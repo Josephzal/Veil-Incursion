@@ -14,6 +14,7 @@ import { useGameFlow } from '../context/GameFlowContext';
 const { width } = Dimensions.get('window');
 const SCAN_DURATION_MS = 2000;
 const INCURSION_FLASH_MS = 600;
+const TERMINAL_ACCENT = '#00ff33';
 
 export default function ScanningScreen(): React.JSX.Element {
   const { theme } = useTerminal();
@@ -105,14 +106,14 @@ export default function ScanningScreen(): React.JSX.Element {
         <Animated.View
           style={[
             styles.radarRingMid,
-            { borderColor: '#22d3ee', opacity: pulseAnim },
+            { borderColor: TERMINAL_ACCENT, opacity: pulseAnim },
           ]}
         />
         <View style={[styles.radarCore, { borderColor: theme.borderColor }]}>
           <Animated.View
             style={[
               styles.radarSweepArm,
-              { backgroundColor: '#22d3ee55', transform: [{ rotate: sweepRotation }] },
+              { backgroundColor: '#00ff3355', transform: [{ rotate: sweepRotation }] },
             ]}
           />
           <View style={[styles.radarBlip, { backgroundColor: '#ef4444' }]} />

@@ -11,6 +11,7 @@ import { useTerminal } from '../context/TerminalContext';
 import { useGameFlow } from '../context/GameFlowContext';
 
 const { width } = Dimensions.get('window');
+const TERMINAL_ACCENT = '#00ff33';
 
 export default function WelcomeScreen(): React.JSX.Element {
   const { theme, profile } = useTerminal();
@@ -45,7 +46,7 @@ export default function WelcomeScreen(): React.JSX.Element {
         </Text>
         <Text style={[styles.welcomeTitle, { color: theme.primaryColor }]}>
           Welcome back,{'\n'}
-          <Text style={{ color: '#22d3ee' }}>{credentials.username}</Text>
+          <Text style={{ color: TERMINAL_ACCENT }}>{credentials.username}</Text>
         </Text>
         <Text style={[styles.welcomeBody, { color: theme.mutedColor }]}>
           Ley-line sensors are nominal. Your soul anchor is synced to the urban grid.
@@ -59,7 +60,7 @@ export default function WelcomeScreen(): React.JSX.Element {
               <View style={[styles.statusDot, { backgroundColor: '#22c55e' }]} />
             </View>
 
-            <View style={[styles.badgeEmblem, { borderColor: '#22d3ee' }]}>
+            <View style={[styles.badgeEmblem, { borderColor: TERMINAL_ACCENT }]}>
               <Text style={styles.badgeEmblemText}>{credentials.class.slice(0, 1)}</Text>
             </View>
 
@@ -72,7 +73,7 @@ export default function WelcomeScreen(): React.JSX.Element {
 
         <View style={[styles.idReadout, { borderColor: theme.borderColor, backgroundColor: '#0d0f14' }]}>
           <Text style={[styles.idLabel, { color: theme.mutedColor }]}>OPERATIVE ID READOUT</Text>
-          <Text style={[styles.idValue, { color: '#22d3ee' }]}>{credentials.id}</Text>
+          <Text style={[styles.idValue, { color: TERMINAL_ACCENT }]}>{credentials.id}</Text>
           <View style={styles.idMetaRow}>
             <Text style={[styles.idMeta, { color: theme.mutedColor }]}>HANDLE</Text>
             <Text style={[styles.idMetaValue, { color: theme.primaryColor }]}>{credentials.username}</Text>
@@ -88,9 +89,9 @@ export default function WelcomeScreen(): React.JSX.Element {
           style={({ pressed }) => [
             styles.scanButton,
             {
-              borderColor: '#22d3ee',
+              borderColor: TERMINAL_ACCENT,
               backgroundColor: pressed ? '#083344' : '#0e1624',
-              shadowColor: '#22d3ee',
+              shadowColor: TERMINAL_ACCENT,
             },
           ]}
         >
@@ -206,7 +207,7 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     fontSize: 28,
     fontWeight: '700',
-    color: '#22d3ee',
+    color: TERMINAL_ACCENT,
   },
   badgeClass: {
     fontFamily: 'monospace',
@@ -265,19 +266,19 @@ const styles = StyleSheet.create({
   },
   scanButtonGlow: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#22d3ee22',
+    backgroundColor: '#00ff3322',
   },
   scanButtonLabel: {
     fontFamily: 'monospace',
     fontSize: 14,
     fontWeight: '700',
     letterSpacing: 1.5,
-    color: '#22d3ee',
+    color: TERMINAL_ACCENT,
   },
   scanButtonSub: {
     fontFamily: 'monospace',
     fontSize: 9,
-    color: '#67e8f9',
+    color: TERMINAL_ACCENT,
     marginTop: 4,
     letterSpacing: 1,
   },
