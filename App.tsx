@@ -2,9 +2,15 @@ import React from 'react';
 import { StyleSheet, SafeAreaView, StatusBar, View } from 'react-native';
 import { TerminalProvider, useTerminal } from './src/context/TerminalContext';
 import { GameFlowProvider, useGameFlow } from './src/context/GameFlowContext';
+import { RunProvider } from './src/context/RunContext';
 import WelcomeScreen from './src/screens/WelcomeScreen';
 import ScanningScreen from './src/screens/ScanningScreen';
+import PathChoiceScreen from './src/screens/PathChoiceScreen';
+import PostCombatBoonScreen from './src/screens/PostCombatBoonScreen';
+import SkillCheckScreen from './src/screens/SkillCheckScreen';
+import RestScreen from './src/screens/RestScreen';
 import CombatScreen from './src/screens/CombatScreen';
+import RunCompleteScreen from './src/screens/RunCompleteScreen';
 
 function GameRoot(): React.JSX.Element {
   const { theme } = useTerminal();
@@ -15,7 +21,12 @@ function GameRoot(): React.JSX.Element {
       <StatusBar barStyle="light-content" />
       {currentScreen === 'WELCOME' && <WelcomeScreen />}
       {currentScreen === 'SCANNING' && <ScanningScreen />}
+      {currentScreen === 'PATH_CHOICE' && <PathChoiceScreen />}
+      {currentScreen === 'POST_COMBAT_BOON' && <PostCombatBoonScreen />}
+      {currentScreen === 'SKILL_CHECK' && <SkillCheckScreen />}
+      {currentScreen === 'REST' && <RestScreen />}
       {currentScreen === 'COMBAT' && <CombatScreen />}
+      {currentScreen === 'RUN_COMPLETE' && <RunCompleteScreen />}
     </View>
   );
 }
@@ -23,21 +34,18 @@ function GameRoot(): React.JSX.Element {
 export default function App(): React.JSX.Element {
   return (
     <TerminalProvider>
-      <GameFlowProvider>
-        <SafeAreaView style={styles.safeArea}>
-          <GameRoot />
-        </SafeAreaView>
-      </GameFlowProvider>
+      <RunProvider>
+        <GameFlowProvider>
+          <SafeAreaView style={styles.safeArea}>
+            <GameRoot />
+          </SafeAreaView>
+        </GameFlowProvider>
+      </RunProvider>
     </TerminalProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#1c1e21',
-  },
-  screenContainer: {
-    flex: 1,
-  },
+  safeArea: { flex: 1, backgroundColor: '#1c1e21' },
+  screenContainer: { flex: 1 },
 });

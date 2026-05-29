@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useTerminal } from '../context/TerminalContext';
 import { useGameFlow } from '../context/GameFlowContext';
+import { useRun } from '../context/RunContext';
 
 const { width } = Dimensions.get('window');
 const TERMINAL_ACCENT = '#00ff33';
@@ -16,6 +17,12 @@ const TERMINAL_ACCENT = '#00ff33';
 export default function WelcomeScreen(): React.JSX.Element {
   const { theme, profile } = useTerminal();
   const { startScanning } = useGameFlow();
+  const { startNewRun } = useRun();
+
+  const handleStartScan = () => {
+    startNewRun();
+    startScanning('INITIAL');
+  };
   const credentials = profile.operative_profile.credentials;
   const vectors = profile.operative_profile.location_vectors;
 
@@ -85,7 +92,7 @@ export default function WelcomeScreen(): React.JSX.Element {
         </View>
 
         <Pressable
-          onPress={startScanning}
+          onPress={handleStartScan}
           style={({ pressed }) => [
             styles.scanButton,
             {

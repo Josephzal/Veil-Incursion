@@ -1,28 +1,68 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  StyleSheet,
-  View,
-  Text,
   Animated,
-  Easing,
   Dimensions,
+  Easing,
   Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
-import { useTerminal } from '../context/TerminalContext';
+import { generateRadarDots, pickRandomSectors } from '../data/regions';
+import PersistentTerminalLog from '../components/PersistentTerminalLog';
 import { useGameFlow } from '../context/GameFlowContext';
+import { useRun } from '../context/RunContext';
+import { useTerminal } from '../context/TerminalContext';
+import { RadarDot } from '../types/run';
 
 const { width } = Dimensions.get('window');
-const SCAN_DURATION_MS = 2000;
-const INCURSION_FLASH_MS = 600;
+const SCAN_SWEEP_MS = 2200;
+const SCAN_ROTATIONS = 3;
+const SCAN_DURATION_MS = SCAN_SWEEP_MS * SCAN_ROTATIONS;
+const SWEEP_DETECT_ARC_DEG = 18;
+const DOT_HIT_SIZE = 44;
+const DOT_VISUAL_SIZE = 12;
 const TERMINAL_ACCENT = '#00ff33';
+const RADAR_SIZE = Math.min(width - 80, 280);
+const RADAR_CORE = RADAR_SIZE * 0.48;
+
+type ScanPhase = 'SWEEPING' | 'DOTS' | 'SECTOR_CARD';
+
+function sweepDeltaDeg(sweepDeg: number, dotDeg: number): number {
+  const raw = ((sweepDeg - dotDeg) % 360 + 360) % 360;
+  return raw > 180 ? 360 - raw : raw;
+}
 
 export default function ScanningScreen(): React.JSX.Element {
   const { theme } = useTerminal();
-  const { startCombat } = useGameFlow();
-  const [phase, setPhase] = useState<'SCANNING' | 'DETECTED'>('SCANNING');
+  const { scanMode, startCombat } = useGameFlow();
+  const { runState, appendRunLog, selectHomeSector } = useRun();
+
+  const [phase, setPhase] = useState<ScanPhase>('SWEEPING');
+  const [dots, setDots] = useState<RadarDot[]>([]);
+  const [selectedDot, setSelectedDot] = useState<RadarDot | null>(null);
+  const [selectedSector, setSelectedSector] = useState<RadarDot['sector'] | null>(null);
+
   const pulseAnim = useRef(new Animated.Value(0.25)).current;
   const sweepAnim = useRef(new Animated.Value(0)).current;
-  const alertAnim = useRef(new Animated.Value(0)).current;
+  const sweepLoopRef = useRef<Animated.CompositeAnimation | null>(null);
+  const dotOpacityRefs = useRef<Animated.Value[]>([]);
+  const dotPulseRefs = useRef<Animated.CompositeAnimation[]>([]);
+  const pingedThisRotationRef = useRef<Set<string>>(new Set());
+  const lastSweepValueRef = useRef(0);
+
+  const isInitialScan = scanMode === 'INITIAL';
+
+  const radarDots = useMemo(() => {
+    if (!isInitialScan) return [];
+    return generateRadarDots(pickRandomSectors(3), RADAR_CORE);
+  }, [isInitialScan]);
+
+  useEffect(() => {
+    dotOpacityRefs.current = radarDots.map(() => new Animated.Value(0));
+    dotPulseRefs.current = [];
+  }, [radarDots]);
 
   useEffect(() => {
     const pulseLoop = Animated.loop(
@@ -41,137 +81,247 @@ export default function ScanningScreen(): React.JSX.Element {
         }),
       ]),
     );
+    pulseLoop.start();
+
+    sweepAnim.setValue(0);
+    pingedThisRotationRef.current.clear();
+    lastSweepValueRef.current = 0;
 
     const sweepLoop = Animated.loop(
       Animated.timing(sweepAnim, {
         toValue: 1,
-        duration: 2200,
+        duration: SCAN_SWEEP_MS,
         easing: Easing.linear,
         useNativeDriver: true,
       }),
     );
-
-    pulseLoop.start();
+    sweepLoopRef.current = sweepLoop;
     sweepLoop.start();
 
-    const scanTimer = setTimeout(() => {
-      setPhase('DETECTED');
-      Animated.sequence([
-        Animated.timing(alertAnim, {
+    const pingDot = (index: number, dotId: string) => {
+      if (pingedThisRotationRef.current.has(dotId)) return;
+      pingedThisRotationRef.current.add(dotId);
+
+      dotPulseRefs.current[index]?.stop();
+      const pulse = Animated.sequence([
+        Animated.timing(dotOpacityRefs.current[index], {
           toValue: 1,
           duration: 180,
-          easing: Easing.out(Easing.cubic),
+          easing: Easing.out(Easing.ease),
           useNativeDriver: true,
         }),
-        Animated.timing(alertAnim, {
-          toValue: 0.85,
-          duration: 420,
+        Animated.timing(dotOpacityRefs.current[index], {
+          toValue: 0.35,
+          duration: 520,
+          easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
-      ]).start();
-    }, SCAN_DURATION_MS);
+      ]);
+      dotPulseRefs.current[index] = pulse;
+      pulse.start();
+    };
 
-    const combatTimer = setTimeout(() => {
-      startCombat();
-    }, SCAN_DURATION_MS + INCURSION_FLASH_MS);
+    const sweepListener = sweepAnim.addListener(({ value }) => {
+      if (!isInitialScan || radarDots.length === 0) return;
+
+      if (value < lastSweepValueRef.current) {
+        pingedThisRotationRef.current.clear();
+      }
+      lastSweepValueRef.current = value;
+
+      const sweepDeg = (value * 360) % 360;
+      radarDots.forEach((dot, index) => {
+        if (sweepDeltaDeg(sweepDeg, dot.angleDeg) <= SWEEP_DETECT_ARC_DEG) {
+          pingDot(index, dot.id);
+        }
+      });
+    });
+
+    const finishTimer = setTimeout(() => {
+      sweepLoop.stop();
+      sweepAnim.stopAnimation();
+      sweepAnim.removeListener(sweepListener);
+
+      if (isInitialScan) {
+        radarDots.forEach((_, index) => {
+          dotPulseRefs.current[index]?.stop();
+          dotOpacityRefs.current[index]?.setValue(1);
+        });
+        setDots(radarDots);
+        setPhase('DOTS');
+      } else {
+        const encounter = runState.pendingEncounter;
+        if (encounter) {
+          appendRunLog(`>> Entering Node ${encounter.index + 1} Combat — ${encounter.label}.`);
+        }
+        startCombat();
+      }
+    }, SCAN_DURATION_MS);
 
     return () => {
       pulseLoop.stop();
       sweepLoop.stop();
-      clearTimeout(scanTimer);
-      clearTimeout(combatTimer);
+      sweepAnim.removeListener(sweepListener);
+      clearTimeout(finishTimer);
+      dotPulseRefs.current.forEach((p) => p?.stop());
     };
-  }, [alertAnim, pulseAnim, startCombat, sweepAnim]);
+  }, [appendRunLog, isInitialScan, pulseAnim, radarDots, runState.pendingEncounter, startCombat, sweepAnim]);
 
   const sweepRotation = sweepAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ['0deg', '360deg'],
   });
 
+  const handleDotPress = (dot: RadarDot) => {
+    setSelectedDot(dot);
+    setSelectedSector(dot.sector);
+    setPhase('SECTOR_CARD');
+  };
+
+  const handleInitiateIncursion = () => {
+    if (!selectedSector) return;
+    selectHomeSector(selectedSector);
+    startCombat();
+  };
+
+  const handleBackToDots = () => {
+    setPhase('DOTS');
+    setSelectedSector(null);
+    setSelectedDot(null);
+  };
+
+  const renderDot = (dot: RadarDot, index: number, interactive: boolean) => {
+    const dimmed = interactive && selectedDot && selectedDot.id !== dot.id;
+    const hitboxStyle = {
+      left: dot.x - DOT_HIT_SIZE / 2,
+      top: dot.y - DOT_HIT_SIZE / 2,
+    };
+
+    if (phase === 'SWEEPING') {
+      const dotOpacity = dotOpacityRefs.current[index];
+      if (!dotOpacity) return null;
+      return (
+        <View key={dot.id} style={[styles.dotHitbox, hitboxStyle]} pointerEvents="none">
+          <Animated.View style={[styles.whiteDot, { opacity: dotOpacity }]} />
+        </View>
+      );
+    }
+
+    return (
+      <Pressable
+        key={dot.id}
+        onPress={interactive ? () => handleDotPress(dot) : undefined}
+        disabled={!interactive}
+        hitSlop={8}
+        style={[styles.dotHitbox, hitboxStyle]}
+      >
+        <View style={[styles.whiteDot, dimmed ? { opacity: 0.35 } : null]} />
+      </Pressable>
+    );
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundColor }]}>
       <View style={[styles.statusBar, { borderColor: theme.borderColor }]}>
         <Text style={[styles.statusBarText, { color: theme.mutedColor }]}>
-          ANOMALY SCAN // THREAT-SEEKING OVERLAY ACTIVE
+          {isInitialScan ? 'ANOMALY SCAN // SECTOR DISCOVERY' : `NODE ${runState.currentNode + 1} // COMBAT DEPLOYMENT`}
         </Text>
       </View>
 
       <View style={styles.radarStage}>
         <Animated.View
-          style={[
-            styles.radarRingOuter,
-            { borderColor: theme.primaryColor, opacity: pulseAnim },
-          ]}
+          style={[styles.radarRingOuter, { borderColor: theme.primaryColor, opacity: pulseAnim }]}
         />
         <Animated.View
-          style={[
-            styles.radarRingMid,
-            { borderColor: TERMINAL_ACCENT, opacity: pulseAnim },
-          ]}
+          style={[styles.radarRingMid, { borderColor: TERMINAL_ACCENT, opacity: pulseAnim }]}
         />
-        <View style={[styles.radarCore, { borderColor: theme.borderColor }]}>
-          <Animated.View
-            style={[
-              styles.radarSweepArm,
-              { backgroundColor: '#00ff3355', transform: [{ rotate: sweepRotation }] },
-            ]}
-          />
-          <View style={[styles.radarBlip, { backgroundColor: '#ef4444' }]} />
+        <View style={[styles.radarCore, { borderColor: theme.borderColor, width: RADAR_CORE, height: RADAR_CORE, borderRadius: RADAR_CORE / 2 }]}>
+          {phase === 'SWEEPING' && (
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.sweepPivot,
+                { width: RADAR_CORE, height: RADAR_CORE, transform: [{ rotate: sweepRotation }] },
+              ]}
+            >
+              <View
+                style={[
+                  styles.radarSweepArm,
+                  {
+                    width: RADAR_CORE / 2,
+                    top: RADAR_CORE / 2 - 1,
+                    left: RADAR_CORE / 2,
+                    backgroundColor: '#00ff3366',
+                  },
+                ]}
+              />
+            </Animated.View>
+          )}
+
+          {phase === 'SWEEPING' && radarDots.map((dot, index) => renderDot(dot, index, false))}
+
+          {(phase === 'DOTS' || phase === 'SECTOR_CARD') &&
+            dots.map((dot, index) => renderDot(dot, index, true))}
         </View>
       </View>
 
       <View style={styles.readoutPanel}>
-        {phase === 'SCANNING' ? (
+        {phase === 'SWEEPING' && (
           <>
-            <Text style={[styles.scanStatus, { color: theme.primaryColor }]}>
-              LOCATING ECTOPLASMIC COORD FIELDS...
-            </Text>
+            <Text style={[styles.scanStatus, { color: theme.primaryColor }]}>LOCATING THREAT SECTORS...</Text>
             <Text style={[styles.scanSubStatus, { color: theme.mutedColor }]}>
-              Sweeping urban ley-lines // sector harmonics in progress
+              Radar sweep in progress // harmonics mapping active
             </Text>
           </>
-        ) : (
-          <Animated.View style={{ opacity: alertAnim, transform: [{ scale: alertAnim }] }}>
-            <Text style={styles.incursionAlert}>INCURSION DETECTED</Text>
-            <Text style={[styles.incursionSub, { color: theme.mutedColor }]}>
-              Apparition vector locked // deploying combat interface
+        )}
+        {phase === 'DOTS' && (
+          <>
+            <Text style={[styles.scanStatus, { color: TERMINAL_ACCENT }]}>3 SECTORS DETECTED</Text>
+            <Text style={[styles.scanSubStatus, { color: theme.mutedColor }]}>
+              Select a white node to inspect environmental threat profile
             </Text>
-          </Animated.View>
+          </>
+        )}
+        {phase === 'SECTOR_CARD' && selectedSector && (
+          <View style={[styles.sectorCard, { borderColor: TERMINAL_ACCENT, backgroundColor: '#0e1624' }]}>
+            <Text style={[styles.sectorCardLabel, { color: theme.mutedColor }]}>ENVIRONMENTAL THREAT SECTOR</Text>
+            <Text style={styles.sectorCardTitle}>Sector: {selectedSector.name}</Text>
+            <Text style={[styles.sectorCardSub, { color: TERMINAL_ACCENT }]}>{selectedSector.subsector}</Text>
+            <Text style={[styles.sectorCardBody, { color: theme.mutedColor }]}>{selectedSector.description}</Text>
+            <Pressable
+              onPress={handleInitiateIncursion}
+              style={({ pressed }) => [
+                styles.incursionButton,
+                { borderColor: TERMINAL_ACCENT, backgroundColor: pressed ? '#0d1a12' : '#0a0b0f' },
+              ]}
+            >
+              <Text style={styles.incursionButtonText}>INITIATE INCURSION</Text>
+            </Pressable>
+            <Pressable onPress={handleBackToDots}>
+              <Text style={[styles.backLink, { color: theme.mutedColor }]}>{'<< RE-SCAN NODES'}</Text>
+            </Pressable>
+          </View>
         )}
       </View>
 
       <View style={[styles.footerTelemetry, { borderColor: theme.borderColor }]}>
         <Text style={[styles.telemetryLine, { color: theme.mutedColor }]}>
-          RADAR_GAIN: 98% // NOISE_FLOOR: -42dB // SWEEP_RATE: 2.2s
+          {runState.runActive
+            ? `NODE ${Math.min(runState.currentNode + 1, runState.totalNodes)}/${runState.totalNodes} // RADAR_GAIN: 98%`
+            : 'RADAR_GAIN: 98% // SWEEP_RATE: 2.2s'}
         </Text>
       </View>
+
+      <PersistentTerminalLog visible={runState.runActive} />
     </View>
   );
 }
 
-const RADAR_SIZE = Math.min(width - 80, 280);
-
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    paddingTop: Platform.OS === 'android' ? 24 : 8,
-  },
-  statusBar: {
-    borderBottomWidth: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-  },
-  statusBarText: {
-    fontFamily: 'monospace',
-    fontSize: 9,
-    letterSpacing: 1.2,
-    textAlign: 'center',
-  },
-  radarStage: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  container: { flex: 1, paddingTop: Platform.OS === 'android' ? 24 : 8 },
+  statusBar: { borderBottomWidth: 1, paddingVertical: 10, paddingHorizontal: 16 },
+  statusBarText: { fontFamily: 'monospace', fontSize: 9, letterSpacing: 1.2, textAlign: 'center' },
+  radarStage: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   radarRingOuter: {
     position: 'absolute',
     width: RADAR_SIZE,
@@ -188,80 +338,48 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   radarCore: {
-    width: RADAR_SIZE * 0.48,
-    height: RADAR_SIZE * 0.48,
-    borderRadius: (RADAR_SIZE * 0.48) / 2,
     borderWidth: 2,
     backgroundColor: '#050608',
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  sweepPivot: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+  },
   radarSweepArm: {
     position: 'absolute',
-    width: '50%',
     height: 2,
-    left: '50%',
-    top: '50%',
-    transformOrigin: 'left center',
   },
-  radarBlip: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+  dotHitbox: {
     position: 'absolute',
-    top: '28%',
-    right: '24%',
-    shadowColor: '#ef4444',
-    shadowOpacity: 1,
-    shadowRadius: 8,
-  },
-  readoutPanel: {
-    paddingHorizontal: 24,
-    paddingBottom: 24,
-    minHeight: 72,
+    width: DOT_HIT_SIZE,
+    height: DOT_HIT_SIZE,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  scanStatus: {
-    fontFamily: 'monospace',
-    fontSize: 12,
-    letterSpacing: 1.2,
-    textAlign: 'center',
+  whiteDot: {
+    width: DOT_VISUAL_SIZE,
+    height: DOT_VISUAL_SIZE,
+    borderRadius: DOT_VISUAL_SIZE / 2,
+    backgroundColor: '#ffffff',
+    shadowColor: '#ffffff',
+    shadowOpacity: 0.9,
+    shadowRadius: 8,
   },
-  scanSubStatus: {
-    fontFamily: 'monospace',
-    fontSize: 10,
-    marginTop: 8,
-    textAlign: 'center',
-    lineHeight: 14,
-  },
-  incursionAlert: {
-    fontFamily: 'monospace',
-    fontSize: 20,
-    fontWeight: '700',
-    letterSpacing: 2,
-    color: '#ef4444',
-    textAlign: 'center',
-    textShadowColor: '#ef4444',
-    textShadowRadius: 12,
-  },
-  incursionSub: {
-    fontFamily: 'monospace',
-    fontSize: 10,
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  footerTelemetry: {
-    borderTopWidth: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    marginBottom: 8,
-  },
-  telemetryLine: {
-    fontFamily: 'monospace',
-    fontSize: 8,
-    letterSpacing: 0.8,
-    textAlign: 'center',
-  },
+  readoutPanel: { paddingHorizontal: 20, paddingBottom: 16, minHeight: 140, justifyContent: 'center' },
+  scanStatus: { fontFamily: 'monospace', fontSize: 12, letterSpacing: 1.2, textAlign: 'center' },
+  scanSubStatus: { fontFamily: 'monospace', fontSize: 10, marginTop: 8, textAlign: 'center', lineHeight: 14 },
+  sectorCard: { borderWidth: 2, padding: 16 },
+  sectorCardLabel: { fontFamily: 'monospace', fontSize: 8, letterSpacing: 1.4, marginBottom: 8 },
+  sectorCardTitle: { fontFamily: 'monospace', fontSize: 13, fontWeight: '700', color: '#ffffff', marginBottom: 4 },
+  sectorCardSub: { fontFamily: 'monospace', fontSize: 11, marginBottom: 10 },
+  sectorCardBody: { fontFamily: 'monospace', fontSize: 10, lineHeight: 15, marginBottom: 16 },
+  incursionButton: { borderWidth: 2, paddingVertical: 14, alignItems: 'center', marginBottom: 10 },
+  incursionButtonText: { fontFamily: 'monospace', fontSize: 12, fontWeight: '700', color: TERMINAL_ACCENT, letterSpacing: 1.2 },
+  backLink: { fontFamily: 'monospace', fontSize: 9, textAlign: 'center', letterSpacing: 1 },
+  footerTelemetry: { borderTopWidth: 1, paddingVertical: 10, paddingHorizontal: 16, marginBottom: 8 },
+  telemetryLine: { fontFamily: 'monospace', fontSize: 8, letterSpacing: 0.8, textAlign: 'center' },
 });
