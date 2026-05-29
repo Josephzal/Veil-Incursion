@@ -1,10 +1,32 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, Text, Animated, Easing, Dimensions, Pressable, Vibration, ScrollView, PanResponder } from 'react-native';
 import { useTerminal } from '../context/TerminalContext';
+import VignetteFlashOverlay from './VignetteFlashOverlay';
 
 const { width } = Dimensions.get('window');
 const TARGET_SIZE = 80;
 const TARGET_RADIUS = TARGET_SIZE / 2;
+
+const KINETIC_CHARGE_PER_HIT = 15;
+const KINETIC_RESERVOIR_CAP = 100;
+const KINETIC_PARRY_UNLOCK = 50;
+const KINETIC_PARRY_COST = 50;
+const PARRY_COUNTER_MULTIPLIER = 1.5;
+
+const COMBAT_PALETTE = {
+  enemyHp: '#ef4444',
+  unitTitle: '#ffffff',
+  enemyPosture: '#fde68a',
+  enemyPostureBorder: '#ca8a04',
+  kineticReservoir: '#bae6fd',
+  kineticReservoirBorder: '#7dd3fc',
+  parryActive: '#00ff33',
+  parryVignette: '#00ff33',
+  defeatVignette: '#5c0606',
+};
+
+const VIGNETTE_FLASH_PEAK = 0.38;
+const VIGNETTE_FLASH_HOLD = 0.26;
 
 type CombatPhase = 'TEXT_COMBAT' | 'DEFEND_PARRY' | 'OFFENSE_SLICE' | 'RESOLUTION';
 
@@ -64,15 +86,21 @@ export default function BlueprintSilhouette({ onCombatComplete }: BlueprintSilho
   const [counterPrepActive, setCounterPrepActive] = useState<boolean>(false);
   const [operativeHp, setOperativeHp] = useState<number>(100);
   const [stamina, setStamina] = useState<number>(10);
-  const [energy, setEnergy] = useState<number>(10);
+  const [kineticReservoir, setKineticReservoir] = useState<number>(0);
+  const kineticReservoirRef = useRef<number>(0);
+  const isKineticParryRef = useRef<boolean>(false);
 
   // Mini-game Win/Loss Visual Flags
   const [isSuccessState, setIsSuccessState] = useState<boolean>(false);
   const [isFailureState, setIsFailureState] = useState<boolean>(false);
+  const [screenFlashActive, setScreenFlashActive] = useState<boolean>(false);
+  const [screenFlashColor, setScreenFlashColor] = useState<string>(COMBAT_PALETTE.defeatVignette);
+  const [kineticParryActive, setKineticParryActive] = useState<boolean>(false);
   const [resolutionOutcome, setResolutionOutcome] = useState<'VICTORY' | 'DEFEAT' | null>(null);
 
   // Animations
   const shrinkAnim = useRef(new Animated.Value(2.5)).current;
+  const screenFlashAnim = useRef(new Animated.Value(0)).current;
   const scrollRef = useRef<ScrollView>(null);
   
   // Swipe Slice Geometry
@@ -93,6 +121,7 @@ export default function BlueprintSilhouette({ onCombatComplete }: BlueprintSilho
   const activeSliceIndexRef = useRef<number>(-1);
 
   useEffect(() => { cycleStateRef.current = cycleState; }, [cycleState]);
+  useEffect(() => { kineticReservoirRef.current = kineticReservoir; }, [kineticReservoir]);
   // 📍 REPLACE THE PREVIOUS ANIMATION useEffect BLOCK WITH THIS ONE:
   useEffect(() => {
     if (cycleState === 'OFFENSE_SLICE' && activeSliceIndex >= 0 && sliceLines[activeSliceIndex]) {
@@ -115,9 +144,64 @@ export default function BlueprintSilhouette({ onCombatComplete }: BlueprintSilho
     initiateVeilIncursion();
   }, []);
 
+  useEffect(() => {
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+  }, [terminalFeed, cycleState]);
+
   const pushTerminalText = (text: string) => {
     setTerminalFeed((prev) => [...prev, text]);
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+  };
+
+  const chargeKineticReservoir = (amount: number = KINETIC_CHARGE_PER_HIT) => {
+    setKineticReservoir((prev) => {
+      const next = Math.min(prev + amount, KINETIC_RESERVOIR_CAP);
+      kineticReservoirRef.current = next;
+      return next;
+    });
+  };
+
+  const triggerVignetteFlash = (color: string, onComplete?: () => void) => {
+    setScreenFlashColor(color);
+    setScreenFlashActive(true);
+    screenFlashAnim.setValue(0);
+    Animated.sequence([
+      Animated.timing(screenFlashAnim, {
+        toValue: VIGNETTE_FLASH_PEAK,
+        duration: 90,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(screenFlashAnim, {
+        toValue: VIGNETTE_FLASH_HOLD,
+        duration: 160,
+        useNativeDriver: true,
+      }),
+      Animated.timing(screenFlashAnim, {
+        toValue: 0,
+        duration: 520,
+        easing: Easing.inOut(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setScreenFlashActive(false);
+      onComplete?.();
+    });
+  };
+
+  const applyEnemyDamage = (rawDamage: number) => {
+    const designation = threatRef.current?.designation ?? 'APPARITION';
+    pushTerminalText(`>> ${designation} EXECUTES ENEMY STRIKE — ${rawDamage} DAMAGE DEALT`);
+
+    setOperativeHp((prev) => {
+      const nextHp = Math.max(prev - rawDamage, 0);
+      if (nextHp <= 0) {
+        handleIncursionResolution(false);
+      } else {
+        returnToPlayerTurn();
+      }
+      return nextHp;
+    });
   };
 
   const initiateVeilIncursion = () => {
@@ -130,7 +214,10 @@ export default function BlueprintSilhouette({ onCombatComplete }: BlueprintSilho
     setThreat(initialThreat);
     setOperativeHp(100);
     setStamina(10);
-    setEnergy(15);
+    setKineticReservoir(0);
+    kineticReservoirRef.current = 0;
+    isKineticParryRef.current = false;
+    setKineticParryActive(false);
     setCounterPrepActive(false);
     setIsPlayerTurn(true);
     setTerminalFeed([
@@ -152,7 +239,7 @@ export default function BlueprintSilhouette({ onCombatComplete }: BlueprintSilho
     }
 
     setStamina((prev) => Math.max(prev - 1, 0));
-    setEnergy((prev) => Math.min(prev + 12, 100));
+    chargeKineticReservoir(KINETIC_CHARGE_PER_HIT);
 
     // Chip away at enemy stability meter
     const nextStability = Math.max(threat.stability - activeWeapon.stabilityChipping, 0);
@@ -183,17 +270,27 @@ export default function BlueprintSilhouette({ onCombatComplete }: BlueprintSilho
     }
   };
 
+  const parryReady = kineticReservoir >= KINETIC_PARRY_UNLOCK;
+
   const handlePrepareCounter = () => {
     if (cycleState !== 'TEXT_COMBAT' || !threat || !isPlayerTurn) return;
+    if (!parryReady) return;
     if (stamina < 1) {
       pushTerminalText(`[REJECTED] >> Insufficient Stamina to array defense shields.`);
       return;
     }
 
     setStamina((prev) => Math.max(prev - 1, 0));
-    setCounterPrepActive(true); // Trap is loaded!
-    pushTerminalText(`[COUNTER MATRIX ARMED] >> Bracing weapon guard plane. Manual interception vectors locked.`);
-    
+    setKineticReservoir((prev) => {
+      const next = Math.max(prev - KINETIC_PARRY_COST, 0);
+      kineticReservoirRef.current = next;
+      return next;
+    });
+    setCounterPrepActive(true);
+    isKineticParryRef.current = true;
+    setKineticParryActive(true);
+    pushTerminalText(`[KINETIC PARRY ARMED] >> Reservoir discharged (-${KINETIC_PARRY_COST}% KR). Counter channel primed.`);
+
     passTurnToEnemy(threat, true);
   };
 
@@ -202,38 +299,26 @@ export default function BlueprintSilhouette({ onCombatComplete }: BlueprintSilho
   // 🛑 CHANGE THIS LINE: Add the isCountering parameter
   const passTurnToEnemy = (currentThreatState: ThreatProfile, isCountering: boolean = false) => {
     setIsPlayerTurn(false);
-    setCombatLog(`HOSTILE INCOMING: WAITING FOR ENEMY VECTOR COMPUTATION...`);
 
     setTimeout(() => {
       if (currentThreatState.currentHp <= 0) return;
 
-      // 🛑 CHANGE THIS LINE: Read the direct parameter instead of the state hook
       if (isCountering) {
-        // TRIGGER REAL-TIME PARRY REFLEX HOOK
-        pushTerminalText(`[INTERCEPT ALERT] >> ${currentThreatState.designation} lashes forward with a heavy strike vector!`);
+        cycleStateRef.current = 'DEFEND_PARRY';
         setCycleState('DEFEND_PARRY');
-        setCombatLog(`REFLEX PARRY REQUIREMENT: CONVERGE SHIELD ON SWEET SPOT.`);
+        setCombatLog('PARRY WINDOW: CONVERGE RING ON SWEET SPOT');
         executeRingPass();
       } else {
-        // STANDARD AUTO-TEXT ATTACK
         const rawIncomingDmg = Math.floor(12 + Math.random() * 8);
-        pushTerminalText(`[AUTO-COMBAT LOG] >> ${currentThreatState.designation} claws your aura layer, infliciting ${rawIncomingDmg} structural damage.`);
-        
-        setOperativeHp((prev) => {
-          const nextHp = Math.max(prev - rawIncomingDmg, 0);
-          if (nextHp <= 0) {
-            handleIncursionResolution(false);
-          } else {
-            returnToPlayerTurn();
-          }
-          return nextHp;
-        });
+        applyEnemyDamage(rawIncomingDmg);
       }
-    }, 1200);
+    }, 600);
   };
 
   const returnToPlayerTurn = () => {
     setCounterPrepActive(false);
+    setKineticParryActive(false);
+    isKineticParryRef.current = false;
     setIsPlayerTurn(true);
     // Recharge 1 stamina per turn cycle automatically like classic RPGs
     setStamina((prev) => Math.min(prev + 1, 10)); 
@@ -259,15 +344,17 @@ export default function BlueprintSilhouette({ onCombatComplete }: BlueprintSilho
         useNativeDriver: true,
       }).start(({ finished }) => {
         if (finished) {
-          // Parry missed completely or user let ring lapse
           setIsFailureState(true);
+          const fallbackDamage = 30;
           pushTerminalText(`[CRITICAL DEFENSE FAULT] >> Guard completely bypassed! Soul Anchor cracked.`);
-          setOperativeHp((prev) => {
-            const nextHp = Math.max(prev - 30, 0); // Enormous unblocked damage punishment
-            if (nextHp <= 0) handleIncursionResolution(false);
-            else returnToPlayerTurn();
-            return nextHp;
-          });
+
+          if (isKineticParryRef.current) {
+            pushTerminalText(`[PARRY FAILED] >> Kinetic counter collapsed — absorbing ${fallbackDamage} damage.`);
+          }
+
+          isKineticParryRef.current = false;
+          setKineticParryActive(false);
+          applyEnemyDamage(fallbackDamage);
         }
       });
     });
@@ -282,14 +369,46 @@ export default function BlueprintSilhouette({ onCombatComplete }: BlueprintSilho
 
       if (deviation <= activeWeapon.tolerance) {
         setIsSuccessState(true);
-        setEnergy(100); // SUCCESS BONUSES: Instant absolute Energy maximum flood!
-        pushTerminalText(`[PERFECT COUNTER] >> Absorb matrices locked! Negated 100% damage and flooded energy cores.`);
         Vibration.vibrate(activeWeapon.hapticDuration);
-        
-        // Stagger their health bar back in retaliation
+
+        if (isKineticParryRef.current) {
+          triggerVignetteFlash(COMBAT_PALETTE.parryVignette);
+          const counterDamage = Math.floor(activeWeapon.strikeDamage * PARRY_COUNTER_MULTIPLIER);
+          pushTerminalText(
+            `[PERFECT KINETIC PARRY] >> 0 damage taken! Counter-strike inflicted ${counterDamage} damage (${PARRY_COUNTER_MULTIPLIER * 100}% weapon output).`,
+          );
+
+          const activeThreat = threatRef.current;
+          if (activeThreat) {
+            const counterHp = Math.max(activeThreat.currentHp - counterDamage, 0);
+            const updatedThreat = { ...activeThreat, currentHp: counterHp };
+            setThreat(updatedThreat);
+            threatRef.current = updatedThreat;
+
+            isKineticParryRef.current = false;
+            setKineticParryActive(false);
+
+            if (counterHp <= 0) {
+              setTimeout(() => handleIncursionResolution(true), 600);
+              return;
+            }
+          } else {
+            isKineticParryRef.current = false;
+            setKineticParryActive(false);
+          }
+
+          setTimeout(() => returnToPlayerTurn(), 600);
+          return;
+        }
+
+        chargeKineticReservoir(KINETIC_CHARGE_PER_HIT);
+        pushTerminalText(`[PERFECT COUNTER] >> Absorb matrices locked! Negated 100% damage.`);
+
         if (threat) {
           const staggerHp = Math.max(threat.currentHp - 15, 0);
-          setThreat({ ...threat, currentHp: staggerHp });
+          const updatedThreat = { ...threat, currentHp: staggerHp };
+          setThreat(updatedThreat);
+          threatRef.current = updatedThreat;
           if (staggerHp <= 0) {
             handleIncursionResolution(true);
             return;
@@ -298,13 +417,16 @@ export default function BlueprintSilhouette({ onCombatComplete }: BlueprintSilho
         returnToPlayerTurn();
       } else {
         setIsFailureState(true);
+        const fallbackDamage = 25;
         pushTerminalText(`[DEFLECTION REFRACTED] >> Off-rhythm collision! Guard collapsed.`);
-        setOperativeHp((prev) => {
-          const nextHp = Math.max(prev - 25, 0);
-          if (nextHp <= 0) handleIncursionResolution(false);
-          else returnToPlayerTurn();
-          return nextHp;
-        });
+
+        if (isKineticParryRef.current) {
+          pushTerminalText(`[PARRY FAILED] >> Kinetic counter mistimed — absorbing ${fallbackDamage} damage.`);
+        }
+
+        isKineticParryRef.current = false;
+        setKineticParryActive(false);
+        applyEnemyDamage(fallbackDamage);
       }
     });
   };
@@ -411,25 +533,11 @@ export default function BlueprintSilhouette({ onCombatComplete }: BlueprintSilho
     setIsPlayerTurn(false);
     cycleStateRef.current = 'TEXT_COMBAT';
     setCycleState('TEXT_COMBAT');
-    setCombatLog(`HOSTILE INCOMING: VEIL ANOMALY RE-STABILIZING...`);
 
     setTimeout(() => {
       const rawIncomingDmg = Math.floor(10 + Math.random() * 6);
-      pushTerminalText(`[AUTO-COMBAT] >> ${freshThreatState.designation} recovers from stagger, dealing ${rawIncomingDmg} damage.`);
-
-      setOperativeHp((prev) => {
-        const nextHp = Math.max(prev - rawIncomingDmg, 0);
-        if (nextHp <= 0) {
-          handleIncursionResolution(false);
-        } else {
-          setCounterPrepActive(false);
-          setIsPlayerTurn(true);
-          setStamina((prevStam) => Math.min(prevStam + 1, 10));
-          setCombatLog(`YOUR TURN: INPUT COMMAND STRATEGEMS.`);
-        }
-        return nextHp;
-      });
-    }, 1200);
+      applyEnemyDamage(rawIncomingDmg);
+    }, 600);
   };
 
   const queueNextSliceSegment = (targetIndex: number) => {
@@ -474,6 +582,7 @@ export default function BlueprintSilhouette({ onCombatComplete }: BlueprintSilho
     const registeredNewHit = registerSliceHit(currentIdx);
     if (registeredNewHit) {
       Vibration.vibrate(10);
+      chargeKineticReservoir(KINETIC_CHARGE_PER_HIT);
     }
 
     scheduleSliceAdvance(currentIdx + 1);
@@ -561,14 +670,19 @@ export default function BlueprintSilhouette({ onCombatComplete }: BlueprintSilho
 
   const handleIncursionResolution = (victory: boolean) => {
     shrinkAnim.stopAnimation();
-    setCycleState('RESOLUTION');
     if (victory) {
+      pushTerminalText('[EXORCISED] >> Apparition neutralized. Incursion sealed.');
+      setCycleState('RESOLUTION');
       setResolutionOutcome('VICTORY');
       setCombatLog('SYS: APPARITION CONDENSED // CORE BOUND AND SECURED.');
       if (awardCurrencies) awardCurrencies(750, 25);
     } else {
-      setResolutionOutcome('DEFEAT');
-      setCombatLog('CRITICAL SYNC BREAKDOWN: VEIL CONSUMED OPERATIVE ANCHOR.');
+      pushTerminalText('[CRITICAL] >> Operative soul anchor severed. Veil sync lost.');
+      triggerVignetteFlash(COMBAT_PALETTE.defeatVignette, () => {
+        setCycleState('RESOLUTION');
+        setResolutionOutcome('DEFEAT');
+        setCombatLog('CRITICAL SYNC BREAKDOWN: VEIL CONSUMED OPERATIVE ANCHOR.');
+      });
     }
   };
 
@@ -576,8 +690,11 @@ export default function BlueprintSilhouette({ onCombatComplete }: BlueprintSilho
     onCombatComplete?.();
   };
 
+  const showCombatLog = cycleState !== 'DEFEND_PARRY' && cycleState !== 'OFFENSE_SLICE';
+
   return (
-    <View style={[styles.blueprintContainer, { borderColor: theme.borderColor }]}>
+    <View style={styles.combatHubRoot}>
+      <View style={[styles.blueprintContainer, { borderColor: theme.borderColor }]}>
       <View style={[styles.panelHeader, { borderBottomColor: theme.borderColor }]}>
         <Text style={[styles.panelTitle, { color: theme.mutedColor }]}>
           VEIL INTERCEPT SYSTEM // CONSOLE: AEGIS_MAPPING // UNIT: {activeWeapon.name}
@@ -586,39 +703,60 @@ export default function BlueprintSilhouette({ onCombatComplete }: BlueprintSilho
 
       {/* --- REAL-TIME GRAPHICS CANVAS MATRIX --- */}
       <View style={styles.vectorCanvas}>
-        {/* COMPONENT LAYER A: TABLETOP TEXT SHELL */}
-        {cycleState === 'TEXT_COMBAT' && (
-          <View style={styles.textCombatInterface}>
-            <ScrollView ref={scrollRef} style={styles.terminalScrollBox}>
-              {terminalFeed.map((line, idx) => (
-                <Text key={idx} style={[styles.terminalLineText, { color: theme.primaryColor }]}>{line}</Text>
-              ))}
-            </ScrollView>
-            
-            {/* ACTION DASHBOARD CONTROLS */}
-            <View style={styles.actionDashboardRow}>
-              <Pressable 
-                onPress={handleBasicStrike} 
-                disabled={!isPlayerTurn}
-                style={[styles.textActionNode, { borderColor: isPlayerTurn ? theme.primaryColor : theme.borderColor }]}
-              >
-                <Text style={[styles.btnLabelText, { color: isPlayerTurn ? theme.primaryColor : theme.mutedColor }]}>
-                  [ WEAPON STRIKE (-1 STAM) ]
-                </Text>
-              </Pressable>
-              
-              <Pressable 
-                onPress={handlePrepareCounter} 
-                disabled={!isPlayerTurn}
-                style={[styles.textActionNode, { borderColor: isPlayerTurn ? '#3b82f6' : theme.borderColor }]}
-              >
-                <Text style={[styles.btnLabelText, { color: isPlayerTurn ? '#3b82f6' : theme.mutedColor }]}>
-                  [ PARRY REDIRECT METHOD ]
-                </Text>
-              </Pressable>
-            </View>
+        {screenFlashActive && (
+          <View style={styles.arenaFlashContainer} pointerEvents="none">
+            <VignetteFlashOverlay color={screenFlashColor} opacityAnim={screenFlashAnim} />
           </View>
         )}
+
+        {showCombatLog && (
+          <ScrollView
+            ref={scrollRef}
+            style={[
+              styles.terminalScrollBox,
+              cycleState === 'RESOLUTION' ? styles.terminalScrollBoxExpanded : null,
+            ]}
+            contentContainerStyle={styles.terminalScrollContent}
+          >
+            {terminalFeed.map((line, idx) => (
+              <Text key={idx} style={[styles.terminalLineText, { color: theme.primaryColor }]}>{line}</Text>
+            ))}
+          </ScrollView>
+        )}
+
+        {cycleState === 'TEXT_COMBAT' && (
+          <View style={styles.actionDashboardRow}>
+            <Pressable 
+              onPress={handleBasicStrike} 
+              disabled={!isPlayerTurn}
+              style={[styles.textActionNode, { borderColor: isPlayerTurn ? theme.primaryColor : theme.borderColor }]}
+            >
+              <Text style={[styles.btnLabelText, { color: isPlayerTurn ? theme.primaryColor : theme.mutedColor }]}>
+                [ WEAPON STRIKE (-1 STAM) ]
+              </Text>
+            </Pressable>
+            
+            <Pressable 
+              onPress={handlePrepareCounter} 
+              disabled={!isPlayerTurn || !parryReady}
+              style={[
+                styles.textActionNode,
+                {
+                  borderColor: parryReady && isPlayerTurn ? COMBAT_PALETTE.parryActive : theme.borderColor,
+                  opacity: parryReady && isPlayerTurn ? 1 : 0.45,
+                },
+              ]}
+            >
+              <Text style={[
+                styles.btnLabelText,
+                { color: parryReady && isPlayerTurn ? COMBAT_PALETTE.parryActive : theme.mutedColor },
+              ]}>
+                [ PARRY (-{KINETIC_PARRY_COST}% KR) ]
+              </Text>
+            </Pressable>
+          </View>
+        )}
+
 
         {/* COMPONENT LAYER B: PARRY OVERRIDE ELEMENT */}
         <View style={[styles.combatLayoutWrapper, { display: cycleState === 'DEFEND_PARRY' ? 'flex' : 'none' }]}>
@@ -626,7 +764,9 @@ export default function BlueprintSilhouette({ onCombatComplete }: BlueprintSilho
             <View style={[styles.innerTargetVector, { borderColor: theme.primaryColor }]} />
             <Animated.View style={[styles.outerPerimeterRing, { borderColor: theme.primaryColor, transform: [{ scale: shrinkAnim }] }]} pointerEvents="none" />
           </Pressable>
-          <Text style={[styles.reflexIndicatorOverlayText, { color: theme.primaryColor }]}>ACTIVE COUNTER CHANNELS OPEN</Text>
+          <Text style={[styles.reflexIndicatorOverlayText, { color: theme.primaryColor }]}>
+            {kineticParryActive ? 'KINETIC PARRY CHANNEL OPEN' : 'ACTIVE COUNTER CHANNELS OPEN'}
+          </Text>
         </View>
 
         {/* COMPONENT LAYER C: DRAG FINISHER FIELDS (HITBOX STABILIZATION) */}
@@ -686,8 +826,8 @@ export default function BlueprintSilhouette({ onCombatComplete }: BlueprintSilho
         )}
 
         {cycleState === 'RESOLUTION' && (
-          <View style={styles.resolutionFrame}>
-            <Text style={[styles.victoryHeader, { color: resolutionOutcome === 'VICTORY' ? '#22c55e' : '#ef4444' }]}>
+          <View style={styles.resolutionBanner}>
+            <Text style={[styles.victoryHeader, { color: resolutionOutcome === 'VICTORY' ? '#22c55e' : COMBAT_PALETTE.enemyHp }]}>
               {resolutionOutcome === 'VICTORY' ? 'INTRUSION DECONSTRUCTED' : 'OPERATIVE SOUL DISCONNECTED'}
             </Text>
             <Pressable onPress={handleDismissResolution} style={[styles.dismissButton, { borderColor: theme.primaryColor }]}>
@@ -698,17 +838,17 @@ export default function BlueprintSilhouette({ onCombatComplete }: BlueprintSilho
       </View>
 
       {/* --- METER TRACKS STATUS DISPLAY --- */}
-      {threat && cycleState !== 'RESOLUTION' && (
+      {threat && (
         <View style={[styles.threatStatusSection, { borderColor: theme.borderColor }]}>
           <View style={styles.meterTextRow}>
-            <Text style={[styles.meterLabel, { color: '#ef4444' }]}>{threat.designation}:</Text>
-            <Text style={[styles.meterValue, { color: '#ef4444' }]}>{threat.currentHp} HP // {threat.stability}% STABILITY</Text>
+            <Text style={[styles.meterLabel, { color: COMBAT_PALETTE.unitTitle }]}>{threat.designation}:</Text>
+            <Text style={[styles.meterValue, { color: COMBAT_PALETTE.enemyHp }]}>{threat.currentHp} HP // {threat.stability}% POSTURE</Text>
           </View>
-          <View style={[styles.meterTrack, { borderColor: '#ef4444', marginBottom: 4 }]}>
-            <View style={[styles.meterFill, { backgroundColor: '#ef4444', width: `${threat.currentHp}%` }]} />
+          <View style={[styles.meterTrack, { borderColor: COMBAT_PALETTE.enemyHp, marginBottom: 4 }]}>
+            <View style={[styles.meterFill, { backgroundColor: COMBAT_PALETTE.enemyHp, width: `${threat.currentHp}%` }]} />
           </View>
-          <View style={[styles.meterTrack, { borderColor: '#eab308' }]}>
-            <View style={[styles.meterFill, { backgroundColor: '#eab308', width: `${threat.stability}%` }]} />
+          <View style={[styles.meterTrack, { borderColor: COMBAT_PALETTE.enemyPostureBorder }]}>
+            <View style={[styles.meterFill, { backgroundColor: COMBAT_PALETTE.enemyPosture, width: `${threat.stability}%` }]} />
           </View>
         </View>
       )}
@@ -717,45 +857,79 @@ export default function BlueprintSilhouette({ onCombatComplete }: BlueprintSilho
         <Text style={[styles.feedText, { color: theme.primaryColor }]}>{combatLog}</Text>
       </View>
 
+      <View style={[styles.operativeHeaderSection, { borderColor: theme.borderColor }]}>
+        <View style={styles.meterTextRow}>
+          <Text style={[styles.meterLabel, { color: COMBAT_PALETTE.unitTitle }]}>OPERATIVE UNIT:</Text>
+          <Text style={[styles.meterValue, { color: COMBAT_PALETTE.enemyHp }]}>SOUL ANCHOR ACTIVE</Text>
+        </View>
+      </View>
+
       <View style={styles.meterSection}>
         <View style={styles.meterTextRow}>
           <Text style={[styles.meterLabel, { color: theme.mutedColor }]}>SOUL ANCHOR INTEGRITY:</Text>
-          <Text style={[styles.meterValue, { color: theme.primaryColor }]}>{operativeHp}%</Text>
+          <Text style={[styles.meterValue, { color: COMBAT_PALETTE.enemyHp }]}>{operativeHp}%</Text>
         </View>
-        <View style={[styles.meterTrack, { borderColor: theme.borderColor }]}><View style={[styles.meterFill, { backgroundColor: theme.primaryColor, width: `${operativeHp}%` }]} /></View>
+        <View style={[styles.meterTrack, { borderColor: COMBAT_PALETTE.enemyHp }]}>
+          <View style={[styles.meterFill, { backgroundColor: COMBAT_PALETTE.enemyHp, width: `${operativeHp}%` }]} />
+        </View>
+      </View>
+
+      <View style={styles.meterSection}>
+        <View style={styles.meterTextRow}>
+          <Text style={[styles.meterLabel, { color: COMBAT_PALETTE.kineticReservoirBorder }]}>KINETIC RESERVOIR:</Text>
+          <Text style={[styles.meterValue, { color: COMBAT_PALETTE.kineticReservoir }]}>
+            {kineticReservoir}%{parryReady ? ' // PARRY READY' : ''}
+          </Text>
+        </View>
+        <View style={[styles.meterTrack, { borderColor: COMBAT_PALETTE.kineticReservoirBorder }]}>
+          <View style={[styles.meterFill, { backgroundColor: COMBAT_PALETTE.kineticReservoir, width: `${kineticReservoir}%` }]} />
+        </View>
       </View>
 
       <View style={styles.dualStatsRowGrid}>
-        <View style={{ flex: 1, marginRight: 8 }}>
+        <View style={{ flex: 1 }}>
           <Text style={[styles.meterLabel, { color: theme.mutedColor }]}>STAMINA CORE: {stamina}/10</Text>
           <View style={[styles.meterTrack, { borderColor: theme.borderColor }]}><View style={[styles.meterFill, { backgroundColor: '#22c55e', width: `${stamina * 10}%` }]} /></View>
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.meterLabel, { color: theme.mutedColor }]}>KINETIC RESERVOIR: {energy}%</Text>
-          <View style={[styles.meterTrack, { borderColor: theme.borderColor }]}><View style={[styles.meterFill, { backgroundColor: '#eab308', width: `${energy}%` }]} /></View>
-        </View>
+      </View>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  blueprintContainer: { borderWidth: 2, padding: 16, width: width - 32, alignSelf: 'center' },
+  combatHubRoot: {
+    width: '100%',
+    maxWidth: width - 32,
+    alignSelf: 'center',
+  },
+  blueprintContainer: { borderWidth: 2, padding: 16, width: '100%', overflow: 'hidden' },
+  operativeHeaderSection: {
+    borderTopWidth: 1,
+    paddingTop: 6,
+    marginBottom: 8,
+  },
+  arenaFlashContainer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 100,
+    overflow: 'hidden',
+  },
   panelHeader: { borderBottomWidth: 1, paddingBottom: 6, marginBottom: 12 },
   panelTitle: { fontFamily: 'monospace', fontSize: 10, letterSpacing: 0.5 },
   vectorCanvas: { 
-    height: 200, 
+    minHeight: 200,
+    height: 200,
     position: 'relative', 
-    justifyContent: 'center', 
-    alignItems: 'center', 
+    justifyContent: 'flex-end', 
     marginBottom: 12,
     overflow: 'hidden', 
-    backgroundColor: '#000000' // Dark backing makes neon stand out cleanly
+    backgroundColor: '#000000',
   },
   radarSweepFrame: { width: '100%', height: '100%', borderWidth: 1, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center' },
   radarText: { fontFamily: 'monospace', fontSize: 10, letterSpacing: 1 },
-  textCombatInterface: { width: '100%', height: '100%', justifyContent: 'space-between' },
-  terminalScrollBox: { flex: 1, width: '100%', marginBottom: 6 },
+  terminalScrollBox: { flex: 1, width: '100%', marginBottom: 6, maxHeight: 130 },
+  terminalScrollBoxExpanded: { maxHeight: 110, marginBottom: 4 },
+  terminalScrollContent: { paddingBottom: 4 },
   terminalLineText: { fontFamily: 'monospace', fontSize: 10, lineHeight: 14, marginBottom: 1 },
   actionDashboardRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 4 },
   textActionNode: { borderWidth: 1, paddingVertical: 8, flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -875,8 +1049,14 @@ const styles = StyleSheet.create({
   meterValue: { fontFamily: 'monospace', fontSize: 9, fontWeight: 'bold' },
   meterTrack: { height: 6, borderWidth: 1, padding: 1, backgroundColor: 'transparent' },
   meterFill: { height: '100%' },
-  resolutionFrame: { justifyContent: 'center', alignItems: 'center', width: '100%' },
-  victoryHeader: { fontFamily: 'monospace', fontSize: 12, fontWeight: 'bold', marginBottom: 12 },
+  resolutionBanner: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.12)',
+    paddingTop: 8,
+    alignItems: 'center',
+    width: '100%',
+  },
+  victoryHeader: { fontFamily: 'monospace', fontSize: 12, fontWeight: 'bold', marginBottom: 8, letterSpacing: 0.5 },
   dismissButton: { borderWidth: 1, paddingVertical: 8, width: '80%', alignItems: 'center' },
   dismissButtonText: { fontFamily: 'monospace', fontSize: 10, fontWeight: 'bold' }
 });
