@@ -6,7 +6,11 @@ const { width } = Dimensions.get('window');
 const TARGET_SIZE = 80;
 const TARGET_RADIUS = TARGET_SIZE / 2;
 
-type IncursionState = 'SCANNING' | 'TEXT_COMBAT' | 'DEFEND_PARRY' | 'OFFENSE_SLICE' | 'RESOLUTION';
+type CombatPhase = 'TEXT_COMBAT' | 'DEFEND_PARRY' | 'OFFENSE_SLICE' | 'RESOLUTION';
+
+interface BlueprintSilhouetteProps {
+  onCombatComplete?: () => void;
+}
 
 interface ThreatProfile {
   designation: string;
@@ -38,17 +42,17 @@ const WEAPON_REGISTRY: Record<string, WeaponConfig> = {
   'monomolecular_katana': { name: 'MONOMOLECULAR KATANA', duration: 900, tolerance: 0.06, hapticDuration: 12, strikeDamage: 15, stabilityChipping: 34 },
 };
 
-export default function BlueprintSilhouette(): React.JSX.Element {
+export default function BlueprintSilhouette({ onCombatComplete }: BlueprintSilhouetteProps): React.JSX.Element {
   const { theme, profile, awardCurrencies } = useTerminal();
   
   const contextWeaponId = profile?.operative_profile?.payload_manifest?.active_slots?.weapon_id || 'kinetic_glaive';
   const activeWeapon = WEAPON_REGISTRY[contextWeaponId] || WEAPON_REGISTRY['kinetic_glaive'];
 
   // Lifecycle State Machines
-  const [cycleState, setCycleState] = useState<IncursionState>('SCANNING');
+  const [cycleState, setCycleState] = useState<CombatPhase>('TEXT_COMBAT');
   const [threat, setThreat] = useState<ThreatProfile | null>(null);
   const threatRef = useRef<ThreatProfile | null>(null);
-  const [combatLog, setCombatLog] = useState<string>('SYS: LEY-LINE RADAR NOMINAL. SCANNING VECTOR TIERS.');
+  const [combatLog, setCombatLog] = useState<string>('SYS: INCURSION CHANNEL OPEN. AWAITING HOSTILE SIGNATURE.');
   const [terminalFeed, setTerminalFeed] = useState<string[]>([]);
   
   useEffect(() => {
@@ -69,24 +73,26 @@ export default function BlueprintSilhouette(): React.JSX.Element {
 
   // Animations
   const shrinkAnim = useRef(new Animated.Value(2.5)).current;
-  const scanningPulseAnim = useRef(new Animated.Value(0.3)).current;
   const scrollRef = useRef<ScrollView>(null);
   
   // Swipe Slice Geometry
   const [activeSliceIndex, setActiveSliceIndex] = useState<number>(-1);
   const sliceStartXRef = useRef<number | null>(null);
   const crossedRef = useRef<boolean>(false);
-  const CANVAS_WIDTH = width - 32;
   const [sliceLines, setSliceLines] = useState<SliceLineConfig[]>([]);
+  const sliceSessionRef = useRef({
+    lines: [] as SliceLineConfig[],
+    hitCount: 0,
+    slicedIds: new Set<number>(),
+    segmentTimer: null as ReturnType<typeof setTimeout> | null,
+    hitFlashTimer: null as ReturnType<typeof setTimeout> | null,
+    evaluated: false,
+  });
 
-  useEffect(() => { cycleStateRef.current = cycleState; }, [cycleState]);
-
-  const cycleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const cycleStateRef = useRef<IncursionState>('SCANNING');
+  const cycleStateRef = useRef<CombatPhase>('TEXT_COMBAT');
   const activeSliceIndexRef = useRef<number>(-1);
 
   useEffect(() => { cycleStateRef.current = cycleState; }, [cycleState]);
-  useEffect(() => { activeSliceIndexRef.current = activeSliceIndex; }, [activeSliceIndex]);
   // 📍 REPLACE THE PREVIOUS ANIMATION useEffect BLOCK WITH THIS ONE:
   useEffect(() => {
     if (cycleState === 'OFFENSE_SLICE' && activeSliceIndex >= 0 && sliceLines[activeSliceIndex]) {
@@ -105,21 +111,9 @@ export default function BlueprintSilhouette(): React.JSX.Element {
     }
   }, [activeSliceIndex, cycleState, sliceLines]);
 
-  // Ambient Radar Scanner Loops
   useEffect(() => {
-    if (cycleState === 'SCANNING') {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(scanningPulseAnim, { toValue: 1, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-          Animated.timing(scanningPulseAnim, { toValue: 0.3, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        ])
-      ).start();
-
-      if (cycleTimeoutRef.current) clearTimeout(cycleTimeoutRef.current);
-      cycleTimeoutRef.current = setTimeout(() => initiateVeilIncursion(), 2500);
-    }
-    return () => { if (cycleTimeoutRef.current) clearTimeout(cycleTimeoutRef.current); };
-  }, [cycleState]);
+    initiateVeilIncursion();
+  }, []);
 
   const pushTerminalText = (text: string) => {
     setTerminalFeed((prev) => [...prev, text]);
@@ -169,6 +163,7 @@ export default function BlueprintSilhouette(): React.JSX.Element {
     if (nextStability <= 0) {
       // THE EARNED OPENING: Posture crushed, trigger Laser-Slice execution window instantly!
       setThreat(updatedThreat);
+      threatRef.current = updatedThreat;
       pushTerminalText(`[CRITICAL APERTURE] >> Specter stability collapsed! Spectral plane fracturing!`);
       setCombatLog(`EXECUTION PHASE: SLICE LINES CONCURRENTLY TO SECURE BONUS DAMAGE.`);
       triggerSliceMiniGame();
@@ -317,114 +312,86 @@ export default function BlueprintSilhouette(): React.JSX.Element {
 
   // ---  SKILL EVENT 2: KINETIC STABILITY SLICE FINISHER ---
 
+  const sliceHandlersRef = useRef({
+    queueNextSliceSegment: (_targetIndex: number) => {},
+    validateLineCompletion: () => {},
+    evaluateSlicePerformance: () => {},
+    triggerSliceMiniGame: () => {},
+  });
 
-  const triggerSliceMiniGame = () => {
-    crossedRef.current = false;
-    sliceStartXRef.current = null;
-    
-    const randomizedConfigurations: SliceLineConfig[] = [];
-    for (let i = 0; i < 3; i++) {
-      const clampedRandomY = 60 + Math.floor(Math.random() * 80);
-      const completelyRandomAngle = Math.floor(Math.random() * 130) - 65;
-
-      randomizedConfigurations.push({
-        id: i,
-        topY: clampedRandomY,
-        rotation: `${completelyRandomAngle}deg`,
-        isSliced: false,
-        fadeAnim: new Animated.Value(0)
-      });
+  const clearSliceTimers = () => {
+    const session = sliceSessionRef.current;
+    if (session.segmentTimer) {
+      clearTimeout(session.segmentTimer);
+      session.segmentTimer = null;
     }
-
-    setSliceLines(randomizedConfigurations);
-    setActiveSliceIndex(0);
-    setCycleState('OFFENSE_SLICE');
-
-    // Clear any leftover system clock timers before building the new chain
-    if (cycleTimeoutRef.current) clearTimeout(cycleTimeoutRef.current);
-    
-    // Seed the first lifecycled line countdown frame
-    queueNextSliceSegment(0);
+    if (session.hitFlashTimer) {
+      clearTimeout(session.hitFlashTimer);
+      session.hitFlashTimer = null;
+    }
   };
 
-  const queueNextSliceSegment = (targetIndex: number) => {
-    // If we've run through all 3 tracks, run evaluation math immediately
-    if (targetIndex >= 3) {
-      evaluateSlicePerformance();
-      return;
-    }
-
-    setActiveSliceIndex(targetIndex);
-
-    // Set a natural 1.2s timeout window for the player to react
-    cycleTimeoutRef.current = setTimeout(() => {
-      crossedRef.current = false;
-      sliceStartXRef.current = null;
-      queueNextSliceSegment(targetIndex + 1);
-    }, 1200);
+  const syncSliceLinesState = (lines: SliceLineConfig[]) => {
+    sliceSessionRef.current.lines = lines;
+    setSliceLines(lines);
   };
 
-  // 📍 REPLACE YOUR ENTIRE CURRENT validateLineCompletion FUNCTION WITH THIS COMBINED HOOK:
-  const validateLineCompletion = () => {
-    Vibration.vibrate(10);
-    const currentIdx = activeSliceIndexRef.current;
-    if (currentIdx === -1 || crossedRef.current) return;
-    
-    crossedRef.current = true; // Block duplicate swipes on this line instance
+  const registerSliceHit = (lineId: number): boolean => {
+    const session = sliceSessionRef.current;
+    if (session.slicedIds.has(lineId)) return false;
 
-    // 1. KILL THE TIMEOUT: Freeze the timer clock immediately so it holds still
-    if (cycleTimeoutRef.current) clearTimeout(cycleTimeoutRef.current);
+    session.slicedIds.add(lineId);
+    session.hitCount += 1;
 
-    // 2. STAMP STATE SEVER: Turn this specific line deep red in state tracking
-    setSliceLines((prevLines) => 
-      prevLines.map((line) => line.id === currentIdx ? { ...line, isSliced: true } : line)
+    const updatedLines = session.lines.map((line) =>
+      line.id === lineId ? { ...line, isSliced: true } : line
     );
-
-    // 3. HIT-FLASH FREEZE DELAY: Wait 180ms to let the red flash register, then advance
-    setTimeout(() => {
-      sliceStartXRef.current = null;
-      crossedRef.current = false;
-      
-      // Advance to the next line or end the minigame
-      queueNextSliceSegment(currentIdx + 1);
-    }, 180); 
+    syncSliceLinesState(updatedLines);
+    return true;
   };
 
-  // 📍 PASTE THIS ENTIRE NEW DAMAGE RESOLUTION MODULE IMMEDIATELY BELOW validateLineCompletion:
   const evaluateSlicePerformance = () => {
+    const session = sliceSessionRef.current;
+    if (session.evaluated) return;
+    session.evaluated = true;
+
+    clearSliceTimers();
+    activeSliceIndexRef.current = -1;
     setActiveSliceIndex(-1);
+
     const activeThreat = threatRef.current;
-    
+    const correctStrikes = session.hitCount;
+
     if (!activeThreat) {
+      session.evaluated = false;
+      cycleStateRef.current = 'TEXT_COMBAT';
+      setCycleState('TEXT_COMBAT');
       returnToPlayerTurn();
       return;
     }
 
-    // Direct configuration scan: access mutated slice tracking metrics inside state hooks
-    // Filter down to get an absolute true tally of perfect hits
-    let correctStrikes = 0;
-    setSliceLines((latestLines) => {
-      correctStrikes = latestLines.filter(l => l.isSliced).length;
-      return latestLines;
-    });
-
-    // Execute variable output logic paths based on performance tiers
     if (correctStrikes === 0) {
       pushTerminalText(`[EXECUTION FAILED] >>> You failed to slice any vector vectors in time! 0 damage dealt.`);
-      
+
       const resetThreat = { ...activeThreat, stability: 100 };
       setThreat(resetThreat);
       threatRef.current = resetThreat;
+      cycleStateRef.current = 'TEXT_COMBAT';
+      setCycleState('TEXT_COMBAT');
       passTurnToEnemy(resetThreat, false);
       return;
     }
 
-    // Scaled performance modifier math: 1 hit = base, 2 hits = medium, 3 hits = massive multiplier
-    const scalingFactor = correctStrikes === 3 ? 3.5 : correctStrikes === 2 ? 2.0 : 1.0;
-    const finalDamage = Math.floor(activeWeapon.strikeDamage * scalingFactor);
+    const baseDamage = activeWeapon.strikeDamage;
+    const finalDamage = correctStrikes === 3
+      ? Math.floor(baseDamage * 3.5)
+      : Math.floor(baseDamage * (correctStrikes / 3));
     const postCritHp = Math.max(activeThreat.currentHp - finalDamage, 0);
 
-    pushTerminalText(`[EXECUTION SEVERANCE] >>> Connected [${correctStrikes}/3] vector cuts! Inflicted ${finalDamage} damage.`);
+    const severanceLabel = correctStrikes === 3
+      ? `[EXECUTION SEVERANCE] >>> Perfect trifecta! [3/3] vector cuts — CRITICAL x3.5! Inflicted ${finalDamage} damage.`
+      : `[EXECUTION SEVERANCE] >>> Connected [${correctStrikes}/3] vector cuts! Inflicted ${finalDamage} damage.`;
+    pushTerminalText(severanceLabel);
 
     if (postCritHp <= 0) {
       setThreat({ ...activeThreat, currentHp: 0, stability: 100 });
@@ -435,21 +402,21 @@ export default function BlueprintSilhouette(): React.JSX.Element {
     const freshThreatState = {
       ...activeThreat,
       currentHp: postCritHp,
-      stability: 100
+      stability: 100,
     };
 
     setThreat(freshThreatState);
     threatRef.current = freshThreatState;
 
-    // Transition back into standard automated text loop combat processing turns
     setIsPlayerTurn(false);
+    cycleStateRef.current = 'TEXT_COMBAT';
     setCycleState('TEXT_COMBAT');
     setCombatLog(`HOSTILE INCOMING: VEIL ANOMALY RE-STABILIZING...`);
 
     setTimeout(() => {
       const rawIncomingDmg = Math.floor(10 + Math.random() * 6);
       pushTerminalText(`[AUTO-COMBAT] >> ${freshThreatState.designation} recovers from stagger, dealing ${rawIncomingDmg} damage.`);
-      
+
       setOperativeHp((prev) => {
         const nextHp = Math.max(prev - rawIncomingDmg, 0);
         if (nextHp <= 0) {
@@ -457,13 +424,110 @@ export default function BlueprintSilhouette(): React.JSX.Element {
         } else {
           setCounterPrepActive(false);
           setIsPlayerTurn(true);
-          setStamina((prevStam) => Math.min(prevStam + 1, 10)); 
+          setStamina((prevStam) => Math.min(prevStam + 1, 10));
           setCombatLog(`YOUR TURN: INPUT COMMAND STRATEGEMS.`);
         }
         return nextHp;
       });
     }, 1200);
   };
+
+  const queueNextSliceSegment = (targetIndex: number) => {
+    if (targetIndex >= 3) {
+      evaluateSlicePerformance();
+      return;
+    }
+
+    activeSliceIndexRef.current = targetIndex;
+    setActiveSliceIndex(targetIndex);
+    crossedRef.current = false;
+    sliceStartXRef.current = null;
+
+    const session = sliceSessionRef.current;
+    if (session.segmentTimer) clearTimeout(session.segmentTimer);
+    session.segmentTimer = setTimeout(() => {
+      session.segmentTimer = null;
+      sliceHandlersRef.current.queueNextSliceSegment(targetIndex + 1);
+    }, 1200);
+  };
+
+  const scheduleSliceAdvance = (nextIndex: number) => {
+    const session = sliceSessionRef.current;
+    if (session.hitFlashTimer) clearTimeout(session.hitFlashTimer);
+    session.hitFlashTimer = setTimeout(() => {
+      session.hitFlashTimer = null;
+      crossedRef.current = false;
+      sliceStartXRef.current = null;
+      sliceHandlersRef.current.queueNextSliceSegment(nextIndex);
+    }, 180);
+  };
+
+  const validateLineCompletion = () => {
+    const currentIdx = activeSliceIndexRef.current;
+    if (currentIdx === -1 || crossedRef.current) return;
+    if (cycleStateRef.current !== 'OFFENSE_SLICE') return;
+    if (!sliceSessionRef.current.lines.some((line) => line.id === currentIdx)) return;
+
+    crossedRef.current = true;
+    clearSliceTimers();
+
+    const registeredNewHit = registerSliceHit(currentIdx);
+    if (registeredNewHit) {
+      Vibration.vibrate(10);
+    }
+
+    scheduleSliceAdvance(currentIdx + 1);
+  };
+
+  const triggerSliceMiniGame = () => {
+    clearSliceTimers();
+
+    const freshSession = {
+      lines: [] as SliceLineConfig[],
+      hitCount: 0,
+      slicedIds: new Set<number>(),
+      segmentTimer: null as ReturnType<typeof setTimeout> | null,
+      hitFlashTimer: null as ReturnType<typeof setTimeout> | null,
+      evaluated: false,
+    };
+    sliceSessionRef.current = freshSession;
+
+    crossedRef.current = false;
+    sliceStartXRef.current = null;
+
+    const randomizedConfigurations: SliceLineConfig[] = [];
+    for (let i = 0; i < 3; i++) {
+      const clampedRandomY = 60 + Math.floor(Math.random() * 80);
+      const completelyRandomAngle = Math.floor(Math.random() * 130) - 65;
+
+      randomizedConfigurations.push({
+        id: i,
+        topY: clampedRandomY,
+        rotation: `${completelyRandomAngle}deg`,
+        isSliced: false,
+        fadeAnim: new Animated.Value(0),
+      });
+    }
+
+    freshSession.lines = randomizedConfigurations;
+    setSliceLines(randomizedConfigurations);
+    activeSliceIndexRef.current = 0;
+    setActiveSliceIndex(0);
+    cycleStateRef.current = 'OFFENSE_SLICE';
+    setCycleState('OFFENSE_SLICE');
+    queueNextSliceSegment(0);
+  };
+
+  sliceHandlersRef.current = {
+    queueNextSliceSegment,
+    validateLineCompletion,
+    evaluateSlicePerformance,
+    triggerSliceMiniGame,
+  };
+
+  useEffect(() => {
+    return () => clearSliceTimers();
+  }, []);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -475,40 +539,22 @@ export default function BlueprintSilhouette(): React.JSX.Element {
           crossedRef.current = false;
         }
       },
-      // 📍 REPLACE THE ENTIRE onPanResponderMove INTERNALS INSIDE YOUR PANRESPONDER WITH THIS:
+     
       onPanResponderMove: (evt, gestureState) => {
         const currentIdx = activeSliceIndexRef.current;
         if (cycleStateRef.current !== 'OFFENSE_SLICE' || sliceStartXRef.current === null || crossedRef.current || currentIdx === -1) return;
+        if (!sliceSessionRef.current.lines.some((line) => line.id === currentIdx)) return;
 
-        // 1. Resolve target layout coordinates safely
-        let targetLineY = 100;
-        setSliceLines((currentLines) => {
-          const activeLineData = currentLines.find(l => l.id === currentIdx);
-          if (activeLineData) targetLineY = activeLineData.topY;
-          return currentLines;
-        });
-
-        // 🚨 FIXED SPATIAL PROXIMITY CHECK
-        // gestureState.dy tracks how far your finger has drifted vertically since the swipe started.
-        // If you are cutting straight across horizontally, dy stays close to 0. If you drag wildly up/down, it blocks it.
         const verticalDrift = Math.abs(gestureState.dy);
-        if (verticalDrift > 90) return; // Forgiving vertical deviation threshold lock
+        if (verticalDrift > 90) return;
 
-        const currentX = gestureState.moveX;
-        const startX = sliceStartXRef.current;
-        const center = CANVAS_WIDTH / 2;
-        const MIN_SLICE_DISTANCE = 60; // Slightly shortened swipe requirement for faster performance response
-
-        if (startX < center && currentX > (startX + MIN_SLICE_DISTANCE)) {
-          validateLineCompletion();
-        } 
-        else if (startX > center && currentX < (startX - MIN_SLICE_DISTANCE)) {
-          validateLineCompletion();
+        if (Math.abs(gestureState.dx) >= 60) {
+          sliceHandlersRef.current.validateLineCompletion();
         }
       },
       onPanResponderRelease: () => {
+        if (cycleStateRef.current !== 'OFFENSE_SLICE') return;
         sliceStartXRef.current = null;
-        crossedRef.current = false;
       },
     })
   ).current;
@@ -526,6 +572,10 @@ export default function BlueprintSilhouette(): React.JSX.Element {
     }
   };
 
+  const handleDismissResolution = () => {
+    onCombatComplete?.();
+  };
+
   return (
     <View style={[styles.blueprintContainer, { borderColor: theme.borderColor }]}>
       <View style={[styles.panelHeader, { borderBottomColor: theme.borderColor }]}>
@@ -536,12 +586,6 @@ export default function BlueprintSilhouette(): React.JSX.Element {
 
       {/* --- REAL-TIME GRAPHICS CANVAS MATRIX --- */}
       <View style={styles.vectorCanvas}>
-        {cycleState === 'SCANNING' && (
-          <Animated.View style={[styles.radarSweepFrame, { borderColor: theme.primaryColor, opacity: scanningPulseAnim }]}>
-            <Text style={[styles.radarText, { color: theme.primaryColor }]}>LOCATING ECTOPLASMIC COORD FIELDS...</Text>
-          </Animated.View>
-        )}
-
         {/* COMPONENT LAYER A: TABLETOP TEXT SHELL */}
         {cycleState === 'TEXT_COMBAT' && (
           <View style={styles.textCombatInterface}>
@@ -595,9 +639,11 @@ export default function BlueprintSilhouette(): React.JSX.Element {
               const isActive = activeSliceIndex === line.id;
               if (!isActive) return null;
 
-              // Dynamic color interpolation calculated directly from state values
-              const glowColor = line.isSliced ? '#5c0606' : '#ef4444'; // Deep dark red on hit, bright red on active
-              const filamentColor = line.isSliced ? '#800c0c' : '#ffffff'; // Dark core vs vibrant core
+              const isSliced = line.isSliced;
+              const neonCrimson = '#ff1744';
+              const bloomCore = '#ffe4e8';
+              const glowColor = isSliced ? neonCrimson : '#ef4444';
+              const filamentColor = isSliced ? bloomCore : '#ffffff';
 
               return (
                 <Animated.View 
@@ -612,13 +658,27 @@ export default function BlueprintSilhouette(): React.JSX.Element {
                   ]}
                   pointerEvents="none"
                 >
-                  {/* Outer Shroud using dynamic color vectors */}
-                  <View style={[styles.laserGlowBackdrop, { backgroundColor: glowColor, shadowColor: glowColor }]} />
-                  
-                  {/* Filament Inner Core using dynamic color vectors */}
-                  <View style={[styles.laserFilamentCore, { backgroundColor: filamentColor, shadowColor: filamentColor }]} />
-                  
-                 
+                  {isSliced && (
+                    <>
+                      <View style={[styles.sliceAuraHalo, styles.sliceAuraHaloOuter, { backgroundColor: '#5c0606' }]} />
+                      <View style={[styles.sliceAuraHalo, styles.sliceAuraHaloMid, { backgroundColor: '#c41010' }]} />
+                      <View style={[styles.sliceAuraHalo, styles.sliceAuraHaloInner, { backgroundColor: neonCrimson }]} />
+                    </>
+                  )}
+
+                  <View
+                    style={[
+                      isSliced ? styles.laserGlowBackdropSliced : styles.laserGlowBackdrop,
+                      { backgroundColor: glowColor, shadowColor: glowColor },
+                    ]}
+                  />
+
+                  <View
+                    style={[
+                      isSliced ? styles.laserFilamentCoreSliced : styles.laserFilamentCore,
+                      { backgroundColor: filamentColor, shadowColor: isSliced ? neonCrimson : filamentColor },
+                    ]}
+                  />
                 </Animated.View>
               );
             })}
@@ -630,7 +690,7 @@ export default function BlueprintSilhouette(): React.JSX.Element {
             <Text style={[styles.victoryHeader, { color: resolutionOutcome === 'VICTORY' ? '#22c55e' : '#ef4444' }]}>
               {resolutionOutcome === 'VICTORY' ? 'INTRUSION DECONSTRUCTED' : 'OPERATIVE SOUL DISCONNECTED'}
             </Text>
-            <Pressable onPress={() => setCycleState('SCANNING')} style={[styles.dismissButton, { borderColor: theme.primaryColor }]}>
+            <Pressable onPress={handleDismissResolution} style={[styles.dismissButton, { borderColor: theme.primaryColor }]}>
               <Text style={[styles.dismissButtonText, { color: theme.primaryColor }]}>[ SYNC LOCAL SECTOR RADAR ]</Text>
             </Pressable>
           </View>
@@ -638,7 +698,7 @@ export default function BlueprintSilhouette(): React.JSX.Element {
       </View>
 
       {/* --- METER TRACKS STATUS DISPLAY --- */}
-      {threat && (cycleState !== 'SCANNING' && cycleState !== 'RESOLUTION') && (
+      {threat && cycleState !== 'RESOLUTION' && (
         <View style={[styles.threatStatusSection, { borderColor: theme.borderColor }]}>
           <View style={styles.meterTextRow}>
             <Text style={[styles.meterLabel, { color: '#ef4444' }]}>{threat.designation}:</Text>
@@ -680,7 +740,7 @@ export default function BlueprintSilhouette(): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
-  blueprintContainer: { borderWidth: 2, padding: 16, width: width - 32, alignSelf: 'center', marginTop: 16 },
+  blueprintContainer: { borderWidth: 2, padding: 16, width: width - 32, alignSelf: 'center' },
   panelHeader: { borderBottomWidth: 1, paddingBottom: 6, marginBottom: 12 },
   panelTitle: { fontFamily: 'monospace', fontSize: 10, letterSpacing: 0.5 },
   vectorCanvas: { 
@@ -730,15 +790,66 @@ const styles = StyleSheet.create({
     shadowOpacity: 1,
     shadowRadius: 12,
   },
+  laserGlowBackdropSliced: {
+    position: 'absolute',
+    width: '62%',
+    alignSelf: 'center',
+    height: 8,
+    opacity: 0.95,
+    borderRadius: 4,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 32,
+    elevation: 16,
+  },
   laserFilamentCore: {
     position: 'absolute',
     width: '55%',
     alignSelf: 'center',
     height: 2,
-    backgroundColor: '#ffffff', // High intensity center line
+    backgroundColor: '#ffffff',
     borderRadius: 1,
     elevation: 8,
     shadowColor: '#ffffff',
+  },
+  laserFilamentCoreSliced: {
+    position: 'absolute',
+    width: '58%',
+    alignSelf: 'center',
+    height: 3,
+    borderRadius: 2,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 18,
+    elevation: 20,
+  },
+  sliceAuraHalo: {
+    position: 'absolute',
+    alignSelf: 'center',
+    borderRadius: 999,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+  },
+  sliceAuraHaloOuter: {
+    width: '98%',
+    height: 36,
+    opacity: 0.14,
+    shadowColor: '#5c0606',
+    shadowRadius: 48,
+  },
+  sliceAuraHaloMid: {
+    width: '82%',
+    height: 22,
+    opacity: 0.32,
+    shadowColor: '#ff0033',
+    shadowRadius: 36,
+  },
+  sliceAuraHaloInner: {
+    width: '68%',
+    height: 14,
+    opacity: 0.55,
+    shadowColor: '#ff1744',
+    shadowRadius: 24,
   },
   swipeLineAlertLabelText: { 
     fontFamily: 'monospace', 

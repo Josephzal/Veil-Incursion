@@ -1,21 +1,21 @@
 import React from 'react';
-import { StyleSheet, SafeAreaView, StatusBar, ScrollView, View } from 'react-native';
+import { StyleSheet, SafeAreaView, StatusBar, View } from 'react-native';
 import { TerminalProvider, useTerminal } from './src/context/TerminalContext';
-import ProfileCard from './src/components/ProfileCard';
-import BlueprintSilhouette from './src/components/BlueprintSilhouette'; // Insert new component link
+import { GameFlowProvider, useGameFlow } from './src/context/GameFlowContext';
+import WelcomeScreen from './src/screens/WelcomeScreen';
+import ScanningScreen from './src/screens/ScanningScreen';
+import CombatScreen from './src/screens/CombatScreen';
 
-function MainTerminalScreen(): React.JSX.Element {
+function GameRoot(): React.JSX.Element {
   const { theme } = useTerminal();
+  const { currentScreen } = useGameFlow();
 
   return (
     <View style={[styles.screenContainer, { backgroundColor: theme.backgroundColor }]}>
       <StatusBar barStyle="light-content" />
-      
-      {/* Wrap into an administrative list view container to allow complete card scanning layout */}
-      <ScrollView contentContainerStyle={styles.scrollWrapper} showsVerticalScrollIndicator={false}>
-        <ProfileCard />
-        <BlueprintSilhouette />
-      </ScrollView>
+      {currentScreen === 'WELCOME' && <WelcomeScreen />}
+      {currentScreen === 'SCANNING' && <ScanningScreen />}
+      {currentScreen === 'COMBAT' && <CombatScreen />}
     </View>
   );
 }
@@ -23,9 +23,11 @@ function MainTerminalScreen(): React.JSX.Element {
 export default function App(): React.JSX.Element {
   return (
     <TerminalProvider>
-      <SafeAreaView style={styles.safeArea}>
-        <MainTerminalScreen />
-      </SafeAreaView>
+      <GameFlowProvider>
+        <SafeAreaView style={styles.safeArea}>
+          <GameRoot />
+        </SafeAreaView>
+      </GameFlowProvider>
     </TerminalProvider>
   );
 }
@@ -37,9 +39,5 @@ const styles = StyleSheet.create({
   },
   screenContainer: {
     flex: 1,
-  },
-  scrollWrapper: {
-    paddingVertical: 16,
-    alignItems: 'center',
   },
 });
