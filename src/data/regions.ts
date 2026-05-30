@@ -1,14 +1,17 @@
 import {
+  ClimateClusterId,
   EncounterType,
   MIN_COMBAT_NODES,
   PathChoice,
   RadarDot,
+  RadarScanResult,
   RegionTheme,
   SectorDefinition,
   SkillCheckEvent,
   TOTAL_RUN_NODES,
   Trinket,
 } from '../types/run';
+import { getClusterBiomes } from './climateClusters';
 
 export const INITIAL_SECTOR_POOL: SectorDefinition[] = [
   {
@@ -158,26 +161,43 @@ function buildPingLabel(index: number, type: EncounterType, theme: RegionTheme):
   return `Ping ${index}: [${ENCOUNTER_TYPE_TAG[type]}] ${pickFlavor(theme, type)}`;
 }
 
-function generateInitialScanChoices(): PathChoice[] {
-  const sectors = pickRandomSectors(3);
-  return sectors.map((sector, i) => ({
-    id: `init-${sector.id}-${i}`,
-    sector,
-    encounterType: 'COMBAT' as EncounterType,
-    label: ENCOUNTER_LABELS.COMBAT[Math.floor(Math.random() * ENCOUNTER_LABELS.COMBAT.length)],
-  }));
+function generateInitialScanChoices(clusterId: ClimateClusterId, count: number): PathChoice[] {
+  const usedIds = new Set<string>();
+  const choices: PathChoice[] = [];
+  let attempts = 0;
+  while (choices.length < count && attempts < 40) {
+    attempts += 1;
+    const sector = pickSectorFromCluster(clusterId, usedIds);
+    if (!sector) continue;
+    choices.push({
+      id: `init-${sector.id}-${choices.length}`,
+      sector,
+      encounterType: 'COMBAT',
+      label: ENCOUNTER_LABELS.COMBAT[Math.floor(Math.random() * ENCOUNTER_LABELS.COMBAT.length)],
+    });
+  }
+  return choices;
 }
 
-/** Build 3 radar blips with encounter metadata for the master scanner navigator. */
+function randomSignalCount(): number {
+  return 2 + Math.floor(Math.random() * 4);
+}
+
+/** Build 2–5 radar blips with encounter metadata for the master scanner navigator. */
 export function generateRadarScanDots(
-  homeRegion: RegionTheme | null,
+  climateCluster: ClimateClusterId | null,
   upcomingNodeIndex: number,
   combatNodesCleared: number,
   coreDiameterPx: number,
-): RadarDot[] {
-  const choices = homeRegion === null
-    ? generateInitialScanChoices()
-    : generatePathChoices(homeRegion, upcomingNodeIndex, combatNodesCleared, 3);
+): RadarScanResult {
+  const signalCount = randomSignalCount();
+  if (!climateCluster) {
+    return { dots: [], signalCount: 0 };
+  }
+
+  const choices = upcomingNodeIndex === 0 && combatNodesCleared === 0
+    ? generateInitialScanChoices(climateCluster, signalCount)
+    : generatePathChoices(climateCluster, upcomingNodeIndex, combatNodesCleared, signalCount);
 
   const center = coreDiameterPx / 2;
   const maxRadius = center * 0.78;
@@ -217,20 +237,15 @@ export function generateRadarScanDots(
     }
   }
 
-  return dots;
+  return { dots, signalCount };
 }
 
-function pickSectorForTheme(homeTheme: RegionTheme, usedNames: Set<string>): SectorDefinition | null {
-  const regional = REGION_ROOMS[homeTheme];
-  const city = REGION_ROOMS.CITY;
-  const useRegional = Math.random() < 0.8;
-  const pool = useRegional
-    ? regional
-    : [...city, ...REGION_ROOMS.HOUSING, ...REGION_ROOMS.FOREST].filter((s) => s.theme !== homeTheme);
-
-  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+function pickSectorFromCluster(clusterId: ClimateClusterId, usedIds: Set<string>): SectorDefinition | null {
+  const shuffled = [...getClusterBiomes(clusterId)].sort(() => Math.random() - 0.5);
   for (const sector of shuffled) {
-    if (!usedNames.has(sector.name)) return sector;
+    if (usedIds.has(sector.id)) continue;
+    usedIds.add(sector.id);
+    return sector;
   }
   return null;
 }
@@ -266,21 +281,20 @@ export function pickEncounterTypeForNode(
 }
 
 export function generatePathChoices(
-  homeTheme: RegionTheme,
+  clusterId: ClimateClusterId,
   upcomingNodeIndex: number,
   combatNodesCleared: number,
-  count: number = 3,
+  count: number,
 ): PathChoice[] {
   const choices: PathChoice[] = [];
-  const usedNames = new Set<string>();
+  const usedIds = new Set<string>();
   let attempts = 0;
 
   while (choices.length < count && attempts < 40) {
     attempts += 1;
-    const sector = pickSectorForTheme(homeTheme, usedNames);
+    const sector = pickSectorFromCluster(clusterId, usedIds);
     if (!sector) continue;
 
-    usedNames.add(sector.name);
     const encounterType = pickEncounterTypeForNode(upcomingNodeIndex, combatNodesCleared);
     const labels = ENCOUNTER_LABELS[encounterType];
 
@@ -307,18 +321,12 @@ export function getThemedSkillChecks(theme: RegionTheme): SkillCheckEvent[] {
         narrative: 'A crash cart drawer slides open on its own — something glints inside the sterile steel.',
         attribute: 'Security',
         modifier: 3,
-        dc: 13,
-        successReward: { hp: 15, log: 'Recovered a stabilizer trinket from the cart.' },
-        failurePenalty: { hp: 12, ambush: true, log: 'Containment breach — apparition drawn to the alarm.' },
       },
       {
         id: 'h-mainframe',
         narrative: 'The nurse station terminal still runs. Patient records scroll in languages that predate the building.',
         attribute: 'Interface',
         modifier: 4,
-        dc: 14,
-        successReward: { stamina: 25, log: 'Mainframe handshake successful — stamina rerouted.' },
-        failurePenalty: { stamina: 20, log: 'Rift interference corrupts your metabolic sync.' },
       },
     ],
     HOUSING: [
@@ -327,9 +335,6 @@ export function getThemedSkillChecks(theme: RegionTheme): SkillCheckEvent[] {
         narrative: 'A dumpster behind the complex hums with trapped ley-energy. Something valuable rattles inside.',
         attribute: 'Athletics',
         modifier: 2,
-        dc: 12,
-        successReward: { stamina: 20, log: 'Salvaged a charged trinket from the refuse.' },
-        failurePenalty: { hp: 10, ambush: true, log: 'Something in the trash wakes up hungry.' },
       },
     ],
     FOREST: [
@@ -338,9 +343,6 @@ export function getThemedSkillChecks(theme: RegionTheme): SkillCheckEvent[] {
         narrative: 'A moss-covered shrine pulses at the breach edge. Offerings still smolder.',
         attribute: 'Interface',
         modifier: 3,
-        dc: 13,
-        successReward: { hp: 20, log: 'Shrine blessing restores soul anchor integrity.' },
-        failurePenalty: { hp: 15, log: 'The shrine rejects your frequency.' },
       },
     ],
     CITY: [
@@ -349,9 +351,6 @@ export function getThemedSkillChecks(theme: RegionTheme): SkillCheckEvent[] {
         narrative: 'A municipal relay box sparks — mainframe access might reroute local veil traffic.',
         attribute: 'Interface',
         modifier: 5,
-        dc: 15,
-        successReward: { hp: 10, stamina: 15, log: 'Relay hacked — resources siphoned from the grid.' },
-        failurePenalty: { stamina: 25, ambush: true, log: 'Security daemon manifests as hostile vector.' },
       },
     ],
   };

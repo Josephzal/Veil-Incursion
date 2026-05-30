@@ -43,6 +43,7 @@ export default function ScanningScreen(): React.JSX.Element {
   const [phase, setPhase] = useState<ScanPhase>('SWEEPING');
   const [scanDots, setScanDots] = useState<RadarDot[]>([]);
   const [displayDots, setDisplayDots] = useState<RadarDot[]>([]);
+  const [signalCount, setSignalCount] = useState(0);
   const [selectedDot, setSelectedDot] = useState<RadarDot | null>(null);
 
   const pulseAnim = useRef(new Animated.Value(0.25)).current;
@@ -52,7 +53,7 @@ export default function ScanningScreen(): React.JSX.Element {
   const pingedThisRotationRef = useRef<Set<string>>(new Set());
   const lastSweepValueRef = useRef(0);
 
-  const isDiscoveryScan = runState.homeRegion === null;
+  const isDiscoveryScan = runState.currentNode === 0 && runState.combatNodesCleared === 0;
   const upcomingNodeIndex = runState.currentNode;
 
   useEffect(() => {
@@ -60,18 +61,25 @@ export default function ScanningScreen(): React.JSX.Element {
     setSelectedDot(null);
     setDisplayDots([]);
 
-    const freshDots = generateRadarScanDots(
-      runState.homeRegion,
+    if (!runState.climateCluster) {
+      setScanDots([]);
+      setSignalCount(0);
+      return;
+    }
+
+    const { dots, signalCount: count } = generateRadarScanDots(
+      runState.climateCluster,
       upcomingNodeIndex,
       runState.combatNodesCleared,
       RADAR_CORE,
     );
-    setScanDots(freshDots);
-    dotOpacityRefs.current = freshDots.map(() => new Animated.Value(0));
+    setScanDots(dots);
+    setSignalCount(count);
+    dotOpacityRefs.current = dots.map(() => new Animated.Value(0));
     dotPulseRefs.current = [];
     pingedThisRotationRef.current.clear();
     lastSweepValueRef.current = 0;
-  }, [scanSessionKey, runState.homeRegion, upcomingNodeIndex, runState.combatNodesCleared]);
+  }, [scanSessionKey, runState.climateCluster, upcomingNodeIndex, runState.combatNodesCleared]);
 
   useEffect(() => {
     if (scanDots.length === 0) return;
@@ -178,7 +186,7 @@ export default function ScanningScreen(): React.JSX.Element {
   const handleInitiateIncursion = () => {
     if (!selectedDot) return;
     commitRadarDot(selectedDot);
-    appendRunLog(`>> Initiating incursion — Node ${runState.homeRegion === null ? 1 : runState.currentNode + 1}.`);
+    appendRunLog(`>> Initiating incursion — Node ${runState.currentNode + 1}.`);
     deployEncounter(selectedDot.encounterType);
   };
 
@@ -279,7 +287,9 @@ export default function ScanningScreen(): React.JSX.Element {
         )}
         {phase === 'DOTS' && (
           <>
-            <Text style={[styles.scanStatus, { color: TERMINAL_ACCENT }]}>3 VECTORS DETECTED</Text>
+            <Text style={[styles.scanStatus, { color: TERMINAL_ACCENT }]}>
+              {`>> SCAN COMPLETE: ${signalCount} SIGNALS DETECTED`}
+            </Text>
             <Text style={[styles.scanSubStatus, { color: theme.mutedColor }]}>
               Select a white node to inspect encounter profile
             </Text>

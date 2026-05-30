@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import PersistentTerminalLog from '../components/PersistentTerminalLog';
-import { pickRandomTrinkets, TRINKET_POOL, useRun } from '../context/RunContext';
+import { useRun } from '../context/RunContext';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useNodeProgression } from '../hooks/useNodeProgression';
@@ -9,10 +9,33 @@ import { useNodeProgression } from '../hooks/useNodeProgression';
 const TERMINAL_ACCENT = '#00ff33';
 
 type CalibrationPhase = 'READY' | 'PINBALL' | 'LOCKED';
+type RollTier = 'CRITICAL_SUCCESS' | 'SUCCESS' | 'FAILURE' | 'CRITICAL_DESYNC';
+
+function resolveTier(roll: number, modifier: number): RollTier {
+  const total = roll + modifier;
+  if (roll === 1) return 'CRITICAL_DESYNC';
+  if (total >= 18) return 'CRITICAL_SUCCESS';
+  if (total >= 11) return 'SUCCESS';
+  return 'FAILURE';
+}
+
+const TIER_LABEL: Record<RollTier, string> = {
+  CRITICAL_SUCCESS: 'CRITICAL SUCCESS',
+  SUCCESS: 'SUCCESS',
+  FAILURE: 'FAILURE',
+  CRITICAL_DESYNC: 'CRITICAL DE-SYNC',
+};
 
 export default function SkillCheckScreen(): React.JSX.Element {
   const { theme } = useTerminal();
-  const { runState, getCurrentSkillCheck, applySkillCheckResult, applyTrinket, appendRunLog, endRun, setPendingAmbush } = useRun();
+  const {
+    runState,
+    getCurrentSkillCheck,
+    applySkillCheckTier,
+    appendRunLog,
+    endRun,
+    setPendingAmbush,
+  } = useRun();
   const { startCombat, startGameOver } = useGameFlow();
   const { completeCurrentNode } = useNodeProgression();
   const event = getCurrentSkillCheck();
@@ -24,7 +47,6 @@ export default function SkillCheckScreen(): React.JSX.Element {
 
   const flickerAnim = useRef(new Animated.Value(0)).current;
   const pinAnim = useRef(new Animated.Value(0)).current;
-  const hiddenRollRef = useRef({ roll: 0, total: 0, success: false });
 
   useEffect(() => {
     const loop = Animated.loop(
@@ -50,74 +72,73 @@ export default function SkillCheckScreen(): React.JSX.Element {
 
     const roll = Math.floor(Math.random() * 20) + 1;
     const total = roll + event.modifier;
-    const success = total >= event.dc;
-    hiddenRollRef.current = { roll, total, success };
+    const tier = resolveTier(roll, event.modifier);
+    const targetValue = Math.min(Math.max(Math.round((total / 22) * 100), 5), 98);
 
-    const targetValue = Math.min(Math.max(Math.round((total / (event.dc + 5)) * 100), 5), 98);
     setPhase('PINBALL');
     pinAnim.setValue(0);
 
-    Animated.sequence([
-      Animated.timing(pinAnim, {
-        toValue: 1,
-        duration: 1400,
-        easing: Easing.out(Easing.elastic(1.2)),
-        useNativeDriver: false,
-      }),
-    ]).start(() => {
+    Animated.timing(pinAnim, {
+      toValue: 1,
+      duration: 1400,
+      easing: Easing.out(Easing.elastic(1.2)),
+      useNativeDriver: false,
+    }).start(() => {
       setCalibrationValue(targetValue);
       setPhase('LOCKED');
-      resolveCalibration(success, roll, total, targetValue);
+      resolveCalibration(tier, roll, total);
     });
 
     const listener = pinAnim.addListener(({ value }) => {
       const bounce = Math.abs(Math.sin(value * Math.PI * 8)) * (1 - value) * 40;
-      const base = value * targetValue;
-      setCalibrationValue(Math.min(Math.round(base + bounce + Math.random() * 8), 99));
+      setCalibrationValue(Math.min(Math.round(value * targetValue + bounce + Math.random() * 8), 99));
     });
-
     setTimeout(() => pinAnim.removeListener(listener), 1500);
   };
 
-  const resolveCalibration = (success: boolean, roll: number, total: number, finalValue: number) => {
+  const resolveCalibration = (tier: RollTier, roll: number, total: number) => {
     if (resolved) return;
     setResolved(true);
+    setResultFlash(TIER_LABEL[tier]);
 
     appendRunLog(
-      `>> Calibration d20: ${roll} (+${event.modifier} ${event.attribute}) = ${total} vs DC ${event.dc} — locked at ${finalValue}%.`,
+      `>> Calibration d20: ${roll} (+${event.modifier} ${event.attribute}) = ${total} — ${TIER_LABEL[tier]}.`,
     );
 
-    if (success) {
-      setResultFlash('CALIBRATION OPTIMAL');
-      const hpGain = event.successReward.hp ?? 0;
-      const stamGain = event.successReward.stamina ?? 0;
-      applySkillCheckResult(hpGain, stamGain, `>> ${event.successReward.log}`);
+    const logLines: Record<RollTier, string> = {
+      CRITICAL_SUCCESS: '>> CRITICAL SUCCESS — powerful boon or +30 HP applied.',
+      SUCCESS: '>> SUCCESS — +10 Max Stamina and +20 Stamina recovered.',
+      FAILURE: '>> FAILURE — -15 Soul Anchor HP, -30 Max Stamina (corruption).',
+      CRITICAL_DESYNC: '>> CRITICAL DE-SYNC — -25 HP and elite ambush triggered.',
+    };
 
-      const trinket = pickRandomTrinkets(TRINKET_POOL, 1)[0];
-      if (trinket) applyTrinket(trinket);
+    applySkillCheckTier(tier, logLines[tier]);
 
-      setTimeout(() => completeCurrentNode(event.successReward.log), 1800);
-    } else {
-      setResultFlash('CRITICAL DE-SYNC / CONTAINMENT BREACH');
-      const hpLoss = event.failurePenalty.hp ?? 0;
-      const stamLoss = event.failurePenalty.stamina ?? 0;
-      const projectedHp = runState.soulAnchorIntegrity - hpLoss;
-      applySkillCheckResult(-hpLoss, -stamLoss, `>> ${event.failurePenalty.log}`);
+    const projectedHp =
+      tier === 'CRITICAL_DESYNC'
+        ? runState.soulAnchorIntegrity - 25
+        : tier === 'FAILURE'
+          ? runState.soulAnchorIntegrity - 15
+          : tier === 'CRITICAL_SUCCESS'
+            ? Math.min(runState.soulAnchorIntegrity + 30, runState.maxSoulAnchor)
+            : runState.soulAnchorIntegrity;
 
-      if (projectedHp <= 0) {
-        appendRunLog('>> SOUL ANCHOR DESTROYED — run terminated.');
-        setTimeout(() => { endRun('SOUL ANCHOR DESTROYED'); startGameOver(); }, 1800);
+    setTimeout(() => {
+      if (projectedHp <= 0 && tier !== 'CRITICAL_SUCCESS') {
+        endRun('SOUL ANCHOR DESTROYED');
+        startGameOver();
         return;
       }
 
-      if (event.failurePenalty.ambush) {
+      if (tier === 'CRITICAL_DESYNC') {
         setPendingAmbush(true);
-        appendRunLog('>> AMBUSH — hostile vector engaged.');
-        setTimeout(() => startCombat(), 1800);
-      } else {
-        setTimeout(() => completeCurrentNode(event.failurePenalty.log), 1800);
+        appendRunLog('>> ELITE AMBUSH — deploying to combat immediately.');
+        startCombat();
+        return;
       }
-    }
+
+      completeCurrentNode(`${TIER_LABEL[tier]} resolved.`);
+    }, 1800);
   };
 
   const flickerOpacity = flickerAnim.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] });
@@ -143,7 +164,7 @@ export default function SkillCheckScreen(): React.JSX.Element {
           </Text>
 
           <View style={[styles.sliderTrack, { borderColor: theme.borderColor }]}>
-            <View style={[styles.sliderFill, { width: `${calibrationValue}%`, backgroundColor: resultFlash?.includes('OPTIMAL') ? TERMINAL_ACCENT : resultFlash ? '#ef4444' : TERMINAL_ACCENT }]} />
+            <View style={[styles.sliderFill, { width: `${calibrationValue}%`, backgroundColor: resultFlash?.includes('SUCCESS') || resultFlash?.includes('CRITICAL SUCCESS') ? TERMINAL_ACCENT : resultFlash ? '#ef4444' : TERMINAL_ACCENT }]} />
             <View style={[styles.sliderPin, { left: `${Math.min(calibrationValue, 96)}%` }]} />
           </View>
 
@@ -155,7 +176,7 @@ export default function SkillCheckScreen(): React.JSX.Element {
         </Animated.View>
 
         {resultFlash && (
-          <Text style={[styles.resultFlash, { color: resultFlash.includes('OPTIMAL') ? TERMINAL_ACCENT : '#ef4444' }]}>
+          <Text style={[styles.resultFlash, { color: resultFlash.includes('FAILURE') || resultFlash.includes('DE-SYNC') ? '#ef4444' : TERMINAL_ACCENT }]}>
             {resultFlash}
           </Text>
         )}

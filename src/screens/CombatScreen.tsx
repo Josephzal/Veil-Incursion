@@ -1,13 +1,11 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import BlueprintSilhouette from '../components/BlueprintSilhouette';
+import TacticalCombatHub from '../components/TacticalCombatHub';
 import PersistentTerminalLog from '../components/PersistentTerminalLog';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useNodeProgression } from '../hooks/useNodeProgression';
-
-type CombatPhase = 'TEXT_COMBAT' | 'DEFEND_PARRY' | 'OFFENSE_SLICE' | 'RESOLUTION';
 
 export default function CombatScreen(): React.JSX.Element {
   const { startPostCombatBoon, startGameOver } = useGameFlow();
@@ -23,9 +21,6 @@ export default function CombatScreen(): React.JSX.Element {
     incrementCombatNodesCleared,
   } = useRun();
   const { completeCurrentNode } = useNodeProgression();
-  const [cyclePhase, setCyclePhase] = useState<CombatPhase>('TEXT_COMBAT');
-
-  const hideMacroLog = cyclePhase === 'DEFEND_PARRY' || cyclePhase === 'OFFENSE_SLICE';
 
   const handleCombatComplete = (result: {
     victory: boolean;
@@ -38,9 +33,8 @@ export default function CombatScreen(): React.JSX.Element {
       return;
     }
 
-    syncAfterCombat(result.remainingHp);
+    syncAfterCombat(result.remainingHp, result.remainingStamina);
 
-    // Skill-check ambush fights skip the post-combat boon and advance immediately.
     if (runState.pendingAmbush) {
       clearPendingAmbush();
       incrementCombatNodesCleared();
@@ -48,7 +42,6 @@ export default function CombatScreen(): React.JSX.Element {
       return;
     }
 
-    // Standard combat victory: boon reward first, then node advance + path selection.
     incrementCombatNodesCleared();
     refillStaminaAfterCombat();
     preparePostCombatBoons();
@@ -59,9 +52,8 @@ export default function CombatScreen(): React.JSX.Element {
     <View style={[styles.container, { backgroundColor: theme.backgroundColor }]}>
       <View style={styles.combatStage}>
         <View style={styles.hubWrapper}>
-          <BlueprintSilhouette
+          <TacticalCombatHub
             onCombatComplete={handleCombatComplete}
-            onCycleStateChange={setCyclePhase}
             initialOperativeHp={runState.soulAnchorIntegrity}
             initialStamina={runState.currentStamina}
             maxStamina={runState.maxStamina}
@@ -70,10 +62,12 @@ export default function CombatScreen(): React.JSX.Element {
             parryMultiplierBonus={runState.parryMultiplierBonus}
             parryWindowBonus={runState.parryWindowBonus}
             sliceDamagePenalty={runState.sliceDamagePenalty}
+            enemyProfile={runState.pendingEnemy}
+            nodeIndex={runState.pendingEncounter?.index ?? runState.currentNode}
             onTerminalLog={appendRunLog}
           />
         </View>
-        <PersistentTerminalLog visible={runState.runActive && !hideMacroLog} expanded />
+        <PersistentTerminalLog visible={runState.runActive} expanded />
       </View>
     </View>
   );

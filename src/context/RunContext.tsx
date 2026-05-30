@@ -1,4 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { pickRandomClimateCluster, getClusterDefinition } from '../data/climateClusters';
+import { spawnEnemyProfile } from '../data/enemies';
 import {
   buildEncounter,
   getThemedSkillChecks,
@@ -9,6 +11,7 @@ import {
 import {
   BASE_MAX_SOUL_ANCHOR,
   BASE_MAX_STAMINA,
+  ClimateClusterId,
   EncounterNode,
   RadarDot,
   RunState,
@@ -29,11 +32,11 @@ interface RunContextType {
   advanceNode: () => { hasNext: boolean; completedCount: number };
   completeNodeAfterBoon: (trinket: Trinket) => { route: 'SCANNING' | 'RUN_COMPLETE'; nodesCleared: number };
   incrementCombatNodesCleared: () => void;
-  syncAfterCombat: (remainingHp: number) => void;
+  syncAfterCombat: (remainingHp: number, remainingStamina: number) => void;
   refillStaminaAfterCombat: () => void;
   applyTrinket: (trinket: Trinket) => void;
   preparePostCombatBoons: () => Trinket[];
-  applySkillCheckResult: (hpDelta: number, staminaDelta: number, logLine: string) => void;
+  applySkillCheckTier: (tier: 'CRITICAL_SUCCESS' | 'SUCCESS' | 'FAILURE' | 'CRITICAL_DESYNC', logLine: string) => void;
   applyRestChoice: (type: 'REST' | 'REPAIR') => void;
   getCurrentEncounter: () => EncounterNode | null;
   getCurrentSkillCheck: () => SkillCheckEvent | null;
@@ -65,10 +68,11 @@ function createInitialRunState(): RunState {
     currentStamina: BASE_MAX_STAMINA,
     maxSoulAnchor: BASE_MAX_SOUL_ANCHOR,
     soulAnchorIntegrity: BASE_MAX_SOUL_ANCHOR,
-    homeRegion: null,
+    climateCluster: null,
     currentSector: null,
     activeTrinkets: [],
     pendingEncounter: null,
+    pendingEnemy: null,
     pendingAmbush: false,
     parryWindowBonus: 0,
     parryMultiplierBonus: 0,
@@ -94,12 +98,22 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const startNewRun = useCallback(() => {
-    const next = { ...createInitialRunState(), runActive: true };
+    const cluster = pickRandomClimateCluster();
+    const clusterDef = getClusterDefinition(cluster);
+    const next: RunState = {
+      ...createInitialRunState(),
+      runActive: true,
+      climateCluster: cluster,
+    };
     runStateRef.current = next;
     setRunState(next);
     setScanSessionKey(0);
     setPostCombatBoonChoices([]);
-    setRunLog(['>> RUN INITIALIZED — ANOMALY SWEEP AUTHORIZED.']);
+    setRunLog([
+      '>> RUN INITIALIZED — ANOMALY SWEEP AUTHORIZED.',
+      `>> CLIMATE CLUSTER LOCKED: ${clusterDef.name}`,
+      `>> ${clusterDef.tagline}`,
+    ]);
   }, []);
 
   const beginScanSession = useCallback(() => {
@@ -111,6 +125,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       const activeTrinkets = [...prev.activeTrinkets, trinket];
       const mods = aggregateModifiers(activeTrinkets);
       let maxSoulAnchor = prev.maxSoulAnchor;
+      let maxStamina = prev.maxStamina;
       let soulAnchorIntegrity = prev.soulAnchorIntegrity;
       let currentStamina = prev.currentStamina;
 
@@ -118,43 +133,55 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         maxSoulAnchor += trinket.maxHpBonus;
         soulAnchorIntegrity += trinket.maxHpBonus;
       }
+      if (trinket.maxStaminaBonus) {
+        maxStamina += trinket.maxStaminaBonus;
+        currentStamina += trinket.maxStaminaBonus;
+      }
       if (trinket.hpRestore) {
         soulAnchorIntegrity = Math.min(soulAnchorIntegrity + trinket.hpRestore, maxSoulAnchor);
       }
       if (trinket.staminaRestore) {
-        currentStamina = Math.min(currentStamina + trinket.staminaRestore, prev.maxStamina);
+        currentStamina = Math.min(currentStamina + trinket.staminaRestore, maxStamina);
       }
 
-      return {
+      const next = {
         ...prev,
         activeTrinkets,
         maxSoulAnchor,
+        maxStamina,
         soulAnchorIntegrity,
         currentStamina,
         ...mods,
       };
+      runStateRef.current = next;
+      return next;
     });
     appendRunLog(`>> Trinket acquired: ${trinket.name} — ${trinket.effect}`);
   }, [appendRunLog]);
 
   const commitRadarDot = useCallback((dot: RadarDot): EncounterNode => {
     const prev = runStateRef.current;
-    const nodeIndex = prev.homeRegion === null ? 0 : prev.currentNode;
+    const nodeIndex = prev.currentNode;
     const encounter = buildEncounter(nodeIndex, dot.sector, dot.encounterType, dot.label);
+    const pendingEnemy =
+      dot.encounterType === 'COMBAT'
+        ? spawnEnemyProfile(dot.sector, nodeIndex, prev.pendingAmbush)
+        : null;
 
     const next: RunState = {
       ...prev,
-      homeRegion: prev.homeRegion ?? dot.sector.theme,
+      climateCluster: prev.climateCluster ?? 'URBAN',
       currentSector: dot.sector,
       pendingEncounter: encounter,
+      pendingEnemy,
     };
     runStateRef.current = next;
     setRunState(next);
 
-    if (prev.homeRegion === null) {
-      appendRunLog(`>> Home sector locked: ${dot.sector.name} — ${dot.sector.subsector}.`);
-    }
     appendRunLog(`>> ${dot.pingLabel} — incursion vector confirmed.`);
+    if (pendingEnemy) {
+      appendRunLog(`>> Hostile signature: ${pendingEnemy.designation} [${pendingEnemy.class}] HP ${pendingEnemy.maxHp}.`);
+    }
     return encounter;
   }, [appendRunLog]);
 
@@ -171,10 +198,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   }, [runState.pendingEncounter]);
 
   const getCurrentSkillCheck = useCallback((): SkillCheckEvent | null => {
-    const theme = runState.currentSector?.theme ?? runState.homeRegion ?? 'CITY';
+    const theme = runState.currentSector?.theme ?? 'CITY';
     const pool = getThemedSkillChecks(theme);
     return pool[Math.floor(Math.random() * pool.length)] ?? pool[0];
-  }, [runState.currentSector, runState.homeRegion]);
+  }, [runState.currentSector]);
 
   const advanceNode = useCallback(() => {
     const prev = runStateRef.current;
@@ -184,6 +211,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       ...prev,
       currentNode: nextCompleted,
       pendingEncounter: null,
+      pendingEnemy: null,
     };
     runStateRef.current = nextState;
     setRunState(nextState);
@@ -198,6 +226,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const activeTrinkets = [...prev.activeTrinkets, trinket];
     const mods = aggregateModifiers(activeTrinkets);
     let maxSoulAnchor = prev.maxSoulAnchor;
+    let maxStamina = prev.maxStamina;
     let soulAnchorIntegrity = prev.soulAnchorIntegrity;
     let currentStamina = prev.currentStamina;
 
@@ -205,21 +234,27 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       maxSoulAnchor += trinket.maxHpBonus;
       soulAnchorIntegrity += trinket.maxHpBonus;
     }
+    if (trinket.maxStaminaBonus) {
+      maxStamina += trinket.maxStaminaBonus;
+      currentStamina += trinket.maxStaminaBonus;
+    }
     if (trinket.hpRestore) {
       soulAnchorIntegrity = Math.min(soulAnchorIntegrity + trinket.hpRestore, maxSoulAnchor);
     }
     if (trinket.staminaRestore) {
-      currentStamina = Math.min(currentStamina + trinket.staminaRestore, prev.maxStamina);
+      currentStamina = Math.min(currentStamina + trinket.staminaRestore, maxStamina);
     }
 
     const nextState: RunState = {
       ...prev,
       activeTrinkets,
       maxSoulAnchor,
+      maxStamina,
       soulAnchorIntegrity,
       currentStamina,
       currentNode: nodesCleared,
       pendingEncounter: null,
+      pendingEnemy: null,
       ...mods,
     };
     runStateRef.current = nextState;
@@ -231,18 +266,25 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     return { route: runComplete ? 'RUN_COMPLETE' : 'SCANNING', nodesCleared };
   }, [appendRunLog]);
 
-  const syncAfterCombat = useCallback((remainingHp: number) => {
-    setRunState((prev) => ({
-      ...prev,
-      soulAnchorIntegrity: Math.min(Math.max(remainingHp, 0), prev.maxSoulAnchor),
-    }));
+  const syncAfterCombat = useCallback((remainingHp: number, remainingStamina: number) => {
+    setRunState((prev) => {
+      const next = {
+        ...prev,
+        soulAnchorIntegrity: Math.min(Math.max(remainingHp, 0), prev.maxSoulAnchor),
+        currentStamina: Math.min(Math.max(remainingStamina, 0), prev.maxStamina),
+        pendingEnemy: null,
+      };
+      runStateRef.current = next;
+      return next;
+    });
   }, []);
 
   const refillStaminaAfterCombat = useCallback(() => {
-    setRunState((prev) => ({
-      ...prev,
-      currentStamina: prev.maxStamina,
-    }));
+    setRunState((prev) => {
+      const next = { ...prev, currentStamina: prev.maxStamina };
+      runStateRef.current = next;
+      return next;
+    });
     appendRunLog('>> Combat node cleared — stamina reserves fully replenished.');
   }, [appendRunLog]);
 
@@ -252,12 +294,53 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     return boons;
   }, []);
 
-  const applySkillCheckResult = useCallback((hpDelta: number, staminaDelta: number, logLine: string) => {
-    setRunState((prev) => ({
-      ...prev,
-      soulAnchorIntegrity: Math.min(Math.max(prev.soulAnchorIntegrity + hpDelta, 0), prev.maxSoulAnchor),
-      currentStamina: Math.min(Math.max(prev.currentStamina + staminaDelta, 0), prev.maxStamina),
-    }));
+  const applySkillCheckTier = useCallback((tier: 'CRITICAL_SUCCESS' | 'SUCCESS' | 'FAILURE' | 'CRITICAL_DESYNC', logLine: string) => {
+    setRunState((prev) => {
+      let maxStamina = prev.maxStamina;
+      let maxSoulAnchor = prev.maxSoulAnchor;
+      let soulAnchorIntegrity = prev.soulAnchorIntegrity;
+      let currentStamina = prev.currentStamina;
+      let pendingAmbush = prev.pendingAmbush;
+      let activeTrinkets = prev.activeTrinkets;
+
+      switch (tier) {
+        case 'CRITICAL_SUCCESS': {
+          soulAnchorIntegrity = Math.min(soulAnchorIntegrity + 30, maxSoulAnchor);
+          const trinket = pickRandomTrinkets(TRINKET_POOL, 1)[0];
+          if (trinket) activeTrinkets = [...activeTrinkets, trinket];
+          break;
+        }
+        case 'SUCCESS':
+          maxStamina += 10;
+          currentStamina = Math.min(currentStamina + 20, maxStamina);
+          break;
+        case 'FAILURE':
+          soulAnchorIntegrity = Math.max(soulAnchorIntegrity - 15, 0);
+          maxStamina = Math.max(maxStamina - 30, 20);
+          currentStamina = Math.min(currentStamina, maxStamina);
+          break;
+        case 'CRITICAL_DESYNC':
+          soulAnchorIntegrity = Math.max(soulAnchorIntegrity - 25, 0);
+          pendingAmbush = true;
+          break;
+        default:
+          break;
+      }
+
+      const mods = aggregateModifiers(activeTrinkets);
+      const next = {
+        ...prev,
+        maxStamina,
+        maxSoulAnchor,
+        soulAnchorIntegrity,
+        currentStamina,
+        pendingAmbush,
+        activeTrinkets,
+        ...mods,
+      };
+      runStateRef.current = next;
+      return next;
+    });
     appendRunLog(logLine);
   }, [appendRunLog]);
 
@@ -265,10 +348,17 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     setRunState((prev) => {
       if (type === 'REST') {
         const restore = Math.floor(prev.maxStamina * 0.4);
-        return { ...prev, currentStamina: Math.min(prev.currentStamina + restore, prev.maxStamina) };
+        const next = { ...prev, currentStamina: Math.min(prev.currentStamina + restore, prev.maxStamina) };
+        runStateRef.current = next;
+        return next;
       }
       const restore = Math.floor(prev.maxSoulAnchor * 0.25);
-      return { ...prev, soulAnchorIntegrity: Math.min(prev.soulAnchorIntegrity + restore, prev.maxSoulAnchor) };
+      const next = {
+        ...prev,
+        soulAnchorIntegrity: Math.min(prev.soulAnchorIntegrity + restore, prev.maxSoulAnchor),
+      };
+      runStateRef.current = next;
+      return next;
     });
     appendRunLog(type === 'REST' ? '>> Sanctuary Rest — stamina reserves replenished.' : '>> Anchor Repair — soul anchor integrity restored.');
   }, [appendRunLog]);
@@ -306,7 +396,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       refillStaminaAfterCombat,
       applyTrinket,
       preparePostCombatBoons,
-      applySkillCheckResult,
+      applySkillCheckTier,
       applyRestChoice,
       getCurrentEncounter,
       getCurrentSkillCheck,
@@ -330,7 +420,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       refillStaminaAfterCombat,
       applyTrinket,
       preparePostCombatBoons,
-      applySkillCheckResult,
+      applySkillCheckTier,
       applyRestChoice,
       getCurrentEncounter,
       getCurrentSkillCheck,
@@ -351,5 +441,4 @@ export function useRun() {
   return context;
 }
 
-// Re-export for skill check trinket rewards
 export { pickRandomTrinkets, TRINKET_POOL };

@@ -1,6 +1,19 @@
 export type RegionTheme = 'HOSPITAL' | 'HOUSING' | 'FOREST' | 'CITY';
 
+export type ClimateClusterId = 'URBAN' | 'ISOLATED' | 'WILDERNESS';
+
 export type EncounterType = 'COMBAT' | 'SKILL_CHECK' | 'REST';
+
+export type EnemyClass = 'GREMLIN' | 'APPARITION' | 'ABOMINATION';
+
+export type EnemyIntent =
+  | 'STRIKE'
+  | 'STRIP_STAMINA'
+  | 'SIPHON_KINETIC'
+  | 'EVADE'
+  | 'CHARGE'
+  | 'WORLD_ENDER'
+  | 'FORTIFY';
 
 export interface SectorDefinition {
   id: string;
@@ -24,6 +37,19 @@ export interface EncounterNode {
   sector: SectorDefinition;
 }
 
+export interface EnemyCombatProfile {
+  class: EnemyClass;
+  designation: string;
+  maxHp: number;
+  currentHp: number;
+  baseDamage: number;
+  intent: EnemyIntent;
+  chargeTurns: number;
+  evadeActive: boolean;
+  nodeIndex: number;
+  scale: number;
+}
+
 export interface Trinket {
   id: string;
   name: string;
@@ -33,6 +59,7 @@ export interface Trinket {
   parryMultiplierBonus?: number;
   sliceDamagePenalty?: number;
   maxHpBonus?: number;
+  maxStaminaBonus?: number;
   startingKineticPercent?: number;
   hpRestore?: number;
   staminaRestore?: number;
@@ -43,10 +70,6 @@ export interface SkillCheckEvent {
   narrative: string;
   attribute: string;
   modifier: number;
-  dc: number;
-  successTrinketPool?: string[];
-  successReward: { hp?: number; stamina?: number; log: string };
-  failurePenalty: { hp?: number; stamina?: number; ambush?: boolean; log: string };
 }
 
 export interface RunState {
@@ -57,10 +80,11 @@ export interface RunState {
   currentStamina: number;
   maxSoulAnchor: number;
   soulAnchorIntegrity: number;
-  homeRegion: RegionTheme | null;
+  climateCluster: ClimateClusterId | null;
   currentSector: SectorDefinition | null;
   activeTrinkets: Trinket[];
   pendingEncounter: EncounterNode | null;
+  pendingEnemy: EnemyCombatProfile | null;
   pendingAmbush: boolean;
   parryWindowBonus: number;
   parryMultiplierBonus: number;
@@ -81,10 +105,30 @@ export interface RadarDot {
   label: string;
   pingLabel: string;
   pingIndex: number;
-  /** Pixel position within the radar core (top-left origin). */
   x: number;
-  /** Pixel position within the radar core (top-left origin). */
   y: number;
-  /** Bearing from core center in degrees (0 = east, counter-clockwise). */
   angleDeg: number;
 }
+
+export interface RadarScanResult {
+  dots: RadarDot[];
+  signalCount: number;
+}
+
+/** Tactical combat action costs (mirrored in combat UI). */
+export const COMBAT_ACTION = {
+  KINETIC_STRIKE_STAMINA: 20,
+  KINETIC_STRIKE_DAMAGE: 10,
+  KINETIC_STRIKE_EXHAUSTED_DAMAGE: 5,
+  KINETIC_CHARGE: 15,
+  AEGIS_STAMINA: 10,
+  AEGIS_BLOCK_PCT: 0.5,
+  AEGIS_KINETIC_BONUS: 30,
+  COUNTER_STAMINA: 40,
+  COUNTER_KINETIC_MIN: 50,
+  COUNTER_DAMAGE: 15,
+  FLUID_VENT_RESTORE: 45,
+  STAMINA_REGEN: 20,
+  VECTOR_SLICE_DAMAGE: 35,
+  KINETIC_CAP: 100,
+} as const;

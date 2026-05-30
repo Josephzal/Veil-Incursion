@@ -1,5 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { getClusterDefinition } from '../data/climateClusters';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
@@ -31,9 +32,9 @@ export default function RunCompleteScreen(): React.JSX.Element {
           <Text style={[styles.stat, { color: theme.primaryColor }]}>
             FINAL STAMINA: {runState.currentStamina}/{runState.maxStamina}
           </Text>
-          {runState.homeRegion && (
+          {runState.climateCluster && (
             <Text style={[styles.stat, { color: theme.mutedColor }]}>
-              HOME SECTOR: {runState.homeRegion}
+              CLIMATE CLUSTER: {getClusterDefinition(runState.climateCluster).name}
             </Text>
           )}
           {runState.activeTrinkets.length > 0 && (
