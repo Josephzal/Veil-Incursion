@@ -17,11 +17,12 @@ const TERMINAL_ACCENT = '#00ff33';
 export default function WelcomeScreen(): React.JSX.Element {
   const { theme, profile } = useTerminal();
   const { startScanning } = useGameFlow();
-  const { startNewRun } = useRun();
+  const { startNewRun, beginScanSession } = useRun();
 
   const handleStartScan = () => {
     startNewRun();
-    startScanning('INITIAL');
+    beginScanSession();
+    startScanning();
   };
   const credentials = profile.operative_profile.credentials;
   const vectors = profile.operative_profile.location_vectors;

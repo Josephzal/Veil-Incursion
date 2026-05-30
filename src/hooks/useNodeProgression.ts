@@ -4,8 +4,8 @@ import { useRun } from '../context/RunContext';
 import { TOTAL_RUN_NODES } from '../types/run';
 
 export function useNodeProgression() {
-  const { runState, advanceNode, appendRunLog, endRun, generatePathDeck } = useRun();
-  const { startPathChoice, startRunComplete, goToWelcome } = useGameFlow();
+  const { runState, advanceNode, appendRunLog, endRun, beginScanSession } = useRun();
+  const { startScanning, startRunComplete, startGameOver } = useGameFlow();
 
   const completeCurrentNode = useCallback(
     (clearMessage: string, remainingHp?: number) => {
@@ -15,7 +15,7 @@ export function useNodeProgression() {
       const hp = remainingHp ?? runState.soulAnchorIntegrity;
       if (hp <= 0) {
         endRun('SOUL ANCHOR DESTROYED');
-        goToWelcome();
+        startGameOver();
         return;
       }
 
@@ -27,21 +27,20 @@ export function useNodeProgression() {
         return;
       }
 
-      generatePathDeck(completedCount, runState.combatNodesCleared);
-      appendRunLog(`>> Regional path matrix unlocked — select route to Node ${completedCount + 1}.`);
-      startPathChoice();
+      appendRunLog(`>> Anomaly sweep authorized — select route to Node ${completedCount + 1}.`);
+      beginScanSession();
+      startScanning();
     },
     [
       runState.currentNode,
       runState.soulAnchorIntegrity,
-      runState.combatNodesCleared,
       appendRunLog,
       advanceNode,
-      generatePathDeck,
       endRun,
-      goToWelcome,
-      startPathChoice,
+      beginScanSession,
+      startScanning,
       startRunComplete,
+      startGameOver,
     ],
   );
 

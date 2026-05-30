@@ -17,8 +17,9 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
     completeNodeAfterBoon,
     appendRunLog,
     endRun,
+    beginScanSession,
   } = useRun();
-  const { startPathChoice, startRunComplete, goToWelcome } = useGameFlow();
+  const { startScanning, startRunComplete, startGameOver } = useGameFlow();
   const selectingRef = useRef(false);
 
   useEffect(() => {
@@ -36,8 +37,7 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
 
     if (runState.soulAnchorIntegrity <= 0) {
       endRun('SOUL ANCHOR DESTROYED');
-      goToWelcome();
-      selectingRef.current = false;
+      startGameOver();
       return;
     }
 
@@ -49,8 +49,9 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
       return;
     }
 
-    appendRunLog(`>> Regional path matrix unlocked — select route to Node ${nodesCleared + 1}.`);
-    startPathChoice();
+    appendRunLog(`>> Anomaly sweep authorized — select route to Node ${nodesCleared + 1}.`);
+    beginScanSession();
+    startScanning();
   };
 
   return (

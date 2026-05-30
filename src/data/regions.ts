@@ -120,20 +120,73 @@ export function pickRandomSectors(count: number): SectorDefinition[] {
 
 const RADAR_DOT_MIN_DISTANCE_PX = 65;
 
-/** Place radar blips inside a circular core without overlapping. */
-export function generateRadarDots(
-  sectors: SectorDefinition[],
+const ENCOUNTER_TYPE_TAG: Record<EncounterType, string> = {
+  COMBAT: 'COMBAT',
+  SKILL_CHECK: 'SKILL CHECK',
+  REST: 'REST SANCTUARY',
+};
+
+const REGION_ENCOUNTER_FLAVOR: Record<RegionTheme, Record<EncounterType, string[]>> = {
+  HOSPITAL: {
+    COMBAT: ['Intensive Care Anomaly', 'Veil Stalker Manifest', 'ICU Hostile Vector'],
+    SKILL_CHECK: ['Encrypted Medical Mainframe', 'Patient Monitor Ghost Signal', 'Pharmacy Vault Lock'],
+    REST: ['Abandoned Staff Lounge', 'Chapel Anchor Point', 'Supply Closet Sanctuary'],
+  },
+  HOUSING: {
+    COMBAT: ['Boiler Room Stalker', 'Pipe Crawler Manifest', 'Basement Hostile Vector'],
+    SKILL_CHECK: ['Faulty Intercom Matrix', 'Meter Room Signal Drift', 'Laundry Lock Calibration'],
+    REST: ['Rooftop Anchor Nook', 'Vacant Unit Sanctuary', 'Boiler Rest Node'],
+  },
+  FOREST: {
+    COMBAT: ['Root Labyrinth Predator', 'Canopy Stalker', 'Breach Point Vector'],
+    SKILL_CHECK: ['Ley-Line Interference Grid', 'Moss-Covered Relay', 'Hollow Grove Cipher'],
+    REST: ['Fern Hollow Sanctuary', 'Creek Bed Recovery Node', 'Root-Cradle Safe Zone'],
+  },
+  CITY: {
+    COMBAT: ['Subway Tunnel Stalker', 'Alleyway Apparition', 'Transit Vector Hostile'],
+    SKILL_CHECK: ['Transit Signal Override', 'Grid Interference Node', 'Platform Lock Sequence'],
+    REST: ['Abandoned Platform Rest', 'Service Alley Sanctuary', 'Rooftop Recovery Node'],
+  },
+};
+
+function pickFlavor(theme: RegionTheme, type: EncounterType): string {
+  const pool = REGION_ENCOUNTER_FLAVOR[theme][type];
+  return pool[Math.floor(Math.random() * pool.length)] ?? pool[0];
+}
+
+function buildPingLabel(index: number, type: EncounterType, theme: RegionTheme): string {
+  return `Ping ${index}: [${ENCOUNTER_TYPE_TAG[type]}] ${pickFlavor(theme, type)}`;
+}
+
+function generateInitialScanChoices(): PathChoice[] {
+  const sectors = pickRandomSectors(3);
+  return sectors.map((sector, i) => ({
+    id: `init-${sector.id}-${i}`,
+    sector,
+    encounterType: 'COMBAT' as EncounterType,
+    label: ENCOUNTER_LABELS.COMBAT[Math.floor(Math.random() * ENCOUNTER_LABELS.COMBAT.length)],
+  }));
+}
+
+/** Build 3 radar blips with encounter metadata for the master scanner navigator. */
+export function generateRadarScanDots(
+  homeRegion: RegionTheme | null,
+  upcomingNodeIndex: number,
+  combatNodesCleared: number,
   coreDiameterPx: number,
-  minDistancePx: number = RADAR_DOT_MIN_DISTANCE_PX,
 ): RadarDot[] {
+  const choices = homeRegion === null
+    ? generateInitialScanChoices()
+    : generatePathChoices(homeRegion, upcomingNodeIndex, combatNodesCleared, 3);
+
   const center = coreDiameterPx / 2;
   const maxRadius = center * 0.78;
   const minRadius = center * 0.22;
   const placed: { x: number; y: number }[] = [];
   const dots: RadarDot[] = [];
 
-  for (let i = 0; i < sectors.length; i += 1) {
-    const sector = sectors[i];
+  for (let i = 0; i < choices.length; i += 1) {
+    const choice = choices[i];
     let found = false;
 
     for (let attempt = 0; attempt < 80 && !found; attempt += 1) {
@@ -143,15 +196,19 @@ export function generateRadarDots(
       const y = center + Math.sin(angle) * radius;
 
       const overlaps = placed.some(
-        (p) => Math.hypot(p.x - x, p.y - y) < minDistancePx,
+        (p) => Math.hypot(p.x - x, p.y - y) < RADAR_DOT_MIN_DISTANCE_PX,
       );
       if (overlaps) continue;
 
       placed.push({ x, y });
       const angleDeg = ((Math.atan2(y - center, x - center) * 180) / Math.PI + 360) % 360;
       dots.push({
-        id: `dot-${sector.id}-${i}`,
-        sector,
+        id: choice.id,
+        sector: choice.sector,
+        encounterType: choice.encounterType,
+        label: choice.label,
+        pingIndex: i + 1,
+        pingLabel: buildPingLabel(i + 1, choice.encounterType, choice.sector.theme),
         x,
         y,
         angleDeg,

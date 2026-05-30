@@ -243,6 +243,7 @@ export default function BlueprintSilhouette({
 
     setOperativeHp((prev) => {
       const nextHp = Math.max(prev - rawDamage, 0);
+      operativeHpRef.current = nextHp;
       if (nextHp <= 0) {
         handleIncursionResolution(false);
       } else {
@@ -776,6 +777,9 @@ export default function BlueprintSilhouette({
   ).current;
 
   const handleIncursionResolution = (victory: boolean) => {
+    if (operativeHpRef.current <= 0) {
+      victory = false;
+    }
     shrinkAnim.stopAnimation();
     if (victory) {
       resolutionOutcomeRef.current = 'VICTORY';
@@ -785,10 +789,10 @@ export default function BlueprintSilhouette({
       if (awardCurrencies) awardCurrencies(750, 25);
     } else {
       resolutionOutcomeRef.current = 'DEFEAT';
+      setResolutionOutcome('DEFEAT');
       pushTerminalText('[CRITICAL] >> Operative soul anchor severed. Veil sync lost.');
       triggerVignetteFlash(COMBAT_PALETTE.defeatVignette, () => {
         setCycleState('RESOLUTION');
-        setResolutionOutcome('DEFEAT');
       });
     }
   };
@@ -796,10 +800,11 @@ export default function BlueprintSilhouette({
   const handleDismissResolution = () => {
     if (resolutionDismissedRef.current) return;
     resolutionDismissedRef.current = true;
-    const victory = resolutionOutcomeRef.current === 'VICTORY';
+    const hp = operativeHpRef.current;
+    const victory = resolutionOutcomeRef.current === 'VICTORY' && hp > 0;
     onCombatComplete?.({
       victory,
-      remainingHp: operativeHpRef.current,
+      remainingHp: hp,
       remainingStamina: staminaRef.current,
     });
   };
@@ -943,8 +948,10 @@ export default function BlueprintSilhouette({
             <Text style={[styles.victoryHeader, { color: resolutionOutcome === 'VICTORY' ? '#22c55e' : COMBAT_PALETTE.enemyHp }]}>
               {resolutionOutcome === 'VICTORY' ? 'INTRUSION DECONSTRUCTED' : 'OPERATIVE SOUL DISCONNECTED'}
             </Text>
-            <Pressable onPress={handleDismissResolution} style={[styles.dismissButton, { borderColor: theme.primaryColor }]}>
-              <Text style={[styles.dismissButtonText, { color: theme.primaryColor }]}>[ CONTINUE RUN ]</Text>
+            <Pressable onPress={handleDismissResolution} style={[styles.dismissButton, { borderColor: resolutionOutcome === 'VICTORY' ? theme.primaryColor : COMBAT_PALETTE.enemyHp }]}>
+              <Text style={[styles.dismissButtonText, { color: resolutionOutcome === 'VICTORY' ? theme.primaryColor : COMBAT_PALETTE.enemyHp }]}>
+                {resolutionOutcome === 'VICTORY' ? '[ CONTINUE RUN ]' : '[ INCURSION FAILED ]'}
+              </Text>
             </Pressable>
           </View>
         )}

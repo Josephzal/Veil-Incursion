@@ -10,7 +10,7 @@ import { useNodeProgression } from '../hooks/useNodeProgression';
 type CombatPhase = 'TEXT_COMBAT' | 'DEFEND_PARRY' | 'OFFENSE_SLICE' | 'RESOLUTION';
 
 export default function CombatScreen(): React.JSX.Element {
-  const { goToWelcome, startPostCombatBoon } = useGameFlow();
+  const { startPostCombatBoon, startGameOver } = useGameFlow();
   const { theme } = useTerminal();
   const {
     runState,
@@ -32,19 +32,13 @@ export default function CombatScreen(): React.JSX.Element {
     remainingHp: number;
     remainingStamina: number;
   }) => {
-    if (!result.victory) {
-      endRun('OPERATIVE DEFEATED IN COMBAT');
-      goToWelcome();
+    if (!result.victory || result.remainingHp <= 0) {
+      endRun(result.remainingHp <= 0 ? 'SOUL ANCHOR DESTROYED' : 'OPERATIVE DEFEATED IN COMBAT');
+      startGameOver();
       return;
     }
 
     syncAfterCombat(result.remainingHp);
-
-    if (result.remainingHp <= 0) {
-      endRun('SOUL ANCHOR DESTROYED');
-      goToWelcome();
-      return;
-    }
 
     // Skill-check ambush fights skip the post-combat boon and advance immediately.
     if (runState.pendingAmbush) {

@@ -1,7 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   buildEncounter,
-  generatePathChoices,
   getThemedSkillChecks,
   pickRandomPostCombatBoons,
   pickRandomTrinkets,
@@ -11,9 +10,8 @@ import {
   BASE_MAX_SOUL_ANCHOR,
   BASE_MAX_STAMINA,
   EncounterNode,
-  PathChoice,
+  RadarDot,
   RunState,
-  SectorDefinition,
   SkillCheckEvent,
   Trinket,
   TOTAL_RUN_NODES,
@@ -22,15 +20,14 @@ import {
 interface RunContextType {
   runState: RunState;
   runLog: string[];
-  pathChoices: PathChoice[];
+  scanSessionKey: number;
   postCombatBoonChoices: Trinket[];
   appendRunLog: (text: string) => void;
   startNewRun: () => void;
-  selectHomeSector: (sector: SectorDefinition) => EncounterNode;
-  generatePathDeck: (upcomingNodeIndex: number, combatNodesCleared: number) => PathChoice[];
-  selectPathChoice: (choice: PathChoice) => EncounterNode;
+  beginScanSession: () => void;
+  commitRadarDot: (dot: RadarDot) => EncounterNode;
   advanceNode: () => { hasNext: boolean; completedCount: number };
-  completeNodeAfterBoon: (trinket: Trinket) => { route: 'PATH_CHOICE' | 'RUN_COMPLETE'; nodesCleared: number };
+  completeNodeAfterBoon: (trinket: Trinket) => { route: 'SCANNING' | 'RUN_COMPLETE'; nodesCleared: number };
   incrementCombatNodesCleared: () => void;
   syncAfterCombat: (remainingHp: number) => void;
   refillStaminaAfterCombat: () => void;
@@ -85,7 +82,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   const [runState, setRunState] = useState<RunState>(createInitialRunState);
   const runStateRef = useRef<RunState>(runState);
   const [runLog, setRunLog] = useState<string[]>([]);
-  const [pathChoices, setPathChoices] = useState<PathChoice[]>([]);
+  const [scanSessionKey, setScanSessionKey] = useState(0);
   const [postCombatBoonChoices, setPostCombatBoonChoices] = useState<Trinket[]>([]);
 
   useEffect(() => {
@@ -100,9 +97,13 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const next = { ...createInitialRunState(), runActive: true };
     runStateRef.current = next;
     setRunState(next);
-    setPathChoices([]);
+    setScanSessionKey(0);
     setPostCombatBoonChoices([]);
     setRunLog(['>> RUN INITIALIZED — ANOMALY SWEEP AUTHORIZED.']);
+  }, []);
+
+  const beginScanSession = useCallback(() => {
+    setScanSessionKey((k) => k + 1);
   }, []);
 
   const applyTrinket = useCallback((trinket: Trinket) => {
@@ -136,30 +137,26 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     appendRunLog(`>> Trinket acquired: ${trinket.name} — ${trinket.effect}`);
   }, [appendRunLog]);
 
-  const selectHomeSector = useCallback((sector: SectorDefinition): EncounterNode => {
-    const encounter = buildEncounter(0, sector, 'COMBAT', 'Hostile Apparition');
-    setRunState((prev) => {
-      const next = {
-        ...prev,
-        homeRegion: sector.theme,
-        currentSector: sector,
-        pendingEncounter: encounter,
-      };
-      runStateRef.current = next;
-      return next;
-    });
-    appendRunLog(`>> Home sector locked: ${sector.name} — ${sector.subsector}.`);
-    appendRunLog('>> Entering Node 1 — incursion initiated.');
+  const commitRadarDot = useCallback((dot: RadarDot): EncounterNode => {
+    const prev = runStateRef.current;
+    const nodeIndex = prev.homeRegion === null ? 0 : prev.currentNode;
+    const encounter = buildEncounter(nodeIndex, dot.sector, dot.encounterType, dot.label);
+
+    const next: RunState = {
+      ...prev,
+      homeRegion: prev.homeRegion ?? dot.sector.theme,
+      currentSector: dot.sector,
+      pendingEncounter: encounter,
+    };
+    runStateRef.current = next;
+    setRunState(next);
+
+    if (prev.homeRegion === null) {
+      appendRunLog(`>> Home sector locked: ${dot.sector.name} — ${dot.sector.subsector}.`);
+    }
+    appendRunLog(`>> ${dot.pingLabel} — incursion vector confirmed.`);
     return encounter;
   }, [appendRunLog]);
-
-  const generatePathDeck = useCallback((upcomingNodeIndex: number, combatNodesCleared: number): PathChoice[] => {
-    const homeRegion = runStateRef.current.homeRegion;
-    if (!homeRegion) return [];
-    const choices = generatePathChoices(homeRegion, upcomingNodeIndex, combatNodesCleared, 3);
-    setPathChoices(choices);
-    return choices;
-  }, []);
 
   const incrementCombatNodesCleared = useCallback(() => {
     setRunState((prev) => {
@@ -168,21 +165,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
   }, []);
-
-  const selectPathChoice = useCallback((choice: PathChoice): EncounterNode => {
-    let encounter: EncounterNode | null = null;
-    setRunState((prev) => {
-      const nodeIndex = prev.currentNode;
-      encounter = buildEncounter(nodeIndex, choice.sector, choice.encounterType, choice.label);
-      return {
-        ...prev,
-        currentSector: choice.sector,
-        pendingEncounter: encounter,
-      };
-    });
-    appendRunLog(`>> Path selected: ${choice.sector.subsector} — ${choice.encounterType}.`);
-    return encounter!;
-  }, [appendRunLog]);
 
   const getCurrentEncounter = useCallback((): EncounterNode | null => {
     return runState.pendingEncounter;
@@ -208,7 +190,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     return { hasNext, completedCount: nextCompleted };
   }, []);
 
-  const completeNodeAfterBoon = useCallback((trinket: Trinket): { route: 'PATH_CHOICE' | 'RUN_COMPLETE'; nodesCleared: number } => {
+  const completeNodeAfterBoon = useCallback((trinket: Trinket): { route: 'SCANNING' | 'RUN_COMPLETE'; nodesCleared: number } => {
     const prev = runStateRef.current;
     const nodesCleared = prev.currentNode + 1;
     const runComplete = nodesCleared >= TOTAL_RUN_NODES;
@@ -246,12 +228,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
     appendRunLog(`>> Trinket acquired: ${trinket.name} — ${trinket.effect}`);
 
-    if (!runComplete && prev.homeRegion) {
-      const choices = generatePathChoices(prev.homeRegion, nodesCleared, prev.combatNodesCleared, 3);
-      setPathChoices(choices);
-    }
-
-    return { route: runComplete ? 'RUN_COMPLETE' : 'PATH_CHOICE', nodesCleared };
+    return { route: runComplete ? 'RUN_COMPLETE' : 'SCANNING', nodesCleared };
   }, [appendRunLog]);
 
   const syncAfterCombat = useCallback((remainingHp: number) => {
@@ -301,7 +278,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const reset = createInitialRunState();
     runStateRef.current = reset;
     setRunState(reset);
-    setPathChoices([]);
     setPostCombatBoonChoices([]);
   }, [appendRunLog]);
 
@@ -317,13 +293,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     () => ({
       runState,
       runLog,
-      pathChoices,
+      scanSessionKey,
       postCombatBoonChoices,
       appendRunLog,
       startNewRun,
-      selectHomeSector,
-      generatePathDeck,
-      selectPathChoice,
+      beginScanSession,
+      commitRadarDot,
       advanceNode,
       completeNodeAfterBoon,
       incrementCombatNodesCleared,
@@ -342,13 +317,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     [
       runState,
       runLog,
-      pathChoices,
+      scanSessionKey,
       postCombatBoonChoices,
       appendRunLog,
       startNewRun,
-      selectHomeSector,
-      generatePathDeck,
-      selectPathChoice,
+      beginScanSession,
+      commitRadarDot,
       advanceNode,
       completeNodeAfterBoon,
       incrementCombatNodesCleared,

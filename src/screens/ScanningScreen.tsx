@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
@@ -9,7 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { generateRadarDots, pickRandomSectors } from '../data/regions';
+import { generateRadarScanDots } from '../data/regions';
 import PersistentTerminalLog from '../components/PersistentTerminalLog';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
@@ -20,7 +20,8 @@ const { width } = Dimensions.get('window');
 const SCAN_SWEEP_MS = 2200;
 const SCAN_ROTATIONS = 3;
 const SCAN_DURATION_MS = SCAN_SWEEP_MS * SCAN_ROTATIONS;
-const SWEEP_DETECT_ARC_DEG = 18;
+const SWEEP_DETECT_ARC_DEG = 14;
+const PING_FADE_MS = 260;
 const DOT_HIT_SIZE = 44;
 const DOT_VISUAL_SIZE = 12;
 const TERMINAL_ACCENT = '#00ff33';
@@ -36,35 +37,45 @@ function sweepDeltaDeg(sweepDeg: number, dotDeg: number): number {
 
 export default function ScanningScreen(): React.JSX.Element {
   const { theme } = useTerminal();
-  const { scanMode, startCombat } = useGameFlow();
-  const { runState, appendRunLog, selectHomeSector } = useRun();
+  const { deployEncounter } = useGameFlow();
+  const { runState, scanSessionKey, appendRunLog, commitRadarDot } = useRun();
 
   const [phase, setPhase] = useState<ScanPhase>('SWEEPING');
-  const [dots, setDots] = useState<RadarDot[]>([]);
+  const [scanDots, setScanDots] = useState<RadarDot[]>([]);
+  const [displayDots, setDisplayDots] = useState<RadarDot[]>([]);
   const [selectedDot, setSelectedDot] = useState<RadarDot | null>(null);
-  const [selectedSector, setSelectedSector] = useState<RadarDot['sector'] | null>(null);
 
   const pulseAnim = useRef(new Animated.Value(0.25)).current;
   const sweepAnim = useRef(new Animated.Value(0)).current;
-  const sweepLoopRef = useRef<Animated.CompositeAnimation | null>(null);
   const dotOpacityRefs = useRef<Animated.Value[]>([]);
   const dotPulseRefs = useRef<Animated.CompositeAnimation[]>([]);
   const pingedThisRotationRef = useRef<Set<string>>(new Set());
   const lastSweepValueRef = useRef(0);
 
-  const isInitialScan = scanMode === 'INITIAL';
-
-  const radarDots = useMemo(() => {
-    if (!isInitialScan) return [];
-    return generateRadarDots(pickRandomSectors(3), RADAR_CORE);
-  }, [isInitialScan]);
+  const isDiscoveryScan = runState.homeRegion === null;
+  const upcomingNodeIndex = runState.currentNode;
 
   useEffect(() => {
-    dotOpacityRefs.current = radarDots.map(() => new Animated.Value(0));
+    setPhase('SWEEPING');
+    setSelectedDot(null);
+    setDisplayDots([]);
+
+    const freshDots = generateRadarScanDots(
+      runState.homeRegion,
+      upcomingNodeIndex,
+      runState.combatNodesCleared,
+      RADAR_CORE,
+    );
+    setScanDots(freshDots);
+    dotOpacityRefs.current = freshDots.map(() => new Animated.Value(0));
     dotPulseRefs.current = [];
-  }, [radarDots]);
+    pingedThisRotationRef.current.clear();
+    lastSweepValueRef.current = 0;
+  }, [scanSessionKey, runState.homeRegion, upcomingNodeIndex, runState.combatNodesCleared]);
 
   useEffect(() => {
+    if (scanDots.length === 0) return;
+
     const pulseLoop = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
@@ -84,9 +95,6 @@ export default function ScanningScreen(): React.JSX.Element {
     pulseLoop.start();
 
     sweepAnim.setValue(0);
-    pingedThisRotationRef.current.clear();
-    lastSweepValueRef.current = 0;
-
     const sweepLoop = Animated.loop(
       Animated.timing(sweepAnim, {
         toValue: 1,
@@ -95,7 +103,6 @@ export default function ScanningScreen(): React.JSX.Element {
         useNativeDriver: true,
       }),
     );
-    sweepLoopRef.current = sweepLoop;
     sweepLoop.start();
 
     const pingDot = (index: number, dotId: string) => {
@@ -103,34 +110,25 @@ export default function ScanningScreen(): React.JSX.Element {
       pingedThisRotationRef.current.add(dotId);
 
       dotPulseRefs.current[index]?.stop();
-      const pulse = Animated.sequence([
-        Animated.timing(dotOpacityRefs.current[index], {
-          toValue: 1,
-          duration: 180,
-          easing: Easing.out(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(dotOpacityRefs.current[index], {
-          toValue: 0.35,
-          duration: 520,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ]);
+      dotOpacityRefs.current[index]?.setValue(1);
+      const pulse = Animated.timing(dotOpacityRefs.current[index], {
+        toValue: 0,
+        duration: PING_FADE_MS,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      });
       dotPulseRefs.current[index] = pulse;
       pulse.start();
     };
 
     const sweepListener = sweepAnim.addListener(({ value }) => {
-      if (!isInitialScan || radarDots.length === 0) return;
-
       if (value < lastSweepValueRef.current) {
         pingedThisRotationRef.current.clear();
       }
       lastSweepValueRef.current = value;
 
       const sweepDeg = (value * 360) % 360;
-      radarDots.forEach((dot, index) => {
+      scanDots.forEach((dot, index) => {
         if (sweepDeltaDeg(sweepDeg, dot.angleDeg) <= SWEEP_DETECT_ARC_DEG) {
           pingDot(index, dot.id);
         }
@@ -142,20 +140,20 @@ export default function ScanningScreen(): React.JSX.Element {
       sweepAnim.stopAnimation();
       sweepAnim.removeListener(sweepListener);
 
-      if (isInitialScan) {
-        radarDots.forEach((_, index) => {
-          dotPulseRefs.current[index]?.stop();
-          dotOpacityRefs.current[index]?.setValue(1);
-        });
-        setDots(radarDots);
+      dotPulseRefs.current.forEach((p) => p?.stop());
+      Animated.parallel(
+        scanDots.map((_, index) =>
+          Animated.timing(dotOpacityRefs.current[index], {
+            toValue: 1,
+            duration: 180,
+            easing: Easing.out(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ),
+      ).start(() => {
+        setDisplayDots(scanDots);
         setPhase('DOTS');
-      } else {
-        const encounter = runState.pendingEncounter;
-        if (encounter) {
-          appendRunLog(`>> Entering Node ${encounter.index + 1} Combat — ${encounter.label}.`);
-        }
-        startCombat();
-      }
+      });
     }, SCAN_DURATION_MS);
 
     return () => {
@@ -165,7 +163,7 @@ export default function ScanningScreen(): React.JSX.Element {
       clearTimeout(finishTimer);
       dotPulseRefs.current.forEach((p) => p?.stop());
     };
-  }, [appendRunLog, isInitialScan, pulseAnim, radarDots, runState.pendingEncounter, startCombat, sweepAnim]);
+  }, [scanDots, pulseAnim, sweepAnim]);
 
   const sweepRotation = sweepAnim.interpolate({
     inputRange: [0, 1],
@@ -174,19 +172,18 @@ export default function ScanningScreen(): React.JSX.Element {
 
   const handleDotPress = (dot: RadarDot) => {
     setSelectedDot(dot);
-    setSelectedSector(dot.sector);
     setPhase('SECTOR_CARD');
   };
 
   const handleInitiateIncursion = () => {
-    if (!selectedSector) return;
-    selectHomeSector(selectedSector);
-    startCombat();
+    if (!selectedDot) return;
+    commitRadarDot(selectedDot);
+    appendRunLog(`>> Initiating incursion — Node ${runState.homeRegion === null ? 1 : runState.currentNode + 1}.`);
+    deployEncounter(selectedDot.encounterType);
   };
 
   const handleBackToDots = () => {
     setPhase('DOTS');
-    setSelectedSector(null);
     setSelectedDot(null);
   };
 
@@ -220,11 +217,15 @@ export default function ScanningScreen(): React.JSX.Element {
     );
   };
 
+  const activeDots = phase === 'SWEEPING' ? scanDots : displayDots;
+
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundColor }]}>
       <View style={[styles.statusBar, { borderColor: theme.borderColor }]}>
         <Text style={[styles.statusBarText, { color: theme.mutedColor }]}>
-          {isInitialScan ? 'ANOMALY SCAN // SECTOR DISCOVERY' : `NODE ${runState.currentNode + 1} // COMBAT DEPLOYMENT`}
+          {isDiscoveryScan
+            ? 'ANOMALY SCAN // SECTOR DISCOVERY'
+            : `NODE ${Math.min(upcomingNodeIndex + 1, runState.totalNodes)}/${runState.totalNodes} // REGIONAL SWEEP`}
         </Text>
       </View>
 
@@ -235,7 +236,12 @@ export default function ScanningScreen(): React.JSX.Element {
         <Animated.View
           style={[styles.radarRingMid, { borderColor: TERMINAL_ACCENT, opacity: pulseAnim }]}
         />
-        <View style={[styles.radarCore, { borderColor: theme.borderColor, width: RADAR_CORE, height: RADAR_CORE, borderRadius: RADAR_CORE / 2 }]}>
+        <View
+          style={[
+            styles.radarCore,
+            { borderColor: theme.borderColor, width: RADAR_CORE, height: RADAR_CORE, borderRadius: RADAR_CORE / 2 },
+          ]}
+        >
           {phase === 'SWEEPING' && (
             <Animated.View
               pointerEvents="none"
@@ -258,36 +264,33 @@ export default function ScanningScreen(): React.JSX.Element {
             </Animated.View>
           )}
 
-          {phase === 'SWEEPING' && radarDots.map((dot, index) => renderDot(dot, index, false))}
-
-          {(phase === 'DOTS' || phase === 'SECTOR_CARD') &&
-            dots.map((dot, index) => renderDot(dot, index, true))}
+          {activeDots.map((dot, index) => renderDot(dot, index, phase !== 'SWEEPING'))}
         </View>
       </View>
 
       <View style={styles.readoutPanel}>
         {phase === 'SWEEPING' && (
           <>
-            <Text style={[styles.scanStatus, { color: theme.primaryColor }]}>LOCATING THREAT SECTORS...</Text>
+            <Text style={[styles.scanStatus, { color: theme.primaryColor }]}>LOCATING THREAT VECTORS...</Text>
             <Text style={[styles.scanSubStatus, { color: theme.mutedColor }]}>
-              Radar sweep in progress // harmonics mapping active
+              Radar sweep in progress // sonar ping mapping active
             </Text>
           </>
         )}
         {phase === 'DOTS' && (
           <>
-            <Text style={[styles.scanStatus, { color: TERMINAL_ACCENT }]}>3 SECTORS DETECTED</Text>
+            <Text style={[styles.scanStatus, { color: TERMINAL_ACCENT }]}>3 VECTORS DETECTED</Text>
             <Text style={[styles.scanSubStatus, { color: theme.mutedColor }]}>
-              Select a white node to inspect environmental threat profile
+              Select a white node to inspect encounter profile
             </Text>
           </>
         )}
-        {phase === 'SECTOR_CARD' && selectedSector && (
+        {phase === 'SECTOR_CARD' && selectedDot && (
           <View style={[styles.sectorCard, { borderColor: TERMINAL_ACCENT, backgroundColor: '#0e1624' }]}>
-            <Text style={[styles.sectorCardLabel, { color: theme.mutedColor }]}>ENVIRONMENTAL THREAT SECTOR</Text>
-            <Text style={styles.sectorCardTitle}>Sector: {selectedSector.name}</Text>
-            <Text style={[styles.sectorCardSub, { color: TERMINAL_ACCENT }]}>{selectedSector.subsector}</Text>
-            <Text style={[styles.sectorCardBody, { color: theme.mutedColor }]}>{selectedSector.description}</Text>
+            <Text style={[styles.sectorCardLabel, { color: theme.mutedColor }]}>ENCOUNTER VECTOR LOCKED</Text>
+            <Text style={styles.sectorCardTitle}>{selectedDot.pingLabel}</Text>
+            <Text style={[styles.sectorCardSub, { color: TERMINAL_ACCENT }]}>{selectedDot.sector.subsector}</Text>
+            <Text style={[styles.sectorCardBody, { color: theme.mutedColor }]}>{selectedDot.sector.description}</Text>
             <Pressable
               onPress={handleInitiateIncursion}
               style={({ pressed }) => [
@@ -307,7 +310,7 @@ export default function ScanningScreen(): React.JSX.Element {
       <View style={[styles.footerTelemetry, { borderColor: theme.borderColor }]}>
         <Text style={[styles.telemetryLine, { color: theme.mutedColor }]}>
           {runState.runActive
-            ? `NODE ${Math.min(runState.currentNode + 1, runState.totalNodes)}/${runState.totalNodes} // RADAR_GAIN: 98%`
+            ? `NODE ${Math.min(upcomingNodeIndex + 1, runState.totalNodes)}/${runState.totalNodes} // RADAR_GAIN: 98%`
             : 'RADAR_GAIN: 98% // SWEEP_RATE: 2.2s'}
         </Text>
       </View>
@@ -344,15 +347,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sweepPivot: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-  },
-  radarSweepArm: {
-    position: 'absolute',
-    height: 2,
-  },
+  sweepPivot: { position: 'absolute', top: 0, left: 0 },
+  radarSweepArm: { position: 'absolute', height: 2 },
   dotHitbox: {
     position: 'absolute',
     width: DOT_HIT_SIZE,
@@ -374,7 +370,7 @@ const styles = StyleSheet.create({
   scanSubStatus: { fontFamily: 'monospace', fontSize: 10, marginTop: 8, textAlign: 'center', lineHeight: 14 },
   sectorCard: { borderWidth: 2, padding: 16 },
   sectorCardLabel: { fontFamily: 'monospace', fontSize: 8, letterSpacing: 1.4, marginBottom: 8 },
-  sectorCardTitle: { fontFamily: 'monospace', fontSize: 13, fontWeight: '700', color: '#ffffff', marginBottom: 4 },
+  sectorCardTitle: { fontFamily: 'monospace', fontSize: 12, fontWeight: '700', color: '#ffffff', marginBottom: 6, lineHeight: 16 },
   sectorCardSub: { fontFamily: 'monospace', fontSize: 11, marginBottom: 10 },
   sectorCardBody: { fontFamily: 'monospace', fontSize: 10, lineHeight: 15, marginBottom: 16 },
   incursionButton: { borderWidth: 2, paddingVertical: 14, alignItems: 'center', marginBottom: 10 },

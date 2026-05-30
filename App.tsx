@@ -5,12 +5,12 @@ import { GameFlowProvider, useGameFlow } from './src/context/GameFlowContext';
 import { RunProvider } from './src/context/RunContext';
 import WelcomeScreen from './src/screens/WelcomeScreen';
 import ScanningScreen from './src/screens/ScanningScreen';
-import PathChoiceScreen from './src/screens/PathChoiceScreen';
 import PostCombatBoonScreen from './src/screens/PostCombatBoonScreen';
 import SkillCheckScreen from './src/screens/SkillCheckScreen';
 import RestScreen from './src/screens/RestScreen';
 import CombatScreen from './src/screens/CombatScreen';
 import RunCompleteScreen from './src/screens/RunCompleteScreen';
+import GameOverScreen from './src/screens/GameOverScreen';
 
 function GameRoot(): React.JSX.Element {
   const { theme } = useTerminal();
@@ -21,12 +21,12 @@ function GameRoot(): React.JSX.Element {
       <StatusBar barStyle="light-content" />
       {currentScreen === 'WELCOME' && <WelcomeScreen />}
       {currentScreen === 'SCANNING' && <ScanningScreen />}
-      {currentScreen === 'PATH_CHOICE' && <PathChoiceScreen />}
       {currentScreen === 'POST_COMBAT_BOON' && <PostCombatBoonScreen />}
       {currentScreen === 'SKILL_CHECK' && <SkillCheckScreen />}
       {currentScreen === 'REST' && <RestScreen />}
       {currentScreen === 'COMBAT' && <CombatScreen />}
       {currentScreen === 'RUN_COMPLETE' && <RunCompleteScreen />}
+      {currentScreen === 'GAME_OVER' && <GameOverScreen />}
     </View>
   );
 }

@@ -77,6 +77,10 @@ export const MIN_COMBAT_NODES = 4;
 export interface RadarDot {
   id: string;
   sector: SectorDefinition;
+  encounterType: EncounterType;
+  label: string;
+  pingLabel: string;
+  pingIndex: number;
   /** Pixel position within the radar core (top-left origin). */
   x: number;
   /** Pixel position within the radar core (top-left origin). */

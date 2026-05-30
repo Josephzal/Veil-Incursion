@@ -13,7 +13,7 @@ type CalibrationPhase = 'READY' | 'PINBALL' | 'LOCKED';
 export default function SkillCheckScreen(): React.JSX.Element {
   const { theme } = useTerminal();
   const { runState, getCurrentSkillCheck, applySkillCheckResult, applyTrinket, appendRunLog, endRun, setPendingAmbush } = useRun();
-  const { startScanning, goToWelcome } = useGameFlow();
+  const { startCombat, startGameOver } = useGameFlow();
   const { completeCurrentNode } = useNodeProgression();
   const event = getCurrentSkillCheck();
 
@@ -106,14 +106,14 @@ export default function SkillCheckScreen(): React.JSX.Element {
 
       if (projectedHp <= 0) {
         appendRunLog('>> SOUL ANCHOR DESTROYED — run terminated.');
-        setTimeout(() => { endRun('SOUL ANCHOR DESTROYED'); goToWelcome(); }, 1800);
+        setTimeout(() => { endRun('SOUL ANCHOR DESTROYED'); startGameOver(); }, 1800);
         return;
       }
 
       if (event.failurePenalty.ambush) {
         setPendingAmbush(true);
         appendRunLog('>> AMBUSH — hostile vector engaged.');
-        setTimeout(() => startScanning('COMBAT_ENTRY'), 1800);
+        setTimeout(() => startCombat(), 1800);
       } else {
         setTimeout(() => completeCurrentNode(event.failurePenalty.log), 1800);
       }
