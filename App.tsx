@@ -6,6 +6,7 @@ import { RegionalShatterProvider } from './src/context/RegionalShatterContext';
 import { GameFlowProvider, useGameFlow } from './src/context/GameFlowContext';
 import { RunProvider } from './src/context/RunContext';
 import OverworldHubScreen from './src/screens/OverworldHubScreen';
+import InventoryManifestScreen from './src/screens/InventoryManifestScreen';
 import WelcomeScreen from './src/screens/WelcomeScreen';
 import ScanningScreen from './src/screens/ScanningScreen';
 import NarrativeScreen from './src/screens/NarrativeScreen';
@@ -25,6 +26,7 @@ function GameRoot(): React.JSX.Element {
     <View style={[styles.screenContainer, { backgroundColor: theme.backgroundColor }]}>
       <StatusBar barStyle="light-content" />
       {currentScreen === 'HUB' && <OverworldHubScreen />}
+      {currentScreen === 'INVENTORY' && <InventoryManifestScreen />}
       {currentScreen === 'WELCOME' && <WelcomeScreen />}
       {currentScreen === 'SCANNING' && <ScanningScreen />}
       {currentScreen === 'NARRATIVE' && <NarrativeScreen />}

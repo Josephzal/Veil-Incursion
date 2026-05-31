@@ -28,6 +28,11 @@ export interface OperativeProfile {
         frame_id: string;
         equipped_title_id: string;
       };
+      stored_items: Array<{
+        id: string;
+        designation: string;
+        category: string;
+      }>;
       pvp_ai_gambit_deck: Array<{ trigger: string; action: string }>;
     };
   };

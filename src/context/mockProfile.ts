@@ -28,6 +28,12 @@ export const mockOperativeProfile: OperativeProfile = {
         frame_id: "animated_cherry_blossom_01",
         equipped_title_id: "tokyo_tested_aegis"
       },
+      stored_items: [
+        { id: "reservoir_coil_mk2", designation: "RESERVOIR COIL MK2", category: "TRINKET" },
+        { id: "void_filament_spool", designation: "VOID FILAMENT SPOOL", category: "MATERIAL" },
+        { id: "tier1_cache_unopened", designation: "TIER-1 VEIL CACHE", category: "CACHE" },
+        { id: "phase_thread_liner", designation: "PHASE-THREAD LINER", category: "MOD" },
+      ],
       pvp_ai_gambit_deck: [
         { trigger: "MATCH_START", action: "CAST_SHIELD" },
         { trigger: "ENEMY_HP_GT_70", action: "APPLY_RESONANCE_BURN" }

@@ -1,5 +1,6 @@
 export type AppScreen =
   | 'HUB'
+  | 'INVENTORY'
   | 'WELCOME'
   | 'SCANNING'
   | 'NARRATIVE'

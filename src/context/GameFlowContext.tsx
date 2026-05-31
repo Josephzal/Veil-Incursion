@@ -5,6 +5,7 @@ import { EncounterType } from '../types/run';
 interface GameFlowContextType {
   currentScreen: AppScreen;
   goToHub: () => void;
+  openInventoryManifest: () => void;
   goToWelcome: () => void;
   startScanning: () => void;
   startNarrative: () => void;
@@ -24,6 +25,7 @@ export function GameFlowProvider({ children }: { children: React.ReactNode }) {
   const [currentScreen, setCurrentScreen] = useState<AppScreen>('HUB');
 
   const goToHub = useCallback(() => setCurrentScreen('HUB'), []);
+  const openInventoryManifest = useCallback(() => setCurrentScreen('INVENTORY'), []);
   const goToWelcome = useCallback(() => setCurrentScreen('WELCOME'), []);
   const startScanning = useCallback(() => setCurrentScreen('SCANNING'), []);
   const startNarrative = useCallback(() => setCurrentScreen('NARRATIVE'), []);
@@ -55,6 +57,7 @@ export function GameFlowProvider({ children }: { children: React.ReactNode }) {
     () => ({
       currentScreen,
       goToHub,
+      openInventoryManifest,
       goToWelcome,
       startScanning,
       startNarrative,
@@ -70,6 +73,7 @@ export function GameFlowProvider({ children }: { children: React.ReactNode }) {
     [
       currentScreen,
       goToHub,
+      openInventoryManifest,
       goToWelcome,
       startScanning,
       startNarrative,
