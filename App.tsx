@@ -1,12 +1,13 @@
 import React from 'react';
-import { StyleSheet, SafeAreaView, StatusBar, View } from 'react-native';
+import { StyleSheet, StatusBar, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { TerminalProvider, useTerminal } from './src/context/TerminalContext';
+import { TerminalNavProvider } from './src/context/TerminalNavContext';
 import { PlayerAccountProvider } from './src/context/PlayerAccountContext';
 import { RegionalShatterProvider } from './src/context/RegionalShatterContext';
 import { GameFlowProvider, useGameFlow } from './src/context/GameFlowContext';
 import { RunProvider } from './src/context/RunContext';
 import OverworldHubScreen from './src/screens/OverworldHubScreen';
-import InventoryManifestScreen from './src/screens/InventoryManifestScreen';
 import WelcomeScreen from './src/screens/WelcomeScreen';
 import ScanningScreen from './src/screens/ScanningScreen';
 import NarrativeScreen from './src/screens/NarrativeScreen';
@@ -24,9 +25,8 @@ function GameRoot(): React.JSX.Element {
 
   return (
     <View style={[styles.screenContainer, { backgroundColor: theme.backgroundColor }]}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="light-content" backgroundColor={theme.backgroundColor} />
       {currentScreen === 'HUB' && <OverworldHubScreen />}
-      {currentScreen === 'INVENTORY' && <InventoryManifestScreen />}
       {currentScreen === 'WELCOME' && <WelcomeScreen />}
       {currentScreen === 'SCANNING' && <ScanningScreen />}
       {currentScreen === 'NARRATIVE' && <NarrativeScreen />}
@@ -43,23 +43,24 @@ function GameRoot(): React.JSX.Element {
 
 export default function App(): React.JSX.Element {
   return (
-    <PlayerAccountProvider>
-      <RegionalShatterProvider>
-        <TerminalProvider>
-          <RunProvider>
-            <GameFlowProvider>
-              <SafeAreaView style={styles.safeArea}>
-                <GameRoot />
-              </SafeAreaView>
-            </GameFlowProvider>
-          </RunProvider>
-        </TerminalProvider>
-      </RegionalShatterProvider>
-    </PlayerAccountProvider>
+    <SafeAreaProvider>
+      <PlayerAccountProvider>
+        <RegionalShatterProvider>
+          <TerminalProvider>
+            <TerminalNavProvider>
+              <RunProvider>
+                <GameFlowProvider>
+                  <GameRoot />
+                </GameFlowProvider>
+              </RunProvider>
+            </TerminalNavProvider>
+          </TerminalProvider>
+        </RegionalShatterProvider>
+      </PlayerAccountProvider>
+    </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#1A1C1E' },
   screenContainer: { flex: 1 },
 });

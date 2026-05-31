@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import DescentPipelineHUD from '../components/DescentPipelineHUD';
+import TerminalSafeArea from '../components/TerminalSafeArea';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { getFactionDefinition } from '../data/factions';
@@ -21,19 +22,21 @@ export default function IncursionShell({ children, hidePipeline = false }: Incur
       : '#00ff33';
 
   return (
-    <View style={styles.root}>
-      {activeIncursion.isRunActive && !hidePipeline && (
-        <DescentPipelineHUD
-          tier={activeIncursion.currentTier}
-          currentNodeIndex={activeIncursion.currentNodeIndex}
-          tierNodes={activeIncursion.tierNodes}
-          accentColor={accent}
-          borderColor={theme.borderColor}
-          mutedColor={theme.mutedColor}
-        />
-      )}
-      <View style={styles.body}>{children}</View>
-    </View>
+    <TerminalSafeArea>
+      <View style={styles.root}>
+        {activeIncursion.isRunActive && !hidePipeline && (
+          <DescentPipelineHUD
+            tier={activeIncursion.currentTier}
+            currentNodeIndex={activeIncursion.currentNodeIndex}
+            tierNodes={activeIncursion.tierNodes}
+            accentColor={accent}
+            borderColor={theme.borderColor}
+            mutedColor={theme.mutedColor}
+          />
+        )}
+        <View style={styles.body}>{children}</View>
+      </View>
+    </TerminalSafeArea>
   );
 }
 

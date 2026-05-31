@@ -11,6 +11,7 @@ import { useTerminal } from '../context/TerminalContext';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import FactionBootLogo from '../components/FactionBootLogo';
+import TerminalSafeArea from '../components/TerminalSafeArea';
 
 const { width } = Dimensions.get('window');
 
@@ -28,7 +29,8 @@ export default function WelcomeScreen(): React.JSX.Element {
   const vectors = profile.operative_profile.location_vectors;
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.backgroundColor }]}>
+    <TerminalSafeArea>
+      <View style={styles.container}>
       <View style={styles.gridBackdrop} pointerEvents="none">
         {Array.from({ length: 8 }).map((_, row) => (
           <View key={`row-${row}`} style={styles.gridRow}>
@@ -111,14 +113,14 @@ export default function WelcomeScreen(): React.JSX.Element {
           <Text style={[styles.scanButtonSub, { color: theme.statusColor }]}>// AUTHORIZE LEY-LINE SWEEP</Text>
         </Pressable>
       </View>
-    </View>
+      </View>
+    </TerminalSafeArea>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingTop: Platform.OS === 'android' ? 24 : 8,
   },
   gridBackdrop: {
     ...StyleSheet.absoluteFillObject,

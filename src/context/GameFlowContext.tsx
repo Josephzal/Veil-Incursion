@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import { AppScreen } from '../types/gameFlow';
 import { EncounterType } from '../types/run';
+import { useTerminalNav } from './TerminalNavContext';
 
 interface GameFlowContextType {
   currentScreen: AppScreen;
@@ -23,9 +24,13 @@ const GameFlowContext = createContext<GameFlowContextType | undefined>(undefined
 
 export function GameFlowProvider({ children }: { children: React.ReactNode }) {
   const [currentScreen, setCurrentScreen] = useState<AppScreen>('HUB');
+  const { setTerminalView } = useTerminalNav();
 
   const goToHub = useCallback(() => setCurrentScreen('HUB'), []);
-  const openInventoryManifest = useCallback(() => setCurrentScreen('INVENTORY'), []);
+  const openInventoryManifest = useCallback(() => {
+    setTerminalView('MANIFEST');
+    setCurrentScreen('HUB');
+  }, [setTerminalView]);
   const goToWelcome = useCallback(() => setCurrentScreen('WELCOME'), []);
   const startScanning = useCallback(() => setCurrentScreen('SCANNING'), []);
   const startNarrative = useCallback(() => setCurrentScreen('NARRATIVE'), []);

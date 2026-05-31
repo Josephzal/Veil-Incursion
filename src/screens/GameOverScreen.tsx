@@ -4,6 +4,7 @@ import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import PersistentTerminalLog from '../components/PersistentTerminalLog';
+import TerminalSafeArea from '../components/TerminalSafeArea';
 
 const TERMINAL_ACCENT = '#ef4444';
 
@@ -17,7 +18,8 @@ export default function GameOverScreen(): React.JSX.Element {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.backgroundColor }]}>
+    <TerminalSafeArea>
+      <View style={styles.container}>
       <View style={styles.content}>
         <Text style={styles.title}>INCURSION FAILED</Text>
         <Text style={[styles.subtitle, { color: TERMINAL_ACCENT }]}>GAME OVER // SOUL ANCHOR SEVERED</Text>
@@ -46,7 +48,8 @@ export default function GameOverScreen(): React.JSX.Element {
       </View>
 
       <PersistentTerminalLog />
-    </View>
+      </View>
+    </TerminalSafeArea>
   );
 }
 

@@ -5,6 +5,7 @@ import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import PersistentTerminalLog from '../components/PersistentTerminalLog';
+import TerminalSafeArea from '../components/TerminalSafeArea';
 
 const TERMINAL_ACCENT = '#00ff33';
 
@@ -19,7 +20,8 @@ export default function RunCompleteScreen(): React.JSX.Element {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.backgroundColor }]}>
+    <TerminalSafeArea>
+      <View style={styles.container}>
       <View style={styles.content}>
         <Text style={[styles.title, { color: TERMINAL_ACCENT }]}>INCURSION RUN COMPLETE</Text>
         <Text style={[styles.body, { color: theme.mutedColor }]}>
@@ -56,7 +58,8 @@ export default function RunCompleteScreen(): React.JSX.Element {
       </View>
 
       <PersistentTerminalLog />
-    </View>
+      </View>
+    </TerminalSafeArea>
   );
 }
 

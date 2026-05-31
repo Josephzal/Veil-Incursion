@@ -335,7 +335,7 @@ export default function ScanningScreen(): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: Platform.OS === 'android' ? 24 : 8 },
+  container: { flex: 1 },
   fallback: { fontFamily: 'monospace', fontSize: 10, textAlign: 'center', padding: 24 },
   statusBar: { borderBottomWidth: 1, paddingVertical: 10, paddingHorizontal: 16 },
   statusBarText: { fontFamily: 'monospace', fontSize: 9, letterSpacing: 1.2, textAlign: 'center' },

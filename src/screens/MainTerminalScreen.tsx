@@ -1,32 +1,28 @@
 import React from 'react';
-import { StyleSheet, View, SafeAreaView, Text, Platform } from 'react-native';
+import { StyleSheet, View, Text, Platform } from 'react-native';
 import { useTerminal } from '../context/TerminalContext';
 import ProfileCard from '../components/ProfileCard';
+import TerminalSafeArea from '../components/TerminalSafeArea';
 
-export default function MainTerminalScreen() {
-  const { theme } = useTerminal(); // profile is safely extracted downstream or can be read here
+export default function MainTerminalScreen(): React.JSX.Element {
+  const { theme } = useTerminal();
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.backgroundColor }]}>
+    <TerminalSafeArea>
       <View style={styles.wrapper}>
         <Text style={[styles.panelTitle, { color: theme.primaryColor }]}>
           CURRENT OPERATIVE CREDENTIALS
         </Text>
-        
-        {/* Render our pristine digital passport asset[cite: 1] */}
         <ProfileCard />
       </View>
-    </SafeAreaView>
+    </TerminalSafeArea>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   wrapper: {
     flex: 1,
-    paddingTop: Platform.OS === 'android' ? 40 : 16,
+    paddingTop: 16,
     paddingHorizontal: 16,
   },
   panelTitle: {

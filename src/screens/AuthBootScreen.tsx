@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View, SafeAreaView, TouchableOpacity, LayoutAnimation, Platform, UIManager } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { useTerminal } from '../context/TerminalContext';
+import TerminalSafeArea from '../components/TerminalSafeArea';
 import { CabalAlignment } from '../types';
 
 // Enable Android LayoutAnimations if testing on an Android emulator/device
@@ -23,7 +24,7 @@ export default function AuthBootScreen(): React.JSX.Element {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.backgroundColor }]}>
+    <TerminalSafeArea>
       <View style={styles.terminalWindow}>
         {/* Dynamic authoritative system boot text dictated by Cabal alignment */}
         <Text style={[styles.terminalText, { color: theme.primaryColor }]}>
@@ -53,7 +54,7 @@ export default function AuthBootScreen(): React.JSX.Element {
           </View>
         </View>
       </View>
-    </SafeAreaView>
+    </TerminalSafeArea>
   );
 }
 
