@@ -69,7 +69,7 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
             </Pressable>
           ))}
         </View>
-        <PersistentTerminalLog visible={runState.runActive} expanded />
+        <PersistentTerminalLog visible={runState.runActive} />
       </View>
     </IncursionShell>
   );

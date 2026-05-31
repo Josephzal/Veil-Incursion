@@ -22,7 +22,7 @@ export default function IncursionShell({ children, hidePipeline = false }: Incur
       : '#00ff33';
 
   return (
-    <TerminalSafeArea>
+    <TerminalSafeArea edges={['top', 'left', 'right']}>
       <View style={styles.root}>
         {activeIncursion.isRunActive && !hidePipeline && (
           <DescentPipelineHUD

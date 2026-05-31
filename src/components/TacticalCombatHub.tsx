@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, View, Text, Animated, Easing, Dimensions, Pressable, Vibration, PanResponder } from 'react-native';
+import { StyleSheet, View, Text, Animated, Easing, Dimensions, Pressable, Vibration, PanResponder, ScrollView } from 'react-native';
 import { useTerminal } from '../context/TerminalContext';
 import { INITIAL_SECTOR_POOL } from '../data/regions';
 import { advanceEnemyIntent, intentLabel, spawnEnemyProfile } from '../data/enemies';
@@ -567,107 +567,118 @@ export default function TacticalCombatHub({
           </Text>
         </View>
 
-        <View style={styles.canvas}>
-          {screenFlashActive && (
-            <View style={styles.flashWrap} pointerEvents="none">
-              <VignetteFlashOverlay color={screenFlashColor} opacityAnim={screenFlashAnim} />
-            </View>
-          )}
-          {phaseAlert && (
-            <Text style={[styles.phaseAlert, { color: '#ef4444' }]}>{phaseAlert}</Text>
-          )}
-          {cycleState === 'TEXT_COMBAT' && intentBanner ? (
-            <Text style={styles.intentBanner}>{intentBanner}</Text>
-          ) : null}
-          {cycleState === 'TEXT_COMBAT' && isExhausted && (
-            <Text style={styles.exhaustedBanner}>EXHAUSTED — COUNTER/SLICE OFFLINE</Text>
-          )}
-          {cycleState === 'TEXT_COMBAT' && env.isPlayerBlinded && (
-            <Text style={[styles.exhaustedBanner, { color: '#fbbf24' }]}>BLINDED — COUNTER WINDOW -15%</Text>
-          )}
-          {cycleState === 'TEXT_COMBAT' && aegisActive && (
-            <Text style={[styles.aegisBanner, { color: theme.primaryColor }]}>AEGIS BARRIER ACTIVE</Text>
-          )}
+        <View style={styles.tacticsStage}>
+          <View style={styles.canvas}>
+            {screenFlashActive && (
+              <View style={styles.flashWrap} pointerEvents="none">
+                <VignetteFlashOverlay color={screenFlashColor} opacityAnim={screenFlashAnim} />
+              </View>
+            )}
+            {phaseAlert && (
+              <Text style={[styles.phaseAlert, { color: '#ef4444' }]}>{phaseAlert}</Text>
+            )}
+            {cycleState === 'TEXT_COMBAT' && intentBanner ? (
+              <Text style={styles.intentBanner}>{intentBanner}</Text>
+            ) : null}
+            {cycleState === 'TEXT_COMBAT' && isExhausted && (
+              <Text style={styles.exhaustedBanner}>EXHAUSTED — COUNTER/SLICE OFFLINE</Text>
+            )}
+            {cycleState === 'TEXT_COMBAT' && env.isPlayerBlinded && (
+              <Text style={[styles.exhaustedBanner, { color: '#fbbf24' }]}>BLINDED — COUNTER WINDOW -15%</Text>
+            )}
+            {cycleState === 'TEXT_COMBAT' && aegisActive && (
+              <Text style={[styles.aegisBanner, { color: theme.primaryColor }]}>AEGIS BARRIER ACTIVE</Text>
+            )}
 
-          {cycleState === 'TEXT_COMBAT' && (
-            <View style={styles.actionCol}>
-              {actionBtn(
-                isExhausted || stamina < strikeStats.strikeStaminaCost
-                  ? `[ KINETIC STRIKE (EXHAUSTED ${strikeStats.exhaustedStrikeDamage} DMG) ]`
-                  : `[ KINETIC STRIKE (Cost: ${strikeStats.strikeStaminaCost} Stamina / ${strikeStats.strikeDamage} DMG) ]`,
-                onStrike, isPlayerTurn, isPlayerTurn ? theme.primaryColor : undefined,
-              )}
-              {actionBtn(`[ AEGIS PROTOCOL (-${COMBAT_ACTION.AEGIS_STAMINA} STAM) ]`, onAegis, isPlayerTurn && stamina >= COMBAT_ACTION.AEGIS_STAMINA)}
-              {actionBtn(`[ COUNTER STANCE (-${COMBAT_ACTION.COUNTER_STAMINA} STAM, 50% KR) ]`, onCounter, isPlayerTurn && counterReady, P.parry)}
-              {actionBtn(`[ FLUID VENT (+${COMBAT_ACTION.FLUID_VENT_RESTORE} STAM) ]`, onVent, isPlayerTurn)}
-              {actionBtn('[ VECTOR SLICE EXECUTION (100% KR) ]', onSlice, isPlayerTurn && sliceReady, '#ff1744')}
-            </View>
-          )}
+            {cycleState === 'TEXT_COMBAT' && (
+              <ScrollView
+                style={styles.actionScroll}
+                contentContainerStyle={styles.actionCol}
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={false}
+              >
+                {actionBtn(
+                  isExhausted || stamina < strikeStats.strikeStaminaCost
+                    ? `[ KINETIC STRIKE (EXHAUSTED ${strikeStats.exhaustedStrikeDamage} DMG) ]`
+                    : `[ KINETIC STRIKE (Cost: ${strikeStats.strikeStaminaCost} Stamina / ${strikeStats.strikeDamage} DMG) ]`,
+                  onStrike, isPlayerTurn, isPlayerTurn ? theme.primaryColor : undefined,
+                )}
+                {actionBtn(`[ AEGIS PROTOCOL (-${COMBAT_ACTION.AEGIS_STAMINA} STAM) ]`, onAegis, isPlayerTurn && stamina >= COMBAT_ACTION.AEGIS_STAMINA)}
+                {actionBtn(`[ COUNTER STANCE (-${COMBAT_ACTION.COUNTER_STAMINA} STAM, 50% KR) ]`, onCounter, isPlayerTurn && counterReady, P.parry)}
+                {actionBtn(`[ FLUID VENT (+${COMBAT_ACTION.FLUID_VENT_RESTORE} STAM) ]`, onVent, isPlayerTurn)}
+                {actionBtn('[ VECTOR SLICE EXECUTION (100% KR) ]', onSlice, isPlayerTurn && sliceReady, '#ff1744')}
+              </ScrollView>
+            )}
 
-          <View style={[styles.parryWrap, { display: cycleState === 'DEFEND_PARRY' ? 'flex' : 'none' }]}>
-            <Pressable onPress={onParryTap} style={styles.ringBox}>
-              <View style={[styles.ringInner, { borderColor: theme.primaryColor }]} />
-              <Animated.View style={[styles.ringOuter, { borderColor: theme.primaryColor, transform: [{ scale: shrinkAnim }] }]} pointerEvents="none" />
-            </Pressable>
-            <Text style={[styles.parryHint, { color: theme.primaryColor }]}>COUNTER STANCE — TAP ON RING COLLISION</Text>
-          </View>
-
-          {cycleState === 'OFFENSE_SLICE' && (
-            <View style={styles.sliceOverlay} {...panResponder.panHandlers}>
-              {sliceLines.map((line) => {
-                if (activeSliceIndex !== line.id) return null;
-                const cr = '#ff1744';
-                return (
-                  <Animated.View key={line.id} style={[styles.sliceTrack, { top: line.topY, opacity: line.fadeAnim, transform: [{ rotate: line.rotation }] }]} pointerEvents="none">
-                    {line.isSliced && (<><View style={[styles.halo, styles.haloOut, { backgroundColor: '#5c0606' }]} /><View style={[styles.halo, styles.haloMid, { backgroundColor: '#c41010' }]} /><View style={[styles.halo, styles.haloIn, { backgroundColor: cr }]} /></>)}
-                    <View style={[line.isSliced ? styles.laserGlowS : styles.laserGlow, { backgroundColor: line.isSliced ? cr : '#ef4444', shadowColor: line.isSliced ? cr : '#ef4444' }]} />
-                    <View style={[line.isSliced ? styles.laserCoreS : styles.laserCore, { backgroundColor: line.isSliced ? '#ffe4e8' : '#fff', shadowColor: line.isSliced ? cr : '#fff' }]} />
-                  </Animated.View>
-                );
-              })}
-            </View>
-          )}
-
-          {cycleState === 'RESOLUTION' && (
-            <View style={styles.resolution}>
-              <Text style={[styles.resTitle, { color: resolutionOutcome === 'VICTORY' ? '#22c55e' : P.enemyHp }]}>
-                {resolutionOutcome === 'VICTORY' ? 'INTRUSION DECONSTRUCTED' : 'OPERATIVE SOUL DISCONNECTED'}
-              </Text>
-              <Pressable onPress={dismiss} style={[styles.resBtn, { borderColor: resolutionOutcome === 'VICTORY' ? theme.primaryColor : P.enemyHp }]}>
-                <Text style={[styles.resBtnText, { color: resolutionOutcome === 'VICTORY' ? theme.primaryColor : P.enemyHp }]}>
-                  {resolutionOutcome === 'VICTORY' ? '[ CONTINUE RUN ]' : '[ INCURSION FAILED ]'}
-                </Text>
+            <View style={[styles.parryWrap, { display: cycleState === 'DEFEND_PARRY' ? 'flex' : 'none' }]}>
+              <Pressable onPress={onParryTap} style={styles.ringBox}>
+                <View style={[styles.ringInner, { borderColor: theme.primaryColor }]} />
+                <Animated.View style={[styles.ringOuter, { borderColor: theme.primaryColor, transform: [{ scale: shrinkAnim }] }]} pointerEvents="none" />
               </Pressable>
+              <Text style={[styles.parryHint, { color: theme.primaryColor }]}>COUNTER STANCE — TAP ON RING COLLISION</Text>
+            </View>
+
+            {cycleState === 'OFFENSE_SLICE' && (
+              <View style={styles.sliceOverlay} {...panResponder.panHandlers}>
+                {sliceLines.map((line) => {
+                  if (activeSliceIndex !== line.id) return null;
+                  const cr = '#ff1744';
+                  return (
+                    <Animated.View key={line.id} style={[styles.sliceTrack, { top: line.topY, opacity: line.fadeAnim, transform: [{ rotate: line.rotation }] }]} pointerEvents="none">
+                      {line.isSliced && (<><View style={[styles.halo, styles.haloOut, { backgroundColor: '#5c0606' }]} /><View style={[styles.halo, styles.haloMid, { backgroundColor: '#c41010' }]} /><View style={[styles.halo, styles.haloIn, { backgroundColor: cr }]} /></>)}
+                      <View style={[line.isSliced ? styles.laserGlowS : styles.laserGlow, { backgroundColor: line.isSliced ? cr : '#ef4444', shadowColor: line.isSliced ? cr : '#ef4444' }]} />
+                      <View style={[line.isSliced ? styles.laserCoreS : styles.laserCore, { backgroundColor: line.isSliced ? '#ffe4e8' : '#fff', shadowColor: line.isSliced ? cr : '#fff' }]} />
+                    </Animated.View>
+                  );
+                })}
+              </View>
+            )}
+
+            {cycleState === 'RESOLUTION' && (
+              <View style={styles.resolution}>
+                <Text style={[styles.resTitle, { color: resolutionOutcome === 'VICTORY' ? '#22c55e' : P.enemyHp }]}>
+                  {resolutionOutcome === 'VICTORY' ? 'INTRUSION DECONSTRUCTED' : 'OPERATIVE SOUL DISCONNECTED'}
+                </Text>
+                <Pressable onPress={dismiss} style={[styles.resBtn, { borderColor: resolutionOutcome === 'VICTORY' ? theme.primaryColor : P.enemyHp }]}>
+                  <Text style={[styles.resBtnText, { color: resolutionOutcome === 'VICTORY' ? theme.primaryColor : P.enemyHp }]}>
+                    {resolutionOutcome === 'VICTORY' ? '[ CONTINUE RUN ]' : '[ INCURSION FAILED ]'}
+                  </Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
+        </View>
+
+        <View style={styles.metricsDock}>
+          {enemy && (
+            <View style={[styles.enemySection, { borderColor: theme.borderColor }]}>
+              <View style={styles.meterRow}>
+                <Text style={[styles.meterLabel, { color: P.unitTitle }]}>{enemy.designation}:</Text>
+                <Text style={[styles.meterValue, { color: P.enemyHp }]}>
+                  {enemy.currentHp}/{enemy.maxHp} HP // {enemy.intent}
+                </Text>
+              </View>
+              <View style={[styles.meterTrack, { borderColor: P.enemyHp }]}>
+                <View style={[styles.meterFill, { backgroundColor: P.enemyHp, width: `${(enemy.currentHp / enemy.maxHp) * 100}%` }]} />
+              </View>
             </View>
           )}
-        </View>
 
-        {enemy && (
-          <View style={[styles.enemySection, { borderColor: theme.borderColor }]}>
+          <View style={[styles.opHeader, { borderColor: theme.borderColor }]}>
             <View style={styles.meterRow}>
-              <Text style={[styles.meterLabel, { color: P.unitTitle }]}>{enemy.designation}:</Text>
-              <Text style={[styles.meterValue, { color: P.enemyHp }]}>{enemy.currentHp}/{enemy.maxHp} HP // {enemy.intent}</Text>
-            </View>
-            <View style={[styles.meterTrack, { borderColor: P.enemyHp }]}>
-              <View style={[styles.meterFill, { backgroundColor: P.enemyHp, width: `${(enemy.currentHp / enemy.maxHp) * 100}%` }]} />
+              <Text style={[styles.meterLabel, { color: P.unitTitle }]}>OPERATIVE UNIT:</Text>
+              <Text style={[styles.meterValue, { color: P.enemyHp }]}>SOUL ANCHOR ACTIVE</Text>
             </View>
           </View>
-        )}
-
-        <View style={[styles.opHeader, { borderColor: theme.borderColor }]}>
-          <View style={styles.meterRow}>
-            <Text style={[styles.meterLabel, { color: P.unitTitle }]}>OPERATIVE UNIT:</Text>
-            <Text style={[styles.meterValue, { color: P.enemyHp }]}>SOUL ANCHOR ACTIVE</Text>
-          </View>
+          {meter('SOUL ANCHOR INTEGRITY:', `${operativeHp}/${maxSoulAnchor}`, (operativeHp / maxSoulAnchor) * 100, P.enemyHp, P.enemyHp)}
+          {meter(`KINETIC RESERVOIR:`, `${kineticReservoir}%${counterReady ? ' // COUNTER READY' : ''}`, kineticReservoir, P.krBorder, P.kr)}
+          {meter(`STAMINA CORE:`, `${stamina}/${maxStamina}`, (stamina / maxStamina) * 100, theme.borderColor, '#22c55e')}
+          {statusEffects.length > 0 && (
+            <Text style={[styles.statusFxLine, { color: P.enemyHp }]}>
+              {`ACTIVE STATUS: ${statusEffects.join(' // ')}`}
+            </Text>
+          )}
         </View>
-        {meter('SOUL ANCHOR INTEGRITY:', `${operativeHp}/${maxSoulAnchor}`, (operativeHp / maxSoulAnchor) * 100, P.enemyHp, P.enemyHp)}
-        {meter(`KINETIC RESERVOIR:`, `${kineticReservoir}%${counterReady ? ' // COUNTER READY' : ''}`, kineticReservoir, P.krBorder, P.kr)}
-        {meter(`STAMINA CORE:`, `${stamina}/${maxStamina}`, (stamina / maxStamina) * 100, theme.borderColor, '#22c55e')}
-        {statusEffects.length > 0 && (
-          <Text style={[styles.statusFxLine, { color: P.enemyHp }]}>
-            {`ACTIVE STATUS: ${statusEffects.join(' // ')}`}
-          </Text>
-        )}
       </View>
     </View>
   );
@@ -675,19 +686,22 @@ export default function TacticalCombatHub({
 
 const abs = StyleSheet.absoluteFillObject;
 const styles = StyleSheet.create({
-  root: { width: '100%', maxWidth: width - 16, alignSelf: 'center' },
-  panel: { borderWidth: 2, padding: 16, width: '100%', overflow: 'hidden' },
-  header: { borderBottomWidth: 1, paddingBottom: 6, marginBottom: 12 },
-  headerText: { fontFamily: MONO, fontSize: 10, letterSpacing: 0.5 },
-  canvas: { minHeight: 240, height: 240, position: 'relative', justifyContent: 'flex-end', marginBottom: 12, overflow: 'hidden', backgroundColor: '#000' },
+  root: { flex: 1, width: '100%', maxWidth: width - 16, alignSelf: 'center', minHeight: 0 },
+  panel: { flex: 1, borderWidth: 2, padding: 16, width: '100%', overflow: 'hidden', flexDirection: 'column', minHeight: 0 },
+  header: { borderBottomWidth: 1, paddingBottom: 6, marginBottom: 8, flexShrink: 0 },
+  headerText: { fontFamily: MONO, fontSize: 10, letterSpacing: 0.5, flexShrink: 1, flexWrap: 'wrap' },
+  tacticsStage: { flex: 1, minHeight: 0, marginBottom: 8 },
+  canvas: { flex: 1, minHeight: 160, position: 'relative', justifyContent: 'flex-end', overflow: 'hidden', backgroundColor: '#000' },
+  actionScroll: { flex: 1, width: '100%' },
   flashWrap: { ...abs, zIndex: 100, overflow: 'hidden' },
   intentBanner: { fontFamily: MONO, fontSize: 8, letterSpacing: 0.5, textAlign: 'center', marginBottom: 4, color: P.enemyPosture },
   phaseAlert: { fontFamily: MONO, fontSize: 9, fontWeight: '700', textAlign: 'center', marginBottom: 6, letterSpacing: 0.8 },
   exhaustedBanner: { fontFamily: MONO, fontSize: 9, letterSpacing: 1, textAlign: 'center', marginBottom: 4, color: P.enemyHp },
   aegisBanner: { fontFamily: MONO, fontSize: 8, letterSpacing: 1, textAlign: 'center', marginBottom: 4 },
-  actionCol: { flexDirection: 'column', gap: 5 },
+  actionCol: { flexDirection: 'column', gap: 5, paddingBottom: 4 },
   actionNode: { borderWidth: 1, paddingVertical: 6, width: '100%', alignItems: 'center' },
-  btnText: { fontFamily: MONO, fontSize: 7, fontWeight: 'bold' },
+  btnText: { fontFamily: MONO, fontSize: 7, fontWeight: 'bold', textAlign: 'center', flexShrink: 1, flexWrap: 'wrap', width: '100%' },
+  metricsDock: { flexShrink: 0, width: '100%' },
   parryWrap: { ...abs, justifyContent: 'center', alignItems: 'center' },
   parryHint: { fontFamily: MONO, fontSize: 9, marginTop: 8, letterSpacing: 1 },
   ringBox: { width: TARGET_SIZE, height: TARGET_SIZE, borderRadius: TARGET_RADIUS, justifyContent: 'center', alignItems: 'center' },
@@ -706,9 +720,9 @@ const styles = StyleSheet.create({
   enemySection: { borderTopWidth: 1, paddingTop: 6, marginBottom: 8 },
   opHeader: { borderTopWidth: 1, paddingTop: 6, marginBottom: 8 },
   meterSection: { marginBottom: 6 },
-  meterRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 },
-  meterLabel: { fontFamily: MONO, fontSize: 9, marginBottom: 2 },
-  meterValue: { fontFamily: MONO, fontSize: 9, fontWeight: 'bold' },
+  meterRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 2, width: '100%' },
+  meterLabel: { fontFamily: MONO, fontSize: 9, marginBottom: 2, flexShrink: 0, maxWidth: '45%' },
+  meterValue: { fontFamily: MONO, fontSize: 9, fontWeight: 'bold', flexShrink: 1, flexWrap: 'wrap', textAlign: 'right', maxWidth: '55%' },
   meterTrack: { height: 6, borderWidth: 1, padding: 1 },
   meterFill: { height: '100%' },
   statusFxLine: { fontFamily: MONO, fontSize: 8, letterSpacing: 0.8, marginBottom: 4, textAlign: 'center' },

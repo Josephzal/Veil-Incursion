@@ -1,8 +1,8 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import IncursionShell from '../components/IncursionShell';
+import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
 import TacticalCombatHub from '../components/TacticalCombatHub';
-import PersistentTerminalLog from '../components/PersistentTerminalLog';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
@@ -68,44 +68,40 @@ export default function CombatScreen(): React.JSX.Element {
 
   return (
     <IncursionShell>
-      <View style={[styles.container, { backgroundColor: theme.backgroundColor }]}>
-        <View style={styles.combatStage}>
-          <View style={styles.hubWrapper}>
-            <TacticalCombatHub
-              onCombatComplete={handleCombatComplete}
-              initialOperativeHp={runState.soulAnchorIntegrity}
-              initialStamina={combatEntryStamina}
-              maxStamina={runState.maxStamina}
-              maxSoulAnchor={runState.maxSoulAnchor}
-              startingKineticPercent={runState.startingKineticPercent}
-              parryMultiplierBonus={runState.parryMultiplierBonus}
-              parryWindowBonus={runState.parryWindowBonus}
-              sliceDamagePenalty={runState.sliceDamagePenalty}
-              enemyProfile={runState.pendingEnemy}
-              nodeIndex={activeIncursion.currentNodeIndex}
-              onTerminalLog={appendRunLog}
-              weaponCombatStats={weaponCombatStats}
-              environmentalModifiers={env}
-              bossProfile={activeIncursion.bossProfile}
-              onBossPhaseShift={shiftBossPhase}
-            />
-          </View>
-          <PersistentTerminalLog visible={runState.runActive} expanded />
+      <MacroLogAnchoredLayout
+        showMacroLog={runState.runActive}
+        style={{ backgroundColor: theme.backgroundColor }}
+      >
+        <View style={styles.hubWrapper}>
+          <TacticalCombatHub
+            onCombatComplete={handleCombatComplete}
+            initialOperativeHp={runState.soulAnchorIntegrity}
+            initialStamina={combatEntryStamina}
+            maxStamina={runState.maxStamina}
+            maxSoulAnchor={runState.maxSoulAnchor}
+            startingKineticPercent={runState.startingKineticPercent}
+            parryMultiplierBonus={runState.parryMultiplierBonus}
+            parryWindowBonus={runState.parryWindowBonus}
+            sliceDamagePenalty={runState.sliceDamagePenalty}
+            enemyProfile={runState.pendingEnemy}
+            nodeIndex={activeIncursion.currentNodeIndex}
+            onTerminalLog={appendRunLog}
+            weaponCombatStats={weaponCombatStats}
+            environmentalModifiers={env}
+            bossProfile={activeIncursion.bossProfile}
+            onBossPhaseShift={shiftBossPhase}
+          />
         </View>
-      </View>
+      </MacroLogAnchoredLayout>
     </IncursionShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  combatStage: {
-    flex: 1,
-    alignItems: 'stretch',
-    paddingHorizontal: 8,
-  },
   hubWrapper: {
     flex: 1,
-    justifyContent: 'center',
+    minHeight: 0,
+    paddingHorizontal: 8,
+    justifyContent: 'flex-start',
   },
 });

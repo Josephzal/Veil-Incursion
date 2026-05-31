@@ -50,7 +50,7 @@ export default function NarrativeScreen(): React.JSX.Element {
             primaryColor={theme.primaryColor}
           />
         </View>
-        <PersistentTerminalLog visible={runState.runActive} expanded />
+        <PersistentTerminalLog visible={runState.runActive} />
       </View>
     </IncursionShell>
   );

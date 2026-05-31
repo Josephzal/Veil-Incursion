@@ -1,0 +1,37 @@
+import React from 'react';
+import { StyleSheet, View, ViewStyle } from 'react-native';
+import PersistentTerminalLog from './PersistentTerminalLog';
+
+interface MacroLogAnchoredLayoutProps {
+  children: React.ReactNode;
+  showMacroLog?: boolean;
+  style?: ViewStyle;
+}
+
+/**
+ * Strict two-zone column: scrollable/flex content above, macro log pinned to screen baseline.
+ * Use inside IncursionShell for combat, checkpoint, and scanner screens.
+ */
+export default function MacroLogAnchoredLayout({
+  children,
+  showMacroLog = true,
+  style,
+}: MacroLogAnchoredLayoutProps): React.JSX.Element {
+  return (
+    <View style={[styles.root, style]}>
+      <View style={styles.content}>{children}</View>
+      {showMacroLog ? <PersistentTerminalLog docked /> : null}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    flexDirection: 'column',
+  },
+  content: {
+    flex: 1,
+    minHeight: 0,
+  },
+});

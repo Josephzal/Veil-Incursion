@@ -3,7 +3,6 @@ import {
   Animated,
   Dimensions,
   Easing,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,7 +12,7 @@ import {
 import { generateTierNodeScanVectors } from '../data/descentEngine';
 import { INITIAL_SECTOR_POOL } from '../data/regions';
 import IncursionShell from '../components/IncursionShell';
-import PersistentTerminalLog from '../components/PersistentTerminalLog';
+import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
 import { useRun } from '../context/RunContext';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useTerminal } from '../context/TerminalContext';
@@ -212,15 +211,19 @@ export default function ScanningScreen(): React.JSX.Element {
 
   return (
     <IncursionShell>
-      <View style={[styles.container, { backgroundColor: theme.backgroundColor }]}>
-        <View style={[styles.statusBar, { borderColor: theme.borderColor }]}>
-          <Text style={[styles.statusBarText, { color: theme.mutedColor }]}>
-            {`TIER ${activeIncursion.currentTier} // DEPTH ${nodeIndex + 1}/7 // TACTICAL SWEEP HUB`}
-          </Text>
-        </View>
+      <MacroLogAnchoredLayout
+        showMacroLog={runState.runActive}
+        style={{ backgroundColor: theme.backgroundColor }}
+      >
+        <View style={styles.body}>
+          <View style={[styles.statusBar, { borderColor: theme.borderColor }]}>
+            <Text style={[styles.statusBarText, { color: theme.mutedColor }]}>
+              {`TIER ${activeIncursion.currentTier} // DEPTH ${nodeIndex + 1}/7 // TACTICAL SWEEP HUB`}
+            </Text>
+          </View>
 
-        <View style={[styles.radarDock, { height: RADAR_DOCK_HEIGHT }]}>
-          <View style={[styles.radarViewport, { width: RADAR_SIZE, height: RADAR_SIZE }]}>
+          <View style={[styles.radarDock, { height: RADAR_DOCK_HEIGHT }]}>
+            <View style={[styles.radarViewport, { width: RADAR_SIZE, height: RADAR_SIZE }]}>
             <Animated.View
               style={[
                 styles.radarRingOuter,
@@ -275,11 +278,11 @@ export default function ScanningScreen(): React.JSX.Element {
               )}
               {renderVectorDots()}
             </View>
+            </View>
           </View>
-        </View>
 
-        <View style={[styles.readoutDock, { height: READOUT_DOCK_HEIGHT, borderColor: theme.borderColor }]}>
-          <View style={styles.readoutInner}>
+          <View style={[styles.readoutDock, { borderColor: theme.borderColor }]}>
+            <View style={styles.readoutInner}>
             {phase === 'SWEEPING' && (
               <View style={styles.readoutBlock}>
                 <Text style={[styles.scanStatus, { color: theme.primaryColor }]}>LOCATING THREAT VECTORS...</Text>
@@ -319,27 +322,31 @@ export default function ScanningScreen(): React.JSX.Element {
                 </Text>
               </View>
             )}
+            </View>
+          </View>
+
+          <View style={[styles.footerTelemetry, { borderColor: theme.borderColor }]}>
+            <Text style={[styles.telemetryLine, { color: theme.mutedColor }]}>
+              {`TIER ${activeIncursion.currentTier} // SCAN ${nodeIndex + 1}/7 // VECTORS: ${vectorCluster.length} // RADAR_GAIN: 98%`}
+            </Text>
           </View>
         </View>
-
-        <View style={[styles.footerTelemetry, { borderColor: theme.borderColor }]}>
-          <Text style={[styles.telemetryLine, { color: theme.mutedColor }]}>
-            {`TIER ${activeIncursion.currentTier} // SCAN ${nodeIndex + 1}/7 // VECTORS: ${vectorCluster.length} // RADAR_GAIN: 98%`}
-          </Text>
-        </View>
-
-        <PersistentTerminalLog visible={runState.runActive} />
-      </View>
+      </MacroLogAnchoredLayout>
     </IncursionShell>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  body: {
+    flex: 1,
+    minHeight: 0,
+    flexDirection: 'column',
+  },
   fallback: { fontFamily: 'monospace', fontSize: 10, textAlign: 'center', padding: 24 },
-  statusBar: { borderBottomWidth: 1, paddingVertical: 10, paddingHorizontal: 16 },
+  statusBar: { borderBottomWidth: 1, paddingVertical: 10, paddingHorizontal: 16, flexShrink: 0 },
   statusBarText: { fontFamily: 'monospace', fontSize: 9, letterSpacing: 1.2, textAlign: 'center' },
-  radarDock: { alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  radarDock: { alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 },
   radarViewport: { position: 'relative', alignItems: 'center', justifyContent: 'center' },
   radarRingOuter: { position: 'absolute', top: 0, left: 0, borderWidth: 1, borderStyle: 'dashed' },
   radarRingMid: {
@@ -367,7 +374,15 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.9,
     shadowRadius: 8,
   },
-  readoutDock: { borderTopWidth: 1, borderBottomWidth: 1, backgroundColor: '#050608', overflow: 'hidden' },
+  readoutDock: {
+    flex: 1,
+    minHeight: 120,
+    maxHeight: READOUT_DOCK_HEIGHT,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    backgroundColor: '#050608',
+    overflow: 'hidden',
+  },
   readoutInner: { flex: 1, paddingHorizontal: 16, paddingVertical: 10, justifyContent: 'center' },
   readoutBlock: { justifyContent: 'center' },
   scanStatus: { fontFamily: 'monospace', fontSize: 11, letterSpacing: 1.1, textAlign: 'center' },
@@ -387,9 +402,16 @@ const styles = StyleSheet.create({
   vectorLogIndex: { fontFamily: 'monospace', fontSize: 9, width: 28 },
   vectorLogBody: { flex: 1 },
   vectorLogTag: { fontFamily: 'monospace', fontSize: 9, fontWeight: '700', lineHeight: 13 },
-  vectorLogLabel: { fontFamily: 'monospace', fontSize: 8, lineHeight: 12, marginTop: 2 },
+  vectorLogLabel: { fontFamily: 'monospace', fontSize: 8, lineHeight: 12, marginTop: 2, flexShrink: 1, flexWrap: 'wrap' },
   vectorLogAction: { fontFamily: 'monospace', fontSize: 12, paddingLeft: 6 },
   vectorLogHint: { fontFamily: 'monospace', fontSize: 7, lineHeight: 11, marginTop: 6 },
-  footerTelemetry: { borderTopWidth: 1, paddingVertical: 8, paddingHorizontal: 16 },
-  telemetryLine: { fontFamily: 'monospace', fontSize: 8, letterSpacing: 0.8, textAlign: 'center' },
+  footerTelemetry: { borderTopWidth: 1, paddingVertical: 8, paddingHorizontal: 16, flexShrink: 0 },
+  telemetryLine: {
+    fontFamily: 'monospace',
+    fontSize: 8,
+    letterSpacing: 0.8,
+    textAlign: 'center',
+    flexShrink: 1,
+    flexWrap: 'wrap',
+  },
 });
