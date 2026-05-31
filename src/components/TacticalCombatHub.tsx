@@ -9,10 +9,15 @@ import {
   rollBossIntent,
   shouldShiftBossPhase,
 } from '../data/bossCombat';
-import { COMBAT_ACTION, EnemyCombatProfile, EnemyIntent } from '../types/run';
+import { COMBAT_ACTION, ENEMY_KINETIC_SIPHON_REQUEST, EnemyCombatProfile, EnemyIntent } from '../types/run';
 import { ResolvedWeaponCombatStats } from '../data/inventory';
 import { BossRuntimeProfile, EnvironmentalModifiers } from '../types/game';
 import VignetteFlashOverlay from './VignetteFlashOverlay';
+import {
+  applyKineticSiphon,
+  formatKineticSiphonLog,
+} from '../utils/combatResourceState';
+import { useReactiveCombatStatus } from '../hooks/useReactiveCombatStatus';
 
 const { width } = Dimensions.get('window');
 const TARGET_SIZE = 80;
@@ -77,7 +82,7 @@ export default function TacticalCombatHub({
   const [operativeHp, setOperativeHp] = useState(initialOperativeHp);
   const [stamina, setStamina] = useState(initialStamina);
   const [kineticReservoir, setKineticReservoir] = useState(startingKineticPercent);
-  const [isExhausted, setIsExhausted] = useState(false);
+  const { statusEffects, isExhausted } = useReactiveCombatStatus(stamina);
   const [aegisActive, setAegisActive] = useState(false);
   const [counterPrepActive, setCounterPrepActive] = useState(false);
   const [isSuccessState, setIsSuccessState] = useState(false);
@@ -95,7 +100,6 @@ export default function TacticalCombatHub({
   const staminaRef = useRef(initialStamina);
   const kineticRef = useRef(startingKineticPercent);
   const skipRegenRef = useRef(false);
-  const exhaustedRef = useRef(false);
   const aegisRef = useRef(false);
   const aegisKrRef = useRef(false);
   const counterRef = useRef(false);
@@ -122,6 +126,13 @@ export default function TacticalCombatHub({
   const parryTol = PARRY_TOLERANCE * (1 + parryWindowBonus) * (env.isPlayerBlinded ? 0.85 : 1);
   const counterReady = kineticReservoir >= COMBAT_ACTION.COUNTER_KINETIC_MIN && !isExhausted;
   const sliceReady = kineticReservoir >= COMBAT_ACTION.KINETIC_CAP && !isExhausted;
+
+  const applyStamina = (next: number) => {
+    const clamped = Math.max(0, Math.min(next, maxStamina));
+    staminaRef.current = clamped;
+    setStamina(clamped);
+    return clamped;
+  };
 
   useEffect(() => {
     cycleRef.current = cycleState; enemyRef.current = enemy;
@@ -216,19 +227,18 @@ export default function TacticalCombatHub({
   };
 
   const markExhausted = () => {
-    exhaustedRef.current = true;
-    setIsExhausted(true);
     skipRegenRef.current = true;
-    staminaRef.current = 0;
-    setStamina(0);
+    applyStamina(0);
     applyTetanusGlitch();
   };
   const spendStam = (cost: number, overdraw = false): boolean => {
-    if (staminaRef.current < cost) { if (!overdraw) return false; markExhausted(); return true; }
-    const n = staminaRef.current - cost; staminaRef.current = n; setStamina(n);
+    if (staminaRef.current < cost) {
+      if (!overdraw) return false;
+      markExhausted();
+      return true;
+    }
+    const n = applyStamina(staminaRef.current - cost);
     if (n <= 0) {
-      exhaustedRef.current = true;
-      setIsExhausted(true);
       skipRegenRef.current = true;
       applyTetanusGlitch();
     }
@@ -258,10 +268,18 @@ export default function TacticalCombatHub({
       case 'WORLD_ENDER': { const { dmg } = attackDmg(e); log(`>> ${e.designation} WORLD-ENDER — ${dmg} UNBLOCKABLE`); hurtPlayer(dmg, true); break; }
       case 'STRIP_STAMINA':
         log(`>> ${e.designation} STRIPS STAMINA (-20).`);
-        setStamina((p) => { const n = Math.max(p - 20, 0); staminaRef.current = n; return n; }); break;
-      case 'SIPHON_KINETIC':
-        log(`>> ${e.designation} SIPHONS KINETIC (-25%).`);
-        setKineticReservoir((p) => { const n = Math.max(p - 25, 0); kineticRef.current = n; return n; }); break;
+        applyStamina(staminaRef.current - 20);
+        break;
+      case 'SIPHON_KINETIC': {
+        const { nextKinetic, siphoned } = applyKineticSiphon(
+          kineticRef.current,
+          ENEMY_KINETIC_SIPHON_REQUEST,
+        );
+        log(formatKineticSiphonLog(e.designation, ENEMY_KINETIC_SIPHON_REQUEST, siphoned));
+        kineticRef.current = nextKinetic;
+        setKineticReservoir(nextKinetic);
+        break;
+      }
       case 'EVADE': log(`>> ${e.designation} EVADE posture — strikes deal 50%.`); break;
       case 'CHARGE': log(`>> ${e.designation} CHARGING world-ender (${e.chargeTurns + 1}/3).`); break;
       default: break;
@@ -287,13 +305,11 @@ export default function TacticalCombatHub({
     counterRef.current = false;
     setIsPlayerTurn(true);
     if (!skipRegenRef.current) {
-      setStamina((p) => {
-        const n = Math.min(p + COMBAT_ACTION.STAMINA_REGEN, maxStamina);
-        staminaRef.current = n;
-        return n;
-      });
+      applyStamina(staminaRef.current + COMBAT_ACTION.STAMINA_REGEN);
+    } else if (staminaRef.current === 0) {
+      log('[EXHAUSTED] >> Stamina regen suppressed — reserves at 0.');
     } else {
-      log('[EXHAUSTED] >> Stamina regen suppressed this turn.');
+      log('[OVEREXERTION] >> Stamina regen suppressed this turn.');
     }
     skipRegenRef.current = false;
     setCycleState('TEXT_COMBAT');
@@ -340,9 +356,11 @@ export default function TacticalCombatHub({
     kineticRef.current = startingKineticPercent; skipRegenRef.current = false;
     aegisRef.current = false; aegisKrRef.current = false; counterRef.current = false;
     resolutionRef.current = null; dismissedRef.current = false;
-    exhaustedRef.current = false;
-    setOperativeHp(initialOperativeHp); setStamina(initialStamina); setKineticReservoir(startingKineticPercent);
-    setIsExhausted(false); setAegisActive(false); setCounterPrepActive(false);
+    applyStamina(initialStamina);
+    setKineticReservoir(startingKineticPercent);
+    setOperativeHp(initialOperativeHp);
+    setAegisActive(false);
+    setCounterPrepActive(false);
     setResolutionOutcome(null); setIsPlayerTurn(true); setCycleState('TEXT_COMBAT');
     log('>> TACTICAL COMBAT LINK ESTABLISHED — AEGIS PROTOCOLS ONLINE.');
     log(`>> WEAPON LINK: ${strikeStats.label} // STRIKE ${strikeStats.strikeDamage} DMG / ${strikeStats.strikeStaminaCost} STAM`);
@@ -371,7 +389,7 @@ export default function TacticalCombatHub({
     } else {
       spendStam(strikeStats.strikeStaminaCost);
     }
-    const exhausted = exhaustedRef.current;
+    const exhausted = overdraw || staminaRef.current === 0;
     const krGain = aegisKrRef.current ? COMBAT_ACTION.AEGIS_KINETIC_BONUS : strikeStats.kineticChargePerStrike;
     chargeKr(krGain);
     if (aegisKrRef.current) aegisKrRef.current = false;
@@ -398,7 +416,7 @@ export default function TacticalCombatHub({
 
   const onVent = () => {
     if (cycleState !== 'TEXT_COMBAT' || !isPlayerTurn) return;
-    setStamina((p) => { const n = Math.min(p + COMBAT_ACTION.FLUID_VENT_RESTORE, maxStamina); staminaRef.current = n; return n; });
+    applyStamina(staminaRef.current + COMBAT_ACTION.FLUID_VENT_RESTORE);
     log(`[FLUID VENT] >> Stamina restored (+${COMBAT_ACTION.FLUID_VENT_RESTORE}).`); passToEnemy(false);
   };
 
@@ -645,6 +663,11 @@ export default function TacticalCombatHub({
         {meter('SOUL ANCHOR INTEGRITY:', `${operativeHp}/${maxSoulAnchor}`, (operativeHp / maxSoulAnchor) * 100, P.enemyHp, P.enemyHp)}
         {meter(`KINETIC RESERVOIR:`, `${kineticReservoir}%${counterReady ? ' // COUNTER READY' : ''}`, kineticReservoir, P.krBorder, P.kr)}
         {meter(`STAMINA CORE:`, `${stamina}/${maxStamina}`, (stamina / maxStamina) * 100, theme.borderColor, '#22c55e')}
+        {statusEffects.length > 0 && (
+          <Text style={[styles.statusFxLine, { color: P.enemyHp }]}>
+            {`ACTIVE STATUS: ${statusEffects.join(' // ')}`}
+          </Text>
+        )}
       </View>
     </View>
   );
@@ -688,6 +711,7 @@ const styles = StyleSheet.create({
   meterValue: { fontFamily: MONO, fontSize: 9, fontWeight: 'bold' },
   meterTrack: { height: 6, borderWidth: 1, padding: 1 },
   meterFill: { height: '100%' },
+  statusFxLine: { fontFamily: MONO, fontSize: 8, letterSpacing: 0.8, marginBottom: 4, textAlign: 'center' },
   resolution: { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.12)', paddingTop: 8, alignItems: 'center', width: '100%' },
   resTitle: { fontFamily: MONO, fontSize: 12, fontWeight: 'bold', marginBottom: 8, letterSpacing: 0.5 },
   resBtn: { borderWidth: 1, paddingVertical: 8, width: '80%', alignItems: 'center' },

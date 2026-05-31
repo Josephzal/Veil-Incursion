@@ -32,6 +32,7 @@ export type { AppScreen, ScanMode } from './gameFlow';
 
 export type {
   ClimateClusterId,
+  CombatStatusEffect,
   EncounterNode,
   EncounterType as RunEncounterType,
   EnemyClass,
@@ -47,7 +48,7 @@ export type {
   Trinket,
 } from './run';
 
-export { COMBAT_ACTION, BASE_MAX_STAMINA, BASE_MAX_SOUL_ANCHOR, TOTAL_RUN_NODES, MIN_COMBAT_NODES } from './run';
+export { COMBAT_ACTION, BASE_MAX_STAMINA, BASE_MAX_SOUL_ANCHOR, TOTAL_RUN_NODES, MIN_COMBAT_NODES, ENEMY_KINETIC_SIPHON_REQUEST, MAX_KINETIC_SIPHON_PER_ACTION } from './run';
 
 export type { FactionTheme } from './theme';
 export { FACTION_THEMES } from './theme';

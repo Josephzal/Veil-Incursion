@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, Text, Animated, Easing, Dimensions, Pressable, Vibration, PanResponder } from 'react-native';
+import { deriveCombatStatusEffects } from '../utils/combatResourceState';
 import { useTerminal } from '../context/TerminalContext';
 import VignetteFlashOverlay from './VignetteFlashOverlay';
 
@@ -122,7 +123,9 @@ export default function BlueprintSilhouette({
   const enemyModeRef = useRef<EnemyCombatMode>('ATTACKING');
   const operativeHpRef = useRef(initialOperativeHp);
   const staminaRef = useRef(initialStamina);
-  const [isExhausted, setIsExhausted] = useState<boolean>(false);
+  const [statusEffects, setStatusEffects] = useState<import('../types/run').CombatStatusEffect[]>(() =>
+    deriveCombatStatusEffects(initialStamina),
+  );
   const skipStaminaRegenRef = useRef<boolean>(false);
 
   // Mini-game Win/Loss Visual Flags
@@ -161,6 +164,10 @@ export default function BlueprintSilhouette({
   useEffect(() => { kineticReservoirRef.current = kineticReservoir; }, [kineticReservoir]);
   useEffect(() => { operativeHpRef.current = operativeHp; }, [operativeHp]);
   useEffect(() => { staminaRef.current = stamina; }, [stamina]);
+  useEffect(() => {
+    setStatusEffects(deriveCombatStatusEffects(stamina));
+  }, [stamina]);
+  const isExhausted = statusEffects.includes('EXHAUSTED');
   useEffect(() => { enemyModeRef.current = enemyMode; }, [enemyMode]);
   // 📍 REPLACE THE PREVIOUS ANIMATION useEffect BLOCK WITH THIS ONE:
   useEffect(() => {
@@ -269,7 +276,7 @@ export default function BlueprintSilhouette({
     kineticReservoirRef.current = startingKineticPercent;
     setEnemyMode('ATTACKING');
     enemyModeRef.current = 'ATTACKING';
-    setIsExhausted(false);
+    setStatusEffects(deriveCombatStatusEffects(initialStamina));
     skipStaminaRegenRef.current = false;
     resolutionOutcomeRef.current = null;
     resolutionDismissedRef.current = false;
@@ -294,7 +301,6 @@ export default function BlueprintSilhouette({
 
     const exhaustedAttack = stamina < STAMINA_ATTACK_COST;
     if (exhaustedAttack) {
-      setIsExhausted(true);
       skipStaminaRegenRef.current = true;
       staminaRef.current = 0;
       setStamina(0);
@@ -420,7 +426,6 @@ export default function BlueprintSilhouette({
     setKineticParryActive(false);
     isKineticParryRef.current = false;
     setIsPlayerTurn(true);
-    setIsExhausted(false);
     if (!skipStaminaRegenRef.current) {
       setStamina((prev) => {
         const next = Math.min(prev + STAMINA_REGEN_PER_TURN, maxStamina);

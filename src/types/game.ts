@@ -48,7 +48,8 @@ export interface CombatNodeState {
   currentEnemyIntent: string;
   kineticReservoir: number;
   vectorSliceStored: boolean;
-  isPlayerExhausted: boolean;
+  /** Derived from stamina === 0; EXHAUSTED purged when stamina rises above 0. */
+  statusEffects: import('./run').CombatStatusEffect[];
 }
 
 export interface WeaponModifiers {

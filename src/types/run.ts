@@ -16,6 +16,15 @@ export type EnemyIntent =
   | 'FORTIFY'
   | 'OVERDRIVE_DISCHARGE';
 
+/** Reactive combat debuffs derived from resource pools (stamina === 0 → EXHAUSTED). */
+export type CombatStatusEffect = 'EXHAUSTED';
+
+/** Enemy-requested kinetic drain before per-action clamp (see clampKineticSiphonAmount). */
+export const ENEMY_KINETIC_SIPHON_REQUEST = 25;
+
+/** Hard cap on kinetic energy siphoned from the player per enemy action. */
+export const MAX_KINETIC_SIPHON_PER_ACTION = 15;
+
 export interface SectorDefinition {
   id: string;
   name: string;
