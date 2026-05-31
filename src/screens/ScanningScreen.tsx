@@ -5,11 +5,12 @@ import {
   Easing,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { generateTierNodeScanVector } from '../data/descentEngine';
+import { generateTierNodeScanVectors } from '../data/descentEngine';
 import { INITIAL_SECTOR_POOL } from '../data/regions';
 import IncursionShell from '../components/IncursionShell';
 import PersistentTerminalLog from '../components/PersistentTerminalLog';
@@ -32,7 +33,7 @@ const TERMINAL_ACCENT = '#00ff33';
 const RADAR_SIZE = Math.min(width - 80, 280);
 const RADAR_CORE = RADAR_SIZE * 0.48;
 const RADAR_DOCK_HEIGHT = RADAR_SIZE + 32;
-const READOUT_DOCK_HEIGHT = 196;
+const READOUT_DOCK_HEIGHT = 220;
 
 type ScanPhase = 'SWEEPING' | 'DOTS';
 
@@ -45,7 +46,7 @@ export default function ScanningScreen(): React.JSX.Element {
   const { theme } = useTerminal();
   const { runState, scanSessionKey, activeIncursion } = useRun();
   const { account } = usePlayerAccount();
-  const { deploySelectedVector, isScanningHub, getCurrentTierNode } = useDescentNavigator();
+  const { deploySelectedVector, isScanningHub } = useDescentNavigator();
 
   const accent =
     account.alignedFaction != null
@@ -53,22 +54,29 @@ export default function ScanningScreen(): React.JSX.Element {
       : TERMINAL_ACCENT;
 
   const [phase, setPhase] = useState<ScanPhase>('SWEEPING');
-  const [vectorDot, setVectorDot] = useState<RadarDot | null>(null);
+  const [vectorDots, setVectorDots] = useState<RadarDot[]>([]);
 
   const pulseAnim = useRef(new Animated.Value(0.25)).current;
   const sweepAnim = useRef(new Animated.Value(0)).current;
-  const dotOpacityAnim = useRef(new Animated.Value(0)).current;
-  const dotPulseRef = useRef<Animated.CompositeAnimation | null>(null);
-  const pingedThisRotationRef = useRef(false);
+  const dotOpacityMapRef = useRef<Record<string, Animated.Value>>({});
+  const dotPulseMapRef = useRef<Record<string, Animated.CompositeAnimation | null>>({});
+  const pingedThisRotationRef = useRef<Record<string, boolean>>({});
   const lastSweepValueRef = useRef(0);
   const lastRadarSessionRef = useRef<number | null>(null);
   const deployingRef = useRef(false);
 
-  const tierNode = getCurrentTierNode();
   const nodeIndex = activeIncursion.currentNodeIndex;
+  const vectorCluster = activeIncursion.activeTierVectors[nodeIndex] ?? [];
+
+  const ensureDotOpacity = (dotId: string): Animated.Value => {
+    if (!dotOpacityMapRef.current[dotId]) {
+      dotOpacityMapRef.current[dotId] = new Animated.Value(0);
+    }
+    return dotOpacityMapRef.current[dotId];
+  };
 
   useEffect(() => {
-    if (!isScanningHub || !tierNode) {
+    if (!isScanningHub || vectorCluster.length === 0) {
       lastRadarSessionRef.current = null;
       return;
     }
@@ -79,15 +87,15 @@ export default function ScanningScreen(): React.JSX.Element {
     deployingRef.current = false;
 
     const sector = runState.currentSector ?? INITIAL_SECTOR_POOL[0];
-    const dot = generateTierNodeScanVector(tierNode, RADAR_CORE, sector);
-    setVectorDot(dot);
-    dotOpacityAnim.setValue(0);
-    pingedThisRotationRef.current = false;
+    const dots = generateTierNodeScanVectors(vectorCluster, RADAR_CORE, sector);
+    dots.forEach((dot) => ensureDotOpacity(dot.id).setValue(0));
+    pingedThisRotationRef.current = {};
     lastSweepValueRef.current = 0;
-  }, [isScanningHub, scanSessionKey, tierNode, nodeIndex, runState.currentSector]);
+    setVectorDots(dots);
+  }, [isScanningHub, scanSessionKey, vectorCluster, nodeIndex, runState.currentSector]);
 
   useEffect(() => {
-    if (!isScanningHub || !vectorDot) return;
+    if (!isScanningHub || vectorDots.length === 0) return;
 
     const pulseLoop = Animated.loop(
       Animated.sequence([
@@ -103,39 +111,47 @@ export default function ScanningScreen(): React.JSX.Element {
     );
     sweepLoop.start();
 
-    const pingDot = () => {
-      if (pingedThisRotationRef.current) return;
-      pingedThisRotationRef.current = true;
-      dotPulseRef.current?.stop();
-      dotOpacityAnim.setValue(1);
-      const pulse = Animated.timing(dotOpacityAnim, {
+    const pingDot = (dotId: string) => {
+      if (pingedThisRotationRef.current[dotId]) return;
+      pingedThisRotationRef.current[dotId] = true;
+      dotPulseMapRef.current[dotId]?.stop();
+      const opacity = ensureDotOpacity(dotId);
+      opacity.setValue(1);
+      const pulse = Animated.timing(opacity, {
         toValue: 0,
         duration: PING_FADE_MS,
         easing: Easing.out(Easing.quad),
         useNativeDriver: true,
       });
-      dotPulseRef.current = pulse;
+      dotPulseMapRef.current[dotId] = pulse;
       pulse.start();
     };
 
     const sweepListener = sweepAnim.addListener(({ value }) => {
-      if (value < lastSweepValueRef.current) pingedThisRotationRef.current = false;
+      if (value < lastSweepValueRef.current) {
+        pingedThisRotationRef.current = {};
+      }
       lastSweepValueRef.current = value;
       const sweepDeg = (value * 360) % 360;
-      if (sweepDeltaDeg(sweepDeg, vectorDot.angleDeg) <= SWEEP_DETECT_ARC_DEG) pingDot();
+      vectorDots.forEach((dot) => {
+        if (sweepDeltaDeg(sweepDeg, dot.angleDeg) <= SWEEP_DETECT_ARC_DEG) pingDot(dot.id);
+      });
     });
 
     const finishTimer = setTimeout(() => {
       sweepLoop.stop();
       sweepAnim.stopAnimation();
       sweepAnim.removeListener(sweepListener);
-      dotPulseRef.current?.stop();
-      Animated.timing(dotOpacityAnim, {
-        toValue: 1,
-        duration: 180,
-        easing: Easing.out(Easing.ease),
-        useNativeDriver: true,
-      }).start(() => setPhase('DOTS'));
+      vectorDots.forEach((dot) => {
+        dotPulseMapRef.current[dot.id]?.stop();
+        Animated.timing(ensureDotOpacity(dot.id), {
+          toValue: 1,
+          duration: 180,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }).start();
+      });
+      setPhase('DOTS');
     }, SCAN_DURATION_MS);
 
     return () => {
@@ -143,42 +159,48 @@ export default function ScanningScreen(): React.JSX.Element {
       sweepLoop.stop();
       sweepAnim.removeListener(sweepListener);
       clearTimeout(finishTimer);
-      dotPulseRef.current?.stop();
+      vectorDots.forEach((dot) => dotPulseMapRef.current[dot.id]?.stop());
     };
-  }, [isScanningHub, vectorDot, pulseAnim, sweepAnim]);
+  }, [isScanningHub, vectorDots, pulseAnim, sweepAnim]);
 
   const sweepRotation = sweepAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ['0deg', '360deg'],
   });
 
-  const handleVectorSelect = () => {
-    if (phase !== 'DOTS' || deployingRef.current || !tierNode) return;
+  const handleVectorSelect = (nodeId: string) => {
+    if (phase !== 'DOTS' || deployingRef.current) return;
     deployingRef.current = true;
-    deploySelectedVector();
+    deploySelectedVector(nodeId);
   };
 
-  const renderVectorDot = () => {
-    if (!vectorDot) return null;
-    const hitboxStyle = {
-      left: vectorDot.x - DOT_HIT_SIZE / 2,
-      top: vectorDot.y - DOT_HIT_SIZE / 2,
-    };
+  const renderVectorDots = () =>
+    vectorDots.map((dot) => {
+      const hitboxStyle = {
+        left: dot.x - DOT_HIT_SIZE / 2,
+        top: dot.y - DOT_HIT_SIZE / 2,
+      };
+      const opacity = ensureDotOpacity(dot.id);
 
-    if (phase === 'SWEEPING') {
+      if (phase === 'SWEEPING') {
+        return (
+          <View key={dot.id} style={[styles.dotHitbox, hitboxStyle]} pointerEvents="none">
+            <Animated.View style={[styles.vectorDot, { opacity }]} />
+          </View>
+        );
+      }
+
       return (
-        <View style={[styles.dotHitbox, hitboxStyle]} pointerEvents="none">
-          <Animated.View style={[styles.vectorDot, { opacity: dotOpacityAnim }]} />
-        </View>
+        <Pressable
+          key={dot.id}
+          onPress={() => handleVectorSelect(dot.id)}
+          hitSlop={12}
+          style={[styles.dotHitbox, hitboxStyle]}
+        >
+          <View style={styles.vectorDot} />
+        </Pressable>
       );
-    }
-
-    return (
-      <Pressable onPress={handleVectorSelect} hitSlop={12} style={[styles.dotHitbox, hitboxStyle]}>
-        <View style={styles.vectorDot} />
-      </Pressable>
-    );
-  };
+    });
 
   if (!isScanningHub) {
     return (
@@ -251,7 +273,7 @@ export default function ScanningScreen(): React.JSX.Element {
                   />
                 </Animated.View>
               )}
-              {renderVectorDot()}
+              {renderVectorDots()}
             </View>
           </View>
         </View>
@@ -262,27 +284,39 @@ export default function ScanningScreen(): React.JSX.Element {
               <View style={styles.readoutBlock}>
                 <Text style={[styles.scanStatus, { color: theme.primaryColor }]}>LOCATING THREAT VECTORS...</Text>
                 <Text style={[styles.scanSubStatus, { color: theme.mutedColor }]}>
-                  Tactical sweep mapping tier depth {nodeIndex + 1}
+                  {`Tactical sweep mapping ${vectorCluster.length} candidate vector${vectorCluster.length === 1 ? '' : 's'} at depth ${nodeIndex + 1}`}
                 </Text>
               </View>
             )}
-            {phase === 'DOTS' && tierNode && vectorDot && (
-              <View style={[styles.vectorCard, { borderColor: accent }]}>
-                <Text style={[styles.vectorCardLabel, { color: theme.mutedColor }]}>NEXT-STEP VECTOR LOCKED</Text>
-                <Text style={[styles.vectorCardTitle, { color: accent }]}>{vectorDot.pingLabel}</Text>
-                <Text style={[styles.vectorCardSub, { color: theme.primaryColor }]}>{tierNode.label}</Text>
-                <Text style={[styles.vectorCardHint, { color: theme.mutedColor }]}>
-                  Tap the white blip on radar to commit vector and deploy encounter layer.
+            {phase === 'DOTS' && vectorDots.length > 0 && (
+              <View style={[styles.vectorLogPanel, { borderColor: accent }]}>
+                <Text style={[styles.vectorLogHeader, { color: theme.mutedColor }]}>
+                  {`VECTOR CLOUD LOCKED — ${vectorDots.length} SELECTABLE ROUTE${vectorDots.length === 1 ? '' : 'S'}`}
                 </Text>
-                <Pressable
-                  onPress={handleVectorSelect}
-                  style={({ pressed }) => [
-                    styles.commitBtn,
-                    { borderColor: accent, opacity: pressed ? 0.75 : 1, backgroundColor: pressed ? '#0d1a12' : '#0a0b0f' },
-                  ]}
-                >
-                  <Text style={[styles.commitBtnText, { color: accent }]}>[ COMMIT VECTOR ]</Text>
-                </Pressable>
+                <ScrollView style={styles.vectorLogScroll} contentContainerStyle={styles.vectorLogContent}>
+                  {vectorDots.map((dot, i) => (
+                    <Pressable
+                      key={dot.id}
+                      onPress={() => handleVectorSelect(dot.id)}
+                      style={({ pressed }) => [
+                        styles.vectorLogEntry,
+                        { borderColor: theme.borderColor, opacity: pressed ? 0.7 : 1 },
+                      ]}
+                    >
+                      <Text style={[styles.vectorLogIndex, { color: accent }]}>
+                        {`[${String(i + 1).padStart(2, '0')}]`}
+                      </Text>
+                      <View style={styles.vectorLogBody}>
+                        <Text style={[styles.vectorLogTag, { color: accent }]}>{dot.pingLabel}</Text>
+                        <Text style={[styles.vectorLogLabel, { color: theme.primaryColor }]}>{dot.label}</Text>
+                      </View>
+                      <Text style={[styles.vectorLogAction, { color: theme.mutedColor }]}>{'>'}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+                <Text style={[styles.vectorLogHint, { color: theme.mutedColor }]}>
+                  Tap a radar blip or log entry to commit vector and deploy encounter layer.
+                </Text>
               </View>
             )}
           </View>
@@ -290,7 +324,7 @@ export default function ScanningScreen(): React.JSX.Element {
 
         <View style={[styles.footerTelemetry, { borderColor: theme.borderColor }]}>
           <Text style={[styles.telemetryLine, { color: theme.mutedColor }]}>
-            {`TIER ${activeIncursion.currentTier} // NODE ${nodeIndex + 1}/7 // RADAR_GAIN: 98%`}
+            {`TIER ${activeIncursion.currentTier} // SCAN ${nodeIndex + 1}/7 // VECTORS: ${vectorCluster.length} // RADAR_GAIN: 98%`}
           </Text>
         </View>
 
@@ -334,17 +368,28 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
   },
   readoutDock: { borderTopWidth: 1, borderBottomWidth: 1, backgroundColor: '#050608', overflow: 'hidden' },
-  readoutInner: { flex: 1, paddingHorizontal: 16, paddingVertical: 12, justifyContent: 'center' },
+  readoutInner: { flex: 1, paddingHorizontal: 16, paddingVertical: 10, justifyContent: 'center' },
   readoutBlock: { justifyContent: 'center' },
   scanStatus: { fontFamily: 'monospace', fontSize: 11, letterSpacing: 1.1, textAlign: 'center' },
   scanSubStatus: { fontFamily: 'monospace', fontSize: 9, marginTop: 6, textAlign: 'center', lineHeight: 13 },
-  vectorCard: { borderWidth: 1, padding: 10, backgroundColor: '#0e1624', flex: 1, justifyContent: 'space-between' },
-  vectorCardLabel: { fontFamily: 'monospace', fontSize: 7, letterSpacing: 1.4, marginBottom: 4 },
-  vectorCardTitle: { fontFamily: 'monospace', fontSize: 10, fontWeight: '700', marginBottom: 4, lineHeight: 14 },
-  vectorCardSub: { fontFamily: 'monospace', fontSize: 9, marginBottom: 6, lineHeight: 13 },
-  vectorCardHint: { fontFamily: 'monospace', fontSize: 8, lineHeight: 12, marginBottom: 8 },
-  commitBtn: { borderWidth: 1, paddingVertical: 10, alignItems: 'center' },
-  commitBtnText: { fontFamily: 'monospace', fontSize: 10, fontWeight: '700', letterSpacing: 1 },
+  vectorLogPanel: { flex: 1, borderWidth: 1, padding: 8, backgroundColor: '#0e1624' },
+  vectorLogHeader: { fontFamily: 'monospace', fontSize: 7, letterSpacing: 1.4, marginBottom: 6 },
+  vectorLogScroll: { flex: 1 },
+  vectorLogContent: { gap: 4 },
+  vectorLogEntry: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    backgroundColor: '#0a0b0f',
+  },
+  vectorLogIndex: { fontFamily: 'monospace', fontSize: 9, width: 28 },
+  vectorLogBody: { flex: 1 },
+  vectorLogTag: { fontFamily: 'monospace', fontSize: 9, fontWeight: '700', lineHeight: 13 },
+  vectorLogLabel: { fontFamily: 'monospace', fontSize: 8, lineHeight: 12, marginTop: 2 },
+  vectorLogAction: { fontFamily: 'monospace', fontSize: 12, paddingLeft: 6 },
+  vectorLogHint: { fontFamily: 'monospace', fontSize: 7, lineHeight: 11, marginTop: 6 },
   footerTelemetry: { borderTopWidth: 1, paddingVertical: 8, paddingHorizontal: 16 },
   telemetryLine: { fontFamily: 'monospace', fontSize: 8, letterSpacing: 0.8, textAlign: 'center' },
 });

@@ -26,6 +26,7 @@ import {
   createDefaultActiveIncursionState,
   FactionModifiers,
   IncursionMapMode,
+  IncursionNode,
   NarrativeEventNode,
 } from '../types/game';
 import {
@@ -36,7 +37,9 @@ import {
 } from '../data/narrativeEvents';
 import {
   createBossProfileForTier,
-  generateTierNodeChain,
+  createPlaceholderTierPath,
+  findVectorInCluster,
+  generateTierVectorMatrix,
   isBossNodeType,
 } from '../data/descentEngine';
 import { spawnBossEnemyProfile } from '../data/bossCombat';
@@ -85,10 +88,21 @@ interface RunContextType {
   shiftBossPhase: (phase: number) => void;
   setIncursionMapMode: (mode: IncursionMapMode) => void;
   purgeEncounterState: () => void;
-  commitNodeEncounter: () => import('../types/game').RunNodeType | null;
+  commitNodeEncounter: (nodeId: string) => import('../types/game').RunNodeType | null;
+  getCurrentVectorCluster: () => import('../types/game').IncursionNode[];
+  getSelectedVectorNode: () => import('../types/game').IncursionNode | null;
 }
 
 const RunContext = createContext<RunContextType | undefined>(undefined);
+
+function resolveActiveVectorNode(inc: ActiveIncursionState): IncursionNode | null {
+  if (inc.selectedVectorId) {
+    const cluster = inc.activeTierVectors[inc.currentNodeIndex] ?? [];
+    const found = findVectorInCluster(cluster, inc.selectedVectorId);
+    if (found) return found;
+  }
+  return inc.tierNodes[inc.currentNodeIndex] ?? null;
+}
 
 function aggregateModifiers(trinkets: Trinket[]) {
   return trinkets.reduce(
@@ -162,13 +176,16 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     };
     runStateRef.current = next;
     setRunState(next);
-    const tierNodes = generateTierNodeChain(1);
+    const { activeTierVectors, earlySanctuarySpawned } = generateTierVectorMatrix(1);
     const incursion: ActiveIncursionState = {
       ...createDefaultActiveIncursionState(),
       isRunActive: true,
       currentTier: 1,
       currentNodeIndex: 0,
-      tierNodes,
+      tierNodes: createPlaceholderTierPath(),
+      activeTierVectors,
+      earlySanctuarySpawned,
+      selectedVectorId: null,
       mapMode: 'SCANNING_HUB',
       lastCheckpointMessage: null,
     };
@@ -494,9 +511,21 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     return inc.tierNodes[inc.currentNodeIndex] ?? null;
   }, []);
 
+  const getCurrentVectorCluster = useCallback(() => {
+    const inc = activeIncursionRef.current;
+    return inc.activeTierVectors[inc.currentNodeIndex] ?? [];
+  }, []);
+
+  const getSelectedVectorNode = useCallback(() => {
+    const inc = activeIncursionRef.current;
+    if (!inc.selectedVectorId) return inc.tierNodes[inc.currentNodeIndex] ?? null;
+    const cluster = inc.activeTierVectors[inc.currentNodeIndex] ?? [];
+    return findVectorInCluster(cluster, inc.selectedVectorId) ?? inc.tierNodes[inc.currentNodeIndex] ?? null;
+  }, []);
+
   const prepareBossEncounter = useCallback(() => {
     const inc = activeIncursionRef.current;
-    const tierNode = inc.tierNodes[inc.currentNodeIndex];
+    const tierNode = resolveActiveVectorNode(inc);
     if (!tierNode || !isBossNodeType(tierNode.type)) return;
 
     const bossProfile = createBossProfileForTier(inc.currentTier);
@@ -533,7 +562,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const prepareStandardCombatEncounter = useCallback(() => {
     const inc = activeIncursionRef.current;
-    const tierNode = inc.tierNodes[inc.currentNodeIndex];
+    const tierNode = resolveActiveVectorNode(inc);
     if (!tierNode || tierNode.type !== 'STANDARD_COMBAT') return;
 
     const prev = runStateRef.current;
@@ -579,6 +608,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       bossProfile: null,
       mapMode: 'PROGRESS_CHECKPOINT',
       lastCheckpointMessage: message,
+      selectedVectorId: null,
     };
     activeIncursionRef.current = nextInc;
     setActiveIncursion(nextInc);
@@ -613,12 +643,15 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (completedIndex >= 6) {
       if (inc.currentTier < 3) {
         const nextTier = inc.currentTier + 1;
-        const freshNodes = generateTierNodeChain(nextTier);
+        const { activeTierVectors, earlySanctuarySpawned } = generateTierVectorMatrix(nextTier);
         const nextInc = resetForScan({
           ...inc,
           currentTier: nextTier,
           currentNodeIndex: 0,
-          tierNodes: freshNodes,
+          tierNodes: createPlaceholderTierPath(),
+          activeTierVectors,
+          earlySanctuarySpawned,
+          selectedVectorId: null,
         });
         activeIncursionRef.current = nextInc;
         setActiveIncursion(nextInc);
@@ -642,6 +675,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const nextInc = resetForScan({
       ...inc,
       currentNodeIndex: nextIndex,
+      selectedVectorId: null,
     });
     activeIncursionRef.current = nextInc;
     setActiveIncursion(nextInc);
@@ -662,14 +696,24 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     return { route: 'NEXT_NODE' as const };
   }, [appendRunLog]);
 
-  const commitNodeEncounter = useCallback((): import('../types/game').RunNodeType | null => {
+  const commitNodeEncounter = useCallback((nodeId: string): import('../types/game').RunNodeType | null => {
     const inc = activeIncursionRef.current;
     if (inc.mapMode !== 'SCANNING_HUB') return null;
 
-    const node = inc.tierNodes[inc.currentNodeIndex];
-    if (!node || node.isCompleted) return null;
+    const cluster = inc.activeTierVectors[inc.currentNodeIndex] ?? [];
+    const node = findVectorInCluster(cluster, nodeId);
+    if (!node) return null;
 
-    appendRunLog(`>> VECTOR COMMITTED — NODE ${node.index + 1}/7: ${node.label}`);
+    const tierNodes = [...inc.tierNodes];
+    tierNodes[inc.currentNodeIndex] = { ...node, index: inc.currentNodeIndex };
+
+    setActiveIncursion((prev) => {
+      const next = { ...prev, tierNodes, selectedVectorId: nodeId };
+      activeIncursionRef.current = next;
+      return next;
+    });
+
+    appendRunLog(`>> VECTOR COMMITTED — SCAN ${inc.currentNodeIndex + 1}/7: ${node.label}`);
 
     if (node.type === 'STANDARD_COMBAT') {
       prepareStandardCombatEncounter();
@@ -683,6 +727,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
     if (node.type === 'NARRATIVE_EVENT') {
       assignNarrativeForCombat(node.index);
+      setActiveIncursion((prev) => {
+        const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
+        activeIncursionRef.current = next;
+        return next;
+      });
       return node.type;
     }
 
@@ -757,6 +806,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       resolveNarrativeCheck,
       activeIncursion,
       getCurrentTierNode,
+      getCurrentVectorCluster,
+      getSelectedVectorNode,
       stageEncounterClear,
       continueFromProgressCheckpoint,
       prepareBossEncounter,
@@ -794,6 +845,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       resolveNarrativeCheck,
       activeIncursion,
       getCurrentTierNode,
+      getCurrentVectorCluster,
+      getSelectedVectorNode,
       stageEncounterClear,
       continueFromProgressCheckpoint,
       prepareBossEncounter,

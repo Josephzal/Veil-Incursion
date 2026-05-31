@@ -44,8 +44,8 @@ export function useDescentNavigator() {
   const incursionRef = useRef(activeIncursion);
   incursionRef.current = activeIncursion;
 
-  const deploySelectedVector = useCallback((): DescentRoute => {
-    const nodeType = commitNodeEncounter();
+  const deploySelectedVector = useCallback((nodeId: string): DescentRoute => {
+    const nodeType = commitNodeEncounter(nodeId);
     const route = routeForNodeType(nodeType);
 
     switch (route) {

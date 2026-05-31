@@ -136,7 +136,12 @@ export interface ActiveIncursionState {
   activeChoice: 'A' | 'B' | null;
   currentTier: number;
   currentNodeIndex: number;
+  /** Resolved path — one chosen node per scan depth (7 steps). */
   tierNodes: IncursionNode[];
+  /** Pre-generated selectable vector clusters indexed by scan depth 0–6. */
+  activeTierVectors: IncursionNode[][];
+  earlySanctuarySpawned: boolean;
+  selectedVectorId: string | null;
   isRunActive: boolean;
   bossProfile: BossRuntimeProfile | null;
   mapMode: IncursionMapMode;
@@ -161,6 +166,9 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     currentTier: 1,
     currentNodeIndex: 0,
     tierNodes: [],
+    activeTierVectors: [],
+    earlySanctuarySpawned: false,
+    selectedVectorId: null,
     isRunActive: false,
     bossProfile: null,
     mapMode: 'SCANNING_HUB',
