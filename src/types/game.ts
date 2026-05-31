@@ -1,3 +1,5 @@
+import type { RegionalPresenceState } from './regional';
+
 export type FactionType = 'TERRAN_GRID' | 'LEGION' | 'SOLARIS';
 export type ClassType = 'AEGIS' | 'RIFTSHOT' | 'ENVOY';
 export type EncounterType = 'COMBAT' | 'SKILL_CHECK' | 'SANCTUARY';
@@ -31,6 +33,7 @@ export interface PlayerAccount {
     maxTierUnlocked: number;
     activeCampaignCluster: 'URBAN' | 'ISOLATED' | 'WILDERNESS' | null;
   };
+  regionalPresence: RegionalPresenceState;
   equipment: {
     weaponId: string | null;
     armorId: string | null;

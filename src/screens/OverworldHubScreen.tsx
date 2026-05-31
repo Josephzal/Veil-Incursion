@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -10,12 +10,18 @@ import {
 } from 'react-native';
 import { CLASS_DEFINITIONS, RESTRICTED_CLASS_TAG } from '../data/classes';
 import { FACTION_DEFINITIONS, getFactionDefinition } from '../data/factions';
+import { regionalCoatingLabel } from '../data/macroSectors';
 import { DECRYPT_PHASES, formatItemStatLines } from '../data/inventory';
 import { usePlayerAccount, xpProgressForAccount } from '../context/PlayerAccountContext';
+import { useRegionalShatter } from '../context/RegionalShatterContext';
 import { useRun } from '../context/RunContext';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useTerminal } from '../context/TerminalContext';
+import FactionBootLogo from '../components/FactionBootLogo';
+import MetropolitanMagnetismMap from '../components/MetropolitanMagnetismMap';
+import ShatterDecreePanel from '../components/ShatterDecreePanel';
 import { ClassType, FactionType, InventoryItem } from '../types/game';
+import { MacroSectorId } from '../types/regional';
 
 const { width } = Dimensions.get('window');
 const FACTION_ORDER: FactionType[] = ['TERRAN_GRID', 'LEGION', 'SOLARIS'];
@@ -28,7 +34,7 @@ const ITEM_CATEGORIES: Array<{ key: InventoryItem['type']; label: string }> = [
 ];
 
 export default function OverworldHubScreen(): React.JSX.Element {
-  const { theme, updateCabalAlignment, alignment } = useTerminal();
+  const { theme, updateCabalAlignment, alignment, shatterFlashActive } = useTerminal();
   const {
     account,
     isHydrated,
@@ -37,18 +43,30 @@ export default function OverworldHubScreen(): React.JSX.Element {
     equipInventoryItem,
     decryptTier1Cache,
     appendHubLog,
+    unlockRegionalWeaponCoating,
+    setMetropolitanNode,
   } = usePlayerAccount();
+  const {
+    isInfluenceFrozen,
+    frozenInfluence,
+    shatterFlashFaction,
+    forceRegionalShatterDecree,
+  } = useRegionalShatter();
   const { startNewRun } = useRun();
   const { startScanning } = useGameFlow();
 
   const [isDecrypting, setIsDecrypting] = useState(false);
   const [decryptReadout, setDecryptReadout] = useState<string | null>(null);
+  const [activeMagnetSector, setActiveMagnetSector] = useState<MacroSectorId>(
+    account.regionalPresence.homeMacroSector,
+  );
+  const lastProxyLogRef = useRef<string | null>(null);
 
   const factionDef = account.alignedFaction ? getFactionDefinition(account.alignedFaction) : null;
-  const accent = factionDef?.accentColor ?? '#00ff33';
-  const hubBg = factionDef?.backgroundColor ?? '#0a0b0f';
-  const hubBorder = factionDef?.borderColor ?? theme.borderColor;
-  const hubText = factionDef?.typographyColor ?? theme.primaryColor;
+  const accent = theme.statusColor;
+  const hubBg = theme.backgroundColor;
+  const hubBorder = theme.borderColor;
+  const hubText = theme.textColor;
 
   const xpProgress = useMemo(() => xpProgressForAccount(account), [account]);
   const activeClassDef = CLASS_DEFINITIONS[account.activeClass];
@@ -72,6 +90,28 @@ export default function OverworldHubScreen(): React.JSX.Element {
     commitFactionAlignment(faction);
     updateCabalAlignment(faction);
   };
+
+  const handleProxyReroute = useCallback(
+    (line: string) => {
+      if (lastProxyLogRef.current === line) return;
+      lastProxyLogRef.current = line;
+      appendHubLog(line);
+      const node = line.split(': ').pop();
+      if (node) setMetropolitanNode(node, activeMagnetSector);
+    },
+    [appendHubLog, setMetropolitanNode, activeMagnetSector],
+  );
+
+  const handleForceShatterDecree = () => {
+    forceRegionalShatterDecree(
+      activeMagnetSector,
+      account.alignedFaction,
+      unlockRegionalWeaponCoating,
+      appendHubLog,
+    );
+  };
+
+  const coatingUnlocks = account.regionalPresence.weaponCoatingUnlocks;
 
   const handleDecryptCache = async () => {
     if (isDecrypting || account.inventory.unopenedCaches.tier1Caches <= 0) return;
@@ -135,8 +175,21 @@ export default function OverworldHubScreen(): React.JSX.Element {
           </Text>
         </View>
 
+        {/* Faction boot logo + terminal skin */}
+        <FactionBootLogo theme={theme} flashActive={shatterFlashActive} />
+
         {/* Top data banner */}
-        <View style={[styles.dataBanner, { borderColor: accent, backgroundColor: '#050608' }]}>
+        <View
+          style={[
+            styles.dataBanner,
+            {
+              borderColor: accent,
+              backgroundColor: '#050608',
+              borderWidth: theme.borderWidth,
+              borderStyle: theme.borderStyle,
+            },
+          ]}
+        >
           <View style={styles.bannerRow}>
             <View style={styles.bannerCell}>
               <Text style={[styles.bannerLabel, { color: theme.mutedColor }]}>OPERATIVE RANK</Text>
@@ -176,6 +229,26 @@ export default function OverworldHubScreen(): React.JSX.Element {
             </Text>
           </View>
         </View>
+
+        {/* Metropolitan magnetism map */}
+        <MetropolitanMagnetismMap
+          homeSectorId={account.regionalPresence.homeMacroSector}
+          theme={theme}
+          isInfluenceFrozen={isInfluenceFrozen}
+          frozenInfluence={frozenInfluence}
+          onProxyReroute={handleProxyReroute}
+          onSectorChange={(id) => {
+            setActiveMagnetSector(id);
+            lastProxyLogRef.current = null;
+          }}
+        />
+
+        <ShatterDecreePanel
+          theme={theme}
+          activeSectorId={activeMagnetSector}
+          shatterFlashFaction={shatterFlashFaction}
+          onForceDecree={handleForceShatterDecree}
+        />
 
         {/* Operative Protocol Systems */}
         <View style={[styles.panel, { borderColor: hubBorder }]}>
@@ -258,6 +331,52 @@ export default function OverworldHubScreen(): React.JSX.Element {
                 </Text>
               ))}
             </View>
+          )}
+        </View>
+
+        {/* Regional weapon coating store */}
+        <View
+          style={[
+            styles.panel,
+            { borderColor: hubBorder, borderWidth: theme.borderWidth, borderStyle: theme.borderStyle },
+          ]}
+        >
+          <Text style={[styles.panelTitle, { color: hubText }]}>REGIONAL WEAPON COATING EXCHANGE</Text>
+          <Text style={[styles.materialRow, { color: theme.mutedColor }]}>
+            METRO NODE: {account.regionalPresence.metropolitanNode}
+          </Text>
+          {coatingUnlocks.length === 0 ? (
+            <Text style={[styles.armoryEmpty, { color: theme.mutedColor }]}>
+              // NO LOCALIZED COATING SLOTS UNLOCKED — WIN A SHATTER DECREE WITH YOUR CABAL
+            </Text>
+          ) : (
+            coatingUnlocks.map((slotId: string) => {
+              const parts = slotId.replace('coating-', '').split('-');
+              const factionKey = parts.pop()?.toUpperCase() ?? '';
+              const sectorKey = parts.join('-').toUpperCase();
+              const label = regionalCoatingLabel(sectorKey, factionKey);
+              return (
+                <View
+                  key={slotId}
+                  style={[styles.armoryCard, { borderColor: accent, backgroundColor: `${accent}14` }]}
+                >
+                  <Text style={[styles.armoryItemName, { color: accent }]}>{label}</Text>
+                  <Text style={[styles.armoryDesc, { color: theme.mutedColor }]}>
+                    Exclusive sector victory coating — purchase slot authorized.
+                  </Text>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.coatingPurchaseBtn,
+                      { borderColor: accent, opacity: pressed ? 0.7 : 1 },
+                    ]}
+                  >
+                    <Text style={[styles.coatingPurchaseText, { color: accent }]}>
+                      [ PURCHASE COATING — 350 CR ]
+                    </Text>
+                  </Pressable>
+                </View>
+              );
+            })
           )}
         </View>
 
@@ -464,6 +583,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 12,
     marginBottom: 12,
+  },
+  coatingPurchaseBtn: {
+    borderWidth: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  coatingPurchaseText: {
+    fontFamily: 'monospace',
+    fontSize: 8,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   panelTitle: {
     fontFamily: 'monospace',

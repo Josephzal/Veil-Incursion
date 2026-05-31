@@ -10,9 +10,9 @@ import {
 import { useTerminal } from '../context/TerminalContext';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
+import FactionBootLogo from '../components/FactionBootLogo';
 
 const { width } = Dimensions.get('window');
-const TERMINAL_ACCENT = '#00ff33';
 
 export default function WelcomeScreen(): React.JSX.Element {
   const { theme, profile } = useTerminal();
@@ -49,12 +49,13 @@ export default function WelcomeScreen(): React.JSX.Element {
       </View>
 
       <View style={styles.content}>
+        <FactionBootLogo theme={theme} />
         <Text style={[styles.welcomeEyebrow, { color: theme.mutedColor }]}>
           SECURE CHANNEL ESTABLISHED
         </Text>
         <Text style={[styles.welcomeTitle, { color: theme.primaryColor }]}>
           Welcome back,{'\n'}
-          <Text style={{ color: TERMINAL_ACCENT }}>{credentials.username}</Text>
+          <Text style={{ color: theme.statusColor }}>{credentials.username}</Text>
         </Text>
         <Text style={[styles.welcomeBody, { color: theme.mutedColor }]}>
           Ley-line sensors are nominal. Your soul anchor is synced to the urban grid.
@@ -68,8 +69,10 @@ export default function WelcomeScreen(): React.JSX.Element {
               <View style={[styles.statusDot, { backgroundColor: '#22c55e' }]} />
             </View>
 
-            <View style={[styles.badgeEmblem, { borderColor: TERMINAL_ACCENT }]}>
-              <Text style={styles.badgeEmblemText}>{credentials.class.slice(0, 1)}</Text>
+            <View style={[styles.badgeEmblem, { borderColor: theme.statusColor }]}>
+              <Text style={[styles.badgeEmblemText, { color: theme.statusColor }]}>
+              {credentials.class.slice(0, 1)}
+            </Text>
             </View>
 
             <Text style={[styles.badgeClass, { color: theme.primaryColor }]}>{credentials.class} OPERATIVE</Text>
@@ -81,7 +84,7 @@ export default function WelcomeScreen(): React.JSX.Element {
 
         <View style={[styles.idReadout, { borderColor: theme.borderColor, backgroundColor: '#0d0f14' }]}>
           <Text style={[styles.idLabel, { color: theme.mutedColor }]}>OPERATIVE ID READOUT</Text>
-          <Text style={[styles.idValue, { color: TERMINAL_ACCENT }]}>{credentials.id}</Text>
+          <Text style={[styles.idValue, { color: theme.statusColor }]}>{credentials.id}</Text>
           <View style={styles.idMetaRow}>
             <Text style={[styles.idMeta, { color: theme.mutedColor }]}>HANDLE</Text>
             <Text style={[styles.idMetaValue, { color: theme.primaryColor }]}>{credentials.username}</Text>
@@ -97,15 +100,15 @@ export default function WelcomeScreen(): React.JSX.Element {
           style={({ pressed }) => [
             styles.scanButton,
             {
-              borderColor: TERMINAL_ACCENT,
+              borderColor: theme.statusColor,
               backgroundColor: pressed ? '#083344' : '#0e1624',
-              shadowColor: TERMINAL_ACCENT,
+              shadowColor: theme.statusColor,
             },
           ]}
         >
           <View style={styles.scanButtonGlow} />
-          <Text style={styles.scanButtonLabel}>INITIATE ANOMALY SCAN</Text>
-          <Text style={styles.scanButtonSub}>// AUTHORIZE LEY-LINE SWEEP</Text>
+          <Text style={[styles.scanButtonLabel, { color: theme.statusColor }]}>INITIATE ANOMALY SCAN</Text>
+          <Text style={[styles.scanButtonSub, { color: theme.statusColor }]}>// AUTHORIZE LEY-LINE SWEEP</Text>
         </Pressable>
       </View>
     </View>
@@ -215,7 +218,6 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     fontSize: 28,
     fontWeight: '700',
-    color: TERMINAL_ACCENT,
   },
   badgeClass: {
     fontFamily: 'monospace',
@@ -281,12 +283,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     letterSpacing: 1.5,
-    color: TERMINAL_ACCENT,
   },
   scanButtonSub: {
     fontFamily: 'monospace',
     fontSize: 9,
-    color: TERMINAL_ACCENT,
     marginTop: 4,
     letterSpacing: 1,
   },

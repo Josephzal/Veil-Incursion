@@ -50,5 +50,13 @@ export type {
 
 export { COMBAT_ACTION, BASE_MAX_STAMINA, BASE_MAX_SOUL_ANCHOR, TOTAL_RUN_NODES, MIN_COMBAT_NODES, ENEMY_KINETIC_SIPHON_REQUEST, MAX_KINETIC_SIPHON_PER_ACTION } from './run';
 
-export type { FactionTheme } from './theme';
-export { FACTION_THEMES } from './theme';
+export type { FactionTheme, TerminalTheme } from './theme';
+export { FACTION_THEMES, getTerminalTheme, getVictoriousFaction } from './theme';
+
+export type {
+  CabalInfluenceBalance,
+  MacroSectorId,
+  MagnetismState,
+  RegionalPresenceState,
+  ShatterSectorResult,
+} from './regional';

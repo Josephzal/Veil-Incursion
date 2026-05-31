@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, SafeAreaView, StatusBar, View } from 'react-native';
 import { TerminalProvider, useTerminal } from './src/context/TerminalContext';
 import { PlayerAccountProvider } from './src/context/PlayerAccountContext';
+import { RegionalShatterProvider } from './src/context/RegionalShatterContext';
 import { GameFlowProvider, useGameFlow } from './src/context/GameFlowContext';
 import { RunProvider } from './src/context/RunContext';
 import OverworldHubScreen from './src/screens/OverworldHubScreen';
@@ -40,21 +41,23 @@ function GameRoot(): React.JSX.Element {
 
 export default function App(): React.JSX.Element {
   return (
-    <TerminalProvider>
-      <PlayerAccountProvider>
-        <RunProvider>
-          <GameFlowProvider>
-            <SafeAreaView style={styles.safeArea}>
-              <GameRoot />
-            </SafeAreaView>
-          </GameFlowProvider>
-        </RunProvider>
-      </PlayerAccountProvider>
-    </TerminalProvider>
+    <PlayerAccountProvider>
+      <RegionalShatterProvider>
+        <TerminalProvider>
+          <RunProvider>
+            <GameFlowProvider>
+              <SafeAreaView style={styles.safeArea}>
+                <GameRoot />
+              </SafeAreaView>
+            </GameFlowProvider>
+          </RunProvider>
+        </TerminalProvider>
+      </RegionalShatterProvider>
+    </PlayerAccountProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#1c1e21' },
+  safeArea: { flex: 1, backgroundColor: '#1A1C1E' },
   screenContainer: { flex: 1 },
 });

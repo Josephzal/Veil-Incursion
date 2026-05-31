@@ -24,6 +24,7 @@ import {
   InventoryItem,
   PlayerAccount,
 } from '../types/game';
+import { MacroSectorId, RegionalPresenceState } from '../types/regional';
 
 const STORAGE_KEY = '@veil_incursion/player_account_v2';
 
@@ -54,6 +55,11 @@ export function createDefaultPlayerAccount(): PlayerAccount {
       maxTierUnlocked: 1,
       activeCampaignCluster: null,
     },
+    regionalPresence: {
+      homeMacroSector: 'PACIFIC',
+      metropolitanNode: 'SEATTLE CORE',
+      weaponCoatingUnlocks: [],
+    },
     equipment: {
       weaponId: equipped?.id ?? 'dull-training-katana',
       armorId: null,
@@ -72,6 +78,7 @@ function mergeStoredAccount(parsed: Partial<PlayerAccount>): PlayerAccount {
     ...parsed,
     factionPerks: { ...defaults.factionPerks, ...parsed.factionPerks },
     progressionMatrix: { ...defaults.progressionMatrix, ...parsed.progressionMatrix },
+    regionalPresence: { ...defaults.regionalPresence, ...parsed.regionalPresence },
     equipment: {
       ...defaults.equipment,
       ...parsed.equipment,
@@ -111,6 +118,8 @@ interface PlayerAccountContextType {
   getEquippedWeaponItem: () => InventoryItem | null;
   getWeaponCombatStats: () => ResolvedWeaponCombatStats;
   resetAccount: () => void;
+  unlockRegionalWeaponCoating: (slotId: string) => void;
+  setMetropolitanNode: (node: string, sectorId?: MacroSectorId) => void;
 }
 
 const PlayerAccountContext = createContext<PlayerAccountContextType | undefined>(undefined);
@@ -289,6 +298,36 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
     persistAccount(fresh);
   }, [persistAccount]);
 
+  const unlockRegionalWeaponCoating = useCallback(
+    (slotId: string) => {
+      updateAccount((prev) => {
+        if (prev.regionalPresence.weaponCoatingUnlocks.includes(slotId)) return prev;
+        return {
+          ...prev,
+          regionalPresence: {
+            ...prev.regionalPresence,
+            weaponCoatingUnlocks: [...prev.regionalPresence.weaponCoatingUnlocks, slotId],
+          },
+        };
+      });
+    },
+    [updateAccount],
+  );
+
+  const setMetropolitanNode = useCallback(
+    (node: string, sectorId?: MacroSectorId) => {
+      updateAccount((prev) => ({
+        ...prev,
+        regionalPresence: {
+          ...prev.regionalPresence,
+          metropolitanNode: node,
+          homeMacroSector: sectorId ?? prev.regionalPresence.homeMacroSector,
+        },
+      }));
+    },
+    [updateAccount],
+  );
+
   const value = useMemo(
     () => ({
       account,
@@ -305,6 +344,8 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       getEquippedWeaponItem,
       getWeaponCombatStats,
       resetAccount,
+      unlockRegionalWeaponCoating,
+      setMetropolitanNode,
     }),
     [
       account,
@@ -321,6 +362,8 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       getEquippedWeaponItem,
       getWeaponCombatStats,
       resetAccount,
+      unlockRegionalWeaponCoating,
+      setMetropolitanNode,
     ],
   );
 
