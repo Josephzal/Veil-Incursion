@@ -66,6 +66,7 @@ export function intentLabel(intent: EnemyIntent, designation: string): string {
     CHARGE: `${designation} is CHARGING a world-ender (turn ${1}/3)`,
     WORLD_ENDER: `${designation} intends WORLD-ENDER (UNBLOCKABLE)`,
     FORTIFY: `${designation} intends to FORTIFY`,
+    OVERDRIVE_DISCHARGE: `${designation} intends OVERDRIVE DISCHARGE (18 DMG)`,
   };
   return labels[intent];
 }

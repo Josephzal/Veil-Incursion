@@ -13,7 +13,8 @@ export type EnemyIntent =
   | 'EVADE'
   | 'CHARGE'
   | 'WORLD_ENDER'
-  | 'FORTIFY';
+  | 'FORTIFY'
+  | 'OVERDRIVE_DISCHARGE';
 
 export interface SectorDefinition {
   id: string;
@@ -48,6 +49,9 @@ export interface EnemyCombatProfile {
   evadeActive: boolean;
   nodeIndex: number;
   scale: number;
+  isBoss?: boolean;
+  bossPhase?: number;
+  bossTier?: number;
 }
 
 export interface Trinket {

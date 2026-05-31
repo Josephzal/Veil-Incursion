@@ -3,7 +3,15 @@ import { StyleSheet, View, Text, Animated, Easing, Dimensions, Pressable, Vibrat
 import { useTerminal } from '../context/TerminalContext';
 import { INITIAL_SECTOR_POOL } from '../data/regions';
 import { advanceEnemyIntent, intentLabel, spawnEnemyProfile } from '../data/enemies';
+import {
+  bossIntentLabel,
+  bossStrikeDamage,
+  rollBossIntent,
+  shouldShiftBossPhase,
+} from '../data/bossCombat';
 import { COMBAT_ACTION, EnemyCombatProfile, EnemyIntent } from '../types/run';
+import { ResolvedWeaponCombatStats } from '../data/inventory';
+import { BossRuntimeProfile, EnvironmentalModifiers } from '../types/game';
 import VignetteFlashOverlay from './VignetteFlashOverlay';
 
 const { width } = Dimensions.get('window');
@@ -24,17 +32,39 @@ interface TacticalCombatHubProps {
   startingKineticPercent?: number; parryMultiplierBonus?: number; parryWindowBonus?: number;
   sliceDamagePenalty?: number; onTerminalLog?: (text: string) => void;
   enemyProfile?: EnemyCombatProfile | null; nodeIndex?: number;
+  weaponCombatStats?: ResolvedWeaponCombatStats;
+  environmentalModifiers?: EnvironmentalModifiers;
+  bossProfile?: BossRuntimeProfile | null;
+  onBossPhaseShift?: (phase: number) => void;
 }
 interface SliceLineConfig { id: number; topY: number; rotation: string; isSliced: boolean; fadeAnim: Animated.Value; }
 
-const isAttackIntent = (i: EnemyIntent) => i === 'STRIKE' || i === 'WORLD_ENDER';
+const isAttackIntent = (i: EnemyIntent) =>
+  i === 'STRIKE' || i === 'WORLD_ENDER' || i === 'OVERDRIVE_DISCHARGE';
 
 export default function TacticalCombatHub({
   onCombatComplete, initialOperativeHp = 100, initialStamina = 100, maxStamina = 100,
   maxSoulAnchor = 100, startingKineticPercent = 0, parryMultiplierBonus = 0,
   parryWindowBonus = 0, sliceDamagePenalty = 0, onTerminalLog,
   enemyProfile = null, nodeIndex = 0,
+  weaponCombatStats,
+  environmentalModifiers,
+  bossProfile = null,
+  onBossPhaseShift,
 }: TacticalCombatHubProps): React.JSX.Element {
+  const env = environmentalModifiers ?? {
+    isEnemyPhaseShrouded: false,
+    isPlayerBlinded: false,
+    hasTetanusGlitch: false,
+    startingStaminaPenalty: 0,
+  };
+  const strikeStats = weaponCombatStats ?? {
+    strikeDamage: COMBAT_ACTION.KINETIC_STRIKE_DAMAGE,
+    strikeStaminaCost: COMBAT_ACTION.KINETIC_STRIKE_STAMINA,
+    exhaustedStrikeDamage: COMBAT_ACTION.KINETIC_STRIKE_EXHAUSTED_DAMAGE,
+    kineticChargePerStrike: COMBAT_ACTION.KINETIC_CHARGE,
+    label: 'Standard Blade',
+  };
   const { theme, profile, awardCurrencies } = useTerminal();
   const weaponLabel = (profile?.operative_profile?.payload_manifest?.active_slots?.weapon_id ?? 'kinetic_glaive')
     .replace(/_/g, ' ').toUpperCase();
@@ -54,7 +84,10 @@ export default function TacticalCombatHub({
   const [isFailureState, setIsFailureState] = useState(false);
   const [screenFlashActive, setScreenFlashActive] = useState(false);
   const [screenFlashColor, setScreenFlashColor] = useState(P.defeat);
+  const [phaseAlert, setPhaseAlert] = useState<string | null>(null);
   const [resolutionOutcome, setResolutionOutcome] = useState<'VICTORY' | 'DEFEAT' | null>(null);
+  const bossPhaseRef = useRef(bossProfile?.currentPhase ?? 1);
+  const bossRuntimeRef = useRef<BossRuntimeProfile | null>(bossProfile);
   const [activeSliceIndex, setActiveSliceIndex] = useState(-1);
   const [sliceLines, setSliceLines] = useState<SliceLineConfig[]>([]);
 
@@ -86,7 +119,7 @@ export default function TacticalCombatHub({
   });
 
   const log = (t: string) => onTerminalLog?.(t);
-  const parryTol = PARRY_TOLERANCE * (1 + parryWindowBonus);
+  const parryTol = PARRY_TOLERANCE * (1 + parryWindowBonus) * (env.isPlayerBlinded ? 0.85 : 1);
   const counterReady = kineticReservoir >= COMBAT_ACTION.COUNTER_KINETIC_MIN && !isExhausted;
   const sliceReady = kineticReservoir >= COMBAT_ACTION.KINETIC_CAP && !isExhausted;
 
@@ -146,13 +179,40 @@ export default function TacticalCombatHub({
 
   const hurtEnemy = (raw: number, tag: string): boolean => {
     const e = enemyRef.current; if (!e) return false;
+    if (env.isEnemyPhaseShrouded && Math.random() < 0.2) {
+      log(`${tag} >> PHASE SHROUD — ATTACK WHIFFED (20% miss).`);
+      return false;
+    }
     let dmg = raw;
     if (e.evadeActive) { dmg = Math.floor(dmg * 0.5); log(`${tag} >> EVADE — 50% (${dmg}).`); }
     else log(`${tag} >> ${dmg} damage.`);
     const hp = Math.max(e.currentHp - dmg, 0);
     syncEnemy({ ...e, currentHp: hp });
+
+    if (e.isBoss && bossRuntimeRef.current && shouldShiftBossPhase(bossRuntimeRef.current, hp)) {
+      bossPhaseRef.current = 2;
+      const updatedBoss = { ...bossRuntimeRef.current, currentHp: hp, currentPhase: 2 };
+      bossRuntimeRef.current = updatedBoss;
+      syncEnemy({ ...e, currentHp: hp, bossPhase: 2, intent: 'OVERDRIVE_DISCHARGE' });
+      setPhaseAlert('>> WARNING: ANOMALY ANCHOR CRACKED // PHASE 2 INITIATED');
+      log('>> WARNING: ANOMALY ANCHOR CRACKED // PHASE 2 INITIATED');
+      onBossPhaseShift?.(2);
+      setTimeout(() => setPhaseAlert(null), 2400);
+    }
+
     if (hp <= 0) { resolve(true); return true; }
     return false;
+  };
+
+  const applyTetanusGlitch = () => {
+    if (!env.hasTetanusGlitch) return;
+    log('[TETANUS GLITCH] >> Soul Anchor hemorrhage — 3 HP lost on exhaustion.');
+    setOperativeHp((p) => {
+      const n = Math.max(p - 3, 0);
+      operativeHpRef.current = n;
+      if (n <= 0) resolve(false);
+      return n;
+    });
   };
 
   const markExhausted = () => {
@@ -161,6 +221,7 @@ export default function TacticalCombatHub({
     skipRegenRef.current = true;
     staminaRef.current = 0;
     setStamina(0);
+    applyTetanusGlitch();
   };
   const spendStam = (cost: number, overdraw = false): boolean => {
     if (staminaRef.current < cost) { if (!overdraw) return false; markExhausted(); return true; }
@@ -169,6 +230,7 @@ export default function TacticalCombatHub({
       exhaustedRef.current = true;
       setIsExhausted(true);
       skipRegenRef.current = true;
+      applyTetanusGlitch();
     }
     return true;
   };
@@ -179,6 +241,18 @@ export default function TacticalCombatHub({
       : { dmg: e.baseDamage, unblockable: false };
 
   const execIntent = (e: EnemyCombatProfile) => {
+    if (e.isBoss && bossRuntimeRef.current) {
+      const phase = bossPhaseRef.current;
+      if (e.intent === 'OVERDRIVE_DISCHARGE') {
+        const dmg = bossStrikeDamage(bossRuntimeRef.current, phase);
+        log(`>> ${e.designation} OVERDRIVE DISCHARGE — ${dmg} DMG`);
+        hurtPlayer(dmg, !counterRef.current, `>> OVERDRIVE HIT — ${dmg}`);
+        return;
+      }
+      const dmg = bossStrikeDamage(bossRuntimeRef.current, phase);
+      hurtPlayer(dmg, false, `>> ${e.designation} STRIKES — ${dmg}`);
+      return;
+    }
     switch (e.intent) {
       case 'STRIKE': { const { dmg, unblockable } = attackDmg(e); hurtPlayer(dmg, unblockable, `>> ${e.designation} STRIKES — ${dmg}`); break; }
       case 'WORLD_ENDER': { const { dmg } = attackDmg(e); log(`>> ${e.designation} WORLD-ENDER — ${dmg} UNBLOCKABLE`); hurtPlayer(dmg, true); break; }
@@ -197,6 +271,13 @@ export default function TacticalCombatHub({
   const endEnemyTurn = () => {
     const e = enemyRef.current;
     if (!e || operativeHpRef.current <= 0) return;
+    if (e.isBoss && bossRuntimeRef.current) {
+      const phase = bossPhaseRef.current;
+      const nextIntent = rollBossIntent(phase);
+      syncEnemy({ ...e, intent: nextIntent, bossPhase: phase });
+      startPlayerTurn(enemyRef.current!);
+      return;
+    }
     syncEnemy(advanceEnemyIntent(e));
     startPlayerTurn(enemyRef.current!);
   };
@@ -216,7 +297,11 @@ export default function TacticalCombatHub({
     }
     skipRegenRef.current = false;
     setCycleState('TEXT_COMBAT');
-    setIntentBanner(intentLabel(e.intent, e.designation));
+    if (e.isBoss && bossRuntimeRef.current) {
+      setIntentBanner(bossIntentLabel(bossRuntimeRef.current, bossPhaseRef.current));
+    } else {
+      setIntentBanner(intentLabel(e.intent, e.designation));
+    }
   };
 
   const passToEnemy = (countering = false) => {
@@ -225,13 +310,19 @@ export default function TacticalCombatHub({
       const e = enemyRef.current;
       if (!e || e.currentHp <= 0 || operativeHpRef.current <= 0) return;
       if (countering) {
-        if (e.intent === 'WORLD_ENDER') {
-          log('[COUNTER FAILED] >> World-Ender cannot be parried.');
-          counterRef.current = false; setCounterPrepActive(false);
-          execIntent(e); if (operativeHpRef.current > 0) endEnemyTurn(); return;
+        if (e.intent === 'WORLD_ENDER' || e.intent === 'OVERDRIVE_DISCHARGE') {
+          if (e.intent === 'WORLD_ENDER') {
+            log('[COUNTER FAILED] >> World-Ender cannot be parried.');
+            counterRef.current = false; setCounterPrepActive(false);
+            execIntent(e); if (operativeHpRef.current > 0) endEnemyTurn(); return;
+          }
         }
         if (isAttackIntent(e.intent)) {
-          const { dmg, unblockable } = attackDmg(e);
+          let dmg = e.isBoss && bossRuntimeRef.current
+            ? bossStrikeDamage(bossRuntimeRef.current, bossPhaseRef.current)
+            : attackDmg(e).dmg;
+          let unblockable = e.intent === 'OVERDRIVE_DISCHARGE' ? false : attackDmg(e).unblockable;
+          if (e.intent === 'OVERDRIVE_DISCHARGE') unblockable = false;
           pendingDmgRef.current = dmg; pendingUnblockRef.current = unblockable;
           cycleRef.current = 'DEFEND_PARRY'; setCycleState('DEFEND_PARRY'); startParryRing(); return;
         }
@@ -254,25 +345,37 @@ export default function TacticalCombatHub({
     setIsExhausted(false); setAegisActive(false); setCounterPrepActive(false);
     setResolutionOutcome(null); setIsPlayerTurn(true); setCycleState('TEXT_COMBAT');
     log('>> TACTICAL COMBAT LINK ESTABLISHED — AEGIS PROTOCOLS ONLINE.');
+    log(`>> WEAPON LINK: ${strikeStats.label} // STRIKE ${strikeStats.strikeDamage} DMG / ${strikeStats.strikeStaminaCost} STAM`);
+    if (env.isPlayerBlinded) log('>> ENV: OPERATIVE BLINDED — Counter Stance window tightened 15%.');
+    if (env.hasTetanusGlitch) log('>> ENV: TETANUS GLITCH ACTIVE — exhaustion triggers 3 HP bleed.');
+    if (env.startingStaminaPenalty > 0) log(`>> ENV: STAMINA PENALTY — entry ceiling reduced to 50.`);
+    if (env.isEnemyPhaseShrouded) log('>> ENV: ENEMY PHASE SHROUDED — 20% miss chance on strikes.');
     log(`>> TARGET LOCK: ${e.designation} // CLASS ${e.class}`);
     if (startingKineticPercent > 0) log(`>> Kinetic reservoir pre-charged to ${startingKineticPercent}%.`);
-    setIntentBanner(intentLabel(e.intent, e.designation));
+    bossRuntimeRef.current = bossProfile;
+    bossPhaseRef.current = bossProfile?.currentPhase ?? 1;
+    if (e.isBoss && bossRuntimeRef.current) {
+      setIntentBanner(bossIntentLabel(bossRuntimeRef.current, bossPhaseRef.current));
+    } else {
+      setIntentBanner(intentLabel(e.intent, e.designation));
+    }
   };
   useEffect(() => { initCombat(); }, []);
 
   const onStrike = () => {
     if (cycleState !== 'TEXT_COMBAT' || !isPlayerTurn || !enemyRef.current) return;
-    const overdraw = staminaRef.current < COMBAT_ACTION.KINETIC_STRIKE_STAMINA;
+    const overdraw = staminaRef.current < strikeStats.strikeStaminaCost;
     if (overdraw) {
       markExhausted();
-      log('[EXHAUSTED] >> Overexertion strike — 5 damage.');
+      log(`[EXHAUSTED] >> Overexertion strike — ${strikeStats.exhaustedStrikeDamage} damage.`);
     } else {
-      spendStam(COMBAT_ACTION.KINETIC_STRIKE_STAMINA);
+      spendStam(strikeStats.strikeStaminaCost);
     }
     const exhausted = exhaustedRef.current;
-    chargeKr(aegisKrRef.current ? COMBAT_ACTION.AEGIS_KINETIC_BONUS : COMBAT_ACTION.KINETIC_CHARGE);
+    const krGain = aegisKrRef.current ? COMBAT_ACTION.AEGIS_KINETIC_BONUS : strikeStats.kineticChargePerStrike;
+    chargeKr(krGain);
     if (aegisKrRef.current) aegisKrRef.current = false;
-    const dmg = exhausted ? COMBAT_ACTION.KINETIC_STRIKE_EXHAUSTED_DAMAGE : COMBAT_ACTION.KINETIC_STRIKE_DAMAGE;
+    const dmg = exhausted ? strikeStats.exhaustedStrikeDamage : strikeStats.strikeDamage;
     if (hurtEnemy(dmg, '[KINETIC STRIKE]')) return;
     passToEnemy(false);
   };
@@ -452,11 +555,17 @@ export default function TacticalCombatHub({
               <VignetteFlashOverlay color={screenFlashColor} opacityAnim={screenFlashAnim} />
             </View>
           )}
+          {phaseAlert && (
+            <Text style={[styles.phaseAlert, { color: '#ef4444' }]}>{phaseAlert}</Text>
+          )}
           {cycleState === 'TEXT_COMBAT' && intentBanner ? (
             <Text style={styles.intentBanner}>{intentBanner}</Text>
           ) : null}
           {cycleState === 'TEXT_COMBAT' && isExhausted && (
             <Text style={styles.exhaustedBanner}>EXHAUSTED — COUNTER/SLICE OFFLINE</Text>
+          )}
+          {cycleState === 'TEXT_COMBAT' && env.isPlayerBlinded && (
+            <Text style={[styles.exhaustedBanner, { color: '#fbbf24' }]}>BLINDED — COUNTER WINDOW -15%</Text>
           )}
           {cycleState === 'TEXT_COMBAT' && aegisActive && (
             <Text style={[styles.aegisBanner, { color: theme.primaryColor }]}>AEGIS BARRIER ACTIVE</Text>
@@ -465,9 +574,9 @@ export default function TacticalCombatHub({
           {cycleState === 'TEXT_COMBAT' && (
             <View style={styles.actionCol}>
               {actionBtn(
-                isExhausted || stamina < COMBAT_ACTION.KINETIC_STRIKE_STAMINA
-                  ? '[ KINETIC STRIKE (EXHAUSTED 5 DMG) ]'
-                  : `[ KINETIC STRIKE (-${COMBAT_ACTION.KINETIC_STRIKE_STAMINA} STAM) ]`,
+                isExhausted || stamina < strikeStats.strikeStaminaCost
+                  ? `[ KINETIC STRIKE (EXHAUSTED ${strikeStats.exhaustedStrikeDamage} DMG) ]`
+                  : `[ KINETIC STRIKE (Cost: ${strikeStats.strikeStaminaCost} Stamina / ${strikeStats.strikeDamage} DMG) ]`,
                 onStrike, isPlayerTurn, isPlayerTurn ? theme.primaryColor : undefined,
               )}
               {actionBtn(`[ AEGIS PROTOCOL (-${COMBAT_ACTION.AEGIS_STAMINA} STAM) ]`, onAegis, isPlayerTurn && stamina >= COMBAT_ACTION.AEGIS_STAMINA)}
@@ -550,6 +659,7 @@ const styles = StyleSheet.create({
   canvas: { minHeight: 240, height: 240, position: 'relative', justifyContent: 'flex-end', marginBottom: 12, overflow: 'hidden', backgroundColor: '#000' },
   flashWrap: { ...abs, zIndex: 100, overflow: 'hidden' },
   intentBanner: { fontFamily: MONO, fontSize: 8, letterSpacing: 0.5, textAlign: 'center', marginBottom: 4, color: P.enemyPosture },
+  phaseAlert: { fontFamily: MONO, fontSize: 9, fontWeight: '700', textAlign: 'center', marginBottom: 6, letterSpacing: 0.8 },
   exhaustedBanner: { fontFamily: MONO, fontSize: 9, letterSpacing: 1, textAlign: 'center', marginBottom: 4, color: P.enemyHp },
   aegisBanner: { fontFamily: MONO, fontSize: 8, letterSpacing: 1, textAlign: 'center', marginBottom: 4 },
   actionCol: { flexDirection: 'column', gap: 5 },

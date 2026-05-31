@@ -1,4 +1,4 @@
-import { CabalAlignment } from './index';
+import { CabalAlignment } from './profile';
 
 export interface FactionTheme {
   primaryColor: string;

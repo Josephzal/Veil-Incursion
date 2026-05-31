@@ -3,13 +3,14 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useNodeProgression } from '../hooks/useNodeProgression';
+import IncursionShell from '../components/IncursionShell';
 import PersistentTerminalLog from '../components/PersistentTerminalLog';
 
 const TERMINAL_ACCENT = '#00ff33';
 
 export default function RestScreen(): React.JSX.Element {
   const { theme } = useTerminal();
-  const { runState, applyRestChoice } = useRun();
+  const { runState, applyRestChoice, activeIncursion } = useRun();
   const { completeCurrentNode } = useNodeProgression();
   const [chosen, setChosen] = useState<'REST' | 'REPAIR' | null>(null);
 
@@ -22,10 +23,11 @@ export default function RestScreen(): React.JSX.Element {
   };
 
   return (
+    <IncursionShell>
     <View style={[styles.container, { backgroundColor: theme.backgroundColor }]}>
       <View style={[styles.header, { borderColor: theme.borderColor }]}>
         <Text style={[styles.headerText, { color: theme.mutedColor }]}>
-          NODE {runState.currentNode + 1}/{runState.totalNodes} // SANCTUARY
+          TIER {activeIncursion.currentTier} // NODE {activeIncursion.currentNodeIndex + 1}/7 // SANCTUARY
         </Text>
       </View>
 
@@ -71,6 +73,7 @@ export default function RestScreen(): React.JSX.Element {
 
       <PersistentTerminalLog />
     </View>
+    </IncursionShell>
   );
 }
 

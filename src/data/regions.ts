@@ -12,6 +12,8 @@ import {
   Trinket,
 } from '../types/run';
 import { getClusterBiomes } from './climateClusters';
+import { pickSectorFromUnlocked } from './biomes';
+import { BiomeType } from '../types/game';
 
 export const INITIAL_SECTOR_POOL: SectorDefinition[] = [
   {
@@ -161,6 +163,24 @@ function buildPingLabel(index: number, type: EncounterType, theme: RegionTheme):
   return `Ping ${index}: [${ENCOUNTER_TYPE_TAG[type]}] ${pickFlavor(theme, type)}`;
 }
 
+function generateInitialScanChoicesFromBiomes(unlockedBiomes: BiomeType[], count: number): PathChoice[] {
+  const usedIds = new Set<string>();
+  const choices: PathChoice[] = [];
+  let attempts = 0;
+  while (choices.length < count && attempts < 40) {
+    attempts += 1;
+    const sector = pickSectorFromUnlocked(unlockedBiomes, usedIds);
+    if (!sector) continue;
+    choices.push({
+      id: `init-${sector.id}-${choices.length}`,
+      sector,
+      encounterType: 'COMBAT',
+      label: ENCOUNTER_LABELS.COMBAT[Math.floor(Math.random() * ENCOUNTER_LABELS.COMBAT.length)],
+    });
+  }
+  return choices;
+}
+
 function generateInitialScanChoices(clusterId: ClimateClusterId, count: number): PathChoice[] {
   const usedIds = new Set<string>();
   const choices: PathChoice[] = [];
@@ -189,15 +209,16 @@ export function generateRadarScanDots(
   upcomingNodeIndex: number,
   combatNodesCleared: number,
   coreDiameterPx: number,
+  unlockedBiomes: BiomeType[] = ['HOSPITAL', 'ALLEYWAYS'],
 ): RadarScanResult {
   const signalCount = randomSignalCount();
-  if (!climateCluster) {
+  if (!climateCluster || unlockedBiomes.length === 0) {
     return { dots: [], signalCount: 0 };
   }
 
   const choices = upcomingNodeIndex === 0 && combatNodesCleared === 0
-    ? generateInitialScanChoices(climateCluster, signalCount)
-    : generatePathChoices(climateCluster, upcomingNodeIndex, combatNodesCleared, signalCount);
+    ? generateInitialScanChoicesFromBiomes(unlockedBiomes, signalCount)
+    : generatePathChoices(climateCluster, upcomingNodeIndex, combatNodesCleared, signalCount, unlockedBiomes);
 
   const center = coreDiameterPx / 2;
   const maxRadius = center * 0.78;
@@ -285,6 +306,7 @@ export function generatePathChoices(
   upcomingNodeIndex: number,
   combatNodesCleared: number,
   count: number,
+  unlockedBiomes: BiomeType[] = ['HOSPITAL', 'ALLEYWAYS'],
 ): PathChoice[] {
   const choices: PathChoice[] = [];
   const usedIds = new Set<string>();
@@ -292,7 +314,8 @@ export function generatePathChoices(
 
   while (choices.length < count && attempts < 40) {
     attempts += 1;
-    const sector = pickSectorFromCluster(clusterId, usedIds);
+    const sector = pickSectorFromUnlocked(unlockedBiomes, usedIds)
+      ?? pickSectorFromCluster(clusterId, usedIds);
     if (!sector) continue;
 
     const encounterType = pickEncounterTypeForNode(upcomingNodeIndex, combatNodesCleared);

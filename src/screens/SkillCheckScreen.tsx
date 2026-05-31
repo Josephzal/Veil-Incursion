@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import IncursionShell from '../components/IncursionShell';
 import PersistentTerminalLog from '../components/PersistentTerminalLog';
 import { useRun } from '../context/RunContext';
 import { useGameFlow } from '../context/GameFlowContext';
@@ -144,6 +145,7 @@ export default function SkillCheckScreen(): React.JSX.Element {
   const flickerOpacity = flickerAnim.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] });
 
   return (
+    <IncursionShell>
     <View style={[styles.container, { backgroundColor: theme.backgroundColor }]}>
       <View style={[styles.header, { borderColor: theme.borderColor }]}>
         <Text style={[styles.headerText, { color: theme.mutedColor }]}>
@@ -184,6 +186,7 @@ export default function SkillCheckScreen(): React.JSX.Element {
 
       <PersistentTerminalLog />
     </View>
+    </IncursionShell>
   );
 }
 

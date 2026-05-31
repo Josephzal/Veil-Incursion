@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import { pickRandomClimateCluster, getClusterDefinition } from '../data/climateClusters';
 import { spawnEnemyProfile } from '../data/enemies';
 import {
@@ -19,6 +19,33 @@ import {
   Trinket,
   TOTAL_RUN_NODES,
 } from '../types/run';
+import {
+  ActiveIncursionState,
+  BiomeType,
+  CheckStatus,
+  createDefaultActiveIncursionState,
+  FactionModifiers,
+  IncursionMapMode,
+  NarrativeEventNode,
+} from '../types/game';
+import {
+  narrativeOutcomeLogLine,
+  pickNarrativeForNode,
+  primeNarrativeEnvironment,
+  resolveNarrativeOutcome,
+} from '../data/narrativeEvents';
+import {
+  createBossProfileForTier,
+  generateTierNodeChain,
+  isBossNodeType,
+} from '../data/descentEngine';
+import { spawnBossEnemyProfile } from '../data/bossCombat';
+import { INITIAL_SECTOR_POOL } from '../data/regions';
+
+export interface RunStartConfig {
+  factionPerks?: FactionModifiers;
+  unlockedBiomes?: BiomeType[];
+}
 
 interface RunContextType {
   runState: RunState;
@@ -26,11 +53,11 @@ interface RunContextType {
   scanSessionKey: number;
   postCombatBoonChoices: Trinket[];
   appendRunLog: (text: string) => void;
-  startNewRun: () => void;
+  startNewRun: (config?: RunStartConfig) => void;
   beginScanSession: () => void;
   commitRadarDot: (dot: RadarDot) => EncounterNode;
   advanceNode: () => { hasNext: boolean; completedCount: number };
-  completeNodeAfterBoon: (trinket: Trinket) => { route: 'SCANNING' | 'RUN_COMPLETE'; nodesCleared: number };
+  completeNodeAfterBoon: (trinket: Trinket) => void;
   incrementCombatNodesCleared: () => void;
   syncAfterCombat: (remainingHp: number, remainingStamina: number) => void;
   refillStaminaAfterCombat: () => void;
@@ -43,6 +70,22 @@ interface RunContextType {
   endRun: (reason: string) => void;
   setPendingAmbush: (value: boolean) => void;
   clearPendingAmbush: () => void;
+  assignNarrativeForCombat: (nodeIndex: number) => void;
+  getCurrentNarrativeNode: () => NarrativeEventNode | null;
+  resolveNarrativeCheck: (choice: 'A' | 'B', status: CheckStatus) => string;
+  activeIncursion: ActiveIncursionState;
+  getCurrentTierNode: () => import('../types/game').IncursionNode | null;
+  stageEncounterClear: (message: string) => { route: 'CHECKPOINT' };
+  continueFromProgressCheckpoint: () => {
+    route: 'NEXT_NODE' | 'TIER_ADVANCE' | 'HUB_VICTORY';
+    nextTier?: number;
+  };
+  prepareBossEncounter: () => void;
+  prepareStandardCombatEncounter: () => void;
+  shiftBossPhase: (phase: number) => void;
+  setIncursionMapMode: (mode: IncursionMapMode) => void;
+  purgeEncounterState: () => void;
+  commitNodeEncounter: () => import('../types/game').RunNodeType | null;
 }
 
 const RunContext = createContext<RunContextType | undefined>(undefined);
@@ -88,30 +131,59 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   const [runLog, setRunLog] = useState<string[]>([]);
   const [scanSessionKey, setScanSessionKey] = useState(0);
   const [postCombatBoonChoices, setPostCombatBoonChoices] = useState<Trinket[]>([]);
+  const [activeIncursion, setActiveIncursion] = useState<ActiveIncursionState>(
+    createDefaultActiveIncursionState,
+  );
+  const activeIncursionRef = useRef<ActiveIncursionState>(activeIncursion);
+  const narrativeNodeRef = useRef<NarrativeEventNode | null>(null);
 
-  useEffect(() => {
-    runStateRef.current = runState;
-  }, [runState]);
+  runStateRef.current = runState;
+  activeIncursionRef.current = activeIncursion;
 
   const appendRunLog = useCallback((text: string) => {
     setRunLog((prev) => [...prev, text]);
   }, []);
 
-  const startNewRun = useCallback(() => {
+  const startNewRun = useCallback((config?: RunStartConfig) => {
     const cluster = pickRandomClimateCluster();
     const clusterDef = getClusterDefinition(cluster);
+    const hpBonus = config?.factionPerks?.maxHpBonus ?? 0;
+    const stamBonus = config?.factionPerks?.maxStaminaBonus ?? 0;
+    const maxSoulAnchor = BASE_MAX_SOUL_ANCHOR + hpBonus;
+    const maxStamina = BASE_MAX_STAMINA + stamBonus;
     const next: RunState = {
       ...createInitialRunState(),
       runActive: true,
       climateCluster: cluster,
+      maxSoulAnchor,
+      soulAnchorIntegrity: maxSoulAnchor,
+      maxStamina,
+      currentStamina: maxStamina,
     };
     runStateRef.current = next;
     setRunState(next);
-    setScanSessionKey(0);
+    const tierNodes = generateTierNodeChain(1);
+    const incursion: ActiveIncursionState = {
+      ...createDefaultActiveIncursionState(),
+      isRunActive: true,
+      currentTier: 1,
+      currentNodeIndex: 0,
+      tierNodes,
+      mapMode: 'SCANNING_HUB',
+      lastCheckpointMessage: null,
+    };
+    activeIncursionRef.current = incursion;
+    setActiveIncursion(incursion);
+    narrativeNodeRef.current = null;
+    setScanSessionKey(1);
     setPostCombatBoonChoices([]);
+    const biomeTag = (config?.unlockedBiomes ?? ['HOSPITAL', 'ALLEYWAYS']).join(', ');
     setRunLog([
-      '>> RUN INITIALIZED — ANOMALY SWEEP AUTHORIZED.',
+      '>> RUN INITIALIZED — VEIL DESCENT ENGINE ONLINE.',
+      `>> TIER 1 THRESHOLD — 7-NODE CHAIN GENERATED.`,
+      `>> SCANNING HUB ACTIVE — TACTICAL SWEEP INITIALIZING.`,
       `>> CLIMATE CLUSTER LOCKED: ${clusterDef.name}`,
+      `>> AUTHORIZED BIOMES: ${biomeTag}`,
       `>> ${clusterDef.tagline}`,
     ]);
   }, []);
@@ -161,7 +233,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const commitRadarDot = useCallback((dot: RadarDot): EncounterNode => {
     const prev = runStateRef.current;
-    const nodeIndex = prev.currentNode;
+    const nodeIndex = activeIncursionRef.current.currentNodeIndex;
     const encounter = buildEncounter(nodeIndex, dot.sector, dot.encounterType, dot.label);
     const pendingEnemy =
       dot.encounterType === 'COMBAT'
@@ -194,14 +266,14 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const getCurrentEncounter = useCallback((): EncounterNode | null => {
-    return runState.pendingEncounter;
-  }, [runState.pendingEncounter]);
+    return runStateRef.current.pendingEncounter;
+  }, []);
 
   const getCurrentSkillCheck = useCallback((): SkillCheckEvent | null => {
-    const theme = runState.currentSector?.theme ?? 'CITY';
+    const theme = runStateRef.current.currentSector?.theme ?? 'CITY';
     const pool = getThemedSkillChecks(theme);
     return pool[Math.floor(Math.random() * pool.length)] ?? pool[0];
-  }, [runState.currentSector]);
+  }, []);
 
   const advanceNode = useCallback(() => {
     const prev = runStateRef.current;
@@ -218,53 +290,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     return { hasNext, completedCount: nextCompleted };
   }, []);
 
-  const completeNodeAfterBoon = useCallback((trinket: Trinket): { route: 'SCANNING' | 'RUN_COMPLETE'; nodesCleared: number } => {
-    const prev = runStateRef.current;
-    const nodesCleared = prev.currentNode + 1;
-    const runComplete = nodesCleared >= TOTAL_RUN_NODES;
-
-    const activeTrinkets = [...prev.activeTrinkets, trinket];
-    const mods = aggregateModifiers(activeTrinkets);
-    let maxSoulAnchor = prev.maxSoulAnchor;
-    let maxStamina = prev.maxStamina;
-    let soulAnchorIntegrity = prev.soulAnchorIntegrity;
-    let currentStamina = prev.currentStamina;
-
-    if (trinket.maxHpBonus) {
-      maxSoulAnchor += trinket.maxHpBonus;
-      soulAnchorIntegrity += trinket.maxHpBonus;
-    }
-    if (trinket.maxStaminaBonus) {
-      maxStamina += trinket.maxStaminaBonus;
-      currentStamina += trinket.maxStaminaBonus;
-    }
-    if (trinket.hpRestore) {
-      soulAnchorIntegrity = Math.min(soulAnchorIntegrity + trinket.hpRestore, maxSoulAnchor);
-    }
-    if (trinket.staminaRestore) {
-      currentStamina = Math.min(currentStamina + trinket.staminaRestore, maxStamina);
-    }
-
-    const nextState: RunState = {
-      ...prev,
-      activeTrinkets,
-      maxSoulAnchor,
-      maxStamina,
-      soulAnchorIntegrity,
-      currentStamina,
-      currentNode: nodesCleared,
-      pendingEncounter: null,
-      pendingEnemy: null,
-      ...mods,
-    };
-    runStateRef.current = nextState;
-    setRunState(nextState);
+  const completeNodeAfterBoon = useCallback((trinket: Trinket) => {
+    applyTrinket(trinket);
     setPostCombatBoonChoices([]);
-
-    appendRunLog(`>> Trinket acquired: ${trinket.name} — ${trinket.effect}`);
-
-    return { route: runComplete ? 'RUN_COMPLETE' : 'SCANNING', nodesCleared };
-  }, [appendRunLog]);
+  }, [applyTrinket]);
 
   const syncAfterCombat = useCallback((remainingHp: number, remainingStamina: number) => {
     setRunState((prev) => {
@@ -273,6 +302,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         soulAnchorIntegrity: Math.min(Math.max(remainingHp, 0), prev.maxSoulAnchor),
         currentStamina: Math.min(Math.max(remainingStamina, 0), prev.maxStamina),
         pendingEnemy: null,
+        pendingEncounter: null,
       };
       runStateRef.current = next;
       return next;
@@ -369,7 +399,326 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     runStateRef.current = reset;
     setRunState(reset);
     setPostCombatBoonChoices([]);
+    const resetIncursion = createDefaultActiveIncursionState();
+    activeIncursionRef.current = resetIncursion;
+    setActiveIncursion(resetIncursion);
+    narrativeNodeRef.current = null;
   }, [appendRunLog]);
+
+  const setIncursionMapMode = useCallback((mode: IncursionMapMode) => {
+    setActiveIncursion((prev) => {
+      if (prev.mapMode === mode) return prev;
+      const next = { ...prev, mapMode: mode };
+      activeIncursionRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const purgeEncounterState = useCallback(() => {
+    narrativeNodeRef.current = null;
+    setActiveIncursion((prev) => {
+      const next: ActiveIncursionState = {
+        ...prev,
+        currentNarrativeId: null,
+        activeChoice: null,
+        bossProfile: null,
+        mapMode: 'SCANNING_HUB',
+        lastCheckpointMessage: null,
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    setRunState((prev) => {
+      const next = {
+        ...prev,
+        pendingEncounter: null,
+        pendingEnemy: null,
+      };
+      runStateRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const assignNarrativeForCombat = useCallback((nodeIndex: number) => {
+    const node = pickNarrativeForNode(nodeIndex);
+    narrativeNodeRef.current = node;
+    const primed = primeNarrativeEnvironment(node);
+    setActiveIncursion((prev) => {
+      const next = {
+        ...prev,
+        currentNarrativeId: node.id,
+        lastCheckStatus: 'NOT_TESTED' as CheckStatus,
+        activeChoice: null,
+        mapMode: 'NODE_ENGAGED' as IncursionMapMode,
+        environmentalModifiers: {
+          ...prev.environmentalModifiers,
+          ...primed,
+        },
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    appendRunLog(`>> NARRATIVE NODE LOADED: ${node.title}`);
+  }, [appendRunLog]);
+
+  const getCurrentNarrativeNode = useCallback((): NarrativeEventNode | null => {
+    return narrativeNodeRef.current;
+  }, []);
+
+  const resolveNarrativeCheck = useCallback((choice: 'A' | 'B', status: CheckStatus): string => {
+    const node = narrativeNodeRef.current;
+    if (!node) return '>> NARRATIVE RESOLVED — NO ACTIVE NODE.';
+
+    setActiveIncursion((prev) => {
+      const environmentalModifiers = resolveNarrativeOutcome(
+        node,
+        choice,
+        status,
+        prev.environmentalModifiers,
+      );
+      const next: ActiveIncursionState = {
+        ...prev,
+        environmentalModifiers,
+        lastCheckStatus: status,
+        activeChoice: choice,
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+
+    return narrativeOutcomeLogLine(node, choice, status);
+  }, []);
+
+  const getCurrentTierNode = useCallback(() => {
+    const inc = activeIncursionRef.current;
+    return inc.tierNodes[inc.currentNodeIndex] ?? null;
+  }, []);
+
+  const prepareBossEncounter = useCallback(() => {
+    const inc = activeIncursionRef.current;
+    const tierNode = inc.tierNodes[inc.currentNodeIndex];
+    if (!tierNode || !isBossNodeType(tierNode.type)) return;
+
+    const bossProfile = createBossProfileForTier(inc.currentTier);
+    const sector = runStateRef.current.currentSector ?? INITIAL_SECTOR_POOL[0];
+    const pendingEnemy = spawnBossEnemyProfile(
+      bossProfile,
+      sector,
+      inc.currentNodeIndex,
+    );
+
+    setActiveIncursion((prev) => {
+      const next = { ...prev, bossProfile };
+      activeIncursionRef.current = next;
+      return next;
+    });
+
+    setRunState((prev) => {
+      const next = {
+        ...prev,
+        pendingEnemy,
+        pendingEncounter: buildEncounter(
+          inc.currentNodeIndex,
+          sector,
+          'COMBAT',
+          tierNode.label,
+        ),
+      };
+      runStateRef.current = next;
+      return next;
+    });
+
+    appendRunLog(`>> BOSS SIGNATURE: ${bossProfile.name} // ${bossProfile.maxHp} HP`);
+  }, [appendRunLog]);
+
+  const prepareStandardCombatEncounter = useCallback(() => {
+    const inc = activeIncursionRef.current;
+    const tierNode = inc.tierNodes[inc.currentNodeIndex];
+    if (!tierNode || tierNode.type !== 'STANDARD_COMBAT') return;
+
+    const prev = runStateRef.current;
+    const sector = prev.currentSector ?? INITIAL_SECTOR_POOL[0];
+    const pendingEnemy = spawnEnemyProfile(sector, inc.currentNodeIndex, prev.pendingAmbush);
+    const pendingEncounter = buildEncounter(
+      inc.currentNodeIndex,
+      sector,
+      'COMBAT',
+      tierNode.label,
+    );
+
+    setRunState((prevState) => {
+      const next = {
+        ...prevState,
+        currentSector: sector,
+        pendingEnemy,
+        pendingEncounter,
+      };
+      runStateRef.current = next;
+      return next;
+    });
+
+    appendRunLog(`>> HOSTILE SIGNATURE: ${pendingEnemy.designation} [${pendingEnemy.class}] HP ${pendingEnemy.maxHp}.`);
+  }, [appendRunLog]);
+
+  const stageEncounterClear = useCallback((message: string) => {
+    appendRunLog(`>> ${message}`);
+
+    const inc = activeIncursionRef.current;
+    const completedIndex = inc.currentNodeIndex;
+    const tierNodes = inc.tierNodes.map((n) =>
+      n.index === completedIndex ? { ...n, isCompleted: true } : n,
+    );
+
+    narrativeNodeRef.current = null;
+
+    const nextInc: ActiveIncursionState = {
+      ...inc,
+      tierNodes,
+      currentNarrativeId: null,
+      activeChoice: null,
+      bossProfile: null,
+      mapMode: 'PROGRESS_CHECKPOINT',
+      lastCheckpointMessage: message,
+    };
+    activeIncursionRef.current = nextInc;
+    setActiveIncursion(nextInc);
+
+    setRunState((prev) => {
+      const next = {
+        ...prev,
+        pendingEncounter: null,
+        pendingEnemy: null,
+      };
+      runStateRef.current = next;
+      return next;
+    });
+
+    appendRunLog('>> SECTOR CHECKPOINT — OPERATIVE PERFORMANCE LOG UPDATED.');
+    return { route: 'CHECKPOINT' as const };
+  }, [appendRunLog]);
+
+  const continueFromProgressCheckpoint = useCallback(() => {
+    const inc = activeIncursionRef.current;
+    const completedIndex = inc.currentNodeIndex;
+
+    const resetForScan = (base: ActiveIncursionState): ActiveIncursionState => ({
+      ...base,
+      currentNarrativeId: null,
+      activeChoice: null,
+      bossProfile: null,
+      mapMode: 'SCANNING_HUB',
+      lastCheckpointMessage: null,
+    });
+
+    if (completedIndex >= 6) {
+      if (inc.currentTier < 3) {
+        const nextTier = inc.currentTier + 1;
+        const freshNodes = generateTierNodeChain(nextTier);
+        const nextInc = resetForScan({
+          ...inc,
+          currentTier: nextTier,
+          currentNodeIndex: 0,
+          tierNodes: freshNodes,
+        });
+        activeIncursionRef.current = nextInc;
+        setActiveIncursion(nextInc);
+        setRunState((prev) => {
+          const next = { ...prev, currentNode: 0, pendingEncounter: null, pendingEnemy: null };
+          runStateRef.current = next;
+          return next;
+        });
+        setScanSessionKey((k) => k + 1);
+        appendRunLog(`>> TIER ${nextTier} DEPTH UNLOCKED — SCANNING HUB RECALIBRATED.`);
+        return { route: 'TIER_ADVANCE' as const, nextTier };
+      }
+
+      const nextInc = createDefaultActiveIncursionState();
+      activeIncursionRef.current = nextInc;
+      setActiveIncursion(nextInc);
+      return { route: 'HUB_VICTORY' as const };
+    }
+
+    const nextIndex = completedIndex + 1;
+    const nextInc = resetForScan({
+      ...inc,
+      currentNodeIndex: nextIndex,
+    });
+    activeIncursionRef.current = nextInc;
+    setActiveIncursion(nextInc);
+
+    setRunState((prev) => {
+      const next = {
+        ...prev,
+        currentNode: nextIndex,
+        pendingEncounter: null,
+        pendingEnemy: null,
+      };
+      runStateRef.current = next;
+      return next;
+    });
+
+    setScanSessionKey((k) => k + 1);
+    appendRunLog(`>> DEPTH ${nextIndex + 1}/7 — SCANNING HUB READY FOR VECTOR SELECT.`);
+    return { route: 'NEXT_NODE' as const };
+  }, [appendRunLog]);
+
+  const commitNodeEncounter = useCallback((): import('../types/game').RunNodeType | null => {
+    const inc = activeIncursionRef.current;
+    if (inc.mapMode !== 'SCANNING_HUB') return null;
+
+    const node = inc.tierNodes[inc.currentNodeIndex];
+    if (!node || node.isCompleted) return null;
+
+    appendRunLog(`>> VECTOR COMMITTED — NODE ${node.index + 1}/7: ${node.label}`);
+
+    if (node.type === 'STANDARD_COMBAT') {
+      prepareStandardCombatEncounter();
+      setActiveIncursion((prev) => {
+        const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
+        activeIncursionRef.current = next;
+        return next;
+      });
+      return node.type;
+    }
+
+    if (node.type === 'NARRATIVE_EVENT') {
+      assignNarrativeForCombat(node.index);
+      return node.type;
+    }
+
+    if (node.type === 'SANCTUARY') {
+      setActiveIncursion((prev) => {
+        const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
+        activeIncursionRef.current = next;
+        return next;
+      });
+      return node.type;
+    }
+
+    if (isBossNodeType(node.type)) {
+      prepareBossEncounter();
+      setActiveIncursion((prev) => {
+        const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
+        activeIncursionRef.current = next;
+        return next;
+      });
+      return node.type;
+    }
+
+    return null;
+  }, [appendRunLog, assignNarrativeForCombat, prepareBossEncounter, prepareStandardCombatEncounter]);
+
+  const shiftBossPhase = useCallback((phase: number) => {
+    setActiveIncursion((prev) => {
+      if (!prev.bossProfile) return prev;
+      const next = {
+        ...prev,
+        bossProfile: { ...prev.bossProfile, currentPhase: phase },
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+  }, []);
 
   const setPendingAmbush = useCallback((value: boolean) => {
     setRunState((prev) => ({ ...prev, pendingAmbush: value }));
@@ -403,6 +752,19 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       endRun,
       setPendingAmbush,
       clearPendingAmbush,
+      assignNarrativeForCombat,
+      getCurrentNarrativeNode,
+      resolveNarrativeCheck,
+      activeIncursion,
+      getCurrentTierNode,
+      stageEncounterClear,
+      continueFromProgressCheckpoint,
+      prepareBossEncounter,
+      prepareStandardCombatEncounter,
+      shiftBossPhase,
+      setIncursionMapMode,
+      purgeEncounterState,
+      commitNodeEncounter,
     }),
     [
       runState,
@@ -427,6 +789,19 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       endRun,
       setPendingAmbush,
       clearPendingAmbush,
+      assignNarrativeForCombat,
+      getCurrentNarrativeNode,
+      resolveNarrativeCheck,
+      activeIncursion,
+      getCurrentTierNode,
+      stageEncounterClear,
+      continueFromProgressCheckpoint,
+      prepareBossEncounter,
+      prepareStandardCombatEncounter,
+      shiftBossPhase,
+      setIncursionMapMode,
+      purgeEncounterState,
+      commitNodeEncounter,
     ],
   );
 

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import { CabalAlignment, OperativeProfile } from '../types';
 import { mockOperativeProfile } from './mockProfile';
 
@@ -23,7 +23,7 @@ export const FactionThemes = {
     mutedColor: '#b91c1c',
     borderColor: '#eab308',
     bootLog: 'SOLARIS CORE // THERMAL ENERGY HARVEST // WARNING: KINETIC FRICTION AT CAPACITY',
-  }
+  },
 };
 
 interface TerminalContextType {
@@ -31,7 +31,7 @@ interface TerminalContextType {
   theme: typeof FactionThemes.TERRAN_GRID;
   profile: OperativeProfile;
   updateCabalAlignment: (cabal: CabalAlignment) => void;
-  awardCurrencies: (glimmerAmt: number, tributeAmt: number) => void; // Added here to fix the type error
+  awardCurrencies: (glimmerAmt: number, tributeAmt: number) => void;
 }
 
 const TerminalContext = createContext<TerminalContextType | undefined>(undefined);
@@ -40,22 +40,27 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   const [alignment, setAlignment] = useState<CabalAlignment>('TERRAN_GRID');
   const [profile, setProfile] = useState<OperativeProfile>(mockOperativeProfile);
 
-  const updateCabalAlignment = (cabal: CabalAlignment) => {
-    setAlignment(cabal);
-    setProfile(prev => ({
-      ...prev,
-      operative_profile: {
-        ...prev.operative_profile,
-        credentials: {
-          ...prev.operative_profile.credentials,
-          cabal_alignment: cabal
-        }
+  const updateCabalAlignment = useCallback((cabal: CabalAlignment) => {
+    setAlignment((prev) => (prev === cabal ? prev : cabal));
+    setProfile((prev) => {
+      if (prev.operative_profile.credentials.cabal_alignment === cabal) {
+        return prev;
       }
-    }));
-  };
+      return {
+        ...prev,
+        operative_profile: {
+          ...prev.operative_profile,
+          credentials: {
+            ...prev.operative_profile.credentials,
+            cabal_alignment: cabal,
+          },
+        },
+      };
+    });
+  }, []);
 
-  const awardCurrencies = (glimmerAmt: number, tributeAmt: number) => {
-    setProfile(prev => ({
+  const awardCurrencies = useCallback((glimmerAmt: number, tributeAmt: number) => {
+    setProfile((prev) => ({
       ...prev,
       operative_profile: {
         ...prev.operative_profile,
@@ -63,20 +68,25 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
           ...prev.operative_profile.payload_manifest,
           currencies: {
             ...prev.operative_profile.payload_manifest.currencies,
-            crypto_glimmer: prev.operative_profile.payload_manifest.currencies.crypto_glimmer + glimmerAmt,
-            cabal_tributes: prev.operative_profile.payload_manifest.currencies.cabal_tributes + tributeAmt,
-          }
-        }
-      }
+            crypto_glimmer:
+              prev.operative_profile.payload_manifest.currencies.crypto_glimmer + glimmerAmt,
+            cabal_tributes:
+              prev.operative_profile.payload_manifest.currencies.cabal_tributes + tributeAmt,
+          },
+        },
+      },
     }));
-  };
+  }, []);
 
   const theme = FactionThemes[alignment];
 
+  const value = useMemo(
+    () => ({ alignment, theme, profile, updateCabalAlignment, awardCurrencies }),
+    [alignment, theme, profile, updateCabalAlignment, awardCurrencies],
+  );
+
   return (
-    <TerminalContext.Provider value={{ alignment, theme, profile, updateCabalAlignment, awardCurrencies }}>
-      {children}
-    </TerminalContext.Provider>
+    <TerminalContext.Provider value={value}>{children}</TerminalContext.Provider>
   );
 }
 

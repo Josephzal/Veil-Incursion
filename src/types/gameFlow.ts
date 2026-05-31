@@ -1,10 +1,13 @@
 export type AppScreen =
+  | 'HUB'
   | 'WELCOME'
   | 'SCANNING'
+  | 'NARRATIVE'
   | 'POST_COMBAT_BOON'
   | 'SKILL_CHECK'
   | 'REST'
   | 'COMBAT'
+  | 'RUN_PROGRESS'
   | 'RUN_COMPLETE'
   | 'GAME_OVER';
 

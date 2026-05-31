@@ -10,10 +10,10 @@ const TERMINAL_ACCENT = '#ef4444';
 export default function GameOverScreen(): React.JSX.Element {
   const { theme } = useTerminal();
   const { runLog } = useRun();
-  const { goToWelcome } = useGameFlow();
+  const { goToHub } = useGameFlow();
 
   const handleReturn = () => {
-    goToWelcome();
+    goToHub();
   };
 
   return (

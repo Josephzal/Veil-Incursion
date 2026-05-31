@@ -11,11 +11,11 @@ const TERMINAL_ACCENT = '#00ff33';
 export default function RunCompleteScreen(): React.JSX.Element {
   const { theme } = useTerminal();
   const { runState, endRun } = useRun();
-  const { goToWelcome } = useGameFlow();
+  const { goToHub } = useGameFlow();
 
   const handleReturn = () => {
     endRun('OPERATOR RETURNED TO BASE');
-    goToWelcome();
+    goToHub();
   };
 
   return (
