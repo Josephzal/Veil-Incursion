@@ -11,6 +11,8 @@ export type {
   FactionModifiers,
   FactionType,
   IncursionMapMode,
+  IncursionBiome,
+  IncursionEncounterType,
   IncursionNode,
   InventoryItem,
   ItemRarity,
@@ -48,7 +50,7 @@ export type {
   Trinket,
 } from './run';
 
-export { COMBAT_ACTION, BASE_MAX_STAMINA, BASE_MAX_SOUL_ANCHOR, TOTAL_RUN_NODES, MIN_COMBAT_NODES, ENEMY_KINETIC_SIPHON_REQUEST, MAX_KINETIC_SIPHON_PER_ACTION } from './run';
+export { COMBAT_ACTION, BASE_MAX_STAMINA, BASE_MAX_SOUL_ANCHOR, TOTAL_RUN_NODES, INCURSION_DEPTH_COUNT, MIN_COMBAT_NODES, SCAN_ENGAGE_STAMINA_COST, ENEMY_KINETIC_SIPHON_REQUEST, MAX_KINETIC_SIPHON_PER_ACTION } from './run';
 
 export type { FactionTheme, TerminalTheme } from './theme';
 export { FACTION_THEMES, getTerminalTheme, getVictoriousFaction } from './theme';

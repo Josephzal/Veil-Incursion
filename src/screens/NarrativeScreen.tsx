@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { StyleSheet, View, Text } from 'react-native';
 import IncursionShell from '../components/IncursionShell';
+import EncounterBiomeBanner from '../components/EncounterBiomeBanner';
 import NarrativeStepperModule from '../components/NarrativeStepperModule';
 import PersistentTerminalLog from '../components/PersistentTerminalLog';
 import { useRun } from '../context/RunContext';
@@ -41,6 +42,7 @@ export default function NarrativeScreen(): React.JSX.Element {
   return (
     <IncursionShell>
       <View style={[styles.container, { backgroundColor: theme.backgroundColor }]}>
+        <EncounterBiomeBanner />
         <View style={styles.content}>
           <NarrativeStepperModule
             node={node}

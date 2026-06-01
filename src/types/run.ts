@@ -108,8 +108,11 @@ export interface RunState {
 
 export const BASE_MAX_STAMINA = 100;
 export const BASE_MAX_SOUL_ANCHOR = 100;
-export const TOTAL_RUN_NODES = 7;
+export const TOTAL_RUN_NODES = 10;
+export const INCURSION_DEPTH_COUNT = 10;
 export const MIN_COMBAT_NODES = 4;
+/** Stamina deducted when operative confirms vector engagement from scanner overlay. */
+export const SCAN_ENGAGE_STAMINA_COST = 8;
 
 export interface RadarDot {
   id: string;
@@ -121,6 +124,8 @@ export interface RadarDot {
   x: number;
   y: number;
   angleDeg: number;
+  isPreDiscovered?: boolean;
+  depthIndex: number;
 }
 
 export interface RadarScanResult {

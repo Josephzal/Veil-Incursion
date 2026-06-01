@@ -1,24 +1,26 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
   Easing,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { generateTierNodeScanVectors } from '../data/descentEngine';
+import { BOSS_DEPTH_INDEX, generateTierNodeScanVectors } from '../data/descentEngine';
 import { INITIAL_SECTOR_POOL } from '../data/regions';
 import IncursionShell from '../components/IncursionShell';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
+import ScanConfirmOverlay from '../components/ScanConfirmOverlay';
 import { useRun } from '../context/RunContext';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useDescentNavigator } from '../hooks/useDescentNavigator';
+import { useGameFlow } from '../context/GameFlowContext';
 import { getFactionDefinition } from '../data/factions';
 import { RadarDot } from '../types/run';
+import { RunNodeType } from '../types/game';
 
 const { width } = Dimensions.get('window');
 const SCAN_SWEEP_MS = 2200;
@@ -28,11 +30,11 @@ const SWEEP_DETECT_ARC_DEG = 14;
 const PING_FADE_MS = 260;
 const DOT_HIT_SIZE = 44;
 const DOT_VISUAL_SIZE = 12;
+const BOSS_DOT_SIZE = 16;
 const TERMINAL_ACCENT = '#00ff33';
 const RADAR_SIZE = Math.min(width - 80, 280);
 const RADAR_CORE = RADAR_SIZE * 0.48;
 const RADAR_DOCK_HEIGHT = RADAR_SIZE + 32;
-const READOUT_DOCK_HEIGHT = 220;
 
 type ScanPhase = 'SWEEPING' | 'DOTS';
 
@@ -43,9 +45,19 @@ function sweepDeltaDeg(sweepDeg: number, dotDeg: number): number {
 
 export default function ScanningScreen(): React.JSX.Element {
   const { theme } = useTerminal();
-  const { runState, scanSessionKey, activeIncursion } = useRun();
+  const {
+    runState,
+    scanSessionKey,
+    activeIncursion,
+    getCurrentVectorCluster,
+    openScanPreview,
+    closeScanPreview,
+    confirmScanPreview,
+    getPreviewNode,
+  } = useRun();
   const { account } = usePlayerAccount();
-  const { deploySelectedVector, isScanningHub } = useDescentNavigator();
+  const { isScanningHub } = useDescentNavigator();
+  const { startNarrative, startCombat, startRest } = useGameFlow();
 
   const accent =
     account.alignedFaction != null
@@ -54,6 +66,7 @@ export default function ScanningScreen(): React.JSX.Element {
 
   const [phase, setPhase] = useState<ScanPhase>('SWEEPING');
   const [vectorDots, setVectorDots] = useState<RadarDot[]>([]);
+  const bossPreviewOpenedRef = useRef(false);
 
   const pulseAnim = useRef(new Animated.Value(0.25)).current;
   const sweepAnim = useRef(new Animated.Value(0)).current;
@@ -62,14 +75,25 @@ export default function ScanningScreen(): React.JSX.Element {
   const pingedThisRotationRef = useRef<Record<string, boolean>>({});
   const lastSweepValueRef = useRef(0);
   const lastRadarSessionRef = useRef<number | null>(null);
-  const deployingRef = useRef(false);
 
   const nodeIndex = activeIncursion.currentNodeIndex;
-  const vectorCluster = activeIncursion.activeTierVectors[nodeIndex] ?? [];
+  const isBossDepth = nodeIndex === BOSS_DEPTH_INDEX;
+  const vectorCluster = useMemo(
+    () => getCurrentVectorCluster(),
+    [
+      getCurrentVectorCluster,
+      activeIncursion.activeTierVectors,
+      activeIncursion.tierNodes,
+      activeIncursion.currentTier,
+      nodeIndex,
+    ],
+  );
+
+  const previewNode = getPreviewNode();
 
   const ensureDotOpacity = (dotId: string): Animated.Value => {
     if (!dotOpacityMapRef.current[dotId]) {
-      dotOpacityMapRef.current[dotId] = new Animated.Value(0);
+      dotOpacityMapRef.current[dotId] = new Animated.Value(isBossDepth ? 1 : 0);
     }
     return dotOpacityMapRef.current[dotId];
   };
@@ -81,20 +105,24 @@ export default function ScanningScreen(): React.JSX.Element {
     }
     if (lastRadarSessionRef.current === scanSessionKey) return;
     lastRadarSessionRef.current = scanSessionKey;
-
-    setPhase('SWEEPING');
-    deployingRef.current = false;
+    bossPreviewOpenedRef.current = false;
 
     const sector = runState.currentSector ?? INITIAL_SECTOR_POOL[0];
     const dots = generateTierNodeScanVectors(vectorCluster, RADAR_CORE, sector);
-    dots.forEach((dot) => ensureDotOpacity(dot.id).setValue(0));
+    dots.forEach((dot) => ensureDotOpacity(dot.id).setValue(isBossDepth ? 1 : 0));
     pingedThisRotationRef.current = {};
     lastSweepValueRef.current = 0;
     setVectorDots(dots);
-  }, [isScanningHub, scanSessionKey, vectorCluster, nodeIndex, runState.currentSector]);
+
+    if (isBossDepth) {
+      setPhase('DOTS');
+    } else {
+      setPhase('SWEEPING');
+    }
+  }, [isScanningHub, scanSessionKey, vectorCluster, nodeIndex, runState.currentSector, isBossDepth]);
 
   useEffect(() => {
-    if (!isScanningHub || vectorDots.length === 0) return;
+    if (!isScanningHub || vectorDots.length === 0 || isBossDepth) return;
 
     const pulseLoop = Animated.loop(
       Animated.sequence([
@@ -160,17 +188,45 @@ export default function ScanningScreen(): React.JSX.Element {
       clearTimeout(finishTimer);
       vectorDots.forEach((dot) => dotPulseMapRef.current[dot.id]?.stop());
     };
-  }, [isScanningHub, vectorDots, pulseAnim, sweepAnim]);
+  }, [isScanningHub, vectorDots, pulseAnim, sweepAnim, isBossDepth]);
+
+  useEffect(() => {
+    if (!isScanningHub || !isBossDepth || vectorDots.length === 0) return;
+    if (bossPreviewOpenedRef.current) return;
+    bossPreviewOpenedRef.current = true;
+    const bossDot = vectorDots.find((dot) => dot.isPreDiscovered) ?? vectorDots[0];
+    if (bossDot) openScanPreview(bossDot.id);
+  }, [isScanningHub, isBossDepth, vectorDots, openScanPreview]);
 
   const sweepRotation = sweepAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ['0deg', '360deg'],
   });
 
-  const handleVectorSelect = (nodeId: string) => {
-    if (phase !== 'DOTS' || deployingRef.current) return;
-    deployingRef.current = true;
-    deploySelectedVector(nodeId);
+  const handleNodeTap = (nodeId: string) => {
+    if (phase !== 'DOTS') return;
+    openScanPreview(nodeId);
+  };
+
+  const handleEngage = () => {
+    const nodeType = confirmScanPreview();
+    if (!nodeType) return;
+
+    switch (nodeType) {
+      case 'NARRATIVE_EVENT':
+        startNarrative();
+        break;
+      case 'STANDARD_COMBAT':
+      case 'ELITE_COMBAT':
+      case 'BOSS_COMBAT':
+        startCombat();
+        break;
+      case 'SANCTUARY':
+        startRest();
+        break;
+      default:
+        break;
+    }
   };
 
   const renderVectorDots = () =>
@@ -180,11 +236,18 @@ export default function ScanningScreen(): React.JSX.Element {
         top: dot.y - DOT_HIT_SIZE / 2,
       };
       const opacity = ensureDotOpacity(dot.id);
+      const dotSize = dot.isPreDiscovered ? BOSS_DOT_SIZE : DOT_VISUAL_SIZE;
 
       if (phase === 'SWEEPING') {
         return (
           <View key={dot.id} style={[styles.dotHitbox, hitboxStyle]} pointerEvents="none">
-            <Animated.View style={[styles.vectorDot, { opacity }]} />
+            <Animated.View
+              style={[
+                styles.vectorDot,
+                dot.isPreDiscovered ? styles.bossDot : null,
+                { width: dotSize, height: dotSize, borderRadius: dotSize / 2, opacity },
+              ]}
+            />
           </View>
         );
       }
@@ -192,11 +255,17 @@ export default function ScanningScreen(): React.JSX.Element {
       return (
         <Pressable
           key={dot.id}
-          onPress={() => handleVectorSelect(dot.id)}
+          onPress={() => handleNodeTap(dot.id)}
           hitSlop={12}
           style={[styles.dotHitbox, hitboxStyle]}
         >
-          <View style={styles.vectorDot} />
+          <View
+            style={[
+              styles.vectorDot,
+              dot.isPreDiscovered ? styles.bossDot : null,
+              { width: dotSize, height: dotSize, borderRadius: dotSize / 2 },
+            ]}
+          />
         </Pressable>
       );
     });
@@ -218,120 +287,111 @@ export default function ScanningScreen(): React.JSX.Element {
         <View style={styles.body}>
           <View style={[styles.statusBar, { borderColor: theme.borderColor }]}>
             <Text style={[styles.statusBarText, { color: theme.mutedColor }]}>
-              {`TIER ${activeIncursion.currentTier} // DEPTH ${nodeIndex + 1}/7 // TACTICAL SWEEP HUB`}
+              {`TIER ${activeIncursion.currentTier} // DEPTH ${nodeIndex + 1}/10 // TACTICAL SWEEP HUB`}
             </Text>
           </View>
 
           <View style={[styles.radarDock, { height: RADAR_DOCK_HEIGHT }]}>
             <View style={[styles.radarViewport, { width: RADAR_SIZE, height: RADAR_SIZE }]}>
-            <Animated.View
-              style={[
-                styles.radarRingOuter,
-                { borderColor: theme.primaryColor, opacity: pulseAnim, width: RADAR_SIZE, height: RADAR_SIZE, borderRadius: RADAR_SIZE / 2 },
-              ]}
-            />
-            <Animated.View
-              style={[
-                styles.radarRingMid,
-                {
-                  borderColor: accent,
-                  opacity: pulseAnim,
-                  width: RADAR_SIZE * 0.72,
-                  height: RADAR_SIZE * 0.72,
-                  borderRadius: (RADAR_SIZE * 0.72) / 2,
-                },
-              ]}
-            />
-            <View
-              style={[
-                styles.radarCore,
-                {
-                  borderColor: theme.borderColor,
-                  width: RADAR_CORE,
-                  height: RADAR_CORE,
-                  borderRadius: RADAR_CORE / 2,
-                  top: (RADAR_SIZE - RADAR_CORE) / 2,
-                  left: (RADAR_SIZE - RADAR_CORE) / 2,
-                },
-              ]}
-            >
-              {phase === 'SWEEPING' && (
-                <Animated.View
-                  pointerEvents="none"
-                  style={[
-                    styles.sweepPivot,
-                    { width: RADAR_CORE, height: RADAR_CORE, transform: [{ rotate: sweepRotation }] },
-                  ]}
-                >
-                  <View
+              <Animated.View
+                style={[
+                  styles.radarRingOuter,
+                  { borderColor: theme.primaryColor, opacity: pulseAnim, width: RADAR_SIZE, height: RADAR_SIZE, borderRadius: RADAR_SIZE / 2 },
+                ]}
+              />
+              <Animated.View
+                style={[
+                  styles.radarRingMid,
+                  {
+                    borderColor: accent,
+                    opacity: pulseAnim,
+                    width: RADAR_SIZE * 0.72,
+                    height: RADAR_SIZE * 0.72,
+                    borderRadius: (RADAR_SIZE * 0.72) / 2,
+                  },
+                ]}
+              />
+              <View
+                style={[
+                  styles.radarCore,
+                  {
+                    borderColor: theme.borderColor,
+                    width: RADAR_CORE,
+                    height: RADAR_CORE,
+                    borderRadius: RADAR_CORE / 2,
+                    top: (RADAR_SIZE - RADAR_CORE) / 2,
+                    left: (RADAR_SIZE - RADAR_CORE) / 2,
+                  },
+                ]}
+              >
+                {phase === 'SWEEPING' && !isBossDepth && (
+                  <Animated.View
+                    pointerEvents="none"
                     style={[
-                      styles.radarSweepArm,
-                      {
-                        width: RADAR_CORE / 2,
-                        top: RADAR_CORE / 2 - 1,
-                        left: RADAR_CORE / 2,
-                        backgroundColor: `${accent}66`,
-                      },
+                      styles.sweepPivot,
+                      { width: RADAR_CORE, height: RADAR_CORE, transform: [{ rotate: sweepRotation }] },
                     ]}
-                  />
-                </Animated.View>
-              )}
-              {renderVectorDots()}
-            </View>
+                  >
+                    <View
+                      style={[
+                        styles.radarSweepArm,
+                        {
+                          width: RADAR_CORE / 2,
+                          top: RADAR_CORE / 2 - 1,
+                          left: RADAR_CORE / 2,
+                          backgroundColor: `${accent}66`,
+                        },
+                      ]}
+                    />
+                  </Animated.View>
+                )}
+                {renderVectorDots()}
+              </View>
             </View>
           </View>
 
           <View style={[styles.readoutDock, { borderColor: theme.borderColor }]}>
             <View style={styles.readoutInner}>
-            {phase === 'SWEEPING' && (
-              <View style={styles.readoutBlock}>
-                <Text style={[styles.scanStatus, { color: theme.primaryColor }]}>LOCATING THREAT VECTORS...</Text>
-                <Text style={[styles.scanSubStatus, { color: theme.mutedColor }]}>
-                  {`Tactical sweep mapping ${vectorCluster.length} candidate vector${vectorCluster.length === 1 ? '' : 's'} at depth ${nodeIndex + 1}`}
-                </Text>
-              </View>
-            )}
-            {phase === 'DOTS' && vectorDots.length > 0 && (
-              <View style={[styles.vectorLogPanel, { borderColor: accent }]}>
-                <Text style={[styles.vectorLogHeader, { color: theme.mutedColor }]}>
-                  {`VECTOR CLOUD LOCKED — ${vectorDots.length} SELECTABLE ROUTE${vectorDots.length === 1 ? '' : 'S'}`}
-                </Text>
-                <ScrollView style={styles.vectorLogScroll} contentContainerStyle={styles.vectorLogContent}>
-                  {vectorDots.map((dot, i) => (
-                    <Pressable
-                      key={dot.id}
-                      onPress={() => handleVectorSelect(dot.id)}
-                      style={({ pressed }) => [
-                        styles.vectorLogEntry,
-                        { borderColor: theme.borderColor, opacity: pressed ? 0.7 : 1 },
-                      ]}
-                    >
-                      <Text style={[styles.vectorLogIndex, { color: accent }]}>
-                        {`[${String(i + 1).padStart(2, '0')}]`}
-                      </Text>
-                      <View style={styles.vectorLogBody}>
-                        <Text style={[styles.vectorLogTag, { color: accent }]}>{dot.pingLabel}</Text>
-                        <Text style={[styles.vectorLogLabel, { color: theme.primaryColor }]}>{dot.label}</Text>
-                      </View>
-                      <Text style={[styles.vectorLogAction, { color: theme.mutedColor }]}>{'>'}</Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
-                <Text style={[styles.vectorLogHint, { color: theme.mutedColor }]}>
-                  Tap a radar blip or log entry to commit vector and deploy encounter layer.
-                </Text>
-              </View>
-            )}
+              {phase === 'SWEEPING' && !isBossDepth && (
+                <View style={styles.readoutBlock}>
+                  <Text style={[styles.scanStatus, { color: theme.primaryColor }]}>LOCATING THREAT VECTORS...</Text>
+                  <Text style={[styles.scanSubStatus, { color: theme.mutedColor }]}>
+                    {`Tactical sweep mapping ${vectorCluster.length} candidate contact${vectorCluster.length === 1 ? '' : 's'} at depth ${nodeIndex + 1}`}
+                  </Text>
+                </View>
+              )}
+              {(phase === 'DOTS' || isBossDepth) && (
+                <View style={styles.readoutBlock}>
+                  <Text style={[styles.scanStatus, { color: isBossDepth ? accent : theme.primaryColor }]}>
+                    {isBossDepth ? 'PRIORITY TARGET IDENTIFIED' : 'VECTOR CONTACTS LOCKED'}
+                  </Text>
+                  <Text style={[styles.scanSubStatus, { color: theme.mutedColor }]}>
+                    {isBossDepth
+                      ? 'Manifested core threat pre-scanned by descent engine. Review classification and engage.'
+                      : `Select a radar contact to open classification preview — ${vectorDots.length} route${vectorDots.length === 1 ? '' : 's'} available.`}
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
 
           <View style={[styles.footerTelemetry, { borderColor: theme.borderColor }]}>
             <Text style={[styles.telemetryLine, { color: theme.mutedColor }]}>
-              {`TIER ${activeIncursion.currentTier} // SCAN ${nodeIndex + 1}/7 // VECTORS: ${vectorCluster.length} // RADAR_GAIN: 98%`}
+              {`TIER ${activeIncursion.currentTier} // DEPTH ${nodeIndex + 1}/10 // CONTACTS: ${vectorCluster.length} // STAMINA: ${runState.currentStamina}`}
             </Text>
           </View>
         </View>
       </MacroLogAnchoredLayout>
+
+      <ScanConfirmOverlay
+        visible={activeIncursion.scanConfirmOverlayVisible}
+        node={previewNode}
+        theme={theme}
+        accentColor={accent}
+        currentStamina={runState.currentStamina}
+        onAbort={closeScanPreview}
+        onEngage={handleEngage}
+      />
     </IncursionShell>
   );
 }
@@ -366,45 +426,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   vectorDot: {
-    width: DOT_VISUAL_SIZE,
-    height: DOT_VISUAL_SIZE,
-    borderRadius: DOT_VISUAL_SIZE / 2,
     backgroundColor: '#ffffff',
     shadowColor: '#ffffff',
     shadowOpacity: 0.9,
     shadowRadius: 8,
   },
+  bossDot: {
+    backgroundColor: '#ef4444',
+    shadowColor: '#ef4444',
+  },
   readoutDock: {
     flex: 1,
-    minHeight: 120,
-    maxHeight: READOUT_DOCK_HEIGHT,
+    minHeight: 88,
     borderTopWidth: 1,
     borderBottomWidth: 1,
     backgroundColor: '#050608',
     overflow: 'hidden',
   },
-  readoutInner: { flex: 1, paddingHorizontal: 16, paddingVertical: 10, justifyContent: 'center' },
+  readoutInner: { flex: 1, paddingHorizontal: 16, paddingVertical: 12, justifyContent: 'center' },
   readoutBlock: { justifyContent: 'center' },
   scanStatus: { fontFamily: 'monospace', fontSize: 11, letterSpacing: 1.1, textAlign: 'center' },
   scanSubStatus: { fontFamily: 'monospace', fontSize: 9, marginTop: 6, textAlign: 'center', lineHeight: 13 },
-  vectorLogPanel: { flex: 1, borderWidth: 1, padding: 8, backgroundColor: '#0e1624' },
-  vectorLogHeader: { fontFamily: 'monospace', fontSize: 7, letterSpacing: 1.4, marginBottom: 6 },
-  vectorLogScroll: { flex: 1 },
-  vectorLogContent: { gap: 4 },
-  vectorLogEntry: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    backgroundColor: '#0a0b0f',
-  },
-  vectorLogIndex: { fontFamily: 'monospace', fontSize: 9, width: 28 },
-  vectorLogBody: { flex: 1 },
-  vectorLogTag: { fontFamily: 'monospace', fontSize: 9, fontWeight: '700', lineHeight: 13 },
-  vectorLogLabel: { fontFamily: 'monospace', fontSize: 8, lineHeight: 12, marginTop: 2, flexShrink: 1, flexWrap: 'wrap' },
-  vectorLogAction: { fontFamily: 'monospace', fontSize: 12, paddingLeft: 6 },
-  vectorLogHint: { fontFamily: 'monospace', fontSize: 7, lineHeight: 11, marginTop: 6 },
   footerTelemetry: { borderTopWidth: 1, paddingVertical: 8, paddingHorizontal: 16, flexShrink: 0 },
   telemetryLine: {
     fontFamily: 'monospace',

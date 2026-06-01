@@ -7,6 +7,8 @@ export type BiomeType = 'HOSPITAL' | 'ALLEYWAYS' | 'SEWERS' | 'CHURCH' | 'FOREST
 export type ItemRarity = 'STANDARD' | 'STABILIZED' | 'COBALT' | 'ABYSSAL';
 export type CheckStatus = 'NOT_TESTED' | 'SUCCESS' | 'FAILURE';
 export type RunNodeType = 'NARRATIVE_EVENT' | 'STANDARD_COMBAT' | 'ELITE_COMBAT' | 'BOSS_COMBAT' | 'SANCTUARY';
+export type IncursionEncounterType = 'COMBAT' | 'NARRATIVE_EVENT' | 'SANCTUARY';
+export type IncursionBiome = 'CITY_STREETS' | 'HOSPITAL' | 'LABORATORY' | 'SECTOR_CORE';
 export type IncursionMapMode = 'SCANNING_HUB' | 'NODE_ENGAGED' | 'PROGRESS_CHECKPOINT';
 
 export interface FactionModifiers {
@@ -111,10 +113,17 @@ export interface EnvironmentalModifiers {
 
 export interface IncursionNode {
   id: string;
+  depthIndex: number;
+  /** Legacy alias — always equals depthIndex. */
   index: number;
+  encounterType: IncursionEncounterType;
+  biome: IncursionBiome;
+  /** Resolved routing type for encounter screens. */
   type: RunNodeType;
   label: string;
   isCompleted: boolean;
+  /** Boss terminal node — bypasses manual sweep mechanics. */
+  isPreDiscovered?: boolean;
 }
 
 export interface BossPhaseConfiguration {
@@ -140,12 +149,15 @@ export interface ActiveIncursionState {
   activeChoice: 'A' | 'B' | null;
   currentTier: number;
   currentNodeIndex: number;
-  /** Resolved path — one chosen node per scan depth (7 steps). */
+  /** Resolved path — one chosen node per depth step (10 steps). */
   tierNodes: IncursionNode[];
-  /** Pre-generated selectable vector clusters indexed by scan depth 0–6. */
+  /** Pre-generated selectable vector clusters indexed by depth 0–9. */
   activeTierVectors: IncursionNode[][];
   earlySanctuarySpawned: boolean;
   selectedVectorId: string | null;
+  /** Node staged for scan confirmation overlay preview. */
+  previewNodeId: string | null;
+  scanConfirmOverlayVisible: boolean;
   isRunActive: boolean;
   bossProfile: BossRuntimeProfile | null;
   mapMode: IncursionMapMode;
@@ -173,6 +185,8 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     activeTierVectors: [],
     earlySanctuarySpawned: false,
     selectedVectorId: null,
+    previewNodeId: null,
+    scanConfirmOverlayVisible: false,
     isRunActive: false,
     bossProfile: null,
     mapMode: 'SCANNING_HUB',

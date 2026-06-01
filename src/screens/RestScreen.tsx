@@ -4,6 +4,7 @@ import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useNodeProgression } from '../hooks/useNodeProgression';
 import IncursionShell from '../components/IncursionShell';
+import EncounterBiomeBanner from '../components/EncounterBiomeBanner';
 import PersistentTerminalLog from '../components/PersistentTerminalLog';
 
 const TERMINAL_ACCENT = '#00ff33';
@@ -25,9 +26,10 @@ export default function RestScreen(): React.JSX.Element {
   return (
     <IncursionShell>
     <View style={[styles.container, { backgroundColor: theme.backgroundColor }]}>
+      <EncounterBiomeBanner />
       <View style={[styles.header, { borderColor: theme.borderColor }]}>
         <Text style={[styles.headerText, { color: theme.mutedColor }]}>
-          TIER {activeIncursion.currentTier} // NODE {activeIncursion.currentNodeIndex + 1}/7 // SANCTUARY
+          TIER {activeIncursion.currentTier} // DEPTH {activeIncursion.currentNodeIndex + 1}/10 // STABILIZATION NODE
         </Text>
       </View>
 

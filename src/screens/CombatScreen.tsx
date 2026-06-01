@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import IncursionShell from '../components/IncursionShell';
+import EncounterBiomeBanner from '../components/EncounterBiomeBanner';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
 import TacticalCombatHub from '../components/TacticalCombatHub';
 import { useGameFlow } from '../context/GameFlowContext';
@@ -72,6 +73,7 @@ export default function CombatScreen(): React.JSX.Element {
         showMacroLog={runState.runActive}
         style={{ backgroundColor: theme.backgroundColor }}
       >
+        <EncounterBiomeBanner />
         <View style={styles.hubWrapper}>
           <TacticalCombatHub
             onCombatComplete={handleCombatComplete}

@@ -253,6 +253,7 @@ export function generateRadarScanDots(
         x,
         y,
         angleDeg,
+        depthIndex: i,
       });
       found = true;
     }

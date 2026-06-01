@@ -81,7 +81,7 @@ export default function VectorMapDashboard({
             ))
           )}
           <MagnetismLogLine
-            line={`>> ACTIVE SECTOR: ${activeMagnetSector} // SCAN DEPTH READY: 1/7`}
+            line={`>> ACTIVE SECTOR: ${activeMagnetSector} // SCAN DEPTH READY: 1/10`}
             color={theme.mutedColor}
           />
         </ScrollView>

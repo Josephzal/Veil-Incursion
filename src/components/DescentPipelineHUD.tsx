@@ -86,7 +86,7 @@ export default function DescentPipelineHUD({
     <View style={[styles.root, compact ? styles.rootCompact : styles.rootExpanded, { borderColor }]}>
       {!hideLabel && (
         <Text style={[styles.tierLabel, { color: mutedColor }]}>
-          VEIL DESCENT // TIER {tier} // NODE {currentNodeIndex + 1}/7
+          VEIL DESCENT // TIER {tier} // DEPTH {currentNodeIndex + 1}/10
         </Text>
       )}
       <View style={styles.pipeline}>
