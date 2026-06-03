@@ -1,18 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Animated,
-  Dimensions,
-  Easing,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Dimensions, StyleSheet, Text, View } from 'react-native';
 import { BOSS_DEPTH_INDEX, generateTierNodeScanVectors } from '../data/descentEngine';
 import { INITIAL_SECTOR_POOL } from '../data/regions';
 import IncursionShell from '../components/IncursionShell';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
 import ScanConfirmOverlay from '../components/ScanConfirmOverlay';
+import VectorScanner from '../components/VectorScanner';
 import { useRun } from '../context/RunContext';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useTerminal } from '../context/TerminalContext';
@@ -20,28 +13,15 @@ import { useDescentNavigator } from '../hooks/useDescentNavigator';
 import { useGameFlow } from '../context/GameFlowContext';
 import { getFactionDefinition } from '../data/factions';
 import { RadarDot } from '../types/run';
-import { RunNodeType } from '../types/game';
+import type { ScannerCabal } from '../types/scanner';
 
 const { width } = Dimensions.get('window');
-const SCAN_SWEEP_MS = 2200;
-const SCAN_ROTATIONS = 3;
-const SCAN_DURATION_MS = SCAN_SWEEP_MS * SCAN_ROTATIONS;
-const SWEEP_DETECT_ARC_DEG = 14;
-const PING_FADE_MS = 260;
-const DOT_HIT_SIZE = 44;
-const DOT_VISUAL_SIZE = 12;
-const BOSS_DOT_SIZE = 16;
 const TERMINAL_ACCENT = '#00ff33';
 const RADAR_SIZE = Math.min(width - 80, 280);
 const RADAR_CORE = RADAR_SIZE * 0.48;
 const RADAR_DOCK_HEIGHT = RADAR_SIZE + 32;
 
 type ScanPhase = 'SWEEPING' | 'DOTS';
-
-function sweepDeltaDeg(sweepDeg: number, dotDeg: number): number {
-  const raw = ((sweepDeg - dotDeg) % 360 + 360) % 360;
-  return raw > 180 ? 360 - raw : raw;
-}
 
 export default function ScanningScreen(): React.JSX.Element {
   const { theme } = useTerminal();
@@ -59,6 +39,7 @@ export default function ScanningScreen(): React.JSX.Element {
   const { isScanningHub } = useDescentNavigator();
   const { startNarrative, startCombat, startRest } = useGameFlow();
 
+  const cabal: ScannerCabal = account.alignedFaction ?? 'TERRAN_GRID';
   const accent =
     account.alignedFaction != null
       ? getFactionDefinition(account.alignedFaction).accentColor
@@ -67,13 +48,6 @@ export default function ScanningScreen(): React.JSX.Element {
   const [phase, setPhase] = useState<ScanPhase>('SWEEPING');
   const [vectorDots, setVectorDots] = useState<RadarDot[]>([]);
   const bossPreviewOpenedRef = useRef(false);
-
-  const pulseAnim = useRef(new Animated.Value(0.25)).current;
-  const sweepAnim = useRef(new Animated.Value(0)).current;
-  const dotOpacityMapRef = useRef<Record<string, Animated.Value>>({});
-  const dotPulseMapRef = useRef<Record<string, Animated.CompositeAnimation | null>>({});
-  const pingedThisRotationRef = useRef<Record<string, boolean>>({});
-  const lastSweepValueRef = useRef(0);
   const lastRadarSessionRef = useRef<number | null>(null);
 
   const nodeIndex = activeIncursion.currentNodeIndex;
@@ -91,13 +65,6 @@ export default function ScanningScreen(): React.JSX.Element {
 
   const previewNode = getPreviewNode();
 
-  const ensureDotOpacity = (dotId: string): Animated.Value => {
-    if (!dotOpacityMapRef.current[dotId]) {
-      dotOpacityMapRef.current[dotId] = new Animated.Value(isBossDepth ? 1 : 0);
-    }
-    return dotOpacityMapRef.current[dotId];
-  };
-
   useEffect(() => {
     if (!isScanningHub || vectorCluster.length === 0) {
       lastRadarSessionRef.current = null;
@@ -109,9 +76,6 @@ export default function ScanningScreen(): React.JSX.Element {
 
     const sector = runState.currentSector ?? INITIAL_SECTOR_POOL[0];
     const dots = generateTierNodeScanVectors(vectorCluster, RADAR_CORE, sector);
-    dots.forEach((dot) => ensureDotOpacity(dot.id).setValue(isBossDepth ? 1 : 0));
-    pingedThisRotationRef.current = {};
-    lastSweepValueRef.current = 0;
     setVectorDots(dots);
 
     if (isBossDepth) {
@@ -122,75 +86,6 @@ export default function ScanningScreen(): React.JSX.Element {
   }, [isScanningHub, scanSessionKey, vectorCluster, nodeIndex, runState.currentSector, isBossDepth]);
 
   useEffect(() => {
-    if (!isScanningHub || vectorDots.length === 0 || isBossDepth) return;
-
-    const pulseLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 0.25, duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-      ]),
-    );
-    pulseLoop.start();
-
-    sweepAnim.setValue(0);
-    const sweepLoop = Animated.loop(
-      Animated.timing(sweepAnim, { toValue: 1, duration: SCAN_SWEEP_MS, easing: Easing.linear, useNativeDriver: true }),
-    );
-    sweepLoop.start();
-
-    const pingDot = (dotId: string) => {
-      if (pingedThisRotationRef.current[dotId]) return;
-      pingedThisRotationRef.current[dotId] = true;
-      dotPulseMapRef.current[dotId]?.stop();
-      const opacity = ensureDotOpacity(dotId);
-      opacity.setValue(1);
-      const pulse = Animated.timing(opacity, {
-        toValue: 0,
-        duration: PING_FADE_MS,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      });
-      dotPulseMapRef.current[dotId] = pulse;
-      pulse.start();
-    };
-
-    const sweepListener = sweepAnim.addListener(({ value }) => {
-      if (value < lastSweepValueRef.current) {
-        pingedThisRotationRef.current = {};
-      }
-      lastSweepValueRef.current = value;
-      const sweepDeg = (value * 360) % 360;
-      vectorDots.forEach((dot) => {
-        if (sweepDeltaDeg(sweepDeg, dot.angleDeg) <= SWEEP_DETECT_ARC_DEG) pingDot(dot.id);
-      });
-    });
-
-    const finishTimer = setTimeout(() => {
-      sweepLoop.stop();
-      sweepAnim.stopAnimation();
-      sweepAnim.removeListener(sweepListener);
-      vectorDots.forEach((dot) => {
-        dotPulseMapRef.current[dot.id]?.stop();
-        Animated.timing(ensureDotOpacity(dot.id), {
-          toValue: 1,
-          duration: 180,
-          easing: Easing.out(Easing.ease),
-          useNativeDriver: true,
-        }).start();
-      });
-      setPhase('DOTS');
-    }, SCAN_DURATION_MS);
-
-    return () => {
-      pulseLoop.stop();
-      sweepLoop.stop();
-      sweepAnim.removeListener(sweepListener);
-      clearTimeout(finishTimer);
-      vectorDots.forEach((dot) => dotPulseMapRef.current[dot.id]?.stop());
-    };
-  }, [isScanningHub, vectorDots, pulseAnim, sweepAnim, isBossDepth]);
-
-  useEffect(() => {
     if (!isScanningHub || !isBossDepth || vectorDots.length === 0) return;
     if (bossPreviewOpenedRef.current) return;
     bossPreviewOpenedRef.current = true;
@@ -198,13 +93,7 @@ export default function ScanningScreen(): React.JSX.Element {
     if (bossDot) openScanPreview(bossDot.id);
   }, [isScanningHub, isBossDepth, vectorDots, openScanPreview]);
 
-  const sweepRotation = sweepAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
-
   const handleNodeTap = (nodeId: string) => {
-    if (phase !== 'DOTS') return;
     openScanPreview(nodeId);
   };
 
@@ -229,47 +118,6 @@ export default function ScanningScreen(): React.JSX.Element {
     }
   };
 
-  const renderVectorDots = () =>
-    vectorDots.map((dot) => {
-      const hitboxStyle = {
-        left: dot.x - DOT_HIT_SIZE / 2,
-        top: dot.y - DOT_HIT_SIZE / 2,
-      };
-      const opacity = ensureDotOpacity(dot.id);
-      const dotSize = dot.isPreDiscovered ? BOSS_DOT_SIZE : DOT_VISUAL_SIZE;
-
-      if (phase === 'SWEEPING') {
-        return (
-          <View key={dot.id} style={[styles.dotHitbox, hitboxStyle]} pointerEvents="none">
-            <Animated.View
-              style={[
-                styles.vectorDot,
-                dot.isPreDiscovered ? styles.bossDot : null,
-                { width: dotSize, height: dotSize, borderRadius: dotSize / 2, opacity },
-              ]}
-            />
-          </View>
-        );
-      }
-
-      return (
-        <Pressable
-          key={dot.id}
-          onPress={() => handleNodeTap(dot.id)}
-          hitSlop={12}
-          style={[styles.dotHitbox, hitboxStyle]}
-        >
-          <View
-            style={[
-              styles.vectorDot,
-              dot.isPreDiscovered ? styles.bossDot : null,
-              { width: dotSize, height: dotSize, borderRadius: dotSize / 2 },
-            ]}
-          />
-        </Pressable>
-      );
-    });
-
   if (!isScanningHub) {
     return (
       <View style={[styles.container, { backgroundColor: theme.backgroundColor }]}>
@@ -292,69 +140,25 @@ export default function ScanningScreen(): React.JSX.Element {
           </View>
 
           <View style={[styles.radarDock, { height: RADAR_DOCK_HEIGHT }]}>
-            <View style={[styles.radarViewport, { width: RADAR_SIZE, height: RADAR_SIZE }]}>
-              <Animated.View
-                style={[
-                  styles.radarRingOuter,
-                  { borderColor: theme.primaryColor, opacity: pulseAnim, width: RADAR_SIZE, height: RADAR_SIZE, borderRadius: RADAR_SIZE / 2 },
-                ]}
-              />
-              <Animated.View
-                style={[
-                  styles.radarRingMid,
-                  {
-                    borderColor: accent,
-                    opacity: pulseAnim,
-                    width: RADAR_SIZE * 0.72,
-                    height: RADAR_SIZE * 0.72,
-                    borderRadius: (RADAR_SIZE * 0.72) / 2,
-                  },
-                ]}
-              />
-              <View
-                style={[
-                  styles.radarCore,
-                  {
-                    borderColor: theme.borderColor,
-                    width: RADAR_CORE,
-                    height: RADAR_CORE,
-                    borderRadius: RADAR_CORE / 2,
-                    top: (RADAR_SIZE - RADAR_CORE) / 2,
-                    left: (RADAR_SIZE - RADAR_CORE) / 2,
-                  },
-                ]}
-              >
-                {phase === 'SWEEPING' && !isBossDepth && (
-                  <Animated.View
-                    pointerEvents="none"
-                    style={[
-                      styles.sweepPivot,
-                      { width: RADAR_CORE, height: RADAR_CORE, transform: [{ rotate: sweepRotation }] },
-                    ]}
-                  >
-                    <View
-                      style={[
-                        styles.radarSweepArm,
-                        {
-                          width: RADAR_CORE / 2,
-                          top: RADAR_CORE / 2 - 1,
-                          left: RADAR_CORE / 2,
-                          backgroundColor: `${accent}66`,
-                        },
-                      ]}
-                    />
-                  </Animated.View>
-                )}
-                {renderVectorDots()}
-              </View>
-            </View>
+            <VectorScanner
+              cabal={cabal}
+              scannerSize={RADAR_SIZE}
+              active={phase === 'SWEEPING' && !isBossDepth}
+              activeNodes={vectorDots}
+              contactsLocked={phase === 'DOTS' || isBossDepth}
+              coreScale={RADAR_CORE / RADAR_SIZE}
+              onSweepComplete={() => setPhase('DOTS')}
+              onSelectNode={handleNodeTap}
+            />
           </View>
 
           <View style={[styles.readoutDock, { borderColor: theme.borderColor }]}>
             <View style={styles.readoutInner}>
               {phase === 'SWEEPING' && !isBossDepth && (
                 <View style={styles.readoutBlock}>
-                  <Text style={[styles.scanStatus, { color: theme.primaryColor }]}>LOCATING THREAT VECTORS...</Text>
+                  <Text style={[styles.scanStatus, { color: theme.primaryColor }]}>
+                    LOCATING THREAT VECTORS...
+                  </Text>
                   <Text style={[styles.scanSubStatus, { color: theme.mutedColor }]}>
                     {`Tactical sweep mapping ${vectorCluster.length} candidate contact${vectorCluster.length === 1 ? '' : 's'} at depth ${nodeIndex + 1}`}
                   </Text>
@@ -407,34 +211,6 @@ const styles = StyleSheet.create({
   statusBar: { borderBottomWidth: 1, paddingVertical: 10, paddingHorizontal: 16, flexShrink: 0 },
   statusBarText: { fontFamily: 'monospace', fontSize: 9, letterSpacing: 1.2, textAlign: 'center' },
   radarDock: { alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 },
-  radarViewport: { position: 'relative', alignItems: 'center', justifyContent: 'center' },
-  radarRingOuter: { position: 'absolute', top: 0, left: 0, borderWidth: 1, borderStyle: 'dashed' },
-  radarRingMid: {
-    position: 'absolute',
-    top: (RADAR_SIZE - RADAR_SIZE * 0.72) / 2,
-    left: (RADAR_SIZE - RADAR_SIZE * 0.72) / 2,
-    borderWidth: 1,
-  },
-  radarCore: { position: 'absolute', borderWidth: 2, backgroundColor: '#050608', overflow: 'hidden' },
-  sweepPivot: { position: 'absolute', top: 0, left: 0 },
-  radarSweepArm: { position: 'absolute', height: 2 },
-  dotHitbox: {
-    position: 'absolute',
-    width: DOT_HIT_SIZE,
-    height: DOT_HIT_SIZE,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  vectorDot: {
-    backgroundColor: '#ffffff',
-    shadowColor: '#ffffff',
-    shadowOpacity: 0.9,
-    shadowRadius: 8,
-  },
-  bossDot: {
-    backgroundColor: '#ef4444',
-    shadowColor: '#ef4444',
-  },
   readoutDock: {
     flex: 1,
     minHeight: 88,
