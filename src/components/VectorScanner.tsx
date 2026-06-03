@@ -113,17 +113,12 @@ function VectorScannerComponent({
     () =>
       activeNodes.map((node) => ({
         id: node.id,
-        canvasX: coreOffset + node.x,
-        canvasY: coreOffset + node.y,
-        bearingDeg: polarAngleDeg(
-          coreOffset + node.x,
-          coreOffset + node.y,
-          radarCenter,
-          radarCenter,
-        ),
+        canvasX: node.x,
+        canvasY: node.y,
+        bearingDeg: polarAngleDeg(node.x, node.y, radarCenter, radarCenter),
         visualRadius: (node.isPreDiscovered ? BOSS_DOT_SIZE : DOT_VISUAL_SIZE) / 2,
       })),
-    [activeNodes, coreOffset, radarCenter],
+    [activeNodes, radarCenter],
   );
 
   const radarClipPath = useMemo(() => {
@@ -517,8 +512,8 @@ function VectorScannerComponent({
       </Canvas>
 
       {activeNodes.map((node) => {
-        const absoluteLeft = coreOffset + node.x - DOT_HIT_SIZE / 2;
-        const absoluteTop = coreOffset + node.y - DOT_HIT_SIZE / 2;
+        const absoluteLeft = node.x - DOT_HIT_SIZE / 2;
+        const absoluteTop = node.y - DOT_HIT_SIZE / 2;
 
         return (
           <TouchableOpacity

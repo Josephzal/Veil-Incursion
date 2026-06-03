@@ -75,7 +75,7 @@ export default function ScanningScreen(): React.JSX.Element {
     bossPreviewOpenedRef.current = false;
 
     const sector = runState.currentSector ?? INITIAL_SECTOR_POOL[0];
-    const dots = generateTierNodeScanVectors(vectorCluster, RADAR_CORE, sector);
+    const dots = generateTierNodeScanVectors(vectorCluster, RADAR_SIZE, sector);
     setVectorDots(dots);
 
     if (isBossDepth) {

@@ -6,6 +6,10 @@ import {
 } from '../types/game';
 import { EncounterType, RadarDot, SectorDefinition } from '../types/run';
 import { INCURSION_DEPTH_COUNT } from '../types/run';
+import {
+  createRadarDotFromPolar,
+  layoutRadarDotsOnScanner,
+} from './scannerNodeLayout';
 import { INITIAL_SECTOR_POOL } from './regions';
 
 export const BOSS_DEPTH_INDEX = 9;
@@ -293,49 +297,35 @@ function incursionEncounterToRadarType(encounterType: IncursionEncounterType): E
   }
 }
 
-function layoutDotsOnRadar(
-  nodes: IncursionNode[],
-  coreDiameterPx: number,
-  sector: SectorDefinition,
-): RadarDot[] {
-  const center = coreDiameterPx / 2;
-  const minRadius = center * 0.22;
-  const maxRadius = center * 0.78;
-  const count = nodes.length;
-
-  return nodes.map((node, i) => {
-    const angleDeg = (360 / count) * i - 90;
-    const rad = (angleDeg * Math.PI) / 180;
-    const radius = minRadius + (maxRadius - minRadius) * (0.35 + (i % 3) * 0.2);
-    const x = center + Math.cos(rad) * radius;
-    const y = center + Math.sin(rad) * radius;
-    const masked = buildMaskedScanTelemetry(node.id, i);
-
-    return {
-      id: node.id,
-      sector,
-      encounterType: incursionEncounterToRadarType(node.encounterType),
-      label: masked.label,
-      pingIndex: i + 1,
-      pingLabel: node.isPreDiscovered
-        ? 'PRIORITY TARGET // MANIFESTED CORE'
-        : masked.pingLabel,
-      x,
-      y,
-      angleDeg: ((angleDeg % 360) + 360) % 360,
-      isPreDiscovered: node.isPreDiscovered,
-      depthIndex: node.depthIndex,
-    };
-  });
-}
-
 export function generateTierNodeScanVectors(
   nodes: IncursionNode[],
-  coreDiameterPx: number,
+  scannerSizePx: number,
   sector: SectorDefinition = INITIAL_SECTOR_POOL[0],
+  rng: () => number = Math.random,
 ): RadarDot[] {
   if (nodes.length === 0) return [];
-  return layoutDotsOnRadar(nodes, coreDiameterPx, sector);
+
+  return layoutRadarDotsOnScanner(
+    nodes,
+    scannerSizePx,
+    (node, index, position) => {
+      const masked = buildMaskedScanTelemetry(node.id, index);
+      return createRadarDotFromPolar(
+        node,
+        index,
+        position,
+        sector,
+        {
+          encounterType: incursionEncounterToRadarType(node.encounterType),
+          label: masked.label,
+          pingLabel: node.isPreDiscovered
+            ? 'PRIORITY TARGET // MANIFESTED CORE'
+            : masked.pingLabel,
+        },
+      );
+    },
+    rng,
+  );
 }
 
 export function getTierScale(tier: number): number {
