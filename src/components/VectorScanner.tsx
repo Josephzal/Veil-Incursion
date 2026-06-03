@@ -1,12 +1,11 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, Easing, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import {
   Canvas,
   Circle,
   DashPathEffect,
   Group,
   Line,
-  Path,
   Rect,
   Skia,
   SweepGradient,
@@ -29,10 +28,14 @@ const BLOOM_SETTLE_MS = 140;
 const DOT_HIT_SIZE = 44;
 const DOT_VISUAL_SIZE = 12;
 const BOSS_DOT_SIZE = 16;
-/** Visual phosphor tail span behind the leading beam (degrees). */
-const SWEEP_TRAIL_DEG = 180;
+const SWEEP_TRAIL_ACTIVE_DEG = 120;
 const STROKE_THIN = 1;
-const STROKE_CORE = 2;
+const STRUCTURAL_LINE_ALPHA = 0.15;
+const CEASE_DECEL_MS = 400;
+const CEASE_FOG_MS = 900;
+const SIPHON_EXTRACT_MS = 280;
+const SIPHON_RING_PEAK_SCALE = 2.5;
+const SIPHON_ILLUMINATE_MIN_OPACITY = 0.35;
 
 interface VectorScannerProps {
   cabal: ScannerCabal;
@@ -43,6 +46,7 @@ interface VectorScannerProps {
   contactsLocked?: boolean;
   onSweepComplete?: () => void;
   onSelectNode?: (nodeId: string) => void;
+  onSiphonedNodesChange?: (nodeIds: string[]) => void;
   children?: React.ReactNode;
 }
 
@@ -51,6 +55,75 @@ interface BlipRenderState {
   scale: number;
   bloomUntil: number;
   decayStart: number | null;
+  siphoned: boolean;
+}
+
+interface RadarTargetProps {
+  node: RadarDot;
+  visualSize: number;
+  left: number;
+  top: number;
+  disabled: boolean;
+  pulseKey: number;
+  onPress: () => void;
+  ringColor: string;
+}
+
+function RadarTarget({
+  visualSize,
+  left,
+  top,
+  disabled,
+  pulseKey,
+  onPress,
+  ringColor,
+}: RadarTargetProps): React.JSX.Element {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (pulseKey === 0) return;
+    scaleAnim.setValue(1);
+    opacityAnim.setValue(0.85);
+    Animated.parallel([
+      Animated.timing(scaleAnim, {
+        toValue: SIPHON_RING_PEAK_SCALE,
+        duration: SIPHON_EXTRACT_MS,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 0,
+        duration: SIPHON_EXTRACT_MS,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [pulseKey, scaleAnim, opacityAnim]);
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.85}
+      disabled={disabled}
+      onPress={onPress}
+      style={[styles.nodeHitbox, { left, top, width: DOT_HIT_SIZE, height: DOT_HIT_SIZE }]}
+    >
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.siphonPulseRing,
+          {
+            width: visualSize,
+            height: visualSize,
+            borderRadius: visualSize / 2,
+            borderColor: ringColor,
+            opacity: opacityAnim,
+            transform: [{ scale: scaleAnim }],
+          },
+        ]}
+      />
+    </TouchableOpacity>
+  );
 }
 
 function polarAngleDeg(x: number, y: number, cx: number, cy: number): number {
@@ -76,6 +149,14 @@ function accentWithAlpha(color: string, alpha: number): string {
   return color;
 }
 
+function easeOutCubic(t: number): number {
+  return 1 - (1 - t) ** 3;
+}
+
+/** Static sweep shader window — never animated (rotation handled by parent Group). */
+const SWEEP_GRADIENT_LEAD_DEG = 360;
+const SWEEP_GRADIENT_TRAIL_START_DEG = 360 - SWEEP_TRAIL_ACTIVE_DEG;
+
 function VectorScannerComponent({
   cabal,
   scannerSize,
@@ -85,38 +166,56 @@ function VectorScannerComponent({
   contactsLocked = false,
   onSweepComplete,
   onSelectNode,
+  onSiphonedNodesChange,
   children,
 }: VectorScannerProps): React.JSX.Element {
   const theme = getCabalScannerTheme(cabal);
   const coreDiameter = scannerSize * coreScale;
-  const coreOffset = (scannerSize - coreDiameter) / 2;
   const radarCenter = scannerSize / 2;
   const sweepRadius = scannerSize / 2;
   const midRingRadius = (scannerSize * 0.72) / 2;
   const coreRadius = coreDiameter / 2;
 
+  const structuralStroke = useMemo(
+    () => accentWithAlpha(theme.line, STRUCTURAL_LINE_ALPHA),
+    [theme.line],
+  );
+
   const [sweepDeg, setSweepDeg] = useState(0);
   const [sweepFinished, setSweepFinished] = useState(false);
+  const [isCeased, setIsCeased] = useState(false);
+  const [siphonedNodeIds, setSiphonedNodeIds] = useState<string[]>([]);
+  const [siphonPulseKeys, setSiphonPulseKeys] = useState<Record<string, number>>({});
   const [renderTick, setRenderTick] = useState(0);
+  const [fogOpacity, setFogOpacity] = useState(1);
+  const [phosphorDischargeDisc, setPhosphorDischargeDisc] = useState(false);
   const [revealedIds, setRevealedIds] = useState<Set<string>>(() => new Set());
 
   const blipStatesRef = useRef<Record<string, BlipRenderState>>({});
   const armedMapRef = useRef<Record<string, boolean>>({});
   const sweepCompleteFiredRef = useRef(false);
   const rafRef = useRef<number | null>(null);
-  const sweepStartRef = useRef<number | null>(null);
+  const sweepAngleRef = useRef(0);
+  const lastFrameTsRef = useRef<number | null>(null);
+  const ceaseStartRef = useRef<number | null>(null);
+  const isCeasedRef = useRef(false);
+  const dischargePhaseRef = useRef<'none' | 'decel' | 'fog' | 'done'>('none');
 
   const uniformSelectable = contactsLocked || sweepFinished;
   const selectionAccent = theme.blipAccent;
+  const scanInteractive =
+    active && !contactsLocked && !uniformSelectable && !isCeased;
 
   const nodeBearings = useMemo(
     () =>
       activeNodes.map((node) => ({
+        node,
         id: node.id,
         canvasX: node.x,
         canvasY: node.y,
         bearingDeg: polarAngleDeg(node.x, node.y, radarCenter, radarCenter),
         visualRadius: (node.isPreDiscovered ? BOSS_DOT_SIZE : DOT_VISUAL_SIZE) / 2,
+        visualSize: node.isPreDiscovered ? BOSS_DOT_SIZE : DOT_VISUAL_SIZE,
       })),
     [activeNodes, radarCenter],
   );
@@ -128,45 +227,40 @@ function VectorScannerComponent({
   }, [radarCenter, sweepRadius]);
 
   const sweepLeadColor = theme.primary;
-  const transparentAccent = accentWithAlpha(sweepLeadColor, 0);
+  const sweepPivot = useMemo(() => vec(radarCenter, radarCenter), [radarCenter]);
 
-  /** Fixed arc from 180° → 360° (3 o'clock); avoids 0/360 shader seam when group rotates. */
-  const SWEEP_GRADIENT_START_DEG = 360 - SWEEP_TRAIL_DEG;
-  const SWEEP_GRADIENT_END_DEG = 360;
-
-  const sweepGradientColors = useMemo(
+  /** Leading edge @ 360°: ~45% accent; 120° trail mid @ ~10%; void elsewhere. */
+  const activeSweepGradientColors = useMemo(
     () => [
       'transparent',
-      transparentAccent,
-      accentWithAlpha(sweepLeadColor, 0.28),
-      sweepLeadColor,
+      accentWithAlpha(sweepLeadColor, 0),
+      accentWithAlpha(sweepLeadColor, 0.1),
+      accentWithAlpha(sweepLeadColor, 0.45),
     ],
-    [sweepLeadColor, transparentAccent],
+    [sweepLeadColor],
   );
 
-  /** Tail hits 0 opacity by ~55% of arc; leading edge locked at 1.0 — no wrap at 0/360. */
-  const sweepGradientPositions = useMemo(() => [0, 0.28, 0.58, 1], []);
+  const activeSweepGradientPositions = useMemo(() => [0, 0.38, 0.68, 1], []);
 
-  const staticSweepSectorPath = useMemo(() => {
-    const path = Skia.Path.Make();
-    const oval = Skia.XYWHRect(
-      radarCenter - sweepRadius,
-      radarCenter - sweepRadius,
-      sweepRadius * 2,
-      sweepRadius * 2,
-    );
-    const startRad = (SWEEP_GRADIENT_START_DEG * Math.PI) / 180;
-    path.moveTo(radarCenter, radarCenter);
-    path.lineTo(
-      radarCenter + sweepRadius * Math.cos(startRad),
-      radarCenter + sweepRadius * Math.sin(startRad),
-    );
-    path.addArc(oval, SWEEP_GRADIENT_START_DEG, SWEEP_TRAIL_DEG);
-    path.close();
-    return path;
-  }, [radarCenter, sweepRadius]);
+  /** Cease fog: full-disc static spread, fades via Group opacity (Option B). */
+  const dischargeSweepGradientColors = useMemo(
+    () => [
+      'transparent',
+      accentWithAlpha(sweepLeadColor, 0.04),
+      accentWithAlpha(sweepLeadColor, 0.1),
+      accentWithAlpha(sweepLeadColor, 0.08),
+      'transparent',
+    ],
+    [sweepLeadColor],
+  );
+
+  const dischargeSweepGradientPositions = useMemo(
+    () => [0, 0.2, 0.45, 0.7, 1],
+    [],
+  );
 
   const sweepRotationRad = (sweepDeg * Math.PI) / 180;
+  const baseSweepSpeedDegPerMs = 360 / SCAN_SWEEP_MS;
 
   const ensureBlipState = useCallback((id: string): BlipRenderState => {
     if (!blipStatesRef.current[id]) {
@@ -175,6 +269,7 @@ function VectorScannerComponent({
         scale: 1,
         bloomUntil: 0,
         decayStart: null,
+        siphoned: false,
       };
     }
     return blipStatesRef.current[id];
@@ -192,17 +287,28 @@ function VectorScannerComponent({
         scale: 1,
         bloomUntil: now,
         decayStart: null,
+        siphoned: blipStatesRef.current[node.id]?.siphoned ?? false,
       };
     });
     setRevealedIds(new Set(activeNodes.map((n) => n.id)));
     bumpRender();
   }, [activeNodes, bumpRender]);
 
+  const finalizeCeaseScan = useCallback(() => {
+    if (sweepCompleteFiredRef.current) return;
+    sweepCompleteFiredRef.current = true;
+    setSweepFinished(true);
+    applyUniformSelectableState();
+    onSweepComplete?.();
+  }, [applyUniformSelectableState, onSweepComplete]);
+
   const triggerPhosphorStrike = useCallback(
     (nodeId: string) => {
-      if (uniformSelectable) return;
-      const now = performance.now();
+      if (uniformSelectable || dischargePhaseRef.current === 'fog') return;
       const state = ensureBlipState(nodeId);
+      if (state.siphoned) return;
+
+      const now = performance.now();
       state.opacity = 1;
       state.scale = BLOOM_SCALE;
       state.bloomUntil = now + BLOOM_SETTLE_MS;
@@ -219,11 +325,60 @@ function VectorScannerComponent({
     [ensureBlipState, bumpRender, uniformSelectable],
   );
 
+  const isNodeIlluminated = useCallback(
+    (nodeId: string): boolean => {
+      if (revealedIds.has(nodeId)) return true;
+      const state = blipStatesRef.current[nodeId];
+      if (!state || state.siphoned) return false;
+      return state.opacity >= SIPHON_ILLUMINATE_MIN_OPACITY || state.bloomUntil > performance.now();
+    },
+    [revealedIds],
+  );
+
+  const triggerSiphonExtract = useCallback(
+    (nodeId: string) => {
+      if (!scanInteractive || siphonedNodeIds.includes(nodeId)) return;
+      if (!isNodeIlluminated(nodeId)) return;
+
+      const state = ensureBlipState(nodeId);
+      state.siphoned = true;
+      state.opacity = 0;
+      state.scale = 1;
+      state.decayStart = null;
+      bumpRender();
+
+      setSiphonedNodeIds((prev) => {
+        const next = [...prev, nodeId];
+        onSiphonedNodesChange?.(next);
+        return next;
+      });
+      setSiphonPulseKeys((prev) => ({ ...prev, [nodeId]: (prev[nodeId] ?? 0) + 1 }));
+    },
+    [
+      scanInteractive,
+      siphonedNodeIds,
+      isNodeIlluminated,
+      ensureBlipState,
+      bumpRender,
+      onSiphonedNodesChange,
+    ],
+  );
+
+  const handleCeaseScan = useCallback(() => {
+    if (!active || contactsLocked || isCeasedRef.current) return;
+    isCeasedRef.current = true;
+    setIsCeased(true);
+    ceaseStartRef.current = performance.now();
+    dischargePhaseRef.current = 'decel';
+  }, [active, contactsLocked]);
+
   const evaluateSweepCollision = useCallback(
     (beamDeg: number) => {
-      if (uniformSelectable) return;
+      if (uniformSelectable || dischargePhaseRef.current === 'fog') return;
 
       nodeBearings.forEach(({ id, bearingDeg }) => {
+        if (blipStatesRef.current[id]?.siphoned) return;
+
         const delta = angularDifference(beamDeg, bearingDeg);
         if (delta <= SWEEP_HIT_THRESHOLD_DEG) {
           if (!armedMapRef.current[id]) {
@@ -240,10 +395,11 @@ function VectorScannerComponent({
 
   const updateBlipDecays = useCallback(
     (now: number) => {
-      let changed = false;
+      if (uniformSelectable) return;
 
-      Object.entries(blipStatesRef.current).forEach(([id, state]) => {
-        if (uniformSelectable) return;
+      let changed = false;
+      Object.values(blipStatesRef.current).forEach((state) => {
+        if (state.siphoned) return;
 
         if (state.bloomUntil > now) {
           const bloomT = 1 - (state.bloomUntil - now) / BLOOM_SETTLE_MS;
@@ -293,19 +449,32 @@ function VectorScannerComponent({
         cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
       }
-      sweepStartRef.current = null;
+      lastFrameTsRef.current = null;
+      ceaseStartRef.current = null;
+      dischargePhaseRef.current = 'none';
       if (!sweepFinished) {
         setSweepDeg(0);
+        sweepAngleRef.current = 0;
       }
       armedMapRef.current = {};
       return;
     }
 
     setSweepFinished(false);
+    setIsCeased(false);
+    isCeasedRef.current = false;
+    setSiphonedNodeIds([]);
+    setSiphonPulseKeys({});
+    onSiphonedNodesChange?.([]);
     sweepCompleteFiredRef.current = false;
-    sweepStartRef.current = null;
+    ceaseStartRef.current = null;
+    dischargePhaseRef.current = 'none';
+    sweepAngleRef.current = 0;
+    lastFrameTsRef.current = null;
     armedMapRef.current = {};
     setRevealedIds(new Set());
+    setFogOpacity(1);
+    setPhosphorDischargeDisc(false);
 
     activeNodes.forEach((node) => {
       blipStatesRef.current[node.id] = {
@@ -313,27 +482,58 @@ function VectorScannerComponent({
         scale: 1,
         bloomUntil: 0,
         decayStart: null,
+        siphoned: false,
       };
     });
     bumpRender();
 
     const frame = (timestamp: number) => {
-      if (sweepStartRef.current == null) {
-        sweepStartRef.current = timestamp;
-      }
-      const elapsed = timestamp - sweepStartRef.current;
-      const cycleDeg = ((elapsed % SCAN_SWEEP_MS) / SCAN_SWEEP_MS) * 360;
-      setSweepDeg(cycleDeg);
-      evaluateSweepCollision(cycleDeg);
-      updateBlipDecays(timestamp);
+      const lastTs = lastFrameTsRef.current ?? timestamp;
+      const deltaMs = Math.min(32, timestamp - lastTs);
+      lastFrameTsRef.current = timestamp;
 
-      if (!sweepCompleteFiredRef.current && elapsed >= SCAN_DURATION_MS) {
-        sweepCompleteFiredRef.current = true;
-        setSweepFinished(true);
-        applyUniformSelectableState();
-        onSweepComplete?.();
+      if (isCeasedRef.current && ceaseStartRef.current != null) {
+        const ceaseElapsed = timestamp - ceaseStartRef.current;
+
+        if (dischargePhaseRef.current === 'decel') {
+          const decelT = Math.min(1, ceaseElapsed / CEASE_DECEL_MS);
+          const speedScale = 1 - easeOutCubic(decelT);
+          sweepAngleRef.current += baseSweepSpeedDegPerMs * deltaMs * speedScale;
+          const beamDeg = sweepAngleRef.current % 360;
+          setSweepDeg(beamDeg);
+          evaluateSweepCollision(beamDeg);
+          updateBlipDecays(timestamp);
+
+          if (decelT >= 1) {
+            dischargePhaseRef.current = 'fog';
+            setPhosphorDischargeDisc(true);
+          }
+        } else if (dischargePhaseRef.current === 'fog') {
+          const fogElapsed = ceaseElapsed - CEASE_DECEL_MS;
+          const fogT = Math.min(1, fogElapsed / CEASE_FOG_MS);
+          const fogEased = easeOutCubic(fogT);
+
+          setFogOpacity(1 - fogEased);
+          setSweepDeg(sweepAngleRef.current % 360);
+
+          if (fogT >= 1) {
+            dischargePhaseRef.current = 'done';
+            finalizeCeaseScan();
+            return;
+          }
+        } else {
+          return;
+        }
+
+        rafRef.current = requestAnimationFrame(frame);
         return;
       }
+
+      sweepAngleRef.current += baseSweepSpeedDegPerMs * deltaMs;
+      const beamDeg = sweepAngleRef.current % 360;
+      setSweepDeg(beamDeg);
+      evaluateSweepCollision(beamDeg);
+      updateBlipDecays(timestamp);
 
       rafRef.current = requestAnimationFrame(frame);
     };
@@ -351,24 +551,35 @@ function VectorScannerComponent({
     activeNodes,
     evaluateSweepCollision,
     updateBlipDecays,
-    onSweepComplete,
-    applyUniformSelectableState,
+    finalizeCeaseScan,
     bumpRender,
+    onSiphonedNodesChange,
     sweepFinished,
   ]);
 
-  const telemetryLabel = active
-    ? 'RESOLVING_SIGNAL_VECTOR...'
-    : uniformSelectable
-      ? 'VECTOR_LOCK_STABLE'
-      : 'STANDBY_LISTEN_MODE';
+  const telemetryLabel = uniformSelectable
+    ? 'VECTOR_LOCK_STABLE'
+    : isCeased
+      ? 'PHOSPHOR_DISCHARGE...'
+      : active
+        ? 'RESOLVING_SIGNAL_VECTOR...'
+        : 'STANDBY_LISTEN_MODE';
 
-  const canSelectNode = (nodeId: string): boolean =>
-    uniformSelectable || revealedIds.has(nodeId);
+  const handleTargetPress = (nodeId: string) => {
+    if (uniformSelectable) {
+      onSelectNode?.(nodeId);
+      return;
+    }
+    if (scanInteractive) {
+      triggerSiphonExtract(nodeId);
+    }
+  };
 
   const getBlipOpacity = (nodeId: string): number => {
     if (uniformSelectable) return 1;
-    return blipStatesRef.current[nodeId]?.opacity ?? 0;
+    const state = blipStatesRef.current[nodeId];
+    if (!state || state.siphoned) return 0;
+    return state.opacity;
   };
 
   const getBlipScale = (nodeId: string): number => {
@@ -379,164 +590,166 @@ function VectorScannerComponent({
   void renderTick;
 
   const useDashedOuter = theme.borderStyle === 'dashed';
+  const showSweep = active && !uniformSelectable;
 
   return (
-    <View style={[styles.root, { width: scannerSize, height: scannerSize }]}>
-      <Canvas style={{ width: scannerSize, height: scannerSize }}>
-        <Rect x={0} y={0} width={scannerSize} height={scannerSize} color={theme.backdrop} />
+    <View style={styles.wrapper}>
+      <View style={[styles.scannerFrame, { width: scannerSize, height: scannerSize }]}>
+        <Canvas style={{ width: scannerSize, height: scannerSize }}>
+          <Rect x={0} y={0} width={scannerSize} height={scannerSize} color={theme.backdrop} />
 
-        <Group opacity={active ? 0.55 : 0.4}>
           <Circle
             cx={radarCenter}
             cy={radarCenter}
             r={sweepRadius}
-            color={theme.primary}
+            color={structuralStroke}
             style="stroke"
             strokeWidth={STROKE_THIN}
           >
             {useDashedOuter ? <DashPathEffect intervals={[6, 5]} /> : null}
           </Circle>
-        </Group>
 
-        <Group opacity={active ? 0.45 : 0.35}>
           <Circle
             cx={radarCenter}
             cy={radarCenter}
             r={midRingRadius}
-            color={theme.line}
+            color={structuralStroke}
             style="stroke"
             strokeWidth={STROKE_THIN}
           />
-        </Group>
 
-        <Circle
-          cx={radarCenter}
-          cy={radarCenter}
-          r={coreRadius}
-          color={theme.primary}
-          style="stroke"
-          strokeWidth={STROKE_CORE}
-        />
-
-        <Line
-          p1={vec(radarCenter, 0)}
-          p2={vec(radarCenter, scannerSize)}
-          color={theme.line}
-          strokeWidth={STROKE_THIN}
-          opacity={0.35}
-        />
-        <Line
-          p1={vec(0, radarCenter)}
-          p2={vec(scannerSize, radarCenter)}
-          color={theme.line}
-          strokeWidth={STROKE_THIN}
-          opacity={0.35}
-        />
-        <Line
-          p1={vec(radarCenter - sweepRadius * 0.7, radarCenter - sweepRadius * 0.7)}
-          p2={vec(radarCenter + sweepRadius * 0.7, radarCenter + sweepRadius * 0.7)}
-          color={theme.line}
-          strokeWidth={STROKE_THIN}
-          opacity={0.22}
-        />
-        <Line
-          p1={vec(radarCenter - sweepRadius * 0.7, radarCenter + sweepRadius * 0.7)}
-          p2={vec(radarCenter + sweepRadius * 0.7, radarCenter - sweepRadius * 0.7)}
-          color={theme.line}
-          strokeWidth={STROKE_THIN}
-          opacity={0.22}
-        />
-
-        {active && (
-          <Group clip={radarClipPath}>
-            <Group
-              origin={vec(radarCenter, radarCenter)}
-              transform={[{ rotate: sweepRotationRad }]}
-            >
-              <Path path={staticSweepSectorPath} style="fill">
-                <SweepGradient
-                  c={vec(radarCenter, radarCenter)}
-                  start={SWEEP_GRADIENT_START_DEG}
-                  end={SWEEP_GRADIENT_END_DEG}
-                  colors={sweepGradientColors}
-                  positions={sweepGradientPositions}
-                  mode="clamp"
-                />
-              </Path>
-              <Line
-                p1={vec(radarCenter, radarCenter)}
-                p2={vec(radarCenter + sweepRadius, radarCenter)}
-                color={sweepLeadColor}
-                strokeWidth={2}
-                opacity={1}
-              />
-            </Group>
-          </Group>
-        )}
-
-        {nodeBearings.map((node) => {
-          const opacity = getBlipOpacity(node.id);
-          const scale = getBlipScale(node.id);
-          const radius = node.visualRadius * scale;
-          if (opacity <= 0.01 && !uniformSelectable) return null;
-
-          return (
-            <Circle
-              key={node.id}
-              cx={node.canvasX}
-              cy={node.canvasY}
-              r={radius}
-              color={uniformSelectable ? selectionAccent : theme.blipAccent}
-              opacity={opacity}
-              style="fill"
-            />
-          );
-        })}
-
-        {nodeBearings.map((node) => {
-          const opacity = getBlipOpacity(node.id);
-          if (opacity <= 0.01 && !uniformSelectable) return null;
-          return (
-            <Circle
-              key={`${node.id}-ring`}
-              cx={node.canvasX}
-              cy={node.canvasY}
-              r={node.visualRadius * getBlipScale(node.id) + 1.5}
-              color={theme.text}
-              style="stroke"
-              strokeWidth={uniformSelectable ? 1.5 : 1}
-              opacity={uniformSelectable ? 1 : opacity * 0.9}
-            />
-          );
-        })}
-      </Canvas>
-
-      {activeNodes.map((node) => {
-        const absoluteLeft = node.x - DOT_HIT_SIZE / 2;
-        const absoluteTop = node.y - DOT_HIT_SIZE / 2;
-
-        return (
-          <TouchableOpacity
-            key={`hit-${node.id}`}
-            activeOpacity={0.85}
-            disabled={!canSelectNode(node.id)}
-            onPress={() => onSelectNode?.(node.id)}
-            style={[
-              styles.nodeHitbox,
-              {
-                left: absoluteLeft,
-                top: absoluteTop,
-                width: DOT_HIT_SIZE,
-                height: DOT_HIT_SIZE,
-              },
-            ]}
+          <Circle
+            cx={radarCenter}
+            cy={radarCenter}
+            r={coreRadius}
+            color={structuralStroke}
+            style="stroke"
+            strokeWidth={STROKE_THIN}
           />
-        );
-      })}
 
-      {children ? <View style={styles.childOverlay}>{children}</View> : null}
+          <Line
+            p1={vec(radarCenter, 0)}
+            p2={vec(radarCenter, scannerSize)}
+            color={structuralStroke}
+            strokeWidth={STROKE_THIN}
+          />
+          <Line
+            p1={vec(0, radarCenter)}
+            p2={vec(scannerSize, radarCenter)}
+            color={structuralStroke}
+            strokeWidth={STROKE_THIN}
+          />
+          <Line
+            p1={vec(radarCenter - sweepRadius * 0.7, radarCenter - sweepRadius * 0.7)}
+            p2={vec(radarCenter + sweepRadius * 0.7, radarCenter + sweepRadius * 0.7)}
+            color={structuralStroke}
+            strokeWidth={STROKE_THIN}
+          />
+          <Line
+            p1={vec(radarCenter - sweepRadius * 0.7, radarCenter + sweepRadius * 0.7)}
+            p2={vec(radarCenter + sweepRadius * 0.7, radarCenter - sweepRadius * 0.7)}
+            color={structuralStroke}
+            strokeWidth={STROKE_THIN}
+          />
 
-      <Text style={[styles.telemetryOverlay, { color: theme.text }]}>{telemetryLabel}</Text>
+          {showSweep && (
+            <Group clip={radarClipPath} opacity={fogOpacity}>
+              <Group origin={sweepPivot} transform={[{ rotate: sweepRotationRad }]}>
+                <Circle cx={radarCenter} cy={radarCenter} r={sweepRadius} style="fill">
+                  <SweepGradient
+                    c={sweepPivot}
+                    start={phosphorDischargeDisc ? 0 : SWEEP_GRADIENT_TRAIL_START_DEG}
+                    end={SWEEP_GRADIENT_LEAD_DEG}
+                    colors={
+                      phosphorDischargeDisc
+                        ? dischargeSweepGradientColors
+                        : activeSweepGradientColors
+                    }
+                    positions={
+                      phosphorDischargeDisc
+                        ? dischargeSweepGradientPositions
+                        : activeSweepGradientPositions
+                    }
+                    mode="clamp"
+                  />
+                </Circle>
+                <Line
+                  p1={sweepPivot}
+                  p2={vec(radarCenter + sweepRadius, radarCenter)}
+                  color={sweepLeadColor}
+                  strokeWidth={2}
+                  opacity={1}
+                />
+              </Group>
+            </Group>
+          )}
+
+          {nodeBearings.map((node) => {
+            const opacity = getBlipOpacity(node.id);
+            const scale = getBlipScale(node.id);
+            if (opacity <= 0.01 && !uniformSelectable) return null;
+
+            return (
+              <Circle
+                key={node.id}
+                cx={node.canvasX}
+                cy={node.canvasY}
+                r={node.visualRadius * scale}
+                color={uniformSelectable ? selectionAccent : theme.blipAccent}
+                opacity={opacity}
+                style="fill"
+              />
+            );
+          })}
+
+          {nodeBearings.map((node) => {
+            const opacity = getBlipOpacity(node.id);
+            if (opacity <= 0.01 && !uniformSelectable) return null;
+            return (
+              <Circle
+                key={`${node.id}-ring`}
+                cx={node.canvasX}
+                cy={node.canvasY}
+                r={node.visualRadius * getBlipScale(node.id) + 1.5}
+                color={theme.text}
+                style="stroke"
+                strokeWidth={uniformSelectable ? 1.5 : 1}
+                opacity={uniformSelectable ? 1 : opacity * 0.9}
+              />
+            );
+          })}
+        </Canvas>
+
+        {nodeBearings.map((bearing) => (
+          <RadarTarget
+            key={`target-${bearing.id}`}
+            node={bearing.node}
+            visualSize={bearing.visualSize}
+            left={bearing.canvasX - DOT_HIT_SIZE / 2}
+            top={bearing.canvasY - DOT_HIT_SIZE / 2}
+            disabled={!scanInteractive && !uniformSelectable}
+            pulseKey={siphonPulseKeys[bearing.id] ?? 0}
+            onPress={() => handleTargetPress(bearing.id)}
+            ringColor={selectionAccent}
+          />
+        ))}
+
+        {children ? <View style={styles.childOverlay}>{children}</View> : null}
+
+        <Text style={[styles.telemetryOverlay, { color: theme.text }]}>{telemetryLabel}</Text>
+      </View>
+
+      {scanInteractive && (
+        <TouchableOpacity
+          activeOpacity={0.75}
+          onPress={handleCeaseScan}
+          style={[styles.ceaseButton, { borderColor: theme.line }]}
+        >
+          <Text style={[styles.ceaseLabel, { color: theme.text }]}>
+            [ OVERRIDE // CEASE_SCAN ]
+          </Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -544,8 +757,17 @@ function VectorScannerComponent({
 export default memo(VectorScannerComponent);
 
 const styles = StyleSheet.create({
-  root: { position: 'relative' },
-  nodeHitbox: { position: 'absolute' },
+  wrapper: { alignItems: 'center' },
+  scannerFrame: { position: 'relative' },
+  nodeHitbox: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  siphonPulseRing: {
+    position: 'absolute',
+    borderWidth: 1.5,
+  },
   childOverlay: { ...StyleSheet.absoluteFillObject },
   telemetryOverlay: {
     position: 'absolute',
@@ -555,5 +777,16 @@ const styles = StyleSheet.create({
     fontSize: 7,
     letterSpacing: 0.6,
     opacity: 0.88,
+  },
+  ceaseButton: {
+    marginTop: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+  },
+  ceaseLabel: {
+    fontFamily: 'monospace',
+    fontSize: 9,
+    letterSpacing: 0.8,
   },
 });

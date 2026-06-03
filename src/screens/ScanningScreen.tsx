@@ -19,7 +19,7 @@ const { width } = Dimensions.get('window');
 const TERMINAL_ACCENT = '#00ff33';
 const RADAR_SIZE = Math.min(width - 80, 280);
 const RADAR_CORE = RADAR_SIZE * 0.48;
-const RADAR_DOCK_HEIGHT = RADAR_SIZE + 32;
+const RADAR_DOCK_HEIGHT = RADAR_SIZE + 56;
 
 type ScanPhase = 'SWEEPING' | 'DOTS';
 
@@ -157,10 +157,10 @@ export default function ScanningScreen(): React.JSX.Element {
               {phase === 'SWEEPING' && !isBossDepth && (
                 <View style={styles.readoutBlock}>
                   <Text style={[styles.scanStatus, { color: theme.primaryColor }]}>
-                    LOCATING THREAT VECTORS...
+                    ACTIVE SIPHON // EXTRACT VECTORS
                   </Text>
                   <Text style={[styles.scanSubStatus, { color: theme.mutedColor }]}>
-                    {`Tactical sweep mapping ${vectorCluster.length} candidate contact${vectorCluster.length === 1 ? '' : 's'} at depth ${nodeIndex + 1}`}
+                    {`Tap illuminated contacts to siphon — ${vectorCluster.length} route${vectorCluster.length === 1 ? '' : 's'} at depth ${nodeIndex + 1}. Override to cease scan.`}
                   </Text>
                 </View>
               )}
