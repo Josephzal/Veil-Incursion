@@ -5,7 +5,7 @@ import { INITIAL_SECTOR_POOL } from '../data/regions';
 import IncursionShell from '../components/IncursionShell';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
 import ScanConfirmOverlay from '../components/ScanConfirmOverlay';
-import VectorScanner from '../components/VectorScanner';
+import VectorScanner, { getScannerShellHeight } from '../components/VectorScanner';
 import { useRun } from '../context/RunContext';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useTerminal } from '../context/TerminalContext';
@@ -19,7 +19,8 @@ const { width } = Dimensions.get('window');
 const TERMINAL_ACCENT = '#00ff33';
 const RADAR_SIZE = Math.min(width - 80, 280);
 const RADAR_CORE = RADAR_SIZE * 0.48;
-const RADAR_DOCK_HEIGHT = RADAR_SIZE + 56;
+const RADAR_DOCK_HEIGHT = getScannerShellHeight(RADAR_SIZE);
+const READOUT_FIXED_HEIGHT = 72;
 
 type ScanPhase = 'SWEEPING' | 'DOTS';
 
@@ -152,30 +153,45 @@ export default function ScanningScreen(): React.JSX.Element {
             />
           </View>
 
-          <View style={[styles.readoutDock, { borderColor: theme.borderColor }]}>
+          <View
+            style={[
+              styles.readoutDock,
+              { borderColor: theme.borderColor, height: READOUT_FIXED_HEIGHT },
+            ]}
+          >
             <View style={styles.readoutInner}>
-              {phase === 'SWEEPING' && !isBossDepth && (
-                <View style={styles.readoutBlock}>
-                  <Text style={[styles.scanStatus, { color: theme.primaryColor }]}>
-                    ACTIVE SIPHON // EXTRACT VECTORS
-                  </Text>
-                  <Text style={[styles.scanSubStatus, { color: theme.mutedColor }]}>
-                    {`Tap illuminated contacts to siphon — ${vectorCluster.length} route${vectorCluster.length === 1 ? '' : 's'} at depth ${nodeIndex + 1}. Override to cease scan.`}
-                  </Text>
-                </View>
-              )}
-              {(phase === 'DOTS' || isBossDepth) && (
-                <View style={styles.readoutBlock}>
-                  <Text style={[styles.scanStatus, { color: isBossDepth ? accent : theme.primaryColor }]}>
-                    {isBossDepth ? 'PRIORITY TARGET IDENTIFIED' : 'VECTOR CONTACTS LOCKED'}
-                  </Text>
-                  <Text style={[styles.scanSubStatus, { color: theme.mutedColor }]}>
-                    {isBossDepth
-                      ? 'Manifested core threat pre-scanned by descent engine. Review classification and engage.'
-                      : `Select a radar contact to open classification preview — ${vectorDots.length} route${vectorDots.length === 1 ? '' : 's'} available.`}
-                  </Text>
-                </View>
-              )}
+              <View
+                style={[
+                  styles.readoutBlock,
+                  styles.readoutLayer,
+                  phase === 'SWEEPING' && !isBossDepth ? styles.readoutVisible : styles.readoutHidden,
+                ]}
+                pointerEvents={phase === 'SWEEPING' && !isBossDepth ? 'auto' : 'none'}
+              >
+                <Text style={[styles.scanStatus, { color: theme.primaryColor }]}>
+                  ACTIVE SIPHON // EXTRACT VECTORS
+                </Text>
+                <Text style={[styles.scanSubStatus, { color: theme.mutedColor }]}>
+                  {`Tap illuminated contacts to siphon — ${vectorCluster.length} route${vectorCluster.length === 1 ? '' : 's'} at depth ${nodeIndex + 1}. Override to cease scan.`}
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.readoutBlock,
+                  styles.readoutLayer,
+                  phase === 'DOTS' || isBossDepth ? styles.readoutVisible : styles.readoutHidden,
+                ]}
+                pointerEvents={phase === 'DOTS' || isBossDepth ? 'auto' : 'none'}
+              >
+                <Text style={[styles.scanStatus, { color: isBossDepth ? accent : theme.primaryColor }]}>
+                  {isBossDepth ? 'PRIORITY TARGET IDENTIFIED' : 'VECTOR CONTACTS LOCKED'}
+                </Text>
+                <Text style={[styles.scanSubStatus, { color: theme.mutedColor }]}>
+                  {isBossDepth
+                    ? 'Manifested core threat pre-scanned by descent engine. Review classification and engage.'
+                    : `Select a radar contact to open classification preview — ${vectorDots.length} route${vectorDots.length === 1 ? '' : 's'} available.`}
+                </Text>
+              </View>
             </View>
           </View>
 
@@ -210,17 +226,37 @@ const styles = StyleSheet.create({
   fallback: { fontFamily: 'monospace', fontSize: 10, textAlign: 'center', padding: 24 },
   statusBar: { borderBottomWidth: 1, paddingVertical: 10, paddingHorizontal: 16, flexShrink: 0 },
   statusBarText: { fontFamily: 'monospace', fontSize: 9, letterSpacing: 1.2, textAlign: 'center' },
-  radarDock: { alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 },
+  radarDock: {
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    overflow: 'hidden',
+    flexShrink: 0,
+  },
   readoutDock: {
-    flex: 1,
-    minHeight: 88,
+    flexShrink: 0,
     borderTopWidth: 1,
     borderBottomWidth: 1,
     backgroundColor: '#050608',
     overflow: 'hidden',
   },
-  readoutInner: { flex: 1, paddingHorizontal: 16, paddingVertical: 12, justifyContent: 'center' },
+  readoutInner: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    justifyContent: 'center',
+    position: 'relative',
+  },
   readoutBlock: { justifyContent: 'center' },
+  readoutLayer: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    top: 12,
+    bottom: 12,
+    justifyContent: 'center',
+  },
+  readoutVisible: { opacity: 1 },
+  readoutHidden: { opacity: 0 },
   scanStatus: { fontFamily: 'monospace', fontSize: 11, letterSpacing: 1.1, textAlign: 'center' },
   scanSubStatus: { fontFamily: 'monospace', fontSize: 9, marginTop: 6, textAlign: 'center', lineHeight: 13 },
   footerTelemetry: { borderTopWidth: 1, paddingVertical: 8, paddingHorizontal: 16, flexShrink: 0 },

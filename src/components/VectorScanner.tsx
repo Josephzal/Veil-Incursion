@@ -18,6 +18,12 @@ import type { RadarDot } from '../types/run';
 export const SCAN_SWEEP_MS = 2200;
 export const SCAN_ROTATIONS = 3;
 export const SCAN_DURATION_MS = SCAN_SWEEP_MS * SCAN_ROTATIONS;
+/** Fixed footer reservation — cease control never unmounts, only fades. */
+export const SCANNER_CEASE_SLOT_HEIGHT = 40;
+
+export function getScannerShellHeight(scannerSize: number): number {
+  return scannerSize + SCANNER_CEASE_SLOT_HEIGHT;
+}
 
 const SWEEP_HIT_THRESHOLD_DEG = 3;
 const SWEEP_ARM_HYSTERESIS_DEG = 8;
@@ -591,9 +597,11 @@ function VectorScannerComponent({
 
   const useDashedOuter = theme.borderStyle === 'dashed';
   const showSweep = active && !uniformSelectable;
+  const shellHeight = getScannerShellHeight(scannerSize);
+  const showCeaseControl = active && !contactsLocked && !uniformSelectable;
 
   return (
-    <View style={styles.wrapper}>
+    <View style={[styles.layoutShell, { width: scannerSize, height: shellHeight }]}>
       <View style={[styles.scannerFrame, { width: scannerSize, height: scannerSize }]}>
         <Canvas style={{ width: scannerSize, height: scannerSize }}>
           <Rect x={0} y={0} width={scannerSize} height={scannerSize} color={theme.backdrop} />
@@ -739,17 +747,25 @@ function VectorScannerComponent({
         <Text style={[styles.telemetryOverlay, { color: theme.text }]}>{telemetryLabel}</Text>
       </View>
 
-      {scanInteractive && (
+      <View style={[styles.footerSlot, { width: scannerSize, height: SCANNER_CEASE_SLOT_HEIGHT }]}>
         <TouchableOpacity
           activeOpacity={0.75}
+          disabled={!showCeaseControl || !scanInteractive}
           onPress={handleCeaseScan}
-          style={[styles.ceaseButton, { borderColor: theme.line }]}
+          style={[
+            styles.ceaseButton,
+            {
+              borderColor: theme.line,
+              opacity: showCeaseControl && scanInteractive ? 1 : 0,
+            },
+          ]}
+          pointerEvents={showCeaseControl && scanInteractive ? 'auto' : 'none'}
         >
           <Text style={[styles.ceaseLabel, { color: theme.text }]}>
             [ OVERRIDE // CEASE_SCAN ]
           </Text>
         </TouchableOpacity>
-      )}
+      </View>
     </View>
   );
 }
@@ -757,8 +773,20 @@ function VectorScannerComponent({
 export default memo(VectorScannerComponent);
 
 const styles = StyleSheet.create({
-  wrapper: { alignItems: 'center' },
-  scannerFrame: { position: 'relative' },
+  layoutShell: {
+    alignSelf: 'center',
+    flexShrink: 0,
+    overflow: 'hidden',
+  },
+  scannerFrame: {
+    position: 'relative',
+    flexShrink: 0,
+  },
+  footerSlot: {
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    flexShrink: 0,
+  },
   nodeHitbox: {
     position: 'absolute',
     alignItems: 'center',
@@ -779,7 +807,7 @@ const styles = StyleSheet.create({
     opacity: 0.88,
   },
   ceaseButton: {
-    marginTop: 10,
+    marginTop: 8,
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderWidth: 1,
