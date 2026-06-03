@@ -5,7 +5,7 @@ import { INITIAL_SECTOR_POOL } from '../data/regions';
 import IncursionShell from '../components/IncursionShell';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
 import ScanConfirmOverlay from '../components/ScanConfirmOverlay';
-import VectorScanner, { getScannerShellHeight } from '../components/VectorScanner';
+import VectorScanner from '../components/VectorScanner';
 import { useRun } from '../context/RunContext';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useTerminal } from '../context/TerminalContext';
@@ -19,10 +19,14 @@ const { width } = Dimensions.get('window');
 const TERMINAL_ACCENT = '#00ff33';
 const RADAR_SIZE = Math.min(width - 80, 280);
 const RADAR_CORE = RADAR_SIZE * 0.48;
-const RADAR_DOCK_HEIGHT = getScannerShellHeight(RADAR_SIZE);
 const READOUT_FIXED_HEIGHT = 72;
 
 type ScanPhase = 'SWEEPING' | 'DOTS';
+
+function resourcePercent(current: number, max: number): number {
+  if (max <= 0) return 0;
+  return Math.round((current / max) * 100);
+}
 
 export default function ScanningScreen(): React.JSX.Element {
   const { theme } = useTerminal();
@@ -65,6 +69,12 @@ export default function ScanningScreen(): React.JSX.Element {
   );
 
   const previewNode = getPreviewNode();
+
+  const healthPct = resourcePercent(runState.soulAnchorIntegrity, runState.maxSoulAnchor);
+  const staminaPct = resourcePercent(runState.currentStamina, runState.maxStamina);
+  const shieldPct = Math.max(0, Math.min(100, healthPct + 8));
+  const energyPct = Math.max(0, Math.min(100, runState.startingKineticPercent));
+  const operativeTelemetry = `HEALTH: ${healthPct}% // SHIELD: ${shieldPct}% // STAMINA: ${staminaPct}% // ENERGY: ${energyPct}%`;
 
   useEffect(() => {
     if (!isScanningHub || vectorCluster.length === 0) {
@@ -135,12 +145,13 @@ export default function ScanningScreen(): React.JSX.Element {
       >
         <View style={styles.body}>
           <View style={[styles.statusBar, { borderColor: theme.borderColor }]}>
-            <Text style={[styles.statusBarText, { color: theme.mutedColor }]}>
-              {`TIER ${activeIncursion.currentTier} // DEPTH ${nodeIndex + 1}/10 // TACTICAL SWEEP HUB`}
+            
+            <Text style={[styles.statusBarResources, { color: theme.primaryColor }]}>
+              {operativeTelemetry}
             </Text>
           </View>
 
-          <View style={[styles.radarDock, { height: RADAR_DOCK_HEIGHT }]}>
+          <View style={styles.radarDock}>
             <VectorScanner
               cabal={cabal}
               scannerSize={RADAR_SIZE}
@@ -194,12 +205,6 @@ export default function ScanningScreen(): React.JSX.Element {
               </View>
             </View>
           </View>
-
-          <View style={[styles.footerTelemetry, { borderColor: theme.borderColor }]}>
-            <Text style={[styles.telemetryLine, { color: theme.mutedColor }]}>
-              {`TIER ${activeIncursion.currentTier} // DEPTH ${nodeIndex + 1}/10 // CONTACTS: ${vectorCluster.length} // STAMINA: ${runState.currentStamina}`}
-            </Text>
-          </View>
         </View>
       </MacroLogAnchoredLayout>
 
@@ -224,19 +229,31 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   fallback: { fontFamily: 'monospace', fontSize: 10, textAlign: 'center', padding: 24 },
-  statusBar: { borderBottomWidth: 1, paddingVertical: 10, paddingHorizontal: 16, flexShrink: 0 },
-  statusBarText: { fontFamily: 'monospace', fontSize: 9, letterSpacing: 1.2, textAlign: 'center' },
-  radarDock: {
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    overflow: 'hidden',
+  statusBar: {
+    borderBottomWidth: 1,
+    paddingTop: 8,
+    paddingBottom: 10,
+    paddingHorizontal: 16,
     flexShrink: 0,
+    gap: 6,
+  },
+  statusBarText: { fontFamily: 'monospace', fontSize: 9, letterSpacing: 1.2, textAlign: 'center' },
+  statusBarResources: {
+    fontFamily: 'monospace',
+    fontSize: 8,
+    letterSpacing: 0.9,
+    textAlign: 'center',
+    lineHeight: 11,
+  },
+  radarDock: {
+    flex: 1,
+    minHeight: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   readoutDock: {
     flexShrink: 0,
     borderTopWidth: 1,
-    borderBottomWidth: 1,
-    backgroundColor: '#050608',
     overflow: 'hidden',
   },
   readoutInner: {
@@ -259,13 +276,4 @@ const styles = StyleSheet.create({
   readoutHidden: { opacity: 0 },
   scanStatus: { fontFamily: 'monospace', fontSize: 11, letterSpacing: 1.1, textAlign: 'center' },
   scanSubStatus: { fontFamily: 'monospace', fontSize: 9, marginTop: 6, textAlign: 'center', lineHeight: 13 },
-  footerTelemetry: { borderTopWidth: 1, paddingVertical: 8, paddingHorizontal: 16, flexShrink: 0 },
-  telemetryLine: {
-    fontFamily: 'monospace',
-    fontSize: 8,
-    letterSpacing: 0.8,
-    textAlign: 'center',
-    flexShrink: 1,
-    flexWrap: 'wrap',
-  },
 });

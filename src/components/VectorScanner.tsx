@@ -36,7 +36,8 @@ const DOT_VISUAL_SIZE = 12;
 const BOSS_DOT_SIZE = 16;
 const SWEEP_TRAIL_ACTIVE_DEG = 120;
 const STROKE_THIN = 1;
-const STRUCTURAL_LINE_ALPHA = 0.15;
+const STRUCTURAL_LINE_ALPHA = 0.38;
+const RADAR_CANVAS_BACKDROP = '#000000';
 const CEASE_DECEL_MS = 400;
 const CEASE_FOG_MS = 900;
 const SIPHON_EXTRACT_MS = 280;
@@ -183,8 +184,8 @@ function VectorScannerComponent({
   const coreRadius = coreDiameter / 2;
 
   const structuralStroke = useMemo(
-    () => accentWithAlpha(theme.line, STRUCTURAL_LINE_ALPHA),
-    [theme.line],
+    () => accentWithAlpha(theme.primary, STRUCTURAL_LINE_ALPHA),
+    [theme.primary],
   );
 
   const [sweepDeg, setSweepDeg] = useState(0);
@@ -604,7 +605,7 @@ function VectorScannerComponent({
     <View style={[styles.layoutShell, { width: scannerSize, height: shellHeight }]}>
       <View style={[styles.scannerFrame, { width: scannerSize, height: scannerSize }]}>
         <Canvas style={{ width: scannerSize, height: scannerSize }}>
-          <Rect x={0} y={0} width={scannerSize} height={scannerSize} color={theme.backdrop} />
+          <Rect x={0} y={0} width={scannerSize} height={scannerSize} color={RADAR_CANVAS_BACKDROP} />
 
           <Circle
             cx={radarCenter}
@@ -776,11 +777,11 @@ const styles = StyleSheet.create({
   layoutShell: {
     alignSelf: 'center',
     flexShrink: 0,
-    overflow: 'hidden',
   },
   scannerFrame: {
     position: 'relative',
     flexShrink: 0,
+    backgroundColor: 'transparent',
   },
   footerSlot: {
     alignItems: 'center',
