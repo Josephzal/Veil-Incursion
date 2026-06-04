@@ -6,39 +6,27 @@ import { advanceEnemyIntent, spawnEnemyProfile } from '../data/enemies';
 import { bossStrikeDamage, rollBossIntent, shouldShiftBossPhase } from '../data/bossCombat';
 import { COMBAT_ACTION, ENEMY_KINETIC_SIPHON_REQUEST, EnemyCombatProfile, EnemyIntent } from '../types/run';
 
-const TELEMETRY_DIVIDER = 'rgba(139, 92, 246, 0.2)';
-
-const INTENT_READOUT: Record<EnemyIntent, string> = {
-  STRIKE: 'STRIKE',
-  STRIP_STAMINA: 'TARGETING STAMINA RES',
-  SIPHON_KINETIC: 'SIPHON KINETIC RES',
-  EVADE: 'EVADE POSTURE',
-  CHARGE: 'CHARGING WORLD-ENDER',
-  WORLD_ENDER: 'WORLD-ENDER UNBLOCK',
-  FORTIFY: 'FORTIFY',
-  OVERDRIVE_DISCHARGE: 'OVERDRIVE DISCHARGE',
-};
-
-function formatHostileId(designation: string): string {
-  const slug = designation
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, '_')
-    .replace(/^_|_$/g, '');
-  return slug.length > 28 ? slug.slice(0, 28) : slug;
-}
-
-function formatIntentReadout(intent: EnemyIntent): string {
-  return INTENT_READOUT[intent] ?? intent.replace(/_/g, ' ');
-}
 import { ResolvedWeaponCombatStats } from '../data/inventory';
 import { BossRuntimeProfile, EnvironmentalModifiers } from '../types/game';
+import CombatTelemetryGaugeRow from './combat/CombatHorizontalGauge';
 import CombatCommandDeck, { DECK_ACTION_LABELS, type CombatDeckAction } from './CombatCommandDeck';
+import {
+  type CombatEnemyTelemetry,
+  formatHostileId,
+  formatIntentReadout,
+  GAUGE_KINETIC,
+  GAUGE_SOUL_ANCHOR,
+  GAUGE_STAMINA,
+  GAUGE_TRACK_BORDER,
+} from '../utils/combatTelemetryFormat';
 import VignetteFlashOverlay from './VignetteFlashOverlay';
 import {
   applyKineticSiphon,
   formatKineticSiphonLog,
 } from '../utils/combatResourceState';
 import { useReactiveCombatStatus } from '../hooks/useReactiveCombatStatus';
+
+const TELEMETRY_DIVIDER = 'rgba(139, 92, 246, 0.2)';
 
 const { width } = Dimensions.get('window');
 const TARGET_SIZE = 80;
@@ -53,8 +41,9 @@ const PARRY_TOLERANCE = 0.09;
 type CombatPhase = 'TEXT_COMBAT' | 'DEFEND_PARRY' | 'OFFENSE_SLICE' | 'RESOLUTION';
 
 interface TacticalCombatHubProps {
-  /** Combat screen stack: no flex growth — keeps command deck above macro log. */
+  /** Combat screen stack: operative metrics + deck only; hostile row lives on CombatScreen. */
   stackedLayout?: boolean;
+  onEnemyTelemetryChange?: (enemy: CombatEnemyTelemetry | null) => void;
   onCombatComplete?: (r: { victory: boolean; remainingHp: number; remainingStamina: number }) => void;
   initialOperativeHp?: number; initialStamina?: number; maxStamina?: number; maxSoulAnchor?: number;
   startingKineticPercent?: number; parryMultiplierBonus?: number; parryWindowBonus?: number;
@@ -72,6 +61,7 @@ const isAttackIntent = (i: EnemyIntent) =>
 
 export default function TacticalCombatHub({
   stackedLayout = false,
+  onEnemyTelemetryChange,
   onCombatComplete, initialOperativeHp = 100, initialStamina = 100, maxStamina = 100,
   maxSoulAnchor = 100, startingKineticPercent = 0, parryMultiplierBonus = 0,
   parryWindowBonus = 0, sliceDamagePenalty = 0, onTerminalLog,
@@ -628,6 +618,31 @@ export default function TacticalCombatHub({
     }
   }, [isPlayerTurn, cycleState]);
 
+  useEffect(() => {
+    if (!stackedLayout || !onEnemyTelemetryChange) return;
+    if (!enemy) {
+      onEnemyTelemetryChange(null);
+      return;
+    }
+    onEnemyTelemetryChange({
+      designation: enemy.designation,
+      currentHp: enemy.currentHp,
+      maxHp: enemy.maxHp,
+      intent: enemy.intent,
+    });
+  }, [
+    stackedLayout,
+    onEnemyTelemetryChange,
+    enemy?.designation,
+    enemy?.currentHp,
+    enemy?.maxHp,
+    enemy?.intent,
+  ]);
+
+  const soulAnchorRatio = maxSoulAnchor > 0 ? operativeHp / maxSoulAnchor : 0;
+  const kineticRatio = kineticReservoir / 100;
+  const staminaRatio = maxStamina > 0 ? stamina / maxStamina : 0;
+
   const commandDeck = (
     <CombatCommandDeck
       selectedAction={selectedAction}
@@ -645,10 +660,36 @@ export default function TacticalCombatHub({
     />
   );
 
-  const telemetryBlock = (
-    <View style={stackedLayout ? styles.telemetryRowCompact : styles.telemetryStack} pointerEvents="none">
+  const stackedOperativeMetrics = (
+    <View style={styles.operativeGaugePanel} pointerEvents="none">
+      <CombatTelemetryGaugeRow
+        label={`SOUL ANCHOR INTEGRITY // ${operativeHp}/${maxSoulAnchor}`}
+        labelColor={P.enemyHp}
+        fillColor={GAUGE_SOUL_ANCHOR}
+        ratio={soulAnchorRatio}
+        trackBorderColor={GAUGE_TRACK_BORDER}
+      />
+      <CombatTelemetryGaugeRow
+        label={`KINETIC RESERVOIR // ${kineticReservoir}%${counterReady ? ' // COUNTER READY' : ''}`}
+        labelColor={P.kr}
+        fillColor={GAUGE_KINETIC}
+        ratio={kineticRatio}
+        trackBorderColor={GAUGE_TRACK_BORDER}
+      />
+      <CombatTelemetryGaugeRow
+        label={`STAMINA CORE // ${stamina}/${maxStamina}`}
+        labelColor={theme.primaryColor}
+        fillColor={GAUGE_STAMINA}
+        ratio={staminaRatio}
+        trackBorderColor={GAUGE_TRACK_BORDER}
+      />
+    </View>
+  );
+
+  const legacyTelemetryBlock = (
+    <View style={styles.telemetryStack} pointerEvents="none">
       {enemy ? (
-        <View style={stackedLayout ? styles.threatMatrixCompact : styles.threatMatrix}>
+        <View style={styles.threatMatrix}>
           <View style={styles.threatRow}>
             <Text
               style={[styles.threatId, { color: P.unitTitle }]}
@@ -670,27 +711,15 @@ export default function TacticalCombatHub({
           </Text>
         </View>
       ) : null}
-
-      {!stackedLayout ? <View style={styles.telemetryDivider} /> : null}
-
-      <View style={stackedLayout ? styles.operativeCoreCompact : styles.operativeCore}>
-        <Text
-          style={[stackedLayout ? styles.telemetryLineCompact : styles.telemetryLine, { color: P.enemyHp }]}
-          numberOfLines={1}
-        >
+      <View style={styles.telemetryDivider} />
+      <View style={styles.operativeCore}>
+        <Text style={[styles.telemetryLine, { color: P.enemyHp }]} numberOfLines={1}>
           {`SOUL ANCHOR INTEGRITY // ${operativeHp}/${maxSoulAnchor}`}
         </Text>
-        <Text
-          style={[stackedLayout ? styles.telemetryLineCompact : styles.telemetryLine, { color: P.kr }]}
-          numberOfLines={1}
-          ellipsizeMode="tail"
-        >
+        <Text style={[styles.telemetryLine, { color: P.kr }]} numberOfLines={1} ellipsizeMode="tail">
           {`KINETIC RESERVOIR // ${kineticReservoir}%${counterReady ? ' // COUNTER READY' : ''}`}
         </Text>
-        <Text
-          style={[stackedLayout ? styles.telemetryLineCompact : styles.telemetryLine, { color: theme.primaryColor }]}
-          numberOfLines={1}
-        >
+        <Text style={[styles.telemetryLine, { color: theme.primaryColor }]} numberOfLines={1}>
           {`STAMINA CORE // ${stamina}/${maxStamina}`}
         </Text>
       </View>
@@ -790,13 +819,13 @@ export default function TacticalCombatHub({
 
   if (stackedLayout) {
     return (
-      <View style={styles.rootStacked}>
+      <View style={[styles.rootStacked, { borderColor: theme.borderColor }]}>
         {screenFlashActive && (
           <View style={styles.flashWrapStacked} pointerEvents="none">
             <VignetteFlashOverlay color={screenFlashColor} opacityAnim={screenFlashAnim} />
           </View>
         )}
-        {telemetryBlock}
+        {stackedOperativeMetrics}
         <View style={styles.commandDeckRow}>
           {renderStatusFeed()}
           {cycleState === 'TEXT_COMBAT' ? commandDeck : null}
@@ -815,7 +844,7 @@ export default function TacticalCombatHub({
           </Text>
         </View>
 
-        {telemetryBlock}
+        {legacyTelemetryBlock}
 
         <View style={styles.tacticsStage}>
           <View style={styles.canvas}>
@@ -840,39 +869,21 @@ const abs = StyleSheet.absoluteFillObject;
 const styles = StyleSheet.create({
   root: { flex: 1, width: '100%', maxWidth: width - 16, alignSelf: 'center', minHeight: 0 },
   rootStacked: {
-    flex: 1,
-    minHeight: 0,
+    flexShrink: 0,
     width: '100%',
     maxWidth: width - 16,
     alignSelf: 'center',
     paddingHorizontal: 8,
-    gap: 4,
-  },
-  telemetryRowCompact: {
-    flexShrink: 0,
-    width: '100%',
+    paddingVertical: 0,
+    gap: 6,
+    overflow: 'hidden',
     backgroundColor: '#000000',
-    gap: 2,
   },
-  threatMatrixCompact: {
+  operativeGaugePanel: {
+    width: '100%',
+    flexShrink: 0,
     gap: 2,
     paddingVertical: 4,
-    paddingHorizontal: 2,
-    width: '100%',
-  },
-  operativeCoreCompact: {
-    gap: 0,
-    paddingVertical: 2,
-    paddingHorizontal: 2,
-    width: '100%',
-  },
-  telemetryLineCompact: {
-    fontFamily: MONO,
-    fontSize: 8,
-    letterSpacing: 0.5,
-    lineHeight: 11,
-    paddingVertical: 1,
-    width: '100%',
   },
   commandDeckRow: {
     flexShrink: 0,

@@ -122,7 +122,7 @@ export default function CombatCommandDeck({
                 adjustsFontSizeToFit
                 minimumFontScale={0.7}
               >
-                [ EXECUTE ENCOUNTER ]
+                [ EXECUTE ]
               </Text>
             </Pressable>
             <Pressable
@@ -135,7 +135,7 @@ export default function CombatCommandDeck({
                 adjustsFontSizeToFit
                 minimumFontScale={0.7}
               >
-                [ ABORT COMMAND ]
+                [ ABORT ]
               </Text>
             </Pressable>
           </View>
@@ -165,7 +165,7 @@ const styles = StyleSheet.create({
     width: '100%',
     borderTopWidth: 1,
     paddingTop: 8,
-    paddingBottom: 4,
+    paddingBottom: 1,
     gap: 8,
   },
   commandDeckFrameless: {
