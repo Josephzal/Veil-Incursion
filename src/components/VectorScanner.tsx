@@ -564,13 +564,6 @@ function VectorScannerComponent({
     sweepFinished,
   ]);
 
-  const telemetryLabel = uniformSelectable
-    ? 'VECTOR_LOCK_STABLE'
-    : isCeased
-      ? 'PHOSPHOR_DISCHARGE...'
-      : active
-        ? 'RESOLVING_SIGNAL_VECTOR...'
-        : 'STANDBY_LISTEN_MODE';
 
   const handleTargetPress = (nodeId: string) => {
     if (uniformSelectable) {
@@ -745,7 +738,7 @@ function VectorScannerComponent({
 
         {children ? <View style={styles.childOverlay}>{children}</View> : null}
 
-        <Text style={[styles.telemetryOverlay, { color: theme.text }]}>{telemetryLabel}</Text>
+        <Text style={[styles.telemetryOverlay, { color: theme.text }]}></Text>
       </View>
 
       <View style={[styles.footerSlot, { width: scannerSize, height: SCANNER_CEASE_SLOT_HEIGHT }]}>

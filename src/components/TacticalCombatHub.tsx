@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, type RefObject } from 'react';
 import { StyleSheet, View, Text, Animated, Easing, Dimensions, Pressable, Vibration, PanResponder } from 'react-native';
 import { useTerminal } from '../context/TerminalContext';
 import { INITIAL_SECTOR_POOL } from '../data/regions';
@@ -9,6 +9,7 @@ import { COMBAT_ACTION, ENEMY_KINETIC_SIPHON_REQUEST, EnemyCombatProfile, EnemyI
 import { ResolvedWeaponCombatStats } from '../data/inventory';
 import { BossRuntimeProfile, EnvironmentalModifiers } from '../types/game';
 import CombatTelemetryGaugeRow from './combat/CombatHorizontalGauge';
+import type { ApparitionViewportRef } from './combat/ApparitionViewport';
 import CombatCommandDeck, { DECK_ACTION_LABELS, type CombatDeckAction } from './CombatCommandDeck';
 import {
   type CombatEnemyTelemetry,
@@ -44,6 +45,9 @@ interface TacticalCombatHubProps {
   /** Combat screen stack: operative metrics + deck only; hostile row lives on CombatScreen. */
   stackedLayout?: boolean;
   onEnemyTelemetryChange?: (enemy: CombatEnemyTelemetry | null) => void;
+  apparitionRef?: RefObject<ApparitionViewportRef | null>;
+  /** Registers callback invoked after eradication dissolve completes (victory). */
+  registerKillResolver?: (resolver: () => void) => void;
   onCombatComplete?: (r: { victory: boolean; remainingHp: number; remainingStamina: number }) => void;
   initialOperativeHp?: number; initialStamina?: number; maxStamina?: number; maxSoulAnchor?: number;
   startingKineticPercent?: number; parryMultiplierBonus?: number; parryWindowBonus?: number;
@@ -62,6 +66,8 @@ const isAttackIntent = (i: EnemyIntent) =>
 export default function TacticalCombatHub({
   stackedLayout = false,
   onEnemyTelemetryChange,
+  apparitionRef,
+  registerKillResolver,
   onCombatComplete, initialOperativeHp = 100, initialStamina = 100, maxStamina = 100,
   maxSoulAnchor = 100, startingKineticPercent = 0, parryMultiplierBonus = 0,
   parryWindowBonus = 0, sliceDamagePenalty = 0, onTerminalLog,
@@ -191,6 +197,10 @@ export default function TacticalCombatHub({
     }
   };
 
+  useEffect(() => {
+    registerKillResolver?.(() => resolve(true));
+  }, [registerKillResolver]);
+
   const hurtPlayer = (raw: number, unblockable = false, msg?: string) => {
     let dmg = raw;
     if (!unblockable && aegisRef.current) {
@@ -225,7 +235,16 @@ export default function TacticalCombatHub({
       setTimeout(() => setPhaseAlert(null), 2400);
     }
 
-    if (hp <= 0) { resolve(true); return true; }
+    apparitionRef?.current?.triggerDamageEffect();
+
+    if (hp <= 0) {
+      if (apparitionRef?.current) {
+        apparitionRef.current.triggerEradication();
+        return true;
+      }
+      resolve(true);
+      return true;
+    }
     return false;
   };
 
