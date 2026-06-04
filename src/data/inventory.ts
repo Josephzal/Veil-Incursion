@@ -29,7 +29,7 @@ export const ITEM_CATALOG: Record<string, Omit<InventoryItem, 'isEquipped'>> = {
     type: 'WEAPON',
     modifiers: {
       staminaCostModifier: -5,
-      kineticGainModifier: 0.5,
+      abyssalGainModifier: 0.5,
     },
   },
 };
@@ -83,7 +83,7 @@ export interface ResolvedWeaponCombatStats {
   strikeDamage: number;
   strikeStaminaCost: number;
   exhaustedStrikeDamage: number;
-  kineticChargePerStrike: number;
+  abyssalChargePerStrike: number;
   label: string;
 }
 
@@ -91,18 +91,18 @@ export function resolveWeaponCombatStats(
   modifiers: Partial<WeaponModifiers> = {},
   weaponName = 'Standard Blade',
 ): ResolvedWeaponCombatStats {
-  const strikeDamage = modifiers.baseDamageOverride ?? COMBAT_ACTION.KINETIC_STRIKE_DAMAGE;
+  const strikeDamage = modifiers.baseDamageOverride ?? COMBAT_ACTION.ABYSSAL_STRIKE_DAMAGE;
   const strikeStaminaCost =
-    COMBAT_ACTION.KINETIC_STRIKE_STAMINA + (modifiers.staminaCostModifier ?? 0);
-  const kineticChargePerStrike = Math.round(
-    COMBAT_ACTION.KINETIC_CHARGE * (1 + (modifiers.kineticGainModifier ?? 0)),
+    COMBAT_ACTION.ABYSSAL_STRIKE_STAMINA + (modifiers.staminaCostModifier ?? 0);
+  const abyssalChargePerStrike = Math.round(
+    COMBAT_ACTION.ABYSSAL_RESERVE_CHARGE * (1 + (modifiers.abyssalGainModifier ?? 0)),
   );
 
   return {
     strikeDamage,
     strikeStaminaCost,
-    exhaustedStrikeDamage: COMBAT_ACTION.KINETIC_STRIKE_EXHAUSTED_DAMAGE,
-    kineticChargePerStrike,
+    exhaustedStrikeDamage: COMBAT_ACTION.ABYSSAL_STRIKE_EXHAUSTED_DAMAGE,
+    abyssalChargePerStrike,
     label: weaponName,
   };
 }
@@ -111,14 +111,14 @@ export function formatItemStatLines(item: InventoryItem): string[] {
   const lines: string[] = [];
   const m = item.modifiers;
   if (m.baseDamageOverride != null) {
-    lines.push(`+${m.baseDamageOverride - COMBAT_ACTION.KINETIC_STRIKE_DAMAGE} Strike Damage`);
+    lines.push(`+${m.baseDamageOverride - COMBAT_ACTION.ABYSSAL_STRIKE_DAMAGE} Strike Damage`);
   }
   if (m.staminaCostModifier != null && m.staminaCostModifier !== 0) {
     const sign = m.staminaCostModifier > 0 ? '+' : '';
     lines.push(`${sign}${m.staminaCostModifier} Stamina Cost per execution`);
   }
-  if (m.kineticGainModifier != null && m.kineticGainModifier !== 0) {
-    lines.push(`+${Math.round(m.kineticGainModifier * 100)}% Kinetic Reservoir charge rate`);
+  if (m.abyssalGainModifier != null && m.abyssalGainModifier !== 0) {
+    lines.push(`+${Math.round(m.abyssalGainModifier * 100)}% Abyssal Reserve charge rate`);
   }
   if (m.parryWindowModifier != null && m.parryWindowModifier !== 0) {
     lines.push(`${m.parryWindowModifier > 0 ? '+' : ''}${Math.round(m.parryWindowModifier * 100)}% Parry Window`);

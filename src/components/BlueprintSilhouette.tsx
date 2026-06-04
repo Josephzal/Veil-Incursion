@@ -8,7 +8,7 @@ const { width } = Dimensions.get('window');
 const TARGET_SIZE = 80;
 const TARGET_RADIUS = TARGET_SIZE / 2;
 
-const KINETIC_CHARGE_PER_HIT = 15;
+const ABYSSAL_RESERVE_CHARGE_PER_HIT = 15;
 const KINETIC_RESERVOIR_CAP = 100;
 const KINETIC_PARRY_UNLOCK = 50;
 const KINETIC_PARRY_COST = 50;
@@ -24,8 +24,8 @@ const COMBAT_PALETTE = {
   unitTitle: '#ffffff',
   enemyPosture: '#fde68a',
   enemyPostureBorder: '#ca8a04',
-  kineticReservoir: '#bae6fd',
-  kineticReservoirBorder: '#7dd3fc',
+  abyssalReserve: '#bae6fd',
+  abyssalReserveBorder: '#7dd3fc',
   parryActive: '#00ff33',
   parryVignette: '#00ff33',
   defeatVignette: '#5c0606',
@@ -46,7 +46,7 @@ interface BlueprintSilhouetteProps {
   initialStamina?: number;
   maxStamina?: number;
   maxSoulAnchor?: number;
-  startingKineticPercent?: number;
+  startingAbyssalReservePercent?: number;
   parryMultiplierBonus?: number;
   parryWindowBonus?: number;
   sliceDamagePenalty?: number;
@@ -90,7 +90,7 @@ export default function BlueprintSilhouette({
   initialStamina = 100,
   maxStamina = 100,
   maxSoulAnchor = 100,
-  startingKineticPercent = 0,
+  startingAbyssalReservePercent = 0,
   parryMultiplierBonus = 0,
   parryWindowBonus = 0,
   sliceDamagePenalty = 0,
@@ -116,8 +116,8 @@ export default function BlueprintSilhouette({
   const [counterPrepActive, setCounterPrepActive] = useState<boolean>(false);
   const [operativeHp, setOperativeHp] = useState<number>(initialOperativeHp);
   const [stamina, setStamina] = useState<number>(initialStamina);
-  const [kineticReservoir, setKineticReservoir] = useState<number>(startingKineticPercent);
-  const kineticReservoirRef = useRef<number>(startingKineticPercent);
+  const [abyssalReserve, setAbyssalReserve] = useState<number>(startingAbyssalReservePercent);
+  const abyssalReserveRef = useRef<number>(startingAbyssalReservePercent);
   const isKineticParryRef = useRef<boolean>(false);
   const [enemyMode, setEnemyMode] = useState<EnemyCombatMode>('ATTACKING');
   const enemyModeRef = useRef<EnemyCombatMode>('ATTACKING');
@@ -161,7 +161,7 @@ export default function BlueprintSilhouette({
 
   useEffect(() => { cycleStateRef.current = cycleState; }, [cycleState]);
   useEffect(() => { onCycleStateChange?.(cycleState); }, [cycleState, onCycleStateChange]);
-  useEffect(() => { kineticReservoirRef.current = kineticReservoir; }, [kineticReservoir]);
+  useEffect(() => { abyssalReserveRef.current = abyssalReserve; }, [abyssalReserve]);
   useEffect(() => { operativeHpRef.current = operativeHp; }, [operativeHp]);
   useEffect(() => { staminaRef.current = stamina; }, [stamina]);
   useEffect(() => {
@@ -208,10 +208,10 @@ export default function BlueprintSilhouette({
     return scaled;
   };
 
-  const chargeKineticReservoir = (amount: number = KINETIC_CHARGE_PER_HIT) => {
-    setKineticReservoir((prev) => {
+  const chargeKineticReservoir = (amount: number = ABYSSAL_RESERVE_CHARGE_PER_HIT) => {
+    setAbyssalReserve((prev) => {
       const next = Math.min(prev + amount, KINETIC_RESERVOIR_CAP);
-      kineticReservoirRef.current = next;
+      abyssalReserveRef.current = next;
       return next;
     });
   };
@@ -272,8 +272,8 @@ export default function BlueprintSilhouette({
     operativeHpRef.current = initialOperativeHp;
     setStamina(initialStamina);
     staminaRef.current = initialStamina;
-    setKineticReservoir(startingKineticPercent);
-    kineticReservoirRef.current = startingKineticPercent;
+    setAbyssalReserve(startingAbyssalReservePercent);
+    abyssalReserveRef.current = startingAbyssalReservePercent;
     setEnemyMode('ATTACKING');
     enemyModeRef.current = 'ATTACKING';
     setStatusEffects(deriveCombatStatusEffects(initialStamina));
@@ -288,8 +288,8 @@ export default function BlueprintSilhouette({
     pushTerminalText(`>> CROSSING THE VEIL... ATTACHING SOUL ANCHORS TO URBAN LEY-LINES.`);
     pushTerminalText(`>> AEGIS COMBAT HARDWARE ENGAGED: ${activeWeapon.name}`);
     pushTerminalText(`>> TARGET SIGNATURE MARKED: ${initialThreat.designation}`);
-    if (startingKineticPercent > 0) {
-      pushTerminalText(`>> BATTERY BOON: Kinetic reservoir pre-charged to ${startingKineticPercent}%.`);
+    if (startingAbyssalReservePercent > 0) {
+      pushTerminalText(`>> BATTERY BOON: Kinetic reservoir pre-charged to ${startingAbyssalReservePercent}%.`);
     }
     setCycleState('TEXT_COMBAT');
   };
@@ -312,7 +312,7 @@ export default function BlueprintSilhouette({
         return next;
       });
     }
-    chargeKineticReservoir(KINETIC_CHARGE_PER_HIT);
+    chargeKineticReservoir(ABYSSAL_RESERVE_CHARGE_PER_HIT);
 
     const nextStability = Math.max(threat.stability - activeWeapon.stabilityChipping, 0);
     const updatedThreat = { ...threat, stability: nextStability };
@@ -327,7 +327,7 @@ export default function BlueprintSilhouette({
       setThreat(updatedThreat);
       threatRef.current = updatedThreat;
       if (exhaustedAttack) {
-        pushTerminalText('[EXHAUSTED] >> Vector slice unavailable — posture aperture wasted.');
+        pushTerminalText('[EXHAUSTED] >> Eviscerate unavailable — posture aperture wasted.');
         const nextHp = Math.max(threat.currentHp - rawDamage, 0);
         updatedThreat.currentHp = nextHp;
         setThreat(updatedThreat);
@@ -352,7 +352,7 @@ export default function BlueprintSilhouette({
     }
   };
 
-  const parryReady = kineticReservoir >= KINETIC_PARRY_UNLOCK;
+  const parryReady = abyssalReserve >= KINETIC_PARRY_UNLOCK;
 
   const handlePrepareCounter = () => {
     if (cycleState !== 'TEXT_COMBAT' || !threat || !isPlayerTurn) return;
@@ -366,9 +366,9 @@ export default function BlueprintSilhouette({
       return;
     }
 
-    setKineticReservoir((prev) => {
+    setAbyssalReserve((prev) => {
       const next = Math.max(prev - KINETIC_PARRY_COST, 0);
-      kineticReservoirRef.current = next;
+      abyssalReserveRef.current = next;
       return next;
     });
     setCounterPrepActive(true);
@@ -513,7 +513,7 @@ export default function BlueprintSilhouette({
           return;
         }
 
-        chargeKineticReservoir(KINETIC_CHARGE_PER_HIT);
+        chargeKineticReservoir(ABYSSAL_RESERVE_CHARGE_PER_HIT);
         pushTerminalText(`[PERFECT COUNTER] >> Absorb matrices locked! Negated 100% damage.`);
 
         if (threat) {
@@ -695,7 +695,7 @@ export default function BlueprintSilhouette({
     const registeredNewHit = registerSliceHit(currentIdx);
     if (registeredNewHit) {
       Vibration.vibrate(10);
-      chargeKineticReservoir(KINETIC_CHARGE_PER_HIT);
+      chargeKineticReservoir(ABYSSAL_RESERVE_CHARGE_PER_HIT);
     }
 
     scheduleSliceAdvance(currentIdx + 1);
@@ -851,7 +851,7 @@ export default function BlueprintSilhouette({
 
             <Pressable
               onPress={handlePrepareCounter}
-              disabled={!isPlayerTurn || kineticReservoir < KINETIC_PARRY_UNLOCK || isExhausted}
+              disabled={!isPlayerTurn || abyssalReserve < KINETIC_PARRY_UNLOCK || isExhausted}
               style={[
                 styles.textActionNode,
                 {
@@ -999,13 +999,13 @@ export default function BlueprintSilhouette({
 
       <View style={styles.meterSection}>
         <View style={styles.meterTextRow}>
-          <Text style={[styles.meterLabel, { color: COMBAT_PALETTE.kineticReservoirBorder }]}>KINETIC RESERVOIR:</Text>
-          <Text style={[styles.meterValue, { color: COMBAT_PALETTE.kineticReservoir }]}>
-            {kineticReservoir}%{parryReady ? ' // PARRY READY' : ''}
+          <Text style={[styles.meterLabel, { color: COMBAT_PALETTE.abyssalReserveBorder }]}>ABYSSAL RESERVE:</Text>
+          <Text style={[styles.meterValue, { color: COMBAT_PALETTE.abyssalReserve }]}>
+            {abyssalReserve}%{parryReady ? ' // PARRY READY' : ''}
           </Text>
         </View>
-        <View style={[styles.meterTrack, { borderColor: COMBAT_PALETTE.kineticReservoirBorder }]}>
-          <View style={[styles.meterFill, { backgroundColor: COMBAT_PALETTE.kineticReservoir, width: `${kineticReservoir}%` }]} />
+        <View style={[styles.meterTrack, { borderColor: COMBAT_PALETTE.abyssalReserveBorder }]}>
+          <View style={[styles.meterFill, { backgroundColor: COMBAT_PALETTE.abyssalReserve, width: `${abyssalReserve}%` }]} />
         </View>
       </View>
 

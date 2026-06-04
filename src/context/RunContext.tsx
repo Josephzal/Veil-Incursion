@@ -121,9 +121,9 @@ function aggregateModifiers(trinkets: Trinket[]) {
       parryWindowBonus: acc.parryWindowBonus + (t.parryWindowBonus ?? 0),
       parryMultiplierBonus: acc.parryMultiplierBonus + (t.parryMultiplierBonus ?? 0),
       sliceDamagePenalty: acc.sliceDamagePenalty + (t.sliceDamagePenalty ?? 0),
-      startingKineticPercent: Math.max(acc.startingKineticPercent, t.startingKineticPercent ?? 0),
+      startingAbyssalReservePercent: Math.max(acc.startingAbyssalReservePercent, t.startingAbyssalReservePercent ?? 0),
     }),
-    { parryWindowBonus: 0, parryMultiplierBonus: 0, sliceDamagePenalty: 0, startingKineticPercent: 0 },
+    { parryWindowBonus: 0, parryMultiplierBonus: 0, sliceDamagePenalty: 0, startingAbyssalReservePercent: 0 },
   );
 }
 
@@ -145,7 +145,7 @@ function createInitialRunState(): RunState {
     parryWindowBonus: 0,
     parryMultiplierBonus: 0,
     sliceDamagePenalty: 0,
-    startingKineticPercent: 0,
+    startingAbyssalReservePercent: 0,
     combatNodesCleared: 0,
   };
 }

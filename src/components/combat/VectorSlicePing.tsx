@@ -77,7 +77,7 @@ export default function VectorSlicePing({
         onPress={onPress}
         disabled={!ready || disabled}
         style={styles.hitbox}
-        accessibilityLabel="Vector slice ready"
+        accessibilityLabel="Eviscerate ready"
       >
         <Animated.View
           style={[

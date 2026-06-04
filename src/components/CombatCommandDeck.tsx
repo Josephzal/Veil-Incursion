@@ -3,29 +3,36 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 
 export type CombatDeckAction =
-  | 'KINETIC_STRIKE'
-  | 'AEGIS_PROTOCOL'
-  | 'FLUID_VENT'
+  | 'STRIKE'
+  | 'ABYSSAL_WARD'
+  | 'BREATHING_TECHNIQUE'
   | 'COUNTER_STANCE';
 
+export const STRIKE_DECK_LABEL = '[ STRIKE ]';
+export const ABYSSAL_STRIKE_PRIMED_LABEL = '[ ABYSSAL STRIKE ]';
+
+export function strikeDeckLabel(wardPrimed: boolean): string {
+  return wardPrimed ? ABYSSAL_STRIKE_PRIMED_LABEL : STRIKE_DECK_LABEL;
+}
+
 export const DECK_ACTION_LABELS: Record<CombatDeckAction, string> = {
-  KINETIC_STRIKE: '[ KINETIC STRIKE ]',
-  FLUID_VENT: '[ FLUID VENT ]',
+  STRIKE: STRIKE_DECK_LABEL,
+  BREATHING_TECHNIQUE: '[ BREATHING TECHNIQUE ]',
   COUNTER_STANCE: '[ COUNTER STANCE ]',
-  AEGIS_PROTOCOL: '[ AEGIS PROTOCOL ]',
+  ABYSSAL_WARD: '[ ABYSSAL WARD ]',
 };
 
-/** 2×2 grid order: strike / vent on row 1, counter / aegis on row 2. */
+/** 2×2 grid order: strike / breathing on row 1, counter / abyssal ward on row 2. */
 export const COMMAND_DECK_GRID: CombatDeckAction[] = [
-  'KINETIC_STRIKE',
-  'FLUID_VENT',
+  'STRIKE',
+  'BREATHING_TECHNIQUE',
   'COUNTER_STANCE',
-  'AEGIS_PROTOCOL',
+  'ABYSSAL_WARD',
 ];
 
 const MONO = 'monospace';
 const TILE_HEIGHT = 52;
-/** 2×2 grid: two tile rows + row gap + deck padding (matches minHeight safeguard). */
+const DECK_TILE_FILL = '#000000';
 export const COMMAND_DECK_MIN_HEIGHT = TILE_HEIGHT * 2 + 8 + 12;
 
 interface CombatCommandDeckProps {
@@ -37,6 +44,8 @@ interface CombatCommandDeckProps {
   getStagedHeader: (action: CombatDeckAction) => string;
   getStagedCostImpact: (action: CombatDeckAction) => string;
   getActionAccent?: (action: CombatDeckAction) => string | undefined;
+  getActionLabel?: (action: CombatDeckAction) => string;
+  getActionGlow?: (action: CombatDeckAction) => boolean;
   borderColor: string;
   primaryColor: string;
   mutedColor: string;
@@ -52,6 +61,8 @@ export default function CombatCommandDeck({
   getStagedHeader,
   getStagedCostImpact,
   getActionAccent,
+  getActionLabel,
+  getActionGlow,
   borderColor,
   primaryColor,
   mutedColor,
@@ -63,18 +74,24 @@ export default function CombatCommandDeck({
     !frameless ? { borderColor } : null,
   ];
 
+  const labelFor = (action: CombatDeckAction) =>
+    getActionLabel?.(action) ?? DECK_ACTION_LABELS[action];
+
   const renderTile = (action: CombatDeckAction) => {
     const enabled = isActionEnabled(action);
     const accent = getActionAccent?.(action);
-    return (
+    const glow = Boolean(enabled && accent && getActionGlow?.(action));
+    const tileBorderColor = enabled && accent ? accent : borderColor;
+
+    const tileBody = (
       <Pressable
-        key={action}
         onPress={() => enabled && onSelectAction(action)}
         disabled={!enabled}
         style={[
           styles.deckTile,
+          glow ? styles.deckTileInset : { borderColor: tileBorderColor, borderWidth: 1 },
           {
-            borderColor: enabled && accent ? accent : borderColor,
+            backgroundColor: glow ? DECK_TILE_FILL : 'transparent',
             opacity: enabled ? 1 : 0.4,
           },
         ]}
@@ -88,9 +105,30 @@ export default function CombatCommandDeck({
           adjustsFontSizeToFit
           minimumFontScale={0.75}
         >
-          {DECK_ACTION_LABELS[action]}
+          {labelFor(action)}
         </Text>
       </Pressable>
+    );
+
+    if (!glow || !accent) {
+      return (
+        <View key={action} style={styles.tileSlot}>
+          {tileBody}
+        </View>
+      );
+    }
+
+    return (
+      <View
+        key={action}
+        style={[
+          styles.tileSlot,
+          styles.tileBorderGlow,
+          { borderColor: accent, shadowColor: accent },
+        ]}
+      >
+        {tileBody}
+      </View>
     );
   };
 
@@ -181,16 +219,33 @@ const styles = StyleSheet.create({
   },
   gridRow: {
     flexDirection: 'row',
+    alignItems: 'stretch',
     gap: 8,
     width: '100%',
+    minHeight: TILE_HEIGHT,
+  },
+  tileSlot: {
+    flex: 1,
+    minHeight: TILE_HEIGHT,
+    overflow: 'visible',
+  },
+  tileBorderGlow: {
+    borderWidth: 1.5,
+    backgroundColor: 'transparent',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 5,
+    elevation: 4,
   },
   deckTile: {
-    flex: 1,
+    width: '100%',
     height: TILE_HEIGHT,
-    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
+  },
+  deckTileInset: {
+    borderWidth: 0,
   },
   tileLabel: {
     fontFamily: MONO,

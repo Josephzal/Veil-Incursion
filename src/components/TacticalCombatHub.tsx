@@ -11,13 +11,17 @@ import { useTerminal } from '../context/TerminalContext';
 import { INITIAL_SECTOR_POOL } from '../data/regions';
 import { advanceEnemyIntent, spawnEnemyProfile } from '../data/enemies';
 import { bossStrikeDamage, rollBossIntent, shouldShiftBossPhase } from '../data/bossCombat';
-import { COMBAT_ACTION, ENEMY_KINETIC_SIPHON_REQUEST, EnemyCombatProfile, EnemyIntent } from '../types/run';
+import { COMBAT_ACTION, ENEMY_ABYSSAL_SIPHON_REQUEST, EnemyCombatProfile, EnemyIntent } from '../types/run';
 
 import { ResolvedWeaponCombatStats } from '../data/inventory';
 import { BossRuntimeProfile, EnvironmentalModifiers } from '../types/game';
 import CombatTelemetryGaugeRow from './combat/CombatHorizontalGauge';
 import type { ApparitionViewportRef } from './combat/ApparitionViewport';
-import CombatCommandDeck, { DECK_ACTION_LABELS, type CombatDeckAction } from './CombatCommandDeck';
+import CombatCommandDeck, {
+  DECK_ACTION_LABELS,
+  strikeDeckLabel,
+  type CombatDeckAction,
+} from './CombatCommandDeck';
 import ParryMatrixOverlay from './combat/ParryMatrixOverlay';
 import VectorSliceOverlay, { ORIGIN_JITTER } from './combat/VectorSliceOverlay';
 import {
@@ -28,15 +32,15 @@ import {
   type CombatEnemyTelemetry,
   formatHostileId,
   formatIntentReadout,
-  GAUGE_KINETIC,
+  GAUGE_ABYSSAL,
   GAUGE_SOUL_ANCHOR,
   GAUGE_STAMINA,
   GAUGE_TRACK_BORDER,
 } from '../utils/combatTelemetryFormat';
 import VignetteFlashOverlay from './VignetteFlashOverlay';
 import {
-  applyKineticSiphon,
-  formatKineticSiphonLog,
+  applyAbyssalSiphon,
+  formatAbyssalSiphonLog,
 } from '../utils/combatResourceState';
 import { useReactiveCombatStatus } from '../hooks/useReactiveCombatStatus';
 import {
@@ -57,7 +61,7 @@ const P = {
   kr: '#bae6fd', krBorder: '#7dd3fc', parry: '#00ff33', defeat: '#5c0606',
 };
 const PARRY_DURATION = 2400;
-const AEGIS_STRIKE_ACCENT = '#fde68a';
+const WARD_STRIKE_ACCENT = '#fde68a';
 type CombatPhase = 'TEXT_COMBAT' | 'DEFEND_PARRY' | 'OFFENSE_SLICE' | 'RESOLUTION';
 
 interface TacticalCombatHubProps {
@@ -69,7 +73,7 @@ interface TacticalCombatHubProps {
   registerKillResolver?: (resolver: () => void) => void;
   onCombatComplete?: (r: { victory: boolean; remainingHp: number; remainingStamina: number }) => void;
   initialOperativeHp?: number; initialStamina?: number; maxStamina?: number; maxSoulAnchor?: number;
-  startingKineticPercent?: number; parryMultiplierBonus?: number; parryWindowBonus?: number;
+  startingAbyssalReservePercent?: number; parryMultiplierBonus?: number; parryWindowBonus?: number;
   sliceDamagePenalty?: number; onTerminalLog?: (text: string) => void;
   enemyProfile?: EnemyCombatProfile | null; nodeIndex?: number;
   weaponCombatStats?: ResolvedWeaponCombatStats;
@@ -94,7 +98,7 @@ export default function TacticalCombatHub({
   apparitionRef,
   registerKillResolver,
   onCombatComplete, initialOperativeHp = 100, initialStamina = 100, maxStamina = 100,
-  maxSoulAnchor = 100, startingKineticPercent = 0, parryMultiplierBonus = 0,
+  maxSoulAnchor = 100, startingAbyssalReservePercent = 0, parryMultiplierBonus = 0,
   parryWindowBonus = 0, sliceDamagePenalty = 0, onTerminalLog,
   enemyProfile = null, nodeIndex = 0,
   weaponCombatStats,
@@ -109,10 +113,10 @@ export default function TacticalCombatHub({
     startingStaminaPenalty: 0,
   };
   const strikeStats = weaponCombatStats ?? {
-    strikeDamage: COMBAT_ACTION.KINETIC_STRIKE_DAMAGE,
-    strikeStaminaCost: COMBAT_ACTION.KINETIC_STRIKE_STAMINA,
-    exhaustedStrikeDamage: COMBAT_ACTION.KINETIC_STRIKE_EXHAUSTED_DAMAGE,
-    kineticChargePerStrike: COMBAT_ACTION.KINETIC_CHARGE,
+    strikeDamage: COMBAT_ACTION.ABYSSAL_STRIKE_DAMAGE,
+    strikeStaminaCost: COMBAT_ACTION.ABYSSAL_STRIKE_STAMINA,
+    exhaustedStrikeDamage: COMBAT_ACTION.ABYSSAL_STRIKE_EXHAUSTED_DAMAGE,
+    abyssalChargePerStrike: COMBAT_ACTION.ABYSSAL_RESERVE_CHARGE,
     label: 'Standard Blade',
   };
   const { theme, profile, awardCurrencies } = useTerminal();
@@ -125,11 +129,11 @@ export default function TacticalCombatHub({
   const [isPlayerTurn, setIsPlayerTurn] = useState(true);
   const [operativeHp, setOperativeHp] = useState(initialOperativeHp);
   const [stamina, setStamina] = useState(initialStamina);
-  const [kineticReservoir, setKineticReservoir] = useState(startingKineticPercent);
+  const [abyssalReserve, setAbyssalReserve] = useState(startingAbyssalReservePercent);
   const { isExhausted } = useReactiveCombatStatus(stamina);
-  const [aegisActive, setAegisActive] = useState(false);
+  const [abyssalWardActive, setAbyssalWardActive] = useState(false);
   /** True after Aegis blocks — next Kinetic Strike gets bonus KR (deck highlight). */
-  const [strikeKrPrimed, setStrikeKrPrimed] = useState(false);
+  const [strikeArPrimed, setStrikeArPrimed] = useState(false);
   const [counterPrepActive, setCounterPrepActive] = useState(false);
   const [isSuccessState, setIsSuccessState] = useState(false);
   const [isFailureState, setIsFailureState] = useState(false);
@@ -145,10 +149,10 @@ export default function TacticalCombatHub({
 
   const operativeHpRef = useRef(initialOperativeHp);
   const staminaRef = useRef(initialStamina);
-  const kineticRef = useRef(startingKineticPercent);
+  const abyssalRef = useRef(startingAbyssalReservePercent);
   const skipRegenRef = useRef(false);
-  const aegisRef = useRef(false);
-  const aegisKrRef = useRef(false);
+  const abyssalWardRef = useRef(false);
+  const wardStrikeBonusRef = useRef(false);
   const counterRef = useRef(false);
   const pendingDmgRef = useRef(0);
   const pendingUnblockRef = useRef(false);
@@ -175,8 +179,9 @@ export default function TacticalCombatHub({
   const log = (t: string) => onTerminalLog?.(t);
   const parryTimingWindowBonus = parryWindowBonus * 0.02;
   const parryTimingBlindPenalty = env.isPlayerBlinded ? 0.015 : 0;
-  const counterReady = kineticReservoir >= COMBAT_ACTION.COUNTER_KINETIC_MIN && !isExhausted;
-  const sliceReady = kineticReservoir >= COMBAT_ACTION.KINETIC_CAP && !isExhausted;
+  const counterReady = abyssalReserve >= COMBAT_ACTION.COUNTER_ABYSSAL_MIN && !isExhausted;
+  const sliceReady = abyssalReserve >= COMBAT_ACTION.ABYSSAL_RESERVE_CAP && !isExhausted;
+  const strikeWardPrimed = strikeArPrimed || wardStrikeBonusRef.current;
 
   const applyStamina = (next: number) => {
     const clamped = Math.max(0, Math.min(next, maxStamina));
@@ -188,23 +193,23 @@ export default function TacticalCombatHub({
   useEffect(() => {
     cycleRef.current = cycleState; enemyRef.current = enemy;
     operativeHpRef.current = operativeHp; staminaRef.current = stamina;
-    kineticRef.current = kineticReservoir;
+    abyssalRef.current = abyssalReserve;
     counterRef.current = counterPrepActive;
-  }, [cycleState, enemy, operativeHp, stamina, kineticReservoir, counterPrepActive]);
+  }, [cycleState, enemy, operativeHp, stamina, abyssalReserve, counterPrepActive]);
 
 
   const syncEnemy = (e: EnemyCombatProfile) => { enemyRef.current = e; setEnemy(e); };
-  const chargeKr = (amt: number) => setKineticReservoir((p) => {
-    const n = Math.min(p + amt, COMBAT_ACTION.KINETIC_CAP); kineticRef.current = n; return n;
+  const chargeAr = (amt: number) => setAbyssalReserve((p) => {
+    const n = Math.min(p + amt, COMBAT_ACTION.ABYSSAL_RESERVE_CAP); abyssalRef.current = n; return n;
   });
-  const primeAegisStrikeBonus = () => {
-    aegisKrRef.current = true;
-    setStrikeKrPrimed(true);
+  const primeWardStrikeBonus = () => {
+    wardStrikeBonusRef.current = true;
+    setStrikeArPrimed(true);
   };
-  const consumeAegisStrikeBonus = () => {
-    const primed = aegisKrRef.current;
-    aegisKrRef.current = false;
-    setStrikeKrPrimed(false);
+  const consumeWardStrikeBonus = () => {
+    const primed = wardStrikeBonusRef.current;
+    wardStrikeBonusRef.current = false;
+    setStrikeArPrimed(false);
     return primed;
   };
   const scaleSlice = (d: number) => sliceDamagePenalty > 0 ? Math.floor(d * (1 - sliceDamagePenalty)) : d;
@@ -237,12 +242,12 @@ export default function TacticalCombatHub({
 
   const hurtPlayer = (raw: number, unblockable = false, msg?: string) => {
     let dmg = raw;
-    if (!unblockable && aegisRef.current) {
-      dmg = Math.floor(dmg * (1 - COMBAT_ACTION.AEGIS_BLOCK_PCT));
-      aegisRef.current = false;
-      setAegisActive(false);
-      primeAegisStrikeBonus();
-      log(`[AEGIS] >> Barrier absorbed 50% — kinetic overcharge primed (+${COMBAT_ACTION.AEGIS_KINETIC_BONUS}% KR next strike).`);
+    if (!unblockable && abyssalWardRef.current) {
+      dmg = Math.floor(dmg * (1 - COMBAT_ACTION.ABYSSAL_WARD_BLOCK_PCT));
+      abyssalWardRef.current = false;
+      setAbyssalWardActive(false);
+      primeWardStrikeBonus();
+      log(`[ABYSSAL WARD] >> Barrier absorbed 50% — abyssal overcharge primed (+${COMBAT_ACTION.ABYSSAL_WARD_STRIKE_BONUS}% AR next strike).`);
     }
     log(msg ?? `>> ENEMY STRIKE — ${dmg} DAMAGE DEALT`);
     setOperativeHp((p) => { const n = Math.max(p - dmg, 0); operativeHpRef.current = n; if (n <= 0) resolve(false); return n; });
@@ -339,14 +344,14 @@ export default function TacticalCombatHub({
         log(`>> ${e.designation} STRIPS STAMINA (-20).`);
         applyStamina(staminaRef.current - 20);
         break;
-      case 'SIPHON_KINETIC': {
-        const { nextKinetic, siphoned } = applyKineticSiphon(
-          kineticRef.current,
-          ENEMY_KINETIC_SIPHON_REQUEST,
+      case 'SIPHON_ABYSSAL': {
+        const { nextAbyssal, siphoned } = applyAbyssalSiphon(
+          abyssalRef.current,
+          ENEMY_ABYSSAL_SIPHON_REQUEST,
         );
-        log(formatKineticSiphonLog(e.designation, ENEMY_KINETIC_SIPHON_REQUEST, siphoned));
-        kineticRef.current = nextKinetic;
-        setKineticReservoir(nextKinetic);
+        log(formatAbyssalSiphonLog(e.designation, ENEMY_ABYSSAL_SIPHON_REQUEST, siphoned));
+        abyssalRef.current = nextAbyssal;
+        setAbyssalReserve(nextAbyssal);
         break;
       }
       case 'EVADE': log(`>> ${e.designation} EVADE posture — strikes deal 50%.`); break;
@@ -418,27 +423,27 @@ export default function TacticalCombatHub({
     const e = enemyProfile ?? spawnEnemyProfile(INITIAL_SECTOR_POOL[0], nodeIndex, false);
     syncEnemy({ ...e });
     operativeHpRef.current = initialOperativeHp; staminaRef.current = initialStamina;
-    kineticRef.current = startingKineticPercent; skipRegenRef.current = false;
-    aegisRef.current = false;
-    aegisKrRef.current = false;
-    setStrikeKrPrimed(false);
+    abyssalRef.current = startingAbyssalReservePercent; skipRegenRef.current = false;
+    abyssalWardRef.current = false;
+    wardStrikeBonusRef.current = false;
+    setStrikeArPrimed(false);
     counterRef.current = false;
     resolutionRef.current = null; dismissedRef.current = false;
     applyStamina(initialStamina);
-    setKineticReservoir(startingKineticPercent);
+    setAbyssalReserve(startingAbyssalReservePercent);
     setOperativeHp(initialOperativeHp);
-    setAegisActive(false);
+    setAbyssalWardActive(false);
     setCounterPrepActive(false);
     setSelectedAction(null);
     setResolutionOutcome(null); setIsPlayerTurn(true); setCycleState('TEXT_COMBAT');
-    log('>> TACTICAL COMBAT LINK ESTABLISHED — AEGIS PROTOCOLS ONLINE.');
+    log('>> TACTICAL COMBAT LINK ESTABLISHED — ABYSSAL WARDS ONLINE.');
     log(`>> WEAPON LINK: ${strikeStats.label} // STRIKE ${strikeStats.strikeDamage} DMG / ${strikeStats.strikeStaminaCost} STAM`);
     if (env.isPlayerBlinded) log('>> ENV: OPERATIVE BLINDED — Counter Stance window tightened 15%.');
     if (env.hasTetanusGlitch) log('>> ENV: TETANUS GLITCH ACTIVE — exhaustion triggers 3 HP bleed.');
     if (env.startingStaminaPenalty > 0) log(`>> ENV: STAMINA PENALTY — entry ceiling reduced to 50.`);
     if (env.isEnemyPhaseShrouded) log('>> ENV: ENEMY PHASE SHROUDED — 20% miss chance on strikes.');
     log(`>> TARGET LOCK: ${e.designation} // CLASS ${e.class}`);
-    if (startingKineticPercent > 0) log(`>> Kinetic reservoir pre-charged to ${startingKineticPercent}%.`);
+    if (startingAbyssalReservePercent > 0) log(`>> Abyssal reserve pre-charged to ${startingAbyssalReservePercent}%.`);
     bossRuntimeRef.current = bossProfile;
     bossPhaseRef.current = bossProfile?.currentPhase ?? 1;
   };
@@ -454,31 +459,31 @@ export default function TacticalCombatHub({
       spendStam(strikeStats.strikeStaminaCost);
     }
     const exhausted = overdraw || staminaRef.current === 0;
-    if (aegisRef.current) {
-      aegisRef.current = false;
-      setAegisActive(false);
+    if (abyssalWardRef.current) {
+      abyssalWardRef.current = false;
+      setAbyssalWardActive(false);
     }
-    const krPrimed = consumeAegisStrikeBonus();
-    const krGain = krPrimed
-      ? COMBAT_ACTION.AEGIS_KINETIC_BONUS
-      : strikeStats.kineticChargePerStrike;
-    chargeKr(krGain);
-    if (krPrimed) {
-      log(`[AEGIS OVERCHARGE] >> Kinetic reservoir +${COMBAT_ACTION.AEGIS_KINETIC_BONUS}%.`);
+    const arPrimed = consumeWardStrikeBonus();
+    const arGain = arPrimed
+      ? COMBAT_ACTION.ABYSSAL_WARD_STRIKE_BONUS
+      : strikeStats.abyssalChargePerStrike;
+    chargeAr(arGain);
+    if (arPrimed) {
+      log(`[ABYSSAL WARD OVERCHARGE] >> Abyssal reserve +${COMBAT_ACTION.ABYSSAL_WARD_STRIKE_BONUS}%.`);
     }
     const dmg = exhausted ? strikeStats.exhaustedStrikeDamage : strikeStats.strikeDamage;
-    if (hurtEnemy(dmg, '[KINETIC STRIKE]')) return;
+    if (hurtEnemy(dmg, arPrimed ? '[ABYSSAL STRIKE]' : '[STRIKE]')) return;
     passToEnemy(false);
   };
 
-  const onAegis = () => {
+  const onAbyssalWard = () => {
     if (cycleState !== 'TEXT_COMBAT' || !isPlayerTurn) return;
-    if (!spendStam(COMBAT_ACTION.AEGIS_STAMINA)) { log('[REJECTED] >> Insufficient stamina.'); return; }
-    aegisRef.current = true;
-    setAegisActive(true);
-    primeAegisStrikeBonus();
+    if (!spendStam(COMBAT_ACTION.ABYSSAL_WARD_STAMINA)) { log('[REJECTED] >> Insufficient stamina.'); return; }
+    abyssalWardRef.current = true;
+    setAbyssalWardActive(true);
+    primeWardStrikeBonus();
     log(
-      `[AEGIS PROTOCOL] >> Barrier armed — blocks 50% next hit. Next Kinetic Strike +${COMBAT_ACTION.AEGIS_KINETIC_BONUS}% KR.`,
+      `[ABYSSAL WARD] >> Barrier armed — blocks 50% next hit. Next Abyssal Strike +${COMBAT_ACTION.ABYSSAL_WARD_STRIKE_BONUS}% AR.`,
     );
     passToEnemy(false);
   };
@@ -486,7 +491,7 @@ export default function TacticalCombatHub({
   const onCounter = () => {
     if (cycleState !== 'TEXT_COMBAT' || !isPlayerTurn) return;
     if (isExhausted) { log('[REJECTED] >> Exhausted — counter offline.'); return; }
-    if (kineticRef.current < COMBAT_ACTION.COUNTER_KINETIC_MIN) { log('[REJECTED] >> KR below 50%.'); return; }
+    if (abyssalRef.current < COMBAT_ACTION.COUNTER_ABYSSAL_MIN) { log('[REJECTED] >> AR below 50%.'); return; }
     if (!spendStam(COMBAT_ACTION.COUNTER_STAMINA)) { log('[REJECTED] >> Insufficient stamina.'); return; }
     counterRef.current = true; setCounterPrepActive(true);
     log('[COUNTER STANCE] >> Parry matrix armed.'); passToEnemy(true);
@@ -494,15 +499,15 @@ export default function TacticalCombatHub({
 
   const onVent = () => {
     if (cycleState !== 'TEXT_COMBAT' || !isPlayerTurn) return;
-    applyStamina(staminaRef.current + COMBAT_ACTION.FLUID_VENT_RESTORE);
-    log(`[FLUID VENT] >> Stamina restored (+${COMBAT_ACTION.FLUID_VENT_RESTORE}).`); passToEnemy(false);
+    applyStamina(staminaRef.current + COMBAT_ACTION.BREATHING_TECHNIQUE_RESTORE);
+    log(`[BREATHING TECHNIQUE] >> Stamina restored (+${COMBAT_ACTION.BREATHING_TECHNIQUE_RESTORE}).`); passToEnemy(false);
   };
 
   const onSlice = () => {
     if (cycleState !== 'TEXT_COMBAT' || !isPlayerTurn) return;
-    if (isExhausted) { log('[REJECTED] >> Exhausted — slice offline.'); return; }
-    if (kineticRef.current < COMBAT_ACTION.KINETIC_CAP) { log('[REJECTED] >> KR below 100%.'); return; }
-    log('[VECTOR SLICE] >> Execution aperture open.'); triggerSlice();
+    if (isExhausted) { log('[REJECTED] >> Exhausted — eviscerate offline.'); return; }
+    if (abyssalRef.current < COMBAT_ACTION.ABYSSAL_RESERVE_CAP) { log('[REJECTED] >> AR below 100%.'); return; }
+    log('[EVISCERATE] >> Execution aperture open.'); triggerSlice();
   };
 
   const registerParryArena = (layout: ParryArenaLayout) => {
@@ -601,10 +606,10 @@ export default function TacticalCombatHub({
     s.evaluated = true; clearSliceTimers(); activeSliceRef.current = -1; setActiveSliceIndex(-1);
     const hits = s.hitCount;
     if (hits === 0) { log('[EXECUTION FAILED] >> 0 damage.'); setCycleState('TEXT_COMBAT'); passToEnemy(false); return; }
-    const base = scaleSlice(COMBAT_ACTION.VECTOR_SLICE_DAMAGE);
+    const base = scaleSlice(COMBAT_ACTION.EVISCERATE_DAMAGE);
     const dmg = hits === 3 ? base : Math.floor(base * (hits / 3));
     log(hits === 3 ? `[EXECUTION SEVERANCE] >> Perfect [3/3] — ${dmg} damage.` : `[EXECUTION SEVERANCE] >> [${hits}/3] — ${dmg} damage.`);
-    if (hurtEnemy(dmg, '[VECTOR SLICE]')) return;
+    if (hurtEnemy(dmg, '[EVISCERATE]')) return;
     setCycleState('TEXT_COMBAT'); passToEnemy(false);
   };
 
@@ -674,11 +679,11 @@ export default function TacticalCombatHub({
   const isDeckActionEnabled = (action: CombatDeckAction): boolean => {
     if (!isPlayerTurn || cycleState !== 'TEXT_COMBAT') return false;
     switch (action) {
-      case 'KINETIC_STRIKE':
+      case 'STRIKE':
         return true;
-      case 'AEGIS_PROTOCOL':
-        return stamina >= COMBAT_ACTION.AEGIS_STAMINA;
-      case 'FLUID_VENT':
+      case 'ABYSSAL_WARD':
+        return stamina >= COMBAT_ACTION.ABYSSAL_WARD_STAMINA;
+      case 'BREATHING_TECHNIQUE':
         return true;
       case 'COUNTER_STANCE':
         return counterReady && stamina >= COMBAT_ACTION.COUNTER_STAMINA;
@@ -687,33 +692,41 @@ export default function TacticalCombatHub({
     }
   };
 
+  const getDeckActionLabel = (action: CombatDeckAction): string => {
+    if (action === 'STRIKE') return strikeDeckLabel(strikeWardPrimed);
+    return DECK_ACTION_LABELS[action];
+  };
+
   const getDeckActionAccent = (action: CombatDeckAction): string | undefined => {
-    if (action === 'KINETIC_STRIKE' && isPlayerTurn && (aegisKrRef.current || strikeKrPrimed)) {
-      return AEGIS_STRIKE_ACCENT;
+    if (action === 'STRIKE' && isPlayerTurn && strikeWardPrimed) {
+      return WARD_STRIKE_ACCENT;
     }
     if (action === 'COUNTER_STANCE' && counterReady) return P.parry;
     return undefined;
   };
 
+  const getDeckActionGlow = (action: CombatDeckAction): boolean =>
+    action === 'STRIKE' && isPlayerTurn && strikeWardPrimed;
+
   const getStagedHeader = (action: CombatDeckAction): string => {
-    const name = DECK_ACTION_LABELS[action].replace(/^\[|\]$/g, '').trim();
+    const name = getDeckActionLabel(action).replace(/^\[|\]$/g, '').trim();
     return `SYSTEM READY // ${name} SELECTED`;
   };
 
   const getStagedCostImpact = (action: CombatDeckAction): string => {
     switch (action) {
-      case 'KINETIC_STRIKE': {
+      case 'STRIKE': {
         const overdraw = isExhausted || stamina < strikeStats.strikeStaminaCost;
         const dmg = overdraw ? strikeStats.exhaustedStrikeDamage : strikeStats.strikeDamage;
         const cost = overdraw ? 'OVERDRAW' : String(strikeStats.strikeStaminaCost);
         return `COST: ${cost} ENERGY // EXPECTED IMPACT: ${dmg} DAMAGE`;
       }
-      case 'AEGIS_PROTOCOL':
-        return `COST: ${COMBAT_ACTION.AEGIS_STAMINA} STAM // 50% BLOCK\nNEXT KINETIC STRIKE +${COMBAT_ACTION.AEGIS_KINETIC_BONUS}% KINETIC ENERGY`;
-      case 'FLUID_VENT':
-        return `COST: 0 ENERGY // EXPECTED IMPACT: +${COMBAT_ACTION.FLUID_VENT_RESTORE} STAMINA`;
+      case 'ABYSSAL_WARD':
+        return `COST: ${COMBAT_ACTION.ABYSSAL_WARD_STAMINA} STAM // 50% BLOCK\nNEXT ABYSSAL STRIKE +${COMBAT_ACTION.ABYSSAL_WARD_STRIKE_BONUS}% ABYSSAL ENERGY`;
+      case 'BREATHING_TECHNIQUE':
+        return `COST: 0 ENERGY // EXPECTED IMPACT: +${COMBAT_ACTION.BREATHING_TECHNIQUE_RESTORE} STAMINA`;
       case 'COUNTER_STANCE':
-        return `COST: ${COMBAT_ACTION.COUNTER_STAMINA} ENERGY + ${COMBAT_ACTION.COUNTER_KINETIC_MIN}% KINETIC // EXPECTED IMPACT: PARRY + ${Math.floor(COMBAT_ACTION.COUNTER_DAMAGE * (1 + parryMultiplierBonus))} RETALIATION`;
+        return `COST: ${COMBAT_ACTION.COUNTER_STAMINA} ENERGY + ${COMBAT_ACTION.COUNTER_ABYSSAL_MIN}% ABYSSAL // EXPECTED IMPACT: PARRY + ${Math.floor(COMBAT_ACTION.COUNTER_DAMAGE * (1 + parryMultiplierBonus))} RETALIATION`;
       default:
         return '';
     }
@@ -722,13 +735,13 @@ export default function TacticalCombatHub({
   const confirmSelectedAction = () => {
     if (!selectedAction) return;
     switch (selectedAction) {
-      case 'KINETIC_STRIKE':
+      case 'STRIKE':
         onStrike();
         break;
-      case 'AEGIS_PROTOCOL':
-        onAegis();
+      case 'ABYSSAL_WARD':
+        onAbyssalWard();
         break;
-      case 'FLUID_VENT':
+      case 'BREATHING_TECHNIQUE':
         onVent();
         break;
       case 'COUNTER_STANCE':
@@ -768,7 +781,7 @@ export default function TacticalCombatHub({
   ]);
 
   const soulAnchorRatio = maxSoulAnchor > 0 ? operativeHp / maxSoulAnchor : 0;
-  const kineticRatio = kineticReservoir / 100;
+  const abyssalRatio = abyssalReserve / 100;
   const staminaRatio = maxStamina > 0 ? stamina / maxStamina : 0;
 
   const commandDeck = (
@@ -781,6 +794,8 @@ export default function TacticalCombatHub({
       getStagedHeader={getStagedHeader}
       getStagedCostImpact={getStagedCostImpact}
       getActionAccent={getDeckActionAccent}
+      getActionLabel={getDeckActionLabel}
+      getActionGlow={getDeckActionGlow}
       borderColor={theme.borderColor}
       primaryColor={theme.primaryColor}
       mutedColor={theme.mutedColor}
@@ -798,10 +813,10 @@ export default function TacticalCombatHub({
         trackBorderColor={GAUGE_TRACK_BORDER}
       />
       <CombatTelemetryGaugeRow
-        label={`KINETIC RESERVOIR // ${kineticReservoir}%${counterReady ? ' // COUNTER READY' : ''}`}
+        label={`ABYSSAL RESERVE // ${abyssalReserve}%${counterReady ? ' // COUNTER READY' : ''}`}
         labelColor={P.kr}
-        fillColor={GAUGE_KINETIC}
-        ratio={kineticRatio}
+        fillColor={GAUGE_ABYSSAL}
+        ratio={abyssalRatio}
         trackBorderColor={GAUGE_TRACK_BORDER}
       />
       <CombatTelemetryGaugeRow
@@ -845,7 +860,7 @@ export default function TacticalCombatHub({
           {`SOUL ANCHOR INTEGRITY // ${operativeHp}/${maxSoulAnchor}`}
         </Text>
         <Text style={[styles.telemetryLine, { color: P.kr }]} numberOfLines={1} ellipsizeMode="tail">
-          {`KINETIC RESERVOIR // ${kineticReservoir}%${counterReady ? ' // COUNTER READY' : ''}`}
+          {`ABYSSAL RESERVE // ${abyssalReserve}%${counterReady ? ' // COUNTER READY' : ''}`}
         </Text>
         <Text style={[styles.telemetryLine, { color: theme.primaryColor }]} numberOfLines={1}>
           {`STAMINA CORE // ${stamina}/${maxStamina}`}

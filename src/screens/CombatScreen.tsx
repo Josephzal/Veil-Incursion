@@ -152,7 +152,7 @@ export default function CombatScreen(): React.JSX.Element {
                 initialStamina={combatEntryStamina}
                 maxStamina={runState.maxStamina}
                 maxSoulAnchor={runState.maxSoulAnchor}
-                startingKineticPercent={runState.startingKineticPercent}
+                startingAbyssalReservePercent={runState.startingAbyssalReservePercent}
                 parryMultiplierBonus={runState.parryMultiplierBonus}
                 parryWindowBonus={runState.parryWindowBonus}
                 sliceDamagePenalty={runState.sliceDamagePenalty}

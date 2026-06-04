@@ -9,7 +9,7 @@ export type EnemyClass = 'GREMLIN' | 'APPARITION' | 'ABOMINATION';
 export type EnemyIntent =
   | 'STRIKE'
   | 'STRIP_STAMINA'
-  | 'SIPHON_KINETIC'
+  | 'SIPHON_ABYSSAL'
   | 'EVADE'
   | 'CHARGE'
   | 'WORLD_ENDER'
@@ -19,11 +19,11 @@ export type EnemyIntent =
 /** Reactive combat debuffs derived from resource pools (stamina === 0 → EXHAUSTED). */
 export type CombatStatusEffect = 'EXHAUSTED';
 
-/** Enemy-requested kinetic drain before per-action clamp (see clampKineticSiphonAmount). */
-export const ENEMY_KINETIC_SIPHON_REQUEST = 25;
+/** Enemy-requested abyssal reserve drain before per-action clamp (see clampAbyssalSiphonAmount). */
+export const ENEMY_ABYSSAL_SIPHON_REQUEST = 25;
 
-/** Hard cap on kinetic energy siphoned from the player per enemy action. */
-export const MAX_KINETIC_SIPHON_PER_ACTION = 15;
+/** Hard cap on abyssal reserve siphoned from the player per enemy action. */
+export const MAX_ABYSSAL_SIPHON_PER_ACTION = 15;
 
 export interface SectorDefinition {
   id: string;
@@ -73,7 +73,7 @@ export interface Trinket {
   sliceDamagePenalty?: number;
   maxHpBonus?: number;
   maxStaminaBonus?: number;
-  startingKineticPercent?: number;
+  startingAbyssalReservePercent?: number;
   hpRestore?: number;
   staminaRestore?: number;
 }
@@ -102,7 +102,7 @@ export interface RunState {
   parryWindowBonus: number;
   parryMultiplierBonus: number;
   sliceDamagePenalty: number;
-  startingKineticPercent: number;
+  startingAbyssalReservePercent: number;
   combatNodesCleared: number;
 }
 
@@ -135,18 +135,18 @@ export interface RadarScanResult {
 
 /** Tactical combat action costs (mirrored in combat UI). */
 export const COMBAT_ACTION = {
-  KINETIC_STRIKE_STAMINA: 20,
-  KINETIC_STRIKE_DAMAGE: 10,
-  KINETIC_STRIKE_EXHAUSTED_DAMAGE: 5,
-  KINETIC_CHARGE: 15,
-  AEGIS_STAMINA: 10,
-  AEGIS_BLOCK_PCT: 0.5,
-  AEGIS_KINETIC_BONUS: 100,
+  ABYSSAL_STRIKE_STAMINA: 20,
+  ABYSSAL_STRIKE_DAMAGE: 10,
+  ABYSSAL_STRIKE_EXHAUSTED_DAMAGE: 5,
+  ABYSSAL_RESERVE_CHARGE: 15,
+  ABYSSAL_WARD_STAMINA: 10,
+  ABYSSAL_WARD_BLOCK_PCT: 0.5,
+  ABYSSAL_WARD_STRIKE_BONUS: 100,
   COUNTER_STAMINA: 40,
-  COUNTER_KINETIC_MIN: 50,
+  COUNTER_ABYSSAL_MIN: 50,
   COUNTER_DAMAGE: 15,
-  FLUID_VENT_RESTORE: 45,
+  BREATHING_TECHNIQUE_RESTORE: 45,
   STAMINA_REGEN: 20,
-  VECTOR_SLICE_DAMAGE: 35,
-  KINETIC_CAP: 100,
+  EVISCERATE_DAMAGE: 35,
+  ABYSSAL_RESERVE_CAP: 100,
 } as const;

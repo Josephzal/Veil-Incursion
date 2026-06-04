@@ -1,6 +1,7 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, TouchableOpacity, Vibration, View } from 'react-native';
 import {
+  Blur,
   Canvas,
   Circle,
   DashPathEffect,
@@ -11,6 +12,12 @@ import {
   SweepGradient,
   vec,
 } from '@shopify/react-native-skia';
+import {
+  Easing as ReanimatedEasing,
+  useDerivedValue,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { getCabalScannerTheme } from './scanner/cabalScannerThemes';
 import type { ScannerCabal } from '../types/scanner';
 import type { RadarDot } from '../types/run';
@@ -44,6 +51,9 @@ const SIPHON_EXTRACT_MS = 280;
 const SIPHON_RING_PEAK_SCALE = 2.5;
 const SIPHON_ILLUMINATE_MIN_OPACITY = 0.35;
 const MIN_SIPHONS_TO_CEASE = 1;
+const SELECTION_GLOW_FADE_MS = 800;
+const SELECTION_GLOW_INNER_SCALE = 1.9;
+const SELECTION_GLOW_OUTER_SCALE = 2.75;
 const SIPHON_HAPTIC_MS = 12;
 
 interface VectorScannerProps {
@@ -220,6 +230,10 @@ function VectorScannerComponent({
 
   const uniformSelectable = contactsLocked || sweepFinished;
   const selectionAccent = theme.blipAccent;
+  const selectionGlowSV = useSharedValue(0);
+  const selectionGlowInnerOpacity = useDerivedValue(() => selectionGlowSV.value * 0.45);
+  const selectionGlowOuterOpacity = useDerivedValue(() => selectionGlowSV.value * 0.24);
+  const selectionGlowRingOpacity = useDerivedValue(() => selectionGlowSV.value * 0.85);
   const scanInteractive =
     active && !contactsLocked && !uniformSelectable && !isCeased;
 
@@ -464,12 +478,25 @@ function VectorScannerComponent({
   useEffect(() => {
     if (!uniformSelectable) {
       uniformSelectAppliedRef.current = false;
+      selectionGlowSV.value = 0;
       return;
     }
     if (uniformSelectAppliedRef.current) return;
     uniformSelectAppliedRef.current = true;
     applyUniformSelectableState();
-  }, [uniformSelectable, applyUniformSelectableState]);
+  }, [uniformSelectable, applyUniformSelectableState, selectionGlowSV]);
+
+  useEffect(() => {
+    if (!uniformSelectable) {
+      selectionGlowSV.value = 0;
+      return;
+    }
+    selectionGlowSV.value = 0;
+    selectionGlowSV.value = withTiming(1, {
+      duration: SELECTION_GLOW_FADE_MS,
+      easing: ReanimatedEasing.out(ReanimatedEasing.cubic),
+    });
+  }, [uniformSelectable, selectionGlowSV]);
 
   useEffect(() => {
     if (!active) {
@@ -716,6 +743,33 @@ function VectorScannerComponent({
             </Group>
           )}
 
+          {uniformSelectable
+            ? nodeBearings.map((node) => (
+                <Group key={`${node.id}-glow`}>
+                  <Circle
+                    cx={node.canvasX}
+                    cy={node.canvasY}
+                    r={node.visualRadius * SELECTION_GLOW_OUTER_SCALE}
+                    color={accentWithAlpha(selectionAccent, 0.7)}
+                    opacity={selectionGlowOuterOpacity}
+                    style="fill"
+                  >
+                    <Blur blur={18} />
+                  </Circle>
+                  <Circle
+                    cx={node.canvasX}
+                    cy={node.canvasY}
+                    r={node.visualRadius * SELECTION_GLOW_INNER_SCALE}
+                    color={accentWithAlpha(selectionAccent, 0.9)}
+                    opacity={selectionGlowInnerOpacity}
+                    style="fill"
+                  >
+                    <Blur blur={11} />
+                  </Circle>
+                </Group>
+              ))
+            : null}
+
           {nodeBearings.map((node) => {
             const opacity = getBlipOpacity(node.id);
             const scale = getBlipScale(node.id);
@@ -737,16 +791,17 @@ function VectorScannerComponent({
           {nodeBearings.map((node) => {
             const opacity = getBlipOpacity(node.id);
             if (opacity <= 0.01 && !uniformSelectable) return null;
+            const scale = getBlipScale(node.id);
             return (
               <Circle
                 key={`${node.id}-ring`}
                 cx={node.canvasX}
                 cy={node.canvasY}
-                r={node.visualRadius * getBlipScale(node.id) + 1.5}
-                color={theme.text}
+                r={node.visualRadius * scale + (uniformSelectable ? 2.5 : 1.5)}
+                color={uniformSelectable ? selectionAccent : theme.text}
                 style="stroke"
-                strokeWidth={uniformSelectable ? 1.5 : 1}
-                opacity={uniformSelectable ? 1 : opacity * 0.9}
+                strokeWidth={uniformSelectable ? 2 : 1}
+                opacity={uniformSelectable ? selectionGlowRingOpacity : opacity * 0.9}
               />
             );
           })}

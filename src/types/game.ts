@@ -51,8 +51,8 @@ export interface CombatNodeState {
   enemyHp: number;
   enemyMaxHp: number;
   currentEnemyIntent: string;
-  kineticReservoir: number;
-  vectorSliceStored: boolean;
+  abyssalReserve: number;
+  eviscerateStored: boolean;
   /** Derived from stamina === 0; EXHAUSTED purged when stamina rises above 0. */
   statusEffects: import('./run').CombatStatusEffect[];
 }
@@ -60,7 +60,7 @@ export interface CombatNodeState {
 export interface WeaponModifiers {
   baseDamageOverride: number;
   staminaCostModifier: number;
-  kineticGainModifier: number;
+  abyssalGainModifier: number;
   parryWindowModifier: number;
 }
 

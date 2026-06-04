@@ -1,7 +1,7 @@
 import type { EnemyIntent } from '../types/run';
 
 export const GAUGE_SOUL_ANCHOR = '#FF453A';
-export const GAUGE_KINETIC = '#00D2C4';
+export const GAUGE_ABYSSAL = '#00D2C4';
 export const GAUGE_STAMINA = '#5C2D91';
 export const GAUGE_HOSTILE_HP = '#FF453A';
 export const GAUGE_TRACK_BORDER = 'rgba(139, 92, 246, 0.45)';
@@ -9,7 +9,7 @@ export const GAUGE_TRACK_BORDER = 'rgba(139, 92, 246, 0.45)';
 const INTENT_READOUT: Record<EnemyIntent, string> = {
   STRIKE: 'STRIKE',
   STRIP_STAMINA: 'TARGETING STAMINA RES',
-  SIPHON_KINETIC: 'SIPHON KINETIC RES',
+  SIPHON_ABYSSAL: 'SIPHON ABYSSAL RES',
   EVADE: 'EVADE POSTURE',
   CHARGE: 'CHARGING WORLD-ENDER',
   WORLD_ENDER: 'WORLD-ENDER UNBLOCK',

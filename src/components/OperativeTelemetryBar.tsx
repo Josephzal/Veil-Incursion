@@ -17,14 +17,14 @@ export default function OperativeTelemetryBar(): React.JSX.Element {
     const healthPct = resourcePercent(runState.soulAnchorIntegrity, runState.maxSoulAnchor);
     const staminaPct = resourcePercent(runState.currentStamina, runState.maxStamina);
     const shieldPct = Math.max(0, Math.min(100, healthPct + 8));
-    const energyPct = Math.max(0, Math.min(100, runState.startingKineticPercent));
+    const energyPct = Math.max(0, Math.min(100, runState.startingAbyssalReservePercent));
     return `HEALTH: ${healthPct}% // SHIELD: ${shieldPct}% // STAMINA: ${staminaPct}% // ENERGY: ${energyPct}%`;
   }, [
     runState.soulAnchorIntegrity,
     runState.maxSoulAnchor,
     runState.currentStamina,
     runState.maxStamina,
-    runState.startingKineticPercent,
+    runState.startingAbyssalReservePercent,
   ]);
 
   return (

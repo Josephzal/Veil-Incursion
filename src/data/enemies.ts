@@ -52,7 +52,7 @@ export function rollEnemyIntent(classType: EnemyClass, chargeTurns: number): Ene
     return Math.random() < 0.45 ? 'STRIP_STAMINA' : 'STRIKE';
   }
   const roll = Math.random();
-  if (roll < 0.35) return 'SIPHON_KINETIC';
+  if (roll < 0.35) return 'SIPHON_ABYSSAL';
   if (roll < 0.55) return 'EVADE';
   return 'STRIKE';
 }
@@ -61,7 +61,7 @@ export function intentLabel(intent: EnemyIntent, designation: string): string {
   const labels: Record<EnemyIntent, string> = {
     STRIKE: `${designation} intends to STRIKE`,
     STRIP_STAMINA: `${designation} intends to STRIP STAMINA`,
-    SIPHON_KINETIC: `${designation} intends to SIPHON KINETIC ENERGY`,
+    SIPHON_ABYSSAL: `${designation} intends to SIPHON KINETIC ENERGY`,
     EVADE: `${designation} intends to EVADE (50% damage reduction)`,
     CHARGE: `${designation} is CHARGING a world-ender (turn ${1}/3)`,
     WORLD_ENDER: `${designation} intends WORLD-ENDER (UNBLOCKABLE)`,

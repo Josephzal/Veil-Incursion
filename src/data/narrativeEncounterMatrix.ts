@@ -20,7 +20,7 @@ export interface OperativeResourceSnapshot {
   soulAnchorIntegrity: number;
   maxStamina: number;
   currentStamina: number;
-  startingKineticPercent: number;
+  startingAbyssalReservePercent: number;
 }
 
 export interface NarrativeResolutionResult {
@@ -125,7 +125,7 @@ const MATRIX_EVENTS: Record<string, MatrixEventTemplate> = {
     scenarioText:
       'Vital-sign monitors scream in harmonic lockstep. Trace the pattern for kinetic gain or strike the display offline.',
     choiceA: { label: '[ A ] PATTERN TRACE', requirement: 'D20 CALIBRATION' },
-    choiceB: { label: '[ B ] KINETIC STRIKE', requirement: 'D20 CALIBRATION' },
+    choiceB: { label: '[ B ] STRIKE', requirement: 'D20 CALIBRATION' },
     interactionMode: 'standard',
   },
   'hospital-04': {
@@ -609,10 +609,10 @@ function resolveStandard(
     runPatch.soulAnchorIntegrity = clamp(pctDelta(snapshot.soulAnchorIntegrity, pct), 1, snapshot.maxSoulAnchor);
   };
   const applyCurrentEnergy = (pct: number) => {
-    runPatch.startingKineticPercent = clamp(pctDelta(snapshot.startingKineticPercent, pct), 0, 100);
+    runPatch.startingAbyssalReservePercent = clamp(pctDelta(snapshot.startingAbyssalReservePercent, pct), 0, 100);
   };
   const applyMaxEnergy = (pct: number) => {
-    runPatch.startingKineticPercent = clamp(pctDelta(snapshot.startingKineticPercent, pct), 0, 100);
+    runPatch.startingAbyssalReservePercent = clamp(pctDelta(snapshot.startingAbyssalReservePercent, pct), 0, 100);
   };
   const applyMaxStamina = (pct: number) => {
     runPatch.maxStamina = pctDelta(snapshot.maxStamina, pct);
@@ -744,7 +744,7 @@ function resolveStandard(
       } else {
         applyMaxShield(5);
         applyCurrentHp(-5);
-        outcome = '>> KINETIC STRIKE — +5% Max Shield / -5% Current HP.';
+        outcome = '>> STRIKE — +5% Max Shield / -5% Current HP.';
         status = 'SUCCESS';
       }
       break;
