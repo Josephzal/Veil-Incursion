@@ -7,6 +7,7 @@ import {
   type ImageSourcePropType,
   type LayoutChangeEvent,
   type StyleProp,
+  type ViewProps,
   type ViewStyle,
   Image as RNImage,
   StyleSheet,
@@ -58,6 +59,7 @@ export interface ApparitionViewportRef {
 export interface ApparitionViewportProps {
   imageSource?: ImageSourcePropType | null;
   style?: StyleProp<ViewStyle>;
+  pointerEvents?: ViewProps['pointerEvents'];
   onEradicationComplete?: () => void;
 }
 
@@ -114,7 +116,10 @@ function PlaceholderGrid({ width, height }: PlaceholderGridProps): React.JSX.Ele
 }
 
 export const ApparitionViewport = forwardRef<ApparitionViewportRef, ApparitionViewportProps>(
-  function ApparitionViewport({ imageSource, style, onEradicationComplete }, ref) {
+  function ApparitionViewport(
+    { imageSource, style, pointerEvents = 'auto', onEradicationComplete },
+    ref,
+  ) {
     const skiaImage = useImage(toSkiaImageSource(imageSource));
     const [layout, setLayout] = useState({ width: 0, height: 0 });
 
@@ -191,7 +196,7 @@ export const ApparitionViewport = forwardRef<ApparitionViewportRef, ApparitionVi
     const showSprite = skiaImage != null && hasLayout;
 
     return (
-      <View style={[styles.root, style]} onLayout={handleLayout}>
+      <View style={[styles.root, style]} onLayout={handleLayout} pointerEvents={pointerEvents}>
         {hasLayout ? (
           <Canvas style={{ width: layout.width, height: layout.height }}>
             <Rect x={0} y={0} width={layout.width} height={layout.height} color={CANVAS_BACKDROP} />

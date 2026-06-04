@@ -4,7 +4,6 @@ import {
   cancelAnimation,
   Easing as ReanimatedEasing,
   runOnJS,
-  runOnUI,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
@@ -40,6 +39,14 @@ import {
   formatKineticSiphonLog,
 } from '../utils/combatResourceState';
 import { useReactiveCombatStatus } from '../hooks/useReactiveCombatStatus';
+import {
+  computeParryArenaLayout,
+  isParryRingsMeet,
+  isTapOnParryCenter,
+  PARRY_RING_SCALE_END,
+  PARRY_RING_SCALE_START,
+  type ParryArenaLayout,
+} from '../utils/parryCollision';
 
 const TELEMETRY_DIVIDER = 'rgba(139, 92, 246, 0.2)';
 
@@ -49,10 +56,7 @@ const P = {
   enemyHp: '#ef4444', unitTitle: '#ffffff', enemyPosture: '#fde68a',
   kr: '#bae6fd', krBorder: '#7dd3fc', parry: '#00ff33', defeat: '#5c0606',
 };
-const PARRY_DURATION = 1200;
-const PARRY_MEET_GRACE_MS = 220;
-const PARRY_TOLERANCE = 0.2;
-const PARRY_RING_MEET_SCALE = 1.0;
+const PARRY_DURATION = 2400;
 const AEGIS_STRIKE_ACCENT = '#fde68a';
 type CombatPhase = 'TEXT_COMBAT' | 'DEFEND_PARRY' | 'OFFENSE_SLICE' | 'RESOLUTION';
 
@@ -153,7 +157,8 @@ export default function TacticalCombatHub({
   const cycleRef = useRef<CombatPhase>('TEXT_COMBAT');
   const parryScaleSV = useSharedValue(2.5);
   const parryResolvedRef = useRef(false);
-  const parryGraceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const parryStartedAtRef = useRef(0);
+  const parryArenaRef = useRef<ParryArenaLayout | null>(null);
   const screenFlashAnim = useRef(new Animated.Value(0)).current;
   const activeSliceRef = useRef(-1);
   const sliceStartXRef = useRef<number | null>(null);
@@ -168,7 +173,8 @@ export default function TacticalCombatHub({
   });
 
   const log = (t: string) => onTerminalLog?.(t);
-  const parryTol = PARRY_TOLERANCE * (1 + parryWindowBonus) * (env.isPlayerBlinded ? 0.85 : 1);
+  const parryTimingWindowBonus = parryWindowBonus * 0.02;
+  const parryTimingBlindPenalty = env.isPlayerBlinded ? 0.015 : 0;
   const counterReady = kineticReservoir >= COMBAT_ACTION.COUNTER_KINETIC_MIN && !isExhausted;
   const sliceReady = kineticReservoir >= COMBAT_ACTION.KINETIC_CAP && !isExhausted;
 
@@ -483,17 +489,13 @@ export default function TacticalCombatHub({
     log('[VECTOR SLICE] >> Execution aperture open.'); triggerSlice();
   };
 
-  const clearParryGraceTimer = () => {
-    if (parryGraceTimerRef.current) {
-      clearTimeout(parryGraceTimerRef.current);
-      parryGraceTimerRef.current = null;
-    }
+  const registerParryArena = (layout: ParryArenaLayout) => {
+    parryArenaRef.current = layout;
   };
 
   const resolveParrySuccess = () => {
     if (parryResolvedRef.current || cycleRef.current !== 'DEFEND_PARRY') return;
     parryResolvedRef.current = true;
-    clearParryGraceTimer();
     setIsSuccessState(true);
     Vibration.vibrate(15);
     flash(P.parry);
@@ -508,7 +510,6 @@ export default function TacticalCombatHub({
   const resolveParryFail = (unmitigated: boolean) => {
     if (parryResolvedRef.current || cycleRef.current !== 'DEFEND_PARRY') return;
     parryResolvedRef.current = true;
-    clearParryGraceTimer();
     setIsFailureState(true);
     log(unmitigated ? '[PARRY FAILED] >> 100% unmitigated damage.' : '[PARRY FAILED] >> Guard collapsed.');
     hurtPlayer(pendingDmgRef.current, unmitigated);
@@ -521,52 +522,57 @@ export default function TacticalCombatHub({
     resolveParryFail(false);
   };
 
-  const applyParryTapScale = (scale: number) => {
-    if (Math.abs(scale - PARRY_RING_MEET_SCALE) <= parryTol) {
+  const parryScaleAtTap = () => {
+    const elapsed = Date.now() - parryStartedAtRef.current;
+    const progress = Math.min(1, Math.max(0, elapsed / PARRY_DURATION));
+    return (
+      PARRY_RING_SCALE_START
+      + (PARRY_RING_SCALE_END - PARRY_RING_SCALE_START) * progress
+    );
+  };
+
+  const applyParryTap = (scale: number, tapX: number, tapY: number) => {
+    if (parryResolvedRef.current || cycleRef.current !== 'DEFEND_PARRY') return;
+    const arena = parryArenaRef.current;
+    const centerHit = arena != null && isTapOnParryCenter(tapX, tapY, arena);
+    const timingHit = isParryRingsMeet(scale, parryTimingWindowBonus, parryTimingBlindPenalty);
+    if (centerHit && timingHit) {
       resolveParrySuccess();
     } else {
       resolveParryFail(true);
     }
   };
 
-  const scheduleParryGraceTimeout = () => {
-    if (parryResolvedRef.current || cycleRef.current !== 'DEFEND_PARRY') return;
-    clearParryGraceTimer();
-    parryGraceTimerRef.current = setTimeout(() => {
-      parryGraceTimerRef.current = null;
-      handleParryTimeout();
-    }, PARRY_MEET_GRACE_MS);
-  };
+  const applyParryTapRef = useRef(applyParryTap);
+  applyParryTapRef.current = applyParryTap;
 
   const startParryRing = () => {
     cancelAnimation(parryScaleSV);
-    clearParryGraceTimer();
     parryResolvedRef.current = false;
     setIsSuccessState(false);
     setIsFailureState(false);
-    parryScaleSV.value = 2.5;
+    const screen = Dimensions.get('screen');
+    const viewportH = Math.round(screen.height * 0.37);
+    parryArenaRef.current = computeParryArenaLayout(screen.width, viewportH);
+    parryScaleSV.value = PARRY_RING_SCALE_START;
     requestAnimationFrame(() => {
       if (cycleRef.current !== 'DEFEND_PARRY') return;
+      parryStartedAtRef.current = Date.now();
       parryScaleSV.value = withTiming(
-        PARRY_RING_MEET_SCALE,
+        PARRY_RING_SCALE_END,
         { duration: PARRY_DURATION, easing: ReanimatedEasing.linear },
         (finished) => {
-          if (!finished) return;
-          runOnJS(scheduleParryGraceTimeout)();
+          if (!finished || parryResolvedRef.current) return;
+          runOnJS(handleParryTimeout)();
         },
       );
     });
   };
 
-  const onParryTap = () => {
+  const onParryTap = (tapX: number, tapY: number) => {
     if (cycleRef.current !== 'DEFEND_PARRY' || parryResolvedRef.current) return;
-    clearParryGraceTimer();
     cancelAnimation(parryScaleSV);
-    runOnUI(() => {
-      'worklet';
-      const scale = parryScaleSV.value;
-      runOnJS(applyParryTapScale)(scale);
-    })();
+    applyParryTapRef.current(parryScaleAtTap(), tapX, tapY);
   };
 
   const clearSliceTimers = () => {
@@ -866,6 +872,7 @@ export default function TacticalCombatHub({
       parrySuccess: isSuccessState,
       parryFailure: isFailureState,
       onParryTap,
+      registerParryArena,
       sliceVisible: cycleState === 'OFFENSE_SLICE',
       sliceLines,
       activeSliceIndex,
@@ -895,6 +902,7 @@ export default function TacticalCombatHub({
             success={isSuccessState}
             failure={isFailureState}
             onTap={onParryTap}
+            onArenaLayout={registerParryArena}
           />
           <VectorSliceOverlay
             visible={cycleState === 'OFFENSE_SLICE'}

@@ -11,6 +11,7 @@ import React, {
 import { StyleSheet, View } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 import ParryMatrixOverlay from '../components/combat/ParryMatrixOverlay';
+import type { ParryArenaLayout } from '../utils/parryCollision';
 import VectorSliceOverlay, { type SliceLineRender } from '../components/combat/VectorSliceOverlay';
 import VectorSlicePing from '../components/combat/VectorSlicePing';
 
@@ -29,7 +30,8 @@ export interface CombatEnemyChromeUIState {
 
 export interface CombatEnemyChromeHandlers {
   onSlicePing: () => void;
-  onParryTap: () => void;
+  onParryTap: (tapX: number, tapY: number) => void;
+  registerParryArena: (layout: ParryArenaLayout) => void;
   parryShrinkScale: SharedValue<number> | null;
   slicePanHandlers: Record<string, unknown> | null;
 }
@@ -51,9 +53,13 @@ const IDLE_UI: CombatEnemyChromeUIState = {
   activeSliceIndex: -1,
 };
 
+const noopParryTap = (_x: number, _y: number) => {};
+const noopRegisterArena = (_layout: ParryArenaLayout) => {};
+
 const IDLE_HANDLERS: CombatEnemyChromeHandlers = {
   onSlicePing: noop,
-  onParryTap: noop,
+  onParryTap: noopParryTap,
+  registerParryArena: noopRegisterArena,
   parryShrinkScale: null,
   slicePanHandlers: null,
 };
@@ -157,6 +163,7 @@ export function CombatChromeBridge(snapshot: CombatEnemyChromeSnapshot): null {
     parrySuccess,
     parryFailure,
     onParryTap,
+    registerParryArena,
     sliceVisible,
     sliceLines,
     activeSliceIndex,
@@ -167,6 +174,7 @@ export function CombatChromeBridge(snapshot: CombatEnemyChromeSnapshot): null {
     ctx.handlersRef.current = {
       onSlicePing,
       onParryTap,
+      registerParryArena,
       parryShrinkScale,
       slicePanHandlers,
     };
@@ -204,7 +212,6 @@ export function CombatChromeBridge(snapshot: CombatEnemyChromeSnapshot): null {
 /** Renders ping / parry / slice over the apparition viewport. */
 export function CombatEnemyChromeLayer(): React.JSX.Element {
   const { ui, handlersRef } = useCombatEnemyChrome();
-  const handlers = handlersRef.current;
   const {
     slicePingVisible,
     slicePingReady,
@@ -218,30 +225,31 @@ export function CombatEnemyChromeLayer(): React.JSX.Element {
   } = ui;
 
   return (
-    <View style={styles.layer} pointerEvents="box-none">
+    <View style={styles.layer} pointerEvents="box-none" collapsable={false}>
       {slicePingVisible ? (
         <VectorSlicePing
           ready={slicePingReady}
           disabled={slicePingDisabled}
-          onPress={handlers.onSlicePing}
+          onPress={() => handlersRef.current.onSlicePing()}
           anchored
         />
       ) : null}
-      {parryVisible && handlers.parryShrinkScale ? (
+      {parryVisible && handlersRef.current.parryShrinkScale ? (
         <ParryMatrixOverlay
           visible
-          shrinkScale={handlers.parryShrinkScale}
+          shrinkScale={handlersRef.current.parryShrinkScale}
           success={parrySuccess}
           failure={parryFailure}
-          onTap={handlers.onParryTap}
+          onTap={(tapX, tapY) => handlersRef.current.onParryTap(tapX, tapY)}
+          onArenaLayout={(layout) => handlersRef.current.registerParryArena(layout)}
         />
       ) : null}
-      {sliceVisible && handlers.slicePanHandlers ? (
+      {sliceVisible && handlersRef.current.slicePanHandlers ? (
         <VectorSliceOverlay
           visible
           lines={sliceLines}
           activeIndex={activeSliceIndex}
-          panHandlers={handlers.slicePanHandlers}
+          panHandlers={handlersRef.current.slicePanHandlers}
         />
       ) : null}
     </View>
@@ -252,5 +260,6 @@ const styles = StyleSheet.create({
   layer: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 12,
+    elevation: 12,
   },
 });

@@ -12,6 +12,7 @@ import TacticalCombatHub from '../components/TacticalCombatHub';
 import {
   CombatEnemyChromeLayer,
   CombatEnemyChromeProvider,
+  useCombatEnemyChrome,
 } from '../context/CombatEnemyChromeContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useGameFlow } from '../context/GameFlowContext';
@@ -22,6 +23,29 @@ import type { CombatEnemyTelemetry } from '../utils/combatTelemetryFormat';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('screen');
 const ENEMY_VIEWPORT_HEIGHT = Math.round(SCREEN_HEIGHT * 0.37);
+
+function CombatApparitionZone({
+  apparitionRef,
+  onEradicationComplete,
+}: {
+  apparitionRef: React.RefObject<ApparitionViewportRef | null>;
+  onEradicationComplete: () => void;
+}): React.JSX.Element {
+  const { ui } = useCombatEnemyChrome();
+
+  return (
+    <View style={styles.apparitionViewport}>
+      <ApparitionViewport
+        ref={apparitionRef}
+        imageSource={EnemyPlaceholder}
+        style={styles.apparitionFill}
+        pointerEvents={ui.parryVisible ? 'none' : 'auto'}
+        onEradicationComplete={onEradicationComplete}
+      />
+      <CombatEnemyChromeLayer />
+    </View>
+  );
+}
 
 export default function CombatScreen(): React.JSX.Element {
   const { theme } = useTerminal();
@@ -103,15 +127,10 @@ export default function CombatScreen(): React.JSX.Element {
           <View style={styles.body}>
             <CombatEnemyHeaderBand enemy={enemyTelemetry} intentMutedColor={theme.mutedColor} />
 
-            <View style={styles.apparitionViewport}>
-              <ApparitionViewport
-                ref={apparitionRef}
-                imageSource={EnemyPlaceholder}
-                style={styles.apparitionFill}
-                onEradicationComplete={handleEradicationComplete}
-              />
-              <CombatEnemyChromeLayer />
-            </View>
+            <CombatApparitionZone
+              apparitionRef={apparitionRef}
+              onEradicationComplete={handleEradicationComplete}
+            />
 
             <View style={styles.combatMiddle}>
               <TacticalCombatHub
