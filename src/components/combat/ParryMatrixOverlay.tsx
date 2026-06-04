@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   type GestureResponderEvent,
   type LayoutChangeEvent,
@@ -14,8 +14,13 @@ import {
   DashPathEffect,
   Group,
 } from '@shopify/react-native-skia';
-import type { SharedValue } from 'react-native-reanimated';
-import { useDerivedValue } from 'react-native-reanimated';
+import {
+  Easing,
+  type SharedValue,
+  useDerivedValue,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import {
   computeParryArenaLayout,
   getParryCenterHitRadius,
@@ -33,6 +38,8 @@ const INNER_STROKE = 4;
 const OUTER_STROKE = 1.5;
 const SWEET_STROKE = 2;
 const CENTER_DOT_RADIUS = 5;
+const HALO_DURATION_MS = 580;
+const HALO_RIPPLE_DELAYS = [0, 0.14, 0.28] as const;
 
 interface ParryMatrixOverlayProps {
   visible: boolean;
@@ -75,6 +82,48 @@ export default function ParryMatrixOverlay({
 
   const outerRadius = useDerivedValue(() => baseR * shrinkScale.value);
   const outerOpacity = useDerivedValue(() => (failure ? 0.35 : success ? 0.2 : 0.9));
+
+  const haloProgress = useSharedValue(0);
+
+  useEffect(() => {
+    if (!success) {
+      haloProgress.value = 0;
+      return;
+    }
+    haloProgress.value = 0;
+    haloProgress.value = withTiming(1, {
+      duration: HALO_DURATION_MS,
+      easing: Easing.out(Easing.cubic),
+    });
+  }, [success, haloProgress]);
+
+  const haloRadius0 = useDerivedValue(() => {
+    const p = Math.max(0, Math.min(1, haloProgress.value));
+    return baseR * (0.35 + p * 2.75);
+  });
+  const haloOpacity0 = useDerivedValue(() => {
+    if (!success) return 0;
+    const p = Math.max(0, Math.min(1, haloProgress.value));
+    return (1 - p) * 0.72;
+  });
+  const haloRadius1 = useDerivedValue(() => {
+    const p = Math.max(0, Math.min(1, (haloProgress.value - HALO_RIPPLE_DELAYS[1]) / (1 - HALO_RIPPLE_DELAYS[1])));
+    return baseR * (0.35 + p * 2.75);
+  });
+  const haloOpacity1 = useDerivedValue(() => {
+    if (!success) return 0;
+    const p = Math.max(0, Math.min(1, (haloProgress.value - HALO_RIPPLE_DELAYS[1]) / (1 - HALO_RIPPLE_DELAYS[1])));
+    return (1 - p) * 0.55;
+  });
+  const haloRadius2 = useDerivedValue(() => {
+    const p = Math.max(0, Math.min(1, (haloProgress.value - HALO_RIPPLE_DELAYS[2]) / (1 - HALO_RIPPLE_DELAYS[2])));
+    return baseR * (0.35 + p * 2.75);
+  });
+  const haloOpacity2 = useDerivedValue(() => {
+    if (!success) return 0;
+    const p = Math.max(0, Math.min(1, (haloProgress.value - HALO_RIPPLE_DELAYS[2]) / (1 - HALO_RIPPLE_DELAYS[2])));
+    return (1 - p) * 0.4;
+  });
 
   const handlePress = (e: GestureResponderEvent) => {
     const { locationX, locationY } = e.nativeEvent;
@@ -152,17 +201,49 @@ export default function ParryMatrixOverlay({
               opacity={0.85}
             />
             {success ? (
-              <Circle
-                cx={cx}
-                cy={cy}
-                r={baseR * 0.42}
-                color={PARRY_SUCCESS}
-                opacity={0.4}
-                style="stroke"
-                strokeWidth={8}
-              >
-                <Blur blur={12} />
-              </Circle>
+              <>
+                <Circle
+                  cx={cx}
+                  cy={cy}
+                  r={haloRadius2}
+                  color={PARRY_SUCCESS}
+                  opacity={haloOpacity2}
+                  style="stroke"
+                  strokeWidth={10}
+                >
+                  <Blur blur={16} />
+                </Circle>
+                <Circle
+                  cx={cx}
+                  cy={cy}
+                  r={haloRadius1}
+                  color={PARRY_RING_BRIGHT}
+                  opacity={haloOpacity1}
+                  style="stroke"
+                  strokeWidth={8}
+                >
+                  <Blur blur={12} />
+                </Circle>
+                <Circle
+                  cx={cx}
+                  cy={cy}
+                  r={haloRadius0}
+                  color={PARRY_SUCCESS}
+                  opacity={haloOpacity0}
+                  style="fill"
+                >
+                  <Blur blur={20} />
+                </Circle>
+                <Circle
+                  cx={cx}
+                  cy={cy}
+                  r={haloRadius0}
+                  color={PARRY_RING_BRIGHT}
+                  opacity={haloOpacity0}
+                  style="stroke"
+                  strokeWidth={3}
+                />
+              </>
             ) : null}
           </Group>
         </Canvas>

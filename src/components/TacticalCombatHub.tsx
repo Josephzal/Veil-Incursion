@@ -498,7 +498,6 @@ export default function TacticalCombatHub({
     parryResolvedRef.current = true;
     setIsSuccessState(true);
     Vibration.vibrate(15);
-    flash(P.parry);
     const cd = Math.floor(COMBAT_ACTION.COUNTER_DAMAGE * (1 + parryMultiplierBonus));
     log(`[PERFECT COUNTER] >> Staggered! ${cd} retaliation damage.`);
     counterRef.current = false;
