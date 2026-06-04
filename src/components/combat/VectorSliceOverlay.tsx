@@ -22,9 +22,9 @@ const SLICE_CRIMSON = '#ff1744';
 const SLICE_GLOW = '#ef4444';
 const SLICE_CORE = '#ffe4e8';
 const BACKDROP = 'rgba(0,0,0,0.32)';
-const LINE_LENGTH_RATIO = 0.32;
-const GLOW_WIDTH = 6;
-const CORE_WIDTH = 2;
+const LINE_LENGTH_RATIO = 0.52;
+const GLOW_WIDTH = 9;
+const CORE_WIDTH = 4;
 const ORIGIN_JITTER = 0.04;
 
 export interface SliceLineRender {

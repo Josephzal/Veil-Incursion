@@ -1,6 +1,7 @@
 import React, {
   forwardRef,
   useImperativeHandle,
+  useMemo,
   useState,
 } from 'react';
 import {
@@ -63,14 +64,27 @@ export interface ApparitionViewportProps {
   onEradicationComplete?: () => void;
 }
 
+/** Skia loads bundled assets reliably from `require()` module ids; URI resolution can fail intermittently. */
 function toSkiaImageSource(source: ImageSourcePropType | null | undefined): DataSourceParam {
   if (source == null) return null;
   if (typeof source === 'number') {
-    const resolved = RNImage.resolveAssetSource(source);
-    return resolved?.uri ?? source;
+    return source;
   }
   if (typeof source === 'object' && 'uri' in source && typeof source.uri === 'string') {
     return source.uri;
+  }
+  return null;
+}
+
+function resolveNativeImageSource(
+  source: ImageSourcePropType | null | undefined,
+): ImageSourcePropType | null {
+  if (source == null) return null;
+  if (typeof source === 'number') {
+    return source;
+  }
+  if (typeof source === 'object' && 'uri' in source) {
+    return source;
   }
   return null;
 }
@@ -120,7 +134,12 @@ export const ApparitionViewport = forwardRef<ApparitionViewportRef, ApparitionVi
     { imageSource, style, pointerEvents = 'auto', onEradicationComplete },
     ref,
   ) {
-    const skiaImage = useImage(toSkiaImageSource(imageSource));
+    const skiaImageSource = useMemo(() => toSkiaImageSource(imageSource), [imageSource]);
+    const nativeImageSource = useMemo(
+      () => resolveNativeImageSource(imageSource),
+      [imageSource],
+    );
+    const skiaImage = useImage(skiaImageSource);
     const [layout, setLayout] = useState({ width: 0, height: 0 });
 
     const canvasW = useSharedValue(0);
@@ -193,15 +212,25 @@ export const ApparitionViewport = forwardRef<ApparitionViewportRef, ApparitionVi
     });
 
     const hasLayout = layout.width > 0 && layout.height > 0;
-    const showSprite = skiaImage != null && hasLayout;
+    const hasPortraitSource = nativeImageSource != null;
+    const showSkiaSprite = skiaImage != null && hasLayout;
+    const showNativeFallback = hasLayout && hasPortraitSource && !showSkiaSprite;
+    const showWireframeGrid = hasLayout && !hasPortraitSource;
 
     return (
       <View style={[styles.root, style]} onLayout={handleLayout} pointerEvents={pointerEvents}>
-        {hasLayout ? (
+        {showNativeFallback ? (
+          <RNImage
+            source={nativeImageSource}
+            style={[styles.portraitFallback, { width: layout.width, height: layout.height }]}
+            resizeMode="contain"
+          />
+        ) : null}
+        {hasLayout && (showSkiaSprite || showWireframeGrid) ? (
           <Canvas style={{ width: layout.width, height: layout.height }}>
             <Rect x={0} y={0} width={layout.width} height={layout.height} color={CANVAS_BACKDROP} />
 
-            {showSprite ? (
+            {showSkiaSprite ? (
               <>
                 <Group clip={dissolveClip} transform={groupTransform}>
                   <Image
@@ -248,5 +277,9 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: CANVAS_BACKDROP,
     overflow: 'hidden',
+  },
+  portraitFallback: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: CANVAS_BACKDROP,
   },
 });

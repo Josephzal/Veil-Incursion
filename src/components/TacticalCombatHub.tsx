@@ -188,15 +188,25 @@ export default function TacticalCombatHub({
   useEffect(() => {
     cycleRef.current = cycleState; enemyRef.current = enemy;
     operativeHpRef.current = operativeHp; staminaRef.current = stamina;
-    kineticRef.current = kineticReservoir; aegisRef.current = aegisActive;
+    kineticRef.current = kineticReservoir;
     counterRef.current = counterPrepActive;
-  }, [cycleState, enemy, operativeHp, stamina, kineticReservoir, aegisActive, counterPrepActive]);
+  }, [cycleState, enemy, operativeHp, stamina, kineticReservoir, counterPrepActive]);
 
 
   const syncEnemy = (e: EnemyCombatProfile) => { enemyRef.current = e; setEnemy(e); };
   const chargeKr = (amt: number) => setKineticReservoir((p) => {
     const n = Math.min(p + amt, COMBAT_ACTION.KINETIC_CAP); kineticRef.current = n; return n;
   });
+  const primeAegisStrikeBonus = () => {
+    aegisKrRef.current = true;
+    setStrikeKrPrimed(true);
+  };
+  const consumeAegisStrikeBonus = () => {
+    const primed = aegisKrRef.current;
+    aegisKrRef.current = false;
+    setStrikeKrPrimed(false);
+    return primed;
+  };
   const scaleSlice = (d: number) => sliceDamagePenalty > 0 ? Math.floor(d * (1 - sliceDamagePenalty)) : d;
 
   const flash = (color: string, done?: () => void) => {
@@ -231,8 +241,7 @@ export default function TacticalCombatHub({
       dmg = Math.floor(dmg * (1 - COMBAT_ACTION.AEGIS_BLOCK_PCT));
       aegisRef.current = false;
       setAegisActive(false);
-      aegisKrRef.current = true;
-      setStrikeKrPrimed(true);
+      primeAegisStrikeBonus();
       log(`[AEGIS] >> Barrier absorbed 50% — kinetic overcharge primed (+${COMBAT_ACTION.AEGIS_KINETIC_BONUS}% KR next strike).`);
     }
     log(msg ?? `>> ENEMY STRIKE — ${dmg} DAMAGE DEALT`);
@@ -449,11 +458,13 @@ export default function TacticalCombatHub({
       aegisRef.current = false;
       setAegisActive(false);
     }
-    const krGain = aegisKrRef.current ? COMBAT_ACTION.AEGIS_KINETIC_BONUS : strikeStats.kineticChargePerStrike;
+    const krPrimed = consumeAegisStrikeBonus();
+    const krGain = krPrimed
+      ? COMBAT_ACTION.AEGIS_KINETIC_BONUS
+      : strikeStats.kineticChargePerStrike;
     chargeKr(krGain);
-    if (aegisKrRef.current) {
-      aegisKrRef.current = false;
-      setStrikeKrPrimed(false);
+    if (krPrimed) {
+      log(`[AEGIS OVERCHARGE] >> Kinetic reservoir +${COMBAT_ACTION.AEGIS_KINETIC_BONUS}%.`);
     }
     const dmg = exhausted ? strikeStats.exhaustedStrikeDamage : strikeStats.strikeDamage;
     if (hurtEnemy(dmg, '[KINETIC STRIKE]')) return;
@@ -463,8 +474,13 @@ export default function TacticalCombatHub({
   const onAegis = () => {
     if (cycleState !== 'TEXT_COMBAT' || !isPlayerTurn) return;
     if (!spendStam(COMBAT_ACTION.AEGIS_STAMINA)) { log('[REJECTED] >> Insufficient stamina.'); return; }
-    aegisRef.current = true; setAegisActive(true);
-    log('[AEGIS PROTOCOL] >> Barrier armed — blocks 50% next hit.'); passToEnemy(false);
+    aegisRef.current = true;
+    setAegisActive(true);
+    primeAegisStrikeBonus();
+    log(
+      `[AEGIS PROTOCOL] >> Barrier armed — blocks 50% next hit. Next Kinetic Strike +${COMBAT_ACTION.AEGIS_KINETIC_BONUS}% KR.`,
+    );
+    passToEnemy(false);
   };
 
   const onCounter = () => {
@@ -672,7 +688,7 @@ export default function TacticalCombatHub({
   };
 
   const getDeckActionAccent = (action: CombatDeckAction): string | undefined => {
-    if (action === 'KINETIC_STRIKE' && isPlayerTurn && (aegisActive || strikeKrPrimed)) {
+    if (action === 'KINETIC_STRIKE' && isPlayerTurn && (aegisKrRef.current || strikeKrPrimed)) {
       return AEGIS_STRIKE_ACCENT;
     }
     if (action === 'COUNTER_STANCE' && counterReady) return P.parry;

@@ -82,7 +82,10 @@ interface RunContextType {
   resolveNarrativeCheck: (choice: 'A' | 'B', status: CheckStatus) => string;
   activeIncursion: ActiveIncursionState;
   getCurrentTierNode: () => import('../types/game').IncursionNode | null;
-  stageEncounterClear: (message: string) => { route: 'CHECKPOINT' };
+  stageEncounterClear: (message: string) => {
+    route: 'NEXT_NODE' | 'TIER_ADVANCE' | 'HUB_VICTORY';
+    nextTier?: number;
+  };
   continueFromProgressCheckpoint: () => {
     route: 'NEXT_NODE' | 'TIER_ADVANCE' | 'HUB_VICTORY';
     nextTier?: number;
@@ -648,7 +651,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     appendRunLog(`>> HOSTILE SIGNATURE: ${pendingEnemy.designation} [${pendingEnemy.class}] HP ${pendingEnemy.maxHp}.`);
   }, [appendRunLog]);
 
-  const stageEncounterClear = useCallback((message: string) => {
+  const advanceIncursionAfterEncounter = useCallback((message: string) => {
     appendRunLog(`>> ${message}`);
 
     const inc = activeIncursionRef.current;
@@ -659,20 +662,16 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
     narrativeNodeRef.current = null;
 
-    const nextInc: ActiveIncursionState = {
+    const incAfterClear: ActiveIncursionState = {
       ...inc,
       tierNodes,
       currentNarrativeId: null,
       activeChoice: null,
       bossProfile: null,
-      mapMode: 'PROGRESS_CHECKPOINT',
-      lastCheckpointMessage: message,
       selectedVectorId: null,
       previewNodeId: null,
       scanConfirmOverlayVisible: false,
     };
-    activeIncursionRef.current = nextInc;
-    setActiveIncursion(nextInc);
 
     setRunState((prev) => {
       const next = {
@@ -683,14 +682,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       runStateRef.current = next;
       return next;
     });
-
-    appendRunLog('>> SECTOR CHECKPOINT — OPERATIVE PERFORMANCE LOG UPDATED.');
-    return { route: 'CHECKPOINT' as const };
-  }, [appendRunLog]);
-
-  const continueFromProgressCheckpoint = useCallback(() => {
-    const inc = activeIncursionRef.current;
-    const completedIndex = inc.currentNodeIndex;
 
     const resetForScan = (base: ActiveIncursionState): ActiveIncursionState => ({
       ...base,
@@ -704,11 +695,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     });
 
     if (completedIndex >= BOSS_DEPTH_INDEX) {
-      if (inc.currentTier < 3) {
-        const nextTier = inc.currentTier + 1;
+      if (incAfterClear.currentTier < 3) {
+        const nextTier = incAfterClear.currentTier + 1;
         const { activeTierVectors, earlySanctuarySpawned } = generateTierVectorMatrix(nextTier);
         const nextInc = resetForScan({
-          ...inc,
+          ...incAfterClear,
           currentTier: nextTier,
           currentNodeIndex: 0,
           tierNodes: createPlaceholderTierPath(),
@@ -736,11 +727,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
     const nextIndex = completedIndex + 1;
     const nextInc = resetForScan({
-      ...inc,
+      ...incAfterClear,
       currentNodeIndex: nextIndex,
       selectedVectorId: null,
-      previewNodeId: null,
-      scanConfirmOverlayVisible: false,
     });
     activeIncursionRef.current = nextInc;
     setActiveIncursion(nextInc);
@@ -760,6 +749,18 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     appendRunLog(`>> DEPTH ${nextIndex + 1}/10 — SCANNING HUB READY FOR VECTOR SELECT.`);
     return { route: 'NEXT_NODE' as const };
   }, [appendRunLog]);
+
+  const stageEncounterClear = advanceIncursionAfterEncounter;
+
+  const continueFromProgressCheckpoint = useCallback(() => {
+    const inc = activeIncursionRef.current;
+    if (inc.mapMode === 'PROGRESS_CHECKPOINT') {
+      return advanceIncursionAfterEncounter(
+        inc.lastCheckpointMessage ?? 'Vector cleared — resuming descent.',
+      );
+    }
+    return { route: 'NEXT_NODE' as const };
+  }, [advanceIncursionAfterEncounter]);
 
   const commitNodeEncounter = useCallback((nodeId: string): import('../types/game').RunNodeType | null => {
     const inc = activeIncursionRef.current;

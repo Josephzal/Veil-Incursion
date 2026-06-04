@@ -1,5 +1,5 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, Easing, StyleSheet, Text, TouchableOpacity, Vibration, View } from 'react-native';
 import {
   Canvas,
   Circle,
@@ -43,6 +43,8 @@ const CEASE_FOG_MS = 900;
 const SIPHON_EXTRACT_MS = 280;
 const SIPHON_RING_PEAK_SCALE = 2.5;
 const SIPHON_ILLUMINATE_MIN_OPACITY = 0.35;
+const MIN_SIPHONS_TO_CEASE = 1;
+const SIPHON_HAPTIC_MS = 12;
 
 interface VectorScannerProps {
   cabal: ScannerCabal;
@@ -66,7 +68,6 @@ interface BlipRenderState {
 }
 
 interface RadarTargetProps {
-  node: RadarDot;
   visualSize: number;
   left: number;
   top: number;
@@ -289,12 +290,13 @@ function VectorScannerComponent({
   const applyUniformSelectableState = useCallback(() => {
     const now = performance.now();
     activeNodes.forEach((node) => {
+      const wasSiphoned = blipStatesRef.current[node.id]?.siphoned ?? false;
       blipStatesRef.current[node.id] = {
         opacity: 1,
         scale: 1,
         bloomUntil: now,
         decayStart: null,
-        siphoned: blipStatesRef.current[node.id]?.siphoned ?? false,
+        siphoned: wasSiphoned,
       };
     });
     setRevealedIds(new Set(activeNodes.map((n) => n.id)));
@@ -349,10 +351,12 @@ function VectorScannerComponent({
 
       const state = ensureBlipState(nodeId);
       state.siphoned = true;
-      state.opacity = 0;
+      state.opacity = 1;
       state.scale = 1;
       state.decayStart = null;
+      state.bloomUntil = 0;
       bumpRender();
+      Vibration.vibrate(SIPHON_HAPTIC_MS);
 
       setSiphonedNodeIds((prev) => {
         const next = [...prev, nodeId];
@@ -373,11 +377,12 @@ function VectorScannerComponent({
 
   const handleCeaseScan = useCallback(() => {
     if (!active || contactsLocked || isCeasedRef.current) return;
+    if (siphonedNodeIds.length < MIN_SIPHONS_TO_CEASE) return;
     isCeasedRef.current = true;
     setIsCeased(true);
     ceaseStartRef.current = performance.now();
     dischargePhaseRef.current = 'decel';
-  }, [active, contactsLocked]);
+  }, [active, contactsLocked, siphonedNodeIds.length]);
 
   const evaluateSweepCollision = useCallback(
     (beamDeg: number) => {
@@ -578,13 +583,17 @@ function VectorScannerComponent({
   const getBlipOpacity = (nodeId: string): number => {
     if (uniformSelectable) return 1;
     const state = blipStatesRef.current[nodeId];
-    if (!state || state.siphoned) return 0;
+    if (!state) return 0;
+    if (state.siphoned) return 1;
     return state.opacity;
   };
 
   const getBlipScale = (nodeId: string): number => {
     if (uniformSelectable) return 1;
-    return blipStatesRef.current[nodeId]?.scale ?? 1;
+    const state = blipStatesRef.current[nodeId];
+    if (!state) return 1;
+    if (state.siphoned) return 1;
+    return state.scale;
   };
 
   void renderTick;
@@ -593,6 +602,7 @@ function VectorScannerComponent({
   const showSweep = active && !uniformSelectable;
   const shellHeight = getScannerShellHeight(scannerSize);
   const showCeaseControl = active && !contactsLocked && !uniformSelectable;
+  const canCeaseScan = siphonedNodeIds.length >= MIN_SIPHONS_TO_CEASE;
 
   return (
     <View style={[styles.layoutShell, { width: scannerSize, height: shellHeight }]}>
@@ -725,12 +735,11 @@ function VectorScannerComponent({
         {nodeBearings.map((bearing) => (
           <RadarTarget
             key={`target-${bearing.id}`}
-            node={bearing.node}
             visualSize={bearing.visualSize}
             left={bearing.canvasX - DOT_HIT_SIZE / 2}
             top={bearing.canvasY - DOT_HIT_SIZE / 2}
             disabled={!scanInteractive && !uniformSelectable}
-            pulseKey={siphonPulseKeys[bearing.id] ?? 0}
+            pulseKey={uniformSelectable ? 0 : (siphonPulseKeys[bearing.id] ?? 0)}
             onPress={() => handleTargetPress(bearing.id)}
             ringColor={selectionAccent}
           />
@@ -744,19 +753,21 @@ function VectorScannerComponent({
       <View style={[styles.footerSlot, { width: scannerSize, height: SCANNER_CEASE_SLOT_HEIGHT }]}>
         <TouchableOpacity
           activeOpacity={0.75}
-          disabled={!showCeaseControl || !scanInteractive}
+          disabled={!showCeaseControl || !scanInteractive || !canCeaseScan}
           onPress={handleCeaseScan}
           style={[
             styles.ceaseButton,
             {
               borderColor: theme.line,
-              opacity: showCeaseControl && scanInteractive ? 1 : 0,
+              opacity: showCeaseControl && scanInteractive ? (canCeaseScan ? 1 : 0.38) : 0,
             },
           ]}
           pointerEvents={showCeaseControl && scanInteractive ? 'auto' : 'none'}
         >
           <Text style={[styles.ceaseLabel, { color: theme.text }]}>
-            [ OVERRIDE // CEASE_SCAN ]
+            {canCeaseScan
+              ? '[ OVERRIDE // CEASE_SCAN ]'
+              : '[ SIPHON ≥1 CONTACT TO CEASE ]'}
           </Text>
         </TouchableOpacity>
       </View>

@@ -11,7 +11,6 @@ export type DescentRoute =
   | 'REST'
   | 'HUB_VICTORY'
   | 'TIER_ADVANCE'
-  | 'CHECKPOINT';
 
 function routeForNodeType(type: RunNodeType | null): DescentRoute {
   switch (type) {
@@ -37,7 +36,7 @@ export function useDescentNavigator() {
     commitNodeEncounter,
     endRun,
   } = useRun();
-  const { startNarrative, startScanning, startCombat, startRest, startRunProgress, goToHub } =
+  const { startNarrative, startScanning, startCombat, startRest, goToHub } =
     useGameFlow();
   const { addCredits, addRiftIron } = usePlayerAccount();
 
@@ -67,11 +66,29 @@ export function useDescentNavigator() {
 
   const finalizeIncursionAdvance = useCallback(
     (message: string) => {
-      stageEncounterClear(message);
-      startRunProgress();
-      return { route: 'CHECKPOINT' as const };
+      const result = stageEncounterClear(message);
+
+      if (result.route === 'HUB_VICTORY') {
+        addCredits(500);
+        addRiftIron(10);
+        appendRunLog('>> VEIL DESCENT COMPLETE — +500 CREDITS, +10 RIFT IRON AWARDED.');
+        endRun('THREE-TIER INCURSION SECURED');
+        goToHub();
+        return result;
+      }
+
+      startScanning();
+      return result;
     },
-    [stageEncounterClear, startRunProgress],
+    [
+      stageEncounterClear,
+      addCredits,
+      addRiftIron,
+      appendRunLog,
+      endRun,
+      goToHub,
+      startScanning,
+    ],
   );
 
   const continueOperation = useCallback(() => {

@@ -26,9 +26,11 @@ const ENEMY_VIEWPORT_HEIGHT = Math.round(SCREEN_HEIGHT * 0.37);
 
 function CombatApparitionZone({
   apparitionRef,
+  portraitKey,
   onEradicationComplete,
 }: {
   apparitionRef: React.RefObject<ApparitionViewportRef | null>;
+  portraitKey: string;
   onEradicationComplete: () => void;
 }): React.JSX.Element {
   const { ui } = useCombatEnemyChrome();
@@ -36,6 +38,7 @@ function CombatApparitionZone({
   return (
     <View style={styles.apparitionViewport}>
       <ApparitionViewport
+        key={portraitKey}
         ref={apparitionRef}
         imageSource={EnemyPlaceholder}
         style={styles.apparitionFill}
@@ -85,6 +88,11 @@ export default function CombatScreen(): React.JSX.Element {
     killResolverRef.current();
   }, []);
 
+  const portraitKey =
+    `${runState.pendingEnemy?.designation ?? 'hostile'}`
+    + `-${activeIncursion.currentNodeIndex}`
+    + `-${runState.combatNodesCleared}`;
+
   const handleCombatComplete = (result: {
     victory: boolean;
     remainingHp: number;
@@ -129,6 +137,7 @@ export default function CombatScreen(): React.JSX.Element {
 
             <CombatApparitionZone
               apparitionRef={apparitionRef}
+              portraitKey={portraitKey}
               onEradicationComplete={handleEradicationComplete}
             />
 

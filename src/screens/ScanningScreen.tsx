@@ -183,7 +183,7 @@ export default function ScanningScreen(): React.JSX.Element {
                   ACTIVE SIPHON // EXTRACT VECTORS
                 </Text>
                 <Text style={[styles.scanSubStatus, { color: theme.mutedColor }]}>
-                  {`Tap illuminated contacts to siphon — ${vectorCluster.length} route${vectorCluster.length === 1 ? '' : 's'} at depth ${nodeIndex + 1}. Override to cease scan.`}
+                  {`Tap illuminated contacts to siphon — ${vectorCluster.length} route${vectorCluster.length === 1 ? '' : 's'} at depth ${nodeIndex + 1}. Siphon at least one contact before ceasing scan.`}
                 </Text>
               </View>
               <View

@@ -3,6 +3,8 @@ import type { SectorDefinition } from '../types/run';
 
 /** Padding from the absolute outer scanner ring (px). */
 export const SCANNER_RADIAL_PADDING = 24;
+/** Minimum node distance from center as a ratio of scanner half-width (keeps nodes off core/mid rings). */
+export const SCANNER_MIN_NODE_RADIUS_RATIO = 0.72;
 
 const MIN_NODE_SEPARATION_PX = 40;
 const MAX_PLACEMENT_ATTEMPTS = 48;
@@ -19,6 +21,10 @@ export function scannerCanvasCenter(scannerSize: number): number {
 
 export function scannerMaxRadius(scannerSize: number): number {
   return scannerCanvasCenter(scannerSize) - SCANNER_RADIAL_PADDING;
+}
+
+export function scannerMinNodeRadius(scannerSize: number): number {
+  return scannerCanvasCenter(scannerSize) * SCANNER_MIN_NODE_RADIUS_RATIO;
 }
 
 export function bearingFromCanvasCenter(
@@ -41,7 +47,9 @@ export function randomPolarScanCoordinate(
 ): PolarScanCoordinate {
   const center = scannerCanvasCenter(scannerSize);
   const maxRadius = scannerMaxRadius(scannerSize);
-  const randomRadius = rng() * maxRadius;
+  const minRadius = Math.min(scannerMinNodeRadius(scannerSize), maxRadius - 12);
+  const span = Math.max(8, maxRadius - minRadius);
+  const randomRadius = minRadius + rng() * span;
   const randomAngle = rng() * 2 * Math.PI;
   const x = center + randomRadius * Math.cos(randomAngle);
   const y = center + randomRadius * Math.sin(randomAngle);
@@ -51,6 +59,12 @@ export function randomPolarScanCoordinate(
     y,
     angleDeg: bearingFromCanvasCenter(scannerSize, x, y),
   };
+}
+
+function isOutsideScannerCore(scannerSize: number, x: number, y: number): boolean {
+  const center = scannerCanvasCenter(scannerSize);
+  const minRadius = Math.min(scannerMinNodeRadius(scannerSize), scannerMaxRadius(scannerSize) - 12);
+  return distancePx(x, y, center, center) >= minRadius;
 }
 
 function distancePx(ax: number, ay: number, bx: number, by: number): number {
@@ -84,8 +98,9 @@ export function layoutRadarDotsOnScanner<T extends { id: string }>(
     let attempts = 0;
 
     while (
-      attempts < MAX_PLACEMENT_ATTEMPTS &&
-      !isSeparatedFromPlaced(position.x, position.y, placed)
+      attempts < MAX_PLACEMENT_ATTEMPTS
+      && (!isSeparatedFromPlaced(position.x, position.y, placed)
+        || !isOutsideScannerCore(scannerSize, position.x, position.y))
     ) {
       position = randomPolarScanCoordinate(scannerSize, rng);
       attempts += 1;
