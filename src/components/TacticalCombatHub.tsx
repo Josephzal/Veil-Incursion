@@ -4,6 +4,7 @@ import {
   cancelAnimation,
   Easing as ReanimatedEasing,
   runOnJS,
+  runOnUI,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
@@ -49,7 +50,10 @@ const P = {
   kr: '#bae6fd', krBorder: '#7dd3fc', parry: '#00ff33', defeat: '#5c0606',
 };
 const PARRY_DURATION = 1200;
-const PARRY_TOLERANCE = 0.09;
+const PARRY_MEET_GRACE_MS = 220;
+const PARRY_TOLERANCE = 0.2;
+const PARRY_RING_MEET_SCALE = 1.0;
+const AEGIS_STRIKE_ACCENT = '#fde68a';
 type CombatPhase = 'TEXT_COMBAT' | 'DEFEND_PARRY' | 'OFFENSE_SLICE' | 'RESOLUTION';
 
 interface TacticalCombatHubProps {
@@ -120,6 +124,8 @@ export default function TacticalCombatHub({
   const [kineticReservoir, setKineticReservoir] = useState(startingKineticPercent);
   const { isExhausted } = useReactiveCombatStatus(stamina);
   const [aegisActive, setAegisActive] = useState(false);
+  /** True after Aegis blocks — next Kinetic Strike gets bonus KR (deck highlight). */
+  const [strikeKrPrimed, setStrikeKrPrimed] = useState(false);
   const [counterPrepActive, setCounterPrepActive] = useState(false);
   const [isSuccessState, setIsSuccessState] = useState(false);
   const [isFailureState, setIsFailureState] = useState(false);
@@ -146,6 +152,8 @@ export default function TacticalCombatHub({
   const dismissedRef = useRef(false);
   const cycleRef = useRef<CombatPhase>('TEXT_COMBAT');
   const parryScaleSV = useSharedValue(2.5);
+  const parryResolvedRef = useRef(false);
+  const parryGraceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const screenFlashAnim = useRef(new Animated.Value(0)).current;
   const activeSliceRef = useRef(-1);
   const sliceStartXRef = useRef<number | null>(null);
@@ -215,8 +223,11 @@ export default function TacticalCombatHub({
     let dmg = raw;
     if (!unblockable && aegisRef.current) {
       dmg = Math.floor(dmg * (1 - COMBAT_ACTION.AEGIS_BLOCK_PCT));
-      aegisRef.current = false; setAegisActive(false); aegisKrRef.current = true;
-      log('[AEGIS] >> Barrier absorbed 50% — kinetic overcharge primed (+30 KR next strike).');
+      aegisRef.current = false;
+      setAegisActive(false);
+      aegisKrRef.current = true;
+      setStrikeKrPrimed(true);
+      log(`[AEGIS] >> Barrier absorbed 50% — kinetic overcharge primed (+${COMBAT_ACTION.AEGIS_KINETIC_BONUS}% KR next strike).`);
     }
     log(msg ?? `>> ENEMY STRIKE — ${dmg} DAMAGE DEALT`);
     setOperativeHp((p) => { const n = Math.max(p - dmg, 0); operativeHpRef.current = n; if (n <= 0) resolve(false); return n; });
@@ -393,7 +404,10 @@ export default function TacticalCombatHub({
     syncEnemy({ ...e });
     operativeHpRef.current = initialOperativeHp; staminaRef.current = initialStamina;
     kineticRef.current = startingKineticPercent; skipRegenRef.current = false;
-    aegisRef.current = false; aegisKrRef.current = false; counterRef.current = false;
+    aegisRef.current = false;
+    aegisKrRef.current = false;
+    setStrikeKrPrimed(false);
+    counterRef.current = false;
     resolutionRef.current = null; dismissedRef.current = false;
     applyStamina(initialStamina);
     setKineticReservoir(startingKineticPercent);
@@ -425,9 +439,16 @@ export default function TacticalCombatHub({
       spendStam(strikeStats.strikeStaminaCost);
     }
     const exhausted = overdraw || staminaRef.current === 0;
+    if (aegisRef.current) {
+      aegisRef.current = false;
+      setAegisActive(false);
+    }
     const krGain = aegisKrRef.current ? COMBAT_ACTION.AEGIS_KINETIC_BONUS : strikeStats.kineticChargePerStrike;
     chargeKr(krGain);
-    if (aegisKrRef.current) aegisKrRef.current = false;
+    if (aegisKrRef.current) {
+      aegisKrRef.current = false;
+      setStrikeKrPrimed(false);
+    }
     const dmg = exhausted ? strikeStats.exhaustedStrikeDamage : strikeStats.strikeDamage;
     if (hurtEnemy(dmg, '[KINETIC STRIKE]')) return;
     passToEnemy(false);
@@ -462,56 +483,90 @@ export default function TacticalCombatHub({
     log('[VECTOR SLICE] >> Execution aperture open.'); triggerSlice();
   };
 
-  const handleParryTimeout = () => {
-    if (cycleRef.current !== 'DEFEND_PARRY') return;
+  const clearParryGraceTimer = () => {
+    if (parryGraceTimerRef.current) {
+      clearTimeout(parryGraceTimerRef.current);
+      parryGraceTimerRef.current = null;
+    }
+  };
+
+  const resolveParrySuccess = () => {
+    if (parryResolvedRef.current || cycleRef.current !== 'DEFEND_PARRY') return;
+    parryResolvedRef.current = true;
+    clearParryGraceTimer();
+    setIsSuccessState(true);
+    Vibration.vibrate(15);
+    flash(P.parry);
+    const cd = Math.floor(COMBAT_ACTION.COUNTER_DAMAGE * (1 + parryMultiplierBonus));
+    log(`[PERFECT COUNTER] >> Staggered! ${cd} retaliation damage.`);
+    counterRef.current = false;
+    setCounterPrepActive(false);
+    if (hurtEnemy(cd, '[COUNTER HIT]')) return;
+    setTimeout(() => endEnemyTurn(), 400);
+  };
+
+  const resolveParryFail = (unmitigated: boolean) => {
+    if (parryResolvedRef.current || cycleRef.current !== 'DEFEND_PARRY') return;
+    parryResolvedRef.current = true;
+    clearParryGraceTimer();
     setIsFailureState(true);
-    log('[PARRY FAILED] >> Guard collapsed.');
-    hurtPlayer(pendingDmgRef.current, pendingUnblockRef.current);
+    log(unmitigated ? '[PARRY FAILED] >> 100% unmitigated damage.' : '[PARRY FAILED] >> Guard collapsed.');
+    hurtPlayer(pendingDmgRef.current, unmitigated);
     counterRef.current = false;
     setCounterPrepActive(false);
     if (operativeHpRef.current > 0) endEnemyTurn();
   };
 
+  const handleParryTimeout = () => {
+    resolveParryFail(false);
+  };
+
+  const applyParryTapScale = (scale: number) => {
+    if (Math.abs(scale - PARRY_RING_MEET_SCALE) <= parryTol) {
+      resolveParrySuccess();
+    } else {
+      resolveParryFail(true);
+    }
+  };
+
+  const scheduleParryGraceTimeout = () => {
+    if (parryResolvedRef.current || cycleRef.current !== 'DEFEND_PARRY') return;
+    clearParryGraceTimer();
+    parryGraceTimerRef.current = setTimeout(() => {
+      parryGraceTimerRef.current = null;
+      handleParryTimeout();
+    }, PARRY_MEET_GRACE_MS);
+  };
+
   const startParryRing = () => {
     cancelAnimation(parryScaleSV);
+    clearParryGraceTimer();
+    parryResolvedRef.current = false;
     setIsSuccessState(false);
     setIsFailureState(false);
     parryScaleSV.value = 2.5;
     requestAnimationFrame(() => {
       if (cycleRef.current !== 'DEFEND_PARRY') return;
       parryScaleSV.value = withTiming(
-        0.5,
+        PARRY_RING_MEET_SCALE,
         { duration: PARRY_DURATION, easing: ReanimatedEasing.linear },
         (finished) => {
           if (!finished) return;
-          runOnJS(handleParryTimeout)();
+          runOnJS(scheduleParryGraceTimeout)();
         },
       );
     });
   };
 
   const onParryTap = () => {
-    if (cycleRef.current !== 'DEFEND_PARRY' || isSuccessState || isFailureState) return;
+    if (cycleRef.current !== 'DEFEND_PARRY' || parryResolvedRef.current) return;
+    clearParryGraceTimer();
     cancelAnimation(parryScaleSV);
-    const scale = parryScaleSV.value;
-    if (Math.abs(scale - 1.0) <= parryTol) {
-      setIsSuccessState(true);
-      Vibration.vibrate(15);
-      flash(P.parry);
-      const cd = Math.floor(COMBAT_ACTION.COUNTER_DAMAGE * (1 + parryMultiplierBonus));
-      log(`[PERFECT COUNTER] >> Staggered! ${cd} retaliation damage.`);
-      counterRef.current = false;
-      setCounterPrepActive(false);
-      if (hurtEnemy(cd, '[COUNTER HIT]')) return;
-      setTimeout(() => endEnemyTurn(), 400);
-    } else {
-      setIsFailureState(true);
-      log('[PARRY FAILED] >> 100% unmitigated damage.');
-      hurtPlayer(pendingDmgRef.current, true);
-      counterRef.current = false;
-      setCounterPrepActive(false);
-      if (operativeHpRef.current > 0) endEnemyTurn();
-    }
+    runOnUI(() => {
+      'worklet';
+      const scale = parryScaleSV.value;
+      runOnJS(applyParryTapScale)(scale);
+    })();
   };
 
   const clearSliceTimers = () => {
@@ -612,7 +667,9 @@ export default function TacticalCombatHub({
   };
 
   const getDeckActionAccent = (action: CombatDeckAction): string | undefined => {
-    if (action === 'KINETIC_STRIKE' && isPlayerTurn) return theme.primaryColor;
+    if (action === 'KINETIC_STRIKE' && isPlayerTurn && (aegisActive || strikeKrPrimed)) {
+      return AEGIS_STRIKE_ACCENT;
+    }
     if (action === 'COUNTER_STANCE' && counterReady) return P.parry;
     return undefined;
   };
@@ -631,7 +688,7 @@ export default function TacticalCombatHub({
         return `COST: ${cost} ENERGY // EXPECTED IMPACT: ${dmg} DAMAGE`;
       }
       case 'AEGIS_PROTOCOL':
-        return `COST: ${COMBAT_ACTION.AEGIS_STAMINA} ENERGY // EXPECTED IMPACT: 50% BLOCK`;
+        return `COST: ${COMBAT_ACTION.AEGIS_STAMINA} STAM // 50% BLOCK\nNEXT KINETIC STRIKE +${COMBAT_ACTION.AEGIS_KINETIC_BONUS}% KINETIC ENERGY`;
       case 'FLUID_VENT':
         return `COST: 0 ENERGY // EXPECTED IMPACT: +${COMBAT_ACTION.FLUID_VENT_RESTORE} STAMINA`;
       case 'COUNTER_STANCE':
@@ -790,9 +847,6 @@ export default function TacticalCombatHub({
           <Text style={[styles.exhaustedBanner, { color: '#fbbf24' }]}>
             BLINDED — COUNTER WINDOW -15%
           </Text>
-        ) : null}
-        {aegisActive ? (
-          <Text style={[styles.aegisBanner, { color: theme.primaryColor }]}>AEGIS BARRIER ACTIVE</Text>
         ) : null}
       </View>
     );

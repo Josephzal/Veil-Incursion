@@ -102,7 +102,12 @@ export default function CombatCommandDeck({
           <Text style={[styles.execHeader, { color: primaryColor }]} numberOfLines={1} ellipsizeMode="tail">
             {getStagedHeader(selectedAction)}
           </Text>
-          <Text style={[styles.execDetail, { color: mutedColor }]} numberOfLines={1} ellipsizeMode="tail">
+          <Text
+            style={[styles.execDetail, { color: mutedColor }]}
+            numberOfLines={2}
+            adjustsFontSizeToFit
+            minimumFontScale={0.65}
+          >
             {getStagedCostImpact(selectedAction)}
           </Text>
           <View style={styles.executionRow}>
@@ -211,6 +216,7 @@ const styles = StyleSheet.create({
     fontSize: 8,
     letterSpacing: 0.5,
     lineHeight: 11,
+    minHeight: 22,
   },
   executionRow: {
     flexDirection: 'row',

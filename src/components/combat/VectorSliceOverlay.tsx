@@ -22,9 +22,9 @@ const SLICE_CRIMSON = '#ff1744';
 const SLICE_GLOW = '#ef4444';
 const SLICE_CORE = '#ffe4e8';
 const BACKDROP = 'rgba(0,0,0,0.32)';
-const LINE_LENGTH_RATIO = 0.26;
-const GLOW_WIDTH = 5;
-const CORE_WIDTH = 1.5;
+const LINE_LENGTH_RATIO = 0.32;
+const GLOW_WIDTH = 6;
+const CORE_WIDTH = 2;
 const ORIGIN_JITTER = 0.04;
 
 export interface SliceLineRender {
@@ -78,7 +78,7 @@ export default function VectorSliceOverlay({
   }, [size.w, size.h]);
 
   const dimRadius = useMemo(
-    () => (Math.min(size.w, size.h) * 0.42) / 2,
+    () => (Math.min(size.w, size.h) * 0.46) / 2,
     [size.w, size.h],
   );
 

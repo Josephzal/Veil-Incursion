@@ -11,8 +11,8 @@ import Animated, {
 } from 'react-native-reanimated';
 
 const SLICE_ACCENT = '#ff1744';
-const PING_SIZE = 22;
-const HITBOX = PING_SIZE + 14;
+const PING_SIZE = 28;
+const HITBOX = PING_SIZE + 16;
 
 interface VectorSlicePingProps {
   ready: boolean;
