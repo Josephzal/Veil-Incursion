@@ -1,5 +1,6 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
+import EnemyPlaceholder from '../../assets/enemy images/enemy_placeholder.png';
 import IncursionShell from '../components/IncursionShell';
 import EncounterBiomeBanner from '../components/EncounterBiomeBanner';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
@@ -74,36 +75,67 @@ export default function CombatScreen(): React.JSX.Element {
         style={{ backgroundColor: theme.backgroundColor }}
       >
         <EncounterBiomeBanner />
-        <View style={styles.hubWrapper}>
-          <TacticalCombatHub
-            onCombatComplete={handleCombatComplete}
-            initialOperativeHp={runState.soulAnchorIntegrity}
-            initialStamina={combatEntryStamina}
-            maxStamina={runState.maxStamina}
-            maxSoulAnchor={runState.maxSoulAnchor}
-            startingKineticPercent={runState.startingKineticPercent}
-            parryMultiplierBonus={runState.parryMultiplierBonus}
-            parryWindowBonus={runState.parryWindowBonus}
-            sliceDamagePenalty={runState.sliceDamagePenalty}
-            enemyProfile={runState.pendingEnemy}
-            nodeIndex={activeIncursion.currentNodeIndex}
-            onTerminalLog={appendRunLog}
-            weaponCombatStats={weaponCombatStats}
-            environmentalModifiers={env}
-            bossProfile={activeIncursion.bossProfile}
-            onBossPhaseShift={shiftBossPhase}
-          />
+        <View style={styles.combatLayout}>
+          <View style={styles.enemyViewport}>
+            <Image
+              source={EnemyPlaceholder}
+              style={styles.enemyImage}
+              resizeMode="contain"
+              accessibilityLabel="Hostile signature placeholder"
+            />
+          </View>
+
+          <View style={styles.combatConsole}>
+            <TacticalCombatHub
+              onCombatComplete={handleCombatComplete}
+              initialOperativeHp={runState.soulAnchorIntegrity}
+              initialStamina={combatEntryStamina}
+              maxStamina={runState.maxStamina}
+              maxSoulAnchor={runState.maxSoulAnchor}
+              startingKineticPercent={runState.startingKineticPercent}
+              parryMultiplierBonus={runState.parryMultiplierBonus}
+              parryWindowBonus={runState.parryWindowBonus}
+              sliceDamagePenalty={runState.sliceDamagePenalty}
+              enemyProfile={runState.pendingEnemy}
+              nodeIndex={activeIncursion.currentNodeIndex}
+              onTerminalLog={appendRunLog}
+              weaponCombatStats={weaponCombatStats}
+              environmentalModifiers={env}
+              bossProfile={activeIncursion.bossProfile}
+              onBossPhaseShift={shiftBossPhase}
+            />
+          </View>
         </View>
       </MacroLogAnchoredLayout>
     </IncursionShell>
   );
 }
 
+const ENEMY_VIEWPORT_HEIGHT = 300;
+
 const styles = StyleSheet.create({
-  hubWrapper: {
+  combatLayout: {
     flex: 1,
     minHeight: 0,
     paddingHorizontal: 8,
-    justifyContent: 'flex-start',
+    flexDirection: 'column',
+  },
+  enemyViewport: {
+    width: '100%',
+    height: ENEMY_VIEWPORT_HEIGHT,
+    flexShrink: 0,
+    backgroundColor: '#000000',
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  enemyImage: {
+    width: '100%',
+    height: ENEMY_VIEWPORT_HEIGHT,
+  },
+  combatConsole: {
+    flex: 1,
+    minHeight: 0,
+    width: '100%',
   },
 });
