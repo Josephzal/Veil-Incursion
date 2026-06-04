@@ -10,7 +10,7 @@ interface MacroLogAnchoredLayoutProps {
 
 /**
  * Strict two-zone column: scrollable/flex content above, macro log pinned to screen baseline.
- * Use inside IncursionShell for combat, checkpoint, and scanner screens.
+ * Use inside IncursionShell for combat, scanner, narrative, boon, and sanctuary screens.
  */
 export default function MacroLogAnchoredLayout({
   children,

@@ -4,14 +4,14 @@ import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useNodeProgression } from '../hooks/useNodeProgression';
 import IncursionShell from '../components/IncursionShell';
-import EncounterBiomeBanner from '../components/EncounterBiomeBanner';
-import PersistentTerminalLog from '../components/PersistentTerminalLog';
+import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
+import OperativeTelemetryBar from '../components/OperativeTelemetryBar';
 
 const TERMINAL_ACCENT = '#00ff33';
 
 export default function RestScreen(): React.JSX.Element {
   const { theme } = useTerminal();
-  const { runState, applyRestChoice, activeIncursion } = useRun();
+  const { runState, applyRestChoice } = useRun();
   const { completeCurrentNode } = useNodeProgression();
   const [chosen, setChosen] = useState<'REST' | 'REPAIR' | null>(null);
 
@@ -25,63 +25,62 @@ export default function RestScreen(): React.JSX.Element {
 
   return (
     <IncursionShell>
-    <View style={[styles.container, { backgroundColor: theme.backgroundColor }]}>
-      <EncounterBiomeBanner />
-      <View style={[styles.header, { borderColor: theme.borderColor }]}>
-        <Text style={[styles.headerText, { color: theme.mutedColor }]}>
-          TIER {activeIncursion.currentTier} // DEPTH {activeIncursion.currentNodeIndex + 1}/10 // STABILIZATION NODE
-        </Text>
-      </View>
+      <MacroLogAnchoredLayout
+        showMacroLog={runState.runActive}
+        style={{ backgroundColor: theme.backgroundColor }}
+      >
+        <View style={styles.screenBody}>
+          <OperativeTelemetryBar />
+        
+          <View style={styles.content}>
+            <Text style={[styles.title, { color: theme.primaryColor }]}>REST / SANCTUARY NODE</Text>
+            <Text style={[styles.bodyText, { color: theme.mutedColor }]}>
+              A quiet anchor chapel hums with stabilizing ley-energy. Choose how to recover before the next incursion vector.
+            </Text>
 
-      <View style={styles.content}>
-        <Text style={[styles.title, { color: theme.primaryColor }]}>REST / SANCTUARY NODE</Text>
-        <Text style={[styles.body, { color: theme.mutedColor }]}>
-          A quiet anchor chapel hums with stabilizing ley-energy. Choose how to recover before the next incursion vector.
-        </Text>
+            <View style={[styles.statsBox, { borderColor: theme.borderColor }]}>
+              <Text style={[styles.statLine, { color: theme.mutedColor }]}>
+                SOUL ANCHOR: {runState.soulAnchorIntegrity}/{runState.maxSoulAnchor}
+              </Text>
+              <Text style={[styles.statLine, { color: theme.mutedColor }]}>
+                STAMINA: {runState.currentStamina}/{runState.maxStamina}
+              </Text>
+            </View>
 
-        <View style={[styles.statsBox, { borderColor: theme.borderColor }]}>
-          <Text style={[styles.statLine, { color: theme.mutedColor }]}>
-            SOUL ANCHOR: {runState.soulAnchorIntegrity}/{runState.maxSoulAnchor}
-          </Text>
-          <Text style={[styles.statLine, { color: theme.mutedColor }]}>
-            STAMINA: {runState.currentStamina}/{runState.maxStamina}
-          </Text>
+            <Pressable
+              onPress={() => handleChoice('REST')}
+              disabled={!!chosen}
+              style={({ pressed }) => [
+                styles.choiceButton,
+                { borderColor: TERMINAL_ACCENT, opacity: chosen && chosen !== 'REST' ? 0.4 : 1, backgroundColor: pressed ? '#0d1a12' : '#0e1624' },
+              ]}
+            >
+              <Text style={styles.choiceLabel}>[ REST ]</Text>
+              <Text style={[styles.choiceDesc, { color: theme.mutedColor }]}>Restore 40% Stamina</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => handleChoice('REPAIR')}
+              disabled={!!chosen}
+              style={({ pressed }) => [
+                styles.choiceButton,
+                { borderColor: TERMINAL_ACCENT, opacity: chosen && chosen !== 'REPAIR' ? 0.4 : 1, backgroundColor: pressed ? '#0d1a12' : '#0e1624' },
+              ]}
+            >
+              <Text style={styles.choiceLabel}>[ ATTUNE ]</Text>
+              <Text style={[styles.choiceDesc, { color: theme.mutedColor }]}>Restore 25% Soul Anchor HP</Text>
+            </Pressable>
+          </View>
         </View>
-
-        <Pressable
-          onPress={() => handleChoice('REST')}
-          disabled={!!chosen}
-          style={({ pressed }) => [
-            styles.choiceButton,
-            { borderColor: TERMINAL_ACCENT, opacity: chosen && chosen !== 'REST' ? 0.4 : 1, backgroundColor: pressed ? '#0d1a12' : '#0e1624' },
-          ]}
-        >
-          <Text style={styles.choiceLabel}>[ REST ]</Text>
-          <Text style={[styles.choiceDesc, { color: theme.mutedColor }]}>Restore 40% Stamina</Text>
-        </Pressable>
-
-        <Pressable
-          onPress={() => handleChoice('REPAIR')}
-          disabled={!!chosen}
-          style={({ pressed }) => [
-            styles.choiceButton,
-            { borderColor: TERMINAL_ACCENT, opacity: chosen && chosen !== 'REPAIR' ? 0.4 : 1, backgroundColor: pressed ? '#0d1a12' : '#0e1624' },
-          ]}
-        >
-          <Text style={styles.choiceLabel}>[ REPAIR ]</Text>
-          <Text style={[styles.choiceDesc, { color: theme.mutedColor }]}>Restore 25% Soul Anchor HP</Text>
-        </Pressable>
-      </View>
-
-      <PersistentTerminalLog />
-    </View>
+      </MacroLogAnchoredLayout>
     </IncursionShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  screenBody: {
     flex: 1,
+    minHeight: 0,
   },
   header: {
     borderBottomWidth: 1,
@@ -96,6 +95,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    minHeight: 0,
     paddingHorizontal: 20,
     paddingTop: 24,
   },
@@ -106,7 +106,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     marginBottom: 10,
   },
-  body: {
+  bodyText: {
     fontFamily: 'monospace',
     fontSize: 11,
     lineHeight: 17,

@@ -208,6 +208,15 @@ function VectorScannerComponent({
   const ceaseStartRef = useRef<number | null>(null);
   const isCeasedRef = useRef(false);
   const dischargePhaseRef = useRef<'none' | 'decel' | 'fog' | 'done'>('none');
+  const sweepSessionActiveRef = useRef(false);
+  const uniformSelectAppliedRef = useRef(false);
+  const onSiphonedNodesChangeRef = useRef(onSiphonedNodesChange);
+  const onSelectNodeRef = useRef(onSelectNode);
+  const onSweepCompleteRef = useRef(onSweepComplete);
+  const lastReportedSiphonsRef = useRef('');
+  onSiphonedNodesChangeRef.current = onSiphonedNodesChange;
+  onSelectNodeRef.current = onSelectNode;
+  onSweepCompleteRef.current = onSweepComplete;
 
   const uniformSelectable = contactsLocked || sweepFinished;
   const selectionAccent = theme.blipAccent;
@@ -308,8 +317,8 @@ function VectorScannerComponent({
     sweepCompleteFiredRef.current = true;
     setSweepFinished(true);
     applyUniformSelectableState();
-    onSweepComplete?.();
-  }, [applyUniformSelectableState, onSweepComplete]);
+    queueMicrotask(() => onSweepCompleteRef.current?.());
+  }, [applyUniformSelectableState]);
 
   const triggerPhosphorStrike = useCallback(
     (nodeId: string) => {
@@ -358,11 +367,7 @@ function VectorScannerComponent({
       bumpRender();
       Vibration.vibrate(SIPHON_HAPTIC_MS);
 
-      setSiphonedNodeIds((prev) => {
-        const next = [...prev, nodeId];
-        onSiphonedNodesChange?.(next);
-        return next;
-      });
+      setSiphonedNodeIds((prev) => (prev.includes(nodeId) ? prev : [...prev, nodeId]));
       setSiphonPulseKeys((prev) => ({ ...prev, [nodeId]: (prev[nodeId] ?? 0) + 1 }));
     },
     [
@@ -371,7 +376,6 @@ function VectorScannerComponent({
       isNodeIlluminated,
       ensureBlipState,
       bumpRender,
-      onSiphonedNodesChange,
     ],
   );
 
@@ -451,12 +455,25 @@ function VectorScannerComponent({
   }, [activeNodes, ensureBlipState]);
 
   useEffect(() => {
-    if (!uniformSelectable) return;
+    const key = siphonedNodeIds.join(',');
+    if (lastReportedSiphonsRef.current === key) return;
+    lastReportedSiphonsRef.current = key;
+    onSiphonedNodesChangeRef.current?.(siphonedNodeIds);
+  }, [siphonedNodeIds]);
+
+  useEffect(() => {
+    if (!uniformSelectable) {
+      uniformSelectAppliedRef.current = false;
+      return;
+    }
+    if (uniformSelectAppliedRef.current) return;
+    uniformSelectAppliedRef.current = true;
     applyUniformSelectableState();
   }, [uniformSelectable, applyUniformSelectableState]);
 
   useEffect(() => {
     if (!active) {
+      sweepSessionActiveRef.current = false;
       if (rafRef.current != null) {
         cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
@@ -472,32 +489,36 @@ function VectorScannerComponent({
       return;
     }
 
-    setSweepFinished(false);
-    setIsCeased(false);
-    isCeasedRef.current = false;
-    setSiphonedNodeIds([]);
-    setSiphonPulseKeys({});
-    onSiphonedNodesChange?.([]);
-    sweepCompleteFiredRef.current = false;
-    ceaseStartRef.current = null;
-    dischargePhaseRef.current = 'none';
-    sweepAngleRef.current = 0;
-    lastFrameTsRef.current = null;
-    armedMapRef.current = {};
-    setRevealedIds(new Set());
-    setFogOpacity(1);
-    setPhosphorDischargeDisc(false);
+    const isNewSweepSession = !sweepSessionActiveRef.current;
+    sweepSessionActiveRef.current = true;
 
-    activeNodes.forEach((node) => {
-      blipStatesRef.current[node.id] = {
-        opacity: 0,
-        scale: 1,
-        bloomUntil: 0,
-        decayStart: null,
-        siphoned: false,
-      };
-    });
-    bumpRender();
+    if (isNewSweepSession) {
+      setSweepFinished(false);
+      setIsCeased(false);
+      isCeasedRef.current = false;
+      setSiphonedNodeIds([]);
+      setSiphonPulseKeys({});
+      sweepCompleteFiredRef.current = false;
+      ceaseStartRef.current = null;
+      dischargePhaseRef.current = 'none';
+      sweepAngleRef.current = 0;
+      lastFrameTsRef.current = null;
+      armedMapRef.current = {};
+      setRevealedIds(new Set());
+      setFogOpacity(1);
+      setPhosphorDischargeDisc(false);
+
+      activeNodes.forEach((node) => {
+        blipStatesRef.current[node.id] = {
+          opacity: 0,
+          scale: 1,
+          bloomUntil: 0,
+          decayStart: null,
+          siphoned: false,
+        };
+      });
+      bumpRender();
+    }
 
     const frame = (timestamp: number) => {
       const lastTs = lastFrameTsRef.current ?? timestamp;
@@ -565,14 +586,13 @@ function VectorScannerComponent({
     updateBlipDecays,
     finalizeCeaseScan,
     bumpRender,
-    onSiphonedNodesChange,
     sweepFinished,
   ]);
 
 
   const handleTargetPress = (nodeId: string) => {
     if (uniformSelectable) {
-      onSelectNode?.(nodeId);
+      queueMicrotask(() => onSelectNodeRef.current?.(nodeId));
       return;
     }
     if (scanInteractive) {
@@ -766,8 +786,8 @@ function VectorScannerComponent({
         >
           <Text style={[styles.ceaseLabel, { color: theme.text }]}>
             {canCeaseScan
-              ? '[ OVERRIDE // CEASE_SCAN ]'
-              : '[ SIPHON ≥1 CONTACT TO CEASE ]'}
+              ? '[ CEASE SCAN ]'
+              : '[ SELECT NODE TO CEASE ]'}
           </Text>
         </TouchableOpacity>
       </View>

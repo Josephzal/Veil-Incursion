@@ -1,9 +1,9 @@
 import React, { useRef } from 'react';
 import { StyleSheet, View, Text } from 'react-native';
 import IncursionShell from '../components/IncursionShell';
-import EncounterBiomeBanner from '../components/EncounterBiomeBanner';
 import NarrativeStepperModule from '../components/NarrativeStepperModule';
-import PersistentTerminalLog from '../components/PersistentTerminalLog';
+import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
+import OperativeTelemetryBar from '../components/OperativeTelemetryBar';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useDescentNavigator } from '../hooks/useDescentNavigator';
@@ -30,7 +30,7 @@ export default function NarrativeScreen(): React.JSX.Element {
   if (!node) {
     return (
       <IncursionShell>
-        <View style={[styles.container, { backgroundColor: theme.backgroundColor }]}>
+        <View style={[styles.body, { backgroundColor: theme.backgroundColor }]}>
           <Text style={[styles.fallback, { color: theme.mutedColor }]}>
             NO ACTIVE NARRATIVE VECTOR — AWAITING MAP COORDINATOR.
           </Text>
@@ -41,26 +41,30 @@ export default function NarrativeScreen(): React.JSX.Element {
 
   return (
     <IncursionShell>
-      <View style={[styles.container, { backgroundColor: theme.backgroundColor }]}>
-        <EncounterBiomeBanner />
-        <View style={styles.content}>
-          <NarrativeStepperModule
-            node={node}
-            onComplete={handleComplete}
-            borderColor={theme.borderColor}
-            mutedColor={theme.mutedColor}
-            primaryColor={theme.primaryColor}
-          />
+      <MacroLogAnchoredLayout
+        showMacroLog={runState.runActive}
+        style={{ backgroundColor: theme.backgroundColor }}
+      >
+        <View style={styles.body}>
+          <OperativeTelemetryBar />
+          <View style={styles.content}>
+            <NarrativeStepperModule
+              node={node}
+              onComplete={handleComplete}
+              borderColor={theme.borderColor}
+              mutedColor={theme.mutedColor}
+              primaryColor={theme.primaryColor}
+            />
+          </View>
         </View>
-        <PersistentTerminalLog visible={runState.runActive} />
-      </View>
+      </MacroLogAnchoredLayout>
     </IncursionShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { flex: 1, paddingHorizontal: 16, paddingTop: 8, justifyContent: 'center' },
+  body: { flex: 1, minHeight: 0 },
+  content: { flex: 1, minHeight: 0, paddingHorizontal: 16, paddingTop: 8, justifyContent: 'center' },
   fallback: {
     fontFamily: 'monospace',
     fontSize: 10,

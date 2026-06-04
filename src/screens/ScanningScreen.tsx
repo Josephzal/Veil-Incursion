@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Dimensions, StyleSheet, Text, View } from 'react-native';
 import { BOSS_DEPTH_INDEX, generateTierNodeScanVectors } from '../data/descentEngine';
 import { INITIAL_SECTOR_POOL } from '../data/regions';
 import IncursionShell from '../components/IncursionShell';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
+import OperativeTelemetryBar from '../components/OperativeTelemetryBar';
 import ScanConfirmOverlay from '../components/ScanConfirmOverlay';
 import VectorScanner from '../components/VectorScanner';
 import { useRun } from '../context/RunContext';
@@ -22,11 +23,6 @@ const RADAR_CORE = RADAR_SIZE * 0.48;
 const READOUT_FIXED_HEIGHT = 72;
 
 type ScanPhase = 'SWEEPING' | 'DOTS';
-
-function resourcePercent(current: number, max: number): number {
-  if (max <= 0) return 0;
-  return Math.round((current / max) * 100);
-}
 
 export default function ScanningScreen(): React.JSX.Element {
   const { theme } = useTerminal();
@@ -52,6 +48,7 @@ export default function ScanningScreen(): React.JSX.Element {
 
   const [phase, setPhase] = useState<ScanPhase>('SWEEPING');
   const [vectorDots, setVectorDots] = useState<RadarDot[]>([]);
+  const [siphonedNodeIds, setSiphonedNodeIds] = useState<string[]>([]);
   const bossPreviewOpenedRef = useRef(false);
   const lastRadarSessionRef = useRef<number | null>(null);
 
@@ -70,11 +67,13 @@ export default function ScanningScreen(): React.JSX.Element {
 
   const previewNode = getPreviewNode();
 
-  const healthPct = resourcePercent(runState.soulAnchorIntegrity, runState.maxSoulAnchor);
-  const staminaPct = resourcePercent(runState.currentStamina, runState.maxStamina);
-  const shieldPct = Math.max(0, Math.min(100, healthPct + 8));
-  const energyPct = Math.max(0, Math.min(100, runState.startingKineticPercent));
-  const operativeTelemetry = `HEALTH: ${healthPct}% // SHIELD: ${shieldPct}% // STAMINA: ${staminaPct}% // ENERGY: ${energyPct}%`;
+  const scannerNodes = useMemo(() => {
+    if (phase !== 'DOTS' || isBossDepth) {
+      return vectorDots;
+    }
+    const siphoned = new Set(siphonedNodeIds);
+    return vectorDots.filter((dot) => siphoned.has(dot.id));
+  }, [phase, isBossDepth, vectorDots, siphonedNodeIds]);
 
   useEffect(() => {
     if (!isScanningHub || vectorCluster.length === 0) {
@@ -88,6 +87,7 @@ export default function ScanningScreen(): React.JSX.Element {
     const sector = runState.currentSector ?? INITIAL_SECTOR_POOL[0];
     const dots = generateTierNodeScanVectors(vectorCluster, RADAR_SIZE, sector);
     setVectorDots(dots);
+    setSiphonedNodeIds([]);
 
     if (isBossDepth) {
       setPhase('DOTS');
@@ -103,6 +103,15 @@ export default function ScanningScreen(): React.JSX.Element {
     const bossDot = vectorDots.find((dot) => dot.isPreDiscovered) ?? vectorDots[0];
     if (bossDot) openScanPreview(bossDot.id);
   }, [isScanningHub, isBossDepth, vectorDots, openScanPreview]);
+
+  const handleSiphonedNodesChange = useCallback((nodeIds: string[]) => {
+    setSiphonedNodeIds((prev) => {
+      if (prev.length === nodeIds.length && prev.every((id, index) => id === nodeIds[index])) {
+        return prev;
+      }
+      return nodeIds;
+    });
+  }, []);
 
   const handleNodeTap = (nodeId: string) => {
     openScanPreview(nodeId);
@@ -144,23 +153,19 @@ export default function ScanningScreen(): React.JSX.Element {
         style={{ backgroundColor: theme.backgroundColor }}
       >
         <View style={styles.body}>
-          <View style={[styles.statusBar, { borderColor: theme.borderColor }]}>
-            
-            <Text style={[styles.statusBarResources, { color: theme.primaryColor }]}>
-              {operativeTelemetry}
-            </Text>
-          </View>
+          <OperativeTelemetryBar />
 
           <View style={styles.radarDock}>
             <VectorScanner
               cabal={cabal}
               scannerSize={RADAR_SIZE}
               active={phase === 'SWEEPING' && !isBossDepth}
-              activeNodes={vectorDots}
+              activeNodes={phase === 'SWEEPING' && !isBossDepth ? vectorDots : scannerNodes}
               contactsLocked={phase === 'DOTS' || isBossDepth}
               coreScale={RADAR_CORE / RADAR_SIZE}
               onSweepComplete={() => setPhase('DOTS')}
               onSelectNode={handleNodeTap}
+              onSiphonedNodesChange={handleSiphonedNodesChange}
             />
           </View>
 
@@ -200,7 +205,7 @@ export default function ScanningScreen(): React.JSX.Element {
                 <Text style={[styles.scanSubStatus, { color: theme.mutedColor }]}>
                   {isBossDepth
                     ? 'Manifested core threat pre-scanned by descent engine. Review classification and engage.'
-                    : `Select a radar contact to open classification preview — ${vectorDots.length} route${vectorDots.length === 1 ? '' : 's'} available.`}
+                    : `Select a radar contact to open classification preview — ${scannerNodes.length} siphoned route${scannerNodes.length === 1 ? '' : 's'} available.`}
                 </Text>
               </View>
             </View>
@@ -229,22 +234,6 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   fallback: { fontFamily: 'monospace', fontSize: 10, textAlign: 'center', padding: 24 },
-  statusBar: {
-    borderBottomWidth: 1,
-    paddingTop: 8,
-    paddingBottom: 10,
-    paddingHorizontal: 16,
-    flexShrink: 0,
-    gap: 6,
-  },
-  statusBarText: { fontFamily: 'monospace', fontSize: 9, letterSpacing: 1.2, textAlign: 'center' },
-  statusBarResources: {
-    fontFamily: 'monospace',
-    fontSize: 8,
-    letterSpacing: 0.9,
-    textAlign: 'center',
-    lineHeight: 11,
-  },
   radarDock: {
     flex: 1,
     minHeight: 0,
