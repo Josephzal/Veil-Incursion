@@ -1,19 +1,20 @@
 import React from 'react';
-import { Image, StyleSheet, View } from 'react-native';
+import { Dimensions, Image, StyleSheet, View } from 'react-native';
 import EnemyPlaceholder from '../../assets/enemy images/enemy_placeholder.png';
 import IncursionShell from '../components/IncursionShell';
-import EncounterBiomeBanner from '../components/EncounterBiomeBanner';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
 import TacticalCombatHub from '../components/TacticalCombatHub';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
-import { useTerminal } from '../context/TerminalContext';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useNodeProgression } from '../hooks/useNodeProgression';
 
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const ENEMY_VIEWPORT_RATIO = 0.28;
+const ENEMY_VIEWPORT_HEIGHT = Math.round(SCREEN_HEIGHT * ENEMY_VIEWPORT_RATIO);
+
 export default function CombatScreen(): React.JSX.Element {
   const { startPostCombatBoon, startGameOver } = useGameFlow();
-  const { theme } = useTerminal();
   const {
     runState,
     syncAfterCombat,
@@ -70,13 +71,14 @@ export default function CombatScreen(): React.JSX.Element {
 
   return (
     <IncursionShell>
-      <MacroLogAnchoredLayout
-        showMacroLog={runState.runActive}
-        style={{ backgroundColor: theme.backgroundColor }}
-      >
-        <EncounterBiomeBanner />
-        <View style={styles.combatLayout}>
-          <View style={styles.enemyViewport}>
+      <MacroLogAnchoredLayout showMacroLog={runState.runActive} style={styles.combatRoot}>
+        <View style={styles.body}>
+          <View
+            style={[
+              styles.enemyViewport,
+              { height: ENEMY_VIEWPORT_HEIGHT, maxHeight: ENEMY_VIEWPORT_HEIGHT },
+            ]}
+          >
             <Image
               source={EnemyPlaceholder}
               style={styles.enemyImage}
@@ -85,8 +87,9 @@ export default function CombatScreen(): React.JSX.Element {
             />
           </View>
 
-          <View style={styles.combatConsole}>
+          <View style={styles.combatMiddle}>
             <TacticalCombatHub
+              stackedLayout
               onCombatComplete={handleCombatComplete}
               initialOperativeHp={runState.soulAnchorIntegrity}
               initialStamina={combatEntryStamina}
@@ -111,19 +114,20 @@ export default function CombatScreen(): React.JSX.Element {
   );
 }
 
-const ENEMY_VIEWPORT_HEIGHT = 300;
-
 const styles = StyleSheet.create({
-  combatLayout: {
+  combatRoot: {
+    flex: 1,
+    backgroundColor: '#000000',
+  },
+  body: {
     flex: 1,
     minHeight: 0,
-    paddingHorizontal: 8,
     flexDirection: 'column',
   },
   enemyViewport: {
     width: '100%',
-    height: ENEMY_VIEWPORT_HEIGHT,
     flexShrink: 0,
+    flexGrow: 0,
     backgroundColor: '#000000',
     overflow: 'hidden',
     alignItems: 'center',
@@ -131,11 +135,12 @@ const styles = StyleSheet.create({
   },
   enemyImage: {
     width: '100%',
-    height: ENEMY_VIEWPORT_HEIGHT,
+    height: '100%',
   },
-  combatConsole: {
+  combatMiddle: {
     flex: 1,
     minHeight: 0,
     width: '100%',
+    overflow: 'hidden',
   },
 });

@@ -14,6 +14,8 @@ const SCROLL_CONTENT_PADDING_BOTTOM = 16;
 interface PersistentTerminalLogProps {
   visible?: boolean;
   docked?: boolean;
+  /** Occupies remaining flex space in parent (combat stack) instead of fixed block height. */
+  fillRemaining?: boolean;
 }
 
 function resolveBottomInset(insetsBottom: number): number {
@@ -31,6 +33,7 @@ function LogLine({ line, color }: { line: string; color: string }) {
 export default function PersistentTerminalLog({
   visible = true,
   docked = false,
+  fillRemaining = false,
 }: PersistentTerminalLogProps): React.JSX.Element | null {
   const { runLog } = useRun();
   const { theme } = useTerminal();
@@ -51,10 +54,11 @@ export default function PersistentTerminalLog({
     <View
       style={[
         styles.container,
+        fillRemaining ? styles.containerFill : null,
         {
           borderColor: theme.borderColor,
           backgroundColor: LOG_SURFACE,
-          height: MACRO_LOG_BLOCK_HEIGHT,
+          ...(fillRemaining ? {} : { height: MACRO_LOG_BLOCK_HEIGHT }),
         },
       ]}
     >
@@ -62,7 +66,7 @@ export default function PersistentTerminalLog({
       <ScrollView
         ref={scrollRef}
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, fillRemaining ? styles.scrollContentFill : null]}
         nestedScrollEnabled
         showsVerticalScrollIndicator={false}
       >
@@ -81,6 +85,7 @@ export default function PersistentTerminalLog({
     <View
       style={[
         styles.dockShell,
+        fillRemaining ? styles.dockShellFill : null,
         {
           paddingBottom: bottomInset,
           backgroundColor: LOG_SURFACE,
@@ -98,6 +103,11 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     flexGrow: 0,
   },
+  dockShellFill: {
+    flex: 1,
+    minHeight: 0,
+    flexShrink: 1,
+  },
   container: {
     width: '100%',
     borderTopWidth: 1,
@@ -106,6 +116,12 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     flexGrow: 0,
     overflow: 'hidden',
+  },
+  containerFill: {
+    flex: 1,
+    minHeight: 0,
+    flexShrink: 1,
+    flexGrow: 1,
   },
   header: {
     fontFamily: 'monospace',
@@ -119,6 +135,10 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: SCROLL_CONTENT_PADDING_BOTTOM,
+    paddingHorizontal: 2,
+  },
+  scrollContentFill: {
+    flexGrow: 1,
   },
   lineRow: {
     flexDirection: 'row',
