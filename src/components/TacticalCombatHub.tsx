@@ -1,5 +1,12 @@
-import React, { useEffect, useRef, useState, type RefObject } from 'react';
+import React, { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { StyleSheet, View, Text, Animated, Easing, Dimensions, Pressable, Vibration, PanResponder } from 'react-native';
+import {
+  cancelAnimation,
+  Easing as ReanimatedEasing,
+  runOnJS,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { useTerminal } from '../context/TerminalContext';
 import { INITIAL_SECTOR_POOL } from '../data/regions';
 import { advanceEnemyIntent, spawnEnemyProfile } from '../data/enemies';
@@ -11,6 +18,12 @@ import { BossRuntimeProfile, EnvironmentalModifiers } from '../types/game';
 import CombatTelemetryGaugeRow from './combat/CombatHorizontalGauge';
 import type { ApparitionViewportRef } from './combat/ApparitionViewport';
 import CombatCommandDeck, { DECK_ACTION_LABELS, type CombatDeckAction } from './CombatCommandDeck';
+import ParryMatrixOverlay from './combat/ParryMatrixOverlay';
+import VectorSliceOverlay, { ORIGIN_JITTER } from './combat/VectorSliceOverlay';
+import {
+  CombatChromeBridge,
+  useCombatEnemyChromeOptional,
+} from '../context/CombatEnemyChromeContext';
 import {
   type CombatEnemyTelemetry,
   formatHostileId,
@@ -30,8 +43,6 @@ import { useReactiveCombatStatus } from '../hooks/useReactiveCombatStatus';
 const TELEMETRY_DIVIDER = 'rgba(139, 92, 246, 0.2)';
 
 const { width } = Dimensions.get('window');
-const TARGET_SIZE = 80;
-const TARGET_RADIUS = TARGET_SIZE / 2;
 const MONO = 'monospace';
 const P = {
   enemyHp: '#ef4444', unitTitle: '#ffffff', enemyPosture: '#fde68a',
@@ -58,7 +69,13 @@ interface TacticalCombatHubProps {
   bossProfile?: BossRuntimeProfile | null;
   onBossPhaseShift?: (phase: number) => void;
 }
-interface SliceLineConfig { id: number; topY: number; rotation: string; isSliced: boolean; fadeAnim: Animated.Value; }
+interface SliceLineConfig {
+  id: number;
+  centerXRatio: number;
+  centerYRatio: number;
+  angleDeg: number;
+  isSliced: boolean;
+}
 
 const isAttackIntent = (i: EnemyIntent) =>
   i === 'STRIKE' || i === 'WORLD_ENDER' || i === 'OVERDRIVE_DISCHARGE';
@@ -128,7 +145,7 @@ export default function TacticalCombatHub({
   const resolutionRef = useRef<'VICTORY' | 'DEFEAT' | null>(null);
   const dismissedRef = useRef(false);
   const cycleRef = useRef<CombatPhase>('TEXT_COMBAT');
-  const shrinkAnim = useRef(new Animated.Value(2.5)).current;
+  const parryScaleSV = useSharedValue(2.5);
   const screenFlashAnim = useRef(new Animated.Value(0)).current;
   const activeSliceRef = useRef(-1);
   const sliceStartXRef = useRef<number | null>(null);
@@ -161,13 +178,6 @@ export default function TacticalCombatHub({
     counterRef.current = counterPrepActive;
   }, [cycleState, enemy, operativeHp, stamina, kineticReservoir, aegisActive, counterPrepActive]);
 
-  useEffect(() => {
-    if (cycleState === 'OFFENSE_SLICE' && activeSliceIndex >= 0 && sliceLines[activeSliceIndex]) {
-      const line = sliceLines[activeSliceIndex];
-      line.fadeAnim.setValue(0);
-      Animated.timing(line.fadeAnim, { toValue: 1, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
-    }
-  }, [activeSliceIndex, cycleState, sliceLines]);
 
   const syncEnemy = (e: EnemyCombatProfile) => { enemyRef.current = e; setEnemy(e); };
   const chargeKr = (amt: number) => setKineticReservoir((p) => {
@@ -186,7 +196,7 @@ export default function TacticalCombatHub({
 
   const resolve = (victory: boolean) => {
     if (operativeHpRef.current <= 0) victory = false;
-    shrinkAnim.stopAnimation();
+    cancelAnimation(parryScaleSV);
     if (victory) {
       resolutionRef.current = 'VICTORY'; log('[EXORCISED] >> Hostile neutralized. Incursion sealed.');
       setCycleState('RESOLUTION'); setResolutionOutcome('VICTORY'); awardCurrencies(750, 25);
@@ -452,38 +462,56 @@ export default function TacticalCombatHub({
     log('[VECTOR SLICE] >> Execution aperture open.'); triggerSlice();
   };
 
+  const handleParryTimeout = () => {
+    if (cycleRef.current !== 'DEFEND_PARRY') return;
+    setIsFailureState(true);
+    log('[PARRY FAILED] >> Guard collapsed.');
+    hurtPlayer(pendingDmgRef.current, pendingUnblockRef.current);
+    counterRef.current = false;
+    setCounterPrepActive(false);
+    if (operativeHpRef.current > 0) endEnemyTurn();
+  };
+
   const startParryRing = () => {
-    shrinkAnim.stopAnimation(); setIsSuccessState(false); setIsFailureState(false); shrinkAnim.setValue(2.5);
+    cancelAnimation(parryScaleSV);
+    setIsSuccessState(false);
+    setIsFailureState(false);
+    parryScaleSV.value = 2.5;
     requestAnimationFrame(() => {
       if (cycleRef.current !== 'DEFEND_PARRY') return;
-      Animated.timing(shrinkAnim, { toValue: 0.5, duration: PARRY_DURATION, easing: Easing.linear, useNativeDriver: true })
-        .start(({ finished }) => {
+      parryScaleSV.value = withTiming(
+        0.5,
+        { duration: PARRY_DURATION, easing: ReanimatedEasing.linear },
+        (finished) => {
           if (!finished) return;
-          setIsFailureState(true); log('[PARRY FAILED] >> Guard collapsed.');
-          hurtPlayer(pendingDmgRef.current, pendingUnblockRef.current);
-          counterRef.current = false; setCounterPrepActive(false);
-          if (operativeHpRef.current > 0) endEnemyTurn();
-        });
+          runOnJS(handleParryTimeout)();
+        },
+      );
     });
   };
 
   const onParryTap = () => {
     if (cycleRef.current !== 'DEFEND_PARRY' || isSuccessState || isFailureState) return;
-    shrinkAnim.stopAnimation((scale) => {
-      if (Math.abs(scale - 1.0) <= parryTol) {
-        setIsSuccessState(true); Vibration.vibrate(15); flash(P.parry);
-        const cd = Math.floor(COMBAT_ACTION.COUNTER_DAMAGE * (1 + parryMultiplierBonus));
-        log(`[PERFECT COUNTER] >> Staggered! ${cd} retaliation damage.`);
-        counterRef.current = false; setCounterPrepActive(false);
-        if (hurtEnemy(cd, '[COUNTER HIT]')) return;
-        setTimeout(() => endEnemyTurn(), 400);
-      } else {
-        setIsFailureState(true); log('[PARRY FAILED] >> 100% unmitigated damage.');
-        hurtPlayer(pendingDmgRef.current, true);
-        counterRef.current = false; setCounterPrepActive(false);
-        if (operativeHpRef.current > 0) endEnemyTurn();
-      }
-    });
+    cancelAnimation(parryScaleSV);
+    const scale = parryScaleSV.value;
+    if (Math.abs(scale - 1.0) <= parryTol) {
+      setIsSuccessState(true);
+      Vibration.vibrate(15);
+      flash(P.parry);
+      const cd = Math.floor(COMBAT_ACTION.COUNTER_DAMAGE * (1 + parryMultiplierBonus));
+      log(`[PERFECT COUNTER] >> Staggered! ${cd} retaliation damage.`);
+      counterRef.current = false;
+      setCounterPrepActive(false);
+      if (hurtEnemy(cd, '[COUNTER HIT]')) return;
+      setTimeout(() => endEnemyTurn(), 400);
+    } else {
+      setIsFailureState(true);
+      log('[PARRY FAILED] >> 100% unmitigated damage.');
+      hurtPlayer(pendingDmgRef.current, true);
+      counterRef.current = false;
+      setCounterPrepActive(false);
+      if (operativeHpRef.current > 0) endEnemyTurn();
+    }
   };
 
   const clearSliceTimers = () => {
@@ -536,8 +564,11 @@ export default function TacticalCombatHub({
     sliceSessionRef.current = { lines: [], hitCount: 0, slicedIds: new Set(), segmentTimer: null, hitFlashTimer: null, evaluated: false };
     crossedRef.current = false; sliceStartXRef.current = null;
     const lines: SliceLineConfig[] = Array.from({ length: 3 }, (_, i) => ({
-      id: i, topY: 60 + Math.floor(Math.random() * 80), rotation: `${Math.floor(Math.random() * 130) - 65}deg`,
-      isSliced: false, fadeAnim: new Animated.Value(0),
+      id: i,
+      centerXRatio: 0.5 + (Math.random() - 0.5) * ORIGIN_JITTER,
+      centerYRatio: 0.5 + (Math.random() - 0.5) * ORIGIN_JITTER,
+      angleDeg: Math.floor(Math.random() * 360),
+      isSliced: false,
     }));
     sliceSessionRef.current.lines = lines; setSliceLines(lines);
     activeSliceRef.current = 0; setActiveSliceIndex(0);
@@ -552,7 +583,7 @@ export default function TacticalCombatHub({
     onPanResponderMove: (_e, g) => {
       if (cycleRef.current !== 'OFFENSE_SLICE' || sliceStartXRef.current === null || crossedRef.current || activeSliceRef.current === -1) return;
       if (Math.abs(g.dy) > 90) return;
-      if (Math.abs(g.dx) >= 60) sliceHandlersRef.current.validate();
+      if (Math.abs(g.dx) >= 44) sliceHandlersRef.current.validate();
     },
     onPanResponderRelease: () => { if (cycleRef.current === 'OFFENSE_SLICE') sliceStartXRef.current = null; },
   })).current;
@@ -573,8 +604,8 @@ export default function TacticalCombatHub({
         return stamina >= COMBAT_ACTION.AEGIS_STAMINA;
       case 'FLUID_VENT':
         return true;
-      case 'VECTOR_SLICE':
-        return sliceReady;
+      case 'COUNTER_STANCE':
+        return counterReady && stamina >= COMBAT_ACTION.COUNTER_STAMINA;
       default:
         return false;
     }
@@ -582,7 +613,7 @@ export default function TacticalCombatHub({
 
   const getDeckActionAccent = (action: CombatDeckAction): string | undefined => {
     if (action === 'KINETIC_STRIKE' && isPlayerTurn) return theme.primaryColor;
-    if (action === 'VECTOR_SLICE') return '#ff1744';
+    if (action === 'COUNTER_STANCE' && counterReady) return P.parry;
     return undefined;
   };
 
@@ -603,8 +634,8 @@ export default function TacticalCombatHub({
         return `COST: ${COMBAT_ACTION.AEGIS_STAMINA} ENERGY // EXPECTED IMPACT: 50% BLOCK`;
       case 'FLUID_VENT':
         return `COST: 0 ENERGY // EXPECTED IMPACT: +${COMBAT_ACTION.FLUID_VENT_RESTORE} STAMINA`;
-      case 'VECTOR_SLICE':
-        return `COST: ${COMBAT_ACTION.KINETIC_CAP}% KINETIC // EXPECTED IMPACT: UP TO ${scaleSlice(COMBAT_ACTION.VECTOR_SLICE_DAMAGE)} DAMAGE`;
+      case 'COUNTER_STANCE':
+        return `COST: ${COMBAT_ACTION.COUNTER_STAMINA} ENERGY + ${COMBAT_ACTION.COUNTER_KINETIC_MIN}% KINETIC // EXPECTED IMPACT: PARRY + ${Math.floor(COMBAT_ACTION.COUNTER_DAMAGE * (1 + parryMultiplierBonus))} RETALIATION`;
       default:
         return '';
     }
@@ -622,8 +653,8 @@ export default function TacticalCombatHub({
       case 'FLUID_VENT':
         onVent();
         break;
-      case 'VECTOR_SLICE':
-        onSlice();
+      case 'COUNTER_STANCE':
+        onCounter();
         break;
       default:
         break;
@@ -767,59 +798,62 @@ export default function TacticalCombatHub({
     );
   };
 
-  const renderCombatOverlays = () => (
-    <>
-      <View style={[styles.parryWrap, { display: cycleState === 'DEFEND_PARRY' ? 'flex' : 'none' }]}>
-        <Pressable onPress={onParryTap} style={styles.ringBox}>
-          <View style={[styles.ringInner, { borderColor: theme.primaryColor }]} />
-          <Animated.View
-            style={[styles.ringOuter, { borderColor: theme.primaryColor, transform: [{ scale: shrinkAnim }] }]}
-            pointerEvents="none"
-          />
-        </Pressable>
-        <Text style={[styles.parryHint, { color: theme.primaryColor }]}>
-          COUNTER STANCE — TAP ON RING COLLISION
-        </Text>
-      </View>
+  const enemyChrome = useCombatEnemyChromeOptional();
+  const useEnemyArenaChrome = stackedLayout && enemyChrome != null;
 
-      {cycleState === 'OFFENSE_SLICE' && (
-        <View style={styles.sliceOverlay} {...panResponder.panHandlers}>
-          {sliceLines.map((line) => {
-            if (activeSliceIndex !== line.id) return null;
-            const cr = '#ff1744';
-            return (
-              <Animated.View
-                key={line.id}
-                style={[styles.sliceTrack, { top: line.topY, opacity: line.fadeAnim, transform: [{ rotate: line.rotation }] }]}
-                pointerEvents="none"
-              >
-                {line.isSliced && (
-                  <>
-                    <View style={[styles.halo, styles.haloOut, { backgroundColor: '#5c0606' }]} />
-                    <View style={[styles.halo, styles.haloMid, { backgroundColor: '#c41010' }]} />
-                    <View style={[styles.halo, styles.haloIn, { backgroundColor: cr }]} />
-                  </>
-                )}
-                <View
-                  style={[
-                    line.isSliced ? styles.laserGlowS : styles.laserGlow,
-                    { backgroundColor: line.isSliced ? cr : '#ef4444', shadowColor: line.isSliced ? cr : '#ef4444' },
-                  ]}
-                />
-                <View
-                  style={[
-                    line.isSliced ? styles.laserCoreS : styles.laserCore,
-                    { backgroundColor: line.isSliced ? '#ffe4e8' : '#fff', shadowColor: line.isSliced ? cr : '#fff' },
-                  ]}
-                />
-              </Animated.View>
-            );
-          })}
-        </View>
-      )}
+  const chromeSnapshot = useMemo(
+    () => ({
+      slicePingVisible: cycleState === 'TEXT_COMBAT' && sliceReady,
+      slicePingReady: sliceReady,
+      slicePingDisabled: !isPlayerTurn,
+      onSlicePing: onSlice,
+      parryVisible: cycleState === 'DEFEND_PARRY',
+      parryShrinkScale: parryScaleSV,
+      parrySuccess: isSuccessState,
+      parryFailure: isFailureState,
+      onParryTap,
+      sliceVisible: cycleState === 'OFFENSE_SLICE',
+      sliceLines,
+      activeSliceIndex,
+      slicePanHandlers: panResponder.panHandlers as Record<string, unknown>,
+    }),
+    [
+      cycleState,
+      sliceReady,
+      isPlayerTurn,
+      isSuccessState,
+      isFailureState,
+      sliceLines,
+      activeSliceIndex,
+      onSlice,
+      onParryTap,
+      panResponder.panHandlers,
+    ],
+  );
+
+  const renderHubOverlays = () => (
+    <>
+      {!useEnemyArenaChrome ? (
+        <>
+          <ParryMatrixOverlay
+            visible={cycleState === 'DEFEND_PARRY'}
+            shrinkScale={parryScaleSV}
+            success={isSuccessState}
+            failure={isFailureState}
+            onTap={onParryTap}
+          />
+          <VectorSliceOverlay
+            visible={cycleState === 'OFFENSE_SLICE'}
+            lines={sliceLines}
+            activeIndex={activeSliceIndex}
+            panHandlers={panResponder.panHandlers}
+          />
+        </>
+      ) : null}
 
       {cycleState === 'RESOLUTION' && (
-        <View style={styles.resolution}>
+        <View style={styles.resolutionOverlay}>
+          <View style={styles.resolution}>
           <Text style={[styles.resTitle, { color: resolutionOutcome === 'VICTORY' ? '#22c55e' : P.enemyHp }]}>
             {resolutionOutcome === 'VICTORY' ? 'INTRUSION DECONSTRUCTED' : 'OPERATIVE SOUL DISCONNECTED'}
           </Text>
@@ -831,6 +865,7 @@ export default function TacticalCombatHub({
               {resolutionOutcome === 'VICTORY' ? '[ CONTINUE RUN ]' : '[ INCURSION FAILED ]'}
             </Text>
           </Pressable>
+          </View>
         </View>
       )}
     </>
@@ -839,6 +874,7 @@ export default function TacticalCombatHub({
   if (stackedLayout) {
     return (
       <View style={[styles.rootStacked, { borderColor: theme.borderColor }]}>
+        {useEnemyArenaChrome ? <CombatChromeBridge {...chromeSnapshot} /> : null}
         {screenFlashActive && (
           <View style={styles.flashWrapStacked} pointerEvents="none">
             <VignetteFlashOverlay color={screenFlashColor} opacityAnim={screenFlashAnim} />
@@ -848,7 +884,9 @@ export default function TacticalCombatHub({
         <View style={styles.commandDeckRow}>
           {renderStatusFeed()}
           {cycleState === 'TEXT_COMBAT' ? commandDeck : null}
-          <View style={styles.actionStageStacked}>{renderCombatOverlays()}</View>
+        </View>
+        <View style={styles.combatOverlayLayer} pointerEvents="box-none">
+          {renderHubOverlays()}
         </View>
       </View>
     );
@@ -875,7 +913,9 @@ export default function TacticalCombatHub({
             {renderStatusFeed()}
             <View style={styles.actionStage}>
               {cycleState === 'TEXT_COMBAT' ? commandDeck : null}
-              {renderCombatOverlays()}
+            </View>
+            <View style={styles.combatOverlayLayerLegacy} pointerEvents="box-none">
+              {renderHubOverlays()}
             </View>
           </View>
         </View>
@@ -897,6 +937,11 @@ const styles = StyleSheet.create({
     gap: 6,
     overflow: 'hidden',
     backgroundColor: '#000000',
+    position: 'relative',
+  },
+  combatOverlayLayer: {
+    ...abs,
+    zIndex: 25,
   },
   operativeGaugePanel: {
     width: '100%',
@@ -1007,6 +1052,7 @@ const styles = StyleSheet.create({
   tacticsStage: { flex: 1, minHeight: 0, marginBottom: 8 },
   tacticsStageStacked: { flexShrink: 0, marginBottom: 0 },
   canvas: {
+    position: 'relative',
     flex: 1,
     minHeight: 120,
     flexDirection: 'column',
@@ -1061,22 +1107,18 @@ const styles = StyleSheet.create({
     textAlign: 'left',
     width: '100%',
   },
-  parryWrap: { ...abs, justifyContent: 'center', alignItems: 'center' },
-  parryHint: { fontFamily: MONO, fontSize: 9, marginTop: 8, letterSpacing: 1 },
-  ringBox: { width: TARGET_SIZE, height: TARGET_SIZE, borderRadius: TARGET_RADIUS, justifyContent: 'center', alignItems: 'center' },
-  ringInner: { width: TARGET_SIZE, height: TARGET_SIZE, borderRadius: TARGET_RADIUS, borderWidth: 5, position: 'absolute' },
-  ringOuter: { width: TARGET_SIZE, height: TARGET_SIZE, borderRadius: TARGET_RADIUS, borderWidth: 1.5, borderStyle: 'dashed', position: 'absolute' },
-  sliceOverlay: { ...abs, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 999 },
-  sliceTrack: { position: 'absolute', left: 24, right: 24, height: 40, justifyContent: 'center', alignItems: 'center' },
-  laserGlow: { position: 'absolute', width: '55%', alignSelf: 'center', height: 6, opacity: 0.45, borderRadius: 3, shadowOpacity: 1, shadowRadius: 12 },
-  laserGlowS: { position: 'absolute', width: '62%', alignSelf: 'center', height: 8, opacity: 0.95, borderRadius: 4, shadowOpacity: 1, shadowRadius: 32, elevation: 16 },
-  laserCore: { position: 'absolute', width: '55%', alignSelf: 'center', height: 2, borderRadius: 1, elevation: 8 },
-  laserCoreS: { position: 'absolute', width: '58%', alignSelf: 'center', height: 3, borderRadius: 2, shadowOpacity: 1, shadowRadius: 18, elevation: 20 },
-  halo: { position: 'absolute', alignSelf: 'center', borderRadius: 999, shadowOpacity: 1 },
-  haloOut: { width: '98%', height: 36, opacity: 0.14, shadowRadius: 48 },
-  haloMid: { width: '82%', height: 22, opacity: 0.32, shadowRadius: 36 },
-  haloIn: { width: '68%', height: 14, opacity: 0.55, shadowRadius: 24 },
-  resolution: { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.12)', paddingTop: 8, alignItems: 'center', width: '100%' },
+  combatOverlayLayerLegacy: {
+    ...abs,
+    zIndex: 25,
+  },
+  resolutionOverlay: {
+    ...abs,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    zIndex: 50,
+  },
+  resolution: { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.12)', paddingTop: 8, alignItems: 'center', width: '90%' },
   resTitle: { fontFamily: MONO, fontSize: 12, fontWeight: 'bold', marginBottom: 8, letterSpacing: 0.5 },
   resBtn: { borderWidth: 1, paddingVertical: 8, width: '80%', alignItems: 'center' },
   resBtnText: { fontFamily: MONO, fontSize: 10, fontWeight: 'bold' },

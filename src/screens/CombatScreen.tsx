@@ -9,6 +9,10 @@ import CombatEnemyHeaderBand from '../components/combat/CombatEnemyHeaderBand';
 import IncursionShell from '../components/IncursionShell';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
 import TacticalCombatHub from '../components/TacticalCombatHub';
+import {
+  CombatEnemyChromeLayer,
+  CombatEnemyChromeProvider,
+} from '../context/CombatEnemyChromeContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
@@ -94,45 +98,48 @@ export default function CombatScreen(): React.JSX.Element {
 
   return (
     <IncursionShell>
-      <MacroLogAnchoredLayout showMacroLog={runState.runActive} style={styles.combatRoot}>
-        <View style={styles.body}>
-          <CombatEnemyHeaderBand enemy={enemyTelemetry} intentMutedColor={theme.mutedColor} />
+      <CombatEnemyChromeProvider>
+        <MacroLogAnchoredLayout showMacroLog={runState.runActive} style={styles.combatRoot}>
+          <View style={styles.body}>
+            <CombatEnemyHeaderBand enemy={enemyTelemetry} intentMutedColor={theme.mutedColor} />
 
-          <View style={styles.apparitionViewport}>
-            <ApparitionViewport
-              ref={apparitionRef}
-              imageSource={EnemyPlaceholder}
-              style={styles.apparitionFill}
-              onEradicationComplete={handleEradicationComplete}
-            />
-          </View>
+            <View style={styles.apparitionViewport}>
+              <ApparitionViewport
+                ref={apparitionRef}
+                imageSource={EnemyPlaceholder}
+                style={styles.apparitionFill}
+                onEradicationComplete={handleEradicationComplete}
+              />
+              <CombatEnemyChromeLayer />
+            </View>
 
-          <View style={styles.combatMiddle}>
-            <TacticalCombatHub
-              stackedLayout
-              apparitionRef={apparitionRef}
-              registerKillResolver={registerKillResolver}
-              onEnemyTelemetryChange={handleEnemyTelemetryChange}
-              onCombatComplete={handleCombatComplete}
-              initialOperativeHp={runState.soulAnchorIntegrity}
-              initialStamina={combatEntryStamina}
-              maxStamina={runState.maxStamina}
-              maxSoulAnchor={runState.maxSoulAnchor}
-              startingKineticPercent={runState.startingKineticPercent}
-              parryMultiplierBonus={runState.parryMultiplierBonus}
-              parryWindowBonus={runState.parryWindowBonus}
-              sliceDamagePenalty={runState.sliceDamagePenalty}
-              enemyProfile={runState.pendingEnemy}
-              nodeIndex={activeIncursion.currentNodeIndex}
-              onTerminalLog={appendRunLog}
-              weaponCombatStats={weaponCombatStats}
-              environmentalModifiers={env}
-              bossProfile={activeIncursion.bossProfile}
-              onBossPhaseShift={shiftBossPhase}
-            />
+            <View style={styles.combatMiddle}>
+              <TacticalCombatHub
+                stackedLayout
+                apparitionRef={apparitionRef}
+                registerKillResolver={registerKillResolver}
+                onEnemyTelemetryChange={handleEnemyTelemetryChange}
+                onCombatComplete={handleCombatComplete}
+                initialOperativeHp={runState.soulAnchorIntegrity}
+                initialStamina={combatEntryStamina}
+                maxStamina={runState.maxStamina}
+                maxSoulAnchor={runState.maxSoulAnchor}
+                startingKineticPercent={runState.startingKineticPercent}
+                parryMultiplierBonus={runState.parryMultiplierBonus}
+                parryWindowBonus={runState.parryWindowBonus}
+                sliceDamagePenalty={runState.sliceDamagePenalty}
+                enemyProfile={runState.pendingEnemy}
+                nodeIndex={activeIncursion.currentNodeIndex}
+                onTerminalLog={appendRunLog}
+                weaponCombatStats={weaponCombatStats}
+                environmentalModifiers={env}
+                bossProfile={activeIncursion.bossProfile}
+                onBossPhaseShift={shiftBossPhase}
+              />
+            </View>
           </View>
-        </View>
-      </MacroLogAnchoredLayout>
+        </MacroLogAnchoredLayout>
+      </CombatEnemyChromeProvider>
     </IncursionShell>
   );
 }
@@ -155,6 +162,7 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: '#000000',
     overflow: 'hidden',
+    position: 'relative',
   },
   apparitionFill: {
     flex: 1,

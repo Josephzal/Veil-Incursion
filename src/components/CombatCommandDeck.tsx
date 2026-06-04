@@ -1,24 +1,25 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+
 export type CombatDeckAction =
   | 'KINETIC_STRIKE'
   | 'AEGIS_PROTOCOL'
   | 'FLUID_VENT'
-  | 'VECTOR_SLICE';
+  | 'COUNTER_STANCE';
 
 export const DECK_ACTION_LABELS: Record<CombatDeckAction, string> = {
   KINETIC_STRIKE: '[ KINETIC STRIKE ]',
   FLUID_VENT: '[ FLUID VENT ]',
-  VECTOR_SLICE: '[ VECTOR SLICE ]',
+  COUNTER_STANCE: '[ COUNTER STANCE ]',
   AEGIS_PROTOCOL: '[ AEGIS PROTOCOL ]',
 };
 
-/** 2×2 grid order: strike / vent on row 1, slice / aegis on row 2. */
+/** 2×2 grid order: strike / vent on row 1, counter / aegis on row 2. */
 export const COMMAND_DECK_GRID: CombatDeckAction[] = [
   'KINETIC_STRIKE',
   'FLUID_VENT',
-  'VECTOR_SLICE',
+  'COUNTER_STANCE',
   'AEGIS_PROTOCOL',
 ];
 
