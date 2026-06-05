@@ -69,6 +69,7 @@ const P = {
   kr: '#bae6fd', krBorder: '#7dd3fc', parry: '#00ff33', defeat: '#5c0606',
 };
 const PARRY_DURATION = 1000;
+const SLICE_HIT_HAPTIC_MS = 15;
 const WARD_STRIKE_ACCENT = '#fde68a';
 type CombatPhase = 'TEXT_COMBAT' | 'DEFEND_PARRY' | 'OFFENSE_SLICE' | 'RESOLUTION';
 
@@ -782,6 +783,21 @@ export default function TacticalCombatHub({
     s.segmentTimer = setTimeout(() => { s.segmentTimer = null; sliceHandlersRef.current.queueNext(idx + 1); }, 1200);
   };
 
+  const pulseSliceHitHaptic = () => {
+    Vibration.vibrate(SLICE_HIT_HAPTIC_MS);
+  };
+
+  const registerSliceHit = (idx: number): boolean => {
+    const s = sliceSessionRef.current;
+    if (s.slicedIds.has(idx)) return false;
+    s.slicedIds.add(idx);
+    s.hitCount += 1;
+    setSliceLines(s.lines.map((l) => (l.id === idx ? { ...l, isSliced: true } : l)));
+    pulseSliceHitHaptic();
+    apparitionRef?.current?.triggerDamageEffect();
+    return true;
+  };
+
   const tryValidateSliceSwipe = (x0: number, y0: number, x1: number, y1: number) => {
     if (isCombatTerminal()) return;
     const idx = activeSliceRef.current;
@@ -802,17 +818,12 @@ export default function TacticalCombatHub({
     const idx = activeSliceRef.current;
     if (idx === -1 || crossedRef.current || cycleRef.current !== 'OFFENSE_SLICE') return;
     if (!sliceSessionRef.current.lines.some((l) => l.id === idx)) return;
-    crossedRef.current = true; clearSliceTimers();
-    const s = sliceSessionRef.current;
-    if (!s.slicedIds.has(idx)) {
-      s.slicedIds.add(idx); s.hitCount += 1;
-      setSliceLines(s.lines.map((l) => (l.id === idx ? { ...l, isSliced: true } : l)));
-      Vibration.vibrate(10);
-      apparitionRef?.current?.triggerDamageEffect();
-    }
-    if (s.hitFlashTimer) clearTimeout(s.hitFlashTimer);
-    s.hitFlashTimer = setTimeout(() => {
-      s.hitFlashTimer = null;
+    crossedRef.current = true;
+    clearSliceTimers();
+    registerSliceHit(idx);
+    if (sliceSessionRef.current.hitFlashTimer) clearTimeout(sliceSessionRef.current.hitFlashTimer);
+    sliceSessionRef.current.hitFlashTimer = setTimeout(() => {
+      sliceSessionRef.current.hitFlashTimer = null;
       crossedRef.current = false;
       sliceTouchStartRef.current = null;
       sliceHandlersRef.current.queueNext(idx + 1);
@@ -848,8 +859,7 @@ export default function TacticalCombatHub({
     onStartShouldSetPanResponder: () => cycleRef.current === 'OFFENSE_SLICE',
     onMoveShouldSetPanResponder: () => cycleRef.current === 'OFFENSE_SLICE',
     onPanResponderGrant: (e) => {
-      if (cycleRef.current !== 'OFFENSE_SLICE') return;
-      crossedRef.current = false;
+      if (cycleRef.current !== 'OFFENSE_SLICE' || crossedRef.current) return;
       sliceTouchStartRef.current = {
         x: e.nativeEvent.locationX,
         y: e.nativeEvent.locationY,
@@ -866,8 +876,19 @@ export default function TacticalCombatHub({
         e.nativeEvent.locationY,
       );
     },
-    onPanResponderRelease: () => {
-      if (cycleRef.current === 'OFFENSE_SLICE') sliceTouchStartRef.current = null;
+    onPanResponderRelease: (e) => {
+      if (cycleRef.current === 'OFFENSE_SLICE' && !crossedRef.current && activeSliceRef.current !== -1) {
+        const start = sliceTouchStartRef.current;
+        if (start) {
+          tryValidateSliceSwipe(
+            start.x,
+            start.y,
+            e.nativeEvent.locationX,
+            e.nativeEvent.locationY,
+          );
+        }
+      }
+      sliceTouchStartRef.current = null;
     },
   })).current;
 

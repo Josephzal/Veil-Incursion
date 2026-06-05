@@ -87,8 +87,6 @@ export default function ParrySuccessHalo({
 
   return (
     <View style={[StyleSheet.absoluteFill, styles.layer]} pointerEvents="none">
-      {ripple(progress2, PARRY_SUCCESS, 0.4, 10)}
-      {ripple(progress1, PARRY_RING_BRIGHT, 0.55, 8)}
       {ripple(progress0, PARRY_SUCCESS, 0.72)}
       {ripple(progress0, PARRY_RING_BRIGHT, 0.72, 3)}
     </View>
