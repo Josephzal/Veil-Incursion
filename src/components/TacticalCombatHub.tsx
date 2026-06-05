@@ -25,6 +25,7 @@ import CombatCommandDeck, {
   type CombatDeckAction,
 } from './CombatCommandDeck';
 import ParryMatrixOverlay from './combat/ParryMatrixOverlay';
+import ParrySuccessBurstOverlay from './combat/ParrySuccessBurstOverlay';
 import VectorSliceOverlay, { ORIGIN_JITTER } from './combat/VectorSliceOverlay';
 import {
   generateVariedSliceAngles,
@@ -53,6 +54,7 @@ import {
 import { useReactiveCombatStatus } from '../hooks/useReactiveCombatStatus';
 import {
   isParryAttemptSuccessful,
+  PARRY_HALO_DURATION_MS,
   PARRY_RING_SCALE_END,
   PARRY_RING_SCALE_START,
   type ParryArenaLayout,
@@ -148,6 +150,13 @@ export default function TacticalCombatHub({
   const [counterPrepActive, setCounterPrepActive] = useState(false);
   const [isSuccessState, setIsSuccessState] = useState(false);
   const [isFailureState, setIsFailureState] = useState(false);
+  const [parrySuccessBurstActive, setParrySuccessBurstActive] = useState(false);
+  const [parryBurstArena, setParryBurstArena] = useState<ParryArenaLayout | null>(null);
+  const [parryBurstEpoch, setParryBurstEpoch] = useState(0);
+  const enemyChrome = useCombatEnemyChromeOptional();
+  const enemyChromeRef = useRef(enemyChrome);
+  enemyChromeRef.current = enemyChrome;
+  const parryBurstEpochRef = useRef(0);
   const [screenFlashActive, setScreenFlashActive] = useState(false);
   const [screenFlashColor, setScreenFlashColor] = useState(P.defeat);
   const [phaseAlert, setPhaseAlert] = useState<string | null>(null);
@@ -174,6 +183,8 @@ export default function TacticalCombatHub({
   const parryResolvedRef = useRef(false);
   const parryTapPendingRef = useRef(false);
   const parrySessionRef = useRef(0);
+  const parryHaloTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const parryBurstCompleteRef = useRef<(() => void) | null>(null);
   const parryArenaRef = useRef<ParryArenaLayout | null>(null);
   const screenFlashAnim = useRef(new Animated.Value(0)).current;
   const activeSliceRef = useRef(-1);
@@ -246,7 +257,59 @@ export default function TacticalCombatHub({
     ]).start(() => { setScreenFlashActive(false); done?.(); });
   };
 
+  const clearParryHaloTimer = () => {
+    if (parryHaloTimerRef.current) {
+      clearTimeout(parryHaloTimerRef.current);
+      parryHaloTimerRef.current = null;
+    }
+  };
+
+  const syncParryBurstChrome = (active: boolean, arena: ParryArenaLayout | null, epoch: number) => {
+    const chrome = enemyChromeRef.current;
+    if (!chrome) return;
+    chrome.parryBurstLiveRef.current = { active, arena, epoch };
+    chrome.updateUI({
+      parrySuccessBurstVisible: active,
+      parryBurstArena: arena,
+    });
+    chrome.notifyParryChromeChange();
+  };
+
+  const clearParrySuccessBurst = () => {
+    clearParryHaloTimer();
+    syncParryBurstChrome(false, null, 0);
+    setParrySuccessBurstActive(false);
+    setParryBurstArena(null);
+    parryBurstCompleteRef.current = null;
+  };
+
+  const startParrySuccessBurst = (onComplete: () => void) => {
+    const arena = parryArenaRef.current;
+    if (!arena) {
+      onComplete();
+      return;
+    }
+    parryBurstEpochRef.current += 1;
+    const epoch = parryBurstEpochRef.current;
+    parryBurstCompleteRef.current = onComplete;
+    syncParryBurstChrome(true, arena, epoch);
+    setParryBurstEpoch(epoch);
+    setParryBurstArena(arena);
+    setParrySuccessBurstActive(true);
+    clearParryHaloTimer();
+    parryHaloTimerRef.current = setTimeout(() => {
+      parryHaloTimerRef.current = null;
+      syncParryBurstChrome(false, null, 0);
+      setParrySuccessBurstActive(false);
+      setParryBurstArena(null);
+      const done = parryBurstCompleteRef.current;
+      parryBurstCompleteRef.current = null;
+      done?.();
+    }, PARRY_HALO_DURATION_MS);
+  };
+
   const abortCombatMinigames = () => {
+    clearParrySuccessBurst();
     clearSliceTimers();
     const s = sliceSessionRef.current;
     s.evaluated = true;
@@ -329,7 +392,10 @@ export default function TacticalCombatHub({
     const viewport = apparitionRef?.current;
 
     if (hp <= 0) {
-      if (cycleRef.current === 'OFFENSE_SLICE' || cycleRef.current === 'DEFEND_PARRY') {
+      if (cycleRef.current === 'DEFEND_PARRY') {
+        return true;
+      }
+      if (cycleRef.current === 'OFFENSE_SLICE') {
         abortCombatMinigames();
         cycleRef.current = 'TEXT_COMBAT';
         setCycleState('TEXT_COMBAT');
@@ -581,6 +647,25 @@ export default function TacticalCombatHub({
     sliceArenaRef.current = layout;
   };
 
+  const hideParryOverlay = () => {
+    setIsSuccessState(false);
+    setIsFailureState(false);
+    cycleRef.current = 'TEXT_COMBAT';
+    setCycleState('TEXT_COMBAT');
+  };
+
+  const finishParryKillAfterHalo = () => {
+    abortCombatMinigames();
+    cycleRef.current = 'TEXT_COMBAT';
+    setCycleState('TEXT_COMBAT');
+    const viewport = apparitionRef?.current;
+    if (viewport) {
+      viewport.triggerEradication();
+      return;
+    }
+    resolve(true);
+  };
+
   /** Exactly one parry outcome — counter damage and parry block cannot diverge. */
   const finalizeParry = (passed: boolean, unmitigatedOnFail: boolean) => {
     if (parryResolvedRef.current || cycleRef.current !== 'DEFEND_PARRY') return;
@@ -588,19 +673,20 @@ export default function TacticalCombatHub({
     parryTapPendingRef.current = false;
     cancelAnimation(parryScaleSV);
     if (passed) {
-      setIsSuccessState(true);
-      setIsFailureState(false);
       Vibration.vibrate(15);
       const cd = Math.floor(COMBAT_ACTION.COUNTER_DAMAGE * (1 + parryMultiplierBonus));
       log(`[PERFECT COUNTER] >> Parry locked — ${cd} retaliation damage.`);
       counterRef.current = false;
       setCounterPrepActive(false);
-      if (hurtEnemy(cd, '[COUNTER HIT]')) return;
-      setTimeout(() => endEnemyTurn(), 400);
+      const killed = hurtEnemy(cd, '[COUNTER HIT]');
+      hideParryOverlay();
+      startParrySuccessBurst(() => {
+        if (killed) finishParryKillAfterHalo();
+        else endEnemyTurn();
+      });
       return;
     }
-    setIsSuccessState(false);
-    setIsFailureState(true);
+    hideParryOverlay();
     log(unmitigatedOnFail ? '[PARRY FAILED] >> Mistimed — 100% unmitigated damage.' : '[PARRY FAILED] >> Guard collapsed.');
     hurtPlayer(pendingDmgRef.current, unmitigatedOnFail);
     counterRef.current = false;
@@ -643,6 +729,7 @@ export default function TacticalCombatHub({
     const session = parrySessionRef.current;
     parryResolvedRef.current = false;
     parryTapPendingRef.current = false;
+    clearParrySuccessBurst();
     setIsSuccessState(false);
     setIsFailureState(false);
     parryScaleSV.value = PARRY_RING_SCALE_START;
@@ -753,6 +840,7 @@ export default function TacticalCombatHub({
   sliceHandlersRef.current = { queueNext: queueSlice, validate: validateSlice, evaluate: evaluateSlice, trigger: triggerSlice };
   useEffect(() => () => {
     clearSliceTimers();
+    clearParrySuccessBurst();
     if (enemyTurnTimerRef.current) clearTimeout(enemyTurnTimerRef.current);
   }, []);
 
@@ -1028,7 +1116,6 @@ export default function TacticalCombatHub({
     </View>
   );
 
-  const enemyChrome = useCombatEnemyChromeOptional();
   const useEnemyArenaChrome = stackedLayout && enemyChrome != null;
 
   const chromeSnapshot = useMemo(
@@ -1041,6 +1128,8 @@ export default function TacticalCombatHub({
       parryShrinkScale: parryScaleSV,
       parrySuccess: isSuccessState,
       parryFailure: isFailureState,
+      parrySuccessBurstVisible: parrySuccessBurstActive,
+      parryBurstArena,
       onParryTap,
       registerParryArena,
       registerSliceArena,
@@ -1051,6 +1140,8 @@ export default function TacticalCombatHub({
     }),
     [
       cycleState,
+      parrySuccessBurstActive,
+      parryBurstArena,
       sliceReady,
       isPlayerTurn,
       isSuccessState,
@@ -1070,11 +1161,18 @@ export default function TacticalCombatHub({
           <ParryMatrixOverlay
             visible={cycleState === 'DEFEND_PARRY'}
             shrinkScale={parryScaleSV}
-            success={isSuccessState}
-            failure={isFailureState}
+            success={false}
+            failure={false}
             onTap={onParryTap}
             onArenaLayout={registerParryArena}
           />
+          {parrySuccessBurstActive && parryBurstArena ? (
+            <ParrySuccessBurstOverlay
+              key={parryBurstEpoch}
+              burstEpoch={parryBurstEpoch}
+              arena={parryBurstArena}
+            />
+          ) : null}
           <VectorSliceOverlay
             visible={cycleState === 'OFFENSE_SLICE'}
             lines={sliceLines}

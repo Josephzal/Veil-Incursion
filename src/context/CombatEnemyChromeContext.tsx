@@ -11,9 +11,17 @@ import React, {
 import { StyleSheet, View } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 import ParryMatrixOverlay from '../components/combat/ParryMatrixOverlay';
+import ParrySuccessBurstOverlay from '../components/combat/ParrySuccessBurstOverlay';
 import type { ParryArenaLayout } from '../utils/parryCollision';
 import VectorSliceOverlay, { type SliceLineRender } from '../components/combat/VectorSliceOverlay';
 import VectorSlicePing from '../components/combat/VectorSlicePing';
+
+/** Updated synchronously on perfect parry — avoids chrome-layer lag for success burst. */
+export interface ParryBurstLiveState {
+  active: boolean;
+  arena: ParryArenaLayout | null;
+  epoch: number;
+}
 
 /** Serializable UI state — safe to store in React state. */
 export interface CombatEnemyChromeUIState {
@@ -23,6 +31,8 @@ export interface CombatEnemyChromeUIState {
   parryVisible: boolean;
   parrySuccess: boolean;
   parryFailure: boolean;
+  parrySuccessBurstVisible: boolean;
+  parryBurstArena: ParryArenaLayout | null;
   sliceVisible: boolean;
   sliceLines: SliceLineRender[];
   activeSliceIndex: number;
@@ -49,6 +59,8 @@ const IDLE_UI: CombatEnemyChromeUIState = {
   parryVisible: false,
   parrySuccess: false,
   parryFailure: false,
+  parrySuccessBurstVisible: false,
+  parryBurstArena: null,
   sliceVisible: false,
   sliceLines: [],
   activeSliceIndex: -1,
@@ -93,6 +105,10 @@ function uiStateEqual(prev: CombatEnemyChromeUIState, next: CombatEnemyChromeUIS
     && prev.parryVisible === next.parryVisible
     && prev.parrySuccess === next.parrySuccess
     && prev.parryFailure === next.parryFailure
+    && prev.parrySuccessBurstVisible === next.parrySuccessBurstVisible
+    && prev.parryBurstArena?.cx === next.parryBurstArena?.cx
+    && prev.parryBurstArena?.cy === next.parryBurstArena?.cy
+    && prev.parryBurstArena?.baseR === next.parryBurstArena?.baseR
     && prev.sliceVisible === next.sliceVisible
     && prev.activeSliceIndex === next.activeSliceIndex
     && sliceLinesEqual(prev.sliceLines, next.sliceLines)
@@ -102,6 +118,9 @@ function uiStateEqual(prev: CombatEnemyChromeUIState, next: CombatEnemyChromeUIS
 interface CombatEnemyChromeContextValue {
   ui: CombatEnemyChromeUIState;
   handlersRef: React.MutableRefObject<CombatEnemyChromeHandlers>;
+  parryBurstLiveRef: React.MutableRefObject<ParryBurstLiveState>;
+  parryChromeTick: number;
+  notifyParryChromeChange: () => void;
   updateUI: (patch: Partial<CombatEnemyChromeUIState>) => void;
   resetUI: () => void;
 }
@@ -115,6 +134,15 @@ export function CombatEnemyChromeProvider({
 }): React.JSX.Element {
   const [ui, setUi] = useState<CombatEnemyChromeUIState>(IDLE_UI);
   const handlersRef = useRef<CombatEnemyChromeHandlers>(IDLE_HANDLERS);
+  const parryBurstLiveRef = useRef<ParryBurstLiveState>({
+    active: false,
+    arena: null,
+    epoch: 0,
+  });
+  const [parryChromeTick, setParryChromeTick] = useState(0);
+  const notifyParryChromeChange = useCallback(() => {
+    setParryChromeTick((tick) => tick + 1);
+  }, []);
 
   const updateUI = useCallback((patch: Partial<CombatEnemyChromeUIState>) => {
     setUi((prev) => {
@@ -126,11 +154,20 @@ export function CombatEnemyChromeProvider({
   const resetUI = useCallback(() => {
     setUi(IDLE_UI);
     handlersRef.current = IDLE_HANDLERS;
+    parryBurstLiveRef.current = { active: false, arena: null, epoch: 0 };
   }, []);
 
   const value = useMemo(
-    () => ({ ui, handlersRef, updateUI, resetUI }),
-    [ui, updateUI, resetUI],
+    () => ({
+      ui,
+      handlersRef,
+      parryBurstLiveRef,
+      parryChromeTick,
+      notifyParryChromeChange,
+      updateUI,
+      resetUI,
+    }),
+    [ui, parryChromeTick, notifyParryChromeChange, updateUI, resetUI],
   );
 
   return (
@@ -165,6 +202,8 @@ export function CombatChromeBridge(snapshot: CombatEnemyChromeSnapshot): null {
     parryShrinkScale,
     parrySuccess,
     parryFailure,
+    parrySuccessBurstVisible,
+    parryBurstArena,
     onParryTap,
     registerParryArena,
     registerSliceArena,
@@ -194,6 +233,8 @@ export function CombatChromeBridge(snapshot: CombatEnemyChromeSnapshot): null {
       parryVisible,
       parrySuccess,
       parryFailure,
+      parrySuccessBurstVisible,
+      parryBurstArena,
       sliceVisible,
       sliceLines,
       activeSliceIndex,
@@ -206,6 +247,8 @@ export function CombatChromeBridge(snapshot: CombatEnemyChromeSnapshot): null {
     parryVisible,
     parrySuccess,
     parryFailure,
+    parrySuccessBurstVisible,
+    parryBurstArena,
     sliceVisible,
     sliceLines,
     activeSliceIndex,
@@ -216,7 +259,8 @@ export function CombatChromeBridge(snapshot: CombatEnemyChromeSnapshot): null {
 
 /** Renders ping / parry / slice over the apparition viewport. */
 export function CombatEnemyChromeLayer(): React.JSX.Element {
-  const { ui, handlersRef } = useCombatEnemyChrome();
+  const { ui, handlersRef, parryBurstLiveRef, parryChromeTick } = useCombatEnemyChrome();
+  void parryChromeTick;
   const {
     slicePingVisible,
     slicePingReady,
@@ -224,10 +268,19 @@ export function CombatEnemyChromeLayer(): React.JSX.Element {
     parryVisible,
     parrySuccess,
     parryFailure,
+    parrySuccessBurstVisible,
+    parryBurstArena,
     sliceVisible,
     sliceLines,
     activeSliceIndex,
   } = ui;
+  const burstLive = parryBurstLiveRef.current;
+  const showParryBurst = (burstLive.active && burstLive.arena != null)
+    || (parrySuccessBurstVisible && parryBurstArena != null);
+  const parryBurstLayout = burstLive.active && burstLive.arena != null
+    ? burstLive.arena
+    : parryBurstArena;
+  const parryBurstKey = burstLive.epoch;
 
   return (
     <View style={styles.layer} pointerEvents="box-none" collapsable={false}>
@@ -247,6 +300,13 @@ export function CombatEnemyChromeLayer(): React.JSX.Element {
           failure={parryFailure}
           onTap={(tapX, tapY) => handlersRef.current.onParryTap(tapX, tapY)}
           onArenaLayout={(layout) => handlersRef.current.registerParryArena(layout)}
+        />
+      ) : null}
+      {showParryBurst && parryBurstLayout ? (
+        <ParrySuccessBurstOverlay
+          key={parryBurstKey}
+          burstEpoch={parryBurstKey}
+          arena={parryBurstLayout}
         />
       ) : null}
       {sliceVisible && handlersRef.current.slicePanHandlers ? (

@@ -9,6 +9,8 @@ export const PARRY_CENTER_HIT_RATIO = 0.34;
 /** Minimum center hit radius in px (small screens). */
 export const PARRY_CENTER_HIT_MIN_PX = 32;
 export const PARRY_RING_SIZE_RATIO = 0.38;
+/** Success halo burst — keep parry overlay up this long before kill resolution. */
+export const PARRY_HALO_DURATION_MS = 580;
 
 export interface ParryArenaLayout {
   width: number;
