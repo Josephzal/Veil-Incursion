@@ -1,3 +1,5 @@
+import type { IncursionBiome } from '../types/game';
+import { pickBiomeCombatDesignation } from './biomeCombat';
 import { EnemyClass, EnemyCombatProfile, EnemyIntent, SectorDefinition } from '../types/run';
 
 const CLASS_BASE_HP: Record<EnemyClass, number> = {
@@ -69,6 +71,32 @@ export function intentLabel(intent: EnemyIntent, designation: string): string {
     OVERDRIVE_DISCHARGE: `${designation} intends OVERDRIVE DISCHARGE (18 DMG)`,
   };
   return labels[intent];
+}
+
+export function spawnBiomeEnemyProfile(
+  biome: IncursionBiome,
+  nodeIndex: number,
+  isEliteAmbush = false,
+): EnemyCombatProfile {
+  const classType = pickEnemyClass(nodeIndex, isEliteAmbush);
+  const scale = getNodeScale(nodeIndex);
+  const designation = pickBiomeCombatDesignation(biome, false);
+  const maxHp = Math.floor(CLASS_BASE_HP[classType] * scale);
+  const baseDamage = Math.floor(CLASS_BASE_DAMAGE[classType] * scale);
+  const intent = rollEnemyIntent(classType, 0);
+
+  return {
+    class: classType,
+    designation,
+    maxHp,
+    currentHp: maxHp,
+    baseDamage,
+    intent,
+    chargeTurns: 0,
+    evadeActive: intent === 'EVADE',
+    nodeIndex,
+    scale,
+  };
 }
 
 export function spawnEnemyProfile(

@@ -9,6 +9,11 @@ import {
 import { RunState } from '../types/run';
 import { biomeForDepthIndex } from './biomeCombat';
 import {
+  CITY_STREETS_ALLEY_MATRIX_EVENTS,
+  CITY_STREETS_DEPTH_ZERO_POOL,
+  resolveCityStreetsAlleyEvent,
+} from './cityStreetsAlleyEvents';
+import {
   appendOutcomeModifier,
   coreLayerCalibrationBonus,
   hasCollectedFlag,
@@ -263,10 +268,19 @@ const MATRIX_EVENTS: Record<string, MatrixEventTemplate> = {
     choiceB: { label: '[ B ] VENT FUEL RESERVES', requirement: 'CONDITIONAL' },
     interactionMode: 'conditional',
   },
+  ...CITY_STREETS_ALLEY_MATRIX_EVENTS,
 };
 
 const EVENT_ORDER_BY_BIOME: Record<IncursionBiome, string[]> = {
-  CITY_STREETS: ['city-01', 'city-02', 'city-03', 'city-04', 'city-05', 'city-06'],
+  CITY_STREETS: [
+    ...CITY_STREETS_DEPTH_ZERO_POOL,
+    'city-01',
+    'city-02',
+    'city-03',
+    'city-04',
+    'city-05',
+    'city-06',
+  ],
   HOSPITAL: ['hospital-01', 'hospital-02', 'hospital-03', 'hospital-04', 'hospital-05', 'hospital-06'],
   LABORATORY: ['lab-01', 'lab-02', 'lab-03', 'lab-04', 'lab-05', 'lab-06'],
   SECTOR_CORE: ['sector-01', 'sector-02', 'sector-03', 'sector-04', 'sector-05', 'sector-06'],
@@ -339,6 +353,21 @@ export function pickMatrixEventForDepth(
   progress: IncursionProgressState,
 ): NarrativeEventNode {
   const biome = biomeForDepthIndex(depthIndex);
+
+  if (biome === 'CITY_STREETS') {
+    const pool = CITY_STREETS_DEPTH_ZERO_POOL.filter(
+      (id) => !progress.usedNarrativeEventIds.includes(id),
+    );
+    const matrixId = pool.length > 0
+      ? pool[Math.floor(Math.random() * pool.length)]
+      : CITY_STREETS_DEPTH_ZERO_POOL[0];
+    return enrichNodeWithFlagContext(
+      templateToNode(MATRIX_EVENTS[matrixId]),
+      matrixId,
+      progress.collectedFlags,
+    );
+  }
+
   const order = EVENT_ORDER_BY_BIOME[biome];
   const slot = Math.min(slotInBiomeBlock(depthIndex), order.length - 1);
   let matrixId = order[slot];
@@ -375,14 +404,14 @@ function templateToNode(template: MatrixEventTemplate): NarrativeEventNode {
     choiceA: {
       label: template.choiceA.label,
       requirement: template.choiceA.requirement,
-      successText: '>> OUTCOME PENDING RESOLUTION...',
-      failureText: '>> OUTCOME PENDING RESOLUTION...',
+      successText: '>> CALIBRATION LOCKED — FIELD OUTCOME RESOLVING...',
+      failureText: '>> CALIBRATION MISSED — FIELD OUTCOME RESOLVING...',
     },
     choiceB: {
       label: template.choiceB.label,
       requirement: template.choiceB.requirement,
-      successText: '>> OUTCOME PENDING RESOLUTION...',
-      failureText: '>> OUTCOME PENDING RESOLUTION...',
+      successText: '>> CALIBRATION LOCKED — FIELD OUTCOME RESOLVING...',
+      failureText: '>> CALIBRATION MISSED — FIELD OUTCOME RESOLVING...',
     },
   };
 }
@@ -922,9 +951,26 @@ function resolveStandard(
       }
       break;
 
-    default:
-      outcome = '>> UNKNOWN MATRIX EVENT — NO EFFECT.';
+    default: {
+      const alley = resolveCityStreetsAlleyEvent(matrixId, choice, success, {
+        applyMaxShield,
+        applyCurrentShield,
+        applyMaxHp,
+        applyCurrentHp,
+        applyCurrentEnergy,
+        applyMaxStamina,
+        applyCurrentStamina,
+      });
+      if (alley) {
+        progressPatch = { ...progressPatch, ...alley.progressPatch };
+        flags.push(...alley.flags);
+        outcome = alley.outcome;
+        status = alley.status;
+      } else {
+        outcome = '>> UNKNOWN MATRIX EVENT — NO EFFECT.';
+      }
       break;
+    }
   }
 
   const usedId = matrixId;
@@ -968,10 +1014,13 @@ export function resolveMatrixNarrativeChoice(
   const autoFail = options?.forceFailure === true;
   const chainAuto = ['city-02', 'hospital-04', 'lab-02'].includes(matrixEventId);
   const autoEvents = ['sector-03'].includes(matrixEventId);
+  const choiceDef = choice === 'A' ? template.choiceA : template.choiceB;
+  const chainAnchored = choiceDef.requirement.startsWith('CHAIN ANCHOR');
 
   let success = evaluateD20Success(roll, progress, depthIndex);
-  if (autoSuccess || chainAuto || autoEvents) success = true;
-  if (autoFail) success = false;
+  if (chainAnchored || chainAuto || autoEvents) success = true;
+  if (autoSuccess) success = true;
+  if (autoFail && !chainAnchored && !chainAuto) success = false;
 
   if (matrixEventId === 'city-05' && choice === 'B' && !success) {
     return resolveStandard(matrixEventId, choice, roll, false, progress, environmentalModifiers, snapshot, depthIndex);

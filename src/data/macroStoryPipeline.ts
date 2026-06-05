@@ -147,7 +147,11 @@ export function resolveConditionalBranchPreview(
 }
 
 export function isSectorCoreDepth(depthIndex: number): boolean {
-  return depthIndex >= SECTOR_BLOCK_LAYOUT[3].depthStart;
+  const coreBlock = SECTOR_BLOCK_LAYOUT.find((block) => block.biome === 'SECTOR_CORE');
+  if (coreBlock) {
+    return depthIndex >= coreBlock.depthStart && depthIndex <= coreBlock.depthEnd;
+  }
+  return (SECTOR_CORE_DEPTH_INDICES as readonly number[]).includes(depthIndex);
 }
 
 /** +15% victory offset applies only to narrative choices at Core depths (8–9). */
@@ -230,7 +234,7 @@ export function initializeIncursionPipeline(
     macroStoryModeLogLine(macroStory),
     '>> SECTOR-BLOCK LAYOUT LOCKED — 10-DEPTH CHRONOLOGY:',
     ...sectorBlockLogLines(),
-    `>> BIOME ANCHOR INDEX 0–2: ${biomeForDepthIndex(0)}`,
+    `>> BIOME ANCHOR LOCKED: ${biomeForDepthIndex(0)} (ALL DEPTHS)`,
     `>> DEPTH COUNT VERIFIED: ${INCURSION_DEPTH_COUNT}`,
   ];
 

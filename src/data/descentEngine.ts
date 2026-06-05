@@ -99,29 +99,15 @@ function rollFlexibleEncounter(): IncursionEncounterType {
 }
 
 export function resolveBiomeForOption(
-  depthIndex: number,
-  optionIndex: number,
-  priorBiome: IncursionBiome | null,
+  _depthIndex: number,
+  _optionIndex: number,
+  _priorBiome: IncursionBiome | null,
 ): IncursionBiome {
-  if (depthIndex === 0) return 'CITY_STREETS';
-  if (depthIndex === PENULT_DEPTH_INDEX || depthIndex === BOSS_DEPTH_INDEX) return 'SECTOR_CORE';
-
-  if (depthIndex === 1) {
-    return optionIndex % 2 === 0 ? 'CITY_STREETS' : 'HOSPITAL';
-  }
-
-  const base = priorBiome ?? 'CITY_STREETS';
-  if (base === 'SECTOR_CORE') return 'LABORATORY';
-  if (base === 'LABORATORY') return 'LABORATORY';
-  if (base === 'HOSPITAL') {
-    return optionIndex % 3 === 2 ? 'LABORATORY' : 'HOSPITAL';
-  }
-
-  return optionIndex % 2 === 0 ? 'CITY_STREETS' : 'HOSPITAL';
+  return 'CITY_STREETS';
 }
 
 export function resolveBossBiome(_tierNodes: IncursionNode[]): IncursionBiome {
-  return 'SECTOR_CORE';
+  return 'CITY_STREETS';
 }
 
 function makeVectorNode(
@@ -182,21 +168,22 @@ export function generateTierVectorMatrix(tier: number): {
 
   for (let depth = 0; depth < INCURSION_DEPTH_COUNT; depth += 1) {
     if (depth === 0) {
-      matrix[0] = [makeVectorNode(tier, 0, 0, 'COMBAT', 'CITY_STREETS')];
+      const count = randomBranchCount();
+      matrix[0] = buildFlexibleCluster(tier, 0, count, -1, 'CITY_STREETS');
       continue;
     }
 
     if (depth === PENULT_DEPTH_INDEX) {
       matrix[PENULT_DEPTH_INDEX] = [
-        makeVectorNode(tier, PENULT_DEPTH_INDEX, 0, 'SANCTUARY', 'SECTOR_CORE'),
-        makeVectorNode(tier, PENULT_DEPTH_INDEX, 1, 'NARRATIVE_EVENT', 'SECTOR_CORE'),
+        makeVectorNode(tier, PENULT_DEPTH_INDEX, 0, 'SANCTUARY', 'CITY_STREETS'),
+        makeVectorNode(tier, PENULT_DEPTH_INDEX, 1, 'NARRATIVE_EVENT', 'CITY_STREETS'),
       ];
       continue;
     }
 
     if (depth === BOSS_DEPTH_INDEX) {
       matrix[BOSS_DEPTH_INDEX] = [
-        makeVectorNode(tier, BOSS_DEPTH_INDEX, 0, 'COMBAT', 'SECTOR_CORE', true),
+        makeVectorNode(tier, BOSS_DEPTH_INDEX, 0, 'COMBAT', 'CITY_STREETS', true),
       ];
       continue;
     }
@@ -204,7 +191,7 @@ export function generateTierVectorMatrix(tier: number): {
     if (depth === MANDATORY_SANCTUARY_DEPTH) {
       const count = randomBranchCount();
       const sanctuarySlot = Math.floor(Math.random() * count);
-      matrix[depth] = buildFlexibleCluster(tier, depth, count, sanctuarySlot, 'HOSPITAL');
+      matrix[depth] = buildFlexibleCluster(tier, depth, count, sanctuarySlot, 'CITY_STREETS');
       continue;
     }
 
@@ -216,13 +203,13 @@ export function generateTierVectorMatrix(tier: number): {
         depth,
         count,
         sanctuarySlot,
-        resolveBiomeForOption(depth, 0, 'CITY_STREETS'),
+        'CITY_STREETS',
       );
       continue;
     }
 
     const count = randomBranchCount();
-    matrix[depth] = buildFlexibleCluster(tier, depth, count, -1, 'HOSPITAL');
+    matrix[depth] = buildFlexibleCluster(tier, depth, count, -1, 'CITY_STREETS');
   }
 
   const earlySanctuarySpawned = matrix.some(
@@ -258,19 +245,12 @@ export function finalizeClusterForScan(
     depthIndex > 0 ? tierNodes[depthIndex - 1]?.biome ?? 'CITY_STREETS' : 'CITY_STREETS';
 
   return cluster.map((node, optionIndex) => {
-    let biome = node.biome;
-    if (depthIndex === 0) {
-      biome = 'CITY_STREETS';
-    } else if (depthIndex === PENULT_DEPTH_INDEX || depthIndex === BOSS_DEPTH_INDEX) {
-      biome = 'SECTOR_CORE';
-    } else if (node.encounterType !== 'SANCTUARY') {
-      biome = resolveBiomeForOption(depthIndex, optionIndex, priorBiome);
-    } else {
-      biome = priorBiome;
-    }
+    const biome = node.encounterType === 'SANCTUARY'
+      ? (priorBiome ?? 'CITY_STREETS')
+      : resolveBiomeForOption(depthIndex, optionIndex, priorBiome);
 
     const encounterType =
-      depthIndex === 0 || depthIndex === BOSS_DEPTH_INDEX ? 'COMBAT' : node.encounterType;
+      depthIndex === BOSS_DEPTH_INDEX ? 'COMBAT' : node.encounterType;
 
     const type = encounterToRunNodeType(encounterType, depthIndex);
 

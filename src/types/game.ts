@@ -1,3 +1,5 @@
+import type { MacroStoryRunConfiguration } from './macroStory';
+import type { OutcomeModifierMetric } from './macroStory';
 import type { RegionalPresenceState } from './regional';
 
 export type FactionType = 'TERRAN_GRID' | 'LEGION' | 'SOLARIS';
@@ -86,8 +88,50 @@ export interface PlayerInventoryState {
   };
 }
 
+export interface NarrativeRunModifiers {
+  nextCombatEnemyHpBonusPct: number;
+  nextCombatDamageBonusPct: number;
+  bossArmorPiercePct: number;
+  nodeNineCalibrationBonusPct: number;
+  bossShieldBypassPct: number;
+}
+
+export interface IncursionProgressState {
+  collectedFlags: string[];
+  usedNarrativeEventIds: string[];
+  narrativeModifiers: NarrativeRunModifiers;
+  outcomeModifiers: OutcomeModifierMetric[];
+  pendingCombatAmbush: boolean;
+  forceNextSanctuary: boolean;
+  macroStory: MacroStoryRunConfiguration;
+}
+
+export function createDefaultNarrativeRunModifiers(): NarrativeRunModifiers {
+  return {
+    nextCombatEnemyHpBonusPct: 0,
+    nextCombatDamageBonusPct: 0,
+    bossArmorPiercePct: 0,
+    nodeNineCalibrationBonusPct: 0,
+    bossShieldBypassPct: 0,
+  };
+}
+
+export function createDefaultIncursionProgressState(): IncursionProgressState {
+  return {
+    collectedFlags: [],
+    usedNarrativeEventIds: [],
+    narrativeModifiers: createDefaultNarrativeRunModifiers(),
+    outcomeModifiers: [],
+    pendingCombatAmbush: false,
+    forceNextSanctuary: false,
+    macroStory: { runMode: 'STANDALONE', macroStoryId: null },
+  };
+}
+
 export interface NarrativeEventNode {
   id: string;
+  matrixEventId?: string;
+  interactionMode?: 'standard' | 'conditional';
   title: string;
   scenarioText: string;
   choiceA: {
@@ -144,6 +188,7 @@ export interface BossRuntimeProfile {
 
 export interface ActiveIncursionState {
   environmentalModifiers: EnvironmentalModifiers;
+  progress: IncursionProgressState;
   currentNarrativeId: string | null;
   lastCheckStatus: CheckStatus;
   activeChoice: 'A' | 'B' | null;
@@ -176,6 +221,7 @@ export function createDefaultEnvironmentalModifiers(): EnvironmentalModifiers {
 export function createDefaultActiveIncursionState(): ActiveIncursionState {
   return {
     environmentalModifiers: createDefaultEnvironmentalModifiers(),
+    progress: createDefaultIncursionProgressState(),
     currentNarrativeId: null,
     lastCheckStatus: 'NOT_TESTED',
     activeChoice: null,

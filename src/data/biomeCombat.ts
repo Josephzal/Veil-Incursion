@@ -3,10 +3,7 @@ import type { SectorBlockSpec } from '../types/macroStory';
 
 /** Authoritative 10-step sector-block layout (indices 0–9). */
 export const SECTOR_BLOCK_LAYOUT: readonly SectorBlockSpec[] = [
-  { depthStart: 0, depthEnd: 2, biome: 'CITY_STREETS', label: 'Streets' },
-  { depthStart: 3, depthEnd: 5, biome: 'HOSPITAL', label: 'Hospital' },
-  { depthStart: 6, depthEnd: 7, biome: 'LABORATORY', label: 'Lab' },
-  { depthStart: 8, depthEnd: 9, biome: 'SECTOR_CORE', label: 'Core' },
+  { depthStart: 0, depthEnd: 9, biome: 'CITY_STREETS', label: 'Streets' },
 ] as const;
 
 export const SECTOR_CORE_DEPTH_INDICES = [8, 9] as const;
@@ -21,6 +18,7 @@ export const BIOME_COMBAT_DESIGNATIONS: Record<IncursionBiome, readonly string[]
 export function pickBiomeCombatDesignation(biome: IncursionBiome, isBoss: boolean): string {
   const pool = BIOME_COMBAT_DESIGNATIONS[biome];
   if (isBoss && biome === 'SECTOR_CORE') return 'The Manifested Core';
+  if (isBoss && biome === 'CITY_STREETS') return 'Gridlock Colossus';
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
@@ -29,7 +27,7 @@ export function biomeForDepthIndex(depthIndex: number): IncursionBiome {
   const block = SECTOR_BLOCK_LAYOUT.find(
     (b) => depthIndex >= b.depthStart && depthIndex <= b.depthEnd,
   );
-  return block?.biome ?? 'SECTOR_CORE';
+  return block?.biome ?? 'CITY_STREETS';
 }
 
 /** Combat spawns must use the node's localized biome tag — no cross-sector units. */

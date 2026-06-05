@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import { pickRandomClimateCluster, getClusterDefinition } from '../data/climateClusters';
-import { createEasyTestEnemy, createHardTestEnemy, spawnEnemyProfile } from '../data/enemies';
+import { createEasyTestEnemy, createHardTestEnemy, spawnBiomeEnemyProfile, spawnEnemyProfile } from '../data/enemies';
 import {
   buildEncounter,
   getThemedSkillChecks,
@@ -31,12 +31,13 @@ import {
   IncursionNode,
   NarrativeEventNode,
 } from '../types/game';
+import { initializeIncursionPipeline } from '../data/macroStoryPipeline';
 import {
-  narrativeOutcomeLogLine,
-  pickNarrativeForNode,
+  pickMatrixEventForDepth,
   primeNarrativeEnvironment,
-  resolveNarrativeOutcome,
-} from '../data/narrativeEvents';
+  resolveMatrixNarrativeChoice,
+  rollVirtualD20,
+} from '../data/narrativeEncounterMatrix';
 import {
   BOSS_DEPTH_INDEX,
   createBossProfileForTier,
@@ -181,10 +182,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const stamBonus = config?.factionPerks?.maxStaminaBonus ?? 0;
     const maxSoulAnchor = BASE_MAX_SOUL_ANCHOR + hpBonus;
     const maxStamina = BASE_MAX_STAMINA + stamBonus;
+    const citySector = INITIAL_SECTOR_POOL.find((s) => s.id === 'city-subway') ?? INITIAL_SECTOR_POOL[0];
     const next: RunState = {
       ...createInitialRunState(),
       runActive: true,
       climateCluster: cluster,
+      currentSector: citySector,
       maxSoulAnchor,
       soulAnchorIntegrity: maxSoulAnchor,
       maxStamina,
@@ -192,15 +195,16 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     };
     runStateRef.current = next;
     setRunState(next);
-    const { activeTierVectors, earlySanctuarySpawned } = generateTierVectorMatrix(1);
+    const pipeline = initializeIncursionPipeline(1);
     const incursion: ActiveIncursionState = {
       ...createDefaultActiveIncursionState(),
       isRunActive: true,
       currentTier: 1,
       currentNodeIndex: 0,
-      tierNodes: createPlaceholderTierPath(),
-      activeTierVectors,
-      earlySanctuarySpawned,
+      progress: pipeline.progress,
+      tierNodes: pipeline.tierNodes,
+      activeTierVectors: pipeline.activeTierVectors,
+      earlySanctuarySpawned: pipeline.earlySanctuarySpawned,
       selectedVectorId: null,
       previewNodeId: null,
       scanConfirmOverlayVisible: false,
@@ -220,6 +224,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       `>> CLIMATE CLUSTER LOCKED: ${clusterDef.name}`,
       `>> AUTHORIZED BIOMES: ${biomeTag}`,
       `>> ${clusterDef.tagline}`,
+      ...pipeline.initLogLines,
     ]);
   }, []);
 
@@ -524,14 +529,15 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const assignNarrativeForCombat = useCallback((nodeIndex: number) => {
-    const node = pickNarrativeForNode(nodeIndex);
+    const inc = activeIncursionRef.current;
+    const node = pickMatrixEventForDepth(nodeIndex, inc.progress);
     narrativeNodeRef.current = node;
     const primed = primeNarrativeEnvironment(node);
-    const tierNode = resolveActiveVectorNode(activeIncursionRef.current);
+    const tierNode = resolveActiveVectorNode(inc);
     setActiveIncursion((prev) => {
       const next = {
         ...prev,
-        currentNarrativeId: node.id,
+        currentNarrativeId: node.matrixEventId ?? node.id,
         lastCheckStatus: 'NOT_TESTED' as CheckStatus,
         activeChoice: null,
         mapMode: 'NODE_ENGAGED' as IncursionMapMode,
@@ -546,6 +552,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (tierNode?.biome) {
       appendRunLog(`>> ${getBiomeContextLog(tierNode.biome)}`);
     }
+    appendRunLog(`>> NARRATIVE VECTOR LOCKED — ${node.title}.`);
     appendRunLog('>> ENCOUNTER LAYER MOUNTED — FIELD CALIBRATION REQUIRED.');
   }, [appendRunLog]);
 
@@ -557,25 +564,52 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const node = narrativeNodeRef.current;
     if (!node) return '>> NARRATIVE RESOLVED — NO ACTIVE NODE.';
 
+    const inc = activeIncursionRef.current;
+    const prevRun = runStateRef.current;
+    const matrixEventId = node.matrixEventId ?? node.id;
+    const roll = rollVirtualD20();
+    const result = resolveMatrixNarrativeChoice(
+      matrixEventId,
+      choice,
+      roll,
+      inc.progress,
+      inc.environmentalModifiers,
+      {
+        maxSoulAnchor: prevRun.maxSoulAnchor,
+        soulAnchorIntegrity: prevRun.soulAnchorIntegrity,
+        maxStamina: prevRun.maxStamina,
+        currentStamina: prevRun.currentStamina,
+        startingAbyssalReservePercent: prevRun.startingAbyssalReservePercent,
+      },
+      inc.currentNodeIndex,
+      { forceSuccess: status === 'SUCCESS', forceFailure: status === 'FAILURE' },
+    );
+
     setActiveIncursion((prev) => {
-      const environmentalModifiers = resolveNarrativeOutcome(
-        node,
-        choice,
-        status,
-        prev.environmentalModifiers,
-      );
       const next: ActiveIncursionState = {
         ...prev,
-        environmentalModifiers,
-        lastCheckStatus: status,
+        progress: result.progress,
+        environmentalModifiers: result.environmentalModifiers,
+        lastCheckStatus: result.status,
         activeChoice: choice,
       };
       activeIncursionRef.current = next;
       return next;
     });
 
-    return narrativeOutcomeLogLine(node, choice, status);
-  }, []);
+    setRunState((prev) => {
+      const next = {
+        ...prev,
+        ...result.runPatch,
+        pendingAmbush: result.triggerCombatAmbush ? true : prev.pendingAmbush,
+      };
+      runStateRef.current = next;
+      return next;
+    });
+
+    result.logLines.forEach((line) => appendRunLog(line));
+    return result.outcomeText;
+  }, [appendRunLog]);
 
   const getCurrentTierNode = useCallback(() => {
     const inc = activeIncursionRef.current;
@@ -682,7 +716,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
     const prev = runStateRef.current;
     const sector = prev.currentSector ?? INITIAL_SECTOR_POOL[0];
-    const pendingEnemy = spawnEnemyProfile(sector, inc.currentNodeIndex, prev.pendingAmbush);
+    const pendingEnemy = spawnBiomeEnemyProfile(
+      'CITY_STREETS',
+      inc.currentNodeIndex,
+      prev.pendingAmbush,
+    );
     const pendingEncounter = buildEncounter(
       inc.currentNodeIndex,
       sector,
