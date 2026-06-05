@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, StatusBar, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { TerminalProvider, useTerminal } from './src/context/TerminalContext';
 import { TerminalNavProvider } from './src/context/TerminalNavContext';
@@ -41,24 +42,27 @@ function GameRoot(): React.JSX.Element {
 
 export default function App(): React.JSX.Element {
   return (
-    <SafeAreaProvider>
-      <PlayerAccountProvider>
-        <RegionalShatterProvider>
-          <TerminalProvider>
-            <TerminalNavProvider>
-              <RunProvider>
-                <GameFlowProvider>
-                  <GameRoot />
-                </GameFlowProvider>
-              </RunProvider>
-            </TerminalNavProvider>
-          </TerminalProvider>
-        </RegionalShatterProvider>
-      </PlayerAccountProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={styles.gestureRoot}>
+      <SafeAreaProvider>
+        <PlayerAccountProvider>
+          <RegionalShatterProvider>
+            <TerminalProvider>
+              <TerminalNavProvider>
+                <RunProvider>
+                  <GameFlowProvider>
+                    <GameRoot />
+                  </GameFlowProvider>
+                </RunProvider>
+              </TerminalNavProvider>
+            </TerminalProvider>
+          </RegionalShatterProvider>
+        </PlayerAccountProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
+  gestureRoot: { flex: 1 },
   screenContainer: { flex: 1 },
 });

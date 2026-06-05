@@ -8,6 +8,17 @@ export interface CabalInfluenceBalance {
   SOLARIS: number;
 }
 
+export interface MapPoint {
+  x: number;
+  y: number;
+}
+
+export interface SectorMapGeometry {
+  polygon: MapPoint[];
+  labelAnchor: MapPoint;
+  nodeAnchor: MapPoint;
+}
+
 export interface MacroSectorDefinition {
   id: MacroSectorId;
   label: string;
@@ -15,6 +26,7 @@ export interface MacroSectorDefinition {
   /** Simulated baseline operative traffic density 0–100. */
   baseTrafficDensity: number;
   influence: CabalInfluenceBalance;
+  mapGeometry: SectorMapGeometry;
 }
 
 export interface RegionalPresenceState {

@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ScrollView } from 'react-native-gesture-handler';
 import MetropolitanMagnetismMap from './MetropolitanMagnetismMap';
 import { MacroSectorId } from '../types/regional';
 import { TerminalTheme } from '../types/theme';
