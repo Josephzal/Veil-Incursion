@@ -37,8 +37,6 @@ interface SectorInfluencePanelProps {
   localTrafficDensity: number;
   influence: { TERRAN_GRID: number; LEGION: number; SOLARIS: number };
   isInfluenceFrozen: boolean;
-  isWeakLocalSignal: boolean;
-  proxyMetropolitanNode: string | null;
 }
 
 export default function SectorInfluencePanel({
@@ -47,8 +45,6 @@ export default function SectorInfluencePanel({
   localTrafficDensity,
   influence,
   isInfluenceFrozen,
-  isWeakLocalSignal,
-  proxyMetropolitanNode,
 }: SectorInfluencePanelProps): React.JSX.Element {
   return (
     <View style={styles.root}>
@@ -65,17 +61,6 @@ export default function SectorInfluencePanel({
           </Text>
         )}
       </View>
-
-      {isWeakLocalSignal && proxyMetropolitanNode && (
-        <View style={[styles.warningOverlay, { borderColor: theme.primaryColor }]}>
-          <Text style={[styles.warningTitle, { color: theme.primaryColor }]}>
-            WEAK LOCAL SIGNAL
-          </Text>
-          <Text style={[styles.warningBody, { color: theme.mutedColor }]}>
-            Routing to nearest metropolitan node: {proxyMetropolitanNode}
-          </Text>
-        </View>
-      )}
 
       <View style={styles.influenceBlock}>
         <Text style={[styles.influenceHeader, { color: theme.primaryColor }]}>
@@ -103,15 +88,6 @@ const styles = StyleSheet.create({
   root: { marginTop: 0 },
   readout: { borderWidth: 1, padding: 8, marginBottom: 8, minHeight: 56 },
   readoutLine: { fontFamily: 'monospace', fontSize: 8, letterSpacing: 0.4, lineHeight: 13, marginBottom: 2 },
-  warningOverlay: {
-    borderWidth: 2,
-    padding: 10,
-    marginBottom: 10,
-    backgroundColor: '#0a0b0f',
-    minHeight: 52,
-  },
-  warningTitle: { fontFamily: 'monospace', fontSize: 9, fontWeight: '700', letterSpacing: 1, marginBottom: 4 },
-  warningBody: { fontFamily: 'monospace', fontSize: 8, lineHeight: 12 },
   influenceBlock: { marginTop: 4 },
   influenceHeader: { fontFamily: 'monospace', fontSize: 8, fontWeight: '700', letterSpacing: 0.8, marginBottom: 8 },
   meterRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6, gap: 6 },

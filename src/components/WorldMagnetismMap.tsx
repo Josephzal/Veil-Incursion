@@ -19,7 +19,7 @@ import {
   Skia,
   vec,
 } from '@shopify/react-native-skia';
-import { Gesture, GestureDetector, GestureHandlerRootView, ScrollView } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
   useAnimatedStyle,
@@ -35,6 +35,9 @@ import {
   INACTIVE_SECTOR_LAYER_OPACITY,
   polygonToSkiaPath,
   resolveSectorInfluence,
+  clampMapTranslation,
+  focalPinchTranslation,
+  resolveMapDrawMetrics,
   screenPointToViewBox,
   SECTOR_SELECT_HAPTIC_MS,
   viewBoxPointToCanvas,
@@ -50,10 +53,10 @@ const MAX_ZOOM = 4;
 const TAP_MAX_DURATION_MS = 450;
 const TAP_MAX_DISTANCE_PX = 28;
 const DOUBLE_TAP_MAX_DELAY_MS = 380;
-const EXPANDED_HORIZONTAL_INSET = 28;
-const EXPANDED_HEADER_HEIGHT = 64;
-const EXPANDED_VERTICAL_PADDING = 86;
-const EXPANDED_DETAIL_HEIGHT_RATIO = 0.36;
+const EXPANDED_HORIZONTAL_INSET = 12;
+const EXPANDED_HEADER_HEIGHT = 52;
+const EXPANDED_VERTICAL_PADDING = 36;
+const EXPANDED_DETAIL_HEIGHT = 156;
 
 interface WorldMagnetismMapProps {
   theme: TerminalTheme;
@@ -62,12 +65,13 @@ interface WorldMagnetismMapProps {
   homeSectorId: MacroSectorId;
   isInfluenceFrozen: boolean;
   frozenInfluence: { TERRAN_GRID: number; LEGION: number; SOLARIS: number } | null;
+  isWeakLocalSignal: boolean;
+  proxyMetropolitanNode: string | null;
   onSectorPress: (id: MacroSectorId) => void;
   expandedDetailPanel?: React.ReactNode;
 }
 
 interface MapViewportProps extends WorldMagnetismMapProps {
-  interactive: boolean;
   fillContainer?: boolean;
   reservedChromeHeight?: number;
   onOpen?: () => void;
@@ -91,35 +95,15 @@ function resolveCanvasSizeForHost(
   fillContainer: boolean,
 ): { width: number; height: number } {
   const aspect = WORLD_VIEWBOX.width / WORLD_VIEWBOX.height;
-  if (fillContainer && height > 0) {
+  if (fillContainer && height > 0 && width > 0) {
     const widthFromHeight = height * aspect;
     if (widthFromHeight <= width) {
       return { width: widthFromHeight, height };
     }
+    return { width, height: width / aspect };
   }
   const fittedHeight = width * (WORLD_VIEWBOX.height / WORLD_VIEWBOX.width);
   return { width, height: fittedHeight };
-}
-
-function clampMapTranslation(
-  translateX: number,
-  translateY: number,
-  zoomScale: number,
-  width: number,
-  height: number,
-) {
-  'worklet';
-  if (zoomScale <= 1) {
-    return { x: 0, y: 0 };
-  }
-  const minX = width * (1 - zoomScale);
-  const maxX = 0;
-  const minY = height * (1 - zoomScale);
-  const maxY = 0;
-  return {
-    x: Math.min(maxX, Math.max(minX, translateX)),
-    y: Math.min(maxY, Math.max(minY, translateY)),
-  };
 }
 
 function MapViewport({
@@ -130,7 +114,7 @@ function MapViewport({
   isInfluenceFrozen,
   frozenInfluence,
   onSectorPress,
-  interactive,
+  isWeakLocalSignal,
   fillContainer = false,
   reservedChromeHeight,
   onOpen,
@@ -140,14 +124,18 @@ function MapViewport({
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
   const [hostSize, setHostSize] = useState({ width: 0, height: 0 });
+  const [fillHostSize, setFillHostSize] = useState({ width: 0, height: 0 });
 
   const expandedHostSize = useMemo(() => {
     if (!fillContainer) return null;
+    if (fillHostSize.width > 0 && fillHostSize.height > 0) {
+      return { width: fillHostSize.width, height: fillHostSize.height };
+    }
     const chromeHeight = reservedChromeHeight ?? EXPANDED_HEADER_HEIGHT + EXPANDED_VERTICAL_PADDING + 220;
-    const width = Math.max(0, windowWidth - EXPANDED_HORIZONTAL_INSET);
+    const width = Math.max(0, windowWidth - EXPANDED_HORIZONTAL_INSET * 2);
     const height = Math.max(0, windowHeight - chromeHeight);
-    return resolveCanvasSizeForHost(width, height, true);
-  }, [fillContainer, reservedChromeHeight, windowHeight, windowWidth]);
+    return { width, height };
+  }, [fillContainer, fillHostSize.height, fillHostSize.width, reservedChromeHeight, windowHeight, windowWidth]);
 
   const zoomScale = useSharedValue(1);
   const savedZoomScale = useSharedValue(1);
@@ -159,11 +147,23 @@ function MapViewport({
   const focalY = useSharedValue(0);
   const canvasWidth = useSharedValue(0);
   const canvasHeight = useSharedValue(0);
+  const contentLeft = useSharedValue(0);
+  const contentTop = useSharedValue(0);
+  const contentRight = useSharedValue(0);
+  const contentBottom = useSharedValue(0);
 
   const handleHostLayout = useCallback((event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
+    if (fillContainer) {
+      setFillHostSize({ width, height });
+      if (width > 0 && height > 0) {
+        canvasWidth.value = width;
+        canvasHeight.value = height;
+      }
+      return;
+    }
     setHostSize({ width, height });
-  }, []);
+  }, [canvasHeight, canvasWidth, fillContainer]);
 
   React.useEffect(() => {
     if (expandedHostSize) {
@@ -180,10 +180,35 @@ function MapViewport({
 
   const activeCanvasSize = expandedHostSize ?? canvasSize;
 
-  const viewBoxScale = useMemo(() => {
-    if (activeCanvasSize.width === 0) return 1;
-    return activeCanvasSize.width / WORLD_VIEWBOX.width;
-  }, [activeCanvasSize.width]);
+  const drawMetrics = useMemo(() => {
+    if (activeCanvasSize.width === 0 || activeCanvasSize.height === 0) {
+      return { scale: 1, offsetX: 0, offsetY: 0 };
+    }
+    return resolveMapDrawMetrics(
+      activeCanvasSize.width,
+      activeCanvasSize.height,
+      WORLD_VIEWBOX.width,
+      WORLD_VIEWBOX.height,
+      'contain',
+    );
+  }, [activeCanvasSize.height, activeCanvasSize.width]);
+
+  React.useEffect(() => {
+    const drawnWidth = WORLD_VIEWBOX.width * drawMetrics.scale;
+    const drawnHeight = WORLD_VIEWBOX.height * drawMetrics.scale;
+    contentLeft.value = drawMetrics.offsetX;
+    contentTop.value = drawMetrics.offsetY;
+    contentRight.value = drawMetrics.offsetX + drawnWidth;
+    contentBottom.value = drawMetrics.offsetY + drawnHeight;
+  }, [
+    contentBottom,
+    contentLeft,
+    contentRight,
+    contentTop,
+    drawMetrics.offsetX,
+    drawMetrics.offsetY,
+    drawMetrics.scale,
+  ]);
 
   const continentPaths = useMemo(
     () => WORLD_CONTINENT_OUTLINES.map((outline) => buildPathFromPolygon(outline)),
@@ -208,20 +233,17 @@ function MapViewport({
       const viewBoxPoint = screenPointToViewBox(
         screenX,
         screenY,
-        activeCanvasSize.width,
-        activeCanvasSize.height,
-        WORLD_VIEWBOX.width,
-        WORLD_VIEWBOX.height,
         zoom,
         offsetX,
         offsetY,
+        drawMetrics,
       );
       const hit = hitTestSectorAtPoint(viewBoxPoint, sectors);
       if (!hit) return;
       Vibration.vibrate(SECTOR_SELECT_HAPTIC_MS);
       onSectorPress(hit.id);
     },
-    [activeCanvasSize.height, activeCanvasSize.width, onSectorPress, sectors],
+    [activeCanvasSize.height, activeCanvasSize.width, drawMetrics, onSectorPress, sectors],
   );
 
   const resetMapView = useCallback(() => {
@@ -243,15 +265,28 @@ function MapViewport({
     })
     .onUpdate((event) => {
       const nextScale = clampZoom(savedZoomScale.value * event.scale);
-      const scaleRatio = nextScale / savedZoomScale.value;
-      const nextX = savedTranslateX.value + (focalX.value - savedTranslateX.value) * (1 - scaleRatio);
-      const nextY = savedTranslateY.value + (focalY.value - savedTranslateY.value) * (1 - scaleRatio);
+      const nextX = focalPinchTranslation(
+        focalX.value,
+        savedTranslateX.value,
+        savedZoomScale.value,
+        nextScale,
+      );
+      const nextY = focalPinchTranslation(
+        focalY.value,
+        savedTranslateY.value,
+        savedZoomScale.value,
+        nextScale,
+      );
       const clamped = clampMapTranslation(
         nextX,
         nextY,
         nextScale,
         canvasWidth.value,
         canvasHeight.value,
+        contentLeft.value,
+        contentTop.value,
+        contentRight.value,
+        contentBottom.value,
       );
       translateX.value = clamped.x;
       translateY.value = clamped.y;
@@ -275,6 +310,10 @@ function MapViewport({
         zoomScale.value,
         canvasWidth.value,
         canvasHeight.value,
+        contentLeft.value,
+        contentTop.value,
+        contentRight.value,
+        contentBottom.value,
       );
       translateX.value = withTiming(clamped.x);
       translateY.value = withTiming(clamped.y);
@@ -305,6 +344,10 @@ function MapViewport({
         zoomScale.value,
         canvasWidth.value,
         canvasHeight.value,
+        contentLeft.value,
+        contentTop.value,
+        contentRight.value,
+        contentBottom.value,
       );
       translateX.value = clamped.x;
       translateY.value = clamped.y;
@@ -335,19 +378,10 @@ function MapViewport({
       runOnJS(resetMapView)();
     });
 
-  const previewTapGesture = Gesture.Tap()
-    .maxDuration(TAP_MAX_DURATION_MS)
-    .maxDistance(TAP_MAX_DISTANCE_PX)
-    .onEnd((event) => {
-      runOnJS(handleMapPress)(event.x, event.y, 1, 0, 0);
-    });
-
-  const mapGesture = interactive
-    ? Gesture.Simultaneous(
-        Gesture.Exclusive(Gesture.Simultaneous(pinchGesture, panGesture), doubleTapGesture),
-        sectorTapGesture,
-      )
-    : previewTapGesture;
+  const mapGesture = Gesture.Simultaneous(
+    Gesture.Exclusive(Gesture.Simultaneous(pinchGesture, panGesture), doubleTapGesture),
+    sectorTapGesture,
+  );
 
   const mapPanStyle = useAnimatedStyle(() => ({
     transform: [
@@ -360,47 +394,21 @@ function MapViewport({
     transform: [{ scale: zoomScale.value }],
   }));
 
-  const labelOverlays = sectors.map((sector) => {
-    const isActive = sector.id === activeSectorId;
-    const canvasPoint = viewBoxPointToCanvas(
-      sector.mapGeometry.labelAnchor,
-      activeCanvasSize.width,
-      activeCanvasSize.height,
-      WORLD_VIEWBOX.width,
-      WORLD_VIEWBOX.height,
-    );
-    return (
-      <Text
-        key={`label-${sector.id}`}
-        pointerEvents="none"
-        style={[
-          styles.sectorLabel,
-          {
-            left: canvasPoint.x - 48,
-            top: canvasPoint.y - 8,
-            color: isActive ? theme.statusColor : theme.mutedColor,
-            opacity: isActive ? 1 : INACTIVE_SECTOR_LAYER_OPACITY,
-          },
-        ]}
-      >
-        {sector.label}
-      </Text>
-    );
-  });
+  const activeSector = sectors.find((sector) => sector.id === activeSectorId);
+  const activeSectorLabel = activeSector
+    ? viewBoxPointToCanvas(activeSector.mapGeometry.labelAnchor, drawMetrics)
+    : null;
 
   const homeSector = sectors.find((sector) => sector.id === homeSectorId);
   const homeMarker = homeSector
-    ? viewBoxPointToCanvas(
-        homeSector.mapGeometry.nodeAnchor,
-        activeCanvasSize.width,
-        activeCanvasSize.height,
-        WORLD_VIEWBOX.width,
-        WORLD_VIEWBOX.height,
-      )
+    ? viewBoxPointToCanvas(homeSector.mapGeometry.nodeAnchor, drawMetrics)
     : null;
 
   return (
-    <View style={[styles.viewportRoot, fillContainer ? styles.viewportRootFill : null]}>
+    <View
+      style={[styles.viewportRoot, fillContainer ? styles.viewportRootFill : null]}
+      onLayout={fillContainer ? handleHostLayout : undefined}
+    >
       <View
         style={[
           styles.mapFrame,
@@ -409,9 +417,11 @@ function MapViewport({
           {
             borderColor: theme.borderColor,
             borderWidth: theme.borderWidth,
-            height: activeCanvasSize.height || undefined,
+            height: fillContainer
+              ? undefined
+              : activeCanvasSize.height || undefined,
             aspectRatio:
-              activeCanvasSize.height > 0
+              fillContainer || activeCanvasSize.height > 0
                 ? undefined
                 : WORLD_VIEWBOX.width / WORLD_VIEWBOX.height,
           },
@@ -422,16 +432,12 @@ function MapViewport({
           <View
             style={[
               styles.mapSurface,
-              fillContainer ? styles.mapSurfaceCentered : null,
-              { width: activeCanvasSize.width, height: activeCanvasSize.height },
+              fillContainer ? styles.mapSurfaceFill : { width: activeCanvasSize.width, height: activeCanvasSize.height },
             ]}
           >
             <Animated.View
               pointerEvents="none"
-              style={[
-                styles.mapVisualLayer,
-                interactive ? mapPanStyle : null,
-              ]}
+              style={[styles.mapVisualLayer, mapPanStyle]}
             >
               <Animated.View
                 style={[
@@ -440,11 +446,17 @@ function MapViewport({
                     height: activeCanvasSize.height,
                     transformOrigin: 'top left',
                   },
-                  interactive ? mapScaleStyle : null,
+                  mapScaleStyle,
                 ]}
               >
               <Canvas style={{ width: activeCanvasSize.width, height: activeCanvasSize.height }}>
-                <Group transform={[{ scale: viewBoxScale }]}>
+                <Group
+                  transform={[
+                    { translateX: drawMetrics.offsetX },
+                    { translateY: drawMetrics.offsetY },
+                    { scale: drawMetrics.scale },
+                  ]}
+                >
                   <Rect
                     x={0}
                     y={0}
@@ -535,7 +547,21 @@ function MapViewport({
               </Canvas>
 
               <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                {labelOverlays}
+                {activeSector && activeSectorLabel && (
+                  <Text
+                    pointerEvents="none"
+                    style={[
+                      styles.sectorLabel,
+                      {
+                        left: activeSectorLabel.x - 48,
+                        top: activeSectorLabel.y - 8,
+                        color: theme.statusColor,
+                      },
+                    ]}
+                  >
+                    {activeSector.label}
+                  </Text>
+                )}
                 {homeMarker && (
                   <View
                     style={[
@@ -555,9 +581,19 @@ function MapViewport({
             </GestureDetector>
           </View>
         )}
+
+        {activeCanvasSize.width > 0 && isWeakLocalSignal && (
+          <View pointerEvents="none" style={styles.mapHudOverlay}>
+            <View style={[styles.weakSignalBadge, { borderColor: theme.primaryColor }]}>
+              <Text style={[styles.weakSignalTitle, { color: theme.primaryColor }]}>
+                WEAK SIGNAL
+              </Text>
+            </View>
+          </View>
+        )}
       </View>
 
-      {!interactive && onOpen && (
+      {!fillContainer && onOpen && (
         <Pressable
           onPress={onOpen}
           style={({ pressed }) => [
@@ -583,19 +619,18 @@ export default function WorldMagnetismMap({
 }: WorldMagnetismMapProps): React.JSX.Element {
   const [expanded, setExpanded] = useState(false);
   const { theme } = props;
-  const { height: windowHeight } = useWindowDimensions();
-  const expandedDetailHeight = Math.round(windowHeight * EXPANDED_DETAIL_HEIGHT_RATIO);
   const expandedReservedChromeHeight =
-    EXPANDED_HEADER_HEIGHT + EXPANDED_VERTICAL_PADDING + expandedDetailHeight + 10;
+    EXPANDED_HEADER_HEIGHT + EXPANDED_VERTICAL_PADDING + EXPANDED_DETAIL_HEIGHT + 10;
 
   return (
     <View style={styles.root}>
-      <MapViewport
-        {...props}
-        interactive={false}
-        onOpen={() => setExpanded(true)}
-        hint="TAP SECTOR FOR TELEMETRY // [ EXPAND MAP ] FOR FULL VIEW"
-      />
+      <GestureHandlerRootView style={styles.previewGestureRoot}>
+        <MapViewport
+          {...props}
+          onOpen={() => setExpanded(true)}
+          hint="TAP SECTOR // PINCH ZOOM // DOUBLE-TAP RESET // [ EXPAND MAP ]"
+        />
+      </GestureHandlerRootView>
 
       <Modal
         visible={expanded}
@@ -625,10 +660,9 @@ export default function WorldMagnetismMap({
                 <MapViewport
                   key="expanded-map"
                   {...props}
-                  interactive
                   fillContainer
                   reservedChromeHeight={expandedReservedChromeHeight}
-                  hint="TAP SECTOR FOR TELEMETRY // PINCH TO ZOOM // DOUBLE-TAP RESET"
+                  hint="TAP SECTOR // PINCH ZOOM // DOUBLE-TAP RESET"
                 />
               )}
             </View>
@@ -639,19 +673,11 @@ export default function WorldMagnetismMap({
                   styles.expandedDetailPanel,
                   {
                     borderColor: theme.borderColor,
-                    height: expandedDetailHeight,
+                    height: EXPANDED_DETAIL_HEIGHT,
                   },
                 ]}
               >
-                <ScrollView
-                  style={styles.expandedDetailScroll}
-                  nestedScrollEnabled
-                  showsVerticalScrollIndicator
-                  bounces={false}
-                  contentContainerStyle={styles.expandedDetailContent}
-                >
-                  {expandedDetailPanel}
-                </ScrollView>
+                <View style={styles.expandedDetailContent}>{expandedDetailPanel}</View>
               </View>
             )}
           </View>
@@ -666,21 +692,36 @@ const styles = StyleSheet.create({
   viewportRoot: { width: '100%' },
   viewportRootFill: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: '100%',
   },
   mapFrame: {
     width: '100%',
     overflow: 'hidden',
     backgroundColor: MAP_BACKDROP,
+    position: 'relative',
+  },
+  previewGestureRoot: {
+    width: '100%',
   },
   mapFrameFill: {
-    justifyContent: 'center',
-    alignItems: 'center',
+    flex: 1,
+    width: '100%',
   },
   mapSurface: {
     overflow: 'hidden',
     position: 'relative',
+  },
+  mapSurfaceFill: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  mapHudOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 20,
+    elevation: 20,
+    justifyContent: 'flex-end',
+    alignItems: 'flex-start',
+    paddingLeft: 5,
+    paddingBottom: 5,
   },
   mapVisualLayer: {
     ...StyleSheet.absoluteFillObject,
@@ -689,8 +730,17 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'transparent',
   },
-  mapSurfaceCentered: {
-    alignSelf: 'center',
+  weakSignalBadge: {
+    borderWidth: 1,
+    paddingHorizontal: 5,
+    paddingVertical: 3,
+    backgroundColor: 'rgba(10, 11, 15, 0.96)',
+  },
+  weakSignalTitle: {
+    fontFamily: 'monospace',
+    fontSize: 7,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   sectorLabel: {
     position: 'absolute',
@@ -740,15 +790,15 @@ const styles = StyleSheet.create({
   expandedBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.92)',
-    paddingTop: 52,
-    paddingHorizontal: 14,
-    paddingBottom: 24,
+    paddingTop: 44,
+    paddingHorizontal: EXPANDED_HORIZONTAL_INSET,
+    paddingBottom: 16,
   },
   expandedHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 8,
     gap: 12,
   },
   expandedTitle: {
@@ -771,20 +821,18 @@ const styles = StyleSheet.create({
   },
   expandedMapHost: {
     flex: 1,
-    minHeight: 220,
+    minHeight: 280,
   },
   expandedDetailPanel: {
     borderWidth: 1,
-    marginTop: 10,
+    marginTop: 8,
     flexShrink: 0,
     overflow: 'hidden',
   },
-  expandedDetailScroll: {
-    flex: 1,
-  },
   expandedDetailContent: {
+    flex: 1,
     padding: 10,
-    paddingBottom: 12,
-    flexGrow: 1,
+    paddingBottom: 10,
+    justifyContent: 'center',
   },
 });

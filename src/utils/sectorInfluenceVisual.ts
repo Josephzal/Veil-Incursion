@@ -67,36 +67,84 @@ export function canvasPointToViewBox(
 export function screenPointToViewBox(
   screenX: number,
   screenY: number,
-  canvasWidth: number,
-  canvasHeight: number,
-  viewBoxWidth: number,
-  viewBoxHeight: number,
   zoomScale: number,
   translateX: number,
   translateY: number,
+  metrics: MapDrawMetrics,
 ): MapPoint {
   const localX = (screenX - translateX) / zoomScale;
   const localY = (screenY - translateY) / zoomScale;
-  return canvasPointToViewBox(
-    localX,
-    localY,
-    canvasWidth,
-    canvasHeight,
-    viewBoxWidth,
-    viewBoxHeight,
-  );
+  return {
+    x: (localX - metrics.offsetX) / metrics.scale,
+    y: (localY - metrics.offsetY) / metrics.scale,
+  };
 }
 
-export function viewBoxPointToCanvas(
-  point: MapPoint,
+/** Keep focal screen point fixed under top-left scale + translate (screen = scale * p + translate). */
+export function focalPinchTranslation(
+  focal: number,
+  savedTranslate: number,
+  savedScale: number,
+  nextScale: number,
+): number {
+  'worklet';
+  return focal - (nextScale * (focal - savedTranslate)) / savedScale;
+}
+
+export function clampMapTranslation(
+  translateX: number,
+  translateY: number,
+  zoomScale: number,
+  width: number,
+  height: number,
+  contentLeft: number,
+  contentTop: number,
+  contentRight: number,
+  contentBottom: number,
+): { x: number; y: number } {
+  'worklet';
+  if (zoomScale <= 1) {
+    return { x: 0, y: 0 };
+  }
+  const minX = -zoomScale * contentLeft;
+  const maxX = width - zoomScale * contentRight;
+  const minY = -zoomScale * contentTop;
+  const maxY = height - zoomScale * contentBottom;
+  return {
+    x: Math.min(maxX, Math.max(minX, translateX)),
+    y: Math.min(maxY, Math.max(minY, translateY)),
+  };
+}
+
+export interface MapDrawMetrics {
+  scale: number;
+  offsetX: number;
+  offsetY: number;
+}
+
+export function resolveMapDrawMetrics(
   canvasWidth: number,
   canvasHeight: number,
   viewBoxWidth: number,
   viewBoxHeight: number,
-): MapPoint {
+  mode: 'contain' | 'cover',
+): MapDrawMetrics {
+  const scaleX = canvasWidth / viewBoxWidth;
+  const scaleY = canvasHeight / viewBoxHeight;
+  const scale = mode === 'cover' ? Math.max(scaleX, scaleY) : Math.min(scaleX, scaleY);
+  const drawnWidth = viewBoxWidth * scale;
+  const drawnHeight = viewBoxHeight * scale;
   return {
-    x: (point.x / viewBoxWidth) * canvasWidth,
-    y: (point.y / viewBoxHeight) * canvasHeight,
+    scale,
+    offsetX: (canvasWidth - drawnWidth) / 2,
+    offsetY: (canvasHeight - drawnHeight) / 2,
+  };
+}
+
+export function viewBoxPointToCanvas(point: MapPoint, metrics: MapDrawMetrics): MapPoint {
+  return {
+    x: metrics.offsetX + point.x * metrics.scale,
+    y: metrics.offsetY + point.y * metrics.scale,
   };
 }
 

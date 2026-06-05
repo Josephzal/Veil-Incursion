@@ -54,6 +54,8 @@ export default function MetropolitanMagnetismMap({
         homeSectorId={homeSectorId}
         isInfluenceFrozen={isInfluenceFrozen}
         frozenInfluence={frozenInfluence}
+        isWeakLocalSignal={magnetism.isWeakLocalSignal}
+        proxyMetropolitanNode={magnetism.proxyMetropolitanNode}
         onSectorPress={handleSectorPress}
         expandedDetailPanel={
           <SectorInfluencePanel
@@ -62,8 +64,6 @@ export default function MetropolitanMagnetismMap({
             localTrafficDensity={magnetism.localTrafficDensity}
             influence={magnetism.influence}
             isInfluenceFrozen={isInfluenceFrozen}
-            isWeakLocalSignal={magnetism.isWeakLocalSignal}
-            proxyMetropolitanNode={magnetism.proxyMetropolitanNode}
           />
         }
       />
@@ -74,8 +74,6 @@ export default function MetropolitanMagnetismMap({
         localTrafficDensity={magnetism.localTrafficDensity}
         influence={magnetism.influence}
         isInfluenceFrozen={isInfluenceFrozen}
-        isWeakLocalSignal={magnetism.isWeakLocalSignal}
-        proxyMetropolitanNode={magnetism.proxyMetropolitanNode}
       />
     </View>
   );

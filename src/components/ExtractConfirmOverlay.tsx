@@ -21,7 +21,7 @@ export default function ExtractConfirmOverlay({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <View style={styles.backdrop}>
         <View style={[styles.panel, { borderColor: accentColor, backgroundColor: '#050608' }]}>
-          <Text style={[styles.header, { color: accentColor }]}>EXTRACT FROM INCURSION?</Text>
+          <Text style={[styles.header, { color: accentColor }]}>EXTRACT FROM INCURSION</Text>
           <Text style={[styles.body, { color: theme.mutedColor }]}>
             Terminate the active run. All unresolved incursion progress will be lost.
           </Text>
