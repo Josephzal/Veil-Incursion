@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import SanctuaryNarrativeBg from '../../assets/narrative images/sanctuary.png';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useNodeProgression } from '../hooks/useNodeProgression';
@@ -33,43 +34,52 @@ export default function RestScreen(): React.JSX.Element {
           <OperativeTelemetryBar />
         
           <View style={styles.content}>
-            <Text style={[styles.title, { color: theme.primaryColor }]}>REST / SANCTUARY NODE</Text>
-            <Text style={[styles.bodyText, { color: theme.mutedColor }]}>
-              A quiet anchor chapel hums with stabilizing ley-energy. Choose how to recover before the next incursion vector.
-            </Text>
+            <Image
+              source={SanctuaryNarrativeBg}
+              style={styles.backgroundImage}
+              resizeMode="cover"
+            />
+            <View style={styles.backgroundScrim} pointerEvents="none" />
 
-            <View style={[styles.statsBox, { borderColor: theme.borderColor }]}>
-              <Text style={[styles.statLine, { color: theme.mutedColor }]}>
-                SOUL ANCHOR: {runState.soulAnchorIntegrity}/{runState.maxSoulAnchor}
+            <View style={styles.contentForeground}>
+              <Text style={[styles.title, { color: theme.primaryColor }]}>REST / SANCTUARY NODE</Text>
+              <Text style={[styles.bodyText, { color: theme.mutedColor }]}>
+                A quiet anchor chapel hums with stabilizing ley-energy. Choose how to recover before the next incursion vector.
               </Text>
-              <Text style={[styles.statLine, { color: theme.mutedColor }]}>
-                STAMINA: {runState.currentStamina}/{runState.maxStamina}
-              </Text>
+
+              <View style={[styles.statsBox, { borderColor: theme.borderColor, backgroundColor: '#0e1000' }]}>
+                <Text style={[styles.statLine, { color: theme.mutedColor }]}>
+                  SOUL ANCHOR: {runState.soulAnchorIntegrity}/{runState.maxSoulAnchor}
+                </Text>
+                <Text style={[styles.statLine, { color: theme.mutedColor }]}>
+                  STAMINA: {runState.currentStamina}/{runState.maxStamina}
+                </Text>
+              </View>
+
+              <Pressable
+                onPress={() => handleChoice('REST')}
+                disabled={!!chosen}
+                style={({ pressed }) => [
+                  styles.choiceButton,
+                  { borderColor: TERMINAL_ACCENT, opacity: chosen && chosen !== 'REST' ? 0.4 : 1, backgroundColor: pressed ? '#0d1a12' : '#0e1000' },
+                ]}
+              >
+                <Text style={styles.choiceLabel}>[ REST ]</Text>
+                <Text style={[styles.choiceDesc, { color: theme.mutedColor }]}>Restore 40% Stamina</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => handleChoice('REPAIR')}
+                disabled={!!chosen}
+                style={({ pressed }) => [
+                  styles.choiceButton,
+                  { borderColor: TERMINAL_ACCENT, opacity: chosen && chosen !== 'REPAIR' ? 0.4 : 1, backgroundColor: pressed ? '#0d1a12' : '#0e1000' },
+                ]}
+              >
+                <Text style={styles.choiceLabel}>[ ATTUNE ]</Text>
+                <Text style={[styles.choiceDesc, { color: theme.mutedColor }]}>Restore 25% Soul Anchor HP</Text>
+              </Pressable>
             </View>
-
-            <Pressable
-              onPress={() => handleChoice('REST')}
-              disabled={!!chosen}
-              style={({ pressed }) => [
-                styles.choiceButton,
-                { borderColor: TERMINAL_ACCENT, opacity: chosen && chosen !== 'REST' ? 0.4 : 1, backgroundColor: pressed ? '#0d1a12' : '#0e1624' },
-              ]}
-            >
-              <Text style={styles.choiceLabel}>[ REST ]</Text>
-              <Text style={[styles.choiceDesc, { color: theme.mutedColor }]}>Restore 40% Stamina</Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => handleChoice('REPAIR')}
-              disabled={!!chosen}
-              style={({ pressed }) => [
-                styles.choiceButton,
-                { borderColor: TERMINAL_ACCENT, opacity: chosen && chosen !== 'REPAIR' ? 0.4 : 1, backgroundColor: pressed ? '#0d1a12' : '#0e1624' },
-              ]}
-            >
-              <Text style={styles.choiceLabel}>[ ATTUNE ]</Text>
-              <Text style={[styles.choiceDesc, { color: theme.mutedColor }]}>Restore 25% Soul Anchor HP</Text>
-            </Pressable>
           </View>
         </View>
       </MacroLogAnchoredLayout>
@@ -96,6 +106,21 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     minHeight: 0,
+    overflow: 'hidden',
+  },
+  backgroundImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
+  backgroundScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(5, 6, 8, 0.84)',
+  },
+  contentForeground: {
+    flex: 1,
+    position: 'relative',
+    zIndex: 1,
     paddingHorizontal: 20,
     paddingTop: 24,
   },
