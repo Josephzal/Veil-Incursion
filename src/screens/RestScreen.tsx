@@ -32,7 +32,7 @@ export default function RestScreen(): React.JSX.Element {
       >
         <View style={styles.screenBody}>
           <OperativeTelemetryBar />
-        
+
           <View style={styles.content}>
             <Image
               source={SanctuaryNarrativeBg}
@@ -42,43 +42,58 @@ export default function RestScreen(): React.JSX.Element {
             <View style={styles.backgroundScrim} pointerEvents="none" />
 
             <View style={styles.contentForeground}>
-              <Text style={[styles.title, { color: theme.primaryColor }]}>REST / SANCTUARY NODE</Text>
-              <Text style={[styles.bodyText, { color: theme.mutedColor }]}>
-                A quiet anchor chapel hums with stabilizing ley-energy. Choose how to recover before the next incursion vector.
-              </Text>
-
-              <View style={[styles.statsBox, { borderColor: theme.borderColor, backgroundColor: '#0e1000' }]}>
-                <Text style={[styles.statLine, { color: theme.mutedColor }]}>
-                  SOUL ANCHOR: {runState.soulAnchorIntegrity}/{runState.maxSoulAnchor}
+              <View style={[styles.docHeader, { borderBottomColor: theme.borderColor }]}>
+                <Text style={[styles.docLabel, { color: theme.mutedColor }]}>
+                  AGENCY SANCTUARY DOCUMENT // REST NODE
                 </Text>
-                <Text style={[styles.statLine, { color: theme.mutedColor }]}>
-                  STAMINA: {runState.currentStamina}/{runState.maxStamina}
-                </Text>
+                <Text style={styles.docTitle}>REST / SANCTUARY NODE</Text>
               </View>
 
-              <Pressable
-                onPress={() => handleChoice('REST')}
-                disabled={!!chosen}
-                style={({ pressed }) => [
-                  styles.choiceButton,
-                  { borderColor: TERMINAL_ACCENT, opacity: chosen && chosen !== 'REST' ? 0.4 : 1, backgroundColor: pressed ? '#0d1a12' : '#0e1000' },
-                ]}
-              >
-                <Text style={styles.choiceLabel}>[ REST ]</Text>
-                <Text style={[styles.choiceDesc, { color: theme.mutedColor }]}>Restore 40% Stamina</Text>
-              </Pressable>
+              <View style={[styles.docBody, { borderColor: theme.borderColor }]}>
+                <Text style={[styles.scenarioText, { color: theme.primaryColor }]}>
+                  A quiet anchor chapel hums with stabilizing ley-energy. Choose how to recover before the next incursion vector.
+                </Text>
+                <View style={styles.statsBlock}>
+                  <Text style={[styles.statLine, { color: theme.mutedColor }]}>
+                    SOUL ANCHOR: {runState.soulAnchorIntegrity}/{runState.maxSoulAnchor}
+                  </Text>
+                  <Text style={[styles.statLine, { color: theme.mutedColor }]}>
+                    STAMINA: {runState.currentStamina}/{runState.maxStamina}
+                  </Text>
+                </View>
+              </View>
 
-              <Pressable
-                onPress={() => handleChoice('REPAIR')}
-                disabled={!!chosen}
-                style={({ pressed }) => [
-                  styles.choiceButton,
-                  { borderColor: TERMINAL_ACCENT, opacity: chosen && chosen !== 'REPAIR' ? 0.4 : 1, backgroundColor: pressed ? '#0d1a12' : '#0e1000' },
-                ]}
-              >
-                <Text style={styles.choiceLabel}>[ ATTUNE ]</Text>
-                <Text style={[styles.choiceDesc, { color: theme.mutedColor }]}>Restore 25% Soul Anchor HP</Text>
-              </Pressable>
+              <View style={styles.choiceCol}>
+                <Pressable
+                  onPress={() => handleChoice('REST')}
+                  disabled={!!chosen}
+                  style={({ pressed }) => [
+                    styles.choiceBtn,
+                    {
+                      borderColor: TERMINAL_ACCENT,
+                      opacity: chosen && chosen !== 'REST' ? 0.4 : pressed ? 0.7 : 1,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.choiceLabel, { color: TERMINAL_ACCENT }]}>[ REST ]</Text>
+                  <Text style={[styles.choiceReq, { color: theme.mutedColor }]}>Restore 40% Stamina</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => handleChoice('REPAIR')}
+                  disabled={!!chosen}
+                  style={({ pressed }) => [
+                    styles.choiceBtn,
+                    {
+                      borderColor: theme.borderColor,
+                      opacity: chosen && chosen !== 'REPAIR' ? 0.4 : pressed ? 0.7 : 1,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.choiceLabel, { color: theme.primaryColor }]}>[ ATTUNE ]</Text>
+                  <Text style={[styles.choiceReq, { color: theme.mutedColor }]}>Restore 25% Soul Anchor HP</Text>
+                </Pressable>
+              </View>
             </View>
           </View>
         </View>
@@ -92,17 +107,6 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
   },
-  header: {
-    borderBottomWidth: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-  },
-  headerText: {
-    fontFamily: 'monospace',
-    fontSize: 9,
-    letterSpacing: 1.2,
-    textAlign: 'center',
-  },
   content: {
     flex: 1,
     minHeight: 0,
@@ -115,52 +119,60 @@ const styles = StyleSheet.create({
   },
   backgroundScrim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(5, 6, 8, 0.84)',
+    backgroundColor: 'rgba(5, 6, 8, 0.8)',
   },
   contentForeground: {
     flex: 1,
     position: 'relative',
     zIndex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 24,
+    padding: 14,
+    justifyContent: 'center',
   },
-  title: {
+  docHeader: { borderBottomWidth: 1, paddingBottom: 8, marginBottom: 10 },
+  docLabel: { fontFamily: 'monospace', fontSize: 7, letterSpacing: 1, marginBottom: 4 },
+  docTitle: {
     fontFamily: 'monospace',
-    fontSize: 16,
+    fontSize: 12,
     fontWeight: '700',
-    letterSpacing: 1.2,
-    marginBottom: 10,
+    letterSpacing: 1,
+    color: TERMINAL_ACCENT,
   },
-  bodyText: {
-    fontFamily: 'monospace',
-    fontSize: 11,
-    lineHeight: 17,
-    marginBottom: 20,
-  },
-  statsBox: {
+  docBody: {
     borderWidth: 1,
     padding: 12,
-    marginBottom: 24,
+    marginBottom: 12,
+    backgroundColor: '#0a0b0f',
   },
-  statLine: {
+  scenarioText: {
     fontFamily: 'monospace',
     fontSize: 10,
+    lineHeight: 16,
+    letterSpacing: 0.2,
+  },
+  statsBlock: { marginTop: 10 },
+  statLine: {
+    fontFamily: 'monospace',
+    fontSize: 7,
+    letterSpacing: 0.8,
     marginBottom: 4,
   },
-  choiceButton: {
-    borderWidth: 2,
-    padding: 16,
-    marginBottom: 12,
+  choiceCol: { gap: 8 },
+  choiceBtn: {
+    borderWidth: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    backgroundColor: '#0a0b0f',
   },
   choiceLabel: {
     fontFamily: 'monospace',
-    fontSize: 13,
+    fontSize: 9,
     fontWeight: '700',
-    color: TERMINAL_ACCENT,
+    letterSpacing: 0.5,
     marginBottom: 4,
   },
-  choiceDesc: {
+  choiceReq: {
     fontFamily: 'monospace',
-    fontSize: 10,
+    fontSize: 7,
+    letterSpacing: 0.8,
   },
 });
