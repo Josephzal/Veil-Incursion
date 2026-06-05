@@ -136,6 +136,14 @@ function makeVectorNode(
   };
 }
 
+/** Depth 0 — exactly two vectors: one combat, one narrative. */
+function buildFirstScanCluster(tier: number): IncursionNode[] {
+  return [
+    makeVectorNode(tier, 0, 0, 'COMBAT', 'CITY_STREETS'),
+    makeVectorNode(tier, 0, 1, 'NARRATIVE_EVENT', 'CITY_STREETS'),
+  ];
+}
+
 function buildFlexibleCluster(
   tier: number,
   depthIndex: number,
@@ -168,8 +176,7 @@ export function generateTierVectorMatrix(tier: number): {
 
   for (let depth = 0; depth < INCURSION_DEPTH_COUNT; depth += 1) {
     if (depth === 0) {
-      const count = randomBranchCount();
-      matrix[0] = buildFlexibleCluster(tier, 0, count, -1, 'CITY_STREETS');
+      matrix[0] = buildFirstScanCluster(tier);
       continue;
     }
 
