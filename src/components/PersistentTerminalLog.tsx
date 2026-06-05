@@ -1,11 +1,13 @@
 import React, { useEffect, useRef } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { TACTICAL_HUB_STACKED_RIGHT_INSET } from './TacticalCombatHub';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 
 const TERMINAL_ACCENT = '#00ff33';
 const LOG_SURFACE = '#0a0b0f';
+const MACRO_LOG_HORIZONTAL_PADDING = 12;
 
 /** Fixed macro log footprint shared across combat, checkpoint, and scanner screens. */
 export const MACRO_LOG_BLOCK_HEIGHT = 110;
@@ -73,7 +75,13 @@ export default function PersistentTerminalLog({
         {showInventory ? (
           <Pressable
             onPress={onInventoryPress}
-            style={[styles.headerActionBtn, { borderColor: theme.borderColor }]}
+            style={[
+              styles.headerActionBtn,
+              {
+                borderColor: theme.borderColor,
+                marginRight: TACTICAL_HUB_STACKED_RIGHT_INSET - MACRO_LOG_HORIZONTAL_PADDING,
+              },
+            ]}
             accessibilityRole="button"
             accessibilityLabel="Open incursion inventory"
           >
@@ -129,7 +137,7 @@ const styles = StyleSheet.create({
   container: {
     width: '100%',
     borderTopWidth: 1,
-    paddingHorizontal: 12,
+    paddingHorizontal: MACRO_LOG_HORIZONTAL_PADDING,
     paddingTop: 8,
     flexShrink: 0,
     flexGrow: 0,

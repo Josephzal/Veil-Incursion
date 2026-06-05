@@ -63,6 +63,9 @@ import {
 const TELEMETRY_DIVIDER = 'rgba(139, 92, 246, 0.2)';
 
 const { width } = Dimensions.get('window');
+
+/** Screen-right inset to stacked hub inner content (center gutter + paddingHorizontal). */
+export const TACTICAL_HUB_STACKED_RIGHT_INSET = 16;
 const MONO = 'monospace';
 const P = {
   enemyHp: '#ef4444', unitTitle: '#ffffff', enemyPosture: '#fde68a',
@@ -1314,7 +1317,8 @@ const styles = StyleSheet.create({
     maxWidth: width - 16,
     alignSelf: 'center',
     paddingHorizontal: 8,
-    paddingVertical: 0,
+    paddingTop: 0,
+    paddingBottom: 6,
     gap: 6,
     overflow: 'hidden',
     backgroundColor: '#000000',

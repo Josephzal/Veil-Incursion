@@ -26,7 +26,8 @@ import { useNodeProgression } from '../hooks/useNodeProgression';
 import type { CombatEnemyTelemetry } from '../utils/combatTelemetryFormat';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('screen');
-const ENEMY_VIEWPORT_HEIGHT = Math.round(SCREEN_HEIGHT * 0.37);
+/** Flexible middle band — grows/shrinks so the hub can dock above the macro log without clipping the descent HUD. */
+const ENEMY_VIEWPORT_MIN_HEIGHT = Math.round(SCREEN_HEIGHT * 0.2);
 
 function CombatApparitionZone({
   apparitionRef,
@@ -275,12 +276,12 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     flexDirection: 'column',
+    overflow: 'hidden',
   },
   apparitionViewport: {
-    height: ENEMY_VIEWPORT_HEIGHT,
-    maxHeight: ENEMY_VIEWPORT_HEIGHT,
-    flexShrink: 0,
-    flexGrow: 0,
+    flex: 1,
+    flexShrink: 1,
+    minHeight: ENEMY_VIEWPORT_MIN_HEIGHT,
     width: '100%',
     backgroundColor: '#000000',
     overflow: 'hidden',
@@ -295,5 +296,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     width: '100%',
     overflow: 'hidden',
+    // Match DescentPipelineHUD rootCompact marginBottom (veil descent → enemy header).
+    marginBottom: 8,
   },
 });
