@@ -40,52 +40,54 @@ export default function VectorMapDashboard({
   onInitiateDeepDive,
 }: VectorMapDashboardProps): React.JSX.Element {
   return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={styles.scrollContent}
-      showsVerticalScrollIndicator={false}
-      nestedScrollEnabled
-    >
-      <MetropolitanMagnetismMap
-        homeSectorId={homeSectorId}
-        theme={theme}
-        isInfluenceFrozen={isInfluenceFrozen}
-        frozenInfluence={frozenInfluence}
-        onProxyReroute={onProxyReroute}
-        onSectorChange={onSectorChange}
-      />
-
-      <View
-        style={[
-          styles.logPanel,
-          {
-            borderColor: theme.borderColor,
-            borderWidth: theme.borderWidth,
-            borderStyle: theme.borderStyle,
-            height: LOG_BLOCK_HEIGHT,
-          },
-        ]}
+    <View style={styles.root}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        nestedScrollEnabled
       >
-        <Text style={[styles.logHeader, { color: theme.primaryColor }]}>REGIONAL MAGNETISM LOG</Text>
-        <ScrollView
-          style={styles.logScroll}
-          contentContainerStyle={styles.logScrollContent}
-          nestedScrollEnabled
-          showsVerticalScrollIndicator={false}
+        <MetropolitanMagnetismMap
+          homeSectorId={homeSectorId}
+          theme={theme}
+          isInfluenceFrozen={isInfluenceFrozen}
+          frozenInfluence={frozenInfluence}
+          onProxyReroute={onProxyReroute}
+          onSectorChange={onSectorChange}
+        />
+
+        <View
+          style={[
+            styles.logPanel,
+            {
+              borderColor: theme.borderColor,
+              borderWidth: theme.borderWidth,
+              borderStyle: theme.borderStyle,
+              height: LOG_BLOCK_HEIGHT,
+            },
+          ]}
         >
-          {hubLog.length === 0 ? (
-            <MagnetismLogLine line=">> AWAITING SECTOR TELEMETRY..." color={theme.mutedColor} />
-          ) : (
-            hubLog.slice(-8).map((line, idx) => (
-              <MagnetismLogLine key={`${line}-${idx}`} line={line} color={theme.statusColor} />
-            ))
-          )}
-          <MagnetismLogLine
-            line={`>> ACTIVE SECTOR: ${activeMagnetSector} // SCAN DEPTH READY: 1/10`}
-            color={theme.mutedColor}
-          />
-        </ScrollView>
-      </View>
+          <Text style={[styles.logHeader, { color: theme.primaryColor }]}>REGIONAL MAGNETISM LOG</Text>
+          <ScrollView
+            style={styles.logScroll}
+            contentContainerStyle={styles.logScrollContent}
+            nestedScrollEnabled
+            showsVerticalScrollIndicator={false}
+          >
+            {hubLog.length === 0 ? (
+              <MagnetismLogLine line=">> AWAITING SECTOR TELEMETRY..." color={theme.mutedColor} />
+            ) : (
+              hubLog.slice(-8).map((line, idx) => (
+                <MagnetismLogLine key={`${line}-${idx}`} line={line} color={theme.statusColor} />
+              ))
+            )}
+            <MagnetismLogLine
+              line={`>> ACTIVE SECTOR: ${activeMagnetSector} // SCAN DEPTH READY: 1/10`}
+              color={theme.mutedColor}
+            />
+          </ScrollView>
+        </View>
+      </ScrollView>
 
       <Pressable
         onPress={onInitiateDeepDive}
@@ -105,13 +107,14 @@ export default function VectorMapDashboard({
           Pass through the veil — Scan 1 of active sector run
         </Text>
       </Pressable>
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: { flex: 1 },
   scroll: { flex: 1 },
-  scrollContent: { paddingBottom: 24 },
+  scrollContent: { paddingBottom: 8 },
   logPanel: { paddingHorizontal: 10, paddingTop: 8, paddingBottom: 6, marginBottom: 12, overflow: 'hidden' },
   logHeader: { fontFamily: 'monospace', fontSize: 8, fontWeight: '700', letterSpacing: 1, marginBottom: 4 },
   logScroll: { flex: 1 },
@@ -127,7 +130,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     width: '100%',
   },
-  deepDiveBtn: { paddingVertical: 18, paddingHorizontal: 12, alignItems: 'center' },
+  deepDiveBtn: { marginTop: 8, paddingVertical: 18, paddingHorizontal: 12, alignItems: 'center' },
   deepDiveTitle: { fontFamily: 'monospace', fontSize: 12, fontWeight: '700', letterSpacing: 1.2, marginBottom: 6 },
   deepDiveSub: { fontFamily: 'monospace', fontSize: 8, textAlign: 'center', letterSpacing: 0.4 },
 });
