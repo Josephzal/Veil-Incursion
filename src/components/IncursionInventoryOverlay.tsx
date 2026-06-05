@@ -143,7 +143,6 @@ export default function IncursionInventoryOverlay({
             ) : (
               <View style={styles.detailPlaceholder}>
                 <Text style={[styles.detailBody, { color: theme.mutedColor }]} numberOfLines={3}>
-                  SELECT A FIELD ITEM TO VIEW DEPLOYMENT DATA.
                 </Text>
               </View>
             )}

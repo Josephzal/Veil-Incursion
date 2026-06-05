@@ -27,7 +27,6 @@ export default function MacroLogAnchoredLayout({
       {showMacroLog ? (
         <PersistentTerminalLog
           docked
-          showEndRun
           showInventory={showInventory}
           onInventoryPress={onInventoryPress}
         />

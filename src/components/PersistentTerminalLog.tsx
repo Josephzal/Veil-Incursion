@@ -1,9 +1,7 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
-import { useTerminalNav } from '../context/TerminalNavContext';
 import { useTerminal } from '../context/TerminalContext';
 
 const TERMINAL_ACCENT = '#00ff33';
@@ -18,8 +16,6 @@ interface PersistentTerminalLogProps {
   docked?: boolean;
   /** Occupies remaining flex space in parent (combat stack) instead of fixed block height. */
   fillRemaining?: boolean;
-  /** Upper-right control — ends run and returns to identity badge (incursion screens). */
-  showEndRun?: boolean;
   /** Combat-only — opens incursion field inventory overlay. */
   showInventory?: boolean;
   onInventoryPress?: () => void;
@@ -41,22 +37,13 @@ export default function PersistentTerminalLog({
   visible = true,
   docked = false,
   fillRemaining = false,
-  showEndRun = false,
   showInventory = false,
   onInventoryPress,
 }: PersistentTerminalLogProps): React.JSX.Element | null {
-  const { runLog, exitCombatToBadge } = useRun();
-  const { goToHub } = useGameFlow();
-  const { setTerminalView } = useTerminalNav();
+  const { runLog } = useRun();
   const { theme } = useTerminal();
   const scrollRef = useRef<ScrollView>(null);
   const insets = useSafeAreaInsets();
-
-  const handleEndRun = useCallback(() => {
-    exitCombatToBadge();
-    goToHub();
-    setTerminalView('BADGE');
-  }, [exitCombatToBadge, goToHub, setTerminalView]);
 
   useEffect(() => {
     if (runLog.length > 0) {
@@ -65,7 +52,7 @@ export default function PersistentTerminalLog({
   }, [runLog]);
 
   if (!visible) return null;
-  if (!showEndRun && runLog.length === 0) return null;
+  if (!showInventory && runLog.length === 0) return null;
 
   const bottomInset = docked ? resolveBottomInset(insets.bottom) : 0;
 
@@ -83,29 +70,15 @@ export default function PersistentTerminalLog({
     >
       <View style={styles.headerRow}>
         <Text style={[styles.header, { color: theme.mutedColor }]}>RUN TERMINAL // MACRO LOG</Text>
-        {showInventory || showEndRun ? (
-          <View style={styles.headerActions}>
-            {showInventory ? (
-              <Pressable
-                onPress={onInventoryPress}
-                style={[styles.endRunBtn, { borderColor: theme.borderColor }]}
-                accessibilityRole="button"
-                accessibilityLabel="Open incursion inventory"
-              >
-                <Text style={[styles.endRunBtnText, { color: theme.mutedColor }]}>[ INVENTORY ]</Text>
-              </Pressable>
-            ) : null}
-            {showEndRun ? (
-              <Pressable
-                onPress={handleEndRun}
-                style={[styles.endRunBtn, { borderColor: theme.borderColor }]}
-                accessibilityRole="button"
-                accessibilityLabel="End run and return to identity badge"
-              >
-                <Text style={[styles.endRunBtnText, { color: theme.mutedColor }]}>[ EXTRACT ]</Text>
-              </Pressable>
-            ) : null}
-          </View>
+        {showInventory ? (
+          <Pressable
+            onPress={onInventoryPress}
+            style={[styles.headerActionBtn, { borderColor: theme.borderColor }]}
+            accessibilityRole="button"
+            accessibilityLabel="Open incursion inventory"
+          >
+            <Text style={[styles.headerActionBtnText, { color: theme.mutedColor }]}>[ INVENTORY ]</Text>
+          </Pressable>
         ) : null}
       </View>
       <ScrollView
@@ -183,19 +156,13 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flexShrink: 0,
-  },
-  endRunBtn: {
+  headerActionBtn: {
     flexShrink: 0,
     borderWidth: 1,
     paddingVertical: 4,
     paddingHorizontal: 8,
   },
-  endRunBtnText: {
+  headerActionBtnText: {
     fontFamily: 'monospace',
     fontSize: 7,
     fontWeight: '700',

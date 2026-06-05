@@ -14,6 +14,8 @@ interface DescentPipelineHUDProps {
   onNodePress?: (index: number) => void;
   compact?: boolean;
   hideLabel?: boolean;
+  showExtract?: boolean;
+  onExtractPress?: () => void;
 }
 
 const NODE_ICON: Record<string, string> = {
@@ -36,6 +38,8 @@ export default function DescentPipelineHUD({
   onNodePress,
   compact = true,
   hideLabel = false,
+  showExtract = false,
+  onExtractPress,
 }: DescentPipelineHUDProps): React.JSX.Element | null {
   if (tierNodes.length === 0) return null;
 
@@ -84,11 +88,25 @@ export default function DescentPipelineHUD({
 
   return (
     <View style={[styles.root, compact ? styles.rootCompact : styles.rootExpanded, { borderColor }]}>
-      {!hideLabel && (
-        <Text style={[styles.tierLabel, { color: mutedColor }]}>
-          VEIL DESCENT // TIER {tier} // DEPTH {currentNodeIndex + 1}/10
-        </Text>
-      )}
+      {!hideLabel ? (
+        <View style={styles.headerRow}>
+          <View style={styles.headerLabelWrap}>
+            <Text style={[styles.tierLabel, { color: mutedColor }]}>
+              VEIL DESCENT // TIER {tier} // DEPTH {currentNodeIndex + 1}/10
+            </Text>
+          </View>
+          {showExtract ? (
+            <Pressable
+              onPress={onExtractPress}
+              style={[styles.extractBtn, { borderColor }]}
+              accessibilityRole="button"
+              accessibilityLabel="End run and return to identity badge"
+            >
+              <Text style={[styles.extractBtnText, { color: mutedColor }]}>[ EXTRACT ]</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
       <View style={styles.pipeline}>
         {tierNodes.flatMap((node, index) => {
           const items: React.JSX.Element[] = [
@@ -125,8 +143,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   rootCompact: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 10,
+    paddingHorizontal: 14,
     marginBottom: 8,
   },
   rootExpanded: {
@@ -134,12 +153,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 0,
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 9,
+    minHeight: 24,
+  },
+  headerLabelWrap: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   tierLabel: {
     fontFamily: 'monospace',
     fontSize: 7,
     letterSpacing: 1,
     textAlign: 'center',
-    marginBottom: 8,
+  },
+  extractBtn: {
+    flexShrink: 0,
+    borderWidth: 1,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    backgroundColor: '#0a0b0f',
+  },
+  extractBtnText: {
+    fontFamily: 'monospace',
+    fontSize: 7,
+    fontWeight: '700',
+    letterSpacing: 0.4,
   },
   pipeline: {
     width: '100%',
