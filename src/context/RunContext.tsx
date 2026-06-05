@@ -110,6 +110,8 @@ interface RunContextType {
   /** Clears run or badge test combat (caller navigates to hub / badge). */
   exitCombatToBadge: () => void;
   useIncursionConsumable: (itemId: IncursionConsumableId) => IncursionConsumableUseResult | null;
+  /** Applies consumable heal to run state (non-combat screens). */
+  applyIncursionConsumableHeal: (amount: number) => void;
 }
 
 const RunContext = createContext<RunContextType | undefined>(undefined);
@@ -1067,6 +1069,17 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     return { healAmount, logLine };
   }, []);
 
+  const applyIncursionConsumableHeal = useCallback((amount: number) => {
+    setRunState((prev) => {
+      const next = {
+        ...prev,
+        soulAnchorIntegrity: Math.min(prev.maxSoulAnchor, prev.soulAnchorIntegrity + amount),
+      };
+      runStateRef.current = next;
+      return next;
+    });
+  }, []);
+
   const value = useMemo(
     () => ({
       runState,
@@ -1114,6 +1127,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       finishBadgeTestCombat,
       exitCombatToBadge,
       useIncursionConsumable,
+      applyIncursionConsumableHeal,
     }),
     [
       runState,
@@ -1161,6 +1175,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       finishBadgeTestCombat,
       exitCombatToBadge,
       useIncursionConsumable,
+      applyIncursionConsumableHeal,
     ],
   );
 

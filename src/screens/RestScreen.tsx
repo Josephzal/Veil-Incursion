@@ -7,6 +7,7 @@ import { useNodeProgression } from '../hooks/useNodeProgression';
 import IncursionShell from '../components/IncursionShell';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
 import OperativeTelemetryBar from '../components/OperativeTelemetryBar';
+import SelectionContinueButton from '../components/SelectionContinueButton';
 
 const TERMINAL_ACCENT = '#00ff33';
 
@@ -14,13 +15,14 @@ export default function RestScreen(): React.JSX.Element {
   const { theme } = useTerminal();
   const { runState, applyRestChoice } = useRun();
   const { completeCurrentNode } = useNodeProgression();
-  const [chosen, setChosen] = useState<'REST' | 'REPAIR' | null>(null);
+  const [selectedChoice, setSelectedChoice] = useState<'REST' | 'REPAIR' | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
 
-  const handleChoice = (type: 'REST' | 'REPAIR') => {
-    if (chosen) return;
-    setChosen(type);
-    applyRestChoice(type);
-    const msg = type === 'REST' ? 'Stamina reserves replenished.' : 'Soul anchor repaired.';
+  const handleContinue = () => {
+    if (!selectedChoice || confirmed) return;
+    setConfirmed(true);
+    applyRestChoice(selectedChoice);
+    const msg = selectedChoice === 'REST' ? 'Stamina reserves replenished.' : 'Soul anchor repaired.';
     setTimeout(() => completeCurrentNode(msg), 1200);
   };
 
@@ -65,34 +67,57 @@ export default function RestScreen(): React.JSX.Element {
 
               <View style={styles.choiceCol}>
                 <Pressable
-                  onPress={() => handleChoice('REST')}
-                  disabled={!!chosen}
+                  onPress={() => !confirmed && setSelectedChoice('REST')}
+                  disabled={confirmed}
                   style={({ pressed }) => [
                     styles.choiceBtn,
+                    selectedChoice === 'REST' && styles.choiceBtnSelected,
                     {
-                      borderColor: TERMINAL_ACCENT,
-                      opacity: chosen && chosen !== 'REST' ? 0.4 : pressed ? 0.7 : 1,
+                      borderColor: selectedChoice === 'REST' ? TERMINAL_ACCENT : theme.borderColor,
+                      opacity: confirmed && selectedChoice !== 'REST' ? 0.4 : pressed ? 0.7 : 1,
                     },
                   ]}
                 >
-                  <Text style={[styles.choiceLabel, { color: TERMINAL_ACCENT }]}>[ REST ]</Text>
-                  <Text style={[styles.choiceReq, { color: theme.mutedColor }]}>Restore 40% Stamina</Text>
+                  <Text
+                    style={[
+                      styles.choiceLabel,
+                      { color: selectedChoice === 'REST' ? TERMINAL_ACCENT : theme.primaryColor },
+                    ]}
+                  >
+                    [ REST ]
+                  </Text>
+                  <Text style={[styles.choiceReq, styles.choiceEffectGood]}>Restore 40% Stamina</Text>
                 </Pressable>
 
                 <Pressable
-                  onPress={() => handleChoice('REPAIR')}
-                  disabled={!!chosen}
+                  onPress={() => !confirmed && setSelectedChoice('REPAIR')}
+                  disabled={confirmed}
                   style={({ pressed }) => [
                     styles.choiceBtn,
+                    selectedChoice === 'REPAIR' && styles.choiceBtnSelected,
                     {
-                      borderColor: theme.borderColor,
-                      opacity: chosen && chosen !== 'REPAIR' ? 0.4 : pressed ? 0.7 : 1,
+                      borderColor: selectedChoice === 'REPAIR' ? TERMINAL_ACCENT : theme.borderColor,
+                      opacity: confirmed && selectedChoice !== 'REPAIR' ? 0.4 : pressed ? 0.7 : 1,
                     },
                   ]}
                 >
-                  <Text style={[styles.choiceLabel, { color: theme.primaryColor }]}>[ ATTUNE ]</Text>
-                  <Text style={[styles.choiceReq, { color: theme.mutedColor }]}>Restore 25% Soul Anchor HP</Text>
+                  <Text
+                    style={[
+                      styles.choiceLabel,
+                      { color: selectedChoice === 'REPAIR' ? TERMINAL_ACCENT : theme.primaryColor },
+                    ]}
+                  >
+                    [ ATTUNE ]
+                  </Text>
+                  <Text style={[styles.choiceReq, styles.choiceEffectGood]}>Restore 25% Soul Anchor HP</Text>
                 </Pressable>
+
+                <SelectionContinueButton
+                  enabled={selectedChoice != null && !confirmed}
+                  onPress={handleContinue}
+                  borderColor={theme.borderColor}
+                  mutedColor={theme.mutedColor}
+                />
               </View>
             </View>
           </View>
@@ -163,6 +188,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     backgroundColor: '#0a0b0f',
   },
+  choiceBtnSelected: { backgroundColor: 'rgba(0, 255, 51, 0.08)' },
+  choiceEffectGood: { color: '#4ade80' },
   choiceLabel: {
     fontFamily: 'monospace',
     fontSize: 9,

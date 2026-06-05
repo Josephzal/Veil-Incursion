@@ -18,7 +18,7 @@ interface PersistentTerminalLogProps {
   docked?: boolean;
   /** Occupies remaining flex space in parent (combat stack) instead of fixed block height. */
   fillRemaining?: boolean;
-  /** Combat-only — opens incursion field inventory overlay. */
+  /** Active incursion run — opens field inventory overlay in macro log header. */
   showInventory?: boolean;
   onInventoryPress?: () => void;
 }

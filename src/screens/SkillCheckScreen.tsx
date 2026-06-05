@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import IncursionShell from '../components/IncursionShell';
-import PersistentTerminalLog from '../components/PersistentTerminalLog';
+import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
 import { useRun } from '../context/RunContext';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useTerminal } from '../context/TerminalContext';
@@ -146,7 +146,11 @@ export default function SkillCheckScreen(): React.JSX.Element {
 
   return (
     <IncursionShell>
-    <View style={[styles.container, { backgroundColor: theme.backgroundColor }]}>
+      <MacroLogAnchoredLayout
+        showMacroLog={runState.runActive}
+        style={{ backgroundColor: theme.backgroundColor }}
+      >
+        <View style={styles.container}>
       <View style={[styles.header, { borderColor: theme.borderColor }]}>
         <Text style={[styles.headerText, { color: theme.mutedColor }]}>
           NODE {runState.currentNode + 1}/{runState.totalNodes} // SIGNAL CALIBRATION MATRIX
@@ -183,9 +187,8 @@ export default function SkillCheckScreen(): React.JSX.Element {
           </Text>
         )}
       </View>
-
-      <PersistentTerminalLog />
-    </View>
+        </View>
+      </MacroLogAnchoredLayout>
     </IncursionShell>
   );
 }

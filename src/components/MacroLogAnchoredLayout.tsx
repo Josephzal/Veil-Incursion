@@ -1,13 +1,20 @@
-import React from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, View, ViewStyle } from 'react-native';
+import IncursionInventoryOverlay from './IncursionInventoryOverlay';
 import PersistentTerminalLog from './PersistentTerminalLog';
+import { useRun } from '../context/RunContext';
+import { useTerminal } from '../context/TerminalContext';
+import type { IncursionConsumableId } from '../types/incursionInventory';
 
 interface MacroLogAnchoredLayoutProps {
   children: React.ReactNode;
   showMacroLog?: boolean;
   style?: ViewStyle;
-  showInventory?: boolean;
-  onInventoryPress?: () => void;
+  /**
+   * When set (combat), consumable heals apply to the live combat hub instead of run state.
+   * Omit on scanner, narrative, boon, and sanctuary screens.
+   */
+  onConsumableHeal?: (amount: number) => void;
 }
 
 /**
@@ -18,19 +25,53 @@ export default function MacroLogAnchoredLayout({
   children,
   showMacroLog = true,
   style,
-  showInventory = false,
-  onInventoryPress,
+  onConsumableHeal,
 }: MacroLogAnchoredLayoutProps): React.JSX.Element {
+  const { theme } = useTerminal();
+  const {
+    runState,
+    activeIncursion,
+    appendRunLog,
+    useIncursionConsumable,
+    applyIncursionConsumableHeal,
+  } = useRun();
+  const [inventoryOpen, setInventoryOpen] = useState(false);
+
+  const showIncursionInventory = useMemo(
+    () => runState.runActive && activeIncursion.isRunActive && runState.combatTestPreset == null,
+    [activeIncursion.isRunActive, runState.combatTestPreset, runState.runActive],
+  );
+
+  const handleUseConsumable = useCallback((itemId: IncursionConsumableId) => {
+    const result = useIncursionConsumable(itemId);
+    if (!result) return;
+    if (onConsumableHeal) {
+      onConsumableHeal(result.healAmount);
+    } else {
+      applyIncursionConsumableHeal(result.healAmount);
+    }
+    appendRunLog(result.logLine);
+    setInventoryOpen(false);
+  }, [appendRunLog, applyIncursionConsumableHeal, onConsumableHeal, useIncursionConsumable]);
+
   return (
     <View style={[styles.root, style]}>
       <View style={styles.content}>{children}</View>
       {showMacroLog ? (
         <PersistentTerminalLog
           docked
-          showInventory={showInventory}
-          onInventoryPress={onInventoryPress}
+          showInventory={showIncursionInventory}
+          onInventoryPress={() => setInventoryOpen(true)}
         />
       ) : null}
+
+      <IncursionInventoryOverlay
+        visible={inventoryOpen}
+        items={activeIncursion.inventory.items}
+        theme={theme}
+        onClose={() => setInventoryOpen(false)}
+        onUse={handleUseConsumable}
+      />
     </View>
   );
 }

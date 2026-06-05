@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import CityStreetNarrativeBg from '../../assets/narrative images/city-street.png';
+import SelectionContinueButton from './SelectionContinueButton';
 import { CheckStatus, NarrativeChoiceEffectPreview, NarrativeEventNode } from '../types/game';
 
 const TERMINAL_ACCENT = '#00ff33';
@@ -41,14 +42,14 @@ function ChoiceEffectPreview({
   if (preview.onSuccess) {
     lines.push(
       <Text key="success" style={[styles.choiceEffectLine, styles.choiceEffectSuccess]}>
-        {`✓ CALIBRATION // ${preview.onSuccess}`}
+        {`CALIBRATION // ${preview.onSuccess}`}
       </Text>,
     );
   }
   if (preview.onFailure) {
     lines.push(
       <Text key="failure" style={[styles.choiceEffectLine, styles.choiceEffectFailure]}>
-        {`✗ MISCALIBRATION // ${preview.onFailure}`}
+        {`MISCALIBRATION // ${preview.onFailure}`}
       </Text>,
     );
   }
@@ -107,8 +108,12 @@ export default function NarrativeStepperModule({
 
   useEffect(() => () => pinLoopRef.current?.stop(), []);
 
-  const handleChoice = (choice: 'A' | 'B') => {
+  const handleChoiceSelect = (choice: 'A' | 'B') => {
     setSelectedChoice(choice);
+  };
+
+  const handleContinue = () => {
+    if (!selectedChoice) return;
     setPhase('SKILL_CHECK');
     startPinball();
   };
@@ -161,33 +166,61 @@ export default function NarrativeStepperModule({
         {phase === 'SCENARIO' && (
           <View style={styles.choiceCol}>
             <Pressable
-              onPress={() => handleChoice('A')}
+              onPress={() => handleChoiceSelect('A')}
               style={({ pressed }) => [
                 styles.choiceBtn,
                 showCityStreetBackground && styles.choiceBtnCityStreets,
-                { borderColor: TERMINAL_ACCENT, opacity: pressed ? 0.7 : 1 },
+                selectedChoice === 'A' && styles.choiceBtnSelected,
+                {
+                  borderColor: selectedChoice === 'A' ? TERMINAL_ACCENT : borderColor,
+                  opacity: pressed ? 0.7 : 1,
+                },
               ]}
             >
-              <Text style={[styles.choiceLabel, { color: TERMINAL_ACCENT }]}>{node.choiceA.label}</Text>
+              <Text
+                style={[
+                  styles.choiceLabel,
+                  { color: selectedChoice === 'A' ? TERMINAL_ACCENT : primaryColor },
+                ]}
+              >
+                {node.choiceA.label}
+              </Text>
               <Text style={[styles.choiceReq, { color: mutedColor }]}>REQ: {node.choiceA.requirement}</Text>
               {node.choiceA.effectPreview ? (
                 <ChoiceEffectPreview preview={node.choiceA.effectPreview} mutedColor={mutedColor} />
               ) : null}
             </Pressable>
             <Pressable
-              onPress={() => handleChoice('B')}
+              onPress={() => handleChoiceSelect('B')}
               style={({ pressed }) => [
                 styles.choiceBtn,
                 showCityStreetBackground && styles.choiceBtnCityStreets,
-                { borderColor: borderColor, opacity: pressed ? 0.7 : 1 },
+                selectedChoice === 'B' && styles.choiceBtnSelected,
+                {
+                  borderColor: selectedChoice === 'B' ? TERMINAL_ACCENT : borderColor,
+                  opacity: pressed ? 0.7 : 1,
+                },
               ]}
             >
-              <Text style={[styles.choiceLabel, { color: primaryColor }]}>{node.choiceB.label}</Text>
+              <Text
+                style={[
+                  styles.choiceLabel,
+                  { color: selectedChoice === 'B' ? TERMINAL_ACCENT : primaryColor },
+                ]}
+              >
+                {node.choiceB.label}
+              </Text>
               <Text style={[styles.choiceReq, { color: mutedColor }]}>REQ: {node.choiceB.requirement}</Text>
               {node.choiceB.effectPreview ? (
                 <ChoiceEffectPreview preview={node.choiceB.effectPreview} mutedColor={mutedColor} />
               ) : null}
             </Pressable>
+            <SelectionContinueButton
+              enabled={selectedChoice != null}
+              onPress={handleContinue}
+              borderColor={borderColor}
+              mutedColor={mutedColor}
+            />
           </View>
         )}
 
@@ -264,6 +297,7 @@ const styles = StyleSheet.create({
   scenarioText: { fontFamily: 'monospace', fontSize: 10, lineHeight: 16, letterSpacing: 0.2 },
   choiceCol: { gap: 8 },
   choiceBtn: { borderWidth: 1, paddingVertical: 10, paddingHorizontal: 10 },
+  choiceBtnSelected: { backgroundColor: 'rgba(0, 255, 51, 0.08)' },
   choiceBtnCityStreets: { backgroundColor: '#0a0b0f' },
   panelCityStreets: { backgroundColor: '#0a0b0f' },
   choiceLabel: { fontFamily: 'monospace', fontSize: 9, fontWeight: '700', letterSpacing: 0.5, marginBottom: 4 },
