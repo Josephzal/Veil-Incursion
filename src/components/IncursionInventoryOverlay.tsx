@@ -1,10 +1,32 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  Image,
+  ImageSourcePropType,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import SoulCoreImage from '../../assets/images/item images/soul-core.png';
 import type { IncursionConsumable, IncursionConsumableId } from '../types/incursionInventory';
 import type { TerminalTheme } from '../types/theme';
 
 const TERMINAL_ACCENT = '#00ff33';
 const GRID_SLOTS = 6;
+const CELL_SIZE = 84;
+const DETAIL_BLOCK_HEIGHT = 110;
+const USE_DISABLED_BORDER = '#1a2e22';
+const USE_DISABLED_BG = '#070809';
+const USE_DISABLED_TEXT = '#2a4032';
+
+const ITEM_IMAGES: Partial<Record<IncursionConsumableId, ImageSourcePropType>> = {
+  'soul-core': SoulCoreImage,
+};
+
+function getItemImage(itemId: IncursionConsumableId): ImageSourcePropType | null {
+  return ITEM_IMAGES[itemId] ?? null;
+}
 
 interface IncursionInventoryOverlayProps {
   visible: boolean;
@@ -34,6 +56,7 @@ export default function IncursionInventoryOverlay({
     : null;
 
   const gridCells = Array.from({ length: GRID_SLOTS }, (_, index) => items[index] ?? null);
+  const useEnabled = selectedItem != null && selectedItem.quantity > 0;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -58,40 +81,73 @@ export default function IncursionInventoryOverlay({
                   style={({ pressed }) => [
                     styles.gridCell,
                     { borderColor: isSelected ? accentColor : theme.borderColor },
-                    item == null && styles.gridCellEmpty,
+                    item == null ? styles.gridCellVacant : null,
                     pressed && item != null ? { opacity: 0.75 } : null,
                   ]}
                 >
                   {item != null ? (
                     <>
-                      <Text style={[styles.cellLabel, { color: accentColor }]} numberOfLines={2}>
-                        {item.name.toUpperCase()}
-                      </Text>
+                      {getItemImage(item.id) != null ? (
+                        <View style={styles.cellImageWrap}>
+                          <Image
+                            source={getItemImage(item.id)!}
+                            style={styles.cellImage}
+                            resizeMode="contain"
+                          />
+                        </View>
+                      ) : (
+                        <View style={styles.cellImageWrap}>
+                          <Text style={[styles.cellLabel, { color: accentColor }]} numberOfLines={2}>
+                            {item.name.toUpperCase()}
+                          </Text>
+                        </View>
+                      )}
                       <Text style={[styles.cellQty, { color: theme.mutedColor }]}>x{item.quantity}</Text>
                     </>
                   ) : (
-                    <Text style={[styles.cellEmpty, { color: theme.mutedColor }]}>—</Text>
+                    <View style={styles.cellEmptyWrap}>
+                      <Text style={[styles.cellEmpty, { color: theme.mutedColor }]}>—</Text>
+                    </View>
                   )}
                 </Pressable>
               );
             })}
           </View>
 
-          {selectedItem != null ? (
-            <View style={[styles.detailBlock, { borderColor: theme.borderColor }]}>
-              <Text style={[styles.detailTitle, { color: accentColor }]}>{selectedItem.name.toUpperCase()}</Text>
-              <Text style={[styles.detailBody, { color: theme.primaryColor }]}>{selectedItem.description}</Text>
-              <Text style={[styles.detailEffect, { color: theme.mutedColor }]}>
-                {`EFFECT: +${selectedItem.healPercent}% SOUL ANCHOR INTEGRITY`}
-              </Text>
-            </View>
-          ) : (
-            <View style={[styles.detailBlock, styles.detailPlaceholder, { borderColor: theme.borderColor }]}>
-              <Text style={[styles.detailBody, { color: theme.mutedColor }]}>
-                SELECT A FIELD ITEM TO VIEW DEPLOYMENT DATA.
-              </Text>
-            </View>
-          )}
+          <View style={[styles.detailBlock, { borderColor: theme.borderColor }]}>
+            {selectedItem != null ? (
+              <View style={styles.detailHeader}>
+                {getItemImage(selectedItem.id) != null ? (
+                  <View style={styles.detailImageWrap}>
+                    <Image
+                      source={getItemImage(selectedItem.id)!}
+                      style={styles.detailImage}
+                      resizeMode="contain"
+                    />
+                  </View>
+                ) : (
+                  <View style={styles.detailImageWrap} />
+                )}
+                <View style={styles.detailCopy}>
+                  <Text style={[styles.detailTitle, { color: accentColor }]} numberOfLines={1}>
+                    {selectedItem.name.toUpperCase()}
+                  </Text>
+                  <Text style={[styles.detailBody, { color: theme.primaryColor }]} numberOfLines={3}>
+                    {selectedItem.description}
+                  </Text>
+                  <Text style={[styles.detailEffect, { color: theme.mutedColor }]} numberOfLines={1}>
+                    {`EFFECT: +${selectedItem.healPercent}% SOUL ANCHOR INTEGRITY`}
+                  </Text>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.detailPlaceholder}>
+                <Text style={[styles.detailBody, { color: theme.mutedColor }]} numberOfLines={3}>
+                  SELECT A FIELD ITEM TO VIEW DEPLOYMENT DATA.
+                </Text>
+              </View>
+            )}
+          </View>
 
           <View style={styles.actions}>
             <Pressable
@@ -105,18 +161,21 @@ export default function IncursionInventoryOverlay({
               <Text style={[styles.btnText, { color: theme.mutedColor }]}>[ CLOSE ]</Text>
             </Pressable>
             <Pressable
-              disabled={selectedItem == null || selectedItem.quantity <= 0}
+              disabled={!useEnabled}
               onPress={() => selectedItem != null && onUse(selectedItem.id)}
               style={({ pressed }) => [
                 styles.btn,
                 styles.useBtn,
                 {
-                  borderColor: accentColor,
-                  opacity: selectedItem == null || selectedItem.quantity <= 0 ? 0.4 : pressed ? 0.75 : 1,
+                  borderColor: useEnabled ? accentColor : USE_DISABLED_BORDER,
+                  backgroundColor: useEnabled ? '#0a0b0f' : USE_DISABLED_BG,
+                  opacity: useEnabled && pressed ? 0.75 : 1,
                 },
               ]}
             >
-              <Text style={[styles.btnText, { color: accentColor }]}>[ USE ]</Text>
+              <Text style={[styles.btnText, { color: useEnabled ? accentColor : USE_DISABLED_TEXT }]}>
+                [ USE ]
+              </Text>
             </Pressable>
           </View>
         </Pressable>
@@ -159,46 +218,88 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    justifyContent: 'space-between',
+    alignContent: 'flex-start',
+    rowGap: 8,
+    width: '100%',
     marginBottom: 12,
   },
   gridCell: {
-    width: '30%',
-    minHeight: 72,
+    width: CELL_SIZE,
+    height: CELL_SIZE,
     borderWidth: 1,
     backgroundColor: '#0a0b0f',
-    padding: 8,
+    padding: 5,
+    alignItems: 'center',
     justifyContent: 'space-between',
   },
-  gridCellEmpty: {
-    opacity: 0.45,
+  gridCellVacant: {
+    opacity: 0.55,
+  },
+  cellImageWrap: {
+    flex: 1,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cellImage: {
+    width: '100%',
+    height: '100%',
   },
   cellLabel: {
     fontFamily: 'monospace',
     fontSize: 7,
     fontWeight: '700',
     letterSpacing: 0.4,
+    textAlign: 'center',
   },
   cellQty: {
     fontFamily: 'monospace',
     fontSize: 7,
     letterSpacing: 0.6,
-    marginTop: 6,
+    alignSelf: 'flex-end',
+  },
+  cellEmptyWrap: {
+    flex: 1,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cellEmpty: {
     fontFamily: 'monospace',
     fontSize: 10,
     textAlign: 'center',
-    alignSelf: 'center',
   },
   detailBlock: {
     borderWidth: 1,
     backgroundColor: '#0a0b0f',
     padding: 12,
     marginBottom: 12,
-    minHeight: 88,
+    height: DETAIL_BLOCK_HEIGHT,
+    overflow: 'hidden',
+  },
+  detailHeader: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'flex-start',
+  },
+  detailImageWrap: {
+    width: 56,
+    height: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  detailImage: {
+    width: '100%',
+    height: '100%',
+  },
+  detailCopy: {
+    flex: 1,
+    minWidth: 0,
   },
   detailPlaceholder: {
+    flex: 1,
     justifyContent: 'center',
   },
   detailTitle: {
@@ -213,7 +314,7 @@ const styles = StyleSheet.create({
     fontSize: 9,
     lineHeight: 14,
     letterSpacing: 0.2,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   detailEffect: {
     fontFamily: 'monospace',
@@ -233,9 +334,7 @@ const styles = StyleSheet.create({
   closeBtn: {
     backgroundColor: '#0a0b0f',
   },
-  useBtn: {
-    backgroundColor: '#0a0b0f',
-  },
+  useBtn: {},
   btnText: {
     fontFamily: 'monospace',
     fontSize: 10,
