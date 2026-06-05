@@ -116,7 +116,7 @@ export default function NarrativeStepperModule({
 
       <View style={[styles.rootContent, showCityStreetBackground && styles.rootContentCityStreets]}>
         <View style={[styles.docHeader, { borderBottomColor: borderColor }]}>
-          <Text style={[styles.docLabel, { color: mutedColor }]}>AGENCY NARRATIVE DOCUMENT // {node.id.toUpperCase()}</Text>
+          <Text style={[styles.docLabel, { color: mutedColor }]}>ANOMALY ENCOUNTER // {node.id.toUpperCase()}</Text>
           <Text style={[styles.docTitle, { color: TERMINAL_ACCENT }]}>{node.title}</Text>
         </View>
 

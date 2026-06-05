@@ -42,7 +42,7 @@ export default function ScanConfirmOverlay({
           ]}
         >
           <Text style={[styles.header, { color: accentColor }]}>
-            {node?.isPreDiscovered ? 'PRIORITY THREAT IDENTIFIED' : 'VECTOR CLASSIFICATION PREVIEW'}
+            {node?.isPreDiscovered ? 'PRIORITY THREAT IDENTIFIED' : 'ANOMALY CLASSIFICATION PREVIEW'}
           </Text>
           <Text style={[styles.subHeader, { color: theme.mutedColor }]}>
             DEPTH {node != null ? node.depthIndex + 1 : '—'}/10 // TERMINAL CONFIRMATION REQUIRED

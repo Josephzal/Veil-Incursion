@@ -200,12 +200,12 @@ export default function ScanningScreen(): React.JSX.Element {
                 pointerEvents={phase === 'DOTS' || isBossDepth ? 'auto' : 'none'}
               >
                 <Text style={[styles.scanStatus, { color: isBossDepth ? accent : theme.primaryColor }]}>
-                  {isBossDepth ? 'PRIORITY TARGET IDENTIFIED' : 'VECTOR CONTACTS LOCKED'}
+                  {isBossDepth ? 'PRIORITY TARGET IDENTIFIED' : 'ANOMALY LOCATIONS LOCKED'}
                 </Text>
                 <Text style={[styles.scanSubStatus, { color: theme.mutedColor }]}>
                   {isBossDepth
                     ? 'Manifested core threat pre-scanned by descent engine. Review classification and engage.'
-                    : `Select a radar contact to open classification preview — ${scannerNodes.length} siphoned route${scannerNodes.length === 1 ? '' : 's'} available.`}
+                    : `Select a node to open classification preview // ${scannerNodes.length} siphoned route${scannerNodes.length === 1 ? '' : 's'} available.`}
                 </Text>
               </View>
             </View>

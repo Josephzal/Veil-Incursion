@@ -566,7 +566,7 @@ export default function TacticalCombatHub({
     setCounterPrepActive(false);
     setSelectedAction(null);
     setResolutionOutcome(null); setIsPlayerTurn(true); setCycleState('TEXT_COMBAT');
-    log('>> TACTICAL COMBAT LINK ESTABLISHED — ABYSSAL WARDS ONLINE.');
+    log('>> COMBAT LINK ESTABLISHED');
     log(`>> WEAPON LINK: ${strikeStats.label} // STRIKE ${strikeStats.strikeDamage} DMG / ${strikeStats.strikeStaminaCost} STAM`);
     if (env.isPlayerBlinded) log('>> ENV: OPERATIVE BLINDED — Counter Stance window tightened 15%.');
     if (env.hasTetanusGlitch) log('>> ENV: TETANUS GLITCH ACTIVE — exhaustion triggers 3 HP bleed.');
