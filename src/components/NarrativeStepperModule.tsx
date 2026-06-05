@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import CityStreetNarrativeBg from '../../assets/narrative images/city-street.png';
-import { CheckStatus, NarrativeEventNode } from '../types/game';
+import { CheckStatus, NarrativeChoiceEffectPreview, NarrativeEventNode } from '../types/game';
 
 const TERMINAL_ACCENT = '#00ff33';
 const TARGET_MIN = 0.6;
@@ -20,6 +20,40 @@ type StepperPhase = 'SCENARIO' | 'SKILL_CHECK' | 'RESULT';
 export function isCityStreetsNarrative(node: NarrativeEventNode): boolean {
   const eventId = node.matrixEventId ?? node.id;
   return eventId.startsWith('city-');
+}
+
+function ChoiceEffectPreview({
+  preview,
+  mutedColor,
+}: {
+  preview: NarrativeChoiceEffectPreview;
+  mutedColor: string;
+}): React.JSX.Element | null {
+  if (preview.guaranteed) {
+    return (
+      <Text style={[styles.choiceEffectLine, { color: mutedColor }]}>
+        {`EFFECT // ${preview.guaranteed}`}
+      </Text>
+    );
+  }
+
+  const lines: React.JSX.Element[] = [];
+  if (preview.onSuccess) {
+    lines.push(
+      <Text key="success" style={[styles.choiceEffectLine, styles.choiceEffectSuccess]}>
+        {`✓ CALIBRATION // ${preview.onSuccess}`}
+      </Text>,
+    );
+  }
+  if (preview.onFailure) {
+    lines.push(
+      <Text key="failure" style={[styles.choiceEffectLine, styles.choiceEffectFailure]}>
+        {`✗ MISCALIBRATION // ${preview.onFailure}`}
+      </Text>,
+    );
+  }
+  if (lines.length === 0) return null;
+  return <View style={styles.choiceEffectCol}>{lines}</View>;
 }
 
 interface NarrativeStepperModuleProps {
@@ -136,6 +170,9 @@ export default function NarrativeStepperModule({
             >
               <Text style={[styles.choiceLabel, { color: TERMINAL_ACCENT }]}>{node.choiceA.label}</Text>
               <Text style={[styles.choiceReq, { color: mutedColor }]}>REQ: {node.choiceA.requirement}</Text>
+              {node.choiceA.effectPreview ? (
+                <ChoiceEffectPreview preview={node.choiceA.effectPreview} mutedColor={mutedColor} />
+              ) : null}
             </Pressable>
             <Pressable
               onPress={() => handleChoice('B')}
@@ -147,6 +184,9 @@ export default function NarrativeStepperModule({
             >
               <Text style={[styles.choiceLabel, { color: primaryColor }]}>{node.choiceB.label}</Text>
               <Text style={[styles.choiceReq, { color: mutedColor }]}>REQ: {node.choiceB.requirement}</Text>
+              {node.choiceB.effectPreview ? (
+                <ChoiceEffectPreview preview={node.choiceB.effectPreview} mutedColor={mutedColor} />
+              ) : null}
             </Pressable>
           </View>
         )}
@@ -228,6 +268,10 @@ const styles = StyleSheet.create({
   panelCityStreets: { backgroundColor: '#0a0b0f' },
   choiceLabel: { fontFamily: 'monospace', fontSize: 9, fontWeight: '700', letterSpacing: 0.5, marginBottom: 4 },
   choiceReq: { fontFamily: 'monospace', fontSize: 7, letterSpacing: 0.8 },
+  choiceEffectCol: { gap: 2, marginTop: 6 },
+  choiceEffectLine: { fontFamily: 'monospace', fontSize: 7, letterSpacing: 0.4, lineHeight: 11 },
+  choiceEffectSuccess: { color: '#4ade80' },
+  choiceEffectFailure: { color: '#f87171' },
   calibrationBox: { borderWidth: 2, padding: 12, marginTop: 4 },
   calibrationTitle: { fontFamily: 'monospace', fontSize: 9, fontWeight: '700', color: TERMINAL_ACCENT, letterSpacing: 0.8, marginBottom: 6 },
   calibrationHint: { fontFamily: 'monospace', fontSize: 8, marginBottom: 10 },

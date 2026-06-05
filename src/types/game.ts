@@ -129,6 +129,12 @@ export function createDefaultIncursionProgressState(): IncursionProgressState {
   };
 }
 
+export interface NarrativeChoiceEffectPreview {
+  onSuccess?: string;
+  onFailure?: string;
+  guaranteed?: string;
+}
+
 export interface NarrativeEventNode {
   id: string;
   matrixEventId?: string;
@@ -140,12 +146,14 @@ export interface NarrativeEventNode {
     requirement: string;
     successText: string;
     failureText: string;
+    effectPreview?: NarrativeChoiceEffectPreview;
   };
   choiceB: {
     label: string;
     requirement: string;
     successText: string;
     failureText: string;
+    effectPreview?: NarrativeChoiceEffectPreview;
   };
 }
 

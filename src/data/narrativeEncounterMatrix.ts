@@ -13,6 +13,7 @@ import {
   CITY_STREETS_DEPTH_ZERO_POOL,
   resolveCityStreetsAlleyEvent,
 } from './cityStreetsAlleyEvents';
+import { applyCityStreetsChoicePreviews } from './cityStreetsChoicePreviews';
 import {
   appendOutcomeModifier,
   coreLayerCalibrationBonus,
@@ -389,9 +390,12 @@ function enrichNodeWithFlagContext(
   matrixId: string,
   collectedFlags: readonly string[],
 ): NarrativeEventNode {
+  let enriched = applyCityStreetsChoicePreviews(node, collectedFlags);
   const preview = resolveConditionalBranchPreview(matrixId, collectedFlags);
-  if (!preview?.scenarioOverride) return node;
-  return { ...node, scenarioText: preview.scenarioOverride };
+  if (preview?.scenarioOverride) {
+    enriched = { ...enriched, scenarioText: preview.scenarioOverride };
+  }
+  return enriched;
 }
 
 function templateToNode(template: MatrixEventTemplate): NarrativeEventNode {
