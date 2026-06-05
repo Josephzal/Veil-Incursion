@@ -28,8 +28,8 @@ export const SCAN_DURATION_MS = SCAN_SWEEP_MS * SCAN_ROTATIONS;
 /** Fixed footer reservation — cease control never unmounts, only fades. */
 export const SCANNER_CEASE_SLOT_HEIGHT = 40;
 
-export function getScannerShellHeight(scannerSize: number): number {
-  return scannerSize + SCANNER_CEASE_SLOT_HEIGHT;
+export function getScannerShellHeight(scannerSize: number, includeCeaseSlot = true): number {
+  return scannerSize + (includeCeaseSlot ? SCANNER_CEASE_SLOT_HEIGHT : 0);
 }
 
 const SWEEP_HIT_THRESHOLD_DEG = 3;
@@ -63,6 +63,10 @@ interface VectorScannerProps {
   activeNodes: RadarDot[];
   coreScale?: number;
   contactsLocked?: boolean;
+  /** Sweep never ceases; siphoned nodes get immediate halo glow; tap locked node to select. */
+  continuousScan?: boolean;
+  /** Locked node highlighted for downstream encounter engagement. */
+  selectedNodeId?: string | null;
   onSweepComplete?: () => void;
   onSelectNode?: (nodeId: string) => void;
   onSiphonedNodesChange?: (nodeIds: string[]) => void;
@@ -182,6 +186,8 @@ function VectorScannerComponent({
   activeNodes,
   coreScale = 0.48,
   contactsLocked = false,
+  continuousScan = false,
+  selectedNodeId = null,
   onSweepComplete,
   onSelectNode,
   onSiphonedNodesChange,
@@ -228,7 +234,7 @@ function VectorScannerComponent({
   onSelectNodeRef.current = onSelectNode;
   onSweepCompleteRef.current = onSweepComplete;
 
-  const uniformSelectable = contactsLocked || sweepFinished;
+  const uniformSelectable = !continuousScan && (contactsLocked || sweepFinished);
   const selectionAccent = theme.blipAccent;
   const selectionGlowSV = useSharedValue(0);
   const selectionGlowInnerOpacity = useDerivedValue(() => selectionGlowSV.value * 0.45);
@@ -367,6 +373,11 @@ function VectorScannerComponent({
     [revealedIds],
   );
 
+  const notifyNodeSelected = useCallback((nodeId: string) => {
+    Vibration.vibrate(SIPHON_HAPTIC_MS);
+    queueMicrotask(() => onSelectNodeRef.current?.(nodeId));
+  }, []);
+
   const triggerSiphonExtract = useCallback(
     (nodeId: string) => {
       if (!scanInteractive || siphonedNodeIds.includes(nodeId)) return;
@@ -379,17 +390,21 @@ function VectorScannerComponent({
       state.decayStart = null;
       state.bloomUntil = 0;
       bumpRender();
-      Vibration.vibrate(SIPHON_HAPTIC_MS);
 
       setSiphonedNodeIds((prev) => (prev.includes(nodeId) ? prev : [...prev, nodeId]));
       setSiphonPulseKeys((prev) => ({ ...prev, [nodeId]: (prev[nodeId] ?? 0) + 1 }));
+      if (continuousScan) {
+        notifyNodeSelected(nodeId);
+      }
     },
     [
+      continuousScan,
       scanInteractive,
       siphonedNodeIds,
       isNodeIlluminated,
       ensureBlipState,
       bumpRender,
+      notifyNodeSelected,
     ],
   );
 
@@ -618,14 +633,27 @@ function VectorScannerComponent({
 
 
   const handleTargetPress = (nodeId: string) => {
+    if (continuousScan && siphonedNodeIds.includes(nodeId)) {
+      notifyNodeSelected(nodeId);
+      return;
+    }
     if (uniformSelectable) {
-      queueMicrotask(() => onSelectNodeRef.current?.(nodeId));
+      notifyNodeSelected(nodeId);
       return;
     }
     if (scanInteractive) {
       triggerSiphonExtract(nodeId);
     }
   };
+
+  const isTargetEnabled = useCallback(
+    (nodeId: string): boolean => {
+      if (uniformSelectable) return true;
+      if (continuousScan && siphonedNodeIds.includes(nodeId)) return true;
+      return scanInteractive;
+    },
+    [continuousScan, siphonedNodeIds, scanInteractive, uniformSelectable],
+  );
 
   const getBlipOpacity = (nodeId: string): number => {
     if (uniformSelectable) return 1;
@@ -646,9 +674,12 @@ function VectorScannerComponent({
   void renderTick;
 
   const useDashedOuter = theme.borderStyle === 'dashed';
-  const showSweep = active && !uniformSelectable;
-  const shellHeight = getScannerShellHeight(scannerSize);
-  const showCeaseControl = active && !contactsLocked && !uniformSelectable;
+  const showSweep = active && (!uniformSelectable || continuousScan);
+  const shellHeight = getScannerShellHeight(scannerSize, !continuousScan);
+  const showCeaseControl = !continuousScan && active && !contactsLocked && !uniformSelectable;
+  const selectedNodeBearing = continuousScan && selectedNodeId
+    ? nodeBearings.find((node) => node.id === selectedNodeId) ?? null
+    : null;
   const canCeaseScan = siphonedNodeIds.length >= MIN_SIPHONS_TO_CEASE;
 
   return (
@@ -770,6 +801,31 @@ function VectorScannerComponent({
               ))
             : null}
 
+          {selectedNodeBearing ? (
+            <Group key={`${selectedNodeBearing.id}-selected-glow`}>
+              <Circle
+                cx={selectedNodeBearing.canvasX}
+                cy={selectedNodeBearing.canvasY}
+                r={selectedNodeBearing.visualRadius * SELECTION_GLOW_OUTER_SCALE}
+                color={accentWithAlpha(selectionAccent, 0.7)}
+                opacity={0.24}
+                style="fill"
+              >
+                <Blur blur={18} />
+              </Circle>
+              <Circle
+                cx={selectedNodeBearing.canvasX}
+                cy={selectedNodeBearing.canvasY}
+                r={selectedNodeBearing.visualRadius * SELECTION_GLOW_INNER_SCALE}
+                color={accentWithAlpha(selectionAccent, 0.9)}
+                opacity={0.45}
+                style="fill"
+              >
+                <Blur blur={11} />
+              </Circle>
+            </Group>
+          ) : null}
+
           {nodeBearings.map((node) => {
             const opacity = getBlipOpacity(node.id);
             const scale = getBlipScale(node.id);
@@ -781,7 +837,11 @@ function VectorScannerComponent({
                 cx={node.canvasX}
                 cy={node.canvasY}
                 r={node.visualRadius * scale}
-                color={uniformSelectable ? selectionAccent : theme.blipAccent}
+                color={
+                  uniformSelectable || (continuousScan && selectedNodeId === node.id)
+                    ? selectionAccent
+                    : theme.blipAccent
+                }
                 opacity={opacity}
                 style="fill"
               />
@@ -792,16 +852,17 @@ function VectorScannerComponent({
             const opacity = getBlipOpacity(node.id);
             if (opacity <= 0.01 && !uniformSelectable) return null;
             const scale = getBlipScale(node.id);
+            const isSelected = continuousScan && selectedNodeId === node.id;
             return (
               <Circle
                 key={`${node.id}-ring`}
                 cx={node.canvasX}
                 cy={node.canvasY}
-                r={node.visualRadius * scale + (uniformSelectable ? 2.5 : 1.5)}
-                color={uniformSelectable ? selectionAccent : theme.text}
+                r={node.visualRadius * scale + (uniformSelectable || isSelected ? 2.5 : 1.5)}
+                color={uniformSelectable || isSelected ? selectionAccent : theme.text}
                 style="stroke"
-                strokeWidth={uniformSelectable ? 2 : 1}
-                opacity={uniformSelectable ? selectionGlowRingOpacity : opacity * 0.9}
+                strokeWidth={isSelected ? 3 : uniformSelectable ? 2 : 1}
+                opacity={uniformSelectable ? selectionGlowRingOpacity : isSelected ? 0.9 : opacity * 0.9}
               />
             );
           })}
@@ -813,7 +874,7 @@ function VectorScannerComponent({
             visualSize={bearing.visualSize}
             left={bearing.canvasX - DOT_HIT_SIZE / 2}
             top={bearing.canvasY - DOT_HIT_SIZE / 2}
-            disabled={!scanInteractive && !uniformSelectable}
+            disabled={!isTargetEnabled(bearing.id)}
             pulseKey={uniformSelectable ? 0 : (siphonPulseKeys[bearing.id] ?? 0)}
             onPress={() => handleTargetPress(bearing.id)}
             ringColor={selectionAccent}

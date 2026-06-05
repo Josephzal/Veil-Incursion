@@ -1,11 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Dimensions, StyleSheet, Text, View } from 'react-native';
-import { BOSS_DEPTH_INDEX, generateTierNodeScanVectors } from '../data/descentEngine';
+import { Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  BIOME_DISPLAY_LABEL,
+  BOSS_DEPTH_INDEX,
+  generateTierNodeScanVectors,
+  getEncounterDisplayLabel,
+} from '../data/descentEngine';
 import { INITIAL_SECTOR_POOL } from '../data/regions';
 import IncursionShell from '../components/IncursionShell';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
 import OperativeTelemetryBar from '../components/OperativeTelemetryBar';
-import ScanConfirmOverlay from '../components/ScanConfirmOverlay';
 import VectorScanner from '../components/VectorScanner';
 import { useRun } from '../context/RunContext';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
@@ -13,16 +17,15 @@ import { useTerminal } from '../context/TerminalContext';
 import { useDescentNavigator } from '../hooks/useDescentNavigator';
 import { useGameFlow } from '../context/GameFlowContext';
 import { getFactionDefinition } from '../data/factions';
-import { RadarDot } from '../types/run';
+import { RadarDot, SCAN_ENGAGE_STAMINA_COST } from '../types/run';
 import type { ScannerCabal } from '../types/scanner';
 
 const { width } = Dimensions.get('window');
 const TERMINAL_ACCENT = '#00ff33';
 const RADAR_SIZE = Math.min(width - 80, 280);
 const RADAR_CORE = RADAR_SIZE * 0.48;
-const READOUT_FIXED_HEIGHT = 72;
-
-type ScanPhase = 'SWEEPING' | 'DOTS';
+/** Fixed readout footprint — must not grow/shrink when a vector is selected. */
+const READOUT_FIXED_HEIGHT = 148;
 
 export default function ScanningScreen(): React.JSX.Element {
   const { theme } = useTerminal();
@@ -46,10 +49,8 @@ export default function ScanningScreen(): React.JSX.Element {
       ? getFactionDefinition(account.alignedFaction).accentColor
       : TERMINAL_ACCENT;
 
-  const [phase, setPhase] = useState<ScanPhase>('SWEEPING');
   const [vectorDots, setVectorDots] = useState<RadarDot[]>([]);
-  const [siphonedNodeIds, setSiphonedNodeIds] = useState<string[]>([]);
-  const bossPreviewOpenedRef = useRef(false);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const lastRadarSessionRef = useRef<number | null>(null);
 
   const nodeIndex = activeIncursion.currentNodeIndex;
@@ -65,15 +66,21 @@ export default function ScanningScreen(): React.JSX.Element {
     ],
   );
 
-  const previewNode = getPreviewNode();
+  const selectedNode = getPreviewNode();
+  const hasSelection = selectedNode != null;
+  const canEngage = hasSelection && runState.currentStamina >= SCAN_ENGAGE_STAMINA_COST;
 
-  const scannerNodes = useMemo(() => {
-    if (phase !== 'DOTS' || isBossDepth) {
-      return vectorDots;
-    }
-    const siphoned = new Set(siphonedNodeIds);
-    return vectorDots.filter((dot) => siphoned.has(dot.id));
-  }, [phase, isBossDepth, vectorDots, siphonedNodeIds]);
+  const scanHint = isBossDepth
+    ? 'Tap the priority contact when illuminated to lock and review classification.'
+    : `Tap illuminated contacts to lock routes — ${vectorCluster.length} vector${vectorCluster.length === 1 ? '' : 's'} at depth ${nodeIndex + 1}. Scanner remains active.`;
+
+  const metaLine = hasSelection
+    ? (
+      selectedNode.isPreDiscovered
+        ? 'PRIORITY MANIFESTED CORE — PRE-SCANNED BY DESCENT ENGINE.'
+        : `BIOME // ${BIOME_DISPLAY_LABEL[selectedNode.biome].toUpperCase()} // ENGAGE ${SCAN_ENGAGE_STAMINA_COST} STAMINA — RESERVE ${runState.currentStamina}`
+    )
+    : scanHint;
 
   useEffect(() => {
     if (!isScanningHub || vectorCluster.length === 0) {
@@ -82,42 +89,20 @@ export default function ScanningScreen(): React.JSX.Element {
     }
     if (lastRadarSessionRef.current === scanSessionKey) return;
     lastRadarSessionRef.current = scanSessionKey;
-    bossPreviewOpenedRef.current = false;
 
     const sector = runState.currentSector ?? INITIAL_SECTOR_POOL[0];
     const dots = generateTierNodeScanVectors(vectorCluster, RADAR_SIZE, sector);
     setVectorDots(dots);
-    setSiphonedNodeIds([]);
+    setSelectedNodeId(null);
+    closeScanPreview();
+  }, [isScanningHub, scanSessionKey, vectorCluster, nodeIndex, runState.currentSector, closeScanPreview]);
 
-    if (isBossDepth) {
-      setPhase('DOTS');
-    } else {
-      setPhase('SWEEPING');
-    }
-  }, [isScanningHub, scanSessionKey, vectorCluster, nodeIndex, runState.currentSector, isBossDepth]);
-
-  useEffect(() => {
-    if (!isScanningHub || !isBossDepth || vectorDots.length === 0) return;
-    if (bossPreviewOpenedRef.current) return;
-    bossPreviewOpenedRef.current = true;
-    const bossDot = vectorDots.find((dot) => dot.isPreDiscovered) ?? vectorDots[0];
-    if (bossDot) openScanPreview(bossDot.id);
-  }, [isScanningHub, isBossDepth, vectorDots, openScanPreview]);
-
-  const handleSiphonedNodesChange = useCallback((nodeIds: string[]) => {
-    setSiphonedNodeIds((prev) => {
-      if (prev.length === nodeIds.length && prev.every((id, index) => id === nodeIds[index])) {
-        return prev;
-      }
-      return nodeIds;
-    });
-  }, []);
-
-  const handleNodeTap = (nodeId: string) => {
+  const handleNodeTap = useCallback((nodeId: string) => {
     openScanPreview(nodeId);
-  };
+    setSelectedNodeId(nodeId);
+  }, [openScanPreview]);
 
-  const handleEngage = () => {
+  const handleEngage = useCallback(() => {
     const nodeType = confirmScanPreview();
     if (!nodeType) return;
 
@@ -136,7 +121,7 @@ export default function ScanningScreen(): React.JSX.Element {
       default:
         break;
     }
-  };
+  }, [confirmScanPreview, startCombat, startNarrative, startRest]);
 
   if (!isScanningHub) {
     return (
@@ -159,13 +144,13 @@ export default function ScanningScreen(): React.JSX.Element {
             <VectorScanner
               cabal={cabal}
               scannerSize={RADAR_SIZE}
-              active={phase === 'SWEEPING' && !isBossDepth}
-              activeNodes={phase === 'SWEEPING' && !isBossDepth ? vectorDots : scannerNodes}
-              contactsLocked={phase === 'DOTS' || isBossDepth}
+              active
+              continuousScan
+              activeNodes={vectorDots}
+              contactsLocked={false}
               coreScale={RADAR_CORE / RADAR_SIZE}
-              onSweepComplete={() => setPhase('DOTS')}
+              selectedNodeId={selectedNodeId}
               onSelectNode={handleNodeTap}
-              onSiphonedNodesChange={handleSiphonedNodesChange}
             />
           </View>
 
@@ -175,53 +160,50 @@ export default function ScanningScreen(): React.JSX.Element {
               { borderColor: theme.borderColor, height: READOUT_FIXED_HEIGHT },
             ]}
           >
-            <View style={styles.readoutInner}>
-              <View
-                style={[
-                  styles.readoutBlock,
-                  styles.readoutLayer,
-                  phase === 'SWEEPING' && !isBossDepth ? styles.readoutVisible : styles.readoutHidden,
-                ]}
-                pointerEvents={phase === 'SWEEPING' && !isBossDepth ? 'auto' : 'none'}
-              >
-                <Text style={[styles.scanStatus, { color: theme.primaryColor }]}>
-                  ACTIVE SIPHON // EXTRACT VECTORS
-                </Text>
-                <Text style={[styles.scanSubStatus, { color: theme.mutedColor }]}>
-                  {`Tap illuminated contacts to siphon — ${vectorCluster.length} route${vectorCluster.length === 1 ? '' : 's'} at depth ${nodeIndex + 1}. Siphon at least one contact before ceasing scan.`}
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.readoutBlock,
-                  styles.readoutLayer,
-                  phase === 'DOTS' || isBossDepth ? styles.readoutVisible : styles.readoutHidden,
-                ]}
-                pointerEvents={phase === 'DOTS' || isBossDepth ? 'auto' : 'none'}
-              >
-                <Text style={[styles.scanStatus, { color: isBossDepth ? accent : theme.primaryColor }]}>
-                  {isBossDepth ? 'PRIORITY TARGET IDENTIFIED' : 'ANOMALY LOCATIONS LOCKED'}
-                </Text>
-                <Text style={[styles.scanSubStatus, { color: theme.mutedColor }]}>
-                  {isBossDepth
-                    ? 'Manifested core threat pre-scanned by descent engine. Review classification and engage.'
-                    : `Select a node to open classification preview // ${scannerNodes.length} siphoned route${scannerNodes.length === 1 ? '' : 's'} available.`}
-                </Text>
-              </View>
-            </View>
+            <Text style={[styles.readoutLabel, { color: theme.mutedColor }]}>
+              {hasSelection ? 'LOCKED VECTOR // CLASSIFICATION' : 'CONTINUOUS VECTOR SCAN // ACTIVE'}
+            </Text>
+
+            <Text
+              style={[
+                styles.encounterType,
+                { color: hasSelection ? (isBossDepth ? accent : theme.primaryColor) : theme.mutedColor },
+              ]}
+              numberOfLines={1}
+            >
+              {hasSelection
+                ? getEncounterDisplayLabel(selectedNode.encounterType, selectedNode.depthIndex).toUpperCase()
+                : 'AWAITING VECTOR LOCK'}
+            </Text>
+
+            <Text
+              style={[
+                styles.readoutMeta,
+                { color: hasSelection && selectedNode.isPreDiscovered ? accent : theme.mutedColor },
+              ]}
+              numberOfLines={2}
+            >
+              {metaLine}
+            </Text>
+
+            <Pressable
+              onPress={handleEngage}
+              disabled={!canEngage}
+              style={({ pressed }) => [
+                styles.actionBtn,
+                {
+                  borderColor: canEngage ? TERMINAL_ACCENT : theme.borderColor,
+                  opacity: !canEngage ? 0.45 : pressed ? 0.75 : 1,
+                },
+              ]}
+            >
+              <Text style={[styles.actionBtnText, { color: canEngage ? TERMINAL_ACCENT : theme.mutedColor }]}>
+                [ ENGAGE ]
+              </Text>
+            </Pressable>
           </View>
         </View>
       </MacroLogAnchoredLayout>
-
-      <ScanConfirmOverlay
-        visible={activeIncursion.scanConfirmOverlayVisible}
-        node={previewNode}
-        theme={theme}
-        accentColor={accent}
-        currentStamina={runState.currentStamina}
-        onAbort={closeScanPreview}
-        onEngage={handleEngage}
-      />
     </IncursionShell>
   );
 }
@@ -243,26 +225,42 @@ const styles = StyleSheet.create({
   readoutDock: {
     flexShrink: 0,
     borderTopWidth: 1,
-    overflow: 'hidden',
-  },
-  readoutInner: {
-    flex: 1,
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    justifyContent: 'center',
-    position: 'relative',
+    paddingTop: 10,
+    paddingBottom: 10,
+    justifyContent: 'space-between',
   },
-  readoutBlock: { justifyContent: 'center' },
-  readoutLayer: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    top: 12,
-    bottom: 12,
-    justifyContent: 'center',
+  readoutLabel: {
+    fontFamily: 'monospace',
+    fontSize: 7,
+    letterSpacing: 1.1,
+    textAlign: 'center',
   },
-  readoutVisible: { opacity: 1 },
-  readoutHidden: { opacity: 0 },
-  scanStatus: { fontFamily: 'monospace', fontSize: 11, letterSpacing: 1.1, textAlign: 'center' },
-  scanSubStatus: { fontFamily: 'monospace', fontSize: 9, marginTop: 6, textAlign: 'center', lineHeight: 13 },
+  encounterType: {
+    fontFamily: 'monospace',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.9,
+    textAlign: 'center',
+    minHeight: 16,
+  },
+  readoutMeta: {
+    fontFamily: 'monospace',
+    fontSize: 8,
+    letterSpacing: 0.5,
+    textAlign: 'center',
+    lineHeight: 12,
+    minHeight: 24,
+  },
+  actionBtn: {
+    borderWidth: 2,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  actionBtnText: {
+    fontFamily: 'monospace',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+  },
 });

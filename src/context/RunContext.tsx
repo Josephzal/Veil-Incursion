@@ -651,7 +651,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     );
     if (!findVectorInCluster(cluster, nodeId)) return;
     setActiveIncursion((prev) => {
-      const next = { ...prev, previewNodeId: nodeId, scanConfirmOverlayVisible: true };
+      const next = { ...prev, previewNodeId: nodeId, scanConfirmOverlayVisible: false };
       activeIncursionRef.current = next;
       return next;
     });
@@ -934,7 +934,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const confirmScanPreview = useCallback((): import('../types/game').RunNodeType | null => {
     const inc = activeIncursionRef.current;
-    if (!inc.previewNodeId || !inc.scanConfirmOverlayVisible) return null;
+    if (!inc.previewNodeId) return null;
 
     if (runStateRef.current.currentStamina < SCAN_ENGAGE_STAMINA_COST) {
       appendRunLog('[REJECTED] >> Insufficient stamina for vector engagement.');
