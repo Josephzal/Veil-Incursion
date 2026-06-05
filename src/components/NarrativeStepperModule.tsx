@@ -2,11 +2,13 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
+  Image,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import CityStreetNarrativeBg from '../../assets/narrative images/city-street.png';
 import { CheckStatus, NarrativeEventNode } from '../types/game';
 
 const TERMINAL_ACCENT = '#00ff33';
@@ -14,6 +16,11 @@ const TARGET_MIN = 0.6;
 const TARGET_MAX = 0.8;
 
 type StepperPhase = 'SCENARIO' | 'SKILL_CHECK' | 'RESULT';
+
+export function isCityStreetsNarrative(node: NarrativeEventNode): boolean {
+  const eventId = node.matrixEventId ?? node.id;
+  return eventId.startsWith('city-');
+}
 
 interface NarrativeStepperModuleProps {
   node: NarrativeEventNode;
@@ -92,69 +99,124 @@ export default function NarrativeStepperModule({
     }, 2000);
   };
 
+  const showCityStreetBackground = isCityStreetsNarrative(node);
+
   return (
-    <View style={[styles.root, { borderColor }]}>
-      <View style={[styles.docHeader, { borderBottomColor: borderColor }]}>
-        <Text style={[styles.docLabel, { color: mutedColor }]}>AGENCY NARRATIVE DOCUMENT // {node.id.toUpperCase()}</Text>
-        <Text style={[styles.docTitle, { color: TERMINAL_ACCENT }]}>{node.title}</Text>
-      </View>
+    <View style={[styles.root, showCityStreetBackground && styles.rootWithCityBackground]}>
+      {showCityStreetBackground ? (
+        <>
+          <Image
+            source={CityStreetNarrativeBg}
+            style={styles.cityBackgroundImage}
+            resizeMode="cover"
+          />
+          <View style={styles.cityBackgroundScrim} pointerEvents="none" />
+        </>
+      ) : null}
 
-      <View style={[styles.docBody, { borderColor }]}>
-        <Text style={[styles.scenarioText, { color: primaryColor }]}>{node.scenarioText}</Text>
-      </View>
-
-      {phase === 'SCENARIO' && (
-        <View style={styles.choiceCol}>
-          <Pressable
-            onPress={() => handleChoice('A')}
-            style={({ pressed }) => [styles.choiceBtn, { borderColor: TERMINAL_ACCENT, opacity: pressed ? 0.7 : 1 }]}
-          >
-            <Text style={[styles.choiceLabel, { color: TERMINAL_ACCENT }]}>{node.choiceA.label}</Text>
-            <Text style={[styles.choiceReq, { color: mutedColor }]}>REQ: {node.choiceA.requirement}</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => handleChoice('B')}
-            style={({ pressed }) => [styles.choiceBtn, { borderColor: borderColor, opacity: pressed ? 0.7 : 1 }]}
-          >
-            <Text style={[styles.choiceLabel, { color: primaryColor }]}>{node.choiceB.label}</Text>
-            <Text style={[styles.choiceReq, { color: mutedColor }]}>REQ: {node.choiceB.requirement}</Text>
-          </Pressable>
+      <View style={[styles.rootContent, showCityStreetBackground && styles.rootContentCityStreets]}>
+        <View style={[styles.docHeader, { borderBottomColor: borderColor }]}>
+          <Text style={[styles.docLabel, { color: mutedColor }]}>AGENCY NARRATIVE DOCUMENT // {node.id.toUpperCase()}</Text>
+          <Text style={[styles.docTitle, { color: TERMINAL_ACCENT }]}>{node.title}</Text>
         </View>
-      )}
 
-      {phase === 'SKILL_CHECK' && (
-        <View style={[styles.calibrationBox, { borderColor: TERMINAL_ACCENT }]}>
-          <Text style={styles.calibrationTitle}>RIFT INTERFERENCE CALIBRATION MATRIX</Text>
-          <Text style={[styles.calibrationHint, { color: mutedColor }]}>
-            Lock marker inside green target zone (60%–80%)
-          </Text>
-          <View style={[styles.sliderTrack, { borderColor: borderColor }]}>
-            <View style={[styles.targetZone, { left: `${TARGET_MIN * 100}%`, width: `${(TARGET_MAX - TARGET_MIN) * 100}%` }]} />
-            <View style={[styles.marker, { left: `${Math.min(markerPct * 100, 97)}%` }]} />
+        <View style={[styles.docBody, { borderColor }]}>
+          <Text style={[styles.scenarioText, { color: primaryColor }]}>{node.scenarioText}</Text>
+        </View>
+
+        {phase === 'SCENARIO' && (
+          <View style={styles.choiceCol}>
+            <Pressable
+              onPress={() => handleChoice('A')}
+              style={({ pressed }) => [
+                styles.choiceBtn,
+                showCityStreetBackground && styles.choiceBtnCityStreets,
+                { borderColor: TERMINAL_ACCENT, opacity: pressed ? 0.7 : 1 },
+              ]}
+            >
+              <Text style={[styles.choiceLabel, { color: TERMINAL_ACCENT }]}>{node.choiceA.label}</Text>
+              <Text style={[styles.choiceReq, { color: mutedColor }]}>REQ: {node.choiceA.requirement}</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => handleChoice('B')}
+              style={({ pressed }) => [
+                styles.choiceBtn,
+                showCityStreetBackground && styles.choiceBtnCityStreets,
+                { borderColor: borderColor, opacity: pressed ? 0.7 : 1 },
+              ]}
+            >
+              <Text style={[styles.choiceLabel, { color: primaryColor }]}>{node.choiceB.label}</Text>
+              <Text style={[styles.choiceReq, { color: mutedColor }]}>REQ: {node.choiceB.requirement}</Text>
+            </Pressable>
           </View>
-          <Pressable
-            onPress={handleLockCalibration}
-            style={({ pressed }) => [styles.lockBtn, { borderColor: TERMINAL_ACCENT, opacity: pressed ? 0.75 : 1 }]}
-          >
-            <Text style={styles.lockBtnText}>[ LOCK CALIBRATION ]</Text>
-          </Pressable>
-        </View>
-      )}
+        )}
 
-      {phase === 'RESULT' && resultText && (
-        <View style={[styles.resultBox, { borderColor: resultText.includes('FAILURE') || resultText.includes('FAIL') ? '#ef4444' : TERMINAL_ACCENT }]}>
-          <Text style={[styles.resultText, { color: resultText.includes('FAILURE') || resultText.includes('FAIL') ? '#ef4444' : TERMINAL_ACCENT }]}>
-            {resultText}
-          </Text>
-          <Text style={[styles.resultSub, { color: mutedColor }]}>Returning to ley-line grid...</Text>
-        </View>
-      )}
+        {phase === 'SKILL_CHECK' && (
+          <View
+            style={[
+              styles.calibrationBox,
+              { borderColor: TERMINAL_ACCENT },
+              showCityStreetBackground && styles.panelCityStreets,
+            ]}
+          >
+            <Text style={styles.calibrationTitle}>RIFT INTERFERENCE CALIBRATION MATRIX</Text>
+            <Text style={[styles.calibrationHint, { color: mutedColor }]}>
+              Lock marker inside green target zone (60%–80%)
+            </Text>
+            <View style={[styles.sliderTrack, { borderColor: borderColor }]}>
+              <View style={[styles.targetZone, { left: `${TARGET_MIN * 100}%`, width: `${(TARGET_MAX - TARGET_MIN) * 100}%` }]} />
+              <View style={[styles.marker, { left: `${Math.min(markerPct * 100, 97)}%` }]} />
+            </View>
+            <Pressable
+              onPress={handleLockCalibration}
+              style={({ pressed }) => [styles.lockBtn, { borderColor: TERMINAL_ACCENT, opacity: pressed ? 0.75 : 1 }]}
+            >
+              <Text style={styles.lockBtnText}>[ LOCK CALIBRATION ]</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {phase === 'RESULT' && resultText && (
+          <View
+            style={[
+              styles.resultBox,
+              { borderColor: resultText.includes('FAILURE') || resultText.includes('FAIL') ? '#ef4444' : TERMINAL_ACCENT },
+              showCityStreetBackground && styles.panelCityStreets,
+            ]}
+          >
+            <Text style={[styles.resultText, { color: resultText.includes('FAILURE') || resultText.includes('FAIL') ? '#ef4444' : TERMINAL_ACCENT }]}>
+              {resultText}
+            </Text>
+            <Text style={[styles.resultSub, { color: mutedColor }]}>Returning to ley-line grid...</Text>
+          </View>
+        )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { borderWidth: 2, padding: 14, backgroundColor: '#050608' },
+  rootWithCityBackground: {
+    flex: 1,
+    alignSelf: 'stretch',
+    width: '100%',
+    backgroundColor: 'transparent',
+    overflow: 'hidden',
+    padding: 0,
+    borderWidth: 0,
+  },
+  cityBackgroundImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
+  cityBackgroundScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(5, 6, 8, 0.69)',
+  },
+  rootContent: { position: 'relative', zIndex: 1 },
+  rootContentCityStreets: { flex: 1, padding: 14, justifyContent: 'center' },
   docHeader: { borderBottomWidth: 1, paddingBottom: 8, marginBottom: 10 },
   docLabel: { fontFamily: 'monospace', fontSize: 7, letterSpacing: 1, marginBottom: 4 },
   docTitle: { fontFamily: 'monospace', fontSize: 12, fontWeight: '700', letterSpacing: 1 },
@@ -162,6 +224,8 @@ const styles = StyleSheet.create({
   scenarioText: { fontFamily: 'monospace', fontSize: 10, lineHeight: 16, letterSpacing: 0.2 },
   choiceCol: { gap: 8 },
   choiceBtn: { borderWidth: 1, paddingVertical: 10, paddingHorizontal: 10 },
+  choiceBtnCityStreets: { backgroundColor: '#0a0b0f' },
+  panelCityStreets: { backgroundColor: '#0a0b0f' },
   choiceLabel: { fontFamily: 'monospace', fontSize: 9, fontWeight: '700', letterSpacing: 0.5, marginBottom: 4 },
   choiceReq: { fontFamily: 'monospace', fontSize: 7, letterSpacing: 0.8 },
   calibrationBox: { borderWidth: 2, padding: 12, marginTop: 4 },

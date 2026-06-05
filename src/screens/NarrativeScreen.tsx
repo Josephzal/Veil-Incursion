@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { StyleSheet, View, Text } from 'react-native';
 import IncursionShell from '../components/IncursionShell';
-import NarrativeStepperModule from '../components/NarrativeStepperModule';
+import NarrativeStepperModule, { isCityStreetsNarrative } from '../components/NarrativeStepperModule';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
 import OperativeTelemetryBar from '../components/OperativeTelemetryBar';
 import { useRun } from '../context/RunContext';
@@ -52,7 +52,7 @@ export default function NarrativeScreen(): React.JSX.Element {
       >
         <View style={styles.body}>
           <OperativeTelemetryBar />
-          <View style={styles.content}>
+          <View style={[styles.content, isCityStreetsNarrative(node) && styles.contentCityStreets]}>
             <NarrativeStepperModule
               node={node}
               onComplete={handleComplete}
@@ -70,6 +70,11 @@ export default function NarrativeScreen(): React.JSX.Element {
 const styles = StyleSheet.create({
   body: { flex: 1, minHeight: 0 },
   content: { flex: 1, minHeight: 0, paddingHorizontal: 16, paddingTop: 8, justifyContent: 'center' },
+  contentCityStreets: {
+    justifyContent: 'flex-start',
+    paddingHorizontal: 0,
+    paddingTop: 0,
+  },
   fallback: {
     fontFamily: 'monospace',
     fontSize: 10,
