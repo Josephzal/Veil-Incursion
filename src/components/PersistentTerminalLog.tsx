@@ -1,7 +1,9 @@
-import React, { useEffect, useRef } from 'react';
-import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useRef } from 'react';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
+import { useTerminalNav } from '../context/TerminalNavContext';
 import { useTerminal } from '../context/TerminalContext';
 
 const TERMINAL_ACCENT = '#00ff33';
@@ -16,6 +18,8 @@ interface PersistentTerminalLogProps {
   docked?: boolean;
   /** Occupies remaining flex space in parent (combat stack) instead of fixed block height. */
   fillRemaining?: boolean;
+  /** Upper-right control — ends run and returns to identity badge (incursion screens). */
+  showEndRun?: boolean;
 }
 
 function resolveBottomInset(insetsBottom: number): number {
@@ -34,11 +38,20 @@ export default function PersistentTerminalLog({
   visible = true,
   docked = false,
   fillRemaining = false,
+  showEndRun = false,
 }: PersistentTerminalLogProps): React.JSX.Element | null {
-  const { runLog } = useRun();
+  const { runLog, exitCombatToBadge } = useRun();
+  const { goToHub } = useGameFlow();
+  const { setTerminalView } = useTerminalNav();
   const { theme } = useTerminal();
   const scrollRef = useRef<ScrollView>(null);
   const insets = useSafeAreaInsets();
+
+  const handleEndRun = useCallback(() => {
+    exitCombatToBadge();
+    goToHub();
+    setTerminalView('BADGE');
+  }, [exitCombatToBadge, goToHub, setTerminalView]);
 
   useEffect(() => {
     if (runLog.length > 0) {
@@ -46,7 +59,8 @@ export default function PersistentTerminalLog({
     }
   }, [runLog]);
 
-  if (!visible || runLog.length === 0) return null;
+  if (!visible) return null;
+  if (!showEndRun && runLog.length === 0) return null;
 
   const bottomInset = docked ? resolveBottomInset(insets.bottom) : 0;
 
@@ -62,7 +76,19 @@ export default function PersistentTerminalLog({
         },
       ]}
     >
-      <Text style={[styles.header, { color: theme.mutedColor }]}>RUN TERMINAL // MACRO LOG</Text>
+      <View style={styles.headerRow}>
+        <Text style={[styles.header, { color: theme.mutedColor }]}>RUN TERMINAL // MACRO LOG</Text>
+        {showEndRun ? (
+          <Pressable
+            onPress={handleEndRun}
+            style={[styles.endRunBtn, { borderColor: theme.borderColor }]}
+            accessibilityRole="button"
+            accessibilityLabel="End run and return to identity badge"
+          >
+            <Text style={[styles.endRunBtnText, { color: theme.mutedColor }]}>[ EXTRACT ]</Text>
+          </Pressable>
+        ) : null}
+      </View>
       <ScrollView
         ref={scrollRef}
         style={styles.scroll}
@@ -123,12 +149,32 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     flexGrow: 1,
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 4,
+    flexShrink: 0,
+  },
   header: {
     fontFamily: 'monospace',
     fontSize: 8,
     letterSpacing: 1,
-    marginBottom: 4,
+    flex: 1,
+    minWidth: 0,
+  },
+  endRunBtn: {
     flexShrink: 0,
+    borderWidth: 1,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  endRunBtnText: {
+    fontFamily: 'monospace',
+    fontSize: 7,
+    fontWeight: '700',
+    letterSpacing: 0.4,
   },
   scroll: {
     flex: 1,

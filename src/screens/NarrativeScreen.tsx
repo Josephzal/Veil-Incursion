@@ -30,11 +30,16 @@ export default function NarrativeScreen(): React.JSX.Element {
   if (!node) {
     return (
       <IncursionShell>
-        <View style={[styles.body, { backgroundColor: theme.backgroundColor }]}>
-          <Text style={[styles.fallback, { color: theme.mutedColor }]}>
-            NO ACTIVE NARRATIVE VECTOR — AWAITING MAP COORDINATOR.
-          </Text>
-        </View>
+        <MacroLogAnchoredLayout
+          showMacroLog={runState.runActive}
+          style={{ backgroundColor: theme.backgroundColor }}
+        >
+          <View style={[styles.body, { backgroundColor: theme.backgroundColor }]}>
+            <Text style={[styles.fallback, { color: theme.mutedColor }]}>
+              NO ACTIVE NARRATIVE VECTOR — AWAITING MAP COORDINATOR.
+            </Text>
+          </View>
+        </MacroLogAnchoredLayout>
       </IncursionShell>
     );
   }

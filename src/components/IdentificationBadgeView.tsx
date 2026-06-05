@@ -1,7 +1,9 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { CLASS_DEFINITIONS } from '../data/classes';
 import { getFactionDefinition } from '../data/factions';
+import { useGameFlow } from '../context/GameFlowContext';
+import { useRun } from '../context/RunContext';
 import { PlayerAccount } from '../types/game';
 import { OperativeProfile } from '../types/profile';
 import { TerminalTheme } from '../types/theme';
@@ -17,6 +19,9 @@ export default function IdentificationBadgeView({
   profile,
   account,
 }: IdentificationBadgeViewProps): React.JSX.Element {
+  const { startCombat } = useGameFlow();
+  const { startBadgeTestCombat } = useRun();
+
   const cred = profile.operative_profile.credentials;
   const vectors = profile.operative_profile.location_vectors;
   const factionDef = account.alignedFaction ? getFactionDefinition(account.alignedFaction) : null;
@@ -26,6 +31,11 @@ export default function IdentificationBadgeView({
     borderColor: theme.borderColor,
     borderWidth: theme.borderWidth,
     borderStyle: theme.borderStyle,
+  };
+
+  const launchTestCombat = (preset: 'easy' | 'hard') => {
+    startBadgeTestCombat(preset);
+    startCombat();
   };
 
   return (
@@ -70,6 +80,33 @@ export default function IdentificationBadgeView({
           {account.cabalCredits} CABAL CR
         </Text>
       </View>
+
+      <View style={[styles.testCombatSection, { borderTopColor: theme.borderColor }]}>
+        <Text style={[styles.testCombatLabel, { color: theme.mutedColor }]}>
+          TEST COMBAT // BADGE ARENA
+        </Text>
+        <View style={styles.testCombatRow}>
+          <Pressable
+            onPress={() => launchTestCombat('easy')}
+            style={[styles.testCombatBtn, { borderColor: theme.primaryColor }]}
+          >
+            <Text style={[styles.testCombatBtnText, { color: theme.primaryColor }]}>
+              [ EASY COMBAT ]
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => launchTestCombat('hard')}
+            style={[styles.testCombatBtn, { borderColor: theme.statusColor }]}
+          >
+            <Text style={[styles.testCombatBtnText, { color: theme.statusColor }]}>
+              [ HARD COMBAT ]
+            </Text>
+          </Pressable>
+        </View>
+        <Text style={[styles.testCombatHint, { color: theme.mutedColor }]}>
+          Returns here after victory or defeat.
+        </Text>
+      </View>
     </View>
   );
 }
@@ -84,6 +121,43 @@ const styles = StyleSheet.create({
   fieldBlock: { marginBottom: 12 },
   fieldLabel: { fontFamily: 'monospace', fontSize: 7, letterSpacing: 1.2, marginBottom: 3 },
   fieldValue: { fontFamily: 'monospace', fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
-  metaRow: { borderTopWidth: 1, paddingTop: 10, marginTop: 'auto', gap: 4 },
+  metaRow: { borderTopWidth: 1, paddingTop: 10, marginTop: 8, gap: 4 },
   metaText: { fontFamily: 'monospace', fontSize: 8, letterSpacing: 0.5 },
+  testCombatSection: {
+    borderTopWidth: 1,
+    paddingTop: 12,
+    marginTop: 12,
+    gap: 8,
+  },
+  testCombatLabel: {
+    fontFamily: 'monospace',
+    fontSize: 7,
+    fontWeight: '700',
+    letterSpacing: 1.1,
+  },
+  testCombatRow: {
+    flexDirection: 'row',
+    gap: 8,
+    width: '100%',
+  },
+  testCombatBtn: {
+    flex: 1,
+    borderWidth: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  testCombatBtnText: {
+    fontFamily: 'monospace',
+    fontSize: 7,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    textAlign: 'center',
+  },
+  testCombatHint: {
+    fontFamily: 'monospace',
+    fontSize: 7,
+    letterSpacing: 0.4,
+    lineHeight: 10,
+  },
 });

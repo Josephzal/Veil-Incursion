@@ -100,9 +100,9 @@ export default function VectorMapDashboard({
           },
         ]}
       >
-        <Text style={[styles.deepDiveTitle, { color: theme.statusColor }]}>INITIATE DEEP-DIVE SCAN</Text>
+        <Text style={[styles.deepDiveTitle, { color: theme.statusColor }]}>BEGIN INCURSION</Text>
         <Text style={[styles.deepDiveSub, { color: theme.mutedColor }]}>
-          Deploy procedural vector cloud — Scan 1 of active sector run
+          Pass through the veil — Scan 1 of active sector run
         </Text>
       </Pressable>
     </ScrollView>

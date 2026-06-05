@@ -97,7 +97,67 @@ export function spawnEnemyProfile(
   };
 }
 
+function rollHardTestIntent(): EnemyIntent {
+  const roll = Math.random();
+  if (roll < 0.3) return 'SIPHON_ABYSSAL';
+  if (roll < 0.5) return 'EVADE';
+  if (roll < 0.7) return 'STRIP_STAMINA';
+  return 'STRIKE';
+}
+
+export function createEasyTestEnemy(): EnemyCombatProfile {
+  return {
+    class: 'GREMLIN',
+    designation: 'TEST DRONE // STRIKE ONLY',
+    maxHp: 40,
+    currentHp: 40,
+    baseDamage: 8,
+    intent: 'STRIKE',
+    chargeTurns: 0,
+    evadeActive: false,
+    nodeIndex: 0,
+    scale: 1,
+    testPreset: 'easy',
+  };
+}
+
+export function createHardTestEnemy(): EnemyCombatProfile {
+  const intent = rollHardTestIntent();
+  return {
+    class: 'APPARITION',
+    designation: 'TEST APPARITION // FULL KIT',
+    maxHp: 200,
+    currentHp: 200,
+    baseDamage: 12,
+    intent,
+    chargeTurns: 0,
+    evadeActive: intent === 'EVADE',
+    nodeIndex: 0,
+    scale: 1,
+    testPreset: 'hard',
+  };
+}
+
 export function advanceEnemyIntent(profile: EnemyCombatProfile): EnemyCombatProfile {
+  if (profile.testPreset === 'easy') {
+    return {
+      ...profile,
+      chargeTurns: 0,
+      intent: 'STRIKE',
+      evadeActive: false,
+    };
+  }
+
+  if (profile.testPreset === 'hard') {
+    const nextIntent = rollHardTestIntent();
+    return {
+      ...profile,
+      chargeTurns: 0,
+      intent: nextIntent,
+      evadeActive: nextIntent === 'EVADE',
+    };
+  }
+
   let chargeTurns = profile.chargeTurns;
   if (profile.intent === 'CHARGE') chargeTurns += 1;
   else if (profile.intent !== 'WORLD_ENDER') chargeTurns = 0;

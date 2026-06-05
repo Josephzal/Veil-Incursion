@@ -61,6 +61,8 @@ export interface EnemyCombatProfile {
   isBoss?: boolean;
   bossPhase?: number;
   bossTier?: number;
+  /** Badge-screen test combat — controls intent rolling in advanceEnemyIntent. */
+  testPreset?: 'easy' | 'hard';
 }
 
 export interface Trinket {
@@ -104,6 +106,8 @@ export interface RunState {
   sliceDamagePenalty: number;
   startingAbyssalReservePercent: number;
   combatNodesCleared: number;
+  /** Set when launching test fights from the identity badge screen. */
+  combatTestPreset: 'easy' | 'hard' | null;
 }
 
 export const BASE_MAX_STAMINA = 100;

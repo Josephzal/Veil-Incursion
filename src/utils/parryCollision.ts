@@ -52,3 +52,31 @@ export function isTapOnParryCenter(
   const dist = Math.hypot(tapX - layout.cx, tapY - layout.cy);
   return dist <= getParryCenterHitRadius(layout);
 }
+
+/** Tap inside the static ring (collision zone — slightly wider than center dot). */
+export function isTapInsideStaticRing(
+  tapX: number,
+  tapY: number,
+  layout: ParryArenaLayout,
+): boolean {
+  const dist = Math.hypot(tapX - layout.cx, tapY - layout.cy);
+  return dist <= layout.baseR * 1.08;
+}
+
+/**
+ * Single pass/fail for counter stance — ring timing and tap zone must agree so
+ * counter damage and parry success cannot diverge.
+ */
+export function isParryAttemptSuccessful(
+  scale: number,
+  tapX: number,
+  tapY: number,
+  layout: ParryArenaLayout | null,
+  windowBonus = 0,
+  blindPenalty = 0,
+): boolean {
+  if (!layout) return false;
+  const timingHit = isParryRingsMeet(scale, windowBonus, blindPenalty);
+  const centerHit = isTapOnParryCenter(tapX, tapY, layout);
+  return timingHit && centerHit;
+}

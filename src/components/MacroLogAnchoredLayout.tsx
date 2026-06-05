@@ -20,7 +20,7 @@ export default function MacroLogAnchoredLayout({
   return (
     <View style={[styles.root, style]}>
       <View style={styles.content}>{children}</View>
-      {showMacroLog ? <PersistentTerminalLog docked /> : null}
+      {showMacroLog ? <PersistentTerminalLog docked showEndRun /> : null}
     </View>
   );
 }

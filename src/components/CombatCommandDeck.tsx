@@ -32,7 +32,6 @@ export const COMMAND_DECK_GRID: CombatDeckAction[] = [
 
 const MONO = 'monospace';
 const TILE_HEIGHT = 52;
-const DECK_TILE_FILL = '#000000';
 export const COMMAND_DECK_MIN_HEIGHT = TILE_HEIGHT * 2 + 8 + 12;
 
 interface CombatCommandDeckProps {
@@ -45,7 +44,6 @@ interface CombatCommandDeckProps {
   getStagedCostImpact: (action: CombatDeckAction) => string;
   getActionAccent?: (action: CombatDeckAction) => string | undefined;
   getActionLabel?: (action: CombatDeckAction) => string;
-  getActionGlow?: (action: CombatDeckAction) => boolean;
   borderColor: string;
   primaryColor: string;
   mutedColor: string;
@@ -62,7 +60,6 @@ export default function CombatCommandDeck({
   getStagedCostImpact,
   getActionAccent,
   getActionLabel,
-  getActionGlow,
   borderColor,
   primaryColor,
   mutedColor,
@@ -80,7 +77,6 @@ export default function CombatCommandDeck({
   const renderTile = (action: CombatDeckAction) => {
     const enabled = isActionEnabled(action);
     const accent = getActionAccent?.(action);
-    const glow = Boolean(enabled && accent && getActionGlow?.(action));
     const tileBorderColor = enabled && accent ? accent : borderColor;
 
     return (
@@ -88,22 +84,13 @@ export default function CombatCommandDeck({
         key={action}
         style={[styles.tileSlot, { borderColor: tileBorderColor }]}
       >
-        {glow && accent ? (
-          <View
-            pointerEvents="none"
-            style={[
-              styles.tileGlowOverlay,
-              { borderColor: accent, shadowColor: accent },
-            ]}
-          />
-        ) : null}
         <Pressable
           onPress={() => enabled && onSelectAction(action)}
           disabled={!enabled}
           style={[
             styles.deckTile,
             {
-              backgroundColor: glow ? DECK_TILE_FILL : 'transparent',
+              backgroundColor: 'transparent',
               opacity: enabled ? 1 : 0.4,
             },
           ]}
@@ -221,16 +208,7 @@ const styles = StyleSheet.create({
     height: TILE_HEIGHT,
     borderWidth: 1,
     position: 'relative',
-    overflow: 'visible',
-  },
-  tileGlowOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    borderWidth: 2,
-    backgroundColor: 'transparent',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.88,
-    shadowRadius: 11,
-    elevation: 8,
+    overflow: 'hidden',
   },
   deckTile: {
     ...StyleSheet.absoluteFillObject,

@@ -1,9 +1,10 @@
 import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import { pickRandomClimateCluster, getClusterDefinition } from '../data/climateClusters';
-import { spawnEnemyProfile } from '../data/enemies';
+import { createEasyTestEnemy, createHardTestEnemy, spawnEnemyProfile } from '../data/enemies';
 import {
   buildEncounter,
   getThemedSkillChecks,
+  INITIAL_SECTOR_POOL,
   pickRandomPostCombatBoons,
   pickRandomTrinkets,
   TRINKET_POOL,
@@ -47,7 +48,6 @@ import {
   isBossNodeType,
 } from '../data/descentEngine';
 import { spawnBossEnemyProfile } from '../data/bossCombat';
-import { INITIAL_SECTOR_POOL } from '../data/regions';
 
 export interface RunStartConfig {
   factionPerks?: FactionModifiers;
@@ -102,6 +102,10 @@ interface RunContextType {
   closeScanPreview: () => void;
   confirmScanPreview: () => import('../types/game').RunNodeType | null;
   getPreviewNode: () => import('../types/game').IncursionNode | null;
+  startBadgeTestCombat: (preset: 'easy' | 'hard') => void;
+  finishBadgeTestCombat: () => void;
+  /** Clears run or badge test combat (caller navigates to hub / badge). */
+  exitCombatToBadge: () => void;
 }
 
 const RunContext = createContext<RunContextType | undefined>(undefined);
@@ -147,6 +151,7 @@ function createInitialRunState(): RunState {
     sliceDamagePenalty: 0,
     startingAbyssalReservePercent: 0,
     combatNodesCleared: 0,
+    combatTestPreset: null,
   };
 }
 
@@ -434,6 +439,55 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     setActiveIncursion(resetIncursion);
     narrativeNodeRef.current = null;
   }, [appendRunLog]);
+
+  const startBadgeTestCombat = useCallback((preset: 'easy' | 'hard') => {
+    const pendingEnemy = preset === 'easy' ? createEasyTestEnemy() : createHardTestEnemy();
+    const next: RunState = {
+      ...createInitialRunState(),
+      runActive: true,
+      maxSoulAnchor: BASE_MAX_SOUL_ANCHOR,
+      soulAnchorIntegrity: BASE_MAX_SOUL_ANCHOR,
+      maxStamina: BASE_MAX_STAMINA,
+      currentStamina: BASE_MAX_STAMINA,
+      currentSector: INITIAL_SECTOR_POOL[0],
+      pendingEnemy,
+      combatTestPreset: preset,
+    };
+    runStateRef.current = next;
+    setRunState(next);
+    const resetIncursion = createDefaultActiveIncursionState();
+    activeIncursionRef.current = resetIncursion;
+    setActiveIncursion(resetIncursion);
+    narrativeNodeRef.current = null;
+    setPostCombatBoonChoices([]);
+    setRunLog([
+      '>> BADGE TEST COMBAT — ISOLATED ARENA.',
+      `>> HOSTILE: ${pendingEnemy.designation} // ${pendingEnemy.maxHp} HP.`,
+      preset === 'easy'
+        ? '>> ENEMY PROFILE: STRIKE ONLY.'
+        : '>> ENEMY PROFILE: STANDARD ABILITIES (NO WORLD-ENDER).',
+    ]);
+  }, []);
+
+  const finishBadgeTestCombat = useCallback(() => {
+    const reset = createInitialRunState();
+    runStateRef.current = reset;
+    setRunState(reset);
+    setPostCombatBoonChoices([]);
+    const resetIncursion = createDefaultActiveIncursionState();
+    activeIncursionRef.current = resetIncursion;
+    setActiveIncursion(resetIncursion);
+    narrativeNodeRef.current = null;
+    appendRunLog('>> TEST COMBAT CONCLUDED — RETURNING TO IDENTITY BADGE.');
+  }, [appendRunLog]);
+
+  const exitCombatToBadge = useCallback(() => {
+    if (runStateRef.current.combatTestPreset) {
+      finishBadgeTestCombat();
+      return;
+    }
+    endRun('OPERATIVE WITHDRAWAL — RUN ABORTED');
+  }, [endRun, finishBadgeTestCombat]);
 
   const setIncursionMapMode = useCallback((mode: IncursionMapMode) => {
     setActiveIncursion((prev) => {
@@ -985,6 +1039,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       setIncursionMapMode,
       purgeEncounterState,
       commitNodeEncounter,
+      startBadgeTestCombat,
+      finishBadgeTestCombat,
+      exitCombatToBadge,
     }),
     [
       runState,
@@ -1028,6 +1085,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       setIncursionMapMode,
       purgeEncounterState,
       commitNodeEncounter,
+      startBadgeTestCombat,
+      finishBadgeTestCombat,
+      exitCombatToBadge,
     ],
   );
 

@@ -17,6 +17,7 @@ import {
 } from '../context/CombatEnemyChromeContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useGameFlow } from '../context/GameFlowContext';
+import { useTerminalNav } from '../context/TerminalNavContext';
 import { useRun } from '../context/RunContext';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useNodeProgression } from '../hooks/useNodeProgression';
@@ -66,12 +67,14 @@ function CombatApparitionZone({
 
 export default function CombatScreen(): React.JSX.Element {
   const { theme } = useTerminal();
-  const { startPostCombatBoon, startGameOver } = useGameFlow();
+  const { startPostCombatBoon, startGameOver, goToHub } = useGameFlow();
+  const { setTerminalView } = useTerminalNav();
   const {
     runState,
     syncAfterCombat,
     appendRunLog,
     endRun,
+    exitCombatToBadge,
     refillStaminaAfterCombat,
     preparePostCombatBoons,
     clearPendingAmbush,
@@ -126,6 +129,13 @@ export default function CombatScreen(): React.JSX.Element {
     remainingHp: number;
     remainingStamina: number;
   }) => {
+    if (runState.combatTestPreset) {
+      exitCombatToBadge();
+      goToHub();
+      setTerminalView('BADGE');
+      return;
+    }
+
     if (!result.victory || result.remainingHp <= 0) {
       endRun(result.remainingHp <= 0 ? 'SOUL ANCHOR DESTROYED' : 'OPERATIVE DEFEATED IN COMBAT');
       startGameOver();
@@ -159,11 +169,15 @@ export default function CombatScreen(): React.JSX.Element {
     clearPendingAmbush,
     completeCurrentNode,
     endRun,
+    exitCombatToBadge,
+    goToHub,
     incrementCombatNodesCleared,
     preparePostCombatBoons,
     refillStaminaAfterCombat,
+    runState.combatTestPreset,
     runState.pendingAmbush,
     runState.pendingEnemy?.isBoss,
+    setTerminalView,
     startGameOver,
     startPostCombatBoon,
     syncAfterCombat,

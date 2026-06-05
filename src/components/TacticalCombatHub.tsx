@@ -4,6 +4,7 @@ import {
   cancelAnimation,
   Easing as ReanimatedEasing,
   runOnJS,
+  runOnUI,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
@@ -51,9 +52,7 @@ import {
 } from '../utils/combatResourceState';
 import { useReactiveCombatStatus } from '../hooks/useReactiveCombatStatus';
 import {
-  computeParryArenaLayout,
-  isParryRingsMeet,
-  isTapOnParryCenter,
+  isParryAttemptSuccessful,
   PARRY_RING_SCALE_END,
   PARRY_RING_SCALE_START,
   type ParryArenaLayout,
@@ -67,7 +66,7 @@ const P = {
   enemyHp: '#ef4444', unitTitle: '#ffffff', enemyPosture: '#fde68a',
   kr: '#bae6fd', krBorder: '#7dd3fc', parry: '#00ff33', defeat: '#5c0606',
 };
-const PARRY_DURATION = 2400;
+const PARRY_DURATION = 1000;
 const WARD_STRIKE_ACCENT = '#fde68a';
 type CombatPhase = 'TEXT_COMBAT' | 'DEFEND_PARRY' | 'OFFENSE_SLICE' | 'RESOLUTION';
 
@@ -173,7 +172,8 @@ export default function TacticalCombatHub({
   const cycleRef = useRef<CombatPhase>('TEXT_COMBAT');
   const parryScaleSV = useSharedValue(2.5);
   const parryResolvedRef = useRef(false);
-  const parryStartedAtRef = useRef(0);
+  const parryTapPendingRef = useRef(false);
+  const parrySessionRef = useRef(0);
   const parryArenaRef = useRef<ParryArenaLayout | null>(null);
   const screenFlashAnim = useRef(new Animated.Value(0)).current;
   const activeSliceRef = useRef(-1);
@@ -260,6 +260,8 @@ export default function TacticalCombatHub({
     }
     cancelAnimation(parryScaleSV);
     parryResolvedRef.current = true;
+    parryTapPendingRef.current = false;
+    parrySessionRef.current += 1;
   };
 
   const resolve = (victory: boolean) => {
@@ -579,85 +581,94 @@ export default function TacticalCombatHub({
     sliceArenaRef.current = layout;
   };
 
-  const resolveParrySuccess = () => {
+  /** Exactly one parry outcome — counter damage and parry block cannot diverge. */
+  const finalizeParry = (passed: boolean, unmitigatedOnFail: boolean) => {
     if (parryResolvedRef.current || cycleRef.current !== 'DEFEND_PARRY') return;
     parryResolvedRef.current = true;
-    setIsSuccessState(true);
-    Vibration.vibrate(15);
-    const cd = Math.floor(COMBAT_ACTION.COUNTER_DAMAGE * (1 + parryMultiplierBonus));
-    log(`[PERFECT COUNTER] >> Staggered! ${cd} retaliation damage.`);
-    counterRef.current = false;
-    setCounterPrepActive(false);
-    if (hurtEnemy(cd, '[COUNTER HIT]')) return;
-    setTimeout(() => endEnemyTurn(), 400);
-  };
-
-  const resolveParryFail = (unmitigated: boolean) => {
-    if (parryResolvedRef.current || cycleRef.current !== 'DEFEND_PARRY') return;
-    parryResolvedRef.current = true;
+    parryTapPendingRef.current = false;
+    cancelAnimation(parryScaleSV);
+    if (passed) {
+      setIsSuccessState(true);
+      setIsFailureState(false);
+      Vibration.vibrate(15);
+      const cd = Math.floor(COMBAT_ACTION.COUNTER_DAMAGE * (1 + parryMultiplierBonus));
+      log(`[PERFECT COUNTER] >> Parry locked — ${cd} retaliation damage.`);
+      counterRef.current = false;
+      setCounterPrepActive(false);
+      if (hurtEnemy(cd, '[COUNTER HIT]')) return;
+      setTimeout(() => endEnemyTurn(), 400);
+      return;
+    }
+    setIsSuccessState(false);
     setIsFailureState(true);
-    log(unmitigated ? '[PARRY FAILED] >> 100% unmitigated damage.' : '[PARRY FAILED] >> Guard collapsed.');
-    hurtPlayer(pendingDmgRef.current, unmitigated);
+    log(unmitigatedOnFail ? '[PARRY FAILED] >> Mistimed — 100% unmitigated damage.' : '[PARRY FAILED] >> Guard collapsed.');
+    hurtPlayer(pendingDmgRef.current, unmitigatedOnFail);
     counterRef.current = false;
     setCounterPrepActive(false);
     if (operativeHpRef.current > 0) endEnemyTurn();
   };
 
-  const handleParryTimeout = () => {
-    resolveParryFail(false);
+  const finalizeParryRef = useRef(finalizeParry);
+  finalizeParryRef.current = finalizeParry;
+
+  const handleParryTimeout = (session: number) => {
+    if (session !== parrySessionRef.current || parryTapPendingRef.current) return;
+    finalizeParryRef.current(false, false);
   };
 
-  const parryScaleAtTap = () => {
-    const elapsed = Date.now() - parryStartedAtRef.current;
-    const progress = Math.min(1, Math.max(0, elapsed / PARRY_DURATION));
-    return (
-      PARRY_RING_SCALE_START
-      + (PARRY_RING_SCALE_END - PARRY_RING_SCALE_START) * progress
+  const adjudicateParryTap = (scale: number, tapX: number, tapY: number, session: number) => {
+    parryTapPendingRef.current = false;
+    if (session !== parrySessionRef.current || parryResolvedRef.current) return;
+    const passed = isParryAttemptSuccessful(
+      scale,
+      tapX,
+      tapY,
+      parryArenaRef.current,
+      parryTimingWindowBonus,
+      parryTimingBlindPenalty,
     );
+    finalizeParryRef.current(passed, true);
   };
 
-  const applyParryTap = (scale: number, tapX: number, tapY: number) => {
-    if (parryResolvedRef.current || cycleRef.current !== 'DEFEND_PARRY') return;
-    const arena = parryArenaRef.current;
-    const centerHit = arena != null && isTapOnParryCenter(tapX, tapY, arena);
-    const timingHit = isParryRingsMeet(scale, parryTimingWindowBonus, parryTimingBlindPenalty);
-    if (centerHit && timingHit) {
-      resolveParrySuccess();
-    } else {
-      resolveParryFail(true);
-    }
-  };
+  const adjudicateParryTapRef = useRef(adjudicateParryTap);
+  adjudicateParryTapRef.current = adjudicateParryTap;
 
-  const applyParryTapRef = useRef(applyParryTap);
-  applyParryTapRef.current = applyParryTap;
+  const runAdjudicateParryTap = (scale: number, tapX: number, tapY: number, session: number) => {
+    adjudicateParryTapRef.current(scale, tapX, tapY, session);
+  };
 
   const startParryRing = () => {
     cancelAnimation(parryScaleSV);
+    parrySessionRef.current += 1;
+    const session = parrySessionRef.current;
     parryResolvedRef.current = false;
+    parryTapPendingRef.current = false;
     setIsSuccessState(false);
     setIsFailureState(false);
-    const screen = Dimensions.get('screen');
-    const viewportH = Math.round(screen.height * 0.37);
-    parryArenaRef.current = computeParryArenaLayout(screen.width, viewportH);
     parryScaleSV.value = PARRY_RING_SCALE_START;
     requestAnimationFrame(() => {
-      if (cycleRef.current !== 'DEFEND_PARRY') return;
-      parryStartedAtRef.current = Date.now();
+      if (cycleRef.current !== 'DEFEND_PARRY' || session !== parrySessionRef.current) return;
       parryScaleSV.value = withTiming(
         PARRY_RING_SCALE_END,
         { duration: PARRY_DURATION, easing: ReanimatedEasing.linear },
         (finished) => {
           if (!finished || parryResolvedRef.current) return;
-          runOnJS(handleParryTimeout)();
+          runOnJS(handleParryTimeout)(session);
         },
       );
     });
   };
 
   const onParryTap = (tapX: number, tapY: number) => {
-    if (cycleRef.current !== 'DEFEND_PARRY' || parryResolvedRef.current) return;
-    cancelAnimation(parryScaleSV);
-    applyParryTapRef.current(parryScaleAtTap(), tapX, tapY);
+    if (cycleRef.current !== 'DEFEND_PARRY' || parryResolvedRef.current || parryTapPendingRef.current) return;
+    parryTapPendingRef.current = true;
+    const session = parrySessionRef.current;
+    runOnUI((x: number, y: number, s: number) => {
+      'worklet';
+      const scale = parryScaleSV.value;
+      cancelAnimation(parryScaleSV);
+      runOnJS(runAdjudicateParryTap)(scale, x, y, s);
+    })(tapX, tapY, session);
   };
 
   const evaluateSlice = () => {
@@ -834,9 +845,6 @@ export default function TacticalCombatHub({
     return undefined;
   };
 
-  const getDeckActionGlow = (action: CombatDeckAction): boolean =>
-    action === 'STRIKE' && isPlayerTurn && strikeWardPrimed;
-
   const getStagedHeader = (action: CombatDeckAction): string => {
     const name = getDeckActionLabel(action).replace(/^\[|\]$/g, '').trim();
     return `SYSTEM READY // ${name} SELECTED`;
@@ -924,7 +932,6 @@ export default function TacticalCombatHub({
       getStagedCostImpact={getStagedCostImpact}
       getActionAccent={getDeckActionAccent}
       getActionLabel={getDeckActionLabel}
-      getActionGlow={getDeckActionGlow}
       borderColor={theme.borderColor}
       primaryColor={theme.primaryColor}
       mutedColor={theme.mutedColor}
