@@ -55,6 +55,17 @@ export default function MetropolitanMagnetismMap({
         isInfluenceFrozen={isInfluenceFrozen}
         frozenInfluence={frozenInfluence}
         onSectorPress={handleSectorPress}
+        expandedDetailPanel={
+          <SectorInfluencePanel
+            theme={theme}
+            sector={sectorDef}
+            localTrafficDensity={magnetism.localTrafficDensity}
+            influence={magnetism.influence}
+            isInfluenceFrozen={isInfluenceFrozen}
+            isWeakLocalSignal={magnetism.isWeakLocalSignal}
+            proxyMetropolitanNode={magnetism.proxyMetropolitanNode}
+          />
+        }
       />
 
       <SectorInfluencePanel

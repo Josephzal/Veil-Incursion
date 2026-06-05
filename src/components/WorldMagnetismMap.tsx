@@ -19,7 +19,7 @@ import {
   Skia,
   vec,
 } from '@shopify/react-native-skia';
-import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector, GestureHandlerRootView, ScrollView } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
   useAnimatedStyle,
@@ -51,7 +51,9 @@ const TAP_MAX_DURATION_MS = 450;
 const TAP_MAX_DISTANCE_PX = 28;
 const DOUBLE_TAP_MAX_DELAY_MS = 380;
 const EXPANDED_HORIZONTAL_INSET = 28;
-const EXPANDED_CHROME_HEIGHT = 130;
+const EXPANDED_HEADER_HEIGHT = 64;
+const EXPANDED_VERTICAL_PADDING = 86;
+const EXPANDED_DETAIL_HEIGHT_RATIO = 0.36;
 
 interface WorldMagnetismMapProps {
   theme: TerminalTheme;
@@ -61,11 +63,13 @@ interface WorldMagnetismMapProps {
   isInfluenceFrozen: boolean;
   frozenInfluence: { TERRAN_GRID: number; LEGION: number; SOLARIS: number } | null;
   onSectorPress: (id: MacroSectorId) => void;
+  expandedDetailPanel?: React.ReactNode;
 }
 
 interface MapViewportProps extends WorldMagnetismMapProps {
   interactive: boolean;
   fillContainer?: boolean;
+  reservedChromeHeight?: number;
   onOpen?: () => void;
   hint: string;
   mapHostStyle?: object;
@@ -108,11 +112,13 @@ function clampMapTranslation(
   if (zoomScale <= 1) {
     return { x: 0, y: 0 };
   }
-  const maxShiftX = width * (zoomScale - 1);
-  const maxShiftY = height * (zoomScale - 1);
+  const minX = width * (1 - zoomScale);
+  const maxX = 0;
+  const minY = height * (1 - zoomScale);
+  const maxY = 0;
   return {
-    x: Math.min(0, Math.max(-maxShiftX, translateX)),
-    y: Math.min(0, Math.max(-maxShiftY, translateY)),
+    x: Math.min(maxX, Math.max(minX, translateX)),
+    y: Math.min(maxY, Math.max(minY, translateY)),
   };
 }
 
@@ -126,6 +132,7 @@ function MapViewport({
   onSectorPress,
   interactive,
   fillContainer = false,
+  reservedChromeHeight,
   onOpen,
   hint,
   mapHostStyle,
@@ -136,10 +143,11 @@ function MapViewport({
 
   const expandedHostSize = useMemo(() => {
     if (!fillContainer) return null;
+    const chromeHeight = reservedChromeHeight ?? EXPANDED_HEADER_HEIGHT + EXPANDED_VERTICAL_PADDING + 220;
     const width = Math.max(0, windowWidth - EXPANDED_HORIZONTAL_INSET);
-    const height = Math.max(0, windowHeight - EXPANDED_CHROME_HEIGHT);
+    const height = Math.max(0, windowHeight - chromeHeight);
     return resolveCanvasSizeForHost(width, height, true);
-  }, [fillContainer, windowHeight, windowWidth]);
+  }, [fillContainer, reservedChromeHeight, windowHeight, windowWidth]);
 
   const zoomScale = useSharedValue(1);
   const savedZoomScale = useSharedValue(1);
@@ -147,6 +155,8 @@ function MapViewport({
   const translateY = useSharedValue(0);
   const savedTranslateX = useSharedValue(0);
   const savedTranslateY = useSharedValue(0);
+  const focalX = useSharedValue(0);
+  const focalY = useSharedValue(0);
   const canvasWidth = useSharedValue(0);
   const canvasHeight = useSharedValue(0);
 
@@ -223,18 +233,29 @@ function MapViewport({
     savedTranslateY.value = 0;
   }, [savedTranslateX, savedTranslateY, savedZoomScale, translateX, translateY, zoomScale]);
 
-  const openExpandedMap = useCallback(() => {
-    onOpen?.();
-  }, [onOpen]);
-
   const pinchGesture = Gesture.Pinch()
-    .onStart(() => {
+    .onStart((event) => {
       savedZoomScale.value = zoomScale.value;
       savedTranslateX.value = translateX.value;
       savedTranslateY.value = translateY.value;
+      focalX.value = event.focalX;
+      focalY.value = event.focalY;
     })
     .onUpdate((event) => {
-      zoomScale.value = clampZoom(savedZoomScale.value * event.scale);
+      const nextScale = clampZoom(savedZoomScale.value * event.scale);
+      const scaleRatio = nextScale / savedZoomScale.value;
+      const nextX = savedTranslateX.value + (focalX.value - savedTranslateX.value) * (1 - scaleRatio);
+      const nextY = savedTranslateY.value + (focalY.value - savedTranslateY.value) * (1 - scaleRatio);
+      const clamped = clampMapTranslation(
+        nextX,
+        nextY,
+        nextScale,
+        canvasWidth.value,
+        canvasHeight.value,
+      );
+      translateX.value = clamped.x;
+      translateY.value = clamped.y;
+      zoomScale.value = nextScale;
     })
     .onEnd(() => {
       if (zoomScale.value <= MIN_ZOOM) {
@@ -314,12 +335,11 @@ function MapViewport({
       runOnJS(resetMapView)();
     });
 
-  const previewOpenGesture = Gesture.Tap()
-    .numberOfTaps(2)
+  const previewTapGesture = Gesture.Tap()
     .maxDuration(TAP_MAX_DURATION_MS)
-    .maxDelay(DOUBLE_TAP_MAX_DELAY_MS)
-    .onEnd(() => {
-      runOnJS(openExpandedMap)();
+    .maxDistance(TAP_MAX_DISTANCE_PX)
+    .onEnd((event) => {
+      runOnJS(handleMapPress)(event.x, event.y, 1, 0, 0);
     });
 
   const mapGesture = interactive
@@ -327,14 +347,17 @@ function MapViewport({
         Gesture.Exclusive(Gesture.Simultaneous(pinchGesture, panGesture), doubleTapGesture),
         sectorTapGesture,
       )
-    : previewOpenGesture;
+    : previewTapGesture;
 
-  const mapAnimatedStyle = useAnimatedStyle(() => ({
+  const mapPanStyle = useAnimatedStyle(() => ({
     transform: [
       { translateX: translateX.value },
       { translateY: translateY.value },
-      { scale: zoomScale.value },
     ],
+  }));
+
+  const mapScaleStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: zoomScale.value }],
   }));
 
   const labelOverlays = sectors.map((sector) => {
@@ -406,10 +429,20 @@ function MapViewport({
             <Animated.View
               pointerEvents="none"
               style={[
-                StyleSheet.absoluteFill,
-                interactive ? mapAnimatedStyle : null,
+                styles.mapVisualLayer,
+                interactive ? mapPanStyle : null,
               ]}
             >
+              <Animated.View
+                style={[
+                  {
+                    width: activeCanvasSize.width,
+                    height: activeCanvasSize.height,
+                    transformOrigin: 'top left',
+                  },
+                  interactive ? mapScaleStyle : null,
+                ]}
+              >
               <Canvas style={{ width: activeCanvasSize.width, height: activeCanvasSize.height }}>
                 <Group transform={[{ scale: viewBoxScale }]}>
                   <Rect
@@ -514,6 +547,7 @@ function MapViewport({
                   </View>
                 )}
               </View>
+              </Animated.View>
             </Animated.View>
 
             <GestureDetector gesture={mapGesture}>
@@ -543,9 +577,16 @@ function MapViewport({
   );
 }
 
-export default function WorldMagnetismMap(props: WorldMagnetismMapProps): React.JSX.Element {
+export default function WorldMagnetismMap({
+  expandedDetailPanel,
+  ...props
+}: WorldMagnetismMapProps): React.JSX.Element {
   const [expanded, setExpanded] = useState(false);
   const { theme } = props;
+  const { height: windowHeight } = useWindowDimensions();
+  const expandedDetailHeight = Math.round(windowHeight * EXPANDED_DETAIL_HEIGHT_RATIO);
+  const expandedReservedChromeHeight =
+    EXPANDED_HEADER_HEIGHT + EXPANDED_VERTICAL_PADDING + expandedDetailHeight + 10;
 
   return (
     <View style={styles.root}>
@@ -553,7 +594,7 @@ export default function WorldMagnetismMap(props: WorldMagnetismMapProps): React.
         {...props}
         interactive={false}
         onOpen={() => setExpanded(true)}
-        hint="TAP [ EXPAND MAP ] OR DOUBLE-TAP PREVIEW // FULL VIEW FOR SECTOR SELECT"
+        hint="TAP SECTOR FOR TELEMETRY // [ EXPAND MAP ] FOR FULL VIEW"
       />
 
       <Modal
@@ -586,10 +627,33 @@ export default function WorldMagnetismMap(props: WorldMagnetismMapProps): React.
                   {...props}
                   interactive
                   fillContainer
-                  hint="TAP SECTOR TO SELECT // PINCH TO ZOOM // DOUBLE-TAP RESET"
+                  reservedChromeHeight={expandedReservedChromeHeight}
+                  hint="TAP SECTOR FOR TELEMETRY // PINCH TO ZOOM // DOUBLE-TAP RESET"
                 />
               )}
             </View>
+
+            {expanded && expandedDetailPanel && (
+              <View
+                style={[
+                  styles.expandedDetailPanel,
+                  {
+                    borderColor: theme.borderColor,
+                    height: expandedDetailHeight,
+                  },
+                ]}
+              >
+                <ScrollView
+                  style={styles.expandedDetailScroll}
+                  nestedScrollEnabled
+                  showsVerticalScrollIndicator
+                  bounces={false}
+                  contentContainerStyle={styles.expandedDetailContent}
+                >
+                  {expandedDetailPanel}
+                </ScrollView>
+              </View>
+            )}
           </View>
         </GestureHandlerRootView>
       </Modal>
@@ -615,8 +679,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   mapSurface: {
-    overflow: 'visible',
+    overflow: 'hidden',
     position: 'relative',
+  },
+  mapVisualLayer: {
+    ...StyleSheet.absoluteFillObject,
   },
   touchLayer: {
     ...StyleSheet.absoluteFillObject,
@@ -704,6 +771,20 @@ const styles = StyleSheet.create({
   },
   expandedMapHost: {
     flex: 1,
-    minHeight: 280,
+    minHeight: 220,
+  },
+  expandedDetailPanel: {
+    borderWidth: 1,
+    marginTop: 10,
+    flexShrink: 0,
+    overflow: 'hidden',
+  },
+  expandedDetailScroll: {
+    flex: 1,
+  },
+  expandedDetailContent: {
+    padding: 10,
+    paddingBottom: 12,
+    flexGrow: 1,
   },
 });

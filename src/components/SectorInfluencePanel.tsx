@@ -100,7 +100,7 @@ export default function SectorInfluencePanel({
 }
 
 const styles = StyleSheet.create({
-  root: { marginTop: 8 },
+  root: { marginTop: 0 },
   readout: { borderWidth: 1, padding: 8, marginBottom: 8, minHeight: 56 },
   readoutLine: { fontFamily: 'monospace', fontSize: 8, letterSpacing: 0.4, lineHeight: 13, marginBottom: 2 },
   warningOverlay: {
