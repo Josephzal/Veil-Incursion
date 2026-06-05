@@ -14,6 +14,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
+import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import {
   Canvas,
   ColorMatrix,
@@ -211,6 +212,18 @@ export const ApparitionViewport = forwardRef<ApparitionViewportRef, ApparitionVi
       return rect(0, y, canvasW.value, h);
     });
 
+    const nativeDissolveClipStyle = useAnimatedStyle(() => {
+      const h = Math.max(0, canvasH.value * (1 - dissolveSweep.value));
+      return {
+        height: h,
+        overflow: 'hidden' as const,
+      };
+    });
+
+    const nativeShakeStyle = useAnimatedStyle(() => ({
+      transform: [{ translateX: SHAKE_AMPLITUDE * shakeProgress.value * Math.sin(shakePhase.value * Math.PI * 2) }],
+    }));
+
     const hasLayout = layout.width > 0 && layout.height > 0;
     const hasPortraitSource = nativeImageSource != null;
     const showSkiaSprite = skiaImage != null && hasLayout;
@@ -220,11 +233,21 @@ export const ApparitionViewport = forwardRef<ApparitionViewportRef, ApparitionVi
     return (
       <View style={[styles.root, style]} onLayout={handleLayout} pointerEvents={pointerEvents}>
         {showNativeFallback ? (
-          <RNImage
-            source={nativeImageSource}
-            style={[styles.portraitFallback, { width: layout.width, height: layout.height }]}
-            resizeMode="contain"
-          />
+          <Animated.View
+            style={[
+              styles.portraitFallback,
+              { width: layout.width },
+              nativeDissolveClipStyle,
+            ]}
+          >
+            <Animated.View style={nativeShakeStyle}>
+              <RNImage
+                source={nativeImageSource}
+                style={{ width: layout.width, height: layout.height }}
+                resizeMode="contain"
+              />
+            </Animated.View>
+          </Animated.View>
         ) : null}
         {hasLayout && (showSkiaSprite || showWireframeGrid) ? (
           <Canvas style={{ width: layout.width, height: layout.height }}>

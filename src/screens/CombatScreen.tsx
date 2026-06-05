@@ -6,6 +6,7 @@ import {
   type ApparitionViewportRef,
 } from '../components/combat/ApparitionViewport';
 import CombatEnemyHeaderBand from '../components/combat/CombatEnemyHeaderBand';
+import CombatResolutionBanner from '../components/combat/CombatResolutionBanner';
 import IncursionShell from '../components/IncursionShell';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
 import TacticalCombatHub from '../components/TacticalCombatHub';
@@ -28,11 +29,16 @@ function CombatApparitionZone({
   apparitionRef,
   portraitKey,
   onEradicationComplete,
+  resolutionOutcome,
+  onResolutionDismiss,
 }: {
   apparitionRef: React.RefObject<ApparitionViewportRef | null>;
   portraitKey: string;
   onEradicationComplete: () => void;
+  resolutionOutcome: 'VICTORY' | 'DEFEAT' | null;
+  onResolutionDismiss: () => void;
 }): React.JSX.Element {
+  const { theme } = useTerminal();
   const { ui } = useCombatEnemyChrome();
 
   return (
@@ -46,6 +52,14 @@ function CombatApparitionZone({
         onEradicationComplete={onEradicationComplete}
       />
       <CombatEnemyChromeLayer />
+      {resolutionOutcome === 'VICTORY' ? (
+        <CombatResolutionBanner
+          outcome="VICTORY"
+          primaryColor={theme.primaryColor}
+          defeatColor="#ef4444"
+          onDismiss={onResolutionDismiss}
+        />
+      ) : null}
     </View>
   );
 }
@@ -73,6 +87,8 @@ export default function CombatScreen(): React.JSX.Element {
     env.startingStaminaPenalty > 0 ? 50 : runState.currentStamina;
 
   const [enemyTelemetry, setEnemyTelemetry] = useState<CombatEnemyTelemetry | null>(null);
+  const [resolutionOutcome, setResolutionOutcome] = useState<'VICTORY' | 'DEFEAT' | null>(null);
+  const resolutionDismissRef = useRef<() => void>(() => {});
   const apparitionRef = useRef<ApparitionViewportRef>(null);
   const killResolverRef = useRef<() => void>(() => {});
 
@@ -93,7 +109,19 @@ export default function CombatScreen(): React.JSX.Element {
     + `-${activeIncursion.currentNodeIndex}`
     + `-${runState.combatNodesCleared}`;
 
-  const handleCombatComplete = (result: {
+  const handleResolutionPanelChange = useCallback(
+    (panel: { outcome: 'VICTORY' | 'DEFEAT'; onDismiss: () => void } | null) => {
+      setResolutionOutcome(panel?.outcome ?? null);
+      resolutionDismissRef.current = panel?.onDismiss ?? (() => {});
+    },
+    [],
+  );
+
+  const handleResolutionDismiss = useCallback(() => {
+    resolutionDismissRef.current();
+  }, []);
+
+  const handleCombatComplete = useCallback((result: {
     victory: boolean;
     remainingHp: number;
     remainingStamina: number;
@@ -126,7 +154,20 @@ export default function CombatScreen(): React.JSX.Element {
 
     preparePostCombatBoons();
     startPostCombatBoon();
-  };
+  }, [
+    activeIncursion.bossProfile,
+    clearPendingAmbush,
+    completeCurrentNode,
+    endRun,
+    incrementCombatNodesCleared,
+    preparePostCombatBoons,
+    refillStaminaAfterCombat,
+    runState.pendingAmbush,
+    runState.pendingEnemy?.isBoss,
+    startGameOver,
+    startPostCombatBoon,
+    syncAfterCombat,
+  ]);
 
   return (
     <IncursionShell>
@@ -139,6 +180,8 @@ export default function CombatScreen(): React.JSX.Element {
               apparitionRef={apparitionRef}
               portraitKey={portraitKey}
               onEradicationComplete={handleEradicationComplete}
+              resolutionOutcome={resolutionOutcome}
+              onResolutionDismiss={handleResolutionDismiss}
             />
 
             <View style={styles.combatMiddle}>
@@ -147,6 +190,7 @@ export default function CombatScreen(): React.JSX.Element {
                 apparitionRef={apparitionRef}
                 registerKillResolver={registerKillResolver}
                 onEnemyTelemetryChange={handleEnemyTelemetryChange}
+                onResolutionPanelChange={handleResolutionPanelChange}
                 onCombatComplete={handleCombatComplete}
                 initialOperativeHp={runState.soulAnchorIntegrity}
                 initialStamina={combatEntryStamina}

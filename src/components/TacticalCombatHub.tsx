@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { StyleSheet, View, Text, Animated, Easing, Dimensions, Pressable, Vibration, PanResponder } from 'react-native';
 import {
   cancelAnimation,
@@ -18,6 +18,7 @@ import { BossRuntimeProfile, EnvironmentalModifiers } from '../types/game';
 import CombatTelemetryGaugeRow from './combat/CombatHorizontalGauge';
 import type { ApparitionViewportRef } from './combat/ApparitionViewport';
 import CombatCommandDeck, {
+  COMMAND_DECK_MIN_HEIGHT,
   DECK_ACTION_LABELS,
   strikeDeckLabel,
   type CombatDeckAction,
@@ -77,6 +78,10 @@ interface TacticalCombatHubProps {
   apparitionRef?: RefObject<ApparitionViewportRef | null>;
   /** Registers callback invoked after eradication dissolve completes (victory). */
   registerKillResolver?: (resolver: () => void) => void;
+  /** Stacked layout: victory/defeat panel in the apparition viewport (hub keeps deck + gauges). */
+  onResolutionPanelChange?: (
+    panel: { outcome: 'VICTORY' | 'DEFEAT'; onDismiss: () => void } | null,
+  ) => void;
   onCombatComplete?: (r: { victory: boolean; remainingHp: number; remainingStamina: number }) => void;
   initialOperativeHp?: number; initialStamina?: number; maxStamina?: number; maxSoulAnchor?: number;
   startingAbyssalReservePercent?: number; parryMultiplierBonus?: number; parryWindowBonus?: number;
@@ -103,6 +108,7 @@ export default function TacticalCombatHub({
   onEnemyTelemetryChange,
   apparitionRef,
   registerKillResolver,
+  onResolutionPanelChange,
   onCombatComplete, initialOperativeHp = 100, initialStamina = 100, maxStamina = 100,
   maxSoulAnchor = 100, startingAbyssalReservePercent = 0, parryMultiplierBonus = 0,
   parryWindowBonus = 0, sliceDamagePenalty = 0, onTerminalLog,
@@ -182,6 +188,10 @@ export default function TacticalCombatHub({
   const sliceHandlersRef = useRef({
     queueNext: (_i: number) => {}, validate: () => {}, evaluate: () => {}, trigger: () => {},
   });
+  const enemyTurnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const isCombatTerminal = () =>
+    resolutionRef.current != null || operativeHpRef.current <= 0;
 
   const log = (t: string) => onTerminalLog?.(t);
   const parryTimingWindowBonus = parryWindowBonus * 0.02;
@@ -221,6 +231,12 @@ export default function TacticalCombatHub({
   };
   const scaleSlice = (d: number) => sliceDamagePenalty > 0 ? Math.floor(d * (1 - sliceDamagePenalty)) : d;
 
+  const clearSliceTimers = () => {
+    const s = sliceSessionRef.current;
+    if (s.segmentTimer) { clearTimeout(s.segmentTimer); s.segmentTimer = null; }
+    if (s.hitFlashTimer) { clearTimeout(s.hitFlashTimer); s.hitFlashTimer = null; }
+  };
+
   const flash = (color: string, done?: () => void) => {
     setScreenFlashColor(color); setScreenFlashActive(true); screenFlashAnim.setValue(0);
     Animated.sequence([
@@ -230,21 +246,46 @@ export default function TacticalCombatHub({
     ]).start(() => { setScreenFlashActive(false); done?.(); });
   };
 
-  const resolve = (victory: boolean) => {
-    if (operativeHpRef.current <= 0) victory = false;
+  const abortCombatMinigames = () => {
+    clearSliceTimers();
+    const s = sliceSessionRef.current;
+    s.evaluated = true;
+    activeSliceRef.current = -1;
+    setActiveSliceIndex(-1);
+    crossedRef.current = false;
+    sliceTouchStartRef.current = null;
+    if (enemyTurnTimerRef.current) {
+      clearTimeout(enemyTurnTimerRef.current);
+      enemyTurnTimerRef.current = null;
+    }
     cancelAnimation(parryScaleSV);
+    parryResolvedRef.current = true;
+  };
+
+  const resolve = (victory: boolean) => {
+    if (resolutionRef.current != null) return;
+    if (operativeHpRef.current <= 0) victory = false;
+    abortCombatMinigames();
+    cycleRef.current = 'RESOLUTION';
+    setCycleState('RESOLUTION');
     if (victory) {
-      resolutionRef.current = 'VICTORY'; log('[EXORCISED] >> Hostile neutralized. Incursion sealed.');
-      setCycleState('RESOLUTION'); setResolutionOutcome('VICTORY'); awardCurrencies(750, 25);
+      resolutionRef.current = 'VICTORY';
+      log('[EXORCISED] >> Hostile neutralized. Incursion sealed.');
+      setResolutionOutcome('VICTORY');
+      awardCurrencies(750, 25);
     } else {
-      resolutionRef.current = 'DEFEAT'; setResolutionOutcome('DEFEAT');
+      resolutionRef.current = 'DEFEAT';
+      setResolutionOutcome('DEFEAT');
       log('[CRITICAL] >> Operative soul anchor severed. Veil sync lost.');
-      flash(P.defeat, () => setCycleState('RESOLUTION'));
+      flash(P.defeat);
     }
   };
 
+  const resolveVictoryRef = useRef(() => resolve(true));
+  resolveVictoryRef.current = () => resolve(true);
+
   useEffect(() => {
-    registerKillResolver?.(() => resolve(true));
+    registerKillResolver?.(() => resolveVictoryRef.current());
   }, [registerKillResolver]);
 
   const hurtPlayer = (raw: number, unblockable = false, msg?: string) => {
@@ -283,16 +324,23 @@ export default function TacticalCombatHub({
       setTimeout(() => setPhaseAlert(null), 2400);
     }
 
-    apparitionRef?.current?.triggerDamageEffect();
+    const viewport = apparitionRef?.current;
 
     if (hp <= 0) {
-      if (apparitionRef?.current) {
-        apparitionRef.current.triggerEradication();
+      if (cycleRef.current === 'OFFENSE_SLICE' || cycleRef.current === 'DEFEND_PARRY') {
+        abortCombatMinigames();
+        cycleRef.current = 'TEXT_COMBAT';
+        setCycleState('TEXT_COMBAT');
+      }
+      if (viewport) {
+        viewport.triggerEradication();
         return true;
       }
       resolve(true);
       return true;
     }
+
+    viewport?.triggerDamageEffect();
     return false;
   };
 
@@ -368,6 +416,7 @@ export default function TacticalCombatHub({
   };
 
   const endEnemyTurn = () => {
+    if (isCombatTerminal()) return;
     const e = enemyRef.current;
     if (!e || operativeHpRef.current <= 0) return;
     if (e.isBoss && bossRuntimeRef.current) {
@@ -382,6 +431,7 @@ export default function TacticalCombatHub({
   };
 
   const startPlayerTurn = (e: EnemyCombatProfile) => {
+    if (isCombatTerminal()) return;
     setCounterPrepActive(false);
     counterRef.current = false;
     setIsPlayerTurn(true);
@@ -397,9 +447,13 @@ export default function TacticalCombatHub({
   };
 
   const passToEnemy = (countering = false) => {
+    if (isCombatTerminal()) return;
     setSelectedAction(null);
     setIsPlayerTurn(false);
-    setTimeout(() => {
+    if (enemyTurnTimerRef.current) clearTimeout(enemyTurnTimerRef.current);
+    enemyTurnTimerRef.current = setTimeout(() => {
+      enemyTurnTimerRef.current = null;
+      if (isCombatTerminal()) return;
       const e = enemyRef.current;
       if (!e || e.currentHp <= 0 || operativeHpRef.current <= 0) return;
       if (countering) {
@@ -606,13 +660,8 @@ export default function TacticalCombatHub({
     applyParryTapRef.current(parryScaleAtTap(), tapX, tapY);
   };
 
-  const clearSliceTimers = () => {
-    const s = sliceSessionRef.current;
-    if (s.segmentTimer) { clearTimeout(s.segmentTimer); s.segmentTimer = null; }
-    if (s.hitFlashTimer) { clearTimeout(s.hitFlashTimer); s.hitFlashTimer = null; }
-  };
-
   const evaluateSlice = () => {
+    if (isCombatTerminal()) return;
     const s = sliceSessionRef.current; if (s.evaluated) return;
     s.evaluated = true; clearSliceTimers(); activeSliceRef.current = -1; setActiveSliceIndex(-1);
     const hits = s.hitCount;
@@ -625,6 +674,7 @@ export default function TacticalCombatHub({
   };
 
   const queueSlice = (idx: number) => {
+    if (isCombatTerminal()) return;
     if (idx >= 3) { evaluateSlice(); return; }
     activeSliceRef.current = idx; setActiveSliceIndex(idx);
     crossedRef.current = false;
@@ -635,6 +685,7 @@ export default function TacticalCombatHub({
   };
 
   const tryValidateSliceSwipe = (x0: number, y0: number, x1: number, y1: number) => {
+    if (isCombatTerminal()) return;
     const idx = activeSliceRef.current;
     if (idx === -1 || crossedRef.current || cycleRef.current !== 'OFFENSE_SLICE') return;
 
@@ -649,6 +700,7 @@ export default function TacticalCombatHub({
   };
 
   const validateSlice = () => {
+    if (isCombatTerminal()) return;
     const idx = activeSliceRef.current;
     if (idx === -1 || crossedRef.current || cycleRef.current !== 'OFFENSE_SLICE') return;
     if (!sliceSessionRef.current.lines.some((l) => l.id === idx)) return;
@@ -670,6 +722,7 @@ export default function TacticalCombatHub({
   };
 
   const triggerSlice = () => {
+    if (isCombatTerminal()) return;
     clearSliceTimers();
     sliceSessionRef.current = { lines: [], hitCount: 0, slicedIds: new Set(), segmentTimer: null, hitFlashTimer: null, evaluated: false };
     crossedRef.current = false;
@@ -687,7 +740,10 @@ export default function TacticalCombatHub({
     cycleRef.current = 'OFFENSE_SLICE'; setCycleState('OFFENSE_SLICE'); queueSlice(0);
   };
   sliceHandlersRef.current = { queueNext: queueSlice, validate: validateSlice, evaluate: evaluateSlice, trigger: triggerSlice };
-  useEffect(() => () => clearSliceTimers(), []);
+  useEffect(() => () => {
+    clearSliceTimers();
+    if (enemyTurnTimerRef.current) clearTimeout(enemyTurnTimerRef.current);
+  }, []);
 
   const panResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => cycleRef.current === 'OFFENSE_SLICE',
@@ -716,12 +772,38 @@ export default function TacticalCombatHub({
     },
   })).current;
 
-  const dismiss = () => {
+  const dismiss = useCallback(() => {
     if (dismissedRef.current) return;
     dismissedRef.current = true;
     const hp = operativeHpRef.current;
-    onCombatComplete?.({ victory: resolutionRef.current === 'VICTORY' && hp > 0, remainingHp: hp, remainingStamina: staminaRef.current });
-  };
+    onCombatComplete?.({
+      victory: resolutionRef.current === 'VICTORY' && hp > 0,
+      remainingHp: hp,
+      remainingStamina: staminaRef.current,
+    });
+  }, [onCombatComplete]);
+
+  const dismissRef = useRef(dismiss);
+  dismissRef.current = dismiss;
+  const resolutionSyncKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!stackedLayout || !onResolutionPanelChange) return;
+    const syncKey =
+      cycleState === 'RESOLUTION' && resolutionOutcome
+        ? resolutionOutcome
+        : 'idle';
+    if (resolutionSyncKeyRef.current === syncKey) return;
+    resolutionSyncKeyRef.current = syncKey;
+    if (syncKey === 'idle') {
+      onResolutionPanelChange(null);
+      return;
+    }
+    onResolutionPanelChange({
+      outcome: resolutionOutcome as 'VICTORY' | 'DEFEAT',
+      onDismiss: () => dismissRef.current(),
+    });
+  }, [stackedLayout, cycleState, resolutionOutcome, onResolutionPanelChange]);
 
   const isDeckActionEnabled = (action: CombatDeckAction): boolean => {
     if (!isPlayerTurn || cycleState !== 'TEXT_COMBAT') return false;
@@ -916,24 +998,28 @@ export default function TacticalCombatHub({
     </View>
   );
 
-  const renderStatusFeed = () => {
-    if (cycleState !== 'TEXT_COMBAT') return null;
-    return (
-      <View style={stackedLayout ? styles.statusFeedCompact : styles.statusFeed}>
-        {phaseAlert ? (
-          <Text style={[styles.phaseAlert, { color: '#ef4444' }]}>{phaseAlert}</Text>
-        ) : null}
-        {isExhausted ? (
-          <Text style={styles.exhaustedBanner}>EXHAUSTED — COUNTER/SLICE OFFLINE</Text>
-        ) : null}
-        {env.isPlayerBlinded ? (
-          <Text style={[styles.exhaustedBanner, { color: '#fbbf24' }]}>
-            BLINDED — COUNTER WINDOW -15%
-          </Text>
-        ) : null}
-      </View>
-    );
-  };
+  const renderStatusFeed = () => (
+    <View
+      style={stackedLayout ? styles.statusFeedSlotStacked : styles.statusFeedSlot}
+      pointerEvents="none"
+    >
+      {cycleState === 'TEXT_COMBAT' ? (
+        <>
+          {phaseAlert ? (
+            <Text style={[styles.phaseAlert, { color: '#ef4444' }]}>{phaseAlert}</Text>
+          ) : null}
+          {isExhausted ? (
+            <Text style={styles.exhaustedBanner}>EXHAUSTED — COUNTER/SLICE OFFLINE</Text>
+          ) : null}
+          {env.isPlayerBlinded ? (
+            <Text style={[styles.exhaustedBanner, { color: '#fbbf24' }]}>
+              BLINDED — COUNTER WINDOW -15%
+            </Text>
+          ) : null}
+        </>
+      ) : null}
+    </View>
+  );
 
   const enemyChrome = useCombatEnemyChromeOptional();
   const useEnemyArenaChrome = stackedLayout && enemyChrome != null;
@@ -992,11 +1078,11 @@ export default function TacticalCombatHub({
         </>
       ) : null}
 
-      {cycleState === 'RESOLUTION' && (
+      {cycleState === 'RESOLUTION' && (!stackedLayout || resolutionOutcome === 'DEFEAT') && (
         <View style={styles.resolutionOverlay}>
           <View style={styles.resolution}>
           <Text style={[styles.resTitle, { color: resolutionOutcome === 'VICTORY' ? '#22c55e' : P.enemyHp }]}>
-            {resolutionOutcome === 'VICTORY' ? 'INTRUSION DECONSTRUCTED' : 'OPERATIVE SOUL DISCONNECTED'}
+            {resolutionOutcome === 'VICTORY' ? 'HOSTILE NEUTRALIZED' : 'OPERATIVE SOUL DISCONNECTED'}
           </Text>
           <Pressable
             onPress={dismiss}
@@ -1024,7 +1110,11 @@ export default function TacticalCombatHub({
         {stackedOperativeMetrics}
         <View style={styles.commandDeckRow}>
           {renderStatusFeed()}
-          {cycleState === 'TEXT_COMBAT' ? commandDeck : null}
+          <View style={styles.commandDeckAnchor}>
+            {cycleState === 'TEXT_COMBAT' || (cycleState === 'RESOLUTION' && resolutionOutcome === 'VICTORY')
+              ? commandDeck
+              : null}
+          </View>
         </View>
         <View style={styles.combatOverlayLayer} pointerEvents="box-none">
           {renderHubOverlays()}
@@ -1051,9 +1141,11 @@ export default function TacticalCombatHub({
                 <VignetteFlashOverlay color={screenFlashColor} opacityAnim={screenFlashAnim} />
               </View>
             )}
-            {renderStatusFeed()}
             <View style={styles.actionStage}>
-              {cycleState === 'TEXT_COMBAT' ? commandDeck : null}
+              {renderStatusFeed()}
+              <View style={styles.commandDeckAnchor}>
+                {cycleState === 'TEXT_COMBAT' ? commandDeck : null}
+              </View>
             </View>
             <View style={styles.combatOverlayLayerLegacy} pointerEvents="box-none">
               {renderHubOverlays()}
@@ -1095,6 +1187,37 @@ const styles = StyleSheet.create({
     width: '100%',
     position: 'relative',
     backgroundColor: '#000000',
+  },
+  statusFeedSlot: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: '100%',
+    minHeight: 52,
+    maxHeight: 52,
+    justifyContent: 'flex-end',
+    gap: 4,
+    paddingBottom: 4,
+    paddingHorizontal: 2,
+    overflow: 'hidden',
+  },
+  statusFeedSlotStacked: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: '100%',
+    minHeight: 40,
+    maxHeight: 40,
+    justifyContent: 'flex-end',
+    gap: 2,
+    paddingBottom: 2,
+    paddingHorizontal: 2,
+    overflow: 'hidden',
+  },
+  commandDeckAnchor: {
+    flexShrink: 0,
+    width: '100%',
+    minHeight: COMMAND_DECK_MIN_HEIGHT,
   },
   statusFeedCompact: {
     flexShrink: 0,
@@ -1220,6 +1343,7 @@ const styles = StyleSheet.create({
     width: '100%',
     position: 'relative',
     justifyContent: 'flex-end',
+    backgroundColor: '#000000',
   },
   flashWrap: { ...abs, zIndex: 100, overflow: 'hidden' },
   phaseAlert: {

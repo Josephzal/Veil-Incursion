@@ -951,7 +951,7 @@ export default function BlueprintSilhouette({
         {cycleState === 'RESOLUTION' && (
           <View style={styles.resolutionBanner}>
             <Text style={[styles.victoryHeader, { color: resolutionOutcome === 'VICTORY' ? '#22c55e' : COMBAT_PALETTE.enemyHp }]}>
-              {resolutionOutcome === 'VICTORY' ? 'INTRUSION DECONSTRUCTED' : 'OPERATIVE SOUL DISCONNECTED'}
+              {resolutionOutcome === 'VICTORY' ? 'HOSTILE NEUTRALIZED' : 'OPERATIVE SOUL DISCONNECTED'}
             </Text>
             <Pressable onPress={handleDismissResolution} style={[styles.dismissButton, { borderColor: resolutionOutcome === 'VICTORY' ? theme.primaryColor : COMBAT_PALETTE.enemyHp }]}>
               <Text style={[styles.dismissButtonText, { color: resolutionOutcome === 'VICTORY' ? theme.primaryColor : COMBAT_PALETTE.enemyHp }]}>

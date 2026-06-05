@@ -83,51 +83,43 @@ export default function CombatCommandDeck({
     const glow = Boolean(enabled && accent && getActionGlow?.(action));
     const tileBorderColor = enabled && accent ? accent : borderColor;
 
-    const tileBody = (
-      <Pressable
-        onPress={() => enabled && onSelectAction(action)}
-        disabled={!enabled}
-        style={[
-          styles.deckTile,
-          glow ? styles.deckTileInset : { borderColor: tileBorderColor, borderWidth: 1 },
-          {
-            backgroundColor: glow ? DECK_TILE_FILL : 'transparent',
-            opacity: enabled ? 1 : 0.4,
-          },
-        ]}
-      >
-        <Text
-          style={[
-            styles.tileLabel,
-            { color: enabled && accent ? accent : mutedColor },
-          ]}
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.75}
-        >
-          {labelFor(action)}
-        </Text>
-      </Pressable>
-    );
-
-    if (!glow || !accent) {
-      return (
-        <View key={action} style={styles.tileSlot}>
-          {tileBody}
-        </View>
-      );
-    }
-
     return (
       <View
         key={action}
-        style={[
-          styles.tileSlot,
-          styles.tileBorderGlow,
-          { borderColor: accent, shadowColor: accent },
-        ]}
+        style={[styles.tileSlot, { borderColor: tileBorderColor }]}
       >
-        {tileBody}
+        {glow && accent ? (
+          <View
+            pointerEvents="none"
+            style={[
+              styles.tileGlowOverlay,
+              { borderColor: accent, shadowColor: accent },
+            ]}
+          />
+        ) : null}
+        <Pressable
+          onPress={() => enabled && onSelectAction(action)}
+          disabled={!enabled}
+          style={[
+            styles.deckTile,
+            {
+              backgroundColor: glow ? DECK_TILE_FILL : 'transparent',
+              opacity: enabled ? 1 : 0.4,
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.tileLabel,
+              { color: enabled && accent ? accent : mutedColor },
+            ]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.75}
+          >
+            {labelFor(action)}
+          </Text>
+        </Pressable>
       </View>
     );
   };
@@ -222,30 +214,29 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
     gap: 8,
     width: '100%',
-    minHeight: TILE_HEIGHT,
+    height: TILE_HEIGHT,
   },
   tileSlot: {
     flex: 1,
-    minHeight: TILE_HEIGHT,
+    height: TILE_HEIGHT,
+    borderWidth: 1,
+    position: 'relative',
     overflow: 'visible',
   },
-  tileBorderGlow: {
-    borderWidth: 1.5,
+  tileGlowOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    borderWidth: 2,
     backgroundColor: 'transparent',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 5,
-    elevation: 4,
+    shadowOpacity: 0.88,
+    shadowRadius: 11,
+    elevation: 8,
   },
   deckTile: {
-    width: '100%',
-    height: TILE_HEIGHT,
+    ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
-  },
-  deckTileInset: {
-    borderWidth: 0,
   },
   tileLabel: {
     fontFamily: MONO,
