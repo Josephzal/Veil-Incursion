@@ -25,6 +25,12 @@ import CombatCommandDeck, {
 import ParryMatrixOverlay from './combat/ParryMatrixOverlay';
 import VectorSliceOverlay, { ORIGIN_JITTER } from './combat/VectorSliceOverlay';
 import {
+  generateVariedSliceAngles,
+  getSliceLineSegment,
+  swipeHitsSliceLine,
+  type SliceArenaSize,
+} from '../utils/sliceLineGeometry';
+import {
   CombatChromeBridge,
   useCombatEnemyChromeOptional,
 } from '../context/CombatEnemyChromeContext';
@@ -165,7 +171,8 @@ export default function TacticalCombatHub({
   const parryArenaRef = useRef<ParryArenaLayout | null>(null);
   const screenFlashAnim = useRef(new Animated.Value(0)).current;
   const activeSliceRef = useRef(-1);
-  const sliceStartXRef = useRef<number | null>(null);
+  const sliceArenaRef = useRef<SliceArenaSize>({ width: 0, height: 0 });
+  const sliceTouchStartRef = useRef<{ x: number; y: number } | null>(null);
   const crossedRef = useRef(false);
   const sliceSessionRef = useRef({
     lines: [] as SliceLineConfig[], hitCount: 0, slicedIds: new Set<number>(),
@@ -514,6 +521,10 @@ export default function TacticalCombatHub({
     parryArenaRef.current = layout;
   };
 
+  const registerSliceArena = (layout: SliceArenaSize) => {
+    sliceArenaRef.current = layout;
+  };
+
   const resolveParrySuccess = () => {
     if (parryResolvedRef.current || cycleRef.current !== 'DEFEND_PARRY') return;
     parryResolvedRef.current = true;
@@ -616,10 +627,25 @@ export default function TacticalCombatHub({
   const queueSlice = (idx: number) => {
     if (idx >= 3) { evaluateSlice(); return; }
     activeSliceRef.current = idx; setActiveSliceIndex(idx);
-    crossedRef.current = false; sliceStartXRef.current = null;
+    crossedRef.current = false;
+    sliceTouchStartRef.current = null;
     const s = sliceSessionRef.current;
     if (s.segmentTimer) clearTimeout(s.segmentTimer);
     s.segmentTimer = setTimeout(() => { s.segmentTimer = null; sliceHandlersRef.current.queueNext(idx + 1); }, 1200);
+  };
+
+  const tryValidateSliceSwipe = (x0: number, y0: number, x1: number, y1: number) => {
+    const idx = activeSliceRef.current;
+    if (idx === -1 || crossedRef.current || cycleRef.current !== 'OFFENSE_SLICE') return;
+
+    const line = sliceSessionRef.current.lines.find((l) => l.id === idx);
+    const arena = sliceArenaRef.current;
+    if (!line || arena.width <= 0 || arena.height <= 0) return;
+
+    const segment = getSliceLineSegment(line, arena);
+    if (!segment || !swipeHitsSliceLine(x0, y0, x1, y1, segment)) return;
+
+    validateSlice();
   };
 
   const validateSlice = () => {
@@ -632,10 +658,13 @@ export default function TacticalCombatHub({
       s.slicedIds.add(idx); s.hitCount += 1;
       setSliceLines(s.lines.map((l) => (l.id === idx ? { ...l, isSliced: true } : l)));
       Vibration.vibrate(10);
+      apparitionRef?.current?.triggerDamageEffect();
     }
     if (s.hitFlashTimer) clearTimeout(s.hitFlashTimer);
     s.hitFlashTimer = setTimeout(() => {
-      s.hitFlashTimer = null; crossedRef.current = false; sliceStartXRef.current = null;
+      s.hitFlashTimer = null;
+      crossedRef.current = false;
+      sliceTouchStartRef.current = null;
       sliceHandlersRef.current.queueNext(idx + 1);
     }, 180);
   };
@@ -643,12 +672,14 @@ export default function TacticalCombatHub({
   const triggerSlice = () => {
     clearSliceTimers();
     sliceSessionRef.current = { lines: [], hitCount: 0, slicedIds: new Set(), segmentTimer: null, hitFlashTimer: null, evaluated: false };
-    crossedRef.current = false; sliceStartXRef.current = null;
-    const lines: SliceLineConfig[] = Array.from({ length: 3 }, (_, i) => ({
+    crossedRef.current = false;
+    sliceTouchStartRef.current = null;
+    const angles = generateVariedSliceAngles(3);
+    const lines: SliceLineConfig[] = angles.map((angleDeg, i) => ({
       id: i,
       centerXRatio: 0.5 + (Math.random() - 0.5) * ORIGIN_JITTER,
       centerYRatio: 0.5 + (Math.random() - 0.5) * ORIGIN_JITTER,
-      angleDeg: Math.floor(Math.random() * 360),
+      angleDeg,
       isSliced: false,
     }));
     sliceSessionRef.current.lines = lines; setSliceLines(lines);
@@ -659,14 +690,30 @@ export default function TacticalCombatHub({
   useEffect(() => () => clearSliceTimers(), []);
 
   const panResponder = useRef(PanResponder.create({
-    onStartShouldSetPanResponder: () => true, onMoveShouldSetPanResponder: () => true,
-    onPanResponderGrant: (_e, g) => { if (cycleRef.current === 'OFFENSE_SLICE') { sliceStartXRef.current = g.x0; crossedRef.current = false; } },
-    onPanResponderMove: (_e, g) => {
-      if (cycleRef.current !== 'OFFENSE_SLICE' || sliceStartXRef.current === null || crossedRef.current || activeSliceRef.current === -1) return;
-      if (Math.abs(g.dy) > 90) return;
-      if (Math.abs(g.dx) >= 44) sliceHandlersRef.current.validate();
+    onStartShouldSetPanResponder: () => cycleRef.current === 'OFFENSE_SLICE',
+    onMoveShouldSetPanResponder: () => cycleRef.current === 'OFFENSE_SLICE',
+    onPanResponderGrant: (e) => {
+      if (cycleRef.current !== 'OFFENSE_SLICE') return;
+      crossedRef.current = false;
+      sliceTouchStartRef.current = {
+        x: e.nativeEvent.locationX,
+        y: e.nativeEvent.locationY,
+      };
     },
-    onPanResponderRelease: () => { if (cycleRef.current === 'OFFENSE_SLICE') sliceStartXRef.current = null; },
+    onPanResponderMove: (e) => {
+      if (cycleRef.current !== 'OFFENSE_SLICE' || crossedRef.current || activeSliceRef.current === -1) return;
+      const start = sliceTouchStartRef.current;
+      if (!start) return;
+      tryValidateSliceSwipe(
+        start.x,
+        start.y,
+        e.nativeEvent.locationX,
+        e.nativeEvent.locationY,
+      );
+    },
+    onPanResponderRelease: () => {
+      if (cycleRef.current === 'OFFENSE_SLICE') sliceTouchStartRef.current = null;
+    },
   })).current;
 
   const dismiss = () => {
@@ -903,6 +950,7 @@ export default function TacticalCombatHub({
       parryFailure: isFailureState,
       onParryTap,
       registerParryArena,
+      registerSliceArena,
       sliceVisible: cycleState === 'OFFENSE_SLICE',
       sliceLines,
       activeSliceIndex,
@@ -939,6 +987,7 @@ export default function TacticalCombatHub({
             lines={sliceLines}
             activeIndex={activeSliceIndex}
             panHandlers={panResponder.panHandlers}
+            onArenaLayout={registerSliceArena}
           />
         </>
       ) : null}

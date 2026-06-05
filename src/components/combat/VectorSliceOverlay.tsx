@@ -22,7 +22,7 @@ const SLICE_CRIMSON = '#ff1744';
 const SLICE_GLOW = '#ef4444';
 const SLICE_CORE = '#ffe4e8';
 const BACKDROP = 'rgba(0,0,0,0.32)';
-const LINE_LENGTH_RATIO = 0.52;
+export const LINE_LENGTH_RATIO = 0.52;
 const GLOW_WIDTH = 9;
 const CORE_WIDTH = 4;
 const ORIGIN_JITTER = 0.04;
@@ -40,6 +40,7 @@ interface VectorSliceOverlayProps {
   lines: SliceLineRender[];
   activeIndex: number;
   panHandlers: object;
+  onArenaLayout?: (layout: { width: number; height: number }) => void;
 }
 
 function degToRad(deg: number): number {
@@ -51,13 +52,17 @@ export default function VectorSliceOverlay({
   lines,
   activeIndex,
   panHandlers,
+  onArenaLayout,
 }: VectorSliceOverlayProps): React.JSX.Element | null {
   const [size, setSize] = useState({ w: 0, h: 0 });
   const lineOpacity = useSharedValue(0);
 
   const onLayout = (e: LayoutChangeEvent) => {
     const { width: w, height: h } = e.nativeEvent.layout;
-    if (w > 0 && h > 0) setSize({ w, h });
+    if (w > 0 && h > 0) {
+      setSize({ w, h });
+      onArenaLayout?.({ width: w, height: h });
+    }
   };
 
   useEffect(() => {

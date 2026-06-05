@@ -32,6 +32,7 @@ export interface CombatEnemyChromeHandlers {
   onSlicePing: () => void;
   onParryTap: (tapX: number, tapY: number) => void;
   registerParryArena: (layout: ParryArenaLayout) => void;
+  registerSliceArena: (layout: { width: number; height: number }) => void;
   parryShrinkScale: SharedValue<number> | null;
   slicePanHandlers: Record<string, unknown> | null;
 }
@@ -55,11 +56,13 @@ const IDLE_UI: CombatEnemyChromeUIState = {
 
 const noopParryTap = (_x: number, _y: number) => {};
 const noopRegisterArena = (_layout: ParryArenaLayout) => {};
+const noopRegisterSliceArena = (_layout: { width: number; height: number }) => {};
 
 const IDLE_HANDLERS: CombatEnemyChromeHandlers = {
   onSlicePing: noop,
   onParryTap: noopParryTap,
   registerParryArena: noopRegisterArena,
+  registerSliceArena: noopRegisterSliceArena,
   parryShrinkScale: null,
   slicePanHandlers: null,
 };
@@ -164,6 +167,7 @@ export function CombatChromeBridge(snapshot: CombatEnemyChromeSnapshot): null {
     parryFailure,
     onParryTap,
     registerParryArena,
+    registerSliceArena,
     sliceVisible,
     sliceLines,
     activeSliceIndex,
@@ -175,6 +179,7 @@ export function CombatChromeBridge(snapshot: CombatEnemyChromeSnapshot): null {
       onSlicePing,
       onParryTap,
       registerParryArena,
+      registerSliceArena,
       parryShrinkScale,
       slicePanHandlers,
     };
@@ -250,6 +255,7 @@ export function CombatEnemyChromeLayer(): React.JSX.Element {
           lines={sliceLines}
           activeIndex={activeSliceIndex}
           panHandlers={handlersRef.current.slicePanHandlers}
+          onArenaLayout={(layout) => handlersRef.current.registerSliceArena(layout)}
         />
       ) : null}
     </View>
