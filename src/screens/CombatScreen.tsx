@@ -8,8 +8,10 @@ import {
 import CombatEnemyHeaderBand from '../components/combat/CombatEnemyHeaderBand';
 import CombatResolutionBanner from '../components/combat/CombatResolutionBanner';
 import IncursionShell from '../components/IncursionShell';
+import IncursionInventoryOverlay from '../components/IncursionInventoryOverlay';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
 import TacticalCombatHub from '../components/TacticalCombatHub';
+import type { IncursionConsumableId } from '../types/incursionInventory';
 import {
   CombatEnemyChromeLayer,
   CombatEnemyChromeProvider,
@@ -81,6 +83,7 @@ export default function CombatScreen(): React.JSX.Element {
     incrementCombatNodesCleared,
     activeIncursion,
     shiftBossPhase,
+    useIncursionConsumable,
   } = useRun();
   const { completeCurrentNode } = useNodeProgression();
   const { getWeaponCombatStats } = usePlayerAccount();
@@ -91,9 +94,11 @@ export default function CombatScreen(): React.JSX.Element {
 
   const [enemyTelemetry, setEnemyTelemetry] = useState<CombatEnemyTelemetry | null>(null);
   const [resolutionOutcome, setResolutionOutcome] = useState<'VICTORY' | 'DEFEAT' | null>(null);
+  const [inventoryOpen, setInventoryOpen] = useState(false);
   const resolutionDismissRef = useRef<() => void>(() => {});
   const apparitionRef = useRef<ApparitionViewportRef>(null);
   const killResolverRef = useRef<() => void>(() => {});
+  const healHandlerRef = useRef<(amount: number) => void>(() => {});
 
   const handleEnemyTelemetryChange = useCallback((enemy: CombatEnemyTelemetry | null) => {
     setEnemyTelemetry(enemy);
@@ -102,6 +107,23 @@ export default function CombatScreen(): React.JSX.Element {
   const registerKillResolver = useCallback((resolver: () => void) => {
     killResolverRef.current = resolver;
   }, []);
+
+  const registerHealHandler = useCallback((handler: (amount: number) => void) => {
+    healHandlerRef.current = handler;
+  }, []);
+
+  const handleUseConsumable = useCallback((itemId: IncursionConsumableId) => {
+    const result = useIncursionConsumable(itemId);
+    if (!result) return;
+    healHandlerRef.current(result.healAmount);
+    appendRunLog(result.logLine);
+    setInventoryOpen(false);
+  }, [appendRunLog, useIncursionConsumable]);
+
+  const showCombatInventory =
+    runState.runActive
+    && activeIncursion.isRunActive
+    && runState.combatTestPreset == null;
 
   const handleEradicationComplete = useCallback(() => {
     killResolverRef.current();
@@ -186,7 +208,12 @@ export default function CombatScreen(): React.JSX.Element {
   return (
     <IncursionShell>
       <CombatEnemyChromeProvider>
-        <MacroLogAnchoredLayout showMacroLog={runState.runActive} style={styles.combatRoot}>
+        <MacroLogAnchoredLayout
+          showMacroLog={runState.runActive}
+          showInventory={showCombatInventory}
+          onInventoryPress={() => setInventoryOpen(true)}
+          style={styles.combatRoot}
+        >
           <View style={styles.body}>
             <CombatEnemyHeaderBand enemy={enemyTelemetry} intentMutedColor={theme.mutedColor} />
 
@@ -203,6 +230,7 @@ export default function CombatScreen(): React.JSX.Element {
                 stackedLayout
                 apparitionRef={apparitionRef}
                 registerKillResolver={registerKillResolver}
+                registerHealHandler={registerHealHandler}
                 onEnemyTelemetryChange={handleEnemyTelemetryChange}
                 onResolutionPanelChange={handleResolutionPanelChange}
                 onCombatComplete={handleCombatComplete}
@@ -225,6 +253,14 @@ export default function CombatScreen(): React.JSX.Element {
             </View>
           </View>
         </MacroLogAnchoredLayout>
+
+        <IncursionInventoryOverlay
+          visible={inventoryOpen}
+          items={activeIncursion.inventory.items}
+          theme={theme}
+          onClose={() => setInventoryOpen(false)}
+          onUse={handleUseConsumable}
+        />
       </CombatEnemyChromeProvider>
     </IncursionShell>
   );

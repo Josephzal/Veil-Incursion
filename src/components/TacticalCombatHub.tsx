@@ -80,6 +80,8 @@ interface TacticalCombatHubProps {
   apparitionRef?: RefObject<ApparitionViewportRef | null>;
   /** Registers callback invoked after eradication dissolve completes (victory). */
   registerKillResolver?: (resolver: () => void) => void;
+  /** Registers callback to apply mid-combat healing from incursion consumables. */
+  registerHealHandler?: (handler: (amount: number) => void) => void;
   /** Stacked layout: victory/defeat panel in the apparition viewport (hub keeps deck + gauges). */
   onResolutionPanelChange?: (
     panel: { outcome: 'VICTORY' | 'DEFEAT'; onDismiss: () => void } | null,
@@ -110,6 +112,7 @@ export default function TacticalCombatHub({
   onEnemyTelemetryChange,
   apparitionRef,
   registerKillResolver,
+  registerHealHandler,
   onResolutionPanelChange,
   onCombatComplete, initialOperativeHp = 100, initialStamina = 100, maxStamina = 100,
   maxSoulAnchor = 100, startingAbyssalReservePercent = 0, parryMultiplierBonus = 0,
@@ -353,6 +356,25 @@ export default function TacticalCombatHub({
   useEffect(() => {
     registerKillResolver?.(() => resolveVictoryRef.current());
   }, [registerKillResolver]);
+
+  const applyHealRef = useRef((amount: number) => {
+    setOperativeHp((p) => {
+      const n = Math.min(p + amount, maxSoulAnchor);
+      operativeHpRef.current = n;
+      return n;
+    });
+  });
+  applyHealRef.current = (amount: number) => {
+    setOperativeHp((p) => {
+      const n = Math.min(p + amount, maxSoulAnchor);
+      operativeHpRef.current = n;
+      return n;
+    });
+  };
+
+  useEffect(() => {
+    registerHealHandler?.((amount: number) => applyHealRef.current(amount));
+  }, [registerHealHandler, maxSoulAnchor]);
 
   const hurtPlayer = (raw: number, unblockable = false, msg?: string) => {
     let dmg = raw;

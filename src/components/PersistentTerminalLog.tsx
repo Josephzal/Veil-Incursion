@@ -20,6 +20,9 @@ interface PersistentTerminalLogProps {
   fillRemaining?: boolean;
   /** Upper-right control — ends run and returns to identity badge (incursion screens). */
   showEndRun?: boolean;
+  /** Combat-only — opens incursion field inventory overlay. */
+  showInventory?: boolean;
+  onInventoryPress?: () => void;
 }
 
 function resolveBottomInset(insetsBottom: number): number {
@@ -39,6 +42,8 @@ export default function PersistentTerminalLog({
   docked = false,
   fillRemaining = false,
   showEndRun = false,
+  showInventory = false,
+  onInventoryPress,
 }: PersistentTerminalLogProps): React.JSX.Element | null {
   const { runLog, exitCombatToBadge } = useRun();
   const { goToHub } = useGameFlow();
@@ -78,15 +83,29 @@ export default function PersistentTerminalLog({
     >
       <View style={styles.headerRow}>
         <Text style={[styles.header, { color: theme.mutedColor }]}>RUN TERMINAL // MACRO LOG</Text>
-        {showEndRun ? (
-          <Pressable
-            onPress={handleEndRun}
-            style={[styles.endRunBtn, { borderColor: theme.borderColor }]}
-            accessibilityRole="button"
-            accessibilityLabel="End run and return to identity badge"
-          >
-            <Text style={[styles.endRunBtnText, { color: theme.mutedColor }]}>[ EXTRACT ]</Text>
-          </Pressable>
+        {showInventory || showEndRun ? (
+          <View style={styles.headerActions}>
+            {showInventory ? (
+              <Pressable
+                onPress={onInventoryPress}
+                style={[styles.endRunBtn, { borderColor: theme.borderColor }]}
+                accessibilityRole="button"
+                accessibilityLabel="Open incursion inventory"
+              >
+                <Text style={[styles.endRunBtnText, { color: theme.mutedColor }]}>[ INVENTORY ]</Text>
+              </Pressable>
+            ) : null}
+            {showEndRun ? (
+              <Pressable
+                onPress={handleEndRun}
+                style={[styles.endRunBtn, { borderColor: theme.borderColor }]}
+                accessibilityRole="button"
+                accessibilityLabel="End run and return to identity badge"
+              >
+                <Text style={[styles.endRunBtnText, { color: theme.mutedColor }]}>[ EXTRACT ]</Text>
+              </Pressable>
+            ) : null}
+          </View>
         ) : null}
       </View>
       <ScrollView
@@ -163,6 +182,12 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     flex: 1,
     minWidth: 0,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 0,
   },
   endRunBtn: {
     flexShrink: 0,

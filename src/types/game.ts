@@ -1,3 +1,4 @@
+import type { IncursionInventoryState } from './incursionInventory';
 import type { MacroStoryRunConfiguration } from './macroStory';
 import type { OutcomeModifierMetric } from './macroStory';
 import type { RegionalPresenceState } from './regional';
@@ -188,6 +189,8 @@ export interface BossRuntimeProfile {
 
 export interface ActiveIncursionState {
   environmentalModifiers: EnvironmentalModifiers;
+  /** Run-scoped consumables — separate from hub inventory manifest. */
+  inventory: IncursionInventoryState;
   progress: IncursionProgressState;
   currentNarrativeId: string | null;
   lastCheckStatus: CheckStatus;
@@ -221,6 +224,7 @@ export function createDefaultEnvironmentalModifiers(): EnvironmentalModifiers {
 export function createDefaultActiveIncursionState(): ActiveIncursionState {
   return {
     environmentalModifiers: createDefaultEnvironmentalModifiers(),
+    inventory: { items: [] },
     progress: createDefaultIncursionProgressState(),
     currentNarrativeId: null,
     lastCheckStatus: 'NOT_TESTED',

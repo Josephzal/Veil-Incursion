@@ -49,6 +49,8 @@ import {
   isBossNodeType,
 } from '../data/descentEngine';
 import { spawnBossEnemyProfile } from '../data/bossCombat';
+import { createDefaultIncursionInventory } from '../data/incursionInventory';
+import type { IncursionConsumableId, IncursionConsumableUseResult } from '../types/incursionInventory';
 
 export interface RunStartConfig {
   factionPerks?: FactionModifiers;
@@ -107,6 +109,7 @@ interface RunContextType {
   finishBadgeTestCombat: () => void;
   /** Clears run or badge test combat (caller navigates to hub / badge). */
   exitCombatToBadge: () => void;
+  useIncursionConsumable: (itemId: IncursionConsumableId) => IncursionConsumableUseResult | null;
 }
 
 const RunContext = createContext<RunContextType | undefined>(undefined);
@@ -199,6 +202,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const incursion: ActiveIncursionState = {
       ...createDefaultActiveIncursionState(),
       isRunActive: true,
+      inventory: createDefaultIncursionInventory(),
       currentTier: 1,
       currentNodeIndex: 0,
       progress: pipeline.progress,
@@ -1034,6 +1038,35 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     setRunState((prev) => ({ ...prev, pendingAmbush: false }));
   }, []);
 
+  const useIncursionConsumable = useCallback((itemId: IncursionConsumableId): IncursionConsumableUseResult | null => {
+    const inc = activeIncursionRef.current;
+    const item = inc.inventory.items.find((entry) => entry.id === itemId);
+    if (!item || item.quantity <= 0) return null;
+
+    const run = runStateRef.current;
+    const healAmount = Math.floor(run.maxSoulAnchor * (item.healPercent / 100));
+    const logLine = `>> SOUL CORE DEPLOYED — +${item.healPercent}% Soul Anchor integrity restored (+${healAmount} HP).`;
+
+    setActiveIncursion((prev) => {
+      const next: ActiveIncursionState = {
+        ...prev,
+        inventory: {
+          items: prev.inventory.items
+            .map((entry) => (
+              entry.id === itemId
+                ? { ...entry, quantity: entry.quantity - 1 }
+                : entry
+            ))
+            .filter((entry) => entry.quantity > 0),
+        },
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+
+    return { healAmount, logLine };
+  }, []);
+
   const value = useMemo(
     () => ({
       runState,
@@ -1080,6 +1113,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       startBadgeTestCombat,
       finishBadgeTestCombat,
       exitCombatToBadge,
+      useIncursionConsumable,
     }),
     [
       runState,
@@ -1126,6 +1160,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       startBadgeTestCombat,
       finishBadgeTestCombat,
       exitCombatToBadge,
+      useIncursionConsumable,
     ],
   );
 

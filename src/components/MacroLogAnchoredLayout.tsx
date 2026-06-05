@@ -6,6 +6,8 @@ interface MacroLogAnchoredLayoutProps {
   children: React.ReactNode;
   showMacroLog?: boolean;
   style?: ViewStyle;
+  showInventory?: boolean;
+  onInventoryPress?: () => void;
 }
 
 /**
@@ -16,11 +18,20 @@ export default function MacroLogAnchoredLayout({
   children,
   showMacroLog = true,
   style,
+  showInventory = false,
+  onInventoryPress,
 }: MacroLogAnchoredLayoutProps): React.JSX.Element {
   return (
     <View style={[styles.root, style]}>
       <View style={styles.content}>{children}</View>
-      {showMacroLog ? <PersistentTerminalLog docked showEndRun /> : null}
+      {showMacroLog ? (
+        <PersistentTerminalLog
+          docked
+          showEndRun
+          showInventory={showInventory}
+          onInventoryPress={onInventoryPress}
+        />
+      ) : null}
     </View>
   );
 }
