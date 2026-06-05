@@ -44,7 +44,7 @@ export default function MetropolitanMagnetismMap({
         VECTOR WORLD MAP // CONTINENTAL MAGNETISM
       </Text>
       <Text style={[styles.sub, { color: theme.mutedColor }]}>
-        5 MACRO-SECTORS // DOMINANT FACTION CONTROL OVERLAY
+        5 MACRO-SECTORS // LOW-POLY WORLD MAP // FACTION CONTROL
       </Text>
 
       <WorldMagnetismMap

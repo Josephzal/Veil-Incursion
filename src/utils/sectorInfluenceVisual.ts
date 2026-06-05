@@ -115,6 +115,24 @@ export function pointInPolygon(point: MapPoint, polygon: MapPoint[]): boolean {
   return inside;
 }
 
+function polygonCentroid(polygon: MapPoint[]): MapPoint {
+  let sumX = 0;
+  let sumY = 0;
+  polygon.forEach((vertex) => {
+    sumX += vertex.x;
+    sumY += vertex.y;
+  });
+  return { x: sumX / polygon.length, y: sumY / polygon.length };
+}
+
+function distanceBetween(a: MapPoint, b: MapPoint): number {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+const SECTOR_HIT_SLOP_VIEWBOX = 110;
+
 export function hitTestSectorAtPoint(
   point: MapPoint,
   sectors: MacroSectorDefinition[],
@@ -123,5 +141,17 @@ export function hitTestSectorAtPoint(
     const sector = sectors[i];
     if (pointInPolygon(point, sector.mapGeometry.polygon)) return sector;
   }
-  return null;
+
+  let nearest: MacroSectorDefinition | null = null;
+  let nearestDistance = SECTOR_HIT_SLOP_VIEWBOX;
+  sectors.forEach((sector) => {
+    const centroid = polygonCentroid(sector.mapGeometry.polygon);
+    const dist = distanceBetween(point, centroid);
+    if (dist < nearestDistance) {
+      nearestDistance = dist;
+      nearest = sector;
+    }
+  });
+
+  return nearest;
 }

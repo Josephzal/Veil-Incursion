@@ -12,7 +12,6 @@ import {
 import {
   Canvas,
   Circle,
-  DashPathEffect,
   Group,
   Line,
   Path,
@@ -20,7 +19,7 @@ import {
   Skia,
   vec,
 } from '@shopify/react-native-skia';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
   useAnimatedStyle,
@@ -43,10 +42,14 @@ import {
 
 const MAP_BACKDROP = '#06080d';
 const OCEAN_GRID_COLOR = '#1a2332';
-const CONTINENT_STROKE = '#2a3548';
+const CONTINENT_FILL = '#243044';
+const CONTINENT_STROKE = '#4a5d78';
 const NODE_MARKER_COLOR = '#00ff33';
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 4;
+const TAP_MAX_DURATION_MS = 450;
+const TAP_MAX_DISTANCE_PX = 28;
+const DOUBLE_TAP_MAX_DELAY_MS = 380;
 const EXPANDED_HORIZONTAL_INSET = 28;
 const EXPANDED_CHROME_HEIGHT = 130;
 
@@ -225,6 +228,11 @@ function MapViewport({
   }, [onOpen]);
 
   const pinchGesture = Gesture.Pinch()
+    .onStart(() => {
+      savedZoomScale.value = zoomScale.value;
+      savedTranslateX.value = translateX.value;
+      savedTranslateY.value = translateY.value;
+    })
     .onUpdate((event) => {
       zoomScale.value = clampZoom(savedZoomScale.value * event.scale);
     })
@@ -255,12 +263,17 @@ function MapViewport({
 
   const panGesture = Gesture.Pan()
     .manualActivation(true)
+    .maxPointers(1)
     .onTouchesMove((_event, state) => {
-      if (zoomScale.value > MIN_ZOOM) {
+      if (zoomScale.value > MIN_ZOOM + 0.02) {
         state.activate();
       } else {
         state.fail();
       }
+    })
+    .onStart(() => {
+      savedTranslateX.value = translateX.value;
+      savedTranslateY.value = translateY.value;
     })
     .onUpdate((event) => {
       const nextX = savedTranslateX.value + event.translationX;
@@ -281,7 +294,8 @@ function MapViewport({
     });
 
   const sectorTapGesture = Gesture.Tap()
-    .maxDuration(250)
+    .maxDuration(TAP_MAX_DURATION_MS)
+    .maxDistance(TAP_MAX_DISTANCE_PX)
     .onEnd((event) => {
       runOnJS(handleMapPress)(
         event.x,
@@ -294,22 +308,23 @@ function MapViewport({
 
   const doubleTapGesture = Gesture.Tap()
     .numberOfTaps(2)
-    .maxDuration(250)
+    .maxDuration(TAP_MAX_DURATION_MS)
+    .maxDelay(DOUBLE_TAP_MAX_DELAY_MS)
     .onEnd(() => {
       runOnJS(resetMapView)();
     });
 
   const previewOpenGesture = Gesture.Tap()
     .numberOfTaps(2)
-    .maxDuration(300)
+    .maxDuration(TAP_MAX_DURATION_MS)
+    .maxDelay(DOUBLE_TAP_MAX_DELAY_MS)
     .onEnd(() => {
       runOnJS(openExpandedMap)();
     });
 
   const mapGesture = interactive
-    ? Gesture.Exclusive(
-        doubleTapGesture,
-        Gesture.Simultaneous(pinchGesture, panGesture),
+    ? Gesture.Simultaneous(
+        Gesture.Exclusive(Gesture.Simultaneous(pinchGesture, panGesture), doubleTapGesture),
         sectorTapGesture,
       )
     : previewOpenGesture;
@@ -381,12 +396,17 @@ function MapViewport({
         onLayout={fillContainer ? undefined : handleHostLayout}
       >
         {activeCanvasSize.width > 0 && (
-          <GestureDetector gesture={mapGesture}>
+          <View
+            style={[
+              styles.mapSurface,
+              fillContainer ? styles.mapSurfaceCentered : null,
+              { width: activeCanvasSize.width, height: activeCanvasSize.height },
+            ]}
+          >
             <Animated.View
+              pointerEvents="none"
               style={[
-                styles.mapSurface,
-                fillContainer ? styles.mapSurfaceCentered : null,
-                { width: activeCanvasSize.width, height: activeCanvasSize.height },
+                StyleSheet.absoluteFill,
                 interactive ? mapAnimatedStyle : null,
               ]}
             >
@@ -407,21 +427,28 @@ function MapViewport({
                       p2={vec(line.p2.x, line.p2.y)}
                       color={OCEAN_GRID_COLOR}
                       strokeWidth={1}
-                      opacity={0.55}
+                      opacity={0.28}
                     />
                   ))}
 
                   {continentPaths.map((path, index) => (
-                    <Path
-                      key={`continent-${index}`}
-                      path={path}
-                      color={CONTINENT_STROKE}
-                      style="stroke"
-                      strokeWidth={2}
-                      opacity={0.7}
-                    >
-                      <DashPathEffect intervals={[10, 8]} />
-                    </Path>
+                    <Group key={`continent-${index}`}>
+                      <Path
+                        path={path}
+                        color={CONTINENT_FILL}
+                        style="fill"
+                        opacity={0.65}
+                      />
+                      <Path
+                        path={path}
+                        color={CONTINENT_STROKE}
+                        style="stroke"
+                        strokeWidth={2.5}
+                        strokeJoin="round"
+                        strokeCap="round"
+                        opacity={0.9}
+                      />
+                    </Group>
                   ))}
 
                   {sectors.map((sector) => {
@@ -447,9 +474,11 @@ function MapViewport({
                       <Path
                         key={`sector-stroke-${sector.id}`}
                         path={path}
-                        color={isActive ? theme.statusColor : theme.borderColor}
+                        color={isActive ? theme.statusColor : CONTINENT_STROKE}
                         style="stroke"
-                        strokeWidth={isActive ? 3 : 1.5}
+                        strokeWidth={isActive ? 3 : 2}
+                        strokeJoin="round"
+                        strokeCap="round"
                         opacity={isActive ? 1 : INACTIVE_SECTOR_LAYER_OPACITY}
                       />
                     );
@@ -486,9 +515,28 @@ function MapViewport({
                 )}
               </View>
             </Animated.View>
-          </GestureDetector>
+
+            <GestureDetector gesture={mapGesture}>
+              <View collapsable={false} style={styles.touchLayer} />
+            </GestureDetector>
+          </View>
         )}
       </View>
+
+      {!interactive && onOpen && (
+        <Pressable
+          onPress={onOpen}
+          style={({ pressed }) => [
+            styles.expandBtn,
+            {
+              borderColor: theme.statusColor,
+              opacity: pressed ? 0.75 : 1,
+            },
+          ]}
+        >
+          <Text style={[styles.expandBtnText, { color: theme.statusColor }]}>[ EXPAND MAP ]</Text>
+        </Pressable>
+      )}
 
       <Text style={[styles.hint, { color: theme.mutedColor }]}>{hint}</Text>
     </View>
@@ -505,7 +553,7 @@ export default function WorldMagnetismMap(props: WorldMagnetismMapProps): React.
         {...props}
         interactive={false}
         onOpen={() => setExpanded(true)}
-        hint="DOUBLE-TAP MAP TO EXPAND // SECTOR TELEMETRY IN FULL VIEW"
+        hint="TAP [ EXPAND MAP ] OR DOUBLE-TAP PREVIEW // FULL VIEW FOR SECTOR SELECT"
       />
 
       <Modal
@@ -514,34 +562,36 @@ export default function WorldMagnetismMap(props: WorldMagnetismMapProps): React.
         animationType="fade"
         onRequestClose={() => setExpanded(false)}
       >
-        <View style={styles.expandedBackdrop}>
-          <View style={styles.expandedHeader}>
-            <Text style={[styles.expandedTitle, { color: theme.primaryColor }]}>
-              VECTOR WORLD MAP // MAGNETISM SCAN
-            </Text>
-            <Pressable
-              onPress={() => setExpanded(false)}
-              style={({ pressed }) => [
-                styles.closeBtn,
-                { borderColor: theme.borderColor, opacity: pressed ? 0.75 : 1 },
-              ]}
-            >
-              <Text style={[styles.closeBtnText, { color: theme.mutedColor }]}>[ CLOSE ]</Text>
-            </Pressable>
-          </View>
+        <GestureHandlerRootView style={styles.expandedGestureRoot}>
+          <View style={styles.expandedBackdrop}>
+            <View style={styles.expandedHeader}>
+              <Text style={[styles.expandedTitle, { color: theme.primaryColor }]}>
+                VECTOR WORLD MAP // MAGNETISM SCAN
+              </Text>
+              <Pressable
+                onPress={() => setExpanded(false)}
+                style={({ pressed }) => [
+                  styles.closeBtn,
+                  { borderColor: theme.borderColor, opacity: pressed ? 0.75 : 1 },
+                ]}
+              >
+                <Text style={[styles.closeBtnText, { color: theme.mutedColor }]}>[ CLOSE ]</Text>
+              </Pressable>
+            </View>
 
-          <View style={styles.expandedMapHost}>
-            {expanded && (
-              <MapViewport
-                key="expanded-map"
-                {...props}
-                interactive
-                fillContainer
-                hint="PINCH TO SCAN // TAP SECTOR FOR TELEMETRY // DOUBLE-TAP RESET"
-              />
-            )}
+            <View style={styles.expandedMapHost}>
+              {expanded && (
+                <MapViewport
+                  key="expanded-map"
+                  {...props}
+                  interactive
+                  fillContainer
+                  hint="TAP SECTOR TO SELECT // PINCH TO ZOOM // DOUBLE-TAP RESET"
+                />
+              )}
+            </View>
           </View>
-        </View>
+        </GestureHandlerRootView>
       </Modal>
     </View>
   );
@@ -566,6 +616,11 @@ const styles = StyleSheet.create({
   },
   mapSurface: {
     overflow: 'visible',
+    position: 'relative',
+  },
+  touchLayer: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'transparent',
   },
   mapSurfaceCentered: {
     alignSelf: 'center',
@@ -598,6 +653,22 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginTop: 6,
     textAlign: 'center',
+  },
+  expandBtn: {
+    marginTop: 8,
+    alignSelf: 'center',
+    borderWidth: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+  },
+  expandBtnText: {
+    fontFamily: 'monospace',
+    fontSize: 8,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+  },
+  expandedGestureRoot: {
+    flex: 1,
   },
   expandedBackdrop: {
     flex: 1,
