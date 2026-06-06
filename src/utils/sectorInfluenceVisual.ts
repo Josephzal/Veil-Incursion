@@ -87,19 +87,17 @@ export function screenPointToViewBoxPreview(
   );
 }
 
-/** Inverse of expanded viewport transform: screen → unzoomed canvas → viewBox. */
-export function screenPointToViewBox(
+/** Inverse of expanded viewport transform (top-left scale + translate + contain layout). */
+export function screenPointToViewBoxExpanded(
   screenX: number,
   screenY: number,
   zoomScale: number,
   translateX: number,
   translateY: number,
-  centerX: number,
-  centerY: number,
   metrics: MapDrawMetrics,
 ): MapPoint {
-  const localX = (screenX - translateX - centerX * (1 - zoomScale)) / zoomScale;
-  const localY = (screenY - translateY - centerY * (1 - zoomScale)) / zoomScale;
+  const localX = (screenX - translateX) / zoomScale;
+  const localY = (screenY - translateY) / zoomScale;
   return {
     x: (localX - metrics.offsetX) / metrics.scale,
     y: (localY - metrics.offsetY) / metrics.scale,
@@ -116,22 +114,6 @@ export function focalPinchTranslationPreview(
   'worklet';
   const scaleRatio = nextScale / savedScale;
   return savedTranslate + (focal - savedTranslate) * (1 - scaleRatio);
-}
-
-/** Keep focal screen point fixed under center-origin scale + translate. */
-export function focalPinchTranslation(
-  focal: number,
-  savedTranslate: number,
-  savedScale: number,
-  nextScale: number,
-  center: number,
-): number {
-  'worklet';
-  return (
-    focal
-    - (nextScale * (focal - savedTranslate - center * (1 - savedScale))) / savedScale
-    - center * (1 - nextScale)
-  );
 }
 
 export function clampPreviewMapTranslation(
@@ -161,8 +143,6 @@ export function clampExpandedMapTranslation(
   zoomScale: number,
   width: number,
   height: number,
-  centerX: number,
-  centerY: number,
   contentLeft: number,
   contentTop: number,
   contentRight: number,
@@ -172,10 +152,10 @@ export function clampExpandedMapTranslation(
   if (zoomScale <= 1) {
     return { x: 0, y: 0 };
   }
-  const boundX1 = -zoomScale * contentLeft - centerX * (1 - zoomScale);
-  const boundX2 = width - zoomScale * contentRight - centerX * (1 - zoomScale);
-  const boundY1 = -zoomScale * contentTop - centerY * (1 - zoomScale);
-  const boundY2 = height - zoomScale * contentBottom - centerY * (1 - zoomScale);
+  const boundX1 = -zoomScale * contentLeft;
+  const boundX2 = width - zoomScale * contentRight;
+  const boundY1 = -zoomScale * contentTop;
+  const boundY2 = height - zoomScale * contentBottom;
   const minX = Math.min(boundX1, boundX2);
   const maxX = Math.max(boundX1, boundX2);
   const minY = Math.min(boundY1, boundY2);

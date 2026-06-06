@@ -37,10 +37,9 @@ import {
   resolveSectorInfluence,
   clampExpandedMapTranslation,
   clampPreviewMapTranslation,
-  focalPinchTranslation,
   focalPinchTranslationPreview,
   resolveMapDrawMetrics,
-  screenPointToViewBox,
+  screenPointToViewBoxExpanded,
   screenPointToViewBoxPreview,
   SECTOR_SELECT_HAPTIC_MS,
   viewBoxPointToCanvas,
@@ -242,34 +241,56 @@ function MapViewport({
   const handleMapPress = useCallback(
     (screenX: number, screenY: number, zoom: number, offsetX: number, offsetY: number) => {
       if (activeCanvasSize.width === 0 || activeCanvasSize.height === 0) return;
-      const viewBoxPoint = fillContainer
-        ? screenPointToViewBox(
-            screenX,
-            screenY,
-            zoom,
-            offsetX,
-            offsetY,
-            activeCanvasSize.width / 2,
-            activeCanvasSize.height / 2,
-            drawMetrics,
-          )
-        : screenPointToViewBoxPreview(
-            screenX,
-            screenY,
-            activeCanvasSize.width,
-            activeCanvasSize.height,
-            WORLD_VIEWBOX.width,
-            WORLD_VIEWBOX.height,
-            zoom,
-            offsetX,
-            offsetY,
-          );
+      const viewBoxPoint = screenPointToViewBoxPreview(
+        screenX,
+        screenY,
+        activeCanvasSize.width,
+        activeCanvasSize.height,
+        WORLD_VIEWBOX.width,
+        WORLD_VIEWBOX.height,
+        zoom,
+        offsetX,
+        offsetY,
+      );
       const hit = hitTestSectorAtPoint(viewBoxPoint, sectors);
       if (!hit) return;
       Vibration.vibrate(SECTOR_SELECT_HAPTIC_MS);
       onSectorPress(hit.id);
     },
-    [activeCanvasSize.height, activeCanvasSize.width, drawMetrics, fillContainer, onSectorPress, sectors],
+    [activeCanvasSize.height, activeCanvasSize.width, onSectorPress, sectors],
+  );
+
+  const handleExpandedMapPress = useCallback(
+    (
+      screenX: number,
+      screenY: number,
+      zoom: number,
+      panX: number,
+      panY: number,
+      mapOffsetX: number,
+      mapOffsetY: number,
+      mapOffsetRight: number,
+    ) => {
+      if (activeCanvasSize.width === 0 || activeCanvasSize.height === 0) return;
+      const metrics = {
+        scale: (mapOffsetRight - mapOffsetX) / WORLD_VIEWBOX.width,
+        offsetX: mapOffsetX,
+        offsetY: mapOffsetY,
+      };
+      const viewBoxPoint = screenPointToViewBoxExpanded(
+        screenX,
+        screenY,
+        zoom,
+        panX,
+        panY,
+        metrics,
+      );
+      const hit = hitTestSectorAtPoint(viewBoxPoint, sectors);
+      if (!hit) return;
+      Vibration.vibrate(SECTOR_SELECT_HAPTIC_MS);
+      onSectorPress(hit.id);
+    },
+    [activeCanvasSize.height, activeCanvasSize.width, onSectorPress, sectors],
   );
 
   const resetMapView = useCallback(() => {
@@ -291,34 +312,18 @@ function MapViewport({
     })
     .onUpdate((event) => {
       const nextScale = clampZoom(savedZoomScale.value * event.scale);
-      const nextX = isExpandedViewport.value
-        ? focalPinchTranslation(
-            focalX.value,
-            savedTranslateX.value,
-            savedZoomScale.value,
-            nextScale,
-            centerX.value,
-          )
-        : focalPinchTranslationPreview(
-            focalX.value,
-            savedTranslateX.value,
-            savedZoomScale.value,
-            nextScale,
-          );
-      const nextY = isExpandedViewport.value
-        ? focalPinchTranslation(
-            focalY.value,
-            savedTranslateY.value,
-            savedZoomScale.value,
-            nextScale,
-            centerY.value,
-          )
-        : focalPinchTranslationPreview(
-            focalY.value,
-            savedTranslateY.value,
-            savedZoomScale.value,
-            nextScale,
-          );
+      const nextX = focalPinchTranslationPreview(
+        focalX.value,
+        savedTranslateX.value,
+        savedZoomScale.value,
+        nextScale,
+      );
+      const nextY = focalPinchTranslationPreview(
+        focalY.value,
+        savedTranslateY.value,
+        savedZoomScale.value,
+        nextScale,
+      );
       const clamped = isExpandedViewport.value
         ? clampExpandedMapTranslation(
             nextX,
@@ -326,8 +331,6 @@ function MapViewport({
             nextScale,
             canvasWidth.value,
             canvasHeight.value,
-            centerX.value,
-            centerY.value,
             contentLeft.value,
             contentTop.value,
             contentRight.value,
@@ -363,8 +366,6 @@ function MapViewport({
             zoomScale.value,
             canvasWidth.value,
             canvasHeight.value,
-            centerX.value,
-            centerY.value,
             contentLeft.value,
             contentTop.value,
             contentRight.value,
@@ -383,7 +384,36 @@ function MapViewport({
       savedTranslateY.value = clamped.y;
     });
 
-  const panGesture = Gesture.Pan()
+  const applyPanUpdate = (
+    nextX: number,
+    nextY: number,
+    currentZoom: number,
+  ) => {
+    'worklet';
+    const clamped = isExpandedViewport.value
+      ? clampExpandedMapTranslation(
+          nextX,
+          nextY,
+          currentZoom,
+          canvasWidth.value,
+          canvasHeight.value,
+          contentLeft.value,
+          contentTop.value,
+          contentRight.value,
+          contentBottom.value,
+        )
+      : clampPreviewMapTranslation(
+          nextX,
+          nextY,
+          currentZoom,
+          canvasWidth.value,
+          canvasHeight.value,
+        );
+    translateX.value = clamped.x;
+    translateY.value = clamped.y;
+  };
+
+  const previewPanGesture = Gesture.Pan()
     .manualActivation(true)
     .maxPointers(1)
     .onTouchesMove((_event, state) => {
@@ -398,31 +428,11 @@ function MapViewport({
       savedTranslateY.value = translateY.value;
     })
     .onUpdate((event) => {
-      const nextX = savedTranslateX.value + event.translationX;
-      const nextY = savedTranslateY.value + event.translationY;
-      const clamped = isExpandedViewport.value
-        ? clampExpandedMapTranslation(
-            nextX,
-            nextY,
-            zoomScale.value,
-            canvasWidth.value,
-            canvasHeight.value,
-            centerX.value,
-            centerY.value,
-            contentLeft.value,
-            contentTop.value,
-            contentRight.value,
-            contentBottom.value,
-          )
-        : clampPreviewMapTranslation(
-            nextX,
-            nextY,
-            zoomScale.value,
-            canvasWidth.value,
-            canvasHeight.value,
-          );
-      translateX.value = clamped.x;
-      translateY.value = clamped.y;
+      applyPanUpdate(
+        savedTranslateX.value + event.translationX,
+        savedTranslateY.value + event.translationY,
+        zoomScale.value,
+      );
     })
     .onEnd(() => {
       savedTranslateX.value = translateX.value;
@@ -433,6 +443,19 @@ function MapViewport({
     .maxDuration(TAP_MAX_DURATION_MS)
     .maxDistance(TAP_MAX_DISTANCE_PX)
     .onEnd((event) => {
+      if (isExpandedViewport.value) {
+        runOnJS(handleExpandedMapPress)(
+          event.x,
+          event.y,
+          zoomScale.value,
+          translateX.value,
+          translateY.value,
+          contentLeft.value,
+          contentTop.value,
+          contentRight.value,
+        );
+        return;
+      }
       runOnJS(handleMapPress)(
         event.x,
         event.y,
@@ -451,7 +474,7 @@ function MapViewport({
     });
 
   const mapGesture = Gesture.Simultaneous(
-    Gesture.Exclusive(Gesture.Simultaneous(pinchGesture, panGesture), doubleTapGesture),
+    Gesture.Exclusive(Gesture.Simultaneous(pinchGesture, previewPanGesture), doubleTapGesture),
     sectorTapGesture,
   );
 
@@ -464,14 +487,6 @@ function MapViewport({
 
   const mapScaleStyle = useAnimatedStyle(() => ({
     transform: [{ scale: zoomScale.value }],
-  }));
-
-  const mapExpandedViewportStyle = useAnimatedStyle(() => ({
-    transform: [
-      { scale: zoomScale.value },
-      { translateX: translateX.value },
-      { translateY: translateY.value },
-    ],
   }));
 
   const activeSector = sectors.find((sector) => sector.id === activeSectorId);
@@ -644,35 +659,20 @@ function MapViewport({
               fillContainer ? styles.mapSurfaceFill : { width: activeCanvasSize.width, height: activeCanvasSize.height },
             ]}
           >
-            {fillContainer ? (
+            <Animated.View pointerEvents="none" style={[styles.mapVisualLayer, mapPanStyle]}>
               <Animated.View
-                pointerEvents="none"
                 style={[
                   {
                     width: activeCanvasSize.width,
                     height: activeCanvasSize.height,
+                    transformOrigin: 'top left',
                   },
-                  mapExpandedViewportStyle,
+                  mapScaleStyle,
                 ]}
               >
                 {mapVisualContent}
               </Animated.View>
-            ) : (
-              <Animated.View pointerEvents="none" style={[styles.mapVisualLayer, mapPanStyle]}>
-                <Animated.View
-                  style={[
-                    {
-                      width: activeCanvasSize.width,
-                      height: activeCanvasSize.height,
-                      transformOrigin: 'top left',
-                    },
-                    mapScaleStyle,
-                  ]}
-                >
-                  {mapVisualContent}
-                </Animated.View>
-              </Animated.View>
-            )}
+            </Animated.View>
 
             <GestureDetector gesture={mapGesture}>
               <View collapsable={false} style={styles.touchLayer} />
