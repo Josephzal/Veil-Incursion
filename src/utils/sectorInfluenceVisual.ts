@@ -63,40 +63,106 @@ export function canvasPointToViewBox(
   };
 }
 
-/** Inverse of viewport transform: screen → unzoomed canvas → viewBox. */
+/** Inverse of preview viewport transform (top-left scale + translate). */
+export function screenPointToViewBoxPreview(
+  screenX: number,
+  screenY: number,
+  canvasWidth: number,
+  canvasHeight: number,
+  viewBoxWidth: number,
+  viewBoxHeight: number,
+  zoomScale: number,
+  translateX: number,
+  translateY: number,
+): MapPoint {
+  const localX = (screenX - translateX) / zoomScale;
+  const localY = (screenY - translateY) / zoomScale;
+  return canvasPointToViewBox(
+    localX,
+    localY,
+    canvasWidth,
+    canvasHeight,
+    viewBoxWidth,
+    viewBoxHeight,
+  );
+}
+
+/** Inverse of expanded viewport transform: screen → unzoomed canvas → viewBox. */
 export function screenPointToViewBox(
   screenX: number,
   screenY: number,
   zoomScale: number,
   translateX: number,
   translateY: number,
+  centerX: number,
+  centerY: number,
   metrics: MapDrawMetrics,
 ): MapPoint {
-  const localX = (screenX - translateX) / zoomScale;
-  const localY = (screenY - translateY) / zoomScale;
+  const localX = (screenX - translateX - centerX * (1 - zoomScale)) / zoomScale;
+  const localY = (screenY - translateY - centerY * (1 - zoomScale)) / zoomScale;
   return {
     x: (localX - metrics.offsetX) / metrics.scale,
     y: (localY - metrics.offsetY) / metrics.scale,
   };
 }
 
-/** Keep focal screen point fixed under top-left scale + translate (screen = scale * p + translate). */
-export function focalPinchTranslation(
+/** Keep focal screen point fixed under top-left scale + translate. */
+export function focalPinchTranslationPreview(
   focal: number,
   savedTranslate: number,
   savedScale: number,
   nextScale: number,
 ): number {
   'worklet';
-  return focal - (nextScale * (focal - savedTranslate)) / savedScale;
+  const scaleRatio = nextScale / savedScale;
+  return savedTranslate + (focal - savedTranslate) * (1 - scaleRatio);
 }
 
-export function clampMapTranslation(
+/** Keep focal screen point fixed under center-origin scale + translate. */
+export function focalPinchTranslation(
+  focal: number,
+  savedTranslate: number,
+  savedScale: number,
+  nextScale: number,
+  center: number,
+): number {
+  'worklet';
+  return (
+    focal
+    - (nextScale * (focal - savedTranslate - center * (1 - savedScale))) / savedScale
+    - center * (1 - nextScale)
+  );
+}
+
+export function clampPreviewMapTranslation(
   translateX: number,
   translateY: number,
   zoomScale: number,
   width: number,
   height: number,
+): { x: number; y: number } {
+  'worklet';
+  if (zoomScale <= 1) {
+    return { x: 0, y: 0 };
+  }
+  const minX = width * (1 - zoomScale);
+  const maxX = 0;
+  const minY = height * (1 - zoomScale);
+  const maxY = 0;
+  return {
+    x: Math.min(maxX, Math.max(minX, translateX)),
+    y: Math.min(maxY, Math.max(minY, translateY)),
+  };
+}
+
+export function clampExpandedMapTranslation(
+  translateX: number,
+  translateY: number,
+  zoomScale: number,
+  width: number,
+  height: number,
+  centerX: number,
+  centerY: number,
   contentLeft: number,
   contentTop: number,
   contentRight: number,
@@ -106,10 +172,14 @@ export function clampMapTranslation(
   if (zoomScale <= 1) {
     return { x: 0, y: 0 };
   }
-  const minX = -zoomScale * contentLeft;
-  const maxX = width - zoomScale * contentRight;
-  const minY = -zoomScale * contentTop;
-  const maxY = height - zoomScale * contentBottom;
+  const boundX1 = -zoomScale * contentLeft - centerX * (1 - zoomScale);
+  const boundX2 = width - zoomScale * contentRight - centerX * (1 - zoomScale);
+  const boundY1 = -zoomScale * contentTop - centerY * (1 - zoomScale);
+  const boundY2 = height - zoomScale * contentBottom - centerY * (1 - zoomScale);
+  const minX = Math.min(boundX1, boundX2);
+  const maxX = Math.max(boundX1, boundX2);
+  const minY = Math.min(boundY1, boundY2);
+  const maxY = Math.max(boundY1, boundY2);
   return {
     x: Math.min(maxX, Math.max(minX, translateX)),
     y: Math.min(maxY, Math.max(minY, translateY)),

@@ -35,10 +35,13 @@ import {
   INACTIVE_SECTOR_LAYER_OPACITY,
   polygonToSkiaPath,
   resolveSectorInfluence,
-  clampMapTranslation,
+  clampExpandedMapTranslation,
+  clampPreviewMapTranslation,
   focalPinchTranslation,
+  focalPinchTranslationPreview,
   resolveMapDrawMetrics,
   screenPointToViewBox,
+  screenPointToViewBoxPreview,
   SECTOR_SELECT_HAPTIC_MS,
   viewBoxPointToCanvas,
 } from '../utils/sectorInfluenceVisual';
@@ -151,6 +154,9 @@ function MapViewport({
   const contentTop = useSharedValue(0);
   const contentRight = useSharedValue(0);
   const contentBottom = useSharedValue(0);
+  const centerX = useSharedValue(0);
+  const centerY = useSharedValue(0);
+  const isExpandedViewport = useSharedValue(fillContainer ? 1 : 0);
 
   const handleHostLayout = useCallback((event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
@@ -159,6 +165,8 @@ function MapViewport({
       if (width > 0 && height > 0) {
         canvasWidth.value = width;
         canvasHeight.value = height;
+        centerX.value = width / 2;
+        centerY.value = height / 2;
       }
       return;
     }
@@ -169,6 +177,8 @@ function MapViewport({
     if (expandedHostSize) {
       canvasWidth.value = expandedHostSize.width;
       canvasHeight.value = expandedHostSize.height;
+      centerX.value = expandedHostSize.width / 2;
+      centerY.value = expandedHostSize.height / 2;
       return;
     }
     if (hostSize.width === 0) return;
@@ -176,7 +186,9 @@ function MapViewport({
     setCanvasSize(next);
     canvasWidth.value = next.width;
     canvasHeight.value = next.height;
-  }, [canvasHeight, canvasWidth, expandedHostSize, hostSize.height, hostSize.width]);
+    centerX.value = next.width / 2;
+    centerY.value = next.height / 2;
+  }, [canvasHeight, canvasWidth, centerX, centerY, expandedHostSize, hostSize.height, hostSize.width]);
 
   const activeCanvasSize = expandedHostSize ?? canvasSize;
 
@@ -230,20 +242,34 @@ function MapViewport({
   const handleMapPress = useCallback(
     (screenX: number, screenY: number, zoom: number, offsetX: number, offsetY: number) => {
       if (activeCanvasSize.width === 0 || activeCanvasSize.height === 0) return;
-      const viewBoxPoint = screenPointToViewBox(
-        screenX,
-        screenY,
-        zoom,
-        offsetX,
-        offsetY,
-        drawMetrics,
-      );
+      const viewBoxPoint = fillContainer
+        ? screenPointToViewBox(
+            screenX,
+            screenY,
+            zoom,
+            offsetX,
+            offsetY,
+            activeCanvasSize.width / 2,
+            activeCanvasSize.height / 2,
+            drawMetrics,
+          )
+        : screenPointToViewBoxPreview(
+            screenX,
+            screenY,
+            activeCanvasSize.width,
+            activeCanvasSize.height,
+            WORLD_VIEWBOX.width,
+            WORLD_VIEWBOX.height,
+            zoom,
+            offsetX,
+            offsetY,
+          );
       const hit = hitTestSectorAtPoint(viewBoxPoint, sectors);
       if (!hit) return;
       Vibration.vibrate(SECTOR_SELECT_HAPTIC_MS);
       onSectorPress(hit.id);
     },
-    [activeCanvasSize.height, activeCanvasSize.width, drawMetrics, onSectorPress, sectors],
+    [activeCanvasSize.height, activeCanvasSize.width, drawMetrics, fillContainer, onSectorPress, sectors],
   );
 
   const resetMapView = useCallback(() => {
@@ -265,29 +291,55 @@ function MapViewport({
     })
     .onUpdate((event) => {
       const nextScale = clampZoom(savedZoomScale.value * event.scale);
-      const nextX = focalPinchTranslation(
-        focalX.value,
-        savedTranslateX.value,
-        savedZoomScale.value,
-        nextScale,
-      );
-      const nextY = focalPinchTranslation(
-        focalY.value,
-        savedTranslateY.value,
-        savedZoomScale.value,
-        nextScale,
-      );
-      const clamped = clampMapTranslation(
-        nextX,
-        nextY,
-        nextScale,
-        canvasWidth.value,
-        canvasHeight.value,
-        contentLeft.value,
-        contentTop.value,
-        contentRight.value,
-        contentBottom.value,
-      );
+      const nextX = isExpandedViewport.value
+        ? focalPinchTranslation(
+            focalX.value,
+            savedTranslateX.value,
+            savedZoomScale.value,
+            nextScale,
+            centerX.value,
+          )
+        : focalPinchTranslationPreview(
+            focalX.value,
+            savedTranslateX.value,
+            savedZoomScale.value,
+            nextScale,
+          );
+      const nextY = isExpandedViewport.value
+        ? focalPinchTranslation(
+            focalY.value,
+            savedTranslateY.value,
+            savedZoomScale.value,
+            nextScale,
+            centerY.value,
+          )
+        : focalPinchTranslationPreview(
+            focalY.value,
+            savedTranslateY.value,
+            savedZoomScale.value,
+            nextScale,
+          );
+      const clamped = isExpandedViewport.value
+        ? clampExpandedMapTranslation(
+            nextX,
+            nextY,
+            nextScale,
+            canvasWidth.value,
+            canvasHeight.value,
+            centerX.value,
+            centerY.value,
+            contentLeft.value,
+            contentTop.value,
+            contentRight.value,
+            contentBottom.value,
+          )
+        : clampPreviewMapTranslation(
+            nextX,
+            nextY,
+            nextScale,
+            canvasWidth.value,
+            canvasHeight.value,
+          );
       translateX.value = clamped.x;
       translateY.value = clamped.y;
       zoomScale.value = nextScale;
@@ -304,17 +356,27 @@ function MapViewport({
       }
 
       savedZoomScale.value = zoomScale.value;
-      const clamped = clampMapTranslation(
-        translateX.value,
-        translateY.value,
-        zoomScale.value,
-        canvasWidth.value,
-        canvasHeight.value,
-        contentLeft.value,
-        contentTop.value,
-        contentRight.value,
-        contentBottom.value,
-      );
+      const clamped = isExpandedViewport.value
+        ? clampExpandedMapTranslation(
+            translateX.value,
+            translateY.value,
+            zoomScale.value,
+            canvasWidth.value,
+            canvasHeight.value,
+            centerX.value,
+            centerY.value,
+            contentLeft.value,
+            contentTop.value,
+            contentRight.value,
+            contentBottom.value,
+          )
+        : clampPreviewMapTranslation(
+            translateX.value,
+            translateY.value,
+            zoomScale.value,
+            canvasWidth.value,
+            canvasHeight.value,
+          );
       translateX.value = withTiming(clamped.x);
       translateY.value = withTiming(clamped.y);
       savedTranslateX.value = clamped.x;
@@ -338,17 +400,27 @@ function MapViewport({
     .onUpdate((event) => {
       const nextX = savedTranslateX.value + event.translationX;
       const nextY = savedTranslateY.value + event.translationY;
-      const clamped = clampMapTranslation(
-        nextX,
-        nextY,
-        zoomScale.value,
-        canvasWidth.value,
-        canvasHeight.value,
-        contentLeft.value,
-        contentTop.value,
-        contentRight.value,
-        contentBottom.value,
-      );
+      const clamped = isExpandedViewport.value
+        ? clampExpandedMapTranslation(
+            nextX,
+            nextY,
+            zoomScale.value,
+            canvasWidth.value,
+            canvasHeight.value,
+            centerX.value,
+            centerY.value,
+            contentLeft.value,
+            contentTop.value,
+            contentRight.value,
+            contentBottom.value,
+          )
+        : clampPreviewMapTranslation(
+            nextX,
+            nextY,
+            zoomScale.value,
+            canvasWidth.value,
+            canvasHeight.value,
+          );
       translateX.value = clamped.x;
       translateY.value = clamped.y;
     })
@@ -394,6 +466,14 @@ function MapViewport({
     transform: [{ scale: zoomScale.value }],
   }));
 
+  const mapExpandedViewportStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: zoomScale.value },
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+    ],
+  }));
+
   const activeSector = sectors.find((sector) => sector.id === activeSectorId);
   const activeSectorLabel = activeSector
     ? viewBoxPointToCanvas(activeSector.mapGeometry.labelAnchor, drawMetrics)
@@ -403,6 +483,135 @@ function MapViewport({
   const homeMarker = homeSector
     ? viewBoxPointToCanvas(homeSector.mapGeometry.nodeAnchor, drawMetrics)
     : null;
+
+  const mapVisualContent = (
+    <>
+      <Canvas style={{ width: activeCanvasSize.width, height: activeCanvasSize.height }}>
+        <Group
+          transform={[
+            { translateX: drawMetrics.offsetX },
+            { translateY: drawMetrics.offsetY },
+            { scale: drawMetrics.scale },
+          ]}
+        >
+          <Rect
+            x={0}
+            y={0}
+            width={WORLD_VIEWBOX.width}
+            height={WORLD_VIEWBOX.height}
+            color={MAP_BACKDROP}
+          />
+
+          {gridLines.map((line, index) => (
+            <Line
+              key={`grid-${index}`}
+              p1={vec(line.p1.x, line.p1.y)}
+              p2={vec(line.p2.x, line.p2.y)}
+              color={OCEAN_GRID_COLOR}
+              strokeWidth={1}
+              opacity={0.28}
+            />
+          ))}
+
+          {continentPaths.map((path, index) => (
+            <Group key={`continent-${index}`}>
+              <Path
+                path={path}
+                color={CONTINENT_FILL}
+                style="fill"
+                opacity={0.65}
+              />
+              <Path
+                path={path}
+                color={CONTINENT_STROKE}
+                style="stroke"
+                strokeWidth={2.5}
+                strokeJoin="round"
+                strokeCap="round"
+                opacity={0.9}
+              />
+            </Group>
+          ))}
+
+          {sectors.map((sector) => {
+            const isActive = sector.id === activeSectorId;
+            const influence = resolveSectorInfluence(sector, isInfluenceFrozen, frozenInfluence);
+            const fillColor = getSectorTintColor(influence, isActive);
+            const path = buildPathFromPolygon(sector.mapGeometry.polygon);
+            return (
+              <Path
+                key={`sector-fill-${sector.id}`}
+                path={path}
+                color={fillColor}
+                style="fill"
+                opacity={isActive ? 1 : INACTIVE_SECTOR_LAYER_OPACITY}
+              />
+            );
+          })}
+
+          {sectors.map((sector) => {
+            const isActive = sector.id === activeSectorId;
+            const path = buildPathFromPolygon(sector.mapGeometry.polygon);
+            return (
+              <Path
+                key={`sector-stroke-${sector.id}`}
+                path={path}
+                color={isActive ? theme.statusColor : CONTINENT_STROKE}
+                style="stroke"
+                strokeWidth={isActive ? 3 : 2}
+                strokeJoin="round"
+                strokeCap="round"
+                opacity={isActive ? 1 : INACTIVE_SECTOR_LAYER_OPACITY}
+              />
+            );
+          })}
+
+          {sectors.map((sector) => {
+            const isActive = sector.id === activeSectorId;
+            const { nodeAnchor } = sector.mapGeometry;
+            return (
+              <Circle
+                key={`node-${sector.id}`}
+                cx={nodeAnchor.x}
+                cy={nodeAnchor.y}
+                r={isActive ? 7 : 5}
+                color={isActive ? NODE_MARKER_COLOR : theme.mutedColor}
+                opacity={isActive ? 1 : INACTIVE_SECTOR_LAYER_OPACITY}
+              />
+            );
+          })}
+        </Group>
+      </Canvas>
+
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        {activeSector && activeSectorLabel && (
+          <Text
+            pointerEvents="none"
+            style={[
+              styles.sectorLabel,
+              {
+                left: activeSectorLabel.x - 48,
+                top: activeSectorLabel.y - 8,
+                color: theme.statusColor,
+              },
+            ]}
+          >
+            {activeSector.label}
+          </Text>
+        )}
+        {homeMarker && (
+          <View
+            style={[
+              styles.homeMarkerTag,
+              { left: homeMarker.x + 10, top: homeMarker.y - 8, borderColor: theme.borderColor },
+            ]}
+          >
+            <Text style={[styles.homeMarkerText, { color: theme.mutedColor }]}>HOME</Text>
+          </View>
+        )}
+      </View>
+    </>
+  );
 
   return (
     <View
@@ -435,146 +644,35 @@ function MapViewport({
               fillContainer ? styles.mapSurfaceFill : { width: activeCanvasSize.width, height: activeCanvasSize.height },
             ]}
           >
-            <Animated.View
-              pointerEvents="none"
-              style={[styles.mapVisualLayer, mapPanStyle]}
-            >
+            {fillContainer ? (
               <Animated.View
+                pointerEvents="none"
                 style={[
                   {
                     width: activeCanvasSize.width,
                     height: activeCanvasSize.height,
-                    transformOrigin: 'top left',
                   },
-                  mapScaleStyle,
+                  mapExpandedViewportStyle,
                 ]}
               >
-              <Canvas style={{ width: activeCanvasSize.width, height: activeCanvasSize.height }}>
-                <Group
-                  transform={[
-                    { translateX: drawMetrics.offsetX },
-                    { translateY: drawMetrics.offsetY },
-                    { scale: drawMetrics.scale },
+                {mapVisualContent}
+              </Animated.View>
+            ) : (
+              <Animated.View pointerEvents="none" style={[styles.mapVisualLayer, mapPanStyle]}>
+                <Animated.View
+                  style={[
+                    {
+                      width: activeCanvasSize.width,
+                      height: activeCanvasSize.height,
+                      transformOrigin: 'top left',
+                    },
+                    mapScaleStyle,
                   ]}
                 >
-                  <Rect
-                    x={0}
-                    y={0}
-                    width={WORLD_VIEWBOX.width}
-                    height={WORLD_VIEWBOX.height}
-                    color={MAP_BACKDROP}
-                  />
-
-                  {gridLines.map((line, index) => (
-                    <Line
-                      key={`grid-${index}`}
-                      p1={vec(line.p1.x, line.p1.y)}
-                      p2={vec(line.p2.x, line.p2.y)}
-                      color={OCEAN_GRID_COLOR}
-                      strokeWidth={1}
-                      opacity={0.28}
-                    />
-                  ))}
-
-                  {continentPaths.map((path, index) => (
-                    <Group key={`continent-${index}`}>
-                      <Path
-                        path={path}
-                        color={CONTINENT_FILL}
-                        style="fill"
-                        opacity={0.65}
-                      />
-                      <Path
-                        path={path}
-                        color={CONTINENT_STROKE}
-                        style="stroke"
-                        strokeWidth={2.5}
-                        strokeJoin="round"
-                        strokeCap="round"
-                        opacity={0.9}
-                      />
-                    </Group>
-                  ))}
-
-                  {sectors.map((sector) => {
-                    const isActive = sector.id === activeSectorId;
-                    const influence = resolveSectorInfluence(sector, isInfluenceFrozen, frozenInfluence);
-                    const fillColor = getSectorTintColor(influence, isActive);
-                    const path = buildPathFromPolygon(sector.mapGeometry.polygon);
-                    return (
-                      <Path
-                        key={`sector-fill-${sector.id}`}
-                        path={path}
-                        color={fillColor}
-                        style="fill"
-                        opacity={isActive ? 1 : INACTIVE_SECTOR_LAYER_OPACITY}
-                      />
-                    );
-                  })}
-
-                  {sectors.map((sector) => {
-                    const isActive = sector.id === activeSectorId;
-                    const path = buildPathFromPolygon(sector.mapGeometry.polygon);
-                    return (
-                      <Path
-                        key={`sector-stroke-${sector.id}`}
-                        path={path}
-                        color={isActive ? theme.statusColor : CONTINENT_STROKE}
-                        style="stroke"
-                        strokeWidth={isActive ? 3 : 2}
-                        strokeJoin="round"
-                        strokeCap="round"
-                        opacity={isActive ? 1 : INACTIVE_SECTOR_LAYER_OPACITY}
-                      />
-                    );
-                  })}
-
-                  {sectors.map((sector) => {
-                    const isActive = sector.id === activeSectorId;
-                    const { nodeAnchor } = sector.mapGeometry;
-                    return (
-                      <Circle
-                        key={`node-${sector.id}`}
-                        cx={nodeAnchor.x}
-                        cy={nodeAnchor.y}
-                        r={isActive ? 7 : 5}
-                        color={isActive ? NODE_MARKER_COLOR : theme.mutedColor}
-                        opacity={isActive ? 1 : INACTIVE_SECTOR_LAYER_OPACITY}
-                      />
-                    );
-                  })}
-                </Group>
-              </Canvas>
-
-              <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                {activeSector && activeSectorLabel && (
-                  <Text
-                    pointerEvents="none"
-                    style={[
-                      styles.sectorLabel,
-                      {
-                        left: activeSectorLabel.x - 48,
-                        top: activeSectorLabel.y - 8,
-                        color: theme.statusColor,
-                      },
-                    ]}
-                  >
-                    {activeSector.label}
-                  </Text>
-                )}
-                {homeMarker && (
-                  <View
-                    style={[
-                      styles.homeMarkerTag,
-                      { left: homeMarker.x + 10, top: homeMarker.y - 8, borderColor: theme.borderColor },
-                    ]}
-                  >
-                    <Text style={[styles.homeMarkerText, { color: theme.mutedColor }]}>HOME</Text>
-                  </View>
-                )}
-              </View>
+                  {mapVisualContent}
+                </Animated.View>
               </Animated.View>
-            </Animated.View>
+            )}
 
             <GestureDetector gesture={mapGesture}>
               <View collapsable={false} style={styles.touchLayer} />
