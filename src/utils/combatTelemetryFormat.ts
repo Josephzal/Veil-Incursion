@@ -29,6 +29,18 @@ export function formatIntentReadout(intent: EnemyIntent): string {
   return INTENT_READOUT[intent] ?? intent.replace(/_/g, ' ');
 }
 
+export type EnemyDeckStrikeVariant = 'hp' | 'stamina' | 'abyssal';
+
+const HP_STRIKE_INTENTS: EnemyIntent[] = ['STRIKE', 'WORLD_ENDER', 'OVERDRIVE_DISCHARGE'];
+
+/** Maps hostile intents to the transparent strike overlay shown on the operative deck. */
+export function getEnemyDeckStrikeVariant(intent: EnemyIntent): EnemyDeckStrikeVariant | null {
+  if (HP_STRIKE_INTENTS.includes(intent)) return 'hp';
+  if (intent === 'STRIP_STAMINA') return 'stamina';
+  if (intent === 'SIPHON_ABYSSAL') return 'abyssal';
+  return null;
+}
+
 export function clampRatio(ratio: number): number {
   if (!Number.isFinite(ratio)) return 0;
   return Math.max(0, Math.min(1, ratio));

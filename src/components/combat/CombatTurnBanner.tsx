@@ -29,9 +29,17 @@ export default function CombatTurnBanner({
   let border = primaryColor;
 
   switch (phase) {
-    case 'ENEMY_ACTION':
+    case 'ENEMY_WINDUP':
       label = 'HOSTILE TURN';
-      sublabel = enemyIntent ? formatIntentReadout(enemyIntent) : 'RESOLVING ATTACK';
+      sublabel = enemyIntent
+        ? `${formatIntentReadout(enemyIntent)} — READ INTENT`
+        : 'ANALYZING HOSTILE CHANNEL';
+      accent = HOSTILE_RED;
+      border = HOSTILE_RED;
+      break;
+    case 'ENEMY_ACTION':
+      label = 'HOSTILE ATTACK';
+      sublabel = enemyIntent ? `${formatIntentReadout(enemyIntent)} — INCOMING` : 'STRIKE CHANNEL ACTIVE';
       accent = HOSTILE_RED;
       border = HOSTILE_RED;
       break;

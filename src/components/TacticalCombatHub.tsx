@@ -42,10 +42,13 @@ import {
   useCombatTurnOptional,
 } from '../context/CombatTurnContext';
 import CombatTurnBanner from './combat/CombatTurnBanner';
+import CombatDeckStrikeOverlay from './combat/CombatDeckStrikeOverlay';
 import {
   type CombatEnemyTelemetry,
+  type EnemyDeckStrikeVariant,
   formatHostileId,
   formatIntentReadout,
+  getEnemyDeckStrikeVariant,
   GAUGE_ABYSSAL,
   GAUGE_SOUL_ANCHOR,
   GAUGE_STAMINA,
@@ -115,6 +118,11 @@ interface SliceLineConfig {
 const isAttackIntent = (i: EnemyIntent) =>
   i === 'STRIKE' || i === 'WORLD_ENDER' || i === 'OVERDRIVE_DISCHARGE';
 
+const ENEMY_INTENT_READ_MS = 2500;
+const ENEMY_ATTACK_ANIM_MS = 1500;
+
+type EnemyActionStage = 'reading' | 'executing' | null;
+
 export default function TacticalCombatHub({
   stackedLayout = false,
   onEnemyTelemetryChange,
@@ -179,6 +187,8 @@ export default function TacticalCombatHub({
   const [activeSliceIndex, setActiveSliceIndex] = useState(-1);
   const [sliceLines, setSliceLines] = useState<SliceLineConfig[]>([]);
   const [selectedAction, setSelectedAction] = useState<CombatDeckAction | null>(null);
+  const [enemyActionStage, setEnemyActionStage] = useState<EnemyActionStage>(null);
+  const [deckStrikeOverlay, setDeckStrikeOverlay] = useState<EnemyDeckStrikeVariant | null>(null);
 
   const operativeHpRef = useRef(initialOperativeHp);
   const staminaRef = useRef(initialStamina);
@@ -213,6 +223,7 @@ export default function TacticalCombatHub({
     queueNext: (_i: number) => {}, validate: () => {}, evaluate: () => {}, trigger: () => {},
   });
   const enemyTurnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const enemyStrikeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isCombatTerminal = () =>
     resolutionRef.current != null || operativeHpRef.current <= 0;
@@ -242,9 +253,10 @@ export default function TacticalCombatHub({
     if (cycleState === 'RESOLUTION') return 'RESOLUTION';
     if (cycleState === 'DEFEND_PARRY') return 'PARRY_WINDOW';
     if (cycleState === 'OFFENSE_SLICE') return 'SLICE';
+    if (!isPlayerTurn && enemyActionStage === 'reading') return 'ENEMY_WINDUP';
     if (!isPlayerTurn) return 'ENEMY_ACTION';
     return 'PLAYER_COMMAND';
-  }, [cycleState, isPlayerTurn]);
+  }, [cycleState, enemyActionStage, isPlayerTurn]);
 
   const setCombatTurnState = combatTurn?.setCombatTurnState;
 
@@ -340,6 +352,19 @@ export default function TacticalCombatHub({
     }, PARRY_HALO_DURATION_MS);
   };
 
+  const clearEnemyTurnTimers = () => {
+    if (enemyTurnTimerRef.current) {
+      clearTimeout(enemyTurnTimerRef.current);
+      enemyTurnTimerRef.current = null;
+    }
+    if (enemyStrikeTimerRef.current) {
+      clearTimeout(enemyStrikeTimerRef.current);
+      enemyStrikeTimerRef.current = null;
+    }
+    setEnemyActionStage(null);
+    setDeckStrikeOverlay(null);
+  };
+
   const abortCombatMinigames = () => {
     clearParrySuccessBurst();
     clearSliceTimers();
@@ -349,10 +374,7 @@ export default function TacticalCombatHub({
     setActiveSliceIndex(-1);
     crossedRef.current = false;
     sliceTouchStartRef.current = null;
-    if (enemyTurnTimerRef.current) {
-      clearTimeout(enemyTurnTimerRef.current);
-      enemyTurnTimerRef.current = null;
-    }
+    clearEnemyTurnTimers();
     cancelAnimation(parryScaleSV);
     parryResolvedRef.current = true;
     parryTapPendingRef.current = false;
@@ -580,6 +602,22 @@ export default function TacticalCombatHub({
     && abyssalRef.current >= COMBAT_ACTION.COUNTER_ABYSSAL_MIN
     && staminaRef.current >= COMBAT_ACTION.COUNTER_STAMINA;
 
+  const resolveEnemyAction = (countering: boolean) => {
+    if (isCombatTerminal()) return;
+    const currentEnemy = enemyRef.current;
+    if (!currentEnemy || currentEnemy.currentHp <= 0 || operativeHpRef.current <= 0) {
+      setEnemyActionStage(null);
+      setDeckStrikeOverlay(null);
+      return;
+    }
+    setEnemyActionStage(null);
+    setDeckStrikeOverlay(null);
+    if (countering && openParryWindow(currentEnemy, true)) return;
+    if (!countering && openParryWindow(currentEnemy, false)) return;
+    execIntent(currentEnemy);
+    if (operativeHpRef.current > 0 && currentEnemy.currentHp > 0) endEnemyTurn();
+  };
+
   const openParryWindow = (e: EnemyCombatProfile, fromCounterStance: boolean): boolean => {
     if (e.intent === 'WORLD_ENDER') {
       if (fromCounterStance) {
@@ -614,22 +652,30 @@ export default function TacticalCombatHub({
   const passToEnemy = (countering = false) => {
     if (isCombatTerminal()) return;
     setSelectedAction(null);
+    clearEnemyTurnTimers();
     setIsPlayerTurn(false);
+    setEnemyActionStage('reading');
     const e = enemyRef.current;
     if (e) {
       log(`>> HOSTILE TURN // ${formatIntentReadout(e.intent)}`);
     }
-    if (enemyTurnTimerRef.current) clearTimeout(enemyTurnTimerRef.current);
     enemyTurnTimerRef.current = setTimeout(() => {
       enemyTurnTimerRef.current = null;
       if (isCombatTerminal()) return;
       const currentEnemy = enemyRef.current;
-      if (!currentEnemy || currentEnemy.currentHp <= 0 || operativeHpRef.current <= 0) return;
-      if (countering && openParryWindow(currentEnemy, true)) return;
-      if (!countering && openParryWindow(currentEnemy, false)) return;
-      execIntent(currentEnemy);
-      if (operativeHpRef.current > 0 && currentEnemy.currentHp > 0) endEnemyTurn();
-    }, 600);
+      if (!currentEnemy || currentEnemy.currentHp <= 0 || operativeHpRef.current <= 0) {
+        setEnemyActionStage(null);
+        return;
+      }
+      setEnemyActionStage('executing');
+      apparitionRef?.current?.triggerAttackEffect();
+      const overlayVariant = getEnemyDeckStrikeVariant(currentEnemy.intent);
+      if (overlayVariant) setDeckStrikeOverlay(overlayVariant);
+      enemyStrikeTimerRef.current = setTimeout(() => {
+        enemyStrikeTimerRef.current = null;
+        resolveEnemyAction(countering);
+      }, ENEMY_ATTACK_ANIM_MS);
+    }, ENEMY_INTENT_READ_MS);
   };
 
   const initCombat = () => {
@@ -648,7 +694,11 @@ export default function TacticalCombatHub({
     setAbyssalWardActive(false);
     setCounterPrepActive(false);
     setSelectedAction(null);
-    setResolutionOutcome(null); setIsPlayerTurn(true); setCycleState('TEXT_COMBAT');
+    setResolutionOutcome(null);
+    setIsPlayerTurn(true);
+    setCycleState('TEXT_COMBAT');
+    setEnemyActionStage(null);
+    setDeckStrikeOverlay(null);
     log('>> COMBAT LINK ESTABLISHED');
     log('>> OPERATIVE TURN // Command deck online.');
     log(`>> WEAPON LINK: ${strikeStats.label} // STRIKE ${strikeStats.strikeDamage} DMG / ${strikeStats.strikeStaminaCost} STAM`);
@@ -937,6 +987,7 @@ export default function TacticalCombatHub({
     clearSliceTimers();
     clearParrySuccessBurst();
     if (enemyTurnTimerRef.current) clearTimeout(enemyTurnTimerRef.current);
+    if (enemyStrikeTimerRef.current) clearTimeout(enemyStrikeTimerRef.current);
   }, []);
 
   const panResponder = useRef(PanResponder.create({
@@ -1230,14 +1281,30 @@ export default function TacticalCombatHub({
     </View>
   );
 
-  const renderEnemyTurnPanel = () => (
-    <View style={[styles.enemyTurnPanel, { borderColor: P.enemyHp }]}>
-      <Text style={[styles.enemyTurnTitle, { color: P.enemyHp }]}>
-        {`>> HOSTILE ACTING // ${enemy ? formatIntentReadout(enemy.intent) : 'RESOLVING'}`}
-      </Text>
-      <Text style={[styles.enemyTurnHint, { color: theme.mutedColor }]}>
-        Stand by — operative command deck offline
-      </Text>
+  const renderEnemyTurnPanel = () => {
+    const intentLabel = enemy ? formatIntentReadout(enemy.intent) : 'RESOLVING';
+    const isReading = enemyActionStage === 'reading';
+    return (
+      <View style={[styles.enemyTurnPanel, { borderColor: P.enemyHp }]}>
+        <Text style={[styles.enemyTurnTitle, { color: P.enemyHp }]}>
+          {isReading
+            ? `>> HOSTILE CHANNEL // ${intentLabel}`
+            : `>> HOSTILE ATTACK // ${intentLabel}`}
+        </Text>
+        <Text style={[styles.enemyTurnHint, { color: theme.mutedColor }]}>
+          {isReading
+            ? 'Read incoming intent — command deck offline'
+            : 'Strike channel active — brace for impact'}
+        </Text>
+      </View>
+    );
+  };
+
+  const renderCommandDeckSlot = () => (
+    <View style={styles.commandDeckAnchor}>
+      {showCommandDeck ? commandDeck : null}
+      {cycleState === 'TEXT_COMBAT' && !isPlayerTurn ? renderEnemyTurnPanel() : null}
+      {deckStrikeOverlay ? <CombatDeckStrikeOverlay variant={deckStrikeOverlay} /> : null}
     </View>
   );
 
@@ -1345,10 +1412,7 @@ export default function TacticalCombatHub({
         <View style={styles.commandDeckRow}>
           {renderStatusFeed()}
           {renderTurnBanner()}
-          <View style={styles.commandDeckAnchor}>
-            {showCommandDeck ? commandDeck : null}
-            {cycleState === 'TEXT_COMBAT' && !isPlayerTurn ? renderEnemyTurnPanel() : null}
-          </View>
+          {renderCommandDeckSlot()}
         </View>
         <View style={styles.combatOverlayLayer} pointerEvents="box-none">
           {renderHubOverlays()}
@@ -1378,10 +1442,7 @@ export default function TacticalCombatHub({
             <View style={styles.actionStage}>
               {renderStatusFeed()}
               {renderTurnBanner()}
-              <View style={styles.commandDeckAnchor}>
-                {showCommandDeck ? commandDeck : null}
-                {cycleState === 'TEXT_COMBAT' && !isPlayerTurn ? renderEnemyTurnPanel() : null}
-              </View>
+              {renderCommandDeckSlot()}
             </View>
             <View style={styles.combatOverlayLayerLegacy} pointerEvents="box-none">
               {renderHubOverlays()}
@@ -1455,6 +1516,8 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     width: '100%',
     minHeight: COMMAND_DECK_MIN_HEIGHT,
+    position: 'relative',
+    overflow: 'hidden',
   },
   enemyTurnPanel: {
     width: '100%',

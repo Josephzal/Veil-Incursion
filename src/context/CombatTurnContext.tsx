@@ -9,6 +9,7 @@ import React, {
 
 export type CombatTurnPhase =
   | 'PLAYER_COMMAND'
+  | 'ENEMY_WINDUP'
   | 'ENEMY_ACTION'
   | 'PARRY_WINDOW'
   | 'SLICE'

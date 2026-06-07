@@ -41,9 +41,12 @@ const GRID_LINE = 'rgba(139, 92, 246, 0.22)';
 const GRID_SPACING = 24;
 
 const DAMAGE_MS = 200;
+const ATTACK_MS = 320;
 const ERADICATION_MS = 800;
 const SHAKE_AMPLITUDE = 12;
+const ATTACK_SHAKE_AMPLITUDE = 7;
 const SHAKE_CYCLES = 5;
+const ATTACK_SHAKE_CYCLES = 4;
 
 /** Static crimson boost — applied on damage overlay pass only. */
 const CRIMSON_BOOST_MATRIX = [
@@ -55,6 +58,8 @@ const CRIMSON_BOOST_MATRIX = [
 
 export interface ApparitionViewportRef {
   triggerDamageEffect: () => void;
+  /** Hostile attack windup — shake only, no crimson flash. */
+  triggerAttackEffect: () => void;
   triggerEradication: () => void;
 }
 
@@ -158,26 +163,35 @@ export const ApparitionViewport = forwardRef<ApparitionViewportRef, ApparitionVi
       canvasH.value = height;
     };
 
+    const runShake = (duration: number, amplitude: number, cycles: number, withCrimson: boolean) => {
+      if (isEradicating.value > 0) return;
+      shakeProgress.value = 1;
+      shakePhase.value = 0;
+      if (withCrimson) crimsonMix.value = 1;
+      shakeProgress.value = withTiming(0, {
+        duration,
+        easing: Easing.out(Easing.cubic),
+      });
+      shakePhase.value = withTiming(cycles, {
+        duration,
+        easing: Easing.linear,
+      });
+      if (withCrimson) {
+        crimsonMix.value = withTiming(0, {
+          duration,
+          easing: Easing.out(Easing.cubic),
+        });
+      }
+    };
+
     useImperativeHandle(
       ref,
       () => ({
         triggerDamageEffect: () => {
-          if (isEradicating.value > 0) return;
-          shakeProgress.value = 1;
-          shakePhase.value = 0;
-          crimsonMix.value = 1;
-          shakeProgress.value = withTiming(0, {
-            duration: DAMAGE_MS,
-            easing: Easing.out(Easing.cubic),
-          });
-          shakePhase.value = withTiming(SHAKE_CYCLES, {
-            duration: DAMAGE_MS,
-            easing: Easing.linear,
-          });
-          crimsonMix.value = withTiming(0, {
-            duration: DAMAGE_MS,
-            easing: Easing.out(Easing.cubic),
-          });
+          runShake(DAMAGE_MS, SHAKE_AMPLITUDE, SHAKE_CYCLES, true);
+        },
+        triggerAttackEffect: () => {
+          runShake(ATTACK_MS, ATTACK_SHAKE_AMPLITUDE, ATTACK_SHAKE_CYCLES, false);
         },
         triggerEradication: () => {
           if (isEradicating.value > 0) return;
