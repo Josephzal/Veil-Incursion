@@ -224,6 +224,10 @@ export const ApparitionViewport = forwardRef<ApparitionViewportRef, ApparitionVi
       transform: [{ translateX: SHAKE_AMPLITUDE * shakeProgress.value * Math.sin(shakePhase.value * Math.PI * 2) }],
     }));
 
+    const crimsonOverlayStyle = useAnimatedStyle(() => ({
+      opacity: crimsonMix.value * 0.52,
+    }));
+
     const hasLayout = layout.width > 0 && layout.height > 0;
     const hasPortraitSource = nativeImageSource != null;
     const showSkiaSprite = skiaImage != null && hasLayout;
@@ -289,6 +293,12 @@ export const ApparitionViewport = forwardRef<ApparitionViewportRef, ApparitionVi
             )}
           </Canvas>
         ) : null}
+        {hasLayout ? (
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.crimsonFlash, crimsonOverlayStyle]}
+          />
+        ) : null}
       </View>
     );
   },
@@ -304,5 +314,9 @@ const styles = StyleSheet.create({
   portraitFallback: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: CANVAS_BACKDROP,
+  },
+  crimsonFlash: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#dc2626',
   },
 });

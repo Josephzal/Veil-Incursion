@@ -1,7 +1,8 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View, ViewStyle } from 'react-native';
 import IncursionInventoryOverlay from './IncursionInventoryOverlay';
 import PersistentTerminalLog from './PersistentTerminalLog';
+import { useCombatTurnOptional } from '../context/CombatTurnContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import type { IncursionConsumableId } from '../types/incursionInventory';
@@ -36,6 +37,14 @@ export default function MacroLogAnchoredLayout({
     applyIncursionConsumableHeal,
   } = useRun();
   const [inventoryOpen, setInventoryOpen] = useState(false);
+  const combatTurn = useCombatTurnOptional();
+  const inventoryEnabled = combatTurn?.canUseInventory ?? true;
+
+  useEffect(() => {
+    if (!inventoryEnabled && inventoryOpen) {
+      setInventoryOpen(false);
+    }
+  }, [inventoryEnabled, inventoryOpen]);
 
   const showIncursionInventory = useMemo(
     () => runState.runActive && activeIncursion.isRunActive && runState.combatTestPreset == null,
@@ -43,6 +52,7 @@ export default function MacroLogAnchoredLayout({
   );
 
   const handleUseConsumable = useCallback((itemId: IncursionConsumableId) => {
+    if (!inventoryEnabled) return;
     const result = useIncursionConsumable(itemId);
     if (!result) return;
     if (onConsumableHeal) {
@@ -52,7 +62,12 @@ export default function MacroLogAnchoredLayout({
     }
     appendRunLog(result.logLine);
     setInventoryOpen(false);
-  }, [appendRunLog, applyIncursionConsumableHeal, onConsumableHeal, useIncursionConsumable]);
+  }, [appendRunLog, applyIncursionConsumableHeal, inventoryEnabled, onConsumableHeal, useIncursionConsumable]);
+
+  const handleInventoryPress = useCallback(() => {
+    if (!inventoryEnabled) return;
+    setInventoryOpen(true);
+  }, [inventoryEnabled]);
 
   return (
     <View style={[styles.root, style]}>
@@ -61,7 +76,8 @@ export default function MacroLogAnchoredLayout({
         <PersistentTerminalLog
           docked
           showInventory={showIncursionInventory}
-          onInventoryPress={() => setInventoryOpen(true)}
+          inventoryDisabled={showIncursionInventory && onConsumableHeal != null && !inventoryEnabled}
+          onInventoryPress={handleInventoryPress}
         />
       ) : null}
 

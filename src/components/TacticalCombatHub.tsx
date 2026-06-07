@@ -38,6 +38,11 @@ import {
   useCombatEnemyChromeOptional,
 } from '../context/CombatEnemyChromeContext';
 import {
+  type CombatTurnPhase,
+  useCombatTurnOptional,
+} from '../context/CombatTurnContext';
+import CombatTurnBanner from './combat/CombatTurnBanner';
+import {
   type CombatEnemyTelemetry,
   formatHostileId,
   formatIntentReadout,
@@ -163,6 +168,7 @@ export default function TacticalCombatHub({
   const enemyChrome = useCombatEnemyChromeOptional();
   const enemyChromeRef = useRef(enemyChrome);
   enemyChromeRef.current = enemyChrome;
+  const combatTurn = useCombatTurnOptional();
   const parryBurstEpochRef = useRef(0);
   const [screenFlashActive, setScreenFlashActive] = useState(false);
   const [screenFlashColor, setScreenFlashColor] = useState(P.defeat);
@@ -231,6 +237,25 @@ export default function TacticalCombatHub({
     abyssalRef.current = abyssalReserve;
     counterRef.current = counterPrepActive;
   }, [cycleState, enemy, operativeHp, stamina, abyssalReserve, counterPrepActive]);
+
+  const combatTurnPhase = useMemo((): CombatTurnPhase => {
+    if (cycleState === 'RESOLUTION') return 'RESOLUTION';
+    if (cycleState === 'DEFEND_PARRY') return 'PARRY_WINDOW';
+    if (cycleState === 'OFFENSE_SLICE') return 'SLICE';
+    if (!isPlayerTurn) return 'ENEMY_ACTION';
+    return 'PLAYER_COMMAND';
+  }, [cycleState, isPlayerTurn]);
+
+  const setCombatTurnState = combatTurn?.setCombatTurnState;
+
+  useEffect(() => {
+    if (!setCombatTurnState) return;
+    setCombatTurnState({
+      isPlayerTurn: isPlayerTurn && cycleState === 'TEXT_COMBAT',
+      phase: combatTurnPhase,
+      canUseInventory: isPlayerTurn && cycleState === 'TEXT_COMBAT',
+    });
+  }, [combatTurnPhase, cycleState, isPlayerTurn, setCombatTurnState]);
 
 
   const syncEnemy = (e: EnemyCombatProfile) => { enemyRef.current = e; setEnemy(e); };
@@ -524,7 +549,7 @@ export default function TacticalCombatHub({
     startPlayerTurn(enemyRef.current!);
   };
 
-  const startPlayerTurn = (e: EnemyCombatProfile) => {
+  const startPlayerTurn = (_e: EnemyCombatProfile) => {
     if (isCombatTerminal()) return;
     setCounterPrepActive(false);
     counterRef.current = false;
@@ -538,39 +563,72 @@ export default function TacticalCombatHub({
     }
     skipRegenRef.current = false;
     setCycleState('TEXT_COMBAT');
+    log('>> OPERATIVE TURN // Command deck online.');
+  };
+
+  const resolvePendingAttackDamage = (e: EnemyCombatProfile) => {
+    const dmg = e.isBoss && bossRuntimeRef.current
+      ? bossStrikeDamage(bossRuntimeRef.current, bossPhaseRef.current)
+      : attackDmg(e).dmg;
+    let unblockable = e.intent === 'OVERDRIVE_DISCHARGE' ? false : attackDmg(e).unblockable;
+    if (e.intent === 'OVERDRIVE_DISCHARGE') unblockable = false;
+    return { dmg, unblockable };
+  };
+
+  const canOfferReactiveParry = () =>
+    !isExhausted
+    && abyssalRef.current >= COMBAT_ACTION.COUNTER_ABYSSAL_MIN
+    && staminaRef.current >= COMBAT_ACTION.COUNTER_STAMINA;
+
+  const openParryWindow = (e: EnemyCombatProfile, fromCounterStance: boolean): boolean => {
+    if (e.intent === 'WORLD_ENDER') {
+      if (fromCounterStance) {
+        log('[COUNTER FAILED] >> World-Ender cannot be parried.');
+        counterRef.current = false;
+        setCounterPrepActive(false);
+      }
+      return false;
+    }
+    if (!isAttackIntent(e.intent)) {
+      if (fromCounterStance) {
+        log('[COUNTER WASTED] >> No attack channel.');
+        counterRef.current = false;
+        setCounterPrepActive(false);
+      }
+      return false;
+    }
+    if (!fromCounterStance) {
+      if (!canOfferReactiveParry()) return false;
+      if (!spendStam(COMBAT_ACTION.COUNTER_STAMINA)) return false;
+      log('[REACTIVE PARRY] >> Hostile attack incoming — counter window open.');
+    }
+    const { dmg, unblockable } = resolvePendingAttackDamage(e);
+    pendingDmgRef.current = dmg;
+    pendingUnblockRef.current = unblockable;
+    cycleRef.current = 'DEFEND_PARRY';
+    setCycleState('DEFEND_PARRY');
+    startParryRing();
+    return true;
   };
 
   const passToEnemy = (countering = false) => {
     if (isCombatTerminal()) return;
     setSelectedAction(null);
     setIsPlayerTurn(false);
+    const e = enemyRef.current;
+    if (e) {
+      log(`>> HOSTILE TURN // ${formatIntentReadout(e.intent)}`);
+    }
     if (enemyTurnTimerRef.current) clearTimeout(enemyTurnTimerRef.current);
     enemyTurnTimerRef.current = setTimeout(() => {
       enemyTurnTimerRef.current = null;
       if (isCombatTerminal()) return;
-      const e = enemyRef.current;
-      if (!e || e.currentHp <= 0 || operativeHpRef.current <= 0) return;
-      if (countering) {
-        if (e.intent === 'WORLD_ENDER' || e.intent === 'OVERDRIVE_DISCHARGE') {
-          if (e.intent === 'WORLD_ENDER') {
-            log('[COUNTER FAILED] >> World-Ender cannot be parried.');
-            counterRef.current = false; setCounterPrepActive(false);
-            execIntent(e); if (operativeHpRef.current > 0) endEnemyTurn(); return;
-          }
-        }
-        if (isAttackIntent(e.intent)) {
-          let dmg = e.isBoss && bossRuntimeRef.current
-            ? bossStrikeDamage(bossRuntimeRef.current, bossPhaseRef.current)
-            : attackDmg(e).dmg;
-          let unblockable = e.intent === 'OVERDRIVE_DISCHARGE' ? false : attackDmg(e).unblockable;
-          if (e.intent === 'OVERDRIVE_DISCHARGE') unblockable = false;
-          pendingDmgRef.current = dmg; pendingUnblockRef.current = unblockable;
-          cycleRef.current = 'DEFEND_PARRY'; setCycleState('DEFEND_PARRY'); startParryRing(); return;
-        }
-        log('[COUNTER WASTED] >> No attack channel.'); counterRef.current = false; setCounterPrepActive(false);
-      }
-      execIntent(e);
-      if (operativeHpRef.current > 0 && e.currentHp > 0) endEnemyTurn();
+      const currentEnemy = enemyRef.current;
+      if (!currentEnemy || currentEnemy.currentHp <= 0 || operativeHpRef.current <= 0) return;
+      if (countering && openParryWindow(currentEnemy, true)) return;
+      if (!countering && openParryWindow(currentEnemy, false)) return;
+      execIntent(currentEnemy);
+      if (operativeHpRef.current > 0 && currentEnemy.currentHp > 0) endEnemyTurn();
     }, 600);
   };
 
@@ -592,6 +650,7 @@ export default function TacticalCombatHub({
     setSelectedAction(null);
     setResolutionOutcome(null); setIsPlayerTurn(true); setCycleState('TEXT_COMBAT');
     log('>> COMBAT LINK ESTABLISHED');
+    log('>> OPERATIVE TURN // Command deck online.');
     log(`>> WEAPON LINK: ${strikeStats.label} // STRIKE ${strikeStats.strikeDamage} DMG / ${strikeStats.strikeStaminaCost} STAM`);
     if (env.isPlayerBlinded) log('>> ENV: OPERATIVE BLINDED — Counter Stance window tightened 15%.');
     if (env.hasTetanusGlitch) log('>> ENV: TETANUS GLITCH ACTIVE — exhaustion triggers 3 HP bleed.');
@@ -1139,6 +1198,15 @@ export default function TacticalCombatHub({
     </View>
   );
 
+  const renderTurnBanner = () => (
+    <CombatTurnBanner
+      phase={combatTurnPhase}
+      primaryColor={theme.primaryColor}
+      mutedColor={theme.mutedColor}
+      enemyIntent={enemy?.intent}
+    />
+  );
+
   const renderStatusFeed = () => (
     <View
       style={stackedLayout ? styles.statusFeedSlotStacked : styles.statusFeedSlot}
@@ -1161,6 +1229,21 @@ export default function TacticalCombatHub({
       ) : null}
     </View>
   );
+
+  const renderEnemyTurnPanel = () => (
+    <View style={[styles.enemyTurnPanel, { borderColor: P.enemyHp }]}>
+      <Text style={[styles.enemyTurnTitle, { color: P.enemyHp }]}>
+        {`>> HOSTILE ACTING // ${enemy ? formatIntentReadout(enemy.intent) : 'RESOLVING'}`}
+      </Text>
+      <Text style={[styles.enemyTurnHint, { color: theme.mutedColor }]}>
+        Stand by — operative command deck offline
+      </Text>
+    </View>
+  );
+
+  const showCommandDeck =
+    (cycleState === 'TEXT_COMBAT' && isPlayerTurn)
+    || (cycleState === 'RESOLUTION' && resolutionOutcome === 'VICTORY');
 
   const useEnemyArenaChrome = stackedLayout && enemyChrome != null;
 
@@ -1261,10 +1344,10 @@ export default function TacticalCombatHub({
         {stackedOperativeMetrics}
         <View style={styles.commandDeckRow}>
           {renderStatusFeed()}
+          {renderTurnBanner()}
           <View style={styles.commandDeckAnchor}>
-            {cycleState === 'TEXT_COMBAT' || (cycleState === 'RESOLUTION' && resolutionOutcome === 'VICTORY')
-              ? commandDeck
-              : null}
+            {showCommandDeck ? commandDeck : null}
+            {cycleState === 'TEXT_COMBAT' && !isPlayerTurn ? renderEnemyTurnPanel() : null}
           </View>
         </View>
         <View style={styles.combatOverlayLayer} pointerEvents="box-none">
@@ -1294,8 +1377,10 @@ export default function TacticalCombatHub({
             )}
             <View style={styles.actionStage}>
               {renderStatusFeed()}
+              {renderTurnBanner()}
               <View style={styles.commandDeckAnchor}>
-                {cycleState === 'TEXT_COMBAT' ? commandDeck : null}
+                {showCommandDeck ? commandDeck : null}
+                {cycleState === 'TEXT_COMBAT' && !isPlayerTurn ? renderEnemyTurnPanel() : null}
               </View>
             </View>
             <View style={styles.combatOverlayLayerLegacy} pointerEvents="box-none">
@@ -1370,6 +1455,27 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     width: '100%',
     minHeight: COMMAND_DECK_MIN_HEIGHT,
+  },
+  enemyTurnPanel: {
+    width: '100%',
+    minHeight: COMMAND_DECK_MIN_HEIGHT,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 12,
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(10, 11, 15, 0.96)',
+  },
+  enemyTurnTitle: {
+    fontFamily: MONO,
+    fontSize: 8,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+  },
+  enemyTurnHint: {
+    fontFamily: MONO,
+    fontSize: 7,
+    letterSpacing: 0.5,
   },
   statusFeedCompact: {
     flexShrink: 0,

@@ -20,6 +20,8 @@ interface PersistentTerminalLogProps {
   fillRemaining?: boolean;
   /** Active incursion run — opens field inventory overlay in macro log header. */
   showInventory?: boolean;
+  /** Combat: inventory only usable on operative turn. */
+  inventoryDisabled?: boolean;
   onInventoryPress?: () => void;
 }
 
@@ -40,6 +42,7 @@ export default function PersistentTerminalLog({
   docked = false,
   fillRemaining = false,
   showInventory = false,
+  inventoryDisabled = false,
   onInventoryPress,
 }: PersistentTerminalLogProps): React.JSX.Element | null {
   const { runLog } = useRun();
@@ -75,17 +78,21 @@ export default function PersistentTerminalLog({
         {showInventory ? (
           <Pressable
             onPress={onInventoryPress}
+            disabled={inventoryDisabled}
             style={[
               styles.headerActionBtn,
               {
                 borderColor: theme.borderColor,
                 marginRight: TACTICAL_HUB_STACKED_RIGHT_INSET - MACRO_LOG_HORIZONTAL_PADDING,
+                opacity: inventoryDisabled ? 0.35 : 1,
               },
             ]}
             accessibilityRole="button"
-            accessibilityLabel="Open incursion inventory"
+            accessibilityLabel={inventoryDisabled ? 'Inventory unavailable during hostile turn' : 'Open incursion inventory'}
           >
-            <Text style={[styles.headerActionBtnText, { color: theme.mutedColor }]}>[ INVENTORY ]</Text>
+            <Text style={[styles.headerActionBtnText, { color: theme.mutedColor }]}>
+              {inventoryDisabled ? '[ INVENTORY LOCKED ]' : '[ INVENTORY ]'}
+            </Text>
           </Pressable>
         ) : null}
       </View>

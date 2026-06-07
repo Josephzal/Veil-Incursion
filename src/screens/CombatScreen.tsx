@@ -15,6 +15,7 @@ import {
   CombatEnemyChromeProvider,
   useCombatEnemyChrome,
 } from '../context/CombatEnemyChromeContext';
+import { CombatTurnProvider } from '../context/CombatTurnContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useTerminalNav } from '../context/TerminalNavContext';
@@ -195,7 +196,8 @@ export default function CombatScreen(): React.JSX.Element {
 
   return (
     <IncursionShell>
-      <CombatEnemyChromeProvider>
+      <CombatTurnProvider>
+        <CombatEnemyChromeProvider>
         <MacroLogAnchoredLayout
           showMacroLog={runState.runActive}
           onConsumableHeal={handleConsumableHeal}
@@ -240,7 +242,8 @@ export default function CombatScreen(): React.JSX.Element {
             </View>
           </View>
         </MacroLogAnchoredLayout>
-      </CombatEnemyChromeProvider>
+        </CombatEnemyChromeProvider>
+      </CombatTurnProvider>
     </IncursionShell>
   );
 }
