@@ -52,7 +52,7 @@ export function createDefaultPlayerAccount(): PlayerAccount {
     unlockedClasses: ['AEGIS'],
     unlockedBiomes: ['HOSPITAL', 'ALLEYWAYS'],
     progressionMatrix: {
-      maxTierUnlocked: 1,
+      maxDepthUnlocked: 1,
       activeCampaignCluster: null,
     },
     regionalPresence: {
@@ -77,7 +77,14 @@ function mergeStoredAccount(parsed: Partial<PlayerAccount>): PlayerAccount {
     ...defaults,
     ...parsed,
     factionPerks: { ...defaults.factionPerks, ...parsed.factionPerks },
-    progressionMatrix: { ...defaults.progressionMatrix, ...parsed.progressionMatrix },
+    progressionMatrix: {
+      ...defaults.progressionMatrix,
+      ...parsed.progressionMatrix,
+      maxDepthUnlocked:
+        parsed.progressionMatrix?.maxDepthUnlocked
+        ?? (parsed.progressionMatrix as { maxTierUnlocked?: number } | undefined)?.maxTierUnlocked
+        ?? defaults.progressionMatrix.maxDepthUnlocked,
+    },
     regionalPresence: { ...defaults.regionalPresence, ...parsed.regionalPresence },
     equipment: {
       ...defaults.equipment,

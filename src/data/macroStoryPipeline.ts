@@ -13,15 +13,15 @@ import {
   OUTCOME_MODIFIER_MIN,
   createDefaultMacroStoryConfiguration,
 } from '../types/macroStory';
-import { INCURSION_DEPTH_COUNT } from '../types/run';
+import { INCURSION_ENCOUNTER_COUNT } from '../types/run';
 import {
   SECTOR_BLOCK_LAYOUT,
-  SECTOR_CORE_DEPTH_INDICES,
-  biomeForDepthIndex,
+  SECTOR_CORE_ENCOUNTER_INDICES,
+  biomeForEncounterIndex,
 } from './biomeCombat';
-import { createPlaceholderTierPath, generateTierVectorMatrix } from './descentEngine';
+import { createPlaceholderDepthPath, generateDepthEncounterMatrix } from './descentEngine';
 
-export { SECTOR_BLOCK_LAYOUT, SECTOR_CORE_DEPTH_INDICES } from './biomeCombat';
+export { SECTOR_BLOCK_LAYOUT, SECTOR_CORE_ENCOUNTER_INDICES } from './biomeCombat';
 
 const RUN_MODE_WEIGHTS: { mode: MacroStoryRunMode; weight: number }[] = [
   { mode: 'STANDALONE', weight: 50 },
@@ -51,12 +51,12 @@ export function appendOutcomeModifier(
   progress: IncursionProgressState,
   key: string,
   pctDelta: number,
-  depthIndex?: number,
+  encounterIndex?: number,
 ): IncursionProgressState {
   const entry: OutcomeModifierMetric = {
     key,
     value: percentToOutcomeModifier(pctDelta),
-    appliedAtDepth: depthIndex,
+    appliedAtEncounter: encounterIndex,
   };
   return {
     ...progress,
@@ -136,7 +136,7 @@ export function resolveConditionalBranchPreview(
           autoResolve: true,
           terminalLogHint: '>> telemetry_downloaded — CORE MAPPING UPLINK ACTIVE.',
           scenarioOverride:
-            'Telemetry cache synchronizes with sector-core navigation. Depth 9 calibration uplink grants +15% victory metric offset on Core-layer choices.',
+            'Telemetry cache synchronizes with sector-core navigation. Encounter 9 calibration uplink grants +15% victory metric offset on Core-layer choices.',
         };
       }
       return null;
@@ -146,20 +146,20 @@ export function resolveConditionalBranchPreview(
   }
 }
 
-export function isSectorCoreDepth(depthIndex: number): boolean {
+export function isSectorCoreEncounter(encounterIndex: number): boolean {
   const coreBlock = SECTOR_BLOCK_LAYOUT.find((block) => block.biome === 'SECTOR_CORE');
   if (coreBlock) {
-    return depthIndex >= coreBlock.depthStart && depthIndex <= coreBlock.depthEnd;
+    return encounterIndex >= coreBlock.encounterStart && encounterIndex <= coreBlock.encounterEnd;
   }
-  return (SECTOR_CORE_DEPTH_INDICES as readonly number[]).includes(depthIndex);
+  return (SECTOR_CORE_ENCOUNTER_INDICES as readonly number[]).includes(encounterIndex);
 }
 
-/** +15% victory offset applies only to narrative choices at Core depths (8–9). */
+/** +15% victory offset applies only to narrative choices at Core encounters (8–9). */
 export function coreLayerCalibrationBonus(
-  depthIndex: number,
+  encounterIndex: number,
   progress: IncursionProgressState,
 ): number {
-  if (!isSectorCoreDepth(depthIndex)) return 0;
+  if (!isSectorCoreEncounter(encounterIndex)) return 0;
   if (!hasCollectedFlag(progress.collectedFlags, 'telemetry_downloaded')) {
     return progress.narrativeModifiers.nodeNineCalibrationBonusPct;
   }
@@ -205,25 +205,25 @@ export function macroStoryModeLogLine(config: MacroStoryRunConfiguration): strin
 export function sectorBlockLogLines(): string[] {
   return SECTOR_BLOCK_LAYOUT.map(
     (block) =>
-      `>> SECTOR BLOCK ${block.label.toUpperCase()} [${block.depthStart}–${block.depthEnd}] → ${block.biome}`,
+      `>> SECTOR BLOCK ${block.label.toUpperCase()} [${block.encounterStart}–${block.encounterEnd}] → ${block.biome}`,
   );
 }
 
 export interface IncursionPipelineInit {
-  activeTierVectors: ActiveIncursionState['activeTierVectors'];
+  encounterOptionClusters: ActiveIncursionState['encounterOptionClusters'];
   earlySanctuarySpawned: boolean;
-  tierNodes: ActiveIncursionState['tierNodes'];
+  encounterPath: ActiveIncursionState['encounterPath'];
   progress: IncursionProgressState;
   initLogLines: string[];
 }
 
 /** Roll run format up-front, then generate the 10-step sector-block vector matrix. */
 export function initializeIncursionPipeline(
-  tier: number,
+  depth: number,
   alignedFaction: FactionType | null = null,
 ): IncursionPipelineInit {
   const macroStory = rollMacroStoryRunProfile(alignedFaction);
-  const { activeTierVectors, earlySanctuarySpawned } = generateTierVectorMatrix(tier);
+  const { encounterOptionClusters, earlySanctuarySpawned } = generateDepthEncounterMatrix(depth);
 
   const progress: IncursionProgressState = {
     ...createDefaultIncursionProgressState(),
@@ -232,21 +232,21 @@ export function initializeIncursionPipeline(
 
   const initLogLines = [
     macroStoryModeLogLine(macroStory),
-    '>> SECTOR-BLOCK LAYOUT LOCKED — 10-DEPTH CHRONOLOGY:',
+    '>> SECTOR-BLOCK LAYOUT LOCKED — 10-ENCOUNTER CHRONOLOGY:',
     ...sectorBlockLogLines(),
-    `>> BIOME ANCHOR LOCKED: ${biomeForDepthIndex(0)} (ALL DEPTHS)`,
-    `>> DEPTH COUNT VERIFIED: ${INCURSION_DEPTH_COUNT}`,
+    `>> BIOME ANCHOR LOCKED: ${biomeForEncounterIndex(0)} (ALL ENCOUNTERS)`,
+    `>> ENCOUNTER COUNT VERIFIED: ${INCURSION_ENCOUNTER_COUNT}`,
   ];
 
   return {
-    activeTierVectors,
+    encounterOptionClusters,
     earlySanctuarySpawned,
-    tierNodes: createPlaceholderTierPath(),
+    encounterPath: createPlaceholderDepthPath(),
     progress,
     initLogLines,
   };
 }
 
-export function validateNodeBiomeForDepth(depthIndex: number, biome: IncursionBiome): boolean {
-  return biomeForDepthIndex(depthIndex) === biome;
+export function validateNodeBiomeForEncounter(encounterIndex: number, biome: IncursionBiome): boolean {
+  return biomeForEncounterIndex(encounterIndex) === biome;
 }

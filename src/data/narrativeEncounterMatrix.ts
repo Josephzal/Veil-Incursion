@@ -7,7 +7,7 @@ import {
   NarrativeRunModifiers,
 } from '../types/game';
 import { RunState } from '../types/run';
-import { biomeForDepthIndex } from './biomeCombat';
+import { biomeForEncounterIndex } from './biomeCombat';
 import {
   CITY_STREETS_ALLEY_MATRIX_EVENTS,
   CITY_STREETS_DEPTH_ZERO_POOL,
@@ -287,11 +287,11 @@ const EVENT_ORDER_BY_BIOME: Record<IncursionBiome, string[]> = {
   SECTOR_CORE: ['sector-01', 'sector-02', 'sector-03', 'sector-04', 'sector-05', 'sector-06'],
 };
 
-function slotInBiomeBlock(depthIndex: number): number {
-  if (depthIndex <= 2) return depthIndex;
-  if (depthIndex <= 5) return depthIndex - 3;
-  if (depthIndex <= 7) return depthIndex - 6;
-  return depthIndex - 8;
+function slotInBiomeBlock(encounterIndex: number): number {
+  if (encounterIndex <= 2) return encounterIndex;
+  if (encounterIndex <= 5) return encounterIndex - 3;
+  if (encounterIndex <= 7) return encounterIndex - 6;
+  return encounterIndex - 8;
 }
 
 function mergeFlags(progress: IncursionProgressState, flags: string[]): IncursionProgressState {
@@ -331,9 +331,9 @@ export function d20SuccessThreshold(progress: IncursionProgressState): number {
 
 export function d20CalibrationBonus(
   progress: IncursionProgressState,
-  depthIndex: number,
+  encounterIndex: number,
 ): number {
-  const pct = coreLayerCalibrationBonus(depthIndex, progress);
+  const pct = coreLayerCalibrationBonus(encounterIndex, progress);
   return Math.floor(pct * 20 / 100);
 }
 
@@ -344,16 +344,16 @@ export function rollVirtualD20(): number {
 export function evaluateD20Success(
   roll: number,
   progress: IncursionProgressState,
-  depthIndex: number,
+  encounterIndex: number,
 ): boolean {
-  return roll + d20CalibrationBonus(progress, depthIndex) >= d20SuccessThreshold(progress);
+  return roll + d20CalibrationBonus(progress, encounterIndex) >= d20SuccessThreshold(progress);
 }
 
-export function pickMatrixEventForDepth(
-  depthIndex: number,
+export function pickMatrixEventForEncounter(
+  encounterIndex: number,
   progress: IncursionProgressState,
 ): NarrativeEventNode {
-  const biome = biomeForDepthIndex(depthIndex);
+  const biome = biomeForEncounterIndex(encounterIndex);
 
   if (biome === 'CITY_STREETS') {
     const pool = CITY_STREETS_DEPTH_ZERO_POOL.filter(
@@ -370,7 +370,7 @@ export function pickMatrixEventForDepth(
   }
 
   const order = EVENT_ORDER_BY_BIOME[biome];
-  const slot = Math.min(slotInBiomeBlock(depthIndex), order.length - 1);
+  const slot = Math.min(slotInBiomeBlock(encounterIndex), order.length - 1);
   let matrixId = order[slot];
 
   if (matrixId.endsWith('-06')) {
@@ -606,9 +606,9 @@ function resolveStandard(
   progress: IncursionProgressState,
   env: EnvironmentalModifiers,
   snapshot: OperativeResourceSnapshot,
-  depthIndex: number,
+  encounterIndex: number,
 ): NarrativeResolutionResult {
-  const calBonus = d20CalibrationBonus(progress, depthIndex);
+  const calBonus = d20CalibrationBonus(progress, encounterIndex);
   const logLines = [
     `>> D20 ROLL: ${roll}${calBonus > 0 ? ` (+${calBonus} CORE CALIBRATION)` : ''} (TARGET ≥ ${d20SuccessThreshold(progress)})`,
     success ? '>> CALIBRATION SUCCESS' : '>> CALIBRATION FAILURE',
@@ -993,7 +993,7 @@ export function resolveMatrixNarrativeChoice(
   progress: IncursionProgressState,
   environmentalModifiers: EnvironmentalModifiers,
   snapshot: OperativeResourceSnapshot,
-  depthIndex: number,
+  encounterIndex: number,
   options?: { forceSuccess?: boolean; forceFailure?: boolean },
 ): NarrativeResolutionResult {
   const template = MATRIX_EVENTS[matrixEventId];
@@ -1021,16 +1021,16 @@ export function resolveMatrixNarrativeChoice(
   const choiceDef = choice === 'A' ? template.choiceA : template.choiceB;
   const chainAnchored = choiceDef.requirement.startsWith('CHAIN ANCHOR');
 
-  let success = evaluateD20Success(roll, progress, depthIndex);
+  let success = evaluateD20Success(roll, progress, encounterIndex);
   if (chainAnchored || chainAuto || autoEvents) success = true;
   if (autoSuccess) success = true;
   if (autoFail && !chainAnchored && !chainAuto) success = false;
 
   if (matrixEventId === 'city-05' && choice === 'B' && !success) {
-    return resolveStandard(matrixEventId, choice, roll, false, progress, environmentalModifiers, snapshot, depthIndex);
+    return resolveStandard(matrixEventId, choice, roll, false, progress, environmentalModifiers, snapshot, encounterIndex);
   }
 
-  return resolveStandard(matrixEventId, choice, roll, success, progress, environmentalModifiers, snapshot, depthIndex);
+  return resolveStandard(matrixEventId, choice, roll, success, progress, environmentalModifiers, snapshot, encounterIndex);
 }
 
 export function primeNarrativeEnvironment(_node: NarrativeEventNode): EnvironmentalModifiers {

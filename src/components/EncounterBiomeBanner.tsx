@@ -25,7 +25,7 @@ export default function EncounterBiomeBanner({
         {getBiomeContextLog(biome)}
       </Text>
       <Text style={[styles.depthLine, { color: theme.mutedColor }]}>
-        {`TIER ${activeIncursion.currentTier} // DEPTH ${activeIncursion.currentNodeIndex + 1}/10 // INCURSION LAYER ACTIVE`}
+        {`DEPTH ${activeIncursion.currentDepth} // ENCOUNTER ${activeIncursion.currentEncounterIndex + 1}/10 // INCURSION LAYER ACTIVE`}
       </Text>
     </View>
   );

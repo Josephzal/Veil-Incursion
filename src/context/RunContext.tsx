@@ -33,23 +33,24 @@ import {
 } from '../types/game';
 import { initializeIncursionPipeline } from '../data/macroStoryPipeline';
 import {
-  pickMatrixEventForDepth,
+  pickMatrixEventForEncounter,
   primeNarrativeEnvironment,
   resolveMatrixNarrativeChoice,
   rollVirtualD20,
 } from '../data/narrativeEncounterMatrix';
 import {
-  BOSS_DEPTH_INDEX,
-  createBossProfileForTier,
-  createPlaceholderTierPath,
+  BOSS_ENCOUNTER_INDEX,
+  createBossProfileForDepth,
+  createPlaceholderDepthPath,
   finalizeClusterForScan,
   findVectorInCluster,
-  generateTierVectorMatrix,
+  generateDepthEncounterMatrix,
   getBiomeContextLog,
   isBossNodeType,
 } from '../data/descentEngine';
 import { spawnBossEnemyProfile } from '../data/bossCombat';
-import { createDefaultIncursionInventory } from '../data/incursionInventory';
+import { catalogItemForId, createDefaultIncursionInventory } from '../data/incursionInventory';
+import { BLACK_MARKET_ITEM_PRICE } from '../data/blackMarket';
 import type { IncursionConsumableId, IncursionConsumableUseResult } from '../types/incursionInventory';
 
 export interface RunStartConfig {
@@ -84,14 +85,14 @@ interface RunContextType {
   getCurrentNarrativeNode: () => NarrativeEventNode | null;
   resolveNarrativeCheck: (choice: 'A' | 'B', status: CheckStatus) => string;
   activeIncursion: ActiveIncursionState;
-  getCurrentTierNode: () => import('../types/game').IncursionNode | null;
+  getCurrentEncounterNode: () => import('../types/game').IncursionNode | null;
   stageEncounterClear: (message: string) => {
-    route: 'NEXT_NODE' | 'TIER_ADVANCE' | 'HUB_VICTORY';
-    nextTier?: number;
+    route: 'NEXT_NODE' | 'DEPTH_ADVANCE' | 'HUB_VICTORY';
+    nextDepth?: number;
   };
   continueFromProgressCheckpoint: () => {
-    route: 'NEXT_NODE' | 'TIER_ADVANCE' | 'HUB_VICTORY';
-    nextTier?: number;
+    route: 'NEXT_NODE' | 'DEPTH_ADVANCE' | 'HUB_VICTORY';
+    nextDepth?: number;
   };
   prepareBossEncounter: () => void;
   prepareStandardCombatEncounter: () => void;
@@ -112,17 +113,19 @@ interface RunContextType {
   useIncursionConsumable: (itemId: IncursionConsumableId) => IncursionConsumableUseResult | null;
   /** Applies consumable heal to run state (non-combat screens). */
   applyIncursionConsumableHeal: (amount: number) => void;
+  awardRunCredits: (amount: number, reason: string) => void;
+  purchaseBlackMarketItem: (itemId: IncursionConsumableId) => { success: boolean; logLine: string } | null;
 }
 
 const RunContext = createContext<RunContextType | undefined>(undefined);
 
 function resolveActiveVectorNode(inc: ActiveIncursionState): IncursionNode | null {
   if (inc.selectedVectorId) {
-    const cluster = inc.activeTierVectors[inc.currentNodeIndex] ?? [];
+    const cluster = inc.encounterOptionClusters[inc.currentEncounterIndex] ?? [];
     const found = findVectorInCluster(cluster, inc.selectedVectorId);
     if (found) return found;
   }
-  return inc.tierNodes[inc.currentNodeIndex] ?? null;
+  return inc.encounterPath[inc.currentEncounterIndex] ?? null;
 }
 
 function aggregateModifiers(trinkets: Trinket[]) {
@@ -205,17 +208,18 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       ...createDefaultActiveIncursionState(),
       isRunActive: true,
       inventory: createDefaultIncursionInventory(),
-      currentTier: 1,
-      currentNodeIndex: 0,
+      currentDepth: 1,
+      currentEncounterIndex: 0,
       progress: pipeline.progress,
-      tierNodes: pipeline.tierNodes,
-      activeTierVectors: pipeline.activeTierVectors,
+      encounterPath: pipeline.encounterPath,
+      encounterOptionClusters: pipeline.encounterOptionClusters,
       earlySanctuarySpawned: pipeline.earlySanctuarySpawned,
       selectedVectorId: null,
       previewNodeId: null,
       scanConfirmOverlayVisible: false,
       mapMode: 'SCANNING_HUB',
       lastCheckpointMessage: null,
+      runCredits: 0,
     };
     activeIncursionRef.current = incursion;
     setActiveIncursion(incursion);
@@ -225,7 +229,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const biomeTag = (config?.unlockedBiomes ?? ['HOSPITAL', 'ALLEYWAYS']).join(', ');
     setRunLog([
       '>> RUN INITIALIZED — VEIL DESCENT ENGINE ONLINE.',
-      `>> TIER 1 THRESHOLD — 10-DEPTH INCURSION GRID GENERATED.`,
+      `>> DEPTH 1 THRESHOLD — 10-ENCOUNTER INCURSION GRID GENERATED.`,
       `>> SCANNING HUB ACTIVE — TACTICAL SWEEP INITIALIZING.`,
       `>> CLIMATE CLUSTER LOCKED: ${clusterDef.name}`,
       `>> AUTHORIZED BIOMES: ${biomeTag}`,
@@ -279,7 +283,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const commitRadarDot = useCallback((dot: RadarDot): EncounterNode => {
     const prev = runStateRef.current;
-    const nodeIndex = activeIncursionRef.current.currentNodeIndex;
+    const nodeIndex = activeIncursionRef.current.currentEncounterIndex;
     const encounter = buildEncounter(nodeIndex, dot.sector, dot.encounterType, dot.label);
     const pendingEnemy =
       dot.encounterType === 'COMBAT'
@@ -536,10 +540,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const assignNarrativeForCombat = useCallback((nodeIndex: number) => {
     const inc = activeIncursionRef.current;
-    const node = pickMatrixEventForDepth(nodeIndex, inc.progress);
+    const node = pickMatrixEventForEncounter(nodeIndex, inc.progress);
     narrativeNodeRef.current = node;
     const primed = primeNarrativeEnvironment(node);
-    const tierNode = resolveActiveVectorNode(inc);
+    const encounterNode = resolveActiveVectorNode(inc);
     setActiveIncursion((prev) => {
       const next = {
         ...prev,
@@ -555,8 +559,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       activeIncursionRef.current = next;
       return next;
     });
-    if (tierNode?.biome) {
-      appendRunLog(`>> ${getBiomeContextLog(tierNode.biome)}`);
+    if (encounterNode?.biome) {
+      appendRunLog(`>> ${getBiomeContextLog(encounterNode.biome)}`);
     }
     appendRunLog(`>> NARRATIVE VECTOR LOCKED — ${node.title}.`);
     appendRunLog('>> ENCOUNTER LAYER MOUNTED — FIELD CALIBRATION REQUIRED.');
@@ -587,7 +591,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         currentStamina: prevRun.currentStamina,
         startingAbyssalReservePercent: prevRun.startingAbyssalReservePercent,
       },
-      inc.currentNodeIndex,
+      inc.currentEncounterIndex,
       { forceSuccess: status === 'SUCCESS', forceFailure: status === 'FAILURE' },
     );
 
@@ -617,37 +621,37 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     return result.outcomeText;
   }, [appendRunLog]);
 
-  const getCurrentTierNode = useCallback(() => {
+  const getCurrentEncounterNode = useCallback(() => {
     const inc = activeIncursionRef.current;
-    return inc.tierNodes[inc.currentNodeIndex] ?? null;
+    return inc.encounterPath[inc.currentEncounterIndex] ?? null;
   }, []);
 
   const getCurrentVectorCluster = useCallback(() => {
     const inc = activeIncursionRef.current;
-    const raw = inc.activeTierVectors[inc.currentNodeIndex] ?? [];
-    return finalizeClusterForScan(raw, inc.currentNodeIndex, inc.tierNodes, inc.currentTier);
+    const raw = inc.encounterOptionClusters[inc.currentEncounterIndex] ?? [];
+    return finalizeClusterForScan(raw, inc.currentEncounterIndex, inc.encounterPath, inc.currentDepth);
   }, []);
 
   const getSelectedVectorNode = useCallback(() => {
     const inc = activeIncursionRef.current;
-    if (!inc.selectedVectorId) return inc.tierNodes[inc.currentNodeIndex] ?? null;
+    if (!inc.selectedVectorId) return inc.encounterPath[inc.currentEncounterIndex] ?? null;
     const cluster = finalizeClusterForScan(
-      inc.activeTierVectors[inc.currentNodeIndex] ?? [],
-      inc.currentNodeIndex,
-      inc.tierNodes,
-      inc.currentTier,
+      inc.encounterOptionClusters[inc.currentEncounterIndex] ?? [],
+      inc.currentEncounterIndex,
+      inc.encounterPath,
+      inc.currentDepth,
     );
-    return findVectorInCluster(cluster, inc.selectedVectorId) ?? inc.tierNodes[inc.currentNodeIndex] ?? null;
+    return findVectorInCluster(cluster, inc.selectedVectorId) ?? inc.encounterPath[inc.currentEncounterIndex] ?? null;
   }, []);
 
   const openScanPreview = useCallback((nodeId: string) => {
     const inc = activeIncursionRef.current;
     if (inc.mapMode !== 'SCANNING_HUB') return;
     const cluster = finalizeClusterForScan(
-      inc.activeTierVectors[inc.currentNodeIndex] ?? [],
-      inc.currentNodeIndex,
-      inc.tierNodes,
-      inc.currentTier,
+      inc.encounterOptionClusters[inc.currentEncounterIndex] ?? [],
+      inc.currentEncounterIndex,
+      inc.encounterPath,
+      inc.currentDepth,
     );
     if (!findVectorInCluster(cluster, nodeId)) return;
     setActiveIncursion((prev) => {
@@ -669,25 +673,25 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const inc = activeIncursionRef.current;
     if (!inc.previewNodeId) return null;
     const cluster = finalizeClusterForScan(
-      inc.activeTierVectors[inc.currentNodeIndex] ?? [],
-      inc.currentNodeIndex,
-      inc.tierNodes,
-      inc.currentTier,
+      inc.encounterOptionClusters[inc.currentEncounterIndex] ?? [],
+      inc.currentEncounterIndex,
+      inc.encounterPath,
+      inc.currentDepth,
     );
     return findVectorInCluster(cluster, inc.previewNodeId);
   }, []);
 
   const prepareBossEncounter = useCallback(() => {
     const inc = activeIncursionRef.current;
-    const tierNode = resolveActiveVectorNode(inc);
-    if (!tierNode || !isBossNodeType(tierNode.type)) return;
+    const encounterNode = resolveActiveVectorNode(inc);
+    if (!encounterNode || !isBossNodeType(encounterNode.type)) return;
 
-    const bossProfile = createBossProfileForTier(inc.currentTier);
+    const bossProfile = createBossProfileForDepth(inc.currentDepth);
     const sector = runStateRef.current.currentSector ?? INITIAL_SECTOR_POOL[0];
     const pendingEnemy = spawnBossEnemyProfile(
       bossProfile,
       sector,
-      inc.currentNodeIndex,
+      inc.currentEncounterIndex,
     );
 
     setActiveIncursion((prev) => {
@@ -701,37 +705,37 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         ...prev,
         pendingEnemy,
         pendingEncounter: buildEncounter(
-          inc.currentNodeIndex,
+          inc.currentEncounterIndex,
           sector,
           'COMBAT',
-          tierNode.label,
+          encounterNode.label,
         ),
       };
       runStateRef.current = next;
       return next;
     });
 
-    appendRunLog(`>> ${getBiomeContextLog(tierNode.biome)}`);
+    appendRunLog(`>> ${getBiomeContextLog(encounterNode.biome)}`);
     appendRunLog(`>> BOSS SIGNATURE: ${bossProfile.name} // ${bossProfile.maxHp} HP`);
   }, [appendRunLog]);
 
   const prepareStandardCombatEncounter = useCallback(() => {
     const inc = activeIncursionRef.current;
-    const tierNode = resolveActiveVectorNode(inc);
-    if (!tierNode || tierNode.type !== 'STANDARD_COMBAT') return;
+    const encounterNode = resolveActiveVectorNode(inc);
+    if (!encounterNode || encounterNode.type !== 'STANDARD_COMBAT') return;
 
     const prev = runStateRef.current;
     const sector = prev.currentSector ?? INITIAL_SECTOR_POOL[0];
     const pendingEnemy = spawnBiomeEnemyProfile(
       'CITY_STREETS',
-      inc.currentNodeIndex,
+      inc.currentEncounterIndex,
       prev.pendingAmbush,
     );
     const pendingEncounter = buildEncounter(
-      inc.currentNodeIndex,
+      inc.currentEncounterIndex,
       sector,
       'COMBAT',
-      tierNode.label,
+      encounterNode.label,
     );
 
     setRunState((prevState) => {
@@ -745,7 +749,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
 
-    appendRunLog(`>> ${getBiomeContextLog(tierNode.biome)}`);
+    appendRunLog(`>> ${getBiomeContextLog(encounterNode.biome)}`);
     appendRunLog(`>> HOSTILE SIGNATURE: ${pendingEnemy.designation} [${pendingEnemy.class}] HP ${pendingEnemy.maxHp}.`);
   }, [appendRunLog]);
 
@@ -753,8 +757,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     appendRunLog(`>> ${message}`);
 
     const inc = activeIncursionRef.current;
-    const completedIndex = inc.currentNodeIndex;
-    const tierNodes = inc.tierNodes.map((n) =>
+    const completedIndex = inc.currentEncounterIndex;
+    const encounterPath = inc.encounterPath.map((n) =>
       n.index === completedIndex ? { ...n, isCompleted: true } : n,
     );
 
@@ -762,7 +766,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
     const incAfterClear: ActiveIncursionState = {
       ...inc,
-      tierNodes,
+      encounterPath,
       currentNarrativeId: null,
       activeChoice: null,
       bossProfile: null,
@@ -792,16 +796,16 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       scanConfirmOverlayVisible: false,
     });
 
-    if (completedIndex >= BOSS_DEPTH_INDEX) {
-      if (incAfterClear.currentTier < 3) {
-        const nextTier = incAfterClear.currentTier + 1;
-        const { activeTierVectors, earlySanctuarySpawned } = generateTierVectorMatrix(nextTier);
+    if (completedIndex >= BOSS_ENCOUNTER_INDEX) {
+      if (incAfterClear.currentDepth < 3) {
+        const nextDepth = incAfterClear.currentDepth + 1;
+        const { encounterOptionClusters, earlySanctuarySpawned } = generateDepthEncounterMatrix(nextDepth);
         const nextInc = resetForScan({
           ...incAfterClear,
-          currentTier: nextTier,
-          currentNodeIndex: 0,
-          tierNodes: createPlaceholderTierPath(),
-          activeTierVectors,
+          currentDepth: nextDepth,
+          currentEncounterIndex: 0,
+          encounterPath: createPlaceholderDepthPath(),
+          encounterOptionClusters,
           earlySanctuarySpawned,
           selectedVectorId: null,
         });
@@ -813,8 +817,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
           return next;
         });
         setScanSessionKey((k) => k + 1);
-        appendRunLog(`>> TIER ${nextTier} DEPTH UNLOCKED — SCANNING HUB RECALIBRATED.`);
-        return { route: 'TIER_ADVANCE' as const, nextTier };
+        appendRunLog(`>> DEPTH ${nextDepth} UNLOCKED — SCANNING HUB RECALIBRATED.`);
+        return { route: 'DEPTH_ADVANCE' as const, nextDepth };
       }
 
       const nextInc = createDefaultActiveIncursionState();
@@ -826,7 +830,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const nextIndex = completedIndex + 1;
     const nextInc = resetForScan({
       ...incAfterClear,
-      currentNodeIndex: nextIndex,
+      currentEncounterIndex: nextIndex,
       selectedVectorId: null,
     });
     activeIncursionRef.current = nextInc;
@@ -844,7 +848,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     });
 
     setScanSessionKey((k) => k + 1);
-    appendRunLog(`>> DEPTH ${nextIndex + 1}/10 — SCANNING HUB READY FOR VECTOR SELECT.`);
+    appendRunLog(`>> ENCOUNTER ${nextIndex + 1}/10 — SCANNING HUB READY FOR VECTOR SELECT.`);
     return { route: 'NEXT_NODE' as const };
   }, [appendRunLog]);
 
@@ -865,29 +869,29 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (inc.mapMode !== 'SCANNING_HUB') return null;
 
     const cluster = finalizeClusterForScan(
-      inc.activeTierVectors[inc.currentNodeIndex] ?? [],
-      inc.currentNodeIndex,
-      inc.tierNodes,
-      inc.currentTier,
+      inc.encounterOptionClusters[inc.currentEncounterIndex] ?? [],
+      inc.currentEncounterIndex,
+      inc.encounterPath,
+      inc.currentDepth,
     );
     const node = findVectorInCluster(cluster, nodeId);
     if (!node) return null;
 
-    const tierNodes = [...inc.tierNodes];
-    tierNodes[inc.currentNodeIndex] = {
+    const encounterPath = [...inc.encounterPath];
+    encounterPath[inc.currentEncounterIndex] = {
       ...node,
-      index: inc.currentNodeIndex,
-      depthIndex: inc.currentNodeIndex,
+      index: inc.currentEncounterIndex,
+      encounterIndex: inc.currentEncounterIndex,
     };
 
     setActiveIncursion((prev) => {
-      const next = { ...prev, tierNodes, selectedVectorId: nodeId };
+      const next = { ...prev, encounterPath, selectedVectorId: nodeId };
       activeIncursionRef.current = next;
       return next;
     });
 
     appendRunLog(
-      `>> INCURSION INITIATED — DEPTH ${inc.currentNodeIndex + 1}/10 // ${node.label.split(' // ').slice(1).join(' // ') || node.label}`,
+      `>> INCURSION INITIATED — ENCOUNTER ${inc.currentEncounterIndex + 1}/10 // ${node.label.split(' // ').slice(1).join(' // ') || node.label}`,
     );
 
     if (node.type === 'STANDARD_COMBAT') {
@@ -911,6 +915,15 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (node.type === 'SANCTUARY') {
+      setActiveIncursion((prev) => {
+        const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
+        activeIncursionRef.current = next;
+        return next;
+      });
+      return node.type;
+    }
+
+    if (node.type === 'BLACK_MARKET') {
       setActiveIncursion((prev) => {
         const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
         activeIncursionRef.current = next;
@@ -957,25 +970,25 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
     const incAfterClose = activeIncursionRef.current;
     const cluster = finalizeClusterForScan(
-      incAfterClose.activeTierVectors[incAfterClose.currentNodeIndex] ?? [],
-      incAfterClose.currentNodeIndex,
-      incAfterClose.tierNodes,
-      incAfterClose.currentTier,
+      incAfterClose.encounterOptionClusters[incAfterClose.currentEncounterIndex] ?? [],
+      incAfterClose.currentEncounterIndex,
+      incAfterClose.encounterPath,
+      incAfterClose.currentDepth,
     );
     const node = findVectorInCluster(cluster, nodeId);
     if (!node) return null;
 
-    const tierNodes = [...incAfterClose.tierNodes];
-    tierNodes[incAfterClose.currentNodeIndex] = { ...node, index: incAfterClose.currentNodeIndex, depthIndex: incAfterClose.currentNodeIndex };
+    const encounterPath = [...incAfterClose.encounterPath];
+    encounterPath[incAfterClose.currentEncounterIndex] = { ...node, index: incAfterClose.currentEncounterIndex, encounterIndex: incAfterClose.currentEncounterIndex };
 
     setActiveIncursion((prev) => {
-      const next = { ...prev, tierNodes, selectedVectorId: nodeId };
+      const next = { ...prev, encounterPath, selectedVectorId: nodeId };
       activeIncursionRef.current = next;
       return next;
     });
 
     appendRunLog(
-      `>> INCURSION INITIATED — DEPTH ${incAfterClose.currentNodeIndex + 1}/10 // ${node.label.split(' // ').slice(1).join(' // ') || node.label}`,
+      `>> INCURSION INITIATED — DEPTH ${incAfterClose.currentEncounterIndex + 1}/10 // ${node.label.split(' // ').slice(1).join(' // ') || node.label}`,
     );
 
     if (node.type === 'STANDARD_COMBAT') {
@@ -989,7 +1002,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (node.type === 'NARRATIVE_EVENT') {
-      assignNarrativeForCombat(node.depthIndex);
+      assignNarrativeForCombat(node.encounterIndex);
       setActiveIncursion((prev) => {
         const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
         activeIncursionRef.current = next;
@@ -999,6 +1012,15 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (node.type === 'SANCTUARY') {
+      setActiveIncursion((prev) => {
+        const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
+        activeIncursionRef.current = next;
+        return next;
+      });
+      return node.type;
+    }
+
+    if (node.type === 'BLACK_MARKET') {
       setActiveIncursion((prev) => {
         const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
         activeIncursionRef.current = next;
@@ -1043,7 +1065,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   const useIncursionConsumable = useCallback((itemId: IncursionConsumableId): IncursionConsumableUseResult | null => {
     const inc = activeIncursionRef.current;
     const item = inc.inventory.items.find((entry) => entry.id === itemId);
-    if (!item || item.quantity <= 0) return null;
+    if (!item || item.quantity <= 0 || item.effect === 'unimplemented') return null;
 
     const run = runStateRef.current;
     let healAmount = 0;
@@ -1053,10 +1075,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (item.effect === 'stun') {
       stunsEnemy = true;
       logLine = '>> VEIL SHARD DEPLOYED — Hostile neural lock engaged.';
-    } else {
+    } else if (item.effect === 'heal') {
       const healPercent = item.healPercent ?? 0;
       healAmount = Math.floor(run.maxSoulAnchor * (healPercent / 100));
       logLine = `>> SOUL CORE DEPLOYED — +${healPercent}% Soul Anchor integrity restored (+${healAmount} HP).`;
+    } else {
+      return null;
     }
 
     setActiveIncursion((prev) => {
@@ -1090,6 +1114,49 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const awardRunCredits = useCallback((amount: number, reason: string) => {
+    if (amount <= 0) return;
+    setActiveIncursion((prev) => {
+      const next = { ...prev, runCredits: prev.runCredits + amount };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    appendRunLog(`>> +${amount} RUN CREDITS — ${reason}`);
+  }, [appendRunLog]);
+
+  const purchaseBlackMarketItem = useCallback((itemId: IncursionConsumableId): { success: boolean; logLine: string } | null => {
+    const inc = activeIncursionRef.current;
+    if (inc.runCredits < BLACK_MARKET_ITEM_PRICE) {
+      return { success: false, logLine: '[REJECTED] >> Insufficient run credits for black market purchase.' };
+    }
+
+    const template = catalogItemForId(itemId);
+    const existing = inc.inventory.items.find((entry) => entry.id === itemId);
+
+    setActiveIncursion((prev) => {
+      const nextItems = existing
+        ? prev.inventory.items.map((entry) => (
+          entry.id === itemId
+            ? { ...entry, quantity: entry.quantity + 1 }
+            : entry
+        ))
+        : [...prev.inventory.items, { ...template, quantity: 1 }];
+
+      const next: ActiveIncursionState = {
+        ...prev,
+        runCredits: prev.runCredits - BLACK_MARKET_ITEM_PRICE,
+        inventory: { items: nextItems },
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+
+    return {
+      success: true,
+      logLine: `>> BLACK MARKET — ${template.name} acquired. -${BLACK_MARKET_ITEM_PRICE} RUN CREDITS.`,
+    };
+  }, []);
+
   const value = useMemo(
     () => ({
       runState,
@@ -1118,7 +1185,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       getCurrentNarrativeNode,
       resolveNarrativeCheck,
       activeIncursion,
-      getCurrentTierNode,
+      getCurrentEncounterNode,
       getCurrentVectorCluster,
       getSelectedVectorNode,
       openScanPreview,
@@ -1138,6 +1205,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       exitCombatToBadge,
       useIncursionConsumable,
       applyIncursionConsumableHeal,
+      awardRunCredits,
+      purchaseBlackMarketItem,
     }),
     [
       runState,
@@ -1166,7 +1235,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       getCurrentNarrativeNode,
       resolveNarrativeCheck,
       activeIncursion,
-      getCurrentTierNode,
+      getCurrentEncounterNode,
       getCurrentVectorCluster,
       getSelectedVectorNode,
       openScanPreview,
@@ -1186,6 +1255,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       exitCombatToBadge,
       useIncursionConsumable,
       applyIncursionConsumableHeal,
+      awardRunCredits,
+      purchaseBlackMarketItem,
     ],
   );
 

@@ -45,14 +45,14 @@ export default function ScanConfirmOverlay({
             {node?.isPreDiscovered ? 'PRIORITY THREAT IDENTIFIED' : 'ANOMALY CLASSIFICATION PREVIEW'}
           </Text>
           <Text style={[styles.subHeader, { color: theme.mutedColor }]}>
-            DEPTH {node != null ? node.depthIndex + 1 : '—'}/10 // TERMINAL CONFIRMATION REQUIRED
+            ENCOUNTER {node != null ? node.encounterIndex + 1 : '—'}/10 // TERMINAL CONFIRMATION REQUIRED
           </Text>
 
           <View style={[styles.dataBlock, { borderColor: theme.borderColor }]}>
             <Text style={[styles.fieldLabel, { color: theme.mutedColor }]}>ENCOUNTER TYPE</Text>
             <Text style={[styles.fieldValue, { color: theme.primaryColor }]}>
               {node != null
-                ? getEncounterDisplayLabel(node.encounterType, node.depthIndex).toUpperCase()
+                ? getEncounterDisplayLabel(node.encounterType, node.encounterIndex).toUpperCase()
                 : '—'}
             </Text>
 

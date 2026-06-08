@@ -9,8 +9,8 @@ export type EncounterType = 'COMBAT' | 'SKILL_CHECK' | 'SANCTUARY';
 export type BiomeType = 'HOSPITAL' | 'ALLEYWAYS' | 'SEWERS' | 'CHURCH' | 'FOREST' | 'CANYON';
 export type ItemRarity = 'STANDARD' | 'STABILIZED' | 'COBALT' | 'ABYSSAL';
 export type CheckStatus = 'NOT_TESTED' | 'SUCCESS' | 'FAILURE';
-export type RunNodeType = 'NARRATIVE_EVENT' | 'STANDARD_COMBAT' | 'ELITE_COMBAT' | 'BOSS_COMBAT' | 'SANCTUARY';
-export type IncursionEncounterType = 'COMBAT' | 'NARRATIVE_EVENT' | 'SANCTUARY';
+export type RunNodeType = 'NARRATIVE_EVENT' | 'STANDARD_COMBAT' | 'ELITE_COMBAT' | 'BOSS_COMBAT' | 'SANCTUARY' | 'BLACK_MARKET';
+export type IncursionEncounterType = 'COMBAT' | 'NARRATIVE_EVENT' | 'SANCTUARY' | 'BLACK_MARKET';
 export type IncursionBiome = 'CITY_STREETS' | 'HOSPITAL' | 'LABORATORY' | 'SECTOR_CORE';
 export type IncursionMapMode = 'SCANNING_HUB' | 'NODE_ENGAGED' | 'PROGRESS_CHECKPOINT';
 
@@ -35,7 +35,7 @@ export interface PlayerAccount {
   unlockedClasses: ClassType[];
   unlockedBiomes: BiomeType[];
   progressionMatrix: {
-    maxTierUnlocked: number;
+    maxDepthUnlocked: number;
     activeCampaignCluster: 'URBAN' | 'ISOLATED' | 'WILDERNESS' | null;
   };
   regionalPresence: RegionalPresenceState;
@@ -166,8 +166,8 @@ export interface EnvironmentalModifiers {
 
 export interface IncursionNode {
   id: string;
-  depthIndex: number;
-  /** Legacy alias — always equals depthIndex. */
+  encounterIndex: number;
+  /** Legacy alias — always equals encounterIndex. */
   index: number;
   encounterType: IncursionEncounterType;
   biome: IncursionBiome;
@@ -192,7 +192,7 @@ export interface BossRuntimeProfile {
   currentHp: number;
   currentPhase: number;
   phases: BossPhaseConfiguration[];
-  tier: number;
+  depth: number;
 }
 
 export interface ActiveIncursionState {
@@ -203,12 +203,12 @@ export interface ActiveIncursionState {
   currentNarrativeId: string | null;
   lastCheckStatus: CheckStatus;
   activeChoice: 'A' | 'B' | null;
-  currentTier: number;
-  currentNodeIndex: number;
-  /** Resolved path — one chosen node per depth step (10 steps). */
-  tierNodes: IncursionNode[];
-  /** Pre-generated selectable vector clusters indexed by depth 0–9. */
-  activeTierVectors: IncursionNode[][];
+  currentDepth: number;
+  currentEncounterIndex: number;
+  /** Resolved path — one chosen node per encounter step (10 per depth). */
+  encounterPath: IncursionNode[];
+  /** Pre-generated selectable vector clusters indexed by encounter 0–9. */
+  encounterOptionClusters: IncursionNode[][];
   earlySanctuarySpawned: boolean;
   selectedVectorId: string | null;
   /** Node staged for scan confirmation overlay preview. */
@@ -218,6 +218,8 @@ export interface ActiveIncursionState {
   bossProfile: BossRuntimeProfile | null;
   mapMode: IncursionMapMode;
   lastCheckpointMessage: string | null;
+  /** Run-scoped credits earned from combat — reset each run, not carried to hub. */
+  runCredits: number;
 }
 
 export function createDefaultEnvironmentalModifiers(): EnvironmentalModifiers {
@@ -237,10 +239,10 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     currentNarrativeId: null,
     lastCheckStatus: 'NOT_TESTED',
     activeChoice: null,
-    currentTier: 1,
-    currentNodeIndex: 0,
-    tierNodes: [],
-    activeTierVectors: [],
+    currentDepth: 1,
+    currentEncounterIndex: 0,
+    encounterPath: [],
+    encounterOptionClusters: [],
     earlySanctuarySpawned: false,
     selectedVectorId: null,
     previewNodeId: null,
@@ -249,5 +251,6 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     bossProfile: null,
     mapMode: 'SCANNING_HUB',
     lastCheckpointMessage: null,
+    runCredits: 0,
   };
 }

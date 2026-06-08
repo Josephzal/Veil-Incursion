@@ -39,9 +39,9 @@ export default function IncursionShell({ children, hidePipeline = false }: Incur
       <View style={styles.root}>
         {activeIncursion.isRunActive && !hidePipeline ? (
           <DescentPipelineHUD
-            tier={activeIncursion.currentTier}
-            currentNodeIndex={activeIncursion.currentNodeIndex}
-            tierNodes={activeIncursion.tierNodes}
+            depth={activeIncursion.currentDepth}
+            currentEncounterIndex={activeIncursion.currentEncounterIndex}
+            encounterPath={activeIncursion.encounterPath}
             accentColor={accent}
             borderColor={theme.borderColor}
             mutedColor={theme.mutedColor}

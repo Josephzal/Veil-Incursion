@@ -24,7 +24,7 @@ export const ITEM_CATALOG: Record<string, Omit<InventoryItem, 'isEquipped'>> = {
   'ghost-wire-nodachi': {
     id: 'ghost-wire-nodachi',
     name: 'Ghost-Wire Nodachi',
-    description: 'Phase-threaded steel filament. Lightweight strikes bleed kinetic charge rapidly into the reservoir.',
+    description: 'Phase-threaded steel filament. Lightweight strikes bleed abyssal charge rapidly into the reservoir.',
     rarity: 'STABILIZED',
     type: 'WEAPON',
     modifiers: {

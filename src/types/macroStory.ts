@@ -11,7 +11,7 @@ export interface OutcomeModifierMetric {
   key: string;
   /** Securely bounded modifier in [-0.10, +0.10]. */
   value: number;
-  appliedAtDepth?: number;
+  appliedAtEncounter?: number;
 }
 
 export interface MacroStoryRunConfiguration {
@@ -21,8 +21,8 @@ export interface MacroStoryRunConfiguration {
 }
 
 export interface SectorBlockSpec {
-  depthStart: number;
-  depthEnd: number;
+  encounterStart: number;
+  encounterEnd: number;
   biome: IncursionBiome;
   label: string;
 }

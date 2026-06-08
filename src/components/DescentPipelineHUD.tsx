@@ -3,9 +3,9 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { IncursionNode } from '../types/game';
 
 interface DescentPipelineHUDProps {
-  tier: number;
-  currentNodeIndex: number;
-  tierNodes: IncursionNode[];
+  depth: number;
+  currentEncounterIndex: number;
+  encounterPath: IncursionNode[];
   accentColor?: string;
   borderColor?: string;
   mutedColor?: string;
@@ -24,12 +24,13 @@ const NODE_ICON: Record<string, string> = {
   ELITE_COMBAT: '☠',
   BOSS_COMBAT: '⬡',
   SANCTUARY: '+',
+  BLACK_MARKET: '◈',
 };
 
 export default function DescentPipelineHUD({
-  tier,
-  currentNodeIndex,
-  tierNodes,
+  depth,
+  currentEncounterIndex,
+  encounterPath,
   accentColor = '#00ff33',
   borderColor = '#334155',
   mutedColor = '#64748b',
@@ -41,13 +42,13 @@ export default function DescentPipelineHUD({
   showExtract = false,
   onExtractPress,
 }: DescentPipelineHUDProps): React.JSX.Element | null {
-  if (tierNodes.length === 0) return null;
+  if (encounterPath.length === 0) return null;
 
   const renderNodeIcon = (node: IncursionNode) => {
-    const isCurrent = node.index === currentNodeIndex;
+    const isCurrent = node.index === currentEncounterIndex;
     const isSelected = selectedNodeIndex === node.index;
     const isComplete = node.isCompleted;
-    const isLocked = node.index > currentNodeIndex;
+    const isLocked = node.index > currentEncounterIndex;
     const isSelectable = interactive && isCurrent && !isComplete;
     const icon = NODE_ICON[node.type] ?? '●';
 
@@ -91,8 +92,8 @@ export default function DescentPipelineHUD({
       {!hideLabel ? (
         <View style={styles.headerRow}>
           <View style={styles.headerLabelWrap}>
-            <Text style={[styles.tierLabel, { color: mutedColor }]}>
-              VEIL DESCENT // TIER {tier} // DEPTH {currentNodeIndex + 1}/10
+            <Text style={[styles.depthLabel, { color: mutedColor }]}>
+              VEIL DESCENT // DEPTH {depth} // ENCOUNTER {currentEncounterIndex + 1}/10
             </Text>
           </View>
           {showExtract ? (
@@ -108,14 +109,14 @@ export default function DescentPipelineHUD({
         </View>
       ) : null}
       <View style={styles.pipeline}>
-        {tierNodes.flatMap((node, index) => {
+        {encounterPath.flatMap((node, index) => {
           const items: React.JSX.Element[] = [
             <View key={node.id} style={styles.nodeCell}>
               {renderNodeIcon(node)}
             </View>,
           ];
 
-          if (index < tierNodes.length - 1) {
+          if (index < encounterPath.length - 1) {
             items.push(
               <View
                 key={`${node.id}-connector`}
@@ -167,7 +168,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  tierLabel: {
+  depthLabel: {
     fontFamily: 'monospace',
     fontSize: 7,
     letterSpacing: 1,

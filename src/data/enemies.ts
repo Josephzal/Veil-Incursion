@@ -63,7 +63,7 @@ export function intentLabel(intent: EnemyIntent, designation: string): string {
   const labels: Record<EnemyIntent, string> = {
     STRIKE: `${designation} intends to STRIKE`,
     STRIP_STAMINA: `${designation} intends to STRIP STAMINA`,
-    SIPHON_ABYSSAL: `${designation} intends to SIPHON KINETIC ENERGY`,
+    SIPHON_ABYSSAL: `${designation} intends to SIPHON ABYSSAL ENERGY`,
     EVADE: `${designation} intends to EVADE (50% damage reduction)`,
     CHARGE: `${designation} is CHARGING a world-ender (turn ${1}/3)`,
     WORLD_ENDER: `${designation} intends WORLD-ENDER (UNBLOCKABLE)`,

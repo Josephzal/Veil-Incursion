@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   BIOME_DISPLAY_LABEL,
-  BOSS_DEPTH_INDEX,
-  generateTierNodeScanVectors,
+  BOSS_ENCOUNTER_INDEX,
+  generateDepthNodeScanVectors,
   getEncounterDisplayLabel,
 } from '../data/descentEngine';
 import { INITIAL_SECTOR_POOL } from '../data/regions';
@@ -41,7 +41,7 @@ export default function ScanningScreen(): React.JSX.Element {
   } = useRun();
   const { account } = usePlayerAccount();
   const { isScanningHub } = useDescentNavigator();
-  const { startNarrative, startCombat, startRest } = useGameFlow();
+  const { startNarrative, startCombat, startRest, startBlackMarket } = useGameFlow();
 
   const cabal: ScannerCabal = account.alignedFaction ?? 'TERRAN_GRID';
   const accent =
@@ -53,15 +53,15 @@ export default function ScanningScreen(): React.JSX.Element {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const lastRadarSessionRef = useRef<number | null>(null);
 
-  const nodeIndex = activeIncursion.currentNodeIndex;
-  const isBossDepth = nodeIndex === BOSS_DEPTH_INDEX;
+  const nodeIndex = activeIncursion.currentEncounterIndex;
+  const isBossEncounter = nodeIndex === BOSS_ENCOUNTER_INDEX;
   const vectorCluster = useMemo(
     () => getCurrentVectorCluster(),
     [
       getCurrentVectorCluster,
-      activeIncursion.activeTierVectors,
-      activeIncursion.tierNodes,
-      activeIncursion.currentTier,
+      activeIncursion.encounterOptionClusters,
+      activeIncursion.encounterPath,
+      activeIncursion.currentDepth,
       nodeIndex,
     ],
   );
@@ -70,9 +70,9 @@ export default function ScanningScreen(): React.JSX.Element {
   const hasSelection = selectedNode != null;
   const canEngage = hasSelection && runState.currentStamina >= SCAN_ENGAGE_STAMINA_COST;
 
-  const scanHint = isBossDepth
+  const scanHint = isBossEncounter
     ? 'Tap the priority contact when illuminated to lock and review classification.'
-    : `Tap illuminated contacts to lock routes — ${vectorCluster.length} vector${vectorCluster.length === 1 ? '' : 's'} at depth ${nodeIndex + 1}. Scanner remains active.`;
+    : `Tap illuminated contacts to lock routes — ${vectorCluster.length} vector${vectorCluster.length === 1 ? '' : 's'} at encounter ${nodeIndex + 1}. Scanner remains active.`;
 
   const metaLine = hasSelection
     ? (
@@ -91,7 +91,7 @@ export default function ScanningScreen(): React.JSX.Element {
     lastRadarSessionRef.current = scanSessionKey;
 
     const sector = runState.currentSector ?? INITIAL_SECTOR_POOL[0];
-    const dots = generateTierNodeScanVectors(vectorCluster, RADAR_SIZE, sector);
+    const dots = generateDepthNodeScanVectors(vectorCluster, RADAR_SIZE, sector);
     setVectorDots(dots);
     setSelectedNodeId(null);
     closeScanPreview();
@@ -118,10 +118,13 @@ export default function ScanningScreen(): React.JSX.Element {
       case 'SANCTUARY':
         startRest();
         break;
+      case 'BLACK_MARKET':
+        startBlackMarket();
+        break;
       default:
         break;
     }
-  }, [confirmScanPreview, startCombat, startNarrative, startRest]);
+  }, [confirmScanPreview, startBlackMarket, startCombat, startNarrative, startRest]);
 
   if (!isScanningHub) {
     return (
@@ -167,12 +170,12 @@ export default function ScanningScreen(): React.JSX.Element {
             <Text
               style={[
                 styles.encounterType,
-                { color: hasSelection ? (isBossDepth ? accent : theme.primaryColor) : theme.mutedColor },
+                { color: hasSelection ? (isBossEncounter ? accent : theme.primaryColor) : theme.mutedColor },
               ]}
               numberOfLines={1}
             >
               {hasSelection
-                ? getEncounterDisplayLabel(selectedNode.encounterType, selectedNode.depthIndex).toUpperCase()
+                ? getEncounterDisplayLabel(selectedNode.encounterType, selectedNode.encounterIndex).toUpperCase()
                 : 'AWAITING VECTOR LOCK'}
             </Text>
 

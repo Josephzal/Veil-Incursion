@@ -53,7 +53,7 @@ export default function RestScreen(): React.JSX.Element {
 
               <View style={[styles.docBody, { borderColor: theme.borderColor }]}>
                 <Text style={[styles.scenarioText, { color: theme.primaryColor }]}>
-                  A quiet anchor chapel hums with stabilizing ley-energy. Choose how to recover before the next incursion vector.
+                  A quiet anchor chapel hums with stabilizing ley-energy. Choose how to recover before the next encounter.
                 </Text>
                 <View style={styles.statsBlock}>
                   <Text style={[styles.statLine, { color: theme.mutedColor }]}>

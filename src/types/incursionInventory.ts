@@ -1,6 +1,6 @@
-export type IncursionConsumableId = 'soul-core' | 'veil-shard';
+export type IncursionConsumableId = 'soul-core' | 'veil-shard' | 'target-fragment';
 
-export type IncursionConsumableEffect = 'heal' | 'stun';
+export type IncursionConsumableEffect = 'heal' | 'stun' | 'unimplemented';
 
 export interface IncursionConsumable {
   id: IncursionConsumableId;

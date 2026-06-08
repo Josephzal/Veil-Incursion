@@ -6,6 +6,7 @@ export type AppScreen =
   | 'POST_COMBAT_BOON'
   | 'SKILL_CHECK'
   | 'REST'
+  | 'BLACK_MARKET'
   | 'COMBAT'
   | 'RUN_PROGRESS'
   | 'RUN_COMPLETE'

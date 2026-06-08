@@ -74,7 +74,7 @@ export default function IdentificationBadgeView({
 
       <View style={[styles.metaRow, { borderTopColor: theme.borderColor }]}>
         <Text style={[styles.metaText, { color: theme.mutedColor }]}>
-          RANK {account.operativeRank} // TIER {account.progressionMatrix.maxTierUnlocked}
+          RANK {account.operativeRank} // DEPTH {account.progressionMatrix.maxDepthUnlocked}
         </Text>
         <Text style={[styles.metaText, { color: theme.mutedColor }]}>
           {account.cabalCredits} CABAL CR

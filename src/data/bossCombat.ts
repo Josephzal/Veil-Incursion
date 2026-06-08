@@ -1,14 +1,14 @@
 import { BossRuntimeProfile } from '../types/game';
 import { EnemyCombatProfile, EnemyIntent, SectorDefinition } from '../types/run';
-import { getTierScale } from './descentEngine';
+import { getDepthScale } from './descentEngine';
 
 export function spawnBossEnemyProfile(
   boss: BossRuntimeProfile,
   sector: SectorDefinition,
   nodeIndex: number,
 ): EnemyCombatProfile {
-  const scale = getTierScale(boss.tier);
-  const baseDamage = boss.tier === 1 ? 8 : boss.tier === 2 ? 12 : 14;
+  const scale = getDepthScale(boss.depth);
+  const baseDamage = boss.depth === 1 ? 8 : boss.depth === 2 ? 12 : 14;
   return {
     class: 'ABOMINATION',
     designation: boss.name,
@@ -22,7 +22,7 @@ export function spawnBossEnemyProfile(
     scale,
     isBoss: true,
     bossPhase: boss.currentPhase,
-    bossTier: boss.tier,
+    bossDepth: boss.depth,
   };
 }
 
@@ -33,10 +33,10 @@ export function bossIntentLabel(
   if (phase >= 2) {
     return `>> INTENT: OVERDRIVE DISCHARGE (18 DMG, unblockable unless Counter Stance)`;
   }
-  if (boss.tier === 1) {
+  if (boss.depth === 1) {
     return `>> INTENT: CONDUIT STRIKE (8 DMG)`;
   }
-  if (boss.tier === 2) {
+  if (boss.depth === 2) {
     return `>> INTENT: COMMANDER LANCET (12 DMG)`;
   }
   return `>> INTENT: PRIME VECTOR STRIKE (14 DMG)`;
@@ -49,8 +49,8 @@ export function rollBossIntent(phase: number): EnemyIntent {
 
 export function bossStrikeDamage(boss: BossRuntimeProfile, phase: number): number {
   if (phase >= 2) return 18;
-  if (boss.tier === 1) return 8;
-  if (boss.tier === 2) return 12;
+  if (boss.depth === 1) return 8;
+  if (boss.depth === 2) return 12;
   return 14;
 }
 

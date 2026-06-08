@@ -114,7 +114,7 @@ export function layoutRadarDotsOnScanner<T extends { id: string }>(
 export type RadarDotLayoutInput = {
   id: string;
   isPreDiscovered?: boolean;
-  depthIndex: number;
+  encounterIndex: number;
 };
 
 export function createRadarDotFromPolar(
@@ -139,6 +139,6 @@ export function createRadarDotFromPolar(
     y: position.y,
     angleDeg: position.angleDeg,
     isPreDiscovered: node.isPreDiscovered,
-    depthIndex: node.depthIndex,
+    encounterIndex: node.encounterIndex,
   };
 }

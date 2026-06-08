@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import SoulCoreImage from '../../assets/images/item images/soul-core.png';
+import TargetFragmentImage from '../../assets/images/item images/target-fragment.png';
 import VeilShardImage from '../../assets/images/item images/veil-shard.png';
 import type { IncursionConsumable, IncursionConsumableId } from '../types/incursionInventory';
 import type { TerminalTheme } from '../types/theme';
@@ -24,11 +25,15 @@ const USE_DISABLED_TEXT = '#2a4032';
 const ITEM_IMAGES: Partial<Record<IncursionConsumableId, ImageSourcePropType>> = {
   'soul-core': SoulCoreImage,
   'veil-shard': VeilShardImage,
+  'target-fragment': TargetFragmentImage,
 };
 
 function formatItemEffect(item: IncursionConsumable): string {
   if (item.effect === 'stun') {
     return 'EFFECT: STUN HOSTILE — SKIPS NEXT TURN // SHATTERS WORLD-ENDER';
+  }
+  if (item.effect === 'unimplemented') {
+    return 'EFFECT: FIELD DEPLOYMENT PENDING — NOT YET OPERATIONAL';
   }
   return `EFFECT: +${item.healPercent ?? 0}% SOUL ANCHOR INTEGRITY`;
 }
@@ -65,7 +70,9 @@ export default function IncursionInventoryOverlay({
     : null;
 
   const gridCells = Array.from({ length: GRID_SLOTS }, (_, index) => items[index] ?? null);
-  const useEnabled = selectedItem != null && selectedItem.quantity > 0;
+  const useEnabled = selectedItem != null
+    && selectedItem.quantity > 0
+    && selectedItem.effect !== 'unimplemented';
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>

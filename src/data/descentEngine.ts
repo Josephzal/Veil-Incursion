@@ -5,19 +5,19 @@ import {
   RunNodeType,
 } from '../types/game';
 import { EncounterType, RadarDot, SectorDefinition } from '../types/run';
-import { INCURSION_DEPTH_COUNT } from '../types/run';
+import { INCURSION_ENCOUNTER_COUNT } from '../types/run';
 import {
   createRadarDotFromPolar,
   layoutRadarDotsOnScanner,
 } from './scannerNodeLayout';
 import { INITIAL_SECTOR_POOL } from './regions';
 
-export const BOSS_DEPTH_INDEX = 9;
-export const PENULT_DEPTH_INDEX = 8;
-export const MANDATORY_SANCTUARY_DEPTH = 3;
+export const BOSS_ENCOUNTER_INDEX = 9;
+export const PENULT_ENCOUNTER_INDEX = 8;
+export const MANDATORY_SANCTUARY_ENCOUNTER = 3;
 export const MIDDLE_SANCTUARY_CANDIDATES = [1, 2, 4, 5, 6] as const;
 
-const TIER_LABELS: Record<number, string> = {
+const DEPTH_LABELS: Record<number, string> = {
   1: 'THRESHOLD',
   2: 'DEEP BLEED',
   3: 'ABYSSAL CORE',
@@ -53,6 +53,7 @@ export const ENCOUNTER_DISPLAY_LABEL: Record<IncursionEncounterType, string> = {
   COMBAT: 'Combat',
   NARRATIVE_EVENT: 'Narrative Event',
   SANCTUARY: 'Sanctuary',
+  BLACK_MARKET: 'Black Market',
 };
 
 function hashSeed(input: string): number {
@@ -83,11 +84,12 @@ function randomBranchCount(): number {
 
 export function encounterToRunNodeType(
   encounterType: IncursionEncounterType,
-  depthIndex: number,
+  encounterIndex: number,
 ): RunNodeType {
   if (encounterType === 'SANCTUARY') return 'SANCTUARY';
   if (encounterType === 'NARRATIVE_EVENT') return 'NARRATIVE_EVENT';
-  return depthIndex === BOSS_DEPTH_INDEX ? 'BOSS_COMBAT' : 'STANDARD_COMBAT';
+  if (encounterType === 'BLACK_MARKET') return 'BLACK_MARKET';
+  return encounterIndex === BOSS_ENCOUNTER_INDEX ? 'BOSS_COMBAT' : 'STANDARD_COMBAT';
 }
 
 export function isCombatNodeType(type: RunNodeType): boolean {
@@ -99,34 +101,34 @@ function rollFlexibleEncounter(): IncursionEncounterType {
 }
 
 export function resolveBiomeForOption(
-  _depthIndex: number,
+  _encounterIndex: number,
   _optionIndex: number,
   _priorBiome: IncursionBiome | null,
 ): IncursionBiome {
   return 'CITY_STREETS';
 }
 
-export function resolveBossBiome(_tierNodes: IncursionNode[]): IncursionBiome {
+export function resolveBossBiome(_encounterPath: IncursionNode[]): IncursionBiome {
   return 'CITY_STREETS';
 }
 
 function makeVectorNode(
-  tier: number,
-  depthIndex: number,
+  depth: number,
+  encounterIndex: number,
   optionIndex: number,
   encounterType: IncursionEncounterType,
   biome: IncursionBiome,
   isPreDiscovered = false,
 ): IncursionNode {
-  const id = `t${tier}-d${depthIndex}-o${optionIndex}`;
+  const id = `depth${depth}-enc${encounterIndex}-o${optionIndex}`;
   const masked = buildMaskedScanTelemetry(id, optionIndex);
-  const prefix = TIER_LABELS[tier] ?? `TIER ${tier}`;
-  const type = encounterToRunNodeType(encounterType, depthIndex);
+  const prefix = DEPTH_LABELS[depth] ?? `DEPTH ${depth}`;
+  const type = encounterToRunNodeType(encounterType, encounterIndex);
 
   return {
     id,
-    depthIndex,
-    index: depthIndex,
+    encounterIndex,
+    index: encounterIndex,
     encounterType,
     biome,
     type,
@@ -136,17 +138,18 @@ function makeVectorNode(
   };
 }
 
-/** Depth 0 — exactly two vectors: one combat, one narrative. */
-function buildFirstScanCluster(tier: number): IncursionNode[] {
+/** Encounter 0 — combat, narrative, and black market vectors. */
+function buildFirstScanCluster(depth: number): IncursionNode[] {
   return [
-    makeVectorNode(tier, 0, 0, 'COMBAT', 'CITY_STREETS'),
-    makeVectorNode(tier, 0, 1, 'NARRATIVE_EVENT', 'CITY_STREETS'),
+    makeVectorNode(depth, 0, 0, 'COMBAT', 'CITY_STREETS'),
+    makeVectorNode(depth, 0, 1, 'NARRATIVE_EVENT', 'CITY_STREETS'),
+    makeVectorNode(depth, 0, 2, 'BLACK_MARKET', 'CITY_STREETS'),
   ];
 }
 
 function buildFlexibleCluster(
-  tier: number,
-  depthIndex: number,
+  depth: number,
+  encounterIndex: number,
   count: number,
   forcedSanctuarySlot: number,
   priorBiome: IncursionBiome,
@@ -154,60 +157,69 @@ function buildFlexibleCluster(
   const cluster: IncursionNode[] = [];
 
   for (let i = 0; i < count; i += 1) {
-    const biome = resolveBiomeForOption(depthIndex, i, priorBiome);
+    const biome = resolveBiomeForOption(encounterIndex, i, priorBiome);
     if (i === forcedSanctuarySlot) {
-      cluster.push(makeVectorNode(tier, depthIndex, i, 'SANCTUARY', biome));
+      cluster.push(makeVectorNode(depth, encounterIndex, i, 'SANCTUARY', biome));
     } else {
-      cluster.push(makeVectorNode(tier, depthIndex, i, rollFlexibleEncounter(), biome));
+      cluster.push(makeVectorNode(depth, encounterIndex, i, rollFlexibleEncounter(), biome));
     }
   }
 
   return cluster;
 }
 
-/** Pre-generate 10 depth-step vector clusters for a tier run. */
-export function generateTierVectorMatrix(tier: number): {
-  activeTierVectors: IncursionNode[][];
+/** Pre-generate 10 encounter-step vector clusters for a depth run. */
+export function generateDepthEncounterMatrix(depth: number): {
+  encounterOptionClusters: IncursionNode[][];
   earlySanctuarySpawned: boolean;
 } {
   const matrix: IncursionNode[][] = [];
-  const middleSanctuaryDepth =
+  const middleSanctuaryEncounter =
     MIDDLE_SANCTUARY_CANDIDATES[Math.floor(Math.random() * MIDDLE_SANCTUARY_CANDIDATES.length)];
 
-  for (let depth = 0; depth < INCURSION_DEPTH_COUNT; depth += 1) {
-    if (depth === 0) {
-      matrix[0] = buildFirstScanCluster(tier);
+  for (let encounter = 0; encounter < INCURSION_ENCOUNTER_COUNT; encounter += 1) {
+    if (encounter === 0) {
+      matrix[0] = buildFirstScanCluster(depth);
       continue;
     }
 
-    if (depth === PENULT_DEPTH_INDEX) {
-      matrix[PENULT_DEPTH_INDEX] = [
-        makeVectorNode(tier, PENULT_DEPTH_INDEX, 0, 'SANCTUARY', 'CITY_STREETS'),
-        makeVectorNode(tier, PENULT_DEPTH_INDEX, 1, 'NARRATIVE_EVENT', 'CITY_STREETS'),
+    if (encounter === 2) {
+      matrix[2] = [
+        makeVectorNode(depth, 2, 0, 'COMBAT', 'CITY_STREETS'),
+        makeVectorNode(depth, 2, 1, 'BLACK_MARKET', 'CITY_STREETS'),
+        makeVectorNode(depth, 2, 2, 'NARRATIVE_EVENT', 'CITY_STREETS'),
       ];
       continue;
     }
 
-    if (depth === BOSS_DEPTH_INDEX) {
-      matrix[BOSS_DEPTH_INDEX] = [
-        makeVectorNode(tier, BOSS_DEPTH_INDEX, 0, 'COMBAT', 'CITY_STREETS', true),
+    if (encounter === PENULT_ENCOUNTER_INDEX) {
+      matrix[PENULT_ENCOUNTER_INDEX] = [
+        makeVectorNode(depth, PENULT_ENCOUNTER_INDEX, 0, 'SANCTUARY', 'CITY_STREETS'),
+        makeVectorNode(depth, PENULT_ENCOUNTER_INDEX, 1, 'NARRATIVE_EVENT', 'CITY_STREETS'),
       ];
       continue;
     }
 
-    if (depth === MANDATORY_SANCTUARY_DEPTH) {
+    if (encounter === BOSS_ENCOUNTER_INDEX) {
+      matrix[BOSS_ENCOUNTER_INDEX] = [
+        makeVectorNode(depth, BOSS_ENCOUNTER_INDEX, 0, 'COMBAT', 'CITY_STREETS', true),
+      ];
+      continue;
+    }
+
+    if (encounter === MANDATORY_SANCTUARY_ENCOUNTER) {
       const count = randomBranchCount();
       const sanctuarySlot = Math.floor(Math.random() * count);
-      matrix[depth] = buildFlexibleCluster(tier, depth, count, sanctuarySlot, 'CITY_STREETS');
+      matrix[encounter] = buildFlexibleCluster(depth, encounter, count, sanctuarySlot, 'CITY_STREETS');
       continue;
     }
 
-    if (MIDDLE_SANCTUARY_CANDIDATES.includes(depth as (typeof MIDDLE_SANCTUARY_CANDIDATES)[number])) {
+    if (MIDDLE_SANCTUARY_CANDIDATES.includes(encounter as (typeof MIDDLE_SANCTUARY_CANDIDATES)[number])) {
       const count = randomBranchCount();
-      const sanctuarySlot = depth === middleSanctuaryDepth ? Math.floor(Math.random() * count) : -1;
-      matrix[depth] = buildFlexibleCluster(
-        tier,
+      const sanctuarySlot = encounter === middleSanctuaryEncounter ? Math.floor(Math.random() * count) : -1;
+      matrix[encounter] = buildFlexibleCluster(
         depth,
+        encounter,
         count,
         sanctuarySlot,
         'CITY_STREETS',
@@ -216,59 +228,59 @@ export function generateTierVectorMatrix(tier: number): {
     }
 
     const count = randomBranchCount();
-    matrix[depth] = buildFlexibleCluster(tier, depth, count, -1, 'CITY_STREETS');
+    matrix[encounter] = buildFlexibleCluster(depth, encounter, count, -1, 'CITY_STREETS');
   }
 
   const earlySanctuarySpawned = matrix.some(
-    (cluster, depth) =>
-      depth !== PENULT_DEPTH_INDEX &&
-      depth !== BOSS_DEPTH_INDEX &&
+    (cluster, encounter) =>
+      encounter !== PENULT_ENCOUNTER_INDEX &&
+      encounter !== BOSS_ENCOUNTER_INDEX &&
       cluster.some((node) => node.encounterType === 'SANCTUARY'),
   );
 
-  return { activeTierVectors: matrix, earlySanctuarySpawned };
+  return { encounterOptionClusters: matrix, earlySanctuarySpawned };
 }
 
-export function createPlaceholderTierPath(): IncursionNode[] {
-  return Array.from({ length: INCURSION_DEPTH_COUNT }, (_, depthIndex) => ({
-    id: `pending-${depthIndex}`,
-    depthIndex,
-    index: depthIndex,
+export function createPlaceholderDepthPath(): IncursionNode[] {
+  return Array.from({ length: INCURSION_ENCOUNTER_COUNT }, (_, encounterIndex) => ({
+    id: `pending-${encounterIndex}`,
+    encounterIndex,
+    index: encounterIndex,
     encounterType: 'COMBAT' as IncursionEncounterType,
     type: 'STANDARD_COMBAT' as RunNodeType,
     biome: 'CITY_STREETS' as IncursionBiome,
-    label: `DEPTH ${depthIndex + 1} // AWAITING VECTOR LOCK`,
+    label: `ENCOUNTER ${encounterIndex + 1} // AWAITING VECTOR LOCK`,
     isCompleted: false,
   }));
 }
 
 export function finalizeClusterForScan(
   cluster: IncursionNode[],
-  depthIndex: number,
-  tierNodes: IncursionNode[],
-  _tier: number,
+  encounterIndex: number,
+  encounterPath: IncursionNode[],
+  _depth: number,
 ): IncursionNode[] {
   const priorBiome =
-    depthIndex > 0 ? tierNodes[depthIndex - 1]?.biome ?? 'CITY_STREETS' : 'CITY_STREETS';
+    encounterIndex > 0 ? encounterPath[encounterIndex - 1]?.biome ?? 'CITY_STREETS' : 'CITY_STREETS';
 
   return cluster.map((node, optionIndex) => {
     const biome = node.encounterType === 'SANCTUARY'
       ? (priorBiome ?? 'CITY_STREETS')
-      : resolveBiomeForOption(depthIndex, optionIndex, priorBiome);
+      : resolveBiomeForOption(encounterIndex, optionIndex, priorBiome);
 
     const encounterType =
-      depthIndex === BOSS_DEPTH_INDEX ? 'COMBAT' : node.encounterType;
+      encounterIndex === BOSS_ENCOUNTER_INDEX ? 'COMBAT' : node.encounterType;
 
-    const type = encounterToRunNodeType(encounterType, depthIndex);
+    const type = encounterToRunNodeType(encounterType, encounterIndex);
 
     return {
       ...node,
-      depthIndex,
-      index: depthIndex,
+      encounterIndex,
+      index: encounterIndex,
       encounterType,
       biome,
       type,
-      isPreDiscovered: depthIndex === BOSS_DEPTH_INDEX ? true : node.isPreDiscovered,
+      isPreDiscovered: encounterIndex === BOSS_ENCOUNTER_INDEX ? true : node.isPreDiscovered,
     };
   });
 }
@@ -279,12 +291,14 @@ function incursionEncounterToRadarType(encounterType: IncursionEncounterType): E
       return 'REST';
     case 'NARRATIVE_EVENT':
       return 'SKILL_CHECK';
+    case 'BLACK_MARKET':
+      return 'REST';
     default:
       return 'COMBAT';
   }
 }
 
-export function generateTierNodeScanVectors(
+export function generateDepthNodeScanVectors(
   nodes: IncursionNode[],
   scannerSizePx: number,
   sector: SectorDefinition = INITIAL_SECTOR_POOL[0],
@@ -315,8 +329,8 @@ export function generateTierNodeScanVectors(
   );
 }
 
-export function getTierScale(tier: number): number {
-  return 1 + (tier - 1) * 0.25;
+export function getDepthScale(depth: number): number {
+  return 1 + (depth - 1) * 0.25;
 }
 
 const DEFAULT_BOSS_PHASES = [
@@ -324,7 +338,7 @@ const DEFAULT_BOSS_PHASES = [
     phaseNumber: 1,
     phaseName: 'Standard Operations',
     triggerHpThreshold: 51,
-    intentModifier: 'Low-tier conduit strikes',
+    intentModifier: 'Low-depth conduit strikes',
   },
   {
     phaseNumber: 2,
@@ -334,21 +348,21 @@ const DEFAULT_BOSS_PHASES = [
   },
 ];
 
-export function createBossProfileForTier(tier: number): import('../types/game').BossRuntimeProfile {
-  const scale = getTierScale(tier);
+export function createBossProfileForDepth(depth: number): import('../types/game').BossRuntimeProfile {
+  const scale = getDepthScale(depth);
   const profiles: Record<number, { name: string; maxHp: number }> = {
     1: { name: 'THE COLD-ROOM CONDUIT', maxHp: 100 },
     2: { name: 'RIVAL COMMANDER — VOID LANCER', maxHp: Math.floor(150 * scale) },
     3: { name: 'RIFT ENTITY PRIME', maxHp: 250 },
   };
-  const def = profiles[tier] ?? profiles[1];
+  const def = profiles[depth] ?? profiles[1];
   return {
     name: def.name,
     maxHp: def.maxHp,
     currentHp: def.maxHp,
     currentPhase: 1,
     phases: DEFAULT_BOSS_PHASES,
-    tier,
+    depth,
   };
 }
 
@@ -369,9 +383,9 @@ export function getBiomeContextLog(biome: IncursionBiome): string {
 
 export function getEncounterDisplayLabel(
   encounterType: IncursionEncounterType,
-  depthIndex: number,
+  encounterIndex: number,
 ): string {
-  if (encounterType === 'COMBAT' && depthIndex === BOSS_DEPTH_INDEX) {
+  if (encounterType === 'COMBAT' && encounterIndex === BOSS_ENCOUNTER_INDEX) {
     return 'Boss Combat';
   }
   return ENCOUNTER_DISPLAY_LABEL[encounterType];

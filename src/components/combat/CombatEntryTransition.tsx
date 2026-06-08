@@ -100,7 +100,7 @@ export default function CombatEntryTransition({
           },
         ]}
       >
-        <Text style={styles.eyebrow}>{'>> COMBAT LINK // HOSTILE VECTOR LOCKED'}</Text>
+        <Text style={styles.eyebrow}>{'>> COMBAT LINK // HOSTILE ANOMALY LOCKED'}</Text>
         <Text style={styles.title}>ENTERING COMBAT</Text>
       </Animated.View>
       

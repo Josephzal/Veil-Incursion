@@ -36,16 +36,16 @@ export default function RunProgressScreen(): React.JSX.Element {
           <View style={[styles.header, { borderColor: theme.borderColor }]}>
             <Text style={[styles.headerTitle, { color: accent }]}>SECTOR CHECKPOINT // PERFORMANCE REVIEW</Text>
             <Text style={[styles.headerSub, { color: theme.mutedColor }]}>
-              TIER {activeIncursion.currentTier} // VECTOR CLEARED — OPERATIVE STATUS NOMINAL
+              DEPTH {activeIncursion.currentDepth} // VECTOR CLEARED — OPERATIVE STATUS NOMINAL
             </Text>
           </View>
 
           <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
             <View style={styles.pipelineFrame}>
               <DescentPipelineHUD
-                tier={activeIncursion.currentTier}
-                currentNodeIndex={activeIncursion.currentNodeIndex}
-                tierNodes={activeIncursion.tierNodes}
+                depth={activeIncursion.currentDepth}
+                currentEncounterIndex={activeIncursion.currentEncounterIndex}
+                encounterPath={activeIncursion.encounterPath}
                 accentColor={accent}
                 borderColor={theme.borderColor}
                 mutedColor={theme.mutedColor}

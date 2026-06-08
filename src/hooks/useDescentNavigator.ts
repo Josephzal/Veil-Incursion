@@ -9,8 +9,9 @@ export type DescentRoute =
   | 'SCANNING'
   | 'COMBAT'
   | 'REST'
+  | 'BLACK_MARKET'
   | 'HUB_VICTORY'
-  | 'TIER_ADVANCE'
+  | 'DEPTH_ADVANCE'
 
 function routeForNodeType(type: RunNodeType | null): DescentRoute {
   switch (type) {
@@ -22,6 +23,8 @@ function routeForNodeType(type: RunNodeType | null): DescentRoute {
       return 'COMBAT';
     case 'SANCTUARY':
       return 'REST';
+    case 'BLACK_MARKET':
+      return 'BLACK_MARKET';
     default:
       return 'SCANNING';
   }
@@ -36,7 +39,7 @@ export function useDescentNavigator() {
     commitNodeEncounter,
     endRun,
   } = useRun();
-  const { startNarrative, startScanning, startCombat, startRest, goToHub } =
+  const { startNarrative, startScanning, startCombat, startRest, startBlackMarket, goToHub } =
     useGameFlow();
   const { addCredits, addRiftIron } = usePlayerAccount();
 
@@ -57,12 +60,15 @@ export function useDescentNavigator() {
       case 'REST':
         startRest();
         break;
+      case 'BLACK_MARKET':
+        startBlackMarket();
+        break;
       default:
         break;
     }
 
     return route;
-  }, [commitNodeEncounter, startNarrative, startCombat, startRest]);
+  }, [commitNodeEncounter, startBlackMarket, startNarrative, startCombat, startRest]);
 
   const finalizeIncursionAdvance = useCallback(
     (message: string) => {
@@ -72,7 +78,7 @@ export function useDescentNavigator() {
         addCredits(500);
         addRiftIron(10);
         appendRunLog('>> VEIL DESCENT COMPLETE — +500 CREDITS, +10 RIFT IRON AWARDED.');
-        endRun('THREE-TIER INCURSION SECURED');
+        endRun('THREE-DEPTH INCURSION SECURED');
         goToHub();
         return result;
       }
@@ -98,7 +104,7 @@ export function useDescentNavigator() {
       addCredits(500);
       addRiftIron(10);
       appendRunLog('>> VEIL DESCENT COMPLETE — +500 CREDITS, +10 RIFT IRON AWARDED.');
-      endRun('THREE-TIER INCURSION SECURED');
+      endRun('THREE-DEPTH INCURSION SECURED');
       goToHub();
       return result;
     }
@@ -115,16 +121,16 @@ export function useDescentNavigator() {
     startScanning,
   ]);
 
-  const getCurrentTierNode = useCallback(() => {
+  const getCurrentEncounterNode = useCallback(() => {
     const inc = incursionRef.current;
-    return inc.tierNodes[inc.currentNodeIndex] ?? null;
+    return inc.encounterPath[inc.currentEncounterIndex] ?? null;
   }, []);
 
   return {
     deploySelectedVector,
     finalizeIncursionAdvance,
     continueOperation,
-    getCurrentTierNode,
+    getCurrentEncounterNode,
     isScanningHub: activeIncursion.mapMode === 'SCANNING_HUB',
   };
 }

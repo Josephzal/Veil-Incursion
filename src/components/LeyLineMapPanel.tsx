@@ -11,12 +11,13 @@ const NODE_TYPE_LABEL: Record<RunNodeType, string> = {
   ELITE_COMBAT: 'ELITE CHECKPOINT',
   BOSS_COMBAT: 'REGION-PRIME BOSS',
   SANCTUARY: 'SANCTUARY ANCHOR',
+  BLACK_MARKET: 'BLACK MARKET VENDOR',
 };
 
 interface LeyLineMapPanelProps {
-  tier: number;
-  currentNodeIndex: number;
-  tierNodes: IncursionNode[];
+  depth: number;
+  currentEncounterIndex: number;
+  encounterPath: IncursionNode[];
   accentColor?: string;
   borderColor?: string;
   mutedColor?: string;
@@ -24,15 +25,15 @@ interface LeyLineMapPanelProps {
 }
 
 export default function LeyLineMapPanel({
-  tier,
-  currentNodeIndex,
-  tierNodes,
+  depth,
+  currentEncounterIndex,
+  encounterPath,
   accentColor = TERMINAL_ACCENT,
   borderColor = '#334155',
   mutedColor = '#64748b',
   onCommit,
 }: LeyLineMapPanelProps): React.JSX.Element | null {
-  const activeNode = tierNodes[currentNodeIndex] ?? null;
+  const activeNode = encounterPath[currentEncounterIndex] ?? null;
 
   const nodeSummary = useMemo(() => {
     if (!activeNode) return null;
@@ -42,7 +43,7 @@ export default function LeyLineMapPanel({
     };
   }, [activeNode]);
 
-  if (tierNodes.length === 0) return null;
+  if (encounterPath.length === 0) return null;
 
   return (
     <View style={styles.root}>
@@ -51,19 +52,19 @@ export default function LeyLineMapPanel({
           LEY-LINE VECTOR GRID SCAN
         </Text>
         <Text style={[styles.headerSub, { color: mutedColor }]}>
-          TIER {tier} // SECTOR PATH LOCKED // SELECT ACTIVE NODE
+          DEPTH {depth} // SECTOR PATH LOCKED // SELECT ACTIVE ENCOUNTER
         </Text>
       </View>
 
       <DescentPipelineHUD
-        tier={tier}
-        currentNodeIndex={currentNodeIndex}
-        tierNodes={tierNodes}
+        depth={depth}
+        currentEncounterIndex={currentEncounterIndex}
+        encounterPath={encounterPath}
         accentColor={accentColor}
         borderColor={borderColor}
         mutedColor={mutedColor}
         interactive
-        selectedNodeIndex={currentNodeIndex}
+        selectedNodeIndex={currentEncounterIndex}
         compact={false}
       />
 
@@ -88,7 +89,7 @@ export default function LeyLineMapPanel({
         ]}
       >
         <Text style={[styles.commitBtnText, { color: accentColor }]}>
-          [ COMMIT VECTOR // DEPLOY NODE {currentNodeIndex + 1} ]
+          [ COMMIT VECTOR // DEPLOY ENCOUNTER {currentEncounterIndex + 1} ]
         </Text>
       </Pressable>
 

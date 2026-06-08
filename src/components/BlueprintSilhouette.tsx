@@ -9,7 +9,7 @@ const TARGET_SIZE = 80;
 const TARGET_RADIUS = TARGET_SIZE / 2;
 
 const ABYSSAL_RESERVE_CHARGE_PER_HIT = 15;
-const KINETIC_RESERVOIR_CAP = 100;
+const ABYSSAL_RESERVOIR_CAP = 100;
 const KINETIC_PARRY_UNLOCK = 50;
 const KINETIC_PARRY_COST = 50;
 const PARRY_COUNTER_MULTIPLIER = 1.5;
@@ -208,9 +208,9 @@ export default function BlueprintSilhouette({
     return scaled;
   };
 
-  const chargeKineticReservoir = (amount: number = ABYSSAL_RESERVE_CHARGE_PER_HIT) => {
+  const chargeAbyssalReservoir = (amount: number = ABYSSAL_RESERVE_CHARGE_PER_HIT) => {
     setAbyssalReserve((prev) => {
-      const next = Math.min(prev + amount, KINETIC_RESERVOIR_CAP);
+      const next = Math.min(prev + amount, ABYSSAL_RESERVOIR_CAP);
       abyssalReserveRef.current = next;
       return next;
     });
@@ -289,7 +289,7 @@ export default function BlueprintSilhouette({
     pushTerminalText(`>> AEGIS COMBAT HARDWARE ENGAGED: ${activeWeapon.name}`);
     pushTerminalText(`>> TARGET SIGNATURE MARKED: ${initialThreat.designation}`);
     if (startingAbyssalReservePercent > 0) {
-      pushTerminalText(`>> BATTERY BOON: Kinetic reservoir pre-charged to ${startingAbyssalReservePercent}%.`);
+      pushTerminalText(`>> BATTERY BOON: Abyssal reservoir pre-charged to ${startingAbyssalReservePercent}%.`);
     }
     setCycleState('TEXT_COMBAT');
   };
@@ -312,7 +312,7 @@ export default function BlueprintSilhouette({
         return next;
       });
     }
-    chargeKineticReservoir(ABYSSAL_RESERVE_CHARGE_PER_HIT);
+    chargeAbyssalReservoir(ABYSSAL_RESERVE_CHARGE_PER_HIT);
 
     const nextStability = Math.max(threat.stability - activeWeapon.stabilityChipping, 0);
     const updatedThreat = { ...threat, stability: nextStability };
@@ -374,7 +374,7 @@ export default function BlueprintSilhouette({
     setCounterPrepActive(true);
     isKineticParryRef.current = true;
     setKineticParryActive(true);
-    pushTerminalText(`[KINETIC PARRY ARMED] >> Reservoir discharged (-${KINETIC_PARRY_COST}% KR). Counter channel primed.`);
+    pushTerminalText(`[KINETIC PARRY ARMED] >> Reservoir discharged (-${KINETIC_PARRY_COST}% AR). Counter channel primed.`);
 
     passTurnToEnemy(threat, true);
   };
@@ -513,7 +513,7 @@ export default function BlueprintSilhouette({
           return;
         }
 
-        chargeKineticReservoir(ABYSSAL_RESERVE_CHARGE_PER_HIT);
+        chargeAbyssalReservoir(ABYSSAL_RESERVE_CHARGE_PER_HIT);
         pushTerminalText(`[PERFECT COUNTER] >> Absorb matrices locked! Negated 100% damage.`);
 
         if (threat) {
@@ -695,7 +695,7 @@ export default function BlueprintSilhouette({
     const registeredNewHit = registerSliceHit(currentIdx);
     if (registeredNewHit) {
       Vibration.vibrate(10);
-      chargeKineticReservoir(ABYSSAL_RESERVE_CHARGE_PER_HIT);
+      chargeAbyssalReservoir(ABYSSAL_RESERVE_CHARGE_PER_HIT);
     }
 
     scheduleSliceAdvance(currentIdx + 1);
@@ -864,7 +864,7 @@ export default function BlueprintSilhouette({
                 styles.btnLabelText,
                 { color: parryReady && isPlayerTurn && !isExhausted ? COMBAT_PALETTE.parryActive : theme.mutedColor },
               ]}>
-                [ PARRY (-{KINETIC_PARRY_COST}% KR) ]
+                [ PARRY (-{KINETIC_PARRY_COST}% AR) ]
               </Text>
             </Pressable>
 

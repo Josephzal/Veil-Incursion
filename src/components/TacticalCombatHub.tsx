@@ -169,7 +169,7 @@ export default function TacticalCombatHub({
   const [abyssalReserve, setAbyssalReserve] = useState(startingAbyssalReservePercent);
   const { isExhausted } = useReactiveCombatStatus(stamina);
   const [abyssalWardActive, setAbyssalWardActive] = useState(false);
-  /** True after Aegis blocks — next Kinetic Strike gets bonus KR (deck highlight). */
+  /** True after Aegis blocks — next Abyssal Strike gets bonus AR (deck highlight). */
   const [strikeArPrimed, setStrikeArPrimed] = useState(false);
   const [counterPrepActive, setCounterPrepActive] = useState(false);
   const [isSuccessState, setIsSuccessState] = useState(false);

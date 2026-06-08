@@ -22,6 +22,11 @@ import { useTerminalNav } from '../context/TerminalNavContext';
 import { useRun } from '../context/RunContext';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useNodeProgression } from '../hooks/useNodeProgression';
+import {
+  RUN_CREDIT_BOSS_KILL,
+  RUN_CREDIT_ELITE_KILL,
+  RUN_CREDIT_STANDARD_KILL,
+} from '../data/blackMarket';
 import type { CombatEnemyTelemetry } from '../utils/combatTelemetryFormat';
 import type { IncursionConsumableUseResult } from '../types/incursionInventory';
 
@@ -84,6 +89,8 @@ export default function CombatScreen(): React.JSX.Element {
     incrementCombatNodesCleared,
     activeIncursion,
     shiftBossPhase,
+    awardRunCredits,
+    getSelectedVectorNode,
   } = useRun();
   const { completeCurrentNode } = useNodeProgression();
   const { getWeaponCombatStats } = usePlayerAccount();
@@ -126,7 +133,7 @@ export default function CombatScreen(): React.JSX.Element {
 
   const portraitKey =
     `${runState.pendingEnemy?.designation ?? 'hostile'}`
-    + `-${activeIncursion.currentNodeIndex}`
+    + `-${activeIncursion.currentEncounterIndex}`
     + `-${runState.combatNodesCleared}`;
 
   const handleResolutionPanelChange = useCallback(
@@ -163,6 +170,19 @@ export default function CombatScreen(): React.JSX.Element {
 
     const isBossEncounter =
       activeIncursion.bossProfile != null || runState.pendingEnemy?.isBoss === true;
+    const nodeType = getSelectedVectorNode()?.type;
+    const creditReward = isBossEncounter
+      ? RUN_CREDIT_BOSS_KILL
+      : nodeType === 'ELITE_COMBAT'
+        ? RUN_CREDIT_ELITE_KILL
+        : RUN_CREDIT_STANDARD_KILL;
+    const creditReason = isBossEncounter
+      ? 'region-prime hostile eradicated'
+      : nodeType === 'ELITE_COMBAT'
+        ? 'elite hostile eradicated'
+        : 'hostile eradicated';
+
+    awardRunCredits(creditReward, creditReason);
 
     if (runState.pendingAmbush) {
       clearPendingAmbush();
@@ -183,10 +203,12 @@ export default function CombatScreen(): React.JSX.Element {
     startPostCombatBoon();
   }, [
     activeIncursion.bossProfile,
+    awardRunCredits,
     clearPendingAmbush,
     completeCurrentNode,
     endRun,
     exitCombatToBadge,
+    getSelectedVectorNode,
     goToHub,
     incrementCombatNodesCleared,
     preparePostCombatBoons,
@@ -241,7 +263,7 @@ export default function CombatScreen(): React.JSX.Element {
                 parryWindowBonus={runState.parryWindowBonus}
                 sliceDamagePenalty={runState.sliceDamagePenalty}
                 enemyProfile={runState.pendingEnemy}
-                nodeIndex={activeIncursion.currentNodeIndex}
+                nodeIndex={activeIncursion.currentEncounterIndex}
                 onTerminalLog={appendRunLog}
                 weaponCombatStats={weaponCombatStats}
                 environmentalModifiers={env}
