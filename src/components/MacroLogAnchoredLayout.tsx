@@ -5,17 +5,17 @@ import PersistentTerminalLog from './PersistentTerminalLog';
 import { useCombatTurnOptional } from '../context/CombatTurnContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
-import type { IncursionConsumableId } from '../types/incursionInventory';
+import type { IncursionConsumableId, IncursionConsumableUseResult } from '../types/incursionInventory';
 
 interface MacroLogAnchoredLayoutProps {
   children: React.ReactNode;
   showMacroLog?: boolean;
   style?: ViewStyle;
   /**
-   * When set (combat), consumable heals apply to the live combat hub instead of run state.
+   * When set (combat), consumable effects apply to the live combat hub instead of run state.
    * Omit on scanner, narrative, boon, and sanctuary screens.
    */
-  onConsumableHeal?: (amount: number) => void;
+  onConsumableUsed?: (result: IncursionConsumableUseResult) => void;
 }
 
 /**
@@ -26,7 +26,7 @@ export default function MacroLogAnchoredLayout({
   children,
   showMacroLog = true,
   style,
-  onConsumableHeal,
+  onConsumableUsed,
 }: MacroLogAnchoredLayoutProps): React.JSX.Element {
   const { theme } = useTerminal();
   const {
@@ -55,14 +55,14 @@ export default function MacroLogAnchoredLayout({
     if (!inventoryEnabled) return;
     const result = useIncursionConsumable(itemId);
     if (!result) return;
-    if (onConsumableHeal) {
-      onConsumableHeal(result.healAmount);
-    } else {
+    if (onConsumableUsed) {
+      onConsumableUsed(result);
+    } else if (result.healAmount > 0) {
       applyIncursionConsumableHeal(result.healAmount);
     }
     appendRunLog(result.logLine);
     setInventoryOpen(false);
-  }, [appendRunLog, applyIncursionConsumableHeal, inventoryEnabled, onConsumableHeal, useIncursionConsumable]);
+  }, [appendRunLog, applyIncursionConsumableHeal, inventoryEnabled, onConsumableUsed, useIncursionConsumable]);
 
   const handleInventoryPress = useCallback(() => {
     if (!inventoryEnabled) return;
@@ -76,7 +76,7 @@ export default function MacroLogAnchoredLayout({
         <PersistentTerminalLog
           docked
           showInventory={showIncursionInventory}
-          inventoryDisabled={showIncursionInventory && onConsumableHeal != null && !inventoryEnabled}
+          inventoryDisabled={showIncursionInventory && onConsumableUsed != null && !inventoryEnabled}
           onInventoryPress={handleInventoryPress}
         />
       ) : null}

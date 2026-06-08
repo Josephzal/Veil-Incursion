@@ -23,6 +23,7 @@ import { useRun } from '../context/RunContext';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useNodeProgression } from '../hooks/useNodeProgression';
 import type { CombatEnemyTelemetry } from '../utils/combatTelemetryFormat';
+import type { IncursionConsumableUseResult } from '../types/incursionInventory';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('screen');
 /** Flexible middle band — grows/shrinks so the hub can dock above the macro log without clipping the descent HUD. */
@@ -97,6 +98,7 @@ export default function CombatScreen(): React.JSX.Element {
   const apparitionRef = useRef<ApparitionViewportRef>(null);
   const killResolverRef = useRef<() => void>(() => {});
   const healHandlerRef = useRef<(amount: number) => void>(() => {});
+  const consumableHandlerRef = useRef<(result: IncursionConsumableUseResult) => void>(() => {});
 
   const handleEnemyTelemetryChange = useCallback((enemy: CombatEnemyTelemetry | null) => {
     setEnemyTelemetry(enemy);
@@ -110,8 +112,12 @@ export default function CombatScreen(): React.JSX.Element {
     healHandlerRef.current = handler;
   }, []);
 
-  const handleConsumableHeal = useCallback((amount: number) => {
-    healHandlerRef.current(amount);
+  const registerConsumableHandler = useCallback((handler: (result: IncursionConsumableUseResult) => void) => {
+    consumableHandlerRef.current = handler;
+  }, []);
+
+  const handleConsumableUsed = useCallback((result: IncursionConsumableUseResult) => {
+    consumableHandlerRef.current(result);
   }, []);
 
   const handleEradicationComplete = useCallback(() => {
@@ -200,7 +206,7 @@ export default function CombatScreen(): React.JSX.Element {
         <CombatEnemyChromeProvider>
         <MacroLogAnchoredLayout
           showMacroLog={runState.runActive}
-          onConsumableHeal={handleConsumableHeal}
+          onConsumableUsed={handleConsumableUsed}
           style={styles.combatRoot}
         >
           <View style={styles.body}>
@@ -222,6 +228,7 @@ export default function CombatScreen(): React.JSX.Element {
                 apparitionRef={apparitionRef}
                 registerKillResolver={registerKillResolver}
                 registerHealHandler={registerHealHandler}
+                registerConsumableHandler={registerConsumableHandler}
                 onEnemyTelemetryChange={handleEnemyTelemetryChange}
                 onResolutionPanelChange={handleResolutionPanelChange}
                 onCombatComplete={handleCombatComplete}

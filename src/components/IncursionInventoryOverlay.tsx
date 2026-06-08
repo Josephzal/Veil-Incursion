@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import SoulCoreImage from '../../assets/images/item images/soul-core.png';
+import VeilShardImage from '../../assets/images/item images/veil-shard.png';
 import type { IncursionConsumable, IncursionConsumableId } from '../types/incursionInventory';
 import type { TerminalTheme } from '../types/theme';
 
@@ -22,7 +23,15 @@ const USE_DISABLED_TEXT = '#2a4032';
 
 const ITEM_IMAGES: Partial<Record<IncursionConsumableId, ImageSourcePropType>> = {
   'soul-core': SoulCoreImage,
+  'veil-shard': VeilShardImage,
 };
+
+function formatItemEffect(item: IncursionConsumable): string {
+  if (item.effect === 'stun') {
+    return 'EFFECT: STUN HOSTILE — SKIPS NEXT TURN // SHATTERS WORLD-ENDER';
+  }
+  return `EFFECT: +${item.healPercent ?? 0}% SOUL ANCHOR INTEGRITY`;
+}
 
 function getItemImage(itemId: IncursionConsumableId): ImageSourcePropType | null {
   return ITEM_IMAGES[itemId] ?? null;
@@ -135,8 +144,8 @@ export default function IncursionInventoryOverlay({
                   <Text style={[styles.detailBody, { color: theme.primaryColor }]} numberOfLines={3}>
                     {selectedItem.description}
                   </Text>
-                  <Text style={[styles.detailEffect, { color: theme.mutedColor }]} numberOfLines={1}>
-                    {`EFFECT: +${selectedItem.healPercent}% SOUL ANCHOR INTEGRITY`}
+                  <Text style={[styles.detailEffect, { color: theme.mutedColor }]} numberOfLines={2}>
+                    {formatItemEffect(selectedItem)}
                   </Text>
                 </View>
               </View>

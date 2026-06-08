@@ -1,11 +1,15 @@
-export type IncursionConsumableId = 'soul-core';
+export type IncursionConsumableId = 'soul-core' | 'veil-shard';
+
+export type IncursionConsumableEffect = 'heal' | 'stun';
 
 export interface IncursionConsumable {
   id: IncursionConsumableId;
   name: string;
   description: string;
-  healPercent: number;
   quantity: number;
+  effect: IncursionConsumableEffect;
+  /** Percent of max Soul Anchor restored — heal items only. */
+  healPercent?: number;
 }
 
 export interface IncursionInventoryState {
@@ -13,6 +17,8 @@ export interface IncursionInventoryState {
 }
 
 export interface IncursionConsumableUseResult {
+  itemId: IncursionConsumableId;
   healAmount: number;
+  stunsEnemy: boolean;
   logLine: string;
 }

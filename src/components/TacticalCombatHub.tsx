@@ -13,6 +13,7 @@ import { INITIAL_SECTOR_POOL } from '../data/regions';
 import { advanceEnemyIntent, spawnEnemyProfile } from '../data/enemies';
 import { bossStrikeDamage, rollBossIntent, shouldShiftBossPhase } from '../data/bossCombat';
 import { COMBAT_ACTION, ENEMY_ABYSSAL_SIPHON_REQUEST, EnemyCombatProfile, EnemyIntent } from '../types/run';
+import type { IncursionConsumableUseResult } from '../types/incursionInventory';
 
 import { ResolvedWeaponCombatStats } from '../data/inventory';
 import { BossRuntimeProfile, EnvironmentalModifiers } from '../types/game';
@@ -93,6 +94,8 @@ interface TacticalCombatHubProps {
   registerKillResolver?: (resolver: () => void) => void;
   /** Registers callback to apply mid-combat healing from incursion consumables. */
   registerHealHandler?: (handler: (amount: number) => void) => void;
+  /** Registers callback when a field consumable is deployed during combat. */
+  registerConsumableHandler?: (handler: (result: IncursionConsumableUseResult) => void) => void;
   /** Stacked layout: victory/defeat panel in the apparition viewport (hub keeps deck + gauges). */
   onResolutionPanelChange?: (
     panel: { outcome: 'VICTORY' | 'DEFEAT'; onDismiss: () => void } | null,
@@ -129,6 +132,7 @@ export default function TacticalCombatHub({
   apparitionRef,
   registerKillResolver,
   registerHealHandler,
+  registerConsumableHandler,
   onResolutionPanelChange,
   onCombatComplete, initialOperativeHp = 100, initialStamina = 100, maxStamina = 100,
   maxSoulAnchor = 100, startingAbyssalReservePercent = 0, parryMultiplierBonus = 0,
@@ -201,6 +205,8 @@ export default function TacticalCombatHub({
   const pendingUnblockRef = useRef(false);
   /** HP already applied when the red deck strike overlay appeared. */
   const preAppliedHpStrikeRef = useRef(0);
+  const enemyStunPendingRef = useRef(false);
+  const isPlayerTurnRef = useRef(isPlayerTurn);
   const resolutionRef = useRef<'VICTORY' | 'DEFEAT' | null>(null);
   const dismissedRef = useRef(false);
   const cycleRef = useRef<CombatPhase>('TEXT_COMBAT');
@@ -249,7 +255,8 @@ export default function TacticalCombatHub({
     operativeHpRef.current = operativeHp; staminaRef.current = stamina;
     abyssalRef.current = abyssalReserve;
     counterRef.current = counterPrepActive;
-  }, [cycleState, enemy, operativeHp, stamina, abyssalReserve, counterPrepActive]);
+    isPlayerTurnRef.current = isPlayerTurn;
+  }, [cycleState, enemy, operativeHp, stamina, abyssalReserve, counterPrepActive, isPlayerTurn]);
 
   const combatTurnPhase = useMemo((): CombatTurnPhase => {
     if (cycleState === 'RESOLUTION') return 'RESOLUTION';
@@ -428,6 +435,36 @@ export default function TacticalCombatHub({
   useEffect(() => {
     registerHealHandler?.((amount: number) => applyHealRef.current(amount));
   }, [registerHealHandler, maxSoulAnchor]);
+
+  const interruptsWorldEnderChannel = (e: EnemyCombatProfile) =>
+    e.intent === 'CHARGE' || e.intent === 'WORLD_ENDER' || e.chargeTurns > 0;
+
+  const applyVeilShardStun = () => {
+    const e = enemyRef.current;
+    if (!e) return;
+    if (interruptsWorldEnderChannel(e)) {
+      syncEnemy({
+        ...e,
+        intent: 'STRIKE',
+        chargeTurns: 0,
+        evadeActive: false,
+      });
+      log('>> WORLD-ENDER CHANNEL SHATTERED — charge dispersed.');
+    }
+    enemyStunPendingRef.current = true;
+  };
+
+  const applyConsumableRef = useRef((_result: IncursionConsumableUseResult) => {});
+  applyConsumableRef.current = (result: IncursionConsumableUseResult) => {
+    if (cycleRef.current !== 'TEXT_COMBAT' || !isPlayerTurnRef.current) return;
+    if (result.healAmount > 0) applyHealRef.current(result.healAmount);
+    if (result.stunsEnemy) applyVeilShardStun();
+    passToEnemy(false);
+  };
+
+  useEffect(() => {
+    registerConsumableHandler?.((result) => applyConsumableRef.current(result));
+  }, [registerConsumableHandler]);
 
   const resolveIncomingHpStrike = (e: EnemyCombatProfile): { raw: number; unblockable: boolean } | null => {
     if (getEnemyDeckStrikeVariant(e.intent) !== 'hp') return null;
@@ -613,18 +650,19 @@ export default function TacticalCombatHub({
     }
   };
 
-  const endEnemyTurn = () => {
+  const endEnemyTurn = (advanceIntent = true) => {
     if (isCombatTerminal()) return;
     const e = enemyRef.current;
     if (!e || operativeHpRef.current <= 0) return;
-    if (e.isBoss && bossRuntimeRef.current) {
-      const phase = bossPhaseRef.current;
-      const nextIntent = rollBossIntent(phase);
-      syncEnemy({ ...e, intent: nextIntent, bossPhase: phase });
-      startPlayerTurn(enemyRef.current!);
-      return;
+    if (advanceIntent) {
+      if (e.isBoss && bossRuntimeRef.current) {
+        const phase = bossPhaseRef.current;
+        const nextIntent = rollBossIntent(phase);
+        syncEnemy({ ...e, intent: nextIntent, bossPhase: phase });
+      } else {
+        syncEnemy(advanceEnemyIntent(e));
+      }
     }
-    syncEnemy(advanceEnemyIntent(e));
     startPlayerTurn(enemyRef.current!);
   };
 
@@ -709,7 +747,14 @@ export default function TacticalCombatHub({
   const passToEnemy = (countering = false) => {
     if (isCombatTerminal()) return;
     setSelectedAction(null);
+    const skipEnemyTurn = enemyStunPendingRef.current;
     clearEnemyTurnTimers();
+    if (skipEnemyTurn) {
+      enemyStunPendingRef.current = false;
+      log('>> HOSTILE STUNNED — Veil interference; turn forfeited.');
+      endEnemyTurn(false);
+      return;
+    }
     setIsPlayerTurn(false);
     setEnemyActionStage('reading');
     const e = enemyRef.current;
@@ -760,6 +805,7 @@ export default function TacticalCombatHub({
     setEnemyActionStage(null);
     setDeckStrikeOverlay(null);
     preAppliedHpStrikeRef.current = 0;
+    enemyStunPendingRef.current = false;
     log('>> COMBAT LINK ESTABLISHED');
     log('>> OPERATIVE TURN // Command deck online.');
     log(`>> WEAPON LINK: ${strikeStats.label} // STRIKE ${strikeStats.strikeDamage} DMG / ${strikeStats.strikeStaminaCost} STAM`);

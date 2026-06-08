@@ -1046,8 +1046,18 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (!item || item.quantity <= 0) return null;
 
     const run = runStateRef.current;
-    const healAmount = Math.floor(run.maxSoulAnchor * (item.healPercent / 100));
-    const logLine = `>> SOUL CORE DEPLOYED — +${item.healPercent}% Soul Anchor integrity restored (+${healAmount} HP).`;
+    let healAmount = 0;
+    let stunsEnemy = false;
+    let logLine = '';
+
+    if (item.effect === 'stun') {
+      stunsEnemy = true;
+      logLine = '>> VEIL SHARD DEPLOYED — Hostile neural lock engaged.';
+    } else {
+      const healPercent = item.healPercent ?? 0;
+      healAmount = Math.floor(run.maxSoulAnchor * (healPercent / 100));
+      logLine = `>> SOUL CORE DEPLOYED — +${healPercent}% Soul Anchor integrity restored (+${healAmount} HP).`;
+    }
 
     setActiveIncursion((prev) => {
       const next: ActiveIncursionState = {
@@ -1066,7 +1076,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
 
-    return { healAmount, logLine };
+    return { itemId, healAmount, stunsEnemy, logLine };
   }, []);
 
   const applyIncursionConsumableHeal = useCallback((amount: number) => {
