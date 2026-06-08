@@ -199,6 +199,8 @@ export default function TacticalCombatHub({
   const counterRef = useRef(false);
   const pendingDmgRef = useRef(0);
   const pendingUnblockRef = useRef(false);
+  /** HP already applied when the red deck strike overlay appeared. */
+  const preAppliedHpStrikeRef = useRef(0);
   const resolutionRef = useRef<'VICTORY' | 'DEFEAT' | null>(null);
   const dismissedRef = useRef(false);
   const cycleRef = useRef<CombatPhase>('TEXT_COMBAT');
@@ -363,6 +365,7 @@ export default function TacticalCombatHub({
     }
     setEnemyActionStage(null);
     setDeckStrikeOverlay(null);
+    preAppliedHpStrikeRef.current = 0;
   };
 
   const abortCombatMinigames = () => {
@@ -426,7 +429,59 @@ export default function TacticalCombatHub({
     registerHealHandler?.((amount: number) => applyHealRef.current(amount));
   }, [registerHealHandler, maxSoulAnchor]);
 
+  const resolveIncomingHpStrike = (e: EnemyCombatProfile): { raw: number; unblockable: boolean } | null => {
+    if (getEnemyDeckStrikeVariant(e.intent) !== 'hp') return null;
+    if (e.isBoss && bossRuntimeRef.current) {
+      const dmg = bossStrikeDamage(bossRuntimeRef.current, bossPhaseRef.current);
+      if (e.intent === 'OVERDRIVE_DISCHARGE') {
+        return { raw: dmg, unblockable: !counterRef.current };
+      }
+      return { raw: dmg, unblockable: false };
+    }
+    const { dmg, unblockable } = attackDmg(e);
+    return { raw: dmg, unblockable: e.intent === 'WORLD_ENDER' ? true : unblockable };
+  };
+
+  const applyHpStrikeOnDeckImpact = (e: EnemyCombatProfile) => {
+    const strike = resolveIncomingHpStrike(e);
+    if (!strike || strike.raw <= 0) return;
+    let dmg = strike.raw;
+    if (!strike.unblockable && abyssalWardRef.current) {
+      dmg = Math.floor(dmg * (1 - COMBAT_ACTION.ABYSSAL_WARD_BLOCK_PCT));
+      abyssalWardRef.current = false;
+      setAbyssalWardActive(false);
+      primeWardStrikeBonus();
+      log(`[ABYSSAL WARD] >> Barrier absorbed 50% — abyssal overcharge primed (+${COMBAT_ACTION.ABYSSAL_WARD_STRIKE_BONUS}% AR next strike).`);
+    }
+    if (dmg <= 0) return;
+    preAppliedHpStrikeRef.current = dmg;
+    Vibration.vibrate([0, 32, 48, 28]);
+    setOperativeHp((p) => {
+      const n = Math.max(p - dmg, 0);
+      operativeHpRef.current = n;
+      if (n <= 0) resolve(false);
+      return n;
+    });
+  };
+
+  const restorePreAppliedHpStrike = () => {
+    const restore = preAppliedHpStrikeRef.current;
+    if (restore <= 0) return;
+    preAppliedHpStrikeRef.current = 0;
+    setOperativeHp((p) => {
+      const n = Math.min(p + restore, maxSoulAnchor);
+      operativeHpRef.current = n;
+      return n;
+    });
+  };
+
   const hurtPlayer = (raw: number, unblockable = false, msg?: string) => {
+    if (preAppliedHpStrikeRef.current > 0) {
+      const applied = preAppliedHpStrikeRef.current;
+      preAppliedHpStrikeRef.current = 0;
+      log(msg ?? `>> ENEMY STRIKE — ${applied} DAMAGE DEALT`);
+      return;
+    }
     let dmg = raw;
     if (!unblockable && abyssalWardRef.current) {
       dmg = Math.floor(dmg * (1 - COMBAT_ACTION.ABYSSAL_WARD_BLOCK_PCT));
@@ -436,6 +491,7 @@ export default function TacticalCombatHub({
       log(`[ABYSSAL WARD] >> Barrier absorbed 50% — abyssal overcharge primed (+${COMBAT_ACTION.ABYSSAL_WARD_STRIKE_BONUS}% AR next strike).`);
     }
     log(msg ?? `>> ENEMY STRIKE — ${dmg} DAMAGE DEALT`);
+    if (dmg > 0) Vibration.vibrate([0, 32, 48, 28]);
     setOperativeHp((p) => { const n = Math.max(p - dmg, 0); operativeHpRef.current = n; if (n <= 0) resolve(false); return n; });
   };
 
@@ -488,6 +544,7 @@ export default function TacticalCombatHub({
   const applyTetanusGlitch = () => {
     if (!env.hasTetanusGlitch) return;
     log('[TETANUS GLITCH] >> Soul Anchor hemorrhage — 3 HP lost on exhaustion.');
+    Vibration.vibrate([0, 32, 48, 28]);
     setOperativeHp((p) => {
       const n = Math.max(p - 3, 0);
       operativeHpRef.current = n;
@@ -670,7 +727,10 @@ export default function TacticalCombatHub({
       setEnemyActionStage('executing');
       apparitionRef?.current?.triggerAttackEffect();
       const overlayVariant = getEnemyDeckStrikeVariant(currentEnemy.intent);
-      if (overlayVariant) setDeckStrikeOverlay(overlayVariant);
+      if (overlayVariant) {
+        setDeckStrikeOverlay(overlayVariant);
+        if (overlayVariant === 'hp') applyHpStrikeOnDeckImpact(currentEnemy);
+      }
       enemyStrikeTimerRef.current = setTimeout(() => {
         enemyStrikeTimerRef.current = null;
         resolveEnemyAction(countering);
@@ -699,6 +759,7 @@ export default function TacticalCombatHub({
     setCycleState('TEXT_COMBAT');
     setEnemyActionStage(null);
     setDeckStrikeOverlay(null);
+    preAppliedHpStrikeRef.current = 0;
     log('>> COMBAT LINK ESTABLISHED');
     log('>> OPERATIVE TURN // Command deck online.');
     log(`>> WEAPON LINK: ${strikeStats.label} // STRIKE ${strikeStats.strikeDamage} DMG / ${strikeStats.strikeStaminaCost} STAM`);
@@ -809,6 +870,7 @@ export default function TacticalCombatHub({
     cancelAnimation(parryScaleSV);
     if (passed) {
       Vibration.vibrate(15);
+      restorePreAppliedHpStrike();
       const cd = Math.floor(COMBAT_ACTION.COUNTER_DAMAGE * (1 + parryMultiplierBonus));
       log(`[PERFECT COUNTER] >> Parry locked — ${cd} retaliation damage.`);
       counterRef.current = false;
@@ -823,7 +885,11 @@ export default function TacticalCombatHub({
     }
     hideParryOverlay();
     log(unmitigatedOnFail ? '[PARRY FAILED] >> Mistimed — 100% unmitigated damage.' : '[PARRY FAILED] >> Guard collapsed.');
-    hurtPlayer(pendingDmgRef.current, unmitigatedOnFail);
+    if (preAppliedHpStrikeRef.current > 0) {
+      preAppliedHpStrikeRef.current = 0;
+    } else {
+      hurtPlayer(pendingDmgRef.current, unmitigatedOnFail);
+    }
     counterRef.current = false;
     setCounterPrepActive(false);
     if (operativeHpRef.current > 0) endEnemyTurn();
@@ -1316,7 +1382,7 @@ export default function TacticalCombatHub({
 
   const chromeSnapshot = useMemo(
     () => ({
-      slicePingVisible: cycleState === 'TEXT_COMBAT' && sliceReady,
+      slicePingVisible: cycleState === 'TEXT_COMBAT' && sliceReady && isPlayerTurn,
       slicePingReady: sliceReady,
       slicePingDisabled: !isPlayerTurn,
       onSlicePing: onSlice,
@@ -1335,6 +1401,7 @@ export default function TacticalCombatHub({
       slicePanHandlers: panResponder.panHandlers as Record<string, unknown>,
     }),
     [
+      stackedLayout,
       cycleState,
       parrySuccessBurstActive,
       parryBurstArena,

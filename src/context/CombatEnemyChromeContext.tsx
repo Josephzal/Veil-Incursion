@@ -289,7 +289,7 @@ export function CombatEnemyChromeLayer(): React.JSX.Element {
           ready={slicePingReady}
           disabled={slicePingDisabled}
           onPress={() => handlersRef.current.onSlicePing()}
-          anchored
+          placement="bottom"
         />
       ) : null}
       {parryVisible && handlersRef.current.parryShrinkScale ? (

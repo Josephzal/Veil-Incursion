@@ -5,6 +5,8 @@ import { useTerminalNav } from './TerminalNavContext';
 
 interface GameFlowContextType {
   currentScreen: AppScreen;
+  combatEntryActive: boolean;
+  completeCombatEntry: () => void;
   goToHub: () => void;
   openInventoryManifest: () => void;
   goToWelcome: () => void;
@@ -24,6 +26,7 @@ const GameFlowContext = createContext<GameFlowContextType | undefined>(undefined
 
 export function GameFlowProvider({ children }: { children: React.ReactNode }) {
   const [currentScreen, setCurrentScreen] = useState<AppScreen>('HUB');
+  const [combatEntryActive, setCombatEntryActive] = useState(false);
   const { setTerminalView } = useTerminalNav();
 
   const goToHub = useCallback(() => setCurrentScreen('HUB'), []);
@@ -37,7 +40,11 @@ export function GameFlowProvider({ children }: { children: React.ReactNode }) {
   const startPostCombatBoon = useCallback(() => setCurrentScreen('POST_COMBAT_BOON'), []);
   const startSkillCheck = useCallback(() => setCurrentScreen('SKILL_CHECK'), []);
   const startRest = useCallback(() => setCurrentScreen('REST'), []);
-  const startCombat = useCallback(() => setCurrentScreen('COMBAT'), []);
+  const startCombat = useCallback(() => setCombatEntryActive(true), []);
+  const completeCombatEntry = useCallback(() => {
+    setCurrentScreen('COMBAT');
+    setCombatEntryActive(false);
+  }, []);
   const startRunProgress = useCallback(() => setCurrentScreen('RUN_PROGRESS'), []);
   const startRunComplete = useCallback(() => setCurrentScreen('RUN_COMPLETE'), []);
   const startGameOver = useCallback(() => setCurrentScreen('GAME_OVER'), []);
@@ -45,7 +52,7 @@ export function GameFlowProvider({ children }: { children: React.ReactNode }) {
   const deployEncounter = useCallback((encounterType: EncounterType) => {
     switch (encounterType) {
       case 'COMBAT':
-        setCurrentScreen('COMBAT');
+        setCombatEntryActive(true);
         break;
       case 'SKILL_CHECK':
         setCurrentScreen('SKILL_CHECK');
@@ -61,6 +68,8 @@ export function GameFlowProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo(
     () => ({
       currentScreen,
+      combatEntryActive,
+      completeCombatEntry,
       goToHub,
       openInventoryManifest,
       goToWelcome,
@@ -76,6 +85,8 @@ export function GameFlowProvider({ children }: { children: React.ReactNode }) {
       deployEncounter,
     }),
     [
+      combatEntryActive,
+      completeCombatEntry,
       currentScreen,
       goToHub,
       openInventoryManifest,

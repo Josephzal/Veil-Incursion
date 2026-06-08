@@ -1,10 +1,11 @@
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { clampRatio } from '../../utils/combatTelemetryFormat';
 
 const MONO = 'monospace';
 const GAUGE_WIDTH = 112;
 const TRACK_HEIGHT = 8;
+const FILL_ANIM_MS = 420;
 
 interface CombatHorizontalGaugeProps {
   fillColor: string;
@@ -21,7 +22,21 @@ export function CombatHorizontalGauge({
   valueCaption,
   valueCaptionColor = '#FF453A',
 }: CombatHorizontalGaugeProps): React.JSX.Element {
-  const fillWidth = `${clampRatio(ratio) * 100}%`;
+  const displayRatio = useRef(new Animated.Value(clampRatio(ratio))).current;
+
+  useEffect(() => {
+    Animated.timing(displayRatio, {
+      toValue: clampRatio(ratio),
+      duration: FILL_ANIM_MS,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [displayRatio, ratio]);
+
+  const fillWidth = displayRatio.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0%', '100%'],
+  });
 
   return (
     <View style={styles.gaugeColumn}>
@@ -31,7 +46,7 @@ export function CombatHorizontalGauge({
         </Text>
       ) : null}
       <View style={[styles.trackOuter, { borderColor: trackBorderColor }]}>
-        <View style={[styles.trackFill, { width: fillWidth, backgroundColor: fillColor }]} />
+        <Animated.View style={[styles.trackFill, { width: fillWidth, backgroundColor: fillColor }]} />
       </View>
     </View>
   );

@@ -16,12 +16,13 @@ import PostCombatBoonScreen from './src/screens/PostCombatBoonScreen';
 import SkillCheckScreen from './src/screens/SkillCheckScreen';
 import RestScreen from './src/screens/RestScreen';
 import CombatScreen from './src/screens/CombatScreen';
+import CombatEntryTransition from './src/components/combat/CombatEntryTransition';
 import RunCompleteScreen from './src/screens/RunCompleteScreen';
 import GameOverScreen from './src/screens/GameOverScreen';
 
 function GameRoot(): React.JSX.Element {
   const { theme } = useTerminal();
-  const { currentScreen } = useGameFlow();
+  const { currentScreen, combatEntryActive, completeCombatEntry } = useGameFlow();
 
   return (
     <View style={[styles.screenContainer, { backgroundColor: theme.backgroundColor }]}>
@@ -36,6 +37,9 @@ function GameRoot(): React.JSX.Element {
       {currentScreen === 'COMBAT' && <CombatScreen />}
       {currentScreen === 'RUN_COMPLETE' && <RunCompleteScreen />}
       {currentScreen === 'GAME_OVER' && <GameOverScreen />}
+      {combatEntryActive ? (
+        <CombatEntryTransition onComplete={completeCombatEntry} />
+      ) : null}
     </View>
   );
 }

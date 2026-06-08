@@ -206,13 +206,15 @@ export default function CombatScreen(): React.JSX.Element {
           <View style={styles.body}>
             <CombatEnemyHeaderBand enemy={enemyTelemetry} intentMutedColor={theme.mutedColor} />
 
-            <CombatApparitionZone
-              apparitionRef={apparitionRef}
-              portraitKey={portraitKey}
-              onEradicationComplete={handleEradicationComplete}
-              resolutionOutcome={resolutionOutcome}
-              onResolutionDismiss={handleResolutionDismiss}
-            />
+            <View style={styles.apparitionStage}>
+              <CombatApparitionZone
+                apparitionRef={apparitionRef}
+                portraitKey={portraitKey}
+                onEradicationComplete={handleEradicationComplete}
+                resolutionOutcome={resolutionOutcome}
+                onResolutionDismiss={handleResolutionDismiss}
+              />
+            </View>
 
             <View style={styles.combatMiddle}>
               <TacticalCombatHub
@@ -259,14 +261,18 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     overflow: 'hidden',
   },
-  apparitionViewport: {
+  apparitionStage: {
     flex: 1,
     flexShrink: 1,
     minHeight: ENEMY_VIEWPORT_MIN_HEIGHT,
     width: '100%',
-    backgroundColor: '#000000',
     overflow: 'hidden',
     position: 'relative',
+  },
+  apparitionViewport: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#000000',
+    overflow: 'hidden',
   },
   apparitionFill: {
     flex: 1,
