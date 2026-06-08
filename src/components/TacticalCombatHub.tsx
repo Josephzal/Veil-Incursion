@@ -1426,10 +1426,12 @@ export default function TacticalCombatHub({
 
   const useEnemyArenaChrome = stackedLayout && enemyChrome != null;
 
+  const enemyAlive = (enemy?.currentHp ?? 0) > 0;
+
   const chromeSnapshot = useMemo(
     () => ({
-      slicePingVisible: cycleState === 'TEXT_COMBAT' && sliceReady && isPlayerTurn,
-      slicePingReady: sliceReady,
+      slicePingVisible: cycleState === 'TEXT_COMBAT' && sliceReady && isPlayerTurn && enemyAlive,
+      slicePingReady: sliceReady && enemyAlive,
       slicePingDisabled: !isPlayerTurn,
       onSlicePing: onSlice,
       parryVisible: cycleState === 'DEFEND_PARRY',
@@ -1452,6 +1454,7 @@ export default function TacticalCombatHub({
       parrySuccessBurstActive,
       parryBurstArena,
       sliceReady,
+      enemyAlive,
       isPlayerTurn,
       isSuccessState,
       isFailureState,
