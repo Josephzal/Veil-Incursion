@@ -14,7 +14,6 @@ import ParryMatrixOverlay from '../components/combat/ParryMatrixOverlay';
 import ParrySuccessBurstOverlay from '../components/combat/ParrySuccessBurstOverlay';
 import type { ParryArenaLayout } from '../utils/parryCollision';
 import VectorSliceOverlay, { type SliceLineRender } from '../components/combat/VectorSliceOverlay';
-import VectorSlicePing from '../components/combat/VectorSlicePing';
 
 /** Updated synchronously on perfect parry — avoids chrome-layer lag for success burst. */
 export interface ParryBurstLiveState {
@@ -262,9 +261,6 @@ export function CombatEnemyChromeLayer(): React.JSX.Element {
   const { ui, handlersRef, parryBurstLiveRef, parryChromeTick } = useCombatEnemyChrome();
   void parryChromeTick;
   const {
-    slicePingVisible,
-    slicePingReady,
-    slicePingDisabled,
     parryVisible,
     parrySuccess,
     parryFailure,
@@ -284,14 +280,6 @@ export function CombatEnemyChromeLayer(): React.JSX.Element {
 
   return (
     <View style={styles.layer} pointerEvents="box-none" collapsable={false}>
-      {slicePingVisible ? (
-        <VectorSlicePing
-          ready={slicePingReady}
-          disabled={slicePingDisabled}
-          onPress={() => handlersRef.current.onSlicePing()}
-          placement="bottom"
-        />
-      ) : null}
       {parryVisible && handlersRef.current.parryShrinkScale ? (
         <ParryMatrixOverlay
           visible

@@ -4,17 +4,18 @@ import {
   resolveCombatEnemyPortrait,
   resolvePortraitKeySuffix,
 } from '../utils/combatEnemyPortrait';
-import {
-  ApparitionViewport,
-  type ApparitionViewportRef,
-} from '../components/combat/ApparitionViewport';
+import type { ApparitionViewportRef } from '../components/combat/ApparitionViewport';
+import CombatArenaStage from '../components/combat/CombatArenaStage';
 import CombatEnemyHeaderBand from '../components/combat/CombatEnemyHeaderBand';
+import CombatOperativeHud from '../components/combat/CombatOperativeHud';
+import CombatPlayerSliceOverlay from '../components/combat/CombatPlayerSliceOverlay';
 import CombatResolutionBanner from '../components/combat/CombatResolutionBanner';
+import type { CombatOperativeTelemetry } from '../components/combat/CombatOperativeHud';
+import type { CombatPlayerViewportRef } from '../components/combat/CombatPlayerViewport';
 import IncursionShell from '../components/IncursionShell';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
 import TacticalCombatHub from '../components/TacticalCombatHub';
 import {
-  CombatEnemyChromeLayer,
   CombatEnemyChromeProvider,
   useCombatEnemyChrome,
 } from '../context/CombatEnemyChromeContext';
@@ -33,48 +34,57 @@ import {
 import type { CombatEnemyTelemetry } from '../utils/combatTelemetryFormat';
 import type { IncursionConsumableUseResult } from '../types/incursionInventory';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('screen');
-/** Flexible middle band — grows/shrinks so the hub can dock above the macro log without clipping the descent HUD. */
-const ENEMY_VIEWPORT_MIN_HEIGHT = Math.round(SCREEN_HEIGHT * 0.2);
+import AegisCombat from '../../assets/images/character images/aegis/aegis_combat.png';
 
-function CombatApparitionZone({
+const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('screen');
+const ARENA_MIN_HEIGHT = Math.round(SCREEN_HEIGHT * 0.28);
+/** Matches TacticalCombatHub rootStacked horizontal inset. */
+const DECK_INSET = 8;
+const DECK_WIDTH = SCREEN_WIDTH - 16;
+const DECK_HALF = DECK_WIDTH / 2;
+
+function CombatArenaZone({
   apparitionRef,
+  playerViewportRef,
   portraitKey,
   portraitSource,
+  wardPrimed,
   onEradicationComplete,
   resolutionOutcome,
   onResolutionDismiss,
 }: {
   apparitionRef: React.RefObject<ApparitionViewportRef | null>;
+  playerViewportRef: React.RefObject<CombatPlayerViewportRef | null>;
   portraitKey: string;
   portraitSource: ReturnType<typeof resolveCombatEnemyPortrait>;
+  wardPrimed: boolean;
   onEradicationComplete: () => void;
   resolutionOutcome: 'VICTORY' | 'DEFEAT' | null;
   onResolutionDismiss: () => void;
 }): React.JSX.Element {
-  const { theme } = useTerminal();
   const { ui } = useCombatEnemyChrome();
 
   return (
-    <View style={styles.apparitionViewport}>
-      <ApparitionViewport
-        key={portraitKey}
-        ref={apparitionRef}
-        imageSource={portraitSource}
-        style={styles.apparitionFill}
-        pointerEvents={ui.parryVisible ? 'none' : 'auto'}
-        onEradicationComplete={onEradicationComplete}
-      />
-      <CombatEnemyChromeLayer />
-      {resolutionOutcome === 'VICTORY' ? (
-        <CombatResolutionBanner
-          outcome="VICTORY"
-          primaryColor={theme.primaryColor}
-          defeatColor="#ef4444"
-          onDismiss={onResolutionDismiss}
-        />
-      ) : null}
-    </View>
+    <CombatArenaStage
+      playerViewportRef={playerViewportRef}
+      enemyViewportRef={apparitionRef}
+      playerImageSource={AegisCombat}
+      enemyImageSource={portraitSource}
+      enemyPortraitKey={portraitKey}
+      wardPrimed={wardPrimed}
+      parryBlocksEnemyTouches={ui.parryVisible}
+      onEradicationComplete={onEradicationComplete}
+      resolutionBanner={
+        resolutionOutcome === 'VICTORY' ? (
+          <CombatResolutionBanner
+            outcome="VICTORY"
+            primaryColor="#00ff33"
+            defeatColor="#ef4444"
+            onDismiss={onResolutionDismiss}
+          />
+        ) : null
+      }
+    />
   );
 }
 
@@ -107,15 +117,22 @@ export default function CombatScreen(): React.JSX.Element {
     env.startingStaminaPenalty > 0 ? 50 : runState.currentStamina;
 
   const [enemyTelemetry, setEnemyTelemetry] = useState<CombatEnemyTelemetry | null>(null);
+  const [operativeTelemetry, setOperativeTelemetry] = useState<CombatOperativeTelemetry | null>(null);
+  const [wardPrimed, setWardPrimed] = useState(false);
   const [resolutionOutcome, setResolutionOutcome] = useState<'VICTORY' | 'DEFEAT' | null>(null);
   const resolutionDismissRef = useRef<() => void>(() => {});
   const apparitionRef = useRef<ApparitionViewportRef>(null);
+  const playerViewportRef = useRef<CombatPlayerViewportRef>(null);
   const killResolverRef = useRef<() => void>(() => {});
   const healHandlerRef = useRef<(amount: number) => void>(() => {});
   const consumableHandlerRef = useRef<(result: IncursionConsumableUseResult) => void>(() => {});
 
   const handleEnemyTelemetryChange = useCallback((enemy: CombatEnemyTelemetry | null) => {
     setEnemyTelemetry(enemy);
+  }, []);
+
+  const handleOperativeTelemetryChange = useCallback((telemetry: CombatOperativeTelemetry | null) => {
+    setOperativeTelemetry(telemetry);
   }, []);
 
   const registerKillResolver = useCallback((resolver: () => void) => {
@@ -275,27 +292,48 @@ export default function CombatScreen(): React.JSX.Element {
           style={styles.combatRoot}
         >
           <View style={styles.body}>
-            <CombatEnemyHeaderBand enemy={enemyTelemetry} intentMutedColor={theme.mutedColor} />
-
-            <View style={styles.apparitionStage}>
-              <CombatApparitionZone
+            <View style={styles.arenaStage}>
+              <CombatArenaZone
                 apparitionRef={apparitionRef}
+                playerViewportRef={playerViewportRef}
                 portraitKey={portraitKey}
                 portraitSource={portraitSource}
+                wardPrimed={wardPrimed}
                 onEradicationComplete={handleEradicationComplete}
                 resolutionOutcome={resolutionOutcome}
                 onResolutionDismiss={handleResolutionDismiss}
               />
+
+              {enemyTelemetry ? (
+                <View style={[styles.enemyHudOverlay, { left: DECK_INSET, width: DECK_HALF }]}>
+                  <CombatEnemyHeaderBand
+                    enemy={enemyTelemetry}
+                    intentMutedColor={theme.mutedColor}
+                    arena
+                  />
+                </View>
+              ) : null}
+
+              <View style={[styles.playerHudOverlay, { right: DECK_INSET, width: DECK_HALF }]}>
+                <CombatPlayerSliceOverlay />
+                {operativeTelemetry ? (
+                  <CombatOperativeHud telemetry={operativeTelemetry} deckAligned />
+                ) : null}
+              </View>
             </View>
 
             <View style={styles.combatMiddle}>
               <TacticalCombatHub
                 stackedLayout
+                arenaLayout
                 apparitionRef={apparitionRef}
+                playerViewportRef={playerViewportRef}
                 registerKillResolver={registerKillResolver}
                 registerHealHandler={registerHealHandler}
                 registerConsumableHandler={registerConsumableHandler}
                 onEnemyTelemetryChange={handleEnemyTelemetryChange}
+                onOperativeTelemetryChange={handleOperativeTelemetryChange}
+                onWardPrimedChange={setWardPrimed}
                 onResolutionPanelChange={handleResolutionPanelChange}
                 onCombatComplete={handleCombatComplete}
                 initialOperativeHp={runState.soulAnchorIntegrity}
@@ -334,29 +372,31 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     overflow: 'hidden',
   },
-  apparitionStage: {
+  arenaStage: {
     flex: 1,
     flexShrink: 1,
-    minHeight: ENEMY_VIEWPORT_MIN_HEIGHT,
+    minHeight: ARENA_MIN_HEIGHT,
     width: '100%',
     overflow: 'hidden',
     position: 'relative',
+    marginBottom: 6,
   },
-  apparitionViewport: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#000000',
-    overflow: 'hidden',
+  playerHudOverlay: {
+    position: 'absolute',
+    bottom: 6,
+    zIndex: 8,
+    alignItems: 'flex-end',
+    gap: 2,
   },
-  apparitionFill: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
+  enemyHudOverlay: {
+    position: 'absolute',
+    top: 6,
+    zIndex: 6,
   },
   combatMiddle: {
     flexShrink: 0,
     width: '100%',
     overflow: 'hidden',
-    // Match DescentPipelineHUD rootCompact marginBottom (veil descent → enemy header).
     marginBottom: 8,
   },
 });

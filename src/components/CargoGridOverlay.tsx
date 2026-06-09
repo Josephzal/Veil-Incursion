@@ -68,7 +68,7 @@ export default function CargoGridOverlay({
               { borderColor: accentColor, opacity: pressed ? 0.75 : 1 },
             ]}
           >
-            <Text style={[styles.closeBtnText, { color: accentColor }]}>[ CLOSE ]</Text>
+            <Text style={[styles.closeBtnText, { color: accentColor }]}> [ CLOSE ] </Text>
           </Pressable>
         </Pressable>
       </Pressable>

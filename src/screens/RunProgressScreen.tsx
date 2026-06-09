@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import DescentPipelineHUD from '../components/DescentPipelineHUD';
+import SectorOverworldMap from '../components/SectorOverworldMap';
 import IncursionShell from '../components/IncursionShell';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
@@ -11,7 +11,8 @@ import { getFactionDefinition } from '../data/factions';
 
 export default function RunProgressScreen(): React.JSX.Element {
   const { theme } = useTerminal();
-  const { runState, activeIncursion, runLog } = useRun();
+  const { runState, activeIncursion, runLog, getCurrentVectorCluster } = useRun();
+  const vectorCluster = getCurrentVectorCluster();
   const { account } = usePlayerAccount();
   const { continueOperation } = useDescentNavigator();
 
@@ -42,18 +43,15 @@ export default function RunProgressScreen(): React.JSX.Element {
 
           <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
             <View style={styles.pipelineFrame}>
-              <DescentPipelineHUD
-                sectorTier={activeIncursion.sectorTier}
-                nodesCleared={activeIncursion.nodesCleared}
-                resonancePercent={activeIncursion.resonance.percent}
-                attunementCurrent={activeIncursion.attunement.current}
-                attunementMax={activeIncursion.attunement.max}
-                currentEncounterIndex={activeIncursion.currentEncounterIndex}
+              <SectorOverworldMap
+                graph={activeIncursion.sectorGraph}
+                currentNodeId={activeIncursion.currentNodeId}
                 encounterPath={activeIncursion.encounterPath}
+                focusedNodeIds={activeIncursion.focusedNodeIds}
+                cluster={vectorCluster}
                 accentColor={accent}
-                borderColor={theme.borderColor}
-                mutedColor={theme.mutedColor}
-                compact={false}
+                compact
+                interactive={false}
               />
             </View>
 

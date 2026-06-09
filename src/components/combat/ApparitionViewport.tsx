@@ -10,18 +10,15 @@ import {
   type StyleProp,
   type ViewProps,
   type ViewStyle,
-  Image as RNImage,
   StyleSheet,
   View,
 } from 'react-native';
-import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import {
+  BlendColor,
   Canvas,
-  ColorMatrix,
   Group,
   Image,
   Line,
-  Paint,
   Rect,
   rect,
   useImage,
@@ -39,6 +36,7 @@ import {
 const CANVAS_BACKDROP = '#000000';
 const GRID_LINE = 'rgba(139, 92, 246, 0.22)';
 const GRID_SPACING = 24;
+const DAMAGE_BLEND = '#dc2626';
 
 const DAMAGE_MS = 200;
 const ATTACK_MS = 320;
@@ -48,17 +46,8 @@ const ATTACK_SHAKE_AMPLITUDE = 7;
 const SHAKE_CYCLES = 5;
 const ATTACK_SHAKE_CYCLES = 4;
 
-/** Static crimson boost — applied on damage overlay pass only. */
-const CRIMSON_BOOST_MATRIX = [
-  1.85, 0, 0, 0, 0.12,
-  0, 0.18, 0, 0, 0,
-  0, 0, 0.18, 0, 0,
-  0, 0, 0, 1, 0,
-];
-
 export interface ApparitionViewportRef {
   triggerDamageEffect: () => void;
-  /** Hostile attack windup — shake only, no crimson flash. */
   triggerAttackEffect: () => void;
   triggerEradication: () => void;
 }
@@ -70,27 +59,11 @@ export interface ApparitionViewportProps {
   onEradicationComplete?: () => void;
 }
 
-/** Skia loads bundled assets reliably from `require()` module ids; URI resolution can fail intermittently. */
 function toSkiaImageSource(source: ImageSourcePropType | null | undefined): DataSourceParam {
   if (source == null) return null;
-  if (typeof source === 'number') {
-    return source;
-  }
+  if (typeof source === 'number') return source;
   if (typeof source === 'object' && 'uri' in source && typeof source.uri === 'string') {
     return source.uri;
-  }
-  return null;
-}
-
-function resolveNativeImageSource(
-  source: ImageSourcePropType | null | undefined,
-): ImageSourcePropType | null {
-  if (source == null) return null;
-  if (typeof source === 'number') {
-    return source;
-  }
-  if (typeof source === 'object' && 'uri' in source) {
-    return source;
   }
   return null;
 }
@@ -141,10 +114,6 @@ export const ApparitionViewport = forwardRef<ApparitionViewportRef, ApparitionVi
     ref,
   ) {
     const skiaImageSource = useMemo(() => toSkiaImageSource(imageSource), [imageSource]);
-    const nativeImageSource = useMemo(
-      () => resolveNativeImageSource(imageSource),
-      [imageSource],
-    );
     const skiaImage = useImage(skiaImageSource);
     const [layout, setLayout] = useState({ width: 0, height: 0 });
 
@@ -152,7 +121,7 @@ export const ApparitionViewport = forwardRef<ApparitionViewportRef, ApparitionVi
     const canvasH = useSharedValue(0);
     const shakeProgress = useSharedValue(0);
     const shakePhase = useSharedValue(0);
-    const crimsonMix = useSharedValue(0);
+    const damageFlash = useSharedValue(0);
     const dissolveSweep = useSharedValue(0);
     const isEradicating = useSharedValue(0);
 
@@ -163,11 +132,11 @@ export const ApparitionViewport = forwardRef<ApparitionViewportRef, ApparitionVi
       canvasH.value = height;
     };
 
-    const runShake = (duration: number, amplitude: number, cycles: number, withCrimson: boolean) => {
+    const runShake = (duration: number, amplitude: number, cycles: number, withDamageFlash: boolean) => {
       if (isEradicating.value > 0) return;
       shakeProgress.value = 1;
       shakePhase.value = 0;
-      if (withCrimson) crimsonMix.value = 1;
+      if (withDamageFlash) damageFlash.value = 1;
       shakeProgress.value = withTiming(0, {
         duration,
         easing: Easing.out(Easing.cubic),
@@ -176,8 +145,8 @@ export const ApparitionViewport = forwardRef<ApparitionViewportRef, ApparitionVi
         duration,
         easing: Easing.linear,
       });
-      if (withCrimson) {
-        crimsonMix.value = withTiming(0, {
+      if (withDamageFlash) {
+        damageFlash.value = withTiming(0, {
           duration,
           easing: Easing.out(Easing.cubic),
         });
@@ -208,7 +177,7 @@ export const ApparitionViewport = forwardRef<ApparitionViewportRef, ApparitionVi
           );
         },
       }),
-      [canvasH, canvasW, crimsonMix, dissolveSweep, isEradicating, onEradicationComplete, shakePhase, shakeProgress],
+      [canvasH, canvasW, damageFlash, dissolveSweep, isEradicating, onEradicationComplete, shakePhase, shakeProgress],
     );
 
     const shakeTranslateX = useDerivedValue(() => {
@@ -226,53 +195,20 @@ export const ApparitionViewport = forwardRef<ApparitionViewportRef, ApparitionVi
       return rect(0, y, canvasW.value, h);
     });
 
-    const nativeDissolveClipStyle = useAnimatedStyle(() => {
-      const h = Math.max(0, canvasH.value * (1 - dissolveSweep.value));
-      return {
-        height: h,
-        overflow: 'hidden' as const,
-      };
-    });
-
-    const nativeShakeStyle = useAnimatedStyle(() => ({
-      transform: [{ translateX: SHAKE_AMPLITUDE * shakeProgress.value * Math.sin(shakePhase.value * Math.PI * 2) }],
-    }));
-
-    const crimsonOverlayStyle = useAnimatedStyle(() => ({
-      opacity: crimsonMix.value * 0.52,
-    }));
+    const damageBlendOpacity = useDerivedValue(() => damageFlash.value * 0.65);
 
     const hasLayout = layout.width > 0 && layout.height > 0;
-    const hasPortraitSource = nativeImageSource != null;
     const showSkiaSprite = skiaImage != null && hasLayout;
-    const showNativeFallback = hasLayout && hasPortraitSource && !showSkiaSprite;
-    const showWireframeGrid = hasLayout && !hasPortraitSource;
+    const showWireframeGrid = hasLayout && !showSkiaSprite;
 
     return (
-      <View style={[styles.root, style]} onLayout={handleLayout} pointerEvents={pointerEvents}>
-        {showNativeFallback ? (
-          <Animated.View
-            style={[
-              styles.portraitFallback,
-              { width: layout.width },
-              nativeDissolveClipStyle,
-            ]}
-          >
-            <Animated.View style={nativeShakeStyle}>
-              <RNImage
-                source={nativeImageSource}
-                style={{ width: layout.width, height: layout.height }}
-                resizeMode="contain"
-              />
-            </Animated.View>
-          </Animated.View>
-        ) : null}
-        {hasLayout && (showSkiaSprite || showWireframeGrid) ? (
-          <Canvas style={{ width: layout.width, height: layout.height }}>
-            <Rect x={0} y={0} width={layout.width} height={layout.height} color={CANVAS_BACKDROP} />
+      <View style={[styles.root, style]} pointerEvents={pointerEvents}>
+        <View style={styles.spriteFrame} onLayout={handleLayout}>
+          {hasLayout && (showSkiaSprite || showWireframeGrid) ? (
+            <Canvas style={{ width: layout.width, height: layout.height }}>
+              <Rect x={0} y={0} width={layout.width} height={layout.height} color={CANVAS_BACKDROP} />
 
-            {showSkiaSprite ? (
-              <>
+              {showSkiaSprite ? (
                 <Group clip={dissolveClip} transform={groupTransform}>
                   <Image
                     image={skiaImage}
@@ -282,15 +218,7 @@ export const ApparitionViewport = forwardRef<ApparitionViewportRef, ApparitionVi
                     height={layout.height}
                     fit="contain"
                   />
-                </Group>
-                <Group clip={dissolveClip} transform={groupTransform} opacity={crimsonMix}>
-                  <Group
-                    layer={
-                      <Paint>
-                        <ColorMatrix matrix={CRIMSON_BOOST_MATRIX} />
-                      </Paint>
-                    }
-                  >
+                  <Group opacity={damageBlendOpacity}>
                     <Image
                       image={skiaImage}
                       x={0}
@@ -298,21 +226,17 @@ export const ApparitionViewport = forwardRef<ApparitionViewportRef, ApparitionVi
                       width={layout.width}
                       height={layout.height}
                       fit="contain"
-                    />
+                    >
+                      <BlendColor color={DAMAGE_BLEND} mode="srcATop" />
+                    </Image>
                   </Group>
                 </Group>
-              </>
-            ) : (
-              <PlaceholderGrid width={layout.width} height={layout.height} />
-            )}
-          </Canvas>
-        ) : null}
-        {hasLayout ? (
-          <Animated.View
-            pointerEvents="none"
-            style={[styles.crimsonFlash, crimsonOverlayStyle]}
-          />
-        ) : null}
+              ) : (
+                <PlaceholderGrid width={layout.width} height={layout.height} />
+              )}
+            </Canvas>
+          ) : null}
+        </View>
       </View>
     );
   },
@@ -324,13 +248,14 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: CANVAS_BACKDROP,
     overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: 2,
   },
-  portraitFallback: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: CANVAS_BACKDROP,
-  },
-  crimsonFlash: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#dc2626',
+  spriteFrame: {
+    width: '86%',
+    height: '90%',
+    position: 'relative',
+    overflow: 'hidden',
   },
 });

@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import DescentPipelineHUD from './DescentPipelineHUD';
+import SectorOverworldMap from './SectorOverworldMap';
 import { IncursionNode, RunNodeType } from '../types/game';
+import type { SectorGraph } from '../types/sector';
 
 const TERMINAL_ACCENT = '#00ff33';
 
@@ -26,6 +27,10 @@ interface LeyLineMapPanelProps {
   attunementMax: number;
   currentEncounterIndex: number;
   encounterPath: IncursionNode[];
+  sectorGraph: SectorGraph;
+  currentNodeId: string;
+  focusedNodeIds: readonly string[];
+  cluster: IncursionNode[];
   accentColor?: string;
   borderColor?: string;
   mutedColor?: string;
@@ -40,6 +45,10 @@ export default function LeyLineMapPanel({
   attunementMax,
   currentEncounterIndex,
   encounterPath,
+  sectorGraph,
+  currentNodeId,
+  focusedNodeIds,
+  cluster,
   accentColor = TERMINAL_ACCENT,
   borderColor = '#334155',
   mutedColor = '#64748b',
@@ -64,23 +73,22 @@ export default function LeyLineMapPanel({
           LEY-LINE VECTOR GRID SCAN
         </Text>
         <Text style={[styles.headerSub, { color: mutedColor }]}>
-          SECTOR T{sectorTier} // NODE {nodesCleared} // RES {resonancePercent}%
+          SECTOR T{sectorTier} // NODE {nodesCleared} // RES {resonancePercent}% // ATT {attunementCurrent}/{attunementMax}
         </Text>
       </View>
 
-      <DescentPipelineHUD
-        sectorTier={sectorTier}
-        nodesCleared={nodesCleared}
-        resonancePercent={resonancePercent}
-        attunementCurrent={attunementCurrent}
-        attunementMax={attunementMax}
-        currentEncounterIndex={currentEncounterIndex}
-        encounterPath={encounterPath}
-        accentColor={accentColor}
-        borderColor={borderColor}
-        mutedColor={mutedColor}
-        compact={false}
-      />
+      <View style={styles.mapFrame}>
+        <SectorOverworldMap
+          graph={sectorGraph}
+          currentNodeId={currentNodeId}
+          encounterPath={encounterPath}
+          focusedNodeIds={focusedNodeIds}
+          cluster={cluster}
+          accentColor={accentColor}
+          compact
+          interactive={false}
+        />
+      </View>
 
       {nodeSummary && (
         <View style={[styles.readout, { borderColor }]}>
@@ -141,6 +149,10 @@ const styles = StyleSheet.create({
     fontSize: 8,
     letterSpacing: 1,
     textAlign: 'center',
+  },
+  mapFrame: {
+    height: 160,
+    marginBottom: 8,
   },
   readout: {
     borderWidth: 1,

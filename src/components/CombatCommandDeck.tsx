@@ -31,8 +31,9 @@ export const COMMAND_DECK_GRID: CombatDeckAction[] = [
 ];
 
 const MONO = 'monospace';
-const TILE_HEIGHT = 52;
-export const COMMAND_DECK_MIN_HEIGHT = TILE_HEIGHT * 2 + 8 + 12;
+const TILE_HEIGHT = 42;
+const GRID_GAP = 6;
+export const COMMAND_DECK_MIN_HEIGHT = TILE_HEIGHT * 2 + GRID_GAP + 10;
 
 interface CombatCommandDeckProps {
   selectedAction: CombatDeckAction | null;
@@ -187,19 +188,19 @@ const styles = StyleSheet.create({
     minHeight: COMMAND_DECK_MIN_HEIGHT,
     width: '100%',
     borderTopWidth: 1,
-    paddingTop: 8,
+    paddingTop: 6,
     paddingBottom: 1,
-    gap: 8,
+    gap: GRID_GAP,
   },
   commandDeckFrameless: {
     borderTopWidth: 0,
-    paddingTop: 4,
+    paddingTop: 3,
     paddingBottom: 2,
   },
   gridRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    gap: 8,
+    gap: GRID_GAP,
     width: '100%',
     height: TILE_HEIGHT,
   },
@@ -224,9 +225,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   executionModule: {
-    gap: 8,
+    gap: 6,
     width: '100%',
-    paddingVertical: 4,
+    paddingVertical: 2,
   },
   execHeader: {
     fontFamily: MONO,
@@ -244,7 +245,7 @@ const styles = StyleSheet.create({
   },
   executionRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: GRID_GAP,
     width: '100%',
   },
   execTile: {

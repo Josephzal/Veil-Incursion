@@ -20,8 +20,8 @@ interface VectorSlicePingProps {
   ready: boolean;
   disabled?: boolean;
   onPress: () => void;
-  /** Absolute overlay placement inside the enemy viewport layer. */
-  placement?: 'center' | 'bottom';
+  /** Absolute overlay placement inside combat chrome layers. */
+  placement?: 'center' | 'bottom' | 'playerHud';
 }
 
 export default function VectorSlicePing({
@@ -81,7 +81,11 @@ export default function VectorSlicePing({
 
   if (!ready && disabled) return null;
 
-  const placementStyle = placement === 'center' ? styles.wrapCenter : styles.wrapBottom;
+  const placementStyle = placement === 'center'
+    ? styles.wrapCenter
+    : placement === 'playerHud'
+      ? styles.wrapPlayerHud
+      : styles.wrapBottom;
 
   return (
     <Animated.View
@@ -133,6 +137,11 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 12,
+    height: HITBOX,
+  },
+  wrapPlayerHud: {
+    position: 'relative',
+    width: HITBOX,
     height: HITBOX,
   },
   hitbox: {

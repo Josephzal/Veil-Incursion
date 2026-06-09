@@ -13,6 +13,8 @@ interface CombatHorizontalGaugeProps {
   trackBorderColor?: string;
   valueCaption?: string;
   valueCaptionColor?: string;
+  width?: number | '100%';
+  compact?: boolean;
 }
 
 export function CombatHorizontalGauge({
@@ -21,6 +23,8 @@ export function CombatHorizontalGauge({
   trackBorderColor = 'rgba(139, 92, 246, 0.45)',
   valueCaption,
   valueCaptionColor = '#FF453A',
+  width,
+  compact = false,
 }: CombatHorizontalGaugeProps): React.JSX.Element {
   const displayRatio = useRef(new Animated.Value(clampRatio(ratio))).current;
 
@@ -38,14 +42,22 @@ export function CombatHorizontalGauge({
     outputRange: ['0%', '100%'],
   });
 
+  const gaugeStyle = width != null
+    ? [styles.gaugeColumn, typeof width === 'number' ? { width } : styles.gaugeFullWidth]
+    : styles.gaugeColumn;
+
   return (
-    <View style={styles.gaugeColumn}>
+    <View style={gaugeStyle}>
       {valueCaption ? (
         <Text style={[styles.valueCaption, { color: valueCaptionColor }]} numberOfLines={1}>
           {valueCaption}
         </Text>
       ) : null}
-      <View style={[styles.trackOuter, { borderColor: trackBorderColor }]}>
+      <View style={[
+        styles.trackOuter,
+        compact ? styles.trackOuterCompact : null,
+        { borderColor: trackBorderColor },
+      ]}>
         <Animated.View style={[styles.trackFill, { width: fillWidth, backgroundColor: fillColor }]} />
       </View>
     </View>
@@ -58,6 +70,8 @@ interface CombatTelemetryGaugeRowProps {
   fillColor: string;
   ratio: number;
   trackBorderColor?: string;
+  variant?: 'inline' | 'stacked' | 'compact';
+  gaugeWidth?: number | '100%';
 }
 
 export default function CombatTelemetryGaugeRow({
@@ -66,13 +80,33 @@ export default function CombatTelemetryGaugeRow({
   fillColor,
   ratio,
   trackBorderColor,
+  variant = 'inline',
+  gaugeWidth,
 }: CombatTelemetryGaugeRowProps): React.JSX.Element {
+  const isCompact = variant === 'compact';
+  const isStacked = variant === 'stacked';
+
   return (
-    <View style={styles.row}>
-      <Text style={[styles.rowLabel, { color: labelColor }]} numberOfLines={1} ellipsizeMode="tail">
+    <View style={[
+      styles.row,
+      isStacked ? styles.rowStacked : null,
+      isCompact ? styles.rowCompact : null,
+    ]}>
+      <Text style={[
+        styles.rowLabel,
+        isStacked ? styles.rowLabelStacked : null,
+        isCompact ? styles.rowLabelCompact : null,
+        { color: labelColor },
+      ]} numberOfLines={1} ellipsizeMode="tail">
         {label}
       </Text>
-      <CombatHorizontalGauge fillColor={fillColor} ratio={ratio} trackBorderColor={trackBorderColor} />
+      <CombatHorizontalGauge
+        fillColor={fillColor}
+        ratio={ratio}
+        trackBorderColor={trackBorderColor}
+        width={gaugeWidth}
+        compact={isCompact}
+      />
     </View>
   );
 }
@@ -100,6 +134,32 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
     gap: 2,
   },
+  gaugeFullWidth: {
+    width: '100%',
+    flexShrink: 1,
+  },
+  rowStacked: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 3,
+  },
+  rowCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 1,
+  },
+  rowLabelStacked: {
+    flex: 0,
+    width: '100%',
+  },
+  rowLabelCompact: {
+    width: 72,
+    flexShrink: 0,
+    flex: 0,
+    fontSize: 7,
+    lineHeight: 9,
+  },
   valueCaption: {
     fontFamily: MONO,
     fontSize: 9,
@@ -108,6 +168,9 @@ const styles = StyleSheet.create({
     lineHeight: 11,
     textAlign: 'right',
     width: '100%',
+  },
+  trackOuterCompact: {
+    height: 5,
   },
   trackOuter: {
     width: '100%',

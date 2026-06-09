@@ -137,6 +137,28 @@ export function clampPreviewMapTranslation(
   };
 }
 
+/** Pan clamp when zoom is baked into content coordinates (transform scale stays at 1). */
+export function clampContentPanTranslation(
+  translateX: number,
+  translateY: number,
+  width: number,
+  height: number,
+  contentLeft: number,
+  contentTop: number,
+  contentRight: number,
+  contentBottom: number,
+): { x: number; y: number } {
+  'worklet';
+  const minX = Math.min(-contentLeft, width - contentRight);
+  const maxX = Math.max(-contentLeft, width - contentRight);
+  const minY = Math.min(-contentTop, height - contentBottom);
+  const maxY = Math.max(-contentTop, height - contentBottom);
+  return {
+    x: Math.min(maxX, Math.max(minX, translateX)),
+    y: Math.min(maxY, Math.max(minY, translateY)),
+  };
+}
+
 export function clampExpandedMapTranslation(
   translateX: number,
   translateY: number,

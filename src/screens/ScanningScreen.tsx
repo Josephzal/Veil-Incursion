@@ -10,6 +10,7 @@ import IncursionShell from '../components/IncursionShell';
 import { calculateGridOccupancy } from '../data/cargoGridEngine';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
 import OperativeTelemetryBar from '../components/OperativeTelemetryBar';
+import SectorOverworldMap from '../components/SectorOverworldMap';
 import VectorScanner from '../components/VectorScanner';
 import { useRun } from '../context/RunContext';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
@@ -95,6 +96,7 @@ export default function ScanningScreen(): React.JSX.Element {
   const emergencyRecallAvailable = isEmergencyRecallAvailable(nodeIndex);
   const zoneId = getSectorZone(nodeIndex, activeIncursion.collapseActive);
   const zoneTint = useMemo(() => getZoneScannerTint(zoneId), [zoneId]);
+  const zoneLineColor = zoneTint.line ?? '#3f6212';
   const canFocus = hasSelection
     && !fullBlindZone
     && !isPreAuthExtraction
@@ -142,10 +144,20 @@ export default function ScanningScreen(): React.JSX.Element {
     closeScanPreview();
   }, [isScanningHub, scanSessionKey, vectorCluster, nodeIndex, runState.currentSector, closeScanPreview]);
 
-  const handleNodeTap = useCallback((nodeId: string) => {
+  const handleMapNodePress = useCallback((nodeId: string) => {
     openScanPreview(nodeId);
     setSelectedNodeId(nodeId);
   }, [openScanPreview]);
+
+  const handleScannerNodeTap = useCallback((nodeId: string) => {
+    openScanPreview(nodeId);
+    setSelectedNodeId(nodeId);
+  }, [openScanPreview]);
+
+  const handleBackToMap = useCallback(() => {
+    closeScanPreview();
+    setSelectedNodeId(null);
+  }, [closeScanPreview]);
 
   const routeAfterEngage = useCallback((nodeType: string | null) => {
     if (!nodeType) return;
@@ -219,107 +231,133 @@ export default function ScanningScreen(): React.JSX.Element {
         <View style={styles.body}>
           <OperativeTelemetryBar />
 
-          <View style={styles.radarDock}>
-            <VectorScanner
-              cabal={cabal}
-              zoneTint={zoneTint}
-              scannerSize={RADAR_SIZE}
-              active
-              continuousScan
-              activeNodes={vectorDots}
-              contactsLocked={false}
-              coreScale={RADAR_CORE / RADAR_SIZE}
-              selectedNodeId={selectedNodeId}
-              onSelectNode={handleNodeTap}
-            />
+          <View style={[styles.statusStrip, { borderColor: theme.borderColor }]}>
+            <Text style={[styles.statusStripText, { color: theme.mutedColor }]}>
+              {`SECTOR T${activeIncursion.sectorTier} // NODE ${nodeIndex} // RES ${activeIncursion.resonance.percent}% // ATT ${activeIncursion.attunement.current}/${activeIncursion.attunement.max}`}
+            </Text>
           </View>
 
-          <View
-            style={[
-              styles.readoutDock,
-              { borderColor: theme.borderColor, height: READOUT_FIXED_HEIGHT },
-            ]}
-          >
-            <Text style={[styles.readoutLabel, { color: theme.mutedColor }]}>
-              {hasSelection
-                ? terminalBlindActive
-                  ? 'TERMINAL_BLIND // CORRUPTED FEED // BREACH BLIND ONLY'
-                  : isFocused
-                    ? 'FOCUSED TELEMETRY // CLASSIFICATION UNLOCKED'
-                    : 'SPECTRAL READOUT // AMBIGUOUS BAND'
-                : terminalBlindActive
-                  ? 'TERMINAL_BLIND // SCANNER INTERFERENCE ACTIVE'
-                  : 'CONTINUOUS SPECTRAL SWEEP // ACTIVE'}
-            </Text>
-
-            {hasSelection ? (
-              <View style={styles.spectralBlock}>
-                {spectralLines.map((line) => (
-                  <Text key={line} style={[styles.spectralLine, { color: theme.primaryColor }]} numberOfLines={1}>
-                    {line}
-                  </Text>
-                ))}
+          {!hasSelection ? (
+            <SectorOverworldMap
+              graph={activeIncursion.sectorGraph}
+              currentNodeId={activeIncursion.currentNodeId}
+              encounterPath={activeIncursion.encounterPath}
+              focusedNodeIds={activeIncursion.focusedNodeIds}
+              cluster={vectorCluster}
+              selectedNodeId={selectedNodeId}
+              zoneLineColor={zoneLineColor}
+              zoneTint={zoneTint}
+              onNodePress={handleMapNodePress}
+            />
+          ) : (
+            <>
+              <View style={styles.radarDock}>
+                <VectorScanner
+                  cabal={cabal}
+                  zoneTint={zoneTint}
+                  scannerSize={RADAR_SIZE}
+                  active
+                  continuousScan
+                  activeNodes={vectorDots}
+                  contactsLocked={false}
+                  coreScale={RADAR_CORE / RADAR_SIZE}
+                  selectedNodeId={selectedNodeId}
+                  onSelectNode={handleScannerNodeTap}
+                />
               </View>
-            ) : (
-              <Text style={[styles.readoutMeta, { color: theme.mutedColor }]} numberOfLines={3}>
+
+              <View
+                style={[
+                  styles.readoutDock,
+                  { borderColor: theme.borderColor, height: READOUT_FIXED_HEIGHT },
+                ]}
+              >
+                <Pressable onPress={handleBackToMap} style={styles.backToMapBtn}>
+                  <Text style={[styles.backToMapText, { color: accent }]}>
+                    [ ← SECTOR MAP ]
+                  </Text>
+                </Pressable>
+
+                <Text style={[styles.readoutLabel, { color: theme.mutedColor }]}>
+                  {terminalBlindActive
+                    ? 'TERMINAL_BLIND // CORRUPTED FEED // BREACH BLIND ONLY'
+                    : isFocused
+                      ? 'FOCUSED TELEMETRY // CLASSIFICATION UNLOCKED'
+                      : 'SPECTRAL READOUT // AMBIGUOUS BAND'}
+                </Text>
+
+                <View style={styles.spectralBlock}>
+                  {spectralLines.map((line) => (
+                    <Text key={line} style={[styles.spectralLine, { color: theme.primaryColor }]} numberOfLines={1}>
+                      {line}
+                    </Text>
+                  ))}
+                </View>
+
+                <View style={styles.actionRow}>
+                  <Pressable
+                    onPress={handleFocus}
+                    disabled={!canFocus}
+                    style={({ pressed }) => [
+                      styles.actionBtn,
+                      styles.actionBtnHalf,
+                      {
+                        borderColor: canFocus ? accent : theme.borderColor,
+                        opacity: !canFocus ? 0.45 : pressed ? 0.75 : 1,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.actionBtnText, { color: canFocus ? accent : theme.mutedColor }]}>
+                      [ FOCUS −1 ]
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={handleEngage}
+                    disabled={!canEngage}
+                    style={({ pressed }) => [
+                      styles.actionBtn,
+                      styles.actionBtnHalf,
+                      {
+                        borderColor: canEngage ? TERMINAL_ACCENT : theme.borderColor,
+                        opacity: !canEngage ? 0.45 : pressed ? 0.75 : 1,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.actionBtnText, { color: canEngage ? TERMINAL_ACCENT : theme.mutedColor }]}>
+                      [ BREACH BLIND ]
+                    </Text>
+                  </Pressable>
+                </View>
+
+                <Text style={[styles.statusLine, { color: theme.mutedColor }]}>
+                  {`ATT ${activeIncursion.attunement.current}/${activeIncursion.attunement.max} // RES ${activeIncursion.resonance.percent}% // CARGO ${Math.round(calculateGridOccupancy(activeIncursion.cargo) * 100)}%`}
+                </Text>
+
+                {emergencyRecallAvailable ? (
+                  <Pressable
+                    onPress={handleEmergencyRecall}
+                    style={({ pressed }) => [
+                      styles.recallBtn,
+                      { borderColor: '#f59e0b', opacity: pressed ? 0.75 : 1 },
+                    ]}
+                  >
+                    <Text style={[styles.recallBtnText, { color: '#fbbf24' }]}>
+                      [ EMERGENCY RECALL — DEFEND THE RIFT ]
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </>
+          )}
+
+          {!hasSelection ? (
+            <View style={[styles.mapHintDock, { borderColor: theme.borderColor }]}>
+              <Text style={[styles.mapHintText, { color: theme.mutedColor }]}>
                 {scanHint}
               </Text>
-            )}
-
-            <View style={styles.actionRow}>
-              <Pressable
-                onPress={handleFocus}
-                disabled={!canFocus}
-                style={({ pressed }) => [
-                  styles.actionBtn,
-                  styles.actionBtnHalf,
-                  {
-                    borderColor: canFocus ? accent : theme.borderColor,
-                    opacity: !canFocus ? 0.45 : pressed ? 0.75 : 1,
-                  },
-                ]}
-              >
-                <Text style={[styles.actionBtnText, { color: canFocus ? accent : theme.mutedColor }]}>
-                  [ FOCUS −1 ]
-                </Text>
-              </Pressable>
-
-              <Pressable
-                onPress={handleEngage}
-                disabled={!canEngage}
-                style={({ pressed }) => [
-                  styles.actionBtn,
-                  styles.actionBtnHalf,
-                  {
-                    borderColor: canEngage ? TERMINAL_ACCENT : theme.borderColor,
-                    opacity: !canEngage ? 0.45 : pressed ? 0.75 : 1,
-                  },
-                ]}
-              >
-                <Text style={[styles.actionBtnText, { color: canEngage ? TERMINAL_ACCENT : theme.mutedColor }]}>
-                  [ BREACH BLIND ]
-                </Text>
-              </Pressable>
             </View>
-
-            <Text style={[styles.statusLine, { color: theme.mutedColor }]}>
-              {`ATT ${activeIncursion.attunement.current}/${activeIncursion.attunement.max} // RES ${activeIncursion.resonance.percent}% // CARGO ${Math.round(calculateGridOccupancy(activeIncursion.cargo) * 100)}%`}
-            </Text>
-
-            {emergencyRecallAvailable ? (
-              <Pressable
-                onPress={handleEmergencyRecall}
-                style={({ pressed }) => [
-                  styles.recallBtn,
-                  { borderColor: '#f59e0b', opacity: pressed ? 0.75 : 1 },
-                ]}
-              >
-                <Text style={[styles.recallBtnText, { color: '#fbbf24' }]}>
-                  [ EMERGENCY RECALL — DEFEND THE RIFT ]
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
+          ) : null}
         </View>
       </MacroLogAnchoredLayout>
 
@@ -335,6 +373,18 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   fallback: { fontFamily: 'monospace', fontSize: 10, textAlign: 'center', padding: 24 },
+  statusStrip: {
+    borderBottomWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    flexShrink: 0,
+  },
+  statusStripText: {
+    fontFamily: 'monospace',
+    fontSize: 7,
+    letterSpacing: 0.8,
+    textAlign: 'center',
+  },
   radarDock: {
     flex: 1,
     minHeight: 0,
@@ -345,23 +395,25 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     borderTopWidth: 1,
     paddingHorizontal: 16,
-    paddingTop: 10,
+    paddingTop: 6,
     paddingBottom: 8,
     justifyContent: 'space-between',
+  },
+  backToMapBtn: {
+    alignSelf: 'flex-start',
+    marginBottom: 4,
+  },
+  backToMapText: {
+    fontFamily: 'monospace',
+    fontSize: 8,
+    fontWeight: '700',
+    letterSpacing: 0.6,
   },
   readoutLabel: {
     fontFamily: 'monospace',
     fontSize: 7,
     letterSpacing: 1.1,
     textAlign: 'center',
-  },
-  readoutMeta: {
-    fontFamily: 'monospace',
-    fontSize: 8,
-    letterSpacing: 0.5,
-    textAlign: 'center',
-    lineHeight: 12,
-    minHeight: 36,
   },
   spectralBlock: {
     minHeight: 52,
@@ -408,5 +460,18 @@ const styles = StyleSheet.create({
     fontSize: 8,
     fontWeight: '700',
     letterSpacing: 0.6,
+  },
+  mapHintDock: {
+    flexShrink: 0,
+    borderTopWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  mapHintText: {
+    fontFamily: 'monospace',
+    fontSize: 8,
+    letterSpacing: 0.5,
+    textAlign: 'center',
+    lineHeight: 12,
   },
 });

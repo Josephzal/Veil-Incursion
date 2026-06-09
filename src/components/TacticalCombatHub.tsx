@@ -25,6 +25,8 @@ import { ResolvedWeaponCombatStats } from '../data/inventory';
 import { BossRuntimeProfile, EnvironmentalModifiers } from '../types/game';
 import CombatTelemetryGaugeRow from './combat/CombatHorizontalGauge';
 import type { ApparitionViewportRef } from './combat/ApparitionViewport';
+import type { CombatPlayerViewportRef } from './combat/CombatPlayerViewport';
+import type { CombatOperativeTelemetry } from './combat/CombatOperativeHud';
 import CombatCommandDeck, {
   COMMAND_DECK_MIN_HEIGHT,
   DECK_ACTION_LABELS,
@@ -94,8 +96,13 @@ type CombatPhase = 'TEXT_COMBAT' | 'DEFEND_PARRY' | 'OFFENSE_SLICE' | 'RESOLUTIO
 interface TacticalCombatHubProps {
   /** Combat screen stack: operative metrics + deck only; hostile row lives on CombatScreen. */
   stackedLayout?: boolean;
+  /** Pokemon-style arena: gauges on CombatScreen, strike FX on player sprite. */
+  arenaLayout?: boolean;
   onEnemyTelemetryChange?: (enemy: CombatEnemyTelemetry | null) => void;
+  onOperativeTelemetryChange?: (telemetry: CombatOperativeTelemetry | null) => void;
+  onWardPrimedChange?: (primed: boolean) => void;
   apparitionRef?: RefObject<ApparitionViewportRef | null>;
+  playerViewportRef?: RefObject<CombatPlayerViewportRef | null>;
   /** Registers callback invoked after eradication dissolve completes (victory). */
   registerKillResolver?: (resolver: () => void) => void;
   /** Registers callback to apply mid-combat healing from incursion consumables. */
@@ -134,8 +141,12 @@ type EnemyActionStage = 'reading' | 'executing' | null;
 
 export default function TacticalCombatHub({
   stackedLayout = false,
+  arenaLayout = false,
   onEnemyTelemetryChange,
+  onOperativeTelemetryChange,
+  onWardPrimedChange,
   apparitionRef,
+  playerViewportRef,
   registerKillResolver,
   registerHealHandler,
   registerConsumableHandler,
@@ -306,6 +317,14 @@ export default function TacticalCombatHub({
     const s = sliceSessionRef.current;
     if (s.segmentTimer) { clearTimeout(s.segmentTimer); s.segmentTimer = null; }
     if (s.hitFlashTimer) { clearTimeout(s.hitFlashTimer); s.hitFlashTimer = null; }
+  };
+
+  const showStrikeFeedback = (variant: EnemyDeckStrikeVariant) => {
+    if (arenaLayout) {
+      playerViewportRef?.current?.triggerDamageEffect(variant);
+      return;
+    }
+    setDeckStrikeOverlay(variant);
   };
 
   const flash = (color: string, done?: () => void) => {
@@ -514,11 +533,16 @@ export default function TacticalCombatHub({
       : pendingDmgRef.current;
     if (pending <= 0) return false;
     preAppliedHpStrikeRef.current = 0;
-    hurtPlayer(pending, unblockable || pendingUnblockRef.current, msg);
+    hurtPlayer(pending, unblockable || pendingUnblockRef.current, msg, { skipStrikeFx: arenaLayout });
     return true;
   };
 
-  const hurtPlayer = (raw: number, unblockable = false, msg?: string) => {
+  const hurtPlayer = (
+    raw: number,
+    unblockable = false,
+    msg?: string,
+    options?: { skipStrikeFx?: boolean },
+  ) => {
     let dmg = raw;
     if (!unblockable && abyssalWardRef.current) {
       dmg = Math.floor(dmg * (1 - COMBAT_ACTION.ABYSSAL_WARD_BLOCK_PCT));
@@ -528,7 +552,12 @@ export default function TacticalCombatHub({
       log(`[ABYSSAL WARD] >> Barrier absorbed 50% — abyssal overcharge primed (+${COMBAT_ACTION.ABYSSAL_WARD_STRIKE_BONUS}% AR next strike).`);
     }
     log(msg ?? `>> ENEMY STRIKE — ${dmg} DAMAGE DEALT`);
-    if (dmg > 0) Vibration.vibrate([0, 32, 48, 28]);
+    if (dmg > 0) {
+      Vibration.vibrate([0, 32, 48, 28]);
+      if (arenaLayout && !options?.skipStrikeFx) {
+        playerViewportRef?.current?.triggerDamageEffect('hp');
+      }
+    }
     setOperativeHp((p) => { const n = Math.max(p - dmg, 0); operativeHpRef.current = n; if (n <= 0) resolve(false); return n; });
   };
 
@@ -816,7 +845,7 @@ export default function TacticalCombatHub({
       apparitionRef?.current?.triggerAttackEffect();
       const overlayVariant = getEnemyDeckStrikeVariant(currentEnemy.intent);
       if (overlayVariant) {
-        setDeckStrikeOverlay(overlayVariant);
+        showStrikeFeedback(overlayVariant);
         if (overlayVariant === 'hp') applyHpStrikeOnDeckImpact(currentEnemy);
       }
       enemyStrikeTimerRef.current = setTimeout(() => {
@@ -896,10 +925,14 @@ export default function TacticalCombatHub({
       log(`[ABYSSAL WARD OVERCHARGE] >> Abyssal reserve +${COMBAT_ACTION.ABYSSAL_WARD_STRIKE_BONUS}%.`);
     }
     const dmg = exhausted ? strikeStats.exhaustedStrikeDamage : strikeStats.strikeDamage;
+    if (arenaLayout) playerViewportRef?.current?.triggerAttackLunge();
     const eradicated = hurtEnemy(dmg, arPrimed ? '[ABYSSAL STRIKE]' : '[STRIKE]', 'STRIKE');
     if ((env.lethalRetaliationDamage ?? 0) > 0 && dmg > 0) {
       const feedback = env.lethalRetaliationDamage ?? 0;
       log(`[LETHAL RETALIATION] >> Hostile feedback — ${feedback} HP.`);
+      if (arenaLayout && feedback > 0) {
+        playerViewportRef?.current?.triggerDamageEffect('hp');
+      }
       setOperativeHp((p) => {
         const n = Math.max(p - feedback, 0);
         operativeHpRef.current = n;
@@ -1335,6 +1368,32 @@ export default function TacticalCombatHub({
     enemy?.affinity,
   ]);
 
+  useEffect(() => {
+    onWardPrimedChange?.(abyssalWardActive);
+  }, [abyssalWardActive, onWardPrimedChange]);
+
+  useEffect(() => {
+    if (!stackedLayout || !arenaLayout || !onOperativeTelemetryChange) return;
+    onOperativeTelemetryChange({
+      operativeHp,
+      maxSoulAnchor,
+      abyssalReserve,
+      stamina,
+      maxStamina,
+      counterReady,
+    });
+  }, [
+    stackedLayout,
+    arenaLayout,
+    onOperativeTelemetryChange,
+    operativeHp,
+    maxSoulAnchor,
+    abyssalReserve,
+    stamina,
+    maxStamina,
+    counterReady,
+  ]);
+
   const soulAnchorRatio = maxSoulAnchor > 0 ? operativeHp / maxSoulAnchor : 0;
   const abyssalRatio = abyssalReserve / 100;
   const staminaRatio = maxStamina > 0 ? stamina / maxStamina : 0;
@@ -1478,7 +1537,7 @@ export default function TacticalCombatHub({
     <View style={styles.commandDeckAnchor}>
       {showCommandDeck ? commandDeck : null}
       {cycleState === 'TEXT_COMBAT' && !isPlayerTurn ? renderEnemyTurnPanel() : null}
-      {deckStrikeOverlay ? <CombatDeckStrikeOverlay variant={deckStrikeOverlay} /> : null}
+      {deckStrikeOverlay && !arenaLayout ? <CombatDeckStrikeOverlay variant={deckStrikeOverlay} /> : null}
     </View>
   );
 
@@ -1586,7 +1645,7 @@ export default function TacticalCombatHub({
             <VignetteFlashOverlay color={screenFlashColor} opacityAnim={screenFlashAnim} />
           </View>
         )}
-        {stackedOperativeMetrics}
+        {!arenaLayout ? stackedOperativeMetrics : null}
         <View style={styles.commandDeckRow}>
           {renderStatusFeed()}
           {renderTurnBanner()}
