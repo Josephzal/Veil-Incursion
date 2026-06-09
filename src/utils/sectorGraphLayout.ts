@@ -23,8 +23,63 @@ const PADDING_X = 48;
 const PADDING_Y = 40;
 const EPHEMERAL_FAN_Y = 36;
 const EPHEMERAL_FAN_X = 52;
+/** Organic scatter applied to every projected node (viewBox units). */
+export const LAYOUT_JITTER_RANGE = 30;
 
 export type AegisFacing = 'left' | 'right' | 'forward' | 'back';
+
+function hashSeed(input: string): number {
+  let hash = 0;
+  for (let i = 0; i < input.length; i += 1) {
+    hash = (hash * 31 + input.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash);
+}
+
+/** Deterministic +/- jitter so layouts stay stable across re-renders. */
+export function jitterOffsetForNode(nodeId: string, axis: 'x' | 'y'): number {
+  const seed = hashSeed(`${nodeId}:${axis}`);
+  const unit = (seed % 1000) / 1000;
+  return (unit * 2 - 1) * LAYOUT_JITTER_RANGE;
+}
+
+export function applyPositionJitter(
+  positions: Record<string, SectorGraphLayoutPoint>,
+): Record<string, SectorGraphLayoutPoint> {
+  const jittered: Record<string, SectorGraphLayoutPoint> = {};
+  Object.entries(positions).forEach(([id, point]) => {
+    jittered[id] = {
+      x: point.x + jitterOffsetForNode(id, 'x'),
+      y: point.y + jitterOffsetForNode(id, 'y'),
+    };
+  });
+  return jittered;
+}
+
+function expandViewBoxForPositions(
+  positions: Record<string, SectorGraphLayoutPoint>,
+  padding = PADDING_X,
+): { width: number; height: number } {
+  const points = Object.values(positions);
+  if (points.length === 0) {
+    return { width: 320, height: 400 };
+  }
+  const maxX = Math.max(...points.map((p) => p.x));
+  const maxY = Math.max(...points.map((p) => p.y));
+  return {
+    width: maxX + padding,
+    height: maxY + padding,
+  };
+}
+
+export function applyLayoutJitter(layout: SectorGraphLayout): SectorGraphLayout {
+  const positions = applyPositionJitter(layout.positions);
+  return {
+    ...layout,
+    positions,
+    viewBox: expandViewBoxForPositions(positions),
+  };
+}
 
 export function resolveAegisFacing(
   from: SectorGraphLayoutPoint,
@@ -98,7 +153,7 @@ export function projectSectorGraphLayout(graph: SectorGraph): SectorGraphLayout 
     };
   });
 
-  return {
+  const layout: SectorGraphLayout = {
     viewBox: {
       width: maxX - minX + PADDING_X * 2 + NODE_GAP,
       height: layoutHeight,
@@ -106,6 +161,8 @@ export function projectSectorGraphLayout(graph: SectorGraph): SectorGraphLayout 
     positions: normalized,
     edges,
   };
+
+  return applyLayoutJitter(layout);
 }
 
 /** Ephemeral cluster-only nodes (safe anchor, master link, etc.) fan below the active step. */
@@ -124,9 +181,13 @@ export function projectClusterEphemerals(
   const count = synthetic.length;
   synthetic.forEach((node, index) => {
     const offsetIndex = index - (count - 1) / 2;
-    ephemerals[node.id] = {
+    const base = {
       x: anchor.x + offsetIndex * EPHEMERAL_FAN_X,
       y: anchor.y - EPHEMERAL_FAN_Y,
+    };
+    ephemerals[node.id] = {
+      x: base.x + jitterOffsetForNode(node.id, 'x'),
+      y: base.y + jitterOffsetForNode(node.id, 'y'),
     };
   });
 

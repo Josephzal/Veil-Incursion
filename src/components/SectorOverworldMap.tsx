@@ -55,19 +55,24 @@ import {
 } from '../utils/sectorGraphVisibility';
 import ActiveNodeGlow from './overworld/ActiveNodeGlow';
 import AnchorRiftVisual from './overworld/AnchorRiftVisual';
+import { RadarRangeRings, RadarViewportCrosshair } from './overworld/RadarTacticalHud';
 import { resolveOverworldPalette } from './overworld/overworldPalette';
+import {
+  formatNodeTelemetryLabel,
+  NODE_TELEMETRY_LABEL_COLOR,
+} from '../utils/overworldNodeLabels';
 
 import AegisForward from '../../assets/images/character images/aegis/aegis-forward.png';
 import AegisBack from '../../assets/images/character images/aegis/aegis-back.png';
 import AegisLeft from '../../assets/images/character images/aegis/aegis-left.png';
 import AegisRight from '../../assets/images/character images/aegis/aegis-right.png';
 
-const HIT_RADIUS = 30;
+const HIT_RADIUS = 39;
 const START_ZOOM = 8.5;
 const PLAYER_FOCUS_Y = 0.84;
-const PLAYER_SPRITE_W = 42;
-const PLAYER_SPRITE_H = 54;
-const NODE_RADIUS = { default: 18, current: 20, boss: 24 } as const;
+const PLAYER_SPRITE_W = 63;
+const PLAYER_SPRITE_H = 81;
+const NODE_RADIUS = { default: 23, current: 26, boss: 31 } as const;
 const PATH_DASH_CYCLE = 18;
 const PARALLAX_DAMPING = 0.7;
 
@@ -106,6 +111,8 @@ interface ScreenNode {
   screenY: number;
   glyph: string;
   nodeType: RunNodeType;
+  graphDepth: number;
+  telemetryLabel: string;
   visibility: ReturnType<typeof resolveNodeVisibility>;
   isCurrent: boolean;
   isInteractive: boolean;
@@ -293,6 +300,7 @@ export default function SectorOverworldMap({
   const panGesture = Gesture.Pan()
     .enabled(!compact)
     .maxPointers(1)
+    .minDistance(6)
     .onStart(() => {
       savedTranslateX.value = translateX.value;
       savedTranslateY.value = translateY.value;
@@ -334,6 +342,7 @@ export default function SectorOverworldMap({
       const graphNode = graph.nodes[id];
       const clusterNode = cluster.find((n) => n.id === id);
       const nodeType = graphNode?.type ?? clusterNode?.type ?? 'NARRATIVE_EVENT';
+      const graphDepth = graphNode?.graphDepth ?? clusterNode?.encounterIndex ?? 0;
       const visibility = resolveNodeVisibility(id, graph, revealed, scanRange);
       nodes.push({
         id,
@@ -341,6 +350,8 @@ export default function SectorOverworldMap({
         screenY: screen.y,
         glyph: nodeGlyphForType(nodeType),
         nodeType,
+        graphDepth,
+        telemetryLabel: formatNodeTelemetryLabel(id, graphDepth),
         visibility,
         isCurrent: id === resolvedCurrentId,
         isInteractive: interactive && interactiveIds.has(id),
@@ -363,6 +374,7 @@ export default function SectorOverworldMap({
   ]);
 
   const playerScreen = toScreen(currentLayoutPoint);
+  const playerMapPoint = currentLayoutPoint;
 
   const gridLines = useMemo(() => {
     const lines: { p1: { x: number; y: number }; p2: { x: number; y: number } }[] = [];
@@ -385,11 +397,15 @@ export default function SectorOverworldMap({
     [drawMetrics],
   );
 
+  const mapSurfaceStyle = canvasSize.width > 0 && canvasSize.height > 0
+    ? { width: canvasSize.width, height: canvasSize.height }
+    : styles.mapSurfaceFallback;
+
   const mapContent = (
-    <Animated.View style={[styles.mapTransform, mapPanStyle]}>
-      <View>
+      <View style={mapSurfaceStyle} collapsable={false}>
         {canvasSize.width > 0 && canvasSize.height > 0 ? (
-          <Canvas style={{ width: canvasSize.width, height: canvasSize.height }}>
+          <View style={mapSurfaceStyle} pointerEvents="none" collapsable={false}>
+            <Canvas style={mapSurfaceStyle}>
             <Rect
               x={0}
               y={0}
@@ -439,14 +455,19 @@ export default function SectorOverworldMap({
                     p2={vec(to.x, to.y)}
                     color={dimmed ? palette.edgeDim : palette.edgeActive}
                     strokeWidth={dimmed ? 1 : 1.5}
-                    opacity={dimmed ? 0.45 : 0.9}
+                    opacity={dimmed ? 0.28 : 0.92}
                   >
-                    {!dimmed ? (
-                      <DashPathEffect intervals={[6, 12]} phase={pathPhase} />
-                    ) : null}
+                    <DashPathEffect
+                      intervals={dimmed ? [3, 16] : [6, 12]}
+                      phase={dimmed ? 0 : pathPhase}
+                    />
                   </Line>
                 );
               })}
+
+              {!compact ? (
+                <RadarRangeRings cx={playerMapPoint.x} cy={playerMapPoint.y} />
+              ) : null}
 
               {screenNodes.map((node) => {
                 const pos = layoutPositions[node.id];
@@ -524,7 +545,8 @@ export default function SectorOverworldMap({
                 );
               })}
             </Group>
-          </Canvas>
+            </Canvas>
+          </View>
         ) : null}
 
         {screenNodes.map((node) => {
@@ -534,23 +556,42 @@ export default function SectorOverworldMap({
             : node.isCurrent
               ? NODE_RADIUS.current * 2
               : NODE_RADIUS.default * 2;
+          const showTelemetry = node.visibility === 'REVEALED';
           return (
-            <View
-              key={`glyph-${node.id}`}
-              pointerEvents="none"
-              style={[
-                styles.glyphLabel,
-                {
-                  width: glyphSize,
-                  height: glyphSize,
-                  left: node.screenX - glyphSize / 2,
-                  top: node.screenY - glyphSize / 2,
-                  opacity: NODE_MARKER_OPACITY[node.visibility],
-                },
-              ]}
-            >
-              <Text style={[styles.glyphText, { color: labelAccent }]}>{node.glyph}</Text>
-            </View>
+            <React.Fragment key={`glyph-${node.id}`}>
+              <View
+                pointerEvents="none"
+                style={[
+                  styles.glyphLabel,
+                  {
+                    width: glyphSize,
+                    height: glyphSize,
+                    left: node.screenX - glyphSize / 2,
+                    top: node.screenY - glyphSize / 2,
+                    opacity: NODE_MARKER_OPACITY[node.visibility],
+                  },
+                ]}
+              >
+                <Text style={[styles.glyphText, { color: labelAccent }]}>{node.glyph}</Text>
+              </View>
+              {showTelemetry ? (
+                <Text
+                  pointerEvents="none"
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                  style={[
+                    styles.telemetryLabel,
+                    {
+                      left: node.screenX - 52,
+                      top: node.screenY + glyphSize / 2 + 2,
+                      maxWidth: 104,
+                    },
+                  ]}
+                >
+                  {node.telemetryLabel}
+                </Text>
+              ) : null}
+            </React.Fragment>
           );
         })}
 
@@ -584,13 +625,13 @@ export default function SectorOverworldMap({
                   {
                     left: node.screenX - HIT_RADIUS,
                     top: node.screenY - HIT_RADIUS,
+                    zIndex: 12,
                   },
                 ]}
               />
             ))
           : null}
       </View>
-    </Animated.View>
   );
 
   return (
@@ -605,19 +646,31 @@ export default function SectorOverworldMap({
       {!compact ? (
         <View style={styles.headerRow}>
           <Text style={[styles.headerLabel, { color: labelAccent }]}>
-            SECTOR OVERWORLD // STRATEGIC MAP
+            TACTICAL RADAR // SECTOR GRID
           </Text>
           <Text style={styles.headerSub}>
-            {`T${graph.sectorTier} // DEPTH ${graph.maxGraphDepth} // DRAG TO SCROLL`}
+            {`T${graph.sectorTier} // MAX DEPTH ${graph.maxGraphDepth} // PAN TO SCAN`}
           </Text>
         </View>
       ) : null}
 
-      <GestureDetector gesture={panGesture}>
-        <View style={styles.mapHost} collapsable={false}>
-          {mapContent}
-        </View>
-      </GestureDetector>
+      <View style={styles.mapHost} collapsable={false}>
+        <GestureDetector gesture={panGesture}>
+          <Animated.View style={[styles.mapGestureRoot, mapPanStyle]} collapsable={false}>
+            {mapContent}
+          </Animated.View>
+        </GestureDetector>
+        {canvasSize.width > 0 && canvasSize.height > 0 && !compact ? (
+          <View style={styles.crosshairOverlay} pointerEvents="none" collapsable={false}>
+            <Canvas style={mapSurfaceStyle}>
+              <RadarViewportCrosshair
+                width={canvasSize.width}
+                height={canvasSize.height}
+              />
+            </Canvas>
+          </View>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -658,9 +711,29 @@ const styles = StyleSheet.create({
   mapHost: {
     flex: 1,
     overflow: 'hidden',
+    position: 'relative',
   },
-  mapTransform: {
+  mapGestureRoot: {
     flex: 1,
+    width: '100%',
+  },
+  mapSurfaceFallback: {
+    flex: 1,
+    width: '100%',
+  },
+  crosshairOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 4,
+  },
+  telemetryLabel: {
+    position: 'absolute',
+    width: 104,
+    textAlign: 'center',
+    fontFamily: 'monospace',
+    fontSize: 6,
+    lineHeight: 8,
+    letterSpacing: 0.3,
+    color: NODE_TELEMETRY_LABEL_COLOR,
   },
   glyphLabel: {
     position: 'absolute',
@@ -669,8 +742,8 @@ const styles = StyleSheet.create({
   },
   glyphText: {
     fontFamily: 'monospace',
-    fontSize: 11,
-    lineHeight: 13,
+    fontSize: 14,
+    lineHeight: 16,
     fontWeight: '700',
   },
   playerSprite: {
