@@ -11,6 +11,8 @@ import {
 import CityStreetNarrativeBg from '../../assets/narrative images/city-street.png';
 import SelectionContinueButton from './SelectionContinueButton';
 import { CheckStatus, NarrativeChoiceEffectPreview, NarrativeEventNode } from '../types/game';
+import { ENVIRONMENT_DISPLAY_LABEL } from '../types/sector';
+import { isOpenSectorNarrative } from '../data/sectorNarrativeEngine';
 
 const TERMINAL_ACCENT = '#00ff33';
 const TARGET_MIN = 0.6;
@@ -155,7 +157,11 @@ export default function NarrativeStepperModule({
 
       <View style={[styles.rootContent, showCityStreetBackground && styles.rootContentCityStreets]}>
         <View style={[styles.docHeader, { borderBottomColor: borderColor }]}>
-          <Text style={[styles.docLabel, { color: mutedColor }]}>ANOMALY ENCOUNTER // {node.id.toUpperCase()}</Text>
+          <Text style={[styles.docLabel, { color: mutedColor }]}>
+            {node.environmentType && isOpenSectorNarrative(node)
+              ? `ENVIRONMENT LOG // ${ENVIRONMENT_DISPLAY_LABEL[node.environmentType].toUpperCase()}`
+              : `ANOMALY ENCOUNTER // ${node.id.toUpperCase()}`}
+          </Text>
           <Text style={[styles.docTitle, { color: TERMINAL_ACCENT }]}>{node.title}</Text>
         </View>
 
@@ -191,14 +197,15 @@ export default function NarrativeStepperModule({
               ) : null}
             </Pressable>
             <Pressable
-              onPress={() => handleChoiceSelect('B')}
+              onPress={() => !node.choiceB.locked && handleChoiceSelect('B')}
+              disabled={node.choiceB.locked === true}
               style={({ pressed }) => [
                 styles.choiceBtn,
                 showCityStreetBackground && styles.choiceBtnCityStreets,
                 selectedChoice === 'B' && styles.choiceBtnSelected,
                 {
                   borderColor: selectedChoice === 'B' ? TERMINAL_ACCENT : borderColor,
-                  opacity: pressed ? 0.7 : 1,
+                  opacity: node.choiceB.locked ? 0.4 : pressed ? 0.7 : 1,
                 },
               ]}
             >
@@ -210,7 +217,11 @@ export default function NarrativeStepperModule({
               >
                 {node.choiceB.label}
               </Text>
-              <Text style={[styles.choiceReq, { color: mutedColor }]}>REQ: {node.choiceB.requirement}</Text>
+              <Text style={[styles.choiceReq, { color: mutedColor }]}>
+                REQ: {node.choiceB.locked && node.choiceB.lockReason
+                  ? node.choiceB.lockReason
+                  : node.choiceB.requirement}
+              </Text>
               {node.choiceB.effectPreview ? (
                 <ChoiceEffectPreview preview={node.choiceB.effectPreview} mutedColor={mutedColor} />
               ) : null}

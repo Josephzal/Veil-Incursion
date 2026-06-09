@@ -10,8 +10,9 @@ export type DescentRoute =
   | 'COMBAT'
   | 'REST'
   | 'BLACK_MARKET'
+  | 'RESOURCE_HARVEST'
   | 'HUB_VICTORY'
-  | 'DEPTH_ADVANCE'
+  | 'EXTRACT_SUCCESS'
 
 function routeForNodeType(type: RunNodeType | null): DescentRoute {
   switch (type) {
@@ -25,6 +26,13 @@ function routeForNodeType(type: RunNodeType | null): DescentRoute {
       return 'REST';
     case 'BLACK_MARKET':
       return 'BLACK_MARKET';
+    case 'RESOURCE_HARVEST':
+      return 'RESOURCE_HARVEST';
+    case 'EMERGENCY_EXTRACTION':
+      return 'EXTRACT_SUCCESS';
+    case 'SAFE_ANCHOR_EXTRACTION':
+    case 'MASTER_EXTRACTION_LINK':
+      return 'SCANNING';
     default:
       return 'SCANNING';
   }
@@ -38,8 +46,9 @@ export function useDescentNavigator() {
     continueFromProgressCheckpoint,
     commitNodeEncounter,
     endRun,
+    calculateSectorExtractionPayout,
   } = useRun();
-  const { startNarrative, startScanning, startCombat, startRest, startBlackMarket, goToHub } =
+  const { startNarrative, startScanning, startCombat, startRest, startBlackMarket, startResourceHarvest, goToHub } =
     useGameFlow();
   const { addCredits, addRiftIron } = usePlayerAccount();
 
@@ -63,72 +72,53 @@ export function useDescentNavigator() {
       case 'BLACK_MARKET':
         startBlackMarket();
         break;
+      case 'RESOURCE_HARVEST':
+        startResourceHarvest();
+        break;
+      case 'EXTRACT_SUCCESS':
+        break;
       default:
         break;
     }
 
     return route;
-  }, [commitNodeEncounter, startBlackMarket, startNarrative, startCombat, startRest]);
+  }, [commitNodeEncounter, startBlackMarket, startNarrative, startCombat, startRest, startResourceHarvest]);
+
+  const finalizeSectorExtraction = useCallback(() => {
+    const credits = calculateSectorExtractionPayout();
+    const riftIron = Math.max(5, Math.floor(credits / 40));
+    addCredits(credits);
+    addRiftIron(riftIron);
+    appendRunLog(`>> SECTOR EXTRACTION COMPLETE — +${credits} CREDITS (incl. cargo), +${riftIron} RIFT IRON.`);
+    endRun('SECTOR EXTRACTION SECURED');
+    goToHub();
+    return { route: 'EXTRACT_SUCCESS' as const };
+  }, [addCredits, addRiftIron, appendRunLog, calculateSectorExtractionPayout, endRun, goToHub]);
 
   const finalizeIncursionAdvance = useCallback(
     (message: string) => {
       const result = stageEncounterClear(message);
-
-      if (result.route === 'HUB_VICTORY') {
-        addCredits(500);
-        addRiftIron(10);
-        appendRunLog('>> VEIL DESCENT COMPLETE — +500 CREDITS, +10 RIFT IRON AWARDED.');
-        endRun('THREE-DEPTH INCURSION SECURED');
-        goToHub();
-        return result;
-      }
-
       startScanning();
       return result;
     },
-    [
-      stageEncounterClear,
-      addCredits,
-      addRiftIron,
-      appendRunLog,
-      endRun,
-      goToHub,
-      startScanning,
-    ],
+    [stageEncounterClear, startScanning],
   );
 
   const continueOperation = useCallback(() => {
     const result = continueFromProgressCheckpoint();
-
-    if (result.route === 'HUB_VICTORY') {
-      addCredits(500);
-      addRiftIron(10);
-      appendRunLog('>> VEIL DESCENT COMPLETE — +500 CREDITS, +10 RIFT IRON AWARDED.');
-      endRun('THREE-DEPTH INCURSION SECURED');
-      goToHub();
-      return result;
-    }
-
     startScanning();
     return result;
-  }, [
-    continueFromProgressCheckpoint,
-    addCredits,
-    addRiftIron,
-    appendRunLog,
-    endRun,
-    goToHub,
-    startScanning,
-  ]);
+  }, [continueFromProgressCheckpoint, startScanning]);
 
   const getCurrentEncounterNode = useCallback(() => {
     const inc = incursionRef.current;
-    return inc.encounterPath[inc.currentEncounterIndex] ?? null;
+    return inc.encounterPath[inc.nodesCleared] ?? null;
   }, []);
 
   return {
     deploySelectedVector,
     finalizeIncursionAdvance,
+    finalizeSectorExtraction,
     continueOperation,
     getCurrentEncounterNode,
     isScanningHub: activeIncursion.mapMode === 'SCANNING_HUB',

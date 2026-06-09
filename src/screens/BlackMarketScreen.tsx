@@ -1,17 +1,14 @@
 import React, { useState } from 'react';
 import {
   Image,
-  ImageSourcePropType,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import BlackMarketBg from '../../assets/images/location images/black_market.png';
-import SoulCoreImage from '../../assets/images/item images/soul-core.png';
-import TargetFragmentImage from '../../assets/images/item images/target-fragment.png';
-import VeilShardImage from '../../assets/images/item images/veil-shard.png';
-import { BLACK_MARKET_ITEM_PRICE, BLACK_MARKET_LISTINGS } from '../data/blackMarket';
+import { BLACK_MARKET_CARGO_LISTINGS, BLACK_MARKET_ITEM_PRICE } from '../data/blackMarket';
+import { countCargoItemInstances } from '../data/cargoGridEngine';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useNodeProgression } from '../hooks/useNodeProgression';
@@ -19,7 +16,8 @@ import IncursionShell from '../components/IncursionShell';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
 import OperativeTelemetryBar from '../components/OperativeTelemetryBar';
 import SelectionContinueButton from '../components/SelectionContinueButton';
-import type { IncursionConsumableId } from '../types/incursionInventory';
+import type { CargoItemId } from '../types/cargoGrid';
+import { resolveCargoItemIcon } from '../utils/cargoItemIcon';
 
 const TERMINAL_ACCENT = '#00ff33';
 const CELL_SIZE = 84;
@@ -28,40 +26,29 @@ const ACTION_DISABLED_BORDER = '#1a2e22';
 const ACTION_DISABLED_BG = '#070809';
 const ACTION_DISABLED_TEXT = '#2a4032';
 
-const ITEM_IMAGES: Partial<Record<IncursionConsumableId, ImageSourcePropType>> = {
-  'soul-core': SoulCoreImage,
-  'veil-shard': VeilShardImage,
-  'target-fragment': TargetFragmentImage,
-};
-
-function getItemImage(itemId: IncursionConsumableId): ImageSourcePropType | null {
-  return ITEM_IMAGES[itemId] ?? null;
-}
-
 export default function BlackMarketScreen(): React.JSX.Element {
   const { theme } = useTerminal();
-  const { runState, activeIncursion, appendRunLog, purchaseBlackMarketItem } = useRun();
+  const { runState, activeIncursion, appendRunLog, purchaseBlackMarketCargo } = useRun();
   const { completeCurrentNode } = useNodeProgression();
-  const [selectedId, setSelectedId] = useState<IncursionConsumableId | null>(null);
+  const [selectedCargoId, setSelectedCargoId] = useState<CargoItemId | null>(null);
   const [leaving, setLeaving] = useState(false);
 
-  const selectedListing = selectedId != null
-    ? BLACK_MARKET_LISTINGS.find((entry) => entry.id === selectedId) ?? null
+  const selectedCargoListing = selectedCargoId != null
+    ? BLACK_MARKET_CARGO_LISTINGS.find((entry) => entry.id === selectedCargoId) ?? null
     : null;
 
-  const purchaseEnabled = selectedListing != null
+  const cargoPurchaseEnabled = selectedCargoListing != null
     && activeIncursion.runCredits >= BLACK_MARKET_ITEM_PRICE;
 
-  const ownedQty = selectedId != null
-    ? activeIncursion.inventory.items.find((item) => item.id === selectedId)?.quantity ?? 0
+  const ownedQty = selectedCargoId != null
+    ? countCargoItemInstances(activeIncursion.cargo, selectedCargoId)
     : 0;
 
-  const handlePurchase = () => {
-    if (!selectedId || !purchaseEnabled) return;
-    const result = purchaseBlackMarketItem(selectedId);
+  const handleCargoPurchase = () => {
+    if (!selectedCargoId || !cargoPurchaseEnabled) return;
+    const result = purchaseBlackMarketCargo(selectedCargoId);
     if (!result) return;
     appendRunLog(result.logLine);
-    if (!result.success) return;
   };
 
   const handleLeave = () => {
@@ -88,7 +75,7 @@ export default function BlackMarketScreen(): React.JSX.Element {
                 <Text style={[styles.docLabel, { color: theme.mutedColor }]}>
                   VEIL UNDERNET // BLACK MARKET NODE
                 </Text>
-                <Text style={styles.docTitle}>BLACK MARKET VENDOR</Text>
+                <Text style={styles.docTitle}>BLACK MARKET</Text>
                 <Text style={[styles.creditsLine, { color: TERMINAL_ACCENT }]}>
                   RUN CREDITS: {activeIncursion.runCredits}
                 </Text>
@@ -96,38 +83,30 @@ export default function BlackMarketScreen(): React.JSX.Element {
 
               <View style={[styles.shopPanel, { borderColor: theme.borderColor }]}>
                 <Text style={[styles.shopSubHeader, { color: theme.mutedColor }]}>
-                  FIELD CONTRABAND // {BLACK_MARKET_ITEM_PRICE} CR PER UNIT
+                  CARGO CONTRABAND // {BLACK_MARKET_ITEM_PRICE} CR PER UNIT // STAGED TO CONTAINMENT
                 </Text>
 
                 <View style={styles.grid}>
-                  {BLACK_MARKET_LISTINGS.map((listing) => {
-                    const isSelected = listing.id === selectedId;
-                    const owned = activeIncursion.inventory.items.find((item) => item.id === listing.id)?.quantity ?? 0;
+                  {BLACK_MARKET_CARGO_LISTINGS.map((listing) => {
+                    const isSelected = listing.id === selectedCargoId;
+                    const owned = countCargoItemInstances(activeIncursion.cargo, listing.id);
                     return (
                       <Pressable
                         key={listing.id}
-                        onPress={() => setSelectedId(listing.id)}
+                        onPress={() => setSelectedCargoId(listing.id)}
                         style={({ pressed }) => [
                           styles.gridCell,
                           { borderColor: isSelected ? TERMINAL_ACCENT : theme.borderColor },
                           pressed ? { opacity: 0.75 } : null,
                         ]}
                       >
-                        {getItemImage(listing.id) != null ? (
-                          <View style={styles.cellImageWrap}>
-                            <Image
-                              source={getItemImage(listing.id)!}
-                              style={styles.cellImage}
-                              resizeMode="contain"
-                            />
-                          </View>
-                        ) : (
-                          <View style={styles.cellImageWrap}>
-                            <Text style={[styles.cellLabel, { color: TERMINAL_ACCENT }]} numberOfLines={2}>
-                              {listing.name.toUpperCase()}
-                            </Text>
-                          </View>
-                        )}
+                        <View style={styles.cellImageWrap}>
+                          <Image
+                            source={resolveCargoItemIcon(listing.id)}
+                            style={styles.cellImage}
+                            resizeMode="contain"
+                          />
+                        </View>
                         <Text style={[styles.cellPrice, { color: theme.mutedColor }]}>
                           {listing.price} CR
                         </Text>
@@ -140,31 +119,27 @@ export default function BlackMarketScreen(): React.JSX.Element {
                 </View>
 
                 <View style={[styles.detailBlock, { borderColor: theme.borderColor }]}>
-                  {selectedListing != null ? (
+                  {selectedCargoListing != null ? (
                     <View style={styles.detailHeader}>
-                      {getItemImage(selectedListing.id) != null ? (
-                        <View style={styles.detailImageWrap}>
-                          <Image
-                            source={getItemImage(selectedListing.id)!}
-                            style={styles.detailImage}
-                            resizeMode="contain"
-                          />
-                        </View>
-                      ) : (
-                        <View style={styles.detailImageWrap} />
-                      )}
+                      <View style={styles.detailImageWrap}>
+                        <Image
+                          source={resolveCargoItemIcon(selectedCargoListing.id)}
+                          style={styles.detailImage}
+                          resizeMode="contain"
+                        />
+                      </View>
                       <View style={styles.detailCopy}>
                         <Text style={[styles.detailTitle, { color: TERMINAL_ACCENT }]} numberOfLines={1}>
-                          {selectedListing.name.toUpperCase()}
+                          {selectedCargoListing.name.toUpperCase()}
                         </Text>
                         <Text style={[styles.detailBody, { color: theme.primaryColor }]} numberOfLines={3}>
-                          {selectedListing.description}
+                          {selectedCargoListing.description}
                         </Text>
                         <Text style={[styles.detailEffect, { color: theme.mutedColor }]} numberOfLines={2}>
-                          {selectedListing.effect}
+                          {selectedCargoListing.effect}
                         </Text>
                         <Text style={[styles.detailEffect, { color: theme.mutedColor }]}>
-                          OWNED: {ownedQty} // PRICE: {selectedListing.price} CR
+                          {`OWNED: ${ownedQty} // PRICE: ${selectedCargoListing.price} CR`}
                         </Text>
                       </View>
                     </View>
@@ -179,19 +154,19 @@ export default function BlackMarketScreen(): React.JSX.Element {
 
                 <View style={styles.actions}>
                   <Pressable
-                    disabled={!purchaseEnabled}
-                    onPress={handlePurchase}
+                    disabled={!cargoPurchaseEnabled}
+                    onPress={handleCargoPurchase}
                     style={({ pressed }) => [
                       styles.btn,
                       {
-                        borderColor: purchaseEnabled ? TERMINAL_ACCENT : ACTION_DISABLED_BORDER,
-                        backgroundColor: purchaseEnabled ? '#0a0b0f' : ACTION_DISABLED_BG,
-                        opacity: purchaseEnabled && pressed ? 0.75 : 1,
+                        borderColor: cargoPurchaseEnabled ? TERMINAL_ACCENT : ACTION_DISABLED_BORDER,
+                        backgroundColor: cargoPurchaseEnabled ? '#0a0b0f' : ACTION_DISABLED_BG,
+                        opacity: cargoPurchaseEnabled && pressed ? 0.75 : 1,
                       },
                     ]}
                   >
-                    <Text style={[styles.btnText, { color: purchaseEnabled ? TERMINAL_ACCENT : ACTION_DISABLED_TEXT }]}>
-                      [ PURCHASE ]
+                    <Text style={[styles.btnText, { color: cargoPurchaseEnabled ? TERMINAL_ACCENT : ACTION_DISABLED_TEXT }]}>
+                      [ PURCHASE TO CONTAINMENT ]
                     </Text>
                   </Pressable>
                 </View>
@@ -301,13 +276,6 @@ const styles = StyleSheet.create({
   cellImage: {
     width: '100%',
     height: '100%',
-  },
-  cellLabel: {
-    fontFamily: 'monospace',
-    fontSize: 7,
-    fontWeight: '700',
-    letterSpacing: 0.4,
-    textAlign: 'center',
   },
   cellPrice: {
     fontFamily: 'monospace',

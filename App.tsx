@@ -16,6 +16,8 @@ import PostCombatBoonScreen from './src/screens/PostCombatBoonScreen';
 import SkillCheckScreen from './src/screens/SkillCheckScreen';
 import RestScreen from './src/screens/RestScreen';
 import BlackMarketScreen from './src/screens/BlackMarketScreen';
+import ResourceHarvestScreen from './src/screens/ResourceHarvestScreen';
+import ExtractionReviewScreen from './src/screens/ExtractionReviewScreen';
 import CombatScreen from './src/screens/CombatScreen';
 import CombatEntryTransition from './src/components/combat/CombatEntryTransition';
 import RunCompleteScreen from './src/screens/RunCompleteScreen';
@@ -36,6 +38,8 @@ function GameRoot(): React.JSX.Element {
       {currentScreen === 'SKILL_CHECK' && <SkillCheckScreen />}
       {currentScreen === 'REST' && <RestScreen />}
       {currentScreen === 'BLACK_MARKET' && <BlackMarketScreen />}
+      {currentScreen === 'RESOURCE_HARVEST' && <ResourceHarvestScreen />}
+      {currentScreen === 'EXTRACTION_REVIEW' && <ExtractionReviewScreen />}
       {currentScreen === 'COMBAT' && <CombatScreen />}
       {currentScreen === 'RUN_COMPLETE' && <RunCompleteScreen />}
       {currentScreen === 'GAME_OVER' && <GameOverScreen />}

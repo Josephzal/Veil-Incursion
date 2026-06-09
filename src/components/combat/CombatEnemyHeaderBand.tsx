@@ -31,7 +31,9 @@ export default function CombatEnemyHeaderBand({
           {`HOSTILE_ID // ${formatHostileId(enemy.designation)}`}
         </Text>
         <Text style={[styles.intentLine, { color: intentMutedColor }]} numberOfLines={1} ellipsizeMode="tail">
-          {`INTENT // ${formatIntentReadout(enemy.intent)}`}
+          {enemy.affinity
+            ? `AFFINITY // ${enemy.affinity} // INTENT // ${formatIntentReadout(enemy.intent)}`
+            : `INTENT // ${formatIntentReadout(enemy.intent)}`}
         </Text>
       </View>
       <CombatHorizontalGauge

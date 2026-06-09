@@ -23,6 +23,7 @@ export function spawnBossEnemyProfile(
     isBoss: true,
     bossPhase: boss.currentPhase,
     bossDepth: boss.depth,
+    affinity: 'CORPOREAL',
   };
 }
 

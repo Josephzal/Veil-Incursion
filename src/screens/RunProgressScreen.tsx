@@ -27,7 +27,7 @@ export default function RunProgressScreen(): React.JSX.Element {
   const recentLogs = runLog.slice(-6);
 
   return (
-    <IncursionShell hidePipeline>
+    <IncursionShell>
       <MacroLogAnchoredLayout
         showMacroLog={runState.runActive}
         style={{ backgroundColor: theme.backgroundColor }}
@@ -36,14 +36,18 @@ export default function RunProgressScreen(): React.JSX.Element {
           <View style={[styles.header, { borderColor: theme.borderColor }]}>
             <Text style={[styles.headerTitle, { color: accent }]}>SECTOR CHECKPOINT // PERFORMANCE REVIEW</Text>
             <Text style={[styles.headerSub, { color: theme.mutedColor }]}>
-              DEPTH {activeIncursion.currentDepth} // VECTOR CLEARED — OPERATIVE STATUS NOMINAL
+              SECTOR T{activeIncursion.sectorTier} // NODE {activeIncursion.nodesCleared} CLEARED — OPERATIVE STATUS NOMINAL
             </Text>
           </View>
 
           <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
             <View style={styles.pipelineFrame}>
               <DescentPipelineHUD
-                depth={activeIncursion.currentDepth}
+                sectorTier={activeIncursion.sectorTier}
+                nodesCleared={activeIncursion.nodesCleared}
+                resonancePercent={activeIncursion.resonance.percent}
+                attunementCurrent={activeIncursion.attunement.current}
+                attunementMax={activeIncursion.attunement.max}
                 currentEncounterIndex={activeIncursion.currentEncounterIndex}
                 encounterPath={activeIncursion.encounterPath}
                 accentColor={accent}

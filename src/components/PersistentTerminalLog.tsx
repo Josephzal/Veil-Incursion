@@ -1,11 +1,10 @@
 import React, { useEffect, useRef } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { TACTICAL_HUB_STACKED_RIGHT_INSET } from './TacticalCombatHub';
+import MacroLogCargoButton, { TERMINAL_ACCENT } from './MacroLogCargoButton';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 
-const TERMINAL_ACCENT = '#00ff33';
 const LOG_SURFACE = '#0a0b0f';
 const MACRO_LOG_HORIZONTAL_PADDING = 12;
 
@@ -18,11 +17,9 @@ interface PersistentTerminalLogProps {
   docked?: boolean;
   /** Occupies remaining flex space in parent (combat stack) instead of fixed block height. */
   fillRemaining?: boolean;
-  /** Active incursion run — opens field inventory overlay in macro log header. */
-  showInventory?: boolean;
-  /** Combat: inventory only usable on operative turn. */
-  inventoryDisabled?: boolean;
-  onInventoryPress?: () => void;
+  showCargo?: boolean;
+  cargoDisabled?: boolean;
+  onCargoPress?: () => void;
 }
 
 function resolveBottomInset(insetsBottom: number): number {
@@ -41,9 +38,9 @@ export default function PersistentTerminalLog({
   visible = true,
   docked = false,
   fillRemaining = false,
-  showInventory = false,
-  inventoryDisabled = false,
-  onInventoryPress,
+  showCargo = false,
+  cargoDisabled = false,
+  onCargoPress,
 }: PersistentTerminalLogProps): React.JSX.Element | null {
   const { runLog } = useRun();
   const { theme } = useTerminal();
@@ -57,7 +54,7 @@ export default function PersistentTerminalLog({
   }, [runLog]);
 
   if (!visible) return null;
-  if (!showInventory && runLog.length === 0) return null;
+  if (!showCargo && runLog.length === 0) return null;
 
   const bottomInset = docked ? resolveBottomInset(insets.bottom) : 0;
 
@@ -75,25 +72,8 @@ export default function PersistentTerminalLog({
     >
       <View style={styles.headerRow}>
         <Text style={[styles.header, { color: theme.mutedColor }]}>RUN TERMINAL // MACRO LOG</Text>
-        {showInventory ? (
-          <Pressable
-            onPress={onInventoryPress}
-            disabled={inventoryDisabled}
-            style={[
-              styles.headerActionBtn,
-              {
-                borderColor: theme.borderColor,
-                marginRight: TACTICAL_HUB_STACKED_RIGHT_INSET - MACRO_LOG_HORIZONTAL_PADDING,
-                opacity: inventoryDisabled ? 0.35 : 1,
-              },
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel={inventoryDisabled ? 'Inventory unavailable during hostile turn' : 'Open incursion inventory'}
-          >
-            <Text style={[styles.headerActionBtnText, { color: theme.mutedColor }]}>
-              {inventoryDisabled ? '[ INVENTORY LOCKED ]' : '[ INVENTORY ]'}
-            </Text>
-          </Pressable>
+        {showCargo && onCargoPress ? (
+          <MacroLogCargoButton disabled={cargoDisabled} onPress={onCargoPress} />
         ) : null}
       </View>
       <ScrollView
@@ -170,18 +150,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     flex: 1,
     minWidth: 0,
-  },
-  headerActionBtn: {
-    flexShrink: 0,
-    borderWidth: 1,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-  },
-  headerActionBtnText: {
-    fontFamily: 'monospace',
-    fontSize: 7,
-    fontWeight: '700',
-    letterSpacing: 0.4,
   },
   scroll: {
     flex: 1,

@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View, ViewStyle } from 'react-native';
-import IncursionInventoryOverlay from './IncursionInventoryOverlay';
+import CargoGridOverlay from './CargoGridOverlay';
 import PersistentTerminalLog from './PersistentTerminalLog';
+import { CargoOverlayProvider } from '../context/CargoOverlayContext';
 import { useCombatTurnOptional } from '../context/CombatTurnContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
@@ -35,60 +36,84 @@ export default function MacroLogAnchoredLayout({
     appendRunLog,
     useIncursionConsumable,
     applyIncursionConsumableHeal,
+    relocateCargoItem,
+    useFocusingAmpouleFromCargo,
   } = useRun();
-  const [inventoryOpen, setInventoryOpen] = useState(false);
+  const [cargoOpen, setCargoOpen] = useState(false);
   const combatTurn = useCombatTurnOptional();
-  const inventoryEnabled = combatTurn?.canUseInventory ?? true;
+  const cargoEnabled = combatTurn?.canUseCargo ?? true;
+  const combatMode = onConsumableUsed != null;
 
   useEffect(() => {
-    if (!inventoryEnabled && inventoryOpen) {
-      setInventoryOpen(false);
+    if (!cargoEnabled && cargoOpen) {
+      setCargoOpen(false);
     }
-  }, [inventoryEnabled, inventoryOpen]);
+  }, [cargoEnabled, cargoOpen]);
 
-  const showIncursionInventory = useMemo(
+  const showCargoOverlay = useMemo(
     () => runState.runActive && activeIncursion.isRunActive && runState.combatTestPreset == null,
     [activeIncursion.isRunActive, runState.combatTestPreset, runState.runActive],
   );
 
-  const handleUseConsumable = useCallback((itemId: IncursionConsumableId) => {
-    if (!inventoryEnabled) return;
+  const handleUseCombatConsumable = useCallback((itemId: IncursionConsumableId) => {
+    if (!cargoEnabled) return false;
     const result = useIncursionConsumable(itemId);
-    if (!result) return;
+    if (!result) return false;
     if (onConsumableUsed) {
       onConsumableUsed(result);
     } else if (result.healAmount > 0) {
       applyIncursionConsumableHeal(result.healAmount);
     }
     appendRunLog(result.logLine);
-    setInventoryOpen(false);
-  }, [appendRunLog, applyIncursionConsumableHeal, inventoryEnabled, onConsumableUsed, useIncursionConsumable]);
+    setCargoOpen(false);
+    return true;
+  }, [
+    appendRunLog,
+    applyIncursionConsumableHeal,
+    cargoEnabled,
+    onConsumableUsed,
+    useIncursionConsumable,
+  ]);
 
-  const handleInventoryPress = useCallback(() => {
-    if (!inventoryEnabled) return;
-    setInventoryOpen(true);
-  }, [inventoryEnabled]);
+  const openCargo = useCallback(() => {
+    if (!cargoEnabled || !showCargoOverlay) return;
+    setCargoOpen(true);
+  }, [cargoEnabled, showCargoOverlay]);
+
+  const cargoOverlayValue = useMemo(
+    () => ({ openCargo, cargoEnabled: showCargoOverlay && cargoEnabled }),
+    [cargoEnabled, openCargo, showCargoOverlay],
+  );
 
   return (
-    <View style={[styles.root, style]}>
-      <View style={styles.content}>{children}</View>
-      {showMacroLog ? (
-        <PersistentTerminalLog
-          docked
-          showInventory={showIncursionInventory}
-          inventoryDisabled={showIncursionInventory && onConsumableUsed != null && !inventoryEnabled}
-          onInventoryPress={handleInventoryPress}
-        />
-      ) : null}
+    <CargoOverlayProvider value={cargoOverlayValue}>
+      <View style={[styles.root, style]}>
+        <View style={styles.content}>{children}</View>
+        {showMacroLog ? (
+          <PersistentTerminalLog
+            docked
+            showCargo={showCargoOverlay}
+            cargoDisabled={showCargoOverlay && combatMode && !cargoEnabled}
+            onCargoPress={openCargo}
+          />
+        ) : null}
 
-      <IncursionInventoryOverlay
-        visible={inventoryOpen}
-        items={activeIncursion.inventory.items}
-        theme={theme}
-        onClose={() => setInventoryOpen(false)}
-        onUse={handleUseConsumable}
-      />
-    </View>
+        {showCargoOverlay ? (
+          <CargoGridOverlay
+            visible={cargoOpen}
+            cargo={activeIncursion.cargo}
+            theme={theme}
+            onClose={() => setCargoOpen(false)}
+            onRelocateItem={relocateCargoItem}
+            scannerMode={!combatMode}
+            combatMode={combatMode}
+            combatConsumablesEnabled={cargoEnabled}
+            onUseAmpoule={!combatMode ? useFocusingAmpouleFromCargo : undefined}
+            onUseCombatConsumable={combatMode ? handleUseCombatConsumable : undefined}
+          />
+        ) : null}
+      </View>
+    </CargoOverlayProvider>
   );
 }
 

@@ -1,5 +1,10 @@
 import type { IncursionBiome } from '../types/game';
 import { pickBiomeCombatDesignation } from './biomeCombat';
+import {
+  applyCorporealHpMultiplier,
+  resolveEnemyAffinity,
+} from './combatEnvironmentEngine';
+import type { EnemyAffinity } from '../types/combatEnvironment';
 import { EnemyClass, EnemyCombatProfile, EnemyIntent, SectorDefinition } from '../types/run';
 
 const CLASS_BASE_HP: Record<EnemyClass, number> = {
@@ -73,10 +78,24 @@ export function intentLabel(intent: EnemyIntent, designation: string): string {
   return labels[intent];
 }
 
+export interface SpawnEnemyOptions {
+  resonancePercent?: number;
+  forcedAffinity?: EnemyAffinity;
+}
+
+function finalizeEnemyProfile(
+  base: Omit<EnemyCombatProfile, 'affinity'>,
+  affinity: EnemyAffinity,
+): EnemyCombatProfile {
+  const withAffinity: EnemyCombatProfile = { ...base, affinity };
+  return applyCorporealHpMultiplier(withAffinity, affinity);
+}
+
 export function spawnBiomeEnemyProfile(
   biome: IncursionBiome,
   nodeIndex: number,
   isEliteAmbush = false,
+  options?: SpawnEnemyOptions,
 ): EnemyCombatProfile {
   const classType = pickEnemyClass(nodeIndex, isEliteAmbush);
   const scale = getNodeScale(nodeIndex);
@@ -84,19 +103,24 @@ export function spawnBiomeEnemyProfile(
   const maxHp = Math.floor(CLASS_BASE_HP[classType] * scale);
   const baseDamage = Math.floor(CLASS_BASE_DAMAGE[classType] * scale);
   const intent = rollEnemyIntent(classType, 0);
+  const affinity = options?.forcedAffinity
+    ?? resolveEnemyAffinity(classType, isEliteAmbush, options?.resonancePercent ?? 0);
 
-  return {
-    class: classType,
-    designation,
-    maxHp,
-    currentHp: maxHp,
-    baseDamage,
-    intent,
-    chargeTurns: 0,
-    evadeActive: intent === 'EVADE',
-    nodeIndex,
-    scale,
-  };
+  return finalizeEnemyProfile(
+    {
+      class: classType,
+      designation,
+      maxHp,
+      currentHp: maxHp,
+      baseDamage,
+      intent,
+      chargeTurns: 0,
+      evadeActive: intent === 'EVADE',
+      nodeIndex,
+      scale,
+    },
+    affinity,
+  );
 }
 
 export function spawnEnemyProfile(
@@ -131,6 +155,54 @@ function rollHardTestIntent(): EnemyIntent {
   if (roll < 0.5) return 'EVADE';
   if (roll < 0.7) return 'STRIP_STAMINA';
   return 'STRIKE';
+}
+
+/** Defend-the-Rift horde — survive N enemy turns; near-indestructible. */
+export function spawnDefendRiftHordeProfile(nodeIndex: number): EnemyCombatProfile {
+  const scale = getNodeScale(nodeIndex) * 1.35;
+  const maxHp = 9999;
+  const baseDamage = Math.floor(CLASS_BASE_DAMAGE.ABOMINATION * scale * 1.2);
+  const affinity = resolveEnemyAffinity('ABOMINATION', true, 60);
+
+  return finalizeEnemyProfile(
+    {
+      class: 'ABOMINATION',
+      designation: 'RIFT DEFENSE HORDE // EVAC INTERDICTION',
+      maxHp,
+      currentHp: maxHp,
+      baseDamage,
+      intent: 'STRIKE',
+      chargeTurns: 0,
+      evadeActive: false,
+      nodeIndex,
+      scale,
+    },
+    affinity,
+  );
+}
+
+export function spawnVeilStalkerProfile(nodeIndex: number): EnemyCombatProfile {
+  const scale = getNodeScale(nodeIndex) * 1.15;
+  const maxHp = Math.floor(CLASS_BASE_HP.APPARITION * scale * 1.2);
+  const baseDamage = Math.floor(CLASS_BASE_DAMAGE.APPARITION * scale * 1.1);
+  const affinity = resolveEnemyAffinity('APPARITION', true, 80);
+
+  return finalizeEnemyProfile(
+    {
+      class: 'APPARITION',
+      designation: 'VEIL STALKER // HUNTER MANIFEST',
+      maxHp,
+      currentHp: maxHp,
+      baseDamage,
+      intent: 'STRIKE',
+      chargeTurns: 0,
+      evadeActive: false,
+      nodeIndex,
+      scale,
+      isVeilStalker: true,
+    },
+    affinity,
+  );
 }
 
 export function createEasyTestEnemy(): EnemyCombatProfile {

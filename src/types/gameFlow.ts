@@ -7,6 +7,8 @@ export type AppScreen =
   | 'SKILL_CHECK'
   | 'REST'
   | 'BLACK_MARKET'
+  | 'RESOURCE_HARVEST'
+  | 'EXTRACTION_REVIEW'
   | 'COMBAT'
   | 'RUN_PROGRESS'
   | 'RUN_COMPLETE'

@@ -1,6 +1,19 @@
 import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import { pickRandomClimateCluster, getClusterDefinition } from '../data/climateClusters';
-import { createEasyTestEnemy, createHardTestEnemy, spawnBiomeEnemyProfile, spawnEnemyProfile } from '../data/enemies';
+import {
+  createEasyTestEnemy,
+  createHardTestEnemy,
+  spawnBiomeEnemyProfile,
+  spawnDefendRiftHordeProfile,
+  spawnEnemyProfile,
+  spawnVeilStalkerProfile,
+} from '../data/enemies';
+import {
+  applyEliteModifierToEnvironment,
+  ELITE_MODIFIER_LABELS,
+  rollEliteModifier,
+} from '../data/eliteModifierEngine';
+import { isCollapseForwardNode } from '../data/pocketDimensionEngine';
 import {
   buildEncounter,
   getThemedSkillChecks,
@@ -17,7 +30,6 @@ import {
   RadarDot,
   RunState,
   SkillCheckEvent,
-  SCAN_ENGAGE_STAMINA_COST,
   Trinket,
   TOTAL_RUN_NODES,
 } from '../types/run';
@@ -31,31 +43,85 @@ import {
   IncursionNode,
   NarrativeEventNode,
 } from '../types/game';
-import { initializeIncursionPipeline } from '../data/macroStoryPipeline';
+import { initializeSectorRun } from '../data/macroStoryPipeline';
 import {
-  pickMatrixEventForEncounter,
   primeNarrativeEnvironment,
   resolveMatrixNarrativeChoice,
   rollVirtualD20,
 } from '../data/narrativeEncounterMatrix';
+import { pickSectorNarrativeForNode } from '../data/sectorNarrativeEngine';
 import {
-  BOSS_ENCOUNTER_INDEX,
+  applyNodeProgressionResonance,
+  applyResonanceAdjustment,
+  harvestResonanceSpikeForTier,
+} from '../data/resonanceProgressionEngine';
+import { isEmergencyRecallAvailable, isFullBlindZone } from '../data/sectorZoneEngine';
+import {
+  DEFEND_RIFT_SURVIVAL_TURNS,
+  EMERGENCY_EXTRACT_CARGO_BLEED_PCT,
+  MASTER_EXTRACTION_PAYOUT_MULTIPLIER,
+} from '../types/sectorPacing';
+import type { ExtractionReviewKind } from '../types/game';
+import { ENVIRONMENT_DISPLAY_LABEL } from '../types/sector';
+import {
   createBossProfileForDepth,
-  createPlaceholderDepthPath,
-  finalizeClusterForScan,
   findVectorInCluster,
-  generateDepthEncounterMatrix,
   getBiomeContextLog,
   isBossNodeType,
 } from '../data/descentEngine';
+import {
+  applyResonanceDelta,
+  applyVectorSeveredToGraph,
+  buildScannerCluster,
+  ensureForwardVectorsOnGraph,
+  resolveScannerGraphNodeId,
+  getGreedZoneActive,
+} from '../data/sectorGraphEngine';
+import {
+  applyResonanceEscalationsOnSpike,
+  clearVeilStalkerHunt,
+  consumeExtractionDecoy,
+  isTerminalBlindActive,
+} from '../data/resonanceEscalationEngine';
+import {
+  affinityCombatLogLine,
+  applyBlindBreachPenalty,
+  buildEnvironmentalModifiersForNode,
+  environmentAdvantageLogLine,
+} from '../data/combatEnvironmentEngine';
+import {
+  addLootToContainment,
+  applyDataBleedToCargo,
+  applyEmergencyExtractBleed,
+  buildHarvestLoot,
+  calculateCargoMarketValue,
+  calculateGridOccupancy,
+  getCargoResonanceMultiplier,
+  placeCargoFromContainment,
+  relocateCargoItem as relocateCargoItemState,
+  resetCargoInstanceCounter,
+  scaledLootCount,
+  hasCargoItem,
+  consumeCargoItem,
+} from '../data/cargoGridEngine';
+import { CARGO_ITEM_CATALOG, HARVEST_YIELD_OPTIONS } from '../types/cargoGrid';
+import type { HarvestYieldTier } from '../types/cargoGrid';
+import {
+  MAX_SECTOR_NODES,
+  RESONANCE_TIER_DATA_BLEED,
+  VEIL_STALKER_AMBUSH_CHANCE,
+} from '../types/sector';
+import { SANCTUARY_RETUNE_ATTUNEMENT } from '../types/sector';
 import { spawnBossEnemyProfile } from '../data/bossCombat';
-import { catalogItemForId, createDefaultIncursionInventory } from '../data/incursionInventory';
+import { createDefaultIncursionInventory } from '../data/incursionInventory';
 import { BLACK_MARKET_ITEM_PRICE } from '../data/blackMarket';
+import type { CargoItemId } from '../types/cargoGrid';
 import type { IncursionConsumableId, IncursionConsumableUseResult } from '../types/incursionInventory';
 
 export interface RunStartConfig {
   factionPerks?: FactionModifiers;
   unlockedBiomes?: BiomeType[];
+  sectorTier?: number;
 }
 
 interface RunContextType {
@@ -75,32 +141,40 @@ interface RunContextType {
   applyTrinket: (trinket: Trinket) => void;
   preparePostCombatBoons: () => Trinket[];
   applySkillCheckTier: (tier: 'CRITICAL_SUCCESS' | 'SUCCESS' | 'FAILURE' | 'CRITICAL_DESYNC', logLine: string) => void;
-  applyRestChoice: (type: 'REST' | 'REPAIR') => void;
+  applyRestChoice: (type: 'REST' | 'REPAIR' | 'RETUNE') => void;
   getCurrentEncounter: () => EncounterNode | null;
   getCurrentSkillCheck: () => SkillCheckEvent | null;
   endRun: (reason: string) => void;
   setPendingAmbush: (value: boolean) => void;
   clearPendingAmbush: () => void;
-  assignNarrativeForCombat: (nodeIndex: number) => void;
+  assignNarrativeForCombat: (encounterNode?: IncursionNode | null) => void;
   getCurrentNarrativeNode: () => NarrativeEventNode | null;
   resolveNarrativeCheck: (choice: 'A' | 'B', status: CheckStatus) => string;
   activeIncursion: ActiveIncursionState;
   getCurrentEncounterNode: () => import('../types/game').IncursionNode | null;
   stageEncounterClear: (message: string) => {
-    route: 'NEXT_NODE' | 'DEPTH_ADVANCE' | 'HUB_VICTORY';
-    nextDepth?: number;
+    route: 'NEXT_NODE' | 'HUB_VICTORY';
   };
   continueFromProgressCheckpoint: () => {
-    route: 'NEXT_NODE' | 'DEPTH_ADVANCE' | 'HUB_VICTORY';
-    nextDepth?: number;
+    route: 'NEXT_NODE' | 'HUB_VICTORY';
   };
+  focusPreviewNode: () => boolean;
+  calculateSectorExtractionPayout: () => number;
+  placeCargoItem: (instanceId: string, row: number, col: number) => boolean;
+  relocateCargoItem: (instanceId: string, row: number, col: number) => boolean;
+  applyHarvestChoice: (tier: HarvestYieldTier) => { logLines: string[]; ambushTriggered: boolean };
+  useFocusingAmpouleFromCargo: () => boolean;
+  beginPostCombatHarvest: () => void;
+  beginResourceNodeHarvest: () => void;
   prepareBossEncounter: () => void;
   prepareStandardCombatEncounter: () => void;
+  prepareHarvestAmbushEncounter: () => void;
   shiftBossPhase: (phase: number) => void;
   setIncursionMapMode: (mode: IncursionMapMode) => void;
   purgeEncounterState: () => void;
   commitNodeEncounter: (nodeId: string) => import('../types/game').RunNodeType | null;
   getCurrentVectorCluster: () => import('../types/game').IncursionNode[];
+  ensureScannerGraphExpanded: () => void;
   getSelectedVectorNode: () => import('../types/game').IncursionNode | null;
   openScanPreview: (nodeId: string) => void;
   closeScanPreview: () => void;
@@ -114,18 +188,55 @@ interface RunContextType {
   /** Applies consumable heal to run state (non-combat screens). */
   applyIncursionConsumableHeal: (amount: number) => void;
   awardRunCredits: (amount: number, reason: string) => void;
-  purchaseBlackMarketItem: (itemId: IncursionConsumableId) => { success: boolean; logLine: string } | null;
+  purchaseBlackMarketCargo: (itemId: CargoItemId) => { success: boolean; logLine: string } | null;
+  stageSafeAnchorReview: (anchorIndex: 1 | 2 | 3) => void;
+  confirmSafeAnchorExtraction: (anchorIndex: 1 | 2 | 3) => void;
+  continueFromExtractionReview: () => void;
+  adjustResonance: (amount: number, reason: string) => number;
+  initiateEmergencyRecall: () => boolean;
+  completeDefendRiftVictory: () => void;
+  confirmMasterExtraction: () => void;
+  applyEmergencyRecallCargoBleed: () => number;
 }
 
 const RunContext = createContext<RunContextType | undefined>(undefined);
 
+function persistExpandedSectorGraph(inc: ActiveIncursionState): ActiveIncursionState {
+  const resolvedNodeId = resolveScannerGraphNodeId(inc.sectorGraph, inc.currentNodeId);
+  const expandedGraph = ensureForwardVectorsOnGraph(inc.sectorGraph, resolvedNodeId);
+  if (Object.keys(expandedGraph.nodes).length === Object.keys(inc.sectorGraph.nodes).length) {
+    return inc;
+  }
+  return { ...inc, sectorGraph: expandedGraph };
+}
+
+function buildSectorCluster(inc: ActiveIncursionState): IncursionNode[] {
+  if (!inc.sectorGraph.entryId) return [];
+  const clusterOptions = {
+    graph: inc.sectorGraph,
+    currentNodeId: resolveScannerGraphNodeId(inc.sectorGraph, inc.currentNodeId),
+    nodesCleared: inc.nodesCleared,
+    resonancePercent: inc.resonance.percent,
+    bossDefeated: inc.bossDefeated,
+    greedZoneActive: getGreedZoneActive(inc.nodesCleared),
+    clearedSafeAnchors: inc.clearedSafeAnchors,
+    collapseActive: inc.collapseActive,
+    masterLinkUsed: inc.masterLinkUsed,
+    extractionDecoyPending: inc.resonanceEscalations.extractionDecoyPending,
+    relayExtractionNodeId: inc.resonanceEscalations.relayExtractionNodeId,
+  };
+  if (inc.nodesCleared >= MAX_SECTOR_NODES && !inc.collapseActive && !inc.bossDefeated) {
+    return buildScannerCluster(clusterOptions).filter((node) => node.isExtractionNode);
+  }
+  return buildScannerCluster(clusterOptions);
+}
+
 function resolveActiveVectorNode(inc: ActiveIncursionState): IncursionNode | null {
   if (inc.selectedVectorId) {
-    const cluster = inc.encounterOptionClusters[inc.currentEncounterIndex] ?? [];
-    const found = findVectorInCluster(cluster, inc.selectedVectorId);
+    const found = findVectorInCluster(buildSectorCluster(inc), inc.selectedVectorId);
     if (found) return found;
   }
-  return inc.encounterPath[inc.currentEncounterIndex] ?? null;
+  return inc.encounterPath[inc.nodesCleared] ?? inc.encounterPath[inc.currentEncounterIndex] ?? null;
 }
 
 function aggregateModifiers(trinkets: Trinket[]) {
@@ -203,38 +314,49 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     };
     runStateRef.current = next;
     setRunState(next);
-    const pipeline = initializeIncursionPipeline(1);
+    const sectorTier = config?.sectorTier ?? 1;
+    const sectorInit = initializeSectorRun(sectorTier);
     const incursion: ActiveIncursionState = {
       ...createDefaultActiveIncursionState(),
       isRunActive: true,
       inventory: createDefaultIncursionInventory(),
-      currentDepth: 1,
+      currentDepth: sectorTier,
       currentEncounterIndex: 0,
-      progress: pipeline.progress,
-      encounterPath: pipeline.encounterPath,
-      encounterOptionClusters: pipeline.encounterOptionClusters,
-      earlySanctuarySpawned: pipeline.earlySanctuarySpawned,
+      progress: sectorInit.progress,
+      encounterPath: sectorInit.encounterPath,
+      encounterOptionClusters: [],
+      earlySanctuarySpawned: false,
       selectedVectorId: null,
       previewNodeId: null,
       scanConfirmOverlayVisible: false,
       mapMode: 'SCANNING_HUB',
       lastCheckpointMessage: null,
       runCredits: 0,
+      sectorGraph: sectorInit.sectorGraph,
+      currentNodeId: sectorInit.currentNodeId,
+      nodesCleared: sectorInit.nodesCleared,
+      attunement: sectorInit.attunement,
+      resonance: sectorInit.resonance,
+      focusedNodeIds: sectorInit.focusedNodeIds,
+      bossDefeated: sectorInit.bossDefeated,
+      primeExtractionBonus: sectorInit.primeExtractionBonus,
+      sectorTier: sectorInit.sectorTier,
     };
     activeIncursionRef.current = incursion;
     setActiveIncursion(incursion);
     narrativeNodeRef.current = null;
+    resetCargoInstanceCounter();
     setScanSessionKey(1);
     setPostCombatBoonChoices([]);
     const biomeTag = (config?.unlockedBiomes ?? ['HOSPITAL', 'ALLEYWAYS']).join(', ');
     setRunLog([
-      '>> RUN INITIALIZED — VEIL DESCENT ENGINE ONLINE.',
-      `>> DEPTH 1 THRESHOLD — 10-ENCOUNTER INCURSION GRID GENERATED.`,
-      `>> SCANNING HUB ACTIVE — TACTICAL SWEEP INITIALIZING.`,
+      '>> RUN INITIALIZED — OPEN SECTOR ENGINE ONLINE.',
+      `>> SECTOR TIER ${sectorTier} — BRANCHING TOPOLOGY PRE-GENERATED.`,
+      `>> SCANNING HUB ACTIVE — SPECTRAL SWEEP INITIALIZING.`,
       `>> CLIMATE CLUSTER LOCKED: ${clusterDef.name}`,
       `>> AUTHORIZED BIOMES: ${biomeTag}`,
       `>> ${clusterDef.tagline}`,
-      ...pipeline.initLogLines,
+      ...sectorInit.initLogLines,
     ]);
   }, []);
 
@@ -424,10 +546,26 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     appendRunLog(logLine);
   }, [appendRunLog]);
 
-  const applyRestChoice = useCallback((type: 'REST' | 'REPAIR') => {
+  const applyRestChoice = useCallback((type: 'REST' | 'REPAIR' | 'RETUNE') => {
+    if (type === 'RETUNE') {
+      setActiveIncursion((prev) => {
+        const next = {
+          ...prev,
+          attunement: {
+            ...prev.attunement,
+            current: Math.min(prev.attunement.max, prev.attunement.current + SANCTUARY_RETUNE_ATTUNEMENT),
+          },
+        };
+        activeIncursionRef.current = next;
+        return next;
+      });
+      appendRunLog(`>> Sanctuary Re-Tune — +${SANCTUARY_RETUNE_ATTUNEMENT} attunement restored.`);
+      return;
+    }
+
     setRunState((prev) => {
-      if (type === 'REST') {
-        const restore = Math.floor(prev.maxStamina * 0.4);
+      if (type === 'REPAIR') {
+        const restore = Math.floor(prev.maxStamina * 0.25);
         const next = { ...prev, currentStamina: Math.min(prev.currentStamina + restore, prev.maxStamina) };
         runStateRef.current = next;
         return next;
@@ -440,7 +578,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       runStateRef.current = next;
       return next;
     });
-    appendRunLog(type === 'REST' ? '>> Sanctuary Rest — stamina reserves replenished.' : '>> Anchor Repair — soul anchor integrity restored.');
+    appendRunLog(
+      type === 'REST'
+        ? '>> Sanctuary Rest — soul anchor integrity restored.'
+        : '>> Field Repair — stamina reserves replenished.',
+    );
   }, [appendRunLog]);
 
   const endRun = useCallback((reason: string) => {
@@ -538,12 +680,29 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const assignNarrativeForCombat = useCallback((nodeIndex: number) => {
+  const enrichNarrativeNode = useCallback((node: NarrativeEventNode): NarrativeEventNode => {
     const inc = activeIncursionRef.current;
-    const node = pickMatrixEventForEncounter(nodeIndex, inc.progress);
+    const matrixId = node.matrixEventId ?? node.id;
+    if (matrixId !== 'sector-07') return node;
+    const hasGrapple = hasCargoItem(inc.cargo, 'gravity-grapple');
+    return {
+      ...node,
+      choiceB: {
+        ...node.choiceB,
+        locked: !hasGrapple,
+        lockReason: hasGrapple ? undefined : 'CARGO: GRAVITY GRAPPLE REQUIRED',
+      },
+    };
+  }, []);
+
+  const assignNarrativeForCombat = useCallback((encounterNode?: IncursionNode | null) => {
+    const inc = activeIncursionRef.current;
+    const vectorNode = encounterNode ?? resolveActiveVectorNode(inc);
+    const node = enrichNarrativeNode(
+      pickSectorNarrativeForNode(vectorNode, inc.progress, inc.nodesCleared),
+    );
     narrativeNodeRef.current = node;
-    const primed = primeNarrativeEnvironment(node);
-    const encounterNode = resolveActiveVectorNode(inc);
+    const primed = primeNarrativeEnvironment(node, vectorNode?.environmentType);
     setActiveIncursion((prev) => {
       const next = {
         ...prev,
@@ -559,12 +718,14 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       activeIncursionRef.current = next;
       return next;
     });
-    if (encounterNode?.biome) {
-      appendRunLog(`>> ${getBiomeContextLog(encounterNode.biome)}`);
+    if (vectorNode?.environmentType) {
+      appendRunLog(`>> ENVIRONMENT LOCK — ${ENVIRONMENT_DISPLAY_LABEL[vectorNode.environmentType].toUpperCase()}.`);
+    } else if (vectorNode?.biome) {
+      appendRunLog(`>> ${getBiomeContextLog(vectorNode.biome)}`);
     }
     appendRunLog(`>> NARRATIVE VECTOR LOCKED — ${node.title}.`);
     appendRunLog('>> ENCOUNTER LAYER MOUNTED — FIELD CALIBRATION REQUIRED.');
-  }, [appendRunLog]);
+  }, [appendRunLog, enrichNarrativeNode]);
 
   const getCurrentNarrativeNode = useCallback((): NarrativeEventNode | null => {
     return narrativeNodeRef.current;
@@ -593,6 +754,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       },
       inc.currentEncounterIndex,
       { forceSuccess: status === 'SUCCESS', forceFailure: status === 'FAILURE' },
+      inc.cargo,
     );
 
     setActiveIncursion((prev) => {
@@ -602,6 +764,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         environmentalModifiers: result.environmentalModifiers,
         lastCheckStatus: result.status,
         activeChoice: choice,
+        cargo: result.cargoPatch ?? prev.cargo,
       };
       activeIncursionRef.current = next;
       return next;
@@ -626,33 +789,27 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     return inc.encounterPath[inc.currentEncounterIndex] ?? null;
   }, []);
 
-  const getCurrentVectorCluster = useCallback(() => {
+  const ensureScannerGraphExpanded = useCallback(() => {
     const inc = activeIncursionRef.current;
-    const raw = inc.encounterOptionClusters[inc.currentEncounterIndex] ?? [];
-    return finalizeClusterForScan(raw, inc.currentEncounterIndex, inc.encounterPath, inc.currentDepth);
+    const expandedInc = persistExpandedSectorGraph(inc);
+    if (expandedInc === inc) return;
+    activeIncursionRef.current = expandedInc;
+    setActiveIncursion(expandedInc);
   }, []);
+
+  const getCurrentVectorCluster = useCallback(() => buildSectorCluster(activeIncursionRef.current), []);
 
   const getSelectedVectorNode = useCallback(() => {
     const inc = activeIncursionRef.current;
-    if (!inc.selectedVectorId) return inc.encounterPath[inc.currentEncounterIndex] ?? null;
-    const cluster = finalizeClusterForScan(
-      inc.encounterOptionClusters[inc.currentEncounterIndex] ?? [],
-      inc.currentEncounterIndex,
-      inc.encounterPath,
-      inc.currentDepth,
-    );
-    return findVectorInCluster(cluster, inc.selectedVectorId) ?? inc.encounterPath[inc.currentEncounterIndex] ?? null;
+    if (!inc.selectedVectorId) return inc.encounterPath[inc.nodesCleared] ?? null;
+    const cluster = buildSectorCluster(inc);
+    return findVectorInCluster(cluster, inc.selectedVectorId) ?? inc.encounterPath[inc.nodesCleared] ?? null;
   }, []);
 
   const openScanPreview = useCallback((nodeId: string) => {
     const inc = activeIncursionRef.current;
     if (inc.mapMode !== 'SCANNING_HUB') return;
-    const cluster = finalizeClusterForScan(
-      inc.encounterOptionClusters[inc.currentEncounterIndex] ?? [],
-      inc.currentEncounterIndex,
-      inc.encounterPath,
-      inc.currentDepth,
-    );
+    const cluster = buildSectorCluster(inc);
     if (!findVectorInCluster(cluster, nodeId)) return;
     setActiveIncursion((prev) => {
       const next = { ...prev, previewNodeId: nodeId, scanConfirmOverlayVisible: false };
@@ -672,13 +829,186 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   const getPreviewNode = useCallback((): IncursionNode | null => {
     const inc = activeIncursionRef.current;
     if (!inc.previewNodeId) return null;
-    const cluster = finalizeClusterForScan(
-      inc.encounterOptionClusters[inc.currentEncounterIndex] ?? [],
-      inc.currentEncounterIndex,
-      inc.encounterPath,
-      inc.currentDepth,
+    const cluster = buildSectorCluster(inc);
+    const node = findVectorInCluster(cluster, inc.previewNodeId);
+    if (!node) return null;
+    const isFocused = inc.focusedNodeIds.includes(node.id) || node.sectorMeta?.isFocused === true;
+    if (!isFocused || !node.sectorMeta) return node;
+    return {
+      ...node,
+      sectorMeta: { ...node.sectorMeta, isFocused: true },
+    };
+  }, []);
+
+  const focusPreviewNode = useCallback((): boolean => {
+    const inc = activeIncursionRef.current;
+    if (isFullBlindZone(inc.nodesCleared)) {
+      appendRunLog('[REJECTED] >> INNER SANCTUM — attunement reveal offline. Breach blind only.');
+      return false;
+    }
+    const cluster = buildSectorCluster(inc);
+    const preview = inc.previewNodeId
+      ? findVectorInCluster(cluster, inc.previewNodeId)
+      : null;
+    if (preview?.type === 'SAFE_ANCHOR_EXTRACTION' || preview?.type === 'MASTER_EXTRACTION_LINK') {
+      appendRunLog('>> EXTRACTION CONDUIT — intel pre-authenticated. No attunement required.');
+      return true;
+    }
+    if (!inc.previewNodeId || inc.attunement.current <= 0) {
+      appendRunLog('[REJECTED] >> Insufficient attunement for Focus Perception.');
+      return false;
+    }
+    if (inc.focusedNodeIds.includes(inc.previewNodeId)) {
+      appendRunLog('>> Vector already focused — spectral intel unlocked.');
+      return true;
+    }
+    setActiveIncursion((prev) => {
+      const next = {
+        ...prev,
+        attunement: { ...prev.attunement, current: prev.attunement.current - 1 },
+        focusedNodeIds: [...prev.focusedNodeIds, prev.previewNodeId!],
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    appendRunLog('>> FOCUS PERCEPTION — attunement spent. Spectral intel unlocked.');
+    return true;
+  }, [appendRunLog]);
+
+  const calculateSectorExtractionPayout = useCallback((): number => {
+    const inc = activeIncursionRef.current;
+    const pathBonus = inc.encounterPath.reduce((sum, node) => sum + (node.sectorMeta?.creditBonus ?? 0), 0);
+    const cargoValue = calculateCargoMarketValue(inc.cargo);
+    let total = inc.runCredits + pathBonus + cargoValue + 150;
+    if (inc.primeExtractionBonus) total = Math.floor(total * 1.5);
+    if (inc.masterLinkUsed) {
+      total = Math.floor(total * MASTER_EXTRACTION_PAYOUT_MULTIPLIER);
+    }
+    if (getGreedZoneActive(inc.nodesCleared)) total = Math.floor(total * 1.25);
+    return total;
+  }, []);
+
+  const relocateCargoItem = useCallback((instanceId: string, row: number, col: number): boolean => {
+    const inc = activeIncursionRef.current;
+    const wasInContainment = inc.cargo.containment.some((item) => item.instanceId === instanceId);
+    const wasInGrid = inc.cargo.grid.placed.some((item) => item.instanceId === instanceId);
+    const nextCargo = relocateCargoItemState(inc.cargo, instanceId, row, col);
+    if (!nextCargo) return false;
+
+    setActiveIncursion((prev) => {
+      const next = { ...prev, cargo: nextCargo };
+      activeIncursionRef.current = next;
+      return next;
+    });
+
+    const occupancy = Math.round(calculateGridOccupancy(nextCargo) * 100);
+    const occupancyNote = getCargoResonanceMultiplier(nextCargo) > 1
+      ? ' — RESONANCE ×2 ACTIVE'
+      : '';
+    if (wasInContainment) {
+      appendRunLog(`>> CARGO PACKED — grid occupancy ${occupancy}%${occupancyNote}.`);
+    } else if (wasInGrid) {
+      appendRunLog(`>> CARGO REPACKED — grid occupancy ${occupancy}%${occupancyNote}.`);
+    }
+    return true;
+  }, [appendRunLog]);
+
+  const placeCargoItem = relocateCargoItem;
+
+  const applyHarvestChoice = useCallback((tier: HarvestYieldTier): { logLines: string[]; ambushTriggered: boolean } => {
+    const inc = activeIncursionRef.current;
+    const node = resolveActiveVectorNode(inc);
+    const option = HARVEST_YIELD_OPTIONS.find((entry) => entry.tier === tier)!;
+    const isElite = node?.type === 'ELITE_COMBAT' || node?.sectorMeta?.combatTier === 'ELITE';
+    const lootIds = buildHarvestLoot(tier, inc.sectorTier, isElite, inc.nodesCleared);
+
+    let nextCargo = inc.cargo;
+    lootIds.forEach((itemId) => {
+      const count = scaledLootCount(option.yieldPct, itemId === 'veil-residue-bulk' ? 1 : 1);
+      nextCargo = addLootToContainment(nextCargo, itemId, count);
+    });
+
+    const harvestSpike = harvestResonanceSpikeForTier(tier);
+    const nextResonance = applyResonanceAdjustment(
+      inc.resonance.percent,
+      harvestSpike,
+      inc.collapseActive,
     );
-    return findVectorInCluster(cluster, inc.previewNodeId);
+
+    const ambushTriggered = Math.random() * 100 < option.ambushRiskPct;
+    const logLines = [
+      `>> ${option.label} — ${option.yieldPct}% yield routed to containment.`,
+      `>> HARVEST SPIKE — RESONANCE +${harvestSpike}% (one-time).`,
+    ];
+    if (ambushTriggered) logLines.push('>> DEEP EXTRACT HEAT — hostile ambush frequency detected.');
+
+    setActiveIncursion((prev) => {
+      const next = {
+        ...prev,
+        cargo: nextCargo,
+        resonance: { percent: nextResonance },
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+
+    if (ambushTriggered) {
+      setRunState((prev) => {
+        const next = { ...prev, pendingAmbush: true };
+        runStateRef.current = next;
+        return next;
+      });
+    }
+
+    return { logLines, ambushTriggered };
+  }, []);
+
+  const useFocusingAmpouleFromCargo = useCallback((): boolean => {
+    const inc = activeIncursionRef.current;
+    if (inc.attunement.current >= inc.attunement.max) {
+      appendRunLog('[REJECTED] >> Attunement already at maximum.');
+      return false;
+    }
+    const ampoule = inc.cargo.grid.placed.find((item) => item.itemId === 'focusing-ampoule');
+    if (!ampoule) {
+      appendRunLog('[REJECTED] >> No Focusing Ampoule packed in cargo grid.');
+      return false;
+    }
+
+    const nextPlaced = inc.cargo.grid.placed.filter((item) => item.instanceId !== ampoule.instanceId);
+    setActiveIncursion((prev) => {
+      const next = {
+        ...prev,
+        attunement: {
+          ...prev.attunement,
+          current: Math.min(prev.attunement.max, prev.attunement.current + 1),
+        },
+        cargo: {
+          ...prev.cargo,
+          grid: { placed: nextPlaced },
+        },
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    appendRunLog('>> FOCUSING AMPOULE DEPLOYED — +1 attunement restored.');
+    return true;
+  }, [appendRunLog]);
+
+  const beginPostCombatHarvest = useCallback(() => {
+    setActiveIncursion((prev) => {
+      const next = { ...prev, pendingHarvestReturn: 'POST_COMBAT' as const, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
+      activeIncursionRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const beginResourceNodeHarvest = useCallback(() => {
+    setActiveIncursion((prev) => {
+      const next = { ...prev, pendingHarvestReturn: 'COMPLETE_NODE' as const, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
+      activeIncursionRef.current = next;
+      return next;
+    });
   }, []);
 
   const prepareBossEncounter = useCallback(() => {
@@ -686,16 +1016,20 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const encounterNode = resolveActiveVectorNode(inc);
     if (!encounterNode || !isBossNodeType(encounterNode.type)) return;
 
-    const bossProfile = createBossProfileForDepth(inc.currentDepth);
+    const bossProfile = createBossProfileForDepth(inc.sectorTier);
     const sector = runStateRef.current.currentSector ?? INITIAL_SECTOR_POOL[0];
     const pendingEnemy = spawnBossEnemyProfile(
       bossProfile,
       sector,
-      inc.currentEncounterIndex,
+      inc.nodesCleared,
+    );
+    const envModifiers = buildEnvironmentalModifiersForNode(
+      encounterNode.environmentType,
+      inc.resonance.percent,
     );
 
     setActiveIncursion((prev) => {
-      const next = { ...prev, bossProfile };
+      const next = { ...prev, bossProfile, environmentalModifiers: envModifiers };
       activeIncursionRef.current = next;
       return next;
     });
@@ -716,20 +1050,42 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     });
 
     appendRunLog(`>> ${getBiomeContextLog(encounterNode.biome)}`);
+    if (encounterNode.environmentType) {
+      appendRunLog(environmentAdvantageLogLine(encounterNode.environmentType));
+    }
+    appendRunLog('>> AFFINITY CORPOREAL — prime anomaly dense tissue detected.');
     appendRunLog(`>> BOSS SIGNATURE: ${bossProfile.name} // ${bossProfile.maxHp} HP`);
   }, [appendRunLog]);
 
   const prepareStandardCombatEncounter = useCallback(() => {
     const inc = activeIncursionRef.current;
     const encounterNode = resolveActiveVectorNode(inc);
-    if (!encounterNode || encounterNode.type !== 'STANDARD_COMBAT') return;
+    if (
+      !encounterNode
+      || (encounterNode.type !== 'STANDARD_COMBAT' && encounterNode.type !== 'ELITE_COMBAT')
+    ) return;
 
     const prev = runStateRef.current;
     const sector = prev.currentSector ?? INITIAL_SECTOR_POOL[0];
+    const isElite = encounterNode.type === 'ELITE_COMBAT';
+    let envModifiers = buildEnvironmentalModifiersForNode(
+      encounterNode.environmentType,
+      inc.resonance.percent,
+    );
+    if (isElite) {
+      const modifier = rollEliteModifier(encounterNode.id);
+      envModifiers = applyEliteModifierToEnvironment(envModifiers, modifier);
+      appendRunLog(`>> ELITE MODIFIER — ${ELITE_MODIFIER_LABELS[modifier]}`);
+    }
+    const forcedAffinity = encounterNode.sectorMeta?.probableAffinity;
     const pendingEnemy = spawnBiomeEnemyProfile(
       'CITY_STREETS',
-      inc.currentEncounterIndex,
-      prev.pendingAmbush,
+      inc.nodesCleared,
+      isElite || prev.pendingAmbush,
+      {
+        resonancePercent: inc.resonance.percent,
+        forcedAffinity,
+      },
     );
     const pendingEncounter = buildEncounter(
       inc.currentEncounterIndex,
@@ -737,6 +1093,15 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       'COMBAT',
       encounterNode.label,
     );
+
+    setActiveIncursion((prevState) => ({
+      ...prevState,
+      environmentalModifiers: envModifiers,
+    }));
+    activeIncursionRef.current = {
+      ...activeIncursionRef.current,
+      environmentalModifiers: envModifiers,
+    };
 
     setRunState((prevState) => {
       const next = {
@@ -750,6 +1115,150 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     });
 
     appendRunLog(`>> ${getBiomeContextLog(encounterNode.biome)}`);
+    if (encounterNode.environmentType) {
+      appendRunLog(environmentAdvantageLogLine(encounterNode.environmentType));
+    }
+    if (pendingEnemy.affinity) {
+      appendRunLog(affinityCombatLogLine(pendingEnemy.affinity));
+    }
+    appendRunLog(`>> HOSTILE SIGNATURE: ${pendingEnemy.designation} [${pendingEnemy.class}] HP ${pendingEnemy.maxHp}.`);
+  }, [appendRunLog]);
+
+  const prepareDefendRiftEncounter = useCallback(() => {
+    const inc = activeIncursionRef.current;
+    const prev = runStateRef.current;
+    const sector = prev.currentSector ?? INITIAL_SECTOR_POOL[0];
+    const envModifiers = {
+      ...buildEnvironmentalModifiersForNode('BLEEDING_HIGH_RISE', inc.resonance.percent),
+      combatObjective: 'SURVIVE_TURNS' as const,
+      survivalTurnsRequired: DEFEND_RIFT_SURVIVAL_TURNS,
+    };
+    const pendingEnemy = spawnDefendRiftHordeProfile(inc.nodesCleared);
+
+    setActiveIncursion((prevState) => ({
+      ...prevState,
+      environmentalModifiers: envModifiers,
+      defendRiftActive: true,
+      mapMode: 'NODE_ENGAGED',
+    }));
+    activeIncursionRef.current = {
+      ...activeIncursionRef.current,
+      environmentalModifiers: envModifiers,
+      defendRiftActive: true,
+      mapMode: 'NODE_ENGAGED',
+    };
+
+    setRunState((prevState) => {
+      const next = {
+        ...prevState,
+        currentSector: sector,
+        pendingEnemy,
+        pendingEncounter: buildEncounter(
+          inc.currentEncounterIndex,
+          sector,
+          'COMBAT',
+          'DEFEND THE RIFT // EMERGENCY RECALL',
+        ),
+      };
+      runStateRef.current = next;
+      return next;
+    });
+
+    appendRunLog('>> EMERGENCY RECALL — DEFEND THE RIFT PROTOCOL ENGAGED.');
+    appendRunLog(`>> SURVIVE ${DEFEND_RIFT_SURVIVAL_TURNS} HOSTILE TURN CYCLES TO OPEN EVAC CONDUIT.`);
+    appendRunLog(`>> HOSTILE SIGNATURE: ${pendingEnemy.designation} [${pendingEnemy.class}] HP ${pendingEnemy.maxHp}.`);
+  }, [appendRunLog]);
+
+  const prepareVeilStalkerEncounter = useCallback(() => {
+    const inc = activeIncursionRef.current;
+    const encounterNode = resolveActiveVectorNode(inc);
+    const prev = runStateRef.current;
+    const sector = prev.currentSector ?? INITIAL_SECTOR_POOL[0];
+    const pendingEnemy = spawnVeilStalkerProfile(inc.nodesCleared);
+    const envModifiers = buildEnvironmentalModifiersForNode(
+      encounterNode?.environmentType,
+      inc.resonance.percent,
+    );
+
+    setActiveIncursion((prevState) => ({
+      ...prevState,
+      environmentalModifiers: envModifiers,
+    }));
+    activeIncursionRef.current = {
+      ...activeIncursionRef.current,
+      environmentalModifiers: envModifiers,
+    };
+
+    setRunState((prevState) => {
+      const next = {
+        ...prevState,
+        currentSector: sector,
+        pendingEnemy,
+        pendingEncounter: buildEncounter(
+          inc.currentEncounterIndex,
+          sector,
+          'COMBAT',
+          'VEIL STALKER AMBUSH',
+        ),
+        pendingAmbush: true,
+      };
+      runStateRef.current = next;
+      return next;
+    });
+
+    appendRunLog('>> VEIL STALKER MANIFEST — hunter signature locked.');
+    appendRunLog(`>> HOSTILE SIGNATURE: ${pendingEnemy.designation} [${pendingEnemy.class}] HP ${pendingEnemy.maxHp}.`);
+  }, [appendRunLog]);
+
+  const prepareHarvestAmbushEncounter = useCallback(() => {
+    const inc = activeIncursionRef.current;
+    const encounterNode = resolveActiveVectorNode(inc);
+    const prev = runStateRef.current;
+    const sector = prev.currentSector ?? INITIAL_SECTOR_POOL[0];
+    const envModifiers = buildEnvironmentalModifiersForNode(
+      encounterNode?.environmentType,
+      inc.resonance.percent,
+    );
+    const pendingEnemy = spawnBiomeEnemyProfile(
+      'CITY_STREETS',
+      inc.nodesCleared,
+      true,
+      { resonancePercent: inc.resonance.percent },
+    );
+    const pendingEncounter = buildEncounter(
+      inc.currentEncounterIndex,
+      sector,
+      'COMBAT',
+      encounterNode?.label ?? 'HARVEST AMBUSH',
+    );
+
+    setActiveIncursion((prevState) => ({
+      ...prevState,
+      environmentalModifiers: envModifiers,
+    }));
+    activeIncursionRef.current = {
+      ...activeIncursionRef.current,
+      environmentalModifiers: envModifiers,
+    };
+
+    setRunState((prevState) => {
+      const next = {
+        ...prevState,
+        currentSector: sector,
+        pendingEnemy,
+        pendingEncounter,
+      };
+      runStateRef.current = next;
+      return next;
+    });
+
+    appendRunLog('>> HARVEST AMBUSH — hostile manifest inbound.');
+    if (encounterNode?.environmentType) {
+      appendRunLog(environmentAdvantageLogLine(encounterNode.environmentType));
+    }
+    if (pendingEnemy.affinity) {
+      appendRunLog(affinityCombatLogLine(pendingEnemy.affinity));
+    }
     appendRunLog(`>> HOSTILE SIGNATURE: ${pendingEnemy.designation} [${pendingEnemy.class}] HP ${pendingEnemy.maxHp}.`);
   }, [appendRunLog]);
 
@@ -757,27 +1266,74 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     appendRunLog(`>> ${message}`);
 
     const inc = activeIncursionRef.current;
-    const completedIndex = inc.currentEncounterIndex;
-    const encounterPath = inc.encounterPath.map((n) =>
-      n.index === completedIndex ? { ...n, isCompleted: true } : n,
+    const completedNode = inc.encounterPath[inc.nodesCleared] ?? resolveActiveVectorNode(inc);
+    const completedIndex = inc.nodesCleared;
+
+    const encounterPath = inc.encounterPath.map((node, index) =>
+      index === completedIndex ? { ...node, isCompleted: true } : node,
     );
 
     narrativeNodeRef.current = null;
 
-    const incAfterClear: ActiveIncursionState = {
+    const graphNodes = { ...inc.sectorGraph.nodes };
+    if (completedNode && graphNodes[completedNode.id]) {
+      graphNodes[completedNode.id] = { ...graphNodes[completedNode.id], isCompleted: true };
+    }
+
+    const wasBoss = completedNode?.type === 'BOSS_COMBAT' || completedNode?.isAnomalyNest === true;
+    const nextNodesCleared = completedIndex + 1;
+    const nextCurrentNodeId =
+      completedNode?.id && graphNodes[completedNode.id]
+        ? completedNode.id
+        : inc.currentNodeId;
+
+    let nextCargo = inc.cargo;
+    if (inc.resonance.percent >= RESONANCE_TIER_DATA_BLEED && !nextCargo.dataBleedActive) {
+      nextCargo = { ...nextCargo, dataBleedActive: true };
+      appendRunLog('>> DATA_BLEED INFECTED — cargo market value erodes each node.');
+    }
+    if (nextCargo.dataBleedActive) {
+      const bleedResult = applyDataBleedToCargo(nextCargo);
+      nextCargo = bleedResult.cargo;
+      if (bleedResult.drainedValue > 0) {
+        appendRunLog(`>> DATA_BLEED — −${bleedResult.drainedValue} cargo value dissolved to ash.`);
+      }
+    }
+
+    const resolvedNextNodeId = resolveScannerGraphNodeId(
+      { ...inc.sectorGraph, nodes: graphNodes },
+      nextCurrentNodeId,
+    );
+    const expandedInc = persistExpandedSectorGraph({
       ...inc,
+      sectorGraph: { ...inc.sectorGraph, nodes: graphNodes },
+      currentNodeId: resolvedNextNodeId,
+    });
+
+    const incAfterClear: ActiveIncursionState = {
+      ...expandedInc,
+      currentNodeId: resolvedNextNodeId,
+      nodesCleared: nextNodesCleared,
+      currentEncounterIndex: nextNodesCleared,
       encounterPath,
+      cargo: nextCargo,
+      bossDefeated: wasBoss || inc.bossDefeated,
+      primeExtractionBonus: wasBoss ? true : inc.primeExtractionBonus,
+      pendingHarvestReturn: null,
       currentNarrativeId: null,
       activeChoice: null,
       bossProfile: null,
       selectedVectorId: null,
       previewNodeId: null,
       scanConfirmOverlayVisible: false,
+      mapMode: 'SCANNING_HUB',
+      lastCheckpointMessage: null,
     };
 
     setRunState((prev) => {
       const next = {
         ...prev,
+        currentNode: nextNodesCleared,
         pendingEncounter: null,
         pendingEnemy: null,
       };
@@ -785,70 +1341,21 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
 
-    const resetForScan = (base: ActiveIncursionState): ActiveIncursionState => ({
-      ...base,
-      currentNarrativeId: null,
-      activeChoice: null,
-      bossProfile: null,
-      mapMode: 'SCANNING_HUB',
-      lastCheckpointMessage: null,
-      previewNodeId: null,
-      scanConfirmOverlayVisible: false,
-    });
+    activeIncursionRef.current = incAfterClear;
+    setActiveIncursion(incAfterClear);
+    setScanSessionKey((k) => k + 1);
 
-    if (completedIndex >= BOSS_ENCOUNTER_INDEX) {
-      if (incAfterClear.currentDepth < 3) {
-        const nextDepth = incAfterClear.currentDepth + 1;
-        const { encounterOptionClusters, earlySanctuarySpawned } = generateDepthEncounterMatrix(nextDepth);
-        const nextInc = resetForScan({
-          ...incAfterClear,
-          currentDepth: nextDepth,
-          currentEncounterIndex: 0,
-          encounterPath: createPlaceholderDepthPath(),
-          encounterOptionClusters,
-          earlySanctuarySpawned,
-          selectedVectorId: null,
-        });
-        activeIncursionRef.current = nextInc;
-        setActiveIncursion(nextInc);
-        setRunState((prev) => {
-          const next = { ...prev, currentNode: 0, pendingEncounter: null, pendingEnemy: null };
-          runStateRef.current = next;
-          return next;
-        });
-        setScanSessionKey((k) => k + 1);
-        appendRunLog(`>> DEPTH ${nextDepth} UNLOCKED — SCANNING HUB RECALIBRATED.`);
-        return { route: 'DEPTH_ADVANCE' as const, nextDepth };
-      }
-
-      const nextInc = createDefaultActiveIncursionState();
-      activeIncursionRef.current = nextInc;
-      setActiveIncursion(nextInc);
-      return { route: 'HUB_VICTORY' as const };
+    if (wasBoss) {
+      appendRunLog('>> ANOMALY NEST NEUTRALIZED — MASTER EXTRACTION LINK ARMED.');
+    }
+    if (nextNodesCleared >= MAX_SECTOR_NODES && !inc.collapseActive) {
+      appendRunLog('>> SECTOR CAP REACHED — MASTER EXTRACTION LINK OR COLLAPSE RIFT ONLY.');
+    } else if (inc.collapseActive) {
+      appendRunLog(`>> COLLAPSE RIFT NODE ${nextNodesCleared} — RESONANCE UNBOUND.`);
+    } else {
+      appendRunLog(`>> NODE ${nextNodesCleared}/${MAX_SECTOR_NODES} CLEARED — SCANNING HUB READY.`);
     }
 
-    const nextIndex = completedIndex + 1;
-    const nextInc = resetForScan({
-      ...incAfterClear,
-      currentEncounterIndex: nextIndex,
-      selectedVectorId: null,
-    });
-    activeIncursionRef.current = nextInc;
-    setActiveIncursion(nextInc);
-
-    setRunState((prev) => {
-      const next = {
-        ...prev,
-        currentNode: nextIndex,
-        pendingEncounter: null,
-        pendingEnemy: null,
-      };
-      runStateRef.current = next;
-      return next;
-    });
-
-    setScanSessionKey((k) => k + 1);
-    appendRunLog(`>> ENCOUNTER ${nextIndex + 1}/10 — SCANNING HUB READY FOR VECTOR SELECT.`);
     return { route: 'NEXT_NODE' as const };
   }, [appendRunLog]);
 
@@ -864,37 +1371,136 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     return { route: 'NEXT_NODE' as const };
   }, [advanceIncursionAfterEncounter]);
 
-  const commitNodeEncounter = useCallback((nodeId: string): import('../types/game').RunNodeType | null => {
+  const engageVectorNode = useCallback((node: IncursionNode): import('../types/game').RunNodeType | null => {
     const inc = activeIncursionRef.current;
-    if (inc.mapMode !== 'SCANNING_HUB') return null;
+    const greedZoneActive = getGreedZoneActive(inc.nodesCleared);
+    const wasBlindBreach = !inc.focusedNodeIds.includes(node.id)
+      && node.type !== 'SAFE_ANCHOR_EXTRACTION'
+      && node.type !== 'MASTER_EXTRACTION_LINK'
+      && node.sectorMeta?.isFocused !== true;
 
-    const cluster = finalizeClusterForScan(
-      inc.encounterOptionClusters[inc.currentEncounterIndex] ?? [],
-      inc.currentEncounterIndex,
-      inc.encounterPath,
-      inc.currentDepth,
+    let enteringCollapse = inc.collapseActive;
+    if (
+      !inc.collapseActive
+      && inc.bossDefeated
+      && node.type !== 'MASTER_EXTRACTION_LINK'
+      && (isCollapseForwardNode(node) || inc.nodesCleared >= MAX_SECTOR_NODES)
+    ) {
+      enteringCollapse = true;
+      appendRunLog('>> POCKET DIMENSION COLLAPSE — resonance telemetry uncapped.');
+    }
+
+    let extraResonance = 0;
+    if (wasBlindBreach && node.environmentType) {
+      const penalty = applyBlindBreachPenalty(
+        node.environmentType,
+        runStateRef.current.maxSoulAnchor,
+      );
+      penalty.logLines.forEach((line) => appendRunLog(line));
+      extraResonance += penalty.resonanceSpike;
+      if (penalty.soulAnchorLoss > 0) {
+        setRunState((prev) => {
+          const next = {
+            ...prev,
+            soulAnchorIntegrity: Math.max(0, prev.soulAnchorIntegrity - penalty.soulAnchorLoss),
+          };
+          runStateRef.current = next;
+          return next;
+        });
+      }
+    }
+
+    const progressionMult = greedZoneActive ? 2 : 1;
+    const prevResonance = inc.resonance.percent + extraResonance;
+    const progressionTick = applyNodeProgressionResonance(
+      prevResonance,
+      inc.nodesCleared,
+      inc.cargo,
+      inc.collapseActive,
+      progressionMult,
     );
-    const node = findVectorInCluster(cluster, nodeId);
-    if (!node) return null;
+    const nextResonance = progressionTick.nextPercent;
+
+    const escalationTick = applyResonanceEscalationsOnSpike(
+      inc.resonance.percent,
+      nextResonance,
+      inc.resonanceEscalations,
+      inc.sectorGraph,
+      inc.currentNodeId,
+    );
+    escalationTick.logLines.forEach((line) => appendRunLog(line));
+
+    let nextSectorGraph = inc.sectorGraph;
+    if (
+      escalationTick.escalations.vectorSeveredTriggered
+      && escalationTick.escalations.relayExtractionNodeId
+      && !inc.resonanceEscalations.vectorSeveredTriggered
+    ) {
+      nextSectorGraph = applyVectorSeveredToGraph(
+        inc.sectorGraph,
+        escalationTick.escalations.relayExtractionNodeId,
+      );
+    }
 
     const encounterPath = [...inc.encounterPath];
-    encounterPath[inc.currentEncounterIndex] = {
+    encounterPath[inc.nodesCleared] = {
       ...node,
-      index: inc.currentEncounterIndex,
-      encounterIndex: inc.currentEncounterIndex,
+      index: inc.nodesCleared,
+      encounterIndex: inc.nodesCleared,
     };
 
+    let nextEscalations = escalationTick.escalations;
+    if (isTerminalBlindActive(inc.resonanceEscalations)) {
+      nextEscalations = {
+        ...nextEscalations,
+        terminalBlindNodesRemaining: nextEscalations.terminalBlindNodesRemaining - 1,
+      };
+    }
+    if (node.id.startsWith('extraction-decoy-')) {
+      nextEscalations = consumeExtractionDecoy(nextEscalations);
+    }
+
     setActiveIncursion((prev) => {
-      const next = { ...prev, encounterPath, selectedVectorId: nodeId };
+      const next = {
+        ...prev,
+        encounterPath,
+        selectedVectorId: node.id,
+        resonance: { percent: nextResonance },
+        resonanceEscalations: nextEscalations,
+        sectorGraph: nextSectorGraph,
+        collapseActive: enteringCollapse || prev.collapseActive,
+      };
       activeIncursionRef.current = next;
       return next;
     });
 
+    if (extraResonance > 0) {
+      appendRunLog(`>> RESONANCE +${extraResonance}% — ENVIRONMENTAL ALARM TRIPPED.`);
+    }
+    if (progressionTick.appliedGain > 0) {
+      appendRunLog(progressionTick.logLine);
+    }
+
     appendRunLog(
-      `>> INCURSION INITIATED — ENCOUNTER ${inc.currentEncounterIndex + 1}/10 // ${node.label.split(' // ').slice(1).join(' // ') || node.label}`,
+      `>> VECTOR ENGAGED — NODE ${inc.nodesCleared + 1} // ${node.label.split(' // ').slice(1).join(' // ') || node.label}`,
     );
 
-    if (node.type === 'STANDARD_COMBAT') {
+    if (node.type === 'EMERGENCY_EXTRACTION') {
+      appendRunLog('>> EMERGENCY EXTRACTION LINK ENGAGED — EVAC CONDUIT OPEN.');
+      return node.type;
+    }
+
+    if (node.type === 'RESOURCE_HARVEST') {
+      beginResourceNodeHarvest();
+      setActiveIncursion((prev) => {
+        const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
+        activeIncursionRef.current = next;
+        return next;
+      });
+      return node.type;
+    }
+
+    if (node.type === 'STANDARD_COMBAT' || node.type === 'ELITE_COMBAT') {
       prepareStandardCombatEncounter();
       setActiveIncursion((prev) => {
         const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
@@ -905,7 +1511,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (node.type === 'NARRATIVE_EVENT') {
-      assignNarrativeForCombat(node.index);
+      assignNarrativeForCombat(node);
       setActiveIncursion((prev) => {
         const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
         activeIncursionRef.current = next;
@@ -914,16 +1520,18 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       return node.type;
     }
 
-    if (node.type === 'SANCTUARY') {
-      setActiveIncursion((prev) => {
-        const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
-        activeIncursionRef.current = next;
-        return next;
-      });
-      return node.type;
-    }
-
-    if (node.type === 'BLACK_MARKET') {
+    if (node.type === 'SANCTUARY' || node.type === 'BLACK_MARKET') {
+      const huntActive = activeIncursionRef.current.resonanceEscalations.veilStalkerHuntActive;
+      if (huntActive && Math.random() < VEIL_STALKER_AMBUSH_CHANCE) {
+        appendRunLog('>> VEIL STALKER AMBUSH — sanctuary vector compromised.');
+        prepareVeilStalkerEncounter();
+        setActiveIncursion((prev) => {
+          const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
+          activeIncursionRef.current = next;
+          return next;
+        });
+        return 'ELITE_COMBAT';
+      }
       setActiveIncursion((prev) => {
         const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
         activeIncursionRef.current = next;
@@ -943,24 +1551,185 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     }
 
     return null;
-  }, [appendRunLog, assignNarrativeForCombat, prepareBossEncounter, prepareStandardCombatEncounter]);
+  }, [
+    appendRunLog,
+    assignNarrativeForCombat,
+    beginResourceNodeHarvest,
+    prepareBossEncounter,
+    prepareStandardCombatEncounter,
+    prepareVeilStalkerEncounter,
+  ]);
+
+  const commitNodeEncounter = useCallback((nodeId: string): import('../types/game').RunNodeType | null => {
+    let inc = activeIncursionRef.current;
+    if (inc.mapMode !== 'SCANNING_HUB') return null;
+    const expandedInc = persistExpandedSectorGraph(inc);
+    if (expandedInc !== inc) {
+      activeIncursionRef.current = expandedInc;
+      setActiveIncursion(expandedInc);
+      inc = expandedInc;
+    }
+    const cluster = buildSectorCluster(inc);
+    const node = findVectorInCluster(cluster, nodeId);
+    if (!node) return null;
+    return engageVectorNode(node);
+  }, [engageVectorNode]);
+
+  const stageExtractionReview = useCallback((kind: ExtractionReviewKind, anchorIndex?: 1 | 2 | 3) => {
+    setActiveIncursion((prev) => {
+      const next = {
+        ...prev,
+        extractionReviewKind: kind,
+        pendingSafeAnchorIndex: kind === 'SAFE_ANCHOR' ? (anchorIndex ?? null) : null,
+        previewNodeId: null,
+        scanConfirmOverlayVisible: false,
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const adjustResonance = useCallback((amount: number, reason: string): number => {
+    const inc = activeIncursionRef.current;
+    const nextPercent = applyResonanceAdjustment(inc.resonance.percent, amount, inc.collapseActive);
+    setActiveIncursion((prev) => {
+      const next = { ...prev, resonance: { percent: nextPercent } };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    const sign = amount >= 0 ? '+' : '';
+    appendRunLog(`>> RESONANCE ${sign}${amount}% — ${reason}`);
+    return nextPercent;
+  }, [appendRunLog]);
+
+  const stageSafeAnchorReview = useCallback((anchorIndex: 1 | 2 | 3) => {
+    stageExtractionReview('SAFE_ANCHOR', anchorIndex);
+    appendRunLog(`>> SAFE ANCHOR ${anchorIndex} — CLEAN EVAC REVIEW STAGED.`);
+  }, [appendRunLog, stageExtractionReview]);
+
+  const confirmSafeAnchorExtraction = useCallback((anchorIndex: 1 | 2 | 3) => {
+    setActiveIncursion((prev) => {
+      const cleared = prev.clearedSafeAnchors.includes(anchorIndex)
+        ? prev.clearedSafeAnchors
+        : [...prev.clearedSafeAnchors, anchorIndex];
+      const next = {
+        ...prev,
+        clearedSafeAnchors: cleared,
+        pendingSafeAnchorIndex: null,
+        extractionReviewKind: null,
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    appendRunLog(`>> SAFE ANCHOR ${anchorIndex} — CLEAN EXTRACTION CONFIRMED. NO PENALTY.`);
+  }, [appendRunLog]);
+
+  const continueFromExtractionReview = useCallback(() => {
+    const kind = activeIncursionRef.current.extractionReviewKind;
+    setActiveIncursion((prev) => {
+      const next = {
+        ...prev,
+        pendingSafeAnchorIndex: null,
+        extractionReviewKind: null,
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    if (kind === 'MASTER_LINK') {
+      appendRunLog('>> INCURSION CONTINUES — master link bypassed. Collapse rift accessible.');
+    } else if (kind === 'EMERGENCY_RECALL') {
+      appendRunLog('>> INCURSION CONTINUES — emergency evac aborted.');
+    } else {
+      appendRunLog('>> INCURSION CONTINUES — safe anchor bypassed.');
+    }
+  }, [appendRunLog]);
+
+  const initiateEmergencyRecall = useCallback((): boolean => {
+    const inc = activeIncursionRef.current;
+    if (!isEmergencyRecallAvailable(inc.nodesCleared)) {
+      appendRunLog('[REJECTED] >> Emergency recall offline — window is nodes 5–15 only.');
+      return false;
+    }
+    if (inc.defendRiftActive) return false;
+    appendRunLog('>> EMERGENCY RECALL INITIATED — rift defense combat staging.');
+    prepareDefendRiftEncounter();
+    return true;
+  }, [appendRunLog, prepareDefendRiftEncounter]);
+
+  const completeDefendRiftVictory = useCallback(() => {
+    setActiveIncursion((prev) => {
+      const next = {
+        ...prev,
+        defendRiftActive: false,
+        extractionReviewKind: 'EMERGENCY_RECALL' as const,
+        mapMode: 'SCANNING_HUB' as IncursionMapMode,
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    setRunState((prev) => {
+      const next = { ...prev, pendingEnemy: null, pendingEncounter: null };
+      runStateRef.current = next;
+      return next;
+    });
+    appendRunLog('>> DEFEND THE RIFT SECURED — emergency evac review opening.');
+    appendRunLog('>> WARNING — 20% cargo value bleed on emergency extraction.');
+  }, [appendRunLog]);
+
+  const confirmMasterExtraction = useCallback(() => {
+    setActiveIncursion((prev) => {
+      const next = {
+        ...prev,
+        masterLinkUsed: true,
+        extractionReviewKind: null,
+        pendingSafeAnchorIndex: null,
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    appendRunLog('>> MASTER EXTRACTION LINK — GUARANTEED CLEAN EXIT CONFIRMED.');
+  }, [appendRunLog]);
+
+  const applyEmergencyRecallCargoBleed = useCallback((): number => {
+    const inc = activeIncursionRef.current;
+    const bleedResult = applyEmergencyExtractBleed(inc.cargo, EMERGENCY_EXTRACT_CARGO_BLEED_PCT);
+    if (bleedResult.drainedValue > 0) {
+      setActiveIncursion((prev) => {
+        const next = { ...prev, cargo: bleedResult.cargo, extractionReviewKind: null };
+        activeIncursionRef.current = next;
+        return next;
+      });
+      appendRunLog(`>> EMERGENCY EXTRACT BLEED — −${bleedResult.drainedValue} cargo value purged.`);
+    } else {
+      setActiveIncursion((prev) => {
+        const next = { ...prev, extractionReviewKind: null };
+        activeIncursionRef.current = next;
+        return next;
+      });
+    }
+    return bleedResult.drainedValue;
+  }, [appendRunLog]);
 
   const confirmScanPreview = useCallback((): import('../types/game').RunNodeType | null => {
     const inc = activeIncursionRef.current;
     if (!inc.previewNodeId) return null;
 
-    if (runStateRef.current.currentStamina < SCAN_ENGAGE_STAMINA_COST) {
-      appendRunLog('[REJECTED] >> Insufficient stamina for vector engagement.');
-      return null;
+    const nodeId = inc.previewNodeId;
+    const cluster = buildSectorCluster(inc);
+    const node = findVectorInCluster(cluster, nodeId);
+    if (!node) return null;
+
+    if (node.type === 'SAFE_ANCHOR_EXTRACTION' && node.safeAnchorIndex != null) {
+      appendRunLog('>> SAFE ANCHOR ENGAGED — extraction review opening.');
+      stageSafeAnchorReview(node.safeAnchorIndex);
+      return node.type;
     }
 
-    const nodeId = inc.previewNodeId;
-    setRunState((prev) => {
-      const next = { ...prev, currentStamina: prev.currentStamina - SCAN_ENGAGE_STAMINA_COST };
-      runStateRef.current = next;
-      return next;
-    });
-    appendRunLog(`>> VECTOR ENGAGEMENT CONFIRMED — ${SCAN_ENGAGE_STAMINA_COST} STAMINA DEDUCTED.`);
+    if (node.type === 'MASTER_EXTRACTION_LINK') {
+      appendRunLog('>> MASTER EXTRACTION LINK ENGAGED — prime evac review opening.');
+      stageExtractionReview('MASTER_LINK');
+      return node.type;
+    }
 
     setActiveIncursion((prev) => {
       const next = { ...prev, previewNodeId: null, scanConfirmOverlayVisible: false };
@@ -968,79 +1737,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
 
-    const incAfterClose = activeIncursionRef.current;
-    const cluster = finalizeClusterForScan(
-      incAfterClose.encounterOptionClusters[incAfterClose.currentEncounterIndex] ?? [],
-      incAfterClose.currentEncounterIndex,
-      incAfterClose.encounterPath,
-      incAfterClose.currentDepth,
-    );
-    const node = findVectorInCluster(cluster, nodeId);
-    if (!node) return null;
-
-    const encounterPath = [...incAfterClose.encounterPath];
-    encounterPath[incAfterClose.currentEncounterIndex] = { ...node, index: incAfterClose.currentEncounterIndex, encounterIndex: incAfterClose.currentEncounterIndex };
-
-    setActiveIncursion((prev) => {
-      const next = { ...prev, encounterPath, selectedVectorId: nodeId };
-      activeIncursionRef.current = next;
-      return next;
-    });
-
-    appendRunLog(
-      `>> INCURSION INITIATED — DEPTH ${incAfterClose.currentEncounterIndex + 1}/10 // ${node.label.split(' // ').slice(1).join(' // ') || node.label}`,
-    );
-
-    if (node.type === 'STANDARD_COMBAT') {
-      prepareStandardCombatEncounter();
-      setActiveIncursion((prev) => {
-        const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
-        activeIncursionRef.current = next;
-        return next;
-      });
-      return node.type;
-    }
-
-    if (node.type === 'NARRATIVE_EVENT') {
-      assignNarrativeForCombat(node.encounterIndex);
-      setActiveIncursion((prev) => {
-        const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
-        activeIncursionRef.current = next;
-        return next;
-      });
-      return node.type;
-    }
-
-    if (node.type === 'SANCTUARY') {
-      setActiveIncursion((prev) => {
-        const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
-        activeIncursionRef.current = next;
-        return next;
-      });
-      return node.type;
-    }
-
-    if (node.type === 'BLACK_MARKET') {
-      setActiveIncursion((prev) => {
-        const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
-        activeIncursionRef.current = next;
-        return next;
-      });
-      return node.type;
-    }
-
-    if (isBossNodeType(node.type)) {
-      prepareBossEncounter();
-      setActiveIncursion((prev) => {
-        const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
-        activeIncursionRef.current = next;
-        return next;
-      });
-      return node.type;
-    }
-
-    return null;
-  }, [appendRunLog, assignNarrativeForCombat, prepareBossEncounter, prepareStandardCombatEncounter]);
+    appendRunLog('>> BREACH BLIND ENGAGE — vector lock confirmed.');
+    return engageVectorNode(node);
+  }, [appendRunLog, engageVectorNode, stageExtractionReview, stageSafeAnchorReview]);
 
   const shiftBossPhase = useCallback((phase: number) => {
     setActiveIncursion((prev) => {
@@ -1059,24 +1758,41 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const clearPendingAmbush = useCallback(() => {
+    const wasStalker = runStateRef.current.pendingEnemy?.isVeilStalker === true;
     setRunState((prev) => ({ ...prev, pendingAmbush: false }));
-  }, []);
+    if (wasStalker) {
+      setActiveIncursion((prev) => {
+        const next = {
+          ...prev,
+          resonanceEscalations: clearVeilStalkerHunt(prev.resonanceEscalations),
+        };
+        activeIncursionRef.current = next;
+        return next;
+      });
+      appendRunLog('>> VEIL STALKER ERADICATED — hunter flag cleared.');
+    }
+  }, [appendRunLog]);
 
   const useIncursionConsumable = useCallback((itemId: IncursionConsumableId): IncursionConsumableUseResult | null => {
     const inc = activeIncursionRef.current;
-    const item = inc.inventory.items.find((entry) => entry.id === itemId);
-    if (!item || item.quantity <= 0 || item.effect === 'unimplemented') return null;
+    const def = CARGO_ITEM_CATALOG[itemId];
+    if (!def.usableInCombat || def.combatEffect === 'unimplemented' || !hasCargoItem(inc.cargo, itemId)) {
+      return null;
+    }
+
+    const nextCargo = consumeCargoItem(inc.cargo, itemId);
+    if (!nextCargo) return null;
 
     const run = runStateRef.current;
     let healAmount = 0;
     let stunsEnemy = false;
     let logLine = '';
 
-    if (item.effect === 'stun') {
+    if (def.combatEffect === 'stun') {
       stunsEnemy = true;
       logLine = '>> VEIL SHARD DEPLOYED — Hostile neural lock engaged.';
-    } else if (item.effect === 'heal') {
-      const healPercent = item.healPercent ?? 0;
+    } else if (def.combatEffect === 'heal') {
+      const healPercent = def.healPercent ?? 0;
       healAmount = Math.floor(run.maxSoulAnchor * (healPercent / 100));
       logLine = `>> SOUL CORE DEPLOYED — +${healPercent}% Soul Anchor integrity restored (+${healAmount} HP).`;
     } else {
@@ -1086,15 +1802,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     setActiveIncursion((prev) => {
       const next: ActiveIncursionState = {
         ...prev,
-        inventory: {
-          items: prev.inventory.items
-            .map((entry) => (
-              entry.id === itemId
-                ? { ...entry, quantity: entry.quantity - 1 }
-                : entry
-            ))
-            .filter((entry) => entry.quantity > 0),
-        },
+        cargo: nextCargo,
       };
       activeIncursionRef.current = next;
       return next;
@@ -1124,28 +1832,18 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     appendRunLog(`>> +${amount} RUN CREDITS — ${reason}`);
   }, [appendRunLog]);
 
-  const purchaseBlackMarketItem = useCallback((itemId: IncursionConsumableId): { success: boolean; logLine: string } | null => {
+  const purchaseBlackMarketCargo = useCallback((itemId: CargoItemId): { success: boolean; logLine: string } | null => {
     const inc = activeIncursionRef.current;
     if (inc.runCredits < BLACK_MARKET_ITEM_PRICE) {
-      return { success: false, logLine: '[REJECTED] >> Insufficient run credits for black market purchase.' };
+      return { success: false, logLine: '[REJECTED] >> Insufficient run credits for cargo purchase.' };
     }
 
-    const template = catalogItemForId(itemId);
-    const existing = inc.inventory.items.find((entry) => entry.id === itemId);
-
     setActiveIncursion((prev) => {
-      const nextItems = existing
-        ? prev.inventory.items.map((entry) => (
-          entry.id === itemId
-            ? { ...entry, quantity: entry.quantity + 1 }
-            : entry
-        ))
-        : [...prev.inventory.items, { ...template, quantity: 1 }];
-
-      const next: ActiveIncursionState = {
+      const nextCargo = addLootToContainment(prev.cargo, itemId, 1);
+      const next = {
         ...prev,
         runCredits: prev.runCredits - BLACK_MARKET_ITEM_PRICE,
-        inventory: { items: nextItems },
+        cargo: nextCargo,
       };
       activeIncursionRef.current = next;
       return next;
@@ -1153,7 +1851,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
     return {
       success: true,
-      logLine: `>> BLACK MARKET — ${template.name} acquired. -${BLACK_MARKET_ITEM_PRICE} RUN CREDITS.`,
+      logLine: `>> BLACK MARKET CARGO — ${CARGO_ITEM_CATALOG[itemId].name} staged in containment. -${BLACK_MARKET_ITEM_PRICE} RUN CREDITS.`,
     };
   }, []);
 
@@ -1187,6 +1885,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       activeIncursion,
       getCurrentEncounterNode,
       getCurrentVectorCluster,
+      ensureScannerGraphExpanded,
       getSelectedVectorNode,
       openScanPreview,
       closeScanPreview,
@@ -1196,6 +1895,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       continueFromProgressCheckpoint,
       prepareBossEncounter,
       prepareStandardCombatEncounter,
+      prepareHarvestAmbushEncounter,
       shiftBossPhase,
       setIncursionMapMode,
       purgeEncounterState,
@@ -1206,7 +1906,23 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       useIncursionConsumable,
       applyIncursionConsumableHeal,
       awardRunCredits,
-      purchaseBlackMarketItem,
+      purchaseBlackMarketCargo,
+      focusPreviewNode,
+      calculateSectorExtractionPayout,
+      placeCargoItem,
+      relocateCargoItem,
+      applyHarvestChoice,
+      useFocusingAmpouleFromCargo,
+      beginPostCombatHarvest,
+      beginResourceNodeHarvest,
+      stageSafeAnchorReview,
+      confirmSafeAnchorExtraction,
+      continueFromExtractionReview,
+      adjustResonance,
+      initiateEmergencyRecall,
+      completeDefendRiftVictory,
+      confirmMasterExtraction,
+      applyEmergencyRecallCargoBleed,
     }),
     [
       runState,
@@ -1237,6 +1953,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       activeIncursion,
       getCurrentEncounterNode,
       getCurrentVectorCluster,
+      ensureScannerGraphExpanded,
       getSelectedVectorNode,
       openScanPreview,
       closeScanPreview,
@@ -1246,6 +1963,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       continueFromProgressCheckpoint,
       prepareBossEncounter,
       prepareStandardCombatEncounter,
+      prepareHarvestAmbushEncounter,
       shiftBossPhase,
       setIncursionMapMode,
       purgeEncounterState,
@@ -1256,7 +1974,23 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       useIncursionConsumable,
       applyIncursionConsumableHeal,
       awardRunCredits,
-      purchaseBlackMarketItem,
+      purchaseBlackMarketCargo,
+      focusPreviewNode,
+      calculateSectorExtractionPayout,
+      placeCargoItem,
+      relocateCargoItem,
+      applyHarvestChoice,
+      useFocusingAmpouleFromCargo,
+      beginPostCombatHarvest,
+      beginResourceNodeHarvest,
+      stageSafeAnchorReview,
+      confirmSafeAnchorExtraction,
+      continueFromExtractionReview,
+      adjustResonance,
+      initiateEmergencyRecall,
+      completeDefendRiftVictory,
+      confirmMasterExtraction,
+      applyEmergencyRecallCargoBleed,
     ],
   );
 

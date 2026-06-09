@@ -1,3 +1,4 @@
+import type { EnemyAffinity } from '../types/combatEnvironment';
 import type { EnemyIntent } from '../types/run';
 
 export const GAUGE_SOUL_ANCHOR = '#FF453A';
@@ -51,4 +52,5 @@ export interface CombatEnemyTelemetry {
   currentHp: number;
   maxHp: number;
   intent: EnemyIntent;
+  affinity?: EnemyAffinity;
 }

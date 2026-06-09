@@ -1,6 +1,9 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { StyleSheet, View, Dimensions } from 'react-native';
-import EnemyPlaceholder from '../../assets/enemy images/enemy_placeholder.png';
+import {
+  resolveCombatEnemyPortrait,
+  resolvePortraitKeySuffix,
+} from '../utils/combatEnemyPortrait';
 import {
   ApparitionViewport,
   type ApparitionViewportRef,
@@ -37,12 +40,14 @@ const ENEMY_VIEWPORT_MIN_HEIGHT = Math.round(SCREEN_HEIGHT * 0.2);
 function CombatApparitionZone({
   apparitionRef,
   portraitKey,
+  portraitSource,
   onEradicationComplete,
   resolutionOutcome,
   onResolutionDismiss,
 }: {
   apparitionRef: React.RefObject<ApparitionViewportRef | null>;
   portraitKey: string;
+  portraitSource: ReturnType<typeof resolveCombatEnemyPortrait>;
   onEradicationComplete: () => void;
   resolutionOutcome: 'VICTORY' | 'DEFEAT' | null;
   onResolutionDismiss: () => void;
@@ -55,7 +60,7 @@ function CombatApparitionZone({
       <ApparitionViewport
         key={portraitKey}
         ref={apparitionRef}
-        imageSource={EnemyPlaceholder}
+        imageSource={portraitSource}
         style={styles.apparitionFill}
         pointerEvents={ui.parryVisible ? 'none' : 'auto'}
         onEradicationComplete={onEradicationComplete}
@@ -75,7 +80,7 @@ function CombatApparitionZone({
 
 export default function CombatScreen(): React.JSX.Element {
   const { theme } = useTerminal();
-  const { startPostCombatBoon, startGameOver, goToHub } = useGameFlow();
+  const { startResourceHarvest, startPostCombatBoon, startGameOver, startExtractionReview, goToHub } = useGameFlow();
   const { setTerminalView } = useTerminalNav();
   const {
     runState,
@@ -91,6 +96,8 @@ export default function CombatScreen(): React.JSX.Element {
     shiftBossPhase,
     awardRunCredits,
     getSelectedVectorNode,
+    beginPostCombatHarvest,
+    completeDefendRiftVictory,
   } = useRun();
   const { completeCurrentNode } = useNodeProgression();
   const { getWeaponCombatStats } = usePlayerAccount();
@@ -131,8 +138,21 @@ export default function CombatScreen(): React.JSX.Element {
     killResolverRef.current();
   }, []);
 
+  const isBossEncounter =
+    activeIncursion.bossProfile != null || runState.pendingEnemy?.isBoss === true;
+  const nodeType = getSelectedVectorNode()?.type;
+  const portraitSource = resolveCombatEnemyPortrait({
+    isBoss: isBossEncounter,
+    isVeilStalker: runState.pendingEnemy?.isVeilStalker === true,
+    nodeType,
+  });
   const portraitKey =
     `${runState.pendingEnemy?.designation ?? 'hostile'}`
+    + `-${resolvePortraitKeySuffix({
+      isBoss: isBossEncounter,
+      isVeilStalker: runState.pendingEnemy?.isVeilStalker === true,
+      nodeType,
+    })}`
     + `-${activeIncursion.currentEncounterIndex}`
     + `-${runState.combatNodesCleared}`;
 
@@ -168,6 +188,12 @@ export default function CombatScreen(): React.JSX.Element {
 
     syncAfterCombat(result.remainingHp, result.remainingStamina);
 
+    if (activeIncursion.defendRiftActive) {
+      completeDefendRiftVictory();
+      startExtractionReview();
+      return;
+    }
+
     const isBossEncounter =
       activeIncursion.bossProfile != null || runState.pendingEnemy?.isBoss === true;
     const nodeType = getSelectedVectorNode()?.type;
@@ -187,6 +213,18 @@ export default function CombatScreen(): React.JSX.Element {
     if (runState.pendingAmbush) {
       clearPendingAmbush();
       incrementCombatNodesCleared();
+      refillStaminaAfterCombat();
+
+      const harvestRoute = activeIncursion.pendingHarvestReturn;
+      if (harvestRoute === 'POST_COMBAT') {
+        startPostCombatBoon();
+        return;
+      }
+      if (harvestRoute === 'COMPLETE_NODE') {
+        completeCurrentNode('Ambush repelled — harvest secured.', result.remainingHp);
+        return;
+      }
+
       completeCurrentNode('Ambush repelled.', result.remainingHp);
       return;
     }
@@ -199,11 +237,13 @@ export default function CombatScreen(): React.JSX.Element {
       return;
     }
 
-    preparePostCombatBoons();
-    startPostCombatBoon();
+    beginPostCombatHarvest();
+    startResourceHarvest();
   }, [
     activeIncursion.bossProfile,
+    activeIncursion.defendRiftActive,
     awardRunCredits,
+    completeDefendRiftVictory,
     clearPendingAmbush,
     completeCurrentNode,
     endRun,
@@ -211,15 +251,18 @@ export default function CombatScreen(): React.JSX.Element {
     getSelectedVectorNode,
     goToHub,
     incrementCombatNodesCleared,
-    preparePostCombatBoons,
+    beginPostCombatHarvest,
     refillStaminaAfterCombat,
     runState.combatTestPreset,
     runState.pendingAmbush,
     runState.pendingEnemy?.isBoss,
     setTerminalView,
+    startExtractionReview,
     startGameOver,
     startPostCombatBoon,
+    startResourceHarvest,
     syncAfterCombat,
+    activeIncursion.pendingHarvestReturn,
   ]);
 
   return (
@@ -238,6 +281,7 @@ export default function CombatScreen(): React.JSX.Element {
               <CombatApparitionZone
                 apparitionRef={apparitionRef}
                 portraitKey={portraitKey}
+                portraitSource={portraitSource}
                 onEradicationComplete={handleEradicationComplete}
                 resolutionOutcome={resolutionOutcome}
                 onResolutionDismiss={handleResolutionDismiss}

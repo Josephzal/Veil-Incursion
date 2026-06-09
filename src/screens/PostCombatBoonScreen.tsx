@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import IncursionShell from '../components/IncursionShell';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
+import OperativeTelemetryBar from '../components/OperativeTelemetryBar';
 import SelectionContinueButton from '../components/SelectionContinueButton';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
@@ -55,6 +56,7 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
         style={{ backgroundColor: theme.backgroundColor }}
       >
         <View style={styles.body}>
+          <OperativeTelemetryBar />
           <View style={[styles.header, { borderColor: theme.borderColor }]}>
             <Text style={[styles.headerText, { color: theme.mutedColor }]}>
               POST-COMBAT BOON // SELECT TRINKET

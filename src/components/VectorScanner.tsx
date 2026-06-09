@@ -19,7 +19,8 @@ import {
   withTiming,
 } from 'react-native-reanimated';
 import { getCabalScannerTheme } from './scanner/cabalScannerThemes';
-import type { ScannerCabal } from '../types/scanner';
+import { mergeScannerThemes } from './scanner/zoneScannerThemes';
+import type { CabalScannerTheme, ScannerCabal } from '../types/scanner';
 import type { RadarDot } from '../types/run';
 
 export const SCAN_SWEEP_MS = 2200;
@@ -58,6 +59,8 @@ const SIPHON_HAPTIC_MS = 12;
 
 interface VectorScannerProps {
   cabal: ScannerCabal;
+  /** Zone tint merged atop cabal chrome (macro-pacing zones). */
+  zoneTint?: Partial<CabalScannerTheme>;
   scannerSize: number;
   active: boolean;
   activeNodes: RadarDot[];
@@ -181,6 +184,7 @@ const SWEEP_GRADIENT_TRAIL_START_DEG = 360 - SWEEP_TRAIL_ACTIVE_DEG;
 
 function VectorScannerComponent({
   cabal,
+  zoneTint,
   scannerSize,
   active,
   activeNodes,
@@ -193,7 +197,9 @@ function VectorScannerComponent({
   onSiphonedNodesChange,
   children,
 }: VectorScannerProps): React.JSX.Element {
-  const theme = getCabalScannerTheme(cabal);
+  const theme = zoneTint
+    ? mergeScannerThemes(getCabalScannerTheme(cabal), zoneTint)
+    : getCabalScannerTheme(cabal);
   const coreDiameter = scannerSize * coreScale;
   const radarCenter = scannerSize / 2;
   const sweepRadius = scannerSize / 2;
@@ -886,7 +892,10 @@ function VectorScannerComponent({
         <Text style={[styles.telemetryOverlay, { color: theme.text }]}></Text>
       </View>
 
-      <View style={[styles.footerSlot, { width: scannerSize, height: SCANNER_CEASE_SLOT_HEIGHT }]}>
+      <View
+        style={[styles.footerSlot, { width: scannerSize, height: SCANNER_CEASE_SLOT_HEIGHT }]}
+        pointerEvents={showCeaseControl && scanInteractive ? 'auto' : 'none'}
+      >
         <TouchableOpacity
           activeOpacity={0.75}
           disabled={!showCeaseControl || !scanInteractive || !canCeaseScan}
@@ -898,7 +907,6 @@ function VectorScannerComponent({
               opacity: showCeaseControl && scanInteractive ? (canCeaseScan ? 1 : 0.38) : 0,
             },
           ]}
-          pointerEvents={showCeaseControl && scanInteractive ? 'auto' : 'none'}
         >
           <Text style={[styles.ceaseLabel, { color: theme.text }]}>
             {canCeaseScan

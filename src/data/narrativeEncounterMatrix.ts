@@ -20,6 +20,9 @@ import {
   hasCollectedFlag,
   resolveConditionalBranchPreview,
 } from './macroStoryPipeline';
+import type { CargoRunState } from '../types/cargoGrid';
+import { ENVIRONMENT_COMBAT_PROFILE } from '../types/combatEnvironment';
+import { consumeCargoItem, hasCargoItem } from './cargoGridEngine';
 
 export interface OperativeResourceSnapshot {
   maxSoulAnchor: number;
@@ -34,6 +37,7 @@ export interface NarrativeResolutionResult {
   flagsAdded: string[];
   progress: IncursionProgressState;
   runPatch: Partial<RunState>;
+  cargoPatch?: CargoRunState;
   status: CheckStatus;
   outcomeText: string;
   environmentalModifiers: EnvironmentalModifiers;
@@ -269,11 +273,21 @@ const MATRIX_EVENTS: Record<string, MatrixEventTemplate> = {
     choiceB: { label: '[ B ] VENT FUEL RESERVES', requirement: 'CONDITIONAL' },
     interactionMode: 'conditional',
   },
+  'sector-07': {
+    id: 'sector-07',
+    title: 'THE SEVERED CONDUIT',
+    scenarioText:
+      'A severed ley-conduit spills void-pressure into the maintenance shaft. Ground your Aegis shield to bleed the overload, or deploy a gravity grapple to anchor the conduit and siphon kinetic charge.',
+    choiceA: { label: '[ A ] AEGIS GROUND', requirement: 'D20 CALIBRATION' },
+    choiceB: { label: '[ B ] GRAVITY ANCHOR', requirement: 'CARGO: GRAVITY GRAPPLE' },
+    interactionMode: 'standard',
+  },
   ...CITY_STREETS_ALLEY_MATRIX_EVENTS,
 };
 
 const EVENT_ORDER_BY_BIOME: Record<IncursionBiome, string[]> = {
   CITY_STREETS: [
+    'sector-07',
     ...CITY_STREETS_DEPTH_ZERO_POOL,
     'city-01',
     'city-02',
@@ -383,6 +397,25 @@ export function pickMatrixEventForEncounter(
   }
 
   return enrichNodeWithFlagContext(templateToNode(MATRIX_EVENTS[matrixId]), matrixId, progress.collectedFlags);
+}
+
+export function buildMatrixNarrativeNode(
+  matrixId: string,
+  progress: IncursionProgressState,
+): NarrativeEventNode {
+  const template = MATRIX_EVENTS[matrixId];
+  if (!template) {
+    return enrichNodeWithFlagContext(
+      templateToNode(MATRIX_EVENTS['sector-01']),
+      'sector-01',
+      progress.collectedFlags,
+    );
+  }
+  return enrichNodeWithFlagContext(
+    templateToNode(template),
+    matrixId,
+    progress.collectedFlags,
+  );
 }
 
 function enrichNodeWithFlagContext(
@@ -607,6 +640,7 @@ function resolveStandard(
   env: EnvironmentalModifiers,
   snapshot: OperativeResourceSnapshot,
   encounterIndex: number,
+  cargo?: CargoRunState,
 ): NarrativeResolutionResult {
   const calBonus = d20CalibrationBonus(progress, encounterIndex);
   const logLines = [
@@ -615,6 +649,7 @@ function resolveStandard(
   ];
   let runPatch: Partial<RunState> = {};
   let progressPatch: ProgressPatch = {};
+  let cargoPatch: CargoRunState | undefined;
   const flags: string[] = [];
   let outcome = '';
   let status: CheckStatus = success ? 'SUCCESS' : 'FAILURE';
@@ -955,6 +990,33 @@ function resolveStandard(
       }
       break;
 
+    case 'sector-07':
+      if (choice === 'A') {
+        if (success) {
+          applyMaxShield(5);
+          outcome = '>> AEGIS GROUND SUCCESS — +5% Max Shield.';
+        } else {
+          applyCurrentShield(-10);
+          outcome = '>> AEGIS GROUND FAILURE — -10% Current Shield.';
+        }
+      } else if (cargo && hasCargoItem(cargo, 'gravity-grapple')) {
+        const consumed = consumeCargoItem(cargo, 'gravity-grapple');
+        if (consumed) {
+          cargoPatch = consumed;
+          applyCurrentEnergy(15);
+          applyCurrentShield(10);
+          outcome = '>> GRAVITY ANCHOR SUCCESS — grapple spent. +15% Energy / +10% Current Shield.';
+          status = 'SUCCESS';
+        } else {
+          outcome = '>> GRAVITY ANCHOR FAILED — grapple not found in cargo.';
+          status = 'FAILURE';
+        }
+      } else {
+        outcome = '>> GRAVITY ANCHOR REJECTED — gravity grapple required in cargo grid.';
+        status = 'FAILURE';
+      }
+      break;
+
     default: {
       const alley = resolveCityStreetsAlleyEvent(matrixId, choice, success, {
         applyMaxShield,
@@ -983,7 +1045,8 @@ function resolveStandard(
     usedNarrativeEventIds: [...progress.usedNarrativeEventIds, usedId],
   };
 
-  return baseResult(progress, env, logLines, flags, outcome, status, runPatch, progressPatch);
+  const result = baseResult(progress, env, logLines, flags, outcome, status, runPatch, progressPatch);
+  return cargoPatch ? { ...result, cargoPatch } : result;
 }
 
 export function resolveMatrixNarrativeChoice(
@@ -995,6 +1058,7 @@ export function resolveMatrixNarrativeChoice(
   snapshot: OperativeResourceSnapshot,
   encounterIndex: number,
   options?: { forceSuccess?: boolean; forceFailure?: boolean },
+  cargo?: CargoRunState,
 ): NarrativeResolutionResult {
   const template = MATRIX_EVENTS[matrixEventId];
   if (!template) {
@@ -1026,18 +1090,33 @@ export function resolveMatrixNarrativeChoice(
   if (autoSuccess) success = true;
   if (autoFail && !chainAnchored && !chainAuto) success = false;
 
-  if (matrixEventId === 'city-05' && choice === 'B' && !success) {
-    return resolveStandard(matrixEventId, choice, roll, false, progress, environmentalModifiers, snapshot, encounterIndex);
+  if (matrixEventId === 'sector-07' && choice === 'B') {
+    return resolveStandard(matrixEventId, choice, roll, true, progress, environmentalModifiers, snapshot, encounterIndex, cargo);
   }
 
-  return resolveStandard(matrixEventId, choice, roll, success, progress, environmentalModifiers, snapshot, encounterIndex);
+  if (matrixEventId === 'city-05' && choice === 'B' && !success) {
+    return resolveStandard(matrixEventId, choice, roll, false, progress, environmentalModifiers, snapshot, encounterIndex, cargo);
+  }
+
+  return resolveStandard(matrixEventId, choice, roll, success, progress, environmentalModifiers, snapshot, encounterIndex, cargo);
 }
 
-export function primeNarrativeEnvironment(_node: NarrativeEventNode): EnvironmentalModifiers {
-  return {
+export function primeNarrativeEnvironment(
+  _node: NarrativeEventNode,
+  environmentType?: import('../types/sector').EnvironmentType,
+): EnvironmentalModifiers {
+  const base: EnvironmentalModifiers = {
     isEnemyPhaseShrouded: false,
     isPlayerBlinded: false,
     hasTetanusGlitch: false,
     startingStaminaPenalty: 0,
+  };
+  if (!environmentType) return base;
+  const profile = ENVIRONMENT_COMBAT_PROFILE[environmentType];
+  return {
+    ...base,
+    environmentType,
+    meleeDamageBonusPct: profile.meleeDamageBonusPct,
+    staminaCostReductionPct: profile.staminaCostReductionPct,
   };
 }

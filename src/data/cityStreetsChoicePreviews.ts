@@ -27,6 +27,10 @@ const CITY_CHOICE_PREVIEWS: Record<string, CityEventPreviews> = {
     A: { onSuccess: '+10% combat damage (next fight)', onFailure: '-10% Current HP' },
     B: { onSuccess: '+5% Crypto-Glimmer', onFailure: 'No reward' },
   },
+  'sector-07': {
+    A: { onSuccess: '+5% Max Shield', onFailure: '-10% Current Shield' },
+    B: { guaranteed: 'Spend Gravity Grapple · +15% Energy / +10% Current Shield' },
+  },
   'city-07': {
     A: { onSuccess: '+15% Shield Integrity', onFailure: '-10% Current HP' },
     B: { guaranteed: '-5% Max Stamina · FLAG: shattered_focus_lens' },
@@ -112,7 +116,7 @@ export function applyCityStreetsChoicePreviews(
   collectedFlags: readonly string[] = [],
 ): NarrativeEventNode {
   const matrixId = node.matrixEventId ?? node.id;
-  if (!matrixId.startsWith('city-')) return node;
+  if (!matrixId.startsWith('city-') && matrixId !== 'sector-07') return node;
 
   const previewA = getCityStreetsChoicePreview(matrixId, 'A', collectedFlags);
   const previewB = getCityStreetsChoicePreview(matrixId, 'B', collectedFlags);

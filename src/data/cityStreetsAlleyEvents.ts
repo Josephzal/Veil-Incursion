@@ -13,6 +13,7 @@ export interface CityStreetsMatrixTemplate {
 
 /** Depth 0 — alleyway / street-grid narrative pool only. */
 export const CITY_STREETS_DEPTH_ZERO_POOL: readonly string[] = [
+  'sector-07',
   'city-07',
   'city-08',
   'city-09',

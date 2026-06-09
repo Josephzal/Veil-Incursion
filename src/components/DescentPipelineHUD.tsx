@@ -1,21 +1,25 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { IncursionNode } from '../types/game';
+import { MAX_SECTOR_NODES } from '../types/sector';
+
+const ICON_SIZE_COMPACT = 26;
+const ICON_SIZE_EXPANDED = 30;
+const CONNECTOR_WIDTH = 10;
 
 interface DescentPipelineHUDProps {
-  depth: number;
+  sectorTier: number;
+  nodesCleared: number;
+  resonancePercent: number;
+  attunementCurrent: number;
+  attunementMax: number;
   currentEncounterIndex: number;
   encounterPath: IncursionNode[];
   accentColor?: string;
   borderColor?: string;
   mutedColor?: string;
-  interactive?: boolean;
-  selectedNodeIndex?: number | null;
-  onNodePress?: (index: number) => void;
   compact?: boolean;
   hideLabel?: boolean;
-  showExtract?: boolean;
-  onExtractPress?: () => void;
 }
 
 const NODE_ICON: Record<string, string> = {
@@ -25,41 +29,42 @@ const NODE_ICON: Record<string, string> = {
   BOSS_COMBAT: '⬡',
   SANCTUARY: '+',
   BLACK_MARKET: '◈',
+  EMERGENCY_EXTRACTION: '↗',
+  SAFE_ANCHOR_EXTRACTION: '◎',
+  MASTER_EXTRACTION_LINK: '★',
+  RESOURCE_HARVEST: '◇',
 };
 
 export default function DescentPipelineHUD({
-  depth,
+  sectorTier,
+  nodesCleared,
+  resonancePercent,
+  attunementCurrent,
+  attunementMax,
   currentEncounterIndex,
   encounterPath,
   accentColor = '#00ff33',
   borderColor = '#334155',
   mutedColor = '#64748b',
-  interactive = false,
-  selectedNodeIndex = null,
-  onNodePress,
   compact = true,
   hideLabel = false,
-  showExtract = false,
-  onExtractPress,
 }: DescentPipelineHUDProps): React.JSX.Element | null {
   if (encounterPath.length === 0) return null;
 
   const renderNodeIcon = (node: IncursionNode) => {
     const isCurrent = node.index === currentEncounterIndex;
-    const isSelected = selectedNodeIndex === node.index;
     const isComplete = node.isCompleted;
     const isLocked = node.index > currentEncounterIndex;
-    const isSelectable = interactive && isCurrent && !isComplete;
     const icon = NODE_ICON[node.type] ?? '●';
 
-    const iconShell = (
+    return (
       <View
         style={[
           styles.nodeIcon,
           compact ? styles.nodeIconCompact : styles.nodeIconExpanded,
           {
-            borderColor: isSelected || isCurrent ? accentColor : isComplete ? accentColor : borderColor,
-            backgroundColor: isSelected || isCurrent ? `${accentColor}22` : isComplete ? `${accentColor}11` : '#0a0b0f',
+            borderColor: isCurrent ? accentColor : isComplete ? accentColor : borderColor,
+            backgroundColor: isCurrent ? `${accentColor}22` : isComplete ? `${accentColor}11` : '#0a0b0f',
             opacity: isLocked ? 0.35 : 1,
           },
         ]}
@@ -68,69 +73,44 @@ export default function DescentPipelineHUD({
           style={[
             styles.iconText,
             compact ? styles.iconTextCompact : styles.iconTextExpanded,
-            { color: isCurrent || isComplete || isSelected ? accentColor : mutedColor },
+            { color: isCurrent || isComplete ? accentColor : mutedColor },
           ]}
         >
           {isComplete ? '✓' : icon}
         </Text>
       </View>
     );
-
-    if (isSelectable && onNodePress) {
-      return (
-        <Pressable onPress={() => onNodePress(node.index)} hitSlop={6}>
-          {iconShell}
-        </Pressable>
-      );
-    }
-
-    return iconShell;
   };
 
   return (
     <View style={[styles.root, compact ? styles.rootCompact : styles.rootExpanded, { borderColor }]}>
       {!hideLabel ? (
         <View style={styles.headerRow}>
-          <View style={styles.headerLabelWrap}>
-            <Text style={[styles.depthLabel, { color: mutedColor }]}>
-              VEIL DESCENT // DEPTH {depth} // ENCOUNTER {currentEncounterIndex + 1}/10
-            </Text>
-          </View>
-          {showExtract ? (
-            <Pressable
-              onPress={onExtractPress}
-              style={[styles.extractBtn, { borderColor }]}
-              accessibilityRole="button"
-              accessibilityLabel="End run and return to identity badge"
-            >
-              <Text style={[styles.extractBtnText, { color: mutedColor }]}>[ EXTRACT ]</Text>
-            </Pressable>
-          ) : null}
+          <Text style={[styles.depthLabel, { color: mutedColor }]}>
+            {`OPEN SECTOR T${sectorTier} // NODE ${nodesCleared}/${MAX_SECTOR_NODES} // RES ${resonancePercent}% // ATT ${attunementCurrent}/${attunementMax}`}
+          </Text>
         </View>
       ) : null}
-      <View style={styles.pipeline}>
-        {encounterPath.flatMap((node, index) => {
-          const items: React.JSX.Element[] = [
-            <View key={node.id} style={styles.nodeCell}>
-              {renderNodeIcon(node)}
-            </View>,
-          ];
-
-          if (index < encounterPath.length - 1) {
-            items.push(
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.pipelineContent}
+        style={styles.pipelineScroll}
+      >
+        {encounterPath.map((node, index) => (
+          <React.Fragment key={node.id}>
+            <View style={styles.nodeCell}>{renderNodeIcon(node)}</View>
+            {index < encounterPath.length - 1 ? (
               <View
-                key={`${node.id}-connector`}
                 style={[
                   styles.connector,
                   { backgroundColor: node.isCompleted ? accentColor : borderColor },
                 ]}
-              />,
-            );
-          }
-
-          return items;
-        })}
-      </View>
+              />
+            ) : null}
+          </React.Fragment>
+        ))}
+      </ScrollView>
     </View>
   );
 }
@@ -139,6 +119,7 @@ const styles = StyleSheet.create({
   root: {
     width: '100%',
     alignSelf: 'stretch',
+    flexShrink: 0,
     borderWidth: 1,
     backgroundColor: '#050608',
     overflow: 'hidden',
@@ -157,16 +138,9 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
+    justifyContent: 'center',
     marginBottom: 9,
     minHeight: 24,
-  },
-  headerLabelWrap: {
-    flex: 1,
-    minWidth: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   depthLabel: {
     fontFamily: 'monospace',
@@ -174,43 +148,35 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     textAlign: 'center',
   },
-  extractBtn: {
-    flexShrink: 0,
-    borderWidth: 1,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    backgroundColor: '#0a0b0f',
-  },
-  extractBtnText: {
-    fontFamily: 'monospace',
-    fontSize: 7,
-    fontWeight: '700',
-    letterSpacing: 0.4,
-  },
-  pipeline: {
+  pipelineScroll: {
     width: '100%',
+    flexGrow: 0,
+    flexShrink: 0,
+  },
+  pipelineContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
+    minHeight: ICON_SIZE_COMPACT + 4,
+    paddingVertical: 2,
   },
   nodeCell: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 0,
+    flexShrink: 0,
   },
   nodeIcon: {
-    aspectRatio: 1,
-    width: '72%',
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   nodeIconCompact: {
-    maxWidth: 28,
+    width: ICON_SIZE_COMPACT,
+    height: ICON_SIZE_COMPACT,
   },
   nodeIconExpanded: {
-    maxWidth: 32,
+    width: ICON_SIZE_EXPANDED,
+    height: ICON_SIZE_EXPANDED,
   },
   iconText: {
     fontFamily: 'monospace',
@@ -223,11 +189,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   connector: {
-    flex: 1,
+    width: CONNECTOR_WIDTH,
     height: 2,
-    alignSelf: 'center',
-    minWidth: 2,
-    maxWidth: 14,
-    marginHorizontal: 1,
+    flexShrink: 0,
+    marginHorizontal: 2,
   },
 });

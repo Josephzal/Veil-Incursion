@@ -20,6 +20,8 @@ import {
   biomeForEncounterIndex,
 } from './biomeCombat';
 import { createPlaceholderDepthPath, generateDepthEncounterMatrix } from './descentEngine';
+import { generateSectorGraph } from './sectorGraphEngine';
+import { MAX_ATTUNEMENT, STARTING_ATTUNEMENT } from '../types/sector';
 
 export { SECTOR_BLOCK_LAYOUT, SECTOR_CORE_ENCOUNTER_INDICES } from './biomeCombat';
 
@@ -249,4 +251,56 @@ export function initializeIncursionPipeline(
 
 export function validateNodeBiomeForEncounter(encounterIndex: number, biome: IncursionBiome): boolean {
   return biomeForEncounterIndex(encounterIndex) === biome;
+}
+
+export interface SectorRunInit {
+  sectorGraph: ReturnType<typeof generateSectorGraph>;
+  currentNodeId: string;
+  nodesCleared: number;
+  attunement: { current: number; max: number };
+  resonance: { percent: number };
+  focusedNodeIds: string[];
+  bossDefeated: boolean;
+  primeExtractionBonus: boolean;
+  sectorTier: number;
+  encounterPath: ActiveIncursionState['encounterPath'];
+  progress: IncursionProgressState;
+  initLogLines: string[];
+}
+
+/** Pre-generate open-sector graph and attunement state at run start. */
+export function initializeSectorRun(
+  sectorTier = 1,
+  alignedFaction: FactionType | null = null,
+): SectorRunInit {
+  const macroStory = rollMacroStoryRunProfile(alignedFaction);
+  const sectorGraph = generateSectorGraph(sectorTier);
+
+  const progress: IncursionProgressState = {
+    ...createDefaultIncursionProgressState(),
+    macroStory,
+  };
+
+  const initLogLines = [
+    macroStoryModeLogLine(macroStory),
+    `>> OPEN SECTOR GRAPH GENERATED — MAX ${sectorGraph.maxGraphDepth} NODES // TIER ${sectorTier}`,
+    '>> ATTUNEMENT CHARGED — 3 FOCUS USES AVAILABLE THIS RUN',
+    '>> RESONANCE TELEMETRY ONLINE — SPECTRAL READOUT ACTIVE',
+    '>> NODES 1–4: INFILTRATION ONLY — SAFE ANCHOR EXTRACTION LOCKED UNTIL NODE 5',
+  ];
+
+  return {
+    sectorGraph,
+    currentNodeId: sectorGraph.entryId,
+    nodesCleared: 0,
+    attunement: { current: STARTING_ATTUNEMENT, max: MAX_ATTUNEMENT },
+    resonance: { percent: 0 },
+    focusedNodeIds: [],
+    bossDefeated: false,
+    primeExtractionBonus: false,
+    sectorTier,
+    encounterPath: [],
+    progress,
+    initLogLines,
+  };
 }

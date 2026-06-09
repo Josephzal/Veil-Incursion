@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { BLOOD_FRENZY_RESONANCE_THRESHOLD } from '../types/combatEnvironment';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 
@@ -11,20 +12,23 @@ function resourcePercent(current: number, max: number): number {
 /** HEALTH // SHIELD // STAMINA // ENERGY strip — shared by scan, narrative, and sanctuary screens. */
 export default function OperativeTelemetryBar(): React.JSX.Element {
   const { theme } = useTerminal();
-  const { runState } = useRun();
+  const { runState, activeIncursion } = useRun();
 
   const operativeTelemetry = useMemo(() => {
     const healthPct = resourcePercent(runState.soulAnchorIntegrity, runState.maxSoulAnchor);
     const staminaPct = resourcePercent(runState.currentStamina, runState.maxStamina);
     const shieldPct = Math.max(0, Math.min(100, healthPct + 8));
     const energyPct = Math.max(0, Math.min(100, runState.startingAbyssalReservePercent));
-    return `HEALTH: ${healthPct}% // SHIELD: ${shieldPct}% // STAMINA: ${staminaPct}% // ENERGY: ${energyPct}%`;
+    const resonancePct = activeIncursion.resonance.percent;
+    const frenzyTag = resonancePct > BLOOD_FRENZY_RESONANCE_THRESHOLD ? ' // BLOOD FRENZY' : '';
+    return `HEALTH: ${healthPct}% // SHIELD: ${shieldPct}% // STAMINA: ${staminaPct}% // ENERGY: ${energyPct}% // RESONANCE: ${resonancePct}%${frenzyTag}`;
   }, [
     runState.soulAnchorIntegrity,
     runState.maxSoulAnchor,
     runState.currentStamina,
     runState.maxStamina,
     runState.startingAbyssalReservePercent,
+    activeIncursion.resonance.percent,
   ]);
 
   return (

@@ -11,11 +11,19 @@ const NODE_TYPE_LABEL: Record<RunNodeType, string> = {
   ELITE_COMBAT: 'ELITE CHECKPOINT',
   BOSS_COMBAT: 'REGION-PRIME BOSS',
   SANCTUARY: 'SANCTUARY ANCHOR',
-  BLACK_MARKET: 'BLACK MARKET VENDOR',
+  BLACK_MARKET: 'BLACK MARKET',
+  EMERGENCY_EXTRACTION: 'EXTRACTION LINK',
+  SAFE_ANCHOR_EXTRACTION: 'SAFE ANCHOR',
+  MASTER_EXTRACTION_LINK: 'MASTER LINK',
+  RESOURCE_HARVEST: 'RESOURCE NODE',
 };
 
 interface LeyLineMapPanelProps {
-  depth: number;
+  sectorTier: number;
+  nodesCleared: number;
+  resonancePercent: number;
+  attunementCurrent: number;
+  attunementMax: number;
   currentEncounterIndex: number;
   encounterPath: IncursionNode[];
   accentColor?: string;
@@ -25,7 +33,11 @@ interface LeyLineMapPanelProps {
 }
 
 export default function LeyLineMapPanel({
-  depth,
+  sectorTier,
+  nodesCleared,
+  resonancePercent,
+  attunementCurrent,
+  attunementMax,
   currentEncounterIndex,
   encounterPath,
   accentColor = TERMINAL_ACCENT,
@@ -52,19 +64,21 @@ export default function LeyLineMapPanel({
           LEY-LINE VECTOR GRID SCAN
         </Text>
         <Text style={[styles.headerSub, { color: mutedColor }]}>
-          DEPTH {depth} // SECTOR PATH LOCKED // SELECT ACTIVE ENCOUNTER
+          SECTOR T{sectorTier} // NODE {nodesCleared} // RES {resonancePercent}%
         </Text>
       </View>
 
       <DescentPipelineHUD
-        depth={depth}
+        sectorTier={sectorTier}
+        nodesCleared={nodesCleared}
+        resonancePercent={resonancePercent}
+        attunementCurrent={attunementCurrent}
+        attunementMax={attunementMax}
         currentEncounterIndex={currentEncounterIndex}
         encounterPath={encounterPath}
         accentColor={accentColor}
         borderColor={borderColor}
         mutedColor={mutedColor}
-        interactive
-        selectedNodeIndex={currentEncounterIndex}
         compact={false}
       />
 

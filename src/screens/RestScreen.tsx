@@ -15,14 +15,18 @@ export default function RestScreen(): React.JSX.Element {
   const { theme } = useTerminal();
   const { runState, applyRestChoice } = useRun();
   const { completeCurrentNode } = useNodeProgression();
-  const [selectedChoice, setSelectedChoice] = useState<'REST' | 'REPAIR' | null>(null);
+  const [selectedChoice, setSelectedChoice] = useState<'REST' | 'REPAIR' | 'RETUNE' | null>(null);
   const [confirmed, setConfirmed] = useState(false);
 
   const handleContinue = () => {
     if (!selectedChoice || confirmed) return;
     setConfirmed(true);
     applyRestChoice(selectedChoice);
-    const msg = selectedChoice === 'REST' ? 'Stamina reserves replenished.' : 'Soul anchor repaired.';
+    const msg = selectedChoice === 'REST'
+      ? 'Soul anchor stabilized.'
+      : selectedChoice === 'REPAIR'
+        ? 'Stamina reserves replenished.'
+        : 'Attunement re-tuned.';
     setTimeout(() => completeCurrentNode(msg), 1200);
   };
 
@@ -48,7 +52,7 @@ export default function RestScreen(): React.JSX.Element {
                 <Text style={[styles.docLabel, { color: theme.mutedColor }]}>
                   AGENCY SANCTUARY DOCUMENT // REST NODE
                 </Text>
-                <Text style={styles.docTitle}>REST / SANCTUARY NODE</Text>
+                <Text style={styles.docTitle}>SANCTUARY // RE-TUNE NODE</Text>
               </View>
 
               <View style={[styles.docBody, { borderColor: theme.borderColor }]}>
@@ -86,7 +90,30 @@ export default function RestScreen(): React.JSX.Element {
                   >
                     [ REST ]
                   </Text>
-                  <Text style={[styles.choiceReq, styles.choiceEffectGood]}>Restore 40% Stamina</Text>
+                  <Text style={[styles.choiceReq, styles.choiceEffectGood]}>Restore 25% Soul Anchor</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => !confirmed && setSelectedChoice('RETUNE')}
+                  disabled={confirmed}
+                  style={({ pressed }) => [
+                    styles.choiceBtn,
+                    selectedChoice === 'RETUNE' && styles.choiceBtnSelected,
+                    {
+                      borderColor: selectedChoice === 'RETUNE' ? TERMINAL_ACCENT : theme.borderColor,
+                      opacity: confirmed && selectedChoice !== 'RETUNE' ? 0.4 : pressed ? 0.7 : 1,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.choiceLabel,
+                      { color: selectedChoice === 'RETUNE' ? TERMINAL_ACCENT : theme.primaryColor },
+                    ]}
+                  >
+                    [ RE-TUNE ]
+                  </Text>
+                  <Text style={[styles.choiceReq, styles.choiceEffectGood]}>+2 Attunement</Text>
                 </Pressable>
 
                 <Pressable
@@ -107,9 +134,9 @@ export default function RestScreen(): React.JSX.Element {
                       { color: selectedChoice === 'REPAIR' ? TERMINAL_ACCENT : theme.primaryColor },
                     ]}
                   >
-                    [ ATTUNE ]
+                    [ REPAIR ]
                   </Text>
-                  <Text style={[styles.choiceReq, styles.choiceEffectGood]}>Restore 25% Soul Anchor HP</Text>
+                  <Text style={[styles.choiceReq, styles.choiceEffectGood]}>Restore 25% Stamina</Text>
                 </Pressable>
 
                 <SelectionContinueButton

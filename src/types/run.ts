@@ -1,3 +1,5 @@
+import type { EnemyAffinity } from './combatEnvironment';
+
 export type RegionTheme = 'HOSPITAL' | 'HOUSING' | 'FOREST' | 'CITY';
 
 export type ClimateClusterId = 'URBAN' | 'ISOLATED' | 'WILDERNESS';
@@ -59,10 +61,12 @@ export interface EnemyCombatProfile {
   nodeIndex: number;
   scale: number;
   isBoss?: boolean;
+  isVeilStalker?: boolean;
   bossPhase?: number;
   bossDepth?: number;
   /** Badge-screen test combat — controls intent rolling in advanceEnemyIntent. */
   testPreset?: 'easy' | 'hard';
+  affinity?: EnemyAffinity;
 }
 
 export interface Trinket {

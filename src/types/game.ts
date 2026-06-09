@@ -2,6 +2,18 @@ import type { IncursionInventoryState } from './incursionInventory';
 import type { MacroStoryRunConfiguration } from './macroStory';
 import type { OutcomeModifierMetric } from './macroStory';
 import type { RegionalPresenceState } from './regional';
+import type { CargoRunState, HarvestReturnRoute } from './cargoGrid';
+import type { ResonanceEscalationState } from './resonanceEscalation';
+import { createDefaultResonanceEscalationState } from './resonanceEscalation';
+import { createDefaultCargoRunState } from './cargoGrid';
+import type {
+  AttunementState,
+  EnvironmentType,
+  NodeSectorMeta,
+  ResonanceState,
+  SectorGraph,
+} from './sector';
+import { MAX_ATTUNEMENT, STARTING_ATTUNEMENT } from './sector';
 
 export type FactionType = 'TERRAN_GRID' | 'LEGION' | 'SOLARIS';
 export type ClassType = 'AEGIS' | 'RIFTSHOT' | 'ENVOY';
@@ -9,8 +21,32 @@ export type EncounterType = 'COMBAT' | 'SKILL_CHECK' | 'SANCTUARY';
 export type BiomeType = 'HOSPITAL' | 'ALLEYWAYS' | 'SEWERS' | 'CHURCH' | 'FOREST' | 'CANYON';
 export type ItemRarity = 'STANDARD' | 'STABILIZED' | 'COBALT' | 'ABYSSAL';
 export type CheckStatus = 'NOT_TESTED' | 'SUCCESS' | 'FAILURE';
-export type RunNodeType = 'NARRATIVE_EVENT' | 'STANDARD_COMBAT' | 'ELITE_COMBAT' | 'BOSS_COMBAT' | 'SANCTUARY' | 'BLACK_MARKET';
-export type IncursionEncounterType = 'COMBAT' | 'NARRATIVE_EVENT' | 'SANCTUARY' | 'BLACK_MARKET';
+export type RunNodeType =
+  | 'NARRATIVE_EVENT'
+  | 'STANDARD_COMBAT'
+  | 'ELITE_COMBAT'
+  | 'BOSS_COMBAT'
+  | 'SANCTUARY'
+  | 'BLACK_MARKET'
+  | 'EMERGENCY_EXTRACTION'
+  | 'SAFE_ANCHOR_EXTRACTION'
+  | 'MASTER_EXTRACTION_LINK'
+  | 'RESOURCE_HARVEST';
+
+export type ExtractionReviewKind = 'SAFE_ANCHOR' | 'EMERGENCY_RECALL' | 'MASTER_LINK';
+
+export type CombatObjective = 'ERADICATE' | 'SURVIVE_TURNS';
+
+export type EliteCombatModifierId =
+  | 'KINETIC_SHIELDING'
+  | 'LETHAL_RETALIATION'
+  | 'PHASE_SHROUD';
+export type IncursionEncounterType =
+  | 'COMBAT'
+  | 'NARRATIVE_EVENT'
+  | 'SANCTUARY'
+  | 'BLACK_MARKET'
+  | 'RESOURCE_HARVEST';
 export type IncursionBiome = 'CITY_STREETS' | 'HOSPITAL' | 'LABORATORY' | 'SECTOR_CORE';
 export type IncursionMapMode = 'SCANNING_HUB' | 'NODE_ENGAGED' | 'PROGRESS_CHECKPOINT';
 
@@ -139,6 +175,8 @@ export interface NarrativeEventNode {
   id: string;
   matrixEventId?: string;
   interactionMode?: 'standard' | 'conditional';
+  /** Open-sector environment flavor for narrative presentation. */
+  environmentType?: import('./sector').EnvironmentType;
   title: string;
   scenarioText: string;
   choiceA: {
@@ -154,6 +192,8 @@ export interface NarrativeEventNode {
     successText: string;
     failureText: string;
     effectPreview?: NarrativeChoiceEffectPreview;
+    locked?: boolean;
+    lockReason?: string;
   };
 }
 
@@ -162,6 +202,17 @@ export interface EnvironmentalModifiers {
   isPlayerBlinded: boolean;
   hasTetanusGlitch: boolean;
   startingStaminaPenalty: number;
+  environmentType?: EnvironmentType;
+  meleeDamageBonusPct?: number;
+  staminaCostReductionPct?: number;
+  parryWindowBonusPct?: number;
+  resonancePercent?: number;
+  bloodFrenzyActive?: boolean;
+  combatObjective?: CombatObjective;
+  survivalTurnsRequired?: number;
+  enemyDamageReductionPct?: number;
+  lethalRetaliationDamage?: number;
+  eliteModifier?: EliteCombatModifierId;
 }
 
 export interface IncursionNode {
@@ -177,6 +228,11 @@ export interface IncursionNode {
   isCompleted: boolean;
   /** Boss terminal node — bypasses manual sweep mechanics. */
   isPreDiscovered?: boolean;
+  environmentType?: EnvironmentType;
+  sectorMeta?: NodeSectorMeta;
+  isExtractionNode?: boolean;
+  isAnomalyNest?: boolean;
+  safeAnchorIndex?: 1 | 2 | 3;
 }
 
 export interface BossPhaseConfiguration {
@@ -203,12 +259,14 @@ export interface ActiveIncursionState {
   currentNarrativeId: string | null;
   lastCheckStatus: CheckStatus;
   activeChoice: 'A' | 'B' | null;
+  /** @deprecated Legacy depth counter — sector runs use nodesCleared + sectorTier. */
   currentDepth: number;
   currentEncounterIndex: number;
-  /** Resolved path — one chosen node per encounter step (10 per depth). */
+  /** Resolved path — one chosen node per cleared encounter step. */
   encounterPath: IncursionNode[];
-  /** Pre-generated selectable vector clusters indexed by encounter 0–9. */
+  /** @deprecated Sector graph replaces pre-generated depth clusters. */
   encounterOptionClusters: IncursionNode[][];
+  /** @deprecated */
   earlySanctuarySpawned: boolean;
   selectedVectorId: string | null;
   /** Node staged for scan confirmation overlay preview. */
@@ -220,6 +278,25 @@ export interface ActiveIncursionState {
   lastCheckpointMessage: string | null;
   /** Run-scoped credits earned from combat — reset each run, not carried to hub. */
   runCredits: number;
+  sectorGraph: SectorGraph;
+  currentNodeId: string;
+  nodesCleared: number;
+  attunement: AttunementState;
+  resonance: ResonanceState;
+  focusedNodeIds: string[];
+  bossDefeated: boolean;
+  primeExtractionBonus: boolean;
+  sectorTier: number;
+  cargo: CargoRunState;
+  pendingHarvestReturn: HarvestReturnRoute | null;
+  resonanceEscalations: ResonanceEscalationState;
+  /** Safe anchor extractions used this run (1, 2, 3). */
+  clearedSafeAnchors: readonly number[];
+  collapseActive: boolean;
+  pendingSafeAnchorIndex: 1 | 2 | 3 | null;
+  extractionReviewKind: ExtractionReviewKind | null;
+  masterLinkUsed: boolean;
+  defendRiftActive: boolean;
 }
 
 export function createDefaultEnvironmentalModifiers(): EnvironmentalModifiers {
@@ -252,5 +329,23 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     mapMode: 'SCANNING_HUB',
     lastCheckpointMessage: null,
     runCredits: 0,
+    sectorGraph: { entryId: '', nodes: {}, sectorTier: 1, maxGraphDepth: 20 },
+    currentNodeId: '',
+    nodesCleared: 0,
+    attunement: { current: STARTING_ATTUNEMENT, max: MAX_ATTUNEMENT },
+    resonance: { percent: 0 },
+    focusedNodeIds: [],
+    bossDefeated: false,
+    primeExtractionBonus: false,
+    sectorTier: 1,
+    cargo: createDefaultCargoRunState(),
+    pendingHarvestReturn: null,
+    resonanceEscalations: createDefaultResonanceEscalationState(),
+    clearedSafeAnchors: [],
+    collapseActive: false,
+    pendingSafeAnchorIndex: null,
+    extractionReviewKind: null,
+    masterLinkUsed: false,
+    defendRiftActive: false,
   };
 }

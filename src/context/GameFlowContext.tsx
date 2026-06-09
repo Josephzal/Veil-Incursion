@@ -16,6 +16,8 @@ interface GameFlowContextType {
   startSkillCheck: () => void;
   startRest: () => void;
   startBlackMarket: () => void;
+  startResourceHarvest: () => void;
+  startExtractionReview: () => void;
   startCombat: () => void;
   startRunProgress: () => void;
   startRunComplete: () => void;
@@ -42,6 +44,8 @@ export function GameFlowProvider({ children }: { children: React.ReactNode }) {
   const startSkillCheck = useCallback(() => setCurrentScreen('SKILL_CHECK'), []);
   const startRest = useCallback(() => setCurrentScreen('REST'), []);
   const startBlackMarket = useCallback(() => setCurrentScreen('BLACK_MARKET'), []);
+  const startResourceHarvest = useCallback(() => setCurrentScreen('RESOURCE_HARVEST'), []);
+  const startExtractionReview = useCallback(() => setCurrentScreen('EXTRACTION_REVIEW'), []);
   const startCombat = useCallback(() => setCombatEntryActive(true), []);
   const completeCombatEntry = useCallback(() => {
     setCurrentScreen('COMBAT');
@@ -81,6 +85,8 @@ export function GameFlowProvider({ children }: { children: React.ReactNode }) {
       startSkillCheck,
       startRest,
       startBlackMarket,
+      startResourceHarvest,
+      startExtractionReview,
       startCombat,
       startRunProgress,
       startRunComplete,
@@ -100,6 +106,8 @@ export function GameFlowProvider({ children }: { children: React.ReactNode }) {
       startSkillCheck,
       startRest,
       startBlackMarket,
+      startResourceHarvest,
+      startExtractionReview,
       startCombat,
       startRunProgress,
       startRunComplete,

@@ -11,6 +11,12 @@ import {
 import { useTerminal } from '../context/TerminalContext';
 import { INITIAL_SECTOR_POOL } from '../data/regions';
 import { advanceEnemyIntent, spawnEnemyProfile } from '../data/enemies';
+import {
+  computeBloodFrenzyHeal,
+  scaleKineticDamage,
+  shouldChronoStunOnKineticHit,
+  type KineticDamageSource,
+} from '../data/combatEnvironmentEngine';
 import { bossStrikeDamage, rollBossIntent, shouldShiftBossPhase } from '../data/bossCombat';
 import { COMBAT_ACTION, ENEMY_ABYSSAL_SIPHON_REQUEST, EnemyCombatProfile, EnemyIntent } from '../types/run';
 import type { IncursionConsumableUseResult } from '../types/incursionInventory';
@@ -206,6 +212,7 @@ export default function TacticalCombatHub({
   /** HP already applied when the red deck strike overlay appeared. */
   const preAppliedHpStrikeRef = useRef(0);
   const enemyStunPendingRef = useRef(false);
+  const survivedEnemyTurnsRef = useRef(0);
   const isPlayerTurnRef = useRef(isPlayerTurn);
   const resolutionRef = useRef<'VICTORY' | 'DEFEAT' | null>(null);
   const dismissedRef = useRef(false);
@@ -237,7 +244,7 @@ export default function TacticalCombatHub({
     resolutionRef.current != null || operativeHpRef.current <= 0;
 
   const log = (t: string) => onTerminalLog?.(t);
-  const parryTimingWindowBonus = parryWindowBonus * 0.02;
+  const parryTimingWindowBonus = parryWindowBonus * 0.02 + ((env.parryWindowBonusPct ?? 0) * 0.01);
   const parryTimingBlindPenalty = env.isPlayerBlinded ? 0.015 : 0;
   const counterReady = abyssalReserve >= COMBAT_ACTION.COUNTER_ABYSSAL_MIN && !isExhausted;
   const sliceReady = abyssalReserve >= COMBAT_ACTION.ABYSSAL_RESERVE_CAP && !isExhausted;
@@ -274,7 +281,7 @@ export default function TacticalCombatHub({
     setCombatTurnState({
       isPlayerTurn: isPlayerTurn && cycleState === 'TEXT_COMBAT',
       phase: combatTurnPhase,
-      canUseInventory: isPlayerTurn && cycleState === 'TEXT_COMBAT',
+      canUseCargo: isPlayerTurn && cycleState === 'TEXT_COMBAT',
     });
   }, [combatTurnPhase, cycleState, isPlayerTurn, setCombatTurnState]);
 
@@ -399,7 +406,11 @@ export default function TacticalCombatHub({
     setCycleState('RESOLUTION');
     if (victory) {
       resolutionRef.current = 'VICTORY';
-      log('[EXORCISED] >> Hostile neutralized. Incursion sealed.');
+      if (env.combatObjective === 'SURVIVE_TURNS') {
+        log('[DEFEND THE RIFT] >> Evac conduit stabilized. Hostile interdiction repelled.');
+      } else {
+        log('[EXORCISED] >> Hostile neutralized. Incursion sealed.');
+      }
       setResolutionOutcome('VICTORY');
       awardCurrencies(750, 25);
     } else {
@@ -492,33 +503,22 @@ export default function TacticalCombatHub({
     }
     if (dmg <= 0) return;
     preAppliedHpStrikeRef.current = dmg;
+    pendingDmgRef.current = dmg;
+    pendingUnblockRef.current = strike.unblockable;
     Vibration.vibrate([0, 32, 48, 28]);
-    setOperativeHp((p) => {
-      const n = Math.max(p - dmg, 0);
-      operativeHpRef.current = n;
-      if (n <= 0) resolve(false);
-      return n;
-    });
   };
 
-  const restorePreAppliedHpStrike = () => {
-    const restore = preAppliedHpStrikeRef.current;
-    if (restore <= 0) return;
+  const commitPendingPlayerDamage = (unblockable = false, msg?: string) => {
+    const pending = preAppliedHpStrikeRef.current > 0
+      ? preAppliedHpStrikeRef.current
+      : pendingDmgRef.current;
+    if (pending <= 0) return false;
     preAppliedHpStrikeRef.current = 0;
-    setOperativeHp((p) => {
-      const n = Math.min(p + restore, maxSoulAnchor);
-      operativeHpRef.current = n;
-      return n;
-    });
+    hurtPlayer(pending, unblockable || pendingUnblockRef.current, msg);
+    return true;
   };
 
   const hurtPlayer = (raw: number, unblockable = false, msg?: string) => {
-    if (preAppliedHpStrikeRef.current > 0) {
-      const applied = preAppliedHpStrikeRef.current;
-      preAppliedHpStrikeRef.current = 0;
-      log(msg ?? `>> ENEMY STRIKE — ${applied} DAMAGE DEALT`);
-      return;
-    }
     let dmg = raw;
     if (!unblockable && abyssalWardRef.current) {
       dmg = Math.floor(dmg * (1 - COMBAT_ACTION.ABYSSAL_WARD_BLOCK_PCT));
@@ -532,17 +532,42 @@ export default function TacticalCombatHub({
     setOperativeHp((p) => { const n = Math.max(p - dmg, 0); operativeHpRef.current = n; if (n <= 0) resolve(false); return n; });
   };
 
-  const hurtEnemy = (raw: number, tag: string): boolean => {
+  const hurtEnemy = (raw: number, tag: string, source?: KineticDamageSource): boolean => {
     const e = enemyRef.current; if (!e) return false;
-    if (env.isEnemyPhaseShrouded && Math.random() < 0.2) {
-      log(`${tag} >> PHASE SHROUD — ATTACK WHIFFED (20% miss).`);
+    const shroudMissChance = env.eliteModifier === 'PHASE_SHROUD' ? 0.25 : 0.2;
+    if (env.isEnemyPhaseShrouded && Math.random() < shroudMissChance) {
+      log(`${tag} >> PHASE SHROUD — ATTACK WHIFFED (${Math.round(shroudMissChance * 100)}% miss).`);
       return false;
     }
-    let dmg = raw;
+    let dmg = source
+      ? scaleKineticDamage(raw, e.affinity, env.meleeDamageBonusPct ?? 0)
+      : raw;
+    if ((env.enemyDamageReductionPct ?? 0) > 0) {
+      dmg = Math.floor(dmg * (1 - (env.enemyDamageReductionPct ?? 0) / 100));
+    }
+    if (source && dmg !== raw) {
+      log(`${tag} >> Kinetic scaling ${raw} → ${dmg}.`);
+    }
     if (e.evadeActive) { dmg = Math.floor(dmg * 0.5); log(`${tag} >> EVADE — 50% (${dmg}).`); }
     else log(`${tag} >> ${dmg} damage.`);
     const hp = Math.max(e.currentHp - dmg, 0);
     syncEnemy({ ...e, currentHp: hp });
+
+    if (source && env.bloodFrenzyActive && dmg > 0) {
+      const heal = computeBloodFrenzyHeal(dmg, true);
+      if (heal > 0) {
+        setOperativeHp((p) => {
+          const n = Math.min(p + heal, maxSoulAnchor);
+          operativeHpRef.current = n;
+          return n;
+        });
+        log(`[BLOOD FRENZY] >> Runic flare restores ${heal} soul anchor.`);
+      }
+    }
+    if (source && shouldChronoStunOnKineticHit(e.affinity, source) && dmg > 0) {
+      enemyStunPendingRef.current = true;
+      log('[CHRONO SHATTER] >> Temporal sync fractured — hostile turn forfeited.');
+    }
 
     if (e.isBoss && bossRuntimeRef.current && shouldShiftBossPhase(bossRuntimeRef.current, hp)) {
       bossPhaseRef.current = 2;
@@ -595,13 +620,20 @@ export default function TacticalCombatHub({
     applyStamina(0);
     applyTetanusGlitch();
   };
+  const adjustedStaminaCost = (cost: number) => {
+    const reduction = env.staminaCostReductionPct ?? 0;
+    if (reduction <= 0) return cost;
+    return Math.max(1, Math.floor(cost * (1 - reduction / 100)));
+  };
+
   const spendStam = (cost: number, overdraw = false): boolean => {
-    if (staminaRef.current < cost) {
+    const effectiveCost = adjustedStaminaCost(cost);
+    if (staminaRef.current < effectiveCost) {
       if (!overdraw) return false;
       markExhausted();
       return true;
     }
-    const n = applyStamina(staminaRef.current - cost);
+    const n = applyStamina(staminaRef.current - effectiveCost);
     if (n <= 0) {
       skipRegenRef.current = true;
       applyTetanusGlitch();
@@ -654,6 +686,15 @@ export default function TacticalCombatHub({
     if (isCombatTerminal()) return;
     const e = enemyRef.current;
     if (!e || operativeHpRef.current <= 0) return;
+    if (env.combatObjective === 'SURVIVE_TURNS') {
+      survivedEnemyTurnsRef.current += 1;
+      const required = env.survivalTurnsRequired ?? 3;
+      log(`>> RIFT DEFENSE — hostile cycle ${survivedEnemyTurnsRef.current}/${required} endured.`);
+      if (survivedEnemyTurnsRef.current >= required) {
+        resolve(true);
+        return;
+      }
+    }
     if (advanceIntent) {
       if (e.isBoss && bossRuntimeRef.current) {
         const phase = bossPhaseRef.current;
@@ -709,7 +750,9 @@ export default function TacticalCombatHub({
     setDeckStrikeOverlay(null);
     if (countering && openParryWindow(currentEnemy, true)) return;
     if (!countering && openParryWindow(currentEnemy, false)) return;
-    execIntent(currentEnemy);
+    if (!commitPendingPlayerDamage()) {
+      execIntent(currentEnemy);
+    }
     if (operativeHpRef.current > 0 && currentEnemy.currentHp > 0) endEnemyTurn();
   };
 
@@ -813,7 +856,17 @@ export default function TacticalCombatHub({
     if (env.hasTetanusGlitch) log('>> ENV: TETANUS GLITCH ACTIVE — exhaustion triggers 3 HP bleed.');
     if (env.startingStaminaPenalty > 0) log(`>> ENV: STAMINA PENALTY — entry ceiling reduced to 50.`);
     if (env.isEnemyPhaseShrouded) log('>> ENV: ENEMY PHASE SHROUDED — 20% miss chance on strikes.');
+    if (env.environmentType) log(`>> ENV ANCHOR: ${env.environmentType.replace(/_/g, ' ')}`);
+    if ((env.meleeDamageBonusPct ?? 0) > 0) log(`>> ENV BONUS: melee damage +${env.meleeDamageBonusPct}%.`);
+    if ((env.staminaCostReductionPct ?? 0) > 0) log(`>> ENV BONUS: melee stamina cost −${env.staminaCostReductionPct}%.`);
+    if ((env.parryWindowBonusPct ?? 0) > 0) log(`>> ENV BONUS: counter window +${env.parryWindowBonusPct}%.`);
+    if (env.bloodFrenzyActive) log('>> BLOOD FRENZY ACTIVE — melee damage leeches 15% to soul anchor.');
+    if (env.combatObjective === 'SURVIVE_TURNS') {
+      log(`>> DEFEND THE RIFT — survive ${env.survivalTurnsRequired ?? 3} hostile turn cycles.`);
+    }
+    if (env.eliteModifier) log(`>> ELITE MODIFIER ACTIVE — ${env.eliteModifier.replace(/_/g, ' ')}`);
     log(`>> TARGET LOCK: ${e.designation} // CLASS ${e.class}`);
+    if (e.affinity) log(`>> AFFINITY LOCK: ${e.affinity}`);
     if (startingAbyssalReservePercent > 0) log(`>> Abyssal reserve pre-charged to ${startingAbyssalReservePercent}%.`);
     bossRuntimeRef.current = bossProfile;
     bossPhaseRef.current = bossProfile?.currentPhase ?? 1;
@@ -843,7 +896,18 @@ export default function TacticalCombatHub({
       log(`[ABYSSAL WARD OVERCHARGE] >> Abyssal reserve +${COMBAT_ACTION.ABYSSAL_WARD_STRIKE_BONUS}%.`);
     }
     const dmg = exhausted ? strikeStats.exhaustedStrikeDamage : strikeStats.strikeDamage;
-    if (hurtEnemy(dmg, arPrimed ? '[ABYSSAL STRIKE]' : '[STRIKE]')) return;
+    const eradicated = hurtEnemy(dmg, arPrimed ? '[ABYSSAL STRIKE]' : '[STRIKE]', 'STRIKE');
+    if ((env.lethalRetaliationDamage ?? 0) > 0 && dmg > 0) {
+      const feedback = env.lethalRetaliationDamage ?? 0;
+      log(`[LETHAL RETALIATION] >> Hostile feedback — ${feedback} HP.`);
+      setOperativeHp((p) => {
+        const n = Math.max(p - feedback, 0);
+        operativeHpRef.current = n;
+        if (n <= 0) resolve(false);
+        return n;
+      });
+    }
+    if (eradicated) return;
     passToEnemy(false);
   };
 
@@ -916,12 +980,12 @@ export default function TacticalCombatHub({
     cancelAnimation(parryScaleSV);
     if (passed) {
       Vibration.vibrate(15);
-      restorePreAppliedHpStrike();
+      preAppliedHpStrikeRef.current = 0;
       const cd = Math.floor(COMBAT_ACTION.COUNTER_DAMAGE * (1 + parryMultiplierBonus));
       log(`[PERFECT COUNTER] >> Parry locked — ${cd} retaliation damage.`);
       counterRef.current = false;
       setCounterPrepActive(false);
-      const killed = hurtEnemy(cd, '[COUNTER HIT]');
+      const killed = hurtEnemy(cd, '[COUNTER HIT]', 'COUNTER');
       hideParryOverlay();
       startParrySuccessBurst(() => {
         if (killed) finishParryKillAfterHalo();
@@ -931,11 +995,7 @@ export default function TacticalCombatHub({
     }
     hideParryOverlay();
     log(unmitigatedOnFail ? '[PARRY FAILED] >> Mistimed — 100% unmitigated damage.' : '[PARRY FAILED] >> Guard collapsed.');
-    if (preAppliedHpStrikeRef.current > 0) {
-      preAppliedHpStrikeRef.current = 0;
-    } else {
-      hurtPlayer(pendingDmgRef.current, unmitigatedOnFail);
-    }
+    commitPendingPlayerDamage(unmitigatedOnFail);
     counterRef.current = false;
     setCounterPrepActive(false);
     if (operativeHpRef.current > 0) endEnemyTurn();
@@ -1014,7 +1074,7 @@ export default function TacticalCombatHub({
     const base = scaleSlice(COMBAT_ACTION.EVISCERATE_DAMAGE);
     const dmg = hits === 3 ? base : Math.floor(base * (hits / 3));
     log(hits === 3 ? `[EXECUTION SEVERANCE] >> Perfect [3/3] — ${dmg} damage.` : `[EXECUTION SEVERANCE] >> [${hits}/3] — ${dmg} damage.`);
-    if (hurtEnemy(dmg, '[EVISCERATE]')) return;
+    if (hurtEnemy(dmg, '[EVISCERATE]', 'EVISCERATE')) return;
     setCycleState('TEXT_COMBAT'); passToEnemy(false);
   };
 
@@ -1263,6 +1323,7 @@ export default function TacticalCombatHub({
       currentHp: enemy.currentHp,
       maxHp: enemy.maxHp,
       intent: enemy.intent,
+      affinity: enemy.affinity,
     });
   }, [
     stackedLayout,
@@ -1271,6 +1332,7 @@ export default function TacticalCombatHub({
     enemy?.currentHp,
     enemy?.maxHp,
     enemy?.intent,
+    enemy?.affinity,
   ]);
 
   const soulAnchorRatio = maxSoulAnchor > 0 ? operativeHp / maxSoulAnchor : 0;

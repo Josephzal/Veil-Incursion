@@ -18,13 +18,13 @@ export type CombatTurnPhase =
 export interface CombatTurnState {
   isPlayerTurn: boolean;
   phase: CombatTurnPhase;
-  canUseInventory: boolean;
+  canUseCargo: boolean;
 }
 
 const DEFAULT_TURN_STATE: CombatTurnState = {
   isPlayerTurn: true,
   phase: 'PLAYER_COMMAND',
-  canUseInventory: true,
+  canUseCargo: true,
 };
 
 interface CombatTurnContextValue extends CombatTurnState {

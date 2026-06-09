@@ -54,6 +54,7 @@ export const ENCOUNTER_DISPLAY_LABEL: Record<IncursionEncounterType, string> = {
   NARRATIVE_EVENT: 'Narrative Event',
   SANCTUARY: 'Sanctuary',
   BLACK_MARKET: 'Black Market',
+  RESOURCE_HARVEST: 'Resource Node',
 };
 
 function hashSeed(input: string): number {
