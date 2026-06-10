@@ -45,6 +45,7 @@ export default function OverworldHubScreen(): React.JSX.Element {
       factionPerks: account.factionPerks,
       unlockedBiomes: account.unlockedBiomes,
       aegisLoadout: account.aegisLoadout,
+      alignedFaction: account.alignedFaction,
     });
     startScanning();
   };

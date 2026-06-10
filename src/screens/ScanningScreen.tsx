@@ -11,6 +11,7 @@ import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
 import OperativeTelemetryBar from '../components/OperativeTelemetryBar';
 import InlineScannerEngagement from '../components/overworld/InlineScannerEngagement';
 import SectorOverworldMap from '../components/SectorOverworldMap';
+import LeyLineBoonSwapOverlay from '../components/LeyLineBoonSwapOverlay';
 import { useRun } from '../context/RunContext';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useTerminal } from '../context/TerminalContext';
@@ -45,6 +46,13 @@ export default function ScanningScreen(): React.JSX.Element {
     appendRunLog,
     initiateEmergencyRecall,
     applyResonanceManifestScan,
+    tickOverworldHazards,
+    collectVeilEcho,
+    acquireRawLeyBoon,
+    fireDirectedPing,
+    prepareGridHoundEncounter,
+    swapLeyLineMutation,
+    cancelLeyBoonSwap,
   } = useRun();
   const { account } = usePlayerAccount();
   const { isScanningHub, finalizeSectorExtraction } = useDescentNavigator();
@@ -66,7 +74,6 @@ export default function ScanningScreen(): React.JSX.Element {
   const [vectorDots, setVectorDots] = useState<RadarDot[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [manifestedNodeIds, setManifestedNodeIds] = useState<Set<string>>(() => new Set());
-  const [riftsDetected, setRiftsDetected] = useState(0);
   const [riftsTotal, setRiftsTotal] = useState(0);
   const lastRadarSessionRef = useRef<number | null>(null);
 
@@ -134,7 +141,6 @@ export default function ScanningScreen(): React.JSX.Element {
     setVectorDots(dots);
     setSelectedNodeId(null);
     setManifestedNodeIds(new Set());
-    setRiftsDetected(0);
     setRiftsTotal(vectorCluster.length);
     closeScanPreview();
   }, [isScanningHub, scanSessionKey, vectorCluster, nodeIndex, runState.currentSector, closeScanPreview]);
@@ -153,10 +159,8 @@ export default function ScanningScreen(): React.JSX.Element {
     setManifestedNodeIds(new Set(ids));
   }, []);
 
-  const handleScoutProgressChange = useCallback((detected: number, total: number) => {
-    setRiftsDetected(detected);
-    setRiftsTotal(total);
-  }, []);
+  const riftsUncovered = manifestedNodeIds.size;
+  const leyScarActive = activeIncursion.overworldSession.rawLeyBoons.some((b) => !b.claimed);
 
   const routeAfterEngage = useCallback((nodeType: string | null) => {
     if (!nodeType) return;
@@ -222,6 +226,11 @@ export default function ScanningScreen(): React.JSX.Element {
     applyResonanceManifestScan(nodeId);
   }, [appendRunLog, applyResonanceManifestScan]);
 
+  const handleGridHoundCaught = useCallback(() => {
+    prepareGridHoundEncounter();
+    startCombat();
+  }, [prepareGridHoundEncounter, startCombat]);
+
   if (!isScanningHub) {
     return (
       <View style={[styles.container, { backgroundColor: theme.backgroundColor }]}>
@@ -257,16 +266,21 @@ export default function ScanningScreen(): React.JSX.Element {
               onFrequencyMatch={handleFrequencyMatch}
               onNodeManifest={handleNodeManifest}
               onManifestedIdsChange={handleManifestedIdsChange}
-              onScoutProgressChange={handleScoutProgressChange}
               currentDistrict={activeIncursion.currentDistrict}
               layoutRollKey={`${scanSessionKey}-d${activeIncursion.currentDistrict}`}
               mapStatusText={`DIST ${activeIncursion.currentDistrict} // DEPTH ${activeIncursion.currentDepth} // RES ${activeIncursion.resonance.percent}% // ATT ${activeIncursion.attunement.current}/${activeIncursion.attunement.max}`}
+              overworldSession={activeIncursion.overworldSession}
+              onCollectVeilEcho={collectVeilEcho}
+              onAcquireRawLeyBoon={acquireRawLeyBoon}
+              onTickOverworldHazards={tickOverworldHazards}
+              onDirectedPing={fireDirectedPing}
+              onGridHoundCaught={handleGridHoundCaught}
             />
           </View>
 
           <View style={[styles.nodeDock, { borderColor: theme.borderColor }]}>
             <Text style={[styles.riftsCounter, { color: theme.mutedColor }]}>
-              RIFTS DETECTED {riftsDetected}/{riftsTotal}
+              {`RIFTS UNCOVERED ${riftsUncovered}/${riftsTotal}${leyScarActive ? ' // LEY SCAR DETECTED' : ''}`}
             </Text>
             <View style={styles.nodeDockBody}>
               {showNodeDock ? (
@@ -305,6 +319,15 @@ export default function ScanningScreen(): React.JSX.Element {
         </View>
       </MacroLogAnchoredLayout>
 
+      <LeyLineBoonSwapOverlay
+        visible={activeIncursion.pendingLeyBoonSwap != null}
+        ownedMutations={activeIncursion.leyLineMutations}
+        incomingMutationId={activeIncursion.pendingLeyBoonSwap?.incomingMutationId ?? 'SHARPENED'}
+        theme={theme}
+        accentColor={accent}
+        onSwap={swapLeyLineMutation}
+        onCancel={cancelLeyBoonSwap}
+      />
     </IncursionShell>
   );
 }

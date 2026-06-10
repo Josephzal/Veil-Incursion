@@ -69,6 +69,8 @@ export interface EnemyCombatProfile {
   scale: number;
   isBoss?: boolean;
   isVeilStalker?: boolean;
+  isGridHound?: boolean;
+  isApex?: boolean;
   bossPhase?: number;
   bossDepth?: number;
   /** Badge-screen test combat — controls intent rolling in advanceEnemyIntent. */

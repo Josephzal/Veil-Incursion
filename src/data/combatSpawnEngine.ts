@@ -51,6 +51,7 @@ export function spawnCombatSquad(options: SpawnSquadOptions): EnemyCombatProfile
     isElite: options.isElite,
     isAmbush: options.isAmbush,
     district,
+    seed: `spawn:${options.nodeIndex}:${options.isElite ? 'elite' : 'std'}:${options.isAmbush ? 'ambush' : 'norm'}`,
   });
   const slots = options.unitCount != null
     ? drafted.slots.slice(0, Math.min(4, options.unitCount))
@@ -63,6 +64,8 @@ export function spawnCombatSquad(options: SpawnSquadOptions): EnemyCombatProfile
         resonancePercent: options.spawnOptions?.resonancePercent,
         forcedElite: options.isElite === true,
         district,
+        isApex: drafted.isApex === true,
+        apexBudget: drafted.isApex ? drafted.spawnBudget : undefined,
       }),
       slot,
     ),

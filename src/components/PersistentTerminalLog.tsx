@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MacroLogCargoButton, { TERMINAL_ACCENT } from './MacroLogCargoButton';
+import MacroLogStatusButton from './MacroLogStatusButton';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 
@@ -20,6 +21,8 @@ interface PersistentTerminalLogProps {
   showCargo?: boolean;
   cargoDisabled?: boolean;
   onCargoPress?: () => void;
+  showStatus?: boolean;
+  onStatusPress?: () => void;
 }
 
 function resolveBottomInset(insetsBottom: number): number {
@@ -41,6 +44,8 @@ export default function PersistentTerminalLog({
   showCargo = false,
   cargoDisabled = false,
   onCargoPress,
+  showStatus = false,
+  onStatusPress,
 }: PersistentTerminalLogProps): React.JSX.Element | null {
   const { runLog } = useRun();
   const { theme } = useTerminal();
@@ -54,7 +59,7 @@ export default function PersistentTerminalLog({
   }, [runLog]);
 
   if (!visible) return null;
-  if (!showCargo && runLog.length === 0) return null;
+  if (!showCargo && !showStatus && runLog.length === 0) return null;
 
   const bottomInset = docked ? resolveBottomInset(insets.bottom) : 0;
 
@@ -72,9 +77,14 @@ export default function PersistentTerminalLog({
     >
       <View style={styles.headerRow}>
         <Text style={[styles.header, { color: theme.mutedColor }]}>RUN TERMINAL // MACRO LOG</Text>
-        {showCargo && onCargoPress ? (
-          <MacroLogCargoButton disabled={cargoDisabled} onPress={onCargoPress} />
-        ) : null}
+        <View style={styles.headerActions}>
+          {showStatus && onStatusPress ? (
+            <MacroLogStatusButton onPress={onStatusPress} />
+          ) : null}
+          {showCargo && onCargoPress ? (
+            <MacroLogCargoButton disabled={cargoDisabled} onPress={onCargoPress} />
+          ) : null}
+        </View>
       </View>
       <ScrollView
         ref={scrollRef}
@@ -142,6 +152,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 8,
     marginBottom: 4,
+    flexShrink: 0,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     flexShrink: 0,
   },
   header: {

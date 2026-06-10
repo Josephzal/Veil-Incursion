@@ -29,6 +29,17 @@ import {
   safeAnchorIndexForCrossingDepth,
 } from './sectorZoneEngine';
 import { appendCollapseForwardNodes, createCollapseEntryNode } from './pocketDimensionEngine';
+import { applyMacroBiomeToCluster } from './macroBiomeEngine';
+import {
+  materializeLevelCluster,
+  maxVectorsForLocalLevel,
+} from './descentLevelMatrix';
+import {
+  depthFromNodesCleared,
+  getDistrictFromDepth,
+  isDistrictGateDepth,
+  localLevelFromDepth,
+} from './districtPacing';
 
 const VECTOR_DESIGNATIONS = ['ALPHA', 'BETA', 'GAMMA', 'DELTA', 'EPSILON', 'ZETA'] as const;
 
@@ -53,8 +64,7 @@ function rollEncounter(graphDepth: number): IncursionEncounterType {
   }
   if (roll < 0.32) return 'COMBAT';
   if (roll < 0.48) return 'NARRATIVE_EVENT';
-  if (roll < 0.58) return 'RESOURCE_HARVEST';
-  if (roll < 0.75) return 'SANCTUARY';
+  if (roll < 0.62) return 'RESOURCE_HARVEST';
   return 'BLACK_MARKET';
 }
 
@@ -226,7 +236,7 @@ export function generateSectorGraph(sectorTier = 1): SectorGraph {
   let spineParentId = entryId;
   for (let depth = 1; depth <= BOSS_GRAPH_DEPTH; depth += 1) {
     const isBoss = (DISTRICT_GATE_DEPTHS as readonly number[]).includes(depth);
-    const spineId = depth === 30 ? 'sector-boss-nest' : isBoss ? `sector-gate-${depth}` : `sector-spine-${depth}`;
+    const spineId = depth === 45 ? 'sector-boss-nest' : isBoss ? `sector-gate-${depth}` : `sector-spine-${depth}`;
     const spine = makeGraphNode(spineId, depth, spineParentId, sectorTier, { isAnomalyNest: isBoss });
     if (isBoss) {
       spine.type = 'BOSS_COMBAT';
@@ -445,6 +455,10 @@ export interface BuildScannerClusterOptions {
   relayExtractionNodeId?: string | null;
   collapseActive?: boolean;
   masterLinkUsed?: boolean;
+  lastLevelOfferedCombat?: boolean;
+  /** Apply current macro/sub biome flavor to forward vectors. */
+  macroBiomeFamily?: import('../types/narrativeProcedural').MacroBiomeFamily | null;
+  subBiomeId?: import('../types/narrativeProcedural').SubBiomeId | null;
 }
 
 /** Synthetic extraction ids are not stored in the sector graph. */
@@ -499,9 +513,12 @@ export function buildScannerCluster(options: BuildScannerClusterOptions): Incurs
     relayExtractionNodeId = null,
     collapseActive = false,
     masterLinkUsed = false,
+    lastLevelOfferedCombat = true,
+    macroBiomeFamily = null,
+    subBiomeId = null,
   } = options;
 
-  let graph = ensureForwardVectorsOnGraph(inputGraph, currentNodeId);
+  let graph = inputGraph;
   if (collapseActive) {
     graph = appendCollapseForwardNodes(graph, currentNodeId, 2);
   }
@@ -510,21 +527,48 @@ export function buildScannerCluster(options: BuildScannerClusterOptions): Incurs
   if (!current) return [];
 
   const stepIndex = nodesCleared;
-  let cluster = current.childIds
-    .filter((childId) => !graph.nodes[childId]?.isCompleted)
-    .map((childId) => graphNodeToIncursionNode(graph.nodes[childId], stepIndex));
+  const upcomingDepth = depthFromNodesCleared(nodesCleared);
+  const localLevel = localLevelFromDepth(upcomingDepth);
+  const district = getDistrictFromDepth(upcomingDepth);
 
-  if (isFullBlindZone(nodesCleared)) {
-    cluster = cluster.filter(
-      (node) => node.type !== 'SANCTUARY' && node.type !== 'BLACK_MARKET',
-    );
+  let cluster: IncursionNode[];
+
+  if (isDistrictGateDepth(upcomingDepth) && !bossDefeated) {
+    const gateId = upcomingDepth === 45
+      ? 'sector-boss-nest'
+      : `sector-gate-${upcomingDepth}`;
+    const gateNode = graph.nodes[gateId];
+    if (gateNode && !gateNode.isCompleted) {
+      cluster = [graphNodeToIncursionNode(gateNode, stepIndex)];
+    } else {
+      cluster = materializeLevelCluster({
+        graphDepth: upcomingDepth,
+        district,
+        nodesCleared,
+        sectorTier: graph.sectorTier,
+        lastLevelOfferedCombat,
+        seed: `gate:${upcomingDepth}:${nodesCleared}`,
+      });
+    }
+  } else if (collapseActive) {
+    cluster = current.childIds
+      .filter((childId) => !graph.nodes[childId]?.isCompleted)
+      .map((childId) => graphNodeToIncursionNode(graph.nodes[childId], stepIndex));
+  } else {
+    cluster = materializeLevelCluster({
+      graphDepth: upcomingDepth,
+      district,
+      nodesCleared,
+      sectorTier: graph.sectorTier,
+      lastLevelOfferedCombat,
+      seed: `level:${upcomingDepth}:${nodesCleared}`,
+    });
   }
 
-  if (isBossApproachDepth(current.graphDepth) && !bossDefeated) {
-    const bossVectors = cluster.filter(
-      (node) => node.type === 'BOSS_COMBAT' || node.isAnomalyNest === true,
-    );
-    if (bossVectors.length > 0) return bossVectors;
+  cluster = cluster.filter((node) => node.type !== 'SANCTUARY');
+
+  if (isFullBlindZone(nodesCleared)) {
+    cluster = cluster.filter((node) => node.type !== 'BLACK_MARKET');
   }
 
   if (relayExtractionNodeId) {
@@ -554,7 +598,7 @@ export function buildScannerCluster(options: BuildScannerClusterOptions): Incurs
     }
   }
 
-  if (extractionDecoyPending && nodesCleared > 14) {
+  if (extractionDecoyPending && nodesCleared > 21) {
     cluster.push(createSeveredExtractionDecoy(stepIndex));
   }
 
@@ -597,7 +641,14 @@ export function buildScannerCluster(options: BuildScannerClusterOptions): Incurs
     });
   }
 
-  return cluster.slice(0, SCANNER_MAX_VECTORS);
+  const vectorCap = collapseActive
+    ? SCANNER_MAX_VECTORS
+    : Math.max(SCANNER_MAX_VECTORS, maxVectorsForLocalLevel(localLevel));
+  const trimmed = cluster.slice(0, vectorCap);
+  if (macroBiomeFamily && subBiomeId) {
+    return applyMacroBiomeToCluster(trimmed, macroBiomeFamily, subBiomeId);
+  }
+  return trimmed;
 }
 
 export function applyResonanceDelta(

@@ -187,6 +187,22 @@ export function spawnVeilStalkerProfile(nodeIndex: number): EnemyCombatProfile {
   };
 }
 
+/** Grid-Hound apex ambush — mandatory fight when caught on overworld at 75%+ resonance. */
+export function spawnGridHoundProfile(nodeIndex: number): EnemyCombatProfile {
+  const depth = nodeIndex + 1;
+  const district = depth <= 15 ? 1 : depth <= 30 ? 2 : 3;
+  return {
+    ...spawnRosterUnit(ENEMY_ROSTER['fracture-hound'], nodeIndex, {
+      forcedElite: true,
+      isApex: true,
+      apexBudget: 8,
+      district: district as 1 | 2 | 3,
+    }),
+    isGridHound: true,
+    designation: 'GRID-HOUND // APEX VEIL PREDATOR',
+  };
+}
+
 export function createEasyTestEnemy(): EnemyCombatProfile {
   return {
     class: 'GREMLIN',

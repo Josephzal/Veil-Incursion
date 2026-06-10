@@ -1,12 +1,19 @@
 import type { EnvironmentType } from '../types/sector';
 import type { SectorZoneId } from '../types/sectorPacing';
-import { BOSS_GRAPH_DEPTH, SAFE_ANCHOR_GRAPH_DEPTHS, ZONE_RESONANCE_BASE } from '../types/sectorPacing';
+import {
+  BOSS_GRAPH_DEPTH,
+  EMERGENCY_RECALL_MAX_CLEARED,
+  EMERGENCY_RECALL_MIN_CLEARED,
+  LEVELS_PER_DISTRICT,
+  SAFE_ANCHOR_GRAPH_DEPTHS,
+  ZONE_RESONANCE_BASE,
+} from '../types/sectorPacing';
 import type { SafeAnchorIndex } from '../types/sectorPacing';
 
 export function getSectorZone(nodesCleared: number, collapseActive = false): SectorZoneId {
-  if (collapseActive || nodesCleared >= 30) return 'COLLAPSE';
-  if (nodesCleared >= 22) return 'INNER_SANCTUM';
-  if (nodesCleared >= 15) return 'BREACH_PERIMETER';
+  if (collapseActive || nodesCleared >= BOSS_GRAPH_DEPTH) return 'COLLAPSE';
+  if (nodesCleared >= LEVELS_PER_DISTRICT * 2) return 'INNER_SANCTUM';
+  if (nodesCleared >= LEVELS_PER_DISTRICT) return 'BREACH_PERIMETER';
   if (nodesCleared >= 7) return 'DEEP_TRANSIT';
   return 'OUTSKIRTS';
 }
@@ -16,20 +23,21 @@ export function getZoneResonanceBase(nodesCleared: number, collapseActive = fals
 }
 
 export function isFullBlindZone(nodesCleared: number): boolean {
-  return nodesCleared >= 15;
+  return nodesCleared >= LEVELS_PER_DISTRICT;
 }
 
 export function isEmergencyRecallAvailable(nodesCleared: number): boolean {
-  return nodesCleared >= 4 && nodesCleared <= 14;
+  return nodesCleared >= EMERGENCY_RECALL_MIN_CLEARED
+    && nodesCleared <= EMERGENCY_RECALL_MAX_CLEARED;
 }
 
-/** Clean safe-anchor / master-link extractions unavailable after node 15. */
+/** Clean safe-anchor / master-link extractions unavailable deep in Act III. */
 export function isCleanExtractionAvailable(nodesCleared: number): boolean {
-  return nodesCleared < 15;
+  return nodesCleared < LEVELS_PER_DISTRICT * 2 - 8;
 }
 
 export function safeAnchorIndexForCrossingDepth(nextGraphDepth: number): SafeAnchorIndex | null {
-  const idx = SAFE_ANCHOR_GRAPH_DEPTHS.indexOf(nextGraphDepth as 5 | 10 | 15);
+  const idx = SAFE_ANCHOR_GRAPH_DEPTHS.indexOf(nextGraphDepth as 8 | 15 | 22);
   if (idx < 0) return null;
   return (idx + 1) as SafeAnchorIndex;
 }
@@ -44,9 +52,9 @@ export function isBossGraphDepth(graphDepth: number): boolean {
 
 /** Zone-appropriate environment assignment for pre-generated graph nodes. */
 export function environmentForGraphDepth(graphDepth: number, seed = 0): EnvironmentType {
-  const primary: EnvironmentType = graphDepth <= 6
+  const primary: EnvironmentType = graphDepth <= 9
     ? 'SUBWAY_CHASM'
-    : graphDepth <= 12
+    : graphDepth <= 18
       ? 'BLEEDING_HIGH_RISE'
       : 'DESECRATED_SANCTUARY';
   if (seed % 7 === 0 && graphDepth > 2) {

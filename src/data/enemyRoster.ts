@@ -7,6 +7,7 @@ import { applyCorporealHpMultiplier } from './combatEnvironmentEngine';
 import { initEnemyCombatLayers } from './combatFractureEngine';
 import { rollEnemyIntent } from './enemies';
 import type { DistrictId } from './districtPacing';
+import { depthFromNodesCleared, localLevelFromDepth } from './districtPacing';
 import type { ThreatTier } from './combatEncounterBudget';
 
 export type EnemyRosterId =
@@ -240,19 +241,28 @@ export function pickRosterEntry(
 }
 
 export function districtBossRosterId(gateDepth: number): EnemyRosterId {
-  if (gateDepth >= 30) return 'boss-primeval-rift-walker';
-  if (gateDepth === 20) return 'boss-choir-of-rust';
+  if (gateDepth >= 45) return 'boss-primeval-rift-walker';
+  if (gateDepth === 30) return 'boss-choir-of-rust';
   return 'boss-hollowed-precinct';
 }
 
 export function spawnRosterUnit(
   entry: EnemyRosterEntry,
   nodeIndex: number,
-  options?: { resonancePercent?: number; forcedElite?: boolean; district?: DistrictId },
+  options?: {
+    resonancePercent?: number;
+    forcedElite?: boolean;
+    district?: DistrictId;
+    isApex?: boolean;
+    apexBudget?: number;
+  },
 ): EnemyCombatProfile {
   const scale = getNodeScale(nodeIndex);
-  const elite = entry.elite === true || options?.forcedElite === true;
-  const maxHp = Math.floor(entry.hp * scale * (elite ? 1.15 : 1));
+  const elite = entry.elite === true || options?.forcedElite === true || options?.isApex === true;
+  const apexScale = options?.isApex && options.apexBudget
+    ? 1 + Math.max(0, options.apexBudget - entry.threatTier) * 0.18
+    : 1;
+  const maxHp = Math.floor(entry.hp * scale * (elite ? 1.15 : 1) * apexScale);
   const baseDamage = Math.floor(entry.damage * scale);
   const affinity = resolveEnemyAffinity(entry.class, elite, options?.resonancePercent ?? 0);
   const intent = rollEnemyIntent(entry.class, 0, options?.district ?? 1);
@@ -271,8 +281,27 @@ export function spawnRosterUnit(
     faction: entry.faction,
   };
   const withAffinity = applyCorporealHpMultiplier({ ...base, affinity }, affinity);
-  return initEnemyCombatLayers(withAffinity, {
-    kineticArmor: entry.kineticArmor,
-    occultWards: entry.occultWards,
+  const depth = depthFromNodesCleared(nodeIndex);
+  const localLevel = localLevelFromDepth(depth);
+  const resonancePct = options?.resonancePercent ?? 0;
+  let kineticArmor = entry.kineticArmor;
+  let occultWards = entry.occultWards;
+  if (localLevel >= 12 && resonancePct >= 75) {
+    kineticArmor += 1;
+    occultWards += 1;
+  }
+  const layered = initEnemyCombatLayers(withAffinity, {
+    kineticArmor,
+    occultWards,
   });
+  if (options?.isApex) {
+    return {
+      ...layered,
+      isApex: true,
+      enemyActionPoints: 2,
+      enemyMaxActionPoints: 2,
+      designation: `APEX ${entry.designation}`,
+    };
+  }
+  return layered;
 }

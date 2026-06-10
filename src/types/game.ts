@@ -13,6 +13,7 @@ import { DEFAULT_AEGIS_LOADOUT } from './aegisCombat';
 import { createEmptyPatrolState } from './overworldPatrol';
 import { createDefaultResonanceEscalationState } from './resonanceEscalation';
 import { createDefaultCargoRunState } from './cargoGrid';
+import { createEmptyOverworldSession } from './overworldFeatures';
 import type {
   AttunementState,
   EnvironmentType,
@@ -186,30 +187,32 @@ export interface NarrativeChoiceEffectPreview {
   guaranteed?: string;
 }
 
+export type NarrativeChoiceKey = 'A' | 'B' | 'C' | 'D';
+
+export interface NarrativeChoiceOption {
+  label: string;
+  requirement: string;
+  successText: string;
+  failureText: string;
+  effectPreview?: NarrativeChoiceEffectPreview;
+  locked?: boolean;
+  lockReason?: string;
+}
+
 export interface NarrativeEventNode {
   id: string;
   matrixEventId?: string;
-  interactionMode?: 'standard' | 'conditional';
+  interactionMode?: 'standard' | 'conditional' | 'procedural';
   /** Open-sector environment flavor for narrative presentation. */
   environmentType?: import('./sector').EnvironmentType;
   title: string;
   scenarioText: string;
-  choiceA: {
-    label: string;
-    requirement: string;
-    successText: string;
-    failureText: string;
-    effectPreview?: NarrativeChoiceEffectPreview;
-  };
-  choiceB: {
-    label: string;
-    requirement: string;
-    successText: string;
-    failureText: string;
-    effectPreview?: NarrativeChoiceEffectPreview;
-    locked?: boolean;
-    lockReason?: string;
-  };
+  /** Procedural encounters — hazard line shown above resolver options. */
+  hazardPreview?: string;
+  choiceA: NarrativeChoiceOption;
+  choiceB: NarrativeChoiceOption;
+  choiceC?: NarrativeChoiceOption;
+  choiceD?: NarrativeChoiceOption;
 }
 
 export interface EnvironmentalModifiers {
@@ -248,6 +251,10 @@ export interface IncursionNode {
   isExtractionNode?: boolean;
   isAnomalyNest?: boolean;
   safeAnchorIndex?: 1 | 2 | 3;
+  /** Procedural narrative tag filter — e.g. faction vault nodes. */
+  narrativeTags?: readonly string[];
+  /** High-stakes narrative band (Act III squeeze). */
+  isHardNarrative?: boolean;
 }
 
 export interface BossPhaseConfiguration {
@@ -277,8 +284,8 @@ export interface ActiveIncursionState {
   progress: IncursionProgressState;
   currentNarrativeId: string | null;
   lastCheckStatus: CheckStatus;
-  activeChoice: 'A' | 'B' | null;
-  /** Player-facing depth (1–30); kept in sync with nodesCleared + 1. */
+  activeChoice: NarrativeChoiceKey | null;
+  /** Player-facing depth (1–45); kept in sync with nodesCleared + 1. */
   currentDepth: number;
   /** Active district chapter (1–3), derived from currentDepth. */
   currentDistrict: 1 | 2 | 3;
@@ -311,6 +318,20 @@ export interface ActiveIncursionState {
   aegisLoadout: AegisLoadout;
   /** Ley-Line mutations acquired this run — stack and alter combat behavior. */
   leyLineMutations: LeyLineMutationId[];
+  /** Cabal locked at run start — gates procedural narrative resolvers. */
+  alignedFaction: FactionType | null;
+  /** Active macro biome family — rotates each cleared node (district 3 = DEEP_VEIL). */
+  currentMacroBiomeFamily: import('./narrativeProcedural').MacroBiomeFamily | null;
+  /** Previous macro family — prevents back-to-back repeats in districts 1–2. */
+  lastMacroBiomeFamily: import('./narrativeProcedural').MacroBiomeFamily | null;
+  /** Rolled sub-biome within the current macro family. */
+  currentSubBiomeId: import('./narrativeProcedural').SubBiomeId | null;
+  /** Buffs, debuffs, and timed boons — powers status popup. */
+  runStatusEffects: import('./narrativeProcedural').RunStatusEffect[];
+  /** Overworld pickups, pockets, raw boons, and Grid-Hound state. */
+  overworldSession: import('./overworldFeatures').OverworldFeatureSession;
+  /** Set when 6th Ley-Line boon requires swap modal. */
+  pendingLeyBoonSwap: import('./overworldFeatures').PendingLeyBoonSwap | null;
   /** Current black market node stock (soul-core + 2–4 rotating listings). */
   blackMarketStock: CargoItemId[];
   focusedNodeIds: string[];
@@ -327,6 +348,8 @@ export interface ActiveIncursionState {
   extractionReviewKind: ExtractionReviewKind | null;
   masterLinkUsed: boolean;
   defendRiftActive: boolean;
+  /** Whether the prior scanner hub offered any combat vector (pity-timer input). */
+  lastLevelOfferedCombat: boolean;
 }
 
 export function createDefaultEnvironmentalModifiers(): EnvironmentalModifiers {
@@ -361,7 +384,7 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     mapMode: 'SCANNING_HUB',
     lastCheckpointMessage: null,
     runCredits: 0,
-    sectorGraph: { entryId: '', nodes: {}, sectorTier: 1, maxGraphDepth: 30 },
+    sectorGraph: { entryId: '', nodes: {}, sectorTier: 1, maxGraphDepth: 45 },
     currentNodeId: '',
     nodesCleared: 0,
     attunement: { current: STARTING_ATTUNEMENT, max: MAX_ATTUNEMENT },
@@ -369,6 +392,13 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     patrolState: createEmptyPatrolState(),
     aegisLoadout: [...DEFAULT_AEGIS_LOADOUT],
     leyLineMutations: [],
+    alignedFaction: null,
+    currentMacroBiomeFamily: null,
+    lastMacroBiomeFamily: null,
+    currentSubBiomeId: null,
+    runStatusEffects: [],
+    overworldSession: createEmptyOverworldSession(),
+    pendingLeyBoonSwap: null,
     blackMarketStock: [],
     focusedNodeIds: [],
     bossDefeated: false,
@@ -383,5 +413,6 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     extractionReviewKind: null,
     masterLinkUsed: false,
     defendRiftActive: false,
+    lastLevelOfferedCombat: true,
   };
 }

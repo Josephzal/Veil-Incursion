@@ -6,6 +6,7 @@ import { applyResonanceEscalationsOnSpike } from './resonanceEscalationEngine';
 import { applyVectorSeveredToGraph } from './sectorGraphEngine';
 import { clampResonanceDelta } from './resonanceHeatVentEngine';
 import { resolvePatrolState } from './patrolSpawnEngine';
+import { shouldSpawnGridHound } from './overworldFeatureEngine';
 
 export interface ResonanceMutationPatch {
   resonancePercent: number;
@@ -13,6 +14,7 @@ export interface ResonanceMutationPatch {
   sectorGraph: SectorGraph;
   patrolState: PatrolState;
   escalationLogLines: string[];
+  spawnGridHound?: boolean;
 }
 
 export function buildResonanceMutationPatch(
@@ -49,12 +51,16 @@ export function buildResonanceMutationPatch(
     patrolSeed,
   );
 
+  const spawnGridHound = shouldSpawnGridHound(prevPercent, nextPercent)
+    && !inc.overworldSession.gridHound?.active;
+
   return {
     resonancePercent: nextPercent,
     resonanceEscalations: escalationTick.escalations,
     sectorGraph,
     patrolState,
     escalationLogLines: escalationTick.logLines,
+    spawnGridHound,
   };
 }
 

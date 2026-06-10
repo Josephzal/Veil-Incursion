@@ -2,7 +2,9 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View, ViewStyle } from 'react-native';
 import CargoGridOverlay from './CargoGridOverlay';
 import PersistentTerminalLog from './PersistentTerminalLog';
+import RunStatusOverlay from './RunStatusOverlay';
 import { CargoOverlayProvider } from '../context/CargoOverlayContext';
+import { RunStatusOverlayProvider } from '../context/RunStatusOverlayContext';
 import { useCombatTurnOptional } from '../context/CombatTurnContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
@@ -43,6 +45,7 @@ export default function MacroLogAnchoredLayout({
     useDeadDropTokenFromCargo,
   } = useRun();
   const [cargoOpen, setCargoOpen] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
   const combatTurn = useCombatTurnOptional();
   const cargoEnabled = combatTurn?.canUseCargo ?? true;
   const combatMode = onConsumableUsed != null;
@@ -53,7 +56,7 @@ export default function MacroLogAnchoredLayout({
     }
   }, [cargoEnabled, cargoOpen]);
 
-  const showCargoOverlay = useMemo(
+  const showRunOverlays = useMemo(
     () => runState.runActive && activeIncursion.isRunActive && runState.combatTestPreset == null,
     [activeIncursion.isRunActive, runState.combatTestPreset, runState.runActive],
   );
@@ -79,29 +82,42 @@ export default function MacroLogAnchoredLayout({
   ]);
 
   const openCargo = useCallback(() => {
-    if (!cargoEnabled || !showCargoOverlay) return;
+    if (!cargoEnabled || !showRunOverlays) return;
     setCargoOpen(true);
-  }, [cargoEnabled, showCargoOverlay]);
+  }, [cargoEnabled, showRunOverlays]);
+
+  const openStatus = useCallback(() => {
+    if (!showRunOverlays) return;
+    setStatusOpen(true);
+  }, [showRunOverlays]);
 
   const cargoOverlayValue = useMemo(
-    () => ({ openCargo, cargoEnabled: showCargoOverlay && cargoEnabled }),
-    [cargoEnabled, openCargo, showCargoOverlay],
+    () => ({ openCargo, cargoEnabled: showRunOverlays && cargoEnabled }),
+    [cargoEnabled, openCargo, showRunOverlays],
+  );
+
+  const statusOverlayValue = useMemo(
+    () => ({ openStatus, statusEnabled: showRunOverlays }),
+    [openStatus, showRunOverlays],
   );
 
   return (
     <CargoOverlayProvider value={cargoOverlayValue}>
+    <RunStatusOverlayProvider value={statusOverlayValue}>
       <View style={[styles.root, style]}>
         <View style={styles.content}>{children}</View>
         {showMacroLog ? (
           <PersistentTerminalLog
             docked
-            showCargo={showCargoOverlay}
-            cargoDisabled={showCargoOverlay && combatMode && !cargoEnabled}
+            showCargo={showRunOverlays}
+            cargoDisabled={showRunOverlays && combatMode && !cargoEnabled}
             onCargoPress={openCargo}
+            showStatus={showRunOverlays}
+            onStatusPress={openStatus}
           />
         ) : null}
 
-        {showCargoOverlay ? (
+        {showRunOverlays ? (
           <CargoGridOverlay
             visible={cargoOpen}
             cargo={activeIncursion.cargo}
@@ -117,7 +133,17 @@ export default function MacroLogAnchoredLayout({
             onUseCombatConsumable={combatMode ? handleUseCombatConsumable : undefined}
           />
         ) : null}
+
+        {showRunOverlays ? (
+          <RunStatusOverlay
+            visible={statusOpen}
+            activeIncursion={activeIncursion}
+            theme={theme}
+            onClose={() => setStatusOpen(false)}
+          />
+        ) : null}
       </View>
+    </RunStatusOverlayProvider>
     </CargoOverlayProvider>
   );
 }

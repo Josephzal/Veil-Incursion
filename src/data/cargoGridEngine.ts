@@ -1,4 +1,5 @@
 import type { CargoItemId, CargoRunState, ContainmentItem, HarvestYieldTier, PlacedCargoItem } from '../types/cargoGrid';
+import { localLevelFromNodesCleared } from './districtPacing';
 import {
   CARGO_GRID_DIMENSION,
   CARGO_ITEM_CATALOG,
@@ -210,7 +211,8 @@ export function buildHarvestLoot(
   isElite: boolean,
   nodesCleared = 0,
 ): CargoItemId[] {
-  const inBreachPerimeter = nodesCleared >= 10 && nodesCleared < 15;
+  const localLevel = localLevelFromNodesCleared(nodesCleared);
+  const inBreachPerimeter = localLevel >= 11 && localLevel <= 14;
   const loot: CargoItemId[] = inBreachPerimeter && Math.random() < 0.55
     ? ['null-crystal-matrix']
     : ['null-crystal-shard'];

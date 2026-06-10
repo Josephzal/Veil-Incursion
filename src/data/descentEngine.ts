@@ -351,13 +351,13 @@ const DEFAULT_BOSS_PHASES = [
 ];
 
 export function createBossProfileForDepth(depth: number): import('../types/game').BossRuntimeProfile {
-  const gateDepth = depth === 10 || depth === 20 || depth === 30
+  const gateDepth = depth === 15 || depth === 30 || depth === 45
     ? depth
-    : depth <= 10
-      ? 10
-      : depth <= 20
-        ? 20
-        : 30;
+    : depth <= 15
+      ? 15
+      : depth <= 30
+        ? 30
+        : 45;
   return createDistrictGateBossProfile(gateDepth);
 }
 

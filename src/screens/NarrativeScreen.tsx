@@ -2,31 +2,52 @@ import React, { useRef } from 'react';
 import { StyleSheet, View, Text } from 'react-native';
 import IncursionShell from '../components/IncursionShell';
 import NarrativeStepperModule, { isCityStreetsNarrative } from '../components/NarrativeStepperModule';
+import ProceduralNarrativeModule from '../components/ProceduralNarrativeModule';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
 import OperativeTelemetryBar from '../components/OperativeTelemetryBar';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useDescentNavigator } from '../hooks/useDescentNavigator';
-import { CheckStatus } from '../types/game';
+import { isProceduralNarrative } from '../data/sectorNarrativeEngine';
+import { CheckStatus, NarrativeChoiceKey } from '../types/game';
 import { narrativeCheckCredits } from '../data/combatCredits';
 
 export default function NarrativeScreen(): React.JSX.Element {
   const { theme } = useTerminal();
-  const { getCurrentNarrativeNode, resolveNarrativeCheck, appendRunLog, awardRunCredits, runState } = useRun();
+  const { getCurrentNarrativeNode, resolveNarrativeChoice, appendRunLog, awardRunCredits, runState } = useRun();
   const { finalizeIncursionAdvance } = useDescentNavigator();
   const resolvingRef = useRef(false);
 
   const node = getCurrentNarrativeNode();
+  const isProcedural = node != null && isProceduralNarrative(node);
 
-  const handleComplete = (result: { choice: 'A' | 'B'; status: CheckStatus }) => {
+  const finishNarrative = (choice: NarrativeChoiceKey, status: CheckStatus = 'SUCCESS') => {
     if (resolvingRef.current) return;
     resolvingRef.current = true;
 
-    const logLine = resolveNarrativeCheck(result.choice, result.status);
-    appendRunLog(logLine);
-    awardRunCredits(narrativeCheckCredits(), 'narrative calibration cleared');
+    const { outcomeText, aborted, creditReward } = resolveNarrativeChoice(choice, status);
+    appendRunLog(outcomeText);
+
+    if (aborted) {
+      resolvingRef.current = false;
+      return;
+    }
+
+    if (creditReward > 0) {
+      awardRunCredits(creditReward, 'procedural narrative resolver');
+    } else {
+      awardRunCredits(narrativeCheckCredits(), 'narrative calibration cleared');
+    }
     appendRunLog('>> NARRATIVE NODE RESOLVED — RETURNING TO LEY-LINE GRID.');
     finalizeIncursionAdvance('Narrative event cleared.');
+  };
+
+  const handleLegacyComplete = (result: { choice: 'A' | 'B'; status: CheckStatus }) => {
+    finishNarrative(result.choice, result.status);
+  };
+
+  const handleProceduralResolve = (choice: NarrativeChoiceKey) => {
+    finishNarrative(choice);
   };
 
   if (!node) {
@@ -55,13 +76,23 @@ export default function NarrativeScreen(): React.JSX.Element {
         <View style={styles.body}>
           <OperativeTelemetryBar />
           <View style={[styles.content, isCityStreetsNarrative(node) && styles.contentCityStreets]}>
-            <NarrativeStepperModule
-              node={node}
-              onComplete={handleComplete}
-              borderColor={theme.borderColor}
-              mutedColor={theme.mutedColor}
-              primaryColor={theme.primaryColor}
-            />
+            {isProcedural ? (
+              <ProceduralNarrativeModule
+                node={node}
+                onResolve={handleProceduralResolve}
+                borderColor={theme.borderColor}
+                mutedColor={theme.mutedColor}
+                primaryColor={theme.primaryColor}
+              />
+            ) : (
+              <NarrativeStepperModule
+                node={node}
+                onComplete={handleLegacyComplete}
+                borderColor={theme.borderColor}
+                mutedColor={theme.mutedColor}
+                primaryColor={theme.primaryColor}
+              />
+            )}
           </View>
         </View>
       </MacroLogAnchoredLayout>

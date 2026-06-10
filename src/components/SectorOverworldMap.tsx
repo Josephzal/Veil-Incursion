@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import {
   Canvas,
+  Circle,
   DashPathEffect,
   Group,
   Line,
@@ -77,6 +78,17 @@ import ProceduralRiftSkia from './overworld/ProceduralRiftSkia';
 import ProximityScanlineOverlay from './overworld/ProximityScanlineOverlay';
 import OverworldTerrainBackdrop from './overworld/OverworldTerrainBackdrop';
 import VirtualJoystick from './overworld/VirtualJoystick';
+import type { OverworldFeatureSession } from '../types/overworldFeatures';
+import { createEmptyOverworldSession } from '../types/overworldFeatures';
+import {
+  collectVeilEchoRadius,
+  facingRadFromAegis,
+  isInDirectedPingCone,
+} from '../data/overworldFeatureEngine';
+import {
+  DIRECTED_PING_CONE_RAD,
+  DIRECTED_PING_RANGE,
+} from '../types/overworldFeatures';
 
 import AegisForward from '../../assets/images/character images/aegis/aegis-forward.png';
 import AegisBack from '../../assets/images/character images/aegis/aegis-back.png';
@@ -127,6 +139,15 @@ export interface SectorOverworldMapProps {
   currentDistrict?: DistrictId;
   compact?: boolean;
   interactive?: boolean;
+  overworldSession?: OverworldFeatureSession;
+  onCollectVeilEcho?: (echoId: string) => void;
+  onAcquireRawLeyBoon?: (boonId: string) => void;
+  onTickOverworldHazards?: (
+    player: { x: number; y: number },
+    deltaMs: number,
+  ) => { gridHoundCaught: boolean };
+  onDirectedPing?: (facing: AegisFacing) => void;
+  onGridHoundCaught?: () => void;
 }
 
 const DISTRICT_ATMOSPHERE_OVERLAY: Record<DistrictId, string | null> = {
@@ -167,6 +188,12 @@ export default function SectorOverworldMap({
   currentDistrict = 1,
   compact = false,
   interactive = true,
+  overworldSession = createEmptyOverworldSession(),
+  onCollectVeilEcho,
+  onAcquireRawLeyBoon,
+  onTickOverworldHazards,
+  onDirectedPing,
+  onGridHoundCaught,
 }: SectorOverworldMapProps): React.JSX.Element {
   const [arenaRoll, setArenaRoll] = useState(() => Math.random());
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
@@ -185,6 +212,7 @@ export default function SectorOverworldMap({
   const [scanlineIntensity, setScanlineIntensity] = useState(0);
   const [ghostRadarBlip, setGhostRadarBlip] = useState<{ x: number; y: number } | null>(null);
   const [patrolDriftRad, setPatrolDriftRad] = useState(0);
+  const [pingRevealIds, setPingRevealIds] = useState<Set<string>>(() => new Set());
 
   const playerWorldX = useSharedValue(0);
   const playerWorldY = useSharedValue(0);
@@ -471,7 +499,19 @@ export default function SectorOverworldMap({
     setGhostRadarBlip(voidNodesRemain ? ghostBlipPos : null);
     setRadarBlips(blips);
     setScanlineIntensity(resolveNearestScoutIntensity(hiddenDistances));
-  }, [layoutPositions, onFrequencyMatch]);
+
+    const pickupRadius = collectVeilEchoRadius();
+    overworldSession.veilEchoes.forEach((echo) => {
+      if (echo.collected || !onCollectVeilEcho) return;
+      const dist = Math.hypot(echo.world.x - x, echo.world.y - y);
+      if (dist <= pickupRadius) onCollectVeilEcho(echo.id);
+    });
+    overworldSession.rawLeyBoons.forEach((boon) => {
+      if (boon.claimed || !onAcquireRawLeyBoon) return;
+      const dist = Math.hypot(boon.world.x - x, boon.world.y - y);
+      if (dist <= pickupRadius) onAcquireRawLeyBoon(boon.id);
+    });
+  }, [layoutPositions, onAcquireRawLeyBoon, onCollectVeilEcho, onFrequencyMatch, overworldSession.rawLeyBoons, overworldSession.veilEchoes]);
 
   const manifestNode = useCallback((nodeId: string, world: SectorGraphLayoutPoint, node: ScoutNode) => {
     manifestedRef.current = new Set([...manifestedRef.current, nodeId]);
@@ -486,25 +526,34 @@ export default function SectorOverworldMap({
     syncBlindScout(playerPos.x, playerPos.y);
   }, [onNodeManifest, onNodePress, playerPos.x, playerPos.y, syncBlindScout]);
 
+  const handleHazardTick = useCallback((x: number, y: number, deltaMs: number) => {
+    if (!onTickOverworldHazards) return;
+    const result = onTickOverworldHazards({ x, y }, deltaMs);
+    if (result.gridHoundCaught) {
+      onGridHoundCaught?.();
+    }
+  }, [onGridHoundCaught, onTickOverworldHazards]);
+
   useFrameCallback((frameInfo) => {
     'worklet';
     if (compact) return;
 
-    const mag = Math.hypot(joystickX.value, joystickY.value);
-    if (mag < 0.08) return;
-
-    const nx = joystickX.value / mag;
-    const ny = joystickY.value / mag;
     const dtMs = frameInfo.timeSincePreviousFrame ?? 16.667;
-    const step = MOVE_SPEED_UNITS_PER_SEC * (dtMs / 1000);
-    const next = clampToWorldBounds(
-      playerWorldX.value + nx * step,
-      playerWorldY.value + ny * step,
-      boundsShared.value,
-    );
-    playerWorldX.value = next.x;
-    playerWorldY.value = next.y;
-    runOnJS(handleFacing)(nx, ny);
+    const mag = Math.hypot(joystickX.value, joystickY.value);
+    if (mag >= 0.08) {
+      const nx = joystickX.value / mag;
+      const ny = joystickY.value / mag;
+      const step = MOVE_SPEED_UNITS_PER_SEC * (dtMs / 1000);
+      const next = clampToWorldBounds(
+        playerWorldX.value + nx * step,
+        playerWorldY.value + ny * step,
+        boundsShared.value,
+      );
+      playerWorldX.value = next.x;
+      playerWorldY.value = next.y;
+      runOnJS(handleFacing)(nx, ny);
+    }
+    runOnJS(handleHazardTick)(playerWorldX.value, playerWorldY.value, dtMs);
   });
 
   useAnimatedReaction(
@@ -633,6 +682,36 @@ export default function SectorOverworldMap({
     onNodePress?.(nodeId);
   }, [onNodePress]);
 
+  const handleDirectedPing = useCallback(() => {
+    if (!onDirectedPing) return;
+    onDirectedPing(facingRef.current);
+    const origin = { x: playerPos.x, y: playerPos.y };
+    const facingRad = facingRadFromAegis(facingRef.current);
+    const revealed = new Set<string>();
+    scoutNodesRef.current.forEach((node) => {
+      const world = overridesRef.current[node.id]
+        ?? layoutPositions[node.id]
+        ?? node.world;
+      if (isInDirectedPingCone(origin, facingRad, world, DIRECTED_PING_RANGE, DIRECTED_PING_CONE_RAD)) {
+        revealed.add(node.id);
+      }
+    });
+    if (revealed.size > 0) {
+      setRevealedOnMapIds((prev) => {
+        const next = new Set(prev);
+        revealed.forEach((id) => next.add(id));
+        return next;
+      });
+      setRegistryIds((prev) => {
+        const next = new Set(prev);
+        revealed.forEach((id) => next.add(id));
+        return next;
+      });
+    }
+    setPingRevealIds(revealed);
+    setTimeout(() => setPingRevealIds(new Set()), 2400);
+  }, [layoutPositions, onDirectedPing, playerPos]);
+
   const registryEntries = useMemo(() => {
     return scoutNodes
       .filter((node) => registryIds.has(node.id))
@@ -721,6 +800,61 @@ export default function SectorOverworldMap({
                   />
                 );
               }) : null}
+
+              {overworldSession.resonancePockets.map((pocket) => (
+                <Circle
+                  key={pocket.id}
+                  cx={pocket.world.x}
+                  cy={pocket.world.y}
+                  r={pocket.radius}
+                  color="rgba(255, 48, 48, 0.14)"
+                />
+              ))}
+
+              {overworldSession.veilEchoes.filter((e) => !e.collected).map((echo) => (
+                <Circle
+                  key={echo.id}
+                  cx={echo.world.x}
+                  cy={echo.world.y}
+                  r={18}
+                  color="rgba(0, 255, 120, 0.38)"
+                />
+              ))}
+
+              {overworldSession.rawLeyBoons.filter((b) => !b.claimed).map((boon) => (
+                <Circle
+                  key={boon.id}
+                  cx={boon.world.x}
+                  cy={boon.world.y}
+                  r={22}
+                  color="rgba(168, 85, 247, 0.42)"
+                />
+              ))}
+
+              {overworldSession.gridHound?.active && !overworldSession.gridHound.caught ? (
+                <Group>
+                  <Circle
+                    cx={overworldSession.gridHound.world.x}
+                    cy={overworldSession.gridHound.world.y}
+                    r={28}
+                    color="rgba(255, 40, 40, 0.75)"
+                  />
+                  <Line
+                    p1={vec(
+                      overworldSession.gridHound.world.x,
+                      overworldSession.gridHound.world.y,
+                    )}
+                    p2={vec(
+                      overworldSession.gridHound.world.x
+                        + Math.cos(overworldSession.gridHound.facingRad) * 180,
+                      overworldSession.gridHound.world.y
+                        + Math.sin(overworldSession.gridHound.facingRad) * 180,
+                    )}
+                    color="rgba(255, 80, 80, 0.45)"
+                    strokeWidth={3}
+                  />
+                </Group>
+              ) : null}
 
               {renderRiftNodes.map(({ node, manifested }) => {
                 const world = layoutPositions[node.id] ?? node.world;
@@ -823,6 +957,18 @@ export default function SectorOverworldMap({
         ) : null}
         {!compact ? <VirtualJoystick vectorX={joystickX} vectorY={joystickY} /> : null}
 
+        {!compact && onDirectedPing ? (
+          <Pressable style={styles.pingBtn} onPress={handleDirectedPing}>
+            <Text style={styles.pingBtnText}>[ PING ]</Text>
+          </Pressable>
+        ) : null}
+
+        {!compact && pingRevealIds.size > 0 ? (
+          <View style={styles.pingFlash} pointerEvents="none">
+            <Text style={styles.pingFlashText}>ECHO LOCK // {pingRevealIds.size} SIGNATURE(S)</Text>
+          </View>
+        ) : null}
+
         <DimensionalTearOverlay
           active={tearActive}
           onComplete={() => setTearActive(false)}
@@ -886,5 +1032,40 @@ const styles = StyleSheet.create({
     height: RIFT_HIT_SIZE,
     zIndex: 12,
     borderRadius: RIFT_HIT_SIZE / 2,
+  },
+  pingBtn: {
+    position: 'absolute',
+    left: 10 + LEY_TRACKER_SIZE + 8,
+    bottom: 10,
+    zIndex: 17,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 255, 51, 0.55)',
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  pingBtnText: {
+    fontFamily: 'monospace',
+    fontSize: 8,
+    fontWeight: '700',
+    color: '#00ff33',
+    letterSpacing: 0.5,
+  },
+  pingFlash: {
+    position: 'absolute',
+    top: 48,
+    alignSelf: 'center',
+    zIndex: 15,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 255, 51, 0.35)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  pingFlashText: {
+    fontFamily: 'monospace',
+    fontSize: 7,
+    color: '#86efac',
+    letterSpacing: 0.6,
   },
 });

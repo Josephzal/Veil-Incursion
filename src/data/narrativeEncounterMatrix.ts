@@ -43,6 +43,14 @@ export interface NarrativeResolutionResult {
   environmentalModifiers: EnvironmentalModifiers;
   cryptoGlimmerGrantPct: number;
   triggerCombatAmbush: boolean;
+  /** Procedural retreat — return to scanner without clearing the node. */
+  abortToScanner?: boolean;
+  /** Awarded on successful node clear (procedural credit rewards). */
+  pendingRunCredits?: number;
+  /** Applied to active incursion resonance after resolve. */
+  resonanceDelta?: number;
+  /** Activates Grid-Hound hunter on overworld (faction vault brute-force). */
+  spawnGridHound?: boolean;
 }
 
 type ChoiceKey = 'A' | 'B';

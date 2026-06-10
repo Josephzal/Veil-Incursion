@@ -1,6 +1,13 @@
 import type { IncursionNode, IncursionProgressState, NarrativeEventNode } from '../types/game';
 import type { EnvironmentType } from '../types/sector';
 import { buildMatrixNarrativeNode } from './narrativeEncounterMatrix';
+import {
+  generateNarrativeEncounter,
+  refreshProceduralNarrativeLocks,
+  shouldUseProceduralNarrative,
+} from './narrative/narrativeProceduralEngine';
+import type { ProceduralEligibilityContext } from './narrative/narrativeProceduralEngine';
+import type { MacroBiomeFamily, ProceduralNarrativeAssembly } from '../types/narrativeProcedural';
 
 const SECTOR_NARRATIVE_BY_ENVIRONMENT: Record<EnvironmentType, readonly string[]> = {
   SUBWAY_CHASM: ['sector-01', 'sector-03', 'sector-07'],
@@ -60,19 +67,57 @@ function tagEnvironmentOnNode(
   return { ...node, environmentType: environment };
 }
 
+export interface SectorNarrativePickResult {
+  node: NarrativeEventNode;
+  assembly: ProceduralNarrativeAssembly | null;
+}
+
 export function pickSectorNarrativeForNode(
   encounterNode: IncursionNode | null,
   progress: IncursionProgressState,
   nodesCleared = 0,
-): NarrativeEventNode {
+  eligibility?: ProceduralEligibilityContext,
+  macroFamily: MacroBiomeFamily = 'CITY_STREETS',
+): SectorNarrativePickResult {
   const environment = encounterNode?.environmentType ?? 'SUBWAY_CHASM';
+
+  if (shouldUseProceduralNarrative(macroFamily) && eligibility) {
+    const seed = `${encounterNode?.id ?? 'narrative'}:${nodesCleared}:${encounterNode?.encounterIndex ?? 0}`;
+    const usedAssemblyIds = progress.usedNarrativeEventIds.filter((id) => id.startsWith('proc-'));
+    const generated = generateNarrativeEncounter(
+      {
+        macroFamily,
+        nodesCleared,
+        seed,
+        usedAssemblyIds,
+        requiredContextTags: encounterNode?.narrativeTags,
+      },
+      eligibility,
+    );
+    const node = tagEnvironmentOnNode(generated.node, environment);
+    return { node, assembly: generated.assembly };
+  }
+
   const pool = eligiblePool(environment, nodesCleared);
   const matrixId = pickMatrixId(encounterNode, progress, pool.length > 0 ? pool : OPEN_SECTOR_NARRATIVE_POOL);
   const node = buildMatrixNarrativeNode(matrixId, progress);
-  return tagEnvironmentOnNode(node, environment);
+  return { node: tagEnvironmentOnNode(node, environment), assembly: null };
+}
+
+export function enrichProceduralNarrativeNode(
+  node: NarrativeEventNode,
+  assembly: ProceduralNarrativeAssembly | null,
+  eligibility: ProceduralEligibilityContext,
+): NarrativeEventNode {
+  if (!assembly || node.interactionMode !== 'procedural') return node;
+  return refreshProceduralNarrativeLocks(node, assembly, eligibility);
 }
 
 export function isOpenSectorNarrative(node: NarrativeEventNode): boolean {
   const eventId = node.matrixEventId ?? node.id;
   return eventId.startsWith('sector-');
+}
+
+export function isProceduralNarrative(node: NarrativeEventNode): boolean {
+  return node.interactionMode === 'procedural';
 }

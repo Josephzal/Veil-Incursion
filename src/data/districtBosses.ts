@@ -1,4 +1,5 @@
 import type { BossRuntimeProfile, DistrictBossVariant } from '../types/game';
+import { LEVELS_PER_DISTRICT } from '../types/sectorPacing';
 import { getDepthScale } from './descentEngine';
 import { isDistrictGateDepth, isPrimeBossDepth } from './districtPacing';
 
@@ -14,7 +15,7 @@ export interface DistrictBossDefinition {
 }
 
 const GATE_BOSSES: Record<number, DistrictBossDefinition> = {
-  10: {
+  15: {
     name: 'HOLLOWED PRECINCT',
     maxHp: 220,
     variant: 'STANDARD',
@@ -24,7 +25,7 @@ const GATE_BOSSES: Record<number, DistrictBossDefinition> = {
     baseDamage: 11,
     logLine: '>> DISTRICT GATE — Hollowed Precinct manifest. Kinetic armor heavy.',
   },
-  20: {
+  30: {
     name: 'CHOIR OF RUST',
     maxHp: 280,
     variant: 'SHARED_CHOIR',
@@ -34,7 +35,7 @@ const GATE_BOSSES: Record<number, DistrictBossDefinition> = {
     baseDamage: 10,
     logLine: '>> DISTRICT GATE — Choir of Rust triptych. Shared anomaly HP pool.',
   },
-  30: {
+  45: {
     name: 'PRIMEVAL RIFT-WALKER',
     maxHp: 360,
     variant: 'STANDARD',
@@ -62,9 +63,10 @@ const DEFAULT_BOSS_PHASES = [
 ];
 
 export function createDistrictGateBossProfile(depth: number): BossRuntimeProfile {
-  const scale = getDepthScale(Math.max(1, Math.floor(depth / 10)));
-  if (isPrimeBossDepth(depth) && GATE_BOSSES[30]) {
-    const def = GATE_BOSSES[30];
+  const districtIndex = Math.max(1, Math.ceil(depth / LEVELS_PER_DISTRICT));
+  const scale = getDepthScale(districtIndex);
+  if (isPrimeBossDepth(depth) && GATE_BOSSES[45]) {
+    const def = GATE_BOSSES[45];
     return {
       name: def.name,
       maxHp: def.maxHp,
@@ -78,18 +80,19 @@ export function createDistrictGateBossProfile(depth: number): BossRuntimeProfile
   }
   if (isDistrictGateDepth(depth) && GATE_BOSSES[depth]) {
     const def = GATE_BOSSES[depth];
+    const scaledHp = Math.floor(def.maxHp * (depth === 30 ? scale : 1));
     return {
       name: def.name,
-      maxHp: Math.floor(def.maxHp * (depth === 20 ? scale : 1)),
-      currentHp: Math.floor(def.maxHp * (depth === 20 ? scale : 1)),
+      maxHp: scaledHp,
+      currentHp: scaledHp,
       currentPhase: 1,
       phases: DEFAULT_BOSS_PHASES,
-      depth: depth === 10 ? 1 : 2,
+      depth: depth === 15 ? 1 : 2,
       variant: def.variant,
       bodyCount: def.bodyCount,
     };
   }
-  const fallback = GATE_BOSSES[10];
+  const fallback = GATE_BOSSES[15];
   return {
     name: fallback.name,
     maxHp: fallback.maxHp,
@@ -103,9 +106,9 @@ export function createDistrictGateBossProfile(depth: number): BossRuntimeProfile
 }
 
 export function districtBossDefinitionForDepth(depth: number): DistrictBossDefinition {
-  if (isPrimeBossDepth(depth)) return GATE_BOSSES[30];
+  if (isPrimeBossDepth(depth)) return GATE_BOSSES[45];
   if (isDistrictGateDepth(depth) && GATE_BOSSES[depth]) return GATE_BOSSES[depth];
-  return GATE_BOSSES[10];
+  return GATE_BOSSES[15];
 }
 
 export function districtBossLogLine(depth: number): string {

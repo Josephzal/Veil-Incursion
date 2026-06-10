@@ -2,13 +2,20 @@ import type { CombatGridSlotId } from '../types/combatGrid';
 import { FRONTLINE_SLOTS } from '../types/combatGrid';
 import type { FactionType } from '../types/game';
 import type { DistrictId } from './districtPacing';
-import { getDistrictFromDepth } from './districtPacing';
+import { getDistrictFromDepth, localLevelFromDepth } from './districtPacing';
 import {
   ENEMY_ROSTER,
   GRUNT_ROSTER_BY_FACTION,
   factionForDistrict,
   type EnemyRosterEntry,
+  type EnemyRosterId,
 } from './enemyRoster';
+import {
+  entriesFromComposition,
+  maxEnemiesForDistrict,
+  pickEncounterComposition,
+  spawnBudgetForDistrict,
+} from './encounterCompositionEngine';
 
 export type ThreatTier = 1 | 2 | 3;
 
@@ -29,60 +36,22 @@ export interface DraftedEncounter {
   slots: CombatGridSlotId[];
   spawnBudget: number;
   spent: number;
+  isApex?: boolean;
 }
 
-function depthInDistrict(depth: number, district: DistrictId): number {
-  if (district === 1) return depth;
-  if (district === 2) return depth - 10;
-  return depth - 20;
+export function depthInDistrict(depth: number, district: DistrictId): number {
+  return localLevelFromDepth(depth);
 }
 
 export function encounterBudgetForDepth(params: EncounterBudgetParams): EncounterBudgetResult {
   const { depth, isElite = false, isAmbush = false } = params;
   const district = getDistrictFromDepth(depth);
   const local = depthInDistrict(depth, district);
-
-  let spawnBudget: number;
-  let maxEnemies: number;
-
-  if (district === 1) {
-    if (local <= 3) {
-      spawnBudget = 2;
-      maxEnemies = 2;
-    } else if (local <= 6) {
-      spawnBudget = 3;
-      maxEnemies = 3;
-    } else {
-      spawnBudget = 4;
-      maxEnemies = 3;
-    }
-  } else if (district === 2) {
-    if (local <= 4) {
-      spawnBudget = 5;
-      maxEnemies = 3;
-    } else {
-      spawnBudget = 6;
-      maxEnemies = 4;
-    }
-  } else if (local <= 4) {
-    spawnBudget = 7;
-    maxEnemies = 4;
-  } else {
-    spawnBudget = 8;
-    maxEnemies = 4;
-  }
-
-  if (isElite) {
-    spawnBudget = Math.min(10, spawnBudget + 1);
-    maxEnemies = Math.min(4, maxEnemies + 1);
-  }
-  if (isAmbush) {
-    spawnBudget = Math.min(10, spawnBudget + 2);
-    maxEnemies = 4;
-  }
-
+  const maxEnemies = isAmbush ? 1 : maxEnemiesForDistrict(district);
+  const spawnBudget = isAmbush
+    ? 8
+    : spawnBudgetForDistrict(district, local, isElite);
   const phaseBudget = Math.min(4, Math.max(2, Math.ceil(spawnBudget / 2)));
-
   return { spawnBudget, maxEnemies, phaseBudget };
 }
 
@@ -148,11 +117,19 @@ function ensureFrontlineRule(
   return [...entries, cheapest];
 }
 
-function pickWeighted(pool: EnemyRosterEntry[], preferHighTier: boolean): EnemyRosterEntry {
+function pickWeighted(
+  pool: EnemyRosterEntry[],
+  preferHighTier: boolean,
+  depthWeights?: Partial<Record<EnemyRosterId, number>> | null,
+): EnemyRosterEntry {
   const sorted = [...pool].sort((a, b) =>
     preferHighTier ? b.threatTier - a.threatTier : a.threatTier - b.threatTier,
   );
-  const weights = sorted.map((e) => (preferHighTier ? e.threatTier : 4 - e.threatTier));
+  const weights = sorted.map((e) => {
+    const depthWeight = depthWeights?.[e.id];
+    const base = preferHighTier ? e.threatTier : 4 - e.threatTier;
+    return depthWeight != null ? base * depthWeight : base;
+  });
   const total = weights.reduce((s, w) => s + w, 0);
   let roll = Math.random() * total;
   for (let i = 0; i < sorted.length; i++) {
@@ -162,10 +139,26 @@ function pickWeighted(pool: EnemyRosterEntry[], preferHighTier: boolean): EnemyR
   return sorted[sorted.length - 1];
 }
 
+/** Single enemy absorbs the full threat budget — Apex anomaly rules. */
+function applyApexRule(
+  entries: EnemyRosterEntry[],
+  faction: FactionType,
+  budget: number,
+): { entries: EnemyRosterEntry[]; isApex: boolean } {
+  if (entries.length !== 1) return { entries, isApex: false };
+
+  const pool = factionPool(faction)
+    .filter((e) => e.threatTier <= budget)
+    .sort((a, b) => b.threatTier - a.threatTier);
+  const apexEntry = pool[0] ?? entries[0];
+  return { entries: [apexEntry], isApex: true };
+}
+
 export function draftEncounterSquad(
   faction: FactionType,
   budget: number,
   maxEnemies: number,
+  depthWeights?: Partial<Record<EnemyRosterId, number>> | null,
 ): DraftedEncounter {
   const pool = factionPool(faction);
   const picks: EnemyRosterEntry[] = [];
@@ -191,7 +184,7 @@ export function draftEncounterSquad(
       if (backOnly.length > 0) candidates = backOnly;
     }
 
-    const entry = pickWeighted(candidates, preferHighTier);
+    const entry = pickWeighted(candidates, preferHighTier, depthWeights);
     picks.push(entry);
     remaining -= entry.threatTier;
     if (entry.isDisruptor) disruptorCount += 1;
@@ -203,24 +196,44 @@ export function draftEncounterSquad(
     finalEntries = finalEntries.slice(0, maxEnemies);
   }
 
-  const spent = finalEntries.reduce((sum, e) => sum + e.threatTier, 0);
+  const apexResult = applyApexRule(finalEntries, faction, budget);
+  finalEntries = apexResult.entries;
+
+  const spent = apexResult.isApex ? budget : finalEntries.reduce((sum, e) => sum + e.threatTier, 0);
   const slots = assignSlots(finalEntries).slice(0, finalEntries.length);
 
-  return { entries: finalEntries, slots, spawnBudget: budget, spent };
+  return {
+    entries: finalEntries,
+    slots,
+    spawnBudget: budget,
+    spent,
+    isApex: apexResult.isApex,
+  };
 }
 
 export function draftEncounterForDepth(
   depth: number,
-  options?: { isElite?: boolean; isAmbush?: boolean; district?: DistrictId },
+  options?: { isElite?: boolean; isAmbush?: boolean; district?: DistrictId; seed?: string },
 ): DraftedEncounter {
-  const district = options?.district ?? getDistrictFromDepth(depth);
-  const faction = factionForDistrict(district);
-  const { spawnBudget, maxEnemies } = encounterBudgetForDepth({
+  const { spawnBudget } = encounterBudgetForDepth({
     depth,
     isElite: options?.isElite,
     isAmbush: options?.isAmbush,
   });
-  return draftEncounterSquad(faction, spawnBudget, maxEnemies);
+  const composition = pickEncounterComposition(depth, {
+    isElite: options?.isElite,
+    isAmbush: options?.isAmbush,
+    seed: options?.seed,
+  });
+  const { entries, slots, isApex } = entriesFromComposition(composition);
+  const spent = isApex ? spawnBudget : entries.reduce((sum, e) => sum + e.threatTier, 0);
+  return {
+    entries,
+    slots,
+    spawnBudget,
+    spent,
+    isApex,
+  };
 }
 
 export function allGridSlots(): CombatGridSlotId[] {

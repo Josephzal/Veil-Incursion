@@ -4,17 +4,25 @@ export type SectorZoneId = 'OUTSKIRTS' | 'DEEP_TRANSIT' | 'BREACH_PERIMETER' | '
 
 export type SafeAnchorIndex = 1 | 2 | 3;
 
-export const SAFE_ANCHOR_GRAPH_DEPTHS: readonly [5, 10, 15] = [5, 10, 15];
-export const BOSS_GRAPH_DEPTH = 30;
-/** District gate boss encounters at depths 10, 20, and 30. */
-export const DISTRICT_GATE_DEPTHS: readonly [10, 20, 30] = [10, 20, 30];
+/** Levels per district chapter (Act I–III each span 5 + 5 + 5 = 15). */
+export const LEVELS_PER_DISTRICT = 15;
 
-/** Max scanner vectors per hub (graph children + optional anchor). */
-export const SCANNER_MAX_VECTORS = 3;
+export const MAX_RUN_GRAPH_DEPTH = LEVELS_PER_DISTRICT * 3;
 
-/** Emergency recall available while choosing nodes 5–15 (nodesCleared 4–14). */
+/** Safe-anchor extraction conduits at ~⅓ marks of the 45-node run. */
+export const SAFE_ANCHOR_GRAPH_DEPTHS: readonly [8, 15, 22] = [8, 15, 22];
+
+export const BOSS_GRAPH_DEPTH = MAX_RUN_GRAPH_DEPTH;
+
+/** District gatekeeper bosses at local level 15 of each district. */
+export const DISTRICT_GATE_DEPTHS: readonly [15, 30, 45] = [15, 30, 45];
+
+/** Max scanner vectors per hub — L7 open grid allows 4. */
+export const SCANNER_MAX_VECTORS = 4;
+
+/** Emergency recall available mid-first-district through late second district. */
 export const EMERGENCY_RECALL_MIN_CLEARED = 4;
-export const EMERGENCY_RECALL_MAX_CLEARED = 14;
+export const EMERGENCY_RECALL_MAX_CLEARED = 28;
 
 export const ZONE_RESONANCE_BASE: Record<SectorZoneId, number> = {
   OUTSKIRTS: 3,
