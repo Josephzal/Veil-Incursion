@@ -170,7 +170,7 @@ function buildSectorMeta(
     resonanceDelta: Math.round(resonanceDelta * tierYield),
     isFocused: false,
     yieldMultiplier: tierYield * depthYield,
-    creditBonus: encounterType === 'NARRATIVE_EVENT' && hashSeed(nodeId) % 5 === 0 ? 50 : 0,
+    creditBonus: encounterType === 'NARRATIVE_EVENT' && hashSeed(nodeId) % 5 === 0 ? 35 : 0,
     combatTier,
     probableAffinity: isCombatNode
       ? rollProbableAffinity(encounterType, combatTier, environmentType, nodeId)

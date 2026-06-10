@@ -24,6 +24,9 @@ import {
   InventoryItem,
   PlayerAccount,
 } from '../types/game';
+import type { AegisLoadout } from '../types/aegisCombat';
+import { DEFAULT_AEGIS_LOADOUT } from '../types/aegisCombat';
+import { normalizeAegisLoadout } from '../utils/aegisLoadoutUtils';
 import { createDefaultBankedCargo } from '../types/cargoGrid';
 import type { GlobalBankedCargo } from '../types/cargoGrid';
 import { MacroSectorId, RegionalPresenceState } from '../types/regional';
@@ -69,6 +72,7 @@ export function createDefaultPlayerAccount(): PlayerAccount {
     },
     inventory,
     bankedCargo: createDefaultBankedCargo(),
+    aegisLoadout: [...DEFAULT_AEGIS_LOADOUT],
   };
 }
 
@@ -99,6 +103,7 @@ function mergeStoredAccount(parsed: Partial<PlayerAccount>): PlayerAccount {
       ...createDefaultBankedCargo(),
       ...parsed.bankedCargo,
     },
+    aegisLoadout: normalizeAegisLoadout(parsed.aegisLoadout),
   };
 }
 
@@ -135,6 +140,7 @@ interface PlayerAccountContextType {
   unlockRegionalWeaponCoating: (slotId: string) => void;
   setMetropolitanNode: (node: string, sectorId?: MacroSectorId) => void;
   depositBankedCargo: (delta: GlobalBankedCargo) => void;
+  setAegisLoadout: (loadout: AegisLoadout) => void;
 }
 
 const PlayerAccountContext = createContext<PlayerAccountContextType | undefined>(undefined);
@@ -356,6 +362,16 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
     [updateAccount],
   );
 
+  const setAegisLoadout = useCallback(
+    (loadout: AegisLoadout) => {
+      updateAccount((prev) => ({
+        ...prev,
+        aegisLoadout: [...loadout],
+      }));
+    },
+    [updateAccount],
+  );
+
   const value = useMemo(
     () => ({
       account,
@@ -375,6 +391,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       unlockRegionalWeaponCoating,
       setMetropolitanNode,
       depositBankedCargo,
+      setAegisLoadout,
     }),
     [
       account,
@@ -394,6 +411,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       unlockRegionalWeaponCoating,
       setMetropolitanNode,
       depositBankedCargo,
+      setAegisLoadout,
     ],
   );
 

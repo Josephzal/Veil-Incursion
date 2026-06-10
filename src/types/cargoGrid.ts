@@ -3,7 +3,17 @@ export const CARGO_OCCUPANCY_RESONANCE_THRESHOLD = 0.7;
 export const CARGO_RESONANCE_MULTIPLIER = 2;
 export const DATA_BLEED_VALUE_DRAIN_PCT = 5;
 
-export type CargoCombatEffect = 'heal' | 'stun' | 'unimplemented';
+export type CargoCombatEffect =
+  | 'heal'
+  | 'stun'
+  | 'max_fracture'
+  | 'stamina_ap_surge'
+  | 'shatter_armor'
+  | 'strip_wards'
+  | 'clear_debuffs'
+  | 'max_abyssal'
+  | 'absorb_hit'
+  | 'unimplemented';
 
 export type CargoItemId =
   | 'null-crystal-shard'
@@ -14,7 +24,15 @@ export type CargoItemId =
   | 'rift-iron-cache'
   | 'soul-core'
   | 'veil-shard'
-  | 'target-fragment';
+  | 'target-fragment'
+  | 'grave-dust-ampoule'
+  | 'grid-cracker-mag'
+  | 'eclipse-flare'
+  | 'coagulation-stitch'
+  | 'dead-drop-token'
+  | 'resonance-bribe'
+  | 'spall-weave-vest'
+  | 'void-surge-catalyst';
 
 export type HarvestYieldTier = 'QUICK' | 'FULL' | 'DEEP_GORE';
 
@@ -195,6 +213,93 @@ export const CARGO_ITEM_CATALOG: Record<CargoItemId, CargoItemDefinition> = {
     tags: ['CONSUMABLE', 'COMBAT'],
     usableInCombat: true,
     combatEffect: 'unimplemented',
+  },
+  'grave-dust-ampoule': {
+    id: 'grave-dust-ampoule',
+    name: 'Grave-Dust Ampoule',
+    width: 1,
+    height: 1,
+    baseValue: 90,
+    resonanceWeight: 1,
+    tags: ['CONSUMABLE', 'COMBAT', 'STIM'],
+    usableInCombat: true,
+    combatEffect: 'stamina_ap_surge',
+  },
+  'grid-cracker-mag': {
+    id: 'grid-cracker-mag',
+    name: 'Grid-Cracker Mag',
+    width: 1,
+    height: 1,
+    baseValue: 70,
+    resonanceWeight: 1,
+    tags: ['CONSUMABLE', 'COMBAT', 'BREACH'],
+    usableInCombat: true,
+    combatEffect: 'shatter_armor',
+  },
+  'eclipse-flare': {
+    id: 'eclipse-flare',
+    name: 'Eclipse Flare',
+    width: 1,
+    height: 1,
+    baseValue: 70,
+    resonanceWeight: 1,
+    tags: ['CONSUMABLE', 'COMBAT', 'BREACH'],
+    usableInCombat: true,
+    combatEffect: 'strip_wards',
+  },
+  'coagulation-stitch': {
+    id: 'coagulation-stitch',
+    name: 'Coagulation Stitch',
+    width: 1,
+    height: 1,
+    baseValue: 55,
+    resonanceWeight: 1,
+    tags: ['CONSUMABLE', 'COMBAT', 'HEAL'],
+    usableInCombat: true,
+    combatEffect: 'clear_debuffs',
+    healPercent: 10,
+  },
+  'dead-drop-token': {
+    id: 'dead-drop-token',
+    name: 'Dead-Drop Token',
+    width: 1,
+    height: 1,
+    baseValue: 200,
+    resonanceWeight: 1,
+    tags: ['TOOL', 'EXTRACT'],
+    usableOnScanner: true,
+  },
+  'resonance-bribe': {
+    id: 'resonance-bribe',
+    name: 'Resonance Bribe',
+    width: 1,
+    height: 1,
+    baseValue: 180,
+    resonanceWeight: 1,
+    tags: ['TOOL', 'RESONANCE'],
+    usableOnScanner: true,
+  },
+  'spall-weave-vest': {
+    id: 'spall-weave-vest',
+    name: 'Spall-Weave Vest',
+    width: 1,
+    height: 1,
+    baseValue: 95,
+    resonanceWeight: 2,
+    tags: ['CONSUMABLE', 'COMBAT', 'SHIELD'],
+    usableInCombat: true,
+    combatEffect: 'absorb_hit',
+  },
+  'void-surge-catalyst': {
+    id: 'void-surge-catalyst',
+    name: 'Void-Surge Catalyst',
+    width: 1,
+    height: 1,
+    baseValue: 160,
+    resonanceWeight: 1,
+    tags: ['CONSUMABLE', 'COMBAT', 'ULTIMATE'],
+    usableInCombat: true,
+    combatEffect: 'max_abyssal',
   },
 };
 

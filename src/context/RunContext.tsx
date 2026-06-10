@@ -18,7 +18,6 @@ import {
   buildEncounter,
   getThemedSkillChecks,
   INITIAL_SECTOR_POOL,
-  pickRandomPostCombatBoons,
   pickRandomTrinkets,
   TRINKET_POOL,
 } from '../data/regions';
@@ -129,9 +128,14 @@ import {
   VEIL_STALKER_AMBUSH_CHANCE,
 } from '../types/sector';
 import { SANCTUARY_RETUNE_ATTUNEMENT } from '../types/sector';
-import { spawnBossEnemyProfile } from '../data/bossCombat';
+import { districtBossLogLine } from '../data/districtBosses';
+import { spawnDistrictBossSquad } from '../data/bossCombat';
 import { createDefaultIncursionInventory } from '../data/incursionInventory';
-import { BLACK_MARKET_ITEM_PRICE } from '../data/blackMarket';
+import { spawnCombatSquad, squadFromSingleEnemy } from '../data/combatSpawnEngine';
+import { listingsForStock, rollBlackMarketStock } from '../data/blackMarket';
+import { pickRandomLeyLineMutations } from '../data/leyLineMutations';
+import type { LeyLineMutationDefinition, LeyLineMutationId } from '../types/leyLineMutation';
+import type { AegisLoadout } from '../types/aegisCombat';
 import type { CargoItemId } from '../types/cargoGrid';
 import type { IncursionConsumableId, IncursionConsumableUseResult } from '../types/incursionInventory';
 
@@ -139,24 +143,29 @@ export interface RunStartConfig {
   factionPerks?: FactionModifiers;
   unlockedBiomes?: BiomeType[];
   sectorTier?: number;
+  aegisLoadout?: AegisLoadout;
 }
 
 interface RunContextType {
   runState: RunState;
   runLog: string[];
   scanSessionKey: number;
-  postCombatBoonChoices: Trinket[];
+  postCombatMutationChoices: LeyLineMutationDefinition[];
   appendRunLog: (text: string) => void;
   startNewRun: (config?: RunStartConfig) => void;
   beginScanSession: () => void;
   commitRadarDot: (dot: RadarDot) => EncounterNode;
   advanceNode: () => { hasNext: boolean; completedCount: number };
-  completeNodeAfterBoon: (trinket: Trinket) => void;
+  completeNodeAfterMutation: (mutationId: LeyLineMutationId) => void;
   incrementCombatNodesCleared: () => void;
   syncAfterCombat: (remainingHp: number, remainingStamina: number) => void;
   refillStaminaAfterCombat: () => void;
   applyTrinket: (trinket: Trinket) => void;
-  preparePostCombatBoons: () => Trinket[];
+  preparePostCombatMutations: () => LeyLineMutationDefinition[];
+  applyLeyLineMutation: (mutationId: LeyLineMutationId) => void;
+  rollBlackMarketStockForNode: () => void;
+  useResonanceBribeFromCargo: () => boolean;
+  useDeadDropTokenFromCargo: () => boolean;
   applySkillCheckTier: (tier: 'CRITICAL_SUCCESS' | 'SUCCESS' | 'FAILURE' | 'CRITICAL_DESYNC', logLine: string) => void;
   applyRestChoice: (type: 'REST' | 'REPAIR' | 'RETUNE') => void;
   getCurrentEncounter: () => EncounterNode | null;
@@ -210,10 +219,11 @@ interface RunContextType {
   finishBadgeTestCombat: () => void;
   /** Clears run or badge test combat (caller navigates to hub / badge). */
   exitCombatToBadge: () => void;
-  useIncursionConsumable: (itemId: IncursionConsumableId) => IncursionConsumableUseResult | null;
+  useIncursionConsumable: (itemId: CargoItemId) => IncursionConsumableUseResult | null;
   /** Applies consumable heal to run state (non-combat screens). */
   applyIncursionConsumableHeal: (amount: number) => void;
   awardRunCredits: (amount: number, reason: string) => void;
+  setAegisLoadout: (loadout: AegisLoadout) => void;
   purchaseBlackMarketCargo: (itemId: CargoItemId) => { success: boolean; logLine: string } | null;
   stageSafeAnchorReview: (anchorIndex: 1 | 2 | 3) => void;
   confirmSafeAnchorExtraction: (anchorIndex: 1 | 2 | 3) => void;
@@ -292,6 +302,7 @@ function createInitialRunState(): RunState {
     activeTrinkets: [],
     pendingEncounter: null,
     pendingEnemy: null,
+    pendingEnemies: [],
     pendingAmbush: false,
     parryWindowBonus: 0,
     parryMultiplierBonus: 0,
@@ -309,7 +320,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   const [scanSessionKey, setScanSessionKey] = useState(0);
   const scanSessionKeyRef = useRef(scanSessionKey);
   scanSessionKeyRef.current = scanSessionKey;
-  const [postCombatBoonChoices, setPostCombatBoonChoices] = useState<Trinket[]>([]);
+  const [postCombatMutationChoices, setPostCombatMutationChoices] = useState<LeyLineMutationDefinition[]>([]);
   const [activeIncursion, setActiveIncursion] = useState<ActiveIncursionState>(
     createDefaultActiveIncursionState,
   );
@@ -372,13 +383,18 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       bossDefeated: sectorInit.bossDefeated,
       primeExtractionBonus: sectorInit.primeExtractionBonus,
       sectorTier: sectorInit.sectorTier,
+      leyLineMutations: [],
+      blackMarketStock: [],
+      aegisLoadout: config?.aegisLoadout
+        ? [...config.aegisLoadout] as AegisLoadout
+        : createDefaultActiveIncursionState().aegisLoadout,
     };
     activeIncursionRef.current = incursion;
     setActiveIncursion(incursion);
     narrativeNodeRef.current = null;
     resetCargoInstanceCounter();
     setScanSessionKey(1);
-    setPostCombatBoonChoices([]);
+    setPostCombatMutationChoices([]);
     const biomeTag = (config?.unlockedBiomes ?? ['HOSPITAL', 'ALLEYWAYS']).join(', ');
     setRunLog([
       '>> RUN INITIALIZED — OPEN SECTOR ENGINE ONLINE.',
@@ -438,10 +454,16 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const prev = runStateRef.current;
     const nodeIndex = activeIncursionRef.current.currentEncounterIndex;
     const encounter = buildEncounter(nodeIndex, dot.sector, dot.encounterType, dot.label);
-    const pendingEnemy =
+    const pendingEnemies =
       dot.encounterType === 'COMBAT'
-        ? spawnEnemyProfile(dot.sector, nodeIndex, prev.pendingAmbush)
-        : null;
+        ? spawnCombatSquad({
+          sector: dot.sector,
+          nodeIndex,
+          isAmbush: prev.pendingAmbush,
+          useRoster: false,
+        })
+        : [];
+    const pendingEnemy = pendingEnemies[0] ?? null;
 
     const next: RunState = {
       ...prev,
@@ -449,6 +471,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       currentSector: dot.sector,
       pendingEncounter: encounter,
       pendingEnemy,
+      pendingEnemies,
     };
     runStateRef.current = next;
     setRunState(next);
@@ -487,16 +510,48 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       currentNode: nextCompleted,
       pendingEncounter: null,
       pendingEnemy: null,
+      pendingEnemies: [],
     };
     runStateRef.current = nextState;
     setRunState(nextState);
     return { hasNext, completedCount: nextCompleted };
   }, []);
 
-  const completeNodeAfterBoon = useCallback((trinket: Trinket) => {
-    applyTrinket(trinket);
-    setPostCombatBoonChoices([]);
-  }, [applyTrinket]);
+  const applyLeyLineMutation = useCallback((mutationId: LeyLineMutationId) => {
+    setActiveIncursion((prev) => {
+      const next = {
+        ...prev,
+        leyLineMutations: [...prev.leyLineMutations, mutationId],
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    if (mutationId === 'HYPER_METABOLISM') {
+      setRunState((prev) => {
+        const maxSoulAnchor = Math.max(1, Math.floor(prev.maxSoulAnchor * 0.75));
+        const soulAnchorIntegrity = Math.min(prev.soulAnchorIntegrity, maxSoulAnchor);
+        const next = { ...prev, maxSoulAnchor, soulAnchorIntegrity };
+        runStateRef.current = next;
+        return next;
+      });
+    }
+    appendRunLog(`>> Ley-Line mutation secured: ${mutationId.replace(/_/g, ' ')}.`);
+  }, [appendRunLog]);
+
+  const completeNodeAfterMutation = useCallback((mutationId: LeyLineMutationId) => {
+    applyLeyLineMutation(mutationId);
+    setPostCombatMutationChoices([]);
+  }, [applyLeyLineMutation]);
+
+  const rollBlackMarketStockForNode = useCallback(() => {
+    const stock = rollBlackMarketStock();
+    setActiveIncursion((prev) => {
+      const next = { ...prev, blackMarketStock: stock };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    appendRunLog(`>> BLACK MARKET STOCK — ${stock.length} listings available.`);
+  }, [appendRunLog]);
 
   const syncAfterCombat = useCallback((remainingHp: number, remainingStamina: number) => {
     setRunState((prev) => {
@@ -505,6 +560,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         soulAnchorIntegrity: Math.min(Math.max(remainingHp, 0), prev.maxSoulAnchor),
         currentStamina: Math.min(Math.max(remainingStamina, 0), prev.maxStamina),
         pendingEnemy: null,
+        pendingEnemies: [],
         pendingEncounter: null,
       };
       runStateRef.current = next;
@@ -521,10 +577,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     appendRunLog('>> Combat node cleared — stamina reserves fully replenished.');
   }, [appendRunLog]);
 
-  const preparePostCombatBoons = useCallback((): Trinket[] => {
-    const boons = pickRandomPostCombatBoons(3);
-    setPostCombatBoonChoices(boons);
-    return boons;
+  const preparePostCombatMutations = useCallback((): LeyLineMutationDefinition[] => {
+    const owned = activeIncursionRef.current.leyLineMutations;
+    const choices = pickRandomLeyLineMutations(3, owned);
+    setPostCombatMutationChoices(choices);
+    return choices;
   }, []);
 
   const applySkillCheckTier = useCallback((tier: 'CRITICAL_SUCCESS' | 'SUCCESS' | 'FAILURE' | 'CRITICAL_DESYNC', logLine: string) => {
@@ -621,7 +678,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const reset = createInitialRunState();
     runStateRef.current = reset;
     setRunState(reset);
-    setPostCombatBoonChoices([]);
+    setPostCombatMutationChoices([]);
     const resetIncursion = createDefaultActiveIncursionState();
     activeIncursionRef.current = resetIncursion;
     setActiveIncursion(resetIncursion);
@@ -629,7 +686,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   }, [appendRunLog]);
 
   const startBadgeTestCombat = useCallback((preset: 'easy' | 'hard') => {
-    const pendingEnemy = preset === 'easy' ? createEasyTestEnemy() : createHardTestEnemy();
+    const pendingEnemies = squadFromSingleEnemy(
+      preset === 'easy' ? createEasyTestEnemy() : createHardTestEnemy(),
+    );
+    const pendingEnemy = pendingEnemies[0] ?? null;
     const next: RunState = {
       ...createInitialRunState(),
       runActive: true,
@@ -639,6 +699,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       currentStamina: BASE_MAX_STAMINA,
       currentSector: INITIAL_SECTOR_POOL[0],
       pendingEnemy,
+      pendingEnemies,
       combatTestPreset: preset,
     };
     runStateRef.current = next;
@@ -647,10 +708,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     activeIncursionRef.current = resetIncursion;
     setActiveIncursion(resetIncursion);
     narrativeNodeRef.current = null;
-    setPostCombatBoonChoices([]);
+    setPostCombatMutationChoices([]);
     setRunLog([
       '>> BADGE TEST COMBAT — ISOLATED ARENA.',
-      `>> HOSTILE: ${pendingEnemy.designation} // ${pendingEnemy.maxHp} HP.`,
+      `>> HOSTILE: ${pendingEnemy?.designation ?? 'UNKNOWN'} // ${pendingEnemy?.maxHp ?? 0} HP.`,
       preset === 'easy'
         ? '>> ENEMY PROFILE: STRIKE ONLY.'
         : '>> ENEMY PROFILE: STANDARD ABILITIES (NO WORLD-ENDER).',
@@ -661,7 +722,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const reset = createInitialRunState();
     runStateRef.current = reset;
     setRunState(reset);
-    setPostCombatBoonChoices([]);
+    setPostCombatMutationChoices([]);
     const resetIncursion = createDefaultActiveIncursionState();
     activeIncursionRef.current = resetIncursion;
     setActiveIncursion(resetIncursion);
@@ -705,6 +766,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         ...prev,
         pendingEncounter: null,
         pendingEnemy: null,
+        pendingEnemies: [],
       };
       runStateRef.current = next;
       return next;
@@ -1074,13 +1136,16 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const encounterNode = resolveActiveVectorNode(inc);
     if (!encounterNode || !isBossNodeType(encounterNode.type)) return;
 
-    const bossProfile = createBossProfileForDepth(inc.sectorTier);
+    const gateDepth = depthFromNodesCleared(inc.nodesCleared);
+    const bossProfile = createBossProfileForDepth(gateDepth);
     const sector = runStateRef.current.currentSector ?? INITIAL_SECTOR_POOL[0];
-    const pendingEnemy = spawnBossEnemyProfile(
+    const pendingEnemies = spawnDistrictBossSquad(
       bossProfile,
       sector,
       inc.nodesCleared,
+      gateDepth,
     );
+    const pendingEnemy = pendingEnemies[0] ?? null;
     const envModifiers = buildEnvironmentalModifiersForNode(
       encounterNode.environmentType,
       inc.resonance.percent,
@@ -1096,6 +1161,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       const next = {
         ...prev,
         pendingEnemy,
+        pendingEnemies,
         pendingEncounter: buildEncounter(
           inc.currentEncounterIndex,
           sector,
@@ -1112,6 +1178,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       appendRunLog(environmentAdvantageLogLine(encounterNode.environmentType));
     }
     appendRunLog('>> AFFINITY CORPOREAL — prime anomaly dense tissue detected.');
+    appendRunLog(districtBossLogLine(gateDepth));
     appendRunLog(`>> BOSS SIGNATURE: ${bossProfile.name} // ${bossProfile.maxHp} HP`);
   }, [appendRunLog]);
 
@@ -1136,15 +1203,18 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       appendRunLog(`>> ELITE MODIFIER — ${ELITE_MODIFIER_LABELS[modifier]}`);
     }
     const forcedAffinity = encounterNode.sectorMeta?.probableAffinity;
-    const pendingEnemy = spawnBiomeEnemyProfile(
-      'CITY_STREETS',
-      inc.nodesCleared,
-      isElite || prev.pendingAmbush,
-      {
+    const district = getDistrictFromDepth(depthFromNodesCleared(inc.nodesCleared));
+    const pendingEnemies = spawnCombatSquad({
+      nodeIndex: inc.nodesCleared,
+      isElite,
+      isAmbush: prev.pendingAmbush,
+      district,
+      spawnOptions: {
         resonancePercent: inc.resonance.percent,
         forcedAffinity,
       },
-    );
+    });
+    const pendingEnemy = pendingEnemies[0] ?? null;
     const pendingEncounter = buildEncounter(
       inc.currentEncounterIndex,
       sector,
@@ -1166,6 +1236,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         ...prevState,
         currentSector: sector,
         pendingEnemy,
+        pendingEnemies,
         pendingEncounter,
       };
       runStateRef.current = next;
@@ -1176,10 +1247,13 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (encounterNode.environmentType) {
       appendRunLog(environmentAdvantageLogLine(encounterNode.environmentType));
     }
-    if (pendingEnemy.affinity) {
+    if (pendingEnemy?.affinity) {
       appendRunLog(affinityCombatLogLine(pendingEnemy.affinity));
     }
-    appendRunLog(`>> HOSTILE SIGNATURE: ${pendingEnemy.designation} [${pendingEnemy.class}] HP ${pendingEnemy.maxHp}.`);
+    appendRunLog(`>> HOSTILE CLUSTER — ${pendingEnemies.length} signature(s) on grid.`);
+    pendingEnemies.forEach((unit) => {
+      appendRunLog(`>> — ${unit.designation} [${unit.class}] HP ${unit.currentHp} // ${unit.gridSlot ?? 'FL_0'}`);
+    });
   }, [appendRunLog]);
 
   const prepareDefendRiftEncounter = useCallback(() => {
@@ -1191,7 +1265,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       combatObjective: 'SURVIVE_TURNS' as const,
       survivalTurnsRequired: DEFEND_RIFT_SURVIVAL_TURNS,
     };
-    const pendingEnemy = spawnDefendRiftHordeProfile(inc.nodesCleared);
+    const pendingEnemies = squadFromSingleEnemy(spawnDefendRiftHordeProfile(inc.nodesCleared));
+    const pendingEnemy = pendingEnemies[0] ?? null;
 
     setActiveIncursion((prevState) => ({
       ...prevState,
@@ -1211,6 +1286,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         ...prevState,
         currentSector: sector,
         pendingEnemy,
+        pendingEnemies,
         pendingEncounter: buildEncounter(
           inc.currentEncounterIndex,
           sector,
@@ -1232,7 +1308,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const encounterNode = resolveActiveVectorNode(inc);
     const prev = runStateRef.current;
     const sector = prev.currentSector ?? INITIAL_SECTOR_POOL[0];
-    const pendingEnemy = spawnVeilStalkerProfile(inc.nodesCleared);
+    const pendingEnemies = squadFromSingleEnemy(spawnVeilStalkerProfile(inc.nodesCleared));
+    const pendingEnemy = pendingEnemies[0] ?? null;
     const envModifiers = buildEnvironmentalModifiersForNode(
       encounterNode?.environmentType,
       inc.resonance.percent,
@@ -1252,6 +1329,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         ...prevState,
         currentSector: sector,
         pendingEnemy,
+        pendingEnemies,
         pendingEncounter: buildEncounter(
           inc.currentEncounterIndex,
           sector,
@@ -1277,12 +1355,15 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       encounterNode?.environmentType,
       inc.resonance.percent,
     );
-    const pendingEnemy = spawnBiomeEnemyProfile(
-      'CITY_STREETS',
-      inc.nodesCleared,
-      true,
-      { resonancePercent: inc.resonance.percent },
-    );
+    const district = getDistrictFromDepth(depthFromNodesCleared(inc.nodesCleared));
+    const pendingEnemies = spawnCombatSquad({
+      nodeIndex: inc.nodesCleared,
+      isElite: true,
+      isAmbush: true,
+      district,
+      spawnOptions: { resonancePercent: inc.resonance.percent },
+    });
+    const pendingEnemy = pendingEnemies[0] ?? null;
     const pendingEncounter = buildEncounter(
       inc.currentEncounterIndex,
       sector,
@@ -1304,6 +1385,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         ...prevState,
         currentSector: sector,
         pendingEnemy,
+        pendingEnemies,
         pendingEncounter,
       };
       runStateRef.current = next;
@@ -1424,6 +1506,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         currentNode: nextNodesCleared,
         pendingEncounter: null,
         pendingEnemy: null,
+        pendingEnemies: [],
       };
       runStateRef.current = next;
       return next;
@@ -1620,6 +1703,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
           return next;
         });
         return 'ELITE_COMBAT';
+      }
+      if (node.type === 'BLACK_MARKET') {
+        rollBlackMarketStockForNode();
       }
       setActiveIncursion((prev) => {
         const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
@@ -1873,7 +1959,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
     setRunState((prev) => {
-      const next = { ...prev, pendingEnemy: null, pendingEncounter: null };
+      const next = { ...prev, pendingEnemy: null, pendingEnemies: [], pendingEncounter: null };
       runStateRef.current = next;
       return next;
     });
@@ -1978,10 +2064,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     }
   }, [appendRunLog]);
 
-  const useIncursionConsumable = useCallback((itemId: IncursionConsumableId): IncursionConsumableUseResult | null => {
+  const useIncursionConsumable = useCallback((itemId: CargoItemId): IncursionConsumableUseResult | null => {
     const inc = activeIncursionRef.current;
     const def = CARGO_ITEM_CATALOG[itemId];
-    if (!def.usableInCombat || def.combatEffect === 'unimplemented' || !hasCargoItem(inc.cargo, itemId)) {
+    if (!def?.usableInCombat || def.combatEffect === 'unimplemented' || !hasCargoItem(inc.cargo, itemId)) {
       return null;
     }
 
@@ -1992,16 +2078,58 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     let healAmount = 0;
     let stunsEnemy = false;
     let logLine = '';
+    const result: IncursionConsumableUseResult = {
+      itemId: itemId as IncursionConsumableUseResult['itemId'],
+      healAmount: 0,
+      stunsEnemy: false,
+      logLine: '',
+    };
 
-    if (def.combatEffect === 'stun') {
-      stunsEnemy = true;
-      logLine = '>> VEIL SHARD DEPLOYED — Hostile neural lock engaged.';
-    } else if (def.combatEffect === 'heal') {
-      const healPercent = def.healPercent ?? 0;
-      healAmount = Math.floor(run.maxSoulAnchor * (healPercent / 100));
-      logLine = `>> SOUL CORE DEPLOYED — +${healPercent}% Soul Anchor integrity restored (+${healAmount} HP).`;
-    } else {
-      return null;
+    switch (def.combatEffect) {
+      case 'stun':
+        stunsEnemy = true;
+        logLine = '>> VEIL SHARD DEPLOYED — Hostile neural lock engaged.';
+        break;
+      case 'heal': {
+        const healPercent = def.healPercent ?? 0;
+        healAmount = Math.floor(run.maxSoulAnchor * (healPercent / 100));
+        logLine = `>> SOUL CORE DEPLOYED — +${healPercent}% Soul Anchor (+${healAmount} HP).`;
+        break;
+      }
+      case 'max_fracture':
+        stunsEnemy = true;
+        logLine = '>> VEIL SHARD DEPLOYED — Fracture gauge maxed.';
+        break;
+      case 'stamina_ap_surge':
+        result.restoreStaminaPct = 100;
+        result.grantBonusAp = 1;
+        logLine = '>> GRAVE-DUST AMPULE — Stamina maxed, +1 AP this turn.';
+        break;
+      case 'shatter_armor':
+        result.shatterKineticArmor = 2;
+        logLine = '>> GRID-CRACKER MAG — Up to 2 kinetic armor layers shattered.';
+        break;
+      case 'strip_wards':
+        result.stripOccultWards = 2;
+        logLine = '>> ECLIPSE FLARE — Up to 2 occult ward layers burned away.';
+        break;
+      case 'clear_debuffs': {
+        const healPercent = def.healPercent ?? 10;
+        healAmount = Math.floor(run.maxSoulAnchor * (healPercent / 100));
+        result.clearDebuffs = true;
+        logLine = `>> COAGULATION STITCH — Debuffs cleared, +${healAmount} HP.`;
+        break;
+      }
+      case 'max_abyssal':
+        result.maxAbyssalReserve = true;
+        logLine = '>> VOID-SURGE CATALYST — Abyssal Reserve overcharged to maximum.';
+        break;
+      case 'absorb_hit':
+        result.absorbNextHit = true;
+        logLine = '>> SPALL-WEAVE VEST — Next health damage fully absorbed.';
+        break;
+      default:
+        return null;
     }
 
     setActiveIncursion((prev) => {
@@ -2013,8 +2141,56 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
 
-    return { itemId, healAmount, stunsEnemy, logLine };
+    return {
+      ...result,
+      healAmount,
+      stunsEnemy,
+      logLine,
+    };
   }, []);
+
+  const useResonanceBribeFromCargo = useCallback((): boolean => {
+    const inc = activeIncursionRef.current;
+    if (!hasCargoItem(inc.cargo, 'resonance-bribe')) return false;
+    const nextCargo = consumeCargoItem(inc.cargo, 'resonance-bribe');
+    if (!nextCargo) return false;
+    setActiveIncursion((prev) => {
+      const vented = Math.max(0, prev.resonance.percent - 25);
+      const next = {
+        ...prev,
+        cargo: nextCargo,
+        resonance: { percent: vented },
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    appendRunLog('>> RESONANCE BRIBE — local trackers scrambled. −25% resonance.');
+    return true;
+  }, [appendRunLog]);
+
+  const useDeadDropTokenFromCargo = useCallback((): boolean => {
+    const inc = activeIncursionRef.current;
+    if (!hasCargoItem(inc.cargo, 'dead-drop-token')) return false;
+    const containment = inc.cargo.containment[0];
+    if (!containment) {
+      appendRunLog('[REJECTED] >> Dead-Drop Token requires cargo in containment.');
+      return false;
+    }
+    const nextCargo = consumeCargoItem(inc.cargo, 'dead-drop-token');
+    if (!nextCargo) return false;
+    const value = containment.currentValue ?? CARGO_ITEM_CATALOG[containment.itemId].baseValue;
+    setActiveIncursion((prev) => {
+      const stripped = {
+        ...nextCargo,
+        containment: nextCargo.containment.filter((c) => c.instanceId !== containment.instanceId),
+      };
+      const next = { ...prev, cargo: stripped };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    appendRunLog(`>> DEAD-DROP TOKEN — ${CARGO_ITEM_CATALOG[containment.itemId].name} secured to Cabal vault (+${value} CR value).`);
+    return true;
+  }, [appendRunLog]);
 
   const applyIncursionConsumableHeal = useCallback((amount: number) => {
     setRunState((prev) => {
@@ -2037,9 +2213,24 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     appendRunLog(`>> +${amount} RUN CREDITS — ${reason}`);
   }, [appendRunLog]);
 
+  const setAegisLoadout = useCallback((loadout: AegisLoadout) => {
+    setActiveIncursion((prev) => {
+      const next = { ...prev, aegisLoadout: [...loadout] as AegisLoadout };
+      activeIncursionRef.current = next;
+      return next;
+    });
+  }, []);
+
   const purchaseBlackMarketCargo = useCallback((itemId: CargoItemId): { success: boolean; logLine: string } | null => {
     const inc = activeIncursionRef.current;
-    if (inc.runCredits < BLACK_MARKET_ITEM_PRICE) {
+    const stock = inc.blackMarketStock.length > 0 ? inc.blackMarketStock : rollBlackMarketStock();
+    const listing = listingsForStock(stock).find((entry) => entry.id === itemId)
+      ?? listingsForStock(rollBlackMarketStock()).find((entry) => entry.id === itemId);
+    const price = listing?.price ?? CARGO_ITEM_CATALOG[itemId]?.baseValue ?? 60;
+    if (stock.length > 0 && !stock.includes(itemId)) {
+      return { success: false, logLine: '[REJECTED] >> Item not in current market stock.' };
+    }
+    if (inc.runCredits < price) {
       return { success: false, logLine: '[REJECTED] >> Insufficient run credits for cargo purchase.' };
     }
 
@@ -2047,7 +2238,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       const nextCargo = addLootToContainment(prev.cargo, itemId, 1);
       const next = {
         ...prev,
-        runCredits: prev.runCredits - BLACK_MARKET_ITEM_PRICE,
+        runCredits: prev.runCredits - price,
         cargo: nextCargo,
       };
       activeIncursionRef.current = next;
@@ -2056,7 +2247,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
     return {
       success: true,
-      logLine: `>> BLACK MARKET CARGO — ${CARGO_ITEM_CATALOG[itemId].name} staged in containment. -${BLACK_MARKET_ITEM_PRICE} RUN CREDITS.`,
+      logLine: `>> BLACK MARKET CARGO — ${CARGO_ITEM_CATALOG[itemId].name} staged in containment. -${price} RUN CREDITS.`,
     };
   }, []);
 
@@ -2065,18 +2256,22 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       runState,
       runLog,
       scanSessionKey,
-      postCombatBoonChoices,
+      postCombatMutationChoices,
       appendRunLog,
       startNewRun,
       beginScanSession,
       commitRadarDot,
       advanceNode,
-      completeNodeAfterBoon,
+      completeNodeAfterMutation,
       incrementCombatNodesCleared,
       syncAfterCombat,
       refillStaminaAfterCombat,
       applyTrinket,
-      preparePostCombatBoons,
+      preparePostCombatMutations,
+      applyLeyLineMutation,
+      rollBlackMarketStockForNode,
+      useResonanceBribeFromCargo,
+      useDeadDropTokenFromCargo,
       applySkillCheckTier,
       applyRestChoice,
       getCurrentEncounter,
@@ -2111,6 +2306,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       useIncursionConsumable,
       applyIncursionConsumableHeal,
       awardRunCredits,
+      setAegisLoadout,
       purchaseBlackMarketCargo,
       focusPreviewNode,
       spendAttunementCharge,
@@ -2139,18 +2335,22 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       runState,
       runLog,
       scanSessionKey,
-      postCombatBoonChoices,
+      postCombatMutationChoices,
       appendRunLog,
       startNewRun,
       beginScanSession,
       commitRadarDot,
       advanceNode,
-      completeNodeAfterBoon,
+      completeNodeAfterMutation,
       incrementCombatNodesCleared,
       syncAfterCombat,
       refillStaminaAfterCombat,
       applyTrinket,
-      preparePostCombatBoons,
+      preparePostCombatMutations,
+      applyLeyLineMutation,
+      rollBlackMarketStockForNode,
+      useResonanceBribeFromCargo,
+      useDeadDropTokenFromCargo,
       applySkillCheckTier,
       applyRestChoice,
       getCurrentEncounter,
@@ -2185,6 +2385,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       useIncursionConsumable,
       applyIncursionConsumableHeal,
       awardRunCredits,
+      setAegisLoadout,
       purchaseBlackMarketCargo,
       focusPreviewNode,
       spendAttunementCharge,

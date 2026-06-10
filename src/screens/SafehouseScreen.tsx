@@ -1,20 +1,23 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import IncursionShell from '../components/IncursionShell';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
+import AegisLoadoutEditor from '../components/AegisLoadoutEditor';
 import { useRun } from '../context/RunContext';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useGameFlow } from '../context/GameFlowContext';
 import { calculateCargoMarketValue, calculateGridOccupancy } from '../data/cargoGridEngine';
 import { DISTRICT_NAMES } from '../data/districtPacing';
+import type { AegisAbilityId, AegisLoadout } from '../types/aegisCombat';
+import { validateLoadoutCommit } from '../utils/aegisLoadoutUtils';
 
 const TERMINAL_ACCENT = '#3ecf6e';
 const TERMINAL_MUTED = '#6b7c72';
 const PANEL_BG = '#121416';
 const BORDER = 'rgba(62, 207, 110, 0.28)';
 
-type SafehouseTab = 'PAYLOAD' | 'BENCH' | 'INTEL';
+type SafehouseTab = 'PAYLOAD' | 'LOADOUT' | 'BENCH' | 'INTEL';
 
 const TRANSFER_PRESETS = [0, 25, 50, 75, 100] as const;
 
@@ -26,13 +29,31 @@ const CLASS_CARDS = [
 
 export default function SafehouseScreen(): React.JSX.Element {
   const { theme } = useTerminal();
-  const { runState, activeIncursion, appendRunLog, transitionToNextDistrict, transferRunCargoToBankVault, restoreHealthFromBench, getSafehouseIntel } = useRun();
-  const { account, depositBankedCargo } = usePlayerAccount();
+  const {
+    runState,
+    activeIncursion,
+    appendRunLog,
+    transitionToNextDistrict,
+    transferRunCargoToBankVault,
+    restoreHealthFromBench,
+    getSafehouseIntel,
+    setAegisLoadout,
+  } = useRun();
+  const { account, depositBankedCargo, setAegisLoadout: setAccountAegisLoadout } = usePlayerAccount();
   const { startScanning } = useGameFlow();
 
   const [activeTab, setActiveTab] = useState<SafehouseTab>('PAYLOAD');
   const [transferPercent, setTransferPercent] = useState(50);
   const [statusLine, setStatusLine] = useState('>> CABAL CHECKPOINT ONLINE — AWAITING OPERATIVE INPUT.');
+  const [loadoutDraft, setLoadoutDraft] = useState<AegisAbilityId[]>([...activeIncursion.aegisLoadout]);
+  const [selectedSlot, setSelectedSlot] = useState<0 | 1 | 2 | 3>(0);
+  const [loadoutStatus, setLoadoutStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (activeTab !== 'LOADOUT') return;
+    setLoadoutDraft([...activeIncursion.aegisLoadout]);
+    setLoadoutStatus(null);
+  }, [activeTab, activeIncursion.aegisLoadout]);
 
   const healthPct = useMemo(() => {
     if (runState.maxSoulAnchor <= 0) return 0;
@@ -68,6 +89,37 @@ export default function SafehouseScreen(): React.JSX.Element {
     startScanning();
   }, [startScanning, transitionToNextDistrict]);
 
+  const assignAbilityToSlot = useCallback((abilityId: AegisAbilityId) => {
+    if (abilityId === 'EVISCERATE') return;
+    setLoadoutDraft((prev) => {
+      const next = [...prev];
+      next[selectedSlot] = abilityId;
+      return next;
+    });
+    setLoadoutStatus(null);
+  }, [selectedSlot]);
+
+  const commitLoadout = useCallback(() => {
+    const rejection = validateLoadoutCommit(loadoutDraft);
+    if (rejection) {
+      setLoadoutStatus(rejection);
+      setStatusLine(rejection);
+      return;
+    }
+    const committed: AegisLoadout = [
+      loadoutDraft[0],
+      loadoutDraft[1],
+      loadoutDraft[2],
+      loadoutDraft[3],
+    ];
+    setAegisLoadout(committed);
+    setAccountAegisLoadout(committed);
+    appendRunLog('>> AEGIS LOADOUT LOCKED — four active abilities staged for next descent.');
+    const success = '>> LOADOUT COMMITTED — COMBAT DECK WILL DEPLOY ON NEXT INCURSION.';
+    setLoadoutStatus(success);
+    setStatusLine(success);
+  }, [appendRunLog, loadoutDraft, setAccountAegisLoadout, setAegisLoadout]);
+
   return (
     <IncursionShell>
       <MacroLogAnchoredLayout
@@ -86,7 +138,7 @@ export default function SafehouseScreen(): React.JSX.Element {
           </View>
 
           <View style={styles.tabRow}>
-            {(['PAYLOAD', 'BENCH', 'INTEL'] as SafehouseTab[]).map((tab) => (
+            {(['PAYLOAD', 'LOADOUT', 'BENCH', 'INTEL'] as SafehouseTab[]).map((tab) => (
               <Pressable
                 key={tab}
                 onPress={() => setActiveTab(tab)}
@@ -129,6 +181,24 @@ export default function SafehouseScreen(): React.JSX.Element {
                   <Text style={styles.actionLabel}>[ EXECUTE BANK TRANSFER ]</Text>
                 </Pressable>
               </>
+            ) : null}
+
+            {activeTab === 'LOADOUT' ? (
+              <AegisLoadoutEditor
+                draft={loadoutDraft}
+                selectedSlot={selectedSlot}
+                onSelectSlot={setSelectedSlot}
+                onAssignAbility={assignAbilityToSlot}
+                onCommit={commitLoadout}
+                theme={{
+                  accentColor: TERMINAL_ACCENT,
+                  borderColor: BORDER,
+                  mutedColor: TERMINAL_MUTED,
+                  textColor: '#d8e2dc',
+                  panelBg: 'rgba(0, 0, 0, 0.35)',
+                }}
+                statusMessage={loadoutStatus}
+              />
             ) : null}
 
             {activeTab === 'BENCH' ? (

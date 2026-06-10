@@ -19,7 +19,6 @@ const REJECT_SNAP_MS = 140;
 import { canPlaceCargoItemExcluding } from '../data/cargoGridEngine';
 import type { CargoItemId, CargoRunState, PlacedCargoItem } from '../types/cargoGrid';
 import { CARGO_GRID_DIMENSION, CARGO_ITEM_CATALOG } from '../types/cargoGrid';
-import type { IncursionConsumableId } from '../types/incursionInventory';
 import type { TerminalTheme } from '../types/theme';
 import { countCargoItemInstances } from '../data/cargoGridEngine';
 import { resolveCargoItemIcon } from '../utils/cargoItemIcon';
@@ -27,11 +26,9 @@ import { resolveCargoItemIcon } from '../utils/cargoItemIcon';
 export const CARGO_CELL_SIZE = 56;
 export const CARGO_CELL_GAP = 2;
 
-const COMBAT_CONSUMABLE_IDS: IncursionConsumableId[] = [
-  'soul-core',
-  'veil-shard',
-  'target-fragment',
-];
+const COMBAT_CONSUMABLE_IDS: CargoItemId[] = Object.values(CARGO_ITEM_CATALOG)
+  .filter((def) => def.usableInCombat === true && def.combatEffect !== 'unimplemented')
+  .map((def) => def.id);
 
 export const CARGO_GRID_FRAME_SIZE =
   CARGO_GRID_DIMENSION * CARGO_CELL_SIZE + (CARGO_GRID_DIMENSION - 1) * CARGO_CELL_GAP;
@@ -57,10 +54,12 @@ interface CargoGridBoardProps {
   onContinue?: () => void;
   continueLabel?: string;
   onUseAmpoule?: () => boolean;
+  onUseResonanceBribe?: () => boolean;
+  onUseDeadDrop?: () => boolean;
   scannerMode?: boolean;
   combatMode?: boolean;
   combatConsumablesEnabled?: boolean;
-  onUseCombatConsumable?: (itemId: IncursionConsumableId) => boolean;
+  onUseCombatConsumable?: (itemId: CargoItemId) => boolean;
   /** Bare grid + external loot + actions — no headers or wrapper chrome. */
   minimal?: boolean;
 }
@@ -312,6 +311,8 @@ export default function CargoGridBoard({
   onContinue,
   continueLabel = '[ CONTINUE ]',
   onUseAmpoule,
+  onUseResonanceBribe,
+  onUseDeadDrop,
   scannerMode = false,
   combatMode = false,
   combatConsumablesEnabled = true,
@@ -479,6 +480,22 @@ export default function CargoGridBoard({
         >
           <Text style={[styles.ampouleBtnText, { color: accentColor }]}>
             [ USE FOCUSING AMPOULE — +1 ATTUNEMENT ]
+          </Text>
+        </Pressable>
+      ) : null}
+
+      {scannerMode && onUseResonanceBribe && countCargoItemInstances(cargo, 'resonance-bribe') > 0 ? (
+        <Pressable onPress={() => onUseResonanceBribe()} style={[styles.ampouleBtn, { borderColor: accentColor }]}>
+          <Text style={[styles.ampouleBtnText, { color: accentColor }]}>
+            [ USE RESONANCE BRIBE — −25% RESONANCE ]
+          </Text>
+        </Pressable>
+      ) : null}
+
+      {scannerMode && onUseDeadDrop && countCargoItemInstances(cargo, 'dead-drop-token') > 0 ? (
+        <Pressable onPress={() => onUseDeadDrop()} style={[styles.ampouleBtn, { borderColor: accentColor }]}>
+          <Text style={[styles.ampouleBtnText, { color: accentColor }]}>
+            [ USE DEAD-DROP TOKEN — VAULT EXTRACT ]
           </Text>
         </Pressable>
       ) : null}

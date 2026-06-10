@@ -7,7 +7,7 @@ import {
   View,
 } from 'react-native';
 import BlackMarketBg from '../../assets/images/location images/black_market.png';
-import { BLACK_MARKET_CARGO_LISTINGS, BLACK_MARKET_ITEM_PRICE } from '../data/blackMarket';
+import { listingsForStock } from '../data/blackMarket';
 import { countCargoItemInstances } from '../data/cargoGridEngine';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
@@ -33,12 +33,17 @@ export default function BlackMarketScreen(): React.JSX.Element {
   const [selectedCargoId, setSelectedCargoId] = useState<CargoItemId | null>(null);
   const [leaving, setLeaving] = useState(false);
 
+  const marketListings = listingsForStock(
+    activeIncursion.blackMarketStock.length > 0
+      ? activeIncursion.blackMarketStock
+      : ['soul-core'],
+  );
   const selectedCargoListing = selectedCargoId != null
-    ? BLACK_MARKET_CARGO_LISTINGS.find((entry) => entry.id === selectedCargoId) ?? null
+    ? marketListings.find((entry) => entry.id === selectedCargoId) ?? null
     : null;
 
   const cargoPurchaseEnabled = selectedCargoListing != null
-    && activeIncursion.runCredits >= BLACK_MARKET_ITEM_PRICE;
+    && activeIncursion.runCredits >= selectedCargoListing.price;
 
   const ownedQty = selectedCargoId != null
     ? countCargoItemInstances(activeIncursion.cargo, selectedCargoId)
@@ -83,11 +88,11 @@ export default function BlackMarketScreen(): React.JSX.Element {
 
               <View style={[styles.shopPanel, { borderColor: theme.borderColor }]}>
                 <Text style={[styles.shopSubHeader, { color: theme.mutedColor }]}>
-                  CARGO CONTRABAND // {BLACK_MARKET_ITEM_PRICE} CR PER UNIT // STAGED TO CONTAINMENT
+                  CARGO CONTRABAND // PRICED PER UNIT // STAGED TO CONTAINMENT
                 </Text>
 
                 <View style={styles.grid}>
-                  {BLACK_MARKET_CARGO_LISTINGS.map((listing) => {
+                  {marketListings.map((listing) => {
                     const isSelected = listing.id === selectedCargoId;
                     const owned = countCargoItemInstances(activeIncursion.cargo, listing.id);
                     return (

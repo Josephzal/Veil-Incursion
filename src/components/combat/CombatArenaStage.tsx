@@ -13,6 +13,7 @@ interface CombatArenaStageProps {
   enemyImageSource: ImageSourcePropType;
   enemyPortraitKey: string;
   wardPrimed?: boolean;
+  hideEnemySprite?: boolean;
   parryBlocksEnemyTouches: boolean;
   onEradicationComplete: () => void;
 }
@@ -24,6 +25,7 @@ export default function CombatArenaStage({
   enemyImageSource,
   enemyPortraitKey,
   wardPrimed = false,
+  hideEnemySprite = false,
   parryBlocksEnemyTouches,
   onEradicationComplete,
 }: CombatArenaStageProps): React.JSX.Element {
@@ -41,7 +43,7 @@ export default function CombatArenaStage({
       </View>
 
       <View style={styles.enemyColumn}>
-        <View style={styles.enemySpriteSlot}>
+        <View style={[styles.enemySpriteSlot, hideEnemySprite && styles.enemySpriteHidden]}>
           <ApparitionViewport
             key={enemyPortraitKey}
             ref={enemyViewportRef}
@@ -94,5 +96,9 @@ const styles = StyleSheet.create({
   spriteFill: {
     flex: 1,
     width: '100%',
+  },
+  enemySpriteHidden: {
+    opacity: 0,
+    pointerEvents: 'none',
   },
 });

@@ -1,4 +1,7 @@
 import type { EnemyAffinity } from './combatEnvironment';
+import type { CombatUnitTag } from './aegisCombat';
+import type { CombatGridLane, CombatGridSlotId } from './combatGrid';
+import type { FactionType } from './game';
 
 export type RegionTheme = 'HOSPITAL' | 'HOUSING' | 'FOREST' | 'CITY';
 
@@ -50,6 +53,10 @@ export interface EncounterNode {
 }
 
 export interface EnemyCombatProfile {
+  /** Stable id for multi-enemy targeting (Phase B). */
+  unitId?: string;
+  gridSlot?: CombatGridSlotId;
+  lane?: CombatGridLane;
   class: EnemyClass;
   designation: string;
   maxHp: number;
@@ -67,6 +74,22 @@ export interface EnemyCombatProfile {
   /** Badge-screen test combat — controls intent rolling in advanceEnemyIntent. */
   testPreset?: 'easy' | 'hard';
   affinity?: EnemyAffinity;
+  kineticArmor?: number;
+  occultWards?: number;
+  baseKineticArmor?: number;
+  baseOccultWards?: number;
+  fractureGauge?: number;
+  fractureMax?: number;
+  combatTags?: CombatUnitTag[];
+  /** Void Contagion — Doomed applications stack up to 3. */
+  doomedStacks?: number;
+  enemyActionPoints?: number;
+  enemyMaxActionPoints?: number;
+  fracturedThisRound?: boolean;
+  rosterId?: string;
+  faction?: FactionType;
+  /** Choir of Rust — damage syncs to boss HP pool across all bodies. */
+  sharedBossPool?: boolean;
 }
 
 export interface Trinket {
@@ -104,6 +127,8 @@ export interface RunState {
   activeTrinkets: Trinket[];
   pendingEncounter: EncounterNode | null;
   pendingEnemy: EnemyCombatProfile | null;
+  /** Multi-enemy squad for combat encounters (max 4). */
+  pendingEnemies: EnemyCombatProfile[];
   pendingAmbush: boolean;
   parryWindowBonus: number;
   parryMultiplierBonus: number;

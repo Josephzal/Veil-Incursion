@@ -1,50 +1,43 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-
-
-export type CombatDeckAction =
-  | 'STRIKE'
-  | 'ABYSSAL_WARD'
-  | 'BREATHING_TECHNIQUE'
-  | 'COUNTER_STANCE';
-
-export const STRIKE_DECK_LABEL = '[ STRIKE ]';
-export const ABYSSAL_STRIKE_PRIMED_LABEL = '[ ABYSSAL STRIKE ]';
-
-export function strikeDeckLabel(wardPrimed: boolean): string {
-  return wardPrimed ? ABYSSAL_STRIKE_PRIMED_LABEL : STRIKE_DECK_LABEL;
-}
-
-export const DECK_ACTION_LABELS: Record<CombatDeckAction, string> = {
-  STRIKE: STRIKE_DECK_LABEL,
-  BREATHING_TECHNIQUE: '[ BREATHING TECHNIQUE ]',
-  COUNTER_STANCE: '[ COUNTER STANCE ]',
-  ABYSSAL_WARD: '[ ABYSSAL WARD ]',
-};
-
-/** 2×2 grid order: strike / breathing on row 1, counter / abyssal ward on row 2. */
-export const COMMAND_DECK_GRID: CombatDeckAction[] = [
-  'STRIKE',
-  'BREATHING_TECHNIQUE',
-  'COUNTER_STANCE',
-  'ABYSSAL_WARD',
-];
+import { getAbilityDefinition } from '../data/aegisAbilities';
+import type { AegisAbilityId } from '../types/aegisCombat';
+import { PLAYER_ACTION_POINTS_PER_TURN } from '../types/aegisCombat';
 
 const MONO = 'monospace';
 const TILE_HEIGHT = 42;
 const GRID_GAP = 6;
-export const COMMAND_DECK_MIN_HEIGHT = TILE_HEIGHT * 2 + GRID_GAP + 10;
+const AP_ROW_HEIGHT = 22;
+const ULTIMATE_ROW_HEIGHT = 36;
+const EVISCERATE_ACCENT = '#ff1744';
+const EVISCERATE_GLOW = 'rgba(255, 23, 68, 0.18)';
+
+export const COMMAND_DECK_MIN_HEIGHT = TILE_HEIGHT * 2 + GRID_GAP + AP_ROW_HEIGHT + 14;
+export const COMMAND_DECK_MIN_HEIGHT_WITH_ULTIMATE =
+  COMMAND_DECK_MIN_HEIGHT + ULTIMATE_ROW_HEIGHT + GRID_GAP;
 
 interface CombatCommandDeckProps {
-  selectedAction: CombatDeckAction | null;
-  onSelectAction: (action: CombatDeckAction) => void;
+  loadout: readonly AegisAbilityId[];
+  selectedAbility: AegisAbilityId | null;
+  onSelectAbility: (ability: AegisAbilityId) => void;
   onConfirm: () => void;
   onAbort: () => void;
-  isActionEnabled: (action: CombatDeckAction) => boolean;
-  getStagedHeader: (action: CombatDeckAction) => string;
-  getStagedCostImpact: (action: CombatDeckAction) => string;
-  getActionAccent?: (action: CombatDeckAction) => string | undefined;
-  getActionLabel?: (action: CombatDeckAction) => string;
+  onEndTurn: () => void;
+  actionPoints: number;
+  maxActionPoints?: number;
+  isActionEnabled: (ability: AegisAbilityId) => boolean;
+  canEndTurn: boolean;
+  getStagedHeader: (ability: AegisAbilityId) => string;
+  getStagedCostImpact: (ability: AegisAbilityId) => string;
+  getActionAccent?: (ability: AegisAbilityId) => string | undefined;
+  /** Hidden ultimate — full-width glitch row when Abyssal Reserve is at cap. */
+  eviscerateReady?: boolean;
+  onEviscerate?: () => void;
+  eviscerateDisabled?: boolean;
+  /** Blood for Time mutation — optional AP trade in the AP row. */
+  bloodForTimeAvailable?: boolean;
+  bloodForTimeEnabled?: boolean;
+  onBloodForTime?: () => void;
   borderColor: string;
   primaryColor: string;
   mutedColor: string;
@@ -52,15 +45,25 @@ interface CombatCommandDeckProps {
 }
 
 export default function CombatCommandDeck({
-  selectedAction,
-  onSelectAction,
+  loadout,
+  selectedAbility,
+  onSelectAbility,
   onConfirm,
   onAbort,
+  onEndTurn,
+  actionPoints,
+  maxActionPoints = PLAYER_ACTION_POINTS_PER_TURN,
   isActionEnabled,
+  canEndTurn,
   getStagedHeader,
   getStagedCostImpact,
   getActionAccent,
-  getActionLabel,
+  eviscerateReady = false,
+  onEviscerate,
+  eviscerateDisabled = false,
+  bloodForTimeAvailable = false,
+  bloodForTimeEnabled = false,
+  onBloodForTime,
   borderColor,
   primaryColor,
   mutedColor,
@@ -72,21 +75,20 @@ export default function CombatCommandDeck({
     !frameless ? { borderColor } : null,
   ];
 
-  const labelFor = (action: CombatDeckAction) =>
-    getActionLabel?.(action) ?? DECK_ACTION_LABELS[action];
+  const labelFor = (ability: AegisAbilityId) => getAbilityDefinition(ability).label;
 
-  const renderTile = (action: CombatDeckAction) => {
-    const enabled = isActionEnabled(action);
-    const accent = getActionAccent?.(action);
+  const renderTile = (ability: AegisAbilityId) => {
+    const enabled = isActionEnabled(ability);
+    const accent = getActionAccent?.(ability);
     const tileBorderColor = enabled && accent ? accent : borderColor;
 
     return (
       <View
-        key={action}
+        key={ability}
         style={[styles.tileSlot, { borderColor: tileBorderColor }]}
       >
         <Pressable
-          onPress={() => enabled && onSelectAction(action)}
+          onPress={() => enabled && onSelectAbility(ability)}
           disabled={!enabled}
           style={[
             styles.deckTile,
@@ -105,20 +107,96 @@ export default function CombatCommandDeck({
             adjustsFontSizeToFit
             minimumFontScale={0.75}
           >
-            {labelFor(action)}
+            {labelFor(ability)}
           </Text>
         </Pressable>
       </View>
     );
   };
 
-  if (selectedAction) {
-    const canExecute = isActionEnabled(selectedAction);
+  const apRow = (
+    <View style={styles.apRow}>
+      <Text style={[styles.apLabel, { color: mutedColor }]}>
+        {`ACTION PTS // ${actionPoints}/${maxActionPoints}`}
+      </Text>
+      <View style={styles.apActions}>
+        {bloodForTimeAvailable ? (
+          <Pressable
+            onPress={onBloodForTime}
+            disabled={!bloodForTimeEnabled}
+            style={[
+              styles.bloodForTimeBtn,
+              {
+                borderColor: bloodForTimeEnabled ? '#c41e1e' : borderColor,
+                opacity: bloodForTimeEnabled ? 1 : 0.4,
+              },
+            ]}
+          >
+            <Text
+              style={[styles.bloodForTimeLabel, { color: bloodForTimeEnabled ? '#f87171' : mutedColor }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+            >
+              [ BLOOD FOR TIME ]
+            </Text>
+          </Pressable>
+        ) : null}
+        <Pressable
+          onPress={onEndTurn}
+          disabled={!canEndTurn}
+          style={[
+            styles.endTurnBtn,
+            {
+              borderColor: canEndTurn ? primaryColor : borderColor,
+              opacity: canEndTurn ? 1 : 0.4,
+            },
+          ]}
+        >
+          <Text
+            style={[styles.endTurnLabel, { color: canEndTurn ? primaryColor : mutedColor }]}
+            numberOfLines={1}
+          >
+            [ END TURN ]
+          </Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+
+  const eviscerateRow = eviscerateReady && !selectedAbility ? (
+    <Pressable
+      onPress={onEviscerate}
+      disabled={eviscerateDisabled}
+      style={[
+        styles.eviscerateTile,
+        {
+          borderColor: EVISCERATE_ACCENT,
+          backgroundColor: EVISCERATE_GLOW,
+          opacity: eviscerateDisabled ? 0.4 : 1,
+        },
+      ]}
+    >
+      <Text
+        style={[styles.eviscerateLabel, { color: EVISCERATE_ACCENT }]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.75}
+      >
+        [ EVISCERATE ]
+      </Text>
+    </Pressable>
+  ) : null;
+
+  if (selectedAbility) {
+    const canExecute = isActionEnabled(selectedAbility);
     return (
       <View style={deckShellStyle}>
+        {apRow}
+        {eviscerateRow}
         <View style={styles.executionModule}>
           <Text style={[styles.execHeader, { color: primaryColor }]} numberOfLines={1} ellipsizeMode="tail">
-            {getStagedHeader(selectedAction)}
+            {getStagedHeader(selectedAbility)}
           </Text>
           <Text
             style={[styles.execDetail, { color: mutedColor }]}
@@ -126,7 +204,7 @@ export default function CombatCommandDeck({
             adjustsFontSizeToFit
             minimumFontScale={0.65}
           >
-            {getStagedCostImpact(selectedAction)}
+            {getStagedCostImpact(selectedAbility)}
           </Text>
           <View style={styles.executionRow}>
             <Pressable
@@ -170,14 +248,16 @@ export default function CombatCommandDeck({
 
   return (
     <View style={deckShellStyle}>
+      {apRow}
       <View style={styles.gridRow}>
-        {renderTile(COMMAND_DECK_GRID[0])}
-        {renderTile(COMMAND_DECK_GRID[1])}
+        {renderTile(loadout[0])}
+        {renderTile(loadout[1])}
       </View>
       <View style={styles.gridRow}>
-        {renderTile(COMMAND_DECK_GRID[2])}
-        {renderTile(COMMAND_DECK_GRID[3])}
+        {renderTile(loadout[2])}
+        {renderTile(loadout[3])}
       </View>
+      {eviscerateRow}
     </View>
   );
 }
@@ -196,6 +276,53 @@ const styles = StyleSheet.create({
     borderTopWidth: 0,
     paddingTop: 3,
     paddingBottom: 2,
+  },
+  apRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: GRID_GAP,
+    height: AP_ROW_HEIGHT,
+    width: '100%',
+  },
+  apLabel: {
+    fontFamily: MONO,
+    fontSize: 7,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+    flex: 1,
+  },
+  apActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: GRID_GAP,
+    flexShrink: 0,
+  },
+  bloodForTimeBtn: {
+    borderWidth: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    maxWidth: 108,
+    alignItems: 'center',
+  },
+  bloodForTimeLabel: {
+    fontFamily: MONO,
+    fontSize: 6,
+    fontWeight: 'bold',
+    letterSpacing: 0.3,
+  },
+  endTurnBtn: {
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    minWidth: 88,
+    alignItems: 'center',
+  },
+  endTurnLabel: {
+    fontFamily: MONO,
+    fontSize: 7,
+    fontWeight: 'bold',
+    letterSpacing: 0.4,
   },
   gridRow: {
     flexDirection: 'row',
@@ -261,6 +388,21 @@ const styles = StyleSheet.create({
     fontSize: 7,
     fontWeight: 'bold',
     letterSpacing: 0.4,
+    textAlign: 'center',
+  },
+  eviscerateTile: {
+    width: '100%',
+    height: ULTIMATE_ROW_HEIGHT,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  eviscerateLabel: {
+    fontFamily: MONO,
+    fontSize: 8,
+    fontWeight: 'bold',
+    letterSpacing: 0.8,
     textAlign: 'center',
   },
 });

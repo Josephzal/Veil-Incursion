@@ -8,35 +8,42 @@ import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useDescentNavigator } from '../hooks/useDescentNavigator';
-import { Trinket } from '../types/run';
+import type { LeyLineMutationDefinition, LeyLineMutationId } from '../types/leyLineMutation';
 
 const TERMINAL_ACCENT = '#00ff33';
+
+const TIER_LABEL: Record<string, string> = {
+  KINETIC: 'TIER 1 // KINETIC',
+  OCCULT: 'TIER 2 // OCCULT',
+  SYSTEM: 'TIER 3 // SYSTEM',
+  AP_BOOST: 'TIER 4 // AP BOOST',
+};
 
 export default function PostCombatBoonScreen(): React.JSX.Element {
   const { theme } = useTerminal();
   const {
     runState,
-    postCombatBoonChoices,
-    preparePostCombatBoons,
-    completeNodeAfterBoon,
+    postCombatMutationChoices,
+    preparePostCombatMutations,
+    completeNodeAfterMutation,
     endRun,
   } = useRun();
   const { startGameOver } = useGameFlow();
   const { finalizeIncursionAdvance } = useDescentNavigator();
   const selectingRef = useRef(false);
-  const [selectedTrinket, setSelectedTrinket] = useState<Trinket | null>(null);
+  const [selectedMutationId, setSelectedMutationId] = useState<LeyLineMutationId | null>(null);
 
-  const boonsPreparedRef = useRef(false);
+  const mutationsPreparedRef = useRef(false);
 
   useEffect(() => {
-    if (postCombatBoonChoices.length === 0 && !boonsPreparedRef.current) {
-      boonsPreparedRef.current = true;
-      preparePostCombatBoons();
+    if (postCombatMutationChoices.length === 0 && !mutationsPreparedRef.current) {
+      mutationsPreparedRef.current = true;
+      preparePostCombatMutations();
     }
-  }, [postCombatBoonChoices.length, preparePostCombatBoons]);
+  }, [postCombatMutationChoices.length, preparePostCombatMutations]);
 
   const handleContinue = () => {
-    if (!selectedTrinket || selectingRef.current) return;
+    if (!selectedMutationId || selectingRef.current) return;
     selectingRef.current = true;
 
     if (runState.soulAnchorIntegrity <= 0) {
@@ -45,8 +52,9 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
       return;
     }
 
-    completeNodeAfterBoon(selectedTrinket);
-    finalizeIncursionAdvance(`Post-combat boon secured: ${selectedTrinket.name}.`);
+    const picked = postCombatMutationChoices.find((m) => m.id === selectedMutationId);
+    completeNodeAfterMutation(selectedMutationId);
+    finalizeIncursionAdvance(`Ley-Line mutation secured: ${picked?.name ?? selectedMutationId}.`);
   };
 
   return (
@@ -59,16 +67,16 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
           <OperativeTelemetryBar />
           <View style={[styles.header, { borderColor: theme.borderColor }]}>
             <Text style={[styles.headerText, { color: theme.mutedColor }]}>
-              POST-COMBAT BOON // SELECT TRINKET
+              LEY-LINE MUTATION // SELECT ONE
             </Text>
           </View>
           <View style={styles.choices}>
-            {postCombatBoonChoices.map((trinket) => {
-              const isSelected = selectedTrinket?.id === trinket.id;
+            {postCombatMutationChoices.map((mutation: LeyLineMutationDefinition) => {
+              const isSelected = selectedMutationId === mutation.id;
               return (
                 <Pressable
-                  key={trinket.id}
-                  onPress={() => !selectingRef.current && setSelectedTrinket(trinket)}
+                  key={mutation.id}
+                  onPress={() => !selectingRef.current && setSelectedMutationId(mutation.id)}
                   disabled={selectingRef.current}
                   style={({ pressed }) => [
                     styles.choice,
@@ -79,15 +87,19 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
                     },
                   ]}
                 >
-                  <Text style={[styles.choiceName, { color: isSelected ? TERMINAL_ACCENT : theme.primaryColor }]}>
-                    {trinket.name}
+                  <Text style={[styles.tierTag, { color: theme.mutedColor }]}>
+                    {TIER_LABEL[mutation.tier] ?? mutation.tier}
                   </Text>
-                  <Text style={[styles.choiceEffect, { color: theme.mutedColor }]}>{trinket.effect}</Text>
+                  <Text style={[styles.choiceName, { color: isSelected ? TERMINAL_ACCENT : theme.primaryColor }]}>
+                    {mutation.name}
+                  </Text>
+                  <Text style={[styles.choiceEffect, { color: theme.mutedColor }]}>{mutation.effect}</Text>
+                  <Text style={[styles.choiceDesc, { color: theme.primaryColor }]}>{mutation.description}</Text>
                 </Pressable>
               );
             })}
             <SelectionContinueButton
-              enabled={selectedTrinket != null && !selectingRef.current}
+              enabled={selectedMutationId != null && !selectingRef.current}
               onPress={handleContinue}
               borderColor={theme.borderColor}
               mutedColor={theme.mutedColor}
@@ -106,6 +118,8 @@ const styles = StyleSheet.create({
   choices: { flex: 1, padding: 16, gap: 10 },
   choice: { borderWidth: 2, padding: 14 },
   choiceSelected: { backgroundColor: 'rgba(0, 255, 51, 0.08)' },
+  tierTag: { fontFamily: 'monospace', fontSize: 7, letterSpacing: 1, marginBottom: 4 },
   choiceName: { fontFamily: 'monospace', fontSize: 11, fontWeight: '700', marginBottom: 4 },
-  choiceEffect: { fontFamily: 'monospace', fontSize: 9 },
+  choiceEffect: { fontFamily: 'monospace', fontSize: 8, marginBottom: 4 },
+  choiceDesc: { fontFamily: 'monospace', fontSize: 8, lineHeight: 12 },
 });

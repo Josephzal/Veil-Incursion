@@ -1,0 +1,53 @@
+/** Aegis ability ids — Phase A wires STRIKE, VEIL_PIERCER, WRAITH_PARRY, ASHEN_MANTLE. */
+export type AegisAbilityId =
+  | 'STRIKE'
+  | 'RUIN'
+  | 'WRAITH_PARRY'
+  | 'GRAVE_BIND'
+  | 'SHADOW_STEP'
+  | 'VEIL_PIERCER'
+  | 'ASHEN_MANTLE'
+  | 'NAIL_TO_GRID'
+  | 'BLOOD_TITHE'
+  | 'DEMONS_LUNG'
+  | 'CRIMSON_PACT'
+  | 'EVISCERATE';
+
+export type AegisLoadout = readonly [
+  AegisAbilityId,
+  AegisAbilityId,
+  AegisAbilityId,
+  AegisAbilityId,
+];
+
+export type CombatUnitTag =
+  | 'CONCUSSED'
+  | 'DOOMED'
+  | 'EXPOSED'
+  | 'FRACTURED';
+
+export type DamageChannel = 'KINETIC' | 'OCCULT' | 'TRUE';
+
+export const PLAYER_ACTION_POINTS_PER_TURN = 3;
+
+export const DEFAULT_AEGIS_LOADOUT: AegisLoadout = [
+  'STRIKE',
+  'VEIL_PIERCER',
+  'WRAITH_PARRY',
+  'ASHEN_MANTLE',
+];
+
+export const ALL_AEGIS_ABILITIES: readonly AegisAbilityId[] = [
+  'STRIKE',
+  'RUIN',
+  'WRAITH_PARRY',
+  'GRAVE_BIND',
+  'SHADOW_STEP',
+  'VEIL_PIERCER',
+  'ASHEN_MANTLE',
+  'NAIL_TO_GRID',
+  'BLOOD_TITHE',
+  'DEMONS_LUNG',
+  'CRIMSON_PACT',
+  'EVISCERATE',
+];

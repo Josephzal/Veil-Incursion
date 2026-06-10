@@ -6,7 +6,10 @@ import {
   formatIntentReadout,
   GAUGE_HOSTILE_HP,
   GAUGE_TRACK_BORDER,
+  clampRatio,
 } from '../../utils/combatTelemetryFormat';
+
+const GAUGE_FRACTURE = '#fbbf24';
 import { CombatHorizontalGauge } from './CombatHorizontalGauge';
 
 const MONO = 'monospace';
@@ -27,6 +30,10 @@ export default function CombatEnemyHeaderBand({
   if (!enemy) return null;
 
   const hpRatio = enemy.maxHp > 0 ? enemy.currentHp / enemy.maxHp : 0;
+  const fractureMax = enemy.fractureMax ?? 100;
+  const fractureRatio = clampRatio(fractureMax > 0 ? (enemy.fractureGauge ?? 0) / fractureMax : 0);
+  const armorLine = `KA ${enemy.kineticArmor ?? 0} // OW ${enemy.occultWards ?? 0}`;
+  const tagLine = enemy.combatTags?.length ? enemy.combatTags.join(' / ') : null;
   const shellStyle = arena ? styles.bandArena : compact ? styles.bandCompact : null;
 
   if (arena) {
@@ -47,10 +54,25 @@ export default function CombatEnemyHeaderBand({
           width="100%"
           compact
         />
+        <View style={styles.fractureRow}>
+          <Text style={[styles.fractureCaption, { color: GAUGE_FRACTURE }]}>
+            {`FRACTURE ${enemy.fractureGauge ?? 0}/${fractureMax}`}
+          </Text>
+          <Text style={[styles.armorCaption, { color: intentMutedColor }]}>{armorLine}</Text>
+        </View>
+        <CombatHorizontalGauge
+          fillColor={GAUGE_FRACTURE}
+          ratio={fractureRatio}
+          trackBorderColor={GAUGE_TRACK_BORDER}
+          width="100%"
+          compact
+        />
         <Text style={[styles.intentLineArena, { color: intentMutedColor }]} numberOfLines={1} ellipsizeMode="tail">
-          {enemy.affinity
-            ? `${enemy.affinity} // ${formatIntentReadout(enemy.intent)}`
-            : formatIntentReadout(enemy.intent)}
+          {tagLine
+            ? `${tagLine} // ${formatIntentReadout(enemy.intent)}`
+            : enemy.affinity
+              ? `${enemy.affinity} // ${formatIntentReadout(enemy.intent)}`
+              : formatIntentReadout(enemy.intent)}
         </Text>
       </View>
     );
@@ -139,6 +161,26 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.4,
     lineHeight: 10,
+    flexShrink: 0,
+  },
+  fractureRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+  },
+  fractureCaption: {
+    fontFamily: MONO,
+    fontSize: 7,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    lineHeight: 9,
+  },
+  armorCaption: {
+    fontFamily: MONO,
+    fontSize: 6,
+    letterSpacing: 0.3,
+    lineHeight: 8,
     flexShrink: 0,
   },
   intentLineArena: {

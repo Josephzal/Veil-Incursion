@@ -6,7 +6,8 @@ import { CargoOverlayProvider } from '../context/CargoOverlayContext';
 import { useCombatTurnOptional } from '../context/CombatTurnContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
-import type { IncursionConsumableId, IncursionConsumableUseResult } from '../types/incursionInventory';
+import type { CargoItemId } from '../types/cargoGrid';
+import type { IncursionConsumableUseResult } from '../types/incursionInventory';
 
 interface MacroLogAnchoredLayoutProps {
   children: React.ReactNode;
@@ -38,6 +39,8 @@ export default function MacroLogAnchoredLayout({
     applyIncursionConsumableHeal,
     relocateCargoItem,
     useFocusingAmpouleFromCargo,
+    useResonanceBribeFromCargo,
+    useDeadDropTokenFromCargo,
   } = useRun();
   const [cargoOpen, setCargoOpen] = useState(false);
   const combatTurn = useCombatTurnOptional();
@@ -55,7 +58,7 @@ export default function MacroLogAnchoredLayout({
     [activeIncursion.isRunActive, runState.combatTestPreset, runState.runActive],
   );
 
-  const handleUseCombatConsumable = useCallback((itemId: IncursionConsumableId) => {
+  const handleUseCombatConsumable = useCallback((itemId: CargoItemId) => {
     if (!cargoEnabled) return false;
     const result = useIncursionConsumable(itemId);
     if (!result) return false;
@@ -109,6 +112,8 @@ export default function MacroLogAnchoredLayout({
             combatMode={combatMode}
             combatConsumablesEnabled={cargoEnabled}
             onUseAmpoule={!combatMode ? useFocusingAmpouleFromCargo : undefined}
+            onUseResonanceBribe={!combatMode ? useResonanceBribeFromCargo : undefined}
+            onUseDeadDrop={!combatMode ? useDeadDropTokenFromCargo : undefined}
             onUseCombatConsumable={combatMode ? handleUseCombatConsumable : undefined}
           />
         ) : null}

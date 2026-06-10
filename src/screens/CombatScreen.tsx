@@ -1,12 +1,13 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View, Dimensions } from 'react-native';
 import {
   resolveCombatEnemyPortrait,
   resolvePortraitKeySuffix,
+  resolveUnitCombatPortrait,
 } from '../utils/combatEnemyPortrait';
 import type { ApparitionViewportRef } from '../components/combat/ApparitionViewport';
 import CombatArenaStage from '../components/combat/CombatArenaStage';
-import CombatEnemyHeaderBand from '../components/combat/CombatEnemyHeaderBand';
+import CombatEnemyGrid from '../components/combat/CombatEnemyGrid';
 import CombatOperativeHud from '../components/combat/CombatOperativeHud';
 import CombatPlayerSliceOverlay from '../components/combat/CombatPlayerSliceOverlay';
 import CombatResolutionBanner from '../components/combat/CombatResolutionBanner';
@@ -27,11 +28,14 @@ import { useRun } from '../context/RunContext';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useNodeProgression } from '../hooks/useNodeProgression';
 import {
-  RUN_CREDIT_BOSS_KILL,
-  RUN_CREDIT_ELITE_KILL,
-  RUN_CREDIT_STANDARD_KILL,
-} from '../data/blackMarket';
-import type { CombatEnemyTelemetry } from '../utils/combatTelemetryFormat';
+  districtBossKillCredits,
+  eliteKillCredits,
+  primeBossKillCredits,
+  standardKillCredits,
+} from '../data/combatCredits';
+import { isPrimeBossDepth } from '../data/districtPacing';
+import type { CombatSquadUiSnapshot } from '../utils/combatTelemetryFormat';
+import { THREAT_BUDGET_AMBUSH, THREAT_BUDGET_ELITE, THREAT_BUDGET_STANDARD } from '../data/combatThreatBudget';
 import type { IncursionConsumableUseResult } from '../types/incursionInventory';
 
 import AegisCombat from '../../assets/images/character images/aegis/aegis_combat.png';
@@ -49,6 +53,7 @@ function CombatArenaZone({
   portraitKey,
   portraitSource,
   wardPrimed,
+  hideEnemySprite,
   onEradicationComplete,
 }: {
   apparitionRef: React.RefObject<ApparitionViewportRef | null>;
@@ -56,6 +61,7 @@ function CombatArenaZone({
   portraitKey: string;
   portraitSource: ReturnType<typeof resolveCombatEnemyPortrait>;
   wardPrimed: boolean;
+  hideEnemySprite?: boolean;
   onEradicationComplete: () => void;
 }): React.JSX.Element {
   const { ui } = useCombatEnemyChrome();
@@ -68,6 +74,7 @@ function CombatArenaZone({
       enemyImageSource={portraitSource}
       enemyPortraitKey={portraitKey}
       wardPrimed={wardPrimed}
+      hideEnemySprite={hideEnemySprite}
       parryBlocksEnemyTouches={ui.parryVisible}
       onEradicationComplete={onEradicationComplete}
     />
@@ -85,7 +92,7 @@ export default function CombatScreen(): React.JSX.Element {
     endRun,
     exitCombatToBadge,
     refillStaminaAfterCombat,
-    preparePostCombatBoons,
+    preparePostCombatMutations,
     clearPendingAmbush,
     incrementCombatNodesCleared,
     activeIncursion,
@@ -102,7 +109,8 @@ export default function CombatScreen(): React.JSX.Element {
   const combatEntryStamina =
     env.startingStaminaPenalty > 0 ? 50 : runState.currentStamina;
 
-  const [enemyTelemetry, setEnemyTelemetry] = useState<CombatEnemyTelemetry | null>(null);
+  const [squadUi, setSquadUi] = useState<CombatSquadUiSnapshot | null>(null);
+  const [expandedEnemyId, setExpandedEnemyId] = useState<string | null>(null);
   const [operativeTelemetry, setOperativeTelemetry] = useState<CombatOperativeTelemetry | null>(null);
   const [wardPrimed, setWardPrimed] = useState(false);
   const [resolutionOutcome, setResolutionOutcome] = useState<'VICTORY' | 'DEFEAT' | null>(null);
@@ -112,9 +120,19 @@ export default function CombatScreen(): React.JSX.Element {
   const killResolverRef = useRef<() => void>(() => {});
   const healHandlerRef = useRef<(amount: number) => void>(() => {});
   const consumableHandlerRef = useRef<(result: IncursionConsumableUseResult) => void>(() => {});
+  const targetHandlerRef = useRef<(unitId: string) => void>(() => {});
 
-  const handleEnemyTelemetryChange = useCallback((enemy: CombatEnemyTelemetry | null) => {
-    setEnemyTelemetry(enemy);
+  const handleSquadUiChange = useCallback((snapshot: CombatSquadUiSnapshot) => {
+    setSquadUi(snapshot);
+  }, []);
+
+  const registerTargetHandler = useCallback((handler: (unitId: string) => void) => {
+    targetHandlerRef.current = handler;
+  }, []);
+
+  const handleEnemyUnitPress = useCallback((unitId: string) => {
+    setExpandedEnemyId((prev) => (prev === unitId ? null : unitId));
+    targetHandlerRef.current(unitId);
   }, []);
 
   const handleOperativeTelemetryChange = useCallback((telemetry: CombatOperativeTelemetry | null) => {
@@ -141,9 +159,20 @@ export default function CombatScreen(): React.JSX.Element {
     killResolverRef.current();
   }, []);
 
+  const combatSquad = runState.pendingEnemies.length > 0
+    ? runState.pendingEnemies
+    : runState.pendingEnemy
+      ? [runState.pendingEnemy]
+      : [];
+  const vectorNode = getSelectedVectorNode();
   const isBossEncounter =
     activeIncursion.bossProfile != null || runState.pendingEnemy?.isBoss === true;
-  const nodeType = getSelectedVectorNode()?.type;
+  const nodeType = vectorNode?.type;
+  const threatBudget = runState.pendingAmbush
+    ? THREAT_BUDGET_AMBUSH
+    : nodeType === 'ELITE_COMBAT'
+      ? THREAT_BUDGET_ELITE
+      : THREAT_BUDGET_STANDARD;
   const portraitSource = resolveCombatEnemyPortrait({
     isBoss: isBossEncounter,
     isVeilStalker: runState.pendingEnemy?.isVeilStalker === true,
@@ -158,6 +187,31 @@ export default function CombatScreen(): React.JSX.Element {
     })}`
     + `-${activeIncursion.currentEncounterIndex}`
     + `-${runState.combatNodesCleared}`;
+
+  const gridUnits = useMemo(() => {
+    if (!squadUi) return [];
+    return squadUi.units.map((unit) => ({
+      ...unit,
+      portraitSource: resolveUnitCombatPortrait(
+        {
+          isBoss: unit.isBoss,
+          isVeilStalker: unit.isVeilStalker,
+          class: unit.enemyClass ?? 'GREMLIN',
+          rosterId: unit.rosterId,
+        },
+        nodeType,
+      ),
+    }));
+  }, [squadUi, nodeType]);
+
+  const hasAliveGridUnits = gridUnits.some((unit) => !unit.isDead);
+
+  const focusedPortraitSource = useMemo(() => {
+    const focused = gridUnits.find((unit) => unit.isFocused && !unit.isDead)
+      ?? gridUnits.find((unit) => unit.isSelected && !unit.isDead)
+      ?? gridUnits.find((unit) => !unit.isDead);
+    return focused?.portraitSource ?? portraitSource;
+  }, [gridUnits, portraitSource]);
 
   const handleResolutionPanelChange = useCallback(
     (panel: { outcome: 'VICTORY' | 'DEFEAT'; onDismiss: () => void } | null) => {
@@ -197,16 +251,18 @@ export default function CombatScreen(): React.JSX.Element {
       return;
     }
 
+    const vectorNode = getSelectedVectorNode();
     const isBossEncounter =
       activeIncursion.bossProfile != null || runState.pendingEnemy?.isBoss === true;
-    const nodeType = getSelectedVectorNode()?.type;
+    const nodeType = vectorNode?.type;
+    const depth = activeIncursion.nodesCleared + 1;
     const creditReward = isBossEncounter
-      ? RUN_CREDIT_BOSS_KILL
+      ? (isPrimeBossDepth(depth) ? primeBossKillCredits() : districtBossKillCredits())
       : nodeType === 'ELITE_COMBAT'
-        ? RUN_CREDIT_ELITE_KILL
-        : RUN_CREDIT_STANDARD_KILL;
+        ? eliteKillCredits()
+        : standardKillCredits();
     const creditReason = isBossEncounter
-      ? 'region-prime hostile eradicated'
+      ? (isPrimeBossDepth(depth) ? 'prime anomaly eradicated' : 'district gate boss eradicated')
       : nodeType === 'ELITE_COMBAT'
         ? 'elite hostile eradicated'
         : 'hostile eradicated';
@@ -283,8 +339,9 @@ export default function CombatScreen(): React.JSX.Element {
                 apparitionRef={apparitionRef}
                 playerViewportRef={playerViewportRef}
                 portraitKey={portraitKey}
-                portraitSource={portraitSource}
+                portraitSource={focusedPortraitSource}
                 wardPrimed={wardPrimed}
+                hideEnemySprite={hasAliveGridUnits}
                 onEradicationComplete={handleEradicationComplete}
               />
 
@@ -297,12 +354,16 @@ export default function CombatScreen(): React.JSX.Element {
                 />
               ) : null}
 
-              {enemyTelemetry ? (
+              {hasAliveGridUnits ? (
                 <View style={[styles.enemyHudOverlay, { left: DECK_INSET, width: DECK_HALF }]}>
-                  <CombatEnemyHeaderBand
-                    enemy={enemyTelemetry}
-                    intentMutedColor={theme.mutedColor}
-                    arena
+                  <CombatEnemyGrid
+                    units={gridUnits}
+                    expandedUnitId={expandedEnemyId}
+                    targetingActive={squadUi?.targetingActive ?? false}
+                    onUnitPress={handleEnemyUnitPress}
+                    borderColor={theme.borderColor}
+                    accentColor={theme.primaryColor}
+                    mutedColor={theme.mutedColor}
                   />
                 </View>
               ) : null}
@@ -326,7 +387,12 @@ export default function CombatScreen(): React.JSX.Element {
                 registerKillResolver={registerKillResolver}
                 registerHealHandler={registerHealHandler}
                 registerConsumableHandler={registerConsumableHandler}
-                onEnemyTelemetryChange={handleEnemyTelemetryChange}
+                registerTargetHandler={registerTargetHandler}
+                onSquadUiChange={handleSquadUiChange}
+                enemySquad={combatSquad}
+                threatBudget={threatBudget}
+                onEnemyTelemetryChange={undefined}
+                combatDistrict={activeIncursion.currentDistrict}
                 onOperativeTelemetryChange={handleOperativeTelemetryChange}
                 onWardPrimedChange={setWardPrimed}
                 onResolutionPanelChange={handleResolutionPanelChange}
@@ -346,6 +412,8 @@ export default function CombatScreen(): React.JSX.Element {
                 environmentalModifiers={env}
                 bossProfile={activeIncursion.bossProfile}
                 onBossPhaseShift={shiftBossPhase}
+                aegisLoadout={activeIncursion.aegisLoadout}
+                leyLineMutations={activeIncursion.leyLineMutations}
               />
             </View>
           </View>
@@ -389,6 +457,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 6,
     zIndex: 6,
+    overflow: 'visible',
   },
   combatMiddle: {
     flexShrink: 0,

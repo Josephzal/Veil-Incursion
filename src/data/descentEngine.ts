@@ -11,6 +11,7 @@ import {
   layoutRadarDotsOnScanner,
 } from './scannerNodeLayout';
 import { INITIAL_SECTOR_POOL } from './regions';
+import { createDistrictGateBossProfile } from './districtBosses';
 
 export const BOSS_ENCOUNTER_INDEX = 9;
 export const PENULT_ENCOUNTER_INDEX = 8;
@@ -350,21 +351,14 @@ const DEFAULT_BOSS_PHASES = [
 ];
 
 export function createBossProfileForDepth(depth: number): import('../types/game').BossRuntimeProfile {
-  const scale = getDepthScale(depth);
-  const profiles: Record<number, { name: string; maxHp: number }> = {
-    1: { name: 'THE COLD-ROOM CONDUIT', maxHp: 100 },
-    2: { name: 'RIVAL COMMANDER — VOID LANCER', maxHp: Math.floor(150 * scale) },
-    3: { name: 'RIFT ENTITY PRIME', maxHp: 250 },
-  };
-  const def = profiles[depth] ?? profiles[1];
-  return {
-    name: def.name,
-    maxHp: def.maxHp,
-    currentHp: def.maxHp,
-    currentPhase: 1,
-    phases: DEFAULT_BOSS_PHASES,
-    depth,
-  };
+  const gateDepth = depth === 10 || depth === 20 || depth === 30
+    ? depth
+    : depth <= 10
+      ? 10
+      : depth <= 20
+        ? 20
+        : 30;
+  return createDistrictGateBossProfile(gateDepth);
 }
 
 export function isBossNodeType(type: RunNodeType): boolean {

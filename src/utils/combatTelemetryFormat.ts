@@ -47,10 +47,46 @@ export function clampRatio(ratio: number): number {
   return Math.max(0, Math.min(1, ratio));
 }
 
+export interface CombatGridUnitSnapshot {
+  unitId: string;
+  slot: import('../types/combatGrid').CombatGridSlotId;
+  designation: string;
+  currentHp: number;
+  maxHp: number;
+  intent: EnemyIntent;
+  intentLabel?: string;
+  affinity?: import('../types/combatEnvironment').EnemyAffinity;
+  fractureGauge?: number;
+  fractureMax?: number;
+  kineticArmor?: number;
+  occultWards?: number;
+  combatTags?: string[];
+  isBoss?: boolean;
+  isVeilStalker?: boolean;
+  enemyClass?: import('../types/run').EnemyClass;
+  rosterId?: string;
+  isDead: boolean;
+  isSelected: boolean;
+  isTargetable: boolean;
+  isFocused: boolean;
+}
+
+export interface CombatSquadUiSnapshot {
+  units: CombatGridUnitSnapshot[];
+  targetingActive: boolean;
+  squadSize: number;
+}
+
 export interface CombatEnemyTelemetry {
+  unitId?: string;
   designation: string;
   currentHp: number;
   maxHp: number;
   intent: EnemyIntent;
   affinity?: EnemyAffinity;
+  fractureGauge?: number;
+  fractureMax?: number;
+  kineticArmor?: number;
+  occultWards?: number;
+  combatTags?: string[];
 }

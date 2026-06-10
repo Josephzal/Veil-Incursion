@@ -20,6 +20,56 @@ import {
 import { bossStrikeDamage, rollBossIntent, shouldShiftBossPhase } from '../data/bossCombat';
 import { COMBAT_ACTION, ENEMY_ABYSSAL_SIPHON_REQUEST, EnemyCombatProfile, EnemyIntent } from '../types/run';
 import type { IncursionConsumableUseResult } from '../types/incursionInventory';
+import type { AegisAbilityId, AegisLoadout } from '../types/aegisCombat';
+import { DEFAULT_AEGIS_LOADOUT, PLAYER_ACTION_POINTS_PER_TURN } from '../types/aegisCombat';
+import { getAbilityDefinition } from '../data/aegisAbilities';
+import { COMBAT_CONSUMABLE_AP_COST, resolveHostileHpHit } from '../data/aegisAbilityResolver';
+import {
+  executeExtendedAbility,
+  isExtendedAbilityEnabled,
+  type PlayerCombatBuffState,
+} from '../data/aegisAbilityExecutor';
+import {
+  aggregateMutationModifiers,
+  hasMutation,
+  type MutationCombatModifiers,
+} from '../data/leyLineMutationEngine';
+import type { LeyLineMutationId } from '../types/leyLineMutation';
+import { normalizeSquad, squadFromSingleEnemy } from '../data/combatSpawnEngine';
+import {
+  allUnitsDefeated,
+  aliveUnits,
+  getUnitById,
+  isUnitAlive,
+  nextDefaultTarget,
+  primaryAliveUnit,
+  updateUnit as patchSquadUnit,
+} from '../data/combatSquadEngine';
+import {
+  abilityRequiresTarget,
+  abilityTargetMode,
+  canTargetWithAbility,
+  validTargetsForAbility,
+} from '../data/combatTargeting';
+import {
+  pickThreatBudgetActions,
+  recoverFracturedUnits,
+  THREAT_BUDGET_AMBUSH,
+  THREAT_BUDGET_ELITE,
+  THREAT_BUDGET_STANDARD,
+} from '../data/combatThreatBudget';
+import {
+  addCombatTag,
+  applyDamageWithFractureBonus,
+  applyFractureDamage,
+  applyFracturedState,
+  doomedPulseStacks,
+  fractureRatio,
+  initEnemyCombatLayers,
+  isEnemyFractured,
+  recoverFromFracture,
+  stackDoomedTag,
+} from '../data/combatFractureEngine';
 
 import { ResolvedWeaponCombatStats } from '../data/inventory';
 import { BossRuntimeProfile, EnvironmentalModifiers } from '../types/game';
@@ -27,12 +77,7 @@ import CombatTelemetryGaugeRow from './combat/CombatHorizontalGauge';
 import type { ApparitionViewportRef } from './combat/ApparitionViewport';
 import type { CombatPlayerViewportRef } from './combat/CombatPlayerViewport';
 import type { CombatOperativeTelemetry } from './combat/CombatOperativeHud';
-import CombatCommandDeck, {
-  COMMAND_DECK_MIN_HEIGHT,
-  DECK_ACTION_LABELS,
-  strikeDeckLabel,
-  type CombatDeckAction,
-} from './CombatCommandDeck';
+import CombatCommandDeck, { COMMAND_DECK_MIN_HEIGHT_WITH_ULTIMATE } from './CombatCommandDeck';
 import ParryMatrixOverlay from './combat/ParryMatrixOverlay';
 import ParrySuccessBurstOverlay from './combat/ParrySuccessBurstOverlay';
 import VectorSliceOverlay, { ORIGIN_JITTER } from './combat/VectorSliceOverlay';
@@ -54,6 +99,7 @@ import CombatTurnBanner from './combat/CombatTurnBanner';
 import CombatDeckStrikeOverlay from './combat/CombatDeckStrikeOverlay';
 import {
   type CombatEnemyTelemetry,
+  type CombatSquadUiSnapshot,
   type EnemyDeckStrikeVariant,
   formatHostileId,
   formatIntentReadout,
@@ -109,6 +155,8 @@ interface TacticalCombatHubProps {
   registerHealHandler?: (handler: (amount: number) => void) => void;
   /** Registers callback when a field consumable is deployed during combat. */
   registerConsumableHandler?: (handler: (result: IncursionConsumableUseResult) => void) => void;
+  /** Registers grid target selection from CombatScreen. */
+  registerTargetHandler?: (handler: (unitId: string) => void) => void;
   /** Stacked layout: victory/defeat panel in the apparition viewport (hub keeps deck + gauges). */
   onResolutionPanelChange?: (
     panel: { outcome: 'VICTORY' | 'DEFEAT'; onDismiss: () => void } | null,
@@ -117,11 +165,18 @@ interface TacticalCombatHubProps {
   initialOperativeHp?: number; initialStamina?: number; maxStamina?: number; maxSoulAnchor?: number;
   startingAbyssalReservePercent?: number; parryMultiplierBonus?: number; parryWindowBonus?: number;
   sliceDamagePenalty?: number; onTerminalLog?: (text: string) => void;
-  enemyProfile?: EnemyCombatProfile | null; nodeIndex?: number;
+  enemyProfile?: EnemyCombatProfile | null;
+  enemySquad?: EnemyCombatProfile[];
+  onSquadUiChange?: (snapshot: CombatSquadUiSnapshot) => void;
+  threatBudget?: number;
+  nodeIndex?: number;
   weaponCombatStats?: ResolvedWeaponCombatStats;
   environmentalModifiers?: EnvironmentalModifiers;
   bossProfile?: BossRuntimeProfile | null;
   onBossPhaseShift?: (phase: number) => void;
+  aegisLoadout?: AegisLoadout;
+  leyLineMutations?: LeyLineMutationId[];
+  combatDistrict?: 1 | 2 | 3;
 }
 interface SliceLineConfig {
   id: number;
@@ -150,15 +205,23 @@ export default function TacticalCombatHub({
   registerKillResolver,
   registerHealHandler,
   registerConsumableHandler,
+  registerTargetHandler,
   onResolutionPanelChange,
   onCombatComplete, initialOperativeHp = 100, initialStamina = 100, maxStamina = 100,
   maxSoulAnchor = 100, startingAbyssalReservePercent = 0, parryMultiplierBonus = 0,
   parryWindowBonus = 0, sliceDamagePenalty = 0, onTerminalLog,
-  enemyProfile = null, nodeIndex = 0,
+  enemyProfile = null,
+  enemySquad,
+  onSquadUiChange,
+  threatBudget,
+  nodeIndex = 0,
   weaponCombatStats,
   environmentalModifiers,
   bossProfile = null,
   onBossPhaseShift,
+  aegisLoadout = DEFAULT_AEGIS_LOADOUT,
+  leyLineMutations = [],
+  combatDistrict = 1,
 }: TacticalCombatHubProps): React.JSX.Element {
   const env = environmentalModifiers ?? {
     isEnemyPhaseShrouded: false,
@@ -178,8 +241,16 @@ export default function TacticalCombatHub({
     .replace(/_/g, ' ').toUpperCase();
 
   const [cycleState, setCycleState] = useState<CombatPhase>('TEXT_COMBAT');
+  const [squad, setSquad] = useState<EnemyCombatProfile[]>([]);
+  const squadRef = useRef<EnemyCombatProfile[]>([]);
   const [enemy, setEnemy] = useState<EnemyCombatProfile | null>(null);
   const enemyRef = useRef<EnemyCombatProfile | null>(null);
+  const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
+  const selectedTargetIdRef = useRef<string | null>(null);
+  const focusedUnitIdRef = useRef<string | null>(null);
+  const enemyActionQueueRef = useRef<string[]>([]);
+  const counteringEnemyRef = useRef(false);
+  const threatBudgetRef = useRef(threatBudget ?? THREAT_BUDGET_STANDARD);
   const [isPlayerTurn, setIsPlayerTurn] = useState(true);
   const [operativeHp, setOperativeHp] = useState(initialOperativeHp);
   const [stamina, setStamina] = useState(initialStamina);
@@ -207,7 +278,8 @@ export default function TacticalCombatHub({
   const bossRuntimeRef = useRef<BossRuntimeProfile | null>(bossProfile);
   const [activeSliceIndex, setActiveSliceIndex] = useState(-1);
   const [sliceLines, setSliceLines] = useState<SliceLineConfig[]>([]);
-  const [selectedAction, setSelectedAction] = useState<CombatDeckAction | null>(null);
+  const [selectedAbility, setSelectedAbility] = useState<AegisAbilityId | null>(null);
+  const [playerActionPoints, setPlayerActionPoints] = useState(PLAYER_ACTION_POINTS_PER_TURN);
   const [enemyActionStage, setEnemyActionStage] = useState<EnemyActionStage>(null);
   const [deckStrikeOverlay, setDeckStrikeOverlay] = useState<EnemyDeckStrikeVariant | null>(null);
 
@@ -250,6 +322,35 @@ export default function TacticalCombatHub({
   });
   const enemyTurnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const enemyStrikeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const playerApRef = useRef(PLAYER_ACTION_POINTS_PER_TURN);
+  const wraithParryRef = useRef(false);
+  const combatBuffRef = useRef<PlayerCombatBuffState>({
+    demonLungCooldown: 0,
+    crimsonPactCharges: 0,
+    bonusApThisTurn: 0,
+    skipNextEnemyTurn: false,
+  });
+  const mutationModsRef = useRef<MutationCombatModifiers>(
+    aggregateMutationModifiers(leyLineMutations),
+  );
+  const mutationEncounterRef = useRef({
+    adrenalineSpikeUsed: false,
+    executionerHighUsed: false,
+    flawlessConduitPending: false,
+    gridGhostPending: false,
+    momentumShiftPending: false,
+    damageTakenThisTurn: false,
+    secondWindUsed: false,
+    unstoppableFractureUsed: false,
+    masochistBuff: false,
+    juggernautShield: false,
+    spallWeaveActive: false,
+    bloodTitheCooldown: 0,
+    ashenMantleCooldown: 0,
+    venomousRuinUnits: new Set<string>(),
+    corruptedBloodUnits: new Set<string>(),
+    bloodForTimeUsed: false,
+  });
 
   const isCombatTerminal = () =>
     resolutionRef.current != null || operativeHpRef.current <= 0;
@@ -258,11 +359,21 @@ export default function TacticalCombatHub({
   const parryTimingWindowBonus = parryWindowBonus * 0.02 + ((env.parryWindowBonusPct ?? 0) * 0.01);
   const parryTimingBlindPenalty = env.isPlayerBlinded ? 0.015 : 0;
   const counterReady = abyssalReserve >= COMBAT_ACTION.COUNTER_ABYSSAL_MIN && !isExhausted;
-  const sliceReady = abyssalReserve >= COMBAT_ACTION.ABYSSAL_RESERVE_CAP && !isExhausted;
+  const sliceReady = abyssalReserve >= mutationModsRef.current.abyssalCap && !isExhausted;
   const strikeWardPrimed = strikeArPrimed || wardStrikeBonusRef.current;
 
+  const tryPreventExhaustionBreak = (next: number): number => {
+    if (next > 0 || staminaRef.current <= 0) return next;
+    if (!hasMutation(leyLineMutations, 'UNSTOPPABLE_FORCE')) return next;
+    if (mutationEncounterRef.current.unstoppableFractureUsed) return next;
+    mutationEncounterRef.current.unstoppableFractureUsed = true;
+    log('[UNSTOPPABLE FORCE] >> Fracture break absorbed — stamina holds.');
+    return 1;
+  };
+
   const applyStamina = (next: number) => {
-    const clamped = Math.max(0, Math.min(next, maxStamina));
+    let clamped = Math.max(0, Math.min(next, maxStamina));
+    if (clamped === 0) clamped = tryPreventExhaustionBreak(0);
     staminaRef.current = clamped;
     setStamina(clamped);
     return clamped;
@@ -272,9 +383,10 @@ export default function TacticalCombatHub({
     cycleRef.current = cycleState; enemyRef.current = enemy;
     operativeHpRef.current = operativeHp; staminaRef.current = stamina;
     abyssalRef.current = abyssalReserve;
-    counterRef.current = counterPrepActive;
+    counterRef.current = counterPrepActive || wraithParryRef.current;
     isPlayerTurnRef.current = isPlayerTurn;
-  }, [cycleState, enemy, operativeHp, stamina, abyssalReserve, counterPrepActive, isPlayerTurn]);
+    playerApRef.current = playerActionPoints;
+  }, [cycleState, enemy, operativeHp, stamina, abyssalReserve, counterPrepActive, isPlayerTurn, playerActionPoints]);
 
   const combatTurnPhase = useMemo((): CombatTurnPhase => {
     if (cycleState === 'RESOLUTION') return 'RESOLUTION';
@@ -297,10 +409,95 @@ export default function TacticalCombatHub({
   }, [combatTurnPhase, cycleState, isPlayerTurn, setCombatTurnState]);
 
 
-  const syncEnemy = (e: EnemyCombatProfile) => { enemyRef.current = e; setEnemy(e); };
-  const chargeAr = (amt: number) => setAbyssalReserve((p) => {
-    const n = Math.min(p + amt, COMBAT_ACTION.ABYSSAL_RESERVE_CAP); abyssalRef.current = n; return n;
-  });
+  const publishSquadUi = (nextSquad: EnemyCombatProfile[]) => {
+    if (!onSquadUiChange) return;
+    const staged = selectedAbility;
+    const targetMode = staged ? abilityTargetMode(staged) : 'NONE';
+    const targetingActive = staged != null && targetMode === 'SINGLE';
+    const validTargets = staged ? validTargetsForAbility(nextSquad, staged) : [];
+    const validIds = new Set(validTargets.map((u) => u.unitId));
+    onSquadUiChange({
+      squadSize: aliveUnits(nextSquad).length,
+      targetingActive,
+      units: nextSquad.map((u) => ({
+        unitId: u.unitId ?? u.designation,
+        slot: u.gridSlot ?? 'FL_0',
+        designation: u.designation,
+        currentHp: u.currentHp,
+        maxHp: u.maxHp,
+        intent: u.intent,
+        intentLabel: formatIntentReadout(u.intent),
+        affinity: u.affinity,
+        fractureGauge: u.fractureGauge ?? 0,
+        fractureMax: u.fractureMax ?? 100,
+        kineticArmor: u.kineticArmor ?? 0,
+        occultWards: u.occultWards ?? 0,
+        combatTags: u.combatTags ?? [],
+        isBoss: u.isBoss,
+        isVeilStalker: u.isVeilStalker,
+        enemyClass: u.class,
+        rosterId: u.rosterId,
+        isDead: !isUnitAlive(u),
+        isSelected: selectedTargetIdRef.current === u.unitId,
+        isTargetable: targetingActive && validIds.has(u.unitId),
+        isFocused: focusedUnitIdRef.current === u.unitId,
+      })),
+    });
+  };
+
+  const focusEnemy = (unit: EnemyCombatProfile | null) => {
+    enemyRef.current = unit;
+    setEnemy(unit);
+    if (unit?.unitId) focusedUnitIdRef.current = unit.unitId;
+    publishSquadUi(squadRef.current);
+  };
+
+  const syncSquad = (next: EnemyCombatProfile[]) => {
+    squadRef.current = next;
+    setSquad(next);
+    const focusId = focusedUnitIdRef.current ?? selectedTargetIdRef.current;
+    const focused = (focusId ? getUnitById(next, focusId) : null) ?? primaryAliveUnit(next);
+    if (focused?.unitId) focusedUnitIdRef.current = focused.unitId;
+    focusEnemy(focused);
+    publishSquadUi(next);
+  };
+
+  const patchUnit = (unitId: string, patch: Partial<EnemyCombatProfile>) => {
+    syncSquad(patchSquadUnit(squadRef.current, unitId, patch));
+  };
+
+  const syncEnemy = (e: EnemyCombatProfile) => {
+    if (e.unitId) patchUnit(e.unitId, e);
+    else focusEnemy(e);
+  };
+
+  const selectTarget = (unitId: string) => {
+    selectedTargetIdRef.current = unitId;
+    setSelectedTargetId(unitId);
+    focusedUnitIdRef.current = unitId;
+    const unit = getUnitById(squadRef.current, unitId);
+    if (unit) focusEnemy(unit);
+    publishSquadUi(squadRef.current);
+  };
+  const chargeAr = (amt: number, targetFractured = false) => {
+    const mult = targetFractured ? mutationModsRef.current.shatterPointArMultiplier : 1;
+    const scaled = Math.floor(amt * mult);
+    if (hasMutation(leyLineMutations, 'UMBRAL_CARAPACE') && scaled > 0) {
+      const heal = Math.floor(maxSoulAnchor * 0.02 * mutationModsRef.current.healMultiplier);
+      if (heal > 0) {
+        setOperativeHp((p) => {
+          const n = Math.min(p + heal, maxSoulAnchor);
+          operativeHpRef.current = n;
+          return n;
+        });
+      }
+    }
+    setAbyssalReserve((p) => {
+      const n = Math.min(p + scaled, mutationModsRef.current.abyssalCap);
+      abyssalRef.current = n;
+      return n;
+    });
+  };
   const primeWardStrikeBonus = () => {
     wardStrikeBonusRef.current = true;
     setStrikeArPrimed(true);
@@ -469,32 +666,84 @@ export default function TacticalCombatHub({
   const interruptsWorldEnderChannel = (e: EnemyCombatProfile) =>
     e.intent === 'CHARGE' || e.intent === 'WORLD_ENDER' || e.chargeTurns > 0;
 
-  const applyVeilShardStun = () => {
-    const e = enemyRef.current;
-    if (!e) return;
+  const applyVeilShardFracture = () => {
+    const targetId = selectedTargetIdRef.current ?? primaryAliveUnit(squadRef.current)?.unitId;
+    const e = targetId ? getUnitById(squadRef.current, targetId) : enemyRef.current;
+    if (!e?.unitId) return;
     if (interruptsWorldEnderChannel(e)) {
-      syncEnemy({
+      patchUnit(e.unitId, applyFracturedState({
         ...e,
         intent: 'STRIKE',
         chargeTurns: 0,
         evadeActive: false,
-      });
-      log('>> WORLD-ENDER CHANNEL SHATTERED — charge dispersed.');
+      }));
+      log('>> WORLD-ENDER CHANNEL SHATTERED — hostile fracture maxed.');
+      return;
     }
-    enemyStunPendingRef.current = true;
+    patchUnit(e.unitId, applyFracturedState(e));
+    log(`>> VEIL SHARD — ${e.designation} fracture maxed.`);
   };
 
   const applyConsumableRef = useRef((_result: IncursionConsumableUseResult) => {});
   applyConsumableRef.current = (result: IncursionConsumableUseResult) => {
     if (cycleRef.current !== 'TEXT_COMBAT' || !isPlayerTurnRef.current) return;
-    if (result.healAmount > 0) applyHealRef.current(result.healAmount);
-    if (result.stunsEnemy) applyVeilShardStun();
-    passToEnemy(false);
+    if (!spendActionPoints(COMBAT_CONSUMABLE_AP_COST)) {
+      log('[REJECTED] >> Insufficient action points for cargo deploy.');
+      return;
+    }
+    const healAmt = Math.floor(result.healAmount * mutationModsRef.current.healMultiplier);
+    if (healAmt > 0) applyHealRef.current(healAmt);
+    if (result.stunsEnemy) applyVeilShardFracture();
+    if (result.shatterKineticArmor) {
+      const targetId = selectedTargetIdRef.current ?? primaryAliveUnit(squadRef.current)?.unitId;
+      const unit = targetId ? getUnitById(squadRef.current, targetId) : null;
+      if (unit?.unitId) {
+        patchUnit(unit.unitId, {
+          kineticArmor: Math.max(0, (unit.kineticArmor ?? 0) - result.shatterKineticArmor),
+        });
+      }
+    }
+    if (result.stripOccultWards) {
+      const targetId = selectedTargetIdRef.current ?? primaryAliveUnit(squadRef.current)?.unitId;
+      const unit = targetId ? getUnitById(squadRef.current, targetId) : null;
+      if (unit?.unitId) {
+        patchUnit(unit.unitId, {
+          occultWards: Math.max(0, (unit.occultWards ?? 0) - result.stripOccultWards),
+        });
+      }
+    }
+    if (result.clearDebuffs) {
+      const targetId = selectedTargetIdRef.current ?? primaryAliveUnit(squadRef.current)?.unitId;
+      const unit = targetId ? getUnitById(squadRef.current, targetId) : null;
+      if (unit?.unitId) {
+        patchUnit(unit.unitId, { combatTags: [] });
+      }
+    }
+    if (result.maxAbyssalReserve) {
+      abyssalRef.current = mutationModsRef.current.abyssalCap;
+      setAbyssalReserve(mutationModsRef.current.abyssalCap);
+    }
+    if (result.grantBonusAp) {
+      combatBuffRef.current.bonusApThisTurn += result.grantBonusAp;
+      playerApRef.current += result.grantBonusAp;
+      setPlayerActionPoints(playerApRef.current);
+    }
+    if (result.restoreStaminaPct) {
+      applyStamina(Math.floor(maxStamina * (result.restoreStaminaPct / 100)));
+    }
+    if (result.absorbNextHit) {
+      mutationEncounterRef.current.spallWeaveActive = true;
+    }
+    log(result.logLine);
   };
 
   useEffect(() => {
     registerConsumableHandler?.((result) => applyConsumableRef.current(result));
   }, [registerConsumableHandler]);
+
+  useEffect(() => {
+    registerTargetHandler?.((unitId: string) => selectTarget(unitId));
+  }, [registerTargetHandler]);
 
   const resolveIncomingHpStrike = (e: EnemyCombatProfile): { raw: number; unblockable: boolean } | null => {
     if (getEnemyDeckStrikeVariant(e.intent) !== 'hp') return null;
@@ -517,8 +766,8 @@ export default function TacticalCombatHub({
       dmg = Math.floor(dmg * (1 - COMBAT_ACTION.ABYSSAL_WARD_BLOCK_PCT));
       abyssalWardRef.current = false;
       setAbyssalWardActive(false);
-      primeWardStrikeBonus();
-      log(`[ABYSSAL WARD] >> Barrier absorbed 50% — abyssal overcharge primed (+${COMBAT_ACTION.ABYSSAL_WARD_STRIKE_BONUS}% AR next strike).`);
+      const attacker = enemyRef.current;
+      if (attacker) markAttackerDoomed(attacker);
     }
     if (dmg <= 0) return;
     preAppliedHpStrikeRef.current = dmg;
@@ -543,13 +792,23 @@ export default function TacticalCombatHub({
     msg?: string,
     options?: { skipStrikeFx?: boolean },
   ) => {
+    if (mutationEncounterRef.current.spallWeaveActive && raw > 0) {
+      mutationEncounterRef.current.spallWeaveActive = false;
+      log('[SPALL-WEAVE] >> Vest absorbed incoming damage.');
+      return;
+    }
+    if (mutationEncounterRef.current.juggernautShield && raw > 0) {
+      mutationEncounterRef.current.juggernautShield = false;
+      log('[JUGGERNAUT PLATING] >> Shadow Step shield absorbed the hit.');
+      return;
+    }
     let dmg = raw;
     if (!unblockable && abyssalWardRef.current) {
       dmg = Math.floor(dmg * (1 - COMBAT_ACTION.ABYSSAL_WARD_BLOCK_PCT));
       abyssalWardRef.current = false;
       setAbyssalWardActive(false);
-      primeWardStrikeBonus();
-      log(`[ABYSSAL WARD] >> Barrier absorbed 50% — abyssal overcharge primed (+${COMBAT_ACTION.ABYSSAL_WARD_STRIKE_BONUS}% AR next strike).`);
+      const attacker = enemyRef.current;
+      if (attacker) markAttackerDoomed(attacker);
     }
     log(msg ?? `>> ENEMY STRIKE — ${dmg} DAMAGE DEALT`);
     if (dmg > 0) {
@@ -558,32 +817,130 @@ export default function TacticalCombatHub({
         playerViewportRef?.current?.triggerDamageEffect('hp');
       }
     }
-    setOperativeHp((p) => { const n = Math.max(p - dmg, 0); operativeHpRef.current = n; if (n <= 0) resolve(false); return n; });
+    mutationEncounterRef.current.damageTakenThisTurn = dmg > 0;
+    if (
+      dmg > 0
+      && hasMutation(leyLineMutations, 'ADRENALINE_SPIKE')
+      && !mutationEncounterRef.current.adrenalineSpikeUsed
+    ) {
+      mutationEncounterRef.current.adrenalineSpikeUsed = true;
+      playerApRef.current += 1;
+      setPlayerActionPoints(playerApRef.current);
+      log('[ADRENALINE SPIKE] >> Damage taken — +1 AP refunded.');
+    }
+    setOperativeHp((p) => {
+      const n = Math.max(p - dmg, 0);
+      operativeHpRef.current = n;
+      if (
+        n > 0
+        && n / maxSoulAnchor <= 0.1
+        && hasMutation(leyLineMutations, 'SECOND_WIND')
+        && !mutationEncounterRef.current.secondWindUsed
+      ) {
+        mutationEncounterRef.current.secondWindUsed = true;
+        applyStamina(maxStamina);
+        combatBuffRef.current.bonusApThisTurn += 2;
+        playerApRef.current += 2;
+        setPlayerActionPoints(playerApRef.current);
+        log('[SECOND WIND] >> Emergency surge — stamina and AP restored.');
+      }
+      if (n <= 0) resolve(false);
+      return n;
+    });
   };
 
-  const hurtEnemy = (raw: number, tag: string, source?: KineticDamageSource): boolean => {
-    const e = enemyRef.current; if (!e) return false;
+  const hurtEnemy = (
+    raw: number,
+    tag: string,
+    source?: KineticDamageSource,
+    options?: { channel?: 'KINETIC' | 'OCCULT' | 'TRUE'; fractureGain?: number; targetId?: string },
+  ): boolean => {
+    const targetId = options?.targetId
+      ?? selectedTargetIdRef.current
+      ?? primaryAliveUnit(squadRef.current)?.unitId;
+    const e = targetId
+      ? getUnitById(squadRef.current, targetId)
+      : enemyRef.current;
+    if (!e || !e.unitId) return false;
     const shroudMissChance = env.eliteModifier === 'PHASE_SHROUD' ? 0.25 : 0.2;
     if (env.isEnemyPhaseShrouded && Math.random() < shroudMissChance) {
       log(`${tag} >> PHASE SHROUD — ATTACK WHIFFED (${Math.round(shroudMissChance * 100)}% miss).`);
       return false;
     }
-    let dmg = source
-      ? scaleKineticDamage(raw, e.affinity, env.meleeDamageBonusPct ?? 0)
-      : raw;
+    let working = e;
+    if (
+      source === 'STRIKE'
+      && options?.channel === 'KINETIC'
+      && mutationModsRef.current.strikeArmorPierce > 0
+    ) {
+      working = {
+        ...working,
+        kineticArmor: Math.max(0, (working.kineticArmor ?? 0) - mutationModsRef.current.strikeArmorPierce),
+      };
+    }
+    const crimsonEmpowered = source != null && combatBuffRef.current.crimsonPactCharges > 0;
+    if (mutationEncounterRef.current.masochistBuff && source) {
+      mutationEncounterRef.current.masochistBuff = false;
+    }
+    if (crimsonEmpowered) {
+      combatBuffRef.current.crimsonPactCharges -= 1;
+      log('[CRIMSON PACT] >> Blood oath empowers strike.');
+    }
+    const fractureGain = (options?.fractureGain ?? 0) * (crimsonEmpowered ? 2 : 1);
+    if (fractureGain > 0) {
+      working = applyFractureDamage(working, fractureGain);
+    }
+    let dmg = raw;
+    if (
+      hasMutation(leyLineMutations, 'FINAL_STAND')
+      && playerApRef.current === 1
+      && staminaRef.current === 0
+      && source
+    ) {
+      options = { ...options, channel: 'TRUE' };
+    }
+    if (source) {
+      if (mutationModsRef.current.abyssalResonancePctPer10Stam > 0 && source === 'STRIKE') {
+        const bonus = Math.floor(staminaRef.current / 10) * mutationModsRef.current.abyssalResonancePctPer10Stam;
+        dmg = Math.floor(dmg * (1 + bonus / 100));
+      }
+      if (mutationEncounterRef.current.masochistBuff) {
+        dmg = Math.floor(dmg * 1.5);
+      }
+      const scaled = scaleKineticDamage(dmg, working.affinity, env.meleeDamageBonusPct ?? 0);
+      if (scaled !== dmg) {
+        log(`${tag} >> Kinetic scaling ${dmg} → ${scaled}.`);
+      }
+      dmg = scaled;
+    }
+    if (options?.channel === 'TRUE') {
+      dmg = applyDamageWithFractureBonus(dmg, working);
+    } else if (options?.channel) {
+      const hit = resolveHostileHpHit(working, dmg, options.channel);
+      working = hit.enemy;
+      dmg = hit.hpDamage;
+    }
     if ((env.enemyDamageReductionPct ?? 0) > 0) {
       dmg = Math.floor(dmg * (1 - (env.enemyDamageReductionPct ?? 0) / 100));
     }
-    if (source && dmg !== raw) {
-      log(`${tag} >> Kinetic scaling ${raw} → ${dmg}.`);
-    }
-    if (e.evadeActive) { dmg = Math.floor(dmg * 0.5); log(`${tag} >> EVADE — 50% (${dmg}).`); }
+    if (crimsonEmpowered && dmg > 0) dmg *= 2;
+    if (working.evadeActive) { dmg = Math.floor(dmg * 0.5); log(`${tag} >> EVADE — 50% (${dmg}).`); }
     else log(`${tag} >> ${dmg} damage.`);
     if (source && arenaLayout && dmg > 0) {
       playerViewportRef?.current?.triggerAttackLunge();
     }
-    const hp = Math.max(e.currentHp - dmg, 0);
-    syncEnemy({ ...e, currentHp: hp });
+    const poolHp = working.sharedBossPool && bossRuntimeRef.current
+      ? Math.max(bossRuntimeRef.current.currentHp - dmg, 0)
+      : Math.max(working.currentHp - dmg, 0);
+    const hp = poolHp;
+    if (working.sharedBossPool && bossRuntimeRef.current) {
+      bossRuntimeRef.current = { ...bossRuntimeRef.current, currentHp: hp };
+      syncSquad(squadRef.current.map((u) =>
+        u.sharedBossPool ? { ...u, currentHp: hp } : u,
+      ));
+    } else {
+      patchUnit(e.unitId, { ...working, currentHp: hp });
+    }
 
     if (source && env.bloodFrenzyActive && dmg > 0) {
       const heal = computeBloodFrenzyHeal(dmg, true);
@@ -596,16 +953,22 @@ export default function TacticalCombatHub({
         log(`[BLOOD FRENZY] >> Runic flare restores ${heal} soul anchor.`);
       }
     }
-    if (source && shouldChronoStunOnKineticHit(e.affinity, source) && dmg > 0) {
+    if (source && shouldChronoStunOnKineticHit(working.affinity, source) && dmg > 0) {
       enemyStunPendingRef.current = true;
       log('[CHRONO SHATTER] >> Temporal sync fractured — hostile turn forfeited.');
     }
 
-    if (e.isBoss && bossRuntimeRef.current && shouldShiftBossPhase(bossRuntimeRef.current, hp)) {
+    if (working.isBoss && bossRuntimeRef.current && shouldShiftBossPhase(bossRuntimeRef.current, hp)) {
       bossPhaseRef.current = 2;
       const updatedBoss = { ...bossRuntimeRef.current, currentHp: hp, currentPhase: 2 };
       bossRuntimeRef.current = updatedBoss;
-      syncEnemy({ ...e, currentHp: hp, bossPhase: 2, intent: 'OVERDRIVE_DISCHARGE' });
+      if (working.sharedBossPool) {
+        syncSquad(squadRef.current.map((u) =>
+          u.isBoss ? { ...u, currentHp: hp, bossPhase: 2, intent: 'OVERDRIVE_DISCHARGE' as EnemyIntent } : u,
+        ));
+      } else {
+        patchUnit(e.unitId, { ...working, currentHp: hp, bossPhase: 2, intent: 'OVERDRIVE_DISCHARGE' });
+      }
       setPhaseAlert('>> WARNING: ANOMALY ANCHOR CRACKED // PHASE 2 INITIATED');
       log('>> WARNING: ANOMALY ANCHOR CRACKED // PHASE 2 INITIATED');
       onBossPhaseShift?.(2);
@@ -614,7 +977,7 @@ export default function TacticalCombatHub({
 
     const viewport = apparitionRef?.current;
 
-    if (hp <= 0) {
+    if (allUnitsDefeated(squadRef.current)) {
       if (cycleRef.current === 'DEFEND_PARRY') {
         return true;
       }
@@ -631,8 +994,126 @@ export default function TacticalCombatHub({
       return true;
     }
 
-    viewport?.triggerDamageEffect();
+    if (
+      hp <= 0
+      && source
+      && isEnemyFractured(working)
+      && hasMutation(leyLineMutations, 'RELENTLESS_MOMENTUM')
+    ) {
+      applyStamina(staminaRef.current + Math.floor(maxStamina * 0.2));
+      log('[RELENTLESS MOMENTUM] >> Fractured kill — 20% stamina restored.');
+    }
+    if (
+      hp <= 0
+      && source
+      && options?.channel === 'KINETIC'
+      && hasMutation(leyLineMutations, 'EXECUTIONERS_HIGH')
+      && !mutationEncounterRef.current.executionerHighUsed
+    ) {
+      mutationEncounterRef.current.executionerHighUsed = true;
+      combatBuffRef.current.bonusApThisTurn += 1;
+      playerApRef.current += 1;
+      setPlayerActionPoints(playerApRef.current);
+      log("[EXECUTIONER'S HIGH] >> Physical kill — +1 AP.");
+    }
+    if (
+      hp > 0
+      && source === 'STRIKE'
+      && mutationModsRef.current.phantomStrikeChance > 0
+      && Math.random() < mutationModsRef.current.phantomStrikeChance
+    ) {
+      const echoTarget = aliveUnits(squadRef.current).find((u) => u.unitId !== e.unitId);
+      if (echoTarget?.unitId) {
+        log('[PHANTOM STRIKES] >> Echo hit on secondary target.');
+        hurtEnemy(Math.floor(dmg * 0.5), '[PHANTOM]', 'STRIKE', {
+          channel: 'KINETIC',
+          targetId: echoTarget.unitId,
+        });
+      }
+    }
+
+    if (hp <= 0) {
+      const nextFocus = primaryAliveUnit(squadRef.current);
+      if (nextFocus?.unitId) selectTarget(nextFocus.unitId);
+    } else {
+      viewport?.triggerDamageEffect();
+    }
     return false;
+  };
+
+  const markAttackerDoomed = (attacker: EnemyCombatProfile) => {
+    if (!attacker.unitId) return;
+    const stacked = stackDoomedTag(attacker);
+    patchUnit(attacker.unitId, stacked);
+    log('[ASHEN MANTLE] >> Mantle absorbed 50% — attacker marked Doomed.');
+    if (hasMutation(leyLineMutations, 'NULL_ZONE')) {
+      const hpDrain = Math.max(1, Math.floor(attacker.maxHp * 0.1));
+      hurtEnemy(hpDrain, '[NULL-ZONE]', 'STRIKE', {
+        channel: 'OCCULT',
+        targetId: attacker.unitId,
+      });
+      log('[NULL-ZONE] >> Mantle backlash — attacker hemorrhaging.');
+    }
+  };
+
+  const tickMutationHazardsOnEnemyPhase = () => {
+    const mods = mutationModsRef.current;
+    if (mods.ruinDotFracture > 0) {
+      for (const unitId of mutationEncounterRef.current.venomousRuinUnits) {
+        const unit = getUnitById(squadRef.current, unitId);
+        if (!unit?.unitId || !isUnitAlive(unit)) continue;
+        let next = applyFractureDamage(unit, mods.ruinDotFracture);
+        if ((next.fractureGauge ?? 0) >= (next.fractureMax ?? 100)) {
+          next = applyFracturedState(next);
+        }
+        patchUnit(unit.unitId, next);
+        log(`[VENOMOUS RUIN] >> ${unit.designation} — +${mods.ruinDotFracture} fracture hazard.`);
+      }
+    }
+    if (mods.voidContagionDamage > 0) {
+      for (const unit of aliveUnits(squadRef.current)) {
+        if (!unit.unitId || doomedPulseStacks(unit) <= 0) continue;
+        const pulse = mods.voidContagionDamage * doomedPulseStacks(unit);
+        hurtEnemy(pulse, '[VOID CONTAGION]', undefined, {
+          channel: 'OCCULT',
+          targetId: unit.unitId,
+        });
+        log(`[VOID CONTAGION] >> ${unit.designation} — ${pulse} occult pulse.`);
+      }
+    }
+    if (mods.corruptedBloodDamage > 0) {
+      for (const unitId of mutationEncounterRef.current.corruptedBloodUnits) {
+        const unit = getUnitById(squadRef.current, unitId);
+        if (!unit?.unitId || !isUnitAlive(unit)) continue;
+        hurtEnemy(mods.corruptedBloodDamage, '[CORRUPTED BLOOD]', undefined, {
+          channel: 'OCCULT',
+          targetId: unit.unitId,
+        });
+        log(`[CORRUPTED BLOOD] >> ${unit.designation} — void bleed.`);
+      }
+    }
+  };
+
+  const applyEviscerateAftermath = () => {
+    const mods = mutationModsRef.current;
+    abyssalRef.current = 0;
+    setAbyssalReserve(0);
+    for (const unit of aliveUnits(squadRef.current)) {
+      if (!unit.unitId) continue;
+      patchUnit(unit.unitId, {
+        kineticArmor: 0,
+        occultWards: 0,
+        baseKineticArmor: 0,
+        baseOccultWards: 0,
+      });
+      if (mods.corruptedBloodDamage > 0) {
+        mutationEncounterRef.current.corruptedBloodUnits.add(unit.unitId);
+      }
+    }
+    if (mods.corruptedBloodDamage > 0) {
+      log('[CORRUPTED BLOOD] >> Survivors marked for void bleed.');
+    }
+    log('[EVISCERATE] >> Reserve vented — survivor armor shattered.');
   };
 
   const applyTetanusGlitch = () => {
@@ -656,6 +1137,14 @@ export default function TacticalCombatHub({
     const reduction = env.staminaCostReductionPct ?? 0;
     if (reduction <= 0) return cost;
     return Math.max(1, Math.floor(cost * (1 - reduction / 100)));
+  };
+
+  const spendActionPoints = (cost: number): boolean => {
+    if (playerApRef.current < cost) return false;
+    const next = playerApRef.current - cost;
+    playerApRef.current = next;
+    setPlayerActionPoints(next);
+    return true;
   };
 
   const spendStam = (cost: number, overdraw = false): boolean => {
@@ -716,8 +1205,7 @@ export default function TacticalCombatHub({
 
   const endEnemyTurn = (advanceIntent = true) => {
     if (isCombatTerminal()) return;
-    const e = enemyRef.current;
-    if (!e || operativeHpRef.current <= 0) return;
+    if (operativeHpRef.current <= 0 || allUnitsDefeated(squadRef.current)) return;
     if (env.combatObjective === 'SURVIVE_TURNS') {
       survivedEnemyTurnsRef.current += 1;
       const required = env.survivalTurnsRequired ?? 3;
@@ -728,21 +1216,58 @@ export default function TacticalCombatHub({
       }
     }
     if (advanceIntent) {
-      if (e.isBoss && bossRuntimeRef.current) {
-        const phase = bossPhaseRef.current;
-        const nextIntent = rollBossIntent(phase);
-        syncEnemy({ ...e, intent: nextIntent, bossPhase: phase });
-      } else {
-        syncEnemy(advanceEnemyIntent(e));
-      }
+      syncSquad(squadRef.current.map((unit) => {
+        if (!isUnitAlive(unit)) return unit;
+        if (unit.isBoss && bossRuntimeRef.current) {
+          const phase = bossPhaseRef.current;
+          const nextIntent = rollBossIntent(phase);
+          return { ...unit, intent: nextIntent, bossPhase: phase };
+        }
+        return advanceEnemyIntent(unit, combatDistrict);
+      }));
     }
-    startPlayerTurn(enemyRef.current!);
+    enemyActionQueueRef.current = [];
+    const nextTarget = nextDefaultTarget(squadRef.current);
+    if (nextTarget) selectTarget(nextTarget);
+    startPlayerTurn(primaryAliveUnit(squadRef.current)!);
   };
 
   const startPlayerTurn = (_e: EnemyCombatProfile) => {
     if (isCombatTerminal()) return;
     setCounterPrepActive(false);
     counterRef.current = false;
+    wraithParryRef.current = false;
+    if (combatBuffRef.current.demonLungCooldown > 0) {
+      combatBuffRef.current.demonLungCooldown -= 1;
+    }
+    if (mutationEncounterRef.current.flawlessConduitPending) {
+      combatBuffRef.current.bonusApThisTurn += 1;
+      mutationEncounterRef.current.flawlessConduitPending = false;
+      log('[FLAWLESS CONDUIT] >> Perfect parry — +1 AP this turn.');
+    }
+    if (mutationEncounterRef.current.gridGhostPending) {
+      combatBuffRef.current.bonusApThisTurn += 1;
+      mutationEncounterRef.current.gridGhostPending = false;
+      log('[GRID GHOST] >> Perfect defense — +1 AP this turn.');
+    }
+    if (mutationEncounterRef.current.momentumShiftPending) {
+      combatBuffRef.current.bonusApThisTurn += 1;
+      mutationEncounterRef.current.momentumShiftPending = false;
+      log('[MOMENTUM SHIFT] >> Zero stamina end — +1 AP this turn.');
+    }
+    if (mutationEncounterRef.current.bloodTitheCooldown > 0) {
+      mutationEncounterRef.current.bloodTitheCooldown -= 1;
+    }
+    if (mutationEncounterRef.current.ashenMantleCooldown > 0) {
+      mutationEncounterRef.current.ashenMantleCooldown -= 1;
+    }
+    mutationEncounterRef.current.adrenalineSpikeUsed = false;
+    mutationEncounterRef.current.executionerHighUsed = false;
+    mutationEncounterRef.current.bloodForTimeUsed = false;
+    const bonusAp = combatBuffRef.current.bonusApThisTurn;
+    combatBuffRef.current.bonusApThisTurn = 0;
+    playerApRef.current = PLAYER_ACTION_POINTS_PER_TURN + bonusAp;
+    setPlayerActionPoints(PLAYER_ACTION_POINTS_PER_TURN + bonusAp);
     setIsPlayerTurn(true);
     if (!skipRegenRef.current) {
       applyStamina(staminaRef.current + COMBAT_ACTION.STAMINA_REGEN);
@@ -773,9 +1298,16 @@ export default function TacticalCombatHub({
   const resolveEnemyAction = (countering: boolean) => {
     if (isCombatTerminal()) return;
     const currentEnemy = enemyRef.current;
-    if (!currentEnemy || currentEnemy.currentHp <= 0 || operativeHpRef.current <= 0) {
+    if (!currentEnemy || operativeHpRef.current <= 0) {
       setEnemyActionStage(null);
       setDeckStrikeOverlay(null);
+      return;
+    }
+    if (!isUnitAlive(currentEnemy)) {
+      setEnemyActionStage(null);
+      setDeckStrikeOverlay(null);
+      if (enemyActionQueueRef.current.length > 0) runEnemyActionAnimation(countering);
+      else if (!allUnitsDefeated(squadRef.current)) endEnemyTurn(true);
       return;
     }
     setEnemyActionStage(null);
@@ -785,7 +1317,53 @@ export default function TacticalCombatHub({
     if (!commitPendingPlayerDamage()) {
       execIntent(currentEnemy);
     }
-    if (operativeHpRef.current > 0 && currentEnemy.currentHp > 0) endEnemyTurn();
+    if (operativeHpRef.current <= 0) return;
+    if (enemyActionQueueRef.current.length > 0) {
+      runEnemyActionAnimation(countering);
+      return;
+    }
+    if (!allUnitsDefeated(squadRef.current)) endEnemyTurn();
+  };
+
+  const runEnemyActionAnimation = (countering: boolean) => {
+    const unitId = enemyActionQueueRef.current[0];
+    const unit = unitId ? getUnitById(squadRef.current, unitId) : enemyRef.current;
+    if (!unit) {
+      enemyActionQueueRef.current.shift();
+      if (enemyActionQueueRef.current.length > 0) runEnemyActionAnimation(countering);
+      else endEnemyTurn(true);
+      return;
+    }
+    focusedUnitIdRef.current = unit.unitId ?? null;
+    focusEnemy(unit);
+    setIsPlayerTurn(false);
+    setEnemyActionStage('reading');
+    log(`>> HOSTILE TURN // ${unit.designation} — ${formatIntentReadout(unit.intent)}`);
+    enemyTurnTimerRef.current = setTimeout(() => {
+      enemyTurnTimerRef.current = null;
+      if (isCombatTerminal()) return;
+      const acting = unitId ? getUnitById(squadRef.current, unitId) : null;
+      if (!acting || !isUnitAlive(acting) || operativeHpRef.current <= 0) {
+        enemyActionQueueRef.current.shift();
+        setEnemyActionStage(null);
+        if (enemyActionQueueRef.current.length > 0) runEnemyActionAnimation(countering);
+        else endEnemyTurn(true);
+        return;
+      }
+      focusEnemy(acting);
+      setEnemyActionStage('executing');
+      apparitionRef?.current?.triggerAttackEffect();
+      const overlayVariant = getEnemyDeckStrikeVariant(acting.intent);
+      if (overlayVariant) {
+        showStrikeFeedback(overlayVariant);
+        if (overlayVariant === 'hp') applyHpStrikeOnDeckImpact(acting);
+      }
+      enemyStrikeTimerRef.current = setTimeout(() => {
+        enemyStrikeTimerRef.current = null;
+        enemyActionQueueRef.current.shift();
+        resolveEnemyAction(countering);
+      }, ENEMY_ATTACK_ANIM_MS);
+    }, ENEMY_INTENT_READ_MS);
   };
 
   const openParryWindow = (e: EnemyCombatProfile, fromCounterStance: boolean): boolean => {
@@ -821,59 +1399,101 @@ export default function TacticalCombatHub({
 
   const passToEnemy = (countering = false) => {
     if (isCombatTerminal()) return;
-    setSelectedAction(null);
-    const skipEnemyTurn = enemyStunPendingRef.current;
+    setSelectedAbility(null);
     clearEnemyTurnTimers();
-    if (skipEnemyTurn) {
+    counteringEnemyRef.current = countering;
+    tickMutationHazardsOnEnemyPhase();
+
+    if (squadHasFracturedUnits()) {
+      syncSquad(recoverFracturedUnits(squadRef.current));
+      log('>> FRACTURED HOSTILES — turn cycle forfeited. Armor layers rebuilding.');
+      endEnemyTurn(true);
+      return;
+    }
+
+    if (enemyStunPendingRef.current) {
       enemyStunPendingRef.current = false;
       log('>> HOSTILE STUNNED — Veil interference; turn forfeited.');
       endEnemyTurn(false);
       return;
     }
-    setIsPlayerTurn(false);
-    setEnemyActionStage('reading');
-    const e = enemyRef.current;
-    if (e) {
-      log(`>> HOSTILE TURN // ${formatIntentReadout(e.intent)}`);
+
+    if (combatBuffRef.current.skipNextEnemyTurn) {
+      combatBuffRef.current.skipNextEnemyTurn = false;
+      log('>> SHADOW STEP — hostile cycle skipped.');
+      endEnemyTurn(true);
+      return;
     }
-    enemyTurnTimerRef.current = setTimeout(() => {
-      enemyTurnTimerRef.current = null;
-      if (isCombatTerminal()) return;
-      const currentEnemy = enemyRef.current;
-      if (!currentEnemy || currentEnemy.currentHp <= 0 || operativeHpRef.current <= 0) {
-        setEnemyActionStage(null);
-        return;
-      }
-      setEnemyActionStage('executing');
-      apparitionRef?.current?.triggerAttackEffect();
-      const overlayVariant = getEnemyDeckStrikeVariant(currentEnemy.intent);
-      if (overlayVariant) {
-        showStrikeFeedback(overlayVariant);
-        if (overlayVariant === 'hp') applyHpStrikeOnDeckImpact(currentEnemy);
-      }
-      enemyStrikeTimerRef.current = setTimeout(() => {
-        enemyStrikeTimerRef.current = null;
-        resolveEnemyAction(countering);
-      }, ENEMY_ATTACK_ANIM_MS);
-    }, ENEMY_INTENT_READ_MS);
+
+    const budget = threatBudgetRef.current;
+    const picks = pickThreatBudgetActions(squadRef.current, budget);
+    if (picks.length === 0) {
+      endEnemyTurn(true);
+      return;
+    }
+    enemyActionQueueRef.current = picks.map((pick) => pick.unitId);
+    runEnemyActionAnimation(countering);
   };
 
+  const squadHasFracturedUnits = () =>
+    aliveUnits(squadRef.current).some((u) => isEnemyFractured(u));
+
   const initCombat = () => {
-    const e = enemyProfile ?? spawnEnemyProfile(INITIAL_SECTOR_POOL[0], nodeIndex, false);
-    syncEnemy({ ...e });
+    const spawned = enemyProfile ?? spawnEnemyProfile(INITIAL_SECTOR_POOL[0], nodeIndex, false);
+    const initialSquad = enemySquad?.length
+      ? normalizeSquad(enemySquad)
+      : squadFromSingleEnemy(initEnemyCombatLayers(spawned));
+    threatBudgetRef.current = threatBudget
+      ?? (initialSquad.length >= 3 ? THREAT_BUDGET_ELITE : THREAT_BUDGET_STANDARD);
+    syncSquad(initialSquad);
+    const defaultTarget = nextDefaultTarget(initialSquad);
+    if (defaultTarget) selectTarget(defaultTarget);
     operativeHpRef.current = initialOperativeHp; staminaRef.current = initialStamina;
-    abyssalRef.current = startingAbyssalReservePercent; skipRegenRef.current = false;
+    const entryAr = Math.max(
+      startingAbyssalReservePercent,
+      mutationModsRef.current.startingAbyssalPercent,
+    );
+    abyssalRef.current = entryAr;
+    skipRegenRef.current = false;
     abyssalWardRef.current = false;
     wardStrikeBonusRef.current = false;
     setStrikeArPrimed(false);
     counterRef.current = false;
     resolutionRef.current = null; dismissedRef.current = false;
     applyStamina(initialStamina);
-    setAbyssalReserve(startingAbyssalReservePercent);
+    setAbyssalReserve(entryAr);
     setOperativeHp(initialOperativeHp);
     setAbyssalWardActive(false);
     setCounterPrepActive(false);
-    setSelectedAction(null);
+    wraithParryRef.current = false;
+    combatBuffRef.current = {
+      demonLungCooldown: 0,
+      crimsonPactCharges: 0,
+      bonusApThisTurn: 0,
+      skipNextEnemyTurn: false,
+    };
+    mutationModsRef.current = aggregateMutationModifiers(leyLineMutations);
+    mutationEncounterRef.current = {
+      adrenalineSpikeUsed: false,
+      executionerHighUsed: false,
+      flawlessConduitPending: false,
+      gridGhostPending: false,
+      momentumShiftPending: false,
+      damageTakenThisTurn: false,
+      secondWindUsed: false,
+      unstoppableFractureUsed: false,
+      masochistBuff: false,
+      juggernautShield: false,
+      spallWeaveActive: false,
+      bloodTitheCooldown: 0,
+      ashenMantleCooldown: 0,
+      venomousRuinUnits: new Set<string>(),
+      corruptedBloodUnits: new Set<string>(),
+      bloodForTimeUsed: false,
+    };
+    playerApRef.current = PLAYER_ACTION_POINTS_PER_TURN;
+    setPlayerActionPoints(PLAYER_ACTION_POINTS_PER_TURN);
+    setSelectedAbility(null);
     setResolutionOutcome(null);
     setIsPlayerTurn(true);
     setCycleState('TEXT_COMBAT');
@@ -897,87 +1517,260 @@ export default function TacticalCombatHub({
       log(`>> DEFEND THE RIFT — survive ${env.survivalTurnsRequired ?? 3} hostile turn cycles.`);
     }
     if (env.eliteModifier) log(`>> ELITE MODIFIER ACTIVE — ${env.eliteModifier.replace(/_/g, ' ')}`);
-    log(`>> TARGET LOCK: ${e.designation} // CLASS ${e.class}`);
-    if (e.affinity) log(`>> AFFINITY LOCK: ${e.affinity}`);
-    if (startingAbyssalReservePercent > 0) log(`>> Abyssal reserve pre-charged to ${startingAbyssalReservePercent}%.`);
+    log(`>> HOSTILE GRID — ${initialSquad.length} unit(s) // threat budget ${threatBudgetRef.current}`);
+    initialSquad.forEach((unit) => {
+      log(`>> LOCK ${unit.gridSlot}: ${unit.designation} // CLASS ${unit.class}`);
+      if (unit.affinity) log(`>> AFFINITY // ${unit.affinity}`);
+    });
+    if (entryAr > 0) log(`>> Abyssal reserve pre-charged to ${entryAr}%.`);
+    if (leyLineMutations.length > 0) {
+      log(`>> LEY-LINE MUTATIONS ACTIVE — ${leyLineMutations.length} stacked.`);
+    }
     bossRuntimeRef.current = bossProfile;
     bossPhaseRef.current = bossProfile?.currentPhase ?? 1;
   };
   useEffect(() => { initCombat(); }, []);
 
-  const onStrike = () => {
+  const applyLethalRetaliation = (dmg: number) => {
+    if ((env.lethalRetaliationDamage ?? 0) <= 0 || dmg <= 0) return;
+    const feedback = env.lethalRetaliationDamage ?? 0;
+    log(`[LETHAL RETALIATION] >> Hostile feedback — ${feedback} HP.`);
+    if (arenaLayout && feedback > 0) {
+      playerViewportRef?.current?.triggerDamageEffect('hp');
+    }
+    setOperativeHp((p) => {
+      const n = Math.max(p - feedback, 0);
+      operativeHpRef.current = n;
+      if (n <= 0) resolve(false);
+      return n;
+    });
+  };
+
+  const executeAbility = (abilityId: AegisAbilityId) => {
     if (cycleState !== 'TEXT_COMBAT' || !isPlayerTurn || !enemyRef.current) return;
-    const overdraw = staminaRef.current < strikeStats.strikeStaminaCost;
-    if (overdraw) {
-      markExhausted();
-      log(`[EXHAUSTED] >> Overexertion strike — ${strikeStats.exhaustedStrikeDamage} damage.`);
-    } else {
-      spendStam(strikeStats.strikeStaminaCost);
+    const def = getAbilityDefinition(abilityId);
+    if (!spendActionPoints(def.apCost)) {
+      log('[REJECTED] >> Insufficient action points.');
+      return;
     }
-    const exhausted = overdraw || staminaRef.current === 0;
-    if (abyssalWardRef.current) {
-      abyssalWardRef.current = false;
-      setAbyssalWardActive(false);
-    }
-    const arPrimed = consumeWardStrikeBonus();
-    const arGain = arPrimed
-      ? COMBAT_ACTION.ABYSSAL_WARD_STRIKE_BONUS
-      : strikeStats.abyssalChargePerStrike;
-    chargeAr(arGain);
-    if (arPrimed) {
-      log(`[ABYSSAL WARD OVERCHARGE] >> Abyssal reserve +${COMBAT_ACTION.ABYSSAL_WARD_STRIKE_BONUS}%.`);
-    }
-    const dmg = exhausted ? strikeStats.exhaustedStrikeDamage : strikeStats.strikeDamage;
-    const eradicated = hurtEnemy(dmg, arPrimed ? '[ABYSSAL STRIKE]' : '[STRIKE]', 'STRIKE');
-    if ((env.lethalRetaliationDamage ?? 0) > 0 && dmg > 0) {
-      const feedback = env.lethalRetaliationDamage ?? 0;
-      log(`[LETHAL RETALIATION] >> Hostile feedback — ${feedback} HP.`);
-      if (arenaLayout && feedback > 0) {
-        playerViewportRef?.current?.triggerDamageEffect('hp');
+
+    switch (abilityId) {
+      case 'STRIKE': {
+        const overdraw = staminaRef.current < strikeStats.strikeStaminaCost;
+        if (overdraw) {
+          markExhausted();
+          log(`[EXHAUSTED] >> Overexertion strike — ${strikeStats.exhaustedStrikeDamage} damage.`);
+        } else if (!spendStam(strikeStats.strikeStaminaCost)) {
+          log('[REJECTED] >> Insufficient stamina.');
+          playerApRef.current += def.apCost;
+          setPlayerActionPoints(playerApRef.current);
+          return;
+        }
+        const exhausted = overdraw || staminaRef.current === 0;
+        const kinetic = exhausted ? strikeStats.exhaustedStrikeDamage : strikeStats.strikeDamage;
+        const eradicated = hurtEnemy(kinetic, '[STRIKE]', 'STRIKE', { channel: 'KINETIC', fractureGain: 25 });
+        const struck = enemyRef.current;
+        chargeAr(15, struck != null && isEnemyFractured(struck));
+        if (struck && fractureRatio(struck) > 0.5) {
+          syncEnemy(addCombatTag(struck, 'CONCUSSED'));
+        }
+        applyLethalRetaliation(kinetic);
+        if (eradicated) return;
+        break;
       }
-      setOperativeHp((p) => {
-        const n = Math.max(p - feedback, 0);
-        operativeHpRef.current = n;
-        if (n <= 0) resolve(false);
-        return n;
-      });
+      case 'VEIL_PIERCER': {
+        if (!spendStam(def.staminaCost)) {
+          log('[REJECTED] >> Insufficient stamina.');
+          playerApRef.current += def.apCost;
+          setPlayerActionPoints(playerApRef.current);
+          return;
+        }
+        const occult = Math.max(8, Math.floor(strikeStats.strikeDamage * 0.85));
+        chargeAr(20);
+        const eradicated = hurtEnemy(occult, '[VEIL-PIERCER]', 'STRIKE', { channel: 'OCCULT', fractureGain: 15 });
+        if (eradicated) return;
+        break;
+      }
+      case 'WRAITH_PARRY': {
+        const stamCost = Math.floor(staminaRef.current * ((def.staminaCostPct ?? 0) / 100));
+        if (stamCost <= 0 || !spendStam(stamCost)) {
+          log('[REJECTED] >> Insufficient stamina for Wraith Parry.');
+          playerApRef.current += def.apCost;
+          setPlayerActionPoints(playerApRef.current);
+          return;
+        }
+        wraithParryRef.current = true;
+        counterRef.current = true;
+        setCounterPrepActive(true);
+        log('[WRAITH PARRY] >> Stance armed — next physical hit reflects 100% as fracture.');
+        break;
+      }
+      case 'ASHEN_MANTLE': {
+        const freeWard = mutationModsRef.current.ashenMantleFree;
+        if (!freeWard && mutationEncounterRef.current.ashenMantleCooldown > 0) {
+          log(`[REJECTED] >> Ashen Mantle on cooldown (${mutationEncounterRef.current.ashenMantleCooldown} turns).`);
+          playerApRef.current += def.apCost;
+          setPlayerActionPoints(playerApRef.current);
+          return;
+        }
+        if (!freeWard && !spendStam(def.staminaCost)) {
+          log('[REJECTED] >> Insufficient stamina.');
+          playerApRef.current += def.apCost;
+          setPlayerActionPoints(playerApRef.current);
+          return;
+        }
+        if (freeWard) {
+          mutationEncounterRef.current.ashenMantleCooldown = 3;
+          playerApRef.current += def.apCost;
+          setPlayerActionPoints(playerApRef.current);
+        }
+        abyssalWardRef.current = true;
+        setAbyssalWardActive(true);
+        log('[ASHEN MANTLE] >> Mantle armed — blocks 50% next hit. Attackers gain Doomed.');
+        break;
+      }
+      case 'RUIN':
+      case 'GRAVE_BIND':
+      case 'SHADOW_STEP':
+      case 'NAIL_TO_GRID':
+      case 'BLOOD_TITHE':
+      case 'DEMONS_LUNG':
+      case 'CRIMSON_PACT': {
+        const result = executeExtendedAbility({
+          abilityId,
+          squad: squadRef.current,
+          targetId: selectedTargetIdRef.current,
+          strikeStats,
+          stamina: staminaRef.current,
+          abyssalReserve: abyssalRef.current,
+          operativeHp: operativeHpRef.current,
+          maxSoulAnchor,
+          buffState: combatBuffRef.current,
+          log,
+          spendStamina: (cost) => spendStam(cost),
+          spendStaminaPct: (pct) => {
+            const cost = Math.floor(staminaRef.current * (pct / 100));
+            return cost > 0 && spendStam(cost);
+          },
+          hurtEnemy: (raw, tag, source, opts, targetId) =>
+            hurtEnemy(raw, tag, source as KineticDamageSource | undefined, {
+              ...opts,
+              targetId: targetId ?? opts?.targetId,
+            }),
+          patchUnit,
+          syncSquad,
+          chargeAr,
+          consumeAbyssalPct: (pct) => {
+            const consumed = Math.floor(abyssalRef.current * (pct / 100));
+            const next = Math.max(0, abyssalRef.current - consumed);
+            abyssalRef.current = next;
+            setAbyssalReserve(next);
+            return consumed;
+          },
+          healOperative: (amount) => applyHealRef.current(amount),
+          sacrificeHpPct: (pct) => {
+            const cost = Math.ceil(maxSoulAnchor * (pct / 100));
+            if (operativeHpRef.current <= cost) return false;
+            setOperativeHp((p) => {
+              const n = Math.max(p - cost, 0);
+              operativeHpRef.current = n;
+              if (n <= 0) resolve(false);
+              return n;
+            });
+            return true;
+          },
+          grantBonusAp: (amount) => {
+            combatBuffRef.current.bonusApThisTurn += amount;
+            playerApRef.current += amount;
+            setPlayerActionPoints(playerApRef.current);
+          },
+          restoreStaminaPct: (pct) => {
+            const restored = Math.floor(maxStamina * (pct / 100));
+            applyStamina(staminaRef.current + restored);
+          },
+          reduceEnemyAp: (unitId, amount) => {
+            const unit = getUnitById(squadRef.current, unitId);
+            if (!unit) return;
+            const nextAp = Math.max(0, (unit.enemyActionPoints ?? 1) - amount);
+            patchUnit(unitId, { enemyActionPoints: nextAp });
+          },
+          mutationMods: mutationModsRef.current,
+          bloodTitheCooldown: mutationEncounterRef.current.bloodTitheCooldown,
+        });
+        if (abilityId === 'RUIN' && result.ok && mutationModsRef.current.ruinDotFracture > 0) {
+          for (const unit of aliveUnits(squadRef.current)) {
+            if (unit.unitId) mutationEncounterRef.current.venomousRuinUnits.add(unit.unitId);
+          }
+          log('[VENOMOUS RUIN] >> Lingering fracture hazard seeded.');
+        }
+        if (abilityId === 'SHADOW_STEP' && result.ok && hasMutation(leyLineMutations, 'JUGGERNAUT_PLATING')) {
+          mutationEncounterRef.current.juggernautShield = true;
+          log('[JUGGERNAUT PLATING] >> Shadow Step shield primed.');
+        }
+        if (!result.ok) {
+          playerApRef.current += result.refundAp;
+          setPlayerActionPoints(playerApRef.current);
+        } else if (result.squad) {
+          syncSquad(result.squad);
+        }
+        break;
+      }
+      default:
+        log('[REJECTED] >> Ability not available.');
+        playerApRef.current += def.apCost;
+        setPlayerActionPoints(playerApRef.current);
+        break;
     }
-    if (eradicated) return;
-    passToEnemy(false);
   };
 
-  const onAbyssalWard = () => {
+  const onEndTurn = () => {
     if (cycleState !== 'TEXT_COMBAT' || !isPlayerTurn) return;
-    if (!spendStam(COMBAT_ACTION.ABYSSAL_WARD_STAMINA)) { log('[REJECTED] >> Insufficient stamina.'); return; }
-    abyssalWardRef.current = true;
-    setAbyssalWardActive(true);
-    primeWardStrikeBonus();
-    log(
-      `[ABYSSAL WARD] >> Barrier armed — blocks 50% next hit. Next Abyssal Strike +${COMBAT_ACTION.ABYSSAL_WARD_STRIKE_BONUS}% AR.`,
-    );
-    passToEnemy(false);
-  };
-
-  const onCounter = () => {
-    if (cycleState !== 'TEXT_COMBAT' || !isPlayerTurn) return;
-    if (isExhausted) { log('[REJECTED] >> Exhausted — counter offline.'); return; }
-    if (abyssalRef.current < COMBAT_ACTION.COUNTER_ABYSSAL_MIN) { log('[REJECTED] >> AR below 50%.'); return; }
-    if (!spendStam(COMBAT_ACTION.COUNTER_STAMINA)) { log('[REJECTED] >> Insufficient stamina.'); return; }
-    counterRef.current = true; setCounterPrepActive(true);
-    log('[COUNTER STANCE] >> Parry matrix armed.'); passToEnemy(true);
-  };
-
-  const onVent = () => {
-    if (cycleState !== 'TEXT_COMBAT' || !isPlayerTurn) return;
-    applyStamina(staminaRef.current + COMBAT_ACTION.BREATHING_TECHNIQUE_RESTORE);
-    log(`[BREATHING TECHNIQUE] >> Stamina restored (+${COMBAT_ACTION.BREATHING_TECHNIQUE_RESTORE}).`); passToEnemy(false);
+    if (
+      hasMutation(leyLineMutations, 'GRID_GHOST')
+      && !mutationEncounterRef.current.damageTakenThisTurn
+    ) {
+      mutationEncounterRef.current.gridGhostPending = true;
+    }
+    if (hasMutation(leyLineMutations, 'MOMENTUM_SHIFT') && staminaRef.current === 0) {
+      mutationEncounterRef.current.momentumShiftPending = true;
+    }
+    passToEnemy(wraithParryRef.current);
   };
 
   const onSlice = () => {
     if (cycleState !== 'TEXT_COMBAT' || !isPlayerTurn) return;
     if (isExhausted) { log('[REJECTED] >> Exhausted — eviscerate offline.'); return; }
-    if (abyssalRef.current < COMBAT_ACTION.ABYSSAL_RESERVE_CAP) { log('[REJECTED] >> AR below 100%.'); return; }
-    log('[EVISCERATE] >> Execution aperture open.'); triggerSlice();
+    const cap = mutationModsRef.current.abyssalCap;
+    if (abyssalRef.current < cap) {
+      log(`[REJECTED] >> AR below ${cap}%.`);
+      return;
+    }
+    log('[EVISCERATE] >> Execution aperture open.');
+    triggerSlice();
+  };
+
+  const onBloodForTime = () => {
+    if (!hasMutation(leyLineMutations, 'BLOOD_FOR_TIME')) return;
+    if (cycleState !== 'TEXT_COMBAT' || !isPlayerTurn) return;
+    if (mutationEncounterRef.current.bloodForTimeUsed) {
+      log('[REJECTED] >> Blood for Time already spent this turn.');
+      return;
+    }
+    const cost = Math.max(1, Math.ceil(operativeHpRef.current * 0.15));
+    if (operativeHpRef.current <= cost) {
+      log('[REJECTED] >> Insufficient Soul Anchor for Blood for Time.');
+      return;
+    }
+    mutationEncounterRef.current.bloodForTimeUsed = true;
+    setOperativeHp((p) => {
+      const n = Math.max(p - cost, 0);
+      operativeHpRef.current = n;
+      if (n <= 0) resolve(false);
+      return n;
+    });
+    playerApRef.current += 1;
+    setPlayerActionPoints(playerApRef.current);
+    log(`[BLOOD FOR TIME] >> ${cost} HP tithed — +1 AP granted.`);
   };
 
   const registerParryArena = (layout: ParryArenaLayout) => {
@@ -1016,11 +1809,46 @@ export default function TacticalCombatHub({
     if (passed) {
       Vibration.vibrate(15);
       preAppliedHpStrikeRef.current = 0;
-      const cd = Math.floor(COMBAT_ACTION.COUNTER_DAMAGE * (1 + parryMultiplierBonus));
-      log(`[PERFECT COUNTER] >> Parry locked — ${cd} retaliation damage.`);
       counterRef.current = false;
       setCounterPrepActive(false);
-      const killed = hurtEnemy(cd, '[COUNTER HIT]', 'COUNTER');
+      let killed = false;
+      if (wraithParryRef.current) {
+        const reflect = pendingDmgRef.current;
+        wraithParryRef.current = false;
+        const e = enemyRef.current;
+        if (e?.unitId) {
+          let fractured = applyFractureDamage(e, reflect);
+          if (fractured.fractureGauge != null && fractured.fractureMax != null
+            && fractured.fractureGauge >= fractured.fractureMax) {
+            fractured = applyFracturedState(fractured);
+          }
+          patchUnit(e.unitId, fractured);
+          log(`[WRAITH PARRY] >> Parry locked — ${reflect} fracture reflected.`);
+          const reflectPct = mutationModsRef.current.parryReflectPct;
+          if (reflectPct > 0) {
+            const hpReflect = Math.floor(pendingDmgRef.current * (reflectPct / 100));
+            if (hpReflect > 0) {
+              hurtEnemy(hpReflect, '[SPIKED WARD]', 'STRIKE', {
+                channel: 'KINETIC',
+                targetId: e.unitId,
+              });
+              log(`[SPIKED WARD] >> ${hpReflect} HP retaliation.`);
+            }
+          }
+        }
+      } else {
+        const cd = Math.floor(COMBAT_ACTION.COUNTER_DAMAGE * (1 + parryMultiplierBonus));
+        log(`[PERFECT COUNTER] >> Parry locked — ${cd} retaliation damage.`);
+        killed = hurtEnemy(cd, '[COUNTER HIT]', 'COUNTER');
+      }
+      if (hasMutation(leyLineMutations, 'PERFECTED_FORM')) {
+        const heal = Math.floor(maxSoulAnchor * 0.1 * mutationModsRef.current.healMultiplier);
+        if (heal > 0) applyHealRef.current(heal);
+        log('[PERFECTED FORM] >> Perfect parry — 10% Soul Anchor restored.');
+      }
+      if (hasMutation(leyLineMutations, 'FLAWLESS_CONDUIT')) {
+        mutationEncounterRef.current.flawlessConduitPending = true;
+      }
       hideParryOverlay();
       startParrySuccessBurst(() => {
         if (killed) finishParryKillAfterHalo();
@@ -1029,6 +1857,10 @@ export default function TacticalCombatHub({
       return;
     }
     hideParryOverlay();
+    if (hasMutation(leyLineMutations, 'MASOCISTS_JOY')) {
+      mutationEncounterRef.current.masochistBuff = true;
+      log("[MASOCHIST'S JOY] >> Failed parry — next attack empowered.");
+    }
     log(unmitigatedOnFail ? '[PARRY FAILED] >> Mistimed — 100% unmitigated damage.' : '[PARRY FAILED] >> Guard collapsed.');
     commitPendingPlayerDamage(unmitigatedOnFail);
     counterRef.current = false;
@@ -1105,12 +1937,22 @@ export default function TacticalCombatHub({
     const s = sliceSessionRef.current; if (s.evaluated) return;
     s.evaluated = true; clearSliceTimers(); activeSliceRef.current = -1; setActiveSliceIndex(-1);
     const hits = s.hitCount;
-    if (hits === 0) { log('[EXECUTION FAILED] >> 0 damage.'); setCycleState('TEXT_COMBAT'); passToEnemy(false); return; }
+    if (hits === 0) {
+      log('[EXECUTION FAILED] >> 0 damage.');
+      setCycleState('TEXT_COMBAT');
+      passToEnemy(false);
+      return;
+    }
     const base = scaleSlice(COMBAT_ACTION.EVISCERATE_DAMAGE);
     const dmg = hits === 3 ? base : Math.floor(base * (hits / 3));
-    log(hits === 3 ? `[EXECUTION SEVERANCE] >> Perfect [3/3] — ${dmg} damage.` : `[EXECUTION SEVERANCE] >> [${hits}/3] — ${dmg} damage.`);
-    if (hurtEnemy(dmg, '[EVISCERATE]', 'EVISCERATE')) return;
-    setCycleState('TEXT_COMBAT'); passToEnemy(false);
+    log(hits === 3
+      ? `[EXECUTION SEVERANCE] >> Perfect [3/3] — ${dmg} damage.`
+      : `[EXECUTION SEVERANCE] >> [${hits}/3] — ${dmg} damage.`);
+    const eradicated = hurtEnemy(dmg, '[EVISCERATE]', 'EVISCERATE', { channel: 'TRUE' });
+    if (!eradicated) applyEviscerateAftermath();
+    if (eradicated) return;
+    setCycleState('TEXT_COMBAT');
+    passToEnemy(false);
   };
 
   const queueSlice = (idx: number) => {
@@ -1267,85 +2109,81 @@ export default function TacticalCombatHub({
     });
   }, [stackedLayout, cycleState, resolutionOutcome, onResolutionPanelChange]);
 
-  const isDeckActionEnabled = (action: CombatDeckAction): boolean => {
+  const isAbilityEnabled = (abilityId: AegisAbilityId): boolean => {
     if (!isPlayerTurn || cycleState !== 'TEXT_COMBAT') return false;
-    switch (action) {
+    const def = getAbilityDefinition(abilityId);
+    if (playerActionPoints < def.apCost) return false;
+    switch (abilityId) {
       case 'STRIKE':
         return true;
-      case 'ABYSSAL_WARD':
-        return stamina >= COMBAT_ACTION.ABYSSAL_WARD_STAMINA;
-      case 'BREATHING_TECHNIQUE':
-        return true;
-      case 'COUNTER_STANCE':
-        return counterReady && stamina >= COMBAT_ACTION.COUNTER_STAMINA;
+      case 'VEIL_PIERCER':
+        return stamina >= def.staminaCost;
+      case 'WRAITH_PARRY': {
+        const stamCost = Math.floor(stamina * ((def.staminaCostPct ?? 0) / 100));
+        return !isExhausted && stamCost > 0 && stamina >= stamCost;
+      }
+      case 'ASHEN_MANTLE':
+        if (mutationModsRef.current.ashenMantleFree) {
+          return mutationEncounterRef.current.ashenMantleCooldown <= 0;
+        }
+        return stamina >= def.staminaCost;
+      case 'RUIN':
+      case 'GRAVE_BIND':
+      case 'SHADOW_STEP':
+      case 'NAIL_TO_GRID':
+      case 'BLOOD_TITHE':
+      case 'DEMONS_LUNG':
+      case 'CRIMSON_PACT':
+        return isExtendedAbilityEnabled(
+          abilityId,
+          stamina,
+          abyssalReserve,
+          operativeHp,
+          maxSoulAnchor,
+          combatBuffRef.current,
+        );
       default:
         return false;
     }
   };
 
-  const getDeckActionLabel = (action: CombatDeckAction): string => {
-    if (action === 'STRIKE') return strikeDeckLabel(strikeWardPrimed);
-    return DECK_ACTION_LABELS[action];
-  };
-
-  const getDeckActionAccent = (action: CombatDeckAction): string | undefined => {
-    if (action === 'STRIKE' && isPlayerTurn && strikeWardPrimed) {
-      return WARD_STRIKE_ACCENT;
-    }
-    if (action === 'COUNTER_STANCE' && counterReady) return P.parry;
+  const getAbilityAccent = (abilityId: AegisAbilityId): string | undefined => {
+    if (abilityId === 'WRAITH_PARRY' && wraithParryRef.current) return P.parry;
+    if (abilityId === 'ASHEN_MANTLE' && abyssalWardActive) return WARD_STRIKE_ACCENT;
     return undefined;
   };
 
-  const getStagedHeader = (action: CombatDeckAction): string => {
-    const name = getDeckActionLabel(action).replace(/^\[|\]$/g, '').trim();
+  const getStagedHeader = (abilityId: AegisAbilityId): string => {
+    const name = getAbilityDefinition(abilityId).label.replace(/^\[|\]$/g, '').trim();
     return `SYSTEM READY // ${name} SELECTED`;
   };
 
-  const getStagedCostImpact = (action: CombatDeckAction): string => {
-    switch (action) {
-      case 'STRIKE': {
-        const overdraw = isExhausted || stamina < strikeStats.strikeStaminaCost;
-        const dmg = overdraw ? strikeStats.exhaustedStrikeDamage : strikeStats.strikeDamage;
-        const cost = overdraw ? 'OVERDRAW' : String(strikeStats.strikeStaminaCost);
-        return `COST: ${cost} ENERGY // EXPECTED IMPACT: ${dmg} DAMAGE`;
-      }
-      case 'ABYSSAL_WARD':
-        return `COST: ${COMBAT_ACTION.ABYSSAL_WARD_STAMINA} STAM // 50% BLOCK\nNEXT ABYSSAL STRIKE +${COMBAT_ACTION.ABYSSAL_WARD_STRIKE_BONUS}% ABYSSAL ENERGY`;
-      case 'BREATHING_TECHNIQUE':
-        return `COST: 0 ENERGY // EXPECTED IMPACT: +${COMBAT_ACTION.BREATHING_TECHNIQUE_RESTORE} STAMINA`;
-      case 'COUNTER_STANCE':
-        return `COST: ${COMBAT_ACTION.COUNTER_STAMINA} ENERGY + ${COMBAT_ACTION.COUNTER_ABYSSAL_MIN}% ABYSSAL // EXPECTED IMPACT: PARRY + ${Math.floor(COMBAT_ACTION.COUNTER_DAMAGE * (1 + parryMultiplierBonus))} RETALIATION`;
-      default:
-        return '';
-    }
+  const getStagedCostImpact = (abilityId: AegisAbilityId): string => {
+    const def = getAbilityDefinition(abilityId);
+    return `COST: ${def.apCost} AP // ${def.staminaCost > 0 ? `${def.staminaCost} STAM` : def.staminaCostPct ? `${def.staminaCostPct}% STAM` : '0 STAM'}\n${def.description}`;
   };
 
-  const confirmSelectedAction = () => {
-    if (!selectedAction) return;
-    switch (selectedAction) {
-      case 'STRIKE':
-        onStrike();
-        break;
-      case 'ABYSSAL_WARD':
-        onAbyssalWard();
-        break;
-      case 'BREATHING_TECHNIQUE':
-        onVent();
-        break;
-      case 'COUNTER_STANCE':
-        onCounter();
-        break;
-      default:
-        break;
+  const confirmSelectedAbility = () => {
+    if (!selectedAbility) return;
+    if (abilityRequiresTarget(selectedAbility)) {
+      const targetId = selectedTargetIdRef.current;
+      if (!targetId || !canTargetWithAbility(squadRef.current, selectedAbility, targetId)) {
+        log('[TARGET] >> Select a valid hostile on the grid.');
+        publishSquadUi(squadRef.current);
+        return;
+      }
     }
-    setSelectedAction(null);
+    executeAbility(selectedAbility);
+    setSelectedAbility(null);
+    publishSquadUi(squadRef.current);
   };
 
   useEffect(() => {
     if (!isPlayerTurn || cycleState !== 'TEXT_COMBAT') {
-      setSelectedAction(null);
+      setSelectedAbility(null);
     }
-  }, [isPlayerTurn, cycleState]);
+    publishSquadUi(squadRef.current);
+  }, [isPlayerTurn, cycleState, selectedAbility, selectedTargetId]);
 
   useEffect(() => {
     if (!stackedLayout || !onEnemyTelemetryChange) return;
@@ -1359,6 +2197,11 @@ export default function TacticalCombatHub({
       maxHp: enemy.maxHp,
       intent: enemy.intent,
       affinity: enemy.affinity,
+      fractureGauge: enemy.fractureGauge ?? 0,
+      fractureMax: enemy.fractureMax ?? 100,
+      kineticArmor: enemy.kineticArmor ?? 0,
+      occultWards: enemy.occultWards ?? 0,
+      combatTags: enemy.combatTags ?? [],
     });
   }, [
     stackedLayout,
@@ -1368,11 +2211,16 @@ export default function TacticalCombatHub({
     enemy?.maxHp,
     enemy?.intent,
     enemy?.affinity,
+    enemy?.fractureGauge,
+    enemy?.fractureMax,
+    enemy?.kineticArmor,
+    enemy?.occultWards,
+    enemy?.combatTags,
   ]);
 
   useEffect(() => {
-    onWardPrimedChange?.(strikeArPrimed);
-  }, [strikeArPrimed, onWardPrimedChange]);
+    onWardPrimedChange?.(abyssalWardActive);
+  }, [abyssalWardActive, onWardPrimedChange]);
 
   useEffect(() => {
     if (!stackedLayout || !arenaLayout || !onOperativeTelemetryChange) return;
@@ -1396,21 +2244,38 @@ export default function TacticalCombatHub({
     counterReady,
   ]);
 
+  const enemyAlive = (enemy?.currentHp ?? 0) > 0;
   const soulAnchorRatio = maxSoulAnchor > 0 ? operativeHp / maxSoulAnchor : 0;
-  const abyssalRatio = abyssalReserve / 100;
+  const abyssalCap = mutationModsRef.current.abyssalCap;
+  const abyssalRatio = abyssalCap > 0 ? abyssalReserve / abyssalCap : 0;
   const staminaRatio = maxStamina > 0 ? stamina / maxStamina : 0;
+  const bloodForTimeOwned = hasMutation(leyLineMutations, 'BLOOD_FOR_TIME');
 
   const commandDeck = (
     <CombatCommandDeck
-      selectedAction={selectedAction}
-      onSelectAction={setSelectedAction}
-      onConfirm={confirmSelectedAction}
-      onAbort={() => setSelectedAction(null)}
-      isActionEnabled={isDeckActionEnabled}
+      loadout={aegisLoadout}
+      selectedAbility={selectedAbility}
+      onSelectAbility={setSelectedAbility}
+      onConfirm={confirmSelectedAbility}
+      onAbort={() => setSelectedAbility(null)}
+      onEndTurn={onEndTurn}
+      actionPoints={playerActionPoints}
+      isActionEnabled={isAbilityEnabled}
+      canEndTurn={isPlayerTurn && cycleState === 'TEXT_COMBAT'}
       getStagedHeader={getStagedHeader}
       getStagedCostImpact={getStagedCostImpact}
-      getActionAccent={getDeckActionAccent}
-      getActionLabel={getDeckActionLabel}
+      getActionAccent={getAbilityAccent}
+      eviscerateReady={sliceReady && enemyAlive}
+      onEviscerate={onSlice}
+      eviscerateDisabled={!isPlayerTurn || cycleState !== 'TEXT_COMBAT'}
+      bloodForTimeAvailable={bloodForTimeOwned}
+      bloodForTimeEnabled={
+        bloodForTimeOwned
+        && isPlayerTurn
+        && cycleState === 'TEXT_COMBAT'
+        && !mutationEncounterRef.current.bloodForTimeUsed
+      }
+      onBloodForTime={onBloodForTime}
       borderColor={theme.borderColor}
       primaryColor={theme.primaryColor}
       mutedColor={theme.mutedColor}
@@ -1428,7 +2293,7 @@ export default function TacticalCombatHub({
         trackBorderColor={GAUGE_TRACK_BORDER}
       />
       <CombatTelemetryGaugeRow
-        label={`ABYSSAL RESERVE // ${abyssalReserve}%${counterReady ? ' // COUNTER READY' : ''}`}
+        label={`ABYSSAL RESERVE // ${abyssalReserve}/${abyssalCap}%${counterReady ? ' // COUNTER READY' : ''}`}
         labelColor={P.kr}
         fillColor={GAUGE_ABYSSAL}
         ratio={abyssalRatio}
@@ -1549,11 +2414,9 @@ export default function TacticalCombatHub({
 
   const useEnemyArenaChrome = stackedLayout && enemyChrome != null;
 
-  const enemyAlive = (enemy?.currentHp ?? 0) > 0;
-
   const chromeSnapshot = useMemo(
     () => ({
-      slicePingVisible: cycleState === 'TEXT_COMBAT' && sliceReady && isPlayerTurn && enemyAlive,
+      slicePingVisible: false,
       slicePingReady: sliceReady && enemyAlive,
       slicePingDisabled: !isPlayerTurn,
       onSlicePing: onSlice,
@@ -1754,13 +2617,13 @@ const styles = StyleSheet.create({
   commandDeckAnchor: {
     flexShrink: 0,
     width: '100%',
-    minHeight: COMMAND_DECK_MIN_HEIGHT,
+    minHeight: COMMAND_DECK_MIN_HEIGHT_WITH_ULTIMATE,
     position: 'relative',
     overflow: 'hidden',
   },
   enemyTurnPanel: {
     width: '100%',
-    minHeight: COMMAND_DECK_MIN_HEIGHT,
+    minHeight: COMMAND_DECK_MIN_HEIGHT_WITH_ULTIMATE,
     borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 12,

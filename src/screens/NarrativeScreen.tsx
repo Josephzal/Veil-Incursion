@@ -8,10 +8,11 @@ import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useDescentNavigator } from '../hooks/useDescentNavigator';
 import { CheckStatus } from '../types/game';
+import { narrativeCheckCredits } from '../data/combatCredits';
 
 export default function NarrativeScreen(): React.JSX.Element {
   const { theme } = useTerminal();
-  const { getCurrentNarrativeNode, resolveNarrativeCheck, appendRunLog, runState } = useRun();
+  const { getCurrentNarrativeNode, resolveNarrativeCheck, appendRunLog, awardRunCredits, runState } = useRun();
   const { finalizeIncursionAdvance } = useDescentNavigator();
   const resolvingRef = useRef(false);
 
@@ -23,6 +24,7 @@ export default function NarrativeScreen(): React.JSX.Element {
 
     const logLine = resolveNarrativeCheck(result.choice, result.status);
     appendRunLog(logLine);
+    awardRunCredits(narrativeCheckCredits(), 'narrative calibration cleared');
     appendRunLog('>> NARRATIVE NODE RESOLVED — RETURNING TO LEY-LINE GRID.');
     finalizeIncursionAdvance('Narrative event cleared.');
   };

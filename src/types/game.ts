@@ -6,6 +6,10 @@ import type { CargoRunState, GlobalBankedCargo, HarvestReturnRoute } from './car
 import { createDefaultBankedCargo } from './cargoGrid';
 import type { ResonanceEscalationState } from './resonanceEscalation';
 import type { PatrolState } from './overworldPatrol';
+import type { AegisLoadout } from './aegisCombat';
+import type { CargoItemId } from './cargoGrid';
+import type { LeyLineMutationId } from './leyLineMutation';
+import { DEFAULT_AEGIS_LOADOUT } from './aegisCombat';
 import { createEmptyPatrolState } from './overworldPatrol';
 import { createDefaultResonanceEscalationState } from './resonanceEscalation';
 import { createDefaultCargoRunState } from './cargoGrid';
@@ -90,6 +94,8 @@ export interface PlayerAccount {
   inventory: PlayerInventoryState;
   /** Cabal vault — banked extraction cargo persists across runs. */
   bankedCargo: GlobalBankedCargo;
+  /** Pre-run combat deck — four active abilities carried into each incursion. */
+  aegisLoadout: AegisLoadout;
 }
 
 export interface CombatNodeState {
@@ -251,6 +257,8 @@ export interface BossPhaseConfiguration {
   intentModifier: string;
 }
 
+export type DistrictBossVariant = 'STANDARD' | 'SHARED_CHOIR';
+
 export interface BossRuntimeProfile {
   name: string;
   maxHp: number;
@@ -258,6 +266,8 @@ export interface BossRuntimeProfile {
   currentPhase: number;
   phases: BossPhaseConfiguration[];
   depth: number;
+  variant?: DistrictBossVariant;
+  bodyCount?: number;
 }
 
 export interface ActiveIncursionState {
@@ -297,6 +307,12 @@ export interface ActiveIncursionState {
   attunement: AttunementState;
   resonance: ResonanceState;
   patrolState: PatrolState;
+  /** Four active combat abilities locked at Safehouse. */
+  aegisLoadout: AegisLoadout;
+  /** Ley-Line mutations acquired this run — stack and alter combat behavior. */
+  leyLineMutations: LeyLineMutationId[];
+  /** Current black market node stock (soul-core + 2–4 rotating listings). */
+  blackMarketStock: CargoItemId[];
   focusedNodeIds: string[];
   bossDefeated: boolean;
   primeExtractionBonus: boolean;
@@ -351,6 +367,9 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     attunement: { current: STARTING_ATTUNEMENT, max: MAX_ATTUNEMENT },
     resonance: { percent: 0 },
     patrolState: createEmptyPatrolState(),
+    aegisLoadout: [...DEFAULT_AEGIS_LOADOUT],
+    leyLineMutations: [],
+    blackMarketStock: [],
     focusedNodeIds: [],
     bossDefeated: false,
     primeExtractionBonus: false,

@@ -1,4 +1,5 @@
 import type { IncursionBiome } from '../types/game';
+import type { DistrictId } from './districtPacing';
 import { pickBiomeCombatDesignation } from './biomeCombat';
 import {
   applyCorporealHpMultiplier,
@@ -49,11 +50,18 @@ function biomeSkin(classType: EnemyClass, sector: SectorDefinition): string {
   return skins[key]?.[classType] ?? `${sector.subsector} ${fallback[classType]}`;
 }
 
-export function rollEnemyIntent(classType: EnemyClass, chargeTurns: number): EnemyIntent {
+export function rollEnemyIntent(
+  classType: EnemyClass,
+  chargeTurns: number,
+  district: DistrictId = 1,
+): EnemyIntent {
   if (classType === 'ABOMINATION') {
-    if (chargeTurns >= 2) return 'WORLD_ENDER';
-    if (chargeTurns > 0) return 'CHARGE';
-    return Math.random() < 0.55 ? 'CHARGE' : 'STRIKE';
+    if (district >= 2) {
+      if (chargeTurns >= 2) return 'WORLD_ENDER';
+      if (chargeTurns > 0) return 'CHARGE';
+      return Math.random() < 0.55 ? 'CHARGE' : 'STRIKE';
+    }
+    return Math.random() < 0.35 ? 'FORTIFY' : 'STRIKE';
   }
   if (classType === 'GREMLIN') {
     return Math.random() < 0.45 ? 'STRIP_STAMINA' : 'STRIKE';
@@ -81,6 +89,7 @@ export function intentLabel(intent: EnemyIntent, designation: string): string {
 export interface SpawnEnemyOptions {
   resonancePercent?: number;
   forcedAffinity?: EnemyAffinity;
+  district?: DistrictId;
 }
 
 function finalizeEnemyProfile(
@@ -102,7 +111,7 @@ export function spawnBiomeEnemyProfile(
   const designation = pickBiomeCombatDesignation(biome, false);
   const maxHp = Math.floor(CLASS_BASE_HP[classType] * scale);
   const baseDamage = Math.floor(CLASS_BASE_DAMAGE[classType] * scale);
-  const intent = rollEnemyIntent(classType, 0);
+  const intent = rollEnemyIntent(classType, 0, options?.district ?? 1);
   const affinity = options?.forcedAffinity
     ?? resolveEnemyAffinity(classType, isEliteAmbush, options?.resonancePercent ?? 0);
 
@@ -238,7 +247,10 @@ export function createHardTestEnemy(): EnemyCombatProfile {
   };
 }
 
-export function advanceEnemyIntent(profile: EnemyCombatProfile): EnemyCombatProfile {
+export function advanceEnemyIntent(
+  profile: EnemyCombatProfile,
+  district: DistrictId = 1,
+): EnemyCombatProfile {
   if (profile.testPreset === 'easy') {
     return {
       ...profile,
@@ -262,7 +274,7 @@ export function advanceEnemyIntent(profile: EnemyCombatProfile): EnemyCombatProf
   if (profile.intent === 'CHARGE') chargeTurns += 1;
   else if (profile.intent !== 'WORLD_ENDER') chargeTurns = 0;
 
-  const nextIntent = rollEnemyIntent(profile.class, chargeTurns);
+  const nextIntent = rollEnemyIntent(profile.class, chargeTurns, district);
   return {
     ...profile,
     chargeTurns,

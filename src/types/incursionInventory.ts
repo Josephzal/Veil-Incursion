@@ -20,5 +20,12 @@ export interface IncursionConsumableUseResult {
   itemId: IncursionConsumableId;
   healAmount: number;
   stunsEnemy: boolean;
+  shatterKineticArmor?: number;
+  stripOccultWards?: number;
+  clearDebuffs?: boolean;
+  maxAbyssalReserve?: boolean;
+  grantBonusAp?: number;
+  restoreStaminaPct?: number;
+  absorbNextHit?: boolean;
   logLine: string;
 }

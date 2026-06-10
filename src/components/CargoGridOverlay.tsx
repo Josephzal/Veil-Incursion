@@ -2,7 +2,7 @@ import React from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import CargoGridBoard from './CargoGridBoard';
 import type { CargoRunState } from '../types/cargoGrid';
-import type { IncursionConsumableId } from '../types/incursionInventory';
+import type { CargoItemId } from '../types/cargoGrid';
 import type { TerminalTheme } from '../types/theme';
 
 const TERMINAL_ACCENT = '#00ff33';
@@ -18,7 +18,9 @@ interface CargoGridOverlayProps {
   scannerMode?: boolean;
   combatMode?: boolean;
   combatConsumablesEnabled?: boolean;
-  onUseCombatConsumable?: (itemId: IncursionConsumableId) => boolean;
+  onUseCombatConsumable?: (itemId: CargoItemId) => boolean;
+  onUseResonanceBribe?: () => boolean;
+  onUseDeadDrop?: () => boolean;
 }
 
 export default function CargoGridOverlay({
@@ -33,6 +35,8 @@ export default function CargoGridOverlay({
   combatMode = false,
   combatConsumablesEnabled = true,
   onUseCombatConsumable,
+  onUseResonanceBribe,
+  onUseDeadDrop,
 }: CargoGridOverlayProps): React.JSX.Element {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -52,6 +56,16 @@ export default function CargoGridOverlay({
             minimal
             onUseAmpoule={onUseAmpoule ? () => {
               const ok = onUseAmpoule();
+              if (ok) onClose();
+              return ok;
+            } : undefined}
+            onUseResonanceBribe={onUseResonanceBribe ? () => {
+              const ok = onUseResonanceBribe();
+              if (ok) onClose();
+              return ok;
+            } : undefined}
+            onUseDeadDrop={onUseDeadDrop ? () => {
+              const ok = onUseDeadDrop();
               if (ok) onClose();
               return ok;
             } : undefined}
