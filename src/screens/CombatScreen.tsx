@@ -165,11 +165,14 @@ export default function CombatScreen(): React.JSX.Element {
     killResolverRef.current();
   }, []);
 
-  const combatSquad = runState.pendingEnemies.length > 0
-    ? runState.pendingEnemies
-    : runState.pendingEnemy
-      ? [runState.pendingEnemy]
-      : [];
+  const combatSquad = useMemo(
+    () => (runState.pendingEnemies.length > 0
+      ? runState.pendingEnemies
+      : runState.pendingEnemy
+        ? [runState.pendingEnemy]
+        : []),
+    [runState.pendingEnemies, runState.pendingEnemy],
+  );
   const vectorNode = getSelectedVectorNode();
   const isBossEncounter =
     activeIncursion.bossProfile != null || runState.pendingEnemy?.isBoss === true;
@@ -201,24 +204,42 @@ export default function CombatScreen(): React.JSX.Element {
     () => buildInitialSquadUiSnapshot(combatSquad),
     [combatSquad],
   );
-  const effectiveSquadUi = squadUi ?? bootstrappedSquadUi;
+  const effectiveSquadUi = useMemo(() => {
+    if (!squadUi || squadUi.units.length === 0) {
+      return bootstrappedSquadUi;
+    }
+    return squadUi;
+  }, [bootstrappedSquadUi, squadUi]);
 
   const gridUnits = useMemo(() => {
-    return effectiveSquadUi.units.map((unit) => ({
-      ...unit,
-      portraitSource: resolveUnitCombatPortrait(
-        {
-          isBoss: unit.isBoss,
-          isVeilStalker: unit.isVeilStalker,
-          class: unit.enemyClass ?? 'GREMLIN',
-          rosterId: unit.rosterId,
-        },
-        nodeType,
-      ),
-    }));
-  }, [effectiveSquadUi, nodeType]);
+    const liveById = new Map(effectiveSquadUi.units.map((unit) => [unit.unitId, unit]));
+    const baseUnits = bootstrappedSquadUi.units.length > 0
+      ? bootstrappedSquadUi.units
+      : effectiveSquadUi.units;
 
-  const showEnemySquadPanel = combatSquad.length > 0 && resolutionOutcome === null;
+    return baseUnits
+      .filter((unit) => unit.currentHp > 0 && unit.maxHp > 0)
+      .map((unit) => {
+        const live = liveById.get(unit.unitId);
+        const merged = live ? { ...unit, ...live } : unit;
+        return {
+          ...merged,
+          isDead: merged.currentHp <= 0,
+          portraitSource: resolveUnitCombatPortrait(
+            {
+              isBoss: merged.isBoss,
+              isVeilStalker: merged.isVeilStalker,
+              class: merged.enemyClass ?? 'GREMLIN',
+              rosterId: merged.rosterId,
+            },
+            nodeType,
+          ),
+        };
+      })
+      .filter((unit) => !unit.isDead);
+  }, [bootstrappedSquadUi.units, effectiveSquadUi.units, nodeType]);
+
+  const showEnemySquadPanel = gridUnits.length > 0 && resolutionOutcome === null;
 
   const enemySquadPanel = showEnemySquadPanel ? (
     <CombatEnemyGrid
@@ -446,7 +467,6 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     flexDirection: 'column',
-    overflow: 'hidden',
   },
   arenaStage: {
     flex: 1,
@@ -456,6 +476,7 @@ const styles = StyleSheet.create({
     overflow: 'visible',
     position: 'relative',
     marginBottom: 2,
+    zIndex: 2,
   },
   playerHudOverlay: {
     position: 'absolute',

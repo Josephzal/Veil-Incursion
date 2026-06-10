@@ -51,7 +51,6 @@ export default function CombatArenaStage({
       <View style={styles.enemyColumn}>
         {useSquadPanel ? (
           <View style={styles.enemySquadSlot}>
-            {enemySquadPanel}
             <View style={styles.hiddenApparition} pointerEvents="none">
               <ApparitionViewport
                 key={enemyPortraitKey}
@@ -60,6 +59,9 @@ export default function CombatArenaStage({
                 style={styles.spriteFill}
                 onEradicationComplete={onEradicationComplete}
               />
+            </View>
+            <View style={styles.enemySquadPanel} pointerEvents="box-none">
+              {enemySquadPanel}
             </View>
           </View>
         ) : (
@@ -123,12 +125,17 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     position: 'relative',
     overflow: 'visible',
+  },
+  enemySquadPanel: {
+    ...StyleSheet.absoluteFillObject,
     zIndex: 10,
     elevation: 10,
+    overflow: 'visible',
   },
   hiddenApparition: {
     ...StyleSheet.absoluteFillObject,
     opacity: 0,
+    zIndex: 1,
   },
   spriteFill: {
     flex: 1,

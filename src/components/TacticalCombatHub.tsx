@@ -414,6 +414,7 @@ export default function TacticalCombatHub({
 
   const publishSquadUi = (nextSquad: EnemyCombatProfile[]) => {
     if (!onSquadUiChange) return;
+    if (nextSquad.length === 0) return;
     const staged = selectedAbility;
     const targetMode = staged ? abilityTargetMode(staged) : 'NONE';
     const targetingActive = staged != null && targetMode === 'SINGLE';

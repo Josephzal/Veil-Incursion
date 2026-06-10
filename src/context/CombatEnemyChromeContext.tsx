@@ -277,9 +277,14 @@ export function CombatEnemyChromeLayer(): React.JSX.Element {
     ? burstLive.arena
     : parryBurstArena;
   const parryBurstKey = burstLive.epoch;
+  const chromeActive = parryVisible || showParryBurst || sliceVisible;
 
   return (
-    <View style={styles.layer} pointerEvents="box-none" collapsable={false}>
+    <View
+      style={[styles.layer, chromeActive ? styles.layerActive : styles.layerIdle]}
+      pointerEvents="box-none"
+      collapsable={false}
+    >
       {parryVisible && handlersRef.current.parryShrinkScale ? (
         <ParryMatrixOverlay
           visible
@@ -313,7 +318,13 @@ export function CombatEnemyChromeLayer(): React.JSX.Element {
 const styles = StyleSheet.create({
   layer: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 12,
-    elevation: 12,
+  },
+  layerIdle: {
+    zIndex: 0,
+    elevation: 0,
+  },
+  layerActive: {
+    zIndex: 14,
+    elevation: 14,
   },
 });

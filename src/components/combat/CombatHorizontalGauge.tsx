@@ -2,6 +2,8 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { clampRatio } from '../../utils/combatTelemetryFormat';
 
+import { COMBAT_GAUGE_TRACK_HEIGHT_COMPACT } from './combatGaugeMetrics';
+
 const MONO = 'monospace';
 const GAUGE_WIDTH = 112;
 const TRACK_HEIGHT = 8;
@@ -177,7 +179,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   trackOuterCompact: {
-    height: 5,
+    height: COMBAT_GAUGE_TRACK_HEIGHT_COMPACT,
   },
   trackOuter: {
     width: '100%',

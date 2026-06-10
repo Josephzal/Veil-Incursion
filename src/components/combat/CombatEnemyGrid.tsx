@@ -5,29 +5,14 @@ import { ALL_GRID_SLOTS } from '../../types/combatGrid';
 import { laneForSlot } from '../../types/combatGrid';
 import type { CombatGridUnitView } from './CombatEnemyUnit';
 import CombatEnemyUnit from './CombatEnemyUnit';
-
-const FRONTLINE_SCALE = 1;
-const BACKLINE_SCALE = 0.75;
+import CombatEnemySlotBars from './CombatEnemySlotBars';
+import {
+  ENEMY_ARENA_SLOT_LAYOUT,
+  resolveArenaBarLayout,
+  resolveArenaSlotLayout,
+} from './combatEnemyBarLayout';
 
 const SLOT_ORDER: CombatGridSlotId[] = ['FL_0', 'FL_1', 'BL_0', 'BL_1'];
-
-interface SlotLayout {
-  left: `${number}%`;
-  top?: `${number}%`;
-  bottom?: `${number}%`;
-  width: `${number}%`;
-  height: `${number}%`;
-  scale: number;
-  zIndex: number;
-}
-
-/** Frontline slots match player column height; backline sits higher and smaller. */
-const ARENA_SLOT_LAYOUT: Record<CombatGridSlotId, SlotLayout> = {
-  FL_0: { left: '0%', bottom: '2%', width: '50%', height: '78%', scale: FRONTLINE_SCALE, zIndex: 4 },
-  FL_1: { left: '50%', bottom: '2%', width: '50%', height: '78%', scale: FRONTLINE_SCALE, zIndex: 3 },
-  BL_0: { left: '4%', top: '2%', width: '44%', height: '50%', scale: BACKLINE_SCALE, zIndex: 1 },
-  BL_1: { left: '54%', top: '4%', width: '44%', height: '50%', scale: BACKLINE_SCALE, zIndex: 2 },
-};
 
 interface CombatEnemyGridProps {
   units: CombatGridUnitView[];
@@ -39,7 +24,8 @@ interface CombatEnemyGridProps {
   variant?: 'arena' | 'compact';
 }
 
-function InvisibleSlotAnchor({ layout }: { layout: SlotLayout }): React.JSX.Element {
+function InvisibleSlotAnchor({ slot }: { slot: CombatGridSlotId }): React.JSX.Element {
+  const layout = ENEMY_ARENA_SLOT_LAYOUT[slot];
   return (
     <View
       style={[
@@ -68,13 +54,12 @@ export default function CombatEnemyGrid({
   variant = 'arena',
 }: CombatEnemyGridProps): React.JSX.Element {
   const isArena = variant === 'arena';
-  const unitBySlot = new Map(
-    units.filter((u) => !u.isDead).map((u) => [u.slot, u]),
-  );
+  const liveUnits = units.filter((unit) => !unit.isDead);
+  const unitBySlot = new Map(liveUnits.map((unit) => [unit.slot, unit]));
 
   const renderSlot = (slot: CombatGridSlotId) => {
     const unit = unitBySlot.get(slot);
-    const layout = ARENA_SLOT_LAYOUT[slot];
+    const layout = isArena ? resolveArenaSlotLayout(slot, liveUnits) : ENEMY_ARENA_SLOT_LAYOUT[slot];
     const isBackline = laneForSlot(slot) === 'BACKLINE';
 
     if (!isArena) {
@@ -83,6 +68,7 @@ export default function CombatEnemyGrid({
       }
       return (
         <Pressable key={slot} onPress={() => onUnitPress(unit.unitId)} style={styles.cell}>
+          <CombatEnemySlotBars unit={unit} />
           <CombatEnemyUnit
             unit={unit}
             targetingActive={targetingActive}
@@ -95,34 +81,55 @@ export default function CombatEnemyGrid({
     }
 
     if (!unit) {
-      return <InvisibleSlotAnchor key={slot} layout={layout} />;
+      return <InvisibleSlotAnchor key={slot} slot={slot} />;
     }
 
+    const barLayout = resolveArenaBarLayout(slot, liveUnits);
+
     return (
-      <Pressable
-        key={slot}
-        onPress={() => onUnitPress(unit.unitId)}
-        style={[
-          styles.slotAnchor,
-          {
-            left: layout.left,
-            top: layout.top,
-            bottom: layout.bottom,
-            width: layout.width,
-            height: layout.height,
-            zIndex: layout.zIndex,
-          },
-        ]}
-      >
-        <CombatEnemyUnit
-          unit={unit}
-          targetingActive={targetingActive}
-          accentColor={accentColor}
-          mutedColor={mutedColor}
-          isBackline={isBackline}
-          spriteScale={layout.scale}
-        />
-      </Pressable>
+      <React.Fragment key={slot}>
+        <View
+          style={[
+            styles.slotAnchor,
+            styles.barAnchor,
+            {
+              left: barLayout.left,
+              bottom: barLayout.bottom,
+              top: barLayout.top,
+              width: barLayout.width,
+              zIndex: layout.zIndex + 10,
+              alignItems: 'center',
+            },
+          ]}
+          pointerEvents="none"
+        >
+          <CombatEnemySlotBars unit={unit} />
+        </View>
+        <Pressable
+          onPress={() => onUnitPress(unit.unitId)}
+          style={[
+            styles.slotAnchor,
+            styles.slotFill,
+            {
+              left: layout.left,
+              top: layout.top,
+              bottom: layout.bottom,
+              width: layout.width,
+              height: layout.height,
+              zIndex: layout.zIndex,
+            },
+          ]}
+        >
+          <CombatEnemyUnit
+            unit={unit}
+            targetingActive={targetingActive}
+            accentColor={accentColor}
+            mutedColor={mutedColor}
+            isBackline={isBackline}
+            spriteScale={layout.scale}
+          />
+        </Pressable>
+      </React.Fragment>
     );
   };
 
@@ -154,10 +161,14 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     position: 'relative',
-    overflow: 'visible',
   },
   slotAnchor: {
     position: 'absolute',
+  },
+  barAnchor: {
+    overflow: 'visible',
+  },
+  slotFill: {
     overflow: 'visible',
   },
   grid: {

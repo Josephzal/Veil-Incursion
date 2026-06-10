@@ -200,8 +200,8 @@ interface RunContextType {
   useFocusingAmpouleFromCargo: () => boolean;
   beginPostCombatHarvest: () => void;
   beginResourceNodeHarvest: () => void;
-  prepareBossEncounter: () => void;
-  prepareStandardCombatEncounter: () => void;
+  prepareBossEncounter: (engagedNode?: IncursionNode | null) => void;
+  prepareStandardCombatEncounter: (engagedNode?: IncursionNode | null) => void;
   prepareHarvestAmbushEncounter: () => void;
   shiftBossPhase: (phase: number) => void;
   setIncursionMapMode: (mode: IncursionMapMode) => void;
@@ -1129,10 +1129,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const prepareBossEncounter = useCallback(() => {
+  const prepareBossEncounter = useCallback((engagedNode?: IncursionNode | null) => {
     const inc = activeIncursionRef.current;
-    const encounterNode = resolveActiveVectorNode(inc);
-    if (!encounterNode || !isBossNodeType(encounterNode.type)) return;
+    const encounterNode = engagedNode ?? resolveActiveVectorNode(inc);
+    if (!encounterNode || encounterNode.type !== 'BOSS_COMBAT') return;
 
     const gateDepth = depthFromNodesCleared(inc.nodesCleared);
     const bossProfile = createBossProfileForDepth(gateDepth);
@@ -1180,9 +1180,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     appendRunLog(`>> BOSS SIGNATURE: ${bossProfile.name} // ${bossProfile.maxHp} HP`);
   }, [appendRunLog]);
 
-  const prepareStandardCombatEncounter = useCallback(() => {
+  const prepareStandardCombatEncounter = useCallback((engagedNode?: IncursionNode | null) => {
     const inc = activeIncursionRef.current;
-    const encounterNode = resolveActiveVectorNode(inc);
+    const encounterNode = engagedNode ?? resolveActiveVectorNode(inc);
     if (
       !encounterNode
       || (encounterNode.type !== 'STANDARD_COMBAT' && encounterNode.type !== 'ELITE_COMBAT')
@@ -1679,7 +1679,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (node.type === 'STANDARD_COMBAT' || node.type === 'ELITE_COMBAT') {
-      prepareStandardCombatEncounter();
+      prepareStandardCombatEncounter(node);
       setActiveIncursion((prev) => {
         const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
         activeIncursionRef.current = next;
@@ -1721,8 +1721,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       return node.type;
     }
 
-    if (isBossNodeType(node.type)) {
-      prepareBossEncounter();
+    if (node.type === 'BOSS_COMBAT') {
+      prepareBossEncounter(node);
       setActiveIncursion((prev) => {
         const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
         activeIncursionRef.current = next;
