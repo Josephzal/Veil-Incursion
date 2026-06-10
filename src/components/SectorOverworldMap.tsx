@@ -5,6 +5,7 @@ import {
   LayoutChangeEvent,
   Pressable,
   StyleSheet,
+  Text,
   View,
 } from 'react-native';
 import {
@@ -42,14 +43,16 @@ import {
 import {
   formatRiftManifestLog,
   layoutToMeters,
+  leyTrackerMaxCanvasRadius,
   resolveNearestScoutIntensity,
   resolveScoutPhase,
+  SCANNER_EDGE_RADIUS_NORM,
+  SENSOR_RANGE_LAYOUT,
   worldToRadarBlip,
   type ScoutTarget,
 } from '../utils/overworldBlindScout';
 import {
   buildDepthCorridor,
-  positionInFrontOfWalker,
   type BoundaryWall,
 } from '../utils/overworldCorridorEngine';
 import {
@@ -64,7 +67,7 @@ import FixedLeyTrackerHud, { LEY_TRACKER_SIZE } from './overworld/FixedLeyTracke
 import FogCorridorMask from './overworld/FogCorridorMask';
 import ProceduralRiftSkia from './overworld/ProceduralRiftSkia';
 import ProximityScanlineOverlay from './overworld/ProximityScanlineOverlay';
-import { BlueprintStreetGrid } from './overworld/SonarRadarBackdrop';
+import OverworldTerrainBackdrop from './overworld/OverworldTerrainBackdrop';
 import VirtualJoystick from './overworld/VirtualJoystick';
 
 import AegisForward from '../../assets/images/character images/aegis/aegis-forward.png';
@@ -73,7 +76,8 @@ import AegisLeft from '../../assets/images/character images/aegis/aegis-left.png
 import AegisRight from '../../assets/images/character images/aegis/aegis-right.png';
 
 const WORLD_ZOOM = 4;
-const MOVE_SPEED = 0.85;
+/** World units per second — frame-rate independent via useFrameCallback delta time. */
+const MOVE_SPEED_UNITS_PER_SEC = 200;
 const PLAYER_SPRITE_W = 63;
 const PLAYER_SPRITE_H = 81;
 const NODE_RADIUS = { default: 23, boss: 31 } as const;
@@ -85,16 +89,6 @@ const FACING_SOURCE: Record<AegisFacing, ImageSourcePropType> = {
   left: AegisLeft,
   right: AegisRight,
 };
-
-function facingVector(facing: AegisFacing): { x: number; y: number } {
-  switch (facing) {
-    case 'back': return { x: 0, y: -1 };
-    case 'forward': return { x: 0, y: 1 };
-    case 'left': return { x: -1, y: 0 };
-    case 'right': return { x: 1, y: 0 };
-    default: return { x: 0, y: -1 };
-  }
-}
 
 function isSafeAnchorNode(nodeType: RunNodeType, nodeId: string): boolean {
   return nodeType === 'SAFE_ANCHOR_EXTRACTION' || nodeId.startsWith('safe-anchor');
@@ -117,6 +111,9 @@ export interface SectorOverworldMapProps {
   onFrequencyMatch?: (nodeId: string, distanceMeters: number) => void;
   onNodeManifest?: (nodeId: string, logLine: string) => void;
   onManifestedIdsChange?: (ids: readonly string[]) => void;
+  onScoutProgressChange?: (revealedCount: number, totalCount: number) => void;
+  mapStatusText?: string;
+  layoutRollKey?: number | string;
   compact?: boolean;
   interactive?: boolean;
 }
@@ -146,12 +143,19 @@ export default function SectorOverworldMap({
   onFrequencyMatch,
   onNodeManifest,
   onManifestedIdsChange,
+  onScoutProgressChange,
+  mapStatusText,
+  layoutRollKey,
   compact = false,
   interactive = true,
 }: SectorOverworldMapProps): React.JSX.Element {
+  const [arenaRoll, setArenaRoll] = useState(() => Math.random());
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
   const [facing, setFacing] = useState<AegisFacing>('back');
   const [manifestedIds, setManifestedIds] = useState<Set<string>>(() => new Set());
+  const [revealedOnMapIds, setRevealedOnMapIds] = useState<Set<string>>(() => new Set());
+  const [sensorDetectedIds, setSensorDetectedIds] = useState<Set<string>>(() => new Set());
+  const [registryIds, setRegistryIds] = useState<Set<string>>(() => new Set());
   const [positionOverrides, setPositionOverrides] = useState<Record<string, SectorGraphLayoutPoint>>({});
   const [vaporizedWalls, setVaporizedWalls] = useState<Set<string>>(() => new Set());
   const [corridorBounds, setCorridorBounds] = useState({ minX: 0, maxX: 320, minY: 0, maxY: 400 });
@@ -160,6 +164,7 @@ export default function SectorOverworldMap({
   const [playerPos, setPlayerPos] = useState<SectorGraphLayoutPoint>({ x: 0, y: 0 });
   const [tearActive, setTearActive] = useState(false);
   const [scanlineIntensity, setScanlineIntensity] = useState(0);
+  const [ghostRadarBlip, setGhostRadarBlip] = useState<{ x: number; y: number } | null>(null);
 
   const playerWorldX = useSharedValue(0);
   const playerWorldY = useSharedValue(0);
@@ -174,6 +179,8 @@ export default function SectorOverworldMap({
   const resonanceLoggedRef = useRef<Set<string>>(new Set());
   const scoutNodesRef = useRef<ScoutNode[]>([]);
   const manifestedRef = useRef<Set<string>>(new Set());
+  const revealedOnMapRef = useRef<Set<string>>(new Set());
+  const sensorDetectedRef = useRef<Set<string>>(new Set());
   const overridesRef = useRef<Record<string, SectorGraphLayoutPoint>>({});
   const facingRef = useRef<AegisFacing>('back');
 
@@ -184,8 +191,6 @@ export default function SectorOverworldMap({
   );
 
   const resolvedCurrentId = graph.nodes[currentNodeId] ? currentNodeId : graph.entryId;
-  const scoutSessionKey = `${resolvedCurrentId}:${nodesCleared}`;
-
   const graphLayoutPositions = useMemo(
     () => mergeLayoutPositions(baseLayout.positions, ephemeralPositions),
     [baseLayout.positions, ephemeralPositions],
@@ -197,8 +202,8 @@ export default function SectorOverworldMap({
 
   const scoutArena = useMemo(() => {
     if (compact) return null;
-    return buildScoutArenaLayout(cluster, graphSpawnPoint, scoutSessionKey);
-  }, [compact, cluster, graphSpawnPoint, scoutSessionKey]);
+    return buildScoutArenaLayout(cluster, arenaRoll);
+  }, [compact, cluster, arenaRoll]);
 
   const layoutPositions = useMemo(() => {
     if (scoutArena) {
@@ -209,6 +214,13 @@ export default function SectorOverworldMap({
 
   const mapViewBox = scoutArena?.viewBox ?? baseLayout.viewBox;
   const spawnPoint = scoutArena?.anchor ?? graphSpawnPoint;
+
+  const applySpawnPoint = useCallback(() => {
+    if (compact) return;
+    playerWorldX.value = spawnPoint.x;
+    playerWorldY.value = spawnPoint.y;
+    setPlayerPos({ x: spawnPoint.x, y: spawnPoint.y });
+  }, [compact, spawnPoint.x, spawnPoint.y, playerWorldX, playerWorldY]);
 
   const revealed = useMemo(
     () => buildRevealedSet(graph, encounterPath, focusedNodeIds),
@@ -243,6 +255,34 @@ export default function SectorOverworldMap({
   }, [manifestedIds, onManifestedIdsChange]);
 
   useEffect(() => {
+    revealedOnMapRef.current = revealedOnMapIds;
+  }, [revealedOnMapIds]);
+
+  useEffect(() => {
+    sensorDetectedRef.current = sensorDetectedIds;
+  }, [sensorDetectedIds]);
+
+  useEffect(() => {
+    if (compact) return;
+    onScoutProgressChange?.(sensorDetectedIds.size, scoutNodes.length);
+  }, [compact, sensorDetectedIds, scoutNodes.length, onScoutProgressChange]);
+
+  const layoutSessionRef = useRef(layoutRollKey);
+
+  useEffect(() => {
+    if (compact || layoutRollKey == null) return;
+    if (layoutSessionRef.current !== layoutRollKey) {
+      layoutSessionRef.current = layoutRollKey;
+      setArenaRoll(Math.random());
+      setRevealedOnMapIds(new Set());
+      setSensorDetectedIds(new Set());
+      setManifestedIds(new Set());
+      setRegistryIds(new Set());
+      resonanceLoggedRef.current = new Set();
+    }
+  }, [compact, layoutRollKey]);
+
+  useEffect(() => {
     overridesRef.current = positionOverrides;
   }, [positionOverrides]);
 
@@ -254,11 +294,11 @@ export default function SectorOverworldMap({
     facingRef.current = facing;
   }, [facing]);
 
-  const depthSessionRef = useRef(`${resolvedCurrentId}:${nodesCleared}`);
+  const depthSessionRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (scoutArena) {
-      const bounds = scoutArenaWorldBounds(scoutArena.anchor, scoutArena.viewBox);
+      const bounds = scoutArenaWorldBounds(scoutArena.viewBox);
       setCorridorBounds(bounds);
       setCorridorWalls([]);
       boundsShared.value = bounds;
@@ -278,16 +318,23 @@ export default function SectorOverworldMap({
 
   useEffect(() => {
     const session = `${resolvedCurrentId}:${nodesCleared}`;
-    if (depthSessionRef.current === session) return;
-    depthSessionRef.current = session;
-    playerWorldX.value = spawnPoint.x;
-    playerWorldY.value = spawnPoint.y;
-    resonanceLoggedRef.current = new Set();
-    setManifestedIds(new Set());
-    setPositionOverrides({});
-    setVaporizedWalls(new Set());
-    setPlayerPos(spawnPoint);
-  }, [resolvedCurrentId, nodesCleared, spawnPoint.x, spawnPoint.y, playerWorldX, playerWorldY]);
+    if (depthSessionRef.current !== session) {
+      depthSessionRef.current = session;
+      setArenaRoll(Math.random());
+      resonanceLoggedRef.current = new Set();
+      setManifestedIds(new Set());
+      setRevealedOnMapIds(new Set());
+      setSensorDetectedIds(new Set());
+      setRegistryIds(new Set());
+      setPositionOverrides({});
+      setVaporizedWalls(new Set());
+    }
+    applySpawnPoint();
+  }, [resolvedCurrentId, nodesCleared, applySpawnPoint]);
+
+  useEffect(() => {
+    applySpawnPoint();
+  }, [applySpawnPoint, scoutArena?.anchor.x, scoutArena?.anchor.y]);
 
   useEffect(() => {
     if (canvasSize.width <= 0 || canvasSize.height <= 0) return;
@@ -305,20 +352,17 @@ export default function SectorOverworldMap({
     setFacing(resolveMovementFacing(dx, dy));
   }, []);
 
-  const manifestNode = useCallback((nodeId: string, world: SectorGraphLayoutPoint, node: ScoutNode) => {
-    setManifestedIds((prev) => new Set([...prev, nodeId]));
-    setPositionOverrides((prev) => ({ ...prev, [nodeId]: world }));
-    setTearActive(true);
-    const logLine = formatRiftManifestLog(node.nodeType, node.label);
-    onNodeManifest?.(nodeId, logLine);
-    onNodePress?.(nodeId);
-  }, [onNodeManifest, onNodePress]);
-
   const syncBlindScout = useCallback((x: number, y: number) => {
     setPlayerPos({ x, y });
     const player = { x, y };
     const blips: ScoutTarget[] = [];
     const hiddenDistances: number[] = [];
+    const newlyRevealed: string[] = [];
+    const newlyDetected: string[] = [];
+    let ghostBlipPos: { x: number; y: number } | null = null;
+    let ghostNearestDistance = Infinity;
+    const scannerCenter = LEY_TRACKER_SIZE / 2;
+    const scannerEdgeR = leyTrackerMaxCanvasRadius(LEY_TRACKER_SIZE);
 
     scoutNodesRef.current.forEach((node) => {
       const baseWorld = layoutPositions[node.id] ?? node.world;
@@ -328,23 +372,44 @@ export default function SectorOverworldMap({
       const distance = Math.sqrt(dx * dx + dy * dy);
       const distanceMeters = layoutToMeters(distance);
       const manifested = manifestedRef.current.has(node.id);
+      const revealedOnMap = revealedOnMapRef.current.has(node.id);
       const phase = resolveScoutPhase(distance, manifested);
 
       if (!manifested) {
         hiddenDistances.push(distance);
       }
 
-      if (phase === 'BLIP' || phase === 'STABILIZED') {
+      if (phase === 'STABILIZED' && !manifested && !revealedOnMap) {
+        newlyRevealed.push(node.id);
+      }
+
+      const showOnScanner = phase === 'BLIP'
+        || phase === 'STABILIZED'
+        || phase === 'MANIFESTED'
+        || revealedOnMap
+        || manifested;
+
+      if (showOnScanner) {
         const { angle, radius } = worldToRadarBlip(baseWorld, player);
+        const outOfSensor = distance > SENSOR_RANGE_LAYOUT;
+        const displayRadius = (revealedOnMap || manifested) && outOfSensor
+          ? SCANNER_EDGE_RADIUS_NORM
+          : radius;
+        const scannerPhase = manifested
+          ? 'MANIFESTED'
+          : phase === 'BLIP' && !revealedOnMap
+            ? 'BLIP'
+            : 'STABILIZED';
+
         blips.push({
           id: node.id,
           world: baseWorld,
           distance,
           distanceMeters,
-          phase,
-          blinking: phase === 'BLIP',
+          phase: scannerPhase,
+          blinking: scannerPhase === 'BLIP',
           radarAngle: angle,
-          radarRadius: radius,
+          radarRadius: displayRadius,
         });
       }
 
@@ -354,13 +419,54 @@ export default function SectorOverworldMap({
           onFrequencyMatch?.(node.id, distanceMeters);
         }
       }
+
+      if (phase !== 'VOID' && !sensorDetectedRef.current.has(node.id)) {
+        newlyDetected.push(node.id);
+      }
+
+      if (phase === 'VOID' && !manifested && distance < ghostNearestDistance) {
+        ghostNearestDistance = distance;
+        const { angle } = worldToRadarBlip(baseWorld, player);
+        ghostBlipPos = {
+          x: scannerCenter + Math.cos(angle) * scannerEdgeR,
+          y: scannerCenter + Math.sin(angle) * scannerEdgeR,
+        };
+      }
     });
 
+    if (newlyRevealed.length > 0) {
+      setRevealedOnMapIds((prev) => new Set([...prev, ...newlyRevealed]));
+    }
+
+    if (newlyDetected.length > 0) {
+      setSensorDetectedIds((prev) => new Set([...prev, ...newlyDetected]));
+    }
+
+    const voidNodesRemain = scoutNodesRef.current.some((node) => {
+      const baseWorld = layoutPositions[node.id] ?? node.world;
+      const world = overridesRef.current[node.id] ?? baseWorld;
+      const distance = Math.hypot(world.x - x, world.y - y);
+      return resolveScoutPhase(distance, manifestedRef.current.has(node.id)) === 'VOID';
+    });
+    setGhostRadarBlip(voidNodesRemain ? ghostBlipPos : null);
     setRadarBlips(blips);
     setScanlineIntensity(resolveNearestScoutIntensity(hiddenDistances));
   }, [layoutPositions, onFrequencyMatch]);
 
-  useFrameCallback(() => {
+  const manifestNode = useCallback((nodeId: string, world: SectorGraphLayoutPoint, node: ScoutNode) => {
+    manifestedRef.current = new Set([...manifestedRef.current, nodeId]);
+    setManifestedIds((prev) => new Set([...prev, nodeId]));
+    setRevealedOnMapIds((prev) => new Set([...prev, nodeId]));
+    setSensorDetectedIds((prev) => new Set([...prev, nodeId]));
+    setPositionOverrides((prev) => ({ ...prev, [nodeId]: world }));
+    setTearActive(true);
+    const logLine = formatRiftManifestLog(node.nodeType, node.label);
+    onNodeManifest?.(nodeId, logLine);
+    onNodePress?.(nodeId);
+    syncBlindScout(playerPos.x, playerPos.y);
+  }, [onNodeManifest, onNodePress, playerPos.x, playerPos.y, syncBlindScout]);
+
+  useFrameCallback((frameInfo) => {
     'worklet';
     if (compact) return;
 
@@ -369,7 +475,8 @@ export default function SectorOverworldMap({
 
     const nx = joystickX.value / mag;
     const ny = joystickY.value / mag;
-    const step = mag * MOVE_SPEED;
+    const dtMs = frameInfo.timeSincePreviousFrame ?? 16.667;
+    const step = MOVE_SPEED_UNITS_PER_SEC * (dtMs / 1000);
     const next = clampToWorldBounds(
       playerWorldX.value + nx * step,
       playerWorldY.value + ny * step,
@@ -404,10 +511,6 @@ export default function SectorOverworldMap({
     canvasHeight.value = height;
   };
 
-  useEffect(() => {
-    syncBlindScout(spawnPoint.x, spawnPoint.y);
-  }, [spawnPoint.x, spawnPoint.y, syncBlindScout]);
-
   const effectiveScale = canvasSize.width > 0
     ? resolveMapDrawMetrics(
       canvasSize.width,
@@ -421,7 +524,7 @@ export default function SectorOverworldMap({
   const visibleRadarDots = useMemo(() => {
     const blipById = new Map(radarBlips.map((blip) => [blip.id, blip]));
     const center = LEY_TRACKER_SIZE / 2;
-    const maxR = center - 20;
+    const maxR = leyTrackerMaxCanvasRadius(LEY_TRACKER_SIZE);
 
     return vectorDots
       .filter((dot) => blipById.has(dot.id))
@@ -439,7 +542,12 @@ export default function SectorOverworldMap({
       });
   }, [radarBlips, vectorDots]);
 
-  const stabilizedNodes = useMemo(() => {
+  const revealedMapNodes = useMemo(() => {
+    if (compact) return [];
+    return scoutNodes.filter((node) => revealedOnMapIds.has(node.id) && !manifestedIds.has(node.id));
+  }, [compact, scoutNodes, revealedOnMapIds, manifestedIds]);
+
+  const stabilizedTapNodes = useMemo(() => {
     if (compact) return [];
     return scoutNodes.filter((node) => {
       if (manifestedIds.has(node.id)) return false;
@@ -456,25 +564,41 @@ export default function SectorOverworldMap({
   const handleStabilizedTap = useCallback((nodeId: string) => {
     const node = scoutNodesRef.current.find((n) => n.id === nodeId);
     if (!node || manifestedRef.current.has(nodeId)) return;
-    const dir = facingVector(facingRef.current);
-    const snap = positionInFrontOfWalker(playerPos.x, playerPos.y, dir.x, dir.y, 46);
-    manifestNode(nodeId, snap, node);
-  }, [manifestNode, playerPos.x, playerPos.y]);
+    const baseWorld = layoutPositions[nodeId] ?? node.world;
+    manifestNode(nodeId, baseWorld, node);
+    setRegistryIds((prev) => new Set([...prev, nodeId]));
+  }, [layoutPositions, manifestNode]);
 
   const handleManifestedTap = useCallback((nodeId: string) => {
     if (!manifestedRef.current.has(nodeId)) return;
+    setRegistryIds((prev) => new Set([...prev, nodeId]));
     onNodePress?.(nodeId);
   }, [onNodePress]);
+
+  const handleRegistrySelect = useCallback((nodeId: string) => {
+    if (!manifestedRef.current.has(nodeId)) return;
+    onNodePress?.(nodeId);
+  }, [onNodePress]);
+
+  const registryEntries = useMemo(() => {
+    return scoutNodes
+      .filter((node) => registryIds.has(node.id))
+      .map((node) => ({
+        id: node.id,
+        label: node.label,
+        manifested: manifestedIds.has(node.id),
+      }));
+  }, [scoutNodes, registryIds, manifestedIds]);
 
   const renderRiftNodes = useMemo((): Array<{ node: ScoutNode; manifested: boolean }> => {
     if (compact) {
       return scoutNodes.map((node) => ({ node, manifested: true }));
     }
     return [
-      ...stabilizedNodes.map((node) => ({ node, manifested: false })),
+      ...revealedMapNodes.map((node) => ({ node, manifested: false })),
       ...manifestedNodes.map((node) => ({ node, manifested: true })),
     ];
-  }, [compact, scoutNodes, stabilizedNodes, manifestedNodes]);
+  }, [compact, scoutNodes, revealedMapNodes, manifestedNodes]);
 
   return (
     <View
@@ -482,10 +606,16 @@ export default function SectorOverworldMap({
       onLayout={handleLayout}
     >
       <View style={styles.radarHost}>
+        {!compact && mapStatusText ? (
+          <View style={styles.mapStatusOverlay} pointerEvents="none">
+            <Text style={styles.mapStatusText}>{mapStatusText}</Text>
+          </View>
+        ) : null}
+
         {canvasSize.width > 0 && canvasSize.height > 0 ? (
           <Canvas style={{ width: canvasSize.width, height: canvasSize.height }}>
             <Group transform={worldTransform}>
-              <BlueprintStreetGrid
+              <OverworldTerrainBackdrop
                 viewBoxWidth={mapViewBox.width}
                 viewBoxHeight={mapViewBox.height}
               />
@@ -529,21 +659,24 @@ export default function SectorOverworldMap({
               }) : null}
 
               {renderRiftNodes.map(({ node, manifested }) => {
-                const world = manifested
-                  ? (positionOverrides[node.id] ?? node.world)
-                  : (layoutPositions[node.id] ?? node.world);
+                const world = layoutPositions[node.id] ?? node.world;
+                const drawWorld = manifested
+                  ? (positionOverrides[node.id] ?? world)
+                  : world;
                 const radius = node.isBoss ? NODE_RADIUS.boss : NODE_RADIUS.default;
+                const isSelected = node.id === selectedNodeId;
                 return (
                   <ProceduralRiftSkia
                     key={node.id}
-                    cx={world.x}
-                    cy={world.y}
+                    cx={drawWorld.x}
+                    cy={drawWorld.y}
                     radius={radius}
                     nodeType={node.nodeType}
                     isBoss={node.isBoss}
                     intensity={manifested ? 1 : 0.42}
-                    locked={manifested && node.id === selectedNodeId}
-                    pulse={!manifested}
+                    locked={manifested && isSelected}
+                    selected={isSelected}
+                    pulse={!manifested && !isSelected}
                   />
                 );
               })}
@@ -563,7 +696,7 @@ export default function SectorOverworldMap({
           <Image source={FACING_SOURCE[facing]} style={styles.walkerImage} resizeMode="contain" />
         </View>
 
-        {!compact ? stabilizedNodes.map((node) => {
+        {!compact ? stabilizedTapNodes.map((node) => {
           const world = layoutPositions[node.id] ?? node.world;
           const screen = worldToScreen(
             world,
@@ -588,7 +721,9 @@ export default function SectorOverworldMap({
         }) : null}
 
         {!compact ? manifestedNodes.map((node) => {
-          const world = positionOverrides[node.id] ?? node.world;
+          const world = positionOverrides[node.id]
+            ?? layoutPositions[node.id]
+            ?? node.world;
           const screen = worldToScreen(
             world,
             playerPos,
@@ -616,7 +751,10 @@ export default function SectorOverworldMap({
             cabal={cabal}
             zoneTint={zoneTint}
             vectorDots={visibleRadarDots}
+            proximityGhost={ghostRadarBlip}
             selectedNodeId={selectedNodeId}
+            registryEntries={registryEntries}
+            onRegistrySelect={handleRegistrySelect}
           />
         ) : null}
         {!compact ? <VirtualJoystick vectorX={joystickX} vectorY={joystickY} /> : null}
@@ -649,6 +787,24 @@ const styles = StyleSheet.create({
     flex: 1,
     position: 'relative',
     overflow: 'hidden',
+  },
+  mapStatusOverlay: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    zIndex: 14,
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 255, 51, 0.28)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    maxWidth: '72%',
+  },
+  mapStatusText: {
+    fontFamily: 'monospace',
+    fontSize: 7,
+    letterSpacing: 0.8,
+    color: '#94a3b8',
   },
   walkerSlot: {
     ...StyleSheet.absoluteFillObject,

@@ -21,7 +21,7 @@ export default function OperativeTelemetryBar(): React.JSX.Element {
     const energyPct = Math.max(0, Math.min(100, runState.startingAbyssalReservePercent));
     const resonancePct = activeIncursion.resonance.percent;
     const frenzyTag = resonancePct > BLOOD_FRENZY_RESONANCE_THRESHOLD ? ' // BLOOD FRENZY' : '';
-    return `HEALTH: ${healthPct}% // SHIELD: ${shieldPct}% // STAMINA: ${staminaPct}% // ENERGY: ${energyPct}% // RESONANCE: ${resonancePct}%${frenzyTag}`;
+    return `HEALTH: ${healthPct}% // SHIELD: ${shieldPct}% // STAMINA: ${staminaPct}% // ENERGY: ${energyPct}%`;
   }, [
     runState.soulAnchorIntegrity,
     runState.maxSoulAnchor,

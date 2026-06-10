@@ -63,6 +63,8 @@ export interface ProceduralRiftSkiaProps {
   /** 0 = faint unstable tear, 1 = fully manifested */
   intensity?: number;
   locked?: boolean;
+  /** Active breach target — strong selection ring */
+  selected?: boolean;
   pulse?: boolean;
 }
 
@@ -74,32 +76,59 @@ export default function ProceduralRiftSkia({
   isBoss = false,
   intensity = 1,
   locked = false,
+  selected = false,
   pulse = true,
 }: ProceduralRiftSkiaProps): React.JSX.Element {
   const palette = paletteForType(nodeType, isBoss);
   const r = isBoss ? radius + 8 : radius;
   const tear = buildTearPath(cx, cy, r, intensity < 0.6 ? 0.35 : 0.18);
+  const selectionRing = buildTearPath(cx, cy, r + 12, 0.08);
   const pulsePhase = useSharedValue(0);
+  const selectionPulse = useSharedValue(0);
 
   useEffect(() => {
-    if (!pulse) return;
+    if (!pulse && !selected) return;
     pulsePhase.value = withRepeat(
       withTiming(1, { duration: intensity < 0.6 ? 680 : 920, easing: Easing.inOut(Easing.quad) }),
       -1,
       true,
     );
-  }, [intensity, pulse, pulsePhase]);
+  }, [intensity, pulse, selected, pulsePhase]);
+
+  useEffect(() => {
+    if (!selected) {
+      selectionPulse.value = 0;
+      return;
+    }
+    selectionPulse.value = withRepeat(
+      withTiming(1, { duration: 560, easing: Easing.inOut(Easing.quad) }),
+      -1,
+      true,
+    );
+  }, [selected, selectionPulse]);
 
   const glowOpacity = useDerivedValue(() => 0.25 + pulsePhase.value * 0.35 * intensity);
   const coreOpacity = useDerivedValue(() => (0.35 + intensity * 0.45) * (0.85 + pulsePhase.value * 0.15));
+  const selectionOpacity = useDerivedValue(() => 0.55 + selectionPulse.value * 0.45);
 
   return (
     <Group opacity={0.35 + intensity * 0.65}>
+      {selected ? (
+        <Path path={selectionRing} color="#00ff33" style="stroke" strokeWidth={3} opacity={selectionOpacity}>
+          <BlurMask blur={8} style="outer" />
+        </Path>
+      ) : null}
       <Path path={tear} color={palette.glow} opacity={glowOpacity}>
-        <BlurMask blur={locked ? 14 : 10} style="outer" />
+        <BlurMask blur={selected || locked ? 14 : 10} style="outer" />
       </Path>
       <Path path={tear} color={palette.core} opacity={coreOpacity} />
-      <Path path={tear} color={palette.edge} style="stroke" strokeWidth={locked ? 2.6 : 1.8} opacity={0.9} />
+      <Path
+        path={tear}
+        color={selected ? '#00ff66' : palette.edge}
+        style="stroke"
+        strokeWidth={selected ? 3.2 : locked ? 2.6 : 1.8}
+        opacity={selected ? 1 : 0.9}
+      />
       <Line
         p1={vec(cx - r * 0.65, cy)}
         p2={vec(cx + r * 0.65, cy)}

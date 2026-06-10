@@ -50,8 +50,6 @@ function CombatArenaZone({
   portraitSource,
   wardPrimed,
   onEradicationComplete,
-  resolutionOutcome,
-  onResolutionDismiss,
 }: {
   apparitionRef: React.RefObject<ApparitionViewportRef | null>;
   playerViewportRef: React.RefObject<CombatPlayerViewportRef | null>;
@@ -59,8 +57,6 @@ function CombatArenaZone({
   portraitSource: ReturnType<typeof resolveCombatEnemyPortrait>;
   wardPrimed: boolean;
   onEradicationComplete: () => void;
-  resolutionOutcome: 'VICTORY' | 'DEFEAT' | null;
-  onResolutionDismiss: () => void;
 }): React.JSX.Element {
   const { ui } = useCombatEnemyChrome();
 
@@ -74,16 +70,6 @@ function CombatArenaZone({
       wardPrimed={wardPrimed}
       parryBlocksEnemyTouches={ui.parryVisible}
       onEradicationComplete={onEradicationComplete}
-      resolutionBanner={
-        resolutionOutcome === 'VICTORY' ? (
-          <CombatResolutionBanner
-            outcome="VICTORY"
-            primaryColor="#00ff33"
-            defeatColor="#ef4444"
-            onDismiss={onResolutionDismiss}
-          />
-        ) : null
-      }
     />
   );
 }
@@ -300,9 +286,16 @@ export default function CombatScreen(): React.JSX.Element {
                 portraitSource={portraitSource}
                 wardPrimed={wardPrimed}
                 onEradicationComplete={handleEradicationComplete}
-                resolutionOutcome={resolutionOutcome}
-                onResolutionDismiss={handleResolutionDismiss}
               />
+
+              {resolutionOutcome === 'VICTORY' ? (
+                <CombatResolutionBanner
+                  outcome="VICTORY"
+                  primaryColor="#00ff33"
+                  defeatColor="#ef4444"
+                  onDismiss={handleResolutionDismiss}
+                />
+              ) : null}
 
               {enemyTelemetry ? (
                 <View style={[styles.enemyHudOverlay, { left: DECK_INSET, width: DECK_HALF }]}>
@@ -315,9 +308,11 @@ export default function CombatScreen(): React.JSX.Element {
               ) : null}
 
               <View style={[styles.playerHudOverlay, { right: DECK_INSET, width: DECK_HALF }]}>
-                <CombatPlayerSliceOverlay />
                 {operativeTelemetry ? (
-                  <CombatOperativeHud telemetry={operativeTelemetry} deckAligned />
+                  <View style={styles.playerHudWithSlice}>
+                    <CombatPlayerSliceOverlay />
+                    <CombatOperativeHud telemetry={operativeTelemetry} deckAligned />
+                  </View>
                 ) : null}
               </View>
             </View>
@@ -385,8 +380,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 6,
     zIndex: 8,
-    alignItems: 'flex-end',
-    gap: 2,
+    alignItems: 'center',
+  },
+  playerHudWithSlice: {
+    width: '100%',
+    position: 'relative',
+    alignItems: 'stretch',
   },
   enemyHudOverlay: {
     position: 'absolute',

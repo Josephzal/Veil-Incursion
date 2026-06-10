@@ -324,6 +324,11 @@ export default function CargoGridBoard({
   const [hoverItemId, setHoverItemId] = useState<CargoItemId | null>(null);
   const [hoverExcludeId, setHoverExcludeId] = useState<string | undefined>(undefined);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const externalSlotCountRef = useRef(0);
+  if (externalSlotCountRef.current === 0 && cargo.containment.length > 0) {
+    externalSlotCountRef.current = cargo.containment.length;
+  }
+  const externalSlotCount = Math.max(externalSlotCountRef.current, cargo.containment.length);
 
   const hasAmpouleInGrid = cargo.grid.placed.some((item) => item.itemId === 'focusing-ampoule');
 
@@ -437,25 +442,32 @@ export default function CargoGridBoard({
       <View style={styles.gridDock}>{gridBlock}</View>
 
       <View style={styles.externalBay}>
-        {cargo.containment.length > 0 ? (
-          <Text style={[styles.containmentLabel, { color: theme.mutedColor }]}>
-            CONTAINMENT FIELD — drag loot into grid
-          </Text>
-        ) : null}
-        {cargo.containment.length > 0 ? (
+        
+        {externalSlotCount > 0 ? (
           <View style={styles.externalRow}>
-            {cargo.containment.map((item) => (
-              <DraggableCargoSprite
-                key={item.instanceId}
-                dragSource={{ instanceId: item.instanceId, itemId: item.itemId, source: 'containment' }}
-                layoutMode="external"
-                gridMetricsRef={gridMetricsRef}
-                onRelocateItem={onRelocateItem}
-                onHoverCell={handleHoverCell}
-                onDragStart={handleDragStart}
-                onDragEnd={handleDragEnd}
-              />
-            ))}
+            {Array.from({ length: externalSlotCount }, (_, slotIndex) => {
+              const item = cargo.containment[slotIndex] ?? null;
+              if (!item) {
+                return <View key={`empty-slot-${slotIndex}`} style={styles.externalSlot} />;
+              }
+              const spriteSize = spriteSizeForCargoItem(item.itemId);
+              return (
+                <View
+                  key={item.instanceId}
+                  style={[styles.externalSlot, { width: spriteSize.width, height: spriteSize.height }]}
+                >
+                  <DraggableCargoSprite
+                    dragSource={{ instanceId: item.instanceId, itemId: item.itemId, source: 'containment' }}
+                    layoutMode="external"
+                    gridMetricsRef={gridMetricsRef}
+                    onRelocateItem={onRelocateItem}
+                    onHoverCell={handleHoverCell}
+                    onDragStart={handleDragStart}
+                    onDragEnd={handleDragEnd}
+                  />
+                </View>
+              );
+            })}
           </View>
         ) : null}
       </View>
@@ -567,10 +579,17 @@ const styles = StyleSheet.create({
   },
   externalRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexWrap: 'nowrap',
     gap: 20,
     justifyContent: 'center',
+    alignItems: 'flex-start',
+    width: '100%',
+  },
+  externalSlot: {
+    width: CARGO_CELL_SIZE,
+    height: CARGO_CELL_SIZE,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   lootSprite: {
     backgroundColor: 'transparent',

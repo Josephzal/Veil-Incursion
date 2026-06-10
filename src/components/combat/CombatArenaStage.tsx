@@ -15,7 +15,6 @@ interface CombatArenaStageProps {
   wardPrimed?: boolean;
   parryBlocksEnemyTouches: boolean;
   onEradicationComplete: () => void;
-  resolutionBanner?: React.ReactNode;
 }
 
 export default function CombatArenaStage({
@@ -27,7 +26,6 @@ export default function CombatArenaStage({
   wardPrimed = false,
   parryBlocksEnemyTouches,
   onEradicationComplete,
-  resolutionBanner,
 }: CombatArenaStageProps): React.JSX.Element {
   return (
     <View style={styles.root}>
@@ -53,7 +51,6 @@ export default function CombatArenaStage({
             onEradicationComplete={onEradicationComplete}
           />
           <CombatEnemyChromeLayer />
-          {resolutionBanner}
         </View>
       </View>
     </View>

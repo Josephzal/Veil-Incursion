@@ -65,6 +65,8 @@ export default function ScanningScreen(): React.JSX.Element {
   const [vectorDots, setVectorDots] = useState<RadarDot[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [manifestedNodeIds, setManifestedNodeIds] = useState<Set<string>>(() => new Set());
+  const [riftsDetected, setRiftsDetected] = useState(0);
+  const [riftsTotal, setRiftsTotal] = useState(0);
   const lastRadarSessionRef = useRef<number | null>(null);
 
   const nodeIndex = activeIncursion.nodesCleared;
@@ -131,6 +133,8 @@ export default function ScanningScreen(): React.JSX.Element {
     setVectorDots(dots);
     setSelectedNodeId(null);
     setManifestedNodeIds(new Set());
+    setRiftsDetected(0);
+    setRiftsTotal(vectorCluster.length);
     closeScanPreview();
   }, [isScanningHub, scanSessionKey, vectorCluster, nodeIndex, runState.currentSector, closeScanPreview]);
 
@@ -146,6 +150,11 @@ export default function ScanningScreen(): React.JSX.Element {
 
   const handleManifestedIdsChange = useCallback((ids: readonly string[]) => {
     setManifestedNodeIds(new Set(ids));
+  }, []);
+
+  const handleScoutProgressChange = useCallback((detected: number, total: number) => {
+    setRiftsDetected(detected);
+    setRiftsTotal(total);
   }, []);
 
   const routeAfterEngage = useCallback((nodeType: string | null) => {
@@ -228,12 +237,6 @@ export default function ScanningScreen(): React.JSX.Element {
         <View style={styles.body}>
           <OperativeTelemetryBar />
 
-          <View style={[styles.statusStrip, { borderColor: theme.borderColor }]}>
-            <Text style={[styles.statusStripText, { color: theme.mutedColor }]}>
-              {`SECTOR T${activeIncursion.sectorTier} // NODE ${nodeIndex} // RES ${activeIncursion.resonance.percent}% // ATT ${activeIncursion.attunement.current}/${activeIncursion.attunement.max}`}
-            </Text>
-          </View>
-
           <View style={styles.mapViewport}>
             <SectorOverworldMap
               graph={activeIncursion.sectorGraph}
@@ -251,11 +254,17 @@ export default function ScanningScreen(): React.JSX.Element {
               onFrequencyMatch={handleFrequencyMatch}
               onNodeManifest={handleNodeManifest}
               onManifestedIdsChange={handleManifestedIdsChange}
+              onScoutProgressChange={handleScoutProgressChange}
+              layoutRollKey={scanSessionKey}
+              mapStatusText={`SECTOR T${activeIncursion.sectorTier} // NODE ${nodeIndex} // RES ${activeIncursion.resonance.percent}% // ATT ${activeIncursion.attunement.current}/${activeIncursion.attunement.max}`}
             />
           </View>
 
-          {(showNodeDock || emergencyRecallAvailable) ? (
-            <View style={[styles.nodeDock, { borderColor: theme.borderColor }]}>
+          <View style={[styles.nodeDock, { borderColor: theme.borderColor }]}>
+            <Text style={[styles.riftsCounter, { color: theme.mutedColor }]}>
+              RIFTS DETECTED {riftsDetected}/{riftsTotal}
+            </Text>
+            <View style={styles.nodeDockBody}>
               {showNodeDock ? (
                 <InlineScannerEngagement
                   layout="dock"
@@ -269,22 +278,26 @@ export default function ScanningScreen(): React.JSX.Element {
                   onEngage={handleEngage}
                   onDismiss={handleBackToMap}
                 />
-              ) : null}
-              {emergencyRecallAvailable ? (
-                <Pressable
-                  onPress={handleEmergencyRecall}
-                  style={({ pressed }) => [
-                    styles.recallBtn,
-                    { borderColor: '#f59e0b', opacity: pressed ? 0.75 : 1 },
-                  ]}
-                >
-                  <Text style={[styles.recallBtnText, { color: '#fbbf24' }]}>
-                    [ EMERGENCY RECALL — DEFEND THE RIFT ]
-                  </Text>
-                </Pressable>
-              ) : null}
+              ) : (
+                <Text style={[styles.dockPlaceholder, { color: theme.mutedColor }]}>
+                  UNCOVER A RIFT ON THE OVERWORLD TO BREACH
+                </Text>
+              )}
             </View>
-          ) : null}
+            {emergencyRecallAvailable ? (
+              <Pressable
+                onPress={handleEmergencyRecall}
+                style={({ pressed }) => [
+                  styles.recallBtn,
+                  { borderColor: '#f59e0b', opacity: pressed ? 0.75 : 1 },
+                ]}
+              >
+                <Text style={[styles.recallBtnText, { color: '#fbbf24' }]}>
+                  [ EMERGENCY RECALL — DEFEND THE RIFT ]
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
         </View>
       </MacroLogAnchoredLayout>
 
@@ -300,18 +313,6 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   fallback: { fontFamily: 'monospace', fontSize: 10, textAlign: 'center', padding: 24 },
-  statusStrip: {
-    borderBottomWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    flexShrink: 0,
-  },
-  statusStripText: {
-    fontFamily: 'monospace',
-    fontSize: 7,
-    letterSpacing: 0.8,
-    textAlign: 'center',
-  },
   mapViewport: {
     flex: 1,
     minHeight: 0,
@@ -322,7 +323,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     backgroundColor: 'rgba(5, 6, 8, 0.96)',
-    gap: 6,
+    gap: 4,
+    minHeight: 76,
+  },
+  riftsCounter: {
+    fontFamily: 'monospace',
+    fontSize: 8,
+    letterSpacing: 0.6,
+    textAlign: 'center',
+  },
+  nodeDockBody: {
+    minHeight: 52,
+    justifyContent: 'center',
+  },
+  dockPlaceholder: {
+    fontFamily: 'monospace',
+    fontSize: 8,
+    letterSpacing: 0.5,
+    textAlign: 'center',
+    lineHeight: 12,
   },
   recallBtn: {
     borderWidth: 1,

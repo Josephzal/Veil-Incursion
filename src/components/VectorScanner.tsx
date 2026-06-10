@@ -70,6 +70,8 @@ interface VectorScannerProps {
   continuousScan?: boolean;
   /** Locked node highlighted for downstream encounter engagement. */
   selectedNodeId?: string | null;
+  /** Faint bearing hint toward nearest out-of-range node (Ley-Tracker scout). */
+  proximityGhost?: { x: number; y: number } | null;
   onSweepComplete?: () => void;
   onSelectNode?: (nodeId: string) => void;
   onSiphonedNodesChange?: (nodeIds: string[]) => void;
@@ -192,6 +194,7 @@ function VectorScannerComponent({
   contactsLocked = false,
   continuousScan = false,
   selectedNodeId = null,
+  proximityGhost = null,
   onSweepComplete,
   onSelectNode,
   onSiphonedNodesChange,
@@ -806,6 +809,31 @@ function VectorScannerComponent({
                 </Group>
               ))
             : null}
+
+          {proximityGhost ? (
+            <Group key="proximity-ghost">
+              <Circle
+                cx={proximityGhost.x}
+                cy={proximityGhost.y}
+                r={DOT_VISUAL_SIZE * 1.65}
+                color={accentWithAlpha(theme.blipAccent, 0.4)}
+                opacity={0.16}
+                style="fill"
+              >
+                <Blur blur={16} />
+              </Circle>
+              <Circle
+                cx={proximityGhost.x}
+                cy={proximityGhost.y}
+                r={DOT_VISUAL_SIZE * 0.85}
+                color={accentWithAlpha(theme.blipAccent, 0.55)}
+                opacity={0.1}
+                style="fill"
+              >
+                <Blur blur={7} />
+              </Circle>
+            </Group>
+          ) : null}
 
           {selectedNodeBearing ? (
             <Group key={`${selectedNodeBearing.id}-selected-glow`}>

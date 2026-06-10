@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import VectorSlicePing from './VectorSlicePing';
 import { useCombatEnemyChrome } from '../../context/CombatEnemyChromeContext';
 
-/** Eviscerate ping anchored above the player operative HUD column. */
+/** Eviscerate ping centered on the operative HUD bar. */
 export default function CombatPlayerSliceOverlay(): React.JSX.Element | null {
   const { ui, handlersRef } = useCombatEnemyChrome();
 
@@ -23,10 +23,9 @@ export default function CombatPlayerSliceOverlay(): React.JSX.Element | null {
 
 const styles = StyleSheet.create({
   host: {
-    alignItems: 'flex-end',
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
-    minHeight: 44,
-    zIndex: 8,
+    zIndex: 12,
   },
 });

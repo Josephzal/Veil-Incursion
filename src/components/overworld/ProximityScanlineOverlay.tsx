@@ -5,8 +5,8 @@ import {
   Easing,
   useDerivedValue,
   useSharedValue,
-  withRepeat,
   withTiming,
+  withRepeat,
 } from 'react-native-reanimated';
 
 interface ProximityScanlineOverlayProps {
@@ -17,6 +17,8 @@ interface ProximityScanlineOverlayProps {
 }
 
 const LINE_COUNT = 14;
+const FADE_OUT_MS = 520;
+const FADE_IN_MS = 140;
 
 export default function ProximityScanlineOverlay({
   width,
@@ -24,6 +26,7 @@ export default function ProximityScanlineOverlay({
   intensity,
 }: ProximityScanlineOverlayProps): React.JSX.Element | null {
   const phase = useSharedValue(0);
+  const animatedIntensity = useSharedValue(0);
 
   useEffect(() => {
     phase.value = withRepeat(
@@ -33,9 +36,19 @@ export default function ProximityScanlineOverlay({
     );
   }, [phase]);
 
-  const groupOpacity = useDerivedValue(() => intensity * (0.22 + Math.sin(phase.value * Math.PI * 2) * 0.08));
+  useEffect(() => {
+    const fadingOut = intensity < animatedIntensity.value;
+    animatedIntensity.value = withTiming(intensity, {
+      duration: fadingOut ? FADE_OUT_MS : FADE_IN_MS,
+      easing: fadingOut ? Easing.out(Easing.cubic) : Easing.out(Easing.quad),
+    });
+  }, [intensity, animatedIntensity]);
 
-  if (width <= 0 || height <= 0 || intensity <= 0.02) return null;
+  const groupOpacity = useDerivedValue(
+    () => animatedIntensity.value * (0.22 + Math.sin(phase.value * Math.PI * 2) * 0.08),
+  );
+
+  if (width <= 0 || height <= 0) return null;
 
   const lines: React.JSX.Element[] = [];
   for (let i = 0; i < LINE_COUNT; i += 1) {

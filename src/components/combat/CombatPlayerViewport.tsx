@@ -25,8 +25,9 @@ import {
 } from '@shopify/react-native-skia';
 import CombatSpritePlaceholder from './CombatSpritePlaceholder';
 import type { DataSourceParam } from '@shopify/react-native-skia';
-import {
+import Animated, {
   Easing,
+  useAnimatedStyle,
   useDerivedValue,
   useSharedValue,
   withRepeat,
@@ -39,6 +40,7 @@ const SHAKE_AMPLITUDE = 10;
 const LUNGE_DISTANCE = 28;
 const LUNGE_MS = 280;
 const WARD_PULSE_MS = 900;
+const WARD_PULSE_MAX_OPACITY = 0.7;
 
 const FLASH_COLORS: Record<EnemyDeckStrikeVariant, string> = {
   hp: '#FF453A',
@@ -79,7 +81,7 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
     const flashOpacity = useSharedValue(0);
     const [flashColor, setFlashColor] = useState(FLASH_COLORS.hp);
     const flashColorRef = useRef(FLASH_COLORS.hp);
-    const wardOpacity = useSharedValue(wardPrimed ? 0.7 : 0);
+    const wardOpacity = useSharedValue(wardPrimed ? WARD_PULSE_MAX_OPACITY : 0);
 
     const handleLayout = (event: LayoutChangeEvent) => {
       const { width, height } = event.nativeEvent.layout;
@@ -90,8 +92,8 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
       if (wardPrimed) {
         wardOpacity.value = withRepeat(
           withSequence(
-            withTiming(0.85, { duration: WARD_PULSE_MS * 0.5, easing: Easing.inOut(Easing.cubic) }),
-            withTiming(0.35, { duration: WARD_PULSE_MS * 0.5, easing: Easing.inOut(Easing.cubic) }),
+            withTiming(WARD_PULSE_MAX_OPACITY, { duration: WARD_PULSE_MS * 0.5, easing: Easing.inOut(Easing.cubic) }),
+            withTiming(0.38, { duration: WARD_PULSE_MS * 0.5, easing: Easing.inOut(Easing.cubic) }),
           ),
           -1,
           true,
@@ -133,13 +135,17 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
         );
       },
       setWardPrimed: (active: boolean) => {
-        wardOpacity.value = withTiming(active ? 0.7 : 0, { duration: WARD_PULSE_MS });
+        if (active) {
+          wardOpacity.value = WARD_PULSE_MAX_OPACITY;
+          return;
+        }
+        wardOpacity.value = withTiming(0, { duration: WARD_PULSE_MS });
       },
     }), [flashOpacity, lungeX, shakeX, wardOpacity]);
 
-    const spriteTransform = useDerivedValue(() => [
-      { translateX: shakeX.value + lungeX.value },
-    ]);
+    const frameAnimatedStyle = useAnimatedStyle(() => ({
+      transform: [{ translateX: shakeX.value + lungeX.value }],
+    }));
 
     const damageBlendOpacity = useDerivedValue(() => flashOpacity.value);
     const wardBlendOpacity = useDerivedValue(() => wardOpacity.value);
@@ -148,7 +154,7 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
 
     return (
       <View style={[styles.root, style]}>
-        <View style={styles.spriteFrame} onLayout={handleLayout}>
+        <Animated.View style={[styles.spriteFrame, frameAnimatedStyle]} onLayout={handleLayout}>
           {hasLayout ? (
             <>
               <RNImage
@@ -161,7 +167,7 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
                 {!skiaImage ? (
                   <CombatSpritePlaceholder width={layout.width} height={layout.height} />
                 ) : (
-                  <Group transform={spriteTransform}>
+                  <>
                     <Group opacity={wardBlendOpacity}>
                       <Image
                         image={skiaImage}
@@ -186,12 +192,12 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
                         <BlendColor color={flashColor} mode="srcATop" />
                       </Image>
                     </Group>
-                  </Group>
+                  </>
                 )}
               </Canvas>
             </>
           ) : null}
-        </View>
+        </Animated.View>
       </View>
     );
   },

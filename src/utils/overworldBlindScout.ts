@@ -4,6 +4,10 @@ import type { SectorGraphLayoutPoint } from './sectorGraphLayout';
 export const SENSOR_RANGE_LAYOUT = 320;
 export const RESONANCE_RANGE_LAYOUT = 72;
 export const LAYOUT_TO_METERS = 2.4;
+/** Normalized Ley-Tracker radius (0–1) at the outer sweep ring. */
+export const SCANNER_EDGE_RADIUS_NORM = 1;
+/** Pixel inset from scanner rim when projecting normalized bearings to canvas. */
+export const SCANNER_RIM_INSET_PX = 3;
 
 export type ScoutPhase = 'VOID' | 'BLIP' | 'RESONANCE' | 'STABILIZED' | 'MANIFESTED';
 
@@ -40,7 +44,7 @@ export function isRadarBlinking(phase: ScoutPhase): boolean {
 export function worldToRadarBlip(
   node: SectorGraphLayoutPoint,
   player: SectorGraphLayoutPoint,
-  maxRadius = 0.88,
+  maxRadius = SCANNER_EDGE_RADIUS_NORM,
 ): { angle: number; radius: number } {
   'worklet';
   const dx = node.x - player.x;
@@ -49,6 +53,10 @@ export function worldToRadarBlip(
   const angle = Math.atan2(dy, dx);
   const radius = Math.min(maxRadius, distance / SENSOR_RANGE_LAYOUT);
   return { angle, radius };
+}
+
+export function leyTrackerMaxCanvasRadius(scannerSize: number): number {
+  return scannerSize / 2 - SCANNER_RIM_INSET_PX;
 }
 
 export function formatFrequencyMatchLog(distanceMeters: number): string {

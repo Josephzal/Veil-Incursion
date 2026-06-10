@@ -579,6 +579,9 @@ export default function TacticalCombatHub({
     }
     if (e.evadeActive) { dmg = Math.floor(dmg * 0.5); log(`${tag} >> EVADE — 50% (${dmg}).`); }
     else log(`${tag} >> ${dmg} damage.`);
+    if (source && arenaLayout && dmg > 0) {
+      playerViewportRef?.current?.triggerAttackLunge();
+    }
     const hp = Math.max(e.currentHp - dmg, 0);
     syncEnemy({ ...e, currentHp: hp });
 
@@ -925,7 +928,6 @@ export default function TacticalCombatHub({
       log(`[ABYSSAL WARD OVERCHARGE] >> Abyssal reserve +${COMBAT_ACTION.ABYSSAL_WARD_STRIKE_BONUS}%.`);
     }
     const dmg = exhausted ? strikeStats.exhaustedStrikeDamage : strikeStats.strikeDamage;
-    if (arenaLayout) playerViewportRef?.current?.triggerAttackLunge();
     const eradicated = hurtEnemy(dmg, arPrimed ? '[ABYSSAL STRIKE]' : '[STRIKE]', 'STRIKE');
     if ((env.lethalRetaliationDamage ?? 0) > 0 && dmg > 0) {
       const feedback = env.lethalRetaliationDamage ?? 0;
@@ -1369,8 +1371,8 @@ export default function TacticalCombatHub({
   ]);
 
   useEffect(() => {
-    onWardPrimedChange?.(abyssalWardActive);
-  }, [abyssalWardActive, onWardPrimedChange]);
+    onWardPrimedChange?.(strikeArPrimed);
+  }, [strikeArPrimed, onWardPrimedChange]);
 
   useEffect(() => {
     if (!stackedLayout || !arenaLayout || !onOperativeTelemetryChange) return;

@@ -20,7 +20,6 @@ import {
   Group,
   Image,
   Rect,
-  rect,
   useImage,
 } from '@shopify/react-native-skia';
 import CombatSpritePlaceholder from './CombatSpritePlaceholder';
@@ -80,7 +79,7 @@ export const ApparitionViewport = forwardRef<ApparitionViewportRef, ApparitionVi
     const shakeProgress = useSharedValue(0);
     const shakePhase = useSharedValue(0);
     const damageFlash = useSharedValue(0);
-    const dissolveSweep = useSharedValue(0);
+    const eradicateOpacity = useSharedValue(1);
     const isEradicating = useSharedValue(0);
 
     const handleLayout = (event: LayoutChangeEvent) => {
@@ -123,10 +122,9 @@ export const ApparitionViewport = forwardRef<ApparitionViewportRef, ApparitionVi
         triggerEradication: () => {
           if (isEradicating.value > 0) return;
           isEradicating.value = 1;
-          dissolveSweep.value = 0;
-          dissolveSweep.value = withTiming(
-            1,
-            { duration: ERADICATION_MS, easing: Easing.inOut(Easing.cubic) },
+          eradicateOpacity.value = withTiming(
+            0,
+            { duration: ERADICATION_MS, easing: Easing.out(Easing.cubic) },
             (finished) => {
               if (finished && onEradicationComplete) {
                 runOnJS(onEradicationComplete)();
@@ -135,7 +133,7 @@ export const ApparitionViewport = forwardRef<ApparitionViewportRef, ApparitionVi
           );
         },
       }),
-      [canvasH, canvasW, damageFlash, dissolveSweep, isEradicating, onEradicationComplete, shakePhase, shakeProgress],
+      [canvasH, canvasW, damageFlash, eradicateOpacity, isEradicating, onEradicationComplete, shakePhase, shakeProgress],
     );
 
     const shakeTranslateX = useDerivedValue(() => {
@@ -146,12 +144,7 @@ export const ApparitionViewport = forwardRef<ApparitionViewportRef, ApparitionVi
 
     const groupTransform = useDerivedValue(() => [{ translateX: shakeTranslateX.value }]);
 
-    const dissolveClip = useDerivedValue(() => {
-      'worklet';
-      const y = canvasH.value * dissolveSweep.value;
-      const h = Math.max(0, canvasH.value * (1 - dissolveSweep.value));
-      return rect(0, y, canvasW.value, h);
-    });
+    const spriteOpacity = useDerivedValue(() => eradicateOpacity.value);
 
     const damageBlendOpacity = useDerivedValue(() => damageFlash.value * 0.65);
 
@@ -163,7 +156,7 @@ export const ApparitionViewport = forwardRef<ApparitionViewportRef, ApparitionVi
         <View style={styles.spriteFrame} onLayout={handleLayout}>
           {hasLayout ? (
             <>
-              {hasRasterSource ? (
+              {hasRasterSource && !skiaImage ? (
                 <RNImage
                   source={imageSource}
                   style={styles.fallbackImage}
@@ -181,7 +174,15 @@ export const ApparitionViewport = forwardRef<ApparitionViewportRef, ApparitionVi
                   />
                 ) : null}
                 {skiaImage ? (
-                  <Group clip={dissolveClip} transform={groupTransform}>
+                  <Group transform={groupTransform} opacity={spriteOpacity}>
+                    <Image
+                      image={skiaImage}
+                      x={0}
+                      y={0}
+                      width={layout.width}
+                      height={layout.height}
+                      fit="contain"
+                    />
                     <Group opacity={damageBlendOpacity}>
                       <Image
                         image={skiaImage}
