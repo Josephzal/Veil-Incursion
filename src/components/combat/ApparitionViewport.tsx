@@ -10,6 +10,7 @@ import {
   type StyleProp,
   type ViewProps,
   type ViewStyle,
+  Image as RNImage,
   StyleSheet,
   View,
 } from 'react-native';
@@ -18,12 +19,11 @@ import {
   Canvas,
   Group,
   Image,
-  Line,
   Rect,
   rect,
   useImage,
-  vec,
 } from '@shopify/react-native-skia';
+import CombatSpritePlaceholder from './CombatSpritePlaceholder';
 import type { DataSourceParam } from '@shopify/react-native-skia';
 import {
   Easing,
@@ -34,8 +34,6 @@ import {
 } from 'react-native-reanimated';
 
 const CANVAS_BACKDROP = '#000000';
-const GRID_LINE = 'rgba(139, 92, 246, 0.22)';
-const GRID_SPACING = 24;
 const DAMAGE_BLEND = '#dc2626';
 
 const DAMAGE_MS = 200;
@@ -66,46 +64,6 @@ function toSkiaImageSource(source: ImageSourcePropType | null | undefined): Data
     return source.uri;
   }
   return null;
-}
-
-interface PlaceholderGridProps {
-  width: number;
-  height: number;
-}
-
-function PlaceholderGrid({ width, height }: PlaceholderGridProps): React.JSX.Element | null {
-  if (width <= 0 || height <= 0) return null;
-
-  const verticals: React.JSX.Element[] = [];
-  const horizontals: React.JSX.Element[] = [];
-
-  for (let x = 0; x <= width; x += GRID_SPACING) {
-    verticals.push(
-      <Line key={`v-${x}`} p1={vec(x, 0)} p2={vec(x, height)} color={GRID_LINE} strokeWidth={1} />,
-    );
-  }
-
-  for (let y = 0; y <= height; y += GRID_SPACING) {
-    horizontals.push(
-      <Line key={`h-${y}`} p1={vec(0, y)} p2={vec(width, y)} color={GRID_LINE} strokeWidth={1} />,
-    );
-  }
-
-  return (
-    <Group>
-      {verticals}
-      {horizontals}
-      <Rect
-        x={width * 0.2}
-        y={height * 0.12}
-        width={width * 0.6}
-        height={height * 0.76}
-        color="rgba(92, 45, 145, 0.12)"
-        style="stroke"
-        strokeWidth={1}
-      />
-    </Group>
-  );
 }
 
 export const ApparitionViewport = forwardRef<ApparitionViewportRef, ApparitionViewportProps>(
@@ -198,43 +156,48 @@ export const ApparitionViewport = forwardRef<ApparitionViewportRef, ApparitionVi
     const damageBlendOpacity = useDerivedValue(() => damageFlash.value * 0.65);
 
     const hasLayout = layout.width > 0 && layout.height > 0;
-    const showSkiaSprite = skiaImage != null && hasLayout;
-    const showWireframeGrid = hasLayout && !showSkiaSprite;
+    const hasRasterSource = imageSource != null;
 
     return (
       <View style={[styles.root, style]} pointerEvents={pointerEvents}>
         <View style={styles.spriteFrame} onLayout={handleLayout}>
-          {hasLayout && (showSkiaSprite || showWireframeGrid) ? (
-            <Canvas style={{ width: layout.width, height: layout.height }}>
-              <Rect x={0} y={0} width={layout.width} height={layout.height} color={CANVAS_BACKDROP} />
-
-              {showSkiaSprite ? (
-                <Group clip={dissolveClip} transform={groupTransform}>
-                  <Image
-                    image={skiaImage}
-                    x={0}
-                    y={0}
+          {hasLayout ? (
+            <>
+              {hasRasterSource ? (
+                <RNImage
+                  source={imageSource}
+                  style={styles.fallbackImage}
+                  resizeMode="contain"
+                />
+              ) : null}
+              <Canvas style={styles.effectCanvas} pointerEvents="none">
+                <Rect x={0} y={0} width={layout.width} height={layout.height} color={CANVAS_BACKDROP} opacity={0} />
+                {!hasRasterSource && !skiaImage ? (
+                  <CombatSpritePlaceholder
                     width={layout.width}
                     height={layout.height}
-                    fit="contain"
+                    lineColor="rgba(139, 92, 246, 0.22)"
+                    frameColor="rgba(92, 45, 145, 0.12)"
                   />
-                  <Group opacity={damageBlendOpacity}>
-                    <Image
-                      image={skiaImage}
-                      x={0}
-                      y={0}
-                      width={layout.width}
-                      height={layout.height}
-                      fit="contain"
-                    >
-                      <BlendColor color={DAMAGE_BLEND} mode="srcATop" />
-                    </Image>
+                ) : null}
+                {skiaImage ? (
+                  <Group clip={dissolveClip} transform={groupTransform}>
+                    <Group opacity={damageBlendOpacity}>
+                      <Image
+                        image={skiaImage}
+                        x={0}
+                        y={0}
+                        width={layout.width}
+                        height={layout.height}
+                        fit="contain"
+                      >
+                        <BlendColor color={DAMAGE_BLEND} mode="srcATop" />
+                      </Image>
+                    </Group>
                   </Group>
-                </Group>
-              ) : (
-                <PlaceholderGrid width={layout.width} height={layout.height} />
-              )}
-            </Canvas>
+                ) : null}
+              </Canvas>
+            </>
           ) : null}
         </View>
       </View>
@@ -255,7 +218,18 @@ const styles = StyleSheet.create({
   spriteFrame: {
     width: '86%',
     height: '90%',
+    minHeight: 120,
     position: 'relative',
     overflow: 'hidden',
+  },
+  fallbackImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
+  effectCanvas: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
   },
 });

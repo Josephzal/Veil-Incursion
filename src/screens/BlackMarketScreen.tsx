@@ -110,9 +110,9 @@ export default function BlackMarketScreen(): React.JSX.Element {
                         <Text style={[styles.cellPrice, { color: theme.mutedColor }]}>
                           {listing.price} CR
                         </Text>
-                        {owned > 0 ? (
-                          <Text style={[styles.cellQty, { color: theme.mutedColor }]}>x{owned}</Text>
-                        ) : null}
+                        <Text style={[styles.cellQty, { color: theme.mutedColor }]}>
+                          {owned > 0 ? `x${owned}` : ' '}
+                        </Text>
                       </Pressable>
                     );
                   })}
@@ -211,7 +211,8 @@ const styles = StyleSheet.create({
     position: 'relative',
     zIndex: 1,
     padding: 14,
-    justifyContent: 'center',
+    paddingTop: 10,
+    justifyContent: 'flex-start',
   },
   docHeader: {
     borderBottomWidth: 1,
@@ -254,8 +255,7 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    rowGap: 8,
+    gap: 8,
     marginBottom: 12,
   },
   gridCell: {
@@ -287,6 +287,8 @@ const styles = StyleSheet.create({
     fontSize: 7,
     letterSpacing: 0.6,
     alignSelf: 'flex-end',
+    minHeight: 9,
+    lineHeight: 9,
   },
   detailBlock: {
     borderWidth: 1,

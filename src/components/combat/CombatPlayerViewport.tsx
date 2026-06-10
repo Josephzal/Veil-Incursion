@@ -11,6 +11,7 @@ import {
   type LayoutChangeEvent,
   type StyleProp,
   type ViewStyle,
+  Image as RNImage,
   StyleSheet,
   View,
 } from 'react-native';
@@ -19,8 +20,10 @@ import {
   Canvas,
   Group,
   Image,
+  Rect,
   useImage,
 } from '@shopify/react-native-skia';
+import CombatSpritePlaceholder from './CombatSpritePlaceholder';
 import type { DataSourceParam } from '@shopify/react-native-skia';
 import {
   Easing,
@@ -146,43 +149,47 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
     return (
       <View style={[styles.root, style]}>
         <View style={styles.spriteFrame} onLayout={handleLayout}>
-          {hasLayout && skiaImage ? (
-            <Canvas style={{ width: layout.width, height: layout.height }}>
-              <Group transform={spriteTransform}>
-                <Image
-                  image={skiaImage}
-                  x={0}
-                  y={0}
-                  width={layout.width}
-                  height={layout.height}
-                  fit="contain"
-                />
-                <Group opacity={wardBlendOpacity}>
-                  <Image
-                    image={skiaImage}
-                    x={0}
-                    y={0}
-                    width={layout.width}
-                    height={layout.height}
-                    fit="contain"
-                  >
-                    <BlendColor color={WARD_BLEND} mode="srcATop" />
-                  </Image>
-                </Group>
-                <Group opacity={damageBlendOpacity}>
-                  <Image
-                    image={skiaImage}
-                    x={0}
-                    y={0}
-                    width={layout.width}
-                    height={layout.height}
-                    fit="contain"
-                  >
-                    <BlendColor color={flashColor} mode="srcATop" />
-                  </Image>
-                </Group>
-              </Group>
-            </Canvas>
+          {hasLayout ? (
+            <>
+              <RNImage
+                source={imageSource}
+                style={styles.fallbackImage}
+                resizeMode="contain"
+              />
+              <Canvas style={styles.effectCanvas} pointerEvents="none">
+                <Rect x={0} y={0} width={layout.width} height={layout.height} color="transparent" />
+                {!skiaImage ? (
+                  <CombatSpritePlaceholder width={layout.width} height={layout.height} />
+                ) : (
+                  <Group transform={spriteTransform}>
+                    <Group opacity={wardBlendOpacity}>
+                      <Image
+                        image={skiaImage}
+                        x={0}
+                        y={0}
+                        width={layout.width}
+                        height={layout.height}
+                        fit="contain"
+                      >
+                        <BlendColor color={WARD_BLEND} mode="srcATop" />
+                      </Image>
+                    </Group>
+                    <Group opacity={damageBlendOpacity}>
+                      <Image
+                        image={skiaImage}
+                        x={0}
+                        y={0}
+                        width={layout.width}
+                        height={layout.height}
+                        fit="contain"
+                      >
+                        <BlendColor color={flashColor} mode="srcATop" />
+                      </Image>
+                    </Group>
+                  </Group>
+                )}
+              </Canvas>
+            </>
           ) : null}
         </View>
       </View>
@@ -205,7 +212,18 @@ const styles = StyleSheet.create({
   spriteFrame: {
     width: '86%',
     height: '90%',
+    minHeight: 120,
     position: 'relative',
     overflow: 'hidden',
+  },
+  fallbackImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
+  effectCanvas: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
   },
 });

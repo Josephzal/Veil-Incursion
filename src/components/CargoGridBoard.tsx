@@ -324,14 +324,6 @@ export default function CargoGridBoard({
   const [hoverItemId, setHoverItemId] = useState<CargoItemId | null>(null);
   const [hoverExcludeId, setHoverExcludeId] = useState<string | undefined>(undefined);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
-  const [activeGridDragOrigin, setActiveGridDragOrigin] = useState<{
-    row: number;
-    col: number;
-  } | null>(null);
-
-  const activeGridDrag = activeDragId != null && activeGridDragOrigin != null
-    ? cargo.grid.placed.find((item) => item.instanceId === activeDragId)
-    : null;
 
   const hasAmpouleInGrid = cargo.grid.placed.some((item) => item.itemId === 'focusing-ampoule');
 
@@ -376,19 +368,10 @@ export default function CargoGridBoard({
     captureGridMetrics();
     requestAnimationFrame(() => captureGridMetrics());
     setActiveDragId(source.instanceId);
-    if (source.source === 'grid') {
-      const placed = cargo.grid.placed.find((item) => item.instanceId === source.instanceId);
-      if (placed) {
-        setActiveGridDragOrigin({ row: placed.originRow, col: placed.originCol });
-      }
-    } else {
-      setActiveGridDragOrigin(null);
-    }
-  }, [captureGridMetrics, cargo.grid.placed]);
+  }, [captureGridMetrics]);
 
   const handleDragEnd = useCallback(() => {
     setActiveDragId(null);
-    setActiveGridDragOrigin(null);
   }, []);
 
   const gridBlock = (
@@ -431,36 +414,20 @@ export default function CargoGridBoard({
       </View>
 
       <View style={styles.placedLayer} pointerEvents="box-none">
-        {cargo.grid.placed
-          .filter((item) => item.instanceId !== activeDragId)
-          .map((item: PlacedCargoItem) => (
-            <DraggableCargoSprite
-              key={item.instanceId}
-              dragSource={{ instanceId: item.instanceId, itemId: item.itemId, source: 'grid' }}
-              layoutMode="grid"
-              originRow={item.originRow}
-              originCol={item.originCol}
-              gridMetricsRef={gridMetricsRef}
-              onRelocateItem={onRelocateItem}
-              onHoverCell={handleHoverCell}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-            />
-          ))}
-        {activeGridDrag && activeGridDragOrigin ? (
+        {cargo.grid.placed.map((item: PlacedCargoItem) => (
           <DraggableCargoSprite
-            key={`drag-${activeGridDrag.instanceId}`}
-            dragSource={{ instanceId: activeGridDrag.instanceId, itemId: activeGridDrag.itemId, source: 'grid' }}
+            key={item.instanceId}
+            dragSource={{ instanceId: item.instanceId, itemId: item.itemId, source: 'grid' }}
             layoutMode="grid"
-            originRow={activeGridDragOrigin.row}
-            originCol={activeGridDragOrigin.col}
+            originRow={item.originRow}
+            originCol={item.originCol}
             gridMetricsRef={gridMetricsRef}
             onRelocateItem={onRelocateItem}
             onHoverCell={handleHoverCell}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           />
-        ) : null}
+        ))}
       </View>
     </View>
   );

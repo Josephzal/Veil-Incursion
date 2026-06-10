@@ -159,6 +159,7 @@ interface RunContextType {
     route: 'NEXT_NODE' | 'HUB_VICTORY';
   };
   focusPreviewNode: () => boolean;
+  spendAttunementCharge: () => boolean;
   calculateSectorExtractionPayout: () => number;
   placeCargoItem: (instanceId: string, row: number, col: number) => boolean;
   relocateCargoItem: (instanceId: string, row: number, col: number) => boolean;
@@ -839,6 +840,23 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       sectorMeta: { ...node.sectorMeta, isFocused: true },
     };
   }, []);
+
+  const spendAttunementCharge = useCallback((): boolean => {
+    const inc = activeIncursionRef.current;
+    if (inc.attunement.current <= 0) {
+      appendRunLog('[REJECTED] >> Insufficient attunement charge.');
+      return false;
+    }
+    setActiveIncursion((prev) => {
+      const next = {
+        ...prev,
+        attunement: { ...prev.attunement, current: prev.attunement.current - 1 },
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    return true;
+  }, [appendRunLog]);
 
   const focusPreviewNode = useCallback((): boolean => {
     const inc = activeIncursionRef.current;
@@ -1908,6 +1926,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       awardRunCredits,
       purchaseBlackMarketCargo,
       focusPreviewNode,
+      spendAttunementCharge,
       calculateSectorExtractionPayout,
       placeCargoItem,
       relocateCargoItem,
@@ -1976,6 +1995,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       awardRunCredits,
       purchaseBlackMarketCargo,
       focusPreviewNode,
+      spendAttunementCharge,
       calculateSectorExtractionPayout,
       placeCargoItem,
       relocateCargoItem,
