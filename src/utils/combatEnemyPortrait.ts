@@ -1,24 +1,42 @@
 import { ImageSourcePropType } from 'react-native';
-import EnemyStandard from '../../assets/enemy images/enemy_placeholder.png';
-import EnemyElite from '../../assets/enemy images/enemyl2.png';
-import EnemyBoss from '../../assets/enemy images/bossv1.png';
+import ConcreteGargoyle from '../../assets/enemy images/concrete_gargoyle.png';
+import GutterGoliath from '../../assets/enemy images/gutter_goliath.png';
+import LeySiren from '../../assets/enemy images/ley_siren.png';
+import MiasmaTickSwarm from '../../assets/enemy images/miasma_tick.png';
+import HollowedPrecinct from '../../assets/enemy images/hollowed_precinct.png';
+import FractureHound from '../../assets/enemy images/hound.png';
+import EnemyFallback from '../../assets/enemy images/enemyl2.png';
 import EnemyStalker from '../../assets/enemy images/stalkerv1.png';
 import type { RunNodeType } from '../types/game';
 import type { EnemyCombatProfile } from '../types/run';
-import { ENEMY_ROSTER, type EnemyRosterId } from '../data/enemyRoster';
+import type { EnemyRosterId } from '../data/enemyRoster';
+
+const ROSTER_PORTRAITS: Partial<Record<EnemyRosterId, ImageSourcePropType>> = {
+  'concrete-gargoyle': ConcreteGargoyle,
+  'gutter-goliath': GutterGoliath,
+  'ley-siren': LeySiren,
+  'miasma-tick-swarm': MiasmaTickSwarm,
+  'fracture-hound': FractureHound,
+  'boss-hollowed-precinct': HollowedPrecinct,
+};
+
+export function resolveRosterPortrait(rosterId?: string | null): ImageSourcePropType {
+  if (!rosterId) return EnemyFallback;
+  return ROSTER_PORTRAITS[rosterId as EnemyRosterId] ?? EnemyFallback;
+}
 
 export function resolveCombatEnemyPortrait(options: {
-  isBoss: boolean;
+  isBoss?: boolean;
   isVeilStalker?: boolean;
+  rosterId?: string | null;
   nodeType?: RunNodeType | null;
   isElite?: boolean;
   enemyClass?: EnemyCombatProfile['class'];
 }): ImageSourcePropType {
   if (options.isVeilStalker) return EnemyStalker;
-  if (options.isBoss) return EnemyBoss;
-  if (options.isElite || options.nodeType === 'ELITE_COMBAT') return EnemyElite;
-  if (options.enemyClass === 'ABOMINATION') return EnemyElite;
-  return EnemyStandard;
+  if (options.rosterId) return resolveRosterPortrait(options.rosterId);
+  if (options.isBoss) return EnemyFallback;
+  return EnemyFallback;
 }
 
 export function resolveUnitCombatPortrait(
@@ -28,24 +46,20 @@ export function resolveUnitCombatPortrait(
   >,
   nodeType?: RunNodeType | null,
 ): ImageSourcePropType {
-  const rosterElite = unit.rosterId
-    ? ENEMY_ROSTER[unit.rosterId as EnemyRosterId]?.elite === true
-    : false;
-  return resolveCombatEnemyPortrait({
-    isBoss: unit.isBoss === true,
-    isVeilStalker: unit.isVeilStalker === true,
-    nodeType,
-    isElite: rosterElite,
-    enemyClass: unit.class,
-  });
+  if (unit.isVeilStalker) return EnemyStalker;
+  if (unit.rosterId) return resolveRosterPortrait(unit.rosterId);
+  if (unit.isBoss) return EnemyFallback;
+  return EnemyFallback;
 }
 
 export function resolvePortraitKeySuffix(options: {
   isBoss: boolean;
   isVeilStalker?: boolean;
+  rosterId?: string | null;
   nodeType?: RunNodeType | null;
 }): string {
   if (options.isVeilStalker) return 'stalker';
+  if (options.rosterId) return options.rosterId;
   if (options.isBoss) return 'boss';
   if (options.nodeType === 'ELITE_COMBAT') return 'elite';
   return 'standard';

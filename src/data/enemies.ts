@@ -1,6 +1,7 @@
 import type { IncursionBiome } from '../types/game';
 import type { DistrictId } from './districtPacing';
 import { pickBiomeCombatDesignation } from './biomeCombat';
+import { ENEMY_ROSTER, spawnRosterUnit } from './enemyRoster';
 import {
   applyCorporealHpMultiplier,
   resolveEnemyAffinity,
@@ -166,52 +167,24 @@ function rollHardTestIntent(): EnemyIntent {
   return 'STRIKE';
 }
 
-/** Defend-the-Rift horde — survive N enemy turns; near-indestructible. */
+/** Defend-the-Rift horde — survive N enemy turns; near-indestructible gutter goliath shell. */
 export function spawnDefendRiftHordeProfile(nodeIndex: number): EnemyCombatProfile {
-  const scale = getNodeScale(nodeIndex) * 1.35;
-  const maxHp = 9999;
-  const baseDamage = Math.floor(CLASS_BASE_DAMAGE.ABOMINATION * scale * 1.2);
-  const affinity = resolveEnemyAffinity('ABOMINATION', true, 60);
-
-  return finalizeEnemyProfile(
-    {
-      class: 'ABOMINATION',
-      designation: 'RIFT DEFENSE HORDE // EVAC INTERDICTION',
-      maxHp,
-      currentHp: maxHp,
-      baseDamage,
-      intent: 'STRIKE',
-      chargeTurns: 0,
-      evadeActive: false,
-      nodeIndex,
-      scale,
-    },
-    affinity,
-  );
+  const profile = spawnRosterUnit(ENEMY_ROSTER['gutter-goliath'], nodeIndex, { forcedElite: true });
+  return {
+    ...profile,
+    designation: 'GUTTER GOLIATH // RIFT DEFENSE HORDE',
+    maxHp: 9999,
+    currentHp: 9999,
+    baseDamage: Math.floor(profile.baseDamage * 1.2),
+  };
 }
 
+/** Resonance hunter ambush — null shade from the established roster. */
 export function spawnVeilStalkerProfile(nodeIndex: number): EnemyCombatProfile {
-  const scale = getNodeScale(nodeIndex) * 1.15;
-  const maxHp = Math.floor(CLASS_BASE_HP.APPARITION * scale * 1.2);
-  const baseDamage = Math.floor(CLASS_BASE_DAMAGE.APPARITION * scale * 1.1);
-  const affinity = resolveEnemyAffinity('APPARITION', true, 80);
-
-  return finalizeEnemyProfile(
-    {
-      class: 'APPARITION',
-      designation: 'VEIL STALKER // HUNTER MANIFEST',
-      maxHp,
-      currentHp: maxHp,
-      baseDamage,
-      intent: 'STRIKE',
-      chargeTurns: 0,
-      evadeActive: false,
-      nodeIndex,
-      scale,
-      isVeilStalker: true,
-    },
-    affinity,
-  );
+  return {
+    ...spawnRosterUnit(ENEMY_ROSTER['null-shade'], nodeIndex, { forcedElite: true }),
+    isVeilStalker: true,
+  };
 }
 
 export function createEasyTestEnemy(): EnemyCombatProfile {

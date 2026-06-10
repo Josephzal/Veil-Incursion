@@ -3,6 +3,7 @@ import type { CombatGridSlotId } from '../types/combatGrid';
 import { EnemyCombatProfile, EnemyIntent, SectorDefinition } from '../types/run';
 import { getDepthScale } from './descentEngine';
 import { districtBossDefinitionForDepth } from './districtBosses';
+import { districtBossRosterId } from './enemyRoster';
 import { initEnemyCombatLayers } from './combatFractureEngine';
 import { normalizeSquad, squadFromSingleEnemy } from './combatSpawnEngine';
 
@@ -30,6 +31,7 @@ export function spawnBossEnemyProfile(
     bossPhase: boss.currentPhase,
     bossDepth: boss.depth,
     affinity: 'CORPOREAL',
+    rosterId: gateDepth != null ? districtBossRosterId(gateDepth) : undefined,
   };
   return initEnemyCombatLayers(base, {
     kineticArmor: def?.kineticArmor ?? 2,

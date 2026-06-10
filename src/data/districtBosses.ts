@@ -15,7 +15,7 @@ export interface DistrictBossDefinition {
 
 const GATE_BOSSES: Record<number, DistrictBossDefinition> = {
   10: {
-    name: 'HOLLOWED PRECINCT // GATE WARDEN',
+    name: 'HOLLOWED PRECINCT',
     maxHp: 220,
     variant: 'STANDARD',
     bodyCount: 1,
@@ -25,7 +25,7 @@ const GATE_BOSSES: Record<number, DistrictBossDefinition> = {
     logLine: '>> DISTRICT GATE — Hollowed Precinct manifest. Kinetic armor heavy.',
   },
   20: {
-    name: 'CHOIR OF RUST // TRIPTYCH ANCHOR',
+    name: 'CHOIR OF RUST',
     maxHp: 280,
     variant: 'SHARED_CHOIR',
     bodyCount: 3,
@@ -35,7 +35,7 @@ const GATE_BOSSES: Record<number, DistrictBossDefinition> = {
     logLine: '>> DISTRICT GATE — Choir of Rust triptych. Shared anomaly HP pool.',
   },
   30: {
-    name: 'RIFT-WALKER PRIME // DEEP VEIL CORE',
+    name: 'PRIMEVAL RIFT-WALKER',
     maxHp: 360,
     variant: 'STANDARD',
     bodyCount: 1,

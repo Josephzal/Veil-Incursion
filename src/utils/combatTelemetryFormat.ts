@@ -1,5 +1,7 @@
+import type { CombatGridSlotId } from '../types/combatGrid';
 import type { EnemyAffinity } from '../types/combatEnvironment';
-import type { EnemyIntent } from '../types/run';
+import type { EnemyCombatProfile, EnemyIntent } from '../types/run';
+import { isUnitAlive } from '../data/combatSquadEngine';
 
 export const GAUGE_SOUL_ANCHOR = '#FF453A';
 export const GAUGE_ABYSSAL = '#00D2C4';
@@ -69,12 +71,53 @@ export interface CombatGridUnitSnapshot {
   isSelected: boolean;
   isTargetable: boolean;
   isFocused: boolean;
+  isBlocked: boolean;
+  isHookValid: boolean;
+  isFractured: boolean;
 }
 
 export interface CombatSquadUiSnapshot {
   units: CombatGridUnitSnapshot[];
   targetingActive: boolean;
   squadSize: number;
+  stagedAbilityId?: string | null;
+}
+
+export function buildInitialSquadUiSnapshot(
+  squad: readonly EnemyCombatProfile[],
+): CombatSquadUiSnapshot {
+  const units = squad.map((unit) => ({
+    unitId: unit.unitId ?? unit.designation,
+    slot: (unit.gridSlot ?? 'FL_0') as CombatGridSlotId,
+    designation: unit.designation,
+    currentHp: unit.currentHp,
+    maxHp: unit.maxHp,
+    intent: unit.intent,
+    intentLabel: formatIntentReadout(unit.intent),
+    affinity: unit.affinity,
+    fractureGauge: unit.fractureGauge ?? 0,
+    fractureMax: unit.fractureMax ?? 100,
+    kineticArmor: unit.kineticArmor ?? 0,
+    occultWards: unit.occultWards ?? 0,
+    combatTags: unit.combatTags ?? [],
+    isBoss: unit.isBoss,
+    isVeilStalker: unit.isVeilStalker,
+    enemyClass: unit.class,
+    rosterId: unit.rosterId,
+    isDead: !isUnitAlive(unit),
+    isSelected: false,
+    isTargetable: false,
+    isFocused: false,
+    isBlocked: false,
+    isHookValid: false,
+    isFractured: (unit.combatTags ?? []).includes('FRACTURED') || unit.fracturedThisRound === true,
+  }));
+  return {
+    units,
+    targetingActive: false,
+    squadSize: units.filter((u) => !u.isDead).length,
+    stagedAbilityId: null,
+  };
 }
 
 export interface CombatEnemyTelemetry {

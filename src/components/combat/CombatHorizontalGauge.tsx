@@ -15,6 +15,10 @@ interface CombatHorizontalGaugeProps {
   valueCaptionColor?: string;
   width?: number | '100%';
   compact?: boolean;
+  /** Enemy overhead — fill track only, no border box. */
+  borderless?: boolean;
+  /** Taller high-contrast bar for enemy overhead HUD. */
+  overhead?: boolean;
 }
 
 export function CombatHorizontalGauge({
@@ -25,6 +29,8 @@ export function CombatHorizontalGauge({
   valueCaptionColor = '#FF453A',
   width,
   compact = false,
+  borderless = false,
+  overhead = false,
 }: CombatHorizontalGaugeProps): React.JSX.Element {
   const displayRatio = useRef(new Animated.Value(clampRatio(ratio))).current;
 
@@ -55,8 +61,9 @@ export function CombatHorizontalGauge({
       ) : null}
       <View style={[
         styles.trackOuter,
-        compact ? styles.trackOuterCompact : null,
-        { borderColor: trackBorderColor },
+        overhead ? styles.trackOuterOverhead : null,
+        !overhead && compact ? styles.trackOuterCompact : null,
+        borderless ? styles.trackOuterBorderless : { borderColor: trackBorderColor },
       ]}>
         <Animated.View style={[styles.trackFill, { width: fillWidth, backgroundColor: fillColor }]} />
       </View>
@@ -180,6 +187,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#000000',
     overflow: 'hidden',
     position: 'relative',
+  },
+  trackOuterOverhead: {
+    height: 7,
+  },
+  trackOuterBorderless: {
+    borderWidth: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
   },
   trackFill: {
     position: 'absolute',

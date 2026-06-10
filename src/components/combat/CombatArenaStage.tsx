@@ -13,7 +13,9 @@ interface CombatArenaStageProps {
   enemyImageSource: ImageSourcePropType;
   enemyPortraitKey: string;
   wardPrimed?: boolean;
-  hideEnemySprite?: boolean;
+  abilityPrimed?: boolean;
+  /** When set, renders the multi-enemy squad grid in the enemy column. */
+  enemySquadPanel?: React.ReactNode;
   parryBlocksEnemyTouches: boolean;
   onEradicationComplete: () => void;
 }
@@ -25,10 +27,13 @@ export default function CombatArenaStage({
   enemyImageSource,
   enemyPortraitKey,
   wardPrimed = false,
-  hideEnemySprite = false,
+  abilityPrimed = false,
+  enemySquadPanel,
   parryBlocksEnemyTouches,
   onEradicationComplete,
 }: CombatArenaStageProps): React.JSX.Element {
+  const useSquadPanel = enemySquadPanel != null;
+
   return (
     <View style={styles.root}>
       <View style={styles.playerColumn}>
@@ -37,23 +42,39 @@ export default function CombatArenaStage({
             ref={playerViewportRef}
             imageSource={playerImageSource}
             wardPrimed={wardPrimed}
+            abilityPrimed={abilityPrimed}
             style={styles.spriteFill}
           />
         </View>
       </View>
 
       <View style={styles.enemyColumn}>
-        <View style={[styles.enemySpriteSlot, hideEnemySprite && styles.enemySpriteHidden]}>
-          <ApparitionViewport
-            key={enemyPortraitKey}
-            ref={enemyViewportRef}
-            imageSource={enemyImageSource}
-            style={styles.spriteFill}
-            pointerEvents={parryBlocksEnemyTouches ? 'none' : 'auto'}
-            onEradicationComplete={onEradicationComplete}
-          />
-          <CombatEnemyChromeLayer />
-        </View>
+        {useSquadPanel ? (
+          <View style={styles.enemySquadSlot}>
+            {enemySquadPanel}
+            <View style={styles.hiddenApparition} pointerEvents="none">
+              <ApparitionViewport
+                key={enemyPortraitKey}
+                ref={enemyViewportRef}
+                imageSource={enemyImageSource}
+                style={styles.spriteFill}
+                onEradicationComplete={onEradicationComplete}
+              />
+            </View>
+          </View>
+        ) : (
+          <View style={styles.enemySpriteSlot}>
+            <ApparitionViewport
+              key={enemyPortraitKey}
+              ref={enemyViewportRef}
+              imageSource={enemyImageSource}
+              style={styles.spriteFill}
+              pointerEvents={parryBlocksEnemyTouches ? 'none' : 'auto'}
+              onEradicationComplete={onEradicationComplete}
+            />
+          </View>
+        )}
+        <CombatEnemyChromeLayer />
       </View>
     </View>
   );
@@ -65,26 +86,28 @@ const styles = StyleSheet.create({
     minHeight: 0,
     flexDirection: 'row',
     width: '100%',
-    backgroundColor: '#000000',
-    overflow: 'hidden',
+    overflow: 'visible',
   },
   playerColumn: {
     flex: 1,
     minWidth: 0,
     justifyContent: 'flex-end',
     position: 'relative',
+    overflow: 'visible',
   },
   enemyColumn: {
     flex: 1,
     minWidth: 0,
     justifyContent: 'flex-start',
     position: 'relative',
+    overflow: 'visible',
   },
   playerSpriteSlot: {
-    flex: 1,
-    minHeight: 0,
+    width: '100%',
+    height: '72%',
+    alignSelf: 'flex-end',
     justifyContent: 'flex-end',
-    paddingBottom: '2%',
+    paddingBottom: 0,
   },
   enemySpriteSlot: {
     flex: 1,
@@ -93,12 +116,22 @@ const styles = StyleSheet.create({
     paddingTop: '6%',
     position: 'relative',
   },
+  enemySquadSlot: {
+    flex: 1,
+    minHeight: 0,
+    height: '100%',
+    justifyContent: 'flex-end',
+    position: 'relative',
+    overflow: 'visible',
+    zIndex: 10,
+    elevation: 10,
+  },
+  hiddenApparition: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0,
+  },
   spriteFill: {
     flex: 1,
     width: '100%',
-  },
-  enemySpriteHidden: {
-    opacity: 0,
-    pointerEvents: 'none',
   },
 });

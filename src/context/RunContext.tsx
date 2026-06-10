@@ -3,9 +3,7 @@ import { pickRandomClimateCluster, getClusterDefinition } from '../data/climateC
 import {
   createEasyTestEnemy,
   createHardTestEnemy,
-  spawnBiomeEnemyProfile,
   spawnDefendRiftHordeProfile,
-  spawnEnemyProfile,
   spawnVeilStalkerProfile,
 } from '../data/enemies';
 import {
@@ -131,6 +129,7 @@ import { SANCTUARY_RETUNE_ATTUNEMENT } from '../types/sector';
 import { districtBossLogLine } from '../data/districtBosses';
 import { spawnDistrictBossSquad } from '../data/bossCombat';
 import { createDefaultIncursionInventory } from '../data/incursionInventory';
+import { encounterBudgetForDepth } from '../data/combatEncounterBudget';
 import { spawnCombatSquad, squadFromSingleEnemy } from '../data/combatSpawnEngine';
 import { listingsForStock, rollBlackMarketStock } from '../data/blackMarket';
 import { pickRandomLeyLineMutations } from '../data/leyLineMutations';
@@ -457,10 +456,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const pendingEnemies =
       dot.encounterType === 'COMBAT'
         ? spawnCombatSquad({
-          sector: dot.sector,
           nodeIndex,
           isAmbush: prev.pendingAmbush,
-          useRoster: false,
+          district: getDistrictFromDepth(depthFromNodesCleared(nodeIndex)),
         })
         : [];
     const pendingEnemy = pendingEnemies[0] ?? null;
@@ -1203,7 +1201,13 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       appendRunLog(`>> ELITE MODIFIER — ${ELITE_MODIFIER_LABELS[modifier]}`);
     }
     const forcedAffinity = encounterNode.sectorMeta?.probableAffinity;
-    const district = getDistrictFromDepth(depthFromNodesCleared(inc.nodesCleared));
+    const depth = depthFromNodesCleared(inc.nodesCleared);
+    const district = getDistrictFromDepth(depth);
+    const spawnBudget = encounterBudgetForDepth({
+      depth,
+      isElite,
+      isAmbush: prev.pendingAmbush,
+    });
     const pendingEnemies = spawnCombatSquad({
       nodeIndex: inc.nodesCleared,
       isElite,
@@ -1250,7 +1254,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (pendingEnemy?.affinity) {
       appendRunLog(affinityCombatLogLine(pendingEnemy.affinity));
     }
-    appendRunLog(`>> HOSTILE CLUSTER — ${pendingEnemies.length} signature(s) on grid.`);
+    appendRunLog(
+      `>> HOSTILE CLUSTER — ${pendingEnemies.length} signature(s) // threat budget ${spawnBudget.spawnBudget} pts.`,
+    );
     pendingEnemies.forEach((unit) => {
       appendRunLog(`>> — ${unit.designation} [${unit.class}] HP ${unit.currentHp} // ${unit.gridSlot ?? 'FL_0'}`);
     });
@@ -1342,7 +1348,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
 
-    appendRunLog('>> VEIL STALKER MANIFEST — hunter signature locked.');
+    appendRunLog('>> HUNTER AMBUSH — null shade signature locked.');
     appendRunLog(`>> HOSTILE SIGNATURE: ${pendingEnemy.designation} [${pendingEnemy.class}] HP ${pendingEnemy.maxHp}.`);
   }, [appendRunLog]);
 

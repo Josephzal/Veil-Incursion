@@ -1,6 +1,6 @@
 import type { AegisAbilityId } from '../types/aegisCombat';
 import type { CombatGridSlotId } from '../types/combatGrid';
-import { BACKLINE_SLOTS, FRONTLINE_SLOTS } from '../types/combatGrid';
+import { BACKLINE_SLOTS } from '../types/combatGrid';
 import { aliveUnits, isUnitAlive, unitAtSlot } from './combatSquadEngine';
 import type { EnemyCombatProfile } from '../types/run';
 
@@ -21,6 +21,12 @@ const ABILITY_TARGET_MODE: Partial<Record<AegisAbilityId, AbilityTargetMode>> = 
   EVISCERATE: 'SINGLE',
 };
 
+/** Column-pair line of sight: back-top guarded by front-top, back-bottom by front-bottom. */
+const COLUMN_GUARD: Partial<Record<CombatGridSlotId, CombatGridSlotId>> = {
+  BL_0: 'FL_0',
+  BL_1: 'FL_1',
+};
+
 export function abilityTargetMode(abilityId: AegisAbilityId): AbilityTargetMode {
   return ABILITY_TARGET_MODE[abilityId] ?? 'SINGLE';
 }
@@ -29,11 +35,36 @@ export function abilityRequiresTarget(abilityId: AegisAbilityId): boolean {
   return abilityTargetMode(abilityId) === 'SINGLE';
 }
 
-function frontlineAlive(squad: EnemyCombatProfile[]): boolean {
-  return FRONTLINE_SLOTS.some((slot) => unitAtSlot(squad, slot) != null);
+function isOccultAbility(abilityId: AegisAbilityId): boolean {
+  return abilityId === 'VEIL_PIERCER' || abilityId === 'BLOOD_TITHE';
 }
 
-/** Kinetic melee blocked on backline while any frontline unit lives. Occult bypasses. */
+function isHookAbility(abilityId: AegisAbilityId): boolean {
+  return abilityId === 'GRAVE_BIND';
+}
+
+export function columnGuardSlot(backSlot: CombatGridSlotId): CombatGridSlotId | null {
+  return COLUMN_GUARD[backSlot] ?? null;
+}
+
+export function isColumnBlocked(
+  squad: EnemyCombatProfile[],
+  backSlot: CombatGridSlotId,
+): boolean {
+  const guardSlot = columnGuardSlot(backSlot);
+  if (!guardSlot) return false;
+  return unitAtSlot(squad, guardSlot) != null;
+}
+
+export function isUnitColumnBlocked(
+  squad: EnemyCombatProfile[],
+  unit: EnemyCombatProfile,
+): boolean {
+  const slot = unit.gridSlot as CombatGridSlotId | undefined;
+  if (!slot || !slot.startsWith('BL')) return false;
+  return isColumnBlocked(squad, slot);
+}
+
 export function canTargetWithAbility(
   squad: EnemyCombatProfile[],
   abilityId: AegisAbilityId,
@@ -45,16 +76,38 @@ export function canTargetWithAbility(
   const mode = abilityTargetMode(abilityId);
   if (mode === 'NONE' || mode === 'ALL') return false;
 
-  if (abilityId === 'GRAVE_BIND') {
+  if (isHookAbility(abilityId)) {
     return unit.gridSlot?.startsWith('BL') === true;
   }
 
-  const isOccult = abilityId === 'VEIL_PIERCER' || abilityId === 'BLOOD_TITHE';
-  if (isOccult) return true;
+  if (isOccultAbility(abilityId)) return true;
 
-  const onBackline = unit.gridSlot?.startsWith('BL') === true;
-  if (onBackline && frontlineAlive(squad)) return false;
+  const slot = unit.gridSlot as CombatGridSlotId | undefined;
+  if (slot?.startsWith('BL') && isColumnBlocked(squad, slot)) return false;
   return true;
+}
+
+export function isUnitBlockedForAbility(
+  squad: EnemyCombatProfile[],
+  abilityId: AegisAbilityId,
+  unitId: string,
+): boolean {
+  const unit = squad.find((u) => u.unitId === unitId);
+  if (!unit || !isUnitAlive(unit)) return false;
+  if (isHookAbility(abilityId)) return false;
+  if (isOccultAbility(abilityId)) return false;
+  const slot = unit.gridSlot as CombatGridSlotId | undefined;
+  if (!slot?.startsWith('BL')) return false;
+  return isColumnBlocked(squad, slot);
+}
+
+export function isUnitHookValid(
+  abilityId: AegisAbilityId | null,
+  unit: EnemyCombatProfile,
+): boolean {
+  if (!abilityId || !isHookAbility(abilityId)) return false;
+  if (!isUnitAlive(unit)) return false;
+  return unit.gridSlot?.startsWith('BL') === true;
 }
 
 export function validTargetsForAbility(

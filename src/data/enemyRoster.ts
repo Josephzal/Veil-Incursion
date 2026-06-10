@@ -7,23 +7,21 @@ import { applyCorporealHpMultiplier } from './combatEnvironmentEngine';
 import { initEnemyCombatLayers } from './combatFractureEngine';
 import { rollEnemyIntent } from './enemies';
 import type { DistrictId } from './districtPacing';
+import type { ThreatTier } from './combatEncounterBudget';
 
 export type EnemyRosterId =
-  | 'grid-enforcer'
-  | 'precinct-drone'
-  | 'riot-shielder'
-  | 'signal-leech'
-  | 'checkpoint-warden'
-  | 'solaris-vanguard'
-  | 'cabal-spark'
-  | 'luminant-pike'
-  | 'choir-acolyte'
-  | 'subgrid-overseer'
-  | 'legion-grunt'
-  | 'ash-knight'
-  | 'veil-lancer'
-  | 'remnant-oracle'
-  | 'iron-pillar';
+  | 'concrete-gargoyle'
+  | 'gutter-goliath'
+  | 'echoing-brute'
+  | 'ley-siren'
+  | 'ash-weeper'
+  | 'miasma-tick-swarm'
+  | 'fracture-hound'
+  | 'null-shade'
+  | 'spatial-glitch'
+  | 'boss-hollowed-precinct'
+  | 'boss-choir-of-rust'
+  | 'boss-primeval-rift-walker';
 
 export interface EnemyRosterEntry {
   id: EnemyRosterId;
@@ -35,13 +33,15 @@ export interface EnemyRosterEntry {
   damage: number;
   kineticArmor: number;
   occultWards: number;
+  threatTier: ThreatTier;
+  isDisruptor?: boolean;
   elite?: boolean;
 }
 
 export const ENEMY_ROSTER: Record<EnemyRosterId, EnemyRosterEntry> = {
-  'grid-enforcer': {
-    id: 'grid-enforcer',
-    designation: 'GRID ENFORCER',
+  'concrete-gargoyle': {
+    id: 'concrete-gargoyle',
+    designation: 'CONCRETE GARGOYLE',
     faction: 'TERRAN_GRID',
     class: 'ABOMINATION',
     role: 'FRONTLINE',
@@ -49,21 +49,11 @@ export const ENEMY_ROSTER: Record<EnemyRosterId, EnemyRosterEntry> = {
     damage: 10,
     kineticArmor: 2,
     occultWards: 0,
+    threatTier: 3,
   },
-  'precinct-drone': {
-    id: 'precinct-drone',
-    designation: 'PRECINCT DRONE',
-    faction: 'TERRAN_GRID',
-    class: 'GREMLIN',
-    role: 'FRONTLINE',
-    hp: 44,
-    damage: 8,
-    kineticArmor: 1,
-    occultWards: 0,
-  },
-  'riot-shielder': {
-    id: 'riot-shielder',
-    designation: 'RIOT SHIELDER',
+  'gutter-goliath': {
+    id: 'gutter-goliath',
+    designation: 'GUTTER GOLIATH',
     faction: 'TERRAN_GRID',
     class: 'ABOMINATION',
     role: 'FRONTLINE',
@@ -71,21 +61,11 @@ export const ENEMY_ROSTER: Record<EnemyRosterId, EnemyRosterEntry> = {
     damage: 11,
     kineticArmor: 3,
     occultWards: 0,
+    threatTier: 3,
   },
-  'signal-leech': {
-    id: 'signal-leech',
-    designation: 'SIGNAL LEECH',
-    faction: 'TERRAN_GRID',
-    class: 'APPARITION',
-    role: 'BACKLINE',
-    hp: 52,
-    damage: 9,
-    kineticArmor: 0,
-    occultWards: 1,
-  },
-  'checkpoint-warden': {
-    id: 'checkpoint-warden',
-    designation: 'CHECKPOINT WARDEN',
+  'echoing-brute': {
+    id: 'echoing-brute',
+    designation: 'ECHOING BRUTE',
     faction: 'TERRAN_GRID',
     class: 'ABOMINATION',
     role: 'FRONTLINE',
@@ -93,22 +73,12 @@ export const ENEMY_ROSTER: Record<EnemyRosterId, EnemyRosterEntry> = {
     damage: 13,
     kineticArmor: 2,
     occultWards: 1,
+    threatTier: 2,
     elite: true,
   },
-  'solaris-vanguard': {
-    id: 'solaris-vanguard',
-    designation: 'SOLARIS VANGUARD',
-    faction: 'SOLARIS',
-    class: 'ABOMINATION',
-    role: 'FRONTLINE',
-    hp: 78,
-    damage: 12,
-    kineticArmor: 2,
-    occultWards: 1,
-  },
-  'cabal-spark': {
-    id: 'cabal-spark',
-    designation: 'CABAL SPARK',
+  'ley-siren': {
+    id: 'ley-siren',
+    designation: 'LEY-SIREN',
     faction: 'SOLARIS',
     class: 'APPARITION',
     role: 'BACKLINE',
@@ -116,66 +86,37 @@ export const ENEMY_ROSTER: Record<EnemyRosterId, EnemyRosterEntry> = {
     damage: 11,
     kineticArmor: 0,
     occultWards: 2,
+    threatTier: 2,
+    isDisruptor: true,
   },
-  'luminant-pike': {
-    id: 'luminant-pike',
-    designation: 'LUMINANT PIKE',
-    faction: 'SOLARIS',
-    class: 'APPARITION',
-    role: 'FRONTLINE',
-    hp: 58,
-    damage: 10,
-    kineticArmor: 1,
-    occultWards: 1,
-  },
-  'choir-acolyte': {
-    id: 'choir-acolyte',
-    designation: 'CHOIR ACOLYTE',
+  'ash-weeper': {
+    id: 'ash-weeper',
+    designation: 'ASH WEEPER',
     faction: 'SOLARIS',
     class: 'APPARITION',
     role: 'BACKLINE',
-    hp: 50,
-    damage: 9,
-    kineticArmor: 0,
-    occultWards: 2,
-  },
-  'subgrid-overseer': {
-    id: 'subgrid-overseer',
-    designation: 'SUB-GRID OVERSEER',
-    faction: 'SOLARIS',
-    class: 'ABOMINATION',
-    role: 'FRONTLINE',
     hp: 102,
     damage: 14,
     kineticArmor: 2,
     occultWards: 2,
-    elite: true,
+    threatTier: 1,
+    isDisruptor: true,
   },
-  'legion-grunt': {
-    id: 'legion-grunt',
-    designation: 'LEGION GRUNT',
-    faction: 'LEGION',
+  'miasma-tick-swarm': {
+    id: 'miasma-tick-swarm',
+    designation: 'MIASMA TICK SWARM',
+    faction: 'SOLARIS',
     class: 'GREMLIN',
     role: 'FRONTLINE',
-    hp: 46,
-    damage: 9,
+    hp: 44,
+    damage: 8,
     kineticArmor: 1,
     occultWards: 0,
+    threatTier: 1,
   },
-  'ash-knight': {
-    id: 'ash-knight',
-    designation: 'ASH KNIGHT',
-    faction: 'LEGION',
-    class: 'ABOMINATION',
-    role: 'FRONTLINE',
-    hp: 82,
-    damage: 12,
-    kineticArmor: 3,
-    occultWards: 0,
-  },
-  'veil-lancer': {
-    id: 'veil-lancer',
-    designation: 'VEIL LANCER',
+  'fracture-hound': {
+    id: 'fracture-hound',
+    designation: 'FRACTURE HOUND',
     faction: 'LEGION',
     class: 'APPARITION',
     role: 'FRONTLINE',
@@ -183,10 +124,11 @@ export const ENEMY_ROSTER: Record<EnemyRosterId, EnemyRosterEntry> = {
     damage: 11,
     kineticArmor: 1,
     occultWards: 1,
+    threatTier: 2,
   },
-  'remnant-oracle': {
-    id: 'remnant-oracle',
-    designation: 'REMNANT ORACLE',
+  'null-shade': {
+    id: 'null-shade',
+    designation: 'NULL SHADE',
     faction: 'LEGION',
     class: 'APPARITION',
     role: 'BACKLINE',
@@ -194,10 +136,11 @@ export const ENEMY_ROSTER: Record<EnemyRosterId, EnemyRosterEntry> = {
     damage: 10,
     kineticArmor: 0,
     occultWards: 2,
+    threatTier: 3,
   },
-  'iron-pillar': {
-    id: 'iron-pillar',
-    designation: 'IRON PILLAR',
+  'spatial-glitch': {
+    id: 'spatial-glitch',
+    designation: 'SPATIAL GLITCH',
     faction: 'LEGION',
     class: 'ABOMINATION',
     role: 'FRONTLINE',
@@ -205,33 +148,71 @@ export const ENEMY_ROSTER: Record<EnemyRosterId, EnemyRosterEntry> = {
     damage: 15,
     kineticArmor: 3,
     occultWards: 1,
+    threatTier: 3,
     elite: true,
+  },
+  'boss-hollowed-precinct': {
+    id: 'boss-hollowed-precinct',
+    designation: 'HOLLOWED PRECINCT',
+    faction: 'TERRAN_GRID',
+    class: 'ABOMINATION',
+    role: 'FRONTLINE',
+    hp: 220,
+    damage: 11,
+    kineticArmor: 3,
+    occultWards: 1,
+    threatTier: 3,
+  },
+  'boss-choir-of-rust': {
+    id: 'boss-choir-of-rust',
+    designation: 'CHOIR OF RUST',
+    faction: 'SOLARIS',
+    class: 'APPARITION',
+    role: 'BACKLINE',
+    hp: 280,
+    damage: 10,
+    kineticArmor: 1,
+    occultWards: 2,
+    threatTier: 3,
+  },
+  'boss-primeval-rift-walker': {
+    id: 'boss-primeval-rift-walker',
+    designation: 'PRIMEVAL RIFT-WALKER',
+    faction: 'LEGION',
+    class: 'ABOMINATION',
+    role: 'FRONTLINE',
+    hp: 360,
+    damage: 16,
+    kineticArmor: 2,
+    occultWards: 3,
+    threatTier: 3,
   },
 };
 
-const ROSTER_BY_FACTION: Record<FactionType, EnemyRosterId[]> = {
-  TERRAN_GRID: [
-    'grid-enforcer',
-    'precinct-drone',
-    'riot-shielder',
-    'signal-leech',
-    'checkpoint-warden',
-  ],
-  SOLARIS: [
-    'solaris-vanguard',
-    'cabal-spark',
-    'luminant-pike',
-    'choir-acolyte',
-    'subgrid-overseer',
-  ],
-  LEGION: [
-    'legion-grunt',
-    'ash-knight',
-    'veil-lancer',
-    'remnant-oracle',
-    'iron-pillar',
-  ],
+/** Grunts eligible for threat-budget encounter drafting. */
+export const GRUNT_ROSTER_BY_FACTION: Record<FactionType, EnemyRosterId[]> = {
+  TERRAN_GRID: ['concrete-gargoyle', 'gutter-goliath', 'echoing-brute'],
+  SOLARIS: ['ley-siren', 'ash-weeper', 'miasma-tick-swarm'],
+  LEGION: ['fracture-hound', 'null-shade', 'spatial-glitch'],
 };
+
+export const ALLOWED_GRUNT_ROSTER_IDS: readonly EnemyRosterId[] = [
+  'concrete-gargoyle',
+  'gutter-goliath',
+  'echoing-brute',
+  'ley-siren',
+  'ash-weeper',
+  'miasma-tick-swarm',
+  'fracture-hound',
+  'null-shade',
+  'spatial-glitch',
+];
+
+export const ALLOWED_BOSS_ROSTER_IDS: readonly EnemyRosterId[] = [
+  'boss-hollowed-precinct',
+  'boss-choir-of-rust',
+  'boss-primeval-rift-walker',
+];
 
 export function factionForDistrict(district: 1 | 2 | 3): FactionType {
   if (district === 1) return 'TERRAN_GRID';
@@ -240,7 +221,7 @@ export function factionForDistrict(district: 1 | 2 | 3): FactionType {
 }
 
 export function rosterPoolForFaction(faction: FactionType, isElite: boolean): EnemyRosterEntry[] {
-  return ROSTER_BY_FACTION[faction]
+  return GRUNT_ROSTER_BY_FACTION[faction]
     .map((id) => ENEMY_ROSTER[id])
     .filter((entry) => (isElite ? entry.elite === true : !entry.elite));
 }
@@ -256,6 +237,12 @@ export function pickRosterEntry(
   const candidates = roleMatches.length > 0 ? roleMatches : pool.filter((e) => !exclude.has(e.id));
   if (candidates.length === 0) return pool[0];
   return candidates[Math.floor(Math.random() * candidates.length)];
+}
+
+export function districtBossRosterId(gateDepth: number): EnemyRosterId {
+  if (gateDepth >= 30) return 'boss-primeval-rift-walker';
+  if (gateDepth === 20) return 'boss-choir-of-rust';
+  return 'boss-hollowed-precinct';
 }
 
 export function spawnRosterUnit(

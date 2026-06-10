@@ -9,8 +9,7 @@ import {
   withTiming,
 } from 'react-native-reanimated';
 import { useTerminal } from '../context/TerminalContext';
-import { INITIAL_SECTOR_POOL } from '../data/regions';
-import { advanceEnemyIntent, spawnEnemyProfile } from '../data/enemies';
+import { advanceEnemyIntent } from '../data/enemies';
 import {
   computeBloodFrenzyHeal,
   scaleKineticDamage,
@@ -35,7 +34,7 @@ import {
   type MutationCombatModifiers,
 } from '../data/leyLineMutationEngine';
 import type { LeyLineMutationId } from '../types/leyLineMutation';
-import { normalizeSquad, squadFromSingleEnemy } from '../data/combatSpawnEngine';
+import { normalizeSquad, spawnCombatSquad, squadFromSingleEnemy } from '../data/combatSpawnEngine';
 import {
   allUnitsDefeated,
   aliveUnits,
@@ -49,6 +48,8 @@ import {
   abilityRequiresTarget,
   abilityTargetMode,
   canTargetWithAbility,
+  isUnitBlockedForAbility,
+  isUnitHookValid,
   validTargetsForAbility,
 } from '../data/combatTargeting';
 import {
@@ -147,6 +148,7 @@ interface TacticalCombatHubProps {
   onEnemyTelemetryChange?: (enemy: CombatEnemyTelemetry | null) => void;
   onOperativeTelemetryChange?: (telemetry: CombatOperativeTelemetry | null) => void;
   onWardPrimedChange?: (primed: boolean) => void;
+  onAbilityPrimedChange?: (primed: boolean) => void;
   apparitionRef?: RefObject<ApparitionViewportRef | null>;
   playerViewportRef?: RefObject<CombatPlayerViewportRef | null>;
   /** Registers callback invoked after eradication dissolve completes (victory). */
@@ -200,6 +202,7 @@ export default function TacticalCombatHub({
   onEnemyTelemetryChange,
   onOperativeTelemetryChange,
   onWardPrimedChange,
+  onAbilityPrimedChange,
   apparitionRef,
   playerViewportRef,
   registerKillResolver,
@@ -419,29 +422,41 @@ export default function TacticalCombatHub({
     onSquadUiChange({
       squadSize: aliveUnits(nextSquad).length,
       targetingActive,
-      units: nextSquad.map((u) => ({
-        unitId: u.unitId ?? u.designation,
-        slot: u.gridSlot ?? 'FL_0',
-        designation: u.designation,
-        currentHp: u.currentHp,
-        maxHp: u.maxHp,
-        intent: u.intent,
-        intentLabel: formatIntentReadout(u.intent),
-        affinity: u.affinity,
-        fractureGauge: u.fractureGauge ?? 0,
-        fractureMax: u.fractureMax ?? 100,
-        kineticArmor: u.kineticArmor ?? 0,
-        occultWards: u.occultWards ?? 0,
-        combatTags: u.combatTags ?? [],
-        isBoss: u.isBoss,
-        isVeilStalker: u.isVeilStalker,
-        enemyClass: u.class,
-        rosterId: u.rosterId,
-        isDead: !isUnitAlive(u),
-        isSelected: selectedTargetIdRef.current === u.unitId,
-        isTargetable: targetingActive && validIds.has(u.unitId),
-        isFocused: focusedUnitIdRef.current === u.unitId,
-      })),
+      stagedAbilityId: staged,
+      units: nextSquad.map((u) => {
+        const unitId = u.unitId ?? u.designation;
+        const hookValid = staged != null && isUnitHookValid(staged, u);
+        const targetable = targetingActive && (validIds.has(u.unitId!) || hookValid);
+        const blocked = staged != null
+          && isUnitBlockedForAbility(nextSquad, staged, unitId)
+          && !hookValid;
+        return {
+          unitId,
+          slot: u.gridSlot ?? 'FL_0',
+          designation: u.designation,
+          currentHp: u.currentHp,
+          maxHp: u.maxHp,
+          intent: u.intent,
+          intentLabel: formatIntentReadout(u.intent),
+          affinity: u.affinity,
+          fractureGauge: u.fractureGauge ?? 0,
+          fractureMax: u.fractureMax ?? 100,
+          kineticArmor: u.kineticArmor ?? 0,
+          occultWards: u.occultWards ?? 0,
+          combatTags: u.combatTags ?? [],
+          isBoss: u.isBoss,
+          isVeilStalker: u.isVeilStalker,
+          enemyClass: u.class,
+          rosterId: u.rosterId,
+          isDead: !isUnitAlive(u),
+          isSelected: selectedTargetIdRef.current === u.unitId,
+          isTargetable: targetable,
+          isFocused: focusedUnitIdRef.current === u.unitId,
+          isBlocked: blocked,
+          isHookValid: hookValid,
+          isFractured: isEnemyFractured(u),
+        };
+      }),
     });
   };
 
@@ -472,6 +487,14 @@ export default function TacticalCombatHub({
   };
 
   const selectTarget = (unitId: string) => {
+    const staged = selectedAbility;
+    if (staged && abilityRequiresTarget(staged)) {
+      if (!canTargetWithAbility(squadRef.current, staged, unitId)) {
+        log('[TARGET] >> Line of sight blocked — clear the frontline column first.');
+        publishSquadUi(squadRef.current);
+        return;
+      }
+    }
     selectedTargetIdRef.current = unitId;
     setSelectedTargetId(unitId);
     focusedUnitIdRef.current = unitId;
@@ -986,6 +1009,10 @@ export default function TacticalCombatHub({
         cycleRef.current = 'TEXT_COMBAT';
         setCycleState('TEXT_COMBAT');
       }
+      if (arenaLayout) {
+        resolve(true);
+        return true;
+      }
       if (viewport) {
         viewport.triggerEradication();
         return true;
@@ -1439,10 +1466,11 @@ export default function TacticalCombatHub({
     aliveUnits(squadRef.current).some((u) => isEnemyFractured(u));
 
   const initCombat = () => {
-    const spawned = enemyProfile ?? spawnEnemyProfile(INITIAL_SECTOR_POOL[0], nodeIndex, false);
     const initialSquad = enemySquad?.length
       ? normalizeSquad(enemySquad)
-      : squadFromSingleEnemy(initEnemyCombatLayers(spawned));
+      : enemyProfile
+        ? squadFromSingleEnemy(initEnemyCombatLayers(enemyProfile))
+        : spawnCombatSquad({ nodeIndex, district: combatDistrict });
     threatBudgetRef.current = threatBudget
       ?? (initialSquad.length >= 3 ? THREAT_BUDGET_ELITE : THREAT_BUDGET_STANDARD);
     syncSquad(initialSquad);
@@ -1792,6 +1820,10 @@ export default function TacticalCombatHub({
     abortCombatMinigames();
     cycleRef.current = 'TEXT_COMBAT';
     setCycleState('TEXT_COMBAT');
+    if (arenaLayout) {
+      resolve(true);
+      return;
+    }
     const viewport = apparitionRef?.current;
     if (viewport) {
       viewport.triggerEradication();
@@ -2221,6 +2253,10 @@ export default function TacticalCombatHub({
   useEffect(() => {
     onWardPrimedChange?.(abyssalWardActive);
   }, [abyssalWardActive, onWardPrimedChange]);
+
+  useEffect(() => {
+    onAbilityPrimedChange?.(selectedAbility != null);
+  }, [selectedAbility, onAbilityPrimedChange]);
 
   useEffect(() => {
     if (!stackedLayout || !arenaLayout || !onOperativeTelemetryChange) return;
