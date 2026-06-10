@@ -20,6 +20,8 @@ interface MacroLogAnchoredLayoutProps {
    * Omit on scanner, narrative, boon, and sanctuary screens.
    */
   onConsumableUsed?: (result: IncursionConsumableUseResult) => void;
+  /** Combat-only: validates turn/AP, consumes cargo, then applies via onConsumableUsed. */
+  onDeployCargoItem?: (itemId: CargoItemId) => boolean;
 }
 
 /**
@@ -31,6 +33,7 @@ export default function MacroLogAnchoredLayout({
   showMacroLog = true,
   style,
   onConsumableUsed,
+  onDeployCargoItem,
 }: MacroLogAnchoredLayoutProps): React.JSX.Element {
   const { theme } = useTerminal();
   const {
@@ -63,6 +66,11 @@ export default function MacroLogAnchoredLayout({
 
   const handleUseCombatConsumable = useCallback((itemId: CargoItemId) => {
     if (!cargoEnabled) return false;
+    if (onDeployCargoItem) {
+      const ok = onDeployCargoItem(itemId);
+      if (ok) setCargoOpen(false);
+      return ok;
+    }
     const result = useIncursionConsumable(itemId);
     if (!result) return false;
     if (onConsumableUsed) {
@@ -78,6 +86,7 @@ export default function MacroLogAnchoredLayout({
     applyIncursionConsumableHeal,
     cargoEnabled,
     onConsumableUsed,
+    onDeployCargoItem,
     useIncursionConsumable,
   ]);
 

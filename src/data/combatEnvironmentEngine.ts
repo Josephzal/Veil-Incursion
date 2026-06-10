@@ -146,6 +146,7 @@ export function scaleKineticDamage(
   rawDamage: number,
   affinity: EnemyAffinity | undefined,
   meleeDamageBonusPct: number,
+  spectralImbueActive = false,
 ): number {
   let scaled = rawDamage;
   if (meleeDamageBonusPct > 0) {
@@ -154,6 +155,7 @@ export function scaleKineticDamage(
 
   switch (affinity) {
     case 'SPECTRAL':
+      if (spectralImbueActive) return Math.max(1, scaled);
       return Math.max(1, Math.floor(scaled * 0.25));
     case 'CORPOREAL':
       return Math.max(1, Math.floor(scaled * 2));
@@ -176,6 +178,19 @@ export function computeBloodFrenzyHeal(
 ): number {
   if (!bloodFrenzyActive || damageDealt <= 0) return 0;
   return Math.max(1, Math.floor(damageDealt * 0.15));
+}
+
+export function affinityWeaknessLabel(affinity: EnemyAffinity | undefined): string {
+  switch (affinity) {
+    case 'SPECTRAL':
+      return 'Occult / Spectral essence';
+    case 'CORPOREAL':
+      return 'Melee kinetic';
+    case 'CHRONO':
+      return 'Kinetic strikes (stun)';
+    default:
+      return '—';
+  }
 }
 
 export function affinityCombatLogLine(affinity: EnemyAffinity): string {

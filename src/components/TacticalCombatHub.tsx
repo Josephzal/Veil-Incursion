@@ -17,6 +17,7 @@ import {
   type KineticDamageSource,
 } from '../data/combatEnvironmentEngine';
 import { bossStrikeDamage, rollBossIntent, shouldShiftBossPhase } from '../data/bossCombat';
+import { resolveEnemyThreatTier } from '../data/enemyRoster';
 import { COMBAT_ACTION, ENEMY_ABYSSAL_SIPHON_REQUEST, EnemyCombatProfile, EnemyIntent } from '../types/run';
 import type { IncursionConsumableUseResult } from '../types/incursionInventory';
 import type { AegisAbilityId, AegisLoadout } from '../types/aegisCombat';
@@ -104,6 +105,7 @@ import {
   type EnemyDeckStrikeVariant,
   formatHostileId,
   formatIntentReadout,
+  type EnemyPortraitGlow,
   getEnemyDeckStrikeVariant,
   GAUGE_ABYSSAL,
   GAUGE_SOUL_ANCHOR,
@@ -157,6 +159,8 @@ interface TacticalCombatHubProps {
   registerHealHandler?: (handler: (amount: number) => void) => void;
   /** Registers callback when a field consumable is deployed during combat. */
   registerConsumableHandler?: (handler: (result: IncursionConsumableUseResult) => void) => void;
+  /** Registers preflight check before cargo is consumed (player turn + AP). */
+  registerCanDeployCargoHandler?: (handler: () => boolean) => void;
   /** Registers grid target selection from CombatScreen. */
   registerTargetHandler?: (handler: (unitId: string) => void) => void;
   /** Stacked layout: victory/defeat panel in the apparition viewport (hub keeps deck + gauges). */
@@ -179,6 +183,8 @@ interface TacticalCombatHubProps {
   aegisLoadout?: AegisLoadout;
   leyLineMutations?: LeyLineMutationId[];
   combatDistrict?: 1 | 2 | 3;
+  /** Spectral Salt in cargo — kinetic strikes bypass spectral resistance. */
+  spectralSaltActive?: boolean;
 }
 interface SliceLineConfig {
   id: number;
@@ -208,6 +214,7 @@ export default function TacticalCombatHub({
   registerKillResolver,
   registerHealHandler,
   registerConsumableHandler,
+  registerCanDeployCargoHandler,
   registerTargetHandler,
   onResolutionPanelChange,
   onCombatComplete, initialOperativeHp = 100, initialStamina = 100, maxStamina = 100,
@@ -225,6 +232,7 @@ export default function TacticalCombatHub({
   aegisLoadout = DEFAULT_AEGIS_LOADOUT,
   leyLineMutations = [],
   combatDistrict = 1,
+  spectralSaltActive = false,
 }: TacticalCombatHubProps): React.JSX.Element {
   const env = environmentalModifiers ?? {
     isEnemyPhaseShrouded: false,
@@ -284,6 +292,7 @@ export default function TacticalCombatHub({
   const [selectedAbility, setSelectedAbility] = useState<AegisAbilityId | null>(null);
   const [playerActionPoints, setPlayerActionPoints] = useState(PLAYER_ACTION_POINTS_PER_TURN);
   const [enemyActionStage, setEnemyActionStage] = useState<EnemyActionStage>(null);
+  const enemyActionStageRef = useRef<EnemyActionStage>(null);
   const [deckStrikeOverlay, setDeckStrikeOverlay] = useState<EnemyDeckStrikeVariant | null>(null);
 
   const operativeHpRef = useRef(initialOperativeHp);
@@ -412,13 +421,34 @@ export default function TacticalCombatHub({
   }, [combatTurnPhase, cycleState, isPlayerTurn, setCombatTurnState]);
 
 
+  const resolvePortraitGlow = (unitId: string): EnemyPortraitGlow => {
+    if (
+      !isPlayerTurnRef.current
+      && cycleRef.current === 'TEXT_COMBAT'
+      && enemyActionStageRef.current != null
+    ) {
+      const actingId = enemyActionQueueRef.current[0] ?? focusedUnitIdRef.current;
+      if (actingId === unitId) return 'enemy-attacking';
+    }
+    if (
+      isPlayerTurnRef.current
+      && cycleRef.current === 'TEXT_COMBAT'
+      && selectedTargetIdRef.current === unitId
+    ) {
+      return 'player-selected';
+    }
+    return 'none';
+  };
+
   const publishSquadUi = (nextSquad: EnemyCombatProfile[]) => {
     if (!onSquadUiChange) return;
     if (nextSquad.length === 0) return;
     const staged = selectedAbility;
     const targetMode = staged ? abilityTargetMode(staged) : 'NONE';
-    const targetingActive = staged != null && targetMode === 'SINGLE';
-    const validTargets = staged ? validTargetsForAbility(nextSquad, staged) : [];
+    const playerSelecting = isPlayerTurnRef.current && cycleRef.current === 'TEXT_COMBAT';
+    const abilityTargeting = staged != null && targetMode === 'SINGLE';
+    const targetingActive = playerSelecting || abilityTargeting;
+    const validTargets = staged && abilityTargeting ? validTargetsForAbility(nextSquad, staged) : [];
     const validIds = new Set(validTargets.map((u) => u.unitId));
     onSquadUiChange({
       squadSize: aliveUnits(nextSquad).length,
@@ -426,9 +456,17 @@ export default function TacticalCombatHub({
       stagedAbilityId: staged,
       units: nextSquad.map((u) => {
         const unitId = u.unitId ?? u.designation;
+        const threatTier = resolveEnemyThreatTier({
+          isBoss: u.isBoss,
+          isApex: u.isApex,
+          rosterId: u.rosterId,
+        });
         const hookValid = staged != null && isUnitHookValid(staged, u);
-        const targetable = targetingActive && (validIds.has(u.unitId!) || hookValid);
-        const blocked = staged != null
+        const alive = isUnitAlive(u);
+        const targetable = targetingActive && alive && (
+          !staged || !abilityTargeting || validIds.has(u.unitId!) || hookValid
+        );
+        const blocked = staged != null && abilityTargeting
           && isUnitBlockedForAbility(nextSquad, staged, unitId)
           && !hookValid;
         return {
@@ -446,16 +484,19 @@ export default function TacticalCombatHub({
           occultWards: u.occultWards ?? 0,
           combatTags: u.combatTags ?? [],
           isBoss: u.isBoss,
+          isApex: u.isApex,
+          isElite: threatTier === 'ELITE' || threatTier === 'APEX',
           isVeilStalker: u.isVeilStalker,
           enemyClass: u.class,
           rosterId: u.rosterId,
           isDead: !isUnitAlive(u),
-          isSelected: selectedTargetIdRef.current === u.unitId,
+          isSelected: isPlayerTurnRef.current && selectedTargetIdRef.current === u.unitId,
           isTargetable: targetable,
           isFocused: focusedUnitIdRef.current === u.unitId,
           isBlocked: blocked,
           isHookValid: hookValid,
           isFractured: isEnemyFractured(u),
+          portraitGlow: resolvePortraitGlow(unitId),
         };
       }),
     });
@@ -487,7 +528,11 @@ export default function TacticalCombatHub({
     else focusEnemy(e);
   };
 
-  const selectTarget = (unitId: string) => {
+  const selectTarget = useCallback((unitId: string) => {
+    if (!isPlayerTurnRef.current || cycleRef.current !== 'TEXT_COMBAT') return;
+    const unit = getUnitById(squadRef.current, unitId);
+    if (!unit || !isUnitAlive(unit)) return;
+
     const staged = selectedAbility;
     if (staged && abilityRequiresTarget(staged)) {
       if (!canTargetWithAbility(squadRef.current, staged, unitId)) {
@@ -499,10 +544,10 @@ export default function TacticalCombatHub({
     selectedTargetIdRef.current = unitId;
     setSelectedTargetId(unitId);
     focusedUnitIdRef.current = unitId;
-    const unit = getUnitById(squadRef.current, unitId);
-    if (unit) focusEnemy(unit);
+    enemyRef.current = unit;
+    setEnemy(unit);
     publishSquadUi(squadRef.current);
-  };
+  }, [selectedAbility, log]);
   const chargeAr = (amt: number, targetFractured = false) => {
     const mult = targetFractured ? mutationModsRef.current.shatterPointArMultiplier : 1;
     const scaled = Math.floor(amt * mult);
@@ -711,7 +756,7 @@ export default function TacticalCombatHub({
   const applyConsumableRef = useRef((_result: IncursionConsumableUseResult) => {});
   applyConsumableRef.current = (result: IncursionConsumableUseResult) => {
     if (cycleRef.current !== 'TEXT_COMBAT' || !isPlayerTurnRef.current) return;
-    if (!spendActionPoints(COMBAT_CONSUMABLE_AP_COST)) {
+    if (playerApRef.current < COMBAT_CONSUMABLE_AP_COST) {
       log('[REJECTED] >> Insufficient action points for cargo deploy.');
       return;
     }
@@ -759,6 +804,10 @@ export default function TacticalCombatHub({
       mutationEncounterRef.current.spallWeaveActive = true;
     }
     log(result.logLine);
+    playerApRef.current = 0;
+    setPlayerActionPoints(0);
+    setSelectedAbility(null);
+    passToEnemy(false);
   };
 
   useEffect(() => {
@@ -766,8 +815,16 @@ export default function TacticalCombatHub({
   }, [registerConsumableHandler]);
 
   useEffect(() => {
-    registerTargetHandler?.((unitId: string) => selectTarget(unitId));
-  }, [registerTargetHandler]);
+    registerCanDeployCargoHandler?.(() => (
+      cycleRef.current === 'TEXT_COMBAT'
+      && isPlayerTurnRef.current
+      && playerApRef.current >= COMBAT_CONSUMABLE_AP_COST
+    ));
+  }, [registerCanDeployCargoHandler]);
+
+  useEffect(() => {
+    registerTargetHandler?.(selectTarget);
+  }, [registerTargetHandler, selectTarget]);
 
   const resolveIncomingHpStrike = (e: EnemyCombatProfile): { raw: number; unblockable: boolean } | null => {
     if (getEnemyDeckStrikeVariant(e.intent) !== 'hp') return null;
@@ -931,9 +988,17 @@ export default function TacticalCombatHub({
       if (mutationEncounterRef.current.masochistBuff) {
         dmg = Math.floor(dmg * 1.5);
       }
-      const scaled = scaleKineticDamage(dmg, working.affinity, env.meleeDamageBonusPct ?? 0);
+      const scaled = scaleKineticDamage(
+        dmg,
+        working.affinity,
+        env.meleeDamageBonusPct ?? 0,
+        spectralSaltActive,
+      );
       if (scaled !== dmg) {
-        log(`${tag} >> Kinetic scaling ${dmg} → ${scaled}.`);
+        const imbueNote = spectralSaltActive && working.affinity === 'SPECTRAL'
+          ? ' // SPECTRAL SALT IMBUE'
+          : '';
+        log(`${tag} >> Kinetic scaling ${dmg} → ${scaled}.${imbueNote}`);
       }
       dmg = scaled;
     }
@@ -2212,6 +2277,11 @@ export default function TacticalCombatHub({
   };
 
   useEffect(() => {
+    enemyActionStageRef.current = enemyActionStage;
+    publishSquadUi(squadRef.current);
+  }, [enemyActionStage]);
+
+  useEffect(() => {
     if (!isPlayerTurn || cycleState !== 'TEXT_COMBAT') {
       setSelectedAbility(null);
     }
@@ -2453,9 +2523,9 @@ export default function TacticalCombatHub({
 
   const chromeSnapshot = useMemo(
     () => ({
-      slicePingVisible: false,
+      slicePingVisible: sliceReady && enemyAlive && isPlayerTurn && cycleState === 'TEXT_COMBAT',
       slicePingReady: sliceReady && enemyAlive,
-      slicePingDisabled: !isPlayerTurn,
+      slicePingDisabled: !isPlayerTurn || cycleState !== 'TEXT_COMBAT' || isExhausted,
       onSlicePing: onSlice,
       parryVisible: cycleState === 'DEFEND_PARRY',
       parryShrinkScale: parryScaleSV,
@@ -2479,6 +2549,7 @@ export default function TacticalCombatHub({
       sliceReady,
       enemyAlive,
       isPlayerTurn,
+      isExhausted,
       isSuccessState,
       isFailureState,
       sliceLines,

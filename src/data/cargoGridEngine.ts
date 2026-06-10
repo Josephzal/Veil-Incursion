@@ -23,6 +23,25 @@ export function resetCargoInstanceCounter(): void {
   instanceCounter = 0;
 }
 
+/** Run-start cargo with Spectral Salt locked in the operative grid. */
+export function createStarterCargoRunState(): CargoRunState {
+  const base = { grid: { placed: [] as PlacedCargoItem[] }, containment: [], dataBleedActive: false };
+  const itemId: CargoItemId = 'spectral-salt';
+  if (!canPlaceCargoItem(base, itemId, 0, 0)) return base;
+  return {
+    ...base,
+    grid: {
+      placed: [{
+        instanceId: createCargoInstanceId('starter'),
+        itemId,
+        originRow: 0,
+        originCol: 0,
+        currentValue: CARGO_ITEM_CATALOG[itemId].baseValue,
+      }],
+    },
+  };
+}
+
 function cellsForItem(itemId: CargoItemId, originRow: number, originCol: number): string[] {
   const def = CARGO_ITEM_CATALOG[itemId];
   const keys: string[] = [];
@@ -269,6 +288,11 @@ export function countCargoItemInstances(cargo: CargoRunState, itemId: CargoItemI
 
 export function isCombatConsumableCargoItem(itemId: CargoItemId): boolean {
   return CARGO_ITEM_CATALOG[itemId].usableInCombat === true;
+}
+
+export function isCombatDeployableCargoItem(itemId: CargoItemId): boolean {
+  const def = CARGO_ITEM_CATALOG[itemId];
+  return def.usableInCombat === true && def.combatEffect !== 'unimplemented';
 }
 
 export function consumeCargoItem(cargo: CargoRunState, itemId: CargoItemId): CargoRunState | null {

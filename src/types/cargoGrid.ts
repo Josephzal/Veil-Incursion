@@ -13,6 +13,7 @@ export type CargoCombatEffect =
   | 'clear_debuffs'
   | 'max_abyssal'
   | 'absorb_hit'
+  | 'spectral_imbue'
   | 'unimplemented';
 
 export type CargoItemId =
@@ -25,6 +26,7 @@ export type CargoItemId =
   | 'soul-core'
   | 'veil-shard'
   | 'target-fragment'
+  | 'spectral-salt'
   | 'grave-dust-ampoule'
   | 'grid-cracker-mag'
   | 'eclipse-flare'
@@ -213,6 +215,17 @@ export const CARGO_ITEM_CATALOG: Record<CargoItemId, CargoItemDefinition> = {
     tags: ['CONSUMABLE', 'COMBAT'],
     usableInCombat: true,
     combatEffect: 'unimplemented',
+  },
+  'spectral-salt': {
+    id: 'spectral-salt',
+    name: 'Spectral Salt',
+    width: 1,
+    height: 1,
+    baseValue: 50,
+    resonanceWeight: 1,
+    tags: ['CONSUMABLE', 'COMBAT', 'WEAPON_IMBUE', 'SPECTRAL'],
+    usableInCombat: true,
+    combatEffect: 'spectral_imbue',
   },
   'grave-dust-ampoule': {
     id: 'grave-dust-ampoule',

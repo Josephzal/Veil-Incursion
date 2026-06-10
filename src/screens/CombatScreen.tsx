@@ -11,6 +11,7 @@ import CombatEnemyGrid from '../components/combat/CombatEnemyGrid';
 import CombatOperativeHud from '../components/combat/CombatOperativeHud';
 import CombatPlayerSliceOverlay from '../components/combat/CombatPlayerSliceOverlay';
 import CombatResolutionBanner from '../components/combat/CombatResolutionBanner';
+import CombatSelectedEnemyIntel from '../components/combat/CombatSelectedEnemyIntel';
 import type { CombatOperativeTelemetry } from '../components/combat/CombatOperativeHud';
 import type { CombatPlayerViewportRef } from '../components/combat/CombatPlayerViewport';
 import IncursionShell from '../components/IncursionShell';
@@ -39,6 +40,7 @@ import {
   type CombatSquadUiSnapshot,
 } from '../utils/combatTelemetryFormat';
 import { encounterBudgetForDepth } from '../data/combatEncounterBudget';
+import type { CargoItemId } from '../types/cargoGrid';
 import { depthFromNodesCleared } from '../data/districtPacing';
 import type { IncursionConsumableUseResult } from '../types/incursionInventory';
 
@@ -96,6 +98,7 @@ export default function CombatScreen(): React.JSX.Element {
     runState,
     syncAfterCombat,
     appendRunLog,
+    useIncursionConsumable,
     endRun,
     exitCombatToBadge,
     refillStaminaAfterCombat,
@@ -127,6 +130,7 @@ export default function CombatScreen(): React.JSX.Element {
   const killResolverRef = useRef<() => void>(() => {});
   const healHandlerRef = useRef<(amount: number) => void>(() => {});
   const consumableHandlerRef = useRef<(result: IncursionConsumableUseResult) => void>(() => {});
+  const canDeployCargoRef = useRef<() => boolean>(() => false);
   const targetHandlerRef = useRef<(unitId: string) => void>(() => {});
 
   const handleSquadUiChange = useCallback((snapshot: CombatSquadUiSnapshot) => {
@@ -157,9 +161,24 @@ export default function CombatScreen(): React.JSX.Element {
     consumableHandlerRef.current = handler;
   }, []);
 
+  const registerCanDeployCargoHandler = useCallback((handler: () => boolean) => {
+    canDeployCargoRef.current = handler;
+  }, []);
+
   const handleConsumableUsed = useCallback((result: IncursionConsumableUseResult) => {
     consumableHandlerRef.current(result);
   }, []);
+
+  const handleDeployCargoItem = useCallback((itemId: CargoItemId): boolean => {
+    if (!canDeployCargoRef.current()) {
+      appendRunLog('[REJECTED] >> Cargo deploy unavailable this turn.');
+      return false;
+    }
+    const result = useIncursionConsumable(itemId);
+    if (!result) return false;
+    consumableHandlerRef.current(result);
+    return true;
+  }, [appendRunLog, useIncursionConsumable]);
 
   const handleEradicationComplete = useCallback(() => {
     killResolverRef.current();
@@ -258,6 +277,13 @@ export default function CombatScreen(): React.JSX.Element {
       ?? gridUnits.find((unit) => !unit.isDead);
     return focused?.portraitSource ?? portraitSource;
   }, [gridUnits, portraitSource]);
+
+  const selectedEnemyUnit = useMemo(
+    () => gridUnits.find((unit) => unit.isSelected && !unit.isDead) ?? null,
+    [gridUnits],
+  );
+
+  const spectralSaltActive = activeIncursion.spectralWeaponImbued === true;
 
   const handleResolutionPanelChange = useCallback(
     (panel: { outcome: 'VICTORY' | 'DEFEAT'; onDismiss: () => void } | null) => {
@@ -377,10 +403,20 @@ export default function CombatScreen(): React.JSX.Element {
         <MacroLogAnchoredLayout
           showMacroLog={runState.runActive}
           onConsumableUsed={handleConsumableUsed}
+          onDeployCargoItem={handleDeployCargoItem}
           style={styles.combatRoot}
         >
           <View style={styles.body}>
             <View style={styles.arenaStage}>
+              {selectedEnemyUnit ? (
+                <View style={styles.enemyIntelOverlay} pointerEvents="none">
+                  <CombatSelectedEnemyIntel
+                    unit={selectedEnemyUnit}
+                    mutedColor={theme.mutedColor}
+                  />
+                </View>
+              ) : null}
+
               <CombatArenaZone
                 apparitionRef={apparitionRef}
                 playerViewportRef={playerViewportRef}
@@ -402,12 +438,12 @@ export default function CombatScreen(): React.JSX.Element {
               ) : null}
 
               <View style={[styles.playerHudOverlay, { right: DECK_INSET, width: DECK_HALF }]}>
-                {operativeTelemetry ? (
-                  <View style={styles.playerHudWithSlice}>
-                    <CombatPlayerSliceOverlay />
+                <View style={styles.playerHudWithSlice}>
+                  <CombatPlayerSliceOverlay />
+                  {operativeTelemetry ? (
                     <CombatOperativeHud telemetry={operativeTelemetry} deckAligned />
-                  </View>
-                ) : null}
+                  ) : null}
+                </View>
               </View>
             </View>
 
@@ -420,6 +456,7 @@ export default function CombatScreen(): React.JSX.Element {
                 registerKillResolver={registerKillResolver}
                 registerHealHandler={registerHealHandler}
                 registerConsumableHandler={registerConsumableHandler}
+                registerCanDeployCargoHandler={registerCanDeployCargoHandler}
                 registerTargetHandler={registerTargetHandler}
                 onSquadUiChange={handleSquadUiChange}
                 enemySquad={combatSquad}
@@ -448,6 +485,7 @@ export default function CombatScreen(): React.JSX.Element {
                 onBossPhaseShift={shiftBossPhase}
                 aegisLoadout={activeIncursion.aegisLoadout}
                 leyLineMutations={activeIncursion.leyLineMutations}
+                spectralSaltActive={spectralSaltActive}
               />
             </View>
           </View>
@@ -477,6 +515,13 @@ const styles = StyleSheet.create({
     position: 'relative',
     marginBottom: 2,
     zIndex: 2,
+  },
+  enemyIntelOverlay: {
+    position: 'absolute',
+    top: 6,
+    left: DECK_INSET,
+    right: DECK_INSET,
+    zIndex: 12,
   },
   playerHudOverlay: {
     position: 'absolute',

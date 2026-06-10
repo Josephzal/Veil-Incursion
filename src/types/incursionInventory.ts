@@ -1,4 +1,4 @@
-export type IncursionConsumableId = 'soul-core' | 'veil-shard' | 'target-fragment';
+export type IncursionConsumableId = 'soul-core' | 'veil-shard' | 'target-fragment' | 'spectral-salt';
 
 export type IncursionConsumableEffect = 'heal' | 'stun' | 'unimplemented';
 

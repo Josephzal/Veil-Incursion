@@ -305,3 +305,14 @@ export function spawnRosterUnit(
   }
   return layered;
 }
+
+export function resolveEnemyThreatTier(profile: {
+  isBoss?: boolean;
+  isApex?: boolean;
+  rosterId?: string;
+}): 'STANDARD' | 'ELITE' | 'APEX' | 'BOSS' {
+  if (profile.isBoss) return 'BOSS';
+  if (profile.isApex) return 'APEX';
+  if (profile.rosterId && ENEMY_ROSTER[profile.rosterId as EnemyRosterId]?.elite) return 'ELITE';
+  return 'STANDARD';
+}

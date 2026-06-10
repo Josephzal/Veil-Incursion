@@ -16,7 +16,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 const REJECT_SNAP_MS = 140;
-import { canPlaceCargoItemExcluding } from '../data/cargoGridEngine';
+import { canPlaceCargoItemExcluding, isCombatDeployableCargoItem } from '../data/cargoGridEngine';
 import type { CargoItemId, CargoRunState, PlacedCargoItem } from '../types/cargoGrid';
 import { CARGO_GRID_DIMENSION, CARGO_ITEM_CATALOG } from '../types/cargoGrid';
 import type { TerminalTheme } from '../types/theme';
@@ -101,6 +101,9 @@ function DraggableCargoSprite({
   onHoverCell,
   onDragStart,
   onDragEnd,
+  combatSelectMode = false,
+  combatSelected = false,
+  onCombatSelect,
 }: {
   dragSource: CargoDragSource;
   layoutMode: 'external' | 'grid';
@@ -115,6 +118,9 @@ function DraggableCargoSprite({
   ) => void;
   onDragStart: (source: CargoDragSource) => void;
   onDragEnd: () => void;
+  combatSelectMode?: boolean;
+  combatSelected?: boolean;
+  onCombatSelect?: () => void;
 }): React.JSX.Element {
   const spriteSize = spriteSizeForCargoItem(dragSource.itemId);
   const translateX = useSharedValue(0);
@@ -240,7 +246,13 @@ function DraggableCargoSprite({
     );
   }, [dragSource.instanceId, dragSource.itemId, dragSource.source, onHoverCell, resolveCellFromAbsolute]);
 
+  const tap = Gesture.Tap()
+    .onEnd(() => {
+      if (onCombatSelect) runOnJS(onCombatSelect)();
+    });
+
   const pan = Gesture.Pan()
+    .enabled(!combatSelectMode)
     .minDistance(6)
     .onBegin(() => {
       runOnJS(onDragStart)(dragSource);
@@ -292,13 +304,21 @@ function DraggableCargoSprite({
       }
     : null;
 
+  const gesture = combatSelectMode ? tap : pan;
+
   return (
-    <GestureDetector gesture={pan}>
-      <Animated.Image
-        source={resolveCargoItemIcon(dragSource.itemId)}
-        resizeMode="contain"
-        style={[styles.lootSprite, spriteSize, staticStyle, animatedStyle]}
-      />
+    <GestureDetector gesture={gesture}>
+      <Animated.View style={[spriteSize, staticStyle, animatedStyle, styles.spriteWrap]}>
+        <Animated.Image
+          source={resolveCargoItemIcon(dragSource.itemId)}
+          resizeMode="contain"
+          style={[
+            styles.lootSprite,
+            spriteSize,
+            combatSelected ? styles.combatItemSelected : null,
+          ]}
+        />
+      </Animated.View>
     </GestureDetector>
   );
 }
@@ -325,6 +345,7 @@ export default function CargoGridBoard({
   const [hoverItemId, setHoverItemId] = useState<CargoItemId | null>(null);
   const [hoverExcludeId, setHoverExcludeId] = useState<string | undefined>(undefined);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [selectedCombatItemId, setSelectedCombatItemId] = useState<CargoItemId | null>(null);
   const externalSlotCountRef = useRef(0);
   if (externalSlotCountRef.current === 0 && cargo.containment.length > 0) {
     externalSlotCountRef.current = cargo.containment.length;
@@ -420,20 +441,27 @@ export default function CargoGridBoard({
       </View>
 
       <View style={styles.placedLayer} pointerEvents="box-none">
-        {cargo.grid.placed.map((item: PlacedCargoItem) => (
-          <DraggableCargoSprite
-            key={item.instanceId}
-            dragSource={{ instanceId: item.instanceId, itemId: item.itemId, source: 'grid' }}
-            layoutMode="grid"
-            originRow={item.originRow}
-            originCol={item.originCol}
-            gridMetricsRef={gridMetricsRef}
-            onRelocateItem={onRelocateItem}
-            onHoverCell={handleHoverCell}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-          />
-        ))}
+        {cargo.grid.placed.map((item: PlacedCargoItem) => {
+          const deployable = isCombatDeployableCargoItem(item.itemId);
+          const selectMode = combatMode && combatConsumablesEnabled && deployable;
+          return (
+            <DraggableCargoSprite
+              key={item.instanceId}
+              dragSource={{ instanceId: item.instanceId, itemId: item.itemId, source: 'grid' }}
+              layoutMode="grid"
+              originRow={item.originRow}
+              originCol={item.originCol}
+              gridMetricsRef={gridMetricsRef}
+              onRelocateItem={onRelocateItem}
+              onHoverCell={handleHoverCell}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              combatSelectMode={selectMode}
+              combatSelected={selectedCombatItemId === item.itemId}
+              onCombatSelect={selectMode ? () => setSelectedCombatItemId(item.itemId) : undefined}
+            />
+          );
+        })}
       </View>
     </View>
   );
@@ -465,6 +493,13 @@ export default function CargoGridBoard({
                     onHoverCell={handleHoverCell}
                     onDragStart={handleDragStart}
                     onDragEnd={handleDragEnd}
+                    combatSelectMode={combatMode && combatConsumablesEnabled && isCombatDeployableCargoItem(item.itemId)}
+                    combatSelected={selectedCombatItemId === item.itemId}
+                    onCombatSelect={
+                      combatMode && combatConsumablesEnabled && isCombatDeployableCargoItem(item.itemId)
+                        ? () => setSelectedCombatItemId(item.itemId)
+                        : undefined
+                    }
                   />
                 </View>
               );
@@ -502,30 +537,58 @@ export default function CargoGridBoard({
 
       {combatMode && onUseCombatConsumable ? (
         <View style={styles.combatConsumableCol}>
+          <Text style={[styles.combatHint, { color: accentColor }]}>
+            {selectedCombatItemId
+              ? `SELECTED // ${CARGO_ITEM_CATALOG[selectedCombatItemId].name.toUpperCase()} — DEPLOY OR CLOSE TO CANCEL`
+              : 'TAP A COMBAT ITEM IN THE GRID TO SELECT'}
+          </Text>
           {COMBAT_CONSUMABLE_IDS.map((itemId) => {
             const count = countCargoItemInstances(cargo, itemId);
             if (count <= 0) return null;
             const def = CARGO_ITEM_CATALOG[itemId];
-            const useEnabled = combatConsumablesEnabled && def.combatEffect !== 'unimplemented';
+            const canSelect = combatConsumablesEnabled && def.combatEffect !== 'unimplemented';
+            const isSelected = selectedCombatItemId === itemId;
             return (
               <Pressable
                 key={itemId}
-                disabled={!useEnabled}
-                onPress={() => onUseCombatConsumable(itemId)}
+                disabled={!canSelect}
+                onPress={() => setSelectedCombatItemId(isSelected ? null : itemId)}
                 style={({ pressed }) => [
                   styles.ampouleBtn,
                   {
-                    borderColor: useEnabled ? accentColor : '#1a2e22',
-                    opacity: useEnabled && pressed ? 0.75 : useEnabled ? 1 : 0.45,
+                    borderColor: isSelected ? accentColor : canSelect ? '#1f2937' : '#1a2e22',
+                    backgroundColor: isSelected ? 'rgba(0, 255, 51, 0.08)' : '#050608',
+                    opacity: canSelect && pressed ? 0.75 : canSelect ? 1 : 0.45,
                   },
                 ]}
               >
-                <Text style={[styles.ampouleBtnText, { color: useEnabled ? accentColor : '#2a4032' }]}>
-                  {`[ USE ${def.name.toUpperCase()} ] x${count}`}
+                <Text style={[styles.ampouleBtnText, { color: isSelected || canSelect ? accentColor : '#2a4032' }]}>
+                  {`[ SELECT ${def.name.toUpperCase()} ] x${count}`}
                 </Text>
               </Pressable>
             );
           })}
+          {selectedCombatItemId ? (
+            <Pressable
+              disabled={!combatConsumablesEnabled}
+              onPress={() => {
+                const ok = onUseCombatConsumable(selectedCombatItemId);
+                if (ok) setSelectedCombatItemId(null);
+              }}
+              style={({ pressed }) => [
+                styles.ampouleBtn,
+                styles.deployBtn,
+                {
+                  borderColor: combatConsumablesEnabled ? accentColor : '#1a2e22',
+                  opacity: combatConsumablesEnabled && pressed ? 0.75 : combatConsumablesEnabled ? 1 : 0.45,
+                },
+              ]}
+            >
+              <Text style={[styles.ampouleBtnText, { color: combatConsumablesEnabled ? accentColor : '#2a4032' }]}>
+                {`[ DEPLOY ${CARGO_ITEM_CATALOG[selectedCombatItemId].name.toUpperCase()} — CONSUMES TURN ]`}
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
 
@@ -608,12 +671,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  spriteWrap: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  combatItemSelected: {
+    opacity: 1,
+    transform: [{ scale: 1.08 }],
+  },
   lootSprite: {
     backgroundColor: 'transparent',
   },
   combatConsumableCol: {
     width: CARGO_GRID_FRAME_SIZE,
     gap: 8,
+  },
+  combatHint: {
+    fontFamily: 'monospace',
+    fontSize: 7,
+    letterSpacing: 0.4,
+    lineHeight: 10,
+    textAlign: 'center',
+  },
+  deployBtn: {
+    marginTop: 4,
   },
   ampouleBtn: {
     borderWidth: 1,

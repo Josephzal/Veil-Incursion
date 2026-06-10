@@ -60,16 +60,17 @@ function trimComposition(
   };
 }
 
-/** Act I — levels 1–5, no elite compositions. */
-function actIStandard(seed: string): EncounterComposition {
-  const single = hashPick(seed, [
+function pickRandom<T>(options: readonly T[]): T {
+  return options[Math.floor(Math.random() * options.length)];
+}
+
+/** Act I — levels 1–5, no elite compositions. Randomized each engagement. */
+function actIStandard(): EncounterComposition {
+  const singles: EncounterComposition[] = [
     { slots: [{ rosterId: 'gutter-goliath', slot: 'FL_0' }] },
     { slots: [{ rosterId: 'concrete-gargoyle', slot: 'FL_0' }] },
-  ] as EncounterComposition[]);
-  if (hashPick(`${seed}:count`, ['one', 'two'] as const) === 'one') {
-    return single;
-  }
-  return hashPick(seed, [
+  ];
+  const doubles: EncounterComposition[] = [
     {
       slots: [
         { rosterId: 'fracture-hound', slot: 'FL_0' },
@@ -84,7 +85,8 @@ function actIStandard(seed: string): EncounterComposition {
       ],
       label: 'Shade + Goliath',
     },
-  ] as EncounterComposition[]);
+  ];
+  return Math.random() < 0.5 ? pickRandom(singles) : pickRandom(doubles);
 }
 
 /** Act II — levels 6–10. */
@@ -201,7 +203,7 @@ export function pickEncounterComposition(
 
   let composition: EncounterComposition;
   if (local <= 5) {
-    composition = actIStandard(seed);
+    composition = actIStandard();
   } else if (local <= 10) {
     composition = isElite
       ? actIIElite(seed, maxEnemies)

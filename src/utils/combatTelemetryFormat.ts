@@ -2,6 +2,7 @@ import type { CombatGridSlotId } from '../types/combatGrid';
 import type { EnemyAffinity } from '../types/combatEnvironment';
 import type { EnemyCombatProfile, EnemyIntent } from '../types/run';
 import { isUnitAlive } from '../data/combatSquadEngine';
+import { resolveEnemyThreatTier } from '../data/enemyRoster';
 
 export const GAUGE_SOUL_ANCHOR = '#FF453A';
 export const GAUGE_ABYSSAL = '#00D2C4';
@@ -49,6 +50,8 @@ export function clampRatio(ratio: number): number {
   return Math.max(0, Math.min(1, ratio));
 }
 
+export type EnemyPortraitGlow = 'none' | 'player-selected' | 'enemy-attacking';
+
 export interface CombatGridUnitSnapshot {
   unitId: string;
   slot: import('../types/combatGrid').CombatGridSlotId;
@@ -64,6 +67,8 @@ export interface CombatGridUnitSnapshot {
   occultWards?: number;
   combatTags?: string[];
   isBoss?: boolean;
+  isApex?: boolean;
+  isElite?: boolean;
   isVeilStalker?: boolean;
   enemyClass?: import('../types/run').EnemyClass;
   rosterId?: string;
@@ -74,6 +79,7 @@ export interface CombatGridUnitSnapshot {
   isBlocked: boolean;
   isHookValid: boolean;
   isFractured: boolean;
+  portraitGlow?: EnemyPortraitGlow;
 }
 
 export interface CombatSquadUiSnapshot {
@@ -101,6 +107,15 @@ export function buildInitialSquadUiSnapshot(
     occultWards: unit.occultWards ?? 0,
     combatTags: unit.combatTags ?? [],
     isBoss: unit.isBoss,
+    isApex: unit.isApex,
+    isElite: (() => {
+      const tier = resolveEnemyThreatTier({
+        isBoss: unit.isBoss,
+        isApex: unit.isApex,
+        rosterId: unit.rosterId,
+      });
+      return tier === 'ELITE' || tier === 'APEX';
+    })(),
     isVeilStalker: unit.isVeilStalker,
     enemyClass: unit.class,
     rosterId: unit.rosterId,
@@ -111,6 +126,7 @@ export function buildInitialSquadUiSnapshot(
     isBlocked: false,
     isHookValid: false,
     isFractured: (unit.combatTags ?? []).includes('FRACTURED') || unit.fracturedThisRound === true,
+    portraitGlow: 'none' as EnemyPortraitGlow,
   }));
   return {
     units,

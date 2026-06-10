@@ -150,6 +150,7 @@ import {
   scaledLootCount,
   hasCargoItem,
   consumeCargoItem,
+  createStarterCargoRunState,
 } from '../data/cargoGridEngine';
 import { CARGO_ITEM_CATALOG, HARVEST_YIELD_OPTIONS } from '../types/cargoGrid';
 import type { HarvestYieldTier } from '../types/cargoGrid';
@@ -464,6 +465,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       aegisLoadout: config?.aegisLoadout
         ? [...config.aegisLoadout] as AegisLoadout
         : createDefaultActiveIncursionState().aegisLoadout,
+      cargo: createStarterCargoRunState(),
     };
     activeIncursionRef.current = incursion;
     setActiveIncursion(incursion);
@@ -2624,6 +2626,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         result.absorbNextHit = true;
         logLine = '>> SPALL-WEAVE VEST — Next health damage fully absorbed.';
         break;
+      case 'spectral_imbue':
+        logLine = '>> SPECTRAL SALT APPLIED — weapon imbued with spectral essence.';
+        break;
       default:
         return null;
     }
@@ -2632,6 +2637,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       const next: ActiveIncursionState = {
         ...prev,
         cargo: nextCargo,
+        spectralWeaponImbued: def.combatEffect === 'spectral_imbue'
+          ? true
+          : prev.spectralWeaponImbued,
       };
       activeIncursionRef.current = next;
       return next;

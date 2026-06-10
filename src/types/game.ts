@@ -339,6 +339,8 @@ export interface ActiveIncursionState {
   primeExtractionBonus: boolean;
   sectorTier: number;
   cargo: CargoRunState;
+  /** Spectral Salt deployed — kinetic weapons bypass spectral resistance. */
+  spectralWeaponImbued: boolean;
   pendingHarvestReturn: HarvestReturnRoute | null;
   resonanceEscalations: ResonanceEscalationState;
   /** Safe anchor extractions used this run (1, 2, 3). */
@@ -405,6 +407,7 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     primeExtractionBonus: false,
     sectorTier: 1,
     cargo: createDefaultCargoRunState(),
+    spectralWeaponImbued: false,
     pendingHarvestReturn: null,
     resonanceEscalations: createDefaultResonanceEscalationState(),
     clearedSafeAnchors: [],
