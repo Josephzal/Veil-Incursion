@@ -384,8 +384,6 @@ const styles = StyleSheet.create({
   },
   playerHudWithSlice: {
     width: '100%',
-    position: 'relative',
-    alignItems: 'stretch',
   },
   enemyHudOverlay: {
     position: 'absolute',
