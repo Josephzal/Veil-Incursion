@@ -134,6 +134,8 @@ export interface RadarDot {
   angleDeg: number;
   isPreDiscovered?: boolean;
   encounterIndex: number;
+  /** Hostile patrol contact on the Ley-Tracker (not a breach rift). */
+  isHostilePatrol?: boolean;
 }
 
 export interface RadarScanResult {

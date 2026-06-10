@@ -60,19 +60,21 @@ export const SANCTUARY_RETUNE_ATTUNEMENT = 2;
 export const RESONANCE_DELTA_STANDARD = 10;
 export const RESONANCE_DELTA_HIGH = 25;
 export const RESONANCE_DELTA_CRITICAL = 50;
-export const MAX_SECTOR_NODES = 20;
+export const MAX_SECTOR_NODES = 30;
 export const EXTRACTION_AVAILABLE_AFTER_CLEARED = 4;
 export const BOSS_SIGNATURE_RESONANCE = 50;
 export const BOSS_NEST_SOFT_RESONANCE = 75;
 export const BOSS_NEST_HARD_RESONANCE = 90;
 export const GREED_ZONE_YIELD_MULTIPLIER = 2;
 export const RESONANCE_TIER_VOLATILE = 30;
-export const RESONANCE_TIER_DATA_BLEED = 50;
-export const RESONANCE_TIER_HOSTILE = 50;
-export const RESONANCE_TIER_CRITICAL = 70;
-export const RESONANCE_TIER_VECTOR_SEVERED = 80;
+/** Cargo data-bleed begins when entering Alert zone. */
+export const RESONANCE_TIER_DATA_BLEED = 41;
+export const RESONANCE_TIER_HOSTILE = 41;
+/** Critical zone — terminal blind + veil stalker hunt. */
+export const RESONANCE_TIER_CRITICAL = 76;
+export const RESONANCE_TIER_VECTOR_SEVERED = 76;
 export const TERMINAL_BLIND_NODE_COUNT = 2;
-export const VEIL_STALKER_RESONANCE_THRESHOLD = 70;
+export const VEIL_STALKER_RESONANCE_THRESHOLD = 76;
 export const VEIL_STALKER_AMBUSH_CHANCE = 0.4;
 
 export const ENVIRONMENT_DISPLAY_LABEL: Record<EnvironmentType, string> = {

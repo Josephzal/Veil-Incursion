@@ -56,6 +56,7 @@ const SELECTION_GLOW_FADE_MS = 800;
 const SELECTION_GLOW_INNER_SCALE = 1.9;
 const SELECTION_GLOW_OUTER_SCALE = 2.75;
 const SIPHON_HAPTIC_MS = 12;
+const HOSTILE_PATROL_COLOR = '#ff453a';
 
 interface VectorScannerProps {
   cabal: ScannerCabal;
@@ -252,6 +253,11 @@ function VectorScannerComponent({
   const scanInteractive =
     active && !contactsLocked && !uniformSelectable && !isCeased;
 
+  const hostilePatrolIds = useMemo(
+    () => new Set(activeNodes.filter((node) => node.isHostilePatrol).map((node) => node.id)),
+    [activeNodes],
+  );
+
   const nodeBearings = useMemo(
     () =>
       activeNodes.map((node) => ({
@@ -262,6 +268,7 @@ function VectorScannerComponent({
         bearingDeg: polarAngleDeg(node.x, node.y, radarCenter, radarCenter),
         visualRadius: (node.isPreDiscovered ? BOSS_DOT_SIZE : DOT_VISUAL_SIZE) / 2,
         visualSize: node.isPreDiscovered ? BOSS_DOT_SIZE : DOT_VISUAL_SIZE,
+        isHostilePatrol: node.isHostilePatrol === true,
       })),
     [activeNodes, radarCenter],
   );
@@ -430,7 +437,8 @@ function VectorScannerComponent({
     (beamDeg: number) => {
       if (uniformSelectable || dischargePhaseRef.current === 'fog') return;
 
-      nodeBearings.forEach(({ id, bearingDeg }) => {
+      nodeBearings.forEach(({ id, bearingDeg, isHostilePatrol }) => {
+        if (isHostilePatrol) return;
         if (blipStatesRef.current[id]?.siphoned) return;
 
         const delta = angularDifference(beamDeg, bearingDeg);
@@ -561,7 +569,7 @@ function VectorScannerComponent({
 
       activeNodes.forEach((node) => {
         blipStatesRef.current[node.id] = {
-          opacity: 0,
+          opacity: node.isHostilePatrol ? 1 : 0,
           scale: 1,
           bloomUntil: 0,
           decayStart: null,
@@ -665,6 +673,7 @@ function VectorScannerComponent({
   );
 
   const getBlipOpacity = (nodeId: string): number => {
+    if (hostilePatrolIds.has(nodeId)) return 1;
     if (uniformSelectable) return 1;
     const state = blipStatesRef.current[nodeId];
     if (!state) return 0;
@@ -865,20 +874,35 @@ function VectorScannerComponent({
             const scale = getBlipScale(node.id);
             if (opacity <= 0.01 && !uniformSelectable) return null;
 
+            const fillColor = node.isHostilePatrol
+              ? HOSTILE_PATROL_COLOR
+              : uniformSelectable || (continuousScan && selectedNodeId === node.id)
+                ? selectionAccent
+                : theme.blipAccent;
+
             return (
-              <Circle
-                key={node.id}
-                cx={node.canvasX}
-                cy={node.canvasY}
-                r={node.visualRadius * scale}
-                color={
-                  uniformSelectable || (continuousScan && selectedNodeId === node.id)
-                    ? selectionAccent
-                    : theme.blipAccent
-                }
-                opacity={opacity}
-                style="fill"
-              />
+              <Group key={node.id}>
+                {node.isHostilePatrol ? (
+                  <Circle
+                    cx={node.canvasX}
+                    cy={node.canvasY}
+                    r={node.visualRadius * scale * 2.1}
+                    color={accentWithAlpha(HOSTILE_PATROL_COLOR, 0.55)}
+                    opacity={0.22}
+                    style="fill"
+                  >
+                    <Blur blur={10} />
+                  </Circle>
+                ) : null}
+                <Circle
+                  cx={node.canvasX}
+                  cy={node.canvasY}
+                  r={node.visualRadius * scale}
+                  color={fillColor}
+                  opacity={opacity}
+                  style="fill"
+                />
+              </Group>
             );
           })}
 
@@ -887,33 +911,48 @@ function VectorScannerComponent({
             if (opacity <= 0.01 && !uniformSelectable) return null;
             const scale = getBlipScale(node.id);
             const isSelected = continuousScan && selectedNodeId === node.id;
+            const ringColor = node.isHostilePatrol
+              ? HOSTILE_PATROL_COLOR
+              : uniformSelectable || isSelected
+                ? selectionAccent
+                : theme.text;
             return (
               <Circle
                 key={`${node.id}-ring`}
                 cx={node.canvasX}
                 cy={node.canvasY}
                 r={node.visualRadius * scale + (uniformSelectable || isSelected ? 2.5 : 1.5)}
-                color={uniformSelectable || isSelected ? selectionAccent : theme.text}
+                color={ringColor}
                 style="stroke"
-                strokeWidth={isSelected ? 3 : uniformSelectable ? 2 : 1}
-                opacity={uniformSelectable ? selectionGlowRingOpacity : isSelected ? 0.9 : opacity * 0.9}
+                strokeWidth={node.isHostilePatrol ? 2 : isSelected ? 3 : uniformSelectable ? 2 : 1}
+                opacity={
+                  node.isHostilePatrol
+                    ? 0.95
+                    : uniformSelectable
+                      ? selectionGlowRingOpacity
+                      : isSelected
+                        ? 0.9
+                        : opacity * 0.9
+                }
               />
             );
           })}
         </Canvas>
 
-        {nodeBearings.map((bearing) => (
-          <RadarTarget
-            key={`target-${bearing.id}`}
-            visualSize={bearing.visualSize}
-            left={bearing.canvasX - DOT_HIT_SIZE / 2}
-            top={bearing.canvasY - DOT_HIT_SIZE / 2}
-            disabled={!isTargetEnabled(bearing.id)}
-            pulseKey={uniformSelectable ? 0 : (siphonPulseKeys[bearing.id] ?? 0)}
-            onPress={() => handleTargetPress(bearing.id)}
-            ringColor={selectionAccent}
-          />
-        ))}
+        {nodeBearings
+          .filter((bearing) => !bearing.isHostilePatrol)
+          .map((bearing) => (
+            <RadarTarget
+              key={`target-${bearing.id}`}
+              visualSize={bearing.visualSize}
+              left={bearing.canvasX - DOT_HIT_SIZE / 2}
+              top={bearing.canvasY - DOT_HIT_SIZE / 2}
+              disabled={!isTargetEnabled(bearing.id)}
+              pulseKey={uniformSelectable ? 0 : (siphonPulseKeys[bearing.id] ?? 0)}
+              onPress={() => handleTargetPress(bearing.id)}
+              ringColor={selectionAccent}
+            />
+          ))}
 
         {children ? <View style={styles.childOverlay}>{children}</View> : null}
 

@@ -18,7 +18,8 @@ import {
   RESONANCE_DELTA_STANDARD,
 } from '../types/sector';
 import type { EnvironmentType } from '../types/sector';
-import { BOSS_GRAPH_DEPTH, SCANNER_MAX_VECTORS } from '../types/sectorPacing';
+import { BOSS_GRAPH_DEPTH, DISTRICT_GATE_DEPTHS, SCANNER_MAX_VECTORS } from '../types/sectorPacing';
+import { districtGateLabel } from './districtPacing';
 import type { SafeAnchorIndex } from '../types/sectorPacing';
 import {
   environmentForGraphDepth,
@@ -224,13 +225,13 @@ export function generateSectorGraph(sectorTier = 1): SectorGraph {
 
   let spineParentId = entryId;
   for (let depth = 1; depth <= BOSS_GRAPH_DEPTH; depth += 1) {
-    const isBoss = depth === BOSS_GRAPH_DEPTH;
-    const spineId = isBoss ? 'sector-boss-nest' : `sector-spine-${depth}`;
+    const isBoss = (DISTRICT_GATE_DEPTHS as readonly number[]).includes(depth);
+    const spineId = depth === 30 ? 'sector-boss-nest' : isBoss ? `sector-gate-${depth}` : `sector-spine-${depth}`;
     const spine = makeGraphNode(spineId, depth, spineParentId, sectorTier, { isAnomalyNest: isBoss });
     if (isBoss) {
       spine.type = 'BOSS_COMBAT';
       spine.encounterType = 'COMBAT';
-      spine.label = 'PRIME ANOMALY NEST // SECTOR BOSS';
+      spine.label = districtGateLabel(depth);
       spine.isAnomalyNest = true;
       spine.sectorMeta = buildSectorMeta(
         spineId,

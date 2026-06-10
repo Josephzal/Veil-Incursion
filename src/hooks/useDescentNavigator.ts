@@ -7,6 +7,7 @@ import { RunNodeType } from '../types/game';
 export type DescentRoute =
   | 'NARRATIVE'
   | 'SCANNING'
+  | 'SAFEHOUSE'
   | 'COMBAT'
   | 'REST'
   | 'BLACK_MARKET'
@@ -48,8 +49,16 @@ export function useDescentNavigator() {
     endRun,
     calculateSectorExtractionPayout,
   } = useRun();
-  const { startNarrative, startScanning, startCombat, startRest, startBlackMarket, startResourceHarvest, goToHub } =
-    useGameFlow();
+  const {
+    startNarrative,
+    startScanning,
+    startSafehouse,
+    startCombat,
+    startRest,
+    startBlackMarket,
+    startResourceHarvest,
+    goToHub,
+  } = useGameFlow();
   const { addCredits, addRiftIron } = usePlayerAccount();
 
   const incursionRef = useRef(activeIncursion);
@@ -98,10 +107,14 @@ export function useDescentNavigator() {
   const finalizeIncursionAdvance = useCallback(
     (message: string) => {
       const result = stageEncounterClear(message);
+      if (result.route === 'SAFEHOUSE') {
+        startSafehouse();
+        return result;
+      }
       startScanning();
       return result;
     },
-    [stageEncounterClear, startScanning],
+    [stageEncounterClear, startScanning, startSafehouse],
   );
 
   const continueOperation = useCallback(() => {

@@ -12,6 +12,7 @@ export type AppScreen =
   | 'COMBAT'
   | 'RUN_PROGRESS'
   | 'RUN_COMPLETE'
+  | 'SAFEHOUSE'
   | 'GAME_OVER';
 
 export type ScanMode = 'INITIAL' | 'COMBAT_ENTRY';

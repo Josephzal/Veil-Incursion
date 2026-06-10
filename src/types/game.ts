@@ -2,8 +2,11 @@ import type { IncursionInventoryState } from './incursionInventory';
 import type { MacroStoryRunConfiguration } from './macroStory';
 import type { OutcomeModifierMetric } from './macroStory';
 import type { RegionalPresenceState } from './regional';
-import type { CargoRunState, HarvestReturnRoute } from './cargoGrid';
+import type { CargoRunState, GlobalBankedCargo, HarvestReturnRoute } from './cargoGrid';
+import { createDefaultBankedCargo } from './cargoGrid';
 import type { ResonanceEscalationState } from './resonanceEscalation';
+import type { PatrolState } from './overworldPatrol';
+import { createEmptyPatrolState } from './overworldPatrol';
 import { createDefaultResonanceEscalationState } from './resonanceEscalation';
 import { createDefaultCargoRunState } from './cargoGrid';
 import type {
@@ -48,7 +51,11 @@ export type IncursionEncounterType =
   | 'BLACK_MARKET'
   | 'RESOURCE_HARVEST';
 export type IncursionBiome = 'CITY_STREETS' | 'HOSPITAL' | 'LABORATORY' | 'SECTOR_CORE';
-export type IncursionMapMode = 'SCANNING_HUB' | 'NODE_ENGAGED' | 'PROGRESS_CHECKPOINT';
+export type IncursionMapMode =
+  | 'SCANNING_HUB'
+  | 'NODE_ENGAGED'
+  | 'PROGRESS_CHECKPOINT'
+  | 'SAFEHOUSE_INTERMISSION';
 
 export interface FactionModifiers {
   maxStaminaBonus: number;
@@ -81,6 +88,8 @@ export interface PlayerAccount {
     trinketId: string | null;
   };
   inventory: PlayerInventoryState;
+  /** Cabal vault — banked extraction cargo persists across runs. */
+  bankedCargo: GlobalBankedCargo;
 }
 
 export interface CombatNodeState {
@@ -259,8 +268,12 @@ export interface ActiveIncursionState {
   currentNarrativeId: string | null;
   lastCheckStatus: CheckStatus;
   activeChoice: 'A' | 'B' | null;
-  /** @deprecated Legacy depth counter — sector runs use nodesCleared + sectorTier. */
+  /** Player-facing depth (1–30); kept in sync with nodesCleared + 1. */
   currentDepth: number;
+  /** Active district chapter (1–3), derived from currentDepth. */
+  currentDistrict: 1 | 2 | 3;
+  /** Rift node ids that already triggered a manifest scan penalty. */
+  resonanceManifestNodeIds: readonly string[];
   currentEncounterIndex: number;
   /** Resolved path — one chosen node per cleared encounter step. */
   encounterPath: IncursionNode[];
@@ -283,6 +296,7 @@ export interface ActiveIncursionState {
   nodesCleared: number;
   attunement: AttunementState;
   resonance: ResonanceState;
+  patrolState: PatrolState;
   focusedNodeIds: string[];
   bossDefeated: boolean;
   primeExtractionBonus: boolean;
@@ -317,6 +331,8 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     lastCheckStatus: 'NOT_TESTED',
     activeChoice: null,
     currentDepth: 1,
+    currentDistrict: 1,
+    resonanceManifestNodeIds: [],
     currentEncounterIndex: 0,
     encounterPath: [],
     encounterOptionClusters: [],
@@ -329,11 +345,12 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     mapMode: 'SCANNING_HUB',
     lastCheckpointMessage: null,
     runCredits: 0,
-    sectorGraph: { entryId: '', nodes: {}, sectorTier: 1, maxGraphDepth: 20 },
+    sectorGraph: { entryId: '', nodes: {}, sectorTier: 1, maxGraphDepth: 30 },
     currentNodeId: '',
     nodesCleared: 0,
     attunement: { current: STARTING_ATTUNEMENT, max: MAX_ATTUNEMENT },
     resonance: { percent: 0 },
+    patrolState: createEmptyPatrolState(),
     focusedNodeIds: [],
     bossDefeated: false,
     primeExtractionBonus: false,

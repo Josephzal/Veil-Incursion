@@ -13,8 +13,10 @@ import {
   DashPathEffect,
   Group,
   Line,
+  Rect,
   vec,
 } from '@shopify/react-native-skia';
+import type { DistrictId } from '../data/districtPacing';
 import Animated, {
   runOnJS,
   useAnimatedReaction,
@@ -26,6 +28,12 @@ import type { IncursionNode, RunNodeType } from '../types/game';
 import type { SectorGraph } from '../types/sector';
 import type { CabalScannerTheme } from '../types/scanner';
 import type { RadarDot } from '../types/run';
+import type { PatrolState } from '../types/overworldPatrol';
+import { createEmptyPatrolState } from '../types/overworldPatrol';
+import {
+  buildPatrolRadarDots,
+  PATROL_DRIFT_RAD_PER_SEC,
+} from '../data/patrolSpawnEngine';
 import type { ScannerCabal } from '../types/scanner';
 import { resolveMapDrawMetrics } from '../utils/sectorInfluenceVisual';
 import {
@@ -102,6 +110,7 @@ export interface SectorOverworldMapProps {
   cluster: IncursionNode[];
   nodesCleared?: number;
   vectorDots?: RadarDot[];
+  patrolState?: PatrolState;
   cabal?: ScannerCabal;
   zoneTint?: Partial<CabalScannerTheme>;
   selectedNodeId?: string | null;
@@ -114,9 +123,17 @@ export interface SectorOverworldMapProps {
   onScoutProgressChange?: (revealedCount: number, totalCount: number) => void;
   mapStatusText?: string;
   layoutRollKey?: number | string;
+  /** District chapter tint — D2 yellow, D3 red. */
+  currentDistrict?: DistrictId;
   compact?: boolean;
   interactive?: boolean;
 }
+
+const DISTRICT_ATMOSPHERE_OVERLAY: Record<DistrictId, string | null> = {
+  1: null,
+  2: 'rgba(255, 214, 64, 0.14)',
+  3: 'rgba(255, 69, 58, 0.16)',
+};
 
 interface ScoutNode {
   id: string;
@@ -136,6 +153,7 @@ export default function SectorOverworldMap({
   cluster,
   nodesCleared = 0,
   vectorDots = [],
+  patrolState = createEmptyPatrolState(),
   cabal = 'TERRAN_GRID',
   zoneTint,
   selectedNodeId = null,
@@ -146,6 +164,7 @@ export default function SectorOverworldMap({
   onScoutProgressChange,
   mapStatusText,
   layoutRollKey,
+  currentDistrict = 1,
   compact = false,
   interactive = true,
 }: SectorOverworldMapProps): React.JSX.Element {
@@ -165,6 +184,7 @@ export default function SectorOverworldMap({
   const [tearActive, setTearActive] = useState(false);
   const [scanlineIntensity, setScanlineIntensity] = useState(0);
   const [ghostRadarBlip, setGhostRadarBlip] = useState<{ x: number; y: number } | null>(null);
+  const [patrolDriftRad, setPatrolDriftRad] = useState(0);
 
   const playerWorldX = useSharedValue(0);
   const playerWorldY = useSharedValue(0);
@@ -511,6 +531,31 @@ export default function SectorOverworldMap({
     canvasHeight.value = height;
   };
 
+  useEffect(() => {
+    if (patrolState.blipCount === 0) {
+      setPatrolDriftRad(0);
+      return;
+    }
+
+    let rafId: number | null = null;
+    let lastTs: number | null = null;
+
+    const tick = (ts: number) => {
+      const prev = lastTs ?? ts;
+      const deltaMs = Math.min(32, ts - prev);
+      lastTs = ts;
+      setPatrolDriftRad((rad) => rad + (
+        PATROL_DRIFT_RAD_PER_SEC * patrolState.speedMultiplier * deltaMs
+      ) / 1000);
+      rafId = requestAnimationFrame(tick);
+    };
+
+    rafId = requestAnimationFrame(tick);
+    return () => {
+      if (rafId != null) cancelAnimationFrame(rafId);
+    };
+  }, [patrolState.blipCount, patrolState.speedMultiplier]);
+
   const effectiveScale = canvasSize.width > 0
     ? resolveMapDrawMetrics(
       canvasSize.width,
@@ -526,7 +571,7 @@ export default function SectorOverworldMap({
     const center = LEY_TRACKER_SIZE / 2;
     const maxR = leyTrackerMaxCanvasRadius(LEY_TRACKER_SIZE);
 
-    return vectorDots
+    const riftDots = vectorDots
       .filter((dot) => blipById.has(dot.id))
       .map((dot) => {
         const blip = blipById.get(dot.id)!;
@@ -540,7 +585,15 @@ export default function SectorOverworldMap({
           angleDeg: bearingFromCanvasCenter(LEY_TRACKER_SIZE, x, y),
         };
       });
-  }, [radarBlips, vectorDots]);
+
+    const patrolDots = buildPatrolRadarDots(
+      patrolState,
+      LEY_TRACKER_SIZE,
+      patrolDriftRad,
+    );
+
+    return [...riftDots, ...patrolDots];
+  }, [radarBlips, vectorDots, patrolState, patrolDriftRad]);
 
   const revealedMapNodes = useMemo(() => {
     if (compact) return [];
@@ -590,6 +643,8 @@ export default function SectorOverworldMap({
       }));
   }, [scoutNodes, registryIds, manifestedIds]);
 
+  const districtOverlayColor = DISTRICT_ATMOSPHERE_OVERLAY[currentDistrict];
+
   const renderRiftNodes = useMemo((): Array<{ node: ScoutNode; manifested: boolean }> => {
     if (compact) {
       return scoutNodes.map((node) => ({ node, manifested: true }));
@@ -619,6 +674,15 @@ export default function SectorOverworldMap({
                 viewBoxWidth={mapViewBox.width}
                 viewBoxHeight={mapViewBox.height}
               />
+              {!compact && districtOverlayColor ? (
+                <Rect
+                  x={0}
+                  y={0}
+                  width={mapViewBox.width}
+                  height={mapViewBox.height}
+                  color={districtOverlayColor}
+                />
+              ) : null}
               <FogCorridorMask
                 viewBoxWidth={mapViewBox.width}
                 viewBoxHeight={mapViewBox.height}

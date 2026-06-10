@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { BLOOD_FRENZY_RESONANCE_THRESHOLD } from '../types/combatEnvironment';
+import { getResonanceZone } from '../data/resonanceHeatVentEngine';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 
@@ -20,8 +21,9 @@ export default function OperativeTelemetryBar(): React.JSX.Element {
     const shieldPct = Math.max(0, Math.min(100, healthPct + 8));
     const energyPct = Math.max(0, Math.min(100, runState.startingAbyssalReservePercent));
     const resonancePct = activeIncursion.resonance.percent;
-    const frenzyTag = resonancePct > BLOOD_FRENZY_RESONANCE_THRESHOLD ? ' // BLOOD FRENZY' : '';
-    return `HEALTH: ${healthPct}% // SHIELD: ${shieldPct}% // STAMINA: ${staminaPct}% // ENERGY: ${energyPct}%`;
+    const resonanceZone = getResonanceZone(resonancePct);
+    const frenzyTag = resonancePct > BLOOD_FRENZY_RESONANCE_THRESHOLD ? ' // FRENZY' : '';
+    return `HEALTH: ${healthPct}% // SHIELD: ${shieldPct}% // STAMINA: ${staminaPct}% // ENERGY: ${energyPct}% // RES: ${resonancePct}% [${resonanceZone}]${frenzyTag} // D${activeIncursion.currentDistrict}`;
   }, [
     runState.soulAnchorIntegrity,
     runState.maxSoulAnchor,
@@ -29,6 +31,7 @@ export default function OperativeTelemetryBar(): React.JSX.Element {
     runState.maxStamina,
     runState.startingAbyssalReservePercent,
     activeIncursion.resonance.percent,
+    activeIncursion.currentDistrict,
   ]);
 
   return (

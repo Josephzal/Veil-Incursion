@@ -5,7 +5,9 @@ export type SectorZoneId = 'OUTSKIRTS' | 'DEEP_TRANSIT' | 'BREACH_PERIMETER' | '
 export type SafeAnchorIndex = 1 | 2 | 3;
 
 export const SAFE_ANCHOR_GRAPH_DEPTHS: readonly [5, 10, 15] = [5, 10, 15];
-export const BOSS_GRAPH_DEPTH = 20;
+export const BOSS_GRAPH_DEPTH = 30;
+/** District gate boss encounters at depths 10, 20, and 30. */
+export const DISTRICT_GATE_DEPTHS: readonly [10, 20, 30] = [10, 20, 30];
 
 /** Max scanner vectors per hub (graph children + optional anchor). */
 export const SCANNER_MAX_VECTORS = 3;

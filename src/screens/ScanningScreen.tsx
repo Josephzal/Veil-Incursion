@@ -44,6 +44,7 @@ export default function ScanningScreen(): React.JSX.Element {
     focusPreviewNode,
     appendRunLog,
     initiateEmergencyRecall,
+    applyResonanceManifestScan,
   } = useRun();
   const { account } = usePlayerAccount();
   const { isScanningHub, finalizeSectorExtraction } = useDescentNavigator();
@@ -216,9 +217,10 @@ export default function ScanningScreen(): React.JSX.Element {
     appendRunLog(`>> FREQUENCY MATCH DETECTED // DISTANCE: ${distanceMeters}m`);
   }, [appendRunLog]);
 
-  const handleNodeManifest = useCallback((_nodeId: string, logLine: string) => {
+  const handleNodeManifest = useCallback((nodeId: string, logLine: string) => {
     appendRunLog(logLine);
-  }, [appendRunLog]);
+    applyResonanceManifestScan(nodeId);
+  }, [appendRunLog, applyResonanceManifestScan]);
 
   if (!isScanningHub) {
     return (
@@ -246,6 +248,7 @@ export default function ScanningScreen(): React.JSX.Element {
               cluster={vectorCluster}
               nodesCleared={nodeIndex}
               vectorDots={vectorDots}
+              patrolState={activeIncursion.patrolState}
               cabal={cabal}
               zoneTint={zoneTint}
               selectedNodeId={selectedNodeId}
@@ -255,8 +258,9 @@ export default function ScanningScreen(): React.JSX.Element {
               onNodeManifest={handleNodeManifest}
               onManifestedIdsChange={handleManifestedIdsChange}
               onScoutProgressChange={handleScoutProgressChange}
-              layoutRollKey={scanSessionKey}
-              mapStatusText={`SECTOR T${activeIncursion.sectorTier} // NODE ${nodeIndex} // RES ${activeIncursion.resonance.percent}% // ATT ${activeIncursion.attunement.current}/${activeIncursion.attunement.max}`}
+              currentDistrict={activeIncursion.currentDistrict}
+              layoutRollKey={`${scanSessionKey}-d${activeIncursion.currentDistrict}`}
+              mapStatusText={`DIST ${activeIncursion.currentDistrict} // DEPTH ${activeIncursion.currentDepth} // RES ${activeIncursion.resonance.percent}% // ATT ${activeIncursion.attunement.current}/${activeIncursion.attunement.max}`}
             />
           </View>
 

@@ -21,6 +21,7 @@ import ExtractionReviewScreen from './src/screens/ExtractionReviewScreen';
 import CombatScreen from './src/screens/CombatScreen';
 import CombatEntryTransition from './src/components/combat/CombatEntryTransition';
 import RunCompleteScreen from './src/screens/RunCompleteScreen';
+import SafehouseScreen from './src/screens/SafehouseScreen';
 import GameOverScreen from './src/screens/GameOverScreen';
 
 function GameRoot(): React.JSX.Element {
@@ -42,6 +43,7 @@ function GameRoot(): React.JSX.Element {
       {currentScreen === 'EXTRACTION_REVIEW' && <ExtractionReviewScreen />}
       {currentScreen === 'COMBAT' && <CombatScreen />}
       {currentScreen === 'RUN_COMPLETE' && <RunCompleteScreen />}
+      {currentScreen === 'SAFEHOUSE' && <SafehouseScreen />}
       {currentScreen === 'GAME_OVER' && <GameOverScreen />}
       {combatEntryActive ? (
         <CombatEntryTransition onComplete={completeCombatEntry} />

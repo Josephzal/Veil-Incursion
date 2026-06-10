@@ -4,10 +4,10 @@ import { BOSS_GRAPH_DEPTH, SAFE_ANCHOR_GRAPH_DEPTHS, ZONE_RESONANCE_BASE } from 
 import type { SafeAnchorIndex } from '../types/sectorPacing';
 
 export function getSectorZone(nodesCleared: number, collapseActive = false): SectorZoneId {
-  if (collapseActive || nodesCleared >= 20) return 'COLLAPSE';
-  if (nodesCleared >= 15) return 'INNER_SANCTUM';
-  if (nodesCleared >= 10) return 'BREACH_PERIMETER';
-  if (nodesCleared >= 5) return 'DEEP_TRANSIT';
+  if (collapseActive || nodesCleared >= 30) return 'COLLAPSE';
+  if (nodesCleared >= 22) return 'INNER_SANCTUM';
+  if (nodesCleared >= 15) return 'BREACH_PERIMETER';
+  if (nodesCleared >= 7) return 'DEEP_TRANSIT';
   return 'OUTSKIRTS';
 }
 

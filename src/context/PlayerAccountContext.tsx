@@ -24,6 +24,8 @@ import {
   InventoryItem,
   PlayerAccount,
 } from '../types/game';
+import { createDefaultBankedCargo } from '../types/cargoGrid';
+import type { GlobalBankedCargo } from '../types/cargoGrid';
 import { MacroSectorId, RegionalPresenceState } from '../types/regional';
 
 const STORAGE_KEY = '@veil_incursion/player_account_v2';
@@ -66,6 +68,7 @@ export function createDefaultPlayerAccount(): PlayerAccount {
       trinketId: null,
     },
     inventory,
+    bankedCargo: createDefaultBankedCargo(),
   };
 }
 
@@ -92,6 +95,10 @@ function mergeStoredAccount(parsed: Partial<PlayerAccount>): PlayerAccount {
       weaponId: equipped?.id ?? parsed.equipment?.weaponId ?? defaults.equipment.weaponId,
     },
     inventory,
+    bankedCargo: {
+      ...createDefaultBankedCargo(),
+      ...parsed.bankedCargo,
+    },
   };
 }
 
@@ -127,6 +134,7 @@ interface PlayerAccountContextType {
   resetAccount: () => void;
   unlockRegionalWeaponCoating: (slotId: string) => void;
   setMetropolitanNode: (node: string, sectorId?: MacroSectorId) => void;
+  depositBankedCargo: (delta: GlobalBankedCargo) => void;
 }
 
 const PlayerAccountContext = createContext<PlayerAccountContextType | undefined>(undefined);
@@ -335,6 +343,19 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
     [updateAccount],
   );
 
+  const depositBankedCargo = useCallback(
+    (delta: GlobalBankedCargo) => {
+      updateAccount((prev) => ({
+        ...prev,
+        bankedCargo: {
+          totalValue: prev.bankedCargo.totalValue + delta.totalValue,
+          lastTransferValue: delta.lastTransferValue,
+        },
+      }));
+    },
+    [updateAccount],
+  );
+
   const value = useMemo(
     () => ({
       account,
@@ -353,6 +374,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       resetAccount,
       unlockRegionalWeaponCoating,
       setMetropolitanNode,
+      depositBankedCargo,
     }),
     [
       account,
@@ -371,6 +393,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       resetAccount,
       unlockRegionalWeaponCoating,
       setMetropolitanNode,
+      depositBankedCargo,
     ],
   );
 

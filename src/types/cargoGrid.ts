@@ -60,6 +60,16 @@ export interface CargoRunState {
   dataBleedActive: boolean;
 }
 
+/** Persistent cabal vault — survives district transitions and hub returns. */
+export interface GlobalBankedCargo {
+  totalValue: number;
+  lastTransferValue: number;
+}
+
+export function createDefaultBankedCargo(): GlobalBankedCargo {
+  return { totalValue: 0, lastTransferValue: 0 };
+}
+
 export interface HarvestYieldOption {
   tier: HarvestYieldTier;
   label: string;
