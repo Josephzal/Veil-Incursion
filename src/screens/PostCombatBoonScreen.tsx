@@ -37,9 +37,12 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
   useEffect(() => {
     if (postCombatMutationChoices.length === 0 && !mutationsPreparedRef.current) {
       mutationsPreparedRef.current = true;
-      preparePostCombatMutations();
+      const choices = preparePostCombatMutations();
+      if (choices.length === 0) {
+        finalizeIncursionAdvance('Ley-Scar acquisition blocked — node advance continues.');
+      }
     }
-  }, [postCombatMutationChoices.length, preparePostCombatMutations]);
+  }, [finalizeIncursionAdvance, postCombatMutationChoices.length, preparePostCombatMutations]);
 
   const handleContinue = () => {
     if (!selectedMutationId || selectingRef.current) return;

@@ -17,13 +17,12 @@ const { width } = Dimensions.get('window');
 
 export default function WelcomeScreen(): React.JSX.Element {
   const { theme, profile } = useTerminal();
-  const { startScanning } = useGameFlow();
-  const { startNewRun, beginScanSession } = useRun();
+  const { startBoundRequisition } = useGameFlow();
+  const { startNewRun } = useRun();
 
   const handleStartScan = () => {
     startNewRun();
-    beginScanSession();
-    startScanning();
+    startBoundRequisition();
   };
   const credentials = profile.operative_profile.credentials;
   const vectors = profile.operative_profile.location_vectors;

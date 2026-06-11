@@ -9,6 +9,7 @@ import type { PatrolState } from './overworldPatrol';
 import type { AegisLoadout } from './aegisCombat';
 import type { CargoItemId } from './cargoGrid';
 import type { LeyLineMutationId } from './leyLineMutation';
+import type { BoundRequisitionRuntime } from './boundRequisition';
 import { DEFAULT_AEGIS_LOADOUT } from './aegisCombat';
 import { createEmptyPatrolState } from './overworldPatrol';
 import { createDefaultResonanceEscalationState } from './resonanceEscalation';
@@ -352,6 +353,8 @@ export interface ActiveIncursionState {
   defendRiftActive: boolean;
   /** Whether the prior scanner hub offered any combat vector (pity-timer input). */
   lastLevelOfferedCombat: boolean;
+  /** Active bound requisition modifiers — set at run start after requisition pick. */
+  boundRequisition: BoundRequisitionRuntime | null;
 }
 
 export function createDefaultEnvironmentalModifiers(): EnvironmentalModifiers {
@@ -417,5 +420,6 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     masterLinkUsed: false,
     defendRiftActive: false,
     lastLevelOfferedCombat: true,
+    boundRequisition: null,
   };
 }

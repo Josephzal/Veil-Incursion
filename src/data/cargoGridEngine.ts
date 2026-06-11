@@ -90,6 +90,35 @@ export function canPlaceCargoItem(
   return canPlaceCargoItemExcluding(cargo, itemId, originRow, originCol);
 }
 
+/** Places a catalog item in the first open grid cell, if any. */
+export function placeCargoAtFirstOpenSlot(
+  cargo: CargoRunState,
+  itemId: CargoItemId,
+): CargoRunState | null {
+  for (let row = 0; row < CARGO_GRID_DIMENSION; row += 1) {
+    for (let col = 0; col < CARGO_GRID_DIMENSION; col += 1) {
+      if (!canPlaceCargoItem(cargo, itemId, row, col)) continue;
+      const def = CARGO_ITEM_CATALOG[itemId];
+      return {
+        ...cargo,
+        grid: {
+          placed: [
+            ...cargo.grid.placed,
+            {
+              instanceId: createCargoInstanceId(itemId),
+              itemId,
+              originRow: row,
+              originCol: col,
+              currentValue: def.baseValue,
+            },
+          ],
+        },
+      };
+    }
+  }
+  return null;
+}
+
 export function placeCargoFromContainment(
   cargo: CargoRunState,
   containmentInstanceId: string,

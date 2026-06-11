@@ -24,7 +24,7 @@ export default function OverworldHubScreen(): React.JSX.Element {
     usePlayerAccount();
   const { isInfluenceFrozen, frozenInfluence } = useRegionalShatter();
   const { startNewRun } = useRun();
-  const { startScanning } = useGameFlow();
+  const { startBoundRequisition } = useGameFlow();
 
   const [activeMagnetSector, setActiveMagnetSector] = useState<MacroSectorId>(
     account.regionalPresence.homeMacroSector,
@@ -47,7 +47,7 @@ export default function OverworldHubScreen(): React.JSX.Element {
       aegisLoadout: account.aegisLoadout,
       alignedFaction: account.alignedFaction,
     });
-    startScanning();
+    startBoundRequisition();
   };
 
   const handleSelectFaction = (faction: FactionType) => {

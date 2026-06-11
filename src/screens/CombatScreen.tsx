@@ -42,6 +42,7 @@ import {
 import { encounterBudgetForDepth } from '../data/combatEncounterBudget';
 import type { CargoItemId } from '../types/cargoGrid';
 import { depthFromNodesCleared } from '../data/districtPacing';
+import { shouldGrantAdrenalinePrimerAp } from '../data/boundRequisitionEngine';
 import type { IncursionConsumableUseResult } from '../types/incursionInventory';
 
 import AegisCombat from '../../assets/images/character images/aegis/aegis_combat.png';
@@ -120,6 +121,8 @@ export default function CombatScreen(): React.JSX.Element {
     getSelectedVectorNode,
     beginPostCombatHarvest,
     completeDefendRiftVictory,
+    consumeAdrenalinePrimerAfterCombat,
+    isPostCombatBoonBlocked,
   } = useRun();
   const { completeCurrentNode } = useNodeProgression();
   const { getWeaponCombatStats } = usePlayerAccount();
@@ -127,6 +130,7 @@ export default function CombatScreen(): React.JSX.Element {
   const env = activeIncursion.environmentalModifiers;
   const combatEntryStamina =
     env.startingStaminaPenalty > 0 ? 50 : runState.currentStamina;
+  const adrenalinePrimerBonusAp = shouldGrantAdrenalinePrimerAp(activeIncursion) ? 1 : 0;
 
   const [squadUi, setSquadUi] = useState<CombatSquadUiSnapshot | null>(null);
   const [operativeTelemetry, setOperativeTelemetry] = useState<CombatOperativeTelemetry | null>(null);
@@ -349,6 +353,9 @@ export default function CombatScreen(): React.JSX.Element {
         : 'hostile eradicated';
 
     awardRunCredits(creditReward, creditReason);
+    if (adrenalinePrimerBonusAp > 0) {
+      consumeAdrenalinePrimerAfterCombat();
+    }
 
     if (runState.pendingAmbush) {
       clearPendingAmbush();
@@ -357,6 +364,10 @@ export default function CombatScreen(): React.JSX.Element {
 
       const harvestRoute = activeIncursion.pendingHarvestReturn;
       if (harvestRoute === 'POST_COMBAT') {
+        if (isPostCombatBoonBlocked()) {
+          completeCurrentNode('Ambush repelled — Ley-Scar boon waived.', result.remainingHp);
+          return;
+        }
         startPostCombatBoon();
         return;
       }
@@ -382,7 +393,10 @@ export default function CombatScreen(): React.JSX.Element {
   }, [
     activeIncursion.bossProfile,
     activeIncursion.defendRiftActive,
+    adrenalinePrimerBonusAp,
     awardRunCredits,
+    consumeAdrenalinePrimerAfterCombat,
+    isPostCombatBoonBlocked,
     completeDefendRiftVictory,
     clearPendingAmbush,
     completeCurrentNode,
@@ -493,6 +507,7 @@ export default function CombatScreen(): React.JSX.Element {
                 aegisLoadout={activeIncursion.aegisLoadout}
                 leyLineMutations={activeIncursion.leyLineMutations}
                 spectralSaltActive={spectralSaltActive}
+                firstTurnBonusAp={adrenalinePrimerBonusAp}
               />
             </View>
           </View>

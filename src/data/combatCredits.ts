@@ -1,4 +1,4 @@
-/** Void-chit economy — tuned for ~200–250 credits by Depth 10 with aggressive exploration. */
+/** Run credit economy — tuned for ~200–250 credits by Depth 10 with aggressive exploration. */
 
 export const RUN_CREDIT_STANDARD_KILL_MIN = 5;
 export const RUN_CREDIT_STANDARD_KILL_MAX = 8;

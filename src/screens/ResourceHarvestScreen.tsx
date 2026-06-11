@@ -25,6 +25,7 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
     relocateCargoItem,
     appendRunLog,
     prepareHarvestAmbushEncounter,
+    isPostCombatBoonBlocked,
   } = useRun();
   const { startPostCombatBoon, startCombat } = useGameFlow();
   const { completeCurrentNode } = useNodeProgression();
@@ -47,6 +48,10 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
 
     const route = activeIncursion.pendingHarvestReturn;
     if (route === 'POST_COMBAT') {
+      if (isPostCombatBoonBlocked()) {
+        completeCurrentNode('Harvest secured — Ley-Scar boon waived.');
+        return;
+      }
       startPostCombatBoon();
       return;
     }

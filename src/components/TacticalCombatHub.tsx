@@ -189,6 +189,8 @@ interface TacticalCombatHubProps {
   combatDistrict?: 1 | 2 | 3;
   /** Spectral Salt in cargo — kinetic strikes bypass spectral resistance. */
   spectralSaltActive?: boolean;
+  /** Bound requisition first-turn AP bonus (Adrenaline Primer). */
+  firstTurnBonusAp?: number;
 }
 interface SliceLineConfig {
   id: number;
@@ -237,6 +239,7 @@ export default function TacticalCombatHub({
   leyLineMutations = [],
   combatDistrict = 1,
   spectralSaltActive = false,
+  firstTurnBonusAp = 0,
 }: TacticalCombatHubProps): React.JSX.Element {
   const env = environmentalModifiers ?? {
     isEnemyPhaseShrouded: false,
@@ -1616,8 +1619,9 @@ export default function TacticalCombatHub({
       corruptedBloodUnits: new Set<string>(),
       bloodForTimeUsed: false,
     };
-    playerApRef.current = PLAYER_ACTION_POINTS_PER_TURN;
-    setPlayerActionPoints(PLAYER_ACTION_POINTS_PER_TURN);
+    const entryAp = PLAYER_ACTION_POINTS_PER_TURN + Math.max(0, firstTurnBonusAp);
+    playerApRef.current = entryAp;
+    setPlayerActionPoints(entryAp);
     setSelectedAbility(null);
     setResolutionOutcome(null);
     setIsPlayerTurn(true);
@@ -1627,6 +1631,9 @@ export default function TacticalCombatHub({
     preAppliedHpStrikeRef.current = 0;
     enemyStunPendingRef.current = false;
     log('>> COMBAT LINK ESTABLISHED');
+    if (firstTurnBonusAp > 0) {
+      log(`>> ADRENALINE PRIMER — FIRST-TURN +${firstTurnBonusAp} AP.`);
+    }
     log('>> OPERATIVE TURN // Command deck online.');
     log(`>> WEAPON LINK: ${strikeStats.label} // STRIKE ${strikeStats.strikeDamage} DMG / ${strikeStats.strikeStaminaCost} STAM`);
     if (env.isPlayerBlinded) log('>> ENV: OPERATIVE BLINDED — Counter Stance window tightened 15%.');

@@ -171,6 +171,20 @@ import type { LeyLineMutationDefinition, LeyLineMutationId } from '../types/leyL
 import type { AegisLoadout } from '../types/aegisCombat';
 import type { CargoItemId } from '../types/cargoGrid';
 import type { IncursionConsumableId, IncursionConsumableUseResult } from '../types/incursionInventory';
+import type { BoundRequisitionDefinition, BoundRequisitionId } from '../types/boundRequisition';
+import { rollBoundRequisitionOffers } from '../data/boundRequisitions';
+import {
+  applyBoundRequisitionAtRunStart,
+  consumeAdrenalinePrimerCombat,
+  consumeScavengerMarkDiscount,
+  getBlackMarketDiscountPct,
+  getEffectiveBlackMarketPrice,
+  isLeyScarAcquisitionBlocked,
+  modifyScanResonanceGain,
+  shouldGrantAdrenalinePrimerAp,
+  tickChalkLineWardAfterNodeClear,
+} from '../data/boundRequisitionEngine';
+import type { PlayerAccount } from '../types/game';
 
 export interface RunStartConfig {
   factionPerks?: FactionModifiers;
@@ -187,6 +201,11 @@ interface RunContextType {
   postCombatMutationChoices: LeyLineMutationDefinition[];
   appendRunLog: (text: string) => void;
   startNewRun: (config?: RunStartConfig) => void;
+  boundRequisitionOffers: BoundRequisitionDefinition[];
+  prepareBoundRequisitionOffers: (account: PlayerAccount) => void;
+  confirmBoundRequisition: (id: BoundRequisitionId) => void;
+  consumeAdrenalinePrimerAfterCombat: () => void;
+  isPostCombatBoonBlocked: () => boolean;
   beginScanSession: () => void;
   commitRadarDot: (dot: RadarDot) => EncounterNode;
   advanceNode: () => { hasNext: boolean; completedCount: number };
@@ -384,6 +403,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   scanSessionKeyRef.current = scanSessionKey;
   const pocketResonanceAccumRef = useRef(0);
   const [postCombatMutationChoices, setPostCombatMutationChoices] = useState<LeyLineMutationDefinition[]>([]);
+  const [boundRequisitionOffers, setBoundRequisitionOffers] = useState<BoundRequisitionDefinition[]>([]);
   const [activeIncursion, setActiveIncursion] = useState<ActiveIncursionState>(
     createDefaultActiveIncursionState,
   );
@@ -475,6 +495,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     resetCargoInstanceCounter();
     setScanSessionKey(1);
     setPostCombatMutationChoices([]);
+    setBoundRequisitionOffers([]);
     const biomeTag = (config?.unlockedBiomes ?? ['HOSPITAL', 'ALLEYWAYS']).join(', ');
     setRunLog([
       '>> RUN INITIALIZED — OPEN SECTOR ENGINE ONLINE.',
@@ -509,6 +530,51 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     setScanSessionKey((k) => k + 1);
     setTimeout(() => refreshOverworldFeatures(), 0);
   }, [refreshOverworldFeatures]);
+
+  const prepareBoundRequisitionOffers = useCallback((account: PlayerAccount) => {
+    const inc = activeIncursionRef.current;
+    const offers = rollBoundRequisitionOffers(account, inc.alignedFaction);
+    setBoundRequisitionOffers(offers);
+  }, []);
+
+  const confirmBoundRequisition = useCallback((id: BoundRequisitionId) => {
+    const run = runStateRef.current;
+    const inc = activeIncursionRef.current;
+    const result = applyBoundRequisitionAtRunStart(id, run, inc);
+
+    if (Object.keys(result.runPatch).length > 0) {
+      const nextRun = { ...run, ...result.runPatch };
+      runStateRef.current = nextRun;
+      setRunState(nextRun);
+    }
+
+    setActiveIncursion((prev) => {
+      const next = { ...prev, ...result.incursionPatch };
+      activeIncursionRef.current = next;
+      return next;
+    });
+
+    result.logLines.forEach((line) => appendRunLog(line));
+    setBoundRequisitionOffers([]);
+  }, [appendRunLog]);
+
+  const consumeAdrenalinePrimerAfterCombat = useCallback(() => {
+    const inc = activeIncursionRef.current;
+    const req = inc.boundRequisition;
+    if (!req || req.adrenalinePrimerCombatsRemaining <= 0) return;
+
+    const nextReq = consumeAdrenalinePrimerCombat(req);
+    setActiveIncursion((prev) => {
+      const next = { ...prev, boundRequisition: nextReq };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    appendRunLog('>> ADRENALINE PRIMER SPENT — FIRST-TURN AP BONUS CONSUMED.');
+  }, [appendRunLog]);
+
+  const isPostCombatBoonBlocked = useCallback((): boolean => {
+    return isLeyScarAcquisitionBlocked(activeIncursionRef.current);
+  }, []);
 
   const applyTrinket = useCallback((trinket: Trinket) => {
     setRunState((prev) => {
@@ -617,6 +683,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const applyLeyLineMutation = useCallback((mutationId: LeyLineMutationId) => {
     const inc = activeIncursionRef.current;
+    if (isLeyScarAcquisitionBlocked(inc)) {
+      appendRunLog('>> LEY-SCAR ACQUISITION BLOCKED — IRONCLAD LOGISTICS MANDATE ACTIVE.');
+      return;
+    }
     if (inc.leyLineMutations.length >= MAX_LEY_MUTATIONS) {
       setActiveIncursion((prev) => {
         const next = {
@@ -689,11 +759,17 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   }, [appendRunLog]);
 
   const preparePostCombatMutations = useCallback((): LeyLineMutationDefinition[] => {
-    const owned = activeIncursionRef.current.leyLineMutations;
+    const inc = activeIncursionRef.current;
+    if (isLeyScarAcquisitionBlocked(inc)) {
+      setPostCombatMutationChoices([]);
+      appendRunLog('>> LEY-SCAR BOON SKIPPED — IRONCLAD LOGISTICS MANDATE ACTIVE.');
+      return [];
+    }
+    const owned = inc.leyLineMutations;
     const choices = pickRandomLeyLineMutations(3, owned);
     setPostCombatMutationChoices(choices);
     return choices;
-  }, []);
+  }, [appendRunLog]);
 
   const applySkillCheckTier = useCallback((tier: 'CRITICAL_SUCCESS' | 'SUCCESS' | 'FAILURE' | 'CRITICAL_DESYNC', logLine: string) => {
     setRunState((prev) => {
@@ -1688,11 +1764,17 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       districtChanged ? 0 : inc.overworldSession.rawBoonsClaimedThisDistrict,
     );
 
+    const chalkWardRuntime = tickChalkLineWardAfterNodeClear({
+      ...expandedInc,
+      nodesCleared: nextNodesCleared,
+    });
+
     const incAfterClear: ActiveIncursionState = {
       ...expandedInc,
       sectorGraph: nextSectorGraph,
       currentNodeId: resolvedNextNodeId,
       nodesCleared: nextNodesCleared,
+      boundRequisition: chalkWardRuntime ?? expandedInc.boundRequisition,
       currentDepth: nextDepth,
       currentDistrict: nextDistrict,
       lastMacroBiomeFamily: inc.currentMacroBiomeFamily,
@@ -2291,7 +2373,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const inc = activeIncursionRef.current;
     if (inc.resonanceManifestNodeIds.includes(nodeId)) return;
 
-    const gain = computeScanPenalty(inc.currentDistrict);
+    const baseGain = computeScanPenalty(inc.currentDistrict);
+    const gain = modifyScanResonanceGain(inc, baseGain);
     const patch = buildResonanceMutationPatch(inc, gain, scanSessionKeyRef.current);
     patch.escalationLogLines.forEach((line) => appendRunLog(line));
 
@@ -2730,7 +2813,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const stock = inc.blackMarketStock.length > 0 ? inc.blackMarketStock : rollBlackMarketStock();
     const listing = listingsForStock(stock).find((entry) => entry.id === itemId)
       ?? listingsForStock(rollBlackMarketStock()).find((entry) => entry.id === itemId);
-    const price = listing?.price ?? CARGO_ITEM_CATALOG[itemId]?.baseValue ?? 60;
+    const basePrice = listing?.price ?? CARGO_ITEM_CATALOG[itemId]?.baseValue ?? 60;
+    const discountPct = getBlackMarketDiscountPct(inc);
+    const price = getEffectiveBlackMarketPrice(basePrice, discountPct);
     if (stock.length > 0 && !stock.includes(itemId)) {
       return { success: false, logLine: '[REJECTED] >> Item not in current market stock.' };
     }
@@ -2740,18 +2825,24 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
     setActiveIncursion((prev) => {
       const nextCargo = addLootToContainment(prev.cargo, itemId, 1);
+      let nextReq = prev.boundRequisition;
+      if (nextReq?.scavengerMarkBlackMarketPending) {
+        nextReq = consumeScavengerMarkDiscount(nextReq);
+      }
       const next = {
         ...prev,
         runCredits: prev.runCredits - price,
         cargo: nextCargo,
+        boundRequisition: nextReq,
       };
       activeIncursionRef.current = next;
       return next;
     });
 
+    const discountNote = discountPct > 0 ? ` // SCAVENGER MARK -${discountPct}%` : '';
     return {
       success: true,
-      logLine: `>> BLACK MARKET CARGO — ${CARGO_ITEM_CATALOG[itemId].name} staged in containment. -${price} RUN CREDITS.`,
+      logLine: `>> BLACK MARKET CARGO — ${CARGO_ITEM_CATALOG[itemId].name} staged in containment. -${price} RUN CREDITS.${discountNote}`,
     };
   }, []);
 
@@ -2763,6 +2854,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       postCombatMutationChoices,
       appendRunLog,
       startNewRun,
+      boundRequisitionOffers,
+      prepareBoundRequisitionOffers,
+      confirmBoundRequisition,
+      consumeAdrenalinePrimerAfterCombat,
+      isPostCombatBoonBlocked,
       beginScanSession,
       commitRadarDot,
       advanceNode,
@@ -2851,6 +2947,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       postCombatMutationChoices,
       appendRunLog,
       startNewRun,
+      boundRequisitionOffers,
+      prepareBoundRequisitionOffers,
+      confirmBoundRequisition,
+      consumeAdrenalinePrimerAfterCombat,
+      isPostCombatBoonBlocked,
       beginScanSession,
       commitRadarDot,
       advanceNode,

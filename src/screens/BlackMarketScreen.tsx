@@ -8,6 +8,10 @@ import {
 } from 'react-native';
 import BlackMarketBg from '../../assets/images/location images/black_market.png';
 import { listingsForStock } from '../data/blackMarket';
+import {
+  getBlackMarketDiscountPct,
+  getEffectiveBlackMarketPrice,
+} from '../data/boundRequisitionEngine';
 import { countCargoItemInstances } from '../data/cargoGridEngine';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
@@ -37,12 +41,18 @@ export default function BlackMarketScreen(): React.JSX.Element {
       ? activeIncursion.blackMarketStock
       : ['soul-core'],
   );
+  const blackMarketDiscountPct = getBlackMarketDiscountPct(activeIncursion);
+  const priceForListing = (basePrice: number) =>
+    getEffectiveBlackMarketPrice(basePrice, blackMarketDiscountPct);
   const selectedCargoListing = selectedCargoId != null
     ? marketListings.find((entry) => entry.id === selectedCargoId) ?? null
     : null;
+  const selectedPrice = selectedCargoListing != null
+    ? priceForListing(selectedCargoListing.price)
+    : 0;
 
   const cargoPurchaseEnabled = selectedCargoListing != null
-    && activeIncursion.runCredits >= selectedCargoListing.price;
+    && activeIncursion.runCredits >= selectedPrice;
 
   const ownedQty = selectedCargoId != null
     ? countCargoItemInstances(activeIncursion.cargo, selectedCargoId)
@@ -80,6 +90,7 @@ export default function BlackMarketScreen(): React.JSX.Element {
                 <Text style={styles.docTitle}>BLACK MARKET</Text>
                 <Text style={[styles.creditsLine, { color: TERMINAL_ACCENT }]}>
                   RUN CREDITS: {activeIncursion.runCredits}
+                  {blackMarketDiscountPct > 0 ? ` // SCAVENGER MARK -${blackMarketDiscountPct}%` : ''}
                 </Text>
               </View>
 
@@ -110,7 +121,7 @@ export default function BlackMarketScreen(): React.JSX.Element {
                           />
                         </View>
                         <Text style={[styles.cellPrice, { color: theme.mutedColor }]}>
-                          {listing.price} CR
+                          {priceForListing(listing.price)} CR
                         </Text>
                         <Text style={[styles.cellQty, { color: theme.mutedColor }]}>
                           {owned > 0 ? `x${owned}` : ' '}
@@ -141,7 +152,7 @@ export default function BlackMarketScreen(): React.JSX.Element {
                           {selectedCargoListing.effect}
                         </Text>
                         <Text style={[styles.detailEffect, { color: theme.mutedColor }]}>
-                          {`OWNED: ${ownedQty} // PRICE: ${selectedCargoListing.price} CR`}
+                          {`OWNED: ${ownedQty} // PRICE: ${selectedPrice} CR`}
                         </Text>
                       </View>
                     </View>
