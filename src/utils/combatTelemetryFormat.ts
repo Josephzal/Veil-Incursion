@@ -99,6 +99,8 @@ export interface CombatGridUnitSnapshot {
   isFractured: boolean;
   portraitGlow?: EnemyPortraitGlow;
   portraitAnim?: EnemyPortraitAnim;
+  /** Increments when the operative deals HP damage to this unit (drives hit flash). */
+  hitFlashSeq?: number;
 }
 
 export interface CombatSquadUiSnapshot {

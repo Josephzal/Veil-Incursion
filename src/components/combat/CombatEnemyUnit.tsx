@@ -10,9 +10,10 @@ import {
   ENEMY_HITBOX_DEBUG,
   FRONTLINE_HITBOX,
 } from './combatEnemyBarLayout';
+import CombatEnemyHitEffect from './CombatEnemyHitEffect';
 import CombatEnemyPortraitSkia from './CombatEnemyPortraitSkia';
+import CombatSilhouetteShatterEffect from './CombatSilhouetteShatterEffect';
 
-const BLOCKED_OVERLAY = 'rgba(220, 38, 38, 0.35)';
 const HITBOX_DEBUG_FILL = 'rgba(255, 0, 0, 0)';
 
 export type CombatGridUnitView = CombatGridUnitSnapshot & {
@@ -37,9 +38,7 @@ export default function CombatEnemyUnit({
 }: CombatEnemyUnitProps): React.JSX.Element {
   const spriteHeightShare =
     `${Math.round(ARENA_ENEMY_SPRITE_HEIGHT_SHARE * 100)}%` as `${number}%`;
-  const fractureMax = unit.fractureMax ?? 100;
-  const fractureRatio = fractureMax > 0 ? (unit.fractureGauge ?? 0) / fractureMax : 0;
-  const fractured = unit.isFractured || fractureRatio >= 1;
+  const fractured = unit.isFractured;
   const portraitGlow = unit.portraitGlow ?? (unit.isSelected ? 'player-selected' : 'none');
   const isBackline = laneForSlot(unit.slot) === 'BACKLINE';
   const hitboxLayout = isBackline ? BACKLINE_HITBOX : FRONTLINE_HITBOX;
@@ -50,7 +49,6 @@ export default function CombatEnemyUnit({
         styles.imageShell,
         constrainSpriteHeight ? styles.imageShellArena : styles.imageShellCompact,
         constrainSpriteHeight ? { height: spriteHeightShare, maxHeight: spriteHeightShare } : null,
-        fractured ? styles.spriteFractured : null,
         {
           opacity: unit.isBlocked && targetingActive && !unit.isHookValid ? 0.5 : 1,
         },
@@ -58,11 +56,15 @@ export default function CombatEnemyUnit({
       pointerEvents="box-none"
     >
       <View style={styles.portraitLayer} pointerEvents="none">
-        <CombatEnemyPortraitSkia
-          source={unit.portraitSource}
-          glow={portraitGlow}
-          anim={unit.portraitAnim ?? 'none'}
-        />
+        <CombatEnemyHitEffect hitFlashSeq={unit.hitFlashSeq} portraitSource={unit.portraitSource}>
+          <CombatSilhouetteShatterEffect trigger={fractured} portraitSource={unit.portraitSource}>
+            <CombatEnemyPortraitSkia
+              source={unit.portraitSource}
+              glow={portraitGlow}
+              anim={unit.portraitAnim ?? 'none'}
+            />
+          </CombatSilhouetteShatterEffect>
+        </CombatEnemyHitEffect>
       </View>
 
       {onPress ? (
@@ -81,12 +83,6 @@ export default function CombatEnemyUnit({
           ]}
           pointerEvents="auto"
         />
-      ) : null}
-
-      {unit.isBlocked && targetingActive && !unit.isHookValid ? (
-        <View style={styles.blockedOverlay} pointerEvents="none">
-          <View style={styles.blockedStrike} />
-        </View>
       ) : null}
     </View>
   );
@@ -120,21 +116,5 @@ const styles = StyleSheet.create({
   },
   hitboxDebug: {
     backgroundColor: HITBOX_DEBUG_FILL,
-  },
-  spriteFractured: {
-    opacity: 0.55,
-  },
-  blockedOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 11,
-  },
-  blockedStrike: {
-    position: 'absolute',
-    width: '120%',
-    height: 2,
-    backgroundColor: BLOCKED_OVERLAY,
-    transform: [{ rotate: '-35deg' }],
   },
 });

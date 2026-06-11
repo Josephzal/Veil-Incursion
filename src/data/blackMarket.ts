@@ -15,8 +15,8 @@ export const BLACK_MARKET_CARGO_LISTINGS: readonly BlackMarketCargoListing[] = [
   {
     id: 'soul-core',
     name: CARGO_ITEM_CATALOG['soul-core'].name,
-    description: 'Condensed life-force from a Solaris ritual site. Restores 25% Soul Anchor in combat.',
-    effect: 'EFFECT: +25% SOUL ANCHOR // 1×1 CARGO',
+    description: 'Condensed life-force from a Solaris ritual site. Restores 50% Soul Anchor in combat.',
+    effect: 'EFFECT: +50% SOUL ANCHOR // 1×1 CARGO',
     price: 60,
     alwaysStocked: true,
   },

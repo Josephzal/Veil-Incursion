@@ -192,7 +192,7 @@ export const CARGO_ITEM_CATALOG: Record<CargoItemId, CargoItemDefinition> = {
     tags: ['CONSUMABLE', 'COMBAT', 'HEAL'],
     usableInCombat: true,
     combatEffect: 'heal',
-    healPercent: 25,
+    healPercent: 50,
   },
   'veil-shard': {
     id: 'veil-shard',

@@ -4,7 +4,7 @@ export const SOUL_CORE_ITEM: IncursionConsumable = {
   id: 'soul-core',
   name: 'Soul Core',
   description: 'Stabilized ley-fragment harvested from anchor chapels. Deploy to restore Soul Anchor integrity.',
-  healPercent: 25,
+  healPercent: 50,
   quantity: 0,
   effect: 'heal',
 };

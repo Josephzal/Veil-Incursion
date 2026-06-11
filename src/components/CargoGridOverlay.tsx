@@ -45,6 +45,17 @@ export default function CargoGridOverlay({
           style={[styles.panel, { borderColor: accentColor }]}
           onPress={(e) => e.stopPropagation()}
         >
+          <Pressable
+            onPress={onClose}
+            style={({ pressed }) => [
+              styles.closeX,
+              { borderColor: accentColor, opacity: pressed ? 0.7 : 1 },
+            ]}
+            hitSlop={8}
+          >
+            <Text style={[styles.closeXText, { color: accentColor }]}>✕</Text>
+          </Pressable>
+
           <CargoGridBoard
             cargo={cargo}
             theme={theme}
@@ -75,15 +86,6 @@ export default function CargoGridOverlay({
               return ok;
             } : undefined}
           />
-          <Pressable
-            onPress={onClose}
-            style={({ pressed }) => [
-              styles.closeBtn,
-              { borderColor: accentColor, opacity: pressed ? 0.75 : 1 },
-            ]}
-          >
-            <Text style={[styles.closeBtnText, { color: accentColor }]}> [ CLOSE ] </Text>
-          </Pressable>
         </Pressable>
       </Pressable>
     </Modal>
@@ -102,20 +104,29 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     backgroundColor: '#050608',
     padding: 14,
+    paddingTop: 36,
     gap: 10,
     alignItems: 'center',
     width: '100%',
     maxWidth: 420,
+    position: 'relative',
   },
-  closeBtn: {
+  closeX: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 28,
+    height: 28,
     borderWidth: 1,
-    paddingVertical: 8,
     alignItems: 'center',
-    marginTop: 4,
+    justifyContent: 'center',
+    backgroundColor: '#0a0b0f',
+    zIndex: 10,
   },
-  closeBtnText: {
+  closeXText: {
     fontFamily: 'monospace',
-    fontSize: 8,
-    letterSpacing: 0.8,
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 16,
   },
 });

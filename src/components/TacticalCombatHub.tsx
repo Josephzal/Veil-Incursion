@@ -315,6 +315,7 @@ export default function TacticalCombatHub({
   /** HP already applied when the red deck strike overlay appeared. */
   const preAppliedHpStrikeRef = useRef(0);
   const enemyStunPendingRef = useRef(false);
+  const hitFlashSeqRef = useRef<Record<string, number>>({});
   const survivedEnemyTurnsRef = useRef(0);
   const isPlayerTurnRef = useRef(isPlayerTurn);
   const resolutionRef = useRef<'VICTORY' | 'DEFEAT' | null>(null);
@@ -530,6 +531,7 @@ export default function TacticalCombatHub({
           isFractured: isEnemyFractured(u),
           portraitGlow: resolvePortraitGlow(unitId, u.intent),
           portraitAnim: resolvePortraitAnim(unitId, u.intent),
+          hitFlashSeq: hitFlashSeqRef.current[unitId] ?? 0,
         };
       }),
     });
@@ -553,7 +555,14 @@ export default function TacticalCombatHub({
   };
 
   const patchUnit = (unitId: string, patch: Partial<EnemyCombatProfile>) => {
-    syncSquad(patchSquadUnit(squadRef.current, unitId, patch));
+    const prev = getUnitById(squadRef.current, unitId);
+    const wasFractured = prev ? isEnemyFractured(prev) : false;
+    const nextSquad = patchSquadUnit(squadRef.current, unitId, patch);
+    const next = getUnitById(nextSquad, unitId);
+    if (next && !wasFractured && isEnemyFractured(next)) {
+      Vibration.vibrate(40);
+    }
+    syncSquad(nextSquad);
   };
 
   const syncEnemy = (e: EnemyCombatProfile) => {
@@ -1056,6 +1065,11 @@ export default function TacticalCombatHub({
       ? Math.max(bossRuntimeRef.current.currentHp - dmg, 0)
       : Math.max(working.currentHp - dmg, 0);
     const hp = poolHp;
+    if (source && dmg > 0 && e.unitId) {
+      hitFlashSeqRef.current[e.unitId] = (hitFlashSeqRef.current[e.unitId] ?? 0) + 1;
+      Vibration.vibrate(18);
+    }
+
     if (working.sharedBossPool && bossRuntimeRef.current) {
       bossRuntimeRef.current = { ...bossRuntimeRef.current, currentHp: hp };
       syncSquad(squadRef.current.map((u) =>
@@ -1189,10 +1203,7 @@ export default function TacticalCombatHub({
       for (const unitId of mutationEncounterRef.current.venomousRuinUnits) {
         const unit = getUnitById(squadRef.current, unitId);
         if (!unit?.unitId || !isUnitAlive(unit)) continue;
-        let next = applyFractureDamage(unit, mods.ruinDotFracture);
-        if ((next.fractureGauge ?? 0) >= (next.fractureMax ?? 100)) {
-          next = applyFracturedState(next);
-        }
+        const next = applyFractureDamage(unit, mods.ruinDotFracture);
         patchUnit(unit.unitId, next);
         log(`[VENOMOUS RUIN] >> ${unit.designation} — +${mods.ruinDotFracture} fracture hazard.`);
       }
@@ -1953,11 +1964,7 @@ export default function TacticalCombatHub({
         wraithParryRef.current = false;
         const e = enemyRef.current;
         if (e?.unitId) {
-          let fractured = applyFractureDamage(e, reflect);
-          if (fractured.fractureGauge != null && fractured.fractureMax != null
-            && fractured.fractureGauge >= fractured.fractureMax) {
-            fractured = applyFracturedState(fractured);
-          }
+          const fractured = applyFractureDamage(e, reflect);
           patchUnit(e.unitId, fractured);
           log(`[WRAITH PARRY] >> Parry locked — ${reflect} fracture reflected.`);
           const reflectPct = mutationModsRef.current.parryReflectPct;

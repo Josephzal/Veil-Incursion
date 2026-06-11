@@ -23,23 +23,11 @@ export function resetCargoInstanceCounter(): void {
   instanceCounter = 0;
 }
 
-/** Run-start cargo with Spectral Salt locked in the operative grid. */
+/** Run-start cargo with Soul Core + Spectral Salt staged in the operative grid. */
 export function createStarterCargoRunState(): CargoRunState {
   const base = { grid: { placed: [] as PlacedCargoItem[] }, containment: [], dataBleedActive: false };
-  const itemId: CargoItemId = 'spectral-salt';
-  if (!canPlaceCargoItem(base, itemId, 0, 0)) return base;
-  return {
-    ...base,
-    grid: {
-      placed: [{
-        instanceId: createCargoInstanceId('starter'),
-        itemId,
-        originRow: 0,
-        originCol: 0,
-        currentValue: CARGO_ITEM_CATALOG[itemId].baseValue,
-      }],
-    },
-  };
+  const withSoulCore = placeCargoAtFirstOpenSlot(base, 'soul-core') ?? base;
+  return placeCargoAtFirstOpenSlot(withSoulCore, 'spectral-salt') ?? withSoulCore;
 }
 
 function cellsForItem(itemId: CargoItemId, originRow: number, originCol: number): string[] {
@@ -322,6 +310,33 @@ export function isCombatConsumableCargoItem(itemId: CargoItemId): boolean {
 export function isCombatDeployableCargoItem(itemId: CargoItemId): boolean {
   const def = CARGO_ITEM_CATALOG[itemId];
   return def.usableInCombat === true && def.combatEffect !== 'unimplemented';
+}
+
+export function combatConsumableDescription(itemId: CargoItemId): string {
+  const def = CARGO_ITEM_CATALOG[itemId];
+  switch (def.combatEffect) {
+    case 'heal':
+      return `Restores ${def.healPercent ?? 0}% of maximum Soul Anchor integrity. Consumes your turn action points.`;
+    case 'stun':
+    case 'max_fracture':
+      return 'Maxes hostile Fracture Gauge and shatters charge channels. Consumes your turn action points.';
+    case 'stamina_ap_surge':
+      return 'Overclocks stamina to maximum and grants +1 action point this turn.';
+    case 'shatter_armor':
+      return 'Shatters up to 2 layers of kinetic armor on the targeted hostile.';
+    case 'strip_wards':
+      return 'Burns up to 2 layers of occult wards off the targeted hostile.';
+    case 'clear_debuffs':
+      return `Clears operative debuffs and restores ${def.healPercent ?? 10}% Soul Anchor integrity.`;
+    case 'max_abyssal':
+      return 'Overcharges Abyssal Reserve to maximum for this combat.';
+    case 'absorb_hit':
+      return 'Absorbs the next incoming health damage completely.';
+    case 'spectral_imbue':
+      return 'Imbues kinetic weapon strikes to bypass spectral resistance this combat.';
+    default:
+      return 'Field deployment protocols pending operative clearance.';
+  }
 }
 
 export function consumeCargoItem(cargo: CargoRunState, itemId: CargoItemId): CargoRunState | null {

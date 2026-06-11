@@ -1,5 +1,6 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
+  Image,
   LayoutChangeEvent,
   Pressable,
   StyleSheet,
@@ -16,7 +17,16 @@ import Animated, {
 } from 'react-native-reanimated';
 
 const REJECT_SNAP_MS = 140;
-import { canPlaceCargoItemExcluding, isCombatDeployableCargoItem } from '../data/cargoGridEngine';
+const COMBAT_DETAIL_PANEL_HEIGHT = 160;
+const COMBAT_DETAIL_TITLE_HEIGHT = 18;
+const COMBAT_DETAIL_BODY_HEIGHT = 39;
+const COMBAT_DETAIL_META_HEIGHT = 14;
+import {
+  canPlaceCargoItemExcluding,
+  combatConsumableDescription,
+  isCombatDeployableCargoItem,
+  relocateCargoItem as relocateCargoInState,
+} from '../data/cargoGridEngine';
 import type { CargoItemId, CargoRunState, PlacedCargoItem } from '../types/cargoGrid';
 import { CARGO_GRID_DIMENSION, CARGO_ITEM_CATALOG } from '../types/cargoGrid';
 import type { TerminalTheme } from '../types/theme';
@@ -25,10 +35,6 @@ import { resolveCargoItemIcon } from '../utils/cargoItemIcon';
 
 export const CARGO_CELL_SIZE = 56;
 export const CARGO_CELL_GAP = 2;
-
-const COMBAT_CONSUMABLE_IDS: CargoItemId[] = Object.values(CARGO_ITEM_CATALOG)
-  .filter((def) => def.usableInCombat === true && def.combatEffect !== 'unimplemented')
-  .map((def) => def.id);
 
 export const CARGO_GRID_FRAME_SIZE =
   CARGO_GRID_DIMENSION * CARGO_CELL_SIZE + (CARGO_GRID_DIMENSION - 1) * CARGO_CELL_GAP;
@@ -60,7 +66,6 @@ interface CargoGridBoardProps {
   combatMode?: boolean;
   combatConsumablesEnabled?: boolean;
   onUseCombatConsumable?: (itemId: CargoItemId) => boolean;
-  /** Bare grid + external loot + actions — no headers or wrapper chrome. */
   minimal?: boolean;
 }
 
@@ -96,11 +101,13 @@ function DraggableCargoSprite({
   layoutMode,
   originRow,
   originCol,
-  gridMetricsRef,
+  isDragging,
   onRelocateItem,
   onHoverCell,
   onDragStart,
+  onDragMove,
   onDragEnd,
+  onDropAttempt,
   combatSelectMode = false,
   combatSelected = false,
   onCombatSelect,
@@ -109,7 +116,7 @@ function DraggableCargoSprite({
   layoutMode: 'external' | 'grid';
   originRow?: number;
   originCol?: number;
-  gridMetricsRef: React.RefObject<GridMetrics | null>;
+  isDragging: boolean;
   onRelocateItem: (instanceId: string, row: number, col: number) => boolean;
   onHoverCell: (
     cell: { row: number; col: number } | null,
@@ -117,7 +124,17 @@ function DraggableCargoSprite({
     excludeInstanceId?: string,
   ) => void;
   onDragStart: (source: CargoDragSource) => void;
+  onDragMove: (absoluteX: number, absoluteY: number) => void;
   onDragEnd: () => void;
+  onDropAttempt: (
+    source: CargoDragSource,
+    absoluteX: number,
+    absoluteY: number,
+    dragged: boolean,
+    originRow: number | undefined,
+    originCol: number | undefined,
+    onResult: (placed: boolean) => void,
+  ) => void;
   combatSelectMode?: boolean;
   combatSelected?: boolean;
   onCombatSelect?: () => void;
@@ -127,174 +144,6 @@ function DraggableCargoSprite({
   const translateY = useSharedValue(0);
   const scale = useSharedValue(1);
   const opacity = useSharedValue(1);
-  const zIndex = useSharedValue(layoutMode === 'grid' ? 2 : 1);
-
-  const resolveCellFromAbsolute = useCallback((absoluteX: number, absoluteY: number) => {
-    const metrics = gridMetricsRef.current;
-    if (!metrics) return null;
-    const stride = CARGO_CELL_SIZE + CARGO_CELL_GAP;
-    const localX = absoluteX - metrics.pageX;
-    const localY = absoluteY - metrics.pageY;
-    if (localX < 0 || localY < 0 || localX > metrics.width || localY > metrics.height) return null;
-    const col = Math.floor(localX / stride);
-    const row = Math.floor(localY / stride);
-    if (row < 0 || col < 0 || row >= CARGO_GRID_DIMENSION || col >= CARGO_GRID_DIMENSION) return null;
-    return { row, col };
-  }, [gridMetricsRef]);
-
-  const settleGridDrag = useCallback(() => {
-    opacity.value = 1;
-    onDragEnd();
-  }, [onDragEnd, opacity]);
-
-  const instantReset = useCallback(() => {
-    translateX.value = 0;
-    translateY.value = 0;
-  }, [translateX, translateY]);
-
-  const rejectDrop = useCallback(() => {
-    translateX.value = withTiming(0, { duration: REJECT_SNAP_MS }, (finished) => {
-      if (finished) runOnJS(settleGridDrag)();
-    });
-    translateY.value = withTiming(0, { duration: REJECT_SNAP_MS });
-  }, [settleGridDrag, translateX, translateY]);
-
-  const handleDrop = useCallback((absoluteX: number, absoluteY: number, dragged: boolean) => {
-    onHoverCell(null, null);
-    if (!dragged) {
-      rejectDrop();
-      return;
-    }
-    const cell = resolveCellFromAbsolute(absoluteX, absoluteY);
-    if (!cell) {
-      rejectDrop();
-      return;
-    }
-    instantReset();
-    opacity.value = 0;
-    const placed = onRelocateItem(dragSource.instanceId, cell.row, cell.col);
-    if (placed) {
-      onDragEnd();
-      return;
-    }
-    opacity.value = 1;
-    rejectDrop();
-  }, [
-    dragSource.instanceId,
-    instantReset,
-    onDragEnd,
-    onHoverCell,
-    onRelocateItem,
-    opacity,
-    rejectDrop,
-    resolveCellFromAbsolute,
-  ]);
-
-  const handleGridDrop = useCallback((
-    absoluteX: number,
-    absoluteY: number,
-    _transX: number,
-    _transY: number,
-    dragged: boolean,
-  ) => {
-    onHoverCell(null, null);
-    if (!dragged || originRow == null || originCol == null) {
-      rejectDrop();
-      return;
-    }
-    const cell = resolveCellFromAbsolute(absoluteX, absoluteY);
-    if (!cell) {
-      rejectDrop();
-      return;
-    }
-    const moved = cell.row !== originRow || cell.col !== originCol;
-    if (!moved) {
-      instantReset();
-      settleGridDrag();
-      return;
-    }
-    instantReset();
-    const placed = onRelocateItem(dragSource.instanceId, cell.row, cell.col);
-    if (placed) {
-      onDragEnd();
-      return;
-    }
-    rejectDrop();
-  }, [
-    dragSource.instanceId,
-    instantReset,
-    onDragEnd,
-    onHoverCell,
-    onRelocateItem,
-    originCol,
-    originRow,
-    rejectDrop,
-    resolveCellFromAbsolute,
-    settleGridDrag,
-  ]);
-
-  const handleDragUpdate = useCallback((absoluteX: number, absoluteY: number) => {
-    const cell = resolveCellFromAbsolute(absoluteX, absoluteY);
-    if (!cell) {
-      onHoverCell(null, null);
-      return;
-    }
-    onHoverCell(
-      cell,
-      dragSource.itemId,
-      dragSource.source === 'grid' ? dragSource.instanceId : undefined,
-    );
-  }, [dragSource.instanceId, dragSource.itemId, dragSource.source, onHoverCell, resolveCellFromAbsolute]);
-
-  const tap = Gesture.Tap()
-    .onEnd(() => {
-      if (onCombatSelect) runOnJS(onCombatSelect)();
-    });
-
-  const pan = Gesture.Pan()
-    .enabled(!combatSelectMode)
-    .minDistance(6)
-    .onBegin(() => {
-      runOnJS(onDragStart)(dragSource);
-      scale.value = withSpring(1.08);
-      opacity.value = 0.92;
-      zIndex.value = 30;
-    })
-    .onUpdate((event) => {
-      translateX.value = event.translationX;
-      translateY.value = event.translationY;
-      runOnJS(handleDragUpdate)(event.absoluteX, event.absoluteY);
-    })
-    .onEnd((event) => {
-      const dragged = Math.hypot(event.translationX, event.translationY) >= 6;
-      scale.value = 1;
-      opacity.value = 1;
-      zIndex.value = layoutMode === 'grid' ? 2 : 1;
-      if (layoutMode === 'grid') {
-        runOnJS(handleGridDrop)(
-          event.absoluteX,
-          event.absoluteY,
-          event.translationX,
-          event.translationY,
-          dragged,
-        );
-      } else {
-        runOnJS(handleDrop)(event.absoluteX, event.absoluteY, dragged);
-      }
-    })
-    .onFinalize(() => {
-      runOnJS(onHoverCell)(null, null);
-    });
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: translateX.value },
-      { translateY: translateY.value },
-      { scale: scale.value },
-    ],
-    opacity: opacity.value,
-    zIndex: zIndex.value,
-  }));
 
   const staticStyle = layoutMode === 'grid' && originRow != null && originCol != null
     ? {
@@ -304,19 +153,99 @@ function DraggableCargoSprite({
       }
     : null;
 
-  const gesture = combatSelectMode ? tap : pan;
+  if (combatSelectMode && onCombatSelect) {
+    return (
+      <Pressable
+        onPress={onCombatSelect}
+        style={({ pressed }) => [
+          spriteSize,
+          staticStyle,
+          styles.spriteWrap,
+          styles.combatSelectPressable,
+          combatSelected ? styles.combatItemSelectedWrap : null,
+          pressed ? styles.combatItemPressed : null,
+        ]}
+      >
+        <Image
+          source={resolveCargoItemIcon(dragSource.itemId)}
+          resizeMode="contain"
+          style={[styles.lootSprite, spriteSize, combatSelected ? styles.combatItemSelected : null]}
+        />
+      </Pressable>
+    );
+  }
+
+  const finishDrop = useCallback((
+    absoluteX: number,
+    absoluteY: number,
+    translationX: number,
+    translationY: number,
+  ) => {
+    const dragged = Math.hypot(translationX, translationY) >= 4;
+    scale.value = 1;
+    onDropAttempt(
+      dragSource,
+      absoluteX,
+      absoluteY,
+      dragged,
+      originRow,
+      originCol,
+      (placed) => {
+        if (!placed) {
+          translateX.value = withTiming(0, { duration: REJECT_SNAP_MS });
+          translateY.value = withTiming(0, { duration: REJECT_SNAP_MS });
+          opacity.value = withTiming(1, { duration: REJECT_SNAP_MS }, (finished) => {
+            if (finished) onDragEnd();
+          });
+          return;
+        }
+        translateX.value = 0;
+        translateY.value = 0;
+        opacity.value = 1;
+        onDragEnd();
+      },
+    );
+  }, [dragSource, onDragEnd, onDropAttempt, originCol, originRow, opacity, scale, translateX, translateY]);
+
+  const pan = Gesture.Pan()
+    .minDistance(4)
+    .onBegin(() => {
+      runOnJS(onDragStart)(dragSource);
+      scale.value = withSpring(1.08);
+      opacity.value = 0.35;
+    })
+    .onUpdate((event) => {
+      translateX.value = event.translationX;
+      translateY.value = event.translationY;
+      runOnJS(onDragMove)(event.absoluteX, event.absoluteY);
+    })
+    .onEnd((event) => {
+      runOnJS(finishDrop)(
+        event.absoluteX,
+        event.absoluteY,
+        event.translationX,
+        event.translationY,
+      );
+    });
+
+  const hideWhileDragging = layoutMode === 'external' && isDragging;
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { scale: scale.value },
+    ],
+    opacity: hideWhileDragging ? 0 : opacity.value,
+  }));
 
   return (
-    <GestureDetector gesture={gesture}>
+    <GestureDetector gesture={pan}>
       <Animated.View style={[spriteSize, staticStyle, animatedStyle, styles.spriteWrap]}>
         <Animated.Image
           source={resolveCargoItemIcon(dragSource.itemId)}
           resizeMode="contain"
-          style={[
-            styles.lootSprite,
-            spriteSize,
-            combatSelected ? styles.combatItemSelected : null,
-          ]}
+          style={[styles.lootSprite, spriteSize]}
         />
       </Animated.View>
     </GestureDetector>
@@ -339,47 +268,144 @@ export default function CargoGridBoard({
   onUseCombatConsumable,
   minimal = true,
 }: CargoGridBoardProps): React.JSX.Element {
+  const boardRef = useRef<View>(null);
   const gridRef = useRef<View>(null);
   const gridMetricsRef = useRef<GridMetrics | null>(null);
+  const boardMetricsRef = useRef<GridMetrics | null>(null);
+  const pendingDropRef = useRef<{ row: number; col: number } | null>(null);
+  const dropTargetRef = useRef<{
+    row: number;
+    col: number;
+    itemId: CargoItemId;
+    excludeInstanceId?: string;
+  } | null>(null);
+  const hoverCellRef = useRef<{ row: number; col: number } | null>(null);
+  const hoverItemIdRef = useRef<CargoItemId | null>(null);
+  const hoverExcludeIdRef = useRef<string | undefined>(undefined);
+
+  const [displayCargo, setDisplayCargo] = useState(cargo);
+  const cargoRef = useRef(displayCargo);
+  cargoRef.current = displayCargo;
+
+  useEffect(() => {
+    setDisplayCargo(cargo);
+  }, [cargo]);
+
   const [hoverCell, setHoverCell] = useState<{ row: number; col: number } | null>(null);
   const [hoverItemId, setHoverItemId] = useState<CargoItemId | null>(null);
   const [hoverExcludeId, setHoverExcludeId] = useState<string | undefined>(undefined);
-  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const activeDragRef = useRef<CargoDragSource | null>(null);
+  const [activeDrag, setActiveDrag] = useState<CargoDragSource | null>(null);
+  const [dragOverlay, setDragOverlay] = useState<{ x: number; y: number } | null>(null);
   const [selectedCombatItemId, setSelectedCombatItemId] = useState<CargoItemId | null>(null);
   const externalSlotCountRef = useRef(0);
-  if (externalSlotCountRef.current === 0 && cargo.containment.length > 0) {
-    externalSlotCountRef.current = cargo.containment.length;
-  }
-  const externalSlotCount = Math.max(externalSlotCountRef.current, cargo.containment.length);
 
-  const hasAmpouleInGrid = cargo.grid.placed.some((item) => item.itemId === 'focusing-ampoule');
+  if (externalSlotCountRef.current === 0 && displayCargo.containment.length > 0) {
+    externalSlotCountRef.current = displayCargo.containment.length;
+  }
+  const externalSlotCount = Math.max(externalSlotCountRef.current, displayCargo.containment.length);
+
+  const hasAmpouleInGrid = displayCargo.grid.placed.some((item) => item.itemId === 'focusing-ampoule');
 
   const occupiedCells = useMemo(() => {
     const set = new Set<string>();
-    cargo.grid.placed.forEach((item) => {
-      if (item.instanceId === activeDragId) return;
+    displayCargo.grid.placed.forEach((item) => {
+      if (activeDrag?.instanceId === item.instanceId) return;
       cellsForItem(item.itemId, item.originRow, item.originCol).forEach((key) => set.add(key));
     });
     return set;
-  }, [cargo.grid.placed, activeDragId]);
+  }, [activeDrag?.instanceId, displayCargo.grid.placed]);
 
   const previewCells = useMemo(() => {
     if (!hoverCell || !hoverItemId) return new Set<string>();
-    if (!canPlaceCargoItemExcluding(cargo, hoverItemId, hoverCell.row, hoverCell.col, hoverExcludeId)) {
+    if (!canPlaceCargoItemExcluding(displayCargo, hoverItemId, hoverCell.row, hoverCell.col, hoverExcludeId)) {
       return new Set<string>();
     }
     return new Set(cellsForPreview(hoverItemId, hoverCell.row, hoverCell.col));
-  }, [cargo, hoverCell, hoverExcludeId, hoverItemId]);
+  }, [displayCargo, hoverCell, hoverExcludeId, hoverItemId]);
 
-  const captureGridMetrics = useCallback(() => {
+  const captureMetrics = useCallback(() => {
     gridRef.current?.measureInWindow((pageX, pageY, width, height) => {
       gridMetricsRef.current = { pageX, pageY, width, height };
+    });
+    boardRef.current?.measureInWindow((pageX, pageY, width, height) => {
+      boardMetricsRef.current = { pageX, pageY, width, height };
     });
   }, []);
 
   const handleGridLayout = useCallback((_event: LayoutChangeEvent) => {
-    captureGridMetrics();
-  }, [captureGridMetrics]);
+    captureMetrics();
+  }, [captureMetrics]);
+
+  useLayoutEffect(() => {
+    captureMetrics();
+  }, [captureMetrics, displayCargo.containment.length, displayCargo.grid.placed.length]);
+
+  const resolveCellFromAbsolute = useCallback((absoluteX: number, absoluteY: number) => {
+    const metrics = gridMetricsRef.current;
+    if (!metrics) return null;
+    const stride = CARGO_CELL_SIZE + CARGO_CELL_GAP;
+    const localX = absoluteX - metrics.pageX;
+    const localY = absoluteY - metrics.pageY;
+    if (localX < 0 || localY < 0 || localX >= metrics.width || localY >= metrics.height) return null;
+    const col = Math.floor(localX / stride);
+    const row = Math.floor(localY / stride);
+    if (row < 0 || col < 0 || row >= CARGO_GRID_DIMENSION || col >= CARGO_GRID_DIMENSION) return null;
+    return { row, col };
+  }, []);
+
+  const resolveValidDropCell = useCallback((
+    absoluteX: number,
+    absoluteY: number,
+    itemId: CargoItemId,
+    excludeInstanceId?: string,
+  ): { row: number; col: number } | null => {
+    const currentCargo = cargoRef.current;
+    const locked = dropTargetRef.current;
+
+    if (
+      locked
+      && locked.itemId === itemId
+      && canPlaceCargoItemExcluding(
+        currentCargo,
+        itemId,
+        locked.row,
+        locked.col,
+        locked.excludeInstanceId ?? excludeInstanceId,
+      )
+    ) {
+      return { row: locked.row, col: locked.col };
+    }
+
+    const hover = hoverCellRef.current;
+    const hoverItem = hoverItemIdRef.current;
+    const hoverExclude = hoverExcludeIdRef.current;
+
+    if (
+      hover
+      && hoverItem === itemId
+      && canPlaceCargoItemExcluding(currentCargo, itemId, hover.row, hover.col, hoverExclude ?? excludeInstanceId)
+    ) {
+      return hover;
+    }
+
+    const pending = pendingDropRef.current;
+    if (
+      pending
+      && canPlaceCargoItemExcluding(currentCargo, itemId, pending.row, pending.col, excludeInstanceId)
+    ) {
+      return pending;
+    }
+
+    const fromFinger = resolveCellFromAbsolute(absoluteX, absoluteY);
+    if (
+      fromFinger
+      && canPlaceCargoItemExcluding(currentCargo, itemId, fromFinger.row, fromFinger.col, excludeInstanceId)
+    ) {
+      return fromFinger;
+    }
+    return null;
+  }, [resolveCellFromAbsolute]);
 
   const handleHoverCell = useCallback((
     cell: { row: number; col: number } | null,
@@ -389,17 +415,115 @@ export default function CargoGridBoard({
     setHoverCell(cell);
     setHoverItemId(itemId);
     setHoverExcludeId(excludeInstanceId);
+    hoverCellRef.current = cell;
+    hoverItemIdRef.current = itemId;
+    hoverExcludeIdRef.current = excludeInstanceId;
+    if (
+      cell
+      && itemId
+      && canPlaceCargoItemExcluding(cargoRef.current, itemId, cell.row, cell.col, excludeInstanceId)
+    ) {
+      pendingDropRef.current = { row: cell.row, col: cell.col };
+      dropTargetRef.current = {
+        row: cell.row,
+        col: cell.col,
+        itemId,
+        excludeInstanceId,
+      };
+    }
   }, []);
 
   const handleDragStart = useCallback((source: CargoDragSource) => {
-    captureGridMetrics();
-    requestAnimationFrame(() => captureGridMetrics());
-    setActiveDragId(source.instanceId);
-  }, [captureGridMetrics]);
+    pendingDropRef.current = null;
+    dropTargetRef.current = null;
+    activeDragRef.current = source;
+    captureMetrics();
+    requestAnimationFrame(() => captureMetrics());
+    setActiveDrag(source);
+  }, [captureMetrics]);
 
-  const handleDragEnd = useCallback(() => {
-    setActiveDragId(null);
+  const handleDragMove = useCallback((absoluteX: number, absoluteY: number) => {
+    const source = activeDragRef.current;
+    const board = boardMetricsRef.current;
+    if (board) {
+      setDragOverlay({ x: absoluteX - board.pageX, y: absoluteY - board.pageY });
+    }
+    const cell = resolveCellFromAbsolute(absoluteX, absoluteY);
+    if (!cell || !source) {
+      return;
+    }
+    handleHoverCell(
+      cell,
+      source.itemId,
+      source.source === 'grid' ? source.instanceId : undefined,
+    );
+  }, [handleHoverCell, resolveCellFromAbsolute]);
+
+  const clearDrag = useCallback(() => {
+    pendingDropRef.current = null;
+    dropTargetRef.current = null;
+    hoverCellRef.current = null;
+    hoverItemIdRef.current = null;
+    hoverExcludeIdRef.current = undefined;
+    activeDragRef.current = null;
+    setActiveDrag(null);
+    setDragOverlay(null);
+    setHoverCell(null);
+    setHoverItemId(null);
+    setHoverExcludeId(undefined);
   }, []);
+
+  const handleDropAttempt = useCallback((
+    source: CargoDragSource,
+    absoluteX: number,
+    absoluteY: number,
+    dragged: boolean,
+    originRow: number | undefined,
+    originCol: number | undefined,
+    onResult: (placed: boolean) => void,
+  ) => {
+    captureMetrics();
+
+    if (!dragged) {
+      clearDrag();
+      onResult(false);
+      return;
+    }
+
+    const excludeId = source.source === 'grid' ? source.instanceId : undefined;
+    const cell = resolveValidDropCell(absoluteX, absoluteY, source.itemId, excludeId);
+
+    if (!cell) {
+      clearDrag();
+      onResult(false);
+      return;
+    }
+
+    if (source.source === 'grid' && originRow === cell.row && originCol === cell.col) {
+      clearDrag();
+      onResult(false);
+      return;
+    }
+
+    const snapshot = cargoRef.current;
+    const optimisticNext = relocateCargoInState(snapshot, source.instanceId, cell.row, cell.col);
+    if (!optimisticNext) {
+      clearDrag();
+      onResult(false);
+      return;
+    }
+
+    clearDrag();
+    setDisplayCargo(optimisticNext);
+    cargoRef.current = optimisticNext;
+
+    const placed = onRelocateItem(source.instanceId, cell.row, cell.col);
+    if (!placed) {
+      setDisplayCargo(snapshot);
+      cargoRef.current = snapshot;
+    }
+    onResult(placed);
+  }, [captureMetrics, clearDrag, onRelocateItem, resolveValidDropCell]);
 
   const gridBlock = (
     <View
@@ -416,7 +540,7 @@ export default function CargoGridBoard({
             const canDrop = hoverCell?.row === row
               && hoverCell?.col === col
               && hoverItemId != null
-              && canPlaceCargoItemExcluding(cargo, hoverItemId, row, col, hoverExcludeId);
+              && canPlaceCargoItemExcluding(displayCargo, hoverItemId, row, col, hoverExcludeId);
 
             return (
               <View
@@ -440,22 +564,25 @@ export default function CargoGridBoard({
         )}
       </View>
 
-      <View style={styles.placedLayer} pointerEvents="box-none">
-        {cargo.grid.placed.map((item: PlacedCargoItem) => {
+      <View style={[styles.placedLayer, combatMode ? styles.placedLayerCombat : null]} pointerEvents="box-none">
+        {displayCargo.grid.placed.map((item: PlacedCargoItem) => {
           const deployable = isCombatDeployableCargoItem(item.itemId);
           const selectMode = combatMode && combatConsumablesEnabled && deployable;
+          const source: CargoDragSource = { instanceId: item.instanceId, itemId: item.itemId, source: 'grid' };
           return (
             <DraggableCargoSprite
               key={item.instanceId}
-              dragSource={{ instanceId: item.instanceId, itemId: item.itemId, source: 'grid' }}
+              dragSource={source}
               layoutMode="grid"
               originRow={item.originRow}
               originCol={item.originCol}
-              gridMetricsRef={gridMetricsRef}
+              isDragging={activeDrag?.instanceId === item.instanceId}
               onRelocateItem={onRelocateItem}
               onHoverCell={handleHoverCell}
               onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
+              onDragMove={handleDragMove}
+              onDragEnd={clearDrag}
+              onDropAttempt={handleDropAttempt}
               combatSelectMode={selectMode}
               combatSelected={selectedCombatItemId === item.itemId}
               onCombatSelect={selectMode ? () => setSelectedCombatItemId(item.itemId) : undefined}
@@ -466,44 +593,74 @@ export default function CargoGridBoard({
     </View>
   );
 
+  const overlaySprite = activeDrag && dragOverlay
+    ? spriteSizeForCargoItem(activeDrag.itemId)
+    : null;
+
   return (
     <View style={[styles.root, minimal && styles.rootMinimal, styles.rootCentered, { width: CARGO_GRID_FRAME_SIZE }]}>
-      <View style={styles.gridDock}>{gridBlock}</View>
+      <View ref={boardRef} onLayout={captureMetrics} style={styles.boardShell}>
+        <View style={styles.gridDock}>{gridBlock}</View>
 
-      <View style={styles.externalBay}>
-        
-        {externalSlotCount > 0 ? (
-          <View style={styles.externalRow}>
-            {Array.from({ length: externalSlotCount }, (_, slotIndex) => {
-              const item = cargo.containment[slotIndex] ?? null;
-              if (!item) {
-                return <View key={`empty-slot-${slotIndex}`} style={styles.externalSlot} />;
-              }
-              const spriteSize = spriteSizeForCargoItem(item.itemId);
-              return (
-                <View
-                  key={item.instanceId}
-                  style={[styles.externalSlot, { width: spriteSize.width, height: spriteSize.height }]}
-                >
-                  <DraggableCargoSprite
-                    dragSource={{ instanceId: item.instanceId, itemId: item.itemId, source: 'containment' }}
-                    layoutMode="external"
-                    gridMetricsRef={gridMetricsRef}
-                    onRelocateItem={onRelocateItem}
-                    onHoverCell={handleHoverCell}
-                    onDragStart={handleDragStart}
-                    onDragEnd={handleDragEnd}
-                    combatSelectMode={combatMode && combatConsumablesEnabled && isCombatDeployableCargoItem(item.itemId)}
-                    combatSelected={selectedCombatItemId === item.itemId}
-                    onCombatSelect={
-                      combatMode && combatConsumablesEnabled && isCombatDeployableCargoItem(item.itemId)
-                        ? () => setSelectedCombatItemId(item.itemId)
-                        : undefined
-                    }
-                  />
-                </View>
-              );
-            })}
+        <View style={styles.externalBay}>
+          {externalSlotCount > 0 ? (
+            <View style={styles.externalRow}>
+              {Array.from({ length: externalSlotCount }, (_, slotIndex) => {
+                const item = displayCargo.containment[slotIndex] ?? null;
+                if (!item) {
+                  return <View key={`empty-slot-${slotIndex}`} style={styles.externalSlot} />;
+                }
+                const spriteSize = spriteSizeForCargoItem(item.itemId);
+                const source: CargoDragSource = {
+                  instanceId: item.instanceId,
+                  itemId: item.itemId,
+                  source: 'containment',
+                };
+                return (
+                  <View
+                    key={item.instanceId}
+                    style={[styles.externalSlot, { width: spriteSize.width, height: spriteSize.height }]}
+                  >
+                    <DraggableCargoSprite
+                      dragSource={source}
+                      layoutMode="external"
+                      isDragging={activeDrag?.instanceId === item.instanceId}
+                      onRelocateItem={onRelocateItem}
+                      onHoverCell={handleHoverCell}
+                      onDragStart={handleDragStart}
+                      onDragMove={handleDragMove}
+                      onDragEnd={clearDrag}
+                      onDropAttempt={handleDropAttempt}
+                      combatSelectMode={combatMode && combatConsumablesEnabled && isCombatDeployableCargoItem(item.itemId)}
+                      combatSelected={selectedCombatItemId === item.itemId}
+                      onCombatSelect={
+                        combatMode && combatConsumablesEnabled && isCombatDeployableCargoItem(item.itemId)
+                          ? () => setSelectedCombatItemId(item.itemId)
+                          : undefined
+                      }
+                    />
+                  </View>
+                );
+              })}
+            </View>
+          ) : null}
+        </View>
+
+        {activeDrag && dragOverlay && overlaySprite ? (
+          <View style={styles.dragOverlayLayer} pointerEvents="none">
+            <Image
+              source={resolveCargoItemIcon(activeDrag.itemId)}
+              resizeMode="contain"
+              style={[
+                styles.lootSprite,
+                overlaySprite,
+                {
+                  position: 'absolute',
+                  left: dragOverlay.x - overlaySprite.width / 2,
+                  top: dragOverlay.y - overlaySprite.height / 2,
+                },
+              ]}
+            />
           </View>
         ) : null}
       </View>
@@ -519,7 +676,7 @@ export default function CargoGridBoard({
         </Pressable>
       ) : null}
 
-      {scannerMode && onUseResonanceBribe && countCargoItemInstances(cargo, 'resonance-bribe') > 0 ? (
+      {scannerMode && onUseResonanceBribe && countCargoItemInstances(displayCargo, 'resonance-bribe') > 0 ? (
         <Pressable onPress={() => onUseResonanceBribe()} style={[styles.ampouleBtn, { borderColor: accentColor }]}>
           <Text style={[styles.ampouleBtnText, { color: accentColor }]}>
             [ USE RESONANCE BRIBE — −25% RESONANCE ]
@@ -527,7 +684,7 @@ export default function CargoGridBoard({
         </Pressable>
       ) : null}
 
-      {scannerMode && onUseDeadDrop && countCargoItemInstances(cargo, 'dead-drop-token') > 0 ? (
+      {scannerMode && onUseDeadDrop && countCargoItemInstances(displayCargo, 'dead-drop-token') > 0 ? (
         <Pressable onPress={() => onUseDeadDrop()} style={[styles.ampouleBtn, { borderColor: accentColor }]}>
           <Text style={[styles.ampouleBtnText, { color: accentColor }]}>
             [ USE DEAD-DROP TOKEN — VAULT EXTRACT ]
@@ -536,42 +693,58 @@ export default function CargoGridBoard({
       ) : null}
 
       {combatMode && onUseCombatConsumable ? (
-        <View style={styles.combatConsumableCol}>
-          <Text style={[styles.combatHint, { color: accentColor }]}>
-            {selectedCombatItemId
-              ? `SELECTED // ${CARGO_ITEM_CATALOG[selectedCombatItemId].name.toUpperCase()} — DEPLOY OR CLOSE TO CANCEL`
-              : 'TAP A COMBAT ITEM IN THE GRID TO SELECT'}
-          </Text>
-          {COMBAT_CONSUMABLE_IDS.map((itemId) => {
-            const count = countCargoItemInstances(cargo, itemId);
-            if (count <= 0) return null;
-            const def = CARGO_ITEM_CATALOG[itemId];
-            const canSelect = combatConsumablesEnabled && def.combatEffect !== 'unimplemented';
-            const isSelected = selectedCombatItemId === itemId;
-            return (
-              <Pressable
-                key={itemId}
-                disabled={!canSelect}
-                onPress={() => setSelectedCombatItemId(isSelected ? null : itemId)}
-                style={({ pressed }) => [
-                  styles.ampouleBtn,
-                  {
-                    borderColor: isSelected ? accentColor : canSelect ? '#1f2937' : '#1a2e22',
-                    backgroundColor: isSelected ? 'rgba(0, 255, 51, 0.08)' : '#050608',
-                    opacity: canSelect && pressed ? 0.75 : canSelect ? 1 : 0.45,
-                  },
+        <View
+          style={[
+            styles.combatDetailPanel,
+            { borderColor: theme.borderColor, height: COMBAT_DETAIL_PANEL_HEIGHT },
+          ]}
+        >
+          <View style={styles.combatDetailInner}>
+            <View style={styles.combatDetailTitleSlot}>
+              <Text
+                style={[
+                  styles.combatDetailTitle,
+                  { color: selectedCombatItemId ? accentColor : theme.mutedColor },
                 ]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
               >
-                <Text style={[styles.ampouleBtnText, { color: isSelected || canSelect ? accentColor : '#2a4032' }]}>
-                  {`[ SELECT ${def.name.toUpperCase()} ] x${count}`}
-                </Text>
-              </Pressable>
-            );
-          })}
-          {selectedCombatItemId ? (
+                {selectedCombatItemId
+                  ? CARGO_ITEM_CATALOG[selectedCombatItemId].name.toUpperCase()
+                  : 'AWAITING SELECTION'}
+              </Text>
+            </View>
+
+            <View style={styles.combatDetailBodySlot}>
+              <Text
+                style={[
+                  styles.combatDetailBody,
+                  { color: selectedCombatItemId ? theme.primaryColor : theme.mutedColor },
+                ]}
+                numberOfLines={3}
+                ellipsizeMode="tail"
+              >
+                {selectedCombatItemId
+                  ? combatConsumableDescription(selectedCombatItemId)
+                  : 'TAP A COMBAT ITEM IN THE GRID TO REVIEW AND DEPLOY.'}
+              </Text>
+            </View>
+
+            <View style={styles.combatDetailMetaSlot}>
+              <Text
+                style={[styles.combatDetailMeta, { color: theme.mutedColor }]}
+                numberOfLines={1}
+              >
+                {selectedCombatItemId
+                  ? `OWNED: ${countCargoItemInstances(displayCargo, selectedCombatItemId)} // COST: 1 AP`
+                  : ' '}
+              </Text>
+            </View>
+
             <Pressable
-              disabled={!combatConsumablesEnabled}
+              disabled={!combatConsumablesEnabled || !selectedCombatItemId}
               onPress={() => {
+                if (!selectedCombatItemId) return;
                 const ok = onUseCombatConsumable(selectedCombatItemId);
                 if (ok) setSelectedCombatItemId(null);
               }}
@@ -579,16 +752,26 @@ export default function CargoGridBoard({
                 styles.ampouleBtn,
                 styles.deployBtn,
                 {
-                  borderColor: combatConsumablesEnabled ? accentColor : '#1a2e22',
-                  opacity: combatConsumablesEnabled && pressed ? 0.75 : combatConsumablesEnabled ? 1 : 0.45,
+                  borderColor: combatConsumablesEnabled && selectedCombatItemId ? accentColor : '#1a2e22',
+                  opacity: combatConsumablesEnabled && selectedCombatItemId && pressed
+                    ? 0.75
+                    : combatConsumablesEnabled && selectedCombatItemId
+                      ? 1
+                      : 0.45,
                 },
               ]}
             >
-              <Text style={[styles.ampouleBtnText, { color: combatConsumablesEnabled ? accentColor : '#2a4032' }]}>
-                {`[ DEPLOY ${CARGO_ITEM_CATALOG[selectedCombatItemId].name.toUpperCase()} — CONSUMES TURN ]`}
+              <Text
+                style={[
+                  styles.ampouleBtnText,
+                  { color: combatConsumablesEnabled && selectedCombatItemId ? accentColor : '#2a4032' },
+                ]}
+                numberOfLines={1}
+              >
+                [ USE ITEM ]
               </Text>
             </Pressable>
-          ) : null}
+          </View>
         </View>
       ) : null}
 
@@ -622,6 +805,11 @@ const styles = StyleSheet.create({
   rootMinimal: {
     gap: 28,
   },
+  boardShell: {
+    width: CARGO_GRID_FRAME_SIZE,
+    position: 'relative',
+    overflow: 'visible',
+  },
   gridDock: {
     alignItems: 'center',
   },
@@ -644,18 +832,31 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     overflow: 'visible',
   },
+  placedLayerCombat: {
+    zIndex: 4,
+  },
+  dragOverlayLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 50,
+    overflow: 'visible',
+  },
+  combatSelectPressable: {
+    zIndex: 5,
+  },
+  combatItemSelectedWrap: {
+    borderWidth: 1,
+    borderColor: '#00ff33',
+    backgroundColor: 'rgba(0, 255, 51, 0.1)',
+  },
+  combatItemPressed: {
+    opacity: 0.8,
+  },
   externalBay: {
     minHeight: 72,
     justifyContent: 'center',
     width: '100%',
     gap: 8,
-  },
-  containmentLabel: {
-    fontFamily: 'monospace',
-    fontSize: 7,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    textAlign: 'center',
+    marginTop: 28,
   },
   externalRow: {
     flexDirection: 'row',
@@ -683,19 +884,57 @@ const styles = StyleSheet.create({
   lootSprite: {
     backgroundColor: 'transparent',
   },
-  combatConsumableCol: {
+  combatDetailPanel: {
     width: CARGO_GRID_FRAME_SIZE,
-    gap: 8,
+    borderWidth: 1,
+    backgroundColor: '#0a0b0f',
+    overflow: 'hidden',
   },
-  combatHint: {
+  combatDetailInner: {
+    flex: 1,
+    padding: 12,
+    gap: 8,
+    justifyContent: 'flex-start',
+  },
+  combatDetailTitleSlot: {
+    height: COMBAT_DETAIL_TITLE_HEIGHT,
+    justifyContent: 'center',
+    width: '100%',
+  },
+  combatDetailTitle: {
+    fontFamily: 'monospace',
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textAlign: 'center',
+  },
+  combatDetailBodySlot: {
+    height: COMBAT_DETAIL_BODY_HEIGHT,
+    justifyContent: 'center',
+    width: '100%',
+  },
+  combatDetailBody: {
+    fontFamily: 'monospace',
+    fontSize: 8,
+    lineHeight: 13,
+    letterSpacing: 0.2,
+    textAlign: 'center',
+  },
+  combatDetailMetaSlot: {
+    height: COMBAT_DETAIL_META_HEIGHT,
+    justifyContent: 'center',
+    width: '100%',
+  },
+  combatDetailMeta: {
     fontFamily: 'monospace',
     fontSize: 7,
-    letterSpacing: 0.4,
-    lineHeight: 10,
+    letterSpacing: 0.5,
     textAlign: 'center',
   },
   deployBtn: {
-    marginTop: 4,
+    marginTop: 0,
+    minHeight: 34,
+    justifyContent: 'center',
   },
   ampouleBtn: {
     borderWidth: 1,

@@ -7,6 +7,7 @@ import {
   applyFractureDamage,
   applyFracturedState,
   hasCombatTag,
+  isEnemyFractured,
   stackDoomedTag,
 } from './combatFractureEngine';
 import {
@@ -78,14 +79,11 @@ function applyFractureToUnit(
   amount: number,
   instantIfConcussed: boolean,
 ): EnemyCombatProfile {
+  if (isEnemyFractured(unit)) return unit;
   if (instantIfConcussed && hasCombatTag(unit, 'CONCUSSED')) {
-    return applyFracturedState({ ...unit, fractureGauge: unit.fractureMax ?? 100 });
+    return applyFracturedState(unit);
   }
-  let next = applyFractureDamage(unit, amount);
-  if ((next.fractureGauge ?? 0) >= (next.fractureMax ?? 100)) {
-    next = applyFracturedState(next);
-  }
-  return next;
+  return applyFractureDamage(unit, amount);
 }
 
 export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExecutionResult {
@@ -158,10 +156,7 @@ export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExe
         ctx.log('[REJECTED] >> Insufficient stamina.');
         return { ok: false, refundAp: def.apCost };
       }
-      let next = applyFractureDamage(unit, 50);
-      if ((next.fractureGauge ?? 0) >= (next.fractureMax ?? 100)) {
-        next = applyFracturedState(next);
-      }
+      const next = applyFractureDamage(unit, 50);
       ctx.patchUnit(unit.unitId, next);
       const eradicated = ctx.hurtEnemy(12, '[SHADOW STEP]', 'STRIKE', { channel: 'KINETIC' }, unit.unitId);
       ctx.buffState.skipNextEnemyTurn = true;

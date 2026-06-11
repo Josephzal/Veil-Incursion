@@ -42,10 +42,11 @@ export function applyFractureDamage(
   enemy: EnemyCombatProfile,
   amount: number,
 ): EnemyCombatProfile {
+  if (isEnemyFractured(enemy)) return enemy;
   const max = enemy.fractureMax ?? FRACTURE_MAX_DEFAULT;
   const nextGauge = Math.min(max, (enemy.fractureGauge ?? 0) + amount);
   if (nextGauge >= max) {
-    return applyFracturedState({ ...enemy, fractureGauge: max });
+    return applyFracturedState(enemy);
   }
   return { ...enemy, fractureGauge: nextGauge };
 }
@@ -54,7 +55,7 @@ export function applyFractureDamage(
 export function applyFracturedState(enemy: EnemyCombatProfile): EnemyCombatProfile {
   return {
     ...enemy,
-    fractureGauge: enemy.fractureMax ?? FRACTURE_MAX_DEFAULT,
+    fractureGauge: 0,
     combatTags: [...new Set([...(enemy.combatTags ?? []), 'FRACTURED' as CombatUnitTag])],
     kineticArmor: 0,
     occultWards: 0,

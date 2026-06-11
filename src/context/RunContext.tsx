@@ -1255,17 +1255,23 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const relocateCargoItem = useCallback((instanceId: string, row: number, col: number): boolean => {
-    const inc = activeIncursionRef.current;
-    const wasInContainment = inc.cargo.containment.some((item) => item.instanceId === instanceId);
-    const wasInGrid = inc.cargo.grid.placed.some((item) => item.instanceId === instanceId);
-    const nextCargo = relocateCargoItemState(inc.cargo, instanceId, row, col);
-    if (!nextCargo) return false;
+    let placed = false;
+    let wasInContainment = false;
+    let wasInGrid = false;
+    let nextCargo: ReturnType<typeof relocateCargoItemState> = null;
 
     setActiveIncursion((prev) => {
+      wasInContainment = prev.cargo.containment.some((item) => item.instanceId === instanceId);
+      wasInGrid = prev.cargo.grid.placed.some((item) => item.instanceId === instanceId);
+      nextCargo = relocateCargoItemState(prev.cargo, instanceId, row, col);
+      if (!nextCargo) return prev;
+      placed = true;
       const next = { ...prev, cargo: nextCargo };
       activeIncursionRef.current = next;
       return next;
     });
+
+    if (!placed || !nextCargo) return false;
 
     const occupancy = Math.round(calculateGridOccupancy(nextCargo) * 100);
     const occupancyNote = getCargoResonanceMultiplier(nextCargo) > 1
