@@ -98,11 +98,7 @@ function cellOriginTop(row: number): number {
 
 function DraggableCargoSprite({
   dragSource,
-  layoutMode,
-  originRow,
-  originCol,
   isDragging,
-  onRelocateItem,
   onHoverCell,
   onDragStart,
   onDragMove,
@@ -111,13 +107,11 @@ function DraggableCargoSprite({
   combatSelectMode = false,
   combatSelected = false,
   onCombatSelect,
+  originRow,
+  originCol,
 }: {
   dragSource: CargoDragSource;
-  layoutMode: 'external' | 'grid';
-  originRow?: number;
-  originCol?: number;
   isDragging: boolean;
-  onRelocateItem: (instanceId: string, row: number, col: number) => boolean;
   onHoverCell: (
     cell: { row: number; col: number } | null,
     itemId: CargoItemId | null,
@@ -138,20 +132,10 @@ function DraggableCargoSprite({
   combatSelectMode?: boolean;
   combatSelected?: boolean;
   onCombatSelect?: () => void;
+  originRow?: number;
+  originCol?: number;
 }): React.JSX.Element {
   const spriteSize = spriteSizeForCargoItem(dragSource.itemId);
-  const translateX = useSharedValue(0);
-  const translateY = useSharedValue(0);
-  const scale = useSharedValue(1);
-  const opacity = useSharedValue(1);
-
-  const staticStyle = layoutMode === 'grid' && originRow != null && originCol != null
-    ? {
-        position: 'absolute' as const,
-        left: cellOriginLeft(originCol),
-        top: cellOriginTop(originRow),
-      }
-    : null;
 
   if (combatSelectMode && onCombatSelect) {
     return (
@@ -159,7 +143,6 @@ function DraggableCargoSprite({
         onPress={onCombatSelect}
         style={({ pressed }) => [
           spriteSize,
-          staticStyle,
           styles.spriteWrap,
           styles.combatSelectPressable,
           combatSelected ? styles.combatItemSelectedWrap : null,
@@ -182,7 +165,6 @@ function DraggableCargoSprite({
     translationY: number,
   ) => {
     const dragged = Math.hypot(translationX, translationY) >= 4;
-    scale.value = 1;
     onDropAttempt(
       dragSource,
       absoluteX,
@@ -192,31 +174,21 @@ function DraggableCargoSprite({
       originCol,
       (placed) => {
         if (!placed) {
-          translateX.value = withTiming(0, { duration: REJECT_SNAP_MS });
-          translateY.value = withTiming(0, { duration: REJECT_SNAP_MS });
-          opacity.value = withTiming(1, { duration: REJECT_SNAP_MS }, (finished) => {
-            if (finished) onDragEnd();
-          });
+          onDragEnd();
           return;
         }
-        translateX.value = 0;
-        translateY.value = 0;
-        opacity.value = 1;
         onDragEnd();
       },
     );
-  }, [dragSource, onDragEnd, onDropAttempt, originCol, originRow, opacity, scale, translateX, translateY]);
+  }, [dragSource, onDragEnd, onDropAttempt, originCol, originRow]);
 
   const pan = Gesture.Pan()
     .minDistance(4)
-    .onBegin(() => {
+    .onBegin((event) => {
       runOnJS(onDragStart)(dragSource);
-      scale.value = withSpring(1.08);
-      opacity.value = 0.35;
+      runOnJS(onDragMove)(event.absoluteX, event.absoluteY);
     })
     .onUpdate((event) => {
-      translateX.value = event.translationX;
-      translateY.value = event.translationY;
       runOnJS(onDragMove)(event.absoluteX, event.absoluteY);
     })
     .onEnd((event) => {
@@ -228,26 +200,19 @@ function DraggableCargoSprite({
       );
     });
 
-  const hideWhileDragging = layoutMode === 'external' && isDragging;
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: translateX.value },
-      { translateY: translateY.value },
-      { scale: scale.value },
-    ],
-    opacity: hideWhileDragging ? 0 : opacity.value,
-  }));
-
   return (
     <GestureDetector gesture={pan}>
-      <Animated.View style={[spriteSize, staticStyle, animatedStyle, styles.spriteWrap]}>
-        <Animated.Image
-          source={resolveCargoItemIcon(dragSource.itemId)}
-          resizeMode="contain"
-          style={[styles.lootSprite, spriteSize]}
-        />
-      </Animated.View>
+      <View style={[spriteSize, styles.spriteWrap]}>
+        {isDragging ? (
+          <View style={styles.dragPlaceholder} pointerEvents="none" />
+        ) : (
+          <Image
+            source={resolveCargoItemIcon(dragSource.itemId)}
+            resizeMode="contain"
+            style={[styles.lootSprite, spriteSize]}
+          />
+        )}
+      </View>
     </GestureDetector>
   );
 }
@@ -299,6 +264,8 @@ export default function CargoGridBoard({
   const [dragOverlay, setDragOverlay] = useState<{ x: number; y: number } | null>(null);
   const [selectedCombatItemId, setSelectedCombatItemId] = useState<CargoItemId | null>(null);
   const externalSlotCountRef = useRef(0);
+
+  const dragGhostScale = useSharedValue(1);
 
   if (externalSlotCountRef.current === 0 && displayCargo.containment.length > 0) {
     externalSlotCountRef.current = displayCargo.containment.length;
@@ -439,8 +406,9 @@ export default function CargoGridBoard({
     activeDragRef.current = source;
     captureMetrics();
     requestAnimationFrame(() => captureMetrics());
+    dragGhostScale.value = withSpring(1.08);
     setActiveDrag(source);
-  }, [captureMetrics]);
+  }, [captureMetrics, dragGhostScale]);
 
   const handleDragMove = useCallback((absoluteX: number, absoluteY: number) => {
     const source = activeDragRef.current;
@@ -466,12 +434,13 @@ export default function CargoGridBoard({
     hoverItemIdRef.current = null;
     hoverExcludeIdRef.current = undefined;
     activeDragRef.current = null;
+    dragGhostScale.value = withTiming(1, { duration: REJECT_SNAP_MS });
     setActiveDrag(null);
     setDragOverlay(null);
     setHoverCell(null);
     setHoverItemId(null);
     setHoverExcludeId(undefined);
-  }, []);
+  }, [dragGhostScale]);
 
   const handleDropAttempt = useCallback((
     source: CargoDragSource,
@@ -525,6 +494,10 @@ export default function CargoGridBoard({
     onResult(placed);
   }, [captureMetrics, clearDrag, onRelocateItem, resolveValidDropCell]);
 
+  const ghostAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: dragGhostScale.value }],
+  }));
+
   const gridBlock = (
     <View
       ref={gridRef}
@@ -569,24 +542,38 @@ export default function CargoGridBoard({
           const deployable = isCombatDeployableCargoItem(item.itemId);
           const selectMode = combatMode && combatConsumablesEnabled && deployable;
           const source: CargoDragSource = { instanceId: item.instanceId, itemId: item.itemId, source: 'grid' };
+          const spriteSize = spriteSizeForCargoItem(item.itemId);
+          const isDragging = activeDrag?.instanceId === item.instanceId;
+
           return (
-            <DraggableCargoSprite
-              key={item.instanceId}
-              dragSource={source}
-              layoutMode="grid"
-              originRow={item.originRow}
-              originCol={item.originCol}
-              isDragging={activeDrag?.instanceId === item.instanceId}
-              onRelocateItem={onRelocateItem}
-              onHoverCell={handleHoverCell}
-              onDragStart={handleDragStart}
-              onDragMove={handleDragMove}
-              onDragEnd={clearDrag}
-              onDropAttempt={handleDropAttempt}
-              combatSelectMode={selectMode}
-              combatSelected={selectedCombatItemId === item.itemId}
-              onCombatSelect={selectMode ? () => setSelectedCombatItemId(item.itemId) : undefined}
-            />
+            <View
+              key={`${item.instanceId}@${item.originRow},${item.originCol}`}
+              style={[
+                styles.placedItemAnchor,
+                {
+                  left: cellOriginLeft(item.originCol),
+                  top: cellOriginTop(item.originRow),
+                  width: spriteSize.width,
+                  height: spriteSize.height,
+                },
+              ]}
+              pointerEvents="box-none"
+            >
+              <DraggableCargoSprite
+                dragSource={source}
+                isDragging={isDragging}
+                originRow={item.originRow}
+                originCol={item.originCol}
+                onHoverCell={handleHoverCell}
+                onDragStart={handleDragStart}
+                onDragMove={handleDragMove}
+                onDragEnd={clearDrag}
+                onDropAttempt={handleDropAttempt}
+                combatSelectMode={selectMode}
+                combatSelected={selectedCombatItemId === item.itemId}
+                onCombatSelect={selectMode ? () => setSelectedCombatItemId(item.itemId) : undefined}
+              />
+            </View>
           );
         })}
       </View>
@@ -616,6 +603,7 @@ export default function CargoGridBoard({
                   itemId: item.itemId,
                   source: 'containment',
                 };
+                const isDragging = activeDrag?.instanceId === item.instanceId;
                 return (
                   <View
                     key={item.instanceId}
@@ -623,9 +611,7 @@ export default function CargoGridBoard({
                   >
                     <DraggableCargoSprite
                       dragSource={source}
-                      layoutMode="external"
-                      isDragging={activeDrag?.instanceId === item.instanceId}
-                      onRelocateItem={onRelocateItem}
+                      isDragging={isDragging}
                       onHoverCell={handleHoverCell}
                       onDragStart={handleDragStart}
                       onDragMove={handleDragMove}
@@ -648,19 +634,26 @@ export default function CargoGridBoard({
 
         {activeDrag && dragOverlay && overlaySprite ? (
           <View style={styles.dragOverlayLayer} pointerEvents="none">
-            <Image
-              source={resolveCargoItemIcon(activeDrag.itemId)}
-              resizeMode="contain"
+            <Animated.View
               style={[
-                styles.lootSprite,
-                overlaySprite,
+                ghostAnimatedStyle,
                 {
                   position: 'absolute',
                   left: dragOverlay.x - overlaySprite.width / 2,
                   top: dragOverlay.y - overlaySprite.height / 2,
+                  width: overlaySprite.width,
+                  height: overlaySprite.height,
+                  justifyContent: 'center',
+                  alignItems: 'center',
                 },
               ]}
-            />
+            >
+              <Image
+                source={resolveCargoItemIcon(activeDrag.itemId)}
+                resizeMode="contain"
+                style={[styles.lootSprite, overlaySprite]}
+              />
+            </Animated.View>
           </View>
         ) : null}
       </View>
@@ -835,10 +828,19 @@ const styles = StyleSheet.create({
   placedLayerCombat: {
     zIndex: 4,
   },
+  placedItemAnchor: {
+    position: 'absolute',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   dragOverlayLayer: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 50,
     overflow: 'visible',
+  },
+  dragPlaceholder: {
+    width: '100%',
+    height: '100%',
   },
   combatSelectPressable: {
     zIndex: 5,
@@ -873,7 +875,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   spriteWrap: {
-    position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
   },
