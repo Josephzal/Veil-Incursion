@@ -41,7 +41,7 @@ interface CombatEnemyPortraitSkiaProps {
   anim?: EnemyPortraitAnim;
 }
 
-/** Silhouette glow via duplicate tinted Image; intent-driven lunge / shimmy on enemy turn. */
+/** Passive portrait art — touch handled by EnemyUnit hitbox sibling. */
 export default function CombatEnemyPortraitSkia({
   source,
   glow,
@@ -104,22 +104,23 @@ export default function CombatEnemyPortraitSkia({
   });
 
   return (
-    <View style={styles.root} collapsable={false}>
-      <Animated.View style={[styles.motionWrap, motionStyle]}>
+    <View style={styles.root} pointerEvents="none" collapsable={false}>
+      <Animated.View style={[styles.motionWrap, motionStyle]} pointerEvents="none">
         {glowTint ? (
-          <Image
-            source={source}
-            resizeMode="contain"
-            style={[
-              styles.portrait,
-              styles.glowDuplicate,
-              {
-                tintColor: glowTint,
-                opacity: glowOpacity,
-                transform: [{ scale: glowScale }],
-              },
-            ]}
-          />
+          <View style={styles.glowDuplicate} pointerEvents="none">
+            <Image
+              source={source}
+              resizeMode="contain"
+              style={[
+                styles.portrait,
+                {
+                  tintColor: glowTint,
+                  opacity: glowOpacity,
+                  transform: [{ scale: glowScale }],
+                },
+              ]}
+            />
+          </View>
         ) : null}
         <Image
           source={source}
@@ -144,12 +145,15 @@ const styles = StyleSheet.create({
     height: '100%',
     alignItems: 'center',
     justifyContent: 'flex-end',
+    overflow: 'visible',
   },
   portrait: {
     width: '100%',
     height: '100%',
   },
   glowDuplicate: {
-    position: 'absolute',
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
   },
 });

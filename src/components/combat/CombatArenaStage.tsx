@@ -6,6 +6,7 @@ import { ApparitionViewport } from './ApparitionViewport';
 import CombatPlayerViewport, { type CombatPlayerViewportRef } from './CombatPlayerViewport';
 import { CombatEnemyChromeLayer } from '../../context/CombatEnemyChromeContext';
 import CombatPlayerSliceOverlay from './CombatPlayerSliceOverlay';
+import { ARENA_ENEMY_GRID_INSET_RIGHT } from './combatEnemyBarLayout';
 
 interface CombatArenaStageProps {
   playerViewportRef: React.RefObject<CombatPlayerViewportRef | null>;
@@ -106,6 +107,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
     position: 'relative',
     overflow: 'visible',
+    paddingRight: ARENA_ENEMY_GRID_INSET_RIGHT,
   },
   playerSpriteSlot: {
     width: '100%',
@@ -129,7 +131,7 @@ const styles = StyleSheet.create({
     height: '100%',
     justifyContent: 'flex-end',
     position: 'relative',
-    overflow: 'hidden',
+    overflow: 'visible',
   },
   enemySquadPanel: {
     ...StyleSheet.absoluteFillObject,

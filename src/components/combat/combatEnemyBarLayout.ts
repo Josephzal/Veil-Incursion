@@ -3,19 +3,44 @@ import type { CombatGridSlotId } from '../../types/combatGrid';
 
 const ARENA_HORIZONTAL_INSET = 16;
 
+/** Arena column split — enemy grid uses the wider share, shifted toward center. */
+export const ARENA_PLAYER_COLUMN_FLEX = 2;
+export const ARENA_ENEMY_COLUMN_FLEX = 3;
+export const ARENA_ENEMY_COLUMN_RATIO =
+  ARENA_ENEMY_COLUMN_FLEX / (ARENA_PLAYER_COLUMN_FLEX + ARENA_ENEMY_COLUMN_FLEX);
+/** Pull enemy grid away from the right screen edge (horizontal only). */
+export const ARENA_ENEMY_GRID_INSET_RIGHT = 24;
+
 /** Matches CombatArenaStage playerSpriteSlot height (% of enemy column). */
 export const ARENA_SPRITE_HEIGHT = '57%';
-export const ARENA_SPRITE_BOTTOM = '2%';
+export const ARENA_SPRITE_BOTTOM = '15%';
+export const ARENA_STAGE_PADDING_BOTTOM = 20;
 
-/** Portrait frame height as a share of its slot (leaves headroom for health gauges). */
-export const ARENA_ENEMY_SPRITE_HEIGHT_SHARE = 0.82;
+/** Portrait frame height as a share of its slot (health gauges live in intel panel). */
+export const ARENA_ENEMY_SPRITE_HEIGHT_SHARE = 0.94;
 
 /** Backline depth — raised above frontline, scaled down, tucked under frontline overlap. */
-export const BACKLINE_SLOT_BOTTOM = '30%';
+export const BACKLINE_SLOT_BOTTOM = '35%';
 export const BACKLINE_SLOT_WIDTH = '54%';
-export const BACKLINE_UNIT_SCALE = 0.84;
+export const BACKLINE_UNIT_SCALE = .9;
 /** Negative = up-screen; lifts heads above frontline while feet stay near the floor. */
 export const BACKLINE_UNIT_TRANSLATE_Y = -34;
+
+/** Toggle red hitbox overlay — set false once overlap is verified. */
+export const ENEMY_HITBOX_DEBUG = true;
+
+/** Torso-only tap targets decoupled from portrait image bounds. */
+export const FRONTLINE_HITBOX = {
+  width: '80%' as const,
+  height: '45%' as const,
+  bottom: '27%' as const,
+};
+
+export const BACKLINE_HITBOX = {
+  width: '80%' as const,
+  height: '50%' as const,
+  top: '25%' as const,
+};
 
 /** Pivot for bottom-anchored depth scale (≈ half frontline sprite frame height). */
 const DEPTH_SCALE_PIVOT_Y = 76;
@@ -27,9 +52,6 @@ export const SOLO_UNIT_TRANSLATE_Y = -14;
 
 /** Matches CombatPlayerViewport.spriteFrame width. */
 export const ARENA_SPRITE_FRAME_WIDTH = '92%';
-
-/** Gap between health gauges and sprite head. */
-export const ENEMY_HEALTH_BAR_SPRITE_GAP = 8;
 
 export {
   COMBAT_GAUGE_BLOCK_HEIGHT_COMPACT as ARENA_GAUGE_BLOCK_HEIGHT,
@@ -56,7 +78,7 @@ export const ENEMY_ARENA_SLOT_LAYOUT: Record<CombatGridSlotId, EnemySlotLayout> 
     bottom: ARENA_SPRITE_BOTTOM,
     width: '50%',
     height: ARENA_SPRITE_HEIGHT,
-    unitScale: 1.5,
+    unitScale: 1.7,
     unitTranslateY: 0,
     zIndex: 8,
   },
@@ -65,7 +87,7 @@ export const ENEMY_ARENA_SLOT_LAYOUT: Record<CombatGridSlotId, EnemySlotLayout> 
     bottom: ARENA_SPRITE_BOTTOM,
     width: '50%',
     height: ARENA_SPRITE_HEIGHT,
-    unitScale: 1.5,
+    unitScale: 1.7,
     unitTranslateY: 0,
     zIndex: 7,
   },
@@ -92,8 +114,14 @@ export const ENEMY_ARENA_SLOT_LAYOUT: Record<CombatGridSlotId, EnemySlotLayout> 
 /** Gauge track width sized to the scaled EnemyUnit footprint. */
 export function arenaSlotGaugeWidth(slotWidthPercent: number, unitScale = 1): number {
   const screenWidth = Dimensions.get('window').width;
-  const enemyColumnWidth = (screenWidth - ARENA_HORIZONTAL_INSET) / 2;
+  const enemyColumnWidth = screenWidth * ARENA_ENEMY_COLUMN_RATIO - ARENA_HORIZONTAL_INSET / 2;
   return Math.max(28, Math.floor(enemyColumnWidth * (slotWidthPercent / 100) * unitScale * 0.84));
+}
+
+/** Intel panel gauge track — spans the enemy-column overlay width. */
+export function arenaIntelGaugeTrackWidth(screenWidth = Dimensions.get('window').width): number {
+  const enemyColumnWidth = screenWidth * ARENA_ENEMY_COLUMN_RATIO;
+  return Math.max(120, Math.floor(enemyColumnWidth - 24));
 }
 
 export function slotWidthPercent(width: `${number}%`): number {

@@ -1,16 +1,12 @@
 import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import type { CombatGridSlotId } from '../../types/combatGrid';
 import type { CombatGridUnitView } from './CombatEnemyUnit';
 import CombatEnemyUnit from './CombatEnemyUnit';
-import CombatEnemySlotBars from './CombatEnemySlotBars';
 import {
   ENEMY_ARENA_SLOT_LAYOUT,
-  ENEMY_HEALTH_BAR_SPRITE_GAP,
-  arenaSlotGaugeWidth,
   enemyUnitDepthTransform,
   resolveArenaSlotLayout,
-  slotWidthPercent,
 } from './combatEnemyBarLayout';
 
 const SLOT_ORDER: CombatGridSlotId[] = ['FL_0', 'FL_1', 'BL_0', 'BL_1'];
@@ -54,9 +50,10 @@ interface EnemyUnitStackProps {
   accentColor: string;
   mutedColor: string;
   constrainSpriteHeight?: boolean;
+  onUnitPress?: (unitId: string) => void;
 }
 
-/** Sprite + health bars grouped and depth-scaled together. */
+/** Sprite only — vitals render in the intel panel. */
 function EnemyUnitStack({
   unit,
   layout,
@@ -64,28 +61,23 @@ function EnemyUnitStack({
   accentColor,
   mutedColor,
   constrainSpriteHeight = false,
+  onUnitPress,
 }: EnemyUnitStackProps): React.JSX.Element {
-  const gaugeWidth = arenaSlotGaugeWidth(
-    slotWidthPercent(layout.width),
-    layout.unitScale,
-  );
-
   return (
     <View
       style={[
         styles.enemyUnit,
         { transform: enemyUnitDepthTransform(layout) },
       ]}
+      pointerEvents="box-none"
     >
-      <View style={styles.healthBarContainer}>
-        <CombatEnemySlotBars unit={unit} trackWidth={gaugeWidth} />
-      </View>
       <CombatEnemyUnit
         unit={unit}
         targetingActive={targetingActive}
         accentColor={accentColor}
         mutedColor={mutedColor}
         constrainSpriteHeight={constrainSpriteHeight}
+        onPress={onUnitPress ? () => onUnitPress(unit.unitId) : undefined}
       />
     </View>
   );
@@ -111,7 +103,7 @@ export default function CombatEnemyGrid({
         return <View key={slot} style={styles.cellEmpty} />;
       }
       return (
-        <Pressable key={slot} onPress={() => onUnitPress(unit.unitId)} style={styles.cell}>
+        <View key={slot} style={styles.cell} pointerEvents="box-none">
           <EnemyUnitStack
             unit={unit}
             layout={layout}
@@ -119,8 +111,9 @@ export default function CombatEnemyGrid({
             accentColor={accentColor}
             mutedColor={mutedColor}
             constrainSpriteHeight={isArena}
+            onUnitPress={onUnitPress}
           />
-        </Pressable>
+        </View>
       );
     }
 
@@ -129,9 +122,8 @@ export default function CombatEnemyGrid({
     }
 
     return (
-      <Pressable
+      <View
         key={slot}
-        onPress={() => onUnitPress(unit.unitId)}
         style={[
           styles.slotAnchor,
           styles.slotFill,
@@ -144,6 +136,7 @@ export default function CombatEnemyGrid({
             zIndex: layout.zIndex,
           },
         ]}
+        pointerEvents="box-none"
       >
         <EnemyUnitStack
           unit={unit}
@@ -152,26 +145,27 @@ export default function CombatEnemyGrid({
           accentColor={accentColor}
           mutedColor={mutedColor}
           constrainSpriteHeight
+          onUnitPress={onUnitPress}
         />
-      </Pressable>
+      </View>
     );
   };
 
   if (isArena) {
     return (
-      <View style={styles.arenaRoot}>
+      <View style={styles.arenaRoot} pointerEvents="box-none">
         {ARENA_DEPTH_RENDER_ORDER.map((slot) => renderSlot(slot))}
       </View>
     );
   }
 
   return (
-    <View style={styles.grid}>
-      <View style={styles.row}>
+    <View style={styles.grid} pointerEvents="box-none">
+      <View style={styles.row} pointerEvents="box-none">
         {renderSlot(SLOT_ORDER[0])}
         {renderSlot(SLOT_ORDER[1])}
       </View>
-      <View style={styles.row}>
+      <View style={styles.row} pointerEvents="box-none">
         {renderSlot(SLOT_ORDER[2])}
         {renderSlot(SLOT_ORDER[3])}
       </View>
@@ -185,7 +179,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     position: 'relative',
-    overflow: 'hidden',
+    overflow: 'visible',
   },
   slotAnchor: {
     position: 'absolute',
@@ -194,16 +188,14 @@ const styles = StyleSheet.create({
     overflow: 'visible',
     justifyContent: 'flex-end',
     alignItems: 'center',
+    pointerEvents: 'box-none',
   },
   enemyUnit: {
-    flex: 1,
     width: '100%',
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'flex-end',
-  },
-  healthBarContainer: {
-    alignItems: 'center',
-    marginBottom: ENEMY_HEALTH_BAR_SPRITE_GAP,
+    pointerEvents: 'box-none',
   },
   grid: {
     width: '100%',
