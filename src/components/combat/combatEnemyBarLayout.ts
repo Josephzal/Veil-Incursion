@@ -1,12 +1,29 @@
 import { Dimensions } from 'react-native';
 import type { CombatGridSlotId } from '../../types/combatGrid';
-import { FRONTLINE_SLOTS } from '../../types/combatGrid';
 
 const ARENA_HORIZONTAL_INSET = 16;
 
-/** Matches CombatArenaStage playerSpriteSlot height. */
-export const ARENA_SPRITE_HEIGHT = '72%';
+/** Matches CombatArenaStage playerSpriteSlot height (% of enemy column). */
+export const ARENA_SPRITE_HEIGHT = '57%';
 export const ARENA_SPRITE_BOTTOM = '2%';
+
+/** Portrait frame height as a share of its slot (leaves headroom for health gauges). */
+export const ARENA_ENEMY_SPRITE_HEIGHT_SHARE = 0.82;
+
+/** Backline depth — raised above frontline, scaled down, tucked under frontline overlap. */
+export const BACKLINE_SLOT_BOTTOM = '30%';
+export const BACKLINE_SLOT_WIDTH = '54%';
+export const BACKLINE_UNIT_SCALE = 0.84;
+/** Negative = up-screen; lifts heads above frontline while feet stay near the floor. */
+export const BACKLINE_UNIT_TRANSLATE_Y = -34;
+
+/** Pivot for bottom-anchored depth scale (≈ half frontline sprite frame height). */
+const DEPTH_SCALE_PIVOT_Y = 76;
+
+/** Lone hostile — centered column, lifted, slightly smaller than a frontline pair tile. */
+export const SOLO_SLOT_BOTTOM = '10%';
+export const SOLO_UNIT_SCALE = 0.88;
+export const SOLO_UNIT_TRANSLATE_Y = -14;
 
 /** Matches CombatPlayerViewport.spriteFrame width. */
 export const ARENA_SPRITE_FRAME_WIDTH = '92%';
@@ -39,35 +56,35 @@ export const ENEMY_ARENA_SLOT_LAYOUT: Record<CombatGridSlotId, EnemySlotLayout> 
     bottom: ARENA_SPRITE_BOTTOM,
     width: '50%',
     height: ARENA_SPRITE_HEIGHT,
-    unitScale: 1,
+    unitScale: 1.5,
     unitTranslateY: 0,
-    zIndex: 6,
+    zIndex: 8,
   },
   FL_1: {
     left: '50%',
     bottom: ARENA_SPRITE_BOTTOM,
     width: '50%',
     height: ARENA_SPRITE_HEIGHT,
-    unitScale: 1,
+    unitScale: 1.5,
     unitTranslateY: 0,
-    zIndex: 5,
+    zIndex: 7,
   },
   BL_0: {
-    left: '0%',
-    bottom: '26%',
-    width: '52%',
-    height: '80%',
-    unitScale: 0.75,
-    unitTranslateY: -24,
+    left: '-1%',
+    bottom: BACKLINE_SLOT_BOTTOM,
+    width: BACKLINE_SLOT_WIDTH,
+    height: ARENA_SPRITE_HEIGHT,
+    unitScale: BACKLINE_UNIT_SCALE,
+    unitTranslateY: BACKLINE_UNIT_TRANSLATE_Y,
     zIndex: 2,
   },
   BL_1: {
-    left: '48%',
-    bottom: '28%',
-    width: '52%',
-    height: '80%',
-    unitScale: 0.75,
-    unitTranslateY: -24,
+    left: '47%',
+    bottom: BACKLINE_SLOT_BOTTOM,
+    width: BACKLINE_SLOT_WIDTH,
+    height: ARENA_SPRITE_HEIGHT,
+    unitScale: BACKLINE_UNIT_SCALE,
+    unitTranslateY: BACKLINE_UNIT_TRANSLATE_Y,
     zIndex: 1,
   },
 };
@@ -86,27 +103,47 @@ export function slotWidthPercent(width: `${number}%`): number {
 export function enemyUnitDepthTransform(
   layout: Pick<EnemySlotLayout, 'unitScale' | 'unitTranslateY'>,
 ): Array<{ translateY: number } | { scale: number }> {
+  const { unitScale, unitTranslateY } = layout;
+  if (unitScale === 1 && unitTranslateY === 0) return [];
+
+  // Scale from the floor so backline torsos sit under frontline overlap.
+  if (unitScale < 1) {
+    return [
+      { translateY: DEPTH_SCALE_PIVOT_Y },
+      { scale: unitScale },
+      { translateY: -DEPTH_SCALE_PIVOT_Y + unitTranslateY },
+    ];
+  }
+
   return [
-    { translateY: layout.unitTranslateY },
-    { scale: layout.unitScale },
+    { translateY: unitTranslateY },
+    { scale: unitScale },
   ];
 }
 
-function occupiedFrontlineSlots(units: readonly { slot: CombatGridSlotId; isDead?: boolean }[]): CombatGridSlotId[] {
-  return FRONTLINE_SLOTS.filter((slot) =>
-    units.some((unit) => !unit.isDead && unit.slot === slot),
-  );
+function soloLiveUnitSlot(
+  units: readonly { slot: CombatGridSlotId; isDead?: boolean }[],
+): CombatGridSlotId | null {
+  const live = units.filter((unit) => !unit.isDead);
+  if (live.length !== 1) return null;
+  return live[0]!.slot;
 }
 
-/** Widen a lone frontline hostile to the full enemy column (player-sized footprint). */
+/** Solo hostile: full column width, raised floor, slightly smaller scale. */
 export function resolveArenaSlotLayout(
   slot: CombatGridSlotId,
   units: readonly { slot: CombatGridSlotId; isDead?: boolean }[],
 ): EnemySlotLayout {
   const base = ENEMY_ARENA_SLOT_LAYOUT[slot];
-  const frontline = occupiedFrontlineSlots(units);
-  if (frontline.length === 1 && frontline[0] === slot) {
-    return { ...base, left: '0%', width: '100%' };
-  }
-  return base;
+  const soloSlot = soloLiveUnitSlot(units);
+  if (soloSlot !== slot) return base;
+
+  return {
+    ...base,
+    left: '0%',
+    width: '100%',
+    bottom: SOLO_SLOT_BOTTOM,
+    unitScale: SOLO_UNIT_SCALE,
+    unitTranslateY: SOLO_UNIT_TRANSLATE_Y,
+  };
 }

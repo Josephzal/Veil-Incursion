@@ -1,7 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import type { CombatGridSlotId } from '../../types/combatGrid';
-import { ALL_GRID_SLOTS } from '../../types/combatGrid';
 import type { CombatGridUnitView } from './CombatEnemyUnit';
 import CombatEnemyUnit from './CombatEnemyUnit';
 import CombatEnemySlotBars from './CombatEnemySlotBars';
@@ -15,6 +14,8 @@ import {
 } from './combatEnemyBarLayout';
 
 const SLOT_ORDER: CombatGridSlotId[] = ['FL_0', 'FL_1', 'BL_0', 'BL_1'];
+/** Backline first so frontline paints on top for 2.5D overlap. */
+const ARENA_DEPTH_RENDER_ORDER: CombatGridSlotId[] = ['BL_0', 'BL_1', 'FL_0', 'FL_1'];
 
 interface CombatEnemyGridProps {
   units: CombatGridUnitView[];
@@ -52,6 +53,7 @@ interface EnemyUnitStackProps {
   targetingActive: boolean;
   accentColor: string;
   mutedColor: string;
+  constrainSpriteHeight?: boolean;
 }
 
 /** Sprite + health bars grouped and depth-scaled together. */
@@ -61,6 +63,7 @@ function EnemyUnitStack({
   targetingActive,
   accentColor,
   mutedColor,
+  constrainSpriteHeight = false,
 }: EnemyUnitStackProps): React.JSX.Element {
   const gaugeWidth = arenaSlotGaugeWidth(
     slotWidthPercent(layout.width),
@@ -82,6 +85,7 @@ function EnemyUnitStack({
         targetingActive={targetingActive}
         accentColor={accentColor}
         mutedColor={mutedColor}
+        constrainSpriteHeight={constrainSpriteHeight}
       />
     </View>
   );
@@ -114,6 +118,7 @@ export default function CombatEnemyGrid({
             targetingActive={targetingActive}
             accentColor={accentColor}
             mutedColor={mutedColor}
+            constrainSpriteHeight={isArena}
           />
         </Pressable>
       );
@@ -146,6 +151,7 @@ export default function CombatEnemyGrid({
           targetingActive={targetingActive}
           accentColor={accentColor}
           mutedColor={mutedColor}
+          constrainSpriteHeight
         />
       </Pressable>
     );
@@ -154,7 +160,7 @@ export default function CombatEnemyGrid({
   if (isArena) {
     return (
       <View style={styles.arenaRoot}>
-        {ALL_GRID_SLOTS.map((slot) => renderSlot(slot))}
+        {ARENA_DEPTH_RENDER_ORDER.map((slot) => renderSlot(slot))}
       </View>
     );
   }
@@ -186,6 +192,8 @@ const styles = StyleSheet.create({
   },
   slotFill: {
     overflow: 'visible',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
   },
   enemyUnit: {
     flex: 1,

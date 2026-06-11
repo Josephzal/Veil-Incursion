@@ -2,7 +2,10 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import type { ImageSourcePropType } from 'react-native';
 import type { CombatGridUnitSnapshot } from '../../utils/combatTelemetryFormat';
-import { ARENA_SPRITE_FRAME_WIDTH } from './combatEnemyBarLayout';
+import {
+  ARENA_ENEMY_SPRITE_HEIGHT_SHARE,
+  ARENA_SPRITE_FRAME_WIDTH,
+} from './combatEnemyBarLayout';
 import CombatEnemyPortraitSkia from './CombatEnemyPortraitSkia';
 
 const BLOCKED_OVERLAY = 'rgba(220, 38, 38, 0.35)';
@@ -16,12 +19,16 @@ interface CombatEnemyUnitProps {
   targetingActive: boolean;
   accentColor: string;
   mutedColor: string;
+  /** Arena grid: cap sprite height to match player footprint. */
+  constrainSpriteHeight?: boolean;
 }
 
 export default function CombatEnemyUnit({
   unit,
   targetingActive,
+  constrainSpriteHeight = false,
 }: CombatEnemyUnitProps): React.JSX.Element {
+  const spriteHeightShare = `${Math.round(ARENA_ENEMY_SPRITE_HEIGHT_SHARE * 100)}%`;
   const fractureMax = unit.fractureMax ?? 100;
   const fractureRatio = fractureMax > 0 ? (unit.fractureGauge ?? 0) / fractureMax : 0;
   const fractured = unit.isFractured || fractureRatio >= 1;
@@ -31,6 +38,8 @@ export default function CombatEnemyUnit({
     <View
       style={[
         styles.imageRoot,
+        constrainSpriteHeight ? styles.imageRootArena : null,
+        constrainSpriteHeight ? { height: spriteHeightShare, maxHeight: spriteHeightShare } : null,
         fractured ? styles.spriteFractured : null,
         {
           opacity: unit.isBlocked && targetingActive && !unit.isHookValid ? 0.5 : 1,
@@ -57,11 +66,17 @@ export default function CombatEnemyUnit({
 const styles = StyleSheet.create({
   imageRoot: {
     width: ARENA_SPRITE_FRAME_WIDTH,
-    flex: 1,
-    minHeight: 120,
+    flexGrow: 1,
+    flexShrink: 1,
+    minHeight: 88,
     alignItems: 'center',
     justifyContent: 'flex-end',
     position: 'relative',
+  },
+  imageRootArena: {
+    flexGrow: 0,
+    flexShrink: 0,
+    minHeight: 0,
   },
   portraitAnchor: {
     width: '100%',
