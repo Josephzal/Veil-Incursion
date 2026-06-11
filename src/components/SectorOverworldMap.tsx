@@ -139,6 +139,8 @@ export interface SectorOverworldMapProps {
   currentDistrict?: DistrictId;
   compact?: boolean;
   interactive?: boolean;
+  /** Walkable corridor only — no rifts, scanner HUD, hazards, or resonance features. */
+  hubMode?: boolean;
   overworldSession?: OverworldFeatureSession;
   onCollectVeilEcho?: (echoId: string) => void;
   onAcquireRawLeyBoon?: (boonId: string) => void;
@@ -188,6 +190,7 @@ export default function SectorOverworldMap({
   currentDistrict = 1,
   compact = false,
   interactive = true,
+  hubMode = false,
   overworldSession = createEmptyOverworldSession(),
   onCollectVeilEcho,
   onAcquireRawLeyBoon,
@@ -402,6 +405,7 @@ export default function SectorOverworldMap({
 
   const syncBlindScout = useCallback((x: number, y: number) => {
     setPlayerPos({ x, y });
+    if (hubMode) return;
     const player = { x, y };
     const blips: ScoutTarget[] = [];
     const hiddenDistances: number[] = [];
@@ -511,7 +515,7 @@ export default function SectorOverworldMap({
       const dist = Math.hypot(boon.world.x - x, boon.world.y - y);
       if (dist <= pickupRadius) onAcquireRawLeyBoon(boon.id);
     });
-  }, [layoutPositions, onAcquireRawLeyBoon, onCollectVeilEcho, onFrequencyMatch, overworldSession.rawLeyBoons, overworldSession.veilEchoes]);
+  }, [hubMode, layoutPositions, onAcquireRawLeyBoon, onCollectVeilEcho, onFrequencyMatch, overworldSession.rawLeyBoons, overworldSession.veilEchoes]);
 
   const manifestNode = useCallback((nodeId: string, world: SectorGraphLayoutPoint, node: ScoutNode) => {
     manifestedRef.current = new Set([...manifestedRef.current, nodeId]);
@@ -553,7 +557,9 @@ export default function SectorOverworldMap({
       playerWorldY.value = next.y;
       runOnJS(handleFacing)(nx, ny);
     }
-    runOnJS(handleHazardTick)(playerWorldX.value, playerWorldY.value, dtMs);
+    if (!hubMode) {
+      runOnJS(handleHazardTick)(playerWorldX.value, playerWorldY.value, dtMs);
+    }
   });
 
   useAnimatedReaction(
@@ -801,7 +807,7 @@ export default function SectorOverworldMap({
                 );
               }) : null}
 
-              {overworldSession.resonancePockets.map((pocket) => (
+              {!hubMode ? overworldSession.resonancePockets.map((pocket) => (
                 <Circle
                   key={pocket.id}
                   cx={pocket.world.x}
@@ -809,9 +815,9 @@ export default function SectorOverworldMap({
                   r={pocket.radius}
                   color="rgba(255, 48, 48, 0.14)"
                 />
-              ))}
+              )) : null}
 
-              {overworldSession.veilEchoes.filter((e) => !e.collected).map((echo) => (
+              {!hubMode ? overworldSession.veilEchoes.filter((e) => !e.collected).map((echo) => (
                 <Circle
                   key={echo.id}
                   cx={echo.world.x}
@@ -819,9 +825,9 @@ export default function SectorOverworldMap({
                   r={18}
                   color="rgba(0, 255, 120, 0.38)"
                 />
-              ))}
+              )) : null}
 
-              {overworldSession.rawLeyBoons.filter((b) => !b.claimed).map((boon) => (
+              {!hubMode ? overworldSession.rawLeyBoons.filter((b) => !b.claimed).map((boon) => (
                 <Circle
                   key={boon.id}
                   cx={boon.world.x}
@@ -829,9 +835,9 @@ export default function SectorOverworldMap({
                   r={22}
                   color="rgba(168, 85, 247, 0.42)"
                 />
-              ))}
+              )) : null}
 
-              {overworldSession.gridHound?.active && !overworldSession.gridHound.caught ? (
+              {!hubMode && overworldSession.gridHound?.active && !overworldSession.gridHound.caught ? (
                 <Group>
                   <Circle
                     cx={overworldSession.gridHound.world.x}
@@ -856,7 +862,7 @@ export default function SectorOverworldMap({
                 </Group>
               ) : null}
 
-              {renderRiftNodes.map(({ node, manifested }) => {
+              {!hubMode ? renderRiftNodes.map(({ node, manifested }) => {
                 const world = layoutPositions[node.id] ?? node.world;
                 const drawWorld = manifested
                   ? (positionOverrides[node.id] ?? world)
@@ -877,12 +883,12 @@ export default function SectorOverworldMap({
                     pulse={!manifested && !isSelected}
                   />
                 );
-              })}
+              }) : null}
             </Group>
           </Canvas>
         ) : null}
 
-        {!compact ? (
+        {!compact && !hubMode ? (
           <ProximityScanlineOverlay
             width={canvasSize.width}
             height={canvasSize.height}
@@ -894,7 +900,7 @@ export default function SectorOverworldMap({
           <Image source={FACING_SOURCE[facing]} style={styles.walkerImage} resizeMode="contain" />
         </View>
 
-        {!compact ? stabilizedTapNodes.map((node) => {
+        {!compact && !hubMode ? stabilizedTapNodes.map((node) => {
           const world = layoutPositions[node.id] ?? node.world;
           const screen = worldToScreen(
             world,
@@ -918,7 +924,7 @@ export default function SectorOverworldMap({
           );
         }) : null}
 
-        {!compact ? manifestedNodes.map((node) => {
+        {!compact && !hubMode ? manifestedNodes.map((node) => {
           const world = positionOverrides[node.id]
             ?? layoutPositions[node.id]
             ?? node.world;
@@ -944,7 +950,7 @@ export default function SectorOverworldMap({
           );
         }) : null}
 
-        {!compact ? (
+        {!compact && !hubMode ? (
           <FixedLeyTrackerHud
             cabal={cabal}
             zoneTint={zoneTint}
@@ -957,7 +963,7 @@ export default function SectorOverworldMap({
         ) : null}
         {!compact ? <VirtualJoystick vectorX={joystickX} vectorY={joystickY} /> : null}
 
-        {!compact && onDirectedPing ? (
+        {!compact && !hubMode && onDirectedPing ? (
           <Pressable style={styles.pingBtn} onPress={handleDirectedPing}>
             <Text style={styles.pingBtnText}>[ PING ]</Text>
           </Pressable>

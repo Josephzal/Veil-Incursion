@@ -1,15 +1,20 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { generateDepthNodeScanVectors } from '../data/descentEngine';
 import {
-  formatFocusedIntel,
-  formatSpectralBlock,
-} from '../data/sectorGraphEngine';
+  LayoutChangeEvent,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import {
+  formatScannerNodeIntel,
+  generateDepthNodeScanVectors,
+} from '../data/descentEngine';
 import { INITIAL_SECTOR_POOL } from '../data/regions';
 import IncursionShell from '../components/IncursionShell';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
 import InlineScannerEngagement from '../components/overworld/InlineScannerEngagement';
-import SectorOverworldMap from '../components/SectorOverworldMap';
+import VectorScanner from '../components/VectorScanner';
 import LeyLineBoonSwapOverlay from '../components/LeyLineBoonSwapOverlay';
 import { useRun } from '../context/RunContext';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
@@ -19,15 +24,28 @@ import { useGameFlow } from '../context/GameFlowContext';
 import { getFactionDefinition } from '../data/factions';
 import { RadarDot } from '../types/run';
 import type { ScannerCabal } from '../types/scanner';
-import { isTerminalBlindActive } from '../data/resonanceEscalationEngine';
 import { getZoneScannerTint } from '../components/scanner/zoneScannerThemes';
+import { formatRiftManifestLog } from '../utils/overworldBlindScout';
 import {
   getSectorZone,
   isEmergencyRecallAvailable,
-  isFullBlindZone,
 } from '../data/sectorZoneEngine';
 
 const TERMINAL_ACCENT = '#00ff33';
+const SCANNER_BEZEL_PADDING = 6;
+
+/** Preserve spawn layout when the scanner viewport resizes. */
+function scaleRadarDots(dots: RadarDot[], fromSize: number, toSize: number): RadarDot[] {
+  if (fromSize === toSize) return dots;
+  const ratio = toSize / fromSize;
+  const fromCenter = fromSize / 2;
+  const toCenter = toSize / 2;
+  return dots.map((dot) => ({
+    ...dot,
+    x: toCenter + (dot.x - fromCenter) * ratio,
+    y: toCenter + (dot.y - fromCenter) * ratio,
+  }));
+}
 
 export default function ScanningScreen(): React.JSX.Element {
   const { theme } = useTerminal();
@@ -41,15 +59,9 @@ export default function ScanningScreen(): React.JSX.Element {
     closeScanPreview,
     confirmScanPreview,
     getPreviewNode,
-    focusPreviewNode,
     appendRunLog,
     initiateEmergencyRecall,
     applyResonanceManifestScan,
-    tickOverworldHazards,
-    collectVeilEcho,
-    acquireRawLeyBoon,
-    fireDirectedPing,
-    prepareGridHoundEncounter,
     swapLeyLineMutation,
     cancelLeyBoonSwap,
   } = useRun();
@@ -70,11 +82,24 @@ export default function ScanningScreen(): React.JSX.Element {
       ? getFactionDefinition(account.alignedFaction).accentColor
       : TERMINAL_ACCENT;
 
+  const [scannerViewportSize, setScannerViewportSize] = useState({ width: 0, height: 0 });
+  const scannerSize = useMemo(() => {
+    const innerWidth = scannerViewportSize.width - SCANNER_BEZEL_PADDING * 2;
+    const innerHeight = scannerViewportSize.height - SCANNER_BEZEL_PADDING * 2;
+    if (innerWidth <= 0 || innerHeight <= 0) return 0;
+    return Math.floor(Math.min(innerWidth, innerHeight));
+  }, [scannerViewportSize]);
+
   const [vectorDots, setVectorDots] = useState<RadarDot[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [manifestedNodeIds, setManifestedNodeIds] = useState<Set<string>>(() => new Set());
-  const [riftsTotal, setRiftsTotal] = useState(0);
+  const [siphonedNodeIds, setSiphonedNodeIds] = useState<string[]>([]);
+  const [nodesInField, setNodesInField] = useState(0);
   const lastRadarSessionRef = useRef<number | null>(null);
+  const lastManifestedSiphonsRef = useRef<Set<string>>(new Set());
+  const spawnedDotsRef = useRef<RadarDot[] | null>(null);
+  const spawnedForSessionRef = useRef<number | null>(null);
+  const spawnedScannerSizeRef = useRef(0);
+  const vectorDotsRef = useRef<RadarDot[]>([]);
 
   const nodeIndex = activeIncursion.nodesCleared;
   const vectorCluster = useMemo(
@@ -92,34 +117,27 @@ export default function ScanningScreen(): React.JSX.Element {
 
   const selectedNode = getPreviewNode();
   const hasSelection = selectedNode != null;
-  const isFocused = selectedNode?.sectorMeta?.isFocused === true;
-  const terminalBlindActive = isTerminalBlindActive(activeIncursion.resonanceEscalations);
-  const canEngage = hasSelection;
-  const fullBlindZone = isFullBlindZone(nodeIndex);
-  const isPreAuthExtraction = selectedNode?.type === 'SAFE_ANCHOR_EXTRACTION'
-    || selectedNode?.type === 'MASTER_EXTRACTION_LINK';
   const emergencyRecallAvailable = isEmergencyRecallAvailable(nodeIndex);
   const zoneId = getSectorZone(nodeIndex, activeIncursion.collapseActive);
   const zoneTint = useMemo(() => getZoneScannerTint(zoneId), [zoneId]);
-  const zoneLineColor = zoneTint.line ?? '#3f6212';
-  const canFocus = hasSelection
-    && !fullBlindZone
-    && !isPreAuthExtraction
-    && activeIncursion.attunement.current > 0
-    && !isFocused
-    && !terminalBlindActive;
+  const canEngage = hasSelection;
 
-  const spectralLines = useMemo(() => {
-    if (!selectedNode?.sectorMeta) return [];
-    if (isFocused) return formatFocusedIntel(selectedNode);
-    return formatSpectralBlock(selectedNode.sectorMeta, false, terminalBlindActive);
-  }, [selectedNode, isFocused, terminalBlindActive]);
-
-  const showNodeDock = Boolean(
-    hasSelection
-    && selectedNodeId
-    && manifestedNodeIds.has(selectedNodeId),
+  const nodeIndexById = useMemo(
+    () => new Map(vectorCluster.map((node, index) => [node.id, index])),
+    [vectorCluster],
   );
+
+  const intelLines = useMemo(() => {
+    if (!selectedNode) return [];
+    const optionIndex = nodeIndexById.get(selectedNode.id) ?? 0;
+    return formatScannerNodeIntel(selectedNode, optionIndex);
+  }, [selectedNode, nodeIndexById]);
+
+  const showNodeDock = hasSelection;
+
+  useEffect(() => {
+    vectorDotsRef.current = vectorDots;
+  }, [vectorDots]);
 
   useEffect(() => {
     if (isScanningHub) {
@@ -135,31 +153,81 @@ export default function ScanningScreen(): React.JSX.Element {
     if (lastRadarSessionRef.current === scanSessionKey) return;
     lastRadarSessionRef.current = scanSessionKey;
 
-    const sector = runState.currentSector ?? INITIAL_SECTOR_POOL[0];
-    const dots = generateDepthNodeScanVectors(vectorCluster, 108, sector);
-    setVectorDots(dots);
     setSelectedNodeId(null);
-    setManifestedNodeIds(new Set());
-    setRiftsTotal(vectorCluster.length);
+    setSiphonedNodeIds([]);
+    lastManifestedSiphonsRef.current = new Set();
+    spawnedDotsRef.current = null;
+    spawnedForSessionRef.current = null;
+    spawnedScannerSizeRef.current = 0;
+    setNodesInField(vectorCluster.length);
     closeScanPreview();
-  }, [isScanningHub, scanSessionKey, vectorCluster, nodeIndex, runState.currentSector, closeScanPreview]);
+  }, [isScanningHub, scanSessionKey, vectorCluster, nodeIndex, closeScanPreview]);
 
-  const handleMapNodePress = useCallback((nodeId: string) => {
-    openScanPreview(nodeId);
-    setSelectedNodeId(nodeId);
-  }, [openScanPreview]);
+  useEffect(() => {
+    if (!isScanningHub || vectorCluster.length === 0 || scannerSize <= 0) return;
 
-  const handleBackToMap = useCallback(() => {
-    closeScanPreview();
-    setSelectedNodeId(null);
-  }, [closeScanPreview]);
+    if (spawnedForSessionRef.current !== scanSessionKey || spawnedDotsRef.current == null) {
+      const sector = runState.currentSector ?? INITIAL_SECTOR_POOL[0];
+      const dots = generateDepthNodeScanVectors(vectorCluster, scannerSize, sector);
+      spawnedDotsRef.current = dots;
+      spawnedForSessionRef.current = scanSessionKey;
+      spawnedScannerSizeRef.current = scannerSize;
+      setVectorDots(dots);
+      return;
+    }
 
-  const handleManifestedIdsChange = useCallback((ids: readonly string[]) => {
-    setManifestedNodeIds(new Set(ids));
+    if (spawnedScannerSizeRef.current !== scannerSize) {
+      const scaled = scaleRadarDots(
+        spawnedDotsRef.current,
+        spawnedScannerSizeRef.current,
+        scannerSize,
+      );
+      spawnedDotsRef.current = scaled;
+      spawnedScannerSizeRef.current = scannerSize;
+      setVectorDots(scaled);
+    }
+  }, [isScanningHub, vectorCluster, scannerSize, scanSessionKey, runState.currentSector]);
+
+  const handleScannerViewportLayout = useCallback((event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout;
+    setScannerViewportSize((prev) => (
+      prev.width === width && prev.height === height ? prev : { width, height }
+    ));
   }, []);
 
-  const riftsUncovered = manifestedNodeIds.size;
-  const leyScarActive = activeIncursion.overworldSession.rawLeyBoons.some((b) => !b.claimed);
+  const selectLockedNode = useCallback((nodeId: string) => {
+    if (!siphonedNodeIds.includes(nodeId)) return;
+    openScanPreview(nodeId);
+    setSelectedNodeId(nodeId);
+  }, [openScanPreview, siphonedNodeIds]);
+
+  const handleScannerNodeSelect = useCallback((nodeId: string) => {
+    selectLockedNode(nodeId);
+  }, [selectLockedNode]);
+
+  const handleSiphonedNodesChange = useCallback((nodeIds: string[]) => {
+    setSiphonedNodeIds((previousIds) => {
+      const previous = new Set(previousIds);
+      const newlyLocked = nodeIds.filter((id) => !previous.has(id));
+
+      nodeIds.forEach((nodeId) => {
+        if (lastManifestedSiphonsRef.current.has(nodeId)) return;
+        lastManifestedSiphonsRef.current.add(nodeId);
+        const node = vectorCluster.find((entry) => entry.id === nodeId);
+        if (!node) return;
+        appendRunLog(formatRiftManifestLog(node.type, node.label ?? node.id));
+        applyResonanceManifestScan(nodeId);
+      });
+
+      if (newlyLocked.length > 0) {
+        const latestLocked = newlyLocked[newlyLocked.length - 1];
+        openScanPreview(latestLocked);
+        setSelectedNodeId(latestLocked);
+      }
+
+      return nodeIds;
+    });
+  }, [appendRunLog, applyResonanceManifestScan, openScanPreview, vectorCluster]);
 
   const routeAfterEngage = useCallback((nodeType: string | null) => {
     if (!nodeType) return;
@@ -212,23 +280,12 @@ export default function ScanningScreen(): React.JSX.Element {
     }
   }, [initiateEmergencyRecall, startCombat]);
 
-  const handleFocus = useCallback(() => {
-    focusPreviewNode();
-  }, [focusPreviewNode]);
-
-  const handleFrequencyMatch = useCallback((_nodeId: string, distanceMeters: number) => {
-    appendRunLog(`>> FREQUENCY MATCH DETECTED // DISTANCE: ${distanceMeters}m`);
-  }, [appendRunLog]);
-
-  const handleNodeManifest = useCallback((nodeId: string, logLine: string) => {
-    appendRunLog(logLine);
-    applyResonanceManifestScan(nodeId);
-  }, [appendRunLog, applyResonanceManifestScan]);
-
-  const handleGridHoundCaught = useCallback(() => {
-    prepareGridHoundEncounter();
-    startCombat();
-  }, [prepareGridHoundEncounter, startCombat]);
+  const dockPlaceholder = useMemo(() => {
+    if (siphonedNodeIds.length === 0) {
+      return 'SWEEP THE FIELD — TAP AN ILLUMINATED PING TO LOCK';
+    }
+    return 'TAP A LOCKED PING TO REVIEW // SELECTED NODE SHOWS BELOW';
+  }, [siphonedNodeIds.length]);
 
   if (!isScanningHub) {
     return (
@@ -245,57 +302,45 @@ export default function ScanningScreen(): React.JSX.Element {
         style={{ backgroundColor: theme.backgroundColor }}
       >
         <View style={styles.body}>
-          <View style={styles.mapViewport}>
-            <SectorOverworldMap
-              graph={activeIncursion.sectorGraph}
-              currentNodeId={activeIncursion.currentNodeId}
-              encounterPath={activeIncursion.encounterPath}
-              focusedNodeIds={activeIncursion.focusedNodeIds}
-              cluster={vectorCluster}
-              nodesCleared={nodeIndex}
-              vectorDots={vectorDots}
-              patrolState={activeIncursion.patrolState}
-              cabal={cabal}
-              zoneTint={zoneTint}
-              selectedNodeId={selectedNodeId}
-              zoneLineColor={zoneLineColor}
-              onNodePress={handleMapNodePress}
-              onFrequencyMatch={handleFrequencyMatch}
-              onNodeManifest={handleNodeManifest}
-              onManifestedIdsChange={handleManifestedIdsChange}
-              currentDistrict={activeIncursion.currentDistrict}
-              layoutRollKey={`${scanSessionKey}-d${activeIncursion.currentDistrict}`}
-              mapStatusText={`DIST ${activeIncursion.currentDistrict} // DEPTH ${activeIncursion.currentDepth} // RES ${activeIncursion.resonance.percent}% // ATT ${activeIncursion.attunement.current}/${activeIncursion.attunement.max}`}
-              overworldSession={activeIncursion.overworldSession}
-              onCollectVeilEcho={collectVeilEcho}
-              onAcquireRawLeyBoon={acquireRawLeyBoon}
-              onTickOverworldHazards={tickOverworldHazards}
-              onDirectedPing={fireDirectedPing}
-              onGridHoundCaught={handleGridHoundCaught}
-            />
+          <View style={styles.scannerViewport} onLayout={handleScannerViewportLayout}>
+            <View style={[styles.scannerBezel, { borderColor: `${accent}55` }]}>
+              {scannerSize > 0 ? (
+                <VectorScanner
+                  key={`scanner-${scanSessionKey}`}
+                  cabal={cabal}
+                  zoneTint={zoneTint}
+                  scannerSize={scannerSize}
+                  active
+                  continuousScan
+                  activeNodes={vectorDots}
+                  contactsLocked={false}
+                  selectedNodeId={selectedNodeId}
+                  onSelectNode={handleScannerNodeSelect}
+                  onSiphonedNodesChange={handleSiphonedNodesChange}
+                />
+              ) : null}
+            </View>
           </View>
 
           <View style={[styles.nodeDock, { borderColor: theme.borderColor }]}>
-            <Text style={[styles.riftsCounter, { color: theme.mutedColor }]}>
-              {`RIFTS UNCOVERED ${riftsUncovered}/${riftsTotal}${leyScarActive ? ' // LEY SCAR DETECTED' : ''}`}
+            <Text style={[styles.nodesCounter, { color: theme.mutedColor }]}>
+              {`NODES IN FIELD: ${nodesInField} // LOCKED: ${siphonedNodeIds.length}/${nodesInField}`}
             </Text>
             <View style={styles.nodeDockBody}>
               {showNodeDock ? (
                 <InlineScannerEngagement
                   layout="dock"
                   headline={selectedNode?.label?.toUpperCase()}
-                  spectralLines={spectralLines}
-                  canFocus={canFocus}
+                  spectralLines={intelLines}
                   canEngage={canEngage}
                   accent={accent}
                   mutedColor={theme.mutedColor}
-                  onFocus={handleFocus}
+                  engageLabel="[ BREACH ]"
                   onEngage={handleEngage}
-                  onDismiss={handleBackToMap}
                 />
               ) : (
                 <Text style={[styles.dockPlaceholder, { color: theme.mutedColor }]}>
-                  UNCOVER A RIFT ON THE OVERWORLD TO BREACH
+                  {dockPlaceholder}
                 </Text>
               )}
             </View>
@@ -337,9 +382,20 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   fallback: { fontFamily: 'monospace', fontSize: 10, textAlign: 'center', padding: 24 },
-  mapViewport: {
+  scannerViewport: {
     flex: 1,
     minHeight: 0,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+  },
+  scannerBezel: {
+    flex: 1,
+    width: '100%',
+    borderWidth: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.92)',
+    padding: SCANNER_BEZEL_PADDING,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   nodeDock: {
     flexShrink: 0,
@@ -350,7 +406,7 @@ const styles = StyleSheet.create({
     gap: 4,
     minHeight: 76,
   },
-  riftsCounter: {
+  nodesCounter: {
     fontFamily: 'monospace',
     fontSize: 8,
     letterSpacing: 0.6,

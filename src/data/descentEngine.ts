@@ -385,3 +385,20 @@ export function getEncounterDisplayLabel(
   }
   return ENCOUNTER_DISPLAY_LABEL[encounterType];
 }
+
+export function resolveVectorLabel(node: IncursionNode, optionIndex = 0): string {
+  const head = node.label.split(' // ')[0]?.trim();
+  if (head?.startsWith('VECTOR ')) return head;
+  return buildMaskedScanTelemetry(node.id, optionIndex).pingLabel;
+}
+
+/** Scanner dock readout — biome, vector designation, and node type only. */
+export function formatScannerNodeIntel(node: IncursionNode, optionIndex = 0): string[] {
+  const vector = resolveVectorLabel(node, optionIndex);
+  const nodeType = node.type.replace(/_/g, ' ');
+  return [
+    `> BIOME: ${BIOME_DISPLAY_LABEL[node.biome].toUpperCase()}`,
+    `> VECTOR: ${vector}`,
+    `> NODE TYPE: ${nodeType.toUpperCase()}`,
+  ];
+}

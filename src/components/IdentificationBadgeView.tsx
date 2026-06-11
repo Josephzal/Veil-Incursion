@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { CLASS_DEFINITIONS } from '../data/classes';
 import { getFactionDefinition } from '../data/factions';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
+import ExplorationHubPanel from './ExplorationHubPanel';
 import { PlayerAccount } from '../types/game';
 import { OperativeProfile } from '../types/profile';
 import { TerminalTheme } from '../types/theme';
@@ -21,6 +22,7 @@ export default function IdentificationBadgeView({
 }: IdentificationBadgeViewProps): React.JSX.Element {
   const { startCombat } = useGameFlow();
   const { startBadgeTestCombat } = useRun();
+  const [hubOpen, setHubOpen] = useState(false);
 
   const cred = profile.operative_profile.credentials;
   const vectors = profile.operative_profile.location_vectors;
@@ -37,6 +39,24 @@ export default function IdentificationBadgeView({
     startBadgeTestCombat(preset);
     startCombat();
   };
+
+  if (hubOpen) {
+    return (
+      <View style={[styles.root, styles.hubRoot, borderStyle, { backgroundColor: '#050608' }]}>
+        <Pressable
+          onPress={() => setHubOpen(false)}
+          style={[styles.hubBackBtn, { borderColor: theme.statusColor }]}
+        >
+          <Text style={[styles.hubBackBtnText, { color: theme.statusColor }]}>
+            [ RETURN TO BADGE ]
+          </Text>
+        </Pressable>
+        <View style={styles.hubPanel}>
+          <ExplorationHubPanel />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.root, borderStyle, { backgroundColor: '#050608' }]}>
@@ -107,12 +127,25 @@ export default function IdentificationBadgeView({
           Returns here after victory or defeat.
         </Text>
       </View>
+
+      <Pressable
+        onPress={() => setHubOpen(true)}
+        style={[styles.hubBtn, { borderColor: theme.primaryColor }]}
+      >
+        <Text style={[styles.hubBtnText, { color: theme.primaryColor }]}>
+          [ HUB ]
+        </Text>
+        <Text style={[styles.hubBtnSub, { color: theme.mutedColor }]}>
+          // METROPOLITAN EXPLORATION CORRIDOR
+        </Text>
+      </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, padding: 14, minHeight: 320 },
+  hubRoot: { paddingTop: 8, gap: 8 },
   header: { fontFamily: 'monospace', fontSize: 9, fontWeight: '700', letterSpacing: 1.2, marginBottom: 12 },
   badgeFrame: { borderWidth: 2, padding: 16, alignItems: 'center', marginBottom: 16 },
   emblem: { fontFamily: 'monospace', fontSize: 32, fontWeight: '700', marginBottom: 6 },
@@ -159,5 +192,42 @@ const styles = StyleSheet.create({
     fontSize: 7,
     letterSpacing: 0.4,
     lineHeight: 10,
+  },
+  hubBtn: {
+    borderWidth: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    marginTop: 12,
+    gap: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+  },
+  hubBtnText: {
+    fontFamily: 'monospace',
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+  },
+  hubBtnSub: {
+    fontFamily: 'monospace',
+    fontSize: 7,
+    letterSpacing: 0.4,
+  },
+  hubBackBtn: {
+    borderWidth: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+  },
+  hubBackBtnText: {
+    fontFamily: 'monospace',
+    fontSize: 7,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  hubPanel: {
+    flex: 1,
+    minHeight: 240,
   },
 });

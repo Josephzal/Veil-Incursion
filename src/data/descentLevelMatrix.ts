@@ -402,8 +402,6 @@ export function materializeLevelCluster(params: MaterializeLevelClusterParams): 
 
 const DEPTH1_TEST_KINDS: MatrixSpawnKind[] = [
   'STANDARD_COMBAT',
-  'NARRATIVE_EVENT',
-  'BLACK_MARKET',
 ];
 
 function makeTestMatrixNode(
@@ -446,7 +444,7 @@ function makeTestMatrixNode(
   };
 }
 
-/** TEST ONLY — depth 1 opener: combat, narrative, and shop vectors (placed near spawn on overworld). */
+/** Depth 1 opener — single combat vector on the first scanner screen. */
 export function buildDepth1TestScannerCluster(params: MaterializeLevelClusterParams): IncursionNode[] {
   const { graphDepth, district, nodesCleared: stepIndex, sectorTier } = params;
   const localLevel = localLevelFromDepth(graphDepth);

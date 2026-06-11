@@ -409,18 +409,14 @@ function VectorScannerComponent({
 
       setSiphonedNodeIds((prev) => (prev.includes(nodeId) ? prev : [...prev, nodeId]));
       setSiphonPulseKeys((prev) => ({ ...prev, [nodeId]: (prev[nodeId] ?? 0) + 1 }));
-      if (continuousScan) {
-        notifyNodeSelected(nodeId);
-      }
+      Vibration.vibrate(SIPHON_HAPTIC_MS);
     },
     [
-      continuousScan,
       scanInteractive,
       siphonedNodeIds,
       isNodeIlluminated,
       ensureBlipState,
       bumpRender,
-      notifyNodeSelected,
     ],
   );
 
@@ -510,17 +506,17 @@ function VectorScannerComponent({
   useEffect(() => {
     if (!uniformSelectable) {
       uniformSelectAppliedRef.current = false;
-      selectionGlowSV.value = 0;
       return;
     }
     if (uniformSelectAppliedRef.current) return;
     uniformSelectAppliedRef.current = true;
     applyUniformSelectableState();
-  }, [uniformSelectable, applyUniformSelectableState, selectionGlowSV]);
+  }, [uniformSelectable, applyUniformSelectableState]);
 
   useEffect(() => {
-    if (!uniformSelectable) {
-      selectionGlowSV.value = 0;
+    const shouldGlow = uniformSelectable || (continuousScan && selectedNodeId != null);
+    if (!shouldGlow) {
+      selectionGlowSV.value = withTiming(0, { duration: SELECTION_GLOW_FADE_MS / 2 });
       return;
     }
     selectionGlowSV.value = 0;
@@ -528,7 +524,7 @@ function VectorScannerComponent({
       duration: SELECTION_GLOW_FADE_MS,
       easing: ReanimatedEasing.out(ReanimatedEasing.cubic),
     });
-  }, [uniformSelectable, selectionGlowSV]);
+  }, [uniformSelectable, continuousScan, selectedNodeId, selectionGlowSV]);
 
   useEffect(() => {
     if (!active) {
@@ -851,7 +847,7 @@ function VectorScannerComponent({
                 cy={selectedNodeBearing.canvasY}
                 r={selectedNodeBearing.visualRadius * SELECTION_GLOW_OUTER_SCALE}
                 color={accentWithAlpha(selectionAccent, 0.7)}
-                opacity={0.24}
+                opacity={selectionGlowOuterOpacity}
                 style="fill"
               >
                 <Blur blur={18} />
@@ -861,7 +857,7 @@ function VectorScannerComponent({
                 cy={selectedNodeBearing.canvasY}
                 r={selectedNodeBearing.visualRadius * SELECTION_GLOW_INNER_SCALE}
                 color={accentWithAlpha(selectionAccent, 0.9)}
-                opacity={0.45}
+                opacity={selectionGlowInnerOpacity}
                 style="fill"
               >
                 <Blur blur={11} />
@@ -928,11 +924,9 @@ function VectorScannerComponent({
                 opacity={
                   node.isHostilePatrol
                     ? 0.95
-                    : uniformSelectable
+                    : uniformSelectable || isSelected
                       ? selectionGlowRingOpacity
-                      : isSelected
-                        ? 0.9
-                        : opacity * 0.9
+                      : opacity * 0.9
                 }
               />
             );
