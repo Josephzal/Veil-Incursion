@@ -8,8 +8,8 @@ import {
 import type { ApparitionViewportRef } from '../components/combat/ApparitionViewport';
 import CombatArenaStage from '../components/combat/CombatArenaStage';
 import CombatEnemyGrid from '../components/combat/CombatEnemyGrid';
-import CombatOperativeHud from '../components/combat/CombatOperativeHud';
 import CombatEviscerateCinematic from '../components/combat/CombatEviscerateCinematic';
+import CombatOperativeHud from '../components/combat/CombatOperativeHud';
 import CombatResolutionBanner from '../components/combat/CombatResolutionBanner';
 import CombatSelectedEnemyIntel from '../components/combat/CombatSelectedEnemyIntel';
 import type { CombatOperativeTelemetry } from '../components/combat/CombatOperativeHud';
@@ -532,14 +532,15 @@ const styles = StyleSheet.create({
   },
   playerHudOverlay: {
     position: 'absolute',
-    bottom: 6,
+    bottom: 0,
     zIndex: 8,
-    alignItems: 'center',
+    alignItems: 'stretch',
   },
   combatMiddle: {
     flexShrink: 0,
     width: '100%',
     overflow: 'hidden',
-    marginBottom: 8,
+    marginTop: 10,
+    marginBottom: 4,
   },
 });

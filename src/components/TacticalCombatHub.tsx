@@ -105,6 +105,10 @@ import {
   type EnemyDeckStrikeVariant,
   formatHostileId,
   formatIntentReadout,
+  isEnemyChargeIntent,
+  isEnemyDamageIntent,
+  isEnemySiphonIntent,
+  type EnemyPortraitAnim,
   type EnemyPortraitGlow,
   getEnemyDeckStrikeVariant,
   GAUGE_ABYSSAL,
@@ -422,14 +426,20 @@ export default function TacticalCombatHub({
   }, [combatTurnPhase, cycleState, isPlayerTurn, setCombatTurnState]);
 
 
-  const resolvePortraitGlow = (unitId: string): EnemyPortraitGlow => {
+  const resolveActingEnemyId = (): string | null =>
+    enemyActionQueueRef.current[0] ?? focusedUnitIdRef.current ?? null;
+
+  const resolvePortraitGlow = (unitId: string, intent: EnemyIntent): EnemyPortraitGlow => {
     if (
       !isPlayerTurnRef.current
       && cycleRef.current === 'TEXT_COMBAT'
       && enemyActionStageRef.current != null
     ) {
-      const actingId = enemyActionQueueRef.current[0] ?? focusedUnitIdRef.current;
-      if (actingId === unitId) return 'enemy-attacking';
+      const actingId = resolveActingEnemyId();
+      if (actingId === unitId) {
+        if (isEnemyChargeIntent(intent)) return 'enemy-charging';
+        if (isEnemyDamageIntent(intent)) return 'enemy-attacking';
+      }
     }
     if (
       isPlayerTurnRef.current
@@ -437,6 +447,24 @@ export default function TacticalCombatHub({
       && selectedTargetIdRef.current === unitId
     ) {
       return 'player-selected';
+    }
+    return 'none';
+  };
+
+  const resolvePortraitAnim = (unitId: string, intent: EnemyIntent): EnemyPortraitAnim => {
+    if (
+      !isPlayerTurnRef.current
+      && cycleRef.current === 'TEXT_COMBAT'
+      && enemyActionStageRef.current != null
+      && resolveActingEnemyId() === unitId
+    ) {
+      if (isEnemySiphonIntent(intent)) return 'shimmy';
+      if (
+        enemyActionStageRef.current === 'executing'
+        && isEnemyDamageIntent(intent)
+      ) {
+        return 'lunge';
+      }
     }
     return 'none';
   };
@@ -497,7 +525,8 @@ export default function TacticalCombatHub({
           isBlocked: blocked,
           isHookValid: hookValid,
           isFractured: isEnemyFractured(u),
-          portraitGlow: resolvePortraitGlow(unitId),
+          portraitGlow: resolvePortraitGlow(unitId, u.intent),
+          portraitAnim: resolvePortraitAnim(unitId, u.intent),
         };
       }),
     });
@@ -2683,8 +2712,8 @@ const styles = StyleSheet.create({
     maxWidth: width - 16,
     alignSelf: 'center',
     paddingHorizontal: 8,
-    paddingTop: 0,
-    paddingBottom: 6,
+    paddingTop: 4,
+    paddingBottom: 4,
     gap: 6,
     overflow: 'hidden',
     backgroundColor: '#000000',

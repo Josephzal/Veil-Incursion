@@ -1,38 +1,18 @@
 import React, { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { BLOOD_FRENZY_RESONANCE_THRESHOLD } from '../types/combatEnvironment';
-import { getResonanceZone } from '../data/resonanceHeatVentEngine';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
+import { buildOperativeVitalsLine } from '../utils/runStatusSnapshot';
 
-function resourcePercent(current: number, max: number): number {
-  if (max <= 0) return 0;
-  return Math.round((current / max) * 100);
-}
-
-/** HEALTH // SHIELD // STAMINA // ENERGY strip — shared by scan, narrative, and sanctuary screens. */
+/** @deprecated Top strip removed — vitals live in Run Status overlay (macro log). */
 export default function OperativeTelemetryBar(): React.JSX.Element {
   const { theme } = useTerminal();
   const { runState, activeIncursion } = useRun();
 
-  const operativeTelemetry = useMemo(() => {
-    const healthPct = resourcePercent(runState.soulAnchorIntegrity, runState.maxSoulAnchor);
-    const staminaPct = resourcePercent(runState.currentStamina, runState.maxStamina);
-    const shieldPct = Math.max(0, Math.min(100, healthPct + 8));
-    const energyPct = Math.max(0, Math.min(100, runState.startingAbyssalReservePercent));
-    const resonancePct = activeIncursion.resonance.percent;
-    const resonanceZone = getResonanceZone(resonancePct);
-    const frenzyTag = resonancePct > BLOOD_FRENZY_RESONANCE_THRESHOLD ? ' // FRENZY' : '';
-    return `HEALTH: ${healthPct}% // SHIELD: ${shieldPct}% // STAMINA: ${staminaPct}% // ENERGY: ${energyPct}% // RES: ${resonancePct}% [${resonanceZone}]${frenzyTag} // D${activeIncursion.currentDistrict}`;
-  }, [
-    runState.soulAnchorIntegrity,
-    runState.maxSoulAnchor,
-    runState.currentStamina,
-    runState.maxStamina,
-    runState.startingAbyssalReservePercent,
-    activeIncursion.resonance.percent,
-    activeIncursion.currentDistrict,
-  ]);
+  const operativeTelemetry = useMemo(
+    () => buildOperativeVitalsLine(runState, activeIncursion),
+    [runState, activeIncursion],
+  );
 
   return (
     <View style={[styles.statusBar, { borderColor: theme.borderColor }]}>

@@ -2,7 +2,6 @@ import React, { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import IncursionShell from '../components/IncursionShell';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
-import OperativeTelemetryBar from '../components/OperativeTelemetryBar';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
@@ -87,8 +86,6 @@ export default function ExtractionReviewScreen(): React.JSX.Element {
         style={{ backgroundColor: theme.backgroundColor }}
       >
         <View style={styles.body}>
-          <OperativeTelemetryBar />
-
           <View style={[styles.header, { borderColor: theme.borderColor }]}>
             <Text style={[styles.headerLabel, { color: theme.mutedColor }]}>
               {headerMeta.label}

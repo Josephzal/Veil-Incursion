@@ -146,7 +146,6 @@ export default function MacroLogAnchoredLayout({
         {showRunOverlays ? (
           <RunStatusOverlay
             visible={statusOpen}
-            activeIncursion={activeIncursion}
             theme={theme}
             onClose={() => setStatusOpen(false)}
           />

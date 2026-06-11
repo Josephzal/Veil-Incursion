@@ -4,7 +4,6 @@ import IncursionShell from '../components/IncursionShell';
 import NarrativeStepperModule, { isCityStreetsNarrative } from '../components/NarrativeStepperModule';
 import ProceduralNarrativeModule from '../components/ProceduralNarrativeModule';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
-import OperativeTelemetryBar from '../components/OperativeTelemetryBar';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useDescentNavigator } from '../hooks/useDescentNavigator';
@@ -74,7 +73,6 @@ export default function NarrativeScreen(): React.JSX.Element {
         style={{ backgroundColor: theme.backgroundColor }}
       >
         <View style={styles.body}>
-          <OperativeTelemetryBar />
           <View style={[styles.content, isCityStreetsNarrative(node) && styles.contentCityStreets]}>
             {isProcedural ? (
               <ProceduralNarrativeModule
@@ -101,10 +99,18 @@ export default function NarrativeScreen(): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
-  body: { flex: 1, minHeight: 0 },
-  content: { flex: 1, minHeight: 0, paddingHorizontal: 16, paddingTop: 8, justifyContent: 'center' },
+  body: {
+    flex: 1,
+    minHeight: 0,
+    justifyContent: 'space-between',
+  },
+  content: {
+    flex: 1,
+    minHeight: 0,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
   contentCityStreets: {
-    justifyContent: 'flex-start',
     paddingHorizontal: 0,
     paddingTop: 0,
   },

@@ -50,7 +50,25 @@ export function clampRatio(ratio: number): number {
   return Math.max(0, Math.min(1, ratio));
 }
 
-export type EnemyPortraitGlow = 'none' | 'player-selected' | 'enemy-attacking';
+export type EnemyPortraitGlow = 'none' | 'player-selected' | 'enemy-attacking' | 'enemy-charging';
+
+export type EnemyPortraitAnim = 'none' | 'lunge' | 'shimmy';
+
+const ENEMY_DAMAGE_INTENTS: EnemyIntent[] = ['STRIKE', 'WORLD_ENDER', 'OVERDRIVE_DISCHARGE'];
+const ENEMY_SIPHON_INTENTS: EnemyIntent[] = ['STRIP_STAMINA', 'SIPHON_ABYSSAL'];
+const ENEMY_CHARGE_INTENTS: EnemyIntent[] = ['FORTIFY', 'CHARGE'];
+
+export function isEnemyDamageIntent(intent: EnemyIntent): boolean {
+  return ENEMY_DAMAGE_INTENTS.includes(intent);
+}
+
+export function isEnemySiphonIntent(intent: EnemyIntent): boolean {
+  return ENEMY_SIPHON_INTENTS.includes(intent);
+}
+
+export function isEnemyChargeIntent(intent: EnemyIntent): boolean {
+  return ENEMY_CHARGE_INTENTS.includes(intent);
+}
 
 export interface CombatGridUnitSnapshot {
   unitId: string;
@@ -80,6 +98,7 @@ export interface CombatGridUnitSnapshot {
   isHookValid: boolean;
   isFractured: boolean;
   portraitGlow?: EnemyPortraitGlow;
+  portraitAnim?: EnemyPortraitAnim;
 }
 
 export interface CombatSquadUiSnapshot {
@@ -127,6 +146,7 @@ export function buildInitialSquadUiSnapshot(
     isHookValid: false,
     isFractured: (unit.combatTags ?? []).includes('FRACTURED') || unit.fracturedThisRound === true,
     portraitGlow: 'none' as EnemyPortraitGlow,
+    portraitAnim: 'none' as EnemyPortraitAnim,
   }));
   return {
     units,

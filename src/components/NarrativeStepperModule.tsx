@@ -4,6 +4,7 @@ import {
   Easing,
   Image,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -155,8 +156,8 @@ export default function NarrativeStepperModule({
         </>
       ) : null}
 
-      <View style={[styles.rootContent, showCityStreetBackground && styles.rootContentCityStreets]}>
-        <View style={[styles.docHeader, { borderBottomColor: borderColor }]}>
+      <View style={[styles.shell, showCityStreetBackground && styles.shellCityStreets]}>
+        <View style={[styles.header, { borderBottomColor: borderColor }]}>
           <Text style={[styles.docLabel, { color: mutedColor }]}>
             {node.environmentType && isOpenSectorNarrative(node)
               ? `ENVIRONMENT LOG // ${ENVIRONMENT_DISPLAY_LABEL[node.environmentType].toUpperCase()}`
@@ -165,11 +166,17 @@ export default function NarrativeStepperModule({
           <Text style={[styles.docTitle, { color: TERMINAL_ACCENT }]}>{node.title}</Text>
         </View>
 
-        <View style={[styles.docBody, { borderColor }]}>
-          <Text style={[styles.scenarioText, { color: primaryColor }]}>{node.scenarioText}</Text>
-        </View>
+        <ScrollView
+          style={styles.scrollBody}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={[styles.docBody, { borderColor }]}>
+            <Text style={[styles.scenarioText, { color: primaryColor }]}>{node.scenarioText}</Text>
+          </View>
 
-        {phase === 'SCENARIO' && (
+          {phase === 'SCENARIO' && (
           <View style={styles.choiceCol}>
             <Pressable
               onPress={() => handleChoiceSelect('A')}
@@ -226,14 +233,8 @@ export default function NarrativeStepperModule({
                 <ChoiceEffectPreview preview={node.choiceB.effectPreview} mutedColor={mutedColor} />
               ) : null}
             </Pressable>
-            <SelectionContinueButton
-              enabled={selectedChoice != null}
-              onPress={handleContinue}
-              borderColor={borderColor}
-              mutedColor={mutedColor}
-            />
           </View>
-        )}
+          )}
 
         {phase === 'SKILL_CHECK' && (
           <View
@@ -274,13 +275,31 @@ export default function NarrativeStepperModule({
             <Text style={[styles.resultSub, { color: mutedColor }]}>Returning to ley-line grid...</Text>
           </View>
         )}
+        </ScrollView>
+
+        {phase === 'SCENARIO' ? (
+          <View style={styles.footer}>
+            <SelectionContinueButton
+              enabled={selectedChoice != null}
+              onPress={handleContinue}
+              borderColor={borderColor}
+              mutedColor={mutedColor}
+            />
+          </View>
+        ) : null}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { borderWidth: 2, padding: 14, backgroundColor: '#050608' },
+  root: {
+    flex: 1,
+    minHeight: 0,
+    borderWidth: 2,
+    padding: 14,
+    backgroundColor: '#050608',
+  },
   rootWithCityBackground: {
     flex: 1,
     alignSelf: 'stretch',
@@ -299,22 +318,48 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(5, 6, 8, 0.69)',
   },
-  rootContent: { position: 'relative', zIndex: 1 },
-  rootContentCityStreets: { flex: 1, padding: 14, justifyContent: 'center' },
-  docHeader: { borderBottomWidth: 1, paddingBottom: 8, marginBottom: 10 },
+  shell: {
+    flex: 1,
+    minHeight: 0,
+    justifyContent: 'space-between',
+    position: 'relative',
+    zIndex: 1,
+  },
+  shellCityStreets: {
+    padding: 14,
+  },
+  header: {
+    flexShrink: 0,
+    borderBottomWidth: 1,
+    paddingBottom: 8,
+    marginBottom: 8,
+  },
+  scrollBody: {
+    flex: 1,
+    minHeight: 0,
+  },
+  scrollContent: {
+    paddingBottom: 8,
+    gap: 8,
+  },
+  footer: {
+    flexShrink: 0,
+    paddingTop: 6,
+    paddingBottom: 4,
+  },
   docLabel: { fontFamily: 'monospace', fontSize: 7, letterSpacing: 1, marginBottom: 4 },
   docTitle: { fontFamily: 'monospace', fontSize: 12, fontWeight: '700', letterSpacing: 1 },
-  docBody: { borderWidth: 1, padding: 12, marginBottom: 12, backgroundColor: '#0a0b0f' },
+  docBody: { borderWidth: 1, padding: 12, backgroundColor: '#0a0b0f' },
   scenarioText: { fontFamily: 'monospace', fontSize: 10, lineHeight: 16, letterSpacing: 0.2 },
-  choiceCol: { gap: 8 },
-  choiceBtn: { borderWidth: 1, paddingVertical: 10, paddingHorizontal: 10 },
+  choiceCol: { gap: 6 },
+  choiceBtn: { borderWidth: 1, paddingVertical: 5, paddingHorizontal: 8 },
   choiceBtnSelected: { backgroundColor: 'rgba(0, 255, 51, 0.08)' },
   choiceBtnCityStreets: { backgroundColor: '#0a0b0f' },
   panelCityStreets: { backgroundColor: '#0a0b0f' },
-  choiceLabel: { fontFamily: 'monospace', fontSize: 9, fontWeight: '700', letterSpacing: 0.5, marginBottom: 4 },
-  choiceReq: { fontFamily: 'monospace', fontSize: 7, letterSpacing: 0.8 },
-  choiceEffectCol: { gap: 2, marginTop: 6 },
-  choiceEffectLine: { fontFamily: 'monospace', fontSize: 7, letterSpacing: 0.4, lineHeight: 11 },
+  choiceLabel: { fontFamily: 'monospace', fontSize: 9, fontWeight: '700', letterSpacing: 0.5, marginBottom: 2 },
+  choiceReq: { fontFamily: 'monospace', fontSize: 7, letterSpacing: 0.8, lineHeight: 10 },
+  choiceEffectCol: { gap: 2, marginTop: 4 },
+  choiceEffectLine: { fontFamily: 'monospace', fontSize: 7, letterSpacing: 0.4, lineHeight: 10 },
   choiceEffectSuccess: { color: '#4ade80' },
   choiceEffectFailure: { color: '#f87171' },
   calibrationBox: { borderWidth: 2, padding: 12, marginTop: 4 },

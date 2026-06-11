@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import CityStreetNarrativeBg from '../../assets/narrative images/city-street.png';
 import type { NarrativeChoiceKey, NarrativeChoiceOption, NarrativeEventNode } from '../types/game';
 import { ENVIRONMENT_DISPLAY_LABEL } from '../types/sector';
@@ -118,8 +118,8 @@ export default function ProceduralNarrativeModule({
         </>
       ) : null}
 
-      <View style={[styles.rootContent, showCityStreetBackground && styles.rootContentCityStreets]}>
-        <View style={[styles.docHeader, { borderBottomColor: borderColor }]}>
+      <View style={[styles.shell, showCityStreetBackground && styles.shellCityStreets]}>
+        <View style={[styles.header, { borderBottomColor: borderColor }]}>
           <Text style={[styles.docLabel, { color: mutedColor }]}>
             {node.environmentType
               ? `ENVIRONMENT LOG // ${ENVIRONMENT_DISPLAY_LABEL[node.environmentType].toUpperCase()}`
@@ -128,32 +128,50 @@ export default function ProceduralNarrativeModule({
           <Text style={[styles.docTitle, { color: TERMINAL_ACCENT }]}>{node.title}</Text>
         </View>
 
-        <View style={[styles.docBody, { borderColor }]}>
-          <Text style={[styles.scenarioText, { color: primaryColor }]}>{node.scenarioText}</Text>
-          {node.hazardPreview ? (
-            <Text style={styles.hazardText}>{node.hazardPreview}</Text>
+        <ScrollView
+          style={styles.scrollBody}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={[styles.docBody, { borderColor }]}>
+            <Text style={[styles.scenarioText, { color: primaryColor }]}>{node.scenarioText}</Text>
+            {node.hazardPreview ? (
+              <Text style={styles.hazardText}>{node.hazardPreview}</Text>
+            ) : null}
+          </View>
+
+          {phase === 'SCENARIO' ? (
+            <View style={styles.choiceCol}>
+              <Text style={[styles.resolverHeader, { color: mutedColor }]}>
+                SELECT EXPEDITION RESOLVER:
+              </Text>
+              {choices.map(({ key, option }) => (
+                <ResolverButton
+                  key={key}
+                  option={option}
+                  selected={selectedChoice === key}
+                  onPress={() => {
+                    if (!option.locked) setSelectedChoice(key);
+                  }}
+                  borderColor={borderColor}
+                  mutedColor={mutedColor}
+                  primaryColor={primaryColor}
+                  cityStreets={showCityStreetBackground}
+                />
+              ))}
+            </View>
           ) : null}
-        </View>
+
+          {phase === 'RESULT' && resultText ? (
+            <View style={[styles.resultBox, { borderColor: TERMINAL_ACCENT }]}>
+              <Text style={[styles.resultText, { color: TERMINAL_ACCENT }]}>{resultText}</Text>
+            </View>
+          ) : null}
+        </ScrollView>
 
         {phase === 'SCENARIO' ? (
-          <View style={styles.choiceCol}>
-            <Text style={[styles.resolverHeader, { color: mutedColor }]}>
-              SELECT EXPEDITION RESOLVER:
-            </Text>
-            {choices.map(({ key, option }) => (
-              <ResolverButton
-                key={key}
-                option={option}
-                selected={selectedChoice === key}
-                onPress={() => {
-                  if (!option.locked) setSelectedChoice(key);
-                }}
-                borderColor={borderColor}
-                mutedColor={mutedColor}
-                primaryColor={primaryColor}
-                cityStreets={showCityStreetBackground}
-              />
-            ))}
+          <View style={styles.footer}>
             <Pressable
               onPress={handleConfirm}
               disabled={selectedChoice == null}
@@ -171,32 +189,79 @@ export default function ProceduralNarrativeModule({
             </Pressable>
           </View>
         ) : null}
-
-        {phase === 'RESULT' && resultText ? (
-          <View style={[styles.resultBox, { borderColor: TERMINAL_ACCENT }]}>
-            <Text style={[styles.resultText, { color: TERMINAL_ACCENT }]}>{resultText}</Text>
-          </View>
-        ) : null}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, minHeight: 0 },
-  rootWithCityBackground: { position: 'relative' },
-  cityBackgroundImage: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
+  root: {
+    flex: 1,
+    minHeight: 0,
+  },
+  rootWithCityBackground: {
+    position: 'relative',
+  },
+  cityBackgroundImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
   cityBackgroundScrim: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0, 0, 0, 0.62)',
   },
-  rootContent: { flex: 1, minHeight: 0, paddingHorizontal: 12, paddingTop: 8 },
-  rootContentCityStreets: { paddingHorizontal: 14 },
-  docHeader: { borderBottomWidth: 1, paddingBottom: 8, marginBottom: 10 },
-  docLabel: { fontFamily: 'monospace', fontSize: 9, letterSpacing: 1 },
-  docTitle: { fontFamily: 'monospace', fontSize: 14, fontWeight: '700', letterSpacing: 1.2, marginTop: 4 },
-  docBody: { borderWidth: 1, padding: 12, marginBottom: 12, gap: 8 },
-  scenarioText: { fontFamily: 'monospace', fontSize: 11, lineHeight: 17 },
+  shell: {
+    flex: 1,
+    minHeight: 0,
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingTop: 8,
+  },
+  shellCityStreets: {
+    paddingHorizontal: 14,
+  },
+  header: {
+    flexShrink: 0,
+    borderBottomWidth: 1,
+    paddingBottom: 8,
+    marginBottom: 8,
+  },
+  scrollBody: {
+    flex: 1,
+    minHeight: 0,
+  },
+  scrollContent: {
+    paddingBottom: 8,
+    gap: 8,
+  },
+  footer: {
+    flexShrink: 0,
+    paddingTop: 6,
+    paddingBottom: 4,
+  },
+  docLabel: {
+    fontFamily: 'monospace',
+    fontSize: 9,
+    letterSpacing: 1,
+  },
+  docTitle: {
+    fontFamily: 'monospace',
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    marginTop: 4,
+  },
+  docBody: {
+    borderWidth: 1,
+    padding: 12,
+    gap: 8,
+  },
+  scenarioText: {
+    fontFamily: 'monospace',
+    fontSize: 11,
+    lineHeight: 17,
+  },
   hazardText: {
     fontFamily: 'monospace',
     fontSize: 10,
@@ -204,7 +269,9 @@ const styles = StyleSheet.create({
     color: '#fbbf24',
     letterSpacing: 0.6,
   },
-  choiceCol: { gap: 8 },
+  choiceCol: {
+    gap: 6,
+  },
   resolverHeader: {
     fontFamily: 'monospace',
     fontSize: 9,
@@ -213,8 +280,9 @@ const styles = StyleSheet.create({
   },
   choiceBtn: {
     borderWidth: 1,
-    padding: 10,
-    gap: 4,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    gap: 2,
   },
   choiceBtnCityStreets: {
     backgroundColor: 'rgba(0, 0, 0, 0.55)',
@@ -222,16 +290,40 @@ const styles = StyleSheet.create({
   choiceBtnSelected: {
     backgroundColor: 'rgba(0, 255, 51, 0.08)',
   },
-  choiceLabel: { fontFamily: 'monospace', fontSize: 11, fontWeight: '600' },
-  choiceReq: { fontFamily: 'monospace', fontSize: 9, letterSpacing: 0.4 },
-  choiceEffectLine: { fontFamily: 'monospace', fontSize: 8, lineHeight: 12 },
+  choiceLabel: {
+    fontFamily: 'monospace',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  choiceReq: {
+    fontFamily: 'monospace',
+    fontSize: 9,
+    letterSpacing: 0.4,
+    lineHeight: 11,
+  },
+  choiceEffectLine: {
+    fontFamily: 'monospace',
+    fontSize: 8,
+    lineHeight: 10,
+  },
   confirmBtn: {
     borderWidth: 1,
-    paddingVertical: 12,
+    paddingVertical: 8,
     alignItems: 'center',
-    marginTop: 4,
   },
-  confirmBtnText: { fontFamily: 'monospace', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
-  resultBox: { borderWidth: 1, padding: 14, marginTop: 8 },
-  resultText: { fontFamily: 'monospace', fontSize: 11, lineHeight: 16 },
+  confirmBtnText: {
+    fontFamily: 'monospace',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+  resultBox: {
+    borderWidth: 1,
+    padding: 14,
+  },
+  resultText: {
+    fontFamily: 'monospace',
+    fontSize: 11,
+    lineHeight: 16,
+  },
 });

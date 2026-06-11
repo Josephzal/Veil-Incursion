@@ -98,6 +98,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     position: 'relative',
     overflow: 'visible',
+    paddingBottom: 6,
   },
   enemyColumn: {
     flex: 1,
@@ -108,10 +109,10 @@ const styles = StyleSheet.create({
   },
   playerSpriteSlot: {
     width: '100%',
-    height: '72%',
+    height: '57%',
     alignSelf: 'flex-end',
     justifyContent: 'flex-end',
-    paddingBottom: 0,
+    marginBottom: -8,
     position: 'relative',
     overflow: 'visible',
   },

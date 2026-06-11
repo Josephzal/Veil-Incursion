@@ -1,4 +1,7 @@
+import { BLOOD_FRENZY_RESONANCE_THRESHOLD } from '../types/combatEnvironment';
 import type { ActiveIncursionState, EnvironmentalModifiers } from '../types/game';
+import type { RunState } from '../types/run';
+import { getResonanceZone } from '../data/resonanceHeatVentEngine';
 import type { RunStatusEffect } from '../types/narrativeProcedural';
 import { LEY_LINE_MUTATION_CATALOG } from '../data/leyLineMutations';
 import { MACRO_BIOME_DISPLAY, SUB_BIOME_DISPLAY } from '../data/macroBiomeEngine';
@@ -11,6 +14,26 @@ export interface RunStatusEntry {
   label: string;
   description: string;
   category: RunStatusCategory;
+}
+
+function resourcePercent(current: number, max: number): number {
+  if (max <= 0) return 0;
+  return Math.round((current / max) * 100);
+}
+
+/** Operative vitals line — formerly the top telemetry strip on incursion screens. */
+export function buildOperativeVitalsLine(
+  runState: RunState,
+  activeIncursion: ActiveIncursionState,
+): string {
+  const healthPct = resourcePercent(runState.soulAnchorIntegrity, runState.maxSoulAnchor);
+  const staminaPct = resourcePercent(runState.currentStamina, runState.maxStamina);
+  const shieldPct = Math.max(0, Math.min(100, healthPct + 8));
+  const energyPct = Math.max(0, Math.min(100, runState.startingAbyssalReservePercent));
+  const resonancePct = activeIncursion.resonance.percent;
+  const resonanceZone = getResonanceZone(resonancePct);
+  const frenzyTag = resonancePct > BLOOD_FRENZY_RESONANCE_THRESHOLD ? ' // FRENZY' : '';
+  return `HEALTH: ${healthPct}% // SHIELD: ${shieldPct}% // STAMINA: ${staminaPct}% // ENERGY: ${energyPct}% // RES: ${resonancePct}% [${resonanceZone}]${frenzyTag} // D${activeIncursion.currentDistrict}`;
 }
 
 const FLAG_LABELS: Record<string, { label: string; description: string }> = {

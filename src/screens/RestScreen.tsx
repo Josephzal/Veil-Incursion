@@ -6,7 +6,6 @@ import { useTerminal } from '../context/TerminalContext';
 import { useNodeProgression } from '../hooks/useNodeProgression';
 import IncursionShell from '../components/IncursionShell';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
-import OperativeTelemetryBar from '../components/OperativeTelemetryBar';
 import SelectionContinueButton from '../components/SelectionContinueButton';
 
 const TERMINAL_ACCENT = '#00ff33';
@@ -37,8 +36,6 @@ export default function RestScreen(): React.JSX.Element {
         style={{ backgroundColor: theme.backgroundColor }}
       >
         <View style={styles.screenBody}>
-          <OperativeTelemetryBar />
-
           <View style={styles.content}>
             <Image
               source={SanctuaryNarrativeBg}

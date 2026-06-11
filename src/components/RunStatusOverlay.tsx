@@ -1,9 +1,10 @@
 import React, { useMemo } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import type { ActiveIncursionState } from '../types/game';
+import { useRun } from '../context/RunContext';
 import type { TerminalTheme } from '../types/theme';
 import {
   RUN_STATUS_CATEGORY_LABELS,
+  buildOperativeVitalsLine,
   buildRunStatusSnapshot,
   groupRunStatusEntries,
 } from '../utils/runStatusSnapshot';
@@ -21,7 +22,6 @@ const CATEGORY_ORDER: RunStatusCategory[] = [
 
 interface RunStatusOverlayProps {
   visible: boolean;
-  activeIncursion: ActiveIncursionState;
   theme: TerminalTheme;
   accentColor?: string;
   onClose: () => void;
@@ -29,11 +29,17 @@ interface RunStatusOverlayProps {
 
 export default function RunStatusOverlay({
   visible,
-  activeIncursion,
   theme,
   accentColor = TERMINAL_ACCENT,
   onClose,
 }: RunStatusOverlayProps): React.JSX.Element {
+  const { runState, activeIncursion } = useRun();
+
+  const vitalsLine = useMemo(
+    () => buildOperativeVitalsLine(runState, activeIncursion),
+    [runState, activeIncursion],
+  );
+
   const grouped = useMemo(() => {
     const entries = buildRunStatusSnapshot(activeIncursion);
     return groupRunStatusEntries(entries);
@@ -49,9 +55,11 @@ export default function RunStatusOverlay({
           onPress={(e) => e.stopPropagation()}
         >
           <Text style={[styles.title, { color: accentColor }]}>OPERATIVE STATUS // RUN MANIFEST</Text>
-          <Text style={[styles.subtitle, { color: theme.mutedColor }]}>
-            RESONANCE {activeIncursion.resonance.percent}% // DISTRICT {activeIncursion.currentDistrict}
-          </Text>
+
+          <View style={[styles.vitalsBlock, { borderColor: accentColor }]}>
+            <Text style={[styles.vitalsLabel, { color: theme.mutedColor }]}>OPERATIVE VITALS</Text>
+            <Text style={[styles.vitalsLine, { color: accentColor }]}>{vitalsLine}</Text>
+          </View>
 
           <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
             {!hasAny ? (
@@ -109,16 +117,29 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.6,
-    marginBottom: 4,
+    marginBottom: 8,
   },
-  subtitle: {
+  vitalsBlock: {
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 10,
+    gap: 4,
+  },
+  vitalsLabel: {
     fontFamily: 'monospace',
     fontSize: 8,
-    marginBottom: 10,
+    letterSpacing: 0.8,
+  },
+  vitalsLine: {
+    fontFamily: 'monospace',
+    fontSize: 8,
+    letterSpacing: 0.5,
+    lineHeight: 12,
   },
   scroll: {
     flexGrow: 0,
-    maxHeight: 360,
+    maxHeight: 320,
   },
   empty: {
     fontFamily: 'monospace',

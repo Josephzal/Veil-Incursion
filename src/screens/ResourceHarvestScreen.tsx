@@ -4,7 +4,6 @@ import ResourceImage from '../../assets/images/resource images/resource1.png';
 import CargoPackingPanel from '../components/CargoPackingPanel';
 import IncursionShell from '../components/IncursionShell';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
-import OperativeTelemetryBar from '../components/OperativeTelemetryBar';
 import SelectionContinueButton from '../components/SelectionContinueButton';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
@@ -61,8 +60,6 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
         style={{ backgroundColor: theme.backgroundColor }}
       >
         <View style={styles.screenBody}>
-          <OperativeTelemetryBar />
-
           {phase === 'SELECT' ? (
             <ScrollView
               style={styles.scroll}

@@ -8,7 +8,6 @@ import {
 import { INITIAL_SECTOR_POOL } from '../data/regions';
 import IncursionShell from '../components/IncursionShell';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
-import OperativeTelemetryBar from '../components/OperativeTelemetryBar';
 import InlineScannerEngagement from '../components/overworld/InlineScannerEngagement';
 import SectorOverworldMap from '../components/SectorOverworldMap';
 import LeyLineBoonSwapOverlay from '../components/LeyLineBoonSwapOverlay';
@@ -246,8 +245,6 @@ export default function ScanningScreen(): React.JSX.Element {
         style={{ backgroundColor: theme.backgroundColor }}
       >
         <View style={styles.body}>
-          <OperativeTelemetryBar />
-
           <View style={styles.mapViewport}>
             <SectorOverworldMap
               graph={activeIncursion.sectorGraph}

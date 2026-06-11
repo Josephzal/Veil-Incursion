@@ -16,15 +16,11 @@ interface CombatEnemyUnitProps {
   targetingActive: boolean;
   accentColor: string;
   mutedColor: string;
-  isBackline?: boolean;
-  spriteScale?: number;
 }
 
 export default function CombatEnemyUnit({
   unit,
   targetingActive,
-  isBackline = false,
-  spriteScale = 1,
 }: CombatEnemyUnitProps): React.JSX.Element {
   const fractureMax = unit.fractureMax ?? 100;
   const fractureRatio = fractureMax > 0 ? (unit.fractureGauge ?? 0) / fractureMax : 0;
@@ -34,26 +30,19 @@ export default function CombatEnemyUnit({
   return (
     <View
       style={[
-        styles.root,
-        isBackline ? styles.rootBackline : styles.rootFrontline,
+        styles.imageRoot,
+        fractured ? styles.spriteFractured : null,
         {
           opacity: unit.isBlocked && targetingActive && !unit.isHookValid ? 0.5 : 1,
         },
       ]}
     >
-      <View
-        style={[
-          styles.spriteFrame,
-          fractured ? styles.spriteFractured : null,
-          { transform: [{ scale: spriteScale }] },
-        ]}
-      >
-        <View style={styles.portraitAnchor} pointerEvents="none">
-          <CombatEnemyPortraitSkia
-            source={unit.portraitSource}
-            glow={portraitGlow}
-          />
-        </View>
+      <View style={styles.portraitAnchor} pointerEvents="none">
+        <CombatEnemyPortraitSkia
+          source={unit.portraitSource}
+          glow={portraitGlow}
+          anim={unit.portraitAnim ?? 'none'}
+        />
       </View>
 
       {unit.isBlocked && targetingActive && !unit.isHookValid ? (
@@ -66,33 +55,17 @@ export default function CombatEnemyUnit({
 }
 
 const styles = StyleSheet.create({
-  root: {
-    width: '100%',
-    height: '100%',
-    position: 'relative',
-  },
-  rootFrontline: {
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-  },
-  rootBackline: {
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    paddingTop: 0,
-  },
-  spriteFrame: {
+  imageRoot: {
     width: ARENA_SPRITE_FRAME_WIDTH,
-    height: '100%',
+    flex: 1,
     minHeight: 120,
-    justifyContent: 'flex-end',
     alignItems: 'center',
+    justifyContent: 'flex-end',
     position: 'relative',
   },
   portraitAnchor: {
-    position: 'absolute',
-    bottom: 0,
-    width: '88%',
-    height: '94%',
+    width: '100%',
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'flex-end',
     overflow: 'visible',

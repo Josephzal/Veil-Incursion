@@ -14,7 +14,6 @@ import { useTerminal } from '../context/TerminalContext';
 import { useNodeProgression } from '../hooks/useNodeProgression';
 import IncursionShell from '../components/IncursionShell';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
-import OperativeTelemetryBar from '../components/OperativeTelemetryBar';
 import SelectionContinueButton from '../components/SelectionContinueButton';
 import type { CargoItemId } from '../types/cargoGrid';
 import { resolveCargoItemIcon } from '../utils/cargoItemIcon';
@@ -69,8 +68,6 @@ export default function BlackMarketScreen(): React.JSX.Element {
         style={{ backgroundColor: theme.backgroundColor }}
       >
         <View style={styles.screenBody}>
-          <OperativeTelemetryBar />
-
           <View style={styles.content}>
             <Image source={BlackMarketBg} style={styles.backgroundImage} resizeMode="cover" />
             <View style={styles.backgroundScrim} pointerEvents="none" />
