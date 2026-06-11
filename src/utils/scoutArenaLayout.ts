@@ -1,3 +1,4 @@
+import { isDepth1TestScannerCluster } from '../data/descentLevelMatrix';
 import type { IncursionNode } from '../types/game';
 import type { SectorGraphLayoutPoint } from './sectorGraphLayout';
 
@@ -22,6 +23,27 @@ export interface ScoutArenaLayout {
  * Scatters active cluster nodes across a large arena with random placement each roll.
  * Operative spawns at bottom-center; nodes scatter in the upper field.
  */
+const NEAR_SPAWN_OFFSETS: SectorGraphLayoutPoint[] = [
+  { x: -130, y: -160 },
+  { x: 0, y: -200 },
+  { x: 130, y: -160 },
+];
+
+function buildNearSpawnTestLayout(
+  cluster: IncursionNode[],
+  anchor: SectorGraphLayoutPoint,
+): Record<string, SectorGraphLayoutPoint> {
+  const positions: Record<string, SectorGraphLayoutPoint> = {};
+  cluster.forEach((node, index) => {
+    const offset = NEAR_SPAWN_OFFSETS[index] ?? { x: 0, y: -180 };
+    positions[node.id] = {
+      x: anchor.x + offset.x,
+      y: anchor.y + offset.y,
+    };
+  });
+  return positions;
+}
+
 export function buildScoutArenaLayout(
   cluster: IncursionNode[],
   arenaRoll: number,
@@ -31,6 +53,14 @@ export function buildScoutArenaLayout(
     x: viewBox.width / 2,
     y: viewBox.height - SPAWN_BOTTOM_PAD,
   };
+
+  if (isDepth1TestScannerCluster(cluster)) {
+    return {
+      positions: buildNearSpawnTestLayout(cluster, anchor),
+      anchor,
+      viewBox,
+    };
+  }
 
   const positions: Record<string, SectorGraphLayoutPoint> = {};
   const placed: SectorGraphLayoutPoint[] = [anchor];

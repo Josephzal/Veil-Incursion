@@ -23,8 +23,11 @@ const SLICE_GLOW = '#ef4444';
 const SLICE_CORE = '#ffe4e8';
 const BACKDROP = 'rgba(0,0,0,0.32)';
 export const LINE_LENGTH_RATIO = 0.52;
+const LINE_LENGTH_RATIO_CINEMATIC = 0.68;
 const GLOW_WIDTH = 9;
+const GLOW_WIDTH_CINEMATIC = 14;
 const CORE_WIDTH = 4;
+const CORE_WIDTH_CINEMATIC = 6;
 const ORIGIN_JITTER = 0.04;
 
 export interface SliceLineRender {
@@ -41,6 +44,7 @@ interface VectorSliceOverlayProps {
   activeIndex: number;
   panHandlers: object;
   onArenaLayout?: (layout: { width: number; height: number }) => void;
+  variant?: 'arena' | 'cinematic';
 }
 
 function degToRad(deg: number): number {
@@ -53,7 +57,12 @@ export default function VectorSliceOverlay({
   activeIndex,
   panHandlers,
   onArenaLayout,
+  variant = 'arena',
 }: VectorSliceOverlayProps): React.JSX.Element | null {
+  const isCinematic = variant === 'cinematic';
+  const lineLengthRatio = isCinematic ? LINE_LENGTH_RATIO_CINEMATIC : LINE_LENGTH_RATIO;
+  const glowWidth = isCinematic ? GLOW_WIDTH_CINEMATIC : GLOW_WIDTH;
+  const coreWidth = isCinematic ? CORE_WIDTH_CINEMATIC : CORE_WIDTH;
   const [size, setSize] = useState({ w: 0, h: 0 });
   const lineOpacity = useSharedValue(0);
 
@@ -79,12 +88,12 @@ export default function VectorSliceOverlay({
 
   const halfLen = useMemo(() => {
     if (size.w <= 0 || size.h <= 0) return 0;
-    return (Math.min(size.w, size.h) * LINE_LENGTH_RATIO) / 2;
-  }, [size.w, size.h]);
+    return (Math.min(size.w, size.h) * lineLengthRatio) / 2;
+  }, [lineLengthRatio, size.w, size.h]);
 
   const dimRadius = useMemo(
-    () => (Math.min(size.w, size.h) * 0.46) / 2,
-    [size.w, size.h],
+    () => (isCinematic ? 0 : (Math.min(size.w, size.h) * 0.46) / 2),
+    [isCinematic, size.w, size.h],
   );
 
   if (!visible) return null;
@@ -110,19 +119,19 @@ export default function VectorSliceOverlay({
               p1={p1}
               p2={p2}
               color="#5c0606"
-              strokeWidth={GLOW_WIDTH + 6}
+              strokeWidth={glowWidth + 6}
               strokeCap="round"
             >
-              <Blur blur={10} />
+              <Blur blur={isCinematic ? 14 : 10} />
             </Line>
             <Line
               p1={p1}
               p2={p2}
               color="#c41010"
-              strokeWidth={GLOW_WIDTH + 2}
+              strokeWidth={glowWidth + 2}
               strokeCap="round"
             >
-              <Blur blur={6} />
+              <Blur blur={isCinematic ? 10 : 6} />
             </Line>
           </Group>
         ) : null}
@@ -130,17 +139,17 @@ export default function VectorSliceOverlay({
           p1={p1}
           p2={p2}
           color={glowColor}
-          strokeWidth={sliced ? GLOW_WIDTH + 1 : GLOW_WIDTH}
+          strokeWidth={sliced ? glowWidth + 1 : glowWidth}
           strokeCap="round"
           opacity={sliced ? 0.95 : 0.55}
         >
-          <Blur blur={sliced ? 10 : 6} />
+          <Blur blur={sliced ? (isCinematic ? 14 : 10) : (isCinematic ? 10 : 6)} />
         </Line>
         <Line
           p1={p1}
           p2={p2}
           color={coreColor}
-          strokeWidth={sliced ? CORE_WIDTH + 0.5 : CORE_WIDTH}
+          strokeWidth={sliced ? coreWidth + 0.5 : coreWidth}
           strokeCap="round"
         />
       </Group>
@@ -154,12 +163,14 @@ export default function VectorSliceOverlay({
     <View style={styles.root} onLayout={onLayout} {...panHandlers}>
       {size.w > 0 && size.h > 0 ? (
         <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
-          <Circle
-            cx={centerX}
-            cy={centerY}
-            r={dimRadius}
-            color={BACKDROP}
-          />
+          {dimRadius > 0 ? (
+            <Circle
+              cx={centerX}
+              cy={centerY}
+              r={dimRadius}
+              color={BACKDROP}
+            />
+          ) : null}
           {lines.map(renderLine)}
         </Canvas>
       ) : null}

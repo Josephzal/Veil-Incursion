@@ -1,11 +1,5 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, {
-  Easing,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
 import { getAbilityDefinition } from '../data/aegisAbilities';
 import type { AegisAbilityId } from '../types/aegisCombat';
 import { PLAYER_ACTION_POINTS_PER_TURN } from '../types/aegisCombat';
@@ -15,9 +9,6 @@ const TILE_HEIGHT = 42;
 const GRID_GAP = 6;
 const AP_ROW_HEIGHT = 22;
 const GRID_BODY_HEIGHT = TILE_HEIGHT * 2 + GRID_GAP;
-const EVISCERATE_ACCENT = '#ff1744';
-const EVISCERATE_GLOW = 'rgba(255, 23, 68, 0.22)';
-
 export const COMMAND_DECK_MIN_HEIGHT = AP_ROW_HEIGHT + GRID_GAP + GRID_BODY_HEIGHT + 14;
 export const COMMAND_DECK_MIN_HEIGHT_WITH_ULTIMATE = COMMAND_DECK_MIN_HEIGHT;
 
@@ -35,9 +26,6 @@ interface CombatCommandDeckProps {
   getStagedHeader: (ability: AegisAbilityId) => string;
   getStagedCostImpact: (ability: AegisAbilityId) => string;
   getActionAccent?: (ability: AegisAbilityId) => string | undefined;
-  eviscerateReady?: boolean;
-  onEviscerate?: () => void;
-  eviscerateDisabled?: boolean;
   bloodForTimeAvailable?: boolean;
   bloodForTimeEnabled?: boolean;
   onBloodForTime?: () => void;
@@ -61,9 +49,6 @@ export default function CombatCommandDeck({
   getStagedHeader,
   getStagedCostImpact,
   getActionAccent,
-  eviscerateReady = false,
-  onEviscerate,
-  eviscerateDisabled = false,
   bloodForTimeAvailable = false,
   bloodForTimeEnabled = false,
   onBloodForTime,
@@ -72,17 +57,6 @@ export default function CombatCommandDeck({
   mutedColor,
   frameless = false,
 }: CombatCommandDeckProps): React.JSX.Element {
-  const eviscerateOpacity = useSharedValue(0);
-
-  useEffect(() => {
-    const show = eviscerateReady && !selectedAbility;
-    eviscerateOpacity.value = withTiming(show ? 1 : 0, { duration: 280 });
-  }, [eviscerateReady, selectedAbility, eviscerateOpacity]);
-
-  const eviscerateAnimStyle = useAnimatedStyle(() => ({
-    opacity: eviscerateOpacity.value,
-  }));
-
   const deckShellStyle = [
     styles.commandDeck,
     frameless ? styles.commandDeckFrameless : null,
@@ -213,28 +187,6 @@ export default function CombatCommandDeck({
             </View>
           </View>
         ) : null}
-
-        <Animated.View
-          style={[styles.eviscerateOverlay, eviscerateAnimStyle]}
-          pointerEvents={eviscerateReady && !selectedAbility ? 'auto' : 'none'}
-        >
-          <Pressable
-            onPress={onEviscerate}
-            disabled={eviscerateDisabled || !eviscerateReady}
-            style={[
-              styles.eviscerateTile,
-              {
-                borderColor: EVISCERATE_ACCENT,
-                backgroundColor: EVISCERATE_GLOW,
-                opacity: eviscerateDisabled ? 0.4 : 1,
-              },
-            ]}
-          >
-            <Text style={[styles.eviscerateLabel, { color: EVISCERATE_ACCENT }]}>
-              [ EVISCERATE ]
-            </Text>
-          </Pressable>
-        </Animated.View>
       </View>
     </View>
   );
@@ -366,28 +318,5 @@ const styles = StyleSheet.create({
     fontSize: 6,
     letterSpacing: 0.4,
     lineHeight: 9,
-  },
-  eviscerateOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: '12%',
-    zIndex: 20,
-    elevation: 20,
-  },
-  eviscerateTile: {
-    width: '100%',
-    height: TILE_HEIGHT,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 8,
-  },
-  eviscerateLabel: {
-    fontFamily: MONO,
-    fontSize: 8,
-    fontWeight: 'bold',
-    letterSpacing: 0.8,
-    textAlign: 'center',
   },
 });

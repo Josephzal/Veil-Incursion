@@ -1,11 +1,9 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import VectorSlicePing from './VectorSlicePing';
 import { useCombatEnemyChrome } from '../../context/CombatEnemyChromeContext';
 
-const EVISCERATE_ACCENT = '#ff1744';
-
-/** Eviscerate ultimate — anchored just above the operative HUD bar. */
+/** Glowing eviscerate ping — tap to trigger, anchored above the player sprite. */
 export default function CombatPlayerSliceOverlay(): React.JSX.Element | null {
   const { ui, handlersRef } = useCombatEnemyChrome();
 
@@ -13,48 +11,24 @@ export default function CombatPlayerSliceOverlay(): React.JSX.Element | null {
 
   return (
     <View style={styles.host} pointerEvents="box-none">
-      <Pressable
+      <VectorSlicePing
+        ready={ui.slicePingReady}
+        disabled={ui.slicePingDisabled}
         onPress={() => handlersRef.current.onSlicePing()}
-        disabled={ui.slicePingDisabled || !ui.slicePingReady}
-        style={({ pressed }) => [
-          styles.eviscerateBtn,
-          { opacity: pressed ? 0.82 : 1 },
-        ]}
-        accessibilityLabel="Eviscerate ready"
-      >
-        <VectorSlicePing
-          ready={ui.slicePingReady}
-          disabled={ui.slicePingDisabled}
-          onPress={() => handlersRef.current.onSlicePing()}
-          placement="playerHud"
-        />
-        <Text style={styles.label}>[ EVISCERATE ]</Text>
-      </Pressable>
+        placement="playerHud"
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   host: {
+    position: 'absolute',
+    bottom: '64%',
+    left: 0,
+    right: 0,
     alignItems: 'center',
-    marginBottom: 6,
-    zIndex: 12,
-  },
-  eviscerateBtn: {
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 23, 68, 0.45)',
-    backgroundColor: 'rgba(0, 0, 0, 0.55)',
-    paddingHorizontal: 10,
-    paddingTop: 6,
-    paddingBottom: 4,
-  },
-  label: {
-    fontFamily: 'monospace',
-    fontSize: 8,
-    fontWeight: '700',
-    letterSpacing: 0.6,
-    color: EVISCERATE_ACCENT,
-    marginTop: 2,
+    zIndex: 16,
+    elevation: 16,
   },
 });

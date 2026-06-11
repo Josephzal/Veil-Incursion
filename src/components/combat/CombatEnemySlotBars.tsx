@@ -19,12 +19,14 @@ interface CombatEnemySlotBarsProps {
     CombatGridUnitSnapshot,
     'currentHp' | 'maxHp' | 'fractureGauge' | 'fractureMax'
   >;
+  trackWidth?: number;
 }
 
 export default function CombatEnemySlotBars({
   unit,
+  trackWidth: trackWidthProp,
 }: CombatEnemySlotBarsProps): React.JSX.Element {
-  const trackWidth = combatDeckGaugeTrackWidth();
+  const trackWidth = trackWidthProp ?? combatDeckGaugeTrackWidth();
   const hpRatio = unit.maxHp > 0 ? unit.currentHp / unit.maxHp : 1;
   const fractureMax = unit.fractureMax ?? 100;
   const fractureRatio = fractureMax > 0 ? (unit.fractureGauge ?? 0) / fractureMax : 0;

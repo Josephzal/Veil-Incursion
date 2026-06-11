@@ -6,7 +6,7 @@ const INTEL_PANEL_HEIGHT = Math.round(COMMAND_DECK_MIN_HEIGHT_WITH_ULTIMATE / 2.
 import { resolveEnemyThreatTier } from '../../data/enemyRoster';
 import { affinityWeaknessLabel } from '../../data/combatEnvironmentEngine';
 import { AFFINITY_DISPLAY_LABEL } from '../../types/combatEnvironment';
-import { formatHostileId } from '../../utils/combatTelemetryFormat';
+import { formatHostileId, formatIntentReadout } from '../../utils/combatTelemetryFormat';
 import type { CombatGridUnitSnapshot } from '../../utils/combatTelemetryFormat';
 
 const MONO = 'monospace';
@@ -45,6 +45,9 @@ export default function CombatSelectedEnemyIntel({
       </Text>
       <Text style={[styles.compactLine, { color: mutedColor }]} numberOfLines={1}>
         {`CLASS ${affinityLabel.toUpperCase()} // TIER ${tierLabel} // ${statusLines(unit.combatTags)}`}
+      </Text>
+      <Text style={[styles.compactLine, { color: mutedColor }]} numberOfLines={1}>
+        {`NEXT ATTACK // ${unit.intentLabel ?? formatIntentReadout(unit.intent)}`}
       </Text>
       <Text style={[styles.compactLine, { color: mutedColor }]} numberOfLines={1}>
         {`WEAK TO // ${affinityWeaknessLabel(affinity).toUpperCase()}`}

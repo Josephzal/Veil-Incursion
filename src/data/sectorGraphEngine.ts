@@ -31,6 +31,7 @@ import {
 import { appendCollapseForwardNodes, createCollapseEntryNode } from './pocketDimensionEngine';
 import { applyMacroBiomeToCluster } from './macroBiomeEngine';
 import {
+  buildDepth1TestScannerCluster,
   materializeLevelCluster,
   maxVectorsForLocalLevel,
 } from './descentLevelMatrix';
@@ -554,6 +555,15 @@ export function buildScannerCluster(options: BuildScannerClusterOptions): Incurs
     cluster = current.childIds
       .filter((childId) => !graph.nodes[childId]?.isCompleted)
       .map((childId) => graphNodeToIncursionNode(graph.nodes[childId], stepIndex));
+  } else if (upcomingDepth === 1 && nodesCleared === 0) {
+    cluster = buildDepth1TestScannerCluster({
+      graphDepth: upcomingDepth,
+      district,
+      nodesCleared,
+      sectorTier: graph.sectorTier,
+      lastLevelOfferedCombat,
+      seed: `test-d1:${nodesCleared}`,
+    });
   } else {
     cluster = materializeLevelCluster({
       graphDepth: upcomingDepth,

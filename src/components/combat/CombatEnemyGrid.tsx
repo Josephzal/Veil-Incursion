@@ -8,8 +8,10 @@ import CombatEnemyUnit from './CombatEnemyUnit';
 import CombatEnemySlotBars from './CombatEnemySlotBars';
 import {
   ENEMY_ARENA_SLOT_LAYOUT,
+  arenaSlotGaugeWidth,
   resolveArenaBarLayout,
   resolveArenaSlotLayout,
+  slotWidthPercent,
 } from './combatEnemyBarLayout';
 
 const SLOT_ORDER: CombatGridSlotId[] = ['FL_0', 'FL_1', 'BL_0', 'BL_1'];
@@ -85,6 +87,7 @@ export default function CombatEnemyGrid({
     }
 
     const barLayout = resolveArenaBarLayout(slot, liveUnits);
+    const gaugeWidth = arenaSlotGaugeWidth(slotWidthPercent(barLayout.width));
 
     return (
       <React.Fragment key={slot}>
@@ -103,7 +106,7 @@ export default function CombatEnemyGrid({
           ]}
           pointerEvents="none"
         >
-          <CombatEnemySlotBars unit={unit} />
+          <CombatEnemySlotBars unit={unit} trackWidth={gaugeWidth} />
         </View>
         <Pressable
           onPress={() => onUnitPress(unit.unitId)}
@@ -161,6 +164,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     position: 'relative',
+    overflow: 'hidden',
   },
   slotAnchor: {
     position: 'absolute',

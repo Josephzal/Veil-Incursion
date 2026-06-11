@@ -293,6 +293,7 @@ export default function TacticalCombatHub({
   const [playerActionPoints, setPlayerActionPoints] = useState(PLAYER_ACTION_POINTS_PER_TURN);
   const [enemyActionStage, setEnemyActionStage] = useState<EnemyActionStage>(null);
   const enemyActionStageRef = useRef<EnemyActionStage>(null);
+  const [eviscerateTargetUnitId, setEviscerateTargetUnitId] = useState<string | null>(null);
   const [deckStrikeOverlay, setDeckStrikeOverlay] = useState<EnemyDeckStrikeVariant | null>(null);
 
   const operativeHpRef = useRef(initialOperativeHp);
@@ -674,6 +675,7 @@ export default function TacticalCombatHub({
     s.evaluated = true;
     activeSliceRef.current = -1;
     setActiveSliceIndex(-1);
+    setEviscerateTargetUnitId(null);
     crossedRef.current = false;
     sliceTouchStartRef.current = null;
     clearEnemyTurnTimers();
@@ -2037,7 +2039,9 @@ export default function TacticalCombatHub({
     const hits = s.hitCount;
     if (hits === 0) {
       log('[EXECUTION FAILED] >> 0 damage.');
+      cycleRef.current = 'TEXT_COMBAT';
       setCycleState('TEXT_COMBAT');
+      setEviscerateTargetUnitId(null);
       passToEnemy(false);
       return;
     }
@@ -2049,7 +2053,9 @@ export default function TacticalCombatHub({
     const eradicated = hurtEnemy(dmg, '[EVISCERATE]', 'EVISCERATE', { channel: 'TRUE' });
     if (!eradicated) applyEviscerateAftermath();
     if (eradicated) return;
+    cycleRef.current = 'TEXT_COMBAT';
     setCycleState('TEXT_COMBAT');
+    setEviscerateTargetUnitId(null);
     passToEnemy(false);
   };
 
@@ -2127,6 +2133,11 @@ export default function TacticalCombatHub({
     }));
     sliceSessionRef.current.lines = lines; setSliceLines(lines);
     activeSliceRef.current = 0; setActiveSliceIndex(0);
+    const targetId = selectedTargetIdRef.current
+      ?? focusedUnitIdRef.current
+      ?? enemyRef.current?.unitId
+      ?? null;
+    setEviscerateTargetUnitId(targetId);
     cycleRef.current = 'OFFENSE_SLICE'; setCycleState('OFFENSE_SLICE'); queueSlice(0);
   };
   sliceHandlersRef.current = { queueNext: queueSlice, validate: validateSlice, evaluate: evaluateSlice, trigger: triggerSlice };
@@ -2372,9 +2383,6 @@ export default function TacticalCombatHub({
       getStagedHeader={getStagedHeader}
       getStagedCostImpact={getStagedCostImpact}
       getActionAccent={getAbilityAccent}
-      eviscerateReady={sliceReady && enemyAlive}
-      onEviscerate={onSlice}
-      eviscerateDisabled={!isPlayerTurn || cycleState !== 'TEXT_COMBAT'}
       bloodForTimeAvailable={bloodForTimeOwned}
       bloodForTimeEnabled={
         bloodForTimeOwned
@@ -2537,6 +2545,7 @@ export default function TacticalCombatHub({
       registerParryArena,
       registerSliceArena,
       sliceVisible: cycleState === 'OFFENSE_SLICE',
+      eviscerateTargetUnitId,
       sliceLines,
       activeSliceIndex,
       slicePanHandlers: panResponder.panHandlers as Record<string, unknown>,
@@ -2552,6 +2561,7 @@ export default function TacticalCombatHub({
       isExhausted,
       isSuccessState,
       isFailureState,
+      eviscerateTargetUnitId,
       sliceLines,
       activeSliceIndex,
       onSlice,

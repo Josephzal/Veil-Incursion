@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { StyleSheet, View, Dimensions } from 'react-native';
+import { StyleSheet, View, Dimensions, type ImageSourcePropType } from 'react-native';
 import {
   resolveCombatEnemyPortrait,
   resolvePortraitKeySuffix,
@@ -9,7 +9,7 @@ import type { ApparitionViewportRef } from '../components/combat/ApparitionViewp
 import CombatArenaStage from '../components/combat/CombatArenaStage';
 import CombatEnemyGrid from '../components/combat/CombatEnemyGrid';
 import CombatOperativeHud from '../components/combat/CombatOperativeHud';
-import CombatPlayerSliceOverlay from '../components/combat/CombatPlayerSliceOverlay';
+import CombatEviscerateCinematic from '../components/combat/CombatEviscerateCinematic';
 import CombatResolutionBanner from '../components/combat/CombatResolutionBanner';
 import CombatSelectedEnemyIntel from '../components/combat/CombatSelectedEnemyIntel';
 import type { CombatOperativeTelemetry } from '../components/combat/CombatOperativeHud';
@@ -61,6 +61,7 @@ function CombatArenaZone({
   wardPrimed,
   abilityPrimed,
   enemySquadPanel,
+  gridUnits,
   onEradicationComplete,
 }: {
   apparitionRef: React.RefObject<ApparitionViewportRef | null>;
@@ -70,23 +71,31 @@ function CombatArenaZone({
   wardPrimed: boolean;
   abilityPrimed: boolean;
   enemySquadPanel?: React.ReactNode;
+  gridUnits: Array<{ unitId: string; portraitSource: ImageSourcePropType }>;
   onEradicationComplete: () => void;
 }): React.JSX.Element {
   const { ui } = useCombatEnemyChrome();
+  const eviscerateTargetPortrait = useMemo(() => {
+    if (!ui.eviscerateTargetUnitId) return null;
+    return gridUnits.find((unit) => unit.unitId === ui.eviscerateTargetUnitId)?.portraitSource ?? null;
+  }, [gridUnits, ui.eviscerateTargetUnitId]);
 
   return (
-    <CombatArenaStage
-      playerViewportRef={playerViewportRef}
-      enemyViewportRef={apparitionRef}
-      playerImageSource={AegisCombat}
-      enemyImageSource={portraitSource}
-      enemyPortraitKey={portraitKey}
-      wardPrimed={wardPrimed}
-      abilityPrimed={abilityPrimed}
-      enemySquadPanel={enemySquadPanel}
-      parryBlocksEnemyTouches={ui.parryVisible}
-      onEradicationComplete={onEradicationComplete}
-    />
+    <>
+      <CombatArenaStage
+        playerViewportRef={playerViewportRef}
+        enemyViewportRef={apparitionRef}
+        playerImageSource={AegisCombat}
+        enemyImageSource={portraitSource}
+        enemyPortraitKey={portraitKey}
+        wardPrimed={wardPrimed}
+        abilityPrimed={abilityPrimed}
+        enemySquadPanel={enemySquadPanel}
+        parryBlocksEnemyTouches={ui.parryVisible}
+        onEradicationComplete={onEradicationComplete}
+      />
+      <CombatEviscerateCinematic targetPortrait={eviscerateTargetPortrait} />
+    </>
   );
 }
 
@@ -425,6 +434,7 @@ export default function CombatScreen(): React.JSX.Element {
                 wardPrimed={wardPrimed}
                 abilityPrimed={abilityPrimed}
                 enemySquadPanel={enemySquadPanel}
+                gridUnits={gridUnits}
                 onEradicationComplete={handleEradicationComplete}
               />
 
@@ -437,14 +447,11 @@ export default function CombatScreen(): React.JSX.Element {
                 />
               ) : null}
 
-              <View style={[styles.playerHudOverlay, { right: DECK_INSET, width: DECK_HALF }]}>
-                <View style={styles.playerHudWithSlice}>
-                  <CombatPlayerSliceOverlay />
-                  {operativeTelemetry ? (
-                    <CombatOperativeHud telemetry={operativeTelemetry} deckAligned />
-                  ) : null}
+              {operativeTelemetry ? (
+                <View style={[styles.playerHudOverlay, { right: DECK_INSET, width: DECK_HALF }]}>
+                  <CombatOperativeHud telemetry={operativeTelemetry} deckAligned />
                 </View>
-              </View>
+              ) : null}
             </View>
 
             <View style={styles.combatMiddle}>
@@ -528,9 +535,6 @@ const styles = StyleSheet.create({
     bottom: 6,
     zIndex: 8,
     alignItems: 'center',
-  },
-  playerHudWithSlice: {
-    width: '100%',
   },
   combatMiddle: {
     flexShrink: 0,

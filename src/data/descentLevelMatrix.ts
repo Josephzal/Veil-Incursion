@@ -400,6 +400,66 @@ export function materializeLevelCluster(params: MaterializeLevelClusterParams): 
   );
 }
 
+const DEPTH1_TEST_KINDS: MatrixSpawnKind[] = [
+  'STANDARD_COMBAT',
+  'NARRATIVE_EVENT',
+  'BLACK_MARKET',
+];
+
+function makeTestMatrixNode(
+  kind: MatrixSpawnKind,
+  graphDepth: number,
+  district: DistrictId,
+  localLevel: number,
+  slotIndex: number,
+  stepIndex: number,
+  sectorTier: number,
+): IncursionNode {
+  const mapped = spawnKindToTypes(kind);
+  const nodeId = `test-d1-${kind.toLowerCase()}-s${slotIndex}`;
+  const environmentType = environmentForGraphDepth(graphDepth, hashSeed(nodeId));
+  const designation = VECTOR_DESIGNATIONS[slotIndex % VECTOR_DESIGNATIONS.length];
+
+  return {
+    id: nodeId,
+    encounterIndex: stepIndex,
+    index: stepIndex,
+    encounterType: mapped.encounterType,
+    biome: 'CITY_STREETS',
+    type: mapped.type,
+    environmentType,
+    label: mapped.label.replace('VECTOR', `VECTOR ${designation}`),
+    isCompleted: false,
+    isAnomalyNest: false,
+    isPreDiscovered: false,
+    narrativeTags: mapped.narrativeTags,
+    isHardNarrative: mapped.isHardNarrative,
+    sectorMeta: buildMatrixSectorMeta(
+      nodeId,
+      mapped.encounterType,
+      mapped.type,
+      graphDepth,
+      sectorTier,
+      environmentType,
+      mapped.combatTier,
+    ),
+  };
+}
+
+/** TEST ONLY — depth 1 opener: combat, narrative, and shop vectors (placed near spawn on overworld). */
+export function buildDepth1TestScannerCluster(params: MaterializeLevelClusterParams): IncursionNode[] {
+  const { graphDepth, district, nodesCleared: stepIndex, sectorTier } = params;
+  const localLevel = localLevelFromDepth(graphDepth);
+  return DEPTH1_TEST_KINDS.map((kind, i) =>
+    makeTestMatrixNode(kind, graphDepth, district, localLevel, i, stepIndex, sectorTier),
+  );
+}
+
+export function isDepth1TestScannerCluster(cluster: readonly IncursionNode[]): boolean {
+  return cluster.length === DEPTH1_TEST_KINDS.length
+    && cluster.every((node) => node.id.startsWith('test-d1-'));
+}
+
 export function requiresVeilBleedBoon(localLevel: number): boolean {
   return localLevel === 6 || localLevel === 11;
 }

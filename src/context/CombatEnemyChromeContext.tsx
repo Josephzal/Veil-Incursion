@@ -13,7 +13,7 @@ import type { SharedValue } from 'react-native-reanimated';
 import ParryMatrixOverlay from '../components/combat/ParryMatrixOverlay';
 import ParrySuccessBurstOverlay from '../components/combat/ParrySuccessBurstOverlay';
 import type { ParryArenaLayout } from '../utils/parryCollision';
-import VectorSliceOverlay, { type SliceLineRender } from '../components/combat/VectorSliceOverlay';
+import type { SliceLineRender } from '../components/combat/VectorSliceOverlay';
 
 /** Updated synchronously on perfect parry — avoids chrome-layer lag for success burst. */
 export interface ParryBurstLiveState {
@@ -33,6 +33,7 @@ export interface CombatEnemyChromeUIState {
   parrySuccessBurstVisible: boolean;
   parryBurstArena: ParryArenaLayout | null;
   sliceVisible: boolean;
+  eviscerateTargetUnitId: string | null;
   sliceLines: SliceLineRender[];
   activeSliceIndex: number;
 }
@@ -61,6 +62,7 @@ const IDLE_UI: CombatEnemyChromeUIState = {
   parrySuccessBurstVisible: false,
   parryBurstArena: null,
   sliceVisible: false,
+  eviscerateTargetUnitId: null,
   sliceLines: [],
   activeSliceIndex: -1,
 };
@@ -109,6 +111,7 @@ function uiStateEqual(prev: CombatEnemyChromeUIState, next: CombatEnemyChromeUIS
     && prev.parryBurstArena?.cy === next.parryBurstArena?.cy
     && prev.parryBurstArena?.baseR === next.parryBurstArena?.baseR
     && prev.sliceVisible === next.sliceVisible
+    && prev.eviscerateTargetUnitId === next.eviscerateTargetUnitId
     && prev.activeSliceIndex === next.activeSliceIndex
     && sliceLinesEqual(prev.sliceLines, next.sliceLines)
   );
@@ -207,6 +210,7 @@ export function CombatChromeBridge(snapshot: CombatEnemyChromeSnapshot): null {
     registerParryArena,
     registerSliceArena,
     sliceVisible,
+    eviscerateTargetUnitId,
     sliceLines,
     activeSliceIndex,
     slicePanHandlers,
@@ -235,6 +239,7 @@ export function CombatChromeBridge(snapshot: CombatEnemyChromeSnapshot): null {
       parrySuccessBurstVisible,
       parryBurstArena,
       sliceVisible,
+      eviscerateTargetUnitId,
       sliceLines,
       activeSliceIndex,
     });
@@ -249,6 +254,7 @@ export function CombatChromeBridge(snapshot: CombatEnemyChromeSnapshot): null {
     parrySuccessBurstVisible,
     parryBurstArena,
     sliceVisible,
+    eviscerateTargetUnitId,
     sliceLines,
     activeSliceIndex,
   ]);
@@ -300,15 +306,6 @@ export function CombatEnemyChromeLayer(): React.JSX.Element {
           key={parryBurstKey}
           burstEpoch={parryBurstKey}
           arena={parryBurstLayout}
-        />
-      ) : null}
-      {sliceVisible && handlersRef.current.slicePanHandlers ? (
-        <VectorSliceOverlay
-          visible
-          lines={sliceLines}
-          activeIndex={activeSliceIndex}
-          panHandlers={handlersRef.current.slicePanHandlers}
-          onArenaLayout={(layout) => handlersRef.current.registerSliceArena(layout)}
         />
       ) : null}
     </View>
