@@ -10,6 +10,7 @@ import Animated, {
 import type { CombatGridSlotId } from '../../types/combatGrid';
 import type { CombatGridUnitView } from './CombatEnemyUnit';
 import CombatEnemyUnit from './CombatEnemyUnit';
+import CombatEnemyDissolveEffect from './CombatEnemyDissolveEffect';
 import {
   ARENA_SLOT_TRANSITION_MS,
   type ArenaLayoutMode,
@@ -138,6 +139,8 @@ export default function CombatEnemySlottedUnit({
     onUnitDissolveComplete?.(unit.unitId);
   }, [onUnitDissolveComplete, unit.unitId]);
 
+  const dissolving = (unit.dissolveSeq ?? 0) > 0 && !unit.dissolveHidden;
+
   return (
     <Animated.View
       style={[
@@ -147,18 +150,25 @@ export default function CombatEnemySlottedUnit({
       ]}
       pointerEvents="box-none"
     >
-      <Animated.View style={[styles.enemyUnit, depthStyle]} pointerEvents="box-none">
-        <CombatEnemyUnit
-          unit={unit}
-          targetingActive={targetingActive}
-          accentColor={accentColor}
-          mutedColor={mutedColor}
-          constrainSpriteHeight
-          layoutUnitScale={layout.unitScale}
-          onPress={onUnitPress ? () => onUnitPress(unit.unitId) : undefined}
-          onDissolveComplete={onUnitDissolveComplete ? handleDissolveComplete : undefined}
-        />
-      </Animated.View>
+      <CombatEnemyDissolveEffect
+        dissolveSeq={unit.dissolveSeq}
+        active={dissolving}
+        portraitSource={unit.portraitSource}
+        onComplete={onUnitDissolveComplete ? handleDissolveComplete : undefined}
+      >
+        <Animated.View style={[styles.enemyUnit, depthStyle]} pointerEvents="box-none">
+          <CombatEnemyUnit
+            unit={unit}
+            targetingActive={targetingActive}
+            accentColor={accentColor}
+            mutedColor={mutedColor}
+            constrainSpriteHeight
+            layoutUnitScale={layout.unitScale}
+            skipDissolveEffect
+            onPress={onUnitPress ? () => onUnitPress(unit.unitId) : undefined}
+          />
+        </Animated.View>
+      </CombatEnemyDissolveEffect>
     </Animated.View>
   );
 }

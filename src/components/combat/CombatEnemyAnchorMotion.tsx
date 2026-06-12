@@ -19,10 +19,10 @@ import {
   backlineMeleeDashTranslateX,
 } from './combatEnemyBarLayout';
 
-const IDLE_CYCLE_MS = 2400;
+const IDLE_CYCLE_MS = 3200;
 const IDLE_HALF_MS = IDLE_CYCLE_MS / 2;
-const IDLE_TRAVEL_Y = 3;
-const IDLE_SCALE_MIN = 0.98;
+const IDLE_TRAVEL_Y = 1.5;
+const IDLE_SCALE_MIN = 0.99;
 const STEP_OUT_X = -20;
 const STEP_OUT_SCALE = 1.05;
 const STEP_OUT_MS = 280;
@@ -53,11 +53,31 @@ export default function CombatEnemyAnchorMotion({
   const stepScale = useSharedValue(1);
   const recoilX = useSharedValue(0);
   const meleeDashX = useSharedValue(0);
+  const motionLocked = useSharedValue(0);
+
+  useEffect(() => {
+    motionLocked.value = frozen ? 1 : 0;
+    if (!frozen) return;
+
+    cancelAnimation(idlePhase);
+    cancelAnimation(meleeDashX);
+    cancelAnimation(stepX);
+    cancelAnimation(recoilX);
+    cancelAnimation(stepScale);
+
+    idlePhase.value = 0;
+    meleeDashX.value = 0;
+    stepX.value = 0;
+    recoilX.value = 0;
+    stepScale.value = 1;
+  }, [frozen, idlePhase, meleeDashX, motionLocked, recoilX, stepScale, stepX]);
 
   useEffect(() => {
     if (frozen || isBacklineDashing) {
       cancelAnimation(idlePhase);
-      idlePhase.value = withTiming(0, { duration: 180, easing: Easing.inOut(Easing.sin) });
+      if (!frozen) {
+        idlePhase.value = withTiming(0, { duration: 180, easing: Easing.inOut(Easing.sin) });
+      }
       return;
     }
 
@@ -110,7 +130,7 @@ export default function CombatEnemyAnchorMotion({
   }, [hitFlashSeq, recoilX]);
 
   useEffect(() => {
-    if (backlineMeleeDashSeq <= 0 || backlineMeleeDashSeq === lastDashRef.current) return;
+    if (frozen || backlineMeleeDashSeq <= 0 || backlineMeleeDashSeq === lastDashRef.current) return;
     lastDashRef.current = backlineMeleeDashSeq;
 
     cancelAnimation(idlePhase);
@@ -134,9 +154,19 @@ export default function CombatEnemyAnchorMotion({
         easing: Easing.out(Easing.cubic),
       }),
     );
-  }, [backlineMeleeDashSeq, idlePhase, meleeDashX, stepScale, stepX]);
+  }, [backlineMeleeDashSeq, frozen, idlePhase, meleeDashX, stepScale, stepX]);
 
   const motionStyle = useAnimatedStyle(() => {
+    if (motionLocked.value === 1) {
+      return {
+        transform: [
+          { translateX: 0 },
+          { translateY: 0 },
+          { scale: 1 },
+        ],
+      };
+    }
+
     const breatheScale = 1 - idlePhase.value * (1 - IDLE_SCALE_MIN);
     return {
       transform: [

@@ -680,6 +680,7 @@ export default function TacticalCombatHub({
     if (hp > 0) return;
     const bump = (id: string) => {
       dissolveSeqRef.current[id] = (dissolveSeqRef.current[id] ?? 0) + 1;
+      backlineDashActiveRef.current[id] = false;
     };
     bump(unitId);
     if (profile.sharedBossPool) {
@@ -2914,6 +2915,14 @@ export default function TacticalCombatHub({
   const holdVictoryChrome =
     cycleState === 'RESOLUTION' && resolutionOutcome === 'VICTORY';
 
+  const resolutionActive =
+    cycleState === 'RESOLUTION' && resolutionOutcome != null;
+
+  const renderCommandDeckDimOverlay = () =>
+    resolutionActive ? (
+      <View style={styles.commandDeckDimOverlay} pointerEvents="none" />
+    ) : null;
+
   const renderTurnBanner = () => (
     <CombatTurnBanner
       phase={holdVictoryChrome ? lastActiveTurnPhaseRef.current : combatTurnPhase}
@@ -3087,6 +3096,7 @@ export default function TacticalCombatHub({
           {renderStatusFeed()}
           {renderTurnBanner()}
           {renderCommandDeckSlot()}
+          {renderCommandDeckDimOverlay()}
         </View>
         <View style={styles.combatOverlayLayer} pointerEvents="box-none">
           {renderHubOverlays()}
@@ -3122,6 +3132,7 @@ export default function TacticalCombatHub({
               {renderStatusFeed()}
               {renderTurnBanner()}
               {renderCommandDeckSlot()}
+              {renderCommandDeckDimOverlay()}
             </View>
             <View style={styles.combatOverlayLayerLegacy} pointerEvents="box-none">
               {renderHubOverlays()}
@@ -3164,6 +3175,11 @@ const styles = StyleSheet.create({
     width: '100%',
     position: 'relative',
     backgroundColor: '#000000',
+  },
+  commandDeckDimOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.68)',
+    zIndex: 8,
   },
   statusFeedSlot: {
     position: 'absolute',
