@@ -3,7 +3,6 @@ import { pickRandomClimateCluster, getClusterDefinition } from '../data/climateC
 import {
   createEasyTestEnemy,
   createHardTestEnemy,
-  spawnDefendRiftHordeProfile,
   spawnGridHoundProfile,
   spawnVeilStalkerProfile,
 } from '../data/enemies';
@@ -106,7 +105,6 @@ import {
 import { resolvePatrolState } from '../data/patrolSpawnEngine';
 import { isEmergencyRecallAvailable, isFullBlindZone } from '../data/sectorZoneEngine';
 import {
-  DEFEND_RIFT_SURVIVAL_TURNS,
   EMERGENCY_EXTRACT_CARGO_BLEED_PCT,
   MASTER_EXTRACTION_PAYOUT_MULTIPLIER,
 } from '../types/sectorPacing';
@@ -132,7 +130,6 @@ import {
 } from '../data/resonanceEscalationEngine';
 import {
   affinityCombatLogLine,
-  applyBlindBreachPenalty,
   buildEnvironmentalModifiersForNode,
   environmentAdvantageLogLine,
 } from '../data/combatEnvironmentEngine';
@@ -152,6 +149,13 @@ import {
   consumeCargoItem,
   createStarterCargoRunState,
 } from '../data/cargoGridEngine';
+import {
+  formatCombatResourceDropLog,
+  rollCombatResourceDrops,
+  type CombatRewardContext,
+} from '../data/combatRewardEngine';
+import { applyResourceBundleToCargo } from '../data/resourceCargoBridge';
+import { getResourceCacheBundle } from '../data/resourceCacheBundles';
 import { CARGO_ITEM_CATALOG, HARVEST_YIELD_OPTIONS } from '../types/cargoGrid';
 import type { HarvestYieldTier } from '../types/cargoGrid';
 import {
@@ -231,7 +235,7 @@ interface RunContextType {
   resolveNarrativeChoice: (
     choice: import('../types/game').NarrativeChoiceKey,
     status?: CheckStatus,
-  ) => { outcomeText: string; aborted: boolean; creditReward: number };
+  ) => { outcomeText: string; aborted: boolean; creditReward: number; requiresResourcePack: boolean };
   abortNarrativeEncounter: () => void;
   activeIncursion: ActiveIncursionState;
   getCurrentEncounterNode: () => import('../types/game').IncursionNode | null;
@@ -258,6 +262,8 @@ interface RunContextType {
   useFocusingAmpouleFromCargo: () => boolean;
   beginPostCombatHarvest: () => void;
   beginResourceNodeHarvest: () => void;
+  beginResourceCachePack: () => void;
+  grantCombatResourceDrops: (options: CombatRewardContext) => void;
   prepareBossEncounter: (engagedNode?: IncursionNode | null) => void;
   prepareStandardCombatEncounter: (engagedNode?: IncursionNode | null) => void;
   prepareHarvestAmbushEncounter: () => void;
@@ -1051,10 +1057,15 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   const resolveNarrativeChoice = useCallback((
     choice: import('../types/game').NarrativeChoiceKey,
     status: CheckStatus = 'SUCCESS',
-  ): { outcomeText: string; aborted: boolean; creditReward: number } => {
+  ): { outcomeText: string; aborted: boolean; creditReward: number; requiresResourcePack: boolean } => {
     const node = narrativeNodeRef.current;
     if (!node) {
-      return { outcomeText: '>> NARRATIVE RESOLVED — NO ACTIVE NODE.', aborted: false, creditReward: 0 };
+      return {
+        outcomeText: '>> NARRATIVE RESOLVED — NO ACTIVE NODE.',
+        aborted: false,
+        creditReward: 0,
+        requiresResourcePack: false,
+      };
     }
 
     const inc = activeIncursionRef.current;
@@ -1092,21 +1103,26 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (result.abortToScanner) {
       result.logLines.forEach((line) => appendRunLog(line));
       abortNarrativeEncounter();
-      return { outcomeText: result.outcomeText, aborted: true, creditReward: 0 };
+      return { outcomeText: result.outcomeText, aborted: true, creditReward: 0, requiresResourcePack: false };
     }
 
-    const resonanceDelta = result.resonanceDelta ?? 0;
+    const resourceCacheId = result.resourceCacheId;
+    let requiresResourcePack = false;
     const creditReward = result.pendingRunCredits ?? 0;
     setActiveIncursion((prev) => {
-      const nextResonance = Math.min(100, Math.max(0, prev.resonance.percent + resonanceDelta));
+      let nextCargo = result.cargoPatch ?? prev.cargo;
+      if (resourceCacheId) {
+        nextCargo = applyResourceBundleToCargo(nextCargo, getResourceCacheBundle(resourceCacheId));
+        requiresResourcePack = true;
+      }
       let next: ActiveIncursionState = {
         ...prev,
         progress: result.progress,
         environmentalModifiers: result.environmentalModifiers,
         lastCheckStatus: result.status,
         activeChoice: choice,
-        cargo: result.cargoPatch ?? prev.cargo,
-        resonance: { percent: nextResonance },
+        cargo: nextCargo,
+        pendingHarvestReturn: requiresResourcePack ? 'RESOURCE_CACHE' : prev.pendingHarvestReturn,
       };
       if (result.spawnGridHound) {
         next = activateGridHoundOnIncursion(next);
@@ -1130,7 +1146,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     narrativeAssemblyRef.current = null;
 
     result.logLines.forEach((line) => appendRunLog(line));
-    return { outcomeText: result.outcomeText, aborted: false, creditReward };
+    return { outcomeText: result.outcomeText, aborted: false, creditReward, requiresResourcePack };
   }, [abortNarrativeEncounter, appendRunLog]);
 
   const getCurrentEncounterNode = useCallback(() => {
@@ -1209,7 +1225,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   const focusPreviewNode = useCallback((): boolean => {
     const inc = activeIncursionRef.current;
     if (isFullBlindZone(inc.nodesCleared)) {
-      appendRunLog('[REJECTED] >> INNER SANCTUM — attunement reveal offline. Breach blind only.');
+      appendRunLog('[REJECTED] >> INNER SANCTUM — attunement reveal offline.');
       return false;
     }
     const cluster = buildSectorCluster(inc);
@@ -1274,13 +1290,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (!placed || !nextCargo) return false;
 
     const occupancy = Math.round(calculateGridOccupancy(nextCargo) * 100);
-    const occupancyNote = getCargoResonanceMultiplier(nextCargo) > 1
-      ? ' — RESONANCE ×2 ACTIVE'
-      : '';
     if (wasInContainment) {
-      appendRunLog(`>> CARGO PACKED — grid occupancy ${occupancy}%${occupancyNote}.`);
+      appendRunLog(`>> CARGO PACKED — grid occupancy ${occupancy}%.`);
     } else if (wasInGrid) {
-      appendRunLog(`>> CARGO REPACKED — grid occupancy ${occupancy}%${occupancyNote}.`);
+      appendRunLog(`>> CARGO REPACKED — grid occupancy ${occupancy}%.`);
     }
     return true;
   }, [appendRunLog]);
@@ -1300,35 +1313,16 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       nextCargo = addLootToContainment(nextCargo, itemId, count);
     });
 
-    const harvestSpike = harvestResonanceSpikeForTier(tier);
-    const harvestPatch = buildResonanceMutationPatch(
-      inc,
-      harvestSpike,
-      scanSessionKeyRef.current,
-    );
-    harvestPatch.escalationLogLines.forEach((line) => appendRunLog(line));
-
     const ambushTriggered = Math.random() * 100 < option.ambushRiskPct;
     const logLines = [
       `>> ${option.label} — ${option.yieldPct}% yield routed to containment.`,
-      `>> HARVEST SPIKE — RESONANCE +${harvestSpike}% (one-time).`,
     ];
     if (ambushTriggered) logLines.push('>> DEEP EXTRACT HEAT — hostile ambush frequency detected.');
-    if (
-      harvestPatch.patrolState.blipCount > 0
-      && inc.patrolState.blipCount === 0
-    ) {
-      logLines.push(`>> PATROL CONTACT — ${harvestPatch.patrolState.blipCount} hostile signal(s) on Ley-Tracker.`);
-    }
 
     setActiveIncursion((prev) => {
       const next = {
         ...prev,
         cargo: nextCargo,
-        resonance: { percent: harvestPatch.resonancePercent },
-        resonanceEscalations: harvestPatch.resonanceEscalations,
-        sectorGraph: harvestPatch.sectorGraph,
-        patrolState: harvestPatch.patrolState,
       };
       activeIncursionRef.current = next;
       return next;
@@ -1392,6 +1386,29 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
   }, []);
+
+  const beginResourceCachePack = useCallback(() => {
+    setActiveIncursion((prev) => {
+      const next = { ...prev, pendingHarvestReturn: 'RESOURCE_CACHE' as const, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
+      activeIncursionRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const grantCombatResourceDrops = useCallback((options: CombatRewardContext) => {
+    const drops = rollCombatResourceDrops(options);
+    if (drops.length === 0) return;
+    setActiveIncursion((prev) => {
+      let nextCargo = prev.cargo;
+      drops.forEach((resourceId) => {
+        nextCargo = addLootToContainment(nextCargo, resourceId, 1);
+      });
+      const next = { ...prev, cargo: nextCargo };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    appendRunLog(formatCombatResourceDropLog(drops));
+  }, [appendRunLog]);
 
   const prepareBossEncounter = useCallback((engagedNode?: IncursionNode | null) => {
     const inc = activeIncursionRef.current;
@@ -1538,12 +1555,15 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const inc = activeIncursionRef.current;
     const prev = runStateRef.current;
     const sector = prev.currentSector ?? INITIAL_SECTOR_POOL[0];
-    const envModifiers = {
-      ...buildEnvironmentalModifiersForNode('BLEEDING_HIGH_RISE', inc.resonance.percent),
-      combatObjective: 'SURVIVE_TURNS' as const,
-      survivalTurnsRequired: DEFEND_RIFT_SURVIVAL_TURNS,
-    };
-    const pendingEnemies = squadFromSingleEnemy(spawnDefendRiftHordeProfile(inc.nodesCleared));
+    const depth = depthFromNodesCleared(inc.nodesCleared);
+    const district = getDistrictFromDepth(depth);
+    const envModifiers = buildEnvironmentalModifiersForNode('BLEEDING_HIGH_RISE', 0);
+    const pendingEnemies = spawnCombatSquad({
+      nodeIndex: inc.nodesCleared,
+      isElite: true,
+      unitCount: 1,
+      district,
+    });
     const pendingEnemy = pendingEnemies[0] ?? null;
 
     setActiveIncursion((prevState) => ({
@@ -1569,16 +1589,17 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
           inc.currentEncounterIndex,
           sector,
           'COMBAT',
-          'DEFEND THE RIFT // EMERGENCY RECALL',
+          'EMERGENCY RECALL // ELITE INTERCEPT',
         ),
       };
       runStateRef.current = next;
       return next;
     });
 
-    appendRunLog('>> EMERGENCY RECALL — DEFEND THE RIFT PROTOCOL ENGAGED.');
-    appendRunLog(`>> SURVIVE ${DEFEND_RIFT_SURVIVAL_TURNS} HOSTILE TURN CYCLES TO OPEN EVAC CONDUIT.`);
-    appendRunLog(`>> HOSTILE SIGNATURE: ${pendingEnemy.designation} [${pendingEnemy.class}] HP ${pendingEnemy.maxHp}.`);
+    appendRunLog('>> EMERGENCY RECALL — ELITE HOSTILE INTERCEPT.');
+    if (pendingEnemy) {
+      appendRunLog(`>> HOSTILE SIGNATURE: ${pendingEnemy.designation} [${pendingEnemy.class}] HP ${pendingEnemy.maxHp}.`);
+    }
   }, [appendRunLog]);
 
   const prepareVeilStalkerEncounter = useCallback(() => {
@@ -1708,18 +1729,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         ? completedNode.id
         : inc.currentNodeId;
 
-    let nextCargo = inc.cargo;
-    if (inc.resonance.percent >= RESONANCE_TIER_DATA_BLEED && !nextCargo.dataBleedActive) {
-      nextCargo = { ...nextCargo, dataBleedActive: true };
-      appendRunLog('>> DATA_BLEED INFECTED — cargo market value erodes each node.');
-    }
-    if (nextCargo.dataBleedActive) {
-      const bleedResult = applyDataBleedToCargo(nextCargo);
-      nextCargo = bleedResult.cargo;
-      if (bleedResult.drainedValue > 0) {
-        appendRunLog(`>> DATA_BLEED — −${bleedResult.drainedValue} cargo value dissolved to ash.`);
-      }
-    }
+    const nextCargo = inc.cargo;
 
     const resolvedNextNodeId = resolveScannerGraphNodeId(
       { ...inc.sectorGraph, nodes: graphNodes },
@@ -1733,27 +1743,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
     const nextDepth = depthFromNodesCleared(nextNodesCleared);
     const nextDistrict = getDistrictFromDepth(nextDepth);
-    const nextPatrolSeed = scanSessionKeyRef.current + 1;
 
-    let nextResonancePercent = inc.resonance.percent;
-    let nextEscalations = inc.resonanceEscalations;
-    let nextSectorGraph = expandedInc.sectorGraph;
-    let nextPatrolState = inc.patrolState;
-
-    if (isCombatVentNode(completedNode?.type)) {
-      const vent = computeClearVent();
-      const ventPatch = buildResonanceMutationPatch(inc, -vent, nextPatrolSeed);
-      ventPatch.escalationLogLines.forEach((line) => appendRunLog(line));
-      nextResonancePercent = ventPatch.resonancePercent;
-      nextEscalations = ventPatch.resonanceEscalations;
-      nextSectorGraph = ventPatch.sectorGraph;
-      appendRunLog(`>> RESONANCE -${vent}% — COMBAT VENT`);
-    }
-
-    nextPatrolState = resolvePatrolState(nextResonancePercent, nextDistrict, nextPatrolSeed);
-    if (nextPatrolState.blipCount > 0 && inc.patrolState.blipCount === 0) {
-      appendRunLog(`>> PATROL CONTACT — ${nextPatrolState.blipCount} hostile signal(s) on Ley-Tracker.`);
-    }
+    const nextSectorGraph = expandedInc.sectorGraph;
+    const nextPatrolState = inc.patrolState;
 
     const nextBiome = rollMacroBiomeStep(
       nextNodesCleared,
@@ -1793,8 +1785,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       currentEncounterIndex: nextNodesCleared,
       encounterPath,
       cargo: nextCargo,
-      resonance: { percent: nextResonancePercent },
-      resonanceEscalations: nextEscalations,
       patrolState: nextPatrolState,
       bossDefeated: wasBoss || inc.bossDefeated,
       primeExtractionBonus: wasBoss ? true : inc.primeExtractionBonus,
@@ -1852,7 +1842,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (nextNodesCleared >= MAX_SECTOR_NODES && !inc.collapseActive) {
       appendRunLog('>> SECTOR CAP REACHED — MASTER EXTRACTION LINK OR COLLAPSE RIFT ONLY.');
     } else if (inc.collapseActive) {
-      appendRunLog(`>> COLLAPSE RIFT NODE ${nextNodesCleared} — RESONANCE UNBOUND.`);
+      appendRunLog(`>> COLLAPSE RIFT NODE ${nextNodesCleared} — POCKET DIMENSION UNSTABLE.`);
     } else if (!enteringSafehouse) {
       appendRunLog(formatMacroBiomeLogLine(nextBiome.family, nextBiome.subBiome));
       appendRunLog(`>> NODE ${nextNodesCleared}/${MAX_SECTOR_NODES} CLEARED — SCANNING HUB READY.`);
@@ -1879,10 +1869,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const engageVectorNode = useCallback((node: IncursionNode): import('../types/game').RunNodeType | null => {
     const inc = activeIncursionRef.current;
-    const wasBlindBreach = !inc.focusedNodeIds.includes(node.id)
-      && node.type !== 'SAFE_ANCHOR_EXTRACTION'
-      && node.type !== 'MASTER_EXTRACTION_LINK'
-      && node.sectorMeta?.isFocused !== true;
 
     let enteringCollapse = inc.collapseActive;
     if (
@@ -1892,49 +1878,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       && (isCollapseForwardNode(node) || inc.nodesCleared >= MAX_SECTOR_NODES)
     ) {
       enteringCollapse = true;
-      appendRunLog('>> POCKET DIMENSION COLLAPSE — resonance telemetry uncapped.');
-    }
-
-    let extraResonance = 0;
-    if (wasBlindBreach && node.environmentType) {
-      const penalty = applyBlindBreachPenalty(
-        node.environmentType,
-        runStateRef.current.maxSoulAnchor,
-      );
-      penalty.logLines.forEach((line) => appendRunLog(line));
-      extraResonance += penalty.resonanceSpike;
-      if (penalty.soulAnchorLoss > 0) {
-        setRunState((prev) => {
-          const next = {
-            ...prev,
-            soulAnchorIntegrity: Math.max(0, prev.soulAnchorIntegrity - penalty.soulAnchorLoss),
-          };
-          runStateRef.current = next;
-          return next;
-        });
-      }
-    }
-
-    let nextResonance = inc.resonance.percent;
-    let nextSectorGraph = inc.sectorGraph;
-    let nextEscalations = inc.resonanceEscalations;
-    let nextPatrolState = inc.patrolState;
-
-    if (extraResonance > 0) {
-      const alarmPatch = buildResonanceMutationPatch(
-        inc,
-        extraResonance,
-        scanSessionKeyRef.current,
-      );
-      alarmPatch.escalationLogLines.forEach((line) => appendRunLog(line));
-      nextResonance = alarmPatch.resonancePercent;
-      nextEscalations = alarmPatch.resonanceEscalations;
-      nextSectorGraph = alarmPatch.sectorGraph;
-      nextPatrolState = alarmPatch.patrolState;
-      appendRunLog(`>> RESONANCE +${extraResonance}% — ENVIRONMENTAL ALARM TRIPPED.`);
-      if (alarmPatch.patrolState.blipCount > 0 && inc.patrolState.blipCount === 0) {
-        appendRunLog(`>> PATROL CONTACT — ${alarmPatch.patrolState.blipCount} hostile signal(s) on Ley-Tracker.`);
-      }
+      appendRunLog('>> POCKET DIMENSION COLLAPSE — sector geometry destabilizing.');
     }
 
     const encounterPath = [...inc.encounterPath];
@@ -1943,25 +1887,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       index: inc.nodesCleared,
       encounterIndex: inc.nodesCleared,
     };
-    if (isTerminalBlindActive(inc.resonanceEscalations)) {
-      nextEscalations = {
-        ...nextEscalations,
-        terminalBlindNodesRemaining: nextEscalations.terminalBlindNodesRemaining - 1,
-      };
-    }
-    if (node.id.startsWith('extraction-decoy-')) {
-      nextEscalations = consumeExtractionDecoy(nextEscalations);
-    }
 
     setActiveIncursion((prev) => {
       const next = {
         ...prev,
         encounterPath,
         selectedVectorId: node.id,
-        resonance: { percent: nextResonance },
-        resonanceEscalations: nextEscalations,
-        sectorGraph: nextSectorGraph,
-        patrolState: nextPatrolState,
         collapseActive: enteringCollapse || prev.collapseActive,
       };
       activeIncursionRef.current = next;
@@ -1971,31 +1902,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     appendRunLog(
       `>> VECTOR ENGAGED — NODE ${inc.nodesCleared + 1} // ${node.label.split(' // ').slice(1).join(' // ') || node.label}`,
     );
-
-    const isExtractionVector = node.type === 'SAFE_ANCHOR_EXTRACTION'
-      || node.type === 'MASTER_EXTRACTION_LINK'
-      || node.type === 'EMERGENCY_EXTRACTION';
-    if (
-      nextResonance >= 100
-      && !enteringCollapse
-      && !inc.collapseActive
-      && node.type !== 'BOSS_COMBAT'
-      && !isExtractionVector
-    ) {
-      appendRunLog('>> RESONANCE OVERRIDE — 100% SATURATION TRIGGERS APEX AMBUSH.');
-      setRunState((prev) => {
-        const next = { ...prev, pendingAmbush: true };
-        runStateRef.current = next;
-        return next;
-      });
-      prepareStandardCombatEncounter(node);
-      setActiveIncursion((prev) => {
-        const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
-        activeIncursionRef.current = next;
-        return next;
-      });
-      return 'ELITE_COMBAT';
-    }
 
     if (node.type === 'EMERGENCY_EXTRACTION') {
       appendRunLog('>> EMERGENCY EXTRACTION LINK ENGAGED — EVAC CONDUIT OPEN.');
@@ -2033,17 +1939,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (node.type === 'SANCTUARY' || node.type === 'BLACK_MARKET') {
-      const huntActive = activeIncursionRef.current.resonanceEscalations.veilStalkerHuntActive;
-      if (huntActive && Math.random() < VEIL_STALKER_AMBUSH_CHANCE) {
-        appendRunLog('>> VEIL STALKER AMBUSH — sanctuary vector compromised.');
-        prepareVeilStalkerEncounter();
-        setActiveIncursion((prev) => {
-          const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
-          activeIncursionRef.current = next;
-          return next;
-        });
-        return 'ELITE_COMBAT';
-      }
       if (node.type === 'BLACK_MARKET') {
         rollBlackMarketStockForNode();
       }
@@ -2072,7 +1967,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     beginResourceNodeHarvest,
     prepareBossEncounter,
     prepareStandardCombatEncounter,
-    prepareVeilStalkerEncounter,
   ]);
 
   const commitNodeEncounter = useCallback((nodeId: string): import('../types/game').RunNodeType | null => {
@@ -2104,104 +1998,16 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const applyResonancePatchToIncursion = useCallback((
-    inc: ActiveIncursionState,
-    patch: ReturnType<typeof buildResonanceMutationPatch>,
-    spawnHound = false,
-  ): ActiveIncursionState => {
-    let next = {
-      ...inc,
-      resonance: { percent: patch.resonancePercent },
-      resonanceEscalations: patch.resonanceEscalations,
-      sectorGraph: patch.sectorGraph,
-      patrolState: patch.patrolState,
-    };
-    if (spawnHound || patch.spawnGridHound) {
-      next = activateGridHoundOnIncursion(next);
-    }
-    return next;
-  }, []);
-
-  const adjustResonance = useCallback((amount: number, reason: string): number => {
-    const inc = activeIncursionRef.current;
-    const patch = buildResonanceMutationPatch(inc, amount, scanSessionKeyRef.current);
-    patch.escalationLogLines.forEach((line) => appendRunLog(line));
-
-    setActiveIncursion((prev) => {
-      const next = applyResonancePatchToIncursion(prev, patch);
-      activeIncursionRef.current = next;
-      return next;
-    });
-    const sign = amount >= 0 ? '+' : '';
-    appendRunLog(`>> RESONANCE ${sign}${amount}% — ${reason}`);
-    if (patch.spawnGridHound) {
-      appendRunLog('>> GRID-HOUND DEPLOYED — APEX PREDATOR ACTIVE ON OVERWORLD.');
-    }
-    if (patch.patrolState.blipCount > 0 && inc.patrolState.blipCount === 0) {
-      appendRunLog(`>> PATROL CONTACT — ${patch.patrolState.blipCount} hostile signal(s) on Ley-Tracker.`);
-    }
-    return patch.resonancePercent;
-  }, [appendRunLog, applyResonancePatchToIncursion]);
+  const adjustResonance = useCallback((_amount: number, _reason: string): number => 0, []);
 
   const tickOverworldHazards = useCallback((
     player: { x: number; y: number },
     deltaMs: number,
   ): { gridHoundCaught: boolean } => {
-    const inc = activeIncursionRef.current;
-    let pocketActive = false;
-    for (const pocket of inc.overworldSession.resonancePockets) {
-      if (isInsideResonancePocket(player, pocket)) {
-        pocketActive = true;
-        break;
-      }
-    }
-
-    if (pocketActive && deltaMs > 0) {
-      pocketResonanceAccumRef.current += (resonancePocketTickRate() * deltaMs) / 1000;
-      if (pocketResonanceAccumRef.current >= 2) {
-        const gain = Math.floor(pocketResonanceAccumRef.current);
-        pocketResonanceAccumRef.current -= gain;
-        adjustResonance(gain, 'RESONANCE POCKET');
-      }
-    } else {
-      pocketResonanceAccumRef.current = 0;
-    }
-
-    const hound = inc.overworldSession.gridHound;
-    if (!hound?.active || hound.caught) {
-      return { gridHoundCaught: false };
-    }
-
-    const nextHound = tickGridHound(hound, player, deltaMs);
-    if (isPlayerCaughtByGridHound(player, nextHound)) {
-      setActiveIncursion((prev) => {
-        const next = {
-          ...prev,
-          overworldSession: {
-            ...prev.overworldSession,
-            gridHound: { ...nextHound, caught: true },
-          },
-        };
-        activeIncursionRef.current = next;
-        return next;
-      });
-      appendRunLog('>> GRID-HOUND INTERCEPT — MANDATORY AMBUSH COMBAT.');
-      return { gridHoundCaught: true };
-    }
-
-    if (nextHound.world.x !== hound.world.x || nextHound.world.y !== hound.world.y) {
-      setActiveIncursion((prev) => {
-        const next = {
-          ...prev,
-          overworldSession: { ...prev.overworldSession, gridHound: nextHound },
-        };
-        activeIncursionRef.current = next;
-        return next;
-      });
-    }
-
+    void player;
+    void deltaMs;
     return { gridHoundCaught: false };
-  }, [adjustResonance, appendRunLog]);
+  }, []);
 
   const collectVeilEcho = useCallback((echoId: string): boolean => {
     const inc = activeIncursionRef.current;
@@ -2375,35 +2181,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     }
   }, [appendRunLog]);
 
-  const applyResonanceManifestScan = useCallback((nodeId: string) => {
-    const inc = activeIncursionRef.current;
-    if (inc.resonanceManifestNodeIds.includes(nodeId)) return;
-
-    const baseGain = computeScanPenalty(inc.currentDistrict);
-    const gain = modifyScanResonanceGain(inc, baseGain);
-    const patch = buildResonanceMutationPatch(inc, gain, scanSessionKeyRef.current);
-    patch.escalationLogLines.forEach((line) => appendRunLog(line));
-
-    setActiveIncursion((prev) => {
-      const next = applyResonancePatchToIncursion(
-        { ...prev, resonanceManifestNodeIds: [...prev.resonanceManifestNodeIds, nodeId] },
-        patch,
-      );
-      activeIncursionRef.current = next;
-      return next;
-    });
-    appendRunLog(`>> RESONANCE +${gain}% — RIFT MANIFEST SCAN`);
-    if (patch.spawnGridHound) {
-      appendRunLog('>> GRID-HOUND DEPLOYED — APEX PREDATOR ACTIVE ON OVERWORLD.');
-    }
-    if (patch.patrolState.blipCount > 0 && inc.patrolState.blipCount === 0) {
-      appendRunLog(`>> PATROL CONTACT — ${patch.patrolState.blipCount} hostile signal(s) on Ley-Tracker.`);
-    }
-    const zone = getResonanceZone(patch.resonancePercent);
-    if (zone === 'CRITICAL' && getResonanceZone(inc.resonance.percent) !== 'CRITICAL') {
-      appendRunLog('>> CRITICAL HEAT — patrol vectors accelerating.');
-    }
-  }, [appendRunLog]);
+  const applyResonanceManifestScan = useCallback((_nodeId: string) => {
+    // Resonance mechanic disabled — manifest scans no longer accrue heat.
+  }, []);
 
   const getSafehouseIntel = useCallback(() => {
     const inc = activeIncursionRef.current;
@@ -2477,7 +2257,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     setActiveIncursion(next);
     setScanSessionKey((k) => k + 1);
     appendRunLog(`>> UNSEAL DOOR — ENTERING DISTRICT ${next.currentDistrict}.`);
-    appendRunLog('>> RESONANCE RESET — DISTRICT HEAT VENTED TO ZERO.');
   }, [appendRunLog]);
 
   const stageSafeAnchorReview = useCallback((anchorIndex: 1 | 2 | 3) => {
@@ -2529,7 +2308,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       return false;
     }
     if (inc.defendRiftActive) return false;
-    appendRunLog('>> EMERGENCY RECALL INITIATED — rift defense combat staging.');
+    appendRunLog('>> EMERGENCY RECALL INITIATED — elite intercept staging.');
     prepareDefendRiftEncounter();
     return true;
   }, [appendRunLog, prepareDefendRiftEncounter]);
@@ -2550,7 +2329,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       runStateRef.current = next;
       return next;
     });
-    appendRunLog('>> DEFEND THE RIFT SECURED — emergency evac review opening.');
+    appendRunLog('>> EMERGENCY RECALL CLEARED — emergency evac review opening.');
     appendRunLog('>> WARNING — 20% cargo value bleed on emergency extraction.');
   }, [appendRunLog]);
 
@@ -2666,7 +2445,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     let stunsEnemy = false;
     let logLine = '';
     const result: IncursionConsumableUseResult = {
-      itemId: itemId as IncursionConsumableUseResult['itemId'],
+      itemId,
       healAmount: 0,
       stunsEnemy: false,
       logLine: '',
@@ -2718,6 +2497,17 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       case 'spectral_imbue':
         logLine = '>> SPECTRAL SALT APPLIED — weapon imbued with spectral essence.';
         break;
+      case 'sanguine_coagulant': {
+        const healPercent = def.healPercent ?? 50;
+        healAmount = Math.floor(run.maxSoulAnchor * (healPercent / 100));
+        result.clearPlayerDebuffs = ['BLEEDING', 'FRACTURED'];
+        logLine = `>> SANGUINE COAGULANT — +${healAmount} HP, purging BLEEDING / FRACTURED.`;
+        break;
+      }
+      case 'veil_ash_grenade':
+        result.frontlineBlindTurns = 2;
+        logLine = '>> VEIL-ASH GRENADE — frontline hostiles blinded for 2 turns.';
+        break;
       default:
         return null;
     }
@@ -2743,22 +2533,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const useResonanceBribeFromCargo = useCallback((): boolean => {
-    const inc = activeIncursionRef.current;
-    if (!hasCargoItem(inc.cargo, 'resonance-bribe')) return false;
-    const nextCargo = consumeCargoItem(inc.cargo, 'resonance-bribe');
-    if (!nextCargo) return false;
-    setActiveIncursion((prev) => {
-      const vented = Math.max(0, prev.resonance.percent - 25);
-      const next = {
-        ...prev,
-        cargo: nextCargo,
-        resonance: { percent: vented },
-      };
-      activeIncursionRef.current = next;
-      return next;
-    });
-    appendRunLog('>> RESONANCE BRIBE — local trackers scrambled. −25% resonance.');
-    return true;
+    appendRunLog('[REJECTED] >> Resonance tracking offline this incursion.');
+    return false;
   }, [appendRunLog]);
 
   const useDeadDropTokenFromCargo = useCallback((): boolean => {
@@ -2924,6 +2700,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       useFocusingAmpouleFromCargo,
       beginPostCombatHarvest,
       beginResourceNodeHarvest,
+      beginResourceCachePack,
+      grantCombatResourceDrops,
       stageSafeAnchorReview,
       confirmSafeAnchorExtraction,
       continueFromExtractionReview,
@@ -3017,6 +2795,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       useFocusingAmpouleFromCargo,
       beginPostCombatHarvest,
       beginResourceNodeHarvest,
+      beginResourceCachePack,
+      grantCombatResourceDrops,
       stageSafeAnchorReview,
       confirmSafeAnchorExtraction,
       continueFromExtractionReview,

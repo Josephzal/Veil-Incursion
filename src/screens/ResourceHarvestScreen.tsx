@@ -29,7 +29,9 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
   } = useRun();
   const { startPostCombatBoon, startCombat } = useGameFlow();
   const { completeCurrentNode } = useNodeProgression();
-  const [phase, setPhase] = useState<HarvestPhase>('SELECT');
+  const [phase, setPhase] = useState<HarvestPhase>(
+    activeIncursion.pendingHarvestReturn === 'RESOURCE_CACHE' ? 'PACK' : 'SELECT',
+  );
   const [selectedTier, setSelectedTier] = useState<HarvestYieldTier | null>(null);
 
   const handleConfirm = () => {
@@ -53,6 +55,10 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
         return;
       }
       startPostCombatBoon();
+      return;
+    }
+    if (route === 'RESOURCE_CACHE') {
+      completeCurrentNode('Resource cache secured — cargo packed.');
       return;
     }
     completeCurrentNode(resultMessageForTier(selectedTier));
@@ -137,7 +143,11 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
                   theme={theme}
                   onRelocateItem={relocateCargoItem}
                   onContinue={handlePackingContinue}
-                  continueLabel="[ CONTINUE EXTRACTION ]"
+                  continueLabel={
+                    activeIncursion.pendingHarvestReturn === 'RESOURCE_CACHE'
+                      ? '[ CONTINUE TO GRID ]'
+                      : '[ CONTINUE EXTRACTION ]'
+                  }
                 />
               </View>
             </View>

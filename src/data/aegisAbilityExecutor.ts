@@ -30,6 +30,9 @@ export interface AbilityHurtOptions {
   channel?: DamageChannel;
   fractureGain?: number;
   targetId?: string;
+  abilityId?: AegisAbilityId;
+  rollCrit?: boolean;
+  echoHit?: boolean;
 }
 
 export interface AbilityExecutionContext {
@@ -61,6 +64,7 @@ export interface AbilityExecutionContext {
   grantBonusAp: (amount: number) => void;
   restoreStaminaPct: (pct: number) => void;
   reduceEnemyAp: (unitId: string, amount: number) => void;
+  setShadowStepEvadeActive?: (active: boolean) => void;
   mutationMods: MutationCombatModifiers;
   bloodTitheCooldown: number;
 }
@@ -100,7 +104,7 @@ export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExe
         if (!unit.unitId) continue;
         let next = applyFractureToUnit(unit, 20, true);
         ctx.patchUnit(unit.unitId, next);
-        eradicated = ctx.hurtEnemy(8, '[RUIN]', 'STRIKE', { channel: 'KINETIC', fractureGain: 0 }, unit.unitId) || eradicated;
+        eradicated = ctx.hurtEnemy(12, '[RUIN]', 'STRIKE', { channel: 'KINETIC', fractureGain: 0 }, unit.unitId) || eradicated;
       }
       ctx.log('[RUIN] >> Fracture shockwave — all hostiles stressed.');
       if (eradicated) return { ok: true };
@@ -158,10 +162,11 @@ export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExe
       }
       const next = applyFractureDamage(unit, 50);
       ctx.patchUnit(unit.unitId, next);
-      const eradicated = ctx.hurtEnemy(12, '[SHADOW STEP]', 'STRIKE', { channel: 'KINETIC' }, unit.unitId);
+      const eradicated = ctx.hurtEnemy(16, '[SHADOW STEP]', 'STRIKE', { channel: 'KINETIC' }, unit.unitId);
       ctx.buffState.skipNextEnemyTurn = true;
       ctx.grantBonusAp(1);
-      ctx.log('[SHADOW STEP] >> Initiative seized — hostile cycle skipped next pass.');
+      ctx.setShadowStepEvadeActive?.(true);
+      ctx.log('[SHADOW STEP] >> Initiative seized — +15% evade until next turn.');
       if (eradicated) return { ok: true };
       return { ok: true };
     }
@@ -238,7 +243,7 @@ export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExe
         return { ok: false, refundAp: def.apCost };
       }
       ctx.buffState.crimsonPactCharges = 2;
-      ctx.log('[CRIMSON PACT] >> Blood oath sealed — next 2 attacks empowered.');
+      ctx.log('[CRIMSON PACT] >> Blood oath sealed — next 2 attacks are guaranteed critical hits.');
       return { ok: true };
     }
 

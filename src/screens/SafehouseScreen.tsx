@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import IncursionShell from '../components/IncursionShell';
+import DecryptionPanel from '../components/DecryptionPanel';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
 import AegisLoadoutEditor from '../components/AegisLoadoutEditor';
 import { useRun } from '../context/RunContext';
@@ -17,7 +18,7 @@ const TERMINAL_MUTED = '#6b7c72';
 const PANEL_BG = '#121416';
 const BORDER = 'rgba(62, 207, 110, 0.28)';
 
-type SafehouseTab = 'PAYLOAD' | 'LOADOUT' | 'BENCH' | 'INTEL';
+type SafehouseTab = 'PAYLOAD' | 'LOADOUT' | 'BENCH' | 'DECRYPT' | 'INTEL';
 
 const TRANSFER_PRESETS = [0, 25, 50, 75, 100] as const;
 
@@ -138,7 +139,7 @@ export default function SafehouseScreen(): React.JSX.Element {
           </View>
 
           <View style={styles.tabRow}>
-            {(['PAYLOAD', 'LOADOUT', 'BENCH', 'INTEL'] as SafehouseTab[]).map((tab) => (
+            {(['PAYLOAD', 'LOADOUT', 'BENCH', 'DECRYPT', 'INTEL'] as SafehouseTab[]).map((tab) => (
               <Pressable
                 key={tab}
                 onPress={() => setActiveTab(tab)}
@@ -226,6 +227,10 @@ export default function SafehouseScreen(): React.JSX.Element {
                   </View>
                 ))}
               </>
+            ) : null}
+
+            {activeTab === 'DECRYPT' ? (
+              <DecryptionPanel onStatus={setStatusLine} />
             ) : null}
 
             {activeTab === 'INTEL' ? (

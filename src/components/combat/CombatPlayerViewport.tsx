@@ -58,6 +58,8 @@ function toSkiaImageSource(source: ImageSourcePropType): DataSourceParam {
 export interface CombatPlayerViewportRef {
   triggerDamageEffect: (variant?: EnemyDeckStrikeVariant) => void;
   triggerAttackLunge: () => void;
+  triggerEvadeAfterimage: () => void;
+  triggerEnemyCritVignette: () => void;
   setWardPrimed: (active: boolean) => void;
 }
 
@@ -133,6 +135,18 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
           withTiming(LUNGE_DISTANCE, { duration: LUNGE_MS * 0.45, easing: Easing.out(Easing.cubic) }),
           withTiming(0, { duration: LUNGE_MS * 0.55, easing: Easing.inOut(Easing.cubic) }),
         );
+      },
+      triggerEvadeAfterimage: () => {
+        lungeX.value = withSequence(
+          withTiming(-14, { duration: 70, easing: Easing.out(Easing.cubic) }),
+          withTiming(10, { duration: 70, easing: Easing.inOut(Easing.cubic) }),
+          withTiming(0, { duration: 60, easing: Easing.in(Easing.cubic) }),
+        );
+        runFlash('hp');
+      },
+      triggerEnemyCritVignette: () => {
+        runShake();
+        runFlash('hp');
       },
       setWardPrimed: (active: boolean) => {
         if (active) {

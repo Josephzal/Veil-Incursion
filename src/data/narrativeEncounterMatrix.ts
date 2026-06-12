@@ -51,6 +51,8 @@ export interface NarrativeResolutionResult {
   resonanceDelta?: number;
   /** Activates Grid-Hound hunter on overworld (faction vault brute-force). */
   spawnGridHound?: boolean;
+  /** Grant a pre-defined resource bundle into cargo containment. */
+  resourceCacheId?: import('../types/resourceItem').ResourceCacheId;
 }
 
 type ChoiceKey = 'A' | 'B';

@@ -723,7 +723,6 @@ export function formatSpectralBlock(
     `> VISUAL SPECTRUM:  ${spectral.visualSpectrum}`,
     `> OCCULT INDEX:     ${spectral.occultIndex}`,
     `> THREAT PROFILE:   ${spectral.threatProfile}`,
-    `> RESONANCE COST:   +${meta.resonanceDelta}%`,
     `> YIELD MULTIPLIER: x${meta.yieldMultiplier.toFixed(2)}`,
   ];
 }
@@ -757,7 +756,6 @@ export function formatFocusedIntel(node: IncursionNode): string[] {
   const lines = [
     `TYPE: ${node.type.replace(/_/g, ' ')}`,
     `ENVIRONMENT: ${node.environmentType?.replace(/_/g, ' ') ?? 'UNKNOWN'}`,
-    `RESONANCE: +${node.sectorMeta?.resonanceDelta ?? 0}%`,
   ];
   const envAdvantage = environmentAdvantageLogLine(node.environmentType);
   if (envAdvantage) {

@@ -47,8 +47,8 @@ export const LEY_LINE_MUTATION_CATALOG: Record<LeyLineMutationId, LeyLineMutatio
     id: 'SHATTER_POINT',
     name: 'Shatter-Point',
     tier: 'KINETIC',
-    description: 'Attacking a Fractured enemy generates double Abyssal Reserve.',
-    effect: 'VS FRACTURED // 2× AR generation',
+    description: 'Attacking a Fractured enemy grants +20% Critical Hit Chance.',
+    effect: 'VS FRACTURED // +20% crit chance',
   },
   ADRENALINE_SPIKE: {
     id: 'ADRENALINE_SPIKE',
@@ -110,8 +110,8 @@ export const LEY_LINE_MUTATION_CATALOG: Record<LeyLineMutationId, LeyLineMutatio
     id: 'PHANTOM_STRIKES',
     name: 'Phantom Strikes',
     tier: 'OCCULT',
-    description: 'Strike has a 25% chance to hit a second random target.',
-    effect: 'STRIKE // 25% echo hit',
+    description: 'Critical hits split 50% of post-armor damage to a random second target.',
+    effect: 'ON CRIT // 50% echo damage',
   },
   CORRUPTED_BLOOD: {
     id: 'CORRUPTED_BLOOD',
@@ -187,8 +187,8 @@ export const LEY_LINE_MUTATION_CATALOG: Record<LeyLineMutationId, LeyLineMutatio
     id: 'GRID_GHOST',
     name: 'Grid Ghost',
     tier: 'SYSTEM',
-    description: 'Taking 0 damage in a turn grants +1 AP next turn.',
-    effect: 'PERFECT TURN // +1 AP next',
+    description: 'Evading an attack refunds 20% Stamina and grants +5% Evade (stacks 3×).',
+    effect: 'ON EVADE // stamina + evade stack',
   },
   MASOCISTS_JOY: {
     id: 'MASOCISTS_JOY',
@@ -236,8 +236,8 @@ export const LEY_LINE_MUTATION_CATALOG: Record<LeyLineMutationId, LeyLineMutatio
     id: 'MOMENTUM_SHIFT',
     name: 'Momentum Shift',
     tier: 'AP_BOOST',
-    description: 'Ending a turn at 0 Stamina grants +1 AP next turn.',
-    effect: '0 STAM END // +1 AP next',
+    description: 'Ending a turn at 0 Stamina grants +1 AP next turn but Evade drops to 0% until stamina returns.',
+    effect: '0 STAM END // +1 AP, evade disabled',
   },
 };
 

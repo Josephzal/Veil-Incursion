@@ -73,6 +73,17 @@ export const CITY_STREETS_RESOLVERS: readonly NarrativeResolverSeed[] = [
     rewardCredits: 90,
   },
   {
+    id: 'res-smuggling-drop-stealth',
+    kind: 'ITEM',
+    compatibleTags: ['urban', 'transit', 'industrial'],
+    label: '[ C ] GHOST THE SMUGGLING DROP',
+    requirement: 'D20 CALIBRATION // STEALTH CHECK',
+    costPreview: 'Cost: 0 Shield',
+    rewardPreview: 'Cache secured — 3x Ley-Slag + Smuggler Ledger',
+    resourceCacheId: 'smuggling_drop_stealth',
+    rewardCredits: 45,
+  },
+  {
     id: 'res-macro-threat-cut',
     kind: 'MACRO',
     compatibleTags: ['occult', 'urban'],

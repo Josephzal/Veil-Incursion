@@ -7,7 +7,7 @@ export interface MutationCombatModifiers {
   parryReflectPct: number;
   graveBindDamage: number;
   graveBindArmorShred: number;
-  shatterPointArMultiplier: number;
+  shatterPointCritBonus: number;
   abyssalResonancePctPer10Stam: number;
   bloodTitheHealPctPer10Ar: number;
   demonLungStaminaPct: number;
@@ -17,7 +17,7 @@ export interface MutationCombatModifiers {
   maxHpMultiplier: number;
   abyssalCap: number;
   ashenMantleFree: boolean;
-  phantomStrikeChance: number;
+  phantomCritSplitPct: number;
   nailApDrain: number;
   bloodTitheFree: boolean;
   bloodTitheCooldown: number;
@@ -42,7 +42,7 @@ export function aggregateMutationModifiers(
     parryReflectPct: has('SPIKED_WARD') ? 50 : 0,
     graveBindDamage: has('HEAVY_CALIBER') ? 15 : 0,
     graveBindArmorShred: has('EXECUTIONERS_GRIP') ? 1 : 0,
-    shatterPointArMultiplier: has('SHATTER_POINT') ? 2 : 1,
+    shatterPointCritBonus: has('SHATTER_POINT') ? 0.20 : 0,
     abyssalResonancePctPer10Stam: has('ABYSSAL_RESONANCE') ? 5 : 0,
     bloodTitheHealPctPer10Ar: has('BLACK_LIGHT_SIPHON') ? 3 : 2,
     demonLungStaminaPct: has('DEEP_LUNGS') ? 80 : 40,
@@ -52,7 +52,7 @@ export function aggregateMutationModifiers(
     maxHpMultiplier: has('HYPER_METABOLISM') ? 0.75 : 1,
     abyssalCap: has('ABYSSAL_OVERFLOW') ? 150 : COMBAT_ACTION.ABYSSAL_RESERVE_CAP,
     ashenMantleFree: has('REACTIVE_WARDS'),
-    phantomStrikeChance: has('PHANTOM_STRIKES') ? 0.25 : 0,
+    phantomCritSplitPct: has('PHANTOM_STRIKES') ? 0.5 : 0,
     nailApDrain: has('EVENT_HORIZON') ? 2 : 1,
     bloodTitheFree: has('ECHOING_VOID'),
     bloodTitheCooldown: has('ECHOING_VOID') ? 2 : 0,

@@ -13,7 +13,7 @@ export const ARENA_ENEMY_GRID_INSET_RIGHT = 24;
 
 /** Matches CombatArenaStage playerSpriteSlot height (% of enemy column). */
 export const ARENA_SPRITE_HEIGHT = '57%';
-export const ARENA_SPRITE_BOTTOM = '15%';
+export const ARENA_SPRITE_BOTTOM = '25%';
 export const ARENA_STAGE_PADDING_BOTTOM = 20;
 
 /** Portrait frame height as a share of its slot (health gauges live in intel panel). */
@@ -32,8 +32,8 @@ export const ENEMY_HITBOX_DEBUG = true;
 /** Torso-only tap targets decoupled from portrait image bounds. */
 export const FRONTLINE_HITBOX = {
   width: '80%' as const,
-  height: '45%' as const,
-  bottom: '27%' as const,
+  height: '40%' as const,
+  bottom: '15%' as const,
 };
 
 export const BACKLINE_HITBOX = {
@@ -41,6 +41,21 @@ export const BACKLINE_HITBOX = {
   height: '50%' as const,
   top: '25%' as const,
 };
+
+/** Visible sprite footprint — bottom-anchored, excludes empty cell space above the art. */
+export const ENEMY_SPRITE_FRAME_HEIGHT = '78%' as const;
+
+export function critLabelAnchorAboveHitbox(
+  hitbox: typeof FRONTLINE_HITBOX | typeof BACKLINE_HITBOX,
+): { bottom?: `${number}%`; top?: `${number}%` } {
+  if ('bottom' in hitbox) {
+    const bottomPct = Number.parseFloat(hitbox.bottom);
+    const heightPct = Number.parseFloat(hitbox.height);
+    return { bottom: `${bottomPct + heightPct + 1}%` };
+  }
+  const topPct = Number.parseFloat(hitbox.top);
+  return { top: `${Math.max(2, topPct - 5)}%` };
+}
 
 /** Pivot for bottom-anchored depth scale (≈ half frontline sprite frame height). */
 const DEPTH_SCALE_PIVOT_Y = 76;
@@ -149,18 +164,33 @@ export function enemyUnitDepthTransform(
   ];
 }
 
-function soloLiveUnitSlot(
-  units: readonly { slot: CombatGridSlotId; isDead?: boolean }[],
-): CombatGridSlotId | null {
-  const live = units.filter((unit) => !unit.isDead);
-  if (live.length !== 1) return null;
-  return live[0]!.slot;
+export type ArenaLayoutUnit = {
+  slot: CombatGridSlotId;
+  isDead?: boolean;
+  dissolveSeq?: number;
+  dissolveHidden?: boolean;
+};
+
+/** Units still occupying a slot — alive, or mid-dissolve before removal. */
+export function unitOccupiesArenaSlot(unit: ArenaLayoutUnit): boolean {
+  if (unit.dissolveHidden) return false;
+  if (!unit.isDead) return true;
+  return (unit.dissolveSeq ?? 0) > 0;
+}
+
+function soloLiveUnitSlot(units: readonly ArenaLayoutUnit[]): CombatGridSlotId | null {
+  const occupying = units.filter(unitOccupiesArenaSlot);
+  if (occupying.length !== 1) return null;
+  const only = occupying[0]!;
+  // Mid-dissolve corpses keep their formation slot — never solo-reflow while fading.
+  if (only.isDead && (only.dissolveSeq ?? 0) > 0 && !only.dissolveHidden) return null;
+  return only.slot;
 }
 
 /** Solo hostile: full column width, raised floor, slightly smaller scale. */
 export function resolveArenaSlotLayout(
   slot: CombatGridSlotId,
-  units: readonly { slot: CombatGridSlotId; isDead?: boolean }[],
+  units: readonly ArenaLayoutUnit[],
 ): EnemySlotLayout {
   const base = ENEMY_ARENA_SLOT_LAYOUT[slot];
   const soloSlot = soloLiveUnitSlot(units);

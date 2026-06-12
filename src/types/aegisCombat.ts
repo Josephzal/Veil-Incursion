@@ -24,7 +24,9 @@ export type CombatUnitTag =
   | 'CONCUSSED'
   | 'DOOMED'
   | 'EXPOSED'
-  | 'FRACTURED';
+  | 'FRACTURED'
+  | 'VULNERABLE'
+  | 'BLINDED';
 
 export type DamageChannel = 'KINETIC' | 'OCCULT' | 'TRUE';
 

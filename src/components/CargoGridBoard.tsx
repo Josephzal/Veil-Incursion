@@ -28,7 +28,7 @@ import {
   relocateCargoItem as relocateCargoInState,
 } from '../data/cargoGridEngine';
 import type { CargoItemId, CargoRunState, PlacedCargoItem } from '../types/cargoGrid';
-import { CARGO_GRID_DIMENSION, CARGO_ITEM_CATALOG } from '../types/cargoGrid';
+import { CARGO_GRID_COLS, CARGO_GRID_ROWS, CARGO_ITEM_CATALOG } from '../types/cargoGrid';
 import type { TerminalTheme } from '../types/theme';
 import { countCargoItemInstances } from '../data/cargoGridEngine';
 import { resolveCargoItemIcon } from '../utils/cargoItemIcon';
@@ -36,8 +36,12 @@ import { resolveCargoItemIcon } from '../utils/cargoItemIcon';
 export const CARGO_CELL_SIZE = 56;
 export const CARGO_CELL_GAP = 2;
 
-export const CARGO_GRID_FRAME_SIZE =
-  CARGO_GRID_DIMENSION * CARGO_CELL_SIZE + (CARGO_GRID_DIMENSION - 1) * CARGO_CELL_GAP;
+export const CARGO_GRID_FRAME_WIDTH =
+  CARGO_GRID_COLS * CARGO_CELL_SIZE + (CARGO_GRID_COLS - 1) * CARGO_CELL_GAP;
+export const CARGO_GRID_FRAME_HEIGHT =
+  CARGO_GRID_ROWS * CARGO_CELL_SIZE + (CARGO_GRID_ROWS - 1) * CARGO_CELL_GAP;
+/** @deprecated Use CARGO_GRID_FRAME_WIDTH / HEIGHT for non-square grids. */
+export const CARGO_GRID_FRAME_SIZE = CARGO_GRID_FRAME_WIDTH;
 
 interface GridMetrics {
   pageX: number;
@@ -317,7 +321,7 @@ export default function CargoGridBoard({
     if (localX < 0 || localY < 0 || localX >= metrics.width || localY >= metrics.height) return null;
     const col = Math.floor(localX / stride);
     const row = Math.floor(localY / stride);
-    if (row < 0 || col < 0 || row >= CARGO_GRID_DIMENSION || col >= CARGO_GRID_DIMENSION) return null;
+    if (row < 0 || col < 0 || row >= CARGO_GRID_ROWS || col >= CARGO_GRID_COLS) return null;
     return { row, col };
   }, []);
 
@@ -502,11 +506,11 @@ export default function CargoGridBoard({
     <View
       ref={gridRef}
       onLayout={handleGridLayout}
-      style={[styles.gridFrame, { width: CARGO_GRID_FRAME_SIZE, height: CARGO_GRID_FRAME_SIZE }]}
+      style={[styles.gridFrame, { width: CARGO_GRID_FRAME_WIDTH, height: CARGO_GRID_FRAME_HEIGHT }]}
     >
       <View style={styles.cellsLayer}>
-        {Array.from({ length: CARGO_GRID_DIMENSION }, (_, row) =>
-          Array.from({ length: CARGO_GRID_DIMENSION }, (_, col) => {
+        {Array.from({ length: CARGO_GRID_ROWS }, (_, row) =>
+          Array.from({ length: CARGO_GRID_COLS }, (_, col) => {
             const key = `${row},${col}`;
             const occupied = occupiedCells.has(key);
             const isPreview = previewCells.has(key);

@@ -250,7 +250,7 @@ function spectralForBand(nodeId: string, band: SpectralThreatBand): NodeSectorMe
       radialFrequency: 'Unclassified Band // Phase Noise',
       visualSpectrum: 'Indeterminate Geometry',
       occultIndex: 'Unreadable Occult Index',
-      threatProfile: 'UNKNOWN // BREACH BLIND ADVISORY',
+      threatProfile: 'UNKNOWN // BREACH ADVISORY',
       threatBand: 'UNKNOWN',
     },
   };

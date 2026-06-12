@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import type { ImageSourcePropType } from 'react-native';
 import type { CombatGridUnitSnapshot } from '../../utils/combatTelemetryFormat';
@@ -7,9 +7,15 @@ import {
   ARENA_ENEMY_SPRITE_HEIGHT_SHARE,
   ARENA_SPRITE_FRAME_WIDTH,
   BACKLINE_HITBOX,
+  critLabelAnchorAboveHitbox,
   ENEMY_HITBOX_DEBUG,
+  ENEMY_SPRITE_FRAME_HEIGHT,
   FRONTLINE_HITBOX,
+  SOLO_UNIT_SCALE,
 } from './combatEnemyBarLayout';
+import CombatEnemyCritImpact from './CombatEnemyCritImpact';
+import CombatEnemyCritLabel from './CombatEnemyCritLabel';
+import CombatEnemyDissolveEffect from './CombatEnemyDissolveEffect';
 import CombatEnemyHitEffect from './CombatEnemyHitEffect';
 import CombatEnemyPortraitSkia from './CombatEnemyPortraitSkia';
 import CombatSilhouetteShatterEffect from './CombatSilhouetteShatterEffect';
@@ -27,64 +33,107 @@ interface CombatEnemyUnitProps {
   mutedColor: string;
   /** Arena grid: cap sprite height to match player footprint. */
   constrainSpriteHeight?: boolean;
+  /** Slot depth scale — crit label counter-scales to match solo-enemy readout size. */
+  layoutUnitScale?: number;
   onPress?: () => void;
+  onDissolveComplete?: () => void;
 }
 
 export default function CombatEnemyUnit({
   unit,
   targetingActive,
   constrainSpriteHeight = false,
+  layoutUnitScale = 1,
   onPress,
-}: CombatEnemyUnitProps): React.JSX.Element {
+  onDissolveComplete,
+}: CombatEnemyUnitProps): React.JSX.Element | null {
+  const [portraitFrozen, setPortraitFrozen] = useState(false);
+  const handleHitStopChange = useCallback((frozen: boolean) => {
+    setPortraitFrozen(frozen);
+  }, []);
+
   const spriteHeightShare =
     `${Math.round(ARENA_ENEMY_SPRITE_HEIGHT_SHARE * 100)}%` as `${number}%`;
   const fractured = unit.isFractured;
+  const dissolving = unit.isDead && (unit.dissolveSeq ?? 0) > 0 && !unit.dissolveHidden;
   const portraitGlow = unit.portraitGlow ?? (unit.isSelected ? 'player-selected' : 'none');
   const isBackline = laneForSlot(unit.slot) === 'BACKLINE';
   const hitboxLayout = isBackline ? BACKLINE_HITBOX : FRONTLINE_HITBOX;
+  const critLabelAnchor = critLabelAnchorAboveHitbox(hitboxLayout);
+  const critLabelScale = layoutUnitScale > 0 ? SOLO_UNIT_SCALE / layoutUnitScale : 1;
+
+  if (unit.dissolveHidden) return null;
 
   return (
-    <View
-      style={[
-        styles.imageShell,
-        constrainSpriteHeight ? styles.imageShellArena : styles.imageShellCompact,
-        constrainSpriteHeight ? { height: spriteHeightShare, maxHeight: spriteHeightShare } : null,
-        {
-          opacity: unit.isBlocked && targetingActive && !unit.isHookValid ? 0.5 : 1,
-        },
-      ]}
-      pointerEvents="box-none"
+    <CombatEnemyDissolveEffect
+      dissolveSeq={unit.dissolveSeq}
+      active={dissolving}
+      onComplete={onDissolveComplete}
     >
-      <View style={styles.portraitLayer} pointerEvents="none">
-        <CombatEnemyHitEffect hitFlashSeq={unit.hitFlashSeq} portraitSource={unit.portraitSource}>
-          <CombatSilhouetteShatterEffect trigger={fractured} portraitSource={unit.portraitSource}>
-            <CombatEnemyPortraitSkia
-              source={unit.portraitSource}
-              glow={portraitGlow}
-              anim={unit.portraitAnim ?? 'none'}
-            />
-          </CombatSilhouetteShatterEffect>
-        </CombatEnemyHitEffect>
-      </View>
+      <View
+        style={[
+          styles.imageShell,
+          constrainSpriteHeight ? styles.imageShellArena : styles.imageShellCompact,
+          constrainSpriteHeight ? { height: spriteHeightShare, maxHeight: spriteHeightShare } : null,
+          {
+            opacity: unit.isBlocked && targetingActive && !unit.isHookValid ? 0.5 : 1,
+          },
+        ]}
+        pointerEvents={dissolving ? 'none' : 'box-none'}
+      >
+        <View style={styles.spriteFrame} pointerEvents="none">
+          <CombatEnemyCritImpact
+            critImpactSeq={unit.critImpactSeq}
+            channel={unit.critImpactChannel}
+            onHitStopChange={handleHitStopChange}
+          >
+            <CombatEnemyHitEffect hitFlashSeq={unit.hitFlashSeq} portraitSource={unit.portraitSource}>
+              <CombatSilhouetteShatterEffect trigger={fractured} portraitSource={unit.portraitSource}>
+                <CombatEnemyPortraitSkia
+                  source={unit.portraitSource}
+                  glow={portraitGlow}
+                  anim={unit.portraitAnim ?? 'none'}
+                  frozen={portraitFrozen}
+                  intentShimmer={unit.intentShimmer ?? null}
+                />
+              </CombatSilhouetteShatterEffect>
+            </CombatEnemyHitEffect>
+          </CombatEnemyCritImpact>
+        </View>
 
-      {onPress ? (
-        <Pressable
-          onPress={onPress}
+        <View
           style={[
-            styles.hitbox,
-            {
-              width: hitboxLayout.width,
-              height: hitboxLayout.height,
-            },
-            'bottom' in hitboxLayout
-              ? { bottom: hitboxLayout.bottom }
-              : { top: hitboxLayout.top },
-            ENEMY_HITBOX_DEBUG ? styles.hitboxDebug : null,
+            styles.critLabelAnchor,
+            critLabelAnchor,
+            { transform: [{ scale: critLabelScale }] },
           ]}
-          pointerEvents="auto"
-        />
-      ) : null}
-    </View>
+          pointerEvents="none"
+        >
+          <CombatEnemyCritLabel
+            critImpactSeq={unit.critImpactSeq}
+            channel={unit.critImpactChannel}
+          />
+        </View>
+
+        {onPress && !dissolving ? (
+          <Pressable
+            onPress={onPress}
+            style={[
+              styles.hitbox,
+              {
+                width: hitboxLayout.width,
+                height: hitboxLayout.height,
+              },
+              'bottom' in hitboxLayout
+                ? { bottom: hitboxLayout.bottom }
+                : { top: hitboxLayout.top },
+              ENEMY_HITBOX_DEBUG ? styles.hitboxDebug : null,
+            ]}
+            pointerEvents="auto"
+          />
+        ) : null}
+      </View>
+    </CombatEnemyDissolveEffect>
   );
 }
 
@@ -105,9 +154,21 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     flexShrink: 1,
   },
-  portraitLayer: {
-    ...StyleSheet.absoluteFillObject,
+  spriteFrame: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: ENEMY_SPRITE_FRAME_HEIGHT,
+    overflow: 'hidden',
     zIndex: 1,
+  },
+  critLabelAnchor: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 12,
   },
   hitbox: {
     position: 'absolute',

@@ -2,10 +2,6 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { calculateCargoMarketValue, calculateGridOccupancy } from '../data/cargoGridEngine';
 import CargoGridBoard, { CARGO_GRID_FRAME_SIZE } from './CargoGridBoard';
-import {
-  CARGO_OCCUPANCY_RESONANCE_THRESHOLD,
-  CARGO_RESONANCE_MULTIPLIER,
-} from '../types/cargoGrid';
 import type { CargoRunState } from '../types/cargoGrid';
 import type { TerminalTheme } from '../types/theme';
 
@@ -28,9 +24,7 @@ export default function CargoPackingPanel({
 }: CargoPackingPanelProps): React.JSX.Element {
   const occupancy = calculateGridOccupancy(cargo);
   const occupancyPct = Math.round(occupancy * 100);
-  const thresholdPct = Math.round(CARGO_OCCUPANCY_RESONANCE_THRESHOLD * 100);
   const cargoValue = calculateCargoMarketValue(cargo);
-  const resonanceElevated = occupancy > CARGO_OCCUPANCY_RESONANCE_THRESHOLD;
   const accent = accentColor ?? '#00ff33';
 
   return (
@@ -43,20 +37,6 @@ export default function CargoPackingPanel({
           <Text style={[styles.statsLine, { color: theme.primaryColor }]}>
             {`OCCUPANCY ${occupancyPct}% // VALUE ${cargoValue}`}
           </Text>
-          {resonanceElevated ? (
-            <Text style={[styles.statsWarn, { color: accent }]}>
-              {`RESONANCE ×${CARGO_RESONANCE_MULTIPLIER} ACTIVE — grid above ${thresholdPct}%`}
-            </Text>
-          ) : (
-            <Text style={[styles.statsHint, { color: theme.mutedColor }]}>
-              {`Pack above ${thresholdPct}% for ×${CARGO_RESONANCE_MULTIPLIER} resonance per node`}
-            </Text>
-          )}
-          {cargo.dataBleedActive ? (
-            <Text style={[styles.statsWarn, { color: '#ff6644' }]}>
-              DATA_BLEED — cargo value erodes each cleared node
-            </Text>
-          ) : null}
         </View>
         <CargoGridBoard
         cargo={cargo}

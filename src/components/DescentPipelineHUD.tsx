@@ -87,7 +87,7 @@ export default function DescentPipelineHUD({
       {!hideLabel ? (
         <View style={styles.headerRow}>
           <Text style={[styles.depthLabel, { color: mutedColor }]}>
-            {`OPEN SECTOR T${sectorTier} // NODE ${nodesCleared}/${MAX_SECTOR_NODES} // RES ${resonancePercent}% // ATT ${attunementCurrent}/${attunementMax}`}
+            {`OPEN SECTOR T${sectorTier} // NODE ${nodesCleared}/${MAX_SECTOR_NODES} // ATT ${attunementCurrent}/${attunementMax}`}
           </Text>
         </View>
       ) : null}

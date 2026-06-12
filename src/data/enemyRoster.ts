@@ -37,6 +37,8 @@ export interface EnemyRosterEntry {
   threatTier: ThreatTier;
   isDisruptor?: boolean;
   elite?: boolean;
+  evadeChance: number;
+  critChance: number;
 }
 
 export const ENEMY_ROSTER: Record<EnemyRosterId, EnemyRosterEntry> = {
@@ -51,6 +53,8 @@ export const ENEMY_ROSTER: Record<EnemyRosterId, EnemyRosterEntry> = {
     kineticArmor: 2,
     occultWards: 0,
     threatTier: 3,
+    evadeChance: 0,
+    critChance: 0.05,
   },
   'gutter-goliath': {
     id: 'gutter-goliath',
@@ -63,6 +67,8 @@ export const ENEMY_ROSTER: Record<EnemyRosterId, EnemyRosterEntry> = {
     kineticArmor: 3,
     occultWards: 0,
     threatTier: 3,
+    evadeChance: 0,
+    critChance: 0.05,
   },
   'echoing-brute': {
     id: 'echoing-brute',
@@ -76,6 +82,8 @@ export const ENEMY_ROSTER: Record<EnemyRosterId, EnemyRosterEntry> = {
     occultWards: 1,
     threatTier: 2,
     elite: true,
+    evadeChance: 0,
+    critChance: 0.05,
   },
   'ley-siren': {
     id: 'ley-siren',
@@ -89,6 +97,8 @@ export const ENEMY_ROSTER: Record<EnemyRosterId, EnemyRosterEntry> = {
     occultWards: 2,
     threatTier: 2,
     isDisruptor: true,
+    evadeChance: 0.10,
+    critChance: 0,
   },
   'ash-weeper': {
     id: 'ash-weeper',
@@ -102,6 +112,8 @@ export const ENEMY_ROSTER: Record<EnemyRosterId, EnemyRosterEntry> = {
     occultWards: 2,
     threatTier: 1,
     isDisruptor: true,
+    evadeChance: 0.10,
+    critChance: 0,
   },
   'miasma-tick-swarm': {
     id: 'miasma-tick-swarm',
@@ -114,6 +126,8 @@ export const ENEMY_ROSTER: Record<EnemyRosterId, EnemyRosterEntry> = {
     kineticArmor: 1,
     occultWards: 0,
     threatTier: 1,
+    evadeChance: 0.15,
+    critChance: 0,
   },
   'fracture-hound': {
     id: 'fracture-hound',
@@ -126,6 +140,8 @@ export const ENEMY_ROSTER: Record<EnemyRosterId, EnemyRosterEntry> = {
     kineticArmor: 1,
     occultWards: 1,
     threatTier: 2,
+    evadeChance: 0.15,
+    critChance: 0.10,
   },
   'null-shade': {
     id: 'null-shade',
@@ -138,6 +154,8 @@ export const ENEMY_ROSTER: Record<EnemyRosterId, EnemyRosterEntry> = {
     kineticArmor: 0,
     occultWards: 2,
     threatTier: 3,
+    evadeChance: 0.15,
+    critChance: 0.10,
   },
   'spatial-glitch': {
     id: 'spatial-glitch',
@@ -151,6 +169,8 @@ export const ENEMY_ROSTER: Record<EnemyRosterId, EnemyRosterEntry> = {
     occultWards: 1,
     threatTier: 3,
     elite: true,
+    evadeChance: 0.15,
+    critChance: 0.15,
   },
   'boss-hollowed-precinct': {
     id: 'boss-hollowed-precinct',
@@ -163,6 +183,8 @@ export const ENEMY_ROSTER: Record<EnemyRosterId, EnemyRosterEntry> = {
     kineticArmor: 3,
     occultWards: 1,
     threatTier: 3,
+    evadeChance: 0,
+    critChance: 0,
   },
   'boss-choir-of-rust': {
     id: 'boss-choir-of-rust',
@@ -175,6 +197,8 @@ export const ENEMY_ROSTER: Record<EnemyRosterId, EnemyRosterEntry> = {
     kineticArmor: 1,
     occultWards: 2,
     threatTier: 3,
+    evadeChance: 0,
+    critChance: 0,
   },
   'boss-primeval-rift-walker': {
     id: 'boss-primeval-rift-walker',
@@ -187,6 +211,8 @@ export const ENEMY_ROSTER: Record<EnemyRosterId, EnemyRosterEntry> = {
     kineticArmor: 2,
     occultWards: 3,
     threatTier: 3,
+    evadeChance: 0,
+    critChance: 0,
   },
 };
 
@@ -279,6 +305,8 @@ export function spawnRosterUnit(
     scale,
     rosterId: entry.id,
     faction: entry.faction,
+    evadeChance: entry.evadeChance,
+    critChance: entry.critChance,
   };
   const withAffinity = applyCorporealHpMultiplier({ ...base, affinity }, affinity);
   const depth = depthFromNodesCleared(nodeIndex);

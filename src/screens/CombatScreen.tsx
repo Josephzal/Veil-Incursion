@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { StyleSheet, View, Dimensions, type ImageSourcePropType } from 'react-native';
+import { Animated, Easing, StyleSheet, View, Dimensions, type ImageSourcePropType } from 'react-native';
 import {
   resolveCombatEnemyPortrait,
   resolvePortraitKeySuffix,
@@ -41,7 +41,8 @@ import {
 } from '../utils/combatTelemetryFormat';
 import { encounterBudgetForDepth } from '../data/combatEncounterBudget';
 import type { CargoItemId } from '../types/cargoGrid';
-import { depthFromNodesCleared } from '../data/districtPacing';
+import { depthFromNodesCleared, isDistrictGateDepth } from '../data/districtPacing';
+import { rollGatekeeperLockedTemplate } from '../data/combatRewardEngine';
 import { shouldGrantAdrenalinePrimerAp } from '../data/boundRequisitionEngine';
 import type { IncursionConsumableUseResult } from '../types/incursionInventory';
 
@@ -120,13 +121,15 @@ export default function CombatScreen(): React.JSX.Element {
     awardRunCredits,
     getSelectedVectorNode,
     beginPostCombatHarvest,
+    grantCombatResourceDrops,
     completeDefendRiftVictory,
     consumeAdrenalinePrimerAfterCombat,
     isPostCombatBoonBlocked,
   } = useRun();
   const { completeCurrentNode } = useNodeProgression();
-  const { getWeaponCombatStats } = usePlayerAccount();
+  const { getWeaponCombatStats, account, addLockedContainer } = usePlayerAccount();
   const weaponCombatStats = getWeaponCombatStats();
+  const playerCritChanceBonus = account.factionPerks.critChanceBonus;
   const env = activeIncursion.environmentalModifiers;
   const combatEntryStamina =
     env.startingStaminaPenalty > 0 ? 50 : runState.currentStamina;
@@ -145,6 +148,28 @@ export default function CombatScreen(): React.JSX.Element {
   const consumableHandlerRef = useRef<(result: IncursionConsumableUseResult) => void>(() => {});
   const canDeployCargoRef = useRef<() => boolean>(() => false);
   const targetHandlerRef = useRef<(unitId: string) => void>(() => {});
+  const dissolveCompleteRef = useRef<(unitId: string) => void>(() => {});
+  const arenaShakeX = useRef(new Animated.Value(0)).current;
+  const arenaShakeY = useRef(new Animated.Value(0)).current;
+
+  const handlePlayerCritImpact = useCallback(() => {
+    arenaShakeX.setValue(0);
+    arenaShakeY.setValue(0);
+    Animated.parallel([
+      Animated.sequence([
+        Animated.timing(arenaShakeX, { toValue: 22, duration: 40, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        Animated.timing(arenaShakeX, { toValue: -18, duration: 35, useNativeDriver: true }),
+        Animated.timing(arenaShakeX, { toValue: 14, duration: 30, useNativeDriver: true }),
+        Animated.timing(arenaShakeX, { toValue: -8, duration: 28, useNativeDriver: true }),
+        Animated.timing(arenaShakeX, { toValue: 0, duration: 45, useNativeDriver: true }),
+      ]),
+      Animated.sequence([
+        Animated.timing(arenaShakeY, { toValue: -10, duration: 40, useNativeDriver: true }),
+        Animated.timing(arenaShakeY, { toValue: 8, duration: 35, useNativeDriver: true }),
+        Animated.timing(arenaShakeY, { toValue: 0, duration: 70, useNativeDriver: true }),
+      ]),
+    ]).start();
+  }, [arenaShakeX, arenaShakeY]);
 
   const handleSquadUiChange = useCallback((snapshot: CombatSquadUiSnapshot) => {
     setSquadUi(snapshot);
@@ -176,6 +201,14 @@ export default function CombatScreen(): React.JSX.Element {
 
   const registerCanDeployCargoHandler = useCallback((handler: () => boolean) => {
     canDeployCargoRef.current = handler;
+  }, []);
+
+  const registerDissolveCompleteHandler = useCallback((handler: (unitId: string) => void) => {
+    dissolveCompleteRef.current = handler;
+  }, []);
+
+  const handleUnitDissolveComplete = useCallback((unitId: string) => {
+    dissolveCompleteRef.current(unitId);
   }, []);
 
   const handleConsumableUsed = useCallback((result: IncursionConsumableUseResult) => {
@@ -250,7 +283,11 @@ export default function CombatScreen(): React.JSX.Element {
       : effectiveSquadUi.units;
 
     return baseUnits
-      .filter((unit) => unit.currentHp > 0 && unit.maxHp > 0)
+      .filter((unit) => {
+        if (unit.dissolveHidden) return false;
+        if (unit.currentHp > 0 && unit.maxHp > 0) return true;
+        return (unit.dissolveSeq ?? 0) > 0;
+      })
       .map((unit) => {
         const live = liveById.get(unit.unitId);
         const merged = live ? { ...unit, ...live } : unit;
@@ -267,8 +304,7 @@ export default function CombatScreen(): React.JSX.Element {
             nodeType,
           ),
         };
-      })
-      .filter((unit) => !unit.isDead);
+      });
   }, [bootstrappedSquadUi.units, effectiveSquadUi.units, nodeType]);
 
   const showEnemySquadPanel = gridUnits.length > 0 && resolutionOutcome === null;
@@ -279,6 +315,7 @@ export default function CombatScreen(): React.JSX.Element {
       units={gridUnits}
       targetingActive={effectiveSquadUi.targetingActive}
       onUnitPress={handleEnemyUnitPress}
+      onUnitDissolveComplete={handleUnitDissolveComplete}
       accentColor={theme.primaryColor}
       mutedColor={theme.mutedColor}
     />
@@ -353,6 +390,21 @@ export default function CombatScreen(): React.JSX.Element {
         : 'hostile eradicated';
 
     awardRunCredits(creditReward, creditReason);
+    const isGatekeeper = isBossEncounter && isDistrictGateDepth(depth);
+    if (isGatekeeper) {
+      const lockedTemplate = rollGatekeeperLockedTemplate(
+        `gatekeeper:${depth}:${runState.pendingEnemy?.rosterId ?? 'unknown'}`,
+      );
+      addLockedContainer(lockedTemplate);
+      appendRunLog('>> GATEKEEPER SALVAGE — sealed container routed to Safehouse decryption vault.');
+    }
+    grantCombatResourceDrops({
+      depth,
+      isElite: nodeType === 'ELITE_COMBAT',
+      isGatekeeper,
+      rosterId: runState.pendingEnemy?.rosterId,
+      seed: `combat:${depth}:${nodeType ?? 'std'}:${runState.pendingEnemy?.rosterId ?? 'unknown'}`,
+    });
     if (adrenalinePrimerBonusAp > 0) {
       consumeAdrenalinePrimerAfterCombat();
     }
@@ -395,7 +447,10 @@ export default function CombatScreen(): React.JSX.Element {
     activeIncursion.defendRiftActive,
     adrenalinePrimerBonusAp,
     awardRunCredits,
+    grantCombatResourceDrops,
     consumeAdrenalinePrimerAfterCombat,
+    addLockedContainer,
+    appendRunLog,
     isPostCombatBoonBlocked,
     completeDefendRiftVictory,
     clearPendingAmbush,
@@ -430,7 +485,17 @@ export default function CombatScreen(): React.JSX.Element {
           style={styles.combatRoot}
         >
           <View style={styles.body}>
-            <View style={styles.arenaStage}>
+            <Animated.View
+              style={[
+                styles.arenaStage,
+                {
+                  transform: [
+                    { translateX: arenaShakeX },
+                    { translateY: arenaShakeY },
+                  ],
+                },
+              ]}
+            >
               {selectedEnemyUnit ? (
                 <View style={styles.enemyIntelOverlay} pointerEvents="none">
                   <CombatSelectedEnemyIntel
@@ -466,7 +531,7 @@ export default function CombatScreen(): React.JSX.Element {
                   <CombatOperativeHud telemetry={operativeTelemetry} deckAligned />
                 </View>
               ) : null}
-            </View>
+            </Animated.View>
 
             <View style={styles.combatMiddle}>
               <TacticalCombatHub
@@ -475,6 +540,7 @@ export default function CombatScreen(): React.JSX.Element {
                 apparitionRef={apparitionRef}
                 playerViewportRef={playerViewportRef}
                 registerKillResolver={registerKillResolver}
+                registerDissolveCompleteHandler={registerDissolveCompleteHandler}
                 registerHealHandler={registerHealHandler}
                 registerConsumableHandler={registerConsumableHandler}
                 registerCanDeployCargoHandler={registerCanDeployCargoHandler}
@@ -508,6 +574,9 @@ export default function CombatScreen(): React.JSX.Element {
                 leyLineMutations={activeIncursion.leyLineMutations}
                 spectralSaltActive={spectralSaltActive}
                 firstTurnBonusAp={adrenalinePrimerBonusAp}
+                equippedBlueprintId={account.equippedBlueprintId}
+                playerCritChanceBonus={playerCritChanceBonus}
+                onPlayerCritImpact={handlePlayerCritImpact}
               />
             </View>
           </View>

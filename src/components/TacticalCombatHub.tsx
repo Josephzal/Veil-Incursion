@@ -20,8 +20,19 @@ import { bossStrikeDamage, rollBossIntent, shouldShiftBossPhase } from '../data/
 import { resolveEnemyThreatTier } from '../data/enemyRoster';
 import { COMBAT_ACTION, ENEMY_ABYSSAL_SIPHON_REQUEST, EnemyCombatProfile, EnemyIntent } from '../types/run';
 import type { IncursionConsumableUseResult } from '../types/incursionInventory';
-import type { AegisAbilityId, AegisLoadout } from '../types/aegisCombat';
-import { DEFAULT_AEGIS_LOADOUT, PLAYER_ACTION_POINTS_PER_TURN } from '../types/aegisCombat';
+import {
+  applyCritMultiplier,
+  resolveEnemyAttackHit,
+  resolvePlayerAttackHit,
+} from '../data/combatChanceEngine';
+import {
+  COMBAT_CHANCE,
+  createDefaultCombatChanceState,
+  type CombatChanceEncounterState,
+  type CombatFeedbackEvent,
+} from '../types/combatChance';
+import CombatFloatingFeedback from './combat/CombatFloatingFeedback';
+import { DEFAULT_AEGIS_LOADOUT, PLAYER_ACTION_POINTS_PER_TURN, type AegisAbilityId, type AegisLoadout } from '../types/aegisCombat';
 import { getAbilityDefinition } from '../data/aegisAbilities';
 import { COMBAT_CONSUMABLE_AP_COST, resolveHostileHpHit } from '../data/aegisAbilityResolver';
 import {
@@ -72,6 +83,19 @@ import {
   recoverFromFracture,
   stackDoomedTag,
 } from '../data/combatFractureEngine';
+import type { BlueprintId } from '../types/equipmentBlueprint';
+import type { CombatSessionExtras } from '../types/combatHooks';
+import { createDefaultCombatSessionExtras } from '../types/combatHooks';
+import {
+  getEnemyAccuracyPenalty,
+  getEnemyDamageTakenMultiplier,
+  patchEnemyTagsFromExtras,
+  runOnCombatStartHooks,
+  runOnFireHooks,
+  runOnHitHooks,
+  tickCombatSessionExtras,
+  applyFrontlineBlinded,
+} from '../data/combatHookRunner';
 
 import { ResolvedWeaponCombatStats } from '../data/inventory';
 import { BossRuntimeProfile, EnvironmentalModifiers } from '../types/game';
@@ -110,6 +134,7 @@ import {
   isEnemySiphonIntent,
   type EnemyPortraitAnim,
   type EnemyPortraitGlow,
+  type EnemyIntentShimmer,
   getEnemyDeckStrikeVariant,
   GAUGE_ABYSSAL,
   GAUGE_SOUL_ANCHOR,
@@ -131,6 +156,7 @@ import {
 } from '../utils/parryCollision';
 
 const TELEMETRY_DIVIDER = 'rgba(139, 92, 246, 0.2)';
+const ENEMY_TO_PLAYER_DAMAGE_MULTIPLIER = 0.9;
 
 const { width } = Dimensions.get('window');
 
@@ -159,6 +185,8 @@ interface TacticalCombatHubProps {
   playerViewportRef?: RefObject<CombatPlayerViewportRef | null>;
   /** Registers callback invoked after eradication dissolve completes (victory). */
   registerKillResolver?: (resolver: () => void) => void;
+  /** Registers callback when a hostile finishes its dissolve VFX. */
+  registerDissolveCompleteHandler?: (handler: (unitId: string) => void) => void;
   /** Registers callback to apply mid-combat healing from incursion consumables. */
   registerHealHandler?: (handler: (amount: number) => void) => void;
   /** Registers callback when a field consumable is deployed during combat. */
@@ -191,6 +219,15 @@ interface TacticalCombatHubProps {
   spectralSaltActive?: boolean;
   /** Bound requisition first-turn AP bonus (Adrenaline Primer). */
   firstTurnBonusAp?: number;
+  /** Equipped class weapon blueprint — claymore / pulse rifle / hex hooks. */
+  equippedBlueprintId?: BlueprintId | null;
+  /** Faction passive crit bonus (e.g. Solaris +10%). */
+  playerCritChanceBonus?: number;
+  /** Arena camera shake + global crit hooks (CombatScreen). */
+  onPlayerCritImpact?: (payload: {
+    unitId: string;
+    channel: 'KINETIC' | 'OCCULT' | 'TRUE';
+  }) => void;
 }
 interface SliceLineConfig {
   id: number;
@@ -218,6 +255,7 @@ export default function TacticalCombatHub({
   apparitionRef,
   playerViewportRef,
   registerKillResolver,
+  registerDissolveCompleteHandler,
   registerHealHandler,
   registerConsumableHandler,
   registerCanDeployCargoHandler,
@@ -240,6 +278,9 @@ export default function TacticalCombatHub({
   combatDistrict = 1,
   spectralSaltActive = false,
   firstTurnBonusAp = 0,
+  equippedBlueprintId = null,
+  playerCritChanceBonus = 0,
+  onPlayerCritImpact,
 }: TacticalCombatHubProps): React.JSX.Element {
   const env = environmentalModifiers ?? {
     isEnemyPhaseShrouded: false,
@@ -304,6 +345,13 @@ export default function TacticalCombatHub({
   const [deckStrikeOverlay, setDeckStrikeOverlay] = useState<EnemyDeckStrikeVariant | null>(null);
 
   const operativeHpRef = useRef(initialOperativeHp);
+  const sessionExtrasRef = useRef<CombatSessionExtras>(createDefaultCombatSessionExtras());
+  const combatChanceRef = useRef<CombatChanceEncounterState>(createDefaultCombatChanceState());
+  const [combatFeedback, setCombatFeedback] = useState<{
+    nonce: number;
+    event: CombatFeedbackEvent;
+  } | null>(null);
+  const feedbackNonceRef = useRef(0);
   const staminaRef = useRef(initialStamina);
   const abyssalRef = useRef(startingAbyssalReservePercent);
   const skipRegenRef = useRef(false);
@@ -316,6 +364,9 @@ export default function TacticalCombatHub({
   const preAppliedHpStrikeRef = useRef(0);
   const enemyStunPendingRef = useRef(false);
   const hitFlashSeqRef = useRef<Record<string, number>>({});
+  const critImpactSeqRef = useRef<Record<string, { seq: number; channel: 'KINETIC' | 'OCCULT' | 'TRUE' }>>({});
+  const dissolveSeqRef = useRef<Record<string, number>>({});
+  const dissolvedHiddenRef = useRef<Set<string>>(new Set());
   const survivedEnemyTurnsRef = useRef(0);
   const isPlayerTurnRef = useRef(isPlayerTurn);
   const resolutionRef = useRef<'VICTORY' | 'DEFEAT' | null>(null);
@@ -397,6 +448,9 @@ export default function TacticalCombatHub({
     if (clamped === 0) clamped = tryPreventExhaustionBreak(0);
     staminaRef.current = clamped;
     setStamina(clamped);
+    if (clamped > 0) {
+      combatChanceRef.current.momentumShiftEvadeDisabled = false;
+    }
     return clamped;
   };
 
@@ -473,6 +527,20 @@ export default function TacticalCombatHub({
     return 'none';
   };
 
+  const resolveIntentShimmer = (unitId: string, u: EnemyCombatProfile): EnemyIntentShimmer | null => {
+    if (u.evadeActive || u.intent === 'EVADE') return 'evade';
+    if (
+      u.intent === 'FORTIFY'
+      && !isPlayerTurnRef.current
+      && cycleRef.current === 'TEXT_COMBAT'
+      && enemyActionStageRef.current != null
+      && resolveActingEnemyId() === unitId
+    ) {
+      return 'fortify';
+    }
+    return null;
+  };
+
   const publishSquadUi = (nextSquad: EnemyCombatProfile[]) => {
     if (!onSquadUiChange) return;
     if (nextSquad.length === 0) return;
@@ -531,10 +599,54 @@ export default function TacticalCombatHub({
           isFractured: isEnemyFractured(u),
           portraitGlow: resolvePortraitGlow(unitId, u.intent),
           portraitAnim: resolvePortraitAnim(unitId, u.intent),
+          intentShimmer: resolveIntentShimmer(unitId, u),
+          critImpactSeq: critImpactSeqRef.current[unitId]?.seq ?? 0,
+          critImpactChannel: critImpactSeqRef.current[unitId]?.channel,
           hitFlashSeq: hitFlashSeqRef.current[unitId] ?? 0,
+          dissolveSeq: dissolveSeqRef.current[unitId] ?? 0,
+          dissolveHidden: dissolvedHiddenRef.current.has(unitId),
         };
       }),
     });
+  };
+
+  const allDeadUnitsDissolved = (squad: EnemyCombatProfile[]) =>
+    squad.every((u) => {
+      if (isUnitAlive(u)) return true;
+      const id = u.unitId ?? u.designation;
+      return dissolvedHiddenRef.current.has(id);
+    });
+
+  const handleUnitDissolveComplete = (unitId: string) => {
+    dissolvedHiddenRef.current.add(unitId);
+    publishSquadUi(squadRef.current);
+    if (allUnitsDefeated(squadRef.current) && allDeadUnitsDissolved(squadRef.current)) {
+      resolveVictoryRef.current();
+    }
+  };
+
+  const handleUnitDissolveCompleteRef = useRef(handleUnitDissolveComplete);
+  handleUnitDissolveCompleteRef.current = handleUnitDissolveComplete;
+
+  useEffect(() => {
+    registerDissolveCompleteHandler?.((unitId) => handleUnitDissolveCompleteRef.current(unitId));
+  }, [registerDissolveCompleteHandler]);
+
+  const beginDissolveForUnit = (
+    unitId: string,
+    profile: EnemyCombatProfile,
+    hp: number,
+  ) => {
+    if (hp > 0) return;
+    const bump = (id: string) => {
+      dissolveSeqRef.current[id] = (dissolveSeqRef.current[id] ?? 0) + 1;
+    };
+    bump(unitId);
+    if (profile.sharedBossPool) {
+      squadRef.current.forEach((unit) => {
+        if (unit.unitId && unit.sharedBossPool) bump(unit.unitId);
+      });
+    }
   };
 
   const focusEnemy = (unit: EnemyCombatProfile | null) => {
@@ -545,13 +657,14 @@ export default function TacticalCombatHub({
   };
 
   const syncSquad = (next: EnemyCombatProfile[]) => {
-    squadRef.current = next;
-    setSquad(next);
+    const tagged = next.map((unit) => patchEnemyTagsFromExtras(unit, sessionExtrasRef.current));
+    squadRef.current = tagged;
+    setSquad(tagged);
     const focusId = focusedUnitIdRef.current ?? selectedTargetIdRef.current;
-    const focused = (focusId ? getUnitById(next, focusId) : null) ?? primaryAliveUnit(next);
+    const focused = (focusId ? getUnitById(tagged, focusId) : null) ?? primaryAliveUnit(tagged);
     if (focused?.unitId) focusedUnitIdRef.current = focused.unitId;
     focusEnemy(focused);
-    publishSquadUi(next);
+    publishSquadUi(tagged);
   };
 
   const patchUnit = (unitId: string, patch: Partial<EnemyCombatProfile>) => {
@@ -590,9 +703,13 @@ export default function TacticalCombatHub({
     setEnemy(unit);
     publishSquadUi(squadRef.current);
   }, [selectedAbility, log]);
-  const chargeAr = (amt: number, targetFractured = false) => {
-    const mult = targetFractured ? mutationModsRef.current.shatterPointArMultiplier : 1;
-    const scaled = Math.floor(amt * mult);
+  const emitCombatFeedback = useCallback((event: CombatFeedbackEvent) => {
+    feedbackNonceRef.current += 1;
+    setCombatFeedback({ nonce: feedbackNonceRef.current, event });
+  }, []);
+
+  const chargeAr = (amt: number, _targetFractured = false) => {
+    const scaled = amt;
     if (hasMutation(leyLineMutations, 'UMBRAL_CARAPACE') && scaled > 0) {
       const heal = Math.floor(maxSoulAnchor * 0.02 * mutationModsRef.current.healMultiplier);
       if (heal > 0) {
@@ -824,6 +941,19 @@ export default function TacticalCombatHub({
         });
       }
     }
+    if (result.clearPlayerDebuffs && result.clearPlayerDebuffs.length > 0) {
+      sessionExtrasRef.current.playerDebuffs = sessionExtrasRef.current.playerDebuffs.filter(
+        (id) => !result.clearPlayerDebuffs!.includes(id),
+      );
+    }
+    if (result.frontlineBlindTurns && result.frontlineBlindTurns > 0) {
+      const blindResult = applyFrontlineBlinded(
+        squadRef.current,
+        sessionExtrasRef.current,
+        result.frontlineBlindTurns,
+      );
+      blindResult.logLines.forEach((line) => log(line));
+    }
     if (result.clearDebuffs) {
       const targetId = selectedTargetIdRef.current ?? primaryAliveUnit(squadRef.current)?.unitId;
       const unit = targetId ? getUnitById(squadRef.current, targetId) : null;
@@ -900,13 +1030,16 @@ export default function TacticalCombatHub({
     Vibration.vibrate([0, 32, 48, 28]);
   };
 
-  const commitPendingPlayerDamage = (unblockable = false, msg?: string) => {
+  const commitPendingPlayerDamage = (unblockable = false, msg?: string, attacker?: EnemyCombatProfile) => {
     const pending = preAppliedHpStrikeRef.current > 0
       ? preAppliedHpStrikeRef.current
       : pendingDmgRef.current;
     if (pending <= 0) return false;
     preAppliedHpStrikeRef.current = 0;
-    hurtPlayer(pending, unblockable || pendingUnblockRef.current, msg, { skipStrikeFx: arenaLayout });
+    hurtPlayer(pending, unblockable || pendingUnblockRef.current, msg, {
+      skipStrikeFx: arenaLayout,
+      attacker: attacker ?? enemyRef.current ?? undefined,
+    });
     return true;
   };
 
@@ -914,7 +1047,12 @@ export default function TacticalCombatHub({
     raw: number,
     unblockable = false,
     msg?: string,
-    options?: { skipStrikeFx?: boolean },
+    options?: {
+      skipStrikeFx?: boolean;
+      attacker?: EnemyCombatProfile;
+      rollEvade?: boolean;
+      rollCrit?: boolean;
+    },
   ) => {
     if (mutationEncounterRef.current.spallWeaveActive && raw > 0) {
       mutationEncounterRef.current.spallWeaveActive = false;
@@ -927,6 +1065,16 @@ export default function TacticalCombatHub({
       return;
     }
     let dmg = raw;
+    if (options?.attacker && raw > 0) {
+      dmg = Math.max(1, Math.floor(raw * ENEMY_TO_PLAYER_DAMAGE_MULTIPLIER));
+    }
+    const extras = sessionExtrasRef.current;
+    if (extras.playerShield > 0 && dmg > 0) {
+      const absorbed = Math.min(extras.playerShield, dmg);
+      extras.playerShield -= absorbed;
+      dmg -= absorbed;
+      log(`[SHIELD] >> ${absorbed} damage absorbed (${extras.playerShield} remaining).`);
+    }
     if (!unblockable && abyssalWardRef.current) {
       dmg = Math.floor(dmg * (1 - COMBAT_ACTION.ABYSSAL_WARD_BLOCK_PCT));
       abyssalWardRef.current = false;
@@ -934,7 +1082,46 @@ export default function TacticalCombatHub({
       const attacker = enemyRef.current;
       if (attacker) markAttackerDoomed(attacker);
     }
-    log(msg ?? `>> ENEMY STRIKE — ${dmg} DAMAGE DEALT`);
+    const chanceState = combatChanceRef.current;
+    if (
+      raw > 0
+      && options?.rollEvade !== false
+      && options?.attacker
+    ) {
+      const hit = resolveEnemyAttackHit(
+        {
+          shadowStepEvadeActive: chanceState.shadowStepEvadeActive,
+          gridGhostEvadeStacks: chanceState.gridGhostEvadeStacks,
+          momentumShiftEvadeDisabled: chanceState.momentumShiftEvadeDisabled,
+        },
+        { attacker: options.attacker },
+      );
+      if (hit.evaded) {
+        emitCombatFeedback({ kind: 'PLAYER_EVADE' });
+        playerViewportRef?.current?.triggerEvadeAfterimage();
+        log(msg?.replace(/— \d+.*/, '') ?? `>> ${options.attacker.designation} STRIKES — [ MISS ]`);
+        log('[EVADE] >> Operative afterimage — attack whiffed.');
+        if (hasMutation(leyLineMutations, 'GRID_GHOST')) {
+          const refund = Math.floor(maxStamina * COMBAT_CHANCE.GRID_GHOST_STAMINA_REFUND_PCT);
+          if (refund > 0) applyStamina(staminaRef.current + refund);
+          if (chanceState.gridGhostEvadeStacks < COMBAT_CHANCE.GRID_GHOST_MAX_STACKS) {
+            chanceState.gridGhostEvadeStacks += 1;
+          }
+          log(`[GRID GHOST] >> Evade successful — +${refund} stamina, +5% evade (${chanceState.gridGhostEvadeStacks}/${COMBAT_CHANCE.GRID_GHOST_MAX_STACKS}).`);
+        }
+        return;
+      }
+      if (options.rollCrit !== false && hit.critical) {
+        dmg = applyCritMultiplier(dmg, hit.critMultiplier);
+        emitCombatFeedback({ kind: 'ENEMY_CRIT' });
+        playerViewportRef?.current?.triggerEnemyCritVignette();
+        log(`[CRITICAL WOUND] >> ${options.attacker.designation} — ${dmg} damage.`);
+      } else {
+        log(msg ?? `>> ENEMY STRIKE — ${dmg} DAMAGE DEALT`);
+      }
+    } else {
+      log(msg ?? `>> ENEMY STRIKE — ${dmg} DAMAGE DEALT`);
+    }
     if (dmg > 0) {
       Vibration.vibrate([0, 32, 48, 28]);
       if (arenaLayout && !options?.skipStrikeFx) {
@@ -977,7 +1164,14 @@ export default function TacticalCombatHub({
     raw: number,
     tag: string,
     source?: KineticDamageSource,
-    options?: { channel?: 'KINETIC' | 'OCCULT' | 'TRUE'; fractureGain?: number; targetId?: string },
+    options?: {
+      channel?: 'KINETIC' | 'OCCULT' | 'TRUE';
+      fractureGain?: number;
+      targetId?: string;
+      abilityId?: AegisAbilityId;
+      rollCrit?: boolean;
+      echoHit?: boolean;
+    },
   ): boolean => {
     const targetId = options?.targetId
       ?? selectedTargetIdRef.current
@@ -992,6 +1186,32 @@ export default function TacticalCombatHub({
       return false;
     }
     let working = e;
+    let critical = false;
+    let ignoreDefenses = false;
+    if (source && source !== 'COUNTER' && !options?.echoHit && options?.rollCrit !== false) {
+      const hit = resolvePlayerAttackHit(
+        { defender: working },
+        {
+          abilityId: options?.abilityId,
+          target: working,
+          factionCritBonus: playerCritChanceBonus,
+          hasShatterPoint: hasMutation(leyLineMutations, 'SHATTER_POINT'),
+          guaranteedCrits: combatBuffRef.current.crimsonPactCharges,
+        },
+      );
+      if (hit.evaded) {
+        emitCombatFeedback({ kind: 'ENEMY_EVADE' });
+        apparitionRef?.current?.triggerStatEvade();
+        log(`${tag} >> [ EVADED ] — ${working.designation} phased through the strike.`);
+        return false;
+      }
+      if (hit.ignoreDefenses && combatBuffRef.current.crimsonPactCharges > 0) {
+        combatBuffRef.current.crimsonPactCharges -= 1;
+        log('[CRIMSON PACT] >> Guaranteed critical hit — defenses ignored.');
+      }
+      critical = hit.critical;
+      ignoreDefenses = hit.ignoreDefenses;
+    }
     if (
       source === 'STRIKE'
       && options?.channel === 'KINETIC'
@@ -1002,19 +1222,39 @@ export default function TacticalCombatHub({
         kineticArmor: Math.max(0, (working.kineticArmor ?? 0) - mutationModsRef.current.strikeArmorPierce),
       };
     }
-    const crimsonEmpowered = source != null && combatBuffRef.current.crimsonPactCharges > 0;
     if (mutationEncounterRef.current.masochistBuff && source) {
       mutationEncounterRef.current.masochistBuff = false;
     }
-    if (crimsonEmpowered) {
-      combatBuffRef.current.crimsonPactCharges -= 1;
-      log('[CRIMSON PACT] >> Blood oath empowers strike.');
-    }
-    const fractureGain = (options?.fractureGain ?? 0) * (crimsonEmpowered ? 2 : 1);
+    const fractureGain = options?.fractureGain ?? 0;
     if (fractureGain > 0) {
       working = applyFractureDamage(working, fractureGain);
     }
     let dmg = raw;
+    if (source && equippedBlueprintId) {
+      const fireResult = runOnFireHooks(equippedBlueprintId, {
+        blueprintId: equippedBlueprintId,
+        player: {
+          hp: operativeHpRef.current,
+          maxHp: maxSoulAnchor,
+          shield: sessionExtrasRef.current.playerShield,
+          shieldTurnsRemaining: sessionExtrasRef.current.playerShieldTurnsRemaining,
+          debuffs: [...sessionExtrasRef.current.playerDebuffs],
+        },
+        target: working,
+        squad: squadRef.current,
+        damage: { raw: dmg, channel: options?.channel, multiplier: 1 },
+        source,
+      });
+      fireResult.logLines.forEach((line) => log(line));
+      if (fireResult.playerHpDelta && fireResult.playerHpDelta < 0) {
+        const hpCost = Math.abs(fireResult.playerHpDelta);
+        setOperativeHp((p) => {
+          const n = Math.max(p - hpCost, 0);
+          operativeHpRef.current = n;
+          return n;
+        });
+      }
+    }
     if (
       hasMutation(leyLineMutations, 'FINAL_STAND')
       && playerApRef.current === 1
@@ -1044,20 +1284,45 @@ export default function TacticalCombatHub({
         log(`${tag} >> Kinetic scaling ${dmg} → ${scaled}.${imbueNote}`);
       }
       dmg = scaled;
+      if (
+        equippedBlueprintId === 'riftshot_pulse_rifle'
+        && working.affinity === 'SPECTRAL'
+        && source
+      ) {
+        dmg = Math.floor(dmg * 2);
+        log(`${tag} >> Pulse rifle spectral resonance — 2× (${dmg}).`);
+      }
     }
     if (options?.channel === 'TRUE') {
       dmg = applyDamageWithFractureBonus(dmg, working);
     } else if (options?.channel) {
-      const hit = resolveHostileHpHit(working, dmg, options.channel);
+      const hit = resolveHostileHpHit(working, dmg, options.channel, { ignoreDefenses });
       working = hit.enemy;
       dmg = hit.hpDamage;
     }
     if ((env.enemyDamageReductionPct ?? 0) > 0) {
       dmg = Math.floor(dmg * (1 - (env.enemyDamageReductionPct ?? 0) / 100));
     }
-    if (crimsonEmpowered && dmg > 0) dmg *= 2;
-    if (working.evadeActive) { dmg = Math.floor(dmg * 0.5); log(`${tag} >> EVADE — 50% (${dmg}).`); }
-    else log(`${tag} >> ${dmg} damage.`);
+    if (critical && dmg > 0 && !options?.echoHit) {
+      dmg = applyCritMultiplier(dmg, COMBAT_CHANCE.CRIT_DAMAGE_MULTIPLIER);
+      const critChannel = options?.channel ?? 'KINETIC';
+      if (e.unitId) {
+        const prev = critImpactSeqRef.current[e.unitId]?.seq ?? 0;
+        critImpactSeqRef.current[e.unitId] = { seq: prev + 1, channel: critChannel };
+        publishSquadUi(squadRef.current);
+        onPlayerCritImpact?.({ unitId: e.unitId, channel: critChannel });
+      }
+      apparitionRef?.current?.triggerPlayerCritSunder(critChannel === 'OCCULT' ? 'OCCULT' : 'KINETIC');
+    }
+    dmg = Math.floor(dmg * getEnemyDamageTakenMultiplier(working, sessionExtrasRef.current));
+    if (working.evadeActive && dmg > 0) {
+      dmg = Math.floor(dmg * 0.5);
+      log(`${tag} >> EVADE POSTURE — 50% (${dmg}).`);
+    } else if (critical) {
+      log(`${tag} >> [ CRITICAL ] ${dmg} damage.`);
+    } else {
+      log(`${tag} >> ${dmg} damage.`);
+    }
     if (source && arenaLayout && dmg > 0) {
       playerViewportRef?.current?.triggerAttackLunge();
     }
@@ -1068,14 +1333,33 @@ export default function TacticalCombatHub({
     if (source && dmg > 0 && e.unitId) {
       hitFlashSeqRef.current[e.unitId] = (hitFlashSeqRef.current[e.unitId] ?? 0) + 1;
       Vibration.vibrate(18);
+      if (equippedBlueprintId) {
+        const hitResult = runOnHitHooks(equippedBlueprintId, {
+          blueprintId: equippedBlueprintId,
+          player: {
+            hp: operativeHpRef.current,
+            maxHp: maxSoulAnchor,
+            shield: sessionExtrasRef.current.playerShield,
+            shieldTurnsRemaining: sessionExtrasRef.current.playerShieldTurnsRemaining,
+            debuffs: [...sessionExtrasRef.current.playerDebuffs],
+          },
+          target: working,
+          squad: squadRef.current,
+          damage: { raw: dmg, channel: options?.channel, multiplier: 1 },
+          source,
+        }, sessionExtrasRef.current);
+        hitResult.logLines.forEach((line) => log(line));
+      }
     }
 
     if (working.sharedBossPool && bossRuntimeRef.current) {
+      if (hp <= 0 && e.unitId) beginDissolveForUnit(e.unitId, working, hp);
       bossRuntimeRef.current = { ...bossRuntimeRef.current, currentHp: hp };
       syncSquad(squadRef.current.map((u) =>
         u.sharedBossPool ? { ...u, currentHp: hp } : u,
       ));
     } else {
+      if (hp <= 0 && e.unitId) beginDissolveForUnit(e.unitId, working, hp);
       patchUnit(e.unitId, { ...working, currentHp: hp });
     }
 
@@ -1124,7 +1408,9 @@ export default function TacticalCombatHub({
         setCycleState('TEXT_COMBAT');
       }
       if (arenaLayout) {
-        resolve(true);
+        if (allDeadUnitsDissolved(squadRef.current)) {
+          resolve(true);
+        }
         return true;
       }
       if (viewport) {
@@ -1158,18 +1444,25 @@ export default function TacticalCombatHub({
       log("[EXECUTIONER'S HIGH] >> Physical kill — +1 AP.");
     }
     if (
-      hp > 0
-      && source === 'STRIKE'
-      && mutationModsRef.current.phantomStrikeChance > 0
-      && Math.random() < mutationModsRef.current.phantomStrikeChance
+      critical
+      && !options?.echoHit
+      && source
+      && mutationModsRef.current.phantomCritSplitPct > 0
     ) {
       const echoTarget = aliveUnits(squadRef.current).find((u) => u.unitId !== e.unitId);
       if (echoTarget?.unitId) {
-        log('[PHANTOM STRIKES] >> Echo hit on secondary target.');
-        hurtEnemy(Math.floor(dmg * 0.5), '[PHANTOM]', 'STRIKE', {
-          channel: 'KINETIC',
-          targetId: echoTarget.unitId,
-        });
+        log('[PHANTOM STRIKES] >> Crit void energy splits to secondary target.');
+        hurtEnemy(
+          Math.floor(dmg * mutationModsRef.current.phantomCritSplitPct),
+          '[PHANTOM]',
+          source,
+          {
+            channel: options?.channel ?? 'KINETIC',
+            targetId: echoTarget.unitId,
+            echoHit: true,
+            rollCrit: false,
+          },
+        );
       }
     }
 
@@ -1306,21 +1599,35 @@ export default function TacticalCombatHub({
       : { dmg: e.baseDamage, unblockable: false };
 
   const execIntent = (e: EnemyCombatProfile) => {
+    const blindPenalty = getEnemyAccuracyPenalty(e, sessionExtrasRef.current);
+    if (blindPenalty > 0 && isAttackIntent(e.intent) && Math.random() < blindPenalty) {
+      log(`>> ${e.designation} BLINDED — attack whiffed (−${Math.round(blindPenalty * 100)}% accuracy).`);
+      return;
+    }
     if (e.isBoss && bossRuntimeRef.current) {
       const phase = bossPhaseRef.current;
       if (e.intent === 'OVERDRIVE_DISCHARGE') {
         const dmg = bossStrikeDamage(bossRuntimeRef.current, phase);
         log(`>> ${e.designation} OVERDRIVE DISCHARGE — ${dmg} DMG`);
-        hurtPlayer(dmg, !counterRef.current, `>> OVERDRIVE HIT — ${dmg}`);
+        hurtPlayer(dmg, !counterRef.current, `>> OVERDRIVE HIT — ${dmg}`, { attacker: e, rollCrit: false });
         return;
       }
       const dmg = bossStrikeDamage(bossRuntimeRef.current, phase);
-      hurtPlayer(dmg, false, `>> ${e.designation} STRIKES — ${dmg}`);
+      hurtPlayer(dmg, false, `>> ${e.designation} STRIKES — ${dmg}`, { attacker: e, rollCrit: false });
       return;
     }
     switch (e.intent) {
-      case 'STRIKE': { const { dmg, unblockable } = attackDmg(e); hurtPlayer(dmg, unblockable, `>> ${e.designation} STRIKES — ${dmg}`); break; }
-      case 'WORLD_ENDER': { const { dmg } = attackDmg(e); log(`>> ${e.designation} WORLD-ENDER — ${dmg} UNBLOCKABLE`); hurtPlayer(dmg, true); break; }
+      case 'STRIKE': {
+        const { dmg, unblockable } = attackDmg(e);
+        hurtPlayer(dmg, unblockable, `>> ${e.designation} STRIKES — ${dmg}`, { attacker: e });
+        break;
+      }
+      case 'WORLD_ENDER': {
+        const { dmg } = attackDmg(e);
+        log(`>> ${e.designation} WORLD-ENDER — ${dmg} UNBLOCKABLE`);
+        hurtPlayer(dmg, true, undefined, { attacker: e, rollCrit: false });
+        break;
+      }
       case 'STRIP_STAMINA':
         log(`>> ${e.designation} STRIPS STAMINA (-20).`);
         applyStamina(staminaRef.current - 20);
@@ -1335,7 +1642,12 @@ export default function TacticalCombatHub({
         setAbyssalReserve(nextAbyssal);
         break;
       }
-      case 'EVADE': log(`>> ${e.designation} EVADE posture — strikes deal 50%.`); break;
+      case 'EVADE':
+        log(`>> ${e.designation} EVADE posture — strikes deal 50%.`);
+        break;
+      case 'FORTIFY':
+        log(`>> ${e.designation} FORTIFY — kinetic shell hardened.`);
+        break;
       case 'CHARGE': log(`>> ${e.designation} CHARGING world-ender (${e.chargeTurns + 1}/3).`); break;
       default: break;
     }
@@ -1372,6 +1684,11 @@ export default function TacticalCombatHub({
 
   const startPlayerTurn = (_e: EnemyCombatProfile) => {
     if (isCombatTerminal()) return;
+    tickCombatSessionExtras(sessionExtrasRef.current);
+    combatChanceRef.current.shadowStepEvadeActive = false;
+    if (staminaRef.current > 0) {
+      combatChanceRef.current.momentumShiftEvadeDisabled = false;
+    }
     setCounterPrepActive(false);
     counterRef.current = false;
     wraithParryRef.current = false;
@@ -1383,15 +1700,10 @@ export default function TacticalCombatHub({
       mutationEncounterRef.current.flawlessConduitPending = false;
       log('[FLAWLESS CONDUIT] >> Perfect parry — +1 AP this turn.');
     }
-    if (mutationEncounterRef.current.gridGhostPending) {
-      combatBuffRef.current.bonusApThisTurn += 1;
-      mutationEncounterRef.current.gridGhostPending = false;
-      log('[GRID GHOST] >> Perfect defense — +1 AP this turn.');
-    }
     if (mutationEncounterRef.current.momentumShiftPending) {
       combatBuffRef.current.bonusApThisTurn += 1;
       mutationEncounterRef.current.momentumShiftPending = false;
-      log('[MOMENTUM SHIFT] >> Zero stamina end — +1 AP this turn.');
+      log('[MOMENTUM SHIFT] >> Zero stamina end — +1 AP this turn. Evade disabled until stamina returns.');
     }
     if (mutationEncounterRef.current.bloodTitheCooldown > 0) {
       mutationEncounterRef.current.bloodTitheCooldown -= 1;
@@ -1452,7 +1764,7 @@ export default function TacticalCombatHub({
     setDeckStrikeOverlay(null);
     if (countering && openParryWindow(currentEnemy, true)) return;
     if (!countering && openParryWindow(currentEnemy, false)) return;
-    if (!commitPendingPlayerDamage()) {
+    if (!commitPendingPlayerDamage(false, undefined, currentEnemy)) {
       execIntent(currentEnemy);
     }
     if (operativeHpRef.current <= 0) return;
@@ -1537,6 +1849,7 @@ export default function TacticalCombatHub({
 
   const passToEnemy = (countering = false) => {
     if (isCombatTerminal()) return;
+    tickCombatSessionExtras(sessionExtrasRef.current);
     setSelectedAbility(null);
     clearEnemyTurnTimers();
     counteringEnemyRef.current = countering;
@@ -1585,6 +1898,20 @@ export default function TacticalCombatHub({
     threatBudgetRef.current = threatBudget
       ?? (initialSquad.length >= 3 ? THREAT_BUDGET_ELITE : THREAT_BUDGET_STANDARD);
     syncSquad(initialSquad);
+    if (equippedBlueprintId) {
+      const startHooks = runOnCombatStartHooks(equippedBlueprintId, {
+        blueprintId: equippedBlueprintId,
+        player: {
+          hp: initialOperativeHp,
+          maxHp: maxSoulAnchor,
+          shield: 0,
+          shieldTurnsRemaining: 0,
+          debuffs: [],
+        },
+        squad: initialSquad,
+      }, sessionExtrasRef.current);
+      startHooks.logLines.forEach((line) => log(line));
+    }
     const defaultTarget = nextDefaultTarget(initialSquad);
     if (defaultTarget) selectTarget(defaultTarget);
     operativeHpRef.current = initialOperativeHp; staminaRef.current = initialStamina;
@@ -1630,6 +1957,8 @@ export default function TacticalCombatHub({
       corruptedBloodUnits: new Set<string>(),
       bloodForTimeUsed: false,
     };
+    sessionExtrasRef.current = createDefaultCombatSessionExtras();
+    combatChanceRef.current = createDefaultCombatChanceState();
     const entryAp = PLAYER_ACTION_POINTS_PER_TURN + Math.max(0, firstTurnBonusAp);
     playerApRef.current = entryAp;
     setPlayerActionPoints(entryAp);
@@ -1730,7 +2059,11 @@ export default function TacticalCombatHub({
         }
         const occult = Math.max(8, Math.floor(strikeStats.strikeDamage * 0.85));
         chargeAr(20);
-        const eradicated = hurtEnemy(occult, '[VEIL-PIERCER]', 'STRIKE', { channel: 'OCCULT', fractureGain: 15 });
+        const eradicated = hurtEnemy(occult, '[VEIL-PIERCER]', 'STRIKE', {
+          channel: 'OCCULT',
+          fractureGain: 15,
+          abilityId: 'VEIL_PIERCER',
+        });
         if (eradicated) return;
         break;
       }
@@ -1839,6 +2172,9 @@ export default function TacticalCombatHub({
           },
           mutationMods: mutationModsRef.current,
           bloodTitheCooldown: mutationEncounterRef.current.bloodTitheCooldown,
+          setShadowStepEvadeActive: (active) => {
+            combatChanceRef.current.shadowStepEvadeActive = active;
+          },
         });
         if (abilityId === 'RUIN' && result.ok && mutationModsRef.current.ruinDotFracture > 0) {
           for (const unit of aliveUnits(squadRef.current)) {
@@ -1868,14 +2204,9 @@ export default function TacticalCombatHub({
 
   const onEndTurn = () => {
     if (cycleState !== 'TEXT_COMBAT' || !isPlayerTurn) return;
-    if (
-      hasMutation(leyLineMutations, 'GRID_GHOST')
-      && !mutationEncounterRef.current.damageTakenThisTurn
-    ) {
-      mutationEncounterRef.current.gridGhostPending = true;
-    }
     if (hasMutation(leyLineMutations, 'MOMENTUM_SHIFT') && staminaRef.current === 0) {
       mutationEncounterRef.current.momentumShiftPending = true;
+      combatChanceRef.current.momentumShiftEvadeDisabled = true;
     }
     passToEnemy(wraithParryRef.current);
   };
@@ -1982,7 +2313,7 @@ export default function TacticalCombatHub({
       } else {
         const cd = Math.floor(COMBAT_ACTION.COUNTER_DAMAGE * (1 + parryMultiplierBonus));
         log(`[PERFECT COUNTER] >> Parry locked — ${cd} retaliation damage.`);
-        killed = hurtEnemy(cd, '[COUNTER HIT]', 'COUNTER');
+        killed = hurtEnemy(cd, '[COUNTER HIT]', 'COUNTER', { rollCrit: false });
       }
       if (hasMutation(leyLineMutations, 'PERFECTED_FORM')) {
         const heal = Math.floor(maxSoulAnchor * 0.1 * mutationModsRef.current.healMultiplier);
@@ -2679,6 +3010,11 @@ export default function TacticalCombatHub({
         </View>
         <View style={styles.combatOverlayLayer} pointerEvents="box-none">
           {renderHubOverlays()}
+          <CombatFloatingFeedback
+            key={combatFeedback?.nonce ?? 'idle'}
+            event={combatFeedback?.event ?? null}
+            onComplete={() => setCombatFeedback(null)}
+          />
         </View>
       </View>
     );

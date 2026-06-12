@@ -87,7 +87,7 @@ const UPCOMING_DISTRICT_INTEL: Record<DistrictId, DistrictIntelBrief> = {
     dominantFaction: 'Solaris Cabal',
     factionTag: 'SOLARIS',
     hazardSummary: 'Advanced hostile tactics. Resonance scan gain elevated.',
-    tacticHint: 'Solaris phalanx units punish blind breaches — focus perception first.',
+    tacticHint: 'Solaris phalanx units punish rushed breaches — focus perception first.',
   },
   3: {
     district: 3,

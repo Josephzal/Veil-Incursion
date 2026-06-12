@@ -1,9 +1,14 @@
 import {
+  ActiveIncursionState,
   IncursionBiome,
   IncursionEncounterType,
   IncursionNode,
   RunNodeType,
 } from '../types/game';
+import { getEnvironmentCombatProfile } from './combatEnvironmentEngine';
+import { formatSpectralBlock } from './sectorGraphEngine';
+import { ENVIRONMENT_DISPLAY_LABEL } from '../types/sector';
+import { ELITE_MODIFIER_LABELS } from './eliteModifierEngine';
 import { EncounterType, RadarDot, SectorDefinition } from '../types/run';
 import { INCURSION_ENCOUNTER_COUNT } from '../types/run';
 import {
@@ -401,4 +406,88 @@ export function formatScannerNodeIntel(node: IncursionNode, optionIndex = 0): st
     `> VECTOR: ${vector}`,
     `> NODE TYPE: ${nodeType.toUpperCase()}`,
   ];
+}
+
+/** Environment / modifier status lines for the scanner dock. */
+export function formatScannerNodeStatus(
+  node: IncursionNode,
+  incursion: Pick<ActiveIncursionState, 'environmentalModifiers'>,
+): string[] {
+  const lines: string[] = [];
+
+  if (node.environmentType) {
+    const envLabel = ENVIRONMENT_DISPLAY_LABEL[node.environmentType];
+    const profile = getEnvironmentCombatProfile(node.environmentType);
+    lines.push(`> STATUS: ${envLabel.toUpperCase()}`);
+    if (profile) {
+      lines.push(`> HAZARD: ${profile.hazardLabel}`);
+      lines.push(`> ENV ADVANTAGE: ${profile.advantageLabel}`);
+    }
+  }
+
+  const eliteModifier = incursion.environmentalModifiers?.eliteModifier;
+  if (eliteModifier) {
+    lines.push(`> ELITE MODIFIER: ${ELITE_MODIFIER_LABELS[eliteModifier].toUpperCase()}`);
+  }
+
+  return lines;
+}
+
+/** Combat HUD readout — full biome / encounter context (no hostile intel). */
+export function formatCombatEncounterIntel(
+  node: IncursionNode | null,
+  incursion: Pick<
+    ActiveIncursionState,
+    'sectorTier' | 'nodesCleared' | 'environmentalModifiers' | 'defendRiftActive'
+  >,
+  optionIndex = 0,
+): string[] {
+  if (!node) {
+    return ['> ENCOUNTER DATA // AWAITING VECTOR LOCK'];
+  }
+
+  const lines: string[] = [
+    `> BIOME: ${BIOME_DISPLAY_LABEL[node.biome].toUpperCase()}`,
+    `> VECTOR: ${resolveVectorLabel(node, optionIndex)}`,
+    `> NODE TYPE: ${node.type.replace(/_/g, ' ').toUpperCase()}`,
+    `> ENCOUNTER: ${getEncounterDisplayLabel(node.encounterType, node.encounterIndex).toUpperCase()}`,
+  ];
+
+  if (node.environmentType) {
+    const envLabel = ENVIRONMENT_DISPLAY_LABEL[node.environmentType];
+    const profile = getEnvironmentCombatProfile(node.environmentType);
+    lines.push(`> ENVIRONMENT: ${envLabel.toUpperCase()}`);
+    if (profile) {
+      lines.push(`> HAZARD: ${profile.hazardLabel}`);
+      lines.push(`> ENV ADVANTAGE: ${profile.advantageLabel}`);
+    }
+  }
+
+  if (node.sectorMeta) {
+    lines.push(...formatSpectralBlock(node.sectorMeta, true));
+    if (node.sectorMeta.yieldMultiplier > 1) {
+      lines.push(`> YIELD MULTIPLIER: x${node.sectorMeta.yieldMultiplier.toFixed(2)}`);
+    }
+    if (node.sectorMeta.combatTier === 'ELITE') {
+      lines.push('> COMBAT TIER: ELITE');
+    }
+    if ((node.sectorMeta.creditBonus ?? 0) > 0) {
+      lines.push(`> CREDIT BONUS: +${node.sectorMeta.creditBonus}`);
+    }
+  }
+
+  const eliteModifier = incursion.environmentalModifiers?.eliteModifier;
+  if (eliteModifier) {
+    lines.push(`> ELITE MODIFIER: ${ELITE_MODIFIER_LABELS[eliteModifier].toUpperCase()}`);
+  }
+
+  if (incursion.defendRiftActive) {
+    lines.push('> OBJECTIVE: EMERGENCY RECALL // ELITE INTERCEPT');
+  } else if (node.type === 'BOSS_COMBAT' || node.isAnomalyNest) {
+    lines.push('> OBJECTIVE: REGION-PRIME ANOMALY');
+  }
+
+  lines.push(`> SECTOR T${incursion.sectorTier} // NODE ${incursion.nodesCleared + 1}`);
+
+  return lines;
 }

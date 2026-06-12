@@ -47,6 +47,8 @@ export interface ApparitionViewportRef {
   triggerDamageEffect: () => void;
   triggerAttackEffect: () => void;
   triggerEradication: () => void;
+  triggerStatEvade: () => void;
+  triggerPlayerCritSunder: (channel?: 'KINETIC' | 'OCCULT') => void;
 }
 
 export interface ApparitionViewportProps {
@@ -131,6 +133,13 @@ export const ApparitionViewport = forwardRef<ApparitionViewportRef, ApparitionVi
               }
             },
           );
+        },
+        triggerStatEvade: () => {
+          runShake(180, 4, 2, false);
+        },
+        triggerPlayerCritSunder: (channel = 'KINETIC') => {
+          runShake(DAMAGE_MS + 80, SHAKE_AMPLITUDE + 10, SHAKE_CYCLES + 2, true);
+          void channel;
         },
       }),
       [canvasH, canvasW, damageFlash, eradicateOpacity, isEradicating, onEradicationComplete, shakePhase, shakeProgress],

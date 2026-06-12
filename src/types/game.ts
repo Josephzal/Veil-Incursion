@@ -8,6 +8,7 @@ import type { ResonanceEscalationState } from './resonanceEscalation';
 import type { PatrolState } from './overworldPatrol';
 import type { AegisLoadout } from './aegisCombat';
 import type { CargoItemId } from './cargoGrid';
+import type { ResourceQuantity } from './resourceItem';
 import type { LeyLineMutationId } from './leyLineMutation';
 import type { BoundRequisitionRuntime } from './boundRequisition';
 import { DEFAULT_AEGIS_LOADOUT } from './aegisCombat';
@@ -98,6 +99,14 @@ export interface PlayerAccount {
   bankedCargo: GlobalBankedCargo;
   /** Pre-run combat deck — four active abilities carried into each incursion. */
   aegisLoadout: AegisLoadout;
+  /** Hub-side abstract resource counts for fabrication. */
+  resourceStash: ResourceQuantity;
+  /** Crafted blueprint IDs unlocked at the metropolitan fabrication bench. */
+  unlockedBlueprints: string[];
+  /** Class weapon blueprint actively wired into combat hooks. */
+  equippedBlueprintId: import('./equipmentBlueprint').BlueprintId | null;
+  /** Safehouse decryption queue — gatekeeper cores/caskets land here as locked containers. */
+  unidentifiedStash: import('./unidentifiedItem').UnidentifiedStashItem[];
 }
 
 export interface CombatNodeState {

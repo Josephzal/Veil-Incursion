@@ -1,3 +1,4 @@
+import type { RunNodeType } from '../types/game';
 import type { RadarDot } from '../types/run';
 import type { SectorDefinition } from '../types/run';
 
@@ -115,6 +116,7 @@ export type RadarDotLayoutInput = {
   id: string;
   isPreDiscovered?: boolean;
   encounterIndex: number;
+  type?: RunNodeType;
 };
 
 export function createRadarDotFromPolar(
@@ -140,5 +142,6 @@ export function createRadarDotFromPolar(
     angleDeg: position.angleDeg,
     isPreDiscovered: node.isPreDiscovered,
     encounterIndex: node.encounterIndex,
+    nodeType: node.type,
   };
 }

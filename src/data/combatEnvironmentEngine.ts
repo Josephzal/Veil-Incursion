@@ -11,13 +11,6 @@ import {
 } from '../types/combatEnvironment';
 import type { EnvironmentalModifiers } from '../types/game';
 
-export interface BlindBreachPenaltyResult {
-  soulAnchorLoss: number;
-  resonanceSpike: number;
-  attunementDrain: number;
-  logLines: string[];
-}
-
 export function getEnvironmentCombatProfile(
   environmentType: EnvironmentType | null | undefined,
 ): EnvironmentCombatProfile | null {
@@ -56,34 +49,6 @@ export function buildEnvironmentalModifiersForNode(
     parryWindowBonusPct: context.parryWindowBonusPct,
     resonancePercent: context.resonancePercent,
     bloodFrenzyActive: context.bloodFrenzyActive,
-  };
-}
-
-export function applyBlindBreachPenalty(
-  environmentType: EnvironmentType | null | undefined,
-  maxSoulAnchor: number,
-): BlindBreachPenaltyResult {
-  const profile = getEnvironmentCombatProfile(environmentType);
-  if (!profile) {
-    return { soulAnchorLoss: 0, resonanceSpike: 0, attunementDrain: 0, logLines: [] };
-  }
-
-  const soulAnchorLoss = profile.blindBreachSoulAnchorLoss
-    + Math.floor(maxSoulAnchor * (profile.blindBreachSoulAnchorLossPct / 100));
-  const logLines: string[] = [];
-
-  if (soulAnchorLoss > 0) {
-    logLines.push(`>> ENV HAZARD — ${profile.hazardLabel} // −${soulAnchorLoss} SOUL ANCHOR.`);
-  }
-  if (profile.blindBreachResonanceSpike > 0) {
-    logLines.push(`>> ENV ALARM — sector resonance spike +${profile.blindBreachResonanceSpike}%.`);
-  }
-
-  return {
-    soulAnchorLoss,
-    resonanceSpike: profile.blindBreachResonanceSpike,
-    attunementDrain: 0,
-    logLines,
   };
 }
 

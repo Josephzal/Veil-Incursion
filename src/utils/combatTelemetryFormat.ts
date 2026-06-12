@@ -54,6 +54,8 @@ export type EnemyPortraitGlow = 'none' | 'player-selected' | 'enemy-attacking' |
 
 export type EnemyPortraitAnim = 'none' | 'lunge' | 'shimmy';
 
+export type EnemyIntentShimmer = 'fortify' | 'evade';
+
 const ENEMY_DAMAGE_INTENTS: EnemyIntent[] = ['STRIKE', 'WORLD_ENDER', 'OVERDRIVE_DISCHARGE'];
 const ENEMY_SIPHON_INTENTS: EnemyIntent[] = ['STRIP_STAMINA', 'SIPHON_ABYSSAL'];
 const ENEMY_CHARGE_INTENTS: EnemyIntent[] = ['FORTIFY', 'CHARGE'];
@@ -99,8 +101,16 @@ export interface CombatGridUnitSnapshot {
   isFractured: boolean;
   portraitGlow?: EnemyPortraitGlow;
   portraitAnim?: EnemyPortraitAnim;
+  intentShimmer?: EnemyIntentShimmer | null;
+  /** Increments on player critical hit — drives hit-stop slash VFX. */
+  critImpactSeq?: number;
+  critImpactChannel?: 'KINETIC' | 'OCCULT' | 'TRUE';
   /** Increments when the operative deals HP damage to this unit (drives hit flash). */
   hitFlashSeq?: number;
+  /** Increments on eradication — drives dissolve VFX before removal. */
+  dissolveSeq?: number;
+  /** True once dissolve animation finished — hide from grid. */
+  dissolveHidden?: boolean;
 }
 
 export interface CombatSquadUiSnapshot {

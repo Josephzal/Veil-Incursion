@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { StyleSheet, View } from 'react-native';
 import type { CombatGridSlotId } from '../../types/combatGrid';
 import type { CombatGridUnitView } from './CombatEnemyUnit';
@@ -17,6 +17,7 @@ interface CombatEnemyGridProps {
   units: CombatGridUnitView[];
   targetingActive: boolean;
   onUnitPress: (unitId: string) => void;
+  onUnitDissolveComplete?: (unitId: string) => void;
   borderColor?: string;
   accentColor: string;
   mutedColor: string;
@@ -51,6 +52,7 @@ interface EnemyUnitStackProps {
   mutedColor: string;
   constrainSpriteHeight?: boolean;
   onUnitPress?: (unitId: string) => void;
+  onUnitDissolveComplete?: (unitId: string) => void;
 }
 
 /** Sprite only — vitals render in the intel panel. */
@@ -62,7 +64,12 @@ function EnemyUnitStack({
   mutedColor,
   constrainSpriteHeight = false,
   onUnitPress,
+  onUnitDissolveComplete,
 }: EnemyUnitStackProps): React.JSX.Element {
+  const handleDissolveComplete = useCallback(() => {
+    onUnitDissolveComplete?.(unit.unitId);
+  }, [onUnitDissolveComplete, unit.unitId]);
+
   return (
     <View
       style={[
@@ -77,7 +84,9 @@ function EnemyUnitStack({
         accentColor={accentColor}
         mutedColor={mutedColor}
         constrainSpriteHeight={constrainSpriteHeight}
+        layoutUnitScale={layout.unitScale}
         onPress={onUnitPress ? () => onUnitPress(unit.unitId) : undefined}
+        onDissolveComplete={onUnitDissolveComplete ? handleDissolveComplete : undefined}
       />
     </View>
   );
@@ -87,17 +96,19 @@ export default function CombatEnemyGrid({
   units,
   targetingActive,
   onUnitPress,
+  onUnitDissolveComplete,
   accentColor,
   mutedColor,
   variant = 'arena',
 }: CombatEnemyGridProps): React.JSX.Element {
   const isArena = variant === 'arena';
-  const liveUnits = units.filter((unit) => !unit.isDead);
-  const unitBySlot = new Map(liveUnits.map((unit) => [unit.slot, unit]));
+  const layoutUnits = units;
 
   const renderSlot = (slot: CombatGridSlotId) => {
-    const unit = unitBySlot.get(slot);
-    const layout = isArena ? resolveArenaSlotLayout(slot, liveUnits) : ENEMY_ARENA_SLOT_LAYOUT[slot];
+    const unit = units.find((entry) => entry.slot === slot && (
+      !entry.isDead || (entry.dissolveSeq ?? 0) > 0
+    ));
+    const layout = isArena ? resolveArenaSlotLayout(slot, layoutUnits) : ENEMY_ARENA_SLOT_LAYOUT[slot];
     if (!isArena) {
       if (!unit) {
         return <View key={slot} style={styles.cellEmpty} />;
@@ -112,6 +123,7 @@ export default function CombatEnemyGrid({
             mutedColor={mutedColor}
             constrainSpriteHeight={isArena}
             onUnitPress={onUnitPress}
+            onUnitDissolveComplete={onUnitDissolveComplete}
           />
         </View>
       );
@@ -146,6 +158,7 @@ export default function CombatEnemyGrid({
           mutedColor={mutedColor}
           constrainSpriteHeight
           onUnitPress={onUnitPress}
+          onUnitDissolveComplete={onUnitDissolveComplete}
         />
       </View>
     );

@@ -27,17 +27,20 @@ export function resolveHostileHpHit(
   enemy: EnemyCombatProfile,
   raw: number,
   channel: DamageChannel,
+  options?: { ignoreDefenses?: boolean },
 ): ResolvedHostileHit {
   let working = enemy;
   let afterArmor = raw;
 
-  const exposed = hasCombatTag(working, 'EXPOSED');
-  if (channel === 'KINETIC') {
-    const layers = working.kineticArmor ?? 0;
-    afterArmor = absorbByArmor(raw, exposed ? Math.floor(layers / 2) : layers);
-  } else if (channel === 'OCCULT') {
-    const layers = working.occultWards ?? 0;
-    afterArmor = absorbByArmor(raw, exposed ? Math.floor(layers / 2) : layers);
+  if (!options?.ignoreDefenses) {
+    const exposed = hasCombatTag(working, 'EXPOSED');
+    if (channel === 'KINETIC') {
+      const layers = working.kineticArmor ?? 0;
+      afterArmor = absorbByArmor(raw, exposed ? Math.floor(layers / 2) : layers);
+    } else if (channel === 'OCCULT') {
+      const layers = working.occultWards ?? 0;
+      afterArmor = absorbByArmor(raw, exposed ? Math.floor(layers / 2) : layers);
+    }
   }
 
   const hpDamage = applyDamageWithFractureBonus(afterArmor, working);

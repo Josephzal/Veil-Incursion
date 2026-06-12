@@ -1,7 +1,8 @@
 import type { CargoItemId, CargoRunState, ContainmentItem, HarvestYieldTier, PlacedCargoItem } from '../types/cargoGrid';
-import { localLevelFromNodesCleared } from './districtPacing';
 import {
-  CARGO_GRID_DIMENSION,
+  CARGO_GRID_COLS,
+  CARGO_GRID_ROWS,
+  CARGO_GRID_CELL_COUNT,
   CARGO_ITEM_CATALOG,
   CARGO_OCCUPANCY_RESONANCE_THRESHOLD,
   CARGO_RESONANCE_MULTIPLIER,
@@ -58,8 +59,8 @@ export function canPlaceCargoItemExcluding(
 ): boolean {
   const def = CARGO_ITEM_CATALOG[itemId];
   if (originRow < 0 || originCol < 0) return false;
-  if (originRow + def.height > CARGO_GRID_DIMENSION) return false;
-  if (originCol + def.width > CARGO_GRID_DIMENSION) return false;
+  if (originRow + def.height > CARGO_GRID_ROWS) return false;
+  if (originCol + def.width > CARGO_GRID_COLS) return false;
 
   const occupied = new Set<string>();
   cargo.grid.placed.forEach((item) => {
@@ -83,8 +84,8 @@ export function placeCargoAtFirstOpenSlot(
   cargo: CargoRunState,
   itemId: CargoItemId,
 ): CargoRunState | null {
-  for (let row = 0; row < CARGO_GRID_DIMENSION; row += 1) {
-    for (let col = 0; col < CARGO_GRID_DIMENSION; col += 1) {
+  for (let row = 0; row < CARGO_GRID_ROWS; row += 1) {
+    for (let col = 0; col < CARGO_GRID_COLS; col += 1) {
       if (!canPlaceCargoItem(cargo, itemId, row, col)) continue;
       const def = CARGO_ITEM_CATALOG[itemId];
       return {
@@ -150,14 +151,12 @@ export function addLootToContainment(
 
 export function calculateGridOccupancy(cargo: CargoRunState): number {
   const occupiedCells = occupiedCellSet(cargo.grid.placed).size;
-  const totalCells = CARGO_GRID_DIMENSION * CARGO_GRID_DIMENSION;
+  const totalCells = CARGO_GRID_CELL_COUNT;
   return occupiedCells / totalCells;
 }
 
-export function getCargoResonanceMultiplier(cargo: CargoRunState): number {
-  return calculateGridOccupancy(cargo) > CARGO_OCCUPANCY_RESONANCE_THRESHOLD
-    ? CARGO_RESONANCE_MULTIPLIER
-    : 1;
+export function getCargoResonanceMultiplier(_cargo: CargoRunState): number {
+  return 1;
 }
 
 export function calculateCargoMarketValue(cargo: CargoRunState): number {
@@ -242,26 +241,12 @@ export function removePlacedCargoItem(cargo: CargoRunState, instanceId: string):
 }
 
 export function buildHarvestLoot(
-  tier: HarvestYieldTier,
-  sectorTier: number,
-  isElite: boolean,
-  nodesCleared = 0,
+  _tier: HarvestYieldTier,
+  _sectorTier: number,
+  _isElite: boolean,
+  _nodesCleared = 0,
 ): CargoItemId[] {
-  const localLevel = localLevelFromNodesCleared(nodesCleared);
-  const inBreachPerimeter = localLevel >= 11 && localLevel <= 14;
-  const loot: CargoItemId[] = inBreachPerimeter && Math.random() < 0.55
-    ? ['null-crystal-matrix']
-    : ['null-crystal-shard'];
-  if (tier === 'FULL' || tier === 'DEEP_GORE') loot.push('rift-iron-cache');
-  if (tier === 'DEEP_GORE' || isElite) loot.push('veil-residue-bulk');
-  if (inBreachPerimeter && tier !== 'QUICK' && Math.random() < 0.4) {
-    loot.push('null-crystal-matrix');
-  }
-  if (tier === 'DEEP_GORE' && Math.random() < 0.35) loot.push('focusing-ampoule');
-  if (sectorTier >= 2 && Math.random() < 0.4) loot.push('gravity-grapple');
-  if (tier === 'QUICK') return loot.slice(0, 1);
-  if (tier === 'FULL') return loot.slice(0, Math.min(2, loot.length));
-  return loot;
+  return ['veil-residue-bulk'];
 }
 
 export function applyEmergencyExtractBleed(
@@ -334,6 +319,10 @@ export function combatConsumableDescription(itemId: CargoItemId): string {
       return 'Absorbs the next incoming health damage completely.';
     case 'spectral_imbue':
       return 'Imbues kinetic weapon strikes to bypass spectral resistance this combat.';
+    case 'sanguine_coagulant':
+      return 'Restores 50% Soul Anchor and purges BLEEDING / FRACTURED operative debuffs.';
+    case 'veil_ash_grenade':
+      return 'Blinds frontline hostiles for 2 turns (−30% accuracy).';
     default:
       return 'Field deployment protocols pending operative clearance.';
   }

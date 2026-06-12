@@ -1,7 +1,7 @@
 import type { EnemyAffinity } from './combatEnvironment';
 import type { CombatUnitTag } from './aegisCombat';
 import type { CombatGridLane, CombatGridSlotId } from './combatGrid';
-import type { FactionType } from './game';
+import type { FactionType, RunNodeType } from './game';
 
 export type RegionTheme = 'HOSPITAL' | 'HOUSING' | 'FOREST' | 'CITY';
 
@@ -90,6 +90,10 @@ export interface EnemyCombatProfile {
   fracturedThisRound?: boolean;
   rosterId?: string;
   faction?: FactionType;
+  /** Passive stat evade — full miss on connect (separate from EVADE intent posture). */
+  evadeChance?: number;
+  /** Passive crit chance on attacks. Bosses should remain 0. */
+  critChance?: number;
   /** Choir of Rust — damage syncs to boss HP pool across all bodies. */
   sharedBossPool?: boolean;
 }
@@ -163,6 +167,8 @@ export interface RadarDot {
   encounterIndex: number;
   /** Hostile patrol contact on the Ley-Tracker (not a breach rift). */
   isHostilePatrol?: boolean;
+  /** Incursion node type — drives reveal color when locked + selected. */
+  nodeType?: RunNodeType;
 }
 
 export interface RadarScanResult {
@@ -173,8 +179,8 @@ export interface RadarScanResult {
 /** Tactical combat action costs (mirrored in combat UI). */
 export const COMBAT_ACTION = {
   ABYSSAL_STRIKE_STAMINA: 20,
-  ABYSSAL_STRIKE_DAMAGE: 10,
-  ABYSSAL_STRIKE_EXHAUSTED_DAMAGE: 5,
+  ABYSSAL_STRIKE_DAMAGE: 15,
+  ABYSSAL_STRIKE_EXHAUSTED_DAMAGE: 8,
   ABYSSAL_RESERVE_CHARGE: 15,
   ABYSSAL_WARD_STAMINA: 10,
   ABYSSAL_WARD_BLOCK_PCT: 0.5,

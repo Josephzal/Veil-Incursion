@@ -34,7 +34,7 @@ export default function EncounterBiomeBanner({
           : getBiomeContextLog(biome)}
       </Text>
       <Text style={[styles.depthLine, { color: theme.mutedColor }]}>
-        {`SECTOR T${activeIncursion.sectorTier} // NODE ${activeIncursion.nodesCleared + 1} // RESONANCE ${activeIncursion.resonance.percent}%${activeIncursion.resonance.percent > 70 ? ' // BLOOD FRENZY' : ''}`}
+        {`SECTOR T${activeIncursion.sectorTier} // NODE ${activeIncursion.nodesCleared + 1}`}
       </Text>
     </View>
   );

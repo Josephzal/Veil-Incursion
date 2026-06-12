@@ -92,7 +92,7 @@ export const AEGIS_ABILITY_CATALOG: Record<AegisAbilityId, AegisAbilityDefinitio
     apCost: 1,
     staminaCost: 0,
     hpCostPct: 12,
-    description: 'Sacrifice HP — next two attacks deal double damage and fracture.',
+    description: 'Sacrifice HP — next two attacks are guaranteed Critical Hits.',
   },
   EVISCERATE: {
     id: 'EVISCERATE',

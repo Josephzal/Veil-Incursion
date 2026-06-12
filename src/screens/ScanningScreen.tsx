@@ -93,6 +93,7 @@ export default function ScanningScreen(): React.JSX.Element {
   const [vectorDots, setVectorDots] = useState<RadarDot[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [siphonedNodeIds, setSiphonedNodeIds] = useState<string[]>([]);
+  const [typeColoredNodeIds, setTypeColoredNodeIds] = useState<ReadonlySet<string>>(() => new Set());
   const [nodesInField, setNodesInField] = useState(0);
   const lastRadarSessionRef = useRef<number | null>(null);
   const lastManifestedSiphonsRef = useRef<Set<string>>(new Set());
@@ -155,6 +156,7 @@ export default function ScanningScreen(): React.JSX.Element {
 
     setSelectedNodeId(null);
     setSiphonedNodeIds([]);
+    setTypeColoredNodeIds(new Set());
     lastManifestedSiphonsRef.current = new Set();
     spawnedDotsRef.current = null;
     spawnedForSessionRef.current = null;
@@ -194,6 +196,17 @@ export default function ScanningScreen(): React.JSX.Element {
       prev.width === width && prev.height === height ? prev : { width, height }
     ));
   }, []);
+
+  const markNodeTypeColored = useCallback((nodeId: string) => {
+    setTypeColoredNodeIds((prev) => {
+      if (prev.has(nodeId)) return prev;
+      return new Set([...prev, nodeId]);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (selectedNodeId) markNodeTypeColored(selectedNodeId);
+  }, [markNodeTypeColored, selectedNodeId]);
 
   const selectLockedNode = useCallback((nodeId: string) => {
     if (!siphonedNodeIds.includes(nodeId)) return;
@@ -315,6 +328,7 @@ export default function ScanningScreen(): React.JSX.Element {
                   activeNodes={vectorDots}
                   contactsLocked={false}
                   selectedNodeId={selectedNodeId}
+                  typeColoredNodeIds={typeColoredNodeIds}
                   onSelectNode={handleScannerNodeSelect}
                   onSiphonedNodesChange={handleSiphonedNodesChange}
                 />
@@ -330,7 +344,6 @@ export default function ScanningScreen(): React.JSX.Element {
               {showNodeDock ? (
                 <InlineScannerEngagement
                   layout="dock"
-                  headline={selectedNode?.label?.toUpperCase()}
                   spectralLines={intelLines}
                   canEngage={canEngage}
                   accent={accent}

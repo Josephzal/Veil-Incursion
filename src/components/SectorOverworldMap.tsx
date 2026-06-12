@@ -141,6 +141,9 @@ export interface SectorOverworldMapProps {
   interactive?: boolean;
   /** Walkable corridor only — no rifts, scanner HUD, hazards, or resonance features. */
   hubMode?: boolean;
+  hubInteractables?: import('../data/hubInteractables').HubInteractable[];
+  onNearHubInteractable?: (id: string | null) => void;
+  onHubInteractablePress?: (id: string) => void;
   overworldSession?: OverworldFeatureSession;
   onCollectVeilEcho?: (echoId: string) => void;
   onAcquireRawLeyBoon?: (boonId: string) => void;
@@ -191,6 +194,9 @@ export default function SectorOverworldMap({
   compact = false,
   interactive = true,
   hubMode = false,
+  hubInteractables = [],
+  onNearHubInteractable,
+  onHubInteractablePress,
   overworldSession = createEmptyOverworldSession(),
   onCollectVeilEcho,
   onAcquireRawLeyBoon,
@@ -405,7 +411,23 @@ export default function SectorOverworldMap({
 
   const syncBlindScout = useCallback((x: number, y: number) => {
     setPlayerPos({ x, y });
-    if (hubMode) return;
+    if (hubMode) {
+      if (hubInteractables.length === 0) {
+        onNearHubInteractable?.(null);
+        return;
+      }
+      let nearestId: string | null = null;
+      let nearestDist = Infinity;
+      hubInteractables.forEach((spot) => {
+        const dist = Math.hypot(spot.x - x, spot.y - y);
+        if (dist <= spot.radius && dist < nearestDist) {
+          nearestDist = dist;
+          nearestId = spot.id;
+        }
+      });
+      onNearHubInteractable?.(nearestId);
+      return;
+    }
     const player = { x, y };
     const blips: ScoutTarget[] = [];
     const hiddenDistances: number[] = [];
@@ -515,7 +537,17 @@ export default function SectorOverworldMap({
       const dist = Math.hypot(boon.world.x - x, boon.world.y - y);
       if (dist <= pickupRadius) onAcquireRawLeyBoon(boon.id);
     });
-  }, [hubMode, layoutPositions, onAcquireRawLeyBoon, onCollectVeilEcho, onFrequencyMatch, overworldSession.rawLeyBoons, overworldSession.veilEchoes]);
+  }, [
+    hubMode,
+    hubInteractables,
+    onNearHubInteractable,
+    layoutPositions,
+    onAcquireRawLeyBoon,
+    onCollectVeilEcho,
+    onFrequencyMatch,
+    overworldSession.rawLeyBoons,
+    overworldSession.veilEchoes,
+  ]);
 
   const manifestNode = useCallback((nodeId: string, world: SectorGraphLayoutPoint, node: ScoutNode) => {
     manifestedRef.current = new Set([...manifestedRef.current, nodeId]);
@@ -900,6 +932,31 @@ export default function SectorOverworldMap({
           <Image source={FACING_SOURCE[facing]} style={styles.walkerImage} resizeMode="contain" />
         </View>
 
+        {!compact && hubMode ? hubInteractables.map((spot) => {
+          const screen = worldToScreen(
+            { x: spot.x, y: spot.y },
+            playerPos,
+            canvasSize.width,
+            canvasSize.height,
+            effectiveScale,
+          );
+          return (
+            <Pressable
+              key={spot.id}
+              style={[
+                styles.hubInteractableHit,
+                {
+                  left: screen.x - 36,
+                  top: screen.y - 36,
+                },
+              ]}
+              onPress={() => onHubInteractablePress?.(spot.id)}
+            >
+              <Text style={styles.hubInteractableLabel}>{spot.label}</Text>
+            </Pressable>
+          );
+        }) : null}
+
         {!compact && !hubMode ? stabilizedTapNodes.map((node) => {
           const world = layoutPositions[node.id] ?? node.world;
           const screen = worldToScreen(
@@ -1073,5 +1130,25 @@ const styles = StyleSheet.create({
     fontSize: 7,
     color: '#86efac',
     letterSpacing: 0.6,
+  },
+  hubInteractableHit: {
+    position: 'absolute',
+    width: 72,
+    height: 72,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 255, 51, 0.55)',
+    backgroundColor: 'rgba(0, 255, 51, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 12,
+  },
+  hubInteractableLabel: {
+    fontFamily: 'monospace',
+    fontSize: 6,
+    fontWeight: '700',
+    color: '#00ff33',
+    letterSpacing: 0.4,
+    textAlign: 'center',
+    paddingHorizontal: 4,
   },
 });

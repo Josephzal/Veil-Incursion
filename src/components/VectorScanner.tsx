@@ -22,6 +22,7 @@ import { getCabalScannerTheme } from './scanner/cabalScannerThemes';
 import { mergeScannerThemes } from './scanner/zoneScannerThemes';
 import type { CabalScannerTheme, ScannerCabal } from '../types/scanner';
 import type { RadarDot } from '../types/run';
+import { scannerRevealColorForNodeType } from '../utils/scannerNodeRevealColor';
 
 export const SCAN_SWEEP_MS = 2200;
 export const SCAN_ROTATIONS = 3;
@@ -71,6 +72,8 @@ interface VectorScannerProps {
   continuousScan?: boolean;
   /** Locked node highlighted for downstream encounter engagement. */
   selectedNodeId?: string | null;
+  /** Nodes that keep type-colored blips after first selection. */
+  typeColoredNodeIds?: ReadonlySet<string>;
   /** Faint bearing hint toward nearest out-of-range node (Ley-Tracker scout). */
   proximityGhost?: { x: number; y: number } | null;
   onSweepComplete?: () => void;
@@ -181,6 +184,27 @@ function easeOutCubic(t: number): number {
   return 1 - (1 - t) ** 3;
 }
 
+function resolveBlipAccent(
+  node: RadarDot,
+  opts: {
+    selected: boolean;
+    siphoned: boolean;
+    typeColored: boolean;
+    isHostilePatrol: boolean;
+    uniformSelectable: boolean;
+    selectionAccent: string;
+    defaultAccent: string;
+  },
+): string {
+  if (opts.isHostilePatrol) return HOSTILE_PATROL_COLOR;
+  if (opts.uniformSelectable) return opts.selectionAccent;
+  if ((opts.typeColored || opts.selected) && opts.siphoned && node.nodeType) {
+    return scannerRevealColorForNodeType(node.nodeType);
+  }
+  if (opts.selected) return opts.selectionAccent;
+  return opts.defaultAccent;
+}
+
 /** Static sweep shader window — never animated (rotation handled by parent Group). */
 const SWEEP_GRADIENT_LEAD_DEG = 360;
 const SWEEP_GRADIENT_TRAIL_START_DEG = 360 - SWEEP_TRAIL_ACTIVE_DEG;
@@ -195,6 +219,7 @@ function VectorScannerComponent({
   contactsLocked = false,
   continuousScan = false,
   selectedNodeId = null,
+  typeColoredNodeIds,
   proximityGhost = null,
   onSweepComplete,
   onSelectNode,
@@ -846,7 +871,18 @@ function VectorScannerComponent({
                 cx={selectedNodeBearing.canvasX}
                 cy={selectedNodeBearing.canvasY}
                 r={selectedNodeBearing.visualRadius * SELECTION_GLOW_OUTER_SCALE}
-                color={accentWithAlpha(selectionAccent, 0.7)}
+                color={accentWithAlpha(
+                  resolveBlipAccent(selectedNodeBearing.node, {
+                    selected: true,
+                    siphoned: siphonedNodeIds.includes(selectedNodeBearing.id),
+                    typeColored: typeColoredNodeIds?.has(selectedNodeBearing.id) ?? false,
+                    isHostilePatrol: selectedNodeBearing.isHostilePatrol,
+                    uniformSelectable,
+                    selectionAccent,
+                    defaultAccent: selectionAccent,
+                  }),
+                  0.7,
+                )}
                 opacity={selectionGlowOuterOpacity}
                 style="fill"
               >
@@ -856,7 +892,18 @@ function VectorScannerComponent({
                 cx={selectedNodeBearing.canvasX}
                 cy={selectedNodeBearing.canvasY}
                 r={selectedNodeBearing.visualRadius * SELECTION_GLOW_INNER_SCALE}
-                color={accentWithAlpha(selectionAccent, 0.9)}
+                color={accentWithAlpha(
+                  resolveBlipAccent(selectedNodeBearing.node, {
+                    selected: true,
+                    siphoned: siphonedNodeIds.includes(selectedNodeBearing.id),
+                    typeColored: typeColoredNodeIds?.has(selectedNodeBearing.id) ?? false,
+                    isHostilePatrol: selectedNodeBearing.isHostilePatrol,
+                    uniformSelectable,
+                    selectionAccent,
+                    defaultAccent: selectionAccent,
+                  }),
+                  0.9,
+                )}
                 opacity={selectionGlowInnerOpacity}
                 style="fill"
               >
@@ -870,11 +917,18 @@ function VectorScannerComponent({
             const scale = getBlipScale(node.id);
             if (opacity <= 0.01 && !uniformSelectable) return null;
 
-            const fillColor = node.isHostilePatrol
-              ? HOSTILE_PATROL_COLOR
-              : uniformSelectable || (continuousScan && selectedNodeId === node.id)
-                ? selectionAccent
-                : theme.blipAccent;
+            const isSelected = continuousScan && selectedNodeId === node.id;
+            const isSiphoned = siphonedNodeIds.includes(node.id)
+              || blipStatesRef.current[node.id]?.siphoned === true;
+            const fillColor = resolveBlipAccent(node.node, {
+              selected: isSelected,
+              siphoned: isSiphoned,
+              typeColored: typeColoredNodeIds?.has(node.id) ?? false,
+              isHostilePatrol: node.isHostilePatrol,
+              uniformSelectable,
+              selectionAccent,
+              defaultAccent: theme.blipAccent,
+            });
 
             return (
               <Group key={node.id}>
@@ -907,11 +961,17 @@ function VectorScannerComponent({
             if (opacity <= 0.01 && !uniformSelectable) return null;
             const scale = getBlipScale(node.id);
             const isSelected = continuousScan && selectedNodeId === node.id;
-            const ringColor = node.isHostilePatrol
-              ? HOSTILE_PATROL_COLOR
-              : uniformSelectable || isSelected
-                ? selectionAccent
-                : theme.text;
+            const isSiphoned = siphonedNodeIds.includes(node.id)
+              || blipStatesRef.current[node.id]?.siphoned === true;
+            const ringColor = resolveBlipAccent(node.node, {
+              selected: isSelected,
+              siphoned: isSiphoned,
+              typeColored: typeColoredNodeIds?.has(node.id) ?? false,
+              isHostilePatrol: node.isHostilePatrol,
+              uniformSelectable,
+              selectionAccent,
+              defaultAccent: uniformSelectable || isSelected ? selectionAccent : theme.text,
+            });
             return (
               <Circle
                 key={`${node.id}-ring`}
@@ -935,7 +995,20 @@ function VectorScannerComponent({
 
         {nodeBearings
           .filter((bearing) => !bearing.isHostilePatrol)
-          .map((bearing) => (
+          .map((bearing) => {
+            const isSelected = continuousScan && selectedNodeId === bearing.id;
+            const isSiphoned = siphonedNodeIds.includes(bearing.id)
+              || blipStatesRef.current[bearing.id]?.siphoned === true;
+            const targetRingColor = resolveBlipAccent(bearing.node, {
+              selected: isSelected,
+              siphoned: isSiphoned,
+              typeColored: typeColoredNodeIds?.has(bearing.id) ?? false,
+              isHostilePatrol: false,
+              uniformSelectable,
+              selectionAccent,
+              defaultAccent: selectionAccent,
+            });
+            return (
             <RadarTarget
               key={`target-${bearing.id}`}
               visualSize={bearing.visualSize}
@@ -944,9 +1017,10 @@ function VectorScannerComponent({
               disabled={!isTargetEnabled(bearing.id)}
               pulseKey={uniformSelectable ? 0 : (siphonPulseKeys[bearing.id] ?? 0)}
               onPress={() => handleTargetPress(bearing.id)}
-              ringColor={selectionAccent}
+              ringColor={targetRingColor}
             />
-          ))}
+            );
+          })}
 
         {children ? <View style={styles.childOverlay}>{children}</View> : null}
 

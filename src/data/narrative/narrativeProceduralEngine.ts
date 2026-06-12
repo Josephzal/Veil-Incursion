@@ -334,6 +334,7 @@ export function resolveProceduralNarrativeChoice(
   let spawnGridHound = false;
   let cryptoGlimmerGrantPct = 0;
   const flagsAdded: string[] = [];
+  let resourceCacheId: import('../../types/resourceItem').ResourceCacheId | undefined;
 
   if (choice === 'A') {
     runPatch.soulAnchorIntegrity = clamp(
@@ -397,6 +398,10 @@ export function resolveProceduralNarrativeChoice(
       resonanceDelta += resolver.macroResonanceSpike;
       nextEnv = applyResonanceSpike(nextEnv, resolver.macroResonanceSpike);
     }
+    if (resolver.resourceCacheId) {
+      resourceCacheId = resolver.resourceCacheId;
+      logLines.push('>> RESOURCE CACHE STAGED — PACK CARGO BEFORE VECTOR RESUME.');
+    }
     logLines.push(`>> CABAL RESOLVER — ${resolver.label}`, `>> ${resolver.rewardPreview}`);
     outcome = `>> CABAL RESOLVER SUCCESS — ${resolver.rewardPreview}`;
   }
@@ -418,6 +423,10 @@ export function resolveProceduralNarrativeChoice(
       cargoPatch = consumed;
     }
     if (resolver.rewardFlag) flagsAdded.push(resolver.rewardFlag);
+    if (resolver.resourceCacheId) {
+      resourceCacheId = resolver.resourceCacheId;
+      logLines.push('>> RESOURCE CACHE STAGED — PACK CARGO BEFORE VECTOR RESUME.');
+    }
     logLines.push(`>> ITEM RESOLVER — ${resolver.label}`, `>> ${resolver.rewardPreview}`);
     outcome = `>> ITEM RESOLVER SUCCESS — ${resolver.rewardPreview}`;
   }
@@ -451,6 +460,7 @@ export function resolveProceduralNarrativeChoice(
     pendingRunCredits: creditReward,
     resonanceDelta,
     spawnGridHound,
+    resourceCacheId,
   };
 }
 

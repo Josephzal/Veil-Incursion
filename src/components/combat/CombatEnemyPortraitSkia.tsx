@@ -9,7 +9,8 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
-import type { EnemyPortraitAnim, EnemyPortraitGlow } from '../../utils/combatTelemetryFormat';
+import type { EnemyPortraitAnim, EnemyPortraitGlow, EnemyIntentShimmer } from '../../utils/combatTelemetryFormat';
+import CombatEnemyIntentShimmer from './CombatEnemyIntentShimmer';
 
 const GLOW_TINT: Record<Exclude<EnemyPortraitGlow, 'none'>, string> = {
   'player-selected': '#f8fafc',
@@ -39,6 +40,8 @@ interface CombatEnemyPortraitSkiaProps {
   source: ImageSourcePropType;
   glow: EnemyPortraitGlow;
   anim?: EnemyPortraitAnim;
+  frozen?: boolean;
+  intentShimmer?: EnemyIntentShimmer | null;
 }
 
 /** Passive portrait art — touch handled by EnemyUnit hitbox sibling. */
@@ -46,6 +49,8 @@ export default function CombatEnemyPortraitSkia({
   source,
   glow,
   anim = 'none',
+  frozen = false,
+  intentShimmer = null,
 }: CombatEnemyPortraitSkiaProps): React.JSX.Element {
   const glowTint = glow !== 'none' ? GLOW_TINT[glow] : null;
   const glowScale = glow !== 'none' ? GLOW_SCALE[glow] : 1.05;
@@ -56,10 +61,12 @@ export default function CombatEnemyPortraitSkia({
   const animMode = useSharedValue(0);
 
   useEffect(() => {
+    if (frozen) return;
     animMode.value = anim === 'shimmy' ? 2 : anim === 'lunge' ? 1 : 0;
-  }, [anim, animMode]);
+  }, [anim, animMode, frozen]);
 
   useEffect(() => {
+    if (frozen) return;
     if (anim === 'lunge') {
       lungeX.value = withSequence(
         withTiming(-LUNGE_DISTANCE, {
@@ -74,9 +81,10 @@ export default function CombatEnemyPortraitSkia({
       return;
     }
     lungeX.value = withTiming(0, { duration: 120 });
-  }, [anim, lungeX]);
+  }, [anim, frozen, lungeX]);
 
   useEffect(() => {
+    if (frozen) return;
     if (anim === 'shimmy') {
       shimmyPhase.value = withRepeat(
         withTiming(Math.PI * 2, { duration: SHIMMY_MS, easing: Easing.linear }),
@@ -87,7 +95,7 @@ export default function CombatEnemyPortraitSkia({
     }
     cancelAnimation(shimmyPhase);
     shimmyPhase.value = withTiming(0, { duration: 120 });
-  }, [anim, shimmyPhase]);
+  }, [anim, frozen, shimmyPhase]);
 
   const motionStyle = useAnimatedStyle(() => {
     if (animMode.value === 2) {
@@ -122,11 +130,14 @@ export default function CombatEnemyPortraitSkia({
             />
           </View>
         ) : null}
-        <Image
-          source={source}
-          resizeMode="contain"
-          style={styles.portrait}
-        />
+        <View style={styles.portraitClip}>
+          <CombatEnemyIntentShimmer kind={intentShimmer} />
+          <Image
+            source={source}
+            resizeMode="contain"
+            style={styles.portrait}
+          />
+        </View>
       </Animated.View>
     </View>
   );
@@ -145,7 +156,15 @@ const styles = StyleSheet.create({
     height: '100%',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    overflow: 'visible',
+    overflow: 'hidden',
+  },
+  portraitClip: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    overflow: 'hidden',
+    position: 'relative',
   },
   portrait: {
     width: '100%',

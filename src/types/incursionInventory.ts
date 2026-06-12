@@ -16,13 +16,17 @@ export interface IncursionInventoryState {
   items: IncursionConsumable[];
 }
 
+export type PlayerCombatDebuffId = 'BLEEDING' | 'FRACTURED';
+
 export interface IncursionConsumableUseResult {
-  itemId: IncursionConsumableId;
+  itemId: IncursionConsumableId | import('./cargoGrid').CargoItemId;
   healAmount: number;
   stunsEnemy: boolean;
   shatterKineticArmor?: number;
   stripOccultWards?: number;
   clearDebuffs?: boolean;
+  clearPlayerDebuffs?: PlayerCombatDebuffId[];
+  frontlineBlindTurns?: number;
   maxAbyssalReserve?: boolean;
   grantBonusAp?: number;
   restoreStaminaPct?: number;

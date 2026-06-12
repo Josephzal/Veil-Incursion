@@ -82,6 +82,7 @@ export interface NarrativeResolverSeed {
   rewardFlag?: string;
   macroThreatReduction?: number;
   macroResonanceSpike?: number;
+  resourceCacheId?: import('../types/resourceItem').ResourceCacheId;
 }
 
 export interface ProceduralNarrativeAssembly {

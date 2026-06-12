@@ -1,4 +1,8 @@
+/** @deprecated Prefer CARGO_GRID_ROWS / CARGO_GRID_COLS — kept for legacy square checks. */
 export const CARGO_GRID_DIMENSION = 4;
+export const CARGO_GRID_ROWS = 4;
+export const CARGO_GRID_COLS = 3;
+export const CARGO_GRID_CELL_COUNT = CARGO_GRID_ROWS * CARGO_GRID_COLS;
 export const CARGO_OCCUPANCY_RESONANCE_THRESHOLD = 0.7;
 export const CARGO_RESONANCE_MULTIPLIER = 2;
 export const DATA_BLEED_VALUE_DRAIN_PCT = 5;
@@ -14,9 +18,14 @@ export type CargoCombatEffect =
   | 'max_abyssal'
   | 'absorb_hit'
   | 'spectral_imbue'
+  | 'sanguine_coagulant'
+  | 'veil_ash_grenade'
   | 'unimplemented';
 
-export type CargoItemId =
+import type { ResourceItemId } from './resourceItem';
+import { ALL_RESOURCE_ITEM_IDS, RESOURCE_REGISTRY } from '../data/resourceRegistry';
+
+export type LegacyCargoItemId =
   | 'null-crystal-shard'
   | 'null-crystal-matrix'
   | 'veil-residue-bulk'
@@ -34,11 +43,15 @@ export type CargoItemId =
   | 'dead-drop-token'
   | 'resonance-bribe'
   | 'spall-weave-vest'
-  | 'void-surge-catalyst';
+  | 'void-surge-catalyst'
+  | 'sanguine-coagulant'
+  | 'veil-ash-grenade';
+
+export type CargoItemId = LegacyCargoItemId | ResourceItemId;
 
 export type HarvestYieldTier = 'QUICK' | 'FULL' | 'DEEP_GORE';
 
-export type HarvestReturnRoute = 'POST_COMBAT' | 'COMPLETE_NODE';
+export type HarvestReturnRoute = 'POST_COMBAT' | 'COMPLETE_NODE' | 'RESOURCE_CACHE';
 
 export interface CargoItemDefinition {
   id: CargoItemId;
@@ -126,6 +139,23 @@ export const HARVEST_YIELD_OPTIONS: HarvestYieldOption[] = [
   },
 ];
 
+function buildResourceCargoCatalogEntries(): Record<ResourceItemId, CargoItemDefinition> {
+  const entries = {} as Record<ResourceItemId, CargoItemDefinition>;
+  ALL_RESOURCE_ITEM_IDS.forEach((id) => {
+    const resource = RESOURCE_REGISTRY[id];
+    entries[id] = {
+      id,
+      name: resource.name,
+      width: resource.gridWidth,
+      height: resource.gridHeight,
+      baseValue: resource.baseCapitalValue,
+      resonanceWeight: 1,
+      tags: ['RESOURCE', resource.itemType],
+    };
+  });
+  return entries;
+}
+
 export const CARGO_ITEM_CATALOG: Record<CargoItemId, CargoItemDefinition> = {
   'null-crystal-shard': {
     id: 'null-crystal-shard',
@@ -147,9 +177,9 @@ export const CARGO_ITEM_CATALOG: Record<CargoItemId, CargoItemDefinition> = {
   },
   'veil-residue-bulk': {
     id: 'veil-residue-bulk',
-    name: 'Veil Residue Bulk',
-    width: 2,
-    height: 2,
+    name: 'Veil Residue',
+    width: 1,
+    height: 1,
     baseValue: 120,
     resonanceWeight: 4,
     tags: ['LOOT', 'BULK', 'VOLATILE'],
@@ -314,6 +344,30 @@ export const CARGO_ITEM_CATALOG: Record<CargoItemId, CargoItemDefinition> = {
     usableInCombat: true,
     combatEffect: 'max_abyssal',
   },
+  'sanguine-coagulant': {
+    id: 'sanguine-coagulant',
+    name: 'Sanguine Coagulant',
+    width: 1,
+    height: 1,
+    baseValue: 85,
+    resonanceWeight: 1,
+    tags: ['CONSUMABLE', 'COMBAT', 'HEAL', 'DEBUFF_PURGE'],
+    usableInCombat: true,
+    combatEffect: 'sanguine_coagulant',
+    healPercent: 50,
+  },
+  'veil-ash-grenade': {
+    id: 'veil-ash-grenade',
+    name: 'Veil-Ash Grenade',
+    width: 1,
+    height: 1,
+    baseValue: 75,
+    resonanceWeight: 1,
+    tags: ['CONSUMABLE', 'COMBAT', 'CROWD_CONTROL'],
+    usableInCombat: true,
+    combatEffect: 'veil_ash_grenade',
+  },
+  ...buildResourceCargoCatalogEntries(),
 };
 
 export function createDefaultCargoRunState(): CargoRunState {

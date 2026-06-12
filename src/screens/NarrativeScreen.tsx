@@ -4,6 +4,7 @@ import IncursionShell from '../components/IncursionShell';
 import NarrativeStepperModule, { isCityStreetsNarrative } from '../components/NarrativeStepperModule';
 import ProceduralNarrativeModule from '../components/ProceduralNarrativeModule';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
+import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useDescentNavigator } from '../hooks/useDescentNavigator';
@@ -14,6 +15,7 @@ import { narrativeCheckCredits } from '../data/combatCredits';
 export default function NarrativeScreen(): React.JSX.Element {
   const { theme } = useTerminal();
   const { getCurrentNarrativeNode, resolveNarrativeChoice, appendRunLog, awardRunCredits, runState } = useRun();
+  const { startResourceHarvest, startScanning } = useGameFlow();
   const { finalizeIncursionAdvance } = useDescentNavigator();
   const resolvingRef = useRef(false);
 
@@ -24,19 +26,28 @@ export default function NarrativeScreen(): React.JSX.Element {
     if (resolvingRef.current) return;
     resolvingRef.current = true;
 
-    const { outcomeText, aborted, creditReward } = resolveNarrativeChoice(choice, status);
+    const { outcomeText, aborted, creditReward, requiresResourcePack } = resolveNarrativeChoice(choice, status);
     appendRunLog(outcomeText);
 
     if (aborted) {
       resolvingRef.current = false;
+      startScanning();
       return;
     }
 
     if (creditReward > 0) {
       awardRunCredits(creditReward, 'procedural narrative resolver');
-    } else {
+    } else if (!requiresResourcePack) {
       awardRunCredits(narrativeCheckCredits(), 'narrative calibration cleared');
     }
+
+    if (requiresResourcePack) {
+      appendRunLog('>> RESOURCE CACHE STAGED — PACK CARGO BEFORE VECTOR RESUME.');
+      resolvingRef.current = false;
+      startResourceHarvest();
+      return;
+    }
+
     appendRunLog('>> NARRATIVE NODE RESOLVED — RETURNING TO LEY-LINE GRID.');
     finalizeIncursionAdvance('Narrative event cleared.');
   };

@@ -1,9 +1,10 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 export interface InlineScannerEngagementProps {
   headline?: string;
   spectralLines: string[];
+  statusLines?: string[];
   canEngage: boolean;
   accent: string;
   mutedColor: string;
@@ -16,6 +17,7 @@ export interface InlineScannerEngagementProps {
 export default function InlineScannerEngagement({
   headline,
   spectralLines,
+  statusLines = [],
   canEngage,
   accent,
   mutedColor,
@@ -32,11 +34,27 @@ export default function InlineScannerEngagement({
               {headline}
             </Text>
           ) : null}
-          {spectralLines.map((line) => (
-            <Text key={line} style={[styles.dockSpectral, { color: mutedColor }]} numberOfLines={1}>
-              {line}
-            </Text>
-          ))}
+          <ScrollView
+            style={styles.dockScroll}
+            contentContainerStyle={styles.dockScrollContent}
+            showsVerticalScrollIndicator={false}
+            nestedScrollEnabled
+          >
+            {spectralLines.map((line) => (
+              <Text key={line} style={[styles.dockSpectral, { color: mutedColor }]} numberOfLines={2}>
+                {line}
+              </Text>
+            ))}
+            {statusLines.length > 0 ? (
+              <View style={styles.dockStatusBlock}>
+                {statusLines.map((line) => (
+                  <Text key={line} style={[styles.dockStatus, { color: accent }]} numberOfLines={2}>
+                    {line}
+                  </Text>
+                ))}
+              </View>
+            ) : null}
+          </ScrollView>
         </View>
         <Pressable
           onPress={onEngage}
@@ -65,6 +83,12 @@ export default function InlineScannerEngagement({
 
         {spectralLines.map((line) => (
           <Text key={line} style={[styles.spectralLine, { color: accent }]} numberOfLines={2}>
+            {line}
+          </Text>
+        ))}
+
+        {statusLines.map((line) => (
+          <Text key={line} style={[styles.statusLine, { color: mutedColor }]} numberOfLines={2}>
             {line}
           </Text>
         ))}
@@ -106,6 +130,13 @@ const styles = StyleSheet.create({
     lineHeight: 9,
     letterSpacing: 0.3,
   },
+  statusLine: {
+    fontFamily: 'monospace',
+    fontSize: 7,
+    lineHeight: 9,
+    letterSpacing: 0.3,
+    fontWeight: '600',
+  },
   actionBtn: {
     borderWidth: 1,
     paddingVertical: 6,
@@ -127,6 +158,14 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     gap: 2,
+    maxHeight: 88,
+  },
+  dockScroll: {
+    flexGrow: 0,
+    maxHeight: 72,
+  },
+  dockScrollContent: {
+    gap: 1,
   },
   dockHeadline: {
     fontFamily: 'monospace',
@@ -138,6 +177,16 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     fontSize: 7,
     letterSpacing: 0.3,
+  },
+  dockStatusBlock: {
+    marginTop: 3,
+    gap: 1,
+  },
+  dockStatus: {
+    fontFamily: 'monospace',
+    fontSize: 7,
+    letterSpacing: 0.3,
+    fontWeight: '600',
   },
   dockActionBtn: {
     borderWidth: 1,
