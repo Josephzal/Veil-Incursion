@@ -62,8 +62,8 @@ export function critLabelAnchorAboveHitbox(
 const DEPTH_SCALE_PIVOT_Y = 76;
 
 /** Lone hostile — centered column, lifted, slightly smaller than a frontline pair tile. */
-export const SOLO_SLOT_BOTTOM = '10%';
-export const SOLO_UNIT_SCALE = 0.88;
+export const SOLO_SLOT_BOTTOM = '20%';
+export const SOLO_UNIT_SCALE = 0.95;
 export const SOLO_UNIT_TRANSLATE_Y = -14;
 
 /** Matches CombatPlayerViewport.spriteFrame width. */

@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, StyleSheet, View, Dimensions, type ImageSourcePropType } from 'react-native';
+import { Animated, Easing, Image, StyleSheet, View, Dimensions, type ImageSourcePropType } from 'react-native';
 import {
   resolveCombatEnemyPortrait,
   resolvePortraitKeySuffix,
@@ -48,6 +48,7 @@ import { shouldGrantAdrenalinePrimerAp } from '../data/boundRequisitionEngine';
 import type { IncursionConsumableUseResult } from '../types/incursionInventory';
 
 import AegisCombat from '../../assets/images/character images/aegis/aegis_combat.png';
+import OverworldArenaBg from '../../assets/images/environment images/overworld.png';
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('screen');
 const ARENA_MIN_HEIGHT = Math.round(SCREEN_HEIGHT * 0.28);
@@ -503,6 +504,8 @@ export default function CombatScreen(): React.JSX.Element {
                 },
               ]}
             >
+              <Image source={OverworldArenaBg} style={styles.arenaBackground} resizeMode="cover" />
+
               {selectedEnemyUnit ? (
                 <View style={styles.enemyIntelOverlay} pointerEvents="none">
                   <CombatSelectedEnemyIntel
@@ -611,10 +614,12 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     minHeight: ARENA_MIN_HEIGHT,
     width: '100%',
-    overflow: 'visible',
+    overflow: 'hidden',
     position: 'relative',
-    marginBottom: 2,
     zIndex: 2,
+  },
+  arenaBackground: {
+    ...StyleSheet.absoluteFillObject,
   },
   enemyIntelOverlay: {
     position: 'absolute',
@@ -633,7 +638,6 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     width: '100%',
     overflow: 'hidden',
-    marginTop: 10,
     marginBottom: 4,
   },
 });
