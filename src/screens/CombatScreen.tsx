@@ -312,9 +312,9 @@ export default function CombatScreen(): React.JSX.Element {
       });
   }, [bootstrappedSquadUi.units, effectiveSquadUi.units, nodeType]);
 
-  const showEnemySquadPanel = gridUnits.length > 0 && resolutionOutcome === null;
+  const showVictoryBanner = resolutionOutcome === 'VICTORY';
 
-  const enemySquadPanel = showEnemySquadPanel ? (
+  const enemySquadPanel = (
     <CombatEnemyGrid
       variant="arena"
       layoutMode={arenaLayoutMode}
@@ -325,7 +325,7 @@ export default function CombatScreen(): React.JSX.Element {
       accentColor={theme.primaryColor}
       mutedColor={theme.mutedColor}
     />
-  ) : undefined;
+  );
 
   const focusedPortraitSource = useMemo(() => {
     const focused = gridUnits.find((unit) => unit.isFocused && !unit.isDead)
@@ -523,7 +523,7 @@ export default function CombatScreen(): React.JSX.Element {
                 onEradicationComplete={handleEradicationComplete}
               />
 
-              {resolutionOutcome === 'VICTORY' ? (
+              {showVictoryBanner ? (
                 <CombatResolutionBanner
                   outcome="VICTORY"
                   primaryColor="#00ff33"

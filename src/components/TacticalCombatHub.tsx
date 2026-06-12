@@ -375,6 +375,8 @@ export default function TacticalCombatHub({
   const dissolveSeqRef = useRef<Record<string, number>>({});
   const dissolvedHiddenRef = useRef<Set<string>>(new Set());
   const pendingVictoryRef = useRef(false);
+  const wasEnemyTurnAtVictoryRef = useRef(false);
+  const lastActiveTurnPhaseRef = useRef<CombatTurnPhase>('PLAYER_COMMAND');
   const survivedEnemyTurnsRef = useRef(0);
   const isPlayerTurnRef = useRef(isPlayerTurn);
   const resolutionRef = useRef<'VICTORY' | 'DEFEAT' | null>(null);
@@ -479,6 +481,10 @@ export default function TacticalCombatHub({
     if (!isPlayerTurn) return 'ENEMY_ACTION';
     return 'PLAYER_COMMAND';
   }, [cycleState, enemyActionStage, isPlayerTurn]);
+
+  if (combatTurnPhase !== 'RESOLUTION') {
+    lastActiveTurnPhaseRef.current = combatTurnPhase;
+  }
 
   const setCombatTurnState = combatTurn?.setCombatTurnState;
 
@@ -635,17 +641,28 @@ export default function TacticalCombatHub({
       return dissolvedHiddenRef.current.has(id);
     });
 
+  const tryResolvePendingVictory = () => {
+    if (
+      resolutionRef.current != null
+      || !allUnitsDefeated(squadRef.current)
+      || !allDeadUnitsDissolved(squadRef.current)
+    ) {
+      return false;
+    }
+    pendingVictoryRef.current = false;
+    resolveVictoryRef.current();
+    return true;
+  };
+
   const handleUnitDissolveComplete = (unitId: string) => {
     dissolvedHiddenRef.current.add(unitId);
     publishSquadUi(squadRef.current);
-    if (
-      pendingVictoryRef.current
-      && allUnitsDefeated(squadRef.current)
-      && allDeadUnitsDissolved(squadRef.current)
-    ) {
-      pendingVictoryRef.current = false;
-      resolveVictoryRef.current();
-    }
+
+    if (!allUnitsDefeated(squadRef.current)) return;
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(tryResolvePendingVictory);
+    });
   };
 
   const handleUnitDissolveCompleteRef = useRef(handleUnitDissolveComplete);
@@ -870,6 +887,9 @@ export default function TacticalCombatHub({
   const resolve = (victory: boolean) => {
     if (resolutionRef.current != null) return;
     if (operativeHpRef.current <= 0) victory = false;
+    if (victory) {
+      wasEnemyTurnAtVictoryRef.current = !isPlayerTurnRef.current;
+    }
     abortCombatMinigames();
     cycleRef.current = 'RESOLUTION';
     setCycleState('RESOLUTION');
@@ -894,8 +914,11 @@ export default function TacticalCombatHub({
   resolveVictoryRef.current = () => resolve(true);
 
   useEffect(() => {
-    registerKillResolver?.(() => resolveVictoryRef.current());
-  }, [registerKillResolver]);
+    registerKillResolver?.(() => {
+      if (arenaLayout) return;
+      resolveVictoryRef.current();
+    });
+  }, [arenaLayout, registerKillResolver]);
 
   const applyHealRef = useRef((amount: number) => {
     setOperativeHp((p) => {
@@ -1426,6 +1449,7 @@ export default function TacticalCombatHub({
 
     if (allUnitsDefeated(squadRef.current)) {
       if (cycleRef.current === 'DEFEND_PARRY') {
+        if (arenaLayout) pendingVictoryRef.current = true;
         return true;
       }
       if (cycleRef.current === 'OFFENSE_SLICE') {
@@ -2313,7 +2337,10 @@ export default function TacticalCombatHub({
     cycleRef.current = 'TEXT_COMBAT';
     setCycleState('TEXT_COMBAT');
     if (arenaLayout) {
-      resolve(true);
+      pendingVictoryRef.current = true;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(tryResolvePendingVictory);
+      });
       return;
     }
     const viewport = apparitionRef?.current;
@@ -2884,9 +2911,12 @@ export default function TacticalCombatHub({
     </View>
   );
 
+  const holdVictoryChrome =
+    cycleState === 'RESOLUTION' && resolutionOutcome === 'VICTORY';
+
   const renderTurnBanner = () => (
     <CombatTurnBanner
-      phase={combatTurnPhase}
+      phase={holdVictoryChrome ? lastActiveTurnPhaseRef.current : combatTurnPhase}
       primaryColor={theme.primaryColor}
       mutedColor={theme.mutedColor}
       enemyIntent={enemy?.intent}
@@ -2935,17 +2965,21 @@ export default function TacticalCombatHub({
     );
   };
 
+  const showCommandDeck =
+    (cycleState === 'TEXT_COMBAT' && isPlayerTurn)
+    || (holdVictoryChrome && !wasEnemyTurnAtVictoryRef.current);
+
+  const showEnemyTurnPanel =
+    (cycleState === 'TEXT_COMBAT' && !isPlayerTurn)
+    || (holdVictoryChrome && wasEnemyTurnAtVictoryRef.current);
+
   const renderCommandDeckSlot = () => (
     <View style={styles.commandDeckAnchor}>
       {showCommandDeck ? commandDeck : null}
-      {cycleState === 'TEXT_COMBAT' && !isPlayerTurn ? renderEnemyTurnPanel() : null}
+      {showEnemyTurnPanel ? renderEnemyTurnPanel() : null}
       {deckStrikeOverlay && !arenaLayout ? <CombatDeckStrikeOverlay variant={deckStrikeOverlay} /> : null}
     </View>
   );
-
-  const showCommandDeck =
-    (cycleState === 'TEXT_COMBAT' && isPlayerTurn)
-    || (cycleState === 'RESOLUTION' && resolutionOutcome === 'VICTORY');
 
   const useEnemyArenaChrome = stackedLayout && enemyChrome != null;
 
