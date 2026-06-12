@@ -37,8 +37,6 @@ export default function CombatEnemyCritImpact({
   const lastSeqRef = useRef(0);
   const flashOpacity = useSharedValue(0);
   const slashScale = useSharedValue(0.4);
-  const shakeX = useSharedValue(0);
-  const shakeY = useSharedValue(0);
   const [flashColor, setFlashColor] = React.useState(CRIT_COLORS.KINETIC);
 
   useEffect(() => {
@@ -63,19 +61,6 @@ export default function CombatEnemyCritImpact({
       withTiming(0.85, { duration: 120 }),
     );
 
-    shakeX.value = withSequence(
-      withTiming(-14, { duration: 35 }),
-      withTiming(16, { duration: 35 }),
-      withTiming(-10, { duration: 30 }),
-      withTiming(8, { duration: 30 }),
-      withTiming(0, { duration: 50 }),
-    );
-    shakeY.value = withSequence(
-      withTiming(-6, { duration: 35 }),
-      withTiming(5, { duration: 35 }),
-      withTiming(0, { duration: 80 }),
-    );
-
     const releaseTimer = setTimeout(() => {
       onHitStopChange?.(false);
     }, HIT_STOP_MS);
@@ -84,21 +69,12 @@ export default function CombatEnemyCritImpact({
       clearTimeout(releaseTimer);
       onHitStopChange?.(false);
     };
-  }, [channel, critImpactSeq, flashOpacity, onHitStopChange, shakeX, shakeY, slashScale]);
+  }, [channel, critImpactSeq, flashOpacity, onHitStopChange, slashScale]);
 
   useEffect(() => () => {
     cancelAnimation(flashOpacity);
     cancelAnimation(slashScale);
-    cancelAnimation(shakeX);
-    cancelAnimation(shakeY);
-  }, [flashOpacity, shakeX, shakeY, slashScale]);
-
-  const shakeStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: shakeX.value },
-      { translateY: shakeY.value },
-    ],
-  }));
+  }, [flashOpacity, slashScale]);
 
   const slashStyle = useAnimatedStyle(() => ({
     opacity: flashOpacity.value,
@@ -106,7 +82,7 @@ export default function CombatEnemyCritImpact({
   }));
 
   return (
-    <Animated.View style={[styles.root, shakeStyle]}>
+    <View style={styles.root}>
       {children}
       <Animated.View style={[styles.slashWrap, slashStyle]} pointerEvents="none">
         <View style={[styles.slashMain, { backgroundColor: flashColor, shadowColor: flashColor }]} />
@@ -114,7 +90,7 @@ export default function CombatEnemyCritImpact({
         <View style={[styles.slashJagB, { backgroundColor: flashColor }]} />
         <View style={[styles.slashCore, { backgroundColor: '#ffffff' }]} />
       </Animated.View>
-    </Animated.View>
+    </View>
   );
 }
 

@@ -268,3 +268,23 @@ export function unitOccupiesArenaSlot(unit: ArenaLayoutUnit): boolean {
 
 /** Duration for slot-to-slot position tweens (ms). */
 export const ARENA_SLOT_TRANSITION_MS = 300;
+
+/** Backline melee dash-and-return timing (ms). */
+export const BACKLINE_MELEE_DASH_WINDUP_MS = 150;
+export const BACKLINE_MELEE_DASH_WINDUP_X = 10;
+export const BACKLINE_MELEE_DASH_MS = 200;
+export const BACKLINE_MELEE_DASH_HOLD_MS = 100;
+export const BACKLINE_MELEE_DASH_RETURN_MS = 400;
+
+/** Impact frame — windup complete + dash arrival. */
+export const BACKLINE_MELEE_DASH_IMPACT_MS =
+  BACKLINE_MELEE_DASH_WINDUP_MS + BACKLINE_MELEE_DASH_MS;
+
+export const BACKLINE_MELEE_DASH_TOTAL_MS =
+  BACKLINE_MELEE_DASH_IMPACT_MS + BACKLINE_MELEE_DASH_HOLD_MS + BACKLINE_MELEE_DASH_RETURN_MS;
+
+/** Viewport distance for a backline hostile to overlap the operative sprite. */
+export function backlineMeleeDashTranslateX(screenWidth = Dimensions.get('window').width): number {
+  const columnHalf = screenWidth * 0.5;
+  return -(columnHalf * 1.42);
+}

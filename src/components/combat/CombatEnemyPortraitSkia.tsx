@@ -1,15 +1,6 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Image, type ImageSourcePropType, StyleSheet, View } from 'react-native';
-import Animated, {
-  Easing,
-  cancelAnimation,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withSequence,
-  withTiming,
-} from 'react-native-reanimated';
-import type { EnemyPortraitAnim, EnemyPortraitGlow, EnemyIntentShimmer } from '../../utils/combatTelemetryFormat';
+import type { EnemyPortraitGlow, EnemyIntentShimmer } from '../../utils/combatTelemetryFormat';
 import CombatEnemyIntentShimmer, { enemySpriteStyles } from './CombatEnemyIntentShimmer';
 
 const GLOW_TINT: Record<Exclude<EnemyPortraitGlow, 'none'>, string> = {
@@ -30,118 +21,51 @@ const GLOW_OPACITY: Record<Exclude<EnemyPortraitGlow, 'none'>, number> = {
   'enemy-charging': 0.38,
 };
 
-const LUNGE_DISTANCE = 22;
-const LUNGE_MS = 320;
-const SHIMMY_RADIUS_X = 5;
-const SHIMMY_RADIUS_Y = 4;
-const SHIMMY_MS = 760;
-
 interface CombatEnemyPortraitSkiaProps {
   source: ImageSourcePropType;
   glow: EnemyPortraitGlow;
-  anim?: EnemyPortraitAnim;
-  frozen?: boolean;
   intentShimmer?: EnemyIntentShimmer | null;
 }
 
-/** Passive portrait art — touch handled by EnemyUnit hitbox sibling. */
+/** Passive portrait art — slot motion handled by CombatEnemyAnchorMotion. */
 export default function CombatEnemyPortraitSkia({
   source,
   glow,
-  anim = 'none',
-  frozen = false,
   intentShimmer = null,
 }: CombatEnemyPortraitSkiaProps): React.JSX.Element {
   const glowTint = glow !== 'none' ? GLOW_TINT[glow] : null;
   const glowScale = glow !== 'none' ? GLOW_SCALE[glow] : 1.05;
   const glowOpacity = glow !== 'none' ? GLOW_OPACITY[glow] : 0.3;
 
-  const lungeX = useSharedValue(0);
-  const shimmyPhase = useSharedValue(0);
-  const animMode = useSharedValue(0);
-
-  useEffect(() => {
-    if (frozen) return;
-    animMode.value = anim === 'shimmy' ? 2 : anim === 'lunge' ? 1 : 0;
-  }, [anim, animMode, frozen]);
-
-  useEffect(() => {
-    if (frozen) return;
-    if (anim === 'lunge') {
-      lungeX.value = withSequence(
-        withTiming(-LUNGE_DISTANCE, {
-          duration: LUNGE_MS * 0.45,
-          easing: Easing.out(Easing.cubic),
-        }),
-        withTiming(0, {
-          duration: LUNGE_MS * 0.55,
-          easing: Easing.inOut(Easing.cubic),
-        }),
-      );
-      return;
-    }
-    lungeX.value = withTiming(0, { duration: 120 });
-  }, [anim, frozen, lungeX]);
-
-  useEffect(() => {
-    if (frozen) return;
-    if (anim === 'shimmy') {
-      shimmyPhase.value = withRepeat(
-        withTiming(Math.PI * 2, { duration: SHIMMY_MS, easing: Easing.linear }),
-        -1,
-        false,
-      );
-      return;
-    }
-    cancelAnimation(shimmyPhase);
-    shimmyPhase.value = withTiming(0, { duration: 120 });
-  }, [anim, frozen, shimmyPhase]);
-
-  const motionStyle = useAnimatedStyle(() => {
-    if (animMode.value === 2) {
-      return {
-        transform: [
-          { translateX: Math.cos(shimmyPhase.value) * SHIMMY_RADIUS_X },
-          { translateY: Math.sin(shimmyPhase.value) * SHIMMY_RADIUS_Y },
-        ],
-      };
-    }
-    return {
-      transform: [{ translateX: lungeX.value }],
-    };
-  });
-
   return (
     <View style={styles.root} pointerEvents="none" collapsable={false}>
-      <Animated.View style={[styles.motionWrap, motionStyle]} pointerEvents="none">
-        {glowTint ? (
-          <View style={styles.glowDuplicate} pointerEvents="none">
-            <Image
-              source={source}
-              resizeMode="contain"
-              style={[
-                enemySpriteStyles.enemySprite,
-                {
-                  tintColor: glowTint,
-                  opacity: glowOpacity,
-                  transform: [{ scale: glowScale }],
-                },
-              ]}
-            />
-          </View>
-        ) : null}
-        <View style={styles.enemySpriteStack} pointerEvents="none">
-          <CombatEnemyIntentShimmer kind={intentShimmer} source={source} layer="back" />
+      {glowTint ? (
+        <View style={styles.glowDuplicate} pointerEvents="none">
           <Image
             source={source}
             resizeMode="contain"
-            style={enemySpriteStyles.enemySprite}
-            nativeID="enemy-sprite"
-            accessibilityLabel="enemy-sprite"
+            style={[
+              enemySpriteStyles.enemySprite,
+              {
+                tintColor: glowTint,
+                opacity: glowOpacity,
+                transform: [{ scale: glowScale }],
+              },
+            ]}
           />
-          <CombatEnemyIntentShimmer kind={intentShimmer} source={source} layer="front" />
         </View>
-      </Animated.View>
+      ) : null}
+      <View style={styles.enemySpriteStack} pointerEvents="none">
+        <CombatEnemyIntentShimmer kind={intentShimmer} source={source} layer="back" />
+        <Image
+          source={source}
+          resizeMode="contain"
+          style={enemySpriteStyles.enemySprite}
+          nativeID="enemy-sprite"
+          accessibilityLabel="enemy-sprite"
+        />
+        <CombatEnemyIntentShimmer kind={intentShimmer} source={source} layer="front" />
+      </View>
     </View>
   );
 }
@@ -153,13 +77,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
     overflow: 'visible',
-  },
-  motionWrap: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    overflow: 'hidden',
+    backgroundColor: 'transparent',
   },
   enemySpriteStack: {
     width: '100%',

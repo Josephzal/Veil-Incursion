@@ -13,6 +13,7 @@ import {
   FRONTLINE_HITBOX,
   SOLO_UNIT_SCALE,
 } from './combatEnemyBarLayout';
+import CombatEnemyAnchorMotion from './CombatEnemyAnchorMotion';
 import CombatEnemyCritImpact from './CombatEnemyCritImpact';
 import CombatEnemyCritLabel from './CombatEnemyCritLabel';
 import CombatEnemyEvadeLabel from './CombatEnemyEvadeLabel';
@@ -69,6 +70,7 @@ export default function CombatEnemyUnit({
     <CombatEnemyDissolveEffect
       dissolveSeq={unit.dissolveSeq}
       active={dissolving}
+      portraitSource={unit.portraitSource}
       onComplete={onDissolveComplete}
     >
       <View
@@ -82,58 +84,64 @@ export default function CombatEnemyUnit({
         ]}
         pointerEvents={dissolving ? 'none' : 'box-none'}
       >
-        <View style={styles.spriteFrame} pointerEvents="none">
-          <CombatEnemyCritImpact
-            critImpactSeq={unit.critImpactSeq}
-            channel={unit.critImpactChannel}
-            onHitStopChange={handleHitStopChange}
-          >
-            <CombatEnemyHitEffect hitFlashSeq={unit.hitFlashSeq} portraitSource={unit.portraitSource}>
-              <CombatSilhouetteShatterEffect trigger={fractured} portraitSource={unit.portraitSource}>
-                <CombatEnemyPortraitSkia
-                  source={unit.portraitSource}
-                  glow={portraitGlow}
-                  anim={unit.portraitAnim ?? 'none'}
-                  frozen={portraitFrozen}
-                  intentShimmer={unit.intentShimmer ?? null}
-                />
-              </CombatSilhouetteShatterEffect>
-            </CombatEnemyHitEffect>
-          </CombatEnemyCritImpact>
-        </View>
-
-        <View
-          style={[
-            styles.critLabelAnchor,
-            critLabelAnchor,
-            { transform: [{ scale: critLabelScale }] },
-          ]}
-          pointerEvents="none"
+        <CombatEnemyAnchorMotion
+          isActingTurn={unit.isActingEnemy}
+          isBacklineDashing={unit.isBacklineDashing}
+          hitFlashSeq={unit.hitFlashSeq}
+          backlineMeleeDashSeq={unit.backlineMeleeDashSeq}
+          frozen={portraitFrozen || dissolving}
         >
-          <CombatEnemyCritLabel
-            critImpactSeq={unit.critImpactSeq}
-            channel={unit.critImpactChannel}
-          />
-          <CombatEnemyEvadeLabel evadeImpactSeq={unit.evadeImpactSeq} />
-        </View>
+          <View style={styles.spriteFrame} pointerEvents="none">
+            <CombatEnemyCritImpact
+              critImpactSeq={unit.critImpactSeq}
+              channel={unit.critImpactChannel}
+              onHitStopChange={handleHitStopChange}
+            >
+              <CombatEnemyHitEffect hitFlashSeq={unit.hitFlashSeq} portraitSource={unit.portraitSource}>
+                <CombatSilhouetteShatterEffect trigger={fractured} portraitSource={unit.portraitSource}>
+                  <CombatEnemyPortraitSkia
+                    source={unit.portraitSource}
+                    glow={portraitGlow}
+                    intentShimmer={unit.intentShimmer ?? null}
+                  />
+                </CombatSilhouetteShatterEffect>
+              </CombatEnemyHitEffect>
+            </CombatEnemyCritImpact>
+          </View>
 
-        {onPress && !dissolving ? (
-          <Pressable
-            onPress={onPress}
+          <View
             style={[
-              styles.hitbox,
-              {
-                width: hitboxLayout.width,
-                height: hitboxLayout.height,
-              },
-              'bottom' in hitboxLayout
-                ? { bottom: hitboxLayout.bottom }
-                : { top: hitboxLayout.top },
-              ENEMY_HITBOX_DEBUG ? styles.hitboxDebug : null,
+              styles.critLabelAnchor,
+              critLabelAnchor,
+              { transform: [{ scale: critLabelScale }] },
             ]}
-            pointerEvents="auto"
-          />
-        ) : null}
+            pointerEvents="none"
+          >
+            <CombatEnemyCritLabel
+              critImpactSeq={unit.critImpactSeq}
+              channel={unit.critImpactChannel}
+            />
+            <CombatEnemyEvadeLabel evadeImpactSeq={unit.evadeImpactSeq} />
+          </View>
+
+          {onPress && !dissolving ? (
+            <Pressable
+              onPress={onPress}
+              style={[
+                styles.hitbox,
+                {
+                  width: hitboxLayout.width,
+                  height: hitboxLayout.height,
+                },
+                'bottom' in hitboxLayout
+                  ? { bottom: hitboxLayout.bottom }
+                  : { top: hitboxLayout.top },
+                ENEMY_HITBOX_DEBUG ? styles.hitboxDebug : null,
+              ]}
+              pointerEvents="auto"
+            />
+          ) : null}
+        </CombatEnemyAnchorMotion>
       </View>
     </CombatEnemyDissolveEffect>
   );
@@ -147,6 +155,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
     position: 'relative',
+    backgroundColor: 'transparent',
   },
   imageShellArena: {
     minHeight: 0,

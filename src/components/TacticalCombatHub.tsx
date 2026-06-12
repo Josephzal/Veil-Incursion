@@ -141,6 +141,10 @@ import {
   GAUGE_STAMINA,
   GAUGE_TRACK_BORDER,
 } from '../utils/combatTelemetryFormat';
+import {
+  BACKLINE_MELEE_DASH_IMPACT_MS,
+  BACKLINE_MELEE_DASH_TOTAL_MS,
+} from './combat/combatEnemyBarLayout';
 import VignetteFlashOverlay from './VignetteFlashOverlay';
 import {
   applyAbyssalSiphon,
@@ -366,8 +370,11 @@ export default function TacticalCombatHub({
   const hitFlashSeqRef = useRef<Record<string, number>>({});
   const critImpactSeqRef = useRef<Record<string, { seq: number; channel: 'KINETIC' | 'OCCULT' | 'TRUE' }>>({});
   const evadeImpactSeqRef = useRef<Record<string, number>>({});
+  const backlineDashSeqRef = useRef<Record<string, number>>({});
+  const backlineDashActiveRef = useRef<Record<string, boolean>>({});
   const dissolveSeqRef = useRef<Record<string, number>>({});
   const dissolvedHiddenRef = useRef<Set<string>>(new Set());
+  const pendingVictoryRef = useRef(false);
   const survivedEnemyTurnsRef = useRef(0);
   const isPlayerTurnRef = useRef(isPlayerTurn);
   const resolutionRef = useRef<'VICTORY' | 'DEFEAT' | null>(null);
@@ -598,6 +605,12 @@ export default function TacticalCombatHub({
           isSelected: isPlayerTurnRef.current && selectedTargetIdRef.current === u.unitId,
           isTargetable: targetable,
           isFocused: focusedUnitIdRef.current === u.unitId,
+          isActingEnemy: !isPlayerTurnRef.current
+            && cycleRef.current === 'TEXT_COMBAT'
+            && enemyActionStageRef.current != null
+            && resolveActingEnemyId() === unitId,
+          isBacklineDashing: backlineDashActiveRef.current[unitId] === true,
+          backlineMeleeDashSeq: backlineDashSeqRef.current[unitId] ?? 0,
           isBlocked: blocked,
           isHookValid: hookValid,
           isFractured: isEnemyFractured(u),
@@ -625,7 +638,12 @@ export default function TacticalCombatHub({
   const handleUnitDissolveComplete = (unitId: string) => {
     dissolvedHiddenRef.current.add(unitId);
     publishSquadUi(squadRef.current);
-    if (allUnitsDefeated(squadRef.current) && allDeadUnitsDissolved(squadRef.current)) {
+    if (
+      pendingVictoryRef.current
+      && allUnitsDefeated(squadRef.current)
+      && allDeadUnitsDissolved(squadRef.current)
+    ) {
+      pendingVictoryRef.current = false;
       resolveVictoryRef.current();
     }
   };
@@ -652,6 +670,7 @@ export default function TacticalCombatHub({
         if (unit.unitId && unit.sharedBossPool) bump(unit.unitId);
       });
     }
+    publishSquadUi(squadRef.current);
   };
 
   const focusEnemy = (unit: EnemyCombatProfile | null) => {
@@ -1415,9 +1434,7 @@ export default function TacticalCombatHub({
         setCycleState('TEXT_COMBAT');
       }
       if (arenaLayout) {
-        if (allDeadUnitsDissolved(squadRef.current)) {
-          resolve(true);
-        }
+        pendingVictoryRef.current = true;
         return true;
       }
       if (viewport) {
@@ -1811,7 +1828,29 @@ export default function TacticalCombatHub({
       setEnemyActionStage('executing');
       apparitionRef?.current?.triggerAttackEffect();
       const overlayVariant = getEnemyDeckStrikeVariant(acting.intent);
-      if (overlayVariant) {
+      const isBacklineMelee = arenaLayout
+        && acting.gridSlot?.startsWith('BL') === true
+        && isEnemyDamageIntent(acting.intent);
+
+      if (isBacklineMelee && acting.unitId) {
+        const dashUnitId = acting.unitId;
+        backlineDashSeqRef.current[dashUnitId] = (backlineDashSeqRef.current[dashUnitId] ?? 0) + 1;
+        backlineDashActiveRef.current[dashUnitId] = true;
+        publishSquadUi(squadRef.current);
+
+        setTimeout(() => {
+          if (isCombatTerminal()) return;
+          if (overlayVariant) {
+            showStrikeFeedback(overlayVariant);
+            if (overlayVariant === 'hp') applyHpStrikeOnDeckImpact(acting);
+          }
+        }, BACKLINE_MELEE_DASH_IMPACT_MS);
+
+        setTimeout(() => {
+          backlineDashActiveRef.current[dashUnitId] = false;
+          publishSquadUi(squadRef.current);
+        }, BACKLINE_MELEE_DASH_TOTAL_MS);
+      } else if (overlayVariant) {
         showStrikeFeedback(overlayVariant);
         if (overlayVariant === 'hp') applyHpStrikeOnDeckImpact(acting);
       }

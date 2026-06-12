@@ -16,7 +16,7 @@ interface CombatEnemyHitEffectProps {
   children: React.ReactNode;
 }
 
-/** Red image tint + slight shake when the operative deals damage to this hostile. */
+/** Red image tint flash when the operative deals damage — motion handled by anchor layer. */
 export default function CombatEnemyHitEffect({
   hitFlashSeq = 0,
   portraitSource,
@@ -24,8 +24,6 @@ export default function CombatEnemyHitEffect({
 }: CombatEnemyHitEffectProps): React.JSX.Element {
   const lastSeqRef = useRef(0);
   const flashOpacity = useSharedValue(0);
-  const shakeX = useSharedValue(0);
-  const shakeY = useSharedValue(0);
 
   useEffect(() => {
     if (hitFlashSeq <= 0 || hitFlashSeq === lastSeqRef.current) return;
@@ -35,33 +33,14 @@ export default function CombatEnemyHitEffect({
       withTiming(0.65, { duration: 60, easing: Easing.out(Easing.quad) }),
       withTiming(0, { duration: 180, easing: Easing.in(Easing.quad) }),
     );
-
-    shakeX.value = withSequence(
-      withTiming(-6, { duration: 35 }),
-      withTiming(6, { duration: 35 }),
-      withTiming(-4, { duration: 30 }),
-      withTiming(0, { duration: 40 }),
-    );
-    shakeY.value = withSequence(
-      withTiming(-3, { duration: 35 }),
-      withTiming(3, { duration: 35 }),
-      withTiming(0, { duration: 50 }),
-    );
-  }, [flashOpacity, hitFlashSeq, shakeX, shakeY]);
-
-  const shakeStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: shakeX.value },
-      { translateY: shakeY.value },
-    ],
-  }));
+  }, [flashOpacity, hitFlashSeq]);
 
   const flashStyle = useAnimatedStyle(() => ({
     opacity: flashOpacity.value,
   }));
 
   return (
-    <Animated.View style={[styles.root, shakeStyle]}>
+    <Animated.View style={styles.root}>
       {children}
       <Animated.View style={[styles.imageFlashWrap, flashStyle]} pointerEvents="none">
         <Image

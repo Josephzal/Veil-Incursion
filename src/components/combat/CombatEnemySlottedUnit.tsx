@@ -140,7 +140,11 @@ export default function CombatEnemySlottedUnit({
 
   return (
     <Animated.View
-      style={[styles.slotUnit, containerStyle, { zIndex: layout.zIndex }]}
+      style={[
+        styles.slotUnit,
+        containerStyle,
+        { zIndex: unit.isBacklineDashing ? 50 : layout.zIndex },
+      ]}
       pointerEvents="box-none"
     >
       <Animated.View style={[styles.enemyUnit, depthStyle]} pointerEvents="box-none">

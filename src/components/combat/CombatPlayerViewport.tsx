@@ -2,11 +2,11 @@ import React, {
   forwardRef,
   useEffect,
   useImperativeHandle,
-  useMemo,
   useRef,
   useState,
 } from 'react';
 import {
+  Image,
   type ImageSourcePropType,
   type LayoutChangeEvent,
   type StyleProp,
@@ -14,20 +14,9 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import {
-  BlendColor,
-  Canvas,
-  Group,
-  Image,
-  Rect,
-  useImage,
-} from '@shopify/react-native-skia';
-import CombatSpritePlaceholder from './CombatSpritePlaceholder';
-import type { DataSourceParam } from '@shopify/react-native-skia';
 import Animated, {
   Easing,
   useAnimatedStyle,
-  useDerivedValue,
   useSharedValue,
   withRepeat,
   withSequence,
@@ -47,14 +36,6 @@ const FLASH_COLORS: Record<EnemyDeckStrikeVariant, string> = {
   abyssal: '#00D2C4',
 };
 
-function toSkiaImageSource(source: ImageSourcePropType): DataSourceParam {
-  if (typeof source === 'number') return source;
-  if (typeof source === 'object' && source != null && 'uri' in source && typeof source.uri === 'string') {
-    return source.uri;
-  }
-  return null;
-}
-
 export interface CombatPlayerViewportRef {
   triggerDamageEffect: (variant?: EnemyDeckStrikeVariant) => void;
   triggerAttackLunge: () => void;
@@ -72,10 +53,6 @@ interface CombatPlayerViewportProps {
 
 const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerViewportProps>(
   function CombatPlayerViewport({ imageSource, style, wardPrimed = false, abilityPrimed = false }, ref) {
-    const skiaSource = useMemo(() => toSkiaImageSource(imageSource), [imageSource]);
-    const skiaImage = useImage(skiaSource);
-    const [layout, setLayout] = useState({ width: 0, height: 0 });
-
     const shakeX = useSharedValue(0);
     const lungeX = useSharedValue(0);
     const flashOpacity = useSharedValue(0);
@@ -84,11 +61,6 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
     const glowOpacity = useSharedValue(0);
 
     const primed = wardPrimed || abilityPrimed;
-
-    const handleLayout = (event: LayoutChangeEvent) => {
-      const { width, height } = event.nativeEvent.layout;
-      setLayout({ width, height });
-    };
 
     useEffect(() => {
       if (primed) {
@@ -161,48 +133,36 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
       transform: [{ translateX: shakeX.value + lungeX.value }],
     }));
 
-    const imageGlowStyle = useAnimatedStyle(() => ({
-      shadowColor: PRIMED_GLOW,
-      shadowOffset: { width: 0, height: 0 },
-      shadowOpacity: glowOpacity.value,
-      shadowRadius: 15,
+    const glowStyle = useAnimatedStyle(() => ({
+      opacity: glowOpacity.value * 0.38,
     }));
 
-    const damageBlendOpacity = useDerivedValue(() => flashOpacity.value);
-
-    const hasLayout = layout.width > 0 && layout.height > 0;
+    const flashStyle = useAnimatedStyle(() => ({
+      opacity: flashOpacity.value,
+    }));
 
     return (
       <View style={[styles.root, style]}>
-        <Animated.View style={[styles.spriteFrame, frameAnimatedStyle]} onLayout={handleLayout}>
-          {hasLayout ? (
-            <>
-              <Animated.Image
-                source={imageSource}
-                style={[styles.playerImage, imageGlowStyle]}
-                resizeMode="contain"
-              />
-              <Canvas style={styles.effectCanvas} pointerEvents="none">
-                <Rect x={0} y={0} width={layout.width} height={layout.height} color="transparent" />
-                {!skiaImage ? (
-                  <CombatSpritePlaceholder width={layout.width} height={layout.height} />
-                ) : (
-                  <Group opacity={damageBlendOpacity}>
-                    <Image
-                      image={skiaImage}
-                      x={0}
-                      y={0}
-                      width={layout.width}
-                      height={layout.height}
-                      fit="contain"
-                    >
-                      <BlendColor color={flashColor} mode="srcATop" />
-                    </Image>
-                  </Group>
-                )}
-              </Canvas>
-            </>
-          ) : null}
+        <Animated.View style={[styles.spriteFrame, frameAnimatedStyle]}>
+          <Animated.View style={[styles.glowDuplicate, glowStyle]} pointerEvents="none">
+            <Image
+              source={imageSource}
+              resizeMode="contain"
+              style={[styles.playerImage, styles.glowImage, { tintColor: PRIMED_GLOW }]}
+            />
+          </Animated.View>
+          <Image
+            source={imageSource}
+            resizeMode="contain"
+            style={styles.playerImage}
+          />
+          <Animated.View style={[styles.damageFlashWrap, flashStyle]} pointerEvents="none">
+            <Image
+              source={imageSource}
+              resizeMode="contain"
+              style={[styles.playerImage, { tintColor: flashColor }]}
+            />
+          </Animated.View>
         </Animated.View>
       </View>
     );
@@ -218,6 +178,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     alignItems: 'center',
     overflow: 'visible',
+    backgroundColor: 'transparent',
     paddingBottom: 0,
   },
   spriteFrame: {
@@ -228,17 +189,28 @@ const styles = StyleSheet.create({
     overflow: 'visible',
     alignItems: 'center',
     justifyContent: 'flex-end',
+    backgroundColor: 'transparent',
   },
   playerImage: {
     width: '100%',
     height: '100%',
     minHeight: 120,
+    backgroundColor: 'transparent',
   },
-  effectCanvas: {
+  glowImage: {
+    transform: [{ scale: 1.05 }],
+  },
+  glowDuplicate: {
     ...StyleSheet.absoluteFillObject,
-    width: '100%',
-    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    backgroundColor: 'transparent',
+  },
+  damageFlashWrap: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
     zIndex: 2,
-    pointerEvents: 'none',
+    backgroundColor: 'transparent',
   },
 });

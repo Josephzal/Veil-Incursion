@@ -100,6 +100,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'visible',
     paddingBottom: 6,
+    backgroundColor: 'transparent',
   },
   enemyColumn: {
     flex: 1,
@@ -117,6 +118,7 @@ const styles = StyleSheet.create({
     marginBottom: -8,
     position: 'relative',
     overflow: 'visible',
+    backgroundColor: 'transparent',
   },
   enemySpriteSlot: {
     flex: 1,
@@ -147,5 +149,6 @@ const styles = StyleSheet.create({
   spriteFill: {
     flex: 1,
     width: '100%',
+    backgroundColor: 'transparent',
   },
 });
