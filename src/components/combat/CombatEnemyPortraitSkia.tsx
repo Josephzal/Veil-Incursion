@@ -10,7 +10,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import type { EnemyPortraitAnim, EnemyPortraitGlow, EnemyIntentShimmer } from '../../utils/combatTelemetryFormat';
-import CombatEnemyIntentShimmer from './CombatEnemyIntentShimmer';
+import CombatEnemyIntentShimmer, { enemySpriteStyles } from './CombatEnemyIntentShimmer';
 
 const GLOW_TINT: Record<Exclude<EnemyPortraitGlow, 'none'>, string> = {
   'player-selected': '#f8fafc',
@@ -120,7 +120,7 @@ export default function CombatEnemyPortraitSkia({
               source={source}
               resizeMode="contain"
               style={[
-                styles.portrait,
+                enemySpriteStyles.enemySprite,
                 {
                   tintColor: glowTint,
                   opacity: glowOpacity,
@@ -130,13 +130,16 @@ export default function CombatEnemyPortraitSkia({
             />
           </View>
         ) : null}
-        <View style={styles.portraitClip}>
-          <CombatEnemyIntentShimmer kind={intentShimmer} />
+        <View style={styles.enemySpriteStack} pointerEvents="none">
+          <CombatEnemyIntentShimmer kind={intentShimmer} source={source} layer="back" />
           <Image
             source={source}
             resizeMode="contain"
-            style={styles.portrait}
+            style={enemySpriteStyles.enemySprite}
+            nativeID="enemy-sprite"
+            accessibilityLabel="enemy-sprite"
           />
+          <CombatEnemyIntentShimmer kind={intentShimmer} source={source} layer="front" />
         </View>
       </Animated.View>
     </View>
@@ -158,17 +161,12 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     overflow: 'hidden',
   },
-  portraitClip: {
+  enemySpriteStack: {
     width: '100%',
     height: '100%',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    overflow: 'hidden',
     position: 'relative',
-  },
-  portrait: {
-    width: '100%',
-    height: '100%',
   },
   glowDuplicate: {
     ...StyleSheet.absoluteFillObject,

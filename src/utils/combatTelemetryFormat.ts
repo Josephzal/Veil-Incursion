@@ -1,4 +1,4 @@
-import type { CombatGridSlotId } from '../types/combatGrid';
+import type { CombatUnitTag } from '../types/aegisCombat';
 import type { EnemyAffinity } from '../types/combatEnvironment';
 import type { EnemyCombatProfile, EnemyIntent } from '../types/run';
 import { isUnitAlive } from '../data/combatSquadEngine';
@@ -86,6 +86,9 @@ export interface CombatGridUnitSnapshot {
   kineticArmor?: number;
   occultWards?: number;
   combatTags?: string[];
+  evadeActive?: boolean;
+  chargeTurns?: number;
+  doomedStacks?: number;
   isBoss?: boolean;
   isApex?: boolean;
   isElite?: boolean;
@@ -113,6 +116,56 @@ export interface CombatGridUnitSnapshot {
   dissolveHidden?: boolean;
 }
 
+const STATUS_TAG_ORDER: CombatUnitTag[] = [
+  'CONCUSSED',
+  'DOOMED',
+  'EXPOSED',
+  'FRACTURED',
+  'VULNERABLE',
+  'BLINDED',
+];
+
+export type EnemyStatusUnitFields = Pick<
+  CombatGridUnitSnapshot,
+  | 'combatTags'
+  | 'evadeActive'
+  | 'intent'
+  | 'chargeTurns'
+  | 'doomedStacks'
+  | 'isFractured'
+>;
+
+/** Human-readable hostile status labels for the intel panel. */
+export function formatEnemyStatusLabels(unit: EnemyStatusUnitFields): string[] {
+  const labels: string[] = [];
+  const tags = new Set(unit.combatTags ?? []);
+
+  if (unit.evadeActive || unit.intent === 'EVADE') labels.push('EVADING');
+  if (unit.intent === 'FORTIFY') labels.push('FORTIFIED');
+  if ((unit.chargeTurns ?? 0) > 0 || unit.intent === 'CHARGE') labels.push('CHARGING');
+  if (unit.intent === 'WORLD_ENDER') labels.push('WORLD-ENDER');
+
+  for (const tag of STATUS_TAG_ORDER) {
+    if (!tags.has(tag)) continue;
+    if (tag === 'DOOMED' && (unit.doomedStacks ?? 0) > 1) {
+      labels.push(`DOOMED x${unit.doomedStacks}`);
+    } else {
+      labels.push(tag);
+    }
+  }
+
+  if (unit.isFractured && !tags.has('FRACTURED')) {
+    labels.push('FRACTURED');
+  }
+
+  return labels;
+}
+
+export function formatEnemyStatusLine(unit: EnemyStatusUnitFields): string {
+  const labels = formatEnemyStatusLabels(unit);
+  return labels.length > 0 ? labels.join(' / ') : 'CLEAR';
+}
+
 export interface CombatSquadUiSnapshot {
   units: CombatGridUnitSnapshot[];
   targetingActive: boolean;
@@ -125,7 +178,7 @@ export function buildInitialSquadUiSnapshot(
 ): CombatSquadUiSnapshot {
   const units = squad.map((unit) => ({
     unitId: unit.unitId ?? unit.designation,
-    slot: (unit.gridSlot ?? 'FL_0') as CombatGridSlotId,
+    slot: (unit.gridSlot ?? 'FL_0') as import('../types/combatGrid').CombatGridSlotId,
     designation: unit.designation,
     currentHp: unit.currentHp,
     maxHp: unit.maxHp,
@@ -137,6 +190,9 @@ export function buildInitialSquadUiSnapshot(
     kineticArmor: unit.kineticArmor ?? 0,
     occultWards: unit.occultWards ?? 0,
     combatTags: unit.combatTags ?? [],
+    evadeActive: unit.evadeActive,
+    chargeTurns: unit.chargeTurns ?? 0,
+    doomedStacks: unit.doomedStacks ?? 0,
     isBoss: unit.isBoss,
     isApex: unit.isApex,
     isElite: (() => {

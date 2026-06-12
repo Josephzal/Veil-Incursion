@@ -3,9 +3,11 @@ import { StyleSheet, View } from 'react-native';
 import {
   GAUGE_HOSTILE_HP,
   GAUGE_TRACK_BORDER,
+  type EnemyStatusUnitFields,
 } from '../../utils/combatTelemetryFormat';
 import type { CombatGridUnitSnapshot } from '../../utils/combatTelemetryFormat';
 import { CombatHorizontalGauge } from './CombatHorizontalGauge';
+import CombatEnemyStatusStrip from './CombatEnemyStatusStrip';
 import {
   COMBAT_GAUGE_BLOCK_HEIGHT_COMPACT,
   COMBAT_GAUGE_ROW_GAP_COMPACT,
@@ -13,12 +15,14 @@ import {
 } from './combatGaugeMetrics';
 
 const GAUGE_FRACTURE = '#fbbf24';
+const STATUS_ROW_HEIGHT = 8;
+const STATUS_ROW_GAP = 1;
 
 interface CombatEnemySlotBarsProps {
   unit: Pick<
     CombatGridUnitSnapshot,
     'currentHp' | 'maxHp' | 'fractureGauge' | 'fractureMax'
-  >;
+  > & EnemyStatusUnitFields;
   trackWidth?: number;
 }
 
@@ -48,15 +52,23 @@ export default function CombatEnemySlotBars({
         width={trackWidth}
         compact
       />
+      <View style={styles.statusGap} />
+      <CombatEnemyStatusStrip unit={unit} trackWidth={trackWidth} />
     </View>
   );
 }
 
+export const COMBAT_ENEMY_SLOT_BARS_HEIGHT =
+  COMBAT_GAUGE_BLOCK_HEIGHT_COMPACT + STATUS_ROW_GAP + STATUS_ROW_HEIGHT;
+
 const styles = StyleSheet.create({
   root: {
-    height: COMBAT_GAUGE_BLOCK_HEIGHT_COMPACT,
+    height: COMBAT_ENEMY_SLOT_BARS_HEIGHT,
     flexShrink: 0,
     alignItems: 'stretch',
+  },
+  statusGap: {
+    height: STATUS_ROW_GAP,
   },
   gap: {
     height: COMBAT_GAUGE_ROW_GAP_COMPACT,

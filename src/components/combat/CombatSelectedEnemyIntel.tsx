@@ -5,9 +5,8 @@ import { affinityWeaknessLabel } from '../../data/combatEnvironmentEngine';
 import { AFFINITY_DISPLAY_LABEL } from '../../types/combatEnvironment';
 import { formatHostileId, formatIntentReadout } from '../../utils/combatTelemetryFormat';
 import type { CombatGridUnitSnapshot } from '../../utils/combatTelemetryFormat';
-import CombatEnemySlotBars from './CombatEnemySlotBars';
+import CombatEnemySlotBars, { COMBAT_ENEMY_SLOT_BARS_HEIGHT } from './CombatEnemySlotBars';
 import {
-  COMBAT_GAUGE_BLOCK_HEIGHT_COMPACT,
   combatDeckGaugeTrackWidth,
 } from './combatGaugeMetrics';
 
@@ -20,19 +19,11 @@ const RIGHT_TEXT_GAP = 2;
 const RIGHT_TEXT_BLOCK = RIGHT_TEXT_LINE * 3 + RIGHT_TEXT_GAP * 2;
 
 const INTEL_PANEL_HEIGHT =
-  9 + 2 + Math.max(COMBAT_GAUGE_BLOCK_HEIGHT_COMPACT, RIGHT_TEXT_BLOCK) + 8;
+  9 + 2 + Math.max(COMBAT_ENEMY_SLOT_BARS_HEIGHT, RIGHT_TEXT_BLOCK) + 8;
 
 interface CombatSelectedEnemyIntelProps {
   unit: CombatGridUnitSnapshot;
   mutedColor: string;
-}
-
-function statusLines(tags: string[] | undefined): string {
-  const lines: string[] = [];
-  if (tags?.includes('CONCUSSED')) lines.push('DAZED');
-  if (tags?.includes('DOOMED')) lines.push('DOOMED');
-  if (tags?.includes('FRACTURED')) lines.push('FRACTURED');
-  return lines.length > 0 ? lines.join(' // ') : 'CLEAR';
 }
 
 export default function CombatSelectedEnemyIntel({
@@ -61,7 +52,7 @@ export default function CombatSelectedEnemyIntel({
 
         <View style={styles.rightColumn}>
           <Text style={[styles.compactLine, styles.rightText, { color: mutedColor }]} numberOfLines={1}>
-            {`CLASS ${affinityLabel.toUpperCase()} // TIER ${tierLabel} // ${statusLines(unit.combatTags)}`}
+            {`CLASS ${affinityLabel.toUpperCase()} // TIER ${tierLabel}`}
           </Text>
           <Text style={[styles.compactLine, styles.rightText, { color: WEAKNESS_COLOR }]} numberOfLines={1}>
             {`WEAK TO // ${affinityWeaknessLabel(affinity).toUpperCase()}`}
