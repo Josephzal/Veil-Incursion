@@ -21,6 +21,9 @@ interface CargoGridOverlayProps {
   onUseCombatConsumable?: (itemId: CargoItemId) => boolean;
   onUseResonanceBribe?: () => boolean;
   onUseDeadDrop?: () => boolean;
+  onDiscardItem?: (instanceId: string) => boolean;
+  runCredits?: number;
+  playerActionPoints?: number;
 }
 
 export default function CargoGridOverlay({
@@ -37,6 +40,9 @@ export default function CargoGridOverlay({
   onUseCombatConsumable,
   onUseResonanceBribe,
   onUseDeadDrop,
+  onDiscardItem,
+  runCredits,
+  playerActionPoints,
 }: CargoGridOverlayProps): React.JSX.Element {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -61,6 +67,9 @@ export default function CargoGridOverlay({
             theme={theme}
             accentColor={accentColor}
             onRelocateItem={onRelocateItem}
+            onDiscardItem={onDiscardItem}
+            runCredits={runCredits}
+            playerActionPoints={playerActionPoints}
             scannerMode={scannerMode}
             combatMode={combatMode}
             combatConsumablesEnabled={combatConsumablesEnabled}

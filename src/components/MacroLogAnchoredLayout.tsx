@@ -43,6 +43,7 @@ export default function MacroLogAnchoredLayout({
     useIncursionConsumable,
     applyIncursionConsumableHeal,
     relocateCargoItem,
+    discardCargoInstance,
     useFocusingAmpouleFromCargo,
     useResonanceBribeFromCargo,
     useDeadDropTokenFromCargo,
@@ -133,6 +134,9 @@ export default function MacroLogAnchoredLayout({
             theme={theme}
             onClose={() => setCargoOpen(false)}
             onRelocateItem={relocateCargoItem}
+            onDiscardItem={discardCargoInstance}
+            runCredits={activeIncursion.runCredits}
+            playerActionPoints={combatTurn?.playerActionPoints}
             scannerMode={!combatMode}
             combatMode={combatMode}
             combatConsumablesEnabled={cargoEnabled}

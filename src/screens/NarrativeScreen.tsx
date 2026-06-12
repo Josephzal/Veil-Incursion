@@ -10,11 +10,12 @@ import { useTerminal } from '../context/TerminalContext';
 import { useDescentNavigator } from '../hooks/useDescentNavigator';
 import { isProceduralNarrative } from '../data/sectorNarrativeEngine';
 import { CheckStatus, NarrativeChoiceKey } from '../types/game';
-import { narrativeCheckCredits } from '../data/combatCredits';
+import { narrativeSuccessCredits } from '../data/combatCredits';
+import { depthFromNodesCleared } from '../data/districtPacing';
 
 export default function NarrativeScreen(): React.JSX.Element {
   const { theme } = useTerminal();
-  const { getCurrentNarrativeNode, resolveNarrativeChoice, appendRunLog, awardRunCredits, runState } = useRun();
+  const { getCurrentNarrativeNode, resolveNarrativeChoice, appendRunLog, awardRunCredits, runState, activeIncursion } = useRun();
   const { startResourceHarvest, startScanning } = useGameFlow();
   const { finalizeIncursionAdvance } = useDescentNavigator();
   const resolvingRef = useRef(false);
@@ -37,8 +38,9 @@ export default function NarrativeScreen(): React.JSX.Element {
 
     if (creditReward > 0) {
       awardRunCredits(creditReward, 'procedural narrative resolver');
-    } else if (!requiresResourcePack) {
-      awardRunCredits(narrativeCheckCredits(), 'narrative calibration cleared');
+    } else if (status !== 'FAILURE' && !requiresResourcePack) {
+      const depth = depthFromNodesCleared(activeIncursion.nodesCleared);
+      awardRunCredits(narrativeSuccessCredits(depth), 'narrative calibration cleared');
     }
 
     if (requiresResourcePack) {

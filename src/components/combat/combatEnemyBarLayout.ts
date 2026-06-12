@@ -288,3 +288,33 @@ export function backlineMeleeDashTranslateX(screenWidth = Dimensions.get('window
   const columnHalf = screenWidth * 0.5;
   return -(columnHalf * 1.42);
 }
+
+/** Diagonal dash target from a backline slot toward the operative sprite plane. */
+export function backlineMeleeDashDelta(
+  slot: CombatGridSlotId,
+  layoutMode: ArenaLayoutMode,
+  arenaWidth: number,
+  arenaHeight: number,
+): { x: number; y: number } {
+  const effectiveSlot = layoutMode === 'solo' ? SOLO_ARENA_SLOT : slot;
+  const layout = resolveArenaSlotLayout(effectiveSlot, layoutMode);
+  const rect = slotLayoutToAnchorRect(layout, arenaWidth, arenaHeight);
+  const slotCenterX = rect.left + rect.width / 2;
+  const slotFootY = rect.top + rect.height;
+
+  const playerFootY = arenaHeight * (1 - Number.parseFloat(ARENA_SPRITE_BOTTOM) / 100);
+  const x = -(slotCenterX + arenaWidth * 0.42);
+  const y = Math.max(16, playerFootY - slotFootY + Math.abs(layout.unitTranslateY) * 0.2);
+
+  return { x, y };
+}
+
+/** Frontline melee attack choreography (ms). */
+export const FRONTLINE_STEP_OUT_X = -20;
+export const FRONTLINE_IMPACT_SNAP_X = -15;
+export const FRONTLINE_STEP_OUT_MS = 280;
+export const FRONTLINE_IMPACT_HOLD_MS = 100;
+export const FRONTLINE_IMPACT_SNAP_MS = 80;
+export const FRONTLINE_RETURN_MS = 320;
+export const FRONTLINE_MELEE_IMPACT_MS =
+  FRONTLINE_STEP_OUT_MS + FRONTLINE_IMPACT_HOLD_MS + Math.floor(FRONTLINE_IMPACT_SNAP_MS * 0.5);

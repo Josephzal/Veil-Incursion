@@ -66,6 +66,8 @@ export interface CargoItemDefinition {
   combatEffect?: CargoCombatEffect;
   /** Percent of max Soul Anchor restored — heal combat items only. */
   healPercent?: number;
+  /** AP deducted when deployed during combat (defaults to 2). */
+  apCost?: number;
 }
 
 export interface PlacedCargoItem {

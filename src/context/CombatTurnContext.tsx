@@ -19,6 +19,8 @@ export interface CombatTurnState {
   isPlayerTurn: boolean;
   phase: CombatTurnPhase;
   canUseCargo: boolean;
+  playerActionPoints?: number;
+  runCredits?: number;
 }
 
 const DEFAULT_TURN_STATE: CombatTurnState = {

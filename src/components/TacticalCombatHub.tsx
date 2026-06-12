@@ -35,6 +35,8 @@ import CombatFloatingFeedback from './combat/CombatFloatingFeedback';
 import { DEFAULT_AEGIS_LOADOUT, PLAYER_ACTION_POINTS_PER_TURN, type AegisAbilityId, type AegisLoadout } from '../types/aegisCombat';
 import { getAbilityDefinition } from '../data/aegisAbilities';
 import { COMBAT_CONSUMABLE_AP_COST, resolveHostileHpHit } from '../data/aegisAbilityResolver';
+import { combatConsumableApCost } from '../data/cargoGridEngine';
+import type { CargoItemId } from '../types/cargoGrid';
 import {
   executeExtendedAbility,
   isExtendedAbilityEnabled,
@@ -144,6 +146,7 @@ import {
 import {
   BACKLINE_MELEE_DASH_IMPACT_MS,
   BACKLINE_MELEE_DASH_TOTAL_MS,
+  FRONTLINE_MELEE_IMPACT_MS,
 } from './combat/combatEnemyBarLayout';
 import VignetteFlashOverlay from './VignetteFlashOverlay';
 import {
@@ -195,8 +198,8 @@ interface TacticalCombatHubProps {
   registerHealHandler?: (handler: (amount: number) => void) => void;
   /** Registers callback when a field consumable is deployed during combat. */
   registerConsumableHandler?: (handler: (result: IncursionConsumableUseResult) => void) => void;
-  /** Registers preflight check before cargo is consumed (player turn + AP). */
-  registerCanDeployCargoHandler?: (handler: () => boolean) => void;
+  /** Registers preflight check before cargo is consumed (player turn + AP for item). */
+  registerCanDeployCargoHandler?: (handler: (itemId: import('../types/cargoGrid').CargoItemId) => boolean) => void;
   /** Registers grid target selection from CombatScreen. */
   registerTargetHandler?: (handler: (unitId: string) => void) => void;
   /** Stacked layout: victory/defeat panel in the apparition viewport (hub keeps deck + gauges). */
@@ -204,6 +207,10 @@ interface TacticalCombatHubProps {
     panel: { outcome: 'VICTORY' | 'DEFEAT'; onDismiss: () => void } | null,
   ) => void;
   onCombatComplete?: (r: { victory: boolean; remainingHp: number; remainingStamina: number }) => void;
+  /** Live run credits for cargo deck HUD. */
+  runCredits?: number;
+  /** Records the hostile designation that dealt the killing blow. */
+  onLethalEnemyStrike?: (designation: string) => void;
   initialOperativeHp?: number; initialStamina?: number; maxStamina?: number; maxSoulAnchor?: number;
   startingAbyssalReservePercent?: number; parryMultiplierBonus?: number; parryWindowBonus?: number;
   sliceDamagePenalty?: number; onTerminalLog?: (text: string) => void;
@@ -265,7 +272,10 @@ export default function TacticalCombatHub({
   registerCanDeployCargoHandler,
   registerTargetHandler,
   onResolutionPanelChange,
-  onCombatComplete, initialOperativeHp = 100, initialStamina = 100, maxStamina = 100,
+  onCombatComplete,
+  onLethalEnemyStrike,
+  runCredits = 0,
+  initialOperativeHp = 100, initialStamina = 100, maxStamina = 100,
   maxSoulAnchor = 100, startingAbyssalReservePercent = 0, parryMultiplierBonus = 0,
   parryWindowBonus = 0, sliceDamagePenalty = 0, onTerminalLog,
   enemyProfile = null,
@@ -494,8 +504,10 @@ export default function TacticalCombatHub({
       isPlayerTurn: isPlayerTurn && cycleState === 'TEXT_COMBAT',
       phase: combatTurnPhase,
       canUseCargo: isPlayerTurn && cycleState === 'TEXT_COMBAT',
+      playerActionPoints,
+      runCredits,
     });
-  }, [combatTurnPhase, cycleState, isPlayerTurn, setCombatTurnState]);
+  }, [combatTurnPhase, cycleState, isPlayerTurn, playerActionPoints, runCredits, setCombatTurnState]);
 
 
   const resolveActingEnemyId = (): string | null =>
@@ -614,6 +626,10 @@ export default function TacticalCombatHub({
           isActingEnemy: !isPlayerTurnRef.current
             && cycleRef.current === 'TEXT_COMBAT'
             && enemyActionStageRef.current != null
+            && resolveActingEnemyId() === unitId,
+          isExecutingAttack: !isPlayerTurnRef.current
+            && cycleRef.current === 'TEXT_COMBAT'
+            && enemyActionStageRef.current === 'executing'
             && resolveActingEnemyId() === unitId,
           isBacklineDashing: backlineDashActiveRef.current[unitId] === true,
           backlineMeleeDashSeq: backlineDashSeqRef.current[unitId] ?? 0,
@@ -964,7 +980,8 @@ export default function TacticalCombatHub({
   const applyConsumableRef = useRef((_result: IncursionConsumableUseResult) => {});
   applyConsumableRef.current = (result: IncursionConsumableUseResult) => {
     if (cycleRef.current !== 'TEXT_COMBAT' || !isPlayerTurnRef.current) return;
-    if (playerApRef.current < COMBAT_CONSUMABLE_AP_COST) {
+    const apCost = result.apCost ?? COMBAT_CONSUMABLE_AP_COST;
+    if (playerApRef.current < apCost) {
       log('[REJECTED] >> Insufficient action points for cargo deploy.');
       return;
     }
@@ -1025,10 +1042,10 @@ export default function TacticalCombatHub({
       mutationEncounterRef.current.spallWeaveActive = true;
     }
     log(result.logLine);
-    playerApRef.current = 0;
-    setPlayerActionPoints(0);
+    playerApRef.current = Math.max(0, playerApRef.current - apCost);
+    setPlayerActionPoints(playerApRef.current);
     setSelectedAbility(null);
-    passToEnemy(false);
+    publishSquadUi(squadRef.current);
   };
 
   useEffect(() => {
@@ -1036,10 +1053,10 @@ export default function TacticalCombatHub({
   }, [registerConsumableHandler]);
 
   useEffect(() => {
-    registerCanDeployCargoHandler?.(() => (
+    registerCanDeployCargoHandler?.((itemId: CargoItemId) => (
       cycleRef.current === 'TEXT_COMBAT'
       && isPlayerTurnRef.current
-      && playerApRef.current >= COMBAT_CONSUMABLE_AP_COST
+      && playerApRef.current >= combatConsumableApCost(itemId)
     ));
   }, [registerCanDeployCargoHandler]);
 
@@ -1190,6 +1207,9 @@ export default function TacticalCombatHub({
     setOperativeHp((p) => {
       const n = Math.max(p - dmg, 0);
       operativeHpRef.current = n;
+      if (n <= 0 && options?.attacker?.designation) {
+        onLethalEnemyStrike?.(options.attacker.designation);
+      }
       if (
         n > 0
         && n / maxSoulAnchor <= 0.1
@@ -1876,8 +1896,21 @@ export default function TacticalCombatHub({
           publishSquadUi(squadRef.current);
         }, BACKLINE_MELEE_DASH_TOTAL_MS);
       } else if (overlayVariant) {
-        showStrikeFeedback(overlayVariant);
-        if (overlayVariant === 'hp') applyHpStrikeOnDeckImpact(acting);
+        const isFrontlineMelee = arenaLayout
+          && acting.gridSlot?.startsWith('FL') === true
+          && isEnemyDamageIntent(acting.intent);
+        const applyStrike = () => {
+          showStrikeFeedback(overlayVariant);
+          if (overlayVariant === 'hp') applyHpStrikeOnDeckImpact(acting);
+        };
+        if (isFrontlineMelee) {
+          setTimeout(() => {
+            if (isCombatTerminal()) return;
+            applyStrike();
+          }, FRONTLINE_MELEE_IMPACT_MS);
+        } else {
+          applyStrike();
+        }
       }
       enemyStrikeTimerRef.current = setTimeout(() => {
         enemyStrikeTimerRef.current = null;

@@ -23,6 +23,7 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
     activeIncursion,
     applyHarvestChoice,
     relocateCargoItem,
+    discardCargoInstance,
     appendRunLog,
     prepareHarvestAmbushEncounter,
     isPostCombatBoonBlocked,
@@ -142,6 +143,8 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
                   cargo={activeIncursion.cargo}
                   theme={theme}
                   onRelocateItem={relocateCargoItem}
+                  onDiscardItem={discardCargoInstance}
+                  runCredits={activeIncursion.runCredits}
                   onContinue={handlePackingContinue}
                   continueLabel={
                     activeIncursion.pendingHarvestReturn === 'RESOURCE_CACHE'

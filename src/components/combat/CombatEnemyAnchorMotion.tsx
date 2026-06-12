@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Dimensions, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 import Animated, {
   Easing,
   cancelAnimation,
@@ -16,34 +16,40 @@ import {
   BACKLINE_MELEE_DASH_RETURN_MS,
   BACKLINE_MELEE_DASH_WINDUP_MS,
   BACKLINE_MELEE_DASH_WINDUP_X,
-  backlineMeleeDashTranslateX,
+  FRONTLINE_IMPACT_HOLD_MS,
+  FRONTLINE_IMPACT_SNAP_MS,
+  FRONTLINE_IMPACT_SNAP_X,
+  FRONTLINE_RETURN_MS,
+  FRONTLINE_STEP_OUT_MS,
+  FRONTLINE_STEP_OUT_X,
 } from './combatEnemyBarLayout';
 
 const IDLE_CYCLE_MS = 3200;
 const IDLE_HALF_MS = IDLE_CYCLE_MS / 2;
 const IDLE_TRAVEL_Y = 1.5;
 const IDLE_SCALE_MIN = 0.99;
-const STEP_OUT_X = -20;
 const STEP_OUT_SCALE = 1.05;
-const STEP_OUT_MS = 280;
-const STEP_RETURN_MS = 320;
 const RECOIL_X = 15;
 
 interface CombatEnemyAnchorMotionProps {
   children: React.ReactNode;
   isActingTurn?: boolean;
+  isExecutingAttack?: boolean;
   isBacklineDashing?: boolean;
   hitFlashSeq?: number;
   backlineMeleeDashSeq?: number;
+  meleeDashDelta?: { x: number; y: number };
   frozen?: boolean;
 }
 
 export default function CombatEnemyAnchorMotion({
   children,
   isActingTurn = false,
+  isExecutingAttack = false,
   isBacklineDashing = false,
   hitFlashSeq = 0,
   backlineMeleeDashSeq = 0,
+  meleeDashDelta,
   frozen = false,
 }: CombatEnemyAnchorMotionProps): React.JSX.Element {
   const lastHitRef = useRef(0);
@@ -53,6 +59,7 @@ export default function CombatEnemyAnchorMotion({
   const stepScale = useSharedValue(1);
   const recoilX = useSharedValue(0);
   const meleeDashX = useSharedValue(0);
+  const meleeDashY = useSharedValue(0);
   const motionLocked = useSharedValue(0);
 
   useEffect(() => {
@@ -61,16 +68,18 @@ export default function CombatEnemyAnchorMotion({
 
     cancelAnimation(idlePhase);
     cancelAnimation(meleeDashX);
+    cancelAnimation(meleeDashY);
     cancelAnimation(stepX);
     cancelAnimation(recoilX);
     cancelAnimation(stepScale);
 
     idlePhase.value = 0;
     meleeDashX.value = 0;
+    meleeDashY.value = 0;
     stepX.value = 0;
     recoilX.value = 0;
     stepScale.value = 1;
-  }, [frozen, idlePhase, meleeDashX, motionLocked, recoilX, stepScale, stepX]);
+  }, [frozen, idlePhase, meleeDashX, meleeDashY, motionLocked, recoilX, stepScale, stepX]);
 
   useEffect(() => {
     if (frozen || isBacklineDashing) {
@@ -94,29 +103,65 @@ export default function CombatEnemyAnchorMotion({
   }, [frozen, idlePhase, isBacklineDashing]);
 
   useEffect(() => {
-    if (frozen || isBacklineDashing) return;
+    if (frozen || isBacklineDashing || isExecutingAttack) return;
 
     if (isActingTurn) {
-      stepX.value = withTiming(STEP_OUT_X, {
-        duration: STEP_OUT_MS,
+      stepX.value = withTiming(FRONTLINE_STEP_OUT_X, {
+        duration: FRONTLINE_STEP_OUT_MS,
         easing: Easing.out(Easing.cubic),
       });
       stepScale.value = withTiming(STEP_OUT_SCALE, {
-        duration: STEP_OUT_MS,
+        duration: FRONTLINE_STEP_OUT_MS,
         easing: Easing.out(Easing.cubic),
       });
       return;
     }
 
     stepX.value = withTiming(0, {
-      duration: STEP_RETURN_MS,
+      duration: FRONTLINE_RETURN_MS,
       easing: Easing.out(Easing.cubic),
     });
     stepScale.value = withTiming(1, {
-      duration: STEP_RETURN_MS,
+      duration: FRONTLINE_RETURN_MS,
       easing: Easing.out(Easing.cubic),
     });
-  }, [frozen, isActingTurn, isBacklineDashing, stepScale, stepX]);
+  }, [frozen, isActingTurn, isBacklineDashing, isExecutingAttack, stepScale, stepX]);
+
+  useEffect(() => {
+    if (frozen || isBacklineDashing) return;
+
+    if (!isExecutingAttack) {
+      return;
+    }
+
+    stepX.value = withSequence(
+      withTiming(FRONTLINE_STEP_OUT_X, {
+        duration: FRONTLINE_STEP_OUT_MS,
+        easing: Easing.out(Easing.cubic),
+      }),
+      withTiming(FRONTLINE_STEP_OUT_X, { duration: FRONTLINE_IMPACT_HOLD_MS }),
+      withTiming(FRONTLINE_STEP_OUT_X + FRONTLINE_IMPACT_SNAP_X, {
+        duration: FRONTLINE_IMPACT_SNAP_MS,
+        easing: Easing.out(Easing.quad),
+      }),
+    );
+    stepScale.value = withTiming(STEP_OUT_SCALE, {
+      duration: FRONTLINE_STEP_OUT_MS,
+      easing: Easing.out(Easing.cubic),
+    });
+  }, [frozen, isBacklineDashing, isExecutingAttack, stepScale, stepX]);
+
+  useEffect(() => {
+    if (isExecutingAttack || frozen || isBacklineDashing) return;
+    stepX.value = withTiming(0, {
+      duration: FRONTLINE_RETURN_MS,
+      easing: Easing.out(Easing.cubic),
+    });
+    stepScale.value = withTiming(1, {
+      duration: FRONTLINE_RETURN_MS,
+      easing: Easing.out(Easing.cubic),
+    });
+  }, [frozen, isBacklineDashing, isExecutingAttack, stepScale, stepX]);
 
   useEffect(() => {
     if (hitFlashSeq <= 0 || hitFlashSeq === lastHitRef.current) return;
@@ -134,27 +179,44 @@ export default function CombatEnemyAnchorMotion({
     lastDashRef.current = backlineMeleeDashSeq;
 
     cancelAnimation(idlePhase);
+    cancelAnimation(stepX);
+    cancelAnimation(meleeDashX);
+    cancelAnimation(meleeDashY);
     idlePhase.value = 0;
     stepX.value = 0;
     stepScale.value = 1;
 
-    const dashTarget = backlineMeleeDashTranslateX(Dimensions.get('window').width);
+    const dashTargetX = meleeDashDelta?.x ?? -120;
+    const dashTargetY = meleeDashDelta?.y ?? 24;
+
     meleeDashX.value = withSequence(
       withTiming(BACKLINE_MELEE_DASH_WINDUP_X, {
         duration: BACKLINE_MELEE_DASH_WINDUP_MS,
         easing: Easing.out(Easing.cubic),
       }),
-      withTiming(dashTarget, {
+      withTiming(dashTargetX, {
         duration: BACKLINE_MELEE_DASH_MS,
-        easing: Easing.in(Easing.cubic),
+        easing: Easing.inOut(Easing.cubic),
       }),
-      withTiming(dashTarget, { duration: BACKLINE_MELEE_DASH_HOLD_MS }),
+      withTiming(dashTargetX, { duration: BACKLINE_MELEE_DASH_HOLD_MS }),
       withTiming(0, {
         duration: BACKLINE_MELEE_DASH_RETURN_MS,
         easing: Easing.out(Easing.cubic),
       }),
     );
-  }, [backlineMeleeDashSeq, frozen, idlePhase, meleeDashX, stepScale, stepX]);
+    meleeDashY.value = withSequence(
+      withTiming(0, { duration: BACKLINE_MELEE_DASH_WINDUP_MS }),
+      withTiming(dashTargetY, {
+        duration: BACKLINE_MELEE_DASH_MS,
+        easing: Easing.inOut(Easing.cubic),
+      }),
+      withTiming(dashTargetY, { duration: BACKLINE_MELEE_DASH_HOLD_MS }),
+      withTiming(0, {
+        duration: BACKLINE_MELEE_DASH_RETURN_MS,
+        easing: Easing.out(Easing.cubic),
+      }),
+    );
+  }, [backlineMeleeDashSeq, frozen, idlePhase, meleeDashDelta, meleeDashX, meleeDashY, stepScale, stepX]);
 
   const motionStyle = useAnimatedStyle(() => {
     if (motionLocked.value === 1) {
@@ -171,7 +233,9 @@ export default function CombatEnemyAnchorMotion({
     return {
       transform: [
         { translateX: stepX.value + recoilX.value + meleeDashX.value },
-        { translateY: idlePhase.value * -IDLE_TRAVEL_Y },
+        {
+          translateY: idlePhase.value * -IDLE_TRAVEL_Y + meleeDashY.value,
+        },
         { scale: stepScale.value * breatheScale },
       ],
     };

@@ -10,6 +10,8 @@ interface CargoPackingPanelProps {
   theme: TerminalTheme;
   accentColor?: string;
   onRelocateItem: (instanceId: string, row: number, col: number) => boolean;
+  onDiscardItem?: (instanceId: string) => boolean;
+  runCredits?: number;
   onContinue: () => void;
   continueLabel?: string;
 }
@@ -19,6 +21,8 @@ export default function CargoPackingPanel({
   theme,
   accentColor,
   onRelocateItem,
+  onDiscardItem,
+  runCredits,
   onContinue,
   continueLabel = '[ CONTINUE ]',
 }: CargoPackingPanelProps): React.JSX.Element {
@@ -43,6 +47,8 @@ export default function CargoPackingPanel({
         theme={theme}
         accentColor={accentColor}
         onRelocateItem={onRelocateItem}
+        onDiscardItem={onDiscardItem}
+        runCredits={runCredits}
         onContinue={onContinue}
         continueLabel={continueLabel}
         minimal

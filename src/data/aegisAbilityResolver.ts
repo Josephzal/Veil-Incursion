@@ -74,4 +74,4 @@ export function applyVeilPiercerPackage(
   return { enemy: hit.enemy, hpDamage: hit.hpDamage };
 }
 
-export const COMBAT_CONSUMABLE_AP_COST = 1;
+export const COMBAT_CONSUMABLE_AP_COST = 2;

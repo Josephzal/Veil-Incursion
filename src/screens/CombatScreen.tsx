@@ -126,6 +126,7 @@ export default function CombatScreen(): React.JSX.Element {
     completeDefendRiftVictory,
     consumeAdrenalinePrimerAfterCombat,
     isPostCombatBoonBlocked,
+    recordRunKillAttacker,
   } = useRun();
   const { completeCurrentNode } = useNodeProgression();
   const { getWeaponCombatStats, account, addLockedContainer } = usePlayerAccount();
@@ -147,7 +148,7 @@ export default function CombatScreen(): React.JSX.Element {
   const killResolverRef = useRef<() => void>(() => {});
   const healHandlerRef = useRef<(amount: number) => void>(() => {});
   const consumableHandlerRef = useRef<(result: IncursionConsumableUseResult) => void>(() => {});
-  const canDeployCargoRef = useRef<() => boolean>(() => false);
+  const canDeployCargoRef = useRef<(itemId: CargoItemId) => boolean>(() => false);
   const targetHandlerRef = useRef<(unitId: string) => void>(() => {});
   const dissolveCompleteRef = useRef<(unitId: string) => void>(() => {});
   const arenaShakeX = useRef(new Animated.Value(0)).current;
@@ -200,7 +201,7 @@ export default function CombatScreen(): React.JSX.Element {
     consumableHandlerRef.current = handler;
   }, []);
 
-  const registerCanDeployCargoHandler = useCallback((handler: () => boolean) => {
+  const registerCanDeployCargoHandler = useCallback((handler: (itemId: CargoItemId) => boolean) => {
     canDeployCargoRef.current = handler;
   }, []);
 
@@ -217,7 +218,7 @@ export default function CombatScreen(): React.JSX.Element {
   }, []);
 
   const handleDeployCargoItem = useCallback((itemId: CargoItemId): boolean => {
-    if (!canDeployCargoRef.current()) {
+    if (!canDeployCargoRef.current(itemId)) {
       appendRunLog('[REJECTED] >> Cargo deploy unavailable this turn.');
       return false;
     }
@@ -385,10 +386,10 @@ export default function CombatScreen(): React.JSX.Element {
     const nodeType = vectorNode?.type;
     const depth = activeIncursion.nodesCleared + 1;
     const creditReward = isBossEncounter
-      ? (isPrimeBossDepth(depth) ? primeBossKillCredits() : districtBossKillCredits())
+      ? (isPrimeBossDepth(depth) ? primeBossKillCredits(depth) : districtBossKillCredits(depth))
       : nodeType === 'ELITE_COMBAT'
-        ? eliteKillCredits()
-        : standardKillCredits();
+        ? eliteKillCredits(depth)
+        : standardKillCredits(depth);
     const creditReason = isBossEncounter
       ? (isPrimeBossDepth(depth) ? 'prime anomaly eradicated' : 'district gate boss eradicated')
       : nodeType === 'ELITE_COMBAT'
@@ -561,6 +562,8 @@ export default function CombatScreen(): React.JSX.Element {
                 onAbilityPrimedChange={setAbilityPrimed}
                 onResolutionPanelChange={handleResolutionPanelChange}
                 onCombatComplete={handleCombatComplete}
+                onLethalEnemyStrike={recordRunKillAttacker}
+                runCredits={activeIncursion.runCredits}
                 initialOperativeHp={runState.soulAnchorIntegrity}
                 initialStamina={combatEntryStamina}
                 maxStamina={runState.maxStamina}

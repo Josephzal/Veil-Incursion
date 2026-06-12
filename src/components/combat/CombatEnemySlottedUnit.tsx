@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { StyleSheet } from 'react-native';
 import Animated, {
   Easing,
@@ -8,6 +8,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import type { CombatGridSlotId } from '../../types/combatGrid';
+import { laneForSlot } from '../../types/combatGrid';
 import type { CombatGridUnitView } from './CombatEnemyUnit';
 import CombatEnemyUnit from './CombatEnemyUnit';
 import CombatEnemyDissolveEffect from './CombatEnemyDissolveEffect';
@@ -15,6 +16,7 @@ import {
   ARENA_SLOT_TRANSITION_MS,
   type ArenaLayoutMode,
   type EnemySlotLayout,
+  backlineMeleeDashDelta,
   resolveArenaSlotLayout,
   SOLO_ARENA_SLOT,
   slotLayoutToAnchorRect,
@@ -139,6 +141,12 @@ export default function CombatEnemySlottedUnit({
     onUnitDissolveComplete?.(unit.unitId);
   }, [onUnitDissolveComplete, unit.unitId]);
 
+  const meleeDashDelta = useMemo(() => {
+    if (arenaWidth <= 0 || arenaHeight <= 0) return undefined;
+    if (laneForSlot(effectiveSlot) !== 'BACKLINE') return undefined;
+    return backlineMeleeDashDelta(effectiveSlot, layoutMode, arenaWidth, arenaHeight);
+  }, [arenaHeight, arenaWidth, effectiveSlot, layoutMode]);
+
   const dissolving = (unit.dissolveSeq ?? 0) > 0 && !unit.dissolveHidden;
 
   return (
@@ -164,6 +172,7 @@ export default function CombatEnemySlottedUnit({
             mutedColor={mutedColor}
             constrainSpriteHeight
             layoutUnitScale={layout.unitScale}
+            meleeDashDelta={meleeDashDelta}
             skipDissolveEffect
             onPress={onUnitPress ? () => onUnitPress(unit.unitId) : undefined}
           />

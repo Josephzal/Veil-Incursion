@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Image,
   LayoutChangeEvent,
   Pressable,
@@ -23,10 +24,12 @@ const COMBAT_DETAIL_BODY_HEIGHT = 39;
 const COMBAT_DETAIL_META_HEIGHT = 14;
 import {
   canPlaceCargoItemExcluding,
+  combatConsumableApCost,
   combatConsumableDescription,
   isCombatDeployableCargoItem,
   relocateCargoItem as relocateCargoInState,
 } from '../data/cargoGridEngine';
+import { useCombatTurnOptional } from '../context/CombatTurnContext';
 import type { CargoItemId, CargoRunState, PlacedCargoItem } from '../types/cargoGrid';
 import { CARGO_GRID_COLS, CARGO_GRID_ROWS, CARGO_ITEM_CATALOG } from '../types/cargoGrid';
 import type { TerminalTheme } from '../types/theme';
@@ -70,6 +73,9 @@ interface CargoGridBoardProps {
   combatMode?: boolean;
   combatConsumablesEnabled?: boolean;
   onUseCombatConsumable?: (itemId: CargoItemId) => boolean;
+  onDiscardItem?: (instanceId: string) => boolean;
+  runCredits?: number;
+  playerActionPoints?: number;
   minimal?: boolean;
 }
 
@@ -235,8 +241,14 @@ export default function CargoGridBoard({
   combatMode = false,
   combatConsumablesEnabled = true,
   onUseCombatConsumable,
+  onDiscardItem,
+  runCredits: runCreditsProp,
+  playerActionPoints: playerActionPointsProp,
   minimal = true,
 }: CargoGridBoardProps): React.JSX.Element {
+  const combatTurn = useCombatTurnOptional();
+  const runCredits = runCreditsProp ?? combatTurn?.runCredits ?? 0;
+  const playerActionPoints = playerActionPointsProp ?? combatTurn?.playerActionPoints ?? 0;
   const boardRef = useRef<View>(null);
   const gridRef = useRef<View>(null);
   const gridMetricsRef = useRef<GridMetrics | null>(null);
@@ -468,6 +480,25 @@ export default function CargoGridBoard({
 
     if (!cell) {
       clearDrag();
+      if (onDiscardItem) {
+        const itemName = CARGO_ITEM_CATALOG[source.itemId].name;
+        Alert.alert(
+          'Jettison Cargo?',
+          `Drop ${itemName} permanently from your inventory?`,
+          [
+            { text: 'No', style: 'cancel', onPress: () => onResult(false) },
+            {
+              text: 'Yes',
+              style: 'destructive',
+              onPress: () => {
+                const discarded = onDiscardItem(source.instanceId);
+                onResult(discarded);
+              },
+            },
+          ],
+        );
+        return;
+      }
       onResult(false);
       return;
     }
@@ -496,7 +527,13 @@ export default function CargoGridBoard({
       cargoRef.current = snapshot;
     }
     onResult(placed);
-  }, [captureMetrics, clearDrag, onRelocateItem, resolveValidDropCell]);
+  }, [captureMetrics, clearDrag, onDiscardItem, onRelocateItem, resolveValidDropCell]);
+
+  const selectedApCost = selectedCombatItemId ? combatConsumableApCost(selectedCombatItemId) : 2;
+  const canAffordConsumableAp = playerActionPoints >= selectedApCost;
+  const combatUseEnabled = combatConsumablesEnabled
+    && selectedCombatItemId != null
+    && canAffordConsumableAp;
 
   const ghostAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: dragGhostScale.value }],
@@ -590,6 +627,11 @@ export default function CargoGridBoard({
 
   return (
     <View style={[styles.root, minimal && styles.rootMinimal, styles.rootCentered, { width: CARGO_GRID_FRAME_SIZE }]}>
+      <View style={[styles.creditsBanner, { borderColor: accentColor }]}>
+        <Text style={[styles.creditsBannerLabel, { color: accentColor }]}>RUN CREDITS</Text>
+        <Text style={[styles.creditsBannerValue, { color: accentColor }]}>{runCredits}</Text>
+      </View>
+
       <View ref={boardRef} onLayout={captureMetrics} style={styles.boardShell}>
         <View style={styles.gridDock}>{gridBlock}</View>
 
@@ -733,15 +775,15 @@ export default function CargoGridBoard({
                 numberOfLines={1}
               >
                 {selectedCombatItemId
-                  ? `OWNED: ${countCargoItemInstances(displayCargo, selectedCombatItemId)} // COST: 1 AP`
+                  ? `OWNED: ${countCargoItemInstances(displayCargo, selectedCombatItemId)} // COST: ${selectedApCost} AP`
                   : ' '}
               </Text>
             </View>
 
             <Pressable
-              disabled={!combatConsumablesEnabled || !selectedCombatItemId}
+              disabled={!combatUseEnabled}
               onPress={() => {
-                if (!selectedCombatItemId) return;
+                if (!selectedCombatItemId || !combatUseEnabled) return;
                 const ok = onUseCombatConsumable(selectedCombatItemId);
                 if (ok) setSelectedCombatItemId(null);
               }}
@@ -749,10 +791,10 @@ export default function CargoGridBoard({
                 styles.ampouleBtn,
                 styles.deployBtn,
                 {
-                  borderColor: combatConsumablesEnabled && selectedCombatItemId ? accentColor : '#1a2e22',
-                  opacity: combatConsumablesEnabled && selectedCombatItemId && pressed
+                  borderColor: combatUseEnabled ? accentColor : '#1a2e22',
+                  opacity: combatUseEnabled && pressed
                     ? 0.75
-                    : combatConsumablesEnabled && selectedCombatItemId
+                    : combatUseEnabled
                       ? 1
                       : 0.45,
                 },
@@ -761,7 +803,7 @@ export default function CargoGridBoard({
               <Text
                 style={[
                   styles.ampouleBtnText,
-                  { color: combatConsumablesEnabled && selectedCombatItemId ? accentColor : '#2a4032' },
+                  { color: combatUseEnabled ? accentColor : '#2a4032' },
                 ]}
                 numberOfLines={1}
               >
@@ -801,6 +843,29 @@ const styles = StyleSheet.create({
   },
   rootMinimal: {
     gap: 28,
+  },
+  creditsBanner: {
+    width: CARGO_GRID_FRAME_SIZE,
+    borderWidth: 2,
+    backgroundColor: '#050608',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    alignSelf: 'center',
+  },
+  creditsBannerLabel: {
+    fontFamily: 'monospace',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+  },
+  creditsBannerValue: {
+    fontFamily: 'monospace',
+    fontSize: 22,
+    fontWeight: '700',
+    letterSpacing: 1,
   },
   boardShell: {
     width: CARGO_GRID_FRAME_SIZE,

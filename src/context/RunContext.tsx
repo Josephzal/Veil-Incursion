@@ -87,6 +87,7 @@ import {
   getUpcomingDistrictIntel,
   isDistrictGateDepth,
   isPrimeBossDepth,
+  localLevelFromDepth,
 } from '../data/districtPacing';
 import {
   applyBenchHealthRestore,
@@ -148,7 +149,9 @@ import {
   hasCargoItem,
   consumeCargoItem,
   createStarterCargoRunState,
+  removePlacedCargoItem,
 } from '../data/cargoGridEngine';
+import type { RunDeathSummary } from '../types/runDeathSummary';
 import {
   formatCombatResourceDropLog,
   rollCombatResourceDrops,
@@ -201,10 +204,12 @@ export interface RunStartConfig {
 interface RunContextType {
   runState: RunState;
   runLog: string[];
+  deathSummary: import('../types/runDeathSummary').RunDeathSummary | null;
   scanSessionKey: number;
   postCombatMutationChoices: LeyLineMutationDefinition[];
   appendRunLog: (text: string) => void;
   startNewRun: (config?: RunStartConfig) => void;
+  recordRunKillAttacker: (designation: string) => void;
   boundRequisitionOffers: BoundRequisitionDefinition[];
   prepareBoundRequisitionOffers: (account: PlayerAccount) => void;
   confirmBoundRequisition: (id: BoundRequisitionId) => void;
@@ -258,6 +263,7 @@ interface RunContextType {
   calculateSectorExtractionPayout: () => number;
   placeCargoItem: (instanceId: string, row: number, col: number) => boolean;
   relocateCargoItem: (instanceId: string, row: number, col: number) => boolean;
+  discardCargoInstance: (instanceId: string) => boolean;
   applyHarvestChoice: (tier: HarvestYieldTier) => { logLines: string[]; ambushTriggered: boolean };
   useFocusingAmpouleFromCargo: () => boolean;
   beginPostCombatHarvest: () => void;
@@ -416,6 +422,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   const activeIncursionRef = useRef<ActiveIncursionState>(activeIncursion);
   const narrativeNodeRef = useRef<NarrativeEventNode | null>(null);
   const narrativeAssemblyRef = useRef<ProceduralNarrativeAssembly | null>(null);
+  const runStartedAtMsRef = useRef<number | null>(null);
+  const lastKillingEnemyRef = useRef<string | null>(null);
+  const [deathSummary, setDeathSummary] = useState<RunDeathSummary | null>(null);
 
   runStateRef.current = runState;
   activeIncursionRef.current = activeIncursion;
@@ -424,7 +433,14 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     setRunLog((prev) => [...prev, text]);
   }, []);
 
+  const recordRunKillAttacker = useCallback((designation: string) => {
+    lastKillingEnemyRef.current = designation;
+  }, []);
+
   const startNewRun = useCallback((config?: RunStartConfig) => {
+    runStartedAtMsRef.current = Date.now();
+    lastKillingEnemyRef.current = null;
+    setDeathSummary(null);
     const cluster = pickRandomClimateCluster();
     const clusterDef = getClusterDefinition(cluster);
     const hpBonus = config?.factionPerks?.maxHpBonus ?? 0;
@@ -867,6 +883,21 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   }, [appendRunLog]);
 
   const endRun = useCallback((reason: string) => {
+    const inc = activeIncursionRef.current;
+    const isRunFailure =
+      reason.includes('DESTROYED')
+      || reason.includes('DEFEATED')
+      || reason.includes('FAILED');
+    if (isRunFailure && runStateRef.current.runActive && runStartedAtMsRef.current != null) {
+      const depth = depthFromNodesCleared(inc.nodesCleared);
+      const depthLayer = getDistrictFromDepth(depth);
+      setDeathSummary({
+        timeAliveMs: Date.now() - runStartedAtMsRef.current,
+        causeOfDeath: lastKillingEnemyRef.current ?? reason,
+        sectorLevel: localLevelFromDepth(depth),
+        depthLayer,
+      });
+    }
     appendRunLog(`>> RUN TERMINATED — ${reason}`);
     const reset = createInitialRunState();
     runStateRef.current = reset;
@@ -1270,7 +1301,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     return total;
   }, []);
 
-  const relocateCargoItem = useCallback((instanceId: string, row: number, col: number): boolean => {
+  const relocateCargoItem = useCallback((instanceId: string, row: number, col: number) => {
     let placed = false;
     let wasInContainment = false;
     let wasInGrid = false;
@@ -1296,6 +1327,35 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       appendRunLog(`>> CARGO REPACKED — grid occupancy ${occupancy}%.`);
     }
     return true;
+  }, [appendRunLog]);
+
+  const discardCargoInstance = useCallback((instanceId: string) => {
+    let removed = false;
+    let itemName = 'Unknown item';
+
+    setActiveIncursion((prev) => {
+      const containmentItem = prev.cargo.containment.find((item) => item.instanceId === instanceId);
+      const placedItem = prev.cargo.grid.placed.find((item) => item.instanceId === instanceId);
+      const target = containmentItem ?? placedItem;
+      if (!target) return prev;
+
+      itemName = CARGO_ITEM_CATALOG[target.itemId].name;
+      removed = true;
+      const nextCargo = containmentItem
+        ? {
+            ...prev.cargo,
+            containment: prev.cargo.containment.filter((item) => item.instanceId !== instanceId),
+          }
+        : removePlacedCargoItem(prev.cargo, instanceId);
+      const next = { ...prev, cargo: nextCargo };
+      activeIncursionRef.current = next;
+      return next;
+    });
+
+    if (removed) {
+      appendRunLog(`>> CARGO JETTISONED — ${itemName} discarded from inventory.`);
+    }
+    return removed;
   }, [appendRunLog]);
 
   const placeCargoItem = relocateCargoItem;
@@ -2528,6 +2588,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       ...result,
       healAmount,
       stunsEnemy,
+      apCost: def.apCost ?? 2,
       logLine,
     };
   }, []);
@@ -2632,10 +2693,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     () => ({
       runState,
       runLog,
+      deathSummary,
       scanSessionKey,
       postCombatMutationChoices,
       appendRunLog,
       startNewRun,
+      recordRunKillAttacker,
       boundRequisitionOffers,
       prepareBoundRequisitionOffers,
       confirmBoundRequisition,
@@ -2696,6 +2759,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       calculateSectorExtractionPayout,
       placeCargoItem,
       relocateCargoItem,
+      discardCargoInstance,
       applyHarvestChoice,
       useFocusingAmpouleFromCargo,
       beginPostCombatHarvest,
@@ -2727,6 +2791,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     [
       runState,
       runLog,
+      deathSummary,
       scanSessionKey,
       postCombatMutationChoices,
       appendRunLog,

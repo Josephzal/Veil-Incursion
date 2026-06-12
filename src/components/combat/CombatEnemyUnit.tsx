@@ -39,6 +39,8 @@ interface CombatEnemyUnitProps {
   layoutUnitScale?: number;
   /** Parent handles dissolve VFX (arena slotted units). */
   skipDissolveEffect?: boolean;
+  /** Arena backline dash target offset toward operative sprite. */
+  meleeDashDelta?: { x: number; y: number };
   onPress?: () => void;
   onDissolveComplete?: () => void;
 }
@@ -49,6 +51,7 @@ export default function CombatEnemyUnit({
   constrainSpriteHeight = false,
   layoutUnitScale = 1,
   skipDissolveEffect = false,
+  meleeDashDelta,
   onPress,
   onDissolveComplete,
 }: CombatEnemyUnitProps): React.JSX.Element | null {
@@ -83,9 +86,11 @@ export default function CombatEnemyUnit({
     >
       <CombatEnemyAnchorMotion
         isActingTurn={unit.isActingEnemy}
+        isExecutingAttack={unit.isExecutingAttack}
         isBacklineDashing={unit.isBacklineDashing}
         hitFlashSeq={unit.hitFlashSeq}
         backlineMeleeDashSeq={unit.backlineMeleeDashSeq}
+        meleeDashDelta={meleeDashDelta}
         frozen={portraitFrozen || dissolving}
       >
         <View style={styles.spriteFrame} pointerEvents="none">

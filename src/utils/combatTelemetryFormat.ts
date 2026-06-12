@@ -101,6 +101,7 @@ export interface CombatGridUnitSnapshot {
   isFocused: boolean;
   /** True while this unit is the active enemy-turn actor (wind-up or execute). */
   isActingEnemy?: boolean;
+  isExecutingAttack?: boolean;
   /** True while a backline melee dash tween is in flight. */
   isBacklineDashing?: boolean;
   /** Increments to trigger backline melee dash-and-return VFX. */

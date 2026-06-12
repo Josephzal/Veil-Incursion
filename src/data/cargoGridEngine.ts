@@ -288,6 +288,10 @@ export function countCargoItemInstances(cargo: CargoRunState, itemId: CargoItemI
   return inGrid + inContainment;
 }
 
+export function combatConsumableApCost(itemId: CargoItemId): number {
+  return CARGO_ITEM_CATALOG[itemId]?.apCost ?? 2;
+}
+
 export function isCombatConsumableCargoItem(itemId: CargoItemId): boolean {
   return CARGO_ITEM_CATALOG[itemId].usableInCombat === true;
 }
@@ -299,12 +303,14 @@ export function isCombatDeployableCargoItem(itemId: CargoItemId): boolean {
 
 export function combatConsumableDescription(itemId: CargoItemId): string {
   const def = CARGO_ITEM_CATALOG[itemId];
+  const apCost = def.apCost ?? 2;
+  const apNote = `Costs ${apCost} AP — does not end your turn.`;
   switch (def.combatEffect) {
     case 'heal':
-      return `Restores ${def.healPercent ?? 0}% of maximum Soul Anchor integrity. Consumes your turn action points.`;
+      return `Restores ${def.healPercent ?? 0}% of maximum Soul Anchor integrity. ${apNote}`;
     case 'stun':
     case 'max_fracture':
-      return 'Maxes hostile Fracture Gauge and shatters charge channels. Consumes your turn action points.';
+      return `Maxes hostile Fracture Gauge and shatters charge channels. ${apNote}`;
     case 'stamina_ap_surge':
       return 'Overclocks stamina to maximum and grants +1 action point this turn.';
     case 'shatter_armor':
