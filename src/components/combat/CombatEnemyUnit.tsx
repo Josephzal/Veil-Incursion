@@ -15,6 +15,7 @@ import {
 } from './combatEnemyBarLayout';
 import CombatEnemyCritImpact from './CombatEnemyCritImpact';
 import CombatEnemyCritLabel from './CombatEnemyCritLabel';
+import CombatEnemyEvadeLabel from './CombatEnemyEvadeLabel';
 import CombatEnemyDissolveEffect from './CombatEnemyDissolveEffect';
 import CombatEnemyHitEffect from './CombatEnemyHitEffect';
 import CombatEnemyPortraitSkia from './CombatEnemyPortraitSkia';
@@ -113,6 +114,7 @@ export default function CombatEnemyUnit({
             critImpactSeq={unit.critImpactSeq}
             channel={unit.critImpactChannel}
           />
+          <CombatEnemyEvadeLabel evadeImpactSeq={unit.evadeImpactSeq} />
         </View>
 
         {onPress && !dissolving ? (

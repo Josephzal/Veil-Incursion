@@ -365,6 +365,7 @@ export default function TacticalCombatHub({
   const enemyStunPendingRef = useRef(false);
   const hitFlashSeqRef = useRef<Record<string, number>>({});
   const critImpactSeqRef = useRef<Record<string, { seq: number; channel: 'KINETIC' | 'OCCULT' | 'TRUE' }>>({});
+  const evadeImpactSeqRef = useRef<Record<string, number>>({});
   const dissolveSeqRef = useRef<Record<string, number>>({});
   const dissolvedHiddenRef = useRef<Set<string>>(new Set());
   const survivedEnemyTurnsRef = useRef(0);
@@ -605,6 +606,7 @@ export default function TacticalCombatHub({
           intentShimmer: resolveIntentShimmer(unitId, u),
           critImpactSeq: critImpactSeqRef.current[unitId]?.seq ?? 0,
           critImpactChannel: critImpactSeqRef.current[unitId]?.channel,
+          evadeImpactSeq: evadeImpactSeqRef.current[unitId] ?? 0,
           hitFlashSeq: hitFlashSeqRef.current[unitId] ?? 0,
           dissolveSeq: dissolveSeqRef.current[unitId] ?? 0,
           dissolveHidden: dissolvedHiddenRef.current.has(unitId),
@@ -1203,7 +1205,9 @@ export default function TacticalCombatHub({
         },
       );
       if (hit.evaded) {
-        emitCombatFeedback({ kind: 'ENEMY_EVADE' });
+        const evadeUnitId = working.unitId!;
+        evadeImpactSeqRef.current[evadeUnitId] = (evadeImpactSeqRef.current[evadeUnitId] ?? 0) + 1;
+        publishSquadUi(squadRef.current);
         apparitionRef?.current?.triggerStatEvade();
         log(`${tag} >> [ EVADED ] — ${working.designation} phased through the strike.`);
         return false;

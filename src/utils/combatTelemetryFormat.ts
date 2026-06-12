@@ -108,6 +108,8 @@ export interface CombatGridUnitSnapshot {
   /** Increments on player critical hit — drives hit-stop slash VFX. */
   critImpactSeq?: number;
   critImpactChannel?: 'KINETIC' | 'OCCULT' | 'TRUE';
+  /** Increments when the operative's attack is stat-evaded — drives hitbox floater. */
+  evadeImpactSeq?: number;
   /** Increments when the operative deals HP damage to this unit (drives hit flash). */
   hitFlashSeq?: number;
   /** Increments on eradication — drives dissolve VFX before removal. */

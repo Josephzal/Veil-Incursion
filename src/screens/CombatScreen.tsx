@@ -8,6 +8,7 @@ import {
 import type { ApparitionViewportRef } from '../components/combat/ApparitionViewport';
 import CombatArenaStage from '../components/combat/CombatArenaStage';
 import CombatEnemyGrid from '../components/combat/CombatEnemyGrid';
+import { resolveArenaLayoutMode } from '../components/combat/combatEnemyBarLayout';
 import CombatEviscerateCinematic from '../components/combat/CombatEviscerateCinematic';
 import CombatOperativeHud from '../components/combat/CombatOperativeHud';
 import CombatResolutionBanner from '../components/combat/CombatResolutionBanner';
@@ -238,6 +239,10 @@ export default function CombatScreen(): React.JSX.Element {
         : []),
     [runState.pendingEnemies, runState.pendingEnemy],
   );
+  const arenaLayoutMode = useMemo(
+    () => resolveArenaLayoutMode(combatSquad.length),
+    [combatSquad.length],
+  );
   const vectorNode = getSelectedVectorNode();
   const isBossEncounter =
     activeIncursion.bossProfile != null || runState.pendingEnemy?.isBoss === true;
@@ -312,6 +317,7 @@ export default function CombatScreen(): React.JSX.Element {
   const enemySquadPanel = showEnemySquadPanel ? (
     <CombatEnemyGrid
       variant="arena"
+      layoutMode={arenaLayoutMode}
       units={gridUnits}
       targetingActive={effectiveSquadUi.targetingActive}
       onUnitPress={handleEnemyUnitPress}

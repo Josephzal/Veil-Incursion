@@ -1,5 +1,6 @@
-import { Dimensions } from 'react-native';
+import { Dimensions, type ViewStyle } from 'react-native';
 import type { CombatGridSlotId } from '../../types/combatGrid';
+import { ALL_GRID_SLOTS } from '../../types/combatGrid';
 
 const ARENA_HORIZONTAL_INSET = 16;
 
@@ -27,7 +28,7 @@ export const BACKLINE_UNIT_SCALE = .9;
 export const BACKLINE_UNIT_TRANSLATE_Y = -34;
 
 /** Toggle red hitbox overlay — set false once overlap is verified. */
-export const ENEMY_HITBOX_DEBUG = true;
+export const ENEMY_HITBOX_DEBUG = false;
 
 /** Torso-only tap targets decoupled from portrait image bounds. */
 export const FRONTLINE_HITBOX = {
@@ -74,6 +75,15 @@ export {
   COMBAT_GAUGE_TRACK_HEIGHT_COMPACT as ARENA_GAUGE_TRACK_HEIGHT,
 } from './combatGaugeMetrics';
 
+export const COMBAT_ARENA_FRONTLINE_SLOT_COUNT = 2;
+export const COMBAT_ARENA_BACKLINE_SLOT_COUNT = 2;
+
+/** Locked at encounter start — never reflow mid-fight when the squad shrinks. */
+export type ArenaLayoutMode = 'solo' | 'group';
+
+/** Slot id used for dedicated single-hostile encounters. */
+export const SOLO_ARENA_SLOT: CombatGridSlotId = 'FL_0';
+
 export interface EnemySlotLayout {
   left: `${number}%`;
   top?: `${number}%`;
@@ -87,6 +97,7 @@ export interface EnemySlotLayout {
   zIndex: number;
 }
 
+/** Fixed 2×2 group formation — coordinates never change when slots empty. */
 export const ENEMY_ARENA_SLOT_LAYOUT: Record<CombatGridSlotId, EnemySlotLayout> = {
   FL_0: {
     left: '0%',
@@ -125,6 +136,83 @@ export const ENEMY_ARENA_SLOT_LAYOUT: Record<CombatGridSlotId, EnemySlotLayout> 
     zIndex: 1,
   },
 };
+
+/** Dedicated solo encounter — one centered anchor only. */
+export const SOLO_ENEMY_ARENA_SLOT_LAYOUT: EnemySlotLayout = {
+  left: '0%',
+  bottom: SOLO_SLOT_BOTTOM,
+  width: '100%',
+  height: ARENA_SPRITE_HEIGHT,
+  unitScale: SOLO_UNIT_SCALE,
+  unitTranslateY: SOLO_UNIT_TRANSLATE_Y,
+  zIndex: 8,
+};
+
+export interface SlotAnchorRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+/** Resolve layout mode once from the encounter's initial squad size. */
+export function resolveArenaLayoutMode(initialUnitCount: number): ArenaLayoutMode {
+  return initialUnitCount <= 1 ? 'solo' : 'group';
+}
+
+/** Slots that receive permanent anchors for the given layout mode. */
+export function arenaSlotsForMode(mode: ArenaLayoutMode): readonly CombatGridSlotId[] {
+  return mode === 'solo' ? [SOLO_ARENA_SLOT] : ALL_GRID_SLOTS;
+}
+
+/** Fixed slot coordinates — mode only, never live squad size. */
+export function resolveArenaSlotLayout(
+  slot: CombatGridSlotId,
+  mode: ArenaLayoutMode,
+): EnemySlotLayout {
+  if (mode === 'solo' && slot === SOLO_ARENA_SLOT) {
+    return SOLO_ENEMY_ARENA_SLOT_LAYOUT;
+  }
+  return ENEMY_ARENA_SLOT_LAYOUT[slot];
+}
+
+/** Percentage-based anchor style — min dimensions prevent collapse when empty. */
+export function slotAnchorStyle(layout: EnemySlotLayout): ViewStyle {
+  return {
+    position: 'absolute',
+    left: layout.left,
+    ...(layout.top != null ? { top: layout.top } : null),
+    ...(layout.bottom != null ? { bottom: layout.bottom } : null),
+    width: layout.width,
+    height: layout.height,
+    minWidth: layout.width,
+    minHeight: layout.height,
+    zIndex: layout.zIndex,
+    flexShrink: 0,
+  };
+}
+
+/** Convert a slot schema entry to pixel bounds inside the arena container. */
+export function slotLayoutToAnchorRect(
+  layout: EnemySlotLayout,
+  containerWidth: number,
+  containerHeight: number,
+): SlotAnchorRect {
+  const leftPct = Number.parseFloat(layout.left) / 100;
+  const widthPct = Number.parseFloat(layout.width) / 100;
+  const heightPct = Number.parseFloat(layout.height) / 100;
+  const bottomPct = layout.bottom ? Number.parseFloat(layout.bottom) / 100 : 0;
+  const topPct = layout.top ? Number.parseFloat(layout.top) / 100 : undefined;
+
+  const width = containerWidth * widthPct;
+  const height = containerHeight * heightPct;
+  const left = containerWidth * leftPct;
+  const top = topPct != null
+    ? containerHeight * topPct
+    : containerHeight - containerHeight * bottomPct - height;
+
+  return { left, top, width, height };
+}
 
 /** Gauge track width sized to the scaled EnemyUnit footprint. */
 export function arenaSlotGaugeWidth(slotWidthPercent: number, unitScale = 1): number {
@@ -178,30 +266,5 @@ export function unitOccupiesArenaSlot(unit: ArenaLayoutUnit): boolean {
   return (unit.dissolveSeq ?? 0) > 0;
 }
 
-function soloLiveUnitSlot(units: readonly ArenaLayoutUnit[]): CombatGridSlotId | null {
-  const occupying = units.filter(unitOccupiesArenaSlot);
-  if (occupying.length !== 1) return null;
-  const only = occupying[0]!;
-  // Mid-dissolve corpses keep their formation slot — never solo-reflow while fading.
-  if (only.isDead && (only.dissolveSeq ?? 0) > 0 && !only.dissolveHidden) return null;
-  return only.slot;
-}
-
-/** Solo hostile: full column width, raised floor, slightly smaller scale. */
-export function resolveArenaSlotLayout(
-  slot: CombatGridSlotId,
-  units: readonly ArenaLayoutUnit[],
-): EnemySlotLayout {
-  const base = ENEMY_ARENA_SLOT_LAYOUT[slot];
-  const soloSlot = soloLiveUnitSlot(units);
-  if (soloSlot !== slot) return base;
-
-  return {
-    ...base,
-    left: '0%',
-    width: '100%',
-    bottom: SOLO_SLOT_BOTTOM,
-    unitScale: SOLO_UNIT_SCALE,
-    unitTranslateY: SOLO_UNIT_TRANSLATE_Y,
-  };
-}
+/** Duration for slot-to-slot position tweens (ms). */
+export const ARENA_SLOT_TRANSITION_MS = 300;

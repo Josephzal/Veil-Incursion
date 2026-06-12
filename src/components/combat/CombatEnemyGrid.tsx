@@ -1,12 +1,17 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
+import type { LayoutChangeEvent } from 'react-native';
 import type { CombatGridSlotId } from '../../types/combatGrid';
 import type { CombatGridUnitView } from './CombatEnemyUnit';
 import CombatEnemyUnit from './CombatEnemyUnit';
+import CombatEnemySlottedUnit from './CombatEnemySlottedUnit';
 import {
+  arenaSlotsForMode,
   ENEMY_ARENA_SLOT_LAYOUT,
   enemyUnitDepthTransform,
+  type ArenaLayoutMode,
   resolveArenaSlotLayout,
+  slotAnchorStyle,
 } from './combatEnemyBarLayout';
 
 const SLOT_ORDER: CombatGridSlotId[] = ['FL_0', 'FL_1', 'BL_0', 'BL_1'];
@@ -22,23 +27,21 @@ interface CombatEnemyGridProps {
   accentColor: string;
   mutedColor: string;
   variant?: 'arena' | 'compact';
+  /** Locked at encounter start — prevents mid-fight solo reflow. */
+  layoutMode?: ArenaLayoutMode;
 }
 
-function InvisibleSlotAnchor({ slot }: { slot: CombatGridSlotId }): React.JSX.Element {
-  const layout = ENEMY_ARENA_SLOT_LAYOUT[slot];
+interface FixedSlotAnchorProps {
+  slot: CombatGridSlotId;
+  layoutMode: ArenaLayoutMode;
+}
+
+/** Permanent slot box — same bounds whether occupied or empty. */
+function FixedSlotAnchor({ slot, layoutMode }: FixedSlotAnchorProps): React.JSX.Element {
+  const layout = resolveArenaSlotLayout(slot, layoutMode);
   return (
     <View
-      style={[
-        styles.slotAnchor,
-        {
-          left: layout.left,
-          top: layout.top,
-          bottom: layout.bottom,
-          width: layout.width,
-          height: layout.height,
-          zIndex: layout.zIndex,
-        },
-      ]}
+      style={[styles.slotAnchor, slotAnchorStyle(layout)]}
       pointerEvents="none"
     />
   );
@@ -55,7 +58,7 @@ interface EnemyUnitStackProps {
   onUnitDissolveComplete?: (unitId: string) => void;
 }
 
-/** Sprite only — vitals render in the intel panel. */
+/** Compact grid cell — sprite only; vitals render in the intel panel. */
 function EnemyUnitStack({
   unit,
   layout,
@@ -100,63 +103,40 @@ export default function CombatEnemyGrid({
   accentColor,
   mutedColor,
   variant = 'arena',
+  layoutMode = 'group',
 }: CombatEnemyGridProps): React.JSX.Element {
   const isArena = variant === 'arena';
-  const layoutUnits = units;
+  const [arenaSize, setArenaSize] = useState({ width: 0, height: 0 });
 
-  const renderSlot = (slot: CombatGridSlotId) => {
-    const unit = units.find((entry) => entry.slot === slot && (
-      !entry.isDead || (entry.dissolveSeq ?? 0) > 0
+  const handleArenaLayout = useCallback((event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout;
+    setArenaSize((prev) => (
+      prev.width === width && prev.height === height ? prev : { width, height }
     ));
-    const layout = isArena ? resolveArenaSlotLayout(slot, layoutUnits) : ENEMY_ARENA_SLOT_LAYOUT[slot];
-    if (!isArena) {
-      if (!unit) {
-        return <View key={slot} style={styles.cellEmpty} />;
-      }
-      return (
-        <View key={slot} style={styles.cell} pointerEvents="box-none">
-          <EnemyUnitStack
-            unit={unit}
-            layout={layout}
-            targetingActive={targetingActive}
-            accentColor={accentColor}
-            mutedColor={mutedColor}
-            constrainSpriteHeight={isArena}
-            onUnitPress={onUnitPress}
-            onUnitDissolveComplete={onUnitDissolveComplete}
-          />
-        </View>
-      );
-    }
+  }, []);
+
+  const visibleUnits = units.filter((unit) => {
+    if (unit.dissolveHidden) return false;
+    if (!unit.isDead) return true;
+    return (unit.dissolveSeq ?? 0) > 0;
+  });
+
+  const renderCompactSlot = (slot: CombatGridSlotId) => {
+    const unit = visibleUnits.find((entry) => entry.slot === slot);
+    const layout = ENEMY_ARENA_SLOT_LAYOUT[slot];
 
     if (!unit) {
-      return <InvisibleSlotAnchor key={slot} slot={slot} />;
+      return <View key={slot} style={styles.cellEmpty} />;
     }
 
     return (
-      <View
-        key={slot}
-        style={[
-          styles.slotAnchor,
-          styles.slotFill,
-          {
-            left: layout.left,
-            top: layout.top,
-            bottom: layout.bottom,
-            width: layout.width,
-            height: layout.height,
-            zIndex: layout.zIndex,
-          },
-        ]}
-        pointerEvents="box-none"
-      >
+      <View key={slot} style={styles.cell} pointerEvents="box-none">
         <EnemyUnitStack
           unit={unit}
           layout={layout}
           targetingActive={targetingActive}
           accentColor={accentColor}
           mutedColor={mutedColor}
-          constrainSpriteHeight
           onUnitPress={onUnitPress}
           onUnitDissolveComplete={onUnitDissolveComplete}
         />
@@ -165,9 +145,32 @@ export default function CombatEnemyGrid({
   };
 
   if (isArena) {
+    const anchorSlots = arenaSlotsForMode(layoutMode);
+    const anchorRenderOrder = layoutMode === 'solo'
+      ? anchorSlots
+      : ARENA_DEPTH_RENDER_ORDER;
+
     return (
-      <View style={styles.arenaRoot} pointerEvents="box-none">
-        {ARENA_DEPTH_RENDER_ORDER.map((slot) => renderSlot(slot))}
+      <View style={styles.arenaRoot} onLayout={handleArenaLayout} pointerEvents="box-none">
+        {anchorRenderOrder.map((slot) => (
+          <FixedSlotAnchor key={`anchor-${slot}`} slot={slot} layoutMode={layoutMode} />
+        ))}
+
+        {visibleUnits.map((unit) => (
+          <CombatEnemySlottedUnit
+            key={unit.unitId}
+            unit={unit}
+            slot={unit.slot}
+            layoutMode={layoutMode}
+            arenaWidth={arenaSize.width}
+            arenaHeight={arenaSize.height}
+            targetingActive={targetingActive}
+            accentColor={accentColor}
+            mutedColor={mutedColor}
+            onUnitPress={onUnitPress}
+            onUnitDissolveComplete={onUnitDissolveComplete}
+          />
+        ))}
       </View>
     );
   }
@@ -175,12 +178,12 @@ export default function CombatEnemyGrid({
   return (
     <View style={styles.grid} pointerEvents="box-none">
       <View style={styles.row} pointerEvents="box-none">
-        {renderSlot(SLOT_ORDER[0])}
-        {renderSlot(SLOT_ORDER[1])}
+        {renderCompactSlot(SLOT_ORDER[0])}
+        {renderCompactSlot(SLOT_ORDER[1])}
       </View>
       <View style={styles.row} pointerEvents="box-none">
-        {renderSlot(SLOT_ORDER[2])}
-        {renderSlot(SLOT_ORDER[3])}
+        {renderCompactSlot(SLOT_ORDER[2])}
+        {renderCompactSlot(SLOT_ORDER[3])}
       </View>
     </View>
   );
@@ -195,13 +198,7 @@ const styles = StyleSheet.create({
     overflow: 'visible',
   },
   slotAnchor: {
-    position: 'absolute',
-  },
-  slotFill: {
     overflow: 'visible',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    pointerEvents: 'box-none',
   },
   enemyUnit: {
     width: '100%',

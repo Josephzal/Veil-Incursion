@@ -4,17 +4,15 @@ import type { CombatFeedbackEvent } from '../../types/combatChance';
 
 const MONO = 'monospace';
 
-type FloatingFeedbackKind = Exclude<CombatFeedbackEvent['kind'], 'PLAYER_CRIT'>;
+type FloatingFeedbackKind = Exclude<CombatFeedbackEvent['kind'], 'PLAYER_CRIT' | 'ENEMY_EVADE'>;
 
 const LABELS: Record<FloatingFeedbackKind, string> = {
   PLAYER_EVADE: '[ MISS ]',
-  ENEMY_EVADE: '[ EVADED ]',
   ENEMY_CRIT: '[ CRITICAL WOUND ]',
 };
 
 const COLORS: Record<FloatingFeedbackKind, string> = {
   PLAYER_EVADE: '#9ca3af',
-  ENEMY_EVADE: '#9ca3af',
   ENEMY_CRIT: '#ef4444',
 };
 
@@ -33,7 +31,7 @@ export default function CombatFloatingFeedback({
   const translateY = React.useRef(new Animated.Value(8)).current;
 
   useEffect(() => {
-    if (!event || event.kind === 'PLAYER_CRIT') return;
+    if (!event || event.kind === 'PLAYER_CRIT' || event.kind === 'ENEMY_EVADE') return;
     setVisible(event.kind);
     opacity.setValue(0);
     scale.setValue(0.9);
