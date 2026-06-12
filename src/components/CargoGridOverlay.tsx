@@ -1,6 +1,7 @@
 import React from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import CargoGridBoard from './CargoGridBoard';
+import CargoCreditsHud from './CargoCreditsHud';
 import type { CargoRunState } from '../types/cargoGrid';
 import type { CargoItemId } from '../types/cargoGrid';
 import type { TerminalTheme } from '../types/theme';
@@ -62,6 +63,12 @@ export default function CargoGridOverlay({
             <Text style={[styles.closeXText, { color: accentColor }]}>✕</Text>
           </Pressable>
 
+          <CargoCreditsHud
+            credits={runCredits ?? 0}
+            accentColor={accentColor}
+            style={styles.panelCredits}
+          />
+
           <CargoGridBoard
             cargo={cargo}
             theme={theme}
@@ -70,6 +77,7 @@ export default function CargoGridOverlay({
             onDiscardItem={onDiscardItem}
             runCredits={runCredits}
             playerActionPoints={playerActionPoints}
+            showCreditsHud={false}
             scannerMode={scannerMode}
             combatMode={combatMode}
             combatConsumablesEnabled={combatConsumablesEnabled}
@@ -130,6 +138,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#0a0b0f',
+    zIndex: 10,
+  },
+  panelCredits: {
+    position: 'absolute',
+    top: 12,
+    left: 14,
     zIndex: 10,
   },
   closeXText: {

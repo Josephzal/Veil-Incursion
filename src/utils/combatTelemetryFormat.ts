@@ -64,6 +64,11 @@ export function isEnemyDamageIntent(intent: EnemyIntent): boolean {
   return ENEMY_DAMAGE_INTENTS.includes(intent);
 }
 
+/** Hostile is executing a direct strike against operative HP, stamina, or abyssal reserve. */
+export function isDirectPlayerStrikeIntent(intent: EnemyIntent): boolean {
+  return getEnemyDeckStrikeVariant(intent) != null;
+}
+
 export function isEnemySiphonIntent(intent: EnemyIntent): boolean {
   return ENEMY_SIPHON_INTENTS.includes(intent);
 }

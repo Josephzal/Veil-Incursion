@@ -12,6 +12,7 @@ interface CargoPackingPanelProps {
   onRelocateItem: (instanceId: string, row: number, col: number) => boolean;
   onDiscardItem?: (instanceId: string) => boolean;
   runCredits?: number;
+  showCreditsHud?: boolean;
   onContinue: () => void;
   continueLabel?: string;
 }
@@ -23,6 +24,7 @@ export default function CargoPackingPanel({
   onRelocateItem,
   onDiscardItem,
   runCredits,
+  showCreditsHud = false,
   onContinue,
   continueLabel = '[ CONTINUE ]',
 }: CargoPackingPanelProps): React.JSX.Element {
@@ -49,6 +51,7 @@ export default function CargoPackingPanel({
         onRelocateItem={onRelocateItem}
         onDiscardItem={onDiscardItem}
         runCredits={runCredits}
+        showCreditsHud={showCreditsHud}
         onContinue={onContinue}
         continueLabel={continueLabel}
         minimal

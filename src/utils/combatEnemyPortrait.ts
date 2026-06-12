@@ -5,6 +5,10 @@ import LeySiren from '../../assets/enemy images/ley_siren.png';
 import MiasmaTickSwarm from '../../assets/enemy images/miasma_tick.png';
 import HollowedPrecinct from '../../assets/enemy images/hollowed_precinct.png';
 import FractureHound from '../../assets/enemy images/hound.png';
+import EchoingBrute from '../../assets/enemy images/echoing-brute.png';
+import SpatialGlitch from '../../assets/enemy images/spatial_glitch.png';
+import NullShade from '../../assets/enemy images/null_shade.png';
+import AshWeeper from '../../assets/enemy images/ash-weeper.png';
 import EnemyFallback from '../../assets/enemy images/enemyl2.png';
 import EnemyStalker from '../../assets/enemy images/stalkerv1.png';
 import type { RunNodeType } from '../types/game';
@@ -14,9 +18,13 @@ import type { EnemyRosterId } from '../data/enemyRoster';
 const ROSTER_PORTRAITS: Partial<Record<EnemyRosterId, ImageSourcePropType>> = {
   'concrete-gargoyle': ConcreteGargoyle,
   'gutter-goliath': GutterGoliath,
+  'echoing-brute': EchoingBrute,
   'ley-siren': LeySiren,
+  'ash-weeper': AshWeeper,
   'miasma-tick-swarm': MiasmaTickSwarm,
   'fracture-hound': FractureHound,
+  'null-shade': NullShade,
+  'spatial-glitch': SpatialGlitch,
   'boss-hollowed-precinct': HollowedPrecinct,
 };
 

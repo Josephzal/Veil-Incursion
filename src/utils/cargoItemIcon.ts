@@ -2,6 +2,15 @@ import { ImageSourcePropType } from 'react-native';
 import SoulCoreImage from '../../assets/images/item images/soul-core.png';
 import TargetFragmentImage from '../../assets/images/item images/target-fragment.png';
 import VeilShardImage from '../../assets/images/item images/veil-shard.png';
+import CoagulationStitchImage from '../../assets/images/item images/coagulation_stitch.png';
+import DeadDropTokenImage from '../../assets/images/item images/dead-drop_token.png';
+import EclipseFlareImage from '../../assets/images/item images/eclipse_flare.png';
+import GraveDustAmpouleImage from '../../assets/images/item images/grave-dust_ampoule.png';
+import GridCrackerMagImage from '../../assets/images/item images/grid-cracker_mag.png';
+import ResonanceBribeImage from '../../assets/images/item images/resonance_bribe.png';
+import SpallWeaveVestImage from '../../assets/images/item images/spall-weave_vest.png';
+import SpectralSaltImage from '../../assets/images/item images/spectral_salt.png';
+import VoidSurgeCatalystImage from '../../assets/images/item images/void-surge_catalyst.png';
 import ResourceImage from '../../assets/images/resource images/resource1.png';
 import LeySlagImage from '../../assets/images/resource images/ley-slag.png';
 import SanguineAmpouleImage from '../../assets/images/resource images/sanguine-ampoule.png';
@@ -20,7 +29,15 @@ const CARGO_ITEM_IMAGES: Partial<Record<CargoItemId, ImageSourcePropType>> = {
   'soul-core': SoulCoreImage,
   'veil-shard': VeilShardImage,
   'target-fragment': TargetFragmentImage,
-  'spectral-salt': TargetFragmentImage,
+  'spectral-salt': SpectralSaltImage,
+  'coagulation-stitch': CoagulationStitchImage,
+  'dead-drop-token': DeadDropTokenImage,
+  'eclipse-flare': EclipseFlareImage,
+  'grave-dust-ampoule': GraveDustAmpouleImage,
+  'grid-cracker-mag': GridCrackerMagImage,
+  'resonance-bribe': ResonanceBribeImage,
+  'spall-weave-vest': SpallWeaveVestImage,
+  'void-surge-catalyst': VoidSurgeCatalystImage,
   'sanguine-coagulant': SanguineAmpouleImage,
   'veil-ash-grenade': VeilAshCanisterImage,
 };

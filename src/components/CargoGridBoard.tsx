@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
   Image,
   LayoutChangeEvent,
   Pressable,
@@ -35,6 +34,8 @@ import { CARGO_GRID_COLS, CARGO_GRID_ROWS, CARGO_ITEM_CATALOG } from '../types/c
 import type { TerminalTheme } from '../types/theme';
 import { countCargoItemInstances } from '../data/cargoGridEngine';
 import { resolveCargoItemIcon } from '../utils/cargoItemIcon';
+import CargoDiscardConfirmOverlay from './CargoDiscardConfirmOverlay';
+import CargoCreditsHud from './CargoCreditsHud';
 
 export const CARGO_CELL_SIZE = 56;
 export const CARGO_CELL_GAP = 2;
@@ -76,6 +77,7 @@ interface CargoGridBoardProps {
   onDiscardItem?: (instanceId: string) => boolean;
   runCredits?: number;
   playerActionPoints?: number;
+  showCreditsHud?: boolean;
   minimal?: boolean;
 }
 
@@ -244,6 +246,7 @@ export default function CargoGridBoard({
   onDiscardItem,
   runCredits: runCreditsProp,
   playerActionPoints: playerActionPointsProp,
+  showCreditsHud = true,
   minimal = true,
 }: CargoGridBoardProps): React.JSX.Element {
   const combatTurn = useCombatTurnOptional();
@@ -279,6 +282,7 @@ export default function CargoGridBoard({
   const [activeDrag, setActiveDrag] = useState<CargoDragSource | null>(null);
   const [dragOverlay, setDragOverlay] = useState<{ x: number; y: number } | null>(null);
   const [selectedCombatItemId, setSelectedCombatItemId] = useState<CargoItemId | null>(null);
+  const [pendingDiscard, setPendingDiscard] = useState<CargoDragSource | null>(null);
   const externalSlotCountRef = useRef(0);
 
   const dragGhostScale = useSharedValue(1);
@@ -481,22 +485,7 @@ export default function CargoGridBoard({
     if (!cell) {
       clearDrag();
       if (onDiscardItem) {
-        const itemName = CARGO_ITEM_CATALOG[source.itemId].name;
-        Alert.alert(
-          'Jettison Cargo?',
-          `Drop ${itemName} permanently from your inventory?`,
-          [
-            { text: 'No', style: 'cancel', onPress: () => onResult(false) },
-            {
-              text: 'Yes',
-              style: 'destructive',
-              onPress: () => {
-                const discarded = onDiscardItem(source.instanceId);
-                onResult(discarded);
-              },
-            },
-          ],
-        );
+        setPendingDiscard(source);
         return;
       }
       onResult(false);
@@ -627,10 +616,9 @@ export default function CargoGridBoard({
 
   return (
     <View style={[styles.root, minimal && styles.rootMinimal, styles.rootCentered, { width: CARGO_GRID_FRAME_SIZE }]}>
-      <View style={[styles.creditsBanner, { borderColor: accentColor }]}>
-        <Text style={[styles.creditsBannerLabel, { color: accentColor }]}>RUN CREDITS</Text>
-        <Text style={[styles.creditsBannerValue, { color: accentColor }]}>{runCredits}</Text>
-      </View>
+      {showCreditsHud ? (
+        <CargoCreditsHud credits={runCredits} accentColor={accentColor} style={styles.creditsHud} />
+      ) : null}
 
       <View ref={boardRef} onLayout={captureMetrics} style={styles.boardShell}>
         <View style={styles.gridDock}>{gridBlock}</View>
@@ -825,6 +813,19 @@ export default function CargoGridBoard({
           <Text style={[styles.continueBtnText, { color: accentColor }]}>{continueLabel}</Text>
         </Pressable>
       ) : null}
+
+      <CargoDiscardConfirmOverlay
+        visible={pendingDiscard != null}
+        itemName={pendingDiscard ? CARGO_ITEM_CATALOG[pendingDiscard.itemId].name : ''}
+        theme={theme}
+        accentColor={accentColor}
+        onConfirm={() => {
+          if (!pendingDiscard || !onDiscardItem) return;
+          onDiscardItem(pendingDiscard.instanceId);
+          setPendingDiscard(null);
+        }}
+        onCancel={() => setPendingDiscard(null)}
+      />
     </View>
   );
 }
@@ -837,6 +838,7 @@ const styles = StyleSheet.create({
   root: {
     gap: 24,
     alignItems: 'center',
+    position: 'relative',
   },
   rootCentered: {
     alignSelf: 'center',
@@ -844,28 +846,11 @@ const styles = StyleSheet.create({
   rootMinimal: {
     gap: 28,
   },
-  creditsBanner: {
-    width: CARGO_GRID_FRAME_SIZE,
-    borderWidth: 2,
-    backgroundColor: '#050608',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    alignSelf: 'center',
-  },
-  creditsBannerLabel: {
-    fontFamily: 'monospace',
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1.2,
-  },
-  creditsBannerValue: {
-    fontFamily: 'monospace',
-    fontSize: 22,
-    fontWeight: '700',
-    letterSpacing: 1,
+  creditsHud: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    zIndex: 30,
   },
   boardShell: {
     width: CARGO_GRID_FRAME_SIZE,

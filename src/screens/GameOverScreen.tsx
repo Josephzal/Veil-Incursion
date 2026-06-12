@@ -11,7 +11,7 @@ const TERMINAL_ACCENT = '#ef4444';
 
 export default function GameOverScreen(): React.JSX.Element {
   const { theme } = useTerminal();
-  const { runLog, deathSummary } = useRun();
+  const { deathSummary } = useRun();
   const { goToHub } = useGameFlow();
 
   const handleReturn = () => {
@@ -54,14 +54,6 @@ export default function GameOverScreen(): React.JSX.Element {
             <Text style={[styles.statLabel, { color: theme.mutedColor }]}>DEPTH</Text>
             <Text style={[styles.statValue, { color: theme.primaryColor }]}>{depthLabel}</Text>
           </View>
-        </View>
-
-        <View style={[styles.logPreview, { borderColor: theme.borderColor }]}>
-          {runLog.slice(-4).map((line, idx) => (
-            <Text key={`${idx}-${line.slice(0, 8)}`} style={[styles.logLine, { color: theme.mutedColor }]}>
-              {line}
-            </Text>
-          ))}
         </View>
 
         <Pressable
@@ -134,9 +126,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     flex: 1,
   },
-  logPreview: { borderWidth: 1, padding: 12, marginBottom: 28 },
-  logLine: { fontFamily: 'monospace', fontSize: 9, lineHeight: 14, marginBottom: 4 },
-  button: { borderWidth: 2, paddingVertical: 16, alignItems: 'center' },
+  button: { borderWidth: 2, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
   buttonLabel: {
     fontFamily: 'monospace',
     fontSize: 12,

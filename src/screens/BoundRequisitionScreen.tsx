@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import CabalBg from '../../assets/images/location images/cabal.png';
 import IncursionShell from '../components/IncursionShell';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
 import SelectionContinueButton from '../components/SelectionContinueButton';
@@ -50,6 +51,9 @@ export default function BoundRequisitionScreen(): React.JSX.Element {
         style={{ backgroundColor: theme.backgroundColor }}
       >
         <View style={styles.screenBody}>
+          <Image source={CabalBg} style={styles.backgroundImage} resizeMode="cover" />
+          <View style={styles.backgroundScrim} pointerEvents="none" />
+
           <ScrollView
             style={styles.scroll}
             contentContainerStyle={styles.scrollContent}
@@ -131,6 +135,16 @@ const styles = StyleSheet.create({
   screenBody: {
     flex: 1,
     minHeight: 0,
+    overflow: 'hidden',
+  },
+  backgroundImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
+  backgroundScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(5, 6, 8, 0.78)',
   },
   scroll: {
     flex: 1,
@@ -176,11 +190,11 @@ const styles = StyleSheet.create({
   },
   choiceBtn: {
     borderWidth: 1,
-    backgroundColor: '#0a0b0f',
+    backgroundColor: 'rgba(10, 11, 15, 0.92)',
     padding: 12,
   },
   choiceBtnSelected: {
-    backgroundColor: '#0e1624',
+    backgroundColor: 'rgba(14, 22, 36, 0.95)',
   },
   tierTag: {
     fontFamily: 'monospace',
