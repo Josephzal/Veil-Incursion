@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import CityStreetNarrativeBg from '../../assets/narrative images/city-street.png';
@@ -141,6 +142,8 @@ export default function NarrativeStepperModule({
   };
 
   const showCityStreetBackground = isCityStreetsNarrative(node);
+  const { height: windowHeight } = useWindowDimensions();
+  const flavorMaxHeight = Math.round(windowHeight * 0.36);
 
   return (
     <View style={[styles.root, showCityStreetBackground && styles.rootWithCityBackground]}>
@@ -163,125 +166,131 @@ export default function NarrativeStepperModule({
           <Text style={[styles.docTitle, { color: TERMINAL_ACCENT }]}>{node.title}</Text>
         </View>
 
-        <ScrollView
-          style={styles.scrollBody}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          <View style={[styles.docBody, { borderColor }]}>
-            <Text style={[styles.scenarioText, { color: primaryColor }]}>{node.scenarioText}</Text>
-          </View>
-
-          {phase === 'SCENARIO' && (
-          <View style={styles.choiceCol}>
-            <Pressable
-              onPress={() => handleChoiceSelect('A')}
-              style={({ pressed }) => [
-                styles.choiceBtn,
-                showCityStreetBackground && styles.choiceBtnCityStreets,
-                selectedChoice === 'A' && styles.choiceBtnSelected,
-                {
-                  borderColor: selectedChoice === 'A' ? TERMINAL_ACCENT : borderColor,
-                  opacity: pressed ? 0.7 : 1,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.choiceLabel,
-                  { color: selectedChoice === 'A' ? TERMINAL_ACCENT : primaryColor },
-                ]}
-              >
-                {node.choiceA.label}
-              </Text>
-              <Text style={[styles.choiceReq, { color: mutedColor }]}>REQ: {node.choiceA.requirement}</Text>
-              {node.choiceA.effectPreview ? (
-                <ChoiceEffectPreview preview={node.choiceA.effectPreview} mutedColor={mutedColor} />
-              ) : null}
-            </Pressable>
-            <Pressable
-              onPress={() => !node.choiceB.locked && handleChoiceSelect('B')}
-              disabled={node.choiceB.locked === true}
-              style={({ pressed }) => [
-                styles.choiceBtn,
-                showCityStreetBackground && styles.choiceBtnCityStreets,
-                selectedChoice === 'B' && styles.choiceBtnSelected,
-                {
-                  borderColor: selectedChoice === 'B' ? TERMINAL_ACCENT : borderColor,
-                  opacity: node.choiceB.locked ? 0.4 : pressed ? 0.7 : 1,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.choiceLabel,
-                  { color: selectedChoice === 'B' ? TERMINAL_ACCENT : primaryColor },
-                ]}
-              >
-                {node.choiceB.label}
-              </Text>
-              <Text style={[styles.choiceReq, { color: mutedColor }]}>
-                REQ: {node.choiceB.locked && node.choiceB.lockReason
-                  ? node.choiceB.lockReason
-                  : node.choiceB.requirement}
-              </Text>
-              {node.choiceB.effectPreview ? (
-                <ChoiceEffectPreview preview={node.choiceB.effectPreview} mutedColor={mutedColor} />
-              ) : null}
-            </Pressable>
-          </View>
-          )}
-
-        {phase === 'SKILL_CHECK' && (
-          <View
-            style={[
-              styles.calibrationBox,
-              { borderColor: TERMINAL_ACCENT },
-              showCityStreetBackground && styles.panelCityStreets,
-            ]}
-          >
-            <Text style={styles.calibrationTitle}>RIFT INTERFERENCE CALIBRATION MATRIX</Text>
-            <Text style={[styles.calibrationHint, { color: mutedColor }]}>
-              Lock marker inside green target zone (60%–80%)
-            </Text>
-            <View style={[styles.sliderTrack, { borderColor: borderColor }]}>
-              <View style={[styles.targetZone, { left: `${TARGET_MIN * 100}%`, width: `${(TARGET_MAX - TARGET_MIN) * 100}%` }]} />
-              <View style={[styles.marker, { left: `${Math.min(markerPct * 100, 97)}%` }]} />
-            </View>
-            <Pressable
-              onPress={handleLockCalibration}
-              style={({ pressed }) => [styles.lockBtn, { borderColor: TERMINAL_ACCENT, opacity: pressed ? 0.75 : 1 }]}
-            >
-              <Text style={styles.lockBtnText}>[ LOCK CALIBRATION ]</Text>
-            </Pressable>
-          </View>
-        )}
-
-        {phase === 'RESULT' && resultText && (
-          <View
-            style={[
-              styles.resultBox,
-              { borderColor: resultText.includes('FAILURE') || resultText.includes('FAIL') ? '#ef4444' : TERMINAL_ACCENT },
-              showCityStreetBackground && styles.panelCityStreets,
-            ]}
-          >
-            <Text style={[styles.resultText, { color: resultText.includes('FAILURE') || resultText.includes('FAIL') ? '#ef4444' : TERMINAL_ACCENT }]}>
-              {resultText}
-            </Text>
-            <Text style={[styles.resultSub, { color: mutedColor }]}>Returning to ley-line grid...</Text>
-          </View>
-        )}
-        </ScrollView>
-
         {phase === 'SCENARIO' ? (
-          <View style={styles.footer}>
-            <SelectionContinueButton
-              enabled={selectedChoice != null}
-              onPress={handleContinue}
-              borderColor={borderColor}
-              mutedColor={mutedColor}
-            />
+          <>
+            <ScrollView
+              style={[styles.flavorScroll, { maxHeight: flavorMaxHeight }]}
+              contentContainerStyle={styles.flavorScrollContent}
+              showsVerticalScrollIndicator
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={[styles.docBody, { borderColor }]}>
+                <Text style={[styles.scenarioText, { color: primaryColor }]}>{node.scenarioText}</Text>
+              </View>
+            </ScrollView>
+
+            <View style={styles.choiceSection}>
+              <View style={styles.choiceCol}>
+                <Pressable
+                  onPress={() => handleChoiceSelect('A')}
+                  style={({ pressed }) => [
+                    styles.choiceBtn,
+                    showCityStreetBackground && styles.choiceBtnCityStreets,
+                    selectedChoice === 'A' && styles.choiceBtnSelected,
+                    {
+                      borderColor: selectedChoice === 'A' ? TERMINAL_ACCENT : borderColor,
+                      opacity: pressed ? 0.7 : 1,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.choiceLabel,
+                      { color: selectedChoice === 'A' ? TERMINAL_ACCENT : primaryColor },
+                    ]}
+                  >
+                    {node.choiceA.label}
+                  </Text>
+                  <Text style={[styles.choiceReq, { color: mutedColor }]}>REQ: {node.choiceA.requirement}</Text>
+                  {node.choiceA.effectPreview ? (
+                    <ChoiceEffectPreview preview={node.choiceA.effectPreview} mutedColor={mutedColor} />
+                  ) : null}
+                </Pressable>
+                <Pressable
+                  onPress={() => !node.choiceB.locked && handleChoiceSelect('B')}
+                  disabled={node.choiceB.locked === true}
+                  style={({ pressed }) => [
+                    styles.choiceBtn,
+                    showCityStreetBackground && styles.choiceBtnCityStreets,
+                    selectedChoice === 'B' && styles.choiceBtnSelected,
+                    {
+                      borderColor: selectedChoice === 'B' ? TERMINAL_ACCENT : borderColor,
+                      opacity: node.choiceB.locked ? 0.4 : pressed ? 0.7 : 1,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.choiceLabel,
+                      { color: selectedChoice === 'B' ? TERMINAL_ACCENT : primaryColor },
+                    ]}
+                  >
+                    {node.choiceB.label}
+                  </Text>
+                  <Text style={[styles.choiceReq, { color: mutedColor }]}>
+                    REQ: {node.choiceB.locked && node.choiceB.lockReason
+                      ? node.choiceB.lockReason
+                      : node.choiceB.requirement}
+                  </Text>
+                  {node.choiceB.effectPreview ? (
+                    <ChoiceEffectPreview preview={node.choiceB.effectPreview} mutedColor={mutedColor} />
+                  ) : null}
+                </Pressable>
+              </View>
+            </View>
+
+            <View style={styles.footer}>
+              <SelectionContinueButton
+                enabled={selectedChoice != null}
+                onPress={handleContinue}
+                borderColor={borderColor}
+                mutedColor={mutedColor}
+              />
+            </View>
+          </>
+        ) : null}
+
+        {phase === 'SKILL_CHECK' ? (
+          <View style={styles.tensionArea}>
+            <View
+              style={[
+                styles.calibrationBox,
+                { borderColor: TERMINAL_ACCENT },
+                showCityStreetBackground && styles.panelCityStreets,
+              ]}
+            >
+              <Text style={styles.calibrationTitle}>RIFT INTERFERENCE CALIBRATION MATRIX</Text>
+              <Text style={[styles.calibrationHint, { color: mutedColor }]}>
+                Lock marker inside green target zone (60%–80%)
+              </Text>
+              <View style={[styles.sliderTrack, { borderColor: borderColor }]}>
+                <View style={[styles.targetZone, { left: `${TARGET_MIN * 100}%`, width: `${(TARGET_MAX - TARGET_MIN) * 100}%` }]} />
+                <View style={[styles.marker, { left: `${Math.min(markerPct * 100, 97)}%` }]} />
+              </View>
+              <Pressable
+                onPress={handleLockCalibration}
+                style={({ pressed }) => [styles.lockBtn, { borderColor: TERMINAL_ACCENT, opacity: pressed ? 0.75 : 1 }]}
+              >
+                <Text style={styles.lockBtnText}>[ LOCK CALIBRATION ]</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+
+        {phase === 'RESULT' && resultText ? (
+          <View style={styles.resultArea}>
+            <View
+              style={[
+                styles.resultBox,
+                { borderColor: resultText.includes('FAILURE') || resultText.includes('FAIL') ? '#ef4444' : TERMINAL_ACCENT },
+                showCityStreetBackground && styles.panelCityStreets,
+              ]}
+            >
+              <Text style={[styles.resultText, { color: resultText.includes('FAILURE') || resultText.includes('FAIL') ? '#ef4444' : TERMINAL_ACCENT }]}>
+                {resultText}
+              </Text>
+              <Text style={[styles.resultSub, { color: mutedColor }]}>Returning to ley-line grid...</Text>
+            </View>
           </View>
         ) : null}
       </View>
@@ -331,17 +340,33 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     marginBottom: 8,
   },
-  scrollBody: {
+  flavorScroll: {
+    flexGrow: 0,
+    flexShrink: 1,
+  },
+  flavorScrollContent: {
+    paddingBottom: 4,
+  },
+  choiceSection: {
     flex: 1,
     minHeight: 0,
+    justifyContent: 'center',
+    marginTop: 8,
   },
-  scrollContent: {
-    paddingBottom: 8,
-    gap: 8,
+  tensionArea: {
+    flex: 1,
+    minHeight: 0,
+    justifyContent: 'center',
+  },
+  resultArea: {
+    flex: 1,
+    minHeight: 0,
+    justifyContent: 'center',
+    paddingVertical: 12,
   },
   footer: {
     flexShrink: 0,
-    paddingTop: 6,
+    paddingTop: 8,
     paddingBottom: 4,
   },
   docLabel: { fontFamily: 'monospace', fontSize: 7, letterSpacing: 1, marginBottom: 4 },

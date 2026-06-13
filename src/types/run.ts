@@ -19,7 +19,18 @@ export type EnemyIntent =
   | 'CHARGE'
   | 'WORLD_ENDER'
   | 'FORTIFY'
-  | 'OVERDRIVE_DISCHARGE';
+  | 'OVERDRIVE_DISCHARGE'
+  | 'PAVEMENT_CRUSHER_CHARGE'
+  | 'PAVEMENT_CRUSHER'
+  | 'OCCULT_TETHER'
+  | 'SWARM_BITE'
+  | 'STAMINA_DRAIN_LEAP'
+  | 'DOUBLE_STRIKE'
+  | 'VEIL_STATIC'
+  | 'PREMATURE_IGNITION'
+  | 'RESONANCE_OVERLOAD'
+  | 'SINKING_INTO_GRID'
+  | 'VOID_AMBUSH';
 
 /** Reactive combat debuffs derived from resource pools (stamina === 0 → EXHAUSTED). */
 export type CombatStatusEffect = 'EXHAUSTED';
@@ -90,12 +101,32 @@ export interface EnemyCombatProfile {
   fracturedThisRound?: boolean;
   rosterId?: string;
   faction?: FactionType;
+  /** Player-turn windows remaining where incoming damage is reduced after FORTIFY resolves. */
+  fortifyTurnsRemaining?: number;
   /** Passive stat evade — full miss on connect (separate from EVADE intent posture). */
   evadeChance?: number;
   /** Passive crit chance on attacks. Bosses should remain 0. */
   critChance?: number;
   /** Choir of Rust — damage syncs to boss HP pool across all bodies. */
   sharedBossPool?: boolean;
+  /** Ley-Siren tether — fracture gauge cannot build while true. */
+  fractureImmune?: boolean;
+  /** Null-Shade — occult channel hits deal 0. */
+  occultImmune?: boolean;
+  /** Echoing Brute — stores last kinetic adaptation for bonus strike damage. */
+  adaptedElement?: 'Kinetic' | 'Occult' | null;
+  /** Concrete Gargoyle — pavement crusher wind-up. */
+  isCharging?: boolean;
+  /** Spatial Glitch — next qualifying hit triggers position swap. */
+  teleportReady?: boolean;
+  /** Persistent enrage latch — drives deep-red overlay when true. */
+  isEnraged?: boolean;
+  /** Telegraphed follow-up action key (e.g. SLAM, VOID_AMBUSH). */
+  queuedAction?: string | null;
+  /** Null-Shade phasing — kinetic/physical targeting blocked while true. */
+  isUntargetable?: boolean;
+  /** Roster telegraph cooldown — turns until Sinking/Void sequence can restart. */
+  rosterAbilityCooldown?: number;
 }
 
 export interface Trinket {

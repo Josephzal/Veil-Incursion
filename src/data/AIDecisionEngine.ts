@@ -25,6 +25,11 @@ export interface EnemyAIState {
   district: DistrictId;
   /** Intent that was just resolved this enemy phase (still on profile at roll time). */
   lastIntent?: EnemyIntent;
+  rosterId?: string;
+  isEnraged?: boolean;
+  queuedAction?: string | null;
+  isUntargetable?: boolean;
+  rosterAbilityCooldown?: number;
 }
 
 export interface AIDecisionContext {
@@ -79,7 +84,7 @@ function roll(rng?: () => number): number {
 export function buildEnemyActiveBuffs(profile: EnemyCombatProfile): string[] {
   const buffs: string[] = [];
   if (profile.evadeActive || profile.intent === 'EVADE') buffs.push('Evade');
-  if (profile.intent === 'FORTIFY') buffs.push('Fortify');
+  if ((profile.fortifyTurnsRemaining ?? 0) > 0) buffs.push('Fortify');
   if ((profile.chargeTurns ?? 0) > 0 || profile.intent === 'CHARGE') buffs.push('Charging');
   return buffs;
 }
@@ -97,8 +102,16 @@ export function enemyAIStateFromProfile(
     activeBuffs: buildEnemyActiveBuffs(profile),
     district,
     lastIntent: profile.intent,
+    rosterId: profile.rosterId,
+    isEnraged: profile.isEnraged,
+    queuedAction: profile.queuedAction ?? null,
+    isUntargetable: profile.isUntargetable,
+    rosterAbilityCooldown: profile.rosterAbilityCooldown ?? 0,
   };
 }
+
+/** Re-export roster enrage thresholds for playtest tuning (see combatRosterAI). */
+export { ROSTER_ENRAGE_THRESHOLDS } from './combatRosterAI';
 
 export function defaultPlayerAIState(overrides?: Partial<PlayerAIState>): PlayerAIState {
   return {

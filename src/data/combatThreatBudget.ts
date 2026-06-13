@@ -6,7 +6,11 @@ export const THREAT_BUDGET_STANDARD = 2;
 export const THREAT_BUDGET_ELITE = 3;
 export const THREAT_BUDGET_AMBUSH = 3;
 
-const HEAVY_INTENTS: EnemyIntent[] = ['WORLD_ENDER', 'OVERDRIVE_DISCHARGE'];
+const HEAVY_INTENTS: EnemyIntent[] = [
+  'WORLD_ENDER',
+  'OVERDRIVE_DISCHARGE',
+  'PAVEMENT_CRUSHER',
+];
 
 export function intentThreatCost(intent: EnemyIntent): number {
   return HEAVY_INTENTS.includes(intent) ? 2 : 1;

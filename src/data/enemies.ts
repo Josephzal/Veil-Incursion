@@ -5,6 +5,7 @@ import {
   enemyAIStateFromProfile,
   type PlayerAIState,
 } from './AIDecisionEngine';
+import { decideRosterIntent, syncRosterCombatState } from './combatRosterActions';
 import { ENEMY_ROSTER, spawnRosterUnit } from './enemyRoster';
 import type { EnemyAffinity } from '../types/combatEnvironment';
 import { EnemyClass, EnemyCombatProfile, EnemyIntent, SectorDefinition } from '../types/run';
@@ -103,6 +104,17 @@ export function intentLabel(intent: EnemyIntent, designation: string): string {
     WORLD_ENDER: `${designation} intends WORLD-ENDER (UNBLOCKABLE)`,
     FORTIFY: `${designation} intends to FORTIFY`,
     OVERDRIVE_DISCHARGE: `${designation} intends OVERDRIVE DISCHARGE (18 DMG)`,
+    PAVEMENT_CRUSHER_CHARGE: `${designation} winds PAVEMENT CRUSHER CHARGE`,
+    PAVEMENT_CRUSHER: `${designation} intends PAVEMENT CRUSHER (MASSIVE KINETIC)`,
+    OCCULT_TETHER: `${designation} casts OCCULT TETHER`,
+    SWARM_BITE: `${designation} intends SWARM BITE (STAMINA DRAIN)`,
+    STAMINA_DRAIN_LEAP: `${designation} intends STAMINA DRAIN LEAP`,
+    DOUBLE_STRIKE: `${designation} intends DOUBLE STRIKE`,
+    VEIL_STATIC: `${designation} casts VEIL STATIC (AP DISRUPTION)`,
+    PREMATURE_IGNITION: `${designation} triggers PREMATURE IGNITION`,
+    RESONANCE_OVERLOAD: `${designation} intends RESONANCE OVERLOAD`,
+    SINKING_INTO_GRID: `${designation} sinks into the GRID (PHASE)`,
+    VOID_AMBUSH: `${designation} intends VOID AMBUSH (CRITICAL)`,
   };
   return labels[intent];
 }
@@ -246,6 +258,7 @@ export function advanceEnemyIntent(
   profile: EnemyCombatProfile,
   district: DistrictId = 1,
   playerState?: PlayerAIState,
+  squad?: EnemyCombatProfile[],
 ): EnemyCombatProfile {
   if (profile.testPreset === 'easy') {
     return {
@@ -266,23 +279,40 @@ export function advanceEnemyIntent(
     };
   }
 
-  let chargeTurns = profile.chargeTurns;
-  if (profile.intent === 'CHARGE') chargeTurns += 1;
-  else if (profile.intent !== 'WORLD_ENDER') chargeTurns = 0;
+  const synced = syncRosterCombatState(profile);
 
-  const enemyState = enemyAIStateFromProfile(
-    { ...profile, chargeTurns },
-    district,
-  );
-  const nextIntent = decideEnemyIntent({
-    enemy: enemyState,
-    player: playerState ?? defaultPlayerAIState(),
-  });
+  let chargeTurns = synced.chargeTurns;
+  if (synced.intent === 'CHARGE') chargeTurns += 1;
+  else if (synced.intent !== 'WORLD_ENDER') chargeTurns = 0;
 
-  return {
-    ...profile,
+  const nextIntent = synced.rosterId
+    ? (decideRosterIntent({ ...synced, chargeTurns }, district, playerState, squad) ?? decideEnemyIntent({
+        enemy: enemyAIStateFromProfile({ ...synced, chargeTurns }, district),
+        player: playerState ?? defaultPlayerAIState(),
+      }))
+    : decideEnemyIntent({
+        enemy: enemyAIStateFromProfile({ ...synced, chargeTurns }, district),
+        player: playerState ?? defaultPlayerAIState(),
+      });
+
+  const telegraphLocked = synced.rosterId === 'concrete-gargoyle'
+    && (synced.queuedAction === 'SLAM' || synced.isCharging);
+  const nextCharging = synced.rosterId === 'concrete-gargoyle'
+    ? nextIntent === 'PAVEMENT_CRUSHER_CHARGE'
+      ? true
+      : nextIntent === 'PAVEMENT_CRUSHER'
+        ? false
+        : synced.isCharging
+    : synced.isCharging;
+
+  return syncRosterCombatState({
+    ...synced,
     chargeTurns,
     intent: nextIntent,
-    evadeActive: nextIntent === 'EVADE',
-  };
+    evadeActive: telegraphLocked ? false : nextIntent === 'EVADE',
+    isCharging: nextCharging,
+    rosterAbilityCooldown: synced.rosterId === 'null-shade' && (synced.rosterAbilityCooldown ?? 0) > 0
+      ? (synced.rosterAbilityCooldown ?? 0) - 1
+      : synced.rosterAbilityCooldown,
+  });
 }

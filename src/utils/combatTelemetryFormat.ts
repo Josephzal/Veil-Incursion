@@ -20,6 +20,17 @@ const INTENT_READOUT: Record<EnemyIntent, string> = {
   WORLD_ENDER: 'WORLD-ENDER UNBLOCK',
   FORTIFY: 'FORTIFY',
   OVERDRIVE_DISCHARGE: 'OVERDRIVE DISCHARGE',
+  PAVEMENT_CRUSHER_CHARGE: 'PAVEMENT CRUSHER CHARGE',
+  PAVEMENT_CRUSHER: 'PAVEMENT CRUSHER',
+  OCCULT_TETHER: 'OCCULT TETHER',
+  SWARM_BITE: 'SWARM BITE',
+  STAMINA_DRAIN_LEAP: 'STAMINA DRAIN LEAP',
+  DOUBLE_STRIKE: 'DOUBLE STRIKE',
+  VEIL_STATIC: 'VEIL STATIC',
+  PREMATURE_IGNITION: 'PREMATURE IGNITION',
+  RESONANCE_OVERLOAD: 'RESONANCE OVERLOAD',
+  SINKING_INTO_GRID: 'SINKING INTO GRID',
+  VOID_AMBUSH: 'VOID AMBUSH',
 };
 
 export function formatHostileId(designation: string): string {
@@ -36,7 +47,15 @@ export function formatIntentReadout(intent: EnemyIntent): string {
 
 export type EnemyDeckStrikeVariant = 'hp' | 'stamina' | 'abyssal';
 
-const HP_STRIKE_INTENTS: EnemyIntent[] = ['STRIKE', 'WORLD_ENDER', 'OVERDRIVE_DISCHARGE'];
+const HP_STRIKE_INTENTS: EnemyIntent[] = [
+  'STRIKE',
+  'WORLD_ENDER',
+  'OVERDRIVE_DISCHARGE',
+  'PAVEMENT_CRUSHER',
+  'DOUBLE_STRIKE',
+  'VOID_AMBUSH',
+  'RESONANCE_OVERLOAD',
+];
 
 /** Maps hostile intents to the transparent strike overlay shown on the operative deck. */
 export function getEnemyDeckStrikeVariant(intent: EnemyIntent): EnemyDeckStrikeVariant | null {
@@ -57,7 +76,15 @@ export type EnemyPortraitAnim = 'none' | 'lunge' | 'shimmy';
 
 export type EnemyIntentShimmer = 'fortify' | 'evade';
 
-const ENEMY_DAMAGE_INTENTS: EnemyIntent[] = ['STRIKE', 'WORLD_ENDER', 'OVERDRIVE_DISCHARGE'];
+const ENEMY_DAMAGE_INTENTS: EnemyIntent[] = [
+  'STRIKE',
+  'WORLD_ENDER',
+  'OVERDRIVE_DISCHARGE',
+  'PAVEMENT_CRUSHER',
+  'DOUBLE_STRIKE',
+  'VOID_AMBUSH',
+  'RESONANCE_OVERLOAD',
+];
 const ENEMY_SIPHON_INTENTS: EnemyIntent[] = ['STRIP_STAMINA', 'SIPHON_ABYSSAL'];
 const ENEMY_CHARGE_INTENTS: EnemyIntent[] = ['FORTIFY', 'CHARGE'];
 
@@ -89,7 +116,8 @@ export function classifyEnemyTurnMotion(
   intent: EnemyIntent,
   options?: { arenaLayout?: boolean; gridSlot?: CombatGridSlotId | null },
 ): EnemyTurnMotionKind {
-  if (isEnemyBuffIntent(intent)) return 'buff';
+  if (isEnemyBuffIntent(intent) || intent === 'OCCULT_TETHER' || intent === 'VEIL_STATIC' || intent === 'SINKING_INTO_GRID') return 'buff';
+  if (intent === 'SWARM_BITE' || intent === 'STAMINA_DRAIN_LEAP') return 'ranged';
   if (isEnemyDamageIntent(intent)) return 'melee';
   if (isEnemySiphonIntent(intent)) return 'ranged';
   return 'ranged';
@@ -114,6 +142,9 @@ export type StatusFloatTone = 'fortify' | 'evade' | 'charge' | 'neutral';
 
 const BUFF_FLOAT_LABELS: Partial<Record<EnemyIntent, string>> = {
   FORTIFY: 'Fortify',
+  OCCULT_TETHER: 'Tether',
+  VEIL_STATIC: 'Static',
+  SINKING_INTO_GRID: 'Phase',
   EVADE: 'Evade',
   CHARGE: 'Charge',
 };
@@ -144,6 +175,7 @@ export interface CombatGridUnitSnapshot {
   occultWards?: number;
   combatTags?: string[];
   evadeActive?: boolean;
+  fortifyTurnsRemaining?: number;
   chargeTurns?: number;
   doomedStacks?: number;
   isBoss?: boolean;
@@ -180,12 +212,17 @@ export interface CombatGridUnitSnapshot {
   critImpactChannel?: 'KINETIC' | 'OCCULT' | 'TRUE';
   /** Increments when the operative's attack is stat-evaded — drives hitbox floater. */
   evadeImpactSeq?: number;
+  /** Increments to drive IMMUNE floaters above hitbox. */
+  immuneFloatSeq?: number;
+  immuneFloatLabel?: string;
   /** Increments when the operative deals HP damage to this unit (drives hit flash). */
   hitFlashSeq?: number;
   /** Increments on eradication — drives dissolve VFX before removal. */
   dissolveSeq?: number;
   /** True once dissolve animation finished — hide from grid. */
   dissolveHidden?: boolean;
+  /** Persistent enrage latch — drives crimson overlay. */
+  isEnraged?: boolean;
 }
 
 const STATUS_TAG_ORDER: CombatUnitTag[] = [
@@ -201,10 +238,12 @@ export type EnemyStatusUnitFields = Pick<
   CombatGridUnitSnapshot,
   | 'combatTags'
   | 'evadeActive'
+  | 'fortifyTurnsRemaining'
   | 'intent'
   | 'chargeTurns'
   | 'doomedStacks'
   | 'isFractured'
+  | 'isEnraged'
 >;
 
 /** Human-readable hostile status labels for the intel panel. */
@@ -212,8 +251,9 @@ export function formatEnemyStatusLabels(unit: EnemyStatusUnitFields): string[] {
   const labels: string[] = [];
   const tags = new Set(unit.combatTags ?? []);
 
+  if (unit.isEnraged) labels.push('ENRAGED');
   if (unit.evadeActive || unit.intent === 'EVADE') labels.push('EVADING');
-  if (unit.intent === 'FORTIFY') labels.push('FORTIFIED');
+  if ((unit.fortifyTurnsRemaining ?? 0) > 0) labels.push('FORTIFIED');
   if ((unit.chargeTurns ?? 0) > 0 || unit.intent === 'CHARGE') labels.push('CHARGING');
   if (unit.intent === 'WORLD_ENDER') labels.push('WORLD-ENDER');
 
@@ -263,6 +303,7 @@ export function buildInitialSquadUiSnapshot(
     occultWards: unit.occultWards ?? 0,
     combatTags: unit.combatTags ?? [],
     evadeActive: unit.evadeActive,
+    fortifyTurnsRemaining: unit.fortifyTurnsRemaining ?? 0,
     chargeTurns: unit.chargeTurns ?? 0,
     doomedStacks: unit.doomedStacks ?? 0,
     isBoss: unit.isBoss,

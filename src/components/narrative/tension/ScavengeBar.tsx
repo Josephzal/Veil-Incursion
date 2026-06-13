@@ -144,6 +144,8 @@ export default function ScavengeBar({
 
 const styles = StyleSheet.create({
   root: {
+    flex: 1,
+    justifyContent: 'center',
     gap: 8,
   },
   header: {

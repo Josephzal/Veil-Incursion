@@ -87,6 +87,9 @@ import {
   stackDoomedTag,
 } from '../data/combatFractureEngine';
 import type { BlueprintId } from '../types/equipmentBlueprint';
+import { CombatLifecycleManager, applyLeySirenTetherAction } from '../data/combatLifecycleEngine';
+import { isRosterSpecificIntent, isNullShadeVoidAmbush, nullShadeVoidAmbushCleanupPatch, patchRosterAfterIntentExec, resolveRosterEnemyDamage, ROSTER_AI_WEIGHTS, syncRosterCombatState, VOID_AMBUSH_CRIT_CHANCE, VOID_AMBUSH_INTERRUPT_THRESHOLD } from '../data/combatRosterActions';
+import type { PlayerCombatState } from '../types/combatLifecycle';
 import type { CombatSessionExtras } from '../types/combatHooks';
 import { createDefaultCombatSessionExtras } from '../types/combatHooks';
 import {
@@ -258,7 +261,13 @@ interface SliceLineConfig {
 }
 
 const isAttackIntent = (i: EnemyIntent) =>
-  i === 'STRIKE' || i === 'WORLD_ENDER' || i === 'OVERDRIVE_DISCHARGE';
+  i === 'STRIKE'
+  || i === 'WORLD_ENDER'
+  || i === 'OVERDRIVE_DISCHARGE'
+  || i === 'PAVEMENT_CRUSHER'
+  || i === 'DOUBLE_STRIKE'
+  || i === 'VOID_AMBUSH'
+  || i === 'RESONANCE_OVERLOAD';
 
 const ENEMY_INTENT_READ_MS = 2500;
 
@@ -361,6 +370,10 @@ export default function TacticalCombatHub({
   const [sliceLines, setSliceLines] = useState<SliceLineConfig[]>([]);
   const [selectedAbility, setSelectedAbility] = useState<AegisAbilityId | null>(null);
   const [playerActionPoints, setPlayerActionPoints] = useState(PLAYER_ACTION_POINTS_PER_TURN);
+  const [initiativeQueued, setInitiativeQueued] = useState(false);
+  const [initiativeProcSeq, setInitiativeProcSeq] = useState(0);
+  const [apRollupDisplay, setApRollupDisplay] = useState<number | null>(null);
+  const [shadowstepProcActive, setShadowstepProcActive] = useState(false);
   const [enemyActionStage, setEnemyActionStage] = useState<EnemyActionStage>(null);
   const enemyActionStageRef = useRef<EnemyActionStage>(null);
   const [eviscerateTargetUnitId, setEviscerateTargetUnitId] = useState<string | null>(null);
@@ -391,6 +404,8 @@ export default function TacticalCombatHub({
   const statusFloatSeqRef = useRef<Record<string, number>>({});
   const backlineDashSeqRef = useRef<Record<string, number>>({});
   const backlineDashActiveRef = useRef<Record<string, boolean>>({});
+  const retributionParryRef = useRef<{ unitId: string; occultDamage: number } | null>(null);
+  const pendingDissolveRef = useRef<{ unitId: string; profile: EnemyCombatProfile; hp: number } | null>(null);
   const dissolveSeqRef = useRef<Record<string, number>>({});
   const dissolvedHiddenRef = useRef<Set<string>>(new Set());
   const pendingVictoryRef = useRef(false);
@@ -423,13 +438,16 @@ export default function TacticalCombatHub({
   });
   const enemyTurnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const enemyStrikeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const voidAmbushWindowRef = useRef<{ unitId: string; damageDealt: number } | null>(null);
   const playerApRef = useRef(PLAYER_ACTION_POINTS_PER_TURN);
   const wraithParryRef = useRef(false);
+  const shadowstepProcRef = useRef(false);
+  const apRollupFrameRef = useRef<number | null>(null);
   const combatBuffRef = useRef<PlayerCombatBuffState>({
     demonLungCooldown: 0,
     crimsonPactCharges: 0,
     bonusApThisTurn: 0,
-    skipNextEnemyTurn: false,
+    initiativeQueued: false,
   });
   const mutationModsRef = useRef<MutationCombatModifiers>(
     aggregateMutationModifiers(leyLineMutations),
@@ -456,6 +474,11 @@ export default function TacticalCombatHub({
   const isCombatTerminal = () =>
     resolutionRef.current != null || operativeHpRef.current <= 0;
 
+  const canPlayerCommand = () =>
+    cycleRef.current === 'TEXT_COMBAT'
+    && !shadowstepProcRef.current
+    && (isPlayerTurnRef.current || voidAmbushWindowRef.current != null);
+
   const buildPlayerAIState = (): PlayerAIState => ({
     hp: operativeHpRef.current,
     maxHp: maxSoulAnchor,
@@ -464,6 +487,26 @@ export default function TacticalCombatHub({
     abyssalReserve: abyssalRef.current,
     actionPoints: playerApRef.current,
   });
+
+  const buildLifecycleContext = () => ({
+    squad: squadRef.current,
+    player: buildPlayerAIState() as PlayerCombatState,
+    extras: sessionExtrasRef.current,
+  });
+
+  const applyLifecycleExtras = (patch?: Partial<CombatSessionExtras>) => {
+    if (!patch) return;
+    sessionExtrasRef.current = {
+      ...sessionExtrasRef.current,
+      ...patch,
+      immunePopupSeq: patch.immunePopupSeq ?? sessionExtrasRef.current.immunePopupSeq,
+      leySirenTetheredUnitIds: patch.leySirenTetheredUnitIds ?? sessionExtrasRef.current.leySirenTetheredUnitIds,
+      playerApPenaltyNextTurn: patch.playerApPenaltyNextTurn ?? sessionExtrasRef.current.playerApPenaltyNextTurn,
+      playerApCapNextTurn: patch.playerApCapNextTurn !== undefined
+        ? patch.playerApCapNextTurn
+        : sessionExtrasRef.current.playerApCapNextTurn,
+    };
+  };
 
   const log = (t: string) => onTerminalLog?.(t);
   const parryTimingWindowBonus = parryWindowBonus * 0.02;
@@ -573,6 +616,7 @@ export default function TacticalCombatHub({
 
   const resolveIntentShimmer = (unitId: string, u: EnemyCombatProfile): EnemyIntentShimmer | null => {
     if (u.evadeActive || u.intent === 'EVADE') return 'evade';
+    if ((u.fortifyTurnsRemaining ?? 0) > 0) return 'fortify';
     if (
       u.intent === 'FORTIFY'
       && !isPlayerTurnRef.current
@@ -590,7 +634,7 @@ export default function TacticalCombatHub({
     if (nextSquad.length === 0) return;
     const staged = selectedAbility;
     const targetMode = staged ? abilityTargetMode(staged) : 'NONE';
-    const playerSelecting = isPlayerTurnRef.current && cycleRef.current === 'TEXT_COMBAT';
+    const playerSelecting = canPlayerCommand();
     const abilityTargeting = staged != null && targetMode === 'SINGLE';
     const targetingActive = playerSelecting || abilityTargeting;
     const validTargets = staged && abilityTargeting ? validTargetsForAbility(nextSquad, staged) : [];
@@ -638,6 +682,7 @@ export default function TacticalCombatHub({
           occultWards: u.occultWards ?? 0,
           combatTags: u.combatTags ?? [],
           evadeActive: u.evadeActive,
+          fortifyTurnsRemaining: u.fortifyTurnsRemaining ?? 0,
           chargeTurns: u.chargeTurns ?? 0,
           doomedStacks: u.doomedStacks ?? 0,
           isBoss: u.isBoss,
@@ -671,7 +716,10 @@ export default function TacticalCombatHub({
           critImpactSeq: critImpactSeqRef.current[unitId]?.seq ?? 0,
           critImpactChannel: critImpactSeqRef.current[unitId]?.channel,
           evadeImpactSeq: evadeImpactSeqRef.current[unitId] ?? 0,
+          immuneFloatSeq: sessionExtrasRef.current.immunePopupSeq[unitId] ?? 0,
+          immuneFloatLabel: (sessionExtrasRef.current.immunePopupSeq[unitId] ?? 0) > 0 ? 'IMMUNE' : undefined,
           hitFlashSeq: hitFlashSeqRef.current[unitId] ?? 0,
+          isEnraged: u.isEnraged ?? false,
           dissolveSeq: dissolveSeqRef.current[unitId] ?? 0,
           dissolveHidden: dissolvedHiddenRef.current.has(unitId),
         };
@@ -771,7 +819,7 @@ export default function TacticalCombatHub({
   };
 
   const selectTarget = useCallback((unitId: string) => {
-    if (!isPlayerTurnRef.current || cycleRef.current !== 'TEXT_COMBAT') return;
+    if (!canPlayerCommand()) return;
     const unit = getUnitById(squadRef.current, unitId);
     if (!unit || !isUnitAlive(unit)) return;
 
@@ -908,6 +956,7 @@ export default function TacticalCombatHub({
       clearTimeout(enemyStrikeTimerRef.current);
       enemyStrikeTimerRef.current = null;
     }
+    voidAmbushWindowRef.current = null;
     setEnemyActionStage(null);
     setDeckStrikeOverlay(null);
     preAppliedHpStrikeRef.current = 0;
@@ -1008,7 +1057,7 @@ export default function TacticalCombatHub({
 
   const applyConsumableRef = useRef((_result: IncursionConsumableUseResult) => {});
   applyConsumableRef.current = (result: IncursionConsumableUseResult) => {
-    if (cycleRef.current !== 'TEXT_COMBAT' || !isPlayerTurnRef.current) return;
+    if (!canPlayerCommand()) return;
     const apCost = result.apCost ?? COMBAT_CONSUMABLE_AP_COST;
     if (playerApRef.current < apCost) {
       log('[REJECTED] >> Insufficient action points for cargo deploy.');
@@ -1083,8 +1132,7 @@ export default function TacticalCombatHub({
 
   useEffect(() => {
     registerCanDeployCargoHandler?.((itemId: CargoItemId) => (
-      cycleRef.current === 'TEXT_COMBAT'
-      && isPlayerTurnRef.current
+      canPlayerCommand()
       && playerApRef.current >= combatConsumableApCost(itemId)
     ));
   }, [registerCanDeployCargoHandler]);
@@ -1282,6 +1330,14 @@ export default function TacticalCombatHub({
       log(`${tag} >> PHASE SHROUD — ATTACK WHIFFED (${Math.round(shroudMissChance * 100)}% miss).`);
       return false;
     }
+    if (
+      e.isUntargetable
+      && options?.channel !== 'OCCULT'
+      && options?.channel !== 'TRUE'
+    ) {
+      log(`${tag} >> PHASED — ${e.designation} cannot be targeted by physical channel.`);
+      return false;
+    }
     let working = e;
     let critical = false;
     let ignoreDefenses = false;
@@ -1414,13 +1470,49 @@ export default function TacticalCombatHub({
       apparitionRef?.current?.triggerPlayerCritSunder(critChannel === 'OCCULT' ? 'OCCULT' : 'KINETIC');
     }
     dmg = Math.floor(dmg * getEnemyDamageTakenMultiplier(working, sessionExtrasRef.current));
-    if (working.evadeActive && dmg > 0) {
+
+    const projectedHpAfter = Math.max(working.currentHp - dmg, 0);
+    if (source && options?.channel) {
+      const hitLifecycle = CombatLifecycleManager.runOnHitTaken(
+        working,
+        {
+          raw: dmg,
+          channel: options.channel,
+          source,
+          projectedHpAfter,
+        },
+        buildLifecycleContext(),
+      );
+      hitLifecycle.logLines.forEach((line) => log(line));
+      applyLifecycleExtras(hitLifecycle.extras);
+      if (hitLifecycle.squad.length > 0) syncSquad(hitLifecycle.squad);
+      working = getUnitById(squadRef.current, e.unitId!) ?? working;
+      if (hitLifecycle.negateDamage) dmg = 0;
+      else if (hitLifecycle.damageOverride != null) dmg = hitLifecycle.damageOverride;
+      if (hitLifecycle.showImmunePopup && hitLifecycle.immunePopupUnitId) {
+        publishSquadUi(squadRef.current);
+      }
+    }
+
+    const hadEvadePosture = working.evadeActive && dmg > 0;
+    const hadFortify = (working.fortifyTurnsRemaining ?? 0) > 0 && dmg > 0;
+    if (hadEvadePosture) {
       dmg = Math.floor(dmg * 0.5);
       log(`${tag} >> EVADE POSTURE — 50% (${dmg}).`);
-    } else if (critical) {
-      log(`${tag} >> [ CRITICAL ] ${dmg} damage.`);
-    } else {
-      log(`${tag} >> ${dmg} damage.`);
+    }
+    if (hadFortify) {
+      dmg = Math.floor(dmg * 0.5);
+      log(`${tag} >> FORTIFIED — 50% (${dmg}).`);
+    }
+    if (!hadEvadePosture && !hadFortify) {
+      if (critical) {
+        log(`${tag} >> [ CRITICAL ] ${dmg} damage.`);
+      } else {
+        log(`${tag} >> ${dmg} damage.`);
+      }
+    }
+    if (source && dmg > 0 && e.unitId) {
+      trackVoidAmbushInterruptDamage(e.unitId, dmg);
     }
     if (source && arenaLayout && dmg > 0) {
       playerViewportRef?.current?.triggerAttackLunge();
@@ -1429,6 +1521,31 @@ export default function TacticalCombatHub({
       ? Math.max(bossRuntimeRef.current.currentHp - dmg, 0)
       : Math.max(working.currentHp - dmg, 0);
     const hp = poolHp;
+
+    if (hp <= 0 && e.unitId && source && options?.channel) {
+      const deathLifecycle = CombatLifecycleManager.runOnDeath(
+        working,
+        { channel: options.channel, damage: dmg },
+        buildLifecycleContext(),
+      );
+      deathLifecycle.logLines.forEach((line) => log(line));
+      applyLifecycleExtras(deathLifecycle.extras);
+      if (deathLifecycle.squad.length > 0) syncSquad(deathLifecycle.squad);
+      working = getUnitById(squadRef.current, e.unitId) ?? working;
+
+      if (deathLifecycle.triggerRetributionParry) {
+        pendingDissolveRef.current = { unitId: e.unitId, profile: working, hp: 0 };
+        retributionParryRef.current = deathLifecycle.triggerRetributionParry;
+        pendingDmgRef.current = deathLifecycle.triggerRetributionParry.occultDamage;
+        pendingUnblockRef.current = false;
+        cycleRef.current = 'DEFEND_PARRY';
+        setCycleState('DEFEND_PARRY');
+        startParryRing();
+        patchUnit(e.unitId, { ...working, currentHp: 0 });
+        return true;
+      }
+    }
+
     if (source && dmg > 0 && e.unitId) {
       hitFlashSeqRef.current[e.unitId] = (hitFlashSeqRef.current[e.unitId] ?? 0) + 1;
       Vibration.vibrate(18);
@@ -1459,7 +1576,7 @@ export default function TacticalCombatHub({
       ));
     } else {
       if (hp <= 0 && e.unitId) beginDissolveForUnit(e.unitId, working, hp);
-      patchUnit(e.unitId, { ...working, currentHp: hp });
+      patchUnit(e.unitId, syncRosterCombatState({ ...working, currentHp: hp }));
     }
 
     if (source && env.bloodFrenzyActive && dmg > 0) {
@@ -1691,10 +1808,95 @@ export default function TacticalCombatHub({
     return true;
   };
 
-  const attackDmg = (e: EnemyCombatProfile) =>
-    e.intent === 'WORLD_ENDER'
-      ? { dmg: Math.floor(e.baseDamage * 2.5), unblockable: true }
-      : { dmg: e.baseDamage, unblockable: false };
+  const attackDmg = (e: EnemyCombatProfile) => {
+    if (e.intent === 'WORLD_ENDER') {
+      return { dmg: Math.floor(e.baseDamage * 2.5), unblockable: true };
+    }
+    if (isRosterSpecificIntent(e.intent) || e.rosterId === 'echoing-brute') {
+      return {
+        dmg: resolveRosterEnemyDamage(e, e.intent),
+        unblockable: false,
+      };
+    }
+    return { dmg: e.baseDamage, unblockable: false };
+  };
+
+  const applyFractureHoundShieldDrain = (attacker: EnemyCombatProfile) => {
+    if (attacker.rosterId !== 'fracture-hound' || attacker.isEnraged) return;
+    const extras = sessionExtrasRef.current;
+    if (extras.playerShield <= 0) return;
+    const drain = Math.min(extras.playerShield, ROSTER_AI_WEIGHTS.FRACTURE_HOUND_SHIELD_DRAIN);
+    extras.playerShield -= drain;
+    log(`>> FRACTURE HOUND — ${drain} shield integrity siphoned.`);
+  };
+
+  const applyStaminaDrainLeap = (attacker: EnemyCombatProfile) => {
+    const beforeStamina = staminaRef.current;
+    applyStamina(beforeStamina - 20);
+    log(`>> ${attacker.designation} STAMINA DRAIN LEAP — stamina siphoned (-20).`);
+    if (beforeStamina > 0 && staminaRef.current <= 0) {
+      sessionExtrasRef.current.playerApPenaltyNextTurn += 1;
+      log('>> MIASMA FATIGUE — operative AP reduced next turn.');
+    }
+  };
+
+  const closeVoidAmbushWindow = () => {
+    voidAmbushWindowRef.current = null;
+    setIsPlayerTurn(false);
+  };
+
+  const finalizeNullShadeVoidAmbush = (enemy: EnemyCombatProfile) => {
+    if (!enemy.unitId || enemy.rosterId !== 'null-shade' || enemy.intent !== 'VOID_AMBUSH') return;
+    patchUnit(enemy.unitId, nullShadeVoidAmbushCleanupPatch(enemy));
+    publishSquadUi(squadRef.current);
+  };
+
+  const interruptVoidAmbush = (unitId: string) => {
+    if (!voidAmbushWindowRef.current || voidAmbushWindowRef.current.unitId !== unitId) return;
+
+    if (enemyTurnTimerRef.current) {
+      clearTimeout(enemyTurnTimerRef.current);
+      enemyTurnTimerRef.current = null;
+    }
+    if (enemyStrikeTimerRef.current) {
+      clearTimeout(enemyStrikeTimerRef.current);
+      enemyStrikeTimerRef.current = null;
+    }
+
+    closeVoidAmbushWindow();
+    setEnemyActionStage(null);
+
+    const shade = getUnitById(squadRef.current, unitId);
+    if (shade?.unitId && isUnitAlive(shade)) {
+      patchUnit(shade.unitId, {
+        ...nullShadeVoidAmbushCleanupPatch({ ...shade, intent: 'VOID_AMBUSH' }),
+        intent: 'STRIKE',
+      });
+    }
+
+    log(`>> VOID AMBUSH INTERRUPTED — ${VOID_AMBUSH_INTERRUPT_THRESHOLD}+ damage dealt. Shade forced material.`);
+
+    if (enemyActionQueueRef.current[0] === unitId) {
+      enemyActionQueueRef.current.shift();
+    }
+
+    publishSquadUi(squadRef.current);
+
+    if (enemyActionQueueRef.current.length > 0) {
+      runEnemyActionAnimation(false);
+    } else if (!allUnitsDefeated(squadRef.current)) {
+      endEnemyTurn(true);
+    }
+  };
+
+  const trackVoidAmbushInterruptDamage = (unitId: string, hpDamage: number) => {
+    const window = voidAmbushWindowRef.current;
+    if (!window || window.unitId !== unitId || hpDamage <= 0) return;
+    window.damageDealt += hpDamage;
+    if (window.damageDealt >= VOID_AMBUSH_INTERRUPT_THRESHOLD) {
+      setTimeout(() => interruptVoidAmbush(unitId), 0);
+    }
+  };
 
   const execIntent = (e: EnemyCombatProfile) => {
     const blindPenalty = getEnemyAccuracyPenalty(e, sessionExtrasRef.current);
@@ -1717,6 +1919,7 @@ export default function TacticalCombatHub({
     switch (e.intent) {
       case 'STRIKE': {
         const { dmg, unblockable } = attackDmg(e);
+        if (e.rosterId === 'fracture-hound' && !e.isEnraged) applyFractureHoundShieldDrain(e);
         hurtPlayer(dmg, unblockable, `>> ${e.designation} STRIKES — ${dmg}`, { attacker: e });
         break;
       }
@@ -1743,11 +1946,109 @@ export default function TacticalCombatHub({
       case 'EVADE':
         log(`>> ${e.designation} EVADE posture — strikes deal 50%.`);
         break;
-      case 'FORTIFY':
-        log(`>> ${e.designation} FORTIFY — kinetic shell hardened.`);
+      case 'FORTIFY': {
+        log(`>> ${e.designation} FORTIFY — kinetic shell hardened (2 turns).`);
+        if (e.unitId) {
+          patchUnit(e.unitId, { fortifyTurnsRemaining: 2 });
+          publishSquadUi(squadRef.current);
+        }
         break;
+      }
       case 'CHARGE': log(`>> ${e.designation} CHARGING world-ender (${e.chargeTurns + 1}/3).`); break;
+      case 'PAVEMENT_CRUSHER_CHARGE':
+        log(`>> ${e.designation} PAVEMENT CRUSHER CHARGE — structural wind-up engaged.`);
+        break;
+      case 'PAVEMENT_CRUSHER': {
+        const dmg = resolveRosterEnemyDamage(e, 'PAVEMENT_CRUSHER');
+        log(`>> ${e.designation} PAVEMENT CRUSHER — ${dmg} kinetic rupture.`);
+        hurtPlayer(dmg, true, `>> PAVEMENT CRUSHER — ${dmg}`, { attacker: e, rollCrit: false });
+        break;
+      }
+      case 'OCCULT_TETHER': {
+        const tether = applyLeySirenTetherAction(squadRef.current, e);
+        syncSquad(tether.squad);
+        sessionExtrasRef.current = {
+          ...sessionExtrasRef.current,
+          leySirenTetheredUnitIds: tether.tetheredIds,
+          leySirenSourceUnitId: e.unitId ?? null,
+        };
+        tether.logLines.forEach((line) => log(line));
+        break;
+      }
+      case 'SWARM_BITE':
+        applyStaminaDrainLeap(e);
+        break;
+      case 'STAMINA_DRAIN_LEAP':
+        applyStaminaDrainLeap(e);
+        break;
+      case 'DOUBLE_STRIKE': {
+        const dmg = resolveRosterEnemyDamage(e, 'DOUBLE_STRIKE');
+        if (e.isEnraged) {
+          log(`>> ${e.designation} DOUBLE STRIKE — enraged true occult cleave.`);
+          hurtPlayer(dmg, true, `>> DOUBLE STRIKE 1 — ${dmg} TRUE OCCULT`, { attacker: e, rollCrit: false });
+          if (operativeHpRef.current > 0) {
+            hurtPlayer(dmg, true, `>> DOUBLE STRIKE 2 — ${dmg} TRUE OCCULT`, { attacker: e, rollCrit: false });
+          }
+        } else {
+          if (e.rosterId === 'fracture-hound') applyFractureHoundShieldDrain(e);
+          log(`>> ${e.designation} DOUBLE STRIKE — twin cleave.`);
+          hurtPlayer(dmg, false, `>> DOUBLE STRIKE 1 — ${dmg}`, { attacker: e });
+          if (operativeHpRef.current > 0) {
+            hurtPlayer(dmg, false, `>> DOUBLE STRIKE 2 — ${dmg}`, { attacker: e, rollCrit: false });
+          }
+        }
+        break;
+      }
+      case 'VEIL_STATIC':
+        sessionExtrasRef.current = {
+          ...sessionExtrasRef.current,
+          playerApCapNextTurn: 2,
+        };
+        log(`>> ${e.designation} VEIL STATIC — operative AP capped next turn (2/3).`);
+        break;
+      case 'PREMATURE_IGNITION': {
+        log(`>> ${e.designation} PREMATURE IGNITION — occult backlash imminent.`);
+        if (e.unitId) {
+          pendingDissolveRef.current = { unitId: e.unitId, profile: e, hp: 0 };
+          retributionParryRef.current = { unitId: e.unitId, occultDamage: 15 };
+          pendingDmgRef.current = 15;
+          pendingUnblockRef.current = false;
+          cycleRef.current = 'DEFEND_PARRY';
+          setCycleState('DEFEND_PARRY');
+          startParryRing();
+          patchUnit(e.unitId, syncRosterCombatState({ ...e, currentHp: 0 }));
+        }
+        break;
+      }
+      case 'RESONANCE_OVERLOAD': {
+        const dmg = resolveRosterEnemyDamage(e, 'RESONANCE_OVERLOAD');
+        log(`>> ${e.designation} RESONANCE OVERLOAD — dual-channel rupture.`);
+        hurtPlayer(dmg, false, `>> RESONANCE KINETIC — ${dmg}`, { attacker: e });
+        if (operativeHpRef.current > 0) {
+          hurtPlayer(dmg, false, `>> RESONANCE OCCULT — ${dmg}`, { attacker: e, rollCrit: false });
+        }
+        break;
+      }
+      case 'SINKING_INTO_GRID':
+        log(`>> ${e.designation} SINKING INTO THE GRID — physical targeting suppressed.`);
+        break;
+      case 'VOID_AMBUSH': {
+        const base = resolveRosterEnemyDamage(e, 'VOID_AMBUSH');
+        const critRoll = Math.random() < VOID_AMBUSH_CRIT_CHANCE;
+        const dmg = critRoll ? applyCritMultiplier(base, COMBAT_CHANCE.CRIT_DAMAGE_MULTIPLIER) : base;
+        log(`>> ${e.designation} VOID AMBUSH — ${critRoll ? 'CRITICAL ' : ''}${dmg} occult rupture.`);
+        hurtPlayer(dmg, false, `>> VOID AMBUSH — ${dmg}`, { attacker: e, rollCrit: false });
+        if (e.unitId) {
+          patchUnit(e.unitId, nullShadeVoidAmbushCleanupPatch(e));
+          publishSquadUi(squadRef.current);
+        }
+        break;
+      }
       default: break;
+    }
+    const rosterPatch = patchRosterAfterIntentExec(e, e.intent);
+    if (e.unitId && Object.keys(rosterPatch).length > 0 && e.intent !== 'VOID_AMBUSH') {
+      patchUnit(e.unitId, rosterPatch);
     }
   };
 
@@ -1771,7 +2072,7 @@ export default function TacticalCombatHub({
           const nextIntent = rollBossIntent(phase);
           return { ...unit, intent: nextIntent, bossPhase: phase };
         }
-        return advanceEnemyIntent(unit, combatDistrict, buildPlayerAIState());
+        return advanceEnemyIntent(unit, combatDistrict, buildPlayerAIState(), squadRef.current);
       }));
     }
     enemyActionQueueRef.current = [];
@@ -1814,8 +2115,21 @@ export default function TacticalCombatHub({
     mutationEncounterRef.current.bloodForTimeUsed = false;
     const bonusAp = combatBuffRef.current.bonusApThisTurn;
     combatBuffRef.current.bonusApThisTurn = 0;
-    playerApRef.current = PLAYER_ACTION_POINTS_PER_TURN + bonusAp;
-    setPlayerActionPoints(PLAYER_ACTION_POINTS_PER_TURN + bonusAp);
+    const apPenalty = sessionExtrasRef.current.playerApPenaltyNextTurn;
+    const apCap = sessionExtrasRef.current.playerApCapNextTurn;
+    if (apPenalty > 0) {
+      sessionExtrasRef.current.playerApPenaltyNextTurn = 0;
+      log(`>> MIASMA FATIGUE — −${apPenalty} AP this turn.`);
+    }
+    if (apCap != null) {
+      sessionExtrasRef.current.playerApCapNextTurn = null;
+      log(`>> VEIL STATIC RESIDUE — operative AP capped at ${apCap}.`);
+    }
+    const baseAp = PLAYER_ACTION_POINTS_PER_TURN + bonusAp - apPenalty;
+    playerApRef.current = apCap != null
+      ? Math.max(0, Math.min(apCap, baseAp))
+      : Math.max(0, baseAp);
+    setPlayerActionPoints(playerApRef.current);
     setIsPlayerTurn(true);
     if (!skipRegenRef.current) {
       applyStamina(staminaRef.current + COMBAT_ACTION.STAMINA_REGEN);
@@ -1862,9 +2176,13 @@ export default function TacticalCombatHub({
     setDeckStrikeOverlay(null);
     if (countering && openParryWindow(currentEnemy, true)) return;
     if (!countering && openParryWindow(currentEnemy, false)) return;
-    if (!commitPendingPlayerDamage(false, undefined, currentEnemy)) {
+    const hpStrikeResolved = commitPendingPlayerDamage(false, undefined, currentEnemy);
+    if (hpStrikeResolved && currentEnemy.intent === 'VOID_AMBUSH') {
+      finalizeNullShadeVoidAmbush(currentEnemy);
+    } else if (!hpStrikeResolved) {
       execIntent(currentEnemy);
     }
+    if (cycleRef.current === 'DEFEND_PARRY') return;
     if (operativeHpRef.current <= 0) return;
     if (enemyActionQueueRef.current.length > 0) {
       runEnemyActionAnimation(countering);
@@ -1884,12 +2202,32 @@ export default function TacticalCombatHub({
     }
     focusedUnitIdRef.current = unit.unitId ?? null;
     focusEnemy(unit);
+    const turnStart = CombatLifecycleManager.runOnTurnStart(unit, buildLifecycleContext());
+    turnStart.logLines.forEach((line) => log(line));
+    applyLifecycleExtras(turnStart.extras);
+    if (turnStart.squad.length > 0) syncSquad(turnStart.squad);
     setIsPlayerTurn(false);
     setEnemyActionStage('reading');
     log(`>> HOSTILE TURN // ${unit.designation} — ${formatIntentReadout(unit.intent)}`);
+
+    if (isNullShadeVoidAmbush(unit) && unit.unitId) {
+      voidAmbushWindowRef.current = { unitId: unit.unitId, damageDealt: 0 };
+      patchUnit(unit.unitId, { isUntargetable: false });
+      selectedTargetIdRef.current = unit.unitId;
+      setSelectedTargetId(unit.unitId);
+      setIsPlayerTurn(true);
+      log(`>> VOID AMBUSH TELEGRAPH — deal ${VOID_AMBUSH_INTERRUPT_THRESHOLD} damage to interrupt.`);
+      publishSquadUi(squadRef.current);
+    }
+
     enemyTurnTimerRef.current = setTimeout(() => {
       enemyTurnTimerRef.current = null;
       if (isCombatTerminal()) return;
+
+      if (voidAmbushWindowRef.current?.unitId === unitId) {
+        closeVoidAmbushWindow();
+      }
+
       const acting = unitId ? getUnitById(squadRef.current, unitId) : null;
       if (!acting || !isUnitAlive(acting) || operativeHpRef.current <= 0) {
         enemyActionQueueRef.current.shift();
@@ -2004,6 +2342,11 @@ export default function TacticalCombatHub({
     if (isCombatTerminal()) return;
     tickCombatSessionExtras(sessionExtrasRef.current);
     setSelectedAbility(null);
+    syncSquad(squadRef.current.map((unit) => {
+      const remaining = unit.fortifyTurnsRemaining ?? 0;
+      if (remaining <= 0) return unit;
+      return { ...unit, fortifyTurnsRemaining: remaining - 1 };
+    }));
     clearEnemyTurnTimers();
     counteringEnemyRef.current = countering;
     tickMutationHazardsOnEnemyPhase();
@@ -2019,13 +2362,6 @@ export default function TacticalCombatHub({
       enemyStunPendingRef.current = false;
       log('>> HOSTILE STUNNED — Veil interference; turn forfeited.');
       endEnemyTurn(false);
-      return;
-    }
-
-    if (combatBuffRef.current.skipNextEnemyTurn) {
-      combatBuffRef.current.skipNextEnemyTurn = false;
-      log('>> SHADOW STEP — hostile cycle skipped.');
-      endEnemyTurn(true);
       return;
     }
 
@@ -2089,8 +2425,13 @@ export default function TacticalCombatHub({
       demonLungCooldown: 0,
       crimsonPactCharges: 0,
       bonusApThisTurn: 0,
-      skipNextEnemyTurn: false,
+      initiativeQueued: false,
     };
+    setInitiativeQueued(false);
+    setInitiativeProcSeq(0);
+    setApRollupDisplay(null);
+    shadowstepProcRef.current = false;
+    setShadowstepProcActive(false);
     mutationModsRef.current = aggregateMutationModifiers(leyLineMutations);
     mutationEncounterRef.current = {
       adrenalineSpikeUsed: false,
@@ -2168,7 +2509,7 @@ export default function TacticalCombatHub({
   };
 
   const executeAbility = (abilityId: AegisAbilityId) => {
-    if (cycleState !== 'TEXT_COMBAT' || !isPlayerTurn || !enemyRef.current) return;
+    if (cycleState !== 'TEXT_COMBAT' || !canPlayerCommand() || !enemyRef.current) return;
     const def = getAbilityDefinition(abilityId);
     if (!spendActionPoints(def.apCost)) {
       log('[REJECTED] >> Insufficient action points.');
@@ -2335,6 +2676,9 @@ export default function TacticalCombatHub({
           mutationEncounterRef.current.juggernautShield = true;
           log('[JUGGERNAUT PLATING] >> Shadow Step shield primed.');
         }
+        if (abilityId === 'SHADOW_STEP' && result.ok) {
+          setInitiativeQueued(combatBuffRef.current.initiativeQueued);
+        }
         if (!result.ok) {
           playerApRef.current += result.refundAp;
           setPlayerActionPoints(playerApRef.current);
@@ -2351,8 +2695,70 @@ export default function TacticalCombatHub({
     }
   };
 
+  const onInitiativeProcComplete = useCallback(() => {
+    setApRollupDisplay(null);
+    shadowstepProcRef.current = false;
+    setShadowstepProcActive(false);
+  }, []);
+
+  useEffect(() => () => {
+    if (apRollupFrameRef.current != null) {
+      cancelAnimationFrame(apRollupFrameRef.current);
+    }
+  }, []);
+
+  const runShadowstepInitiativeProc = useCallback(() => {
+    if (shadowstepProcRef.current || isCombatTerminal()) return;
+    shadowstepProcRef.current = true;
+    setShadowstepProcActive(true);
+    combatBuffRef.current.initiativeQueued = false;
+    setInitiativeQueued(false);
+    setSelectedAbility(null);
+
+    const startAp = playerApRef.current;
+    const maxAp = PLAYER_ACTION_POINTS_PER_TURN;
+    setApRollupDisplay(startAp);
+    setInitiativeProcSeq((seq) => seq + 1);
+
+    const rollupMs = 300;
+    const startTime = Date.now();
+    let peakFired = false;
+
+    const tickApRollup = () => {
+      const elapsed = Date.now() - startTime;
+      const t = Math.min(1, elapsed / rollupMs);
+      const displayed = Math.round(startAp + (maxAp - startAp) * t);
+      setApRollupDisplay(displayed);
+
+      if (t >= 1 && !peakFired) {
+        peakFired = true;
+        playerApRef.current = maxAp;
+        setPlayerActionPoints(maxAp);
+        Vibration.vibrate([0, 12, 24, 48]);
+        log('[SHADOW STEP] >> Initiative seized — bonus turn active.');
+      }
+
+      if (t < 1) {
+        apRollupFrameRef.current = requestAnimationFrame(tickApRollup);
+      } else {
+        apRollupFrameRef.current = null;
+      }
+    };
+
+    apRollupFrameRef.current = requestAnimationFrame(tickApRollup);
+  }, [log]);
+
   const onEndTurn = () => {
-    if (cycleState !== 'TEXT_COMBAT' || !isPlayerTurn) return;
+    if (cycleState !== 'TEXT_COMBAT' || !isPlayerTurn || shadowstepProcRef.current) return;
+    Vibration.vibrate(12);
+    if (combatBuffRef.current.initiativeQueued) {
+      if (hasMutation(leyLineMutations, 'MOMENTUM_SHIFT') && staminaRef.current === 0) {
+        mutationEncounterRef.current.momentumShiftPending = true;
+        combatChanceRef.current.momentumShiftEvadeDisabled = true;
+      }
+      runShadowstepInitiativeProc();
+      return;
+    }
     if (hasMutation(leyLineMutations, 'MOMENTUM_SHIFT') && staminaRef.current === 0) {
       mutationEncounterRef.current.momentumShiftPending = true;
       combatChanceRef.current.momentumShiftEvadeDisabled = true;
@@ -2436,6 +2842,30 @@ export default function TacticalCombatHub({
     parryResolvedRef.current = true;
     parryTapPendingRef.current = false;
     cancelAnimation(parryScaleSV);
+
+    const retribution = retributionParryRef.current;
+    if (retribution) {
+      if (!passed) {
+        hurtPlayer(
+          retribution.occultDamage,
+          false,
+          `>> ASH DETONATION — ${retribution.occultDamage} occult`,
+          { rollCrit: false },
+        );
+      } else {
+        log('[PARRY LOCKED] >> Ash detonation contained.');
+      }
+      const pending = pendingDissolveRef.current;
+      hideParryOverlay();
+      retributionParryRef.current = null;
+      pendingDissolveRef.current = null;
+      if (pending) beginDissolveForUnit(pending.unitId, pending.profile, 0);
+      if (operativeHpRef.current <= 0) return;
+      if (enemyActionQueueRef.current.length > 0) runEnemyActionAnimation(false);
+      else if (!allUnitsDefeated(squadRef.current)) endEnemyTurn(true);
+      return;
+    }
+
     if (passed) {
       Vibration.vibrate(15);
       preAppliedHpStrikeRef.current = 0;
@@ -2745,7 +3175,7 @@ export default function TacticalCombatHub({
   }, [stackedLayout, cycleState, resolutionOutcome, onResolutionPanelChange]);
 
   const isAbilityEnabled = (abilityId: AegisAbilityId): boolean => {
-    if (!isPlayerTurn || cycleState !== 'TEXT_COMBAT') return false;
+    if (!isPlayerTurn || cycleState !== 'TEXT_COMBAT' || shadowstepProcRef.current) return false;
     const def = getAbilityDefinition(abilityId);
     if (playerActionPoints < def.apCost) return false;
     switch (abilityId) {
@@ -2904,8 +3334,12 @@ export default function TacticalCombatHub({
       onAbort={() => setSelectedAbility(null)}
       onEndTurn={onEndTurn}
       actionPoints={playerActionPoints}
+      displayActionPoints={apRollupDisplay}
+      initiativeQueued={initiativeQueued}
+      initiativeProcSeq={initiativeProcSeq}
+      onInitiativeProcComplete={onInitiativeProcComplete}
       isActionEnabled={isAbilityEnabled}
-      canEndTurn={isPlayerTurn && cycleState === 'TEXT_COMBAT'}
+      canEndTurn={isPlayerTurn && cycleState === 'TEXT_COMBAT' && !shadowstepProcActive}
       getStagedHeader={getStagedHeader}
       getStagedCostImpact={getStagedCostImpact}
       getActionAccent={getAbilityAccent}

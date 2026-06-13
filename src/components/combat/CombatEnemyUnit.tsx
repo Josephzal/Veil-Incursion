@@ -99,7 +99,11 @@ export default function CombatEnemyUnit({
             channel={unit.critImpactChannel}
             onHitStopChange={handleHitStopChange}
           >
-            <CombatEnemyHitEffect hitFlashSeq={unit.hitFlashSeq} portraitSource={unit.portraitSource}>
+            <CombatEnemyHitEffect
+              hitFlashSeq={unit.hitFlashSeq}
+              isEnraged={unit.isEnraged}
+              portraitSource={unit.portraitSource}
+            >
               <CombatSilhouetteShatterEffect trigger={fractured} portraitSource={unit.portraitSource}>
                 <CombatEnemyPortraitSkia
                   source={unit.portraitSource}
@@ -128,6 +132,11 @@ export default function CombatEnemyUnit({
             triggerSeq={unit.statusFloatSeq}
             label={unit.statusFloatLabel}
             tone={unit.statusFloatTone}
+          />
+          <CombatFloatingStatusText
+            triggerSeq={unit.immuneFloatSeq}
+            label={unit.immuneFloatLabel}
+            tone="neutral"
           />
         </View>
 

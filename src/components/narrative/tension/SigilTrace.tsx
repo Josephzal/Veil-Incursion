@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Svg, { Line } from 'react-native-svg';
+import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import Svg, { Circle, Defs, Line, LinearGradient, Stop } from 'react-native-svg';
 import type { TensionMechanicProps } from './tensionMechanicTypes';
 
 const GRID_SIZE = 3;
@@ -12,9 +12,12 @@ const PANEL_BG = '#141418';
 const NODE_IDLE = '#1f2937';
 const NODE_FLASH = '#4b5563';
 const NODE_TRACED = '#065f46';
-const LINE_FLASH = '#6b7280';
+const LINE_START = '#6ee7b7';
+const LINE_END = '#f87171';
 const ACCENT_MUTED = '#9ca3af';
 const DANGER_MUTED = '#7f1d1d';
+const START_RING = '#a7f3d0';
+const END_PULSE = '#fca5a5';
 
 type SigilPhase = 'flash' | 'trace' | 'resolved';
 
@@ -69,10 +72,13 @@ export default function SigilTrace({
   defaultPenalty,
 }: TensionMechanicProps): React.JSX.Element {
   const targetPath = useMemo(() => generateSigilPath(), []);
+  const startNode = targetPath[0] ?? 0;
+  const endNode = targetPath[targetPath.length - 1] ?? 0;
   const [phase, setPhase] = useState<SigilPhase>('flash');
   const [tracePath, setTracePath] = useState<number[]>([]);
   const [secondsLeft, setSecondsLeft] = useState(TRACE_MS / 1000);
   const resolvedRef = useRef(false);
+  const endPulse = useRef(new Animated.Value(0.45)).current;
 
   const resolveSuccess = useCallback(() => {
     if (resolvedRef.current) return;
@@ -94,6 +100,29 @@ export default function SigilTrace({
     }, FLASH_MS);
     return () => clearTimeout(flashTimer);
   }, []);
+
+  useEffect(() => {
+    if (phase !== 'flash') return undefined;
+
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(endPulse, {
+          toValue: 1,
+          duration: 520,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(endPulse, {
+          toValue: 0.45,
+          duration: 520,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [endPulse, phase]);
 
   useEffect(() => {
     if (phase !== 'trace') return undefined;
@@ -140,17 +169,40 @@ export default function SigilTrace({
     if (to == null) return null;
     const start = cellCenter(from);
     const end = cellCenter(to);
+    const gradId = `sigil-flow-${from}-${to}`;
     return (
-      <Line
-        key={`${from}-${to}`}
-        x1={start.x}
-        y1={start.y}
-        x2={end.x}
-        y2={end.y}
-        stroke={LINE_FLASH}
-        strokeWidth={2.5}
-        strokeLinecap="round"
-      />
+      <React.Fragment key={`${from}-${to}`}>
+        <Defs>
+          <LinearGradient
+            id={gradId}
+            x1={start.x}
+            y1={start.y}
+            x2={end.x}
+            y2={end.y}
+            gradientUnits="userSpaceOnUse"
+          >
+            <Stop offset="0%" stopColor={LINE_START} stopOpacity={0.95} />
+            <Stop offset="55%" stopColor="#9ca3af" stopOpacity={0.85} />
+            <Stop offset="100%" stopColor={LINE_END} stopOpacity={0.95} />
+          </LinearGradient>
+        </Defs>
+        <Line
+          x1={start.x}
+          y1={start.y}
+          x2={end.x}
+          y2={end.y}
+          stroke={`url(#${gradId})`}
+          strokeWidth={3}
+          strokeLinecap="round"
+        />
+        <Circle
+          cx={end.x}
+          cy={end.y}
+          r={3}
+          fill={LINE_END}
+          opacity={0.55}
+        />
+      </React.Fragment>
     );
   });
 
@@ -166,7 +218,7 @@ export default function SigilTrace({
       <View style={styles.panel}>
         <Text style={styles.instructions}>
           {phase === 'flash'
-            ? 'Memorize the sigil path…'
+            ? 'Memorize the sigil — green ring = START, red pulse = END.'
             : phase === 'trace'
               ? 'Trace the pattern — tap nodes in order.'
               : 'Protocol resolved.'}
@@ -176,12 +228,23 @@ export default function SigilTrace({
           {phase === 'flash' ? (
             <Svg width={GRID_WIDTH} height={GRID_HEIGHT} style={styles.gridSvg}>
               {flashLines}
+              {(() => {
+                const start = cellCenter(startNode);
+                return (
+                  <>
+                    <Circle cx={start.x} cy={start.y} r={14} fill="none" stroke={START_RING} strokeWidth={2} opacity={0.9} />
+                    <Circle cx={start.x} cy={start.y} r={8} fill="none" stroke={LINE_START} strokeWidth={1.5} opacity={0.75} />
+                  </>
+                );
+              })()}
             </Svg>
           ) : null}
 
           <View style={styles.grid}>
             {Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, index) => {
               const isFlashNode = phase === 'flash' && targetPath.includes(index);
+              const isStartNode = phase === 'flash' && index === startNode;
+              const isEndNode = phase === 'flash' && index === endNode;
               const traceIndex = tracePath.indexOf(index);
               const isTraced = traceIndex >= 0;
 
@@ -189,26 +252,65 @@ export default function SigilTrace({
               if (phase === 'flash' && isFlashNode) backgroundColor = NODE_FLASH;
               if (phase === 'trace' && isTraced) backgroundColor = NODE_TRACED;
 
-              return (
+              let borderColor = '#111827';
+              let borderWidth = 1;
+              if (isStartNode) {
+                borderColor = LINE_START;
+                borderWidth = 2;
+              }
+              if (isEndNode) {
+                borderColor = LINE_END;
+                borderWidth = 2;
+              }
+
+              const nodeContent = (
                 <Pressable
-                  key={index}
                   onPress={() => handleNodePress(index)}
                   disabled={phase !== 'trace'}
                   style={({ pressed }) => [
                     styles.node,
+                    isEndNode && phase === 'flash' ? styles.nodeEndSquare : null,
                     {
                       backgroundColor,
-                      borderColor: isFlashNode && phase === 'flash' ? ACCENT_MUTED : '#111827',
+                      borderColor,
+                      borderWidth,
                       opacity: phase === 'flash' ? 1 : pressed ? 0.85 : 1,
                     },
                   ]}
                 >
-                  {isTraced ? (
+                  {isStartNode && phase === 'flash' ? (
+                    <View style={styles.startMarkerWrap}>
+                      <View style={styles.startRingOuter} />
+                      <View style={styles.startRingInner} />
+                      <Text style={styles.startArrow}>▲</Text>
+                    </View>
+                  ) : isEndNode && phase === 'flash' ? (
+                    <View style={styles.endMarkerWrap}>
+                      <View style={styles.endMarkerCore} />
+                    </View>
+                  ) : isTraced ? (
                     <Text style={styles.nodeOrder}>{traceIndex + 1}</Text>
                   ) : (
                     <View style={styles.nodeCore} />
                   )}
                 </Pressable>
+              );
+
+              if (isEndNode && phase === 'flash') {
+                return (
+                  <Animated.View
+                    key={index}
+                    style={[styles.endPulseWrap, { opacity: endPulse }]}
+                  >
+                    {nodeContent}
+                  </Animated.View>
+                );
+              }
+
+              return (
+                <View key={index}>
+                  {nodeContent}
+                </View>
               );
             })}
           </View>
@@ -230,6 +332,8 @@ export default function SigilTrace({
 
 const styles = StyleSheet.create({
   root: {
+    flex: 1,
+    justifyContent: 'center',
     gap: 8,
   },
   header: {
@@ -262,6 +366,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     left: 0,
+    zIndex: 2,
+    pointerEvents: 'none',
   },
   grid: {
     width: GRID_WIDTH,
@@ -273,15 +379,65 @@ const styles = StyleSheet.create({
   node: {
     width: CELL,
     height: CELL,
-    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  nodeEndSquare: {
+    borderRadius: 2,
+  },
+  endPulseWrap: {
+    width: CELL,
+    height: CELL,
   },
   nodeCore: {
     width: 10,
     height: 10,
     borderRadius: 5,
     backgroundColor: '#374151',
+  },
+  startMarkerWrap: {
+    width: CELL,
+    height: CELL,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  startRingOuter: {
+    position: 'absolute',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 2,
+    borderColor: START_RING,
+    opacity: 0.85,
+  },
+  startRingInner: {
+    position: 'absolute',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: LINE_START,
+    opacity: 0.7,
+  },
+  startArrow: {
+    fontFamily: 'monospace',
+    fontSize: 10,
+    color: LINE_START,
+    marginTop: -2,
+  },
+  endMarkerWrap: {
+    width: CELL,
+    height: CELL,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  endMarkerCore: {
+    width: 16,
+    height: 16,
+    borderRadius: 2,
+    borderWidth: 2,
+    borderColor: END_PULSE,
+    backgroundColor: 'rgba(248, 113, 113, 0.25)',
   },
   nodeOrder: {
     fontFamily: 'monospace',

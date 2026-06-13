@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { PanResponder, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, PanResponder, StyleSheet, Text, View } from 'react-native';
 import type { TensionMechanicProps } from './tensionMechanicTypes';
 
 const PANEL_BG = '#141418';
@@ -9,8 +9,10 @@ const TRACK_HEIGHT = 240;
 const HANDLE_HEIGHT = 18;
 const ZONE_HEIGHT = 56;
 const DURATION_MS = 8000;
-const MAX_OUTSIDE_MS = 1500;
+const MAX_OUTSIDE_MS = 2500;
+const GRACE_PERIOD_MS = 100;
 const TICK_MS = 50;
+const ZONE_MOVE_MS = 320;
 const ZONE_HEIGHT_NORM = ZONE_HEIGHT / TRACK_HEIGHT;
 const HALF_HANDLE_NORM = HANDLE_HEIGHT / 2 / TRACK_HEIGHT;
 
@@ -34,21 +36,22 @@ export default function ConcealSlider({
   onFailure,
   defaultPenalty,
 }: TensionMechanicProps): React.JSX.Element {
+  const initialZone = randomZoneTop();
+  const zoneTopAnim = useRef(new Animated.Value(initialZone)).current;
   const [handleCenter, setHandleCenter] = useState(0.5);
-  const [zoneTop, setZoneTop] = useState(randomZoneTop);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [outsideMs, setOutsideMs] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
 
   const handleCenterRef = useRef(handleCenter);
-  const zoneTopRef = useRef(zoneTop);
+  const zoneTopRef = useRef(initialZone);
   const dragStartHandleRef = useRef(handleCenter);
   const elapsedRef = useRef(0);
   const outsideRef = useRef(0);
+  const graceElapsedRef = useRef(0);
   const resolvedRef = useRef(false);
 
   handleCenterRef.current = handleCenter;
-  zoneTopRef.current = zoneTop;
 
   const resolveSuccess = useCallback(() => {
     if (resolvedRef.current) return;
@@ -62,13 +65,29 @@ export default function ConcealSlider({
     onFailure();
   }, [onFailure]);
 
+  const animateZoneTo = useCallback((nextTop: number) => {
+    Animated.timing(zoneTopAnim, {
+      toValue: nextTop,
+      duration: ZONE_MOVE_MS,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [zoneTopAnim]);
+
+  useEffect(() => {
+    const listenerId = zoneTopAnim.addListener(({ value }) => {
+      zoneTopRef.current = value;
+    });
+    return () => zoneTopAnim.removeListener(listenerId);
+  }, [zoneTopAnim]);
+
   useEffect(() => {
     const zoneTimer = setInterval(() => {
       if (resolvedRef.current) return;
-      setZoneTop(randomZoneTop());
+      animateZoneTo(randomZoneTop());
     }, 850);
     return () => clearInterval(zoneTimer);
-  }, []);
+  }, [animateZoneTo]);
 
   useEffect(() => {
     const tick = setInterval(() => {
@@ -76,8 +95,13 @@ export default function ConcealSlider({
 
       elapsedRef.current += TICK_MS;
       const inside = handleInsideZone(handleCenterRef.current, zoneTopRef.current);
-      if (!inside) {
-        outsideRef.current += TICK_MS;
+      if (inside) {
+        graceElapsedRef.current = 0;
+      } else {
+        graceElapsedRef.current += TICK_MS;
+        if (graceElapsedRef.current > GRACE_PERIOD_MS) {
+          outsideRef.current += TICK_MS;
+        }
       }
 
       setElapsedMs(elapsedRef.current);
@@ -120,7 +144,7 @@ export default function ConcealSlider({
   const progressPct = Math.min(100, Math.round((elapsedMs / DURATION_MS) * 100));
   const exposurePct = Math.min(100, Math.round((outsideMs / MAX_OUTSIDE_MS) * 100));
   const handleTopPx = handleCenter * TRACK_HEIGHT - HANDLE_HEIGHT / 2;
-  const zoneTopPx = zoneTop * TRACK_HEIGHT;
+  const zoneTopPx = Animated.multiply(zoneTopAnim, TRACK_HEIGHT);
 
   const penaltyHint = defaultPenalty
     ? defaultPenalty.type === 'HP'
@@ -144,7 +168,7 @@ export default function ConcealSlider({
         </View>
 
         <View style={styles.track} {...panResponder.panHandlers}>
-          <View
+          <Animated.View
             style={[
               styles.safeZone,
               {
@@ -176,6 +200,8 @@ export default function ConcealSlider({
 
 const styles = StyleSheet.create({
   root: {
+    flex: 1,
+    justifyContent: 'center',
     gap: 8,
   },
   header: {

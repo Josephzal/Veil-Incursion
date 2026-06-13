@@ -5,6 +5,8 @@ import { getNodeScale } from './enemies';
 import { resolveEnemyAffinity } from './combatEnvironmentEngine';
 import { applyCorporealHpMultiplier } from './combatEnvironmentEngine';
 import { initEnemyCombatLayers } from './combatFractureEngine';
+import { initRosterLifecycleDefaults } from './combatLifecycleEngine';
+import { CONCRETE_GARGOYLE_FRACTURE_MAX } from './combatRosterActions';
 import { rollEnemyIntent } from './enemies';
 import type { DistrictId } from './districtPacing';
 import { depthFromNodesCleared, localLevelFromDepth } from './districtPacing';
@@ -321,17 +323,19 @@ export function spawnRosterUnit(
   const layered = initEnemyCombatLayers(withAffinity, {
     kineticArmor,
     occultWards,
+    fractureMax: entry.id === 'concrete-gargoyle' ? CONCRETE_GARGOYLE_FRACTURE_MAX : undefined,
   });
+  const withLifecycle = initRosterLifecycleDefaults(layered, entry.id);
   if (options?.isApex) {
     return {
-      ...layered,
+      ...withLifecycle,
       isApex: true,
       enemyActionPoints: 2,
       enemyMaxActionPoints: 2,
       designation: `APEX ${entry.designation}`,
     };
   }
-  return layered;
+  return withLifecycle;
 }
 
 export function resolveEnemyThreatTier(profile: {

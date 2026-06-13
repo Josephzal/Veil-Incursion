@@ -46,6 +46,15 @@ export interface CombatSessionExtras {
   playerShieldTurnsRemaining: number;
   playerDebuffs: PlayerDebuffId[];
   enemyStatusTurns: Record<string, Partial<Record<EnemyStatusId, number>>>;
+  /** Unit ids granted fracture immunity by a living Ley-Siren. */
+  leySirenTetheredUnitIds: string[];
+  leySirenSourceUnitId: string | null;
+  /** AP stripped from operative next player turn (Miasma Tick / Lag Field). */
+  playerApPenaltyNextTurn: number;
+  /** Hard AP cap for operative next player turn (Veil Static — e.g. 2/3). */
+  playerApCapNextTurn: number | null;
+  /** Increments to drive IMMUNE floaters above hostiles. */
+  immunePopupSeq: Record<string, number>;
 }
 
 export function createDefaultCombatSessionExtras(): CombatSessionExtras {
@@ -54,5 +63,10 @@ export function createDefaultCombatSessionExtras(): CombatSessionExtras {
     playerShieldTurnsRemaining: 0,
     playerDebuffs: [],
     enemyStatusTurns: {},
+    leySirenTetheredUnitIds: [],
+    leySirenSourceUnitId: null,
+    playerApPenaltyNextTurn: 0,
+    playerApCapNextTurn: null,
+    immunePopupSeq: {},
   };
 }

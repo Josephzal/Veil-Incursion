@@ -23,7 +23,8 @@ export interface PlayerCombatBuffState {
   demonLungCooldown: number;
   crimsonPactCharges: number;
   bonusApThisTurn: number;
-  skipNextEnemyTurn: boolean;
+  /** Shadow Step queues initiative hijack until the operative ends their turn. */
+  initiativeQueued: boolean;
 }
 
 export interface AbilityHurtOptions {
@@ -163,10 +164,9 @@ export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExe
       const next = applyFractureDamage(unit, 50);
       ctx.patchUnit(unit.unitId, next);
       const eradicated = ctx.hurtEnemy(16, '[SHADOW STEP]', 'STRIKE', { channel: 'KINETIC' }, unit.unitId);
-      ctx.buffState.skipNextEnemyTurn = true;
-      ctx.grantBonusAp(1);
+      ctx.buffState.initiativeQueued = true;
       ctx.setShadowStepEvadeActive?.(true);
-      ctx.log('[SHADOW STEP] >> Initiative seized — +15% evade until next turn.');
+      ctx.log('[SHADOW STEP] >> Veil shift queued — end turn to seize initiative (+15% evade).');
       if (eradicated) return { ok: true };
       return { ok: true };
     }

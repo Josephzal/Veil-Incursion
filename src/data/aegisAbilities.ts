@@ -48,7 +48,7 @@ export const AEGIS_ABILITY_CATALOG: Record<AegisAbilityId, AegisAbilityDefinitio
     apCost: 0,
     staminaCost: 0,
     staminaCostPct: 30,
-    description: 'Teleport shoulder-check. Massive fracture. Win next initiative.',
+    description: 'Teleport shoulder-check. Massive fracture. End turn to seize initiative.',
   },
   VEIL_PIERCER: {
     id: 'VEIL_PIERCER',

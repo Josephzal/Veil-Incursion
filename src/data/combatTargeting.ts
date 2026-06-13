@@ -82,6 +82,8 @@ export function canTargetWithAbility(
 
   if (isOccultAbility(abilityId)) return true;
 
+  if (unit.isUntargetable) return false;
+
   const slot = unit.gridSlot as CombatGridSlotId | undefined;
   if (slot?.startsWith('BL') && isColumnBlocked(squad, slot)) return false;
   return true;

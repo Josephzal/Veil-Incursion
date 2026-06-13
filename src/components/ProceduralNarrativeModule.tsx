@@ -1,5 +1,13 @@
 import React, { useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import CityStreetNarrativeBg from '../../assets/narrative images/city-street.png';
 import type { NarrativeChoiceKey, NarrativeChoiceOption, NarrativeEventNode, CheckStatus } from '../types/game';
 import { isOpenSectorNarrative } from '../data/sectorNarrativeEngine';
@@ -177,6 +185,9 @@ export default function ProceduralNarrativeModule({
     return '[ CONFIRM RESOLVER ]';
   })();
 
+  const { height: windowHeight } = useWindowDimensions();
+  const flavorMaxHeight = Math.round(windowHeight * 0.36);
+
   return (
     <View style={[styles.root, showCityStreetBackground && styles.rootWithCityBackground]}>
       {showCityStreetBackground ? (
@@ -194,50 +205,90 @@ export default function ProceduralNarrativeModule({
           <Text style={[styles.docTitle, { color: TERMINAL_ACCENT }]}>{node.title}</Text>
         </View>
 
-        <ScrollView
-          style={styles.scrollBody}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          <View style={[styles.docBody, { borderColor }]}>
-            <Text style={[styles.scenarioText, { color: primaryColor }]}>{node.scenarioText}</Text>
-            {node.hazardPreview ? (
-              <Text style={styles.hazardText}>{node.hazardPreview}</Text>
-            ) : null}
-          </View>
+        {phase === 'SCENARIO' ? (
+          <>
+            <ScrollView
+              style={[styles.flavorScroll, { maxHeight: flavorMaxHeight }]}
+              contentContainerStyle={styles.flavorScrollContent}
+              showsVerticalScrollIndicator
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={[styles.docBody, { borderColor }]}>
+                <Text style={[styles.scenarioText, { color: primaryColor }]}>{node.scenarioText}</Text>
+                {node.hazardPreview ? (
+                  <Text style={styles.hazardText}>{node.hazardPreview}</Text>
+                ) : null}
+              </View>
+            </ScrollView>
 
-          {phase === 'SCENARIO' ? (
-            <View style={styles.choiceCol}>
+            <View style={styles.choiceSection}>
               <Text style={[styles.resolverHeader, { color: mutedColor }]}>
                 SELECT EXPEDITION RESOLVER:
               </Text>
-              {choices.map(({ key, option, showLockIcon }) => (
-                <ResolverButton
-                  key={key}
-                  option={option}
-                  selected={selectedChoice === key}
-                  onPress={() => {
-                    if (!option.locked) setSelectedChoice(key);
-                  }}
-                  borderColor={borderColor}
-                  mutedColor={mutedColor}
-                  primaryColor={primaryColor}
-                  cityStreets={showCityStreetBackground}
-                  showLockIcon={showLockIcon}
-                />
-              ))}
-              {selectedChoice === 'D' && optionDVariant ? (
-                <Text style={[styles.optionDHint, { color: mutedColor }]}>
-                  {optionDVariant === 'Retreat'
-                    ? '>> RETREAT — aborts encounter and routes back to the ley-line grid.'
-                    : '>> BRUTE FORCE — accepts guaranteed cost without tension protocol.'}
-                </Text>
-              ) : null}
+              <ScrollView
+                style={styles.choiceScroll}
+                contentContainerStyle={styles.choiceCol}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+              >
+                {choices.map(({ key, option, showLockIcon }) => (
+                  <ResolverButton
+                    key={key}
+                    option={option}
+                    selected={selectedChoice === key}
+                    onPress={() => {
+                      if (!option.locked) setSelectedChoice(key);
+                    }}
+                    borderColor={borderColor}
+                    mutedColor={mutedColor}
+                    primaryColor={primaryColor}
+                    cityStreets={showCityStreetBackground}
+                    showLockIcon={showLockIcon}
+                  />
+                ))}
+                {selectedChoice === 'D' && optionDVariant ? (
+                  <Text style={[styles.optionDHint, { color: mutedColor }]}>
+                    {optionDVariant === 'Retreat'
+                      ? '>> RETREAT — aborts encounter and routes back to the ley-line grid.'
+                      : '>> BRUTE FORCE — accepts guaranteed cost without tension protocol.'}
+                  </Text>
+                ) : null}
+              </ScrollView>
             </View>
-          ) : null}
 
-          {phase === 'TENSION' ? (
+            <View style={styles.footer}>
+              <Pressable
+                onPress={handleConfirm}
+                disabled={selectedChoice == null || selectedOption?.locked === true}
+                style={({ pressed }) => [
+                  styles.confirmBtn,
+                  {
+                    borderColor: selectedChoice != null && !selectedOption?.locked
+                      ? TERMINAL_ACCENT
+                      : borderColor,
+                    opacity: selectedChoice == null || selectedOption?.locked ? 0.4 : pressed ? 0.75 : 1,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.confirmBtnText,
+                    {
+                      color: selectedChoice != null && !selectedOption?.locked
+                        ? TERMINAL_ACCENT
+                        : mutedColor,
+                    },
+                  ]}
+                >
+                  {confirmLabel}
+                </Text>
+              </Pressable>
+            </View>
+          </>
+        ) : null}
+
+        {phase === 'TENSION' ? (
+          <View style={styles.tensionArea}>
             <TensionMechanicHost
               tensionMechanic={node.proceduralMeta?.tensionMechanic}
               onSuccess={handleTensionSuccess}
@@ -249,43 +300,14 @@ export default function ProceduralNarrativeModule({
               mutedColor={mutedColor}
               primaryColor={primaryColor}
             />
-          ) : null}
+          </View>
+        ) : null}
 
-          {phase === 'RESULT' && resultText ? (
+        {phase === 'RESULT' && resultText ? (
+          <View style={styles.resultArea}>
             <View style={[styles.resultBox, { borderColor: TERMINAL_ACCENT }]}>
               <Text style={[styles.resultText, { color: TERMINAL_ACCENT }]}>{resultText}</Text>
             </View>
-          ) : null}
-        </ScrollView>
-
-        {phase === 'SCENARIO' ? (
-          <View style={styles.footer}>
-            <Pressable
-              onPress={handleConfirm}
-              disabled={selectedChoice == null || selectedOption?.locked === true}
-              style={({ pressed }) => [
-                styles.confirmBtn,
-                {
-                  borderColor: selectedChoice != null && !selectedOption?.locked
-                    ? TERMINAL_ACCENT
-                    : borderColor,
-                  opacity: selectedChoice == null || selectedOption?.locked ? 0.4 : pressed ? 0.75 : 1,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.confirmBtnText,
-                  {
-                    color: selectedChoice != null && !selectedOption?.locked
-                      ? TERMINAL_ACCENT
-                      : mutedColor,
-                  },
-                ]}
-              >
-                {confirmLabel}
-              </Text>
-            </Pressable>
           </View>
         ) : null}
       </View>
@@ -326,17 +348,37 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     marginBottom: 8,
   },
-  scrollBody: {
+  flavorScroll: {
+    flexGrow: 0,
+    flexShrink: 1,
+  },
+  flavorScrollContent: {
+    paddingBottom: 4,
+  },
+  choiceSection: {
+    flex: 1,
+    minHeight: 0,
+    marginTop: 8,
+    gap: 4,
+  },
+  choiceScroll: {
     flex: 1,
     minHeight: 0,
   },
-  scrollContent: {
-    paddingBottom: 8,
-    gap: 8,
+  tensionArea: {
+    flex: 1,
+    minHeight: 0,
+    justifyContent: 'center',
+  },
+  resultArea: {
+    flex: 1,
+    minHeight: 0,
+    justifyContent: 'center',
+    paddingVertical: 12,
   },
   footer: {
     flexShrink: 0,
-    paddingTop: 6,
+    paddingTop: 8,
     paddingBottom: 4,
   },
   docLabel: {

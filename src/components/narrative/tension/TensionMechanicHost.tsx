@@ -81,14 +81,27 @@ export default function TensionMechanicHost({
 
   switch (tensionMechanic) {
     case 'Mechanic_SigilTrace':
-      return <SigilTrace {...mechanicProps} />;
+      return (
+        <View style={styles.mechanicHost}>
+          <SigilTrace {...mechanicProps} />
+        </View>
+      );
     case 'Mechanic_ScavengeBar':
-      return <ScavengeBar {...mechanicProps} />;
+      return (
+        <View style={styles.mechanicHost}>
+          <ScavengeBar {...mechanicProps} />
+        </View>
+      );
     case 'Mechanic_ConcealSlider':
-      return <ConcealSlider {...mechanicProps} />;
+      return (
+        <View style={styles.mechanicHost}>
+          <ConcealSlider {...mechanicProps} />
+        </View>
+      );
     default:
       return (
-        <TensionMechanicFallback
+        <View style={styles.mechanicHost}>
+          <TensionMechanicFallback
           mechanicLabel={fallbackLabel ?? formatTensionMechanicLabel(tensionMechanic)}
           penaltyPreview={penaltyPreview}
           onComplete={onSuccess}
@@ -96,11 +109,17 @@ export default function TensionMechanicHost({
           mutedColor={mutedColor}
           primaryColor={primaryColor}
         />
+        </View>
       );
   }
 }
 
 const styles = StyleSheet.create({
+  mechanicHost: {
+    flex: 1,
+    minHeight: 0,
+    justifyContent: 'center',
+  },
   fallbackCol: {
     gap: 8,
   },
