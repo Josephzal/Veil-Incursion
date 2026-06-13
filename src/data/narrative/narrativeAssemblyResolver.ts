@@ -9,6 +9,7 @@ import {
 } from '../../types/narrativeAssembly';
 import type { IncursionProgressState } from '../../types/game';
 import { consumeCargoItem } from '../cargoGridEngine';
+import { resolveNarrativeCreditPayout } from '../combatCredits';
 import type { NarrativeResolutionResult, OperativeResourceSnapshot } from '../narrativeEncounterMatrix';
 import type { ProceduralEligibilityContext } from './narrativeProceduralEngine';
 import {
@@ -16,6 +17,11 @@ import {
   evaluateItemResolverEligibility,
   lookupAssemblyEncounterParts,
 } from './narrativeAssemblyBridge';
+import type { NarrativeBonusReward } from '../../types/narrativeBonusReward';
+import {
+  bonusRewardCredits,
+  formatNarrativeBonusLogLine,
+} from './narrativeBonusLoot';
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -114,6 +120,7 @@ export function resolveAssemblyNarrativeChoice(
   const { context, complication, resolverSet } = encounter;
   const usedIds = [...progress.usedNarrativeEventIds, assembly.assemblyId];
   const defaultPenalty = complication.defaultPenalty;
+  const encounterBonusReward = assembly.bonusReward ?? encounter.bonusReward;
 
   if (choice === 'D') {
     if (isOptionDRetreat(resolverSet.optionD)) {
@@ -146,6 +153,10 @@ export function resolveAssemblyNarrativeChoice(
       nextEnv = applyResonanceSpike(nextEnv, Math.abs(resonanceDelta));
     }
     const triggerCombatAmbush = triggersAmbush(resolverSet.optionD.onSuccess);
+    const pendingRunCredits = resolveNarrativeCreditPayout(
+      parseCredits(resolverSet.optionD.onSuccess),
+      'SUCCESS',
+    );
 
     return {
       logLines: [
@@ -164,7 +175,7 @@ export function resolveAssemblyNarrativeChoice(
       environmentalModifiers: nextEnv,
       cryptoGlimmerGrantPct: 0,
       triggerCombatAmbush,
-      pendingRunCredits: parseCredits(resolverSet.optionD.onSuccess),
+      pendingRunCredits,
       resonanceDelta,
     };
   }
@@ -175,9 +186,18 @@ export function resolveAssemblyNarrativeChoice(
   let resonanceDelta = 0;
   let triggerCombatAmbush = false;
   let pendingRunCredits = 0;
+  let bonusCreditAddon = 0;
+  let bonusReward: NarrativeBonusReward | undefined;
   const logLines: string[] = [`>> ASSEMBLY RESOLVER // ${context.id}`];
   let outcome = '';
   let resolveStatus: CheckStatus = 'SUCCESS';
+
+  const grantBonusLoot = () => {
+    if (!encounterBonusReward) return;
+    bonusReward = encounterBonusReward;
+    bonusCreditAddon += bonusRewardCredits(bonusReward);
+    logLines.push(formatNarrativeBonusLogLine(bonusReward));
+  };
 
   if (choice === 'A') {
     if (status === 'FAILURE') {
@@ -197,6 +217,7 @@ export function resolveAssemblyNarrativeChoice(
       }
       logLines.push(`>> MECHANIC SUCCESS — ${resolverSet.optionA.onSuccess}`);
       outcome = `>> MECHANIC SUCCESS — ${resolverSet.optionA.onSuccess}`;
+      grantBonusLoot();
     }
   }
 
@@ -212,6 +233,7 @@ export function resolveAssemblyNarrativeChoice(
     }
     logLines.push(`>> CABAL BYPASS — ${resolverSet.optionB.onSuccess}`);
     outcome = `>> CABAL BYPASS — ${resolverSet.optionB.onSuccess}`;
+    grantBonusLoot();
   }
 
   if (choice === 'C') {
@@ -231,8 +253,10 @@ export function resolveAssemblyNarrativeChoice(
     pendingRunCredits = parseCredits(resolverSet.optionC.onSuccess);
     logLines.push(`>> ITEM BYPASS — ${resolverSet.optionC.onSuccess}`);
     outcome = `>> ITEM BYPASS — ${resolverSet.optionC.onSuccess}`;
+    grantBonusLoot();
   }
 
+  pendingRunCredits = resolveNarrativeCreditPayout(pendingRunCredits, resolveStatus) + bonusCreditAddon;
   if (pendingRunCredits > 0) {
     logLines.push(`>> RUN CREDITS PENDING — +${pendingRunCredits} on node clear.`);
   }
@@ -254,5 +278,6 @@ export function resolveAssemblyNarrativeChoice(
     triggerCombatAmbush,
     pendingRunCredits,
     resonanceDelta,
+    bonusReward,
   };
 }

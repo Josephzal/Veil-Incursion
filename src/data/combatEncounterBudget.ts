@@ -11,6 +11,9 @@ import {
   type EnemyRosterId,
 } from './enemyRoster';
 import {
+  assignDiagonalStaggerSlots,
+} from './combatGridPlacement';
+import {
   entriesFromComposition,
   maxEnemiesForDistrict,
   pickEncounterComposition,
@@ -74,12 +77,11 @@ function canAddEntry(
 }
 
 function assignSlots(entries: EnemyRosterEntry[]): CombatGridSlotId[] {
+  const diagonal = assignDiagonalStaggerSlots(entries);
+  if (diagonal) return diagonal;
+
   const front = entries.filter((e) => e.role === 'FRONTLINE');
   const back = entries.filter((e) => e.role === 'BACKLINE');
-
-  if (front.length === 1 && back.length === 1) {
-    return ['FL_0', 'BL_1'];
-  }
 
   const slots: CombatGridSlotId[] = [];
   const frontSlots: CombatGridSlotId[] = ['FL_0', 'FL_1'];

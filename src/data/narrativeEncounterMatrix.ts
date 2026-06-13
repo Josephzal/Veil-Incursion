@@ -46,6 +46,8 @@ export interface NarrativeResolutionResult {
   pendingRunCredits?: number;
   /** Applied to active incursion resonance after resolve. */
   resonanceDelta?: number;
+  /** Randomized bonus loot from procedural narrative success (A/B/C only). */
+  bonusReward?: import('../types/narrativeBonusReward').NarrativeBonusReward;
   /** Activates Grid-Hound hunter on overworld (faction vault brute-force). */
   spawnGridHound?: boolean;
   /** Grant a pre-defined resource bundle into cargo containment. */

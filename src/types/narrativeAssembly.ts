@@ -109,6 +109,8 @@ export interface GeneratedEncounter {
   complication: ComplicationSeed;
   resolverSet: ResolverSet;
   scenarioText: string;
+  /** Rolled once per encounter — shared by options A/B/C on success. */
+  bonusReward?: import('./narrativeBonusReward').NarrativeBonusReward;
 }
 
 const MACRO_TO_BIOME: Record<MacroBiomeFamily, Biome | null> = {

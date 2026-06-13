@@ -56,6 +56,14 @@ import {
   resolveProceduralNarrativeChoice,
 } from '../data/narrative/narrativeProceduralEngine';
 import { resolveAssemblyNarrativeChoice } from '../data/narrative/narrativeAssemblyResolver';
+import {
+  applyBoonToPending,
+  applyVeilResidueBonus,
+  runStatusEffectForBoon,
+  stripNarrativeBoonStatusEffects,
+} from '../data/narrative/narrativeBonusLoot';
+import type { PendingNarrativeCombatBoons } from '../types/narrativeBonusReward';
+import { createDefaultPendingNarrativeCombatBoons } from '../types/narrativeBonusReward';
 import type { ProceduralNarrativeAssembly } from '../types/narrativeProcedural';
 import {
   formatMacroBiomeLogLine,
@@ -214,6 +222,10 @@ interface RunContextType {
   prepareBoundRequisitionOffers: (account: PlayerAccount) => void;
   confirmBoundRequisition: (id: BoundRequisitionId) => void;
   consumeAdrenalinePrimerAfterCombat: () => void;
+  /** Claims next-combat narrative boons and clears pending state. */
+  claimPendingNarrativeCombatBoons: () => PendingNarrativeCombatBoons;
+  /** Removes narrative boon entries from the status overlay after combat. */
+  clearNarrativeBoonStatusEffects: () => void;
   isPostCombatBoonBlocked: () => boolean;
   beginScanSession: () => void;
   commitRadarDot: (dot: RadarDot) => EncounterNode;
@@ -240,7 +252,14 @@ interface RunContextType {
   resolveNarrativeChoice: (
     choice: import('../types/game').NarrativeChoiceKey,
     status?: CheckStatus,
-  ) => { outcomeText: string; aborted: boolean; creditReward: number; requiresResourcePack: boolean };
+    options?: { tensionBonusCredits?: number },
+  ) => {
+    outcomeText: string;
+    aborted: boolean;
+    creditReward: number;
+    requiresResourcePack: boolean;
+    triggerCombatAmbush: boolean;
+  };
   abortNarrativeEncounter: () => void;
   activeIncursion: ActiveIncursionState;
   getCurrentEncounterNode: () => import('../types/game').IncursionNode | null;
@@ -589,6 +608,38 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     });
     appendRunLog('>> ADRENALINE PRIMER SPENT — FIRST-TURN AP BONUS CONSUMED.');
   }, [appendRunLog]);
+
+  const claimPendingNarrativeCombatBoons = useCallback((): PendingNarrativeCombatBoons => {
+    const inc = activeIncursionRef.current;
+    const claimed = { ...inc.pendingNarrativeCombatBoons };
+    if (
+      !claimed.ghosted
+      && !claimed.scouted
+      && !claimed.overcharged
+      && !claimed.veilWard
+    ) {
+      return createDefaultPendingNarrativeCombatBoons();
+    }
+    setActiveIncursion((prev) => {
+      const next = {
+        ...prev,
+        pendingNarrativeCombatBoons: createDefaultPendingNarrativeCombatBoons(),
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    return claimed;
+  }, []);
+
+  const clearNarrativeBoonStatusEffects = useCallback(() => {
+    setActiveIncursion((prev) => {
+      const nextEffects = stripNarrativeBoonStatusEffects(prev.runStatusEffects);
+      if (nextEffects.length === prev.runStatusEffects.length) return prev;
+      const next = { ...prev, runStatusEffects: nextEffects };
+      activeIncursionRef.current = next;
+      return next;
+    });
+  }, []);
 
   const isPostCombatBoonBlocked = useCallback((): boolean => {
     return isLeyScarAcquisitionBlocked(activeIncursionRef.current);
@@ -1082,7 +1133,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   const resolveNarrativeChoice = useCallback((
     choice: import('../types/game').NarrativeChoiceKey,
     status: CheckStatus = 'SUCCESS',
-  ): { outcomeText: string; aborted: boolean; creditReward: number; requiresResourcePack: boolean } => {
+    options?: { tensionBonusCredits?: number },
+  ): { outcomeText: string; aborted: boolean; creditReward: number; requiresResourcePack: boolean; triggerCombatAmbush: boolean } => {
     const node = narrativeNodeRef.current;
     if (!node) {
       return {
@@ -1090,6 +1142,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         aborted: false,
         creditReward: 0,
         requiresResourcePack: false,
+        triggerCombatAmbush: false,
       };
     }
 
@@ -1139,18 +1192,34 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (result.abortToScanner) {
       result.logLines.forEach((line) => appendRunLog(line));
       abortNarrativeEncounter();
-      return { outcomeText: result.outcomeText, aborted: true, creditReward: 0, requiresResourcePack: false };
+      return { outcomeText: result.outcomeText, aborted: true, creditReward: 0, requiresResourcePack: false, triggerCombatAmbush: false };
     }
 
     const resourceCacheId = result.resourceCacheId;
     let requiresResourcePack = false;
-    const creditReward = result.pendingRunCredits ?? 0;
+    const tensionBonus = options?.tensionBonusCredits ?? 0;
+    const creditReward = (result.pendingRunCredits ?? 0) + tensionBonus;
+    const triggerCombatAmbush = AMBUSH_ENCOUNTERS_ENABLED && result.triggerCombatAmbush;
     setActiveIncursion((prev) => {
       let nextCargo = result.cargoPatch ?? prev.cargo;
       if (resourceCacheId) {
         nextCargo = applyResourceBundleToCargo(nextCargo, getResourceCacheBundle(resourceCacheId));
         requiresResourcePack = true;
       }
+      if (result.bonusReward?.kind === 'VEIL_RESIDUE') {
+        nextCargo = applyVeilResidueBonus(nextCargo, result.bonusReward.amount);
+      }
+
+      let nextPendingBoons = prev.pendingNarrativeCombatBoons;
+      let nextStatusEffects = prev.runStatusEffects;
+      if (result.bonusReward?.kind === 'BOON') {
+        nextPendingBoons = applyBoonToPending(nextPendingBoons, result.bonusReward.boonId);
+        const boonEffect = runStatusEffectForBoon(result.bonusReward.boonId);
+        nextStatusEffects = nextStatusEffects.some((e) => e.id === boonEffect.id)
+          ? nextStatusEffects
+          : [...nextStatusEffects, boonEffect];
+      }
+
       let next: ActiveIncursionState = {
         ...prev,
         progress: result.progress,
@@ -1159,6 +1228,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         activeChoice: choice,
         cargo: nextCargo,
         pendingHarvestReturn: requiresResourcePack ? 'RESOURCE_CACHE' : prev.pendingHarvestReturn,
+        pendingNarrativeCombatBoons: nextPendingBoons,
+        runStatusEffects: nextStatusEffects,
       };
       if (result.spawnGridHound) {
         next = activateGridHoundOnIncursion(next);
@@ -1171,7 +1242,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       const next = {
         ...prev,
         ...result.runPatch,
-        pendingAmbush: AMBUSH_ENCOUNTERS_ENABLED && result.triggerCombatAmbush ? true : prev.pendingAmbush,
+        pendingAmbush: triggerCombatAmbush ? true : prev.pendingAmbush,
       };
       runStateRef.current = next;
       return next;
@@ -1182,7 +1253,13 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     narrativeAssemblyRef.current = null;
 
     result.logLines.forEach((line) => appendRunLog(line));
-    return { outcomeText: result.outcomeText, aborted: false, creditReward, requiresResourcePack };
+    return {
+      outcomeText: result.outcomeText,
+      aborted: false,
+      creditReward,
+      requiresResourcePack,
+      triggerCombatAmbush,
+    };
   }, [abortNarrativeEncounter, appendRunLog]);
 
   const getCurrentEncounterNode = useCallback(() => {
@@ -2687,6 +2764,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       prepareBoundRequisitionOffers,
       confirmBoundRequisition,
       consumeAdrenalinePrimerAfterCombat,
+      claimPendingNarrativeCombatBoons,
+      clearNarrativeBoonStatusEffects,
       isPostCombatBoonBlocked,
       beginScanSession,
       commitRadarDot,
@@ -2784,6 +2863,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       prepareBoundRequisitionOffers,
       confirmBoundRequisition,
       consumeAdrenalinePrimerAfterCombat,
+      claimPendingNarrativeCombatBoons,
+      clearNarrativeBoonStatusEffects,
       isPostCombatBoonBlocked,
       beginScanSession,
       commitRadarDot,

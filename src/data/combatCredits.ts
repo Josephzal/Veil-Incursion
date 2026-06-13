@@ -20,6 +20,19 @@ export const RUN_CREDIT_NARRATIVE_SUCCESS = 35;
 /** Narrative node — failed gamble (no credits). */
 export const RUN_CREDIT_NARRATIVE_FAILURE = 0;
 
+/** Baseline resolver payout when JSON/catalog copy omits an explicit credit line. */
+export function defaultNarrativeResolverCredits(): number {
+  return RUN_CREDIT_NARRATIVE_SUCCESS;
+}
+
+export function resolveNarrativeCreditPayout(
+  parsedCredits: number,
+  status: import('../types/game').CheckStatus,
+): number {
+  if (status === 'FAILURE') return 0;
+  return parsedCredits > 0 ? parsedCredits : defaultNarrativeResolverCredits();
+}
+
 export function rollCreditReward(min: number, max: number): number {
   return min + Math.floor(Math.random() * (max - min + 1));
 }

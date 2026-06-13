@@ -132,6 +132,7 @@ function buildNodeFromEncounter(
       resolverSetId: resolverSet.id,
       tensionMechanic: resolverSet.optionA.tensionMechanic,
       defaultPenalty: complication.defaultPenalty,
+      bonusReward: encounter.bonusReward,
     },
     choiceA: buildChoiceOption(
       `[ A ] ${resolverSet.optionA.text}`,
@@ -194,6 +195,7 @@ export function buildAssemblyFromEncounter(
       item: encounter.resolverSet.id,
       retreat: 'static-retreat',
     },
+    bonusReward: encounter.bonusReward,
   };
 }
 

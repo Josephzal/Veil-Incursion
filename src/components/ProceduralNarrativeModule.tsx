@@ -12,11 +12,24 @@ import CityStreetNarrativeBg from '../../assets/narrative images/city-street.png
 import type { NarrativeChoiceKey, NarrativeChoiceOption, NarrativeEventNode, CheckStatus } from '../types/game';
 import { isOpenSectorNarrative } from '../data/sectorNarrativeEngine';
 import TensionMechanicHost from './narrative/tension/TensionMechanicHost';
+import NarrativeOutcomePanel from './narrative/NarrativeOutcomePanel';
 import { formatTensionMechanicLabel } from './narrative/tension/tensionMechanicTypes';
+import {
+  buildProceduralOutcomeSummary,
+  formatBonusLine,
+} from '../data/narrative/narrativeOutcomeSummary';
+import type { NarrativeOutcomeSummary } from '../data/narrative/narrativeOutcomeSummary';
 
 const TERMINAL_ACCENT = '#00ff33';
 
-type ModulePhase = 'SCENARIO' | 'TENSION' | 'RESULT';
+type ModulePhase = 'SCENARIO' | 'TENSION' | 'OUTCOME';
+
+interface PendingResolve {
+  choice: NarrativeChoiceKey;
+  status: CheckStatus;
+  options?: { tensionBonusCredits?: number };
+}
+
 type OptionDVariant = 'Retreat' | 'BruteForce';
 
 function ChoiceEffectPreview({
@@ -53,7 +66,11 @@ function getOptionDVariant(choiceD?: NarrativeChoiceOption): OptionDVariant | nu
 
 interface ProceduralNarrativeModuleProps {
   node: NarrativeEventNode;
-  onResolve: (choice: NarrativeChoiceKey, status?: CheckStatus) => void;
+  onResolve: (
+    choice: NarrativeChoiceKey,
+    status?: CheckStatus,
+    options?: { tensionBonusCredits?: number },
+  ) => void;
   borderColor?: string;
   mutedColor?: string;
   primaryColor?: string;
@@ -129,7 +146,9 @@ export default function ProceduralNarrativeModule({
 }: ProceduralNarrativeModuleProps): React.JSX.Element {
   const [phase, setPhase] = useState<ModulePhase>('SCENARIO');
   const [selectedChoice, setSelectedChoice] = useState<NarrativeChoiceKey | null>(null);
-  const [resultText, setResultText] = useState<string | null>(null);
+  const [outcomeSummary, setOutcomeSummary] = useState<NarrativeOutcomeSummary | null>(null);
+  const [pendingResolve, setPendingResolve] = useState<PendingResolve | null>(null);
+  const [bonusLine, setBonusLine] = useState<string | null>(null);
 
   const showCityStreetBackground = node.interactionMode === 'procedural' || !isOpenSectorNarrative(node);
   const optionDVariant = getOptionDVariant(node.choiceD);
@@ -143,14 +162,23 @@ export default function ProceduralNarrativeModule({
   const selectedOption = choices.find((entry) => entry.key === selectedChoice)?.option;
   const tensionMechanicLabel = formatTensionMechanicLabel(node.proceduralMeta?.tensionMechanic);
 
-  const finishWithResult = (
+  const showOutcome = (
     choice: NarrativeChoiceKey,
-    resultText: string,
     status: CheckStatus = 'SUCCESS',
+    options?: { tensionBonusCredits?: number },
   ) => {
-    setResultText(resultText);
-    setPhase('RESULT');
-    setTimeout(() => onResolve(choice, status), 1400);
+    const summary = buildProceduralOutcomeSummary(node, choice, status, options);
+    const bonusReward = node.proceduralMeta?.bonusReward;
+    const showBonus = status === 'SUCCESS' && choice !== 'D' && bonusReward != null;
+    setOutcomeSummary(summary);
+    setBonusLine(showBonus ? formatBonusLine(bonusReward) : null);
+    setPendingResolve({ choice, status, options });
+    setPhase('OUTCOME');
+  };
+
+  const handleContinue = () => {
+    if (!pendingResolve) return;
+    onResolve(pendingResolve.choice, pendingResolve.status, pendingResolve.options);
   };
 
   const handleConfirm = () => {
@@ -165,8 +193,19 @@ export default function ProceduralNarrativeModule({
     finishWithResult(selectedChoice, selectedOption.successText);
   };
 
-  const handleTensionSuccess = () => {
-    finishWithResult('A', node.choiceA.successText, 'SUCCESS');
+  const finishWithResult = (
+    choice: NarrativeChoiceKey,
+    _resultText: string,
+    status: CheckStatus = 'SUCCESS',
+    options?: { tensionBonusCredits?: number },
+  ) => {
+    showOutcome(choice, status, options);
+  };
+
+  const handleTensionSuccess = (result?: { bonusCredits?: number }) => {
+    finishWithResult('A', node.choiceA.successText, 'SUCCESS', {
+      tensionBonusCredits: result?.bonusCredits ?? 0,
+    });
   };
 
   const handleTensionFailure = () => {
@@ -200,7 +239,9 @@ export default function ProceduralNarrativeModule({
       <View style={[styles.shell, showCityStreetBackground && styles.shellCityStreets]}>
         <View style={[styles.header, { borderBottomColor: borderColor }]}>
           <Text style={[styles.docLabel, { color: mutedColor }]}>
-            EXPEDITION LOG // PROCEDURAL ASSEMBLY
+            {phase === 'OUTCOME'
+              ? 'EXPEDITION LOG // RESOLVE REPORT'
+              : 'EXPEDITION LOG // PROCEDURAL ASSEMBLY'}
           </Text>
           <Text style={[styles.docTitle, { color: TERMINAL_ACCENT }]}>{node.title}</Text>
         </View>
@@ -303,12 +344,16 @@ export default function ProceduralNarrativeModule({
           </View>
         ) : null}
 
-        {phase === 'RESULT' && resultText ? (
-          <View style={styles.resultArea}>
-            <View style={[styles.resultBox, { borderColor: TERMINAL_ACCENT }]}>
-              <Text style={[styles.resultText, { color: TERMINAL_ACCENT }]}>{resultText}</Text>
-            </View>
-          </View>
+        {phase === 'OUTCOME' && outcomeSummary ? (
+          <NarrativeOutcomePanel
+            summary={outcomeSummary}
+            bonusLine={bonusLine}
+            onContinue={handleContinue}
+            borderColor={borderColor}
+            mutedColor={mutedColor}
+            primaryColor={primaryColor}
+            cityStreets={showCityStreetBackground}
+          />
         ) : null}
       </View>
     </View>
@@ -490,5 +535,12 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     fontSize: 11,
     lineHeight: 16,
+  },
+  bonusText: {
+    fontFamily: 'monospace',
+    fontSize: 10,
+    lineHeight: 14,
+    marginTop: 8,
+    letterSpacing: 0.4,
   },
 });

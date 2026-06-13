@@ -15,6 +15,7 @@ import {
   isAssemblyPairUsed,
   pickFromPool,
 } from './narrativeAssemblyCore';
+import { rollNarrativeBonusReward } from './narrativeBonusLoot';
 
 export interface NarrativePlayerState {
   seed: string;
@@ -92,6 +93,11 @@ export function generateEncounter(
 
   const assemblyId = assemblyIdFor(context.id, complication.id, playerState.seed);
 
+  const bonusReward = rollNarrativeBonusReward(
+    resolverSet.optionA.tensionMechanic,
+    `${playerState.seed}:bonus:${assemblyId}`,
+  );
+
   return {
     assemblyId,
     biome: currentBiome,
@@ -99,5 +105,6 @@ export function generateEncounter(
     complication,
     resolverSet,
     scenarioText: buildScenarioText(context, complication),
+    bonusReward,
   };
 }

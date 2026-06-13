@@ -46,7 +46,7 @@ export function getEnemyAccuracyPenalty(
 }
 
 export function tickCombatSessionExtras(extras: CombatSessionExtras): void {
-  if (extras.playerShieldTurnsRemaining > 0) {
+  if (extras.playerShieldTurnsRemaining > 0 && !extras.narrativeVeilWardActive) {
     extras.playerShieldTurnsRemaining -= 1;
     if (extras.playerShieldTurnsRemaining <= 0) {
       extras.playerShield = 0;

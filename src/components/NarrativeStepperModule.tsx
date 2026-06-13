@@ -12,14 +12,24 @@ import {
 } from 'react-native';
 import CityStreetNarrativeBg from '../../assets/narrative images/city-street.png';
 import SelectionContinueButton from './SelectionContinueButton';
+import NarrativeOutcomePanel from './narrative/NarrativeOutcomePanel';
 import { CheckStatus, NarrativeChoiceEffectPreview, NarrativeEventNode } from '../types/game';
 import { isOpenSectorNarrative } from '../data/sectorNarrativeEngine';
+import {
+  buildLegacyOutcomeSummary,
+  type NarrativeOutcomeSummary,
+} from '../data/narrative/narrativeOutcomeSummary';
 
 const TERMINAL_ACCENT = '#00ff33';
 const TARGET_MIN = 0.6;
 const TARGET_MAX = 0.8;
 
-type StepperPhase = 'SCENARIO' | 'SKILL_CHECK' | 'RESULT';
+type StepperPhase = 'SCENARIO' | 'SKILL_CHECK' | 'OUTCOME';
+
+interface PendingLegacyResolve {
+  choice: 'A' | 'B';
+  status: CheckStatus;
+}
 
 export function isCityStreetsNarrative(node: NarrativeEventNode): boolean {
   const eventId = node.matrixEventId ?? node.id;
@@ -77,7 +87,8 @@ export default function NarrativeStepperModule({
 }: NarrativeStepperModuleProps): React.JSX.Element {
   const [phase, setPhase] = useState<StepperPhase>('SCENARIO');
   const [selectedChoice, setSelectedChoice] = useState<'A' | 'B' | null>(null);
-  const [resultText, setResultText] = useState<string | null>(null);
+  const [outcomeSummary, setOutcomeSummary] = useState<NarrativeOutcomeSummary | null>(null);
+  const [pendingResolve, setPendingResolve] = useState<PendingLegacyResolve | null>(null);
   const [markerPct, setMarkerPct] = useState(0.5);
 
   const pinAnim = useRef(new Animated.Value(0)).current;
@@ -115,7 +126,7 @@ export default function NarrativeStepperModule({
     setSelectedChoice(choice);
   };
 
-  const handleContinue = () => {
+  const handleScenarioContinue = () => {
     if (!selectedChoice) return;
     setPhase('SKILL_CHECK');
     startPinball();
@@ -130,15 +141,16 @@ export default function NarrativeStepperModule({
     const pct = markerPctRef.current;
     const inZone = pct >= TARGET_MIN && pct <= TARGET_MAX;
     const status: CheckStatus = inZone ? 'SUCCESS' : 'FAILURE';
-    const choiceDef = selectedChoice === 'A' ? node.choiceA : node.choiceB;
-    const text = inZone ? choiceDef.successText : choiceDef.failureText;
 
-    setResultText(text);
-    setPhase('RESULT');
+    const summary = buildLegacyOutcomeSummary(node, selectedChoice, status);
+    setOutcomeSummary(summary);
+    setPendingResolve({ choice: selectedChoice, status });
+    setPhase('OUTCOME');
+  };
 
-    setTimeout(() => {
-      onComplete({ choice: selectedChoice, status });
-    }, 2000);
+  const handleContinue = () => {
+    if (!pendingResolve) return;
+    onComplete(pendingResolve);
   };
 
   const showCityStreetBackground = isCityStreetsNarrative(node);
@@ -242,7 +254,7 @@ export default function NarrativeStepperModule({
             <View style={styles.footer}>
               <SelectionContinueButton
                 enabled={selectedChoice != null}
-                onPress={handleContinue}
+                onPress={handleScenarioContinue}
                 borderColor={borderColor}
                 mutedColor={mutedColor}
               />
@@ -277,21 +289,15 @@ export default function NarrativeStepperModule({
           </View>
         ) : null}
 
-        {phase === 'RESULT' && resultText ? (
-          <View style={styles.resultArea}>
-            <View
-              style={[
-                styles.resultBox,
-                { borderColor: resultText.includes('FAILURE') || resultText.includes('FAIL') ? '#ef4444' : TERMINAL_ACCENT },
-                showCityStreetBackground && styles.panelCityStreets,
-              ]}
-            >
-              <Text style={[styles.resultText, { color: resultText.includes('FAILURE') || resultText.includes('FAIL') ? '#ef4444' : TERMINAL_ACCENT }]}>
-                {resultText}
-              </Text>
-              <Text style={[styles.resultSub, { color: mutedColor }]}>Returning to ley-line grid...</Text>
-            </View>
-          </View>
+        {phase === 'OUTCOME' && outcomeSummary ? (
+          <NarrativeOutcomePanel
+            summary={outcomeSummary}
+            onContinue={handleContinue}
+            borderColor={borderColor}
+            mutedColor={mutedColor}
+            primaryColor={primaryColor}
+            cityStreets={showCityStreetBackground}
+          />
         ) : null}
       </View>
     </View>

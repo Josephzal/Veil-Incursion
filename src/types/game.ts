@@ -2,12 +2,12 @@ import type { IncursionInventoryState } from './incursionInventory';
 import type { MacroStoryRunConfiguration } from './macroStory';
 import type { OutcomeModifierMetric } from './macroStory';
 import type { RegionalPresenceState } from './regional';
-import type { CargoRunState, GlobalBankedCargo, HarvestReturnRoute } from './cargoGrid';
+import type { CargoItemId, CargoRunState, GlobalBankedCargo, HarvestReturnRoute } from './cargoGrid';
 import { createDefaultBankedCargo } from './cargoGrid';
 import type { ResonanceEscalationState } from './resonanceEscalation';
 import type { PatrolState } from './overworldPatrol';
 import type { AegisLoadout } from './aegisCombat';
-import type { CargoItemId } from './cargoGrid';
+import { createDefaultPendingNarrativeCombatBoons } from './narrativeBonusReward';
 import type { ResourceQuantity } from './resourceItem';
 import type { LeyLineMutationId } from './leyLineMutation';
 import type { BoundRequisitionRuntime } from './boundRequisition';
@@ -212,6 +212,8 @@ export interface NarrativeProceduralMeta {
   resolverSetId?: string;
   tensionMechanic?: import('./narrativeAssembly').TensionMechanic;
   defaultPenalty?: import('./narrativeAssembly').NarrativePenalty;
+  /** Rolled at encounter generation — revealed on successful A/B/C resolve. */
+  bonusReward?: import('./narrativeBonusReward').NarrativeBonusReward;
 }
 
 export interface NarrativeEventNode {
@@ -360,6 +362,8 @@ export interface ActiveIncursionState {
   lastLevelOfferedCombat: boolean;
   /** Active bound requisition modifiers — set at run start after requisition pick. */
   boundRequisition: BoundRequisitionRuntime | null;
+  /** Next-combat narrative boons acquired from bonus loot. */
+  pendingNarrativeCombatBoons: import('./narrativeBonusReward').PendingNarrativeCombatBoons;
 }
 
 export function createDefaultEnvironmentalModifiers(): EnvironmentalModifiers {
@@ -425,5 +429,6 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     defendRiftActive: false,
     lastLevelOfferedCombat: true,
     boundRequisition: null,
+    pendingNarrativeCombatBoons: createDefaultPendingNarrativeCombatBoons(),
   };
 }

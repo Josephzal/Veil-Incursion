@@ -2,6 +2,7 @@ import type { CombatGridSlotId } from '../types/combatGrid';
 import { ALL_GRID_SLOTS } from '../types/combatGrid';
 import { laneForSlot } from '../types/combatGrid';
 import { draftEncounterForDepth } from './combatEncounterBudget';
+import { applyDiagonalStaggerToProfiles } from './combatGridPlacement';
 import { initEnemyCombatLayers } from './combatFractureEngine';
 import type { EnemyCombatProfile, SectorDefinition } from '../types/run';
 import type { DistrictId } from './districtPacing';
@@ -56,7 +57,7 @@ export function spawnCombatSquad(options: SpawnSquadOptions): EnemyCombatProfile
     : drafted.slots;
   const entries = drafted.entries.slice(0, slots.length);
 
-  return slots.map((slot, index) =>
+  const squad = slots.map((slot, index) =>
     assignGrid(
       spawnRosterUnit(entries[index], options.nodeIndex, {
         resonancePercent: options.spawnOptions?.resonancePercent,
@@ -68,6 +69,7 @@ export function spawnCombatSquad(options: SpawnSquadOptions): EnemyCombatProfile
       slot,
     ),
   );
+  return applyDiagonalStaggerToProfiles(squad);
 }
 
 export function squadFromSingleEnemy(enemy: EnemyCombatProfile): EnemyCombatProfile[] {
@@ -78,7 +80,7 @@ export function squadFromSingleEnemy(enemy: EnemyCombatProfile): EnemyCombatProf
 export function normalizeSquad(enemies: EnemyCombatProfile[]): EnemyCombatProfile[] {
   if (enemies.length === 0) return [];
   const used = new Set<CombatGridSlotId>();
-  return enemies.map((e) => {
+  const placed = enemies.map((e) => {
     let slot = e.gridSlot as CombatGridSlotId | undefined;
     if (!slot || used.has(slot)) {
       slot = ALL_GRID_SLOTS.find((s) => !used.has(s)) ?? 'FL_0';
@@ -86,4 +88,5 @@ export function normalizeSquad(enemies: EnemyCombatProfile[]): EnemyCombatProfil
     used.add(slot);
     return assignGrid({ ...e, unitId: e.unitId ?? nextUnitId('hostile') }, slot);
   });
+  return applyDiagonalStaggerToProfiles(placed);
 }

@@ -10,24 +10,42 @@ import { useTerminal } from '../context/TerminalContext';
 import { useDescentNavigator } from '../hooks/useDescentNavigator';
 import { isProceduralNarrative } from '../data/sectorNarrativeEngine';
 import { CheckStatus, NarrativeChoiceKey } from '../types/game';
-import { narrativeSuccessCredits } from '../data/combatCredits';
-import { depthFromNodesCleared } from '../data/districtPacing';
+import { resolveNarrativeCreditPayout } from '../data/combatCredits';
 
 export default function NarrativeScreen(): React.JSX.Element {
   const { theme } = useTerminal();
-  const { getCurrentNarrativeNode, resolveNarrativeChoice, appendRunLog, awardRunCredits, runState, activeIncursion } = useRun();
-  const { startResourceHarvest, startScanning } = useGameFlow();
+  const {
+    getCurrentNarrativeNode,
+    resolveNarrativeChoice,
+    appendRunLog,
+    awardRunCredits,
+    runState,
+    activeIncursion,
+    prepareStandardCombatEncounter,
+    getCurrentEncounterNode,
+  } = useRun();
+  const { startResourceHarvest, startScanning, startCombat } = useGameFlow();
   const { finalizeIncursionAdvance } = useDescentNavigator();
   const resolvingRef = useRef(false);
 
   const node = getCurrentNarrativeNode();
   const isProcedural = node != null && isProceduralNarrative(node);
 
-  const finishNarrative = (choice: NarrativeChoiceKey, status: CheckStatus = 'SUCCESS') => {
+  const finishNarrative = (
+    choice: NarrativeChoiceKey,
+    status: CheckStatus = 'SUCCESS',
+    options?: { tensionBonusCredits?: number },
+  ) => {
     if (resolvingRef.current) return;
     resolvingRef.current = true;
 
-    const { outcomeText, aborted, creditReward, requiresResourcePack } = resolveNarrativeChoice(choice, status);
+    const {
+      outcomeText,
+      aborted,
+      creditReward,
+      requiresResourcePack,
+      triggerCombatAmbush,
+    } = resolveNarrativeChoice(choice, status, options);
     appendRunLog(outcomeText);
 
     if (aborted) {
@@ -36,17 +54,30 @@ export default function NarrativeScreen(): React.JSX.Element {
       return;
     }
 
-    if (creditReward > 0) {
-      awardRunCredits(creditReward, 'procedural narrative resolver');
-    } else if (status !== 'FAILURE' && !requiresResourcePack) {
-      const depth = depthFromNodesCleared(activeIncursion.nodesCleared);
-      awardRunCredits(narrativeSuccessCredits(depth), 'narrative calibration cleared');
+    const totalCredits = resolveNarrativeCreditPayout(
+      creditReward,
+      status === 'FAILURE' ? 'FAILURE' : 'SUCCESS',
+    );
+    if (totalCredits > 0) {
+      awardRunCredits(totalCredits, options?.tensionBonusCredits
+        ? 'narrative tension salvage + resolver payout'
+        : creditReward > 0
+          ? 'procedural narrative resolver'
+          : 'narrative calibration cleared');
     }
 
     if (requiresResourcePack) {
       appendRunLog('>> RESOURCE CACHE STAGED — PACK CARGO BEFORE VECTOR RESUME.');
       resolvingRef.current = false;
       startResourceHarvest();
+      return;
+    }
+
+    if (triggerCombatAmbush) {
+      appendRunLog('>> NARRATIVE AMBUSH — HOSTILE SIGNATURES LOCKED.');
+      prepareStandardCombatEncounter(getCurrentEncounterNode());
+      resolvingRef.current = false;
+      startCombat();
       return;
     }
 
@@ -58,8 +89,12 @@ export default function NarrativeScreen(): React.JSX.Element {
     finishNarrative(result.choice, result.status);
   };
 
-  const handleProceduralResolve = (choice: NarrativeChoiceKey, status: CheckStatus = 'SUCCESS') => {
-    finishNarrative(choice, status);
+  const handleProceduralResolve = (
+    choice: NarrativeChoiceKey,
+    status: CheckStatus = 'SUCCESS',
+    options?: { tensionBonusCredits?: number },
+  ) => {
+    finishNarrative(choice, status, options);
   };
 
   if (!node) {

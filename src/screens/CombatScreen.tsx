@@ -126,6 +126,8 @@ export default function CombatScreen(): React.JSX.Element {
     grantCombatResourceDrops,
     completeDefendRiftVictory,
     consumeAdrenalinePrimerAfterCombat,
+    claimPendingNarrativeCombatBoons,
+    clearNarrativeBoonStatusEffects,
     isPostCombatBoonBlocked,
     recordRunKillAttacker,
   } = useRun();
@@ -137,6 +139,8 @@ export default function CombatScreen(): React.JSX.Element {
   const combatEntryStamina =
     env.startingStaminaPenalty > 0 ? 50 : runState.currentStamina;
   const adrenalinePrimerBonusAp = shouldGrantAdrenalinePrimerAp(activeIncursion) ? 1 : 0;
+  const narrativeCombatBoonsRef = useRef(claimPendingNarrativeCombatBoons());
+  const narrativeCombatBoons = narrativeCombatBoonsRef.current;
 
   const [squadUi, setSquadUi] = useState<CombatSquadUiSnapshot | null>(null);
   const [operativeTelemetry, setOperativeTelemetry] = useState<CombatOperativeTelemetry | null>(null);
@@ -368,12 +372,14 @@ export default function CombatScreen(): React.JSX.Element {
     }
 
     if (!result.victory || result.remainingHp <= 0) {
+      clearNarrativeBoonStatusEffects();
       endRun(result.remainingHp <= 0 ? 'SOUL ANCHOR DESTROYED' : 'OPERATIVE DEFEATED IN COMBAT');
       startGameOver();
       return;
     }
 
     syncAfterCombat(result.remainingHp, result.remainingStamina);
+    clearNarrativeBoonStatusEffects();
 
     if (activeIncursion.defendRiftActive) {
       completeDefendRiftVictory();
@@ -479,6 +485,7 @@ export default function CombatScreen(): React.JSX.Element {
     startPostCombatBoon,
     startResourceHarvest,
     syncAfterCombat,
+    clearNarrativeBoonStatusEffects,
     activeIncursion.pendingHarvestReturn,
   ]);
 
@@ -586,6 +593,7 @@ export default function CombatScreen(): React.JSX.Element {
                 leyLineMutations={activeIncursion.leyLineMutations}
                 spectralSaltActive={spectralSaltActive}
                 firstTurnBonusAp={adrenalinePrimerBonusAp}
+                narrativeCombatBoons={narrativeCombatBoons}
                 equippedBlueprintId={account.equippedBlueprintId}
                 playerCritChanceBonus={playerCritChanceBonus}
                 onPlayerCritImpact={handlePlayerCritImpact}

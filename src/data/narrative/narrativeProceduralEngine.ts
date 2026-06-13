@@ -22,6 +22,7 @@ import type {
 } from '../../types/narrativeProcedural';
 import { getDistrictFromDepth, depthFromNodesCleared } from '../districtPacing';
 import { consumeCargoItem, hasCargoItem } from '../cargoGridEngine';
+import { resolveNarrativeCreditPayout } from '../combatCredits';
 import type { NarrativeResolutionResult, OperativeResourceSnapshot } from '../narrativeEncounterMatrix';
 import { CITY_STREETS_COMPLICATIONS } from './catalogs/cityStreetsComplications';
 import { CITY_STREETS_CONTEXTS } from './catalogs/cityStreetsContexts';
@@ -434,11 +435,13 @@ export function resolveProceduralNarrativeChoice(
     outcome = `>> ITEM RESOLVER SUCCESS — ${resolver.rewardPreview}`;
   }
 
-  const creditReward = choice === 'A'
+  let creditReward = choice === 'A'
     ? complication.rewardCredits
     : choice === 'B'
       ? lookupResolver(assembly.resolverIds.cabal)?.rewardCredits ?? 0
       : lookupResolver(assembly.resolverIds.item)?.rewardCredits ?? 0;
+
+  creditReward = resolveNarrativeCreditPayout(creditReward, status);
 
   if (creditReward > 0) {
     logLines.push(`>> RUN CREDITS PENDING — +${creditReward} on node clear.`);

@@ -55,6 +55,10 @@ export interface CombatSessionExtras {
   playerApCapNextTurn: number | null;
   /** Increments to drive IMMUNE floaters above hostiles. */
   immunePopupSeq: Record<string, number>;
+  /** Narrative Overcharged boon — first damaging player strike ignores mitigation. */
+  overchargedActive: boolean;
+  /** Narrative Veil Ward boon — shield persists for full encounter. */
+  narrativeVeilWardActive: boolean;
 }
 
 export function createDefaultCombatSessionExtras(): CombatSessionExtras {
@@ -68,5 +72,7 @@ export function createDefaultCombatSessionExtras(): CombatSessionExtras {
     playerApPenaltyNextTurn: 0,
     playerApCapNextTurn: null,
     immunePopupSeq: {},
+    overchargedActive: false,
+    narrativeVeilWardActive: false,
   };
 }

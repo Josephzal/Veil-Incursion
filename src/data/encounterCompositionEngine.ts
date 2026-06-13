@@ -1,6 +1,7 @@
 import type { CombatGridSlotId } from '../types/combatGrid';
 import type { DistrictId } from './districtPacing';
 import { getDistrictFromDepth, localLevelFromDepth } from './districtPacing';
+import { assignDiagonalStaggerSlots } from './combatGridPlacement';
 import type { EnemyRosterId } from './enemyRoster';
 import { ENEMY_ROSTER, type EnemyRosterEntry } from './enemyRoster';
 
@@ -225,7 +226,9 @@ export function entriesFromComposition(composition: EncounterComposition): {
   isApex: boolean;
 } {
   const entries = composition.slots.map((s) => ENEMY_ROSTER[s.rosterId]);
-  const slots = composition.slots.map((s) => s.slot);
+  let slots = composition.slots.map((s) => s.slot);
+  const diagonal = assignDiagonalStaggerSlots(entries);
+  if (diagonal) slots = diagonal;
   const isApex = composition.isApex === true
     || composition.slots.some((s) => s.isApex === true && composition.slots.length === 1);
   return { entries, slots, isApex };

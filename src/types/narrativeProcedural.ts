@@ -85,6 +85,8 @@ export interface ProceduralNarrativeAssembly {
     item: string;
     retreat: 'static-retreat';
   };
+  /** Shared bonus loot for options A/B/C — hidden until success. */
+  bonusReward?: import('./narrativeBonusReward').NarrativeBonusReward;
 }
 
 /** Buffs, debuffs, and boons with optional expiry — powers status popup (Phase 3). */

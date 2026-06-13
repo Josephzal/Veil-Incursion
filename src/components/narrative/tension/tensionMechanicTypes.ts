@@ -1,7 +1,12 @@
 import type { NarrativePenalty, TensionMechanic } from '../../../types/narrativeAssembly';
 
+export interface TensionMechanicSuccessResult {
+  /** Extra run credits earned inside a tension mini-game (e.g. ScavengeBar). */
+  bonusCredits?: number;
+}
+
 export interface TensionMechanicProps {
-  onSuccess: () => void;
+  onSuccess: (result?: TensionMechanicSuccessResult) => void;
   onFailure: () => void;
   defaultPenalty?: NarrativePenalty;
 }

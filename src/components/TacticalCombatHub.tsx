@@ -242,6 +242,8 @@ interface TacticalCombatHubProps {
   spectralSaltActive?: boolean;
   /** Bound requisition first-turn AP bonus (Adrenaline Primer). */
   firstTurnBonusAp?: number;
+  /** Narrative bonus boons claimed for this combat encounter. */
+  narrativeCombatBoons?: import('../types/narrativeBonusReward').PendingNarrativeCombatBoons;
   /** Equipped class weapon blueprint — claymore / pulse rifle / hex hooks. */
   equippedBlueprintId?: BlueprintId | null;
   /** Faction passive crit bonus (e.g. Solaris +10%). */
@@ -270,6 +272,7 @@ const isAttackIntent = (i: EnemyIntent) =>
   || i === 'RESONANCE_OVERLOAD';
 
 const ENEMY_INTENT_READ_MS = 2500;
+const ENEMY_TURN_GAP_MS = 500;
 
 type EnemyActionStage = 'reading' | 'executing' | null;
 
@@ -309,6 +312,7 @@ export default function TacticalCombatHub({
   combatDistrict = 1,
   spectralSaltActive = false,
   firstTurnBonusAp = 0,
+  narrativeCombatBoons,
   equippedBlueprintId = null,
   playerCritChanceBonus = 0,
   onPlayerCritImpact,
@@ -437,6 +441,7 @@ export default function TacticalCombatHub({
     queueNext: (_i: number) => {}, validate: () => {}, evaluate: () => {}, trigger: () => {},
   });
   const enemyTurnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const enemyTurnGapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const enemyStrikeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const voidAmbushWindowRef = useRef<{ unitId: string; damageDealt: number } | null>(null);
   const playerApRef = useRef(PLAYER_ACTION_POINTS_PER_TURN);
@@ -952,6 +957,10 @@ export default function TacticalCombatHub({
       clearTimeout(enemyTurnTimerRef.current);
       enemyTurnTimerRef.current = null;
     }
+    if (enemyTurnGapTimerRef.current) {
+      clearTimeout(enemyTurnGapTimerRef.current);
+      enemyTurnGapTimerRef.current = null;
+    }
     if (enemyStrikeTimerRef.current) {
       clearTimeout(enemyStrikeTimerRef.current);
       enemyStrikeTimerRef.current = null;
@@ -1341,6 +1350,9 @@ export default function TacticalCombatHub({
     let working = e;
     let critical = false;
     let ignoreDefenses = false;
+    const overchargedStrike = Boolean(
+      source && sessionExtrasRef.current.overchargedActive,
+    );
     if (source && source !== 'COUNTER' && !options?.echoHit && options?.rollCrit !== false) {
       const hit = resolvePlayerAttackHit(
         { defender: working },
@@ -1366,6 +1378,9 @@ export default function TacticalCombatHub({
       }
       critical = hit.critical;
       ignoreDefenses = hit.ignoreDefenses;
+    }
+    if (overchargedStrike) {
+      ignoreDefenses = true;
     }
     if (
       source === 'STRIKE'
@@ -1432,13 +1447,15 @@ export default function TacticalCombatHub({
         0,
         spectralSaltActive,
       );
-      if (scaled !== dmg) {
-        const imbueNote = spectralSaltActive && working.affinity === 'SPECTRAL'
-          ? ' // SPECTRAL SALT IMBUE'
-          : '';
-        log(`${tag} >> Kinetic scaling ${dmg} → ${scaled}.${imbueNote}`);
+      if (!overchargedStrike) {
+        if (scaled !== dmg) {
+          const imbueNote = spectralSaltActive && working.affinity === 'SPECTRAL'
+            ? ' // SPECTRAL SALT IMBUE'
+            : '';
+          log(`${tag} >> Kinetic scaling ${dmg} → ${scaled}.${imbueNote}`);
+        }
+        dmg = scaled;
       }
-      dmg = scaled;
       if (
         equippedBlueprintId === 'riftshot_pulse_rifle'
         && working.affinity === 'SPECTRAL'
@@ -1448,14 +1465,14 @@ export default function TacticalCombatHub({
         log(`${tag} >> Pulse rifle spectral resonance — 2× (${dmg}).`);
       }
     }
-    if (options?.channel === 'TRUE') {
+    if (options?.channel === 'TRUE' || overchargedStrike) {
       dmg = applyDamageWithFractureBonus(dmg, working);
     } else if (options?.channel) {
       const hit = resolveHostileHpHit(working, dmg, options.channel, { ignoreDefenses });
       working = hit.enemy;
       dmg = hit.hpDamage;
     }
-    if ((env.enemyDamageReductionPct ?? 0) > 0) {
+    if (!overchargedStrike && (env.enemyDamageReductionPct ?? 0) > 0) {
       dmg = Math.floor(dmg * (1 - (env.enemyDamageReductionPct ?? 0) / 100));
     }
     if (critical && dmg > 0 && !options?.echoHit) {
@@ -1469,7 +1486,9 @@ export default function TacticalCombatHub({
       }
       apparitionRef?.current?.triggerPlayerCritSunder(critChannel === 'OCCULT' ? 'OCCULT' : 'KINETIC');
     }
-    dmg = Math.floor(dmg * getEnemyDamageTakenMultiplier(working, sessionExtrasRef.current));
+    if (!overchargedStrike) {
+      dmg = Math.floor(dmg * getEnemyDamageTakenMultiplier(working, sessionExtrasRef.current));
+    }
 
     const projectedHpAfter = Math.max(working.currentHp - dmg, 0);
     if (source && options?.channel) {
@@ -1494,8 +1513,8 @@ export default function TacticalCombatHub({
       }
     }
 
-    const hadEvadePosture = working.evadeActive && dmg > 0;
-    const hadFortify = (working.fortifyTurnsRemaining ?? 0) > 0 && dmg > 0;
+    const hadEvadePosture = !overchargedStrike && working.evadeActive && dmg > 0;
+    const hadFortify = !overchargedStrike && (working.fortifyTurnsRemaining ?? 0) > 0 && dmg > 0;
     if (hadEvadePosture) {
       dmg = Math.floor(dmg * 0.5);
       log(`${tag} >> EVADE POSTURE — 50% (${dmg}).`);
@@ -1510,6 +1529,10 @@ export default function TacticalCombatHub({
       } else {
         log(`${tag} >> ${dmg} damage.`);
       }
+    }
+    if (overchargedStrike && source && dmg > 0) {
+      sessionExtrasRef.current.overchargedActive = false;
+      log('[OVERCHARGED BOON] >> First strike bypassed all mitigation.');
     }
     if (source && dmg > 0 && e.unitId) {
       trackVoidAmbushInterruptDamage(e.unitId, dmg);
@@ -1883,10 +1906,22 @@ export default function TacticalCombatHub({
     publishSquadUi(squadRef.current);
 
     if (enemyActionQueueRef.current.length > 0) {
-      runEnemyActionAnimation(false);
+      scheduleNextEnemyAction(false);
     } else if (!allUnitsDefeated(squadRef.current)) {
       endEnemyTurn(true);
     }
+  };
+
+  const scheduleNextEnemyAction = (countering: boolean) => {
+    if (isCombatTerminal() || enemyActionQueueRef.current.length === 0) return;
+    if (enemyTurnGapTimerRef.current) {
+      clearTimeout(enemyTurnGapTimerRef.current);
+    }
+    enemyTurnGapTimerRef.current = setTimeout(() => {
+      enemyTurnGapTimerRef.current = null;
+      if (isCombatTerminal()) return;
+      runEnemyActionAnimation(countering);
+    }, ENEMY_TURN_GAP_MS);
   };
 
   const trackVoidAmbushInterruptDamage = (unitId: string, hpDamage: number) => {
@@ -2139,6 +2174,10 @@ export default function TacticalCombatHub({
       log('[OVEREXERTION] >> Stamina regen suppressed this turn.');
     }
     skipRegenRef.current = false;
+    if (staminaRef.current <= 0) {
+      applyStamina(15);
+      log('[STAMINA REBOUND] >> Zero reserves at turn start — operative enters at 15 STAM.');
+    }
     setCycleState('TEXT_COMBAT');
     log('>> OPERATIVE TURN // Command deck online.');
   };
@@ -2168,7 +2207,7 @@ export default function TacticalCombatHub({
     if (!isUnitAlive(currentEnemy)) {
       setEnemyActionStage(null);
       setDeckStrikeOverlay(null);
-      if (enemyActionQueueRef.current.length > 0) runEnemyActionAnimation(countering);
+      if (enemyActionQueueRef.current.length > 0) scheduleNextEnemyAction(countering);
       else if (!allUnitsDefeated(squadRef.current)) endEnemyTurn(true);
       return;
     }
@@ -2185,7 +2224,7 @@ export default function TacticalCombatHub({
     if (cycleRef.current === 'DEFEND_PARRY') return;
     if (operativeHpRef.current <= 0) return;
     if (enemyActionQueueRef.current.length > 0) {
-      runEnemyActionAnimation(countering);
+      scheduleNextEnemyAction(countering);
       return;
     }
     if (!allUnitsDefeated(squadRef.current)) endEnemyTurn();
@@ -2232,7 +2271,7 @@ export default function TacticalCombatHub({
       if (!acting || !isUnitAlive(acting) || operativeHpRef.current <= 0) {
         enemyActionQueueRef.current.shift();
         setEnemyActionStage(null);
-        if (enemyActionQueueRef.current.length > 0) runEnemyActionAnimation(countering);
+        if (enemyActionQueueRef.current.length > 0) scheduleNextEnemyAction(countering);
         else endEnemyTurn(true);
         return;
       }
@@ -2379,11 +2418,19 @@ export default function TacticalCombatHub({
     aliveUnits(squadRef.current).some((u) => isEnemyFractured(u));
 
   const initCombat = () => {
-    const initialSquad = enemySquad?.length
+    let initialSquad = enemySquad?.length
       ? normalizeSquad(enemySquad)
       : enemyProfile
         ? squadFromSingleEnemy(initEnemyCombatLayers(enemyProfile))
         : spawnCombatSquad({ nodeIndex, district: combatDistrict });
+
+    if (narrativeCombatBoons?.scouted) {
+      initialSquad = initialSquad.map((unit) => ({
+        ...unit,
+        currentHp: Math.max(1, Math.floor(unit.currentHp * 0.9)),
+      }));
+    }
+
     threatBudgetRef.current = threatBudget
       ?? (initialSquad.length >= 3 ? THREAT_BUDGET_ELITE : THREAT_BUDGET_STANDARD);
     syncSquad(initialSquad);
@@ -2453,7 +2500,15 @@ export default function TacticalCombatHub({
     };
     sessionExtrasRef.current = createDefaultCombatSessionExtras();
     combatChanceRef.current = createDefaultCombatChanceState();
-    const entryAp = PLAYER_ACTION_POINTS_PER_TURN + Math.max(0, firstTurnBonusAp);
+    if (narrativeCombatBoons?.veilWard) {
+      sessionExtrasRef.current.playerShield = 15;
+      sessionExtrasRef.current.narrativeVeilWardActive = true;
+    }
+    if (narrativeCombatBoons?.overcharged) {
+      sessionExtrasRef.current.overchargedActive = true;
+    }
+    const ghostedAp = narrativeCombatBoons?.ghosted ? 1 : 0;
+    const entryAp = PLAYER_ACTION_POINTS_PER_TURN + Math.max(0, firstTurnBonusAp) + ghostedAp;
     playerApRef.current = entryAp;
     setPlayerActionPoints(entryAp);
     setSelectedAbility(null);
@@ -2465,8 +2520,20 @@ export default function TacticalCombatHub({
     preAppliedHpStrikeRef.current = 0;
     enemyStunPendingRef.current = false;
     log('>> COMBAT LINK ESTABLISHED');
+    if (narrativeCombatBoons?.scouted) {
+      log('>> SCOUTED BOON — hostile grid entered at −10% current HP.');
+    }
+    if (narrativeCombatBoons?.veilWard) {
+      log('>> VEIL WARD BOON — +15 shield capacity active for this encounter.');
+    }
+    if (narrativeCombatBoons?.overcharged) {
+      log('>> OVERCHARGED BOON — first damaging strike ignores all mitigation.');
+    }
     if (firstTurnBonusAp > 0) {
       log(`>> ADRENALINE PRIMER — FIRST-TURN +${firstTurnBonusAp} AP.`);
+    }
+    if (ghostedAp > 0) {
+      log('>> GHOSTED BOON — +1 AP on operative first turn.');
     }
     log('>> OPERATIVE TURN // Command deck online.');
     log(`>> WEAPON LINK: ${strikeStats.label} // STRIKE ${strikeStats.strikeDamage} DMG / ${strikeStats.strikeStaminaCost} STAM`);
@@ -2861,7 +2928,7 @@ export default function TacticalCombatHub({
       pendingDissolveRef.current = null;
       if (pending) beginDissolveForUnit(pending.unitId, pending.profile, 0);
       if (operativeHpRef.current <= 0) return;
-      if (enemyActionQueueRef.current.length > 0) runEnemyActionAnimation(false);
+      if (enemyActionQueueRef.current.length > 0) scheduleNextEnemyAction(false);
       else if (!allUnitsDefeated(squadRef.current)) endEnemyTurn(true);
       return;
     }
@@ -3101,6 +3168,7 @@ export default function TacticalCombatHub({
     clearSliceTimers();
     clearParrySuccessBurst();
     if (enemyTurnTimerRef.current) clearTimeout(enemyTurnTimerRef.current);
+    if (enemyTurnGapTimerRef.current) clearTimeout(enemyTurnGapTimerRef.current);
     if (enemyStrikeTimerRef.current) clearTimeout(enemyStrikeTimerRef.current);
   }, []);
 
