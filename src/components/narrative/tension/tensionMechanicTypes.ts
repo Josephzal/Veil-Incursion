@@ -23,5 +23,6 @@ export interface TensionMechanicHostProps extends TensionMechanicProps {
 
 export function formatTensionMechanicLabel(raw?: TensionMechanic | string): string {
   if (!raw) return 'TENSION PROTOCOL';
+  if (raw === 'Mechanic_SigilTrace') return 'GRID CIPHER';
   return raw.replace('Mechanic_', '').replace(/_/g, ' ').toUpperCase();
 }

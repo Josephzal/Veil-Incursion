@@ -44,6 +44,8 @@ import {
   SECTOR_SELECT_HAPTIC_MS,
   viewBoxPointToCanvas,
 } from '../utils/sectorInfluenceVisual';
+import ScanlineOverlay from './map/ScanlineOverlay';
+import TacticalGridBackdrop from './map/TacticalGridBackdrop';
 
 const MAP_BACKDROP = '#06080d';
 const OCEAN_GRID_COLOR = '#1a2332';
@@ -639,8 +641,6 @@ function MapViewport({
           mapHostStyle,
           fillContainer ? styles.mapFrameFill : null,
           {
-            borderColor: theme.borderColor,
-            borderWidth: theme.borderWidth,
             height: fillContainer
               ? undefined
               : activeCanvasSize.height || undefined,
@@ -652,6 +652,7 @@ function MapViewport({
         ]}
         onLayout={fillContainer ? undefined : handleHostLayout}
       >
+        <TacticalGridBackdrop />
         {activeCanvasSize.width > 0 && (
           <View
             style={[
@@ -677,6 +678,7 @@ function MapViewport({
             <GestureDetector gesture={mapGesture}>
               <View collapsable={false} style={styles.touchLayer} />
             </GestureDetector>
+            <ScanlineOverlay />
           </View>
         )}
 
@@ -766,15 +768,7 @@ export default function WorldMagnetismMap({
             </View>
 
             {expanded && expandedDetailPanel && (
-              <View
-                style={[
-                  styles.expandedDetailPanel,
-                  {
-                    borderColor: theme.borderColor,
-                    height: EXPANDED_DETAIL_HEIGHT,
-                  },
-                ]}
-              >
+              <View style={[styles.expandedDetailPanel, { height: EXPANDED_DETAIL_HEIGHT }]}>
                 <View style={styles.expandedDetailContent}>{expandedDetailPanel}</View>
               </View>
             )}
@@ -797,6 +791,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: MAP_BACKDROP,
     position: 'relative',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
   },
   previewGestureRoot: {
     width: '100%',
@@ -867,12 +863,12 @@ const styles = StyleSheet.create({
     fontSize: 7,
     letterSpacing: 0.5,
     marginTop: 6,
-    textAlign: 'center',
   },
   expandBtn: {
     marginTop: 8,
-    alignSelf: 'center',
-    borderWidth: 1,
+    alignSelf: 'flex-start',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
     paddingVertical: 8,
     paddingHorizontal: 14,
   },
@@ -922,7 +918,8 @@ const styles = StyleSheet.create({
     minHeight: 280,
   },
   expandedDetailPanel: {
-    borderWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
     marginTop: 8,
     flexShrink: 0,
     overflow: 'hidden',

@@ -2,7 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import ConcealSlider from './ConcealSlider';
 import ScavengeBar from './ScavengeBar';
-import SigilTrace from './SigilTrace';
+import GridCipher from './GridCipher';
 import {
   formatTensionMechanicLabel,
   type TensionMechanicHostProps,
@@ -83,7 +83,7 @@ export default function TensionMechanicHost({
     case 'Mechanic_SigilTrace':
       return (
         <View style={styles.mechanicHost}>
-          <SigilTrace {...mechanicProps} />
+          <GridCipher {...mechanicProps} />
         </View>
       );
     case 'Mechanic_ScavengeBar':

@@ -39,9 +39,9 @@ export default function MetropolitanMagnetismMap({
   };
 
   return (
-    <View style={[styles.panel, { borderColor: theme.borderColor, borderWidth: theme.borderWidth, borderStyle: theme.borderStyle }]}>
+    <View style={styles.panel}>
       <Text style={[styles.title, { color: theme.primaryColor }]}>
-        VECTOR WORLD MAP // CONTINENTAL MAGNETISM
+        [ VECTOR WORLD MAP // CONTINENTAL MAGNETISM ]
       </Text>
       <Text style={[styles.sub, { color: theme.mutedColor }]}>
         5 MACRO-SECTORS // LOW-POLY WORLD MAP // FACTION CONTROL
@@ -80,7 +80,12 @@ export default function MetropolitanMagnetismMap({
 }
 
 const styles = StyleSheet.create({
-  panel: { padding: 12, marginBottom: 12 },
+  panel: {
+    padding: 12,
+    marginBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+  },
   title: { fontFamily: 'monospace', fontSize: 9, fontWeight: '700', letterSpacing: 1, marginBottom: 4 },
   sub: { fontFamily: 'monospace', fontSize: 8, letterSpacing: 0.5, marginBottom: 10 },
 });

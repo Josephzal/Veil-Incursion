@@ -57,18 +57,10 @@ export default function VectorMapDashboard({
           onSectorChange={onSectorChange}
         />
 
-        <View
-          style={[
-            styles.logPanel,
-            {
-              borderColor: theme.borderColor,
-              borderWidth: theme.borderWidth,
-              borderStyle: theme.borderStyle,
-              height: LOG_BLOCK_HEIGHT,
-            },
-          ]}
-        >
-          <Text style={[styles.logHeader, { color: theme.primaryColor }]}>REGIONAL MAGNETISM LOG</Text>
+        <View style={styles.logPanel}>
+          <Text style={[styles.logHeader, { color: theme.primaryColor }]}>
+            [ REGIONAL MAGNETISM LOG ]
+          </Text>
           <ScrollView
             style={styles.logScroll}
             contentContainerStyle={styles.logScrollContent}
@@ -116,7 +108,16 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: 8 },
-  logPanel: { paddingHorizontal: 10, paddingTop: 8, paddingBottom: 6, marginBottom: 12, overflow: 'hidden' },
+  logPanel: {
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    paddingBottom: 6,
+    marginBottom: 12,
+    overflow: 'hidden',
+    height: LOG_BLOCK_HEIGHT,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+  },
   logHeader: { fontFamily: 'monospace', fontSize: 8, fontWeight: '700', letterSpacing: 1, marginBottom: 4 },
   logScroll: { flex: 1 },
   logScrollContent: { paddingBottom: 2 },
@@ -131,7 +132,12 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     width: '100%',
   },
-  deepDiveBtn: { marginTop: 8, paddingVertical: 18, paddingHorizontal: 12, alignItems: 'center' },
+  deepDiveBtn: {
+    marginTop: 8,
+    paddingVertical: 18,
+    paddingHorizontal: 12,
+    alignItems: 'flex-start',
+  },
   deepDiveTitle: { fontFamily: 'monospace', fontSize: 12, fontWeight: '700', letterSpacing: 1.2, marginBottom: 6 },
-  deepDiveSub: { fontFamily: 'monospace', fontSize: 8, textAlign: 'center', letterSpacing: 0.4 },
+  deepDiveSub: { fontFamily: 'monospace', fontSize: 8, letterSpacing: 0.4 },
 });

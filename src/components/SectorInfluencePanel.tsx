@@ -11,19 +11,17 @@ function InfluenceMeter({
   label,
   pct,
   color,
-  borderColor,
 }: {
   label: string;
   pct: number;
   color: string;
-  borderColor: string;
 }) {
   return (
     <View style={styles.meterRow}>
       <Text style={[styles.meterLabel, { color }]} numberOfLines={1}>
         {label}
       </Text>
-      <View style={[styles.meterTrack, { borderColor }]}>
+      <View style={styles.meterTrack}>
         <View style={[styles.meterFill, { backgroundColor: color, width: `${pct}%` }]} />
       </View>
       <Text style={[styles.meterPct, { color }]}>{pct}%</Text>
@@ -48,12 +46,12 @@ export default function SectorInfluencePanel({
 }: SectorInfluencePanelProps): React.JSX.Element {
   return (
     <View style={styles.root}>
-      <View style={[styles.readout, { borderColor: theme.borderColor }]}>
+      <View style={styles.readout}>
         <Text style={[styles.readoutLine, { color: theme.mutedColor }]}>
-          ACTIVE: {sector.label} // NODE: {sector.metropolitanNode}
+          {`ACTIVE: ${sector.label} // NODE: ${sector.metropolitanNode}`}
         </Text>
         <Text style={[styles.readoutLine, { color: theme.statusColor }]}>
-          TRAFFIC DENSITY: {localTrafficDensity}%
+          {`TRAFFIC DENSITY: ${localTrafficDensity}%`}
         </Text>
         {isInfluenceFrozen && (
           <Text style={[styles.readoutLine, { color: theme.primaryColor }]}>
@@ -64,7 +62,7 @@ export default function SectorInfluencePanel({
 
       <View style={styles.influenceBlock}>
         <Text style={[styles.influenceHeader, { color: theme.primaryColor }]}>
-          TERRITORIAL INFLUENCE — {sector.label}
+          {`[ TERRITORIAL INFLUENCE — ${sector.label} ]`}
         </Text>
         {FACTION_ORDER.map((factionId) => {
           const def = FACTION_DEFINITIONS[factionId];
@@ -75,7 +73,6 @@ export default function SectorInfluencePanel({
               label={def.displayName}
               pct={pct}
               color={def.accentColor}
-              borderColor={theme.borderColor}
             />
           );
         })}
@@ -86,13 +83,37 @@ export default function SectorInfluencePanel({
 
 const styles = StyleSheet.create({
   root: { marginTop: 0 },
-  readout: { borderWidth: 1, padding: 8, marginBottom: 8, minHeight: 56 },
-  readoutLine: { fontFamily: 'monospace', fontSize: 8, letterSpacing: 0.4, lineHeight: 13, marginBottom: 2 },
-  influenceBlock: { marginTop: 4 },
-  influenceHeader: { fontFamily: 'monospace', fontSize: 8, fontWeight: '700', letterSpacing: 0.8, marginBottom: 8 },
-  meterRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6, gap: 6 },
+  readout: {
+    paddingVertical: 8,
+    paddingHorizontal: 2,
+    marginBottom: 8,
+    minHeight: 48,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  readoutLine: {
+    fontFamily: 'monospace',
+    fontSize: 8,
+    letterSpacing: 0.4,
+    lineHeight: 13,
+    marginBottom: 2,
+  },
+  influenceBlock: { marginTop: 8 },
+  influenceHeader: {
+    fontFamily: 'monospace',
+    fontSize: 8,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    marginBottom: 10,
+  },
+  meterRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 },
   meterLabel: { fontFamily: 'monospace', fontSize: 7, width: 72 },
-  meterTrack: { flex: 1, height: 8, borderWidth: 1, padding: 1 },
+  meterTrack: {
+    flex: 1,
+    height: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    overflow: 'hidden',
+  },
   meterFill: { height: '100%' },
   meterPct: { fontFamily: 'monospace', fontSize: 8, width: 32, textAlign: 'right' },
 });

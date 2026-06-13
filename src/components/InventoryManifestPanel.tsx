@@ -3,8 +3,10 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTerminal } from '../context/TerminalContext';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import AegisLoadoutEditor from './AegisLoadoutEditor';
+import InventoryMatrixRow from './InventoryMatrixRow';
 import type { AegisAbilityId, AegisLoadout } from '../types/aegisCombat';
 import { validateLoadoutCommit } from '../utils/aegisLoadoutUtils';
+import { formatSnakeCaseToTitleCase } from '../utils/formatDisplayName';
 
 const WEAPON_WIREFRAME = [
   '    ┌──────────────┐',
@@ -131,7 +133,7 @@ export default function InventoryManifestPanel(): React.JSX.Element {
       </View>
 
       <ManifestSection
-        title="AEGIS COMBAT LOADOUT // PRE-RUN CONFIG"
+        title="PRE-RUN CONFIG"
         borderColor={border}
         accentColor={accent}
       >
@@ -154,29 +156,12 @@ export default function InventoryManifestPanel(): React.JSX.Element {
         />
       </ManifestSection>
 
-      <ManifestSection
-        title="EQUIPPED WEAPON SLOT"
-        borderColor={border}
-        accentColor={accent}
-      >
-        <Text style={[styles.slotId, { color: theme.statusColor }]}>{slots.weapon_id}</Text>
-        <Text style={[styles.wireframe, { color: theme.mutedColor }]}>{WEAPON_WIREFRAME}</Text>
-        <Text style={[styles.wireframeCaption, { color: theme.mutedColor }]}>
-          ARCHITECTURAL BLUEPRINT // WIREFRAME PLACEHOLDER
-        </Text>
-      </ManifestSection>
+     
+
+   
 
       <ManifestSection
-        title="EQUIPPED ARMOR / CASING SLOT"
-        borderColor={border}
-        accentColor={accent}
-      >
-        <ManifestRow label="FRAME SERIAL" value={slots.frame_id} mutedColor={theme.mutedColor} textColor={theme.textColor} />
-        <ManifestRow label="TITLE ID" value={slots.equipped_title_id} mutedColor={theme.mutedColor} textColor={theme.textColor} />
-      </ManifestSection>
-
-      <ManifestSection
-        title="CURRENCIES SEGMENT"
+        title="CURRENCIES"
         borderColor={border}
         accentColor={accent}
       >
@@ -196,19 +181,13 @@ export default function InventoryManifestPanel(): React.JSX.Element {
           <Text style={[styles.emptyLine, { color: theme.mutedColor }]}>{'// MANIFEST EMPTY'}</Text>
         ) : (
           matrixItems.map((item, index) => (
-            <View
+            <InventoryMatrixRow
               key={`${item.id}-${index}`}
-              style={[styles.matrixRow, { borderBottomColor: `${border}66` }]}
-            >
-              <Text style={[styles.matrixIndex, { color: theme.statusColor }]}>
-                {String(index + 1).padStart(3, '0')}
-              </Text>
-              <View style={styles.matrixBody}>
-                <Text style={[styles.matrixId, { color: theme.textColor }]}>{item.id}</Text>
-                <Text style={[styles.matrixDesignation, { color: accent }]}>{item.designation}</Text>
-              </View>
-              <Text style={[styles.matrixCategory, { color: theme.mutedColor }]}>{item.category}</Text>
-            </View>
+              item={item}
+              index={index}
+              striped={index % 2 === 1}
+              isLast={index === matrixItems.length - 1}
+            />
           ))
         )}
       </ManifestSection>
@@ -286,35 +265,5 @@ const styles = StyleSheet.create({
   emptyLine: {
     fontFamily: 'monospace',
     fontSize: 8,
-  },
-  matrixRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    borderBottomWidth: 1,
-    paddingVertical: 8,
-    gap: 8,
-  },
-  matrixIndex: {
-    fontFamily: 'monospace',
-    fontSize: 9,
-    width: 28,
-  },
-  matrixBody: { flex: 1 },
-  matrixId: {
-    fontFamily: 'monospace',
-    fontSize: 8,
-    letterSpacing: 0.3,
-    marginBottom: 2,
-  },
-  matrixDesignation: {
-    fontFamily: 'monospace',
-    fontSize: 9,
-    fontWeight: '700',
-  },
-  matrixCategory: {
-    fontFamily: 'monospace',
-    fontSize: 8,
-    width: 64,
-    textAlign: 'right',
   },
 });
