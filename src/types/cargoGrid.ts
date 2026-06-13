@@ -124,23 +124,23 @@ export const HARVEST_YIELD_OPTIONS: HarvestYieldOption[] = [
     yieldPct: 50,
     resonanceSpike: 3,
     ambushRiskPct: 0,
-    description: 'Low noise extraction — 50% yield, +3% resonance spike.',
+    description: 'Low noise extraction — 50% yield.',
   },
   {
     tier: 'FULL',
     label: 'FULL EXTRACTION',
     yieldPct: 75,
     resonanceSpike: 8,
-    ambushRiskPct: 8,
-    description: 'Standard ritual pull — 75% yield, +8% resonance spike.',
+    ambushRiskPct: 0,
+    description: 'Standard ritual pull — 75% yield.',
   },
   {
     tier: 'DEEP_GORE',
     label: 'DEEP GORE',
     yieldPct: 100,
     resonanceSpike: 8,
-    ambushRiskPct: 25,
-    description: 'Violent tear — 100% yield, +8% resonance spike, ambush risk.',
+    ambushRiskPct: 0,
+    description: 'Violent tear — 100% yield.',
   },
 ];
 

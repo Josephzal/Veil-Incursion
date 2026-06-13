@@ -9,16 +9,12 @@ import {
   groupRunStatusEntries,
 } from '../utils/runStatusSnapshot';
 import type { RunStatusCategory } from '../utils/runStatusSnapshot';
+import { RESONANCE_SYSTEM_ACTIVE } from '../data/featureFlags';
 
 const TERMINAL_ACCENT = '#00ff33';
-const CATEGORY_ORDER: RunStatusCategory[] = [
-  'SECTOR',
-  'BOON',
-  'HAZARD',
-  'MACRO',
-  'ENVIRONMENT',
-  'RESONANCE',
-];
+const CATEGORY_ORDER: RunStatusCategory[] = RESONANCE_SYSTEM_ACTIVE
+  ? ['SECTOR', 'BOON', 'HAZARD', 'MACRO', 'ENVIRONMENT', 'RESONANCE']
+  : ['SECTOR', 'BOON', 'HAZARD', 'MACRO', 'ENVIRONMENT'];
 
 interface RunStatusOverlayProps {
   visible: boolean;

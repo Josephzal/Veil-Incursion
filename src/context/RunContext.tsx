@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import { pickRandomClimateCluster, getClusterDefinition } from '../data/climateClusters';
+import { AMBUSH_ENCOUNTERS_ENABLED } from '../data/featureFlags';
 import {
   createEasyTestEnemy,
   createHardTestEnemy,
@@ -515,13 +516,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     setScanSessionKey(1);
     setPostCombatMutationChoices([]);
     setBoundRequisitionOffers([]);
-    const biomeTag = (config?.unlockedBiomes ?? ['HOSPITAL', 'ALLEYWAYS']).join(', ');
     setRunLog([
       '>> RUN INITIALIZED — OPEN SECTOR ENGINE ONLINE.',
       `>> SECTOR TIER ${sectorTier} — BRANCHING TOPOLOGY PRE-GENERATED.`,
       `>> SCANNING HUB ACTIVE — SPECTRAL SWEEP INITIALIZING.`,
       `>> CLIMATE CLUSTER LOCKED: ${clusterDef.name}`,
-      `>> AUTHORIZED BIOMES: ${biomeTag}`,
       formatMacroBiomeLogLine(initialBiome),
       `>> ${clusterDef.tagline}`,
       ...sectorInit.initLogLines,
@@ -817,7 +816,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
           break;
         case 'CRITICAL_DESYNC':
           soulAnchorIntegrity = Math.max(soulAnchorIntegrity - 25, 0);
-          pendingAmbush = true;
+          if (AMBUSH_ENCOUNTERS_ENABLED) pendingAmbush = true;
           break;
         default:
           break;
@@ -1172,7 +1171,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       const next = {
         ...prev,
         ...result.runPatch,
-        pendingAmbush: result.triggerCombatAmbush ? true : prev.pendingAmbush,
+        pendingAmbush: AMBUSH_ENCOUNTERS_ENABLED && result.triggerCombatAmbush ? true : prev.pendingAmbush,
       };
       runStateRef.current = next;
       return next;
@@ -1379,7 +1378,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       nextCargo = addLootToContainment(nextCargo, itemId, count);
     });
 
-    const ambushTriggered = Math.random() * 100 < option.ambushRiskPct;
+    const ambushTriggered = AMBUSH_ENCOUNTERS_ENABLED && Math.random() * 100 < option.ambushRiskPct;
     const logLines = [
       `>> ${option.label} — ${option.yieldPct}% yield routed to containment.`,
     ];

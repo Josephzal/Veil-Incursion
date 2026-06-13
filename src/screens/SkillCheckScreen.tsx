@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import IncursionShell from '../components/IncursionShell';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
+import { AMBUSH_ENCOUNTERS_ENABLED } from '../data/featureFlags';
 import { useRun } from '../context/RunContext';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useTerminal } from '../context/TerminalContext';
@@ -131,10 +132,15 @@ export default function SkillCheckScreen(): React.JSX.Element {
         return;
       }
 
-      if (tier === 'CRITICAL_DESYNC') {
+      if (tier === 'CRITICAL_DESYNC' && AMBUSH_ENCOUNTERS_ENABLED) {
         setPendingAmbush(true);
         appendRunLog('>> ELITE AMBUSH — deploying to combat immediately.');
         startCombat();
+        return;
+      }
+
+      if (tier === 'CRITICAL_DESYNC') {
+        completeCurrentNode(`${TIER_LABEL[tier]} resolved.`);
         return;
       }
 

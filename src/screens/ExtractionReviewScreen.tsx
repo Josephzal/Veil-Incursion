@@ -102,9 +102,6 @@ export default function ExtractionReviewScreen(): React.JSX.Element {
                 {`HP ${runState.soulAnchorIntegrity}/${runState.maxSoulAnchor} // STA ${runState.currentStamina}/${runState.maxStamina}`}
               </Text>
               <Text style={[styles.line, { color: theme.primaryColor }]}>
-                {`RESONANCE ${activeIncursion.resonance.percent}% // ATT ${activeIncursion.attunement.current}/${activeIncursion.attunement.max}`}
-              </Text>
-              <Text style={[styles.line, { color: theme.primaryColor }]}>
                 {`ZONE ${zone.replace(/_/g, ' ')} // NODES CLEARED ${activeIncursion.nodesCleared}`}
               </Text>
             </View>

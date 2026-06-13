@@ -1,4 +1,5 @@
 import { BLOOD_FRENZY_RESONANCE_THRESHOLD } from '../types/combatEnvironment';
+import { RESONANCE_SYSTEM_ACTIVE } from '../data/featureFlags';
 import type { ActiveIncursionState, EnvironmentalModifiers } from '../types/game';
 import type { RunState } from '../types/run';
 import { getResonanceZone } from '../data/resonanceHeatVentEngine';
@@ -30,10 +31,14 @@ export function buildOperativeVitalsLine(
   const staminaPct = resourcePercent(runState.currentStamina, runState.maxStamina);
   const shieldPct = Math.max(0, Math.min(100, healthPct + 8));
   const energyPct = Math.max(0, Math.min(100, runState.startingAbyssalReservePercent));
+  const districtTag = ` // D${activeIncursion.currentDistrict}`;
+  if (!RESONANCE_SYSTEM_ACTIVE) {
+    return `HEALTH: ${healthPct}% // SHIELD: ${shieldPct}% // STAMINA: ${staminaPct}% // ENERGY: ${energyPct}%${districtTag}`;
+  }
   const resonancePct = activeIncursion.resonance.percent;
   const resonanceZone = getResonanceZone(resonancePct);
   const frenzyTag = resonancePct > BLOOD_FRENZY_RESONANCE_THRESHOLD ? ' // FRENZY' : '';
-  return `HEALTH: ${healthPct}% // SHIELD: ${shieldPct}% // STAMINA: ${staminaPct}% // ENERGY: ${energyPct}% // RES: ${resonancePct}% [${resonanceZone}]${frenzyTag} // D${activeIncursion.currentDistrict}`;
+  return `HEALTH: ${healthPct}% // SHIELD: ${shieldPct}% // STAMINA: ${staminaPct}% // ENERGY: ${energyPct}% // RES: ${resonancePct}% [${resonanceZone}]${frenzyTag}${districtTag}`;
 }
 
 const FLAG_LABELS: Record<string, { label: string; description: string }> = {
@@ -127,6 +132,7 @@ function envModifierEntries(env: EnvironmentalModifiers): RunStatusEntry[] {
 }
 
 function escalationEntries(inc: ActiveIncursionState): RunStatusEntry[] {
+  if (!RESONANCE_SYSTEM_ACTIVE) return [];
   const esc = inc.resonanceEscalations;
   const entries: RunStatusEntry[] = [];
 

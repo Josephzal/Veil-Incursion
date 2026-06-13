@@ -40,9 +40,6 @@ interface LeyLineMapPanelProps {
 export default function LeyLineMapPanel({
   sectorTier,
   nodesCleared,
-  resonancePercent,
-  attunementCurrent,
-  attunementMax,
   currentEncounterIndex,
   encounterPath,
   sectorGraph,
@@ -73,7 +70,7 @@ export default function LeyLineMapPanel({
           LEY-LINE VECTOR GRID SCAN
         </Text>
         <Text style={[styles.headerSub, { color: mutedColor }]}>
-          SECTOR T{sectorTier} // NODE {nodesCleared} // RES {resonancePercent}% // ATT {attunementCurrent}/{attunementMax}
+          SECTOR T{sectorTier} // NODE {nodesCleared}
         </Text>
       </View>
 

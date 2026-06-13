@@ -274,8 +274,6 @@ export function initializeSectorRun(
   const initLogLines = [
     macroStoryModeLogLine(macroStory),
     `>> OPEN SECTOR GRAPH GENERATED — MAX ${sectorGraph.maxGraphDepth} NODES // TIER ${sectorTier}`,
-    '>> ATTUNEMENT CHARGED — 3 FOCUS USES AVAILABLE THIS RUN',
-    '>> RESONANCE TELEMETRY ONLINE — SPECTRAL READOUT ACTIVE',
     '>> NODES 1–4: INFILTRATION ONLY — SAFE ANCHOR EXTRACTION LOCKED UNTIL NODE 5',
   ];
 

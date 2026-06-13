@@ -38,9 +38,6 @@ const NODE_ICON: Record<string, string> = {
 export default function DescentPipelineHUD({
   sectorTier,
   nodesCleared,
-  resonancePercent,
-  attunementCurrent,
-  attunementMax,
   currentEncounterIndex,
   encounterPath,
   accentColor = '#00ff33',
@@ -87,7 +84,7 @@ export default function DescentPipelineHUD({
       {!hideLabel ? (
         <View style={styles.headerRow}>
           <Text style={[styles.depthLabel, { color: mutedColor }]}>
-            {`OPEN SECTOR T${sectorTier} // NODE ${nodesCleared}/${MAX_SECTOR_NODES} // ATT ${attunementCurrent}/${attunementMax}`}
+            {`OPEN SECTOR T${sectorTier} // NODE ${nodesCleared}/${MAX_SECTOR_NODES}`}
           </Text>
         </View>
       ) : null}
