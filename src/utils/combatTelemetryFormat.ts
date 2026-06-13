@@ -1,3 +1,4 @@
+import type { CombatGridSlotId } from '../types/combatGrid';
 import type { CombatUnitTag } from '../types/aegisCombat';
 import type { EnemyAffinity } from '../types/combatEnvironment';
 import type { EnemyCombatProfile, EnemyIntent } from '../types/run';
@@ -77,6 +78,57 @@ export function isEnemyChargeIntent(intent: EnemyIntent): boolean {
   return ENEMY_CHARGE_INTENTS.includes(intent);
 }
 
+export function isEnemyBuffIntent(intent: EnemyIntent): boolean {
+  return intent === 'FORTIFY' || intent === 'EVADE' || intent === 'CHARGE';
+}
+
+export type EnemyTurnMotionKind = 'buff' | 'melee' | 'ranged';
+
+/** Physical motion bucket for the active enemy turn (drives anchor choreography). */
+export function classifyEnemyTurnMotion(
+  intent: EnemyIntent,
+  options?: { arenaLayout?: boolean; gridSlot?: CombatGridSlotId | null },
+): EnemyTurnMotionKind {
+  if (isEnemyBuffIntent(intent)) return 'buff';
+  if (isEnemyDamageIntent(intent)) return 'melee';
+  if (isEnemySiphonIntent(intent)) return 'ranged';
+  return 'ranged';
+}
+
+export type EnemyTurnPhase = 'reading' | 'buff' | 'melee_attack' | 'ranged_attack';
+
+export function resolveEnemyTurnPhase(
+  intent: EnemyIntent,
+  stage: 'reading' | 'executing' | null,
+  options?: { arenaLayout?: boolean; gridSlot?: CombatGridSlotId | null },
+): EnemyTurnPhase | null {
+  if (!stage) return null;
+  if (stage === 'reading') return 'reading';
+  const kind = classifyEnemyTurnMotion(intent, options);
+  if (kind === 'buff') return 'buff';
+  if (kind === 'melee') return 'melee_attack';
+  return 'ranged_attack';
+}
+
+export type StatusFloatTone = 'fortify' | 'evade' | 'charge' | 'neutral';
+
+const BUFF_FLOAT_LABELS: Partial<Record<EnemyIntent, string>> = {
+  FORTIFY: 'Fortify',
+  EVADE: 'Evade',
+  CHARGE: 'Charge',
+};
+
+export function getEnemyBuffFloatLabel(intent: EnemyIntent): string {
+  return BUFF_FLOAT_LABELS[intent] ?? formatIntentReadout(intent);
+}
+
+export function getStatusFloatTone(intent: EnemyIntent): StatusFloatTone {
+  if (intent === 'FORTIFY') return 'fortify';
+  if (intent === 'EVADE') return 'evade';
+  if (intent === 'CHARGE') return 'charge';
+  return 'neutral';
+}
+
 export interface CombatGridUnitSnapshot {
   unitId: string;
   slot: import('../types/combatGrid').CombatGridSlotId;
@@ -107,6 +159,12 @@ export interface CombatGridUnitSnapshot {
   /** True while this unit is the active enemy-turn actor (wind-up or execute). */
   isActingEnemy?: boolean;
   isExecutingAttack?: boolean;
+  /** Anchor motion phase — idle when null/absent on inactive units. */
+  turnPhase?: EnemyTurnPhase | null;
+  /** Buff/status floater proc above hitbox. */
+  statusFloatSeq?: number;
+  statusFloatLabel?: string;
+  statusFloatTone?: StatusFloatTone;
   /** True while a backline melee dash tween is in flight. */
   isBacklineDashing?: boolean;
   /** Increments to trigger backline melee dash-and-return VFX. */

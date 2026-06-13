@@ -10,6 +10,7 @@ import {
 } from 'react-native-reanimated';
 import { useTerminal } from '../context/TerminalContext';
 import { advanceEnemyIntent } from '../data/enemies';
+import type { PlayerAIState } from '../data/AIDecisionEngine';
 import {
   computeBloodFrenzyHeal,
   scaleKineticDamage,
@@ -134,6 +135,10 @@ import {
   isEnemyChargeIntent,
   isEnemyDamageIntent,
   isEnemySiphonIntent,
+  classifyEnemyTurnMotion,
+  resolveEnemyTurnPhase,
+  getEnemyBuffFloatLabel,
+  getStatusFloatTone,
   type EnemyPortraitAnim,
   type EnemyPortraitGlow,
   type EnemyIntentShimmer,
@@ -146,6 +151,10 @@ import {
 import {
   BACKLINE_MELEE_DASH_IMPACT_MS,
   BACKLINE_MELEE_DASH_TOTAL_MS,
+  ENEMY_BACKLINE_MELEE_ANIM_MS,
+  ENEMY_BUFF_ANIM_MS,
+  ENEMY_MELEE_ANIM_MS,
+  ENEMY_RANGED_ANIM_MS,
   FRONTLINE_MELEE_IMPACT_MS,
 } from './combat/combatEnemyBarLayout';
 import VignetteFlashOverlay from './VignetteFlashOverlay';
@@ -252,7 +261,6 @@ const isAttackIntent = (i: EnemyIntent) =>
   i === 'STRIKE' || i === 'WORLD_ENDER' || i === 'OVERDRIVE_DISCHARGE';
 
 const ENEMY_INTENT_READ_MS = 2500;
-const ENEMY_ATTACK_ANIM_MS = 1500;
 
 type EnemyActionStage = 'reading' | 'executing' | null;
 
@@ -380,6 +388,7 @@ export default function TacticalCombatHub({
   const hitFlashSeqRef = useRef<Record<string, number>>({});
   const critImpactSeqRef = useRef<Record<string, { seq: number; channel: 'KINETIC' | 'OCCULT' | 'TRUE' }>>({});
   const evadeImpactSeqRef = useRef<Record<string, number>>({});
+  const statusFloatSeqRef = useRef<Record<string, number>>({});
   const backlineDashSeqRef = useRef<Record<string, number>>({});
   const backlineDashActiveRef = useRef<Record<string, boolean>>({});
   const dissolveSeqRef = useRef<Record<string, number>>({});
@@ -446,6 +455,15 @@ export default function TacticalCombatHub({
 
   const isCombatTerminal = () =>
     resolutionRef.current != null || operativeHpRef.current <= 0;
+
+  const buildPlayerAIState = (): PlayerAIState => ({
+    hp: operativeHpRef.current,
+    maxHp: maxSoulAnchor,
+    stamina: staminaRef.current,
+    maxStamina,
+    abyssalReserve: abyssalRef.current,
+    actionPoints: playerApRef.current,
+  });
 
   const log = (t: string) => onTerminalLog?.(t);
   const parryTimingWindowBonus = parryWindowBonus * 0.02;
@@ -596,6 +614,15 @@ export default function TacticalCombatHub({
         const blocked = staged != null && abilityTargeting
           && isUnitBlockedForAbility(nextSquad, staged, unitId)
           && !hookValid;
+        const motionOptions = { arenaLayout, gridSlot: u.gridSlot ?? null };
+        const isActiveActor = resolveActingEnemyId() === unitId
+          && enemyActionStageRef.current != null
+          && !isPlayerTurnRef.current
+          && cycleRef.current === 'TEXT_COMBAT';
+        const motionKind = classifyEnemyTurnMotion(u.intent, motionOptions);
+        const turnPhase = isActiveActor
+          ? resolveEnemyTurnPhase(u.intent, enemyActionStageRef.current, motionOptions)
+          : null;
         return {
           unitId,
           slot: u.gridSlot ?? 'FL_0',
@@ -623,14 +650,16 @@ export default function TacticalCombatHub({
           isSelected: isPlayerTurnRef.current && selectedTargetIdRef.current === u.unitId,
           isTargetable: targetable,
           isFocused: focusedUnitIdRef.current === u.unitId,
-          isActingEnemy: !isPlayerTurnRef.current
-            && cycleRef.current === 'TEXT_COMBAT'
-            && enemyActionStageRef.current != null
-            && resolveActingEnemyId() === unitId,
-          isExecutingAttack: !isPlayerTurnRef.current
-            && cycleRef.current === 'TEXT_COMBAT'
+          isActingEnemy: isActiveActor,
+          isExecutingAttack: isActiveActor
             && enemyActionStageRef.current === 'executing'
-            && resolveActingEnemyId() === unitId,
+            && motionKind !== 'buff',
+          turnPhase,
+          statusFloatSeq: statusFloatSeqRef.current[unitId] ?? 0,
+          statusFloatLabel: isActiveActor && motionKind === 'buff' && enemyActionStageRef.current === 'executing'
+            ? getEnemyBuffFloatLabel(u.intent)
+            : undefined,
+          statusFloatTone: getStatusFloatTone(u.intent),
           isBacklineDashing: backlineDashActiveRef.current[unitId] === true,
           backlineMeleeDashSeq: backlineDashSeqRef.current[unitId] ?? 0,
           isBlocked: blocked,
@@ -1742,7 +1771,7 @@ export default function TacticalCombatHub({
           const nextIntent = rollBossIntent(phase);
           return { ...unit, intent: nextIntent, bossPhase: phase };
         }
-        return advanceEnemyIntent(unit, combatDistrict);
+        return advanceEnemyIntent(unit, combatDistrict, buildPlayerAIState());
       }));
     }
     enemyActionQueueRef.current = [];
@@ -1871,52 +1900,72 @@ export default function TacticalCombatHub({
       }
       focusEnemy(acting);
       setEnemyActionStage('executing');
-      apparitionRef?.current?.triggerAttackEffect();
+
+      const motionOptions = { arenaLayout, gridSlot: acting.gridSlot ?? null };
+      const motionKind = classifyEnemyTurnMotion(acting.intent, motionOptions);
       const overlayVariant = getEnemyDeckStrikeVariant(acting.intent);
       const isBacklineMelee = arenaLayout
         && acting.gridSlot?.startsWith('BL') === true
-        && isEnemyDamageIntent(acting.intent);
+        && motionKind === 'melee';
+      const isFrontlineMelee = arenaLayout
+        && acting.gridSlot?.startsWith('FL') === true
+        && motionKind === 'melee'
+        && !isBacklineMelee;
+      const actingUnitId = acting.unitId ?? acting.designation;
 
-      if (isBacklineMelee && acting.unitId) {
-        const dashUnitId = acting.unitId;
-        backlineDashSeqRef.current[dashUnitId] = (backlineDashSeqRef.current[dashUnitId] ?? 0) + 1;
-        backlineDashActiveRef.current[dashUnitId] = true;
+      let animDurationMs = ENEMY_RANGED_ANIM_MS;
+
+      if (motionKind === 'buff') {
+        statusFloatSeqRef.current[actingUnitId] = (statusFloatSeqRef.current[actingUnitId] ?? 0) + 1;
         publishSquadUi(squadRef.current);
+        animDurationMs = ENEMY_BUFF_ANIM_MS;
+      } else {
+        apparitionRef?.current?.triggerAttackEffect();
 
-        setTimeout(() => {
-          if (isCombatTerminal()) return;
-          if (overlayVariant) {
-            showStrikeFeedback(overlayVariant);
-            if (overlayVariant === 'hp') applyHpStrikeOnDeckImpact(acting);
-          }
-        }, BACKLINE_MELEE_DASH_IMPACT_MS);
-
-        setTimeout(() => {
-          backlineDashActiveRef.current[dashUnitId] = false;
+        if (isBacklineMelee && acting.unitId) {
+          const dashUnitId = acting.unitId;
+          backlineDashSeqRef.current[dashUnitId] = (backlineDashSeqRef.current[dashUnitId] ?? 0) + 1;
+          backlineDashActiveRef.current[dashUnitId] = true;
           publishSquadUi(squadRef.current);
-        }, BACKLINE_MELEE_DASH_TOTAL_MS);
-      } else if (overlayVariant) {
-        const isFrontlineMelee = arenaLayout
-          && acting.gridSlot?.startsWith('FL') === true
-          && isEnemyDamageIntent(acting.intent);
-        const applyStrike = () => {
-          showStrikeFeedback(overlayVariant);
-          if (overlayVariant === 'hp') applyHpStrikeOnDeckImpact(acting);
-        };
-        if (isFrontlineMelee) {
+          animDurationMs = ENEMY_BACKLINE_MELEE_ANIM_MS;
+
           setTimeout(() => {
             if (isCombatTerminal()) return;
+            if (overlayVariant) {
+              showStrikeFeedback(overlayVariant);
+              if (overlayVariant === 'hp') applyHpStrikeOnDeckImpact(acting);
+            }
+          }, BACKLINE_MELEE_DASH_IMPACT_MS);
+
+          setTimeout(() => {
+            backlineDashActiveRef.current[dashUnitId] = false;
+            publishSquadUi(squadRef.current);
+          }, BACKLINE_MELEE_DASH_TOTAL_MS);
+        } else if (overlayVariant) {
+          const applyStrike = () => {
+            showStrikeFeedback(overlayVariant);
+            if (overlayVariant === 'hp') applyHpStrikeOnDeckImpact(acting);
+          };
+          if (isFrontlineMelee) {
+            animDurationMs = ENEMY_MELEE_ANIM_MS;
+            setTimeout(() => {
+              if (isCombatTerminal()) return;
+              applyStrike();
+            }, FRONTLINE_MELEE_IMPACT_MS);
+          } else {
+            animDurationMs = ENEMY_RANGED_ANIM_MS;
             applyStrike();
-          }, FRONTLINE_MELEE_IMPACT_MS);
-        } else {
-          applyStrike();
+          }
+        } else if (motionKind === 'melee') {
+          animDurationMs = ENEMY_MELEE_ANIM_MS;
         }
       }
+
       enemyStrikeTimerRef.current = setTimeout(() => {
         enemyStrikeTimerRef.current = null;
         enemyActionQueueRef.current.shift();
         resolveEnemyAction(countering);
-      }, ENEMY_ATTACK_ANIM_MS);
+      }, animDurationMs);
     }, ENEMY_INTENT_READ_MS);
   };
 

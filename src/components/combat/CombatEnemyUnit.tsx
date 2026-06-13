@@ -17,6 +17,7 @@ import CombatEnemyAnchorMotion from './CombatEnemyAnchorMotion';
 import CombatEnemyCritImpact from './CombatEnemyCritImpact';
 import CombatEnemyCritLabel from './CombatEnemyCritLabel';
 import CombatEnemyEvadeLabel from './CombatEnemyEvadeLabel';
+import CombatFloatingStatusText from './CombatFloatingStatusText';
 import CombatEnemyDissolveEffect from './CombatEnemyDissolveEffect';
 import CombatEnemyHitEffect from './CombatEnemyHitEffect';
 import CombatEnemyPortraitSkia from './CombatEnemyPortraitSkia';
@@ -85,8 +86,7 @@ export default function CombatEnemyUnit({
       pointerEvents={dissolving ? 'none' : 'box-none'}
     >
       <CombatEnemyAnchorMotion
-        isActingTurn={unit.isActingEnemy}
-        isExecutingAttack={unit.isExecutingAttack}
+        turnPhase={unit.turnPhase ?? null}
         isBacklineDashing={unit.isBacklineDashing}
         hitFlashSeq={unit.hitFlashSeq}
         backlineMeleeDashSeq={unit.backlineMeleeDashSeq}
@@ -124,6 +124,11 @@ export default function CombatEnemyUnit({
             channel={unit.critImpactChannel}
           />
           <CombatEnemyEvadeLabel evadeImpactSeq={unit.evadeImpactSeq} />
+          <CombatFloatingStatusText
+            triggerSeq={unit.statusFloatSeq}
+            label={unit.statusFloatLabel}
+            tone={unit.statusFloatTone}
+          />
         </View>
 
         {onPress && !dissolving ? (

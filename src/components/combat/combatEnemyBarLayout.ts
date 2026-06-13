@@ -309,12 +309,28 @@ export function backlineMeleeDashDelta(
   return { x, y };
 }
 
-/** Frontline melee attack choreography (ms). */
-export const FRONTLINE_STEP_OUT_X = -20;
-export const FRONTLINE_IMPACT_SNAP_X = -15;
-export const FRONTLINE_STEP_OUT_MS = 280;
-export const FRONTLINE_IMPACT_HOLD_MS = 100;
-export const FRONTLINE_IMPACT_SNAP_MS = 80;
-export const FRONTLINE_RETURN_MS = 320;
-export const FRONTLINE_MELEE_IMPACT_MS =
-  FRONTLINE_STEP_OUT_MS + FRONTLINE_IMPACT_HOLD_MS + Math.floor(FRONTLINE_IMPACT_SNAP_MS * 0.5);
+/** Frontline melee attack choreography (ms) — idle, stand, attack are distinct coordinates. */
+export const FRONTLINE_STAND_X = -20;
+export const FRONTLINE_MELEE_ATTACK_X = -52;
+export const FRONTLINE_STAND_MS = 220;
+export const FRONTLINE_MELEE_SNAP_MS = 120;
+export const FRONTLINE_MELEE_RETURN_IDLE_MS = 110;
+export const FRONTLINE_RANGED_RETURN_IDLE_MS = 140;
+export const STATUS_FLOAT_DURATION_MS = 1000;
+
+/** @deprecated Use FRONTLINE_STAND_X */
+export const FRONTLINE_STEP_OUT_X = FRONTLINE_STAND_X;
+/** @deprecated Melee snap target is FRONTLINE_MELEE_ATTACK_X */
+export const FRONTLINE_IMPACT_SNAP_X = FRONTLINE_MELEE_ATTACK_X - FRONTLINE_STAND_X;
+export const FRONTLINE_STEP_OUT_MS = FRONTLINE_STAND_MS;
+export const FRONTLINE_IMPACT_HOLD_MS = 0;
+export const FRONTLINE_IMPACT_SNAP_MS = FRONTLINE_MELEE_SNAP_MS;
+export const FRONTLINE_RETURN_MS = FRONTLINE_RANGED_RETURN_IDLE_MS;
+
+export const FRONTLINE_MELEE_IMPACT_MS = Math.floor(FRONTLINE_MELEE_SNAP_MS * 0.72);
+
+export const ENEMY_BUFF_ANIM_MS = STATUS_FLOAT_DURATION_MS + FRONTLINE_MELEE_RETURN_IDLE_MS;
+export const ENEMY_MELEE_ANIM_MS =
+  FRONTLINE_MELEE_SNAP_MS + FRONTLINE_MELEE_RETURN_IDLE_MS + 40;
+export const ENEMY_RANGED_ANIM_MS = 880;
+export const ENEMY_BACKLINE_MELEE_ANIM_MS = BACKLINE_MELEE_DASH_TOTAL_MS;

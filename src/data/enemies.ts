@@ -1,4 +1,10 @@
 import type { DistrictId } from './districtPacing';
+import {
+  decideEnemyIntent,
+  defaultPlayerAIState,
+  enemyAIStateFromProfile,
+  type PlayerAIState,
+} from './AIDecisionEngine';
 import { ENEMY_ROSTER, spawnRosterUnit } from './enemyRoster';
 import type { EnemyAffinity } from '../types/combatEnvironment';
 import { EnemyClass, EnemyCombatProfile, EnemyIntent, SectorDefinition } from '../types/run';
@@ -45,26 +51,46 @@ function biomeSkin(classType: EnemyClass, sector: SectorDefinition): string {
   return skins[key]?.[classType] ?? `${sector.subsector} ${fallback[classType]}`;
 }
 
+/** @deprecated Use decideEnemyIntent via advanceEnemyIntent / rollEnemyIntentForProfile. */
 export function rollEnemyIntent(
   classType: EnemyClass,
   chargeTurns: number,
   district: DistrictId = 1,
+  playerState?: PlayerAIState,
 ): EnemyIntent {
-  if (classType === 'ABOMINATION') {
-    if (district >= 2) {
-      if (chargeTurns >= 2) return 'WORLD_ENDER';
-      if (chargeTurns > 0) return 'CHARGE';
-      return Math.random() < 0.55 ? 'CHARGE' : 'STRIKE';
-    }
-    return Math.random() < 0.35 ? 'FORTIFY' : 'STRIKE';
-  }
-  if (classType === 'GREMLIN') {
-    return Math.random() < 0.45 ? 'STRIP_STAMINA' : 'STRIKE';
-  }
-  const roll = Math.random();
-  if (roll < 0.35) return 'SIPHON_ABYSSAL';
-  if (roll < 0.55) return 'EVADE';
-  return 'STRIKE';
+  return rollEnemyIntentForProfile(
+    {
+      class: classType,
+      currentHp: CLASS_BASE_HP[classType],
+      maxHp: CLASS_BASE_HP[classType],
+      baseDamage: CLASS_BASE_DAMAGE[classType],
+      chargeTurns,
+      intent: chargeTurns > 0 ? 'CHARGE' : 'STRIKE',
+      evadeActive: false,
+    } as EnemyCombatProfile,
+    district,
+    playerState,
+  );
+}
+
+export function rollEnemyIntentForProfile(
+  profile: Pick<EnemyCombatProfile, 'class' | 'currentHp' | 'maxHp' | 'baseDamage' | 'chargeTurns' | 'intent' | 'evadeActive'>,
+  district: DistrictId = 1,
+  playerState?: PlayerAIState,
+): EnemyIntent {
+  const enemyState = enemyAIStateFromProfile(
+    {
+      ...profile,
+      designation: '',
+      nodeIndex: 0,
+      scale: 1,
+    } as EnemyCombatProfile,
+    district,
+  );
+  return decideEnemyIntent({
+    enemy: { ...enemyState, chargeTurns: profile.chargeTurns ?? 0 },
+    player: playerState ?? defaultPlayerAIState(),
+  });
 }
 
 export function intentLabel(intent: EnemyIntent, designation: string): string {
@@ -85,19 +111,23 @@ export interface SpawnEnemyOptions {
   resonancePercent?: number;
   forcedAffinity?: EnemyAffinity;
   district?: DistrictId;
+  /** Operative snapshot for opening intent selection. */
+  playerState?: PlayerAIState;
 }
 
 export function spawnEnemyProfile(
   sector: SectorDefinition,
   nodeIndex: number,
   isEliteAmbush = false,
+  options?: SpawnEnemyOptions,
 ): EnemyCombatProfile {
   const classType = pickEnemyClass(nodeIndex, isEliteAmbush);
   const scale = getNodeScale(nodeIndex);
   const designation = biomeSkin(classType, sector);
   const maxHp = Math.floor(CLASS_BASE_HP[classType] * scale);
   const baseDamage = Math.floor(CLASS_BASE_DAMAGE[classType] * scale);
-  const intent = rollEnemyIntent(classType, 0);
+  const district = options?.district ?? 1;
+  const intent = rollEnemyIntent(classType, 0, district, options?.playerState);
 
   return {
     class: classType,
@@ -113,12 +143,34 @@ export function spawnEnemyProfile(
   };
 }
 
-function rollHardTestIntent(): EnemyIntent {
-  const roll = Math.random();
-  if (roll < 0.3) return 'SIPHON_ABYSSAL';
-  if (roll < 0.5) return 'EVADE';
-  if (roll < 0.7) return 'STRIP_STAMINA';
-  return 'STRIKE';
+const HARD_TEST_INTENTS: EnemyIntent[] = ['STRIKE', 'STRIP_STAMINA', 'SIPHON_ABYSSAL', 'EVADE'];
+
+function rollHardTestIntent(playerState?: PlayerAIState): EnemyIntent {
+  const profile = {
+    class: 'APPARITION' as const,
+    currentHp: 200,
+    maxHp: 200,
+    baseDamage: 12,
+    chargeTurns: 0,
+    intent: 'STRIKE' as const,
+    evadeActive: false,
+  };
+  const enemyState = enemyAIStateFromProfile(
+    { ...profile, designation: '', nodeIndex: 0, scale: 1 },
+    1,
+  );
+  const valid = HARD_TEST_INTENTS.filter((intent) => {
+    const ctx = {
+      enemy: enemyState,
+      player: playerState ?? defaultPlayerAIState(),
+    };
+    if (intent === 'SIPHON_ABYSSAL' && ctx.player.abyssalReserve <= 0) return false;
+    if (intent === 'STRIP_STAMINA' && ctx.player.stamina <= 0) return false;
+    if (intent === 'EVADE' && enemyState.activeBuffs.includes('Evade')) return false;
+    return true;
+  });
+  const pool = valid.length > 0 ? valid : ['STRIKE' as const];
+  return pool[Math.floor(Math.random() * pool.length)]!;
 }
 
 /** Defend-the-Rift horde — survive N enemy turns; near-indestructible gutter goliath shell. */
@@ -173,8 +225,8 @@ export function createEasyTestEnemy(): EnemyCombatProfile {
   };
 }
 
-export function createHardTestEnemy(): EnemyCombatProfile {
-  const intent = rollHardTestIntent();
+export function createHardTestEnemy(playerState?: PlayerAIState): EnemyCombatProfile {
+  const intent = rollHardTestIntent(playerState);
   return {
     class: 'APPARITION',
     designation: 'TEST APPARITION // FULL KIT',
@@ -193,6 +245,7 @@ export function createHardTestEnemy(): EnemyCombatProfile {
 export function advanceEnemyIntent(
   profile: EnemyCombatProfile,
   district: DistrictId = 1,
+  playerState?: PlayerAIState,
 ): EnemyCombatProfile {
   if (profile.testPreset === 'easy') {
     return {
@@ -204,7 +257,7 @@ export function advanceEnemyIntent(
   }
 
   if (profile.testPreset === 'hard') {
-    const nextIntent = rollHardTestIntent();
+    const nextIntent = rollHardTestIntent(playerState);
     return {
       ...profile,
       chargeTurns: 0,
@@ -217,7 +270,15 @@ export function advanceEnemyIntent(
   if (profile.intent === 'CHARGE') chargeTurns += 1;
   else if (profile.intent !== 'WORLD_ENDER') chargeTurns = 0;
 
-  const nextIntent = rollEnemyIntent(profile.class, chargeTurns, district);
+  const enemyState = enemyAIStateFromProfile(
+    { ...profile, chargeTurns },
+    district,
+  );
+  const nextIntent = decideEnemyIntent({
+    enemy: enemyState,
+    player: playerState ?? defaultPlayerAIState(),
+  });
+
   return {
     ...profile,
     chargeTurns,
