@@ -4,37 +4,29 @@ import { useTerminal } from '../context/TerminalContext';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import AegisLoadoutEditor from './AegisLoadoutEditor';
 import InventoryMatrixRow from './InventoryMatrixRow';
+import {
+  formatBracketHeader,
+  hubTerminalUi,
+} from '../styles/hubTerminalUi';
 import type { AegisAbilityId, AegisLoadout } from '../types/aegisCombat';
 import { validateLoadoutCommit } from '../utils/aegisLoadoutUtils';
-import { formatSnakeCaseToTitleCase } from '../utils/formatDisplayName';
-
-const WEAPON_WIREFRAME = [
-  '    ┌──────────────┐',
-  '    │   ╱╲    ╱╲   │',
-  '    │  ╱  ╲  ╱  ╲  │',
-  '    │ ╱ BLADE ╲ │',
-  '    │╱  CORE   ╲│',
-  '    └─────┬──────┘',
-  '          │ GRIP',
-  '          └───┘',
-].join('\n');
-
-const PANEL_BG = '#121416';
 
 function ManifestSection({
   title,
   children,
-  borderColor,
-  accentColor,
+  mutedColor,
+  leading = false,
 }: {
   title: string;
   children: React.ReactNode;
-  borderColor: string;
-  accentColor: string;
+  mutedColor: string;
+  leading?: boolean;
 }) {
   return (
-    <View style={[styles.section, { borderColor, backgroundColor: PANEL_BG }]}>
-      <Text style={[styles.sectionTitle, { color: accentColor }]}>{title}</Text>
+    <View style={leading ? hubTerminalUi.dataSectionLeading : hubTerminalUi.dataSection}>
+      <Text style={[hubTerminalUi.sectionHeader, { color: mutedColor }]}>
+        {formatBracketHeader(title)}
+      </Text>
       {children}
     </View>
   );
@@ -64,7 +56,6 @@ export default function InventoryManifestPanel(): React.JSX.Element {
   const { account, setAegisLoadout, appendHubLog } = usePlayerAccount();
 
   const manifest = profile.operative_profile.payload_manifest;
-  const slots = manifest.active_slots;
   const currencies = manifest.currencies;
   const storedItems = manifest.stored_items ?? [];
 
@@ -115,7 +106,6 @@ export default function InventoryManifestPanel(): React.JSX.Element {
   }, [appendHubLog, loadoutDraft, setAegisLoadout]);
 
   const accent = theme.primaryColor;
-  const border = theme.borderColor;
 
   return (
     <ScrollView
@@ -123,20 +113,16 @@ export default function InventoryManifestPanel(): React.JSX.Element {
       contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
     >
-      <View style={[styles.headerBand, { borderColor: border, backgroundColor: PANEL_BG }]}>
-        <Text style={[styles.headerTitle, { color: accent }]}>
-          ASSET MANIFEST // OPERATIVE LEDGER
+      <View style={hubTerminalUi.dataSectionLeading}>
+        <Text style={[hubTerminalUi.sectionHeaderLg, { color: theme.mutedColor }]}>
+          {formatBracketHeader('ASSET MANIFEST // OPERATIVE LEDGER')}
         </Text>
         <Text style={[styles.headerSub, { color: theme.mutedColor }]}>
           {`CLASS ${account.activeClass} // RANK ${account.operativeRank} // ${account.username}`}
         </Text>
       </View>
 
-      <ManifestSection
-        title="PRE-RUN CONFIG"
-        borderColor={border}
-        accentColor={accent}
-      >
+      <ManifestSection title="PRE-RUN CONFIG" mutedColor={theme.mutedColor}>
         <AegisLoadoutEditor
           draft={loadoutDraft}
           selectedSlot={selectedSlot}
@@ -145,10 +131,9 @@ export default function InventoryManifestPanel(): React.JSX.Element {
           onCommit={commitLoadout}
           theme={{
             accentColor: accent,
-            borderColor: border,
+            borderColor: theme.borderColor,
             mutedColor: theme.mutedColor,
             textColor: theme.textColor,
-            panelBg: 'rgba(0, 0, 0, 0.35)',
           }}
           hint="Configure four active abilities before initiating a deep-dive. Eviscerate remains a hidden ultimate at full Abyssal Reserve."
           commitLabel="[ SAVE LOADOUT FOR NEXT RUN ]"
@@ -156,15 +141,7 @@ export default function InventoryManifestPanel(): React.JSX.Element {
         />
       </ManifestSection>
 
-     
-
-   
-
-      <ManifestSection
-        title="CURRENCIES"
-        borderColor={border}
-        accentColor={accent}
-      >
+      <ManifestSection title="CURRENCIES" mutedColor={theme.mutedColor}>
         <ManifestRow label="CRYPTO_GLIMMER" value={String(currencies.crypto_glimmer)} mutedColor={theme.mutedColor} textColor={theme.textColor} />
         <ManifestRow label="CABAL_TRIBUTES" value={String(currencies.cabal_tributes)} mutedColor={theme.mutedColor} textColor={theme.textColor} />
         <ManifestRow label="FREQUENCY_TOKENS" value={String(currencies.frequency_tokens)} mutedColor={theme.mutedColor} textColor={theme.textColor} />
@@ -172,11 +149,7 @@ export default function InventoryManifestPanel(): React.JSX.Element {
         <ManifestRow label="BANKED CARGO VALUE" value={`${account.bankedCargo.totalValue} CR`} mutedColor={theme.mutedColor} textColor={theme.textColor} />
       </ManifestSection>
 
-      <ManifestSection
-        title="ITEM INVENTORY MATRIX"
-        borderColor={border}
-        accentColor={accent}
-      >
+      <ManifestSection title="ITEM INVENTORY MATRIX" mutedColor={theme.mutedColor}>
         {matrixItems.length === 0 ? (
           <Text style={[styles.emptyLine, { color: theme.mutedColor }]}>{'// MANIFEST EMPTY'}</Text>
         ) : (
@@ -197,50 +170,11 @@ export default function InventoryManifestPanel(): React.JSX.Element {
 
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
-  scrollContent: { paddingBottom: 24, gap: 12 },
-  headerBand: {
-    borderWidth: 1,
-    padding: 12,
-    gap: 6,
-  },
-  headerTitle: {
-    fontFamily: 'monospace',
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1,
-  },
+  scrollContent: { paddingBottom: 24 },
   headerSub: {
     fontFamily: 'monospace',
     fontSize: 8,
     letterSpacing: 0.6,
-  },
-  section: {
-    borderWidth: 1,
-    padding: 12,
-    gap: 10,
-  },
-  sectionTitle: {
-    fontFamily: 'monospace',
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 1,
-  },
-  slotId: {
-    fontFamily: 'monospace',
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.6,
-  },
-  wireframe: {
-    fontFamily: 'monospace',
-    fontSize: 9,
-    lineHeight: 12,
-    marginBottom: 6,
-  },
-  wireframeCaption: {
-    fontFamily: 'monospace',
-    fontSize: 7,
-    letterSpacing: 0.5,
   },
   row: {
     flexDirection: 'row',

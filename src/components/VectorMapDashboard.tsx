@@ -2,6 +2,14 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
 import MetropolitanMagnetismMap from './MetropolitanMagnetismMap';
+import {
+  formatBracketHeader,
+  getInteractiveButtonStyle,
+  getInteractiveButtonTextStyle,
+  hubTerminalUi,
+  HUB_DATA_DIVIDER,
+} from '../styles/hubTerminalUi';
+import { pulseHubButton } from '../utils/hubButtonHaptics';
 import { MacroSectorId } from '../types/regional';
 import { TerminalTheme } from '../types/theme';
 
@@ -58,8 +66,8 @@ export default function VectorMapDashboard({
         />
 
         <View style={styles.logPanel}>
-          <Text style={[styles.logHeader, { color: theme.primaryColor }]}>
-            [ REGIONAL MAGNETISM LOG ]
+          <Text style={[hubTerminalUi.sectionHeader, styles.logHeader, { color: theme.mutedColor }]}>
+            {formatBracketHeader('REGIONAL MAGNETISM LOG')}
           </Text>
           <ScrollView
             style={styles.logScroll}
@@ -83,19 +91,25 @@ export default function VectorMapDashboard({
       </ScrollView>
 
       <Pressable
-        onPress={onInitiateDeepDive}
+        onPress={() => {
+          if (runDisabled) return;
+          pulseHubButton();
+          onInitiateDeepDive();
+        }}
         disabled={runDisabled}
         style={({ pressed }) => [
+          getInteractiveButtonStyle(theme.statusColor, {
+            disabled: runDisabled,
+            pressed,
+            size: 'lg',
+          }),
           styles.deepDiveBtn,
-          {
-            borderColor: theme.statusColor,
-            borderWidth: theme.borderWidth + 1,
-            opacity: runDisabled ? 0.4 : pressed ? 0.75 : 1,
-            backgroundColor: pressed ? `${theme.primaryColor}18` : '#0a0b0f',
-          },
+          runDisabled ? null : pressed ? { opacity: 0.85 } : null,
         ]}
       >
-        <Text style={[styles.deepDiveTitle, { color: theme.statusColor }]}>BEGIN INCURSION</Text>
+        <Text style={[getInteractiveButtonTextStyle('lg'), { color: theme.statusColor }]}>
+          BEGIN INCURSION
+        </Text>
         <Text style={[styles.deepDiveSub, { color: theme.mutedColor }]}>
           Pass through the veil — Scan 1 of active sector run
         </Text>
@@ -109,16 +123,16 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: 8 },
   logPanel: {
-    paddingHorizontal: 10,
-    paddingTop: 8,
+    paddingHorizontal: 12,
+    paddingTop: 12,
     paddingBottom: 6,
     marginBottom: 12,
     overflow: 'hidden',
     height: LOG_BLOCK_HEIGHT,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+    borderTopWidth: 0,
+    borderTopColor: HUB_DATA_DIVIDER,
   },
-  logHeader: { fontFamily: 'monospace', fontSize: 8, fontWeight: '700', letterSpacing: 1, marginBottom: 4 },
+  logHeader: { marginBottom: 4 },
   logScroll: { flex: 1 },
   logScrollContent: { paddingBottom: 2 },
   logRow: { flexDirection: 'row', width: '100%' },
@@ -132,12 +146,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     width: '100%',
   },
-  deepDiveBtn: {
-    marginTop: 8,
-    paddingVertical: 18,
-    paddingHorizontal: 12,
-    alignItems: 'flex-start',
-  },
-  deepDiveTitle: { fontFamily: 'monospace', fontSize: 12, fontWeight: '700', letterSpacing: 1.2, marginBottom: 6 },
+  deepDiveBtn: { marginTop: 8, gap: 6 },
   deepDiveSub: { fontFamily: 'monospace', fontSize: 8, letterSpacing: 0.4 },
 });

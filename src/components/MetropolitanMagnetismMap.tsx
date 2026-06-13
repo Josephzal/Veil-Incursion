@@ -1,6 +1,11 @@
 import React, { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useMagnetism } from '../hooks/useMagnetism';
+import {
+  formatBracketHeader,
+  hubTerminalUi,
+  HUB_DATA_DIVIDER,
+} from '../styles/hubTerminalUi';
 import { MacroSectorId } from '../types/regional';
 import { TerminalTheme } from '../types/theme';
 import SectorInfluencePanel from './SectorInfluencePanel';
@@ -40,8 +45,8 @@ export default function MetropolitanMagnetismMap({
 
   return (
     <View style={styles.panel}>
-      <Text style={[styles.title, { color: theme.primaryColor }]}>
-        [ VECTOR WORLD MAP // CONTINENTAL MAGNETISM ]
+      <Text style={[hubTerminalUi.sectionHeaderLg, styles.title, { color: theme.mutedColor }]}>
+        {formatBracketHeader('VECTOR WORLD MAP // CONTINENTAL MAGNETISM')}
       </Text>
       <Text style={[styles.sub, { color: theme.mutedColor }]}>
         5 MACRO-SECTORS // LOW-POLY WORLD MAP // FACTION CONTROL
@@ -83,9 +88,9 @@ const styles = StyleSheet.create({
   panel: {
     padding: 12,
     marginBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+    borderBottomWidth: 1,
+    borderBottomColor: HUB_DATA_DIVIDER,
   },
-  title: { fontFamily: 'monospace', fontSize: 9, fontWeight: '700', letterSpacing: 1, marginBottom: 4 },
+  title: { marginBottom: 4 },
   sub: { fontFamily: 'monospace', fontSize: 8, letterSpacing: 0.5, marginBottom: 10 },
 });

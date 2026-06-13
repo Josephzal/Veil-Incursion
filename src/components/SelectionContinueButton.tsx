@@ -1,5 +1,10 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, ViewStyle } from 'react-native';
+import {
+  getInteractiveButtonStyle,
+  getInteractiveButtonTextStyle,
+} from '../styles/hubTerminalUi';
+import { pulseHubButton } from '../utils/hubButtonHaptics';
 
 const TERMINAL_ACCENT = '#00ff33';
 
@@ -9,34 +14,47 @@ interface SelectionContinueButtonProps {
   label?: string;
   borderColor: string;
   mutedColor: string;
+  accentColor?: string;
   style?: ViewStyle;
+  haptic?: boolean;
 }
 
 export default function SelectionContinueButton({
   enabled,
   onPress,
   label = '[ CONTINUE ]',
-  borderColor,
+  borderColor: _borderColor,
   mutedColor,
+  accentColor = TERMINAL_ACCENT,
   style,
+  haptic = true,
 }: SelectionContinueButtonProps): React.JSX.Element {
+  const handlePress = () => {
+    if (!enabled) return;
+    if (haptic) pulseHubButton();
+    onPress();
+  };
+
   return (
     <Pressable
-      onPress={onPress}
+      onPress={handlePress}
       disabled={!enabled}
       style={({ pressed }) => [
+        getInteractiveButtonStyle(accentColor, { disabled: !enabled, pressed, size: 'md' }),
         styles.btn,
         style,
-        {
-          borderColor: enabled ? TERMINAL_ACCENT : borderColor,
-          opacity: !enabled ? 0.45 : pressed ? 0.75 : 1,
-        },
+        !enabled ? { opacity: 0.45 } : pressed ? { opacity: 0.85 } : null,
       ]}
       accessibilityRole="button"
       accessibilityState={{ disabled: !enabled }}
       accessibilityLabel={label}
     >
-      <Text style={[styles.btnText, { color: enabled ? TERMINAL_ACCENT : mutedColor }]}>
+      <Text
+        style={[
+          getInteractiveButtonTextStyle('md'),
+          { color: enabled ? accentColor : mutedColor },
+        ]}
+      >
         {label}
       </Text>
     </Pressable>
@@ -44,16 +62,5 @@ export default function SelectionContinueButton({
 }
 
 const styles = StyleSheet.create({
-  btn: {
-    borderWidth: 2,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  btnText: {
-    fontFamily: 'monospace',
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-  },
+  btn: { marginTop: 10 },
 });

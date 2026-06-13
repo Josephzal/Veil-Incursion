@@ -1,5 +1,10 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  getInteractiveButtonStyle,
+  getInteractiveButtonTextStyle,
+} from '../../styles/hubTerminalUi';
+import { pulseHubButton } from '../../utils/hubButtonHaptics';
 
 const MONO = 'monospace';
 
@@ -28,10 +33,16 @@ export default function CombatResolutionBanner({
           {isVictory ? 'HOSTILE NEUTRALIZED' : 'OPERATIVE SOUL DISCONNECTED'}
         </Text>
         <Pressable
-          onPress={onDismiss}
-          style={[styles.btn, { borderColor: btnBorder }]}
+          onPress={() => {
+            pulseHubButton();
+            onDismiss();
+          }}
+          style={({ pressed }) => [
+            getInteractiveButtonStyle(btnBorder, { pressed, size: 'md' }),
+            styles.btn,
+          ]}
         >
-          <Text style={[styles.btnText, { color: btnText }]}>
+          <Text style={[getInteractiveButtonTextStyle('md'), { color: btnText }]}>
             {isVictory ? '[ CONTINUE RUN ]' : '[ INCURSION FAILED ]'}
           </Text>
         </Pressable>
@@ -66,18 +77,5 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     textAlign: 'center',
   },
-  btn: {
-    borderWidth: 2,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    width: '100%',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
-  },
-  btnText: {
-    fontFamily: MONO,
-    fontSize: 13,
-    fontWeight: 'bold',
-    letterSpacing: 0.8,
-  },
+  btn: { width: '100%' },
 });

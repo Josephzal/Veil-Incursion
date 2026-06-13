@@ -1,6 +1,10 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AEGIS_ABILITY_CATALOG } from '../data/aegisAbilities';
+import {
+  getInteractiveButtonStyle,
+  getInteractiveButtonTextStyle,
+} from '../styles/hubTerminalUi';
 import { ALL_AEGIS_ABILITIES, type AegisAbilityId } from '../types/aegisCombat';
 
 const MONO = 'monospace';
@@ -40,40 +44,40 @@ export default function AegisLoadoutEditor({
   statusMessage = null,
 }: AegisLoadoutEditorProps): React.JSX.Element {
   const textColor = theme.textColor ?? '#d8e2dc';
-  const panelBg = theme.panelBg ?? 'rgba(0, 0, 0, 0.28)';
 
   return (
     <View style={styles.root}>
-      <Text style={[styles.title, { color: theme.accentColor }]}>{title}</Text>
+      <Text style={[styles.title, { color: theme.mutedColor }]}>{title}</Text>
       <Text style={[styles.hint, { color: theme.mutedColor }]}>{hint}</Text>
 
       <View style={styles.slotRow}>
-        {draft.map((abilityId, index) => (
-          <Pressable
-            key={`slot-${index}`}
-            onPress={() => onSelectSlot(index as 0 | 1 | 2 | 3)}
-            style={[
-              styles.slot,
-              {
-                borderColor: selectedSlot === index ? theme.accentColor : theme.borderColor,
-                backgroundColor: panelBg,
-              },
-            ]}
-          >
-            <Text style={[styles.slotLabel, { color: theme.mutedColor }]}>{`S${index + 1}`}</Text>
-            <Text style={[styles.slotAbility, { color: textColor }]} numberOfLines={2}>
-              {AEGIS_ABILITY_CATALOG[abilityId].label}
-            </Text>
-            <Text
-              style={[styles.slotMeta, { color: theme.mutedColor }]}
-              numberOfLines={2}
-              adjustsFontSizeToFit
-              minimumFontScale={0.65}
+        {draft.map((abilityId, index) => {
+          const isSelected = selectedSlot === index;
+          return (
+            <Pressable
+              key={`slot-${index}`}
+              onPress={() => onSelectSlot(index as 0 | 1 | 2 | 3)}
+              style={({ pressed }) => [
+                getInteractiveButtonStyle(theme.accentColor, { pressed, size: 'sm' }),
+                styles.slot,
+                !isSelected && { borderColor: theme.borderColor },
+              ]}
             >
-              {AEGIS_ABILITY_CATALOG[abilityId].description}
-            </Text>
-          </Pressable>
-        ))}
+              <Text style={[styles.slotLabel, { color: theme.mutedColor }]}>{`S${index + 1}`}</Text>
+              <Text style={[styles.slotAbility, { color: textColor }]} numberOfLines={2}>
+                {AEGIS_ABILITY_CATALOG[abilityId].label}
+              </Text>
+              <Text
+                style={[styles.slotMeta, { color: theme.mutedColor }]}
+                numberOfLines={2}
+                adjustsFontSizeToFit
+                minimumFontScale={0.65}
+              >
+                {AEGIS_ABILITY_CATALOG[abilityId].description}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
 
       <Text style={[styles.poolLabel, { color: theme.mutedColor }]}>ABILITY POOL // TAP TO ASSIGN</Text>
@@ -85,12 +89,10 @@ export default function AegisLoadoutEditor({
             <Pressable
               key={abilityId}
               onPress={() => onAssignAbility(abilityId)}
-              style={[
+              style={({ pressed }) => [
+                getInteractiveButtonStyle(theme.accentColor, { pressed, size: 'sm' }),
                 styles.chip,
-                {
-                  borderColor: isSelected ? theme.accentColor : theme.borderColor,
-                  backgroundColor: assigned >= 0 ? 'rgba(255, 255, 255, 0.04)' : panelBg,
-                },
+                !isSelected && { borderColor: theme.borderColor },
               ]}
             >
               <Text style={[styles.chipLabel, { color: isSelected ? theme.accentColor : textColor }]}>
@@ -110,23 +112,25 @@ export default function AegisLoadoutEditor({
 
       <Pressable
         onPress={onCommit}
-        style={[styles.commitBtn, { borderColor: theme.accentColor, backgroundColor: panelBg }]}
+        style={({ pressed }) => [
+          getInteractiveButtonStyle(theme.accentColor, { pressed, size: 'md' }),
+          styles.commitBtn,
+        ]}
       >
-        <Text style={[styles.commitLabel, { color: theme.accentColor }]}>{commitLabel}</Text>
+        <Text style={[getInteractiveButtonTextStyle('md'), { color: theme.accentColor }]}>
+          {commitLabel}
+        </Text>
       </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    gap: 10,
-  },
+  root: { gap: 10 },
   title: {
     fontFamily: MONO,
-    fontSize: 10,
-    letterSpacing: 1,
-    fontWeight: '700',
+    fontSize: 8,
+    letterSpacing: 0.8,
   },
   hint: {
     fontFamily: MONO,
@@ -142,8 +146,7 @@ const styles = StyleSheet.create({
   slot: {
     flexBasis: '47%',
     flexGrow: 1,
-    borderWidth: 1,
-    padding: 8,
+    alignItems: 'flex-start',
     gap: 4,
     minHeight: 72,
   },
@@ -175,9 +178,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   chip: {
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    alignItems: 'flex-start',
     gap: 2,
     minWidth: '30%',
     flexGrow: 1,
@@ -198,15 +199,5 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     textAlign: 'center',
   },
-  commitBtn: {
-    borderWidth: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  commitLabel: {
-    fontFamily: MONO,
-    fontSize: 9,
-    letterSpacing: 0.7,
-    fontWeight: '700',
-  },
+  commitBtn: { marginTop: 4 },
 });

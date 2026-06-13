@@ -9,6 +9,12 @@ import { PlayerAccount } from '../types/game';
 import { OperativeProfile } from '../types/profile';
 import { TerminalTheme } from '../types/theme';
 import { formatSnakeCaseToTitleCase } from '../utils/formatDisplayName';
+import {
+  formatBracketHeader,
+  getInteractiveButtonStyle,
+  getInteractiveButtonTextStyle,
+  hubTerminalUi,
+} from '../styles/hubTerminalUi';
 
 interface IdentificationBadgeViewProps {
   theme: TerminalTheme;
@@ -66,12 +72,6 @@ export default function IdentificationBadgeView({
   const factionColor = factionDef?.accentColor ?? theme.primaryColor;
   const accentFill = `${theme.primaryColor}26`;
 
-  const borderStyle = {
-    borderColor: theme.borderColor,
-    borderWidth: theme.borderWidth,
-    borderStyle: theme.borderStyle,
-  };
-
   const launchTestCombat = (preset: 'easy' | 'hard') => {
     startBadgeTestCombat(preset);
     startCombat();
@@ -79,12 +79,15 @@ export default function IdentificationBadgeView({
 
   if (hubOpen) {
     return (
-      <View style={[styles.root, styles.hubRoot, borderStyle, { backgroundColor: '#050608' }]}>
+      <View style={[styles.root, styles.hubRoot, { backgroundColor: '#050608' }]}>
         <Pressable
           onPress={() => setHubOpen(false)}
-          style={[styles.hubBackBtn, { borderColor: theme.statusColor }]}
+          style={({ pressed }) => [
+            getInteractiveButtonStyle(theme.statusColor, { pressed, size: 'sm' }),
+            styles.hubBackBtn,
+          ]}
         >
-          <Text style={[styles.hubBackBtnText, { color: theme.statusColor }]}>
+          <Text style={[getInteractiveButtonTextStyle('sm'), { color: theme.statusColor }]}>
             [ RETURN TO BADGE ]
           </Text>
         </Pressable>
@@ -96,12 +99,12 @@ export default function IdentificationBadgeView({
   }
 
   return (
-    <View style={[styles.root, borderStyle, { backgroundColor: '#050608' }]}>
-      <Text style={[styles.header, { color: theme.primaryColor }]}>
-        [ IDENTIFICATION BADGE // OPERATIVE ]
+    <View style={[styles.root, { backgroundColor: '#050608' }]}>
+      <Text style={[hubTerminalUi.sectionHeaderLg, styles.screenHeader, { color: theme.mutedColor }]}>
+        {formatBracketHeader('IDENTIFICATION BADGE // OPERATIVE')}
       </Text>
 
-      <View style={[styles.badgeCard, { borderColor: `${theme.statusColor}55` }]}>
+      <View style={styles.badgeCard}>
         <View style={styles.identityRow}>
           <View style={[styles.avatarBlock, { backgroundColor: accentFill }]}>
             <Text style={[styles.avatarLetter, { color: theme.statusColor }]}>
@@ -126,8 +129,10 @@ export default function IdentificationBadgeView({
         </View>
       </View>
 
-      <View style={styles.fieldBlock}>
-        <Text style={[styles.fieldLabel, { color: theme.mutedColor }]}>[ CABAL ALIGNMENT ]</Text>
+      <View style={hubTerminalUi.dataSection}>
+        <Text style={[hubTerminalUi.sectionHeader, { color: theme.mutedColor }]}>
+          {formatBracketHeader('CABAL ALIGNMENT')}
+        </Text>
         <View style={styles.factionRow}>
           <View style={[styles.factionDot, { backgroundColor: factionColor }]} />
           <Text style={[styles.fieldValue, { color: factionColor }]}>
@@ -136,49 +141,61 @@ export default function IdentificationBadgeView({
         </View>
       </View>
 
-      <View style={styles.fieldBlock}>
-        <Text style={[styles.fieldLabel, { color: theme.mutedColor }]}>[ TRACKING FREQUENCY ]</Text>
+      <View style={hubTerminalUi.dataSection}>
+        <Text style={[hubTerminalUi.sectionHeader, { color: theme.mutedColor }]}>
+          {formatBracketHeader('TRACKING FREQUENCY')}
+        </Text>
         <Text style={[styles.fieldValue, { color: theme.statusColor }]}>{vectors.active_frequency}</Text>
       </View>
 
-      <View style={styles.fieldBlock}>
-        <Text style={[styles.fieldLabel, { color: theme.mutedColor }]}>[ NODE LOCK ]</Text>
+      <View style={hubTerminalUi.dataSection}>
+        <Text style={[hubTerminalUi.sectionHeader, { color: theme.mutedColor }]}>
+          {formatBracketHeader('NODE LOCK')}
+        </Text>
         <Text style={[styles.fieldValue, { color: theme.textColor }]}>
           {formatSnakeCaseToTitleCase(vectors.current_node_lock)}
         </Text>
       </View>
 
-      <View style={styles.fieldBlock}>
-        <Text style={[styles.fieldLabel, { color: theme.mutedColor }]}>[ HOME SECTOR ]</Text>
+      <View style={hubTerminalUi.dataSection}>
+        <Text style={[hubTerminalUi.sectionHeader, { color: theme.mutedColor }]}>
+          {formatBracketHeader('HOME SECTOR')}
+        </Text>
         <Text style={[styles.fieldValue, { color: theme.textColor }]}>
           {formatSnakeCaseToTitleCase(vectors.home_sector)}
         </Text>
       </View>
 
-      <View style={[styles.metaRow, { borderTopColor: `${theme.borderColor}66` }]}>
+      <View style={hubTerminalUi.dataSection}>
         <Text style={[styles.metaText, { color: theme.mutedColor }]}>
           {`${account.cabalCredits} CABAL CR // CLEARANCE ACTIVE`}
         </Text>
       </View>
 
-      <View style={[styles.testCombatSection, { borderTopColor: `${theme.borderColor}66` }]}>
-        <Text style={[styles.testCombatLabel, { color: theme.mutedColor }]}>
-          [ TEST COMBAT // BADGE ARENA ]
+      <View style={[hubTerminalUi.dataSection, styles.testCombatSection]}>
+        <Text style={[hubTerminalUi.sectionHeader, { color: theme.mutedColor }]}>
+          {formatBracketHeader('TEST COMBAT // BADGE ARENA')}
         </Text>
         <View style={styles.testCombatRow}>
           <Pressable
             onPress={() => launchTestCombat('easy')}
-            style={[styles.testCombatBtn, { borderColor: theme.primaryColor }]}
+            style={({ pressed }) => [
+              getInteractiveButtonStyle(theme.primaryColor, { pressed, size: 'sm' }),
+              styles.testCombatBtn,
+            ]}
           >
-            <Text style={[styles.testCombatBtnText, { color: theme.primaryColor }]}>
+            <Text style={[getInteractiveButtonTextStyle('sm'), { color: theme.primaryColor }]}>
               [ EASY COMBAT ]
             </Text>
           </Pressable>
           <Pressable
             onPress={() => launchTestCombat('hard')}
-            style={[styles.testCombatBtn, { borderColor: theme.statusColor }]}
+            style={({ pressed }) => [
+              getInteractiveButtonStyle(theme.statusColor, { pressed, size: 'sm' }),
+              styles.testCombatBtn,
+            ]}
           >
-            <Text style={[styles.testCombatBtnText, { color: theme.statusColor }]}>
+            <Text style={[getInteractiveButtonTextStyle('sm'), { color: theme.statusColor }]}>
               [ HARD COMBAT ]
             </Text>
           </Pressable>
@@ -190,9 +207,12 @@ export default function IdentificationBadgeView({
 
       <Pressable
         onPress={() => setHubOpen(true)}
-        style={[styles.hubBtn, { borderColor: theme.primaryColor }]}
+        style={({ pressed }) => [
+          getInteractiveButtonStyle(theme.primaryColor, { pressed, size: 'md' }),
+          styles.hubBtn,
+        ]}
       >
-        <Text style={[styles.hubBtnText, { color: theme.primaryColor }]}>
+        <Text style={[getInteractiveButtonTextStyle('md'), { color: theme.primaryColor }]}>
           [ HUB ]
         </Text>
         <Text style={[styles.hubBtnSub, { color: theme.mutedColor }]}>
@@ -206,17 +226,10 @@ export default function IdentificationBadgeView({
 const styles = StyleSheet.create({
   root: { flex: 1, padding: 14, minHeight: 320 },
   hubRoot: { paddingTop: 8, gap: 8 },
-  header: {
-    fontFamily: 'monospace',
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 1.2,
-    marginBottom: 12,
-  },
+  screenHeader: { marginBottom: 12 },
   badgeCard: {
-    borderWidth: 1,
     padding: 12,
-    marginBottom: 16,
+    marginBottom: 4,
     minHeight: 120,
     position: 'relative',
   },
@@ -300,13 +313,6 @@ const styles = StyleSheet.create({
   securityCellOff: {
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
-  fieldBlock: { marginBottom: 12 },
-  fieldLabel: {
-    fontFamily: 'monospace',
-    fontSize: 7,
-    letterSpacing: 1,
-    marginBottom: 4,
-  },
   factionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -323,45 +329,18 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.5,
   },
-  metaRow: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: 10,
-    marginTop: 4,
-  },
   metaText: {
     fontFamily: 'monospace',
     fontSize: 8,
     letterSpacing: 0.5,
   },
-  testCombatSection: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: 12,
-    marginTop: 12,
-    gap: 8,
-  },
-  testCombatLabel: {
-    fontFamily: 'monospace',
-    fontSize: 7,
-    fontWeight: '700',
-    letterSpacing: 1.1,
-  },
+  testCombatSection: { gap: 8 },
   testCombatRow: {
     flexDirection: 'row',
     gap: 8,
     width: '100%',
   },
-  testCombatBtn: {
-    flex: 1,
-    borderWidth: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 6,
-  },
-  testCombatBtnText: {
-    fontFamily: 'monospace',
-    fontSize: 7,
-    fontWeight: '700',
-    letterSpacing: 0.4,
-  },
+  testCombatBtn: { flex: 1 },
   testCombatHint: {
     fontFamily: 'monospace',
     fontSize: 7,
@@ -369,36 +348,16 @@ const styles = StyleSheet.create({
     lineHeight: 10,
   },
   hubBtn: {
-    borderWidth: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    marginTop: 12,
+    marginTop: 4,
     gap: 4,
-    backgroundColor: 'rgba(0, 0, 0, 0.55)',
-  },
-  hubBtnText: {
-    fontFamily: 'monospace',
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.8,
+    alignItems: 'flex-start',
   },
   hubBtnSub: {
     fontFamily: 'monospace',
     fontSize: 7,
     letterSpacing: 0.4,
   },
-  hubBackBtn: {
-    borderWidth: 1,
-    paddingVertical: 8,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-  },
-  hubBackBtnText: {
-    fontFamily: 'monospace',
-    fontSize: 7,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
+  hubBackBtn: { alignSelf: 'flex-start' },
   hubPanel: {
     flex: 1,
     minHeight: 240,

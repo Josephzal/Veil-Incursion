@@ -122,6 +122,7 @@ export default function BoundRequisitionScreen(): React.JSX.Element {
               onPress={handleContinue}
               borderColor={theme.borderColor}
               mutedColor={theme.mutedColor}
+              accentColor={theme.primaryColor}
               label="[ LOCK REQUISITION // CONTINUE ]"
             />
           </ScrollView>

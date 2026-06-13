@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { FACTION_DEFINITIONS } from '../data/factions';
+import { formatBracketHeader, hubTerminalUi, HUB_DATA_DIVIDER } from '../styles/hubTerminalUi';
 import { FactionType } from '../types/game';
 import { MacroSectorDefinition } from '../types/regional';
 import { TerminalTheme } from '../types/theme';
@@ -61,8 +62,8 @@ export default function SectorInfluencePanel({
       </View>
 
       <View style={styles.influenceBlock}>
-        <Text style={[styles.influenceHeader, { color: theme.primaryColor }]}>
-          {`[ TERRITORIAL INFLUENCE — ${sector.label} ]`}
+        <Text style={[hubTerminalUi.sectionHeader, styles.influenceHeader, { color: theme.mutedColor }]}>
+          {formatBracketHeader(`TERRITORIAL INFLUENCE — ${sector.label}`)}
         </Text>
         {FACTION_ORDER.map((factionId) => {
           const def = FACTION_DEFINITIONS[factionId];
@@ -88,8 +89,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
     marginBottom: 8,
     minHeight: 48,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+    borderBottomWidth: 1,
+    borderBottomColor: HUB_DATA_DIVIDER,
   },
   readoutLine: {
     fontFamily: 'monospace',
@@ -99,13 +100,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   influenceBlock: { marginTop: 8 },
-  influenceHeader: {
-    fontFamily: 'monospace',
-    fontSize: 8,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    marginBottom: 10,
-  },
+  influenceHeader: { marginBottom: 10 },
   meterRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 },
   meterLabel: { fontFamily: 'monospace', fontSize: 7, width: 72 },
   meterTrack: {

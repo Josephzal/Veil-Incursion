@@ -805,6 +805,7 @@ export default function BlueprintSilhouette({
   const handleDismissResolution = () => {
     if (resolutionDismissedRef.current) return;
     resolutionDismissedRef.current = true;
+    Vibration.vibrate(12);
     const hp = operativeHpRef.current;
     const victory = resolutionOutcomeRef.current === 'VICTORY' && hp > 0;
     onCombatComplete?.({

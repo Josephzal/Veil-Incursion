@@ -1,5 +1,10 @@
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  getInteractiveButtonStyle,
+  getInteractiveButtonTextStyle,
+} from '../../styles/hubTerminalUi';
+import { pulseHubButton } from '../../utils/hubButtonHaptics';
 
 export interface InlineScannerEngagementProps {
   headline?: string;
@@ -11,6 +16,12 @@ export interface InlineScannerEngagementProps {
   onEngage: () => void;
   layout?: 'card' | 'dock';
   engageLabel?: string;
+}
+
+function handleEngage(canEngage: boolean, onEngage: () => void): void {
+  if (!canEngage) return;
+  pulseHubButton();
+  onEngage();
 }
 
 /** Node readout + breach action — card (legacy) or compact dock strip. */
@@ -57,14 +68,14 @@ export default function InlineScannerEngagement({
           </ScrollView>
         </View>
         <Pressable
-          onPress={onEngage}
+          onPress={() => handleEngage(canEngage, onEngage)}
           disabled={!canEngage}
-          style={[
+          style={({ pressed }) => [
+            getInteractiveButtonStyle(accent, { disabled: !canEngage, pressed, size: 'sm' }),
             styles.dockActionBtn,
-            { borderColor: canEngage ? accent : mutedColor, opacity: canEngage ? 1 : 0.4 },
           ]}
         >
-          <Text style={[styles.dockActionText, { color: canEngage ? accent : mutedColor }]}>
+          <Text style={[getInteractiveButtonTextStyle('sm'), { color: canEngage ? accent : mutedColor }]}>
             {engageLabel}
           </Text>
         </Pressable>
@@ -94,11 +105,16 @@ export default function InlineScannerEngagement({
         ))}
 
         <Pressable
-          onPress={onEngage}
+          onPress={() => handleEngage(canEngage, onEngage)}
           disabled={!canEngage}
-          style={[styles.actionBtn, { borderColor: canEngage ? accent : mutedColor, opacity: canEngage ? 1 : 0.45 }]}
+          style={({ pressed }) => [
+            getInteractiveButtonStyle(accent, { disabled: !canEngage, pressed, size: 'sm' }),
+            styles.actionBtn,
+          ]}
         >
-          <Text style={[styles.actionText, { color: canEngage ? accent : mutedColor }]}>{engageLabel}</Text>
+          <Text style={[getInteractiveButtonTextStyle('sm'), { color: canEngage ? accent : mutedColor }]}>
+            {engageLabel}
+          </Text>
         </Pressable>
       </View>
     </View>
@@ -106,9 +122,7 @@ export default function InlineScannerEngagement({
 }
 
 const styles = StyleSheet.create({
-  panel: {
-    width: 200,
-  },
+  panel: { width: 200 },
   readoutShell: {
     borderWidth: 1,
     borderColor: 'rgba(0, 255, 51, 0.35)',
@@ -137,17 +151,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
     fontWeight: '600',
   },
-  actionBtn: {
-    borderWidth: 1,
-    paddingVertical: 6,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  actionText: {
-    fontFamily: 'monospace',
-    fontSize: 7,
-    letterSpacing: 0.4,
-  },
+  actionBtn: { marginTop: 4 },
   dockRoot: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -160,13 +164,8 @@ const styles = StyleSheet.create({
     gap: 2,
     maxHeight: 88,
   },
-  dockScroll: {
-    flexGrow: 0,
-    maxHeight: 72,
-  },
-  dockScrollContent: {
-    gap: 1,
-  },
+  dockScroll: { flexGrow: 0, maxHeight: 72 },
+  dockScrollContent: { gap: 1 },
   dockHeadline: {
     fontFamily: 'monospace',
     fontSize: 8,
@@ -178,28 +177,12 @@ const styles = StyleSheet.create({
     fontSize: 7,
     letterSpacing: 0.3,
   },
-  dockStatusBlock: {
-    marginTop: 3,
-    gap: 1,
-  },
+  dockStatusBlock: { marginTop: 3, gap: 1 },
   dockStatus: {
     fontFamily: 'monospace',
     fontSize: 7,
     letterSpacing: 0.3,
     fontWeight: '600',
   },
-  dockActionBtn: {
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
-    flexShrink: 0,
-  },
-  dockActionText: {
-    fontFamily: 'monospace',
-    fontSize: 7,
-    fontWeight: '700',
-    letterSpacing: 0.4,
-  },
+  dockActionBtn: { flexShrink: 0 },
 });

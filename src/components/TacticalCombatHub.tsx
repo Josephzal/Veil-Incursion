@@ -3649,7 +3649,10 @@ export default function TacticalCombatHub({
             {resolutionOutcome === 'VICTORY' ? 'HOSTILE NEUTRALIZED' : 'OPERATIVE SOUL DISCONNECTED'}
           </Text>
           <Pressable
-            onPress={dismiss}
+            onPress={() => {
+              Vibration.vibrate(12);
+              dismiss();
+            }}
             style={[styles.resBtn, { borderColor: resolutionOutcome === 'VICTORY' ? theme.primaryColor : P.enemyHp }]}
           >
             <Text style={[styles.resBtnText, { color: resolutionOutcome === 'VICTORY' ? theme.primaryColor : P.enemyHp }]}>

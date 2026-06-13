@@ -36,6 +36,11 @@ import { countCargoItemInstances } from '../data/cargoGridEngine';
 import { resolveCargoItemIcon } from '../utils/cargoItemIcon';
 import CargoDiscardConfirmOverlay from './CargoDiscardConfirmOverlay';
 import CargoCreditsHud from './CargoCreditsHud';
+import {
+  getInteractiveButtonStyle,
+  getInteractiveButtonTextStyle,
+} from '../styles/hubTerminalUi';
+import { pulseHubButton } from '../utils/hubButtonHaptics';
 
 export const CARGO_CELL_SIZE = 56;
 export const CARGO_CELL_GAP = 2;
@@ -804,13 +809,19 @@ export default function CargoGridBoard({
 
       {onContinue ? (
         <Pressable
-          onPress={onContinue}
+          onPress={() => {
+            pulseHubButton();
+            onContinue();
+          }}
           style={({ pressed }) => [
+            getInteractiveButtonStyle(accentColor, { pressed, size: 'md' }),
             styles.continueBtn,
-            { borderColor: accentColor, opacity: pressed ? 0.75 : 1 },
+            pressed ? { opacity: 0.85 } : null,
           ]}
         >
-          <Text style={[styles.continueBtnText, { color: accentColor }]}>{continueLabel}</Text>
+          <Text style={[getInteractiveButtonTextStyle('md'), styles.continueBtnText, { color: accentColor }]}>
+            {continueLabel}
+          </Text>
         </Pressable>
       ) : null}
 
@@ -1004,18 +1015,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   continueBtn: {
-    borderWidth: 1,
-    paddingVertical: 10,
-    backgroundColor: '#050608',
-    alignItems: 'center',
     width: CARGO_GRID_FRAME_SIZE,
     alignSelf: 'center',
   },
   continueBtnText: {
-    fontFamily: 'monospace',
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.8,
     textAlign: 'center',
   },
 });
