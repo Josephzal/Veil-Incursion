@@ -12,7 +12,6 @@ import {
 import CityStreetNarrativeBg from '../../assets/narrative images/city-street.png';
 import SelectionContinueButton from './SelectionContinueButton';
 import { CheckStatus, NarrativeChoiceEffectPreview, NarrativeEventNode } from '../types/game';
-import { ENVIRONMENT_DISPLAY_LABEL } from '../types/sector';
 import { isOpenSectorNarrative } from '../data/sectorNarrativeEngine';
 
 const TERMINAL_ACCENT = '#00ff33';
@@ -159,9 +158,7 @@ export default function NarrativeStepperModule({
       <View style={[styles.shell, showCityStreetBackground && styles.shellCityStreets]}>
         <View style={[styles.header, { borderBottomColor: borderColor }]}>
           <Text style={[styles.docLabel, { color: mutedColor }]}>
-            {node.environmentType && isOpenSectorNarrative(node)
-              ? `ENVIRONMENT LOG // ${ENVIRONMENT_DISPLAY_LABEL[node.environmentType].toUpperCase()}`
-              : `ANOMALY ENCOUNTER // ${node.id.toUpperCase()}`}
+            {`ANOMALY ENCOUNTER // ${node.id.toUpperCase()}`}
           </Text>
           <Text style={[styles.docTitle, { color: TERMINAL_ACCENT }]}>{node.title}</Text>
         </View>

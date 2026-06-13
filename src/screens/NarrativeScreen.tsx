@@ -58,8 +58,8 @@ export default function NarrativeScreen(): React.JSX.Element {
     finishNarrative(result.choice, result.status);
   };
 
-  const handleProceduralResolve = (choice: NarrativeChoiceKey) => {
-    finishNarrative(choice);
+  const handleProceduralResolve = (choice: NarrativeChoiceKey, status: CheckStatus = 'SUCCESS') => {
+    finishNarrative(choice, status);
   };
 
   if (!node) {

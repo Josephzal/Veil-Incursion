@@ -1,4 +1,3 @@
-import type { EnvironmentType } from '../types/sector';
 import type { SectorZoneId } from '../types/sectorPacing';
 import {
   BOSS_GRAPH_DEPTH,
@@ -48,18 +47,4 @@ export function isBossApproachDepth(graphDepth: number): boolean {
 
 export function isBossGraphDepth(graphDepth: number): boolean {
   return graphDepth >= BOSS_GRAPH_DEPTH;
-}
-
-/** Zone-appropriate environment assignment for pre-generated graph nodes. */
-export function environmentForGraphDepth(graphDepth: number, seed = 0): EnvironmentType {
-  const primary: EnvironmentType = graphDepth <= 9
-    ? 'SUBWAY_CHASM'
-    : graphDepth <= 18
-      ? 'BLEEDING_HIGH_RISE'
-      : 'DESECRATED_SANCTUARY';
-  if (seed % 7 === 0 && graphDepth > 2) {
-    const variants: EnvironmentType[] = ['SUBWAY_CHASM', 'BLEEDING_HIGH_RISE', 'DESECRATED_SANCTUARY'];
-    return variants[(seed + graphDepth) % variants.length];
-  }
-  return primary;
 }

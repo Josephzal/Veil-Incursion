@@ -1,0 +1,81 @@
+[
+    {
+      "id": "CTX_01",
+      "biomes": ["city_streets", "city_buildings"],
+      "tags": ["urban", "outdoor", "physical"],
+      "flavorText": "A heavy rain washes over a derelict alleyway behind the old transit hub. The flickering glow of a busted streetlamp illuminates a narrow maintenance stairwell."
+    },
+    {
+      "id": "CTX_02",
+      "biomes": ["underground", "city_buildings"],
+      "tags": ["subterranean", "indoor", "occult"],
+      "flavorText": "You step into the stagnant air of an abandoned subway line. The walls are coated in a thick, ash-like residue, and the ambient temperature drops significantly."
+    },
+    {
+      "id": "CTX_03",
+      "biomes": ["forests", "backroads"],
+      "tags": ["outdoor", "occult", "hazardous"],
+      "flavorText": "The dirt road narrows into a dense, unnatural thicket. The trees are blackened and warped, twisting inward to form a suffocating canopy."
+    },
+    {
+        "id": "CTX_04",
+        "biomes": ["city_buildings", "underground"],
+        "tags": ["indoor", "tech", "urban"],
+        "flavorText": "A derelict server farm hums with erratic, jury-rigged power. Thick bundles of fiber-optic cables bleed a faint, unnatural violet light into the standing water on the floor."
+      },
+      {
+        "id": "CTX_05",
+        "biomes": ["underground"],
+        "tags": ["subterranean", "hazardous", "physical"],
+        "flavorText": "A flooded drainage canal choked with rusted industrial debris. The structural supports groan under the weight of the city above, and the water is thick with chemical runoff."
+      },
+      {
+        "id": "CTX_06",
+        "biomes": ["forests", "backroads"],
+        "tags": ["outdoor", "occult", "nature"],
+        "flavorText": "A desecrated logging waystation on the edge of the timberline. The cabins have been torn open from the inside out, and the surrounding trees are marked with crude, bleeding runes."
+      },
+      {
+        "id": "CTX_07",
+        "biomes": ["backroads", "city_streets"],
+        "tags": ["outdoor", "physical", "urban"],
+        "flavorText": "An abandoned transit overpass choked with dead, rusted vehicles. The fog is dense here, severely limiting visibility and deadening all sound."
+      },
+      {
+        "id": "CTX_08",
+        "biomes": ["city_buildings"],
+        "tags": ["indoor", "occult", "subterranean"],
+        "flavorText": "A forgotten sub-basement beneath the old city hospital. Medical archives are scattered across the floor, covered in a thin, pulsating layer of gray ash."
+      },
+      {
+        "id": "CTX_09",
+        "biomes": ["city_streets", "backroads"],
+        "tags": ["outdoor", "occult", "urban"],
+        "flavorText": "An overgrown Victorian cemetery wedged between two monolithic apartment blocks. The mausoleums are cracked open, leaking a pale, spectral fog that clings to the muddy ground."
+      },
+      {
+        "id": "CTX_10",
+        "biomes": ["forests", "backroads"],
+        "tags": ["outdoor", "physical", "hazardous"],
+        "flavorText": "A gutted gas station on a dead stretch of dirt highway. The rusted pumps are bleeding a dark, viscous fluid into the soil, and the flickering neon sign buzzes with a discordant, unnatural frequency."
+      },
+      {
+        "id": "CTX_11",
+        "biomes": ["city_buildings"],
+        "tags": ["indoor", "urban", "occult"],
+        "flavorText": "The auditorium of a condemned public theater. The velvet seats are rotting away, and the wooden stage is covered in meticulously arranged piles of white ash and burnt bone."
+      },
+      {
+        "id": "CTX_12",
+        "biomes": ["underground"],
+        "tags": ["subterranean", "urban", "tech"],
+        "flavorText": "A forgotten smuggling market buried beneath the active subway lines. Corroded shipping containers serve as makeshift storefronts, illuminated only by dying, bare-bulb wire lights."
+      },
+      {
+        "id": "CTX_13",
+        "biomes": ["city_streets"],
+        "tags": ["outdoor", "nature", "urban"],
+        "flavorText": "A dense, rain-soaked city park at midnight. The bronze statues have been defaced with fresh occult sigils, and the smell of ozone and copper hangs heavy in the humid air."
+      }
+    
+  ]

@@ -1,77 +1,30 @@
 import type { EnemyClass, EnemyCombatProfile } from '../types/run';
-import type { EnvironmentType } from '../types/sector';
-import type {
-  AegisCombatContext,
-  EnemyAffinity,
-  EnvironmentCombatProfile,
-} from '../types/combatEnvironment';
-import {
-  BLOOD_FRENZY_RESONANCE_THRESHOLD,
-  ENVIRONMENT_COMBAT_PROFILE,
-} from '../types/combatEnvironment';
+import type { EnemyAffinity } from '../types/combatEnvironment';
+import { BLOOD_FRENZY_RESONANCE_THRESHOLD } from '../types/combatEnvironment';
 import type { EnvironmentalModifiers } from '../types/game';
 
-export function getEnvironmentCombatProfile(
-  environmentType: EnvironmentType | null | undefined,
-): EnvironmentCombatProfile | null {
-  if (!environmentType) return null;
-  return ENVIRONMENT_COMBAT_PROFILE[environmentType] ?? null;
-}
-
-export function buildAegisCombatContext(
-  environmentType: EnvironmentType | null | undefined,
-  resonancePercent: number,
-): AegisCombatContext {
-  const profile = getEnvironmentCombatProfile(environmentType);
-  return {
-    environmentType: environmentType ?? null,
-    resonancePercent,
-    bloodFrenzyActive: resonancePercent > BLOOD_FRENZY_RESONANCE_THRESHOLD,
-    meleeDamageBonusPct: profile?.meleeDamageBonusPct ?? 0,
-    staminaCostReductionPct: profile?.staminaCostReductionPct ?? 0,
-    parryWindowBonusPct: environmentType === 'BLEEDING_HIGH_RISE' ? 10 : 0,
-  };
-}
-
 export function buildEnvironmentalModifiersForNode(
-  environmentType: EnvironmentType | null | undefined,
   resonancePercent: number,
 ): EnvironmentalModifiers {
-  const context = buildAegisCombatContext(environmentType, resonancePercent);
   return {
     isEnemyPhaseShrouded: false,
     isPlayerBlinded: false,
     hasTetanusGlitch: false,
     startingStaminaPenalty: 0,
-    environmentType: context.environmentType ?? undefined,
-    meleeDamageBonusPct: context.meleeDamageBonusPct,
-    staminaCostReductionPct: context.staminaCostReductionPct,
-    parryWindowBonusPct: context.parryWindowBonusPct,
-    resonancePercent: context.resonancePercent,
-    bloodFrenzyActive: context.bloodFrenzyActive,
+    resonancePercent,
+    bloodFrenzyActive: resonancePercent > BLOOD_FRENZY_RESONANCE_THRESHOLD,
   };
 }
 
 export function rollProbableAffinity(
   encounterType: string,
   combatTier: 'STANDARD' | 'ELITE',
-  environmentType: EnvironmentType,
   seed: string,
 ): EnemyAffinity | undefined {
   if (encounterType !== 'COMBAT' && combatTier !== 'ELITE') return undefined;
   const hash = seed.split('').reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) | 0, 0);
   const roll = Math.abs(hash) % 100;
 
-  if (environmentType === 'DESECRATED_SANCTUARY') {
-    if (roll < 55) return 'SPECTRAL';
-    if (roll < 80) return 'CHRONO';
-    return 'CORPOREAL';
-  }
-  if (environmentType === 'BLEEDING_HIGH_RISE') {
-    if (roll < 45) return 'CORPOREAL';
-    if (roll < 70) return 'CHRONO';
-    return 'SPECTRAL';
-  }
   if (combatTier === 'ELITE' && roll < 25) return 'CHRONO';
   if (roll < 50) return 'SPECTRAL';
   return 'CORPOREAL';
@@ -169,10 +122,4 @@ export function affinityCombatLogLine(affinity: EnemyAffinity): string {
     default:
       return '';
   }
-}
-
-export function environmentAdvantageLogLine(environmentType: EnvironmentType | null | undefined): string {
-  const profile = getEnvironmentCombatProfile(environmentType);
-  if (!profile) return '';
-  return `>> ENV ADVANTAGE — ${profile.advantageLabel}`;
 }

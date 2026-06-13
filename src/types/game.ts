@@ -18,7 +18,6 @@ import { createDefaultCargoRunState } from './cargoGrid';
 import { createEmptyOverworldSession } from './overworldFeatures';
 import type {
   AttunementState,
-  EnvironmentType,
   NodeSectorMeta,
   ResonanceState,
   SectorGraph,
@@ -57,7 +56,6 @@ export type IncursionEncounterType =
   | 'SANCTUARY'
   | 'BLACK_MARKET'
   | 'RESOURCE_HARVEST';
-export type IncursionBiome = 'CITY_STREETS' | 'HOSPITAL' | 'LABORATORY' | 'SECTOR_CORE';
 export type IncursionMapMode =
   | 'SCANNING_HUB'
   | 'NODE_ENGAGED'
@@ -209,16 +207,22 @@ export interface NarrativeChoiceOption {
   lockReason?: string;
 }
 
+export interface NarrativeProceduralMeta {
+  engineVersion?: import('./narrativeProcedural').NarrativeEngineVersion;
+  resolverSetId?: string;
+  tensionMechanic?: import('./narrativeAssembly').TensionMechanic;
+  defaultPenalty?: import('./narrativeAssembly').NarrativePenalty;
+}
+
 export interface NarrativeEventNode {
   id: string;
   matrixEventId?: string;
   interactionMode?: 'standard' | 'conditional' | 'procedural';
-  /** Open-sector environment flavor for narrative presentation. */
-  environmentType?: import('./sector').EnvironmentType;
   title: string;
   scenarioText: string;
   /** Procedural encounters — hazard line shown above resolver options. */
   hazardPreview?: string;
+  proceduralMeta?: NarrativeProceduralMeta;
   choiceA: NarrativeChoiceOption;
   choiceB: NarrativeChoiceOption;
   choiceC?: NarrativeChoiceOption;
@@ -230,10 +234,6 @@ export interface EnvironmentalModifiers {
   isPlayerBlinded: boolean;
   hasTetanusGlitch: boolean;
   startingStaminaPenalty: number;
-  environmentType?: EnvironmentType;
-  meleeDamageBonusPct?: number;
-  staminaCostReductionPct?: number;
-  parryWindowBonusPct?: number;
   resonancePercent?: number;
   bloodFrenzyActive?: boolean;
   combatObjective?: CombatObjective;
@@ -249,14 +249,12 @@ export interface IncursionNode {
   /** Legacy alias — always equals encounterIndex. */
   index: number;
   encounterType: IncursionEncounterType;
-  biome: IncursionBiome;
   /** Resolved routing type for encounter screens. */
   type: RunNodeType;
   label: string;
   isCompleted: boolean;
   /** Boss terminal node — bypasses manual sweep mechanics. */
   isPreDiscovered?: boolean;
-  environmentType?: EnvironmentType;
   sectorMeta?: NodeSectorMeta;
   isExtractionNode?: boolean;
   isAnomalyNest?: boolean;
@@ -334,8 +332,6 @@ export interface ActiveIncursionState {
   currentMacroBiomeFamily: import('./narrativeProcedural').MacroBiomeFamily | null;
   /** Previous macro family — prevents back-to-back repeats in districts 1–2. */
   lastMacroBiomeFamily: import('./narrativeProcedural').MacroBiomeFamily | null;
-  /** Rolled sub-biome within the current macro family. */
-  currentSubBiomeId: import('./narrativeProcedural').SubBiomeId | null;
   /** Buffs, debuffs, and timed boons — powers status popup. */
   runStatusEffects: import('./narrativeProcedural').RunStatusEffect[];
   /** Overworld pickups, pockets, raw boons, and Grid-Hound state. */
@@ -409,7 +405,6 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     alignedFaction: null,
     currentMacroBiomeFamily: null,
     lastMacroBiomeFamily: null,
-    currentSubBiomeId: null,
     runStatusEffects: [],
     overworldSession: createEmptyOverworldSession(),
     pendingLeyBoonSwap: null,

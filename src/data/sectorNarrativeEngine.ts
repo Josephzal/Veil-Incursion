@@ -1,19 +1,15 @@
 import type { IncursionNode, IncursionProgressState, NarrativeEventNode } from '../types/game';
-import type { EnvironmentType } from '../types/sector';
 import { buildMatrixNarrativeNode } from './narrativeEncounterMatrix';
 import {
-  generateNarrativeEncounter,
   refreshProceduralNarrativeLocks,
   shouldUseProceduralNarrative,
 } from './narrative/narrativeProceduralEngine';
 import type { ProceduralEligibilityContext } from './narrative/narrativeProceduralEngine';
+import {
+  pickAssemblyNarrativeEncounter,
+  refreshAssemblyNarrativeLocks,
+} from './narrative/narrativeAssemblyBridge';
 import type { MacroBiomeFamily, ProceduralNarrativeAssembly } from '../types/narrativeProcedural';
-
-const SECTOR_NARRATIVE_BY_ENVIRONMENT: Record<EnvironmentType, readonly string[]> = {
-  SUBWAY_CHASM: ['sector-01', 'sector-03', 'sector-07'],
-  BLEEDING_HIGH_RISE: ['sector-02', 'sector-04', 'sector-05'],
-  DESECRATED_SANCTUARY: ['sector-02', 'sector-06', 'sector-04'],
-};
 
 const OPEN_SECTOR_NARRATIVE_POOL = [
   'sector-01',
@@ -35,15 +31,8 @@ function hashSeed(value: string): number {
   return Math.abs(hash);
 }
 
-function environmentPool(environment: EnvironmentType): readonly string[] {
-  return SECTOR_NARRATIVE_BY_ENVIRONMENT[environment] ?? OPEN_SECTOR_NARRATIVE_POOL;
-}
-
-function eligiblePool(
-  environment: EnvironmentType,
-  nodesCleared: number,
-): string[] {
-  return environmentPool(environment).filter((id) => {
+function eligiblePool(nodesCleared: number): string[] {
+  return OPEN_SECTOR_NARRATIVE_POOL.filter((id) => {
     if (LATE_SECTOR_CONDITIONAL_IDS.has(id) && nodesCleared < 8) return false;
     return true;
   });
@@ -60,13 +49,6 @@ function pickMatrixId(
   return candidates[hashSeed(seed) % candidates.length] ?? candidates[0] ?? 'sector-01';
 }
 
-function tagEnvironmentOnNode(
-  node: NarrativeEventNode,
-  environment: EnvironmentType,
-): NarrativeEventNode {
-  return { ...node, environmentType: environment };
-}
-
 export interface SectorNarrativePickResult {
   node: NarrativeEventNode;
   assembly: ProceduralNarrativeAssembly | null;
@@ -79,12 +61,12 @@ export function pickSectorNarrativeForNode(
   eligibility?: ProceduralEligibilityContext,
   macroFamily: MacroBiomeFamily = 'CITY_STREETS',
 ): SectorNarrativePickResult {
-  const environment = encounterNode?.environmentType ?? 'SUBWAY_CHASM';
-
   if (shouldUseProceduralNarrative(macroFamily) && eligibility) {
     const seed = `${encounterNode?.id ?? 'narrative'}:${nodesCleared}:${encounterNode?.encounterIndex ?? 0}`;
-    const usedAssemblyIds = progress.usedNarrativeEventIds.filter((id) => id.startsWith('proc-'));
-    const generated = generateNarrativeEncounter(
+    const usedAssemblyIds = progress.usedNarrativeEventIds.filter(
+      (id) => id.startsWith('proc-') || id.startsWith('asm-'),
+    );
+    const generated = pickAssemblyNarrativeEncounter(
       {
         macroFamily,
         nodesCleared,
@@ -94,14 +76,13 @@ export function pickSectorNarrativeForNode(
       },
       eligibility,
     );
-    const node = tagEnvironmentOnNode(generated.node, environment);
-    return { node, assembly: generated.assembly };
+    return { node: generated.node, assembly: generated.assembly };
   }
 
-  const pool = eligiblePool(environment, nodesCleared);
+  const pool = eligiblePool(nodesCleared);
   const matrixId = pickMatrixId(encounterNode, progress, pool.length > 0 ? pool : OPEN_SECTOR_NARRATIVE_POOL);
   const node = buildMatrixNarrativeNode(matrixId, progress);
-  return { node: tagEnvironmentOnNode(node, environment), assembly: null };
+  return { node, assembly: null };
 }
 
 export function enrichProceduralNarrativeNode(
@@ -110,6 +91,9 @@ export function enrichProceduralNarrativeNode(
   eligibility: ProceduralEligibilityContext,
 ): NarrativeEventNode {
   if (!assembly || node.interactionMode !== 'procedural') return node;
+  if (assembly.engineVersion === 'assembly-v1') {
+    return refreshAssemblyNarrativeLocks(node, assembly, eligibility);
+  }
   return refreshProceduralNarrativeLocks(node, assembly, eligibility);
 }
 

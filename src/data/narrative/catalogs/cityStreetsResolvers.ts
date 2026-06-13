@@ -1,3 +1,4 @@
+/** @deprecated Superseded by `narrative/resolver_sets.json` — use `narrativeCatalog.ts`. */
 import type { NarrativeResolverSeed } from '../../../types/narrativeProcedural';
 
 export const CITY_STREETS_RESOLVERS: readonly NarrativeResolverSeed[] = [

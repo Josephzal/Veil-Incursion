@@ -1,7 +1,6 @@
 import {
   ActiveIncursionState,
   FactionType,
-  IncursionBiome,
   IncursionProgressState,
   createDefaultIncursionProgressState,
 } from '../types/game';
@@ -11,19 +10,19 @@ import {
   OutcomeModifierMetric,
   OUTCOME_MODIFIER_MAX,
   OUTCOME_MODIFIER_MIN,
+  SectorBlockSpec,
   createDefaultMacroStoryConfiguration,
 } from '../types/macroStory';
 import { INCURSION_ENCOUNTER_COUNT } from '../types/run';
-import {
-  SECTOR_BLOCK_LAYOUT,
-  SECTOR_CORE_ENCOUNTER_INDICES,
-  biomeForEncounterIndex,
-} from './biomeCombat';
 import { createPlaceholderDepthPath, generateDepthEncounterMatrix } from './descentEngine';
 import { generateSectorGraph } from './sectorGraphEngine';
 import { MAX_ATTUNEMENT, STARTING_ATTUNEMENT } from '../types/sector';
 
-export { SECTOR_BLOCK_LAYOUT, SECTOR_CORE_ENCOUNTER_INDICES } from './biomeCombat';
+export const SECTOR_BLOCK_LAYOUT: readonly SectorBlockSpec[] = [
+  { encounterStart: 0, encounterEnd: 9, label: 'Streets' },
+] as const;
+
+export const SECTOR_CORE_ENCOUNTER_INDICES = [8, 9] as const;
 
 const RUN_MODE_WEIGHTS: { mode: MacroStoryRunMode; weight: number }[] = [
   { mode: 'STANDALONE', weight: 50 },
@@ -149,10 +148,6 @@ export function resolveConditionalBranchPreview(
 }
 
 export function isSectorCoreEncounter(encounterIndex: number): boolean {
-  const coreBlock = SECTOR_BLOCK_LAYOUT.find((block) => block.biome === 'SECTOR_CORE');
-  if (coreBlock) {
-    return encounterIndex >= coreBlock.encounterStart && encounterIndex <= coreBlock.encounterEnd;
-  }
   return (SECTOR_CORE_ENCOUNTER_INDICES as readonly number[]).includes(encounterIndex);
 }
 
@@ -207,7 +202,7 @@ export function macroStoryModeLogLine(config: MacroStoryRunConfiguration): strin
 export function sectorBlockLogLines(): string[] {
   return SECTOR_BLOCK_LAYOUT.map(
     (block) =>
-      `>> SECTOR BLOCK ${block.label.toUpperCase()} [${block.encounterStart}–${block.encounterEnd}] → ${block.biome}`,
+      `>> SECTOR BLOCK ${block.label.toUpperCase()} [${block.encounterStart}–${block.encounterEnd}]`,
   );
 }
 
@@ -236,7 +231,6 @@ export function initializeIncursionPipeline(
     macroStoryModeLogLine(macroStory),
     '>> SECTOR-BLOCK LAYOUT LOCKED — 10-ENCOUNTER CHRONOLOGY:',
     ...sectorBlockLogLines(),
-    `>> BIOME ANCHOR LOCKED: ${biomeForEncounterIndex(0)} (ALL ENCOUNTERS)`,
     `>> ENCOUNTER COUNT VERIFIED: ${INCURSION_ENCOUNTER_COUNT}`,
   ];
 
@@ -247,10 +241,6 @@ export function initializeIncursionPipeline(
     progress,
     initLogLines,
   };
-}
-
-export function validateNodeBiomeForEncounter(encounterIndex: number, biome: IncursionBiome): boolean {
-  return biomeForEncounterIndex(encounterIndex) === biome;
 }
 
 export interface SectorRunInit {

@@ -1,11 +1,10 @@
 import type { IncursionEncounterType, IncursionNode, RunNodeType } from '../types/game';
-import type { EnvironmentType, NodeSectorMeta, SpectralThreatBand } from '../types/sector';
+import type { NodeSectorMeta, SpectralThreatBand } from '../types/sector';
 import {
   RESONANCE_DELTA_HIGH,
   RESONANCE_DELTA_STANDARD,
   GREED_ZONE_YIELD_MULTIPLIER,
 } from '../types/sector';
-import { environmentForGraphDepth } from './sectorZoneEngine';
 import { rollProbableAffinity } from './combatEnvironmentEngine';
 import type { DistrictId } from './districtPacing';
 import { localLevelFromDepth } from './districtPacing';
@@ -267,7 +266,6 @@ function buildMatrixSectorMeta(
   type: RunNodeType,
   graphDepth: number,
   sectorTier: number,
-  environmentType: EnvironmentType,
   combatTier: 'STANDARD' | 'ELITE',
 ): NodeSectorMeta {
   const isElite = type === 'ELITE_COMBAT' || type === 'BOSS_COMBAT';
@@ -285,7 +283,7 @@ function buildMatrixSectorMeta(
     creditBonus: type === 'ELITE_COMBAT' ? 100 : 0,
     combatTier,
     probableAffinity: isCombatNode
-      ? rollProbableAffinity(encounterType, combatTier, environmentType, nodeId)
+      ? rollProbableAffinity(encounterType, combatTier, nodeId)
       : undefined,
   };
 }
@@ -302,7 +300,6 @@ function makeMatrixNode(
 ): IncursionNode {
   const mapped = spawnKindToTypes(kind);
   const nodeId = `matrix-d${district}-l${localLevel}-s${slotIndex}-${seed}`;
-  const environmentType = environmentForGraphDepth(graphDepth, hashSeed(nodeId));
   const designation = VECTOR_DESIGNATIONS[slotIndex % VECTOR_DESIGNATIONS.length];
 
   return {
@@ -310,9 +307,7 @@ function makeMatrixNode(
     encounterIndex: stepIndex,
     index: stepIndex,
     encounterType: mapped.encounterType,
-    biome: 'CITY_STREETS',
     type: mapped.type,
-    environmentType,
     label: mapped.label.replace('VECTOR', `VECTOR ${designation}`),
     isCompleted: false,
     isAnomalyNest: mapped.type === 'BOSS_COMBAT',
@@ -325,7 +320,6 @@ function makeMatrixNode(
       mapped.type,
       graphDepth,
       sectorTier,
-      environmentType,
       mapped.combatTier,
     ),
   };
@@ -415,7 +409,6 @@ function makeTestMatrixNode(
 ): IncursionNode {
   const mapped = spawnKindToTypes(kind);
   const nodeId = `test-d1-${kind.toLowerCase()}-s${slotIndex}`;
-  const environmentType = environmentForGraphDepth(graphDepth, hashSeed(nodeId));
   const designation = VECTOR_DESIGNATIONS[slotIndex % VECTOR_DESIGNATIONS.length];
 
   return {
@@ -423,9 +416,7 @@ function makeTestMatrixNode(
     encounterIndex: stepIndex,
     index: stepIndex,
     encounterType: mapped.encounterType,
-    biome: 'CITY_STREETS',
     type: mapped.type,
-    environmentType,
     label: mapped.label.replace('VECTOR', `VECTOR ${designation}`),
     isCompleted: false,
     isAnomalyNest: false,
@@ -438,7 +429,6 @@ function makeTestMatrixNode(
       mapped.type,
       graphDepth,
       sectorTier,
-      environmentType,
       mapped.combatTier,
     ),
   };

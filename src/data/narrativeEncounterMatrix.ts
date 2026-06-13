@@ -1,13 +1,11 @@
 import {
   CheckStatus,
   EnvironmentalModifiers,
-  IncursionBiome,
   IncursionProgressState,
   NarrativeEventNode,
   NarrativeRunModifiers,
 } from '../types/game';
 import { RunState } from '../types/run';
-import { biomeForEncounterIndex } from './biomeCombat';
 import {
   CITY_STREETS_ALLEY_MATRIX_EVENTS,
   CITY_STREETS_DEPTH_ZERO_POOL,
@@ -21,7 +19,6 @@ import {
   resolveConditionalBranchPreview,
 } from './macroStoryPipeline';
 import type { CargoRunState } from '../types/cargoGrid';
-import { ENVIRONMENT_COMBAT_PROFILE } from '../types/combatEnvironment';
 import { consumeCargoItem, hasCargoItem } from './cargoGridEngine';
 
 export interface OperativeResourceSnapshot {
@@ -295,28 +292,11 @@ const MATRIX_EVENTS: Record<string, MatrixEventTemplate> = {
   ...CITY_STREETS_ALLEY_MATRIX_EVENTS,
 };
 
-const EVENT_ORDER_BY_BIOME: Record<IncursionBiome, string[]> = {
-  CITY_STREETS: [
-    'sector-07',
-    ...CITY_STREETS_DEPTH_ZERO_POOL,
-    'city-01',
-    'city-02',
-    'city-03',
-    'city-04',
-    'city-05',
-    'city-06',
-  ],
-  HOSPITAL: ['hospital-01', 'hospital-02', 'hospital-03', 'hospital-04', 'hospital-05', 'hospital-06'],
-  LABORATORY: ['lab-01', 'lab-02', 'lab-03', 'lab-04', 'lab-05', 'lab-06'],
-  SECTOR_CORE: ['sector-01', 'sector-02', 'sector-03', 'sector-04', 'sector-05', 'sector-06'],
-};
+export type LegacyMatrixEventTemplate = MatrixEventTemplate;
 
-function slotInBiomeBlock(encounterIndex: number): number {
-  if (encounterIndex <= 2) return encounterIndex;
-  if (encounterIndex <= 5) return encounterIndex - 3;
-  if (encounterIndex <= 7) return encounterIndex - 6;
-  return encounterIndex - 8;
-}
+/** Hard-coded matrix narrative templates (city, sector, hospital, lab, alley pools). */
+export const LEGACY_MATRIX_EVENT_TEMPLATES: Readonly<Record<string, LegacyMatrixEventTemplate>> =
+  MATRIX_EVENTS;
 
 function mergeFlags(progress: IncursionProgressState, flags: string[]): IncursionProgressState {
   const set = new Set([...progress.collectedFlags, ...flags]);
@@ -374,39 +354,20 @@ export function evaluateD20Success(
 }
 
 export function pickMatrixEventForEncounter(
-  encounterIndex: number,
+  _encounterIndex: number,
   progress: IncursionProgressState,
 ): NarrativeEventNode {
-  const biome = biomeForEncounterIndex(encounterIndex);
-
-  if (biome === 'CITY_STREETS') {
-    const pool = CITY_STREETS_DEPTH_ZERO_POOL.filter(
-      (id) => !progress.usedNarrativeEventIds.includes(id),
-    );
-    const matrixId = pool.length > 0
-      ? pool[Math.floor(Math.random() * pool.length)]
-      : CITY_STREETS_DEPTH_ZERO_POOL[0];
-    return enrichNodeWithFlagContext(
-      templateToNode(MATRIX_EVENTS[matrixId]),
-      matrixId,
-      progress.collectedFlags,
-    );
-  }
-
-  const order = EVENT_ORDER_BY_BIOME[biome];
-  const slot = Math.min(slotInBiomeBlock(encounterIndex), order.length - 1);
-  let matrixId = order[slot];
-
-  if (matrixId.endsWith('-06')) {
-    return enrichNodeWithFlagContext(templateToNode(MATRIX_EVENTS[matrixId]), matrixId, progress.collectedFlags);
-  }
-
-  const unused = order.filter((id) => !progress.usedNarrativeEventIds.includes(id) && !id.endsWith('-06'));
-  if (unused.length > 0) {
-    matrixId = unused[Math.floor(Math.random() * unused.length)];
-  }
-
-  return enrichNodeWithFlagContext(templateToNode(MATRIX_EVENTS[matrixId]), matrixId, progress.collectedFlags);
+  const pool = CITY_STREETS_DEPTH_ZERO_POOL.filter(
+    (id) => !progress.usedNarrativeEventIds.includes(id),
+  );
+  const matrixId = pool.length > 0
+    ? pool[Math.floor(Math.random() * pool.length)]
+    : CITY_STREETS_DEPTH_ZERO_POOL[0];
+  return enrichNodeWithFlagContext(
+    templateToNode(MATRIX_EVENTS[matrixId]),
+    matrixId,
+    progress.collectedFlags,
+  );
 }
 
 export function buildMatrixNarrativeNode(
@@ -1113,20 +1074,11 @@ export function resolveMatrixNarrativeChoice(
 
 export function primeNarrativeEnvironment(
   _node: NarrativeEventNode,
-  environmentType?: import('../types/sector').EnvironmentType,
 ): EnvironmentalModifiers {
-  const base: EnvironmentalModifiers = {
+  return {
     isEnemyPhaseShrouded: false,
     isPlayerBlinded: false,
     hasTetanusGlitch: false,
     startingStaminaPenalty: 0,
-  };
-  if (!environmentType) return base;
-  const profile = ENVIRONMENT_COMBAT_PROFILE[environmentType];
-  return {
-    ...base,
-    environmentType,
-    meleeDamageBonusPct: profile.meleeDamageBonusPct,
-    staminaCostReductionPct: profile.staminaCostReductionPct,
   };
 }

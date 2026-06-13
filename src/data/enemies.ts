@@ -1,11 +1,5 @@
-import type { IncursionBiome } from '../types/game';
 import type { DistrictId } from './districtPacing';
-import { pickBiomeCombatDesignation } from './biomeCombat';
 import { ENEMY_ROSTER, spawnRosterUnit } from './enemyRoster';
-import {
-  applyCorporealHpMultiplier,
-  resolveEnemyAffinity,
-} from './combatEnvironmentEngine';
 import type { EnemyAffinity } from '../types/combatEnvironment';
 import { EnemyClass, EnemyCombatProfile, EnemyIntent, SectorDefinition } from '../types/run';
 
@@ -91,46 +85,6 @@ export interface SpawnEnemyOptions {
   resonancePercent?: number;
   forcedAffinity?: EnemyAffinity;
   district?: DistrictId;
-}
-
-function finalizeEnemyProfile(
-  base: Omit<EnemyCombatProfile, 'affinity'>,
-  affinity: EnemyAffinity,
-): EnemyCombatProfile {
-  const withAffinity: EnemyCombatProfile = { ...base, affinity };
-  return applyCorporealHpMultiplier(withAffinity, affinity);
-}
-
-export function spawnBiomeEnemyProfile(
-  biome: IncursionBiome,
-  nodeIndex: number,
-  isEliteAmbush = false,
-  options?: SpawnEnemyOptions,
-): EnemyCombatProfile {
-  const classType = pickEnemyClass(nodeIndex, isEliteAmbush);
-  const scale = getNodeScale(nodeIndex);
-  const designation = pickBiomeCombatDesignation(biome, false);
-  const maxHp = Math.floor(CLASS_BASE_HP[classType] * scale);
-  const baseDamage = Math.floor(CLASS_BASE_DAMAGE[classType] * scale);
-  const intent = rollEnemyIntent(classType, 0, options?.district ?? 1);
-  const affinity = options?.forcedAffinity
-    ?? resolveEnemyAffinity(classType, isEliteAmbush, options?.resonancePercent ?? 0);
-
-  return finalizeEnemyProfile(
-    {
-      class: classType,
-      designation,
-      maxHp,
-      currentHp: maxHp,
-      baseDamage,
-      intent,
-      chargeTurns: 0,
-      evadeActive: intent === 'EVADE',
-      nodeIndex,
-      scale,
-    },
-    affinity,
-  );
 }
 
 export function spawnEnemyProfile(

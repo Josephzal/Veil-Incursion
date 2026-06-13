@@ -448,7 +448,7 @@ export default function TacticalCombatHub({
     resolutionRef.current != null || operativeHpRef.current <= 0;
 
   const log = (t: string) => onTerminalLog?.(t);
-  const parryTimingWindowBonus = parryWindowBonus * 0.02 + ((env.parryWindowBonusPct ?? 0) * 0.01);
+  const parryTimingWindowBonus = parryWindowBonus * 0.02;
   const parryTimingBlindPenalty = env.isPlayerBlinded ? 0.015 : 0;
   const counterReady = abyssalReserve >= COMBAT_ACTION.COUNTER_ABYSSAL_MIN && !isExhausted;
   const sliceReady = abyssalReserve >= mutationModsRef.current.abyssalCap && !isExhausted;
@@ -1344,7 +1344,7 @@ export default function TacticalCombatHub({
       const scaled = scaleKineticDamage(
         dmg,
         working.affinity,
-        env.meleeDamageBonusPct ?? 0,
+        0,
         spectralSaltActive,
       );
       if (scaled !== dmg) {
@@ -1634,7 +1634,7 @@ export default function TacticalCombatHub({
     applyTetanusGlitch();
   };
   const adjustedStaminaCost = (cost: number) => {
-    const reduction = env.staminaCostReductionPct ?? 0;
+    const reduction = 0;
     if (reduction <= 0) return cost;
     return Math.max(1, Math.floor(cost * (1 - reduction / 100)));
   };
@@ -2084,10 +2084,6 @@ export default function TacticalCombatHub({
     if (env.hasTetanusGlitch) log('>> ENV: TETANUS GLITCH ACTIVE — exhaustion triggers 3 HP bleed.');
     if (env.startingStaminaPenalty > 0) log(`>> ENV: STAMINA PENALTY — entry ceiling reduced to 50.`);
     if (env.isEnemyPhaseShrouded) log('>> ENV: ENEMY PHASE SHROUDED — 20% miss chance on strikes.');
-    if (env.environmentType) log(`>> ENV ANCHOR: ${env.environmentType.replace(/_/g, ' ')}`);
-    if ((env.meleeDamageBonusPct ?? 0) > 0) log(`>> ENV BONUS: melee damage +${env.meleeDamageBonusPct}%.`);
-    if ((env.staminaCostReductionPct ?? 0) > 0) log(`>> ENV BONUS: melee stamina cost −${env.staminaCostReductionPct}%.`);
-    if ((env.parryWindowBonusPct ?? 0) > 0) log(`>> ENV BONUS: counter window +${env.parryWindowBonusPct}%.`);
     if (env.bloodFrenzyActive) log('>> BLOOD FRENZY ACTIVE — melee damage leeches 15% to soul anchor.');
     if (env.combatObjective === 'SURVIVE_TURNS') {
       log(`>> DEFEND THE RIFT — survive ${env.survivalTurnsRequired ?? 3} hostile turn cycles.`);

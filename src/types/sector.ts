@@ -1,8 +1,6 @@
 import type { IncursionEncounterType, RunNodeType } from './game';
 import type { EnemyAffinity } from './combatEnvironment';
 
-export type EnvironmentType = 'SUBWAY_CHASM' | 'BLEEDING_HIGH_RISE' | 'DESECRATED_SANCTUARY';
-
 export type SpectralThreatBand = 'LOW' | 'MODERATE' | 'ELEVATED' | 'CRITICAL' | 'UNKNOWN';
 
 export interface SpectralTelemetry {
@@ -28,7 +26,6 @@ export interface SectorGraphNode {
   graphDepth: number;
   encounterType: IncursionEncounterType;
   type: RunNodeType;
-  environmentType: EnvironmentType;
   childIds: string[];
   parentId: string | null;
   label: string;
@@ -76,9 +73,3 @@ export const RESONANCE_TIER_VECTOR_SEVERED = 76;
 export const TERMINAL_BLIND_NODE_COUNT = 2;
 export const VEIL_STALKER_RESONANCE_THRESHOLD = 76;
 export const VEIL_STALKER_AMBUSH_CHANCE = 0.4;
-
-export const ENVIRONMENT_DISPLAY_LABEL: Record<EnvironmentType, string> = {
-  SUBWAY_CHASM: 'Subway Chasm',
-  BLEEDING_HIGH_RISE: 'Bleeding High-Rise',
-  DESECRATED_SANCTUARY: 'Desecrated Sanctuary',
-};

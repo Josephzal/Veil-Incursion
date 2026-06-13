@@ -1,37 +1,20 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { getBiomeContextLog } from '../data/descentEngine';
-import { getEnvironmentCombatProfile } from '../data/combatEnvironmentEngine';
+import { getMacroBiomeDisplayLabel } from '../data/descentEngine';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
-import { IncursionBiome } from '../types/game';
-import { ENVIRONMENT_DISPLAY_LABEL } from '../types/sector';
 
-interface EncounterBiomeBannerProps {
-  biomeOverride?: IncursionBiome;
-}
-
-export default function EncounterBiomeBanner({
-  biomeOverride,
-}: EncounterBiomeBannerProps): React.JSX.Element | null {
-  const { getSelectedVectorNode, activeIncursion } = useRun();
+export default function EncounterBiomeBanner(): React.JSX.Element | null {
+  const { activeIncursion } = useRun();
   const { theme } = useTerminal();
 
-  const node = getSelectedVectorNode();
-  const biome = biomeOverride ?? node?.biome;
-  if (!biome || activeIncursion.mapMode === 'SCANNING_HUB') return null;
-
-  const envLabel = node?.environmentType
-    ? ENVIRONMENT_DISPLAY_LABEL[node.environmentType]
-    : null;
-  const envProfile = getEnvironmentCombatProfile(node?.environmentType);
+  const macroFamily = activeIncursion.currentMacroBiomeFamily;
+  if (!macroFamily || activeIncursion.mapMode === 'SCANNING_HUB') return null;
 
   return (
     <View style={[styles.banner, { borderColor: theme.borderColor, backgroundColor: '#050608' }]}>
       <Text style={[styles.biomeLine, { color: theme.primaryColor }]}>
-        {envLabel
-          ? `ENVIRONMENT // ${envLabel.toUpperCase()} // ${envProfile?.hazardLabel ?? 'ACTIVE'}`
-          : getBiomeContextLog(biome)}
+        {`MACRO BIOME // ${getMacroBiomeDisplayLabel(macroFamily).toUpperCase()}`}
       </Text>
       <Text style={[styles.depthLine, { color: theme.mutedColor }]}>
         {`SECTOR T${activeIncursion.sectorTier} // NODE ${activeIncursion.nodesCleared + 1}`}

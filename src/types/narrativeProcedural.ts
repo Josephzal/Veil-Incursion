@@ -1,5 +1,6 @@
 import type { CargoItemId } from './cargoGrid';
 import type { FactionType } from './game';
+import type { Biome, NarrativePenalty, TensionMechanic } from './narrativeAssembly';
 
 /** Macro biome families — depth 3 always DEEP_VEIL (Phase 2 rotation). */
 export type MacroBiomeFamily =
@@ -9,27 +10,6 @@ export type MacroBiomeFamily =
   | 'UNDERGROUND'
   | 'BACKROADS'
   | 'DEEP_VEIL';
-
-export type SubBiomeId =
-  | 'ALLEYS'
-  | 'PARKS'
-  | 'GRAVEYARD'
-  | 'SCHOOL'
-  | 'THEATRE'
-  | 'HOSPITAL'
-  | 'CHURCH'
-  | 'CABIN'
-  | 'LAKE'
-  | 'FOREST'
-  | 'SEWERS'
-  | 'UNDERGROUND_CITY'
-  | 'TRANSIT_LINES'
-  | 'HOTEL'
-  | 'PIT_STOP'
-  | 'FARM'
-  | 'VOID_RIFT'
-  | 'NULL_CHASM'
-  | 'PRIMEVAL_BREACH';
 
 /** Run depth (district): 1 = levels 1–15, 2 = 16–30, 3 = 31–45. */
 export type RunDepth = 1 | 2 | 3;
@@ -85,12 +65,20 @@ export interface NarrativeResolverSeed {
   resourceCacheId?: import('../types/resourceItem').ResourceCacheId;
 }
 
+export type NarrativeEngineVersion = 'legacy-catalog' | 'assembly-v1';
+
 export interface ProceduralNarrativeAssembly {
   assemblyId: string;
   macroFamily: MacroBiomeFamily;
   depth: RunDepth;
   contextId: string;
   complicationId: string;
+  /** When `assembly-v1`, resolver data comes from JSON resolver sets. */
+  engineVersion?: NarrativeEngineVersion;
+  resolverSetId?: string;
+  biome?: Biome;
+  tensionMechanic?: TensionMechanic;
+  defaultPenalty?: NarrativePenalty;
   resolverIds: {
     brute: string;
     cabal: string;

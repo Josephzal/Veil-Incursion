@@ -3,7 +3,6 @@ import { ALL_GRID_SLOTS } from '../types/combatGrid';
 import { laneForSlot } from '../types/combatGrid';
 import { draftEncounterForDepth } from './combatEncounterBudget';
 import { initEnemyCombatLayers } from './combatFractureEngine';
-import type { IncursionBiome } from '../types/game';
 import type { EnemyCombatProfile, SectorDefinition } from '../types/run';
 import type { DistrictId } from './districtPacing';
 import { getDistrictFromDepth, depthFromNodesCleared } from './districtPacing';
@@ -35,7 +34,6 @@ export interface SpawnSquadOptions {
   nodeIndex: number;
   isElite?: boolean;
   isAmbush?: boolean;
-  biome?: IncursionBiome;
   /** Legacy field — combat enemies always use the established roster. */
   sector?: SectorDefinition;
   spawnOptions?: SpawnEnemyOptions;

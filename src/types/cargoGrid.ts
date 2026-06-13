@@ -45,7 +45,10 @@ export type LegacyCargoItemId =
   | 'spall-weave-vest'
   | 'void-surge-catalyst'
   | 'sanguine-coagulant'
-  | 'veil-ash-grenade';
+  | 'veil-ash-grenade'
+  | 'smoke-ampoule'
+  | 'null-key'
+  | 'hazmat-shielding';
 
 export type CargoItemId = LegacyCargoItemId | ResourceItemId;
 
@@ -368,6 +371,33 @@ export const CARGO_ITEM_CATALOG: Record<CargoItemId, CargoItemDefinition> = {
     tags: ['CONSUMABLE', 'COMBAT', 'CROWD_CONTROL'],
     usableInCombat: true,
     combatEffect: 'veil_ash_grenade',
+  },
+  'smoke-ampoule': {
+    id: 'smoke-ampoule',
+    name: 'Smoke Ampoule',
+    width: 1,
+    height: 1,
+    baseValue: 60,
+    resonanceWeight: 1,
+    tags: ['CONSUMABLE', 'NARRATIVE', 'OBSCURE'],
+  },
+  'null-key': {
+    id: 'null-key',
+    name: 'Null-Key',
+    width: 1,
+    height: 1,
+    baseValue: 85,
+    resonanceWeight: 1,
+    tags: ['TOOL', 'NARRATIVE', 'BREACH'],
+  },
+  'hazmat-shielding': {
+    id: 'hazmat-shielding',
+    name: 'Hazmat Shielding',
+    width: 1,
+    height: 2,
+    baseValue: 110,
+    resonanceWeight: 2,
+    tags: ['CONSUMABLE', 'NARRATIVE', 'SHIELD'],
   },
   ...buildResourceCargoCatalogEntries(),
 };

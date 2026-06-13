@@ -11,7 +11,6 @@ export type {
   FactionModifiers,
   FactionType,
   IncursionMapMode,
-  IncursionBiome,
   IncursionEncounterType,
   IncursionNode,
   InventoryItem,

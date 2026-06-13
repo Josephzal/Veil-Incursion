@@ -1,3 +1,4 @@
+/** @deprecated Superseded by `narrative/context_seeds.json` — use `narrativeCatalog.ts`. */
 import type { NarrativeContextSeed } from '../../../types/narrativeProcedural';
 
 export const CITY_STREETS_CONTEXTS: readonly NarrativeContextSeed[] = [

@@ -1,16 +1,18 @@
 import React from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
-  BIOME_DISPLAY_LABEL,
   getEncounterDisplayLabel,
+  getMacroBiomeDisplayLabel,
 } from '../data/descentEngine';
 import { IncursionNode } from '../types/game';
+import type { MacroBiomeFamily } from '../types/narrativeProcedural';
 import { SCAN_ENGAGE_STAMINA_COST } from '../types/run';
 import { TerminalTheme } from '../types/theme';
 
 interface ScanConfirmOverlayProps {
   visible: boolean;
   node: IncursionNode | null;
+  macroFamily: MacroBiomeFamily | null;
   theme: TerminalTheme;
   accentColor: string;
   currentStamina: number;
@@ -21,6 +23,7 @@ interface ScanConfirmOverlayProps {
 export default function ScanConfirmOverlay({
   visible,
   node,
+  macroFamily,
   theme,
   accentColor,
   currentStamina,
@@ -56,9 +59,9 @@ export default function ScanConfirmOverlay({
                 : '—'}
             </Text>
 
-            <Text style={[styles.fieldLabel, { color: theme.mutedColor, marginTop: 12 }]}>ACTIVE BIOME</Text>
+            <Text style={[styles.fieldLabel, { color: theme.mutedColor, marginTop: 12 }]}>MACRO BIOME</Text>
             <Text style={[styles.fieldValue, { color: theme.primaryColor }]}>
-              {node != null ? BIOME_DISPLAY_LABEL[node.biome].toUpperCase() : '—'}
+              {getMacroBiomeDisplayLabel(macroFamily).toUpperCase()}
             </Text>
           </View>
 

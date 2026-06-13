@@ -1,3 +1,4 @@
+/** @deprecated Superseded by `narrative/complication_seeds.json` — use `narrativeCatalog.ts`. */
 import type { NarrativeComplicationSeed } from '../../../types/narrativeProcedural';
 
 export const CITY_STREETS_COMPLICATIONS: readonly NarrativeComplicationSeed[] = [

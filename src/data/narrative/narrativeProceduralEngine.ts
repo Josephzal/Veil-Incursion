@@ -1,3 +1,7 @@
+/**
+ * @deprecated Legacy TS narrative catalogs — replaced by JSON assembly seeds in `/narrative/*.json`.
+ * Retained for `resolveProceduralNarrativeChoice` on pre-v1 assemblies only.
+ */
 import type { CargoRunState } from '../../types/cargoGrid';
 import type {
   CheckStatus,
@@ -22,6 +26,11 @@ import type { NarrativeResolutionResult, OperativeResourceSnapshot } from '../na
 import { CITY_STREETS_COMPLICATIONS } from './catalogs/cityStreetsComplications';
 import { CITY_STREETS_CONTEXTS } from './catalogs/cityStreetsContexts';
 import { CITY_STREETS_RESOLVERS } from './catalogs/cityStreetsResolvers';
+import { pickAssemblyNarrativeEncounter } from './narrativeAssemblyBridge';
+import { runNarrativeAssemblyCoreSelfCheck, tagsCompatible } from './narrativeAssemblyCore';
+import { verifyNarrativeAssemblyCatalog } from './narrativeCatalog';
+
+export { tagsCompatible };
 
 export interface GenerateNarrativeEncounterParams {
   macroFamily?: MacroBiomeFamily;
@@ -84,15 +93,6 @@ function pickFromPool<T extends { id: string }>(
 }
 
 /** Tags must intersect — prevents incompatible context/complication pairings. */
-export function tagsCompatible(
-  contextTags: readonly string[],
-  requiredTags: readonly string[],
-): boolean {
-  if (requiredTags.length === 0) return true;
-  const contextSet = new Set(contextTags);
-  return requiredTags.some((tag) => contextSet.has(tag));
-}
-
 export function filterComplicationsForContext(
   context: NarrativeContextSeed,
   complications: readonly NarrativeComplicationSeed[],
@@ -166,6 +166,9 @@ function evaluateResolverEligibility(
   return { locked: false };
 }
 
+/**
+ * @deprecated Superseded by `pickAssemblyNarrativeEncounter` + JSON catalogs in `narrativeCatalog.ts`.
+ */
 export function generateNarrativeEncounter(
   params: GenerateNarrativeEncounterParams,
   eligibility: ProceduralEligibilityContext,
@@ -517,43 +520,31 @@ export function shouldUseProceduralNarrative(_macroFamily: MacroBiomeFamily): bo
   return true;
 }
 
-/** Dev-only tag compatibility self-check — throws on failure. */
+/** Dev-only assembly catalog self-check — throws on failure. */
 export function verifyNarrativeProceduralEngine(): void {
-  for (const context of CITY_STREETS_CONTEXTS) {
-    const matches = filterComplicationsForContext(context, CITY_STREETS_COMPLICATIONS);
-    if (matches.length === 0) {
-      throw new Error(`No complications match context ${context.id}`);
-    }
-    for (const complication of matches) {
-      const cabal = filterResolversForAssembly(
-        context,
-        complication,
-        CITY_STREETS_RESOLVERS,
-        'CABAL',
-      );
-      const item = filterResolversForAssembly(
-        context,
-        complication,
-        CITY_STREETS_RESOLVERS,
-        'ITEM',
-      );
-      if (cabal.length === 0 && item.length === 0) {
-        throw new Error(`No resolvers for ${context.id} + ${complication.id}`);
-      }
-    }
-  }
+  verifyNarrativeAssemblyCatalog();
+  runNarrativeAssemblyCoreSelfCheck();
 
-  const bogus = tagsCompatible(['hydro', 'outdoor'], ['tech', 'indoor']);
-  if (bogus) throw new Error('Incompatible tags should not match');
-
-  const sample = generateNarrativeEncounter(
-    { nodesCleared: 0, seed: 'verify-seed', usedAssemblyIds: [] },
-    { alignedFaction: 'SOLARIS', cargo: { grid: { placed: [] }, containment: [], dataBleedActive: false } },
+  const eligibility = {
+    alignedFaction: 'SOLARIS' as const,
+    cargo: { grid: { placed: [] }, containment: [], dataBleedActive: false },
+  };
+  const sample = pickAssemblyNarrativeEncounter(
+    {
+      macroFamily: 'CITY_STREETS',
+      nodesCleared: 0,
+      seed: 'verify-seed',
+      usedAssemblyIds: [],
+    },
+    eligibility,
   );
   if (sample.node.interactionMode !== 'procedural') {
     throw new Error('Generated node must be procedural');
   }
   if (!sample.node.choiceC || !sample.node.choiceD) {
     throw new Error('Generated node must expose four resolver options');
+  }
+  if (sample.assembly.engineVersion !== 'assembly-v1') {
+    throw new Error('Generated assembly must use assembly-v1 engine');
   }
 }

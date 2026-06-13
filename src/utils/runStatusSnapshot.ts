@@ -4,8 +4,8 @@ import type { RunState } from '../types/run';
 import { getResonanceZone } from '../data/resonanceHeatVentEngine';
 import type { RunStatusEffect } from '../types/narrativeProcedural';
 import { LEY_LINE_MUTATION_CATALOG } from '../data/leyLineMutations';
-import { MACRO_BIOME_DISPLAY, SUB_BIOME_DISPLAY } from '../data/macroBiomeEngine';
-import type { MacroBiomeFamily, SubBiomeId } from '../types/narrativeProcedural';
+import { MACRO_BIOME_DISPLAY } from '../data/macroBiomeEngine';
+import type { MacroBiomeFamily } from '../types/narrativeProcedural';
 
 export type RunStatusCategory = 'BOON' | 'HAZARD' | 'MACRO' | 'ENVIRONMENT' | 'RESONANCE' | 'SECTOR';
 
@@ -95,22 +95,6 @@ function envModifierEntries(env: EnvironmentalModifiers): RunStatusEntry[] {
       id: 'env-blood-frenzy',
       label: 'Blood Frenzy',
       description: 'Occult saturation elevated — aggressive damage modifiers active.',
-      category: 'ENVIRONMENT',
-    });
-  }
-  if (env.meleeDamageBonusPct && env.meleeDamageBonusPct > 0) {
-    entries.push({
-      id: 'env-melee-bonus',
-      label: `Melee Bonus (+${env.meleeDamageBonusPct}%)`,
-      description: 'Kinetic strike output amplified by sector conditions.',
-      category: 'ENVIRONMENT',
-    });
-  }
-  if (env.staminaCostReductionPct && env.staminaCostReductionPct > 0) {
-    entries.push({
-      id: 'env-stamina-reduction',
-      label: `Stamina Efficiency (+${env.staminaCostReductionPct}%)`,
-      description: 'Ability stamina costs reduced for this encounter chain.',
       category: 'ENVIRONMENT',
     });
   }
@@ -245,14 +229,11 @@ function statusEffectEntries(effects: readonly RunStatusEffect[]): RunStatusEntr
   }));
 }
 
-function sectorEntry(
-  family: MacroBiomeFamily | null,
-  subBiome: SubBiomeId | null,
-): RunStatusEntry | null {
-  if (!family || !subBiome) return null;
+function sectorEntry(family: MacroBiomeFamily | null): RunStatusEntry | null {
+  if (!family) return null;
   return {
     id: 'sector-macro-biome',
-    label: `${MACRO_BIOME_DISPLAY[family]} — ${SUB_BIOME_DISPLAY[subBiome]}`,
+    label: MACRO_BIOME_DISPLAY[family],
     description: 'Current macro biome rotation for procedural narrative and sector flavor.',
     category: 'SECTOR',
   };
@@ -261,7 +242,7 @@ function sectorEntry(
 export function buildRunStatusSnapshot(inc: ActiveIncursionState): RunStatusEntry[] {
   const entries: RunStatusEntry[] = [];
 
-  const sector = sectorEntry(inc.currentMacroBiomeFamily, inc.currentSubBiomeId);
+  const sector = sectorEntry(inc.currentMacroBiomeFamily);
   if (sector) entries.push(sector);
 
   entries.push(...mutationEntries(inc.leyLineMutations));

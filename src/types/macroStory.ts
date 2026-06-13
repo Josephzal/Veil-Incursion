@@ -1,5 +1,3 @@
-import type { IncursionBiome } from './game';
-
 /** Macro-story run format — rolled once at incursion initialization. */
 export type MacroStoryRunMode = 'STANDALONE' | 'CONTINUOUS_THREAD' | 'FACTION_OVERLAY';
 
@@ -23,7 +21,6 @@ export interface MacroStoryRunConfiguration {
 export interface SectorBlockSpec {
   encounterStart: number;
   encounterEnd: number;
-  biome: IncursionBiome;
   label: string;
 }
 

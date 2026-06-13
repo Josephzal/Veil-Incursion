@@ -6,7 +6,7 @@ import type {
   SpectralTelemetry,
   SpectralThreatBand,
 } from '../types/sector';
-import { environmentAdvantageLogLine, rollProbableAffinity } from './combatEnvironmentEngine';
+import { rollProbableAffinity } from './combatEnvironmentEngine';
 import {
   BOSS_NEST_HARD_RESONANCE,
   BOSS_NEST_SOFT_RESONANCE,
@@ -17,12 +17,7 @@ import {
   RESONANCE_DELTA_HIGH,
   RESONANCE_DELTA_STANDARD,
 } from '../types/sector';
-import type { EnvironmentType } from '../types/sector';
-import { BOSS_GRAPH_DEPTH, DISTRICT_GATE_DEPTHS, SCANNER_MAX_VECTORS } from '../types/sectorPacing';
-import { districtGateLabel } from './districtPacing';
-import type { SafeAnchorIndex } from '../types/sectorPacing';
 import {
-  environmentForGraphDepth,
   isBossApproachDepth,
   isCleanExtractionAvailable,
   isFullBlindZone,
@@ -41,14 +36,11 @@ import {
   isDistrictGateDepth,
   localLevelFromDepth,
 } from './districtPacing';
+import { BOSS_GRAPH_DEPTH, DISTRICT_GATE_DEPTHS, SCANNER_MAX_VECTORS } from '../types/sectorPacing';
+import { districtGateLabel } from './districtPacing';
+import type { SafeAnchorIndex } from '../types/sectorPacing';
 
 const VECTOR_DESIGNATIONS = ['ALPHA', 'BETA', 'GAMMA', 'DELTA', 'EPSILON', 'ZETA'] as const;
-
-const ENVIRONMENTS: EnvironmentType[] = [
-  'SUBWAY_CHASM',
-  'BLEEDING_HIGH_RISE',
-  'DESECRATED_SANCTUARY',
-];
 
 function hashSeed(input: string): number {
   let hash = 0;
@@ -165,7 +157,6 @@ function buildSectorMeta(
   type: RunNodeType,
   graphDepth: number,
   sectorTier: number,
-  environmentType: EnvironmentType,
 ): NodeSectorMeta {
   const band = threatBandForEncounter(encounterType, type);
   const isElite = type === 'ELITE_COMBAT' || type === 'BOSS_COMBAT';
@@ -184,7 +175,7 @@ function buildSectorMeta(
     creditBonus: encounterType === 'NARRATIVE_EVENT' && hashSeed(nodeId) % 5 === 0 ? 35 : 0,
     combatTier,
     probableAffinity: isCombatNode
-      ? rollProbableAffinity(encounterType, combatTier, environmentType, nodeId)
+      ? rollProbableAffinity(encounterType, combatTier, nodeId)
       : undefined,
   };
 }
@@ -199,8 +190,6 @@ export function makeGraphNode(
   const isAnomalyNest = options?.isAnomalyNest === true;
   const encounterType = options?.encounterType ?? rollEncounter(graphDepth);
   const type = encounterToType(encounterType, isAnomalyNest);
-  const seed = hashSeed(id);
-  const environmentType = environmentForGraphDepth(graphDepth, seed);
   const designation = VECTOR_DESIGNATIONS[hashSeed(id) % VECTOR_DESIGNATIONS.length];
 
   return {
@@ -208,11 +197,10 @@ export function makeGraphNode(
     graphDepth,
     encounterType,
     type,
-    environmentType,
     childIds: [],
     parentId,
-    label: `VECTOR ${designation} // ${environmentType.replace(/_/g, ' ')}`,
-    sectorMeta: buildSectorMeta(id, encounterType, type, graphDepth, sectorTier, environmentType),
+    label: `VECTOR ${designation}`,
+    sectorMeta: buildSectorMeta(id, encounterType, type, graphDepth, sectorTier),
     isAnomalyNest,
     isCompleted: false,
   };
@@ -226,11 +214,10 @@ export function generateSectorGraph(sectorTier = 1): SectorGraph {
     graphDepth: 0,
     encounterType: 'NARRATIVE_EVENT',
     type: 'NARRATIVE_EVENT',
-    environmentType: 'SUBWAY_CHASM',
     childIds: [],
     parentId: null,
     label: 'SECTOR ENTRY // VEIL THRESHOLD',
-    sectorMeta: buildSectorMeta(entryId, 'NARRATIVE_EVENT', 'NARRATIVE_EVENT', 0, sectorTier, 'SUBWAY_CHASM'),
+    sectorMeta: buildSectorMeta(entryId, 'NARRATIVE_EVENT', 'NARRATIVE_EVENT', 0, sectorTier),
     isCompleted: true,
   };
 
@@ -250,7 +237,6 @@ export function generateSectorGraph(sectorTier = 1): SectorGraph {
         'BOSS_COMBAT',
         depth,
         sectorTier,
-        spine.environmentType,
       );
     }
     nodes[spineId] = spine;
@@ -291,9 +277,7 @@ export function graphNodeToIncursionNode(
     encounterIndex: stepIndex,
     index: stepIndex,
     encounterType: graphNode.encounterType,
-    biome: 'CITY_STREETS',
     type: graphNode.type,
-    environmentType: graphNode.environmentType,
     label: graphNode.label,
     isCompleted: graphNode.isCompleted ?? false,
     isPreDiscovered: graphNode.isAnomalyNest === true,
@@ -319,9 +303,7 @@ export function createSafeAnchorExtractionNode(
     encounterIndex: stepIndex,
     index: stepIndex,
     encounterType: 'SANCTUARY',
-    biome: 'CITY_STREETS',
     type: 'SAFE_ANCHOR_EXTRACTION',
-    environmentType: 'SUBWAY_CHASM',
     label: SAFE_ANCHOR_LABELS[anchorIndex],
     isCompleted: false,
     isExtractionNode: true,
@@ -350,9 +332,7 @@ export function createMasterExtractionNode(stepIndex: number): IncursionNode {
     encounterIndex: stepIndex,
     index: stepIndex,
     encounterType: 'SANCTUARY',
-    biome: 'CITY_STREETS',
     type: 'MASTER_EXTRACTION_LINK',
-    environmentType: 'SUBWAY_CHASM',
     label: 'MASTER EXTRACTION LINK // PRIME CONDUIT',
     isCompleted: false,
     isExtractionNode: true,
@@ -380,9 +360,7 @@ export function createEmergencyExtractionNode(stepIndex: number): IncursionNode 
     encounterIndex: stepIndex,
     index: stepIndex,
     encounterType: 'SANCTUARY',
-    biome: 'CITY_STREETS',
     type: 'EMERGENCY_EXTRACTION',
-    environmentType: 'SUBWAY_CHASM',
     label: 'SIGNAL: EMERGENCY EXTRACTION LINK',
     isCompleted: false,
     isExtractionNode: true,
@@ -411,9 +389,7 @@ export function createSeveredExtractionDecoy(stepIndex: number): IncursionNode {
     encounterIndex: stepIndex,
     index: stepIndex,
     encounterType: 'COMBAT',
-    biome: 'CITY_STREETS',
     type: 'ELITE_COMBAT',
-    environmentType: 'BLEEDING_HIGH_RISE',
     label: 'SIGNAL: EMERGENCY EXTRACTION LINK',
     isCompleted: false,
     isExtractionNode: true,
@@ -457,9 +433,8 @@ export interface BuildScannerClusterOptions {
   collapseActive?: boolean;
   masterLinkUsed?: boolean;
   lastLevelOfferedCombat?: boolean;
-  /** Apply current macro/sub biome flavor to forward vectors. */
+  /** Apply current macro biome flavor to forward vectors. */
   macroBiomeFamily?: import('../types/narrativeProcedural').MacroBiomeFamily | null;
-  subBiomeId?: import('../types/narrativeProcedural').SubBiomeId | null;
 }
 
 /** Synthetic extraction ids are not stored in the sector graph. */
@@ -516,7 +491,6 @@ export function buildScannerCluster(options: BuildScannerClusterOptions): Incurs
     masterLinkUsed = false,
     lastLevelOfferedCombat = true,
     macroBiomeFamily = null,
-    subBiomeId = null,
   } = options;
 
   let graph = inputGraph;
@@ -655,8 +629,8 @@ export function buildScannerCluster(options: BuildScannerClusterOptions): Incurs
     ? SCANNER_MAX_VECTORS
     : Math.max(SCANNER_MAX_VECTORS, maxVectorsForLocalLevel(localLevel));
   const trimmed = cluster.slice(0, vectorCap);
-  if (macroBiomeFamily && subBiomeId) {
-    return applyMacroBiomeToCluster(trimmed, macroBiomeFamily, subBiomeId);
+  if (macroBiomeFamily) {
+    return applyMacroBiomeToCluster(trimmed, macroBiomeFamily);
   }
   return trimmed;
 }
@@ -755,12 +729,7 @@ export function applyVectorSeveredToGraph(
 export function formatFocusedIntel(node: IncursionNode): string[] {
   const lines = [
     `TYPE: ${node.type.replace(/_/g, ' ')}`,
-    `ENVIRONMENT: ${node.environmentType?.replace(/_/g, ' ') ?? 'UNKNOWN'}`,
   ];
-  const envAdvantage = environmentAdvantageLogLine(node.environmentType);
-  if (envAdvantage) {
-    lines.push(envAdvantage.replace('>> ENV ADVANTAGE — ', 'ENV ADVANTAGE: '));
-  }
   if ((node.sectorMeta?.creditBonus ?? 0) > 0) {
     lines.push(`CREDIT BONUS: +${node.sectorMeta?.creditBonus}`);
   }
@@ -784,10 +753,6 @@ export function formatFocusedIntel(node: IncursionNode): string[] {
   }
   if (node.sectorMeta?.probableAffinity) {
     lines.push(`PROBABLE AFFINITY: ${node.sectorMeta.probableAffinity.replace(/_/g, ' ')}`);
-  }
-  const envProfile = node.environmentType;
-  if (envProfile) {
-    lines.push(`HAZARD BAND: ${envProfile.replace(/_/g, ' ')}`);
   }
   return lines;
 }

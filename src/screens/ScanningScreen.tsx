@@ -131,8 +131,8 @@ export default function ScanningScreen(): React.JSX.Element {
   const intelLines = useMemo(() => {
     if (!selectedNode) return [];
     const optionIndex = nodeIndexById.get(selectedNode.id) ?? 0;
-    return formatScannerNodeIntel(selectedNode, optionIndex);
-  }, [selectedNode, nodeIndexById]);
+    return formatScannerNodeIntel(selectedNode, activeIncursion.currentMacroBiomeFamily, optionIndex);
+  }, [selectedNode, nodeIndexById, activeIncursion.currentMacroBiomeFamily]);
 
   const showNodeDock = hasSelection;
 

@@ -29,7 +29,6 @@ export function appendCollapseForwardNodes(
     child.type = typeRoll;
     child.encounterType = typeRoll === 'RESOURCE_HARVEST' ? 'RESOURCE_HARVEST' : 'COMBAT';
     child.label = `COLLAPSE RIFT // ${typeRoll.replace(/_/g, ' ')}`;
-    child.environmentType = 'BLEEDING_HIGH_RISE';
     nodes[childId] = child;
     parent = { ...parent, childIds: [...parent.childIds, childId] };
   }
@@ -45,9 +44,7 @@ export function createCollapseEntryNode(stepIndex: number): IncursionNode {
     encounterIndex: stepIndex,
     index: stepIndex,
     encounterType: 'COMBAT',
-    biome: 'CITY_STREETS',
     type: 'ELITE_COMBAT',
-    environmentType: 'BLEEDING_HIGH_RISE',
     label: 'COLLAPSE RIFT // POCKET DIMENSION BREACH',
     isCompleted: false,
     sectorMeta: {

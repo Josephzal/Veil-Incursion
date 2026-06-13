@@ -1,13 +1,12 @@
 import {
   ActiveIncursionState,
-  IncursionBiome,
   IncursionEncounterType,
   IncursionNode,
   RunNodeType,
 } from '../types/game';
-import { getEnvironmentCombatProfile } from './combatEnvironmentEngine';
+import { MACRO_BIOME_DISPLAY } from './macroBiomeEngine';
+import type { MacroBiomeFamily } from '../types/narrativeProcedural';
 import { formatSpectralBlock } from './sectorGraphEngine';
-import { ENVIRONMENT_DISPLAY_LABEL } from '../types/sector';
 import { ELITE_MODIFIER_LABELS } from './eliteModifierEngine';
 import { EncounterType, RadarDot, SectorDefinition } from '../types/run';
 import { INCURSION_ENCOUNTER_COUNT } from '../types/run';
@@ -40,20 +39,6 @@ const SIGNATURE_PROFILES = [
   'CONTAINMENT FIELD FLUCTUATION',
   'ANOMALOUS THERMAL SIGNATURE',
 ] as const;
-
-export const BIOME_CONTEXT_LOG: Record<IncursionBiome, string> = {
-  CITY_STREETS: 'BIOME ANCHOR // URBAN STREET GRID — CONCRETE CANYON SECTOR',
-  HOSPITAL: 'BIOME ANCHOR // MEDICAL WING — STERILE CORRIDOR SECTOR',
-  LABORATORY: 'BIOME ANCHOR // RESEARCH SUBLEVEL — CONTAINMENT LAB SECTOR',
-  SECTOR_CORE: 'BIOME ANCHOR // SECTOR CORE — PRIMARY THREAT CONDUIT',
-};
-
-export const BIOME_DISPLAY_LABEL: Record<IncursionBiome, string> = {
-  CITY_STREETS: 'City Streets',
-  HOSPITAL: 'Hospital',
-  LABORATORY: 'Laboratory',
-  SECTOR_CORE: 'Sector Core',
-};
 
 export const ENCOUNTER_DISPLAY_LABEL: Record<IncursionEncounterType, string> = {
   COMBAT: 'Combat',
@@ -107,24 +92,11 @@ function rollFlexibleEncounter(): IncursionEncounterType {
   return Math.random() < 0.45 ? 'NARRATIVE_EVENT' : 'COMBAT';
 }
 
-export function resolveBiomeForOption(
-  _encounterIndex: number,
-  _optionIndex: number,
-  _priorBiome: IncursionBiome | null,
-): IncursionBiome {
-  return 'CITY_STREETS';
-}
-
-export function resolveBossBiome(_encounterPath: IncursionNode[]): IncursionBiome {
-  return 'CITY_STREETS';
-}
-
 function makeVectorNode(
   depth: number,
   encounterIndex: number,
   optionIndex: number,
   encounterType: IncursionEncounterType,
-  biome: IncursionBiome,
   isPreDiscovered = false,
 ): IncursionNode {
   const id = `depth${depth}-enc${encounterIndex}-o${optionIndex}`;
@@ -137,7 +109,6 @@ function makeVectorNode(
     encounterIndex,
     index: encounterIndex,
     encounterType,
-    biome,
     type,
     label: `${prefix} // ${masked.label}`,
     isCompleted: false,
@@ -148,9 +119,9 @@ function makeVectorNode(
 /** Encounter 0 — combat, narrative, and black market vectors. */
 function buildFirstScanCluster(depth: number): IncursionNode[] {
   return [
-    makeVectorNode(depth, 0, 0, 'COMBAT', 'CITY_STREETS'),
-    makeVectorNode(depth, 0, 1, 'NARRATIVE_EVENT', 'CITY_STREETS'),
-    makeVectorNode(depth, 0, 2, 'BLACK_MARKET', 'CITY_STREETS'),
+    makeVectorNode(depth, 0, 0, 'COMBAT'),
+    makeVectorNode(depth, 0, 1, 'NARRATIVE_EVENT'),
+    makeVectorNode(depth, 0, 2, 'BLACK_MARKET'),
   ];
 }
 
@@ -159,16 +130,14 @@ function buildFlexibleCluster(
   encounterIndex: number,
   count: number,
   forcedSanctuarySlot: number,
-  priorBiome: IncursionBiome,
 ): IncursionNode[] {
   const cluster: IncursionNode[] = [];
 
   for (let i = 0; i < count; i += 1) {
-    const biome = resolveBiomeForOption(encounterIndex, i, priorBiome);
     if (i === forcedSanctuarySlot) {
-      cluster.push(makeVectorNode(depth, encounterIndex, i, 'SANCTUARY', biome));
+      cluster.push(makeVectorNode(depth, encounterIndex, i, 'SANCTUARY'));
     } else {
-      cluster.push(makeVectorNode(depth, encounterIndex, i, rollFlexibleEncounter(), biome));
+      cluster.push(makeVectorNode(depth, encounterIndex, i, rollFlexibleEncounter()));
     }
   }
 
@@ -192,24 +161,24 @@ export function generateDepthEncounterMatrix(depth: number): {
 
     if (encounter === 2) {
       matrix[2] = [
-        makeVectorNode(depth, 2, 0, 'COMBAT', 'CITY_STREETS'),
-        makeVectorNode(depth, 2, 1, 'BLACK_MARKET', 'CITY_STREETS'),
-        makeVectorNode(depth, 2, 2, 'NARRATIVE_EVENT', 'CITY_STREETS'),
+        makeVectorNode(depth, 2, 0, 'COMBAT'),
+        makeVectorNode(depth, 2, 1, 'BLACK_MARKET'),
+        makeVectorNode(depth, 2, 2, 'NARRATIVE_EVENT'),
       ];
       continue;
     }
 
     if (encounter === PENULT_ENCOUNTER_INDEX) {
       matrix[PENULT_ENCOUNTER_INDEX] = [
-        makeVectorNode(depth, PENULT_ENCOUNTER_INDEX, 0, 'SANCTUARY', 'CITY_STREETS'),
-        makeVectorNode(depth, PENULT_ENCOUNTER_INDEX, 1, 'NARRATIVE_EVENT', 'CITY_STREETS'),
+        makeVectorNode(depth, PENULT_ENCOUNTER_INDEX, 0, 'SANCTUARY'),
+        makeVectorNode(depth, PENULT_ENCOUNTER_INDEX, 1, 'NARRATIVE_EVENT'),
       ];
       continue;
     }
 
     if (encounter === BOSS_ENCOUNTER_INDEX) {
       matrix[BOSS_ENCOUNTER_INDEX] = [
-        makeVectorNode(depth, BOSS_ENCOUNTER_INDEX, 0, 'COMBAT', 'CITY_STREETS', true),
+        makeVectorNode(depth, BOSS_ENCOUNTER_INDEX, 0, 'COMBAT', true),
       ];
       continue;
     }
@@ -217,7 +186,7 @@ export function generateDepthEncounterMatrix(depth: number): {
     if (encounter === MANDATORY_SANCTUARY_ENCOUNTER) {
       const count = randomBranchCount();
       const sanctuarySlot = Math.floor(Math.random() * count);
-      matrix[encounter] = buildFlexibleCluster(depth, encounter, count, sanctuarySlot, 'CITY_STREETS');
+      matrix[encounter] = buildFlexibleCluster(depth, encounter, count, sanctuarySlot);
       continue;
     }
 
@@ -229,13 +198,12 @@ export function generateDepthEncounterMatrix(depth: number): {
         encounter,
         count,
         sanctuarySlot,
-        'CITY_STREETS',
       );
       continue;
     }
 
     const count = randomBranchCount();
-    matrix[encounter] = buildFlexibleCluster(depth, encounter, count, -1, 'CITY_STREETS');
+    matrix[encounter] = buildFlexibleCluster(depth, encounter, count, -1);
   }
 
   const earlySanctuarySpawned = matrix.some(
@@ -255,7 +223,6 @@ export function createPlaceholderDepthPath(): IncursionNode[] {
     index: encounterIndex,
     encounterType: 'COMBAT' as IncursionEncounterType,
     type: 'STANDARD_COMBAT' as RunNodeType,
-    biome: 'CITY_STREETS' as IncursionBiome,
     label: `ENCOUNTER ${encounterIndex + 1} // AWAITING VECTOR LOCK`,
     isCompleted: false,
   }));
@@ -264,17 +231,10 @@ export function createPlaceholderDepthPath(): IncursionNode[] {
 export function finalizeClusterForScan(
   cluster: IncursionNode[],
   encounterIndex: number,
-  encounterPath: IncursionNode[],
+  _encounterPath: IncursionNode[],
   _depth: number,
 ): IncursionNode[] {
-  const priorBiome =
-    encounterIndex > 0 ? encounterPath[encounterIndex - 1]?.biome ?? 'CITY_STREETS' : 'CITY_STREETS';
-
-  return cluster.map((node, optionIndex) => {
-    const biome = node.encounterType === 'SANCTUARY'
-      ? (priorBiome ?? 'CITY_STREETS')
-      : resolveBiomeForOption(encounterIndex, optionIndex, priorBiome);
-
+  return cluster.map((node) => {
     const encounterType =
       encounterIndex === BOSS_ENCOUNTER_INDEX ? 'COMBAT' : node.encounterType;
 
@@ -285,7 +245,6 @@ export function finalizeClusterForScan(
       encounterIndex,
       index: encounterIndex,
       encounterType,
-      biome,
       type,
       isPreDiscovered: encounterIndex === BOSS_ENCOUNTER_INDEX ? true : node.isPreDiscovered,
     };
@@ -377,8 +336,9 @@ export function findVectorInCluster(
   return cluster.find((n) => n.id === nodeId) ?? null;
 }
 
-export function getBiomeContextLog(biome: IncursionBiome): string {
-  return BIOME_CONTEXT_LOG[biome];
+export function getMacroBiomeDisplayLabel(family: MacroBiomeFamily | null | undefined): string {
+  if (!family) return 'UNKNOWN';
+  return MACRO_BIOME_DISPLAY[family];
 }
 
 export function getEncounterDisplayLabel(
@@ -397,33 +357,27 @@ export function resolveVectorLabel(node: IncursionNode, optionIndex = 0): string
   return buildMaskedScanTelemetry(node.id, optionIndex).pingLabel;
 }
 
-/** Scanner dock readout — biome, vector designation, and node type only. */
-export function formatScannerNodeIntel(node: IncursionNode, optionIndex = 0): string[] {
+/** Scanner dock readout — macro biome, vector designation, and node type only. */
+export function formatScannerNodeIntel(
+  node: IncursionNode,
+  macroFamily: MacroBiomeFamily | null | undefined,
+  optionIndex = 0,
+): string[] {
   const vector = resolveVectorLabel(node, optionIndex);
   const nodeType = node.type.replace(/_/g, ' ');
   return [
-    `> BIOME: ${BIOME_DISPLAY_LABEL[node.biome].toUpperCase()}`,
+    `> MACRO BIOME: ${getMacroBiomeDisplayLabel(macroFamily).toUpperCase()}`,
     `> VECTOR: ${vector}`,
     `> NODE TYPE: ${nodeType.toUpperCase()}`,
   ];
 }
 
-/** Environment / modifier status lines for the scanner dock. */
+/** Modifier status lines for the scanner dock. */
 export function formatScannerNodeStatus(
-  node: IncursionNode,
+  _node: IncursionNode,
   incursion: Pick<ActiveIncursionState, 'environmentalModifiers'>,
 ): string[] {
   const lines: string[] = [];
-
-  if (node.environmentType) {
-    const envLabel = ENVIRONMENT_DISPLAY_LABEL[node.environmentType];
-    const profile = getEnvironmentCombatProfile(node.environmentType);
-    lines.push(`> STATUS: ${envLabel.toUpperCase()}`);
-    if (profile) {
-      lines.push(`> HAZARD: ${profile.hazardLabel}`);
-      lines.push(`> ENV ADVANTAGE: ${profile.advantageLabel}`);
-    }
-  }
 
   const eliteModifier = incursion.environmentalModifiers?.eliteModifier;
   if (eliteModifier) {
@@ -433,12 +387,12 @@ export function formatScannerNodeStatus(
   return lines;
 }
 
-/** Combat HUD readout — full biome / encounter context (no hostile intel). */
+/** Combat HUD readout — macro biome / encounter context (no hostile intel). */
 export function formatCombatEncounterIntel(
   node: IncursionNode | null,
   incursion: Pick<
     ActiveIncursionState,
-    'sectorTier' | 'nodesCleared' | 'environmentalModifiers' | 'defendRiftActive'
+    'sectorTier' | 'nodesCleared' | 'environmentalModifiers' | 'defendRiftActive' | 'currentMacroBiomeFamily'
   >,
   optionIndex = 0,
 ): string[] {
@@ -447,21 +401,11 @@ export function formatCombatEncounterIntel(
   }
 
   const lines: string[] = [
-    `> BIOME: ${BIOME_DISPLAY_LABEL[node.biome].toUpperCase()}`,
+    `> MACRO BIOME: ${getMacroBiomeDisplayLabel(incursion.currentMacroBiomeFamily).toUpperCase()}`,
     `> VECTOR: ${resolveVectorLabel(node, optionIndex)}`,
     `> NODE TYPE: ${node.type.replace(/_/g, ' ').toUpperCase()}`,
     `> ENCOUNTER: ${getEncounterDisplayLabel(node.encounterType, node.encounterIndex).toUpperCase()}`,
   ];
-
-  if (node.environmentType) {
-    const envLabel = ENVIRONMENT_DISPLAY_LABEL[node.environmentType];
-    const profile = getEnvironmentCombatProfile(node.environmentType);
-    lines.push(`> ENVIRONMENT: ${envLabel.toUpperCase()}`);
-    if (profile) {
-      lines.push(`> HAZARD: ${profile.hazardLabel}`);
-      lines.push(`> ENV ADVANTAGE: ${profile.advantageLabel}`);
-    }
-  }
 
   if (node.sectorMeta) {
     lines.push(...formatSpectralBlock(node.sectorMeta, true));

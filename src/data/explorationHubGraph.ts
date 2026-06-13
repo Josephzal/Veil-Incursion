@@ -13,7 +13,6 @@ export const EXPLORATION_HUB_GRAPH: SectorGraph = {
       graphDepth: 0,
       encounterType: 'NARRATIVE_EVENT',
       type: 'NARRATIVE_EVENT',
-      environmentType: 'SUBWAY_CHASM',
       childIds: [],
       parentId: null,
       label: 'METROPOLITAN HUB // SAFE CORRIDOR',

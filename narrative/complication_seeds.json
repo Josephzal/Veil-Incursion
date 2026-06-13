@@ -1,0 +1,80 @@
+[
+    {
+      "id": "COMP_01",
+      "requiredTags": ["urban", "physical"],
+      "flavorText": "A heavily armed Terran Grid patrol is locking down the sector ahead. Floodlights sweep the pavement, and their hounds are sniffing the air for unfamiliar occult signatures.",
+      "defaultPenalty": { "type": "HP", "amount": 25 }
+    },
+    {
+      "id": "COMP_02",
+      "requiredTags": ["occult", "indoor", "subterranean"],
+      "flavorText": "A localized Veil-tear is violently leaking raw Resonance, warping the concrete and sealing the blast doors shut.",
+      "defaultPenalty": { "type": "Resonance", "amount": 15 }
+    },
+    {
+      "id": "COMP_03",
+      "requiredTags": ["physical", "indoor"],
+      "flavorText": "The path is blocked by a massive, rusted Legion weapons cache. The lock is rigged to a dead-man's switch, vibrating violently.",
+      "defaultPenalty": { "type": "HP", "amount": 30 }
+    },
+    {
+        "id": "COMP_04",
+        "requiredTags": ["tech", "indoor"],
+        "flavorText": "The primary terminal is locked behind a lethal, biometric firewall. Attempting to force the connection will trigger a localized kinetic shockwave.",
+        "defaultPenalty": { "type": "HP", "amount": 20 }
+      },
+      {
+        "id": "COMP_05",
+        "requiredTags": ["hazardous", "subterranean"],
+        "flavorText": "A ruptured industrial valve is venting highly caustic, Veil-tainted gas into the corridor. The air itself is rapidly becoming corrosive to flesh and metal.",
+        "defaultPenalty": { "type": "HP", "amount": 35 }
+      },
+      {
+        "id": "COMP_06",
+        "requiredTags": ["occult", "nature"],
+        "flavorText": "The physical space is folding in on itself. A labyrinth of shifting ley-lines has trapped you, and the Veil is actively trying to drain your life force.",
+        "defaultPenalty": { "type": "Resonance", "amount": 25 }
+      },
+      {
+        "id": "COMP_07",
+        "requiredTags": ["physical", "urban", "outdoor"],
+        "flavorText": "A brutalized Legion vanguard has set up a makeshift toll ahead. Their heavy weapons are spun up, and chained spectral entities patrol their perimeter.",
+        "defaultPenalty": { "type": "HP", "amount": 40 }
+      },
+      {
+        "id": "COMP_08",
+        "requiredTags": ["occult", "indoor"],
+        "flavorText": "The room is rigged with a dense network of Solaris blood-wards. Ethereal tripwires crisscross the area, ready to detonate raw occult energy if disturbed.",
+        "defaultPenalty": { "type": "HP", "amount": 25 }
+      },
+      {
+        "id": "COMP_09",
+        "requiredTags": ["occult", "outdoor"],
+        "flavorText": "The area is choked by a localized Memory Bleed. Ethereal echoes of a violent, historical massacre are looping continuously, threatening to drag your consciousness into the nightmare.",
+        "defaultPenalty": { "type": "Resonance", "amount": 30 }
+      },
+      {
+        "id": "COMP_10",
+        "requiredTags": ["physical", "hazardous"],
+        "flavorText": "A massive, starving Abyssal entity is tearing apart a rusted transit vehicle ahead. It hasn't noticed you yet, but the only path forward is directly through its hunting ground.",
+        "defaultPenalty": { "type": "HP", "amount": 45 }
+      },
+      {
+        "id": "COMP_11",
+        "requiredTags": ["subterranean", "indoor"],
+        "flavorText": "A localized Veil-distortion is warping the structural supports. The supernatural gravity is pulling the ceiling down, threatening to crush everything in the corridor.",
+        "defaultPenalty": { "type": "HP", "amount": 30 }
+      },
+      {
+        "id": "COMP_12",
+        "requiredTags": ["occult", "urban", "indoor"],
+        "flavorText": "A Solaris purger-squad is conducting a brutal blood-rite in the center of the room. They are highly alert and sealing the exits with volatile ash-wards.",
+        "defaultPenalty": { "type": "HP", "amount": 35 }
+      },
+      {
+        "id": "COMP_13",
+        "requiredTags": ["tech", "urban"],
+        "flavorText": "A hidden, automated Terran Grid kinetic-sentry has deployed from the masonry, its targeting laser cutting through the dark and scanning for unauthorized biometric signatures.",
+        "defaultPenalty": { "type": "HP", "amount": 25 }
+      }
+  ]

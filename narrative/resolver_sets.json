@@ -1,0 +1,105 @@
+[
+    {
+      "id": "RES_01",
+      "complicationId": "COMP_01",
+      "optionA": { "text": "Slip through the shadows.", "tensionMechanic": "Mechanic_ConcealSlider", "onSuccess": "35 Credits", "onFailure": "Trigger Elite Ambush" },
+      "optionB": { "text": "[Terran Grid] Transmit clearance codes.", "requirementType": "Cabal", "requirementValue": "Terran_Grid", "onSuccess": "Safe Passage" },
+      "optionC": { "text": "[Use: Smoke Ampoule] Blind the thermal optics.", "requirementType": "Item", "requirementValue": "Smoke_Ampoule", "onSuccess": "Safe Passage" },
+      "optionD": { "text": "Fall back and find another route.", "type": "Retreat", "onSuccess": "Return to Map" }
+    },
+    {
+      "id": "RES_02",
+      "complicationId": "COMP_02",
+      "optionA": { "text": "Bind the tear manually.", "tensionMechanic": "Mechanic_SigilTrace", "onSuccess": "5 Veil Residue", "onFailure": "+15 Resonance" },
+      "optionB": { "text": "[Solaris] Absorb the ambient energy.", "requirementType": "Cabal", "requirementValue": "Solaris", "onSuccess": "-10 Resonance" },
+      "optionC": { "text": "[Use: Null-Key] Mechanically lock the rift.", "requirementType": "Item", "requirementValue": "Null_Key", "onSuccess": "5 Veil Residue" },
+      "optionD": { "text": "Force your way through the hazard.", "type": "BruteForce", "onSuccess": "Proceed (-20 HP)" }
+    },
+    {
+      "id": "RES_13",
+      "complicationId": "COMP_03",
+      "optionA": { "text": "Work the dead-man switch in slow pulses.", "tensionMechanic": "Mechanic_ScavengeBar", "onSuccess": "Extract Munitions", "onFailure": "30 Kinetic Damage" },
+      "optionB": { "text": "[Legion] Broadcast cache clearance codes.", "requirementType": "Cabal", "requirementValue": "Legion", "onSuccess": "Extract Munitions + 15 Credits" },
+      "optionC": { "text": "[Use: Null-Key] Mechanically bypass the lock.", "requirementType": "Item", "requirementValue": "Null_Key", "onSuccess": "Extract Munitions" },
+      "optionD": { "text": "Trip the switch and dive clear.", "type": "BruteForce", "onSuccess": "Minor Munitions (-30 HP)" }
+    },
+    {
+        "complicationId": "COMP_04",
+        "optionA": { "text": "Carefully hack the kinetic nodes.", "tensionMechanic": "Mechanic_SigilTrace", "onSuccess": "Advanced Schematics", "onFailure": "20 Kinetic Damage" },
+        "optionB": { "text": "[Terran Grid] Input administrative backdoor codes.", "requirementType": "Cabal", "requirementValue": "Terran_Grid", "onSuccess": "Advanced Schematics + 20 Credits" },
+        "optionC": { "text": "[Use: Grid-Cracker Mag] Fry the terminal's logic board.", "requirementType": "Item", "requirementValue": "Grid_Cracker_Mag", "onSuccess": "Advanced Schematics" },
+        "optionD": { "text": "Smash the hardware and salvage what you can.", "type": "BruteForce", "onSuccess": "Minor Scrap (-20 HP)" }
+      },
+      {
+        "id": "RES_04",
+        "complicationId": "COMP_05",
+        "optionA": { "text": "Hold your breath and sprint for the manual shutoff.", "tensionMechanic": "Mechanic_ScavengeBar", "onSuccess": "Safe Passage", "onFailure": "35 Caustic Damage" },
+        "optionB": { "text": "[Legion] Filter the gas through your Blood-Iron respirator.", "requirementType": "Cabal", "requirementValue": "Legion", "onSuccess": "Safe Passage + 10 Credits" },
+        "optionC": { "text": "[Use: Hazmat Shielding] Deploy the protective matrix.", "requirementType": "Item", "requirementValue": "Hazmat_Shielding", "onSuccess": "Safe Passage" },
+        "optionD": { "text": "Fall back before your lungs blister.", "type": "Retreat", "onSuccess": "Return to Map" }
+      },
+      {
+        "id": "RES_05",
+        "complicationId": "COMP_06",
+        "optionA": { "text": "Close your eyes and navigate by instinct.", "tensionMechanic": "Mechanic_ConcealSlider", "onSuccess": "Safe Passage", "onFailure": "+25 Resonance" },
+        "optionB": { "text": "[Solaris] Read the ash-trails and walk the true path.", "requirementType": "Cabal", "requirementValue": "Solaris", "onSuccess": "Safe Passage + -10 Resonance" },
+        "optionC": { "text": "[Use: Grave-Dust Ampoule] Ground yourself in reality.", "requirementType": "Item", "requirementValue": "Grave_Dust_Ampoule", "onSuccess": "Safe Passage" },
+        "optionD": { "text": "Force your way out of the distortion.", "type": "BruteForce", "onSuccess": "Escape (+25 Resonance)" }
+      },
+      {
+        "id": "RES_06",
+        "complicationId": "COMP_07",
+        "optionA": { "text": "Sneak through their blind spots.", "tensionMechanic": "Mechanic_ConcealSlider", "onSuccess": "Bypass Toll", "onFailure": "Combat Encounter (Player starts 0 AP)" },
+        "optionB": { "text": "[Legion] Intimidate the vanguard with rank.", "requirementType": "Cabal", "requirementValue": "Legion", "onSuccess": "Bypass Toll + Free Munitions" },
+        "optionC": { "text": "[Use: Sanguine Ampoule] Distract their chained specters.", "requirementType": "Item", "requirementValue": "Sanguine_Ampoule", "onSuccess": "Bypass Toll" },
+        "optionD": { "text": "Route away from the vanguard.", "type": "Retreat", "onSuccess": "Return to Map" }
+      },
+      {
+        "id": "RES_07",
+        "complicationId": "COMP_08",
+        "optionA": { "text": "Manually untangle the ethereal threads.", "tensionMechanic": "Mechanic_SigilTrace", "onSuccess": "5 Veil Residue", "onFailure": "25 Occult Damage" },
+        "optionB": { "text": "[Solaris] Absorb the blood-rite.", "requirementType": "Cabal", "requirementValue": "Solaris", "onSuccess": "10 Veil Residue + Heal 15 HP" },
+        "optionC": { "text": "[Use: Null-Key] Mechanically shatter the ward.", "requirementType": "Item", "requirementValue": "Null_Key", "onSuccess": "5 Veil Residue" },
+        "optionD": { "text": "Trigger the ward and brace for impact.", "type": "BruteForce", "onSuccess": "Proceed (-25 HP)" }
+      },
+      {
+        "id": "RES_08",
+        "complicationId": "COMP_09",
+        "optionA": { "text": "Anchor your mind and navigate the echoes.", "tensionMechanic": "Mechanic_SigilTrace", "onSuccess": "10 Veil Residue", "onFailure": "+30 Resonance" },
+        "optionB": { "text": "[Solaris] Speak the rites of closure to quiet the spirits.", "requirementType": "Cabal", "requirementValue": "Solaris", "onSuccess": "10 Veil Residue + Heal 10 HP" },
+        "optionC": { "text": "[Use: Spectral Salt] Burn the salt to dissolve the loop.", "requirementType": "Item", "requirementValue": "Spectral_Salt", "onSuccess": "10 Veil Residue" },
+        "optionD": { "text": "Push through and accept the mental toll.", "type": "BruteForce", "onSuccess": "Proceed (+30 Resonance)" }
+      },
+      {
+        "id": "RES_09",
+        "complicationId": "COMP_10",
+        "optionA": { "text": "Mask your heartbeat and creep past.", "tensionMechanic": "Mechanic_ConcealSlider", "onSuccess": "Bypass Entity", "onFailure": "Trigger Elite Combat Encounter" },
+        "optionB": { "text": "[Legion] Flare your blood-iron to assert dominance.", "requirementType": "Cabal", "requirementValue": "Legion", "onSuccess": "Entity Flees + 15 Credits" },
+        "optionC": { "text": "[Use: Sanguine Ampoule] Throw the blood to bait it away.", "requirementType": "Item", "requirementValue": "Sanguine_Ampoule", "onSuccess": "Bypass Entity" },
+        "optionD": { "text": "Quietly back away and take a massive detour.", "type": "Retreat", "onSuccess": "Return to Map" }
+      },
+      {
+        "id": "RES_10",
+        "complicationId": "COMP_11",
+        "optionA": { "text": "Sprint through the collapsing debris.", "tensionMechanic": "Mechanic_ScavengeBar", "onSuccess": "Safe Passage + Minor Scrap", "onFailure": "30 Kinetic Damage" },
+        "optionB": { "text": "[Terran Grid] Remotely stabilize the gravity pylons.", "requirementType": "Cabal", "requirementValue": "Terran_Grid", "onSuccess": "Safe Passage + 20 Credits" },
+        "optionC": { "text": "[Use: Null-Key] Jam the distortion field.", "requirementType": "Item", "requirementValue": "Null_Key", "onSuccess": "Safe Passage" },
+        "optionD": { "text": "Take the hit and dive for the exit.", "type": "BruteForce", "onSuccess": "Escape (-30 HP)" }
+      },
+      {
+        "id": "RES_11",
+        "complicationId": "COMP_12",
+        "optionA": { "text": "Slip through their patrol routes.", "tensionMechanic": "Mechanic_ConcealSlider", "onSuccess": "Bypass Squad", "onFailure": "Combat Encounter (Player starts 0 AP)" },
+        "optionB": { "text": "[Solaris] Join the procession and blend in.", "requirementType": "Cabal", "requirementValue": "Solaris", "onSuccess": "Bypass Squad + 5 Veil Residue" },
+        "optionC": { "text": "[Use: Smoke Ampoule] Flood the room with obscuring fog.", "requirementType": "Item", "requirementValue": "Smoke_Ampoule", "onSuccess": "Bypass Squad" },
+        "optionD": { "text": "Draw your weapon and kick the door open.", "type": "BruteForce", "onSuccess": "Start Combat with +1 AP Bonus" }
+      },
+      {
+        "id": "RES_12",
+        "complicationId": "COMP_13",
+        "optionA": { "text": "Dash frantically from cover to cover.", "tensionMechanic": "Mechanic_ScavengeBar", "onSuccess": "Bypass Sentry", "onFailure": "25 Kinetic Damage" },
+        "optionB": { "text": "[Terran Grid] Broadcast friendly IFF beacon.", "requirementType": "Cabal", "requirementValue": "Terran_Grid", "onSuccess": "Bypass Sentry + Extract Munitions" },
+        "optionC": { "text": "[Use: Grid-Cracker Mag] Short-circuit the targeting logic.", "requirementType": "Item", "requirementValue": "Grid_Cracker_Mag", "onSuccess": "Bypass Sentry" },
+        "optionD": { "text": "Retreat into the blind spot and leave.", "type": "Retreat", "onSuccess": "Return to Map" }
+      }
+  ]
