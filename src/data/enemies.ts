@@ -254,6 +254,18 @@ export function createHardTestEnemy(playerState?: PlayerAIState): EnemyCombatPro
   };
 }
 
+export function isRedundantBuffIntent(intent: EnemyIntent, profile: EnemyCombatProfile): boolean {
+  if (intent === 'EVADE' && profile.evadeActive) return true;
+  if (intent === 'FORTIFY' && (profile.fortifyTurnsRemaining ?? 0) > 0) return true;
+  return false;
+}
+
+/** When a hostile already has Evade/Fortify active, spend the turn on a strike instead. */
+export function resolveEffectiveEnemyIntent(profile: EnemyCombatProfile): EnemyIntent {
+  if (isRedundantBuffIntent(profile.intent, profile)) return 'STRIKE';
+  return profile.intent;
+}
+
 export function advanceEnemyIntent(
   profile: EnemyCombatProfile,
   district: DistrictId = 1,
@@ -270,7 +282,8 @@ export function advanceEnemyIntent(
   }
 
   if (profile.testPreset === 'hard') {
-    const nextIntent = rollHardTestIntent(playerState);
+    let nextIntent = rollHardTestIntent(playerState);
+    if (isRedundantBuffIntent(nextIntent, profile)) nextIntent = 'STRIKE';
     return {
       ...profile,
       chargeTurns: 0,
@@ -285,7 +298,7 @@ export function advanceEnemyIntent(
   if (synced.intent === 'CHARGE') chargeTurns += 1;
   else if (synced.intent !== 'WORLD_ENDER') chargeTurns = 0;
 
-  const nextIntent = synced.rosterId
+  let nextIntent = synced.rosterId
     ? (decideRosterIntent({ ...synced, chargeTurns }, district, playerState, squad) ?? decideEnemyIntent({
         enemy: enemyAIStateFromProfile({ ...synced, chargeTurns }, district),
         player: playerState ?? defaultPlayerAIState(),
@@ -294,6 +307,10 @@ export function advanceEnemyIntent(
         enemy: enemyAIStateFromProfile({ ...synced, chargeTurns }, district),
         player: playerState ?? defaultPlayerAIState(),
       });
+
+  if (isRedundantBuffIntent(nextIntent, synced)) {
+    nextIntent = 'STRIKE';
+  }
 
   const telegraphLocked = synced.rosterId === 'concrete-gargoyle'
     && (synced.queuedAction === 'SLAM' || synced.isCharging);

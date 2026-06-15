@@ -10,6 +10,7 @@ import {
 } from './AIDecisionEngine';
 import { aliveUnits } from './combatSquadEngine';
 import type { EnemyCombatProfile, EnemyIntent } from '../types/run';
+import { isRedundantBuffIntent } from './enemies';
 
 /** Playtest-tunable hostile enrage thresholds — adjust ratios/absolute HP here. */
 export const ROSTER_ENRAGE_THRESHOLDS = {
@@ -189,7 +190,13 @@ export function decideRosterIntent(
     player: playerState ?? defaultPlayerAIState(),
   };
   const valid = filterValidIntents(cooledPool, ctx);
-  const weighted = weightValidIntents(valid.length > 0 ? valid : cooledPool, ctx);
+  const withoutRedundantBuffs = cooledPool.filter((intent) => !isRedundantBuffIntent(intent, synced));
+  const fallbackPool = valid.length > 0
+    ? valid
+    : withoutRedundantBuffs.length > 0
+      ? withoutRedundantBuffs
+      : (['STRIKE'] as EnemyIntent[]);
+  const weighted = weightValidIntents(fallbackPool, ctx);
   const rosterWeighted = applyRosterIntentWeights(
     weighted,
     synced,

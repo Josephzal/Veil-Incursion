@@ -27,6 +27,7 @@ const HITBOX_DEBUG_FILL = 'rgba(255, 0, 0, 0)';
 
 export type CombatGridUnitView = CombatGridUnitSnapshot & {
   portraitSource: ImageSourcePropType;
+  attackPortraitSource: ImageSourcePropType;
 };
 
 interface CombatEnemyUnitProps {
@@ -107,6 +108,10 @@ export default function CombatEnemyUnit({
               <CombatSilhouetteShatterEffect trigger={fractured} portraitSource={unit.portraitSource}>
                 <CombatEnemyPortraitSkia
                   source={unit.portraitSource}
+                  attackSource={unit.attackPortraitSource}
+                  turnPhase={unit.turnPhase ?? null}
+                  backlineDashSeq={unit.backlineMeleeDashSeq ?? 0}
+                  isBacklineDashing={unit.isBacklineDashing === true}
                   glow={portraitGlow}
                   intentShimmer={unit.intentShimmer ?? null}
                 />

@@ -3,6 +3,7 @@ import { Animated, Easing, Image, StyleSheet, View, Dimensions, type ImageSource
 import {
   resolveCombatEnemyPortrait,
   resolvePortraitKeySuffix,
+  resolveUnitCombatAttackPortrait,
   resolveUnitCombatPortrait,
 } from '../utils/combatEnemyPortrait';
 import type { ApparitionViewportRef } from '../components/combat/ApparitionViewport';
@@ -302,18 +303,18 @@ export default function CombatScreen(): React.JSX.Element {
       .map((unit) => {
         const live = liveById.get(unit.unitId);
         const merged = live ? { ...unit, ...live } : unit;
+        const portraitMeta = {
+          isBoss: merged.isBoss,
+          isVeilStalker: merged.isVeilStalker,
+          class: merged.enemyClass ?? 'GREMLIN',
+          rosterId: merged.rosterId,
+        } as const;
+        const portraitSource = resolveUnitCombatPortrait(portraitMeta, nodeType);
         return {
           ...merged,
           isDead: merged.currentHp <= 0,
-          portraitSource: resolveUnitCombatPortrait(
-            {
-              isBoss: merged.isBoss,
-              isVeilStalker: merged.isVeilStalker,
-              class: merged.enemyClass ?? 'GREMLIN',
-              rosterId: merged.rosterId,
-            },
-            nodeType,
-          ),
+          portraitSource,
+          attackPortraitSource: resolveUnitCombatAttackPortrait(portraitMeta, portraitSource),
         };
       });
   }, [bootstrappedSquadUi.units, effectiveSquadUi.units, nodeType]);

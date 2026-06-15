@@ -1,6 +1,7 @@
 import React from 'react';
 import { Image, type ImageSourcePropType, StyleSheet, View } from 'react-native';
-import type { EnemyPortraitGlow, EnemyIntentShimmer } from '../../utils/combatTelemetryFormat';
+import AnimatedEnemySprite from './AnimatedEnemySprite';
+import type { EnemyPortraitGlow, EnemyIntentShimmer, EnemyTurnPhase } from '../../utils/combatTelemetryFormat';
 import CombatEnemyIntentShimmer, { enemySpriteStyles } from './CombatEnemyIntentShimmer';
 
 const GLOW_TINT: Record<Exclude<EnemyPortraitGlow, 'none'>, string> = {
@@ -23,19 +24,28 @@ const GLOW_OPACITY: Record<Exclude<EnemyPortraitGlow, 'none'>, number> = {
 
 interface CombatEnemyPortraitSkiaProps {
   source: ImageSourcePropType;
+  attackSource?: ImageSourcePropType;
+  turnPhase?: EnemyTurnPhase | null;
+  backlineDashSeq?: number;
+  isBacklineDashing?: boolean;
   glow: EnemyPortraitGlow;
   intentShimmer?: EnemyIntentShimmer | null;
 }
 
-/** Passive portrait art — slot motion handled by CombatEnemyAnchorMotion. */
+/** Portrait art with idle/attack crossfade synced to CombatEnemyAnchorMotion. */
 export default function CombatEnemyPortraitSkia({
   source,
+  attackSource,
+  turnPhase = null,
+  backlineDashSeq = 0,
+  isBacklineDashing = false,
   glow,
   intentShimmer = null,
 }: CombatEnemyPortraitSkiaProps): React.JSX.Element {
   const glowTint = glow !== 'none' ? GLOW_TINT[glow] : null;
   const glowScale = glow !== 'none' ? GLOW_SCALE[glow] : 1.05;
   const glowOpacity = glow !== 'none' ? GLOW_OPACITY[glow] : 0.3;
+  const resolvedAttackSource = attackSource ?? source;
 
   return (
     <View style={styles.root} pointerEvents="none" collapsable={false}>
@@ -57,12 +67,13 @@ export default function CombatEnemyPortraitSkia({
       ) : null}
       <View style={styles.enemySpriteStack} pointerEvents="none">
         <CombatEnemyIntentShimmer kind={intentShimmer} source={source} layer="back" />
-        <Image
-          source={source}
-          resizeMode="contain"
-          style={enemySpriteStyles.enemySprite}
-          nativeID="enemy-sprite"
-          accessibilityLabel="enemy-sprite"
+        <AnimatedEnemySprite
+          idleSource={source}
+          attackSource={resolvedAttackSource}
+          turnPhase={turnPhase}
+          backlineDashSeq={backlineDashSeq}
+          isBacklineDashing={isBacklineDashing}
+          enableLocalMotion={false}
         />
         <CombatEnemyIntentShimmer kind={intentShimmer} source={source} layer="front" />
       </View>

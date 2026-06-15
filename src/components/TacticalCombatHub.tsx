@@ -9,7 +9,7 @@ import {
   withTiming,
 } from 'react-native-reanimated';
 import { useTerminal } from '../context/TerminalContext';
-import { advanceEnemyIntent } from '../data/enemies';
+import { advanceEnemyIntent, resolveEffectiveEnemyIntent } from '../data/enemies';
 import type { PlayerAIState } from '../data/AIDecisionEngine';
 import {
   computeBloodFrenzyHeal,
@@ -668,9 +668,10 @@ export default function TacticalCombatHub({
           && enemyActionStageRef.current != null
           && !isPlayerTurnRef.current
           && cycleRef.current === 'TEXT_COMBAT';
-        const motionKind = classifyEnemyTurnMotion(u.intent, motionOptions);
+        const actingIntent = isActiveActor ? resolveEffectiveEnemyIntent(u) : u.intent;
+        const motionKind = classifyEnemyTurnMotion(actingIntent, motionOptions);
         const turnPhase = isActiveActor
-          ? resolveEnemyTurnPhase(u.intent, enemyActionStageRef.current, motionOptions)
+          ? resolveEnemyTurnPhase(actingIntent, enemyActionStageRef.current, motionOptions)
           : null;
         return {
           unitId,
@@ -1934,14 +1935,15 @@ export default function TacticalCombatHub({
   };
 
   const execIntent = (e: EnemyCombatProfile) => {
+    const intent = resolveEffectiveEnemyIntent(e);
     const blindPenalty = getEnemyAccuracyPenalty(e, sessionExtrasRef.current);
-    if (blindPenalty > 0 && isAttackIntent(e.intent) && Math.random() < blindPenalty) {
+    if (blindPenalty > 0 && isAttackIntent(intent) && Math.random() < blindPenalty) {
       log(`>> ${e.designation} BLINDED — attack whiffed (−${Math.round(blindPenalty * 100)}% accuracy).`);
       return;
     }
     if (e.isBoss && bossRuntimeRef.current) {
       const phase = bossPhaseRef.current;
-      if (e.intent === 'OVERDRIVE_DISCHARGE') {
+      if (intent === 'OVERDRIVE_DISCHARGE') {
         const dmg = bossStrikeDamage(bossRuntimeRef.current, phase);
         log(`>> ${e.designation} OVERDRIVE DISCHARGE — ${dmg} DMG`);
         hurtPlayer(dmg, !counterRef.current, `>> OVERDRIVE HIT — ${dmg}`, { attacker: e, rollCrit: false });
@@ -1951,7 +1953,7 @@ export default function TacticalCombatHub({
       hurtPlayer(dmg, false, `>> ${e.designation} STRIKES — ${dmg}`, { attacker: e, rollCrit: false });
       return;
     }
-    switch (e.intent) {
+    switch (intent) {
       case 'STRIKE': {
         const { dmg, unblockable } = attackDmg(e);
         if (e.rosterId === 'fracture-hound' && !e.isEnraged) applyFractureHoundShieldDrain(e);
@@ -2278,9 +2280,10 @@ export default function TacticalCombatHub({
       focusEnemy(acting);
       setEnemyActionStage('executing');
 
+      const effectiveIntent = resolveEffectiveEnemyIntent(acting);
       const motionOptions = { arenaLayout, gridSlot: acting.gridSlot ?? null };
-      const motionKind = classifyEnemyTurnMotion(acting.intent, motionOptions);
-      const overlayVariant = getEnemyDeckStrikeVariant(acting.intent);
+      const motionKind = classifyEnemyTurnMotion(effectiveIntent, motionOptions);
+      const overlayVariant = getEnemyDeckStrikeVariant(effectiveIntent);
       const isBacklineMelee = arenaLayout
         && acting.gridSlot?.startsWith('BL') === true
         && motionKind === 'melee';
