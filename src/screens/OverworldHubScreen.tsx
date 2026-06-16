@@ -12,6 +12,7 @@ import InventoryManifestPanel from '../components/InventoryManifestPanel';
 import TerminalNavHeader from '../components/TerminalNavHeader';
 import TerminalSafeArea from '../components/TerminalSafeArea';
 import VectorMapDashboard from '../components/VectorMapDashboard';
+import { DEFAULT_HOME_MACRO_SECTOR } from '../constants/homeSector';
 import { FactionType } from '../types/game';
 import { MacroSectorId } from '../types/regional';
 
@@ -27,11 +28,16 @@ export default function OverworldHubScreen(): React.JSX.Element {
   const { startBoundRequisition } = useGameFlow();
 
   const [activeMagnetSector, setActiveMagnetSector] = useState<MacroSectorId>(
-    account.regionalPresence.homeMacroSector,
+    DEFAULT_HOME_MACRO_SECTOR,
   );
   const lastProxyLogRef = useRef<string | null>(null);
 
   const needsFactionSelection = account.alignedFaction === null;
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    setActiveMagnetSector(account.regionalPresence.homeMacroSector);
+  }, [isHydrated, account.regionalPresence.homeMacroSector]);
 
   useEffect(() => {
     if (!account.alignedFaction || account.alignedFaction === alignment) return;

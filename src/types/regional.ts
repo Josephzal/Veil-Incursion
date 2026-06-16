@@ -1,6 +1,28 @@
 import { FactionType } from './game';
 
-export type MacroSectorId = 'PACIFIC' | 'MOUNTAIN' | 'CENTRAL' | 'ATLANTIC' | 'THE_ARCHIPELAGO';
+export type ContinentCode = 'NA' | 'SA' | 'EU' | 'AF' | 'AS' | 'OC';
+
+export type MacroSectorId =
+  | 'PACIFIC'
+  | 'CASCADIA'
+  | 'HEARTLAND'
+  | 'ATLANTIC'
+  | 'NEO-MEX'
+  | 'AMAZONIA'
+  | 'ANDEAN CORDON'
+  | 'PATAGONIA'
+  | 'NORDIC SPRAWL'
+  | 'WESTERN BLOC'
+  | 'SLAVIC GRID'
+  | 'SAHARA EXPANSE'
+  | 'CONGO BASIN'
+  | 'CAPE SECTOR'
+  | 'SIBERIAN WASTES'
+  | 'SINO-GRID'
+  | 'DUNE SEA'
+  | 'INDO-TRACT'
+  | 'PACIFIC RIM'
+  | 'OUTBACK CORDON';
 
 export interface CabalInfluenceBalance {
   TERRAN_GRID: number;
@@ -14,6 +36,7 @@ export interface MapPoint {
 }
 
 export interface SectorMapGeometry {
+  path: string;
   polygon: MapPoint[];
   labelAnchor: MapPoint;
   nodeAnchor: MapPoint;
@@ -22,9 +45,11 @@ export interface SectorMapGeometry {
 export interface MacroSectorDefinition {
   id: MacroSectorId;
   label: string;
+  continent: ContinentCode;
   metropolitanNode: string;
   /** Simulated baseline operative traffic density 0–100. */
   baseTrafficDensity: number;
+  defaultFaction: FactionType;
   influence: CabalInfluenceBalance;
   mapGeometry: SectorMapGeometry;
 }

@@ -44,6 +44,10 @@ import {
   type UnidentifiedTemplateId,
 } from '../types/unidentifiedItem';
 import { createLockedContainer } from '../data/unidentifiedStashEngine';
+import {
+  DEFAULT_HOME_MACRO_SECTOR,
+  DEFAULT_HOME_METROPOLITAN_NODE,
+} from '../constants/homeSector';
 
 const STORAGE_KEY = '@veil_incursion/player_account_v2';
 
@@ -75,8 +79,8 @@ export function createDefaultPlayerAccount(): PlayerAccount {
       activeCampaignCluster: null,
     },
     regionalPresence: {
-      homeMacroSector: 'PACIFIC',
-      metropolitanNode: 'SEATTLE CORE',
+      homeMacroSector: DEFAULT_HOME_MACRO_SECTOR,
+      metropolitanNode: DEFAULT_HOME_METROPOLITAN_NODE,
       weaponCoatingUnlocks: [],
     },
     equipment: {
@@ -116,7 +120,12 @@ function mergeStoredAccount(parsed: Partial<PlayerAccount>): PlayerAccount {
         ?? (parsed.progressionMatrix as { maxTierUnlocked?: number } | undefined)?.maxTierUnlocked
         ?? defaults.progressionMatrix.maxDepthUnlocked,
     },
-    regionalPresence: { ...defaults.regionalPresence, ...parsed.regionalPresence },
+    regionalPresence: {
+      ...defaults.regionalPresence,
+      ...parsed.regionalPresence,
+      homeMacroSector: DEFAULT_HOME_MACRO_SECTOR,
+      metropolitanNode: DEFAULT_HOME_METROPOLITAN_NODE,
+    },
     equipment: {
       ...defaults.equipment,
       ...parsed.equipment,
@@ -372,13 +381,12 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
   );
 
   const setMetropolitanNode = useCallback(
-    (node: string, sectorId?: MacroSectorId) => {
+    (node: string, _sectorId?: MacroSectorId) => {
       updateAccount((prev) => ({
         ...prev,
         regionalPresence: {
           ...prev.regionalPresence,
           metropolitanNode: node,
-          homeMacroSector: sectorId ?? prev.regionalPresence.homeMacroSector,
         },
       }));
     },

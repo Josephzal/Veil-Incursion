@@ -9,7 +9,7 @@ export const mockOperativeProfile: OperativeProfile = {
       class: "AEGIS"
     },
     location_vectors: {
-      home_sector: "PACIFIC_NORTHWEST",
+      home_sector: "PACIFIC // US",
       current_node_lock: "SEATTLE CORE",
       active_frequency: "LOCAL_SEATTLE"
     },

@@ -9,16 +9,6 @@ import {
   Vibration,
   View,
 } from 'react-native';
-import {
-  Canvas,
-  Circle,
-  Group,
-  Line,
-  Path,
-  Rect,
-  Skia,
-  vec,
-} from '@shopify/react-native-skia';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
@@ -26,14 +16,16 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import { WORLD_CONTINENT_OUTLINES, WORLD_VIEWBOX } from '../data/worldMapGeometry';
+import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
+import { WORLD_VIEWBOX } from '../data/sectorMapData';
+import { FACTION_DEFINITIONS } from '../data/factions';
 import { MacroSectorDefinition, MacroSectorId } from '../types/regional';
 import { TerminalTheme } from '../types/theme';
 import {
+  getDominantFaction,
+  getSectorCabalStrokeColor,
   getSectorTintColor,
   hitTestSectorAtPoint,
-  INACTIVE_SECTOR_LAYER_OPACITY,
-  polygonToSkiaPath,
   resolveSectorInfluence,
   clampExpandedMapTranslation,
   clampPreviewMapTranslation,
@@ -49,8 +41,6 @@ import TacticalGridBackdrop from './map/TacticalGridBackdrop';
 
 const MAP_BACKDROP = '#06080d';
 const OCEAN_GRID_COLOR = '#1a2332';
-const CONTINENT_FILL = '#243044';
-const CONTINENT_STROKE = '#4a5d78';
 const NODE_MARKER_COLOR = '#00ff33';
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 4;
@@ -81,11 +71,6 @@ interface MapViewportProps extends WorldMagnetismMapProps {
   onOpen?: () => void;
   hint: string;
   mapHostStyle?: object;
-}
-
-function buildPathFromPolygon(polygon: { x: number; y: number }[]) {
-  const path = Skia.Path.MakeFromSVGString(polygonToSkiaPath(polygon));
-  return path ?? Skia.Path.Make();
 }
 
 function clampZoom(value: number): number {
@@ -223,14 +208,9 @@ function MapViewport({
     drawMetrics.scale,
   ]);
 
-  const continentPaths = useMemo(
-    () => WORLD_CONTINENT_OUTLINES.map((outline) => buildPathFromPolygon(outline)),
-    [],
-  );
-
   const gridLines = useMemo(() => {
     const lines: { p1: { x: number; y: number }; p2: { x: number; y: number } }[] = [];
-    const step = 160;
+    const step = 100;
     for (let x = 0; x <= WORLD_VIEWBOX.width; x += step) {
       lines.push({ p1: { x, y: 0 }, p2: { x, y: WORLD_VIEWBOX.height } });
     }
@@ -239,6 +219,11 @@ function MapViewport({
     }
     return lines;
   }, []);
+
+  const handleSectorSelect = useCallback((id: MacroSectorId) => {
+    Vibration.vibrate(SECTOR_SELECT_HAPTIC_MS);
+    onSectorPress(id);
+  }, [onSectorPress]);
 
   const handleMapPress = useCallback(
     (screenX: number, screenY: number, zoom: number, offsetX: number, offsetY: number) => {
@@ -256,10 +241,9 @@ function MapViewport({
       );
       const hit = hitTestSectorAtPoint(viewBoxPoint, sectors);
       if (!hit) return;
-      Vibration.vibrate(SECTOR_SELECT_HAPTIC_MS);
-      onSectorPress(hit.id);
+      handleSectorSelect(hit.id);
     },
-    [activeCanvasSize.height, activeCanvasSize.width, onSectorPress, sectors],
+    [activeCanvasSize.height, activeCanvasSize.width, handleSectorSelect, sectors],
   );
 
   const handleExpandedMapPress = useCallback(
@@ -289,10 +273,9 @@ function MapViewport({
       );
       const hit = hitTestSectorAtPoint(viewBoxPoint, sectors);
       if (!hit) return;
-      Vibration.vibrate(SECTOR_SELECT_HAPTIC_MS);
-      onSectorPress(hit.id);
+      handleSectorSelect(hit.id);
     },
-    [activeCanvasSize.height, activeCanvasSize.width, onSectorPress, sectors],
+    [activeCanvasSize.height, activeCanvasSize.width, handleSectorSelect, sectors],
   );
 
   const resetMapView = useCallback(() => {
@@ -492,6 +475,7 @@ function MapViewport({
   }));
 
   const activeSector = sectors.find((sector) => sector.id === activeSectorId);
+  const inactiveSectors = sectors.filter((sector) => sector.id !== activeSectorId);
   const activeSectorLabel = activeSector
     ? viewBoxPointToCanvas(activeSector.mapGeometry.labelAnchor, drawMetrics)
     : null;
@@ -501,104 +485,74 @@ function MapViewport({
     ? viewBoxPointToCanvas(homeSector.mapGeometry.nodeAnchor, drawMetrics)
     : null;
 
+  const renderSectorPath = (sector: MacroSectorDefinition, isActive: boolean) => {
+    const influence = resolveSectorInfluence(sector, isInfluenceFrozen, frozenInfluence);
+    const fillColor = getSectorTintColor(influence, isActive);
+    const strokeColor = getSectorCabalStrokeColor(influence, isActive);
+
+    return (
+      <Path
+        key={`sector-${sector.id}-${isActive ? 'active' : 'idle'}`}
+        d={sector.mapGeometry.path}
+        fill={fillColor}
+        stroke={strokeColor}
+        strokeWidth={isActive ? 3.5 : 2}
+        strokeLinejoin="miter"
+        onPress={() => handleSectorSelect(sector.id)}
+      />
+    );
+  };
+
   const mapVisualContent = (
     <>
-      <Canvas style={{ width: activeCanvasSize.width, height: activeCanvasSize.height }}>
-        <Group
-          transform={[
-            { translateX: drawMetrics.offsetX },
-            { translateY: drawMetrics.offsetY },
-            { scale: drawMetrics.scale },
-          ]}
-        >
-          <Rect
-            x={0}
-            y={0}
-            width={WORLD_VIEWBOX.width}
-            height={WORLD_VIEWBOX.height}
-            color={MAP_BACKDROP}
+      <Svg
+        width={activeCanvasSize.width}
+        height={activeCanvasSize.height}
+        viewBox={`0 0 ${WORLD_VIEWBOX.width} ${WORLD_VIEWBOX.height}`}
+        preserveAspectRatio="xMidYMid meet"
+      >
+        <Rect
+          x={0}
+          y={0}
+          width={WORLD_VIEWBOX.width}
+          height={WORLD_VIEWBOX.height}
+          fill={MAP_BACKDROP}
+        />
+
+        {gridLines.map((line, index) => (
+          <Line
+            key={`grid-${index}`}
+            x1={line.p1.x}
+            y1={line.p1.y}
+            x2={line.p2.x}
+            y2={line.p2.y}
+            stroke={OCEAN_GRID_COLOR}
+            strokeWidth={1}
+            opacity={0.28}
           />
+        ))}
 
-          {gridLines.map((line, index) => (
-            <Line
-              key={`grid-${index}`}
-              p1={vec(line.p1.x, line.p1.y)}
-              p2={vec(line.p2.x, line.p2.y)}
-              color={OCEAN_GRID_COLOR}
-              strokeWidth={1}
-              opacity={0.28}
+        {inactiveSectors.map((sector) => renderSectorPath(sector, false))}
+        {activeSector ? renderSectorPath(activeSector, true) : null}
+
+        {sectors.map((sector) => {
+          const isActive = sector.id === activeSectorId;
+          const influence = resolveSectorInfluence(sector, isInfluenceFrozen, frozenInfluence);
+          const cabalColor = FACTION_DEFINITIONS[getDominantFaction(influence)].accentColor;
+          const { nodeAnchor } = sector.mapGeometry;
+          return (
+            <Circle
+              key={`node-${sector.id}`}
+              cx={nodeAnchor.x}
+              cy={nodeAnchor.y}
+              r={isActive ? 6 : 4}
+              fill={isActive ? NODE_MARKER_COLOR : cabalColor}
+              opacity={isActive ? 1 : 0.85}
+              onPress={() => handleSectorSelect(sector.id)}
             />
-          ))}
-
-          {continentPaths.map((path, index) => (
-            <Group key={`continent-${index}`}>
-              <Path
-                path={path}
-                color={CONTINENT_FILL}
-                style="fill"
-                opacity={0.65}
-              />
-              <Path
-                path={path}
-                color={CONTINENT_STROKE}
-                style="stroke"
-                strokeWidth={2.5}
-                strokeJoin="round"
-                strokeCap="round"
-                opacity={0.9}
-              />
-            </Group>
-          ))}
-
-          {sectors.map((sector) => {
-            const isActive = sector.id === activeSectorId;
-            const influence = resolveSectorInfluence(sector, isInfluenceFrozen, frozenInfluence);
-            const fillColor = getSectorTintColor(influence, isActive);
-            const path = buildPathFromPolygon(sector.mapGeometry.polygon);
-            return (
-              <Path
-                key={`sector-fill-${sector.id}`}
-                path={path}
-                color={fillColor}
-                style="fill"
-                opacity={isActive ? 1 : INACTIVE_SECTOR_LAYER_OPACITY}
-              />
-            );
-          })}
-
-          {sectors.map((sector) => {
-            const isActive = sector.id === activeSectorId;
-            const path = buildPathFromPolygon(sector.mapGeometry.polygon);
-            return (
-              <Path
-                key={`sector-stroke-${sector.id}`}
-                path={path}
-                color={isActive ? theme.statusColor : CONTINENT_STROKE}
-                style="stroke"
-                strokeWidth={isActive ? 3 : 2}
-                strokeJoin="round"
-                strokeCap="round"
-                opacity={isActive ? 1 : INACTIVE_SECTOR_LAYER_OPACITY}
-              />
-            );
-          })}
-
-          {sectors.map((sector) => {
-            const isActive = sector.id === activeSectorId;
-            const { nodeAnchor } = sector.mapGeometry;
-            return (
-              <Circle
-                key={`node-${sector.id}`}
-                cx={nodeAnchor.x}
-                cy={nodeAnchor.y}
-                r={isActive ? 7 : 5}
-                color={isActive ? NODE_MARKER_COLOR : theme.mutedColor}
-                opacity={isActive ? 1 : INACTIVE_SECTOR_LAYER_OPACITY}
-              />
-            );
-          })}
-        </Group>
-      </Canvas>
+          );
+        })}
+      </Svg>
 
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         {activeSector && activeSectorLabel && (
@@ -607,7 +561,7 @@ function MapViewport({
             style={[
               styles.sectorLabel,
               {
-                left: activeSectorLabel.x - 48,
+                left: activeSectorLabel.x - 56,
                 top: activeSectorLabel.y - 8,
                 color: theme.statusColor,
               },
@@ -616,7 +570,7 @@ function MapViewport({
             {activeSector.label}
           </Text>
         )}
-        {homeMarker && (
+        {homeMarker && homeSector && (
           <View
             style={[
               styles.homeMarkerTag,
@@ -660,7 +614,7 @@ function MapViewport({
               fillContainer ? styles.mapSurfaceFill : { width: activeCanvasSize.width, height: activeCanvasSize.height },
             ]}
           >
-            <Animated.View pointerEvents="none" style={[styles.mapVisualLayer, mapPanStyle]}>
+            <Animated.View pointerEvents="box-none" style={[styles.mapVisualLayer, mapPanStyle]}>
               <Animated.View
                 style={[
                   {
@@ -691,6 +645,7 @@ function MapViewport({
             </View>
           </View>
         )}
+
       </View>
 
       {!fillContainer && onOpen && (
@@ -838,7 +793,7 @@ const styles = StyleSheet.create({
   },
   sectorLabel: {
     position: 'absolute',
-    width: 96,
+    width: 112,
     fontFamily: 'monospace',
     fontSize: 7,
     fontWeight: '700',

@@ -49,7 +49,7 @@ export default function MetropolitanMagnetismMap({
         {formatBracketHeader('VECTOR WORLD MAP // CONTINENTAL MAGNETISM')}
       </Text>
       <Text style={[styles.sub, { color: theme.mutedColor }]}>
-        5 MACRO-SECTORS // LOW-POLY WORLD MAP // FACTION CONTROL
+        20 GLOBAL MACRO-SECTORS // LOW-POLY WORLD MAP // FACTION CONTROL
       </Text>
 
       <WorldMagnetismMap

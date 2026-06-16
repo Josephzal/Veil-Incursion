@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { CLASS_DEFINITIONS } from '../data/classes';
 import { getFactionDefinition } from '../data/factions';
+import { getMacroSector } from '../data/macroSectors';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import ExplorationHubPanel from './ExplorationHubPanel';
 import { PlayerAccount } from '../types/game';
 import { OperativeProfile } from '../types/profile';
 import { TerminalTheme } from '../types/theme';
+import { formatHomeSectorDisplay } from '../constants/homeSector';
 import { formatSnakeCaseToTitleCase } from '../utils/formatDisplayName';
 import {
   formatBracketHeader,
@@ -69,6 +71,7 @@ export default function IdentificationBadgeView({
   const vectors = profile.operative_profile.location_vectors;
   const factionDef = account.alignedFaction ? getFactionDefinition(account.alignedFaction) : null;
   const classDef = CLASS_DEFINITIONS[account.activeClass];
+  const homeSector = getMacroSector(account.regionalPresence.homeMacroSector);
   const factionColor = factionDef?.accentColor ?? theme.primaryColor;
   const accentFill = `${theme.primaryColor}26`;
 
@@ -162,7 +165,7 @@ export default function IdentificationBadgeView({
           {formatBracketHeader('HOME SECTOR')}
         </Text>
         <Text style={[styles.fieldValue, { color: theme.textColor }]}>
-          {formatSnakeCaseToTitleCase(vectors.home_sector)}
+          {formatHomeSectorDisplay(homeSector.id, homeSector.label)}
         </Text>
       </View>
 

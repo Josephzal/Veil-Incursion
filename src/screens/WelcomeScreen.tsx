@@ -12,6 +12,7 @@ import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import FactionBootLogo from '../components/FactionBootLogo';
 import TerminalSafeArea from '../components/TerminalSafeArea';
+import { DEFAULT_HOME_SECTOR_PROFILE_LABEL } from '../constants/homeSector';
 
 const { width } = Dimensions.get('window');
 
@@ -92,7 +93,9 @@ export default function WelcomeScreen(): React.JSX.Element {
           </View>
           <View style={styles.idMetaRow}>
             <Text style={[styles.idMeta, { color: theme.mutedColor }]}>SECTOR LOCK</Text>
-            <Text style={[styles.idMetaValue, { color: theme.primaryColor }]}>{vectors.home_sector}</Text>
+            <Text style={[styles.idMetaValue, { color: theme.primaryColor }]}>
+              {DEFAULT_HOME_SECTOR_PROFILE_LABEL}
+            </Text>
           </View>
         </View>
 

@@ -4,8 +4,10 @@ import { CabalInfluenceBalance, MacroSectorDefinition, MapPoint } from '../types
 
 const FACTION_ORDER: FactionType[] = ['TERRAN_GRID', 'LEGION', 'SOLARIS'];
 
-const DEFAULT_TINT_OPACITY = 0.35;
-const ACTIVE_TINT_OPACITY = 0.48;
+const DEFAULT_TINT_OPACITY = 0.38;
+const ACTIVE_TINT_OPACITY = 0.58;
+const DEFAULT_STROKE_OPACITY = 0.72;
+const ACTIVE_STROKE_OPACITY = 1;
 
 export const SECTOR_SELECT_HAPTIC_MS = 12;
 export const INACTIVE_SECTOR_LAYER_OPACITY = 0.42;
@@ -33,6 +35,15 @@ export function getSectorTintColor(
   return hexToRgba(accent, isActive ? ACTIVE_TINT_OPACITY : DEFAULT_TINT_OPACITY);
 }
 
+export function getSectorCabalStrokeColor(
+  influence: CabalInfluenceBalance,
+  isActive = false,
+): string {
+  const dominant = getDominantFaction(influence);
+  const accent = FACTION_DEFINITIONS[dominant].accentColor;
+  return hexToRgba(accent, isActive ? ACTIVE_STROKE_OPACITY : DEFAULT_STROKE_OPACITY);
+}
+
 export function resolveSectorInfluence(
   sector: MacroSectorDefinition,
   isInfluenceFrozen: boolean,
@@ -40,6 +51,41 @@ export function resolveSectorInfluence(
 ): CabalInfluenceBalance {
   if (isInfluenceFrozen && frozenInfluence) return frozenInfluence;
   return sector.influence;
+}
+
+export function parseLowPolyPath(d: string): MapPoint[] {
+  const points: MapPoint[] = [];
+  const tokens = d.trim().split(/\s+/);
+  let i = 0;
+  while (i < tokens.length) {
+    const cmd = tokens[i];
+    if (cmd === 'M' || cmd === 'L') {
+      const x = parseFloat(tokens[i + 1]);
+      const y = parseFloat(tokens[i + 2]);
+      if (!Number.isNaN(x) && !Number.isNaN(y)) {
+        points.push({ x, y });
+      }
+      i += 3;
+      continue;
+    }
+    if (cmd === 'Z' || cmd === 'z') {
+      i += 1;
+      continue;
+    }
+    i += 1;
+  }
+  return points;
+}
+
+export function polygonCentroid(polygon: MapPoint[]): MapPoint {
+  if (polygon.length === 0) return { x: 0, y: 0 };
+  let sumX = 0;
+  let sumY = 0;
+  polygon.forEach((vertex) => {
+    sumX += vertex.x;
+    sumY += vertex.y;
+  });
+  return { x: sumX / polygon.length, y: sumY / polygon.length };
 }
 
 export function polygonToSkiaPath(polygon: MapPoint[]): string {
@@ -235,23 +281,13 @@ export function pointInPolygon(point: MapPoint, polygon: MapPoint[]): boolean {
   return inside;
 }
 
-function polygonCentroid(polygon: MapPoint[]): MapPoint {
-  let sumX = 0;
-  let sumY = 0;
-  polygon.forEach((vertex) => {
-    sumX += vertex.x;
-    sumY += vertex.y;
-  });
-  return { x: sumX / polygon.length, y: sumY / polygon.length };
-}
-
 function distanceBetween(a: MapPoint, b: MapPoint): number {
   const dx = a.x - b.x;
   const dy = a.y - b.y;
   return Math.sqrt(dx * dx + dy * dy);
 }
 
-const SECTOR_HIT_SLOP_VIEWBOX = 110;
+const SECTOR_HIT_SLOP_VIEWBOX = 72;
 
 export function hitTestSectorAtPoint(
   point: MapPoint,
