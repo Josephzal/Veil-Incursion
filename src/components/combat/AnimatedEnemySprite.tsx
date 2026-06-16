@@ -7,6 +7,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withDelay,
+  withRepeat,
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
@@ -24,7 +25,9 @@ import {
   RANGED_ATTACK_SPRITE_OUT_MS,
 } from './combatEnemyBarLayout';
 import {
+  CombatEnemyEnrageOverlaySynced,
   CombatEnemyIntentShimmerSynced,
+  ENRAGE_PULSE_MS,
   enemySpriteStyles,
   type IntentShimmerKind,
 } from './CombatEnemyIntentShimmer';
@@ -61,6 +64,8 @@ interface AnimatedEnemySpriteProps {
     scale?: number;
   } | null;
   intentShimmer?: IntentShimmerKind | null;
+  /** Persistent crimson pulse while enraged — synced to idle/attack crossfade. */
+  isEnraged?: boolean;
 }
 
 const AnimatedEnemySprite = forwardRef<AnimatedEnemySpriteHandle, AnimatedEnemySpriteProps>(
@@ -74,12 +79,14 @@ const AnimatedEnemySprite = forwardRef<AnimatedEnemySpriteHandle, AnimatedEnemyS
       enableLocalMotion = false,
       attackGlow = null,
       intentShimmer = null,
+      isEnraged = false,
     },
     ref,
   ) {
     const translateX = useSharedValue(0);
     const idleOpacity = useSharedValue(1);
     const attackOpacity = useSharedValue(0);
+    const enragePulseOpacity = useSharedValue(0);
     const lastTurnPhaseRef = useRef<EnemyTurnPhase | null>(null);
     const lastDashSeqRef = useRef(0);
     const runningRef = useRef(false);
@@ -157,13 +164,19 @@ const AnimatedEnemySprite = forwardRef<AnimatedEnemySpriteHandle, AnimatedEnemyS
           runningRef.current = true;
           cancelAnimation(attackOpacity);
           cancelAnimation(idleOpacity);
+
+          const finish = () => {
+            runningRef.current = false;
+            resolve();
+          };
+
           attackOpacity.value = withSequence(
             withTiming(1, { duration: RANGED_ATTACK_SPRITE_IN_MS, easing: LINEAR }),
             withDelay(RANGED_ATTACK_SPRITE_HOLD_MS, withTiming(1, { duration: 0 })),
           );
           idleOpacity.value = withSequence(
             withTiming(0, { duration: RANGED_ATTACK_SPRITE_IN_MS, easing: LINEAR }),
-            withDelay(RANGED_ATTACK_SPRITE_HOLD_MS, withTiming(0, { duration: 0 }, () => runOnJS(resolve)())),
+            withDelay(RANGED_ATTACK_SPRITE_HOLD_MS, withTiming(0, { duration: 0 }, () => runOnJS(finish)())),
           );
         }),
       [attackOpacity, idleOpacity],
@@ -172,14 +185,22 @@ const AnimatedEnemySprite = forwardRef<AnimatedEnemySpriteHandle, AnimatedEnemyS
     const runRangedCrossfadeOut = useCallback(
       () =>
         new Promise<void>((resolve) => {
+          runningRef.current = true;
+          cancelAnimation(attackOpacity);
+          cancelAnimation(idleOpacity);
+
+          const finish = () => {
+            runningRef.current = false;
+            idleOpacity.value = 1;
+            attackOpacity.value = 0;
+            resolve();
+          };
+
           attackOpacity.value = withTiming(0, { duration: RANGED_ATTACK_SPRITE_OUT_MS, easing: LINEAR });
           idleOpacity.value = withTiming(
             1,
             { duration: RANGED_ATTACK_SPRITE_OUT_MS, easing: LINEAR },
-            () => {
-              runningRef.current = false;
-              resolve();
-            },
+            () => runOnJS(finish)(),
           );
         }),
       [attackOpacity, idleOpacity],
@@ -264,13 +285,18 @@ const AnimatedEnemySprite = forwardRef<AnimatedEnemySpriteHandle, AnimatedEnemyS
         return;
       }
 
-      if (turnPhase == null && prev === 'ranged_attack') {
-        void runRangedCrossfadeOut();
-        return;
-      }
-
-      if (turnPhase == null && prev === 'melee_attack') {
-        snapIdle();
+      if (turnPhase == null) {
+        if (prev === 'ranged_attack' || prev === 'melee_attack') {
+          if (prev === 'melee_attack') {
+            snapIdle();
+          } else {
+            void runRangedCrossfadeOut();
+          }
+          return;
+        }
+        if (prev != null) {
+          void runRangedCrossfadeOut();
+        }
       }
     }, [
       runFrontlineMeleeCrossfade,
@@ -280,6 +306,21 @@ const AnimatedEnemySprite = forwardRef<AnimatedEnemySpriteHandle, AnimatedEnemyS
       turnPhase,
       isBacklineDashing,
     ]);
+
+    useEffect(() => {
+      if (isEnraged) {
+        enragePulseOpacity.value = withRepeat(
+          withSequence(
+            withTiming(0.6, { duration: ENRAGE_PULSE_MS / 2, easing: Easing.inOut(Easing.sin) }),
+            withTiming(0.3, { duration: ENRAGE_PULSE_MS / 2, easing: Easing.inOut(Easing.sin) }),
+          ),
+          -1,
+          false,
+        );
+        return () => cancelAnimation(enragePulseOpacity);
+      }
+      enragePulseOpacity.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.quad) });
+    }, [enragePulseOpacity, isEnraged]);
 
     const motionStyle = useAnimatedStyle(() => ({
       transform: [{ translateX: translateX.value }],
@@ -341,6 +382,15 @@ const AnimatedEnemySprite = forwardRef<AnimatedEnemySpriteHandle, AnimatedEnemyS
             style={[enemySpriteStyles.enemySprite, styles.layer, attackStyle]}
             nativeID="enemy-sprite-attack"
             accessibilityLabel="enemy-sprite-attack"
+          />
+        ) : null}
+        {isEnraged ? (
+          <CombatEnemyEnrageOverlaySynced
+            idleSource={idleSource}
+            attackSource={attackSource}
+            idleOpacity={idleOpacity}
+            attackOpacity={attackOpacity}
+            pulseOpacity={enragePulseOpacity}
           />
         ) : null}
         <CombatEnemyIntentShimmerSynced

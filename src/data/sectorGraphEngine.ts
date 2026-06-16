@@ -644,8 +644,11 @@ export function buildScannerCluster(options: BuildScannerClusterOptions): Incurs
     );
     if (nest) {
       const alreadyInCluster = cluster.some((node) => node.id === nest.id);
-      if (!alreadyInCluster && (resonancePercent >= BOSS_NEST_HARD_RESONANCE || Math.random() < 0.45)) {
-        cluster.push(createAnomalyNestVector(nest, stepIndex));
+      if (!alreadyInCluster) {
+        const nestRoll = (hashSeed(`${nest.id}:${stepIndex}:${nodesCleared}`) % 1000) / 1000;
+        if (resonancePercent >= BOSS_NEST_HARD_RESONANCE || nestRoll < 0.45) {
+          cluster.push(createAnomalyNestVector(nest, stepIndex));
+        }
       }
     }
   }

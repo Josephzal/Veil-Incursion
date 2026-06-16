@@ -30,6 +30,7 @@ interface CombatEnemyPortraitSkiaProps {
   isBacklineDashing?: boolean;
   glow: EnemyPortraitGlow;
   intentShimmer?: EnemyIntentShimmer | null;
+  isEnraged?: boolean;
 }
 
 /** Portrait art with idle/attack crossfade synced to CombatEnemyAnchorMotion. */
@@ -41,6 +42,7 @@ export default function CombatEnemyPortraitSkia({
   isBacklineDashing = false,
   glow,
   intentShimmer = null,
+  isEnraged = false,
 }: CombatEnemyPortraitSkiaProps): React.JSX.Element {
   const glowTint = glow !== 'none' ? GLOW_TINT[glow] : null;
   const glowScale = glow !== 'none' ? GLOW_SCALE[glow] : 1.05;
@@ -76,6 +78,7 @@ export default function CombatEnemyPortraitSkia({
           isBacklineDashing={isBacklineDashing}
           enableLocalMotion={false}
           intentShimmer={intentShimmer}
+          isEnraged={isEnraged}
           attackGlow={
             isAttackGlow
               ? {

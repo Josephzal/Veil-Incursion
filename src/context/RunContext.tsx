@@ -526,8 +526,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         : createDefaultActiveIncursionState().aegisLoadout,
       cargo: createStarterCargoRunState(),
     };
-    activeIncursionRef.current = incursion;
-    setActiveIncursion(incursion);
+    const expandedIncursion = persistExpandedSectorGraph(incursion);
+    activeIncursionRef.current = expandedIncursion;
+    setActiveIncursion(expandedIncursion);
     narrativeNodeRef.current = null;
     narrativeAssemblyRef.current = null;
     narrativeAssemblyRef.current = null;
@@ -1945,7 +1946,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
           mapMode: 'SAFEHOUSE_INTERMISSION',
           runStatusEffects: incAfterClear.runStatusEffects.filter((effect) => !effect.expiresAtSafehouse),
         }
-      : incAfterClear;
+      : persistExpandedSectorGraph(incAfterClear);
 
     activeIncursionRef.current = incWithMode;
     setActiveIncursion(incWithMode);
@@ -2366,13 +2367,13 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (inc.mapMode !== 'SAFEHOUSE_INTERMISSION') return;
 
     const nextPatrolState = createEmptyPatrolState();
-    const next: ActiveIncursionState = {
+    const next: ActiveIncursionState = persistExpandedSectorGraph({
       ...inc,
       resonance: { percent: 0 },
       patrolState: nextPatrolState,
       mapMode: 'SCANNING_HUB',
       resonanceManifestNodeIds: [],
-    };
+    });
 
     activeIncursionRef.current = next;
     setActiveIncursion(next);

@@ -181,7 +181,7 @@ import {
 } from '../utils/parryCollision';
 
 const TELEMETRY_DIVIDER = 'rgba(139, 92, 246, 0.2)';
-const ENEMY_TO_PLAYER_DAMAGE_MULTIPLIER = 0.9;
+const ENEMY_TO_PLAYER_DAMAGE_MULTIPLIER = 0.75;
 
 const { width, height: windowHeight } = Dimensions.get('window');
 
@@ -3022,6 +3022,7 @@ export default function TacticalCombatHub({
   finalizeParryRef.current = finalizeParry;
 
   const handleParryTimeout = (session: number) => {
+    if (parryResolvedRef.current) return;
     if (session !== parrySessionRef.current || parryTapPendingRef.current) return;
     finalizeParryRef.current(false, false);
   };
@@ -3063,8 +3064,8 @@ export default function TacticalCombatHub({
         PARRY_RING_SCALE_END,
         { duration: PARRY_DURATION, easing: ReanimatedEasing.linear },
         (finished) => {
-          if (!finished || parryResolvedRef.current) return;
-          runOnJS(handleParryTimeout)(session);
+          'worklet';
+          if (finished) runOnJS(handleParryTimeout)(session);
         },
       );
     });

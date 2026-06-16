@@ -102,7 +102,6 @@ export default function CombatEnemyUnit({
           >
             <CombatEnemyHitEffect
               hitFlashSeq={unit.hitFlashSeq}
-              isEnraged={unit.isEnraged}
               portraitSource={unit.portraitSource}
             >
               <CombatSilhouetteShatterEffect trigger={fractured} portraitSource={unit.portraitSource}>
@@ -114,6 +113,7 @@ export default function CombatEnemyUnit({
                   isBacklineDashing={unit.isBacklineDashing === true}
                   glow={portraitGlow}
                   intentShimmer={unit.intentShimmer ?? null}
+                  isEnraged={unit.isEnraged === true}
                 />
               </CombatSilhouetteShatterEffect>
             </CombatEnemyHitEffect>

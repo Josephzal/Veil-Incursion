@@ -298,6 +298,12 @@ function VectorScannerComponent({
     [activeNodes, radarCenter],
   );
 
+  const activeNodesKey = useMemo(
+    () => activeNodes.map((node) => node.id).join('\0'),
+    [activeNodes],
+  );
+  const lastActiveNodesKeyRef = useRef('');
+
   const radarClipPath = useMemo(() => {
     const path = Skia.Path.Make();
     path.addCircle(radarCenter, radarCenter, sweepRadius);
@@ -518,8 +524,33 @@ function VectorScannerComponent({
   );
 
   useEffect(() => {
-    activeNodes.forEach((node) => ensureBlipState(node.id));
-  }, [activeNodes, ensureBlipState]);
+    if (lastActiveNodesKeyRef.current === activeNodesKey) {
+      activeNodes.forEach((node) => ensureBlipState(node.id));
+      return;
+    }
+    lastActiveNodesKeyRef.current = activeNodesKey;
+
+    armedMapRef.current = {};
+    setRevealedIds(new Set());
+
+    const validIds = new Set<string>();
+    activeNodes.forEach((node) => {
+      validIds.add(node.id);
+      blipStatesRef.current[node.id] = {
+        opacity: node.isHostilePatrol ? 1 : 0,
+        scale: 1,
+        bloomUntil: 0,
+        decayStart: null,
+        siphoned: false,
+      };
+    });
+
+    for (const id of Object.keys(blipStatesRef.current)) {
+      if (!validIds.has(id)) delete blipStatesRef.current[id];
+    }
+
+    bumpRender();
+  }, [activeNodes, activeNodesKey, bumpRender, ensureBlipState]);
 
   useEffect(() => {
     const key = siphonedNodeIds.join(',');

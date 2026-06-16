@@ -91,6 +91,7 @@ export default function ScanningScreen(): React.JSX.Element {
   }, [scannerViewportSize]);
 
   const [vectorDots, setVectorDots] = useState<RadarDot[]>([]);
+  const [scannerDotsReady, setScannerDotsReady] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [siphonedNodeIds, setSiphonedNodeIds] = useState<string[]>([]);
   const [typeColoredNodeIds, setTypeColoredNodeIds] = useState<ReadonlySet<string>>(() => new Set());
@@ -99,6 +100,7 @@ export default function ScanningScreen(): React.JSX.Element {
   const lastManifestedSiphonsRef = useRef<Set<string>>(new Set());
   const spawnedDotsRef = useRef<RadarDot[] | null>(null);
   const spawnedForSessionRef = useRef<number | null>(null);
+  const spawnedClusterKeyRef = useRef<string | null>(null);
   const spawnedScannerSizeRef = useRef(0);
   const vectorDotsRef = useRef<RadarDot[]>([]);
 
@@ -125,6 +127,11 @@ export default function ScanningScreen(): React.JSX.Element {
 
   const nodeIndexById = useMemo(
     () => new Map(vectorCluster.map((node, index) => [node.id, index])),
+    [vectorCluster],
+  );
+
+  const clusterNodeIdsKey = useMemo(
+    () => vectorCluster.map((node) => node.id).join('\0'),
     [vectorCluster],
   );
 
@@ -157,28 +164,41 @@ export default function ScanningScreen(): React.JSX.Element {
     setSelectedNodeId(null);
     setSiphonedNodeIds([]);
     setTypeColoredNodeIds(new Set());
+    setScannerDotsReady(false);
+    setVectorDots([]);
     lastManifestedSiphonsRef.current = new Set();
     spawnedDotsRef.current = null;
     spawnedForSessionRef.current = null;
+    spawnedClusterKeyRef.current = null;
     spawnedScannerSizeRef.current = 0;
     setNodesInField(vectorCluster.length);
     closeScanPreview();
   }, [isScanningHub, scanSessionKey, vectorCluster, nodeIndex, closeScanPreview]);
 
   useEffect(() => {
-    if (!isScanningHub || vectorCluster.length === 0 || scannerSize <= 0) return;
+    if (!isScanningHub || vectorCluster.length === 0 || scannerSize <= 0) {
+      setScannerDotsReady(false);
+      return;
+    }
 
-    if (spawnedForSessionRef.current !== scanSessionKey || spawnedDotsRef.current == null) {
+    const needsSpawn =
+      spawnedForSessionRef.current !== scanSessionKey
+      || spawnedDotsRef.current == null
+      || spawnedClusterKeyRef.current !== clusterNodeIdsKey;
+
+    if (needsSpawn) {
       const sector = runState.currentSector ?? INITIAL_SECTOR_POOL[0];
       const dots = generateDepthNodeScanVectors(vectorCluster, scannerSize, sector);
       spawnedDotsRef.current = dots;
       spawnedForSessionRef.current = scanSessionKey;
+      spawnedClusterKeyRef.current = clusterNodeIdsKey;
       spawnedScannerSizeRef.current = scannerSize;
       setVectorDots(dots);
+      setScannerDotsReady(true);
       return;
     }
 
-    if (spawnedScannerSizeRef.current !== scannerSize) {
+    if (spawnedScannerSizeRef.current !== scannerSize && spawnedDotsRef.current != null) {
       const scaled = scaleRadarDots(
         spawnedDotsRef.current,
         spawnedScannerSizeRef.current,
@@ -188,7 +208,14 @@ export default function ScanningScreen(): React.JSX.Element {
       spawnedScannerSizeRef.current = scannerSize;
       setVectorDots(scaled);
     }
-  }, [isScanningHub, vectorCluster, scannerSize, scanSessionKey, runState.currentSector]);
+  }, [
+    clusterNodeIdsKey,
+    isScanningHub,
+    vectorCluster,
+    scannerSize,
+    scanSessionKey,
+    runState.currentSector,
+  ]);
 
   const handleScannerViewportLayout = useCallback((event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
@@ -317,7 +344,7 @@ export default function ScanningScreen(): React.JSX.Element {
         <View style={styles.body}>
           <View style={styles.scannerViewport} onLayout={handleScannerViewportLayout}>
             <View style={[styles.scannerBezel, { borderColor: `${accent}55` }]}>
-              {scannerSize > 0 ? (
+              {scannerSize > 0 && scannerDotsReady && vectorDots.length > 0 ? (
                 <VectorScanner
                   key={`scanner-${scanSessionKey}`}
                   cabal={cabal}

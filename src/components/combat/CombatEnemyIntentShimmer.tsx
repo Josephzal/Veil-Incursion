@@ -19,6 +19,9 @@ import Animated, {
 
 export type IntentShimmerKind = 'fortify' | 'evade';
 
+export const ENRAGE_TINT = '#8B0000';
+export const ENRAGE_PULSE_MS = 2000;
+
 const AnimatedImage = Animated.createAnimatedComponent(Image);
 
 const FORTIFY_GLOW = '#fb923c';
@@ -242,6 +245,58 @@ export function CombatEnemyIntentShimmerSynced({
           styles.enemySpriteLayer,
           attackEvadeTintStyle,
           { tintColor: EVADE_TINT },
+        ]}
+      />
+    </>
+  );
+}
+
+interface CombatEnemyEnrageOverlaySyncedProps {
+  idleSource: ImageSourcePropType;
+  attackSource: ImageSourcePropType;
+  idleOpacity: SharedValue<number>;
+  attackOpacity: SharedValue<number>;
+  pulseOpacity: SharedValue<number>;
+}
+
+/** Enraged crimson pulse — idle tint tracks idle pose; attack tint tracks attack pose. */
+export function CombatEnemyEnrageOverlaySynced({
+  idleSource,
+  attackSource,
+  idleOpacity,
+  attackOpacity,
+  pulseOpacity,
+}: CombatEnemyEnrageOverlaySyncedProps): React.JSX.Element {
+  const idleEnrageStyle = useAnimatedStyle(() => ({
+    opacity: pulseOpacity.value * idleOpacity.value,
+  }));
+
+  const attackEnrageStyle = useAnimatedStyle(() => ({
+    opacity: pulseOpacity.value * attackOpacity.value,
+  }));
+
+  return (
+    <>
+      <AnimatedImage
+        source={idleSource}
+        resizeMode="contain"
+        style={[
+          styles.enemySprite,
+          styles.enemySpriteLayer,
+          styles.enemySpriteFront,
+          idleEnrageStyle,
+          { tintColor: ENRAGE_TINT },
+        ]}
+      />
+      <AnimatedImage
+        source={attackSource}
+        resizeMode="contain"
+        style={[
+          styles.enemySprite,
+          styles.enemySpriteLayer,
+          styles.enemySpriteFront,
+          attackEnrageStyle,
+          { tintColor: ENRAGE_TINT },
         ]}
       />
     </>
