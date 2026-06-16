@@ -31,6 +31,7 @@ export interface IncursionConsumableUseResult {
   grantBonusAp?: number;
   restoreStaminaPct?: number;
   absorbNextHit?: boolean;
+  enableGodMode?: boolean;
   apCost?: number;
   logLine: string;
 }

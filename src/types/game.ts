@@ -365,6 +365,10 @@ export interface ActiveIncursionState {
   boundRequisition: BoundRequisitionRuntime | null;
   /** Next-combat narrative boons acquired from bonus loot. */
   pendingNarrativeCombatBoons: import('./narrativeBonusReward').PendingNarrativeCombatBoons;
+  /** Veil Residue vacuumed into the run canister this incursion (capped at 100). */
+  sessionVeilResidueCollected: number;
+  /** God Mode consumable active — 1000 STRIKE damage and locked max resources. */
+  godModeActive: boolean;
 }
 
 export function createDefaultEnvironmentalModifiers(): EnvironmentalModifiers {
@@ -431,5 +435,7 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     lastLevelOfferedCombat: true,
     boundRequisition: null,
     pendingNarrativeCombatBoons: createDefaultPendingNarrativeCombatBoons(),
+    sessionVeilResidueCollected: 0,
+    godModeActive: false,
   };
 }

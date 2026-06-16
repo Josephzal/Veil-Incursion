@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import { pickRandomClimateCluster, getClusterDefinition } from '../data/climateClusters';
 import { AMBUSH_ENCOUNTERS_ENABLED } from '../data/featureFlags';
+import { MAX_RUN_CANISTER_RESIDUE } from '../constants/veilResidue';
 import {
   createEasyTestEnemy,
   createHardTestEnemy,
@@ -289,6 +290,7 @@ interface RunContextType {
   beginResourceNodeHarvest: () => void;
   beginResourceCachePack: () => void;
   grantCombatResourceDrops: (options: CombatRewardContext) => void;
+  absorbVeilResidueInstance: (instanceId: string) => number;
   prepareBossEncounter: (engagedNode?: IncursionNode | null) => void;
   prepareStandardCombatEncounter: (engagedNode?: IncursionNode | null) => void;
   prepareHarvestAmbushEncounter: () => void;
@@ -806,10 +808,15 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const syncAfterCombat = useCallback((remainingHp: number, remainingStamina: number) => {
     setRunState((prev) => {
+      const godMode = activeIncursionRef.current.godModeActive;
       const next = {
         ...prev,
-        soulAnchorIntegrity: Math.min(Math.max(remainingHp, 0), prev.maxSoulAnchor),
-        currentStamina: Math.min(Math.max(remainingStamina, 0), prev.maxStamina),
+        soulAnchorIntegrity: godMode
+          ? prev.maxSoulAnchor
+          : Math.min(Math.max(remainingHp, 0), prev.maxSoulAnchor),
+        currentStamina: godMode
+          ? prev.maxStamina
+          : Math.min(Math.max(remainingStamina, 0), prev.maxStamina),
         pendingEnemy: null,
         pendingEnemies: [],
         pendingEncounter: null,
@@ -1566,6 +1573,31 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     });
     appendRunLog(formatCombatResourceDropLog(drops));
   }, [appendRunLog]);
+
+  const absorbVeilResidueInstance = useCallback((instanceId: string): number => {
+    let absorbed = 0;
+
+    setActiveIncursion((prev) => {
+      if (prev.sessionVeilResidueCollected >= MAX_RUN_CANISTER_RESIDUE) return prev;
+
+      const target = prev.cargo.containment.find((item) => item.instanceId === instanceId);
+      if (!target || target.itemId !== 'veil-residue-bulk') return prev;
+
+      absorbed = 1;
+      const next = {
+        ...prev,
+        sessionVeilResidueCollected: Math.min(MAX_RUN_CANISTER_RESIDUE, prev.sessionVeilResidueCollected + 1),
+        cargo: {
+          ...prev.cargo,
+          containment: prev.cargo.containment.filter((item) => item.instanceId !== instanceId),
+        },
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+
+    return absorbed;
+  }, []);
 
   const prepareBossEncounter = useCallback((engagedNode?: IncursionNode | null) => {
     const inc = activeIncursionRef.current;
@@ -2661,6 +2693,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         result.frontlineBlindTurns = 2;
         logLine = '>> VEIL-ASH GRENADE — frontline hostiles blinded for 2 turns.';
         break;
+      case 'god_mode':
+        result.enableGodMode = true;
+        logLine = '>> GOD MODE — Operative overclocked. 1000 DMG STRIKE, resources locked at maximum.';
+        break;
       default:
         return null;
     }
@@ -2672,10 +2708,23 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         spectralWeaponImbued: def.combatEffect === 'spectral_imbue'
           ? true
           : prev.spectralWeaponImbued,
+        godModeActive: def.combatEffect === 'god_mode' ? true : prev.godModeActive,
       };
       activeIncursionRef.current = next;
       return next;
     });
+
+    if (def.combatEffect === 'god_mode') {
+      setRunState((prev) => {
+        const next = {
+          ...prev,
+          soulAnchorIntegrity: prev.maxSoulAnchor,
+          currentStamina: prev.maxStamina,
+        };
+        runStateRef.current = next;
+        return next;
+      });
+    }
 
     return {
       ...result,
@@ -2861,6 +2910,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       beginResourceNodeHarvest,
       beginResourceCachePack,
       grantCombatResourceDrops,
+      absorbVeilResidueInstance,
       stageSafeAnchorReview,
       confirmSafeAnchorExtraction,
       continueFromExtractionReview,
@@ -2959,6 +3009,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       beginResourceNodeHarvest,
       beginResourceCachePack,
       grantCombatResourceDrops,
+      absorbVeilResidueInstance,
       stageSafeAnchorReview,
       confirmSafeAnchorExtraction,
       continueFromExtractionReview,

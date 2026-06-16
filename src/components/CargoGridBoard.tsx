@@ -89,6 +89,8 @@ interface CargoGridBoardProps {
   playerActionPoints?: number;
   showCreditsHud?: boolean;
   minimal?: boolean;
+  onContainmentItemCenterMeasured?: (instanceId: string, center: { x: number; y: number }) => void;
+  hideContinueButton?: boolean;
 }
 
 function cellsForItem(itemId: CargoItemId, originRow: number, originCol: number): string[] {
@@ -239,6 +241,91 @@ function DraggableCargoSprite({
   );
 }
 
+function ContainmentSlot({
+  item,
+  spriteSize,
+  isDragging,
+  source,
+  onContainmentItemCenterMeasured,
+  onHoverCell,
+  onDragStart,
+  onDragMove,
+  onDragEnd,
+  onDropAttempt,
+  combatMode,
+  combatConsumablesEnabled,
+  selectedCombatItemId,
+  selectCombatItem,
+}: {
+  item: import('../types/cargoGrid').ContainmentItem;
+  spriteSize: { width: number; height: number };
+  isDragging: boolean;
+  source: CargoDragSource;
+  onContainmentItemCenterMeasured?: (instanceId: string, center: { x: number; y: number }) => void;
+  onHoverCell: (
+    cell: { row: number; col: number } | null,
+    itemId: CargoItemId | null,
+    excludeInstanceId?: string,
+  ) => void;
+  onDragStart: (source: CargoDragSource) => void;
+  onDragMove: (absoluteX: number, absoluteY: number) => void;
+  onDragEnd: () => void;
+  onDropAttempt: (
+    source: CargoDragSource,
+    absoluteX: number,
+    absoluteY: number,
+    dragged: boolean,
+    originRow: number | undefined,
+    originCol: number | undefined,
+    onResult: (placed: boolean) => void,
+  ) => void;
+  combatMode: boolean;
+  combatConsumablesEnabled: boolean;
+  selectedCombatItemId: CargoItemId | null;
+  selectCombatItem: (itemId: CargoItemId) => void;
+}): React.JSX.Element {
+  const slotRef = useRef<View>(null);
+
+  const reportCenter = useCallback(() => {
+    if (!onContainmentItemCenterMeasured) return;
+    slotRef.current?.measureInWindow((x, y, width, height) => {
+      onContainmentItemCenterMeasured(item.instanceId, {
+        x: x + width / 2,
+        y: y + height / 2,
+      });
+    });
+  }, [item.instanceId, onContainmentItemCenterMeasured]);
+
+  useEffect(() => {
+    reportCenter();
+  }, [reportCenter]);
+
+  return (
+    <View
+      ref={slotRef}
+      onLayout={reportCenter}
+      style={[styles.externalSlot, { width: spriteSize.width, height: spriteSize.height }]}
+    >
+      <DraggableCargoSprite
+        dragSource={source}
+        isDragging={isDragging}
+        onHoverCell={onHoverCell}
+        onDragStart={onDragStart}
+        onDragMove={onDragMove}
+        onDragEnd={onDragEnd}
+        onDropAttempt={onDropAttempt}
+        combatSelectMode={combatMode && combatConsumablesEnabled && isCombatDeployableCargoItem(item.itemId)}
+        combatSelected={selectedCombatItemId === item.itemId}
+        onCombatSelect={
+          combatMode && combatConsumablesEnabled && isCombatDeployableCargoItem(item.itemId)
+            ? () => selectCombatItem(item.itemId)
+            : undefined
+        }
+      />
+    </View>
+  );
+}
+
 export default function CargoGridBoard({
   cargo,
   theme,
@@ -258,6 +345,8 @@ export default function CargoGridBoard({
   playerActionPoints: playerActionPointsProp,
   showCreditsHud = true,
   minimal = true,
+  onContainmentItemCenterMeasured,
+  hideContinueButton = false,
 }: CargoGridBoardProps): React.JSX.Element {
   const combatTurn = useCombatTurnOptional();
   const runCredits = runCreditsProp ?? combatTurn?.runCredits ?? 0;
@@ -655,27 +744,23 @@ export default function CargoGridBoard({
                 };
                 const isDragging = activeDrag?.instanceId === item.instanceId;
                 return (
-                  <View
+                  <ContainmentSlot
                     key={item.instanceId}
-                    style={[styles.externalSlot, { width: spriteSize.width, height: spriteSize.height }]}
-                  >
-                    <DraggableCargoSprite
-                      dragSource={source}
-                      isDragging={isDragging}
-                      onHoverCell={handleHoverCell}
-                      onDragStart={handleDragStart}
-                      onDragMove={handleDragMove}
-                      onDragEnd={clearDrag}
-                      onDropAttempt={handleDropAttempt}
-                      combatSelectMode={combatMode && combatConsumablesEnabled && isCombatDeployableCargoItem(item.itemId)}
-                      combatSelected={selectedCombatItemId === item.itemId}
-                      onCombatSelect={
-                        combatMode && combatConsumablesEnabled && isCombatDeployableCargoItem(item.itemId)
-                          ? () => selectCombatItem(item.itemId)
-                          : undefined
-                      }
-                    />
-                  </View>
+                    item={item}
+                    spriteSize={spriteSize}
+                    isDragging={isDragging}
+                    source={source}
+                    onContainmentItemCenterMeasured={onContainmentItemCenterMeasured}
+                    onHoverCell={handleHoverCell}
+                    onDragStart={handleDragStart}
+                    onDragMove={handleDragMove}
+                    onDragEnd={clearDrag}
+                    onDropAttempt={handleDropAttempt}
+                    combatMode={combatMode}
+                    combatConsumablesEnabled={combatConsumablesEnabled}
+                    selectedCombatItemId={selectedCombatItemId}
+                    selectCombatItem={selectCombatItem}
+                  />
                 );
               })}
             </View>
@@ -834,7 +919,7 @@ export default function CargoGridBoard({
         </View>
       ) : null}
 
-      {onContinue ? (
+      {onContinue && !hideContinueButton ? (
         <Pressable
           onPress={() => {
             pulseHubButton();

@@ -1,9 +1,18 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { calculateCargoMarketValue, calculateGridOccupancy } from '../data/cargoGridEngine';
-import CargoGridBoard, { CARGO_GRID_FRAME_SIZE } from './CargoGridBoard';
+import CargoGridBoard, {
+  CARGO_GRID_FRAME_HEIGHT,
+  CARGO_GRID_FRAME_SIZE,
+  CARGO_GRID_FRAME_WIDTH,
+} from './CargoGridBoard';
 import type { CargoRunState } from '../types/cargoGrid';
 import type { TerminalTheme } from '../types/theme';
+import {
+  getInteractiveButtonStyle,
+  getInteractiveButtonTextStyle,
+} from '../styles/hubTerminalUi';
+import { pulseHubButton } from '../utils/hubButtonHaptics';
 
 interface CargoPackingPanelProps {
   cargo: CargoRunState;
@@ -15,6 +24,10 @@ interface CargoPackingPanelProps {
   showCreditsHud?: boolean;
   onContinue: () => void;
   continueLabel?: string;
+  onContainmentItemCenterMeasured?: (instanceId: string, center: { x: number; y: number }) => void;
+  /** Harvest screen: grid centered on screen, sidecar anchored to cell grid. */
+  harvestLayout?: boolean;
+  gridSidecar?: React.ReactNode;
 }
 
 export default function CargoPackingPanel({
@@ -27,6 +40,9 @@ export default function CargoPackingPanel({
   showCreditsHud = false,
   onContinue,
   continueLabel = '[ CONTINUE ]',
+  onContainmentItemCenterMeasured,
+  harvestLayout = false,
+  gridSidecar,
 }: CargoPackingPanelProps): React.JSX.Element {
   const occupancy = calculateGridOccupancy(cargo);
   const occupancyPct = Math.round(occupancy * 100);
@@ -34,8 +50,8 @@ export default function CargoPackingPanel({
   const accent = accentColor ?? '#00ff33';
 
   return (
-    <View style={styles.root}>
-      <View style={styles.boardColumn}>
+    <View style={[styles.root, harvestLayout ? styles.rootHarvest : null]}>
+      <View style={[styles.boardColumn, harvestLayout ? styles.boardColumnHarvest : null]}>
         <View style={[styles.headerContainer, { borderColor: theme.borderColor, width: CARGO_GRID_FRAME_SIZE }]}>
           <Text style={[styles.headerLabel, { color: theme.mutedColor }]}>
             Cargo Grid // Pack Extracted Resources
@@ -44,22 +60,53 @@ export default function CargoPackingPanel({
             {`OCCUPANCY ${occupancyPct}% // VALUE ${cargoValue}`}
           </Text>
         </View>
-        <CargoGridBoard
-        cargo={cargo}
-        theme={theme}
-        accentColor={accentColor}
-        onRelocateItem={onRelocateItem}
-        onDiscardItem={onDiscardItem}
-        runCredits={runCredits}
-        showCreditsHud={showCreditsHud}
-        onContinue={onContinue}
-        continueLabel={continueLabel}
-        minimal
-        />
+
+        <View style={harvestLayout ? styles.gridAnchor : undefined}>
+          <CargoGridBoard
+            cargo={cargo}
+            theme={theme}
+            accentColor={accentColor}
+            onRelocateItem={onRelocateItem}
+            onDiscardItem={onDiscardItem}
+            runCredits={runCredits}
+            showCreditsHud={showCreditsHud}
+            onContinue={onContinue}
+            continueLabel={continueLabel}
+            minimal
+            hideContinueButton={harvestLayout}
+            onContainmentItemCenterMeasured={onContainmentItemCenterMeasured}
+          />
+
+          {harvestLayout && gridSidecar ? (
+            <View style={styles.gridSidecarSlot} pointerEvents="box-none">
+              {gridSidecar}
+            </View>
+          ) : null}
+        </View>
+
+        {harvestLayout ? (
+          <Pressable
+            onPress={() => {
+              pulseHubButton();
+              onContinue();
+            }}
+            style={({ pressed }) => [
+              getInteractiveButtonStyle(accent, { pressed, size: 'md' }),
+              styles.continueBtn,
+              pressed ? { opacity: 0.85 } : null,
+            ]}
+          >
+            <Text style={[getInteractiveButtonTextStyle('md'), styles.continueBtnText, { color: accent }]}>
+              {continueLabel}
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );
 }
+
+const GRID_CANISTER_GAP = 6;
 
 const styles = StyleSheet.create({
   root: {
@@ -68,11 +115,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
   },
+  rootHarvest: {
+    flex: 0,
+    flexGrow: 0,
+    paddingVertical: 0,
+    width: '100%',
+    alignItems: 'center',
+  },
   boardColumn: {
     alignItems: 'center',
     gap: 16,
     width: '100%',
     maxWidth: CARGO_GRID_FRAME_SIZE + 32,
+  },
+  boardColumnHarvest: {
+    width: '100%',
+    maxWidth: '100%',
+    alignSelf: 'center',
+  },
+  gridAnchor: {
+    position: 'relative',
+    width: CARGO_GRID_FRAME_WIDTH,
+    alignSelf: 'center',
+  },
+  gridSidecarSlot: {
+    position: 'absolute',
+    top: 0,
+    left: CARGO_GRID_FRAME_WIDTH + GRID_CANISTER_GAP,
+    height: CARGO_GRID_FRAME_HEIGHT,
+    justifyContent: 'flex-end',
+    zIndex: 20,
   },
   headerContainer: {
     borderWidth: 1,
@@ -95,20 +167,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 4,
   },
-  statsHint: {
-    fontFamily: 'monospace',
-    fontSize: 7,
-    letterSpacing: 0.5,
-    textAlign: 'center',
-    lineHeight: 11,
+  continueBtn: {
+    width: CARGO_GRID_FRAME_SIZE,
+    alignSelf: 'center',
   },
-  statsWarn: {
-    fontFamily: 'monospace',
-    fontSize: 7,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+  continueBtnText: {
     textAlign: 'center',
-    lineHeight: 11,
-    marginTop: 4,
   },
 });

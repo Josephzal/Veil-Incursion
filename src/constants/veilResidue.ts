@@ -1,0 +1,1 @@
+export const MAX_RUN_CANISTER_RESIDUE = 100;

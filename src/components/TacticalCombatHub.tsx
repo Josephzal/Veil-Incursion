@@ -259,6 +259,8 @@ interface TacticalCombatHubProps {
     unitId: string;
     channel: 'KINETIC' | 'OCCULT' | 'TRUE';
   }) => void;
+  /** God Mode consumable — 1000 STRIKE damage and locked max resources. */
+  godModeActive?: boolean;
 }
 interface SliceLineConfig {
   id: number;
@@ -279,6 +281,7 @@ const isAttackIntent = (i: EnemyIntent) =>
 
 const ENEMY_INTENT_READ_MS = 1800;
 const ENEMY_TURN_GAP_MS = 500;
+const GOD_MODE_STRIKE_DAMAGE = 1000;
 
 type EnemyActionStage = 'reading' | 'executing' | null;
 
@@ -322,6 +325,7 @@ export default function TacticalCombatHub({
   equippedBlueprintId = null,
   playerCritChanceBonus = 0,
   onPlayerCritImpact,
+  godModeActive = false,
 }: TacticalCombatHubProps): React.JSX.Element {
   const env = environmentalModifiers ?? {
     isEnemyPhaseShrouded: false,
@@ -545,6 +549,18 @@ export default function TacticalCombatHub({
       combatChanceRef.current.momentumShiftEvadeDisabled = false;
     }
     return clamped;
+  };
+
+  const godModeRef = useRef(godModeActive);
+  godModeRef.current = godModeActive;
+
+  const applyGodModeResources = () => {
+    operativeHpRef.current = maxSoulAnchor;
+    setOperativeHp(maxSoulAnchor);
+    applyStamina(maxStamina);
+    abyssalRef.current = mutationModsRef.current.abyssalCap;
+    setAbyssalReserve(mutationModsRef.current.abyssalCap);
+    sessionExtrasRef.current.playerDebuffs = [];
   };
 
   useEffect(() => {
@@ -1144,6 +1160,10 @@ export default function TacticalCombatHub({
     if (result.absorbNextHit) {
       mutationEncounterRef.current.spallWeaveActive = true;
     }
+    if (result.enableGodMode) {
+      godModeRef.current = true;
+      applyGodModeResources();
+    }
     log(result.logLine);
     playerApRef.current = Math.max(0, playerApRef.current - apCost);
     setPlayerActionPoints(playerApRef.current);
@@ -1221,6 +1241,7 @@ export default function TacticalCombatHub({
       rollCrit?: boolean;
     },
   ) => {
+    if (godModeRef.current) return;
     if (mutationEncounterRef.current.spallWeaveActive && raw > 0) {
       mutationEncounterRef.current.spallWeaveActive = false;
       log('[SPALL-WEAVE] >> Vest absorbed incoming damage.');
@@ -2199,7 +2220,9 @@ export default function TacticalCombatHub({
       log('[OVEREXERTION] >> Stamina regen suppressed this turn.');
     }
     skipRegenRef.current = false;
-    if (staminaRef.current <= 0) {
+    if (godModeRef.current) {
+      applyGodModeResources();
+    } else if (staminaRef.current <= 0) {
       applyStamina(15);
       log('[STAMINA REBOUND] >> Zero reserves at turn start — operative enters at 15 STAM.');
     }
@@ -2584,10 +2607,16 @@ export default function TacticalCombatHub({
     }
     bossRuntimeRef.current = bossProfile;
     bossPhaseRef.current = bossProfile?.currentPhase ?? 1;
+    if (godModeActive) {
+      godModeRef.current = true;
+      applyGodModeResources();
+      log('>> GOD MODE ACTIVE — operative resources locked at maximum.');
+    }
   };
   useEffect(() => { initCombat(); }, []);
 
   const applyLethalRetaliation = (dmg: number) => {
+    if (godModeRef.current) return;
     if ((env.lethalRetaliationDamage ?? 0) <= 0 || dmg <= 0) return;
     const feedback = env.lethalRetaliationDamage ?? 0;
     log(`[LETHAL RETALIATION] >> Hostile feedback — ${feedback} HP.`);
@@ -2612,6 +2641,19 @@ export default function TacticalCombatHub({
 
     switch (abilityId) {
       case 'STRIKE': {
+        if (godModeRef.current) {
+          const kinetic = GOD_MODE_STRIKE_DAMAGE;
+          const eradicated = hurtEnemy(kinetic, '[STRIKE]', 'STRIKE', { channel: 'KINETIC', fractureGain: 25 });
+          const struck = enemyRef.current;
+          chargeAr(15, struck != null && isEnemyFractured(struck));
+          if (struck && fractureRatio(struck) > 0.5) {
+            syncEnemy(addCombatTag(struck, 'CONCUSSED'));
+          }
+          applyLethalRetaliation(kinetic);
+          applyGodModeResources();
+          if (eradicated) return;
+          break;
+        }
         const overdraw = staminaRef.current < strikeStats.strikeStaminaCost;
         if (overdraw) {
           markExhausted();

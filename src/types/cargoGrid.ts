@@ -20,6 +20,7 @@ export type CargoCombatEffect =
   | 'spectral_imbue'
   | 'sanguine_coagulant'
   | 'veil_ash_grenade'
+  | 'god_mode'
   | 'unimplemented';
 
 import type { ResourceItemId } from './resourceItem';
@@ -48,7 +49,8 @@ export type LegacyCargoItemId =
   | 'veil-ash-grenade'
   | 'smoke-ampoule'
   | 'null-key'
-  | 'hazmat-shielding';
+  | 'hazmat-shielding'
+  | 'god-mode';
 
 export type CargoItemId = LegacyCargoItemId | ResourceItemId;
 
@@ -371,6 +373,18 @@ export const CARGO_ITEM_CATALOG: Record<CargoItemId, CargoItemDefinition> = {
     tags: ['CONSUMABLE', 'COMBAT', 'CROWD_CONTROL'],
     usableInCombat: true,
     combatEffect: 'veil_ash_grenade',
+  },
+  'god-mode': {
+    id: 'god-mode',
+    name: 'God Mode',
+    width: 1,
+    height: 1,
+    baseValue: 0,
+    resonanceWeight: 0,
+    tags: ['CONSUMABLE', 'COMBAT', 'DEBUG'],
+    usableInCombat: true,
+    combatEffect: 'god_mode',
+    apCost: 0,
   },
   'smoke-ampoule': {
     id: 'smoke-ampoule',

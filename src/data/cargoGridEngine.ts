@@ -28,7 +28,8 @@ export function resetCargoInstanceCounter(): void {
 export function createStarterCargoRunState(): CargoRunState {
   const base = { grid: { placed: [] as PlacedCargoItem[] }, containment: [], dataBleedActive: false };
   const withSoulCore = placeCargoAtFirstOpenSlot(base, 'soul-core') ?? base;
-  return placeCargoAtFirstOpenSlot(withSoulCore, 'spectral-salt') ?? withSoulCore;
+  const withSalt = placeCargoAtFirstOpenSlot(withSoulCore, 'spectral-salt') ?? withSoulCore;
+  return addLootToContainment(withSalt, 'god-mode', 1);
 }
 
 function cellsForItem(itemId: CargoItemId, originRow: number, originCol: number): string[] {
@@ -249,6 +250,16 @@ export function buildHarvestLoot(
   return ['veil-residue-bulk'];
 }
 
+export function isVeilResidueCargoItem(itemId: CargoItemId): boolean {
+  return itemId === 'veil-residue-bulk';
+}
+
+export function countVeilResidueInCargo(cargo: CargoRunState): number {
+  const inContainment = cargo.containment.filter((item) => isVeilResidueCargoItem(item.itemId)).length;
+  const inGrid = cargo.grid.placed.filter((item) => isVeilResidueCargoItem(item.itemId)).length;
+  return inContainment + inGrid;
+}
+
 export function applyEmergencyExtractBleed(
   cargo: CargoRunState,
   bleedPct: number,
@@ -329,6 +340,8 @@ export function combatConsumableDescription(itemId: CargoItemId): string {
       return 'Restores 50% Soul Anchor and purges BLEEDING / FRACTURED operative debuffs.';
     case 'veil_ash_grenade':
       return 'Blinds frontline hostiles for 2 turns (−30% accuracy).';
+    case 'god_mode':
+      return 'Overclocks operative systems — 1000 STRIKE damage, max health, stamina, and Abyssal Reserve. Free deploy.';
     default:
       return 'Field deployment protocols pending operative clearance.';
   }

@@ -614,6 +614,7 @@ export default function CombatScreen(): React.JSX.Element {
                 equippedBlueprintId={account.equippedBlueprintId}
                 playerCritChanceBonus={playerCritChanceBonus}
                 onPlayerCritImpact={handlePlayerCritImpact}
+                godModeActive={activeIncursion.godModeActive}
               />
             </View>
           </View>
