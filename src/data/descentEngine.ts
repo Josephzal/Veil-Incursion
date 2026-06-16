@@ -16,6 +16,9 @@ import {
 } from './scannerNodeLayout';
 import { INITIAL_SECTOR_POOL } from './regions';
 import { createDistrictGateBossProfile } from './districtBosses';
+import { getDepthScale } from './descentScaling';
+
+export { getDepthScale } from './descentScaling';
 
 export const BOSS_ENCOUNTER_INDEX = 9;
 export const PENULT_ENCOUNTER_INDEX = 8;
@@ -293,10 +296,6 @@ export function generateDepthNodeScanVectors(
     },
     rng,
   );
-}
-
-export function getDepthScale(depth: number): number {
-  return 1 + (depth - 1) * 0.25;
 }
 
 const DEFAULT_BOSS_PHASES = [

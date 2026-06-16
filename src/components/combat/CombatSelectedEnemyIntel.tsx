@@ -6,9 +6,7 @@ import { AFFINITY_DISPLAY_LABEL } from '../../types/combatEnvironment';
 import { formatHostileId, formatIntentReadout } from '../../utils/combatTelemetryFormat';
 import type { CombatGridUnitSnapshot } from '../../utils/combatTelemetryFormat';
 import CombatEnemySlotBars, { COMBAT_ENEMY_SLOT_BARS_HEIGHT } from './CombatEnemySlotBars';
-import {
-  combatDeckGaugeTrackWidth,
-} from './combatGaugeMetrics';
+import { combatDeckGaugeTrackWidth } from './combatGaugeMetrics';
 
 const MONO = 'monospace';
 const HOSTILE_ACCENT = '#ef4444';

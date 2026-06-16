@@ -110,9 +110,6 @@ export function enemyAIStateFromProfile(
   };
 }
 
-/** Re-export roster enrage thresholds for playtest tuning (see combatRosterAI). */
-export { ROSTER_ENRAGE_THRESHOLDS } from './combatRosterAI';
-
 export function defaultPlayerAIState(overrides?: Partial<PlayerAIState>): PlayerAIState {
   return {
     hp: 100,

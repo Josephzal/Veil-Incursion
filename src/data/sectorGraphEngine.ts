@@ -23,7 +23,7 @@ import {
   isFullBlindZone,
   safeAnchorIndexForCrossingDepth,
 } from './sectorZoneEngine';
-import { appendCollapseForwardNodes, createCollapseEntryNode } from './pocketDimensionEngine';
+import { createCollapseEntryNode } from './pocketDimensionEngine';
 import { applyMacroBiomeToCluster } from './macroBiomeEngine';
 import {
   buildDepth1TestScannerCluster,
@@ -204,6 +204,41 @@ export function makeGraphNode(
     isAnomalyNest,
     isCompleted: false,
   };
+}
+
+const COLLAPSE_VECTOR_TYPES = ['STANDARD_COMBAT', 'ELITE_COMBAT', 'RESOURCE_HARVEST'] as const;
+
+/**
+ * Spawns procedural collapse vectors when the operative pushes past the boss nest.
+ * Each engagement increments graph depth beyond MAX_SECTOR_NODES.
+ */
+export function appendCollapseForwardNodes(
+  graph: SectorGraph,
+  currentNodeId: string,
+  count = 2,
+): SectorGraph {
+  const resolvedId = graph.nodes[currentNodeId] ? currentNodeId : graph.entryId;
+  const current = graph.nodes[resolvedId];
+  if (!current) return graph;
+
+  const nodes = { ...graph.nodes };
+  let parent = { ...current };
+  let spawnIndex = Object.keys(nodes).length;
+
+  for (let i = 0; i < count; i += 1) {
+    spawnIndex += 1;
+    const childId = `collapse-rift-${resolvedId}-${spawnIndex}`;
+    const typeRoll = COLLAPSE_VECTOR_TYPES[spawnIndex % COLLAPSE_VECTOR_TYPES.length];
+    const child = makeGraphNode(childId, parent.graphDepth + 1, resolvedId, graph.sectorTier);
+    child.type = typeRoll;
+    child.encounterType = typeRoll === 'RESOURCE_HARVEST' ? 'RESOURCE_HARVEST' : 'COMBAT';
+    child.label = `COLLAPSE RIFT // ${typeRoll.replace(/_/g, ' ')}`;
+    nodes[childId] = child;
+    parent = { ...parent, childIds: [...parent.childIds, childId] };
+  }
+  nodes[resolvedId] = parent;
+
+  return { ...graph, nodes, maxGraphDepth: Math.max(graph.maxGraphDepth, parent.graphDepth + 1) };
 }
 
 export function generateSectorGraph(sectorTier = 1): SectorGraph {

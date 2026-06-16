@@ -10,7 +10,7 @@ import {
 } from './AIDecisionEngine';
 import { aliveUnits } from './combatSquadEngine';
 import type { EnemyCombatProfile, EnemyIntent } from '../types/run';
-import { isRedundantBuffIntent } from './enemies';
+import { isRedundantBuffIntent } from './enemyIntentUtils';
 
 /** Playtest-tunable hostile enrage thresholds — adjust ratios/absolute HP here. */
 export const ROSTER_ENRAGE_THRESHOLDS = {

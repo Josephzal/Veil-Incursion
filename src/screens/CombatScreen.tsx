@@ -14,6 +14,7 @@ import CombatEviscerateCinematic from '../components/combat/CombatEviscerateCine
 import CombatOperativeHud from '../components/combat/CombatOperativeHud';
 import CombatResolutionBanner from '../components/combat/CombatResolutionBanner';
 import CombatSelectedEnemyIntel from '../components/combat/CombatSelectedEnemyIntel';
+import StatusEffectTray from '../components/combat/StatusEffectTray';
 import type { CombatOperativeTelemetry } from '../components/combat/CombatOperativeHud';
 import type { CombatPlayerViewportRef } from '../components/combat/CombatPlayerViewport';
 import IncursionShell from '../components/IncursionShell';
@@ -515,11 +516,12 @@ export default function CombatScreen(): React.JSX.Element {
               <Image source={OverworldArenaBg} style={styles.arenaBackground} resizeMode="cover" />
 
               {selectedEnemyUnit ? (
-                <View style={styles.enemyIntelOverlay} pointerEvents="none">
+                <View style={styles.enemyIntelOverlay} pointerEvents="box-none">
                   <CombatSelectedEnemyIntel
                     unit={selectedEnemyUnit}
                     mutedColor={theme.mutedColor}
                   />
+                  <StatusEffectTray activeStatuses={selectedEnemyUnit.activeStatuses ?? []} />
                 </View>
               ) : null}
 
@@ -636,6 +638,7 @@ const styles = StyleSheet.create({
     left: DECK_INSET,
     right: DECK_INSET,
     zIndex: 12,
+    alignItems: 'flex-start',
   },
   playerHudOverlay: {
     position: 'absolute',

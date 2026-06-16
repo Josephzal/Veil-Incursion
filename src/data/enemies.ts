@@ -7,8 +7,15 @@ import {
 } from './AIDecisionEngine';
 import { decideRosterIntent, syncRosterCombatState } from './combatRosterActions';
 import { ENEMY_ROSTER, spawnRosterUnit } from './enemyRoster';
+import { isRedundantBuffIntent } from './enemyIntentUtils';
+import { getNodeScale } from './enemyNodeScale';
+import { rollEnemyIntent } from './enemyIntentRoll';
 import type { EnemyAffinity } from '../types/combatEnvironment';
 import { EnemyClass, EnemyCombatProfile, EnemyIntent, SectorDefinition } from '../types/run';
+
+export { getNodeScale } from './enemyNodeScale';
+export { rollEnemyIntent, rollEnemyIntentForProfile } from './enemyIntentRoll';
+export { isRedundantBuffIntent, resolveEffectiveEnemyIntent } from './enemyIntentUtils';
 
 const CLASS_BASE_HP: Record<EnemyClass, number> = {
   GREMLIN: 40,
@@ -21,11 +28,6 @@ const CLASS_BASE_DAMAGE: Record<EnemyClass, number> = {
   APPARITION: 12,
   ABOMINATION: 16,
 };
-
-/** Scale = 1 + (currentNode * 0.15) where currentNode is 0-indexed encounter index. */
-export function getNodeScale(nodeIndex: number): number {
-  return 1 + nodeIndex * 0.15;
-}
 
 function pickEnemyClass(nodeIndex: number, isEliteAmbush: boolean): EnemyClass {
   if (isEliteAmbush) return 'ABOMINATION';
@@ -50,48 +52,6 @@ function biomeSkin(classType: EnemyClass, sector: SectorDefinition): string {
     ABOMINATION: 'Incursion Abomination',
   };
   return skins[key]?.[classType] ?? `${sector.subsector} ${fallback[classType]}`;
-}
-
-/** @deprecated Use decideEnemyIntent via advanceEnemyIntent / rollEnemyIntentForProfile. */
-export function rollEnemyIntent(
-  classType: EnemyClass,
-  chargeTurns: number,
-  district: DistrictId = 1,
-  playerState?: PlayerAIState,
-): EnemyIntent {
-  return rollEnemyIntentForProfile(
-    {
-      class: classType,
-      currentHp: CLASS_BASE_HP[classType],
-      maxHp: CLASS_BASE_HP[classType],
-      baseDamage: CLASS_BASE_DAMAGE[classType],
-      chargeTurns,
-      intent: chargeTurns > 0 ? 'CHARGE' : 'STRIKE',
-      evadeActive: false,
-    } as EnemyCombatProfile,
-    district,
-    playerState,
-  );
-}
-
-export function rollEnemyIntentForProfile(
-  profile: Pick<EnemyCombatProfile, 'class' | 'currentHp' | 'maxHp' | 'baseDamage' | 'chargeTurns' | 'intent' | 'evadeActive'>,
-  district: DistrictId = 1,
-  playerState?: PlayerAIState,
-): EnemyIntent {
-  const enemyState = enemyAIStateFromProfile(
-    {
-      ...profile,
-      designation: '',
-      nodeIndex: 0,
-      scale: 1,
-    } as EnemyCombatProfile,
-    district,
-  );
-  return decideEnemyIntent({
-    enemy: { ...enemyState, chargeTurns: profile.chargeTurns ?? 0 },
-    player: playerState ?? defaultPlayerAIState(),
-  });
 }
 
 export function intentLabel(intent: EnemyIntent, designation: string): string {
@@ -252,18 +212,6 @@ export function createHardTestEnemy(playerState?: PlayerAIState): EnemyCombatPro
     scale: 1,
     testPreset: 'hard',
   };
-}
-
-export function isRedundantBuffIntent(intent: EnemyIntent, profile: EnemyCombatProfile): boolean {
-  if (intent === 'EVADE' && profile.evadeActive) return true;
-  if (intent === 'FORTIFY' && (profile.fortifyTurnsRemaining ?? 0) > 0) return true;
-  return false;
-}
-
-/** When a hostile already has Evade/Fortify active, spend the turn on a strike instead. */
-export function resolveEffectiveEnemyIntent(profile: EnemyCombatProfile): EnemyIntent {
-  if (isRedundantBuffIntent(profile.intent, profile)) return 'STRIKE';
-  return profile.intent;
 }
 
 export function advanceEnemyIntent(

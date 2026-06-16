@@ -1,6 +1,6 @@
 import type { BossRuntimeProfile, DistrictBossVariant } from '../types/game';
 import { LEVELS_PER_DISTRICT } from '../types/sectorPacing';
-import { getDepthScale } from './descentEngine';
+import { getDepthScale } from './descentScaling';
 import { isDistrictGateDepth, isPrimeBossDepth } from './districtPacing';
 
 export interface DistrictBossDefinition {

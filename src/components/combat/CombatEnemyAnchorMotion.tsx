@@ -17,6 +17,7 @@ import {
   BACKLINE_MELEE_DASH_RETURN_MS,
   BACKLINE_MELEE_DASH_WINDUP_MS,
   BACKLINE_MELEE_DASH_WINDUP_X,
+  FRONTLINE_IMPACT_HOLD_MS,
   FRONTLINE_MELEE_ATTACK_X,
   FRONTLINE_MELEE_RETURN_IDLE_MS,
   FRONTLINE_MELEE_SNAP_MS,
@@ -139,7 +140,8 @@ export default function CombatEnemyAnchorMotion({
 
     if (turnPhase === 'melee_attack') {
       stepX.value = withSequence(
-        withTiming(FRONTLINE_STAND_X, { duration: 0 }),
+        withTiming(FRONTLINE_MELEE_ATTACK_X, { duration: FRONTLINE_IMPACT_HOLD_MS }),
+withTiming(0, { duration: FRONTLINE_MELEE_RETURN_IDLE_MS, easing: Easing.in(Easing.quad) }),
         withSpring(FRONTLINE_MELEE_ATTACK_X, {
           damping: 16,
           stiffness: 480,

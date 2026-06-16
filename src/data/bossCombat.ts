@@ -1,7 +1,7 @@
 import type { BossRuntimeProfile } from '../types/game';
 import type { CombatGridSlotId } from '../types/combatGrid';
 import { EnemyCombatProfile, EnemyIntent, SectorDefinition } from '../types/run';
-import { getDepthScale } from './descentEngine';
+import { getDepthScale } from './descentScaling';
 import { districtBossDefinitionForDepth } from './districtBosses';
 import { districtBossRosterId } from './enemyRoster';
 import { initEnemyCombatLayers } from './combatFractureEngine';

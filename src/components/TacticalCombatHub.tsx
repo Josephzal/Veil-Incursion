@@ -9,7 +9,9 @@ import {
   withTiming,
 } from 'react-native-reanimated';
 import { useTerminal } from '../context/TerminalContext';
-import { advanceEnemyIntent, resolveEffectiveEnemyIntent } from '../data/enemies';
+import { advanceEnemyIntent } from '../data/enemies';
+import { resolveEffectiveEnemyIntent } from '../data/enemyIntentUtils';
+import { resolveActiveEnemyStatuses } from '../utils/enemyStatusEffects';
 import type { PlayerAIState } from '../data/AIDecisionEngine';
 import {
   computeBloodFrenzyHeal,
@@ -271,7 +273,7 @@ const isAttackIntent = (i: EnemyIntent) =>
   || i === 'VOID_AMBUSH'
   || i === 'RESONANCE_OVERLOAD';
 
-const ENEMY_INTENT_READ_MS = 2500;
+const ENEMY_INTENT_READ_MS = 1800;
 const ENEMY_TURN_GAP_MS = 500;
 
 type EnemyActionStage = 'reading' | 'executing' | null;
@@ -691,6 +693,13 @@ export default function TacticalCombatHub({
           fortifyTurnsRemaining: u.fortifyTurnsRemaining ?? 0,
           chargeTurns: u.chargeTurns ?? 0,
           doomedStacks: u.doomedStacks ?? 0,
+          activeStatuses: resolveActiveEnemyStatuses({
+            combatTags: u.combatTags ?? [],
+            evadeActive: u.evadeActive,
+            intent: u.intent,
+            fortifyTurnsRemaining: u.fortifyTurnsRemaining ?? 0,
+            doomedStacks: u.doomedStacks ?? 0,
+          }),
           isBoss: u.isBoss,
           isApex: u.isApex,
           isElite: threatTier === 'ELITE' || threatTier === 'APEX',

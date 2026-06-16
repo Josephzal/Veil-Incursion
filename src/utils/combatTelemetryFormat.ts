@@ -4,6 +4,9 @@ import type { EnemyAffinity } from '../types/combatEnvironment';
 import type { EnemyCombatProfile, EnemyIntent } from '../types/run';
 import { isUnitAlive } from '../data/combatSquadEngine';
 import { resolveEnemyThreatTier } from '../data/enemyRoster';
+import { resolveActiveEnemyStatuses, type EnemyStatusEffectKey } from './enemyStatusEffects';
+
+export type { EnemyStatusEffectKey } from './enemyStatusEffects';
 
 export const GAUGE_SOUL_ANCHOR = '#FF453A';
 export const GAUGE_ABYSSAL = '#00D2C4';
@@ -178,6 +181,8 @@ export interface CombatGridUnitSnapshot {
   fortifyTurnsRemaining?: number;
   chargeTurns?: number;
   doomedStacks?: number;
+  /** Icon tray keys — fortified, evading, concussed, doomed. */
+  activeStatuses?: readonly EnemyStatusEffectKey[];
   isBoss?: boolean;
   isApex?: boolean;
   isElite?: boolean;
@@ -306,6 +311,13 @@ export function buildInitialSquadUiSnapshot(
     fortifyTurnsRemaining: unit.fortifyTurnsRemaining ?? 0,
     chargeTurns: unit.chargeTurns ?? 0,
     doomedStacks: unit.doomedStacks ?? 0,
+    activeStatuses: resolveActiveEnemyStatuses({
+      combatTags: unit.combatTags ?? [],
+      evadeActive: unit.evadeActive,
+      intent: unit.intent,
+      fortifyTurnsRemaining: unit.fortifyTurnsRemaining ?? 0,
+      doomedStacks: unit.doomedStacks ?? 0,
+    }),
     isBoss: unit.isBoss,
     isApex: unit.isApex,
     isElite: (() => {
