@@ -1,11 +1,12 @@
 import type { ImageSourcePropType } from 'react-native';
 import FortifiedIcon from '../../assets/images/enemy status images/fortified.png';
 import EvadingIcon from '../../assets/images/enemy status images/evading.png';
+import EnragedIcon from '../../assets/images/enemy status images/enraged.png';
 import ConcussedIcon from '../../assets/images/enemy status images/concussed.png';
 import DoomedIcon from '../../assets/images/enemy status images/doomed.png';
 import type { EnemyIntent } from '../types/run';
 
-export type EnemyStatusEffectKey = 'fortified' | 'evading' | 'concussed' | 'doomed';
+export type EnemyStatusEffectKey = 'fortified' | 'evading' | 'enraged' | 'concussed' | 'doomed';
 
 export interface EnemyActiveStatusSource {
   combatTags?: readonly string[];
@@ -13,6 +14,7 @@ export interface EnemyActiveStatusSource {
   intent?: EnemyIntent;
   fortifyTurnsRemaining?: number;
   doomedStacks?: number;
+  isEnraged?: boolean;
 }
 
 export interface EnemyStatusEffectDef {
@@ -25,6 +27,7 @@ export interface EnemyStatusEffectDef {
 export const ENEMY_STATUS_EFFECT_ORDER: readonly EnemyStatusEffectKey[] = [
   'fortified',
   'evading',
+  'enraged',
   'concussed',
   'doomed',
 ] as const;
@@ -41,6 +44,12 @@ export const ENEMY_STATUS_EFFECTS: Record<EnemyStatusEffectKey, EnemyStatusEffec
     label: 'Evading',
     description: 'Guaranteed dodge of the next targeted attack.',
     icon: EvadingIcon,
+  },
+  enraged: {
+    key: 'enraged',
+    label: 'Enraged',
+    description: 'Combat frenzy below HP threshold — increased damage and roster-specific enrage effects.',
+    icon: EnragedIcon,
   },
   concussed: {
     key: 'concussed',
@@ -63,6 +72,7 @@ export function resolveActiveEnemyStatuses(unit: EnemyActiveStatusSource): Enemy
 
   if ((unit.fortifyTurnsRemaining ?? 0) > 0) statuses.push('fortified');
   if (unit.evadeActive || unit.intent === 'EVADE') statuses.push('evading');
+  if (unit.isEnraged) statuses.push('enraged');
   if (tags.has('CONCUSSED')) statuses.push('concussed');
   if (tags.has('DOOMED') || (unit.doomedStacks ?? 0) > 0) statuses.push('doomed');
 

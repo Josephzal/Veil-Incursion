@@ -23,7 +23,11 @@ import {
   RANGED_ATTACK_SPRITE_IN_MS,
   RANGED_ATTACK_SPRITE_OUT_MS,
 } from './combatEnemyBarLayout';
-import { enemySpriteStyles } from './CombatEnemyIntentShimmer';
+import {
+  CombatEnemyIntentShimmerSynced,
+  enemySpriteStyles,
+  type IntentShimmerKind,
+} from './CombatEnemyIntentShimmer';
 
 /** Standalone/manual choreography when enableLocalMotion is true. */
 export const WINDUP_DURATION = 200;
@@ -50,6 +54,13 @@ interface AnimatedEnemySpriteProps {
   isBacklineDashing?: boolean;
   /** When false, only crossfades — CombatEnemyAnchorMotion handles translateX. */
   enableLocalMotion?: boolean;
+  /** Tinted duplicate on the attack layer — opacity tracks attack crossfade. */
+  attackGlow?: {
+    tint: string;
+    opacity: number;
+    scale?: number;
+  } | null;
+  intentShimmer?: IntentShimmerKind | null;
 }
 
 const AnimatedEnemySprite = forwardRef<AnimatedEnemySpriteHandle, AnimatedEnemySpriteProps>(
@@ -61,6 +72,8 @@ const AnimatedEnemySprite = forwardRef<AnimatedEnemySpriteHandle, AnimatedEnemyS
       backlineDashSeq = 0,
       isBacklineDashing = false,
       enableLocalMotion = false,
+      attackGlow = null,
+      intentShimmer = null,
     },
     ref,
   ) {
@@ -280,10 +293,23 @@ const AnimatedEnemySprite = forwardRef<AnimatedEnemySpriteHandle, AnimatedEnemyS
       opacity: attackOpacity.value,
     }));
 
+    const attackGlowStyle = useAnimatedStyle(() => ({
+      opacity: attackOpacity.value * (attackGlow?.opacity ?? 0),
+    }));
+
     const hasDistinctAttackArt = idleSource !== attackSource;
+    const showAttackLayer = hasDistinctAttackArt || attackGlow != null || intentShimmer != null;
 
     return (
       <Animated.View style={[styles.root, enableLocalMotion ? motionStyle : null]}>
+        <CombatEnemyIntentShimmerSynced
+          kind={intentShimmer}
+          idleSource={idleSource}
+          attackSource={attackSource}
+          idleOpacity={idleOpacity}
+          attackOpacity={attackOpacity}
+          layer="back"
+        />
         <Animated.Image
           source={idleSource}
           resizeMode="contain"
@@ -291,7 +317,24 @@ const AnimatedEnemySprite = forwardRef<AnimatedEnemySpriteHandle, AnimatedEnemyS
           nativeID="enemy-sprite-idle"
           accessibilityLabel="enemy-sprite-idle"
         />
-        {hasDistinctAttackArt ? (
+        {attackGlow ? (
+          <Animated.Image
+            source={attackSource}
+            resizeMode="contain"
+            style={[
+              enemySpriteStyles.enemySprite,
+              styles.layer,
+              attackGlowStyle,
+              {
+                tintColor: attackGlow.tint,
+                transform: [{ scale: attackGlow.scale ?? 1.05 }],
+              },
+            ]}
+            nativeID="enemy-sprite-attack-glow"
+            accessibilityLabel="enemy-sprite-attack-glow"
+          />
+        ) : null}
+        {showAttackLayer ? (
           <Animated.Image
             source={attackSource}
             resizeMode="contain"
@@ -300,6 +343,14 @@ const AnimatedEnemySprite = forwardRef<AnimatedEnemySpriteHandle, AnimatedEnemyS
             accessibilityLabel="enemy-sprite-attack"
           />
         ) : null}
+        <CombatEnemyIntentShimmerSynced
+          kind={intentShimmer}
+          idleSource={idleSource}
+          attackSource={attackSource}
+          idleOpacity={idleOpacity}
+          attackOpacity={attackOpacity}
+          layer="front"
+        />
       </Animated.View>
     );
   },

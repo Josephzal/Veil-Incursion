@@ -9,6 +9,7 @@ import {
 import Animated, {
   Easing,
   cancelAnimation,
+  type SharedValue,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
@@ -31,19 +32,7 @@ function spriteDropShadow(color: string, blurPx = 10): ImageStyle | undefined {
   return { filter: `drop-shadow(0 0 ${blurPx}px ${color})` } as ImageStyle;
 }
 
-interface CombatEnemyIntentShimmerProps {
-  kind: IntentShimmerKind | null;
-  source: ImageSourcePropType;
-  /** Fortify tint renders on `front`; glow halo on `back`. */
-  layer?: 'back' | 'front';
-}
-
-/** Fortify / evade VFX — tinted duplicate sprites only (never parent box overlays). */
-export default function CombatEnemyIntentShimmer({
-  kind,
-  source,
-  layer = 'back',
-}: CombatEnemyIntentShimmerProps): React.JSX.Element | null {
+function useIntentShimmerAnimation(kind: IntentShimmerKind | null) {
   const glowOpacity = useSharedValue(0.28);
   const tintOpacity = useSharedValue(0.18);
   const evadePhase = useSharedValue(0);
@@ -98,16 +87,52 @@ export default function CombatEnemyIntentShimmer({
     };
   }, [evadePhase, glowOpacity, kind, tintOpacity]);
 
-  const glowStyle = useAnimatedStyle(() => ({
-    opacity: glowOpacity.value,
+  return { glowOpacity, tintOpacity, evadePhase };
+}
+
+interface CombatEnemyIntentShimmerSyncedProps {
+  kind: IntentShimmerKind | null;
+  idleSource: ImageSourcePropType;
+  attackSource: ImageSourcePropType;
+  idleOpacity: SharedValue<number>;
+  attackOpacity: SharedValue<number>;
+  /** Fortify tint renders on `front`; glow halo on `back`. */
+  layer?: 'back' | 'front';
+}
+
+/** Fortify / evade VFX — idle overlay tracks idle pose; attack overlay tracks attack pose. */
+export function CombatEnemyIntentShimmerSynced({
+  kind,
+  idleSource,
+  attackSource,
+  idleOpacity,
+  attackOpacity,
+  layer = 'back',
+}: CombatEnemyIntentShimmerSyncedProps): React.JSX.Element | null {
+  const { glowOpacity, tintOpacity, evadePhase } = useIntentShimmerAnimation(kind);
+
+  const idleGlowStyle = useAnimatedStyle(() => ({
+    opacity: glowOpacity.value * idleOpacity.value,
   }));
 
-  const fortifyTintStyle = useAnimatedStyle(() => ({
-    opacity: tintOpacity.value,
+  const attackGlowStyle = useAnimatedStyle(() => ({
+    opacity: glowOpacity.value * attackOpacity.value,
   }));
 
-  const evadeTintStyle = useAnimatedStyle(() => ({
-    opacity: 0.1 + evadePhase.value * 0.28,
+  const idleFortifyTintStyle = useAnimatedStyle(() => ({
+    opacity: tintOpacity.value * idleOpacity.value,
+  }));
+
+  const attackFortifyTintStyle = useAnimatedStyle(() => ({
+    opacity: tintOpacity.value * attackOpacity.value,
+  }));
+
+  const idleEvadeTintStyle = useAnimatedStyle(() => ({
+    opacity: (0.1 + evadePhase.value * 0.28) * idleOpacity.value,
+  }));
+
+  const attackEvadeTintStyle = useAnimatedStyle(() => ({
+    opacity: (0.1 + evadePhase.value * 0.28) * attackOpacity.value,
   }));
 
   if (!kind) return null;
@@ -115,32 +140,59 @@ export default function CombatEnemyIntentShimmer({
   if (kind === 'fortify') {
     if (layer === 'back') {
       return (
+        <>
+          <AnimatedImage
+            source={idleSource}
+            resizeMode="contain"
+            style={[
+              styles.enemySprite,
+              styles.enemySpriteLayer,
+              styles.enemySpriteGlow,
+              idleGlowStyle,
+              { tintColor: FORTIFY_GLOW },
+              spriteDropShadow('rgba(251, 146, 60, 0.65)', 12),
+            ]}
+          />
+          <AnimatedImage
+            source={attackSource}
+            resizeMode="contain"
+            style={[
+              styles.enemySprite,
+              styles.enemySpriteLayer,
+              styles.enemySpriteGlow,
+              attackGlowStyle,
+              { tintColor: FORTIFY_GLOW },
+              spriteDropShadow('rgba(251, 146, 60, 0.65)', 12),
+            ]}
+          />
+        </>
+      );
+    }
+    return (
+      <>
         <AnimatedImage
-          source={source}
+          source={idleSource}
           resizeMode="contain"
           style={[
             styles.enemySprite,
             styles.enemySpriteLayer,
-            styles.enemySpriteGlow,
-            glowStyle,
-            { tintColor: FORTIFY_GLOW },
-            spriteDropShadow('rgba(251, 146, 60, 0.65)', 12),
+            styles.enemySpriteFront,
+            idleFortifyTintStyle,
+            { tintColor: FORTIFY_TINT },
           ]}
         />
-      );
-    }
-    return (
-      <AnimatedImage
-        source={source}
-        resizeMode="contain"
-        style={[
-          styles.enemySprite,
-          styles.enemySpriteLayer,
-          styles.enemySpriteFront,
-          fortifyTintStyle,
-          { tintColor: FORTIFY_TINT },
-        ]}
-      />
+        <AnimatedImage
+          source={attackSource}
+          resizeMode="contain"
+          style={[
+            styles.enemySprite,
+            styles.enemySpriteLayer,
+            styles.enemySpriteFront,
+            attackFortifyTintStyle,
+            { tintColor: FORTIFY_TINT },
+          ]}
+        />
+      </>
     );
   }
 
@@ -149,28 +201,76 @@ export default function CombatEnemyIntentShimmer({
   return (
     <>
       <AnimatedImage
-        source={source}
+        source={idleSource}
         resizeMode="contain"
         style={[
           styles.enemySprite,
           styles.enemySpriteLayer,
           styles.enemySpriteGlow,
-          glowStyle,
+          idleGlowStyle,
           { tintColor: EVADE_GLOW },
           spriteDropShadow('rgba(248, 250, 252, 0.55)', 10),
         ]}
       />
       <AnimatedImage
-        source={source}
+        source={idleSource}
         resizeMode="contain"
         style={[
           styles.enemySprite,
           styles.enemySpriteLayer,
-          evadeTintStyle,
+          idleEvadeTintStyle,
+          { tintColor: EVADE_TINT },
+        ]}
+      />
+      <AnimatedImage
+        source={attackSource}
+        resizeMode="contain"
+        style={[
+          styles.enemySprite,
+          styles.enemySpriteLayer,
+          styles.enemySpriteGlow,
+          attackGlowStyle,
+          { tintColor: EVADE_GLOW },
+          spriteDropShadow('rgba(248, 250, 252, 0.55)', 10),
+        ]}
+      />
+      <AnimatedImage
+        source={attackSource}
+        resizeMode="contain"
+        style={[
+          styles.enemySprite,
+          styles.enemySpriteLayer,
+          attackEvadeTintStyle,
           { tintColor: EVADE_TINT },
         ]}
       />
     </>
+  );
+}
+
+/** @deprecated Use CombatEnemyIntentShimmerSynced inside AnimatedEnemySprite. */
+interface CombatEnemyIntentShimmerProps {
+  kind: IntentShimmerKind | null;
+  source: ImageSourcePropType;
+  layer?: 'back' | 'front';
+}
+
+export default function CombatEnemyIntentShimmer({
+  kind,
+  source,
+  layer = 'back',
+}: CombatEnemyIntentShimmerProps): React.JSX.Element | null {
+  const idleOpacity = useSharedValue(1);
+  const attackOpacity = useSharedValue(0);
+  return (
+    <CombatEnemyIntentShimmerSynced
+      kind={kind}
+      idleSource={source}
+      attackSource={source}
+      idleOpacity={idleOpacity}
+      attackOpacity={attackOpacity}
+      layer={layer}
+    />
   );
 }
 

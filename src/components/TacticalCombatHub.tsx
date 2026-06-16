@@ -704,6 +704,7 @@ export default function TacticalCombatHub({
             intent: u.intent,
             fortifyTurnsRemaining: u.fortifyTurnsRemaining ?? 0,
             doomedStacks: u.doomedStacks ?? 0,
+            isEnraged: u.isEnraged ?? false,
           }),
           isBoss: u.isBoss,
           isApex: u.isApex,

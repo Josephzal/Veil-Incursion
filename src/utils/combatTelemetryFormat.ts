@@ -317,6 +317,7 @@ export function buildInitialSquadUiSnapshot(
       intent: unit.intent,
       fortifyTurnsRemaining: unit.fortifyTurnsRemaining ?? 0,
       doomedStacks: unit.doomedStacks ?? 0,
+      isEnraged: unit.isEnraged ?? false,
     }),
     isBoss: unit.isBoss,
     isApex: unit.isApex,

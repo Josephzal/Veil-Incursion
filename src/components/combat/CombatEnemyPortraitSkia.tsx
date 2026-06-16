@@ -2,7 +2,7 @@ import React from 'react';
 import { Image, type ImageSourcePropType, StyleSheet, View } from 'react-native';
 import AnimatedEnemySprite from './AnimatedEnemySprite';
 import type { EnemyPortraitGlow, EnemyIntentShimmer, EnemyTurnPhase } from '../../utils/combatTelemetryFormat';
-import CombatEnemyIntentShimmer, { enemySpriteStyles } from './CombatEnemyIntentShimmer';
+import { enemySpriteStyles } from './CombatEnemyIntentShimmer';
 
 const GLOW_TINT: Record<Exclude<EnemyPortraitGlow, 'none'>, string> = {
   'player-selected': '#f8fafc',
@@ -46,10 +46,12 @@ export default function CombatEnemyPortraitSkia({
   const glowScale = glow !== 'none' ? GLOW_SCALE[glow] : 1.05;
   const glowOpacity = glow !== 'none' ? GLOW_OPACITY[glow] : 0.3;
   const resolvedAttackSource = attackSource ?? source;
+  const isAttackGlow = glow === 'enemy-attacking';
+  const idlePortraitGlow = glow !== 'none' && !isAttackGlow ? glow : null;
 
   return (
     <View style={styles.root} pointerEvents="none" collapsable={false}>
-      {glowTint ? (
+      {idlePortraitGlow && glowTint ? (
         <View style={styles.glowDuplicate} pointerEvents="none">
           <Image
             source={source}
@@ -66,7 +68,6 @@ export default function CombatEnemyPortraitSkia({
         </View>
       ) : null}
       <View style={styles.enemySpriteStack} pointerEvents="none">
-        <CombatEnemyIntentShimmer kind={intentShimmer} source={source} layer="back" />
         <AnimatedEnemySprite
           idleSource={source}
           attackSource={resolvedAttackSource}
@@ -74,8 +75,17 @@ export default function CombatEnemyPortraitSkia({
           backlineDashSeq={backlineDashSeq}
           isBacklineDashing={isBacklineDashing}
           enableLocalMotion={false}
+          intentShimmer={intentShimmer}
+          attackGlow={
+            isAttackGlow
+              ? {
+                  tint: GLOW_TINT['enemy-attacking'],
+                  opacity: GLOW_OPACITY['enemy-attacking'],
+                  scale: GLOW_SCALE['enemy-attacking'],
+                }
+              : null
+          }
         />
-        <CombatEnemyIntentShimmer kind={intentShimmer} source={source} layer="front" />
       </View>
     </View>
   );
