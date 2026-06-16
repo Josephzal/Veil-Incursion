@@ -5,6 +5,7 @@ import Animated, {
   cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
+  withDelay,
   withRepeat,
   withSequence,
   withSpring,
@@ -17,8 +18,8 @@ import {
   BACKLINE_MELEE_DASH_RETURN_MS,
   BACKLINE_MELEE_DASH_WINDUP_MS,
   BACKLINE_MELEE_DASH_WINDUP_X,
-  FRONTLINE_IMPACT_HOLD_MS,
   FRONTLINE_MELEE_ATTACK_X,
+  FRONTLINE_MELEE_HOLD_MS,
   FRONTLINE_MELEE_RETURN_IDLE_MS,
   FRONTLINE_MELEE_SNAP_MS,
   FRONTLINE_RANGED_RETURN_IDLE_MS,
@@ -32,6 +33,7 @@ const IDLE_TRAVEL_Y = 1.5;
 const IDLE_SCALE_MIN = 0.99;
 const STAND_SCALE = 1.05;
 const RECOIL_X = 15;
+const RETURN_EASING = Easing.out(Easing.cubic);
 
 interface CombatEnemyAnchorMotionProps {
   children: React.ReactNode;
@@ -55,6 +57,7 @@ export default function CombatEnemyAnchorMotion({
 }: CombatEnemyAnchorMotionProps): React.JSX.Element {
   const lastHitRef = useRef(0);
   const lastDashRef = useRef(0);
+  const lastTurnPhaseRef = useRef<EnemyTurnPhase | null>(null);
   const idlePhase = useSharedValue(0);
   const breatheActive = useSharedValue(1);
   const stepX = useSharedValue(0);
@@ -84,14 +87,23 @@ export default function CombatEnemyAnchorMotion({
   }, [frozen, idlePhase, meleeDashX, meleeDashY, motionLocked, recoilX, stepScale, stepX]);
 
   useEffect(() => {
+    if (turnPhase != null) {
+      breatheActive.value = 0;
+      return;
+    }
+    breatheActive.value = withTiming(1, {
+      duration: FRONTLINE_RANGED_RETURN_IDLE_MS,
+      easing: RETURN_EASING,
+    });
+  }, [breatheActive, turnPhase]);
+
+  useEffect(() => {
     if (frozen || isBacklineDashing || turnPhase != null) {
       cancelAnimation(idlePhase);
-      if (!frozen && turnPhase == null) {
-        idlePhase.value = withTiming(0, { duration: 180, easing: Easing.inOut(Easing.sin) });
-      }
       return;
     }
 
+    idlePhase.value = 0;
     idlePhase.value = withRepeat(
       withTiming(1, {
         duration: IDLE_HALF_MS,
@@ -105,59 +117,73 @@ export default function CombatEnemyAnchorMotion({
   }, [frozen, idlePhase, isBacklineDashing, turnPhase]);
 
   useEffect(() => {
-    breatheActive.value = turnPhase == null ? 1 : 0;
-  }, [breatheActive, turnPhase]);
-
-  useEffect(() => {
     if (frozen || isBacklineDashing) return;
 
-    cancelAnimation(stepX);
-    cancelAnimation(stepScale);
-
     if (!turnPhase) {
-      stepX.value = withTiming(0, {
-        duration: FRONTLINE_RANGED_RETURN_IDLE_MS,
-        easing: Easing.out(Easing.cubic),
-      });
-      stepScale.value = withTiming(1, {
-        duration: FRONTLINE_RANGED_RETURN_IDLE_MS,
-        easing: Easing.out(Easing.cubic),
-      });
+      const prev = lastTurnPhaseRef.current;
+      lastTurnPhaseRef.current = null;
+
+      if (prev === 'melee_attack' || prev === 'ranged_attack') {
+        cancelAnimation(stepX);
+        cancelAnimation(stepScale);
+        stepX.value = 0;
+        stepScale.value = 1;
+      } else if (prev === 'reading' || prev === 'buff') {
+        stepX.value = withTiming(0, {
+          duration: FRONTLINE_RANGED_RETURN_IDLE_MS,
+          easing: RETURN_EASING,
+        });
+        stepScale.value = withTiming(1, {
+          duration: FRONTLINE_RANGED_RETURN_IDLE_MS,
+          easing: RETURN_EASING,
+        });
+      }
       return;
     }
+
+    lastTurnPhaseRef.current = turnPhase;
+    cancelAnimation(stepX);
+    cancelAnimation(stepScale);
 
     if (turnPhase === 'reading' || turnPhase === 'buff' || turnPhase === 'ranged_attack') {
       stepX.value = withTiming(FRONTLINE_STAND_X, {
         duration: turnPhase === 'reading' ? FRONTLINE_STAND_MS : 0,
-        easing: Easing.out(Easing.cubic),
+        easing: RETURN_EASING,
       });
       stepScale.value = withTiming(STAND_SCALE, {
         duration: turnPhase === 'reading' ? FRONTLINE_STAND_MS : 0,
-        easing: Easing.out(Easing.cubic),
+        easing: RETURN_EASING,
       });
       return;
     }
 
     if (turnPhase === 'melee_attack') {
       stepX.value = withSequence(
-        withTiming(FRONTLINE_MELEE_ATTACK_X, { duration: FRONTLINE_IMPACT_HOLD_MS }),
-withTiming(0, { duration: FRONTLINE_MELEE_RETURN_IDLE_MS, easing: Easing.in(Easing.quad) }),
-        withSpring(FRONTLINE_MELEE_ATTACK_X, {
-          damping: 16,
-          stiffness: 480,
-          mass: 0.55,
+        withTiming(FRONTLINE_MELEE_ATTACK_X, {
+          duration: FRONTLINE_MELEE_SNAP_MS,
+          easing: Easing.out(Easing.cubic),
         }),
+        withDelay(
+          FRONTLINE_MELEE_HOLD_MS,
+          withTiming(FRONTLINE_MELEE_ATTACK_X, { duration: 0 }),
+        ),
         withTiming(0, {
           duration: FRONTLINE_MELEE_RETURN_IDLE_MS,
-          easing: Easing.in(Easing.quad),
+          easing: RETURN_EASING,
         }),
       );
       stepScale.value = withSequence(
-        withTiming(STAND_SCALE, { duration: 0 }),
-        withTiming(STAND_SCALE * 1.03, { duration: FRONTLINE_MELEE_SNAP_MS }),
+        withTiming(STAND_SCALE * 1.03, {
+          duration: FRONTLINE_MELEE_SNAP_MS,
+          easing: Easing.out(Easing.cubic),
+        }),
+        withDelay(
+          FRONTLINE_MELEE_HOLD_MS,
+          withTiming(STAND_SCALE * 1.03, { duration: 0 }),
+        ),
         withTiming(1, {
           duration: FRONTLINE_MELEE_RETURN_IDLE_MS,
-          easing: Easing.in(Easing.quad),
+          easing: RETURN_EASING,
         }),
       );
     }
@@ -201,7 +227,7 @@ withTiming(0, { duration: FRONTLINE_MELEE_RETURN_IDLE_MS, easing: Easing.in(Easi
       withTiming(dashTargetX, { duration: BACKLINE_MELEE_DASH_HOLD_MS }),
       withTiming(0, {
         duration: BACKLINE_MELEE_DASH_RETURN_MS,
-        easing: Easing.in(Easing.quad),
+        easing: RETURN_EASING,
       }),
     );
     meleeDashY.value = withSequence(
@@ -213,7 +239,7 @@ withTiming(0, { duration: FRONTLINE_MELEE_RETURN_IDLE_MS, easing: Easing.in(Easi
       withTiming(dashTargetY, { duration: BACKLINE_MELEE_DASH_HOLD_MS }),
       withTiming(0, {
         duration: BACKLINE_MELEE_DASH_RETURN_MS,
-        easing: Easing.in(Easing.quad),
+        easing: RETURN_EASING,
       }),
     );
   }, [backlineMeleeDashSeq, frozen, idlePhase, meleeDashDelta, meleeDashX, meleeDashY, stepScale, stepX]);
