@@ -17,6 +17,7 @@ import CombatSelectedEnemyIntel from '../components/combat/CombatSelectedEnemyIn
 import StatusEffectTray from '../components/combat/StatusEffectTray';
 import ParticleOverlay from '../components/atmosphere/ParticleOverlay';
 import { macroFamilyToBiomeId } from '../constants/biomeConfig';
+import { pulseCombatTargetSelect } from '../utils/hubButtonHaptics';
 import type { CombatOperativeTelemetry } from '../components/combat/CombatOperativeHud';
 import type { CombatPlayerViewportRef } from '../components/combat/CombatPlayerViewport';
 import IncursionShell from '../components/IncursionShell';
@@ -51,7 +52,10 @@ import { rollGatekeeperLockedTemplate } from '../data/combatRewardEngine';
 import { shouldGrantAdrenalinePrimerAp } from '../data/boundRequisitionEngine';
 import type { IncursionConsumableUseResult } from '../types/incursionInventory';
 
-import AegisCombat from '../../assets/images/character images/aegis/aegis_combat.png';
+import {
+  resolvePlayerCombatAttackPortrait,
+  resolvePlayerCombatIdlePortrait,
+} from '../utils/combatPlayerPortrait';
 import OverworldArenaBg from '../../assets/images/environment images/overworld.png';
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('screen');
@@ -93,7 +97,8 @@ function CombatArenaZone({
       <CombatArenaStage
         playerViewportRef={playerViewportRef}
         enemyViewportRef={apparitionRef}
-        playerImageSource={AegisCombat}
+        playerImageSource={resolvePlayerCombatIdlePortrait()}
+        playerAttackImageSource={resolvePlayerCombatAttackPortrait()}
         enemyImageSource={portraitSource}
         enemyPortraitKey={portraitKey}
         wardPrimed={wardPrimed}
@@ -191,6 +196,7 @@ export default function CombatScreen(): React.JSX.Element {
   }, []);
 
   const handleEnemyUnitPress = useCallback((unitId: string) => {
+    pulseCombatTargetSelect();
     targetHandlerRef.current(unitId);
   }, []);
 

@@ -1,5 +1,6 @@
 import { Dimensions, type ViewStyle } from 'react-native';
 import type { CombatGridSlotId } from '../../types/combatGrid';
+import { laneForSlot } from '../../types/combatGrid';
 import { ALL_GRID_SLOTS } from '../../types/combatGrid';
 
 const ARENA_HORIZONTAL_INSET = 16;
@@ -305,6 +306,32 @@ export function backlineMeleeDashDelta(
   const playerFootY = arenaHeight * (1 - Number.parseFloat(ARENA_SPRITE_BOTTOM) / 100);
   const x = -(slotCenterX + arenaWidth * 0.42);
   const y = Math.max(16, playerFootY - slotFootY + Math.abs(layout.unitTranslateY) * 0.2);
+
+  return { x, y };
+}
+
+/** Forward lunge from the operative sprite toward a targeted hostile slot. */
+export function playerAttackLungeDelta(
+  slot: CombatGridSlotId,
+  layoutMode: ArenaLayoutMode,
+  arenaWidth: number,
+  arenaHeight: number,
+): { x: number; y: number } {
+  const effectiveSlot = layoutMode === 'solo' ? SOLO_ARENA_SLOT : slot;
+  const layout = resolveArenaSlotLayout(effectiveSlot, layoutMode);
+  const enemyColumnWidth = arenaWidth * 0.5;
+  const rect = slotLayoutToAnchorRect(layout, enemyColumnWidth, arenaHeight);
+  const enemyColumnLeft = arenaWidth * 0.5;
+  const slotCenterX = enemyColumnLeft + rect.left + rect.width / 2;
+
+  const playerColumnWidth = arenaWidth * 0.5;
+  const playerAnchorX = playerColumnWidth * 0.58;
+  const rawGap = slotCenterX - playerAnchorX;
+  const x = Math.round(Math.min(88, Math.max(28, rawGap * 0.42)));
+
+  const playerFootY = arenaHeight * 0.98;
+  const slotTorsoY = rect.top + rect.height * (laneForSlot(effectiveSlot) === 'BACKLINE' ? 0.62 : 0.72);
+  const y = Math.round(Math.min(0, Math.max(-32, (slotTorsoY - playerFootY) * 0.3)));
 
   return { x, y };
 }

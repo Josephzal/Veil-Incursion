@@ -14,6 +14,8 @@ interface CargoGridOverlayProps {
   theme: TerminalTheme;
   accentColor?: string;
   onClose: () => void;
+  /** Closes without exit haptic — e.g. after a successful item use. */
+  onDismissSilently?: () => void;
   onRelocateItem: (instanceId: string, row: number, col: number) => boolean;
   onUseAmpoule?: () => boolean;
   scannerMode?: boolean;
@@ -33,6 +35,7 @@ export default function CargoGridOverlay({
   theme,
   accentColor = TERMINAL_ACCENT,
   onClose,
+  onDismissSilently,
   onRelocateItem,
   onUseAmpoule,
   scannerMode = false,
@@ -45,6 +48,8 @@ export default function CargoGridOverlay({
   runCredits,
   playerActionPoints,
 }: CargoGridOverlayProps): React.JSX.Element {
+  const dismissAfterUse = onDismissSilently ?? onClose;
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
@@ -84,22 +89,22 @@ export default function CargoGridOverlay({
             minimal
             onUseAmpoule={onUseAmpoule ? () => {
               const ok = onUseAmpoule();
-              if (ok) onClose();
+              if (ok) dismissAfterUse();
               return ok;
             } : undefined}
             onUseResonanceBribe={onUseResonanceBribe ? () => {
               const ok = onUseResonanceBribe();
-              if (ok) onClose();
+              if (ok) dismissAfterUse();
               return ok;
             } : undefined}
             onUseDeadDrop={onUseDeadDrop ? () => {
               const ok = onUseDeadDrop();
-              if (ok) onClose();
+              if (ok) dismissAfterUse();
               return ok;
             } : undefined}
             onUseCombatConsumable={onUseCombatConsumable ? (itemId) => {
               const ok = onUseCombatConsumable(itemId);
-              if (ok) onClose();
+              if (ok) dismissAfterUse();
               return ok;
             } : undefined}
           />

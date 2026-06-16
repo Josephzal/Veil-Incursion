@@ -40,7 +40,12 @@ import {
   getInteractiveButtonStyle,
   getInteractiveButtonTextStyle,
 } from '../styles/hubTerminalUi';
-import { pulseHubButton } from '../utils/hubButtonHaptics';
+import {
+  pulseCargoItemPickup,
+  pulseCargoItemSelect,
+  pulseCargoItemUse,
+  pulseHubButton,
+} from '../utils/hubButtonHaptics';
 
 export const CARGO_CELL_SIZE = 56;
 export const CARGO_CELL_GAP = 2;
@@ -426,6 +431,7 @@ export default function CargoGridBoard({
   }, []);
 
   const handleDragStart = useCallback((source: CargoDragSource) => {
+    pulseCargoItemPickup();
     pendingDropRef.current = null;
     dropTargetRef.current = null;
     activeDragRef.current = source;
@@ -434,6 +440,11 @@ export default function CargoGridBoard({
     dragGhostScale.value = withSpring(1.08);
     setActiveDrag(source);
   }, [captureMetrics, dragGhostScale]);
+
+  const selectCombatItem = useCallback((itemId: CargoItemId) => {
+    pulseCargoItemSelect();
+    setSelectedCombatItemId(itemId);
+  }, []);
 
   const handleDragMove = useCallback((absoluteX: number, absoluteY: number) => {
     const source = activeDragRef.current;
@@ -606,7 +617,7 @@ export default function CargoGridBoard({
                 onDropAttempt={handleDropAttempt}
                 combatSelectMode={selectMode}
                 combatSelected={selectedCombatItemId === item.itemId}
-                onCombatSelect={selectMode ? () => setSelectedCombatItemId(item.itemId) : undefined}
+                onCombatSelect={selectMode ? () => selectCombatItem(item.itemId) : undefined}
               />
             </View>
           );
@@ -660,7 +671,7 @@ export default function CargoGridBoard({
                       combatSelected={selectedCombatItemId === item.itemId}
                       onCombatSelect={
                         combatMode && combatConsumablesEnabled && isCombatDeployableCargoItem(item.itemId)
-                          ? () => setSelectedCombatItemId(item.itemId)
+                          ? () => selectCombatItem(item.itemId)
                           : undefined
                       }
                     />
@@ -699,7 +710,10 @@ export default function CargoGridBoard({
 
       {scannerMode && hasAmpouleInGrid && onUseAmpoule ? (
         <Pressable
-          onPress={() => onUseAmpoule()}
+          onPress={() => {
+            pulseCargoItemUse();
+            onUseAmpoule();
+          }}
           style={[styles.ampouleBtn, { borderColor: accentColor }]}
         >
           <Text style={[styles.ampouleBtnText, { color: accentColor }]}>
@@ -709,7 +723,13 @@ export default function CargoGridBoard({
       ) : null}
 
       {scannerMode && onUseResonanceBribe && countCargoItemInstances(displayCargo, 'resonance-bribe') > 0 ? (
-        <Pressable onPress={() => onUseResonanceBribe()} style={[styles.ampouleBtn, { borderColor: accentColor }]}>
+        <Pressable
+          onPress={() => {
+            pulseCargoItemUse();
+            onUseResonanceBribe();
+          }}
+          style={[styles.ampouleBtn, { borderColor: accentColor }]}
+        >
           <Text style={[styles.ampouleBtnText, { color: accentColor }]}>
             [ USE RESONANCE BRIBE — −25% RESONANCE ]
           </Text>
@@ -717,7 +737,13 @@ export default function CargoGridBoard({
       ) : null}
 
       {scannerMode && onUseDeadDrop && countCargoItemInstances(displayCargo, 'dead-drop-token') > 0 ? (
-        <Pressable onPress={() => onUseDeadDrop()} style={[styles.ampouleBtn, { borderColor: accentColor }]}>
+        <Pressable
+          onPress={() => {
+            pulseCargoItemUse();
+            onUseDeadDrop();
+          }}
+          style={[styles.ampouleBtn, { borderColor: accentColor }]}
+        >
           <Text style={[styles.ampouleBtnText, { color: accentColor }]}>
             [ USE DEAD-DROP TOKEN — VAULT EXTRACT ]
           </Text>
@@ -777,6 +803,7 @@ export default function CargoGridBoard({
               disabled={!combatUseEnabled}
               onPress={() => {
                 if (!selectedCombatItemId || !combatUseEnabled) return;
+                pulseCargoItemUse();
                 const ok = onUseCombatConsumable(selectedCombatItemId);
                 if (ok) setSelectedCombatItemId(null);
               }}

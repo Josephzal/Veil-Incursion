@@ -8,7 +8,6 @@ import React, {
 import {
   Image,
   type ImageSourcePropType,
-  type LayoutChangeEvent,
   type StyleProp,
   type ViewStyle,
   StyleSheet,
@@ -18,15 +17,21 @@ import Animated, {
   Easing,
   useAnimatedStyle,
   useSharedValue,
+  withDelay,
   withRepeat,
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
 import type { EnemyDeckStrikeVariant } from '../../utils/combatTelemetryFormat';
+import {
+  FRONTLINE_MELEE_RETURN_IDLE_MS,
+  FRONTLINE_MELEE_SNAP_MS,
+  FRONTLINE_MELEE_SPRITE_HOLD_MS,
+} from './combatEnemyBarLayout';
+import CombatPlayerAttackSprite, { type CombatPlayerAttackSpriteHandle } from './CombatPlayerAttackSprite';
 
 const SHAKE_AMPLITUDE = 10;
-const LUNGE_DISTANCE = 28;
-const LUNGE_MS = 280;
+const DEFAULT_LUNGE = { x: 48, y: 0 };
 const GLOW_PULSE_MS = 900;
 const PRIMED_GLOW = '#ff00ff';
 
@@ -36,9 +41,14 @@ const FLASH_COLORS: Record<EnemyDeckStrikeVariant, string> = {
   abyssal: '#00D2C4',
 };
 
+export interface PlayerAttackLungeDelta {
+  x: number;
+  y: number;
+}
+
 export interface CombatPlayerViewportRef {
   triggerDamageEffect: (variant?: EnemyDeckStrikeVariant) => void;
-  triggerAttackLunge: () => void;
+  triggerAttackLunge: (delta?: PlayerAttackLungeDelta) => void;
   triggerEvadeAfterimage: () => void;
   triggerEnemyCritVignette: () => void;
   setWardPrimed: (active: boolean) => void;
@@ -46,19 +56,26 @@ export interface CombatPlayerViewportRef {
 
 interface CombatPlayerViewportProps {
   imageSource: ImageSourcePropType;
+  attackImageSource?: ImageSourcePropType;
   style?: StyleProp<ViewStyle>;
   wardPrimed?: boolean;
   abilityPrimed?: boolean;
 }
 
 const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerViewportProps>(
-  function CombatPlayerViewport({ imageSource, style, wardPrimed = false, abilityPrimed = false }, ref) {
+  function CombatPlayerViewport(
+    { imageSource, attackImageSource, style, wardPrimed = false, abilityPrimed = false },
+    ref,
+  ) {
     const shakeX = useSharedValue(0);
     const lungeX = useSharedValue(0);
+    const lungeY = useSharedValue(0);
     const flashOpacity = useSharedValue(0);
     const [flashColor, setFlashColor] = useState(FLASH_COLORS.hp);
     const flashColorRef = useRef(FLASH_COLORS.hp);
     const glowOpacity = useSharedValue(0);
+    const attackSpriteRef = useRef<CombatPlayerAttackSpriteHandle>(null);
+    const resolvedAttackSource = attackImageSource ?? imageSource;
 
     const primed = wardPrimed || abilityPrimed;
 
@@ -97,16 +114,27 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
       );
     };
 
+    const runTargetedLunge = (delta: PlayerAttackLungeDelta) => {
+      void attackSpriteRef.current?.executeAttackAnimation();
+      lungeX.value = withSequence(
+        withTiming(delta.x, { duration: FRONTLINE_MELEE_SNAP_MS, easing: Easing.out(Easing.cubic) }),
+        withDelay(FRONTLINE_MELEE_SPRITE_HOLD_MS, withTiming(delta.x, { duration: 0 })),
+        withTiming(0, { duration: FRONTLINE_MELEE_RETURN_IDLE_MS, easing: Easing.inOut(Easing.cubic) }),
+      );
+      lungeY.value = withSequence(
+        withTiming(delta.y, { duration: FRONTLINE_MELEE_SNAP_MS, easing: Easing.out(Easing.cubic) }),
+        withDelay(FRONTLINE_MELEE_SPRITE_HOLD_MS, withTiming(delta.y, { duration: 0 })),
+        withTiming(0, { duration: FRONTLINE_MELEE_RETURN_IDLE_MS, easing: Easing.inOut(Easing.cubic) }),
+      );
+    };
+
     useImperativeHandle(ref, () => ({
       triggerDamageEffect: (variant = 'hp') => {
         runShake();
         runFlash(variant);
       },
-      triggerAttackLunge: () => {
-        lungeX.value = withSequence(
-          withTiming(LUNGE_DISTANCE, { duration: LUNGE_MS * 0.45, easing: Easing.out(Easing.cubic) }),
-          withTiming(0, { duration: LUNGE_MS * 0.55, easing: Easing.inOut(Easing.cubic) }),
-        );
+      triggerAttackLunge: (delta = DEFAULT_LUNGE) => {
+        runTargetedLunge(delta);
       },
       triggerEvadeAfterimage: () => {
         lungeX.value = withSequence(
@@ -114,6 +142,7 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
           withTiming(10, { duration: 70, easing: Easing.inOut(Easing.cubic) }),
           withTiming(0, { duration: 60, easing: Easing.in(Easing.cubic) }),
         );
+        lungeY.value = withTiming(0, { duration: 60 });
         runFlash('hp');
       },
       triggerEnemyCritVignette: () => {
@@ -127,10 +156,13 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
         }
         glowOpacity.value = withTiming(0, { duration: GLOW_PULSE_MS });
       },
-    }), [flashOpacity, lungeX, shakeX, glowOpacity]);
+    }), [flashOpacity, lungeX, lungeY, shakeX, glowOpacity]);
 
     const frameAnimatedStyle = useAnimatedStyle(() => ({
-      transform: [{ translateX: shakeX.value + lungeX.value }],
+      transform: [
+        { translateX: shakeX.value + lungeX.value },
+        { translateY: lungeY.value },
+      ],
     }));
 
     const glowStyle = useAnimatedStyle(() => ({
@@ -145,24 +177,30 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
       <View style={[styles.root, style]}>
         <Animated.View style={[styles.spriteFrame, frameAnimatedStyle]}>
           <Animated.View style={[styles.glowDuplicate, glowStyle]} pointerEvents="none">
-            <Image
-              source={imageSource}
-              resizeMode="contain"
-              style={[styles.playerImage, styles.glowImage, { tintColor: PRIMED_GLOW }]}
-            />
+            <View style={styles.glowArtBox} pointerEvents="none">
+              <Image
+                source={imageSource}
+                resizeMode="contain"
+                style={[styles.spriteLayer, styles.glowImage, { tintColor: PRIMED_GLOW }]}
+              />
+            </View>
           </Animated.View>
-          <Image
-            source={imageSource}
-            resizeMode="contain"
-            style={styles.playerImage}
-          />
-          <Animated.View style={[styles.damageFlashWrap, flashStyle]} pointerEvents="none">
-            <Image
-              source={imageSource}
-              resizeMode="contain"
-              style={[styles.playerImage, { tintColor: flashColor }]}
+          <View style={styles.spriteStack} pointerEvents="none">
+            <CombatPlayerAttackSprite
+              ref={attackSpriteRef}
+              idleSource={imageSource}
+              attackSource={resolvedAttackSource}
             />
-          </Animated.View>
+            <Animated.View style={[styles.damageFlashWrap, flashStyle]} pointerEvents="none">
+              <View style={styles.flashArtBox} pointerEvents="none">
+                <Image
+                  source={imageSource}
+                  resizeMode="contain"
+                  style={[styles.spriteLayer, { tintColor: flashColor }]}
+                />
+              </View>
+            </Animated.View>
+          </View>
         </Animated.View>
       </View>
     );
@@ -191,7 +229,29 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     backgroundColor: 'transparent',
   },
-  playerImage: {
+  spriteStack: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    backgroundColor: 'transparent',
+  },
+  glowArtBox: {
+    width: '100%',
+    height: '100%',
+    minHeight: 120,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  flashArtBox: {
+    width: '100%',
+    height: '100%',
+    minHeight: 120,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  spriteLayer: {
     width: '100%',
     height: '100%',
     minHeight: 120,

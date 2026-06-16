@@ -12,6 +12,7 @@ interface CombatArenaStageProps {
   playerViewportRef: React.RefObject<CombatPlayerViewportRef | null>;
   enemyViewportRef: React.RefObject<ApparitionViewportRef | null>;
   playerImageSource: ImageSourcePropType;
+  playerAttackImageSource?: ImageSourcePropType;
   enemyImageSource: ImageSourcePropType;
   enemyPortraitKey: string;
   wardPrimed?: boolean;
@@ -26,6 +27,7 @@ export default function CombatArenaStage({
   playerViewportRef,
   enemyViewportRef,
   playerImageSource,
+  playerAttackImageSource,
   enemyImageSource,
   enemyPortraitKey,
   wardPrimed = false,
@@ -43,6 +45,7 @@ export default function CombatArenaStage({
           <CombatPlayerViewport
             ref={playerViewportRef}
             imageSource={playerImageSource}
+            attackImageSource={playerAttackImageSource}
             wardPrimed={wardPrimed}
             abilityPrimed={abilityPrimed}
             style={styles.spriteFill}

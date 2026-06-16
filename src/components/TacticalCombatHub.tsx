@@ -40,6 +40,7 @@ import { getAbilityDefinition } from '../data/aegisAbilities';
 import { COMBAT_CONSUMABLE_AP_COST, resolveHostileHpHit } from '../data/aegisAbilityResolver';
 import { combatConsumableApCost } from '../data/cargoGridEngine';
 import type { CargoItemId } from '../types/cargoGrid';
+import type { CombatGridSlotId } from '../types/combatGrid';
 import {
   executeExtendedAbility,
   isExtendedAbilityEnabled,
@@ -161,6 +162,9 @@ import {
   ENEMY_MELEE_ANIM_MS,
   ENEMY_RANGED_ANIM_MS,
   FRONTLINE_MELEE_IMPACT_MS,
+  playerAttackLungeDelta,
+  resolveArenaLayoutMode,
+  type ArenaLayoutMode,
 } from './combat/combatEnemyBarLayout';
 import VignetteFlashOverlay from './VignetteFlashOverlay';
 import {
@@ -179,7 +183,7 @@ import {
 const TELEMETRY_DIVIDER = 'rgba(139, 92, 246, 0.2)';
 const ENEMY_TO_PLAYER_DAMAGE_MULTIPLIER = 0.9;
 
-const { width } = Dimensions.get('window');
+const { width, height: windowHeight } = Dimensions.get('window');
 
 /** Screen-right inset to stacked hub inner content (center gutter + paddingHorizontal). */
 export const TACTICAL_HUB_STACKED_RIGHT_INSET = 16;
@@ -347,6 +351,7 @@ export default function TacticalCombatHub({
   const enemyActionQueueRef = useRef<string[]>([]);
   const counteringEnemyRef = useRef(false);
   const threatBudgetRef = useRef(threatBudget ?? THREAT_BUDGET_STANDARD);
+  const arenaLayoutModeRef = useRef<ArenaLayoutMode>('group');
   const [isPlayerTurn, setIsPlayerTurn] = useState(true);
   const [operativeHp, setOperativeHp] = useState(initialOperativeHp);
   const [stamina, setStamina] = useState(initialStamina);
@@ -1547,8 +1552,16 @@ export default function TacticalCombatHub({
     if (source && dmg > 0 && e.unitId) {
       trackVoidAmbushInterruptDamage(e.unitId, dmg);
     }
-    if (source && arenaLayout && dmg > 0) {
-      playerViewportRef?.current?.triggerAttackLunge();
+    if (source && arenaLayout) {
+      const targetSlot = (working.gridSlot ?? 'FL_0') as CombatGridSlotId;
+      const arenaHeight = Math.max(windowHeight * 0.28, 200);
+      const lungeDelta = playerAttackLungeDelta(
+        targetSlot,
+        arenaLayoutModeRef.current,
+        width,
+        arenaHeight,
+      );
+      playerViewportRef?.current?.triggerAttackLunge(lungeDelta);
     }
     const poolHp = working.sharedBossPool && bossRuntimeRef.current
       ? Math.max(bossRuntimeRef.current.currentHp - dmg, 0)
@@ -2445,6 +2458,7 @@ export default function TacticalCombatHub({
 
     threatBudgetRef.current = threatBudget
       ?? (initialSquad.length >= 3 ? THREAT_BUDGET_ELITE : THREAT_BUDGET_STANDARD);
+    arenaLayoutModeRef.current = resolveArenaLayoutMode(initialSquad.length);
     syncSquad(initialSquad);
     if (equippedBlueprintId) {
       const startHooks = runOnCombatStartHooks(equippedBlueprintId, {

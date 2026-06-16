@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { pulseCargoClose, pulseCargoOpen } from '../utils/hubButtonHaptics';
 import { StyleSheet, View, ViewStyle } from 'react-native';
 import CargoGridOverlay from './CargoGridOverlay';
 import PersistentTerminalLog from './PersistentTerminalLog';
@@ -93,8 +94,18 @@ export default function MacroLogAnchoredLayout({
 
   const openCargo = useCallback(() => {
     if (!cargoEnabled || !showRunOverlays) return;
+    pulseCargoOpen();
     setCargoOpen(true);
   }, [cargoEnabled, showRunOverlays]);
+
+  const closeCargo = useCallback(() => {
+    pulseCargoClose();
+    setCargoOpen(false);
+  }, []);
+
+  const dismissCargoSilently = useCallback(() => {
+    setCargoOpen(false);
+  }, []);
 
   const openStatus = useCallback(() => {
     if (!showRunOverlays) return;
@@ -132,7 +143,8 @@ export default function MacroLogAnchoredLayout({
             visible={cargoOpen}
             cargo={activeIncursion.cargo}
             theme={theme}
-            onClose={() => setCargoOpen(false)}
+            onClose={closeCargo}
+            onDismissSilently={dismissCargoSilently}
             onRelocateItem={relocateCargoItem}
             onDiscardItem={discardCargoInstance}
             runCredits={activeIncursion.runCredits}
