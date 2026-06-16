@@ -15,6 +15,8 @@ import CombatOperativeHud from '../components/combat/CombatOperativeHud';
 import CombatResolutionBanner from '../components/combat/CombatResolutionBanner';
 import CombatSelectedEnemyIntel from '../components/combat/CombatSelectedEnemyIntel';
 import StatusEffectTray from '../components/combat/StatusEffectTray';
+import ParticleOverlay from '../components/atmosphere/ParticleOverlay';
+import { macroFamilyToBiomeId } from '../constants/biomeConfig';
 import type { CombatOperativeTelemetry } from '../components/combat/CombatOperativeHud';
 import type { CombatPlayerViewportRef } from '../components/combat/CombatPlayerViewport';
 import IncursionShell from '../components/IncursionShell';
@@ -347,6 +349,11 @@ export default function CombatScreen(): React.JSX.Element {
     [gridUnits],
   );
 
+  const combatBiomeId = useMemo(
+    () => macroFamilyToBiomeId(activeIncursion.currentMacroBiomeFamily),
+    [activeIncursion.currentMacroBiomeFamily],
+  );
+
   const spectralSaltActive = activeIncursion.spectralWeaponImbued === true;
 
   const handleResolutionPanelChange = useCallback(
@@ -514,6 +521,7 @@ export default function CombatScreen(): React.JSX.Element {
               ]}
             >
               <Image source={OverworldArenaBg} style={styles.arenaBackground} resizeMode="cover" />
+              <ParticleOverlay biomeId={combatBiomeId} />
 
               {selectedEnemyUnit ? (
                 <View style={styles.enemyIntelOverlay} pointerEvents="box-none">
