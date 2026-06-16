@@ -90,6 +90,11 @@ interface CargoGridBoardProps {
   showCreditsHud?: boolean;
   minimal?: boolean;
   onContainmentItemCenterMeasured?: (instanceId: string, center: { x: number; y: number }) => void;
+  onHarvestFloorMeasured?: (rect: { x: number; y: number; width: number; height: number }) => void;
+  /** Locks containment bay slot count and layout (harvest screen). */
+  fixedExternalSlotCount?: number;
+  resolveContainmentSlotIndex?: (instanceId: string) => number | undefined;
+  stableExternalBay?: boolean;
   hideContinueButton?: boolean;
 }
 
@@ -346,12 +351,17 @@ export default function CargoGridBoard({
   showCreditsHud = true,
   minimal = true,
   onContainmentItemCenterMeasured,
+  onHarvestFloorMeasured,
+  fixedExternalSlotCount,
+  resolveContainmentSlotIndex,
+  stableExternalBay = false,
   hideContinueButton = false,
 }: CargoGridBoardProps): React.JSX.Element {
   const combatTurn = useCombatTurnOptional();
   const runCredits = runCreditsProp ?? combatTurn?.runCredits ?? 0;
   const playerActionPoints = playerActionPointsProp ?? combatTurn?.playerActionPoints ?? 0;
   const boardRef = useRef<View>(null);
+  const externalBayRef = useRef<View>(null);
   const gridRef = useRef<View>(null);
   const gridMetricsRef = useRef<GridMetrics | null>(null);
   const boardMetricsRef = useRef<GridMetrics | null>(null);
@@ -389,7 +399,18 @@ export default function CargoGridBoard({
   if (externalSlotCountRef.current === 0 && displayCargo.containment.length > 0) {
     externalSlotCountRef.current = displayCargo.containment.length;
   }
-  const externalSlotCount = Math.max(externalSlotCountRef.current, displayCargo.containment.length);
+  const dynamicExternalSlotCount = Math.max(externalSlotCountRef.current, displayCargo.containment.length);
+  const externalSlotCount = fixedExternalSlotCount ?? dynamicExternalSlotCount;
+
+  const containmentBySlot = useMemo(() => {
+    if (!fixedExternalSlotCount || !resolveContainmentSlotIndex) return null;
+    const map = new Map<number, import('../types/cargoGrid').ContainmentItem>();
+    displayCargo.containment.forEach((item) => {
+      const slot = resolveContainmentSlotIndex(item.instanceId);
+      if (slot != null) map.set(slot, item);
+    });
+    return map;
+  }, [displayCargo.containment, fixedExternalSlotCount, resolveContainmentSlotIndex]);
 
   const hasAmpouleInGrid = displayCargo.grid.placed.some((item) => item.itemId === 'focusing-ampoule');
 
@@ -419,13 +440,22 @@ export default function CargoGridBoard({
     });
   }, []);
 
+  const reportHarvestFloor = useCallback(() => {
+    if (!onHarvestFloorMeasured) return;
+    externalBayRef.current?.measureInWindow((x, y, width, height) => {
+      onHarvestFloorMeasured({ x, y, width, height });
+    });
+  }, [onHarvestFloorMeasured]);
+
   const handleGridLayout = useCallback((_event: LayoutChangeEvent) => {
     captureMetrics();
-  }, [captureMetrics]);
+    reportHarvestFloor();
+  }, [captureMetrics, reportHarvestFloor]);
 
   useLayoutEffect(() => {
     captureMetrics();
-  }, [captureMetrics, displayCargo.containment.length, displayCargo.grid.placed.length]);
+    reportHarvestFloor();
+  }, [captureMetrics, displayCargo.containment.length, displayCargo.grid.placed.length, reportHarvestFloor]);
 
   const resolveCellFromAbsolute = useCallback((absoluteX: number, absoluteY: number) => {
     const metrics = gridMetricsRef.current;
@@ -728,11 +758,29 @@ export default function CargoGridBoard({
       <View ref={boardRef} onLayout={captureMetrics} style={styles.boardShell}>
         <View style={styles.gridDock}>{gridBlock}</View>
 
-        <View style={styles.externalBay}>
+        <View
+          ref={externalBayRef}
+          onLayout={reportHarvestFloor}
+          style={[
+            styles.externalBay,
+            stableExternalBay ? styles.externalBayStable : null,
+          ]}
+        >
           {externalSlotCount > 0 ? (
-            <View style={styles.externalRow}>
+            <View
+              style={[
+                styles.externalRow,
+                stableExternalBay ? {
+                  width: externalSlotCount * CARGO_CELL_SIZE + (externalSlotCount - 1) * 20,
+                  alignSelf: 'center',
+                  justifyContent: 'flex-start',
+                } : null,
+              ]}
+            >
               {Array.from({ length: externalSlotCount }, (_, slotIndex) => {
-                const item = displayCargo.containment[slotIndex] ?? null;
+                const item = containmentBySlot?.get(slotIndex)
+                  ?? displayCargo.containment[slotIndex]
+                  ?? null;
                 if (!item) {
                   return <View key={`empty-slot-${slotIndex}`} style={styles.externalSlot} />;
                 }
@@ -1035,6 +1083,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: '100%',
     gap: 8,
+    marginTop: 28,
+  },
+  externalBayStable: {
+    minHeight: undefined,
+    height: 84,
     marginTop: 28,
   },
   externalRow: {

@@ -367,6 +367,8 @@ export interface ActiveIncursionState {
   pendingNarrativeCombatBoons: import('./narrativeBonusReward').PendingNarrativeCombatBoons;
   /** Veil Residue vacuumed into the run canister this incursion (capped at 100). */
   sessionVeilResidueCollected: number;
+  /** Instance ids staged on the harvest screen — purged on exit unless packed or vacuumed. */
+  harvestStagingInstanceIds: readonly string[];
   /** God Mode consumable active — 1000 STRIKE damage and locked max resources. */
   godModeActive: boolean;
 }
@@ -436,6 +438,7 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     boundRequisition: null,
     pendingNarrativeCombatBoons: createDefaultPendingNarrativeCombatBoons(),
     sessionVeilResidueCollected: 0,
+    harvestStagingInstanceIds: [],
     godModeActive: false,
   };
 }

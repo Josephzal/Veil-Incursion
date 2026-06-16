@@ -1,14 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
-import Animated, {
-  Easing,
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
 import ResourceHarvestBg from '../../assets/images/location images/resource_harvest.png';
 import CargoPackingPanel from '../components/CargoPackingPanel';
+import ResidueParticle from '../components/harvest/ResidueParticle';
 import VeilVacuumCanisterStack, {
   type VeilVacuumCanisterStackHandle,
 } from '../components/harvest/VeilVacuumCanisterStack';
@@ -19,75 +13,22 @@ import { MAX_RUN_CANISTER_RESIDUE } from '../constants/veilResidue';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
-import { countVeilResidueInCargo, isVeilResidueCargoItem } from '../data/cargoGridEngine';
+import { isVeilResidueCargoItem } from '../data/cargoGridEngine';
 import { useNodeProgression } from '../hooks/useNodeProgression';
+import type { HarvestFloorBounds, ResidueParticleData } from '../types/residueParticle';
 import {
-  pulseResidueAbsorbed,
   startVacuumHoldHaptics,
   stopVacuumHoldHaptics,
-  tickVacuumHoldHaptics,
+  tickResidueParticleAbsorbed,
 } from '../utils/harvestHaptics';
-import { resolveCargoItemIcon } from '../utils/cargoItemIcon';
+import {
+  harvestFloorFromWindowRect,
+  resolveResidueEnemyTier,
+  spawnResidueSwarm,
+} from '../utils/spawnResidueSwarm';
 
-const RESIDUE_PARTICLE_SIZE = 52;
-const VACUUM_FLIGHT_MS = 480;
-const VACUUM_SCAN_MS = 180;
 const VACUUM_HAPTIC_MS = 150;
-
-interface VacuumFlight {
-  id: string;
-  instanceId: string;
-  startX: number;
-  startY: number;
-  targetX: number;
-  targetY: number;
-}
-
-function VacuumFlightParticle({
-  flight,
-  onComplete,
-}: {
-  flight: VacuumFlight;
-  onComplete: (flight: VacuumFlight) => void;
-}): React.JSX.Element {
-  const progress = useSharedValue(0);
-
-  useEffect(() => {
-    progress.value = withTiming(
-      1,
-      { duration: VACUUM_FLIGHT_MS, easing: Easing.in(Easing.cubic) },
-      (finished) => {
-        if (finished) {
-          runOnJS(onComplete)(flight);
-        }
-      },
-    );
-  }, [flight, onComplete, progress]);
-
-  const style = useAnimatedStyle(() => {
-    const t = progress.value;
-    const x = flight.startX + (flight.targetX - flight.startX) * t;
-    const y = flight.startY + (flight.targetY - flight.startY) * t;
-    const scale = 1 - t * 0.8;
-    return {
-      position: 'absolute',
-      left: x - (RESIDUE_PARTICLE_SIZE * scale) / 2,
-      top: y - (RESIDUE_PARTICLE_SIZE * scale) / 2,
-      width: RESIDUE_PARTICLE_SIZE,
-      height: RESIDUE_PARTICLE_SIZE,
-      opacity: 1 - t,
-      transform: [{ scale }],
-    };
-  });
-
-  return (
-    <Animated.Image
-      source={resolveCargoItemIcon('veil-residue-bulk')}
-      resizeMode="contain"
-      style={style}
-    />
-  );
-}
+const VALUE_EPSILON = 0.001;
 
 export default function ResourceHarvestScreen(): React.JSX.Element {
   const { theme } = useTerminal();
@@ -99,35 +40,64 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
     discardCargoInstance,
     appendRunLog,
     prepareHarvestAmbushEncounter,
-    absorbVeilResidueInstance,
+    absorbVeilResidueParticle,
+    finalizeHarvestScreen,
   } = useRun();
   const { startCombat } = useGameFlow();
   const { completeCurrentNode } = useNodeProgression();
 
   const harvestAppliedRef = useRef(false);
+  const harvestFinalizedRef = useRef(false);
   const canisterRef = useRef<VeilVacuumCanisterStackHandle>(null);
   const overlayRef = useRef<View>(null);
-  const vacuumActiveRef = useRef(false);
-  const vacuumBusyRef = useRef(false);
-  const itemCentersRef = useRef<Record<string, { x: number; y: number }>>({});
-  const hiddenInstanceIdsRef = useRef<Set<string>>(new Set());
+  const swarmedInstanceIdsRef = useRef<Set<string>>(new Set());
+  const instanceRemainingRef = useRef<Record<string, number>>({});
   const sessionCollectedRef = useRef(activeIncursion.sessionVeilResidueCollected);
+  const lootFloorRef = useRef<HarvestFloorBounds | null>(null);
 
   const [isVacuuming, setIsVacuuming] = useState(false);
-  const [flights, setFlights] = useState<VacuumFlight[]>([]);
-  const [hiddenInstanceIds, setHiddenInstanceIds] = useState<Set<string>>(() => new Set());
+  const [lootPool, setLootPool] = useState<ResidueParticleData[]>([]);
+  const [swarmedInstanceIds, setSwarmedInstanceIds] = useState<Set<string>>(() => new Set());
+  const [canisterCoordinates, setCanisterCoordinates] = useState<{ x: number; y: number } | null>(null);
+  const [lootFloor, setLootFloor] = useState<HarvestFloorBounds | null>(null);
+  const [residueSpawnGeneration, setResidueSpawnGeneration] = useState(0);
+  const lootPoolRef = useRef<ResidueParticleData[]>([]);
+  const containmentSlotAssignmentRef = useRef<Map<string, number>>(new Map());
+  const nextContainmentSlotRef = useRef(0);
+  const [fixedExternalSlotCount, setFixedExternalSlotCount] = useState(0);
 
   sessionCollectedRef.current = activeIncursion.sessionVeilResidueCollected;
+  lootPoolRef.current = lootPool;
+  lootFloorRef.current = lootFloor;
 
-  const pendingResidue = useMemo(
-    () => countVeilResidueInCargo(activeIncursion.cargo),
-    [activeIncursion.cargo],
-  );
-  const harvestPercentage = Math.round(
-    (activeIncursion.sessionVeilResidueCollected / MAX_RUN_CANISTER_RESIDUE) * 100,
-  );
+  const harvestPercentage = (activeIncursion.sessionVeilResidueCollected / MAX_RUN_CANISTER_RESIDUE) * 100;
   const canisterFull = activeIncursion.sessionVeilResidueCollected >= MAX_RUN_CANISTER_RESIDUE;
-  const canVacuum = pendingResidue > 0 && !canisterFull;
+  const canVacuum = lootPool.length > 0 && !canisterFull;
+
+  const residueInstanceIds = useMemo(
+    () => activeIncursion.cargo.containment
+      .filter((item) => isVeilResidueCargoItem(item.itemId))
+      .map((item) => item.instanceId),
+    [activeIncursion.cargo.containment],
+  );
+
+  useEffect(() => {
+    let assigned = false;
+    activeIncursion.cargo.containment.forEach((item) => {
+      if (containmentSlotAssignmentRef.current.has(item.instanceId)) return;
+      containmentSlotAssignmentRef.current.set(item.instanceId, nextContainmentSlotRef.current);
+      nextContainmentSlotRef.current += 1;
+      assigned = true;
+    });
+    if (assigned) {
+      setFixedExternalSlotCount(nextContainmentSlotRef.current);
+    }
+  }, [activeIncursion.cargo.containment]);
+
+  const resolveContainmentSlotIndex = useCallback(
+    (instanceId: string) => containmentSlotAssignmentRef.current.get(instanceId),
+    [],
+  );
 
   useEffect(() => {
     if (harvestAppliedRef.current) return;
@@ -135,69 +105,67 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
     harvestAppliedRef.current = true;
     const result = applyHarvestChoice('FULL');
     result.logLines.forEach((line) => appendRunLog(line));
+    setResidueSpawnGeneration((gen) => gen + 1);
   }, [activeIncursion.pendingHarvestReturn, appendRunLog, applyHarvestChoice]);
 
-  const handleResidueAbsorption = useCallback((instanceId: string, startCenter: { x: number; y: number }) => {
-    vacuumBusyRef.current = true;
+  useEffect(() => {
+    if (activeIncursion.pendingHarvestReturn !== 'RESOURCE_CACHE') return;
+    setResidueSpawnGeneration((gen) => gen + 1);
+  }, [activeIncursion.pendingHarvestReturn]);
 
-    const centerPromise = canisterRef.current?.measureCanisterCenter() ?? Promise.resolve(null);
-    centerPromise.then((targetCenter) => {
-      if (!targetCenter) {
-        vacuumBusyRef.current = false;
-        return;
-      }
+  useEffect(() => () => {
+    if (harvestFinalizedRef.current) return;
+    harvestFinalizedRef.current = true;
+    finalizeHarvestScreen();
+  }, [finalizeHarvestScreen]);
 
-      overlayRef.current?.measureInWindow((overlayX, overlayY) => {
-        hiddenInstanceIdsRef.current.add(instanceId);
-        setHiddenInstanceIds(new Set(hiddenInstanceIdsRef.current));
-        setFlights((prev) => [
-          ...prev,
-          {
-            id: instanceId,
-            instanceId,
-            startX: startCenter.x - overlayX,
-            startY: startCenter.y - overlayY,
-            targetX: targetCenter.x - overlayX,
-            targetY: targetCenter.y - overlayY,
-          },
-        ]);
-      });
+  const handleHarvestFloorMeasured = useCallback((rect: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }) => {
+    overlayRef.current?.measureInWindow((overlayX, overlayY) => {
+      const nextFloor = harvestFloorFromWindowRect(rect, { x: overlayX, y: overlayY });
+      lootFloorRef.current = nextFloor;
+      setLootFloor(nextFloor);
     });
   }, []);
 
-  const launchNextVacuum = useCallback(() => {
-    if (!vacuumActiveRef.current || vacuumBusyRef.current) return;
-    if (sessionCollectedRef.current >= MAX_RUN_CANISTER_RESIDUE) return;
-
-    const nextResidue = activeIncursion.cargo.containment.find(
-      (item) => isVeilResidueCargoItem(item.itemId) && !hiddenInstanceIdsRef.current.has(item.instanceId),
-    );
-    if (!nextResidue) return;
-
-    const startCenter = itemCentersRef.current[nextResidue.instanceId];
-    if (!startCenter) return;
-
-    handleResidueAbsorption(nextResidue.instanceId, startCenter);
-  }, [activeIncursion.cargo.containment, handleResidueAbsorption]);
-
   useEffect(() => {
-    if (!isVacuuming || !canVacuum) return undefined;
+    const floor = lootFloorRef.current;
+    if (!floor) return;
 
-    const scanTimer = setInterval(() => {
-      if (!vacuumBusyRef.current) {
-        launchNextVacuum();
-      }
-    }, VACUUM_SCAN_MS);
+    const tier = resolveResidueEnemyTier(activeIncursion);
+    const depth = activeIncursion.currentDepth;
+    const newParticles: ResidueParticleData[] = [];
+    let spawnedAny = false;
 
-    return () => clearInterval(scanTimer);
-  }, [canVacuum, isVacuuming, launchNextVacuum, pendingResidue]);
+    residueInstanceIds.forEach((instanceId) => {
+      if (swarmedInstanceIdsRef.current.has(instanceId)) return;
+
+      newParticles.push(...spawnResidueSwarm(tier, depth, floor, {
+        instanceId,
+        totalValue: 1,
+      }));
+
+      swarmedInstanceIdsRef.current.add(instanceId);
+      instanceRemainingRef.current[instanceId] = 1;
+      spawnedAny = true;
+    });
+
+    if (!spawnedAny) return;
+
+    setSwarmedInstanceIds(new Set(swarmedInstanceIdsRef.current));
+    setLootPool((prev) => [...prev, ...newParticles]);
+  }, [activeIncursion, lootFloor, residueInstanceIds, residueSpawnGeneration]);
 
   useEffect(() => {
     if (!isVacuuming) return undefined;
 
     startVacuumHoldHaptics();
     const hapticTimer = setInterval(() => {
-      tickVacuumHoldHaptics();
+      startVacuumHoldHaptics();
     }, VACUUM_HAPTIC_MS);
 
     return () => {
@@ -208,55 +176,70 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
 
   const handleVacuumStart = useCallback(() => {
     if (!canVacuum) return;
-    vacuumActiveRef.current = true;
-    setIsVacuuming(true);
-    launchNextVacuum();
-  }, [canVacuum, launchNextVacuum]);
+
+    const centerPromise = canisterRef.current?.measureCanisterCenter() ?? Promise.resolve(null);
+    centerPromise.then((targetCenter) => {
+      if (!targetCenter) return;
+
+      overlayRef.current?.measureInWindow((overlayX, overlayY) => {
+        setCanisterCoordinates({
+          x: targetCenter.x - overlayX,
+          y: targetCenter.y - overlayY,
+        });
+        setIsVacuuming(true);
+      });
+    });
+  }, [canVacuum]);
 
   const handleVacuumStop = useCallback(() => {
-    vacuumActiveRef.current = false;
     setIsVacuuming(false);
   }, []);
 
-  const handleFlightComplete = useCallback((flight: VacuumFlight) => {
-    setFlights((prev) => prev.filter((entry) => entry.id !== flight.id));
+  const handleParticleAbsorbed = useCallback((value: number, particleId: string) => {
+    tickResidueParticleAbsorbed();
 
-    const priorCollected = sessionCollectedRef.current;
-    const absorbed = absorbVeilResidueInstance(flight.instanceId);
-    if (absorbed > 0) {
-      pulseResidueAbsorbed();
-      const nextPercent = Math.round(
-        ((priorCollected + absorbed) / MAX_RUN_CANISTER_RESIDUE) * 100,
-      );
-      canisterRef.current?.animateFillToPercent(nextPercent);
+    const particle = lootPoolRef.current.find((entry) => entry.id === particleId);
+    if (!particle) return;
+
+    const { instanceId } = particle;
+    const remaining = (instanceRemainingRef.current[instanceId] ?? 1) - value;
+    instanceRemainingRef.current[instanceId] = Math.max(0, remaining);
+    const finalizeInstance = instanceRemainingRef.current[instanceId] <= VALUE_EPSILON;
+    if (finalizeInstance) {
+      delete instanceRemainingRef.current[instanceId];
     }
 
-    hiddenInstanceIdsRef.current.delete(flight.instanceId);
-    setHiddenInstanceIds(new Set(hiddenInstanceIdsRef.current));
-    vacuumBusyRef.current = false;
+    const nextCollected = Math.min(
+      MAX_RUN_CANISTER_RESIDUE,
+      sessionCollectedRef.current + value,
+    );
+    sessionCollectedRef.current = nextCollected;
 
-    if (vacuumActiveRef.current) {
-      requestAnimationFrame(() => launchNextVacuum());
-    }
-  }, [absorbVeilResidueInstance, launchNextVacuum]);
+    absorbVeilResidueParticle(instanceId, value, finalizeInstance);
+    canisterRef.current?.animateFillToPercent(
+      (nextCollected / MAX_RUN_CANISTER_RESIDUE) * 100,
+    );
 
-  const handleContainmentItemCenterMeasured = useCallback((
-    instanceId: string,
-    center: { x: number; y: number },
-  ) => {
-    if (hiddenInstanceIdsRef.current.has(instanceId)) return;
-    itemCentersRef.current[instanceId] = center;
-  }, []);
+    setLootPool((prev) => prev.filter((entry) => entry.id !== particleId));
+  }, [absorbVeilResidueParticle]);
 
   const displayCargo = useMemo(() => ({
     ...activeIncursion.cargo,
     containment: activeIncursion.cargo.containment.filter(
-      (item) => !hiddenInstanceIds.has(item.instanceId),
+      (item) => !isVeilResidueCargoItem(item.itemId) || !swarmedInstanceIds.has(item.instanceId),
     ),
-  }), [activeIncursion.cargo, hiddenInstanceIds]);
+  }), [activeIncursion.cargo, swarmedInstanceIds]);
 
   const handlePackingContinue = () => {
     handleVacuumStop();
+    if (!harvestFinalizedRef.current) {
+      harvestFinalizedRef.current = true;
+      finalizeHarvestScreen();
+    }
+    setLootPool([]);
+    swarmedInstanceIdsRef.current.clear();
+    instanceRemainingRef.current = {};
+    setSwarmedInstanceIds(new Set());
 
     if (runState.pendingAmbush) {
       prepareHarvestAmbushEncounter();
@@ -299,7 +282,9 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
                   ? '[ CONTINUE TO GRID ]'
                   : '[ CONTINUE RUN ]'
               }
-              onContainmentItemCenterMeasured={handleContainmentItemCenterMeasured}
+              onHarvestFloorMeasured={handleHarvestFloorMeasured}
+              fixedExternalSlotCount={fixedExternalSlotCount}
+              resolveContainmentSlotIndex={resolveContainmentSlotIndex}
               harvestLayout
               gridSidecar={(
                 <VeilVacuumCanisterStack
@@ -315,12 +300,14 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
             />
           </View>
 
-          <View ref={overlayRef} style={styles.flightOverlay} pointerEvents="none">
-            {flights.map((flight) => (
-              <VacuumFlightParticle
-                key={flight.id}
-                flight={flight}
-                onComplete={handleFlightComplete}
+          <View ref={overlayRef} style={styles.particleOverlay} pointerEvents="none">
+            {lootPool.map((particle) => (
+              <ResidueParticle
+                key={particle.id}
+                particle={particle}
+                isVacuuming={isVacuuming}
+                canisterCoordinates={canisterCoordinates}
+                onAbsorbed={handleParticleAbsorbed}
               />
             ))}
           </View>
@@ -348,8 +335,8 @@ const styles = StyleSheet.create({
     position: 'relative',
     zIndex: 1,
   },
-  flightOverlay: {
+  particleOverlay: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 99,
+    zIndex: 2,
   },
 });

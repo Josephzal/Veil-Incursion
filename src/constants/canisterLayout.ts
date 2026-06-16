@@ -8,8 +8,34 @@ export const CANISTER_TOP_CAP_RATIO = 0.24;
 export const CANISTER_GLASS_HEIGHT_RATIO = 0.60;
 export const CANISTER_BASE_RATIO = 0.16;
 
+/** Visual vacuum bar height scale (0.9 = 10% shorter than the glass band). */
+export const VACUUM_BAR_HEIGHT_SCALE = 0.9;
+export const VACUUM_BAR_HEIGHT_RATIO = CANISTER_GLASS_HEIGHT_RATIO * VACUUM_BAR_HEIGHT_SCALE;
+
+/** Lift the bar bottom edge upward by this fraction of total canister height (net after adjustments). */
+export const VACUUM_BAR_BOTTOM_LIFT_RATIO = 0.04;
+
+const DEFAULT_VACUUM_BAR_BOTTOM_RATIO = CANISTER_TOP_CAP_RATIO + CANISTER_GLASS_HEIGHT_RATIO;
+export const VACUUM_BAR_BOTTOM_RATIO = DEFAULT_VACUUM_BAR_BOTTOM_RATIO - VACUUM_BAR_BOTTOM_LIFT_RATIO;
+export const VACUUM_BAR_TOP_RATIO = VACUUM_BAR_BOTTOM_RATIO - VACUUM_BAR_HEIGHT_RATIO;
+
+/** Font size scale for the fill percentage label on the base metal band. */
+export const CANISTER_BASE_PERCENT_FONT_SCALE = 0.22;
+
 /** Horizontal inset of the glass cylinder from the shell edges. */
 export const CANISTER_GLASS_SIDE_INSET_RATIO = 0.08;
+
+/** Canister shell width scale (0.85 = 15% narrower than derived layout width). */
+export const CANISTER_SHELL_WIDTH_SCALE = 0.85;
+
+/** Vacuum bar width scale relative to its default inset-derived width (0.75 = 25% narrower). */
+export const VACUUM_BAR_WIDTH_SCALE = 0.75;
+
+const BASE_VACUUM_BAR_INSET_PCT = CANISTER_GLASS_SIDE_INSET_RATIO * 10;
+const BASE_VACUUM_BAR_WIDTH_PCT = 100 - BASE_VACUUM_BAR_INSET_PCT * 2;
+
+/** Horizontal inset (% of shell width) for each side of the vacuum bar pressable. */
+export const VACUUM_BAR_SIDE_INSET_PCT = (100 - BASE_VACUUM_BAR_WIDTH_PCT * VACUUM_BAR_WIDTH_SCALE) / 2;
 
 /** Responsive glass tube height clamps (screen-height fraction + min/max). */
 export const GLASS_SCREEN_HEIGHT_RATIO = 0.115;
@@ -32,8 +58,8 @@ export function resolveCanisterLayoutDimensions(screenHeight: number): CanisterL
     Math.max(GLASS_MIN_HEIGHT, Math.round(screenHeight * GLASS_SCREEN_HEIGHT_RATIO)),
   );
   const canisterHeight = Math.round(glassHeight / CANISTER_GLASS_HEIGHT_RATIO);
-  const canisterWidth = Math.round(canisterHeight * CANISTER_ASPECT_RATIO);
-  const glassWidth = Math.round(canisterWidth * (1 - CANISTER_GLASS_SIDE_INSET_RATIO * 2));
+  const canisterWidth = Math.round(canisterHeight * CANISTER_ASPECT_RATIO * CANISTER_SHELL_WIDTH_SCALE);
+  const glassWidth = Math.round(canisterWidth * (1 - CANISTER_GLASS_SIDE_INSET_RATIO * 2) * VACUUM_BAR_WIDTH_SCALE);
 
   return { glassHeight, glassWidth, canisterHeight, canisterWidth };
 }
@@ -42,8 +68,8 @@ export function resolveCanisterLayoutDimensions(screenHeight: number): CanisterL
 export function resolveCanisterLayoutForGrid(gridFrameHeight: number): CanisterLayoutDimensions {
   const canisterHeight = Math.max(48, Math.round(gridFrameHeight * CANISTER_GRID_HEIGHT_RATIO));
   const glassHeight = Math.round(canisterHeight * CANISTER_GLASS_HEIGHT_RATIO);
-  const canisterWidth = Math.round(canisterHeight * CANISTER_ASPECT_RATIO);
-  const glassWidth = Math.round(canisterWidth * (1 - CANISTER_GLASS_SIDE_INSET_RATIO * 2));
+  const canisterWidth = Math.round(canisterHeight * CANISTER_ASPECT_RATIO * CANISTER_SHELL_WIDTH_SCALE);
+  const glassWidth = Math.round(canisterWidth * (1 - CANISTER_GLASS_SIDE_INSET_RATIO * 2) * VACUUM_BAR_WIDTH_SCALE);
 
   return { glassHeight, glassWidth, canisterHeight, canisterWidth };
 }

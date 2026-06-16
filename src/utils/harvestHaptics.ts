@@ -15,3 +15,7 @@ export function stopVacuumHoldHaptics(): void {
 export function pulseResidueAbsorbed(): void {
   void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 }
+
+export function tickResidueParticleAbsorbed(): void {
+  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+}

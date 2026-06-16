@@ -7,14 +7,19 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import {
   Easing,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import { CARGO_GRID_FRAME_WIDTH } from '../CargoGridBoard';
-import { resolveCanisterLayoutDimensions, resolveCanisterLayoutForGrid } from '../../constants/canisterLayout';
+import {
+  CANISTER_BASE_PERCENT_FONT_SCALE,
+  CANISTER_BASE_RATIO,
+  resolveCanisterLayoutDimensions,
+  resolveCanisterLayoutForGrid,
+} from '../../constants/canisterLayout';
+import { resolveHarvestSidecarWidth } from '../../constants/harvestLayout';
 import VeilResidueCanisterShell from './VeilResidueCanister';
 import VeilVacuumBar from './VeilVacuumBar';
 
@@ -56,9 +61,9 @@ const VeilVacuumCanisterStack = forwardRef<VeilVacuumCanisterStackHandle, VeilVa
         : resolveCanisterLayoutDimensions(screenHeight);
 
       if (gridFrameHeight != null) {
-        const availableRight = (screenWidth / 2) - (CARGO_GRID_FRAME_WIDTH / 2) - 26;
-        if (availableRight > 0 && dims.canisterWidth > availableRight) {
-          const scale = availableRight / dims.canisterWidth;
+        const sidecarWidth = resolveHarvestSidecarWidth(screenWidth);
+        if (sidecarWidth > 0 && dims.canisterWidth > sidecarWidth) {
+          const scale = sidecarWidth / dims.canisterWidth;
           dims = {
             canisterWidth: Math.max(36, Math.round(dims.canisterWidth * scale)),
             canisterHeight: Math.max(48, Math.round(dims.canisterHeight * scale)),
@@ -72,8 +77,8 @@ const VeilVacuumCanisterStack = forwardRef<VeilVacuumCanisterStackHandle, VeilVa
     }, [gridFrameHeight, screenHeight, screenWidth]);
 
     const percentFontSize = useMemo(
-      () => Math.max(9, Math.round(layout.glassWidth * 0.38)),
-      [layout.glassWidth],
+      () => Math.max(7, Math.round(layout.canisterWidth * CANISTER_BASE_PERCENT_FONT_SCALE)),
+      [layout.canisterWidth],
     );
 
     useEffect(() => {
@@ -89,7 +94,7 @@ const VeilVacuumCanisterStack = forwardRef<VeilVacuumCanisterStackHandle, VeilVa
         duration: 420,
         easing: Easing.out(Easing.cubic),
       });
-      setDisplayPercent(Math.round(percent));
+      setDisplayPercent(Math.round(percent * 10) / 10);
     }, [fillPct]);
 
     const measureCanisterCenter = useCallback((): Promise<{ x: number; y: number } | null> => (
@@ -122,12 +127,15 @@ const VeilVacuumCanisterStack = forwardRef<VeilVacuumCanisterStackHandle, VeilVa
         <VeilVacuumBar
           active={active}
           disabled={disabled}
-          displayPercent={displayPercent}
           fillPct={fillPct}
-          percentFontSize={percentFontSize}
           onPressIn={onPressIn}
           onPressOut={onPressOut}
         />
+        <View style={styles.basePercentBand} pointerEvents="none">
+          <Text style={[styles.percentText, { fontSize: percentFontSize }]}>
+            {Number.isInteger(displayPercent) ? displayPercent : displayPercent.toFixed(1)}%
+          </Text>
+        </View>
       </View>
     );
   },
@@ -138,5 +146,23 @@ export default VeilVacuumCanisterStack;
 const styles = StyleSheet.create({
   stack: {
     position: 'relative',
+  },
+  basePercentBand: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: `${CANISTER_BASE_RATIO * 100}%`,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 3,
+  },
+  percentText: {
+    color: '#d8f4f0',
+    fontWeight: '600',
+    fontFamily: 'monospace',
+    textShadowColor: 'rgba(0, 0, 0, 0.85)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
 });

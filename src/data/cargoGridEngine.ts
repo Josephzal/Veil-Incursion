@@ -139,11 +139,13 @@ export function addLootToContainment(
   cargo: CargoRunState,
   itemId: CargoItemId,
   count = 1,
+  stagedInstanceIds?: string[],
 ): CargoRunState {
   const additions = Array.from({ length: count }, () => ({
     instanceId: createCargoInstanceId(itemId),
     itemId,
   }));
+  stagedInstanceIds?.push(...additions.map((entry) => entry.instanceId));
   return {
     ...cargo,
     containment: [...cargo.containment, ...additions],
@@ -258,6 +260,24 @@ export function countVeilResidueInCargo(cargo: CargoRunState): number {
   const inContainment = cargo.containment.filter((item) => isVeilResidueCargoItem(item.itemId)).length;
   const inGrid = cargo.grid.placed.filter((item) => isVeilResidueCargoItem(item.itemId)).length;
   return inContainment + inGrid;
+}
+
+/** Removes unclaimed harvest loot. Packed non-residue grid items are kept. */
+export function finalizeHarvestCargoState(
+  cargo: CargoRunState,
+  stagingInstanceIds: ReadonlySet<string>,
+): CargoRunState {
+  return {
+    ...cargo,
+    containment: cargo.containment.filter((item) => {
+      if (isVeilResidueCargoItem(item.itemId)) return false;
+      if (!stagingInstanceIds.has(item.instanceId)) return true;
+      return false;
+    }),
+    grid: {
+      placed: cargo.grid.placed.filter((item) => !isVeilResidueCargoItem(item.itemId)),
+    },
+  };
 }
 
 export function applyEmergencyExtractBleed(

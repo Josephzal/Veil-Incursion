@@ -1,5 +1,9 @@
-import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo } from 'react';
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import {
+  GRID_CANISTER_GAP,
+  resolveHarvestSidecarWidth,
+} from '../constants/harvestLayout';
 import { calculateCargoMarketValue, calculateGridOccupancy } from '../data/cargoGridEngine';
 import CargoGridBoard, {
   CARGO_GRID_FRAME_HEIGHT,
@@ -25,6 +29,9 @@ interface CargoPackingPanelProps {
   onContinue: () => void;
   continueLabel?: string;
   onContainmentItemCenterMeasured?: (instanceId: string, center: { x: number; y: number }) => void;
+  onHarvestFloorMeasured?: (rect: { x: number; y: number; width: number; height: number }) => void;
+  fixedExternalSlotCount?: number;
+  resolveContainmentSlotIndex?: (instanceId: string) => number | undefined;
   /** Harvest screen: grid centered on screen, sidecar anchored to cell grid. */
   harvestLayout?: boolean;
   gridSidecar?: React.ReactNode;
@@ -43,7 +50,16 @@ export default function CargoPackingPanel({
   onContainmentItemCenterMeasured,
   harvestLayout = false,
   gridSidecar,
+  onHarvestFloorMeasured,
+  fixedExternalSlotCount,
+  resolveContainmentSlotIndex,
 }: CargoPackingPanelProps): React.JSX.Element {
+  const { width: screenWidth } = useWindowDimensions();
+  const harvestSidecarWidth = useMemo(
+    () => (harvestLayout ? resolveHarvestSidecarWidth(screenWidth) : 0),
+    [harvestLayout, screenWidth],
+  );
+
   const occupancy = calculateGridOccupancy(cargo);
   const occupancyPct = Math.round(occupancy * 100);
   const cargoValue = calculateCargoMarketValue(cargo);
@@ -52,7 +68,7 @@ export default function CargoPackingPanel({
   return (
     <View style={[styles.root, harvestLayout ? styles.rootHarvest : null]}>
       <View style={[styles.boardColumn, harvestLayout ? styles.boardColumnHarvest : null]}>
-        <View style={[styles.headerContainer, { borderColor: theme.borderColor, width: CARGO_GRID_FRAME_SIZE }]}>
+        <View style={[styles.headerContainer, harvestLayout ? styles.headerContainerHarvest : null, { borderColor: theme.borderColor, width: CARGO_GRID_FRAME_SIZE }]}>
           <Text style={[styles.headerLabel, { color: theme.mutedColor }]}>
             Cargo Grid // Pack Extracted Resources
           </Text>
@@ -75,10 +91,20 @@ export default function CargoPackingPanel({
             minimal
             hideContinueButton={harvestLayout}
             onContainmentItemCenterMeasured={onContainmentItemCenterMeasured}
+            onHarvestFloorMeasured={harvestLayout ? onHarvestFloorMeasured : undefined}
+            fixedExternalSlotCount={harvestLayout ? fixedExternalSlotCount : undefined}
+            resolveContainmentSlotIndex={harvestLayout ? resolveContainmentSlotIndex : undefined}
+            stableExternalBay={harvestLayout}
           />
 
           {harvestLayout && gridSidecar ? (
-            <View style={styles.gridSidecarSlot} pointerEvents="box-none">
+            <View
+              style={[
+                styles.gridSidecarSlot,
+                { width: harvestSidecarWidth },
+              ]}
+              pointerEvents="box-none"
+            >
               {gridSidecar}
             </View>
           ) : null}
@@ -106,8 +132,6 @@ export default function CargoPackingPanel({
   );
 }
 
-const GRID_CANISTER_GAP = 6;
-
 const styles = StyleSheet.create({
   root: {
     flex: 1,
@@ -132,6 +156,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: '100%',
     alignSelf: 'center',
+    gap: 16,
   },
   gridAnchor: {
     position: 'relative',
@@ -144,6 +169,7 @@ const styles = StyleSheet.create({
     left: CARGO_GRID_FRAME_WIDTH + GRID_CANISTER_GAP,
     height: CARGO_GRID_FRAME_HEIGHT,
     justifyContent: 'flex-end',
+    alignItems: 'center',
     zIndex: 20,
   },
   headerContainer: {
@@ -151,6 +177,10 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     backgroundColor: '#0a0b0f',
+  },
+  headerContainerHarvest: {
+    minHeight: 52,
+    justifyContent: 'center',
   },
   headerLabel: {
     fontFamily: 'monospace',

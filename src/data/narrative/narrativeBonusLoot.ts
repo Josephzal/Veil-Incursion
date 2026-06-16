@@ -99,8 +99,12 @@ export function runStatusEffectForBoon(boonId: NarrativeBoonId): RunStatusEffect
   };
 }
 
-export function applyVeilResidueBonus(cargo: CargoRunState, amount: number): CargoRunState {
-  return addLootToContainment(cargo, 'veil-residue-bulk', amount);
+export function applyVeilResidueBonus(
+  cargo: CargoRunState,
+  amount: number,
+  stagedInstanceIds?: string[],
+): CargoRunState {
+  return addLootToContainment(cargo, 'veil-residue-bulk', amount, stagedInstanceIds);
 }
 
 export function hasPendingNarrativeCombatBoons(pending: PendingNarrativeCombatBoons): boolean {

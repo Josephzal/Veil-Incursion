@@ -1,22 +1,20 @@
 import React, { useCallback } from 'react';
-import { LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
+import { LayoutChangeEvent, Pressable, StyleSheet, View } from 'react-native';
 import Animated, {
   SharedValue,
   useAnimatedStyle,
   useSharedValue,
 } from 'react-native-reanimated';
 import {
-  CANISTER_GLASS_HEIGHT_RATIO,
-  CANISTER_GLASS_SIDE_INSET_RATIO,
-  CANISTER_TOP_CAP_RATIO,
+  VACUUM_BAR_HEIGHT_RATIO,
+  VACUUM_BAR_SIDE_INSET_PCT,
+  VACUUM_BAR_TOP_RATIO,
 } from '../../constants/canisterLayout';
 
 interface VeilVacuumBarProps {
   active: boolean;
   disabled?: boolean;
-  displayPercent: number;
   fillPct: SharedValue<number>;
-  percentFontSize: number;
   onPressIn: () => void;
   onPressOut: () => void;
   onGlassLayout?: (height: number) => void;
@@ -25,9 +23,7 @@ interface VeilVacuumBarProps {
 export default function VeilVacuumBar({
   active,
   disabled = false,
-  displayPercent,
   fillPct,
-  percentFontSize,
   onPressIn,
   onPressOut,
   onGlassLayout,
@@ -60,12 +56,6 @@ export default function VeilVacuumBar({
         <View style={styles.glassEmptyTint} />
         <Animated.View style={[styles.liquidFill, liquidFillStyle]} />
       </View>
-
-      <View style={styles.percentOverlay} pointerEvents="none">
-        <Text style={[styles.percentText, { fontSize: percentFontSize }]}>
-          {displayPercent}%
-        </Text>
-      </View>
     </Pressable>
   );
 }
@@ -73,10 +63,10 @@ export default function VeilVacuumBar({
 const styles = StyleSheet.create({
   glassRegion: {
     position: 'absolute',
-    top: `${CANISTER_TOP_CAP_RATIO * 100}%`,
-    left: `${CANISTER_GLASS_SIDE_INSET_RATIO * 10}%`,
-    right: `${CANISTER_GLASS_SIDE_INSET_RATIO * 10}%`,
-    height: `${CANISTER_GLASS_HEIGHT_RATIO * 100}%`,
+    top: `${VACUUM_BAR_TOP_RATIO * 100}%`,
+    left: `${VACUUM_BAR_SIDE_INSET_PCT}%`,
+    right: `${VACUUM_BAR_SIDE_INSET_PCT}%`,
+    height: `${VACUUM_BAR_HEIGHT_RATIO * 100}%`,
     zIndex: 2,
     pointerEvents: 'auto',
     borderRadius: '6%',
@@ -107,19 +97,5 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: '#00ffff',
     opacity: 0.82,
-  },
-  percentOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 3,
-  },
-  percentText: {
-    color: '#ffffff',
-    fontWeight: 'bold',
-    fontFamily: 'monospace',
-    textShadowColor: 'rgba(0, 255, 255, 0.95)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 8,
   },
 });

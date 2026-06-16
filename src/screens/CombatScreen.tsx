@@ -427,7 +427,7 @@ export default function CombatScreen(): React.JSX.Element {
       addLockedContainer(lockedTemplate);
       appendRunLog('>> GATEKEEPER SALVAGE — sealed container routed to Safehouse decryption vault.');
     }
-    grantCombatResourceDrops({
+    const combatDropInstanceIds = grantCombatResourceDrops({
       depth,
       isElite: nodeType === 'ELITE_COMBAT',
       isGatekeeper,
@@ -469,7 +469,7 @@ export default function CombatScreen(): React.JSX.Element {
       return;
     }
 
-    beginPostCombatHarvest();
+    beginPostCombatHarvest(combatDropInstanceIds);
     startResourceHarvest();
   }, [
     activeIncursion.bossProfile,

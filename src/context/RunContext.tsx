@@ -151,7 +151,9 @@ import {
   calculateCargoMarketValue,
   calculateGridOccupancy,
   getCargoResonanceMultiplier,
+  isVeilResidueCargoItem,
   placeCargoFromContainment,
+  finalizeHarvestCargoState,
   relocateCargoItem as relocateCargoItemState,
   resetCargoInstanceCounter,
   scaledLootCount,
@@ -286,11 +288,12 @@ interface RunContextType {
   discardCargoInstance: (instanceId: string) => boolean;
   applyHarvestChoice: (tier: HarvestYieldTier) => { logLines: string[]; ambushTriggered: boolean };
   useFocusingAmpouleFromCargo: () => boolean;
-  beginPostCombatHarvest: () => void;
+  beginPostCombatHarvest: (initialStagingIds?: readonly string[]) => void;
   beginResourceNodeHarvest: () => void;
   beginResourceCachePack: () => void;
-  grantCombatResourceDrops: (options: CombatRewardContext) => void;
-  absorbVeilResidueInstance: (instanceId: string) => number;
+  finalizeHarvestScreen: () => void;
+  grantCombatResourceDrops: (options: CombatRewardContext) => readonly string[];
+  absorbVeilResidueParticle: (instanceId: string, value: number, finalizeInstance: boolean) => number;
   prepareBossEncounter: (engagedNode?: IncursionNode | null) => void;
   prepareStandardCombatEncounter: (engagedNode?: IncursionNode | null) => void;
   prepareHarvestAmbushEncounter: () => void;
@@ -1210,12 +1213,13 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const triggerCombatAmbush = AMBUSH_ENCOUNTERS_ENABLED && result.triggerCombatAmbush;
     setActiveIncursion((prev) => {
       let nextCargo = result.cargoPatch ?? prev.cargo;
+      const stagedIds: string[] = [];
       if (resourceCacheId) {
-        nextCargo = applyResourceBundleToCargo(nextCargo, getResourceCacheBundle(resourceCacheId));
+        nextCargo = applyResourceBundleToCargo(nextCargo, getResourceCacheBundle(resourceCacheId), stagedIds);
         requiresResourcePack = true;
       }
       if (result.bonusReward?.kind === 'VEIL_RESIDUE') {
-        nextCargo = applyVeilResidueBonus(nextCargo, result.bonusReward.amount);
+        nextCargo = applyVeilResidueBonus(nextCargo, result.bonusReward.amount, stagedIds);
       }
 
       let nextPendingBoons = prev.pendingNarrativeCombatBoons;
@@ -1235,6 +1239,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         lastCheckStatus: result.status,
         activeChoice: choice,
         cargo: nextCargo,
+        harvestStagingInstanceIds: stagedIds.length > 0
+          ? [...new Set([...prev.harvestStagingInstanceIds, ...stagedIds])]
+          : prev.harvestStagingInstanceIds,
         pendingHarvestReturn: requiresResourcePack ? 'RESOURCE_CACHE' : prev.pendingHarvestReturn,
         pendingNarrativeCombatBoons: nextPendingBoons,
         runStatusEffects: nextStatusEffects,
@@ -1437,7 +1444,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
             containment: prev.cargo.containment.filter((item) => item.instanceId !== instanceId),
           }
         : removePlacedCargoItem(prev.cargo, instanceId);
-      const next = { ...prev, cargo: nextCargo };
+      const next = {
+        ...prev,
+        cargo: nextCargo,
+        harvestStagingInstanceIds: prev.harvestStagingInstanceIds.filter((id) => id !== instanceId),
+      };
       activeIncursionRef.current = next;
       return next;
     });
@@ -1458,11 +1469,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const lootIds = buildHarvestLoot(tier, inc.sectorTier, isElite, inc.nodesCleared);
 
     let nextCargo = inc.cargo;
+    const stagedIds: string[] = [];
     lootIds.forEach((itemId) => {
       const count = scaledLootCount(option.yieldPct, itemId === 'veil-residue-bulk' ? 1 : 1);
-      nextCargo = addLootToContainment(nextCargo, itemId, count);
+      nextCargo = addLootToContainment(nextCargo, itemId, count, stagedIds);
     });
-
     const ambushTriggered = AMBUSH_ENCOUNTERS_ENABLED && Math.random() * 100 < option.ambushRiskPct;
     const logLines = [
       `>> ${option.label} — ${option.yieldPct}% yield routed to containment.`,
@@ -1473,6 +1484,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       const next = {
         ...prev,
         cargo: nextCargo,
+        harvestStagingInstanceIds: [...new Set([...prev.harvestStagingInstanceIds, ...stagedIds])],
       };
       activeIncursionRef.current = next;
       return next;
@@ -1521,9 +1533,14 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     return true;
   }, [appendRunLog]);
 
-  const beginPostCombatHarvest = useCallback(() => {
+  const beginPostCombatHarvest = useCallback((initialStagingIds: readonly string[] = []) => {
     setActiveIncursion((prev) => {
-      const next = { ...prev, pendingHarvestReturn: 'POST_COMBAT' as const, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
+      const next = {
+        ...prev,
+        pendingHarvestReturn: 'POST_COMBAT' as const,
+        mapMode: 'NODE_ENGAGED' as IncursionMapMode,
+        harvestStagingInstanceIds: [...new Set(initialStagingIds)],
+      };
       activeIncursionRef.current = next;
       return next;
     });
@@ -1531,7 +1548,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const beginResourceNodeHarvest = useCallback(() => {
     setActiveIncursion((prev) => {
-      const next = { ...prev, pendingHarvestReturn: 'COMPLETE_NODE' as const, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
+      const next = {
+        ...prev,
+        pendingHarvestReturn: 'COMPLETE_NODE' as const,
+        mapMode: 'NODE_ENGAGED' as IncursionMapMode,
+        harvestStagingInstanceIds: [],
+      };
       activeIncursionRef.current = next;
       return next;
     });
@@ -1539,11 +1561,56 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const beginResourceCachePack = useCallback(() => {
     setActiveIncursion((prev) => {
-      const next = { ...prev, pendingHarvestReturn: 'RESOURCE_CACHE' as const, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
+      const next = {
+        ...prev,
+        pendingHarvestReturn: 'RESOURCE_CACHE' as const,
+        mapMode: 'NODE_ENGAGED' as IncursionMapMode,
+        harvestStagingInstanceIds: [],
+      };
       activeIncursionRef.current = next;
       return next;
     });
   }, []);
+
+  const grantCombatResourceDrops = useCallback((options: CombatRewardContext): readonly string[] => {
+    const drops = rollCombatResourceDrops(options);
+    if (drops.length === 0) return [];
+    const stagedIds: string[] = [];
+    setActiveIncursion((prev) => {
+      let nextCargo = prev.cargo;
+      drops.forEach((resourceId) => {
+        nextCargo = addLootToContainment(nextCargo, resourceId, 1, stagedIds);
+      });
+      const next = { ...prev, cargo: nextCargo };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    appendRunLog(formatCombatResourceDropLog(drops));
+    return stagedIds;
+  }, [appendRunLog]);
+
+  const finalizeHarvestScreen = useCallback(() => {
+    const inc = activeIncursionRef.current;
+    const stagingIds = new Set(inc.harvestStagingInstanceIds);
+    const hadLooseResidue = inc.cargo.containment.some((item) => isVeilResidueCargoItem(item.itemId));
+    const hadUnpackedStaging = inc.cargo.containment.some((item) => stagingIds.has(item.instanceId));
+    const hadResidueOnGrid = inc.cargo.grid.placed.some((item) => isVeilResidueCargoItem(item.itemId));
+    const nextCargo = finalizeHarvestCargoState(inc.cargo, stagingIds);
+
+    setActiveIncursion((prev) => {
+      const next = {
+        ...prev,
+        cargo: nextCargo,
+        harvestStagingInstanceIds: [],
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+
+    if (hadLooseResidue || hadUnpackedStaging || hadResidueOnGrid) {
+      appendRunLog('>> UNCLAIMED HARVEST LOOT PURGED — unstaged resources dissipated.');
+    }
+  }, [appendRunLog]);
 
   const applyVeilBleedHpCost = useCallback(() => {
     setRunState((prev) => {
@@ -1559,23 +1626,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     appendRunLog(`>> VEIL BLEED — Ley-Scar cost applied (−${VEIL_BLEED_HP_COST_PCT}% max HP).`);
   }, [appendRunLog]);
 
-  const grantCombatResourceDrops = useCallback((options: CombatRewardContext) => {
-    const drops = rollCombatResourceDrops(options);
-    if (drops.length === 0) return;
-    setActiveIncursion((prev) => {
-      let nextCargo = prev.cargo;
-      drops.forEach((resourceId) => {
-        nextCargo = addLootToContainment(nextCargo, resourceId, 1);
-      });
-      const next = { ...prev, cargo: nextCargo };
-      activeIncursionRef.current = next;
-      return next;
-    });
-    appendRunLog(formatCombatResourceDropLog(drops));
-  }, [appendRunLog]);
-
-  const absorbVeilResidueInstance = useCallback((instanceId: string): number => {
-    let absorbed = 0;
+  const absorbVeilResidueParticle = useCallback((
+    instanceId: string,
+    value: number,
+    finalizeInstance: boolean,
+  ): number => {
+    let applied = 0;
 
     setActiveIncursion((prev) => {
       if (prev.sessionVeilResidueCollected >= MAX_RUN_CANISTER_RESIDUE) return prev;
@@ -1583,20 +1639,32 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       const target = prev.cargo.containment.find((item) => item.instanceId === instanceId);
       if (!target || target.itemId !== 'veil-residue-bulk') return prev;
 
-      absorbed = 1;
+      const headroom = MAX_RUN_CANISTER_RESIDUE - prev.sessionVeilResidueCollected;
+      const clampedValue = Math.min(Math.max(value, 0), headroom);
+      if (clampedValue <= 0) return prev;
+
+      applied = clampedValue;
       const next = {
         ...prev,
-        sessionVeilResidueCollected: Math.min(MAX_RUN_CANISTER_RESIDUE, prev.sessionVeilResidueCollected + 1),
-        cargo: {
-          ...prev.cargo,
-          containment: prev.cargo.containment.filter((item) => item.instanceId !== instanceId),
-        },
+        sessionVeilResidueCollected: Math.min(
+          MAX_RUN_CANISTER_RESIDUE,
+          prev.sessionVeilResidueCollected + clampedValue,
+        ),
+        cargo: finalizeInstance
+          ? {
+            ...prev.cargo,
+            containment: prev.cargo.containment.filter((item) => item.instanceId !== instanceId),
+          }
+          : prev.cargo,
+        harvestStagingInstanceIds: finalizeInstance
+          ? prev.harvestStagingInstanceIds.filter((id) => id !== instanceId)
+          : prev.harvestStagingInstanceIds,
       };
       activeIncursionRef.current = next;
       return next;
     });
 
-    return absorbed;
+    return applied;
   }, []);
 
   const prepareBossEncounter = useCallback((engagedNode?: IncursionNode | null) => {
@@ -2909,8 +2977,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       beginPostCombatHarvest,
       beginResourceNodeHarvest,
       beginResourceCachePack,
+      finalizeHarvestScreen,
       grantCombatResourceDrops,
-      absorbVeilResidueInstance,
+      absorbVeilResidueParticle,
       stageSafeAnchorReview,
       confirmSafeAnchorExtraction,
       continueFromExtractionReview,
@@ -3008,8 +3077,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       beginPostCombatHarvest,
       beginResourceNodeHarvest,
       beginResourceCachePack,
+      finalizeHarvestScreen,
       grantCombatResourceDrops,
-      absorbVeilResidueInstance,
+      absorbVeilResidueParticle,
       stageSafeAnchorReview,
       confirmSafeAnchorExtraction,
       continueFromExtractionReview,
