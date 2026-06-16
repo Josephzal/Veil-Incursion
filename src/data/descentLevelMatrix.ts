@@ -16,9 +16,12 @@ export type MatrixSpawnKind =
   | 'NARRATIVE_EVENT'
   | 'HARD_NARRATIVE'
   | 'BLACK_MARKET'
-  | 'FACTION_VAULT_LOW'
   | 'FACTION_VAULT_HIGH'
+  | 'VEIL_BLEED_BOON'
   | 'BOSS_COMBAT';
+
+/** Ley-Scar cost when engaging a guaranteed Veil Bleed vector. */
+export const VEIL_BLEED_HP_COST_PCT = 30;
 
 interface LevelMatrixSpec {
   minChoices: number;
@@ -28,25 +31,22 @@ interface LevelMatrixSpec {
 }
 
 const LEVEL_MATRIX: Record<number, LevelMatrixSpec> = {
+  /** Act I — The Drop */
   1: { minChoices: 1, maxChoices: 1, guaranteed: ['STANDARD_COMBAT'], pool: [] },
   2: { minChoices: 2, maxChoices: 2, guaranteed: [], pool: ['STANDARD_COMBAT', 'NARRATIVE_EVENT'] },
-  3: { minChoices: 2, maxChoices: 3, guaranteed: [], pool: ['STANDARD_COMBAT', 'NARRATIVE_EVENT'] },
-  4: {
-    minChoices: 2,
-    maxChoices: 3,
-    guaranteed: [],
-    pool: ['STANDARD_COMBAT', 'NARRATIVE_EVENT', 'FACTION_VAULT_LOW'],
-  },
+  3: { minChoices: 2, maxChoices: 2, guaranteed: [], pool: ['STANDARD_COMBAT', 'NARRATIVE_EVENT'] },
+  4: { minChoices: 2, maxChoices: 2, guaranteed: [], pool: ['STANDARD_COMBAT', 'NARRATIVE_EVENT'] },
   5: {
     minChoices: 2,
     maxChoices: 3,
     guaranteed: ['BLACK_MARKET'],
     pool: ['STANDARD_COMBAT', 'FACTION_VAULT_HIGH'],
   },
+  /** Act II — The Bleed */
   6: {
     minChoices: 2,
     maxChoices: 3,
-    guaranteed: [],
+    guaranteed: ['VEIL_BLEED_BOON'],
     pool: ['STANDARD_COMBAT', 'NARRATIVE_EVENT'],
   },
   7: {
@@ -73,10 +73,11 @@ const LEVEL_MATRIX: Record<number, LevelMatrixSpec> = {
     guaranteed: ['BLACK_MARKET', 'ELITE_COMBAT'],
     pool: [],
   },
+  /** Act III — The Squeeze */
   11: {
     minChoices: 2,
     maxChoices: 3,
-    guaranteed: [],
+    guaranteed: ['VEIL_BLEED_BOON'],
     pool: ['ELITE_COMBAT', 'HARD_NARRATIVE'],
   },
   12: {
@@ -181,13 +182,12 @@ function spawnKindToTypes(kind: MatrixSpawnKind): {
         label: 'VECTOR // BLACK MARKET CONDUIT',
         combatTier: 'STANDARD',
       };
-    case 'FACTION_VAULT_LOW':
+    case 'VEIL_BLEED_BOON':
       return {
-        encounterType: 'NARRATIVE_EVENT',
-        type: 'NARRATIVE_EVENT',
-        label: 'VECTOR // FACTION VAULT (LOW-YIELD)',
+        encounterType: 'RESOURCE_HARVEST',
+        type: 'VEIL_BLEED_BOON',
+        label: 'VECTOR // VEIL BLEED (BOON)',
         combatTier: 'STANDARD',
-        narrativeTags: ['vault'],
       };
     case 'FACTION_VAULT_HIGH':
       return {

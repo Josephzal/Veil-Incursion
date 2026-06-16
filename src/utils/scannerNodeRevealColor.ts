@@ -27,6 +27,7 @@ export function scannerRevealToneForNodeType(nodeType: RunNodeType): ScannerReve
     case 'BLACK_MARKET':
       return 'market';
     case 'RESOURCE_HARVEST':
+    case 'VEIL_BLEED_BOON':
       return 'boon';
     default:
       return 'combat';

@@ -126,7 +126,7 @@ import {
   findVectorInCluster,
   isBossNodeType,
 } from '../data/descentEngine';
-import { clusterOffersCombat } from '../data/descentLevelMatrix';
+import { clusterOffersCombat, VEIL_BLEED_HP_COST_PCT } from '../data/descentLevelMatrix';
 import {
   buildScannerCluster,
   ensureForwardVectorsOnGraph,
@@ -1538,6 +1538,20 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const applyVeilBleedHpCost = useCallback(() => {
+    setRunState((prev) => {
+      const maxSoulAnchor = Math.max(
+        1,
+        Math.floor(prev.maxSoulAnchor * (1 - VEIL_BLEED_HP_COST_PCT / 100)),
+      );
+      const soulAnchorIntegrity = Math.min(prev.soulAnchorIntegrity, maxSoulAnchor);
+      const next = { ...prev, maxSoulAnchor, soulAnchorIntegrity };
+      runStateRef.current = next;
+      return next;
+    });
+    appendRunLog(`>> VEIL BLEED — Ley-Scar cost applied (−${VEIL_BLEED_HP_COST_PCT}% max HP).`);
+  }, [appendRunLog]);
+
   const grantCombatResourceDrops = useCallback((options: CombatRewardContext) => {
     const drops = rollCombatResourceDrops(options);
     if (drops.length === 0) return;
@@ -2043,6 +2057,21 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       return node.type;
     }
 
+    if (node.type === 'VEIL_BLEED_BOON') {
+      if (!isLeyScarAcquisitionBlocked(activeIncursionRef.current)) {
+        applyVeilBleedHpCost();
+      } else {
+        appendRunLog('>> VEIL BLEED BLOCKED — Ley-Scar acquisition unavailable this run.');
+      }
+      preparePostCombatMutations();
+      setActiveIncursion((prev) => {
+        const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
+        activeIncursionRef.current = next;
+        return next;
+      });
+      return node.type;
+    }
+
     if (node.type === 'STANDARD_COMBAT' || node.type === 'ELITE_COMBAT') {
       prepareStandardCombatEncounter(node);
       setActiveIncursion((prev) => {
@@ -2088,9 +2117,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     return null;
   }, [
     appendRunLog,
+    applyVeilBleedHpCost,
     assignNarrativeForCombat,
     beginResourceNodeHarvest,
     prepareBossEncounter,
+    preparePostCombatMutations,
     prepareStandardCombatEncounter,
   ]);
 

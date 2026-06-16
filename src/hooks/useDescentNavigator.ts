@@ -12,6 +12,7 @@ export type DescentRoute =
   | 'REST'
   | 'BLACK_MARKET'
   | 'RESOURCE_HARVEST'
+  | 'VEIL_BLEED_BOON'
   | 'HUB_VICTORY'
   | 'EXTRACT_SUCCESS'
 
@@ -29,6 +30,8 @@ function routeForNodeType(type: RunNodeType | null): DescentRoute {
       return 'BLACK_MARKET';
     case 'RESOURCE_HARVEST':
       return 'RESOURCE_HARVEST';
+    case 'VEIL_BLEED_BOON':
+      return 'VEIL_BLEED_BOON';
     case 'EMERGENCY_EXTRACTION':
       return 'EXTRACT_SUCCESS';
     case 'SAFE_ANCHOR_EXTRACTION':
@@ -57,6 +60,7 @@ export function useDescentNavigator() {
     startRest,
     startBlackMarket,
     startResourceHarvest,
+    startPostCombatBoon,
     goToHub,
   } = useGameFlow();
   const { addCredits, addRiftIron } = usePlayerAccount();
@@ -84,6 +88,9 @@ export function useDescentNavigator() {
       case 'RESOURCE_HARVEST':
         startResourceHarvest();
         break;
+      case 'VEIL_BLEED_BOON':
+        startPostCombatBoon();
+        break;
       case 'EXTRACT_SUCCESS':
         break;
       default:
@@ -91,7 +98,7 @@ export function useDescentNavigator() {
     }
 
     return route;
-  }, [commitNodeEncounter, startBlackMarket, startNarrative, startCombat, startRest, startResourceHarvest]);
+  }, [commitNodeEncounter, startBlackMarket, startNarrative, startCombat, startRest, startResourceHarvest, startPostCombatBoon]);
 
   const finalizeSectorExtraction = useCallback(() => {
     const credits = calculateSectorExtractionPayout();

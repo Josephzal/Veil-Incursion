@@ -79,6 +79,8 @@ export function resolveRiftSignature(nodeType: RunNodeType): string {
       return 'NARRATIVE ANOMALY';
     case 'RESOURCE_HARVEST':
       return 'RESOURCE CLUSTER';
+    case 'VEIL_BLEED_BOON':
+      return 'VEIL BLEED CONDUIT';
     case 'BLACK_MARKET':
       return 'UNDERCITY CONDUIT';
     case 'SANCTUARY':

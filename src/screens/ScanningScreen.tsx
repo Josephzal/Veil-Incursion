@@ -73,6 +73,7 @@ export default function ScanningScreen(): React.JSX.Element {
     startRest,
     startBlackMarket,
     startResourceHarvest,
+    startPostCombatBoon,
     startExtractionReview,
   } = useGameFlow();
 
@@ -289,6 +290,9 @@ export default function ScanningScreen(): React.JSX.Element {
       case 'RESOURCE_HARVEST':
         startResourceHarvest();
         break;
+      case 'VEIL_BLEED_BOON':
+        startPostCombatBoon();
+        break;
       case 'EMERGENCY_EXTRACTION':
         finalizeSectorExtraction();
         break;
@@ -305,6 +309,7 @@ export default function ScanningScreen(): React.JSX.Element {
     startCombat,
     startExtractionReview,
     startNarrative,
+    startPostCombatBoon,
     startResourceHarvest,
     startRest,
   ]);
