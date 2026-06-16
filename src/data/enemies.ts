@@ -115,7 +115,7 @@ export function spawnEnemyProfile(
   };
 }
 
-const HARD_TEST_INTENTS: EnemyIntent[] = ['STRIKE', 'STRIP_STAMINA', 'SIPHON_ABYSSAL', 'EVADE'];
+const HARD_TEST_INTENTS: EnemyIntent[] = ['STRIKE', 'STRIP_STAMINA', 'EVADE'];
 
 function rollHardTestIntent(playerState?: PlayerAIState): EnemyIntent {
   const profile = {
@@ -136,7 +136,6 @@ function rollHardTestIntent(playerState?: PlayerAIState): EnemyIntent {
       enemy: enemyState,
       player: playerState ?? defaultPlayerAIState(),
     };
-    if (intent === 'SIPHON_ABYSSAL' && ctx.player.abyssalReserve <= 0) return false;
     if (intent === 'STRIP_STAMINA' && ctx.player.stamina <= 0) return false;
     if (intent === 'EVADE' && enemyState.activeBuffs.includes('Evade')) return false;
     return true;

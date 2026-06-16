@@ -51,7 +51,7 @@ const ROSTER_INTENTS: Partial<Record<string, EnemyIntent[]>> = {
   'miasma-tick-swarm': ['SWARM_BITE', 'STAMINA_DRAIN_LEAP', 'STRIKE'],
   'fracture-hound': ['DOUBLE_STRIKE', 'STRIKE'],
   'null-shade': ['SINKING_INTO_GRID', 'VOID_AMBUSH', 'STRIKE', 'EVADE', 'SIPHON_ABYSSAL'],
-  'spatial-glitch': ['STRIKE', 'FORTIFY'],
+  'spatial-glitch': ['STRIKE', 'FORTIFY', 'SIPHON_ABYSSAL'],
 };
 
 function isHpBelowEnrageThreshold(profile: EnemyCombatProfile, rosterId: string): boolean {

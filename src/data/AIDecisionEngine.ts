@@ -44,6 +44,13 @@ export interface WeightedIntent {
 }
 
 const SIPHON_INTENTS: EnemyIntent[] = ['SIPHON_ABYSSAL'];
+/** Hostiles allowed to drain the operative's abyssal reserve. */
+export const SIPHON_ELIGIBLE_ROSTER_IDS = new Set([
+  'null-shade',
+  'ash-weeper',
+  'ley-siren',
+  'spatial-glitch',
+]);
 const STAMINA_DRAIN_INTENTS: EnemyIntent[] = ['STRIP_STAMINA'];
 const DEFENSIVE_INTENTS: EnemyIntent[] = ['EVADE', 'FORTIFY'];
 const AGGRESSIVE_INTENTS: EnemyIntent[] = [
@@ -64,6 +71,7 @@ type IntentWeightRule = (weights: WeightedIntent[], ctx: AIDecisionContext) => W
 
 /** Prune zero-value actions before weighting. Add new filters here. */
 export const INTENT_FILTER_RULES: IntentFilterRule[] = [
+  pruneSiphonByRoster,
   pruneSiphonWhenAbyssalEmpty,
   pruneStaminaDrainWhenStaminaEmpty,
   pruneNonStackingBuffs,
@@ -129,7 +137,7 @@ export function getBaseIntentPool(enemy: EnemyAIState): EnemyIntent[] {
     return ['STRIKE', 'STRIP_STAMINA'];
   }
   if (enemy.enemyClass === 'APPARITION') {
-    return ['STRIKE', 'SIPHON_ABYSSAL', 'EVADE'];
+    return ['STRIKE', 'EVADE'];
   }
   if (enemy.enemyClass === 'ABOMINATION') {
     if (enemy.district >= 2) {
@@ -146,6 +154,12 @@ export function resolveChargeSequenceIntent(enemy: EnemyAIState): EnemyIntent | 
   if (enemy.chargeTurns >= 2) return 'WORLD_ENDER';
   if (enemy.chargeTurns > 0) return 'CHARGE';
   return null;
+}
+
+function pruneSiphonByRoster(pool: EnemyIntent[], ctx: AIDecisionContext): EnemyIntent[] {
+  const rosterId = ctx.enemy.rosterId;
+  if (rosterId && SIPHON_ELIGIBLE_ROSTER_IDS.has(rosterId)) return pool;
+  return pool.filter((intent) => !SIPHON_INTENTS.includes(intent));
 }
 
 function pruneSiphonWhenAbyssalEmpty(pool: EnemyIntent[], ctx: AIDecisionContext): EnemyIntent[] {
