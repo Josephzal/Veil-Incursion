@@ -6,7 +6,8 @@ export type BiomeId =
   | 'backroads'
   | 'deep_veil'
   | 'city_buildings'
-  | 'forest';
+  | 'forest'
+  | 'underground';
 
 export type ParticleEffectType = 'rain' | 'none';
 
@@ -20,6 +21,7 @@ export const BIOME_CONFIG: Record<BiomeId, BiomeAtmosphereConfig> = {
   deep_veil: { effect: 'none' },
   city_buildings: { effect: 'none' },
   forest: { effect: 'rain' },
+  underground: { effect: 'none' },
 };
 
 const BIOME_ID_SET = new Set<string>(Object.keys(BIOME_CONFIG));
@@ -53,6 +55,8 @@ export function macroFamilyToBiomeId(
       return 'forest';
     case 'BACKROADS':
       return 'backroads';
+    case 'UNDERGROUND':
+      return 'underground';
     case 'DEEP_VEIL':
       return 'deep_veil';
     default:

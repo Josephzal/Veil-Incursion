@@ -18,6 +18,10 @@ import CombatSelectedEnemyIntel from '../components/combat/CombatSelectedEnemyIn
 import StatusEffectTray from '../components/combat/StatusEffectTray';
 import ParticleOverlay from '../components/atmosphere/ParticleOverlay';
 import { macroFamilyToBiomeId } from '../constants/biomeConfig';
+import {
+  resolveCombatArenaBackground,
+  resolveCombatArenaBackgroundScrim,
+} from '../constants/combatArenaBackground';
 import { pulseCombatTargetSelect } from '../utils/hubButtonHaptics';
 import type { CombatOperativeTelemetry } from '../components/combat/CombatOperativeHud';
 import type { CombatPlayerViewportRef } from '../components/combat/CombatPlayerViewport';
@@ -61,7 +65,6 @@ import {
   resolvePlayerCombatAttackPortrait,
   resolvePlayerCombatIdlePortrait,
 } from '../utils/combatPlayerPortrait';
-import OverworldArenaBg from '../../assets/images/environment images/overworld.png';
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('screen');
 const ARENA_MIN_HEIGHT = Math.round(SCREEN_HEIGHT * 0.28);
@@ -372,6 +375,14 @@ export default function CombatScreen(): React.JSX.Element {
     () => macroFamilyToBiomeId(activeIncursion.currentMacroBiomeFamily),
     [activeIncursion.currentMacroBiomeFamily],
   );
+  const arenaBackgroundSource = useMemo(
+    () => resolveCombatArenaBackground(combatBiomeId),
+    [combatBiomeId],
+  );
+  const arenaBackgroundScrimColor = useMemo(
+    () => resolveCombatArenaBackgroundScrim(combatBiomeId),
+    [combatBiomeId],
+  );
 
   const spectralSaltActive = activeIncursion.spectralWeaponImbued === true;
 
@@ -539,7 +550,13 @@ export default function CombatScreen(): React.JSX.Element {
                 },
               ]}
             >
-              <Image source={OverworldArenaBg} style={styles.arenaBackground} resizeMode="cover" />
+              <Image source={arenaBackgroundSource} style={styles.arenaBackground} resizeMode="cover" />
+              {arenaBackgroundScrimColor ? (
+                <View
+                  style={[styles.arenaBackgroundScrim, { backgroundColor: arenaBackgroundScrimColor }]}
+                  pointerEvents="none"
+                />
+              ) : null}
               <ParticleOverlay biomeId={combatBiomeId} />
 
               {selectedEnemyUnit ? (
@@ -661,6 +678,9 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   arenaBackground: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  arenaBackgroundScrim: {
     ...StyleSheet.absoluteFillObject,
   },
   enemyIntelOverlay: {
