@@ -161,7 +161,8 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
   }, [activeIncursion, lootFloor, residueInstanceIds, residueSpawnGeneration]);
 
   useEffect(() => {
-    if (!isVacuuming) return undefined;
+    const shouldPulseHaptics = isVacuuming && lootPool.length > 0 && !canisterFull;
+    if (!shouldPulseHaptics) return undefined;
 
     startVacuumHoldHaptics();
     const hapticTimer = setInterval(() => {
@@ -172,7 +173,7 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
       clearInterval(hapticTimer);
       stopVacuumHoldHaptics();
     };
-  }, [isVacuuming]);
+  }, [canisterFull, isVacuuming, lootPool.length]);
 
   const handleVacuumStart = useCallback(() => {
     if (!canVacuum) return;

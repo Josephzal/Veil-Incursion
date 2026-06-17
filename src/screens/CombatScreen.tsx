@@ -12,6 +12,7 @@ import CombatEnemyGrid from '../components/combat/CombatEnemyGrid';
 import { resolveArenaLayoutMode } from '../components/combat/combatEnemyBarLayout';
 import CombatEviscerateCinematic from '../components/combat/CombatEviscerateCinematic';
 import CombatOperativeHud from '../components/combat/CombatOperativeHud';
+import CombatParryScreenOverlay from '../components/combat/CombatParryScreenOverlay';
 import CombatResolutionBanner from '../components/combat/CombatResolutionBanner';
 import CombatSelectedEnemyIntel from '../components/combat/CombatSelectedEnemyIntel';
 import StatusEffectTray from '../components/combat/StatusEffectTray';
@@ -567,6 +568,8 @@ export default function CombatScreen(): React.JSX.Element {
               ) : null}
             </Animated.View>
 
+            <CombatParryScreenOverlay />
+
             <View style={styles.combatMiddle}>
               <TacticalCombatHub
                 stackedLayout
@@ -634,6 +637,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     flexDirection: 'column',
+    position: 'relative',
   },
   arenaStage: {
     flex: 1,

@@ -2,16 +2,13 @@ import React, {
   createContext,
   useCallback,
   useContext,
-  useLayoutEffect,
+  useEffect,
   useMemo,
   useRef,
   useState,
   type ReactNode,
 } from 'react';
-import { StyleSheet, View } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
-import ParryMatrixOverlay from '../components/combat/ParryMatrixOverlay';
-import ParrySuccessBurstOverlay from '../components/combat/ParrySuccessBurstOverlay';
 import type { ParryArenaLayout } from '../utils/parryCollision';
 import type { SliceLineRender } from '../components/combat/VectorSliceOverlay';
 
@@ -227,7 +224,7 @@ export function CombatChromeBridge(snapshot: CombatEnemyChromeSnapshot): null {
     };
   }
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (!ctx) return;
     ctx.updateUI({
       slicePingVisible,
@@ -244,7 +241,7 @@ export function CombatChromeBridge(snapshot: CombatEnemyChromeSnapshot): null {
       activeSliceIndex,
     });
   }, [
-    ctx?.updateUI,
+    ctx,
     slicePingVisible,
     slicePingReady,
     slicePingDisabled,
@@ -262,66 +259,7 @@ export function CombatChromeBridge(snapshot: CombatEnemyChromeSnapshot): null {
   return null;
 }
 
-/** Renders ping / parry / slice over the apparition viewport. */
-export function CombatEnemyChromeLayer(): React.JSX.Element {
-  const { ui, handlersRef, parryBurstLiveRef, parryChromeTick } = useCombatEnemyChrome();
-  void parryChromeTick;
-  const {
-    parryVisible,
-    parrySuccess,
-    parryFailure,
-    parrySuccessBurstVisible,
-    parryBurstArena,
-    sliceVisible,
-    sliceLines,
-    activeSliceIndex,
-  } = ui;
-  const burstLive = parryBurstLiveRef.current;
-  const showParryBurst = (burstLive.active && burstLive.arena != null)
-    || (parrySuccessBurstVisible && parryBurstArena != null);
-  const parryBurstLayout = burstLive.active && burstLive.arena != null
-    ? burstLive.arena
-    : parryBurstArena;
-  const parryBurstKey = burstLive.epoch;
-  const chromeActive = parryVisible || showParryBurst || sliceVisible;
-
-  return (
-    <View
-      style={[styles.layer, chromeActive ? styles.layerActive : styles.layerIdle]}
-      pointerEvents="box-none"
-      collapsable={false}
-    >
-      {parryVisible && handlersRef.current.parryShrinkScale ? (
-        <ParryMatrixOverlay
-          visible
-          shrinkScale={handlersRef.current.parryShrinkScale}
-          success={parrySuccess}
-          failure={parryFailure}
-          onTap={(tapX, tapY) => handlersRef.current.onParryTap(tapX, tapY)}
-          onArenaLayout={(layout) => handlersRef.current.registerParryArena(layout)}
-        />
-      ) : null}
-      {showParryBurst && parryBurstLayout ? (
-        <ParrySuccessBurstOverlay
-          key={parryBurstKey}
-          burstEpoch={parryBurstKey}
-          arena={parryBurstLayout}
-        />
-      ) : null}
-    </View>
-  );
+/** Reserved for future slice/ping chrome over the enemy column. */
+export function CombatEnemyChromeLayer(): React.JSX.Element | null {
+  return null;
 }
-
-const styles = StyleSheet.create({
-  layer: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  layerIdle: {
-    zIndex: 0,
-    elevation: 0,
-  },
-  layerActive: {
-    zIndex: 14,
-    elevation: 14,
-  },
-});

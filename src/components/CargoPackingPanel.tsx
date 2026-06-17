@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: CARGO_GRID_FRAME_WIDTH + GRID_CANISTER_GAP,
     height: CARGO_GRID_FRAME_HEIGHT,
-    justifyContent: 'flex-end',
+    justifyContent: 'flex-start',
     alignItems: 'center',
     zIndex: 20,
   },

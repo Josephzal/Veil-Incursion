@@ -181,7 +181,7 @@ import {
 } from '../utils/parryCollision';
 
 const TELEMETRY_DIVIDER = 'rgba(139, 92, 246, 0.2)';
-const ENEMY_TO_PLAYER_DAMAGE_MULTIPLIER = 0.75;
+const ENEMY_TO_PLAYER_DAMAGE_MULTIPLIER = 0.5;
 
 const { width, height: windowHeight } = Dimensions.get('window');
 
@@ -944,11 +944,11 @@ export default function TacticalCombatHub({
     const chrome = enemyChromeRef.current;
     if (!chrome) return;
     chrome.parryBurstLiveRef.current = { active, arena, epoch };
-    chrome.updateUI({
-      parrySuccessBurstVisible: active,
-      parryBurstArena: arena,
+    queueMicrotask(() => {
+      const liveChrome = enemyChromeRef.current;
+      if (!liveChrome) return;
+      liveChrome.notifyParryChromeChange();
     });
-    chrome.notifyParryChromeChange();
   };
 
   const clearParrySuccessBurst = () => {
@@ -3696,11 +3696,20 @@ export default function TacticalCombatHub({
             onArenaLayout={registerParryArena}
           />
           {parrySuccessBurstActive && parryBurstArena ? (
-            <ParrySuccessBurstOverlay
-              key={parryBurstEpoch}
-              burstEpoch={parryBurstEpoch}
-              arena={parryBurstArena}
-            />
+            <View style={styles.parryBurstHost} pointerEvents="none">
+              <View
+                style={{
+                  width: parryBurstArena.width,
+                  height: parryBurstArena.height,
+                }}
+              >
+                <ParrySuccessBurstOverlay
+                  key={parryBurstEpoch}
+                  burstEpoch={parryBurstEpoch}
+                  arena={parryBurstArena}
+                />
+              </View>
+            </View>
           ) : null}
           <VectorSliceOverlay
             visible={cycleState === 'OFFENSE_SLICE'}
@@ -3816,6 +3825,12 @@ const styles = StyleSheet.create({
   combatOverlayLayer: {
     ...abs,
     zIndex: 25,
+  },
+  parryBurstHost: {
+    ...abs,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 26,
   },
   operativeGaugePanel: {
     width: '100%',

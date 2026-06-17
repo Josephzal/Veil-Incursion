@@ -1,12 +1,12 @@
-import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { StyleSheet, View, type LayoutChangeEvent, type ViewStyle } from 'react-native';
 import type { ImageSourcePropType } from 'react-native';
 import type { ApparitionViewportRef } from './ApparitionViewport';
 import { ApparitionViewport } from './ApparitionViewport';
 import CombatPlayerViewport, { type CombatPlayerViewportRef } from './CombatPlayerViewport';
 import { CombatEnemyChromeLayer } from '../../context/CombatEnemyChromeContext';
 import CombatPlayerSliceOverlay from './CombatPlayerSliceOverlay';
-import { ARENA_ENEMY_GRID_INSET_RIGHT } from './combatEnemyBarLayout';
+import { ARENA_ENEMY_GRID_INSET_RIGHT, PLAYER_SPRITE_LOWER_RATIO } from './combatEnemyBarLayout';
 
 interface CombatArenaStageProps {
   playerViewportRef: React.RefObject<CombatPlayerViewportRef | null>;
@@ -37,11 +37,22 @@ export default function CombatArenaStage({
   onEradicationComplete,
 }: CombatArenaStageProps): React.JSX.Element {
   const useSquadPanel = enemySquadPanel != null;
+  const [playerColumnHeight, setPlayerColumnHeight] = useState(0);
+
+  const handlePlayerColumnLayout = useCallback((event: LayoutChangeEvent) => {
+    const { height } = event.nativeEvent.layout;
+    setPlayerColumnHeight((prev) => (prev === height ? prev : height));
+  }, []);
+
+  const playerSpriteSlotStyle: ViewStyle | undefined =
+    playerColumnHeight > 0
+      ? { transform: [{ translateY: playerColumnHeight * PLAYER_SPRITE_LOWER_RATIO }] }
+      : undefined;
 
   return (
     <View style={styles.root}>
-      <View style={styles.playerColumn}>
-        <View style={styles.playerSpriteSlot}>
+      <View style={styles.playerColumn} onLayout={handlePlayerColumnLayout}>
+        <View style={[styles.playerSpriteSlot, playerSpriteSlotStyle]}>
           <CombatPlayerViewport
             ref={playerViewportRef}
             imageSource={playerImageSource}

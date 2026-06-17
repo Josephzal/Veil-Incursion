@@ -19,9 +19,6 @@ const DEFAULT_VACUUM_BAR_BOTTOM_RATIO = CANISTER_TOP_CAP_RATIO + CANISTER_GLASS_
 export const VACUUM_BAR_BOTTOM_RATIO = DEFAULT_VACUUM_BAR_BOTTOM_RATIO - VACUUM_BAR_BOTTOM_LIFT_RATIO;
 export const VACUUM_BAR_TOP_RATIO = VACUUM_BAR_BOTTOM_RATIO - VACUUM_BAR_HEIGHT_RATIO;
 
-/** Font size scale for the fill percentage label on the base metal band. */
-export const CANISTER_BASE_PERCENT_FONT_SCALE = 0.22;
-
 /** Horizontal inset of the glass cylinder from the shell edges. */
 export const CANISTER_GLASS_SIDE_INSET_RATIO = 0.08;
 
@@ -44,6 +41,9 @@ export const GLASS_MAX_HEIGHT = 132;
 
 /** Canister height as a fraction of the cargo cell grid frame height (harvest sidecar). */
 export const CANISTER_GRID_HEIGHT_RATIO = 0.78;
+
+/** Harvest screen: canister shell + vacuum bar rendered at 60% of grid-derived size (40% reduction). */
+export const HARVEST_CANISTER_SIZE_SCALE = 0.6;
 
 export interface CanisterLayoutDimensions {
   glassHeight: number;
@@ -71,5 +71,11 @@ export function resolveCanisterLayoutForGrid(gridFrameHeight: number): CanisterL
   const canisterWidth = Math.round(canisterHeight * CANISTER_ASPECT_RATIO * CANISTER_SHELL_WIDTH_SCALE);
   const glassWidth = Math.round(canisterWidth * (1 - CANISTER_GLASS_SIDE_INSET_RATIO * 2) * VACUUM_BAR_WIDTH_SCALE);
 
-  return { glassHeight, glassWidth, canisterHeight, canisterWidth };
+  const scale = HARVEST_CANISTER_SIZE_SCALE;
+  return {
+    canisterHeight: Math.max(29, Math.round(canisterHeight * scale)),
+    glassHeight: Math.max(17, Math.round(glassHeight * scale)),
+    canisterWidth: Math.max(22, Math.round(canisterWidth * scale)),
+    glassWidth: Math.max(10, Math.round(glassWidth * scale)),
+  };
 }

@@ -14,6 +14,9 @@ import Animated, {
 } from 'react-native-reanimated';
 import type { ResidueParticleData } from '../../types/residueParticle';
 
+const VACUUM_SPRING = { damping: 20, stiffness: 88, mass: 0.95 };
+const VACUUM_ABSORB_MS = 720;
+
 interface ResidueParticleProps {
   particle: ResidueParticleData;
   isVacuuming: boolean;
@@ -74,19 +77,19 @@ export default function ResidueParticle({
 
     posX.value = withDelay(
       delay,
-      withSpring(targetX, { damping: 16, stiffness: 140, mass: 0.7 }),
+      withSpring(targetX, VACUUM_SPRING),
     );
     posY.value = withDelay(
       delay,
-      withSpring(targetY, { damping: 16, stiffness: 140, mass: 0.7 }),
+      withSpring(targetY, VACUUM_SPRING),
     );
     scale.value = withDelay(
       delay,
-      withTiming(0.1, { duration: 520, easing: Easing.in(Easing.cubic) }),
+      withTiming(0.1, { duration: VACUUM_ABSORB_MS, easing: Easing.in(Easing.cubic) }),
     );
     opacity.value = withDelay(
       delay,
-      withTiming(0, { duration: 520, easing: Easing.in(Easing.quad) }, (finished) => {
+      withTiming(0, { duration: VACUUM_ABSORB_MS, easing: Easing.in(Easing.quad) }, (finished) => {
         if (finished) {
           runOnJS(handleAbsorbed)();
         }

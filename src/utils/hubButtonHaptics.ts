@@ -33,3 +33,11 @@ export function pulseCargoItemPickup(): void {
 export function pulseCargoItemUse(): void {
   Vibration.vibrate([0, 14, 22, 18]);
 }
+
+export function pulseStatusOpen(): void {
+  Vibration.vibrate(HUB_BUTTON_HAPTIC_MS);
+}
+
+export function pulseStatusDismiss(): void {
+  Vibration.vibrate(CARGO_CLOSE_HAPTIC_MS);
+}

@@ -2,17 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import type { ImageSourcePropType } from 'react-native';
 import type { CombatGridUnitSnapshot } from '../../utils/combatTelemetryFormat';
-import { laneForSlot } from '../../types/combatGrid';
-import {
-  ARENA_ENEMY_SPRITE_HEIGHT_SHARE,
-  ARENA_SPRITE_FRAME_WIDTH,
-  BACKLINE_HITBOX,
-  critLabelAnchorAboveHitbox,
-  ENEMY_HITBOX_DEBUG,
-  ENEMY_SPRITE_FRAME_HEIGHT,
-  FRONTLINE_HITBOX,
-  SOLO_UNIT_SCALE,
-} from './combatEnemyBarLayout';
+import { ENEMY_HITBOX_DEBUG } from './combatEnemyBarLayout';
 import CombatEnemyAnchorMotion from './CombatEnemyAnchorMotion';
 import CombatEnemyCritImpact from './CombatEnemyCritImpact';
 import CombatEnemyCritLabel from './CombatEnemyCritLabel';
@@ -23,7 +13,7 @@ import CombatEnemyHitEffect from './CombatEnemyHitEffect';
 import CombatEnemyPortraitSkia from './CombatEnemyPortraitSkia';
 import CombatSilhouetteShatterEffect from './CombatSilhouetteShatterEffect';
 
-const HITBOX_DEBUG_FILL = 'rgba(255, 0, 0, 0)';
+const HITBOX_DEBUG_FILL = 'rgba(255, 0, 0, 0.35)';
 
 export type CombatGridUnitView = CombatGridUnitSnapshot & {
   portraitSource: ImageSourcePropType;
@@ -35,9 +25,8 @@ interface CombatEnemyUnitProps {
   targetingActive: boolean;
   accentColor: string;
   mutedColor: string;
-  /** Arena grid: cap sprite height to match player footprint. */
-  constrainSpriteHeight?: boolean;
-  /** Slot depth scale — crit label counter-scales to match solo-enemy readout size. */
+  variant?: 'arena' | 'compact';
+  /** Slot depth scale — crit label counter-scales for consistent readout size. */
   layoutUnitScale?: number;
   /** Parent handles dissolve VFX (arena slotted units). */
   skipDissolveEffect?: boolean;
@@ -50,7 +39,7 @@ interface CombatEnemyUnitProps {
 export default function CombatEnemyUnit({
   unit,
   targetingActive,
-  constrainSpriteHeight = false,
+  variant = 'arena',
   layoutUnitScale = 1,
   skipDissolveEffect = false,
   meleeDashDelta,
@@ -62,15 +51,11 @@ export default function CombatEnemyUnit({
     setPortraitFrozen(frozen);
   }, []);
 
-  const spriteHeightShare =
-    `${Math.round(ARENA_ENEMY_SPRITE_HEIGHT_SHARE * 100)}%` as `${number}%`;
+  const isArena = variant === 'arena';
   const fractured = unit.isFractured;
   const dissolving = (unit.dissolveSeq ?? 0) > 0 && !unit.dissolveHidden;
   const portraitGlow = unit.portraitGlow ?? (unit.isSelected ? 'player-selected' : 'none');
-  const isBackline = laneForSlot(unit.slot) === 'BACKLINE';
-  const hitboxLayout = isBackline ? BACKLINE_HITBOX : FRONTLINE_HITBOX;
-  const critLabelAnchor = critLabelAnchorAboveHitbox(hitboxLayout);
-  const critLabelScale = layoutUnitScale > 0 ? SOLO_UNIT_SCALE / layoutUnitScale : 1;
+  const critLabelScale = layoutUnitScale > 0 ? 1 / layoutUnitScale : 1;
 
   if (unit.dissolveHidden) return null;
 
@@ -78,8 +63,7 @@ export default function CombatEnemyUnit({
     <View
       style={[
         styles.imageShell,
-        constrainSpriteHeight ? styles.imageShellArena : styles.imageShellCompact,
-        constrainSpriteHeight ? { height: spriteHeightShare, maxHeight: spriteHeightShare } : null,
+        isArena ? styles.imageShellArena : styles.imageShellCompact,
         {
           opacity: unit.isBlocked && targetingActive && !unit.isHookValid ? 0.5 : 1,
         },
@@ -94,7 +78,7 @@ export default function CombatEnemyUnit({
         meleeDashDelta={meleeDashDelta}
         frozen={portraitFrozen || dissolving}
       >
-        <View style={styles.spriteFrame} pointerEvents="none">
+        <View style={styles.overlayLayer} pointerEvents="none">
           <CombatEnemyCritImpact
             critImpactSeq={unit.critImpactSeq}
             channel={unit.critImpactChannel}
@@ -122,8 +106,7 @@ export default function CombatEnemyUnit({
 
         <View
           style={[
-            styles.critLabelAnchor,
-            critLabelAnchor,
+            styles.statusAnchor,
             { transform: [{ scale: critLabelScale }] },
           ]}
           pointerEvents="none"
@@ -148,17 +131,7 @@ export default function CombatEnemyUnit({
         {onPress && !dissolving ? (
           <Pressable
             onPress={onPress}
-            style={[
-              styles.hitbox,
-              {
-                width: hitboxLayout.width,
-                height: hitboxLayout.height,
-              },
-              'bottom' in hitboxLayout
-                ? { bottom: hitboxLayout.bottom }
-                : { top: hitboxLayout.top },
-              ENEMY_HITBOX_DEBUG ? styles.hitboxDebug : null,
-            ]}
+            style={[styles.hitbox, ENEMY_HITBOX_DEBUG ? styles.hitboxDebug : null]}
             pointerEvents="auto"
           />
         ) : null}
@@ -182,12 +155,11 @@ export default function CombatEnemyUnit({
 
 const styles = StyleSheet.create({
   imageShell: {
-    width: ARENA_SPRITE_FRAME_WIDTH,
-    flexGrow: 0,
-    flexShrink: 0,
+    width: '100%',
+    height: '100%',
+    position: 'relative',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    position: 'relative',
     backgroundColor: 'transparent',
   },
   imageShellArena: {
@@ -197,27 +169,30 @@ const styles = StyleSheet.create({
     minHeight: 88,
     flexGrow: 1,
     flexShrink: 1,
+    width: '92%',
   },
-  spriteFrame: {
+  overlayLayer: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: ENEMY_SPRITE_FRAME_HEIGHT,
-    overflow: 'hidden',
+    width: '120%',
+    height: '120%',
+    top: '-10%',
+    left: '-10%',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
     zIndex: 1,
   },
-  critLabelAnchor: {
+  statusAnchor: {
     position: 'absolute',
-    left: 0,
-    right: 0,
+    top: '-25%',
+    width: '100%',
     alignItems: 'center',
     zIndex: 12,
   },
   hitbox: {
     position: 'absolute',
+    width: '100%',
+    height: '100%',
     zIndex: 10,
-    alignSelf: 'center',
   },
   hitboxDebug: {
     backgroundColor: HITBOX_DEBUG_FILL,

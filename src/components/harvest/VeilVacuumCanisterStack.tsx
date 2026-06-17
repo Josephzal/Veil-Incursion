@@ -5,17 +5,14 @@ import React, {
   useImperativeHandle,
   useMemo,
   useRef,
-  useState,
 } from 'react';
-import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import {
   Easing,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
 import {
-  CANISTER_BASE_PERCENT_FONT_SCALE,
-  CANISTER_BASE_RATIO,
   resolveCanisterLayoutDimensions,
   resolveCanisterLayoutForGrid,
 } from '../../constants/canisterLayout';
@@ -52,7 +49,6 @@ const VeilVacuumCanisterStack = forwardRef<VeilVacuumCanisterStackHandle, VeilVa
   ): React.JSX.Element {
     const stackRef = useRef<View>(null);
     const fillPct = useSharedValue(harvestPercentage / 100);
-    const [displayPercent, setDisplayPercent] = useState(harvestPercentage);
     const { height: screenHeight, width: screenWidth } = useWindowDimensions();
 
     const layout = useMemo(() => {
@@ -76,17 +72,11 @@ const VeilVacuumCanisterStack = forwardRef<VeilVacuumCanisterStackHandle, VeilVa
       return dims;
     }, [gridFrameHeight, screenHeight, screenWidth]);
 
-    const percentFontSize = useMemo(
-      () => Math.max(7, Math.round(layout.canisterWidth * CANISTER_BASE_PERCENT_FONT_SCALE)),
-      [layout.canisterWidth],
-    );
-
     useEffect(() => {
       fillPct.value = withTiming(harvestPercentage / 100, {
         duration: 420,
         easing: Easing.out(Easing.cubic),
       });
-      setDisplayPercent(harvestPercentage);
     }, [fillPct, harvestPercentage]);
 
     const animateFillToPercent = useCallback((percent: number) => {
@@ -94,7 +84,6 @@ const VeilVacuumCanisterStack = forwardRef<VeilVacuumCanisterStackHandle, VeilVa
         duration: 420,
         easing: Easing.out(Easing.cubic),
       });
-      setDisplayPercent(Math.round(percent * 10) / 10);
     }, [fillPct]);
 
     const measureCanisterCenter = useCallback((): Promise<{ x: number; y: number } | null> => (
@@ -131,11 +120,6 @@ const VeilVacuumCanisterStack = forwardRef<VeilVacuumCanisterStackHandle, VeilVa
           onPressIn={onPressIn}
           onPressOut={onPressOut}
         />
-        <View style={styles.basePercentBand} pointerEvents="none">
-          <Text style={[styles.percentText, { fontSize: percentFontSize }]}>
-            {Number.isInteger(displayPercent) ? displayPercent : displayPercent.toFixed(1)}%
-          </Text>
-        </View>
       </View>
     );
   },
@@ -146,23 +130,5 @@ export default VeilVacuumCanisterStack;
 const styles = StyleSheet.create({
   stack: {
     position: 'relative',
-  },
-  basePercentBand: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: `${CANISTER_BASE_RATIO * 100}%`,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 3,
-  },
-  percentText: {
-    color: '#d8f4f0',
-    fontWeight: '600',
-    fontFamily: 'monospace',
-    textShadowColor: 'rgba(0, 0, 0, 0.85)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
   },
 });

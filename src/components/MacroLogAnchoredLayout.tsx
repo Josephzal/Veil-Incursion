@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { pulseCargoClose, pulseCargoOpen } from '../utils/hubButtonHaptics';
+import { pulseCargoClose, pulseCargoOpen, pulseStatusDismiss, pulseStatusOpen } from '../utils/hubButtonHaptics';
 import { StyleSheet, View, ViewStyle } from 'react-native';
 import CargoGridOverlay from './CargoGridOverlay';
 import PersistentTerminalLog from './PersistentTerminalLog';
@@ -109,8 +109,14 @@ export default function MacroLogAnchoredLayout({
 
   const openStatus = useCallback(() => {
     if (!showRunOverlays) return;
+    pulseStatusOpen();
     setStatusOpen(true);
   }, [showRunOverlays]);
+
+  const closeStatus = useCallback(() => {
+    pulseStatusDismiss();
+    setStatusOpen(false);
+  }, []);
 
   const cargoOverlayValue = useMemo(
     () => ({ openCargo, cargoEnabled: showRunOverlays && cargoEnabled }),
@@ -163,7 +169,7 @@ export default function MacroLogAnchoredLayout({
           <RunStatusOverlay
             visible={statusOpen}
             theme={theme}
-            onClose={() => setStatusOpen(false)}
+            onClose={closeStatus}
           />
         ) : null}
       </View>

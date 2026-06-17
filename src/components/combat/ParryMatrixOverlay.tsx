@@ -33,6 +33,8 @@ const INNER_STROKE = 4;
 const OUTER_STROKE = 1.5;
 const SWEET_STROKE = 2;
 const CENTER_DOT_RADIUS = 5;
+/** Centered parry arena as a share of the shorter screen axis. */
+const PARRY_ARENA_SCREEN_RATIO = 0.58;
 
 interface ParryMatrixOverlayProps {
   visible: boolean;
@@ -47,28 +49,41 @@ export default function ParryMatrixOverlay({
   visible,
   shrinkScale,
   onTap,
-  onArenaLayout,
+  onArenaLayout: registerArenaLayout,
 }: ParryMatrixOverlayProps): React.JSX.Element | null {
-  const [size, setSize] = useState({ w: 0, h: 0 });
+  const [screen, setScreen] = useState({ w: 0, h: 0 });
+  const [arenaSize, setArenaSize] = useState({ w: 0, h: 0 });
 
-  const onLayout = (e: LayoutChangeEvent) => {
+  const onScreenLayout = (e: LayoutChangeEvent) => {
     const { width: w, height: h } = e.nativeEvent.layout;
     if (w > 0 && h > 0) {
-      setSize({ w, h });
-      onArenaLayout?.(computeParryArenaLayout(w, h));
+      setScreen({ w, h });
     }
   };
 
-  const cx = size.w / 2;
-  const cy = size.h / 2;
+  const onArenaBoxLayout = (e: LayoutChangeEvent) => {
+    const { width: w, height: h } = e.nativeEvent.layout;
+    if (w > 0 && h > 0) {
+      setArenaSize({ w, h });
+      registerArenaLayout?.(computeParryArenaLayout(w, h));
+    }
+  };
+
+  const arenaDim = useMemo(() => {
+    if (screen.w <= 0 || screen.h <= 0) return 0;
+    return Math.floor(Math.min(screen.w, screen.h) * PARRY_ARENA_SCREEN_RATIO);
+  }, [screen.h, screen.w]);
+
+  const cx = arenaSize.w / 2;
+  const cy = arenaSize.h / 2;
   const baseR = useMemo(
-    () => (Math.min(size.w, size.h) * PARRY_RING_SIZE_RATIO) / 2,
-    [size.w, size.h],
+    () => (Math.min(arenaSize.w, arenaSize.h) * PARRY_RING_SIZE_RATIO) / 2,
+    [arenaSize.w, arenaSize.h],
   );
 
   const centerHitR = useMemo(
-    () => (size.w > 0 ? getParryCenterHitRadius({ width: size.w, height: size.h, cx, cy, baseR }) : 0),
-    [size.w, size.h, cx, cy, baseR],
+    () => (arenaSize.w > 0 ? getParryCenterHitRadius({ width: arenaSize.w, height: arenaSize.h, cx, cy, baseR }) : 0),
+    [arenaSize.w, arenaSize.h, cx, cy, baseR],
   );
 
   const outerRadius = useDerivedValue(() => baseR * shrinkScale.value);
@@ -81,59 +96,69 @@ export default function ParryMatrixOverlay({
   if (!visible) return null;
 
   return (
-    <View style={styles.root} onLayout={onLayout} pointerEvents="box-none" collapsable={false}>
-      {size.w > 0 && size.h > 0 ? (
-        <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
-          <Group>
-            <Circle cx={cx} cy={cy} r={baseR + 12} color="rgba(0,0,0,0.35)" style="fill" />
-            <Circle cx={cx} cy={cy} r={baseR + 16} color={PARRY_RING} opacity={0.08} style="fill">
-              <Blur blur={14} />
-            </Circle>
-            <Circle
-              cx={cx}
-              cy={cy}
-              r={baseR}
-              color={PARRY_SWEET}
-              opacity={0.2}
-              style="stroke"
-              strokeWidth={SWEET_STROKE}
-            />
-            <Circle
-              cx={cx}
-              cy={cy}
-              r={baseR}
-              color={PARRY_RING_BRIGHT}
-              style="stroke"
-              strokeWidth={INNER_STROKE}
-            />
-            <Circle
-              cx={cx}
-              cy={cy}
-              r={outerRadius}
-              color={PARRY_RING_BRIGHT}
-              opacity={0.9}
-              style="stroke"
-              strokeWidth={OUTER_STROKE}
-            >
-              <DashPathEffect intervals={[8, 6]} />
-            </Circle>
-            <Circle
-              cx={cx}
-              cy={cy}
-              r={centerHitR}
-              color={PARRY_SWEET}
-              opacity={0.12}
-              style="stroke"
-              strokeWidth={1}
-            />
-            <Circle cx={cx} cy={cy} r={CENTER_DOT_RADIUS} color={PARRY_RING_BRIGHT} opacity={0.85} />
-          </Group>
-        </Canvas>
+    <View style={styles.root} onLayout={onScreenLayout} pointerEvents="box-none" collapsable={false}>
+      <View style={styles.scrim} pointerEvents="none" />
+
+      {arenaDim > 0 ? (
+        <View
+          style={[styles.arena, { width: arenaDim, height: arenaDim }]}
+          onLayout={onArenaBoxLayout}
+        >
+          {arenaSize.w > 0 && arenaSize.h > 0 ? (
+            <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
+              <Group>
+                <Circle cx={cx} cy={cy} r={baseR + 12} color="rgba(0,0,0,0.35)" style="fill" />
+                <Circle cx={cx} cy={cy} r={baseR + 16} color={PARRY_RING} opacity={0.08} style="fill">
+                  <Blur blur={14} />
+                </Circle>
+                <Circle
+                  cx={cx}
+                  cy={cy}
+                  r={baseR}
+                  color={PARRY_SWEET}
+                  opacity={0.2}
+                  style="stroke"
+                  strokeWidth={SWEET_STROKE}
+                />
+                <Circle
+                  cx={cx}
+                  cy={cy}
+                  r={baseR}
+                  color={PARRY_RING_BRIGHT}
+                  style="stroke"
+                  strokeWidth={INNER_STROKE}
+                />
+                <Circle
+                  cx={cx}
+                  cy={cy}
+                  r={outerRadius}
+                  color={PARRY_RING_BRIGHT}
+                  opacity={0.9}
+                  style="stroke"
+                  strokeWidth={OUTER_STROKE}
+                >
+                  <DashPathEffect intervals={[8, 6]} />
+                </Circle>
+                <Circle
+                  cx={cx}
+                  cy={cy}
+                  r={centerHitR}
+                  color={PARRY_SWEET}
+                  opacity={0.12}
+                  style="stroke"
+                  strokeWidth={1}
+                />
+                <Circle cx={cx} cy={cy} r={CENTER_DOT_RADIUS} color={PARRY_RING_BRIGHT} opacity={0.85} />
+              </Group>
+            </Canvas>
+          ) : null}
+          <Pressable style={styles.tapCapture} onPress={handlePress} />
+        </View>
       ) : null}
+
       <Text style={styles.hint} pointerEvents="none">
         TAP CENTER WHEN RINGS COLLIDE
       </Text>
-      <Pressable style={styles.tapCapture} onPress={handlePress} />
     </View>
   );
 }
@@ -145,20 +170,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 30,
     elevation: 30,
-    backgroundColor: 'rgba(0,0,0,0.28)',
+  },
+  scrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.58)',
+    zIndex: 0,
+  },
+  arena: {
+    position: 'relative',
+    zIndex: 1,
+    overflow: 'visible',
   },
   tapCapture: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 40,
+    zIndex: 2,
   },
   hint: {
     position: 'absolute',
-    bottom: 12,
+    bottom: 28,
+    left: 0,
+    right: 0,
     fontFamily: MONO,
     fontSize: 8,
     letterSpacing: 1,
     textAlign: 'center',
-    width: '100%',
     color: PARRY_RING_BRIGHT,
+    zIndex: 2,
   },
 });
