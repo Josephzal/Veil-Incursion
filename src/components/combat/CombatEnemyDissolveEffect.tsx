@@ -1,10 +1,11 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Image,
   type ImageSourcePropType,
   Platform,
   StyleSheet,
   View,
+  type LayoutChangeEvent,
   type ViewStyle,
 } from 'react-native';
 import Animated, {
@@ -16,6 +17,7 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
+import EnemyDisintegration from './EnemyDisintegration';
 
 export const ASHEN_DISSOLVE_FLASH_MS = 80;
 export const ASHEN_DISSOLVE_MS = 450;
@@ -48,6 +50,8 @@ export default function CombatEnemyDissolveEffect({
   const spriteOpacity = useSharedValue(1);
   const riseY = useSharedValue(0);
   const blurRadius = useSharedValue(0);
+  const [showBurst, setShowBurst] = useState(false);
+  const [bounds, setBounds] = useState({ width: 0, height: 0 });
 
   const finishDissolve = () => {
     if (completedRef.current) return;
@@ -59,6 +63,7 @@ export default function CombatEnemyDissolveEffect({
     if (!active || dissolveSeq <= 0 || dissolveSeq === lastSeqRef.current) return;
     lastSeqRef.current = dissolveSeq;
     completedRef.current = false;
+    setShowBurst(true);
 
     flashOpacity.value = 0;
     spriteOpacity.value = 1;
@@ -94,11 +99,25 @@ export default function CombatEnemyDissolveEffect({
   useEffect(() => {
     if (active) return;
     completedRef.current = false;
+    setShowBurst(false);
     flashOpacity.value = 0;
     spriteOpacity.value = 1;
     riseY.value = 0;
     blurRadius.value = 0;
   }, [active, blurRadius, flashOpacity, riseY, spriteOpacity]);
+
+  const handleLayout = (event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout;
+    setBounds((prev) => (
+      prev.width === width && prev.height === height ? prev : { width, height }
+    ));
+  };
+
+  const handleBurstComplete = () => {
+    setShowBurst(false);
+  };
+
+  const burstReady = showBurst && bounds.width > 0 && bounds.height > 0;
 
   const dissolveStyle = useAnimatedStyle(() => {
     const blur = blurRadius.value;
@@ -121,6 +140,7 @@ export default function CombatEnemyDissolveEffect({
     return (
       <View
         style={styles.wrap}
+        onLayout={handleLayout}
         pointerEvents="box-none"
         collapsable={false}
       >
@@ -132,6 +152,7 @@ export default function CombatEnemyDissolveEffect({
   return (
     <Animated.View
       style={styles.wrap}
+      onLayout={handleLayout}
       pointerEvents="none"
       collapsable={false}
     >
@@ -146,6 +167,15 @@ export default function CombatEnemyDissolveEffect({
             style={styles.flashImage}
           />
         </Animated.View>
+      ) : null}
+      {burstReady ? (
+        <EnemyDisintegration
+          x={bounds.width / 2}
+          y={bounds.height / 2}
+          width={bounds.width}
+          height={bounds.height}
+          onComplete={handleBurstComplete}
+        />
       ) : null}
     </Animated.View>
   );

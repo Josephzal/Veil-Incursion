@@ -424,11 +424,18 @@ export default function CargoGridBoard({
   }, [activeDrag?.instanceId, displayCargo.grid.placed]);
 
   const previewCells = useMemo(() => {
-    if (!hoverCell || !hoverItemId) return new Set<string>();
-    if (!canPlaceCargoItemExcluding(displayCargo, hoverItemId, hoverCell.row, hoverCell.col, hoverExcludeId)) {
-      return new Set<string>();
+    if (!hoverCell || !hoverItemId) {
+      return { cells: new Set<string>(), valid: false };
     }
-    return new Set(cellsForPreview(hoverItemId, hoverCell.row, hoverCell.col));
+    const cells = new Set(cellsForPreview(hoverItemId, hoverCell.row, hoverCell.col));
+    const valid = canPlaceCargoItemExcluding(
+      displayCargo,
+      hoverItemId,
+      hoverCell.row,
+      hoverCell.col,
+      hoverExcludeId,
+    );
+    return { cells, valid };
   }, [displayCargo, hoverCell, hoverExcludeId, hoverItemId]);
 
   const captureMetrics = useCallback(() => {
@@ -674,11 +681,8 @@ export default function CargoGridBoard({
           Array.from({ length: CARGO_GRID_COLS }, (_, col) => {
             const key = `${row},${col}`;
             const occupied = occupiedCells.has(key);
-            const isPreview = previewCells.has(key);
-            const canDrop = hoverCell?.row === row
-              && hoverCell?.col === col
-              && hoverItemId != null
-              && canPlaceCargoItemExcluding(displayCargo, hoverItemId, row, col, hoverExcludeId);
+            const isPreview = previewCells.cells.has(key);
+            const canDrop = isPreview && previewCells.valid;
 
             return (
               <View

@@ -8,17 +8,17 @@ export type BiomeId =
   | 'city_buildings'
   | 'forest';
 
-export type ParticleEffectType = 'rain' | 'ash' | 'none';
+export type ParticleEffectType = 'rain' | 'none';
 
 export interface BiomeAtmosphereConfig {
-  effect: Exclude<ParticleEffectType, 'none'>;
+  effect: ParticleEffectType;
 }
 
 export const BIOME_CONFIG: Record<BiomeId, BiomeAtmosphereConfig> = {
   city_streets: { effect: 'rain' },
   backroads: { effect: 'rain' },
-  deep_veil: { effect: 'ash' },
-  city_buildings: { effect: 'ash' },
+  deep_veil: { effect: 'none' },
+  city_buildings: { effect: 'none' },
   forest: { effect: 'rain' },
 };
 

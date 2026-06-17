@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Image, StyleSheet, View, Dimensions, type ImageSourcePropType } from 'react-native';
 import {
   resolveCombatEnemyPortrait,
@@ -48,6 +48,10 @@ import {
 } from '../utils/combatTelemetryFormat';
 import { encounterBudgetForDepth } from '../data/combatEncounterBudget';
 import type { CargoItemId } from '../types/cargoGrid';
+import {
+  createDefaultPendingNarrativeCombatBoons,
+  type PendingNarrativeCombatBoons,
+} from '../types/narrativeBonusReward';
 import { depthFromNodesCleared, isDistrictGateDepth } from '../data/districtPacing';
 import { rollGatekeeperLockedTemplate } from '../data/combatRewardEngine';
 import { shouldGrantAdrenalinePrimerAp } from '../data/boundRequisitionEngine';
@@ -149,8 +153,16 @@ export default function CombatScreen(): React.JSX.Element {
   const combatEntryStamina =
     env.startingStaminaPenalty > 0 ? 50 : runState.currentStamina;
   const adrenalinePrimerBonusAp = shouldGrantAdrenalinePrimerAp(activeIncursion) ? 1 : 0;
-  const narrativeCombatBoonsRef = useRef(claimPendingNarrativeCombatBoons());
-  const narrativeCombatBoons = narrativeCombatBoonsRef.current;
+  const [narrativeCombatBoons, setNarrativeCombatBoons] = useState<PendingNarrativeCombatBoons>(
+    createDefaultPendingNarrativeCombatBoons,
+  );
+  const narrativeBoonsClaimedRef = useRef(false);
+
+  useLayoutEffect(() => {
+    if (narrativeBoonsClaimedRef.current) return;
+    narrativeBoonsClaimedRef.current = true;
+    setNarrativeCombatBoons(claimPendingNarrativeCombatBoons());
+  }, [claimPendingNarrativeCombatBoons]);
 
   const [squadUi, setSquadUi] = useState<CombatSquadUiSnapshot | null>(null);
   const [operativeTelemetry, setOperativeTelemetry] = useState<CombatOperativeTelemetry | null>(null);
