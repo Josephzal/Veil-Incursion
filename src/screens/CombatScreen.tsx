@@ -150,7 +150,17 @@ export default function CombatScreen(): React.JSX.Element {
   } = useRun();
   const { completeCurrentNode } = useNodeProgression();
   const { getWeaponCombatStats, account, addLockedContainer } = usePlayerAccount();
-  const weaponCombatStats = getWeaponCombatStats();
+  const baseWeaponStats = getWeaponCombatStats();
+  const strikeBonusPct = activeIncursion.strikeDamageBonusPct ?? 0;
+  const weaponCombatStats = useMemo(() => {
+    if (strikeBonusPct <= 0) return baseWeaponStats;
+    const mult = 1 + strikeBonusPct / 100;
+    return {
+      ...baseWeaponStats,
+      strikeDamage: Math.floor(baseWeaponStats.strikeDamage * mult),
+      exhaustedStrikeDamage: Math.floor(baseWeaponStats.exhaustedStrikeDamage * mult),
+    };
+  }, [baseWeaponStats, strikeBonusPct]);
   const playerCritChanceBonus = account.factionPerks.critChanceBonus;
   const env = activeIncursion.environmentalModifiers;
   const combatEntryStamina =

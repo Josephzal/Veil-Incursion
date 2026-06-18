@@ -177,7 +177,7 @@ import {
   RESONANCE_TIER_DATA_BLEED,
   VEIL_STALKER_AMBUSH_CHANCE,
 } from '../types/sector';
-import { SANCTUARY_RETUNE_ATTUNEMENT } from '../types/sector';
+import { rollSanctuarySchedule } from '../data/sanctuaryScheduleEngine';
 import { districtBossLogLine } from '../data/districtBosses';
 import { spawnDistrictBossSquad } from '../data/bossCombat';
 import { createDefaultIncursionInventory } from '../data/incursionInventory';
@@ -244,7 +244,7 @@ interface RunContextType {
   useResonanceBribeFromCargo: () => boolean;
   useDeadDropTokenFromCargo: () => boolean;
   applySkillCheckTier: (tier: 'CRITICAL_SUCCESS' | 'SUCCESS' | 'FAILURE' | 'CRITICAL_DESYNC', logLine: string) => void;
-  applyRestChoice: (type: 'REST' | 'REPAIR' | 'RETUNE') => void;
+  applyRestChoice: (type: 'REST' | 'STRIKE_UPGRADE') => void;
   getCurrentEncounter: () => EncounterNode | null;
   getCurrentSkillCheck: () => SkillCheckEvent | null;
   endRun: (reason: string) => void;
@@ -377,6 +377,7 @@ function buildSectorCluster(inc: ActiveIncursionState): IncursionNode[] {
     relayExtractionNodeId: inc.resonanceEscalations.relayExtractionNodeId,
     macroBiomeFamily: inc.currentMacroBiomeFamily,
     lastLevelOfferedCombat: inc.lastLevelOfferedCombat,
+    sanctuarySchedule: inc.sanctuarySchedule,
   };
   if (inc.nodesCleared >= MAX_SECTOR_NODES && !inc.collapseActive && !inc.bossDefeated) {
     return buildScannerCluster(clusterOptions).filter((node) => node.isExtractionNode);
@@ -486,6 +487,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const sectorTier = config?.sectorTier ?? 1;
     const sectorInit = initializeSectorRun(sectorTier);
     const initialBiome = rollMacroBiomeStep(0, null, `run-start:${sectorTier}`);
+    const sanctuarySchedule = rollSanctuarySchedule(`run:${Date.now()}:${sectorTier}`);
     const incursion: ActiveIncursionState = {
       ...createDefaultActiveIncursionState(),
       isRunActive: true,
@@ -530,6 +532,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         ? [...config.aegisLoadout] as AegisLoadout
         : createDefaultActiveIncursionState().aegisLoadout,
       cargo: createStarterCargoRunState(),
+      sanctuarySchedule,
+      strikeDamageBonusPct: 0,
     };
     const expandedIncursion = persistExpandedSectorGraph(incursion);
     activeIncursionRef.current = expandedIncursion;
@@ -548,6 +552,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       `>> CLIMATE CLUSTER LOCKED: ${clusterDef.name}`,
       formatMacroBiomeLogLine(initialBiome),
       `>> ${clusterDef.tagline}`,
+      `>> SANCTUARY SCHEDULE — D1:[${sanctuarySchedule[1].join(',')}] D2:[${sanctuarySchedule[2].join(',')}] D3:[${sanctuarySchedule[3].join(',')}]`,
       ...sectorInit.initLogLines,
     ]);
   }, []);
@@ -901,31 +906,20 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     appendRunLog(logLine);
   }, [appendRunLog]);
 
-  const applyRestChoice = useCallback((type: 'REST' | 'REPAIR' | 'RETUNE') => {
-    if (type === 'RETUNE') {
+  const applyRestChoice = useCallback((type: 'REST' | 'STRIKE_UPGRADE') => {
+    if (type === 'STRIKE_UPGRADE') {
       setActiveIncursion((prev) => {
-        const next = {
-          ...prev,
-          attunement: {
-            ...prev.attunement,
-            current: Math.min(prev.attunement.max, prev.attunement.current + SANCTUARY_RETUNE_ATTUNEMENT),
-          },
-        };
+        const nextBonus = (prev.strikeDamageBonusPct ?? 0) + 10;
+        const next = { ...prev, strikeDamageBonusPct: nextBonus };
         activeIncursionRef.current = next;
         return next;
       });
-      appendRunLog(`>> Sanctuary Re-Tune — +${SANCTUARY_RETUNE_ATTUNEMENT} attunement restored.`);
+      appendRunLog('>> Sanctuary Strike Tuning — +10% strike damage (stacks per visit).');
       return;
     }
 
     setRunState((prev) => {
-      if (type === 'REPAIR') {
-        const restore = Math.floor(prev.maxStamina * 0.25);
-        const next = { ...prev, currentStamina: Math.min(prev.currentStamina + restore, prev.maxStamina) };
-        runStateRef.current = next;
-        return next;
-      }
-      const restore = Math.floor(prev.maxSoulAnchor * 0.25);
+      const restore = Math.floor(prev.maxSoulAnchor * 0.30);
       const next = {
         ...prev,
         soulAnchorIntegrity: Math.min(prev.soulAnchorIntegrity + restore, prev.maxSoulAnchor),
@@ -933,11 +927,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       runStateRef.current = next;
       return next;
     });
-    appendRunLog(
-      type === 'REST'
-        ? '>> Sanctuary Rest — soul anchor integrity restored.'
-        : '>> Field Repair — stamina reserves replenished.',
-    );
+    appendRunLog('>> Sanctuary Rest — 30% soul anchor integrity restored.');
   }, [appendRunLog]);
 
   const endRun = useCallback((reason: string) => {

@@ -21,8 +21,9 @@ function paletteForType(nodeType: RunNodeType, isBoss: boolean): RiftPalette {
   }
   switch (nodeType) {
     case 'STANDARD_COMBAT':
-    case 'ELITE_COMBAT':
       return { core: 'rgba(239, 68, 68, 0.42)', glow: 'rgba(220, 38, 38, 0.28)', edge: '#f87171' };
+    case 'ELITE_COMBAT':
+      return { core: 'rgba(127, 29, 29, 0.55)', glow: 'rgba(69, 10, 10, 0.38)', edge: '#991b1b' };
     case 'NARRATIVE_EVENT':
       return { core: 'rgba(168, 85, 247, 0.4)', glow: 'rgba(124, 58, 237, 0.28)', edge: '#a78bfa' };
     case 'RESOURCE_HARVEST':
@@ -30,9 +31,10 @@ function paletteForType(nodeType: RunNodeType, isBoss: boolean): RiftPalette {
     case 'BLACK_MARKET':
       return { core: 'rgba(245, 158, 11, 0.38)', glow: 'rgba(217, 119, 6, 0.24)', edge: '#fbbf24' };
     case 'SANCTUARY':
+      return { core: 'rgba(34, 197, 94, 0.38)', glow: 'rgba(22, 163, 74, 0.24)', edge: '#22c55e' };
     case 'SAFE_ANCHOR_EXTRACTION':
     case 'MASTER_EXTRACTION_LINK':
-      return { core: 'rgba(0, 255, 51, 0.32)', glow: 'rgba(0, 255, 51, 0.18)', edge: '#00ff33' };
+      return { core: 'rgba(245, 158, 11, 0.38)', glow: 'rgba(217, 119, 6, 0.24)', edge: '#fbbf24' };
     default:
       return { core: 'rgba(0, 255, 51, 0.28)', glow: 'rgba(0, 255, 51, 0.14)', edge: '#00ff33' };
   }

@@ -12,10 +12,12 @@ const TERMINAL_ACCENT = '#00ff33';
 
 export default function RestScreen(): React.JSX.Element {
   const { theme } = useTerminal();
-  const { runState, applyRestChoice } = useRun();
+  const { runState, activeIncursion, applyRestChoice } = useRun();
   const { completeCurrentNode } = useNodeProgression();
-  const [selectedChoice, setSelectedChoice] = useState<'REST' | 'REPAIR' | 'RETUNE' | null>(null);
+  const [selectedChoice, setSelectedChoice] = useState<'REST' | 'STRIKE_UPGRADE' | null>(null);
   const [confirmed, setConfirmed] = useState(false);
+
+  const strikeBonus = activeIncursion.strikeDamageBonusPct ?? 0;
 
   const handleContinue = () => {
     if (!selectedChoice || confirmed) return;
@@ -23,9 +25,7 @@ export default function RestScreen(): React.JSX.Element {
     applyRestChoice(selectedChoice);
     const msg = selectedChoice === 'REST'
       ? 'Soul anchor stabilized.'
-      : selectedChoice === 'REPAIR'
-        ? 'Stamina reserves replenished.'
-        : 'Attunement re-tuned.';
+      : 'Strike channel tuned.';
     setTimeout(() => completeCurrentNode(msg), 1200);
   };
 
@@ -54,14 +54,14 @@ export default function RestScreen(): React.JSX.Element {
 
               <View style={[styles.docBody, { borderColor: theme.borderColor }]}>
                 <Text style={[styles.scenarioText, { color: theme.primaryColor }]}>
-                  A quiet anchor chapel hums with stabilizing ley-energy. Choose how to recover before the next encounter.
+                  A quiet anchor chapel hums with stabilizing ley-energy. Choose recovery or strike tuning before the next encounter.
                 </Text>
                 <View style={styles.statsBlock}>
                   <Text style={[styles.statLine, { color: theme.mutedColor }]}>
                     SOUL ANCHOR: {runState.soulAnchorIntegrity}/{runState.maxSoulAnchor}
                   </Text>
                   <Text style={[styles.statLine, { color: theme.mutedColor }]}>
-                    STAMINA: {runState.currentStamina}/{runState.maxStamina}
+                    STRIKE BONUS: +{strikeBonus}%
                   </Text>
                 </View>
               </View>
@@ -87,53 +87,30 @@ export default function RestScreen(): React.JSX.Element {
                   >
                     [ REST ]
                   </Text>
-                  <Text style={[styles.choiceReq, styles.choiceEffectGood]}>Restore 25% Soul Anchor</Text>
+                  <Text style={[styles.choiceReq, styles.choiceEffectGood]}>Restore 30% Soul Anchor</Text>
                 </Pressable>
 
                 <Pressable
-                  onPress={() => !confirmed && setSelectedChoice('RETUNE')}
+                  onPress={() => !confirmed && setSelectedChoice('STRIKE_UPGRADE')}
                   disabled={confirmed}
                   style={({ pressed }) => [
                     styles.choiceBtn,
-                    selectedChoice === 'RETUNE' && styles.choiceBtnSelected,
+                    selectedChoice === 'STRIKE_UPGRADE' && styles.choiceBtnSelected,
                     {
-                      borderColor: selectedChoice === 'RETUNE' ? TERMINAL_ACCENT : theme.borderColor,
-                      opacity: confirmed && selectedChoice !== 'RETUNE' ? 0.4 : pressed ? 0.7 : 1,
+                      borderColor: selectedChoice === 'STRIKE_UPGRADE' ? TERMINAL_ACCENT : theme.borderColor,
+                      opacity: confirmed && selectedChoice !== 'STRIKE_UPGRADE' ? 0.4 : pressed ? 0.7 : 1,
                     },
                   ]}
                 >
                   <Text
                     style={[
                       styles.choiceLabel,
-                      { color: selectedChoice === 'RETUNE' ? TERMINAL_ACCENT : theme.primaryColor },
+                      { color: selectedChoice === 'STRIKE_UPGRADE' ? TERMINAL_ACCENT : theme.primaryColor },
                     ]}
                   >
-                    [ RE-TUNE ]
+                    [ STRIKE TUNING ]
                   </Text>
-                  <Text style={[styles.choiceReq, styles.choiceEffectGood]}>+2 Attunement</Text>
-                </Pressable>
-
-                <Pressable
-                  onPress={() => !confirmed && setSelectedChoice('REPAIR')}
-                  disabled={confirmed}
-                  style={({ pressed }) => [
-                    styles.choiceBtn,
-                    selectedChoice === 'REPAIR' && styles.choiceBtnSelected,
-                    {
-                      borderColor: selectedChoice === 'REPAIR' ? TERMINAL_ACCENT : theme.borderColor,
-                      opacity: confirmed && selectedChoice !== 'REPAIR' ? 0.4 : pressed ? 0.7 : 1,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.choiceLabel,
-                      { color: selectedChoice === 'REPAIR' ? TERMINAL_ACCENT : theme.primaryColor },
-                    ]}
-                  >
-                    [ REPAIR ]
-                  </Text>
-                  <Text style={[styles.choiceReq, styles.choiceEffectGood]}>Restore 25% Stamina</Text>
+                  <Text style={[styles.choiceReq, styles.choiceEffectGood]}>+10% Strike Damage (stacks)</Text>
                 </Pressable>
 
                 <SelectionContinueButton

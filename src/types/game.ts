@@ -371,6 +371,10 @@ export interface ActiveIncursionState {
   harvestStagingInstanceIds: readonly string[];
   /** God Mode consumable active — 1000 STRIKE damage and locked max resources. */
   godModeActive: boolean;
+  /** Pre-rolled sanctuary local levels per district chapter (includes mandatory L14). */
+  sanctuarySchedule: import('../data/sanctuaryScheduleEngine').SanctuarySchedule;
+  /** Cumulative strike damage bonus from sanctuary upgrades (%). Stacks per visit. */
+  strikeDamageBonusPct: number;
 }
 
 export function createDefaultEnvironmentalModifiers(): EnvironmentalModifiers {
@@ -440,5 +444,7 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     sessionVeilResidueCollected: 0,
     harvestStagingInstanceIds: [],
     godModeActive: false,
+    sanctuarySchedule: { 1: [14], 2: [14], 3: [14] },
+    strikeDamageBonusPct: 0,
   };
 }

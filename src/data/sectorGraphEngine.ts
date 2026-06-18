@@ -36,9 +36,15 @@ import {
   isDistrictGateDepth,
   localLevelFromDepth,
 } from './districtPacing';
-import { BOSS_GRAPH_DEPTH, DISTRICT_GATE_DEPTHS, SCANNER_MAX_VECTORS } from '../types/sectorPacing';
+import {
+  district1ExtractionAnchorForLocalLevel,
+  isDistrict1ExtractionLevel,
+  isSanctuaryScheduledLevel,
+  type SanctuarySchedule,
+} from './sanctuaryScheduleEngine';
 import { districtGateLabel } from './districtPacing';
 import type { SafeAnchorIndex } from '../types/sectorPacing';
+import { BOSS_GRAPH_DEPTH, DISTRICT_GATE_DEPTHS, SCANNER_MAX_VECTORS } from '../types/sectorPacing';
 
 const VECTOR_DESIGNATIONS = ['ALPHA', 'BETA', 'GAMMA', 'DELTA', 'EPSILON', 'ZETA'] as const;
 
@@ -328,6 +334,33 @@ const SAFE_ANCHOR_LABELS: Record<SafeAnchorIndex, string> = {
   3: 'SAFE ANCHOR III // FINAL CLEAN EXIT',
 };
 
+export function createSanctuaryNode(stepIndex: number, localLevel: number): IncursionNode {
+  const id = `sanctuary-l${localLevel}-${stepIndex}`;
+  return {
+    id,
+    encounterIndex: stepIndex,
+    index: stepIndex,
+    encounterType: 'SANCTUARY',
+    type: 'SANCTUARY',
+    label: 'SANCTUARY ANCHOR // RE-TUNE CONDUIT',
+    isCompleted: false,
+    sectorMeta: {
+      spectral: {
+        radialFrequency: 'Stabilized Ley Band // Recovery Channel',
+        visualSpectrum: 'Verdant Anchor // Soft Green Static',
+        occultIndex: 'Sanctuary Relay Authenticated',
+        threatProfile: 'LOW // RECOVERY OR STRIKE TUNING',
+        threatBand: 'LOW',
+      },
+      resonanceDelta: 0,
+      isFocused: true,
+      yieldMultiplier: 1,
+      creditBonus: 0,
+      combatTier: 'STANDARD',
+    },
+  };
+}
+
 export function createSafeAnchorExtractionNode(
   anchorIndex: SafeAnchorIndex,
   stepIndex: number,
@@ -470,6 +503,7 @@ export interface BuildScannerClusterOptions {
   lastLevelOfferedCombat?: boolean;
   /** Apply current macro biome flavor to forward vectors. */
   macroBiomeFamily?: import('../types/narrativeProcedural').MacroBiomeFamily | null;
+  sanctuarySchedule?: SanctuarySchedule;
 }
 
 /** Synthetic extraction ids are not stored in the sector graph. */
@@ -526,6 +560,7 @@ export function buildScannerCluster(options: BuildScannerClusterOptions): Incurs
     masterLinkUsed = false,
     lastLevelOfferedCombat = true,
     macroBiomeFamily = null,
+    sanctuarySchedule,
   } = options;
 
   let graph = inputGraph;
@@ -584,7 +619,15 @@ export function buildScannerCluster(options: BuildScannerClusterOptions): Incurs
     });
   }
 
-  cluster = cluster.filter((node) => node.type !== 'SANCTUARY');
+  const schedule = sanctuarySchedule ?? { 1: [14], 2: [14], 3: [14] };
+
+  if (
+    !isDistrictGateDepth(upcomingDepth)
+    && isSanctuaryScheduledLevel(schedule, district, localLevel)
+    && !cluster.some((node) => node.type === 'SANCTUARY' && !node.isExtractionNode)
+  ) {
+    cluster.push(createSanctuaryNode(stepIndex, localLevel));
+  }
 
   if (isFullBlindZone(nodesCleared)) {
     cluster = cluster.filter((node) => node.type !== 'BLACK_MARKET');
@@ -629,13 +672,26 @@ export function buildScannerCluster(options: BuildScannerClusterOptions): Incurs
     }
   }
 
-  const anchorIndex = safeAnchorIndexForCrossingDepth(current.graphDepth + 1);
-  if (
-    anchorIndex != null
-    && isCleanExtractionAvailable(nodesCleared)
-    && !clearedSafeAnchors.includes(anchorIndex)
-  ) {
-    cluster.unshift(createSafeAnchorExtractionNode(anchorIndex, stepIndex));
+  if (district === 1 && isDistrict1ExtractionLevel(district, localLevel)) {
+    const d1Anchor = district1ExtractionAnchorForLocalLevel(localLevel);
+    if (
+      d1Anchor != null
+      && !clearedSafeAnchors.includes(d1Anchor)
+      && !cluster.some(
+        (node) => node.type === 'SAFE_ANCHOR_EXTRACTION' && node.safeAnchorIndex === d1Anchor,
+      )
+    ) {
+      cluster.unshift(createSafeAnchorExtractionNode(d1Anchor, stepIndex));
+    }
+  } else {
+    const anchorIndex = safeAnchorIndexForCrossingDepth(current.graphDepth + 1);
+    if (
+      anchorIndex != null
+      && isCleanExtractionAvailable(nodesCleared)
+      && !clearedSafeAnchors.includes(anchorIndex)
+    ) {
+      cluster.unshift(createSafeAnchorExtractionNode(anchorIndex, stepIndex));
+    }
   }
 
   if (!bossDefeated && resonancePercent >= BOSS_NEST_SOFT_RESONANCE) {
@@ -663,9 +719,10 @@ export function buildScannerCluster(options: BuildScannerClusterOptions): Incurs
     });
   }
 
-  const vectorCap = collapseActive
+  const baseCap = collapseActive
     ? SCANNER_MAX_VECTORS
-    : Math.max(SCANNER_MAX_VECTORS, maxVectorsForLocalLevel(localLevel));
+    : maxVectorsForLocalLevel(localLevel);
+  const vectorCap = Math.max(baseCap, Math.min(cluster.length, SCANNER_MAX_VECTORS + 2));
   const trimmed = cluster.slice(0, vectorCap);
   if (macroBiomeFamily) {
     return applyMacroBiomeToCluster(trimmed, macroBiomeFamily);
