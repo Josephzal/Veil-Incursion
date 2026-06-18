@@ -45,13 +45,13 @@ const NULL_SHADE_TELEGRAPH_INTENTS: EnemyIntent[] = ['SINKING_INTO_GRID', 'VOID_
 const ROSTER_INTENTS: Partial<Record<string, EnemyIntent[]>> = {
   'concrete-gargoyle': ['PAVEMENT_CRUSHER_CHARGE', 'PAVEMENT_CRUSHER', 'STRIKE'],
   'gutter-goliath': ['STRIKE', 'FORTIFY'],
-  'echoing-brute': ['STRIKE', 'FORTIFY', 'RESONANCE_OVERLOAD'],
-  'ley-siren': ['OCCULT_TETHER', 'VEIL_STATIC', 'SIPHON_ABYSSAL', 'STRIKE'],
-  'ash-weeper': ['STRIKE', 'SIPHON_ABYSSAL', 'PREMATURE_IGNITION'],
-  'miasma-tick-swarm': ['SWARM_BITE', 'STAMINA_DRAIN_LEAP', 'STRIKE'],
-  'fracture-hound': ['DOUBLE_STRIKE', 'STRIKE'],
-  'null-shade': ['SINKING_INTO_GRID', 'VOID_AMBUSH', 'STRIKE', 'EVADE', 'SIPHON_ABYSSAL'],
-  'spatial-glitch': ['STRIKE', 'FORTIFY', 'SIPHON_ABYSSAL'],
+  'echoing-brute': ['STRIKE', 'KINETIC_AFTERSHOCK', 'FORTIFY', 'RESONANCE_OVERLOAD'],
+  'ley-siren': ['OCCULT_TETHER', 'TARGET_LOCK', 'VEIL_STATIC', 'SIPHON_ABYSSAL', 'STRIKE'],
+  'ash-weeper': ['STRIKE', 'SIPHON_ABYSSAL', 'PREMATURE_IGNITION', 'SCAVENGE'],
+  'miasma-tick-swarm': ['SWARM_BITE', 'STAMINA_DRAIN_LEAP', 'STRIKE', 'SCAVENGE'],
+  'fracture-hound': ['STRIKE'],
+  'null-shade': ['SINKING_INTO_GRID', 'VOID_AMBUSH', 'STRIKE', 'EVADE', 'VEIL_BARRIER', 'ASHEN_ROT'],
+  'spatial-glitch': ['STRIKE', 'SENSORY_JAM', 'FORTIFY', 'SIPHON_ABYSSAL'],
 };
 
 function isHpBelowEnrageThreshold(profile: EnemyCombatProfile, rosterId: string): boolean {
@@ -172,10 +172,19 @@ export function decideRosterIntent(
   district: DistrictId = 1,
   playerState?: PlayerAIState,
   squad?: EnemyCombatProfile[],
+  options?: { hasAshToken?: boolean },
 ): EnemyIntent | null {
   const synced = syncRosterCombatState(profile);
   const rosterId = synced.rosterId;
   if (!rosterId) return null;
+
+  if (
+    options?.hasAshToken
+    && (rosterId === 'ash-weeper' || rosterId === 'miasma-tick-swarm')
+    && synced.currentHp < synced.maxHp
+  ) {
+    return 'SCAVENGE';
+  }
 
   const forced = resolveForcedRosterIntent(synced);
   if (forced) return forced;
@@ -217,5 +226,11 @@ export function isRosterSpecificIntent(intent: EnemyIntent): boolean {
     || intent === 'PREMATURE_IGNITION'
     || intent === 'RESONANCE_OVERLOAD'
     || intent === 'SINKING_INTO_GRID'
-    || intent === 'VOID_AMBUSH';
+    || intent === 'VOID_AMBUSH'
+    || intent === 'KINETIC_AFTERSHOCK'
+    || intent === 'SCAVENGE'
+    || intent === 'SENSORY_JAM'
+    || intent === 'VEIL_BARRIER'
+    || intent === 'TARGET_LOCK'
+    || intent === 'ASHEN_ROT';
 }

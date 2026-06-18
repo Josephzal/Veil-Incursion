@@ -42,6 +42,7 @@ export default function ConcealSlider({
   const [elapsedMs, setElapsedMs] = useState(0);
   const [outsideMs, setOutsideMs] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [hasStarted, setHasStarted] = useState(false);
 
   const handleCenterRef = useRef(handleCenter);
   const zoneTopRef = useRef(initialZone);
@@ -50,6 +51,7 @@ export default function ConcealSlider({
   const outsideRef = useRef(0);
   const graceElapsedRef = useRef(0);
   const resolvedRef = useRef(false);
+  const hasStartedRef = useRef(false);
 
   handleCenterRef.current = handleCenter;
 
@@ -82,14 +84,18 @@ export default function ConcealSlider({
   }, [zoneTopAnim]);
 
   useEffect(() => {
+    if (!hasStarted) return undefined;
+
     const zoneTimer = setInterval(() => {
       if (resolvedRef.current) return;
       animateZoneTo(randomZoneTop());
     }, 850);
     return () => clearInterval(zoneTimer);
-  }, [animateZoneTo]);
+  }, [animateZoneTo, hasStarted]);
 
   useEffect(() => {
+    if (!hasStarted) return undefined;
+
     const tick = setInterval(() => {
       if (resolvedRef.current) return;
 
@@ -117,13 +123,18 @@ export default function ConcealSlider({
     }, TICK_MS);
 
     return () => clearInterval(tick);
-  }, [resolveFailure, resolveSuccess]);
+  }, [hasStarted, resolveFailure, resolveSuccess]);
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => !resolvedRef.current,
       onMoveShouldSetPanResponder: () => !resolvedRef.current,
       onPanResponderGrant: () => {
+        if (resolvedRef.current) return;
+        if (!hasStartedRef.current) {
+          hasStartedRef.current = true;
+          setHasStarted(true);
+        }
         dragStartHandleRef.current = handleCenterRef.current;
         setIsDragging(true);
       },
@@ -157,13 +168,17 @@ export default function ConcealSlider({
       <Text style={styles.header}>CONCEAL SLIDER // STEALTH HOLD</Text>
       <View style={styles.panel}>
         <Text style={styles.instructions}>
-          Keep the handle inside the safe zone for 8 seconds. The zone drifts — stay with it.
+          {hasStarted
+            ? 'Keep the handle inside the safe zone for 8 seconds. The zone drifts — stay with it.'
+            : 'Press and hold the bar to begin concealment.'}
         </Text>
 
         <View style={styles.statsRow}>
-          <Text style={styles.stat}>HOLD {progressPct}%</Text>
-          <Text style={[styles.stat, outsideMs > MAX_OUTSIDE_MS * 0.6 && styles.statWarn]}>
-            EXPOSURE {exposurePct}%
+          <Text style={styles.stat}>
+            {hasStarted ? `HOLD ${progressPct}%` : 'AWAITING HOLD'}
+          </Text>
+          <Text style={[styles.stat, hasStarted && outsideMs > MAX_OUTSIDE_MS * 0.6 && styles.statWarn]}>
+            {hasStarted ? `EXPOSURE ${exposurePct}%` : 'STANDBY'}
           </Text>
         </View>
 
@@ -188,7 +203,11 @@ export default function ConcealSlider({
           />
         </View>
 
-        <Text style={styles.hint}>Drag the handle vertically to match the safe zone.</Text>
+        <Text style={styles.hint}>
+          {hasStarted
+            ? 'Drag the handle vertically to match the safe zone.'
+            : 'Touch the bar and hold to engage stealth tracking.'}
+        </Text>
 
         {penaltyHint ? (
           <Text style={styles.penalty}>{penaltyHint}</Text>
@@ -263,6 +282,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#9ca3af',
     borderWidth: 1,
     borderColor: '#d1d5db',
+  },
+  standbyOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(10, 11, 15, 0.55)',
+    zIndex: 2,
+  },
+  standbyText: {
+    fontFamily: 'monospace',
+    fontSize: 8,
+    letterSpacing: 1,
+    color: '#d1d5db',
   },
   hint: {
     fontFamily: 'monospace',

@@ -75,11 +75,14 @@ const gutterGoliathTurnStart: TurnStartHandler = (enemy, ctx) => {
   if (enemy.currentHp >= enemy.maxHp) {
     return { squad: ctx.squad, logLines: [] };
   }
+  const healAmount = enemy.maxHp - enemy.currentHp >= 15 ? 15 : enemy.maxHp - enemy.currentHp;
   const healed = Math.min(enemy.maxHp, enemy.currentHp + 15);
   const squad = patchUnitInSquad(ctx.squad, enemy.unitId, { currentHp: healed });
   return {
     squad,
     logLines: [`>> ${enemy.designation} REGENERATES — +${healed - enemy.currentHp} HP.`],
+    statusFloatLabel: `+${healAmount} HP`,
+    statusFloatUnitId: enemy.unitId,
   };
 };
 
@@ -170,13 +173,26 @@ const leySirenDeath: DeathHandler = (enemy, _killingBlow, ctx) => {
 const ashWeeperDeath: DeathHandler = (enemy, killingBlow, ctx) => {
   if (enemy.rosterId !== 'ash-weeper' || !enemy.unitId) return { ...EMPTY_DEATH, squad: ctx.squad };
   if (killingBlow.channel !== 'KINETIC') {
-    return { squad: ctx.squad, logLines: [] };
+    return { squad: ctx.squad, logLines: [], ashTokenSlot: enemy.gridSlot };
   }
   return {
     squad: ctx.squad,
     logLines: [`>> ${enemy.designation} ASH DETONATION — parry window to contain occult backlash.`],
     delayDissolve: true,
     triggerRetributionParry: { unitId: enemy.unitId, occultDamage: 15 },
+    ashTokenSlot: enemy.gridSlot,
+  };
+};
+
+const genericAshDeath: DeathHandler = (enemy, _killingBlow, ctx) => {
+  if (enemy.rosterId === 'ley-siren' || enemy.rosterId === 'ash-weeper') {
+    return { ...EMPTY_DEATH, squad: ctx.squad };
+  }
+  if (!enemy.unitId || !enemy.gridSlot) return { ...EMPTY_DEATH, squad: ctx.squad };
+  return {
+    squad: ctx.squad,
+    logLines: [],
+    ashTokenSlot: enemy.gridSlot,
   };
 };
 
@@ -194,6 +210,7 @@ const HIT_TAKEN_HANDLERS: HitTakenHandler[] = [
 const DEATH_HANDLERS: DeathHandler[] = [
   leySirenDeath,
   ashWeeperDeath,
+  genericAshDeath,
 ];
 
 function mergeSquads(base: EnemyCombatProfile[], patch: EnemyCombatProfile[]): EnemyCombatProfile[] {
@@ -231,15 +248,27 @@ export const CombatLifecycleManager = {
     let squad = ctx.squad;
     const logLines: string[] = [];
     let extras = ctx.extras;
+    let statusFloatLabel: string | undefined;
+    let statusFloatUnitId: string | undefined;
 
     for (const handler of TURN_START_HANDLERS) {
       const result = handler(enemy, { ...ctx, squad, extras });
       if (result.squad.length > 0) squad = mergeSquads(squad, result.squad);
       logLines.push(...result.logLines);
       extras = mergeExtras(extras, result.extras);
+      if (result.statusFloatLabel) {
+        statusFloatLabel = result.statusFloatLabel;
+        statusFloatUnitId = result.statusFloatUnitId;
+      }
     }
 
-    return { squad, logLines, extras: extras !== ctx.extras ? extras : undefined };
+    return {
+      squad,
+      logLines,
+      extras: extras !== ctx.extras ? extras : undefined,
+      statusFloatLabel,
+      statusFloatUnitId,
+    };
   },
 
   runOnHitTaken(
@@ -289,6 +318,7 @@ export const CombatLifecycleManager = {
     let extras = ctx.extras;
     let delayDissolve = false;
     let triggerRetributionParry: DeathLifecycleResult['triggerRetributionParry'];
+    let ashTokenSlot: DeathLifecycleResult['ashTokenSlot'];
 
     for (const handler of DEATH_HANDLERS) {
       const result = handler(enemy, killingBlow, { ...ctx, squad, extras });
@@ -297,6 +327,7 @@ export const CombatLifecycleManager = {
       extras = mergeExtras(extras, result.extras);
       if (result.delayDissolve) delayDissolve = true;
       if (result.triggerRetributionParry) triggerRetributionParry = result.triggerRetributionParry;
+      if (result.ashTokenSlot) ashTokenSlot = result.ashTokenSlot;
     }
 
     return {
@@ -304,6 +335,7 @@ export const CombatLifecycleManager = {
       logLines,
       delayDissolve,
       triggerRetributionParry,
+      ashTokenSlot,
       extras: extras !== ctx.extras ? extras : undefined,
     };
   },

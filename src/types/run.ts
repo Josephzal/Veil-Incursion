@@ -30,7 +30,13 @@ export type EnemyIntent =
   | 'PREMATURE_IGNITION'
   | 'RESONANCE_OVERLOAD'
   | 'SINKING_INTO_GRID'
-  | 'VOID_AMBUSH';
+  | 'VOID_AMBUSH'
+  | 'KINETIC_AFTERSHOCK'
+  | 'SCAVENGE'
+  | 'SENSORY_JAM'
+  | 'VEIL_BARRIER'
+  | 'TARGET_LOCK'
+  | 'ASHEN_ROT';
 
 /** Reactive combat debuffs derived from resource pools (stamina === 0 → EXHAUSTED). */
 export type CombatStatusEffect = 'EXHAUSTED';
@@ -127,6 +133,10 @@ export interface EnemyCombatProfile {
   isUntargetable?: boolean;
   /** Roster telegraph cooldown — turns until Sinking/Void sequence can restart. */
   rosterAbilityCooldown?: number;
+  /** Hit-based shield — absorbs one full strike per charge. */
+  veilBarrierCharges?: number;
+  /** Spawn archetype for target-lock / placement rules. */
+  spawnArchetype?: 'MELEE' | 'SUPPORT' | 'RANGED' | 'HEAVY';
 }
 
 export interface Trinket {

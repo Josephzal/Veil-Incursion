@@ -1,6 +1,7 @@
 import type { FactionType } from '../types/game';
 import type { CombatGridLane } from '../types/combatGrid';
 import type { EnemyClass, EnemyCombatProfile } from '../types/run';
+import { resolveEnemyCombatStats } from './enemyCombatConfig';
 import { getNodeScale } from './enemyNodeScale';
 import { rollEnemyIntent } from './enemyIntentRoll';
 import { resolveEnemyAffinity } from './combatEnvironmentEngine';
@@ -283,15 +284,16 @@ export function spawnRosterUnit(
     district?: DistrictId;
     isApex?: boolean;
     apexBudget?: number;
+    isAlpha?: boolean;
   },
 ): EnemyCombatProfile {
   const scale = getNodeScale(nodeIndex);
+  const depth = depthFromNodesCleared(nodeIndex);
+  const resolvedStats = resolveEnemyCombatStats(entry.id, depth, { isAlpha: options?.isAlpha });
   const elite = entry.elite === true || options?.forcedElite === true || options?.isApex === true;
-  const apexScale = options?.isApex && options.apexBudget
-    ? 1 + Math.max(0, options.apexBudget - entry.threatTier) * 0.18
-    : 1;
-  const maxHp = Math.floor(entry.hp * scale * (elite ? 1.15 : 1) * apexScale);
-  const baseDamage = Math.floor(entry.damage * scale);
+  const maxHp = resolvedStats?.maxHp
+    ?? Math.floor(entry.hp * (elite ? 1.15 : 1));
+  const baseDamage = resolvedStats?.baseDamage ?? entry.damage;
   const affinity = resolveEnemyAffinity(entry.class, elite, options?.resonancePercent ?? 0);
   const intent = rollEnemyIntent(entry.class, 0, options?.district ?? 1);
   const base: EnemyCombatProfile = {
@@ -311,11 +313,10 @@ export function spawnRosterUnit(
     critChance: entry.critChance,
   };
   const withAffinity = applyCorporealHpMultiplier({ ...base, affinity }, affinity);
-  const depth = depthFromNodesCleared(nodeIndex);
   const localLevel = localLevelFromDepth(depth);
   const resonancePct = options?.resonancePercent ?? 0;
-  let kineticArmor = entry.kineticArmor;
-  let occultWards = entry.occultWards;
+  let kineticArmor = resolvedStats?.kineticArmor ?? entry.kineticArmor;
+  let occultWards = resolvedStats?.occultWards ?? entry.occultWards;
   if (localLevel >= 12 && resonancePct >= 75) {
     kineticArmor += 1;
     occultWards += 1;
@@ -326,16 +327,20 @@ export function spawnRosterUnit(
     fractureMax: entry.id === 'concrete-gargoyle' ? CONCRETE_GARGOYLE_FRACTURE_MAX : undefined,
   });
   const withLifecycle = initRosterLifecycleDefaults(layered, entry.id);
+  const withArchetype = {
+    ...withLifecycle,
+    spawnArchetype: resolvedStats?.archetype,
+  };
   if (options?.isApex) {
     return {
-      ...withLifecycle,
+      ...withArchetype,
       isApex: true,
       enemyActionPoints: 2,
       enemyMaxActionPoints: 2,
       designation: `APEX ${entry.designation}`,
     };
   }
-  return withLifecycle;
+  return withArchetype;
 }
 
 export function resolveEnemyThreatTier(profile: {

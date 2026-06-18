@@ -24,7 +24,7 @@ export default function CombatPlayerSliceOverlay(): React.JSX.Element | null {
 const styles = StyleSheet.create({
   host: {
     position: 'absolute',
-    bottom: '40%',
+    top: '18%',
     left: 0,
     right: 0,
     alignItems: 'center',

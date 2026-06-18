@@ -37,6 +37,9 @@ export interface TurnStartLifecycleResult {
   squad: EnemyCombatProfile[];
   logLines: string[];
   extras?: Partial<CombatSessionExtras>;
+  /** Optional floating status label (e.g. goliath regenerate). */
+  statusFloatLabel?: string;
+  statusFloatUnitId?: string;
 }
 
 export interface HitTakenLifecycleResult {
@@ -58,6 +61,8 @@ export interface DeathLifecycleResult {
     occultDamage: number;
   };
   extras?: Partial<CombatSessionExtras>;
+  /** Leave ash token at dead unit's grid slot for scavengers. */
+  ashTokenSlot?: import('./combatGrid').CombatGridSlotId;
 }
 
 export type TurnStartHandler = (

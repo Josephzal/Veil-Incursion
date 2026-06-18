@@ -97,7 +97,7 @@ export const AEGIS_ABILITY_CATALOG: Record<AegisAbilityId, AegisAbilityDefinitio
   EVISCERATE: {
     id: 'EVISCERATE',
     label: '[ EVISCERATE ]',
-    apCost: 0,
+    apCost: 2,
     staminaCost: 0,
     requiresFullAbyssal: true,
     description: 'Ultimate — 3-slice execution. True damage. Sunder armor on survivors.',

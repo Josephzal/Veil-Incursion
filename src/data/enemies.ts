@@ -75,6 +75,12 @@ export function intentLabel(intent: EnemyIntent, designation: string): string {
     RESONANCE_OVERLOAD: `${designation} intends RESONANCE OVERLOAD`,
     SINKING_INTO_GRID: `${designation} sinks into the GRID (PHASE)`,
     VOID_AMBUSH: `${designation} intends VOID AMBUSH (CRITICAL)`,
+    KINETIC_AFTERSHOCK: `${designation} intends KINETIC AFTERSHOCK`,
+    SCAVENGE: `${designation} intends SCAVENGE (ASH HEAL)`,
+    SENSORY_JAM: `${designation} casts SENSORY JAM`,
+    VEIL_BARRIER: `${designation} raises VEIL BARRIER`,
+    TARGET_LOCK: `${designation} applies TARGET LOCK`,
+    ASHEN_ROT: `${designation} inflicts ASHEN ROT`,
   };
   return labels[intent];
 }
@@ -218,6 +224,7 @@ export function advanceEnemyIntent(
   district: DistrictId = 1,
   playerState?: PlayerAIState,
   squad?: EnemyCombatProfile[],
+  options?: { hasAshToken?: boolean },
 ): EnemyCombatProfile {
   if (profile.testPreset === 'easy') {
     return {
@@ -246,7 +253,7 @@ export function advanceEnemyIntent(
   else if (synced.intent !== 'WORLD_ENDER') chargeTurns = 0;
 
   let nextIntent = synced.rosterId
-    ? (decideRosterIntent({ ...synced, chargeTurns }, district, playerState, squad) ?? decideEnemyIntent({
+    ? (decideRosterIntent({ ...synced, chargeTurns }, district, playerState, squad, options) ?? decideEnemyIntent({
         enemy: enemyAIStateFromProfile({ ...synced, chargeTurns }, district),
         player: playerState ?? defaultPlayerAIState(),
       }))

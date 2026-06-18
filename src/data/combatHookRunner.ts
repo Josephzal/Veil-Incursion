@@ -6,6 +6,7 @@ import type {
   CombatHookResult,
   CombatSessionExtras,
   EnemyStatusId,
+  PlayerDebuffId,
 } from '../types/combatHooks';
 import type { BlueprintId } from '../types/equipmentBlueprint';
 import type { EnemyCombatProfile } from '../types/run';
@@ -52,6 +53,22 @@ export function tickCombatSessionExtras(extras: CombatSessionExtras): void {
       extras.playerShield = 0;
     }
   }
+  extras.structuredDebuffs = extras.structuredDebuffs
+    .map((d) => ({ ...d, turnsRemaining: d.turnsRemaining - 1 }))
+    .filter((d) => d.turnsRemaining > 0);
+  extras.playerDebuffs = extras.structuredDebuffs.map((d) => d.type);
+
+  Object.keys(extras.ashTokens).forEach((slot) => {
+    const key = slot as keyof typeof extras.ashTokens;
+    const token = extras.ashTokens[key];
+    if (!token) return;
+    token.turnsRemaining -= 1;
+    if (token.turnsRemaining <= 0) {
+      delete extras.ashTokens[key];
+    }
+  });
+
+  extras.playerDefendedThisTurn = false;
   Object.keys(extras.enemyStatusTurns).forEach((unitId) => {
     const entry = extras.enemyStatusTurns[unitId];
     (['VULNERABLE', 'BLINDED'] as EnemyStatusId[]).forEach((status) => {

@@ -25,9 +25,10 @@ export const CONSUMABLE_HANDLERS: Partial<Record<CargoItemId, ConsumableHandler>
     const removed = ctx.sessionExtras.playerDebuffs.filter(
       (id) => id === 'BLEEDING' || id === 'FRACTURED',
     );
-    ctx.sessionExtras.playerDebuffs = ctx.sessionExtras.playerDebuffs.filter(
-      (id) => id !== 'BLEEDING' && id !== 'FRACTURED',
+    ctx.sessionExtras.structuredDebuffs = ctx.sessionExtras.structuredDebuffs.filter(
+      (d) => d.type !== 'BLEEDING' && d.type !== 'FRACTURED',
     );
+    ctx.sessionExtras.playerDebuffs = ctx.sessionExtras.structuredDebuffs.map((d) => d.type);
     return {
       healAmount,
       clearDebuffIds: removed,

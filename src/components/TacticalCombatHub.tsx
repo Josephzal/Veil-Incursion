@@ -94,7 +94,8 @@ import { CombatLifecycleManager, applyLeySirenTetherAction } from '../data/comba
 import { isRosterSpecificIntent, isNullShadeVoidAmbush, nullShadeVoidAmbushCleanupPatch, patchRosterAfterIntentExec, resolveRosterEnemyDamage, ROSTER_AI_WEIGHTS, syncRosterCombatState, VOID_AMBUSH_CRIT_CHANCE, VOID_AMBUSH_INTERRUPT_THRESHOLD } from '../data/combatRosterActions';
 import type { PlayerCombatState } from '../types/combatLifecycle';
 import type { CombatSessionExtras } from '../types/combatHooks';
-import { createDefaultCombatSessionExtras } from '../types/combatHooks';
+import { createDefaultCombatSessionExtras, addStructuredDebuff, hasStructuredDebuff, removeStructuredDebuff } from '../types/combatHooks';
+import { isHeavyArchetype } from '../data/enemyCombatConfig';
 import {
   getEnemyAccuracyPenalty,
   getEnemyDamageTakenMultiplier,
@@ -181,7 +182,12 @@ import {
 } from '../utils/parryCollision';
 
 const TELEMETRY_DIVIDER = 'rgba(139, 92, 246, 0.2)';
-const ENEMY_TO_PLAYER_DAMAGE_MULTIPLIER = 0.5;
+
+const FRACTURE_HOUND_DOUBLE_STRIKE_CHANCE = 0.35;
+const EVISCERATE_AP_COST = 2;
+
+const DEFEND_ABILITIES: AegisAbilityId[] = ['WRAITH_PARRY', 'ASHEN_MANTLE'];
+const BUFF_ABILITIES: AegisAbilityId[] = ['DEMONS_LUNG', 'CRIMSON_PACT'];
 
 const { width, height: windowHeight } = Dimensions.get('window');
 
@@ -417,6 +423,7 @@ export default function TacticalCombatHub({
   const critImpactSeqRef = useRef<Record<string, { seq: number; channel: 'KINETIC' | 'OCCULT' | 'TRUE' }>>({});
   const evadeImpactSeqRef = useRef<Record<string, number>>({});
   const statusFloatSeqRef = useRef<Record<string, number>>({});
+  const lifecycleFloatLabelsRef = useRef<Record<string, string>>({});
   const backlineDashSeqRef = useRef<Record<string, number>>({});
   const backlineDashActiveRef = useRef<Record<string, boolean>>({});
   const retributionParryRef = useRef<{ unitId: string; occultDamage: number } | null>(null);
@@ -521,8 +528,26 @@ export default function TacticalCombatHub({
       playerApCapNextTurn: patch.playerApCapNextTurn !== undefined
         ? patch.playerApCapNextTurn
         : sessionExtrasRef.current.playerApCapNextTurn,
+      ashTokens: patch.ashTokens ?? sessionExtrasRef.current.ashTokens,
+      structuredDebuffs: patch.structuredDebuffs ?? sessionExtrasRef.current.structuredDebuffs,
     };
+    sessionExtrasRef.current.playerDebuffs = sessionExtrasRef.current.structuredDebuffs.map((d) => d.type);
   };
+
+  const hasAshOnBoard = () => Object.keys(sessionExtrasRef.current.ashTokens).length > 0;
+
+  const consumeAshToken = () => {
+    const slots = Object.keys(sessionExtrasRef.current.ashTokens);
+    if (slots.length === 0) return;
+    const next = { ...sessionExtrasRef.current.ashTokens };
+    delete next[slots[0] as keyof typeof next];
+    sessionExtrasRef.current.ashTokens = next;
+  };
+
+  const markPlayerDefendedRef = useRef<() => void>(() => {});
+  const resolvePlayerTurnEndDebuffsRef = useRef<() => void>(() => {});
+  const isBuffOrDefendAbility = (abilityId: AegisAbilityId) =>
+    DEFEND_ABILITIES.includes(abilityId) || BUFF_ABILITIES.includes(abilityId);
 
   const log = (t: string) => onTerminalLog?.(t);
   const parryTimingWindowBonus = parryWindowBonus * 0.02;
@@ -561,6 +586,7 @@ export default function TacticalCombatHub({
     abyssalRef.current = mutationModsRef.current.abyssalCap;
     setAbyssalReserve(mutationModsRef.current.abyssalCap);
     sessionExtrasRef.current.playerDebuffs = [];
+    sessionExtrasRef.current.structuredDebuffs = [];
   };
 
   useEffect(() => {
@@ -696,14 +722,16 @@ export default function TacticalCombatHub({
         const turnPhase = isActiveActor
           ? resolveEnemyTurnPhase(actingIntent, enemyActionStageRef.current, motionOptions)
           : null;
+        const sensoryJammed = hasStructuredDebuff(sessionExtrasRef.current, 'SENSORY_JAMMED');
+        const displayIntent = sensoryJammed ? ('SENSORY_JAM' as EnemyIntent) : u.intent;
         return {
           unitId,
           slot: u.gridSlot ?? 'FL_0',
           designation: u.designation,
           currentHp: u.currentHp,
           maxHp: u.maxHp,
-          intent: u.intent,
-          intentLabel: formatIntentReadout(u.intent),
+          intent: displayIntent,
+          intentLabel: sensoryJammed ? 'STATIC // JAMMED' : formatIntentReadout(u.intent),
           affinity: u.affinity,
           fractureGauge: u.fractureGauge ?? 0,
           fractureMax: u.fractureMax ?? 100,
@@ -738,10 +766,13 @@ export default function TacticalCombatHub({
             && motionKind !== 'buff',
           turnPhase,
           statusFloatSeq: statusFloatSeqRef.current[unitId] ?? 0,
-          statusFloatLabel: isActiveActor && motionKind === 'buff' && enemyActionStageRef.current === 'executing'
-            ? getEnemyBuffFloatLabel(u.intent)
-            : undefined,
-          statusFloatTone: getStatusFloatTone(u.intent),
+          statusFloatLabel: lifecycleFloatLabelsRef.current[unitId]
+            ?? (isActiveActor && motionKind === 'buff' && enemyActionStageRef.current === 'executing'
+              ? getEnemyBuffFloatLabel(u.intent)
+              : undefined),
+          statusFloatTone: lifecycleFloatLabelsRef.current[unitId]
+            ? 'fortify'
+            : getStatusFloatTone(u.intent),
           isBacklineDashing: backlineDashActiveRef.current[unitId] === true,
           backlineMeleeDashSeq: backlineDashSeqRef.current[unitId] ?? 0,
           isBlocked: blocked,
@@ -1126,9 +1157,13 @@ export default function TacticalCombatHub({
       }
     }
     if (result.clearPlayerDebuffs && result.clearPlayerDebuffs.length > 0) {
-      sessionExtrasRef.current.playerDebuffs = sessionExtrasRef.current.playerDebuffs.filter(
-        (id) => !result.clearPlayerDebuffs!.includes(id),
+      sessionExtrasRef.current.structuredDebuffs = sessionExtrasRef.current.structuredDebuffs.filter(
+        (d) => {
+          if (d.type !== 'BLEEDING' && d.type !== 'FRACTURED') return true;
+          return !result.clearPlayerDebuffs!.includes(d.type);
+        },
       );
+      sessionExtrasRef.current.playerDebuffs = sessionExtrasRef.current.structuredDebuffs.map((d) => d.type);
     }
     if (result.frontlineBlindTurns && result.frontlineBlindTurns > 0) {
       const blindResult = applyFrontlineBlinded(
@@ -1253,8 +1288,18 @@ export default function TacticalCombatHub({
       return;
     }
     let dmg = raw;
-    if (options?.attacker && raw > 0) {
-      dmg = Math.max(1, Math.floor(raw * ENEMY_TO_PLAYER_DAMAGE_MULTIPLIER));
+    if (
+      options?.attacker
+      && hasStructuredDebuff(sessionExtrasRef.current, 'TARGET_LOCKED')
+      && raw > 0
+    ) {
+      const tier = resolveEnemyThreatTier(options.attacker);
+      const heavyHit = isHeavyArchetype(options.attacker.rosterId) || tier === 'ELITE' || tier === 'APEX';
+      if (heavyHit) {
+        dmg = applyCritMultiplier(dmg, COMBAT_CHANCE.CRIT_DAMAGE_MULTIPLIER);
+        removeStructuredDebuff(sessionExtrasRef.current, 'TARGET_LOCKED');
+        log(`[TARGET LOCKED] >> Heavy strike — critical hit for ${dmg}.`);
+      }
     }
     const extras = sessionExtrasRef.current;
     if (extras.playerShield > 0 && dmg > 0) {
@@ -1382,6 +1427,15 @@ export default function TacticalCombatHub({
       && options?.channel !== 'TRUE'
     ) {
       log(`${tag} >> PHASED — ${e.designation} cannot be targeted by physical channel.`);
+      return false;
+    }
+    if ((e.veilBarrierCharges ?? 0) > 0 && raw > 0) {
+      const nextCharges = (e.veilBarrierCharges ?? 0) - 1;
+      patchUnit(e.unitId, {
+        veilBarrierCharges: nextCharges > 0 ? nextCharges : undefined,
+      });
+      log(`${tag} >> VEIL BARRIER — hit absorbed (${nextCharges} charge${nextCharges === 1 ? '' : 's'} left).`);
+      publishSquadUi(squadRef.current);
       return false;
     }
     let working = e;
@@ -1601,6 +1655,13 @@ export default function TacticalCombatHub({
       if (deathLifecycle.squad.length > 0) syncSquad(deathLifecycle.squad);
       working = getUnitById(squadRef.current, e.unitId) ?? working;
 
+      if (deathLifecycle.ashTokenSlot) {
+        sessionExtrasRef.current.ashTokens = {
+          ...sessionExtrasRef.current.ashTokens,
+          [deathLifecycle.ashTokenSlot]: { turnsRemaining: 1 },
+        };
+      }
+
       if (deathLifecycle.triggerRetributionParry) {
         pendingDissolveRef.current = { unitId: e.unitId, profile: working, hp: 0 };
         retributionParryRef.current = deathLifecycle.triggerRetributionParry;
@@ -1756,6 +1817,29 @@ export default function TacticalCombatHub({
       viewport?.triggerDamageEffect();
     }
     return false;
+  };
+
+  markPlayerDefendedRef.current = () => {
+    sessionExtrasRef.current.playerDefendedThisTurn = true;
+    if (hasStructuredDebuff(sessionExtrasRef.current, 'ECHO_DEBUFF')) {
+      removeStructuredDebuff(sessionExtrasRef.current, 'ECHO_DEBUFF');
+      log('>> ECHO DISSIPATED — defensive posture absorbed the aftershock.');
+    }
+  };
+
+  resolvePlayerTurnEndDebuffsRef.current = () => {
+    const echo = sessionExtrasRef.current.structuredDebuffs.find((d) => d.type === 'ECHO_DEBUFF');
+    if (!echo) return;
+    if (sessionExtrasRef.current.playerDefendedThisTurn) {
+      removeStructuredDebuff(sessionExtrasRef.current, 'ECHO_DEBUFF');
+      return;
+    }
+    const echoDmg = echo.amount ?? 0;
+    if (echoDmg > 0 && operativeHpRef.current > 0) {
+      hurtPlayer(echoDmg, false, `>> KINETIC ECHO — ${echoDmg}`, { rollEvade: false, rollCrit: false });
+      log('>> KINETIC AFTERSHOCK — delayed rupture lands.');
+    }
+    removeStructuredDebuff(sessionExtrasRef.current, 'ECHO_DEBUFF');
   };
 
   const markAttackerDoomed = (attacker: EnemyCombatProfile) => {
@@ -2125,6 +2209,59 @@ export default function TacticalCombatHub({
         }
         break;
       }
+      case 'KINETIC_AFTERSHOCK': {
+        const dmg = resolveRosterEnemyDamage(e, 'STRIKE');
+        log(`>> ${e.designation} KINETIC AFTERSHOCK — ${dmg} impact + echo primed.`);
+        hurtPlayer(dmg, false, `>> KINETIC AFTERSHOCK — ${dmg}`, { attacker: e });
+        addStructuredDebuff(sessionExtrasRef.current, {
+          type: 'ECHO_DEBUFF',
+          amount: dmg,
+          turnsRemaining: 1,
+        });
+        break;
+      }
+      case 'SCAVENGE': {
+        if (!e.unitId) break;
+        consumeAshToken();
+        const healAmt = Math.max(1, Math.floor(e.maxHp * 0.2));
+        const healed = Math.min(e.maxHp, e.currentHp + healAmt);
+        patchUnit(e.unitId, { currentHp: healed });
+        statusFloatSeqRef.current[e.unitId] = (statusFloatSeqRef.current[e.unitId] ?? 0) + 1;
+        publishSquadUi(squadRef.current);
+        log(`>> ${e.designation} SCAVENGES ASH — +${healed - e.currentHp} HP.`);
+        break;
+      }
+      case 'SENSORY_JAM': {
+        const jamTurns = Math.random() < 0.5 ? 1 : 2;
+        addStructuredDebuff(sessionExtrasRef.current, {
+          type: 'SENSORY_JAMMED',
+          turnsRemaining: jamTurns,
+        });
+        log(`>> ${e.designation} SENSORY JAM — hostile intents obscured (${jamTurns} turn${jamTurns > 1 ? 's' : ''}).`);
+        break;
+      }
+      case 'VEIL_BARRIER': {
+        if (!e.unitId) break;
+        patchUnit(e.unitId, { veilBarrierCharges: 2 });
+        log(`>> ${e.designation} VEIL BARRIER — 2 hit charges active.`);
+        break;
+      }
+      case 'TARGET_LOCK': {
+        addStructuredDebuff(sessionExtrasRef.current, {
+          type: 'TARGET_LOCKED',
+          turnsRemaining: 2,
+        });
+        log(`>> ${e.designation} TARGET LOCK — heavy strikes will crit.`);
+        break;
+      }
+      case 'ASHEN_ROT': {
+        addStructuredDebuff(sessionExtrasRef.current, {
+          type: 'ASHEN_ROT',
+          turnsRemaining: 2,
+        });
+        log(`>> ${e.designation} ASHEN ROT — buff/defend actions cost stamina.`);
+        break;
+      }
       default: break;
     }
     const rosterPatch = patchRosterAfterIntentExec(e, e.intent);
@@ -2153,7 +2290,13 @@ export default function TacticalCombatHub({
           const nextIntent = rollBossIntent(phase);
           return { ...unit, intent: nextIntent, bossPhase: phase };
         }
-        return advanceEnemyIntent(unit, combatDistrict, buildPlayerAIState(), squadRef.current);
+        return advanceEnemyIntent(
+          unit,
+          combatDistrict,
+          buildPlayerAIState(),
+          squadRef.current,
+          { hasAshToken: hasAshOnBoard() },
+        );
       }));
     }
     enemyActionQueueRef.current = [];
@@ -2164,6 +2307,7 @@ export default function TacticalCombatHub({
 
   const startPlayerTurn = (_e: EnemyCombatProfile) => {
     if (isCombatTerminal()) return;
+    lifecycleFloatLabelsRef.current = {};
     tickCombatSessionExtras(sessionExtrasRef.current);
     combatChanceRef.current.shadowStepEvadeActive = false;
     if (staminaRef.current > 0) {
@@ -2293,6 +2437,23 @@ export default function TacticalCombatHub({
     turnStart.logLines.forEach((line) => log(line));
     applyLifecycleExtras(turnStart.extras);
     if (turnStart.squad.length > 0) syncSquad(turnStart.squad);
+    if (turnStart.statusFloatLabel && turnStart.statusFloatUnitId) {
+      statusFloatSeqRef.current[turnStart.statusFloatUnitId] =
+        (statusFloatSeqRef.current[turnStart.statusFloatUnitId] ?? 0) + 1;
+      lifecycleFloatLabelsRef.current[turnStart.statusFloatUnitId] = turnStart.statusFloatLabel;
+      publishSquadUi(squadRef.current);
+    }
+    if (
+      unit.rosterId === 'fracture-hound'
+      && unit.intent === 'STRIKE'
+      && unit.unitId
+      && enemyActionQueueRef.current[0] === unit.unitId
+      && enemyActionQueueRef.current[1] !== unit.unitId
+      && Math.random() < FRACTURE_HOUND_DOUBLE_STRIKE_CHANCE
+    ) {
+      enemyActionQueueRef.current.splice(1, 0, unit.unitId);
+      log(`>> ${unit.designation} DOUBLE STRIKE — twin cleave queued.`);
+    }
     setIsPlayerTurn(false);
     setEnemyActionStage('reading');
     log(`>> HOSTILE TURN // ${unit.designation} — ${formatIntentReadout(unit.intent)}`);
@@ -2428,6 +2589,7 @@ export default function TacticalCombatHub({
 
   const passToEnemy = (countering = false) => {
     if (isCombatTerminal()) return;
+    resolvePlayerTurnEndDebuffsRef.current();
     tickCombatSessionExtras(sessionExtrasRef.current);
     setSelectedAbility(null);
     syncSquad(squadRef.current.map((unit) => {
@@ -2633,6 +2795,14 @@ export default function TacticalCombatHub({
 
   const executeAbility = (abilityId: AegisAbilityId) => {
     if (cycleState !== 'TEXT_COMBAT' || !canPlayerCommand() || !enemyRef.current) return;
+    if (
+      hasStructuredDebuff(sessionExtrasRef.current, 'ASHEN_ROT')
+      && isBuffOrDefendAbility(abilityId)
+    ) {
+      const rotCost = 50;
+      applyStamina(Math.max(0, staminaRef.current - rotCost));
+      log(`>> ROT TRIGGERED! −${rotCost} Stamina`);
+    }
     const def = getAbilityDefinition(abilityId);
     if (!spendActionPoints(def.apCost)) {
       log('[REJECTED] >> Insufficient action points.');
@@ -2704,6 +2874,7 @@ export default function TacticalCombatHub({
         wraithParryRef.current = true;
         counterRef.current = true;
         setCounterPrepActive(true);
+        markPlayerDefendedRef.current();
         log('[WRAITH PARRY] >> Stance armed — next physical hit reflects 100% as fracture.');
         break;
       }
@@ -2728,6 +2899,7 @@ export default function TacticalCombatHub({
         }
         abyssalWardRef.current = true;
         setAbyssalWardActive(true);
+        markPlayerDefendedRef.current();
         log('[ASHEN MANTLE] >> Mantle armed — blocks 50% next hit. Attackers gain Doomed.');
         break;
       }
@@ -2905,9 +3077,17 @@ export default function TacticalCombatHub({
   const onSlice = () => {
     if (cycleState !== 'TEXT_COMBAT' || !isPlayerTurn) return;
     if (isExhausted) { log('[REJECTED] >> Exhausted — eviscerate offline.'); return; }
+    if (playerApRef.current < EVISCERATE_AP_COST) {
+      log(`[REJECTED] >> Eviscerate requires ${EVISCERATE_AP_COST} AP.`);
+      return;
+    }
     const cap = mutationModsRef.current.abyssalCap;
     if (abyssalRef.current < cap) {
       log(`[REJECTED] >> AR below ${cap}%.`);
+      return;
+    }
+    if (!spendActionPoints(EVISCERATE_AP_COST)) {
+      log(`[REJECTED] >> Insufficient action points for Eviscerate.`);
       return;
     }
     log('[EVISCERATE] >> Execution aperture open.');
@@ -3644,9 +3824,13 @@ export default function TacticalCombatHub({
 
   const chromeSnapshot = useMemo(
     () => ({
-      slicePingVisible: sliceReady && enemyAlive && isPlayerTurn && cycleState === 'TEXT_COMBAT',
+      slicePingVisible: sliceReady && enemyAlive,
       slicePingReady: sliceReady && enemyAlive,
-      slicePingDisabled: !isPlayerTurn || cycleState !== 'TEXT_COMBAT' || isExhausted,
+      slicePingDisabled: !isPlayerTurn
+        || cycleState !== 'TEXT_COMBAT'
+        || isExhausted
+        || playerApRef.current < EVISCERATE_AP_COST
+        || abyssalRef.current < mutationModsRef.current.abyssalCap,
       onSlicePing: onSlice,
       parryVisible: cycleState === 'DEFEND_PARRY',
       parryShrinkScale: parryScaleSV,

@@ -36,8 +36,9 @@ export function decideRosterIntent(
   district: DistrictId = 1,
   playerState?: PlayerAIState,
   squad?: EnemyCombatProfile[],
+  options?: { hasAshToken?: boolean },
 ): EnemyIntent | null {
-  return decideRosterIntentFromAI(profile, district, playerState, squad);
+  return decideRosterIntentFromAI(profile, district, playerState, squad, options);
 }
 
 export function resolveRosterEnemyDamage(profile: EnemyCombatProfile, intent: EnemyIntent): number {
@@ -77,6 +78,12 @@ export function rosterIntentLabel(intent: EnemyIntent, designation: string): str
     RESONANCE_OVERLOAD: `${designation} intends RESONANCE OVERLOAD`,
     SINKING_INTO_GRID: `${designation} sinks into the GRID (PHASE)`,
     VOID_AMBUSH: `${designation} intends VOID AMBUSH (CRITICAL)`,
+    KINETIC_AFTERSHOCK: `${designation} intends KINETIC AFTERSHOCK`,
+    SCAVENGE: `${designation} intends SCAVENGE (ASH HEAL)`,
+    SENSORY_JAM: `${designation} casts SENSORY JAM`,
+    VEIL_BARRIER: `${designation} raises VEIL BARRIER`,
+    TARGET_LOCK: `${designation} applies TARGET LOCK`,
+    ASHEN_ROT: `${designation} inflicts ASHEN ROT`,
   };
   return labels[intent] ?? null;
 }

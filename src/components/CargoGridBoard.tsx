@@ -782,9 +782,9 @@ export default function CargoGridBoard({
               ]}
             >
               {Array.from({ length: externalSlotCount }, (_, slotIndex) => {
-                const item = containmentBySlot?.get(slotIndex)
-                  ?? displayCargo.containment[slotIndex]
-                  ?? null;
+                const item = containmentBySlot
+                  ? (containmentBySlot.get(slotIndex) ?? null)
+                  : (displayCargo.containment[slotIndex] ?? null);
                 if (!item) {
                   return <View key={`empty-slot-${slotIndex}`} style={styles.externalSlot} />;
                 }
@@ -797,7 +797,7 @@ export default function CargoGridBoard({
                 const isDragging = activeDrag?.instanceId === item.instanceId;
                 return (
                   <ContainmentSlot
-                    key={item.instanceId}
+                    key={`external-slot-${slotIndex}`}
                     item={item}
                     spriteSize={spriteSize}
                     isDragging={isDragging}
