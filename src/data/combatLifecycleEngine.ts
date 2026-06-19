@@ -2,6 +2,7 @@ import { laneForSlot } from '../types/combatGrid';
 import type { CombatGridSlotId } from '../types/combatGrid';
 import type { EnemyCombatProfile } from '../types/run';
 import { aliveUnits, getUnitById, updateUnit } from './combatSquadEngine';
+import { isFragileArchetype } from './enemyCombatConfig';
 import type {
   CombatLifecycleContext,
   DeathHandler,
@@ -95,6 +96,70 @@ const spatialGlitchTurnStart: TurnStartHandler = (enemy, ctx) => {
   };
 };
 
+const thrallSlumpTurnStart: TurnStartHandler = (enemy, ctx) => {
+  if (enemy.rosterId !== 'thrall' || !enemy.unitId) return { ...EMPTY_TURN, squad: ctx.squad };
+  if (!enemy.isSlumped) return { squad: ctx.squad, logLines: [] };
+  const remaining = (enemy.slumpTurnsRemaining ?? 0) - 1;
+  if (remaining > 0) {
+    const squad = patchUnitInSquad(ctx.squad, enemy.unitId, { slumpTurnsRemaining: remaining });
+    return {
+      squad,
+      logLines: [`>> ${enemy.designation} SLUMPED — revival in ${remaining} turn(s).`],
+    };
+  }
+  const revivedHp = Math.floor(enemy.maxHp * 0.5);
+  const squad = patchUnitInSquad(ctx.squad, enemy.unitId, {
+    isSlumped: false,
+    slumpTurnsRemaining: 0,
+    currentHp: revivedHp,
+  });
+  return {
+    squad,
+    logLines: [`>> ${enemy.designation} REVIVES — ${revivedHp} HP.`],
+    statusFloatLabel: `+${revivedHp} HP`,
+    statusFloatUnitId: enemy.unitId,
+  };
+};
+
+const golemVentTurnStart: TurnStartHandler = (enemy, ctx) => {
+  if (enemy.rosterId !== 'golem' || !enemy.unitId) return { ...EMPTY_TURN, squad: ctx.squad };
+  const heat = enemy.heatCharge ?? 0;
+  if (heat < 3) return { squad: ctx.squad, logLines: [] };
+  const squad = patchUnitInSquad(ctx.squad, enemy.unitId, { heatCharge: 0 });
+  return {
+    squad,
+    logLines: [`>> ${enemy.designation} VENTING CORE — catastrophic heat discharge.`],
+    playerHpDelta: -Math.floor(enemy.baseDamage * 2.5),
+  };
+};
+
+const churnFleshAmmoTurnStart: TurnStartHandler = (enemy, ctx) => {
+  if (enemy.rosterId !== 'churn' || !enemy.unitId) return { ...EMPTY_TURN, squad: ctx.squad };
+  const fragile = aliveUnits(ctx.squad).find(
+    (u) => u.unitId !== enemy.unitId && isFragileArchetype(u.rosterId),
+  );
+  if (!fragile?.unitId) return { squad: ctx.squad, logLines: [] };
+  let squad = patchUnitInSquad(ctx.squad, fragile.unitId, { currentHp: 0 });
+  return {
+    squad,
+    logLines: [
+      `>> ${enemy.designation} FLESH AMMO — ${fragile.designation} consumed.`,
+      `>> SHRAPNEL BLAST — ${Math.floor(enemy.baseDamage * 1.5)} damage.`,
+    ],
+    playerHpDelta: -Math.floor(enemy.baseDamage * 1.5),
+  };
+};
+
+const resonanceCasterTurnStart: TurnStartHandler = (enemy, ctx) => {
+  if (enemy.rosterId !== 'resonance-caster' || !enemy.unitId) return { ...EMPTY_TURN, squad: ctx.squad };
+  const stack = (enemy.resonanceStack ?? 0) + 1;
+  const squad = patchUnitInSquad(ctx.squad, enemy.unitId, { resonanceStack: stack });
+  return {
+    squad,
+    logLines: [`>> ${enemy.designation} FREQUENCY ESCALATION — +${stack * 50}% attack power.`],
+  };
+};
+
 // --- Hit taken handlers ---
 
 const echoingBruteHitTaken: HitTakenHandler = (enemy, attack, ctx) => {
@@ -151,6 +216,65 @@ const spatialGlitchHitTaken: HitTakenHandler = (enemy, attack, ctx) => {
   };
 };
 
+const scuttlerHitTaken: HitTakenHandler = (enemy, attack, ctx) => {
+  if (enemy.rosterId !== 'scuttler' || !enemy.unitId) return { ...EMPTY_HIT, squad: ctx.squad };
+  if (attack.source !== 'STRIKE' && attack.source !== 'SLICE') return { squad: ctx.squad, logLines: [] };
+  if (Math.random() >= 0.5) return { squad: ctx.squad, logLines: [] };
+  const counterDmg = Math.max(4, Math.floor(enemy.baseDamage * 0.6));
+  return {
+    squad: ctx.squad,
+    logLines: [`>> ${enemy.designation} EVASIVE MANEUVER — attack dodged. Counter: ${counterDmg}.`],
+    negateDamage: true,
+    damageOverride: 0,
+    playerHpDelta: -counterDmg,
+    scuttlerCounter: true,
+  };
+};
+
+const ironMaidenHitTaken: HitTakenHandler = (enemy, attack, ctx) => {
+  if (enemy.rosterId !== 'iron-maiden' || !enemy.unitId) return { ...EMPTY_HIT, squad: ctx.squad };
+  if (attack.channel !== 'KINETIC' || attack.raw <= 0) return { squad: ctx.squad, logLines: [] };
+  const reflect = Math.max(1, Math.floor(attack.raw * 0.2));
+  return {
+    squad: ctx.squad,
+    logLines: [`>> ${enemy.designation} SPIKED CARAPACE — ${reflect} reflected.`],
+    playerHpDelta: -reflect,
+  };
+};
+
+const golemHeatHitTaken: HitTakenHandler = (enemy, attack, ctx) => {
+  if (enemy.rosterId !== 'golem' || !enemy.unitId || attack.raw <= 0) {
+    return { ...EMPTY_HIT, squad: ctx.squad };
+  }
+  const heat = (enemy.heatCharge ?? 0) + 1;
+  const squad = patchUnitInSquad(ctx.squad, enemy.unitId, { heatCharge: heat });
+  return {
+    squad,
+    logLines: heat >= 3
+      ? [`>> ${enemy.designation} CORE OVERHEAT — vent imminent (${heat}/3).`]
+      : [`>> ${enemy.designation} heat charge ${heat}/3.`],
+  };
+};
+
+const slagBloodHitTaken: HitTakenHandler = (enemy, attack, ctx) => {
+  if (enemy.rosterId !== 'slag-blood' || !enemy.unitId || enemy.isEnraged) {
+    return { ...EMPTY_HIT, squad: ctx.squad };
+  }
+  const projected = attack.projectedHpAfter;
+  const threshold = Math.floor(enemy.maxHp * 0.3);
+  if (projected > threshold) return { squad: ctx.squad, logLines: [] };
+  const squad = patchUnitInSquad(ctx.squad, enemy.unitId, {
+    isEnraged: true,
+    kineticArmor: 0,
+    occultWards: 0,
+    baseDamage: enemy.baseDamage * 2,
+  });
+  return {
+    squad,
+    logLines: [`>> ${enemy.designation} DESPERATION PROTOCOL — enraged, armor stripped.`],
+  };
+};
+
 // --- Death handlers ---
 
 const leySirenDeath: DeathHandler = (enemy, _killingBlow, ctx) => {
@@ -196,18 +320,70 @@ const genericAshDeath: DeathHandler = (enemy, _killingBlow, ctx) => {
   };
 };
 
+const spallDeath: DeathHandler = (enemy, _killingBlow, ctx) => {
+  if (enemy.rosterId !== 'spall') return { ...EMPTY_DEATH, squad: ctx.squad };
+  if (ctx.extras.playerDefendedThisTurn) {
+    return {
+      squad: ctx.squad,
+      logLines: [`>> ${enemy.designation} shrapnel contained — defend active.`],
+    };
+  }
+  return {
+    squad: ctx.squad,
+    logLines: [`>> ${enemy.designation} VOLATILE SHATTER — 12 shrapnel damage.`],
+    playerHpDelta: -12,
+    ashTokenSlot: enemy.gridSlot,
+  };
+};
+
+const thrallDeath: DeathHandler = (enemy, killingBlow, ctx) => {
+  if (enemy.rosterId !== 'thrall' || !enemy.unitId) return { ...EMPTY_DEATH, squad: ctx.squad };
+  const isHeavy = killingBlow.damage >= 25
+    || killingBlow.source === 'EVISCERATE'
+    || killingBlow.source === 'RUIN'
+    || killingBlow.source === 'GRAVE_BIND';
+  if (isHeavy) {
+    return {
+      squad: ctx.squad,
+      logLines: [`>> ${enemy.designation} TRUE DEATH — heavy blow confirmed.`],
+      ashTokenSlot: enemy.gridSlot,
+    };
+  }
+  const squad = patchUnitInSquad(ctx.squad, enemy.unitId, {
+    isSlumped: true,
+    slumpTurnsRemaining: 2,
+    currentHp: 0,
+  });
+  return {
+    squad,
+    logLines: [`>> ${enemy.designation} SLUMPS — requires heavy strike to finish.`],
+    delayDissolve: true,
+    enterSlump: true,
+  };
+};
+
 const TURN_START_HANDLERS: TurnStartHandler[] = [
+  thrallSlumpTurnStart,
   gutterGoliathTurnStart,
   spatialGlitchTurnStart,
+  golemVentTurnStart,
+  churnFleshAmmoTurnStart,
+  resonanceCasterTurnStart,
 ];
 
 const HIT_TAKEN_HANDLERS: HitTakenHandler[] = [
+  scuttlerHitTaken,
   echoingBruteHitTaken,
   nullShadeHitTaken,
   spatialGlitchHitTaken,
+  ironMaidenHitTaken,
+  golemHeatHitTaken,
+  slagBloodHitTaken,
 ];
 
 const DEATH_HANDLERS: DeathHandler[] = [
+  thrallDeath,
+  spallDeath,
   leySirenDeath,
   ashWeeperDeath,
   genericAshDeath,
@@ -250,6 +426,7 @@ export const CombatLifecycleManager = {
     let extras = ctx.extras;
     let statusFloatLabel: string | undefined;
     let statusFloatUnitId: string | undefined;
+    let playerHpDelta: number | undefined;
 
     for (const handler of TURN_START_HANDLERS) {
       const result = handler(enemy, { ...ctx, squad, extras });
@@ -260,6 +437,9 @@ export const CombatLifecycleManager = {
         statusFloatLabel = result.statusFloatLabel;
         statusFloatUnitId = result.statusFloatUnitId;
       }
+      if (result.playerHpDelta != null) {
+        playerHpDelta = (playerHpDelta ?? 0) + result.playerHpDelta;
+      }
     }
 
     return {
@@ -268,6 +448,7 @@ export const CombatLifecycleManager = {
       extras: extras !== ctx.extras ? extras : undefined,
       statusFloatLabel,
       statusFloatUnitId,
+      playerHpDelta,
     };
   },
 
@@ -283,6 +464,7 @@ export const CombatLifecycleManager = {
     let damageOverride: number | undefined;
     let showImmunePopup = false;
     let immunePopupUnitId: string | undefined;
+    let playerHpDelta: number | undefined;
 
     for (const handler of HIT_TAKEN_HANDLERS) {
       const result = handler(enemy, attack, { ...ctx, squad, extras });
@@ -295,6 +477,9 @@ export const CombatLifecycleManager = {
         showImmunePopup = true;
         immunePopupUnitId = result.immunePopupUnitId ?? enemy.unitId;
       }
+      if (result.playerHpDelta != null) {
+        playerHpDelta = (playerHpDelta ?? 0) + result.playerHpDelta;
+      }
     }
 
     return {
@@ -305,6 +490,7 @@ export const CombatLifecycleManager = {
       showImmunePopup,
       immunePopupUnitId,
       extras: extras !== ctx.extras ? extras : undefined,
+      playerHpDelta,
     };
   },
 
@@ -319,6 +505,8 @@ export const CombatLifecycleManager = {
     let delayDissolve = false;
     let triggerRetributionParry: DeathLifecycleResult['triggerRetributionParry'];
     let ashTokenSlot: DeathLifecycleResult['ashTokenSlot'];
+    let playerHpDelta: number | undefined;
+    let enterSlump = false;
 
     for (const handler of DEATH_HANDLERS) {
       const result = handler(enemy, killingBlow, { ...ctx, squad, extras });
@@ -328,6 +516,10 @@ export const CombatLifecycleManager = {
       if (result.delayDissolve) delayDissolve = true;
       if (result.triggerRetributionParry) triggerRetributionParry = result.triggerRetributionParry;
       if (result.ashTokenSlot) ashTokenSlot = result.ashTokenSlot;
+      if (result.playerHpDelta != null) {
+        playerHpDelta = (playerHpDelta ?? 0) + result.playerHpDelta;
+      }
+      if (result.enterSlump) enterSlump = true;
     }
 
     return {
@@ -337,6 +529,8 @@ export const CombatLifecycleManager = {
       triggerRetributionParry,
       ashTokenSlot,
       extras: extras !== ctx.extras ? extras : undefined,
+      playerHpDelta,
+      enterSlump,
     };
   },
 };
@@ -357,6 +551,11 @@ export function initRosterLifecycleDefaults(
     queuedAction: profile.queuedAction ?? null,
     isUntargetable: profile.isUntargetable ?? false,
     rosterAbilityCooldown: profile.rosterAbilityCooldown ?? 0,
+    isSlumped: profile.isSlumped ?? false,
+    slumpTurnsRemaining: profile.slumpTurnsRemaining ?? 0,
+    heatCharge: profile.heatCharge ?? 0,
+    resonanceStack: profile.resonanceStack ?? 0,
+    tetheredAllyUnitId: profile.tetheredAllyUnitId ?? null,
   };
 
   if (id === 'null-shade') {
@@ -364,6 +563,24 @@ export function initRosterLifecycleDefaults(
   }
 
   return next;
+}
+
+export function applyHookWeaverTetherAction(
+  squad: EnemyCombatProfile[],
+  weaver: EnemyCombatProfile,
+): { squad: EnemyCombatProfile[]; tetheredId: string | null; logLines: string[] } {
+  if (!weaver.unitId) return { squad, tetheredId: null, logLines: [] };
+  const frontline = aliveUnits(squad).filter(
+    (u) => u.unitId !== weaver.unitId && u.gridSlot?.startsWith('FL'),
+  );
+  const target = frontline[Math.floor(Math.random() * frontline.length)] ?? null;
+  if (!target?.unitId) return { squad, tetheredId: null, logLines: [] };
+  const nextSquad = patchUnitInSquad(squad, weaver.unitId, { tetheredAllyUnitId: target.unitId });
+  return {
+    squad: nextSquad,
+    tetheredId: target.unitId,
+    logLines: [`>> ${weaver.designation} STAMINA TETHER — ${target.designation} linked.`],
+  };
 }
 
 export function applyLeySirenTetherAction(

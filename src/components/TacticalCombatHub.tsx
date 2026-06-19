@@ -90,7 +90,7 @@ import {
   stackDoomedTag,
 } from '../data/combatFractureEngine';
 import type { BlueprintId } from '../types/equipmentBlueprint';
-import { CombatLifecycleManager, applyLeySirenTetherAction } from '../data/combatLifecycleEngine';
+import { CombatLifecycleManager, applyHookWeaverTetherAction, applyLeySirenTetherAction } from '../data/combatLifecycleEngine';
 import { isRosterSpecificIntent, isNullShadeVoidAmbush, nullShadeVoidAmbushCleanupPatch, patchRosterAfterIntentExec, resolveRosterEnemyDamage, ROSTER_AI_WEIGHTS, syncRosterCombatState, VOID_AMBUSH_CRIT_CHANCE, VOID_AMBUSH_INTERRUPT_THRESHOLD } from '../data/combatRosterActions';
 import type { PlayerCombatState } from '../types/combatLifecycle';
 import type { CombatSessionExtras } from '../types/combatHooks';
@@ -532,6 +532,23 @@ export default function TacticalCombatHub({
       structuredDebuffs: patch.structuredDebuffs ?? sessionExtrasRef.current.structuredDebuffs,
     };
     sessionExtrasRef.current.playerDebuffs = sessionExtrasRef.current.structuredDebuffs.map((d) => d.type);
+  };
+
+  const applyLifecyclePlayerDelta = (delta?: number) => {
+    if (delta == null || delta === 0) return;
+    setOperativeHp((prev) => {
+      const next = Math.max(0, Math.min(maxSoulAnchor, prev + delta));
+      operativeHpRef.current = next;
+      return next;
+    });
+  };
+
+  const smogCallerActive = () =>
+    aliveUnits(squadRef.current).some((u) => u.rosterId === 'smog-caller');
+
+  const hookWeaverTetheredUnitId = () => {
+    const weaver = aliveUnits(squadRef.current).find((u) => u.rosterId === 'hook-weaver');
+    return weaver?.tetheredAllyUnitId ?? sessionExtrasRef.current.hookWeaverTetheredUnitId;
   };
 
   const hasAshOnBoard = () => Object.keys(sessionExtrasRef.current.ashTokens).length > 0;
@@ -1356,6 +1373,14 @@ export default function TacticalCombatHub({
       log(msg ?? `>> ENEMY STRIKE — ${dmg} DAMAGE DEALT`);
     }
     if (dmg > 0) {
+      if (
+        hasStructuredDebuff(sessionExtrasRef.current, 'SEARING')
+        && options?.attacker?.rosterId !== 'splinter'
+      ) {
+        const burst = 8;
+        dmg += burst;
+        log(`[SEARING] >> Secondary burst — +${burst} damage.`);
+      }
       Vibration.vibrate([0, 32, 48, 28]);
       if (arenaLayout && !options?.skipStrikeFx) {
         playerViewportRef?.current?.triggerDamageEffect('hp');
@@ -1595,6 +1620,7 @@ export default function TacticalCombatHub({
       );
       hitLifecycle.logLines.forEach((line) => log(line));
       applyLifecycleExtras(hitLifecycle.extras);
+      applyLifecyclePlayerDelta(hitLifecycle.playerHpDelta);
       if (hitLifecycle.squad.length > 0) syncSquad(hitLifecycle.squad);
       working = getUnitById(squadRef.current, e.unitId!) ?? working;
       if (hitLifecycle.negateDamage) dmg = 0;
@@ -1647,13 +1673,19 @@ export default function TacticalCombatHub({
     if (hp <= 0 && e.unitId && source && options?.channel) {
       const deathLifecycle = CombatLifecycleManager.runOnDeath(
         working,
-        { channel: options.channel, damage: dmg },
+        { channel: options.channel, damage: dmg, source: source ?? undefined },
         buildLifecycleContext(),
       );
       deathLifecycle.logLines.forEach((line) => log(line));
       applyLifecycleExtras(deathLifecycle.extras);
+      applyLifecyclePlayerDelta(deathLifecycle.playerHpDelta);
       if (deathLifecycle.squad.length > 0) syncSquad(deathLifecycle.squad);
       working = getUnitById(squadRef.current, e.unitId) ?? working;
+
+      if (deathLifecycle.enterSlump) {
+        patchUnit(e.unitId, working);
+        return true;
+      }
 
       if (deathLifecycle.ashTokenSlot) {
         sessionExtrasRef.current.ashTokens = {
@@ -1676,6 +1708,11 @@ export default function TacticalCombatHub({
     }
 
     if (source && dmg > 0 && e.unitId) {
+      const tetheredId = hookWeaverTetheredUnitId();
+      if (tetheredId && tetheredId === e.unitId) {
+        applyStamina(Math.max(0, staminaRef.current - 10));
+        log('>> HOOK WEAVER TETHER — 10 stamina siphoned.');
+      }
       hitFlashSeqRef.current[e.unitId] = (hitFlashSeqRef.current[e.unitId] ?? 0) + 1;
       Vibration.vibrate(18);
       if (equippedBlueprintId) {
@@ -2262,6 +2299,76 @@ export default function TacticalCombatHub({
         log(`>> ${e.designation} ASHEN ROT — buff/defend actions cost stamina.`);
         break;
       }
+      case 'ARTILLERY_CHARGE':
+        log(`>> ${e.designation} ARTILLERY CHARGE — ordnance priming.`);
+        break;
+      case 'LASER_SIGHT': {
+        addStructuredDebuff(sessionExtrasRef.current, {
+          type: 'LASER_SIGHT',
+          turnsRemaining: 1,
+        });
+        log(`>> ${e.designation} LASER SIGHT — true damage lock acquired.`);
+        break;
+      }
+      case 'ARTILLERY_FIRE': {
+        const isSapper = e.rosterId === 'sapper';
+        const isSniper = e.rosterId === 'coil-spike-sniper';
+        const dmg = resolveRosterEnemyDamage(e, 'ARTILLERY_FIRE');
+        if (isSapper) {
+          sessionExtrasRef.current.playerShield = 0;
+          sessionExtrasRef.current.playerShieldTurnsRemaining = 0;
+          log(`>> ${e.designation} BUNKER BUSTER — shields stripped, ${dmg} unblockable.`);
+          hurtPlayer(dmg, true, `>> BUNKER BUSTER — ${dmg}`, { attacker: e, rollCrit: false });
+        } else if (isSniper) {
+          log(`>> ${e.designation} TRUE SHOT — ${dmg} (armor bypassed).`);
+          hurtPlayer(dmg, true, `>> TRUE SHOT — ${dmg}`, { attacker: e, rollCrit: false });
+        } else if (e.rosterId === 'splinter') {
+          const chip = Math.max(4, Math.floor(dmg * 0.35));
+          hurtPlayer(chip, false, `>> SEARING LASER — ${chip}`, { attacker: e });
+          addStructuredDebuff(sessionExtrasRef.current, {
+            type: 'SEARING',
+            turnsRemaining: 3,
+          });
+          log(`>> ${e.designation} SEARING MARK applied.`);
+        } else {
+          log(`>> ${e.designation} ARTILLERY FIRE — ${dmg}.`);
+          hurtPlayer(dmg, false, `>> ARTILLERY — ${dmg}`, { attacker: e });
+        }
+        break;
+      }
+      case 'TAR_BIND': {
+        const dmg = resolveRosterEnemyDamage(e, 'TAR_BIND');
+        hurtPlayer(dmg, false, `>> TAR BIND — ${dmg}`, { attacker: e });
+        addStructuredDebuff(sessionExtrasRef.current, {
+          type: 'ROOTED',
+          turnsRemaining: 1,
+        });
+        log(`>> ${e.designation} ROOTED — defend/evade disabled.`);
+        break;
+      }
+      case 'STAMINA_TETHER': {
+        const tether = applyHookWeaverTetherAction(squadRef.current, e);
+        syncSquad(tether.squad);
+        sessionExtrasRef.current = {
+          ...sessionExtrasRef.current,
+          hookWeaverTetheredUnitId: tether.tetheredId,
+        };
+        tether.logLines.forEach((line) => log(line));
+        break;
+      }
+      case 'JAM_AUGMENT': {
+        const slot = Math.floor(Math.random() * 3);
+        sessionExtrasRef.current = {
+          ...sessionExtrasRef.current,
+          jammedAugmentSlot: slot,
+        };
+        addStructuredDebuff(sessionExtrasRef.current, {
+          type: 'JAMMED_AUGMENT',
+          turnsRemaining: 2,
+        });
+        log(`>> ${e.designation} JAMMED AUGMENT — loadout slot ${slot + 1} disabled.`);
+        break;
+      }
       default: break;
     }
     const rosterPatch = patchRosterAfterIntentExec(e, e.intent);
@@ -2436,6 +2543,7 @@ export default function TacticalCombatHub({
     const turnStart = CombatLifecycleManager.runOnTurnStart(unit, buildLifecycleContext());
     turnStart.logLines.forEach((line) => log(line));
     applyLifecycleExtras(turnStart.extras);
+    applyLifecyclePlayerDelta(turnStart.playerHpDelta);
     if (turnStart.squad.length > 0) syncSquad(turnStart.squad);
     if (turnStart.statusFloatLabel && turnStart.statusFloatUnitId) {
       statusFloatSeqRef.current[turnStart.statusFloatUnitId] =
@@ -2824,11 +2932,17 @@ export default function TacticalCombatHub({
           if (eradicated) return;
           break;
         }
-        const overdraw = staminaRef.current < strikeStats.strikeStaminaCost;
+        let strikeStaminaCost = strikeStats.strikeStaminaCost;
+        const strikeTarget = enemyRef.current;
+        if (smogCallerActive() && strikeTarget?.gridSlot?.startsWith('FL')) {
+          strikeStaminaCost *= 2;
+          log('>> SMOG CALLER — choking hazard doubles melee stamina cost.');
+        }
+        const overdraw = staminaRef.current < strikeStaminaCost;
         if (overdraw) {
           markExhausted();
           log(`[EXHAUSTED] >> Overexertion strike — ${strikeStats.exhaustedStrikeDamage} damage.`);
-        } else if (!spendStam(strikeStats.strikeStaminaCost)) {
+        } else if (!spendStam(strikeStaminaCost)) {
           log('[REJECTED] >> Insufficient stamina.');
           playerApRef.current += def.apCost;
           setPlayerActionPoints(playerApRef.current);
@@ -3494,6 +3608,12 @@ export default function TacticalCombatHub({
 
   const isAbilityEnabled = (abilityId: AegisAbilityId): boolean => {
     if (!isPlayerTurn || cycleState !== 'TEXT_COMBAT' || shadowstepProcRef.current) return false;
+    if (hasStructuredDebuff(sessionExtrasRef.current, 'ROOTED')
+      && (abilityId === 'WRAITH_PARRY' || abilityId === 'SHADOW_STEP')) {
+      return false;
+    }
+    const jammedSlot = sessionExtrasRef.current.jammedAugmentSlot;
+    if (jammedSlot != null && aegisLoadout[jammedSlot] === abilityId) return false;
     const def = getAbilityDefinition(abilityId);
     if (playerActionPoints < def.apCost) return false;
     switch (abilityId) {

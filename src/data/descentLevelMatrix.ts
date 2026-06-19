@@ -7,8 +7,10 @@ import {
 } from '../types/sector';
 import { rollProbableAffinity } from './combatEnvironmentEngine';
 import type { DistrictId } from './districtPacing';
-import { localLevelFromDepth } from './districtPacing';
-import { isDistrictGateDepth } from './districtPacing';
+import { isDistrictGateDepth, localLevelFromDepth } from './districtPacing';
+import type { RunSegmentState } from './encounterGenerator';
+import { isAlphaDuelLevel, isBreathingRoomLevel } from './encounterGenerator';
+import type { BreathingRoomKind } from './encounterGenerator';
 
 export type MatrixSpawnKind =
   | 'STANDARD_COMBAT'
@@ -350,6 +352,13 @@ export interface MaterializeLevelClusterParams {
   sectorTier: number;
   lastLevelOfferedCombat: boolean;
   seed?: string;
+  runSegment?: RunSegmentState | null;
+}
+
+function breathingRoomToMatrixKind(kind: BreathingRoomKind): MatrixSpawnKind {
+  if (kind === 'BLACK_MARKET') return 'BLACK_MARKET';
+  if (kind === 'VEIL_BLEED_BOON') return 'VEIL_BLEED_BOON';
+  return 'FACTION_VAULT_HIGH';
 }
 
 /** Roll forward-vector options for the upcoming depth using the 15-level golden rules matrix. */
@@ -361,12 +370,27 @@ export function materializeLevelCluster(params: MaterializeLevelClusterParams): 
     sectorTier,
     lastLevelOfferedCombat,
     seed = `matrix:${graphDepth}:${district}`,
+    runSegment = null,
   } = params;
 
   const localLevel = localLevelFromDepth(graphDepth);
   const spec = LEVEL_MATRIX[localLevel] ?? LEVEL_MATRIX[3];
   const rand = seededRandom(seed);
   const stepIndex = nodesCleared;
+
+  if (runSegment && isBreathingRoomLevel(runSegment, localLevel)) {
+    const roll = rand();
+    const breathingKind: BreathingRoomKind =
+      roll < 0.4 ? 'BLACK_MARKET' : roll < 0.8 ? 'VEIL_BLEED_BOON' : 'RESOURCE_HARVEST';
+    const kind = breathingRoomToMatrixKind(breathingKind);
+    return [makeMatrixNode(kind, graphDepth, district, localLevel, 0, stepIndex, sectorTier, seed)];
+  }
+
+  if (runSegment && isAlphaDuelLevel(runSegment, localLevel)) {
+    return [
+      makeMatrixNode('ELITE_COMBAT', graphDepth, district, localLevel, 0, stepIndex, sectorTier, seed),
+    ];
+  }
 
   const choiceCount = spec.minChoices === spec.maxChoices
     ? spec.minChoices

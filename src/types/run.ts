@@ -36,7 +36,14 @@ export type EnemyIntent =
   | 'SENSORY_JAM'
   | 'VEIL_BARRIER'
   | 'TARGET_LOCK'
-  | 'ASHEN_ROT';
+  | 'ASHEN_ROT'
+  | 'ARTILLERY_CHARGE'
+  | 'ARTILLERY_FIRE'
+  | 'TAR_BIND'
+  | 'LASER_SIGHT'
+  | 'STAMINA_TETHER'
+  | 'JAM_AUGMENT'
+  | 'MEMORY_LEECH';
 
 /** Reactive combat debuffs derived from resource pools (stamina === 0 → EXHAUSTED). */
 export type CombatStatusEffect = 'EXHAUSTED';
@@ -136,7 +143,16 @@ export interface EnemyCombatProfile {
   /** Hit-based shield — absorbs one full strike per charge. */
   veilBarrierCharges?: number;
   /** Spawn archetype for target-lock / placement rules. */
-  spawnArchetype?: 'MELEE' | 'SUPPORT' | 'RANGED' | 'HEAVY';
+  spawnArchetype?: 'MELEE' | 'SUPPORT' | 'RANGED' | 'HEAVY' | 'ARTILLERY';
+  /** Thrall — fleshy resilience slump state. */
+  isSlumped?: boolean;
+  slumpTurnsRemaining?: number;
+  /** Golem venting core heat accumulator. */
+  heatCharge?: number;
+  /** Resonance Caster stacking damage buff count. */
+  resonanceStack?: number;
+  /** Hook Weaver tether target unit id. */
+  tetheredAllyUnitId?: string | null;
 }
 
 export interface Trinket {

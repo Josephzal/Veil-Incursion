@@ -35,6 +35,21 @@ const ROSTER_PORTRAITS: Partial<Record<EnemyRosterId, ImageSourcePropType>> = {
   'null-shade': NullShade,
   'spatial-glitch': SpatialGlitch,
   'boss-hollowed-precinct': HollowedPrecinct,
+  'spall': NullShade,
+  'scuttler': NullShade,
+  'thrall': NullShade,
+  'hook-weaver': NullShade,
+  'memory-leech': NullShade,
+  'smog-caller': NullShade,
+  'iron-maiden': NullShade,
+  'golem': NullShade,
+  'slag-blood': NullShade,
+  'sapper': NullShade,
+  'coil-spike-sniper': NullShade,
+  'resonance-caster': NullShade,
+  'tar-spitter': NullShade,
+  'churn': NullShade,
+  'splinter': NullShade,
 };
 
 const ROSTER_ATTACK_PORTRAITS: Partial<Record<EnemyRosterId, ImageSourcePropType>> = {
@@ -47,6 +62,21 @@ const ROSTER_ATTACK_PORTRAITS: Partial<Record<EnemyRosterId, ImageSourcePropType
   'null-shade': NullShadeAttacking,
   'spatial-glitch': SpatialGlitchAttacking,
   'boss-hollowed-precinct': HollowedPrecinctAttacking,
+  'spall': NullShadeAttacking,
+  'scuttler': NullShadeAttacking,
+  'thrall': NullShadeAttacking,
+  'hook-weaver': NullShadeAttacking,
+  'memory-leech': NullShadeAttacking,
+  'smog-caller': NullShadeAttacking,
+  'iron-maiden': NullShadeAttacking,
+  'golem': NullShadeAttacking,
+  'slag-blood': NullShadeAttacking,
+  'sapper': NullShadeAttacking,
+  'coil-spike-sniper': NullShadeAttacking,
+  'resonance-caster': NullShadeAttacking,
+  'tar-spitter': NullShadeAttacking,
+  'churn': NullShadeAttacking,
+  'splinter': NullShadeAttacking,
 };
 
 export function resolveRosterPortrait(rosterId?: string | null): ImageSourcePropType {

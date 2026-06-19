@@ -3,6 +3,7 @@ import { ADJACENT_SLOTS, FRONTLINE_SLOTS } from '../types/combatGrid';
 import type { EnemyCombatProfile } from '../types/run';
 
 export function isUnitAlive(unit: EnemyCombatProfile): boolean {
+  if (unit.isSlumped && (unit.slumpTurnsRemaining ?? 0) > 0) return true;
   return unit.currentHp > 0;
 }
 

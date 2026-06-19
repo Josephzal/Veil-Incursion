@@ -18,11 +18,14 @@ export const ROSTER_ENRAGE_THRESHOLDS = {
   'echoing-brute': { mode: 'absolute' as const, value: 20 },
   'ash-weeper': { mode: 'absolute' as const, value: 15 },
   'fracture-hound': { mode: 'ratio' as const, value: 0.35 },
+  'slag-blood': { mode: 'ratio' as const, value: 0.30 },
 } as const;
 
 export const ROSTER_QUEUED_ACTION = {
   SLAM: 'SLAM',
   VOID_AMBUSH: 'VOID_AMBUSH',
+  BUNKER_BUSTER: 'BUNKER_BUSTER',
+  LASER_FIRE: 'LASER_FIRE',
 } as const;
 
 export type RosterQueuedAction =
@@ -52,6 +55,21 @@ const ROSTER_INTENTS: Partial<Record<string, EnemyIntent[]>> = {
   'fracture-hound': ['STRIKE'],
   'null-shade': ['SINKING_INTO_GRID', 'VOID_AMBUSH', 'STRIKE', 'EVADE', 'VEIL_BARRIER', 'ASHEN_ROT'],
   'spatial-glitch': ['STRIKE', 'SENSORY_JAM', 'FORTIFY', 'SIPHON_ABYSSAL'],
+  'spall': ['STRIKE'],
+  'scuttler': ['STRIKE', 'EVADE'],
+  'thrall': ['STRIKE'],
+  'hook-weaver': ['STAMINA_TETHER', 'STRIKE'],
+  'memory-leech': ['JAM_AUGMENT', 'STRIKE'],
+  'smog-caller': ['STRIKE', 'SIPHON_ABYSSAL'],
+  'iron-maiden': ['STRIKE', 'FORTIFY'],
+  'golem': ['STRIKE', 'FORTIFY'],
+  'slag-blood': ['STRIKE', 'DOUBLE_STRIKE'],
+  'sapper': ['ARTILLERY_CHARGE', 'ARTILLERY_FIRE', 'STRIKE'],
+  'coil-spike-sniper': ['LASER_SIGHT', 'ARTILLERY_FIRE', 'STRIKE'],
+  'resonance-caster': ['ARTILLERY_CHARGE', 'ARTILLERY_FIRE'],
+  'tar-spitter': ['ARTILLERY_CHARGE', 'TAR_BIND', 'STRIKE'],
+  'churn': ['STRIKE'],
+  'splinter': ['ARTILLERY_CHARGE', 'ARTILLERY_FIRE', 'STRIKE'],
 };
 
 function isHpBelowEnrageThreshold(profile: EnemyCombatProfile, rosterId: string): boolean {
@@ -86,6 +104,15 @@ export function syncRosterCombatState(profile: EnemyCombatProfile): EnemyCombatP
       ...next,
       kineticArmor: 0,
       occultWards: 0,
+    };
+  }
+
+  if (rosterId === 'slag-blood' && next.isEnraged) {
+    next = {
+      ...next,
+      kineticArmor: 0,
+      occultWards: 0,
+      baseDamage: Math.floor((profile.baseDamage ?? next.baseDamage) * 2),
     };
   }
 
@@ -154,6 +181,22 @@ function resolveForcedRosterIntent(profile: EnemyCombatProfile): EnemyIntent | n
     if (profile.queuedAction === ROSTER_QUEUED_ACTION.VOID_AMBUSH) {
       return 'VOID_AMBUSH';
     }
+  }
+
+  const artilleryIds = [
+    'sapper', 'coil-spike-sniper', 'resonance-caster', 'tar-spitter', 'splinter',
+  ];
+  if (rosterId && artilleryIds.includes(rosterId)) {
+    if (profile.queuedAction === ROSTER_QUEUED_ACTION.BUNKER_BUSTER
+      || profile.queuedAction === ROSTER_QUEUED_ACTION.LASER_FIRE) {
+      return 'ARTILLERY_FIRE';
+    }
+    if (profile.isCharging) return 'ARTILLERY_FIRE';
+    if (rosterId === 'coil-spike-sniper' && !profile.isCharging && profile.queuedAction !== ROSTER_QUEUED_ACTION.LASER_FIRE) {
+      return 'LASER_SIGHT';
+    }
+    if (rosterId === 'tar-spitter' && profile.isCharging) return 'TAR_BIND';
+    return 'ARTILLERY_CHARGE';
   }
 
   if (rosterId === 'echoing-brute' && profile.isEnraged) {
@@ -232,5 +275,11 @@ export function isRosterSpecificIntent(intent: EnemyIntent): boolean {
     || intent === 'SENSORY_JAM'
     || intent === 'VEIL_BARRIER'
     || intent === 'TARGET_LOCK'
-    || intent === 'ASHEN_ROT';
+    || intent === 'ASHEN_ROT'
+    || intent === 'ARTILLERY_CHARGE'
+    || intent === 'ARTILLERY_FIRE'
+    || intent === 'TAR_BIND'
+    || intent === 'LASER_SIGHT'
+    || intent === 'STAMINA_TETHER'
+    || intent === 'JAM_AUGMENT';
 }

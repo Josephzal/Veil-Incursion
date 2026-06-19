@@ -25,6 +25,7 @@ export interface AttackData {
 export interface KillingBlowData {
   channel: DamageChannel;
   damage: number;
+  source?: string;
 }
 
 export interface CombatLifecycleContext {
@@ -40,6 +41,7 @@ export interface TurnStartLifecycleResult {
   /** Optional floating status label (e.g. goliath regenerate). */
   statusFloatLabel?: string;
   statusFloatUnitId?: string;
+  playerHpDelta?: number;
 }
 
 export interface HitTakenLifecycleResult {
@@ -50,6 +52,9 @@ export interface HitTakenLifecycleResult {
   showImmunePopup?: boolean;
   immunePopupUnitId?: string;
   extras?: Partial<CombatSessionExtras>;
+  playerHpDelta?: number;
+  /** Scuttler counter-attack after dodge. */
+  scuttlerCounter?: boolean;
 }
 
 export interface DeathLifecycleResult {
@@ -63,6 +68,9 @@ export interface DeathLifecycleResult {
   extras?: Partial<CombatSessionExtras>;
   /** Leave ash token at dead unit's grid slot for scavengers. */
   ashTokenSlot?: import('./combatGrid').CombatGridSlotId;
+  playerHpDelta?: number;
+  /** Thrall slump — keep unit on grid instead of dissolving. */
+  enterSlump?: boolean;
 }
 
 export type TurnStartHandler = (

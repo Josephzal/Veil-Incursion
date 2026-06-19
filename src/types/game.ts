@@ -375,6 +375,8 @@ export interface ActiveIncursionState {
   sanctuarySchedule: import('../data/sanctuaryScheduleEngine').SanctuarySchedule;
   /** Cumulative strike damage bonus from sanctuary upgrades (%). Stacks per visit. */
   strikeDamageBonusPct: number;
+  /** Per-district encounter pacing — alpha duel index, anti-repetition history. */
+  runSegment: import('../data/encounterGenerator').RunSegmentState | null;
 }
 
 export function createDefaultEnvironmentalModifiers(): EnvironmentalModifiers {
@@ -446,5 +448,6 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     godModeActive: false,
     sanctuarySchedule: { 1: [14], 2: [14], 3: [14] },
     strikeDamageBonusPct: 0,
+    runSegment: null,
   };
 }

@@ -5,6 +5,7 @@ import { applyDiagonalStaggerToProfiles } from './combatGridPlacement';
 import { initEnemyCombatLayers } from './combatFractureEngine';
 import { isDistrictGateDepth, depthFromNodesCleared, getDistrictFromDepth } from './districtPacing';
 import { resolveSpawnSlotsForDepth } from './levelEncounterData';
+import type { RunSegmentState } from './encounterGenerator';
 import { apexResonanceAmbushComposition, entriesFromComposition } from './encounterCompositionEngine';
 import type { EnemyCombatProfile, SectorDefinition } from '../types/run';
 import type { DistrictId } from './districtPacing';
@@ -41,6 +42,8 @@ export interface SpawnSquadOptions {
   spawnOptions?: SpawnEnemyOptions;
   unitCount?: number;
   district?: DistrictId;
+  runSegment?: RunSegmentState | null;
+  encounterSeed?: string;
 }
 
 /** Spawns from LEVEL_DATA encounter layouts (levels 1–45). Boss gates return empty — bosses use district boss flow. */
@@ -52,7 +55,11 @@ export function spawnCombatSquad(options: SpawnSquadOptions): EnemyCombatProfile
     return [];
   }
 
-  let slotAssignments = resolveSpawnSlotsForDepth(depth);
+  let slotAssignments = resolveSpawnSlotsForDepth(
+    depth,
+    options.runSegment ?? undefined,
+    options.encounterSeed,
+  );
 
   if (slotAssignments.length === 0 && options.isAmbush) {
     const ambush = entriesFromComposition(apexResonanceAmbushComposition());

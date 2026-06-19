@@ -8,7 +8,11 @@ export type PlayerDebuffId =
   | 'ECHO_DEBUFF'
   | 'SENSORY_JAMMED'
   | 'TARGET_LOCKED'
-  | 'ASHEN_ROT';
+  | 'ASHEN_ROT'
+  | 'JAMMED_AUGMENT'
+  | 'ROOTED'
+  | 'SEARING'
+  | 'LASER_SIGHT';
 
 export interface StructuredPlayerDebuff {
   type: PlayerDebuffId;
@@ -81,6 +85,10 @@ export interface CombatSessionExtras {
   ashTokens: Partial<Record<CombatGridSlotId, AshBoardToken>>;
   /** Player guarded or dodged this turn — clears echo debuff. */
   playerDefendedThisTurn: boolean;
+  /** Hook Weaver — stamina drain when damaging tethered ally. */
+  hookWeaverTetheredUnitId: string | null;
+  /** Memory Leech — disabled augment slot index (0–2). */
+  jammedAugmentSlot: number | null;
 }
 
 export function createDefaultCombatSessionExtras(): CombatSessionExtras {
@@ -99,6 +107,8 @@ export function createDefaultCombatSessionExtras(): CombatSessionExtras {
     narrativeVeilWardActive: false,
     ashTokens: {},
     playerDefendedThisTurn: false,
+    hookWeaverTetheredUnitId: null,
+    jammedAugmentSlot: null,
   };
 }
 

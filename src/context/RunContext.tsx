@@ -178,6 +178,7 @@ import {
   VEIL_STALKER_AMBUSH_CHANCE,
 } from '../types/sector';
 import { rollSanctuarySchedule } from '../data/sanctuaryScheduleEngine';
+import { createRunSegment, applyEncounterToSegment, generateNodeEncounter } from '../data/encounterGenerator';
 import { districtBossLogLine } from '../data/districtBosses';
 import { spawnDistrictBossSquad } from '../data/bossCombat';
 import { createDefaultIncursionInventory } from '../data/incursionInventory';
@@ -378,6 +379,7 @@ function buildSectorCluster(inc: ActiveIncursionState): IncursionNode[] {
     macroBiomeFamily: inc.currentMacroBiomeFamily,
     lastLevelOfferedCombat: inc.lastLevelOfferedCombat,
     sanctuarySchedule: inc.sanctuarySchedule,
+    runSegment: inc.runSegment,
   };
   if (inc.nodesCleared >= MAX_SECTOR_NODES && !inc.collapseActive && !inc.bossDefeated) {
     return buildScannerCluster(clusterOptions).filter((node) => node.isExtractionNode);
@@ -488,6 +490,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const sectorInit = initializeSectorRun(sectorTier);
     const initialBiome = rollMacroBiomeStep(0, null, `run-start:${sectorTier}`);
     const sanctuarySchedule = rollSanctuarySchedule(`run:${Date.now()}:${sectorTier}`);
+    const runSeed = `run:${Date.now()}:${sectorTier}`;
+    const initialRunSegment = createRunSegment(1, runSeed);
     const incursion: ActiveIncursionState = {
       ...createDefaultActiveIncursionState(),
       isRunActive: true,
@@ -534,6 +538,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       cargo: createStarterCargoRunState(),
       sanctuarySchedule,
       strikeDamageBonusPct: 0,
+      runSegment: initialRunSegment,
     };
     const expandedIncursion = persistExpandedSectorGraph(incursion);
     activeIncursionRef.current = expandedIncursion;
@@ -553,6 +558,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       formatMacroBiomeLogLine(initialBiome),
       `>> ${clusterDef.tagline}`,
       `>> SANCTUARY SCHEDULE — D1:[${sanctuarySchedule[1].join(',')}] D2:[${sanctuarySchedule[2].join(',')}] D3:[${sanctuarySchedule[3].join(',')}]`,
+      `>> ALPHA DUEL INDEX — D1 NODE ${initialRunSegment.alphaNodeIndex}`,
       ...sectorInit.initLogLines,
     ]);
   }, []);
@@ -705,6 +711,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
           nodeIndex,
           isAmbush: prev.pendingAmbush,
           district: getDistrictFromDepth(depthFromNodesCleared(nodeIndex)),
+          runSegment: activeIncursionRef.current.runSegment,
         })
         : [];
     const pendingEnemy = pendingEnemies[0] ?? null;
@@ -1739,6 +1746,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       isElite,
       isAmbush: prev.pendingAmbush,
       district,
+      runSegment: inc.runSegment,
+      encounterSeed: `engage:${inc.nodesCleared}:${encounterNode.id}`,
       spawnOptions: {
         resonancePercent: inc.resonance.percent,
         forcedAffinity,
@@ -1939,6 +1948,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const lastLevelOfferedCombat = clusterOffersCombat(offeredCluster);
     const completedNode = inc.encounterPath[inc.nodesCleared] ?? resolveActiveVectorNode(inc);
     const completedIndex = inc.nodesCleared;
+    const clearedDepth = depthFromNodesCleared(completedIndex);
 
     const encounterPath = inc.encounterPath.map((node, index) =>
       index === completedIndex ? { ...node, isCompleted: true } : node,
@@ -1983,6 +1993,23 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       `node-clear:${nextNodesCleared}:${completedNode?.id ?? 'step'}`,
     );
     const districtChanged = nextDistrict !== inc.currentDistrict;
+
+    let nextRunSegment = inc.runSegment;
+    const wasCombat =
+      completedNode?.type === 'STANDARD_COMBAT' || completedNode?.type === 'ELITE_COMBAT';
+    if (wasCombat && inc.runSegment) {
+      const generated = generateNodeEncounter(
+        clearedDepth,
+        inc.runSegment,
+        `clear:${completedIndex}:${completedNode?.id ?? 'node'}`,
+      );
+      nextRunSegment = applyEncounterToSegment(inc.runSegment, generated.encounterId);
+    }
+    if (wasBoss && isDistrictGateDepth(clearedDepth) && nextDistrict !== inc.currentDistrict) {
+      nextRunSegment = createRunSegment(nextDistrict, `district:${nextDistrict}:${nextNodesCleared}`);
+      appendRunLog(`>> ALPHA DUEL INDEX — D${nextDistrict} NODE ${nextRunSegment.alphaNodeIndex}`);
+    }
+
     const nextOverworldSession = generateOverworldFeatures(
       nextNodesCleared,
       nextDistrict,
@@ -2002,6 +2029,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       sectorGraph: nextSectorGraph,
       currentNodeId: resolvedNextNodeId,
       nodesCleared: nextNodesCleared,
+      runSegment: nextRunSegment,
       boundRequisition: chalkWardRuntime ?? expandedInc.boundRequisition,
       currentDepth: nextDepth,
       currentDistrict: nextDistrict,
@@ -2041,7 +2069,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
 
-    const clearedDepth = depthFromNodesCleared(completedIndex);
     const enteringSafehouse = wasBoss && isDistrictGateDepth(clearedDepth);
 
     const incWithMode: ActiveIncursionState = enteringSafehouse

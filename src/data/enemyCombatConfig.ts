@@ -2,7 +2,6 @@ import type { DistrictId } from './districtPacing';
 import { getDistrictFromDepth } from './districtPacing';
 import type { EnemyRosterId } from './enemyRoster';
 
-/** Spec alias keys — mapped to roster ids via ENCOUNTER_ENEMY_KEYS. */
 export type EncounterEnemyKey =
   | 'FRACTURE_HOUND'
   | 'ECHOING_BRUTE'
@@ -13,9 +12,24 @@ export type EncounterEnemyKey =
   | 'SPATIAL_GLITCH'
   | 'GUTTER_GOLIATH'
   | 'CONCRETE_GARGOYLE'
-  | 'RIOT_VANGUARD';
+  | 'RIOT_VANGUARD'
+  | 'SPALL'
+  | 'SCUTTLER'
+  | 'THRALL'
+  | 'HOOK_WEAVER'
+  | 'MEMORY_LEECH'
+  | 'SMOG_CALLER'
+  | 'IRON_MAIDEN'
+  | 'GOLEM'
+  | 'SLAG_BLOOD'
+  | 'SAPPER'
+  | 'COIL_SPIKE_SNIPER'
+  | 'RESONANCE_CASTER'
+  | 'TAR_SPITTER'
+  | 'CHURN'
+  | 'SPLINTER';
 
-export type EnemySpawnArchetype = 'MELEE' | 'SUPPORT' | 'RANGED' | 'HEAVY';
+export type EnemySpawnArchetype = 'MELEE' | 'SUPPORT' | 'RANGED' | 'HEAVY' | 'ARTILLERY';
 
 export const ENCOUNTER_KEY_TO_ROSTER: Record<EncounterEnemyKey, EnemyRosterId> = {
   FRACTURE_HOUND: 'fracture-hound',
@@ -28,6 +42,21 @@ export const ENCOUNTER_KEY_TO_ROSTER: Record<EncounterEnemyKey, EnemyRosterId> =
   GUTTER_GOLIATH: 'gutter-goliath',
   CONCRETE_GARGOYLE: 'concrete-gargoyle',
   RIOT_VANGUARD: 'echoing-brute',
+  SPALL: 'spall',
+  SCUTTLER: 'scuttler',
+  THRALL: 'thrall',
+  HOOK_WEAVER: 'hook-weaver',
+  MEMORY_LEECH: 'memory-leech',
+  SMOG_CALLER: 'smog-caller',
+  IRON_MAIDEN: 'iron-maiden',
+  GOLEM: 'golem',
+  SLAG_BLOOD: 'slag-blood',
+  SAPPER: 'sapper',
+  COIL_SPIKE_SNIPER: 'coil-spike-sniper',
+  RESONANCE_CASTER: 'resonance-caster',
+  TAR_SPITTER: 'tar-spitter',
+  CHURN: 'churn',
+  SPLINTER: 'splinter',
 };
 
 type StatKey = keyof typeof ENEMY_BASE_STATS;
@@ -42,21 +71,52 @@ const ROSTER_STAT_KEY: Record<EnemyRosterId, StatKey | null> = {
   'spatial-glitch': 'SPATIAL_GLITCH',
   'gutter-goliath': 'GUTTER_GOLIATH',
   'concrete-gargoyle': 'CONCRETE_GARGOYLE',
+  'spall': 'SPALL',
+  'scuttler': 'SCUTTLER',
+  'thrall': 'THRALL',
+  'hook-weaver': 'HOOK_WEAVER',
+  'memory-leech': 'MEMORY_LEECH',
+  'smog-caller': 'SMOG_CALLER',
+  'iron-maiden': 'IRON_MAIDEN',
+  'golem': 'GOLEM',
+  'slag-blood': 'SLAG_BLOOD',
+  'sapper': 'SAPPER',
+  'coil-spike-sniper': 'COIL_SPIKE_SNIPER',
+  'resonance-caster': 'RESONANCE_CASTER',
+  'tar-spitter': 'TAR_SPITTER',
+  'churn': 'CHURN',
+  'splinter': 'SPLINTER',
   'boss-hollowed-precinct': null,
   'boss-choir-of-rust': null,
   'boss-primeval-rift-walker': null,
 };
 
+/** Base stats before depth scaling — HP buffed to force ability usage. */
 export const ENEMY_BASE_STATS = {
-  MIASMA_SWARM: { maxHp: 20, baseDamage: 8, armor: 0 },
-  FRACTURE_HOUND: { maxHp: 30, baseDamage: 10, armor: 5 },
-  LEY_SIREN: { maxHp: 35, baseDamage: 12, armor: 0 },
-  SPATIAL_GLITCH: { maxHp: 35, baseDamage: 10, armor: 0 },
-  ASH_WEEPER: { maxHp: 40, baseDamage: 12, armor: 0 },
-  NULL_SHADE: { maxHp: 45, baseDamage: 14, armor: 5 },
-  ECHOING_BRUTE: { maxHp: 65, baseDamage: 18, armor: 10 },
-  CONCRETE_GARGOYLE: { maxHp: 75, baseDamage: 15, armor: 25 },
-  GUTTER_GOLIATH: { maxHp: 95, baseDamage: 22, armor: 15 },
+  MIASMA_SWARM: { maxHp: 75, baseDamage: 8, armor: 0 },
+  FRACTURE_HOUND: { maxHp: 80, baseDamage: 10, armor: 5 },
+  SCUTTLER: { maxHp: 70, baseDamage: 9, armor: 0 },
+  SPALL: { maxHp: 72, baseDamage: 10, armor: 0 },
+  THRALL: { maxHp: 85, baseDamage: 11, armor: 3 },
+  LEY_SIREN: { maxHp: 90, baseDamage: 12, armor: 0 },
+  ASH_WEEPER: { maxHp: 95, baseDamage: 12, armor: 0 },
+  NULL_SHADE: { maxHp: 88, baseDamage: 14, armor: 5 },
+  HOOK_WEAVER: { maxHp: 92, baseDamage: 11, armor: 0 },
+  MEMORY_LEECH: { maxHp: 85, baseDamage: 10, armor: 0 },
+  SMOG_CALLER: { maxHp: 100, baseDamage: 12, armor: 0 },
+  ECHOING_BRUTE: { maxHp: 130, baseDamage: 18, armor: 10 },
+  CONCRETE_GARGOYLE: { maxHp: 140, baseDamage: 15, armor: 25 },
+  GUTTER_GOLIATH: { maxHp: 150, baseDamage: 22, armor: 15 },
+  IRON_MAIDEN: { maxHp: 135, baseDamage: 16, armor: 20 },
+  GOLEM: { maxHp: 145, baseDamage: 14, armor: 18 },
+  SLAG_BLOOD: { maxHp: 120, baseDamage: 20, armor: 12 },
+  SPATIAL_GLITCH: { maxHp: 85, baseDamage: 10, armor: 0 },
+  SAPPER: { maxHp: 82, baseDamage: 22, armor: 0 },
+  COIL_SPIKE_SNIPER: { maxHp: 80, baseDamage: 18, armor: 0 },
+  RESONANCE_CASTER: { maxHp: 88, baseDamage: 14, armor: 0 },
+  TAR_SPITTER: { maxHp: 86, baseDamage: 12, armor: 0 },
+  CHURN: { maxHp: 90, baseDamage: 20, armor: 0 },
+  SPLINTER: { maxHp: 84, baseDamage: 13, armor: 0 },
 } as const;
 
 export const DEPTH_SCALING: Record<DistrictId, { hpMult: number; dmgMult: number }> = {
@@ -65,24 +125,60 @@ export const DEPTH_SCALING: Record<DistrictId, { hpMult: number; dmgMult: number
   3: { hpMult: 2.4, dmgMult: 2.6 },
 };
 
-export const ALPHA_MODIFIER = { hpMult: 1.5, dmgMult: 1.25 } as const;
+export const ALPHA_MODIFIER = { hpMult: 2.5, dmgMult: 1.25 } as const;
 
 export const ENEMY_ARCHETYPE: Partial<Record<EnemyRosterId, EnemySpawnArchetype>> = {
   'fracture-hound': 'MELEE',
   'echoing-brute': 'MELEE',
   'miasma-tick-swarm': 'MELEE',
+  'scuttler': 'MELEE',
+  'spall': 'MELEE',
+  'thrall': 'MELEE',
   'gutter-goliath': 'HEAVY',
   'concrete-gargoyle': 'HEAVY',
+  'iron-maiden': 'HEAVY',
+  'golem': 'HEAVY',
+  'slag-blood': 'HEAVY',
   'ley-siren': 'SUPPORT',
   'ash-weeper': 'SUPPORT',
   'null-shade': 'SUPPORT',
-  'spatial-glitch': 'RANGED',
+  'hook-weaver': 'SUPPORT',
+  'memory-leech': 'SUPPORT',
+  'smog-caller': 'SUPPORT',
+  'spatial-glitch': 'ARTILLERY',
+  'sapper': 'ARTILLERY',
+  'coil-spike-sniper': 'ARTILLERY',
+  'resonance-caster': 'ARTILLERY',
+  'tar-spitter': 'ARTILLERY',
+  'churn': 'ARTILLERY',
+  'splinter': 'ARTILLERY',
 };
+
+export const FRAGILE_ROSTER_IDS: readonly EnemyRosterId[] = [
+  'miasma-tick-swarm',
+  'fracture-hound',
+  'scuttler',
+  'spall',
+  'thrall',
+];
 
 export const HEAVY_ROSTER_IDS: readonly EnemyRosterId[] = [
   'gutter-goliath',
   'concrete-gargoyle',
   'echoing-brute',
+  'iron-maiden',
+  'golem',
+  'slag-blood',
+];
+
+export const ARTILLERY_ROSTER_IDS: readonly EnemyRosterId[] = [
+  'spatial-glitch',
+  'sapper',
+  'coil-spike-sniper',
+  'resonance-caster',
+  'tar-spitter',
+  'churn',
+  'splinter',
 ];
 
 export interface ResolvedEnemyStats {
@@ -125,3 +221,39 @@ export function resolveEnemyCombatStats(
 export function isHeavyArchetype(rosterId?: string): boolean {
   return rosterId != null && (HEAVY_ROSTER_IDS as readonly string[]).includes(rosterId);
 }
+
+export function isFragileArchetype(rosterId?: string): boolean {
+  return rosterId != null && (FRAGILE_ROSTER_IDS as readonly string[]).includes(rosterId);
+}
+
+export function isArtilleryArchetype(rosterId?: string): boolean {
+  return rosterId != null && (ARTILLERY_ROSTER_IDS as readonly string[]).includes(rosterId);
+}
+
+export const ENEMY_ARCHETYPE_FOR_KEY: Record<EncounterEnemyKey, EnemySpawnArchetype> = {
+  FRACTURE_HOUND: 'MELEE',
+  ECHOING_BRUTE: 'MELEE',
+  MIASMA_SWARM: 'MELEE',
+  SCUTTLER: 'MELEE',
+  SPALL: 'MELEE',
+  THRALL: 'MELEE',
+  GUTTER_GOLIATH: 'HEAVY',
+  CONCRETE_GARGOYLE: 'HEAVY',
+  IRON_MAIDEN: 'HEAVY',
+  GOLEM: 'HEAVY',
+  SLAG_BLOOD: 'HEAVY',
+  LEY_SIREN: 'SUPPORT',
+  ASH_WEEPER: 'SUPPORT',
+  NULL_SHADE: 'SUPPORT',
+  HOOK_WEAVER: 'SUPPORT',
+  MEMORY_LEECH: 'SUPPORT',
+  SMOG_CALLER: 'SUPPORT',
+  SPATIAL_GLITCH: 'ARTILLERY',
+  SAPPER: 'ARTILLERY',
+  COIL_SPIKE_SNIPER: 'ARTILLERY',
+  RESONANCE_CASTER: 'ARTILLERY',
+  TAR_SPITTER: 'ARTILLERY',
+  CHURN: 'ARTILLERY',
+  SPLINTER: 'ARTILLERY',
+  RIOT_VANGUARD: 'MELEE',
+};

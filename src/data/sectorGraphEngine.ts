@@ -504,6 +504,7 @@ export interface BuildScannerClusterOptions {
   /** Apply current macro biome flavor to forward vectors. */
   macroBiomeFamily?: import('../types/narrativeProcedural').MacroBiomeFamily | null;
   sanctuarySchedule?: SanctuarySchedule;
+  runSegment?: import('./encounterGenerator').RunSegmentState | null;
 }
 
 /** Synthetic extraction ids are not stored in the sector graph. */
@@ -561,6 +562,7 @@ export function buildScannerCluster(options: BuildScannerClusterOptions): Incurs
     lastLevelOfferedCombat = true,
     macroBiomeFamily = null,
     sanctuarySchedule,
+    runSegment = null,
   } = options;
 
   let graph = inputGraph;
@@ -593,6 +595,7 @@ export function buildScannerCluster(options: BuildScannerClusterOptions): Incurs
         sectorTier: graph.sectorTier,
         lastLevelOfferedCombat,
         seed: `gate:${upcomingDepth}:${nodesCleared}`,
+        runSegment,
       });
     }
   } else if (collapseActive) {
@@ -616,6 +619,7 @@ export function buildScannerCluster(options: BuildScannerClusterOptions): Incurs
       sectorTier: graph.sectorTier,
       lastLevelOfferedCombat,
       seed: `level:${upcomingDepth}:${nodesCleared}`,
+      runSegment,
     });
   }
 

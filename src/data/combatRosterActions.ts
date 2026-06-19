@@ -62,6 +62,13 @@ export function resolveRosterEnemyDamage(profile: EnemyCombatProfile, intent: En
   if (profile.rosterId === 'gutter-goliath' && profile.isEnraged) {
     return Math.floor(base * ROSTER_AI_WEIGHTS.GOLIATH_ENRAGE_DAMAGE_MULT);
   }
+  if (profile.rosterId === 'resonance-caster') {
+    const stack = profile.resonanceStack ?? 0;
+    return Math.floor(base * (1 + stack * 0.5));
+  }
+  if (intent === 'ARTILLERY_FIRE') {
+    return Math.floor(base * 1.75);
+  }
   return base;
 }
 
@@ -84,6 +91,12 @@ export function rosterIntentLabel(intent: EnemyIntent, designation: string): str
     VEIL_BARRIER: `${designation} raises VEIL BARRIER`,
     TARGET_LOCK: `${designation} applies TARGET LOCK`,
     ASHEN_ROT: `${designation} inflicts ASHEN ROT`,
+    ARTILLERY_CHARGE: `${designation} charges artillery`,
+    ARTILLERY_FIRE: `${designation} fires charged ordnance`,
+    TAR_BIND: `${designation} binds target in sludge`,
+    LASER_SIGHT: `${designation} paints LASER SIGHT`,
+    STAMINA_TETHER: `${designation} casts STAMINA TETHER`,
+    JAM_AUGMENT: `${designation} jams operative augment`,
   };
   return labels[intent] ?? null;
 }
@@ -123,6 +136,20 @@ export function patchRosterAfterIntentExec(
     }
     if (intent === 'VOID_AMBUSH') {
       return nullShadeVoidAmbushCleanupPatch(profile);
+    }
+  }
+
+  const artilleryChargeIds = ['sapper', 'coil-spike-sniper', 'resonance-caster', 'tar-spitter', 'splinter'];
+  if (profile.rosterId && artilleryChargeIds.includes(profile.rosterId)) {
+    if (intent === 'ARTILLERY_CHARGE' || intent === 'LASER_SIGHT') {
+      patch.isCharging = true;
+      patch.queuedAction = profile.rosterId === 'sapper'
+        ? ROSTER_QUEUED_ACTION.BUNKER_BUSTER
+        : ROSTER_QUEUED_ACTION.LASER_FIRE;
+    }
+    if (intent === 'ARTILLERY_FIRE' || intent === 'TAR_BIND') {
+      patch.isCharging = false;
+      patch.queuedAction = null;
     }
   }
 

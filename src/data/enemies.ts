@@ -81,6 +81,13 @@ export function intentLabel(intent: EnemyIntent, designation: string): string {
     VEIL_BARRIER: `${designation} raises VEIL BARRIER`,
     TARGET_LOCK: `${designation} applies TARGET LOCK`,
     ASHEN_ROT: `${designation} inflicts ASHEN ROT`,
+    ARTILLERY_CHARGE: `${designation} charges artillery`,
+    ARTILLERY_FIRE: `${designation} fires charged ordnance`,
+    TAR_BIND: `${designation} binds target in sludge`,
+    LASER_SIGHT: `${designation} paints LASER SIGHT`,
+    STAMINA_TETHER: `${designation} casts STAMINA TETHER`,
+    JAM_AUGMENT: `${designation} jams operative augment`,
+    MEMORY_LEECH: `${designation} leeches augment memory`,
   };
   return labels[intent];
 }
