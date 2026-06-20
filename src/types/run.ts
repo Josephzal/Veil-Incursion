@@ -153,6 +153,23 @@ export interface EnemyCombatProfile {
   resonanceStack?: number;
   /** Hook Weaver tether target unit id. */
   tetheredAllyUnitId?: string | null;
+  /** Cabal human operative — receives faction trait at spawn. */
+  isCabalHuman?: boolean;
+  /** Advanced Veil anomaly — no Cabal faction traits. */
+  isVeilEntity?: boolean;
+  /** Controlling Cabal faction for this depth (Cabal humans only). */
+  cabalFaction?: FactionType;
+  factionTrait?: 'ENTRENCHED' | 'COLD_VACUUM' | 'VOLATILE_CORE';
+  /** Faction trait loot dropped on true death. */
+  factionLootId?: string;
+  /** Wide frontline unit (e.g. Amalgam occupies FL_0 + FL_1). */
+  gridWidth?: number;
+  /** Secondary occupied slot for wide units. */
+  occupiedSlots?: CombatGridSlotId[];
+  /** Grave Robber — permanent buff stacks from corpse feed. */
+  graveRobberFeeds?: number;
+  /** Spotter — turn-1 lock telegraph before artillery burst. */
+  spotterLockedOn?: boolean;
 }
 
 export interface Trinket {

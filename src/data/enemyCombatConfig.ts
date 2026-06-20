@@ -27,7 +27,17 @@ export type EncounterEnemyKey =
   | 'RESONANCE_CASTER'
   | 'TAR_SPITTER'
   | 'CHURN'
-  | 'SPLINTER';
+  | 'SPLINTER'
+  | 'BREACHER'
+  | 'CUTTER'
+  | 'WARDEN'
+  | 'FIXER'
+  | 'SPOTTER'
+  | 'BURNER'
+  | 'AMALGAM'
+  | 'WIRE_GHOUL'
+  | 'HOLLOW_LUNG'
+  | 'GRAVE_ROBBER';
 
 export type EnemySpawnArchetype = 'MELEE' | 'SUPPORT' | 'RANGED' | 'HEAVY' | 'ARTILLERY';
 
@@ -57,6 +67,16 @@ export const ENCOUNTER_KEY_TO_ROSTER: Record<EncounterEnemyKey, EnemyRosterId> =
   TAR_SPITTER: 'tar-spitter',
   CHURN: 'churn',
   SPLINTER: 'splinter',
+  BREACHER: 'breacher',
+  CUTTER: 'cutter',
+  WARDEN: 'warden',
+  FIXER: 'fixer',
+  SPOTTER: 'spotter',
+  BURNER: 'burner',
+  AMALGAM: 'amalgam',
+  WIRE_GHOUL: 'wire-ghoul',
+  HOLLOW_LUNG: 'hollow-lung',
+  GRAVE_ROBBER: 'grave-robber',
 };
 
 type StatKey = keyof typeof ENEMY_BASE_STATS;
@@ -86,6 +106,16 @@ const ROSTER_STAT_KEY: Record<EnemyRosterId, StatKey | null> = {
   'tar-spitter': 'TAR_SPITTER',
   'churn': 'CHURN',
   'splinter': 'SPLINTER',
+  'breacher': 'BREACHER',
+  'cutter': 'CUTTER',
+  'warden': 'WARDEN',
+  'fixer': 'FIXER',
+  'spotter': 'SPOTTER',
+  'burner': 'BURNER',
+  'amalgam': 'AMALGAM',
+  'wire-ghoul': 'WIRE_GHOUL',
+  'hollow-lung': 'HOLLOW_LUNG',
+  'grave-robber': 'GRAVE_ROBBER',
   'boss-hollowed-precinct': null,
   'boss-choir-of-rust': null,
   'boss-primeval-rift-walker': null,
@@ -117,6 +147,16 @@ export const ENEMY_BASE_STATS = {
   TAR_SPITTER: { maxHp: 86, baseDamage: 12, armor: 0 },
   CHURN: { maxHp: 90, baseDamage: 20, armor: 0 },
   SPLINTER: { maxHp: 84, baseDamage: 13, armor: 0 },
+  BREACHER: { maxHp: 78, baseDamage: 6, armor: 0 },
+  CUTTER: { maxHp: 74, baseDamage: 10, armor: 0 },
+  WARDEN: { maxHp: 128, baseDamage: 14, armor: 8 },
+  FIXER: { maxHp: 88, baseDamage: 8, armor: 0 },
+  SPOTTER: { maxHp: 84, baseDamage: 12, armor: 0 },
+  BURNER: { maxHp: 86, baseDamage: 9, armor: 0 },
+  AMALGAM: { maxHp: 160, baseDamage: 17, armor: 12 },
+  WIRE_GHOUL: { maxHp: 72, baseDamage: 10, armor: 0 },
+  HOLLOW_LUNG: { maxHp: 92, baseDamage: 10, armor: 0 },
+  GRAVE_ROBBER: { maxHp: 90, baseDamage: 11, armor: 0 },
 } as const;
 
 export const DEPTH_SCALING: Record<DistrictId, { hpMult: number; dmgMult: number }> = {
@@ -152,6 +192,16 @@ export const ENEMY_ARCHETYPE: Partial<Record<EnemyRosterId, EnemySpawnArchetype>
   'tar-spitter': 'ARTILLERY',
   'churn': 'ARTILLERY',
   'splinter': 'ARTILLERY',
+  'breacher': 'MELEE',
+  'cutter': 'MELEE',
+  'warden': 'HEAVY',
+  'fixer': 'SUPPORT',
+  'spotter': 'ARTILLERY',
+  'burner': 'SUPPORT',
+  'amalgam': 'HEAVY',
+  'wire-ghoul': 'MELEE',
+  'hollow-lung': 'SUPPORT',
+  'grave-robber': 'SUPPORT',
 };
 
 export const FRAGILE_ROSTER_IDS: readonly EnemyRosterId[] = [
@@ -160,6 +210,7 @@ export const FRAGILE_ROSTER_IDS: readonly EnemyRosterId[] = [
   'scuttler',
   'spall',
   'thrall',
+  'wire-ghoul',
 ];
 
 export const HEAVY_ROSTER_IDS: readonly EnemyRosterId[] = [
@@ -169,6 +220,8 @@ export const HEAVY_ROSTER_IDS: readonly EnemyRosterId[] = [
   'iron-maiden',
   'golem',
   'slag-blood',
+  'amalgam',
+  'warden',
 ];
 
 export const ARTILLERY_ROSTER_IDS: readonly EnemyRosterId[] = [
@@ -255,5 +308,15 @@ export const ENEMY_ARCHETYPE_FOR_KEY: Record<EncounterEnemyKey, EnemySpawnArchet
   TAR_SPITTER: 'ARTILLERY',
   CHURN: 'ARTILLERY',
   SPLINTER: 'ARTILLERY',
+  BREACHER: 'MELEE',
+  CUTTER: 'MELEE',
+  WARDEN: 'HEAVY',
+  FIXER: 'SUPPORT',
+  SPOTTER: 'ARTILLERY',
+  BURNER: 'SUPPORT',
+  AMALGAM: 'HEAVY',
+  WIRE_GHOUL: 'MELEE',
+  HOLLOW_LUNG: 'SUPPORT',
+  GRAVE_ROBBER: 'SUPPORT',
   RIOT_VANGUARD: 'MELEE',
 };

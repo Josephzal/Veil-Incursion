@@ -70,6 +70,16 @@ const ROSTER_INTENTS: Partial<Record<string, EnemyIntent[]>> = {
   'tar-spitter': ['ARTILLERY_CHARGE', 'TAR_BIND', 'STRIKE'],
   'churn': ['STRIKE'],
   'splinter': ['ARTILLERY_CHARGE', 'ARTILLERY_FIRE', 'STRIKE'],
+  'breacher': ['STRIKE', 'FORTIFY'],
+  'cutter': ['STRIKE', 'EVADE'],
+  'warden': ['STRIKE', 'FORTIFY'],
+  'fixer': ['EVADE'],
+  'spotter': ['TARGET_LOCK', 'ARTILLERY_FIRE'],
+  'burner': ['STRIKE'],
+  'amalgam': ['STRIKE', 'FORTIFY'],
+  'wire-ghoul': ['STRIKE', 'EVADE'],
+  'hollow-lung': ['STRIKE'],
+  'grave-robber': ['SCAVENGE', 'STRIKE'],
 };
 
 function isHpBelowEnrageThreshold(profile: EnemyCombatProfile, rosterId: string): boolean {
@@ -184,7 +194,7 @@ function resolveForcedRosterIntent(profile: EnemyCombatProfile): EnemyIntent | n
   }
 
   const artilleryIds = [
-    'sapper', 'coil-spike-sniper', 'resonance-caster', 'tar-spitter', 'splinter',
+    'sapper', 'coil-spike-sniper', 'resonance-caster', 'tar-spitter', 'splinter', 'spotter',
   ];
   if (rosterId && artilleryIds.includes(rosterId)) {
     if (profile.queuedAction === ROSTER_QUEUED_ACTION.BUNKER_BUSTER
@@ -192,6 +202,8 @@ function resolveForcedRosterIntent(profile: EnemyCombatProfile): EnemyIntent | n
       return 'ARTILLERY_FIRE';
     }
     if (profile.isCharging) return 'ARTILLERY_FIRE';
+    if (rosterId === 'spotter' && profile.spotterLockedOn) return 'ARTILLERY_FIRE';
+    if (rosterId === 'spotter' && !profile.spotterLockedOn) return 'TARGET_LOCK';
     if (rosterId === 'coil-spike-sniper' && !profile.isCharging && profile.queuedAction !== ROSTER_QUEUED_ACTION.LASER_FIRE) {
       return 'LASER_SIGHT';
     }
@@ -206,6 +218,8 @@ function resolveForcedRosterIntent(profile: EnemyCombatProfile): EnemyIntent | n
   if (rosterId === 'ash-weeper' && profile.isEnraged && profile.currentHp > 0) {
     return 'PREMATURE_IGNITION';
   }
+
+  if (rosterId === 'fixer') return 'EVADE';
 
   return null;
 }
@@ -227,6 +241,13 @@ export function decideRosterIntent(
     && synced.currentHp < synced.maxHp
   ) {
     return 'SCAVENGE';
+  }
+
+  if (rosterId === 'grave-robber' && squad) {
+    const hasCorpse = squad.some(
+      (u) => u.unitId !== synced.unitId && (u.isSlumped || u.currentHp <= 0),
+    );
+    if (hasCorpse) return 'STRIKE';
   }
 
   const forced = resolveForcedRosterIntent(synced);

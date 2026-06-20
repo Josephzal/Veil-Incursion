@@ -69,7 +69,13 @@ import {
   isUnitBlockedForAbility,
   isUnitHookValid,
   validTargetsForAbility,
+  resolveWardenInterceptTarget,
 } from '../data/combatTargeting';
+import {
+  BREACHER_STAMINA_DRAIN,
+  LEGION_COLD_VACUUM_STAMINA,
+  SPOTTER_ARTILLERY_TRUE_DAMAGE,
+} from '../data/factionTraitEngine';
 import {
   pickThreatBudgetActions,
   recoverFracturedUnits,
@@ -1434,13 +1440,25 @@ export default function TacticalCombatHub({
       echoHit?: boolean;
     },
   ): boolean => {
-    const targetId = options?.targetId
+    const rawTargetId = options?.targetId
       ?? selectedTargetIdRef.current
       ?? primaryAliveUnit(squadRef.current)?.unitId;
+    const interceptAbility = options?.abilityId ?? 'STRIKE';
+    const targetId = rawTargetId
+      ? resolveWardenInterceptTarget(squadRef.current, interceptAbility, rawTargetId)
+      : rawTargetId;
     const e = targetId
       ? getUnitById(squadRef.current, targetId)
       : enemyRef.current;
     if (!e || !e.unitId) return false;
+    if (
+      rawTargetId
+      && targetId
+      && rawTargetId !== targetId
+      && e.rosterId === 'warden'
+    ) {
+      log(`${tag} >> WARDEN INTERCEPT — backline strike redirected.`);
+    }
     const shroudMissChance = env.eliteModifier === 'PHASE_SHROUD' ? 0.25 : 0.2;
     if (env.isEnemyPhaseShrouded && Math.random() < shroudMissChance) {
       log(`${tag} >> PHASE SHROUD — ATTACK WHIFFED (${Math.round(shroudMissChance * 100)}% miss).`);
@@ -1653,6 +1671,15 @@ export default function TacticalCombatHub({
     }
     if (source && dmg > 0 && e.unitId) {
       trackVoidAmbushInterruptDamage(e.unitId, dmg);
+    }
+    if (
+      source
+      && dmg > 0
+      && working.factionTrait === 'COLD_VACUUM'
+      && (options?.channel === 'KINETIC' || options?.channel === 'TRUE')
+    ) {
+      applyStamina(staminaRef.current - LEGION_COLD_VACUUM_STAMINA);
+      log(`${tag} >> COLD VACUUM — +${LEGION_COLD_VACUUM_STAMINA} stamina tax.`);
     }
     if (source && arenaLayout) {
       const targetSlot = (working.gridSlot ?? 'FL_0') as CombatGridSlotId;
@@ -2122,6 +2149,12 @@ export default function TacticalCombatHub({
       case 'STRIKE': {
         const { dmg, unblockable } = attackDmg(e);
         if (e.rosterId === 'fracture-hound' && !e.isEnraged) applyFractureHoundShieldDrain(e);
+        if (e.rosterId === 'breacher') {
+          applyStamina(staminaRef.current - BREACHER_STAMINA_DRAIN);
+          log(`>> ${e.designation} BREACH STRIKE — ${BREACHER_STAMINA_DRAIN} stamina shredded (${dmg} HP).`);
+          hurtPlayer(dmg, unblockable, `>> BREACH STRIKE — ${dmg}`, { attacker: e, rollCrit: false });
+          break;
+        }
         hurtPlayer(dmg, unblockable, `>> ${e.designation} STRIKES — ${dmg}`, { attacker: e });
         break;
       }
@@ -2288,7 +2321,10 @@ export default function TacticalCombatHub({
           type: 'TARGET_LOCKED',
           turnsRemaining: 2,
         });
-        log(`>> ${e.designation} TARGET LOCK — heavy strikes will crit.`);
+        if (e.unitId && e.rosterId === 'spotter') {
+          patchUnit(e.unitId, { spotterLockedOn: true, isCharging: true });
+        }
+        log(`>> ${e.designation} LOCKED ON — artillery primed.`);
         break;
       }
       case 'ASHEN_ROT': {
@@ -2313,7 +2349,11 @@ export default function TacticalCombatHub({
       case 'ARTILLERY_FIRE': {
         const isSapper = e.rosterId === 'sapper';
         const isSniper = e.rosterId === 'coil-spike-sniper';
-        const dmg = resolveRosterEnemyDamage(e, 'ARTILLERY_FIRE');
+        const isSpotter = e.rosterId === 'spotter';
+        const dmg = isSpotter ? SPOTTER_ARTILLERY_TRUE_DAMAGE : resolveRosterEnemyDamage(e, 'ARTILLERY_FIRE');
+        if (isSpotter && e.unitId) {
+          patchUnit(e.unitId, { spotterLockedOn: false, isCharging: false });
+        }
         if (isSapper) {
           sessionExtrasRef.current.playerShield = 0;
           sessionExtrasRef.current.playerShieldTurnsRemaining = 0;
@@ -2322,6 +2362,9 @@ export default function TacticalCombatHub({
         } else if (isSniper) {
           log(`>> ${e.designation} TRUE SHOT — ${dmg} (armor bypassed).`);
           hurtPlayer(dmg, true, `>> TRUE SHOT — ${dmg}`, { attacker: e, rollCrit: false });
+        } else if (isSpotter) {
+          log(`>> ${e.designation} ARTILLERY BURST — ${dmg} TRUE.`);
+          hurtPlayer(dmg, true, `>> ARTILLERY BURST — ${dmg}`, { attacker: e, rollCrit: false });
         } else if (e.rosterId === 'splinter') {
           const chip = Math.max(4, Math.floor(dmg * 0.35));
           hurtPlayer(chip, false, `>> SEARING LASER — ${chip}`, { attacker: e });

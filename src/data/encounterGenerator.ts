@@ -1,3 +1,4 @@
+import type { FactionType } from '../types/game';
 import type { DistrictId } from './districtPacing';
 import { getDistrictFromDepth, isDistrictGateDepth, localLevelFromDepth } from './districtPacing';
 import type { EncounterLayout } from './levelEncounterData';
@@ -5,16 +6,23 @@ import type { EncounterEnemyKey } from './enemyCombatConfig';
 import {
   ENCOUNTER_POOLS,
   filterSquadForDepth,
+  resolvePoolForTier,
   type EncounterGridPos,
   type EncounterPoolTier,
   type EncounterSquadSpec,
 } from './encounterPools';
+import { buildOriginDeck, peekEncounterOrigin, type EncounterOrigin } from './originDeckEngine';
+import { rollFactionControl } from './factionTraitEngine';
 
 export interface RunSegmentState {
   depth: DistrictId;
   alphaNodeIndex: number;
   lastEncounterId: string | null;
   history: string[];
+  currentFactionControl: FactionType;
+  originDeck: EncounterOrigin[];
+  originDeckIndex: number;
+  lastEncounterOrigin: EncounterOrigin | null;
 }
 
 export type BreathingRoomKind = 'BLACK_MARKET' | 'VEIL_BLEED_BOON' | 'RESOURCE_HARVEST';
@@ -25,6 +33,8 @@ export interface GeneratedEncounter {
   encounterId: string;
   poolTier: EncounterPoolTier | 'BOSS' | 'BREATHING_ROOM';
   breathingRoomKind?: BreathingRoomKind;
+  encounterOrigin?: EncounterOrigin;
+  cabalFaction?: FactionType;
 }
 
 const POS_TO_LAYOUT: Record<EncounterGridPos, keyof EncounterLayout> = {
@@ -57,12 +67,20 @@ export function rollAlphaNodeIndex(seed: string): number {
   return 6 + Math.floor(rand() * 5);
 }
 
-export function createRunSegment(district: DistrictId, seed: string): RunSegmentState {
+export function createRunSegment(
+  district: DistrictId,
+  seed: string,
+  playerFaction?: FactionType | null,
+): RunSegmentState {
   return {
     depth: district,
     alphaNodeIndex: rollAlphaNodeIndex(`${seed}:alpha:${district}`),
     lastEncounterId: null,
     history: [],
+    currentFactionControl: rollFactionControl(district, playerFaction, seed),
+    originDeck: buildOriginDeck(district, seed),
+    originDeckIndex: 0,
+    lastEncounterOrigin: null,
   };
 }
 
@@ -74,17 +92,31 @@ function squadToLayout(squad: EncounterSquadSpec): { layout: EncounterLayout; is
   const layout = emptyLayout();
   let isAlpha = false;
   for (const unit of squad.units) {
-    const key = POS_TO_LAYOUT[unit.pos];
-    if (layout[key] == null) {
-      layout[key] = unit.type;
-    } else if (unit.pos === 'FRONT_CENTER' && layout.frontRight == null) {
-      layout.frontRight = unit.type;
-    } else if (unit.pos === 'BACK_CENTER' && layout.backRight == null) {
-      layout.backRight = unit.type;
+    if (unit.type === 'AMALGAM') {
+      layout.frontLeft = 'AMALGAM';
+      layout.frontRight = 'AMALGAM';
+    } else {
+      const key = POS_TO_LAYOUT[unit.pos];
+      if (layout[key] == null) {
+        layout[key] = unit.type;
+      } else if (unit.pos === 'FRONT_CENTER' && layout.frontRight == null) {
+        layout.frontRight = unit.type;
+      } else if (unit.pos === 'BACK_CENTER' && layout.backRight == null) {
+        layout.backRight = unit.type;
+      }
     }
     if (unit.isAlpha) isAlpha = true;
   }
   return { layout, isAlpha };
+}
+
+function validateAmalgamPlacement(squad: EncounterSquadSpec): boolean {
+  const hasAmalgam = squad.units.some((u) => u.type === 'AMALGAM');
+  if (!hasAmalgam) return true;
+  const frontOccupiers = squad.units.filter(
+    (u) => u.type !== 'AMALGAM' && (u.pos === 'FRONT_LEFT' || u.pos === 'FRONT_RIGHT' || u.pos === 'FRONT_CENTER'),
+  );
+  return frontOccupiers.length === 0;
 }
 
 function pickFromPool(
@@ -92,10 +124,11 @@ function pickFromPool(
   lastEncounterId: string | null,
   rand: () => number,
   district: DistrictId,
+  origin: EncounterOrigin,
 ): EncounterSquadSpec | null {
   const eligible = pool
-    .map((s) => filterSquadForDepth(s, district))
-    .filter((s): s is EncounterSquadSpec => s != null);
+    .map((s) => filterSquadForDepth(s, district, origin))
+    .filter((s): s is EncounterSquadSpec => s != null && validateAmalgamPlacement(s));
   if (eligible.length === 0) return null;
 
   let attempts = 0;
@@ -115,6 +148,19 @@ function rollBreathingRoomKind(rand: () => number): BreathingRoomKind {
   return 'RESOURCE_HARVEST';
 }
 
+function resolveEncounterOrigin(segment: RunSegmentState, seed: string, district: DistrictId): EncounterOrigin {
+  if (segment.originDeckIndex < segment.originDeck.length) {
+    return segment.originDeck[segment.originDeckIndex];
+  }
+  return peekEncounterOrigin(
+    segment.originDeck,
+    segment.originDeckIndex,
+    district,
+    segment.lastEncounterOrigin,
+    seed,
+  );
+}
+
 export function generateNodeEncounter(
   globalDepth: number,
   segment: RunSegmentState,
@@ -122,7 +168,7 @@ export function generateNodeEncounter(
 ): GeneratedEncounter {
   const district = getDistrictFromDepth(globalDepth);
   const localLevel = localLevelFromDepth(globalDepth);
-  const rand = seededRandom(`${seed}:enc:${globalDepth}:${segment.alphaNodeIndex}`);
+  const rand = seededRandom(`${seed}:enc:${globalDepth}:${segment.alphaNodeIndex}:${segment.originDeckIndex}`);
 
   if (isDistrictGateDepth(globalDepth)) {
     return {
@@ -143,31 +189,44 @@ export function generateNodeEncounter(
     };
   }
 
-  const pools = ENCOUNTER_POOLS[district];
-  let poolTier: EncounterPoolTier;
-  let pool: EncounterSquadSpec[];
+  const encounterOrigin = resolveEncounterOrigin(segment, seed, district);
+  const originPools = ENCOUNTER_POOLS[district][encounterOrigin];
 
+  let poolTier: EncounterPoolTier;
   if (localLevel <= 3) {
     poolTier = 'INTRO';
-    pool = pools.INTRO;
   } else if (localLevel === segment.alphaNodeIndex) {
     poolTier = 'SOLO_ALPHA';
-    pool = pools.SOLO_ALPHA;
   } else if (localLevel >= 9) {
     poolTier = 'ADVANCED_SYNERGY';
-    pool = pools.ADVANCED_SYNERGY;
   } else {
     poolTier = 'BASIC_SYNERGY';
-    pool = pools.BASIC_SYNERGY;
   }
 
-  const squad = pickFromPool(pool, segment.lastEncounterId, rand, district);
+  const pool = resolvePoolForTier(originPools, poolTier, encounterOrigin);
+  const squad = pickFromPool(pool, segment.lastEncounterId, rand, district, encounterOrigin);
+
   if (!squad) {
+    const fallbackOrigin: EncounterOrigin = encounterOrigin === 'CABAL' ? 'VEIL' : 'CABAL';
+    const fallbackPool = resolvePoolForTier(ENCOUNTER_POOLS[district][fallbackOrigin], poolTier, fallbackOrigin);
+    const fallbackSquad = pickFromPool(fallbackPool, segment.lastEncounterId, rand, district, fallbackOrigin);
+    if (fallbackSquad) {
+      const { layout, isAlpha } = squadToLayout(fallbackSquad);
+      return {
+        layout,
+        isAlpha,
+        encounterId: fallbackSquad.id,
+        poolTier,
+        encounterOrigin: fallbackOrigin,
+        cabalFaction: fallbackOrigin === 'CABAL' ? segment.currentFactionControl : undefined,
+      };
+    }
     return {
       layout: { frontLeft: 'FRACTURE_HOUND', frontRight: null, backLeft: null, backRight: null },
       isAlpha: false,
       encounterId: 'fallback-hound',
       poolTier,
+      encounterOrigin: 'VEIL',
     };
   }
 
@@ -177,17 +236,23 @@ export function generateNodeEncounter(
     isAlpha,
     encounterId: squad.id,
     poolTier,
+    encounterOrigin,
+    cabalFaction: encounterOrigin === 'CABAL' ? segment.currentFactionControl : undefined,
   };
 }
 
 export function applyEncounterToSegment(
   segment: RunSegmentState,
   encounterId: string,
+  encounterOrigin?: EncounterOrigin | null,
 ): RunSegmentState {
+  const consumedOrigin = encounterOrigin === 'CABAL' || encounterOrigin === 'VEIL';
   return {
     ...segment,
     lastEncounterId: encounterId,
     history: [...segment.history, encounterId],
+    originDeckIndex: consumedOrigin ? segment.originDeckIndex + 1 : segment.originDeckIndex,
+    lastEncounterOrigin: encounterOrigin ?? segment.lastEncounterOrigin,
   };
 }
 
@@ -199,10 +264,11 @@ export function isAlphaDuelLevel(segment: RunSegmentState, localLevel: number): 
   return localLevel === segment.alphaNodeIndex;
 }
 
-/** Keys referenced in pools — used for type completeness checks. */
 export const ALL_POOL_ENEMY_KEYS: EncounterEnemyKey[] = [
   'FRACTURE_HOUND', 'ECHOING_BRUTE', 'MIASMA_SWARM', 'LEY_SIREN', 'SPALL', 'TAR_SPITTER',
   'CONCRETE_GARGOYLE', 'IRON_MAIDEN', 'ASH_WEEPER', 'NULL_SHADE', 'SPATIAL_GLITCH',
   'SCUTTLER', 'RESONANCE_CASTER', 'SAPPER', 'GUTTER_GOLIATH', 'GOLEM', 'SLAG_BLOOD',
   'HOOK_WEAVER', 'MEMORY_LEECH', 'SMOG_CALLER', 'THRALL', 'COIL_SPIKE_SNIPER', 'CHURN', 'SPLINTER',
+  'BREACHER', 'CUTTER', 'WARDEN', 'FIXER', 'SPOTTER', 'BURNER',
+  'AMALGAM', 'WIRE_GHOUL', 'HOLLOW_LUNG', 'GRAVE_ROBBER',
 ];

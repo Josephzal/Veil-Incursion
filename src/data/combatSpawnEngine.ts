@@ -4,7 +4,7 @@ import { laneForSlot } from '../types/combatGrid';
 import { applyDiagonalStaggerToProfiles } from './combatGridPlacement';
 import { initEnemyCombatLayers } from './combatFractureEngine';
 import { isDistrictGateDepth, depthFromNodesCleared, getDistrictFromDepth } from './districtPacing';
-import { resolveSpawnSlotsForDepth } from './levelEncounterData';
+import { resolveSpawnSlotsForDepth, resolveEncounterMetaForDepth } from './levelEncounterData';
 import type { RunSegmentState } from './encounterGenerator';
 import { apexResonanceAmbushComposition, entriesFromComposition } from './encounterCompositionEngine';
 import type { EnemyCombatProfile, SectorDefinition } from '../types/run';
@@ -22,12 +22,18 @@ function nextUnitId(prefix: string): string {
 function assignGrid(
   profile: EnemyCombatProfile,
   slot: CombatGridSlotId,
+  gridWidth = 1,
 ): EnemyCombatProfile {
+  const occupiedSlots: CombatGridSlotId[] | undefined = gridWidth >= 2
+    ? [slot, slot === 'FL_0' ? 'FL_1' : 'FL_0']
+    : undefined;
   return {
     ...initEnemyCombatLayers(profile),
     unitId: profile.unitId ?? nextUnitId('hostile'),
     gridSlot: slot,
     lane: laneForSlot(slot),
+    gridWidth: gridWidth > 1 ? gridWidth : profile.gridWidth,
+    occupiedSlots: occupiedSlots ?? profile.occupiedSlots,
     enemyActionPoints: profile.enemyActionPoints ?? 1,
     enemyMaxActionPoints: profile.enemyMaxActionPoints ?? 1,
   };
@@ -60,6 +66,12 @@ export function spawnCombatSquad(options: SpawnSquadOptions): EnemyCombatProfile
     options.runSegment ?? undefined,
     options.encounterSeed,
   );
+  const encounterMeta = resolveEncounterMetaForDepth(
+    depth,
+    options.runSegment ?? undefined,
+    options.encounterSeed,
+  );
+  const cabalFaction = encounterMeta.cabalFaction;
 
   if (slotAssignments.length === 0 && options.isAmbush) {
     const ambush = entriesFromComposition(apexResonanceAmbushComposition());
@@ -78,15 +90,17 @@ export function spawnCombatSquad(options: SpawnSquadOptions): EnemyCombatProfile
     ? slotAssignments.slice(0, Math.min(4, options.unitCount))
     : slotAssignments;
 
-  const squad = limited.map(({ rosterId, slot, isAlpha }) =>
+  const squad = limited.map(({ rosterId, slot, isAlpha, gridWidth }) =>
     assignGrid(
       spawnRosterUnit(ENEMY_ROSTER[rosterId], options.nodeIndex, {
         resonancePercent: options.spawnOptions?.resonancePercent,
         forcedElite: options.isElite === true,
         district,
         isAlpha,
+        cabalFaction: cabalFaction ?? undefined,
       }),
       slot,
+      gridWidth,
     ),
   );
   return applyDiagonalStaggerToProfiles(squad);

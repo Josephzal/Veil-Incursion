@@ -491,7 +491,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const initialBiome = rollMacroBiomeStep(0, null, `run-start:${sectorTier}`);
     const sanctuarySchedule = rollSanctuarySchedule(`run:${Date.now()}:${sectorTier}`);
     const runSeed = `run:${Date.now()}:${sectorTier}`;
-    const initialRunSegment = createRunSegment(1, runSeed);
+    const initialRunSegment = createRunSegment(1, runSeed, config?.alignedFaction ?? null);
     const incursion: ActiveIncursionState = {
       ...createDefaultActiveIncursionState(),
       isRunActive: true,
@@ -2003,10 +2003,18 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         inc.runSegment,
         `clear:${completedIndex}:${completedNode?.id ?? 'node'}`,
       );
-      nextRunSegment = applyEncounterToSegment(inc.runSegment, generated.encounterId);
+      nextRunSegment = applyEncounterToSegment(
+        inc.runSegment,
+        generated.encounterId,
+        generated.encounterOrigin,
+      );
     }
     if (wasBoss && isDistrictGateDepth(clearedDepth) && nextDistrict !== inc.currentDistrict) {
-      nextRunSegment = createRunSegment(nextDistrict, `district:${nextDistrict}:${nextNodesCleared}`);
+      nextRunSegment = createRunSegment(
+        nextDistrict,
+        `district:${nextDistrict}:${nextNodesCleared}`,
+        inc.alignedFaction,
+      );
       appendRunLog(`>> ALPHA DUEL INDEX — D${nextDistrict} NODE ${nextRunSegment.alphaNodeIndex}`);
     }
 

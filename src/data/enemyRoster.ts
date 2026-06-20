@@ -9,6 +9,8 @@ import { applyCorporealHpMultiplier } from './combatEnvironmentEngine';
 import { initEnemyCombatLayers } from './combatFractureEngine';
 import { initRosterLifecycleDefaults } from './combatLifecycleEngine';
 import { CONCRETE_GARGOYLE_FRACTURE_MAX } from './combatRosterActions';
+import { defaultPostureIntentForRoster } from './enemyPostureConfig';
+import { applyFactionTrait } from './factionTraitEngine';
 import type { DistrictId } from './districtPacing';
 import { depthFromNodesCleared, localLevelFromDepth } from './districtPacing';
 import type { ThreatTier } from './combatEncounterBudget';
@@ -38,6 +40,16 @@ export type EnemyRosterId =
   | 'tar-spitter'
   | 'churn'
   | 'splinter'
+  | 'breacher'
+  | 'cutter'
+  | 'warden'
+  | 'fixer'
+  | 'spotter'
+  | 'burner'
+  | 'amalgam'
+  | 'wire-ghoul'
+  | 'hollow-lung'
+  | 'grave-robber'
   | 'boss-hollowed-precinct'
   | 'boss-choir-of-rust'
   | 'boss-primeval-rift-walker';
@@ -57,6 +69,9 @@ export interface EnemyRosterEntry {
   elite?: boolean;
   evadeChance: number;
   critChance: number;
+  isCabalHuman?: boolean;
+  isVeilEntity?: boolean;
+  cabalClassLabel?: string;
 }
 
 export const ENEMY_ROSTER: Record<EnemyRosterId, EnemyRosterEntry> = {
@@ -403,6 +418,162 @@ export const ENEMY_ROSTER: Record<EnemyRosterId, EnemyRosterEntry> = {
     evadeChance: 0,
     critChance: 0.05,
   },
+  'breacher': {
+    id: 'breacher',
+    designation: 'BREACHER',
+    faction: 'TERRAN_GRID',
+    class: 'APPARITION',
+    role: 'FRONTLINE',
+    hp: 78,
+    damage: 6,
+    kineticArmor: 0,
+    occultWards: 0,
+    threatTier: 2,
+    isCabalHuman: true,
+    cabalClassLabel: 'BREACHER',
+    evadeChance: 0,
+    critChance: 0,
+  },
+  'cutter': {
+    id: 'cutter',
+    designation: 'CUTTER',
+    faction: 'TERRAN_GRID',
+    class: 'GREMLIN',
+    role: 'FRONTLINE',
+    hp: 74,
+    damage: 10,
+    kineticArmor: 0,
+    occultWards: 0,
+    threatTier: 1,
+    isCabalHuman: true,
+    cabalClassLabel: 'CUTTER',
+    evadeChance: 0.15,
+    critChance: 0,
+  },
+  'warden': {
+    id: 'warden',
+    designation: 'WARDEN',
+    faction: 'TERRAN_GRID',
+    class: 'ABOMINATION',
+    role: 'FRONTLINE',
+    hp: 128,
+    damage: 14,
+    kineticArmor: 8,
+    occultWards: 0,
+    threatTier: 3,
+    isCabalHuman: true,
+    cabalClassLabel: 'WARDEN',
+    evadeChance: 0,
+    critChance: 0.05,
+  },
+  'fixer': {
+    id: 'fixer',
+    designation: 'FIXER',
+    faction: 'TERRAN_GRID',
+    class: 'APPARITION',
+    role: 'BACKLINE',
+    hp: 88,
+    damage: 8,
+    kineticArmor: 0,
+    occultWards: 0,
+    threatTier: 2,
+    isCabalHuman: true,
+    cabalClassLabel: 'FIXER',
+    evadeChance: 0.10,
+    critChance: 0,
+  },
+  'spotter': {
+    id: 'spotter',
+    designation: 'SPOTTER',
+    faction: 'TERRAN_GRID',
+    class: 'APPARITION',
+    role: 'BACKLINE',
+    hp: 84,
+    damage: 12,
+    kineticArmor: 0,
+    occultWards: 0,
+    threatTier: 2,
+    isCabalHuman: true,
+    cabalClassLabel: 'SPOTTER',
+    evadeChance: 0.10,
+    critChance: 0,
+  },
+  'burner': {
+    id: 'burner',
+    designation: 'BURNER',
+    faction: 'TERRAN_GRID',
+    class: 'APPARITION',
+    role: 'BACKLINE',
+    hp: 86,
+    damage: 9,
+    kineticArmor: 0,
+    occultWards: 0,
+    threatTier: 2,
+    isCabalHuman: true,
+    cabalClassLabel: 'BURNER',
+    evadeChance: 0,
+    critChance: 0,
+  },
+  'amalgam': {
+    id: 'amalgam',
+    designation: 'AMALGAM',
+    faction: 'LEGION',
+    class: 'ABOMINATION',
+    role: 'FRONTLINE',
+    hp: 160,
+    damage: 17,
+    kineticArmor: 12,
+    occultWards: 0,
+    threatTier: 3,
+    isVeilEntity: true,
+    evadeChance: 0,
+    critChance: 0.05,
+  },
+  'wire-ghoul': {
+    id: 'wire-ghoul',
+    designation: 'WIRE GHOUL',
+    faction: 'LEGION',
+    class: 'GREMLIN',
+    role: 'FRONTLINE',
+    hp: 72,
+    damage: 10,
+    kineticArmor: 0,
+    occultWards: 0,
+    threatTier: 1,
+    isVeilEntity: true,
+    evadeChance: 0.15,
+    critChance: 0,
+  },
+  'hollow-lung': {
+    id: 'hollow-lung',
+    designation: 'HOLLOW LUNG',
+    faction: 'SOLARIS',
+    class: 'APPARITION',
+    role: 'BACKLINE',
+    hp: 92,
+    damage: 10,
+    kineticArmor: 0,
+    occultWards: 1,
+    threatTier: 2,
+    isVeilEntity: true,
+    evadeChance: 0,
+    critChance: 0,
+  },
+  'grave-robber': {
+    id: 'grave-robber',
+    designation: 'GRAVE ROBBER',
+    faction: 'LEGION',
+    class: 'APPARITION',
+    role: 'BACKLINE',
+    hp: 90,
+    damage: 11,
+    kineticArmor: 0,
+    occultWards: 0,
+    threatTier: 2,
+    isVeilEntity: true,
+    evadeChance: 0,
+    critChance: 0,
+  },
   'boss-hollowed-precinct': {
     id: 'boss-hollowed-precinct',
     designation: 'HOLLOWED PRECINCT',
@@ -479,6 +650,16 @@ export const ALLOWED_GRUNT_ROSTER_IDS: readonly EnemyRosterId[] = [
   'tar-spitter',
   'churn',
   'splinter',
+  'breacher',
+  'cutter',
+  'warden',
+  'fixer',
+  'spotter',
+  'burner',
+  'amalgam',
+  'wire-ghoul',
+  'hollow-lung',
+  'grave-robber',
 ];
 
 export const ALLOWED_BOSS_ROSTER_IDS: readonly EnemyRosterId[] = [
@@ -528,6 +709,7 @@ export function spawnRosterUnit(
     isApex?: boolean;
     apexBudget?: number;
     isAlpha?: boolean;
+    cabalFaction?: FactionType;
   },
 ): EnemyCombatProfile {
   const scale = getNodeScale(nodeIndex);
@@ -538,7 +720,8 @@ export function spawnRosterUnit(
     ?? Math.floor(entry.hp * (elite ? 1.15 : 1));
   const baseDamage = resolvedStats?.baseDamage ?? entry.damage;
   const affinity = resolveEnemyAffinity(entry.class, elite, options?.resonancePercent ?? 0);
-  const intent = rollEnemyIntent(entry.class, 0, options?.district ?? 1);
+  const postureIntent = defaultPostureIntentForRoster(entry.id);
+  const intent = postureIntent ?? rollEnemyIntent(entry.class, 0, options?.district ?? 1);
   const base: EnemyCombatProfile = {
     class: entry.class,
     designation: entry.designation,
@@ -552,6 +735,8 @@ export function spawnRosterUnit(
     scale,
     rosterId: entry.id,
     faction: entry.faction,
+    isCabalHuman: entry.isCabalHuman,
+    isVeilEntity: entry.isVeilEntity,
     evadeChance: entry.evadeChance,
     critChance: entry.critChance,
   };
@@ -574,23 +759,34 @@ export function spawnRosterUnit(
     ...withLifecycle,
     spawnArchetype: resolvedStats?.archetype,
   };
+  let profile: EnemyCombatProfile = withArchetype;
   if (options?.isApex) {
-    return {
-      ...withArchetype,
+    profile = {
+      ...profile,
       isApex: true,
       enemyActionPoints: 2,
       enemyMaxActionPoints: 2,
       designation: `APEX ${entry.designation}`,
     };
-  }
-  if (options?.isAlpha) {
-    return {
-      ...withArchetype,
+  } else if (options?.isAlpha) {
+    profile = {
+      ...profile,
       enemyActionPoints: 2,
       enemyMaxActionPoints: 2,
     };
   }
-  return withArchetype;
+  if (entry.isCabalHuman && options?.cabalFaction) {
+    profile = applyFactionTrait(profile, options.cabalFaction);
+  }
+  if (entry.id === 'amalgam') {
+    profile = {
+      ...profile,
+      gridWidth: 2,
+      occupiedSlots: ['FL_0', 'FL_1'],
+      fractureImmune: true,
+    };
+  }
+  return profile;
 }
 
 export function resolveEnemyThreatTier(profile: {

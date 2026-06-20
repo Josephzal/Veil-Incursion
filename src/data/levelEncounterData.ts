@@ -22,6 +22,8 @@ export interface LevelEncounterEntry {
   /** Solo alpha duel — applies Alpha stat modifier. */
   isAlpha?: boolean;
   encounterId?: string;
+  encounterOrigin?: import('./originDeckEngine').EncounterOrigin;
+  cabalFaction?: import('../types/game').FactionType;
 }
 
 const SLOT_MAP: Record<keyof EncounterLayout, CombatGridSlotId> = {
@@ -72,6 +74,8 @@ export function resolveLevelEncounter(
     layout: generated.layout,
     isAlpha: generated.isAlpha,
     encounterId: generated.encounterId,
+    encounterOrigin: generated.encounterOrigin,
+    cabalFaction: generated.cabalFaction,
   };
 }
 
@@ -85,6 +89,7 @@ export interface SpawnSlotAssignment {
   rosterId: EnemyRosterId;
   slot: CombatGridSlotId;
   isAlpha?: boolean;
+  gridWidth?: number;
 }
 
 export function layoutToSpawnSlots(
@@ -97,6 +102,16 @@ export function layoutToSpawnSlots(
   for (const layoutKey of slotKeys) {
     const enemyKey = layout[layoutKey];
     if (!enemyKey) continue;
+    if (enemyKey === 'AMALGAM' && assignments.some((a) => a.rosterId === 'amalgam')) continue;
+    if (enemyKey === 'AMALGAM') {
+      assignments.push({
+        rosterId: ENCOUNTER_KEY_TO_ROSTER[enemyKey],
+        slot: 'FL_0',
+        isAlpha,
+        gridWidth: 2,
+      });
+      continue;
+    }
     assignments.push({
       rosterId: ENCOUNTER_KEY_TO_ROSTER[enemyKey],
       slot: SLOT_MAP[layoutKey],
@@ -119,6 +134,14 @@ export function resolveSpawnSlotsForDepth(
   if (!hasAnyEnemy) return [];
 
   return layoutToSpawnSlots(entry.layout, entry.isAlpha);
+}
+
+export function resolveEncounterMetaForDepth(
+  depth: number,
+  segment?: RunSegmentState,
+  seed?: string,
+): Pick<LevelEncounterEntry, 'encounterOrigin' | 'cabalFaction' | 'encounterId'> {
+  return resolveLevelEncounter(depth, segment, seed);
 }
 
 export function isAlphaDuelDepth(depth: number, segment: RunSegmentState): boolean {

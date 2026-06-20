@@ -41,7 +41,16 @@ export function unitAtSlot(
   squad: EnemyCombatProfile[],
   slot: CombatGridSlotId,
 ): EnemyCombatProfile | undefined {
-  return squad.find((u) => u.gridSlot === slot && isUnitAlive(u));
+  const direct = squad.find((u) => u.gridSlot === slot && isUnitAlive(u));
+  if (direct) return direct;
+  return squad.find((u) => {
+    if (!isUnitAlive(u)) return false;
+    if (u.occupiedSlots?.includes(slot)) return true;
+    if ((u.gridWidth ?? 1) >= 2 && u.gridSlot === 'FL_0' && (slot === 'FL_0' || slot === 'FL_1')) {
+      return true;
+    }
+    return false;
+  });
 }
 
 export function nextDefaultTarget(squad: EnemyCombatProfile[]): string | null {

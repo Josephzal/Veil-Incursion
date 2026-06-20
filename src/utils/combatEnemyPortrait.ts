@@ -18,6 +18,51 @@ import NullShade from '../../assets/enemy images/null_shade.png';
 import NullShadeAttacking from '../../assets/enemy images/null_shade_attacking.png';
 import AshWeeper from '../../assets/enemy images/ash-weeper.png';
 import AshWeeperAttacking from '../../assets/enemy images/ash_weeper_attacking.png';
+import Spall from '../../assets/enemy images/spall.png';
+import SpallAttacking from '../../assets/enemy images/spall_attack.png';
+import Scuttler from '../../assets/enemy images/scuttler.png';
+import ScuttlerAttacking from '../../assets/enemy images/scuttler_attack.png';
+import Thrall from '../../assets/enemy images/thrall.png';
+import ThrallAttacking from '../../assets/enemy images/thrall_attack.png';
+import HookWeaver from '../../assets/enemy images/hook_weaver.png';
+import MemoryLeech from '../../assets/enemy images/memory_leech.png';
+import SmogCaller from '../../assets/enemy images/smog_caller.png';
+import IronMaiden from '../../assets/enemy images/iron_maiden.png';
+import IronMaidenAttacking from '../../assets/enemy images/iron_maiden_attack.png';
+import Golem from '../../assets/enemy images/golem.png';
+import SlagBlood from '../../assets/enemy images/slag_blood.png';
+import SlagBloodAttacking from '../../assets/enemy images/slag_blood_attack.png';
+import Sapper from '../../assets/enemy images/sapper.png';
+import SapperAttacking from '../../assets/enemy images/sapper_attack.png';
+import CoilSpikeSniper from '../../assets/enemy images/coil_spike_sniper.png';
+import CoilSpikeSniperAttacking from '../../assets/enemy images/coil_spike_sniper_attack.png';
+import ResonanceCaster from '../../assets/enemy images/resonance_caster.png';
+import ResonanceCasterAttacking from '../../assets/enemy images/resonance_caster_attack.png';
+import TarSpitter from '../../assets/enemy images/tar_spitter.png';
+import Churn from '../../assets/enemy images/churn.png';
+import ChurnAttacking from '../../assets/enemy images/churn_attack.png';
+import Splinter from '../../assets/enemy images/splinter.png';
+import SplinterAttacking from '../../assets/enemy images/splinter_attack.png';
+import Breacher from '../../assets/enemy images/breacher.png';
+import BreacherAttacking from '../../assets/enemy images/breacher_attack.png';
+import Cutter from '../../assets/enemy images/cutter.png';
+import CutterAttacking from '../../assets/enemy images/cutter_attack.png';
+import Warden from '../../assets/enemy images/warden.png';
+import WardenAttacking from '../../assets/enemy images/warden_attack.png';
+import Fixer from '../../assets/enemy images/fixer.png';
+import FixerAttacking from '../../assets/enemy images/fixer_attack.png';
+import Spotter from '../../assets/enemy images/spotter.png';
+import SpotterAttacking from '../../assets/enemy images/spotter_attacking.png';
+import Burner from '../../assets/enemy images/burner.png';
+import BurnerAttacking from '../../assets/enemy images/burner_attack.png';
+import Amalgam from '../../assets/enemy images/amalgam.png';
+import AmalgamAttacking from '../../assets/enemy images/amalgam_attack.png';
+import WireGhoul from '../../assets/enemy images/wire_ghoul.png';
+import WireGhoulAttacking from '../../assets/enemy images/wire_ghoul_attack.png';
+import HollowLung from '../../assets/enemy images/hollow_lung.png';
+import HollowLungAttacking from '../../assets/enemy images/hollow_lung_attack.png';
+import GraveRobber from '../../assets/enemy images/grave_robber.png';
+import GraveRobberAttacking from '../../assets/enemy images/grave_robber_attack.png';
 import EnemyFallback from '../../assets/enemy images/enemyl2.png';
 import EnemyStalker from '../../assets/enemy images/stalkerv1.png';
 import type { RunNodeType } from '../types/game';
@@ -35,21 +80,31 @@ const ROSTER_PORTRAITS: Partial<Record<EnemyRosterId, ImageSourcePropType>> = {
   'null-shade': NullShade,
   'spatial-glitch': SpatialGlitch,
   'boss-hollowed-precinct': HollowedPrecinct,
-  'spall': NullShade,
-  'scuttler': NullShade,
-  'thrall': NullShade,
-  'hook-weaver': NullShade,
-  'memory-leech': NullShade,
-  'smog-caller': NullShade,
-  'iron-maiden': NullShade,
-  'golem': NullShade,
-  'slag-blood': NullShade,
-  'sapper': NullShade,
-  'coil-spike-sniper': NullShade,
-  'resonance-caster': NullShade,
-  'tar-spitter': NullShade,
-  'churn': NullShade,
-  'splinter': NullShade,
+  'spall': Spall,
+  'scuttler': Scuttler,
+  'thrall': Thrall,
+  'hook-weaver': HookWeaver,
+  'memory-leech': MemoryLeech,
+  'smog-caller': SmogCaller,
+  'iron-maiden': IronMaiden,
+  'golem': Golem,
+  'slag-blood': SlagBlood,
+  'sapper': Sapper,
+  'coil-spike-sniper': CoilSpikeSniper,
+  'resonance-caster': ResonanceCaster,
+  'tar-spitter': TarSpitter,
+  'churn': Churn,
+  'splinter': Splinter,
+  'breacher': Breacher,
+  'cutter': Cutter,
+  'warden': Warden,
+  'fixer': Fixer,
+  'spotter': Spotter,
+  'burner': Burner,
+  'amalgam': Amalgam,
+  'wire-ghoul': WireGhoul,
+  'hollow-lung': HollowLung,
+  'grave-robber': GraveRobber,
 };
 
 const ROSTER_ATTACK_PORTRAITS: Partial<Record<EnemyRosterId, ImageSourcePropType>> = {
@@ -62,21 +117,31 @@ const ROSTER_ATTACK_PORTRAITS: Partial<Record<EnemyRosterId, ImageSourcePropType
   'null-shade': NullShadeAttacking,
   'spatial-glitch': SpatialGlitchAttacking,
   'boss-hollowed-precinct': HollowedPrecinctAttacking,
-  'spall': NullShadeAttacking,
-  'scuttler': NullShadeAttacking,
-  'thrall': NullShadeAttacking,
-  'hook-weaver': NullShadeAttacking,
-  'memory-leech': NullShadeAttacking,
-  'smog-caller': NullShadeAttacking,
-  'iron-maiden': NullShadeAttacking,
-  'golem': NullShadeAttacking,
-  'slag-blood': NullShadeAttacking,
-  'sapper': NullShadeAttacking,
-  'coil-spike-sniper': NullShadeAttacking,
-  'resonance-caster': NullShadeAttacking,
-  'tar-spitter': NullShadeAttacking,
-  'churn': NullShadeAttacking,
-  'splinter': NullShadeAttacking,
+  'spall': SpallAttacking,
+  'scuttler': ScuttlerAttacking,
+  'thrall': ThrallAttacking,
+  'hook-weaver': HookWeaver,
+  'memory-leech': MemoryLeech,
+  'smog-caller': SmogCaller,
+  'iron-maiden': IronMaidenAttacking,
+  'golem': Golem,
+  'slag-blood': SlagBloodAttacking,
+  'sapper': SapperAttacking,
+  'coil-spike-sniper': CoilSpikeSniperAttacking,
+  'resonance-caster': ResonanceCasterAttacking,
+  'tar-spitter': TarSpitter,
+  'churn': ChurnAttacking,
+  'splinter': SplinterAttacking,
+  'breacher': BreacherAttacking,
+  'cutter': CutterAttacking,
+  'warden': WardenAttacking,
+  'fixer': FixerAttacking,
+  'spotter': SpotterAttacking,
+  'burner': BurnerAttacking,
+  'amalgam': AmalgamAttacking,
+  'wire-ghoul': WireGhoulAttacking,
+  'hollow-lung': HollowLungAttacking,
+  'grave-robber': GraveRobberAttacking,
 };
 
 export function resolveRosterPortrait(rosterId?: string | null): ImageSourcePropType {

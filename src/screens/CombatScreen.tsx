@@ -57,7 +57,7 @@ import {
   type PendingNarrativeCombatBoons,
 } from '../types/narrativeBonusReward';
 import { depthFromNodesCleared, isDistrictGateDepth } from '../data/districtPacing';
-import { rollGatekeeperLockedTemplate } from '../data/combatRewardEngine';
+import { collectFactionTraitLoot, rollGatekeeperLockedTemplate } from '../data/combatRewardEngine';
 import { shouldGrantAdrenalinePrimerAp } from '../data/boundRequisitionEngine';
 import type { IncursionConsumableUseResult } from '../types/incursionInventory';
 
@@ -461,12 +461,14 @@ export default function CombatScreen(): React.JSX.Element {
       addLockedContainer(lockedTemplate);
       appendRunLog('>> GATEKEEPER SALVAGE — sealed container routed to Safehouse decryption vault.');
     }
+    const factionLoot = collectFactionTraitLoot(runState.pendingEnemies ?? []);
     const combatDropInstanceIds = grantCombatResourceDrops({
       depth,
       isElite: nodeType === 'ELITE_COMBAT',
       isGatekeeper,
       rosterId: runState.pendingEnemy?.rosterId,
       seed: `combat:${depth}:${nodeType ?? 'std'}:${runState.pendingEnemy?.rosterId ?? 'unknown'}`,
+      extraLoot: factionLoot,
     });
     if (adrenalinePrimerBonusAp > 0) {
       consumeAdrenalinePrimerAfterCombat();

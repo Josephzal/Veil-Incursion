@@ -1,4 +1,5 @@
 import type { ResourceItemId } from '../types/resourceItem';
+import type { EnemyCombatProfile } from '../types/run';
 import { ENEMY_ROSTER, type EnemyRosterId } from './enemyRoster';
 
 export type LootDepthTier = 1 | 2 | 3;
@@ -44,6 +45,7 @@ export interface CombatRewardContext {
   isGatekeeper: boolean;
   rosterId?: string | null;
   seed?: string;
+  extraLoot?: ResourceItemId[];
 }
 
 export function lootDepthTierFromDepth(depth: number): LootDepthTier {
@@ -113,6 +115,18 @@ function pickEliteDrops(
   return [pickFromPool(rare, rng), pickFromPool(rare, rng)];
 }
 
+export function collectFactionTraitLoot(
+  enemies: Array<Pick<EnemyCombatProfile, 'isCabalHuman' | 'factionLootId' | 'currentHp' | 'isSlumped'>>,
+): ResourceItemId[] {
+  const drops: ResourceItemId[] = [];
+  for (const enemy of enemies) {
+    if (!enemy.isCabalHuman || !enemy.factionLootId) continue;
+    if (enemy.currentHp > 0 || enemy.isSlumped) continue;
+    drops.push(enemy.factionLootId as ResourceItemId);
+  }
+  return drops;
+}
+
 export function rollCombatResourceDrops(ctx: CombatRewardContext): ResourceItemId[] {
   const rng = createSeededRng(ctx.seed ?? `combat-loot:${ctx.depth}:${ctx.rosterId ?? 'unknown'}`);
   const tier = lootDepthTierFromDepth(ctx.depth);
@@ -125,6 +139,7 @@ export function rollCombatResourceDrops(ctx: CombatRewardContext): ResourceItemI
 
   if (ctx.isElite) {
     drops.push(...pickEliteDrops(profile, tier, rng));
+    drops.push(...(ctx.extraLoot ?? []));
     return drops;
   }
 
@@ -132,6 +147,7 @@ export function rollCombatResourceDrops(ctx: CombatRewardContext): ResourceItemI
     drops.push(pickBiasedFromPool(tierResourcePool(tier), profile, rng));
   }
 
+  drops.push(...(ctx.extraLoot ?? []));
   return drops;
 }
 

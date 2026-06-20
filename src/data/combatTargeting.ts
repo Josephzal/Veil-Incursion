@@ -122,6 +122,37 @@ export function validTargetsForAbility(
   return aliveUnits(squad).filter((u) => canTargetWithAbility(squad, abilityId, u.unitId!));
 }
 
+export function resolveUnitAtGridSlot(
+  squad: EnemyCombatProfile[],
+  slot: CombatGridSlotId,
+): EnemyCombatProfile | undefined {
+  return unitAtSlot(squad, slot);
+}
+
+export function findLivingWarden(squad: EnemyCombatProfile[]): EnemyCombatProfile | null {
+  return aliveUnits(squad).find(
+    (u) => u.rosterId === 'warden' && u.gridSlot?.startsWith('FL'),
+  ) ?? null;
+}
+
+/** Hard redirect — backline single-target kinetic attacks hit a living frontline Warden. */
+export function resolveWardenInterceptTarget(
+  squad: EnemyCombatProfile[],
+  abilityId: AegisAbilityId,
+  unitId: string,
+): string {
+  const mode = abilityTargetMode(abilityId);
+  if (mode !== 'SINGLE') return unitId;
+  if (isHookAbility(abilityId) || isOccultAbility(abilityId)) return unitId;
+
+  const unit = squad.find((u) => u.unitId === unitId);
+  if (!unit?.gridSlot?.startsWith('BL')) return unitId;
+
+  const warden = findLivingWarden(squad);
+  if (warden?.unitId) return warden.unitId;
+  return unitId;
+}
+
 export function isBacklineSlot(slot: CombatGridSlotId): boolean {
   return BACKLINE_SLOTS.includes(slot);
 }
