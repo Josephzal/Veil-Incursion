@@ -27,12 +27,28 @@ import {
 import type { AegisLoadout } from '../types/aegisCombat';
 import { DEFAULT_AEGIS_LOADOUT } from '../types/aegisCombat';
 import { normalizeAegisLoadout } from '../utils/aegisLoadoutUtils';
-import { createDefaultBankedCargo } from '../types/cargoGrid';
-import type { GlobalBankedCargo } from '../types/cargoGrid';
+import { createDefaultBankedCargo, createDefaultCargoRunState } from '../types/cargoGrid';
+import type { GlobalBankedCargo, CargoRunState } from '../types/cargoGrid';
+import {
+  applyFenceSale,
+  applyHubContrabandPurchase,
+  loadStashResourceIntoCargo,
+  calculateStashUsed,
+  clearTacticalSlotState,
+  createDefaultTacticalLoadout,
+  equipTacticalFromHub,
+  finalizeDescentLoadout,
+  HUB_STASH_CAPACITY,
+  returnCargoResourceToStash,
+} from '../data/hubSafehouseEngine';
+import { relocateCargoItem } from '../data/cargoGridEngine';
+import type { FenceableResourceId, ResourceItemId } from '../types/resourceItem';
 import { MacroSectorId, RegionalPresenceState } from '../types/regional';
 import { createEmptyResourceStash, canAffordRecipe, deductRecipeFromStash } from '../data/resourceStashEngine';
-import { getCraftingRecipe } from '../data/craftingRegistry';
+import { getCraftingRecipe, isRecipeOutputOwned } from '../data/craftingRegistry';
 import type { ResourceQuantity } from '../types/resourceItem';
+import type { BoundRequisitionId } from '../types/boundRequisition';
+import type { CargoItemId } from '../types/cargoGrid';
 import { rollDecryptionLoot } from '../data/decryptionLootEngine';
 import {
   blueprintForClass,
@@ -99,6 +115,10 @@ export function createDefaultPlayerAccount(): PlayerAccount {
       'encrypted-grid-drive': 1,
     },
     unlockedBlueprints: [],
+    craftedAugments: [],
+    hubCraftedConsumables: {},
+    preRunCargo: createDefaultCargoRunState(),
+    tacticalLoadout: createDefaultTacticalLoadout(),
     equippedBlueprintId: null,
     unidentifiedStash: [],
   };
@@ -142,6 +162,13 @@ function mergeStoredAccount(parsed: Partial<PlayerAccount>): PlayerAccount {
       ...parsed.resourceStash,
     },
     unlockedBlueprints: parsed.unlockedBlueprints ?? defaults.unlockedBlueprints,
+    craftedAugments: parsed.craftedAugments ?? defaults.craftedAugments,
+    hubCraftedConsumables: {
+      ...defaults.hubCraftedConsumables,
+      ...parsed.hubCraftedConsumables,
+    },
+    preRunCargo: parsed.preRunCargo ?? defaults.preRunCargo,
+    tacticalLoadout: parsed.tacticalLoadout ?? defaults.tacticalLoadout,
     equippedBlueprintId: parsed.equippedBlueprintId ?? defaults.equippedBlueprintId,
     unidentifiedStash: parsed.unidentifiedStash ?? defaults.unidentifiedStash,
   };
@@ -186,6 +213,16 @@ interface PlayerAccountContextType {
   addLockedContainer: (templateId: UnidentifiedTemplateId) => void;
   decryptUnidentifiedItem: (instanceId: string) => Promise<string[]>;
   setEquippedBlueprint: (blueprintId: BlueprintId | null) => void;
+  relocatePreRunCargoItem: (instanceId: string, row: number, col: number) => boolean;
+  loadStashResourceToCargo: (resourceId: ResourceItemId) => { success: boolean; logLine: string };
+  returnPreRunCargoToStash: (instanceId: string) => { success: boolean; logLine: string };
+  equipTacticalSlot: (slotIndex: 0 | 1 | 2, itemId: CargoItemId) => { success: boolean; logLine: string };
+  clearTacticalSlot: (slotIndex: 0 | 1 | 2) => void;
+  purchaseHubContraband: (cargoId: CargoItemId, discountPct?: number) => { success: boolean; logLine: string };
+  sellFenceResource: (resourceId: FenceableResourceId, quantity?: number) => { success: boolean; logLine: string };
+  commitDescentLoadout: () => CargoRunState;
+  getStashCapacitySnapshot: () => { used: number; max: number };
+  replaceResourceStash: (stash: ResourceQuantity) => void;
 }
 
 const PlayerAccountContext = createContext<PlayerAccountContextType | undefined>(undefined);
@@ -437,8 +474,15 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       if (!recipe) {
         return { success: false, logLine: '>> FABRICATION REJECTED — UNKNOWN SCHEMATIC.' };
       }
-      if (account.unlockedBlueprints.includes(recipe.outputId)) {
-        return { success: false, logLine: `>> ${recipe.label.toUpperCase()} ALREADY UNLOCKED.` };
+      if (
+        recipe.kind !== 'CONSUMABLE'
+        && isRecipeOutputOwned(
+          recipe.outputId,
+          account.unlockedBlueprints,
+          account.craftedAugments,
+        )
+      ) {
+        return { success: false, logLine: `>> ${recipe.label.toUpperCase()} ALREADY FORGED.` };
       }
       if (!canAffordRecipe(account.resourceStash, recipe)) {
         return { success: false, logLine: '>> FABRICATION REJECTED — INSUFFICIENT RESOURCES.' };
@@ -447,23 +491,61 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       if (!nextStash) {
         return { success: false, logLine: '>> FABRICATION REJECTED — STASH DEDUCTION FAILED.' };
       }
+
       updateAccount((prev) => {
-        const nextBlueprints = [...prev.unlockedBlueprints, recipe.outputId];
-        const shouldEquip = isBlueprintId(recipe.outputId)
-          && blueprintForClass(prev.activeClass) === recipe.outputId;
+        const base = { ...prev, resourceStash: nextStash };
+        if (recipe.kind === 'LOADOUT') {
+          const nextBlueprints = [...prev.unlockedBlueprints, recipe.outputId];
+          const shouldEquip = isBlueprintId(recipe.outputId)
+            && blueprintForClass(prev.activeClass) === recipe.outputId;
+          return {
+            ...base,
+            unlockedBlueprints: nextBlueprints,
+            equippedBlueprintId: shouldEquip
+              ? (recipe.outputId as BlueprintId)
+              : prev.equippedBlueprintId,
+          };
+        }
+        if (recipe.kind === 'AUGMENT') {
+          const augmentId = recipe.outputId as BoundRequisitionId;
+          if (prev.craftedAugments.includes(augmentId)) return base;
+          return {
+            ...base,
+            craftedAugments: [...prev.craftedAugments, augmentId],
+          };
+        }
+        const consumableId = recipe.outputId as CargoItemId;
+        const nextConsumables = { ...prev.hubCraftedConsumables };
+        nextConsumables[consumableId] = (nextConsumables[consumableId] ?? 0) + 1;
         return {
-          ...prev,
-          resourceStash: nextStash,
-          unlockedBlueprints: nextBlueprints,
-          equippedBlueprintId: shouldEquip ? (recipe.outputId as BlueprintId) : prev.equippedBlueprintId,
+          ...base,
+          hubCraftedConsumables: nextConsumables,
         };
       });
+
+      if (recipe.kind === 'LOADOUT') {
+        return {
+          success: true,
+          logLine: `>> FABRICATION COMPLETE — ${recipe.outputId.replace(/_/g, ' ').toUpperCase()} UNLOCKED.`,
+        };
+      }
+      if (recipe.kind === 'AUGMENT') {
+        return {
+          success: true,
+          logLine: `>> AUGMENT FORGED — ${recipe.label.toUpperCase()} STAGED FOR DEPLOYMENT.`,
+        };
+      }
       return {
         success: true,
-        logLine: `>> FABRICATION COMPLETE — ${recipe.outputId.replace(/_/g, ' ').toUpperCase()} UNLOCKED.`,
+        logLine: `>> CONSUMABLE FABRICATED — ${recipe.label.toUpperCase()} ADDED TO HUB STAGING.`,
       };
     },
-    [account.resourceStash, account.unlockedBlueprints, updateAccount],
+    [
+      account.craftedAugments,
+      account.resourceStash,
+      account.unlockedBlueprints,
+      updateAccount,
+    ],
   );
 
   const addLockedContainer = useCallback(
@@ -483,6 +565,173 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
     [updateAccount],
   );
 
+  const relocatePreRunCargoItem = useCallback(
+    (instanceId: string, row: number, col: number): boolean => {
+      let moved = false;
+      updateAccount((prev) => {
+        const nextCargo = relocateCargoItem(prev.preRunCargo, instanceId, row, col);
+        if (!nextCargo) return prev;
+        moved = true;
+        return { ...prev, preRunCargo: nextCargo };
+      });
+      return moved;
+    },
+    [updateAccount],
+  );
+
+  const loadStashResourceToCargo = useCallback(
+    (resourceId: ResourceItemId): { success: boolean; logLine: string } => {
+      let success = false;
+      updateAccount((prev) => {
+        const result = loadStashResourceIntoCargo(prev.resourceStash, prev.preRunCargo, resourceId);
+        if (!result) return prev;
+        success = true;
+        return {
+          ...prev,
+          resourceStash: result.stash,
+          preRunCargo: result.cargo,
+        };
+      });
+      return success
+        ? { success: true, logLine: `>> STASH → CARGO — ${resourceId.replace(/-/g, ' ').toUpperCase()} LOADED.` }
+        : { success: false, logLine: '>> CARGO TRANSFER REJECTED — STASH EMPTY OR GRID FULL.' };
+    },
+    [updateAccount],
+  );
+
+  const returnPreRunCargoToStash = useCallback(
+    (instanceId: string): { success: boolean; logLine: string } => {
+      let success = false;
+      updateAccount((prev) => {
+        const result = returnCargoResourceToStash(prev.resourceStash, prev.preRunCargo, instanceId);
+        if (!result) return prev;
+        success = true;
+        return {
+          ...prev,
+          resourceStash: result.stash,
+          preRunCargo: result.cargo,
+        };
+      });
+      return success
+        ? { success: true, logLine: '>> CARGO → STASH — RESOURCE RETURNED TO VAULT.' }
+        : { success: false, logLine: '>> RETURN REJECTED — ITEM NOT A STASH RESOURCE.' };
+    },
+    [updateAccount],
+  );
+
+  const equipTacticalSlot = useCallback(
+    (slotIndex: 0 | 1 | 2, itemId: CargoItemId): { success: boolean; logLine: string } => {
+      let success = false;
+      updateAccount((prev) => {
+        const result = equipTacticalFromHub(
+          prev.hubCraftedConsumables,
+          prev.tacticalLoadout,
+          slotIndex,
+          itemId,
+        );
+        if (!result) return prev;
+        success = true;
+        return {
+          ...prev,
+          hubCraftedConsumables: result.hubCraftedConsumables,
+          tacticalLoadout: result.tacticalLoadout,
+        };
+      });
+      return success
+        ? { success: true, logLine: `>> TACTICAL SLOT ${slotIndex + 1} ARMED — ${itemId.replace(/-/g, ' ').toUpperCase()}.` }
+        : { success: false, logLine: '>> TACTICAL EQUIP REJECTED — CONSUMABLE NOT IN STAGING.' };
+    },
+    [updateAccount],
+  );
+
+  const clearTacticalSlot = useCallback(
+    (slotIndex: 0 | 1 | 2) => {
+      updateAccount((prev) => {
+        const result = clearTacticalSlotState(
+          prev.hubCraftedConsumables,
+          prev.tacticalLoadout,
+          slotIndex,
+        );
+        return {
+          ...prev,
+          hubCraftedConsumables: result.hubCraftedConsumables,
+          tacticalLoadout: result.tacticalLoadout,
+        };
+      });
+    },
+    [updateAccount],
+  );
+
+  const purchaseHubContraband = useCallback(
+    (cargoId: CargoItemId, discountPct = 0): { success: boolean; logLine: string } => {
+      let success = false;
+      updateAccount((prev) => {
+        const result = applyHubContrabandPurchase(
+          prev.cabalCredits,
+          prev.hubCraftedConsumables,
+          cargoId,
+          discountPct,
+        );
+        if (!result) return prev;
+        success = true;
+        return {
+          ...prev,
+          cabalCredits: result.cabalCredits,
+          hubCraftedConsumables: result.hubCraftedConsumables,
+        };
+      });
+      return success
+        ? { success: true, logLine: `>> CONTRABAND ACQUIRED — ${cargoId.replace(/-/g, ' ').toUpperCase()} STAGED.` }
+        : { success: false, logLine: '>> PURCHASE REJECTED — INSUFFICIENT CABAL CREDITS.' };
+    },
+    [updateAccount],
+  );
+
+  const sellFenceResource = useCallback(
+    (resourceId: FenceableResourceId, quantity = 1): { success: boolean; logLine: string } => {
+      let creditsEarned = 0;
+      updateAccount((prev) => {
+        const result = applyFenceSale(prev.resourceStash, prev.cabalCredits, resourceId, quantity);
+        if (!result) return prev;
+        creditsEarned = result.creditsEarned;
+        return {
+          ...prev,
+          resourceStash: result.stash,
+          cabalCredits: result.cabalCredits,
+        };
+      });
+      return creditsEarned > 0
+        ? { success: true, logLine: `>> FENCE PAYOUT — +${creditsEarned} CABAL CREDITS.` }
+        : { success: false, logLine: '>> SALE REJECTED — INSUFFICIENT STASH QUANTITY.' };
+    },
+    [updateAccount],
+  );
+
+  const commitDescentLoadout = useCallback((): CargoRunState => {
+    const cargo = finalizeDescentLoadout(account.preRunCargo, account.tacticalLoadout);
+    updateAccount((prev) => ({
+      ...prev,
+      preRunCargo: createDefaultCargoRunState(),
+      tacticalLoadout: createDefaultTacticalLoadout(),
+    }));
+    return cargo;
+  }, [account.preRunCargo, account.tacticalLoadout, updateAccount]);
+
+  const getStashCapacitySnapshot = useCallback(
+    () => ({
+      used: calculateStashUsed(account.resourceStash),
+      max: HUB_STASH_CAPACITY,
+    }),
+    [account.resourceStash],
+  );
+
+  const replaceResourceStash = useCallback(
+    (stash: ResourceQuantity) => {
+      updateAccount((prev) => ({ ...prev, resourceStash: { ...stash } }));
+    },
+    [updateAccount],
+  );
+
   const decryptUnidentifiedItem = useCallback(
     async (instanceId: string): Promise<string[]> => {
       const item = account.unidentifiedStash.find((entry) => entry.instanceId === instanceId);
@@ -492,6 +741,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       const costRecipe = {
         id: 'decrypt',
         label: 'Decrypt',
+        kind: 'LOADOUT' as const,
         outputId: item.templateId,
         requirements: DECRYPTION_COST[item.templateId],
       };
@@ -562,6 +812,16 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       addLockedContainer,
       decryptUnidentifiedItem,
       setEquippedBlueprint,
+      relocatePreRunCargoItem,
+      loadStashResourceToCargo,
+      returnPreRunCargoToStash,
+      equipTacticalSlot,
+      clearTacticalSlot,
+      purchaseHubContraband,
+      sellFenceResource,
+      commitDescentLoadout,
+      getStashCapacitySnapshot,
+      replaceResourceStash,
     }),
     [
       account,
@@ -587,6 +847,16 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       addLockedContainer,
       decryptUnidentifiedItem,
       setEquippedBlueprint,
+      relocatePreRunCargoItem,
+      loadStashResourceToCargo,
+      returnPreRunCargoToStash,
+      equipTacticalSlot,
+      clearTacticalSlot,
+      purchaseHubContraband,
+      sellFenceResource,
+      commitDescentLoadout,
+      getStashCapacitySnapshot,
+      replaceResourceStash,
     ],
   );
 

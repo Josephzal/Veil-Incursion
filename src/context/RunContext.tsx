@@ -194,6 +194,8 @@ import type { BoundRequisitionDefinition, BoundRequisitionId } from '../types/bo
 import { rollBoundRequisitionOffers } from '../data/boundRequisitions';
 import {
   applyBoundRequisitionAtRunStart,
+  applyCraftedAugmentPassives,
+  buildBoundRequisitionRuntime,
   consumeAdrenalinePrimerCombat,
   consumeScavengerMarkDiscount,
   getBlackMarketDiscountPct,
@@ -211,6 +213,9 @@ export interface RunStartConfig {
   sectorTier?: number;
   aegisLoadout?: AegisLoadout;
   alignedFaction?: FactionType | null;
+  /** Safehouse cargo grid + tactical slots committed on descent. */
+  initialCargo?: import('../types/cargoGrid').CargoRunState;
+  shadowWarBuffs?: import('../data/shadowWarBuffEngine').ShadowWarRunBuffModifiers;
 }
 
 interface RunContextType {
@@ -224,7 +229,10 @@ interface RunContextType {
   recordRunKillAttacker: (designation: string) => void;
   boundRequisitionOffers: BoundRequisitionDefinition[];
   prepareBoundRequisitionOffers: (account: PlayerAccount) => void;
-  confirmBoundRequisition: (id: BoundRequisitionId) => void;
+  confirmBoundRequisition: (
+    id: BoundRequisitionId,
+    craftedAugments?: readonly BoundRequisitionId[],
+  ) => void;
   consumeAdrenalinePrimerAfterCombat: () => void;
   /** Claims next-combat narrative boons and clears pending state. */
   claimPendingNarrativeCombatBoons: () => PendingNarrativeCombatBoons;
@@ -470,8 +478,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const cluster = pickRandomClimateCluster();
     const clusterDef = getClusterDefinition(cluster);
     const hpBonus = config?.factionPerks?.maxHpBonus ?? 0;
+    const shadowHpBonus = config?.shadowWarBuffs?.maxHpBonusPct ?? 0;
     const stamBonus = config?.factionPerks?.maxStaminaBonus ?? 0;
-    const maxSoulAnchor = BASE_MAX_SOUL_ANCHOR + hpBonus;
+    const maxSoulAnchor = Math.floor((BASE_MAX_SOUL_ANCHOR + hpBonus) * (1 + shadowHpBonus / 100));
     const maxStamina = BASE_MAX_STAMINA + stamBonus;
     const citySector = INITIAL_SECTOR_POOL.find((s) => s.id === 'city-subway') ?? INITIAL_SECTOR_POOL[0];
     const next: RunState = {
@@ -535,9 +544,16 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       aegisLoadout: config?.aegisLoadout
         ? [...config.aegisLoadout] as AegisLoadout
         : createDefaultActiveIncursionState().aegisLoadout,
-      cargo: createStarterCargoRunState(),
+      cargo: config?.initialCargo ?? createStarterCargoRunState(),
       sanctuarySchedule,
       strikeDamageBonusPct: 0,
+      shadowWarBuffs: config?.shadowWarBuffs ?? {
+        maxHpBonusPct: 0,
+        kineticArmorBonus: 0,
+        rareLootBonusPct: 0,
+        blackMarketDiscountPct: 0,
+        firstTurnApBonus: 0,
+      },
       runSegment: initialRunSegment,
     };
     const expandedIncursion = persistExpandedSectorGraph(incursion);
@@ -591,24 +607,41 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     setBoundRequisitionOffers(offers);
   }, []);
 
-  const confirmBoundRequisition = useCallback((id: BoundRequisitionId) => {
+  const confirmBoundRequisition = useCallback((
+    id: BoundRequisitionId,
+    craftedAugments: readonly BoundRequisitionId[] = [],
+  ) => {
     const run = runStateRef.current;
     const inc = activeIncursionRef.current;
     const result = applyBoundRequisitionAtRunStart(id, run, inc);
+    const mergedRun = { ...run, ...result.runPatch };
+    const mergedInc = { ...inc, ...result.incursionPatch };
+    const primaryRuntime = mergedInc.boundRequisition ?? buildBoundRequisitionRuntime(id);
+    const passiveResult = applyCraftedAugmentPassives(
+      craftedAugments,
+      id,
+      mergedRun,
+      mergedInc,
+      primaryRuntime,
+    );
 
-    if (Object.keys(result.runPatch).length > 0) {
-      const nextRun = { ...run, ...result.runPatch };
+    const nextRun = { ...mergedRun, ...passiveResult.runPatch };
+    if (Object.keys({ ...result.runPatch, ...passiveResult.runPatch }).length > 0) {
       runStateRef.current = nextRun;
       setRunState(nextRun);
     }
 
     setActiveIncursion((prev) => {
-      const next = { ...prev, ...result.incursionPatch };
+      const next = {
+        ...prev,
+        ...result.incursionPatch,
+        ...passiveResult.incursionPatch,
+      };
       activeIncursionRef.current = next;
       return next;
     });
 
-    result.logLines.forEach((line) => appendRunLog(line));
+    [...result.logLines, ...passiveResult.logLines].forEach((line) => appendRunLog(line));
     setBoundRequisitionOffers([]);
   }, [appendRunLog]);
 

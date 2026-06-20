@@ -100,6 +100,14 @@ export const BOUND_REQUISITION_CATALOG: Record<BoundRequisitionId, BoundRequisit
     tagline: 'RUNNER ECHO BEACON',
     effectSummary: 'Forces a [ RUNNER ECHO ] within the first 7 Depths.',
   },
+  KINETIC_BATTERY: {
+    id: 'KINETIC_BATTERY',
+    name: 'Kinetic Battery',
+    tier: 2,
+    kind: 'STANDARD',
+    tagline: 'DEFENSE CHARGE LATTICE',
+    effectSummary: 'Defending boosts your next attack damage.',
+  },
   HOLLOW_POINT_REQUISITION: {
     id: 'HOLLOW_POINT_REQUISITION',
     name: 'Hollow-Point Requisition',

@@ -102,6 +102,18 @@ export interface PlayerAccount {
   resourceStash: ResourceQuantity;
   /** Crafted blueprint IDs unlocked at the metropolitan fabrication bench. */
   unlockedBlueprints: string[];
+  /** Hub-forged passive augments available for pre-run loadout staging. */
+  craftedAugments: import('./boundRequisition').BoundRequisitionId[];
+  /** Hub-crafted tactical consumables awaiting run deployment. */
+  hubCraftedConsumables: Partial<Record<import('./cargoGrid').CargoItemId, number>>;
+  /** Pre-run cargo grid draft staged at the Safehouse. */
+  preRunCargo: import('./cargoGrid').CargoRunState;
+  /** Three tactical consumable slots armed for the next descent. */
+  tacticalLoadout: [
+    import('./cargoGrid').CargoItemId | null,
+    import('./cargoGrid').CargoItemId | null,
+    import('./cargoGrid').CargoItemId | null,
+  ];
   /** Class weapon blueprint actively wired into combat hooks. */
   equippedBlueprintId: import('./equipmentBlueprint').BlueprintId | null;
   /** Safehouse decryption queue — gatekeeper cores/caskets land here as locked containers. */
@@ -375,6 +387,8 @@ export interface ActiveIncursionState {
   sanctuarySchedule: import('../data/sanctuaryScheduleEngine').SanctuarySchedule;
   /** Cumulative strike damage bonus from sanctuary upgrades (%). Stacks per visit. */
   strikeDamageBonusPct: number;
+  /** Passive modifiers from secured Shadow War macro-sectors. */
+  shadowWarBuffs: import('../data/shadowWarBuffEngine').ShadowWarRunBuffModifiers;
   /** Per-district encounter pacing — alpha duel index, anti-repetition history. */
   runSegment: import('../data/encounterGenerator').RunSegmentState | null;
 }
@@ -448,6 +462,13 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     godModeActive: false,
     sanctuarySchedule: { 1: [14], 2: [14], 3: [14] },
     strikeDamageBonusPct: 0,
+    shadowWarBuffs: {
+      maxHpBonusPct: 0,
+      kineticArmorBonus: 0,
+      rareLootBonusPct: 0,
+      blackMarketDiscountPct: 0,
+      firstTurnApBonus: 0,
+    },
     runSegment: null,
   };
 }

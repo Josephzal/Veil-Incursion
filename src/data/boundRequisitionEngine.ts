@@ -68,6 +68,9 @@ export function buildBoundRequisitionRuntime(id: BoundRequisitionId): BoundRequi
     case 'DEAD_DROP_TRACKER':
       runtime.deadDropTrackerActive = true;
       break;
+    case 'KINETIC_BATTERY':
+      runtime.kineticBatteryActive = true;
+      break;
     case 'HOLLOW_POINT_REQUISITION':
       runtime.hollowPointActive = true;
       break;
@@ -198,6 +201,21 @@ export function applyBoundRequisitionAtRunStart(
       logLines.push('>> VOID-TOUCHED ARTIFACT STOWED — 2 CARGO SLOTS LOCKED.');
       break;
     }
+    case 'KINETIC_BATTERY':
+      logLines.push('>> KINETIC BATTERY ONLINE — defend to overcharge next strike (+40%).');
+      break;
+    case 'DEAD_DROP_TRACKER':
+      logLines.push('>> DEAD-DROP TRACKER ARMED — high-tier cache within first 7 depths.');
+      break;
+    case 'WIRETAP_OVERRIDE':
+      logLines.push('>> WIRETAP OVERRIDE — exact enemy types revealed for 5 depths.');
+      break;
+    case 'BRIBE_THE_FERRYMAN':
+      logLines.push('>> FERRYMAN BRIBED — evac vector guaranteed at depth 5.');
+      break;
+    case 'HOLLOW_POINT_REQUISITION':
+      logLines.push('>> HOLLOW-POINT LOADOUT — frontline corporeal damage boosted.');
+      break;
     default:
       logLines.push('>> REQUISITION FLAGS REGISTERED — AWAITING DEPTH HOOKS.');
       break;
@@ -257,9 +275,102 @@ export function getEffectiveBlackMarketPrice(basePrice: number, discountPct: num
 }
 
 export function getBlackMarketDiscountPct(incursion: ActiveIncursionState): number {
+  let discount = incursion.shadowWarBuffs?.blackMarketDiscountPct ?? 0;
   const req = incursion.boundRequisition;
-  if (!req?.scavengerMarkBlackMarketPending) return 0;
-  return req.blackMarketDiscountPct;
+  if (req?.scavengerMarkBlackMarketPending) {
+    discount = Math.max(discount, req.blackMarketDiscountPct);
+  }
+  return discount;
+}
+
+export function mergeBoundRequisitionRuntime(
+  primary: BoundRequisitionRuntime,
+  passive: BoundRequisitionRuntime,
+): BoundRequisitionRuntime {
+  return {
+    id: primary.id,
+    adrenalinePrimerCombatsRemaining: Math.max(
+      primary.adrenalinePrimerCombatsRemaining,
+      passive.adrenalinePrimerCombatsRemaining,
+    ),
+    chalkLineWardDepthsRemaining: Math.max(
+      primary.chalkLineWardDepthsRemaining,
+      passive.chalkLineWardDepthsRemaining,
+    ),
+    wiretapDepthsRemaining: Math.max(primary.wiretapDepthsRemaining, passive.wiretapDepthsRemaining),
+    smugglersPocketsActive: primary.smugglersPocketsActive || passive.smugglersPocketsActive,
+    scavengerMarkBlackMarketPending:
+      primary.scavengerMarkBlackMarketPending || passive.scavengerMarkBlackMarketPending,
+    bribeFerrymanActive: primary.bribeFerrymanActive || passive.bribeFerrymanActive,
+    deadDropTrackerActive: primary.deadDropTrackerActive || passive.deadDropTrackerActive,
+    kineticBatteryActive: primary.kineticBatteryActive || passive.kineticBatteryActive,
+    hollowPointActive: primary.hollowPointActive || passive.hollowPointActive,
+    voidTouchedArtifactActive: primary.voidTouchedArtifactActive || passive.voidTouchedArtifactActive,
+    apexBaitActive: primary.apexBaitActive || passive.apexBaitActive,
+    martyrsBargainActive: primary.martyrsBargainActive || passive.martyrsBargainActive,
+    ironcladLogisticsActive: primary.ironcladLogisticsActive || passive.ironcladLogisticsActive,
+    leyScarsBlocked: primary.leyScarsBlocked || passive.leyScarsBlocked,
+    sunkenRiteActive: primary.sunkenRiteActive || passive.sunkenRiteActive,
+    resonanceImmuneDepthsRemaining: Math.max(
+      primary.resonanceImmuneDepthsRemaining,
+      passive.resonanceImmuneDepthsRemaining,
+    ),
+    endlessMarchActive: primary.endlessMarchActive || passive.endlessMarchActive,
+    evacBlocked: primary.evacBlocked || passive.evacBlocked,
+    endlessMarchDamageBonusPct: Math.max(
+      primary.endlessMarchDamageBonusPct,
+      passive.endlessMarchDamageBonusPct,
+    ),
+    extraCargoSlots: primary.extraCargoSlots + passive.extraCargoSlots,
+    lockedCargoSlots: primary.lockedCargoSlots + passive.lockedCargoSlots,
+    guaranteedEvacDepth: primary.guaranteedEvacDepth ?? passive.guaranteedEvacDepth,
+    blackMarketDiscountPct: Math.max(primary.blackMarketDiscountPct, passive.blackMarketDiscountPct),
+    eliteIncomingDamageBonusPct: Math.max(
+      primary.eliteIncomingDamageBonusPct,
+      passive.eliteIncomingDamageBonusPct,
+    ),
+    eliteLootMultiplier: Math.max(primary.eliteLootMultiplier, passive.eliteLootMultiplier),
+  };
+}
+
+/** Permanent forge-crafted augments stack atop the chosen bound requisition. */
+export function applyCraftedAugmentPassives(
+  craftedIds: readonly BoundRequisitionId[],
+  selectedId: BoundRequisitionId,
+  run: RunState,
+  incursion: ActiveIncursionState,
+  primaryRuntime: BoundRequisitionRuntime,
+): BoundRequisitionApplyResult {
+  const passives = craftedIds.filter((id) => id !== selectedId);
+  if (passives.length === 0) {
+    return { runPatch: {}, incursionPatch: {}, logLines: [] };
+  }
+
+  let runPatch: Partial<RunState> = {};
+  let incursionPatch: Partial<ActiveIncursionState> = {};
+  const logLines: string[] = [];
+  let mergedRuntime = primaryRuntime;
+  let workingRun = run;
+  let workingInc = incursion;
+
+  for (const augmentId of passives) {
+    const def = getBoundRequisitionDefinition(augmentId);
+    const result = applyBoundRequisitionAtRunStart(augmentId, workingRun, workingInc);
+    logLines.push(`>> FORGE PASSIVE — ${def.name.toUpperCase()} ONLINE.`);
+    workingRun = { ...workingRun, ...result.runPatch };
+    workingInc = { ...workingInc, ...result.incursionPatch };
+    runPatch = { ...runPatch, ...result.runPatch };
+    incursionPatch = { ...incursionPatch, ...result.incursionPatch };
+    if (result.incursionPatch.boundRequisition) {
+      mergedRuntime = mergeBoundRequisitionRuntime(
+        mergedRuntime,
+        result.incursionPatch.boundRequisition,
+      );
+    }
+  }
+
+  incursionPatch.boundRequisition = mergedRuntime;
+  return { runPatch, incursionPatch, logLines };
 }
 
 export function consumeScavengerMarkDiscount(

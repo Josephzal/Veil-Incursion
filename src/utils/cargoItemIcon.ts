@@ -54,6 +54,8 @@ const RESOURCE_ITEM_IMAGES: Record<ResourceItemId, ImageSourcePropType> = {
   'smugglers-ledger': SmugglersLedgerImage,
   'ossified-ley-knot': OssifiedLeyKnotImage,
   'sealed-containment-casket': SealedContainmentCasketImage,
+  'tarnished-dog-tags': ResourceImage,
+  'combustion-cylinder': ResourceImage,
 };
 
 /** Per-item cargo art when available; otherwise shared resource placeholder. */

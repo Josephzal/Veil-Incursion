@@ -4,7 +4,7 @@ import CabalBg from '../../assets/images/location images/cabal.png';
 import IncursionShell from '../components/IncursionShell';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
 import SelectionContinueButton from '../components/SelectionContinueButton';
-import { tierLabel } from '../data/boundRequisitions';
+import { tierLabel, getBoundRequisitionDefinition } from '../data/boundRequisitions';
 import { getBoundRequisitionLevel } from '../data/boundRequisitionProgression';
 import { useGameFlow } from '../context/GameFlowContext';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
@@ -39,7 +39,7 @@ export default function BoundRequisitionScreen(): React.JSX.Element {
   const handleContinue = () => {
     if (!selectedId || confirming) return;
     setConfirming(true);
-    confirmBoundRequisition(selectedId);
+    confirmBoundRequisition(selectedId, account.craftedAugments);
     beginScanSession();
     startScanning();
   };
@@ -70,6 +70,21 @@ export default function BoundRequisitionScreen(): React.JSX.Element {
               <Text style={[styles.instruction, { color: theme.primaryColor }]}>
                 Select one requisition offer. Effects bind for the entire incursion.
               </Text>
+              {account.craftedAugments.length > 0 ? (
+                <View style={[styles.forgePassivesBlock, { borderColor: theme.borderColor }]}>
+                  <Text style={[styles.forgePassivesLabel, { color: theme.mutedColor }]}>
+                    FORGE PASSIVES (ALWAYS ACTIVE)
+                  </Text>
+                  {account.craftedAugments.map((augmentId) => {
+                    const def = getBoundRequisitionDefinition(augmentId);
+                    return (
+                      <Text key={augmentId} style={[styles.forgePassiveLine, { color: TERMINAL_ACCENT }]}>
+                        {`>> ${def.name.toUpperCase()} — ${def.effectSummary}`}
+                      </Text>
+                    );
+                  })}
+                </View>
+              ) : null}
             </View>
 
             <View style={styles.choiceCol}>
@@ -226,5 +241,22 @@ const styles = StyleSheet.create({
     fontSize: 8,
     lineHeight: 13,
     marginTop: 6,
+  },
+  forgePassivesBlock: {
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    gap: 4,
+  },
+  forgePassivesLabel: {
+    fontFamily: 'monospace',
+    fontSize: 8,
+    letterSpacing: 0.8,
+    marginBottom: 4,
+  },
+  forgePassiveLine: {
+    fontFamily: 'monospace',
+    fontSize: 8,
+    lineHeight: 12,
   },
 });

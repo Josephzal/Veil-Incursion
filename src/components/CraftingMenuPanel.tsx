@@ -1,6 +1,11 @@
 import React, { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { CRAFTING_REGISTRY } from '../data/craftingRegistry';
+import {
+  getRecipesByKind,
+  isRecipeOutputOwned,
+  type CraftingRecipe,
+  type CraftingRecipeKind,
+} from '../data/craftingRegistry';
 import { canAffordRecipe, getStashCount } from '../data/resourceStashEngine';
 import { RESOURCE_REGISTRY } from '../data/resourceRegistry';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
@@ -8,28 +13,126 @@ import { useTerminal } from '../context/TerminalContext';
 import type { ResourceItemId } from '../types/resourceItem';
 
 interface CraftingMenuPanelProps {
-  onClose: () => void;
+  onClose?: () => void;
+  embedded?: boolean;
 }
 
-export default function CraftingMenuPanel({ onClose }: CraftingMenuPanelProps): React.JSX.Element {
+const SECTION_LABELS: Record<CraftingRecipeKind, string> = {
+  LOADOUT: 'LOADOUT SCHEMATICS',
+  AUGMENT: 'PERMANENT AUGMENTS',
+  CONSUMABLE: 'TACTICAL CONSUMABLES',
+};
+
+function RecipeCard({
+  recipe,
+  affordable,
+  alreadyOwned,
+  stash,
+  onCraft,
+  theme,
+}: {
+  recipe: CraftingRecipe;
+  affordable: boolean;
+  alreadyOwned: boolean;
+  stash: ReturnType<typeof usePlayerAccount>['account']['resourceStash'];
+  onCraft: (recipeId: string) => void;
+  theme: ReturnType<typeof useTerminal>['theme'];
+}): React.JSX.Element {
+  const craftDisabled = !affordable || (recipe.kind !== 'CONSUMABLE' && alreadyOwned);
+  const craftLabel = recipe.kind === 'CONSUMABLE'
+    ? '[ CRAFT ]'
+    : alreadyOwned
+      ? '[ ALREADY FORGED ]'
+      : '[ FABRICATE ]';
+
+  return (
+    <View
+      style={[styles.recipeCard, { borderColor: affordable ? theme.statusColor : theme.borderColor }]}
+    >
+      <Text style={[styles.recipeTitle, { color: theme.primaryColor }]}>{recipe.label.toUpperCase()}</Text>
+      {recipe.effectSummary ? (
+        <Text style={[styles.recipeBody, { color: theme.mutedColor }]}>{recipe.effectSummary}</Text>
+      ) : null}
+      {recipe.description ? (
+        <Text style={[styles.recipeBody, { color: theme.mutedColor }]}>{recipe.description}</Text>
+      ) : null}
+      <View style={styles.reqBlock}>
+        {recipe.requirements.map((req) => (
+          <Text
+            key={`${recipe.id}-${req.resourceId}`}
+            style={[
+              styles.reqLine,
+              {
+                color: getStashCount(stash, req.resourceId) >= req.quantity
+                  ? theme.textColor
+                  : '#ef4444',
+              },
+            ]}
+          >
+            {`${req.quantity}x ${RESOURCE_REGISTRY[req.resourceId].name} (owned: ${getStashCount(stash, req.resourceId)})`}
+          </Text>
+        ))}
+      </View>
+      <Pressable
+        disabled={craftDisabled}
+        onPress={() => onCraft(recipe.id)}
+        style={({ pressed }) => [
+          styles.craftBtn,
+          {
+            borderColor: !craftDisabled ? theme.statusColor : '#1a2e22',
+            opacity: pressed ? 0.75 : !craftDisabled ? 1 : 0.45,
+          },
+        ]}
+      >
+        <Text
+          style={[
+            styles.craftBtnText,
+            { color: !craftDisabled ? theme.statusColor : '#2a4032' },
+          ]}
+        >
+          {craftLabel}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
+export default function CraftingMenuPanel({
+  onClose,
+  embedded = false,
+}: CraftingMenuPanelProps): React.JSX.Element {
   const { theme } = useTerminal();
   const { account, craftRecipe, appendHubLog } = usePlayerAccount();
 
-  const recipes = useMemo(() => CRAFTING_REGISTRY, []);
+  const recipesByKind = useMemo(
+    () => ({
+      LOADOUT: getRecipesByKind('LOADOUT'),
+      AUGMENT: getRecipesByKind('AUGMENT'),
+      CONSUMABLE: getRecipesByKind('CONSUMABLE'),
+    }),
+    [],
+  );
 
   const handleCraft = (recipeId: string) => {
     const result = craftRecipe(recipeId);
     appendHubLog(result.logLine);
   };
 
+  const stagedConsumableCount = Object.values(account.hubCraftedConsumables)
+    .reduce((sum, count) => sum + (count ?? 0), 0);
+
   return (
-    <View style={[styles.root, { borderColor: theme.borderColor, backgroundColor: '#050608' }]}>
-      <View style={[styles.header, { borderBottomColor: theme.borderColor }]}>
-        <Text style={[styles.title, { color: theme.primaryColor }]}>FABRICATION BENCH // METRO HUB</Text>
-        <Pressable onPress={onClose} style={[styles.closeBtn, { borderColor: theme.statusColor }]}>
-          <Text style={[styles.closeBtnText, { color: theme.statusColor }]}>[ CLOSE ]</Text>
-        </Pressable>
-      </View>
+    <View style={[styles.root, embedded ? styles.rootEmbedded : null, { borderColor: theme.borderColor, backgroundColor: '#050608' }]}>
+      {!embedded ? (
+        <View style={[styles.header, { borderBottomColor: theme.borderColor }]}>
+          <Text style={[styles.title, { color: theme.primaryColor }]}>FABRICATION BENCH // METRO HUB</Text>
+          {onClose ? (
+            <Pressable onPress={onClose} style={[styles.closeBtn, { borderColor: theme.statusColor }]}>
+              <Text style={[styles.closeBtnText, { color: theme.statusColor }]}>[ CLOSE ]</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
         <View style={[styles.stashPanel, { borderColor: theme.borderColor }]}>
@@ -47,67 +150,64 @@ export default function CraftingMenuPanel({ onClose }: CraftingMenuPanelProps): 
           )}
         </View>
 
-        <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>AVAILABLE SCHEMATICS</Text>
-        {recipes.map((recipe) => {
-          const affordable = canAffordRecipe(account.resourceStash, recipe);
-          const alreadyUnlocked = account.unlockedBlueprints.includes(recipe.outputId);
-          return (
-            <View
-              key={recipe.id}
-              style={[styles.recipeCard, { borderColor: affordable ? theme.statusColor : theme.borderColor }]}
-            >
-              <Text style={[styles.recipeTitle, { color: theme.primaryColor }]}>{recipe.label.toUpperCase()}</Text>
-              {recipe.description ? (
-                <Text style={[styles.recipeBody, { color: theme.mutedColor }]}>{recipe.description}</Text>
-              ) : null}
-              <View style={styles.reqBlock}>
-                {recipe.requirements.map((req) => (
-                  <Text
-                    key={`${recipe.id}-${req.resourceId}`}
-                    style={[
-                      styles.reqLine,
-                      {
-                        color: getStashCount(account.resourceStash, req.resourceId) >= req.quantity
-                          ? theme.textColor
-                          : '#ef4444',
-                      },
-                    ]}
-                  >
-                    {`${req.quantity}x ${RESOURCE_REGISTRY[req.resourceId].name} (owned: ${getStashCount(account.resourceStash, req.resourceId)})`}
-                  </Text>
-                ))}
-              </View>
-              <Pressable
-                disabled={!affordable || alreadyUnlocked}
-                onPress={() => handleCraft(recipe.id)}
-                style={({ pressed }) => [
-                  styles.craftBtn,
-                  {
-                    borderColor: affordable && !alreadyUnlocked ? theme.statusColor : '#1a2e22',
-                    opacity: pressed ? 0.75 : affordable && !alreadyUnlocked ? 1 : 0.45,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.craftBtnText,
-                    { color: affordable && !alreadyUnlocked ? theme.statusColor : '#2a4032' },
-                  ]}
-                >
-                  {alreadyUnlocked ? '[ BLUEPRINT UNLOCKED ]' : '[ FABRICATE ]'}
-                </Text>
-              </Pressable>
-            </View>
-          );
-        })}
+        {(['AUGMENT', 'CONSUMABLE', 'LOADOUT'] as CraftingRecipeKind[]).map((kind) => (
+          <View key={kind}>
+            <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>
+              {SECTION_LABELS[kind]}
+            </Text>
+            {recipesByKind[kind].map((recipe) => {
+              const affordable = canAffordRecipe(account.resourceStash, recipe);
+              const alreadyOwned = isRecipeOutputOwned(
+                recipe.outputId,
+                account.unlockedBlueprints,
+                account.craftedAugments,
+              );
+              return (
+                <RecipeCard
+                  key={recipe.id}
+                  recipe={recipe}
+                  affordable={affordable}
+                  alreadyOwned={alreadyOwned}
+                  stash={account.resourceStash}
+                  onCraft={handleCraft}
+                  theme={theme}
+                />
+              );
+            })}
+          </View>
+        ))}
 
         {account.unlockedBlueprints.length > 0 ? (
           <View style={[styles.stashPanel, { borderColor: theme.borderColor }]}>
-            <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>UNLOCKED BLUEPRINTS</Text>
+            <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>UNLOCKED LOADOUTS</Text>
             {account.unlockedBlueprints.map((blueprintId) => (
               <Text key={blueprintId} style={[styles.stashLine, { color: theme.statusColor }]}>
                 {blueprintId.replace(/_/g, ' ').toUpperCase()}
               </Text>
+            ))}
+          </View>
+        ) : null}
+
+        {account.craftedAugments.length > 0 ? (
+          <View style={[styles.stashPanel, { borderColor: theme.borderColor }]}>
+            <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>FORGED AUGMENTS</Text>
+            {account.craftedAugments.map((augmentId) => (
+              <Text key={augmentId} style={[styles.stashLine, { color: theme.statusColor }]}>
+                {augmentId.replace(/_/g, ' ')}
+              </Text>
+            ))}
+          </View>
+        ) : null}
+
+        {stagedConsumableCount > 0 ? (
+          <View style={[styles.stashPanel, { borderColor: theme.borderColor }]}>
+            <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>STAGED CONSUMABLES</Text>
+            {Object.entries(account.hubCraftedConsumables).map(([id, count]) => (
+              count && count > 0 ? (
+                <Text key={id} style={[styles.stashLine, { color: theme.textColor }]}>
+                  {`${count}x ${id.replace(/-/g, ' ').toUpperCase()}`}
+                </Text>
+              ) : null
             ))}
           </View>
         ) : null}
@@ -121,6 +221,10 @@ const styles = StyleSheet.create({
     flex: 1,
     borderWidth: 1,
     minHeight: 280,
+  },
+  rootEmbedded: {
+    borderWidth: 0,
+    minHeight: 0,
   },
   header: {
     flexDirection: 'row',
@@ -159,6 +263,7 @@ const styles = StyleSheet.create({
     fontSize: 7,
     letterSpacing: 0.6,
     fontWeight: '700',
+    marginBottom: 6,
   },
   stashPanel: {
     borderWidth: 1,
@@ -179,6 +284,7 @@ const styles = StyleSheet.create({
     padding: 10,
     gap: 6,
     backgroundColor: '#0a0b0f',
+    marginBottom: 8,
   },
   recipeTitle: {
     fontFamily: 'monospace',

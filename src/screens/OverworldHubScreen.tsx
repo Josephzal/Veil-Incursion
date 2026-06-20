@@ -1,9 +1,7 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { FACTION_DEFINITIONS } from '../data/factions';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
-import { useRegionalShatter } from '../context/RegionalShatterContext';
-import { useRun } from '../context/RunContext';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useTerminalNav } from '../context/TerminalNavContext';
@@ -11,33 +9,42 @@ import IdentificationBadgeView from '../components/IdentificationBadgeView';
 import InventoryManifestPanel from '../components/InventoryManifestPanel';
 import TerminalNavHeader from '../components/TerminalNavHeader';
 import TerminalSafeArea from '../components/TerminalSafeArea';
-import VectorMapDashboard from '../components/VectorMapDashboard';
-import { DEFAULT_HOME_MACRO_SECTOR } from '../constants/homeSector';
-import { FactionType } from '../types/game';
-import { MacroSectorId } from '../types/regional';
+import ShadowWarDashboard from '../components/ShadowWarDashboard';
+import { useShadowWar } from '../context/ShadowWarContext';
+import type { FactionType } from '../types/game';
 
 const FACTION_ORDER: FactionType[] = ['TERRAN_GRID', 'LEGION', 'SOLARIS'];
 
 export default function OverworldHubScreen(): React.JSX.Element {
   const { theme, profile, updateCabalAlignment, alignment } = useTerminal();
   const { terminalView, setTerminalView } = useTerminalNav();
-  const { account, isHydrated, hubLog, commitFactionAlignment, appendHubLog, setMetropolitanNode } =
+  const { account, isHydrated, hubLog, commitFactionAlignment, appendHubLog, addCredits, depositResourceStash } =
     usePlayerAccount();
-  const { isInfluenceFrozen, frozenInfluence } = useRegionalShatter();
-  const { startNewRun } = useRun();
-  const { startBoundRequisition } = useGameFlow();
-
-  const [activeMagnetSector, setActiveMagnetSector] = useState<MacroSectorId>(
-    DEFAULT_HOME_MACRO_SECTOR,
-  );
-  const lastProxyLogRef = useRef<string | null>(null);
+  const { refreshCycleIfNeeded, isHydrated: shadowWarHydrated } = useShadowWar();
+  const { startSafehouseHub } = useGameFlow();
 
   const needsFactionSelection = account.alignedFaction === null;
 
   useEffect(() => {
-    if (!isHydrated) return;
-    setActiveMagnetSector(account.regionalPresence.homeMacroSector);
-  }, [isHydrated, account.regionalPresence.homeMacroSector]);
+    if (!isHydrated || !shadowWarHydrated) return;
+    refreshCycleIfNeeded(account.alignedFaction).then((result) => {
+      result.logs.forEach((line) => appendHubLog(line));
+      if (result.creditGrant > 0) addCredits(result.creditGrant);
+      Object.entries(result.resourceGrants).forEach(([id, qty]) => {
+        if (qty && qty > 0) {
+          depositResourceStash({ [id as import('../types/resourceItem').ResourceItemId]: qty });
+        }
+      });
+    });
+  }, [
+    isHydrated,
+    shadowWarHydrated,
+    account.alignedFaction,
+    refreshCycleIfNeeded,
+    appendHubLog,
+    addCredits,
+    depositResourceStash,
+  ]);
 
   useEffect(() => {
     if (!account.alignedFaction || account.alignedFaction === alignment) return;
@@ -46,31 +53,14 @@ export default function OverworldHubScreen(): React.JSX.Element {
 
   const handleInitiateDeepDive = () => {
     if (needsFactionSelection) return;
-    appendHubLog('>> DEEP-DIVE SCAN AUTHORIZED — PROCEDURAL VECTOR CLOUD INITIALIZING.');
-    startNewRun({
-      factionPerks: account.factionPerks,
-      unlockedBiomes: account.unlockedBiomes,
-      aegisLoadout: account.aegisLoadout,
-      alignedFaction: account.alignedFaction,
-    });
-    startBoundRequisition();
+    appendHubLog('>> SAFEHOUSE ACCESS GRANTED — STAGE LOADOUT BEFORE DESCENT.');
+    startSafehouseHub();
   };
 
   const handleSelectFaction = (faction: FactionType) => {
     commitFactionAlignment(faction);
     updateCabalAlignment(faction);
   };
-
-  const handleProxyReroute = useCallback(
-    (line: string) => {
-      if (lastProxyLogRef.current === line) return;
-      lastProxyLogRef.current = line;
-      appendHubLog(line);
-      const node = line.split(': ').pop();
-      if (node) setMetropolitanNode(node, activeMagnetSector);
-    },
-    [appendHubLog, setMetropolitanNode, activeMagnetSector],
-  );
 
   if (!isHydrated) {
     return (
@@ -103,20 +93,12 @@ export default function OverworldHubScreen(): React.JSX.Element {
             <IdentificationBadgeView theme={theme} profile={profile} account={account} />
           )}
           {terminalView === 'MAP' && (
-            <VectorMapDashboard
+            <ShadowWarDashboard
               theme={theme}
-              homeSectorId={account.regionalPresence.homeMacroSector}
-              activeMagnetSector={activeMagnetSector}
-              isInfluenceFrozen={isInfluenceFrozen}
-              frozenInfluence={frozenInfluence}
               hubLog={hubLog}
               runDisabled={needsFactionSelection}
-              onSectorChange={(id) => {
-                setActiveMagnetSector(id);
-                lastProxyLogRef.current = null;
-              }}
-              onProxyReroute={handleProxyReroute}
               onInitiateDeepDive={handleInitiateDeepDive}
+              onAppendLog={appendHubLog}
             />
           )}
           {terminalView === 'MANIFEST' && <InventoryManifestPanel />}

@@ -42,6 +42,7 @@ export default function DecryptionPanel({ onStatus }: DecryptionPanelProps): Rea
           const affordable = canAffordRecipe(account.resourceStash, {
             id: item.instanceId,
             label: '',
+            kind: 'LOADOUT',
             outputId: '',
             requirements: cost,
           });

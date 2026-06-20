@@ -26,8 +26,9 @@ interface CargoPackingPanelProps {
   onDiscardItem?: (instanceId: string) => boolean;
   runCredits?: number;
   showCreditsHud?: boolean;
-  onContinue: () => void;
+  onContinue?: () => void;
   continueLabel?: string;
+  hideContinueButton?: boolean;
   onContainmentItemCenterMeasured?: (instanceId: string, center: { x: number; y: number }) => void;
   onHarvestFloorMeasured?: (rect: { x: number; y: number; width: number; height: number }) => void;
   fixedExternalSlotCount?: number;
@@ -47,6 +48,7 @@ export default function CargoPackingPanel({
   showCreditsHud = false,
   onContinue,
   continueLabel = '[ CONTINUE ]',
+  hideContinueButton = false,
   onContainmentItemCenterMeasured,
   harvestLayout = false,
   gridSidecar,
@@ -89,7 +91,7 @@ export default function CargoPackingPanel({
             onContinue={onContinue}
             continueLabel={continueLabel}
             minimal
-            hideContinueButton={harvestLayout}
+            hideContinueButton={hideContinueButton || !onContinue}
             onContainmentItemCenterMeasured={onContainmentItemCenterMeasured}
             onHarvestFloorMeasured={harvestLayout ? onHarvestFloorMeasured : undefined}
             fixedExternalSlotCount={harvestLayout ? fixedExternalSlotCount : undefined}
@@ -110,7 +112,7 @@ export default function CargoPackingPanel({
           ) : null}
         </View>
 
-        {harvestLayout ? (
+        {harvestLayout && onContinue ? (
           <Pressable
             onPress={() => {
               pulseHubButton();

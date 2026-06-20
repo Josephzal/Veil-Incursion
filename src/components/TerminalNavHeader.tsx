@@ -5,7 +5,7 @@ import { TerminalView } from '../types/terminalNav';
 
 const NAV_ITEMS: Array<{ key: TerminalView; label: string }> = [
   { key: 'BADGE', label: '01 // IDENTITY BADGE' },
-  { key: 'MAP', label: '02 // VECTOR MAP' },
+  { key: 'MAP', label: '02 // SHADOW WAR' },
   { key: 'MANIFEST', label: '03 // ASSET MANIFEST' },
 ];
 

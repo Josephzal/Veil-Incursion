@@ -37,7 +37,7 @@ import {
 import CombatFloatingFeedback from './combat/CombatFloatingFeedback';
 import { DEFAULT_AEGIS_LOADOUT, PLAYER_ACTION_POINTS_PER_TURN, type AegisAbilityId, type AegisLoadout } from '../types/aegisCombat';
 import { getAbilityDefinition } from '../data/aegisAbilities';
-import { COMBAT_CONSUMABLE_AP_COST, resolveHostileHpHit } from '../data/aegisAbilityResolver';
+import { COMBAT_CONSUMABLE_AP_COST, absorbByArmor, resolveHostileHpHit } from '../data/aegisAbilityResolver';
 import { combatConsumableApCost } from '../data/cargoGridEngine';
 import type { CargoItemId } from '../types/cargoGrid';
 import type { CombatGridSlotId } from '../types/combatGrid';
@@ -265,6 +265,10 @@ interface TacticalCombatHubProps {
   spectralSaltActive?: boolean;
   /** Bound requisition first-turn AP bonus (Adrenaline Primer). */
   firstTurnBonusAp?: number;
+  /** Shadow War Slag Works — flat kinetic armor layers on operative. */
+  playerKineticArmorBonus?: number;
+  /** Bound requisition / forge passive — defend to overcharge next strike. */
+  kineticBatteryActive?: boolean;
   /** Narrative bonus boons claimed for this combat encounter. */
   narrativeCombatBoons?: import('../types/narrativeBonusReward').PendingNarrativeCombatBoons;
   /** Equipped class weapon blueprint — claymore / pulse rifle / hex hooks. */
@@ -338,6 +342,8 @@ export default function TacticalCombatHub({
   combatDistrict = 1,
   spectralSaltActive = false,
   firstTurnBonusAp = 0,
+  playerKineticArmorBonus = 0,
+  kineticBatteryActive = false,
   narrativeCombatBoons,
   equippedBlueprintId = null,
   playerCritChanceBonus = 0,
@@ -424,6 +430,7 @@ export default function TacticalCombatHub({
   const skipRegenRef = useRef(false);
   const abyssalWardRef = useRef(false);
   const wardStrikeBonusRef = useRef(false);
+  const kineticBatteryChargedRef = useRef(false);
   const counterRef = useRef(false);
   const pendingDmgRef = useRef(0);
   const pendingUnblockRef = useRef(false);
@@ -1337,6 +1344,14 @@ export default function TacticalCombatHub({
       dmg -= absorbed;
       log(`[SHIELD] >> ${absorbed} damage absorbed (${extras.playerShield} remaining).`);
     }
+    if (playerKineticArmorBonus > 0 && dmg > 0) {
+      const beforeArmor = dmg;
+      dmg = absorbByArmor(dmg, playerKineticArmorBonus);
+      const absorbed = beforeArmor - dmg;
+      if (absorbed > 0) {
+        log(`[KINETIC ARMOR] >> ${absorbed} absorbed (${playerKineticArmorBonus} layer${playerKineticArmorBonus === 1 ? '' : 's'}).`);
+      }
+    }
     if (!unblockable && abyssalWardRef.current) {
       dmg = Math.floor(dmg * (1 - COMBAT_ACTION.ABYSSAL_WARD_BLOCK_PCT));
       abyssalWardRef.current = false;
@@ -1540,6 +1555,16 @@ export default function TacticalCombatHub({
       working = applyFractureDamage(working, fractureGain);
     }
     let dmg = raw;
+    if (
+      source === 'STRIKE'
+      && kineticBatteryChargedRef.current
+      && dmg > 0
+    ) {
+      kineticBatteryChargedRef.current = false;
+      const boosted = Math.floor(dmg * 1.4);
+      log(`${tag} >> [KINETIC BATTERY] — ${dmg} → ${boosted}.`);
+      dmg = boosted;
+    }
     if (source && equippedBlueprintId) {
       const fireResult = runOnFireHooks(equippedBlueprintId, {
         blueprintId: equippedBlueprintId,
@@ -1891,6 +1916,10 @@ export default function TacticalCombatHub({
 
   markPlayerDefendedRef.current = () => {
     sessionExtrasRef.current.playerDefendedThisTurn = true;
+    if (kineticBatteryActive && !kineticBatteryChargedRef.current) {
+      kineticBatteryChargedRef.current = true;
+      log('[KINETIC BATTERY] >> Defense lattice charged — next strike +40%.');
+    }
     if (hasStructuredDebuff(sessionExtrasRef.current, 'ECHO_DEBUFF')) {
       removeStructuredDebuff(sessionExtrasRef.current, 'ECHO_DEBUFF');
       log('>> ECHO DISSIPATED — defensive posture absorbed the aftershock.');
@@ -2886,6 +2915,7 @@ export default function TacticalCombatHub({
       bloodForTimeUsed: false,
     };
     sessionExtrasRef.current = createDefaultCombatSessionExtras();
+    kineticBatteryChargedRef.current = false;
     combatChanceRef.current = createDefaultCombatChanceState();
     if (narrativeCombatBoons?.veilWard) {
       sessionExtrasRef.current.playerShield = 15;

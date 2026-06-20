@@ -8,7 +8,9 @@ export type ResourceItemId =
   | 'veil-ash-canister'
   | 'smugglers-ledger'
   | 'ossified-ley-knot'
-  | 'sealed-containment-casket';
+  | 'sealed-containment-casket'
+  | 'tarnished-dog-tags'
+  | 'combustion-cylinder';
 
 export type ResourceItemType = 'RESOURCE';
 
@@ -18,7 +20,12 @@ export interface ResourceItemDefinition {
   gridWidth: number;
   gridHeight: number;
   maxStack: number;
+  /** In-run cargo extraction / market friction value. */
   baseCapitalValue: number;
+  /** Hub fence sell price in Cabal Credits. */
+  sellValue: number;
+  /** Shadow War donation influence yield. */
+  ipValue: number;
   itemType: ResourceItemType;
 }
 
@@ -29,3 +36,12 @@ export interface ResourceBundle {
 }
 
 export type ResourceCacheId = 'smuggling_drop_stealth';
+
+/** Resources the hub fence will buy for Credits. */
+export const FENCEABLE_RESOURCE_IDS = [
+  'ley-slag',
+  'tarnished-dog-tags',
+  'smugglers-ledger',
+] as const satisfies readonly ResourceItemId[];
+
+export type FenceableResourceId = (typeof FENCEABLE_RESOURCE_IDS)[number];

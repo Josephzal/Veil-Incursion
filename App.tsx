@@ -6,10 +6,12 @@ import { TerminalProvider, useTerminal } from './src/context/TerminalContext';
 import { TerminalNavProvider } from './src/context/TerminalNavContext';
 import { PlayerAccountProvider } from './src/context/PlayerAccountContext';
 import { RegionalShatterProvider } from './src/context/RegionalShatterContext';
+import { ShadowWarProvider } from './src/context/ShadowWarContext';
 import { GameFlowProvider, useGameFlow } from './src/context/GameFlowContext';
 import { RunProvider } from './src/context/RunContext';
 import OverworldHubScreen from './src/screens/OverworldHubScreen';
 import WelcomeScreen from './src/screens/WelcomeScreen';
+import SafehouseHubScreen from './src/screens/SafehouseHubScreen';
 import BoundRequisitionScreen from './src/screens/BoundRequisitionScreen';
 import ScanningScreen from './src/screens/ScanningScreen';
 import NarrativeScreen from './src/screens/NarrativeScreen';
@@ -34,6 +36,7 @@ function GameRoot(): React.JSX.Element {
       <StatusBar barStyle="light-content" backgroundColor={theme.backgroundColor} />
       {currentScreen === 'HUB' && <OverworldHubScreen />}
       {currentScreen === 'WELCOME' && <WelcomeScreen />}
+      {currentScreen === 'SAFEHOUSE_HUB' && <SafehouseHubScreen />}
       {currentScreen === 'BOUND_REQUISITION' && <BoundRequisitionScreen />}
       {currentScreen === 'SCANNING' && <ScanningScreen />}
       {currentScreen === 'NARRATIVE' && <NarrativeScreen />}
@@ -60,6 +63,7 @@ export default function App(): React.JSX.Element {
       <SafeAreaProvider>
         <PlayerAccountProvider>
           <RegionalShatterProvider>
+            <ShadowWarProvider>
             <TerminalProvider>
               <TerminalNavProvider>
                 <RunProvider>
@@ -69,6 +73,7 @@ export default function App(): React.JSX.Element {
                 </RunProvider>
               </TerminalNavProvider>
             </TerminalProvider>
+            </ShadowWarProvider>
           </RegionalShatterProvider>
         </PlayerAccountProvider>
       </SafeAreaProvider>

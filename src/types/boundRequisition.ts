@@ -16,6 +16,7 @@ export type BoundRequisitionId =
   | 'WIRETAP_OVERRIDE'
   | 'BRIBE_THE_FERRYMAN'
   | 'DEAD_DROP_TRACKER'
+  | 'KINETIC_BATTERY'
   | 'HOLLOW_POINT_REQUISITION'
   | 'VOID_TOUCHED_ARTIFACT'
   | 'APEX_BAIT'
@@ -45,6 +46,7 @@ export interface BoundRequisitionRuntime {
   scavengerMarkBlackMarketPending: boolean;
   bribeFerrymanActive: boolean;
   deadDropTrackerActive: boolean;
+  kineticBatteryActive: boolean;
   hollowPointActive: boolean;
   voidTouchedArtifactActive: boolean;
   apexBaitActive: boolean;
@@ -74,6 +76,7 @@ export function createDefaultBoundRequisitionRuntime(id: BoundRequisitionId): Bo
     scavengerMarkBlackMarketPending: false,
     bribeFerrymanActive: false,
     deadDropTrackerActive: false,
+    kineticBatteryActive: false,
     hollowPointActive: false,
     voidTouchedArtifactActive: false,
     apexBaitActive: false,

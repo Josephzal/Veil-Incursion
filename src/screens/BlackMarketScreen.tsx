@@ -90,7 +90,7 @@ export default function BlackMarketScreen(): React.JSX.Element {
                 <Text style={styles.docTitle}>BLACK MARKET</Text>
                 <Text style={[styles.creditsLine, { color: TERMINAL_ACCENT }]}>
                   RUN CREDITS: {activeIncursion.runCredits}
-                  {blackMarketDiscountPct > 0 ? ` // SCAVENGER MARK -${blackMarketDiscountPct}%` : ''}
+                  {blackMarketDiscountPct > 0 ? ` // MARKET DISCOUNT -${blackMarketDiscountPct}%` : ''}
                 </Text>
               </View>
 

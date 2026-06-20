@@ -47,6 +47,8 @@ export type LegacyCargoItemId =
   | 'void-surge-catalyst'
   | 'sanguine-coagulant'
   | 'veil-ash-grenade'
+  | 'kinetic-hollow-points'
+  | 'sonar-ping'
   | 'smoke-ampoule'
   | 'null-key'
   | 'hazmat-shielding'
@@ -373,6 +375,29 @@ export const CARGO_ITEM_CATALOG: Record<CargoItemId, CargoItemDefinition> = {
     tags: ['CONSUMABLE', 'COMBAT', 'CROWD_CONTROL'],
     usableInCombat: true,
     combatEffect: 'veil_ash_grenade',
+  },
+  'kinetic-hollow-points': {
+    id: 'kinetic-hollow-points',
+    name: 'Veil-Vial',
+    width: 1,
+    height: 1,
+    baseValue: 48,
+    resonanceWeight: 1,
+    tags: ['CONSUMABLE', 'COMBAT', 'DAMAGE_BUFF'],
+    usableInCombat: true,
+    combatEffect: 'unimplemented',
+  },
+  'sonar-ping': {
+    id: 'sonar-ping',
+    name: 'Sonar-Ping',
+    width: 1,
+    height: 1,
+    baseValue: 40,
+    resonanceWeight: 1,
+    tags: ['CONSUMABLE', 'SCANNER', 'EXTRACTION'],
+    usableOnScanner: true,
+    usableInCombat: false,
+    combatEffect: 'unimplemented',
   },
   'god-mode': {
     id: 'god-mode',

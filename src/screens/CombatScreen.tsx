@@ -166,6 +166,10 @@ export default function CombatScreen(): React.JSX.Element {
   const combatEntryStamina =
     env.startingStaminaPenalty > 0 ? 50 : runState.currentStamina;
   const adrenalinePrimerBonusAp = shouldGrantAdrenalinePrimerAp(activeIncursion) ? 1 : 0;
+  const shadowWarApBonus = activeIncursion.shadowWarBuffs?.firstTurnApBonus ?? 0;
+  const shadowWarKineticArmor = activeIncursion.shadowWarBuffs?.kineticArmorBonus ?? 0;
+  const kineticBatteryActive = activeIncursion.boundRequisition?.kineticBatteryActive ?? false;
+  const firstTurnBonusAp = adrenalinePrimerBonusAp + shadowWarApBonus;
   const [narrativeCombatBoons, setNarrativeCombatBoons] = useState<PendingNarrativeCombatBoons>(
     createDefaultPendingNarrativeCombatBoons,
   );
@@ -469,6 +473,8 @@ export default function CombatScreen(): React.JSX.Element {
       rosterId: runState.pendingEnemy?.rosterId,
       seed: `combat:${depth}:${nodeType ?? 'std'}:${runState.pendingEnemy?.rosterId ?? 'unknown'}`,
       extraLoot: factionLoot,
+      slainEnemies: runState.pendingEnemies ?? [],
+      rareLootBonusPct: activeIncursion.shadowWarBuffs?.rareLootBonusPct ?? 0,
     });
     if (adrenalinePrimerBonusAp > 0) {
       consumeAdrenalinePrimerAfterCombat();
@@ -653,7 +659,9 @@ export default function CombatScreen(): React.JSX.Element {
                 aegisLoadout={activeIncursion.aegisLoadout}
                 leyLineMutations={activeIncursion.leyLineMutations}
                 spectralSaltActive={spectralSaltActive}
-                firstTurnBonusAp={adrenalinePrimerBonusAp}
+                firstTurnBonusAp={firstTurnBonusAp}
+                playerKineticArmorBonus={shadowWarKineticArmor}
+                kineticBatteryActive={kineticBatteryActive}
                 narrativeCombatBoons={narrativeCombatBoons}
                 equippedBlueprintId={account.equippedBlueprintId}
                 playerCritChanceBonus={playerCritChanceBonus}

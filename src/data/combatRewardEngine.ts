@@ -1,6 +1,9 @@
 import type { ResourceItemId } from '../types/resourceItem';
 import type { EnemyCombatProfile } from '../types/run';
+import { collectEnemyResourceLoot } from './enemyResourceDrops';
 import { ENEMY_ROSTER, type EnemyRosterId } from './enemyRoster';
+
+export { collectEnemyResourceLoot } from './enemyResourceDrops';
 
 export type LootDepthTier = 1 | 2 | 3;
 
@@ -9,6 +12,7 @@ export type CombatLootProfile = 'STANDARD' | 'SOLARIS' | 'TERRAN_GRID' | 'LEGION
 const TIER_1_POOL: ResourceItemId[] = [
   'ley-slag',
   'echo-glass-shard',
+  'tarnished-dog-tags',
   'sanguine-ampoule',
   'veil-ash-canister',
 ];
@@ -16,6 +20,7 @@ const TIER_1_POOL: ResourceItemId[] = [
 const TIER_2_ADD: ResourceItemId[] = [
   'encrypted-grid-drive',
   'legion-blood-iron',
+  'combustion-cylinder',
   'ossified-ley-knot',
   'smugglers-ledger',
 ];
@@ -46,6 +51,10 @@ export interface CombatRewardContext {
   rosterId?: string | null;
   seed?: string;
   extraLoot?: ResourceItemId[];
+  /** Slain squad members — drives per-enemy salvage tables. */
+  slainEnemies?: Array<Pick<EnemyCombatProfile, 'rosterId' | 'currentHp' | 'isSlumped'>>;
+  /** Shadow War Null Zone buff — extra salvage roll chance (%). */
+  rareLootBonusPct?: number;
 }
 
 export function lootDepthTierFromDepth(depth: number): LootDepthTier {
@@ -128,7 +137,8 @@ export function collectFactionTraitLoot(
 }
 
 export function rollCombatResourceDrops(ctx: CombatRewardContext): ResourceItemId[] {
-  const rng = createSeededRng(ctx.seed ?? `combat-loot:${ctx.depth}:${ctx.rosterId ?? 'unknown'}`);
+  const seed = ctx.seed ?? `combat-loot:${ctx.depth}:${ctx.rosterId ?? 'unknown'}`;
+  const rng = createSeededRng(seed);
   const tier = lootDepthTierFromDepth(ctx.depth);
   const profile = resolveCombatLootProfile(ctx.rosterId);
   const drops: ResourceItemId[] = [];
@@ -137,17 +147,36 @@ export function rollCombatResourceDrops(ctx: CombatRewardContext): ResourceItemI
     return [];
   }
 
+  const enemyLoot = ctx.slainEnemies?.length
+    ? collectEnemyResourceLoot(ctx.slainEnemies, seed)
+    : [];
+  drops.push(...enemyLoot);
+
   if (ctx.isElite) {
-    drops.push(...pickEliteDrops(profile, tier, rng));
+    if (enemyLoot.length === 0) {
+      drops.push(...pickEliteDrops(profile, tier, rng));
+    } else {
+      drops.push(pickFromPool(factionRarePool(profile, tier), rng));
+    }
     drops.push(...(ctx.extraLoot ?? []));
+    const rareBonusPct = ctx.rareLootBonusPct ?? 0;
+    if (rareBonusPct > 0 && rng() * 100 < rareBonusPct) {
+      drops.push(pickFromPool(factionRarePool(profile, tier), rng));
+    }
     return drops;
   }
 
-  if (!ctx.isGatekeeper) {
+  if (enemyLoot.length === 0) {
     drops.push(pickBiasedFromPool(tierResourcePool(tier), profile, rng));
   }
 
   drops.push(...(ctx.extraLoot ?? []));
+
+  const rareBonusPct = ctx.rareLootBonusPct ?? 0;
+  if (rareBonusPct > 0 && rng() * 100 < rareBonusPct) {
+    drops.push(pickFromPool(factionRarePool(profile, tier), rng));
+  }
+
   return drops;
 }
 

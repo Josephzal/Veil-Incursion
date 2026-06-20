@@ -11,6 +11,7 @@ interface GameFlowContextType {
   openInventoryManifest: () => void;
   goToWelcome: () => void;
   startBoundRequisition: () => void;
+  startSafehouseHub: () => void;
   startScanning: () => void;
   startNarrative: () => void;
   startPostCombatBoon: () => void;
@@ -41,6 +42,7 @@ export function GameFlowProvider({ children }: { children: React.ReactNode }) {
   }, [setTerminalView]);
   const goToWelcome = useCallback(() => setCurrentScreen('WELCOME'), []);
   const startBoundRequisition = useCallback(() => setCurrentScreen('BOUND_REQUISITION'), []);
+  const startSafehouseHub = useCallback(() => setCurrentScreen('SAFEHOUSE_HUB'), []);
   const startScanning = useCallback(() => setCurrentScreen('SCANNING'), []);
   const startNarrative = useCallback(() => setCurrentScreen('NARRATIVE'), []);
   const startPostCombatBoon = useCallback(() => setCurrentScreen('POST_COMBAT_BOON'), []);
@@ -84,6 +86,7 @@ export function GameFlowProvider({ children }: { children: React.ReactNode }) {
       openInventoryManifest,
       goToWelcome,
       startBoundRequisition,
+      startSafehouseHub,
       startScanning,
       startNarrative,
       startPostCombatBoon,
@@ -107,6 +110,7 @@ export function GameFlowProvider({ children }: { children: React.ReactNode }) {
       openInventoryManifest,
       goToWelcome,
       startBoundRequisition,
+      startSafehouseHub,
       startScanning,
       startNarrative,
       startPostCombatBoon,
