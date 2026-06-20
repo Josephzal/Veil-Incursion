@@ -22,7 +22,7 @@ export const BLUEPRINT_DEFINITIONS: Record<BlueprintId, BlueprintDefinition> = {
   riftshot_pulse_rifle: {
     id: 'riftshot_pulse_rifle',
     name: 'Pulse Shot Rifle',
-    classId: 'RIFTSHOT',
+    classId: 'HEX_SHOT',
     description: 'On fire — self 5% HP. Spectral targets take 2× damage.',
   },
   envoy_hex: {

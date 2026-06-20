@@ -1,6 +1,5 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
-import { getAbilityDefinition } from '../data/aegisAbilities';
 import type { AegisAbilityId } from '../types/aegisCombat';
 import { PLAYER_ACTION_POINTS_PER_TURN } from '../types/aegisCombat';
 
@@ -18,26 +17,30 @@ export const COMMAND_DECK_MIN_HEIGHT = AP_ROW_HEIGHT + GRID_GAP + GRID_BODY_HEIG
 export const COMMAND_DECK_MIN_HEIGHT_WITH_ULTIMATE = COMMAND_DECK_MIN_HEIGHT;
 
 interface CombatCommandDeckProps {
-  loadout: readonly AegisAbilityId[];
-  selectedAbility: AegisAbilityId | null;
-  onSelectAbility: (ability: AegisAbilityId) => void;
+  loadout: readonly string[];
+  selectedAbility: string | null;
+  onSelectAbility: (ability: string) => void;
   onConfirm: () => void;
   onAbort: () => void;
   onEndTurn: () => void;
   actionPoints: number;
   displayActionPoints?: number | null;
   maxActionPoints?: number;
-  isActionEnabled: (ability: AegisAbilityId) => boolean;
+  isActionEnabled: (ability: string) => boolean;
   canEndTurn: boolean;
+  getAbilityLabel: (ability: string) => string;
   initiativeQueued?: boolean;
   initiativeProcSeq?: number;
   onInitiativeProcComplete?: () => void;
-  getStagedHeader: (ability: AegisAbilityId) => string;
-  getStagedCostImpact: (ability: AegisAbilityId) => string;
-  getActionAccent?: (ability: AegisAbilityId) => string | undefined;
+  getStagedHeader: (ability: string) => string;
+  getStagedCostImpact: (ability: string) => string;
+  getActionAccent?: (ability: string) => string | undefined;
   bloodForTimeAvailable?: boolean;
   bloodForTimeEnabled?: boolean;
   onBloodForTime?: () => void;
+  combatReloadAvailable?: boolean;
+  combatReloadEnabled?: boolean;
+  onCombatReload?: () => void;
   borderColor: string;
   primaryColor: string;
   mutedColor: string;
@@ -56,6 +59,7 @@ export default function CombatCommandDeck({
   maxActionPoints = PLAYER_ACTION_POINTS_PER_TURN,
   isActionEnabled,
   canEndTurn,
+  getAbilityLabel,
   initiativeQueued = false,
   initiativeProcSeq = 0,
   onInitiativeProcComplete,
@@ -65,6 +69,9 @@ export default function CombatCommandDeck({
   bloodForTimeAvailable = false,
   bloodForTimeEnabled = false,
   onBloodForTime,
+  combatReloadAvailable = false,
+  combatReloadEnabled = false,
+  onCombatReload,
   borderColor,
   primaryColor,
   mutedColor,
@@ -203,9 +210,9 @@ export default function CombatCommandDeck({
     !frameless ? { borderColor } : null,
   ];
 
-  const labelFor = (ability: AegisAbilityId) => getAbilityDefinition(ability).label;
+  const labelFor = (ability: string) => getAbilityLabel(ability);
 
-  const renderTile = (ability: AegisAbilityId) => {
+  const renderTile = (ability: string) => {
     const enabled = isActionEnabled(ability);
     const accent = getActionAccent?.(ability);
     const tileBorderColor = enabled && accent ? accent : borderColor;
@@ -290,6 +297,26 @@ export default function CombatCommandDeck({
               </Text>
             )}
             <View style={styles.apActions}>
+              {combatReloadAvailable ? (
+                <Pressable
+                  onPress={onCombatReload}
+                  disabled={!combatReloadEnabled}
+                  style={[
+                    styles.combatReloadBtn,
+                    {
+                      borderColor: combatReloadEnabled ? '#fbbf24' : borderColor,
+                      opacity: combatReloadEnabled ? 1 : 0.4,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[styles.combatReloadLabel, { color: combatReloadEnabled ? '#fbbf24' : mutedColor }]}
+                    numberOfLines={1}
+                  >
+                    [ COMBAT RELOAD ]
+                  </Text>
+                </Pressable>
+              ) : null}
               {bloodForTimeAvailable ? (
                 <Pressable
                   onPress={onBloodForTime}
@@ -475,6 +502,19 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     maxWidth: 108,
     alignItems: 'center',
+  },
+  combatReloadBtn: {
+    borderWidth: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    maxWidth: 118,
+    alignItems: 'center',
+  },
+  combatReloadLabel: {
+    fontFamily: MONO,
+    fontSize: 6,
+    fontWeight: 'bold',
+    letterSpacing: 0.3,
   },
   bloodForTimeLabel: {
     fontFamily: MONO,

@@ -5,6 +5,9 @@ import type { RunState } from '../types/run';
 import { getResonanceZone } from '../data/resonanceHeatVentEngine';
 import type { RunStatusEffect } from '../types/narrativeProcedural';
 import { LEY_LINE_MUTATION_CATALOG } from '../data/leyLineMutations';
+import { ENVOY_BOON_CATALOG } from '../data/envoyBoons';
+import { HEX_SHOT_BOON_CATALOG } from '../data/hexShotBoons';
+import type { ClassType } from '../types/game';
 import { MACRO_BIOME_DISPLAY } from '../data/macroBiomeEngine';
 import type { MacroBiomeFamily } from '../types/narrativeProcedural';
 
@@ -245,13 +248,42 @@ function sectorEntry(family: MacroBiomeFamily | null): RunStatusEntry | null {
   };
 }
 
+function classBoonEntries(
+  classId: ClassType,
+  inc: ActiveIncursionState,
+): RunStatusEntry[] {
+  if (classId === 'HEX_SHOT') {
+    return inc.hexShotBoons.map((id) => {
+      const def = HEX_SHOT_BOON_CATALOG[id];
+      return {
+        id: `hex-boon-${id}`,
+        label: def?.name ?? id,
+        description: def?.description ?? def?.effect ?? 'Hex-Shot boon active.',
+        category: 'BOON' as const,
+      };
+    });
+  }
+  if (classId === 'ENVOY') {
+    return inc.envoyBoons.map((id) => {
+      const def = ENVOY_BOON_CATALOG[id];
+      return {
+        id: `envoy-boon-${id}`,
+        label: def?.name ?? id,
+        description: def?.description ?? def?.effect ?? 'Envoy boon active.',
+        category: 'BOON' as const,
+      };
+    });
+  }
+  return mutationEntries(inc.leyLineMutations);
+}
+
 export function buildRunStatusSnapshot(inc: ActiveIncursionState): RunStatusEntry[] {
   const entries: RunStatusEntry[] = [];
 
   const sector = sectorEntry(inc.currentMacroBiomeFamily);
   if (sector) entries.push(sector);
 
-  entries.push(...mutationEntries(inc.leyLineMutations));
+  entries.push(...classBoonEntries(inc.activeClass ?? 'AEGIS', inc));
   entries.push(...statusEffectEntries(inc.runStatusEffects));
   entries.push(...flagEntries(inc.progress.collectedFlags));
   entries.push(...envModifierEntries(inc.environmentalModifiers));

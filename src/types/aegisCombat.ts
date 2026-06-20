@@ -62,8 +62,8 @@ export const PLAYER_ACTION_POINTS_PER_TURN = 3;
 
 export const DEFAULT_AEGIS_LOADOUT: AegisLoadout = [
   'STRIKE',
-  'VEIL_PIERCER',
-  'WRAITH_PARRY',
+  'RUIN',
+  'SHADOW_STEP',
   'ASHEN_MANTLE',
 ];
 

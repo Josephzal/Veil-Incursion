@@ -10,8 +10,17 @@ import type { AegisLoadout, AegisAbilityId } from './aegisCombat';
 import { createDefaultPendingNarrativeCombatBoons } from './narrativeBonusReward';
 import type { ResourceQuantity } from './resourceItem';
 import type { LeyLineMutationId } from './leyLineMutation';
+import type { EnvoyBoonId, HexShotBoonId } from './classBoon';
+import type { EnvoyGraftId, HexShotGraftId } from './classGraft';
+import type { VeilGraftId } from './veilGraft';
 import type { BoundRequisitionRuntime } from './boundRequisition';
 import { DEFAULT_AEGIS_LOADOUT } from './aegisCombat';
+import {
+  DEFAULT_ENVOY_LOADOUT,
+  DEFAULT_HEX_SHOT_LOADOUT,
+  type EnvoyLoadout,
+  type HexShotLoadout,
+} from './operativeClass';
 import { createEmptyPatrolState } from './overworldPatrol';
 import { createDefaultResonanceEscalationState } from './resonanceEscalation';
 import { createDefaultCargoRunState } from './cargoGrid';
@@ -25,7 +34,7 @@ import type {
 import { MAX_ATTUNEMENT, STARTING_ATTUNEMENT } from './sector';
 
 export type FactionType = 'TERRAN_GRID' | 'LEGION' | 'SOLARIS';
-export type ClassType = 'AEGIS' | 'RIFTSHOT' | 'ENVOY';
+export type ClassType = 'AEGIS' | 'HEX_SHOT' | 'ENVOY';
 export type EncounterType = 'COMBAT' | 'SKILL_CHECK' | 'SANCTUARY';
 export type BiomeType = 'HOSPITAL' | 'ALLEYWAYS' | 'SEWERS' | 'CHURCH' | 'FOREST' | 'CANYON';
 export type ItemRarity = 'STANDARD' | 'STABILIZED' | 'COBALT' | 'ABYSSAL';
@@ -98,10 +107,18 @@ export interface PlayerAccount {
   inventory: PlayerInventoryState;
   /** Cabal vault — banked extraction cargo persists across runs. */
   bankedCargo: GlobalBankedCargo;
-  /** Pre-run combat deck — four active abilities carried into each incursion. */
+  /** Pre-run combat deck — four active abilities carried into each incursion (Aegis). */
   aegisLoadout: AegisLoadout;
   /** Hub-unlocked Aegis abilities available for loadout staging. */
   unlockedAegisAbilities: AegisAbilityId[];
+  /** Pre-run Hex Shot deck — four tactical ballistic slots. */
+  hexShotLoadout: import('./operativeClass').HexShotLoadout;
+  /** Hub-unlocked Hex Shot abilities. */
+  unlockedHexShotAbilities: import('./operativeClass').HexShotAbilityId[];
+  /** Pre-run Envoy deck — four spell/curse slots. */
+  envoyLoadout: import('./operativeClass').EnvoyLoadout;
+  /** Hub-unlocked Envoy abilities. */
+  unlockedEnvoyAbilities: import('./operativeClass').EnvoyAbilityId[];
   /** Hub-side abstract resource counts for fabrication. */
   resourceStash: ResourceQuantity;
   /** Crafted blueprint IDs unlocked at the metropolitan fabrication bench. */
@@ -341,10 +358,20 @@ export interface ActiveIncursionState {
   attunement: AttunementState;
   resonance: ResonanceState;
   patrolState: PatrolState;
-  /** Four active combat abilities locked at Safehouse. */
+  /** Four active combat abilities locked at Safehouse (Aegis deck). */
   aegisLoadout: AegisLoadout;
+  /** Hex Shot deck locked at run start. */
+  hexShotLoadout: HexShotLoadout;
+  /** Envoy deck locked at run start. */
+  envoyLoadout: EnvoyLoadout;
+  /** Operative class locked at run start. */
+  activeClass: ClassType;
   /** Ley-Line mutations acquired this run — stack and alter combat behavior. */
   leyLineMutations: LeyLineMutationId[];
+  /** Hex Shot class boons acquired this run. */
+  hexShotBoons: HexShotBoonId[];
+  /** Envoy class boons acquired this run. */
+  envoyBoons: EnvoyBoonId[];
   /** Cabal locked at run start — gates procedural narrative resolvers. */
   alignedFaction: FactionType | null;
   /** Active macro biome family — rotates each cleared node (district 3 = DEEP_VEIL). */
@@ -391,10 +418,14 @@ export interface ActiveIncursionState {
   sanctuarySchedule: import('../data/sanctuaryScheduleEngine').SanctuarySchedule;
   /** Cumulative strike damage bonus from sanctuary upgrades (%). Stacks per visit. */
   strikeDamageBonusPct: number;
-  /** Veil-Grafts applied to loadout abilities for this incursion. */
+  /** Veil-Grafts applied to Aegis loadout abilities for this incursion. */
   abilityGrafts: Partial<Record<import('./aegisCombat').AegisAbilityId, import('./veilGraft').VeilGraftId>>;
+  /** Hex Shot grafts applied to loadout abilities for this incursion. */
+  hexShotAbilityGrafts: Partial<Record<import('./operativeClass').HexShotAbilityId, HexShotGraftId>>;
+  /** Envoy grafts applied to loadout abilities for this incursion. */
+  envoyAbilityGrafts: Partial<Record<import('./operativeClass').EnvoyAbilityId, EnvoyGraftId>>;
   /** Rolled graft offers at the current sanctuary terminal (3 choices). */
-  sanctuaryGraftOffers: import('./veilGraft').VeilGraftId[] | null;
+  sanctuaryGraftOffers: (VeilGraftId | HexShotGraftId | EnvoyGraftId)[] | null;
   /** Set when Apex Graft disables ultimate for the active combat encounter. */
   encounterUltimateDisabled: boolean;
   /** Passive modifiers from secured Shadow War macro-sectors. */
@@ -442,7 +473,12 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     resonance: { percent: 0 },
     patrolState: createEmptyPatrolState(),
     aegisLoadout: [...DEFAULT_AEGIS_LOADOUT],
+    hexShotLoadout: [...DEFAULT_HEX_SHOT_LOADOUT],
+    envoyLoadout: [...DEFAULT_ENVOY_LOADOUT],
+    activeClass: 'AEGIS',
     leyLineMutations: [],
+    hexShotBoons: [],
+    envoyBoons: [],
     alignedFaction: null,
     currentMacroBiomeFamily: null,
     lastMacroBiomeFamily: null,
@@ -473,6 +509,8 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     sanctuarySchedule: { 1: [14], 2: [14], 3: [14] },
     strikeDamageBonusPct: 0,
     abilityGrafts: {},
+    hexShotAbilityGrafts: {},
+    envoyAbilityGrafts: {},
     sanctuaryGraftOffers: null,
     encounterUltimateDisabled: false,
     shadowWarBuffs: {

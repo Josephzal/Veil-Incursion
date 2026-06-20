@@ -25,8 +25,8 @@ const TRANSFER_PRESETS = [0, 25, 50, 75, 100] as const;
 
 const CLASS_CARDS = [
   { id: 'AEGIS', label: 'AEGIS', status: 'ACTIVE' },
-  { id: 'RIFTSHOT', label: 'RIFTSHOT', status: 'LOCKED' },
-  { id: 'ENVOY', label: 'ENVOY', status: 'LOCKED' },
+  { id: 'HEX_SHOT', label: 'HEX SHOT', status: 'ACTIVE' },
+  { id: 'ENVOY', label: 'ENVOY', status: 'ACTIVE' },
 ] as const;
 
 export default function SafehouseScreen(): React.JSX.Element {
@@ -229,7 +229,7 @@ export default function SafehouseScreen(): React.JSX.Element {
                           <Text style={styles.actionLabel}>[ RESTORE 25% HEALTH — 10% CARGO ]</Text>
                         </Pressable>
                         <Pressable
-                          onPress={() => setStatusLine('>> MODULE SWAP — RIFTSHOT / ENVOY NOT YET DEPLOYED.')}
+                          onPress={() => setStatusLine('>> MODULE SWAP — USE ID BADGE CLASS TOGGLE BEFORE DEPLOY.')}
                           style={[styles.actionBtn, { borderColor: BORDER }]}
                         >
                           <Text style={[styles.actionLabel, { color: TERMINAL_MUTED }]}>[ SWAP PRIMARY MODULE ]</Text>

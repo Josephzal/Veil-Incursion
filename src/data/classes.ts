@@ -17,10 +17,10 @@ export const CLASS_DEFINITIONS: Record<ClassType, Omit<ClassDefinition, 'unlocke
     weaponLine: 'WEAPON: ANOMALY-TREATED SWORD',
     interactionLine: 'INTERACTION: KINETIC SCAR BRAND',
   },
-  RIFTSHOT: {
-    id: 'RIFTSHOT',
-    displayName: 'RIFTSHOT',
-    protocolLabel: 'OPERATIVE PROTOCOL: RIFTSHOT [RESTRICTED]',
+  HEX_SHOT: {
+    id: 'HEX_SHOT',
+    displayName: 'HEX SHOT',
+    protocolLabel: 'OPERATIVE PROTOCOL: HEX SHOT [RESTRICTED]',
     weaponLine: 'WEAPON: PHASE-BOLT CARBINE',
     interactionLine: 'INTERACTION: RIFT MARK SMITE',
   },

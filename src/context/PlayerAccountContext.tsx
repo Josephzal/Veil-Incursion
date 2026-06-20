@@ -26,6 +26,15 @@ import {
 } from '../types/game';
 import type { AegisAbilityId, AegisLoadout } from '../types/aegisCombat';
 import { DEFAULT_AEGIS_LOADOUT } from '../types/aegisCombat';
+import {
+  DEFAULT_ENVOY_LOADOUT,
+  DEFAULT_ENVOY_UNLOCKED,
+  DEFAULT_HEX_SHOT_LOADOUT,
+  DEFAULT_HEX_SHOT_UNLOCKED,
+  type EnvoyLoadout,
+  type HexShotLoadout,
+} from '../types/operativeClass';
+import { normalizeClassAccountFields, cycleOperativeClass, getClassDisplayName } from '../data/classLoadoutEngine';
 import { normalizeAegisLoadout } from '../utils/aegisLoadoutUtils';
 import {
   deductAbilityUnlockCost,
@@ -98,7 +107,7 @@ export function createDefaultPlayerAccount(): PlayerAccount {
     alignedFaction: null,
     factionPerks: { ...NEUTRAL_FACTION_PERKS },
     activeClass: 'AEGIS',
-    unlockedClasses: ['AEGIS'],
+    unlockedClasses: ['AEGIS', 'HEX_SHOT', 'ENVOY'],
     unlockedBiomes: ['HOSPITAL', 'ALLEYWAYS'],
     progressionMatrix: {
       maxDepthUnlocked: 1,
@@ -118,6 +127,10 @@ export function createDefaultPlayerAccount(): PlayerAccount {
     bankedCargo: createDefaultBankedCargo(),
     aegisLoadout: [...DEFAULT_AEGIS_LOADOUT],
     unlockedAegisAbilities: [...normalizeUnlockedAegisAbilities(undefined, DEFAULT_AEGIS_LOADOUT)],
+    hexShotLoadout: [...DEFAULT_HEX_SHOT_LOADOUT] as HexShotLoadout,
+    unlockedHexShotAbilities: [...DEFAULT_HEX_SHOT_UNLOCKED],
+    envoyLoadout: [...DEFAULT_ENVOY_LOADOUT] as EnvoyLoadout,
+    unlockedEnvoyAbilities: [...DEFAULT_ENVOY_UNLOCKED],
     resourceStash: {
       'ley-slag': 6,
       'echo-glass-shard': 10,
@@ -139,9 +152,11 @@ function mergeStoredAccount(parsed: Partial<PlayerAccount>): PlayerAccount {
   const defaults = createDefaultPlayerAccount();
   const inventory = mergeInventory(parsed.inventory);
   const equipped = getEquippedWeapon(inventory.items);
+  const classFields = normalizeClassAccountFields(parsed);
   return {
     ...defaults,
     ...parsed,
+    ...classFields,
     factionPerks: { ...defaults.factionPerks, ...parsed.factionPerks },
     progressionMatrix: {
       ...defaults.progressionMatrix,
@@ -167,11 +182,6 @@ function mergeStoredAccount(parsed: Partial<PlayerAccount>): PlayerAccount {
       ...createDefaultBankedCargo(),
       ...parsed.bankedCargo,
     },
-    aegisLoadout: normalizeAegisLoadout(parsed.aegisLoadout),
-    unlockedAegisAbilities: normalizeUnlockedAegisAbilities(
-      parsed.unlockedAegisAbilities,
-      normalizeAegisLoadout(parsed.aegisLoadout),
-    ),
     resourceStash: {
       ...createEmptyResourceStash(),
       ...parsed.resourceStash,
@@ -223,6 +233,8 @@ interface PlayerAccountContextType {
   setMetropolitanNode: (node: string, sectorId?: MacroSectorId) => void;
   depositBankedCargo: (delta: GlobalBankedCargo) => void;
   setAegisLoadout: (loadout: AegisLoadout) => void;
+  setActiveClass: (classId: ClassType) => void;
+  cycleActiveClass: (direction: 1 | -1) => void;
   unlockAegisAbility: (abilityId: AegisAbilityId) => {
     success: boolean;
     logLine: string;
@@ -476,6 +488,43 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       }));
     },
     [updateAccount],
+  );
+
+  const setActiveClass = useCallback(
+    (classId: ClassType) => {
+      updateAccount((prev) => {
+        if (!prev.unlockedClasses.includes(classId) || prev.activeClass === classId) {
+          return prev;
+        }
+        const ownedBlueprint = blueprintForClass(classId);
+        const canEquipBlueprint = ownedBlueprint != null && prev.unlockedBlueprints.includes(ownedBlueprint);
+        appendHubLog(`>> CLASS MODULE LOCKED — ${getClassDisplayName(classId).toUpperCase()} ACTIVE.`);
+        return {
+          ...prev,
+          activeClass: classId,
+          equippedBlueprintId: canEquipBlueprint ? ownedBlueprint : null,
+        };
+      });
+    },
+    [appendHubLog, updateAccount],
+  );
+
+  const cycleActiveClass = useCallback(
+    (direction: 1 | -1) => {
+      updateAccount((prev) => {
+        const nextClass = cycleOperativeClass(prev.activeClass, prev.unlockedClasses, direction);
+        if (nextClass === prev.activeClass) return prev;
+        const ownedBlueprint = blueprintForClass(nextClass);
+        const canEquipBlueprint = ownedBlueprint != null && prev.unlockedBlueprints.includes(ownedBlueprint);
+        appendHubLog(`>> CLASS MODULE LOCKED — ${getClassDisplayName(nextClass).toUpperCase()} ACTIVE.`);
+        return {
+          ...prev,
+          activeClass: nextClass,
+          equippedBlueprintId: canEquipBlueprint ? ownedBlueprint : null,
+        };
+      });
+    },
+    [appendHubLog, updateAccount],
   );
 
   const unlockAegisAbility = useCallback(
@@ -907,6 +956,8 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       setMetropolitanNode,
       depositBankedCargo,
       setAegisLoadout,
+      setActiveClass,
+      cycleActiveClass,
       unlockAegisAbility,
       craftRecipe,
       depositResourceStash,
@@ -945,6 +996,8 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       setMetropolitanNode,
       depositBankedCargo,
       setAegisLoadout,
+      setActiveClass,
+      cycleActiveClass,
       unlockAegisAbility,
       craftRecipe,
       depositResourceStash,

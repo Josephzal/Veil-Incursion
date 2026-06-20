@@ -78,6 +78,7 @@ function CombatArenaZone({
   playerViewportRef,
   portraitKey,
   portraitSource,
+  operativeClass,
   wardPrimed,
   abilityPrimed,
   enemySquadPanel,
@@ -88,6 +89,7 @@ function CombatArenaZone({
   playerViewportRef: React.RefObject<CombatPlayerViewportRef | null>;
   portraitKey: string;
   portraitSource: ReturnType<typeof resolveCombatEnemyPortrait>;
+  operativeClass: import('../types/game').ClassType;
   wardPrimed: boolean;
   abilityPrimed: boolean;
   enemySquadPanel?: React.ReactNode;
@@ -105,8 +107,8 @@ function CombatArenaZone({
       <CombatArenaStage
         playerViewportRef={playerViewportRef}
         enemyViewportRef={apparitionRef}
-        playerImageSource={resolvePlayerCombatIdlePortrait()}
-        playerAttackImageSource={resolvePlayerCombatAttackPortrait()}
+        playerImageSource={resolvePlayerCombatIdlePortrait(operativeClass)}
+        playerAttackImageSource={resolvePlayerCombatAttackPortrait(operativeClass)}
         enemyImageSource={portraitSource}
         enemyPortraitKey={portraitKey}
         wardPrimed={wardPrimed}
@@ -600,6 +602,7 @@ export default function CombatScreen(): React.JSX.Element {
                 playerViewportRef={playerViewportRef}
                 portraitKey={portraitKey}
                 portraitSource={focusedPortraitSource}
+                operativeClass={activeIncursion.activeClass ?? account.activeClass}
                 wardPrimed={wardPrimed}
                 abilityPrimed={abilityPrimed}
                 enemySquadPanel={enemySquadPanel}
@@ -665,7 +668,11 @@ export default function CombatScreen(): React.JSX.Element {
                 bossProfile={activeIncursion.bossProfile}
                 onBossPhaseShift={shiftBossPhase}
                 aegisLoadout={activeIncursion.aegisLoadout}
+                hexShotLoadout={activeIncursion.hexShotLoadout}
+                envoyLoadout={activeIncursion.envoyLoadout}
                 leyLineMutations={activeIncursion.leyLineMutations}
+                hexShotBoons={activeIncursion.hexShotBoons}
+                envoyBoons={activeIncursion.envoyBoons}
                 spectralSaltActive={spectralSaltActive}
                 firstTurnBonusAp={firstTurnBonusAp}
                 playerKineticArmorBonus={shadowWarKineticArmor}
@@ -676,7 +683,10 @@ export default function CombatScreen(): React.JSX.Element {
                 onPlayerCritImpact={handlePlayerCritImpact}
                 godModeActive={activeIncursion.godModeActive}
                 abilityGrafts={activeIncursion.abilityGrafts}
+                hexShotAbilityGrafts={activeIncursion.hexShotAbilityGrafts}
+                envoyAbilityGrafts={activeIncursion.envoyAbilityGrafts}
                 encounterUltimateDisabled={activeIncursion.encounterUltimateDisabled}
+                operativeClass={activeIncursion.activeClass ?? account.activeClass}
               />
             </View>
           </View>

@@ -34,6 +34,22 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<OperativeProfile>(mockOperativeProfile);
 
   useEffect(() => {
+    setProfile((prev) => {
+      if (prev.operative_profile.credentials.class === account.activeClass) return prev;
+      return {
+        ...prev,
+        operative_profile: {
+          ...prev.operative_profile,
+          credentials: {
+            ...prev.operative_profile.credentials,
+            class: account.activeClass,
+          },
+        },
+      };
+    });
+  }, [account.activeClass]);
+
+  useEffect(() => {
     if (account.alignedFaction && account.alignedFaction !== alignment) {
       setAlignment(account.alignedFaction);
       setProfile((prev) => {

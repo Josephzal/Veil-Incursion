@@ -1,15 +1,14 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import SanctuaryNarrativeBg from '../../assets/narrative images/sanctuary.png';
-import VeilGraftUI from '../components/VeilGraftUI';
+import ClassGraftUI from '../components/ClassGraftUI';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useNodeProgression } from '../hooks/useNodeProgression';
 import IncursionShell from '../components/IncursionShell';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
 import SelectionContinueButton from '../components/SelectionContinueButton';
-import type { AegisAbilityId } from '../types/aegisCombat';
-import type { VeilGraftId } from '../types/veilGraft';
+import type { OperativeClassGraftId } from '../types/classGraft';
 
 const TERMINAL_ACCENT = '#00ff33';
 
@@ -22,7 +21,7 @@ export default function RestScreen(): React.JSX.Element {
     activeIncursion,
     applySanctuaryAttune,
     openSanctuaryGraftTerminal,
-    applyVeilGraftToAbility,
+    applyClassGraftToAbility,
     getVeilResidueBalance,
   } = useRun();
   const { completeCurrentNode } = useNodeProgression();
@@ -31,8 +30,21 @@ export default function RestScreen(): React.JSX.Element {
   const [graftComplete, setGraftComplete] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
 
+  const activeClass = activeIncursion.activeClass ?? 'AEGIS';
   const residueBalance = getVeilResidueBalance();
   const graftOffers = activeIncursion.sanctuaryGraftOffers ?? [];
+
+  const loadout = useMemo(() => {
+    if (activeClass === 'HEX_SHOT') return activeIncursion.hexShotLoadout;
+    if (activeClass === 'ENVOY') return activeIncursion.envoyLoadout;
+    return activeIncursion.aegisLoadout;
+  }, [activeClass, activeIncursion.aegisLoadout, activeIncursion.envoyLoadout, activeIncursion.hexShotLoadout]);
+
+  const abilityGrafts = useMemo(() => {
+    if (activeClass === 'HEX_SHOT') return activeIncursion.hexShotAbilityGrafts;
+    if (activeClass === 'ENVOY') return activeIncursion.envoyAbilityGrafts;
+    return activeIncursion.abilityGrafts;
+  }, [activeClass, activeIncursion.abilityGrafts, activeIncursion.envoyAbilityGrafts, activeIncursion.hexShotAbilityGrafts]);
 
   const handleSelectAttune = () => {
     if (confirmed) return;
@@ -48,8 +60,8 @@ export default function RestScreen(): React.JSX.Element {
     openSanctuaryGraftTerminal();
   };
 
-  const handleApplyGraft = (abilityId: AegisAbilityId, graftId: VeilGraftId) => {
-    const result = applyVeilGraftToAbility(abilityId, graftId);
+  const handleApplyGraft = (abilityId: string, graftId: string) => {
+    const result = applyClassGraftToAbility(abilityId, graftId);
     if (result.success) {
       setGraftComplete(true);
     }
@@ -66,9 +78,15 @@ export default function RestScreen(): React.JSX.Element {
     }
     const msg = selectedChoice === 'ATTUNE'
       ? 'Soul anchor stabilized.'
-      : 'Veil-Graft mutation secured.';
+      : 'Class graft mutation secured.';
     setTimeout(() => completeCurrentNode(msg), 1200);
   };
+
+  const graftTerminalLabel = activeClass === 'HEX_SHOT'
+    ? '[ ACCESS HEX-SHOT GRAFT TERMINAL ]'
+    : activeClass === 'ENVOY'
+      ? '[ ACCESS ENVOY GRAFT TERMINAL ]'
+      : '[ ACCESS VEIL-GRAFT TERMINAL ]';
 
   return (
     <IncursionShell>
@@ -103,6 +121,9 @@ export default function RestScreen(): React.JSX.Element {
                   </Text>
                   <Text style={[styles.statLine, { color: theme.mutedColor }]}>
                     VEIL RESIDUE: {residueBalance}
+                  </Text>
+                  <Text style={[styles.statLine, { color: theme.mutedColor }]}>
+                    ACTIVE CLASS: {activeClass.replace(/_/g, ' ')}
                   </Text>
                 </View>
               </View>
@@ -152,7 +173,7 @@ export default function RestScreen(): React.JSX.Element {
                         { color: selectedChoice === 'GRAFT' ? '#c084fc' : theme.primaryColor },
                       ]}
                     >
-                      [ ACCESS VEIL-GRAFT TERMINAL ]
+                      {graftTerminalLabel}
                     </Text>
                     <Text style={[styles.choiceReq, { color: '#c084fc' }]}>
                       Spend Veil Residue to mutate an equipped ability
@@ -168,11 +189,12 @@ export default function RestScreen(): React.JSX.Element {
                 </View>
               ) : (
                 <View style={styles.graftCol}>
-                  <VeilGraftUI
-                    loadout={activeIncursion.aegisLoadout}
+                  <ClassGraftUI
+                    activeClass={activeClass}
+                    loadout={loadout}
                     offers={graftOffers}
                     residueBalance={residueBalance}
-                    abilityGrafts={activeIncursion.abilityGrafts}
+                    abilityGrafts={abilityGrafts}
                     onApply={handleApplyGraft}
                     borderColor={theme.borderColor}
                     primaryColor={theme.primaryColor}

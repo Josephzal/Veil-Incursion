@@ -8,15 +8,14 @@ import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useDescentNavigator } from '../hooks/useDescentNavigator';
-import type { LeyLineMutationDefinition, LeyLineMutationId } from '../types/leyLineMutation';
+import type { ClassType } from '../types/game';
 
 const TERMINAL_ACCENT = '#00ff33';
 
-const TIER_LABEL: Record<string, string> = {
-  KINETIC: 'TIER 1 // KINETIC',
-  OCCULT: 'TIER 2 // OCCULT',
-  SYSTEM: 'TIER 3 // SYSTEM',
-  AP_BOOST: 'TIER 4 // AP BOOST',
+const HEADER_LABEL: Record<ClassType, string> = {
+  AEGIS: 'LEY-LINE MUTATION // SELECT ONE',
+  HEX_SHOT: 'HEX-SHOT BOON // SELECT ONE',
+  ENVOY: 'ENVOY BOON // SELECT ONE',
 };
 
 export default function PostCombatBoonScreen(): React.JSX.Element {
@@ -32,9 +31,10 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
   const { startGameOver, startResourceHarvest } = useGameFlow();
   const { finalizeIncursionAdvance } = useDescentNavigator();
   const selectingRef = useRef(false);
-  const [selectedMutationId, setSelectedMutationId] = useState<LeyLineMutationId | null>(null);
+  const [selectedBoonId, setSelectedBoonId] = useState<string | null>(null);
 
   const mutationsPreparedRef = useRef(false);
+  const activeClass = activeIncursion.activeClass ?? 'AEGIS';
 
   const advanceAfterBoon = useCallback((message: string) => {
     if (activeIncursion.pendingHarvestReturn === 'POST_COMBAT') {
@@ -49,7 +49,7 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
       mutationsPreparedRef.current = true;
       const choices = preparePostCombatMutations();
       if (choices.length === 0) {
-        advanceAfterBoon('Ley-Scar acquisition blocked — node advance continues.');
+        advanceAfterBoon('Boon acquisition blocked — node advance continues.');
       }
     }
   }, [
@@ -59,7 +59,7 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
   ]);
 
   const handleContinue = () => {
-    if (!selectedMutationId || selectingRef.current) return;
+    if (!selectedBoonId || selectingRef.current) return;
     selectingRef.current = true;
 
     if (runState.soulAnchorIntegrity <= 0) {
@@ -68,9 +68,9 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
       return;
     }
 
-    const picked = postCombatMutationChoices.find((m) => m.id === selectedMutationId);
-    completeNodeAfterMutation(selectedMutationId);
-    advanceAfterBoon(`Ley-Line mutation secured: ${picked?.name ?? selectedMutationId}.`);
+    const picked = postCombatMutationChoices.find((m) => m.id === selectedBoonId);
+    completeNodeAfterMutation(selectedBoonId);
+    advanceAfterBoon(`Class boon secured: ${picked?.name ?? selectedBoonId}.`);
   };
 
   return (
@@ -86,16 +86,16 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
           <View style={styles.body}>
             <View style={[styles.header, { borderColor: theme.borderColor }]}>
               <Text style={[styles.headerText, { color: theme.mutedColor }]}>
-                LEY-LINE MUTATION // SELECT ONE
+                {HEADER_LABEL[activeClass]}
               </Text>
             </View>
             <View style={styles.choices}>
-              {postCombatMutationChoices.map((mutation: LeyLineMutationDefinition) => {
-                const isSelected = selectedMutationId === mutation.id;
+              {postCombatMutationChoices.map((offer) => {
+                const isSelected = selectedBoonId === offer.id;
                 return (
                   <Pressable
-                    key={mutation.id}
-                    onPress={() => !selectingRef.current && setSelectedMutationId(mutation.id)}
+                    key={offer.id}
+                    onPress={() => !selectingRef.current && setSelectedBoonId(offer.id)}
                     disabled={selectingRef.current}
                     style={({ pressed }) => [
                       styles.choice,
@@ -107,18 +107,18 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
                     ]}
                   >
                     <Text style={[styles.tierTag, { color: theme.mutedColor }]}>
-                      {TIER_LABEL[mutation.tier] ?? mutation.tier}
+                      {offer.tierLabel ?? offer.tier}
                     </Text>
                     <Text style={[styles.choiceName, { color: isSelected ? TERMINAL_ACCENT : theme.primaryColor }]}>
-                      {mutation.name}
+                      {offer.name}
                     </Text>
-                    <Text style={[styles.choiceEffect, { color: theme.mutedColor }]}>{mutation.effect}</Text>
-                    <Text style={[styles.choiceDesc, { color: theme.primaryColor }]}>{mutation.description}</Text>
+                    <Text style={[styles.choiceEffect, { color: theme.mutedColor }]}>{offer.effect}</Text>
+                    <Text style={[styles.choiceDesc, { color: theme.primaryColor }]}>{offer.description}</Text>
                   </Pressable>
                 );
               })}
               <SelectionContinueButton
-                enabled={selectedMutationId != null && !selectingRef.current}
+                enabled={selectedBoonId != null && !selectingRef.current}
                 onPress={handleContinue}
                 borderColor={theme.borderColor}
                 mutedColor={theme.mutedColor}

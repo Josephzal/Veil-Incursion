@@ -1,16 +1,20 @@
-import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo } from 'react';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { CLASS_DEFINITIONS } from '../data/classes';
 import { getFactionDefinition } from '../data/factions';
 import { getMacroSector } from '../data/macroSectors';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
+import { usePlayerAccount } from '../context/PlayerAccountContext';
+import { useTerminal } from '../context/TerminalContext';
 import ExplorationHubPanel from './ExplorationHubPanel';
+import ClassAbilityRoster from './ClassAbilityRoster';
 import { PlayerAccount } from '../types/game';
 import { OperativeProfile } from '../types/profile';
 import { TerminalTheme } from '../types/theme';
 import { formatHomeSectorDisplay } from '../constants/homeSector';
 import { formatSnakeCaseToTitleCase } from '../utils/formatDisplayName';
+import { resolvePlayerBadgePortrait } from '../utils/combatPlayerPortrait';
 import {
   formatBracketHeader,
   getInteractiveButtonStyle,
@@ -65,7 +69,8 @@ export default function IdentificationBadgeView({
 }: IdentificationBadgeViewProps): React.JSX.Element {
   const { startCombat } = useGameFlow();
   const { startBadgeTestCombat } = useRun();
-  const [hubOpen, setHubOpen] = useState(false);
+  const { cycleActiveClass } = usePlayerAccount();
+  const [hubOpen, setHubOpen] = React.useState(false);
 
   const cred = profile.operative_profile.credentials;
   const vectors = profile.operative_profile.location_vectors;
@@ -74,6 +79,16 @@ export default function IdentificationBadgeView({
   const homeSector = getMacroSector(account.regionalPresence.homeMacroSector);
   const factionColor = factionDef?.accentColor ?? theme.primaryColor;
   const accentFill = `${theme.primaryColor}26`;
+  const portraitSource = useMemo(
+    () => resolvePlayerBadgePortrait(account.activeClass),
+    [account.activeClass],
+  );
+  const canCycleClass = account.unlockedClasses.length > 1;
+
+  const handleCycleClass = (direction: 1 | -1) => {
+    if (!canCycleClass) return;
+    cycleActiveClass(direction);
+  };
 
   const launchTestCombat = (preset: 'easy' | 'hard') => {
     startBadgeTestCombat(preset);
@@ -109,16 +124,44 @@ export default function IdentificationBadgeView({
 
       <View style={styles.badgeCard}>
         <View style={styles.identityRow}>
-          <View style={[styles.avatarBlock, { backgroundColor: accentFill }]}>
-            <Text style={[styles.avatarLetter, { color: theme.statusColor }]}>
-              {cred.class.slice(0, 1)}
-            </Text>
+          <View style={styles.portraitColumn}>
+            {canCycleClass ? (
+              <Pressable
+                onPress={() => handleCycleClass(-1)}
+                style={({ pressed }) => [
+                  styles.classArrow,
+                  { borderColor: theme.borderColor, opacity: pressed ? 0.6 : 1 },
+                ]}
+              >
+                <Text style={[styles.classArrowLabel, { color: theme.mutedColor }]}>{'<'}</Text>
+              </Pressable>
+            ) : null}
+            <View style={[styles.avatarBlock, { backgroundColor: accentFill }]}>
+              <Image source={portraitSource} style={styles.avatarImage} resizeMode="contain" />
+            </View>
+            {canCycleClass ? (
+              <Pressable
+                onPress={() => handleCycleClass(1)}
+                style={({ pressed }) => [
+                  styles.classArrow,
+                  { borderColor: theme.borderColor, opacity: pressed ? 0.6 : 1 },
+                ]}
+              >
+                <Text style={[styles.classArrowLabel, { color: theme.mutedColor }]}>{'>'}</Text>
+              </Pressable>
+            ) : null}
           </View>
 
           <View style={styles.identityDetails}>
             <Text style={styles.operativeName}>{cred.username}</Text>
             <Text style={[styles.subline, { color: theme.mutedColor }]}>
               {`${classDef.displayName.toUpperCase()} // ID ${cred.id}`}
+            </Text>
+            <Text style={[styles.rankLine, { color: theme.mutedColor }]}>
+              {classDef.protocolLabel}
+            </Text>
+            <Text style={[styles.rankLine, { color: theme.mutedColor }]}>
+              {`${classDef.weaponLine} // ${classDef.interactionLine}`}
             </Text>
             <Text style={[styles.rankLine, { color: theme.mutedColor }]}>
               {`RANK ${account.operativeRank} // DEPTH ${account.progressionMatrix.maxDepthUnlocked}`}
@@ -130,6 +173,10 @@ export default function IdentificationBadgeView({
           <BarcodeStrip color={`${theme.mutedColor}88`} />
           <SecurityMatrix />
         </View>
+      </View>
+
+      <View style={hubTerminalUi.dataSection}>
+        <ClassAbilityRoster account={account} theme={theme} />
       </View>
 
       <View style={hubTerminalUi.dataSection}>
@@ -241,20 +288,35 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 12,
   },
+  portraitColumn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flexShrink: 0,
+  },
+  classArrow: {
+    width: 22,
+    height: 80,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  classArrowLabel: {
+    fontFamily: 'monospace',
+    fontSize: 16,
+    fontWeight: '700',
+  },
   avatarBlock: {
     width: 80,
     height: 80,
-    justifyContent: 'flex-start',
-    alignItems: 'flex-start',
-    paddingTop: 8,
-    paddingLeft: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
     flexShrink: 0,
   },
-  avatarLetter: {
-    fontFamily: 'System',
-    fontSize: 36,
-    fontWeight: '800',
-    lineHeight: 40,
+  avatarImage: {
+    width: '100%',
+    height: '100%',
   },
   identityDetails: {
     flex: 1,

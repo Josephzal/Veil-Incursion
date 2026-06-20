@@ -2,8 +2,11 @@ import React, { createContext, useCallback, useContext, useMemo, useRef, useStat
 import { pickRandomClimateCluster, getClusterDefinition } from '../data/climateClusters';
 import { AMBUSH_ENCOUNTERS_ENABLED } from '../data/featureFlags';
 import { anomalyResolutionLogLine, resolveAnomalyNode } from '../data/anomalyResolver';
-import { canGraftAbility, rollVeilGraftOffers } from '../data/veilGraftEngine';
-import { getVeilGraftDefinition } from '../data/veilGraftDatabase';
+import {
+  canGraftClassAbility,
+  getClassGraftDefinition,
+  rollClassGraftOffers,
+} from '../data/classGraftEngine';
 import { MAX_RUN_CANISTER_RESIDUE } from '../constants/veilResidue';
 import {
   createEasyTestEnemy,
@@ -39,6 +42,7 @@ import {
   ActiveIncursionState,
   BiomeType,
   CheckStatus,
+  ClassType,
   createDefaultActiveIncursionState,
   FactionModifiers,
   FactionType,
@@ -189,9 +193,15 @@ import { createDefaultIncursionInventory } from '../data/incursionInventory';
 import { encounterBudgetForDepth } from '../data/combatEncounterBudget';
 import { spawnCombatSquad, squadFromSingleEnemy } from '../data/combatSpawnEngine';
 import { listingsForStock, rollBlackMarketStock } from '../data/blackMarket';
-import { pickRandomLeyLineMutations } from '../data/leyLineMutations';
-import type { LeyLineMutationDefinition, LeyLineMutationId } from '../types/leyLineMutation';
+import {
+  getClassBoonDisplayName,
+  preparePostCombatBoonOffers,
+} from '../data/classBoonEngine';
+import type { PostCombatBoonOffer } from '../types/classBoon';
+import type { EnvoyBoonId, HexShotBoonId } from '../types/classBoon';
+import type { LeyLineMutationId } from '../types/leyLineMutation';
 import type { AegisLoadout } from '../types/aegisCombat';
+import type { EnvoyLoadout, HexShotLoadout } from '../types/operativeClass';
 import type { CargoItemId } from '../types/cargoGrid';
 import type { IncursionConsumableId, IncursionConsumableUseResult } from '../types/incursionInventory';
 import type { BoundRequisitionDefinition, BoundRequisitionId } from '../types/boundRequisition';
@@ -216,6 +226,9 @@ export interface RunStartConfig {
   unlockedBiomes?: BiomeType[];
   sectorTier?: number;
   aegisLoadout?: AegisLoadout;
+  hexShotLoadout?: HexShotLoadout;
+  envoyLoadout?: EnvoyLoadout;
+  activeClass?: ClassType;
   alignedFaction?: FactionType | null;
   /** Safehouse cargo grid + tactical slots committed on descent. */
   initialCargo?: import('../types/cargoGrid').CargoRunState;
@@ -227,7 +240,7 @@ interface RunContextType {
   runLog: string[];
   deathSummary: import('../types/runDeathSummary').RunDeathSummary | null;
   scanSessionKey: number;
-  postCombatMutationChoices: LeyLineMutationDefinition[];
+  postCombatMutationChoices: PostCombatBoonOffer[];
   appendRunLog: (text: string) => void;
   startNewRun: (config?: RunStartConfig) => void;
   recordRunKillAttacker: (designation: string) => void;
@@ -246,20 +259,22 @@ interface RunContextType {
   beginScanSession: () => void;
   commitRadarDot: (dot: RadarDot) => EncounterNode;
   advanceNode: () => { hasNext: boolean; completedCount: number };
-  completeNodeAfterMutation: (mutationId: LeyLineMutationId) => void;
+  completeNodeAfterMutation: (boonId: string) => void;
   incrementCombatNodesCleared: () => void;
   syncAfterCombat: (remainingHp: number, remainingStamina: number) => void;
   refillStaminaAfterCombat: () => void;
   applyTrinket: (trinket: Trinket) => void;
-  preparePostCombatMutations: () => LeyLineMutationDefinition[];
+  preparePostCombatMutations: () => PostCombatBoonOffer[];
   applyLeyLineMutation: (mutationId: LeyLineMutationId) => void;
+  applyHexShotBoon: (boonId: HexShotBoonId) => void;
+  applyEnvoyBoon: (boonId: EnvoyBoonId) => void;
   rollBlackMarketStockForNode: () => void;
   useResonanceBribeFromCargo: () => boolean;
   useDeadDropTokenFromCargo: () => boolean;
   applySkillCheckTier: (tier: 'CRITICAL_SUCCESS' | 'SUCCESS' | 'FAILURE' | 'CRITICAL_DESYNC', logLine: string) => void;
   applySanctuaryAttune: () => void;
   openSanctuaryGraftTerminal: () => void;
-  applyVeilGraftToAbility: (abilityId: import('../types/aegisCombat').AegisAbilityId, graftId: import('../types/veilGraft').VeilGraftId) => { success: boolean; message: string };
+  applyClassGraftToAbility: (abilityId: string, graftId: string) => { success: boolean; message: string };
   getVeilResidueBalance: () => number;
   clearEncounterUltimateDisabled: () => void;
   getCurrentEncounter: () => EncounterNode | null;
@@ -456,7 +471,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   const scanSessionKeyRef = useRef(scanSessionKey);
   scanSessionKeyRef.current = scanSessionKey;
   const pocketResonanceAccumRef = useRef(0);
-  const [postCombatMutationChoices, setPostCombatMutationChoices] = useState<LeyLineMutationDefinition[]>([]);
+  const [postCombatMutationChoices, setPostCombatMutationChoices] = useState<PostCombatBoonOffer[]>([]);
   const [boundRequisitionOffers, setBoundRequisitionOffers] = useState<BoundRequisitionDefinition[]>([]);
   const [activeIncursion, setActiveIncursion] = useState<ActiveIncursionState>(
     createDefaultActiveIncursionState,
@@ -537,6 +552,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       primeExtractionBonus: sectorInit.primeExtractionBonus,
       sectorTier: sectorInit.sectorTier,
       leyLineMutations: [],
+      hexShotBoons: [],
+      envoyBoons: [],
       alignedFaction: config?.alignedFaction ?? null,
       currentMacroBiomeFamily: initialBiome,
       lastMacroBiomeFamily: null,
@@ -552,6 +569,13 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       aegisLoadout: config?.aegisLoadout
         ? [...config.aegisLoadout] as AegisLoadout
         : createDefaultActiveIncursionState().aegisLoadout,
+      hexShotLoadout: config?.hexShotLoadout
+        ? [...config.hexShotLoadout] as HexShotLoadout
+        : createDefaultActiveIncursionState().hexShotLoadout,
+      envoyLoadout: config?.envoyLoadout
+        ? [...config.envoyLoadout] as EnvoyLoadout
+        : createDefaultActiveIncursionState().envoyLoadout,
+      activeClass: config?.activeClass ?? 'AEGIS',
       cargo: applyIncursionStarterCargo(config?.initialCargo ?? createStarterCargoRunState()),
       sanctuarySchedule,
       strikeDamageBonusPct: 0,
@@ -850,10 +874,59 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     appendRunLog(`>> Ley-Line mutation secured: ${mutationId.replace(/_/g, ' ')}.`);
   }, [appendRunLog]);
 
-  const completeNodeAfterMutation = useCallback((mutationId: LeyLineMutationId) => {
-    applyLeyLineMutation(mutationId);
+  const applyHexShotBoon = useCallback((boonId: HexShotBoonId) => {
+    const inc = activeIncursionRef.current;
+    if (isLeyScarAcquisitionBlocked(inc)) {
+      appendRunLog('>> LEY-SCAR ACQUISITION BLOCKED — IRONCLAD LOGISTICS MANDATE ACTIVE.');
+      return;
+    }
+    if (inc.hexShotBoons.length >= MAX_LEY_MUTATIONS) {
+      appendRunLog('>> HEX-SHOT BOON CAP REACHED — swap required to accept incoming boon.');
+      return;
+    }
+    setActiveIncursion((prev) => {
+      const next = {
+        ...prev,
+        hexShotBoons: [...prev.hexShotBoons, boonId],
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    appendRunLog(`>> Hex-Shot boon secured: ${getClassBoonDisplayName('HEX_SHOT', boonId)}.`);
+  }, [appendRunLog]);
+
+  const applyEnvoyBoon = useCallback((boonId: EnvoyBoonId) => {
+    const inc = activeIncursionRef.current;
+    if (isLeyScarAcquisitionBlocked(inc)) {
+      appendRunLog('>> LEY-SCAR ACQUISITION BLOCKED — IRONCLAD LOGISTICS MANDATE ACTIVE.');
+      return;
+    }
+    if (inc.envoyBoons.length >= MAX_LEY_MUTATIONS) {
+      appendRunLog('>> ENVOY BOON CAP REACHED — swap required to accept incoming boon.');
+      return;
+    }
+    setActiveIncursion((prev) => {
+      const next = {
+        ...prev,
+        envoyBoons: [...prev.envoyBoons, boonId],
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    appendRunLog(`>> Envoy boon secured: ${getClassBoonDisplayName('ENVOY', boonId)}.`);
+  }, [appendRunLog]);
+
+  const completeNodeAfterMutation = useCallback((boonId: string) => {
+    const inc = activeIncursionRef.current;
+    if (inc.activeClass === 'HEX_SHOT') {
+      applyHexShotBoon(boonId as HexShotBoonId);
+    } else if (inc.activeClass === 'ENVOY') {
+      applyEnvoyBoon(boonId as EnvoyBoonId);
+    } else {
+      applyLeyLineMutation(boonId as LeyLineMutationId);
+    }
     setPostCombatMutationChoices([]);
-  }, [applyLeyLineMutation]);
+  }, [applyEnvoyBoon, applyHexShotBoon, applyLeyLineMutation]);
 
   const rollBlackMarketStockForNode = useCallback(() => {
     const stock = rollBlackMarketStock();
@@ -894,7 +967,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     appendRunLog('>> Combat node cleared — stamina reserves fully replenished.');
   }, [appendRunLog]);
 
-  const preparePostCombatMutations = useCallback((): LeyLineMutationDefinition[] => {
+  const preparePostCombatMutations = useCallback((): PostCombatBoonOffer[] => {
     const inc = activeIncursionRef.current;
     if (isLeyScarAcquisitionBlocked(inc)) {
       setPostCombatMutationChoices([]);
@@ -906,8 +979,13 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       setPostCombatMutationChoices([]);
       return [];
     }
-    const owned = inc.leyLineMutations;
-    const choices = pickRandomLeyLineMutations(3, owned);
+    const choices = preparePostCombatBoonOffers(
+      inc.activeClass,
+      inc.leyLineMutations,
+      inc.hexShotBoons,
+      inc.envoyBoons,
+      3,
+    );
     setPostCombatMutationChoices(choices);
     return choices;
   }, [appendRunLog]);
@@ -980,7 +1058,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const openSanctuaryGraftTerminal = useCallback(() => {
-    const offers = rollVeilGraftOffers(3);
+    const inc = activeIncursionRef.current;
+    const classId = inc.activeClass ?? 'AEGIS';
+    const offers = rollClassGraftOffers(classId, 3);
     setActiveIncursion((prev) => {
       const next = {
         ...prev,
@@ -989,22 +1069,25 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       activeIncursionRef.current = next;
       return next;
     });
-    appendRunLog('>> VEIL-GRAFT TERMINAL ONLINE — three volatile mutations staged.');
+    appendRunLog(`>> ${classId} GRAFT TERMINAL ONLINE — three volatile mutations staged.`);
     offers.forEach((graftId) => {
-      appendRunLog(`>> — OFFER: ${getVeilGraftDefinition(graftId).name.toUpperCase()} (${getVeilGraftDefinition(graftId).cost} RESIDUE)`);
+      const graft = getClassGraftDefinition(classId, graftId);
+      appendRunLog(`>> — OFFER: ${graft.name.toUpperCase()} (${graft.cost} RESIDUE)`);
     });
   }, [appendRunLog]);
 
-  const applyVeilGraftToAbility = useCallback((
-    abilityId: import('../types/aegisCombat').AegisAbilityId,
-    graftId: import('../types/veilGraft').VeilGraftId,
+  const applyClassGraftToAbility = useCallback((
+    abilityId: string,
+    graftId: string,
   ): { success: boolean; message: string } => {
-    if (!canGraftAbility(abilityId)) {
-      return { success: false, message: 'Ultimate abilities cannot be grafted.' };
+    const inc = activeIncursionRef.current;
+    const classId = inc.activeClass ?? 'AEGIS';
+
+    if (!canGraftClassAbility(classId, abilityId)) {
+      return { success: false, message: 'This ability slot cannot be grafted.' };
     }
 
-    const graft = getVeilGraftDefinition(graftId);
-    const inc = activeIncursionRef.current;
+    const graft = getClassGraftDefinition(classId, graftId);
     if (inc.sessionVeilResidueCollected < graft.cost) {
       return { success: false, message: 'Insufficient Veil Residue.' };
     }
@@ -1023,13 +1106,31 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     }
 
     setActiveIncursion((prev) => {
+      const graftPatch = classId === 'HEX_SHOT'
+        ? {
+          hexShotAbilityGrafts: {
+            ...prev.hexShotAbilityGrafts,
+            [abilityId]: graftId,
+          },
+        }
+        : classId === 'ENVOY'
+          ? {
+            envoyAbilityGrafts: {
+              ...prev.envoyAbilityGrafts,
+              [abilityId]: graftId,
+            },
+          }
+          : {
+            abilityGrafts: {
+              ...prev.abilityGrafts,
+              [abilityId as import('../types/aegisCombat').AegisAbilityId]: graftId as import('../types/veilGraft').VeilGraftId,
+            },
+          };
+
       const next = {
         ...prev,
         sessionVeilResidueCollected: prev.sessionVeilResidueCollected - graft.cost,
-        abilityGrafts: {
-          ...prev.abilityGrafts,
-          [abilityId]: graftId,
-        },
+        ...graftPatch,
         encounterUltimateDisabled: graft.disableUltimate === true
           ? true
           : prev.encounterUltimateDisabled,
@@ -3106,13 +3207,15 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       applyTrinket,
       preparePostCombatMutations,
       applyLeyLineMutation,
+      applyHexShotBoon,
+      applyEnvoyBoon,
       rollBlackMarketStockForNode,
       useResonanceBribeFromCargo,
       useDeadDropTokenFromCargo,
       applySkillCheckTier,
       applySanctuaryAttune,
       openSanctuaryGraftTerminal,
-      applyVeilGraftToAbility,
+      applyClassGraftToAbility,
       getVeilResidueBalance,
       clearEncounterUltimateDisabled,
       getCurrentEncounter,
@@ -3211,13 +3314,15 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       applyTrinket,
       preparePostCombatMutations,
       applyLeyLineMutation,
+      applyHexShotBoon,
+      applyEnvoyBoon,
       rollBlackMarketStockForNode,
       useResonanceBribeFromCargo,
       useDeadDropTokenFromCargo,
       applySkillCheckTier,
       applySanctuaryAttune,
       openSanctuaryGraftTerminal,
-      applyVeilGraftToAbility,
+      applyClassGraftToAbility,
       getVeilResidueBalance,
       clearEncounterUltimateDisabled,
       getCurrentEncounter,

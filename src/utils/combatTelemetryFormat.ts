@@ -10,6 +10,8 @@ export type { EnemyStatusEffectKey } from './enemyStatusEffects';
 
 export const GAUGE_SOUL_ANCHOR = '#FF453A';
 export const GAUGE_ABYSSAL = '#00D2C4';
+export const GAUGE_MAGAZINE = '#fbbf24';
+export const GAUGE_VEIL_FLUX = '#c084fc';
 export const GAUGE_STAMINA = '#5C2D91';
 export const GAUGE_HOSTILE_HP = '#FF453A';
 export const GAUGE_TRACK_BORDER = 'rgba(139, 92, 246, 0.45)';

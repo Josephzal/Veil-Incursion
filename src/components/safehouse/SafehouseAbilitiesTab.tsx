@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import AegisLoadoutEditor from '../AegisLoadoutEditor';
+import ClassAbilityRoster from '../ClassAbilityRoster';
 import { formatBracketHeader, hubTerminalUi } from '../../styles/hubTerminalUi';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useTerminal } from '../../context/TerminalContext';
@@ -56,6 +57,28 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
     appendHubLog('>> AEGIS LOADOUT LOCKED — combat deck staged for next incursion.');
     setLoadoutStatus('>> LOADOUT COMMITTED — CARRIES INTO NEXT RUN.');
   }, [appendHubLog, account.unlockedAegisAbilities, loadoutDraft, setAegisLoadout]);
+
+  if (account.activeClass !== 'AEGIS') {
+    return (
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={hubTerminalUi.dataSectionLeading}>
+          <Text style={[hubTerminalUi.sectionHeaderLg, { color: theme.mutedColor }]}>
+            {formatBracketHeader(`PRE-RUN ${account.activeClass} CONFIG`)}
+          </Text>
+          <Text style={[styles.headerSub, { color: theme.mutedColor }]}>
+            Starter kit locked for this class. Full loadout editor arrives with class combat systems.
+          </Text>
+        </View>
+        <View style={hubTerminalUi.dataSection}>
+          <ClassAbilityRoster account={account} theme={theme} />
+        </View>
+      </ScrollView>
+    );
+  }
 
   return (
     <ScrollView
