@@ -23,6 +23,7 @@ interface DescentPipelineHUDProps {
 }
 
 const NODE_ICON: Record<string, string> = {
+  ANOMALY: '?',
   NARRATIVE_EVENT: '◆',
   STANDARD_COMBAT: '⚔',
   ELITE_COMBAT: '☠',

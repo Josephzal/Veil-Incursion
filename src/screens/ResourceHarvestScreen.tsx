@@ -287,6 +287,7 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
               fixedExternalSlotCount={fixedExternalSlotCount}
               resolveContainmentSlotIndex={resolveContainmentSlotIndex}
               harvestLayout
+              hideContinueButton
               gridSidecar={(
                 <VeilVacuumCanisterStack
                   ref={canisterRef}

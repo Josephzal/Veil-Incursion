@@ -22,6 +22,7 @@ export function scannerRevealToneForNodeType(nodeType: RunNodeType): ScannerReve
       return 'elite';
     case 'SANCTUARY':
       return 'sanctuary';
+    case 'ANOMALY':
     case 'NARRATIVE_EVENT':
       return 'narrative';
     case 'EMERGENCY_EXTRACTION':

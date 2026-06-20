@@ -59,7 +59,7 @@ export function intentLabel(intent: EnemyIntent, designation: string): string {
     STRIKE: `${designation} intends to STRIKE`,
     STRIP_STAMINA: `${designation} intends to STRIP STAMINA`,
     SIPHON_ABYSSAL: `${designation} intends to SIPHON ABYSSAL ENERGY`,
-    EVADE: `${designation} intends to EVADE (50% damage reduction)`,
+    EVADE: `${designation} intends to EVADE (50% evasion chance)`,
     CHARGE: `${designation} is CHARGING a world-ender (turn ${1}/3)`,
     WORLD_ENDER: `${designation} intends WORLD-ENDER (UNBLOCKABLE)`,
     FORTIFY: `${designation} intends to FORTIFY`,

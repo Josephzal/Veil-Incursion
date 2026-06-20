@@ -33,7 +33,10 @@ export function hasDuplicateLoadoutSlots(loadout: readonly AegisAbilityId[]): bo
   return new Set(loadout).size < loadout.length;
 }
 
-export function validateLoadoutCommit(loadout: readonly AegisAbilityId[]): string | null {
+export function validateLoadoutCommit(
+  loadout: readonly AegisAbilityId[],
+  unlocked?: readonly AegisAbilityId[],
+): string | null {
   if (loadout.length !== 4) return '>> LOADOUT REJECTED — FOUR SLOTS REQUIRED.';
   if (loadout.some((id) => id === 'EVISCERATE')) {
     return '>> LOADOUT REJECTED — EVISCERATE IS A HIDDEN ULTIMATE.';
@@ -43,6 +46,12 @@ export function validateLoadoutCommit(loadout: readonly AegisAbilityId[]): strin
   }
   if (loadout.some((id) => !isAssignableAbility(id))) {
     return '>> LOADOUT REJECTED — UNKNOWN ABILITY IN SLOT.';
+  }
+  if (unlocked) {
+    const locked = loadout.find((id) => !unlocked.includes(id));
+    if (locked) {
+      return `>> LOADOUT REJECTED — ${locked.replace(/_/g, ' ')} NOT UNLOCKED.`;
+    }
   }
   return null;
 }

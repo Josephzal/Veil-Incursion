@@ -12,6 +12,8 @@ export const COMBAT_CHANCE = {
   VEIL_PIERCER_CRIT_BONUS: 0.10,
   SHATTER_POINT_CRIT_BONUS: 0.20,
   GRID_GHOST_EVADE_PER_STACK: 0.05,
+  /** EVADE intent posture — full miss roll (not damage reduction). */
+  EVADE_POSTURE_EVADE_CHANCE: 0.50,
   GRID_GHOST_MAX_STACKS: 3,
   GRID_GHOST_STAMINA_REFUND_PCT: 0.20,
   PHANTOM_CRIT_SPLIT_PCT: 0.50,
@@ -51,6 +53,8 @@ export interface EnemyCritContext {
 
 export interface EnemyEvadeContext {
   defender: EnemyCombatProfile;
+  /** Overcharged boon — posture evade does not apply. */
+  bypassPostureEvade?: boolean;
 }
 
 export interface CombatHitResolution {

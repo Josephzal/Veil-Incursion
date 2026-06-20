@@ -137,7 +137,7 @@ export default function ShadowWarDashboard({
           BEGIN INCURSION
         </Text>
         <Text style={[styles.deepDiveSub, { color: theme.mutedColor }]}>
-          Stage loadout at Safehouse — then push into the Veil
+          Stage loadout on Safehouse tab — then breach the Veil
         </Text>
       </Pressable>
     </View>

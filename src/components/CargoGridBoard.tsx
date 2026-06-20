@@ -96,6 +96,18 @@ interface CargoGridBoardProps {
   resolveContainmentSlotIndex?: (instanceId: string) => number | undefined;
   stableExternalBay?: boolean;
   hideContinueButton?: boolean;
+  /** Hover preview while dragging from an external stash panel. */
+  externalHover?: { itemId: CargoItemId; row: number; col: number } | null;
+  /** Tap-to-place: selected stash item awaiting grid cell click. */
+  selectedPlacementItemId?: CargoItemId | null;
+  onPlaceAtCell?: (row: number, col: number) => void;
+  onGridMetricsMeasured?: (metrics: GridMetrics & { cellSize: number; cellGap: number }) => void;
+  /** Hub loadout: drag off-grid onto stash returns item without discard confirm. */
+  onHubExternalDrop?: (source: CargoDragSource, absoluteX: number, absoluteY: number) => boolean;
+  /** Reports in-progress cargo drags for cross-panel drop highlighting. */
+  onDragPositionChange?: (payload: { source: CargoDragSource; x: number; y: number } | null) => void;
+  /** Override cell pixel size — hub loadout uses a compact grid. */
+  cellSize?: number;
 }
 
 function cellsForItem(itemId: CargoItemId, originRow: number, originCol: number): string[] {
@@ -109,20 +121,36 @@ function cellsForItem(itemId: CargoItemId, originRow: number, originCol: number)
   return keys;
 }
 
-export function spriteSizeForCargoItem(itemId: CargoItemId): { width: number; height: number } {
+export function spriteSizeForCargoItem(
+  itemId: CargoItemId,
+  cellSize: number = CARGO_CELL_SIZE,
+): { width: number; height: number } {
   const def = CARGO_ITEM_CATALOG[itemId];
   return {
-    width: def.width * CARGO_CELL_SIZE + (def.width - 1) * CARGO_CELL_GAP,
-    height: def.height * CARGO_CELL_SIZE + (def.height - 1) * CARGO_CELL_GAP,
+    width: def.width * cellSize + (def.width - 1) * CARGO_CELL_GAP,
+    height: def.height * cellSize + (def.height - 1) * CARGO_CELL_GAP,
   };
 }
 
-function cellOriginLeft(col: number): number {
-  return col * (CARGO_CELL_SIZE + CARGO_CELL_GAP);
+export function cargoGridFrameDimensions(cellSize: number = CARGO_CELL_SIZE): {
+  frameWidth: number;
+  frameHeight: number;
+  stride: number;
+} {
+  const stride = cellSize + CARGO_CELL_GAP;
+  return {
+    frameWidth: CARGO_GRID_COLS * cellSize + (CARGO_GRID_COLS - 1) * CARGO_CELL_GAP,
+    frameHeight: CARGO_GRID_ROWS * cellSize + (CARGO_GRID_ROWS - 1) * CARGO_CELL_GAP,
+    stride,
+  };
 }
 
-function cellOriginTop(row: number): number {
-  return row * (CARGO_CELL_SIZE + CARGO_CELL_GAP);
+function cellOriginLeft(col: number, cellSize: number = CARGO_CELL_SIZE): number {
+  return col * (cellSize + CARGO_CELL_GAP);
+}
+
+function cellOriginTop(row: number, cellSize: number = CARGO_CELL_SIZE): number {
+  return row * (cellSize + CARGO_CELL_GAP);
 }
 
 function DraggableCargoSprite({
@@ -138,6 +166,7 @@ function DraggableCargoSprite({
   onCombatSelect,
   originRow,
   originCol,
+  cellSize = CARGO_CELL_SIZE,
 }: {
   dragSource: CargoDragSource;
   isDragging: boolean;
@@ -163,8 +192,9 @@ function DraggableCargoSprite({
   onCombatSelect?: () => void;
   originRow?: number;
   originCol?: number;
+  cellSize?: number;
 }): React.JSX.Element {
-  const spriteSize = spriteSizeForCargoItem(dragSource.itemId);
+  const spriteSize = spriteSizeForCargoItem(dragSource.itemId, cellSize);
 
   if (combatSelectMode && onCombatSelect) {
     return (
@@ -356,7 +386,19 @@ export default function CargoGridBoard({
   resolveContainmentSlotIndex,
   stableExternalBay = false,
   hideContinueButton = false,
+  externalHover = null,
+  selectedPlacementItemId = null,
+  onPlaceAtCell,
+  onGridMetricsMeasured,
+  onHubExternalDrop,
+  onDragPositionChange,
+  cellSize: cellSizeProp,
 }: CargoGridBoardProps): React.JSX.Element {
+  const cellSize = cellSizeProp ?? CARGO_CELL_SIZE;
+  const { frameWidth, frameHeight, stride } = useMemo(
+    () => cargoGridFrameDimensions(cellSize),
+    [cellSize],
+  );
   const combatTurn = useCombatTurnOptional();
   const runCredits = runCreditsProp ?? combatTurn?.runCredits ?? 0;
   const playerActionPoints = playerActionPointsProp ?? combatTurn?.playerActionPoints ?? 0;
@@ -424,28 +466,31 @@ export default function CargoGridBoard({
   }, [activeDrag?.instanceId, displayCargo.grid.placed]);
 
   const previewCells = useMemo(() => {
-    if (!hoverCell || !hoverItemId) {
+    const hover = externalHover ?? (hoverCell && hoverItemId ? { itemId: hoverItemId, row: hoverCell.row, col: hoverCell.col } : null);
+    if (!hover) {
       return { cells: new Set<string>(), valid: false };
     }
-    const cells = new Set(cellsForPreview(hoverItemId, hoverCell.row, hoverCell.col));
+    const cells = new Set(cellsForPreview(hover.itemId, hover.row, hover.col));
     const valid = canPlaceCargoItemExcluding(
       displayCargo,
-      hoverItemId,
-      hoverCell.row,
-      hoverCell.col,
-      hoverExcludeId,
+      hover.itemId,
+      hover.row,
+      hover.col,
+      externalHover ? undefined : hoverExcludeId,
     );
     return { cells, valid };
-  }, [displayCargo, hoverCell, hoverExcludeId, hoverItemId]);
+  }, [displayCargo, externalHover, hoverCell, hoverExcludeId, hoverItemId]);
 
   const captureMetrics = useCallback(() => {
     gridRef.current?.measureInWindow((pageX, pageY, width, height) => {
-      gridMetricsRef.current = { pageX, pageY, width, height };
+      const metrics = { pageX, pageY, width, height, cellSize, cellGap: CARGO_CELL_GAP };
+      gridMetricsRef.current = metrics;
+      onGridMetricsMeasured?.(metrics);
     });
     boardRef.current?.measureInWindow((pageX, pageY, width, height) => {
       boardMetricsRef.current = { pageX, pageY, width, height };
     });
-  }, []);
+  }, [cellSize, onGridMetricsMeasured]);
 
   const reportHarvestFloor = useCallback(() => {
     if (!onHarvestFloorMeasured) return;
@@ -467,7 +512,7 @@ export default function CargoGridBoard({
   const resolveCellFromAbsolute = useCallback((absoluteX: number, absoluteY: number) => {
     const metrics = gridMetricsRef.current;
     if (!metrics) return null;
-    const stride = CARGO_CELL_SIZE + CARGO_CELL_GAP;
+    const stride = cellSize + CARGO_CELL_GAP;
     const localX = absoluteX - metrics.pageX;
     const localY = absoluteY - metrics.pageY;
     if (localX < 0 || localY < 0 || localX >= metrics.width || localY >= metrics.height) return null;
@@ -475,7 +520,7 @@ export default function CargoGridBoard({
     const row = Math.floor(localY / stride);
     if (row < 0 || col < 0 || row >= CARGO_GRID_ROWS || col >= CARGO_GRID_COLS) return null;
     return { row, col };
-  }, []);
+  }, [cellSize]);
 
   const resolveValidDropCell = useCallback((
     absoluteX: number,
@@ -528,7 +573,7 @@ export default function CargoGridBoard({
       return fromFinger;
     }
     return null;
-  }, [resolveCellFromAbsolute]);
+  }, [cellSize, resolveCellFromAbsolute]);
 
   const handleHoverCell = useCallback((
     cell: { row: number; col: number } | null,
@@ -567,27 +612,11 @@ export default function CargoGridBoard({
     setActiveDrag(source);
   }, [captureMetrics, dragGhostScale]);
 
-  const selectCombatItem = useCallback((itemId: CargoItemId) => {
-    pulseCargoItemSelect();
-    setSelectedCombatItemId(itemId);
-  }, []);
-
-  const handleDragMove = useCallback((absoluteX: number, absoluteY: number) => {
+  const reportDragPosition = useCallback((absoluteX: number, absoluteY: number) => {
     const source = activeDragRef.current;
-    const board = boardMetricsRef.current;
-    if (board) {
-      setDragOverlay({ x: absoluteX - board.pageX, y: absoluteY - board.pageY });
-    }
-    const cell = resolveCellFromAbsolute(absoluteX, absoluteY);
-    if (!cell || !source) {
-      return;
-    }
-    handleHoverCell(
-      cell,
-      source.itemId,
-      source.source === 'grid' ? source.instanceId : undefined,
-    );
-  }, [handleHoverCell, resolveCellFromAbsolute]);
+    if (!source || !onDragPositionChange) return;
+    onDragPositionChange({ source, x: absoluteX, y: absoluteY });
+  }, [onDragPositionChange]);
 
   const clearDrag = useCallback(() => {
     pendingDropRef.current = null;
@@ -602,7 +631,32 @@ export default function CargoGridBoard({
     setHoverCell(null);
     setHoverItemId(null);
     setHoverExcludeId(undefined);
-  }, [dragGhostScale]);
+    onDragPositionChange?.(null);
+  }, [dragGhostScale, onDragPositionChange]);
+
+  const selectCombatItem = useCallback((itemId: CargoItemId) => {
+    pulseCargoItemSelect();
+    setSelectedCombatItemId(itemId);
+  }, []);
+
+  const handleDragMove = useCallback((absoluteX: number, absoluteY: number) => {
+    const source = activeDragRef.current;
+    const board = boardMetricsRef.current;
+    if (board) {
+      setDragOverlay({ x: absoluteX - board.pageX, y: absoluteY - board.pageY });
+    }
+    reportDragPosition(absoluteX, absoluteY);
+    const cell = resolveCellFromAbsolute(absoluteX, absoluteY);
+    if (!cell || !source) {
+      handleHoverCell(null, null);
+      return;
+    }
+    handleHoverCell(
+      cell,
+      source.itemId,
+      source.source === 'grid' ? source.instanceId : undefined,
+    );
+  }, [handleHoverCell, reportDragPosition, resolveCellFromAbsolute]);
 
   const handleDropAttempt = useCallback((
     source: CargoDragSource,
@@ -626,6 +680,10 @@ export default function CargoGridBoard({
 
     if (!cell) {
       clearDrag();
+      if (onHubExternalDrop?.(source, absoluteX, absoluteY)) {
+        onResult(true);
+        return;
+      }
       if (onDiscardItem) {
         setPendingDiscard(source);
         return;
@@ -658,7 +716,7 @@ export default function CargoGridBoard({
       cargoRef.current = snapshot;
     }
     onResult(placed);
-  }, [captureMetrics, clearDrag, onDiscardItem, onRelocateItem, resolveValidDropCell]);
+  }, [captureMetrics, clearDrag, onDiscardItem, onHubExternalDrop, onRelocateItem, resolveValidDropCell]);
 
   const selectedApCost = selectedCombatItemId ? combatConsumableApCost(selectedCombatItemId) : 2;
   const canAffordConsumableAp = playerActionPoints >= selectedApCost;
@@ -674,9 +732,9 @@ export default function CargoGridBoard({
     <View
       ref={gridRef}
       onLayout={handleGridLayout}
-      style={[styles.gridFrame, { width: CARGO_GRID_FRAME_WIDTH, height: CARGO_GRID_FRAME_HEIGHT }]}
+      style={[styles.gridFrame, { width: frameWidth, height: frameHeight }]}
     >
-      <View style={styles.cellsLayer}>
+      <View style={[styles.cellsLayer, { gap: CARGO_CELL_GAP }]}>
         {Array.from({ length: CARGO_GRID_ROWS }, (_, row) =>
           Array.from({ length: CARGO_GRID_COLS }, (_, col) => {
             const key = `${row},${col}`;
@@ -685,11 +743,15 @@ export default function CargoGridBoard({
             const canDrop = isPreview && previewCells.valid;
 
             return (
-              <View
+              <Pressable
                 key={key}
+                disabled={!selectedPlacementItemId || !onPlaceAtCell}
+                onPress={() => onPlaceAtCell?.(row, col)}
                 style={[
                   styles.cell,
                   {
+                    width: cellSize,
+                    height: cellSize,
                     borderColor: isPreview
                       ? (canDrop ? accentColor : '#ef4444')
                       : theme.borderColor,
@@ -711,7 +773,7 @@ export default function CargoGridBoard({
           const deployable = isCombatDeployableCargoItem(item.itemId);
           const selectMode = combatMode && combatConsumablesEnabled && deployable;
           const source: CargoDragSource = { instanceId: item.instanceId, itemId: item.itemId, source: 'grid' };
-          const spriteSize = spriteSizeForCargoItem(item.itemId);
+          const spriteSize = spriteSizeForCargoItem(item.itemId, cellSize);
           const isDragging = activeDrag?.instanceId === item.instanceId;
 
           return (
@@ -720,8 +782,8 @@ export default function CargoGridBoard({
               style={[
                 styles.placedItemAnchor,
                 {
-                  left: cellOriginLeft(item.originCol),
-                  top: cellOriginTop(item.originRow),
+                  left: cellOriginLeft(item.originCol, cellSize),
+                  top: cellOriginTop(item.originRow, cellSize),
                   width: spriteSize.width,
                   height: spriteSize.height,
                 },
@@ -733,6 +795,7 @@ export default function CargoGridBoard({
                 isDragging={isDragging}
                 originRow={item.originRow}
                 originCol={item.originCol}
+                cellSize={cellSize}
                 onHoverCell={handleHoverCell}
                 onDragStart={handleDragStart}
                 onDragMove={handleDragMove}
@@ -750,18 +813,24 @@ export default function CargoGridBoard({
   );
 
   const overlaySprite = activeDrag && dragOverlay
-    ? spriteSizeForCargoItem(activeDrag.itemId)
+    ? spriteSizeForCargoItem(activeDrag.itemId, cellSize)
     : null;
 
   return (
-    <View style={[styles.root, minimal && styles.rootMinimal, styles.rootCentered, { width: CARGO_GRID_FRAME_SIZE }]}>
+    <View style={[
+      styles.root,
+      minimal && styles.rootMinimal,
+      styles.rootCentered,
+      { width: frameWidth, gap: cellSize < 48 ? 8 : undefined },
+    ]}>
       {showCreditsHud ? (
         <CargoCreditsHud credits={runCredits} accentColor={accentColor} style={styles.creditsHud} />
       ) : null}
 
-      <View ref={boardRef} onLayout={captureMetrics} style={styles.boardShell}>
+      <View ref={boardRef} onLayout={captureMetrics} style={[styles.boardShell, { width: frameWidth }]}>
         <View style={styles.gridDock}>{gridBlock}</View>
 
+        {externalSlotCount > 0 ? (
         <View
           ref={externalBayRef}
           onLayout={reportHarvestFloor}
@@ -770,25 +839,29 @@ export default function CargoGridBoard({
             stableExternalBay ? styles.externalBayStable : null,
           ]}
         >
-          {externalSlotCount > 0 ? (
-            <View
-              style={[
-                styles.externalRow,
-                stableExternalBay ? {
-                  width: externalSlotCount * CARGO_CELL_SIZE + (externalSlotCount - 1) * 20,
-                  alignSelf: 'center',
-                  justifyContent: 'flex-start',
-                } : null,
-              ]}
-            >
-              {Array.from({ length: externalSlotCount }, (_, slotIndex) => {
+          <View
+            style={[
+              styles.externalRow,
+              stableExternalBay ? {
+                width: externalSlotCount * cellSize + (externalSlotCount - 1) * 20,
+                alignSelf: 'center',
+                justifyContent: 'flex-start',
+              } : null,
+            ]}
+          >
+            {Array.from({ length: externalSlotCount }, (_, slotIndex) => {
                 const item = containmentBySlot
                   ? (containmentBySlot.get(slotIndex) ?? null)
                   : (displayCargo.containment[slotIndex] ?? null);
                 if (!item) {
-                  return <View key={`empty-slot-${slotIndex}`} style={styles.externalSlot} />;
+                  return (
+                    <View
+                      key={`empty-slot-${slotIndex}`}
+                      style={[styles.externalSlot, { width: cellSize, height: cellSize }]}
+                    />
+                  );
                 }
-                const spriteSize = spriteSizeForCargoItem(item.itemId);
+                const spriteSize = spriteSizeForCargoItem(item.itemId, cellSize);
                 const source: CargoDragSource = {
                   instanceId: item.instanceId,
                   itemId: item.itemId,
@@ -815,9 +888,9 @@ export default function CargoGridBoard({
                   />
                 );
               })}
-            </View>
-          ) : null}
+          </View>
         </View>
+        ) : null}
 
         {activeDrag && dragOverlay && overlaySprite ? (
           <View style={styles.dragOverlayLayer} pointerEvents="none">

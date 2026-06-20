@@ -37,6 +37,9 @@ import {
 import CombatFloatingFeedback from './combat/CombatFloatingFeedback';
 import { DEFAULT_AEGIS_LOADOUT, PLAYER_ACTION_POINTS_PER_TURN, type AegisAbilityId, type AegisLoadout } from '../types/aegisCombat';
 import { getAbilityDefinition } from '../data/aegisAbilities';
+import { buildGraftCastPlan, scaleGraftDamage } from '../data/veilGraftEngine';
+import { getVeilGraftDefinition } from '../data/veilGraftDatabase';
+import type { GraftCastPlan } from '../types/veilGraft';
 import { COMBAT_CONSUMABLE_AP_COST, absorbByArmor, resolveHostileHpHit } from '../data/aegisAbilityResolver';
 import { combatConsumableApCost } from '../data/cargoGridEngine';
 import type { CargoItemId } from '../types/cargoGrid';
@@ -48,9 +51,14 @@ import {
 } from '../data/aegisAbilityExecutor';
 import {
   aggregateMutationModifiers,
+  boonMatchesAction,
+  createDefaultBoonEncounterState,
   hasMutation,
+  modifierForAction,
+  targetIsExposed,
   type MutationCombatModifiers,
-} from '../data/leyLineMutationEngine';
+} from '../data/boonEngine';
+import { getAbilityTags } from '../data/aegisAbilities';
 import type { LeyLineMutationId } from '../types/leyLineMutation';
 import { normalizeSquad, spawnCombatSquad, squadFromSingleEnemy } from '../data/combatSpawnEngine';
 import {
@@ -197,7 +205,7 @@ const TELEMETRY_DIVIDER = 'rgba(139, 92, 246, 0.2)';
 const FRACTURE_HOUND_DOUBLE_STRIKE_CHANCE = 0.35;
 const EVISCERATE_AP_COST = 2;
 
-const DEFEND_ABILITIES: AegisAbilityId[] = ['WRAITH_PARRY', 'ASHEN_MANTLE'];
+const DEFEND_ABILITIES: AegisAbilityId[] = ['WRAITH_PARRY', 'ASHEN_MANTLE', 'BLOOD_BOUND_CARAPACE'];
 const BUFF_ABILITIES: AegisAbilityId[] = ['DEMONS_LUNG', 'CRIMSON_PACT'];
 
 const { width, height: windowHeight } = Dimensions.get('window');
@@ -282,6 +290,10 @@ interface TacticalCombatHubProps {
   }) => void;
   /** God Mode consumable — 1000 STRIKE damage and locked max resources. */
   godModeActive?: boolean;
+  /** Run-scoped Veil-Grafts keyed by loadout ability. */
+  abilityGrafts?: import('../types/veilGraft').AbilityGraftMap;
+  /** Apex Graft — disables ultimate abilities for this encounter. */
+  encounterUltimateDisabled?: boolean;
 }
 interface SliceLineConfig {
   id: number;
@@ -349,6 +361,8 @@ export default function TacticalCombatHub({
   playerCritChanceBonus = 0,
   onPlayerCritImpact,
   godModeActive = false,
+  abilityGrafts = {},
+  encounterUltimateDisabled = false,
 }: TacticalCombatHubProps): React.JSX.Element {
   const env = environmentalModifiers ?? {
     isEnemyPhaseShrouded: false,
@@ -482,6 +496,7 @@ export default function TacticalCombatHub({
   const voidAmbushWindowRef = useRef<{ unitId: string; damageDealt: number } | null>(null);
   const playerApRef = useRef(PLAYER_ACTION_POINTS_PER_TURN);
   const wraithParryRef = useRef(false);
+  const bloodBoundCarapaceRef = useRef(false);
   const shadowstepProcRef = useRef(false);
   const apRollupFrameRef = useRef<number | null>(null);
   const combatBuffRef = useRef<PlayerCombatBuffState>({
@@ -493,24 +508,14 @@ export default function TacticalCombatHub({
   const mutationModsRef = useRef<MutationCombatModifiers>(
     aggregateMutationModifiers(leyLineMutations),
   );
-  const mutationEncounterRef = useRef({
-    adrenalineSpikeUsed: false,
-    executionerHighUsed: false,
-    flawlessConduitPending: false,
-    gridGhostPending: false,
-    momentumShiftPending: false,
-    damageTakenThisTurn: false,
-    secondWindUsed: false,
-    unstoppableFractureUsed: false,
-    masochistBuff: false,
-    juggernautShield: false,
-    spallWeaveActive: false,
-    bloodTitheCooldown: 0,
-    ashenMantleCooldown: 0,
-    venomousRuinUnits: new Set<string>(),
-    corruptedBloodUnits: new Set<string>(),
-    bloodForTimeUsed: false,
-  });
+  const mutationEncounterRef = useRef(createDefaultBoonEncounterState());
+  const activeGraftPlanRef = useRef<GraftCastPlan | null>(null);
+  const activeGraftStaminaSpentRef = useRef(0);
+  const activeGraftApCostRef = useRef(0);
+  const graftCooldownsRef = useRef<Partial<Record<AegisAbilityId, number>>>({});
+  const abilityGraftsRef = useRef(abilityGrafts);
+  abilityGraftsRef.current = abilityGrafts;
+  const lastPlayerAbilityRef = useRef<AegisAbilityId | null>(null);
 
   const isCombatTerminal = () =>
     resolutionRef.current != null || operativeHpRef.current <= 0;
@@ -1352,7 +1357,7 @@ export default function TacticalCombatHub({
         log(`[KINETIC ARMOR] >> ${absorbed} absorbed (${playerKineticArmorBonus} layer${playerKineticArmorBonus === 1 ? '' : 's'}).`);
       }
     }
-    if (!unblockable && abyssalWardRef.current) {
+    if (!unblockable && abyssalWardRef.current && !bloodBoundCarapaceRef.current) {
       dmg = Math.floor(dmg * (1 - COMBAT_ACTION.ABYSSAL_WARD_BLOCK_PCT));
       abyssalWardRef.current = false;
       setAbyssalWardActive(false);
@@ -1400,6 +1405,26 @@ export default function TacticalCombatHub({
       log(msg ?? `>> ENEMY STRIKE — ${dmg} DAMAGE DEALT`);
     }
     if (dmg > 0) {
+      if (
+        bloodBoundCarapaceRef.current
+        && options?.attacker?.unitId
+      ) {
+        const attacker = options.attacker;
+        const attackerId = attacker.unitId;
+        if (attackerId) {
+          hurtEnemy(dmg, '[CARAPACE SPIKE]', 'STRIKE', {
+            channel: 'TRUE',
+            abilityId: 'BLOOD_BOUND_CARAPACE',
+            rollCrit: false,
+            targetId: attackerId,
+          });
+          const refreshed = getUnitById(squadRef.current, attackerId);
+          if (refreshed?.unitId) {
+            patchUnit(attackerId, applyFracturedState(refreshed));
+          }
+          log(`>> [BLOOD-BOUND CARAPACE] — ${dmg} True reflected, attacker Fractured.`);
+        }
+      }
       if (
         hasStructuredDebuff(sessionExtrasRef.current, 'SEARING')
         && options?.attacker?.rosterId !== 'splinter'
@@ -1510,7 +1535,7 @@ export default function TacticalCombatHub({
     );
     if (source && source !== 'COUNTER' && !options?.echoHit && options?.rollCrit !== false) {
       const hit = resolvePlayerAttackHit(
-        { defender: working },
+        { defender: working, bypassPostureEvade: overchargedStrike },
         {
           abilityId: options?.abilityId,
           target: working,
@@ -1538,9 +1563,9 @@ export default function TacticalCombatHub({
       ignoreDefenses = true;
     }
     if (
-      source === 'STRIKE'
+      mutationModsRef.current.strikeArmorPierce > 0
+      && boonMatchesAction(leyLineMutations, 'SHARPENED', options?.abilityId ?? lastPlayerAbilityRef.current ?? undefined)
       && options?.channel === 'KINETIC'
-      && mutationModsRef.current.strikeArmorPierce > 0
     ) {
       working = {
         ...working,
@@ -1551,10 +1576,29 @@ export default function TacticalCombatHub({
       mutationEncounterRef.current.masochistBuff = false;
     }
     const fractureGain = options?.fractureGain ?? 0;
-    if (fractureGain > 0) {
+    const graftPlanForFracture = activeGraftPlanRef.current;
+    if (
+      fractureGain > 0
+      && (!graftPlanForFracture || graftPlanForFracture.effectiveTags.includes('FRACTURE'))
+    ) {
       working = applyFractureDamage(working, fractureGain);
+      patchUnit(e.unitId, working);
     }
     let dmg = raw;
+    const graftPlan = activeGraftPlanRef.current;
+    if (graftPlan && dmg > 0) {
+      dmg = scaleGraftDamage(dmg, graftPlan, activeGraftStaminaSpentRef.current);
+      if (graftPlan.forceTrueDamage) {
+        options = { ...options, channel: 'TRUE' };
+      }
+      if (graftPlan.executeThreshold && working.maxHp > 0 && !working.isBoss) {
+        const hpRatio = working.currentHp / working.maxHp;
+        if (hpRatio <= graftPlan.executeThreshold) {
+          dmg = working.currentHp;
+          log(`>> [${graftPlan.graftName.toUpperCase()}] EXECUTE — sub-threshold cull.`);
+        }
+      }
+    }
     if (
       source === 'STRIKE'
       && kineticBatteryChargedRef.current
@@ -1599,9 +1643,22 @@ export default function TacticalCombatHub({
       options = { ...options, channel: 'TRUE' };
     }
     if (source) {
-      if (mutationModsRef.current.abyssalResonancePctPer10Stam > 0 && source === 'STRIKE') {
+      const activeAbility = options?.abilityId ?? lastPlayerAbilityRef.current ?? undefined;
+      if (
+        modifierForAction(leyLineMutations, 'ABYSSAL_RESONANCE', activeAbility, mutationModsRef.current.abyssalResonancePctPer10Stam) > 0
+        && dmg > 0
+      ) {
         const bonus = Math.floor(staminaRef.current / 10) * mutationModsRef.current.abyssalResonancePctPer10Stam;
         dmg = Math.floor(dmg * (1 + bonus / 100));
+      }
+      if (
+        mutationEncounterRef.current.voidResonanceOccultBonus
+        && activeAbility
+        && dmg > 0
+      ) {
+        mutationEncounterRef.current.voidResonanceOccultBonus = false;
+        dmg = Math.floor(dmg * 1.15);
+        log('[VOID RESONANCE] >> Alternating channel — +15% damage.');
       }
       if (mutationEncounterRef.current.masochistBuff) {
         dmg = Math.floor(dmg * 1.5);
@@ -1679,17 +1736,12 @@ export default function TacticalCombatHub({
       }
     }
 
-    const hadEvadePosture = !overchargedStrike && working.evadeActive && dmg > 0;
     const hadFortify = !overchargedStrike && (working.fortifyTurnsRemaining ?? 0) > 0 && dmg > 0;
-    if (hadEvadePosture) {
-      dmg = Math.floor(dmg * 0.5);
-      log(`${tag} >> EVADE POSTURE — 50% (${dmg}).`);
-    }
     if (hadFortify) {
       dmg = Math.floor(dmg * 0.5);
       log(`${tag} >> FORTIFIED — 50% (${dmg}).`);
     }
-    if (!hadEvadePosture && !hadFortify) {
+    if (!hadFortify) {
       if (critical) {
         log(`${tag} >> [ CRITICAL ] ${dmg} damage.`);
       } else {
@@ -1702,6 +1754,47 @@ export default function TacticalCombatHub({
     }
     if (source && dmg > 0 && e.unitId) {
       trackVoidAmbushInterruptDamage(e.unitId, dmg);
+    }
+    const activeAbility = options?.abilityId ?? lastPlayerAbilityRef.current ?? undefined;
+    if (source && dmg > 0 && activeAbility && e.unitId) {
+      if (
+        boonMatchesAction(leyLineMutations, 'EXECUTIONERS_STRIDE', activeAbility)
+        && targetIsExposed(working)
+        && !mutationEncounterRef.current.executionerStrideUsed
+      ) {
+        mutationEncounterRef.current.executionerStrideUsed = true;
+        playerApRef.current += 1;
+        setPlayerActionPoints(playerApRef.current);
+        log("[EXECUTIONER'S STRIDE] >> Exposed melee hit — +1 AP.");
+      }
+      if (
+        boonMatchesAction(leyLineMutations, 'SUNDER_WEAVE', activeAbility)
+        && mutationModsRef.current.sunderWeaveArmorShred > 0
+      ) {
+        working = {
+          ...working,
+          kineticArmor: Math.max(0, (working.kineticArmor ?? 0) - mutationModsRef.current.sunderWeaveArmorShred),
+          occultWards: Math.max(0, (working.occultWards ?? 0) - 1),
+        };
+        patchUnit(e.unitId, working);
+        log('[SUNDER-WEAVE] >> Dual-channel strike — 1 armor layer shattered.');
+      }
+      if (boonMatchesAction(leyLineMutations, 'TAR_TRAPPED', activeAbility)) {
+        mutationEncounterRef.current.tarTrappedUnits[e.unitId] = 2;
+        patchUnit(e.unitId, { evadeChance: 0, evadeActive: false });
+        log('[TAR-TRAPPED] >> Target cannot evade for 2 turns.');
+      }
+      if (
+        modifierForAction(
+          leyLineMutations,
+          'ABYSSAL_ERUPTION',
+          activeAbility,
+          mutationModsRef.current.abyssalEruptionPerHit,
+        ) > 0
+      ) {
+        chargeAr(mutationModsRef.current.abyssalEruptionPerHit);
+        log(`[ABYSSAL ERUPTION] >> +${mutationModsRef.current.abyssalEruptionPerHit} reserve from AoE hit.`);
+      }
     }
     if (
       source
@@ -1729,6 +1822,11 @@ export default function TacticalCombatHub({
     const hp = poolHp;
 
     if (hp <= 0 && e.unitId && source && options?.channel) {
+      if (graftPlan?.refundApOnKill) {
+        playerApRef.current += activeGraftApCostRef.current + 1;
+        setPlayerActionPoints(playerApRef.current);
+        log(`>> [${graftPlan.graftName.toUpperCase()}] — kill confirmed, AP refunded (+1).`);
+      }
       const deathLifecycle = CombatLifecycleManager.runOnDeath(
         working,
         { channel: options.channel, damage: dmg, source: source ?? undefined },
@@ -1814,6 +1912,18 @@ export default function TacticalCombatHub({
         log(`[BLOOD FRENZY] >> Runic flare restores ${heal} soul anchor.`);
       }
     }
+    if (graftPlan && source && dmg > 0) {
+      if (graftPlan.healOnDamagePct > 0) {
+        const graftHeal = Math.floor(dmg * graftPlan.healOnDamagePct);
+        if (graftHeal > 0) {
+          applyHealRef.current(graftHeal);
+          log(`>> [${graftPlan.graftName.toUpperCase()}] — ${graftHeal} HP siphoned from damage.`);
+        }
+      }
+      if (hp > 0 && graftPlan.forceTrueDamage) {
+        log(`>> [${graftPlan.graftName.toUpperCase()}] — target survived, operative EXPOSED.`);
+      }
+    }
     if (source && shouldChronoStunOnKineticHit(working.affinity, source) && dmg > 0) {
       enemyStunPendingRef.current = true;
       log('[CHRONO SHATTER] >> Temporal sync fractured — hostile turn forfeited.');
@@ -1869,18 +1979,26 @@ export default function TacticalCombatHub({
       applyStamina(staminaRef.current + Math.floor(maxStamina * 0.2));
       log('[RELENTLESS MOMENTUM] >> Fractured kill — 20% stamina restored.');
     }
+    const killingAbility = options?.abilityId ?? lastPlayerAbilityRef.current ?? undefined;
     if (
       hp <= 0
-      && source
-      && options?.channel === 'KINETIC'
-      && hasMutation(leyLineMutations, 'EXECUTIONERS_HIGH')
+      && killingAbility
+      && boonMatchesAction(leyLineMutations, 'EXECUTIONERS_HIGH', killingAbility)
       && !mutationEncounterRef.current.executionerHighUsed
     ) {
       mutationEncounterRef.current.executionerHighUsed = true;
       combatBuffRef.current.bonusApThisTurn += 1;
       playerApRef.current += 1;
       setPlayerActionPoints(playerApRef.current);
-      log("[EXECUTIONER'S HIGH] >> Physical kill — +1 AP.");
+      log("[EXECUTIONER'S HIGH] >> Kinetic kill — +1 AP.");
+    }
+    if (
+      hp <= 0
+      && killingAbility
+      && boonMatchesAction(leyLineMutations, 'VOIDS_TOLL', killingAbility)
+    ) {
+      mutationEncounterRef.current.voidsTollApBonus += 1;
+      log("[VOID'S TOLL] >> Ultimate kill — +1 max AP this incursion (−15% max HP).");
     }
     if (
       critical
@@ -1988,6 +2106,44 @@ export default function TacticalCombatHub({
         });
         log(`[CORRUPTED BLOOD] >> ${unit.designation} — void bleed.`);
       }
+    }
+    const trapped = mutationEncounterRef.current.tarTrappedUnits;
+    for (const [unitId, turns] of Object.entries(trapped)) {
+      if (turns <= 1) {
+        delete trapped[unitId];
+      } else {
+        trapped[unitId] = turns - 1;
+      }
+    }
+    if (mutationEncounterRef.current.veilTarTurnsRemaining > 0) {
+      for (const unit of aliveUnits(squadRef.current)) {
+        if (!unit.unitId) continue;
+        patchUnit(unit.unitId, {
+          evadeChance: 0,
+          evadeActive: false,
+          enemyActionPoints: 0,
+        });
+      }
+      log(`>> VEIL-TAR HAZARD — hostiles rooted (${mutationEncounterRef.current.veilTarTurnsRemaining} turn(s) left).`);
+    }
+    const bleedUnits = mutationEncounterRef.current.reaveBleedUnits;
+    for (const [unitId, turns] of Object.entries({ ...bleedUnits })) {
+      const unit = getUnitById(squadRef.current, unitId);
+      if (!unit?.unitId || !isUnitAlive(unit)) {
+        delete bleedUnits[unitId];
+        continue;
+      }
+      hurtEnemy(8, '[REAVE BLEED]', 'STRIKE', {
+        channel: 'KINETIC',
+        targetId: unit.unitId,
+        rollCrit: false,
+      });
+      if (turns <= 1) {
+        delete bleedUnits[unitId];
+      } else {
+        bleedUnits[unitId] = turns - 1;
+      }
+      log(`[REAVE BLEED] >> ${unit.designation} — jagged debris (${bleedUnits[unitId] ?? 0} turn(s) left).`);
     }
   };
 
@@ -2214,7 +2370,7 @@ export default function TacticalCombatHub({
         break;
       }
       case 'EVADE':
-        log(`>> ${e.designation} EVADE posture — strikes deal 50%.`);
+        log(`>> ${e.designation} EVADE posture — 50% evasion chance.`);
         break;
       case 'FORTIFY': {
         log(`>> ${e.designation} FORTIFY — kinetic shell hardened (2 turns).`);
@@ -2475,6 +2631,9 @@ export default function TacticalCombatHub({
   const endEnemyTurn = (advanceIntent = true) => {
     if (isCombatTerminal()) return;
     if (operativeHpRef.current <= 0 || allUnitsDefeated(squadRef.current)) return;
+    if (mutationEncounterRef.current.veilTarTurnsRemaining > 0) {
+      mutationEncounterRef.current.veilTarTurnsRemaining -= 1;
+    }
     if (env.combatObjective === 'SURVIVE_TURNS') {
       survivedEnemyTurnsRef.current += 1;
       const required = env.survivalTurnsRequired ?? 3;
@@ -2518,6 +2677,7 @@ export default function TacticalCombatHub({
     setCounterPrepActive(false);
     counterRef.current = false;
     wraithParryRef.current = false;
+    bloodBoundCarapaceRef.current = false;
     if (combatBuffRef.current.demonLungCooldown > 0) {
       combatBuffRef.current.demonLungCooldown -= 1;
     }
@@ -2540,6 +2700,13 @@ export default function TacticalCombatHub({
     mutationEncounterRef.current.adrenalineSpikeUsed = false;
     mutationEncounterRef.current.executionerHighUsed = false;
     mutationEncounterRef.current.bloodForTimeUsed = false;
+    Object.keys(graftCooldownsRef.current).forEach((abilityId) => {
+      const key = abilityId as AegisAbilityId;
+      const remaining = graftCooldownsRef.current[key] ?? 0;
+      if (remaining > 0) {
+        graftCooldownsRef.current[key] = remaining - 1;
+      }
+    });
     const bonusAp = combatBuffRef.current.bonusApThisTurn;
     combatBuffRef.current.bonusApThisTurn = 0;
     const apPenalty = sessionExtrasRef.current.playerApPenaltyNextTurn;
@@ -2896,24 +3063,8 @@ export default function TacticalCombatHub({
     shadowstepProcRef.current = false;
     setShadowstepProcActive(false);
     mutationModsRef.current = aggregateMutationModifiers(leyLineMutations);
-    mutationEncounterRef.current = {
-      adrenalineSpikeUsed: false,
-      executionerHighUsed: false,
-      flawlessConduitPending: false,
-      gridGhostPending: false,
-      momentumShiftPending: false,
-      damageTakenThisTurn: false,
-      secondWindUsed: false,
-      unstoppableFractureUsed: false,
-      masochistBuff: false,
-      juggernautShield: false,
-      spallWeaveActive: false,
-      bloodTitheCooldown: 0,
-      ashenMantleCooldown: 0,
-      venomousRuinUnits: new Set<string>(),
-      corruptedBloodUnits: new Set<string>(),
-      bloodForTimeUsed: false,
-    };
+    mutationEncounterRef.current = createDefaultBoonEncounterState();
+    lastPlayerAbilityRef.current = null;
     sessionExtrasRef.current = createDefaultCombatSessionExtras();
     kineticBatteryChargedRef.current = false;
     combatChanceRef.current = createDefaultCombatChanceState();
@@ -2998,8 +3149,35 @@ export default function TacticalCombatHub({
     });
   };
 
+  const applyAbilityResolvedBoons = (abilityId: AegisAbilityId) => {
+    lastPlayerAbilityRef.current = abilityId;
+    const prevTags = mutationEncounterRef.current.lastActionTags;
+    const tags = getAbilityTags(abilityId);
+    if (hasMutation(leyLineMutations, 'VOID_RESONANCE')) {
+      if (tags.includes('OCCULT') && prevTags.includes('KINETIC')) {
+        mutationEncounterRef.current.voidResonanceOccultBonus = true;
+        log('[VOID RESONANCE] >> Occult follow-up primed (+15%).');
+      } else if (tags.includes('KINETIC') && prevTags.includes('OCCULT')) {
+        mutationEncounterRef.current.voidResonanceOccultBonus = true;
+        log('[VOID RESONANCE] >> Kinetic follow-up primed (+15%).');
+      }
+    }
+    mutationEncounterRef.current.lastActionTags = tags;
+    if (boonMatchesAction(leyLineMutations, 'MOMENTUM_TRANSFER', abilityId)) {
+      mutationEncounterRef.current.nextKineticApDiscount = 1;
+      log('[MOMENTUM TRANSFER] >> Next [KINETIC] action −1 AP.');
+    }
+  };
+
   const executeAbility = (abilityId: AegisAbilityId) => {
     if (cycleState !== 'TEXT_COMBAT' || !canPlayerCommand() || !enemyRef.current) return;
+    if (
+      encounterUltimateDisabled
+      && getAbilityTags(abilityId).includes('ULTIMATE')
+    ) {
+      log('[REJECTED] >> Ultimate channel sealed by Apex Graft.');
+      return;
+    }
     if (
       hasStructuredDebuff(sessionExtrasRef.current, 'ASHEN_ROT')
       && isBuffOrDefendAbility(abilityId)
@@ -3009,16 +3187,88 @@ export default function TacticalCombatHub({
       log(`>> ROT TRIGGERED! −${rotCost} Stamina`);
     }
     const def = getAbilityDefinition(abilityId);
-    if (!spendActionPoints(def.apCost)) {
-      log('[REJECTED] >> Insufficient action points.');
+    const graftId = abilityGraftsRef.current[abilityId];
+    const graftPlan = buildGraftCastPlan(abilityId, graftId);
+    activeGraftPlanRef.current = graftPlan;
+    activeGraftApCostRef.current = graftPlan.apCost;
+
+    const graftCooldown = graftCooldownsRef.current[abilityId] ?? 0;
+    if (graftCooldown > 0) {
+      log(`[REJECTED] >> Graft cooldown active (${graftCooldown} turn${graftCooldown === 1 ? '' : 's'}).`);
+      activeGraftPlanRef.current = null;
       return;
     }
+
+    let apCost = graftPlan.apCost;
+    if (
+      mutationEncounterRef.current.nextKineticApDiscount > 0
+      && graftPlan.effectiveTags.includes('KINETIC')
+    ) {
+      apCost = Math.max(0, apCost - mutationEncounterRef.current.nextKineticApDiscount);
+      mutationEncounterRef.current.nextKineticApDiscount = 0;
+    }
+    if (!spendActionPoints(apCost)) {
+      log('[REJECTED] >> Insufficient action points.');
+      activeGraftPlanRef.current = null;
+      return;
+    }
+
+    if (graftPlan.hpCostPct > (def.hpCostPct ?? 0)) {
+      const extraHpPct = graftPlan.hpCostPct - (def.hpCostPct ?? 0);
+      const hpCost = Math.ceil(maxSoulAnchor * (extraHpPct / 100));
+      if (operativeHpRef.current <= hpCost) {
+        log('[REJECTED] >> Insufficient soul anchor for graft HP cost.');
+        playerApRef.current += apCost;
+        setPlayerActionPoints(playerApRef.current);
+        activeGraftPlanRef.current = null;
+        return;
+      }
+      setOperativeHp((p) => {
+        const n = Math.max(p - hpCost, 0);
+        operativeHpRef.current = n;
+        if (n <= 0) resolve(false);
+        return n;
+      });
+      log(`>> [${graftPlan.graftName.toUpperCase()}] — ${hpCost} HP tithe on cast.`);
+    }
+
+    activeGraftStaminaSpentRef.current = 0;
+    if (graftPlan.consumeAllStamina) {
+      activeGraftStaminaSpentRef.current = staminaRef.current;
+      applyStamina(0);
+      log(`>> [${graftPlan.graftName.toUpperCase()}] — all stamina consumed (${activeGraftStaminaSpentRef.current}).`);
+    } else if (graftPlan.extraStaminaCost > 0 && !spendStam(graftPlan.extraStaminaCost)) {
+      log('[REJECTED] >> Insufficient stamina for graft tax.');
+      playerApRef.current += apCost;
+      setPlayerActionPoints(playerApRef.current);
+      activeGraftPlanRef.current = null;
+      return;
+    }
+
+    if (graftPlan.grantShieldHits > 0) {
+      mutationEncounterRef.current.juggernautShield = true;
+      log(`>> [${graftPlan.graftName.toUpperCase()}] — ${graftPlan.grantShieldHits}-hit graft shield online.`);
+    }
+    if (graftPlan.evadeBuffPct > 0) {
+      combatChanceRef.current.shadowStepEvadeActive = true;
+      log(`>> [${graftPlan.graftName.toUpperCase()}] — +${graftPlan.evadeBuffPct}% evade until next turn.`);
+    }
+    if (graftPlan.cooldownTurns > 0) {
+      graftCooldownsRef.current[abilityId] = graftPlan.cooldownTurns;
+    }
+
+    const squadBeforeAbility = squadRef.current.map((unit) => ({ ...unit, currentHp: unit.currentHp }));
+    applyAbilityResolvedBoons(abilityId);
 
     switch (abilityId) {
       case 'STRIKE': {
         if (godModeRef.current) {
           const kinetic = GOD_MODE_STRIKE_DAMAGE;
-          const eradicated = hurtEnemy(kinetic, '[STRIKE]', 'STRIKE', { channel: 'KINETIC', fractureGain: 25 });
+          const eradicated = hurtEnemy(kinetic, '[STRIKE]', 'STRIKE', {
+            channel: 'KINETIC',
+            fractureGain: 25,
+            abilityId: 'STRIKE',
+          });
           const struck = enemyRef.current;
           chargeAr(15, struck != null && isEnemyFractured(struck));
           if (struck && fractureRatio(struck) > 0.5) {
@@ -3047,7 +3297,11 @@ export default function TacticalCombatHub({
         }
         const exhausted = overdraw || staminaRef.current === 0;
         const kinetic = exhausted ? strikeStats.exhaustedStrikeDamage : strikeStats.strikeDamage;
-        const eradicated = hurtEnemy(kinetic, '[STRIKE]', 'STRIKE', { channel: 'KINETIC', fractureGain: 25 });
+        const eradicated = hurtEnemy(kinetic, '[STRIKE]', 'STRIKE', {
+          channel: 'KINETIC',
+          fractureGain: 25,
+          abilityId: 'STRIKE',
+        });
         const struck = enemyRef.current;
         chargeAr(15, struck != null && isEnemyFractured(struck));
         if (struck && fractureRatio(struck) > 0.5) {
@@ -3120,7 +3374,11 @@ export default function TacticalCombatHub({
       case 'NAIL_TO_GRID':
       case 'BLOOD_TITHE':
       case 'DEMONS_LUNG':
-      case 'CRIMSON_PACT': {
+      case 'CRIMSON_PACT':
+      case 'DEVASTATE':
+      case 'ABYSSAL_FAULT':
+      case 'BLOOD_BOUND_CARAPACE':
+      case 'REAVE': {
         const result = executeExtendedAbility({
           abilityId,
           squad: squadRef.current,
@@ -3179,21 +3437,35 @@ export default function TacticalCombatHub({
             const nextAp = Math.max(0, (unit.enemyActionPoints ?? 1) - amount);
             patchUnit(unitId, { enemyActionPoints: nextAp });
           },
+          ownedBoons: leyLineMutations,
           mutationMods: mutationModsRef.current,
           bloodTitheCooldown: mutationEncounterRef.current.bloodTitheCooldown,
+          setVeilTarTurns: (turns) => {
+            mutationEncounterRef.current.veilTarTurnsRemaining = turns;
+          },
+          activateBloodBoundCarapace: () => {
+            bloodBoundCarapaceRef.current = true;
+          },
+          applyReaveBleed: (unitId, turns) => {
+            mutationEncounterRef.current.reaveBleedUnits[unitId] = turns;
+          },
           setShadowStepEvadeActive: (active) => {
             combatChanceRef.current.shadowStepEvadeActive = active;
           },
         });
-        if (abilityId === 'RUIN' && result.ok && mutationModsRef.current.ruinDotFracture > 0) {
+        if (
+          result.ok
+          && boonMatchesAction(leyLineMutations, 'VENOMOUS_RUIN', abilityId)
+          && mutationModsRef.current.ruinDotFracture > 0
+        ) {
           for (const unit of aliveUnits(squadRef.current)) {
             if (unit.unitId) mutationEncounterRef.current.venomousRuinUnits.add(unit.unitId);
           }
           log('[VENOMOUS RUIN] >> Lingering fracture hazard seeded.');
         }
-        if (abilityId === 'SHADOW_STEP' && result.ok && hasMutation(leyLineMutations, 'JUGGERNAUT_PLATING')) {
+        if (result.ok && boonMatchesAction(leyLineMutations, 'JUGGERNAUT_PLATING', abilityId)) {
           mutationEncounterRef.current.juggernautShield = true;
-          log('[JUGGERNAUT PLATING] >> Shadow Step shield primed.');
+          log('[JUGGERNAUT PLATING] >> Mobility shield primed.');
         }
         if (abilityId === 'SHADOW_STEP' && result.ok) {
           setInitiativeQueued(combatBuffRef.current.initiativeQueued);
@@ -3208,10 +3480,31 @@ export default function TacticalCombatHub({
       }
       default:
         log('[REJECTED] >> Ability not available.');
-        playerApRef.current += def.apCost;
+        playerApRef.current += apCost;
         setPlayerActionPoints(playerApRef.current);
         break;
     }
+
+    const anyHostileKilled = squadBeforeAbility.some((before) => {
+      if (!before.unitId) return false;
+      const after = getUnitById(squadRef.current, before.unitId);
+      return before.currentHp > 0 && (after == null || after.currentHp <= 0);
+    });
+    if (graftPlan.failDebuff && !anyHostileKilled) {
+      log(`>> [${graftPlan.graftName.toUpperCase()}] — non-lethal cast, operative CONCUSSED.`);
+    }
+    if (graftPlan.reserveGenerationBonus > 0) {
+      const reserveGain = Math.floor(
+        graftPlan.reserveGenerationBonus * graftPlan.reserveGenerationMultiplier,
+      );
+      if (reserveGain > 0) {
+        chargeAr(reserveGain);
+        log(`>> [${graftPlan.graftName.toUpperCase()}] — +${reserveGain} Abyssal Reserve.`);
+      }
+    }
+
+    activeGraftPlanRef.current = null;
+    activeGraftStaminaSpentRef.current = 0;
   };
 
   const onInitiativeProcComplete = useCallback(() => {
@@ -3287,6 +3580,10 @@ export default function TacticalCombatHub({
 
   const onSlice = () => {
     if (cycleState !== 'TEXT_COMBAT' || !isPlayerTurn) return;
+    if (encounterUltimateDisabled) {
+      log('[REJECTED] >> Ultimate channel sealed by Apex Graft.');
+      return;
+    }
     if (isExhausted) { log('[REJECTED] >> Exhausted — eviscerate offline.'); return; }
     if (playerApRef.current < EVISCERATE_AP_COST) {
       log(`[REJECTED] >> Eviscerate requires ${EVISCERATE_AP_COST} AP.`);
@@ -3705,6 +4002,12 @@ export default function TacticalCombatHub({
 
   const isAbilityEnabled = (abilityId: AegisAbilityId): boolean => {
     if (!isPlayerTurn || cycleState !== 'TEXT_COMBAT' || shadowstepProcRef.current) return false;
+    if (
+      encounterUltimateDisabled
+      && getAbilityTags(abilityId).includes('ULTIMATE')
+    ) {
+      return false;
+    }
     if (hasStructuredDebuff(sessionExtrasRef.current, 'ROOTED')
       && (abilityId === 'WRAITH_PARRY' || abilityId === 'SHADOW_STEP')) {
       return false;
@@ -3712,7 +4015,9 @@ export default function TacticalCombatHub({
     const jammedSlot = sessionExtrasRef.current.jammedAugmentSlot;
     if (jammedSlot != null && aegisLoadout[jammedSlot] === abilityId) return false;
     const def = getAbilityDefinition(abilityId);
-    if (playerActionPoints < def.apCost) return false;
+    const graftPlan = buildGraftCastPlan(abilityId, abilityGraftsRef.current[abilityId]);
+    if ((graftCooldownsRef.current[abilityId] ?? 0) > 0) return false;
+    if (playerActionPoints < graftPlan.apCost) return false;
     switch (abilityId) {
       case 'STRIKE':
         return true;
@@ -3734,6 +4039,10 @@ export default function TacticalCombatHub({
       case 'BLOOD_TITHE':
       case 'DEMONS_LUNG':
       case 'CRIMSON_PACT':
+      case 'DEVASTATE':
+      case 'ABYSSAL_FAULT':
+      case 'BLOOD_BOUND_CARAPACE':
+      case 'REAVE':
         return isExtendedAbilityEnabled(
           abilityId,
           stamina,
@@ -3748,6 +4057,8 @@ export default function TacticalCombatHub({
   };
 
   const getAbilityAccent = (abilityId: AegisAbilityId): string | undefined => {
+    const graftId = abilityGraftsRef.current[abilityId];
+    if (graftId) return getVeilGraftDefinition(graftId).accentColor;
     if (abilityId === 'WRAITH_PARRY' && wraithParryRef.current) return P.parry;
     if (abilityId === 'ASHEN_MANTLE' && abyssalWardActive) return WARD_STRIKE_ACCENT;
     return undefined;
@@ -3755,12 +4066,20 @@ export default function TacticalCombatHub({
 
   const getStagedHeader = (abilityId: AegisAbilityId): string => {
     const name = getAbilityDefinition(abilityId).label.replace(/^\[|\]$/g, '').trim();
+    const graftId = abilityGraftsRef.current[abilityId];
+    if (graftId) {
+      return `GRAFT READY // ${getVeilGraftDefinition(graftId).name.toUpperCase()} // ${name}`;
+    }
     return `SYSTEM READY // ${name} SELECTED`;
   };
 
   const getStagedCostImpact = (abilityId: AegisAbilityId): string => {
     const def = getAbilityDefinition(abilityId);
-    return `COST: ${def.apCost} AP // ${def.staminaCost > 0 ? `${def.staminaCost} STAM` : def.staminaCostPct ? `${def.staminaCostPct}% STAM` : '0 STAM'}\n${def.description}`;
+    const graftPlan = buildGraftCastPlan(abilityId, abilityGraftsRef.current[abilityId]);
+    const graftLine = graftPlan.graftName
+      ? `\nGRAFT: ${graftPlan.graftName.toUpperCase()}`
+      : '';
+    return `COST: ${graftPlan.apCost} AP // ${def.staminaCost > 0 ? `${def.staminaCost} STAM` : def.staminaCostPct ? `${def.staminaCostPct}% STAM` : '0 STAM'}${graftLine}\n${def.description}`;
   };
 
   const confirmSelectedAbility = () => {

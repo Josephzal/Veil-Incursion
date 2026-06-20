@@ -273,6 +273,7 @@ export default function ScanningScreen(): React.JSX.Element {
   const routeAfterEngage = useCallback((nodeType: string | null) => {
     if (!nodeType) return;
     switch (nodeType) {
+      case 'ANOMALY':
       case 'NARRATIVE_EVENT':
         startNarrative();
         break;

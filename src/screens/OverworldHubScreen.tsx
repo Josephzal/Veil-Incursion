@@ -1,16 +1,18 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { FACTION_DEFINITIONS } from '../data/factions';
+import { shadowWarBuffsToRunModifiers } from '../data/shadowWarBuffEngine';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useGameFlow } from '../context/GameFlowContext';
+import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useTerminalNav } from '../context/TerminalNavContext';
+import { useShadowWar } from '../context/ShadowWarContext';
 import IdentificationBadgeView from '../components/IdentificationBadgeView';
-import InventoryManifestPanel from '../components/InventoryManifestPanel';
+import SafehouseHubPanel from '../components/safehouse/SafehouseHubPanel';
 import TerminalNavHeader from '../components/TerminalNavHeader';
 import TerminalSafeArea from '../components/TerminalSafeArea';
 import ShadowWarDashboard from '../components/ShadowWarDashboard';
-import { useShadowWar } from '../context/ShadowWarContext';
 import type { FactionType } from '../types/game';
 
 const FACTION_ORDER: FactionType[] = ['TERRAN_GRID', 'LEGION', 'SOLARIS'];
@@ -18,10 +20,20 @@ const FACTION_ORDER: FactionType[] = ['TERRAN_GRID', 'LEGION', 'SOLARIS'];
 export default function OverworldHubScreen(): React.JSX.Element {
   const { theme, profile, updateCabalAlignment, alignment } = useTerminal();
   const { terminalView, setTerminalView } = useTerminalNav();
-  const { account, isHydrated, hubLog, commitFactionAlignment, appendHubLog, addCredits, depositResourceStash } =
-    usePlayerAccount();
-  const { refreshCycleIfNeeded, isHydrated: shadowWarHydrated } = useShadowWar();
-  const { startSafehouseHub } = useGameFlow();
+  const {
+    account,
+    isHydrated,
+    hubLog,
+    commitFactionAlignment,
+    appendHubLog,
+    addCredits,
+    depositResourceStash,
+    commitDescentLoadout,
+  } = usePlayerAccount();
+  const { refreshCycleIfNeeded, isHydrated: shadowWarHydrated, activeBuffs } = useShadowWar();
+  const { startBoundRequisition } = useGameFlow();
+  const { startNewRun } = useRun();
+  const [launchingIncursion, setLaunchingIncursion] = useState(false);
 
   const needsFactionSelection = account.alignedFaction === null;
 
@@ -51,11 +63,32 @@ export default function OverworldHubScreen(): React.JSX.Element {
     updateCabalAlignment(account.alignedFaction);
   }, [account.alignedFaction, alignment, updateCabalAlignment]);
 
-  const handleInitiateDeepDive = () => {
-    if (needsFactionSelection) return;
-    appendHubLog('>> SAFEHOUSE ACCESS GRANTED — STAGE LOADOUT BEFORE DESCENT.');
-    startSafehouseHub();
-  };
+  const handleInitiateDeepDive = useCallback(() => {
+    if (needsFactionSelection || launchingIncursion) return;
+    setLaunchingIncursion(true);
+    const initialCargo = commitDescentLoadout();
+    const shadowWarBuffs = shadowWarBuffsToRunModifiers(activeBuffs);
+    appendHubLog('>> DESCENT LOADOUT LOCKED — CARGO MANIFEST COMMITTED TO RUN STATE.');
+    startNewRun({
+      factionPerks: account.factionPerks,
+      unlockedBiomes: account.unlockedBiomes,
+      aegisLoadout: account.aegisLoadout,
+      alignedFaction: account.alignedFaction,
+      initialCargo,
+      shadowWarBuffs,
+    });
+    startBoundRequisition();
+    setLaunchingIncursion(false);
+  }, [
+    account,
+    activeBuffs,
+    appendHubLog,
+    commitDescentLoadout,
+    launchingIncursion,
+    needsFactionSelection,
+    startBoundRequisition,
+    startNewRun,
+  ]);
 
   const handleSelectFaction = (faction: FactionType) => {
     commitFactionAlignment(faction);
@@ -96,12 +129,12 @@ export default function OverworldHubScreen(): React.JSX.Element {
             <ShadowWarDashboard
               theme={theme}
               hubLog={hubLog}
-              runDisabled={needsFactionSelection}
+              runDisabled={needsFactionSelection || launchingIncursion}
               onInitiateDeepDive={handleInitiateDeepDive}
               onAppendLog={appendHubLog}
             />
           )}
-          {terminalView === 'MANIFEST' && <InventoryManifestPanel />}
+          {terminalView === 'SAFEHOUSE' && <SafehouseHubPanel />}
         </View>
 
         {needsFactionSelection && (
@@ -114,7 +147,7 @@ export default function OverworldHubScreen(): React.JSX.Element {
             >
               <Text style={[styles.factionModalTitle, { color: theme.primaryColor }]}>CABAL ALIGNMENT MATRIX</Text>
               <Text style={[styles.factionModalSub, { color: theme.mutedColor }]}>
-                Select allegiance to unlock deep-dive scanning and asset manifest access.
+                Select allegiance to unlock Safehouse prep, Shadow War donations, and incursion access.
               </Text>
               {FACTION_ORDER.map((factionId) => {
                 const def = FACTION_DEFINITIONS[factionId];

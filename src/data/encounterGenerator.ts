@@ -25,7 +25,7 @@ export interface RunSegmentState {
   lastEncounterOrigin: EncounterOrigin | null;
 }
 
-export type BreathingRoomKind = 'BLACK_MARKET' | 'VEIL_BLEED_BOON' | 'RESOURCE_HARVEST';
+export type BreathingRoomKind = 'BLACK_MARKET' | 'RESOURCE_HARVEST';
 
 export interface GeneratedEncounter {
   layout: EncounterLayout;
@@ -142,10 +142,7 @@ function pickFromPool(
 }
 
 function rollBreathingRoomKind(rand: () => number): BreathingRoomKind {
-  const roll = rand();
-  if (roll < 0.4) return 'BLACK_MARKET';
-  if (roll < 0.8) return 'VEIL_BLEED_BOON';
-  return 'RESOURCE_HARVEST';
+  return rand() < 0.5 ? 'BLACK_MARKET' : 'RESOURCE_HARVEST';
 }
 
 function resolveEncounterOrigin(segment: RunSegmentState, seed: string, district: DistrictId): EncounterOrigin {

@@ -6,7 +6,7 @@ import type { CargoItemId, CargoRunState, GlobalBankedCargo, HarvestReturnRoute 
 import { createDefaultBankedCargo } from './cargoGrid';
 import type { ResonanceEscalationState } from './resonanceEscalation';
 import type { PatrolState } from './overworldPatrol';
-import type { AegisLoadout } from './aegisCombat';
+import type { AegisLoadout, AegisAbilityId } from './aegisCombat';
 import { createDefaultPendingNarrativeCombatBoons } from './narrativeBonusReward';
 import type { ResourceQuantity } from './resourceItem';
 import type { LeyLineMutationId } from './leyLineMutation';
@@ -31,6 +31,7 @@ export type BiomeType = 'HOSPITAL' | 'ALLEYWAYS' | 'SEWERS' | 'CHURCH' | 'FOREST
 export type ItemRarity = 'STANDARD' | 'STABILIZED' | 'COBALT' | 'ABYSSAL';
 export type CheckStatus = 'NOT_TESTED' | 'SUCCESS' | 'FAILURE';
 export type RunNodeType =
+  | 'ANOMALY'
   | 'NARRATIVE_EVENT'
   | 'STANDARD_COMBAT'
   | 'ELITE_COMBAT'
@@ -53,6 +54,7 @@ export type EliteCombatModifierId =
   | 'PHASE_SHROUD';
 export type IncursionEncounterType =
   | 'COMBAT'
+  | 'ANOMALY'
   | 'NARRATIVE_EVENT'
   | 'SANCTUARY'
   | 'BLACK_MARKET'
@@ -98,6 +100,8 @@ export interface PlayerAccount {
   bankedCargo: GlobalBankedCargo;
   /** Pre-run combat deck — four active abilities carried into each incursion. */
   aegisLoadout: AegisLoadout;
+  /** Hub-unlocked Aegis abilities available for loadout staging. */
+  unlockedAegisAbilities: AegisAbilityId[];
   /** Hub-side abstract resource counts for fabrication. */
   resourceStash: ResourceQuantity;
   /** Crafted blueprint IDs unlocked at the metropolitan fabrication bench. */
@@ -387,6 +391,12 @@ export interface ActiveIncursionState {
   sanctuarySchedule: import('../data/sanctuaryScheduleEngine').SanctuarySchedule;
   /** Cumulative strike damage bonus from sanctuary upgrades (%). Stacks per visit. */
   strikeDamageBonusPct: number;
+  /** Veil-Grafts applied to loadout abilities for this incursion. */
+  abilityGrafts: Partial<Record<import('./aegisCombat').AegisAbilityId, import('./veilGraft').VeilGraftId>>;
+  /** Rolled graft offers at the current sanctuary terminal (3 choices). */
+  sanctuaryGraftOffers: import('./veilGraft').VeilGraftId[] | null;
+  /** Set when Apex Graft disables ultimate for the active combat encounter. */
+  encounterUltimateDisabled: boolean;
   /** Passive modifiers from secured Shadow War macro-sectors. */
   shadowWarBuffs: import('../data/shadowWarBuffEngine').ShadowWarRunBuffModifiers;
   /** Per-district encounter pacing — alpha duel index, anti-repetition history. */
@@ -462,6 +472,9 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     godModeActive: false,
     sanctuarySchedule: { 1: [14], 2: [14], 3: [14] },
     strikeDamageBonusPct: 0,
+    abilityGrafts: {},
+    sanctuaryGraftOffers: null,
+    encounterUltimateDisabled: false,
     shadowWarBuffs: {
       maxHpBonusPct: 0,
       kineticArmorBonus: 0,

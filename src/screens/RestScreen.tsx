@@ -1,31 +1,72 @@
 import React, { useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import SanctuaryNarrativeBg from '../../assets/narrative images/sanctuary.png';
+import VeilGraftUI from '../components/VeilGraftUI';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useNodeProgression } from '../hooks/useNodeProgression';
 import IncursionShell from '../components/IncursionShell';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
 import SelectionContinueButton from '../components/SelectionContinueButton';
+import type { AegisAbilityId } from '../types/aegisCombat';
+import type { VeilGraftId } from '../types/veilGraft';
 
 const TERMINAL_ACCENT = '#00ff33';
 
+type SanctuaryChoice = 'ATTUNE' | 'GRAFT' | null;
+
 export default function RestScreen(): React.JSX.Element {
   const { theme } = useTerminal();
-  const { runState, activeIncursion, applyRestChoice } = useRun();
+  const {
+    runState,
+    activeIncursion,
+    applySanctuaryAttune,
+    openSanctuaryGraftTerminal,
+    applyVeilGraftToAbility,
+    getVeilResidueBalance,
+  } = useRun();
   const { completeCurrentNode } = useNodeProgression();
-  const [selectedChoice, setSelectedChoice] = useState<'REST' | 'STRIKE_UPGRADE' | null>(null);
+  const [selectedChoice, setSelectedChoice] = useState<SanctuaryChoice>(null);
+  const [graftTerminalOpen, setGraftTerminalOpen] = useState(false);
+  const [graftComplete, setGraftComplete] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
 
-  const strikeBonus = activeIncursion.strikeDamageBonusPct ?? 0;
+  const residueBalance = getVeilResidueBalance();
+  const graftOffers = activeIncursion.sanctuaryGraftOffers ?? [];
+
+  const handleSelectAttune = () => {
+    if (confirmed) return;
+    setSelectedChoice('ATTUNE');
+    setGraftTerminalOpen(false);
+    setGraftComplete(false);
+  };
+
+  const handleSelectGraft = () => {
+    if (confirmed) return;
+    setSelectedChoice('GRAFT');
+    setGraftTerminalOpen(true);
+    openSanctuaryGraftTerminal();
+  };
+
+  const handleApplyGraft = (abilityId: AegisAbilityId, graftId: VeilGraftId) => {
+    const result = applyVeilGraftToAbility(abilityId, graftId);
+    if (result.success) {
+      setGraftComplete(true);
+    }
+  };
+
+  const canContinue = selectedChoice === 'ATTUNE'
+    || (selectedChoice === 'GRAFT' && graftComplete);
 
   const handleContinue = () => {
-    if (!selectedChoice || confirmed) return;
+    if (!canContinue || confirmed) return;
     setConfirmed(true);
-    applyRestChoice(selectedChoice);
-    const msg = selectedChoice === 'REST'
+    if (selectedChoice === 'ATTUNE') {
+      applySanctuaryAttune();
+    }
+    const msg = selectedChoice === 'ATTUNE'
       ? 'Soul anchor stabilized.'
-      : 'Strike channel tuned.';
+      : 'Veil-Graft mutation secured.';
     setTimeout(() => completeCurrentNode(msg), 1200);
   };
 
@@ -47,79 +88,104 @@ export default function RestScreen(): React.JSX.Element {
             <View style={styles.contentForeground}>
               <View style={[styles.docHeader, { borderBottomColor: theme.borderColor }]}>
                 <Text style={[styles.docLabel, { color: theme.mutedColor }]}>
-                  AGENCY SANCTUARY DOCUMENT // REST NODE
+                  AGENCY SANCTUARY DOCUMENT // RE-TUNE NODE
                 </Text>
-                <Text style={styles.docTitle}>SANCTUARY // RE-TUNE NODE</Text>
+                <Text style={styles.docTitle}>SANCTUARY // MUTUAL EXCLUSION PROTOCOL</Text>
               </View>
 
               <View style={[styles.docBody, { borderColor: theme.borderColor }]}>
                 <Text style={[styles.scenarioText, { color: theme.primaryColor }]}>
-                  A quiet anchor chapel hums with stabilizing ley-energy. Choose recovery or strike tuning before the next encounter.
+                  Stabilizing ley-energy hums through the anchor chapel. Choose attunement or graft mutation — not both.
                 </Text>
                 <View style={styles.statsBlock}>
                   <Text style={[styles.statLine, { color: theme.mutedColor }]}>
                     SOUL ANCHOR: {runState.soulAnchorIntegrity}/{runState.maxSoulAnchor}
                   </Text>
                   <Text style={[styles.statLine, { color: theme.mutedColor }]}>
-                    STRIKE BONUS: +{strikeBonus}%
+                    VEIL RESIDUE: {residueBalance}
                   </Text>
                 </View>
               </View>
 
-              <View style={styles.choiceCol}>
-                <Pressable
-                  onPress={() => !confirmed && setSelectedChoice('REST')}
-                  disabled={confirmed}
-                  style={({ pressed }) => [
-                    styles.choiceBtn,
-                    selectedChoice === 'REST' && styles.choiceBtnSelected,
-                    {
-                      borderColor: selectedChoice === 'REST' ? TERMINAL_ACCENT : theme.borderColor,
-                      opacity: confirmed && selectedChoice !== 'REST' ? 0.4 : pressed ? 0.7 : 1,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.choiceLabel,
-                      { color: selectedChoice === 'REST' ? TERMINAL_ACCENT : theme.primaryColor },
+              {!graftTerminalOpen ? (
+                <View style={styles.choiceCol}>
+                  <Pressable
+                    onPress={handleSelectAttune}
+                    disabled={confirmed || selectedChoice === 'GRAFT'}
+                    style={({ pressed }) => [
+                      styles.choiceBtn,
+                      selectedChoice === 'ATTUNE' && styles.choiceBtnSelected,
+                      {
+                        borderColor: selectedChoice === 'ATTUNE' ? TERMINAL_ACCENT : theme.borderColor,
+                        opacity: confirmed && selectedChoice !== 'ATTUNE' ? 0.4 : selectedChoice === 'GRAFT' ? 0.35 : pressed ? 0.7 : 1,
+                      },
                     ]}
                   >
-                    [ REST ]
-                  </Text>
-                  <Text style={[styles.choiceReq, styles.choiceEffectGood]}>Restore 30% Soul Anchor</Text>
-                </Pressable>
+                    <Text
+                      style={[
+                        styles.choiceLabel,
+                        { color: selectedChoice === 'ATTUNE' ? TERMINAL_ACCENT : theme.primaryColor },
+                      ]}
+                    >
+                      [ ATTUNE ]
+                    </Text>
+                    <Text style={[styles.choiceReq, styles.choiceEffectGood]}>
+                      Restore 30% of Maximum Health
+                    </Text>
+                  </Pressable>
 
-                <Pressable
-                  onPress={() => !confirmed && setSelectedChoice('STRIKE_UPGRADE')}
-                  disabled={confirmed}
-                  style={({ pressed }) => [
-                    styles.choiceBtn,
-                    selectedChoice === 'STRIKE_UPGRADE' && styles.choiceBtnSelected,
-                    {
-                      borderColor: selectedChoice === 'STRIKE_UPGRADE' ? TERMINAL_ACCENT : theme.borderColor,
-                      opacity: confirmed && selectedChoice !== 'STRIKE_UPGRADE' ? 0.4 : pressed ? 0.7 : 1,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.choiceLabel,
-                      { color: selectedChoice === 'STRIKE_UPGRADE' ? TERMINAL_ACCENT : theme.primaryColor },
+                  <Pressable
+                    onPress={handleSelectGraft}
+                    disabled={confirmed || selectedChoice === 'ATTUNE'}
+                    style={({ pressed }) => [
+                      styles.choiceBtn,
+                      selectedChoice === 'GRAFT' && styles.choiceBtnSelected,
+                      {
+                        borderColor: selectedChoice === 'GRAFT' ? '#c084fc' : theme.borderColor,
+                        opacity: confirmed && selectedChoice !== 'GRAFT' ? 0.4 : selectedChoice === 'ATTUNE' ? 0.35 : pressed ? 0.7 : 1,
+                      },
                     ]}
                   >
-                    [ STRIKE TUNING ]
-                  </Text>
-                  <Text style={[styles.choiceReq, styles.choiceEffectGood]}>+10% Strike Damage (stacks)</Text>
-                </Pressable>
+                    <Text
+                      style={[
+                        styles.choiceLabel,
+                        { color: selectedChoice === 'GRAFT' ? '#c084fc' : theme.primaryColor },
+                      ]}
+                    >
+                      [ ACCESS VEIL-GRAFT TERMINAL ]
+                    </Text>
+                    <Text style={[styles.choiceReq, { color: '#c084fc' }]}>
+                      Spend Veil Residue to mutate an equipped ability
+                    </Text>
+                  </Pressable>
 
-                <SelectionContinueButton
-                  enabled={selectedChoice != null && !confirmed}
-                  onPress={handleContinue}
-                  borderColor={theme.borderColor}
-                  mutedColor={theme.mutedColor}
-                />
-              </View>
+                  <SelectionContinueButton
+                    enabled={canContinue && !confirmed}
+                    onPress={handleContinue}
+                    borderColor={theme.borderColor}
+                    mutedColor={theme.mutedColor}
+                  />
+                </View>
+              ) : (
+                <View style={styles.graftCol}>
+                  <VeilGraftUI
+                    loadout={activeIncursion.aegisLoadout}
+                    offers={graftOffers}
+                    residueBalance={residueBalance}
+                    abilityGrafts={activeIncursion.abilityGrafts}
+                    onApply={handleApplyGraft}
+                    borderColor={theme.borderColor}
+                    primaryColor={theme.primaryColor}
+                    mutedColor={theme.mutedColor}
+                  />
+                  <SelectionContinueButton
+                    enabled={graftComplete && !confirmed}
+                    onPress={handleContinue}
+                    borderColor={theme.borderColor}
+                    mutedColor={theme.mutedColor}
+                  />
+                </View>
+              )}
             </View>
           </View>
         </View>
@@ -183,6 +249,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   choiceCol: { gap: 8 },
+  graftCol: { gap: 10 },
   choiceBtn: {
     borderWidth: 1,
     paddingVertical: 10,

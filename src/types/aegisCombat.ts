@@ -1,3 +1,27 @@
+import type { ResourceItemId } from './resourceItem';
+
+/** Semantic tags for boon targeting and graft validation. */
+export type AbilityTag =
+  | 'KINETIC'
+  | 'OCCULT'
+  | 'MELEE'
+  | 'RANGED'
+  | 'AOE'
+  | 'DEFENSIVE'
+  | 'MOBILITY'
+  | 'CONTROL'
+  | 'DEBUFF'
+  | 'FRACTURE'
+  | 'ARMOR_PIERCE'
+  | 'RESTORE'
+  | 'BUFF'
+  | 'SACRIFICE'
+  | 'ULTIMATE'
+  | 'TRUE_DAMAGE';
+
+/** Hub stash resources required to permanently unlock an ability. Empty = no cost. */
+export type AbilityUnlockCost = Partial<Record<ResourceItemId, number>>;
+
 /** Aegis ability ids — Phase A wires STRIKE, VEIL_PIERCER, WRAITH_PARRY, ASHEN_MANTLE. */
 export type AegisAbilityId =
   | 'STRIKE'
@@ -11,7 +35,11 @@ export type AegisAbilityId =
   | 'BLOOD_TITHE'
   | 'DEMONS_LUNG'
   | 'CRIMSON_PACT'
-  | 'EVISCERATE';
+  | 'EVISCERATE'
+  | 'DEVASTATE'
+  | 'ABYSSAL_FAULT'
+  | 'BLOOD_BOUND_CARAPACE'
+  | 'REAVE';
 
 export type AegisLoadout = readonly [
   AegisAbilityId,
@@ -52,4 +80,8 @@ export const ALL_AEGIS_ABILITIES: readonly AegisAbilityId[] = [
   'DEMONS_LUNG',
   'CRIMSON_PACT',
   'EVISCERATE',
+  'DEVASTATE',
+  'ABYSSAL_FAULT',
+  'BLOOD_BOUND_CARAPACE',
+  'REAVE',
 ];

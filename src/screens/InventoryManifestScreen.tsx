@@ -1,12 +1,12 @@
 import React from 'react';
-import InventoryManifestPanel from '../components/InventoryManifestPanel';
 import TerminalSafeArea from '../components/TerminalSafeArea';
+import SafehouseHubPanel from '../components/safehouse/SafehouseHubPanel';
 
-/** Legacy screen alias — manifest content lives in the unified hub nav. */
+/** @deprecated Use Overworld Hub tab 03 // SAFEHOUSE. */
 export default function InventoryManifestScreen(): React.JSX.Element {
   return (
     <TerminalSafeArea>
-      <InventoryManifestPanel />
+      <SafehouseHubPanel />
     </TerminalSafeArea>
   );
 }

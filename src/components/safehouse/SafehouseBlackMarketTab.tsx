@@ -13,16 +13,15 @@ import { useTerminal } from '../../context/TerminalContext';
 import type { CargoItemId } from '../../types/cargoGrid';
 import { resolveCargoItemIcon } from '../../utils/cargoItemIcon';
 
-const AMBER = '#d4a574';
-const SLATE = '#1a1d22';
-const RUST = '#8b4513';
-
 export default function SafehouseBlackMarketTab(): React.JSX.Element {
   const { theme } = useTerminal();
   const { account, purchaseHubContraband, sellFenceResource, appendHubLog } = usePlayerAccount();
   const { activeBuffs } = useShadowWar();
   const marketDiscount = shadowWarBuffsToRunModifiers(activeBuffs).blackMarketDiscountPct;
   const [selectedListingId, setSelectedListingId] = useState<CargoItemId | null>(null);
+
+  const accent = theme.statusColor;
+  const panelBg = theme.backgroundColor;
 
   const selectedListing = selectedListingId != null
     ? BLACK_MARKET_CARGO_LISTINGS.find((entry) => entry.id === selectedListingId) ?? null
@@ -46,8 +45,8 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
   return (
     <View style={styles.root}>
       <View style={styles.splitRow}>
-        <View style={[styles.panel, { borderColor: RUST }]}>
-          <Text style={[styles.panelTitle, { color: AMBER }]}>BUY CONTRABAND</Text>
+        <View style={[styles.panel, { borderColor: theme.borderColor, backgroundColor: panelBg }]}>
+          <Text style={[styles.panelTitle, { color: accent }]}>BUY CONTRABAND</Text>
           <Text style={[styles.panelSub, { color: theme.mutedColor }]}>
             High-end field gear — purchases stage in hub consumable vault.
           </Text>
@@ -63,20 +62,20 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
                   style={[
                     styles.listingCard,
                     {
-                      borderColor: selected ? AMBER : '#2a2f36',
+                      borderColor: selected ? accent : theme.borderColor,
                       opacity: affordable ? 1 : 0.55,
                     },
                   ]}
                 >
                   <Image source={resolveCargoItemIcon(listing.id)} style={styles.listingIcon} />
                   <View style={styles.listingBody}>
-                    <Text style={[styles.listingName, { color: selected ? AMBER : theme.textColor }]}>
+                    <Text style={[styles.listingName, { color: selected ? accent : theme.textColor }]}>
                       {listing.name.toUpperCase()}
                     </Text>
                     <Text style={[styles.listingEffect, { color: theme.mutedColor }]} numberOfLines={2}>
                       {listing.effect}
                     </Text>
-                    <Text style={[styles.listingPrice, { color: AMBER }]}>{`${price} CR`}</Text>
+                    <Text style={[styles.listingPrice, { color: accent }]}>{`${price} CR`}</Text>
                   </View>
                 </Pressable>
               );
@@ -85,14 +84,20 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
           <Pressable
             disabled={!canBuy}
             onPress={handleBuy}
-            style={[styles.actionBtn, { borderColor: canBuy ? AMBER : '#3a3028', opacity: canBuy ? 1 : 0.45 }]}
+            style={[
+              styles.actionBtn,
+              {
+                borderColor: canBuy ? accent : theme.borderColor,
+                opacity: canBuy ? 1 : 0.45,
+              },
+            ]}
           >
-            <Text style={[styles.actionBtnText, { color: canBuy ? AMBER : '#5a4a38' }]}>[ BUY ]</Text>
+            <Text style={[styles.actionBtnText, { color: canBuy ? accent : theme.mutedColor }]}>[ BUY ]</Text>
           </Pressable>
         </View>
 
-        <View style={[styles.panel, { borderColor: RUST }]}>
-          <Text style={[styles.panelTitle, { color: AMBER }]}>FENCE // LIQUIDATE</Text>
+        <View style={[styles.panel, { borderColor: theme.borderColor, backgroundColor: panelBg }]}>
+          <Text style={[styles.panelTitle, { color: accent }]}>FENCE // LIQUIDATE</Text>
           <Text style={[styles.panelSub, { color: theme.mutedColor }]}>
             Sell dog tags, ledgers, and excess ley-slag for Cabal Credits.
           </Text>
@@ -103,7 +108,7 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
               </Text>
             ) : (
               fenceEntries.map((entry) => (
-                <View key={entry.resourceId} style={[styles.fenceRow, { borderColor: '#2a2f36' }]}>
+                <View key={entry.resourceId} style={[styles.fenceRow, { borderColor: theme.borderColor }]}>
                   <View style={styles.fenceInfo}>
                     <Text style={[styles.fenceName, { color: theme.textColor }]}>
                       {RESOURCE_REGISTRY[entry.resourceId].name.toUpperCase()}
@@ -115,16 +120,16 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
                   <View style={styles.fenceActions}>
                     <Pressable
                       onPress={() => handleSell(entry.resourceId, 1)}
-                      style={[styles.sellBtn, { borderColor: AMBER }]}
+                      style={[styles.sellBtn, { borderColor: accent }]}
                     >
-                      <Text style={[styles.sellBtnText, { color: AMBER }]}>SELL 1</Text>
+                      <Text style={[styles.sellBtnText, { color: accent }]}>SELL 1</Text>
                     </Pressable>
                     {entry.quantity > 1 ? (
                       <Pressable
                         onPress={() => handleSell(entry.resourceId, entry.quantity)}
-                        style={[styles.sellBtn, { borderColor: AMBER }]}
+                        style={[styles.sellBtn, { borderColor: accent }]}
                       >
-                        <Text style={[styles.sellBtnText, { color: AMBER }]}>ALL</Text>
+                        <Text style={[styles.sellBtnText, { color: accent }]}>ALL</Text>
                       </Pressable>
                     ) : null}
                   </View>
@@ -144,7 +149,6 @@ const styles = StyleSheet.create({
   panel: {
     flex: 1,
     borderWidth: 1,
-    backgroundColor: SLATE,
     padding: 10,
     gap: 8,
   },
@@ -166,7 +170,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 8,
     gap: 8,
-    backgroundColor: '#0d0f12',
   },
   listingIcon: { width: 40, height: 40, resizeMode: 'contain' },
   listingBody: { flex: 1, gap: 2 },
@@ -179,7 +182,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 8,
     gap: 8,
-    backgroundColor: '#0d0f12',
   },
   fenceInfo: { flex: 1, gap: 2 },
   fenceName: { fontFamily: 'monospace', fontSize: 8, fontWeight: '700' },

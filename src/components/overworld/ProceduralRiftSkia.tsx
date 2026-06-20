@@ -24,6 +24,7 @@ function paletteForType(nodeType: RunNodeType, isBoss: boolean): RiftPalette {
       return { core: 'rgba(239, 68, 68, 0.42)', glow: 'rgba(220, 38, 38, 0.28)', edge: '#f87171' };
     case 'ELITE_COMBAT':
       return { core: 'rgba(127, 29, 29, 0.55)', glow: 'rgba(69, 10, 10, 0.38)', edge: '#991b1b' };
+    case 'ANOMALY':
     case 'NARRATIVE_EVENT':
       return { core: 'rgba(168, 85, 247, 0.4)', glow: 'rgba(124, 58, 237, 0.28)', edge: '#a78bfa' };
     case 'RESOURCE_HARVEST':

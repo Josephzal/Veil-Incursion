@@ -9,6 +9,7 @@ import {
   hubTerminalUi,
 } from '../styles/hubTerminalUi';
 import type { AegisAbilityId, AegisLoadout } from '../types/aegisCombat';
+import { isAbilityUnlocked } from '../data/aegisAbilityUnlockEngine';
 import { validateLoadoutCommit } from '../utils/aegisLoadoutUtils';
 
 function ManifestSection({
@@ -53,7 +54,7 @@ function ManifestRow({
 
 export default function InventoryManifestPanel(): React.JSX.Element {
   const { theme, profile } = useTerminal();
-  const { account, setAegisLoadout, appendHubLog } = usePlayerAccount();
+  const { account, setAegisLoadout, unlockAegisAbility, appendHubLog } = usePlayerAccount();
 
   const manifest = profile.operative_profile.payload_manifest;
   const currencies = manifest.currencies;
@@ -80,16 +81,26 @@ export default function InventoryManifestPanel(): React.JSX.Element {
 
   const assignAbilityToSlot = useCallback((abilityId: AegisAbilityId) => {
     if (abilityId === 'EVISCERATE') return;
+    if (!isAbilityUnlocked(account.unlockedAegisAbilities, abilityId)) {
+      setLoadoutStatus(`>> ${abilityId.replace(/_/g, ' ')} NOT UNLOCKED — DECRYPT PROTOCOL FIRST.`);
+      return;
+    }
     setLoadoutDraft((prev) => {
       const next = [...prev];
       next[selectedSlot] = abilityId;
       return next;
     });
     setLoadoutStatus(null);
-  }, [selectedSlot]);
+  }, [account.unlockedAegisAbilities, selectedSlot]);
+
+  const handleUnlockAbility = useCallback((abilityId: AegisAbilityId) => {
+    const result = unlockAegisAbility(abilityId);
+    appendHubLog(result.logLine);
+    setLoadoutStatus(result.logLine);
+  }, [appendHubLog, unlockAegisAbility]);
 
   const commitLoadout = useCallback(() => {
-    const rejection = validateLoadoutCommit(loadoutDraft);
+    const rejection = validateLoadoutCommit(loadoutDraft, account.unlockedAegisAbilities);
     if (rejection) {
       setLoadoutStatus(rejection);
       return;
@@ -103,7 +114,7 @@ export default function InventoryManifestPanel(): React.JSX.Element {
     setAegisLoadout(committed);
     appendHubLog('>> AEGIS LOADOUT LOCKED — combat deck staged for next incursion.');
     setLoadoutStatus('>> LOADOUT COMMITTED — CARRIES INTO NEXT RUN.');
-  }, [appendHubLog, loadoutDraft, setAegisLoadout]);
+  }, [appendHubLog, account.unlockedAegisAbilities, loadoutDraft, setAegisLoadout]);
 
   const accent = theme.primaryColor;
 
@@ -128,7 +139,10 @@ export default function InventoryManifestPanel(): React.JSX.Element {
           selectedSlot={selectedSlot}
           onSelectSlot={setSelectedSlot}
           onAssignAbility={assignAbilityToSlot}
+          onUnlockAbility={handleUnlockAbility}
           onCommit={commitLoadout}
+          unlockedAbilities={account.unlockedAegisAbilities}
+          resourceStash={account.resourceStash}
           theme={{
             accentColor: accent,
             borderColor: theme.borderColor,

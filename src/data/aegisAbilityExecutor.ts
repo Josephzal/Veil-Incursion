@@ -14,10 +14,16 @@ import {
   adjacentAliveUnits,
   aliveUnits,
   getUnitById,
+  isUnitAlive,
   pullBacklineToFrontline,
+  unitAtSlot,
 } from './combatSquadEngine';
+import { columnSlotsFor } from '../types/combatGrid';
+import type { CombatGridSlotId } from '../types/combatGrid';
 import { getAbilityDefinition } from './aegisAbilities';
-import type { MutationCombatModifiers } from './leyLineMutationEngine';
+import type { LeyLineMutationId } from '../types/leyLineMutation';
+import { boonMatchesAction } from './boonEngine';
+import type { MutationCombatModifiers } from './boonEngine';
 
 export interface PlayerCombatBuffState {
   demonLungCooldown: number;
@@ -66,8 +72,12 @@ export interface AbilityExecutionContext {
   restoreStaminaPct: (pct: number) => void;
   reduceEnemyAp: (unitId: string, amount: number) => void;
   setShadowStepEvadeActive?: (active: boolean) => void;
+  ownedBoons: readonly LeyLineMutationId[];
   mutationMods: MutationCombatModifiers;
   bloodTitheCooldown: number;
+  setVeilTarTurns?: (turns: number) => void;
+  activateBloodBoundCarapace?: () => void;
+  applyReaveBleed?: (unitId: string, turns: number) => void;
 }
 
 export type AbilityExecutionResult =
@@ -105,7 +115,11 @@ export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExe
         if (!unit.unitId) continue;
         let next = applyFractureToUnit(unit, 20, true);
         ctx.patchUnit(unit.unitId, next);
-        eradicated = ctx.hurtEnemy(12, '[RUIN]', 'STRIKE', { channel: 'KINETIC', fractureGain: 0 }, unit.unitId) || eradicated;
+        eradicated = ctx.hurtEnemy(12, '[RUIN]', 'STRIKE', {
+          channel: 'KINETIC',
+          fractureGain: 0,
+          abilityId: 'RUIN',
+        }, unit.unitId) || eradicated;
       }
       ctx.log('[RUIN] >> Fracture shockwave — all hostiles stressed.');
       if (eradicated) return { ok: true };
@@ -126,7 +140,10 @@ export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExe
       const pulledUnit = getUnitById(pulled, unit.unitId);
       if (pulledUnit?.unitId) {
         let exposed = addCombatTag(pulledUnit, 'EXPOSED');
-        if (ctx.mutationMods.graveBindArmorShred > 0) {
+        if (
+          boonMatchesAction(ctx.ownedBoons, 'EXECUTIONERS_GRIP', ctx.abilityId)
+          && ctx.mutationMods.graveBindArmorShred > 0
+        ) {
           exposed = {
             ...exposed,
             kineticArmor: Math.max(0, (exposed.kineticArmor ?? 0) - ctx.mutationMods.graveBindArmorShred),
@@ -135,12 +152,15 @@ export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExe
         ctx.syncSquad(
           pulled.map((u) => (u.unitId === exposed.unitId ? exposed : u)),
         );
-        if (ctx.mutationMods.graveBindDamage > 0) {
+        if (
+          boonMatchesAction(ctx.ownedBoons, 'HEAVY_CALIBER', ctx.abilityId)
+          && ctx.mutationMods.graveBindDamage > 0
+        ) {
           ctx.hurtEnemy(
             ctx.mutationMods.graveBindDamage,
             '[GRAVE BIND]',
             'STRIKE',
-            { channel: 'KINETIC' },
+            { channel: 'KINETIC', abilityId: ctx.abilityId },
             pulledUnit.unitId,
           );
         }
@@ -163,7 +183,10 @@ export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExe
       }
       const next = applyFractureDamage(unit, 50);
       ctx.patchUnit(unit.unitId, next);
-      const eradicated = ctx.hurtEnemy(16, '[SHADOW STEP]', 'STRIKE', { channel: 'KINETIC' }, unit.unitId);
+      const eradicated = ctx.hurtEnemy(16, '[SHADOW STEP]', 'STRIKE', {
+        channel: 'KINETIC',
+        abilityId: 'SHADOW_STEP',
+      }, unit.unitId);
       ctx.buffState.initiativeQueued = true;
       ctx.setShadowStepEvadeActive?.(true);
       ctx.log('[SHADOW STEP] >> Veil shift queued — end turn to seize initiative (+15% evade).');
@@ -183,6 +206,14 @@ export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExe
       }
       ctx.reduceEnemyAp(unit.unitId, ctx.mutationMods.nailApDrain);
       ctx.patchUnit(unit.unitId, stackDoomedTag(unit));
+      if (
+        boonMatchesAction(ctx.ownedBoons, 'NECROTIC_ATROPHY', ctx.abilityId)
+        && ctx.mutationMods.necroticAtrophyPct > 0
+      ) {
+        const reduced = Math.max(1, Math.floor(unit.baseDamage * (1 - ctx.mutationMods.necroticAtrophyPct / 100)));
+        ctx.patchUnit(unit.unitId, { baseDamage: reduced });
+        ctx.log('[NECROTIC ATROPHY] >> Debuff shaves target base damage.');
+      }
       for (const adj of adjacentAliveUnits(ctx.squad, unit.unitId)) {
         if (!adj.unitId) continue;
         ctx.patchUnit(adj.unitId, stackDoomedTag(adj));
@@ -219,7 +250,11 @@ export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExe
       }
       if (heal > 0) ctx.healOperative(heal);
       const occult = Math.max(10, Math.floor(consumed * 0.4));
-      const eradicated = ctx.hurtEnemy(occult, '[BLOOD-TITHE]', 'STRIKE', { channel: 'OCCULT', fractureGain: 10 }, unit.unitId);
+      const eradicated = ctx.hurtEnemy(occult, '[BLOOD-TITHE]', 'STRIKE', {
+        channel: 'OCCULT',
+        fractureGain: 10,
+        abilityId: 'BLOOD_TITHE',
+      }, unit.unitId);
       ctx.log(`[BLOOD-TITHE] >> Reserve tithed (${consumed} AR) — ${heal} HP restored.`);
       if (eradicated) return { ok: true };
       return { ok: true };
@@ -244,6 +279,103 @@ export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExe
       }
       ctx.buffState.crimsonPactCharges = 2;
       ctx.log('[CRIMSON PACT] >> Blood oath sealed — next 2 attacks are guaranteed critical hits.');
+      return { ok: true };
+    }
+
+    case 'DEVASTATE': {
+      const unit = targetUnit(ctx);
+      if (!unit?.unitId) {
+        ctx.log('[REJECTED] >> Devastate requires a target.');
+        return { ok: false, refundAp: def.apCost };
+      }
+      if (!ctx.spendStamina(def.staminaCost)) {
+        ctx.log('[REJECTED] >> Insufficient stamina.');
+        return { ok: false, refundAp: def.apCost };
+      }
+      const fracturePool = unit.fractureGauge ?? 0;
+      ctx.patchUnit(unit.unitId, {
+        fractureGauge: 0,
+        combatTags: (unit.combatTags ?? []).filter((tag) => tag !== 'FRACTURED'),
+        fracturedThisRound: false,
+      });
+      ctx.hurtEnemy(4, '[DEVASTATE]', 'STRIKE', {
+        channel: 'KINETIC',
+        fractureGain: 0,
+        abilityId: 'DEVASTATE',
+      }, unit.unitId);
+      if (fracturePool > 0) {
+        const detonation = Math.max(8, Math.floor(fracturePool));
+        ctx.hurtEnemy(detonation, '[DEVASTATE DETONATION]', 'STRIKE', {
+          channel: 'TRUE',
+          fractureGain: 0,
+          abilityId: 'DEVASTATE',
+        }, unit.unitId);
+        ctx.log(`[DEVASTATE] >> Fracture detonated — ${detonation} True damage.`);
+      } else {
+        ctx.log('[DEVASTATE] >> Minimal crush — no latent fracture to detonate.');
+      }
+      return { ok: true };
+    }
+
+    case 'ABYSSAL_FAULT': {
+      if (!ctx.spendStamina(def.staminaCost)) {
+        ctx.log('[REJECTED] >> Insufficient stamina.');
+        return { ok: false, refundAp: def.apCost };
+      }
+      ctx.setVeilTarTurns?.(3);
+      for (const unit of aliveUnits(ctx.squad)) {
+        if (!unit.unitId) continue;
+        ctx.patchUnit(unit.unitId, {
+          evadeChance: 0,
+          evadeActive: false,
+        });
+      }
+      ctx.log('[ABYSSAL FAULT] >> Veil-tar boils across the grid — 3-turn hazard seeded.');
+      return { ok: true };
+    }
+
+    case 'BLOOD_BOUND_CARAPACE': {
+      if (!ctx.sacrificeHpPct(def.hpCostPct ?? 10)) {
+        ctx.log('[REJECTED] >> Insufficient soul anchor for carapace rite.');
+        return { ok: false, refundAp: def.apCost };
+      }
+      ctx.activateBloodBoundCarapace?.();
+      ctx.log('[BLOOD-BOUND CARAPACE] >> Calcified spikes extruded — full damage until next operative turn.');
+      return { ok: true };
+    }
+
+    case 'REAVE': {
+      const unit = targetUnit(ctx);
+      if (!unit?.unitId || !unit.gridSlot) {
+        ctx.log('[REJECTED] >> Reave requires a column target.');
+        return { ok: false, refundAp: def.apCost };
+      }
+      if (!ctx.spendStaminaPct(def.staminaCostPct ?? 15)) {
+        ctx.log('[REJECTED] >> Insufficient stamina.');
+        return { ok: false, refundAp: def.apCost };
+      }
+      const slots = columnSlotsFor(unit.gridSlot as CombatGridSlotId);
+      let eradicated = false;
+      for (const slot of slots) {
+        const hit = unitAtSlot(ctx.squad, slot);
+        if (!hit?.unitId || !isUnitAlive(hit)) continue;
+        const kinetic = Math.max(14, Math.floor(ctx.strikeStats.strikeDamage * 1.15));
+        const hadArmor = (hit.kineticArmor ?? 0) > 0;
+        if (hadArmor) {
+          ctx.patchUnit(hit.unitId, {
+            kineticArmor: Math.max(0, (hit.kineticArmor ?? 0) - 1),
+          });
+        } else {
+          ctx.applyReaveBleed?.(hit.unitId, 2);
+        }
+        eradicated = ctx.hurtEnemy(kinetic, '[REAVE]', 'STRIKE', {
+          channel: 'KINETIC',
+          fractureGain: 12,
+          abilityId: 'REAVE',
+        }, hit.unitId) || eradicated;
+      }
+      ctx.log('[REAVE] >> Void-pressure line — armor shattered or bleed inflicted.');
+      if (eradicated) return { ok: true };
       return { ok: true };
     }
 
@@ -279,6 +411,18 @@ export function isExtendedAbilityEnabled(
     case 'CRIMSON_PACT': {
       const cost = Math.ceil(maxSoulAnchor * ((def.hpCostPct ?? 0) / 100));
       return operativeHp > cost;
+    }
+    case 'DEVASTATE':
+      return stamina >= def.staminaCost;
+    case 'ABYSSAL_FAULT':
+      return stamina >= def.staminaCost;
+    case 'BLOOD_BOUND_CARAPACE': {
+      const cost = Math.ceil(maxSoulAnchor * ((def.hpCostPct ?? 0) / 100));
+      return operativeHp > cost;
+    }
+    case 'REAVE': {
+      const cost = Math.floor(stamina * ((def.staminaCostPct ?? 0) / 100));
+      return cost > 0 && stamina >= cost;
     }
     default:
       return false;

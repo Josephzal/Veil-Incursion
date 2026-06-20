@@ -19,6 +19,10 @@ const ABILITY_TARGET_MODE: Partial<Record<AegisAbilityId, AbilityTargetMode>> = 
   SHADOW_STEP: 'SINGLE',
   DEMONS_LUNG: 'NONE',
   EVISCERATE: 'SINGLE',
+  DEVASTATE: 'SINGLE',
+  ABYSSAL_FAULT: 'ALL',
+  BLOOD_BOUND_CARAPACE: 'NONE',
+  REAVE: 'SINGLE',
 };
 
 /** Column-pair line of sight: back-top guarded by front-top, back-bottom by front-bottom. */

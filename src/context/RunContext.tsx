@@ -1,6 +1,9 @@
 import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import { pickRandomClimateCluster, getClusterDefinition } from '../data/climateClusters';
 import { AMBUSH_ENCOUNTERS_ENABLED } from '../data/featureFlags';
+import { anomalyResolutionLogLine, resolveAnomalyNode } from '../data/anomalyResolver';
+import { canGraftAbility, rollVeilGraftOffers } from '../data/veilGraftEngine';
+import { getVeilGraftDefinition } from '../data/veilGraftDatabase';
 import { MAX_RUN_CANISTER_RESIDUE } from '../constants/veilResidue';
 import {
   createEasyTestEnemy,
@@ -160,6 +163,7 @@ import {
   hasCargoItem,
   consumeCargoItem,
   createStarterCargoRunState,
+  applyIncursionStarterCargo,
   removePlacedCargoItem,
 } from '../data/cargoGridEngine';
 import type { RunDeathSummary } from '../types/runDeathSummary';
@@ -253,7 +257,11 @@ interface RunContextType {
   useResonanceBribeFromCargo: () => boolean;
   useDeadDropTokenFromCargo: () => boolean;
   applySkillCheckTier: (tier: 'CRITICAL_SUCCESS' | 'SUCCESS' | 'FAILURE' | 'CRITICAL_DESYNC', logLine: string) => void;
-  applyRestChoice: (type: 'REST' | 'STRIKE_UPGRADE') => void;
+  applySanctuaryAttune: () => void;
+  openSanctuaryGraftTerminal: () => void;
+  applyVeilGraftToAbility: (abilityId: import('../types/aegisCombat').AegisAbilityId, graftId: import('../types/veilGraft').VeilGraftId) => { success: boolean; message: string };
+  getVeilResidueBalance: () => number;
+  clearEncounterUltimateDisabled: () => void;
   getCurrentEncounter: () => EncounterNode | null;
   getCurrentSkillCheck: () => SkillCheckEvent | null;
   endRun: (reason: string) => void;
@@ -544,7 +552,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       aegisLoadout: config?.aegisLoadout
         ? [...config.aegisLoadout] as AegisLoadout
         : createDefaultActiveIncursionState().aegisLoadout,
-      cargo: config?.initialCargo ?? createStarterCargoRunState(),
+      cargo: applyIncursionStarterCargo(config?.initialCargo ?? createStarterCargoRunState()),
       sanctuarySchedule,
       strikeDamageBonusPct: 0,
       shadowWarBuffs: config?.shadowWarBuffs ?? {
@@ -692,7 +700,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const isPostCombatBoonBlocked = useCallback((): boolean => {
-    return isLeyScarAcquisitionBlocked(activeIncursionRef.current);
+    const inc = activeIncursionRef.current;
+    if (isLeyScarAcquisitionBlocked(inc)) return true;
+    const node = resolveActiveVectorNode(inc);
+    return node?.type !== 'ELITE_COMBAT';
   }, []);
 
   const applyTrinket = useCallback((trinket: Trinket) => {
@@ -890,6 +901,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       appendRunLog('>> LEY-SCAR BOON SKIPPED — IRONCLAD LOGISTICS MANDATE ACTIVE.');
       return [];
     }
+    const node = resolveActiveVectorNode(inc);
+    if (node?.type !== 'ELITE_COMBAT') {
+      setPostCombatMutationChoices([]);
+      return [];
+    }
     const owned = inc.leyLineMutations;
     const choices = pickRandomLeyLineMutations(3, owned);
     setPostCombatMutationChoices(choices);
@@ -946,18 +962,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     appendRunLog(logLine);
   }, [appendRunLog]);
 
-  const applyRestChoice = useCallback((type: 'REST' | 'STRIKE_UPGRADE') => {
-    if (type === 'STRIKE_UPGRADE') {
-      setActiveIncursion((prev) => {
-        const nextBonus = (prev.strikeDamageBonusPct ?? 0) + 10;
-        const next = { ...prev, strikeDamageBonusPct: nextBonus };
-        activeIncursionRef.current = next;
-        return next;
-      });
-      appendRunLog('>> Sanctuary Strike Tuning — +10% strike damage (stacks per visit).');
-      return;
-    }
-
+  const applySanctuaryAttune = useCallback(() => {
     setRunState((prev) => {
       const restore = Math.floor(prev.maxSoulAnchor * 0.30);
       const next = {
@@ -967,8 +972,92 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       runStateRef.current = next;
       return next;
     });
-    appendRunLog('>> Sanctuary Rest — 30% soul anchor integrity restored.');
+    appendRunLog('>> SANCTUARY ATTUNE — 30% soul anchor integrity restored.');
   }, [appendRunLog]);
+
+  const getVeilResidueBalance = useCallback((): number => {
+    return activeIncursionRef.current.sessionVeilResidueCollected;
+  }, []);
+
+  const openSanctuaryGraftTerminal = useCallback(() => {
+    const offers = rollVeilGraftOffers(3);
+    setActiveIncursion((prev) => {
+      const next = {
+        ...prev,
+        sanctuaryGraftOffers: offers,
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    appendRunLog('>> VEIL-GRAFT TERMINAL ONLINE — three volatile mutations staged.');
+    offers.forEach((graftId) => {
+      appendRunLog(`>> — OFFER: ${getVeilGraftDefinition(graftId).name.toUpperCase()} (${getVeilGraftDefinition(graftId).cost} RESIDUE)`);
+    });
+  }, [appendRunLog]);
+
+  const applyVeilGraftToAbility = useCallback((
+    abilityId: import('../types/aegisCombat').AegisAbilityId,
+    graftId: import('../types/veilGraft').VeilGraftId,
+  ): { success: boolean; message: string } => {
+    if (!canGraftAbility(abilityId)) {
+      return { success: false, message: 'Ultimate abilities cannot be grafted.' };
+    }
+
+    const graft = getVeilGraftDefinition(graftId);
+    const inc = activeIncursionRef.current;
+    if (inc.sessionVeilResidueCollected < graft.cost) {
+      return { success: false, message: 'Insufficient Veil Residue.' };
+    }
+
+    if (graft.reduceMaxHp != null) {
+      setRunState((runPrev) => {
+        const nextMaxHp = Math.max(1, Math.floor(runPrev.maxSoulAnchor * (1 - graft.reduceMaxHp!)));
+        const runNext = {
+          ...runPrev,
+          maxSoulAnchor: nextMaxHp,
+          soulAnchorIntegrity: Math.min(runPrev.soulAnchorIntegrity, nextMaxHp),
+        };
+        runStateRef.current = runNext;
+        return runNext;
+      });
+    }
+
+    setActiveIncursion((prev) => {
+      const next = {
+        ...prev,
+        sessionVeilResidueCollected: prev.sessionVeilResidueCollected - graft.cost,
+        abilityGrafts: {
+          ...prev.abilityGrafts,
+          [abilityId]: graftId,
+        },
+        encounterUltimateDisabled: graft.disableUltimate === true
+          ? true
+          : prev.encounterUltimateDisabled,
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+
+    const abilityLabel = abilityId.replace(/_/g, ' ');
+    appendRunLog(`>> GRAFT APPLIED — ${graft.name.toUpperCase()} fused to ${abilityLabel}. (−${graft.cost} RESIDUE)`);
+    if (graft.reduceMaxHp != null) {
+      appendRunLog(`>> MARTYR TAX — max soul anchor reduced by ${Math.round(graft.reduceMaxHp * 100)}%.`);
+    }
+    if (graft.disableUltimate) {
+      appendRunLog('>> APEX MUTATION — ultimate channel sealed for next combat encounter.');
+    }
+
+    return { success: true, message: `${graft.name} applied.` };
+  }, [appendRunLog]);
+
+  const clearEncounterUltimateDisabled = useCallback(() => {
+    setActiveIncursion((prev) => {
+      if (!prev.encounterUltimateDisabled) return prev;
+      const next = { ...prev, encounterUltimateDisabled: false };
+      activeIncursionRef.current = next;
+      return next;
+    });
+  }, []);
 
   const endRun = useCallback((reason: string) => {
     const inc = activeIncursionRef.current;
@@ -1418,8 +1507,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   const calculateSectorExtractionPayout = useCallback((): number => {
     const inc = activeIncursionRef.current;
     const pathBonus = inc.encounterPath.reduce((sum, node) => sum + (node.sectorMeta?.creditBonus ?? 0), 0);
-    const cargoValue = calculateCargoMarketValue(inc.cargo);
-    let total = inc.runCredits + pathBonus + cargoValue + 150;
+    let total = inc.runCredits + pathBonus + 150;
     if (inc.primeExtractionBonus) total = Math.floor(total * 1.5);
     if (inc.masterLinkUsed) {
       total = Math.floor(total * MASTER_EXTRACTION_PAYOUT_MULTIPLIER);
@@ -2215,21 +2303,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       return node.type;
     }
 
-    if (node.type === 'VEIL_BLEED_BOON') {
-      if (!isLeyScarAcquisitionBlocked(activeIncursionRef.current)) {
-        applyVeilBleedHpCost();
-      } else {
-        appendRunLog('>> VEIL BLEED BLOCKED — Ley-Scar acquisition unavailable this run.');
-      }
-      preparePostCombatMutations();
-      setActiveIncursion((prev) => {
-        const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
-        activeIncursionRef.current = next;
-        return next;
-      });
-      return node.type;
-    }
-
     if (node.type === 'STANDARD_COMBAT' || node.type === 'ELITE_COMBAT') {
       prepareStandardCombatEncounter(node);
       setActiveIncursion((prev) => {
@@ -2238,6 +2311,54 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         return next;
       });
       return node.type;
+    }
+
+    if (node.type === 'ANOMALY') {
+      appendRunLog('>> ANALYZING UNIDENTIFIED SIGNAL...');
+      const resolution = resolveAnomalyNode();
+      appendRunLog(anomalyResolutionLogLine(resolution));
+
+      if (resolution === 'NARRATIVE') {
+        assignNarrativeForCombat(node);
+        setActiveIncursion((prev) => {
+          const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
+          activeIncursionRef.current = next;
+          return next;
+        });
+        return 'NARRATIVE_EVENT';
+      }
+
+      if (resolution === 'AMBUSH_COMBAT') {
+        setRunState((prev) => {
+          const next = {
+            ...prev,
+            pendingAmbush: true,
+            currentStamina: 0,
+          };
+          runStateRef.current = next;
+          return next;
+        });
+        prepareStandardCombatEncounter({
+          ...node,
+          encounterType: 'COMBAT',
+          type: 'STANDARD_COMBAT',
+          label: node.label.replace('UNIDENTIFIED SIGNAL', 'AMBUSH MANIFEST'),
+        });
+        setActiveIncursion((prev) => {
+          const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
+          activeIncursionRef.current = next;
+          return next;
+        });
+        return 'STANDARD_COMBAT';
+      }
+
+      rollBlackMarketStockForNode();
+      setActiveIncursion((prev) => {
+        const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
+        activeIncursionRef.current = next;
+        return next;
+      });
+      return 'BLACK_MARKET';
     }
 
     if (node.type === 'NARRATIVE_EVENT') {
@@ -2281,6 +2402,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     prepareBossEncounter,
     preparePostCombatMutations,
     prepareStandardCombatEncounter,
+    rollBlackMarketStockForNode,
   ]);
 
   const commitNodeEncounter = useCallback((nodeId: string): import('../types/game').RunNodeType | null => {
@@ -2988,7 +3110,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       useResonanceBribeFromCargo,
       useDeadDropTokenFromCargo,
       applySkillCheckTier,
-      applyRestChoice,
+      applySanctuaryAttune,
+      openSanctuaryGraftTerminal,
+      applyVeilGraftToAbility,
+      getVeilResidueBalance,
+      clearEncounterUltimateDisabled,
       getCurrentEncounter,
       getCurrentSkillCheck,
       endRun,
@@ -3089,7 +3215,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       useResonanceBribeFromCargo,
       useDeadDropTokenFromCargo,
       applySkillCheckTier,
-      applyRestChoice,
+      applySanctuaryAttune,
+      openSanctuaryGraftTerminal,
+      applyVeilGraftToAbility,
+      getVeilResidueBalance,
+      clearEncounterUltimateDisabled,
       getCurrentEncounter,
       getCurrentSkillCheck,
       endRun,

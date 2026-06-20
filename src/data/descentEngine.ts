@@ -45,6 +45,7 @@ const SIGNATURE_PROFILES = [
 
 export const ENCOUNTER_DISPLAY_LABEL: Record<IncursionEncounterType, string> = {
   COMBAT: 'Combat',
+  ANOMALY: 'Anomaly',
   NARRATIVE_EVENT: 'Narrative Event',
   SANCTUARY: 'Sanctuary',
   BLACK_MARKET: 'Black Market',
@@ -82,6 +83,7 @@ export function encounterToRunNodeType(
   encounterIndex: number,
 ): RunNodeType {
   if (encounterType === 'SANCTUARY') return 'SANCTUARY';
+  if (encounterType === 'ANOMALY') return 'ANOMALY';
   if (encounterType === 'NARRATIVE_EVENT') return 'NARRATIVE_EVENT';
   if (encounterType === 'BLACK_MARKET') return 'BLACK_MARKET';
   return encounterIndex === BOSS_ENCOUNTER_INDEX ? 'BOSS_COMBAT' : 'STANDARD_COMBAT';
@@ -92,7 +94,7 @@ export function isCombatNodeType(type: RunNodeType): boolean {
 }
 
 function rollFlexibleEncounter(): IncursionEncounterType {
-  return Math.random() < 0.45 ? 'NARRATIVE_EVENT' : 'COMBAT';
+  return Math.random() < 0.45 ? 'ANOMALY' : 'COMBAT';
 }
 
 function makeVectorNode(
@@ -123,7 +125,7 @@ function makeVectorNode(
 function buildFirstScanCluster(depth: number): IncursionNode[] {
   return [
     makeVectorNode(depth, 0, 0, 'COMBAT'),
-    makeVectorNode(depth, 0, 1, 'NARRATIVE_EVENT'),
+    makeVectorNode(depth, 0, 1, 'ANOMALY'),
     makeVectorNode(depth, 0, 2, 'BLACK_MARKET'),
   ];
 }
@@ -166,7 +168,7 @@ export function generateDepthEncounterMatrix(depth: number): {
       matrix[2] = [
         makeVectorNode(depth, 2, 0, 'COMBAT'),
         makeVectorNode(depth, 2, 1, 'BLACK_MARKET'),
-        makeVectorNode(depth, 2, 2, 'NARRATIVE_EVENT'),
+        makeVectorNode(depth, 2, 2, 'ANOMALY'),
       ];
       continue;
     }
@@ -174,7 +176,7 @@ export function generateDepthEncounterMatrix(depth: number): {
     if (encounter === PENULT_ENCOUNTER_INDEX) {
       matrix[PENULT_ENCOUNTER_INDEX] = [
         makeVectorNode(depth, PENULT_ENCOUNTER_INDEX, 0, 'SANCTUARY'),
-        makeVectorNode(depth, PENULT_ENCOUNTER_INDEX, 1, 'NARRATIVE_EVENT'),
+        makeVectorNode(depth, PENULT_ENCOUNTER_INDEX, 1, 'ANOMALY'),
       ];
       continue;
     }
@@ -258,6 +260,7 @@ function incursionEncounterToRadarType(encounterType: IncursionEncounterType): E
   switch (encounterType) {
     case 'SANCTUARY':
       return 'REST';
+    case 'ANOMALY':
     case 'NARRATIVE_EVENT':
       return 'SKILL_CHECK';
     case 'BLACK_MARKET':

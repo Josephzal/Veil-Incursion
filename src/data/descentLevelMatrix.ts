@@ -15,7 +15,7 @@ import type { BreathingRoomKind } from './encounterGenerator';
 export type MatrixSpawnKind =
   | 'STANDARD_COMBAT'
   | 'ELITE_COMBAT'
-  | 'NARRATIVE_EVENT'
+  | 'ANOMALY'
   | 'HARD_NARRATIVE'
   | 'BLACK_MARKET'
   | 'FACTION_VAULT_HIGH'
@@ -35,9 +35,9 @@ interface LevelMatrixSpec {
 const LEVEL_MATRIX: Record<number, LevelMatrixSpec> = {
   /** Act I — The Drop */
   1: { minChoices: 1, maxChoices: 1, guaranteed: ['STANDARD_COMBAT'], pool: [] },
-  2: { minChoices: 2, maxChoices: 2, guaranteed: [], pool: ['STANDARD_COMBAT', 'NARRATIVE_EVENT'] },
-  3: { minChoices: 2, maxChoices: 2, guaranteed: [], pool: ['STANDARD_COMBAT', 'NARRATIVE_EVENT'] },
-  4: { minChoices: 2, maxChoices: 2, guaranteed: [], pool: ['STANDARD_COMBAT', 'NARRATIVE_EVENT'] },
+  2: { minChoices: 2, maxChoices: 2, guaranteed: [], pool: ['STANDARD_COMBAT', 'ANOMALY'] },
+  3: { minChoices: 2, maxChoices: 2, guaranteed: [], pool: ['STANDARD_COMBAT', 'ANOMALY'] },
+  4: { minChoices: 2, maxChoices: 2, guaranteed: [], pool: ['STANDARD_COMBAT', 'ANOMALY'] },
   5: {
     minChoices: 2,
     maxChoices: 3,
@@ -48,26 +48,26 @@ const LEVEL_MATRIX: Record<number, LevelMatrixSpec> = {
   6: {
     minChoices: 2,
     maxChoices: 3,
-    guaranteed: ['VEIL_BLEED_BOON'],
-    pool: ['STANDARD_COMBAT', 'NARRATIVE_EVENT'],
+    guaranteed: [],
+    pool: ['STANDARD_COMBAT', 'ANOMALY'],
   },
   7: {
     minChoices: 3,
     maxChoices: 4,
     guaranteed: [],
-    pool: ['STANDARD_COMBAT', 'ELITE_COMBAT', 'NARRATIVE_EVENT', 'FACTION_VAULT_HIGH'],
+    pool: ['STANDARD_COMBAT', 'ELITE_COMBAT', 'ANOMALY', 'FACTION_VAULT_HIGH'],
   },
   8: {
     minChoices: 2,
     maxChoices: 3,
     guaranteed: [],
-    pool: ['STANDARD_COMBAT', 'ELITE_COMBAT', 'NARRATIVE_EVENT'],
+    pool: ['STANDARD_COMBAT', 'ELITE_COMBAT', 'ANOMALY'],
   },
   9: {
     minChoices: 2,
     maxChoices: 3,
     guaranteed: [],
-    pool: ['ELITE_COMBAT', 'FACTION_VAULT_HIGH', 'NARRATIVE_EVENT'],
+    pool: ['ELITE_COMBAT', 'FACTION_VAULT_HIGH', 'ANOMALY'],
   },
   10: {
     minChoices: 2,
@@ -79,8 +79,8 @@ const LEVEL_MATRIX: Record<number, LevelMatrixSpec> = {
   11: {
     minChoices: 2,
     maxChoices: 3,
-    guaranteed: ['VEIL_BLEED_BOON'],
-    pool: ['ELITE_COMBAT', 'HARD_NARRATIVE'],
+    guaranteed: [],
+    pool: ['ELITE_COMBAT', 'ANOMALY'],
   },
   12: {
     minChoices: 2,
@@ -92,7 +92,7 @@ const LEVEL_MATRIX: Record<number, LevelMatrixSpec> = {
     minChoices: 2,
     maxChoices: 2,
     guaranteed: [],
-    pool: ['ELITE_COMBAT', 'HARD_NARRATIVE'],
+    pool: ['ELITE_COMBAT', 'ANOMALY'],
   },
   14: {
     minChoices: 2,
@@ -161,18 +161,18 @@ function spawnKindToTypes(kind: MatrixSpawnKind): {
         label: 'VECTOR // ELITE HEAT SIGNATURE',
         combatTier: 'ELITE',
       };
-    case 'NARRATIVE_EVENT':
+    case 'ANOMALY':
       return {
-        encounterType: 'NARRATIVE_EVENT',
-        type: 'NARRATIVE_EVENT',
-        label: 'VECTOR // DATA SPIKE / NARRATIVE BAND',
+        encounterType: 'ANOMALY',
+        type: 'ANOMALY',
+        label: 'VECTOR // UNIDENTIFIED SIGNAL',
         combatTier: 'STANDARD',
       };
     case 'HARD_NARRATIVE':
       return {
-        encounterType: 'NARRATIVE_EVENT',
-        type: 'NARRATIVE_EVENT',
-        label: 'VECTOR // HIGH-STAKES NARRATIVE LOCK',
+        encounterType: 'ANOMALY',
+        type: 'ANOMALY',
+        label: 'VECTOR // UNIDENTIFIED SIGNAL (HIGH BAND)',
         combatTier: 'STANDARD',
         isHardNarrative: true,
         narrativeTags: ['vault', 'tech'],
@@ -193,9 +193,9 @@ function spawnKindToTypes(kind: MatrixSpawnKind): {
       };
     case 'FACTION_VAULT_HIGH':
       return {
-        encounterType: 'NARRATIVE_EVENT',
-        type: 'NARRATIVE_EVENT',
-        label: 'VECTOR // FACTION VAULT (HIGH-YIELD)',
+        encounterType: 'ANOMALY',
+        type: 'ANOMALY',
+        label: 'VECTOR // UNIDENTIFIED SIGNAL (VAULT BAND)',
         combatTier: 'STANDARD',
         narrativeTags: ['vault', 'tech'],
       };
@@ -357,8 +357,7 @@ export interface MaterializeLevelClusterParams {
 
 function breathingRoomToMatrixKind(kind: BreathingRoomKind): MatrixSpawnKind {
   if (kind === 'BLACK_MARKET') return 'BLACK_MARKET';
-  if (kind === 'VEIL_BLEED_BOON') return 'VEIL_BLEED_BOON';
-  return 'FACTION_VAULT_HIGH';
+  return 'ANOMALY';
 }
 
 /** Roll forward-vector options for the upcoming depth using the 15-level golden rules matrix. */
@@ -381,7 +380,7 @@ export function materializeLevelCluster(params: MaterializeLevelClusterParams): 
   if (runSegment && isBreathingRoomLevel(runSegment, localLevel)) {
     const roll = rand();
     const breathingKind: BreathingRoomKind =
-      roll < 0.4 ? 'BLACK_MARKET' : roll < 0.8 ? 'VEIL_BLEED_BOON' : 'RESOURCE_HARVEST';
+      roll < 0.5 ? 'BLACK_MARKET' : 'RESOURCE_HARVEST';
     const kind = breathingRoomToMatrixKind(breathingKind);
     return [makeMatrixNode(kind, graphDepth, district, localLevel, 0, stepIndex, sectorTier, seed)];
   }

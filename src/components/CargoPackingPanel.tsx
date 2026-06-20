@@ -6,9 +6,12 @@ import {
 } from '../constants/harvestLayout';
 import { calculateCargoMarketValue, calculateGridOccupancy } from '../data/cargoGridEngine';
 import CargoGridBoard, {
+  CARGO_CELL_SIZE,
   CARGO_GRID_FRAME_HEIGHT,
   CARGO_GRID_FRAME_SIZE,
   CARGO_GRID_FRAME_WIDTH,
+  cargoGridFrameDimensions,
+  type CargoDragSource,
 } from './CargoGridBoard';
 import type { CargoRunState } from '../types/cargoGrid';
 import type { TerminalTheme } from '../types/theme';
@@ -36,6 +39,30 @@ interface CargoPackingPanelProps {
   /** Harvest screen: grid centered on screen, sidecar anchored to cell grid. */
   harvestLayout?: boolean;
   gridSidecar?: React.ReactNode;
+  externalHover?: { itemId: import('../types/cargoGrid').CargoItemId; row: number; col: number } | null;
+  selectedPlacementItemId?: import('../types/cargoGrid').CargoItemId | null;
+  onPlaceAtCell?: (row: number, col: number) => void;
+  onGridMetricsMeasured?: (metrics: {
+    pageX: number;
+    pageY: number;
+    width: number;
+    height: number;
+    cellSize: number;
+    cellGap: number;
+  }) => void;
+  packHeaderLabel?: string;
+  /** Hub loadout: skip bordered header — parent renders stats. */
+  hidePackHeader?: boolean;
+  /** Hub loadout: no flex expansion, compact padding. */
+  embedded?: boolean;
+  /** Hub loadout: smaller cargo cells. */
+  compactCellSize?: number;
+  onHubExternalDrop?: (
+    source: CargoDragSource,
+    absoluteX: number,
+    absoluteY: number,
+  ) => boolean;
+  onDragPositionChange?: (payload: { source: CargoDragSource; x: number; y: number } | null) => void;
 }
 
 export default function CargoPackingPanel({
@@ -55,6 +82,16 @@ export default function CargoPackingPanel({
   onHarvestFloorMeasured,
   fixedExternalSlotCount,
   resolveContainmentSlotIndex,
+  externalHover,
+  selectedPlacementItemId,
+  onPlaceAtCell,
+  onGridMetricsMeasured,
+  packHeaderLabel = 'Cargo Grid // Pack Extracted Resources',
+  hidePackHeader = false,
+  embedded = false,
+  compactCellSize,
+  onHubExternalDrop,
+  onDragPositionChange,
 }: CargoPackingPanelProps): React.JSX.Element {
   const { width: screenWidth } = useWindowDimensions();
   const harvestSidecarWidth = useMemo(
@@ -62,22 +99,35 @@ export default function CargoPackingPanel({
     [harvestLayout, screenWidth],
   );
 
+  const cellSize = compactCellSize ?? CARGO_CELL_SIZE;
+  const frame = useMemo(() => cargoGridFrameDimensions(cellSize), [cellSize]);
+
   const occupancy = calculateGridOccupancy(cargo);
   const occupancyPct = Math.round(occupancy * 100);
   const cargoValue = calculateCargoMarketValue(cargo);
   const accent = accentColor ?? '#00ff33';
 
   return (
-    <View style={[styles.root, harvestLayout ? styles.rootHarvest : null]}>
-      <View style={[styles.boardColumn, harvestLayout ? styles.boardColumnHarvest : null]}>
-        <View style={[styles.headerContainer, harvestLayout ? styles.headerContainerHarvest : null, { borderColor: theme.borderColor, width: CARGO_GRID_FRAME_SIZE }]}>
-          <Text style={[styles.headerLabel, { color: theme.mutedColor }]}>
-            Cargo Grid // Pack Extracted Resources
-          </Text>
-          <Text style={[styles.statsLine, { color: theme.primaryColor }]}>
-            {`OCCUPANCY ${occupancyPct}% // VALUE ${cargoValue}`}
-          </Text>
-        </View>
+    <View style={[
+      styles.root,
+      harvestLayout ? styles.rootHarvest : null,
+      embedded ? styles.rootEmbedded : null,
+    ]}>
+      <View style={[
+        styles.boardColumn,
+        harvestLayout ? styles.boardColumnHarvest : null,
+        embedded ? styles.boardColumnEmbedded : null,
+      ]}>
+        {!hidePackHeader ? (
+          <View style={[styles.headerContainer, harvestLayout ? styles.headerContainerHarvest : null, { borderColor: theme.borderColor, width: frame.frameWidth }]}>
+            <Text style={[styles.headerLabel, { color: theme.mutedColor }]}>
+              {packHeaderLabel}
+            </Text>
+            <Text style={[styles.statsLine, { color: theme.primaryColor }]}>
+              {`OCCUPANCY ${occupancyPct}% // VALUE ${cargoValue}`}
+            </Text>
+          </View>
+        ) : null}
 
         <View style={harvestLayout ? styles.gridAnchor : undefined}>
           <CargoGridBoard
@@ -97,6 +147,13 @@ export default function CargoPackingPanel({
             fixedExternalSlotCount={harvestLayout ? fixedExternalSlotCount : undefined}
             resolveContainmentSlotIndex={harvestLayout ? resolveContainmentSlotIndex : undefined}
             stableExternalBay={harvestLayout}
+            externalHover={externalHover}
+            selectedPlacementItemId={selectedPlacementItemId}
+            onPlaceAtCell={onPlaceAtCell}
+            onGridMetricsMeasured={onGridMetricsMeasured}
+            onHubExternalDrop={onHubExternalDrop}
+            onDragPositionChange={onDragPositionChange}
+            cellSize={cellSize}
           />
 
           {harvestLayout && gridSidecar ? (
@@ -148,6 +205,12 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
   },
+  rootEmbedded: {
+    flex: 0,
+    flexGrow: 0,
+    paddingVertical: 0,
+    width: '100%',
+  },
   boardColumn: {
     alignItems: 'center',
     gap: 16,
@@ -159,6 +222,10 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
     alignSelf: 'center',
     gap: 16,
+  },
+  boardColumnEmbedded: {
+    gap: 0,
+    maxWidth: '100%',
   },
   gridAnchor: {
     position: 'relative',

@@ -59,10 +59,10 @@ function hashSeed(input: string): number {
 function rollEncounter(graphDepth: number): IncursionEncounterType {
   const roll = Math.random();
   if (graphDepth <= 2) {
-    return roll < 0.55 ? 'COMBAT' : 'NARRATIVE_EVENT';
+    return roll < 0.55 ? 'COMBAT' : 'ANOMALY';
   }
   if (roll < 0.32) return 'COMBAT';
-  if (roll < 0.48) return 'NARRATIVE_EVENT';
+  if (roll < 0.48) return 'ANOMALY';
   if (roll < 0.62) return 'RESOURCE_HARVEST';
   return 'BLACK_MARKET';
 }
@@ -72,6 +72,8 @@ function encounterToType(encounterType: IncursionEncounterType, isAnomalyNest: b
   switch (encounterType) {
     case 'SANCTUARY':
       return 'SANCTUARY';
+    case 'ANOMALY':
+      return 'ANOMALY';
     case 'NARRATIVE_EVENT':
       return 'NARRATIVE_EVENT';
     case 'BLACK_MARKET':
@@ -92,6 +94,7 @@ function threatBandForEncounter(
   if (encounterType === 'SANCTUARY') return 'LOW';
   if (encounterType === 'BLACK_MARKET') return 'MODERATE';
   if (encounterType === 'RESOURCE_HARVEST') return 'MODERATE';
+  if (encounterType === 'ANOMALY') return 'MODERATE';
   if (encounterType === 'NARRATIVE_EVENT') return 'MODERATE';
   return 'MODERATE';
 }
@@ -178,7 +181,7 @@ function buildSectorMeta(
     resonanceDelta: Math.round(resonanceDelta * tierYield),
     isFocused: false,
     yieldMultiplier: tierYield * depthYield,
-    creditBonus: encounterType === 'NARRATIVE_EVENT' && hashSeed(nodeId) % 5 === 0 ? 35 : 0,
+    creditBonus: (encounterType === 'ANOMALY' || encounterType === 'NARRATIVE_EVENT') && hashSeed(nodeId) % 5 === 0 ? 35 : 0,
     combatTier,
     probableAffinity: isCombatNode
       ? rollProbableAffinity(encounterType, combatTier, nodeId)

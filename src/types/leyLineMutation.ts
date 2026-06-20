@@ -1,4 +1,4 @@
-export type LeyLineMutationTier = 'KINETIC' | 'OCCULT' | 'SYSTEM' | 'AP_BOOST';
+export type LeyLineMutationTier = 'KINETIC' | 'OCCULT' | 'SYSTEM' | 'SYNAPTIC' | 'AP_BOOST';
 
 export type LeyLineMutationId =
   | 'SHARPENED'
@@ -34,12 +34,23 @@ export type LeyLineMutationId =
   | 'EXECUTIONERS_HIGH'
   | 'FLAWLESS_CONDUIT'
   | 'BLOOD_FOR_TIME'
-  | 'MOMENTUM_SHIFT';
+  | 'MOMENTUM_SHIFT'
+  | 'MOMENTUM_TRANSFER'
+  | 'ABYSSAL_ERUPTION'
+  | 'EXECUTIONERS_STRIDE'
+  | 'SPALL_SHATTER'
+  | 'VOID_RESONANCE'
+  | 'TAR_TRAPPED'
+  | 'SLIPSTREAM'
+  | 'NECROTIC_ATROPHY'
+  | 'SUNDER_WEAVE'
+  | 'VOIDS_TOLL';
 
 export interface LeyLineMutationDefinition {
   id: LeyLineMutationId;
   name: string;
   tier: LeyLineMutationTier;
   description: string;
+  /** Tag-based trigger summary for terminal readouts. */
   effect: string;
 }

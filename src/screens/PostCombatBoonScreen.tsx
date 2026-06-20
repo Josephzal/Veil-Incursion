@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import CabalBg from '../../assets/images/location images/cabal.png';
 import IncursionShell from '../components/IncursionShell';
@@ -23,27 +23,40 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
   const { theme } = useTerminal();
   const {
     runState,
+    activeIncursion,
     postCombatMutationChoices,
     preparePostCombatMutations,
     completeNodeAfterMutation,
     endRun,
   } = useRun();
-  const { startGameOver } = useGameFlow();
+  const { startGameOver, startResourceHarvest } = useGameFlow();
   const { finalizeIncursionAdvance } = useDescentNavigator();
   const selectingRef = useRef(false);
   const [selectedMutationId, setSelectedMutationId] = useState<LeyLineMutationId | null>(null);
 
   const mutationsPreparedRef = useRef(false);
 
+  const advanceAfterBoon = useCallback((message: string) => {
+    if (activeIncursion.pendingHarvestReturn === 'POST_COMBAT') {
+      startResourceHarvest();
+      return;
+    }
+    finalizeIncursionAdvance(message);
+  }, [activeIncursion.pendingHarvestReturn, finalizeIncursionAdvance, startResourceHarvest]);
+
   useEffect(() => {
     if (postCombatMutationChoices.length === 0 && !mutationsPreparedRef.current) {
       mutationsPreparedRef.current = true;
       const choices = preparePostCombatMutations();
       if (choices.length === 0) {
-        finalizeIncursionAdvance('Ley-Scar acquisition blocked — node advance continues.');
+        advanceAfterBoon('Ley-Scar acquisition blocked — node advance continues.');
       }
     }
-  }, [finalizeIncursionAdvance, postCombatMutationChoices.length, preparePostCombatMutations]);
+  }, [
+    advanceAfterBoon,
+    postCombatMutationChoices.length,
+    preparePostCombatMutations,
+  ]);
 
   const handleContinue = () => {
     if (!selectedMutationId || selectingRef.current) return;
@@ -57,7 +70,7 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
 
     const picked = postCombatMutationChoices.find((m) => m.id === selectedMutationId);
     completeNodeAfterMutation(selectedMutationId);
-    finalizeIncursionAdvance(`Ley-Line mutation secured: ${picked?.name ?? selectedMutationId}.`);
+    advanceAfterBoon(`Ley-Line mutation secured: ${picked?.name ?? selectedMutationId}.`);
   };
 
   return (

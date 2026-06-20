@@ -18,6 +18,7 @@ export type DescentRoute =
 
 function routeForNodeType(type: RunNodeType | null): DescentRoute {
   switch (type) {
+    case 'ANOMALY':
     case 'NARRATIVE_EVENT':
       return 'NARRATIVE';
     case 'STANDARD_COMBAT':
@@ -63,7 +64,7 @@ export function useDescentNavigator() {
     startPostCombatBoon,
     goToHub,
   } = useGameFlow();
-  const { addCredits, addRiftIron } = usePlayerAccount();
+  const { addCredits, addRiftIron, persistRunExtraction } = usePlayerAccount();
 
   const incursionRef = useRef(activeIncursion);
   incursionRef.current = activeIncursion;
@@ -101,15 +102,17 @@ export function useDescentNavigator() {
   }, [commitNodeEncounter, startBlackMarket, startNarrative, startCombat, startRest, startResourceHarvest, startPostCombatBoon]);
 
   const finalizeSectorExtraction = useCallback(() => {
+    const inc = incursionRef.current;
+    persistRunExtraction({ cargo: inc.cargo, aegisLoadout: inc.aegisLoadout });
     const credits = calculateSectorExtractionPayout();
     const riftIron = Math.max(5, Math.floor(credits / 40));
     addCredits(credits);
     addRiftIron(riftIron);
-    appendRunLog(`>> SECTOR EXTRACTION COMPLETE — +${credits} CREDITS (incl. cargo), +${riftIron} RIFT IRON.`);
+    appendRunLog(`>> SECTOR EXTRACTION COMPLETE — +${credits} CREDITS, LOOT ROUTED TO HOME STASH, +${riftIron} RIFT IRON.`);
     endRun('SECTOR EXTRACTION SECURED');
     goToHub();
     return { route: 'EXTRACT_SUCCESS' as const };
-  }, [addCredits, addRiftIron, appendRunLog, calculateSectorExtractionPayout, endRun, goToHub]);
+  }, [addCredits, addRiftIron, appendRunLog, calculateSectorExtractionPayout, endRun, goToHub, persistRunExtraction]);
 
   const finalizeIncursionAdvance = useCallback(
     (message: string) => {

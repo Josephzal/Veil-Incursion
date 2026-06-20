@@ -7,6 +7,7 @@ import type { SectorGraph } from '../types/sector';
 const TERMINAL_ACCENT = '#00ff33';
 
 const NODE_TYPE_LABEL: Record<RunNodeType, string> = {
+  ANOMALY: 'ANOMALY',
   NARRATIVE_EVENT: 'NARRATIVE EVENT',
   STANDARD_COMBAT: 'COMBAT VECTOR',
   ELITE_COMBAT: 'ELITE CHECKPOINT',

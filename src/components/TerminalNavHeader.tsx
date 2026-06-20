@@ -4,9 +4,9 @@ import { useTerminal } from '../context/TerminalContext';
 import { TerminalView } from '../types/terminalNav';
 
 const NAV_ITEMS: Array<{ key: TerminalView; label: string }> = [
-  { key: 'BADGE', label: '01 // IDENTITY BADGE' },
-  { key: 'MAP', label: '02 // SHADOW WAR' },
-  { key: 'MANIFEST', label: '03 // ASSET MANIFEST' },
+  { key: 'BADGE', label: 'IDENTITY BADGE' },
+  { key: 'MAP', label: 'SHADOW WAR' },
+  { key: 'SAFEHOUSE', label: 'SAFEHOUSE' },
 ];
 
 interface TerminalNavHeaderProps {

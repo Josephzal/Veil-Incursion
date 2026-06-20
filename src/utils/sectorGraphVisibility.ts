@@ -63,6 +63,7 @@ export function isEdgeDimmed(
 
 export function nodeGlyphForType(type: SectorGraphNode['type'] | IncursionNode['type']): string {
   const glyphs: Record<string, string> = {
+    ANOMALY: '?',
     NARRATIVE_EVENT: '◆',
     STANDARD_COMBAT: '⚔',
     ELITE_COMBAT: '☠',

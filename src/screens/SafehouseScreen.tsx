@@ -11,6 +11,7 @@ import { useGameFlow } from '../context/GameFlowContext';
 import { calculateCargoMarketValue, calculateGridOccupancy } from '../data/cargoGridEngine';
 import { DISTRICT_NAMES } from '../data/districtPacing';
 import type { AegisAbilityId, AegisLoadout } from '../types/aegisCombat';
+import { isAbilityUnlocked } from '../data/aegisAbilityUnlockEngine';
 import { validateLoadoutCommit } from '../utils/aegisLoadoutUtils';
 
 const TERMINAL_ACCENT = '#3ecf6e';
@@ -40,7 +41,7 @@ export default function SafehouseScreen(): React.JSX.Element {
     getSafehouseIntel,
     setAegisLoadout,
   } = useRun();
-  const { account, depositBankedCargo, setAegisLoadout: setAccountAegisLoadout } = usePlayerAccount();
+  const { account, depositBankedCargo, setAegisLoadout: setAccountAegisLoadout, unlockAegisAbility } = usePlayerAccount();
   const { startScanning } = useGameFlow();
 
   const [activeTab, setActiveTab] = useState<SafehouseTab>('PAYLOAD');
@@ -92,16 +93,26 @@ export default function SafehouseScreen(): React.JSX.Element {
 
   const assignAbilityToSlot = useCallback((abilityId: AegisAbilityId) => {
     if (abilityId === 'EVISCERATE') return;
+    if (!isAbilityUnlocked(account.unlockedAegisAbilities, abilityId)) {
+      setLoadoutStatus(`>> ${abilityId.replace(/_/g, ' ')} NOT UNLOCKED — DECRYPT PROTOCOL FIRST.`);
+      return;
+    }
     setLoadoutDraft((prev) => {
       const next = [...prev];
       next[selectedSlot] = abilityId;
       return next;
     });
     setLoadoutStatus(null);
-  }, [selectedSlot]);
+  }, [account.unlockedAegisAbilities, selectedSlot]);
+
+  const handleUnlockAbility = useCallback((abilityId: AegisAbilityId) => {
+    const result = unlockAegisAbility(abilityId);
+    appendRunLog(result.logLine);
+    setLoadoutStatus(result.logLine);
+  }, [appendRunLog, unlockAegisAbility]);
 
   const commitLoadout = useCallback(() => {
-    const rejection = validateLoadoutCommit(loadoutDraft);
+    const rejection = validateLoadoutCommit(loadoutDraft, account.unlockedAegisAbilities);
     if (rejection) {
       setLoadoutStatus(rejection);
       setStatusLine(rejection);
@@ -119,7 +130,7 @@ export default function SafehouseScreen(): React.JSX.Element {
     const success = '>> LOADOUT COMMITTED — COMBAT DECK WILL DEPLOY ON NEXT INCURSION.';
     setLoadoutStatus(success);
     setStatusLine(success);
-  }, [appendRunLog, loadoutDraft, setAccountAegisLoadout, setAegisLoadout]);
+  }, [appendRunLog, account.unlockedAegisAbilities, loadoutDraft, setAccountAegisLoadout, setAegisLoadout]);
 
   return (
     <IncursionShell>
@@ -190,7 +201,10 @@ export default function SafehouseScreen(): React.JSX.Element {
                 selectedSlot={selectedSlot}
                 onSelectSlot={setSelectedSlot}
                 onAssignAbility={assignAbilityToSlot}
+                onUnlockAbility={handleUnlockAbility}
                 onCommit={commitLoadout}
+                unlockedAbilities={account.unlockedAegisAbilities}
+                resourceStash={account.resourceStash}
                 theme={{
                   accentColor: TERMINAL_ACCENT,
                   borderColor: BORDER,

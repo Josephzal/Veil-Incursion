@@ -147,6 +147,7 @@ export default function CombatScreen(): React.JSX.Element {
     clearNarrativeBoonStatusEffects,
     isPostCombatBoonBlocked,
     recordRunKillAttacker,
+    clearEncounterUltimateDisabled,
   } = useRun();
   const { completeCurrentNode } = useNodeProgression();
   const { getWeaponCombatStats, account, addLockedContainer } = usePlayerAccount();
@@ -432,6 +433,7 @@ export default function CombatScreen(): React.JSX.Element {
     }
 
     syncAfterCombat(result.remainingHp, result.remainingStamina);
+    clearEncounterUltimateDisabled();
     clearNarrativeBoonStatusEffects();
 
     if (activeIncursion.defendRiftActive) {
@@ -512,7 +514,13 @@ export default function CombatScreen(): React.JSX.Element {
     }
 
     beginPostCombatHarvest(combatDropInstanceIds);
-    startResourceHarvest();
+
+    if (isPostCombatBoonBlocked()) {
+      startResourceHarvest();
+      return;
+    }
+
+    startPostCombatBoon();
   }, [
     activeIncursion.bossProfile,
     activeIncursion.defendRiftActive,
@@ -667,6 +675,8 @@ export default function CombatScreen(): React.JSX.Element {
                 playerCritChanceBonus={playerCritChanceBonus}
                 onPlayerCritImpact={handlePlayerCritImpact}
                 godModeActive={activeIncursion.godModeActive}
+                abilityGrafts={activeIncursion.abilityGrafts}
+                encounterUltimateDisabled={activeIncursion.encounterUltimateDisabled}
               />
             </View>
           </View>

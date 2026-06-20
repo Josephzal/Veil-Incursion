@@ -24,24 +24,34 @@ import {
   InventoryItem,
   PlayerAccount,
 } from '../types/game';
-import type { AegisLoadout } from '../types/aegisCombat';
+import type { AegisAbilityId, AegisLoadout } from '../types/aegisCombat';
 import { DEFAULT_AEGIS_LOADOUT } from '../types/aegisCombat';
 import { normalizeAegisLoadout } from '../utils/aegisLoadoutUtils';
+import {
+  deductAbilityUnlockCost,
+  isAbilityUnlocked,
+  normalizeUnlockedAegisAbilities,
+} from '../data/aegisAbilityUnlockEngine';
+import { getAbilityDefinition } from '../data/aegisAbilities';
 import { createDefaultBankedCargo, createDefaultCargoRunState } from '../types/cargoGrid';
 import type { GlobalBankedCargo, CargoRunState } from '../types/cargoGrid';
 import {
   applyFenceSale,
   applyHubContrabandPurchase,
+  loadHubConsumableIntoCargoAtCell,
   loadStashResourceIntoCargo,
+  loadStashResourceIntoCargoAtCell,
   calculateStashUsed,
   clearTacticalSlotState,
   createDefaultTacticalLoadout,
   equipTacticalFromHub,
   finalizeDescentLoadout,
   HUB_STASH_CAPACITY,
-  returnCargoResourceToStash,
+  returnCargoItemToHubStash,
 } from '../data/hubSafehouseEngine';
+import { depositAllCargoToHubAccount } from '../data/extractionPersistenceEngine';
 import { relocateCargoItem } from '../data/cargoGridEngine';
+import { isResourceItemId } from '../data/resourceRegistry';
 import type { FenceableResourceId, ResourceItemId } from '../types/resourceItem';
 import { MacroSectorId, RegionalPresenceState } from '../types/regional';
 import { createEmptyResourceStash, canAffordRecipe, deductRecipeFromStash } from '../data/resourceStashEngine';
@@ -107,6 +117,7 @@ export function createDefaultPlayerAccount(): PlayerAccount {
     inventory,
     bankedCargo: createDefaultBankedCargo(),
     aegisLoadout: [...DEFAULT_AEGIS_LOADOUT],
+    unlockedAegisAbilities: [...normalizeUnlockedAegisAbilities(undefined, DEFAULT_AEGIS_LOADOUT)],
     resourceStash: {
       'ley-slag': 6,
       'echo-glass-shard': 10,
@@ -157,6 +168,10 @@ function mergeStoredAccount(parsed: Partial<PlayerAccount>): PlayerAccount {
       ...parsed.bankedCargo,
     },
     aegisLoadout: normalizeAegisLoadout(parsed.aegisLoadout),
+    unlockedAegisAbilities: normalizeUnlockedAegisAbilities(
+      parsed.unlockedAegisAbilities,
+      normalizeAegisLoadout(parsed.aegisLoadout),
+    ),
     resourceStash: {
       ...createEmptyResourceStash(),
       ...parsed.resourceStash,
@@ -208,6 +223,10 @@ interface PlayerAccountContextType {
   setMetropolitanNode: (node: string, sectorId?: MacroSectorId) => void;
   depositBankedCargo: (delta: GlobalBankedCargo) => void;
   setAegisLoadout: (loadout: AegisLoadout) => void;
+  unlockAegisAbility: (abilityId: AegisAbilityId) => {
+    success: boolean;
+    logLine: string;
+  };
   craftRecipe: (recipeId: string) => { success: boolean; logLine: string };
   depositResourceStash: (delta: ResourceQuantity) => void;
   addLockedContainer: (templateId: UnidentifiedTemplateId) => void;
@@ -215,12 +234,18 @@ interface PlayerAccountContextType {
   setEquippedBlueprint: (blueprintId: BlueprintId | null) => void;
   relocatePreRunCargoItem: (instanceId: string, row: number, col: number) => boolean;
   loadStashResourceToCargo: (resourceId: ResourceItemId) => { success: boolean; logLine: string };
+  loadStashItemToCargoAtCell: (
+    itemId: CargoItemId,
+    row: number,
+    col: number,
+  ) => { success: boolean; logLine: string };
   returnPreRunCargoToStash: (instanceId: string) => { success: boolean; logLine: string };
   equipTacticalSlot: (slotIndex: 0 | 1 | 2, itemId: CargoItemId) => { success: boolean; logLine: string };
   clearTacticalSlot: (slotIndex: 0 | 1 | 2) => void;
   purchaseHubContraband: (cargoId: CargoItemId, discountPct?: number) => { success: boolean; logLine: string };
   sellFenceResource: (resourceId: FenceableResourceId, quantity?: number) => { success: boolean; logLine: string };
   commitDescentLoadout: () => CargoRunState;
+  persistRunExtraction: (payload: { cargo: CargoRunState; aegisLoadout: AegisLoadout }) => void;
   getStashCapacitySnapshot: () => { used: number; max: number };
   replaceResourceStash: (stash: ResourceQuantity) => void;
 }
@@ -453,6 +478,26 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
     [updateAccount],
   );
 
+  const unlockAegisAbility = useCallback(
+    (abilityId: AegisAbilityId): { success: boolean; logLine: string } => {
+      const def = getAbilityDefinition(abilityId);
+      if (isAbilityUnlocked(account.unlockedAegisAbilities, abilityId)) {
+        return { success: false, logLine: `>> ${def.label} ALREADY UNLOCKED.` };
+      }
+      const nextStash = deductAbilityUnlockCost(account.resourceStash, def.unlockCost);
+      if (!nextStash) {
+        return { success: false, logLine: `>> UNLOCK REJECTED — INSUFFICIENT RESOURCES FOR ${def.label}.` };
+      }
+      updateAccount((prev) => ({
+        ...prev,
+        resourceStash: nextStash,
+        unlockedAegisAbilities: [...prev.unlockedAegisAbilities, abilityId],
+      }));
+      return { success: true, logLine: `>> ${def.label} UNLOCKED — COMBAT PROTOCOL INTEGRATED.` };
+    },
+    [account.resourceStash, account.unlockedAegisAbilities, updateAccount],
+  );
+
   const depositResourceStash = useCallback(
     (delta: ResourceQuantity) => {
       updateAccount((prev) => {
@@ -599,22 +644,62 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
     [updateAccount],
   );
 
-  const returnPreRunCargoToStash = useCallback(
-    (instanceId: string): { success: boolean; logLine: string } => {
+  const loadStashItemToCargoAtCell = useCallback(
+    (itemId: CargoItemId, row: number, col: number): { success: boolean; logLine: string } => {
       let success = false;
       updateAccount((prev) => {
-        const result = returnCargoResourceToStash(prev.resourceStash, prev.preRunCargo, instanceId);
+        if (isResourceItemId(itemId)) {
+          const result = loadStashResourceIntoCargoAtCell(prev.resourceStash, prev.preRunCargo, itemId, row, col);
+          if (!result) return prev;
+          success = true;
+          return {
+            ...prev,
+            resourceStash: result.stash,
+            preRunCargo: result.cargo,
+          };
+        }
+        const result = loadHubConsumableIntoCargoAtCell(prev.hubCraftedConsumables, prev.preRunCargo, itemId, row, col);
         if (!result) return prev;
         success = true;
         return {
           ...prev,
-          resourceStash: result.stash,
+          hubCraftedConsumables: result.hubCraftedConsumables,
           preRunCargo: result.cargo,
         };
       });
+      const label = itemId.replace(/-/g, ' ').toUpperCase();
       return success
-        ? { success: true, logLine: '>> CARGO → STASH — RESOURCE RETURNED TO VAULT.' }
-        : { success: false, logLine: '>> RETURN REJECTED — ITEM NOT A STASH RESOURCE.' };
+        ? { success: true, logLine: `>> STASH → CARGO [${row},${col}] — ${label} LOADED.` }
+        : { success: false, logLine: '>> CARGO TRANSFER REJECTED — STASH EMPTY OR SLOT INVALID.' };
+    },
+    [updateAccount],
+  );
+
+  const returnPreRunCargoToStash = useCallback(
+    (instanceId: string): { success: boolean; logLine: string } => {
+      let success = false;
+      let itemId: CargoItemId | undefined;
+      updateAccount((prev) => {
+        const result = returnCargoItemToHubStash(
+          prev.resourceStash,
+          prev.hubCraftedConsumables,
+          prev.preRunCargo,
+          instanceId,
+        );
+        if (!result) return prev;
+        success = true;
+        itemId = result.itemId;
+        return {
+          ...prev,
+          resourceStash: result.resourceStash,
+          hubCraftedConsumables: result.hubCraftedConsumables,
+          preRunCargo: result.cargo,
+        };
+      });
+      const label = itemId?.replace(/-/g, ' ').toUpperCase() ?? 'ITEM';
+      return success
+        ? { success: true, logLine: `>> CARGO → STASH — ${label} RETURNED TO VAULT.` }
+        : { success: false, logLine: '>> RETURN REJECTED — ITEM NOT FOUND IN CARGO.' };
     },
     [updateAccount],
   );
@@ -717,6 +802,21 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
     return cargo;
   }, [account.preRunCargo, account.tacticalLoadout, updateAccount]);
 
+  const persistRunExtraction = useCallback(
+    (payload: { cargo: CargoRunState; aegisLoadout: AegisLoadout }) => {
+      updateAccount((prev) => {
+        const deposited = depositAllCargoToHubAccount(payload.cargo, prev, payload.aegisLoadout);
+        return {
+          ...prev,
+          resourceStash: deposited.resourceStash,
+          hubCraftedConsumables: deposited.hubCraftedConsumables,
+          aegisLoadout: normalizeAegisLoadout(deposited.aegisLoadout),
+        };
+      });
+    },
+    [updateAccount],
+  );
+
   const getStashCapacitySnapshot = useCallback(
     () => ({
       used: calculateStashUsed(account.resourceStash),
@@ -807,6 +907,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       setMetropolitanNode,
       depositBankedCargo,
       setAegisLoadout,
+      unlockAegisAbility,
       craftRecipe,
       depositResourceStash,
       addLockedContainer,
@@ -814,12 +915,14 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       setEquippedBlueprint,
       relocatePreRunCargoItem,
       loadStashResourceToCargo,
+      loadStashItemToCargoAtCell,
       returnPreRunCargoToStash,
       equipTacticalSlot,
       clearTacticalSlot,
       purchaseHubContraband,
       sellFenceResource,
       commitDescentLoadout,
+      persistRunExtraction,
       getStashCapacitySnapshot,
       replaceResourceStash,
     }),
@@ -842,6 +945,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       setMetropolitanNode,
       depositBankedCargo,
       setAegisLoadout,
+      unlockAegisAbility,
       craftRecipe,
       depositResourceStash,
       addLockedContainer,
@@ -849,12 +953,14 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       setEquippedBlueprint,
       relocatePreRunCargoItem,
       loadStashResourceToCargo,
+      loadStashItemToCargoAtCell,
       returnPreRunCargoToStash,
       equipTacticalSlot,
       clearTacticalSlot,
       purchaseHubContraband,
       sellFenceResource,
       commitDescentLoadout,
+      persistRunExtraction,
       getStashCapacitySnapshot,
       replaceResourceStash,
     ],

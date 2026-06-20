@@ -30,6 +30,28 @@ export const ADJACENT_SLOTS: Record<CombatGridSlotId, readonly CombatGridSlotId[
   BL_1: ['FL_1', 'BL_0'],
 };
 
+/** Vertical column pair (front + back) sharing the same lateral index. */
+export function columnPartnerSlot(slot: CombatGridSlotId): CombatGridSlotId | null {
+  switch (slot) {
+    case 'FL_0':
+      return 'BL_0';
+    case 'BL_0':
+      return 'FL_0';
+    case 'FL_1':
+      return 'BL_1';
+    case 'BL_1':
+      return 'FL_1';
+    default:
+      return null;
+  }
+}
+
+export function columnSlotsFor(slot: CombatGridSlotId): readonly CombatGridSlotId[] {
+  const partner = columnPartnerSlot(slot);
+  if (!partner) return [slot];
+  return slot.startsWith('FL') ? [slot, partner] : [partner, slot];
+}
+
 export function slotLabel(slot: CombatGridSlotId): string {
   switch (slot) {
     case 'FL_0':

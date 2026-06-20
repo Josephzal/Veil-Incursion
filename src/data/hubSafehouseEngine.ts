@@ -1,7 +1,9 @@
 import { BLACK_MARKET_CARGO_LISTINGS } from './blackMarket';
 import {
   addLootToContainment,
+  applyIncursionStarterCargo,
   placeCargoAtFirstOpenSlot,
+  placeCatalogItemAtCell,
   removePlacedCargoItem,
 } from './cargoGridEngine';
 import type { CargoItemId, CargoRunState } from '../types/cargoGrid';
@@ -129,6 +131,57 @@ export function loadStashResourceIntoCargo(
   return { stash: nextStash, cargo: nextCargo };
 }
 
+export function loadStashResourceIntoCargoAtCell(
+  stash: ResourceQuantity,
+  cargo: CargoRunState,
+  resourceId: ResourceItemId,
+  row: number,
+  col: number,
+): {
+  stash: ResourceQuantity;
+  cargo: CargoRunState;
+} | null {
+  if (getStashCount(stash, resourceId) <= 0) return null;
+  const nextCargo = placeCatalogItemAtCell(cargo, resourceId as CargoItemId, row, col)
+    ?? addLootToContainment(cargo, resourceId as CargoItemId, 1);
+  if (nextCargo === cargo) return null;
+
+  const nextStash = { ...stash };
+  const remaining = getStashCount(stash, resourceId) - 1;
+  if (remaining <= 0) {
+    delete nextStash[resourceId];
+  } else {
+    nextStash[resourceId] = remaining;
+  }
+  return { stash: nextStash, cargo: nextCargo };
+}
+
+export function loadHubConsumableIntoCargoAtCell(
+  hubCraftedConsumables: Partial<Record<CargoItemId, number>>,
+  cargo: CargoRunState,
+  itemId: CargoItemId,
+  row: number,
+  col: number,
+): {
+  hubCraftedConsumables: Partial<Record<CargoItemId, number>>;
+  cargo: CargoRunState;
+} | null {
+  const available = hubCraftedConsumables[itemId] ?? 0;
+  if (available <= 0) return null;
+  const nextCargo = placeCatalogItemAtCell(cargo, itemId, row, col)
+    ?? addLootToContainment(cargo, itemId, 1);
+  if (nextCargo === cargo) return null;
+
+  const nextConsumables = { ...hubCraftedConsumables };
+  const remaining = available - 1;
+  if (remaining <= 0) {
+    delete nextConsumables[itemId];
+  } else {
+    nextConsumables[itemId] = remaining;
+  }
+  return { hubCraftedConsumables: nextConsumables, cargo: nextCargo };
+}
+
 export function returnCargoResourceToStash(
   stash: ResourceQuantity,
   cargo: CargoRunState,
@@ -147,6 +200,48 @@ export function returnCargoResourceToStash(
     stash: nextStash,
     cargo: removePlacedCargoItem(cargo, instanceId),
     resourceId,
+  };
+}
+
+/** Return any hub-stashable cargo item (resource or consumable) from grid or containment to home stash. */
+export function returnCargoItemToHubStash(
+  resourceStash: ResourceQuantity,
+  hubCraftedConsumables: Partial<Record<CargoItemId, number>>,
+  cargo: CargoRunState,
+  instanceId: string,
+): {
+  resourceStash: ResourceQuantity;
+  hubCraftedConsumables: Partial<Record<CargoItemId, number>>;
+  cargo: CargoRunState;
+  itemId: CargoItemId;
+} | null {
+  const placed = cargo.grid.placed.find((item) => item.instanceId === instanceId);
+  const contained = cargo.containment.find((item) => item.instanceId === instanceId);
+  const item = placed ?? contained;
+  if (!item) return null;
+
+  let nextResourceStash = resourceStash;
+  const nextConsumables = { ...hubCraftedConsumables };
+
+  if (isResourceItemId(item.itemId)) {
+    nextResourceStash = { ...resourceStash };
+    nextResourceStash[item.itemId] = (nextResourceStash[item.itemId] ?? 0) + 1;
+  } else {
+    nextConsumables[item.itemId] = (nextConsumables[item.itemId] ?? 0) + 1;
+  }
+
+  const nextCargo = placed
+    ? removePlacedCargoItem(cargo, instanceId)
+    : {
+        ...cargo,
+        containment: cargo.containment.filter((entry) => entry.instanceId !== instanceId),
+      };
+
+  return {
+    resourceStash: nextResourceStash,
+    hubCraftedConsumables: nextConsumables,
+    cargo: nextCargo,
+    itemId: item.itemId,
   };
 }
 
@@ -204,7 +299,7 @@ export function finalizeDescentLoadout(
       cargo = addLootToContainment(cargo, itemId, 1);
     }
   });
-  return cargo;
+  return applyIncursionStarterCargo(cargo);
 }
 
 export function isHubCraftableConsumable(itemId: CargoItemId): boolean {

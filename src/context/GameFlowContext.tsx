@@ -8,10 +8,9 @@ interface GameFlowContextType {
   combatEntryActive: boolean;
   completeCombatEntry: () => void;
   goToHub: () => void;
-  openInventoryManifest: () => void;
+  openSafehouse: () => void;
   goToWelcome: () => void;
   startBoundRequisition: () => void;
-  startSafehouseHub: () => void;
   startScanning: () => void;
   startNarrative: () => void;
   startPostCombatBoon: () => void;
@@ -36,13 +35,12 @@ export function GameFlowProvider({ children }: { children: React.ReactNode }) {
   const { setTerminalView } = useTerminalNav();
 
   const goToHub = useCallback(() => setCurrentScreen('HUB'), []);
-  const openInventoryManifest = useCallback(() => {
-    setTerminalView('MANIFEST');
+  const openSafehouse = useCallback(() => {
+    setTerminalView('SAFEHOUSE');
     setCurrentScreen('HUB');
   }, [setTerminalView]);
   const goToWelcome = useCallback(() => setCurrentScreen('WELCOME'), []);
   const startBoundRequisition = useCallback(() => setCurrentScreen('BOUND_REQUISITION'), []);
-  const startSafehouseHub = useCallback(() => setCurrentScreen('SAFEHOUSE_HUB'), []);
   const startScanning = useCallback(() => setCurrentScreen('SCANNING'), []);
   const startNarrative = useCallback(() => setCurrentScreen('NARRATIVE'), []);
   const startPostCombatBoon = useCallback(() => setCurrentScreen('POST_COMBAT_BOON'), []);
@@ -83,10 +81,9 @@ export function GameFlowProvider({ children }: { children: React.ReactNode }) {
       combatEntryActive,
       completeCombatEntry,
       goToHub,
-      openInventoryManifest,
+      openSafehouse,
       goToWelcome,
       startBoundRequisition,
-      startSafehouseHub,
       startScanning,
       startNarrative,
       startPostCombatBoon,
@@ -107,10 +104,9 @@ export function GameFlowProvider({ children }: { children: React.ReactNode }) {
       completeCombatEntry,
       currentScreen,
       goToHub,
-      openInventoryManifest,
+      openSafehouse,
       goToWelcome,
       startBoundRequisition,
-      startSafehouseHub,
       startScanning,
       startNarrative,
       startPostCombatBoon,

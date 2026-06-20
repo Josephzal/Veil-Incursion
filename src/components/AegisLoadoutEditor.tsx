@@ -2,13 +2,20 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AEGIS_ABILITY_CATALOG } from '../data/aegisAbilities';
 import {
+  canAffordAbilityUnlock,
+  formatAbilityTags,
+  formatAbilityUnlockCost,
+  getAssignableAbilities,
+  isAbilityUnlocked,
+} from '../data/aegisAbilityUnlockEngine';
+import {
   getInteractiveButtonStyle,
   getInteractiveButtonTextStyle,
 } from '../styles/hubTerminalUi';
-import { ALL_AEGIS_ABILITIES, type AegisAbilityId } from '../types/aegisCombat';
+import type { AegisAbilityId } from '../types/aegisCombat';
+import type { ResourceQuantity } from '../types/resourceItem';
 
 const MONO = 'monospace';
-const ASSIGNABLE_ABILITIES = ALL_AEGIS_ABILITIES.filter((id) => id !== 'EVISCERATE');
 
 export interface AegisLoadoutEditorTheme {
   accentColor: string;
@@ -25,6 +32,9 @@ interface AegisLoadoutEditorProps {
   onAssignAbility: (abilityId: AegisAbilityId) => void;
   onCommit: () => void;
   theme: AegisLoadoutEditorTheme;
+  unlockedAbilities: readonly AegisAbilityId[];
+  resourceStash?: ResourceQuantity;
+  onUnlockAbility?: (abilityId: AegisAbilityId) => void;
   title?: string;
   hint?: string;
   commitLabel?: string;
@@ -38,12 +48,24 @@ export default function AegisLoadoutEditor({
   onAssignAbility,
   onCommit,
   theme,
+  unlockedAbilities,
+  resourceStash = {},
+  onUnlockAbility,
   title = 'AEGIS COMBAT LOADOUT // 4 ACTIVE SLOTS',
-  hint = 'Select a slot, then tap an ability. Eviscerate unlocks at full Abyssal Reserve.',
+  hint = 'Select a slot, then tap an unlocked ability. Locked protocols can be decrypted with hub resources.',
   commitLabel = '[ COMMIT LOADOUT ]',
   statusMessage = null,
 }: AegisLoadoutEditorProps): React.JSX.Element {
   const textColor = theme.textColor ?? '#d8e2dc';
+
+  const handleAbilityPress = (abilityId: AegisAbilityId) => {
+    const unlocked = isAbilityUnlocked(unlockedAbilities, abilityId);
+    if (unlocked) {
+      onAssignAbility(abilityId);
+      return;
+    }
+    onUnlockAbility?.(abilityId);
+  };
 
   return (
     <View style={styles.root}>
@@ -53,6 +75,7 @@ export default function AegisLoadoutEditor({
       <View style={styles.slotRow}>
         {draft.map((abilityId, index) => {
           const isSelected = selectedSlot === index;
+          const def = AEGIS_ABILITY_CATALOG[abilityId];
           return (
             <Pressable
               key={`slot-${index}`}
@@ -65,7 +88,15 @@ export default function AegisLoadoutEditor({
             >
               <Text style={[styles.slotLabel, { color: theme.mutedColor }]}>{`S${index + 1}`}</Text>
               <Text style={[styles.slotAbility, { color: textColor }]} numberOfLines={2}>
-                {AEGIS_ABILITY_CATALOG[abilityId].label}
+                {def.label}
+              </Text>
+              <Text
+                style={[styles.tagLine, { color: theme.mutedColor }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.65}
+              >
+                {formatAbilityTags(abilityId)}
               </Text>
               <Text
                 style={[styles.slotMeta, { color: theme.mutedColor }]}
@@ -73,30 +104,53 @@ export default function AegisLoadoutEditor({
                 adjustsFontSizeToFit
                 minimumFontScale={0.65}
               >
-                {AEGIS_ABILITY_CATALOG[abilityId].description}
+                {def.description}
               </Text>
             </Pressable>
           );
         })}
       </View>
 
-      <Text style={[styles.poolLabel, { color: theme.mutedColor }]}>ABILITY POOL // TAP TO ASSIGN</Text>
+      <Text style={[styles.poolLabel, { color: theme.mutedColor }]}>ABILITY POOL // TAP TO ASSIGN OR UNLOCK</Text>
       <View style={styles.pool}>
-        {ASSIGNABLE_ABILITIES.map((abilityId) => {
+        {getAssignableAbilities().map((abilityId) => {
+          const def = AEGIS_ABILITY_CATALOG[abilityId];
           const assigned = draft.indexOf(abilityId);
           const isSelected = draft[selectedSlot] === abilityId;
+          const unlocked = isAbilityUnlocked(unlockedAbilities, abilityId);
+          const affordable = unlocked || canAffordAbilityUnlock(resourceStash, def.unlockCost);
           return (
             <Pressable
               key={abilityId}
-              onPress={() => onAssignAbility(abilityId)}
+              onPress={() => handleAbilityPress(abilityId)}
               style={({ pressed }) => [
                 getInteractiveButtonStyle(theme.accentColor, { pressed, size: 'sm' }),
                 styles.chip,
                 !isSelected && { borderColor: theme.borderColor },
+                !unlocked && !affordable && styles.chipLocked,
+                !unlocked && affordable && styles.chipUnlockable,
               ]}
             >
               <Text style={[styles.chipLabel, { color: isSelected ? theme.accentColor : textColor }]}>
-                {AEGIS_ABILITY_CATALOG[abilityId].label}
+                {def.label}
+              </Text>
+              {!unlocked ? (
+                <Text
+                  style={[
+                    styles.chipCost,
+                    { color: affordable ? '#4ade80' : '#f87171' },
+                  ]}
+                >
+                  {`LOCKED // ${formatAbilityUnlockCost(def.unlockCost)}`}
+                </Text>
+              ) : null}
+              <Text
+                style={[styles.chipTags, { color: theme.mutedColor }]}
+                numberOfLines={2}
+                adjustsFontSizeToFit
+                minimumFontScale={0.65}
+              >
+                {formatAbilityTags(abilityId)}
               </Text>
               {assigned >= 0 ? (
                 <Text style={[styles.chipSlot, { color: theme.mutedColor }]}>{`S${assigned + 1}`}</Text>
@@ -161,6 +215,12 @@ const styles = StyleSheet.create({
     lineHeight: 11,
     fontWeight: '700',
   },
+  tagLine: {
+    fontFamily: MONO,
+    fontSize: 6,
+    lineHeight: 8,
+    letterSpacing: 0.3,
+  },
   slotMeta: {
     fontFamily: MONO,
     fontSize: 6,
@@ -183,10 +243,28 @@ const styles = StyleSheet.create({
     minWidth: '30%',
     flexGrow: 1,
   },
+  chipLocked: {
+    opacity: 0.55,
+  },
+  chipUnlockable: {
+    borderStyle: 'dashed',
+  },
   chipLabel: {
     fontFamily: MONO,
     fontSize: 7,
     letterSpacing: 0.4,
+  },
+  chipCost: {
+    fontFamily: MONO,
+    fontSize: 6,
+    letterSpacing: 0.4,
+    lineHeight: 9,
+  },
+  chipTags: {
+    fontFamily: MONO,
+    fontSize: 5,
+    lineHeight: 7,
+    letterSpacing: 0.3,
   },
   chipSlot: {
     fontFamily: MONO,

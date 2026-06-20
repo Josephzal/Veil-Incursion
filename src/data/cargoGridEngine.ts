@@ -7,6 +7,7 @@ import {
   CARGO_OCCUPANCY_RESONANCE_THRESHOLD,
   CARGO_RESONANCE_MULTIPLIER,
   DATA_BLEED_VALUE_DRAIN_PCT,
+  createDefaultCargoRunState,
 } from '../types/cargoGrid';
 
 let instanceCounter = 0;
@@ -24,12 +25,78 @@ export function resetCargoInstanceCounter(): void {
   instanceCounter = 0;
 }
 
-/** Run-start cargo with Soul Core + Spectral Salt staged in the operative grid. */
+/** Run-start cargo with God Mode + Spectral Salt locked to grid slots (0,0) and (0,1). */
 export function createStarterCargoRunState(): CargoRunState {
-  const base = { grid: { placed: [] as PlacedCargoItem[] }, containment: [], dataBleedActive: false };
-  const withSoulCore = placeCargoAtFirstOpenSlot(base, 'soul-core') ?? base;
-  const withSalt = placeCargoAtFirstOpenSlot(withSoulCore, 'spectral-salt') ?? withSoulCore;
-  return addLootToContainment(withSalt, 'god-mode', 1);
+  return applyIncursionStarterCargo(createDefaultCargoRunState());
+}
+
+const INCURSION_STARTER_CARGO: ReadonlyArray<{ itemId: CargoItemId; row: number; col: number }> = [
+  { itemId: 'god-mode', row: 0, col: 0 },
+  { itemId: 'spectral-salt', row: 0, col: 1 },
+];
+
+function stripCatalogItemsFromCargo(cargo: CargoRunState, itemIds: readonly CargoItemId[]): CargoRunState {
+  const idSet = new Set(itemIds);
+  const placed = cargo.grid.placed.filter((item) => !idSet.has(item.itemId));
+  const containment = cargo.containment.filter((item) => !idSet.has(item.itemId));
+  if (placed.length === cargo.grid.placed.length && containment.length === cargo.containment.length) {
+    return cargo;
+  }
+  return {
+    ...cargo,
+    grid: { placed },
+    containment,
+  };
+}
+
+function removePlacedItemsOverlappingCell(cargo: CargoRunState, row: number, col: number): CargoRunState {
+  const target = `${row},${col}`;
+  let working = cargo;
+  for (const item of cargo.grid.placed) {
+    if (cellsForItem(item.itemId, item.originRow, item.originCol).includes(target)) {
+      working = removePlacedCargoItem(working, item.instanceId);
+    }
+  }
+  return working;
+}
+
+export function placeCatalogItemAtCell(
+  cargo: CargoRunState,
+  itemId: CargoItemId,
+  originRow: number,
+  originCol: number,
+): CargoRunState | null {
+  if (!canPlaceCargoItem(cargo, itemId, originRow, originCol)) return null;
+  const def = CARGO_ITEM_CATALOG[itemId];
+  return {
+    ...cargo,
+    grid: {
+      placed: [
+        ...cargo.grid.placed,
+        {
+          instanceId: createCargoInstanceId(itemId),
+          itemId,
+          originRow,
+          originCol,
+          currentValue: def.baseValue,
+        },
+      ],
+    },
+  };
+}
+
+/** Ensures God Mode and Spectral Salt occupy the first two cargo grid cells at run start. */
+export function applyIncursionStarterCargo(cargo: CargoRunState): CargoRunState {
+  const starterIds = INCURSION_STARTER_CARGO.map((entry) => entry.itemId);
+  let working = stripCatalogItemsFromCargo(cargo, starterIds);
+  for (const slot of INCURSION_STARTER_CARGO) {
+    working = removePlacedItemsOverlappingCell(working, slot.row, slot.col);
+  }
+  for (const slot of INCURSION_STARTER_CARGO) {
+    const placed = placeCatalogItemAtCell(working, slot.itemId, slot.row, slot.col);
+    if (placed) working = placed;
+  }
+  return working;
 }
 
 function cellsForItem(itemId: CargoItemId, originRow: number, originCol: number): string[] {

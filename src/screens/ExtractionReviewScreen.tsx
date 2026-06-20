@@ -6,7 +6,6 @@ import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useDescentNavigator } from '../hooks/useDescentNavigator';
-import { calculateCargoMarketValue } from '../data/cargoGridEngine';
 import { getSectorZone } from '../data/sectorZoneEngine';
 import {
   EMERGENCY_EXTRACT_CARGO_BLEED_PCT,
@@ -30,18 +29,19 @@ export default function ExtractionReviewScreen(): React.JSX.Element {
 
   const reviewKind = activeIncursion.extractionReviewKind;
   const anchorIndex = activeIncursion.pendingSafeAnchorIndex;
-  const cargoValue = calculateCargoMarketValue(activeIncursion.cargo);
+  const cargoItemCount =
+    activeIncursion.cargo.grid.placed.length + activeIncursion.cargo.containment.length;
   const zone = getSectorZone(activeIncursion.nodesCleared, activeIncursion.collapseActive);
 
   const payoutPreview = useMemo(() => {
-    let total = activeIncursion.runCredits + cargoValue + 150;
+    let total = activeIncursion.runCredits + 150;
     if (activeIncursion.primeExtractionBonus) total = Math.floor(total * 1.5);
     if (reviewKind === 'MASTER_LINK') total = Math.floor(total * MASTER_EXTRACTION_PAYOUT_MULTIPLIER);
     if (reviewKind === 'EMERGENCY_RECALL') {
       total = Math.floor(total * (1 - EMERGENCY_EXTRACT_CARGO_BLEED_PCT / 100));
     }
     return total;
-  }, [activeIncursion.primeExtractionBonus, activeIncursion.runCredits, cargoValue, reviewKind]);
+  }, [activeIncursion.primeExtractionBonus, activeIncursion.runCredits, reviewKind]);
 
   const headerMeta = useMemo(() => {
     switch (reviewKind) {
@@ -112,15 +112,15 @@ export default function ExtractionReviewScreen(): React.JSX.Element {
                 {`RUN CREDITS ${activeIncursion.runCredits}`}
               </Text>
               <Text style={[styles.line, { color: theme.primaryColor }]}>
-                {`CARGO VALUE ${cargoValue}`}
+                {`CARGO ITEMS ${cargoItemCount} → HOME STASH`}
               </Text>
               {reviewKind === 'EMERGENCY_RECALL' ? (
                 <Text style={[styles.line, { color: '#fbbf24' }]}>
-                  {`EMERGENCY BLEED — −${EMERGENCY_EXTRACT_CARGO_BLEED_PCT}% cargo value on extract`}
+                  {`EMERGENCY BLEED — −${EMERGENCY_EXTRACT_CARGO_BLEED_PCT}% cargo items lost on extract`}
                 </Text>
               ) : null}
               <Text style={[styles.line, { color: TERMINAL_ACCENT }]}>
-                {`EST. EXTRACTION PAYOUT ~${payoutPreview}`}
+                {`EST. CREDIT PAYOUT ~${payoutPreview}`}
               </Text>
             </View>
           </ScrollView>

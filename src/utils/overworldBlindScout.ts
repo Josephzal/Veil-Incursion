@@ -75,6 +75,8 @@ export function resolveRiftSignature(nodeType: RunNodeType): string {
     case 'ELITE_COMBAT':
     case 'BOSS_COMBAT':
       return 'COMBAT CACHE';
+    case 'ANOMALY':
+      return 'UNIDENTIFIED SIGNAL';
     case 'NARRATIVE_EVENT':
       return 'NARRATIVE ANOMALY';
     case 'RESOURCE_HARVEST':

@@ -1,7 +1,6 @@
 export type AppScreen =
   | 'HUB'
   | 'WELCOME'
-  | 'SAFEHOUSE_HUB'
   | 'BOUND_REQUISITION'
   | 'SCANNING'
   | 'NARRATIVE'
