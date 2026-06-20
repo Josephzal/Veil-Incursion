@@ -43,7 +43,8 @@ export type EnemyIntent =
   | 'LASER_SIGHT'
   | 'STAMINA_TETHER'
   | 'JAM_AUGMENT'
-  | 'MEMORY_LEECH';
+  | 'MEMORY_LEECH'
+  | 'FIELD_REPAIR';
 
 /** Reactive combat debuffs derived from resource pools (stamina === 0 → EXHAUSTED). */
 export type CombatStatusEffect = 'EXHAUSTED';

@@ -47,6 +47,7 @@ const INTENT_READOUT: Record<EnemyIntent, string> = {
   STAMINA_TETHER: 'STAMINA TETHER',
   JAM_AUGMENT: 'JAM AUGMENT',
   MEMORY_LEECH: 'MEMORY LEECH',
+  FIELD_REPAIR: 'FIELD REPAIR',
 };
 
 export function formatHostileId(designation: string): string {
@@ -122,7 +123,7 @@ export function isEnemyChargeIntent(intent: EnemyIntent): boolean {
 }
 
 export function isEnemyBuffIntent(intent: EnemyIntent): boolean {
-  return intent === 'FORTIFY' || intent === 'EVADE' || intent === 'CHARGE';
+  return intent === 'FORTIFY' || intent === 'EVADE' || intent === 'CHARGE' || intent === 'FIELD_REPAIR';
 }
 
 export type EnemyTurnMotionKind = 'buff' | 'melee' | 'ranged';
@@ -163,6 +164,7 @@ const BUFF_FLOAT_LABELS: Partial<Record<EnemyIntent, string>> = {
   SINKING_INTO_GRID: 'Phase',
   EVADE: 'Evade',
   CHARGE: 'Charge',
+  FIELD_REPAIR: 'Repair',
 };
 
 export function getEnemyBuffFloatLabel(intent: EnemyIntent): string {

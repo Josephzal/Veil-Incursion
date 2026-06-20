@@ -88,6 +88,7 @@ export function intentLabel(intent: EnemyIntent, designation: string): string {
     STAMINA_TETHER: `${designation} casts STAMINA TETHER`,
     JAM_AUGMENT: `${designation} jams operative augment`,
     MEMORY_LEECH: `${designation} leeches augment memory`,
+    FIELD_REPAIR: `${designation} intends FIELD REPAIR`,
   };
   return labels[intent];
 }
@@ -122,7 +123,7 @@ export function spawnEnemyProfile(
     baseDamage,
     intent,
     chargeTurns: 0,
-    evadeActive: intent === 'EVADE',
+    evadeActive: false,
     nodeIndex,
     scale,
   };
@@ -219,7 +220,7 @@ export function createHardTestEnemy(playerState?: PlayerAIState): EnemyCombatPro
     baseDamage: 12,
     intent,
     chargeTurns: 0,
-    evadeActive: intent === 'EVADE',
+    evadeActive: false,
     nodeIndex: 0,
     scale: 1,
     testPreset: 'hard',
@@ -249,7 +250,7 @@ export function advanceEnemyIntent(
       ...profile,
       chargeTurns: 0,
       intent: nextIntent,
-      evadeActive: nextIntent === 'EVADE',
+      evadeActive: false,
     };
   }
 
@@ -273,6 +274,11 @@ export function advanceEnemyIntent(
     nextIntent = 'STRIKE';
   }
 
+  const clearsEvadePosture = nextIntent === 'STRIKE'
+    || nextIntent === 'DOUBLE_STRIKE'
+    || nextIntent === 'WORLD_ENDER'
+    || nextIntent === 'PAVEMENT_CRUSHER';
+
   const telegraphLocked = synced.rosterId === 'concrete-gargoyle'
     && (synced.queuedAction === 'SLAM' || synced.isCharging);
   const nextCharging = synced.rosterId === 'concrete-gargoyle'
@@ -287,7 +293,7 @@ export function advanceEnemyIntent(
     ...synced,
     chargeTurns,
     intent: nextIntent,
-    evadeActive: telegraphLocked ? false : nextIntent === 'EVADE',
+    evadeActive: telegraphLocked ? false : clearsEvadePosture ? false : synced.evadeActive,
     isCharging: nextCharging,
     rosterAbilityCooldown: synced.rosterId === 'null-shade' && (synced.rosterAbilityCooldown ?? 0) > 0
       ? (synced.rosterAbilityCooldown ?? 0) - 1

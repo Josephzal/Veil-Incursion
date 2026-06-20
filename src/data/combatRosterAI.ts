@@ -10,6 +10,7 @@ import {
 } from './AIDecisionEngine';
 import { aliveUnits } from './combatSquadEngine';
 import type { EnemyCombatProfile, EnemyIntent } from '../types/run';
+import { squadNeedsFixerRepair } from './fixerRepairEngine';
 import { isRedundantBuffIntent } from './enemyIntentUtils';
 
 /** Playtest-tunable hostile enrage thresholds — adjust ratios/absolute HP here. */
@@ -73,7 +74,7 @@ const ROSTER_INTENTS: Partial<Record<string, EnemyIntent[]>> = {
   'breacher': ['STRIKE', 'FORTIFY'],
   'cutter': ['STRIKE', 'EVADE'],
   'warden': ['STRIKE', 'FORTIFY'],
-  'fixer': ['EVADE'],
+  'fixer': ['FIELD_REPAIR', 'EVADE'],
   'spotter': ['TARGET_LOCK', 'ARTILLERY_FIRE'],
   'burner': ['STRIKE'],
   'amalgam': ['STRIKE', 'FORTIFY'],
@@ -219,8 +220,6 @@ function resolveForcedRosterIntent(profile: EnemyCombatProfile): EnemyIntent | n
     return 'PREMATURE_IGNITION';
   }
 
-  if (rosterId === 'fixer') return 'EVADE';
-
   return null;
 }
 
@@ -241,6 +240,13 @@ export function decideRosterIntent(
     && synced.currentHp < synced.maxHp
   ) {
     return 'SCAVENGE';
+  }
+
+  if (rosterId === 'fixer') {
+    if (squad && synced.unitId && squadNeedsFixerRepair(squad, synced.unitId)) {
+      return 'FIELD_REPAIR';
+    }
+    return 'EVADE';
   }
 
   if (rosterId === 'grave-robber' && squad) {

@@ -153,5 +153,20 @@ export function patchRosterAfterIntentExec(
     }
   }
 
+  if (intent === 'EVADE') {
+    patch.evadeActive = true;
+  }
+  if (
+    intent === 'STRIKE'
+    || intent === 'DOUBLE_STRIKE'
+    || intent === 'WORLD_ENDER'
+    || intent === 'PAVEMENT_CRUSHER'
+    || intent === 'VOID_AMBUSH'
+    || intent === 'RESONANCE_OVERLOAD'
+    || intent === 'ARTILLERY_FIRE'
+  ) {
+    patch.evadeActive = false;
+  }
+
   return patch;
 }

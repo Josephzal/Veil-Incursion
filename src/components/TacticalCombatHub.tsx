@@ -98,6 +98,11 @@ import {
 import type { BlueprintId } from '../types/equipmentBlueprint';
 import { CombatLifecycleManager, applyHookWeaverTetherAction, applyLeySirenTetherAction } from '../data/combatLifecycleEngine';
 import { isRosterSpecificIntent, isNullShadeVoidAmbush, nullShadeVoidAmbushCleanupPatch, patchRosterAfterIntentExec, resolveRosterEnemyDamage, ROSTER_AI_WEIGHTS, syncRosterCombatState, VOID_AMBUSH_CRIT_CHANCE, VOID_AMBUSH_INTERRUPT_THRESHOLD } from '../data/combatRosterActions';
+import {
+  fixerDistrictFromProfile,
+  fixerRepairTarget,
+  rollFixerRepairAmount,
+} from '../data/fixerRepairEngine';
 import type { PlayerCombatState } from '../types/combatLifecycle';
 import type { CombatSessionExtras } from '../types/combatHooks';
 import { createDefaultCombatSessionExtras, addStructuredDebuff, hasStructuredDebuff, removeStructuredDebuff } from '../types/combatHooks';
@@ -1245,7 +1250,8 @@ export default function TacticalCombatHub({
   }, [registerTargetHandler, selectTarget]);
 
   const resolveIncomingHpStrike = (e: EnemyCombatProfile): { raw: number; unblockable: boolean } | null => {
-    if (getEnemyDeckStrikeVariant(e.intent) !== 'hp') return null;
+    const effectiveIntent = resolveEffectiveEnemyIntent(e);
+    if (getEnemyDeckStrikeVariant(effectiveIntent) !== 'hp') return null;
     if (e.isBoss && bossRuntimeRef.current) {
       const dmg = bossStrikeDamage(bossRuntimeRef.current, bossPhaseRef.current);
       if (e.intent === 'OVERDRIVE_DISCHARGE') {
@@ -2189,6 +2195,23 @@ export default function TacticalCombatHub({
         }
         break;
       }
+      case 'FIELD_REPAIR': {
+        if (!e.unitId) break;
+        const target = fixerRepairTarget(squadRef.current, e.unitId);
+        if (!target?.unitId || target.currentHp >= target.maxHp) {
+          log(`>> ${e.designation} FIELD REPAIR — no valid target.`);
+          break;
+        }
+        const district = fixerDistrictFromProfile(e);
+        const healAmt = rollFixerRepairAmount(district);
+        const healed = Math.min(target.maxHp, target.currentHp + healAmt);
+        const applied = healed - target.currentHp;
+        patchUnit(target.unitId, { currentHp: healed });
+        statusFloatSeqRef.current[target.unitId] = (statusFloatSeqRef.current[target.unitId] ?? 0) + 1;
+        publishSquadUi(squadRef.current);
+        log(`>> ${e.designation} FIELD REPAIR — ${target.designation} +${applied} HP (D${district}).`);
+        break;
+      }
       case 'CHARGE': log(`>> ${e.designation} CHARGING world-ender (${e.chargeTurns + 1}/3).`); break;
       case 'PAVEMENT_CRUSHER_CHARGE':
         log(`>> ${e.designation} PAVEMENT CRUSHER CHARGE — structural wind-up engaged.`);
@@ -2414,8 +2437,8 @@ export default function TacticalCombatHub({
       }
       default: break;
     }
-    const rosterPatch = patchRosterAfterIntentExec(e, e.intent);
-    if (e.unitId && Object.keys(rosterPatch).length > 0 && e.intent !== 'VOID_AMBUSH') {
+    const rosterPatch = patchRosterAfterIntentExec(e, intent);
+    if (e.unitId && Object.keys(rosterPatch).length > 0 && intent !== 'VOID_AMBUSH') {
       patchUnit(e.unitId, rosterPatch);
     }
   };
@@ -2708,7 +2731,8 @@ export default function TacticalCombatHub({
   };
 
   const openParryWindow = (e: EnemyCombatProfile, fromCounterStance: boolean): boolean => {
-    if (e.intent === 'WORLD_ENDER') {
+    const effectiveIntent = resolveEffectiveEnemyIntent(e);
+    if (effectiveIntent === 'WORLD_ENDER') {
       if (fromCounterStance) {
         log('[COUNTER FAILED] >> World-Ender cannot be parried.');
         counterRef.current = false;
@@ -2716,7 +2740,7 @@ export default function TacticalCombatHub({
       }
       return false;
     }
-    if (!isAttackIntent(e.intent)) {
+    if (!isAttackIntent(effectiveIntent)) {
       if (fromCounterStance) {
         log('[COUNTER WASTED] >> No attack channel.');
         counterRef.current = false;

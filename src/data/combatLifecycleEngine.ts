@@ -161,27 +161,6 @@ const resonanceCasterTurnStart: TurnStartHandler = (enemy, ctx) => {
   };
 };
 
-const fixerTurnStart: TurnStartHandler = (enemy, ctx) => {
-  if (enemy.rosterId !== 'fixer' || !enemy.unitId) return { ...EMPTY_TURN, squad: ctx.squad };
-  const allies = aliveUnits(ctx.squad).filter((u) => u.unitId !== enemy.unitId);
-  if (allies.length === 0) return { squad: ctx.squad, logLines: [] };
-  const target = allies.reduce((worst, u) => {
-    const missing = u.maxHp - u.currentHp;
-    const worstMissing = worst.maxHp - worst.currentHp;
-    return missing > worstMissing ? u : worst;
-  });
-  if (!target.unitId || target.currentHp >= target.maxHp) return { squad: ctx.squad, logLines: [] };
-  const healAmt = Math.max(1, Math.floor(target.maxHp * 0.25));
-  const healed = Math.min(target.maxHp, target.currentHp + healAmt);
-  const squad = patchUnitInSquad(ctx.squad, target.unitId, { currentHp: healed });
-  return {
-    squad,
-    logLines: [`>> ${enemy.designation} FIELD REPAIR — ${target.designation} +${healed - target.currentHp} HP.`],
-    statusFloatLabel: `+${healed - target.currentHp} HP`,
-    statusFloatUnitId: target.unitId,
-  };
-};
-
 const hollowLungTurnStart: TurnStartHandler = (enemy, ctx) => {
   if (enemy.rosterId !== 'hollow-lung' || !enemy.unitId) return { ...EMPTY_TURN, squad: ctx.squad };
   const debt = Math.max(1, Math.floor(ctx.player.maxHp * 0.05));
@@ -473,7 +452,6 @@ const thrallDeath: DeathHandler = (enemy, killingBlow, ctx) => {
 
 const TURN_START_HANDLERS: TurnStartHandler[] = [
   thrallSlumpTurnStart,
-  fixerTurnStart,
   hollowLungTurnStart,
   graveRobberTurnStart,
   burnerTurnStart,

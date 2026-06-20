@@ -730,7 +730,7 @@ export function spawnRosterUnit(
     baseDamage,
     intent,
     chargeTurns: 0,
-    evadeActive: intent === 'EVADE',
+    evadeActive: false,
     nodeIndex,
     scale,
     rosterId: entry.id,
