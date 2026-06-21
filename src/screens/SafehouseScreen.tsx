@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import IncursionShell from '../components/IncursionShell';
 import DecryptionPanel from '../components/DecryptionPanel';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
 import AegisLoadoutEditor from '../components/AegisLoadoutEditor';
+import ClassLoadoutEditor from '../components/ClassLoadoutEditor';
 import { useRun } from '../context/RunContext';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useTerminal } from '../context/TerminalContext';
@@ -12,7 +13,26 @@ import { calculateCargoMarketValue, calculateGridOccupancy } from '../data/cargo
 import { DISTRICT_NAMES } from '../data/districtPacing';
 import type { AegisAbilityId, AegisLoadout } from '../types/aegisCombat';
 import { isAbilityUnlocked } from '../data/aegisAbilityUnlockEngine';
+import {
+  ENVOY_ANCHOR,
+  ENVOY_INTRINSIC,
+  formatEnvoyAbilityTags,
+  formatHexShotAbilityTags,
+  getAssignableEnvoyAbilities,
+  getAssignableHexShotAbilities,
+  HEX_SHOT_ANCHOR,
+  HEX_SHOT_INTRINSIC,
+  isEnvoyAbilityUnlocked,
+  isHexShotAbilityUnlocked,
+} from '../data/classAbilityUnlockEngine';
+import { ENVOY_ABILITY_CATALOG } from '../data/envoyAbilities';
+import { HEX_SHOT_ABILITY_CATALOG } from '../data/hexShotAbilities';
+import type { EnvoyAbilityId, EnvoyLoadout, HexShotAbilityId, HexShotLoadout } from '../types/operativeClass';
 import { validateLoadoutCommit } from '../utils/aegisLoadoutUtils';
+import {
+  validateEnvoyLoadoutCommit,
+  validateHexShotLoadoutCommit,
+} from '../utils/classLoadoutUtils';
 
 const TERMINAL_ACCENT = '#3ecf6e';
 const TERMINAL_MUTED = '#6b7c72';
@@ -23,11 +43,13 @@ type SafehouseTab = 'PAYLOAD' | 'LOADOUT' | 'BENCH' | 'DECRYPT' | 'INTEL';
 
 const TRANSFER_PRESETS = [0, 25, 50, 75, 100] as const;
 
-const CLASS_CARDS = [
-  { id: 'AEGIS', label: 'AEGIS', status: 'ACTIVE' },
-  { id: 'HEX_SHOT', label: 'HEX SHOT', status: 'ACTIVE' },
-  { id: 'ENVOY', label: 'ENVOY', status: 'ACTIVE' },
-] as const;
+const EDITOR_THEME = {
+  accentColor: TERMINAL_ACCENT,
+  borderColor: BORDER,
+  mutedColor: TERMINAL_MUTED,
+  textColor: '#d8e2dc',
+  panelBg: 'rgba(0, 0, 0, 0.35)',
+};
 
 export default function SafehouseScreen(): React.JSX.Element {
   const { theme } = useTerminal();
@@ -40,22 +62,76 @@ export default function SafehouseScreen(): React.JSX.Element {
     restoreHealthFromBench,
     getSafehouseIntel,
     setAegisLoadout,
+    setHexShotLoadout,
+    setEnvoyLoadout,
   } = useRun();
-  const { account, depositBankedCargo, setAegisLoadout: setAccountAegisLoadout, unlockAegisAbility } = usePlayerAccount();
+  const {
+    account,
+    depositBankedCargo,
+    setAegisLoadout: setAccountAegisLoadout,
+    setHexShotLoadout: setAccountHexShotLoadout,
+    setEnvoyLoadout: setAccountEnvoyLoadout,
+    unlockAegisAbility,
+    unlockHexShotAbility,
+    unlockEnvoyAbility,
+  } = usePlayerAccount();
   const { startScanning } = useGameFlow();
 
   const [activeTab, setActiveTab] = useState<SafehouseTab>('PAYLOAD');
   const [transferPercent, setTransferPercent] = useState(50);
   const [statusLine, setStatusLine] = useState('>> CABAL CHECKPOINT ONLINE — AWAITING OPERATIVE INPUT.');
   const [loadoutDraft, setLoadoutDraft] = useState<AegisAbilityId[]>([...activeIncursion.aegisLoadout]);
+  const [hexDraft, setHexDraft] = useState<HexShotAbilityId[]>([...activeIncursion.hexShotLoadout]);
+  const [envoyDraft, setEnvoyDraft] = useState<EnvoyAbilityId[]>([...activeIncursion.envoyLoadout]);
   const [selectedSlot, setSelectedSlot] = useState<0 | 1 | 2 | 3>(0);
+  const [selectedFlexSlot, setSelectedFlexSlot] = useState<1 | 2 | 3>(1);
   const [loadoutStatus, setLoadoutStatus] = useState<string | null>(null);
+
+  const operativeClass = activeIncursion.activeClass ?? account.activeClass;
+
+  const hexCatalog = useMemo(
+    () => Object.fromEntries(
+      getAssignableHexShotAbilities().map((id) => [
+        id,
+        {
+          label: HEX_SHOT_ABILITY_CATALOG[id].label,
+          description: HEX_SHOT_ABILITY_CATALOG[id].description,
+          unlockCost: HEX_SHOT_ABILITY_CATALOG[id].unlockCost,
+          tagsLine: formatHexShotAbilityTags(id),
+        },
+      ]),
+    ),
+    [],
+  );
+
+  const envoyCatalog = useMemo(
+    () => Object.fromEntries(
+      getAssignableEnvoyAbilities().map((id) => [
+        id,
+        {
+          label: ENVOY_ABILITY_CATALOG[id].label,
+          description: ENVOY_ABILITY_CATALOG[id].description,
+          unlockCost: ENVOY_ABILITY_CATALOG[id].unlockCost,
+          tagsLine: formatEnvoyAbilityTags(id),
+        },
+      ]),
+    ),
+    [],
+  );
 
   useEffect(() => {
     if (activeTab !== 'LOADOUT') return;
     setLoadoutDraft([...activeIncursion.aegisLoadout]);
+    setHexDraft([...activeIncursion.hexShotLoadout]);
+    setEnvoyDraft([...activeIncursion.envoyLoadout]);
     setLoadoutStatus(null);
-  }, [activeTab, activeIncursion.aegisLoadout]);
+  }, [
+    activeTab,
+    activeIncursion.aegisLoadout,
+    activeIncursion.hexShotLoadout,
+    activeIncursion.envoyLoadout,
+    operativeClass,
+  ]);
 
   const healthPct = useMemo(() => {
     if (runState.maxSoulAnchor <= 0) return 0;
@@ -132,6 +208,78 @@ export default function SafehouseScreen(): React.JSX.Element {
     setStatusLine(success);
   }, [appendRunLog, account.unlockedAegisAbilities, loadoutDraft, setAccountAegisLoadout, setAegisLoadout]);
 
+  const assignHexAbility = useCallback((abilityId: HexShotAbilityId) => {
+    if (HEX_SHOT_INTRINSIC.includes(abilityId) || abilityId === HEX_SHOT_ANCHOR) return;
+    if (!isHexShotAbilityUnlocked(account.unlockedHexShotAbilities, abilityId)) {
+      setLoadoutStatus(`>> ${abilityId.replace(/_/g, ' ')} NOT UNLOCKED — DECRYPT PROTOCOL FIRST.`);
+      return;
+    }
+    setHexDraft((prev) => {
+      const next: HexShotAbilityId[] = [...prev];
+      next[selectedFlexSlot] = abilityId;
+      return next;
+    });
+    setLoadoutStatus(null);
+  }, [account.unlockedHexShotAbilities, selectedFlexSlot]);
+
+  const assignEnvoyAbility = useCallback((abilityId: EnvoyAbilityId) => {
+    if (ENVOY_INTRINSIC.includes(abilityId) || abilityId === ENVOY_ANCHOR) return;
+    if (!isEnvoyAbilityUnlocked(account.unlockedEnvoyAbilities, abilityId)) {
+      setLoadoutStatus(`>> ${abilityId.replace(/_/g, ' ')} NOT UNLOCKED — DECRYPT PROTOCOL FIRST.`);
+      return;
+    }
+    setEnvoyDraft((prev) => {
+      const next: EnvoyAbilityId[] = [...prev];
+      next[selectedFlexSlot] = abilityId;
+      return next;
+    });
+    setLoadoutStatus(null);
+  }, [account.unlockedEnvoyAbilities, selectedFlexSlot]);
+
+  const commitHexLoadout = useCallback(() => {
+    const rejection = validateHexShotLoadoutCommit(hexDraft, account.unlockedHexShotAbilities);
+    if (rejection) {
+      setLoadoutStatus(rejection);
+      setStatusLine(rejection);
+      return;
+    }
+    const committed: HexShotLoadout = [hexDraft[0], hexDraft[1], hexDraft[2], hexDraft[3]];
+    setHexShotLoadout(committed);
+    setAccountHexShotLoadout(committed);
+    appendRunLog('>> HEX-SHOT LOADOUT LOCKED — ballistic deck staged for next descent.');
+    const success = '>> LOADOUT COMMITTED — COMBAT DECK WILL DEPLOY ON NEXT INCURSION.';
+    setLoadoutStatus(success);
+    setStatusLine(success);
+  }, [
+    account.unlockedHexShotAbilities,
+    appendRunLog,
+    hexDraft,
+    setAccountHexShotLoadout,
+    setHexShotLoadout,
+  ]);
+
+  const commitEnvoyLoadout = useCallback(() => {
+    const rejection = validateEnvoyLoadoutCommit(envoyDraft, account.unlockedEnvoyAbilities);
+    if (rejection) {
+      setLoadoutStatus(rejection);
+      setStatusLine(rejection);
+      return;
+    }
+    const committed: EnvoyLoadout = [envoyDraft[0], envoyDraft[1], envoyDraft[2], envoyDraft[3]];
+    setEnvoyLoadout(committed);
+    setAccountEnvoyLoadout(committed);
+    appendRunLog('>> ENVOY LOADOUT LOCKED — spell deck staged for next descent.');
+    const success = '>> LOADOUT COMMITTED — COMBAT DECK WILL DEPLOY ON NEXT INCURSION.';
+    setLoadoutStatus(success);
+    setStatusLine(success);
+  }, [
+    account.unlockedEnvoyAbilities,
+    appendRunLog,
+    envoyDraft,
+    setAccountEnvoyLoadout,
+    setEnvoyLoadout,
+  ]);
+
   return (
     <IncursionShell>
       <MacroLogAnchoredLayout
@@ -196,50 +344,91 @@ export default function SafehouseScreen(): React.JSX.Element {
             ) : null}
 
             {activeTab === 'LOADOUT' ? (
-              <AegisLoadoutEditor
-                draft={loadoutDraft}
-                selectedSlot={selectedSlot}
-                onSelectSlot={setSelectedSlot}
-                onAssignAbility={assignAbilityToSlot}
-                onUnlockAbility={handleUnlockAbility}
-                onCommit={commitLoadout}
-                unlockedAbilities={account.unlockedAegisAbilities}
-                resourceStash={account.resourceStash}
-                theme={{
-                  accentColor: TERMINAL_ACCENT,
-                  borderColor: BORDER,
-                  mutedColor: TERMINAL_MUTED,
-                  textColor: '#d8e2dc',
-                  panelBg: 'rgba(0, 0, 0, 0.35)',
-                }}
-                statusMessage={loadoutStatus}
-              />
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.loadoutScroll}>
+                <Text style={styles.panelTitle}>
+                  {`${operativeClass.replace(/_/g, ' ')} COMBAT LOADOUT`}
+                </Text>
+                {operativeClass === 'AEGIS' ? (
+                  <AegisLoadoutEditor
+                    draft={loadoutDraft}
+                    selectedSlot={selectedSlot}
+                    onSelectSlot={setSelectedSlot}
+                    onAssignAbility={assignAbilityToSlot}
+                    onUnlockAbility={handleUnlockAbility}
+                    onCommit={commitLoadout}
+                    unlockedAbilities={account.unlockedAegisAbilities}
+                    resourceStash={account.resourceStash}
+                    theme={EDITOR_THEME}
+                    statusMessage={loadoutStatus}
+                  />
+                ) : null}
+                {operativeClass === 'HEX_SHOT' ? (
+                  <ClassLoadoutEditor
+                    draft={hexDraft}
+                    anchorId={HEX_SHOT_ANCHOR}
+                    anchorLabel={HEX_SHOT_ABILITY_CATALOG[HEX_SHOT_ANCHOR].label}
+                    assignableIds={getAssignableHexShotAbilities()}
+                    catalog={hexCatalog}
+                    selectedSlot={selectedFlexSlot}
+                    onSelectSlot={setSelectedFlexSlot}
+                    onAssignAbility={assignHexAbility}
+                    onUnlockAbility={(abilityId) => {
+                      const result = unlockHexShotAbility(abilityId);
+                      appendRunLog(result.logLine);
+                      setLoadoutStatus(result.logLine);
+                    }}
+                    onCommit={commitHexLoadout}
+                    unlockedAbilities={account.unlockedHexShotAbilities}
+                    isUnlocked={(id) => isHexShotAbilityUnlocked(account.unlockedHexShotAbilities, id)}
+                    resourceStash={account.resourceStash}
+                    theme={EDITOR_THEME}
+                    title="HEX-SHOT COMBAT LOADOUT // 4 ACTIVE SLOTS"
+                    hint="Slot 1 is Silver-Core Sidearm. Phase-Shift Reload is intrinsic on the combat bar."
+                    commitLabel="[ COMMIT LOADOUT FOR REMAINING RUN ]"
+                    statusMessage={loadoutStatus}
+                  />
+                ) : null}
+                {operativeClass === 'ENVOY' ? (
+                  <ClassLoadoutEditor
+                    draft={envoyDraft}
+                    anchorId={ENVOY_ANCHOR}
+                    anchorLabel={ENVOY_ABILITY_CATALOG[ENVOY_ANCHOR].label}
+                    assignableIds={getAssignableEnvoyAbilities()}
+                    catalog={envoyCatalog}
+                    selectedSlot={selectedFlexSlot}
+                    onSelectSlot={setSelectedFlexSlot}
+                    onAssignAbility={assignEnvoyAbility}
+                    onUnlockAbility={(abilityId) => {
+                      const result = unlockEnvoyAbility(abilityId);
+                      appendRunLog(result.logLine);
+                      setLoadoutStatus(result.logLine);
+                    }}
+                    onCommit={commitEnvoyLoadout}
+                    unlockedAbilities={account.unlockedEnvoyAbilities}
+                    isUnlocked={(id) => isEnvoyAbilityUnlocked(account.unlockedEnvoyAbilities, id)}
+                    resourceStash={account.resourceStash}
+                    theme={EDITOR_THEME}
+                    title="ENVOY COMBAT LOADOUT // 4 ACTIVE SLOTS"
+                    hint="Slot 1 is Veil-Splinter. Rift-Ward triggers automatically on incoming attacks."
+                    commitLabel="[ COMMIT LOADOUT FOR REMAINING RUN ]"
+                    statusMessage={loadoutStatus}
+                  />
+                ) : null}
+              </ScrollView>
             ) : null}
 
             {activeTab === 'BENCH' ? (
               <>
                 <Text style={styles.panelTitle}>THE BENCH // CLASS MODULES</Text>
-                {CLASS_CARDS.map((card) => (
-                  <View key={card.id} style={[styles.classCard, { borderColor: BORDER }]}>
-                    <Text style={styles.classTitle}>{card.label}</Text>
-                    <Text style={styles.classStatus}>{card.status}</Text>
-                    {card.id === 'AEGIS' ? (
-                      <View style={styles.classActions}>
-                        <Pressable onPress={handleBenchRestore} style={[styles.actionBtn, { borderColor: TERMINAL_ACCENT }]}>
-                          <Text style={styles.actionLabel}>[ RESTORE 25% HEALTH — 10% CARGO ]</Text>
-                        </Pressable>
-                        <Pressable
-                          onPress={() => setStatusLine('>> MODULE SWAP — USE ID BADGE CLASS TOGGLE BEFORE DEPLOY.')}
-                          style={[styles.actionBtn, { borderColor: BORDER }]}
-                        >
-                          <Text style={[styles.actionLabel, { color: TERMINAL_MUTED }]}>[ SWAP PRIMARY MODULE ]</Text>
-                        </Pressable>
-                      </View>
-                    ) : (
-                      <Text style={styles.classLocked}>CLASS NOT UNLOCKED THIS CAMPAIGN.</Text>
-                    )}
+                <View style={[styles.classCard, { borderColor: BORDER }]}>
+                  <Text style={styles.classTitle}>{operativeClass.replace(/_/g, ' ')}</Text>
+                  <Text style={styles.classStatus}>ACTIVE OPERATIVE CLASS</Text>
+                  <View style={styles.classActions}>
+                    <Pressable onPress={handleBenchRestore} style={[styles.actionBtn, { borderColor: TERMINAL_ACCENT }]}>
+                      <Text style={styles.actionLabel}>[ RESTORE 25% HEALTH — 10% CARGO ]</Text>
+                    </Pressable>
                   </View>
-                ))}
+                </View>
               </>
             ) : null}
 
@@ -333,6 +522,10 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 12,
   },
+  loadoutScroll: {
+    gap: 12,
+    paddingBottom: 8,
+  },
   panelTitle: {
     fontFamily: 'monospace',
     fontSize: 10,
@@ -398,11 +591,6 @@ const styles = StyleSheet.create({
   classActions: {
     gap: 8,
     marginTop: 4,
-  },
-  classLocked: {
-    fontFamily: 'monospace',
-    fontSize: 8,
-    color: TERMINAL_MUTED,
   },
   intelBlock: {
     borderWidth: 1,

@@ -155,8 +155,21 @@ export interface ClassBoonEncounterState {
   lastActionWasAoe: boolean;
   phantomTracerUnits: Record<string, number>;
   voidMarkedUnits: Record<string, boolean>;
+  voidBleedTurns: Record<string, number>;
+  suppressiveFireUnits: Record<string, boolean>;
+  chemicalWarfareTurns: Record<string, number>;
+  flashBlindDamageDebuff: Record<string, boolean>;
+  guerillaEvadeTurnsRemaining: number;
+  hotSwapPending: boolean;
   fluxShieldStacks: number;
   emergencyVentUsed: boolean;
+  cursedUnitIds: Record<string, boolean>;
+  wardWeaverCurseFree: boolean;
+  vampiricLifestealPending: boolean;
+  cataclysmicEchoUltBonus: number;
+  voidsBargainFirstStrike: boolean;
+  hexBreakerCurseTurns: Record<string, number>;
+  heavyGravityApDrain: Record<string, number>;
 }
 
 export function createDefaultClassBoonEncounterState(): ClassBoonEncounterState {
@@ -173,8 +186,21 @@ export function createDefaultClassBoonEncounterState(): ClassBoonEncounterState 
     lastActionWasAoe: false,
     phantomTracerUnits: {},
     voidMarkedUnits: {},
+    voidBleedTurns: {},
+    suppressiveFireUnits: {},
+    chemicalWarfareTurns: {},
+    flashBlindDamageDebuff: {},
+    guerillaEvadeTurnsRemaining: 0,
+    hotSwapPending: false,
     fluxShieldStacks: 0,
     emergencyVentUsed: false,
+    cursedUnitIds: {},
+    wardWeaverCurseFree: false,
+    vampiricLifestealPending: false,
+    cataclysmicEchoUltBonus: 0,
+    voidsBargainFirstStrike: true,
+    hexBreakerCurseTurns: {},
+    heavyGravityApDrain: {},
   };
 }
 

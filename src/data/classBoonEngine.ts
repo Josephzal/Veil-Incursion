@@ -107,6 +107,7 @@ export function aggregateHexShotBoonModifiers(
   if (hasHexShotBoon(boons, 'VOID_BANDOLEER')) mods.voidAmmoHpCostPct += 10;
   if (hasHexShotBoon(boons, 'LEYLINE_PENETRATOR')) mods.voidBacklineDamagePct += 50;
   if (hasHexShotBoon(boons, 'KINETIC_DAMPENERS')) mods.maxHpMultiplier *= 1.1;
+  if (hasHexShotBoon(boons, 'SURVIVALIST')) mods.maxHpMultiplier *= 1.05;
   if (hasHexShotBoon(boons, 'AUTO_LOADER_DECK')) mods.autoLoaderOnStart = true;
   if (hasHexShotBoon(boons, 'FLAWLESS_DRILL')) mods.perfectReloadApBonus = true;
   if (hasHexShotBoon(boons, 'GUNSMITHS_CURSE')) {
@@ -133,7 +134,6 @@ export function aggregateEnvoyBoonModifiers(
   if (hasEnvoyBoon(boons, 'MASOCHISTIC_CHANNEL')) mods.masochisticChannel = true;
   if (hasEnvoyBoon(boons, 'PENDULUM_SHIFT')) mods.pendulumDumpBonusPct += 50;
   if (hasEnvoyBoon(boons, 'OVERLOAD_MASTERY')) mods.overloadMasteryCrit = true;
-  if (hasEnvoyBoon(boons, 'VOIDS_BARGAIN')) mods.damageMultiplier *= 1; // first-hit hook
   return mods;
 }
 
@@ -147,6 +147,22 @@ function toOffer(def: ClassBoonDefinition): PostCombatBoonOffer {
     description: def.description,
     effect: def.effect,
   };
+}
+
+export function pickRawLeyBoonsForClass(
+  count: number,
+  classId: ClassType,
+  ownedAegis: readonly LeyLineMutationId[],
+  ownedHex: readonly HexShotBoonId[],
+  ownedEnvoy: readonly EnvoyBoonId[],
+): string[] {
+  if (classId === 'HEX_SHOT') {
+    return pickRandomHexShotBoons(count, ownedHex).map((def) => def.id);
+  }
+  if (classId === 'ENVOY') {
+    return pickRandomEnvoyBoons(count, ownedEnvoy).map((def) => def.id);
+  }
+  return pickRandomLeyLineMutations(count, ownedAegis).map((def) => def.id);
 }
 
 export function preparePostCombatBoonOffers(

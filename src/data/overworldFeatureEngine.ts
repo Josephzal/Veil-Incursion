@@ -1,7 +1,9 @@
 import type { DistrictId } from './districtPacing';
 import { depthFromNodesCleared, getDistrictFromDepth, localLevelFromDepth } from './districtPacing';
 import { requiresVeilBleedBoon } from './descentLevelMatrix';
-import { pickRandomLeyLineMutations } from './leyLineMutations';
+import { pickRawLeyBoonsForClass } from './classBoonEngine';
+import type { ClassType } from '../types/game';
+import type { EnvoyBoonId, HexShotBoonId } from '../types/classBoon';
 import type { LeyLineMutationId } from '../types/leyLineMutation';
 import type { SectorGraphLayoutPoint } from '../utils/sectorGraphLayout';
 import {
@@ -67,6 +69,13 @@ export function canSpawnRawLeyBoons(
     && claimedThisDistrict < RAW_LEY_BOONS_PER_DISTRICT;
 }
 
+export interface RawLeyBoonGenerationContext {
+  activeClass: ClassType;
+  leyLineMutations: readonly LeyLineMutationId[];
+  hexShotBoons: readonly HexShotBoonId[];
+  envoyBoons: readonly EnvoyBoonId[];
+}
+
 export function generateOverworldFeatures(
   nodesCleared: number,
   district: DistrictId,
@@ -74,6 +83,12 @@ export function generateOverworldFeatures(
   viewBox: { width: number; height: number },
   existingHound: GridHoundState | null = null,
   rawBoonsClaimedThisDistrict = 0,
+  boonContext: RawLeyBoonGenerationContext = {
+    activeClass: 'AEGIS',
+    leyLineMutations: [],
+    hexShotBoons: [],
+    envoyBoons: [],
+  },
 ): OverworldFeatureSession {
   const rand = seededRandom(seed);
   const echoCount = 2 + Math.floor(rand() * 3);
@@ -104,13 +119,18 @@ export function generateOverworldFeatures(
     const spawnCount = forceScarBoon
       ? Math.min(remaining, 1)
       : Math.min(remaining, 1 + Math.floor(rand() * 2));
-    const owned: LeyLineMutationId[] = [];
-    const picks = pickRandomLeyLineMutations(spawnCount, owned);
-    picks.forEach((mutation, i) => {
+    const picks = pickRawLeyBoonsForClass(
+      spawnCount,
+      boonContext.activeClass,
+      boonContext.leyLineMutations,
+      boonContext.hexShotBoons,
+      boonContext.envoyBoons,
+    );
+    picks.forEach((boonId, i) => {
       rawLeyBoons.push({
         id: `raw-boon-${seed}-${i}`,
         world: scatterPoint(rand, viewBox),
-        mutationId: mutation.id,
+        boonId,
         claimed: false,
       });
     });

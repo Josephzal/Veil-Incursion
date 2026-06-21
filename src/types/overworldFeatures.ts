@@ -1,4 +1,3 @@
-import type { LeyLineMutationId } from './leyLineMutation';
 import type { SectorGraphLayoutPoint } from '../utils/sectorGraphLayout';
 
 export const MAX_LEY_MUTATIONS = 5;
@@ -38,7 +37,8 @@ export interface ResonancePocket {
 export interface RawLeyBoonNode {
   id: string;
   world: SectorGraphLayoutPoint;
-  mutationId: LeyLineMutationId;
+  /** Class boon id — LeyLineMutationId, HexShotBoonId, or EnvoyBoonId depending on operative class. */
+  boonId: string;
   claimed: boolean;
 }
 
@@ -69,5 +69,10 @@ export function createEmptyOverworldSession(): OverworldFeatureSession {
 }
 
 export interface PendingLeyBoonSwap {
-  incomingMutationId: LeyLineMutationId;
+  incomingMutationId: import('./leyLineMutation').LeyLineMutationId;
+}
+
+export interface PendingClassBoonSwap {
+  classId: import('./game').ClassType;
+  incomingBoonId: string;
 }

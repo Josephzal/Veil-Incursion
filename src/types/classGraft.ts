@@ -129,6 +129,7 @@ export interface ClassGraftCastPlan {
   evadeBuffPct: number;
   untargetableBuff: boolean;
   disableUltimate: boolean;
+  dropLootOnKill: string | null;
   graftName: string;
 }
 
@@ -172,6 +173,7 @@ export function defaultClassGraftCastPlan(
     evadeBuffPct: 0,
     untargetableBuff: false,
     disableUltimate: false,
+    dropLootOnKill: null,
     graftName: '',
   };
 }

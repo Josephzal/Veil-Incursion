@@ -235,6 +235,13 @@ export interface RunStartConfig {
   shadowWarBuffs?: import('../data/shadowWarBuffEngine').ShadowWarRunBuffModifiers;
 }
 
+export interface BadgeTestCombatConfig {
+  activeClass: ClassType;
+  aegisLoadout: AegisLoadout;
+  hexShotLoadout: HexShotLoadout;
+  envoyLoadout: EnvoyLoadout;
+}
+
 interface RunContextType {
   runState: RunState;
   runLog: string[];
@@ -340,7 +347,7 @@ interface RunContextType {
   closeScanPreview: () => void;
   confirmScanPreview: () => import('../types/game').RunNodeType | null;
   getPreviewNode: () => import('../types/game').IncursionNode | null;
-  startBadgeTestCombat: (preset: 'easy' | 'hard') => void;
+  startBadgeTestCombat: (preset: 'easy' | 'hard', config: BadgeTestCombatConfig) => void;
   finishBadgeTestCombat: () => void;
   /** Clears run or badge test combat (caller navigates to hub / badge). */
   exitCombatToBadge: () => void;
@@ -349,6 +356,8 @@ interface RunContextType {
   applyIncursionConsumableHeal: (amount: number) => void;
   awardRunCredits: (amount: number, reason: string) => void;
   setAegisLoadout: (loadout: AegisLoadout) => void;
+  setHexShotLoadout: (loadout: HexShotLoadout) => void;
+  setEnvoyLoadout: (loadout: EnvoyLoadout) => void;
   purchaseBlackMarketCargo: (itemId: CargoItemId) => { success: boolean; logLine: string } | null;
   stageSafeAnchorReview: (anchorIndex: 1 | 2 | 3) => void;
   confirmSafeAnchorExtraction: (anchorIndex: 1 | 2 | 3) => void;
@@ -369,6 +378,8 @@ interface RunContextType {
   fireDirectedPing: (facing: AegisFacing) => void;
   swapLeyLineMutation: (outgoingId: LeyLineMutationId) => void;
   cancelLeyBoonSwap: () => void;
+  swapClassBoon: (outgoingId: string) => void;
+  cancelClassBoonSwap: () => void;
   prepareGridHoundEncounter: () => void;
 }
 
@@ -563,8 +574,17 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         1,
         `run-start:${sectorTier}`,
         { width: SCOUT_ARENA_WIDTH, height: SCOUT_ARENA_HEIGHT },
+        null,
+        0,
+        {
+          activeClass: config?.activeClass ?? 'AEGIS',
+          leyLineMutations: [],
+          hexShotBoons: [],
+          envoyBoons: [],
+        },
       ),
       pendingLeyBoonSwap: null,
+      pendingClassBoonSwap: null,
       blackMarketStock: [],
       aegisLoadout: config?.aegisLoadout
         ? [...config.aegisLoadout] as AegisLoadout
@@ -620,6 +640,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       { width: SCOUT_ARENA_WIDTH, height: SCOUT_ARENA_HEIGHT },
       inc.overworldSession.gridHound,
       inc.overworldSession.rawBoonsClaimedThisDistrict,
+      {
+        activeClass: inc.activeClass ?? 'AEGIS',
+        leyLineMutations: inc.leyLineMutations,
+        hexShotBoons: inc.hexShotBoons,
+        envoyBoons: inc.envoyBoons,
+      },
     );
     setActiveIncursion((prev) => {
       const next = { ...prev, overworldSession: session };
@@ -881,6 +907,17 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     if (inc.hexShotBoons.length >= MAX_LEY_MUTATIONS) {
+      setActiveIncursion((prev) => {
+        const next = {
+          ...prev,
+          pendingClassBoonSwap: {
+            classId: 'HEX_SHOT' as const,
+            incomingBoonId: boonId,
+          },
+        };
+        activeIncursionRef.current = next;
+        return next;
+      });
       appendRunLog('>> HEX-SHOT BOON CAP REACHED — swap required to accept incoming boon.');
       return;
     }
@@ -902,6 +939,17 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     if (inc.envoyBoons.length >= MAX_LEY_MUTATIONS) {
+      setActiveIncursion((prev) => {
+        const next = {
+          ...prev,
+          pendingClassBoonSwap: {
+            classId: 'ENVOY' as const,
+            incomingBoonId: boonId,
+          },
+        };
+        activeIncursionRef.current = next;
+        return next;
+      });
       appendRunLog('>> ENVOY BOON CAP REACHED — swap required to accept incoming boon.');
       return;
     }
@@ -1188,7 +1236,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     narrativeAssemblyRef.current = null;
   }, [appendRunLog]);
 
-  const startBadgeTestCombat = useCallback((preset: 'easy' | 'hard') => {
+  const startBadgeTestCombat = useCallback((preset: 'easy' | 'hard', config: BadgeTestCombatConfig) => {
     const pendingEnemies = squadFromSingleEnemy(
       preset === 'easy' ? createEasyTestEnemy() : createHardTestEnemy(),
     );
@@ -1207,7 +1255,13 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     };
     runStateRef.current = next;
     setRunState(next);
-    const resetIncursion = createDefaultActiveIncursionState();
+    const resetIncursion: ActiveIncursionState = {
+      ...createDefaultActiveIncursionState(),
+      activeClass: config.activeClass,
+      aegisLoadout: [...config.aegisLoadout] as AegisLoadout,
+      hexShotLoadout: [...config.hexShotLoadout] as HexShotLoadout,
+      envoyLoadout: [...config.envoyLoadout] as EnvoyLoadout,
+    };
     activeIncursionRef.current = resetIncursion;
     setActiveIncursion(resetIncursion);
     narrativeNodeRef.current = null;
@@ -1215,6 +1269,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     setPostCombatMutationChoices([]);
     setRunLog([
       '>> BADGE TEST COMBAT — ISOLATED ARENA.',
+      `>> OPERATIVE CLASS: ${config.activeClass.replace(/_/g, ' ')}.`,
       `>> HOSTILE: ${pendingEnemy?.designation ?? 'UNKNOWN'} // ${pendingEnemy?.maxHp ?? 0} HP.`,
       preset === 'easy'
         ? '>> ENEMY PROFILE: STRIKE ONLY.'
@@ -2247,6 +2302,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       { width: SCOUT_ARENA_WIDTH, height: SCOUT_ARENA_HEIGHT },
       inc.overworldSession.gridHound?.caught ? null : inc.overworldSession.gridHound,
       districtChanged ? 0 : inc.overworldSession.rawBoonsClaimedThisDistrict,
+      {
+        activeClass: inc.activeClass ?? 'AEGIS',
+        leyLineMutations: inc.leyLineMutations,
+        hexShotBoons: inc.hexShotBoons,
+        envoyBoons: inc.envoyBoons,
+      },
     );
 
     const chalkWardRuntime = tickChalkLineWardAfterNodeClear({
@@ -2620,10 +2681,23 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
 
-    applyLeyLineMutation(node.mutationId);
-    appendRunLog(`>> RAW LEY-LINE NODE — ${node.mutationId.replace(/_/g, ' ')} acquired.`);
+    const activeClass = inc.activeClass ?? 'AEGIS';
+    if (activeClass === 'HEX_SHOT') {
+      applyHexShotBoon(node.boonId as HexShotBoonId);
+    } else if (activeClass === 'ENVOY') {
+      applyEnvoyBoon(node.boonId as EnvoyBoonId);
+    } else {
+      applyLeyLineMutation(node.boonId as LeyLineMutationId);
+    }
+    appendRunLog(`>> RAW LEY-LINE NODE — ${getClassBoonDisplayName(activeClass, node.boonId)} acquired.`);
     return true;
-  }, [adjustResonance, applyLeyLineMutation, appendRunLog]);
+  }, [
+    adjustResonance,
+    applyEnvoyBoon,
+    applyHexShotBoon,
+    applyLeyLineMutation,
+    appendRunLog,
+  ]);
 
   const fireDirectedPing = useCallback((facing: AegisFacing) => {
     adjustResonance(DIRECTED_PING_RESONANCE_COST, 'DIRECTED PING');
@@ -2666,6 +2740,54 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
     appendRunLog('>> INCOMING LEY-LINE BOON DECLINED.');
+  }, [appendRunLog]);
+
+  const swapClassBoon = useCallback((outgoingId: string) => {
+    const inc = activeIncursionRef.current;
+    const pending = inc.pendingClassBoonSwap;
+    if (!pending) return;
+
+    setRunState((prev) => {
+      const maxSoulAnchor = Math.max(
+        1,
+        Math.floor(prev.maxSoulAnchor * (1 - LEY_BOON_SWAP_HP_COST_PCT / 100)),
+      );
+      const soulAnchorIntegrity = Math.min(prev.soulAnchorIntegrity, maxSoulAnchor);
+      const next = { ...prev, maxSoulAnchor, soulAnchorIntegrity };
+      runStateRef.current = next;
+      return next;
+    });
+
+    setActiveIncursion((prev) => {
+      if (pending.classId === 'HEX_SHOT') {
+        const without = prev.hexShotBoons.filter((id) => id !== outgoingId);
+        const next = {
+          ...prev,
+          hexShotBoons: [...without, pending.incomingBoonId as HexShotBoonId],
+          pendingClassBoonSwap: null,
+        };
+        activeIncursionRef.current = next;
+        return next;
+      }
+      const without = prev.envoyBoons.filter((id) => id !== outgoingId);
+      const next = {
+        ...prev,
+        envoyBoons: [...without, pending.incomingBoonId as EnvoyBoonId],
+        pendingClassBoonSwap: null,
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    appendRunLog(`>> ${pending.classId} BOON SWAP — ${outgoingId.replace(/_/g, ' ')} replaced (HP cost applied).`);
+  }, [appendRunLog]);
+
+  const cancelClassBoonSwap = useCallback(() => {
+    setActiveIncursion((prev) => {
+      const next = { ...prev, pendingClassBoonSwap: null };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    appendRunLog('>> INCOMING CLASS BOON DECLINED.');
   }, [appendRunLog]);
 
   const prepareGridHoundEncounter = useCallback(() => {
@@ -3142,6 +3264,22 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const setHexShotLoadout = useCallback((loadout: HexShotLoadout) => {
+    setActiveIncursion((prev) => {
+      const next = { ...prev, hexShotLoadout: [...loadout] as HexShotLoadout };
+      activeIncursionRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const setEnvoyLoadout = useCallback((loadout: EnvoyLoadout) => {
+    setActiveIncursion((prev) => {
+      const next = { ...prev, envoyLoadout: [...loadout] as EnvoyLoadout };
+      activeIncursionRef.current = next;
+      return next;
+    });
+  }, []);
+
   const purchaseBlackMarketCargo = useCallback((itemId: CargoItemId): { success: boolean; logLine: string } | null => {
     const inc = activeIncursionRef.current;
     const stock = inc.blackMarketStock.length > 0 ? inc.blackMarketStock : rollBlackMarketStock();
@@ -3252,6 +3390,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       applyIncursionConsumableHeal,
       awardRunCredits,
       setAegisLoadout,
+      setHexShotLoadout,
+      setEnvoyLoadout,
       purchaseBlackMarketCargo,
       focusPreviewNode,
       spendAttunementCharge,
@@ -3287,6 +3427,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       fireDirectedPing,
       swapLeyLineMutation,
       cancelLeyBoonSwap,
+      swapClassBoon,
+      cancelClassBoonSwap,
       prepareGridHoundEncounter,
     }),
     [
@@ -3359,6 +3501,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       applyIncursionConsumableHeal,
       awardRunCredits,
       setAegisLoadout,
+      setHexShotLoadout,
+      setEnvoyLoadout,
       purchaseBlackMarketCargo,
       focusPreviewNode,
       spendAttunementCharge,
@@ -3393,6 +3537,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       fireDirectedPing,
       swapLeyLineMutation,
       cancelLeyBoonSwap,
+      swapClassBoon,
+      cancelClassBoonSwap,
       prepareGridHoundEncounter,
     ],
   );

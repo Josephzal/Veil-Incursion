@@ -35,7 +35,18 @@ import {
   type HexShotLoadout,
 } from '../types/operativeClass';
 import { normalizeClassAccountFields, cycleOperativeClass, getClassDisplayName } from '../data/classLoadoutEngine';
+import {
+  isHexShotAbilityUnlocked,
+  isEnvoyAbilityUnlocked,
+} from '../data/classAbilityUnlockEngine';
+import { getHexShotAbilityDefinition } from '../data/hexShotAbilities';
+import { getEnvoyAbilityDefinition } from '../data/envoyAbilities';
+import type { EnvoyAbilityId, HexShotAbilityId } from '../types/operativeClass';
 import { normalizeAegisLoadout } from '../utils/aegisLoadoutUtils';
+import {
+  normalizeEnvoyLoadoutForCommit,
+  normalizeHexShotLoadoutForCommit,
+} from '../utils/classLoadoutUtils';
 import {
   deductAbilityUnlockCost,
   isAbilityUnlocked,
@@ -233,9 +244,19 @@ interface PlayerAccountContextType {
   setMetropolitanNode: (node: string, sectorId?: MacroSectorId) => void;
   depositBankedCargo: (delta: GlobalBankedCargo) => void;
   setAegisLoadout: (loadout: AegisLoadout) => void;
+  setHexShotLoadout: (loadout: HexShotLoadout) => void;
+  setEnvoyLoadout: (loadout: EnvoyLoadout) => void;
   setActiveClass: (classId: ClassType) => void;
   cycleActiveClass: (direction: 1 | -1) => void;
   unlockAegisAbility: (abilityId: AegisAbilityId) => {
+    success: boolean;
+    logLine: string;
+  };
+  unlockHexShotAbility: (abilityId: HexShotAbilityId) => {
+    success: boolean;
+    logLine: string;
+  };
+  unlockEnvoyAbility: (abilityId: EnvoyAbilityId) => {
     success: boolean;
     logLine: string;
   };
@@ -257,7 +278,12 @@ interface PlayerAccountContextType {
   purchaseHubContraband: (cargoId: CargoItemId, discountPct?: number) => { success: boolean; logLine: string };
   sellFenceResource: (resourceId: FenceableResourceId, quantity?: number) => { success: boolean; logLine: string };
   commitDescentLoadout: () => CargoRunState;
-  persistRunExtraction: (payload: { cargo: CargoRunState; aegisLoadout: AegisLoadout }) => void;
+  persistRunExtraction: (payload: {
+    cargo: CargoRunState;
+    aegisLoadout: AegisLoadout;
+    hexShotLoadout: HexShotLoadout;
+    envoyLoadout: EnvoyLoadout;
+  }) => void;
   getStashCapacitySnapshot: () => { used: number; max: number };
   replaceResourceStash: (stash: ResourceQuantity) => void;
 }
@@ -490,6 +516,26 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
     [updateAccount],
   );
 
+  const setHexShotLoadout = useCallback(
+    (loadout: HexShotLoadout) => {
+      updateAccount((prev) => ({
+        ...prev,
+        hexShotLoadout: [...loadout],
+      }));
+    },
+    [updateAccount],
+  );
+
+  const setEnvoyLoadout = useCallback(
+    (loadout: EnvoyLoadout) => {
+      updateAccount((prev) => ({
+        ...prev,
+        envoyLoadout: [...loadout],
+      }));
+    },
+    [updateAccount],
+  );
+
   const setActiveClass = useCallback(
     (classId: ClassType) => {
       updateAccount((prev) => {
@@ -545,6 +591,46 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       return { success: true, logLine: `>> ${def.label} UNLOCKED — COMBAT PROTOCOL INTEGRATED.` };
     },
     [account.resourceStash, account.unlockedAegisAbilities, updateAccount],
+  );
+
+  const unlockHexShotAbility = useCallback(
+    (abilityId: HexShotAbilityId): { success: boolean; logLine: string } => {
+      const def = getHexShotAbilityDefinition(abilityId);
+      if (isHexShotAbilityUnlocked(account.unlockedHexShotAbilities, abilityId)) {
+        return { success: false, logLine: `>> ${def.label} ALREADY UNLOCKED.` };
+      }
+      const nextStash = deductAbilityUnlockCost(account.resourceStash, def.unlockCost);
+      if (!nextStash) {
+        return { success: false, logLine: `>> UNLOCK REJECTED — INSUFFICIENT RESOURCES FOR ${def.label}.` };
+      }
+      updateAccount((prev) => ({
+        ...prev,
+        resourceStash: nextStash,
+        unlockedHexShotAbilities: [...prev.unlockedHexShotAbilities, abilityId],
+      }));
+      return { success: true, logLine: `>> ${def.label} UNLOCKED — BALLISTIC PROTOCOL INTEGRATED.` };
+    },
+    [account.resourceStash, account.unlockedHexShotAbilities, updateAccount],
+  );
+
+  const unlockEnvoyAbility = useCallback(
+    (abilityId: EnvoyAbilityId): { success: boolean; logLine: string } => {
+      const def = getEnvoyAbilityDefinition(abilityId);
+      if (isEnvoyAbilityUnlocked(account.unlockedEnvoyAbilities, abilityId)) {
+        return { success: false, logLine: `>> ${def.label} ALREADY UNLOCKED.` };
+      }
+      const nextStash = deductAbilityUnlockCost(account.resourceStash, def.unlockCost);
+      if (!nextStash) {
+        return { success: false, logLine: `>> UNLOCK REJECTED — INSUFFICIENT RESOURCES FOR ${def.label}.` };
+      }
+      updateAccount((prev) => ({
+        ...prev,
+        resourceStash: nextStash,
+        unlockedEnvoyAbilities: [...prev.unlockedEnvoyAbilities, abilityId],
+      }));
+      return { success: true, logLine: `>> ${def.label} UNLOCKED — SPELL PROTOCOL INTEGRATED.` };
+    },
+    [account.resourceStash, account.unlockedEnvoyAbilities, updateAccount],
   );
 
   const depositResourceStash = useCallback(
@@ -852,14 +938,25 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
   }, [account.preRunCargo, account.tacticalLoadout, updateAccount]);
 
   const persistRunExtraction = useCallback(
-    (payload: { cargo: CargoRunState; aegisLoadout: AegisLoadout }) => {
+    (payload: {
+      cargo: CargoRunState;
+      aegisLoadout: AegisLoadout;
+      hexShotLoadout: HexShotLoadout;
+      envoyLoadout: EnvoyLoadout;
+    }) => {
       updateAccount((prev) => {
-        const deposited = depositAllCargoToHubAccount(payload.cargo, prev, payload.aegisLoadout);
+        const deposited = depositAllCargoToHubAccount(payload.cargo, prev, {
+          aegisLoadout: payload.aegisLoadout,
+          hexShotLoadout: payload.hexShotLoadout,
+          envoyLoadout: payload.envoyLoadout,
+        });
         return {
           ...prev,
           resourceStash: deposited.resourceStash,
           hubCraftedConsumables: deposited.hubCraftedConsumables,
           aegisLoadout: normalizeAegisLoadout(deposited.aegisLoadout),
+          hexShotLoadout: normalizeHexShotLoadoutForCommit(deposited.hexShotLoadout),
+          envoyLoadout: normalizeEnvoyLoadoutForCommit(deposited.envoyLoadout),
         };
       });
     },
@@ -956,9 +1053,13 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       setMetropolitanNode,
       depositBankedCargo,
       setAegisLoadout,
+      setHexShotLoadout,
+      setEnvoyLoadout,
       setActiveClass,
       cycleActiveClass,
       unlockAegisAbility,
+      unlockHexShotAbility,
+      unlockEnvoyAbility,
       craftRecipe,
       depositResourceStash,
       addLockedContainer,
@@ -996,9 +1097,13 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       setMetropolitanNode,
       depositBankedCargo,
       setAegisLoadout,
+      setHexShotLoadout,
+      setEnvoyLoadout,
       setActiveClass,
       cycleActiveClass,
       unlockAegisAbility,
+      unlockHexShotAbility,
+      unlockEnvoyAbility,
       craftRecipe,
       depositResourceStash,
       addLockedContainer,

@@ -49,6 +49,7 @@ export interface EnvoyExecutionContext {
   setShadowStepEvadeActive?: (active: boolean) => void;
   reduceEnemyAp: (unitId: string, amount: number) => void;
   cancelEnemyPreparedAttack?: (unitId: string) => void;
+  ultimatePerformance?: number;
 }
 
 export type EnvoyExecutionResult =
@@ -271,9 +272,11 @@ export function executeEnvoyAbility(ctx: EnvoyExecutionContext): EnvoyExecutionR
     }
 
     case 'CATACLYSM_SIGIL': {
+      const performance = ctx.ultimatePerformance ?? 1;
+      const perTarget = Math.floor(def.baseDamage * 1.4 * (0.55 + performance * 0.45));
       for (const unit of aliveUnits(ctx.squad)) {
         if (!unit.unitId) continue;
-        ctx.hurtEnemy(Math.floor(def.baseDamage * 1.4), '[CATACLYSM SIGIL]', {
+        ctx.hurtEnemy(perTarget, '[CATACLYSM SIGIL]', {
           channel: 'TRUE',
           abilityId: ctx.abilityId,
           rollCrit: false,

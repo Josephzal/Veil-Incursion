@@ -1,20 +1,32 @@
 import type { CargoItemId, CargoRunState } from '../types/cargoGrid';
 import type { AegisLoadout } from '../types/aegisCombat';
 import type { PlayerAccount } from '../types/game';
+import type { EnvoyLoadout, HexShotLoadout } from '../types/operativeClass';
 import { isResourceItemId } from './resourceRegistry';
 import { addToResourceStash } from './resourceStashEngine';
+
+export interface RunExtractionLoadouts {
+  aegisLoadout: AegisLoadout;
+  hexShotLoadout: HexShotLoadout;
+  envoyLoadout: EnvoyLoadout;
+}
 
 export interface RunExtractionDeposit {
   resourceStash: PlayerAccount['resourceStash'];
   hubCraftedConsumables: PlayerAccount['hubCraftedConsumables'];
   aegisLoadout: AegisLoadout;
+  hexShotLoadout: HexShotLoadout;
+  envoyLoadout: EnvoyLoadout;
 }
 
 /** Deposits every item from run cargo into persistent hub stash fields. */
 export function depositAllCargoToHubAccount(
   cargo: CargoRunState,
-  account: Pick<PlayerAccount, 'resourceStash' | 'hubCraftedConsumables' | 'aegisLoadout'>,
-  aegisLoadout: AegisLoadout,
+  account: Pick<
+    PlayerAccount,
+    'resourceStash' | 'hubCraftedConsumables' | 'aegisLoadout' | 'hexShotLoadout' | 'envoyLoadout'
+  >,
+  loadouts: RunExtractionLoadouts,
 ): RunExtractionDeposit {
   let resourceStash = account.resourceStash;
   const hubCraftedConsumables = { ...account.hubCraftedConsumables };
@@ -36,6 +48,8 @@ export function depositAllCargoToHubAccount(
   return {
     resourceStash,
     hubCraftedConsumables,
-    aegisLoadout: [...aegisLoadout] as AegisLoadout,
+    aegisLoadout: [...loadouts.aegisLoadout] as AegisLoadout,
+    hexShotLoadout: [...loadouts.hexShotLoadout] as HexShotLoadout,
+    envoyLoadout: [...loadouts.envoyLoadout] as EnvoyLoadout,
   };
 }

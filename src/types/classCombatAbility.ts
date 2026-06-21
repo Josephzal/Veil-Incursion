@@ -55,6 +55,8 @@ export interface ClassCombatEncounterState {
   entropyHexTurns: Record<string, number>;
   fleshWarpUnits: Record<string, boolean>;
   brimstoneBleedTurns: Record<string, number>;
+  /** Hex Reactive Camo — once per encounter. */
+  reactiveCamoUsed: boolean;
 }
 
 export function createDefaultClassCombatEncounterState(): ClassCombatEncounterState {
@@ -68,6 +70,7 @@ export function createDefaultClassCombatEncounterState(): ClassCombatEncounterSt
     entropyHexTurns: {},
     fleshWarpUnits: {},
     brimstoneBleedTurns: {},
+    reactiveCamoUsed: false,
   };
 }
 

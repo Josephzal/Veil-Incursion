@@ -91,7 +91,12 @@ export default function IdentificationBadgeView({
   };
 
   const launchTestCombat = (preset: 'easy' | 'hard') => {
-    startBadgeTestCombat(preset);
+    startBadgeTestCombat(preset, {
+      activeClass: account.activeClass,
+      aegisLoadout: account.aegisLoadout,
+      hexShotLoadout: account.hexShotLoadout,
+      envoyLoadout: account.envoyLoadout,
+    });
     startCombat();
   };
 

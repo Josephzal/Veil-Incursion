@@ -38,11 +38,6 @@ export default function ClassAbilityRoster({
           );
         })}
       </View>
-      {classId !== 'AEGIS' ? (
-        <Text style={[styles.note, { color: theme.mutedColor }]}>
-          {'>> Combat systems for this class deploy in the next phase.'}
-        </Text>
-      ) : null}
     </View>
   );
 }

@@ -384,6 +384,7 @@ export interface ActiveIncursionState {
   overworldSession: import('./overworldFeatures').OverworldFeatureSession;
   /** Set when 6th Ley-Line boon requires swap modal. */
   pendingLeyBoonSwap: import('./overworldFeatures').PendingLeyBoonSwap | null;
+  pendingClassBoonSwap: import('./overworldFeatures').PendingClassBoonSwap | null;
   /** Current black market node stock (soul-core + 2–4 rotating listings). */
   blackMarketStock: CargoItemId[];
   focusedNodeIds: string[];
@@ -485,6 +486,7 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     runStatusEffects: [],
     overworldSession: createEmptyOverworldSession(),
     pendingLeyBoonSwap: null,
+    pendingClassBoonSwap: null,
     blackMarketStock: [],
     focusedNodeIds: [],
     bossDefeated: false,

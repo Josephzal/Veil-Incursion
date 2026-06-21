@@ -27,11 +27,15 @@ import {
   FRONTLINE_MELEE_RETURN_IDLE_MS,
   FRONTLINE_MELEE_SNAP_MS,
   FRONTLINE_MELEE_SPRITE_HOLD_MS,
+  RANGED_ATTACK_SPRITE_HOLD_MS,
+  RANGED_ATTACK_SPRITE_IN_MS,
+  RANGED_ATTACK_SPRITE_OUT_MS,
 } from './combatEnemyBarLayout';
 import CombatPlayerAttackSprite, { type CombatPlayerAttackSpriteHandle } from './CombatPlayerAttackSprite';
 
 const SHAKE_AMPLITUDE = 10;
 const DEFAULT_LUNGE = { x: 48, y: 0 };
+const RANGED_ATTACK_SCALE = 1.05;
 const GLOW_PULSE_MS = 900;
 const PRIMED_GLOW = '#ff00ff';
 
@@ -49,6 +53,8 @@ export interface PlayerAttackLungeDelta {
 export interface CombatPlayerViewportRef {
   triggerDamageEffect: (variant?: EnemyDeckStrikeVariant) => void;
   triggerAttackLunge: (delta?: PlayerAttackLungeDelta) => void;
+  /** Ranged operative strike — attack sprite only, no forward lunge. */
+  triggerRangedAttack: () => void;
   triggerEvadeAfterimage: () => void;
   triggerEnemyCritVignette: () => void;
   setWardPrimed: (active: boolean) => void;
@@ -70,6 +76,7 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
     const shakeX = useSharedValue(0);
     const lungeX = useSharedValue(0);
     const lungeY = useSharedValue(0);
+    const attackScale = useSharedValue(1);
     const flashOpacity = useSharedValue(0);
     const [flashColor, setFlashColor] = useState(FLASH_COLORS.hp);
     const flashColorRef = useRef(FLASH_COLORS.hp);
@@ -116,6 +123,7 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
 
     const runTargetedLunge = (delta: PlayerAttackLungeDelta) => {
       void attackSpriteRef.current?.executeAttackAnimation();
+      attackScale.value = 1;
       lungeX.value = withSequence(
         withTiming(delta.x, { duration: FRONTLINE_MELEE_SNAP_MS, easing: Easing.out(Easing.cubic) }),
         withDelay(FRONTLINE_MELEE_SPRITE_HOLD_MS, withTiming(delta.x, { duration: 0 })),
@@ -128,6 +136,23 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
       );
     };
 
+    const runRangedAttack = () => {
+      void attackSpriteRef.current?.executeRangedAttackAnimation();
+      lungeX.value = 0;
+      lungeY.value = 0;
+      attackScale.value = withSequence(
+        withTiming(RANGED_ATTACK_SCALE, {
+          duration: RANGED_ATTACK_SPRITE_IN_MS,
+          easing: Easing.out(Easing.cubic),
+        }),
+        withDelay(RANGED_ATTACK_SPRITE_HOLD_MS, withTiming(RANGED_ATTACK_SCALE, { duration: 0 })),
+        withTiming(1, {
+          duration: RANGED_ATTACK_SPRITE_OUT_MS,
+          easing: Easing.inOut(Easing.cubic),
+        }),
+      );
+    };
+
     useImperativeHandle(ref, () => ({
       triggerDamageEffect: (variant = 'hp') => {
         runShake();
@@ -135,6 +160,9 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
       },
       triggerAttackLunge: (delta = DEFAULT_LUNGE) => {
         runTargetedLunge(delta);
+      },
+      triggerRangedAttack: () => {
+        runRangedAttack();
       },
       triggerEvadeAfterimage: () => {
         lungeX.value = withSequence(
@@ -156,12 +184,13 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
         }
         glowOpacity.value = withTiming(0, { duration: GLOW_PULSE_MS });
       },
-    }), [flashOpacity, lungeX, lungeY, shakeX, glowOpacity]);
+    }), [attackScale, flashOpacity, lungeX, lungeY, shakeX, glowOpacity]);
 
     const frameAnimatedStyle = useAnimatedStyle(() => ({
       transform: [
         { translateX: shakeX.value + lungeX.value },
         { translateY: lungeY.value },
+        { scale: attackScale.value },
       ],
     }));
 

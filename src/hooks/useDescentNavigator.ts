@@ -103,7 +103,12 @@ export function useDescentNavigator() {
 
   const finalizeSectorExtraction = useCallback(() => {
     const inc = incursionRef.current;
-    persistRunExtraction({ cargo: inc.cargo, aegisLoadout: inc.aegisLoadout });
+    persistRunExtraction({
+      cargo: inc.cargo,
+      aegisLoadout: inc.aegisLoadout,
+      hexShotLoadout: inc.hexShotLoadout,
+      envoyLoadout: inc.envoyLoadout,
+    });
     const credits = calculateSectorExtractionPayout();
     const riftIron = Math.max(5, Math.floor(credits / 40));
     addCredits(credits);

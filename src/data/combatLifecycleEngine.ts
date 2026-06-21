@@ -77,6 +77,12 @@ const gutterGoliathTurnStart: TurnStartHandler = (enemy, ctx) => {
   if (enemy.currentHp >= enemy.maxHp) {
     return { squad: ctx.squad, logLines: [] };
   }
+  if (ctx.extras.fleshWarpUnitIds[enemy.unitId]) {
+    return {
+      squad: ctx.squad,
+      logLines: [`>> ${enemy.designation} REGENERATION BLOCKED — flesh-warp seal.`],
+    };
+  }
   const healAmount = enemy.maxHp - enemy.currentHp >= 15 ? 15 : enemy.maxHp - enemy.currentHp;
   const healed = Math.min(enemy.maxHp, enemy.currentHp + 15);
   const squad = patchUnitInSquad(ctx.squad, enemy.unitId, { currentHp: healed });
@@ -106,6 +112,12 @@ const thrallSlumpTurnStart: TurnStartHandler = (enemy, ctx) => {
     return {
       squad,
       logLines: [`>> ${enemy.designation} SLUMPED — revival in ${remaining} turn(s).`],
+    };
+  }
+  if (ctx.extras.fleshWarpUnitIds[enemy.unitId]) {
+    return {
+      squad: ctx.squad,
+      logLines: [`>> ${enemy.designation} REVIVAL BLOCKED — flesh-warp seal.`],
     };
   }
   const revivedHp = Math.floor(enemy.maxHp * 0.5);
@@ -181,7 +193,10 @@ const graveRobberTurnStart: TurnStartHandler = (enemy, ctx) => {
   const hpBonus = Math.floor(enemy.maxHp * 0.3);
   const dmgBonus = Math.floor(enemy.baseDamage * 0.2);
   const nextMaxHp = enemy.maxHp + hpBonus;
-  const nextHp = Math.min(nextMaxHp, enemy.currentHp + hpBonus);
+  const growthBlocked = ctx.extras.fleshWarpUnitIds[enemy.unitId] === true;
+  const nextHp = growthBlocked
+    ? enemy.currentHp
+    : Math.min(nextMaxHp, enemy.currentHp + hpBonus);
   let squad = patchUnitInSquad(ctx.squad, enemy.unitId, {
     graveRobberFeeds: feeds,
     maxHp: nextMaxHp,
@@ -193,7 +208,9 @@ const graveRobberTurnStart: TurnStartHandler = (enemy, ctx) => {
     squad,
     logLines: [
       `>> ${enemy.designation} CORPSE FEED — consumed ${corpse.designation}.`,
-      `>> GROWTH — +${hpBonus} HP pool, +${dmgBonus} damage.`,
+      growthBlocked
+        ? '>> GROWTH — HP gain blocked by flesh-warp seal.'
+        : `>> GROWTH — +${hpBonus} HP pool, +${dmgBonus} damage.`,
     ],
   };
 };

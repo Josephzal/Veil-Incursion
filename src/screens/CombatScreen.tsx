@@ -651,6 +651,11 @@ export default function CombatScreen(): React.JSX.Element {
                 onResolutionPanelChange={handleResolutionPanelChange}
                 onCombatComplete={handleCombatComplete}
                 onLethalEnemyStrike={recordRunKillAttacker}
+                onGraftLootDrop={(kind) => {
+                  if (kind === 'CREDITS') {
+                    awardRunCredits(standardKillCredits(activeIncursion.nodesCleared), 'Scavenger Bolt graft');
+                  }
+                }}
                 runCredits={activeIncursion.runCredits}
                 initialOperativeHp={runState.soulAnchorIntegrity}
                 initialStamina={combatEntryStamina}

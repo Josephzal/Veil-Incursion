@@ -49,6 +49,7 @@ export interface HexShotExecutionContext {
   setShadowStepEvadeActive?: (active: boolean) => void;
   reduceEnemyAp: (unitId: string, amount: number) => void;
   emptyMagazine: () => void;
+  ultimatePerformance?: number;
 }
 
 export type HexShotExecutionResult =
@@ -334,7 +335,8 @@ export function executeHexShotAbility(ctx: HexShotExecutionContext): HexShotExec
         ctx.log('[REJECTED] >> Zero-Protocol requires a target.');
         return { ok: false, refundAp: def.apCost };
       }
-      const burst = def.baseDamage + ctx.currentAmmo * 4;
+      const performance = ctx.ultimatePerformance ?? 1;
+      const burst = Math.floor((def.baseDamage + ctx.currentAmmo * 4) * (0.55 + performance * 0.45));
       ctx.hurtEnemy(burst, '[ZERO-PROTOCOL]', {
         channel: 'TRUE',
         abilityId: ctx.abilityId,
@@ -376,23 +378,42 @@ export function isHexShotAbilityEnabled(
   return true;
 }
 
+export function detonateRiftSnareOnUnit(
+  unitId: string,
+  designation: string,
+  snares: Record<string, number>,
+  hurtEnemy: HexShotExecutionContext['hurtEnemy'],
+  log: (msg: string) => void,
+): Record<string, number> {
+  if (snares[unitId] == null) return snares;
+  const dmg = snares[unitId];
+  const remaining = { ...snares };
+  delete remaining[unitId];
+  hurtEnemy(dmg, '[RIFT-SNARE DETONATION]', {
+    channel: 'KINETIC',
+    abilityId: 'RIFT_SNARE',
+    targetId: unitId,
+  }, unitId);
+  log(`[RIFT-SNARE] >> Mine detonated under ${designation}.`);
+  return remaining;
+}
+
 export function detonateRiftSnares(
   squad: EnemyCombatProfile[],
   snares: Record<string, number>,
   hurtEnemy: HexShotExecutionContext['hurtEnemy'],
   log: (msg: string) => void,
 ): Record<string, number> {
-  const remaining: Record<string, number> = { ...snares };
+  let remaining: Record<string, number> = { ...snares };
   for (const unit of aliveUnits(squad)) {
     if (!unit.unitId || remaining[unit.unitId] == null) continue;
-    const dmg = remaining[unit.unitId];
-    delete remaining[unit.unitId];
-    hurtEnemy(dmg, '[RIFT-SNARE DETONATION]', {
-      channel: 'KINETIC',
-      abilityId: 'RIFT_SNARE',
-      targetId: unit.unitId,
-    }, unit.unitId);
-    log(`[RIFT-SNARE] >> Mine detonated under ${unit.designation} — ${dmg} splash.`);
+    remaining = detonateRiftSnareOnUnit(
+      unit.unitId,
+      unit.designation,
+      remaining,
+      hurtEnemy,
+      log,
+    );
   }
   return remaining;
 }

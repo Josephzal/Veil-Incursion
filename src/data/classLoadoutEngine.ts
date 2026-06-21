@@ -19,6 +19,7 @@ import { getEnvoyAbilityDefinition } from './envoyAbilities';
 import { getHexShotAbilityDefinition } from './hexShotAbilities';
 import { getAbilityDefinition } from './aegisAbilities';
 import { CLASS_DEFINITIONS } from './classes';
+import { normalizeUnlockedHexShotAbilities, normalizeUnlockedEnvoyAbilities } from './classAbilityUnlockEngine';
 
 export function migrateClassType(classId: string | undefined): ClassType {
   if (classId === 'RIFTSHOT') return 'HEX_SHOT';
@@ -53,22 +54,6 @@ function normalizeEnvoyLoadout(loadout: readonly string[] | undefined): EnvoyLoa
   ];
 }
 
-function normalizeHexShotUnlocked(
-  unlocked: readonly string[] | undefined,
-  loadout: HexShotLoadout,
-): HexShotAbilityId[] {
-  const fromSave = (unlocked?.length ? unlocked : [...DEFAULT_HEX_SHOT_UNLOCKED]) as HexShotAbilityId[];
-  return [...new Set<HexShotAbilityId>([...fromSave, ...loadout])];
-}
-
-function normalizeEnvoyUnlocked(
-  unlocked: readonly string[] | undefined,
-  loadout: EnvoyLoadout,
-): EnvoyAbilityId[] {
-  const fromSave = (unlocked?.length ? unlocked : [...DEFAULT_ENVOY_UNLOCKED]) as EnvoyAbilityId[];
-  return [...new Set<EnvoyAbilityId>([...fromSave, ...loadout])];
-}
-
 export function getClassDisplayName(classId: ClassType): string {
   return CLASS_DEFINITIONS[classId].displayName;
 }
@@ -79,13 +64,19 @@ export function getActiveClassSnapshot(account: PlayerAccount): ClassLoadoutSnap
       return {
         classId: 'HEX_SHOT',
         loadout: normalizeHexShotLoadout(account.hexShotLoadout),
-        unlocked: normalizeHexShotUnlocked(account.unlockedHexShotAbilities, normalizeHexShotLoadout(account.hexShotLoadout)),
+        unlocked: normalizeUnlockedHexShotAbilities(
+          account.unlockedHexShotAbilities,
+          normalizeHexShotLoadout(account.hexShotLoadout),
+        ),
       };
     case 'ENVOY':
       return {
         classId: 'ENVOY',
         loadout: normalizeEnvoyLoadout(account.envoyLoadout),
-        unlocked: normalizeEnvoyUnlocked(account.unlockedEnvoyAbilities, normalizeEnvoyLoadout(account.envoyLoadout)),
+        unlocked: normalizeUnlockedEnvoyAbilities(
+          account.unlockedEnvoyAbilities,
+          normalizeEnvoyLoadout(account.envoyLoadout),
+        ),
       };
     default:
       return {
@@ -146,8 +137,8 @@ export function normalizeClassAccountFields(parsed: Partial<PlayerAccount>): Pic
     aegisLoadout,
     unlockedAegisAbilities: normalizeUnlockedAegisAbilities(parsed.unlockedAegisAbilities, aegisLoadout),
     hexShotLoadout,
-    unlockedHexShotAbilities: normalizeHexShotUnlocked(parsed.unlockedHexShotAbilities, hexShotLoadout),
+    unlockedHexShotAbilities: normalizeUnlockedHexShotAbilities(parsed.unlockedHexShotAbilities, hexShotLoadout),
     envoyLoadout,
-    unlockedEnvoyAbilities: normalizeEnvoyUnlocked(parsed.unlockedEnvoyAbilities, envoyLoadout),
+    unlockedEnvoyAbilities: normalizeUnlockedEnvoyAbilities(parsed.unlockedEnvoyAbilities, envoyLoadout),
   };
 }

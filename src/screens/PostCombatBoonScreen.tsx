@@ -6,9 +6,11 @@ import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
 import SelectionContinueButton from '../components/SelectionContinueButton';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
+import ClassBoonSwapOverlay from '../components/ClassBoonSwapOverlay';
 import { useTerminal } from '../context/TerminalContext';
 import { useDescentNavigator } from '../hooks/useDescentNavigator';
 import type { ClassType } from '../types/game';
+import { MAX_LEY_MUTATIONS } from '../types/overworldFeatures';
 
 const TERMINAL_ACCENT = '#00ff33';
 
@@ -27,14 +29,24 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
     preparePostCombatMutations,
     completeNodeAfterMutation,
     endRun,
+    swapClassBoon,
+    cancelClassBoonSwap,
   } = useRun();
   const { startGameOver, startResourceHarvest } = useGameFlow();
   const { finalizeIncursionAdvance } = useDescentNavigator();
   const selectingRef = useRef(false);
+  const swapAdvancePendingRef = useRef(false);
+  const swapOverlayShownRef = useRef(false);
   const [selectedBoonId, setSelectedBoonId] = useState<string | null>(null);
 
   const mutationsPreparedRef = useRef(false);
   const activeClass = activeIncursion.activeClass ?? 'AEGIS';
+  const pendingClassSwap = activeIncursion.pendingClassBoonSwap;
+  const ownedClassBoons = activeClass === 'HEX_SHOT'
+    ? activeIncursion.hexShotBoons
+    : activeClass === 'ENVOY'
+      ? activeIncursion.envoyBoons
+      : [];
 
   const advanceAfterBoon = useCallback((message: string) => {
     if (activeIncursion.pendingHarvestReturn === 'POST_COMBAT') {
@@ -58,6 +70,27 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
     preparePostCombatMutations,
   ]);
 
+  useEffect(() => {
+    if (pendingClassSwap != null) {
+      swapOverlayShownRef.current = true;
+    }
+    if (
+      swapAdvancePendingRef.current
+      && swapOverlayShownRef.current
+      && pendingClassSwap == null
+    ) {
+      swapAdvancePendingRef.current = false;
+      swapOverlayShownRef.current = false;
+      const picked = postCombatMutationChoices.find((m) => m.id === selectedBoonId);
+      advanceAfterBoon(`Class boon secured: ${picked?.name ?? selectedBoonId ?? 'unknown'}.`);
+    }
+  }, [
+    advanceAfterBoon,
+    pendingClassSwap,
+    postCombatMutationChoices,
+    selectedBoonId,
+  ]);
+
   const handleContinue = () => {
     if (!selectedBoonId || selectingRef.current) return;
     selectingRef.current = true;
@@ -69,7 +102,12 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
     }
 
     const picked = postCombatMutationChoices.find((m) => m.id === selectedBoonId);
+    const atClassBoonCap = activeClass !== 'AEGIS' && ownedClassBoons.length >= MAX_LEY_MUTATIONS;
     completeNodeAfterMutation(selectedBoonId);
+    if (atClassBoonCap) {
+      swapAdvancePendingRef.current = true;
+      return;
+    }
     advanceAfterBoon(`Class boon secured: ${picked?.name ?? selectedBoonId}.`);
   };
 
@@ -127,6 +165,17 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
           </View>
         </View>
       </MacroLogAnchoredLayout>
+
+      <ClassBoonSwapOverlay
+        visible={pendingClassSwap != null && activeClass !== 'AEGIS'}
+        classId={pendingClassSwap?.classId ?? activeClass}
+        ownedBoonIds={ownedClassBoons}
+        incomingBoonId={pendingClassSwap?.incomingBoonId ?? ''}
+        theme={theme}
+        accentColor={TERMINAL_ACCENT}
+        onSwap={swapClassBoon}
+        onCancel={cancelClassBoonSwap}
+      />
     </IncursionShell>
   );
 }

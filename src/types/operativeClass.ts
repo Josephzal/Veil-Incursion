@@ -1,7 +1,7 @@
 import type { ClassType } from './game';
 import type { AegisAbilityId, AegisLoadout } from './aegisCombat';
 
-/** Hex Shot combat ability ids — combat execution lands in a later phase. */
+/** Hex Shot deck ability ids. */
 export type HexShotAbilityId =
   | 'SILVER_CORE_SIDEARM'
   | 'ZERO_PROTOCOL'
@@ -27,7 +27,7 @@ export type HexShotLoadout = readonly [
   HexShotAbilityId,
 ];
 
-/** Envoy combat ability ids — combat execution lands in a later phase. */
+/** Envoy deck ability ids. */
 export type EnvoyAbilityId =
   | 'VEIL_SPLINTER'
   | 'CATACLYSM_SIGIL'

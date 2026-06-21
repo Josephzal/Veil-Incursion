@@ -140,6 +140,7 @@ export function buildClassGraftCastPlan(
   plan.evadeBuffPct = graft.addBuff === 'EVADE_20' ? 20 : graft.addBuff === 'EVADE_30' ? 30 : 0;
   plan.untargetableBuff = graft.addBuff === 'UNTARGETABLE';
   plan.disableUltimate = graft.disableUltimate === true;
+  plan.dropLootOnKill = graft.dropLootOnKill ?? null;
 
   plan.apCost = Math.max(0, plan.apCost);
   plan.ammoCost = Math.max(0, plan.ammoCost);

@@ -14,12 +14,16 @@ import {
   FRONTLINE_MELEE_SPRITE_HOLD_MS,
   FRONTLINE_MELEE_SPRITE_IN_MS,
   FRONTLINE_MELEE_SPRITE_OUT_MS,
+  RANGED_ATTACK_SPRITE_HOLD_MS,
+  RANGED_ATTACK_SPRITE_IN_MS,
+  RANGED_ATTACK_SPRITE_OUT_MS,
 } from './combatEnemyBarLayout';
 
 const LINEAR = Easing.linear;
 
 export type CombatPlayerAttackSpriteHandle = {
   executeAttackAnimation: () => Promise<void>;
+  executeRangedAttackAnimation: () => Promise<void>;
 };
 
 interface CombatPlayerAttackSpriteProps {
@@ -35,7 +39,7 @@ const CombatPlayerAttackSprite = forwardRef<CombatPlayerAttackSpriteHandle, Comb
     const runningRef = useRef(false);
 
     const runCrossfade = useCallback(
-      () =>
+      (inMs: number, holdMs: number, outMs: number) =>
         new Promise<void>((resolve) => {
           runningRef.current = true;
           cancelAnimation(idleOpacity);
@@ -47,19 +51,18 @@ const CombatPlayerAttackSprite = forwardRef<CombatPlayerAttackSpriteHandle, Comb
           };
 
           idleOpacity.value = withSequence(
-            withTiming(0, { duration: FRONTLINE_MELEE_SPRITE_IN_MS, easing: LINEAR }),
-            withDelay(FRONTLINE_MELEE_SPRITE_HOLD_MS, withTiming(0, { duration: 0 })),
-            withTiming(1, { duration: FRONTLINE_MELEE_SPRITE_OUT_MS, easing: LINEAR }, () => runOnJS(finish)()),
+            withTiming(0, { duration: inMs, easing: LINEAR }),
+            withDelay(holdMs, withTiming(0, { duration: 0 })),
+            withTiming(1, { duration: outMs, easing: LINEAR }, () => runOnJS(finish)()),
           );
 
           attackOpacity.value = withSequence(
-            withTiming(1, { duration: FRONTLINE_MELEE_SPRITE_IN_MS, easing: LINEAR }),
-            withDelay(FRONTLINE_MELEE_SPRITE_HOLD_MS, withTiming(1, { duration: 0 })),
-            withTiming(0, { duration: FRONTLINE_MELEE_SPRITE_OUT_MS, easing: LINEAR }),
+            withTiming(1, { duration: inMs, easing: LINEAR }),
+            withDelay(holdMs, withTiming(1, { duration: 0 })),
+            withTiming(0, { duration: outMs, easing: LINEAR }),
           );
 
-          const totalMs =
-            FRONTLINE_MELEE_SPRITE_IN_MS + FRONTLINE_MELEE_SPRITE_HOLD_MS + FRONTLINE_MELEE_SPRITE_OUT_MS;
+          const totalMs = inMs + holdMs + outMs;
           setTimeout(() => {
             if (runningRef.current) finish();
           }, totalMs + 16);
@@ -67,7 +70,32 @@ const CombatPlayerAttackSprite = forwardRef<CombatPlayerAttackSpriteHandle, Comb
       [attackOpacity, idleOpacity],
     );
 
-    useImperativeHandle(ref, () => ({ executeAttackAnimation: runCrossfade }), [runCrossfade]);
+    const runMeleeCrossfade = useCallback(
+      () => runCrossfade(
+        FRONTLINE_MELEE_SPRITE_IN_MS,
+        FRONTLINE_MELEE_SPRITE_HOLD_MS,
+        FRONTLINE_MELEE_SPRITE_OUT_MS,
+      ),
+      [runCrossfade],
+    );
+
+    const runRangedCrossfade = useCallback(
+      () => runCrossfade(
+        RANGED_ATTACK_SPRITE_IN_MS,
+        RANGED_ATTACK_SPRITE_HOLD_MS,
+        RANGED_ATTACK_SPRITE_OUT_MS,
+      ),
+      [runCrossfade],
+    );
+
+    useImperativeHandle(
+      ref,
+      () => ({
+        executeAttackAnimation: runMeleeCrossfade,
+        executeRangedAttackAnimation: runRangedCrossfade,
+      }),
+      [runMeleeCrossfade, runRangedCrossfade],
+    );
 
     const idleStyle = useAnimatedStyle(() => ({
       opacity: idleOpacity.value,

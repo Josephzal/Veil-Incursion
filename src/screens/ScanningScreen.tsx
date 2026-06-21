@@ -16,6 +16,7 @@ import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
 import InlineScannerEngagement from '../components/overworld/InlineScannerEngagement';
 import VectorScanner from '../components/VectorScanner';
 import LeyLineBoonSwapOverlay from '../components/LeyLineBoonSwapOverlay';
+import ClassBoonSwapOverlay from '../components/ClassBoonSwapOverlay';
 import { useRun } from '../context/RunContext';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useTerminal } from '../context/TerminalContext';
@@ -64,6 +65,8 @@ export default function ScanningScreen(): React.JSX.Element {
     applyResonanceManifestScan,
     swapLeyLineMutation,
     cancelLeyBoonSwap,
+    swapClassBoon,
+    cancelClassBoonSwap,
   } = useRun();
   const { account } = usePlayerAccount();
   const { isScanningHub, finalizeSectorExtraction } = useDescentNavigator();
@@ -415,6 +418,21 @@ export default function ScanningScreen(): React.JSX.Element {
         accentColor={accent}
         onSwap={swapLeyLineMutation}
         onCancel={cancelLeyBoonSwap}
+      />
+
+      <ClassBoonSwapOverlay
+        visible={activeIncursion.pendingClassBoonSwap != null}
+        classId={activeIncursion.pendingClassBoonSwap?.classId ?? 'HEX_SHOT'}
+        ownedBoonIds={
+          activeIncursion.pendingClassBoonSwap?.classId === 'ENVOY'
+            ? activeIncursion.envoyBoons
+            : activeIncursion.hexShotBoons
+        }
+        incomingBoonId={activeIncursion.pendingClassBoonSwap?.incomingBoonId ?? ''}
+        theme={theme}
+        accentColor={accent}
+        onSwap={swapClassBoon}
+        onCancel={cancelClassBoonSwap}
       />
     </IncursionShell>
   );
