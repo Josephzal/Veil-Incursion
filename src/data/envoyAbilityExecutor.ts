@@ -22,6 +22,7 @@ export interface EnvoyAbilityHurtOptions {
   targetId?: string;
   abilityId?: EnvoyAbilityId;
   rollCrit?: boolean;
+  indirectDamage?: boolean;
 }
 
 export interface EnvoyExecutionContext {
@@ -324,6 +325,7 @@ export function applyEntropyHexDot(
       abilityId: 'ENTROPY_HEX',
       targetId: unitId,
       rollCrit: false,
+      indirectDamage: true,
     }, unitId);
     if (remaining > 1) next[unitId] = remaining - 1;
   }

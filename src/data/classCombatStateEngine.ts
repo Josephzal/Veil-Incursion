@@ -47,6 +47,7 @@ export function applyBrimstoneBleedDot(
       abilityId?: HexShotAbilityId;
       targetId?: string;
       rollCrit?: boolean;
+      indirectDamage?: boolean;
     },
     targetId?: string,
   ) => void,
@@ -61,6 +62,7 @@ export function applyBrimstoneBleedDot(
       abilityId: 'BRIMSTONE_PAYLOAD',
       targetId: unitId,
       rollCrit: false,
+      indirectDamage: true,
     }, unitId);
     log(`[BRIMSTONE BLEED] >> ${unit.designation} — ${BRIMSTONE_BLEED_DOT} occult burn.`);
     if (remaining > 1) next[unitId] = remaining - 1;

@@ -1831,6 +1831,8 @@ export default function TacticalCombatHub({
       abilityId?: AegisAbilityId;
       rollCrit?: boolean;
       echoHit?: boolean;
+      /** Burn/bleed/DoT — skip operative attack pose; still flash the damaged unit. */
+      indirectDamage?: boolean;
     },
   ): boolean => {
     const rawTargetId = options?.targetId
@@ -2304,7 +2306,7 @@ export default function TacticalCombatHub({
       applyStamina(staminaRef.current - LEGION_COLD_VACUUM_STAMINA);
       log(`${tag} >> COLD VACUUM — +${LEGION_COLD_VACUUM_STAMINA} stamina tax.`);
     }
-    if (source && arenaLayout) {
+    if (source && arenaLayout && dmg > 0 && !options?.indirectDamage && !options?.echoHit) {
       if (operativeClass === 'AEGIS') {
         const targetSlot = (working.gridSlot ?? 'FL_0') as CombatGridSlotId;
         const arenaHeight = Math.max(windowHeight * 0.28, 200);
@@ -2370,9 +2372,9 @@ export default function TacticalCombatHub({
       }
     }
 
-    if (source && dmg > 0 && e.unitId) {
+    if (dmg > 0 && e.unitId && (source || options?.indirectDamage)) {
       const tetheredId = hookWeaverTetheredUnitId();
-      if (tetheredId && tetheredId === e.unitId) {
+      if (source && tetheredId && tetheredId === e.unitId) {
         applyStamina(Math.max(0, staminaRef.current - 10));
         log('>> HOOK WEAVER TETHER — 10 stamina siphoned.');
       }
@@ -2740,6 +2742,7 @@ export default function TacticalCombatHub({
         hurtEnemy(pulse, '[VOID CONTAGION]', undefined, {
           channel: 'OCCULT',
           targetId: unit.unitId,
+          indirectDamage: true,
         });
         log(`[VOID CONTAGION] >> ${unit.designation} — ${pulse} occult pulse.`);
       }
@@ -2751,6 +2754,7 @@ export default function TacticalCombatHub({
         hurtEnemy(mods.corruptedBloodDamage, '[CORRUPTED BLOOD]', undefined, {
           channel: 'OCCULT',
           targetId: unit.unitId,
+          indirectDamage: true,
         });
         log(`[CORRUPTED BLOOD] >> ${unit.designation} — void bleed.`);
       }
@@ -2781,10 +2785,11 @@ export default function TacticalCombatHub({
         delete bleedUnits[unitId];
         continue;
       }
-      hurtEnemy(8, '[REAVE BLEED]', 'STRIKE', {
+      hurtEnemy(8, '[REAVE BLEED]', undefined, {
         channel: 'KINETIC',
         targetId: unit.unitId,
         rollCrit: false,
+        indirectDamage: true,
       });
       if (turns <= 1) {
         delete bleedUnits[unitId];
@@ -2796,20 +2801,22 @@ export default function TacticalCombatHub({
     classCombatRef.current.brimstoneBleedTurns = applyBrimstoneBleedDot(
       squadRef.current,
       classCombatRef.current.brimstoneBleedTurns,
-      (raw, tag, options, targetId) => hurtEnemy(raw, tag, 'STRIKE', {
+      (raw, tag, options, targetId) => hurtEnemy(raw, tag, undefined, {
         channel: options?.channel ?? 'OCCULT',
         targetId: options?.targetId ?? targetId,
         rollCrit: options?.rollCrit,
+        indirectDamage: true,
       }),
       log,
     );
     classBoonEncounterRef.current.voidBleedTurns = applyVoidBleedDot(
       squadRef.current,
       classBoonEncounterRef.current.voidBleedTurns,
-      (raw, tag, targetId) => hurtEnemy(raw, tag, 'STRIKE', {
+      (raw, tag, targetId) => hurtEnemy(raw, tag, undefined, {
         channel: 'OCCULT',
         targetId,
         rollCrit: false,
+        indirectDamage: true,
       }),
       log,
     );
@@ -3514,10 +3521,11 @@ export default function TacticalCombatHub({
     classCombatRef.current.entropyHexTurns = applyEntropyHexDot(
       squadRef.current,
       classCombatRef.current.entropyHexTurns,
-      (raw, tag, options, targetId) => hurtEnemy(raw, tag, 'STRIKE', {
+      (raw, tag, options, targetId) => hurtEnemy(raw, tag, undefined, {
         channel: options?.channel ?? 'OCCULT',
         targetId: options?.targetId ?? targetId,
         rollCrit: options?.rollCrit,
+        indirectDamage: true,
       }),
     );
     setCycleState('TEXT_COMBAT');

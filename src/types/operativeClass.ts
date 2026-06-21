@@ -55,15 +55,15 @@ export const ALL_OPERATIVE_CLASSES: readonly ClassType[] = ['AEGIS', 'HEX_SHOT',
 
 export const DEFAULT_HEX_SHOT_LOADOUT: HexShotLoadout = [
   'SILVER_CORE_SIDEARM',
-  'ASH_JACKET_SALVO',
+  'ZERO_PROTOCOL',
   'RIFT_SNARE',
   'BRIMSTONE_PAYLOAD',
 ];
 
 export const DEFAULT_ENVOY_LOADOUT: EnvoyLoadout = [
   'VEIL_SPLINTER',
+  'CATACLYSM_SIGIL',
   'ASTRAL_LANCE',
-  'DIMENSIONAL_SHEAR',
   'ENTROPY_HEX',
 ];
 
