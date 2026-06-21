@@ -26,10 +26,13 @@ import Thrall from '../../assets/enemy images/thrall.png';
 import ThrallAttacking from '../../assets/enemy images/thrall_attack.png';
 import HookWeaver from '../../assets/enemy images/hook_weaver.png';
 import MemoryLeech from '../../assets/enemy images/memory_leech.png';
+import MemoryLeechAttacking from '../../assets/enemy images/memory_leech_attack.png';
 import SmogCaller from '../../assets/enemy images/smog_caller.png';
+import SmogCallerAttacking from '../../assets/enemy images/smog_caller_attack.png';
 import IronMaiden from '../../assets/enemy images/iron_maiden.png';
 import IronMaidenAttacking from '../../assets/enemy images/iron_maiden_attack.png';
 import Golem from '../../assets/enemy images/golem.png';
+import GolemAttacking from '../../assets/enemy images/golem_attack.png';
 import SlagBlood from '../../assets/enemy images/slag_blood.png';
 import SlagBloodAttacking from '../../assets/enemy images/slag_blood_attack.png';
 import Sapper from '../../assets/enemy images/sapper.png';
@@ -121,10 +124,10 @@ const ROSTER_ATTACK_PORTRAITS: Partial<Record<EnemyRosterId, ImageSourcePropType
   'scuttler': ScuttlerAttacking,
   'thrall': ThrallAttacking,
   'hook-weaver': HookWeaver,
-  'memory-leech': MemoryLeech,
-  'smog-caller': SmogCaller,
+  'memory-leech': MemoryLeechAttacking,
+  'smog-caller': SmogCallerAttacking,
   'iron-maiden': IronMaidenAttacking,
-  'golem': Golem,
+  'golem': GolemAttacking,
   'slag-blood': SlagBloodAttacking,
   'sapper': SapperAttacking,
   'coil-spike-sniper': CoilSpikeSniperAttacking,

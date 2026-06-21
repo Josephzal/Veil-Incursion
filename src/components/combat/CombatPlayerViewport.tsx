@@ -35,7 +35,7 @@ import CombatPlayerAttackSprite, { type CombatPlayerAttackSpriteHandle } from '.
 
 const SHAKE_AMPLITUDE = 10;
 const DEFAULT_LUNGE = { x: 48, y: 0 };
-const RANGED_ATTACK_SCALE = 1.05;
+const RANGED_ATTACK_SCALE = 1.4;
 const GLOW_PULSE_MS = 900;
 const PRIMED_GLOW = '#ff00ff';
 
