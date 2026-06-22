@@ -4,6 +4,7 @@ import type { RunState } from '../../types/run';
 import type { ProceduralNarrativeAssembly } from '../../types/narrativeProcedural';
 import type { NarrativePenalty } from '../../types/narrativeAssembly';
 import {
+  isOptionABruteForce,
   isOptionDRetreat,
   jsonItemToCargoItemId,
 } from '../../types/narrativeAssembly';
@@ -13,10 +14,11 @@ import { resolveNarrativeCreditPayout } from '../combatCredits';
 import type { NarrativeResolutionResult, OperativeResourceSnapshot } from '../narrativeEncounterMatrix';
 import type { ProceduralEligibilityContext } from './narrativeProceduralEngine';
 import {
-  evaluateCabalResolverEligibility,
   evaluateItemResolverEligibility,
+  evaluateOptionBEligibility,
   lookupAssemblyEncounterParts,
 } from './narrativeAssemblyBridge';
+import { creditsFromReward } from './narrativeDynamicAssembly';
 import type { NarrativeBonusReward } from '../../types/narrativeBonusReward';
 import {
   bonusRewardCredits,
@@ -200,7 +202,16 @@ export function resolveAssemblyNarrativeChoice(
   };
 
   if (choice === 'A') {
-    if (status === 'FAILURE') {
+    if (isOptionABruteForce(resolverSet.optionA)) {
+      const penaltyResult = applyPenalty(defaultPenalty, snapshot, runPatch, nextEnv);
+      runPatch = penaltyResult.runPatch;
+      nextEnv = penaltyResult.env;
+      resonanceDelta += penaltyResult.resonanceDelta;
+      pendingRunCredits = creditsFromReward(complication.defaultReward);
+      logLines.push(`>> BRUTE FORCE — ${resolverSet.optionA.onSuccess}`);
+      outcome = `>> BRUTE FORCE — ${resolverSet.optionA.onSuccess}`;
+      grantBonusLoot();
+    } else if (status === 'FAILURE') {
       const penaltyResult = applyPenalty(defaultPenalty, snapshot, runPatch, nextEnv);
       runPatch = penaltyResult.runPatch;
       nextEnv = penaltyResult.env;
@@ -222,17 +233,18 @@ export function resolveAssemblyNarrativeChoice(
   }
 
   if (choice === 'B') {
-    const gate = evaluateCabalResolverEligibility(resolverSet.optionB, eligibility.alignedFaction);
+    const gate = evaluateOptionBEligibility(resolverSet.optionB, eligibility);
     if (gate.locked) {
       return blockedResult(progress, env, `>> ${gate.lockReason ?? 'REQUIREMENTS NOT MET'}.`);
     }
-    pendingRunCredits = parseCredits(resolverSet.optionB.onSuccess);
+    pendingRunCredits = parseCredits(resolverSet.optionB.onSuccess)
+      || creditsFromReward(complication.defaultReward);
     resonanceDelta += parseResonanceDelta(resolverSet.optionB.onSuccess);
     if (resonanceDelta !== 0) {
       nextEnv = applyResonanceSpike(nextEnv, resonanceDelta);
     }
-    logLines.push(`>> CABAL BYPASS — ${resolverSet.optionB.onSuccess}`);
-    outcome = `>> CABAL BYPASS — ${resolverSet.optionB.onSuccess}`;
+    logLines.push(`>> BYPASS — ${resolverSet.optionB.onSuccess}`);
+    outcome = `>> BYPASS — ${resolverSet.optionB.onSuccess}`;
     grantBonusLoot();
   }
 
@@ -250,7 +262,8 @@ export function resolveAssemblyNarrativeChoice(
       return blockedResult(progress, env, '>> ITEM NOT FOUND IN CARGO GRID.');
     }
     cargoPatch = consumed;
-    pendingRunCredits = parseCredits(resolverSet.optionC.onSuccess);
+    pendingRunCredits = parseCredits(resolverSet.optionC.onSuccess)
+      || creditsFromReward(complication.defaultReward);
     logLines.push(`>> ITEM BYPASS — ${resolverSet.optionC.onSuccess}`);
     outcome = `>> ITEM BYPASS — ${resolverSet.optionC.onSuccess}`;
     grantBonusLoot();

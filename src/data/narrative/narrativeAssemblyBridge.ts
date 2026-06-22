@@ -1,18 +1,27 @@
 import type { CargoRunState } from '../../types/cargoGrid';
-import type { FactionType, NarrativeChoiceOption, NarrativeEventNode } from '../../types/game';
+import type {
+  ClassType,
+  FactionType,
+  NarrativeChoiceOption,
+  NarrativeEventNode,
+} from '../../types/game';
 import type { MacroBiomeFamily, ProceduralNarrativeAssembly, RunDepth } from '../../types/narrativeProcedural';
 import type {
   Biome,
   CabalResolver,
+  ClassResolver,
   GeneratedEncounter,
   ItemResolver,
-  NarrativePenalty,
-  OptionDResolver,
+  MechanicResolver,
+  OptionAResolver,
+  OptionBResolver,
   Tag,
 } from '../../types/narrativeAssembly';
 import {
   cabalToFaction,
-  isOptionDBruteForce,
+  isOptionABruteForce,
+  isOptionBCabalResolver,
+  isOptionBClassResolver,
   isOptionDRetreat,
   jsonItemToCargoItemId,
   macroFamilyToBiome,
@@ -25,7 +34,12 @@ import {
   getComplicationSeedById,
   getContextSeedById,
   getResolverSetById,
+  USE_ASSEMBLY_V2,
 } from './narrativeCatalog';
+import {
+  assembleDynamicResolverSet,
+  formatCriticalHazard,
+} from './narrativeDynamicAssembly';
 
 export interface PickAssemblyEncounterParams {
   macroFamily: MacroBiomeFamily;
@@ -43,11 +57,6 @@ function contextTitle(contextId: string, flavorText: string): string {
   const snippet = flavorText.split('.')[0]?.trim().toUpperCase() ?? contextId;
   if (snippet.length <= 44) return snippet;
   return `${snippet.slice(0, 44)}…`;
-}
-
-function formatPenaltyPreview(penalty: NarrativePenalty): string {
-  if (penalty.type === 'HP') return `ON FAIL: -${penalty.amount} HP`;
-  return `ON FAIL: +${penalty.amount} RESONANCE`;
 }
 
 function buildChoiceOption(
@@ -74,22 +83,67 @@ function cabalRequirementLabel(cabal: CabalResolver['requirementValue']): string
   return cabal.replace(/_/g, ' ').toUpperCase();
 }
 
+function classRequirementLabel(classType: ClassType): string {
+  return classType.replace(/_/g, ' ');
+}
+
 function itemRequirementLabel(itemId: string): string {
   return itemId.replace(/_/g, ' ').toUpperCase();
+}
+
+function optionBRequirementLabel(optionB: OptionBResolver): string {
+  if (isOptionBClassResolver(optionB)) {
+    return `[REQUIRES CLASS: ${classRequirementLabel(optionB.requirementValue)}]`;
+  }
+  return `[REQUIRES ${cabalRequirementLabel(optionB.requirementValue)} CABAL]`;
 }
 
 export function evaluateCabalResolverEligibility(
   resolver: CabalResolver,
   alignedFaction: FactionType | null,
+  activeClass: ClassType = 'AEGIS',
 ): { locked: boolean; lockReason?: string } {
+  if (resolver.requirementValue === 'Aegis_Vanguard') {
+    if (activeClass !== 'AEGIS') {
+      return { locked: true, lockReason: 'REQUIRES AEGIS VANGUARD CLASS' };
+    }
+    return { locked: false };
+  }
   const requiredFaction = cabalToFaction(resolver.requirementValue);
   if (requiredFaction == null) {
-    return { locked: true, lockReason: 'REQUIRES CABAL ALIGNMENT' };
+    return {
+      locked: true,
+      lockReason: `REQUIRES ${cabalRequirementLabel(resolver.requirementValue)} CABAL`,
+    };
   }
   if (requiredFaction !== alignedFaction) {
     return { locked: true, lockReason: `REQUIRES ${cabalRequirementLabel(resolver.requirementValue)} CABAL` };
   }
   return { locked: false };
+}
+
+export function evaluateClassResolverEligibility(
+  resolver: ClassResolver,
+  activeClass: ClassType,
+): { locked: boolean; lockReason?: string } {
+  if (resolver.requirementValue !== activeClass) {
+    return {
+      locked: true,
+      lockReason: `REQUIRES CLASS: ${classRequirementLabel(resolver.requirementValue)}`,
+    };
+  }
+  return { locked: false };
+}
+
+export function evaluateOptionBEligibility(
+  optionB: OptionBResolver,
+  eligibility: ProceduralEligibilityContext,
+): { locked: boolean; lockReason?: string } {
+  const activeClass = eligibility.activeClass ?? 'AEGIS';
+  if (isOptionBClassResolver(optionB)) {
+    return evaluateClassResolverEligibility(optionB, activeClass);
+  }
+  return evaluateCabalResolverEligibility(optionB, eligibility.alignedFaction, activeClass);
 }
 
 export function evaluateItemResolverEligibility(
@@ -98,7 +152,7 @@ export function evaluateItemResolverEligibility(
 ): { locked: boolean; lockReason?: string } {
   const cargoItemId = jsonItemToCargoItemId(resolver.requirementValue);
   if (!cargoItemId) {
-    return { locked: true, lockReason: `ITEM NOT IN CATALOG: ${itemRequirementLabel(resolver.requirementValue)}` };
+    return { locked: true, lockReason: `REQUIRES ITEM: ${itemRequirementLabel(resolver.requirementValue)}` };
   }
   if (!hasCargoItem(cargo, cargoItemId)) {
     return { locked: true, lockReason: `REQUIRES ITEM: ${itemRequirementLabel(resolver.requirementValue)}` };
@@ -106,10 +160,12 @@ export function evaluateItemResolverEligibility(
   return { locked: false };
 }
 
-function optionDRequirement(optionD: OptionDResolver): string {
-  if (isOptionDRetreat(optionD)) return 'RETURN TO MAP';
-  if (isOptionDBruteForce(optionD)) return 'GUARANTEED COST — NO MINI-GAME';
-  return 'RESOLVER';
+function asMechanicResolver(optionA: OptionAResolver): MechanicResolver | null {
+  return isOptionABruteForce(optionA) ? null : optionA;
+}
+
+function isV2Encounter(encounter: GeneratedEncounter): boolean {
+  return USE_ASSEMBLY_V2 || encounter.resolverSet.assemblyMode === 'dynamic-v2';
 }
 
 function buildNodeFromEncounter(
@@ -117,42 +173,62 @@ function buildNodeFromEncounter(
   eligibility: ProceduralEligibilityContext,
 ): NarrativeEventNode {
   const { context, complication, resolverSet } = encounter;
-  const penaltyPreview = formatPenaltyPreview(complication.defaultPenalty);
-  const cabalGate = evaluateCabalResolverEligibility(resolverSet.optionB, eligibility.alignedFaction);
+  const v2 = isV2Encounter(encounter);
+  const optionBGate = evaluateOptionBEligibility(resolverSet.optionB, eligibility);
   const itemGate = evaluateItemResolverEligibility(resolverSet.optionC, eligibility.cargo);
+  const hazardPreview = v2
+    ? formatCriticalHazard(complication.defaultPenalty)
+    : complication.defaultPenalty.type === 'HP'
+      ? `ON FAIL: -${complication.defaultPenalty.amount} HP`
+      : `ON FAIL: +${complication.defaultPenalty.amount} RESONANCE`;
+
+  const engineVersion = v2 ? 'assembly-v2' : 'assembly-v1';
+  const mechanicA = asMechanicResolver(resolverSet.optionA);
 
   return {
     id: encounter.assemblyId,
     interactionMode: 'procedural',
     title: contextTitle(context.id, context.flavorText),
     scenarioText: encounter.scenarioText,
-    hazardPreview: penaltyPreview,
+    hazardPreview,
     proceduralMeta: {
-      engineVersion: 'assembly-v1',
+      engineVersion,
       resolverSetId: resolverSet.id,
-      tensionMechanic: resolverSet.optionA.tensionMechanic,
+      tensionMechanic: mechanicA?.tensionMechanic,
       defaultPenalty: complication.defaultPenalty,
       bonusReward: encounter.bonusReward,
     },
-    choiceA: buildChoiceOption(
-      `[ A ] ${resolverSet.optionA.text}`,
-      resolverSet.optionA.tensionMechanic.replace('Mechanic_', '').toUpperCase(),
-      `>> MECHANIC SUCCESS — ${resolverSet.optionA.onSuccess}`,
-      `>> MECHANIC FAILURE — ${resolverSet.optionA.onFailure}`,
-      `${resolverSet.optionA.onSuccess} // ${penaltyPreview}`,
-    ),
+    choiceA: mechanicA == null
+      ? buildChoiceOption(
+        `[ A ] ${resolverSet.optionA.text}`,
+        'GUARANTEED COST — BRUTE FORCE',
+        `>> BRUTE FORCE — ${resolverSet.optionA.onSuccess}`,
+        `>> BRUTE FORCE BLOCKED — RESOLVER UNAVAILABLE.`,
+        resolverSet.optionA.onSuccess,
+      )
+      : buildChoiceOption(
+        `[ A ] ${mechanicA.text}`,
+        mechanicA.tensionMechanic.replace('Mechanic_', '').toUpperCase(),
+        `>> MECHANIC SUCCESS — ${mechanicA.onSuccess}`,
+        `>> MECHANIC FAILURE — ${mechanicA.onFailure}`,
+        `${mechanicA.onSuccess} // ${hazardPreview}`,
+      ),
     choiceB: buildChoiceOption(
       `[ B ] ${resolverSet.optionB.text}`,
-      cabalRequirementLabel(resolverSet.optionB.requirementValue),
-      `>> CABAL BYPASS — ${resolverSet.optionB.onSuccess}`,
-      '>> CABAL BYPASS BLOCKED — ALIGNMENT REQUIRED.',
+      optionBRequirementLabel(resolverSet.optionB),
+      isOptionBClassResolver(resolverSet.optionB)
+        ? `>> CLASS BYPASS — ${resolverSet.optionB.onSuccess}`
+        : `>> CABAL BYPASS — ${resolverSet.optionB.onSuccess}`,
+      isOptionBClassResolver(resolverSet.optionB)
+        ? '>> CLASS BYPASS BLOCKED — CLASS REQUIRED.'
+        : '>> CABAL BYPASS BLOCKED — ALIGNMENT REQUIRED.',
       resolverSet.optionB.onSuccess,
-      cabalGate.locked,
-      cabalGate.lockReason,
+      optionBGate.locked,
+      optionBGate.lockReason,
     ),
     choiceC: buildChoiceOption(
       `[ C ] ${resolverSet.optionC.text}`,
-      itemRequirementLabel(resolverSet.optionC.requirementValue),
+      `[REQUIRES ITEM: ${itemRequirementLabel(resolverSet.optionC.requirementValue)}]`,
       `>> ITEM BYPASS — ${resolverSet.optionC.onSuccess}`,
       '>> ITEM BYPASS BLOCKED — CARGO ITEM REQUIRED.',
       resolverSet.optionC.onSuccess,
@@ -161,14 +237,10 @@ function buildNodeFromEncounter(
     ),
     choiceD: buildChoiceOption(
       `[ D ] ${resolverSet.optionD.text}`,
-      optionDRequirement(resolverSet.optionD),
-      isOptionDRetreat(resolverSet.optionD)
-        ? '>> ABORT CONFIRMED — ROUTING TERMINAL BACK TO LEY-LINE GRID.'
-        : `>> BRUTE RESOLVER — ${resolverSet.optionD.onSuccess}`,
-      isOptionDRetreat(resolverSet.optionD)
-        ? '>> ABORT CONFIRMED — ROUTING TERMINAL BACK TO LEY-LINE GRID.'
-        : `>> BRUTE RESOLVER — ${resolverSet.optionD.onSuccess}`,
-      resolverSet.optionD.onSuccess,
+      'RETURN TO SCANNER',
+      '>> ABORT CONFIRMED — ROUTING TERMINAL BACK TO LEY-LINE GRID.',
+      '>> ABORT CONFIRMED — ROUTING TERMINAL BACK TO LEY-LINE GRID.',
+      isOptionDRetreat(resolverSet.optionD) ? 'No reward. No penalty.' : resolverSet.optionD.onSuccess,
     ),
   };
 }
@@ -178,16 +250,19 @@ export function buildAssemblyFromEncounter(
   macroFamily: MacroBiomeFamily,
   nodesCleared: number,
 ): ProceduralNarrativeAssembly {
+  const v2 = isV2Encounter(encounter);
+  const mechanicA = asMechanicResolver(encounter.resolverSet.optionA);
   return {
     assemblyId: encounter.assemblyId,
     macroFamily,
     depth: runDepthFromNodesCleared(nodesCleared),
     contextId: encounter.context.id,
     complicationId: encounter.complication.id,
-    engineVersion: 'assembly-v1',
+    engineVersion: v2 ? 'assembly-v2' : 'assembly-v1',
     resolverSetId: encounter.resolverSet.id,
+    resolverTemplateIds: encounter.dynamicSelection,
     biome: encounter.biome,
-    tensionMechanic: encounter.resolverSet.optionA.tensionMechanic,
+    tensionMechanic: mechanicA?.tensionMechanic,
     defaultPenalty: encounter.complication.defaultPenalty,
     resolverIds: {
       brute: encounter.complication.id,
@@ -215,28 +290,44 @@ export function pickAssemblyNarrativeEncounter(
   return { assembly, node };
 }
 
+function resolveEncounterResolverSet(
+  assembly: ProceduralNarrativeAssembly,
+): GeneratedEncounter['resolverSet'] | undefined {
+  if (assembly.engineVersion === 'assembly-v2') {
+    const complication = getComplicationSeedById(assembly.complicationId);
+    if (!complication || !assembly.resolverTemplateIds) return undefined;
+    return assembleDynamicResolverSet(
+      complication,
+      assembly.resolverSetId ?? assembly.assemblyId,
+      assembly.resolverTemplateIds,
+    );
+  }
+  return assembly.resolverSetId ? getResolverSetById(assembly.resolverSetId) : undefined;
+}
+
 export function refreshAssemblyNarrativeLocks(
   node: NarrativeEventNode,
   assembly: ProceduralNarrativeAssembly,
   eligibility: ProceduralEligibilityContext,
 ): NarrativeEventNode {
-  if (assembly.engineVersion !== 'assembly-v1' || node.interactionMode !== 'procedural') {
+  if (
+    (assembly.engineVersion !== 'assembly-v1' && assembly.engineVersion !== 'assembly-v2')
+    || node.interactionMode !== 'procedural'
+  ) {
     return node;
   }
-  const resolverSet = assembly.resolverSetId
-    ? getResolverSetById(assembly.resolverSetId)
-    : undefined;
+  const resolverSet = resolveEncounterResolverSet(assembly);
   if (!resolverSet) return node;
 
-  const cabalGate = evaluateCabalResolverEligibility(resolverSet.optionB, eligibility.alignedFaction);
+  const optionBGate = evaluateOptionBEligibility(resolverSet.optionB, eligibility);
   const itemGate = evaluateItemResolverEligibility(resolverSet.optionC, eligibility.cargo);
 
   return {
     ...node,
     choiceB: {
       ...node.choiceB,
-      locked: cabalGate.locked,
-      lockReason: cabalGate.lockReason,
+      locked: optionBGate.locked,
+      lockReason: optionBGate.lockReason,
     },
     choiceC: node.choiceC
       ? {
@@ -249,12 +340,10 @@ export function refreshAssemblyNarrativeLocks(
 }
 
 export function lookupAssemblyEncounterParts(assembly: ProceduralNarrativeAssembly): GeneratedEncounter | null {
-  if (assembly.engineVersion !== 'assembly-v1') return null;
+  if (assembly.engineVersion !== 'assembly-v1' && assembly.engineVersion !== 'assembly-v2') return null;
   const context = getContextSeedById(assembly.contextId);
   const complication = getComplicationSeedById(assembly.complicationId);
-  const resolverSet = assembly.resolverSetId
-    ? getResolverSetById(assembly.resolverSetId)
-    : undefined;
+  const resolverSet = resolveEncounterResolverSet(assembly);
   if (!context || !complication || !resolverSet || !assembly.biome) return null;
   return {
     assemblyId: assembly.assemblyId,
@@ -263,5 +352,7 @@ export function lookupAssemblyEncounterParts(assembly: ProceduralNarrativeAssemb
     complication,
     resolverSet,
     scenarioText: `${context.flavorText} ${complication.flavorText}`.trim(),
+    bonusReward: assembly.bonusReward,
+    dynamicSelection: assembly.resolverTemplateIds,
   };
 }

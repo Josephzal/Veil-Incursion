@@ -1,8 +1,10 @@
 import type { Biome, GeneratedEncounter, Tag } from '../../types/narrativeAssembly';
+import { isOptionABruteForce } from '../../types/narrativeAssembly';
 import {
   COMPLICATION_SEEDS,
   CONTEXT_SEEDS,
   RESOLVER_SETS,
+  USE_ASSEMBLY_V2,
   getContextSeedsForBiome,
   getResolverSetsForComplication,
 } from './narrativeCatalog';
@@ -16,6 +18,10 @@ import {
   pickFromPool,
 } from './narrativeAssemblyCore';
 import { rollNarrativeBonusReward } from './narrativeBonusLoot';
+import {
+  assembleDynamicResolverSet,
+  pickDynamicResolverTemplates,
+} from './narrativeDynamicAssembly';
 
 export interface NarrativePlayerState {
   seed: string;
@@ -43,12 +49,11 @@ export function generateEncounter(
     contextPool = [...CONTEXT_SEEDS];
   }
 
-  const resolvableComplications = filterComplicationsWithResolverSets(
-    COMPLICATION_SEEDS,
-    RESOLVER_SETS,
-  );
-  if (resolvableComplications.length === 0) {
-    throw new Error('generateEncounter: no complications with resolver sets in catalog');
+  const complicationPoolSource = USE_ASSEMBLY_V2
+    ? COMPLICATION_SEEDS
+    : filterComplicationsWithResolverSets(COMPLICATION_SEEDS, RESOLVER_SETS);
+  if (complicationPoolSource.length === 0) {
+    throw new Error('generateEncounter: no complications in catalog');
   }
 
   const context = pickFromPool(
@@ -58,9 +63,9 @@ export function generateEncounter(
     (entry) => entry.id,
   );
 
-  let complicationPool = filterComplicationsForContextSeed(context, resolvableComplications);
+  let complicationPool = filterComplicationsForContextSeed(context, complicationPoolSource);
   if (complicationPool.length === 0) {
-    complicationPool = [...resolvableComplications];
+    complicationPool = [...complicationPoolSource];
   }
 
   const unusedComplications = complicationPool.filter(
@@ -77,24 +82,36 @@ export function generateEncounter(
     (entry) => entry.id,
   );
 
-  const resolverPool = [...getResolverSetsForComplication(complication.id)];
-  if (resolverPool.length === 0) {
-    throw new Error(
-      `generateEncounter: no resolver set for complication ${complication.id}`,
+  const assemblySeed = `${playerState.seed}:res:${context.id}:${complication.id}`;
+  let resolverSet;
+  let dynamicSelection: ReturnType<typeof pickDynamicResolverTemplates> | undefined;
+
+  if (USE_ASSEMBLY_V2) {
+    dynamicSelection = pickDynamicResolverTemplates(assemblySeed);
+    resolverSet = assembleDynamicResolverSet(complication, assemblySeed, dynamicSelection);
+  } else {
+    const resolverPool = [...getResolverSetsForComplication(complication.id)];
+    if (resolverPool.length === 0) {
+      throw new Error(
+        `generateEncounter: no resolver set for complication ${complication.id}`,
+      );
+    }
+    resolverSet = pickFromPool(
+      resolverPool,
+      assemblySeed,
+      [],
+      (entry) => entry.id,
     );
   }
 
-  const resolverSet = pickFromPool(
-    resolverPool,
-    `${playerState.seed}:res:${context.id}:${complication.id}`,
-    [],
-    (entry) => entry.id,
-  );
-
   const assemblyId = assemblyIdFor(context.id, complication.id, playerState.seed);
 
+  const tensionMechanic = isOptionABruteForce(resolverSet.optionA)
+    ? 'Mechanic_ScavengeBar'
+    : resolverSet.optionA.tensionMechanic;
+
   const bonusReward = rollNarrativeBonusReward(
-    resolverSet.optionA.tensionMechanic,
+    tensionMechanic,
     `${playerState.seed}:bonus:${assemblyId}`,
   );
 
@@ -106,5 +123,6 @@ export function generateEncounter(
     resolverSet,
     scenarioText: buildScenarioText(context, complication),
     bonusReward,
+    dynamicSelection,
   };
 }

@@ -8,6 +8,7 @@ import {
   generateNodeEncounter,
   type RunSegmentState,
 } from './encounterGenerator';
+import type { MacroBiomeFamily } from '../types/narrativeProcedural';
 
 export type EncounterLayout = {
   frontLeft: EncounterEnemyKey | null;
@@ -65,10 +66,10 @@ export function resolveLevelEncounter(
   depth: number,
   segment?: RunSegmentState,
   seed?: string,
+  macroBiome?: MacroBiomeFamily | null,
 ): LevelEncounterEntry {
-  const district = getDistrictFromDepth(depth);
   const seg = segment ?? defaultSegmentForDepth(depth);
-  const generated = generateNodeEncounter(depth, seg, seed ?? `level:${depth}`);
+  const generated = generateNodeEncounter(depth, seg, seed ?? `level:${depth}`, { macroBiome });
   return {
     level: depth,
     layout: generated.layout,
@@ -126,10 +127,11 @@ export function resolveSpawnSlotsForDepth(
   depth: number,
   segment?: RunSegmentState,
   seed?: string,
+  macroBiome?: MacroBiomeFamily | null,
 ): SpawnSlotAssignment[] {
   if (isDistrictGateDepth(depth)) return [];
 
-  const entry = resolveLevelEncounter(depth, segment, seed);
+  const entry = resolveLevelEncounter(depth, segment, seed, macroBiome);
   const hasAnyEnemy = Object.values(entry.layout).some((v) => v != null);
   if (!hasAnyEnemy) return [];
 
@@ -140,8 +142,9 @@ export function resolveEncounterMetaForDepth(
   depth: number,
   segment?: RunSegmentState,
   seed?: string,
+  macroBiome?: MacroBiomeFamily | null,
 ): Pick<LevelEncounterEntry, 'encounterOrigin' | 'cabalFaction' | 'encounterId'> {
-  return resolveLevelEncounter(depth, segment, seed);
+  return resolveLevelEncounter(depth, segment, seed, macroBiome);
 }
 
 export function isAlphaDuelDepth(depth: number, segment: RunSegmentState): boolean {

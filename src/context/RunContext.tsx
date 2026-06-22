@@ -74,9 +74,10 @@ import type { PendingNarrativeCombatBoons } from '../types/narrativeBonusReward'
 import { createDefaultPendingNarrativeCombatBoons } from '../types/narrativeBonusReward';
 import type { ProceduralNarrativeAssembly } from '../types/narrativeProcedural';
 import {
+  formatDistrictBiomeSelectionLog,
   formatMacroBiomeLogLine,
   getMacroBiomeContextLog,
-  rollMacroBiomeStep,
+  rollDistrictBiomeOptions,
 } from '../data/macroBiomeEngine';
 import {
   createGridHound,
@@ -404,6 +405,20 @@ function activateGridHoundOnIncursion(inc: ActiveIncursionState): ActiveIncursio
   };
 }
 
+function districtBiomeLockPatch(
+  inc: ActiveIncursionState,
+  node: IncursionNode,
+): Partial<ActiveIncursionState> {
+  if (!inc.awaitingDistrictBiomeChoice || !node.offeredMacroBiome) return {};
+  const locked = node.offeredMacroBiome;
+  return {
+    currentMacroBiomeFamily: locked,
+    awaitingDistrictBiomeChoice: false,
+    pendingDistrictBiomeOffers: null,
+    depth1MacroBiomeChoice: inc.currentDistrict === 1 ? locked : inc.depth1MacroBiomeChoice,
+  };
+}
+
 function buildSectorCluster(inc: ActiveIncursionState): IncursionNode[] {
   if (!inc.sectorGraph.entryId) return [];
   const clusterOptions = {
@@ -419,6 +434,8 @@ function buildSectorCluster(inc: ActiveIncursionState): IncursionNode[] {
     extractionDecoyPending: inc.resonanceEscalations.extractionDecoyPending,
     relayExtractionNodeId: inc.resonanceEscalations.relayExtractionNodeId,
     macroBiomeFamily: inc.currentMacroBiomeFamily,
+    pendingDistrictBiomeOffers: inc.pendingDistrictBiomeOffers,
+    awaitingDistrictBiomeChoice: inc.awaitingDistrictBiomeChoice,
     lastLevelOfferedCombat: inc.lastLevelOfferedCombat,
     sanctuarySchedule: inc.sanctuarySchedule,
     runSegment: inc.runSegment,
@@ -531,9 +548,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     setRunState(next);
     const sectorTier = config?.sectorTier ?? 1;
     const sectorInit = initializeSectorRun(sectorTier);
-    const initialBiome = rollMacroBiomeStep(0, null, `run-start:${sectorTier}`);
-    const sanctuarySchedule = rollSanctuarySchedule(`run:${Date.now()}:${sectorTier}`);
     const runSeed = `run:${Date.now()}:${sectorTier}`;
+    const pendingBiomeOffers = rollDistrictBiomeOptions(1, [], runSeed);
+    const sanctuarySchedule = rollSanctuarySchedule(`run:${Date.now()}:${sectorTier}`);
     const initialRunSegment = createRunSegment(1, runSeed, config?.alignedFaction ?? null);
     const incursion: ActiveIncursionState = {
       ...createDefaultActiveIncursionState(),
@@ -566,8 +583,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       hexShotBoons: [],
       envoyBoons: [],
       alignedFaction: config?.alignedFaction ?? null,
-      currentMacroBiomeFamily: initialBiome,
+      currentMacroBiomeFamily: null,
       lastMacroBiomeFamily: null,
+      pendingDistrictBiomeOffers: pendingBiomeOffers,
+      awaitingDistrictBiomeChoice: true,
+      depth1MacroBiomeChoice: null,
       runStatusEffects: [],
       overworldSession: generateOverworldFeatures(
         0,
@@ -623,7 +643,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       `>> SECTOR TIER ${sectorTier} — BRANCHING TOPOLOGY PRE-GENERATED.`,
       `>> SCANNING HUB ACTIVE — SPECTRAL SWEEP INITIALIZING.`,
       `>> CLIMATE CLUSTER LOCKED: ${clusterDef.name}`,
-      formatMacroBiomeLogLine(initialBiome),
+      formatDistrictBiomeSelectionLog(pendingBiomeOffers),
+      '>> ENGAGE A COMBAT VECTOR TO LOCK MACRO BIOME FOR DISTRICT 1.',
       `>> ${clusterDef.tagline}`,
       `>> SANCTUARY SCHEDULE — D1:[${sanctuarySchedule[1].join(',')}] D2:[${sanctuarySchedule[2].join(',')}] D3:[${sanctuarySchedule[3].join(',')}]`,
       `>> ALPHA DUEL INDEX — D1 NODE ${initialRunSegment.alphaNodeIndex}`,
@@ -806,6 +827,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
           isAmbush: prev.pendingAmbush,
           district: getDistrictFromDepth(depthFromNodesCleared(nodeIndex)),
           runSegment: activeIncursionRef.current.runSegment,
+          macroBiome: activeIncursionRef.current.currentMacroBiomeFamily,
         })
         : [];
     const pendingEnemy = pendingEnemies[0] ?? null;
@@ -1355,6 +1377,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const eligibility = {
       alignedFaction: inc.alignedFaction,
       cargo: inc.cargo,
+      activeClass: inc.activeClass ?? 'AEGIS',
     };
     const picked = pickSectorNarrativeForNode(
       vectorNode,
@@ -1444,7 +1467,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
     const assembly = narrativeAssemblyRef.current;
     const result = node.interactionMode === 'procedural' && assembly
-      ? assembly.engineVersion === 'assembly-v1'
+      ? assembly.engineVersion === 'assembly-v1' || assembly.engineVersion === 'assembly-v2'
         ? resolveAssemblyNarrativeChoice(
           assembly,
           choice,
@@ -1452,7 +1475,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
           inc.progress,
           inc.environmentalModifiers,
           snapshot,
-          { alignedFaction: inc.alignedFaction, cargo: inc.cargo },
+          {
+            alignedFaction: inc.alignedFaction,
+            cargo: inc.cargo,
+            activeClass: inc.activeClass ?? 'AEGIS',
+          },
         )
         : resolveProceduralNarrativeChoice(
           assembly,
@@ -2025,6 +2052,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       district,
       runSegment: inc.runSegment,
       encounterSeed: `engage:${inc.nodesCleared}:${encounterNode.id}`,
+      macroBiome: inc.currentMacroBiomeFamily,
       spawnOptions: {
         resonancePercent: inc.resonance.percent,
         forcedAffinity,
@@ -2088,6 +2116,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       isElite: true,
       unitCount: 1,
       district,
+      runSegment: inc.runSegment,
+      macroBiome: inc.currentMacroBiomeFamily,
     });
     const pendingEnemy = pendingEnemies[0] ?? null;
 
@@ -2179,6 +2209,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       isElite: true,
       isAmbush: true,
       district,
+      runSegment: inc.runSegment,
+      macroBiome: inc.currentMacroBiomeFamily,
       spawnOptions: { resonancePercent: inc.resonance.percent },
     });
     const pendingEnemy = pendingEnemies[0] ?? null;
@@ -2263,13 +2295,26 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
     const nextSectorGraph = expandedInc.sectorGraph;
     const nextPatrolState = inc.patrolState;
-
-    const nextBiome = rollMacroBiomeStep(
-      nextNodesCleared,
-      inc.currentMacroBiomeFamily,
-      `node-clear:${nextNodesCleared}:${completedNode?.id ?? 'step'}`,
-    );
     const districtChanged = nextDistrict !== inc.currentDistrict;
+
+    const nextBiome = districtChanged ? null : inc.currentMacroBiomeFamily;
+    let pendingOffers = inc.pendingDistrictBiomeOffers;
+    let depth1Choice = inc.depth1MacroBiomeChoice;
+    let awaitingChoice = inc.awaitingDistrictBiomeChoice;
+
+    if (districtChanged) {
+      if (inc.currentDistrict === 1 && inc.currentMacroBiomeFamily) {
+        depth1Choice = inc.currentMacroBiomeFamily;
+      }
+      awaitingChoice = true;
+      const exclude =
+        nextDistrict === 2 && depth1Choice ? [depth1Choice] : [];
+      pendingOffers = rollDistrictBiomeOptions(
+        nextDistrict,
+        exclude,
+        `district-entry:${nextDistrict}:${nextNodesCleared}`,
+      );
+    }
 
     let nextRunSegment = inc.runSegment;
     const wasCombat =
@@ -2279,6 +2324,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         clearedDepth,
         inc.runSegment,
         `clear:${completedIndex}:${completedNode?.id ?? 'node'}`,
+        { macroBiome: inc.currentMacroBiomeFamily },
       );
       nextRunSegment = applyEncounterToSegment(
         inc.runSegment,
@@ -2326,6 +2372,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       currentDistrict: nextDistrict,
       lastMacroBiomeFamily: inc.currentMacroBiomeFamily,
       currentMacroBiomeFamily: nextBiome,
+      pendingDistrictBiomeOffers: pendingOffers,
+      awaitingDistrictBiomeChoice: awaitingChoice,
+      depth1MacroBiomeChoice: depth1Choice,
       runStatusEffects: inc.runStatusEffects.filter(
         (effect) => effect.expiresAtNodesCleared == null || effect.expiresAtNodesCleared > nextNodesCleared,
       ),
@@ -2391,7 +2440,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     } else if (inc.collapseActive) {
       appendRunLog(`>> COLLAPSE RIFT NODE ${nextNodesCleared} — POCKET DIMENSION UNSTABLE.`);
     } else if (!enteringSafehouse) {
-      appendRunLog(formatMacroBiomeLogLine(nextBiome));
+      if (awaitingChoice && pendingOffers) {
+        appendRunLog(formatDistrictBiomeSelectionLog(pendingOffers));
+        appendRunLog(`>> ENGAGE A COMBAT VECTOR TO LOCK MACRO BIOME FOR DISTRICT ${nextDistrict}.`);
+      } else if (nextBiome) {
+        appendRunLog(formatMacroBiomeLogLine(nextBiome));
+      }
       appendRunLog(`>> NODE ${nextNodesCleared}/${MAX_SECTOR_NODES} CLEARED — SCANNING HUB READY.`);
     }
 
@@ -2428,6 +2482,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       appendRunLog('>> POCKET DIMENSION COLLAPSE — sector geometry destabilizing.');
     }
 
+    const lockPatch = districtBiomeLockPatch(inc, node);
+
     const encounterPath = [...inc.encounterPath];
     encounterPath[inc.nodesCleared] = {
       ...node,
@@ -2435,9 +2491,15 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       encounterIndex: inc.nodesCleared,
     };
 
+    if (lockPatch.currentMacroBiomeFamily) {
+      appendRunLog(formatMacroBiomeLogLine(lockPatch.currentMacroBiomeFamily));
+      appendRunLog(`>> ${getMacroBiomeContextLog(lockPatch.currentMacroBiomeFamily)}`);
+    }
+
     setActiveIncursion((prev) => {
       const next = {
         ...prev,
+        ...lockPatch,
         encounterPath,
         selectedVectorId: node.id,
         collapseActive: enteringCollapse || prev.collapseActive,

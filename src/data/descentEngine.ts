@@ -4,7 +4,7 @@ import {
   IncursionNode,
   RunNodeType,
 } from '../types/game';
-import { MACRO_BIOME_DISPLAY } from './macroBiomeEngine';
+import { getMacroBiomeDisplayLabel, resolveDisplayedMacroBiome } from './macroBiomeEngine';
 import type { MacroBiomeFamily } from '../types/narrativeProcedural';
 import { formatSpectralBlock } from './sectorGraphEngine';
 import { ELITE_MODIFIER_LABELS } from './eliteModifierEngine';
@@ -338,10 +338,7 @@ export function findVectorInCluster(
   return cluster.find((n) => n.id === nodeId) ?? null;
 }
 
-export function getMacroBiomeDisplayLabel(family: MacroBiomeFamily | null | undefined): string {
-  if (!family) return 'UNKNOWN';
-  return MACRO_BIOME_DISPLAY[family];
-}
+export { getMacroBiomeDisplayLabel } from './macroBiomeEngine';
 
 export function getEncounterDisplayLabel(
   encounterType: IncursionEncounterType,
@@ -367,8 +364,9 @@ export function formatScannerNodeIntel(
 ): string[] {
   const vector = resolveVectorLabel(node, optionIndex);
   const nodeType = node.type.replace(/_/g, ' ');
+  const displayBiome = resolveDisplayedMacroBiome(node, macroFamily);
   return [
-    `> MACRO BIOME: ${getMacroBiomeDisplayLabel(macroFamily).toUpperCase()}`,
+    `> MACRO BIOME: ${getMacroBiomeDisplayLabel(displayBiome).toUpperCase()}`,
     `> VECTOR: ${vector}`,
     `> NODE TYPE: ${nodeType.toUpperCase()}`,
   ];

@@ -151,6 +151,7 @@ export default function ProceduralNarrativeModule({
   const [bonusLine, setBonusLine] = useState<string | null>(null);
 
   const showCityStreetBackground = node.interactionMode === 'procedural' || !isOpenSectorNarrative(node);
+  const isBruteForceA = node.proceduralMeta?.engineVersion === 'assembly-v2';
   const optionDVariant = getOptionDVariant(node.choiceD);
   const choices: { key: NarrativeChoiceKey; option: NarrativeChoiceOption; showLockIcon: boolean }[] = [
     { key: 'A', option: node.choiceA, showLockIcon: false },
@@ -186,6 +187,10 @@ export default function ProceduralNarrativeModule({
     if (selectedOption.locked) return;
 
     if (selectedChoice === 'A') {
+      if (isBruteForceA) {
+        finishWithResult('A', selectedOption.successText);
+        return;
+      }
       setPhase('TENSION');
       return;
     }
@@ -214,7 +219,9 @@ export default function ProceduralNarrativeModule({
 
   const confirmLabel = (() => {
     if (!selectedChoice) return '[ CONFIRM RESOLVER ]';
-    if (selectedChoice === 'A') return '[ ENGAGE TENSION PROTOCOL ]';
+    if (selectedChoice === 'A') {
+      return isBruteForceA ? '[ CONFIRM BRUTE FORCE ]' : '[ ENGAGE TENSION PROTOCOL ]';
+    }
     if (selectedChoice === 'D') {
       if (optionDVariant === 'Retreat') return '[ CONFIRM ABORT — RETURN TO MAP ]';
       return '[ CONFIRM BRUTE FORCE ]';

@@ -7,7 +7,11 @@ export type BiomeId =
   | 'deep_veil'
   | 'city_buildings'
   | 'forest'
-  | 'underground';
+  | 'underground'
+  | 'sunken_transit'
+  | 'black_site_sector'
+  | 'fractal_abyss'
+  | 'sanguine_atrium';
 
 export type ParticleEffectType = 'rain' | 'none';
 
@@ -22,6 +26,10 @@ export const BIOME_CONFIG: Record<BiomeId, BiomeAtmosphereConfig> = {
   city_buildings: { effect: 'none' },
   forest: { effect: 'rain' },
   underground: { effect: 'none' },
+  sunken_transit: { effect: 'none' },
+  black_site_sector: { effect: 'none' },
+  fractal_abyss: { effect: 'none' },
+  sanguine_atrium: { effect: 'none' },
 };
 
 const BIOME_ID_SET = new Set<string>(Object.keys(BIOME_CONFIG));
@@ -59,6 +67,14 @@ export function macroFamilyToBiomeId(
       return 'underground';
     case 'DEEP_VEIL':
       return 'deep_veil';
+    case 'SUNKEN_TRANSIT':
+      return 'sunken_transit';
+    case 'BLACK_SITE_SECTOR':
+      return 'black_site_sector';
+    case 'FRACTAL_ABYSS':
+      return 'fractal_abyss';
+    case 'SANGUINE_ATRIUM':
+      return 'sanguine_atrium';
     default:
       return null;
   }

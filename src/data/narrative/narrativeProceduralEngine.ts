@@ -5,6 +5,7 @@
 import type { CargoRunState } from '../../types/cargoGrid';
 import type {
   CheckStatus,
+  ClassType,
   EnvironmentalModifiers,
   FactionType,
   IncursionProgressState,
@@ -45,6 +46,7 @@ export interface GenerateNarrativeEncounterParams {
 export interface ProceduralEligibilityContext {
   alignedFaction: FactionType | null;
   cargo: CargoRunState;
+  activeClass?: ClassType;
 }
 
 const CONTEXTS_BY_FAMILY: Record<MacroBiomeFamily, readonly NarrativeContextSeed[]> = {
@@ -53,7 +55,11 @@ const CONTEXTS_BY_FAMILY: Record<MacroBiomeFamily, readonly NarrativeContextSeed
   FORESTS: CITY_STREETS_CONTEXTS,
   UNDERGROUND: CITY_STREETS_CONTEXTS,
   BACKROADS: CITY_STREETS_CONTEXTS,
+  SUNKEN_TRANSIT: CITY_STREETS_CONTEXTS,
+  BLACK_SITE_SECTOR: CITY_STREETS_CONTEXTS,
   DEEP_VEIL: CITY_STREETS_CONTEXTS,
+  FRACTAL_ABYSS: CITY_STREETS_CONTEXTS,
+  SANGUINE_ATRIUM: CITY_STREETS_CONTEXTS,
 };
 
 const COMPLICATIONS_BY_FAMILY: Record<MacroBiomeFamily, readonly NarrativeComplicationSeed[]> = {
@@ -62,7 +68,11 @@ const COMPLICATIONS_BY_FAMILY: Record<MacroBiomeFamily, readonly NarrativeCompli
   FORESTS: CITY_STREETS_COMPLICATIONS,
   UNDERGROUND: CITY_STREETS_COMPLICATIONS,
   BACKROADS: CITY_STREETS_COMPLICATIONS,
+  SUNKEN_TRANSIT: CITY_STREETS_COMPLICATIONS,
+  BLACK_SITE_SECTOR: CITY_STREETS_COMPLICATIONS,
   DEEP_VEIL: CITY_STREETS_COMPLICATIONS,
+  FRACTAL_ABYSS: CITY_STREETS_COMPLICATIONS,
+  SANGUINE_ATRIUM: CITY_STREETS_COMPLICATIONS,
 };
 
 const RESOLVERS_BY_FAMILY: Record<MacroBiomeFamily, readonly NarrativeResolverSeed[]> = {
@@ -71,7 +81,11 @@ const RESOLVERS_BY_FAMILY: Record<MacroBiomeFamily, readonly NarrativeResolverSe
   FORESTS: CITY_STREETS_RESOLVERS,
   UNDERGROUND: CITY_STREETS_RESOLVERS,
   BACKROADS: CITY_STREETS_RESOLVERS,
+  SUNKEN_TRANSIT: CITY_STREETS_RESOLVERS,
+  BLACK_SITE_SECTOR: CITY_STREETS_RESOLVERS,
   DEEP_VEIL: CITY_STREETS_RESOLVERS,
+  FRACTAL_ABYSS: CITY_STREETS_RESOLVERS,
+  SANGUINE_ATRIUM: CITY_STREETS_RESOLVERS,
 };
 
 function hashSeed(value: string): number {
@@ -547,7 +561,7 @@ export function verifyNarrativeProceduralEngine(): void {
   if (!sample.node.choiceC || !sample.node.choiceD) {
     throw new Error('Generated node must expose four resolver options');
   }
-  if (sample.assembly.engineVersion !== 'assembly-v1') {
-    throw new Error('Generated assembly must use assembly-v1 engine');
+  if (sample.assembly.engineVersion !== 'assembly-v2') {
+    throw new Error('Generated assembly must use assembly-v2 engine');
   }
 }

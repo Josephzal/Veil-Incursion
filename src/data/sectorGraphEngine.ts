@@ -24,9 +24,12 @@ import {
   safeAnchorIndexForCrossingDepth,
 } from './sectorZoneEngine';
 import { createCollapseEntryNode } from './pocketDimensionEngine';
-import { applyMacroBiomeToCluster } from './macroBiomeEngine';
 import {
-  buildDepth1TestScannerCluster,
+  applyMacroBiomeToCluster,
+  isDistrictEntryScannerHub,
+} from './macroBiomeEngine';
+import {
+  buildDistrictBiomeChoiceCluster,
   materializeLevelCluster,
   maxVectorsForLocalLevel,
 } from './descentLevelMatrix';
@@ -506,6 +509,12 @@ export interface BuildScannerClusterOptions {
   lastLevelOfferedCombat?: boolean;
   /** Apply current macro biome flavor to forward vectors. */
   macroBiomeFamily?: import('../types/narrativeProcedural').MacroBiomeFamily | null;
+  /** District-entry biome offers — two combat vectors until player locks a biome. */
+  pendingDistrictBiomeOffers?: readonly [
+    import('../types/narrativeProcedural').MacroBiomeFamily,
+    import('../types/narrativeProcedural').MacroBiomeFamily,
+  ] | null;
+  awaitingDistrictBiomeChoice?: boolean;
   sanctuarySchedule?: SanctuarySchedule;
   runSegment?: import('./encounterGenerator').RunSegmentState | null;
 }
@@ -564,6 +573,8 @@ export function buildScannerCluster(options: BuildScannerClusterOptions): Incurs
     masterLinkUsed = false,
     lastLevelOfferedCombat = true,
     macroBiomeFamily = null,
+    pendingDistrictBiomeOffers = null,
+    awaitingDistrictBiomeChoice = false,
     sanctuarySchedule,
     runSegment = null,
   } = options;
@@ -605,15 +616,23 @@ export function buildScannerCluster(options: BuildScannerClusterOptions): Incurs
     cluster = current.childIds
       .filter((childId) => !graph.nodes[childId]?.isCompleted)
       .map((childId) => graphNodeToIncursionNode(graph.nodes[childId], stepIndex));
-  } else if (upcomingDepth === 1 && nodesCleared === 0) {
-    cluster = buildDepth1TestScannerCluster({
-      graphDepth: upcomingDepth,
-      district,
-      nodesCleared,
-      sectorTier: graph.sectorTier,
-      lastLevelOfferedCombat,
-      seed: `test-d1:${nodesCleared}`,
-    });
+  } else if (
+    isDistrictEntryScannerHub(nodesCleared)
+    && awaitingDistrictBiomeChoice
+    && pendingDistrictBiomeOffers
+  ) {
+    cluster = buildDistrictBiomeChoiceCluster(
+      {
+        graphDepth: upcomingDepth,
+        district,
+        nodesCleared,
+        sectorTier: graph.sectorTier,
+        lastLevelOfferedCombat,
+        seed: `district-entry:${upcomingDepth}:${nodesCleared}`,
+        runSegment,
+      },
+      pendingDistrictBiomeOffers,
+    );
   } else {
     cluster = materializeLevelCluster({
       graphDepth: upcomingDepth,

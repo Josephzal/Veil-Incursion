@@ -299,6 +299,8 @@ export interface IncursionNode {
   narrativeTags?: readonly string[];
   /** High-stakes narrative band (Act III squeeze). */
   isHardNarrative?: boolean;
+  /** District-entry combat vectors — engaging locks this biome for the chapter. */
+  offeredMacroBiome?: import('./narrativeProcedural').MacroBiomeFamily;
 }
 
 export interface BossPhaseConfiguration {
@@ -374,10 +376,19 @@ export interface ActiveIncursionState {
   envoyBoons: EnvoyBoonId[];
   /** Cabal locked at run start — gates procedural narrative resolvers. */
   alignedFaction: FactionType | null;
-  /** Active macro biome family — rotates each cleared node (district 3 = DEEP_VEIL). */
+  /** Active macro biome — locked for the current district after first combat engage. */
   currentMacroBiomeFamily: import('./narrativeProcedural').MacroBiomeFamily | null;
-  /** Previous macro family — prevents back-to-back repeats in districts 1–2. */
+  /** Previous district's locked biome (telemetry only). */
   lastMacroBiomeFamily: import('./narrativeProcedural').MacroBiomeFamily | null;
+  /** Two biome offers on district-entry scanner hubs until combat is engaged. */
+  pendingDistrictBiomeOffers: readonly [
+    import('./narrativeProcedural').MacroBiomeFamily,
+    import('./narrativeProcedural').MacroBiomeFamily,
+  ] | null;
+  /** True until the player engages a biome-tagged combat vector this district. */
+  awaitingDistrictBiomeChoice: boolean;
+  /** District 1 pick — excluded from district 2 offer pool. */
+  depth1MacroBiomeChoice: import('./narrativeProcedural').MacroBiomeFamily | null;
   /** Buffs, debuffs, and timed boons — powers status popup. */
   runStatusEffects: import('./narrativeProcedural').RunStatusEffect[];
   /** Overworld pickups, pockets, raw boons, and Grid-Hound state. */
@@ -483,6 +494,9 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     alignedFaction: null,
     currentMacroBiomeFamily: null,
     lastMacroBiomeFamily: null,
+    pendingDistrictBiomeOffers: null,
+    awaitingDistrictBiomeChoice: false,
+    depth1MacroBiomeChoice: null,
     runStatusEffects: [],
     overworldSession: createEmptyOverworldSession(),
     pendingLeyBoonSwap: null,

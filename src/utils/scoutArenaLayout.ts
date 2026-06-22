@@ -1,4 +1,4 @@
-import { isDepth1TestScannerCluster } from '../data/descentLevelMatrix';
+import { isDistrictBiomeChoiceCluster } from '../data/descentLevelMatrix';
 import type { IncursionNode } from '../types/game';
 import type { SectorGraphLayoutPoint } from './sectorGraphLayout';
 
@@ -54,7 +54,7 @@ export function buildScoutArenaLayout(
     y: viewBox.height - SPAWN_BOTTOM_PAD,
   };
 
-  if (isDepth1TestScannerCluster(cluster)) {
+  if (isDistrictBiomeChoiceCluster(cluster)) {
     return {
       positions: buildNearSpawnTestLayout(cluster, anchor),
       anchor,

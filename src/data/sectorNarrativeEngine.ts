@@ -91,7 +91,7 @@ export function enrichProceduralNarrativeNode(
   eligibility: ProceduralEligibilityContext,
 ): NarrativeEventNode {
   if (!assembly || node.interactionMode !== 'procedural') return node;
-  if (assembly.engineVersion === 'assembly-v1') {
+  if (assembly.engineVersion === 'assembly-v1' || assembly.engineVersion === 'assembly-v2') {
     return refreshAssemblyNarrativeLocks(node, assembly, eligibility);
   }
   return refreshProceduralNarrativeLocks(node, assembly, eligibility);

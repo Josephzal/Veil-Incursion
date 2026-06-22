@@ -6,6 +6,8 @@ import {
   GREED_ZONE_YIELD_MULTIPLIER,
 } from '../types/sector';
 import { rollProbableAffinity } from './combatEnvironmentEngine';
+import type { MacroBiomeFamily } from '../types/narrativeProcedural';
+import { MACRO_BIOME_DISPLAY } from './macroBiomeEngine';
 import type { DistrictId } from './districtPacing';
 import { isDistrictGateDepth, localLevelFromDepth } from './districtPacing';
 import type { RunSegmentState } from './encounterGenerator';
@@ -417,12 +419,8 @@ export function materializeLevelCluster(params: MaterializeLevelClusterParams): 
   );
 }
 
-const DEPTH1_TEST_KINDS: MatrixSpawnKind[] = [
-  'STANDARD_COMBAT',
-];
-
-function makeTestMatrixNode(
-  kind: MatrixSpawnKind,
+function makeDistrictBiomeCombatNode(
+  offeredMacroBiome: MacroBiomeFamily,
   graphDepth: number,
   district: DistrictId,
   localLevel: number,
@@ -430,9 +428,10 @@ function makeTestMatrixNode(
   stepIndex: number,
   sectorTier: number,
 ): IncursionNode {
-  const mapped = spawnKindToTypes(kind);
-  const nodeId = `test-d1-${kind.toLowerCase()}-s${slotIndex}`;
+  const mapped = spawnKindToTypes('STANDARD_COMBAT');
+  const nodeId = `district-biome-d${district}-l${localLevel}-s${slotIndex}`;
   const designation = VECTOR_DESIGNATIONS[slotIndex % VECTOR_DESIGNATIONS.length];
+  const baseLabel = mapped.label.replace('VECTOR', `VECTOR ${designation}`);
 
   return {
     id: nodeId,
@@ -440,12 +439,13 @@ function makeTestMatrixNode(
     index: stepIndex,
     encounterType: mapped.encounterType,
     type: mapped.type,
-    label: mapped.label.replace('VECTOR', `VECTOR ${designation}`),
+    label: `${MACRO_BIOME_DISPLAY[offeredMacroBiome].toUpperCase()} // ${baseLabel}`,
     isCompleted: false,
     isAnomalyNest: false,
     isPreDiscovered: false,
     narrativeTags: mapped.narrativeTags,
     isHardNarrative: mapped.isHardNarrative,
+    offeredMacroBiome,
     sectorMeta: buildMatrixSectorMeta(
       nodeId,
       mapped.encounterType,
@@ -457,18 +457,41 @@ function makeTestMatrixNode(
   };
 }
 
-/** Depth 1 opener — single combat vector on the first scanner screen. */
-export function buildDepth1TestScannerCluster(params: MaterializeLevelClusterParams): IncursionNode[] {
+/** District entry — exactly two combat vectors, each tagged with a distinct biome offer. */
+export function buildDistrictBiomeChoiceCluster(
+  params: MaterializeLevelClusterParams,
+  biomes: readonly [MacroBiomeFamily, MacroBiomeFamily],
+): IncursionNode[] {
   const { graphDepth, district, nodesCleared: stepIndex, sectorTier } = params;
   const localLevel = localLevelFromDepth(graphDepth);
-  return DEPTH1_TEST_KINDS.map((kind, i) =>
-    makeTestMatrixNode(kind, graphDepth, district, localLevel, i, stepIndex, sectorTier),
+  return biomes.map((biome, slotIndex) =>
+    makeDistrictBiomeCombatNode(
+      biome,
+      graphDepth,
+      district,
+      localLevel,
+      slotIndex,
+      stepIndex,
+      sectorTier,
+    ),
   );
 }
 
+export function isDistrictBiomeChoiceCluster(cluster: readonly IncursionNode[]): boolean {
+  return cluster.length === 2
+    && cluster.every(
+      (node) => node.type === 'STANDARD_COMBAT' && node.offeredMacroBiome != null,
+    );
+}
+
+/** @deprecated Use buildDistrictBiomeChoiceCluster */
+export function buildDepth1TestScannerCluster(params: MaterializeLevelClusterParams): IncursionNode[] {
+  return buildDistrictBiomeChoiceCluster(params, ['CITY_STREETS', 'CITY_BUILDINGS']);
+}
+
+/** @deprecated Use isDistrictBiomeChoiceCluster */
 export function isDepth1TestScannerCluster(cluster: readonly IncursionNode[]): boolean {
-  return cluster.length === DEPTH1_TEST_KINDS.length
-    && cluster.every((node) => node.id.startsWith('test-d1-'));
+  return isDistrictBiomeChoiceCluster(cluster);
 }
 
 export function requiresVeilBleedBoon(localLevel: number): boolean {

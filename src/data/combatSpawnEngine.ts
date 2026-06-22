@@ -6,6 +6,7 @@ import { initEnemyCombatLayers } from './combatFractureEngine';
 import { isDistrictGateDepth, depthFromNodesCleared, getDistrictFromDepth } from './districtPacing';
 import { resolveSpawnSlotsForDepth, resolveEncounterMetaForDepth } from './levelEncounterData';
 import type { RunSegmentState } from './encounterGenerator';
+import type { MacroBiomeFamily } from '../types/narrativeProcedural';
 import { apexResonanceAmbushComposition, entriesFromComposition } from './encounterCompositionEngine';
 import type { EnemyCombatProfile, SectorDefinition } from '../types/run';
 import type { DistrictId } from './districtPacing';
@@ -50,6 +51,7 @@ export interface SpawnSquadOptions {
   district?: DistrictId;
   runSegment?: RunSegmentState | null;
   encounterSeed?: string;
+  macroBiome?: MacroBiomeFamily | null;
 }
 
 /** Spawns from LEVEL_DATA encounter layouts (levels 1–45). Boss gates return empty — bosses use district boss flow. */
@@ -65,11 +67,13 @@ export function spawnCombatSquad(options: SpawnSquadOptions): EnemyCombatProfile
     depth,
     options.runSegment ?? undefined,
     options.encounterSeed,
+    options.macroBiome,
   );
   const encounterMeta = resolveEncounterMetaForDepth(
     depth,
     options.runSegment ?? undefined,
     options.encounterSeed,
+    options.macroBiome,
   );
   const cabalFaction = encounterMeta.cabalFaction;
 

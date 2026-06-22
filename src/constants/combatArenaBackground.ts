@@ -19,6 +19,10 @@ const COMBAT_ARENA_BACKGROUNDS: Partial<Record<BiomeId, ImageSourcePropType>> = 
   city_streets: OverworldBg,
   deep_veil: OverworldBg,
   underground: OverworldBg,
+  sunken_transit: OverworldBg,
+  black_site_sector: CityBuildingBg,
+  fractal_abyss: OverworldBg,
+  sanguine_atrium: OverworldBg,
 };
 
 const COMBAT_ARENA_SCRIMS: Partial<Record<BiomeId, string>> = {
@@ -27,6 +31,11 @@ const COMBAT_ARENA_SCRIMS: Partial<Record<BiomeId, string>> = {
   forest: COMBAT_ARENA_FOREST_SCRIM,
   city_streets: COMBAT_ARENA_CITY_STREETS_SCRIM,
   underground: COMBAT_ARENA_UNDERGROUND_SCRIM,
+  sunken_transit: COMBAT_ARENA_UNDERGROUND_SCRIM,
+  black_site_sector: COMBAT_ARENA_CITY_BUILDINGS_SCRIM,
+  fractal_abyss: COMBAT_ARENA_UNDERGROUND_SCRIM,
+  sanguine_atrium: COMBAT_ARENA_UNDERGROUND_SCRIM,
+  deep_veil: COMBAT_ARENA_UNDERGROUND_SCRIM,
 };
 
 export function resolveCombatArenaBackground(

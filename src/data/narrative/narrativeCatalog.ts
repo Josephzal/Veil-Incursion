@@ -7,10 +7,17 @@ import type {
   ResolverSet,
 } from '../../types/narrativeAssembly';
 import { migrateLegacyNodes, type MigratedLegacyCatalog } from './migrateLegacyNodes';
+import {
+  EXPANSION_COMPLICATION_SEEDS,
+  EXPANSION_CONTEXT_SEEDS,
+} from './narrativeDnDExpansion';
 import { tagsCompatible } from './narrativeAssemblyCore';
 
 /** When true, legacy matrix events are merged into assembly catalog pools. */
 export const INCLUDE_LEGACY_MIGRATED_SEEDS = false;
+
+/** When true, v2 encounters use dynamic resolver assembly (brute A / retreat D). */
+export const USE_ASSEMBLY_V2 = true;
 
 export const BASE_CONTEXT_SEEDS: readonly ContextSeed[] = contextSeedsJson as ContextSeed[];
 
@@ -27,12 +34,12 @@ export const LEGACY_COMPLICATION_SEEDS: readonly ComplicationSeed[] =
 export const LEGACY_RESOLVER_SETS: readonly ResolverSet[] = MIGRATED_LEGACY_CATALOG.resolverSets;
 
 export const CONTEXT_SEEDS: readonly ContextSeed[] = INCLUDE_LEGACY_MIGRATED_SEEDS
-  ? [...BASE_CONTEXT_SEEDS, ...LEGACY_CONTEXT_SEEDS]
-  : BASE_CONTEXT_SEEDS;
+  ? [...BASE_CONTEXT_SEEDS, ...LEGACY_CONTEXT_SEEDS, ...EXPANSION_CONTEXT_SEEDS]
+  : [...BASE_CONTEXT_SEEDS, ...EXPANSION_CONTEXT_SEEDS];
 
 export const COMPLICATION_SEEDS: readonly ComplicationSeed[] = INCLUDE_LEGACY_MIGRATED_SEEDS
-  ? [...BASE_COMPLICATION_SEEDS, ...LEGACY_COMPLICATION_SEEDS]
-  : BASE_COMPLICATION_SEEDS;
+  ? [...BASE_COMPLICATION_SEEDS, ...LEGACY_COMPLICATION_SEEDS, ...EXPANSION_COMPLICATION_SEEDS]
+  : [...BASE_COMPLICATION_SEEDS, ...EXPANSION_COMPLICATION_SEEDS];
 
 export const RESOLVER_SETS: readonly ResolverSet[] = INCLUDE_LEGACY_MIGRATED_SEEDS
   ? [...BASE_RESOLVER_SETS, ...LEGACY_RESOLVER_SETS]
@@ -84,14 +91,17 @@ export function isLegacyMigratedResolverSetId(resolverSetId: string): boolean {
 /** Dev-only — validates JSON assembly catalog integrity. */
 export function verifyNarrativeAssemblyCatalog(): void {
   const resolvableComplicationIds = new Set(RESOLVER_SETS.map((set) => set.complicationId));
-  for (const complication of COMPLICATION_SEEDS) {
+  for (const complication of BASE_COMPLICATION_SEEDS) {
     if (!resolvableComplicationIds.has(complication.id)) {
       throw new Error(`verifyNarrativeAssemblyCatalog: missing resolver set for ${complication.id}`);
     }
   }
 
-  for (const context of CONTEXT_SEEDS) {
-    const matches = COMPLICATION_SEEDS.filter((cmp) =>
+  const allContexts = [...CONTEXT_SEEDS];
+  const allComplications = [...COMPLICATION_SEEDS];
+
+  for (const context of allContexts) {
+    const matches = allComplications.filter((cmp) =>
       tagsCompatible(context.tags, cmp.requiredTags),
     );
     if (matches.length === 0) {

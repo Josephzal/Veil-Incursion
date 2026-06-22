@@ -2,14 +2,18 @@ import type { CargoItemId } from './cargoGrid';
 import type { FactionType } from './game';
 import type { Biome, NarrativePenalty, TensionMechanic } from './narrativeAssembly';
 
-/** Macro biome families — depth 3 always DEEP_VEIL (Phase 2 rotation). */
+/** Macro biome families — locked per district after first combat vector choice. */
 export type MacroBiomeFamily =
   | 'CITY_STREETS'
   | 'CITY_BUILDINGS'
   | 'FORESTS'
   | 'UNDERGROUND'
   | 'BACKROADS'
-  | 'DEEP_VEIL';
+  | 'SUNKEN_TRANSIT'
+  | 'BLACK_SITE_SECTOR'
+  | 'DEEP_VEIL'
+  | 'FRACTAL_ABYSS'
+  | 'SANGUINE_ATRIUM';
 
 /** Run depth (district): 1 = levels 1–15, 2 = 16–30, 3 = 31–45. */
 export type RunDepth = 1 | 2 | 3;
@@ -65,7 +69,7 @@ export interface NarrativeResolverSeed {
   resourceCacheId?: import('../types/resourceItem').ResourceCacheId;
 }
 
-export type NarrativeEngineVersion = 'legacy-catalog' | 'assembly-v1';
+export type NarrativeEngineVersion = 'legacy-catalog' | 'assembly-v1' | 'assembly-v2';
 
 export interface ProceduralNarrativeAssembly {
   assemblyId: string;
@@ -76,6 +80,8 @@ export interface ProceduralNarrativeAssembly {
   /** When `assembly-v1`, resolver data comes from JSON resolver sets. */
   engineVersion?: NarrativeEngineVersion;
   resolverSetId?: string;
+  /** Dynamic v2 — cabal/class + item template ids for reassembly. */
+  resolverTemplateIds?: { cabalTemplateId: string; itemTemplateId: string };
   biome?: Biome;
   tensionMechanic?: TensionMechanic;
   defaultPenalty?: NarrativePenalty;

@@ -1,5 +1,5 @@
 import type { CargoItemId } from './cargoGrid';
-import type { FactionType } from './game';
+import type { ClassType, FactionType } from './game';
 import type { MacroBiomeFamily } from './narrativeProcedural';
 
 export type Biome =
@@ -7,9 +7,21 @@ export type Biome =
   | 'city_buildings'
   | 'forests'
   | 'underground'
-  | 'backroads';
+  | 'backroads'
+  | 'sunken_transit'
+  | 'black_site_sector'
+  | 'deep_veil'
+  | 'fractal_abyss'
+  | 'sanguine_atrium';
 
-export type Cabal = 'Terran_Grid' | 'Solaris' | 'Legion' | 'Neutral';
+export type Cabal =
+  | 'Terran_Grid'
+  | 'Solaris'
+  | 'Legion'
+  | 'Void_Weavers'
+  | 'The_Syndicate'
+  | 'Aegis_Vanguard'
+  | 'Neutral';
 
 export type Tag =
   | 'urban'
@@ -20,7 +32,15 @@ export type Tag =
   | 'hazardous'
   | 'subterranean'
   | 'tech'
-  | 'nature';
+  | 'nature'
+  | 'flooded'
+  | 'industrial'
+  | 'militarized'
+  | 'organic'
+  | 'void'
+  | 'cosmic'
+  | 'city'
+  | 'forest';
 
 export type TensionMechanic =
   | 'Mechanic_ScavengeBar'
@@ -41,11 +61,17 @@ export interface ContextSeed {
   flavorText: string;
 }
 
+export interface NarrativeReward {
+  type: string;
+  amount: number;
+}
+
 export interface ComplicationSeed {
   id: string;
   requiredTags: Tag[];
   flavorText: string;
   defaultPenalty: NarrativePenalty;
+  defaultReward?: NarrativeReward;
 }
 
 export interface MechanicResolver {
@@ -62,6 +88,15 @@ export interface CabalResolver {
   onSuccess: string;
 }
 
+export interface ClassResolver {
+  text: string;
+  requirementType: 'Class';
+  requirementValue: ClassType;
+  onSuccess: string;
+}
+
+export type OptionBResolver = CabalResolver | ClassResolver;
+
 /** JSON catalog item id (PascalCase / snake_case in resolver_sets.json). */
 export type NarrativeJsonItemId =
   | 'Grid_Cracker_Mag'
@@ -70,7 +105,16 @@ export type NarrativeJsonItemId =
   | 'Sanguine_Ampoule'
   | 'Smoke_Ampoule'
   | 'Null_Key'
-  | 'Hazmat_Shielding';
+  | 'Hazmat_Shielding'
+  | 'FILTER_MASK'
+  | 'EMP_GRENADE'
+  | 'BREACHING_CHARGE'
+  | 'VOID_ANCHOR'
+  | 'PURITY_SEAL'
+  | 'DEFUSAL_KIT'
+  | 'GRAPPLE_LINE'
+  | 'HAZMAT_SHIELDING'
+  | 'SANGUINE_AMPOULE';
 
 export interface ItemResolver {
   text: string;
@@ -93,13 +137,16 @@ export interface RetreatResolver {
 
 export type OptionDResolver = BruteForceResolver | RetreatResolver;
 
+export type OptionAResolver = MechanicResolver | BruteForceResolver;
+
 export interface ResolverSet {
   id: string;
   complicationId: string;
-  optionA: MechanicResolver;
-  optionB: CabalResolver;
+  optionA: OptionAResolver;
+  optionB: OptionBResolver;
   optionC: ItemResolver;
   optionD: OptionDResolver;
+  assemblyMode?: 'static-v1' | 'dynamic-v2';
 }
 
 export interface GeneratedEncounter {
@@ -111,6 +158,8 @@ export interface GeneratedEncounter {
   scenarioText: string;
   /** Rolled once per encounter — shared by options A/B/C on success. */
   bonusReward?: import('./narrativeBonusReward').NarrativeBonusReward;
+  /** Dynamic v2 template ids for lock refresh / resolution lookup. */
+  dynamicSelection?: { cabalTemplateId: string; itemTemplateId: string };
 }
 
 const MACRO_TO_BIOME: Record<MacroBiomeFamily, Biome | null> = {
@@ -119,7 +168,11 @@ const MACRO_TO_BIOME: Record<MacroBiomeFamily, Biome | null> = {
   FORESTS: 'forests',
   UNDERGROUND: 'underground',
   BACKROADS: 'backroads',
-  DEEP_VEIL: null,
+  SUNKEN_TRANSIT: 'sunken_transit',
+  BLACK_SITE_SECTOR: 'black_site_sector',
+  DEEP_VEIL: 'deep_veil',
+  FRACTAL_ABYSS: 'fractal_abyss',
+  SANGUINE_ATRIUM: 'sanguine_atrium',
 };
 
 const BIOME_TO_MACRO: Record<Biome, MacroBiomeFamily> = {
@@ -128,9 +181,14 @@ const BIOME_TO_MACRO: Record<Biome, MacroBiomeFamily> = {
   forests: 'FORESTS',
   underground: 'UNDERGROUND',
   backroads: 'BACKROADS',
+  sunken_transit: 'SUNKEN_TRANSIT',
+  black_site_sector: 'BLACK_SITE_SECTOR',
+  deep_veil: 'DEEP_VEIL',
+  fractal_abyss: 'FRACTAL_ABYSS',
+  sanguine_atrium: 'SANGUINE_ATRIUM',
 };
 
-const CABAL_TO_FACTION: Record<Exclude<Cabal, 'Neutral'>, FactionType> = {
+const CABAL_TO_FACTION: Partial<Record<Exclude<Cabal, 'Neutral'>, FactionType>> = {
   Terran_Grid: 'TERRAN_GRID',
   Solaris: 'SOLARIS',
   Legion: 'LEGION',
@@ -148,9 +206,12 @@ const JSON_ITEM_TO_CARGO: Partial<Record<NarrativeJsonItemId, CargoItemId>> = {
   Grave_Dust_Ampoule: 'grave-dust-ampoule',
   Spectral_Salt: 'spectral-salt',
   Sanguine_Ampoule: 'sanguine-coagulant',
+  SANGUINE_AMPOULE: 'sanguine-coagulant',
   Smoke_Ampoule: 'smoke-ampoule',
   Null_Key: 'null-key',
   Hazmat_Shielding: 'hazmat-shielding',
+  HAZMAT_SHIELDING: 'hazmat-shielding',
+  GRAPPLE_LINE: 'gravity-grapple',
 };
 
 const CARGO_TO_JSON_ITEM = Object.fromEntries(
@@ -167,7 +228,19 @@ export function biomeToMacroFamily(biome: Biome): MacroBiomeFamily {
 
 export function cabalToFaction(cabal: Cabal): FactionType | null {
   if (cabal === 'Neutral') return null;
-  return CABAL_TO_FACTION[cabal];
+  return CABAL_TO_FACTION[cabal] ?? null;
+}
+
+export function isOptionABruteForce(optionA: OptionAResolver): optionA is BruteForceResolver {
+  return 'type' in optionA && optionA.type === 'BruteForce';
+}
+
+export function isOptionBClassResolver(optionB: OptionBResolver): optionB is ClassResolver {
+  return optionB.requirementType === 'Class';
+}
+
+export function isOptionBCabalResolver(optionB: OptionBResolver): optionB is CabalResolver {
+  return optionB.requirementType === 'Cabal';
 }
 
 export function factionToCabal(faction: FactionType): Cabal {
