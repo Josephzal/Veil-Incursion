@@ -42,6 +42,7 @@ export interface TurnStartLifecycleResult {
   statusFloatLabel?: string;
   statusFloatUnitId?: string;
   playerHpDelta?: number;
+  playerStaminaDelta?: number;
 }
 
 export interface HitTakenLifecycleResult {
@@ -55,6 +56,7 @@ export interface HitTakenLifecycleResult {
   playerHpDelta?: number;
   /** Scuttler counter-attack after dodge. */
   scuttlerCounter?: boolean;
+  playerStaminaDelta?: number;
 }
 
 export interface DeathLifecycleResult {

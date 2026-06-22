@@ -35,14 +35,21 @@ export default function CombatSelectedEnemyIntel({
     isApex: unit.isApex,
     rosterId: unit.rosterId,
   });
-  const tierLabel = tier === 'STANDARD' ? 'STANDARD' : tier;
+  const tierLabel = unit.isAlpha ? 'ALPHA' : tier === 'STANDARD' ? 'STANDARD' : tier;
   const gaugeWidth = combatDeckGaugeTrackWidth();
 
   return (
     <View style={[styles.panel, { borderColor: HOSTILE_ACCENT }]} pointerEvents="none">
       <View style={styles.bodyRow}>
         <View style={styles.leftColumn}>
-          <Text style={[styles.title, { color: HOSTILE_ACCENT }]} numberOfLines={1}>
+          <Text
+            style={[
+              styles.title,
+              { color: unit.isAlpha ? '#ff4444' : HOSTILE_ACCENT },
+              unit.isAlpha && styles.alphaTitle,
+            ]}
+            numberOfLines={1}
+          >
             {`>> HOSTILE INTEL // ${formatHostileId(unit.designation)}`}
           </Text>
           <CombatEnemySlotBars unit={unit} trackWidth={gaugeWidth} />
@@ -98,6 +105,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.5,
     lineHeight: 9,
+  },
+  alphaTitle: {
+    fontWeight: '800',
   },
   compactLine: {
     fontFamily: MONO,

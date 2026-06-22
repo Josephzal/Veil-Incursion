@@ -203,6 +203,7 @@ export interface CombatGridUnitSnapshot {
   isBoss?: boolean;
   isApex?: boolean;
   isElite?: boolean;
+  isAlpha?: boolean;
   isVeilStalker?: boolean;
   enemyClass?: import('../types/run').EnemyClass;
   rosterId?: string;
@@ -338,6 +339,7 @@ export function buildInitialSquadUiSnapshot(
     }),
     isBoss: unit.isBoss,
     isApex: unit.isApex,
+    isAlpha: unit.isAlpha === true,
     isElite: (() => {
       const tier = resolveEnemyThreatTier({
         isBoss: unit.isBoss,
@@ -379,4 +381,5 @@ export interface CombatEnemyTelemetry {
   kineticArmor?: number;
   occultWards?: number;
   combatTags?: string[];
+  isAlpha?: boolean;
 }

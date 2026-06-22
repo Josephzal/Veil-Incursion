@@ -6,8 +6,11 @@ import type { EnemyRosterId } from './enemyRoster';
 import {
   createRunSegment,
   generateNodeEncounter,
+  type EncounterPoolTier,
   type RunSegmentState,
 } from './encounterGenerator';
+import type { EncounterUnitSpec } from './synergyEncounterTypes';
+import { rosterToSpawnSlots } from './rosterSpawnSlots';
 import type { MacroBiomeFamily } from '../types/narrativeProcedural';
 
 export type EncounterLayout = {
@@ -20,8 +23,10 @@ export type EncounterLayout = {
 export interface LevelEncounterEntry {
   level: number;
   layout: EncounterLayout;
-  /** Solo alpha duel — applies Alpha stat modifier. */
+  /** Solo alpha duel — legacy flag when roster is absent. */
   isAlpha?: boolean;
+  roster?: readonly EncounterUnitSpec[];
+  poolTier?: EncounterPoolTier;
   encounterId?: string;
   encounterOrigin?: import('./originDeckEngine').EncounterOrigin;
   cabalFaction?: import('../types/game').FactionType;
@@ -74,6 +79,8 @@ export function resolveLevelEncounter(
     level: depth,
     layout: generated.layout,
     isAlpha: generated.isAlpha,
+    roster: generated.roster,
+    poolTier: generated.poolTier,
     encounterId: generated.encounterId,
     encounterOrigin: generated.encounterOrigin,
     cabalFaction: generated.cabalFaction,
@@ -132,8 +139,14 @@ export function resolveSpawnSlotsForDepth(
   if (isDistrictGateDepth(depth)) return [];
 
   const entry = resolveLevelEncounter(depth, segment, seed, macroBiome);
-  const hasAnyEnemy = Object.values(entry.layout).some((v) => v != null);
+  const hasAnyEnemy = entry.roster?.length
+    ? true
+    : Object.values(entry.layout).some((v) => v != null);
   if (!hasAnyEnemy) return [];
+
+  if (entry.roster && entry.roster.length > 0) {
+    return rosterToSpawnSlots(entry.roster);
+  }
 
   return layoutToSpawnSlots(entry.layout, entry.isAlpha);
 }

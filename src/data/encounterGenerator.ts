@@ -7,12 +7,18 @@ import type { EncounterEnemyKey } from './enemyCombatConfig';
 import { buildOriginDeck, peekEncounterOrigin, type EncounterOrigin } from './originDeckEngine';
 import { rollFactionControl } from './factionTraitEngine';
 import {
+  loadAlphaDuelElite,
+  loadEliteEncounter,
+  verifyEliteDatabase,
+} from './eliteSpawnEngine';
+import {
   loadCombatEncounter,
   macroFamilyToSynergyBiome,
   verifySynergyDatabase,
   ALL_SYNERGY_ENEMY_KEYS,
 } from './synergySpawnEngine';
-import type { EncounterGridPos, SynergySquadSpec } from './synergyEncounterTypes';
+import type { EncounterGridPos, EncounterUnitSpec, SynergySquadSpec } from './synergyEncounterTypes';
+import { rosterHasMixedAlpha } from './rosterSpawnSlots';
 
 export type { EncounterGridPos, EncounterUnitSpec, EncounterSquadSpec, SynergySquadSpec } from './synergyEncounterTypes';
 
@@ -29,13 +35,15 @@ export interface RunSegmentState {
 
 export type BreathingRoomKind = 'BLACK_MARKET' | 'RESOURCE_HARVEST';
 
-export type EncounterPoolTier = 'SYNERGY' | 'ALPHA_DUEL' | 'BOSS' | 'BREATHING_ROOM';
+export type EncounterPoolTier = 'SYNERGY' | 'ELITE' | 'ALPHA_DUEL' | 'BOSS' | 'BREATHING_ROOM';
 
 export interface GeneratedEncounter {
   layout: EncounterLayout;
   isAlpha: boolean;
   encounterId: string;
   poolTier: EncounterPoolTier;
+  /** When present, spawn uses per-unit isAlpha instead of layout-wide flattening. */
+  roster?: readonly EncounterUnitSpec[];
   breathingRoomKind?: BreathingRoomKind;
   encounterOrigin?: EncounterOrigin;
   cabalFaction?: FactionType;
@@ -50,7 +58,7 @@ const POS_TO_LAYOUT: Record<EncounterGridPos, keyof EncounterLayout> = {
   BACK_CENTER: 'backLeft',
 };
 
-function hashSeed(input: string): number {
+export function hashSeed(input: string): number {
   let hash = 0;
   for (let i = 0; i < input.length; i += 1) {
     hash = (hash * 31 + input.charCodeAt(i)) | 0;
@@ -58,7 +66,7 @@ function hashSeed(input: string): number {
   return Math.abs(hash);
 }
 
-function seededRandom(seed: string): () => number {
+export function seededRandom(seed: string): () => number {
   let state = hashSeed(seed);
   return () => {
     state = (state * 9301 + 49297) % 233280;
@@ -168,6 +176,38 @@ export function generateNodeEncounter(
   const encounterOrigin = resolveEncounterOrigin(segment, seed, district);
   const isAlphaDuel = localLevel === segment.alphaNodeIndex;
 
+  if (isAlphaDuel) {
+    let squad = loadAlphaDuelElite(district, synergyBiome, rand, {
+      lastEncounterId: segment.lastEncounterId,
+    });
+    if (!squad) {
+      squad = loadAlphaDuelElite(district, synergyBiome, rand, {
+        lastEncounterId: null,
+        interloper: true,
+      });
+    }
+    if (!squad) {
+      return {
+        layout: { frontLeft: 'FRACTURE_HOUND', frontRight: null, backLeft: null, backRight: null },
+        roster: [{ type: 'FRACTURE_HOUND', pos: 'FRONT_LEFT', isAlpha: true }],
+        isAlpha: true,
+        encounterId: 'fallback-alpha-hound',
+        poolTier: 'ALPHA_DUEL',
+        encounterOrigin: 'VEIL',
+      };
+    }
+    const { layout } = squadToLayout(squad);
+    return {
+      layout,
+      roster: squad.roster,
+      isAlpha: true,
+      encounterId: squad.id,
+      poolTier: 'ALPHA_DUEL',
+      encounterOrigin,
+      cabalFaction: encounterOrigin === 'CABAL' ? segment.currentFactionControl : undefined,
+    };
+  }
+
   let squad = loadCombatEncounter(district, synergyBiome, rand, {
     lastEncounterId: segment.lastEncounterId,
   });
@@ -190,13 +230,14 @@ export function generateNodeEncounter(
   }
 
   const { layout, isAlpha: squadAlpha } = squadToLayout(squad);
-  const isAlpha = isAlphaDuel || squadAlpha;
+  const useRoster = rosterHasMixedAlpha(squad.roster) || squad.roster.some((u) => u.isAlpha);
 
   return {
     layout,
-    isAlpha,
+    roster: useRoster ? squad.roster : undefined,
+    isAlpha: squadAlpha,
     encounterId: squad.id,
-    poolTier: isAlphaDuel ? 'ALPHA_DUEL' : 'SYNERGY',
+    poolTier: 'SYNERGY',
     encounterOrigin,
     cabalFaction: encounterOrigin === 'CABAL' ? segment.currentFactionControl : undefined,
   };
@@ -229,4 +270,5 @@ export const ALL_POOL_ENEMY_KEYS: EncounterEnemyKey[] = ALL_SYNERGY_ENEMY_KEYS;
 
 export function verifyEncounterGenerator(): void {
   verifySynergyDatabase();
+  verifyEliteDatabase();
 }

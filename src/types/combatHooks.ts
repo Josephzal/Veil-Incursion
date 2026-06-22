@@ -89,6 +89,8 @@ export interface CombatSessionExtras {
   hookWeaverTetheredUnitId: string | null;
   /** Memory Leech — disabled augment slot index (0–2). */
   jammedAugmentSlot: number | null;
+  /** Memory Leech alpha — multiple disabled augment slots. */
+  jammedAugmentSlots?: number[];
   /** Envoy Flesh-Warp — unit ids with healing negated. */
   fleshWarpUnitIds: Record<string, boolean>;
 }
@@ -111,6 +113,7 @@ export function createDefaultCombatSessionExtras(): CombatSessionExtras {
     playerDefendedThisTurn: false,
     hookWeaverTetheredUnitId: null,
     jammedAugmentSlot: null,
+    jammedAugmentSlots: [],
     fleshWarpUnitIds: {},
   };
 }

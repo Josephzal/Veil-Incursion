@@ -3,8 +3,18 @@ import { ALL_GRID_SLOTS } from '../types/combatGrid';
 import { laneForSlot } from '../types/combatGrid';
 import { applyDiagonalStaggerToProfiles } from './combatGridPlacement';
 import { initEnemyCombatLayers } from './combatFractureEngine';
-import { isDistrictGateDepth, depthFromNodesCleared, getDistrictFromDepth } from './districtPacing';
-import { resolveSpawnSlotsForDepth, resolveEncounterMetaForDepth } from './levelEncounterData';
+import {
+  isDistrictGateDepth,
+  depthFromNodesCleared,
+  getDistrictFromDepth,
+  localLevelFromDepth,
+} from './districtPacing';
+import {
+  resolveSpawnSlotsForDepth,
+  resolveEncounterMetaForDepth,
+  isAlphaDuelDepth,
+} from './levelEncounterData';
+import { seededRandom } from './encounterGenerator';
 import type { RunSegmentState } from './encounterGenerator';
 import type { MacroBiomeFamily } from '../types/narrativeProcedural';
 import { apexResonanceAmbushComposition, entriesFromComposition } from './encounterCompositionEngine';
@@ -12,6 +22,10 @@ import type { EnemyCombatProfile, SectorDefinition } from '../types/run';
 import type { DistrictId } from './districtPacing';
 import { ENEMY_ROSTER, spawnRosterUnit } from './enemyRoster';
 import type { SpawnEnemyOptions } from './enemies';
+import { loadAlphaDuelElite, loadEliteEncounter } from './eliteSpawnEngine';
+import { macroFamilyToSynergyBiome } from './synergySpawnEngine';
+import { rosterToSpawnSlots } from './rosterSpawnSlots';
+import type { SpawnSlotAssignment } from './levelEncounterData';
 
 let unitSeq = 0;
 
@@ -40,6 +54,38 @@ function assignGrid(
   };
 }
 
+function resolveEliteSlotAssignments(
+  depth: number,
+  district: DistrictId,
+  runSegment: RunSegmentState | null | undefined,
+  encounterSeed: string | undefined,
+  macroBiome: MacroBiomeFamily | null | undefined,
+): { slots: SpawnSlotAssignment[]; encounterId: string } | null {
+  const synergyBiome = macroFamilyToSynergyBiome(macroBiome);
+  const localLevel = localLevelFromDepth(depth);
+  const isAlphaDuel = runSegment != null && isAlphaDuelDepth(depth, runSegment);
+  const rand = seededRandom(
+    `${encounterSeed ?? 'elite'}:spawn:${depth}:${localLevel}:${runSegment?.alphaNodeIndex ?? 0}`,
+  );
+
+  const loader = isAlphaDuel ? loadAlphaDuelElite : loadEliteEncounter;
+  let squad = loader(district, synergyBiome, rand, {
+    lastEncounterId: runSegment?.lastEncounterId,
+  });
+  if (!squad) {
+    squad = loader(district, synergyBiome, rand, {
+      lastEncounterId: null,
+      interloper: true,
+    });
+  }
+  if (!squad) return null;
+
+  return {
+    slots: rosterToSpawnSlots(squad.roster),
+    encounterId: squad.id,
+  };
+}
+
 export interface SpawnSquadOptions {
   nodeIndex: number;
   isElite?: boolean;
@@ -63,18 +109,42 @@ export function spawnCombatSquad(options: SpawnSquadOptions): EnemyCombatProfile
     return [];
   }
 
-  let slotAssignments = resolveSpawnSlotsForDepth(
+  let slotAssignments: SpawnSlotAssignment[];
+  let encounterMeta = resolveEncounterMetaForDepth(
     depth,
     options.runSegment ?? undefined,
     options.encounterSeed,
     options.macroBiome,
   );
-  const encounterMeta = resolveEncounterMetaForDepth(
-    depth,
-    options.runSegment ?? undefined,
-    options.encounterSeed,
-    options.macroBiome,
-  );
+
+  if (options.isElite === true) {
+    const elite = resolveEliteSlotAssignments(
+      depth,
+      district,
+      options.runSegment,
+      options.encounterSeed,
+      options.macroBiome,
+    );
+    if (elite) {
+      slotAssignments = elite.slots;
+      encounterMeta = { ...encounterMeta, encounterId: elite.encounterId };
+    } else {
+      slotAssignments = resolveSpawnSlotsForDepth(
+        depth,
+        options.runSegment ?? undefined,
+        options.encounterSeed,
+        options.macroBiome,
+      );
+    }
+  } else {
+    slotAssignments = resolveSpawnSlotsForDepth(
+      depth,
+      options.runSegment ?? undefined,
+      options.encounterSeed,
+      options.macroBiome,
+    );
+  }
+
   const cabalFaction = encounterMeta.cabalFaction;
 
   if (slotAssignments.length === 0 && options.isAmbush) {

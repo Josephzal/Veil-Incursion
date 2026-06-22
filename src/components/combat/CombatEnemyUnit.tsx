@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { ImageSourcePropType } from 'react-native';
 import type { CombatGridUnitSnapshot } from '../../utils/combatTelemetryFormat';
 import { ENEMY_HITBOX_DEBUG } from './combatEnemyBarLayout';
@@ -12,6 +12,10 @@ import CombatEnemyDissolveEffect from './CombatEnemyDissolveEffect';
 import CombatEnemyHitEffect from './CombatEnemyHitEffect';
 import CombatEnemyPortraitSkia from './CombatEnemyPortraitSkia';
 import CombatSilhouetteShatterEffect from './CombatSilhouetteShatterEffect';
+import EliteSkullBadge from './EliteSkullBadge';
+
+const MONO = 'monospace';
+const ALPHA_CRIMSON = '#ff4444';
 
 const HITBOX_DEBUG_FILL = 'rgba(255, 0, 0, 0.35)';
 
@@ -52,6 +56,7 @@ export default function CombatEnemyUnit({
   }, []);
 
   const isArena = variant === 'arena';
+  const isAlpha = unit.isAlpha === true;
   const fractured = unit.isFractured;
   const dissolving = (unit.dissolveSeq ?? 0) > 0 && !unit.dissolveHidden;
   const portraitGlow = unit.portraitGlow ?? (unit.isSelected ? 'player-selected' : 'none');
@@ -62,6 +67,8 @@ export default function CombatEnemyUnit({
   const unitBody = (
     <View
       style={[
+        styles.enemyContainer,
+        isAlpha && styles.alphaGlow,
         styles.imageShell,
         isArena ? styles.imageShellArena : styles.imageShellCompact,
         {
@@ -70,6 +77,14 @@ export default function CombatEnemyUnit({
       ]}
       pointerEvents={dissolving ? 'none' : 'box-none'}
     >
+      {isAlpha ? <EliteSkullBadge style={styles.eliteBadge} /> : null}
+
+      {isAlpha ? (
+        <Text style={styles.alphaNameplate} numberOfLines={1} ellipsizeMode="tail">
+          {unit.designation.toUpperCase()}
+        </Text>
+      ) : null}
+
       <CombatEnemyAnchorMotion
         turnPhase={unit.turnPhase ?? null}
         isBacklineDashing={unit.isBacklineDashing}
@@ -78,7 +93,7 @@ export default function CombatEnemyUnit({
         meleeDashDelta={meleeDashDelta}
         frozen={portraitFrozen || dissolving}
       >
-        <View style={styles.overlayLayer} pointerEvents="none">
+        <View style={[styles.overlayLayer, isAlpha && styles.alphaSpriteScale]} pointerEvents="none">
           <CombatEnemyCritImpact
             critImpactSeq={unit.critImpactSeq}
             channel={unit.critImpactChannel}
@@ -154,6 +169,39 @@ export default function CombatEnemyUnit({
 }
 
 const styles = StyleSheet.create({
+  enemyContainer: {
+    width: '100%',
+    height: '100%',
+    position: 'relative',
+  },
+  alphaGlow: {
+    shadowColor: ALPHA_CRIMSON,
+    shadowOpacity: 0.45,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  eliteBadge: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    zIndex: 20,
+  },
+  alphaNameplate: {
+    position: 'absolute',
+    top: -14,
+    left: 0,
+    right: 0,
+    zIndex: 18,
+    textAlign: 'center',
+    fontFamily: MONO,
+    fontSize: 7,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    color: ALPHA_CRIMSON,
+  },
+  alphaSpriteScale: {
+    transform: [{ scale: 1.15 }],
+  },
   imageShell: {
     width: '100%',
     height: '100%',

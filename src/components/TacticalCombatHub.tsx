@@ -176,6 +176,7 @@ import {
 import type { BlueprintId } from '../types/equipmentBlueprint';
 import { CombatLifecycleManager, applyHookWeaverTetherAction, applyLeySirenTetherAction } from '../data/combatLifecycleEngine';
 import { isRosterSpecificIntent, isNullShadeVoidAmbush, nullShadeVoidAmbushCleanupPatch, patchRosterAfterIntentExec, resolveRosterEnemyDamage, ROSTER_AI_WEIGHTS, syncRosterCombatState, VOID_AMBUSH_CRIT_CHANCE, VOID_AMBUSH_INTERRUPT_THRESHOLD } from '../data/combatRosterActions';
+import { getAlphaMechanic } from '../data/enemyAlphaConfig';
 import {
   fixerDistrictFromProfile,
   fixerRepairTarget,
@@ -754,13 +755,21 @@ export default function TacticalCombatHub({
     });
   };
 
+  const applyLifecycleStaminaDelta = (delta?: number) => {
+    if (delta == null || delta === 0) return;
+    applyStamina(staminaRef.current + delta);
+  };
+
   const smogCallerActive = () =>
-    aliveUnits(squadRef.current).some((u) => u.rosterId === 'smog-caller');
+    aliveUnits(squadRef.current).find((u) => u.rosterId === 'smog-caller') ?? null;
 
   const hookWeaverTetheredUnitId = () => {
     const weaver = aliveUnits(squadRef.current).find((u) => u.rosterId === 'hook-weaver');
     return weaver?.tetheredAllyUnitId ?? sessionExtrasRef.current.hookWeaverTetheredUnitId;
   };
+
+  const activeHookWeaver = () =>
+    aliveUnits(squadRef.current).find((u) => u.rosterId === 'hook-weaver') ?? null;
 
   const hasAshOnBoard = () => Object.keys(sessionExtrasRef.current.ashTokens).length > 0;
 
@@ -1050,7 +1059,8 @@ export default function TacticalCombatHub({
           }),
           isBoss: u.isBoss,
           isApex: u.isApex,
-          isElite: threatTier === 'ELITE' || threatTier === 'APEX',
+          isAlpha: u.isAlpha === true,
+          isElite: threatTier === 'ELITE' || threatTier === 'APEX' || u.isAlpha === true,
           isVeilStalker: u.isVeilStalker,
           enemyClass: u.class,
           rosterId: u.rosterId,
@@ -1750,9 +1760,18 @@ export default function TacticalCombatHub({
         hasStructuredDebuff(sessionExtrasRef.current, 'SEARING')
         && options?.attacker?.rosterId !== 'splinter'
       ) {
-        const burst = 8;
-        dmg += burst;
-        log(`[SEARING] >> Secondary burst — +${burst} damage.`);
+        const splinter = aliveUnits(squadRef.current).find((u) => u.rosterId === 'splinter');
+        const searingMult = splinter
+          ? getAlphaMechanic(splinter, 'searingDamageMultiplier', 1)
+          : 1;
+        if (searingMult > 1) {
+          const extra = Math.floor(dmg * (searingMult - 1));
+          dmg += extra;
+          log(`[SEARING] >> Damage tripled — +${extra} damage.`);
+        } else {
+          dmg += 8;
+          log('[SEARING] >> Secondary burst — +8 damage.');
+        }
       }
       Vibration.vibrate([0, 32, 48, 28]);
       if (arenaLayout && !options?.skipStrikeFx) {
@@ -2221,6 +2240,7 @@ export default function TacticalCombatHub({
       hitLifecycle.logLines.forEach((line) => log(line));
       applyLifecycleExtras(hitLifecycle.extras);
       applyLifecyclePlayerDelta(hitLifecycle.playerHpDelta);
+      applyLifecycleStaminaDelta(hitLifecycle.playerStaminaDelta);
       if (hitLifecycle.squad.length > 0) syncSquad(hitLifecycle.squad);
       working = getUnitById(squadRef.current, e.unitId!) ?? working;
       if (hitLifecycle.negateDamage) dmg = 0;
@@ -2375,8 +2395,12 @@ export default function TacticalCombatHub({
     if (dmg > 0 && e.unitId && (source || options?.indirectDamage)) {
       const tetheredId = hookWeaverTetheredUnitId();
       if (source && tetheredId && tetheredId === e.unitId) {
-        applyStamina(Math.max(0, staminaRef.current - 10));
-        log('>> HOOK WEAVER TETHER — 10 stamina siphoned.');
+        const weaver = activeHookWeaver();
+        const penalty = weaver
+          ? getAlphaMechanic(weaver, 'tetherStaminaPenalty', 10)
+          : 10;
+        applyStamina(Math.max(0, staminaRef.current - penalty));
+        log(`>> HOOK WEAVER TETHER — ${penalty} stamina siphoned.`);
       }
       hitFlashSeqRef.current[e.unitId] = (hitFlashSeqRef.current[e.unitId] ?? 0) + 1;
       Vibration.vibrate(18);
@@ -2913,15 +2937,30 @@ export default function TacticalCombatHub({
     if (attacker.rosterId !== 'fracture-hound' || attacker.isEnraged) return;
     const extras = sessionExtrasRef.current;
     if (extras.playerShield <= 0) return;
-    const drain = Math.min(extras.playerShield, ROSTER_AI_WEIGHTS.FRACTURE_HOUND_SHIELD_DRAIN);
+    const drainAmt = getAlphaMechanic(
+      attacker,
+      'shieldDamage',
+      ROSTER_AI_WEIGHTS.FRACTURE_HOUND_SHIELD_DRAIN,
+    );
+    const drain = Math.min(extras.playerShield, drainAmt);
     extras.playerShield -= drain;
     log(`>> FRACTURE HOUND — ${drain} shield integrity siphoned.`);
   };
 
   const applyStaminaDrainLeap = (attacker: EnemyCombatProfile) => {
+    const drain = getAlphaMechanic(attacker, 'staminaDrain', 20);
     const beforeStamina = staminaRef.current;
-    applyStamina(beforeStamina - 20);
-    log(`>> ${attacker.designation} STAMINA DRAIN LEAP — stamina siphoned (-20).`);
+    applyStamina(beforeStamina - drain);
+    log(`>> ${attacker.designation} STAMINA DRAIN LEAP — stamina siphoned (-${drain}).`);
+    if (getAlphaMechanic(attacker, 'appliesBleed', false)) {
+      if (!sessionExtrasRef.current.playerDebuffs.includes('BLEEDING')) {
+        sessionExtrasRef.current.playerDebuffs = [
+          ...sessionExtrasRef.current.playerDebuffs,
+          'BLEEDING',
+        ];
+      }
+      log('>> PLAGUE SWARM — operative bleeding.');
+    }
     if (beforeStamina > 0 && staminaRef.current <= 0) {
       sessionExtrasRef.current.playerApPenaltyNextTurn += 1;
       log('>> MIASMA FATIGUE — operative AP reduced next turn.');
@@ -3022,8 +3061,9 @@ export default function TacticalCombatHub({
         const { dmg, unblockable } = attackDmg(e);
         if (e.rosterId === 'fracture-hound' && !e.isEnraged) applyFractureHoundShieldDrain(e);
         if (e.rosterId === 'breacher') {
-          applyStamina(staminaRef.current - BREACHER_STAMINA_DRAIN);
-          log(`>> ${e.designation} BREACH STRIKE — ${BREACHER_STAMINA_DRAIN} stamina shredded (${dmg} HP).`);
+          const staminaShred = getAlphaMechanic(e, 'concussiveDamageToStamina', BREACHER_STAMINA_DRAIN);
+          applyStamina(staminaRef.current - staminaShred);
+          log(`>> ${e.designation} BREACH STRIKE — ${staminaShred} stamina shredded (${dmg} HP).`);
           hurtPlayer(dmg, unblockable, `>> BREACH STRIKE — ${dmg}`, { attacker: e, rollCrit: false });
           break;
         }
@@ -3063,6 +3103,29 @@ export default function TacticalCombatHub({
       }
       case 'FIELD_REPAIR': {
         if (!e.unitId) break;
+        const district = fixerDistrictFromProfile(e);
+        const healAmt = rollFixerRepairAmount(district);
+        if (e.fixerAoEHeal) {
+          let healedAny = false;
+          for (const ally of aliveUnits(squadRef.current)) {
+            if (ally.unitId === e.unitId || ally.currentHp >= ally.maxHp) continue;
+            if (isEnemyHealBlocked(classCombatRef.current, ally.unitId!, hasEnvoyBoon(envoyBoons, 'FLESH_ROT'))) {
+              continue;
+            }
+            const pct = e.alphaMechanics?.healPercent ?? 0.15;
+            const amount = Math.max(1, Math.floor(ally.maxHp * pct));
+            const healed = Math.min(ally.maxHp, ally.currentHp + amount);
+            const applied = healed - ally.currentHp;
+            if (applied <= 0) continue;
+            patchUnit(ally.unitId!, { currentHp: healed });
+            statusFloatSeqRef.current[ally.unitId!] = (statusFloatSeqRef.current[ally.unitId!] ?? 0) + 1;
+            healedAny = true;
+            log(`>> ${e.designation} FIELD REPAIR — ${ally.designation} +${applied} HP (board heal).`);
+          }
+          if (healedAny) publishSquadUi(squadRef.current);
+          else log(`>> ${e.designation} FIELD REPAIR — no valid targets.`);
+          break;
+        }
         const target = fixerRepairTarget(squadRef.current, e.unitId);
         if (!target?.unitId || target.currentHp >= target.maxHp) {
           log(`>> ${e.designation} FIELD REPAIR — no valid target.`);
@@ -3072,8 +3135,6 @@ export default function TacticalCombatHub({
           log(`>> ${e.designation} FIELD REPAIR BLOCKED — ${target.designation} flesh-warped.`);
           break;
         }
-        const district = fixerDistrictFromProfile(e);
-        const healAmt = rollFixerRepairAmount(district);
         const healed = Math.min(target.maxHp, target.currentHp + healAmt);
         const applied = healed - target.currentHp;
         patchUnit(target.unitId, { currentHp: healed });
@@ -3111,18 +3172,24 @@ export default function TacticalCombatHub({
         break;
       case 'DOUBLE_STRIKE': {
         const dmg = resolveRosterEnemyDamage(e, 'DOUBLE_STRIKE');
+        const strikeCount = e.rosterId === 'fracture-hound'
+          ? getAlphaMechanic(e, 'attacksPerTurn', 2)
+          : 2;
         if (e.isEnraged) {
           log(`>> ${e.designation} DOUBLE STRIKE — enraged true occult cleave.`);
-          hurtPlayer(dmg, true, `>> DOUBLE STRIKE 1 — ${dmg} TRUE OCCULT`, { attacker: e, rollCrit: false });
-          if (operativeHpRef.current > 0) {
-            hurtPlayer(dmg, true, `>> DOUBLE STRIKE 2 — ${dmg} TRUE OCCULT`, { attacker: e, rollCrit: false });
+          for (let i = 0; i < strikeCount && operativeHpRef.current > 0; i += 1) {
+            hurtPlayer(dmg, true, `>> DOUBLE STRIKE ${i + 1} — ${dmg} TRUE OCCULT`, { attacker: e, rollCrit: false });
           }
         } else {
           if (e.rosterId === 'fracture-hound') applyFractureHoundShieldDrain(e);
-          log(`>> ${e.designation} DOUBLE STRIKE — twin cleave.`);
-          hurtPlayer(dmg, false, `>> DOUBLE STRIKE 1 — ${dmg}`, { attacker: e });
-          if (operativeHpRef.current > 0) {
-            hurtPlayer(dmg, false, `>> DOUBLE STRIKE 2 — ${dmg}`, { attacker: e, rollCrit: false });
+          log(`>> ${e.designation} DOUBLE STRIKE — ${strikeCount > 2 ? 'rabid flurry' : 'twin cleave'}.`);
+          for (let i = 0; i < strikeCount && operativeHpRef.current > 0; i += 1) {
+            hurtPlayer(
+              dmg,
+              false,
+              `>> DOUBLE STRIKE ${i + 1} — ${dmg}`,
+              { attacker: e, rollCrit: i > 0 ? false : undefined },
+            );
           }
         }
         break;
@@ -3208,9 +3275,18 @@ export default function TacticalCombatHub({
         break;
       }
       case 'VEIL_BARRIER': {
-        if (!e.unitId) break;
-        patchUnit(e.unitId, { veilBarrierCharges: 2 });
-        log(`>> ${e.designation} VEIL BARRIER — 2 hit charges active.`);
+        const isAoeBarrier = getAlphaMechanic<string>(e, 'shieldCastTarget', 'SINGLE') === 'AOE';
+        const charges = 2;
+        if (isAoeBarrier) {
+          for (const ally of aliveUnits(squadRef.current)) {
+            if (!ally.unitId) continue;
+            patchUnit(ally.unitId, { veilBarrierCharges: charges });
+          }
+          log(`>> ${e.designation} VEIL BARRIER — board-wide ${charges} hit charges.`);
+        } else if (e.unitId) {
+          patchUnit(e.unitId, { veilBarrierCharges: charges });
+          log(`>> ${e.designation} VEIL BARRIER — ${charges} hit charges active.`);
+        }
         break;
       }
       case 'TARGET_LOCK': {
@@ -3233,14 +3309,25 @@ export default function TacticalCombatHub({
         break;
       }
       case 'ARTILLERY_CHARGE':
-        log(`>> ${e.designation} ARTILLERY CHARGE — ordnance priming.`);
+        if (e.rosterId === 'coil-spike-sniper' && (e.laserLockTurnsRemaining ?? 0) > 0) {
+          log(`>> ${e.designation} CHARGING TRUE SHOT — ${e.laserLockTurnsRemaining} cycle(s) remaining.`);
+        } else {
+          log(`>> ${e.designation} ARTILLERY CHARGE — ordnance priming.`);
+        }
         break;
       case 'LASER_SIGHT': {
+        const lockTurns = e.rosterId === 'coil-spike-sniper'
+          ? getAlphaMechanic(e, 'lockOnTurns', 2)
+          : 1;
         addStructuredDebuff(sessionExtrasRef.current, {
           type: 'LASER_SIGHT',
-          turnsRemaining: 1,
+          turnsRemaining: lockTurns,
         });
-        log(`>> ${e.designation} LASER SIGHT — true damage lock acquired.`);
+        log(
+          e.rosterId === 'coil-spike-sniper' && lockTurns > 1
+            ? `>> ${e.designation} LASER SIGHT — true damage lock acquired (${lockTurns}-turn wind-up).`
+            : `>> ${e.designation} LASER SIGHT — true damage lock acquired.`,
+        );
         break;
       }
       case 'ARTILLERY_FIRE': {
@@ -3278,12 +3365,13 @@ export default function TacticalCombatHub({
       }
       case 'TAR_BIND': {
         const dmg = resolveRosterEnemyDamage(e, 'TAR_BIND');
+        const rootDuration = getAlphaMechanic(e, 'rootDuration', 1);
         hurtPlayer(dmg, false, `>> TAR BIND — ${dmg}`, { attacker: e });
         addStructuredDebuff(sessionExtrasRef.current, {
           type: 'ROOTED',
-          turnsRemaining: 1,
+          turnsRemaining: rootDuration,
         });
-        log(`>> ${e.designation} ROOTED — defend/evade disabled.`);
+        log(`>> ${e.designation} ROOTED — defend/evade disabled (${rootDuration} turn${rootDuration > 1 ? 's' : ''}).`);
         break;
       }
       case 'STAMINA_TETHER': {
@@ -3297,16 +3385,23 @@ export default function TacticalCombatHub({
         break;
       }
       case 'JAM_AUGMENT': {
-        const slot = Math.floor(Math.random() * 3);
+        const slotCount = getAlphaMechanic(e, 'disabledAugmentCount', 1);
+        const duration = getAlphaMechanic(e, 'disableDuration', 2);
+        const slots: number[] = [];
+        while (slots.length < Math.min(slotCount, 3)) {
+          const slot = Math.floor(Math.random() * 3);
+          if (!slots.includes(slot)) slots.push(slot);
+        }
         sessionExtrasRef.current = {
           ...sessionExtrasRef.current,
-          jammedAugmentSlot: slot,
+          jammedAugmentSlot: slots[0] ?? null,
+          jammedAugmentSlots: slots,
         };
         addStructuredDebuff(sessionExtrasRef.current, {
           type: 'JAMMED_AUGMENT',
-          turnsRemaining: 2,
+          turnsRemaining: duration,
         });
-        log(`>> ${e.designation} JAMMED AUGMENT — loadout slot ${slot + 1} disabled.`);
+        log(`>> ${e.designation} JAMMED AUGMENT — loadout slot(s) ${slots.map((s) => s + 1).join(', ')} disabled (${duration} turn${duration > 1 ? 's' : ''}).`);
         break;
       }
       default: break;
@@ -3666,6 +3761,7 @@ export default function TacticalCombatHub({
     turnStart.logLines.forEach((line) => log(line));
     applyLifecycleExtras(turnStart.extras);
     applyLifecyclePlayerDelta(turnStart.playerHpDelta);
+    applyLifecycleStaminaDelta(turnStart.playerStaminaDelta);
     if (turnStart.squad.length > 0) syncSquad(turnStart.squad);
     if (turnStart.statusFloatLabel && turnStart.statusFloatUnitId) {
       statusFloatSeqRef.current[turnStart.statusFloatUnitId] =
@@ -3678,11 +3774,20 @@ export default function TacticalCombatHub({
       && unit.intent === 'STRIKE'
       && unit.unitId
       && enemyActionQueueRef.current[0] === unit.unitId
-      && enemyActionQueueRef.current[1] !== unit.unitId
-      && Math.random() < FRACTURE_HOUND_DOUBLE_STRIKE_CHANCE
     ) {
-      enemyActionQueueRef.current.splice(1, 0, unit.unitId);
-      log(`>> ${unit.designation} DOUBLE STRIKE — twin cleave queued.`);
+      const attacksPerTurn = getAlphaMechanic(unit, 'attacksPerTurn', 0);
+      const queuedSame = enemyActionQueueRef.current.filter((id) => id === unit.unitId).length;
+      if (attacksPerTurn >= 2 && unit.isAlpha && queuedSame === 1) {
+        const extra = attacksPerTurn - 1;
+        enemyActionQueueRef.current.splice(1, 0, ...Array(extra).fill(unit.unitId));
+        log(`>> ${unit.designation} RABID FLURRY — ${attacksPerTurn} strikes queued.`);
+      } else if (
+        enemyActionQueueRef.current[1] !== unit.unitId
+        && Math.random() < FRACTURE_HOUND_DOUBLE_STRIKE_CHANCE
+      ) {
+        enemyActionQueueRef.current.splice(1, 0, unit.unitId);
+        log(`>> ${unit.designation} DOUBLE STRIKE — twin cleave queued.`);
+      }
     }
     setIsPlayerTurn(false);
     setEnemyActionStage('reading');
@@ -3946,6 +4051,19 @@ export default function TacticalCombatHub({
     }
     if (narrativeCombatBoons?.overcharged) {
       sessionExtrasRef.current.overchargedActive = true;
+    }
+    const preLockedSniper = initialSquad.find(
+      (unit) => unit.rosterId === 'coil-spike-sniper'
+        && unit.isAlpha
+        && unit.isCharging
+        && (unit.laserLockTurnsRemaining ?? 0) === 0,
+    );
+    if (preLockedSniper) {
+      addStructuredDebuff(sessionExtrasRef.current, {
+        type: 'LASER_SIGHT',
+        turnsRemaining: getAlphaMechanic(preLockedSniper, 'lockOnTurns', 1),
+      });
+      log(`>> ${preLockedSniper.designation} EXECUTIONER LOCK — target pre-acquired.`);
     }
     const ghostedAp = narrativeCombatBoons?.ghosted ? 1 : 0;
     const entryAp = PLAYER_ACTION_POINTS_PER_TURN + Math.max(0, firstTurnBonusAp) + ghostedAp;
@@ -4772,9 +4890,11 @@ export default function TacticalCombatHub({
         }
         let strikeStaminaCost = strikeStats.strikeStaminaCost;
         const strikeTarget = enemyRef.current;
-        if (smogCallerActive() && strikeTarget?.gridSlot?.startsWith('FL')) {
-          strikeStaminaCost *= 2;
-          log('>> SMOG CALLER — choking hazard doubles melee stamina cost.');
+        const smogCaller = smogCallerActive();
+        if (smogCaller && strikeTarget?.gridSlot?.startsWith('FL')) {
+          const meleeMult = getAlphaMechanic(smogCaller, 'meleeStaminaMultiplier', 2);
+          strikeStaminaCost *= meleeMult;
+          log(`>> SMOG CALLER — choking hazard ×${meleeMult} melee stamina cost.`);
         }
         const overdraw = staminaRef.current < strikeStaminaCost;
         if (overdraw) {
@@ -5599,8 +5719,12 @@ export default function TacticalCombatHub({
       && (abilityId === 'WRAITH_PARRY' || abilityId === 'SHADOW_STEP')) {
       return false;
     }
-    const jammedSlot = sessionExtrasRef.current.jammedAugmentSlot;
-    if (jammedSlot != null && aegisLoadout[jammedSlot] === abilityId) return false;
+    const jammedSlots = sessionExtrasRef.current.jammedAugmentSlots?.length
+      ? sessionExtrasRef.current.jammedAugmentSlots
+      : sessionExtrasRef.current.jammedAugmentSlot != null
+        ? [sessionExtrasRef.current.jammedAugmentSlot]
+        : [];
+    if (jammedSlots.some((slot) => aegisLoadout[slot] === abilityId)) return false;
     const def = getAbilityDefinition(abilityId);
     const graftPlan = buildGraftCastPlan(abilityId, abilityGraftsRef.current[abilityId]);
     if ((graftCooldownsRef.current[abilityId] ?? 0) > 0) return false;

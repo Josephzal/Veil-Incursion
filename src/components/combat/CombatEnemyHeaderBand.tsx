@@ -40,7 +40,7 @@ export default function CombatEnemyHeaderBand({
     return (
       <View style={[styles.band, shellStyle]}>
         <View style={styles.arenaTopRow}>
-          <Text style={styles.hostileIdArena} numberOfLines={1} ellipsizeMode="tail">
+          <Text style={[styles.hostileIdArena, enemy.isAlpha && styles.alphaHostileId]} numberOfLines={1} ellipsizeMode="tail">
             {formatHostileId(enemy.designation)}
           </Text>
           <Text style={[styles.hpCaption, { color: GAUGE_HOSTILE_HP }]}>
@@ -81,7 +81,7 @@ export default function CombatEnemyHeaderBand({
   return (
     <View style={[styles.band, shellStyle]}>
       <View style={styles.identityCol}>
-        <Text style={styles.hostileId} numberOfLines={compact ? 2 : 1} ellipsizeMode="tail">
+        <Text style={[styles.hostileId, enemy.isAlpha && styles.alphaHostileId]} numberOfLines={compact ? 2 : 1} ellipsizeMode="tail">
           {`HOSTILE_ID // ${formatHostileId(enemy.designation)}`}
         </Text>
         <Text
@@ -154,6 +154,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     lineHeight: 10,
     color: '#ffffff',
+  },
+  alphaHostileId: {
+    color: '#ff4444',
+    fontWeight: '800',
   },
   hpCaption: {
     fontFamily: MONO,

@@ -146,15 +146,23 @@ export function resolveWardenInterceptTarget(
   unitId: string,
 ): string {
   const mode = abilityTargetMode(abilityId);
+  const unit = squad.find((u) => u.unitId === unitId);
+  const warden = findLivingWarden(squad);
+  if (!warden?.unitId) return unitId;
+
+  if (mode === 'ALL') {
+    if (warden.wardenInterceptsAoE && unit?.gridSlot?.startsWith('BL')) {
+      return warden.unitId;
+    }
+    return unitId;
+  }
+
   if (mode !== 'SINGLE') return unitId;
   if (isHookAbility(abilityId) || isOccultAbility(abilityId)) return unitId;
 
-  const unit = squad.find((u) => u.unitId === unitId);
   if (!unit?.gridSlot?.startsWith('BL')) return unitId;
 
-  const warden = findLivingWarden(squad);
-  if (warden?.unitId) return warden.unitId;
-  return unitId;
+  return warden.unitId;
 }
 
 export function isBacklineSlot(slot: CombatGridSlotId): boolean {

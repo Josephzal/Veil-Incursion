@@ -2,6 +2,7 @@ import type { FactionType } from '../types/game';
 import type { CombatGridLane } from '../types/combatGrid';
 import type { EnemyClass, EnemyCombatProfile } from '../types/run';
 import { resolveEnemyCombatStats } from './enemyCombatConfig';
+import { applyAlphaToEnemyProfile } from './enemyAlphaConfig';
 import { getNodeScale } from './enemyNodeScale';
 import { rollEnemyIntent } from './enemyIntentRoll';
 import { resolveEnemyAffinity } from './combatEnvironmentEngine';
@@ -768,12 +769,6 @@ export function spawnRosterUnit(
       enemyMaxActionPoints: 2,
       designation: `APEX ${entry.designation}`,
     };
-  } else if (options?.isAlpha) {
-    profile = {
-      ...profile,
-      enemyActionPoints: 2,
-      enemyMaxActionPoints: 2,
-    };
   }
   if (entry.isCabalHuman && options?.cabalFaction) {
     profile = applyFactionTrait(profile, options.cabalFaction);
@@ -785,6 +780,12 @@ export function spawnRosterUnit(
       occupiedSlots: ['FL_0', 'FL_1'],
       fractureImmune: true,
     };
+  }
+  if (options?.isAlpha) {
+    profile = applyAlphaToEnemyProfile(profile, entry.id, {
+      isAlpha: true,
+      baseDesignation: entry.designation,
+    });
   }
   return profile;
 }

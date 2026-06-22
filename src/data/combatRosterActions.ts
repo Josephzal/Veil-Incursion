@@ -1,6 +1,7 @@
 import type { DistrictId } from './districtPacing';
 import type { PlayerAIState } from './AIDecisionEngine';
 import type { EnemyCombatProfile, EnemyIntent } from '../types/run';
+import { getAlphaMechanic, resolveCoilSniperLockWindUp } from './enemyAlphaConfig';
 import {
   decideRosterIntent as decideRosterIntentFromAI,
   isRosterSpecificIntent,
@@ -57,14 +58,16 @@ export function resolveRosterEnemyDamage(profile: EnemyCombatProfile, intent: En
     return Math.floor(base * RESONANCE_OVERLOAD_DAMAGE_MULT);
   }
   if (profile.rosterId === 'echoing-brute' && profile.adaptedElement === 'Kinetic' && !profile.isEnraged) {
-    return Math.floor(base * 1.65);
+    const adaptiveMult = getAlphaMechanic(profile, 'adaptiveDamageMultiplier', 1.65);
+    return Math.floor(base * adaptiveMult);
   }
   if (profile.rosterId === 'gutter-goliath' && profile.isEnraged) {
     return Math.floor(base * ROSTER_AI_WEIGHTS.GOLIATH_ENRAGE_DAMAGE_MULT);
   }
   if (profile.rosterId === 'resonance-caster') {
     const stack = profile.resonanceStack ?? 0;
-    return Math.floor(base * (1 + stack * 0.5));
+    const scalingPerTurn = getAlphaMechanic(profile, 'damageScalingPerTurn', 0.5);
+    return Math.floor(base * (1 + stack * scalingPerTurn));
   }
   if (intent === 'ARTILLERY_FIRE') {
     return Math.floor(base * 1.75);
@@ -147,9 +150,18 @@ export function patchRosterAfterIntentExec(
         ? ROSTER_QUEUED_ACTION.BUNKER_BUSTER
         : ROSTER_QUEUED_ACTION.LASER_FIRE;
     }
+    if (profile.rosterId === 'coil-spike-sniper' && intent === 'LASER_SIGHT') {
+      patch.laserLockTurnsRemaining = resolveCoilSniperLockWindUp(profile);
+    }
+    if (profile.rosterId === 'coil-spike-sniper' && intent === 'ARTILLERY_CHARGE') {
+      patch.laserLockTurnsRemaining = Math.max(0, (profile.laserLockTurnsRemaining ?? 0) - 1);
+    }
     if (intent === 'ARTILLERY_FIRE' || intent === 'TAR_BIND') {
       patch.isCharging = false;
       patch.queuedAction = null;
+      if (profile.rosterId === 'coil-spike-sniper') {
+        patch.laserLockTurnsRemaining = 0;
+      }
     }
   }
 

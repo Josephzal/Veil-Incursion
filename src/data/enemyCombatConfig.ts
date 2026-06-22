@@ -165,7 +165,7 @@ export const DEPTH_SCALING: Record<DistrictId, { hpMult: number; dmgMult: number
   3: { hpMult: 2.4, dmgMult: 2.6 },
 };
 
-export const ALPHA_MODIFIER = { hpMult: 2.5, dmgMult: 1.25 } as const;
+export const ALPHA_MODIFIER = { hpMult: 1.3, dmgMult: 1.25, ftMult: 1.5 } as const;
 
 export const ENEMY_ARCHETYPE: Partial<Record<EnemyRosterId, EnemySpawnArchetype>> = {
   'fracture-hound': 'MELEE',

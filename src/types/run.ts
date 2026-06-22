@@ -171,6 +171,29 @@ export interface EnemyCombatProfile {
   graveRobberFeeds?: number;
   /** Spotter — turn-1 lock telegraph before artillery burst. */
   spotterLockedOn?: boolean;
+  /** Alpha elite — bespoke modifier payload applied at spawn. */
+  isAlpha?: boolean;
+  alphaMechanics?: import('../data/enemyAlphaConfig').AlphaMechanicOverrides;
+  /** Alpha Warden — absorbs AoE player abilities. */
+  wardenInterceptsAoE?: boolean;
+  /** Alpha Golem — heat vent threshold (default 3). */
+  golemHeatVentThreshold?: number;
+  /** Alpha Fixer — heals entire enemy board. */
+  fixerAoEHeal?: boolean;
+  /** Alpha Churn — fires without sacrificing fragile allies. */
+  churnSelfFiring?: boolean;
+  /** Alpha Ley-Siren — bonus occult armor on tethered frontline. */
+  leySirenGrantArmor?: number;
+  /** Alpha Amalgam — regains armor each turn. */
+  regeneratesArmor?: boolean;
+  /** Alpha artillery — skip wind-up telegraph. */
+  alphaInstantArtillery?: boolean;
+  /** Alpha spotter — skip lock-on telegraph. */
+  alphaInstantLockOn?: boolean;
+  /** Alpha sniper — shortened lock-on turns. */
+  alphaLockOnTurns?: number;
+  /** Coil sniper — charge cycles remaining before TRUE SHOT. */
+  laserLockTurnsRemaining?: number;
 }
 
 export interface Trinket {

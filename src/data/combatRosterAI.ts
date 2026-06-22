@@ -12,6 +12,7 @@ import { aliveUnits } from './combatSquadEngine';
 import type { EnemyCombatProfile, EnemyIntent } from '../types/run';
 import { squadNeedsFixerRepair } from './fixerRepairEngine';
 import { isRedundantBuffIntent } from './enemyIntentUtils';
+import { getAlphaMechanic, resolveCoilSniperLockWindUp } from './enemyAlphaConfig';
 
 /** Playtest-tunable hostile enrage thresholds — adjust ratios/absolute HP here. */
 export const ROSTER_ENRAGE_THRESHOLDS = {
@@ -198,16 +199,26 @@ function resolveForcedRosterIntent(profile: EnemyCombatProfile): EnemyIntent | n
     'sapper', 'coil-spike-sniper', 'resonance-caster', 'tar-spitter', 'splinter', 'spotter',
   ];
   if (rosterId && artilleryIds.includes(rosterId)) {
+    if (rosterId === 'coil-spike-sniper') {
+      if (profile.alphaInstantArtillery) return 'ARTILLERY_FIRE';
+      const windingUp = profile.isCharging || profile.queuedAction === ROSTER_QUEUED_ACTION.LASER_FIRE;
+      if (windingUp) {
+        const lockRemaining = profile.laserLockTurnsRemaining ?? resolveCoilSniperLockWindUp(profile);
+        if (lockRemaining > 0) return 'ARTILLERY_CHARGE';
+        return 'ARTILLERY_FIRE';
+      }
+      return 'LASER_SIGHT';
+    }
+
     if (profile.queuedAction === ROSTER_QUEUED_ACTION.BUNKER_BUSTER
       || profile.queuedAction === ROSTER_QUEUED_ACTION.LASER_FIRE) {
       return 'ARTILLERY_FIRE';
     }
     if (profile.isCharging) return 'ARTILLERY_FIRE';
+    if (profile.alphaInstantArtillery) return 'ARTILLERY_FIRE';
+    if (rosterId === 'spotter' && profile.alphaInstantLockOn) return 'ARTILLERY_FIRE';
     if (rosterId === 'spotter' && profile.spotterLockedOn) return 'ARTILLERY_FIRE';
     if (rosterId === 'spotter' && !profile.spotterLockedOn) return 'TARGET_LOCK';
-    if (rosterId === 'coil-spike-sniper' && !profile.isCharging && profile.queuedAction !== ROSTER_QUEUED_ACTION.LASER_FIRE) {
-      return 'LASER_SIGHT';
-    }
     if (rosterId === 'tar-spitter' && profile.isCharging) return 'TAR_BIND';
     return 'ARTILLERY_CHARGE';
   }
@@ -253,7 +264,9 @@ export function decideRosterIntent(
     const hasCorpse = squad.some(
       (u) => u.unitId !== synced.unitId && (u.isSlumped || u.currentHp <= 0),
     );
-    if (hasCorpse) return 'STRIKE';
+    const corpsesOnly = getAlphaMechanic(synced, 'consumesOnlyCorpses', true);
+    const hasLivingPrey = !corpsesOnly && aliveUnits(squad).some((u) => u.unitId !== synced.unitId);
+    if (hasCorpse || hasLivingPrey) return 'STRIKE';
   }
 
   const forced = resolveForcedRosterIntent(synced);
