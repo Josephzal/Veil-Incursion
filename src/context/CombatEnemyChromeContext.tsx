@@ -11,6 +11,7 @@ import React, {
 import type { SharedValue } from 'react-native-reanimated';
 import type { ParryArenaLayout } from '../utils/parryCollision';
 import type { SliceLineRender } from '../components/combat/VectorSliceOverlay';
+import type { EnvoyWardExpansionSpeed } from '../components/combat/EnvoyWardOverlay';
 
 /** Updated synchronously on perfect parry — avoids chrome-layer lag for success burst. */
 export interface ParryBurstLiveState {
@@ -19,12 +20,19 @@ export interface ParryBurstLiveState {
   epoch: number;
 }
 
-/** Serializable UI state — safe to store in React state. */
+  /** Serializable UI state — safe to store in React state. */
 export interface CombatEnemyChromeUIState {
-  slicePingVisible: boolean;
-  slicePingReady: boolean;
-  slicePingDisabled: boolean;
+  ultimatePingVisible: boolean;
+  ultimatePingReady: boolean;
+  ultimatePingDisabled: boolean;
+  ultimatePingVariant: 'eviscerate' | 'zero_protocol' | 'cataclysm' | null;
+  masteryProgressVisible: boolean;
+  masteryProgressCurrent: number;
+  masteryProgressRequired: number;
+  masteryProgressAccent: string;
   parryVisible: boolean;
+  wardVisible: boolean;
+  envoyWardSpeed: EnvoyWardExpansionSpeed;
   parrySuccess: boolean;
   parryFailure: boolean;
   parrySuccessBurstVisible: boolean;
@@ -36,7 +44,8 @@ export interface CombatEnemyChromeUIState {
 }
 
 export interface CombatEnemyChromeHandlers {
-  onSlicePing: () => void;
+  onUltimatePing: () => void;
+  onEnvoyWardRelease: (overlapRatio: number) => void;
   onParryTap: (tapX: number, tapY: number) => void;
   registerParryArena: (layout: ParryArenaLayout) => void;
   registerSliceArena: (layout: { width: number; height: number }) => void;
@@ -50,10 +59,17 @@ export interface CombatEnemyChromeSnapshot extends CombatEnemyChromeUIState, Com
 const noop = () => {};
 
 const IDLE_UI: CombatEnemyChromeUIState = {
-  slicePingVisible: false,
-  slicePingReady: false,
-  slicePingDisabled: true,
+  ultimatePingVisible: false,
+  ultimatePingReady: false,
+  ultimatePingDisabled: true,
+  ultimatePingVariant: null,
+  masteryProgressVisible: false,
+  masteryProgressCurrent: 0,
+  masteryProgressRequired: 3,
+  masteryProgressAccent: '#94a3b8',
   parryVisible: false,
+  wardVisible: false,
+  envoyWardSpeed: 'normal',
   parrySuccess: false,
   parryFailure: false,
   parrySuccessBurstVisible: false,
@@ -69,7 +85,8 @@ const noopRegisterArena = (_layout: ParryArenaLayout) => {};
 const noopRegisterSliceArena = (_layout: { width: number; height: number }) => {};
 
 const IDLE_HANDLERS: CombatEnemyChromeHandlers = {
-  onSlicePing: noop,
+  onUltimatePing: noop,
+  onEnvoyWardRelease: () => {},
   onParryTap: noopParryTap,
   registerParryArena: noopRegisterArena,
   registerSliceArena: noopRegisterSliceArena,
@@ -97,10 +114,17 @@ function sliceLinesEqual(a: SliceLineRender[], b: SliceLineRender[]): boolean {
 
 function uiStateEqual(prev: CombatEnemyChromeUIState, next: CombatEnemyChromeUIState): boolean {
   return (
-    prev.slicePingVisible === next.slicePingVisible
-    && prev.slicePingReady === next.slicePingReady
-    && prev.slicePingDisabled === next.slicePingDisabled
+    prev.ultimatePingVisible === next.ultimatePingVisible
+    && prev.ultimatePingReady === next.ultimatePingReady
+    && prev.ultimatePingDisabled === next.ultimatePingDisabled
+    && prev.ultimatePingVariant === next.ultimatePingVariant
+    && prev.masteryProgressVisible === next.masteryProgressVisible
+    && prev.masteryProgressCurrent === next.masteryProgressCurrent
+    && prev.masteryProgressRequired === next.masteryProgressRequired
+    && prev.masteryProgressAccent === next.masteryProgressAccent
     && prev.parryVisible === next.parryVisible
+    && prev.wardVisible === next.wardVisible
+    && prev.envoyWardSpeed === next.envoyWardSpeed
     && prev.parrySuccess === next.parrySuccess
     && prev.parryFailure === next.parryFailure
     && prev.parrySuccessBurstVisible === next.parrySuccessBurstVisible
@@ -193,11 +217,19 @@ export function CombatChromeBridge(snapshot: CombatEnemyChromeSnapshot): null {
   const ctx = useCombatEnemyChromeOptional();
 
   const {
-    slicePingVisible,
-    slicePingReady,
-    slicePingDisabled,
-    onSlicePing,
+    ultimatePingVisible,
+    ultimatePingReady,
+    ultimatePingDisabled,
+    ultimatePingVariant,
+    masteryProgressVisible,
+    masteryProgressCurrent,
+    masteryProgressRequired,
+    masteryProgressAccent,
+    onUltimatePing,
+    onEnvoyWardRelease,
     parryVisible,
+    wardVisible,
+    envoyWardSpeed,
     parryShrinkScale,
     parrySuccess,
     parryFailure,
@@ -215,7 +247,8 @@ export function CombatChromeBridge(snapshot: CombatEnemyChromeSnapshot): null {
 
   if (ctx) {
     ctx.handlersRef.current = {
-      onSlicePing,
+      onUltimatePing,
+      onEnvoyWardRelease,
       onParryTap,
       registerParryArena,
       registerSliceArena,
@@ -227,10 +260,17 @@ export function CombatChromeBridge(snapshot: CombatEnemyChromeSnapshot): null {
   useEffect(() => {
     if (!ctx) return;
     ctx.updateUI({
-      slicePingVisible,
-      slicePingReady,
-      slicePingDisabled,
+      ultimatePingVisible,
+      ultimatePingReady,
+      ultimatePingDisabled,
+      ultimatePingVariant,
+      masteryProgressVisible,
+      masteryProgressCurrent,
+      masteryProgressRequired,
+      masteryProgressAccent,
       parryVisible,
+      wardVisible,
+      envoyWardSpeed,
       parrySuccess,
       parryFailure,
       parrySuccessBurstVisible,
@@ -242,10 +282,17 @@ export function CombatChromeBridge(snapshot: CombatEnemyChromeSnapshot): null {
     });
   }, [
     ctx,
-    slicePingVisible,
-    slicePingReady,
-    slicePingDisabled,
+    ultimatePingVisible,
+    ultimatePingReady,
+    ultimatePingDisabled,
+    ultimatePingVariant,
+    masteryProgressVisible,
+    masteryProgressCurrent,
+    masteryProgressRequired,
+    masteryProgressAccent,
     parryVisible,
+    wardVisible,
+    envoyWardSpeed,
     parrySuccess,
     parryFailure,
     parrySuccessBurstVisible,

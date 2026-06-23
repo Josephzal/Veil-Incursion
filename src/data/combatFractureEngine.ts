@@ -41,14 +41,24 @@ export function fractureRatio(enemy: EnemyCombatProfile): number {
 export function applyFractureDamage(
   enemy: EnemyCombatProfile,
   amount: number,
+  options?: { deferBreak?: boolean },
 ): EnemyCombatProfile {
   if (isEnemyFractured(enemy) || enemy.fractureImmune === true) return enemy;
   const max = enemy.fractureMax ?? FRACTURE_MAX_DEFAULT;
   const nextGauge = Math.min(max, (enemy.fractureGauge ?? 0) + amount);
   if (nextGauge >= max) {
+    if (options?.deferBreak) {
+      return { ...enemy, fractureGauge: max };
+    }
     return applyFracturedState(enemy);
   }
   return { ...enemy, fractureGauge: nextGauge };
+}
+
+export function willFractureBreak(enemy: EnemyCombatProfile, amount: number): boolean {
+  if (isEnemyFractured(enemy) || enemy.fractureImmune === true) return false;
+  const max = enemy.fractureMax ?? FRACTURE_MAX_DEFAULT;
+  return (enemy.fractureGauge ?? 0) + amount >= max;
 }
 
 /** Break state — stunned, armor stripped, +50% damage taken this round. */

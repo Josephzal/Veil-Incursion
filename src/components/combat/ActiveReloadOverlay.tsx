@@ -1,83 +1,105 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { ActiveReloadResult } from '../../types/classCombatResources';
-import { resolveActiveReloadZone } from '../../data/activeReloadEngine';
+import {
+  ACTIVE_RELOAD_PASS_MS,
+  buildReloadZoneConfig,
+  resolveActiveReloadZone,
+} from '../../data/activeReloadEngine';
 
 interface ActiveReloadOverlayProps {
   visible: boolean;
+  /** 1 = normal perfect band; 0.5 = Gunsmith's Curse (50% tighter). */
   perfectWindowScale?: number;
   onResolve: (result: ActiveReloadResult, cursorRatio: number) => void;
 }
 
-const BAR_WIDTH = 280;
-const CURSOR_WIDTH = 10;
-const TICK_MS = 16;
-const CURSOR_SPEED = 0.022;
+const BAR_WIDTH = 300;
+const CURSOR_WIDTH = 8;
 
 export default function ActiveReloadOverlay({
   visible,
   perfectWindowScale = 1,
   onResolve,
 }: ActiveReloadOverlayProps): React.JSX.Element | null {
-  const [cursorRatio, setCursorRatio] = useState(0.5);
-  const directionRef = useRef(1);
+  const [cursorRatio, setCursorRatio] = useState(0);
+  const startMsRef = useRef(0);
   const resolvingRef = useRef(false);
+  const rafRef = useRef<number | null>(null);
+  const zoneConfig = useMemo(
+    () => buildReloadZoneConfig(perfectWindowScale),
+    [perfectWindowScale],
+  );
 
   useEffect(() => {
     if (!visible) {
       resolvingRef.current = false;
-      setCursorRatio(0.5);
-      directionRef.current = 1;
+      setCursorRatio(0);
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
       return;
     }
-    const timer = setInterval(() => {
-      setCursorRatio((prev) => {
-        let next = prev + directionRef.current * CURSOR_SPEED;
-        if (next >= 1) {
-          next = 1;
-          directionRef.current = -1;
-        } else if (next <= 0) {
-          next = 0;
-          directionRef.current = 1;
-        }
-        return next;
-      });
-    }, TICK_MS);
-    return () => clearInterval(timer);
-  }, [visible]);
+    startMsRef.current = Date.now();
+    resolvingRef.current = false;
+
+    const tick = () => {
+      const elapsed = Date.now() - startMsRef.current;
+      const ratio = Math.min(1, elapsed / ACTIVE_RELOAD_PASS_MS);
+      setCursorRatio(ratio);
+      if (ratio >= 1 && !resolvingRef.current) {
+        resolvingRef.current = true;
+        onResolve(resolveActiveReloadZone(1, zoneConfig), 1);
+        return;
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+    };
+  }, [visible, onResolve, zoneConfig]);
 
   if (!visible) return null;
 
-  const handleStop = () => {
+  const handleTap = () => {
     if (resolvingRef.current) return;
     resolvingRef.current = true;
-    onResolve(resolveActiveReloadZone(cursorRatio, perfectWindowScale), cursorRatio);
+    if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+    onResolve(resolveActiveReloadZone(cursorRatio, zoneConfig), cursorRatio);
   };
 
   const cursorLeft = Math.max(
     0,
     Math.min(BAR_WIDTH - CURSOR_WIDTH, cursorRatio * (BAR_WIDTH - CURSOR_WIDTH)),
   );
+  const goldLeftPct = zoneConfig.perfectMin * 100;
+  const goldWidthPct = (zoneConfig.perfectMax - zoneConfig.perfectMin) * 100;
+  const grayWidthPct = zoneConfig.standardMax * 100;
+  const redMidLeftPct = zoneConfig.standardMax * 100;
+  const redMidWidthPct = Math.max(0, (zoneConfig.perfectMin - zoneConfig.standardMax) * 100);
+  const redEndLeftPct = zoneConfig.perfectMax * 100;
+  const redEndWidthPct = Math.max(0, (1 - zoneConfig.perfectMax) * 100);
+  const perfectLabel = `${Math.round(zoneConfig.perfectMin * 100)}–${Math.round(zoneConfig.perfectMax * 100)}%`;
 
   return (
-    <View style={styles.overlay} pointerEvents="box-none">
-      <View style={styles.panel}>
-        <Text style={styles.title}>[ ACTIVE RELOAD // TIMING WINDOW ]</Text>
-        <Text style={styles.subtitle}>Tap STOP inside the white band for a perfect feed.</Text>
+    <View style={styles.overlay} pointerEvents="auto">
+      <Pressable onPress={handleTap} style={styles.panel}>
+        <Text style={styles.title}>[ COMBAT RELOAD // SINGLE PASS ]</Text>
+        <Text style={styles.subtitle}>Tap once to stop the playhead — gold band is perfect.</Text>
         <View style={[styles.barTrack, { width: BAR_WIDTH }]}>
-          <View style={[styles.zone, styles.perfectZone]} />
-          <View style={[styles.zone, styles.goodZone]} />
+          <View style={[styles.zone, styles.grayZone, { width: `${grayWidthPct}%` }]} />
+          <View style={[styles.zone, styles.redZoneMid, { left: `${redMidLeftPct}%`, width: `${redMidWidthPct}%` }]} />
+          <View style={[styles.zone, styles.goldZone, { left: `${goldLeftPct}%`, width: `${goldWidthPct}%` }]} />
+          <View style={[styles.zone, styles.redZoneEnd, { left: `${redEndLeftPct}%`, width: `${redEndWidthPct}%` }]} />
           <View style={[styles.cursor, { left: cursorLeft, width: CURSOR_WIDTH }]} />
         </View>
         <View style={styles.legendRow}>
-          <Text style={styles.legendPerfect}>WHITE — 0 AP + OVERCHARGED</Text>
-          <Text style={styles.legendGood}>GRAY — 1 AP FULL MAG</Text>
-          <Text style={styles.legendFail}>RED — 2 RNDS / END TURN</Text>
+          <Text style={styles.legendGray}>GRAY 0–60% — full mag, −1 AP</Text>
+          <Text style={styles.legendGold}>{`GOLD ${perfectLabel} — full mag, 0 AP, OVERCHARGED`}</Text>
+          <Text style={styles.legendRed}>RED — jam (weapon locked)</Text>
         </View>
-        <Pressable onPress={handleStop} style={styles.stopBtn}>
-          <Text style={styles.stopLabel}>[ STOP ]</Text>
-        </Pressable>
-      </View>
+        <Text style={styles.tapHint}>[ TAP ANYWHERE TO STOP ]</Text>
+      </Pressable>
     </View>
   );
 }
@@ -94,7 +116,7 @@ const styles = StyleSheet.create({
   },
   panel: {
     width: '100%',
-    maxWidth: 340,
+    maxWidth: 360,
     borderWidth: 1,
     borderColor: 'rgba(251, 191, 36, 0.55)',
     backgroundColor: 'rgba(8, 10, 16, 0.96)',
@@ -119,7 +141,7 @@ const styles = StyleSheet.create({
     lineHeight: 11,
   },
   barTrack: {
-    height: 22,
+    height: 24,
     borderWidth: 1,
     borderColor: 'rgba(148, 163, 184, 0.45)',
     backgroundColor: 'rgba(15, 23, 42, 0.9)',
@@ -131,58 +153,52 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
   },
-  goodZone: {
-    left: '35%',
-    width: '30%',
-    backgroundColor: 'rgba(148, 163, 184, 0.22)',
+  grayZone: {
+    left: 0,
+    backgroundColor: 'rgba(148, 163, 184, 0.28)',
   },
-  perfectZone: {
-    left: '44%',
-    width: '12%',
-    backgroundColor: 'rgba(255, 255, 255, 0.35)',
+  redZoneMid: {
+    backgroundColor: 'rgba(248, 113, 113, 0.25)',
+  },
+  goldZone: {
+    backgroundColor: 'rgba(251, 191, 36, 0.55)',
+  },
+  redZoneEnd: {
+    backgroundColor: 'rgba(248, 113, 113, 0.35)',
   },
   cursor: {
     position: 'absolute',
     top: 1,
     bottom: 1,
-    backgroundColor: '#fbbf24',
+    backgroundColor: '#f8fafc',
     borderWidth: 1,
-    borderColor: '#fff7ed',
+    borderColor: '#fbbf24',
   },
   legendRow: {
     gap: 2,
     alignItems: 'center',
   },
-  legendPerfect: {
-    fontFamily: 'monospace',
-    fontSize: 6,
-    color: '#f8fafc',
-    letterSpacing: 0.3,
-  },
-  legendGood: {
+  legendGray: {
     fontFamily: 'monospace',
     fontSize: 6,
     color: '#94a3b8',
-    letterSpacing: 0.3,
   },
-  legendFail: {
+  legendGold: {
+    fontFamily: 'monospace',
+    fontSize: 6,
+    color: '#fbbf24',
+  },
+  legendRed: {
     fontFamily: 'monospace',
     fontSize: 6,
     color: '#f87171',
-    letterSpacing: 0.3,
   },
-  stopBtn: {
-    marginTop: 4,
-    borderWidth: 1,
-    borderColor: '#fbbf24',
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-  },
-  stopLabel: {
+  tapHint: {
     fontFamily: 'monospace',
-    fontSize: 10,
+    fontSize: 8,
     fontWeight: '700',
-    letterSpacing: 1,
-    color: '#fbbf24',
+    color: '#e2e8f0',
+    letterSpacing: 0.8,
+    marginTop: 4,
   },
 });

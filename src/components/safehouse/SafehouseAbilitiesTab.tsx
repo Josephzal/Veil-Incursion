@@ -239,7 +239,7 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
             resourceStash={account.resourceStash}
             theme={editorTheme}
             title="HEX-SHOT COMBAT LOADOUT // 4 ACTIVE SLOTS"
-            hint="Slot 1 is Silver-Core Sidearm. Select slots 2–4, then tap an ability to assign or unlock with ley-slag."
+            hint="Slot 1 is Silver-Core Sidearm. Zero-Protocol procs from 3 perfect reloads — not a deck slot."
             commitLabel="[ SAVE LOADOUT FOR NEXT RUN ]"
             statusMessage={loadoutStatus}
           />
@@ -266,7 +266,7 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
             resourceStash={account.resourceStash}
             theme={editorTheme}
             title="ENVOY COMBAT LOADOUT // 4 ACTIVE SLOTS"
-            hint="Slot 1 is Veil-Splinter. Select slots 2–4, then tap an ability to assign or unlock with ley-slag."
+            hint="Slot 1 is Veil-Splinter. Cataclysm Sigil procs at Flux 100 — not a deck slot."
             commitLabel="[ SAVE LOADOUT FOR NEXT RUN ]"
             statusMessage={loadoutStatus}
           />

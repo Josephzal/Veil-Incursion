@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
+import EnvoyWardOverlay from './EnvoyWardOverlay';
 import { useCombatEnemyChromeOptional } from '../../context/CombatEnemyChromeContext';
 import ParryMatrixOverlay from './ParryMatrixOverlay';
 import ParrySuccessBurstOverlay from './ParrySuccessBurstOverlay';
@@ -14,6 +15,8 @@ export default function CombatParryScreenOverlay(): React.JSX.Element | null {
 
   const {
     parryVisible,
+    wardVisible,
+    envoyWardSpeed,
     parrySuccess,
     parryFailure,
     parrySuccessBurstVisible,
@@ -28,10 +31,17 @@ export default function CombatParryScreenOverlay(): React.JSX.Element | null {
     : parryBurstArena;
   const parryBurstKey = burstLive.epoch;
 
-  if (!parryVisible && !showParryBurst) return null;
+  if (!parryVisible && !wardVisible && !showParryBurst) return null;
 
   return (
     <View style={styles.overlay} pointerEvents="box-none" collapsable={false}>
+      {wardVisible ? (
+        <EnvoyWardOverlay
+          visible
+          expansionSpeed={envoyWardSpeed}
+          onRelease={(ratio) => handlersRef.current.onEnvoyWardRelease(ratio)}
+        />
+      ) : null}
       {parryVisible && handlersRef.current.parryShrinkScale ? (
         <ParryMatrixOverlay
           visible

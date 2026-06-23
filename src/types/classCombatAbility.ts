@@ -57,6 +57,12 @@ export interface ClassCombatEncounterState {
   brimstoneBleedTurns: Record<string, number>;
   /** Hex Reactive Camo — once per encounter. */
   reactiveCamoUsed: boolean;
+  /** Hex Shot — perfect active reloads toward Zero Protocol. */
+  perfectReloadCount: number;
+  /** Aegis — successful parries toward Eviscerate proc. */
+  successfulParryCount: number;
+  /** Envoy — Cataclysm sigil ready at max flux. */
+  cataclysmReady: boolean;
 }
 
 export function createDefaultClassCombatEncounterState(): ClassCombatEncounterState {
@@ -71,6 +77,9 @@ export function createDefaultClassCombatEncounterState(): ClassCombatEncounterSt
     fleshWarpUnits: {},
     brimstoneBleedTurns: {},
     reactiveCamoUsed: false,
+    perfectReloadCount: 0,
+    successfulParryCount: 0,
+    cataclysmReady: false,
   };
 }
 

@@ -1,25 +1,21 @@
 import {
   ENVOY_ANCHOR,
   HEX_SHOT_ANCHOR,
+  sanitizeEnvoyCombatLoadout,
+  sanitizeHexShotCombatLoadout,
 } from '../data/classAbilityUnlockEngine';
-import type { EnvoyLoadout, HexShotLoadout } from '../types/operativeClass';
 import {
-  DEFAULT_ENVOY_LOADOUT,
-  DEFAULT_HEX_SHOT_LOADOUT,
-} from '../types/operativeClass';
+  isEnvoyProcUltimate,
+  isHexShotProcUltimate,
+} from '../data/combatMasteryEngine';
+import type { EnvoyLoadout, HexShotLoadout } from '../types/operativeClass';
 
 export function normalizeHexShotLoadoutForCommit(input: readonly string[]): HexShotLoadout {
-  if (input.length !== 4 || input[0] !== HEX_SHOT_ANCHOR) {
-    return [...DEFAULT_HEX_SHOT_LOADOUT];
-  }
-  return [input[0], input[1], input[2], input[3]] as HexShotLoadout;
+  return sanitizeHexShotCombatLoadout(input as HexShotLoadout);
 }
 
 export function normalizeEnvoyLoadoutForCommit(input: readonly string[]): EnvoyLoadout {
-  if (input.length !== 4 || input[0] !== ENVOY_ANCHOR) {
-    return [...DEFAULT_ENVOY_LOADOUT];
-  }
-  return [input[0], input[1], input[2], input[3]] as EnvoyLoadout;
+  return sanitizeEnvoyCombatLoadout(input as EnvoyLoadout);
 }
 
 export function validateHexShotLoadoutCommit(
@@ -31,6 +27,9 @@ export function validateHexShotLoadoutCommit(
     return '>> LOADOUT REJECTED — SLOT 1 MUST REMAIN SILVER-CORE SIDEARM.';
   }
   const flex = loadout.slice(1);
+  if (flex.some((id) => isHexShotProcUltimate(id))) {
+    return '>> LOADOUT REJECTED — ZERO-PROTOCOL is a mastery proc, not a deck slot.';
+  }
   if (new Set(flex).size < flex.length) {
     return '>> LOADOUT REJECTED — DUPLICATE ABILITY SLOTS DETECTED.';
   }
@@ -52,6 +51,9 @@ export function validateEnvoyLoadoutCommit(
     return '>> LOADOUT REJECTED — SLOT 1 MUST REMAIN VEIL-SPLINTER.';
   }
   const flex = loadout.slice(1);
+  if (flex.some((id) => isEnvoyProcUltimate(id))) {
+    return '>> LOADOUT REJECTED — CATACLYSM SIGIL is a mastery proc, not a deck slot.';
+  }
   if (new Set(flex).size < flex.length) {
     return '>> LOADOUT REJECTED — DUPLICATE ABILITY SLOTS DETECTED.';
   }

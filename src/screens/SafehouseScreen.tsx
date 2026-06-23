@@ -383,7 +383,7 @@ export default function SafehouseScreen(): React.JSX.Element {
                     resourceStash={account.resourceStash}
                     theme={EDITOR_THEME}
                     title="HEX-SHOT COMBAT LOADOUT // 4 ACTIVE SLOTS"
-                    hint="Slot 1 is Silver-Core Sidearm. Phase-Shift Reload is intrinsic on the combat bar."
+                    hint="Slot 1 is Silver-Core Sidearm. Phase-Shift Reload is intrinsic; Zero-Protocol procs from reload mastery."
                     commitLabel="[ COMMIT LOADOUT FOR REMAINING RUN ]"
                     statusMessage={loadoutStatus}
                   />
@@ -409,7 +409,7 @@ export default function SafehouseScreen(): React.JSX.Element {
                     resourceStash={account.resourceStash}
                     theme={EDITOR_THEME}
                     title="ENVOY COMBAT LOADOUT // 4 ACTIVE SLOTS"
-                    hint="Slot 1 is Veil-Splinter. Rift-Ward triggers automatically on incoming attacks."
+                    hint="Slot 1 is Veil-Splinter. Rift-Ward is automatic; Cataclysm Sigil procs at Flux 100."
                     commitLabel="[ COMMIT LOADOUT FOR REMAINING RUN ]"
                     statusMessage={loadoutStatus}
                   />

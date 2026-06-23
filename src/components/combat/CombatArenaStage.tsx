@@ -5,7 +5,6 @@ import type { ApparitionViewportRef } from './ApparitionViewport';
 import { ApparitionViewport } from './ApparitionViewport';
 import CombatPlayerViewport, { type CombatPlayerViewportRef } from './CombatPlayerViewport';
 import { CombatEnemyChromeLayer } from '../../context/CombatEnemyChromeContext';
-import CombatPlayerSliceOverlay from './CombatPlayerSliceOverlay';
 import { ARENA_ENEMY_GRID_INSET_RIGHT, PLAYER_SPRITE_LOWER_RATIO } from './combatEnemyBarLayout';
 
 interface CombatArenaStageProps {
@@ -61,7 +60,6 @@ export default function CombatArenaStage({
             abilityPrimed={abilityPrimed}
             style={styles.spriteFill}
           />
-          <CombatPlayerSliceOverlay />
         </View>
       </View>
 

@@ -166,6 +166,7 @@ import {
   applyDamageWithFractureBonus,
   applyFractureDamage,
   applyFracturedState,
+  willFractureBreak,
   doomedPulseStacks,
   fractureRatio,
   initEnemyCombatLayers,
@@ -185,7 +186,7 @@ import {
 import type { PlayerCombatState } from '../types/combatLifecycle';
 import type { CombatSessionExtras } from '../types/combatHooks';
 import { createDefaultCombatSessionExtras, addStructuredDebuff, hasStructuredDebuff, removeStructuredDebuff } from '../types/combatHooks';
-import { isHeavyArchetype } from '../data/enemyCombatConfig';
+import { isHeavyArchetype, type EnemySpawnArchetype } from '../data/enemyCombatConfig';
 import {
   getEnemyAccuracyPenalty,
   getEnemyDamageTakenMultiplier,
@@ -207,7 +208,35 @@ import {
 } from '../types/classCombatResources';
 import { activeReloadLogLine } from '../data/activeReloadEngine';
 import ActiveReloadOverlay from './combat/ActiveReloadOverlay';
-import UltimateMinigameOverlay, { type UltimateMinigameMode, type UltimateMinigameResult } from './combat/UltimateMinigameOverlay';
+import ZeroProtocolGridOverlay from './combat/ZeroProtocolGridOverlay';
+import CataclysmSigilOverlay from './combat/CataclysmSigilOverlay';
+import FractureBreakPrompt from './combat/FractureBreakPrompt';
+import EnvoyWardOverlay, { type EnvoyWardExpansionSpeed } from './combat/EnvoyWardOverlay';
+import { ASHEN_DISSOLVE_TOTAL_MS } from './combat/CombatEnemyDissolveEffect';
+import {
+  PERFECT_PARRIES_FOR_ULTIMATE,
+  PERFECT_RELOADS_FOR_ULTIMATE,
+  ENVOY_FLUX_ULTIMATE_THRESHOLD,
+  ZERO_PROTOCOL_DAMAGE_PER_TAP,
+  CATACLYSM_SUCCESS_AOE,
+  CATACLYSM_FAIL_AOE,
+  CATACLYSM_FAIL_BACKLASH,
+  CATACLYSM_FAIL_FLUX,
+  isEnvoyProcUltimate,
+  isHexShotProcUltimate,
+} from '../data/combatMasteryEngine';
+import {
+  sanitizeEnvoyCombatLoadout,
+  sanitizeHexShotCombatLoadout,
+} from '../data/classAbilityUnlockEngine';
+import { planFractureBreachStrike } from '../data/combatFractureBreachEngine';
+import {
+  isHitstopActive,
+  triggerHitstop,
+  triggerHaptic,
+  triggerShake,
+} from '../utils/combatJuice';
+import type { UltimatePingVariant } from './combat/UltimateReadyPing';
 import CombatMagazineGauge from './combat/CombatMagazineGauge';
 import {
   createDefaultClassCombatEncounterState,
@@ -345,7 +374,7 @@ const P = {
 const PARRY_DURATION = 1000;
 const SLICE_HIT_HAPTIC_MS = 15;
 const WARD_STRIKE_ACCENT = '#fde68a';
-type CombatPhase = 'TEXT_COMBAT' | 'DEFEND_PARRY' | 'OFFENSE_SLICE' | 'RESOLUTION';
+type CombatPhase = 'TEXT_COMBAT' | 'DEFEND_PARRY' | 'DEFEND_WARD' | 'OFFENSE_SLICE' | 'RESOLUTION';
 
 interface TacticalCombatHubProps {
   /** Combat screen stack: operative metrics + deck only; hostile row lives on CombatScreen. */
@@ -589,9 +618,17 @@ export default function TacticalCombatHub({
   const [envoyOverloaded, setEnvoyOverloaded] = useState(false);
   const [envoySilenced, setEnvoySilenced] = useState(false);
   const [activeReloadVisible, setActiveReloadVisible] = useState(false);
-  const [ultimateMinigameVisible, setUltimateMinigameVisible] = useState(false);
-  const [ultimateMinigameMode, setUltimateMinigameMode] = useState<UltimateMinigameMode>('ZERO_PROTOCOL');
-  const pendingUltimateExecutorRef = useRef<((performance: number) => void) | null>(null);
+  const [hexReloadUsedThisTurn, setHexReloadUsedThisTurn] = useState(false);
+  const hexReloadUsedThisTurnRef = useRef(false);
+  const [zeroProtocolVisible, setZeroProtocolVisible] = useState(false);
+  const zeroProtocolActiveRef = useRef(false);
+  const [cataclysmSigilVisible, setCataclysmSigilVisible] = useState(false);
+  const [fractureBreakUnitId, setFractureBreakUnitId] = useState<string | null>(null);
+  const [envoyWardSpeed, setEnvoyWardSpeed] = useState<EnvoyWardExpansionSpeed>('normal');
+  const [perfectReloadCount, setPerfectReloadCount] = useState(0);
+  const [successfulParryCount, setSuccessfulParryCount] = useState(0);
+  const [cataclysmReadyUi, setCataclysmReadyUi] = useState(false);
+  const combatPausedRef = useRef(false);
   const riftWardReadyRef = useRef(false);
 
   const operativeHpRef = useRef(initialOperativeHp);
@@ -631,6 +668,7 @@ export default function TacticalCombatHub({
   const dissolveSeqRef = useRef<Record<string, number>>({});
   const dissolvedHiddenRef = useRef<Set<string>>(new Set());
   const pendingVictoryRef = useRef(false);
+  const victoryFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wasEnemyTurnAtVictoryRef = useRef(false);
   const lastActiveTurnPhaseRef = useRef<CombatTurnPhase>('PLAYER_COMMAND');
   const survivedEnemyTurnsRef = useRef(0);
@@ -707,8 +745,11 @@ export default function TacticalCombatHub({
   const canPlayerCommand = () =>
     cycleRef.current === 'TEXT_COMBAT'
     && !shadowstepProcRef.current
-    && !ultimateMinigameVisible
+    && !combatPausedRef.current
     && !activeReloadVisible
+    && !zeroProtocolVisible
+    && !cataclysmSigilVisible
+    && fractureBreakUnitId == null
     && (isPlayerTurnRef.current || voidAmbushWindowRef.current != null);
 
   const buildPlayerAIState = (): PlayerAIState => ({
@@ -793,18 +834,79 @@ export default function TacticalCombatHub({
     && abyssalReserve >= COMBAT_ACTION.COUNTER_ABYSSAL_MIN
     && !isExhausted;
   const sliceReady = operativeClass === 'AEGIS'
-    && abyssalReserve >= mutationModsRef.current.abyssalCap
+    && successfulParryCount >= PERFECT_PARRIES_FOR_ULTIMATE
     && !isExhausted;
+  const zeroProtocolReady = operativeClass === 'HEX_SHOT'
+    && perfectReloadCount >= PERFECT_RELOADS_FOR_ULTIMATE
+    && !isExhausted;
+  const cataclysmReady = operativeClass === 'ENVOY'
+    && cataclysmReadyUi
+    && !isExhausted;
+  const ultimatePingVariant: UltimatePingVariant | null = zeroProtocolReady
+    ? 'zero_protocol'
+    : cataclysmReady
+      ? 'cataclysm'
+      : sliceReady
+        ? 'eviscerate'
+        : null;
+  const ultimatePingReady = ultimatePingVariant != null;
   const classLabel = operativeClass === 'HEX_SHOT'
     ? 'HEX SHOT'
     : operativeClass === 'ENVOY'
       ? 'ENVOY'
       : 'AEGIS';
   const activeLoadout = useMemo((): readonly string[] => {
-    if (operativeClass === 'HEX_SHOT') return hexShotLoadout;
-    if (operativeClass === 'ENVOY') return envoyLoadout;
+    if (operativeClass === 'HEX_SHOT') return sanitizeHexShotCombatLoadout(hexShotLoadout);
+    if (operativeClass === 'ENVOY') return sanitizeEnvoyCombatLoadout(envoyLoadout);
     return aegisLoadout;
   }, [operativeClass, hexShotLoadout, envoyLoadout, aegisLoadout]);
+  const masteryProgress = useMemo(() => {
+    if (operativeClass === 'HEX_SHOT') {
+      if (perfectReloadCount > 0 && perfectReloadCount < PERFECT_RELOADS_FOR_ULTIMATE) {
+        return {
+          visible: true,
+          current: perfectReloadCount,
+          required: PERFECT_RELOADS_FOR_ULTIMATE,
+          accent: '#fbbf24',
+        };
+      }
+    } else if (operativeClass === 'AEGIS') {
+      if (successfulParryCount > 0 && successfulParryCount < PERFECT_PARRIES_FOR_ULTIMATE) {
+        return {
+          visible: true,
+          current: successfulParryCount,
+          required: PERFECT_PARRIES_FOR_ULTIMATE,
+          accent: '#ff1744',
+        };
+      }
+    } else if (operativeClass === 'ENVOY' && !cataclysmReadyUi && veilFlux > 0) {
+      const required = 3;
+      const current = Math.min(
+        required,
+        Math.floor(veilFlux / (ENVOY_FLUX_ULTIMATE_THRESHOLD / required)),
+      );
+      if (current > 0) {
+        return {
+          visible: true,
+          current,
+          required,
+          accent: '#a78bfa',
+        };
+      }
+    }
+    return {
+      visible: false,
+      current: 0,
+      required: 3,
+      accent: '#94a3b8',
+    };
+  }, [
+    operativeClass,
+    perfectReloadCount,
+    successfulParryCount,
+    cataclysmReadyUi,
+    veilFlux,
+  ]);
   const strikeWardPrimed = strikeArPrimed || wardStrikeBonusRef.current;
 
   const tryPreventExhaustionBreak = (next: number): number => {
@@ -859,6 +961,15 @@ export default function TacticalCombatHub({
     const next = Math.max(0, veilFluxRef.current + delta);
     veilFluxRef.current = next;
     setVeilFlux(next);
+    if (
+      operativeClass === 'ENVOY'
+      && next >= ENVOY_FLUX_ULTIMATE_THRESHOLD
+      && !cataclysmReadyUi
+    ) {
+      classCombatRef.current.cataclysmReady = true;
+      setCataclysmReadyUi(true);
+      log('>> VEIL-FLUX SATURATED — Cataclysm Sigil primed.');
+    }
     if (next < fluxOverloadThreshold) {
       if (envoySilencedRef.current) {
         envoySilencedRef.current = false;
@@ -1118,9 +1229,59 @@ export default function TacticalCombatHub({
     ) {
       return false;
     }
+    if (victoryFallbackTimerRef.current) {
+      clearTimeout(victoryFallbackTimerRef.current);
+      victoryFallbackTimerRef.current = null;
+    }
     pendingVictoryRef.current = false;
     resolveVictoryRef.current();
     return true;
+  };
+
+  const ensureDeadUnitsDissolving = () => {
+    for (const unit of squadRef.current) {
+      if (!unit.unitId || isUnitAlive(unit)) continue;
+      if ((dissolveSeqRef.current[unit.unitId] ?? 0) > 0) continue;
+      beginDissolveForUnit(unit.unitId, unit, 0);
+    }
+  };
+
+  const clearVictoryBlockers = () => {
+    combatPausedRef.current = false;
+    setFractureBreakUnitId(null);
+    setZeroProtocolVisible(false);
+    zeroProtocolActiveRef.current = false;
+    setCataclysmSigilVisible(false);
+  };
+
+  const scheduleCombatVictoryResolution = () => {
+    if (resolutionRef.current != null || !allUnitsDefeated(squadRef.current)) return;
+    pendingVictoryRef.current = true;
+    wasEnemyTurnAtVictoryRef.current = !isPlayerTurnRef.current;
+    clearVictoryBlockers();
+    ensureDeadUnitsDissolving();
+
+    if (victoryFallbackTimerRef.current) {
+      clearTimeout(victoryFallbackTimerRef.current);
+    }
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        tryResolvePendingVictory();
+      });
+    });
+
+    victoryFallbackTimerRef.current = setTimeout(() => {
+      victoryFallbackTimerRef.current = null;
+      if (resolutionRef.current != null || !allUnitsDefeated(squadRef.current)) return;
+      for (const unit of squadRef.current) {
+        if (isUnitAlive(unit)) continue;
+        const id = unit.unitId ?? unit.designation;
+        dissolvedHiddenRef.current.add(id);
+      }
+      publishSquadUi(squadRef.current);
+      tryResolvePendingVictory();
+    }, ASHEN_DISSOLVE_TOTAL_MS + 250);
   };
 
   const handleUnitDissolveComplete = (unitId: string) => {
@@ -1361,6 +1522,10 @@ export default function TacticalCombatHub({
 
   const resolve = (victory: boolean) => {
     if (resolutionRef.current != null) return;
+    if (victoryFallbackTimerRef.current) {
+      clearTimeout(victoryFallbackTimerRef.current);
+      victoryFallbackTimerRef.current = null;
+    }
     if (operativeHpRef.current <= 0) victory = false;
     if (victory) {
       wasEnemyTurnAtVictoryRef.current = !isPlayerTurnRef.current;
@@ -2003,8 +2168,18 @@ export default function TacticalCombatHub({
       fractureGain > 0
       && (!graftPlanForFracture || graftPlanForFracture.effectiveTags.includes('FRACTURE'))
     ) {
-      working = applyFractureDamage(working, fractureGain);
-      patchUnit(e.unitId, working);
+      if (willFractureBreak(working, fractureGain) && !fractureBreakUnitId) {
+        working = applyFractureDamage(working, fractureGain, { deferBreak: true });
+        patchUnit(e.unitId, working);
+        combatPausedRef.current = true;
+        triggerHitstop(200);
+        triggerShake('heavy');
+        setFractureBreakUnitId(e.unitId);
+        log(`>> FRACTURE BREAK — ${working.designation} stagger threshold breached.`);
+      } else {
+        working = applyFractureDamage(working, fractureGain);
+        patchUnit(e.unitId, working);
+      }
     }
     let dmg = raw;
     let pendingEnvoyKineticSplash: number | undefined;
@@ -2560,7 +2735,10 @@ export default function TacticalCombatHub({
 
     if (allUnitsDefeated(squadRef.current)) {
       if (cycleRef.current === 'DEFEND_PARRY') {
-        if (arenaLayout) pendingVictoryRef.current = true;
+        if (arenaLayout) {
+          pendingVictoryRef.current = true;
+          ensureDeadUnitsDissolving();
+        }
         return true;
       }
       if (cycleRef.current === 'OFFENSE_SLICE') {
@@ -2569,7 +2747,7 @@ export default function TacticalCombatHub({
         setCycleState('TEXT_COMBAT');
       }
       if (arenaLayout) {
-        pendingVictoryRef.current = true;
+        scheduleCombatVictoryResolution();
         return true;
       }
       if (viewport) {
@@ -2856,6 +3034,8 @@ export default function TacticalCombatHub({
     const mods = mutationModsRef.current;
     abyssalRef.current = 0;
     setAbyssalReserve(0);
+    setSuccessfulParryCount(0);
+    classCombatRef.current.successfulParryCount = 0;
     for (const unit of aliveUnits(squadRef.current)) {
       if (!unit.unitId) continue;
       patchUnit(unit.unitId, {
@@ -3018,6 +3198,10 @@ export default function TacticalCombatHub({
 
   const scheduleNextEnemyAction = (countering: boolean) => {
     if (isCombatTerminal() || enemyActionQueueRef.current.length === 0) return;
+    if (isHitstopActive() || combatPausedRef.current) {
+      setTimeout(() => scheduleNextEnemyAction(countering), 50);
+      return;
+    }
     if (enemyTurnGapTimerRef.current) {
       clearTimeout(enemyTurnGapTimerRef.current);
     }
@@ -3414,7 +3598,12 @@ export default function TacticalCombatHub({
 
   const endEnemyTurn = (advanceIntent = true) => {
     if (isCombatTerminal()) return;
-    if (operativeHpRef.current <= 0 || allUnitsDefeated(squadRef.current)) return;
+    if (operativeHpRef.current <= 0) return;
+    if (allUnitsDefeated(squadRef.current)) {
+      if (arenaLayout) scheduleCombatVictoryResolution();
+      else if (resolutionRef.current == null) resolve(true);
+      return;
+    }
     if (mutationEncounterRef.current.veilTarTurnsRemaining > 0) {
       mutationEncounterRef.current.veilTarTurnsRemaining -= 1;
     }
@@ -3527,6 +3716,8 @@ export default function TacticalCombatHub({
       : Math.max(0, baseAp);
     setPlayerActionPoints(playerApRef.current);
     if (operativeClass === 'HEX_SHOT') {
+      hexReloadUsedThisTurnRef.current = false;
+      setHexReloadUsedThisTurn(false);
       const panic = tryHexShotPanicButton(
         hexShotBoons,
         classBoonEncounterRef.current,
@@ -3572,6 +3763,7 @@ export default function TacticalCombatHub({
     if (
       operativeClass === 'ENVOY'
       && veilFluxRef.current > fluxOverloadThreshold
+      && !cataclysmReadyUi
       && !godModeRef.current
     ) {
       if (!envoyOverloadedRef.current) {
@@ -3702,7 +3894,8 @@ export default function TacticalCombatHub({
       log('[PANOPTICON] >> Overwatch failed — magazine empty.');
     }
     if (countering && openParryWindow(currentEnemy, true)) return;
-    if (!countering && openParryWindow(currentEnemy, false)) return;
+    if (!countering && operativeClass === 'ENVOY' && openEnvoyWardWindow(currentEnemy)) return;
+    if (!countering && operativeClass === 'AEGIS' && openParryWindow(currentEnemy, false)) return;
     const hpStrikeResolved = commitPendingPlayerDamage(false, undefined, currentEnemy);
     if (hpStrikeResolved && currentEnemy.intent === 'VOID_AMBUSH') {
       finalizeNullShadeVoidAmbush(currentEnemy);
@@ -3710,6 +3903,7 @@ export default function TacticalCombatHub({
       execIntent(currentEnemy);
     }
     if (cycleRef.current === 'DEFEND_PARRY') return;
+    if (cycleRef.current === 'DEFEND_WARD') return;
     if (operativeHpRef.current <= 0) return;
     if (enemyActionQueueRef.current.length > 0) {
       scheduleNextEnemyAction(countering);
@@ -3891,6 +4085,55 @@ export default function TacticalCombatHub({
     }, ENEMY_INTENT_READ_MS);
   };
 
+  const resolveEnvoyWardSpeed = (enemy: EnemyCombatProfile): EnvoyWardExpansionSpeed => {
+    const archetype = (enemy.spawnArchetype ?? 'MELEE') as EnemySpawnArchetype;
+    if (archetype === 'HEAVY' || archetype === 'ARTILLERY') return 'slow';
+    if (enemy.rosterId === 'scuttler' || enemy.rosterId === 'fracture-hound') return 'fast';
+    return 'normal';
+  };
+
+  const openEnvoyWardWindow = (e: EnemyCombatProfile): boolean => {
+    if (operativeClass !== 'ENVOY' || isExhausted) return false;
+    const effectiveIntent = resolveEffectiveEnemyIntent(e);
+    if (!isAttackIntent(effectiveIntent)) return false;
+    const { dmg, unblockable } = resolvePendingAttackDamage(e);
+    pendingDmgRef.current = dmg;
+    pendingUnblockRef.current = unblockable;
+    setEnvoyWardSpeed(resolveEnvoyWardSpeed(e));
+    cycleRef.current = 'DEFEND_WARD';
+    setCycleState('DEFEND_WARD');
+    log('[VOID WARD] >> Hold to charge — release on ring overlap.');
+    return true;
+  };
+
+  const finalizeEnvoyWard = (overlapRatio: number) => {
+    const perfect = Math.abs(overlapRatio - 1.0) <= 0.05;
+    cycleRef.current = 'TEXT_COMBAT';
+    setCycleState('TEXT_COMBAT');
+    if (perfect) {
+      triggerHitstop(100);
+      triggerHaptic('impactHeavy');
+      applyVeilFlux(-30);
+      preAppliedHpStrikeRef.current = 0;
+      log('[VOID WARD] >> Perfect overlap — 100% negated, −30 flux.');
+    } else {
+      triggerShake('light');
+      triggerHaptic('notificationError');
+      applyVeilFlux(15);
+      const mitigated = Math.max(1, Math.floor(pendingDmgRef.current * 0.5));
+      hurtPlayer(
+        mitigated,
+        pendingUnblockRef.current,
+        `[VOID WARD] >> Imperfect seal — ${mitigated} damage, +15 flux.`,
+        { rollCrit: false },
+      );
+      log('[VOID WARD] >> Ward cracked — partial impact.');
+    }
+    if (operativeHpRef.current <= 0) return;
+    if (enemyActionQueueRef.current.length > 0) scheduleNextEnemyAction(false);
+    else if (!allUnitsDefeated(squadRef.current)) endEnemyTurn(true);
+  };
+
   const openParryWindow = (e: EnemyCombatProfile, fromCounterStance: boolean): boolean => {
     const effectiveIntent = resolveEffectiveEnemyIntent(e);
     if (effectiveIntent === 'WORLD_ENDER') {
@@ -4044,6 +4287,16 @@ export default function TacticalCombatHub({
     setEnvoyOverloaded(false);
     setEnvoySilenced(false);
     setActiveReloadVisible(false);
+    hexReloadUsedThisTurnRef.current = false;
+    setHexReloadUsedThisTurn(false);
+    setZeroProtocolVisible(false);
+    zeroProtocolActiveRef.current = false;
+    setCataclysmSigilVisible(false);
+    setFractureBreakUnitId(null);
+    setPerfectReloadCount(0);
+    setSuccessfulParryCount(0);
+    setCataclysmReadyUi(false);
+    combatPausedRef.current = false;
     classCombatRef.current = createDefaultClassCombatEncounterState();
     if (narrativeCombatBoons?.veilWard) {
       sessionExtrasRef.current.playerShield = 15;
@@ -4483,14 +4736,11 @@ export default function TacticalCombatHub({
     publishSquadUi(squadRef.current);
   };
 
-  const handleUltimateMinigameResolve = (result: UltimateMinigameResult) => {
-    setUltimateMinigameVisible(false);
-    const run = pendingUltimateExecutorRef.current;
-    pendingUltimateExecutorRef.current = null;
-    if (run) run(result.score);
-  };
-
   const executeHexShotClassAbility = (abilityId: HexShotAbilityId) => {
+    if (abilityId === 'ZERO_PROTOCOL') {
+      log('[REJECTED] >> Zero-Protocol procs from perfect reload mastery — use the ping.');
+      return;
+    }
     if (cycleState !== 'TEXT_COMBAT' || !canPlayerCommand()) return;
     const graftId = hexShotAbilityGraftsRef.current[abilityId];
     const graftPlan = buildClassGraftCastPlan('HEX_SHOT', abilityId, graftId);
@@ -4591,17 +4841,14 @@ export default function TacticalCombatHub({
       finalizeHexShotAbilityResult(execResult, graftPlan, squadBefore, abilityId);
     };
 
-    if (abilityId === 'ZERO_PROTOCOL') {
-      pendingUltimateExecutorRef.current = (performance) => runExecutor(performance);
-      setUltimateMinigameMode('ZERO_PROTOCOL');
-      setUltimateMinigameVisible(true);
-      return;
-    }
-
     runExecutor();
   };
 
   const executeEnvoyClassAbility = (abilityId: EnvoyAbilityId) => {
+    if (abilityId === 'CATACLYSM_SIGIL') {
+      log('[REJECTED] >> Cataclysm Sigil procs at Flux 100 — use the mastery ping.');
+      return;
+    }
     if (cycleState !== 'TEXT_COMBAT' || !canPlayerCommand()) return;
     const graftId = envoyAbilityGraftsRef.current[abilityId];
     const graftPlan = buildClassGraftCastPlan('ENVOY', abilityId, graftId);
@@ -4755,13 +5002,6 @@ export default function TacticalCombatHub({
       activeClassGraftPlanRef.current = null;
       publishSquadUi(squadRef.current);
     };
-
-    if (abilityId === 'CATACLYSM_SIGIL') {
-      pendingUltimateExecutorRef.current = (performance) => runExecutor(performance);
-      setUltimateMinigameMode('CATACLYSM_SIGIL');
-      setUltimateMinigameVisible(true);
-      return;
-    }
 
     runExecutor();
   };
@@ -5189,6 +5429,142 @@ export default function TacticalCombatHub({
     passToEnemy(wraithParryRef.current);
   };
 
+  const onUltimatePing = () => {
+    if (cycleState !== 'TEXT_COMBAT' || !isPlayerTurn) return;
+    if (encounterUltimateDisabled) {
+      log('[REJECTED] >> Ultimate channel sealed by Apex Graft.');
+      return;
+    }
+    if (zeroProtocolReady) {
+      zeroProtocolActiveRef.current = true;
+      setZeroProtocolVisible(true);
+      combatPausedRef.current = true;
+      log('>> [ZERO-PROTOCOL] >> Rapid execution grid online.');
+      return;
+    }
+    if (cataclysmReady) {
+      setCataclysmSigilVisible(true);
+      combatPausedRef.current = true;
+      log('>> [CATACLYSM SIGIL] >> Trace the void pattern.');
+      return;
+    }
+    if (sliceReady) onSlice();
+  };
+
+  const handleZeroProtocolTap = () => {
+    if (!zeroProtocolActiveRef.current) return;
+    const targets = aliveUnits(squadRef.current);
+    if (targets.length === 0) return;
+    const pick = targets[Math.floor(Math.random() * targets.length)];
+    if (!pick.unitId) return;
+    hurtEnemy(ZERO_PROTOCOL_DAMAGE_PER_TAP, '[ZERO-PROTOCOL]', 'STRIKE', {
+      channel: 'TRUE',
+      targetId: pick.unitId,
+      rollCrit: false,
+    });
+    triggerHaptic('impactLight');
+    triggerShake('micro');
+  };
+
+  const finishZeroProtocol = (tapCount: number) => {
+    zeroProtocolActiveRef.current = false;
+    setZeroProtocolVisible(false);
+    combatPausedRef.current = false;
+    setPerfectReloadCount(0);
+    classCombatRef.current.perfectReloadCount = 0;
+    log(`>> [ZERO-PROTOCOL] >> ${tapCount} impact(s) delivered.`);
+  };
+
+  const handleCataclysmResolve = (success: boolean) => {
+    setCataclysmSigilVisible(false);
+    combatPausedRef.current = false;
+    setCataclysmReadyUi(false);
+    classCombatRef.current.cataclysmReady = false;
+    const aoe = success ? CATACLYSM_SUCCESS_AOE : CATACLYSM_FAIL_AOE;
+    for (const unit of aliveUnits(squadRef.current)) {
+      if (!unit.unitId) continue;
+      hurtEnemy(aoe, '[CATACLYSM SIGIL]', 'STRIKE', {
+        channel: 'TRUE',
+        targetId: unit.unitId,
+        rollCrit: false,
+      });
+    }
+    if (success) {
+      applyVeilFlux(-veilFluxRef.current);
+      triggerHitstop(150);
+      triggerShake('heavy');
+      triggerHaptic('impactHeavy');
+      log('>> [CATACLYSM SIGIL] >> Pattern locked — 50 TRUE to all hostiles, flux vented.');
+    } else {
+      applyVeilFlux(CATACLYSM_FAIL_FLUX - veilFluxRef.current);
+      hurtPlayer(
+        CATACLYSM_FAIL_BACKLASH,
+        true,
+        `>> SIGIL BACKLASH — ${CATACLYSM_FAIL_BACKLASH} TRUE.`,
+        { rollCrit: false },
+      );
+      triggerShake('light');
+      triggerHaptic('notificationError');
+      log('>> [CATACLYSM SIGIL] >> Pattern failed — partial detonation, flux at 50%.');
+    }
+  };
+
+  const expireFractureBreak = (unitId: string) => {
+    setFractureBreakUnitId(null);
+    combatPausedRef.current = false;
+    const unit = getUnitById(squadRef.current, unitId);
+    if (unit?.unitId) {
+      patchUnit(unit.unitId, applyFracturedState(unit));
+      log(`>> FRACTURE BREAK EXPIRED — ${unit.designation} enters FRACTURED state.`);
+    }
+    if (allUnitsDefeated(squadRef.current) && arenaLayout) {
+      scheduleCombatVictoryResolution();
+    }
+  };
+
+  const executeFractureBreak = (unitId: string) => {
+    const unit = getUnitById(squadRef.current, unitId);
+    if (!unit?.unitId) {
+      setFractureBreakUnitId(null);
+      combatPausedRef.current = false;
+      return;
+    }
+    const plan = planFractureBreachStrike(operativeClass, strikeStats);
+    for (let i = 0; i < plan.hitCount; i += 1) {
+      hurtEnemy(plan.damagePerHit, plan.tag, 'STRIKE', {
+        channel: plan.channel,
+        targetId: unit.unitId,
+        rollCrit: plan.rollCrit,
+      });
+      triggerHaptic('impactLight');
+    }
+    if (operativeClass === 'ENVOY') {
+      triggerShake('heavy');
+      triggerHitstop(120);
+    } else if (operativeClass === 'AEGIS') {
+      patchUnit(unit.unitId, applyFracturedState(unit));
+      enemyStunPendingRef.current = true;
+      triggerHitstop(100);
+      triggerHaptic('impactHeavy');
+    } else {
+      triggerHitstop(80);
+    }
+    const refreshed = getUnitById(squadRef.current, unit.unitId);
+    if (
+      refreshed?.unitId
+      && isUnitAlive(refreshed)
+      && operativeClass !== 'AEGIS'
+    ) {
+      patchUnit(refreshed.unitId, applyFracturedState(refreshed));
+    }
+    setFractureBreakUnitId(null);
+    combatPausedRef.current = false;
+    log(`>> FRACTURE BREACH — ${unit.designation} executed (${plan.hitCount} hit(s)).`);
+    if (allUnitsDefeated(squadRef.current) && arenaLayout) {
+      scheduleCombatVictoryResolution();
+    }
+  };
+
   const onSlice = () => {
     if (cycleState !== 'TEXT_COMBAT' || !isPlayerTurn) return;
     if (encounterUltimateDisabled) {
@@ -5198,11 +5574,6 @@ export default function TacticalCombatHub({
     if (isExhausted) { log('[REJECTED] >> Exhausted — eviscerate offline.'); return; }
     if (playerApRef.current < EVISCERATE_AP_COST) {
       log(`[REJECTED] >> Eviscerate requires ${EVISCERATE_AP_COST} AP.`);
-      return;
-    }
-    const cap = mutationModsRef.current.abyssalCap;
-    if (abyssalRef.current < cap) {
-      log(`[REJECTED] >> AR below ${cap}%.`);
       return;
     }
     if (!spendActionPoints(EVISCERATE_AP_COST)) {
@@ -5240,7 +5611,14 @@ export default function TacticalCombatHub({
   const onCombatReload = () => {
     if (operativeClass !== 'HEX_SHOT') return;
     if (cycleState !== 'TEXT_COMBAT' || !isPlayerTurn || shadowstepProcRef.current) return;
-    if (activeReloadVisible) return;
+    if (activeReloadVisible || hexReloadUsedThisTurnRef.current) {
+      if (hexReloadUsedThisTurnRef.current) {
+        log('[REJECTED] >> Combat reload already spent this turn.');
+      }
+      return;
+    }
+    hexReloadUsedThisTurnRef.current = true;
+    setHexReloadUsedThisTurn(true);
     setActiveReloadVisible(true);
     log('>> [COMBAT RELOAD] — active reload window open.');
   };
@@ -5254,6 +5632,13 @@ export default function TacticalCombatHub({
         hexOverchargedRef.current = true;
         setHexOvercharged(true);
         markHexShotTacticalReloadPending(hexShotBoons, classBoonEncounterRef.current, log);
+        triggerHitstop(80);
+        triggerHaptic('impactHeavy');
+        {
+          const nextPerfect = perfectReloadCount + 1;
+          setPerfectReloadCount(nextPerfect);
+          classCombatRef.current.perfectReloadCount = nextPerfect;
+        }
         if (hasHexShotBoon(hexShotBoons, 'FLAWLESS_DRILL') && hexShotBoonMods.perfectReloadApBonus) {
           playerApRef.current += 1;
           setPlayerActionPoints(playerApRef.current);
@@ -5264,18 +5649,21 @@ export default function TacticalCombatHub({
           log('[ETHEREAL MAGAZINES] >> Occult shield grafted to operative.');
         }
         break;
-      case 'GOOD':
+      case 'STANDARD':
         setMagazineAmmo(maxAmmo);
         markHexShotTacticalReloadPending(hexShotBoons, classBoonEncounterRef.current, log);
+        triggerHaptic('impactLight');
         if (playerApRef.current > 0) {
           playerApRef.current -= 1;
           setPlayerActionPoints(playerApRef.current);
         }
         break;
-      case 'FAIL':
+      case 'JAM':
         setMagazineAmmo(Math.min(2, maxAmmo));
         playerApRef.current = 0;
         setPlayerActionPoints(0);
+        triggerShake('light');
+        triggerHaptic('notificationError');
         if (isPlayerTurnRef.current && cycleRef.current === 'TEXT_COMBAT') {
           passToEnemy(false);
         }
@@ -5305,10 +5693,7 @@ export default function TacticalCombatHub({
     cycleRef.current = 'TEXT_COMBAT';
     setCycleState('TEXT_COMBAT');
     if (arenaLayout) {
-      pendingVictoryRef.current = true;
-      requestAnimationFrame(() => {
-        requestAnimationFrame(tryResolvePendingVictory);
-      });
+      scheduleCombatVictoryResolution();
       return;
     }
     const viewport = apparitionRef?.current;
@@ -5351,6 +5736,13 @@ export default function TacticalCombatHub({
 
     if (passed) {
       Vibration.vibrate(15);
+      triggerHitstop(100);
+      triggerHaptic('impactHeavy');
+      {
+        const nextParries = successfulParryCount + 1;
+        setSuccessfulParryCount(nextParries);
+        classCombatRef.current.successfulParryCount = nextParries;
+      }
       preAppliedHpStrikeRef.current = 0;
       counterRef.current = false;
       setCounterPrepActive(false);
@@ -5661,6 +6053,8 @@ export default function TacticalCombatHub({
 
   const isOperativeAbilityEnabled = (abilityId: string): boolean => {
     if (!isPlayerTurn || cycleState !== 'TEXT_COMBAT' || shadowstepProcRef.current) return false;
+    if (operativeClass === 'HEX_SHOT' && isHexShotProcUltimate(abilityId)) return false;
+    if (operativeClass === 'ENVOY' && isEnvoyProcUltimate(abilityId)) return false;
     const cost = resolveClassAbilityCost(operativeClass, abilityId);
     const ultimateSealed = encounterUltimateDisabled
       || (operativeClass === 'HEX_SHOT'
@@ -5940,6 +6334,7 @@ export default function TacticalCombatHub({
         && cycleState === 'TEXT_COMBAT'
         && !shadowstepProcActive
         && !activeReloadVisible
+        && !hexReloadUsedThisTurn
       }
       onCombatReload={onCombatReload}
       borderColor={theme.borderColor}
@@ -6120,15 +6515,23 @@ export default function TacticalCombatHub({
 
   const chromeSnapshot = useMemo(
     () => ({
-      slicePingVisible: sliceReady && enemyAlive,
-      slicePingReady: sliceReady && enemyAlive,
-      slicePingDisabled: !isPlayerTurn
+      ultimatePingVisible: ultimatePingReady && enemyAlive,
+      ultimatePingReady: ultimatePingReady && enemyAlive,
+      ultimatePingDisabled: !isPlayerTurn
         || cycleState !== 'TEXT_COMBAT'
         || isExhausted
-        || playerApRef.current < EVISCERATE_AP_COST
-        || abyssalRef.current < mutationModsRef.current.abyssalCap,
-      onSlicePing: onSlice,
+        || combatPausedRef.current
+        || (sliceReady && playerApRef.current < EVISCERATE_AP_COST),
+      ultimatePingVariant: ultimatePingVariant,
+      masteryProgressVisible: masteryProgress.visible && isPlayerTurn && cycleState === 'TEXT_COMBAT',
+      masteryProgressCurrent: masteryProgress.current,
+      masteryProgressRequired: masteryProgress.required,
+      masteryProgressAccent: masteryProgress.accent,
+      onUltimatePing,
       parryVisible: cycleState === 'DEFEND_PARRY',
+      wardVisible: cycleState === 'DEFEND_WARD',
+      envoyWardSpeed,
+      onEnvoyWardRelease: finalizeEnvoyWard,
       parryShrinkScale: parryScaleSV,
       parrySuccess: isSuccessState,
       parryFailure: isFailureState,
@@ -6148,20 +6551,28 @@ export default function TacticalCombatHub({
       cycleState,
       parrySuccessBurstActive,
       parryBurstArena,
+      ultimatePingReady,
+      ultimatePingVariant,
+      masteryProgress,
       sliceReady,
       enemyAlive,
       isPlayerTurn,
       isExhausted,
+      envoyWardSpeed,
       isSuccessState,
       isFailureState,
       eviscerateTargetUnitId,
       sliceLines,
       activeSliceIndex,
-      onSlice,
+      onUltimatePing,
       onParryTap,
       panResponder.panHandlers,
     ],
   );
+
+  const fractureBreakUnit = fractureBreakUnitId
+    ? getUnitById(squadRef.current, fractureBreakUnitId)
+    : null;
 
   const renderHubOverlays = () => (
     <>
@@ -6226,12 +6637,32 @@ export default function TacticalCombatHub({
         perfectWindowScale={hexShotBoonMods.gunsmithsCurseActive ? 0.5 : 1}
         onResolve={handleActiveReloadResolve}
       />
-      <UltimateMinigameOverlay
-        visible={ultimateMinigameVisible}
-        mode={ultimateMinigameMode}
-        onResolve={handleUltimateMinigameResolve}
-        onAbort={() => log('>> ULTIMATE CHANNEL — minimum yield accepted.')}
+      <ZeroProtocolGridOverlay
+        visible={zeroProtocolVisible}
+        onTap={handleZeroProtocolTap}
+        onComplete={finishZeroProtocol}
       />
+      <CataclysmSigilOverlay
+        visible={cataclysmSigilVisible}
+        onResolve={handleCataclysmResolve}
+      />
+      <FractureBreakPrompt
+        visible={fractureBreakUnitId != null}
+        designation={fractureBreakUnit?.designation}
+        onBreach={() => {
+          if (fractureBreakUnitId) executeFractureBreak(fractureBreakUnitId);
+        }}
+        onExpire={() => {
+          if (fractureBreakUnitId) expireFractureBreak(fractureBreakUnitId);
+        }}
+      />
+      {!useEnemyArenaChrome && cycleState === 'DEFEND_WARD' ? (
+        <EnvoyWardOverlay
+          visible
+          expansionSpeed={envoyWardSpeed}
+          onRelease={finalizeEnvoyWard}
+        />
+      ) : null}
     </>
   );
 

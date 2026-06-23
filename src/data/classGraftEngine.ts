@@ -18,8 +18,8 @@ import { getVeilGraftDefinition } from './veilGraftDatabase';
 import type { AegisAbilityId } from '../types/aegisCombat';
 import type { VeilGraftId } from '../types/veilGraft';
 
-const HEX_ANCHORS: readonly HexShotAbilityId[] = ['SILVER_CORE_SIDEARM', 'ZERO_PROTOCOL'];
-const ENVOY_ANCHORS: readonly EnvoyAbilityId[] = ['VEIL_SPLINTER', 'CATACLYSM_SIGIL'];
+const HEX_ANCHORS: readonly HexShotAbilityId[] = ['SILVER_CORE_SIDEARM'];
+const ENVOY_ANCHORS: readonly EnvoyAbilityId[] = ['VEIL_SPLINTER'];
 
 export function getClassGraftDefinition(
   classId: ClassType,
@@ -45,11 +45,13 @@ export function rollClassGraftOffers(
 
 export function canGraftClassAbility(classId: ClassType, abilityId: string): boolean {
   if (classId === 'HEX_SHOT') {
-    return !HEX_ANCHORS.includes(abilityId as HexShotAbilityId);
+    return !HEX_ANCHORS.includes(abilityId as HexShotAbilityId)
+      && abilityId !== 'ZERO_PROTOCOL';
   }
   if (classId === 'ENVOY') {
     return !ENVOY_ANCHORS.includes(abilityId as EnvoyAbilityId)
-      && abilityId !== 'RIFT_WARD';
+      && abilityId !== 'RIFT_WARD'
+      && abilityId !== 'CATACLYSM_SIGIL';
   }
   return canGraftAbility(abilityId as AegisAbilityId);
 }

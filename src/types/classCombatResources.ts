@@ -3,7 +3,7 @@ export const VEIL_FLUX_CAP = 100;
 export const ENVOY_OVERLOAD_THRESHOLD = 100;
 export const ENVOY_OVERLOAD_SELF_DAMAGE = 10;
 
-export type ActiveReloadResult = 'PERFECT' | 'GOOD' | 'FAIL';
+export type ActiveReloadResult = 'PERFECT' | 'STANDARD' | 'JAM';
 
 export type HexShotCombatBuffs = {
   overchargedActive: boolean;

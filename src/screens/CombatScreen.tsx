@@ -1,5 +1,5 @@
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Image, StyleSheet, View, Dimensions, type ImageSourcePropType } from 'react-native';
+import { Image, StyleSheet, View, Dimensions, type ImageSourcePropType } from 'react-native';
 import {
   resolveCombatEnemyPortrait,
   resolvePortraitKeySuffix,
@@ -12,6 +12,8 @@ import CombatEnemyGrid from '../components/combat/CombatEnemyGrid';
 import { resolveArenaLayoutMode } from '../components/combat/combatEnemyBarLayout';
 import CombatEviscerateCinematic from '../components/combat/CombatEviscerateCinematic';
 import CombatOperativeHud from '../components/combat/CombatOperativeHud';
+import CombatPlayerUltimateOverlay from '../components/combat/CombatPlayerUltimateOverlay';
+import CombatJuiceHost from '../components/combat/CombatJuiceHost';
 import CombatParryScreenOverlay from '../components/combat/CombatParryScreenOverlay';
 import CombatResolutionBanner from '../components/combat/CombatResolutionBanner';
 import CombatSelectedEnemyIntel from '../components/combat/CombatSelectedEnemyIntel';
@@ -23,6 +25,7 @@ import {
   resolveCombatArenaBackgroundScrim,
 } from '../constants/combatArenaBackground';
 import { pulseCombatTargetSelect } from '../utils/hubButtonHaptics';
+import { triggerShake } from '../utils/combatJuice';
 import type { CombatOperativeTelemetry } from '../components/combat/CombatOperativeHud';
 import type { CombatPlayerViewportRef } from '../components/combat/CombatPlayerViewport';
 import IncursionShell from '../components/IncursionShell';
@@ -198,27 +201,10 @@ export default function CombatScreen(): React.JSX.Element {
   const canDeployCargoRef = useRef<(itemId: CargoItemId) => boolean>(() => false);
   const targetHandlerRef = useRef<(unitId: string) => void>(() => {});
   const dissolveCompleteRef = useRef<(unitId: string) => void>(() => {});
-  const arenaShakeX = useRef(new Animated.Value(0)).current;
-  const arenaShakeY = useRef(new Animated.Value(0)).current;
 
   const handlePlayerCritImpact = useCallback(() => {
-    arenaShakeX.setValue(0);
-    arenaShakeY.setValue(0);
-    Animated.parallel([
-      Animated.sequence([
-        Animated.timing(arenaShakeX, { toValue: 22, duration: 40, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-        Animated.timing(arenaShakeX, { toValue: -18, duration: 35, useNativeDriver: true }),
-        Animated.timing(arenaShakeX, { toValue: 14, duration: 30, useNativeDriver: true }),
-        Animated.timing(arenaShakeX, { toValue: -8, duration: 28, useNativeDriver: true }),
-        Animated.timing(arenaShakeX, { toValue: 0, duration: 45, useNativeDriver: true }),
-      ]),
-      Animated.sequence([
-        Animated.timing(arenaShakeY, { toValue: -10, duration: 40, useNativeDriver: true }),
-        Animated.timing(arenaShakeY, { toValue: 8, duration: 35, useNativeDriver: true }),
-        Animated.timing(arenaShakeY, { toValue: 0, duration: 70, useNativeDriver: true }),
-      ]),
-    ]).start();
-  }, [arenaShakeX, arenaShakeY]);
+    triggerShake('heavy');
+  }, []);
 
   const handleSquadUiChange = useCallback((snapshot: CombatSquadUiSnapshot) => {
     setSquadUi(snapshot);
@@ -566,18 +552,8 @@ export default function CombatScreen(): React.JSX.Element {
           onDeployCargoItem={handleDeployCargoItem}
           style={styles.combatRoot}
         >
-          <View style={styles.body}>
-            <Animated.View
-              style={[
-                styles.arenaStage,
-                {
-                  transform: [
-                    { translateX: arenaShakeX },
-                    { translateY: arenaShakeY },
-                  ],
-                },
-              ]}
-            >
+          <CombatJuiceHost style={styles.body}>
+            <View style={styles.arenaStage}>
               <Image source={arenaBackgroundSource} style={styles.arenaBackground} resizeMode="cover" />
               {arenaBackgroundScrimColor ? (
                 <View
@@ -621,10 +597,11 @@ export default function CombatScreen(): React.JSX.Element {
 
               {operativeTelemetry ? (
                 <View style={[styles.playerHudOverlay, { right: DECK_INSET, width: DECK_HALF }]}>
+                  <CombatPlayerUltimateOverlay />
                   <CombatOperativeHud telemetry={operativeTelemetry} deckAligned />
                 </View>
               ) : null}
-            </Animated.View>
+            </View>
 
             <CombatParryScreenOverlay />
 
@@ -694,7 +671,7 @@ export default function CombatScreen(): React.JSX.Element {
                 operativeClass={activeIncursion.activeClass ?? account.activeClass}
               />
             </View>
-          </View>
+          </CombatJuiceHost>
         </MacroLogAnchoredLayout>
         </CombatEnemyChromeProvider>
       </CombatTurnProvider>
