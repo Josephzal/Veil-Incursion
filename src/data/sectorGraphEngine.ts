@@ -6,7 +6,6 @@ import type {
   SpectralTelemetry,
   SpectralThreatBand,
 } from '../types/sector';
-import { rollProbableAffinity } from './combatEnvironmentEngine';
 import {
   BOSS_NEST_HARD_RESONANCE,
   BOSS_NEST_SOFT_RESONANCE,
@@ -186,9 +185,6 @@ function buildSectorMeta(
     yieldMultiplier: tierYield * depthYield,
     creditBonus: (encounterType === 'ANOMALY' || encounterType === 'NARRATIVE_EVENT') && hashSeed(nodeId) % 5 === 0 ? 35 : 0,
     combatTier,
-    probableAffinity: isCombatNode
-      ? rollProbableAffinity(encounterType, combatTier, nodeId)
-      : undefined,
   };
 }
 
@@ -871,9 +867,6 @@ export function formatFocusedIntel(node: IncursionNode): string[] {
   }
   if (node.type === 'RESOURCE_HARVEST') {
     lines.push('VOLATILE RESOURCE NODE — YIELD CHOICE ON ENGAGE');
-  }
-  if (node.sectorMeta?.probableAffinity) {
-    lines.push(`PROBABLE AFFINITY: ${node.sectorMeta.probableAffinity.replace(/_/g, ' ')}`);
   }
   return lines;
 }

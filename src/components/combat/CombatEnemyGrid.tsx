@@ -17,9 +17,12 @@ import {
   FRONTLINE_ROW_HEIGHT,
   FRONTLINE_ROW_OVERLAP_MARGIN,
   FRONTLINE_SLOTS,
+  type ArenaGridVariant,
   type ArenaLayoutMode,
   resolveSlotPresentation,
   SOLO_ARENA_SLOT,
+  staggeredSlotStyle,
+  STAGGERED_SLOT_WIDTH_PCT,
   FRONTLINE_BATTLEFIELD_LIFT_RATIO,
   SOLO_BATTLEFIELD_LIFT_RATIO,
 } from './combatEnemyBarLayout';
@@ -37,6 +40,8 @@ interface CombatEnemyGridProps {
   variant?: 'arena' | 'compact';
   /** Locked at encounter start — prevents mid-fight solo reflow. */
   layoutMode?: ArenaLayoutMode;
+  /** Arena grid geometry — flex rows or absolute staggered 2.5D. */
+  arenaGridVariant?: ArenaGridVariant;
 }
 
 interface BattlefieldSlotProps {
@@ -52,6 +57,7 @@ interface BattlefieldSlotProps {
   onUnitPress: (unitId: string) => void;
   onUnitDissolveComplete?: (unitId: string) => void;
   wrapperStyle?: ViewStyle;
+  arenaGridVariant?: ArenaGridVariant;
 }
 
 function BattlefieldSlot({
@@ -67,14 +73,15 @@ function BattlefieldSlot({
   onUnitPress,
   onUnitDissolveComplete,
   wrapperStyle,
+  arenaGridVariant = 'flex',
 }: BattlefieldSlotProps): React.JSX.Element {
-  const presentation = resolveSlotPresentation(slot, layoutMode);
+  const presentation = resolveSlotPresentation(slot, layoutMode, arenaGridVariant);
 
   const meleeDashDelta = useMemo(() => {
     if (!unit || arenaWidth <= 0 || arenaHeight <= 0) return undefined;
     if (laneForSlot(slot) !== 'BACKLINE') return undefined;
-    return backlineMeleeDashDelta(slot, layoutMode, arenaWidth, arenaHeight);
-  }, [arenaHeight, arenaWidth, layoutMode, slot, unit]);
+    return backlineMeleeDashDelta(slot, layoutMode, arenaWidth, arenaHeight, arenaGridVariant);
+  }, [arenaGridVariant, arenaHeight, arenaWidth, layoutMode, slot, unit]);
 
   const handleDissolveComplete = useCallback(() => {
     if (unit) onUnitDissolveComplete?.(unit.unitId);
@@ -160,6 +167,7 @@ export default function CombatEnemyGrid({
   mutedColor,
   variant = 'arena',
   layoutMode = 'group',
+  arenaGridVariant = 'flex',
 }: CombatEnemyGridProps): React.JSX.Element {
   const isArena = variant === 'arena';
   const [arenaSize, setArenaSize] = useState({ width: 0, height: 0 });
@@ -218,7 +226,42 @@ export default function CombatEnemyGrid({
       mutedColor,
       onUnitPress,
       onUnitDissolveComplete,
+      arenaGridVariant,
     };
+
+    if (arenaGridVariant === 'staggered') {
+      const slots = layoutMode === 'solo'
+        ? [SOLO_ARENA_SLOT]
+        : [...BACKLINE_SLOTS, ...FRONTLINE_SLOTS];
+
+      return (
+        <View
+          style={styles.staggeredArena}
+          onLayout={handleArenaLayout}
+          pointerEvents="box-none"
+        >
+          {slots.map((slot) => {
+            const style = staggeredSlotStyle(slot, layoutMode);
+            const slotStyle: ViewStyle = {
+              position: 'absolute',
+              bottom: style.bottom,
+              zIndex: style.zIndex,
+              width: `${STAGGERED_SLOT_WIDTH_PCT}%`,
+              ...(style.left != null ? { left: style.left } : { right: style.right }),
+            };
+            return (
+              <BattlefieldSlot
+                key={slot}
+                slot={slot}
+                unit={layoutMode === 'solo' ? soloUnit : unitForSlot(slot)}
+                wrapperStyle={slotStyle}
+                {...slotProps}
+              />
+            );
+          })}
+        </View>
+      );
+    }
 
     if (layoutMode === 'solo') {
       const soloLiftStyle: ViewStyle | undefined =
@@ -290,6 +333,14 @@ export default function CombatEnemyGrid({
 }
 
 const styles = StyleSheet.create({
+  staggeredArena: {
+    position: 'absolute',
+    top: 0,
+    right: 60,
+    width: '42%',
+    height: '100%',
+    overflow: 'visible',
+  },
   battlefieldContainer: {
     flex: 1,
     width: '100%',

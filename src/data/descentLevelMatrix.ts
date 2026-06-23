@@ -5,7 +5,6 @@ import {
   RESONANCE_DELTA_STANDARD,
   GREED_ZONE_YIELD_MULTIPLIER,
 } from '../types/sector';
-import { rollProbableAffinity } from './combatEnvironmentEngine';
 import type { MacroBiomeFamily } from '../types/narrativeProcedural';
 import { MACRO_BIOME_DISPLAY } from './macroBiomeEngine';
 import type { DistrictId } from './districtPacing';
@@ -286,9 +285,6 @@ function buildMatrixSectorMeta(
     yieldMultiplier: tierYield * depthYield,
     creditBonus: type === 'ELITE_COMBAT' ? 100 : 0,
     combatTier,
-    probableAffinity: isCombatNode
-      ? rollProbableAffinity(encounterType, combatTier, nodeId)
-      : undefined,
   };
 }
 

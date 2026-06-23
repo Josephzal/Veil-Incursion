@@ -1,5 +1,5 @@
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Image, StyleSheet, View, Dimensions, type ImageSourcePropType } from 'react-native';
+import { ImageBackground, StatusBar, StyleSheet, View, type ImageSourcePropType } from 'react-native';
 import {
   resolveCombatEnemyPortrait,
   resolvePortraitKeySuffix,
@@ -7,17 +7,12 @@ import {
   resolveUnitCombatPortrait,
 } from '../utils/combatEnemyPortrait';
 import type { ApparitionViewportRef } from '../components/combat/ApparitionViewport';
-import CombatArenaStage from '../components/combat/CombatArenaStage';
+import CombatLandscapeArena from '../components/combat/CombatLandscapeArena';
 import CombatEnemyGrid from '../components/combat/CombatEnemyGrid';
 import { resolveArenaLayoutMode } from '../components/combat/combatEnemyBarLayout';
-import CombatEviscerateCinematic from '../components/combat/CombatEviscerateCinematic';
-import CombatOperativeHud from '../components/combat/CombatOperativeHud';
-import CombatPlayerUltimateOverlay from '../components/combat/CombatPlayerUltimateOverlay';
 import CombatJuiceHost from '../components/combat/CombatJuiceHost';
 import CombatParryScreenOverlay from '../components/combat/CombatParryScreenOverlay';
 import CombatResolutionBanner from '../components/combat/CombatResolutionBanner';
-import CombatSelectedEnemyIntel from '../components/combat/CombatSelectedEnemyIntel';
-import StatusEffectTray from '../components/combat/StatusEffectTray';
 import ParticleOverlay from '../components/atmosphere/ParticleOverlay';
 import { macroFamilyToBiomeId } from '../constants/biomeConfig';
 import {
@@ -26,15 +21,14 @@ import {
 } from '../constants/combatArenaBackground';
 import { pulseCombatTargetSelect } from '../utils/hubButtonHaptics';
 import { triggerShake } from '../utils/combatJuice';
-import type { CombatOperativeTelemetry } from '../components/combat/CombatOperativeHud';
 import type { CombatPlayerViewportRef } from '../components/combat/CombatPlayerViewport';
 import IncursionShell from '../components/IncursionShell';
 import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
 import TacticalCombatHub from '../components/TacticalCombatHub';
 import {
   CombatEnemyChromeProvider,
-  useCombatEnemyChrome,
 } from '../context/CombatEnemyChromeContext';
+import { CombatArenaOverlayProvider } from '../context/CombatArenaOverlayContext';
 import { CombatTurnProvider } from '../context/CombatTurnContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useGameFlow } from '../context/GameFlowContext';
@@ -53,6 +47,7 @@ import {
   buildInitialSquadUiSnapshot,
   type CombatSquadUiSnapshot,
 } from '../utils/combatTelemetryFormat';
+import { buildCombatAugmentIcons } from '../utils/combatAugmentIcons';
 import { encounterBudgetForDepth } from '../data/combatEncounterBudget';
 import type { CargoItemId } from '../types/cargoGrid';
 import {
@@ -63,69 +58,18 @@ import { depthFromNodesCleared, isDistrictGateDepth } from '../data/districtPaci
 import { collectFactionTraitLoot, rollGatekeeperLockedTemplate } from '../data/combatRewardEngine';
 import { shouldGrantAdrenalinePrimerAp } from '../data/boundRequisitionEngine';
 import type { IncursionConsumableUseResult } from '../types/incursionInventory';
-
-import {
-  resolvePlayerCombatAttackPortrait,
-  resolvePlayerCombatIdlePortrait,
-} from '../utils/combatPlayerPortrait';
-
-const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('screen');
-const ARENA_MIN_HEIGHT = Math.round(SCREEN_HEIGHT * 0.28);
-/** Matches TacticalCombatHub rootStacked horizontal inset. */
-const DECK_INSET = 8;
-const DECK_WIDTH = SCREEN_WIDTH - 16;
-const DECK_HALF = DECK_WIDTH / 2;
-
-function CombatArenaZone({
-  apparitionRef,
-  playerViewportRef,
-  portraitKey,
-  portraitSource,
-  operativeClass,
-  wardPrimed,
-  abilityPrimed,
-  enemySquadPanel,
-  gridUnits,
-  onEradicationComplete,
-}: {
-  apparitionRef: React.RefObject<ApparitionViewportRef | null>;
-  playerViewportRef: React.RefObject<CombatPlayerViewportRef | null>;
-  portraitKey: string;
-  portraitSource: ReturnType<typeof resolveCombatEnemyPortrait>;
-  operativeClass: import('../types/game').ClassType;
-  wardPrimed: boolean;
-  abilityPrimed: boolean;
-  enemySquadPanel?: React.ReactNode;
-  gridUnits: Array<{ unitId: string; portraitSource: ImageSourcePropType }>;
-  onEradicationComplete: () => void;
-}): React.JSX.Element {
-  const { ui } = useCombatEnemyChrome();
-  const eviscerateTargetPortrait = useMemo(() => {
-    if (!ui.eviscerateTargetUnitId) return null;
-    return gridUnits.find((unit) => unit.unitId === ui.eviscerateTargetUnitId)?.portraitSource ?? null;
-  }, [gridUnits, ui.eviscerateTargetUnitId]);
-
-  return (
-    <>
-      <CombatArenaStage
-        playerViewportRef={playerViewportRef}
-        enemyViewportRef={apparitionRef}
-        playerImageSource={resolvePlayerCombatIdlePortrait(operativeClass)}
-        playerAttackImageSource={resolvePlayerCombatAttackPortrait(operativeClass)}
-        enemyImageSource={portraitSource}
-        enemyPortraitKey={portraitKey}
-        wardPrimed={wardPrimed}
-        abilityPrimed={abilityPrimed}
-        enemySquadPanel={enemySquadPanel}
-        parryBlocksEnemyTouches={ui.parryVisible}
-        onEradicationComplete={onEradicationComplete}
-      />
-      <CombatEviscerateCinematic targetPortrait={eviscerateTargetPortrait} />
-    </>
-  );
-}
+import CombatGlobalChrome from './combat/layouts/CombatGlobalChrome';
+import CombatOperativeVitalsOverlay from './combat/layouts/CombatOperativeVitalsOverlay';
+import CombatTacticalDashboard from './combat/layouts/CombatTacticalDashboard';
+import CombatDashboardMacroLog from './combat/layouts/CombatDashboardMacroLog';
+import HostileIntelView from './combat/layouts/HostileIntelView';
+import TurnOrderSidebar from './combat/layouts/TurnOrderSidebar';
+import CombatDashboardCommandColumn from './combat/layouts/CombatDashboardCommandColumn';
+import type { CombatOperativeTelemetry } from '../components/combat/CombatOperativeHud';
+import { useImmersiveCombatChrome } from '../hooks/useImmersiveCombatChrome';
 
 export default function CombatScreen(): React.JSX.Element {
+  useImmersiveCombatChrome(true);
   const { theme } = useTerminal();
   const { startResourceHarvest, startPostCombatBoon, startGameOver, startExtractionReview, goToHub } = useGameFlow();
   const { setTerminalView } = useTerminalNav();
@@ -210,6 +154,10 @@ export default function CombatScreen(): React.JSX.Element {
     setSquadUi(snapshot);
   }, []);
 
+  const handleOperativeTelemetryChange = useCallback((telemetry: CombatOperativeTelemetry | null) => {
+    setOperativeTelemetry(telemetry);
+  }, []);
+
   const registerTargetHandler = useCallback((handler: (unitId: string) => void) => {
     targetHandlerRef.current = handler;
   }, []);
@@ -217,10 +165,6 @@ export default function CombatScreen(): React.JSX.Element {
   const handleEnemyUnitPress = useCallback((unitId: string) => {
     pulseCombatTargetSelect();
     targetHandlerRef.current(unitId);
-  }, []);
-
-  const handleOperativeTelemetryChange = useCallback((telemetry: CombatOperativeTelemetry | null) => {
-    setOperativeTelemetry(telemetry);
   }, []);
 
   const registerKillResolver = useCallback((resolver: () => void) => {
@@ -274,6 +218,37 @@ export default function CombatScreen(): React.JSX.Element {
         : []),
     [runState.pendingEnemies, runState.pendingEnemy],
   );
+  const operativeClass = activeIncursion.activeClass ?? account.activeClass;
+
+  const combatAugmentIcons = useMemo(
+    () => buildCombatAugmentIcons({
+      operativeClass,
+      aegisLoadout: activeIncursion.aegisLoadout,
+      hexShotLoadout: activeIncursion.hexShotLoadout,
+      envoyLoadout: activeIncursion.envoyLoadout,
+      abilityGrafts: activeIncursion.abilityGrafts,
+      hexShotAbilityGrafts: activeIncursion.hexShotAbilityGrafts,
+      envoyAbilityGrafts: activeIncursion.envoyAbilityGrafts,
+      leyLineMutations: activeIncursion.leyLineMutations,
+      hexShotBoons: activeIncursion.hexShotBoons,
+      envoyBoons: activeIncursion.envoyBoons,
+      narrativeCombatBoons,
+    }),
+    [
+      operativeClass,
+      activeIncursion.aegisLoadout,
+      activeIncursion.hexShotLoadout,
+      activeIncursion.envoyLoadout,
+      activeIncursion.abilityGrafts,
+      activeIncursion.hexShotAbilityGrafts,
+      activeIncursion.envoyAbilityGrafts,
+      activeIncursion.leyLineMutations,
+      activeIncursion.hexShotBoons,
+      activeIncursion.envoyBoons,
+      narrativeCombatBoons,
+    ],
+  );
+
   const arenaLayoutMode = useMemo(
     () => resolveArenaLayoutMode(combatSquad.length),
     [combatSquad.length],
@@ -353,6 +328,7 @@ export default function CombatScreen(): React.JSX.Element {
     <CombatEnemyGrid
       variant="arena"
       layoutMode={arenaLayoutMode}
+      arenaGridVariant="staggered"
       units={gridUnits}
       targetingActive={effectiveSquadUi.targetingActive}
       onUnitPress={handleEnemyUnitPress}
@@ -386,8 +362,6 @@ export default function CombatScreen(): React.JSX.Element {
     () => resolveCombatArenaBackgroundScrim(combatBiomeId),
     [combatBiomeId],
   );
-
-  const spectralSaltActive = activeIncursion.spectralWeaponImbued === true;
 
   const handleResolutionPanelChange = useCallback(
     (panel: { outcome: 'VICTORY' | 'DEFEAT'; onDismiss: () => void } | null) => {
@@ -543,136 +517,153 @@ export default function CombatScreen(): React.JSX.Element {
   ]);
 
   return (
-    <IncursionShell>
+    <IncursionShell immersive>
+      <StatusBar hidden translucent backgroundColor="transparent" />
       <CombatTurnProvider>
         <CombatEnemyChromeProvider>
+        <CombatArenaOverlayProvider>
         <MacroLogAnchoredLayout
-          showMacroLog={runState.runActive}
+          showMacroLog={false}
           onConsumableUsed={handleConsumableUsed}
           onDeployCargoItem={handleDeployCargoItem}
           style={styles.combatRoot}
         >
-          <CombatJuiceHost style={styles.body}>
-            <View style={styles.arenaStage}>
-              <Image source={arenaBackgroundSource} style={styles.arenaBackground} resizeMode="cover" />
-              {arenaBackgroundScrimColor ? (
-                <View
-                  style={[styles.arenaBackgroundScrim, { backgroundColor: arenaBackgroundScrimColor }]}
-                  pointerEvents="none"
-                />
-              ) : null}
-              <ParticleOverlay biomeId={combatBiomeId} />
+          <ImageBackground
+            source={arenaBackgroundSource}
+            style={styles.landscapeRoot}
+            resizeMode="cover"
+          >
+            {arenaBackgroundScrimColor ? (
+              <View
+                style={[styles.arenaBackgroundScrim, { backgroundColor: arenaBackgroundScrimColor }]}
+                pointerEvents="none"
+              />
+            ) : null}
 
-              {selectedEnemyUnit ? (
-                <View style={styles.enemyIntelOverlay} pointerEvents="box-none">
-                  <CombatSelectedEnemyIntel
-                    unit={selectedEnemyUnit}
-                    mutedColor={theme.mutedColor}
-                  />
-                  <StatusEffectTray activeStatuses={selectedEnemyUnit.activeStatuses ?? []} />
-                </View>
-              ) : null}
+            <View style={styles.landscapeColumn}>
+              <CombatOperativeVitalsOverlay
+                telemetry={operativeTelemetry}
+                primaryColor={theme.primaryColor}
+              />
+              <CombatGlobalChrome />
 
-              <CombatArenaZone
-                apparitionRef={apparitionRef}
-                playerViewportRef={playerViewportRef}
-                portraitKey={portraitKey}
-                portraitSource={focusedPortraitSource}
-                operativeClass={activeIncursion.activeClass ?? account.activeClass}
-                wardPrimed={wardPrimed}
-                abilityPrimed={abilityPrimed}
-                enemySquadPanel={enemySquadPanel}
+              <TurnOrderSidebar
+                turnOrder={squadUi?.turnOrder}
                 gridUnits={gridUnits}
-                onEradicationComplete={handleEradicationComplete}
+                operativeClass={operativeClass}
+                primaryColor={theme.primaryColor}
+                mutedColor={theme.mutedColor}
               />
 
-              {showVictoryBanner ? (
-                <CombatResolutionBanner
-                  outcome="VICTORY"
-                  primaryColor="#00ff33"
-                  defeatColor="#ef4444"
-                  onDismiss={handleResolutionDismiss}
-                />
-              ) : null}
+              <CombatJuiceHost style={styles.body}>
+                <View style={styles.arenaPanel}>
+                  <ParticleOverlay biomeId={combatBiomeId} />
 
-              {operativeTelemetry ? (
-                <View style={[styles.playerHudOverlay, { right: DECK_INSET, width: DECK_HALF }]}>
-                  <CombatPlayerUltimateOverlay />
-                  <CombatOperativeHud telemetry={operativeTelemetry} deckAligned />
+                  <CombatLandscapeArena
+                    apparitionRef={apparitionRef}
+                    playerViewportRef={playerViewportRef}
+                    portraitKey={portraitKey}
+                    portraitSource={focusedPortraitSource}
+                    operativeClass={operativeClass}
+                    wardPrimed={wardPrimed}
+                    abilityPrimed={abilityPrimed}
+                    enemySquadPanel={enemySquadPanel}
+                    augmentIcons={combatAugmentIcons}
+                    gridUnits={gridUnits}
+                    onEradicationComplete={handleEradicationComplete}
+                  />
+
+                  {showVictoryBanner ? (
+                    <CombatResolutionBanner
+                      outcome="VICTORY"
+                      primaryColor="#00ff33"
+                      defeatColor="#ef4444"
+                      onDismiss={handleResolutionDismiss}
+                    />
+                  ) : null}
                 </View>
-              ) : null}
-            </View>
 
-            <CombatParryScreenOverlay />
+                <CombatTacticalDashboard
+                  commandDeck={(
+                    <CombatDashboardCommandColumn>
+                      <TacticalCombatHub
+                      arenaGridVariant="staggered"
+                      apparitionRef={apparitionRef}
+                      playerViewportRef={playerViewportRef}
+                      registerKillResolver={registerKillResolver}
+                      registerDissolveCompleteHandler={registerDissolveCompleteHandler}
+                      registerHealHandler={registerHealHandler}
+                      registerConsumableHandler={registerConsumableHandler}
+                      registerCanDeployCargoHandler={registerCanDeployCargoHandler}
+                      registerTargetHandler={registerTargetHandler}
+                      onSquadUiChange={handleSquadUiChange}
+                      onOperativeTelemetryChange={handleOperativeTelemetryChange}
+                      enemySquad={combatSquad}
+                      threatBudget={threatBudget}
+                      combatDistrict={activeIncursion.currentDistrict}
+                      onWardPrimedChange={setWardPrimed}
+                      onAbilityPrimedChange={setAbilityPrimed}
+                      onResolutionPanelChange={handleResolutionPanelChange}
+                      onCombatComplete={handleCombatComplete}
+                      onLethalEnemyStrike={recordRunKillAttacker}
+                      onGraftLootDrop={(kind) => {
+                        if (kind === 'CREDITS') {
+                          awardRunCredits(standardKillCredits(activeIncursion.nodesCleared), 'Scavenger Bolt graft');
+                        }
+                      }}
+                      runCredits={activeIncursion.runCredits}
+                      initialOperativeHp={runState.soulAnchorIntegrity}
+                      initialStamina={combatEntryStamina}
+                      maxStamina={runState.maxStamina}
+                      maxSoulAnchor={runState.maxSoulAnchor}
+                      startingAbyssalReservePercent={runState.startingAbyssalReservePercent}
+                      parryMultiplierBonus={runState.parryMultiplierBonus}
+                      parryWindowBonus={runState.parryWindowBonus}
+                      sliceDamagePenalty={runState.sliceDamagePenalty}
+                      enemyProfile={runState.pendingEnemy}
+                      nodeIndex={activeIncursion.currentEncounterIndex}
+                      onTerminalLog={appendRunLog}
+                      weaponCombatStats={weaponCombatStats}
+                      environmentalModifiers={env}
+                      bossProfile={activeIncursion.bossProfile}
+                      onBossPhaseShift={shiftBossPhase}
+                      aegisLoadout={activeIncursion.aegisLoadout}
+                      hexShotLoadout={activeIncursion.hexShotLoadout}
+                      envoyLoadout={activeIncursion.envoyLoadout}
+                      leyLineMutations={activeIncursion.leyLineMutations}
+                      hexShotBoons={activeIncursion.hexShotBoons}
+                      envoyBoons={activeIncursion.envoyBoons}
+                      firstTurnBonusAp={firstTurnBonusAp}
+                      playerKineticArmorBonus={shadowWarKineticArmor}
+                      kineticBatteryActive={kineticBatteryActive}
+                      narrativeCombatBoons={narrativeCombatBoons}
+                      equippedBlueprintId={account.equippedBlueprintId}
+                      playerCritChanceBonus={playerCritChanceBonus}
+                      onPlayerCritImpact={handlePlayerCritImpact}
+                      godModeActive={activeIncursion.godModeActive}
+                      abilityGrafts={activeIncursion.abilityGrafts}
+                      hexShotAbilityGrafts={activeIncursion.hexShotAbilityGrafts}
+                      envoyAbilityGrafts={activeIncursion.envoyAbilityGrafts}
+                      encounterUltimateDisabled={activeIncursion.encounterUltimateDisabled}
+                      operativeClass={operativeClass}
+                    />
+                    </CombatDashboardCommandColumn>
+                  )}
+                  macroLog={<CombatDashboardMacroLog />}
+                  hostileIntel={(
+                    <HostileIntelView
+                      enemy={selectedEnemyUnit}
+                      mutedColor={theme.mutedColor}
+                    />
+                  )}
+                />
+              </CombatJuiceHost>
 
-            <View style={styles.combatMiddle}>
-              <TacticalCombatHub
-                stackedLayout
-                arenaLayout
-                apparitionRef={apparitionRef}
-                playerViewportRef={playerViewportRef}
-                registerKillResolver={registerKillResolver}
-                registerDissolveCompleteHandler={registerDissolveCompleteHandler}
-                registerHealHandler={registerHealHandler}
-                registerConsumableHandler={registerConsumableHandler}
-                registerCanDeployCargoHandler={registerCanDeployCargoHandler}
-                registerTargetHandler={registerTargetHandler}
-                onSquadUiChange={handleSquadUiChange}
-                enemySquad={combatSquad}
-                threatBudget={threatBudget}
-                onEnemyTelemetryChange={undefined}
-                combatDistrict={activeIncursion.currentDistrict}
-                onOperativeTelemetryChange={handleOperativeTelemetryChange}
-                onWardPrimedChange={setWardPrimed}
-                onAbilityPrimedChange={setAbilityPrimed}
-                onResolutionPanelChange={handleResolutionPanelChange}
-                onCombatComplete={handleCombatComplete}
-                onLethalEnemyStrike={recordRunKillAttacker}
-                onGraftLootDrop={(kind) => {
-                  if (kind === 'CREDITS') {
-                    awardRunCredits(standardKillCredits(activeIncursion.nodesCleared), 'Scavenger Bolt graft');
-                  }
-                }}
-                runCredits={activeIncursion.runCredits}
-                initialOperativeHp={runState.soulAnchorIntegrity}
-                initialStamina={combatEntryStamina}
-                maxStamina={runState.maxStamina}
-                maxSoulAnchor={runState.maxSoulAnchor}
-                startingAbyssalReservePercent={runState.startingAbyssalReservePercent}
-                parryMultiplierBonus={runState.parryMultiplierBonus}
-                parryWindowBonus={runState.parryWindowBonus}
-                sliceDamagePenalty={runState.sliceDamagePenalty}
-                enemyProfile={runState.pendingEnemy}
-                nodeIndex={activeIncursion.currentEncounterIndex}
-                onTerminalLog={appendRunLog}
-                weaponCombatStats={weaponCombatStats}
-                environmentalModifiers={env}
-                bossProfile={activeIncursion.bossProfile}
-                onBossPhaseShift={shiftBossPhase}
-                aegisLoadout={activeIncursion.aegisLoadout}
-                hexShotLoadout={activeIncursion.hexShotLoadout}
-                envoyLoadout={activeIncursion.envoyLoadout}
-                leyLineMutations={activeIncursion.leyLineMutations}
-                hexShotBoons={activeIncursion.hexShotBoons}
-                envoyBoons={activeIncursion.envoyBoons}
-                spectralSaltActive={spectralSaltActive}
-                firstTurnBonusAp={firstTurnBonusAp}
-                playerKineticArmorBonus={shadowWarKineticArmor}
-                kineticBatteryActive={kineticBatteryActive}
-                narrativeCombatBoons={narrativeCombatBoons}
-                equippedBlueprintId={account.equippedBlueprintId}
-                playerCritChanceBonus={playerCritChanceBonus}
-                onPlayerCritImpact={handlePlayerCritImpact}
-                godModeActive={activeIncursion.godModeActive}
-                abilityGrafts={activeIncursion.abilityGrafts}
-                hexShotAbilityGrafts={activeIncursion.hexShotAbilityGrafts}
-                envoyAbilityGrafts={activeIncursion.envoyAbilityGrafts}
-                encounterUltimateDisabled={activeIncursion.encounterUltimateDisabled}
-                operativeClass={activeIncursion.activeClass ?? account.activeClass}
-              />
+              <CombatParryScreenOverlay />
             </View>
-          </CombatJuiceHost>
+          </ImageBackground>
         </MacroLogAnchoredLayout>
+        </CombatArenaOverlayProvider>
         </CombatEnemyChromeProvider>
       </CombatTurnProvider>
     </IncursionShell>
@@ -682,47 +673,36 @@ export default function CombatScreen(): React.JSX.Element {
 const styles = StyleSheet.create({
   combatRoot: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: '#0a0a0c',
+  },
+  landscapeRoot: {
+    flex: 1,
+    width: '100%',
+    backgroundColor: '#0a0a0c',
+  },
+  landscapeColumn: {
+    flex: 1,
+    minHeight: 0,
+    position: 'relative',
+    overflow: 'hidden',
   },
   body: {
     flex: 1,
     minHeight: 0,
     flexDirection: 'column',
     position: 'relative',
+    overflow: 'hidden',
   },
-  arenaStage: {
+  arenaPanel: {
     flex: 1,
-    flexShrink: 1,
-    minHeight: ARENA_MIN_HEIGHT,
+    minHeight: 0,
     width: '100%',
     overflow: 'hidden',
     position: 'relative',
     zIndex: 2,
   },
-  arenaBackground: {
-    ...StyleSheet.absoluteFillObject,
-  },
   arenaBackgroundScrim: {
     ...StyleSheet.absoluteFillObject,
-  },
-  enemyIntelOverlay: {
-    position: 'absolute',
-    top: 6,
-    left: DECK_INSET,
-    right: DECK_INSET,
-    zIndex: 12,
-    alignItems: 'flex-start',
-  },
-  playerHudOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    zIndex: 8,
-    alignItems: 'stretch',
-  },
-  combatMiddle: {
-    flexShrink: 0,
-    width: '100%',
-    overflow: 'hidden',
-    marginBottom: 4,
+    zIndex: 1,
   },
 });

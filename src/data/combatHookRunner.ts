@@ -117,10 +117,6 @@ export function runOnFireHooks(
   const hpCost = Math.floor(ctx.player.maxHp * 0.05);
   logLines.push(`[PULSE RIFLE] >> Overcharge bleed — ${hpCost} Soul Anchor.`);
   let damageMultiplier = 1;
-  if (ctx.target?.affinity === 'SPECTRAL') {
-    damageMultiplier = 2;
-    logLines.push('[PULSE RIFLE] >> Spectral resonance — 2× damage.');
-  }
   return {
     playerHpDelta: -hpCost,
     damageMultiplier,

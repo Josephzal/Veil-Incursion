@@ -70,9 +70,7 @@ export default function CombatEnemyHeaderBand({
         <Text style={[styles.intentLineArena, { color: intentMutedColor }]} numberOfLines={1} ellipsizeMode="tail">
           {tagLine
             ? `${tagLine} // ${formatIntentReadout(enemy.intent)}`
-            : enemy.affinity
-              ? `${enemy.affinity} // ${formatIntentReadout(enemy.intent)}`
-              : formatIntentReadout(enemy.intent)}
+            : formatIntentReadout(enemy.intent)}
         </Text>
       </View>
     );
@@ -89,9 +87,7 @@ export default function CombatEnemyHeaderBand({
           numberOfLines={compact ? 2 : 1}
           ellipsizeMode="tail"
         >
-          {enemy.affinity
-            ? `AFFINITY // ${enemy.affinity} // INTENT // ${formatIntentReadout(enemy.intent)}`
-            : `INTENT // ${formatIntentReadout(enemy.intent)}`}
+          {`INTENT // ${formatIntentReadout(enemy.intent)}`}
         </Text>
       </View>
       <CombatHorizontalGauge

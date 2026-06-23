@@ -12,6 +12,8 @@ import CombatEnemyDissolveEffect from './CombatEnemyDissolveEffect';
 import CombatEnemyHitEffect from './CombatEnemyHitEffect';
 import CombatEnemyPortraitSkia from './CombatEnemyPortraitSkia';
 import CombatSilhouetteShatterEffect from './CombatSilhouetteShatterEffect';
+import CombatEnemyOverheadBars from './CombatEnemyOverheadBars';
+import EnemyEntity from './EnemyEntity';
 import EliteSkullBadge from './EliteSkullBadge';
 
 const MONO = 'monospace';
@@ -85,72 +87,84 @@ export default function CombatEnemyUnit({
         </Text>
       ) : null}
 
-      <CombatEnemyAnchorMotion
-        turnPhase={unit.turnPhase ?? null}
-        isBacklineDashing={unit.isBacklineDashing}
-        hitFlashSeq={unit.hitFlashSeq}
-        backlineMeleeDashSeq={unit.backlineMeleeDashSeq}
-        meleeDashDelta={meleeDashDelta}
-        frozen={portraitFrozen || dissolving}
-      >
-        <View style={[styles.overlayLayer, isAlpha && styles.alphaSpriteScale]} pointerEvents="none">
-          <CombatEnemyCritImpact
-            critImpactSeq={unit.critImpactSeq}
-            channel={unit.critImpactChannel}
-            onHitStopChange={handleHitStopChange}
+      <EnemyEntity
+        showVitals={isArena}
+        vitals={<CombatEnemyOverheadBars unit={unit} />}
+        sprite={(
+          <CombatEnemyAnchorMotion
+            turnPhase={unit.turnPhase ?? null}
+            isBacklineDashing={unit.isBacklineDashing}
+            hitFlashSeq={unit.hitFlashSeq}
+            backlineMeleeDashSeq={unit.backlineMeleeDashSeq}
+            meleeDashDelta={meleeDashDelta}
+            frozen={portraitFrozen || dissolving}
           >
-            <CombatEnemyHitEffect
-              hitFlashSeq={unit.hitFlashSeq}
-              portraitSource={unit.portraitSource}
+            <View
+              style={[
+                styles.overlayLayer,
+                { transform: [{ scale: isAlpha ? 0.86 : 0.75 }] },
+              ]}
+              pointerEvents="none"
             >
-              <CombatSilhouetteShatterEffect trigger={fractured} portraitSource={unit.portraitSource}>
-                <CombatEnemyPortraitSkia
-                  source={unit.portraitSource}
-                  attackSource={unit.attackPortraitSource}
-                  turnPhase={unit.turnPhase ?? null}
-                  backlineDashSeq={unit.backlineMeleeDashSeq ?? 0}
-                  isBacklineDashing={unit.isBacklineDashing === true}
-                  glow={portraitGlow}
-                  intentShimmer={unit.intentShimmer ?? null}
-                  isEnraged={unit.isEnraged === true}
-                />
-              </CombatSilhouetteShatterEffect>
-            </CombatEnemyHitEffect>
-          </CombatEnemyCritImpact>
-        </View>
+              <CombatEnemyCritImpact
+                critImpactSeq={unit.critImpactSeq}
+                channel={unit.critImpactChannel}
+                onHitStopChange={handleHitStopChange}
+              >
+                <CombatEnemyHitEffect
+                  hitFlashSeq={unit.hitFlashSeq}
+                  portraitSource={unit.portraitSource}
+                >
+                  <CombatSilhouetteShatterEffect trigger={fractured} portraitSource={unit.portraitSource}>
+                    <CombatEnemyPortraitSkia
+                      source={unit.portraitSource}
+                      attackSource={unit.attackPortraitSource}
+                      turnPhase={unit.turnPhase ?? null}
+                      backlineDashSeq={unit.backlineMeleeDashSeq ?? 0}
+                      isBacklineDashing={unit.isBacklineDashing === true}
+                      glow={portraitGlow}
+                      intentShimmer={unit.intentShimmer ?? null}
+                      isEnraged={unit.isEnraged === true}
+                    />
+                  </CombatSilhouetteShatterEffect>
+                </CombatEnemyHitEffect>
+              </CombatEnemyCritImpact>
+            </View>
 
-        <View
-          style={[
-            styles.statusAnchor,
-            { transform: [{ scale: critLabelScale }] },
-          ]}
-          pointerEvents="none"
-        >
-          <CombatEnemyCritLabel
-            critImpactSeq={unit.critImpactSeq}
-            channel={unit.critImpactChannel}
-          />
-          <CombatEnemyEvadeLabel evadeImpactSeq={unit.evadeImpactSeq} />
-          <CombatFloatingStatusText
-            triggerSeq={unit.statusFloatSeq}
-            label={unit.statusFloatLabel}
-            tone={unit.statusFloatTone}
-          />
-          <CombatFloatingStatusText
-            triggerSeq={unit.immuneFloatSeq}
-            label={unit.immuneFloatLabel}
-            tone="neutral"
-          />
-        </View>
+            <View
+              style={[
+                styles.statusAnchor,
+                { transform: [{ scale: critLabelScale }] },
+              ]}
+              pointerEvents="none"
+            >
+              <CombatEnemyCritLabel
+                critImpactSeq={unit.critImpactSeq}
+                channel={unit.critImpactChannel}
+              />
+              <CombatEnemyEvadeLabel evadeImpactSeq={unit.evadeImpactSeq} />
+              <CombatFloatingStatusText
+                triggerSeq={unit.statusFloatSeq}
+                label={unit.statusFloatLabel}
+                tone={unit.statusFloatTone}
+              />
+              <CombatFloatingStatusText
+                triggerSeq={unit.immuneFloatSeq}
+                label={unit.immuneFloatLabel}
+                tone="neutral"
+              />
+            </View>
 
-        {onPress && !dissolving ? (
-          <Pressable
-            onPress={onPress}
-            style={[styles.hitbox, ENEMY_HITBOX_DEBUG ? styles.hitboxDebug : null]}
-            pointerEvents="auto"
-          />
-        ) : null}
-      </CombatEnemyAnchorMotion>
+            {onPress && !dissolving ? (
+              <Pressable
+                onPress={onPress}
+                style={[styles.hitbox, ENEMY_HITBOX_DEBUG ? styles.hitboxDebug : null]}
+                pointerEvents="auto"
+              />
+            ) : null}
+          </CombatEnemyAnchorMotion>
+        )}
+      />
     </View>
   );
 
@@ -198,9 +212,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.5,
     color: ALPHA_CRIMSON,
-  },
-  alphaSpriteScale: {
-    transform: [{ scale: 1.15 }],
   },
   imageShell: {
     width: '100%',

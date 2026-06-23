@@ -13,6 +13,8 @@ interface CombatTurnBannerProps {
   primaryColor: string;
   mutedColor: string;
   enemyIntent?: EnemyIntent | null;
+  /** Tighter typography for the landscape dashboard column. */
+  compact?: boolean;
 }
 
 export default function CombatTurnBanner({
@@ -20,6 +22,7 @@ export default function CombatTurnBanner({
   primaryColor,
   mutedColor,
   enemyIntent,
+  compact = false,
 }: CombatTurnBannerProps): React.JSX.Element | null {
   if (phase === 'RESOLUTION') return null;
 
@@ -62,10 +65,14 @@ export default function CombatTurnBanner({
   }
 
   return (
-    <View style={[styles.banner, { borderColor: border }]}>
-      <Text style={[styles.label, { color: accent }]}>{`>> ${label}`}</Text>
+    <View style={[styles.banner, compact && styles.bannerCompact, { borderColor: border }]}>
+      <Text style={[styles.label, compact && styles.labelCompact, { color: accent }]}>{`>> ${label}`}</Text>
       {sublabel ? (
-        <Text style={[styles.sublabel, { color: mutedColor }]} numberOfLines={1} ellipsizeMode="tail">
+        <Text
+          style={[styles.sublabel, compact && styles.sublabelCompact, { color: mutedColor }]}
+          numberOfLines={1}
+          ellipsizeMode="tail"
+        >
           {sublabel}
         </Text>
       ) : null}
@@ -80,6 +87,13 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     backgroundColor: 'rgba(10, 11, 15, 0.96)',
     gap: 2,
+    width: '100%',
+  },
+  bannerCompact: {
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    gap: 1,
+    backgroundColor: 'rgba(10, 11, 15, 0.88)',
   },
   label: {
     fontFamily: MONO,
@@ -87,9 +101,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.7,
   },
+  labelCompact: {
+    fontSize: 7,
+    letterSpacing: 0.5,
+  },
   sublabel: {
     fontFamily: MONO,
     fontSize: 7,
     letterSpacing: 0.5,
+  },
+  sublabelCompact: {
+    fontSize: 6,
+    letterSpacing: 0.35,
   },
 });

@@ -6,23 +6,20 @@ import {
   type CombatGridUnitSnapshot,
 } from '../../utils/combatTelemetryFormat';
 import { CombatHorizontalGauge } from './CombatHorizontalGauge';
-import {
-  COMBAT_GAUGE_BLOCK_HEIGHT_COMPACT,
-  COMBAT_GAUGE_ROW_GAP_COMPACT,
-} from './combatGaugeMetrics';
 
 const GAUGE_FRACTURE = '#fbbf24';
 
-interface CombatEnemySlotBarsProps {
+interface CombatEnemyOverheadBarsProps {
   unit: Pick<
     CombatGridUnitSnapshot,
     'currentHp' | 'maxHp' | 'fractureGauge' | 'fractureMax'
   >;
 }
 
-export default function CombatEnemySlotBars({
+/** HP + fracture gauges anchored under hostile sprites in the arena. */
+export default function CombatEnemyOverheadBars({
   unit,
-}: CombatEnemySlotBarsProps): React.JSX.Element {
+}: CombatEnemyOverheadBarsProps): React.JSX.Element {
   const hpRatio = unit.maxHp > 0 ? unit.currentHp / unit.maxHp : 1;
   const fractureMax = unit.fractureMax ?? 100;
   const fractureRatio = fractureMax > 0 ? (unit.fractureGauge ?? 0) / fractureMax : 0;
@@ -34,27 +31,24 @@ export default function CombatEnemySlotBars({
         ratio={hpRatio}
         trackBorderColor={GAUGE_TRACK_BORDER}
         width="100%"
-        compact
+        overhead
+        borderless
       />
-      <View style={styles.gap} />
       <CombatHorizontalGauge
         fillColor={GAUGE_FRACTURE}
         ratio={fractureRatio}
         trackBorderColor={GAUGE_TRACK_BORDER}
         width="100%"
-        compact
+        overhead
+        borderless
       />
     </View>
   );
 }
 
-export const COMBAT_ENEMY_SLOT_BARS_HEIGHT = COMBAT_GAUGE_BLOCK_HEIGHT_COMPACT;
-
 const styles = StyleSheet.create({
   root: {
     width: '100%',
-  },
-  gap: {
-    height: COMBAT_GAUGE_ROW_GAP_COMPACT,
+    gap: 2,
   },
 });

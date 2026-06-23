@@ -10,9 +10,9 @@ export const ARENA_ENEMY_COLUMN_FLEX = 3;
 export const ARENA_ENEMY_COLUMN_RATIO =
   ARENA_ENEMY_COLUMN_FLEX / (ARENA_PLAYER_COLUMN_FLEX + ARENA_ENEMY_COLUMN_FLEX);
 /** Pull enemy grid away from the right screen edge (horizontal only). */
-export const ARENA_ENEMY_GRID_INSET_RIGHT = 44;
+export const ARENA_ENEMY_GRID_INSET_RIGHT = 72;
 
-/** Matches CombatArenaStage playerSpriteSlot height (% of enemy column). */
+/** Matches CombatLandscapeArena playerSpriteSlot height (% of enemy column). */
 export const ARENA_SPRITE_HEIGHT = '27%';
 export const ARENA_SPRITE_BOTTOM = '20%';
 export const ARENA_STAGE_PADDING_BOTTOM = 20;
@@ -32,6 +32,46 @@ export const COMBAT_ARENA_BACKLINE_SLOT_COUNT = 2;
 /** Locked at encounter start — never reflow mid-fight when the squad shrinks. */
 export type ArenaLayoutMode = 'solo' | 'group';
 
+/** Arena grid presentation — flex rows (legacy) or absolute staggered 2.5D. */
+export type ArenaGridVariant = 'flex' | 'staggered';
+
+export const STAGGERED_ARENA_WIDTH = '42%' as const;
+export const STAGGERED_SLOT_WIDTH_PCT = 38;
+
+export interface StaggeredSlotStyle {
+  bottom: `${number}%`;
+  left?: `${number}%`;
+  right?: `${number}%`;
+  zIndex: number;
+  scale: number;
+}
+
+export const STAGGERED_GROUP_SLOTS: Record<CombatGridSlotId, StaggeredSlotStyle> = {
+  FL_0: { bottom: '20%', left: '12%', zIndex: 4, scale: 1.1 },
+  FL_1: { bottom: '24%', right: '18%', zIndex: 3, scale: 1.0 },
+  BL_0: { bottom: '42%', left: '28%', zIndex: 2, scale: 0.85 },
+  BL_1: { bottom: '52%', right: '16%', zIndex: 1, scale: 0.75 },
+};
+
+export const STAGGERED_SOLO_SLOT: StaggeredSlotStyle = {
+  bottom: '24%',
+  left: '26%',
+  zIndex: 4,
+  scale: 1.05,
+};
+
+export function staggeredSlotStyle(
+  slot: CombatGridSlotId,
+  mode: ArenaLayoutMode,
+): StaggeredSlotStyle {
+  if (mode === 'solo') return STAGGERED_SOLO_SLOT;
+  return STAGGERED_GROUP_SLOTS[slot];
+}
+
+/** Landscape operative anchor — bottom-left of full arena. */
+export const LANDSCAPE_OPERATIVE_ZONE_WIDTH = '28%' as const;
+export const LANDSCAPE_OPERATIVE_SPRITE_HEIGHT = '72%' as const;
+
 /** Slot id used for dedicated single-hostile encounters. */
 export const SOLO_ARENA_SLOT: CombatGridSlotId = 'FL_0';
 
@@ -46,8 +86,8 @@ export interface EnemySlotPresentation {
 export const FRONTLINE_UNIT_SCALE = 1.1;
 export const SOLO_UNIT_SCALE = .85;
 /** Lift hostiles upward as a share of battlefield height. */
-export const FRONTLINE_BATTLEFIELD_LIFT_RATIO = 0.07;
-export const SOLO_BATTLEFIELD_LIFT_RATIO = 0.1;
+export const FRONTLINE_BATTLEFIELD_LIFT_RATIO = 0.1;
+export const SOLO_BATTLEFIELD_LIFT_RATIO = 0.12;
 /** Lower the operative sprite as a share of the player column height. */
 export const PLAYER_SPRITE_LOWER_RATIO = 0.04;
 
@@ -85,7 +125,12 @@ export function arenaSlotsForMode(mode: ArenaLayoutMode): readonly CombatGridSlo
 export function resolveSlotPresentation(
   slot: CombatGridSlotId,
   mode: ArenaLayoutMode,
+  gridVariant: ArenaGridVariant = 'flex',
 ): EnemySlotPresentation {
+  if (gridVariant === 'staggered') {
+    const style = staggeredSlotStyle(slot, mode);
+    return { unitScale: style.scale, zIndex: style.zIndex };
+  }
   if (mode === 'solo') return SOLO_PRESENTATION;
   return laneForSlot(slot) === 'BACKLINE' ? BACKLINE_PRESENTATION : FRONTLINE_PRESENTATION;
 }
@@ -99,11 +144,32 @@ interface SlotAnchorFraction {
   footY: number;
 }
 
+function estimateStaggeredSlotAnchor(
+  slot: CombatGridSlotId,
+  layoutMode: ArenaLayoutMode,
+): SlotAnchorFraction {
+  const style = staggeredSlotStyle(slot, layoutMode);
+  const widthFrac = STAGGERED_SLOT_WIDTH_PCT / 100;
+  let x: number;
+  if (style.left != null) {
+    x = Number.parseFloat(style.left) / 100 + widthFrac * 0.5;
+  } else {
+    x = 1 - Number.parseFloat(style.right ?? '10') / 100 - widthFrac * 0.5;
+  }
+  const footY = 1 - Number.parseFloat(style.bottom) / 100;
+  const y = Math.max(0.12, footY - 0.14);
+  return { x, y, footY };
+}
+
 /** Estimated slot centers for attack dash math — mirrors flex row + wrapper layout. */
 export function estimateSlotAnchorFraction(
   slot: CombatGridSlotId,
   layoutMode: ArenaLayoutMode,
+  gridVariant: ArenaGridVariant = 'flex',
 ): SlotAnchorFraction {
+  if (gridVariant === 'staggered') {
+    return estimateStaggeredSlotAnchor(slot, layoutMode);
+  }
   if (layoutMode === 'solo') {
     return { x: 0.5, y: 0.66, footY: 0.82 };
   }
@@ -114,12 +180,6 @@ export function estimateSlotAnchorFraction(
   const y = isBackline ? 0.34 : 0.68;
   const footY = isBackline ? 0.48 : 0.84;
   return { x, y, footY };
-}
-
-/** Intel panel gauge track — spans the enemy-column overlay width. */
-export function arenaIntelGaugeTrackWidth(screenWidth = Dimensions.get('window').width): number {
-  const enemyColumnWidth = screenWidth * ARENA_ENEMY_COLUMN_RATIO;
-  return Math.max(120, Math.floor(enemyColumnWidth - 24));
 }
 
 export type ArenaLayoutUnit = {
@@ -163,14 +223,22 @@ export function backlineMeleeDashDelta(
   layoutMode: ArenaLayoutMode,
   arenaWidth: number,
   arenaHeight: number,
+  gridVariant: ArenaGridVariant = 'flex',
 ): { x: number; y: number } {
   const effectiveSlot = layoutMode === 'solo' ? SOLO_ARENA_SLOT : slot;
-  const anchor = estimateSlotAnchorFraction(effectiveSlot, layoutMode);
-  const slotCenterX = arenaWidth * anchor.x;
+  const anchor = estimateSlotAnchorFraction(effectiveSlot, layoutMode, gridVariant);
+  const slotCenterX = gridVariant === 'staggered'
+    ? (arenaWidth * (1 - Number.parseFloat(STAGGERED_ARENA_WIDTH) / 100))
+      + (arenaWidth * Number.parseFloat(STAGGERED_ARENA_WIDTH) / 100) * anchor.x
+    : arenaWidth * anchor.x;
   const slotFootY = arenaHeight * anchor.footY;
 
-  const playerFootY = arenaHeight * (1 - Number.parseFloat(ARENA_SPRITE_BOTTOM) / 100);
-  const x = -(slotCenterX + arenaWidth * 0.42);
+  const playerFootY = gridVariant === 'staggered'
+    ? arenaHeight * 0.94
+    : arenaHeight * (1 - Number.parseFloat(ARENA_SPRITE_BOTTOM) / 100);
+  const x = gridVariant === 'staggered'
+    ? -(slotCenterX - arenaWidth * 0.14)
+    : -(slotCenterX + arenaWidth * 0.42);
   const y = Math.max(16, playerFootY - slotFootY);
 
   return { x, y };
@@ -182,9 +250,24 @@ export function playerAttackLungeDelta(
   layoutMode: ArenaLayoutMode,
   arenaWidth: number,
   arenaHeight: number,
+  gridVariant: ArenaGridVariant = 'flex',
 ): { x: number; y: number } {
   const effectiveSlot = layoutMode === 'solo' ? SOLO_ARENA_SLOT : slot;
-  const anchor = estimateSlotAnchorFraction(effectiveSlot, layoutMode);
+  const anchor = estimateSlotAnchorFraction(effectiveSlot, layoutMode, gridVariant);
+
+  if (gridVariant === 'staggered') {
+    const staggeredLeft = arenaWidth * (1 - Number.parseFloat(STAGGERED_ARENA_WIDTH) / 100);
+    const gridWidth = arenaWidth - staggeredLeft;
+    const slotCenterX = staggeredLeft + gridWidth * anchor.x;
+    const operativeAnchorX = arenaWidth * 0.14;
+    const rawGap = slotCenterX - operativeAnchorX;
+    const x = Math.round(Math.min(120, Math.max(32, rawGap * 0.55)));
+    const playerFootY = arenaHeight * 0.94;
+    const slotTorsoY = arenaHeight * anchor.y;
+    const y = Math.round(Math.min(0, Math.max(-28, (slotTorsoY - playerFootY) * 0.35)));
+    return { x, y };
+  }
+
   const enemyColumnWidth = arenaWidth * 0.5;
   const enemyColumnLeft = arenaWidth * 0.5;
   const slotCenterX = enemyColumnLeft + enemyColumnWidth * anchor.x;

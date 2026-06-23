@@ -1,5 +1,4 @@
 import type { IncursionEncounterType, RunNodeType } from './game';
-import type { EnemyAffinity } from './combatEnvironment';
 
 export type SpectralThreatBand = 'LOW' | 'MODERATE' | 'ELEVATED' | 'CRITICAL' | 'UNKNOWN';
 
@@ -18,7 +17,6 @@ export interface NodeSectorMeta {
   yieldMultiplier: number;
   creditBonus: number;
   combatTier: 'STANDARD' | 'ELITE';
-  probableAffinity?: EnemyAffinity;
 }
 
 export interface SectorGraphNode {

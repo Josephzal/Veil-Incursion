@@ -5,8 +5,6 @@ import { resolveEnemyCombatStats } from './enemyCombatConfig';
 import { applyAlphaToEnemyProfile } from './enemyAlphaConfig';
 import { getNodeScale } from './enemyNodeScale';
 import { rollEnemyIntent } from './enemyIntentRoll';
-import { resolveEnemyAffinity } from './combatEnvironmentEngine';
-import { applyCorporealHpMultiplier } from './combatEnvironmentEngine';
 import { initEnemyCombatLayers } from './combatFractureEngine';
 import { initRosterLifecycleDefaults } from './combatLifecycleEngine';
 import { CONCRETE_GARGOYLE_FRACTURE_MAX } from './combatRosterActions';
@@ -720,7 +718,6 @@ export function spawnRosterUnit(
   const maxHp = resolvedStats?.maxHp
     ?? Math.floor(entry.hp * (elite ? 1.15 : 1));
   const baseDamage = resolvedStats?.baseDamage ?? entry.damage;
-  const affinity = resolveEnemyAffinity(entry.class, elite, options?.resonancePercent ?? 0);
   const postureIntent = defaultPostureIntentForRoster(entry.id);
   const intent = postureIntent ?? rollEnemyIntent(entry.class, 0, options?.district ?? 1);
   const base: EnemyCombatProfile = {
@@ -741,7 +738,6 @@ export function spawnRosterUnit(
     evadeChance: entry.evadeChance,
     critChance: entry.critChance,
   };
-  const withAffinity = applyCorporealHpMultiplier({ ...base, affinity }, affinity);
   const localLevel = localLevelFromDepth(depth);
   const resonancePct = options?.resonancePercent ?? 0;
   let kineticArmor = resolvedStats?.kineticArmor ?? entry.kineticArmor;
@@ -750,7 +746,7 @@ export function spawnRosterUnit(
     kineticArmor += 1;
     occultWards += 1;
   }
-  const layered = initEnemyCombatLayers(withAffinity, {
+  const layered = initEnemyCombatLayers(base, {
     kineticArmor,
     occultWards,
     fractureMax: entry.id === 'concrete-gargoyle' ? CONCRETE_GARGOYLE_FRACTURE_MAX : undefined,

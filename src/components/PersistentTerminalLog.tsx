@@ -11,7 +11,7 @@ const MACRO_LOG_HORIZONTAL_PADDING = 12;
 
 /** Fixed macro log footprint shared across combat, checkpoint, and scanner screens. */
 export const MACRO_LOG_BLOCK_HEIGHT = 110;
-const SCROLL_CONTENT_PADDING_BOTTOM = 16;
+const SCROLL_CONTENT_PADDING_BOTTOM = 24;
 
 interface PersistentTerminalLogProps {
   visible?: boolean;
@@ -23,6 +23,8 @@ interface PersistentTerminalLogProps {
   onCargoPress?: () => void;
   showStatus?: boolean;
   onStatusPress?: () => void;
+  /** Omit the top border (dashboard macro log column). */
+  hideTopBorder?: boolean;
 }
 
 function resolveBottomInset(insetsBottom: number): number {
@@ -46,6 +48,7 @@ export default function PersistentTerminalLog({
   onCargoPress,
   showStatus = false,
   onStatusPress,
+  hideTopBorder = false,
 }: PersistentTerminalLogProps): React.JSX.Element | null {
   const { runLog } = useRun();
   const { theme } = useTerminal();
@@ -59,7 +62,7 @@ export default function PersistentTerminalLog({
   }, [runLog]);
 
   if (!visible) return null;
-  if (!showCargo && !showStatus && runLog.length === 0) return null;
+  if (!fillRemaining && !showCargo && !showStatus && runLog.length === 0) return null;
 
   const bottomInset = docked ? resolveBottomInset(insets.bottom) : 0;
 
@@ -68,6 +71,7 @@ export default function PersistentTerminalLog({
       style={[
         styles.container,
         fillRemaining ? styles.containerFill : null,
+        hideTopBorder ? styles.containerBorderless : null,
         {
           borderColor: theme.borderColor,
           backgroundColor: LOG_SURFACE,
@@ -146,6 +150,9 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     flexGrow: 1,
   },
+  containerBorderless: {
+    borderTopWidth: 0,
+  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -173,9 +180,11 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: SCROLL_CONTENT_PADDING_BOTTOM,
     paddingHorizontal: 2,
+    flexGrow: 1,
   },
   scrollContentFill: {
     flexGrow: 1,
+    justifyContent: 'flex-end',
   },
   lineRow: {
     flexDirection: 'row',

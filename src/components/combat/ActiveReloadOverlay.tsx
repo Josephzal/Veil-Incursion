@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import type { ActiveReloadResult } from '../../types/classCombatResources';
 import {
   ACTIVE_RELOAD_PASS_MS,
@@ -14,8 +14,8 @@ interface ActiveReloadOverlayProps {
   onResolve: (result: ActiveReloadResult, cursorRatio: number) => void;
 }
 
-const BAR_WIDTH = 300;
 const CURSOR_WIDTH = 8;
+const MIN_BAR_WIDTH = 120;
 
 export default function ActiveReloadOverlay({
   visible,
@@ -23,6 +23,7 @@ export default function ActiveReloadOverlay({
   onResolve,
 }: ActiveReloadOverlayProps): React.JSX.Element | null {
   const [cursorRatio, setCursorRatio] = useState(0);
+  const [barWidth, setBarWidth] = useState(0);
   const startMsRef = useRef(0);
   const resolvingRef = useRef(false);
   const rafRef = useRef<number | null>(null);
@@ -30,6 +31,11 @@ export default function ActiveReloadOverlay({
     () => buildReloadZoneConfig(perfectWindowScale),
     [perfectWindowScale],
   );
+
+  const handleBarLayout = useCallback((event: LayoutChangeEvent) => {
+    const { width } = event.nativeEvent.layout;
+    setBarWidth((prev) => (prev === width ? prev : width));
+  }, []);
 
   useEffect(() => {
     if (!visible) {
@@ -68,10 +74,12 @@ export default function ActiveReloadOverlay({
     onResolve(resolveActiveReloadZone(cursorRatio, zoneConfig), cursorRatio);
   };
 
-  const cursorLeft = Math.max(
-    0,
-    Math.min(BAR_WIDTH - CURSOR_WIDTH, cursorRatio * (BAR_WIDTH - CURSOR_WIDTH)),
-  );
+  const cursorLeft = barWidth > 0
+    ? Math.max(
+      0,
+      Math.min(barWidth - CURSOR_WIDTH, cursorRatio * (barWidth - CURSOR_WIDTH)),
+    )
+    : 0;
   const goldLeftPct = zoneConfig.perfectMin * 100;
   const goldWidthPct = (zoneConfig.perfectMax - zoneConfig.perfectMin) * 100;
   const grayWidthPct = zoneConfig.standardMax * 100;
@@ -86,12 +94,14 @@ export default function ActiveReloadOverlay({
       <Pressable onPress={handleTap} style={styles.panel}>
         <Text style={styles.title}>[ COMBAT RELOAD // SINGLE PASS ]</Text>
         <Text style={styles.subtitle}>Tap once to stop the playhead — gold band is perfect.</Text>
-        <View style={[styles.barTrack, { width: BAR_WIDTH }]}>
+        <View style={styles.barTrack} onLayout={handleBarLayout}>
           <View style={[styles.zone, styles.grayZone, { width: `${grayWidthPct}%` }]} />
           <View style={[styles.zone, styles.redZoneMid, { left: `${redMidLeftPct}%`, width: `${redMidWidthPct}%` }]} />
           <View style={[styles.zone, styles.goldZone, { left: `${goldLeftPct}%`, width: `${goldWidthPct}%` }]} />
           <View style={[styles.zone, styles.redZoneEnd, { left: `${redEndLeftPct}%`, width: `${redEndWidthPct}%` }]} />
-          <View style={[styles.cursor, { left: cursorLeft, width: CURSOR_WIDTH }]} />
+          {barWidth > 0 ? (
+            <View style={[styles.cursor, { left: cursorLeft, width: CURSOR_WIDTH }]} />
+          ) : null}
         </View>
         <View style={styles.legendRow}>
           <Text style={styles.legendGray}>GRAY 0–60% — full mag, −1 AP</Text>
@@ -116,7 +126,7 @@ const styles = StyleSheet.create({
   },
   panel: {
     width: '100%',
-    maxWidth: 360,
+    maxWidth: 420,
     borderWidth: 1,
     borderColor: 'rgba(251, 191, 36, 0.55)',
     backgroundColor: 'rgba(8, 10, 16, 0.96)',
@@ -141,6 +151,8 @@ const styles = StyleSheet.create({
     lineHeight: 11,
   },
   barTrack: {
+    width: '100%',
+    minWidth: MIN_BAR_WIDTH,
     height: 24,
     borderWidth: 1,
     borderColor: 'rgba(148, 163, 184, 0.45)',

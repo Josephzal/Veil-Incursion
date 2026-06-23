@@ -16,7 +16,6 @@ import type { PlayerAIState } from '../data/AIDecisionEngine';
 import {
   computeBloodFrenzyHeal,
   scaleKineticDamage,
-  shouldChronoStunOnKineticHit,
   type KineticDamageSource,
 } from '../data/combatEnvironmentEngine';
 import { bossStrikeDamage, rollBossIntent, shouldShiftBossPhase } from '../data/bossCombat';
@@ -298,14 +297,12 @@ import {
   CombatChromeBridge,
   useCombatEnemyChromeOptional,
 } from '../context/CombatEnemyChromeContext';
+import { CombatArenaOverlaySink } from '../context/CombatArenaOverlayContext';
 import {
   type CombatTurnPhase,
   useCombatTurnOptional,
 } from '../context/CombatTurnContext';
-import CombatTurnBanner from './combat/CombatTurnBanner';
-import CombatDeckStrikeOverlay from './combat/CombatDeckStrikeOverlay';
 import {
-  type CombatEnemyTelemetry,
   type CombatSquadUiSnapshot,
   type EnemyDeckStrikeVariant,
   formatHostileId,
@@ -328,6 +325,7 @@ import {
   GAUGE_TRACK_BORDER,
   GAUGE_VEIL_FLUX,
 } from '../utils/combatTelemetryFormat';
+import { buildCombatTurnOrder } from '../utils/combatTurnOrder';
 import {
   BACKLINE_MELEE_DASH_IMPACT_MS,
   BACKLINE_MELEE_DASH_TOTAL_MS,
@@ -338,6 +336,7 @@ import {
   FRONTLINE_MELEE_IMPACT_MS,
   playerAttackLungeDelta,
   resolveArenaLayoutMode,
+  type ArenaGridVariant,
   type ArenaLayoutMode,
 } from './combat/combatEnemyBarLayout';
 import VignetteFlashOverlay from './VignetteFlashOverlay';
@@ -364,8 +363,8 @@ const BUFF_ABILITIES: AegisAbilityId[] = ['DEMONS_LUNG', 'CRIMSON_PACT'];
 
 const { width, height: windowHeight } = Dimensions.get('window');
 
-/** Screen-right inset to stacked hub inner content (center gutter + paddingHorizontal). */
-export const TACTICAL_HUB_STACKED_RIGHT_INSET = 16;
+/** @deprecated Import from `src/constants/combatLayout`. */
+export { TACTICAL_HUB_STACKED_RIGHT_INSET } from '../constants/combatLayout';
 const MONO = 'monospace';
 const P = {
   enemyHp: '#ef4444', unitTitle: '#ffffff', enemyPosture: '#fde68a',
@@ -377,11 +376,8 @@ const WARD_STRIKE_ACCENT = '#fde68a';
 type CombatPhase = 'TEXT_COMBAT' | 'DEFEND_PARRY' | 'DEFEND_WARD' | 'OFFENSE_SLICE' | 'RESOLUTION';
 
 interface TacticalCombatHubProps {
-  /** Combat screen stack: operative metrics + deck only; hostile row lives on CombatScreen. */
-  stackedLayout?: boolean;
-  /** Pokemon-style arena: gauges on CombatScreen, strike FX on player sprite. */
-  arenaLayout?: boolean;
-  onEnemyTelemetryChange?: (enemy: CombatEnemyTelemetry | null) => void;
+  /** Arena grid geometry for strike FX / dash math. */
+  arenaGridVariant?: ArenaGridVariant;
   onOperativeTelemetryChange?: (telemetry: CombatOperativeTelemetry | null) => void;
   onWardPrimedChange?: (primed: boolean) => void;
   onAbilityPrimedChange?: (primed: boolean) => void;
@@ -427,8 +423,6 @@ interface TacticalCombatHubProps {
   hexShotBoons?: HexShotBoonId[];
   envoyBoons?: EnvoyBoonId[];
   combatDistrict?: 1 | 2 | 3;
-  /** Spectral Salt in cargo — kinetic strikes bypass spectral resistance. */
-  spectralSaltActive?: boolean;
   /** Bound requisition first-turn AP bonus (Adrenaline Primer). */
   firstTurnBonusAp?: number;
   /** Shadow War Slag Works — flat kinetic armor layers on operative. */
@@ -483,9 +477,7 @@ const GOD_MODE_STRIKE_DAMAGE = 1000;
 type EnemyActionStage = 'reading' | 'executing' | null;
 
 export default function TacticalCombatHub({
-  stackedLayout = false,
-  arenaLayout = false,
-  onEnemyTelemetryChange,
+  arenaGridVariant = 'staggered',
   onOperativeTelemetryChange,
   onWardPrimedChange,
   onAbilityPrimedChange,
@@ -520,7 +512,6 @@ export default function TacticalCombatHub({
   hexShotBoons = [],
   envoyBoons = [],
   combatDistrict = 1,
-  spectralSaltActive = false,
   firstTurnBonusAp = 0,
   playerKineticArmorBonus = 0,
   kineticBatteryActive = false,
@@ -560,8 +551,6 @@ export default function TacticalCombatHub({
     label: 'Standard Blade',
   };
   const { theme, profile, awardCurrencies } = useTerminal();
-  const weaponLabel = (profile?.operative_profile?.payload_manifest?.active_slots?.weapon_id ?? 'kinetic_glaive')
-    .replace(/_/g, ' ').toUpperCase();
 
   const [cycleState, setCycleState] = useState<CombatPhase>('TEXT_COMBAT');
   const [squad, setSquad] = useState<EnemyCombatProfile[]>([]);
@@ -611,7 +600,6 @@ export default function TacticalCombatHub({
   const [enemyActionStage, setEnemyActionStage] = useState<EnemyActionStage>(null);
   const enemyActionStageRef = useRef<EnemyActionStage>(null);
   const [eviscerateTargetUnitId, setEviscerateTargetUnitId] = useState<string | null>(null);
-  const [deckStrikeOverlay, setDeckStrikeOverlay] = useState<EnemyDeckStrikeVariant | null>(null);
   const [currentAmmo, setCurrentAmmo] = useState(DEFAULT_MAGAZINE_SIZE);
   const [hexOvercharged, setHexOvercharged] = useState(false);
   const [veilFlux, setVeilFlux] = useState(0);
@@ -850,11 +838,6 @@ export default function TacticalCombatHub({
         ? 'eviscerate'
         : null;
   const ultimatePingReady = ultimatePingVariant != null;
-  const classLabel = operativeClass === 'HEX_SHOT'
-    ? 'HEX SHOT'
-    : operativeClass === 'ENVOY'
-      ? 'ENVOY'
-      : 'AEGIS';
   const activeLoadout = useMemo((): readonly string[] => {
     if (operativeClass === 'HEX_SHOT') return sanitizeHexShotCombatLoadout(hexShotLoadout);
     if (operativeClass === 'ENVOY') return sanitizeEnvoyCombatLoadout(envoyLoadout);
@@ -1115,6 +1098,12 @@ export default function TacticalCombatHub({
       squadSize: aliveUnits(nextSquad).length,
       targetingActive,
       stagedAbilityId: staged,
+      turnOrder: buildCombatTurnOrder({
+        squad: nextSquad,
+        operativeClass,
+        phase: combatTurnPhase,
+        enemyQueue: enemyActionQueueRef.current,
+      }),
       units: nextSquad.map((u) => {
         const unitId = u.unitId ?? u.designation;
         const threatTier = resolveEnemyThreatTier({
@@ -1130,7 +1119,7 @@ export default function TacticalCombatHub({
         const blocked = staged != null && abilityTargeting
           && isUnitBlockedForClassAbility(operativeClass, nextSquad, staged, unitId)
           && !hookValid;
-        const motionOptions = { arenaLayout, gridSlot: u.gridSlot ?? null };
+        const motionOptions = { arenaLayout: true, gridSlot: u.gridSlot ?? null };
         const isActiveActor = resolveActingEnemyId() === unitId
           && enemyActionStageRef.current != null
           && !isPlayerTurnRef.current
@@ -1150,7 +1139,6 @@ export default function TacticalCombatHub({
           maxHp: u.maxHp,
           intent: displayIntent,
           intentLabel: sensoryJammed ? 'STATIC // JAMMED' : formatIntentReadout(u.intent),
-          affinity: u.affinity,
           fractureGauge: u.fractureGauge ?? 0,
           fractureMax: u.fractureMax ?? 100,
           kineticArmor: u.kineticArmor ?? 0,
@@ -1417,11 +1405,7 @@ export default function TacticalCombatHub({
   };
 
   const showStrikeFeedback = (variant: EnemyDeckStrikeVariant) => {
-    if (arenaLayout) {
-      playerViewportRef?.current?.triggerDamageEffect(variant);
-      return;
-    }
-    setDeckStrikeOverlay(variant);
+    playerViewportRef?.current?.triggerDamageEffect(variant);
   };
 
   const flash = (color: string, done?: () => void) => {
@@ -1499,7 +1483,6 @@ export default function TacticalCombatHub({
     }
     voidAmbushWindowRef.current = null;
     setEnemyActionStage(null);
-    setDeckStrikeOverlay(null);
     preAppliedHpStrikeRef.current = 0;
   };
 
@@ -1554,11 +1537,8 @@ export default function TacticalCombatHub({
   resolveVictoryRef.current = () => resolve(true);
 
   useEffect(() => {
-    registerKillResolver?.(() => {
-      if (arenaLayout) return;
-      resolveVictoryRef.current();
-    });
-  }, [arenaLayout, registerKillResolver]);
+    registerKillResolver?.(() => {});
+  }, [registerKillResolver]);
 
   const applyHealRef = useRef((amount: number) => {
     setOperativeHp((p) => {
@@ -1733,7 +1713,7 @@ export default function TacticalCombatHub({
     if (pending <= 0) return false;
     preAppliedHpStrikeRef.current = 0;
     hurtPlayer(pending, unblockable || pendingUnblockRef.current, msg, {
-      skipStrikeFx: arenaLayout,
+      skipStrikeFx: true,
       attacker: attacker ?? enemyRef.current ?? undefined,
     });
     return true;
@@ -1939,7 +1919,7 @@ export default function TacticalCombatHub({
         }
       }
       Vibration.vibrate([0, 32, 48, 28]);
-      if (arenaLayout && !options?.skipStrikeFx) {
+      if (!options?.skipStrikeFx) {
         playerViewportRef?.current?.triggerDamageEffect('hp');
       }
     }
@@ -2337,29 +2317,11 @@ export default function TacticalCombatHub({
       if (mutationEncounterRef.current.masochistBuff) {
         dmg = Math.floor(dmg * 1.5);
       }
-      const scaled = scaleKineticDamage(
-        dmg,
-        working.affinity,
-        0,
-        spectralSaltActive,
-      );
-      if (!narrativeOvercharged) {
-        if (scaled !== dmg) {
-          const imbueNote = spectralSaltActive && working.affinity === 'SPECTRAL'
-            ? ' // SPECTRAL SALT IMBUE'
-            : '';
-          log(`${tag} >> Kinetic scaling ${dmg} → ${scaled}.${imbueNote}`);
-        }
-        dmg = scaled;
+      const scaled = scaleKineticDamage(dmg, 0);
+      if (!narrativeOvercharged && scaled !== dmg) {
+        log(`${tag} >> Kinetic scaling ${dmg} → ${scaled}.`);
       }
-      if (
-        equippedBlueprintId === 'riftshot_pulse_rifle'
-        && working.affinity === 'SPECTRAL'
-        && source
-      ) {
-        dmg = Math.floor(dmg * 2);
-        log(`${tag} >> Pulse rifle spectral resonance — 2× (${dmg}).`);
-      }
+      dmg = scaled;
     }
     if (options?.channel === 'TRUE' || bypassAllMitigation) {
       dmg = applyDamageWithFractureBonus(dmg, working);
@@ -2501,15 +2463,19 @@ export default function TacticalCombatHub({
       applyStamina(staminaRef.current - LEGION_COLD_VACUUM_STAMINA);
       log(`${tag} >> COLD VACUUM — +${LEGION_COLD_VACUUM_STAMINA} stamina tax.`);
     }
-    if (source && arenaLayout && dmg > 0 && !options?.indirectDamage && !options?.echoHit) {
+    if (source && dmg > 0 && !options?.indirectDamage && !options?.echoHit) {
       if (operativeClass === 'AEGIS') {
         const targetSlot = (working.gridSlot ?? 'FL_0') as CombatGridSlotId;
-        const arenaHeight = Math.max(windowHeight * 0.28, 200);
+        const arenaHeight = Math.max(
+          windowHeight * 0.52,
+          200,
+        );
         const lungeDelta = playerAttackLungeDelta(
           targetSlot,
           arenaLayoutModeRef.current,
           width,
           arenaHeight,
+          arenaGridVariant,
         );
         playerViewportRef?.current?.triggerAttackLunge(lungeDelta);
       } else {
@@ -2709,11 +2675,6 @@ export default function TacticalCombatHub({
         }
       }
     }
-    if (source && shouldChronoStunOnKineticHit(working.affinity, source) && dmg > 0) {
-      enemyStunPendingRef.current = true;
-      log('[CHRONO SHATTER] >> Temporal sync fractured — hostile turn forfeited.');
-    }
-
     if (working.isBoss && bossRuntimeRef.current && shouldShiftBossPhase(bossRuntimeRef.current, hp)) {
       bossPhaseRef.current = 2;
       const updatedBoss = { ...bossRuntimeRef.current, currentHp: hp, currentPhase: 2 };
@@ -2731,14 +2692,10 @@ export default function TacticalCombatHub({
       setTimeout(() => setPhaseAlert(null), 2400);
     }
 
-    const viewport = apparitionRef?.current;
-
     if (allUnitsDefeated(squadRef.current)) {
       if (cycleRef.current === 'DEFEND_PARRY') {
-        if (arenaLayout) {
-          pendingVictoryRef.current = true;
-          ensureDeadUnitsDissolving();
-        }
+        pendingVictoryRef.current = true;
+        ensureDeadUnitsDissolving();
         return true;
       }
       if (cycleRef.current === 'OFFENSE_SLICE') {
@@ -2746,15 +2703,7 @@ export default function TacticalCombatHub({
         cycleRef.current = 'TEXT_COMBAT';
         setCycleState('TEXT_COMBAT');
       }
-      if (arenaLayout) {
-        scheduleCombatVictoryResolution();
-        return true;
-      }
-      if (viewport) {
-        viewport.triggerEradication();
-        return true;
-      }
-      resolve(true);
+      scheduleCombatVictoryResolution();
       return true;
     }
 
@@ -2879,7 +2828,7 @@ export default function TacticalCombatHub({
       const nextFocus = primaryAliveUnit(squadRef.current);
       if (nextFocus?.unitId) selectTarget(nextFocus.unitId);
     } else {
-      viewport?.triggerDamageEffect();
+      playerViewportRef?.current?.triggerDamageEffect('hp');
     }
     return false;
   };
@@ -3600,8 +3549,7 @@ export default function TacticalCombatHub({
     if (isCombatTerminal()) return;
     if (operativeHpRef.current <= 0) return;
     if (allUnitsDefeated(squadRef.current)) {
-      if (arenaLayout) scheduleCombatVictoryResolution();
-      else if (resolutionRef.current == null) resolve(true);
+      scheduleCombatVictoryResolution();
       return;
     }
     if (mutationEncounterRef.current.veilTarTurnsRemaining > 0) {
@@ -3839,18 +3787,15 @@ export default function TacticalCombatHub({
     const currentEnemy = enemyRef.current;
     if (!currentEnemy || operativeHpRef.current <= 0) {
       setEnemyActionStage(null);
-      setDeckStrikeOverlay(null);
       return;
     }
     if (!isUnitAlive(currentEnemy)) {
       setEnemyActionStage(null);
-      setDeckStrikeOverlay(null);
       if (enemyActionQueueRef.current.length > 0) scheduleNextEnemyAction(countering);
       else if (!allUnitsDefeated(squadRef.current)) endEnemyTurn(true);
       return;
     }
     setEnemyActionStage(null);
-    setDeckStrikeOverlay(null);
     const enemyId = currentEnemy.unitId;
     if (enemyId) {
       classCombatRef.current.riftSnareUnits = detonateRiftSnareOnUnit(
@@ -4017,14 +3962,12 @@ export default function TacticalCombatHub({
       setEnemyActionStage('executing');
 
       const effectiveIntent = resolveEffectiveEnemyIntent(acting);
-      const motionOptions = { arenaLayout, gridSlot: acting.gridSlot ?? null };
+      const motionOptions = { arenaLayout: true, gridSlot: acting.gridSlot ?? null };
       const motionKind = classifyEnemyTurnMotion(effectiveIntent, motionOptions);
       const overlayVariant = getEnemyDeckStrikeVariant(effectiveIntent);
-      const isBacklineMelee = arenaLayout
-        && acting.gridSlot?.startsWith('BL') === true
+      const isBacklineMelee = acting.gridSlot?.startsWith('BL') === true
         && motionKind === 'melee';
-      const isFrontlineMelee = arenaLayout
-        && acting.gridSlot?.startsWith('FL') === true
+      const isFrontlineMelee = acting.gridSlot?.startsWith('FL') === true
         && motionKind === 'melee'
         && !isBacklineMelee;
       const actingUnitId = acting.unitId ?? acting.designation;
@@ -4327,7 +4270,6 @@ export default function TacticalCombatHub({
     setIsPlayerTurn(true);
     setCycleState('TEXT_COMBAT');
     setEnemyActionStage(null);
-    setDeckStrikeOverlay(null);
     preAppliedHpStrikeRef.current = 0;
     enemyStunPendingRef.current = false;
     log('>> COMBAT LINK ESTABLISHED');
@@ -4360,7 +4302,6 @@ export default function TacticalCombatHub({
     log(`>> HOSTILE GRID — ${initialSquad.length} unit(s) // threat budget ${threatBudgetRef.current}`);
     initialSquad.forEach((unit) => {
       log(`>> LOCK ${unit.gridSlot}: ${unit.designation} // CLASS ${unit.class}`);
-      if (unit.affinity) log(`>> AFFINITY // ${unit.affinity}`);
     });
     if (entryAr > 0 && operativeClass === 'AEGIS') {
       log(`>> Abyssal reserve pre-charged to ${entryAr}%.`);
@@ -4415,7 +4356,7 @@ export default function TacticalCombatHub({
     if ((env.lethalRetaliationDamage ?? 0) <= 0 || dmg <= 0) return;
     const feedback = env.lethalRetaliationDamage ?? 0;
     log(`[LETHAL RETALIATION] >> Hostile feedback — ${feedback} HP.`);
-    if (arenaLayout && feedback > 0) {
+    if (feedback > 0) {
       playerViewportRef?.current?.triggerDamageEffect('hp');
     }
     setOperativeHp((p) => {
@@ -4936,7 +4877,6 @@ export default function TacticalCombatHub({
         cancelEnemyPreparedAttack: (unitId) => {
           if (enemyRef.current?.unitId === unitId && enemyActionStageRef.current === 'reading') {
             setEnemyActionStage(null);
-            setDeckStrikeOverlay(null);
             log('[MIND-SUNDER] >> Prepared attack cancelled.');
           }
         },
@@ -5517,7 +5457,7 @@ export default function TacticalCombatHub({
       patchUnit(unit.unitId, applyFracturedState(unit));
       log(`>> FRACTURE BREAK EXPIRED — ${unit.designation} enters FRACTURED state.`);
     }
-    if (allUnitsDefeated(squadRef.current) && arenaLayout) {
+    if (allUnitsDefeated(squadRef.current)) {
       scheduleCombatVictoryResolution();
     }
   };
@@ -5560,7 +5500,7 @@ export default function TacticalCombatHub({
     setFractureBreakUnitId(null);
     combatPausedRef.current = false;
     log(`>> FRACTURE BREACH — ${unit.designation} executed (${plan.hitCount} hit(s)).`);
-    if (allUnitsDefeated(squadRef.current) && arenaLayout) {
+    if (allUnitsDefeated(squadRef.current)) {
       scheduleCombatVictoryResolution();
     }
   };
@@ -5692,16 +5632,8 @@ export default function TacticalCombatHub({
     abortCombatMinigames();
     cycleRef.current = 'TEXT_COMBAT';
     setCycleState('TEXT_COMBAT');
-    if (arenaLayout) {
-      scheduleCombatVictoryResolution();
-      return;
-    }
-    const viewport = apparitionRef?.current;
-    if (viewport) {
-      viewport.triggerEradication();
-      return;
-    }
-    resolve(true);
+    scheduleCombatVictoryResolution();
+    return;
   };
 
   /** Exactly one parry outcome — counter damage and parry block cannot diverge. */
@@ -6034,7 +5966,7 @@ export default function TacticalCombatHub({
   const resolutionSyncKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!stackedLayout || !onResolutionPanelChange) return;
+    if (!onResolutionPanelChange) return;
     const syncKey =
       cycleState === 'RESOLUTION' && resolutionOutcome
         ? resolutionOutcome
@@ -6049,7 +5981,7 @@ export default function TacticalCombatHub({
       outcome: resolutionOutcome as 'VICTORY' | 'DEFEAT',
       onDismiss: () => dismissRef.current(),
     });
-  }, [stackedLayout, cycleState, resolutionOutcome, onResolutionPanelChange]);
+  }, [cycleState, resolutionOutcome, onResolutionPanelChange]);
 
   const isOperativeAbilityEnabled = (abilityId: string): boolean => {
     if (!isPlayerTurn || cycleState !== 'TEXT_COMBAT' || shadowstepProcRef.current) return false;
@@ -6213,40 +6145,7 @@ export default function TacticalCombatHub({
       setSelectedAbility(null);
     }
     publishSquadUi(squadRef.current);
-  }, [isPlayerTurn, cycleState, selectedAbility, selectedTargetId]);
-
-  useEffect(() => {
-    if (!stackedLayout || !onEnemyTelemetryChange) return;
-    if (!enemy) {
-      onEnemyTelemetryChange(null);
-      return;
-    }
-    onEnemyTelemetryChange({
-      designation: enemy.designation,
-      currentHp: enemy.currentHp,
-      maxHp: enemy.maxHp,
-      intent: enemy.intent,
-      affinity: enemy.affinity,
-      fractureGauge: enemy.fractureGauge ?? 0,
-      fractureMax: enemy.fractureMax ?? 100,
-      kineticArmor: enemy.kineticArmor ?? 0,
-      occultWards: enemy.occultWards ?? 0,
-      combatTags: enemy.combatTags ?? [],
-    });
-  }, [
-    stackedLayout,
-    onEnemyTelemetryChange,
-    enemy?.designation,
-    enemy?.currentHp,
-    enemy?.maxHp,
-    enemy?.intent,
-    enemy?.affinity,
-    enemy?.fractureGauge,
-    enemy?.fractureMax,
-    enemy?.kineticArmor,
-    enemy?.occultWards,
-    enemy?.combatTags,
-  ]);
+  }, [isPlayerTurn, cycleState, selectedAbility, selectedTargetId, combatTurnPhase]);
 
   useEffect(() => {
     onWardPrimedChange?.(abyssalWardActive);
@@ -6257,7 +6156,7 @@ export default function TacticalCombatHub({
   }, [selectedAbility, onAbilityPrimedChange]);
 
   useEffect(() => {
-    if (!stackedLayout || !arenaLayout || !onOperativeTelemetryChange) return;
+    if (!onOperativeTelemetryChange) return;
     onOperativeTelemetryChange({
       operativeClass,
       operativeHp,
@@ -6274,8 +6173,6 @@ export default function TacticalCombatHub({
       envoySilenced,
     });
   }, [
-    stackedLayout,
-    arenaLayout,
     onOperativeTelemetryChange,
     operativeClass,
     operativeHp,
@@ -6293,11 +6190,6 @@ export default function TacticalCombatHub({
   ]);
 
   const enemyAlive = (enemy?.currentHp ?? 0) > 0;
-  const soulAnchorRatio = maxSoulAnchor > 0 ? operativeHp / maxSoulAnchor : 0;
-  const abyssalCap = mutationModsRef.current.abyssalCap;
-  const abyssalRatio = abyssalCap > 0 ? abyssalReserve / abyssalCap : 0;
-  const staminaRatio = maxStamina > 0 ? stamina / maxStamina : 0;
-  const fluxRatio = Math.min(1, veilFlux / fluxOverloadThreshold);
   const bloodForTimeOwned = hasMutation(leyLineMutations, 'BLOOD_FOR_TIME');
 
   const commandDeck = (
@@ -6340,93 +6232,9 @@ export default function TacticalCombatHub({
       borderColor={theme.borderColor}
       primaryColor={theme.primaryColor}
       mutedColor={theme.mutedColor}
-      frameless={stackedLayout}
+      frameless
+      dashboardLayout
     />
-  );
-
-  const stackedOperativeMetrics = (
-    <View style={styles.operativeGaugePanel} pointerEvents="none">
-      <CombatTelemetryGaugeRow
-        label={`SOUL ANCHOR INTEGRITY // ${operativeHp}/${maxSoulAnchor}`}
-        labelColor={P.enemyHp}
-        fillColor={GAUGE_SOUL_ANCHOR}
-        ratio={soulAnchorRatio}
-        trackBorderColor={GAUGE_TRACK_BORDER}
-      />
-      {operativeClass === 'HEX_SHOT' ? (
-        <CombatMagazineGauge
-          currentAmmo={currentAmmo}
-          maxAmmo={maxAmmo}
-          overcharged={hexOvercharged}
-          labelColor={GAUGE_MAGAZINE}
-          liveColor={GAUGE_MAGAZINE}
-          variant="stacked"
-        />
-      ) : operativeClass === 'ENVOY' ? (
-        <CombatTelemetryGaugeRow
-          label={`VEIL-FLUX // ${Math.round(veilFlux)}%${envoyOverloaded ? ' // OVERLOADED' : ''}${envoySilenced ? ' // SILENCED' : ''}`}
-          labelColor={GAUGE_VEIL_FLUX}
-          fillColor={GAUGE_VEIL_FLUX}
-          ratio={fluxRatio}
-          trackBorderColor={GAUGE_TRACK_BORDER}
-        />
-      ) : (
-        <CombatTelemetryGaugeRow
-          label={`ABYSSAL RESERVE // ${abyssalReserve}/${abyssalCap}%${counterReady ? ' // COUNTER READY' : ''}`}
-          labelColor={P.kr}
-          fillColor={GAUGE_ABYSSAL}
-          ratio={abyssalRatio}
-          trackBorderColor={GAUGE_TRACK_BORDER}
-        />
-      )}
-      <CombatTelemetryGaugeRow
-        label={`STAMINA CORE // ${stamina}/${maxStamina}`}
-        labelColor={theme.primaryColor}
-        fillColor={GAUGE_STAMINA}
-        ratio={staminaRatio}
-        trackBorderColor={GAUGE_TRACK_BORDER}
-      />
-    </View>
-  );
-
-  const legacyTelemetryBlock = (
-    <View style={styles.telemetryStack} pointerEvents="none">
-      {enemy ? (
-        <View style={styles.threatMatrix}>
-          <View style={styles.threatRow}>
-            <Text
-              style={[styles.threatId, { color: P.unitTitle }]}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
-              {`HOSTILE_ID // ${formatHostileId(enemy.designation)}`}
-            </Text>
-            <Text style={[styles.threatHp, { color: P.enemyHp }]} numberOfLines={1}>
-              {`HP: ${enemy.currentHp}/${enemy.maxHp}`}
-            </Text>
-          </View>
-          <Text
-            style={[styles.intentReadout, { color: theme.mutedColor }]}
-            numberOfLines={1}
-            ellipsizeMode="tail"
-          >
-            {`INTENT // ${formatIntentReadout(enemy.intent)}`}
-          </Text>
-        </View>
-      ) : null}
-      <View style={styles.telemetryDivider} />
-      <View style={styles.operativeCore}>
-        <Text style={[styles.telemetryLine, { color: P.enemyHp }]} numberOfLines={1}>
-          {`SOUL ANCHOR INTEGRITY // ${operativeHp}/${maxSoulAnchor}`}
-        </Text>
-        <Text style={[styles.telemetryLine, { color: P.kr }]} numberOfLines={1} ellipsizeMode="tail">
-          {`ABYSSAL RESERVE // ${abyssalReserve}%${counterReady ? ' // COUNTER READY' : ''}`}
-        </Text>
-        <Text style={[styles.telemetryLine, { color: theme.primaryColor }]} numberOfLines={1}>
-          {`STAMINA CORE // ${stamina}/${maxStamina}`}
-        </Text>
-      </View>
-    </View>
   );
 
   const holdVictoryChrome =
@@ -6440,18 +6248,9 @@ export default function TacticalCombatHub({
       <View style={styles.commandDeckDimOverlay} pointerEvents="none" />
     ) : null;
 
-  const renderTurnBanner = () => (
-    <CombatTurnBanner
-      phase={holdVictoryChrome ? lastActiveTurnPhaseRef.current : combatTurnPhase}
-      primaryColor={theme.primaryColor}
-      mutedColor={theme.mutedColor}
-      enemyIntent={enemy?.intent}
-    />
-  );
-
   const renderStatusFeed = () => (
     <View
-      style={stackedLayout ? styles.statusFeedSlotStacked : styles.statusFeedSlot}
+      style={styles.statusFeedSlotStacked}
       pointerEvents="none"
     >
       {cycleState === 'TEXT_COMBAT' ? (
@@ -6507,11 +6306,10 @@ export default function TacticalCombatHub({
     <View style={styles.commandDeckAnchor}>
       {showCommandDeck ? commandDeck : null}
       {showEnemyTurnPanel ? renderEnemyTurnPanel() : null}
-      {deckStrikeOverlay && !arenaLayout ? <CombatDeckStrikeOverlay variant={deckStrikeOverlay} /> : null}
     </View>
   );
 
-  const useEnemyArenaChrome = stackedLayout && enemyChrome != null;
+  const useEnemyArenaChrome = enemyChrome != null;
 
   const chromeSnapshot = useMemo(
     () => ({
@@ -6547,7 +6345,6 @@ export default function TacticalCombatHub({
       slicePanHandlers: panResponder.panHandlers as Record<string, unknown>,
     }),
     [
-      stackedLayout,
       cycleState,
       parrySuccessBurstActive,
       parryBurstArena,
@@ -6612,21 +6409,21 @@ export default function TacticalCombatHub({
         </>
       ) : null}
 
-      {cycleState === 'RESOLUTION' && (!stackedLayout || resolutionOutcome === 'DEFEAT') && (
+      {cycleState === 'RESOLUTION' && resolutionOutcome === 'DEFEAT' && (
         <View style={styles.resolutionOverlay}>
           <View style={styles.resolution}>
-          <Text style={[styles.resTitle, { color: resolutionOutcome === 'VICTORY' ? '#22c55e' : P.enemyHp }]}>
-            {resolutionOutcome === 'VICTORY' ? 'HOSTILE NEUTRALIZED' : 'OPERATIVE SOUL DISCONNECTED'}
+          <Text style={[styles.resTitle, { color: P.enemyHp }]}>
+            OPERATIVE SOUL DISCONNECTED
           </Text>
           <Pressable
             onPress={() => {
               Vibration.vibrate(12);
               dismiss();
             }}
-            style={[styles.resBtn, { borderColor: resolutionOutcome === 'VICTORY' ? theme.primaryColor : P.enemyHp }]}
+            style={[styles.resBtn, { borderColor: P.enemyHp }]}
           >
-            <Text style={[styles.resBtnText, { color: resolutionOutcome === 'VICTORY' ? theme.primaryColor : P.enemyHp }]}>
-              {resolutionOutcome === 'VICTORY' ? '[ CONTINUE RUN ]' : '[ INCURSION FAILED ]'}
+            <Text style={[styles.resBtnText, { color: P.enemyHp }]}>
+              [ INCURSION FAILED ]
             </Text>
           </Pressable>
           </View>
@@ -6666,82 +6463,45 @@ export default function TacticalCombatHub({
     </>
   );
 
-  if (stackedLayout) {
-    return (
-      <View style={[styles.rootStacked, { borderColor: theme.borderColor }]}>
-        {useEnemyArenaChrome ? <CombatChromeBridge {...chromeSnapshot} /> : null}
-        {screenFlashActive && (
-          <View style={styles.flashWrapStacked} pointerEvents="none">
-            <VignetteFlashOverlay color={screenFlashColor} opacityAnim={screenFlashAnim} />
-          </View>
-        )}
-        {!arenaLayout ? stackedOperativeMetrics : null}
-        <View style={styles.commandDeckRow}>
-          {renderStatusFeed()}
-          {renderTurnBanner()}
-          {renderCommandDeckSlot()}
-          {renderCommandDeckDimOverlay()}
-        </View>
-        <View style={styles.combatOverlayLayer} pointerEvents="box-none">
-          {renderHubOverlays()}
-          <CombatFloatingFeedback
-            key={combatFeedback?.nonce ?? 'idle'}
-            event={combatFeedback?.event ?? null}
-            onComplete={() => setCombatFeedback(null)}
-          />
-        </View>
-      </View>
-    );
-  }
-
   return (
-    <View style={styles.root}>
-      <View style={[styles.panel, { borderColor: theme.borderColor }]}>
-        <View style={[styles.header, { borderBottomColor: theme.borderColor }]}>
-          <Text style={[styles.headerText, { color: theme.mutedColor }]}>
-            TACTICAL COMBAT HUB // {classLabel} // {weaponLabel}
-          </Text>
+    <View style={[styles.rootStacked, { borderColor: theme.borderColor }]}>
+      {useEnemyArenaChrome ? <CombatChromeBridge {...chromeSnapshot} /> : null}
+      {screenFlashActive && (
+        <View style={styles.flashWrapStacked} pointerEvents="none">
+          <VignetteFlashOverlay color={screenFlashColor} opacityAnim={screenFlashAnim} />
         </View>
-
-        {legacyTelemetryBlock}
-
-        <View style={styles.tacticsStage}>
-          <View style={styles.canvas}>
-            {screenFlashActive && (
-              <View style={styles.flashWrap} pointerEvents="none">
-                <VignetteFlashOverlay color={screenFlashColor} opacityAnim={screenFlashAnim} />
-              </View>
-            )}
-            <View style={styles.actionStage}>
-              {renderStatusFeed()}
-              {renderTurnBanner()}
-              {renderCommandDeckSlot()}
-              {renderCommandDeckDimOverlay()}
-            </View>
-            <View style={styles.combatOverlayLayerLegacy} pointerEvents="box-none">
-              {renderHubOverlays()}
-            </View>
-          </View>
-        </View>
+      )}
+      <View style={styles.commandDeckRow}>
+        {renderStatusFeed()}
+        {renderCommandDeckSlot()}
+        {renderCommandDeckDimOverlay()}
       </View>
+      <CombatArenaOverlaySink>
+        {renderHubOverlays()}
+        <CombatFloatingFeedback
+          key={combatFeedback?.nonce ?? 'idle'}
+          event={combatFeedback?.event ?? null}
+          onComplete={() => setCombatFeedback(null)}
+        />
+      </CombatArenaOverlaySink>
     </View>
   );
 }
 
 const abs = StyleSheet.absoluteFillObject;
 const styles = StyleSheet.create({
-  root: { flex: 1, width: '100%', maxWidth: width - 16, alignSelf: 'center', minHeight: 0 },
+  root: { flex: 1, width: '100%', alignSelf: 'stretch', minHeight: 0 },
   rootStacked: {
-    flexShrink: 0,
+    flex: 1,
+    minHeight: 0,
     width: '100%',
-    maxWidth: width - 16,
-    alignSelf: 'center',
-    paddingHorizontal: 8,
-    paddingTop: 4,
-    paddingBottom: 4,
-    gap: 6,
+    alignSelf: 'stretch',
+    paddingHorizontal: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
+    gap: 4,
     overflow: 'hidden',
-    backgroundColor: '#000000',
+    backgroundColor: 'transparent',
     position: 'relative',
   },
   combatOverlayLayer: {
@@ -6761,10 +6521,12 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   commandDeckRow: {
-    flexShrink: 0,
+    flex: 1,
+    minHeight: 0,
     width: '100%',
     position: 'relative',
-    backgroundColor: '#000000',
+    gap: 3,
+    backgroundColor: 'transparent',
   },
   commandDeckDimOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -6798,9 +6560,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   commandDeckAnchor: {
-    flexShrink: 0,
+    flex: 1,
+    minHeight: 0,
     width: '100%',
-    minHeight: COMMAND_DECK_MIN_HEIGHT_WITH_ULTIMATE,
     position: 'relative',
     overflow: 'hidden',
   },

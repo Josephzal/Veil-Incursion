@@ -148,7 +148,6 @@ import {
   isTerminalBlindActive,
 } from '../data/resonanceEscalationEngine';
 import {
-  affinityCombatLogLine,
   buildEnvironmentalModifiersForNode,
 } from '../data/combatEnvironmentEngine';
 import {
@@ -2037,7 +2036,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       envModifiers = applyEliteModifierToEnvironment(envModifiers, modifier);
       appendRunLog(`>> ELITE MODIFIER — ${ELITE_MODIFIER_LABELS[modifier]}`);
     }
-    const forcedAffinity = encounterNode.sectorMeta?.probableAffinity;
     const depth = depthFromNodesCleared(inc.nodesCleared);
     const district = getDistrictFromDepth(depth);
     const spawnBudget = encounterBudgetForDepth({
@@ -2055,7 +2053,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       macroBiome: inc.currentMacroBiomeFamily,
       spawnOptions: {
         resonancePercent: inc.resonance.percent,
-        forcedAffinity,
       },
     });
     const pendingEnemy = pendingEnemies[0] ?? null;
@@ -2089,9 +2086,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
     if (inc.currentMacroBiomeFamily) {
       appendRunLog(`>> ${getMacroBiomeContextLog(inc.currentMacroBiomeFamily)}`);
-    }
-    if (pendingEnemy?.affinity) {
-      appendRunLog(affinityCombatLogLine(pendingEnemy.affinity));
     }
     appendRunLog(
       `>> HOSTILE CLUSTER — ${pendingEnemies.length} signature(s) // threat budget ${spawnBudget.spawnBudget} pts.`,
@@ -2243,9 +2237,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     });
 
     appendRunLog('>> HARVEST AMBUSH — hostile manifest inbound.');
-    if (pendingEnemy.affinity) {
-      appendRunLog(affinityCombatLogLine(pendingEnemy.affinity));
-    }
     appendRunLog(`>> HOSTILE SIGNATURE: ${pendingEnemy.designation} [${pendingEnemy.class}] HP ${pendingEnemy.maxHp}.`);
   }, [appendRunLog]);
 

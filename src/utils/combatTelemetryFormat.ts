@@ -1,6 +1,5 @@
 import type { CombatGridSlotId } from '../types/combatGrid';
 import type { CombatUnitTag } from '../types/aegisCombat';
-import type { EnemyAffinity } from '../types/combatEnvironment';
 import type { EnemyCombatProfile, EnemyIntent } from '../types/run';
 import { isUnitAlive } from '../data/combatSquadEngine';
 import { resolveEnemyThreatTier } from '../data/enemyRoster';
@@ -188,7 +187,6 @@ export interface CombatGridUnitSnapshot {
   maxHp: number;
   intent: EnemyIntent;
   intentLabel?: string;
-  affinity?: import('../types/combatEnvironment').EnemyAffinity;
   fractureGauge?: number;
   fractureMax?: number;
   kineticArmor?: number;
@@ -301,11 +299,14 @@ export function formatEnemyStatusLine(unit: EnemyStatusUnitFields): string {
   return labels.length > 0 ? labels.join(' / ') : 'CLEAR';
 }
 
+import type { CombatTurnOrderSnapshot } from './combatTurnOrder';
+
 export interface CombatSquadUiSnapshot {
   units: CombatGridUnitSnapshot[];
   targetingActive: boolean;
   squadSize: number;
   stagedAbilityId?: string | null;
+  turnOrder?: CombatTurnOrderSnapshot;
 }
 
 export function buildInitialSquadUiSnapshot(
@@ -319,7 +320,6 @@ export function buildInitialSquadUiSnapshot(
     maxHp: unit.maxHp,
     intent: unit.intent,
     intentLabel: formatIntentReadout(unit.intent),
-    affinity: unit.affinity,
     fractureGauge: unit.fractureGauge ?? 0,
     fractureMax: unit.fractureMax ?? 100,
     kineticArmor: unit.kineticArmor ?? 0,
@@ -375,7 +375,6 @@ export interface CombatEnemyTelemetry {
   currentHp: number;
   maxHp: number;
   intent: EnemyIntent;
-  affinity?: EnemyAffinity;
   fractureGauge?: number;
   fractureMax?: number;
   kineticArmor?: number;

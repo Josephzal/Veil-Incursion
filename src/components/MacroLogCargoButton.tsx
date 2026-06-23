@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
-import { TACTICAL_HUB_STACKED_RIGHT_INSET } from './TacticalCombatHub';
+import { TACTICAL_HUB_STACKED_RIGHT_INSET } from '../constants/combatLayout';
 
 export const TERMINAL_ACCENT = '#00ff33';
 const MACRO_LOG_HORIZONTAL_PADDING = 12;

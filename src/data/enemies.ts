@@ -10,7 +10,6 @@ import { ENEMY_ROSTER, spawnRosterUnit } from './enemyRoster';
 import { isRedundantBuffIntent } from './enemyIntentUtils';
 import { getNodeScale } from './enemyNodeScale';
 import { rollEnemyIntent } from './enemyIntentRoll';
-import type { EnemyAffinity } from '../types/combatEnvironment';
 import { EnemyClass, EnemyCombatProfile, EnemyIntent, SectorDefinition } from '../types/run';
 
 export { getNodeScale } from './enemyNodeScale';
@@ -95,7 +94,6 @@ export function intentLabel(intent: EnemyIntent, designation: string): string {
 
 export interface SpawnEnemyOptions {
   resonancePercent?: number;
-  forcedAffinity?: EnemyAffinity;
   district?: DistrictId;
   /** Operative snapshot for opening intent selection. */
   playerState?: PlayerAIState;

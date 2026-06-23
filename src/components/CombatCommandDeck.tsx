@@ -2,18 +2,22 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { AegisAbilityId } from '../types/aegisCombat';
 import { PLAYER_ACTION_POINTS_PER_TURN } from '../types/aegisCombat';
+import CombatApPipRow from './combat/CombatApPipRow';
 
 const MONO = 'monospace';
-const TILE_HEIGHT = 42;
+const TILE_HEIGHT = 40;
+const TILE_HEIGHT_DASHBOARD = 25;
+const TILE_MARGIN_BOTTOM = 8;
+const TILE_MARGIN_BOTTOM_DASHBOARD = 2;
 const GRID_GAP = 6;
 const AP_ROW_HEIGHT = 22;
-const GRID_BODY_HEIGHT = TILE_HEIGHT * 2 + GRID_GAP;
+const GRID_BODY_HEIGHT = TILE_HEIGHT * 2 + TILE_MARGIN_BOTTOM * 2 + GRID_GAP;
 const INITIATIVE_FLOAT_MS = 800;
 const INITIATIVE_SURGE_MS = 300;
 const INITIATIVE_GLOW = '#a78bfa';
 const INITIATIVE_GLOW_PALE = '#bae6fd';
 
-export const COMMAND_DECK_MIN_HEIGHT = AP_ROW_HEIGHT + GRID_GAP + GRID_BODY_HEIGHT + 14;
+export const COMMAND_DECK_MIN_HEIGHT = AP_ROW_HEIGHT + GRID_GAP + GRID_BODY_HEIGHT + 10;
 export const COMMAND_DECK_MIN_HEIGHT_WITH_ULTIMATE = COMMAND_DECK_MIN_HEIGHT;
 
 interface CombatCommandDeckProps {
@@ -45,6 +49,7 @@ interface CombatCommandDeckProps {
   primaryColor: string;
   mutedColor: string;
   frameless?: boolean;
+  dashboardLayout?: boolean;
 }
 
 export default function CombatCommandDeck({
@@ -76,6 +81,7 @@ export default function CombatCommandDeck({
   primaryColor,
   mutedColor,
   frameless = false,
+  dashboardLayout = false,
 }: CombatCommandDeckProps): React.JSX.Element {
   const shownAp = displayActionPoints ?? actionPoints;
   const lastProcSeqRef = useRef(0);
@@ -199,10 +205,6 @@ export default function CombatCommandDeck({
     inputRange: [0, 1],
     outputRange: ['rgba(167, 139, 250, 0.35)', 'rgba(186, 230, 253, 0.82)'],
   });
-  const queuedApColor = queuePulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['rgba(167, 139, 250, 0.55)', 'rgba(186, 230, 253, 0.95)'],
-  });
 
   const deckShellStyle = [
     styles.commandDeck,
@@ -211,6 +213,9 @@ export default function CombatCommandDeck({
   ];
 
   const labelFor = (ability: string) => getAbilityLabel(ability);
+
+  const tileHeight = dashboardLayout ? TILE_HEIGHT_DASHBOARD : TILE_HEIGHT;
+  const tileMarginBottom = dashboardLayout ? TILE_MARGIN_BOTTOM_DASHBOARD : TILE_MARGIN_BOTTOM;
 
   const renderTile = (ability: string) => {
     const enabled = isActionEnabled(ability);
@@ -226,6 +231,8 @@ export default function CombatCommandDeck({
           {
             borderColor: isSelected ? primaryColor : tileBorderColor,
             backgroundColor: isSelected ? 'rgba(139, 92, 246, 0.12)' : 'transparent',
+            height: tileHeight,
+            marginBottom: tileMarginBottom,
           },
         ]}
       >
@@ -235,7 +242,11 @@ export default function CombatCommandDeck({
           style={[styles.deckTile, { opacity: enabled ? 1 : 0.4 }]}
         >
           <Text
-            style={[styles.tileLabel, { color: enabled && accent ? accent : mutedColor }]}
+            style={[
+              styles.tileLabel,
+              dashboardLayout && styles.tileLabelDashboard,
+              { color: enabled && accent ? accent : mutedColor },
+            ]}
             numberOfLines={1}
             adjustsFontSizeToFit
             minimumFontScale={0.75}
@@ -249,8 +260,140 @@ export default function CombatCommandDeck({
 
   const canExecute = selectedAbility ? isActionEnabled(selectedAbility) : false;
 
+  const renderEndTurnButton = () => (
+    initiativeQueued ? (
+      <Animated.View
+        style={[
+          styles.endTurnBtn,
+          dashboardLayout && styles.endTurnBtnDashboard,
+          {
+            borderColor: queuedBorderColor,
+            opacity: canEndTurn ? 1 : 0.4,
+          },
+        ]}
+      >
+        <Pressable
+          onPress={onEndTurn}
+          disabled={!canEndTurn}
+          style={styles.endTurnPressable}
+        >
+          <Text style={[styles.endTurnLabel, { color: INITIATIVE_GLOW_PALE }]}>
+            [ END TURN ]
+          </Text>
+        </Pressable>
+      </Animated.View>
+    ) : (
+      <Pressable
+        onPress={onEndTurn}
+        disabled={!canEndTurn}
+        style={[
+          styles.endTurnBtn,
+          dashboardLayout && styles.endTurnBtnDashboard,
+          {
+            borderColor: canEndTurn ? primaryColor : borderColor,
+            opacity: canEndTurn ? 1 : 0.4,
+          },
+        ]}
+      >
+        <Text style={[styles.endTurnLabel, { color: canEndTurn ? primaryColor : mutedColor }]}>
+          [ END TURN ]
+        </Text>
+      </Pressable>
+    )
+  );
+
+  const renderSecondaryActions = () => {
+    if (!combatReloadAvailable && !bloodForTimeAvailable) return null;
+    return (
+      <View style={styles.secondaryActionsRow}>
+        {combatReloadAvailable ? (
+          <Pressable
+            onPress={onCombatReload}
+            disabled={!combatReloadEnabled}
+            style={[
+              styles.combatReloadBtn,
+              {
+                borderColor: combatReloadEnabled ? '#fbbf24' : borderColor,
+                opacity: combatReloadEnabled ? 1 : 0.4,
+              },
+            ]}
+          >
+            <Text
+              style={[styles.combatReloadLabel, { color: combatReloadEnabled ? '#fbbf24' : mutedColor }]}
+              numberOfLines={1}
+            >
+              [ COMBAT RELOAD ]
+            </Text>
+          </Pressable>
+        ) : null}
+        {bloodForTimeAvailable ? (
+          <Pressable
+            onPress={onBloodForTime}
+            disabled={!bloodForTimeEnabled}
+            style={[
+              styles.bloodForTimeBtn,
+              {
+                borderColor: bloodForTimeEnabled ? '#c41e1e' : borderColor,
+                opacity: bloodForTimeEnabled ? 1 : 0.4,
+              },
+            ]}
+          >
+            <Text
+              style={[styles.bloodForTimeLabel, { color: bloodForTimeEnabled ? '#f87171' : mutedColor }]}
+              numberOfLines={1}
+            >
+              [ BLOOD FOR TIME ]
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
+    );
+  };
+
+  const renderAbilityGrid = () => (
+    <View style={[styles.deckBody, dashboardLayout && styles.abilitiesSection]}>
+      <View style={[styles.abilityGrid, dashboardLayout && styles.abilityGridDashboard]}>
+        {renderTile(loadout[0])}
+        {renderTile(loadout[1])}
+        {renderTile(loadout[2])}
+        {renderTile(loadout[3])}
+      </View>
+
+      {selectedAbility ? (
+        <View style={styles.execOverlay}>
+          <View style={styles.gridRow}>
+            <View style={[styles.tileSlot, { borderColor: primaryColor, height: tileHeight }]}>
+              <Pressable
+                onPress={onConfirm}
+                disabled={!canExecute}
+                style={[styles.deckTile, { opacity: canExecute ? 1 : 0.45 }]}
+              >
+                <Text style={[styles.tileLabel, { color: primaryColor }]}>[ EXECUTE ]</Text>
+              </Pressable>
+            </View>
+            <View style={[styles.tileSlot, { borderColor, height: tileHeight }]}>
+              <Pressable onPress={onAbort} style={styles.deckTile}>
+                <Text style={[styles.tileLabel, { color: mutedColor }]}>[ ABORT ]</Text>
+              </Pressable>
+            </View>
+          </View>
+          <View style={styles.gridRow}>
+            <View style={styles.execMetaSlot}>
+              <Text style={[styles.execHeader, { color: primaryColor }]} numberOfLines={1}>
+                {getStagedHeader(selectedAbility)}
+              </Text>
+              <Text style={[styles.execDetail, { color: mutedColor }]} numberOfLines={2}>
+                {getStagedCostImpact(selectedAbility)}
+              </Text>
+            </View>
+          </View>
+        </View>
+      ) : null}
+    </View>
+  );
+
   return (
-    <View style={styles.deckHost}>
+    <View style={[styles.deckHost, dashboardLayout && styles.deckHostDashboard]}>
       {floatVisible ? (
         <Animated.Text
           style={[
@@ -268,7 +411,7 @@ export default function CombatCommandDeck({
         </Animated.Text>
       ) : null}
 
-      <View style={styles.deckShellWrap}>
+      <View style={[styles.deckShellWrap, dashboardLayout && styles.deckShellWrapDashboard]}>
         <Animated.View
           pointerEvents="none"
           style={[
@@ -282,142 +425,79 @@ export default function CombatCommandDeck({
           ]}
         />
 
-        <View style={deckShellStyle}>
-          <View style={styles.apRow}>
-            {initiativeQueued ? (
-              <Animated.Text
-                style={[styles.apLabel, styles.apLabelQueued, { color: queuedApColor }]}
-                numberOfLines={1}
-              >
-                {`ACTION PTS // ${shownAp}/${maxActionPoints}`}
-              </Animated.Text>
-            ) : (
-              <Text style={[styles.apLabel, { color: mutedColor }]} numberOfLines={1}>
-                {`ACTION PTS // ${shownAp}/${maxActionPoints}`}
-              </Text>
-            )}
-            <View style={styles.apActions}>
-              {combatReloadAvailable ? (
-                <Pressable
-                  onPress={onCombatReload}
-                  disabled={!combatReloadEnabled}
-                  style={[
-                    styles.combatReloadBtn,
-                    {
-                      borderColor: combatReloadEnabled ? '#fbbf24' : borderColor,
-                      opacity: combatReloadEnabled ? 1 : 0.4,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[styles.combatReloadLabel, { color: combatReloadEnabled ? '#fbbf24' : mutedColor }]}
-                    numberOfLines={1}
-                  >
-                    [ COMBAT RELOAD ]
-                  </Text>
-                </Pressable>
-              ) : null}
-              {bloodForTimeAvailable ? (
-                <Pressable
-                  onPress={onBloodForTime}
-                  disabled={!bloodForTimeEnabled}
-                  style={[
-                    styles.bloodForTimeBtn,
-                    {
-                      borderColor: bloodForTimeEnabled ? '#c41e1e' : borderColor,
-                      opacity: bloodForTimeEnabled ? 1 : 0.4,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[styles.bloodForTimeLabel, { color: bloodForTimeEnabled ? '#f87171' : mutedColor }]}
-                    numberOfLines={1}
-                  >
-                    [ BLOOD FOR TIME ]
-                  </Text>
-                </Pressable>
-              ) : null}
-              {initiativeQueued ? (
-                <Animated.View
-                  style={[
-                    styles.endTurnBtn,
-                    {
-                      borderColor: queuedBorderColor,
-                      opacity: canEndTurn ? 1 : 0.4,
-                    },
-                  ]}
-                >
-                  <Pressable
-                    onPress={onEndTurn}
-                    disabled={!canEndTurn}
-                    style={styles.endTurnPressable}
-                  >
-                    <Text style={[styles.endTurnLabel, { color: INITIATIVE_GLOW_PALE }]}>
-                      [ END TURN ]
-                    </Text>
-                  </Pressable>
-                </Animated.View>
-              ) : (
-                <Pressable
-                  onPress={onEndTurn}
-                  disabled={!canEndTurn}
-                  style={[
-                    styles.endTurnBtn,
-                    {
-                      borderColor: canEndTurn ? primaryColor : borderColor,
-                      opacity: canEndTurn ? 1 : 0.4,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.endTurnLabel, { color: canEndTurn ? primaryColor : mutedColor }]}>
-                    [ END TURN ]
-                  </Text>
-                </Pressable>
-              )}
-            </View>
-          </View>
-
-          <View style={styles.deckBody}>
-            <View style={styles.gridRow}>
-              {renderTile(loadout[0])}
-              {renderTile(loadout[1])}
-            </View>
-            <View style={styles.gridRow}>
-              {renderTile(loadout[2])}
-              {renderTile(loadout[3])}
-            </View>
-
-            {selectedAbility ? (
-              <View style={styles.execOverlay}>
-                <View style={styles.gridRow}>
-                  <View style={[styles.tileSlot, { borderColor: primaryColor }]}>
+        <View style={[deckShellStyle, dashboardLayout && styles.commandDeckDashboard]}>
+          {dashboardLayout ? (
+            <>
+              <View style={styles.topBand}>
+                <CombatApPipRow
+                  current={shownAp}
+                  max={maxActionPoints}
+                  accent={primaryColor}
+                  mutedColor={mutedColor}
+                  queued={initiativeQueued}
+                />
+                {renderEndTurnButton()}
+              </View>
+              {renderSecondaryActions()}
+              {renderAbilityGrid()}
+            </>
+          ) : (
+            <>
+              <View style={styles.apRow}>
+                <CombatApPipRow
+                  current={shownAp}
+                  max={maxActionPoints}
+                  accent={primaryColor}
+                  mutedColor={mutedColor}
+                  queued={initiativeQueued}
+                />
+                <View style={styles.apActions}>
+                  {combatReloadAvailable ? (
                     <Pressable
-                      onPress={onConfirm}
-                      disabled={!canExecute}
-                      style={[styles.deckTile, { opacity: canExecute ? 1 : 0.45 }]}
+                      onPress={onCombatReload}
+                      disabled={!combatReloadEnabled}
+                      style={[
+                        styles.combatReloadBtn,
+                        {
+                          borderColor: combatReloadEnabled ? '#fbbf24' : borderColor,
+                          opacity: combatReloadEnabled ? 1 : 0.4,
+                        },
+                      ]}
                     >
-                      <Text style={[styles.tileLabel, { color: primaryColor }]}>[ EXECUTE ]</Text>
+                      <Text
+                        style={[styles.combatReloadLabel, { color: combatReloadEnabled ? '#fbbf24' : mutedColor }]}
+                        numberOfLines={1}
+                      >
+                        [ COMBAT RELOAD ]
+                      </Text>
                     </Pressable>
-                  </View>
-                  <View style={[styles.tileSlot, { borderColor }]}>
-                    <Pressable onPress={onAbort} style={styles.deckTile}>
-                      <Text style={[styles.tileLabel, { color: mutedColor }]}>[ ABORT ]</Text>
+                  ) : null}
+                  {bloodForTimeAvailable ? (
+                    <Pressable
+                      onPress={onBloodForTime}
+                      disabled={!bloodForTimeEnabled}
+                      style={[
+                        styles.bloodForTimeBtn,
+                        {
+                          borderColor: bloodForTimeEnabled ? '#c41e1e' : borderColor,
+                          opacity: bloodForTimeEnabled ? 1 : 0.4,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[styles.bloodForTimeLabel, { color: bloodForTimeEnabled ? '#f87171' : mutedColor }]}
+                        numberOfLines={1}
+                      >
+                        [ BLOOD FOR TIME ]
+                      </Text>
                     </Pressable>
-                  </View>
-                </View>
-                <View style={styles.gridRow}>
-                  <View style={styles.execMetaSlot}>
-                    <Text style={[styles.execHeader, { color: primaryColor }]} numberOfLines={1}>
-                      {getStagedHeader(selectedAbility)}
-                    </Text>
-                    <Text style={[styles.execDetail, { color: mutedColor }]} numberOfLines={2}>
-                      {getStagedCostImpact(selectedAbility)}
-                    </Text>
-                  </View>
+                  ) : null}
+                  {renderEndTurnButton()}
                 </View>
               </View>
-            ) : null}
-          </View>
+              {renderAbilityGrid()}
+            </>
+          )}
         </View>
       </View>
     </View>
@@ -429,9 +509,17 @@ const styles = StyleSheet.create({
     width: '100%',
     position: 'relative',
   },
+  deckHostDashboard: {
+    flex: 1,
+    minHeight: 0,
+  },
   deckShellWrap: {
     width: '100%',
     position: 'relative',
+  },
+  deckShellWrapDashboard: {
+    flex: 1,
+    minHeight: 0,
   },
   surgeRing: {
     ...StyleSheet.absoluteFillObject,
@@ -457,12 +545,10 @@ const styles = StyleSheet.create({
   },
   commandDeck: {
     flexShrink: 0,
-    height: COMMAND_DECK_MIN_HEIGHT,
-    minHeight: COMMAND_DECK_MIN_HEIGHT,
     width: '100%',
     borderTopWidth: 1,
-    paddingTop: 6,
-    paddingBottom: 1,
+    paddingTop: 4,
+    paddingBottom: 2,
     gap: GRID_GAP,
   },
   commandDeckFrameless: {
@@ -470,25 +556,41 @@ const styles = StyleSheet.create({
     paddingTop: 3,
     paddingBottom: 2,
   },
+  commandDeckDashboard: {
+    flex: 1,
+    minHeight: 0,
+    flexDirection: 'column',
+    borderTopWidth: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
+    gap: 4,
+  },
+  topBand: {
+    flexShrink: 0,
+    minHeight: AP_ROW_HEIGHT,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+    width: '100%',
+  },
+  secondaryActionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    width: '100%',
+  },
+  abilitiesSection: {
+    flex: 1,
+    minHeight: 0,
+    justifyContent: 'flex-start',
+  },
   apRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: GRID_GAP,
-    height: AP_ROW_HEIGHT,
     width: '100%',
-  },
-  apLabel: {
-    fontFamily: MONO,
-    fontSize: 7,
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
-    flex: 1,
-  },
-  apLabelQueued: {
-    textShadowColor: INITIATIVE_GLOW,
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 4,
   },
   apActions: {
     flexDirection: 'row',
@@ -529,6 +631,11 @@ const styles = StyleSheet.create({
     minWidth: 88,
     alignItems: 'center',
   },
+  endTurnBtnDashboard: {
+    minWidth: 80,
+    paddingHorizontal: 6,
+    flexShrink: 0,
+  },
   endTurnPressable: {
     width: '100%',
     alignItems: 'center',
@@ -542,8 +649,16 @@ const styles = StyleSheet.create({
   deckBody: {
     position: 'relative',
     width: '100%',
-    height: GRID_BODY_HEIGHT,
-    minHeight: GRID_BODY_HEIGHT,
+  },
+  abilityGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    width: '100%',
+    rowGap: GRID_GAP,
+  },
+  abilityGridDashboard: {
+    alignContent: 'center',
   },
   gridRow: {
     flexDirection: 'row',
@@ -553,8 +668,7 @@ const styles = StyleSheet.create({
     height: TILE_HEIGHT,
   },
   tileSlot: {
-    flex: 1,
-    height: TILE_HEIGHT,
+    width: '48%',
     borderWidth: 1,
   },
   deckTile: {
@@ -570,6 +684,10 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     letterSpacing: 0.3,
     textAlign: 'center',
+  },
+  tileLabelDashboard: {
+    fontSize: 6,
+    letterSpacing: 0.25,
   },
   execOverlay: {
     ...StyleSheet.absoluteFillObject,

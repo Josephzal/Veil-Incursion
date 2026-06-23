@@ -32,7 +32,12 @@ function GameRoot(): React.JSX.Element {
 
   return (
     <View style={[styles.screenContainer, { backgroundColor: theme.backgroundColor }]}>
-      <StatusBar barStyle="light-content" backgroundColor={theme.backgroundColor} />
+      <StatusBar
+        hidden={currentScreen === 'COMBAT'}
+        translucent
+        backgroundColor="transparent"
+        barStyle="light-content"
+      />
       {currentScreen === 'HUB' && <OverworldHubScreen />}
       {currentScreen === 'WELCOME' && <WelcomeScreen />}
       {currentScreen === 'BOUND_REQUISITION' && <BoundRequisitionScreen />}

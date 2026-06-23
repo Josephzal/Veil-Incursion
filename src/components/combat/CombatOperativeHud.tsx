@@ -33,6 +33,9 @@ interface CombatOperativeHudProps {
   primaryColor?: string;
   wide?: boolean;
   deckAligned?: boolean;
+  dashboardCompact?: boolean;
+  /** Semi-transparent panel for the arena upper-left vitals overlay. */
+  arenaOverlay?: boolean;
 }
 
 export default function CombatOperativeHud({
@@ -41,6 +44,8 @@ export default function CombatOperativeHud({
   primaryColor = '#00ff33',
   wide = false,
   deckAligned = false,
+  dashboardCompact = false,
+  arenaOverlay = false,
 }: CombatOperativeHudProps): React.JSX.Element {
   const {
     operativeClass,
@@ -63,8 +68,14 @@ export default function CombatOperativeHud({
   const staminaRatio = maxStamina > 0 ? stamina / maxStamina : 0;
   const fluxRatio = Math.min(1, veilFlux / 100);
 
-  const compact = deckAligned || wide;
-  const rowVariant = compact ? 'compact' as const : wide ? 'stacked' as const : 'inline' as const;
+  const compact = deckAligned || wide || dashboardCompact;
+  const rowVariant = dashboardCompact
+    ? 'compact' as const
+    : compact
+      ? 'compact' as const
+      : wide
+        ? 'stacked' as const
+        : 'inline' as const;
 
   const renderClassResource = () => {
     if (operativeClass === 'HEX_SHOT') {
@@ -108,7 +119,9 @@ export default function CombatOperativeHud({
     <View style={[
       styles.root,
       wide ? styles.rootWide : null,
-      deckAligned ? styles.rootDeckAligned : null,
+      deckAligned && !arenaOverlay ? styles.rootDeckAligned : null,
+      dashboardCompact ? styles.rootDashboardCompact : null,
+      arenaOverlay ? styles.rootArenaOverlay : null,
     ]} pointerEvents="none">
       <CombatTelemetryGaugeRow
         label={`SOUL // ${operativeHp}/${maxSoulAnchor}`}
@@ -152,5 +165,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 4,
     width: '100%',
+  },
+  rootDashboardCompact: {
+    gap: 1,
+    paddingHorizontal: 4,
+    paddingVertical: 3,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 255, 51, 0.2)',
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+  },
+  rootArenaOverlay: {
+    gap: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: 'rgba(157, 0, 255, 0.2)',
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
   },
 });

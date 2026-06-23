@@ -4,11 +4,16 @@ import TerminalSafeArea from '../components/TerminalSafeArea';
 
 interface IncursionShellProps {
   children: React.ReactNode;
+  /** Edge-to-edge layout — no safe-area inset (combat immersive). */
+  immersive?: boolean;
 }
 
-export default function IncursionShell({ children }: IncursionShellProps): React.JSX.Element {
+export default function IncursionShell({
+  children,
+  immersive = false,
+}: IncursionShellProps): React.JSX.Element {
   return (
-    <TerminalSafeArea edges={['top', 'left', 'right']}>
+    <TerminalSafeArea edges={immersive ? [] : ['top', 'left', 'right']}>
       <View style={styles.root}>{children}</View>
     </TerminalSafeArea>
   );

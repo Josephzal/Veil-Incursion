@@ -1,4 +1,3 @@
-import type { EnemyAffinity } from './combatEnvironment';
 import type { CombatUnitTag } from './aegisCombat';
 import type { CombatGridLane, CombatGridSlotId } from './combatGrid';
 import type { FactionType, RunNodeType } from './game';
@@ -100,7 +99,6 @@ export interface EnemyCombatProfile {
   bossDepth?: number;
   /** Badge-screen test combat — controls intent rolling in advanceEnemyIntent. */
   testPreset?: 'easy' | 'hard';
-  affinity?: EnemyAffinity;
   kineticArmor?: number;
   occultWards?: number;
   baseKineticArmor?: number;
