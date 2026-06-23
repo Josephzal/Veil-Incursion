@@ -144,6 +144,7 @@ export default function CombatScreen(): React.JSX.Element {
   const consumableHandlerRef = useRef<(result: IncursionConsumableUseResult) => void>(() => {});
   const canDeployCargoRef = useRef<(itemId: CargoItemId) => boolean>(() => false);
   const targetHandlerRef = useRef<(unitId: string) => void>(() => {});
+  const intelTargetHandlerRef = useRef<(unitId: string) => void>(() => {});
   const dissolveCompleteRef = useRef<(unitId: string) => void>(() => {});
 
   const handlePlayerCritImpact = useCallback(() => {
@@ -162,9 +163,18 @@ export default function CombatScreen(): React.JSX.Element {
     targetHandlerRef.current = handler;
   }, []);
 
+  const registerIntelTargetHandler = useCallback((handler: (unitId: string) => void) => {
+    intelTargetHandlerRef.current = handler;
+  }, []);
+
   const handleEnemyUnitPress = useCallback((unitId: string) => {
     pulseCombatTargetSelect();
     targetHandlerRef.current(unitId);
+  }, []);
+
+  const handleTurnOrderHostilePress = useCallback((unitId: string) => {
+    pulseCombatTargetSelect();
+    intelTargetHandlerRef.current(unitId);
   }, []);
 
   const registerKillResolver = useCallback((resolver: () => void) => {
@@ -346,7 +356,9 @@ export default function CombatScreen(): React.JSX.Element {
   }, [gridUnits, portraitSource]);
 
   const selectedEnemyUnit = useMemo(
-    () => gridUnits.find((unit) => unit.isSelected && !unit.isDead) ?? null,
+    () => gridUnits.find((unit) => unit.isFocused && !unit.isDead)
+      ?? gridUnits.find((unit) => unit.isSelected && !unit.isDead)
+      ?? null,
     [gridUnits],
   );
 
@@ -553,6 +565,8 @@ export default function CombatScreen(): React.JSX.Element {
                 operativeClass={operativeClass}
                 primaryColor={theme.primaryColor}
                 mutedColor={theme.mutedColor}
+                selectedUnitId={selectedEnemyUnit?.unitId}
+                onHostilePress={handleTurnOrderHostilePress}
               />
 
               <CombatJuiceHost style={styles.body}>
@@ -596,6 +610,7 @@ export default function CombatScreen(): React.JSX.Element {
                       registerConsumableHandler={registerConsumableHandler}
                       registerCanDeployCargoHandler={registerCanDeployCargoHandler}
                       registerTargetHandler={registerTargetHandler}
+                      registerIntelTargetHandler={registerIntelTargetHandler}
                       onSquadUiChange={handleSquadUiChange}
                       onOperativeTelemetryChange={handleOperativeTelemetryChange}
                       enemySquad={combatSquad}

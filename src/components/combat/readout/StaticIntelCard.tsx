@@ -11,6 +11,7 @@ import {
   type CombatGridUnitSnapshot,
 } from '../../../utils/combatTelemetryFormat';
 import CombatStatusIconRow from './CombatStatusIconRow';
+import CombatEnemySlotBars from '../CombatEnemySlotBars';
 import type { EnemyStatusEffectKey } from '../../../utils/enemyStatusEffects';
 import { ENEMY_STATUS_EFFECTS } from '../../../utils/enemyStatusEffects';
 
@@ -87,6 +88,10 @@ export default function StaticIntelCard({
         </Text>
       </View>
 
+      <View style={styles.vitalsRow}>
+        <CombatEnemySlotBars unit={unit} />
+      </View>
+
       {(trayKeys.length > 0 || extraTags.length > 0) ? (
         <View style={styles.statusRow}>
           <CombatStatusIconRow statusKeys={trayKeys} />
@@ -131,12 +136,10 @@ const styles = StyleSheet.create({
     minHeight: 0,
     maxHeight: '100%',
     width: '100%',
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.45)',
     backgroundColor: 'rgba(10, 11, 15, 0.96)',
     paddingHorizontal: 6,
     paddingVertical: 5,
-    overflow: 'hidden',
+    overflow: 'visible',
     justifyContent: 'space-between',
     gap: 4,
   },
@@ -162,14 +165,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.3,
   },
+  vitalsRow: {
+    flexShrink: 0,
+    width: '100%',
+  },
   statusRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: 3,
     flexShrink: 0,
-    maxHeight: 28,
-    overflow: 'hidden',
+    overflow: 'visible',
   },
   extraTagChip: {
     borderWidth: 1,

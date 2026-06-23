@@ -36,7 +36,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     width: '100%',
-    overflow: 'hidden',
+    overflow: 'visible',
   },
   standby: {
     flex: 1,

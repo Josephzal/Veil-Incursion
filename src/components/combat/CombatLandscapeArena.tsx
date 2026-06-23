@@ -10,7 +10,7 @@ import { useCombatEnemyChrome } from '../../context/CombatEnemyChromeContext';
 import CombatOperativeAugmentRow from './CombatOperativeAugmentRow';
 import PlayerEntity from './PlayerEntity';
 import type { CombatAugmentIcon } from '../../utils/combatAugmentIcons';
-import { OPERATIVE_ARENA_SPRITE_WIDTH, OPERATIVE_ARENA_TOP_INSET } from '../../constants/combatLayout';
+import { OPERATIVE_ARENA_SPRITE_WIDTH, OPERATIVE_ARENA_LEFT_INSET, OPERATIVE_ARENA_TOP_INSET } from '../../constants/combatLayout';
 import type { ClassType } from '../../types/game';
 import type { CombatPlayerViewportRef } from './CombatPlayerViewport';
 
@@ -112,7 +112,7 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     justifyContent: 'flex-end',
     alignItems: 'flex-start',
-    paddingLeft: 4,
+    paddingLeft: OPERATIVE_ARENA_LEFT_INSET,
     paddingTop: OPERATIVE_ARENA_TOP_INSET,
   },
   operativeSpriteSlot: {

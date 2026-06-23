@@ -395,6 +395,8 @@ interface TacticalCombatHubProps {
   registerCanDeployCargoHandler?: (handler: (itemId: import('../types/cargoGrid').CargoItemId) => boolean) => void;
   /** Registers grid target selection from CombatScreen. */
   registerTargetHandler?: (handler: (unitId: string) => void) => void;
+  /** Registers intel-only hostile focus (turn order / scouting). */
+  registerIntelTargetHandler?: (handler: (unitId: string) => void) => void;
   /** Stacked layout: victory/defeat panel in the apparition viewport (hub keeps deck + gauges). */
   onResolutionPanelChange?: (
     panel: { outcome: 'VICTORY' | 'DEFEAT'; onDismiss: () => void } | null,
@@ -489,6 +491,7 @@ export default function TacticalCombatHub({
   registerConsumableHandler,
   registerCanDeployCargoHandler,
   registerTargetHandler,
+  registerIntelTargetHandler,
   onResolutionPanelChange,
   onCombatComplete,
   onLethalEnemyStrike,
@@ -1164,7 +1167,8 @@ export default function TacticalCombatHub({
           enemyClass: u.class,
           rosterId: u.rosterId,
           isDead: !isUnitAlive(u),
-          isSelected: isPlayerTurnRef.current && selectedTargetIdRef.current === u.unitId,
+          isSelected: selectedTargetIdRef.current === u.unitId
+            || focusedUnitIdRef.current === u.unitId,
           isTargetable: targetable,
           isFocused: focusedUnitIdRef.current === u.unitId,
           isActingEnemy: isActiveActor,
@@ -1363,6 +1367,29 @@ export default function TacticalCombatHub({
     setEnemy(unit);
     publishSquadUi(squadRef.current);
   }, [selectedAbility, log]);
+  const focusIntelTarget = useCallback((unitId: string) => {
+    const unit = getUnitById(squadRef.current, unitId);
+    if (!unit || !isUnitAlive(unit)) return;
+
+    focusedUnitIdRef.current = unitId;
+    selectedTargetIdRef.current = unitId;
+    setSelectedTargetId(unitId);
+    enemyRef.current = unit;
+    setEnemy(unit);
+
+    if (canPlayerCommand()) {
+      const staged = selectedAbility;
+      if (staged && classAbilityRequiresTarget(operativeClass, staged)) {
+        if (!canTargetWithClassAbility(operativeClass, squadRef.current, staged, unitId)) {
+          log('[TARGET] >> Line of sight blocked — clear the frontline column first.');
+          publishSquadUi(squadRef.current);
+          return;
+        }
+      }
+    }
+
+    publishSquadUi(squadRef.current);
+  }, [log, operativeClass, selectedAbility]);
   const emitCombatFeedback = useCallback((event: CombatFeedbackEvent) => {
     feedbackNonceRef.current += 1;
     setCombatFeedback({ nonce: feedbackNonceRef.current, event });
@@ -1673,6 +1700,10 @@ export default function TacticalCombatHub({
   useEffect(() => {
     registerTargetHandler?.(selectTarget);
   }, [registerTargetHandler, selectTarget]);
+
+  useEffect(() => {
+    registerIntelTargetHandler?.(focusIntelTarget);
+  }, [registerIntelTargetHandler, focusIntelTarget]);
 
   const resolveIncomingHpStrike = (e: EnemyCombatProfile): { raw: number; unblockable: boolean } | null => {
     const effectiveIntent = resolveEffectiveEnemyIntent(e);

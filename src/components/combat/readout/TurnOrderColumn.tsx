@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Image, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
 import type { ClassType } from '../../../types/game';
 import type { CombatTurnOrderEntry, CombatTurnOrderSnapshot } from '../../../utils/combatTurnOrder';
 
@@ -19,11 +19,13 @@ interface TurnOrderColumnProps {
   operativeClass?: ClassType;
   primaryColor: string;
   mutedColor: string;
+  overlay?: boolean;
+  selectedUnitId?: string | null;
+  onHostilePress?: (unitId: string) => void;
 }
 
-function resolvePortraitUnitId(entry: CombatTurnOrderEntry): string {
-  const dashIndex = entry.id.indexOf('-');
-  return dashIndex > 0 ? entry.id.slice(0, dashIndex) : entry.id;
+function hostileEntryUnitId(entry: CombatTurnOrderEntry): string {
+  return entry.id;
 }
 
 function avatarPalette(
@@ -58,6 +60,9 @@ export default function TurnOrderColumn({
   operativeClass: _operativeClass,
   primaryColor,
   mutedColor,
+  overlay = false,
+  selectedUnitId,
+  onHostilePress,
 }: TurnOrderColumnProps): React.JSX.Element {
   const entries = turnOrder?.entries ?? [];
   const portraitById = useMemo(
@@ -69,45 +74,66 @@ export default function TurnOrderColumn({
   const activeSize = baseSize + 6;
 
   return (
-    <View style={styles.host}>
+    <View style={[styles.host, overlay && styles.hostOverlay]}>
       <Text style={[styles.header, { color: mutedColor }]}>TURN ORDER</Text>
       {entries.length === 0 ? (
         <Text style={[styles.empty, { color: mutedColor }]}>Awaiting telemetry…</Text>
       ) : (
-        <View style={styles.column}>
+        <View style={[styles.column, overlay && styles.columnOverlay]}>
           {entries.map((entry, index) => {
             const palette = avatarPalette(entry);
             const isActive = entry.state === 'active';
             const size = isActive ? activeSize : baseSize;
             const portraitSource = entry.kind === 'hostile'
-              ? portraitById.get(resolvePortraitUnitId(entry))
+              ? portraitById.get(hostileEntryUnitId(entry))
               : null;
+            const unitId = entry.kind === 'hostile' ? hostileEntryUnitId(entry) : null;
+            const isIntelSelected = unitId != null && selectedUnitId === unitId;
+            const canPressHostile = entry.kind === 'hostile'
+              && entry.state !== 'defeated'
+              && unitId != null
+              && onHostilePress != null;
+
+            const avatar = (
+              <View
+                style={[
+                  styles.avatarRing,
+                  entry.kind === 'operative' ? styles.avatarRingPlayer : styles.avatarRingHostile,
+                  {
+                    width: size,
+                    height: size,
+                    borderColor: isIntelSelected ? primaryColor : palette.border,
+                    opacity: palette.opacity,
+                    shadowColor: isActive ? palette.glow : 'transparent',
+                  },
+                  isActive && styles.avatarRingActive,
+                  isIntelSelected && styles.avatarRingIntelSelected,
+                ]}
+              >
+                {entry.kind === 'hostile' && portraitSource ? (
+                  <Image source={portraitSource} style={styles.portrait} resizeMode="cover" />
+                ) : (
+                  <Text style={styles.operativeGlyph} numberOfLines={1}>
+                    {entry.label.slice(0, 2)}
+                  </Text>
+                )}
+              </View>
+            );
 
             return (
               <View key={`${entry.id}-${index}`} style={styles.itemWrap}>
                 {index > 0 ? <View style={[styles.connector, { backgroundColor: mutedColor }]} /> : null}
-                <View
-                  style={[
-                    styles.avatarRing,
-                    entry.kind === 'operative' ? styles.avatarRingPlayer : styles.avatarRingHostile,
-                    {
-                      width: size,
-                      height: size,
-                      borderColor: palette.border,
-                      opacity: palette.opacity,
-                      shadowColor: isActive ? palette.glow : 'transparent',
-                    },
-                    isActive && styles.avatarRingActive,
-                  ]}
-                >
-                  {entry.kind === 'hostile' && portraitSource ? (
-                    <Image source={portraitSource} style={styles.portrait} resizeMode="cover" />
-                  ) : (
-                    <Text style={styles.operativeGlyph} numberOfLines={1}>
-                      {entry.label.slice(0, 2)}
-                    </Text>
-                  )}
-                </View>
+                {canPressHostile ? (
+                  <Pressable
+                    onPress={() => onHostilePress(unitId)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Select ${entry.label}`}
+                  >
+                    {avatar}
+                  </Pressable>
+                ) : (
+                  avatar
+                )}
               </View>
             );
           })}
@@ -124,6 +150,11 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
     overflow: 'hidden',
+  },
+  hostOverlay: {
+    flex: 0,
+    minHeight: undefined,
+    overflow: 'visible',
   },
   header: {
     fontFamily: MONO,
@@ -146,6 +177,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-start',
     overflow: 'hidden',
+  },
+  columnOverlay: {
+    flex: 0,
+    minHeight: undefined,
+    overflow: 'visible',
   },
   itemWrap: {
     alignItems: 'center',
@@ -178,6 +214,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 0 },
     elevation: 3,
     transform: [{ scale: 1.08 }],
+  },
+  avatarRingIntelSelected: {
+    borderWidth: 2,
   },
   portrait: {
     width: '100%',

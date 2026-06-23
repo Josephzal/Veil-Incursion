@@ -68,23 +68,23 @@ export default function CombatStatusIconRow({
       <Modal
         visible={tooltipContent != null}
         transparent
-        animationType="none"
+        animationType="fade"
         onRequestClose={dismissTooltip}
       >
         <Pressable
-          style={styles.modalScrim}
+          style={styles.modalBody}
           onPress={dismissTooltip}
           accessibilityRole="button"
           accessibilityLabel="Dismiss status tooltip"
-        />
+        >
+          {tooltipContent ? (
+            <View style={styles.tooltip} pointerEvents="none">
+              <Text style={styles.tooltipHeader}>{`[ ${tooltipContent.label} ]`}</Text>
+              <Text style={styles.tooltipBody}>{tooltipContent.description}</Text>
+            </View>
+          ) : null}
+        </Pressable>
       </Modal>
-
-      {tooltipContent ? (
-        <View style={styles.tooltip} pointerEvents="none">
-          <Text style={styles.tooltipHeader}>{`[ ${tooltipContent.label} ]`}</Text>
-          <Text style={styles.tooltipBody}>{tooltipContent.description}</Text>
-        </View>
-      ) : null}
 
       <View style={styles.iconRow}>
         {statusKeys.map((key) => {
@@ -113,9 +113,12 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     minHeight: ICON_SIZE,
   },
-  modalScrim: {
+  modalBody: {
     flex: 1,
-    backgroundColor: 'transparent',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
   },
   iconRow: {
     flexDirection: 'row',
@@ -141,32 +144,28 @@ const styles = StyleSheet.create({
     height: ICON_SIZE - 2,
   },
   tooltip: {
-    position: 'absolute',
-    left: 0,
-    bottom: ICON_SIZE + 6,
-    zIndex: 24,
-    minWidth: 140,
-    maxWidth: 200,
-    paddingHorizontal: 6,
-    paddingVertical: 5,
+    minWidth: 160,
+    maxWidth: 280,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     backgroundColor: TOOLTIP_BG,
     borderWidth: 1,
     borderColor: TOOLTIP_BORDER,
   },
   tooltipHeader: {
     fontFamily: MONO,
-    fontSize: 6,
+    fontSize: 7,
     fontWeight: '700',
     letterSpacing: 0.5,
-    lineHeight: 9,
+    lineHeight: 10,
     color: VIOLET,
-    marginBottom: 2,
+    marginBottom: 4,
   },
   tooltipBody: {
     fontFamily: MONO,
-    fontSize: 5,
+    fontSize: 6,
     letterSpacing: 0.3,
-    lineHeight: 8,
+    lineHeight: 9,
     color: VIOLET_DIM,
   },
 });

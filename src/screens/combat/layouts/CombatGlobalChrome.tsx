@@ -52,16 +52,13 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     gap: 4,
     marginBottom: 6,
-    padding: 4,
-    borderRadius: 4,
-    backgroundColor: 'rgba(10, 10, 15, 0.55)',
   },
   btn: {
     borderWidth: 1,
     borderColor: 'rgba(0, 255, 51, 0.45)',
     paddingVertical: 4,
     paddingHorizontal: 8,
-    backgroundColor: 'rgba(10, 11, 15, 0.85)',
+    backgroundColor: 'rgba(10, 11, 15, 0.72)',
   },
   btnText: {
     fontFamily: 'monospace',
