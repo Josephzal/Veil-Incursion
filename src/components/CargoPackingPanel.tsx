@@ -3,6 +3,8 @@ import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import HapticPressable from './HapticPressable';
 import {
   GRID_CANISTER_GAP,
+  HARVEST_BOARD_COLUMN_GAP,
+  HARVEST_CONTENT_BUFFER,
   harvestGridFrameHeight,
   resolveHarvestCellSize,
   resolveHarvestSidecarWidth,
@@ -99,7 +101,7 @@ export default function CargoPackingPanel({
   onDragPositionChange,
 }: CargoPackingPanelProps): React.JSX.Element {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-  const { safeBottom } = useLandscapeMetrics();
+  const { safeBottom, safeTop } = useLandscapeMetrics();
   const harvestSidecarWidth = useMemo(
     () => (harvestLayout ? resolveHarvestSidecarWidth(screenWidth) : 0),
     [harvestLayout, screenWidth],
@@ -107,9 +109,9 @@ export default function CargoPackingPanel({
 
   const cellSize = useMemo(() => {
     if (compactCellSize != null) return compactCellSize;
-    if (harvestLayout) return resolveHarvestCellSize(screenHeight, safeBottom);
+    if (harvestLayout) return resolveHarvestCellSize(screenHeight, safeBottom, safeTop);
     return CARGO_CELL_SIZE;
-  }, [compactCellSize, harvestLayout, safeBottom, screenHeight]);
+  }, [compactCellSize, harvestLayout, safeBottom, safeTop, screenHeight]);
   const harvestGridHeight = harvestLayout ? harvestGridFrameHeight(cellSize) : CARGO_GRID_FRAME_HEIGHT;
   const frame = useMemo(() => cargoGridFrameDimensions(cellSize), [cellSize]);
 
@@ -140,7 +142,7 @@ export default function CargoPackingPanel({
           </View>
         ) : null}
 
-        <View style={harvestLayout ? styles.gridAnchor : undefined}>
+        <View style={harvestLayout ? [styles.gridAnchor, { width: frame.frameWidth }] : undefined}>
           <CargoGridBoard
             cargo={cargo}
             theme={theme}
@@ -157,7 +159,7 @@ export default function CargoPackingPanel({
             onHarvestFloorMeasured={harvestLayout ? onHarvestFloorMeasured : undefined}
             fixedExternalSlotCount={fixedExternalSlotCount}
             resolveContainmentSlotIndex={harvestLayout ? resolveContainmentSlotIndex : undefined}
-            stableExternalBay={stableExternalBay}
+            stableExternalBay={stableExternalBay || harvestLayout}
             externalHover={externalHover}
             selectedPlacementItemId={selectedPlacementItemId}
             onPlaceAtCell={onPlaceAtCell}
@@ -171,7 +173,11 @@ export default function CargoPackingPanel({
             <View
               style={[
                 styles.gridSidecarSlot,
-                { width: harvestSidecarWidth, height: harvestGridHeight },
+                {
+                  width: harvestSidecarWidth,
+                  height: harvestGridHeight,
+                  left: frame.frameWidth + GRID_CANISTER_GAP,
+                },
               ]}
               pointerEvents="box-none"
             >
@@ -237,8 +243,9 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: '100%',
     alignSelf: 'center',
-    gap: 6,
+    gap: HARVEST_BOARD_COLUMN_GAP,
     justifyContent: 'flex-start',
+    paddingBottom: HARVEST_CONTENT_BUFFER,
   },
   boardColumnEmbedded: {
     gap: 0,
@@ -254,7 +261,6 @@ const styles = StyleSheet.create({
   gridSidecarSlot: {
     position: 'absolute',
     top: 0,
-    left: CARGO_GRID_FRAME_WIDTH + GRID_CANISTER_GAP,
     height: CARGO_GRID_FRAME_HEIGHT,
     justifyContent: 'flex-start',
     alignItems: 'center',

@@ -34,8 +34,14 @@ interface ShadowWarContextType {
     faction: FactionType,
     operativeName: string,
     stash: ResourceQuantity,
+    veilResidueBalance: number,
     draft: ShadowWarDonationDraft,
-  ) => Promise<{ success: boolean; logLine: string; nextStash?: ResourceQuantity }>;
+  ) => Promise<{
+    success: boolean;
+    logLine: string;
+    nextStash?: ResourceQuantity;
+    nextVeilResidueBalance?: number;
+  }>;
   refreshCycleIfNeeded: (
     playerFaction: FactionType | null,
   ) => Promise<{ logs: string[]; creditGrant: number; resourceGrants: Partial<Record<string, number>> }>;
@@ -112,9 +118,18 @@ export function ShadowWarProvider({ children }: { children: React.ReactNode }) {
       faction: FactionType,
       operativeName: string,
       stash: ResourceQuantity,
+      veilResidueBalance: number,
       draft: ShadowWarDonationDraft,
     ) => {
-      const outcome = executeDonationUpload(state, stash, sectorId, faction, operativeName, draft);
+      const outcome = executeDonationUpload(
+        state,
+        stash,
+        veilResidueBalance,
+        sectorId,
+        faction,
+        operativeName,
+        draft,
+      );
       if (!outcome) {
         return { success: false, logLine: '>> UPLOAD REJECTED — INVALID STASH OR ZERO IP YIELD.' };
       }
@@ -123,6 +138,7 @@ export function ShadowWarProvider({ children }: { children: React.ReactNode }) {
         success: true,
         logLine: outcome.logLine,
         nextStash: outcome.nextStash,
+        nextVeilResidueBalance: outcome.nextVeilResidueBalance,
       };
     },
     [state],

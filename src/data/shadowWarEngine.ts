@@ -11,6 +11,7 @@ import type {
   ShadowWarSectorId,
 } from '../types/shadowWar';
 import { calculateDonationIpYield, getResourceIpValue } from './resourceRegistry';
+import { VEIL_RESIDUE_DONATION_IP } from '../constants/veilResidue';
 import { getStashCount } from './resourceStashEngine';
 import { createDefaultSectorIpState, getShadowWarSector, SHADOW_WAR_SECTORS } from './shadowWarSectors';
 
@@ -87,33 +88,50 @@ export function calculateDonationDraftIp(draft: ShadowWarDonationDraft): number 
     if (!quantity || quantity <= 0) return [];
     return [{ id: id as ResourceItemId, quantity }];
   });
-  return calculateDonationIpYield(items);
+  const resourceIp = calculateDonationIpYield(items);
+  const residueIp = Math.max(0, draft.veilResidue ?? 0) * VEIL_RESIDUE_DONATION_IP;
+  return resourceIp + residueIp;
 }
 
 export function validateDonationDraft(
   stash: ResourceQuantity,
+  veilResidueBalance: number,
   draft: ShadowWarDonationDraft,
 ): boolean {
-  return Object.entries(draft.items).every(([id, quantity]) => {
+  const residueQty = draft.veilResidue ?? 0;
+  if (residueQty < 0 || residueQty > veilResidueBalance) return false;
+  const resourcesValid = Object.entries(draft.items).every(([id, quantity]) => {
     if (!quantity || quantity <= 0) return true;
     return getStashCount(stash, id as ResourceItemId) >= quantity;
-  }) && calculateDonationDraftIp(draft) > 0;
+  });
+  return resourcesValid && calculateDonationDraftIp(draft) > 0;
 }
 
 export function applyDonationDraftToStash(
   stash: ResourceQuantity,
   draft: ShadowWarDonationDraft,
 ): ResourceQuantity | null {
-  if (!validateDonationDraft(stash, draft)) return null;
   const next = { ...stash };
   for (const [id, quantity] of Object.entries(draft.items)) {
     if (!quantity || quantity <= 0) continue;
     const resourceId = id as ResourceItemId;
-    const remaining = getStashCount(next, resourceId) - quantity;
+    const owned = getStashCount(next, resourceId);
+    if (owned < quantity) return null;
+    const remaining = owned - quantity;
     if (remaining <= 0) delete next[resourceId];
     else next[resourceId] = remaining;
   }
   return next;
+}
+
+export function applyVeilResidueDonation(
+  balance: number,
+  draft: ShadowWarDonationDraft,
+): number | null {
+  const residueQty = draft.veilResidue ?? 0;
+  if (residueQty <= 0) return balance;
+  if (residueQty > balance) return null;
+  return balance - residueQty;
 }
 
 export function applyDonationToSectorIp(
@@ -232,6 +250,7 @@ export function getShadowWarSectorLabel(sectorId: ShadowWarSectorId): string {
 export function executeDonationUpload(
   state: ShadowWarPersistedState,
   stash: ResourceQuantity,
+  veilResidueBalance: number,
   sectorId: ShadowWarSectorId,
   faction: FactionType,
   operativeName: string,
@@ -239,12 +258,16 @@ export function executeDonationUpload(
 ): {
   nextState: ShadowWarPersistedState;
   nextStash: ResourceQuantity;
+  nextVeilResidueBalance: number;
   ipGain: number;
   logLine: string;
 } | null {
+  if (!validateDonationDraft(stash, veilResidueBalance, draft)) return null;
+
   const ipGain = calculateDonationDraftIp(draft);
   const nextStash = applyDonationDraftToStash(stash, draft);
-  if (!nextStash || ipGain <= 0) return null;
+  const nextVeilResidueBalance = applyVeilResidueDonation(veilResidueBalance, draft);
+  if (!nextStash || nextVeilResidueBalance == null || ipGain <= 0) return null;
 
   const sector = getShadowWarSector(sectorId);
   const nextSectorIp = applyDonationToSectorIp(state.sectorIp[sectorId], faction, ipGain);
@@ -261,6 +284,7 @@ export function executeDonationUpload(
       donationLog: [logLine, ...state.donationLog].slice(0, 24),
     },
     nextStash,
+    nextVeilResidueBalance,
     ipGain,
     logLine,
   };

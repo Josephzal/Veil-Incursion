@@ -25,7 +25,8 @@ import {
 import { useCombatTurnOptional } from '../context/CombatTurnContext';
 import type { CargoItemId, CargoRunState, PlacedCargoItem } from '../types/cargoGrid';
 import { CARGO_GRID_COLS, CARGO_GRID_ROWS, CARGO_ITEM_CATALOG } from '../types/cargoGrid';
-import { HARVEST_EXTERNAL_BAY_MARGIN_TOP } from '../constants/harvestLayout';
+import { HARVEST_EXTERNAL_BAY_MARGIN_TOP, harvestExternalBayHeight } from '../constants/harvestLayout';
+import { COMBAT_OVERLAY_SPLIT_GAP } from '../constants/cargoOverlayLayout';
 import type { TerminalTheme } from '../types/theme';
 import { countCargoItemInstances } from '../data/cargoGridEngine';
 import { resolveCargoItemIcon } from '../utils/cargoItemIcon';
@@ -104,6 +105,10 @@ interface CargoGridBoardProps {
   cellSize?: number;
   /** Incursion cargo modal: tighter gaps and combat detail panel. */
   overlayCompact?: boolean;
+  /** Combat overlay: grid left, item detail + USE ITEM right — no vertical scroll. */
+  overlayCombatSplit?: boolean;
+  /** Full inner width of the combat overlay panel (excluding modal padding). */
+  contentWidth?: number;
 }
 
 function cellsForItem(itemId: CargoItemId, originRow: number, originCol: number): string[] {
@@ -390,11 +395,17 @@ export default function CargoGridBoard({
   onDragPositionChange,
   cellSize: cellSizeProp,
   overlayCompact = false,
+  overlayCombatSplit = false,
+  contentWidth,
 }: CargoGridBoardProps): React.JSX.Element {
   const cellSize = cellSizeProp ?? CARGO_CELL_SIZE;
-  const combatDetailHeight = overlayCompact ? 108 : COMBAT_DETAIL_PANEL_HEIGHT;
+  const combatDetailHeight = overlayCompact ? 168 : COMBAT_DETAIL_PANEL_HEIGHT;
   const boardGap = overlayCompact ? 10 : undefined;
-  const externalBayMarginTop = overlayCompact ? 10 : 28;
+  const externalBayMarginTop = stableExternalBay
+    ? HARVEST_EXTERNAL_BAY_MARGIN_TOP
+    : overlayCompact
+      ? 10
+      : 28;
   const { frameWidth, frameHeight, stride } = useMemo(
     () => cargoGridFrameDimensions(cellSize),
     [cellSize],
@@ -818,20 +829,134 @@ export default function CargoGridBoard({
     ? spriteSizeForCargoItem(activeDrag.itemId, cellSize)
     : null;
 
+  const layoutWidth = overlayCombatSplit && contentWidth != null ? contentWidth : frameWidth;
+
+  const combatDetailPanel = combatMode && onUseCombatConsumable ? (
+    <View
+      style={[
+        styles.combatDetailPanel,
+        {
+          borderColor: theme.borderColor,
+          height: overlayCombatSplit ? frameHeight : combatDetailHeight,
+          width: overlayCombatSplit ? undefined : frameWidth,
+          flex: overlayCombatSplit ? 1 : undefined,
+          minWidth: overlayCombatSplit ? 0 : undefined,
+        },
+      ]}
+    >
+      <View
+        style={[
+          styles.combatDetailInner,
+          overlayCombatSplit ? styles.combatDetailInnerSplit : null,
+        ]}
+      >
+        <View style={styles.combatDetailTitleSlot}>
+          <Text
+            style={[
+              styles.combatDetailTitle,
+              { color: selectedCombatItemId ? accentColor : theme.mutedColor },
+            ]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {selectedCombatItemId
+              ? CARGO_ITEM_CATALOG[selectedCombatItemId].name.toUpperCase()
+              : 'AWAITING SELECTION'}
+          </Text>
+        </View>
+
+        <View
+          style={[
+            styles.combatDetailBodySlot,
+            overlayCombatSplit ? styles.combatDetailBodySlotSplit : null,
+          ]}
+        >
+          <Text
+            style={[
+              styles.combatDetailBody,
+              { color: selectedCombatItemId ? theme.primaryColor : theme.mutedColor },
+            ]}
+            numberOfLines={overlayCombatSplit ? 5 : 3}
+            ellipsizeMode="tail"
+          >
+            {selectedCombatItemId
+              ? combatConsumableDescription(selectedCombatItemId)
+              : 'TAP A COMBAT ITEM IN THE GRID TO REVIEW AND DEPLOY.'}
+          </Text>
+        </View>
+
+        <View style={styles.combatDetailMetaSlot}>
+          <Text
+            style={[styles.combatDetailMeta, { color: theme.mutedColor }]}
+            numberOfLines={1}
+          >
+            {selectedCombatItemId
+              ? `OWNED: ${countCargoItemInstances(displayCargo, selectedCombatItemId)} // COST: ${selectedApCost} AP`
+              : ' '}
+          </Text>
+        </View>
+
+        <HapticPressable
+          disabled={!combatUseEnabled}
+          onPress={() => {
+            if (!selectedCombatItemId || !combatUseEnabled) return;
+            pulseCargoItemUse();
+            const ok = onUseCombatConsumable(selectedCombatItemId);
+            if (ok) setSelectedCombatItemId(null);
+          }}
+          style={({ pressed }) => [
+            styles.ampouleBtn,
+            styles.deployBtn,
+            {
+              borderColor: combatUseEnabled ? accentColor : '#1a2e22',
+              opacity: combatUseEnabled && pressed
+                ? 0.75
+                : combatUseEnabled
+                  ? 1
+                  : 0.45,
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.ampouleBtnText,
+              { color: combatUseEnabled ? accentColor : '#2a4032' },
+            ]}
+            numberOfLines={1}
+          >
+            [ USE ITEM ]
+          </Text>
+        </HapticPressable>
+      </View>
+    </View>
+  ) : null;
+
   return (
     <View style={[
       styles.root,
       minimal && styles.rootMinimal,
       overlayCompact && styles.rootOverlayCompact,
-      styles.rootCentered,
-      { width: frameWidth, gap: boardGap ?? (cellSize < 48 ? 8 : undefined) },
+      overlayCombatSplit ? styles.rootCombatSplit : styles.rootCentered,
+      { width: layoutWidth, gap: boardGap ?? (cellSize < 48 ? 8 : undefined) },
     ]}>
       {showCreditsHud ? (
         <CargoCreditsHud credits={runCredits} accentColor={accentColor} style={styles.creditsHud} />
       ) : null}
 
-      <View ref={boardRef} onLayout={captureMetrics} style={[styles.boardShell, { width: frameWidth }]}>
-        <View style={styles.gridDock}>{gridBlock}</View>
+      <View
+        ref={boardRef}
+        onLayout={captureMetrics}
+        style={[
+          styles.boardShell,
+          { width: layoutWidth },
+          overlayCombatSplit ? styles.boardShellCombatSplit : null,
+        ]}
+      >
+        <View style={[styles.gridDock, overlayCombatSplit ? styles.gridDockSplit : null]}>
+          {gridBlock}
+        </View>
+
+        {overlayCombatSplit ? combatDetailPanel : null}
 
         {externalSlotCount > 0 ? (
         <View
@@ -840,6 +965,7 @@ export default function CargoGridBoard({
           style={[
             styles.externalBay,
             stableExternalBay ? styles.externalBayStable : null,
+            stableExternalBay ? { height: harvestExternalBayHeight(cellSize) } : null,
             { marginTop: externalBayMarginTop },
           ]}
         >
@@ -964,93 +1090,7 @@ export default function CargoGridBoard({
         </HapticPressable>
       ) : null}
 
-      {combatMode && onUseCombatConsumable ? (
-        <View
-          style={[
-            styles.combatDetailPanel,
-            {
-              borderColor: theme.borderColor,
-              height: combatDetailHeight,
-              width: frameWidth,
-            },
-          ]}
-        >
-          <View style={styles.combatDetailInner}>
-            <View style={styles.combatDetailTitleSlot}>
-              <Text
-                style={[
-                  styles.combatDetailTitle,
-                  { color: selectedCombatItemId ? accentColor : theme.mutedColor },
-                ]}
-                numberOfLines={1}
-                ellipsizeMode="tail"
-              >
-                {selectedCombatItemId
-                  ? CARGO_ITEM_CATALOG[selectedCombatItemId].name.toUpperCase()
-                  : 'AWAITING SELECTION'}
-              </Text>
-            </View>
-
-            <View style={styles.combatDetailBodySlot}>
-              <Text
-                style={[
-                  styles.combatDetailBody,
-                  { color: selectedCombatItemId ? theme.primaryColor : theme.mutedColor },
-                ]}
-                numberOfLines={3}
-                ellipsizeMode="tail"
-              >
-                {selectedCombatItemId
-                  ? combatConsumableDescription(selectedCombatItemId)
-                  : 'TAP A COMBAT ITEM IN THE GRID TO REVIEW AND DEPLOY.'}
-              </Text>
-            </View>
-
-            <View style={styles.combatDetailMetaSlot}>
-              <Text
-                style={[styles.combatDetailMeta, { color: theme.mutedColor }]}
-                numberOfLines={1}
-              >
-                {selectedCombatItemId
-                  ? `OWNED: ${countCargoItemInstances(displayCargo, selectedCombatItemId)} // COST: ${selectedApCost} AP`
-                  : ' '}
-              </Text>
-            </View>
-
-            <HapticPressable
-              disabled={!combatUseEnabled}
-              onPress={() => {
-                if (!selectedCombatItemId || !combatUseEnabled) return;
-                pulseCargoItemUse();
-                const ok = onUseCombatConsumable(selectedCombatItemId);
-                if (ok) setSelectedCombatItemId(null);
-              }}
-              style={({ pressed }) => [
-                styles.ampouleBtn,
-                styles.deployBtn,
-                {
-                  borderColor: combatUseEnabled ? accentColor : '#1a2e22',
-                  opacity: combatUseEnabled && pressed
-                    ? 0.75
-                    : combatUseEnabled
-                      ? 1
-                      : 0.45,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.ampouleBtnText,
-                  { color: combatUseEnabled ? accentColor : '#2a4032' },
-                ]}
-                numberOfLines={1}
-              >
-                [ USE ITEM ]
-              </Text>
-            </HapticPressable>
-          </View>
-        </View>
-      ) : null}
+      {!overlayCombatSplit ? combatDetailPanel : null}
 
       {onContinue && !hideContinueButton ? (
         <HapticPressable
@@ -1096,6 +1136,9 @@ const styles = StyleSheet.create({
   rootCentered: {
     alignSelf: 'center',
   },
+  rootCombatSplit: {
+    alignSelf: 'stretch',
+  },
   rootMinimal: {
     gap: 28,
   },
@@ -1113,8 +1156,17 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'visible',
   },
+  boardShellCombatSplit: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: COMBAT_OVERLAY_SPLIT_GAP,
+  },
   gridDock: {
     alignItems: 'center',
+  },
+  gridDockSplit: {
+    alignItems: 'flex-start',
+    flexShrink: 0,
   },
   gridFrame: {
     position: 'relative',
@@ -1172,7 +1224,6 @@ const styles = StyleSheet.create({
   },
   externalBayStable: {
     minHeight: undefined,
-    height: 84,
     marginTop: HARVEST_EXTERNAL_BAY_MARGIN_TOP,
   },
   externalRow: {
@@ -1201,16 +1252,17 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   combatDetailPanel: {
-    width: CARGO_GRID_FRAME_SIZE,
     borderWidth: 1,
     backgroundColor: '#0a0b0f',
-    overflow: 'hidden',
   },
   combatDetailInner: {
-    flex: 1,
-    padding: 12,
-    gap: 8,
+    padding: 10,
+    gap: 6,
     justifyContent: 'flex-start',
+  },
+  combatDetailInnerSplit: {
+    flex: 1,
+    justifyContent: 'space-between',
   },
   combatDetailTitleSlot: {
     height: COMBAT_DETAIL_TITLE_HEIGHT,
@@ -1228,6 +1280,11 @@ const styles = StyleSheet.create({
     height: COMBAT_DETAIL_BODY_HEIGHT,
     justifyContent: 'center',
     width: '100%',
+  },
+  combatDetailBodySlotSplit: {
+    flex: 1,
+    height: undefined,
+    justifyContent: 'center',
   },
   combatDetailBody: {
     fontFamily: 'monospace',

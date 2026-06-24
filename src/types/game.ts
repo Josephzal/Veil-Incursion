@@ -89,6 +89,8 @@ export interface PlayerAccount {
   operativeRank: number;
   experiencePoints: number;
   cabalCredits: number;
+  /** Persistent Veil Residue harvested across incursions — donatable to Shadow War. */
+  veilResidueBalance: number;
   alignedFaction: FactionType | null;
   factionPerks: FactionModifiers;
   activeClass: ClassType;

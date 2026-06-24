@@ -1,12 +1,18 @@
 import React, { useMemo } from 'react';
-import { Modal, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import {
+  Modal,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import HapticPressable from './HapticPressable';
 import CargoGridBoard from './CargoGridBoard';
 import CargoCreditsHud from './CargoCreditsHud';
 import {
-  cargoOverlayFrameWidth,
   CARGO_OVERLAY_PANEL_PADDING,
   resolveCargoOverlayCellSize,
+  resolveOverlayPanelWidth,
 } from '../constants/cargoOverlayLayout';
 import { useLandscapeMetrics } from '../hooks/useLandscapeMetrics';
 import { countCargoItemInstances } from '../data/cargoGridEngine';
@@ -57,7 +63,7 @@ export default function CargoGridOverlay({
   playerActionPoints,
 }: CargoGridOverlayProps): React.JSX.Element {
   const dismissAfterUse = onDismissSilently ?? onClose;
-  const { height: screenHeight } = useWindowDimensions();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const { safeBottom } = useLandscapeMetrics();
 
   const scannerButtonCount = useMemo(() => {
@@ -70,123 +76,147 @@ export default function CargoGridOverlay({
   }, [cargo, onUseAmpoule, onUseDeadDrop, onUseResonanceBribe, scannerMode]);
 
   const cellSize = useMemo(
-    () => resolveCargoOverlayCellSize(screenHeight, safeBottom, {
+    () => resolveCargoOverlayCellSize(screenHeight, screenWidth, safeBottom, {
       combatMode,
       hasContainment: cargo.containment.length > 0,
       scannerButtonCount,
     }),
-    [cargo.containment.length, combatMode, safeBottom, scannerButtonCount, screenHeight],
+    [cargo.containment.length, combatMode, safeBottom, scannerButtonCount, screenHeight, screenWidth],
   );
 
-  const frameWidth = useMemo(() => cargoOverlayFrameWidth(cellSize), [cellSize]);
+  const panelWidth = useMemo(
+    () => resolveOverlayPanelWidth(screenWidth, cellSize, combatMode),
+    [cellSize, combatMode, screenWidth],
+  );
+
+  const contentWidth = panelWidth - CARGO_OVERLAY_PANEL_PADDING * 2;
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <HapticPressable style={styles.backdrop} onPress={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalRoot}>
         <HapticPressable
-          style={[
-            styles.panel,
-            {
-              borderColor: accentColor,
-              maxWidth: frameWidth + CARGO_OVERLAY_PANEL_PADDING * 2 + 4,
-            },
-          ]}
-          onPress={(e) => e.stopPropagation()}
-        >
-          <HapticPressable
-            onPress={onClose}
-            style={({ pressed }) => [
-              styles.closeX,
-              { borderColor: accentColor, opacity: pressed ? 0.7 : 1 },
+          style={styles.backdrop}
+          onPress={onClose}
+          accessibilityLabel="Close cargo overlay"
+        />
+
+        <View style={styles.panelHost} pointerEvents="box-none">
+          <View
+            style={[
+              styles.panel,
+              {
+                borderColor: accentColor,
+                width: panelWidth,
+                maxWidth: screenWidth - 12,
+              },
             ]}
-            hitSlop={8}
           >
-            <Text style={[styles.closeXText, { color: accentColor }]}>✕</Text>
-          </HapticPressable>
+            <View style={styles.panelHeader}>
+              <CargoCreditsHud
+                credits={runCredits ?? 0}
+                accentColor={accentColor}
+              />
+              <HapticPressable
+                onPress={onClose}
+                style={({ pressed }) => [
+                  styles.closeX,
+                  { borderColor: accentColor, opacity: pressed ? 0.7 : 1 },
+                ]}
+                hitSlop={8}
+              >
+                <Text style={[styles.closeXText, { color: accentColor }]}>✕</Text>
+              </HapticPressable>
+            </View>
 
-          <CargoCreditsHud
-            credits={runCredits ?? 0}
-            accentColor={accentColor}
-            style={styles.panelCredits}
-          />
-
-          <CargoGridBoard
-            cargo={cargo}
-            theme={theme}
-            accentColor={accentColor}
-            onRelocateItem={onRelocateItem}
-            onDiscardItem={onDiscardItem}
-            runCredits={runCredits}
-            playerActionPoints={playerActionPoints}
-            showCreditsHud={false}
-            scannerMode={scannerMode}
-            combatMode={combatMode}
-            combatConsumablesEnabled={combatConsumablesEnabled}
-            overlayCompact
-            minimal
-            cellSize={cellSize}
-            onUseAmpoule={onUseAmpoule ? () => {
-              const ok = onUseAmpoule();
-              if (ok) dismissAfterUse();
-              return ok;
-            } : undefined}
-            onUseResonanceBribe={onUseResonanceBribe ? () => {
-              const ok = onUseResonanceBribe();
-              if (ok) dismissAfterUse();
-              return ok;
-            } : undefined}
-            onUseDeadDrop={onUseDeadDrop ? () => {
-              const ok = onUseDeadDrop();
-              if (ok) dismissAfterUse();
-              return ok;
-            } : undefined}
-            onUseCombatConsumable={onUseCombatConsumable ? (itemId) => {
-              const ok = onUseCombatConsumable(itemId);
-              if (ok) dismissAfterUse();
-              return ok;
-            } : undefined}
-          />
-        </HapticPressable>
-      </HapticPressable>
+            <CargoGridBoard
+              cargo={cargo}
+              theme={theme}
+              accentColor={accentColor}
+              onRelocateItem={onRelocateItem}
+              onDiscardItem={onDiscardItem}
+              runCredits={runCredits}
+              playerActionPoints={playerActionPoints}
+              showCreditsHud={false}
+              scannerMode={scannerMode}
+              combatMode={combatMode}
+              combatConsumablesEnabled={combatConsumablesEnabled}
+              overlayCompact={combatMode}
+              overlayCombatSplit={combatMode}
+              contentWidth={contentWidth}
+              minimal
+              cellSize={cellSize}
+              onUseAmpoule={onUseAmpoule ? () => {
+                const ok = onUseAmpoule();
+                if (ok) dismissAfterUse();
+                return ok;
+              } : undefined}
+              onUseResonanceBribe={onUseResonanceBribe ? () => {
+                const ok = onUseResonanceBribe();
+                if (ok) dismissAfterUse();
+                return ok;
+              } : undefined}
+              onUseDeadDrop={onUseDeadDrop ? () => {
+                const ok = onUseDeadDrop();
+                if (ok) dismissAfterUse();
+                return ok;
+              } : undefined}
+              onUseCombatConsumable={onUseCombatConsumable ? (itemId) => {
+                const ok = onUseCombatConsumable(itemId);
+                if (ok) dismissAfterUse();
+                return ok;
+              } : undefined}
+            />
+          </View>
+        </View>
+      </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
+  modalRoot: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.82)',
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.86)',
+  },
+  panelHost: {
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 16,
+    paddingHorizontal: 6,
   },
   panel: {
     borderWidth: 2,
     backgroundColor: '#050608',
-    padding: CARGO_OVERLAY_PANEL_PADDING,
-    paddingTop: 36,
+    paddingHorizontal: CARGO_OVERLAY_PANEL_PADDING,
+    paddingBottom: CARGO_OVERLAY_PANEL_PADDING,
     gap: 8,
+  },
+  panelHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    width: '100%',
-    position: 'relative',
+    justifyContent: 'space-between',
+    minHeight: 36,
+    paddingTop: 8,
+    paddingBottom: 4,
+    flexShrink: 0,
   },
   closeX: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
     width: 28,
     height: 28,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#0a0b0f',
-    zIndex: 10,
-  },
-  panelCredits: {
-    position: 'absolute',
-    top: 12,
-    left: 14,
-    zIndex: 10,
+    marginLeft: 8,
   },
   closeXText: {
     fontFamily: 'monospace',

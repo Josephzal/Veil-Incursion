@@ -1,36 +1,73 @@
 import { CARGO_CELL_GAP, CARGO_CELL_SIZE, CARGO_GRID_FRAME_WIDTH } from '../components/CargoGridBoard';
-import { IMMERSIVE_FOOTER_GUTTER } from './immersiveLayout';
+import { LANDSCAPE_PANEL_PADDING } from './landscapeLayout';
+import {
+  resolveImmersiveContentPadding,
+  resolveImmersiveFooterInset,
+} from './immersiveLayout';
 import { CARGO_GRID_ROWS } from '../types/cargoGrid';
 
 export const HARVEST_HORIZONTAL_PADDING = 8;
 export const GRID_CANISTER_GAP = 6;
 export const HARVEST_EXTERNAL_ROW_GAP = 20;
+/** Padding below the containment slot row inside the external bay. */
+export const HARVEST_EXTERNAL_BAY_EXTRA = 28;
 /** Fixed vertical footprint for the harvest containment row (margin + slot height). */
-export const HARVEST_EXTERNAL_BAY_HEIGHT = 84;
-/** Vertical space reserved for pinned footer CTA on harvest screen. */
-export const HARVEST_FOOTER_RESERVE = 56;
-export const HARVEST_HEADER_RESERVE = 40;
-export const HARVEST_FRAME_PADDING = 24;
-export const HARVEST_MIN_CELL_SIZE = 40;
+export const HARVEST_EXTERNAL_BAY_HEIGHT = CARGO_CELL_SIZE + HARVEST_EXTERNAL_BAY_EXTRA;
+export const HARVEST_HEADER_RESERVE = 36;
+export const HARVEST_BOARD_COLUMN_GAP = 6;
+export const HARVEST_MIN_CELL_SIZE = 34;
 export const HARVEST_EXTERNAL_BAY_MARGIN_TOP = 10;
+/** Gap between containment row and pinned footer CTA. */
+export const HARVEST_CONTENT_BUFFER = 6;
+export const HARVEST_CONTINUE_BUTTON_HEIGHT = 36;
 
-export function resolveHarvestCellSize(screenHeight: number, bottomInset = 0): number {
-  const footerReserve = HARVEST_FOOTER_RESERVE + Math.max(0, bottomInset - IMMERSIVE_FOOTER_GUTTER);
-  const available =
-    screenHeight
-    - footerReserve
-    - HARVEST_HEADER_RESERVE
-    - HARVEST_EXTERNAL_BAY_HEIGHT
-    - HARVEST_EXTERNAL_BAY_MARGIN_TOP
-    - HARVEST_FRAME_PADDING;
-  const computed = Math.floor(
-    (available - (CARGO_GRID_ROWS - 1) * CARGO_CELL_GAP) / CARGO_GRID_ROWS,
-  );
-  return Math.min(CARGO_CELL_SIZE, Math.max(HARVEST_MIN_CELL_SIZE, computed));
+export function harvestExternalBayHeight(cellSize: number): number {
+  return cellSize + HARVEST_EXTERNAL_BAY_EXTRA;
 }
 
 export function harvestGridFrameHeight(cellSize: number): number {
   return CARGO_GRID_ROWS * cellSize + (CARGO_GRID_ROWS - 1) * CARGO_CELL_GAP;
+}
+
+export function resolveHarvestFooterSlotHeight(bottomInset = 0): number {
+  const footerBottomInset = resolveImmersiveFooterInset(bottomInset);
+  return (
+    8 // RunEventScreenFrame footer paddingTop
+    + 6 // harvest footer band paddingTop
+    + HARVEST_CONTINUE_BUTTON_HEIGHT
+    + 2 // harvest footer band paddingBottom
+    + footerBottomInset
+  );
+}
+
+export function resolveHarvestCellSize(
+  screenHeight: number,
+  bottomInset = 0,
+  topInset = 0,
+): number {
+  const framePaddingTop = resolveImmersiveContentPadding(topInset, LANDSCAPE_PANEL_PADDING);
+  const framePaddingBottom = LANDSCAPE_PANEL_PADDING;
+  const headerReserve = HARVEST_HEADER_RESERVE + HARVEST_BOARD_COLUMN_GAP;
+
+  const fixedChrome =
+    framePaddingTop
+    + framePaddingBottom
+    + headerReserve
+    + resolveHarvestFooterSlotHeight(bottomInset)
+    + HARVEST_CONTENT_BUFFER;
+
+  const rowGaps = (CARGO_GRID_ROWS - 1) * CARGO_CELL_GAP;
+  const numerator =
+    screenHeight
+    - fixedChrome
+    - HARVEST_EXTERNAL_BAY_MARGIN_TOP
+    - HARVEST_EXTERNAL_BAY_EXTRA
+    - rowGaps;
+
+  // Grid rows plus one external containment strip share the same cell size.
+  const computed = Math.floor(numerator / (CARGO_GRID_ROWS + 1));
+
+  return Math.min(CARGO_CELL_SIZE, Math.max(HARVEST_MIN_CELL_SIZE, computed));
 }
 
 /** Width of the harvest gap between the cargo grid and the right screen edge. */

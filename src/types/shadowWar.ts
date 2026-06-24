@@ -53,6 +53,8 @@ export interface ShadowWarPersistedState {
 
 export interface ShadowWarDonationDraft {
   items: Partial<Record<ResourceItemId, number>>;
+  /** Veil Residue drawn from the operative vault (not resource stash). */
+  veilResidue?: number;
 }
 
 export interface ShadowWarCycleReward {

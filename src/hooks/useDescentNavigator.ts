@@ -103,17 +103,22 @@ export function useDescentNavigator() {
 
   const finalizeSectorExtraction = useCallback(() => {
     const inc = incursionRef.current;
+    const residueCollected = inc.sessionVeilResidueCollected;
     persistRunExtraction({
       cargo: inc.cargo,
       aegisLoadout: inc.aegisLoadout,
       hexShotLoadout: inc.hexShotLoadout,
       envoyLoadout: inc.envoyLoadout,
+      veilResidueCollected: residueCollected,
     });
     const credits = calculateSectorExtractionPayout();
     const riftIron = Math.max(5, Math.floor(credits / 40));
     addCredits(credits);
     addRiftIron(riftIron);
-    appendRunLog(`>> SECTOR EXTRACTION COMPLETE — +${credits} CREDITS, LOOT ROUTED TO HOME STASH, +${riftIron} RIFT IRON.`);
+    const residueLine = residueCollected > 0
+      ? ` +${residueCollected} VEIL RESIDUE VAULTED`
+      : '';
+    appendRunLog(`>> SECTOR EXTRACTION COMPLETE — +${credits} CREDITS, LOOT ROUTED TO HOME STASH, +${riftIron} RIFT IRON${residueLine}.`);
     endRun('SECTOR EXTRACTION SECURED');
     goToHub();
     return { route: 'EXTRACT_SUCCESS' as const };

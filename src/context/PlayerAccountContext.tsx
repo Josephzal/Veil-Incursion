@@ -117,6 +117,7 @@ export function createDefaultPlayerAccount(): PlayerAccount {
     operativeRank: 1,
     experiencePoints: 0,
     cabalCredits: 500,
+    veilResidueBalance: 0,
     alignedFaction: null,
     factionPerks: { ...NEUTRAL_FACTION_PERKS },
     activeClass: 'AEGIS',
@@ -209,6 +210,7 @@ function mergeStoredAccount(parsed: Partial<PlayerAccount>): PlayerAccount {
     tacticalLoadout: parsed.tacticalLoadout ?? defaults.tacticalLoadout,
     equippedBlueprintId: parsed.equippedBlueprintId ?? defaults.equippedBlueprintId,
     unidentifiedStash: parsed.unidentifiedStash ?? defaults.unidentifiedStash,
+    veilResidueBalance: parsed.veilResidueBalance ?? defaults.veilResidueBalance,
   };
 }
 
@@ -287,7 +289,12 @@ interface PlayerAccountContextType {
     aegisLoadout: AegisLoadout;
     hexShotLoadout: HexShotLoadout;
     envoyLoadout: EnvoyLoadout;
+    veilResidueCollected?: number;
   }) => void;
+  applyShadowWarDonationAccount: (
+    nextStash: ResourceQuantity,
+    nextVeilResidueBalance: number,
+  ) => void;
   getStashCapacitySnapshot: () => { used: number; max: number };
   replaceResourceStash: (stash: ResourceQuantity) => void;
 }
@@ -1004,7 +1011,9 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       aegisLoadout: AegisLoadout;
       hexShotLoadout: HexShotLoadout;
       envoyLoadout: EnvoyLoadout;
+      veilResidueCollected?: number;
     }) => {
+      const residueDeposit = Math.max(0, Math.floor(payload.veilResidueCollected ?? 0));
       updateAccount((prev) => {
         const deposited = depositAllCargoToHubAccount(payload.cargo, prev, {
           aegisLoadout: payload.aegisLoadout,
@@ -1018,8 +1027,20 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
           aegisLoadout: normalizeAegisLoadout(deposited.aegisLoadout),
           hexShotLoadout: normalizeHexShotLoadoutForCommit(deposited.hexShotLoadout),
           envoyLoadout: normalizeEnvoyLoadoutForCommit(deposited.envoyLoadout),
+          veilResidueBalance: prev.veilResidueBalance + residueDeposit,
         };
       });
+    },
+    [updateAccount],
+  );
+
+  const applyShadowWarDonationAccount = useCallback(
+    (nextStash: ResourceQuantity, nextVeilResidueBalance: number) => {
+      updateAccount((prev) => ({
+        ...prev,
+        resourceStash: { ...nextStash },
+        veilResidueBalance: Math.max(0, nextVeilResidueBalance),
+      }));
     },
     [updateAccount],
   );
@@ -1138,6 +1159,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       sellFenceResource,
       commitDescentLoadout,
       persistRunExtraction,
+      applyShadowWarDonationAccount,
       getStashCapacitySnapshot,
       replaceResourceStash,
     }),
@@ -1184,6 +1206,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       sellFenceResource,
       commitDescentLoadout,
       persistRunExtraction,
+      applyShadowWarDonationAccount,
       getStashCapacitySnapshot,
       replaceResourceStash,
     ],

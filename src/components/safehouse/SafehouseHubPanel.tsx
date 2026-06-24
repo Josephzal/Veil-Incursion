@@ -41,6 +41,9 @@ export default function SafehouseHubPanel(): React.JSX.Element {
           <Text style={[styles.creditLine, { color: accent }]}>
             {`${account.cabalCredits} CR`}
           </Text>
+          <Text style={[styles.residueLine, { color: theme.primaryColor }]}>
+            {`${account.veilResidueBalance} VEIL RESIDUE`}
+          </Text>
           <Text style={[styles.stashLine, { color: theme.mutedColor }]}>
             {`STASH ${stashCapacity.used}/${stashCapacity.max}`}
           </Text>
@@ -95,6 +98,7 @@ const styles = StyleSheet.create({
   headerRight: { alignItems: 'flex-end', gap: 2 },
   headerSub: { fontFamily: 'monospace', fontSize: 7, letterSpacing: 0.5 },
   creditLine: { fontFamily: 'monospace', fontSize: 11, fontWeight: '700', letterSpacing: 0.6 },
+  residueLine: { fontFamily: 'monospace', fontSize: 8, fontWeight: '700', letterSpacing: 0.5 },
   stashLine: { fontFamily: 'monospace', fontSize: 7, letterSpacing: 0.4 },
   navRow: {
     flexDirection: 'row',
