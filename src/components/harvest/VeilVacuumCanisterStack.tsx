@@ -14,9 +14,9 @@ import {
 } from 'react-native-reanimated';
 import {
   resolveCanisterLayoutDimensions,
+  resolveCanisterLayoutForExtractorBlock,
   resolveCanisterLayoutForGrid,
 } from '../../constants/canisterLayout';
-import { resolveHarvestSidecarWidth } from '../../constants/harvestLayout';
 import VeilResidueCanisterShell from './VeilResidueCanister';
 import VeilVacuumBar from './VeilVacuumBar';
 
@@ -33,6 +33,8 @@ interface VeilVacuumCanisterStackProps {
   onPressOut: () => void;
   /** When set, size the stack relative to the cargo cell grid instead of screen height. */
   gridFrameHeight?: number;
+  /** Harvest tri-pane: large anchored extractor machinery. */
+  sizeMode?: 'grid-sidecar' | 'extractor-block';
 }
 
 const VeilVacuumCanisterStack = forwardRef<VeilVacuumCanisterStackHandle, VeilVacuumCanisterStackProps>(
@@ -44,33 +46,25 @@ const VeilVacuumCanisterStack = forwardRef<VeilVacuumCanisterStackHandle, VeilVa
       onPressIn,
       onPressOut,
       gridFrameHeight,
+      sizeMode = 'grid-sidecar',
     },
     ref,
   ): React.JSX.Element {
     const stackRef = useRef<View>(null);
     const fillPct = useSharedValue(harvestPercentage / 100);
-    const { height: screenHeight, width: screenWidth } = useWindowDimensions();
+    const { height: screenHeight } = useWindowDimensions();
 
     const layout = useMemo(() => {
+      if (sizeMode === 'extractor-block') {
+        return resolveCanisterLayoutForExtractorBlock(screenHeight);
+      }
+
       let dims = gridFrameHeight != null
         ? resolveCanisterLayoutForGrid(gridFrameHeight)
         : resolveCanisterLayoutDimensions(screenHeight);
 
-      if (gridFrameHeight != null) {
-        const sidecarWidth = resolveHarvestSidecarWidth(screenWidth);
-        if (sidecarWidth > 0 && dims.canisterWidth > sidecarWidth) {
-          const scale = sidecarWidth / dims.canisterWidth;
-          dims = {
-            canisterWidth: Math.max(36, Math.round(dims.canisterWidth * scale)),
-            canisterHeight: Math.max(48, Math.round(dims.canisterHeight * scale)),
-            glassHeight: Math.max(28, Math.round(dims.glassHeight * scale)),
-            glassWidth: Math.max(16, Math.round(dims.glassWidth * scale)),
-          };
-        }
-      }
-
       return dims;
-    }, [gridFrameHeight, screenHeight, screenWidth]);
+    }, [gridFrameHeight, screenHeight, sizeMode]);
 
     useEffect(() => {
       fillPct.value = withTiming(harvestPercentage / 100, {

@@ -11,7 +11,10 @@ import CargoGridBoard from './CargoGridBoard';
 import CargoCreditsHud from './CargoCreditsHud';
 import {
   CARGO_OVERLAY_PANEL_PADDING,
+  COMBAT_OVERLAY_PANEL_PADDING,
   resolveCargoOverlayCellSize,
+  resolveCombatOverlayCellSize,
+  resolveCombatOverlayContentWidth,
   resolveOverlayPanelWidth,
 } from '../constants/cargoOverlayLayout';
 import { useLandscapeMetrics } from '../hooks/useLandscapeMetrics';
@@ -75,21 +78,33 @@ export default function CargoGridOverlay({
     return count;
   }, [cargo, onUseAmpoule, onUseDeadDrop, onUseResonanceBribe, scannerMode]);
 
-  const cellSize = useMemo(
-    () => resolveCargoOverlayCellSize(screenHeight, screenWidth, safeBottom, {
-      combatMode,
+  const cellSize = useMemo(() => {
+    if (combatMode) {
+      return resolveCombatOverlayCellSize(screenHeight, safeBottom);
+    }
+    return resolveCargoOverlayCellSize(screenHeight, screenWidth, safeBottom, {
       hasContainment: cargo.containment.length > 0,
       scannerButtonCount,
-    }),
-    [cargo.containment.length, combatMode, safeBottom, scannerButtonCount, screenHeight, screenWidth],
-  );
+    });
+  }, [
+    cargo.containment.length,
+    combatMode,
+    safeBottom,
+    scannerButtonCount,
+    screenHeight,
+    screenWidth,
+  ]);
+
+  const panelPadding = combatMode ? COMBAT_OVERLAY_PANEL_PADDING : CARGO_OVERLAY_PANEL_PADDING;
 
   const panelWidth = useMemo(
     () => resolveOverlayPanelWidth(screenWidth, cellSize, combatMode),
     [cellSize, combatMode, screenWidth],
   );
 
-  const contentWidth = panelWidth - CARGO_OVERLAY_PANEL_PADDING * 2;
+  const contentWidth = combatMode
+    ? resolveCombatOverlayContentWidth(cellSize)
+    : panelWidth - panelPadding * 2;
 
   return (
     <Modal
@@ -114,6 +129,8 @@ export default function CargoGridOverlay({
                 borderColor: accentColor,
                 width: panelWidth,
                 maxWidth: screenWidth - 12,
+                paddingHorizontal: panelPadding,
+                paddingBottom: panelPadding,
               },
             ]}
           >
@@ -196,7 +213,6 @@ const styles = StyleSheet.create({
   panel: {
     borderWidth: 2,
     backgroundColor: '#050608',
-    paddingHorizontal: CARGO_OVERLAY_PANEL_PADDING,
     paddingBottom: CARGO_OVERLAY_PANEL_PADDING,
     gap: 8,
   },

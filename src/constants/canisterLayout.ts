@@ -45,6 +45,9 @@ export const CANISTER_GRID_HEIGHT_RATIO = 0.78;
 /** Harvest screen: canister shell + vacuum bar rendered at 60% of grid-derived size (40% reduction). */
 export const HARVEST_CANISTER_SIZE_SCALE = 0.6;
 
+/** Tri-pane harvest extractor block — larger anchored machinery. */
+export const HARVEST_EXTRACTOR_CANISTER_SCALE = 1.05;
+
 export interface CanisterLayoutDimensions {
   glassHeight: number;
   glassWidth: number;
@@ -77,5 +80,17 @@ export function resolveCanisterLayoutForGrid(gridFrameHeight: number): CanisterL
     glassHeight: Math.max(17, Math.round(glassHeight * scale)),
     canisterWidth: Math.max(22, Math.round(canisterWidth * scale)),
     glassWidth: Math.max(10, Math.round(glassWidth * scale)),
+  };
+}
+
+/** Large canister for the dedicated harvest extractor pane. */
+export function resolveCanisterLayoutForExtractorBlock(screenHeight: number): CanisterLayoutDimensions {
+  const dims = resolveCanisterLayoutDimensions(screenHeight);
+  const scale = HARVEST_EXTRACTOR_CANISTER_SCALE;
+  return {
+    canisterHeight: Math.round(dims.canisterHeight * scale),
+    glassHeight: Math.round(dims.glassHeight * scale),
+    canisterWidth: Math.round(dims.canisterWidth * scale),
+    glassWidth: Math.round(dims.glassWidth * scale),
   };
 }

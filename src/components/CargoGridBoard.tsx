@@ -25,8 +25,8 @@ import {
 import { useCombatTurnOptional } from '../context/CombatTurnContext';
 import type { CargoItemId, CargoRunState, PlacedCargoItem } from '../types/cargoGrid';
 import { CARGO_GRID_COLS, CARGO_GRID_ROWS, CARGO_ITEM_CATALOG } from '../types/cargoGrid';
-import { HARVEST_EXTERNAL_BAY_MARGIN_TOP, harvestExternalBayHeight } from '../constants/harvestLayout';
-import { COMBAT_OVERLAY_SPLIT_GAP } from '../constants/cargoOverlayLayout';
+import { HARVEST_EXTERNAL_BAY_MARGIN_TOP, HARVEST_TRI_PANE_GAP, harvestExternalBayHeight } from '../constants/harvestLayout';
+import { COMBAT_OVERLAY_SPLIT_GAP, resolveCombatOverlaySplitWidths } from '../constants/cargoOverlayLayout';
 import type { TerminalTheme } from '../types/theme';
 import { countCargoItemInstances } from '../data/cargoGridEngine';
 import { resolveCargoItemIcon } from '../utils/cargoItemIcon';
@@ -109,6 +109,12 @@ interface CargoGridBoardProps {
   overlayCombatSplit?: boolean;
   /** Full inner width of the combat overlay panel (excluding modal padding). */
   contentWidth?: number;
+  /** Harvest tri-pane: grid left, drop zone center, extractor right. */
+  harvestTriPaneLayout?: boolean;
+  leftPaneHeader?: React.ReactNode;
+  rightPaneSlot?: React.ReactNode;
+  leftPaneWidth?: number;
+  rightPaneWidth?: number;
 }
 
 function cellsForItem(itemId: CargoItemId, originRow: number, originCol: number): string[] {
@@ -397,6 +403,11 @@ export default function CargoGridBoard({
   overlayCompact = false,
   overlayCombatSplit = false,
   contentWidth,
+  harvestTriPaneLayout = false,
+  leftPaneHeader,
+  rightPaneSlot,
+  leftPaneWidth,
+  rightPaneWidth,
 }: CargoGridBoardProps): React.JSX.Element {
   const cellSize = cellSizeProp ?? CARGO_CELL_SIZE;
   const combatDetailHeight = overlayCompact ? 168 : COMBAT_DETAIL_PANEL_HEIGHT;
@@ -410,11 +421,19 @@ export default function CargoGridBoard({
     () => cargoGridFrameDimensions(cellSize),
     [cellSize],
   );
+  const combatSplitWidths = useMemo(
+    () => (overlayCombatSplit ? resolveCombatOverlaySplitWidths(frameWidth) : null),
+    [frameWidth, overlayCombatSplit],
+  );
+  const combatLayoutWidth = combatSplitWidths
+    ? combatSplitWidths.gridWidth + COMBAT_OVERLAY_SPLIT_GAP + combatSplitWidths.detailWidth
+    : frameWidth;
   const combatTurn = useCombatTurnOptional();
   const runCredits = runCreditsProp ?? combatTurn?.runCredits ?? 0;
   const playerActionPoints = playerActionPointsProp ?? combatTurn?.playerActionPoints ?? 0;
   const boardRef = useRef<View>(null);
   const externalBayRef = useRef<View>(null);
+  const dropZoneRef = useRef<View>(null);
   const gridRef = useRef<View>(null);
   const gridMetricsRef = useRef<GridMetrics | null>(null);
   const boardMetricsRef = useRef<GridMetrics | null>(null);
@@ -505,10 +524,16 @@ export default function CargoGridBoard({
 
   const reportHarvestFloor = useCallback(() => {
     if (!onHarvestFloorMeasured) return;
-    externalBayRef.current?.measureInWindow((x, y, width, height) => {
+    const measureRef = harvestTriPaneLayout ? dropZoneRef : externalBayRef;
+    measureRef.current?.measureInWindow((x, y, width, height) => {
       onHarvestFloorMeasured({ x, y, width, height });
     });
-  }, [onHarvestFloorMeasured]);
+  }, [harvestTriPaneLayout, onHarvestFloorMeasured]);
+
+  const handleDropZoneLayout = useCallback(() => {
+    captureMetrics();
+    reportHarvestFloor();
+  }, [captureMetrics, reportHarvestFloor]);
 
   const handleGridLayout = useCallback((_event: LayoutChangeEvent) => {
     captureMetrics();
@@ -829,7 +854,7 @@ export default function CargoGridBoard({
     ? spriteSizeForCargoItem(activeDrag.itemId, cellSize)
     : null;
 
-  const layoutWidth = overlayCombatSplit && contentWidth != null ? contentWidth : frameWidth;
+  const layoutWidth = overlayCombatSplit ? combatLayoutWidth : frameWidth;
 
   const combatDetailPanel = combatMode && onUseCombatConsumable ? (
     <View
@@ -838,9 +863,12 @@ export default function CargoGridBoard({
         {
           borderColor: theme.borderColor,
           height: overlayCombatSplit ? frameHeight : combatDetailHeight,
-          width: overlayCombatSplit ? undefined : frameWidth,
-          flex: overlayCombatSplit ? 1 : undefined,
+          width: overlayCombatSplit
+            ? combatSplitWidths?.detailWidth
+            : frameWidth,
+          flex: undefined,
           minWidth: overlayCombatSplit ? 0 : undefined,
+          flexShrink: overlayCombatSplit ? 0 : undefined,
         },
       ]}
     >
@@ -931,123 +959,99 @@ export default function CargoGridBoard({
     </View>
   ) : null;
 
-  return (
-    <View style={[
-      styles.root,
-      minimal && styles.rootMinimal,
-      overlayCompact && styles.rootOverlayCompact,
-      overlayCombatSplit ? styles.rootCombatSplit : styles.rootCentered,
-      { width: layoutWidth, gap: boardGap ?? (cellSize < 48 ? 8 : undefined) },
-    ]}>
-      {showCreditsHud ? (
-        <CargoCreditsHud credits={runCredits} accentColor={accentColor} style={styles.creditsHud} />
-      ) : null}
-
+  const externalBayNode = externalSlotCount > 0 ? (
+    <View
+      ref={harvestTriPaneLayout ? undefined : externalBayRef}
+      onLayout={harvestTriPaneLayout ? undefined : reportHarvestFloor}
+      style={[
+        styles.externalBay,
+        stableExternalBay ? styles.externalBayStable : null,
+        harvestTriPaneLayout ? styles.externalBayTriPane : null,
+        stableExternalBay && !harvestTriPaneLayout ? { height: harvestExternalBayHeight(cellSize) } : null,
+        { marginTop: harvestTriPaneLayout ? 0 : externalBayMarginTop },
+      ]}
+    >
       <View
-        ref={boardRef}
-        onLayout={captureMetrics}
         style={[
-          styles.boardShell,
-          { width: layoutWidth },
-          overlayCombatSplit ? styles.boardShellCombatSplit : null,
+          styles.externalRow,
+          stableExternalBay ? {
+            width: externalSlotCount * cellSize + (externalSlotCount - 1) * 20,
+            alignSelf: 'center',
+            justifyContent: 'flex-start',
+          } : null,
+          harvestTriPaneLayout ? styles.externalRowTriPane : null,
         ]}
       >
-        <View style={[styles.gridDock, overlayCombatSplit ? styles.gridDockSplit : null]}>
-          {gridBlock}
-        </View>
-
-        {overlayCombatSplit ? combatDetailPanel : null}
-
-        {externalSlotCount > 0 ? (
-        <View
-          ref={externalBayRef}
-          onLayout={reportHarvestFloor}
-          style={[
-            styles.externalBay,
-            stableExternalBay ? styles.externalBayStable : null,
-            stableExternalBay ? { height: harvestExternalBayHeight(cellSize) } : null,
-            { marginTop: externalBayMarginTop },
-          ]}
-        >
-          <View
-            style={[
-              styles.externalRow,
-              stableExternalBay ? {
-                width: externalSlotCount * cellSize + (externalSlotCount - 1) * 20,
-                alignSelf: 'center',
-                justifyContent: 'flex-start',
-              } : null,
-            ]}
-          >
-            {Array.from({ length: externalSlotCount }, (_, slotIndex) => {
-                const item = containmentBySlot
-                  ? (containmentBySlot.get(slotIndex) ?? null)
-                  : (displayCargo.containment[slotIndex] ?? null);
-                if (!item) {
-                  return (
-                    <View
-                      key={`empty-slot-${slotIndex}`}
-                      style={[styles.externalSlot, { width: cellSize, height: cellSize }]}
-                    />
-                  );
-                }
-                const spriteSize = spriteSizeForCargoItem(item.itemId, cellSize);
-                const source: CargoDragSource = {
-                  instanceId: item.instanceId,
-                  itemId: item.itemId,
-                  source: 'containment',
-                };
-                const isDragging = activeDrag?.instanceId === item.instanceId;
-                return (
-                  <ContainmentSlot
-                    key={`external-slot-${slotIndex}`}
-                    item={item}
-                    spriteSize={spriteSize}
-                    isDragging={isDragging}
-                    source={source}
-                    onContainmentItemCenterMeasured={onContainmentItemCenterMeasured}
-                    onHoverCell={handleHoverCell}
-                    onDragStart={handleDragStart}
-                    onDragMove={handleDragMove}
-                    onDragEnd={clearDrag}
-                    onDropAttempt={handleDropAttempt}
-                    combatMode={combatMode}
-                    combatConsumablesEnabled={combatConsumablesEnabled}
-                    selectedCombatItemId={selectedCombatItemId}
-                    selectCombatItem={selectCombatItem}
-                  />
-                );
-              })}
-          </View>
-        </View>
-        ) : null}
-
-        {activeDrag && dragOverlay && overlaySprite ? (
-          <View style={styles.dragOverlayLayer} pointerEvents="none">
-            <Animated.View
-              style={[
-                ghostAnimatedStyle,
-                {
-                  position: 'absolute',
-                  left: dragOverlay.x - overlaySprite.width / 2,
-                  top: dragOverlay.y - overlaySprite.height / 2,
-                  width: overlaySprite.width,
-                  height: overlaySprite.height,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                },
-              ]}
-            >
-              <Image
-                source={resolveCargoItemIcon(activeDrag.itemId)}
-                resizeMode="contain"
-                style={[styles.lootSprite, overlaySprite]}
+        {Array.from({ length: externalSlotCount }, (_, slotIndex) => {
+            const item = containmentBySlot
+              ? (containmentBySlot.get(slotIndex) ?? null)
+              : (displayCargo.containment[slotIndex] ?? null);
+            if (!item) {
+              return (
+                <View
+                  key={`empty-slot-${slotIndex}`}
+                  style={[styles.externalSlot, { width: cellSize, height: cellSize }]}
+                />
+              );
+            }
+            const spriteSize = spriteSizeForCargoItem(item.itemId, cellSize);
+            const source: CargoDragSource = {
+              instanceId: item.instanceId,
+              itemId: item.itemId,
+              source: 'containment',
+            };
+            const isDragging = activeDrag?.instanceId === item.instanceId;
+            return (
+              <ContainmentSlot
+                key={`external-slot-${slotIndex}`}
+                item={item}
+                spriteSize={spriteSize}
+                isDragging={isDragging}
+                source={source}
+                onContainmentItemCenterMeasured={onContainmentItemCenterMeasured}
+                onHoverCell={handleHoverCell}
+                onDragStart={handleDragStart}
+                onDragMove={handleDragMove}
+                onDragEnd={clearDrag}
+                onDropAttempt={handleDropAttempt}
+                combatMode={combatMode}
+                combatConsumablesEnabled={combatConsumablesEnabled}
+                selectedCombatItemId={selectedCombatItemId}
+                selectCombatItem={selectCombatItem}
               />
-            </Animated.View>
-          </View>
-        ) : null}
+            );
+          })}
       </View>
+    </View>
+  ) : null;
 
+  const dragGhostOverlay = activeDrag && dragOverlay && overlaySprite ? (
+    <View style={styles.dragOverlayLayer} pointerEvents="none">
+      <Animated.View
+        style={[
+          ghostAnimatedStyle,
+          {
+            position: 'absolute',
+            left: dragOverlay.x - overlaySprite.width / 2,
+            top: dragOverlay.y - overlaySprite.height / 2,
+            width: overlaySprite.width,
+            height: overlaySprite.height,
+            justifyContent: 'center',
+            alignItems: 'center',
+          },
+        ]}
+      >
+        <Image
+          source={resolveCargoItemIcon(activeDrag.itemId)}
+          resizeMode="contain"
+          style={[styles.lootSprite, overlaySprite]}
+        />
+      </Animated.View>
+    </View>
+  ) : null;
+
+  const postBoardControls = (
+    <>
       {scannerMode && hasAmpouleInGrid && onUseAmpoule ? (
         <HapticPressable
           onPress={() => {
@@ -1119,6 +1123,92 @@ export default function CargoGridBoard({
         }}
         onCancel={() => setPendingDiscard(null)}
       />
+    </>
+  );
+
+  if (harvestTriPaneLayout) {
+    return (
+      <View style={[styles.root, styles.rootHarvestTriPane, { width: '100%' }]}>
+        {showCreditsHud ? (
+          <CargoCreditsHud credits={runCredits} accentColor={accentColor} style={styles.creditsHud} />
+        ) : null}
+
+        <View
+          ref={boardRef}
+          onLayout={captureMetrics}
+          style={styles.harvestTriPaneRow}
+        >
+          <View style={[styles.harvestLeftPane, leftPaneWidth != null ? { width: leftPaneWidth } : null]}>
+            <View style={[styles.cargoPackBacking, { borderColor: theme.borderColor }]}>
+              {leftPaneHeader}
+              <View style={[styles.boardShell, { width: frameWidth }]}>
+                <View style={styles.gridDock}>{gridBlock}</View>
+              </View>
+            </View>
+          </View>
+
+          <View
+            ref={dropZoneRef}
+            onLayout={handleDropZoneLayout}
+            style={[styles.harvestCenterPane, { borderColor: theme.borderColor }]}
+          >
+            <Text style={[styles.dropZoneLabel, { color: theme.mutedColor }]}>
+              FIELD DROP // UNPACKED LOOT
+            </Text>
+            {externalBayNode}
+          </View>
+
+          <View style={[styles.harvestRightPane, rightPaneWidth != null ? { width: rightPaneWidth } : null]}>
+            {rightPaneSlot}
+          </View>
+
+          {dragGhostOverlay}
+        </View>
+
+        {postBoardControls}
+      </View>
+    );
+  }
+
+  return (
+    <View style={[
+      styles.root,
+      minimal && styles.rootMinimal,
+      overlayCompact && styles.rootOverlayCompact,
+      overlayCombatSplit ? styles.rootCombatSplit : styles.rootCentered,
+      { width: layoutWidth, gap: boardGap ?? (cellSize < 48 ? 8 : undefined) },
+    ]}>
+      {showCreditsHud ? (
+        <CargoCreditsHud credits={runCredits} accentColor={accentColor} style={styles.creditsHud} />
+      ) : null}
+
+      <View
+        ref={boardRef}
+        onLayout={captureMetrics}
+        style={[
+          styles.boardShell,
+          { width: layoutWidth },
+          overlayCombatSplit ? styles.boardShellCombatSplit : null,
+        ]}
+      >
+        <View
+          style={[
+            styles.gridDock,
+            overlayCombatSplit ? styles.gridDockSplit : null,
+            combatSplitWidths ? { width: combatSplitWidths.gridWidth } : null,
+          ]}
+        >
+          {gridBlock}
+        </View>
+
+        {overlayCombatSplit ? combatDetailPanel : null}
+
+        {externalBayNode}
+
+        {dragGhostOverlay}
+      </View>
+
+      {postBoardControls}
     </View>
   );
 }
@@ -1145,6 +1235,58 @@ const styles = StyleSheet.create({
   rootOverlayCompact: {
     gap: 10,
   },
+  rootHarvestTriPane: {
+    flex: 1,
+    minHeight: 0,
+    gap: 0,
+    alignSelf: 'stretch',
+  },
+  harvestTriPaneRow: {
+    flex: 1,
+    minHeight: 0,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: HARVEST_TRI_PANE_GAP,
+    position: 'relative',
+    overflow: 'visible',
+  },
+  harvestLeftPane: {
+    flexShrink: 0,
+    minHeight: 0,
+    justifyContent: 'flex-start',
+  },
+  cargoPackBacking: {
+    flex: 1,
+    minHeight: 0,
+    backgroundColor: 'rgba(5, 6, 8, 0.84)',
+    borderWidth: 1,
+    padding: 12,
+    gap: 8,
+    justifyContent: 'flex-start',
+  },
+  harvestCenterPane: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 0,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    backgroundColor: 'rgba(0, 0, 0, 0.28)',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 8,
+    overflow: 'visible',
+  },
+  dropZoneLabel: {
+    fontFamily: 'monospace',
+    fontSize: 7,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textAlign: 'center',
+  },
+  harvestRightPane: {
+    flexShrink: 0,
+    minHeight: 0,
+  },
   creditsHud: {
     position: 'absolute',
     top: 0,
@@ -1165,7 +1307,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   gridDockSplit: {
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    justifyContent: 'center',
     flexShrink: 0,
   },
   gridFrame: {
@@ -1226,6 +1369,13 @@ const styles = StyleSheet.create({
     minHeight: undefined,
     marginTop: HARVEST_EXTERNAL_BAY_MARGIN_TOP,
   },
+  externalBayTriPane: {
+    marginTop: 0,
+    minHeight: undefined,
+    flex: 1,
+    justifyContent: 'center',
+    width: '100%',
+  },
   externalRow: {
     flexDirection: 'row',
     flexWrap: 'nowrap',
@@ -1233,6 +1383,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'flex-start',
     width: '100%',
+  },
+  externalRowTriPane: {
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+    alignSelf: 'center',
   },
   externalSlot: {
     width: CARGO_CELL_SIZE,

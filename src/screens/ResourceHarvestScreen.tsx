@@ -6,16 +6,18 @@ import ResidueParticle from '../components/harvest/ResidueParticle';
 import VeilVacuumCanisterStack, {
   type VeilVacuumCanisterStackHandle,
 } from '../components/harvest/VeilVacuumCanisterStack';
-import { CARGO_GRID_FRAME_HEIGHT } from '../components/CargoGridBoard';
 import IncursionShell from '../components/IncursionShell';
 import IncursionRunLayout from '../components/IncursionRunLayout';
 import RunEventScreenFrame from '../components/layout/RunEventScreenFrame';
 import SelectionContinueButton from '../components/SelectionContinueButton';
+import { LANDSCAPE_PANEL_PADDING } from '../constants/landscapeLayout';
+import { resolveImmersiveFooterInset } from '../constants/immersiveLayout';
 import { MAX_RUN_CANISTER_RESIDUE } from '../constants/veilResidue';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { isVeilResidueCargoItem } from '../data/cargoGridEngine';
+import { useLandscapeMetrics } from '../hooks/useLandscapeMetrics';
 import { useNodeProgression } from '../hooks/useNodeProgression';
 import type { HarvestFloorBounds, ResidueParticleData } from '../types/residueParticle';
 import {
@@ -34,6 +36,7 @@ const VALUE_EPSILON = 0.001;
 
 export default function ResourceHarvestScreen(): React.JSX.Element {
   const { theme } = useTerminal();
+  const { safeBottom, safeRight } = useLandscapeMetrics();
   const {
     runState,
     activeIncursion,
@@ -75,6 +78,15 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
   const harvestPercentage = (activeIncursion.sessionVeilResidueCollected / MAX_RUN_CANISTER_RESIDUE) * 100;
   const canisterFull = activeIncursion.sessionVeilResidueCollected >= MAX_RUN_CANISTER_RESIDUE;
   const canVacuum = lootPool.length > 0 && !canisterFull;
+
+  const continueLabel = useMemo(
+    () => (activeIncursion.pendingHarvestReturn === 'RESOURCE_CACHE'
+      ? '[ CONTINUE TO GRID ]'
+      : '[ CONTINUE RUN ]'),
+    [activeIncursion.pendingHarvestReturn],
+  );
+
+  const footerInset = resolveImmersiveFooterInset(safeBottom);
 
   const residueInstanceIds = useMemo(
     () => activeIncursion.cargo.containment
@@ -269,22 +281,6 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
           backgroundImage={ResourceHarvestBg}
           backgroundScrimOpacity={0.72}
           bodyStyle={styles.harvestBody}
-          footer={(
-            <View style={[styles.footerBand, { backgroundColor: `${theme.backgroundColor}ee` }]}>
-              <SelectionContinueButton
-                enabled
-                onPress={handlePackingContinue}
-                label={
-                  activeIncursion.pendingHarvestReturn === 'RESOURCE_CACHE'
-                    ? '[ CONTINUE TO GRID ]'
-                    : '[ CONTINUE RUN ]'
-                }
-                borderColor={theme.borderColor}
-                mutedColor={theme.mutedColor}
-                style={styles.continueFooter}
-              />
-            </View>
-          )}
           overlay={(
             <View ref={overlayRef} style={styles.particleOverlay} pointerEvents="none">
               {lootPool.map((particle) => (
@@ -299,35 +295,54 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
             </View>
           )}
         >
-          <CargoPackingPanel
-            cargo={displayCargo}
-            theme={theme}
-            onRelocateItem={relocateCargoItem}
-            onDiscardItem={discardCargoInstance}
-            showCreditsHud={false}
-            onContinue={handlePackingContinue}
-            continueLabel={
-              activeIncursion.pendingHarvestReturn === 'RESOURCE_CACHE'
-                ? '[ CONTINUE TO GRID ]'
-                : '[ CONTINUE RUN ]'
-            }
-            onHarvestFloorMeasured={handleHarvestFloorMeasured}
-            fixedExternalSlotCount={fixedExternalSlotCount}
-            resolveContainmentSlotIndex={resolveContainmentSlotIndex}
-            harvestLayout
-            hideContinueButton
-            gridSidecar={(
-              <VeilVacuumCanisterStack
-                ref={canisterRef}
-                harvestPercentage={harvestPercentage}
-                active={isVacuuming}
-                disabled={!canVacuum}
-                onPressIn={handleVacuumStart}
-                onPressOut={handleVacuumStop}
-                gridFrameHeight={CARGO_GRID_FRAME_HEIGHT}
+          <View style={styles.harvestStage}>
+            <CargoPackingPanel
+              cargo={displayCargo}
+              theme={theme}
+              onRelocateItem={relocateCargoItem}
+              onDiscardItem={discardCargoInstance}
+              showCreditsHud={false}
+              onContinue={handlePackingContinue}
+              continueLabel={continueLabel}
+              onHarvestFloorMeasured={handleHarvestFloorMeasured}
+              fixedExternalSlotCount={fixedExternalSlotCount}
+              resolveContainmentSlotIndex={resolveContainmentSlotIndex}
+              harvestTriPane
+              harvestPercentage={harvestPercentage}
+              hideContinueButton
+              gridSidecar={(
+                <VeilVacuumCanisterStack
+                  ref={canisterRef}
+                  harvestPercentage={harvestPercentage}
+                  active={isVacuuming}
+                  disabled={!canVacuum}
+                  onPressIn={handleVacuumStart}
+                  onPressOut={handleVacuumStop}
+                  sizeMode="extractor-block"
+                />
+              )}
+            />
+
+            <View
+              style={[
+                styles.continueCorner,
+                {
+                  right: LANDSCAPE_PANEL_PADDING + safeRight,
+                  bottom: footerInset,
+                },
+              ]}
+              pointerEvents="box-none"
+            >
+              <SelectionContinueButton
+                enabled
+                onPress={handlePackingContinue}
+                label={continueLabel}
+                borderColor={theme.borderColor}
+                mutedColor={theme.mutedColor}
+                style={styles.continueFooter}
               />
-            )}
-          />
+            </View>
+          </View>
         </RunEventScreenFrame>
       </IncursionRunLayout>
     </IncursionShell>
@@ -338,20 +353,23 @@ const styles = StyleSheet.create({
   harvestBody: {
     flex: 1,
     minHeight: 0,
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-    paddingTop: 2,
+    paddingTop: 0,
     pointerEvents: 'box-none',
   },
-  footerBand: {
-    paddingTop: 6,
-    paddingBottom: 2,
+  harvestStage: {
+    flex: 1,
+    minHeight: 0,
+    width: '100%',
+  },
+  continueCorner: {
+    position: 'absolute',
+    zIndex: 40,
+    minWidth: 210,
+    maxWidth: 280,
   },
   continueFooter: {
     marginTop: 0,
-    alignSelf: 'center',
-    width: '100%',
-    maxWidth: 360,
+    alignSelf: 'stretch',
   },
   particleOverlay: {
     ...StyleSheet.absoluteFillObject,

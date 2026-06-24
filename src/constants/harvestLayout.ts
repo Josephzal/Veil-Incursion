@@ -4,11 +4,16 @@ import {
   resolveImmersiveContentPadding,
   resolveImmersiveFooterInset,
 } from './immersiveLayout';
-import { CARGO_GRID_ROWS } from '../types/cargoGrid';
+import { CARGO_GRID_COLS, CARGO_GRID_ROWS } from '../types/cargoGrid';
 
 export const HARVEST_HORIZONTAL_PADDING = 8;
 export const GRID_CANISTER_GAP = 6;
 export const HARVEST_EXTERNAL_ROW_GAP = 20;
+/** Tri-pane harvest column ratios. */
+export const HARVEST_LEFT_PANE_RATIO = 0.27;
+export const HARVEST_RIGHT_PANE_RATIO = 0.23;
+export const HARVEST_TRI_PANE_GAP = 8;
+export const HARVEST_CARGO_BACKING_PADDING = 12;
 /** Padding below the containment slot row inside the external bay. */
 export const HARVEST_EXTERNAL_BAY_EXTRA = 28;
 /** Fixed vertical footprint for the harvest containment row (margin + slot height). */
@@ -68,6 +73,42 @@ export function resolveHarvestCellSize(
   const computed = Math.floor(numerator / (CARGO_GRID_ROWS + 1));
 
   return Math.min(CARGO_CELL_SIZE, Math.max(HARVEST_MIN_CELL_SIZE, computed));
+}
+
+export function resolveHarvestTriPaneCellSize(
+  screenHeight: number,
+  screenWidth: number,
+  topInset = 0,
+): number {
+  const framePaddingTop = resolveImmersiveContentPadding(topInset, LANDSCAPE_PANEL_PADDING);
+  const framePaddingBottom = LANDSCAPE_PANEL_PADDING;
+  const headerReserve = HARVEST_HEADER_RESERVE + HARVEST_BOARD_COLUMN_GAP;
+
+  const leftPaneInnerWidth =
+    Math.floor(screenWidth * HARVEST_LEFT_PANE_RATIO)
+    - HARVEST_CARGO_BACKING_PADDING * 2
+    - 2;
+  const widthCell = Math.floor(
+    (leftPaneInnerWidth - (CARGO_GRID_COLS - 1) * CARGO_CELL_GAP) / CARGO_GRID_COLS,
+  );
+
+  const rowGaps = (CARGO_GRID_ROWS - 1) * CARGO_CELL_GAP;
+  const heightAvailable =
+    screenHeight - framePaddingTop - framePaddingBottom - headerReserve - 8;
+  const heightCell = Math.floor((heightAvailable - rowGaps) / CARGO_GRID_ROWS);
+
+  return Math.min(
+    CARGO_CELL_SIZE,
+    Math.max(HARVEST_MIN_CELL_SIZE, Math.min(widthCell, heightCell)),
+  );
+}
+
+export function resolveHarvestLeftPaneWidth(screenWidth: number): number {
+  return Math.floor(screenWidth * HARVEST_LEFT_PANE_RATIO);
+}
+
+export function resolveHarvestRightPaneWidth(screenWidth: number): number {
+  return Math.floor(screenWidth * HARVEST_RIGHT_PANE_RATIO);
 }
 
 /** Width of the harvest gap between the cargo grid and the right screen edge. */
