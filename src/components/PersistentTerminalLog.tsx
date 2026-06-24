@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MacroLogCargoButton, { TERMINAL_ACCENT } from './MacroLogCargoButton';
@@ -12,6 +12,7 @@ const MACRO_LOG_HORIZONTAL_PADDING = 12;
 /** Fixed macro log footprint shared across combat, checkpoint, and scanner screens. */
 export const MACRO_LOG_BLOCK_HEIGHT = 110;
 const SCROLL_CONTENT_PADDING_BOTTOM = 24;
+const SCROLL_CONTENT_PADDING_BOTTOM_DASHBOARD = 2;
 
 interface PersistentTerminalLogProps {
   visible?: boolean;
@@ -54,6 +55,10 @@ export default function PersistentTerminalLog({
   const { theme } = useTerminal();
   const scrollRef = useRef<ScrollView>(null);
   const insets = useSafeAreaInsets();
+  const [scrollHeight, setScrollHeight] = useState(0);
+  const [contentHeight, setContentHeight] = useState(0);
+
+  const contentPinsToBottom = fillRemaining && contentHeight > 0 && contentHeight <= scrollHeight;
 
   useEffect(() => {
     if (runLog.length > 0) {
@@ -65,6 +70,9 @@ export default function PersistentTerminalLog({
   if (!fillRemaining && !showCargo && !showStatus && runLog.length === 0) return null;
 
   const bottomInset = docked ? resolveBottomInset(insets.bottom) : 0;
+  const dashboardPaddingBottom = hideTopBorder
+    ? SCROLL_CONTENT_PADDING_BOTTOM_DASHBOARD
+    : SCROLL_CONTENT_PADDING_BOTTOM;
 
   const logBlock = (
     <View
@@ -93,9 +101,17 @@ export default function PersistentTerminalLog({
       <ScrollView
         ref={scrollRef}
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, fillRemaining ? styles.scrollContentFill : null]}
+        onLayout={(event) => setScrollHeight(event.nativeEvent.layout.height)}
+        contentContainerStyle={[
+          styles.scrollContent,
+          fillRemaining ? styles.scrollContentFill : null,
+          contentPinsToBottom ? styles.scrollContentPinned : null,
+          !contentPinsToBottom && fillRemaining ? styles.scrollContentScrollable : null,
+          { paddingBottom: fillRemaining ? dashboardPaddingBottom : SCROLL_CONTENT_PADDING_BOTTOM },
+        ]}
         nestedScrollEnabled
         showsVerticalScrollIndicator={false}
+        onContentSizeChange={(_width, height) => setContentHeight(height)}
       >
         {runLog.map((line, idx) => (
           <LogLine key={`${idx}-${line.slice(0, 12)}`} line={line} color={TERMINAL_ACCENT} />
@@ -183,13 +199,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: SCROLL_CONTENT_PADDING_BOTTOM,
     paddingHorizontal: 2,
     flexGrow: 1,
   },
   scrollContentFill: {
     flexGrow: 1,
+  },
+  scrollContentPinned: {
     justifyContent: 'flex-end',
+  },
+  scrollContentScrollable: {
+    justifyContent: 'flex-start',
+    flexGrow: 0,
   },
   lineRow: {
     flexDirection: 'row',

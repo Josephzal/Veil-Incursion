@@ -19,7 +19,12 @@ import {
   type KineticDamageSource,
 } from '../data/combatEnvironmentEngine';
 import { bossStrikeDamage, rollBossIntent, shouldShiftBossPhase } from '../data/bossCombat';
-import { resolveEnemyThreatTier } from '../data/enemyRoster';
+import {
+  ENEMY_ROSTER,
+  factionForDistrict,
+  resolveEnemyThreatTier,
+  type EnemyRosterId,
+} from '../data/enemyRoster';
 import { COMBAT_ACTION, ENEMY_ABYSSAL_SIPHON_REQUEST, EnemyCombatProfile, EnemyIntent } from '../types/run';
 import type { IncursionConsumableUseResult } from '../types/incursionInventory';
 import {
@@ -2498,6 +2503,10 @@ export default function TacticalCombatHub({
       log(`${tag} >> COLD VACUUM — +${LEGION_COLD_VACUUM_STAMINA} stamina tax.`);
     }
     if (source && dmg > 0 && !options?.indirectDamage && !options?.echoHit) {
+      const rosterEntry = working.rosterId
+        ? ENEMY_ROSTER[working.rosterId as EnemyRosterId]
+        : undefined;
+      const strikeFaction = rosterEntry?.faction ?? factionForDistrict(combatDistrict);
       if (operativeClass === 'AEGIS') {
         const targetSlot = (working.gridSlot ?? 'FL_0') as CombatGridSlotId;
         const arenaHeight = Math.max(
@@ -2511,9 +2520,9 @@ export default function TacticalCombatHub({
           arenaHeight,
           arenaGridVariant,
         );
-        playerViewportRef?.current?.triggerAttackLunge(lungeDelta);
+        playerViewportRef?.current?.triggerAttackLunge(lungeDelta, { faction: strikeFaction });
       } else {
-        playerViewportRef?.current?.triggerRangedAttack();
+        playerViewportRef?.current?.triggerRangedAttack({ faction: strikeFaction });
       }
     }
     const poolHp = working.sharedBossPool && bossRuntimeRef.current
@@ -2870,8 +2879,6 @@ export default function TacticalCombatHub({
       }
       const nextFocus = primaryAliveUnit(squadRef.current);
       if (nextFocus?.unitId) selectTarget(nextFocus.unitId);
-    } else {
-      playerViewportRef?.current?.triggerDamageEffect('hp');
     }
     return false;
   };
@@ -6322,7 +6329,7 @@ export default function TacticalCombatHub({
     const intentLabel = enemy ? formatIntentReadout(enemy.intent) : 'RESOLVING';
     const isReading = enemyActionStage === 'reading';
     return (
-      <View style={[styles.enemyTurnPanel, { borderColor: P.enemyHp }]}>
+      <View style={styles.enemyTurnPanel}>
         <Text style={[styles.enemyTurnTitle, { color: P.enemyHp }]}>
           {isReading
             ? `>> HOSTILE CHANNEL // ${intentLabel}`
@@ -6612,10 +6619,11 @@ const styles = StyleSheet.create({
   enemyTurnPanel: {
     width: '100%',
     minHeight: COMMAND_DECK_MIN_HEIGHT_WITH_ULTIMATE,
-    borderWidth: 1,
+    borderWidth: 0,
     paddingHorizontal: 10,
-    paddingVertical: 12,
-    justifyContent: 'center',
+    paddingTop: 4,
+    paddingBottom: 12,
+    justifyContent: 'flex-start',
     gap: 6,
     backgroundColor: 'rgba(10, 11, 15, 0.96)',
   },

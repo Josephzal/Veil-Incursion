@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import Animated, {
+  cancelAnimation,
   Easing,
   useAnimatedStyle,
   useSharedValue,
@@ -22,11 +23,15 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
+import { FACTION_STRIKE_TINT } from '../../constants/combatFactionStrike';
+import type { FactionType } from '../../types/game';
 import type { EnemyDeckStrikeVariant } from '../../utils/combatTelemetryFormat';
 import {
   FRONTLINE_MELEE_RETURN_IDLE_MS,
   FRONTLINE_MELEE_SNAP_MS,
   FRONTLINE_MELEE_SPRITE_HOLD_MS,
+  FRONTLINE_MELEE_SPRITE_IN_MS,
+  FRONTLINE_MELEE_SPRITE_OUT_MS,
   RANGED_ATTACK_SPRITE_HOLD_MS,
   RANGED_ATTACK_SPRITE_IN_MS,
   RANGED_ATTACK_SPRITE_OUT_MS,
@@ -35,11 +40,13 @@ import CombatPlayerAttackSprite, { type CombatPlayerAttackSpriteHandle } from '.
 
 const SHAKE_AMPLITUDE = 10;
 const DEFAULT_LUNGE = { x: 48, y: 0 };
-const RANGED_ATTACK_SCALE = 1.4;
 const GLOW_PULSE_MS = 900;
 const PRIMED_GLOW = '#ff00ff';
+/** Peak aura opacity — matches enemy player-selected glow read. */
+const STRIKE_AURA_PEAK = 0.42;
+const STRIKE_AURA_SCALE = 1.08;
 
-const FLASH_COLORS: Record<EnemyDeckStrikeVariant, string> = {
+const DAMAGE_FLASH_COLORS: Record<EnemyDeckStrikeVariant, string> = {
   hp: '#FF453A',
   stamina: '#5C2D91',
   abyssal: '#00D2C4',
@@ -50,11 +57,15 @@ export interface PlayerAttackLungeDelta {
   y: number;
 }
 
+export interface PlayerStrikeOptions {
+  faction?: FactionType;
+}
+
 export interface CombatPlayerViewportRef {
   triggerDamageEffect: (variant?: EnemyDeckStrikeVariant) => void;
-  triggerAttackLunge: (delta?: PlayerAttackLungeDelta) => void;
-  /** Ranged operative strike — attack sprite only, no forward lunge. */
-  triggerRangedAttack: () => void;
+  triggerAttackLunge: (delta?: PlayerAttackLungeDelta, options?: PlayerStrikeOptions) => void;
+  /** Ranged strike — attack crossfade, no lunge/scale; faction aura behind art. */
+  triggerRangedAttack: (options?: PlayerStrikeOptions) => void;
   triggerEvadeAfterimage: () => void;
   triggerEnemyCritVignette: () => void;
   setWardPrimed: (active: boolean) => void;
@@ -77,9 +88,10 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
     const lungeX = useSharedValue(0);
     const lungeY = useSharedValue(0);
     const attackScale = useSharedValue(1);
-    const flashOpacity = useSharedValue(0);
-    const [flashColor, setFlashColor] = useState(FLASH_COLORS.hp);
-    const flashColorRef = useRef(FLASH_COLORS.hp);
+    const damageFlashOpacity = useSharedValue(0);
+    const strikeAuraOpacity = useSharedValue(0);
+    const [damageTint, setDamageTint] = useState(DAMAGE_FLASH_COLORS.hp);
+    const [strikeTint, setStrikeTint] = useState(FACTION_STRIKE_TINT.TERRAN_GRID);
     const glowOpacity = useSharedValue(0);
     const attackSpriteRef = useRef<CombatPlayerAttackSpriteHandle>(null);
     const resolvedAttackSource = attackImageSource ?? imageSource;
@@ -110,19 +122,47 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
       );
     };
 
-    const runFlash = (variant: EnemyDeckStrikeVariant) => {
-      const nextColor = FLASH_COLORS[variant];
-      flashColorRef.current = nextColor;
-      setFlashColor(nextColor);
-      flashOpacity.value = withSequence(
+    const runDamageFlash = (variant: EnemyDeckStrikeVariant) => {
+      setDamageTint(DAMAGE_FLASH_COLORS[variant]);
+      cancelAnimation(strikeAuraOpacity);
+      strikeAuraOpacity.value = 0;
+      damageFlashOpacity.value = withSequence(
         withTiming(0.72, { duration: 90, easing: Easing.out(Easing.cubic) }),
         withTiming(0.48, { duration: 180 }),
         withTiming(0, { duration: 320, easing: Easing.inOut(Easing.cubic) }),
       );
     };
 
-    const runTargetedLunge = (delta: PlayerAttackLungeDelta) => {
+    const runStrikeAura = (
+      faction: FactionType | undefined,
+      inMs: number,
+      holdMs: number,
+      outMs: number,
+    ) => {
+      setStrikeTint(FACTION_STRIKE_TINT[faction ?? 'TERRAN_GRID']);
+      cancelAnimation(damageFlashOpacity);
+      damageFlashOpacity.value = 0;
+      strikeAuraOpacity.value = withSequence(
+        withTiming(1, {
+          duration: inMs,
+          easing: Easing.out(Easing.cubic),
+        }),
+        withDelay(holdMs, withTiming(1, { duration: 0 })),
+        withTiming(0, {
+          duration: outMs,
+          easing: Easing.inOut(Easing.cubic),
+        }),
+      );
+    };
+
+    const runTargetedLunge = (delta: PlayerAttackLungeDelta, faction?: FactionType) => {
       void attackSpriteRef.current?.executeAttackAnimation();
+      runStrikeAura(
+        faction,
+        FRONTLINE_MELEE_SPRITE_IN_MS,
+        FRONTLINE_MELEE_SPRITE_HOLD_MS,
+        FRONTLINE_MELEE_SPRITE_OUT_MS,
+      );
       attackScale.value = 1;
       lungeX.value = withSequence(
         withTiming(delta.x, { duration: FRONTLINE_MELEE_SNAP_MS, easing: Easing.out(Easing.cubic) }),
@@ -136,33 +176,29 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
       );
     };
 
-    const runRangedAttack = () => {
+    const runRangedAttack = (faction?: FactionType) => {
       void attackSpriteRef.current?.executeRangedAttackAnimation();
+      runStrikeAura(
+        faction,
+        RANGED_ATTACK_SPRITE_IN_MS,
+        RANGED_ATTACK_SPRITE_HOLD_MS,
+        RANGED_ATTACK_SPRITE_OUT_MS,
+      );
       lungeX.value = 0;
       lungeY.value = 0;
-      attackScale.value = withSequence(
-        withTiming(RANGED_ATTACK_SCALE, {
-          duration: RANGED_ATTACK_SPRITE_IN_MS,
-          easing: Easing.out(Easing.cubic),
-        }),
-        withDelay(RANGED_ATTACK_SPRITE_HOLD_MS, withTiming(RANGED_ATTACK_SCALE, { duration: 0 })),
-        withTiming(1, {
-          duration: RANGED_ATTACK_SPRITE_OUT_MS,
-          easing: Easing.inOut(Easing.cubic),
-        }),
-      );
+      attackScale.value = 1;
     };
 
     useImperativeHandle(ref, () => ({
       triggerDamageEffect: (variant = 'hp') => {
         runShake();
-        runFlash(variant);
+        runDamageFlash(variant);
       },
-      triggerAttackLunge: (delta = DEFAULT_LUNGE) => {
-        runTargetedLunge(delta);
+      triggerAttackLunge: (delta = DEFAULT_LUNGE, options) => {
+        runTargetedLunge(delta, options?.faction);
       },
-      triggerRangedAttack: () => {
-        runRangedAttack();
+      triggerRangedAttack: (options) => {
+        runRangedAttack(options?.faction);
       },
       triggerEvadeAfterimage: () => {
         lungeX.value = withSequence(
@@ -171,11 +207,11 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
           withTiming(0, { duration: 60, easing: Easing.in(Easing.cubic) }),
         );
         lungeY.value = withTiming(0, { duration: 60 });
-        runFlash('hp');
+        runDamageFlash('hp');
       },
       triggerEnemyCritVignette: () => {
         runShake();
-        runFlash('hp');
+        runDamageFlash('hp');
       },
       setWardPrimed: (active: boolean) => {
         if (active) {
@@ -184,7 +220,7 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
         }
         glowOpacity.value = withTiming(0, { duration: GLOW_PULSE_MS });
       },
-    }), [attackScale, flashOpacity, lungeX, lungeY, shakeX, glowOpacity]);
+    }), [attackScale, damageFlashOpacity, strikeAuraOpacity, lungeX, lungeY, shakeX, glowOpacity]);
 
     const frameAnimatedStyle = useAnimatedStyle(() => ({
       transform: [
@@ -194,23 +230,36 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
       ],
     }));
 
-    const glowStyle = useAnimatedStyle(() => ({
+    const primedGlowStyle = useAnimatedStyle(() => ({
       opacity: glowOpacity.value * 0.38,
     }));
 
-    const flashStyle = useAnimatedStyle(() => ({
-      opacity: flashOpacity.value,
+    const strikeAuraStyle = useAnimatedStyle(() => ({
+      opacity: strikeAuraOpacity.value * STRIKE_AURA_PEAK,
+    }));
+
+    const damageFlashStyle = useAnimatedStyle(() => ({
+      opacity: damageFlashOpacity.value * (1 - strikeAuraOpacity.value),
     }));
 
     return (
       <View style={[styles.root, style]}>
         <Animated.View style={[styles.spriteFrame, frameAnimatedStyle]}>
-          <Animated.View style={[styles.glowDuplicate, glowStyle]} pointerEvents="none">
+          <Animated.View style={[styles.glowDuplicate, primedGlowStyle]} pointerEvents="none">
             <View style={styles.glowArtBox} pointerEvents="none">
               <Image
                 source={imageSource}
                 resizeMode="contain"
-                style={[styles.spriteLayer, styles.glowImage, { tintColor: PRIMED_GLOW }]}
+                style={[styles.spriteLayer, styles.auraImage, { tintColor: PRIMED_GLOW }]}
+              />
+            </View>
+          </Animated.View>
+          <Animated.View style={[styles.strikeAuraDuplicate, strikeAuraStyle]} pointerEvents="none">
+            <View style={styles.glowArtBox} pointerEvents="none">
+              <Image
+                source={resolvedAttackSource}
+                resizeMode="contain"
+                style={[styles.spriteLayer, styles.auraImage, { tintColor: strikeTint }]}
               />
             </View>
           </Animated.View>
@@ -220,12 +269,12 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
               idleSource={imageSource}
               attackSource={resolvedAttackSource}
             />
-            <Animated.View style={[styles.damageFlashWrap, flashStyle]} pointerEvents="none">
+            <Animated.View style={[styles.damageFlashWrap, damageFlashStyle]} pointerEvents="none">
               <View style={styles.flashArtBox} pointerEvents="none">
                 <Image
                   source={imageSource}
                   resizeMode="contain"
-                  style={[styles.spriteLayer, { tintColor: flashColor }]}
+                  style={[styles.spriteLayer, { tintColor: damageTint }]}
                 />
               </View>
             </Animated.View>
@@ -263,6 +312,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
     backgroundColor: 'transparent',
+    zIndex: 2,
   },
   glowArtBox: {
     width: '100%',
@@ -286,20 +336,28 @@ const styles = StyleSheet.create({
     minHeight: 120,
     backgroundColor: 'transparent',
   },
-  glowImage: {
-    transform: [{ scale: 1.05 }],
+  auraImage: {
+    transform: [{ scale: STRIKE_AURA_SCALE }],
   },
   glowDuplicate: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'flex-end',
     backgroundColor: 'transparent',
+    zIndex: 0,
+  },
+  strikeAuraDuplicate: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    backgroundColor: 'transparent',
+    zIndex: 1,
   },
   damageFlashWrap: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'flex-end',
-    zIndex: 2,
+    zIndex: 3,
     backgroundColor: 'transparent',
   },
 });

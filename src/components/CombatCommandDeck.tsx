@@ -302,30 +302,39 @@ export default function CombatCommandDeck({
     )
   );
 
+  const renderCombatReloadButton = () => {
+    if (!combatReloadAvailable) return null;
+    return (
+      <Pressable
+        onPress={onCombatReload}
+        disabled={!combatReloadEnabled}
+        style={[
+          styles.combatReloadBtn,
+          dashboardLayout && styles.combatReloadBtnDashboard,
+          {
+            borderColor: combatReloadEnabled ? '#fbbf24' : borderColor,
+            opacity: combatReloadEnabled ? 1 : 0.4,
+          },
+        ]}
+      >
+        <Text
+          style={[
+            styles.combatReloadLabel,
+            dashboardLayout ? styles.combatReloadLabelDashboard : null,
+            { color: combatReloadEnabled ? '#fbbf24' : mutedColor },
+          ]}
+          numberOfLines={1}
+        >
+          [ RELOAD ]
+        </Text>
+      </Pressable>
+    );
+  };
+
   const renderSecondaryActions = () => {
-    if (!combatReloadAvailable && !bloodForTimeAvailable) return null;
+    if (!bloodForTimeAvailable) return null;
     return (
       <View style={styles.secondaryActionsRow}>
-        {combatReloadAvailable ? (
-          <Pressable
-            onPress={onCombatReload}
-            disabled={!combatReloadEnabled}
-            style={[
-              styles.combatReloadBtn,
-              {
-                borderColor: combatReloadEnabled ? '#fbbf24' : borderColor,
-                opacity: combatReloadEnabled ? 1 : 0.4,
-              },
-            ]}
-          >
-            <Text
-              style={[styles.combatReloadLabel, { color: combatReloadEnabled ? '#fbbf24' : mutedColor }]}
-              numberOfLines={1}
-            >
-              [ COMBAT RELOAD ]
-            </Text>
-          </Pressable>
-        ) : null}
         {bloodForTimeAvailable ? (
           <Pressable
             onPress={onBloodForTime}
@@ -436,7 +445,10 @@ export default function CombatCommandDeck({
                   mutedColor={mutedColor}
                   queued={initiativeQueued}
                 />
-                {renderEndTurnButton()}
+                <View style={styles.apActions}>
+                  {renderCombatReloadButton()}
+                  {renderEndTurnButton()}
+                </View>
               </View>
               {renderSecondaryActions()}
               {renderAbilityGrid()}
@@ -452,26 +464,7 @@ export default function CombatCommandDeck({
                   queued={initiativeQueued}
                 />
                 <View style={styles.apActions}>
-                  {combatReloadAvailable ? (
-                    <Pressable
-                      onPress={onCombatReload}
-                      disabled={!combatReloadEnabled}
-                      style={[
-                        styles.combatReloadBtn,
-                        {
-                          borderColor: combatReloadEnabled ? '#fbbf24' : borderColor,
-                          opacity: combatReloadEnabled ? 1 : 0.4,
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[styles.combatReloadLabel, { color: combatReloadEnabled ? '#fbbf24' : mutedColor }]}
-                        numberOfLines={1}
-                      >
-                        [ COMBAT RELOAD ]
-                      </Text>
-                    </Pressable>
-                  ) : null}
+                  {renderCombatReloadButton()}
                   {bloodForTimeAvailable ? (
                     <Pressable
                       onPress={onBloodForTime}
@@ -609,14 +602,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 6,
     paddingVertical: 4,
-    maxWidth: 118,
+    maxWidth: 88,
     alignItems: 'center',
+  },
+  combatReloadBtnDashboard: {
+    maxWidth: 68,
+    paddingHorizontal: 3,
+    flexShrink: 0,
   },
   combatReloadLabel: {
     fontFamily: MONO,
     fontSize: 6,
     fontWeight: 'bold',
     letterSpacing: 0.3,
+  },
+  combatReloadLabelDashboard: {
+    fontSize: 5.5,
+    letterSpacing: 0.2,
   },
   bloodForTimeLabel: {
     fontFamily: MONO,
