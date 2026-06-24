@@ -2,15 +2,18 @@ import React, { useMemo } from 'react';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import HapticPressable from './HapticPressable';
 import HarvestExtractorPanel from './harvest/HarvestExtractorPanel';
+import SelectionContinueButton from './SelectionContinueButton';
 import {
   HARVEST_BOARD_COLUMN_GAP,
   HARVEST_CONTENT_BUFFER,
+  HARVEST_CONTINUE_BUTTON_HEIGHT,
   resolveHarvestCellSize,
   resolveHarvestLeftPaneWidth,
   resolveHarvestRightPaneWidth,
   resolveHarvestTriPaneCellSize,
 } from '../constants/harvestLayout';
 import { useLandscapeMetrics } from '../hooks/useLandscapeMetrics';
+import { resolveImmersiveFooterInset } from '../constants/immersiveLayout';
 import { calculateCargoMarketValue, calculateGridOccupancy } from '../data/cargoGridEngine';
 import CargoGridBoard, {
   CARGO_CELL_SIZE,
@@ -121,6 +124,7 @@ export default function CargoPackingPanel({
     () => (harvestTriPane ? resolveHarvestRightPaneWidth(screenWidth) : undefined),
     [harvestTriPane, screenWidth],
   );
+  const footerInset = resolveImmersiveFooterInset(safeBottom);
 
   const occupancy = calculateGridOccupancy(cargo);
   const occupancyPct = Math.round(occupancy * 100);
@@ -142,6 +146,28 @@ export default function CargoPackingPanel({
     </View>
   ) : null;
 
+  const triPaneRightColumn = harvestTriPane && gridSidecar ? (
+    <View style={[styles.harvestRightColumn, { paddingBottom: footerInset }]}>
+      <HarvestExtractorPanel
+        theme={theme}
+        harvestPercentage={harvestPercentage}
+        style={styles.extractorPanelFill}
+      >
+        {gridSidecar}
+      </HarvestExtractorPanel>
+      {onContinue && !hideContinueButton ? (
+        <SelectionContinueButton
+          enabled
+          onPress={onContinue}
+          label={continueLabel}
+          borderColor={theme.borderColor}
+          mutedColor={theme.mutedColor}
+          style={styles.continueTriPane}
+        />
+      ) : null}
+    </View>
+  ) : undefined;
+
   const board = (
     <CargoGridBoard
       cargo={cargo}
@@ -154,7 +180,7 @@ export default function CargoPackingPanel({
       onContinue={onContinue}
       continueLabel={continueLabel}
       minimal
-      hideContinueButton={hideContinueButton || !onContinue}
+      hideContinueButton={hideContinueButton || !onContinue || harvestTriPane}
       onContainmentItemCenterMeasured={onContainmentItemCenterMeasured}
       onHarvestFloorMeasured={useHarvestLayout ? onHarvestFloorMeasured : undefined}
       fixedExternalSlotCount={fixedExternalSlotCount}
@@ -171,11 +197,7 @@ export default function CargoPackingPanel({
       leftPaneHeader={harvestTriPane ? packHeader : undefined}
       leftPaneWidth={leftPaneWidth}
       rightPaneWidth={rightPaneWidth}
-      rightPaneSlot={harvestTriPane && gridSidecar ? (
-        <HarvestExtractorPanel theme={theme} harvestPercentage={harvestPercentage}>
-          {gridSidecar}
-        </HarvestExtractorPanel>
-      ) : undefined}
+      rightPaneSlot={triPaneRightColumn}
     />
   );
 
@@ -242,6 +264,23 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     width: '100%',
+  },
+  harvestRightColumn: {
+    flex: 1,
+    minHeight: 0,
+    width: '100%',
+    gap: 8,
+    justifyContent: 'flex-end',
+  },
+  extractorPanelFill: {
+    flex: 1,
+    minHeight: 0,
+  },
+  continueTriPane: {
+    marginTop: 0,
+    width: '100%',
+    minHeight: HARVEST_CONTINUE_BUTTON_HEIGHT,
+    flexShrink: 0,
   },
   rootEmbedded: {
     flex: 0,

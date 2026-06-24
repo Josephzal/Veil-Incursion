@@ -1,28 +1,26 @@
-import React, { useRef } from 'react';
-import { StyleSheet, View, Text } from 'react-native';
+import React, { useMemo, useRef } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import IncursionShell from '../components/IncursionShell';
-import NarrativeStepperModule, { isCityStreetsNarrative } from '../components/NarrativeStepperModule';
+import NarrativeStepperModule from '../components/NarrativeStepperModule';
 import ProceduralNarrativeModule from '../components/ProceduralNarrativeModule';
+import NarrativeArtTerminalFrame from '../components/narrative/NarrativeArtTerminalFrame';
 import IncursionRunLayout from '../components/IncursionRunLayout';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useDescentNavigator } from '../hooks/useDescentNavigator';
-import { useLandscapeMetrics } from '../hooks/useLandscapeMetrics';
 import { isProceduralNarrative } from '../data/sectorNarrativeEngine';
 import { CheckStatus, NarrativeChoiceKey } from '../types/game';
 import { resolveNarrativeCreditPayout } from '../data/combatCredits';
+import { resolveNarrativeBackgroundImage } from '../utils/resolveNarrativeBackground';
 
 export default function NarrativeScreen(): React.JSX.Element {
   const { theme } = useTerminal();
-  const { useHorizontalSplit } = useLandscapeMetrics();
   const {
     getCurrentNarrativeNode,
     resolveNarrativeChoice,
     appendRunLog,
     awardRunCredits,
-    runState,
-    activeIncursion,
     prepareStandardCombatEncounter,
     getCurrentEncounterNode,
   } = useRun();
@@ -32,6 +30,11 @@ export default function NarrativeScreen(): React.JSX.Element {
 
   const node = getCurrentNarrativeNode();
   const isProcedural = node != null && isProceduralNarrative(node);
+
+  const backgroundImage = useMemo(
+    () => (node ? resolveNarrativeBackgroundImage(node) : null),
+    [node],
+  );
 
   const finishNarrative = (
     choice: NarrativeChoiceKey,
@@ -99,13 +102,11 @@ export default function NarrativeScreen(): React.JSX.Element {
     finishNarrative(choice, status, options);
   };
 
-  if (!node) {
+  if (!node || !backgroundImage) {
     return (
       <IncursionShell>
-        <IncursionRunLayout
-          style={{ backgroundColor: theme.backgroundColor }}
-        >
-          <View style={[styles.body, { backgroundColor: theme.backgroundColor }]}>
+        <IncursionRunLayout hideRunChrome style={{ backgroundColor: theme.backgroundColor }}>
+          <View style={[styles.fallbackHost, { backgroundColor: theme.backgroundColor }]}>
             <Text style={[styles.fallback, { color: theme.mutedColor }]}>
               NO ACTIVE NARRATIVE VECTOR — AWAITING MAP COORDINATOR.
             </Text>
@@ -117,58 +118,48 @@ export default function NarrativeScreen(): React.JSX.Element {
 
   return (
     <IncursionShell>
-      <IncursionRunLayout
-        style={{ backgroundColor: theme.backgroundColor }}
-      >
-        <View style={styles.body}>
-          <View style={[styles.content, isCityStreetsNarrative(node) && styles.contentCityStreets]}>
-            {isProcedural ? (
-              <ProceduralNarrativeModule
-                node={node}
-                onResolve={handleProceduralResolve}
-                splitLayout={useHorizontalSplit}
-                borderColor={theme.borderColor}
-                mutedColor={theme.mutedColor}
-                primaryColor={theme.primaryColor}
-              />
-            ) : (
-              <NarrativeStepperModule
-                node={node}
-                onComplete={handleLegacyComplete}
-                splitLayout={useHorizontalSplit}
-                borderColor={theme.borderColor}
-                mutedColor={theme.mutedColor}
-                primaryColor={theme.primaryColor}
-              />
-            )}
-          </View>
-        </View>
+      <IncursionRunLayout hideRunChrome style={{ backgroundColor: theme.backgroundColor }}>
+        <NarrativeArtTerminalFrame
+          backgroundImage={backgroundImage}
+          accentColor={theme.primaryColor}
+          flavorText={node.scenarioText}
+          flavorPrimaryColor={theme.primaryColor}
+          flavorMutedColor={theme.mutedColor}
+        >
+          {isProcedural ? (
+            <ProceduralNarrativeModule
+              node={node}
+              onResolve={handleProceduralResolve}
+              borderColor={theme.borderColor}
+              mutedColor={theme.mutedColor}
+              primaryColor={theme.primaryColor}
+            />
+          ) : (
+            <NarrativeStepperModule
+              node={node}
+              onComplete={handleLegacyComplete}
+              borderColor={theme.borderColor}
+              mutedColor={theme.mutedColor}
+              primaryColor={theme.primaryColor}
+            />
+          )}
+        </NarrativeArtTerminalFrame>
       </IncursionRunLayout>
     </IncursionShell>
   );
 }
 
 const styles = StyleSheet.create({
-  body: {
+  fallbackHost: {
     flex: 1,
-    minHeight: 0,
-    justifyContent: 'space-between',
-  },
-  content: {
-    flex: 1,
-    minHeight: 0,
-    paddingHorizontal: 16,
-    paddingTop: 8,
-  },
-  contentCityStreets: {
-    paddingHorizontal: 0,
-    paddingTop: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
   },
   fallback: {
     fontFamily: 'monospace',
     fontSize: 10,
     textAlign: 'center',
-    padding: 24,
     letterSpacing: 0.8,
   },
 });

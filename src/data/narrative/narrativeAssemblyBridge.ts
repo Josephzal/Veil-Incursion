@@ -15,7 +15,9 @@ import type {
   MechanicResolver,
   OptionAResolver,
   OptionBResolver,
+  OptionDResolver,
   Tag,
+  TensionMechanic,
 } from '../../types/narrativeAssembly';
 import {
   cabalToFaction,
@@ -39,7 +41,11 @@ import {
 import {
   assembleDynamicResolverSet,
   formatCriticalHazard,
+  formatPenaltyPreview,
+  formatRewardPreview,
 } from './narrativeDynamicAssembly';
+import { hashSeed } from './narrativeAssemblyCore';
+import { NARRATIVE_GENERIC_TERMINAL_TITLE } from '../../constants/narrativeLayout';
 
 export interface PickAssemblyEncounterParams {
   macroFamily: MacroBiomeFamily;
@@ -53,10 +59,8 @@ function runDepthFromNodesCleared(nodesCleared: number): RunDepth {
   return getDistrictFromDepth(depthFromNodesCleared(nodesCleared));
 }
 
-function contextTitle(contextId: string, flavorText: string): string {
-  const snippet = flavorText.split('.')[0]?.trim().toUpperCase() ?? contextId;
-  if (snippet.length <= 44) return snippet;
-  return `${snippet.slice(0, 44)}…`;
+function contextTitle(_contextId: string, _flavorText: string): string {
+  return NARRATIVE_GENERIC_TERMINAL_TITLE;
 }
 
 function buildChoiceOption(
@@ -89,6 +93,23 @@ function classRequirementLabel(classType: ClassType): string {
 
 function itemRequirementLabel(itemId: string): string {
   return itemId.replace(/_/g, ' ').toUpperCase();
+}
+
+function optionDRequirementLabel(optionD: OptionDResolver): string {
+  if (isOptionDRetreat(optionD)) return 'RETURN TO SCANNER';
+  return 'GUARANTEED COST — BRUTE FORCE';
+}
+
+function optionDSuccessText(optionD: OptionDResolver): string {
+  if (isOptionDRetreat(optionD)) {
+    return '>> ABORT CONFIRMED — ROUTING TERMINAL BACK TO LEY-LINE GRID.';
+  }
+  return `>> BRUTE FORCE — ${optionD.onSuccess}`;
+}
+
+function optionDEffectPreview(optionD: OptionDResolver): string {
+  if (isOptionDRetreat(optionD)) return 'No reward. No penalty.';
+  return optionD.onSuccess;
 }
 
 function optionBRequirementLabel(optionB: OptionBResolver): string {
@@ -164,6 +185,30 @@ function asMechanicResolver(optionA: OptionAResolver): MechanicResolver | null {
   return isOptionABruteForce(optionA) ? null : optionA;
 }
 
+function resolveMechanicForOptionA(
+  resolverSet: GeneratedEncounter['resolverSet'],
+  complication: GeneratedEncounter['complication'],
+  assemblyId: string,
+): MechanicResolver {
+  const mechanicA = asMechanicResolver(resolverSet.optionA);
+  if (mechanicA) return mechanicA;
+
+  const mechanics: TensionMechanic[] = [
+    'Mechanic_ScavengeBar',
+    'Mechanic_ConcealSlider',
+    'Mechanic_SigilTrace',
+  ];
+  const tensionMechanic = mechanics[hashSeed(`${assemblyId}:mechanic-a`) % mechanics.length]
+    ?? 'Mechanic_ScavengeBar';
+
+  return {
+    text: resolverSet.optionA.text,
+    tensionMechanic,
+    onSuccess: formatRewardPreview(complication.defaultReward),
+    onFailure: formatPenaltyPreview(complication.defaultPenalty),
+  };
+}
+
 function isV2Encounter(encounter: GeneratedEncounter): boolean {
   return USE_ASSEMBLY_V2 || encounter.resolverSet.assemblyMode === 'dynamic-v2';
 }
@@ -183,7 +228,7 @@ function buildNodeFromEncounter(
       : `ON FAIL: +${complication.defaultPenalty.amount} RESONANCE`;
 
   const engineVersion = v2 ? 'assembly-v2' : 'assembly-v1';
-  const mechanicA = asMechanicResolver(resolverSet.optionA);
+  const mechanicA = resolveMechanicForOptionA(resolverSet, complication, encounter.assemblyId);
 
   return {
     id: encounter.assemblyId,
@@ -194,25 +239,17 @@ function buildNodeFromEncounter(
     proceduralMeta: {
       engineVersion,
       resolverSetId: resolverSet.id,
-      tensionMechanic: mechanicA?.tensionMechanic,
+      tensionMechanic: mechanicA.tensionMechanic,
       defaultPenalty: complication.defaultPenalty,
       bonusReward: encounter.bonusReward,
     },
-    choiceA: mechanicA == null
-      ? buildChoiceOption(
-        `[ A ] ${resolverSet.optionA.text}`,
-        'GUARANTEED COST — BRUTE FORCE',
-        `>> BRUTE FORCE — ${resolverSet.optionA.onSuccess}`,
-        `>> BRUTE FORCE BLOCKED — RESOLVER UNAVAILABLE.`,
-        resolverSet.optionA.onSuccess,
-      )
-      : buildChoiceOption(
-        `[ A ] ${mechanicA.text}`,
-        mechanicA.tensionMechanic.replace('Mechanic_', '').toUpperCase(),
-        `>> MECHANIC SUCCESS — ${mechanicA.onSuccess}`,
-        `>> MECHANIC FAILURE — ${mechanicA.onFailure}`,
-        `${mechanicA.onSuccess} // ${hazardPreview}`,
-      ),
+    choiceA: buildChoiceOption(
+      `[ A ] ${mechanicA.text}`,
+      mechanicA.tensionMechanic.replace('Mechanic_', '').toUpperCase(),
+      `>> MECHANIC SUCCESS — ${mechanicA.onSuccess}`,
+      `>> MECHANIC FAILURE — ${mechanicA.onFailure}`,
+      `${mechanicA.onSuccess}`,
+    ),
     choiceB: buildChoiceOption(
       `[ B ] ${resolverSet.optionB.text}`,
       optionBRequirementLabel(resolverSet.optionB),
@@ -237,10 +274,10 @@ function buildNodeFromEncounter(
     ),
     choiceD: buildChoiceOption(
       `[ D ] ${resolverSet.optionD.text}`,
-      'RETURN TO SCANNER',
-      '>> ABORT CONFIRMED — ROUTING TERMINAL BACK TO LEY-LINE GRID.',
-      '>> ABORT CONFIRMED — ROUTING TERMINAL BACK TO LEY-LINE GRID.',
-      isOptionDRetreat(resolverSet.optionD) ? 'No reward. No penalty.' : resolverSet.optionD.onSuccess,
+      optionDRequirementLabel(resolverSet.optionD),
+      optionDSuccessText(resolverSet.optionD),
+      optionDSuccessText(resolverSet.optionD),
+      optionDEffectPreview(resolverSet.optionD),
     ),
   };
 }
@@ -251,7 +288,7 @@ export function buildAssemblyFromEncounter(
   nodesCleared: number,
 ): ProceduralNarrativeAssembly {
   const v2 = isV2Encounter(encounter);
-  const mechanicA = asMechanicResolver(encounter.resolverSet.optionA);
+  const mechanicA = resolveMechanicForOptionA(encounter.resolverSet, encounter.complication, encounter.assemblyId);
   return {
     assemblyId: encounter.assemblyId,
     macroFamily,
@@ -262,7 +299,7 @@ export function buildAssemblyFromEncounter(
     resolverSetId: encounter.resolverSet.id,
     resolverTemplateIds: encounter.dynamicSelection,
     biome: encounter.biome,
-    tensionMechanic: mechanicA?.tensionMechanic,
+    tensionMechanic: mechanicA.tensionMechanic,
     defaultPenalty: encounter.complication.defaultPenalty,
     resolverIds: {
       brute: encounter.complication.id,

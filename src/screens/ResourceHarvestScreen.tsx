@@ -9,15 +9,11 @@ import VeilVacuumCanisterStack, {
 import IncursionShell from '../components/IncursionShell';
 import IncursionRunLayout from '../components/IncursionRunLayout';
 import RunEventScreenFrame from '../components/layout/RunEventScreenFrame';
-import SelectionContinueButton from '../components/SelectionContinueButton';
-import { LANDSCAPE_PANEL_PADDING } from '../constants/landscapeLayout';
-import { resolveImmersiveFooterInset } from '../constants/immersiveLayout';
 import { MAX_RUN_CANISTER_RESIDUE } from '../constants/veilResidue';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { isVeilResidueCargoItem } from '../data/cargoGridEngine';
-import { useLandscapeMetrics } from '../hooks/useLandscapeMetrics';
 import { useNodeProgression } from '../hooks/useNodeProgression';
 import type { HarvestFloorBounds, ResidueParticleData } from '../types/residueParticle';
 import {
@@ -36,7 +32,6 @@ const VALUE_EPSILON = 0.001;
 
 export default function ResourceHarvestScreen(): React.JSX.Element {
   const { theme } = useTerminal();
-  const { safeBottom, safeRight } = useLandscapeMetrics();
   const {
     runState,
     activeIncursion,
@@ -85,8 +80,6 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
       : '[ CONTINUE RUN ]'),
     [activeIncursion.pendingHarvestReturn],
   );
-
-  const footerInset = resolveImmersiveFooterInset(safeBottom);
 
   const residueInstanceIds = useMemo(
     () => activeIncursion.cargo.containment
@@ -276,7 +269,7 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
 
   return (
     <IncursionShell>
-      <IncursionRunLayout style={{ backgroundColor: theme.backgroundColor }}>
+      <IncursionRunLayout hideRunChrome style={{ backgroundColor: theme.backgroundColor }}>
         <RunEventScreenFrame
           backgroundImage={ResourceHarvestBg}
           backgroundScrimOpacity={0.72}
@@ -309,7 +302,6 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
               resolveContainmentSlotIndex={resolveContainmentSlotIndex}
               harvestTriPane
               harvestPercentage={harvestPercentage}
-              hideContinueButton
               gridSidecar={(
                 <VeilVacuumCanisterStack
                   ref={canisterRef}
@@ -322,26 +314,6 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
                 />
               )}
             />
-
-            <View
-              style={[
-                styles.continueCorner,
-                {
-                  right: LANDSCAPE_PANEL_PADDING + safeRight,
-                  bottom: footerInset,
-                },
-              ]}
-              pointerEvents="box-none"
-            >
-              <SelectionContinueButton
-                enabled
-                onPress={handlePackingContinue}
-                label={continueLabel}
-                borderColor={theme.borderColor}
-                mutedColor={theme.mutedColor}
-                style={styles.continueFooter}
-              />
-            </View>
           </View>
         </RunEventScreenFrame>
       </IncursionRunLayout>
@@ -360,16 +332,6 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     width: '100%',
-  },
-  continueCorner: {
-    position: 'absolute',
-    zIndex: 40,
-    minWidth: 210,
-    maxWidth: 280,
-  },
-  continueFooter: {
-    marginTop: 0,
-    alignSelf: 'stretch',
   },
   particleOverlay: {
     ...StyleSheet.absoluteFillObject,

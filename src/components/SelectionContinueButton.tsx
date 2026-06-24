@@ -4,6 +4,7 @@ import HapticPressable from './HapticPressable';
 import {
   getInteractiveButtonStyle,
   getInteractiveButtonTextStyle,
+  type HubInteractiveButtonSize,
 } from '../styles/hubTerminalUi';
 
 const TERMINAL_ACCENT = '#00ff33';
@@ -15,6 +16,7 @@ interface SelectionContinueButtonProps {
   borderColor: string;
   mutedColor: string;
   accentColor?: string;
+  size?: HubInteractiveButtonSize;
   style?: ViewStyle;
 }
 
@@ -25,6 +27,7 @@ export default function SelectionContinueButton({
   borderColor: _borderColor,
   mutedColor,
   accentColor = TERMINAL_ACCENT,
+  size = 'md',
   style,
 }: SelectionContinueButtonProps): React.JSX.Element {
   const handlePress = () => {
@@ -37,7 +40,7 @@ export default function SelectionContinueButton({
       onPress={handlePress}
       disabled={!enabled}
       style={({ pressed }) => [
-        getInteractiveButtonStyle(accentColor, { disabled: !enabled, pressed, size: 'md' }),
+        getInteractiveButtonStyle(accentColor, { disabled: !enabled, pressed, size }),
         styles.btn,
         style,
         !enabled ? { opacity: 0.45 } : pressed ? { opacity: 0.85 } : null,
@@ -48,7 +51,7 @@ export default function SelectionContinueButton({
     >
       <Text
         style={[
-          getInteractiveButtonTextStyle('md'),
+          getInteractiveButtonTextStyle(size),
           { color: enabled ? accentColor : mutedColor },
         ]}
       >
@@ -59,5 +62,5 @@ export default function SelectionContinueButton({
 }
 
 const styles = StyleSheet.create({
-  btn: { marginTop: 10 },
+  btn: { marginTop: 0 },
 });

@@ -5,11 +5,12 @@ import type {
   ComplicationSeed,
   ContextSeed,
   ItemResolver,
+  MechanicResolver,
   NarrativePenalty,
   NarrativeReward,
   OptionBResolver,
   ResolverSet,
-  RetreatResolver,
+  TensionMechanic,
 } from '../../types/narrativeAssembly';
 import {
   EXPANSION_RESOLVER_TEMPLATES,
@@ -60,6 +61,23 @@ export function creditsFromReward(reward?: NarrativeReward): number {
   return 0;
 }
 
+function buildMechanicOption(complication: ComplicationSeed, seed: string): MechanicResolver {
+  const mechanics: TensionMechanic[] = [
+    'Mechanic_ScavengeBar',
+    'Mechanic_ConcealSlider',
+    'Mechanic_SigilTrace',
+  ];
+  const tensionMechanic = mechanics[hashSeed(`${seed}:mechanic-a`) % mechanics.length] ?? 'Mechanic_ScavengeBar';
+  const costPreview = formatPenaltyPreview(complication.defaultPenalty);
+  const rewardPreview = formatRewardPreview(complication.defaultReward);
+  return {
+    text: `Execute tension protocol. (${rewardPreview} // on fail: ${costPreview})`,
+    tensionMechanic,
+    onSuccess: rewardPreview,
+    onFailure: costPreview,
+  };
+}
+
 function buildBruteForceOption(complication: ComplicationSeed): BruteForceResolver {
   const costPreview = formatPenaltyPreview(complication.defaultPenalty);
   const rewardPreview = formatRewardPreview(complication.defaultReward);
@@ -67,14 +85,6 @@ function buildBruteForceOption(complication: ComplicationSeed): BruteForceResolv
     type: 'BruteForce',
     text: `Push through the hazard. (${costPreview} // ${rewardPreview})`,
     onSuccess: `${costPreview} — ${rewardPreview}`,
-  };
-}
-
-function buildRetreatOption(): RetreatResolver {
-  return {
-    type: 'Retreat',
-    text: 'Abort protocol and route terminal back to Scanner.',
-    onSuccess: 'Encounter aborted — no reward, no penalty.',
   };
 }
 
@@ -145,10 +155,10 @@ export function assembleDynamicResolverSet(
   return {
     id: `dyn-${complication.id}-${hashSeed(seed)}`,
     complicationId: complication.id,
-    optionA: buildBruteForceOption(complication),
+    optionA: buildMechanicOption(complication, seed),
     optionB: templateToOptionB(cabalTemplate, complication),
     optionC: templateToOptionC(itemTemplate, complication),
-    optionD: buildRetreatOption(),
+    optionD: buildBruteForceOption(complication),
     assemblyMode: 'dynamic-v2',
   };
 }

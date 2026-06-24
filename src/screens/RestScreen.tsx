@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import HapticPressable from '../components/HapticPressable';
 import SanctuaryNarrativeBg from '../../assets/narrative images/sanctuary.png';
 import ClassGraftUI from '../components/ClassGraftUI';
+import { canAffordAnySanctuaryGraft, getMinimumClassGraftCost } from '../data/classGraftEngine';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useNodeProgression } from '../hooks/useNodeProgression';
@@ -35,6 +36,8 @@ export default function RestScreen(): React.JSX.Element {
   const activeClass = activeIncursion.activeClass ?? 'AEGIS';
   const residueBalance = getVeilResidueBalance();
   const graftOffers = activeIncursion.sanctuaryGraftOffers ?? [];
+  const graftAffordable = canAffordAnySanctuaryGraft(activeClass, residueBalance);
+  const minimumGraftCost = getMinimumClassGraftCost(activeClass);
 
   const loadout = useMemo(() => {
     if (activeClass === 'HEX_SHOT') return activeIncursion.hexShotLoadout;
@@ -56,7 +59,7 @@ export default function RestScreen(): React.JSX.Element {
   };
 
   const handleSelectGraft = () => {
-    if (confirmed) return;
+    if (confirmed || !graftAffordable) return;
     setSelectedChoice('GRAFT');
     setGraftTerminalOpen(true);
     openSanctuaryGraftTerminal();
@@ -164,26 +167,48 @@ export default function RestScreen(): React.JSX.Element {
 
               <HapticPressable
                 onPress={handleSelectGraft}
-                disabled={confirmed || selectedChoice === 'ATTUNE'}
+                disabled={confirmed || selectedChoice === 'ATTUNE' || !graftAffordable}
                 style={({ pressed }) => [
                   styles.choiceBtn,
                   selectedChoice === 'GRAFT' && styles.choiceBtnSelected,
+                  !graftAffordable && styles.choiceBtnLocked,
                   {
                     borderColor: selectedChoice === 'GRAFT' ? '#c084fc' : theme.borderColor,
-                    opacity: confirmed && selectedChoice !== 'GRAFT' ? 0.4 : selectedChoice === 'ATTUNE' ? 0.35 : pressed ? 0.7 : 1,
+                    opacity: !graftAffordable
+                      ? 0.4
+                      : confirmed && selectedChoice !== 'GRAFT'
+                        ? 0.4
+                        : selectedChoice === 'ATTUNE'
+                          ? 0.35
+                          : pressed
+                            ? 0.7
+                            : 1,
                   },
                 ]}
               >
                 <Text
                   style={[
                     styles.choiceLabel,
-                    { color: selectedChoice === 'GRAFT' ? '#c084fc' : theme.primaryColor },
+                    {
+                      color: !graftAffordable
+                        ? theme.mutedColor
+                        : selectedChoice === 'GRAFT'
+                          ? '#c084fc'
+                          : theme.primaryColor,
+                    },
                   ]}
                 >
                   {graftTerminalLabel}
                 </Text>
-                <Text style={[styles.choiceReq, { color: '#c084fc' }]}>
-                  Spend Veil Residue to mutate an equipped ability
+                <Text
+                  style={[
+                    styles.choiceReq,
+                    { color: !graftAffordable ? theme.mutedColor : '#c084fc' },
+                  ]}
+                >
+                  {!graftAffordable
+                    ? `INSUFFICIENT RESIDUE — REQUIRES ${minimumGraftCost}+`
+                    : 'Spend Veil Residue to mutate an equipped ability'}
                 </Text>
               </HapticPressable>
             </View>
@@ -233,6 +258,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(10, 11, 15, 0.92)',
   },
   choiceBtnSelected: { backgroundColor: 'rgba(0, 255, 51, 0.08)' },
+  choiceBtnLocked: { backgroundColor: 'rgba(0, 0, 0, 0.2)' },
   choiceEffectGood: { color: '#4ade80' },
   choiceLabel: {
     fontFamily: 'monospace',

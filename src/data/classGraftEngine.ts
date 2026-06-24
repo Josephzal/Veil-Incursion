@@ -14,7 +14,7 @@ import { resolveClassAbilityCost } from './classAbilityResolver';
 import { ENVOY_GRAFT_DATABASE, getEnvoyGraftDefinition, pickRandomEnvoyGraftOffers } from './envoyGrafts';
 import { HEX_SHOT_GRAFT_DATABASE, getHexShotGraftDefinition, pickRandomHexShotGraftOffers } from './hexShotGrafts';
 import { canGraftAbility, rollVeilGraftOffers } from './veilGraftEngine';
-import { getVeilGraftDefinition } from './veilGraftDatabase';
+import { GRAFT_DATABASE, getVeilGraftDefinition } from './veilGraftDatabase';
 import type { AegisAbilityId } from '../types/aegisCombat';
 import type { VeilGraftId } from '../types/veilGraft';
 
@@ -41,6 +41,20 @@ export function rollClassGraftOffers(
   if (classId === 'HEX_SHOT') return pickRandomHexShotGraftOffers(count);
   if (classId === 'ENVOY') return pickRandomEnvoyGraftOffers(count);
   return rollVeilGraftOffers(count);
+}
+
+export function getMinimumClassGraftCost(classId: ClassType): number {
+  if (classId === 'HEX_SHOT') {
+    return Math.min(...Object.values(HEX_SHOT_GRAFT_DATABASE).map((graft) => graft.cost));
+  }
+  if (classId === 'ENVOY') {
+    return Math.min(...Object.values(ENVOY_GRAFT_DATABASE).map((graft) => graft.cost));
+  }
+  return Math.min(...Object.values(GRAFT_DATABASE).map((graft) => graft.cost));
+}
+
+export function canAffordAnySanctuaryGraft(classId: ClassType, residueBalance: number): boolean {
+  return residueBalance >= getMinimumClassGraftCost(classId);
 }
 
 export function canGraftClassAbility(classId: ClassType, abilityId: string): boolean {

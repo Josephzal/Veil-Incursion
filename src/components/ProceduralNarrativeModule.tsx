@@ -1,10 +1,7 @@
 import React, { useState } from 'react';
-import { Image, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import HapticPressable from './HapticPressable';
-import CityStreetNarrativeBg from '../../assets/narrative images/city-street.png';
-import LandscapeSplitPane from './layout/LandscapeSplitPane';
 import type { NarrativeChoiceKey, NarrativeChoiceOption, NarrativeEventNode, CheckStatus } from '../types/game';
-import { isOpenSectorNarrative } from '../data/sectorNarrativeEngine';
 import TensionMechanicHost from './narrative/tension/TensionMechanicHost';
 import NarrativeOutcomePanel from './narrative/NarrativeOutcomePanel';
 import { formatTensionMechanicLabel } from './narrative/tension/tensionMechanicTypes';
@@ -13,6 +10,12 @@ import {
   formatBonusLine,
 } from '../data/narrative/narrativeOutcomeSummary';
 import type { NarrativeOutcomeSummary } from '../data/narrative/narrativeOutcomeSummary';
+import {
+  NARRATIVE_CHOICE_GAP,
+  NARRATIVE_CHOICE_PADDING_H,
+  NARRATIVE_CHOICE_PADDING_V,
+  NARRATIVE_DIVIDER_COLOR,
+} from '../constants/narrativeLayout';
 
 const TERMINAL_ACCENT = '#00ff33';
 
@@ -65,7 +68,6 @@ interface ProceduralNarrativeModuleProps {
     status?: CheckStatus,
     options?: { tensionBonusCredits?: number },
   ) => void;
-  splitLayout?: boolean;
   borderColor?: string;
   mutedColor?: string;
   primaryColor?: string;
@@ -78,7 +80,6 @@ function ResolverButton({
   borderColor,
   mutedColor,
   primaryColor,
-  cityStreets,
   showLockIcon = false,
 }: {
   option: NarrativeChoiceOption;
@@ -87,7 +88,6 @@ function ResolverButton({
   borderColor: string;
   mutedColor: string;
   primaryColor: string;
-  cityStreets: boolean;
   showLockIcon?: boolean;
 }): React.JSX.Element {
   const locked = option.locked === true;
@@ -97,7 +97,6 @@ function ResolverButton({
       disabled={locked}
       style={({ pressed }) => [
         styles.choiceBtn,
-        cityStreets && styles.choiceBtnCityStreets,
         selected && !locked && styles.choiceBtnSelected,
         locked && styles.choiceBtnLocked,
         {
@@ -135,7 +134,6 @@ function ResolverButton({
 export default function ProceduralNarrativeModule({
   node,
   onResolve,
-  splitLayout = false,
   borderColor = '#334155',
   mutedColor = '#94a3b8',
   primaryColor = '#f8fafc',
@@ -146,8 +144,6 @@ export default function ProceduralNarrativeModule({
   const [pendingResolve, setPendingResolve] = useState<PendingResolve | null>(null);
   const [bonusLine, setBonusLine] = useState<string | null>(null);
 
-  const showCityStreetBackground = node.interactionMode === 'procedural' || !isOpenSectorNarrative(node);
-  const isBruteForceA = node.proceduralMeta?.engineVersion === 'assembly-v2';
   const optionDVariant = getOptionDVariant(node.choiceD);
   const choices: { key: NarrativeChoiceKey; option: NarrativeChoiceOption; showLockIcon: boolean }[] = [
     { key: 'A', option: node.choiceA, showLockIcon: false },
@@ -183,10 +179,6 @@ export default function ProceduralNarrativeModule({
     if (selectedOption.locked) return;
 
     if (selectedChoice === 'A') {
-      if (isBruteForceA) {
-        finishWithResult('A', selectedOption.successText);
-        return;
-      }
       setPhase('TENSION');
       return;
     }
@@ -215,9 +207,7 @@ export default function ProceduralNarrativeModule({
 
   const confirmLabel = (() => {
     if (!selectedChoice) return '[ CONFIRM RESOLVER ]';
-    if (selectedChoice === 'A') {
-      return isBruteForceA ? '[ CONFIRM BRUTE FORCE ]' : '[ ENGAGE TENSION PROTOCOL ]';
-    }
+    if (selectedChoice === 'A') return '[ ENGAGE TENSION PROTOCOL ]';
     if (selectedChoice === 'D') {
       if (optionDVariant === 'Retreat') return '[ CONFIRM ABORT — RETURN TO MAP ]';
       return '[ CONFIRM BRUTE FORCE ]';
@@ -227,157 +217,101 @@ export default function ProceduralNarrativeModule({
     return '[ CONFIRM RESOLVER ]';
   })();
 
-  const { height: windowHeight } = useWindowDimensions();
-  const flavorMaxHeight = Math.round(windowHeight * 0.36);
-
-  const scenarioStory = (
-    <ScrollView
-      style={splitLayout ? styles.flavorScrollFill : [styles.flavorScroll, { maxHeight: flavorMaxHeight }]}
-      contentContainerStyle={styles.flavorScrollContent}
-      showsVerticalScrollIndicator
-      keyboardShouldPersistTaps="handled"
-    >
-      <View style={[styles.docBody, { borderColor }]}>
-        <Text style={[styles.scenarioText, { color: primaryColor }]}>{node.scenarioText}</Text>
-        {node.hazardPreview ? (
-          <Text style={styles.hazardText}>{node.hazardPreview}</Text>
-        ) : null}
-      </View>
-    </ScrollView>
-  );
-
-  const scenarioChoices = (
-    <View style={styles.choicePane}>
-      <View style={styles.choiceSection}>
-        <Text style={[styles.resolverHeader, { color: mutedColor }]}>
-          SELECT EXPEDITION RESOLVER:
-        </Text>
-        <ScrollView
-          style={styles.choiceScroll}
-          contentContainerStyle={styles.choiceCol}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          {choices.map(({ key, option, showLockIcon }) => (
-            <ResolverButton
-              key={key}
-              option={option}
-              selected={selectedChoice === key}
-              onPress={() => {
-                if (!option.locked) setSelectedChoice(key);
-              }}
-              borderColor={borderColor}
-              mutedColor={mutedColor}
-              primaryColor={primaryColor}
-              cityStreets={showCityStreetBackground}
-              showLockIcon={showLockIcon}
-            />
-          ))}
-          {selectedChoice === 'D' && optionDVariant ? (
-            <Text style={[styles.optionDHint, { color: mutedColor }]}>
-              {optionDVariant === 'Retreat'
-                ? '>> RETREAT — aborts encounter and routes back to the ley-line grid.'
-                : '>> BRUTE FORCE — accepts guaranteed cost without tension protocol.'}
-            </Text>
-          ) : null}
-        </ScrollView>
-      </View>
-
-      <View style={styles.footer}>
-        <HapticPressable
-          onPress={handleConfirm}
-          disabled={selectedChoice == null || selectedOption?.locked === true}
-          style={({ pressed }) => [
-            styles.confirmBtn,
-            {
-              borderColor: selectedChoice != null && !selectedOption?.locked
-                ? TERMINAL_ACCENT
-                : borderColor,
-              opacity: selectedChoice == null || selectedOption?.locked ? 0.4 : pressed ? 0.75 : 1,
-            },
-          ]}
-        >
-          <Text
-            style={[
-              styles.confirmBtnText,
-              {
-                color: selectedChoice != null && !selectedOption?.locked
-                  ? TERMINAL_ACCENT
-                  : mutedColor,
-              },
-            ]}
-          >
-            {confirmLabel}
-          </Text>
-        </HapticPressable>
-      </View>
-    </View>
-  );
-
   return (
-    <View style={[styles.root, showCityStreetBackground && styles.rootWithCityBackground]}>
-      {showCityStreetBackground ? (
-        <>
-          <Image source={CityStreetNarrativeBg} style={styles.cityBackgroundImage} resizeMode="cover" />
-          <View style={styles.cityBackgroundScrim} pointerEvents="none" />
-        </>
+    <View style={styles.root}>
+      <View style={styles.header}>
+        <Text style={[styles.docLabel, { color: mutedColor }]}>
+          {phase === 'OUTCOME'
+            ? 'EXPEDITION LOG // RESOLVE REPORT'
+            : 'EXPEDITION LOG // PROCEDURAL ASSEMBLY'}
+        </Text>
+      </View>
+      <View style={[styles.divider, { backgroundColor: NARRATIVE_DIVIDER_COLOR }]} />
+
+      {phase === 'SCENARIO' ? (
+        <View style={styles.scenarioLayout}>
+          <View style={styles.decisionDock}>
+            <Text style={[styles.resolverHeader, { color: mutedColor }]}>
+              SELECT EXPEDITION RESOLVER:
+            </Text>
+            <View style={styles.choiceCol}>
+              {choices.map(({ key, option, showLockIcon }) => (
+                <ResolverButton
+                  key={key}
+                  option={option}
+                  selected={selectedChoice === key}
+                  onPress={() => {
+                    if (!option.locked) setSelectedChoice(key);
+                  }}
+                  borderColor={borderColor}
+                  mutedColor={mutedColor}
+                  primaryColor={primaryColor}
+                  showLockIcon={showLockIcon}
+                />
+              ))}
+              {selectedChoice === 'D' && optionDVariant ? (
+                <Text style={[styles.optionDHint, { color: mutedColor }]}>
+                  {optionDVariant === 'Retreat'
+                    ? '>> RETREAT — aborts encounter and routes back to the ley-line grid.'
+                    : '>> BRUTE FORCE — accepts guaranteed cost without tension protocol.'}
+                </Text>
+              ) : null}
+            </View>
+            <HapticPressable
+              onPress={handleConfirm}
+              disabled={selectedChoice == null || selectedOption?.locked === true}
+              style={({ pressed }) => [
+                styles.confirmBtn,
+                {
+                  borderColor: selectedChoice != null && !selectedOption?.locked
+                    ? TERMINAL_ACCENT
+                    : borderColor,
+                  opacity: selectedChoice == null || selectedOption?.locked ? 0.4 : pressed ? 0.75 : 1,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.confirmBtnText,
+                  {
+                    color: selectedChoice != null && !selectedOption?.locked
+                      ? TERMINAL_ACCENT
+                      : mutedColor,
+                  },
+                ]}
+              >
+                {confirmLabel}
+              </Text>
+            </HapticPressable>
+          </View>
+        </View>
       ) : null}
 
-      <View style={[styles.shell, showCityStreetBackground && styles.shellCityStreets]}>
-        <View style={[styles.header, { borderBottomColor: borderColor }]}>
-          <Text style={[styles.docLabel, { color: mutedColor }]}>
-            {phase === 'OUTCOME'
-              ? 'EXPEDITION LOG // RESOLVE REPORT'
-              : 'EXPEDITION LOG // PROCEDURAL ASSEMBLY'}
-          </Text>
-          <Text style={[styles.docTitle, { color: TERMINAL_ACCENT }]}>{node.title}</Text>
-        </View>
-
-        {phase === 'SCENARIO' ? (
-          splitLayout ? (
-            <LandscapeSplitPane
-              style={styles.splitPane}
-              primary={scenarioStory}
-              secondary={scenarioChoices}
-              primaryStyle={styles.splitPrimary}
-              secondaryStyle={styles.splitSecondary}
-            />
-          ) : (
-            <>
-              {scenarioStory}
-              {scenarioChoices}
-            </>
-          )
-        ) : null}
-
-        {phase === 'TENSION' ? (
-          <View style={styles.tensionArea}>
-            <TensionMechanicHost
-              tensionMechanic={node.proceduralMeta?.tensionMechanic}
-              onSuccess={handleTensionSuccess}
-              onFailure={handleTensionFailure}
-              defaultPenalty={node.proceduralMeta?.defaultPenalty}
-              fallbackLabel={tensionMechanicLabel}
-              penaltyPreview={node.hazardPreview}
-              borderColor={borderColor}
-              mutedColor={mutedColor}
-              primaryColor={primaryColor}
-            />
-          </View>
-        ) : null}
-
-        {phase === 'OUTCOME' && outcomeSummary ? (
-          <NarrativeOutcomePanel
-            summary={outcomeSummary}
-            bonusLine={bonusLine}
-            onContinue={handleContinue}
+      {phase === 'TENSION' ? (
+        <View style={styles.tensionArea}>
+          <TensionMechanicHost
+            tensionMechanic={node.proceduralMeta?.tensionMechanic ?? 'Mechanic_ScavengeBar'}
+            onSuccess={handleTensionSuccess}
+            onFailure={handleTensionFailure}
+            defaultPenalty={node.proceduralMeta?.defaultPenalty}
+            fallbackLabel={tensionMechanicLabel}
             borderColor={borderColor}
             mutedColor={mutedColor}
             primaryColor={primaryColor}
-            cityStreets={showCityStreetBackground}
           />
-        ) : null}
-      </View>
+        </View>
+      ) : null}
+
+      {phase === 'OUTCOME' && outcomeSummary ? (
+        <NarrativeOutcomePanel
+          summary={outcomeSummary}
+          bonusLine={bonusLine}
+          onContinue={handleContinue}
+          borderColor={borderColor}
+          mutedColor={mutedColor}
+          primaryColor={primaryColor}
+        />
+      ) : null}
     </View>
   );
 }
@@ -387,151 +321,72 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
   },
-  rootWithCityBackground: {
-    position: 'relative',
-  },
-  cityBackgroundImage: {
-    ...StyleSheet.absoluteFillObject,
-    width: '100%',
-    height: '100%',
-  },
-  cityBackgroundScrim: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.62)',
-  },
-  shell: {
-    flex: 1,
-    minHeight: 0,
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingTop: 8,
-  },
-  shellCityStreets: {
-    paddingHorizontal: 14,
-  },
   header: {
     flexShrink: 0,
-    borderBottomWidth: 1,
     paddingBottom: 8,
-    marginBottom: 8,
   },
-  flavorScroll: {
-    flexGrow: 0,
-    flexShrink: 1,
+  divider: {
+    height: 1,
+    flexShrink: 0,
+    marginBottom: 10,
   },
-  flavorScrollFill: {
+  scenarioLayout: {
     flex: 1,
     minHeight: 0,
+    gap: 8,
   },
-  flavorScrollContent: {
-    paddingBottom: 4,
-  },
-  splitPane: {
+  decisionDock: {
     flex: 1,
     minHeight: 0,
-  },
-  splitPrimary: {
-    minHeight: 0,
-  },
-  splitSecondary: {
-    minHeight: 0,
-  },
-  choicePane: {
-    flex: 1,
-    minHeight: 0,
-    justifyContent: 'space-between',
-  },
-  choiceSection: {
-    flex: 1,
-    minHeight: 0,
-    marginTop: 8,
-    gap: 4,
-  },
-  choiceScroll: {
-    flex: 1,
-    minHeight: 0,
+    justifyContent: 'flex-end',
+    paddingTop: 8,
+    gap: 6,
   },
   tensionArea: {
     flex: 1,
     minHeight: 0,
     justifyContent: 'center',
   },
-  resultArea: {
-    flex: 1,
-    minHeight: 0,
-    justifyContent: 'center',
-    paddingVertical: 12,
-  },
-  footer: {
-    flexShrink: 0,
-    paddingTop: 8,
-    paddingBottom: 4,
-  },
   docLabel: {
     fontFamily: 'monospace',
-    fontSize: 9,
+    fontSize: 8,
     letterSpacing: 1,
   },
-  docTitle: {
-    fontFamily: 'monospace',
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 1.2,
-    marginTop: 4,
-  },
-  docBody: {
-    borderWidth: 1,
-    padding: 12,
-    gap: 8,
-  },
-  scenarioText: {
-    fontFamily: 'monospace',
-    fontSize: 11,
-    lineHeight: 17,
-  },
-  hazardText: {
-    fontFamily: 'monospace',
-    fontSize: 10,
-    lineHeight: 14,
-    color: '#fbbf24',
-    letterSpacing: 0.6,
-  },
   choiceCol: {
-    gap: 6,
+    gap: NARRATIVE_CHOICE_GAP,
+    width: '100%',
   },
   resolverHeader: {
     fontFamily: 'monospace',
-    fontSize: 9,
+    fontSize: 7,
     letterSpacing: 1,
-    marginBottom: 2,
   },
   choiceBtn: {
     borderWidth: 1,
-    paddingVertical: 5,
-    paddingHorizontal: 8,
+    paddingVertical: NARRATIVE_CHOICE_PADDING_V,
+    paddingHorizontal: NARRATIVE_CHOICE_PADDING_H,
     gap: 2,
-  },
-  choiceBtnCityStreets: {
-    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    width: '100%',
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
   },
   choiceBtnSelected: {
     backgroundColor: 'rgba(0, 255, 51, 0.08)',
   },
   choiceBtnLocked: {
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
   },
   choiceLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
   },
   lockIcon: {
-    fontSize: 10,
-    lineHeight: 12,
+    fontSize: 8,
+    lineHeight: 10,
   },
   choiceLabel: {
     fontFamily: 'monospace',
-    fontSize: 11,
+    fontSize: 8,
     fontWeight: '600',
     flexShrink: 1,
   },
@@ -540,48 +395,33 @@ const styles = StyleSheet.create({
   },
   choiceReq: {
     fontFamily: 'monospace',
-    fontSize: 9,
+    fontSize: 6,
     letterSpacing: 0.4,
-    lineHeight: 11,
+    lineHeight: 10,
   },
   choiceEffectLine: {
     fontFamily: 'monospace',
-    fontSize: 8,
-    lineHeight: 10,
+    fontSize: 6,
+    lineHeight: 9,
   },
   optionDHint: {
     fontFamily: 'monospace',
-    fontSize: 8,
-    lineHeight: 12,
+    fontSize: 6,
+    lineHeight: 10,
     letterSpacing: 0.4,
-    marginTop: 2,
     paddingHorizontal: 2,
   },
   confirmBtn: {
     borderWidth: 1,
-    paddingVertical: 8,
+    paddingVertical: NARRATIVE_CHOICE_PADDING_V,
     alignItems: 'center',
+    width: '100%',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
   confirmBtnText: {
     fontFamily: 'monospace',
-    fontSize: 11,
+    fontSize: 8,
     fontWeight: '700',
-    letterSpacing: 1,
-  },
-  resultBox: {
-    borderWidth: 1,
-    padding: 14,
-  },
-  resultText: {
-    fontFamily: 'monospace',
-    fontSize: 11,
-    lineHeight: 16,
-  },
-  bonusText: {
-    fontFamily: 'monospace',
-    fontSize: 10,
-    lineHeight: 14,
-    marginTop: 8,
-    letterSpacing: 0.4,
+    letterSpacing: 0.8,
   },
 });

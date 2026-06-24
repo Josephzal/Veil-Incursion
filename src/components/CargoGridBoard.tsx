@@ -1286,6 +1286,7 @@ const styles = StyleSheet.create({
   harvestRightPane: {
     flexShrink: 0,
     minHeight: 0,
+    alignSelf: 'stretch',
   },
   creditsHud: {
     position: 'absolute',

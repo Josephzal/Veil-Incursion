@@ -1,20 +1,22 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import type { TerminalTheme } from '../../types/theme';
 
 interface HarvestExtractorPanelProps {
   theme: TerminalTheme;
   harvestPercentage: number;
   children: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
 }
 
 export default function HarvestExtractorPanel({
   theme,
   harvestPercentage,
   children,
+  style,
 }: HarvestExtractorPanelProps): React.JSX.Element {
   return (
-    <View style={[styles.block, { borderColor: theme.borderColor }]}>
+    <View style={[styles.block, { borderColor: theme.borderColor }, style]}>
       <Text style={[styles.eyebrow, { color: theme.mutedColor }]}>
         VEIL EXTRACTOR // RESONANCE SINK
       </Text>

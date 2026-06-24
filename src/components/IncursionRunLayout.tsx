@@ -22,6 +22,8 @@ interface IncursionRunLayoutProps {
   onConsumableUsed?: (result: IncursionConsumableUseResult) => void;
   /** Combat-only: validates turn/AP, consumes cargo, then applies via onConsumableUsed. */
   onDeployCargoItem?: (itemId: CargoItemId) => boolean;
+  /** Hide floating STATUS / CARGO chrome (e.g. harvest screen has its own layout). */
+  hideRunChrome?: boolean;
 }
 
 /**
@@ -32,6 +34,7 @@ export default function IncursionRunLayout({
   style,
   onConsumableUsed,
   onDeployCargoItem,
+  hideRunChrome = false,
 }: IncursionRunLayoutProps): React.JSX.Element {
   const { theme } = useTerminal();
   const {
@@ -116,13 +119,13 @@ export default function IncursionRunLayout({
   }, []);
 
   const cargoOverlayValue = useMemo(
-    () => ({ openCargo, cargoEnabled: showRunOverlays && cargoEnabled }),
-    [cargoEnabled, openCargo, showRunOverlays],
+    () => ({ openCargo, cargoEnabled: showRunOverlays && cargoEnabled && !hideRunChrome }),
+    [cargoEnabled, hideRunChrome, openCargo, showRunOverlays],
   );
 
   const statusOverlayValue = useMemo(
-    () => ({ openStatus, statusEnabled: showRunOverlays }),
-    [openStatus, showRunOverlays],
+    () => ({ openStatus, statusEnabled: showRunOverlays && !hideRunChrome }),
+    [hideRunChrome, openStatus, showRunOverlays],
   );
 
   return (
@@ -131,7 +134,7 @@ export default function IncursionRunLayout({
         <View style={[styles.root, style]}>
           <View style={styles.content}>
             {children}
-            {showRunOverlays && !combatMode ? <RunGlobalChrome /> : null}
+            {showRunOverlays && !combatMode && !hideRunChrome ? <RunGlobalChrome /> : null}
           </View>
 
           {showRunOverlays ? (
