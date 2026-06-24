@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import HapticPressable from '../HapticPressable';
 import type { ImageSourcePropType } from 'react-native';
 import type { CombatGridUnitSnapshot } from '../../utils/combatTelemetryFormat';
 import { ENEMY_HITBOX_DEBUG } from './combatEnemyBarLayout';
@@ -162,7 +163,7 @@ export default function CombatEnemyUnit({
             </View>
 
             {onPress && !dissolving ? (
-              <Pressable
+              <HapticPressable
                 onPress={onPress}
                 style={[styles.hitbox, ENEMY_HITBOX_DEBUG ? styles.hitboxDebug : null]}
                 pointerEvents="auto"

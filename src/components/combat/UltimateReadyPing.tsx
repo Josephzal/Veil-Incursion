@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import HapticPressable from '../HapticPressable';
 import Animated, {
   Easing,
   cancelAnimation,
@@ -84,12 +85,12 @@ export default function UltimateReadyPing({
 
   return (
     <Animated.View style={[styles.wrap, wrapStyle]} pointerEvents={ready && !disabled ? 'auto' : 'none'}>
-      <Pressable onPress={onPress} disabled={!ready || disabled} style={styles.hitbox}>
+      <HapticPressable onPress={onPress} disabled={!ready || disabled} style={styles.hitbox}>
         <Animated.View
           style={[styles.pulseRing, { borderColor: palette.accent, backgroundColor: palette.glow }, ringStyle]}
         />
         <View style={[styles.core, { backgroundColor: palette.core, borderColor: palette.accent }]} />
-      </Pressable>
+      </HapticPressable>
     </Animated.View>
   );
 }

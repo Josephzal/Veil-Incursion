@@ -15,12 +15,14 @@ export const META_RESULTS_CARD_MAX_WIDTH_WIDE = 620;
 export const LANDSCAPE_PANEL_GAP = 8;
 export const LANDSCAPE_PANEL_PADDING = 10;
 
-export const HUB_NAV_RAIL_WIDTH = 200;
-export const HUB_NAV_RAIL_MIN_WIDTH = 168;
-export const HUB_NAV_RAIL_MAX_WIDTH = 240;
+export const HUB_NAV_RAIL_WIDTH = 130;
+export const HUB_NAV_RAIL_MIN_WIDTH = 112;
+export const HUB_NAV_RAIL_MAX_WIDTH = 152;
+/** Buffer between nav rail border and hub main content. */
+export const HUB_NAV_MAIN_GAP = 12;
 
 export function resolveHubNavRailWidth(screenWidth: number): number {
-  const raw = Math.round(screenWidth * 0.22);
+  const raw = Math.round(screenWidth * 0.14);
   return Math.max(HUB_NAV_RAIL_MIN_WIDTH, Math.min(HUB_NAV_RAIL_MAX_WIDTH, raw));
 }
 

@@ -1,10 +1,10 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, ViewStyle } from 'react-native';
+import { StyleSheet, Text, type ViewStyle } from 'react-native';
+import HapticPressable from './HapticPressable';
 import {
   getInteractiveButtonStyle,
   getInteractiveButtonTextStyle,
 } from '../styles/hubTerminalUi';
-import { pulseHubButton } from '../utils/hubButtonHaptics';
 
 const TERMINAL_ACCENT = '#00ff33';
 
@@ -16,7 +16,6 @@ interface SelectionContinueButtonProps {
   mutedColor: string;
   accentColor?: string;
   style?: ViewStyle;
-  haptic?: boolean;
 }
 
 export default function SelectionContinueButton({
@@ -27,16 +26,14 @@ export default function SelectionContinueButton({
   mutedColor,
   accentColor = TERMINAL_ACCENT,
   style,
-  haptic = true,
 }: SelectionContinueButtonProps): React.JSX.Element {
   const handlePress = () => {
     if (!enabled) return;
-    if (haptic) pulseHubButton();
     onPress();
   };
 
   return (
-    <Pressable
+    <HapticPressable
       onPress={handlePress}
       disabled={!enabled}
       style={({ pressed }) => [
@@ -57,7 +54,7 @@ export default function SelectionContinueButton({
       >
         {label}
       </Text>
-    </Pressable>
+    </HapticPressable>
   );
 }
 

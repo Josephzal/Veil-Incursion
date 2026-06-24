@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import HapticPressable from '../HapticPressable';
 import { BLACK_MARKET_CARGO_LISTINGS } from '../../data/blackMarket';
 import {
   hubContrabandPrice,
@@ -56,7 +57,7 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
               const selected = selectedListingId === listing.id;
               const affordable = account.cabalCredits >= price;
               return (
-                <Pressable
+                <HapticPressable
                   key={listing.id}
                   onPress={() => setSelectedListingId(listing.id)}
                   style={[
@@ -77,11 +78,11 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
                     </Text>
                     <Text style={[styles.listingPrice, { color: accent }]}>{`${price} CR`}</Text>
                   </View>
-                </Pressable>
+                </HapticPressable>
               );
             })}
           </ScrollView>
-          <Pressable
+          <HapticPressable
             disabled={!canBuy}
             onPress={handleBuy}
             style={[
@@ -93,7 +94,7 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
             ]}
           >
             <Text style={[styles.actionBtnText, { color: canBuy ? accent : theme.mutedColor }]}>[ BUY ]</Text>
-          </Pressable>
+          </HapticPressable>
         </View>
 
         <View style={[styles.panel, { borderColor: theme.borderColor, backgroundColor: panelBg }]}>
@@ -118,19 +119,19 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
                     </Text>
                   </View>
                   <View style={styles.fenceActions}>
-                    <Pressable
+                    <HapticPressable
                       onPress={() => handleSell(entry.resourceId, 1)}
                       style={[styles.sellBtn, { borderColor: accent }]}
                     >
                       <Text style={[styles.sellBtnText, { color: accent }]}>SELL 1</Text>
-                    </Pressable>
+                    </HapticPressable>
                     {entry.quantity > 1 ? (
-                      <Pressable
+                      <HapticPressable
                         onPress={() => handleSell(entry.resourceId, entry.quantity)}
                         style={[styles.sellBtn, { borderColor: accent }]}
                       >
                         <Text style={[styles.sellBtnText, { color: accent }]}>ALL</Text>
-                      </Pressable>
+                      </HapticPressable>
                     ) : null}
                   </View>
                 </View>

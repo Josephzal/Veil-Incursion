@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { StyleSheet, View, Text, Animated, Easing, Dimensions, Pressable, Vibration, PanResponder } from 'react-native';
+import { StyleSheet, View, Text, Animated, Easing, Dimensions, Vibration, PanResponder } from 'react-native';
+import HapticPressable from './HapticPressable';
 import {
   cancelAnimation,
   Easing as ReanimatedEasing,
@@ -6166,8 +6167,13 @@ export default function TacticalCombatHub({
   };
 
   const getStagedCostImpact = (abilityId: string): string => {
+    return `COST: ${formatClassAbilityCostLine(operativeClass, abilityId)}`;
+  };
+
+  const getStagedAbilityDescription = (abilityId: string): string => {
     const cost = resolveClassAbilityCost(operativeClass, abilityId);
-    return `COST: ${formatClassAbilityCostLine(operativeClass, abilityId)}\n${cost.description}`;
+    const tagLine = cost.tags.length > 0 ? `TAGS: ${cost.tags.join(' // ')}` : '';
+    return [cost.description, tagLine].filter(Boolean).join('\n\n');
   };
 
   const confirmSelectedAbility = () => {
@@ -6260,6 +6266,7 @@ export default function TacticalCombatHub({
       canEndTurn={isPlayerTurn && cycleState === 'TEXT_COMBAT' && !shadowstepProcActive}
       getStagedHeader={getStagedHeader}
       getStagedCostImpact={getStagedCostImpact}
+      getStagedAbilityDescription={getStagedAbilityDescription}
       getActionAccent={getAbilityAccent}
       bloodForTimeAvailable={bloodForTimeOwned}
       bloodForTimeEnabled={
@@ -6465,7 +6472,7 @@ export default function TacticalCombatHub({
           <Text style={[styles.resTitle, { color: P.enemyHp }]}>
             OPERATIVE SOUL DISCONNECTED
           </Text>
-          <Pressable
+          <HapticPressable
             onPress={() => {
               Vibration.vibrate(12);
               dismiss();
@@ -6475,7 +6482,7 @@ export default function TacticalCombatHub({
             <Text style={[styles.resBtnText, { color: P.enemyHp }]}>
               [ INCURSION FAILED ]
             </Text>
-          </Pressable>
+          </HapticPressable>
           </View>
         </View>
       )}

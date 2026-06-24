@@ -1,5 +1,6 @@
 import React from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, StyleSheet, Text, View } from 'react-native';
+import HapticPressable from './HapticPressable';
 import {
   getEncounterDisplayLabel,
   getMacroBiomeDisplayLabel,
@@ -76,7 +77,7 @@ export default function ScanConfirmOverlay({
           )}
 
           <View style={styles.actions}>
-            <Pressable
+            <HapticPressable
               onPress={onAbort}
               style={({ pressed }) => [
                 styles.btn,
@@ -85,8 +86,8 @@ export default function ScanConfirmOverlay({
               ]}
             >
               <Text style={[styles.btnText, { color: theme.mutedColor }]}>[ ABORT ]</Text>
-            </Pressable>
-            <Pressable
+            </HapticPressable>
+            <HapticPressable
               onPress={onEngage}
               disabled={!canEngage}
               style={({ pressed }) => [
@@ -102,7 +103,7 @@ export default function ScanConfirmOverlay({
               <Text style={[styles.btnText, { color: canEngage ? accentColor : theme.mutedColor }]}>
                 [ ENGAGE ]
               </Text>
-            </Pressable>
+            </HapticPressable>
           </View>
         </View>
       </View>

@@ -1,10 +1,12 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import HapticPressable from '../components/HapticPressable';
 import TerminalResultsLayout from '../components/layout/TerminalResultsLayout';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import TerminalSafeArea from '../components/TerminalSafeArea';
+import { useImmersiveScreenPadding } from '../hooks/useImmersiveScreenPadding';
 import { formatTimeAliveMmSs } from '../types/runDeathSummary';
 
 const TERMINAL_ACCENT = '#ef4444';
@@ -20,9 +22,10 @@ export default function GameOverScreen(): React.JSX.Element {
   const causeOfDeath = deathSummary?.causeOfDeath ?? 'UNKNOWN TERMINATION';
   const sectorNode = deathSummary ? `Level ${deathSummary.sectorLevel}` : 'Level —';
   const depthLabel = deathSummary ? `Depth ${deathSummary.depthLayer}` : 'Depth —';
+  const immersivePadding = useImmersiveScreenPadding();
 
   return (
-    <TerminalSafeArea>
+    <TerminalSafeArea style={immersivePadding}>
       <TerminalResultsLayout
         accentBorderColor={`${TERMINAL_ACCENT}55`}
         narrative={(
@@ -59,7 +62,7 @@ export default function GameOverScreen(): React.JSX.Element {
           </View>
         )}
         footer={(
-          <Pressable
+          <HapticPressable
             onPress={goToHub}
             style={({ pressed }) => [
               styles.button,
@@ -67,7 +70,7 @@ export default function GameOverScreen(): React.JSX.Element {
             ]}
           >
             <Text style={styles.buttonLabel}>[ RETURN TO TERMINAL ]</Text>
-          </Pressable>
+          </HapticPressable>
         )}
       />
     </TerminalSafeArea>

@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import HapticPressable from './HapticPressable';
 import { AEGIS_ABILITY_CATALOG } from '../data/aegisAbilities';
 import {
   canAffordAbilityUnlock,
@@ -77,7 +78,7 @@ export default function AegisLoadoutEditor({
           const isSelected = selectedSlot === index;
           const def = AEGIS_ABILITY_CATALOG[abilityId];
           return (
-            <Pressable
+            <HapticPressable
               key={`slot-${index}`}
               onPress={() => onSelectSlot(index as 0 | 1 | 2 | 3)}
               style={({ pressed }) => [
@@ -106,7 +107,7 @@ export default function AegisLoadoutEditor({
               >
                 {def.description}
               </Text>
-            </Pressable>
+            </HapticPressable>
           );
         })}
       </View>
@@ -120,7 +121,7 @@ export default function AegisLoadoutEditor({
           const unlocked = isAbilityUnlocked(unlockedAbilities, abilityId);
           const affordable = unlocked || canAffordAbilityUnlock(resourceStash, def.unlockCost);
           return (
-            <Pressable
+            <HapticPressable
               key={abilityId}
               onPress={() => handleAbilityPress(abilityId)}
               style={({ pressed }) => [
@@ -155,7 +156,7 @@ export default function AegisLoadoutEditor({
               {assigned >= 0 ? (
                 <Text style={[styles.chipSlot, { color: theme.mutedColor }]}>{`S${assigned + 1}`}</Text>
               ) : null}
-            </Pressable>
+            </HapticPressable>
           );
         })}
       </View>
@@ -164,7 +165,7 @@ export default function AegisLoadoutEditor({
         <Text style={[styles.status, { color: theme.mutedColor }]}>{statusMessage}</Text>
       ) : null}
 
-      <Pressable
+      <HapticPressable
         onPress={onCommit}
         style={({ pressed }) => [
           getInteractiveButtonStyle(theme.accentColor, { pressed, size: 'md' }),
@@ -174,7 +175,7 @@ export default function AegisLoadoutEditor({
         <Text style={[getInteractiveButtonTextStyle('md'), { color: theme.accentColor }]}>
           {commitLabel}
         </Text>
-      </Pressable>
+      </HapticPressable>
     </View>
   );
 }

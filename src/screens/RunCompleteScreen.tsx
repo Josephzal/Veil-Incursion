@@ -1,11 +1,13 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import HapticPressable from '../components/HapticPressable';
 import { getClusterDefinition } from '../data/climateClusters';
 import TerminalResultsLayout from '../components/layout/TerminalResultsLayout';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import TerminalSafeArea from '../components/TerminalSafeArea';
+import { useImmersiveScreenPadding } from '../hooks/useImmersiveScreenPadding';
 
 const TERMINAL_ACCENT = '#00ff33';
 
@@ -18,9 +20,10 @@ export default function RunCompleteScreen(): React.JSX.Element {
     endRun('OPERATOR RETURNED TO BASE');
     goToHub();
   };
+  const immersivePadding = useImmersiveScreenPadding();
 
   return (
-    <TerminalSafeArea>
+    <TerminalSafeArea style={immersivePadding}>
       <TerminalResultsLayout
         accentBorderColor={`${TERMINAL_ACCENT}44`}
         narrative={(
@@ -52,7 +55,7 @@ export default function RunCompleteScreen(): React.JSX.Element {
           </View>
         )}
         footer={(
-          <Pressable
+          <HapticPressable
             onPress={handleReturn}
             style={({ pressed }) => [
               styles.button,
@@ -60,7 +63,7 @@ export default function RunCompleteScreen(): React.JSX.Element {
             ]}
           >
             <Text style={styles.buttonLabel}>[ RETURN TO TERMINAL ]</Text>
-          </Pressable>
+          </HapticPressable>
         )}
       />
     </TerminalSafeArea>

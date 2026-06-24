@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import HapticPressable from './HapticPressable';
 import { getAbilityDefinition } from '../data/aegisAbilities';
 import { canGraftAbility, formatGraftOfferLine } from '../data/veilGraftEngine';
 import { getVeilGraftDefinition } from '../data/veilGraftDatabase';
@@ -58,7 +59,7 @@ export default function VeilGraftUI({
           const affordable = residueBalance >= graft.cost;
           const selected = selectedGraftId === graftId;
           return (
-            <Pressable
+            <HapticPressable
               key={graftId}
               disabled={!affordable}
               onPress={() => setSelectedGraftId(graftId)}
@@ -77,7 +78,7 @@ export default function VeilGraftUI({
               <Text style={[styles.offerBody, { color: mutedColor }]}>
                 {formatGraftOfferLine(graftId, residueBalance).split('\n')[1]}
               </Text>
-            </Pressable>
+            </HapticPressable>
           );
         })}
       </View>
@@ -95,7 +96,7 @@ export default function VeilGraftUI({
             && selectedGraftId != null
             && residueBalance >= (selectedGraft?.cost ?? 0);
           return (
-            <Pressable
+            <HapticPressable
               key={abilityId}
               disabled={!canApply}
               onPress={() => {
@@ -130,7 +131,7 @@ export default function VeilGraftUI({
               ) : (
                 <Text style={[styles.graftTag, { color: mutedColor }]}>UNGRAFTED</Text>
               )}
-            </Pressable>
+            </HapticPressable>
           );
         })}
       </View>

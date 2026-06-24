@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import HapticPressable from '../HapticPressable';
 import {
   getInteractiveButtonStyle,
   getInteractiveButtonTextStyle,
@@ -67,7 +68,7 @@ export default function InlineScannerEngagement({
             ) : null}
           </ScrollView>
         </View>
-        <Pressable
+        <HapticPressable
           onPress={() => handleEngage(canEngage, onEngage)}
           disabled={!canEngage}
           style={({ pressed }) => [
@@ -78,7 +79,7 @@ export default function InlineScannerEngagement({
           <Text style={[getInteractiveButtonTextStyle('sm'), { color: canEngage ? accent : mutedColor }]}>
             {engageLabel}
           </Text>
-        </Pressable>
+        </HapticPressable>
       </View>
     );
   }
@@ -104,7 +105,7 @@ export default function InlineScannerEngagement({
           </Text>
         ))}
 
-        <Pressable
+        <HapticPressable
           onPress={() => handleEngage(canEngage, onEngage)}
           disabled={!canEngage}
           style={({ pressed }) => [
@@ -115,7 +116,7 @@ export default function InlineScannerEngagement({
           <Text style={[getInteractiveButtonTextStyle('sm'), { color: canEngage ? accent : mutedColor }]}>
             {engageLabel}
           </Text>
-        </Pressable>
+        </HapticPressable>
       </View>
     </View>
   );

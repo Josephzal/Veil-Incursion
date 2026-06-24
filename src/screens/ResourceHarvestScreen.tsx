@@ -10,6 +10,7 @@ import { CARGO_GRID_FRAME_HEIGHT } from '../components/CargoGridBoard';
 import IncursionShell from '../components/IncursionShell';
 import IncursionRunLayout from '../components/IncursionRunLayout';
 import RunEventScreenFrame from '../components/layout/RunEventScreenFrame';
+import SelectionContinueButton from '../components/SelectionContinueButton';
 import { MAX_RUN_CANISTER_RESIDUE } from '../constants/veilResidue';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
@@ -267,7 +268,23 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
         <RunEventScreenFrame
           backgroundImage={ResourceHarvestBg}
           backgroundScrimOpacity={0.72}
-          bodyStyle={styles.contentForegroundPack}
+          bodyStyle={styles.harvestBody}
+          footer={(
+            <View style={[styles.footerBand, { backgroundColor: `${theme.backgroundColor}ee` }]}>
+              <SelectionContinueButton
+                enabled
+                onPress={handlePackingContinue}
+                label={
+                  activeIncursion.pendingHarvestReturn === 'RESOURCE_CACHE'
+                    ? '[ CONTINUE TO GRID ]'
+                    : '[ CONTINUE RUN ]'
+                }
+                borderColor={theme.borderColor}
+                mutedColor={theme.mutedColor}
+                style={styles.continueFooter}
+              />
+            </View>
+          )}
           overlay={(
             <View ref={overlayRef} style={styles.particleOverlay} pointerEvents="none">
               {lootPool.map((particle) => (
@@ -318,11 +335,23 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
-  contentForegroundPack: {
+  harvestBody: {
     flex: 1,
-    justifyContent: 'center',
+    minHeight: 0,
+    justifyContent: 'flex-start',
     alignItems: 'center',
+    paddingTop: 2,
     pointerEvents: 'box-none',
+  },
+  footerBand: {
+    paddingTop: 6,
+    paddingBottom: 2,
+  },
+  continueFooter: {
+    marginTop: 0,
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 360,
   },
   particleOverlay: {
     ...StyleSheet.absoluteFillObject,

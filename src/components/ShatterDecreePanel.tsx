@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import HapticPressable from './HapticPressable';
 import { useShatterCountdown } from '../hooks/useShatterCountdown';
 import { FactionType } from '../types/game';
 import { MacroSectorId } from '../types/regional';
@@ -45,7 +46,7 @@ export default function ShatterDecreePanel({
         </View>
       )}
 
-      <Pressable
+      <HapticPressable
         onPress={onForceDecree}
         style={({ pressed }) => [
           styles.decreeBtn,
@@ -59,7 +60,7 @@ export default function ShatterDecreePanel({
         <Text style={[styles.decreeBtnText, { color: theme.primaryColor }]}>
           [ FORCE REGIONAL SHATTER DECREE ]
         </Text>
-      </Pressable>
+      </HapticPressable>
       <Text style={[styles.adminNote, { color: theme.mutedColor }]}>
         ADMIN OVERRIDE — FREEZES INFLUENCE ARRAYS AND EVALUATES SECTOR VICTOR
       </Text>

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ImageBackground, StatusBar, StyleSheet, View, type ImageSourcePropType } from 'react-native';
+import { ImageBackground, StyleSheet, View, type ImageSourcePropType } from 'react-native';
 import {
   resolveCombatEnemyPortrait,
   resolvePortraitKeySuffix,
@@ -65,10 +65,8 @@ import HostileIntelView from './combat/layouts/HostileIntelView';
 import TurnOrderSidebar from './combat/layouts/TurnOrderSidebar';
 import CombatDashboardCommandColumn from './combat/layouts/CombatDashboardCommandColumn';
 import type { CombatOperativeTelemetry } from '../components/combat/CombatOperativeHud';
-import { useImmersiveCombatChrome } from '../hooks/useImmersiveCombatChrome';
 
 export default function CombatScreen(): React.JSX.Element {
-  useImmersiveCombatChrome(true);
   const { theme } = useTerminal();
   const { startResourceHarvest, startPostCombatBoon, startGameOver, startExtractionReview, goToHub } = useGameFlow();
   const { setTerminalView } = useTerminalNav();
@@ -533,8 +531,7 @@ export default function CombatScreen(): React.JSX.Element {
   ]);
 
   return (
-    <IncursionShell immersive>
-      <StatusBar hidden translucent backgroundColor="transparent" />
+    <IncursionShell>
       <CombatTurnProvider>
         <CombatEnemyChromeProvider>
         <CombatArenaOverlayProvider>

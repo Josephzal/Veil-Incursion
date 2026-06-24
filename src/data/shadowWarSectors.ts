@@ -14,7 +14,7 @@ const RAW_SECTORS: Array<Omit<ShadowWarSectorDefinition, 'mapGeometry'> & { path
   },
   {
     id: 'THE_ABYSSAL_SINK',
-    label: 'The Abyssal Sink',
+    label: 'Abyssal Sink',
     buffSummary: '+10% Max HP for controlling Cabal',
     buffId: 'MAX_HP_PLUS_10',
     path: 'M 30 190 L 110 170 L 140 260 L 60 280 L 20 230 Z',
@@ -22,7 +22,7 @@ const RAW_SECTORS: Array<Omit<ShadowWarSectorDefinition, 'mapGeometry'> & { path
   },
   {
     id: 'THE_NULL_ZONE',
-    label: 'The Null Zone',
+    label: 'Null Zone',
     buffSummary: '+10% Rare Loot Drop Rate',
     buffId: 'RARE_LOOT_PLUS_10',
     path: 'M 190 110 L 290 90 L 320 170 L 250 210 L 170 180 Z',
@@ -38,7 +38,7 @@ const RAW_SECTORS: Array<Omit<ShadowWarSectorDefinition, 'mapGeometry'> & { path
   },
   {
     id: 'THE_FRACTAL_WASTES',
-    label: 'The Fractal Wastes',
+    label: 'Fractal Wastes',
     buffSummary: '+1 Max AP on combat Turn 1',
     buffId: 'FIRST_TURN_AP_PLUS_1',
     path: 'M 300 190 L 420 175 L 460 260 L 360 290 L 280 240 Z',

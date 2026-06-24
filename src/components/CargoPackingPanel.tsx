@@ -1,9 +1,13 @@
 import React, { useMemo } from 'react';
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import HapticPressable from './HapticPressable';
 import {
   GRID_CANISTER_GAP,
+  harvestGridFrameHeight,
+  resolveHarvestCellSize,
   resolveHarvestSidecarWidth,
 } from '../constants/harvestLayout';
+import { useLandscapeMetrics } from '../hooks/useLandscapeMetrics';
 import { calculateCargoMarketValue, calculateGridOccupancy } from '../data/cargoGridEngine';
 import CargoGridBoard, {
   CARGO_CELL_SIZE,
@@ -19,7 +23,6 @@ import {
   getInteractiveButtonStyle,
   getInteractiveButtonTextStyle,
 } from '../styles/hubTerminalUi';
-import { pulseHubButton } from '../utils/hubButtonHaptics';
 
 interface CargoPackingPanelProps {
   cargo: CargoRunState;
@@ -57,6 +60,7 @@ interface CargoPackingPanelProps {
   embedded?: boolean;
   /** Hub loadout: smaller cargo cells. */
   compactCellSize?: number;
+  stableExternalBay?: boolean;
   onHubExternalDrop?: (
     source: CargoDragSource,
     absoluteX: number,
@@ -90,16 +94,23 @@ export default function CargoPackingPanel({
   hidePackHeader = false,
   embedded = false,
   compactCellSize,
+  stableExternalBay = false,
   onHubExternalDrop,
   onDragPositionChange,
 }: CargoPackingPanelProps): React.JSX.Element {
-  const { width: screenWidth } = useWindowDimensions();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const { safeBottom } = useLandscapeMetrics();
   const harvestSidecarWidth = useMemo(
     () => (harvestLayout ? resolveHarvestSidecarWidth(screenWidth) : 0),
     [harvestLayout, screenWidth],
   );
 
-  const cellSize = compactCellSize ?? CARGO_CELL_SIZE;
+  const cellSize = useMemo(() => {
+    if (compactCellSize != null) return compactCellSize;
+    if (harvestLayout) return resolveHarvestCellSize(screenHeight, safeBottom);
+    return CARGO_CELL_SIZE;
+  }, [compactCellSize, harvestLayout, safeBottom, screenHeight]);
+  const harvestGridHeight = harvestLayout ? harvestGridFrameHeight(cellSize) : CARGO_GRID_FRAME_HEIGHT;
   const frame = useMemo(() => cargoGridFrameDimensions(cellSize), [cellSize]);
 
   const occupancy = calculateGridOccupancy(cargo);
@@ -144,9 +155,9 @@ export default function CargoPackingPanel({
             hideContinueButton={hideContinueButton || !onContinue}
             onContainmentItemCenterMeasured={onContainmentItemCenterMeasured}
             onHarvestFloorMeasured={harvestLayout ? onHarvestFloorMeasured : undefined}
-            fixedExternalSlotCount={harvestLayout ? fixedExternalSlotCount : undefined}
+            fixedExternalSlotCount={fixedExternalSlotCount}
             resolveContainmentSlotIndex={harvestLayout ? resolveContainmentSlotIndex : undefined}
-            stableExternalBay={harvestLayout}
+            stableExternalBay={stableExternalBay}
             externalHover={externalHover}
             selectedPlacementItemId={selectedPlacementItemId}
             onPlaceAtCell={onPlaceAtCell}
@@ -160,21 +171,23 @@ export default function CargoPackingPanel({
             <View
               style={[
                 styles.gridSidecarSlot,
-                { width: harvestSidecarWidth },
+                { width: harvestSidecarWidth, height: harvestGridHeight },
               ]}
               pointerEvents="box-none"
             >
-              {gridSidecar}
+              {React.isValidElement(gridSidecar)
+                ? React.cloneElement(
+                    gridSidecar as React.ReactElement<{ gridFrameHeight?: number }>,
+                    { gridFrameHeight: harvestGridHeight },
+                  )
+                : gridSidecar}
             </View>
           ) : null}
         </View>
 
-        {harvestLayout && onContinue ? (
-          <Pressable
-            onPress={() => {
-              pulseHubButton();
-              onContinue();
-            }}
+        {harvestLayout && onContinue && !hideContinueButton ? (
+          <HapticPressable
+            onPress={onContinue}
             style={({ pressed }) => [
               getInteractiveButtonStyle(accent, { pressed, size: 'md' }),
               styles.continueBtn,
@@ -184,7 +197,7 @@ export default function CargoPackingPanel({
             <Text style={[getInteractiveButtonTextStyle('md'), styles.continueBtnText, { color: accent }]}>
               {continueLabel}
             </Text>
-          </Pressable>
+          </HapticPressable>
         ) : null}
       </View>
     </View>
@@ -199,11 +212,12 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   rootHarvest: {
-    flex: 0,
-    flexGrow: 0,
+    flex: 1,
+    minHeight: 0,
     paddingVertical: 0,
     width: '100%',
     alignItems: 'center',
+    justifyContent: 'flex-start',
   },
   rootEmbedded: {
     flex: 0,
@@ -218,14 +232,19 @@ const styles = StyleSheet.create({
     maxWidth: CARGO_GRID_FRAME_SIZE + 32,
   },
   boardColumnHarvest: {
+    flex: 1,
+    minHeight: 0,
     width: '100%',
     maxWidth: '100%',
     alignSelf: 'center',
-    gap: 16,
+    gap: 6,
+    justifyContent: 'flex-start',
   },
   boardColumnEmbedded: {
     gap: 0,
     maxWidth: '100%',
+    justifyContent: 'flex-start',
+    alignSelf: 'stretch',
   },
   gridAnchor: {
     position: 'relative',
@@ -248,8 +267,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#0a0b0f',
   },
   headerContainerHarvest: {
-    minHeight: 52,
+    minHeight: 36,
     justifyContent: 'center',
+    paddingVertical: 6,
   },
   headerLabel: {
     fontFamily: 'monospace',

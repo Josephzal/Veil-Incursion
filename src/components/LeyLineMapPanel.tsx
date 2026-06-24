@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import HapticPressable from './HapticPressable';
 import SectorOverworldMap from './SectorOverworldMap';
 import { IncursionNode, RunNodeType } from '../types/game';
 import type { SectorGraph } from '../types/sector';
@@ -97,7 +98,7 @@ export default function LeyLineMapPanel({
         </View>
       )}
 
-      <Pressable
+      <HapticPressable
         onPress={onCommit}
         disabled={!activeNode}
         style={({ pressed }) => [
@@ -112,7 +113,7 @@ export default function LeyLineMapPanel({
         <Text style={[styles.commitBtnText, { color: accentColor }]}>
           [ COMMIT VECTOR // DEPLOY ENCOUNTER {currentEncounterIndex + 1} ]
         </Text>
-      </Pressable>
+      </HapticPressable>
 
       <Text style={[styles.hint, { color: mutedColor }]}>
         Commit vector to deploy directly into combat or narrative layer.

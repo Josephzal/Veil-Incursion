@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import HapticPressable from '../HapticPressable';
 import { calculateDonationDraftIp, listDonatableStashResources, validateDonationDraft } from '../../data/shadowWarEngine';
 import { RESOURCE_REGISTRY } from '../../data/resourceRegistry';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
@@ -89,13 +90,13 @@ export default function DonationTerminalPanel({
                   </Text>
                 </View>
                 <View style={styles.rowControls}>
-                  <Pressable onPress={() => adjustDraft(entry.resourceId, -1)} style={styles.stepBtn}>
+                  <HapticPressable onPress={() => adjustDraft(entry.resourceId, -1)} style={styles.stepBtn}>
                     <Text style={styles.stepBtnText}>-</Text>
-                  </Pressable>
+                  </HapticPressable>
                   <Text style={[styles.qty, { color: AMBER }]}>{qty}</Text>
-                  <Pressable onPress={() => adjustDraft(entry.resourceId, 1)} style={styles.stepBtn}>
+                  <HapticPressable onPress={() => adjustDraft(entry.resourceId, 1)} style={styles.stepBtn}>
                     <Text style={styles.stepBtnText}>+</Text>
-                  </Pressable>
+                  </HapticPressable>
                 </View>
               </View>
             );
@@ -105,7 +106,7 @@ export default function DonationTerminalPanel({
 
       <Text style={[styles.yield, { color: AMBER }]}>{`UPLOAD YIELD: ${draftIp} IP`}</Text>
 
-      <Pressable
+      <HapticPressable
         disabled={!canUpload}
         onPress={handleUpload}
         style={[styles.uploadBtn, { borderColor: canUpload ? AMBER : '#3a3028', opacity: canUpload ? 1 : 0.45 }]}
@@ -113,7 +114,7 @@ export default function DonationTerminalPanel({
         <Text style={[styles.uploadText, { color: canUpload ? AMBER : '#5a4a38' }]}>
           [ INITIATE UPLOAD ]
         </Text>
-      </Pressable>
+      </HapticPressable>
     </View>
   );
 }

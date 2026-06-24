@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import HapticPressable from './HapticPressable';
 import {
   getRecipesByKind,
   isRecipeOutputOwned,
@@ -73,7 +74,7 @@ function RecipeCard({
           </Text>
         ))}
       </View>
-      <Pressable
+      <HapticPressable
         disabled={craftDisabled}
         onPress={() => onCraft(recipe.id)}
         style={({ pressed }) => [
@@ -92,7 +93,7 @@ function RecipeCard({
         >
           {craftLabel}
         </Text>
-      </Pressable>
+      </HapticPressable>
     </View>
   );
 }
@@ -127,9 +128,9 @@ export default function CraftingMenuPanel({
         <View style={[styles.header, { borderBottomColor: theme.borderColor }]}>
           <Text style={[styles.title, { color: theme.primaryColor }]}>FABRICATION BENCH // METRO HUB</Text>
           {onClose ? (
-            <Pressable onPress={onClose} style={[styles.closeBtn, { borderColor: theme.statusColor }]}>
+            <HapticPressable onPress={onClose} style={[styles.closeBtn, { borderColor: theme.statusColor }]}>
               <Text style={[styles.closeBtnText, { color: theme.statusColor }]}>[ CLOSE ]</Text>
-            </Pressable>
+            </HapticPressable>
           ) : null}
         </View>
       ) : null}

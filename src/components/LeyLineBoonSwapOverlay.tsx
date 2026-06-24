@@ -1,5 +1,6 @@
 import React from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
+import HapticPressable from './HapticPressable';
 import { LEY_LINE_MUTATION_CATALOG } from '../data/leyLineMutations';
 import type { LeyLineMutationId } from '../types/leyLineMutation';
 import type { TerminalTheme } from '../types/theme';
@@ -30,8 +31,8 @@ export default function LeyLineBoonSwapOverlay({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <Pressable style={styles.backdrop} onPress={onCancel}>
-        <Pressable
+      <HapticPressable style={styles.backdrop} onPress={onCancel}>
+        <HapticPressable
           style={[styles.panel, { borderColor: accentColor }]}
           onPress={(e) => e.stopPropagation()}
         >
@@ -47,7 +48,7 @@ export default function LeyLineBoonSwapOverlay({
             {ownedMutations.map((id) => {
               const def = LEY_LINE_MUTATION_CATALOG[id];
               return (
-                <Pressable
+                <HapticPressable
                   key={id}
                   onPress={() => onSwap(id)}
                   style={[styles.swapRow, { borderColor: accentColor }]}
@@ -55,16 +56,16 @@ export default function LeyLineBoonSwapOverlay({
                   <Text style={[styles.swapLabel, { color: accentColor }]}>{def?.name ?? id}</Text>
                   <Text style={[styles.swapDesc, { color: theme.textColor }]}>{def?.effect ?? def?.description}</Text>
                   <Text style={[styles.swapAction, { color: theme.mutedColor }]}>[ REPLACE WITH INCOMING ]</Text>
-                </Pressable>
+                </HapticPressable>
               );
             })}
           </ScrollView>
 
-          <Pressable onPress={onCancel} style={[styles.cancelBtn, { borderColor: theme.mutedColor }]}>
+          <HapticPressable onPress={onCancel} style={[styles.cancelBtn, { borderColor: theme.mutedColor }]}>
             <Text style={[styles.cancelText, { color: theme.mutedColor }]}>[ DECLINE INCOMING BOON ]</Text>
-          </Pressable>
-        </Pressable>
-      </Pressable>
+          </HapticPressable>
+        </HapticPressable>
+      </HapticPressable>
     </Modal>
   );
 }

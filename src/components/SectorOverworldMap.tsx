@@ -1,13 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Image,
-  type ImageSourcePropType,
-  LayoutChangeEvent,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Image, type ImageSourcePropType, LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
+import HapticPressable from './HapticPressable';
 import {
   Canvas,
   Circle,
@@ -941,7 +934,7 @@ export default function SectorOverworldMap({
             effectiveScale,
           );
           return (
-            <Pressable
+            <HapticPressable
               key={spot.id}
               style={[
                 styles.hubInteractableHit,
@@ -953,7 +946,7 @@ export default function SectorOverworldMap({
               onPress={() => onHubInteractablePress?.(spot.id)}
             >
               <Text style={styles.hubInteractableLabel}>{spot.label}</Text>
-            </Pressable>
+            </HapticPressable>
           );
         }) : null}
 
@@ -967,7 +960,7 @@ export default function SectorOverworldMap({
             effectiveScale,
           );
           return (
-            <Pressable
+            <HapticPressable
               key={`stabilized-${node.id}`}
               style={[
                 styles.riftHit,
@@ -993,7 +986,7 @@ export default function SectorOverworldMap({
             effectiveScale,
           );
           return (
-            <Pressable
+            <HapticPressable
               key={`manifested-${node.id}`}
               style={[
                 styles.riftHit,
@@ -1021,9 +1014,9 @@ export default function SectorOverworldMap({
         {!compact ? <VirtualJoystick vectorX={joystickX} vectorY={joystickY} /> : null}
 
         {!compact && !hubMode && onDirectedPing ? (
-          <Pressable style={styles.pingBtn} onPress={handleDirectedPing}>
+          <HapticPressable style={styles.pingBtn} onPress={handleDirectedPing}>
             <Text style={styles.pingBtnText}>[ PING ]</Text>
-          </Pressable>
+          </HapticPressable>
         ) : null}
 
         {!compact && pingRevealIds.size > 0 ? (

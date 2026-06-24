@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import HapticPressable from '../../HapticPressable';
 import type { TensionMechanicProps, TensionMechanicSuccessResult } from './tensionMechanicTypes';
 
 const PANEL_BG = '#141418';
@@ -195,7 +196,7 @@ export default function ScavengeBar({
         </View>
 
         <View style={styles.actionRow}>
-          <Pressable
+          <HapticPressable
             onPress={handleRansack}
             disabled={resolvedRefState}
             style={({ pressed }) => [
@@ -204,7 +205,7 @@ export default function ScavengeBar({
             ]}
           >
             <Text style={styles.ransackBtnText}>[ RANSACK ]</Text>
-          </Pressable>
+          </HapticPressable>
 
           <Animated.View
             style={[
@@ -221,7 +222,7 @@ export default function ScavengeBar({
                 { opacity: canExtract ? secureGlowOpacity : 0 },
               ]}
             />
-            <Pressable
+            <HapticPressable
               onPress={handleSecure}
               disabled={!canExtract || resolvedRefState}
               style={({ pressed }) => [
@@ -243,7 +244,7 @@ export default function ScavengeBar({
               >
                 {canExtract ? '[ SECURE & LEAVE ]' : '[ EXTRACTION LOCKED ]'}
               </Text>
-            </Pressable>
+            </HapticPressable>
           </Animated.View>
         </View>
 

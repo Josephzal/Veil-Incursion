@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import HapticPressable from '../HapticPressable';
 import CraftingMenuPanel from '../CraftingMenuPanel';
 import SafehouseAbilitiesTab from './SafehouseAbilitiesTab';
 import SafehouseBlackMarketTab from './SafehouseBlackMarketTab';
@@ -46,16 +47,11 @@ export default function SafehouseHubPanel(): React.JSX.Element {
         </View>
       </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={[styles.navScroll, { borderBottomColor: theme.borderColor }]}
-        contentContainerStyle={styles.navScrollContent}
-      >
+      <View style={[styles.navRow, { borderBottomColor: theme.borderColor }]}>
         {NAV_ITEMS.map((item) => {
           const active = activeTab === item.key;
           return (
-            <Pressable
+            <HapticPressable
               key={item.key}
               onPress={() => setActiveTab(item.key)}
               style={[
@@ -69,10 +65,10 @@ export default function SafehouseHubPanel(): React.JSX.Element {
               <Text style={[styles.navLabel, { color: active ? accent : theme.mutedColor }]}>
                 {item.label}
               </Text>
-            </Pressable>
+            </HapticPressable>
           );
         })}
-      </ScrollView>
+      </View>
 
       <View style={styles.tabBody}>
         {activeTab === 'FORGE' && <CraftingMenuPanel embedded />}
@@ -100,15 +96,14 @@ const styles = StyleSheet.create({
   headerSub: { fontFamily: 'monospace', fontSize: 7, letterSpacing: 0.5 },
   creditLine: { fontFamily: 'monospace', fontSize: 11, fontWeight: '700', letterSpacing: 0.6 },
   stashLine: { fontFamily: 'monospace', fontSize: 7, letterSpacing: 0.4 },
-  navScroll: {
+  navRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
     borderBottomWidth: 1,
     marginBottom: 8,
-    flexGrow: 0,
-  },
-  navScrollContent: {
-    gap: 6,
     paddingBottom: 8,
-    paddingRight: 4,
   },
   navCell: {
     borderWidth: 1,

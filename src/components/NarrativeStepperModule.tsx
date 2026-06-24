@@ -1,15 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  Animated,
-  Easing,
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { Animated, Easing, Image, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import HapticPressable from './HapticPressable';
 import CityStreetNarrativeBg from '../../assets/narrative images/city-street.png';
 import SelectionContinueButton from './SelectionContinueButton';
 import LandscapeSplitPane from './layout/LandscapeSplitPane';
@@ -177,7 +168,7 @@ export default function NarrativeStepperModule({
     <View style={styles.choicePane}>
       <View style={styles.choiceSection}>
         <View style={styles.choiceCol}>
-          <Pressable
+          <HapticPressable
             onPress={() => handleChoiceSelect('A')}
             style={({ pressed }) => [
               styles.choiceBtn,
@@ -201,8 +192,8 @@ export default function NarrativeStepperModule({
             {node.choiceA.effectPreview ? (
               <ChoiceEffectPreview preview={node.choiceA.effectPreview} mutedColor={mutedColor} />
             ) : null}
-          </Pressable>
-          <Pressable
+          </HapticPressable>
+          <HapticPressable
             onPress={() => !node.choiceB.locked && handleChoiceSelect('B')}
             disabled={node.choiceB.locked === true}
             style={({ pressed }) => [
@@ -231,7 +222,7 @@ export default function NarrativeStepperModule({
             {node.choiceB.effectPreview ? (
               <ChoiceEffectPreview preview={node.choiceB.effectPreview} mutedColor={mutedColor} />
             ) : null}
-          </Pressable>
+          </HapticPressable>
         </View>
       </View>
 
@@ -301,12 +292,12 @@ export default function NarrativeStepperModule({
                 <View style={[styles.targetZone, { left: `${TARGET_MIN * 100}%`, width: `${(TARGET_MAX - TARGET_MIN) * 100}%` }]} />
                 <View style={[styles.marker, { left: `${Math.min(markerPct * 100, 97)}%` }]} />
               </View>
-              <Pressable
+              <HapticPressable
                 onPress={handleLockCalibration}
                 style={({ pressed }) => [styles.lockBtn, { borderColor: TERMINAL_ACCENT, opacity: pressed ? 0.75 : 1 }]}
               >
                 <Text style={styles.lockBtnText}>[ LOCK CALIBRATION ]</Text>
-              </Pressable>
+              </HapticPressable>
             </View>
           </View>
         ) : null}

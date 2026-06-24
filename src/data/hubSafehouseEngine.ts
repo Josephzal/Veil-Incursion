@@ -131,6 +131,78 @@ export function loadStashResourceIntoCargo(
   return { stash: nextStash, cargo: nextCargo };
 }
 
+export function stageStashItemToCargoContainment(
+  resourceStash: ResourceQuantity,
+  hubCraftedConsumables: Partial<Record<CargoItemId, number>>,
+  cargo: CargoRunState,
+  itemId: CargoItemId,
+): {
+  resourceStash: ResourceQuantity;
+  hubCraftedConsumables: Partial<Record<CargoItemId, number>>;
+  cargo: CargoRunState;
+} | null {
+  if (isResourceItemId(itemId)) {
+    if (getStashCount(resourceStash, itemId) <= 0) return null;
+    const nextCargo = addLootToContainment(cargo, itemId, 1);
+    const nextStash = { ...resourceStash };
+    const remaining = getStashCount(resourceStash, itemId) - 1;
+    if (remaining <= 0) {
+      delete nextStash[itemId];
+    } else {
+      nextStash[itemId] = remaining;
+    }
+    return { resourceStash: nextStash, hubCraftedConsumables, cargo: nextCargo };
+  }
+
+  const available = hubCraftedConsumables[itemId] ?? 0;
+  if (available <= 0) return null;
+  const nextCargo = addLootToContainment(cargo, itemId, 1);
+  const nextConsumables = { ...hubCraftedConsumables };
+  const remaining = available - 1;
+  if (remaining <= 0) {
+    delete nextConsumables[itemId];
+  } else {
+    nextConsumables[itemId] = remaining;
+  }
+  return {
+    resourceStash,
+    hubCraftedConsumables: nextConsumables,
+    cargo: nextCargo,
+  };
+}
+
+export function returnAllPreRunContainmentToStash(
+  resourceStash: ResourceQuantity,
+  hubCraftedConsumables: Partial<Record<CargoItemId, number>>,
+  cargo: CargoRunState,
+): {
+  resourceStash: ResourceQuantity;
+  hubCraftedConsumables: Partial<Record<CargoItemId, number>>;
+  cargo: CargoRunState;
+} {
+  if (cargo.containment.length === 0) {
+    return { resourceStash, hubCraftedConsumables, cargo };
+  }
+
+  let nextResourceStash = resourceStash;
+  let nextConsumables = { ...hubCraftedConsumables };
+
+  cargo.containment.forEach((item) => {
+    if (isResourceItemId(item.itemId)) {
+      nextResourceStash = { ...nextResourceStash };
+      nextResourceStash[item.itemId] = (nextResourceStash[item.itemId] ?? 0) + 1;
+    } else {
+      nextConsumables[item.itemId] = (nextConsumables[item.itemId] ?? 0) + 1;
+    }
+  });
+
+  return {
+    resourceStash: nextResourceStash,
+    hubCraftedConsumables: nextConsumables,
+    cargo: { ...cargo, containment: [] },
+  };
+}
+
 export function loadStashResourceIntoCargoAtCell(
   stash: ResourceQuantity,
   cargo: CargoRunState,

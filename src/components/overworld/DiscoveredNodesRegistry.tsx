@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import HapticPressable from '../HapticPressable';
 
 export interface RegistryEntry {
   id: string;
@@ -40,7 +41,7 @@ export default function DiscoveredNodesRegistry({
             const isSelected = entry.id === selectedNodeId;
             const shortLabel = entry.label.split(' // ').slice(-1)[0] ?? entry.label;
             return (
-              <Pressable
+              <HapticPressable
                 key={entry.id}
                 onPress={() => onSelectNode(entry.id)}
                 style={({ pressed }) => [
@@ -67,13 +68,13 @@ export default function DiscoveredNodesRegistry({
                 <Text style={[styles.rowStatus, { color: entry.manifested ? accent : '#64748b' }]}>
                   {entry.manifested ? 'BREACH READY' : 'DISCOVERED'}
                 </Text>
-              </Pressable>
+              </HapticPressable>
             );
           })}
         </ScrollView>
       ) : null}
 
-      <Pressable
+      <HapticPressable
         onPress={() => setExpanded((prev) => !prev)}
         style={({ pressed }) => [
           styles.toggle,
@@ -88,7 +89,7 @@ export default function DiscoveredNodesRegistry({
             {`${manifestedCount} READY`}
           </Text>
         ) : null}
-      </Pressable>
+      </HapticPressable>
     </View>
   );
 }

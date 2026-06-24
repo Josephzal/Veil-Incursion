@@ -1,19 +1,15 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import TerminalSafeArea from '../components/TerminalSafeArea';
+import TerminalSafeArea from './TerminalSafeArea';
 
 interface IncursionShellProps {
   children: React.ReactNode;
-  /** Edge-to-edge layout — no safe-area inset (combat immersive). */
-  immersive?: boolean;
 }
 
-export default function IncursionShell({
-  children,
-  immersive = false,
-}: IncursionShellProps): React.JSX.Element {
+/** Run screen wrapper — edge-to-edge under immersive OS chrome. */
+export default function IncursionShell({ children }: IncursionShellProps): React.JSX.Element {
   return (
-    <TerminalSafeArea edges={immersive ? [] : ['top', 'left', 'right']}>
+    <TerminalSafeArea edges={[]}>
       <View style={styles.root}>{children}</View>
     </TerminalSafeArea>
   );

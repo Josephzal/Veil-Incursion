@@ -1,11 +1,6 @@
 import React, { useState } from 'react';
-import {
-  Image,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
+import HapticPressable from '../components/HapticPressable';
 import BlackMarketBg from '../../assets/images/location images/black_market.png';
 import { listingsForStock } from '../data/blackMarket';
 import {
@@ -114,7 +109,7 @@ export default function BlackMarketScreen(): React.JSX.Element {
                 const isSelected = listing.id === selectedCargoId;
                 const owned = countCargoItemInstances(activeIncursion.cargo, listing.id);
                 return (
-                  <Pressable
+                  <HapticPressable
                     key={listing.id}
                     onPress={() => setSelectedCargoId(listing.id)}
                     style={({ pressed }) => [
@@ -136,7 +131,7 @@ export default function BlackMarketScreen(): React.JSX.Element {
                     <Text style={[styles.cellQty, { color: theme.mutedColor }]}>
                       {owned > 0 ? `x${owned}` : ' '}
                     </Text>
-                  </Pressable>
+                  </HapticPressable>
                 );
               })}
             </View>
@@ -175,7 +170,7 @@ export default function BlackMarketScreen(): React.JSX.Element {
               )}
             </View>
 
-            <Pressable
+            <HapticPressable
               disabled={!cargoPurchaseEnabled}
               onPress={handleCargoPurchase}
               style={({ pressed }) => [
@@ -190,7 +185,7 @@ export default function BlackMarketScreen(): React.JSX.Element {
               <Text style={[styles.btnText, { color: cargoPurchaseEnabled ? TERMINAL_ACCENT : ACTION_DISABLED_TEXT }]}>
                 [ PURCHASE TO CONTAINMENT ]
               </Text>
-            </Pressable>
+            </HapticPressable>
           </View>
         </RunEventScreenFrame>
       </IncursionRunLayout>

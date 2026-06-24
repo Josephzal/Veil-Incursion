@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import HapticPressable from '../components/HapticPressable';
 import SanctuaryNarrativeBg from '../../assets/narrative images/sanctuary.png';
 import ClassGraftUI from '../components/ClassGraftUI';
 import { useRun } from '../context/RunContext';
@@ -136,7 +137,7 @@ export default function RestScreen(): React.JSX.Element {
 
           {!graftTerminalOpen ? (
             <View style={styles.choiceCol}>
-              <Pressable
+              <HapticPressable
                 onPress={handleSelectAttune}
                 disabled={confirmed || selectedChoice === 'GRAFT'}
                 style={({ pressed }) => [
@@ -159,9 +160,9 @@ export default function RestScreen(): React.JSX.Element {
                 <Text style={[styles.choiceReq, styles.choiceEffectGood]}>
                   Restore 30% of Maximum Health
                 </Text>
-              </Pressable>
+              </HapticPressable>
 
-              <Pressable
+              <HapticPressable
                 onPress={handleSelectGraft}
                 disabled={confirmed || selectedChoice === 'ATTUNE'}
                 style={({ pressed }) => [
@@ -184,7 +185,7 @@ export default function RestScreen(): React.JSX.Element {
                 <Text style={[styles.choiceReq, { color: '#c084fc' }]}>
                   Spend Veil Residue to mutate an equipped ability
                 </Text>
-              </Pressable>
+              </HapticPressable>
             </View>
           ) : (
             <ClassGraftUI

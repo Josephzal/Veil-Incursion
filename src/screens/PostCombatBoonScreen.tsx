@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import HapticPressable from '../components/HapticPressable';
 import CabalBg from '../../assets/images/location images/cabal.png';
 import IncursionShell from '../components/IncursionShell';
 import IncursionRunLayout from '../components/IncursionRunLayout';
@@ -116,8 +117,8 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
     <IncursionShell>
       <IncursionRunLayout style={{ backgroundColor: theme.backgroundColor }}>
         <RunEventScreenFrame
-          scrollable
           backgroundImage={CabalBg}
+          contentPadding={8}
           header={(
             <RunEventScreenHeader
               title={HEADER_LABEL[activeClass]}
@@ -131,36 +132,46 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
               onPress={handleContinue}
               borderColor={theme.borderColor}
               mutedColor={theme.mutedColor}
+              style={styles.continueBtn}
             />
           )}
         >
-          {postCombatMutationChoices.map((offer) => {
-            const isSelected = selectedBoonId === offer.id;
-            return (
-              <Pressable
-                key={offer.id}
-                onPress={() => !selectingRef.current && setSelectedBoonId(offer.id)}
-                disabled={selectingRef.current}
-                style={({ pressed }) => [
-                  styles.choice,
-                  isSelected && styles.choiceSelected,
-                  {
-                    borderColor: isSelected ? TERMINAL_ACCENT : theme.borderColor,
-                    opacity: selectingRef.current && !isSelected ? 0.4 : pressed ? 0.7 : 1,
-                  },
-                ]}
-              >
-                <Text style={[styles.tierTag, { color: theme.mutedColor }]}>
-                  {offer.tierLabel ?? offer.tier}
-                </Text>
-                <Text style={[styles.choiceName, { color: isSelected ? TERMINAL_ACCENT : theme.primaryColor }]}>
-                  {offer.name}
-                </Text>
-                <Text style={[styles.choiceEffect, { color: theme.mutedColor }]}>{offer.effect}</Text>
-                <Text style={[styles.choiceDesc, { color: theme.primaryColor }]}>{offer.description}</Text>
-              </Pressable>
-            );
-          })}
+          <View style={styles.choiceRow}>
+            {postCombatMutationChoices.map((offer) => {
+              const isSelected = selectedBoonId === offer.id;
+              return (
+                <HapticPressable
+                  key={offer.id}
+                  onPress={() => !selectingRef.current && setSelectedBoonId(offer.id)}
+                  disabled={selectingRef.current}
+                  style={({ pressed }) => [
+                    styles.choice,
+                    isSelected && styles.choiceSelected,
+                    {
+                      borderColor: isSelected ? TERMINAL_ACCENT : theme.borderColor,
+                      opacity: selectingRef.current && !isSelected ? 0.4 : pressed ? 0.7 : 1,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.tierTag, { color: theme.mutedColor }]} numberOfLines={1}>
+                    {offer.tierLabel ?? offer.tier}
+                  </Text>
+                  <Text
+                    style={[styles.choiceName, { color: isSelected ? TERMINAL_ACCENT : theme.primaryColor }]}
+                    numberOfLines={2}
+                  >
+                    {offer.name}
+                  </Text>
+                  <Text style={[styles.choiceEffect, { color: theme.mutedColor }]} numberOfLines={2}>
+                    {offer.effect}
+                  </Text>
+                  <Text style={[styles.choiceDesc, { color: theme.primaryColor }]} numberOfLines={4}>
+                    {offer.description}
+                  </Text>
+                </HapticPressable>
+              );
+            })}
+          </View>
         </RunEventScreenFrame>
       </IncursionRunLayout>
 
@@ -179,10 +190,24 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
-  choice: { borderWidth: 2, padding: 14 },
+  choiceRow: {
+    flex: 1,
+    minHeight: 0,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 8,
+  },
+  choice: {
+    flex: 1,
+    minWidth: 0,
+    borderWidth: 2,
+    padding: 8,
+    justifyContent: 'flex-start',
+  },
   choiceSelected: { backgroundColor: 'rgba(0, 255, 51, 0.08)' },
-  tierTag: { fontFamily: 'monospace', fontSize: 7, letterSpacing: 1, marginBottom: 4 },
-  choiceName: { fontFamily: 'monospace', fontSize: 11, fontWeight: '700', marginBottom: 4 },
-  choiceEffect: { fontFamily: 'monospace', fontSize: 8, marginBottom: 4 },
-  choiceDesc: { fontFamily: 'monospace', fontSize: 8, lineHeight: 12 },
+  tierTag: { fontFamily: 'monospace', fontSize: 6, letterSpacing: 0.8, marginBottom: 2 },
+  choiceName: { fontFamily: 'monospace', fontSize: 9, fontWeight: '700', marginBottom: 2, lineHeight: 11 },
+  choiceEffect: { fontFamily: 'monospace', fontSize: 7, marginBottom: 2, lineHeight: 9 },
+  choiceDesc: { fontFamily: 'monospace', fontSize: 7, lineHeight: 9 },
+  continueBtn: { marginTop: 0, alignSelf: 'center', width: '100%', maxWidth: 320 },
 });

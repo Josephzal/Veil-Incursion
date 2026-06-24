@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import HapticPressable from '../HapticPressable';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -74,7 +75,7 @@ export default function EnvoyWardOverlay({
 
   return (
     <View style={styles.overlay} pointerEvents="auto">
-      <Pressable
+      <HapticPressable
         style={styles.arena}
         onPressIn={startHold}
         onPressOut={endHold}
@@ -84,7 +85,7 @@ export default function EnvoyWardOverlay({
         <Text style={styles.hint}>
           {holding ? 'RELEASE ON RING OVERLAP' : 'HOLD TO CHARGE VOID WARD'}
         </Text>
-      </Pressable>
+      </HapticPressable>
     </View>
   );
 }

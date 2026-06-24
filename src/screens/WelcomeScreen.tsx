@@ -1,11 +1,6 @@
 import React from 'react';
-import {
-  ScrollView,
-  StyleSheet,
-  View,
-  Text,
-  Pressable,
-} from 'react-native';
+import { ScrollView, StyleSheet, View, Text } from 'react-native';
+import HapticPressable from '../components/HapticPressable';
 import { useTerminal } from '../context/TerminalContext';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
@@ -14,11 +9,13 @@ import LandscapeSplitPane from '../components/layout/LandscapeSplitPane';
 import TerminalSafeArea from '../components/TerminalSafeArea';
 import { DEFAULT_HOME_SECTOR_PROFILE_LABEL } from '../constants/homeSector';
 import { LANDSCAPE_PANEL_PADDING, LANDSCAPE_WELCOME_PRIMARY_RATIO } from '../constants/landscapeLayout';
+import { useImmersiveScreenPadding } from '../hooks/useImmersiveScreenPadding';
 import { useLandscapeMetrics } from '../hooks/useLandscapeMetrics';
 
 export default function WelcomeScreen(): React.JSX.Element {
   const { theme, profile } = useTerminal();
   const { width } = useLandscapeMetrics();
+  const immersivePadding = useImmersiveScreenPadding();
   const { startBoundRequisition } = useGameFlow();
   const { startNewRun } = useRun();
 
@@ -92,7 +89,7 @@ export default function WelcomeScreen(): React.JSX.Element {
         </View>
       </View>
 
-      <Pressable
+      <HapticPressable
         onPress={handleStartScan}
         style={({ pressed }) => [
           styles.scanButton,
@@ -106,12 +103,12 @@ export default function WelcomeScreen(): React.JSX.Element {
         <View style={styles.scanButtonGlow} />
         <Text style={[styles.scanButtonLabel, { color: theme.statusColor }]}>INITIATE ANOMALY SCAN</Text>
         <Text style={[styles.scanButtonSub, { color: theme.statusColor }]}>// AUTHORIZE LEY-LINE SWEEP</Text>
-      </Pressable>
+      </HapticPressable>
     </ScrollView>
   );
 
   return (
-    <TerminalSafeArea>
+    <TerminalSafeArea style={immersivePadding}>
       <View style={styles.container}>
         <View style={styles.gridBackdrop} pointerEvents="none">
           {Array.from({ length: 8 }).map((_, row) => (

@@ -29,11 +29,12 @@ export function pointInWindowRect(
   x: number,
   y: number,
   rect: { pageX: number; pageY: number; width: number; height: number },
+  padding = 0,
 ): boolean {
-  return x >= rect.pageX
-    && x <= rect.pageX + rect.width
-    && y >= rect.pageY
-    && y <= rect.pageY + rect.height;
+  return x >= rect.pageX - padding
+    && x <= rect.pageX + rect.width + padding
+    && y >= rect.pageY - padding
+    && y <= rect.pageY + rect.height + padding;
 }
 
 /** Fit cargo grid cells within the deployment pack content area. */

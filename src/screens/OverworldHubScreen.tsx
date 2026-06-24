@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import HapticPressable from '../components/HapticPressable';
 import { FACTION_DEFINITIONS } from '../data/factions';
 import { shadowWarBuffsToRunModifiers } from '../data/shadowWarBuffEngine';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
@@ -13,6 +14,8 @@ import SafehouseHubPanel from '../components/safehouse/SafehouseHubPanel';
 import TerminalHubLayout from '../components/layout/TerminalHubLayout';
 import TerminalSafeArea from '../components/TerminalSafeArea';
 import ShadowWarDashboard from '../components/ShadowWarDashboard';
+import IncursionPrepPanel from '../components/hub/IncursionPrepPanel';
+import DevTestHubPanel from '../components/hub/DevTestHubPanel';
 import type { FactionType } from '../types/game';
 
 const FACTION_ORDER: FactionType[] = ['TERRAN_GRID', 'LEGION', 'SOLARIS'];
@@ -23,7 +26,6 @@ export default function OverworldHubScreen(): React.JSX.Element {
   const {
     account,
     isHydrated,
-    hubLog,
     commitFactionAlignment,
     appendHubLog,
     addCredits,
@@ -133,13 +135,20 @@ export default function OverworldHubScreen(): React.JSX.Element {
           {terminalView === 'MAP' && (
             <ShadowWarDashboard
               theme={theme}
-              hubLog={hubLog}
-              runDisabled={needsFactionSelection || launchingIncursion}
-              onInitiateDeepDive={handleInitiateDeepDive}
               onAppendLog={appendHubLog}
             />
           )}
           {terminalView === 'SAFEHOUSE' && <SafehouseHubPanel />}
+          {terminalView === 'INCURSION' && (
+            <IncursionPrepPanel
+              theme={theme}
+              account={account}
+              runDisabled={needsFactionSelection || launchingIncursion}
+              launching={launchingIncursion}
+              onBeginIncursion={handleInitiateDeepDive}
+            />
+          )}
+          {terminalView === 'TEST' && <DevTestHubPanel />}
         </TerminalHubLayout>
 
         {needsFactionSelection && (
@@ -157,7 +166,7 @@ export default function OverworldHubScreen(): React.JSX.Element {
               {FACTION_ORDER.map((factionId) => {
                 const def = FACTION_DEFINITIONS[factionId];
                 return (
-                  <Pressable
+                  <HapticPressable
                     key={factionId}
                     onPress={() => handleSelectFaction(factionId)}
                     style={({ pressed }) => [
@@ -167,7 +176,7 @@ export default function OverworldHubScreen(): React.JSX.Element {
                   >
                     <Text style={[styles.factionName, { color: theme.textColor }]}>[{def.displayName}]</Text>
                     <Text style={[styles.factionTagline, { color: theme.mutedColor }]}>{def.tagline}</Text>
-                  </Pressable>
+                  </HapticPressable>
                 );
               })}
             </View>

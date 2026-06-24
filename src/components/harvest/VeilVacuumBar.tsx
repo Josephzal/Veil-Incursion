@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react';
-import { LayoutChangeEvent, Pressable, StyleSheet, View } from 'react-native';
+import { LayoutChangeEvent, StyleSheet, View } from 'react-native';
+import HapticPressable from '../HapticPressable';
 import Animated, {
   SharedValue,
   useAnimatedStyle,
@@ -41,7 +42,7 @@ export default function VeilVacuumBar({
   }));
 
   return (
-    <Pressable
+    <HapticPressable
       disabled={disabled}
       onPressIn={onPressIn}
       onPressOut={onPressOut}
@@ -56,7 +57,7 @@ export default function VeilVacuumBar({
         <View style={styles.glassEmptyTint} />
         <Animated.View style={[styles.liquidFill, liquidFillStyle]} />
       </View>
-    </Pressable>
+    </HapticPressable>
   );
 }
 

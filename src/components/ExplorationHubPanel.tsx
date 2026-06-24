@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import HapticPressable from './HapticPressable';
 import CraftingMenuPanel from './CraftingMenuPanel';
 import { EXPLORATION_HUB_GRAPH } from '../data/explorationHubGraph';
 import { HUB_CRAFTING_BENCH } from '../data/hubInteractables';
@@ -45,14 +46,14 @@ export default function ExplorationHubPanel(): React.JSX.Element {
         }}
       />
       {nearBench ? (
-        <Pressable
+        <HapticPressable
           onPress={() => setCraftingOpen(true)}
           style={[styles.promptBtn, { borderColor: theme.statusColor }]}
         >
           <Text style={[styles.promptText, { color: theme.statusColor }]}>
             {HUB_CRAFTING_BENCH.prompt}
           </Text>
-        </Pressable>
+        </HapticPressable>
       ) : (
         <Text style={[styles.caption, { color: theme.mutedColor }]}>
           JOYSTICK TO SCOUT // APPROACH FABRICATION BENCH TO CRAFT

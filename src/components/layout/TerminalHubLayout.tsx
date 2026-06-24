@@ -1,8 +1,8 @@
 import React from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import { LANDSCAPE_PANEL_PADDING } from '../../constants/landscapeLayout';
+import { HUB_NAV_MAIN_GAP, LANDSCAPE_PANEL_PADDING } from '../../constants/landscapeLayout';
+import { resolveImmersiveFooterInset } from '../../constants/immersiveLayout';
 import { useLandscapeMetrics } from '../../hooks/useLandscapeMetrics';
-import TerminalNavHeader from '../TerminalNavHeader';
 import TerminalNavRail from '../TerminalNavRail';
 import type { TerminalView } from '../../types/terminalNav';
 
@@ -14,9 +14,7 @@ interface TerminalHubLayoutProps {
   mainStyle?: StyleProp<ViewStyle>;
 }
 
-/**
- * Overworld hub shell — left nav rail on wide landscape, top nav tabs on compact.
- */
+/** Overworld hub shell — always uses left nav rail for full viewport height. */
 export default function TerminalHubLayout({
   activeView,
   onSelectView,
@@ -24,25 +22,23 @@ export default function TerminalHubLayout({
   style,
   mainStyle,
 }: TerminalHubLayoutProps): React.JSX.Element {
-  const { useHubNavRail, hubNavRailWidth } = useLandscapeMetrics();
-
-  if (useHubNavRail) {
-    return (
-      <View style={[styles.root, styles.rootRail, style]}>
-        <TerminalNavRail
-          activeView={activeView}
-          onSelectView={onSelectView}
-          width={hubNavRailWidth}
-        />
-        <View style={[styles.mainRail, mainStyle]}>{children}</View>
-      </View>
-    );
-  }
+  const { hubNavRailWidth, safeTop, safeBottom, safeRight } = useLandscapeMetrics();
+  const mainRailStyle = {
+    paddingTop: LANDSCAPE_PANEL_PADDING + safeTop,
+    paddingRight: LANDSCAPE_PANEL_PADDING + safeRight,
+    paddingBottom: resolveImmersiveFooterInset(safeBottom),
+    paddingLeft: 4,
+  };
 
   return (
-    <View style={[styles.root, styles.rootCompact, style]}>
-      <TerminalNavHeader activeView={activeView} onSelectView={onSelectView} />
-      <View style={[styles.mainCompact, mainStyle]}>{children}</View>
+    <View style={[styles.root, styles.rootRail, style]}>
+      <TerminalNavRail
+        activeView={activeView}
+        onSelectView={onSelectView}
+        width={hubNavRailWidth}
+      />
+      <View style={styles.mainGap} />
+      <View style={[styles.mainRail, mainRailStyle, mainStyle]}>{children}</View>
     </View>
   );
 }
@@ -56,20 +52,13 @@ const styles = StyleSheet.create({
   rootRail: {
     flexDirection: 'row',
   },
-  rootCompact: {
-    flexDirection: 'column',
+  mainGap: {
+    width: HUB_NAV_MAIN_GAP,
+    flexShrink: 0,
   },
   mainRail: {
     flex: 1,
     minWidth: 0,
     minHeight: 0,
-    padding: LANDSCAPE_PANEL_PADDING,
-  },
-  mainCompact: {
-    flex: 1,
-    minHeight: 0,
-    paddingHorizontal: LANDSCAPE_PANEL_PADDING,
-    paddingTop: 8,
-    paddingBottom: LANDSCAPE_PANEL_PADDING,
   },
 });

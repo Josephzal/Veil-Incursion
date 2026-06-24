@@ -1,5 +1,6 @@
 import React from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, StyleSheet, Text, View } from 'react-native';
+import HapticPressable from './HapticPressable';
 import type { TerminalTheme } from '../types/theme';
 
 interface ExtractConfirmOverlayProps {
@@ -27,7 +28,7 @@ export default function ExtractConfirmOverlay({
           </Text>
 
           <View style={styles.actions}>
-            <Pressable
+            <HapticPressable
               onPress={onCancel}
               style={({ pressed }) => [
                 styles.btn,
@@ -36,8 +37,8 @@ export default function ExtractConfirmOverlay({
               ]}
             >
               <Text style={[styles.btnText, { color: theme.mutedColor }]}>[ NO ]</Text>
-            </Pressable>
-            <Pressable
+            </HapticPressable>
+            <HapticPressable
               onPress={onConfirm}
               style={({ pressed }) => [
                 styles.btn,
@@ -46,7 +47,7 @@ export default function ExtractConfirmOverlay({
               ]}
             >
               <Text style={[styles.btnText, { color: accentColor }]}>[ YES ]</Text>
-            </Pressable>
+            </HapticPressable>
           </View>
         </View>
       </View>

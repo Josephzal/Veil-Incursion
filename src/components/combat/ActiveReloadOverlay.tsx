@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
+import { StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
+import HapticPressable from '../HapticPressable';
 import type { ActiveReloadResult } from '../../types/classCombatResources';
 import {
   ACTIVE_RELOAD_PASS_MS,
@@ -91,7 +92,7 @@ export default function ActiveReloadOverlay({
 
   return (
     <View style={styles.overlay} pointerEvents="auto">
-      <Pressable onPress={handleTap} style={styles.panel}>
+      <HapticPressable onPress={handleTap} style={styles.panel}>
         <Text style={styles.title}>[ COMBAT RELOAD // SINGLE PASS ]</Text>
         <Text style={styles.subtitle}>Tap once to stop the playhead — gold band is perfect.</Text>
         <View style={styles.barTrack} onLayout={handleBarLayout}>
@@ -109,7 +110,7 @@ export default function ActiveReloadOverlay({
           <Text style={styles.legendRed}>RED — jam (weapon locked)</Text>
         </View>
         <Text style={styles.tapHint}>[ TAP ANYWHERE TO STOP ]</Text>
-      </Pressable>
+      </HapticPressable>
     </View>
   );
 }

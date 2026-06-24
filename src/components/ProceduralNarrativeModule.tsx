@@ -1,13 +1,6 @@
 import React, { useState } from 'react';
-import {
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import HapticPressable from './HapticPressable';
 import CityStreetNarrativeBg from '../../assets/narrative images/city-street.png';
 import LandscapeSplitPane from './layout/LandscapeSplitPane';
 import type { NarrativeChoiceKey, NarrativeChoiceOption, NarrativeEventNode, CheckStatus } from '../types/game';
@@ -99,7 +92,7 @@ function ResolverButton({
 }): React.JSX.Element {
   const locked = option.locked === true;
   return (
-    <Pressable
+    <HapticPressable
       onPress={onPress}
       disabled={locked}
       style={({ pressed }) => [
@@ -135,7 +128,7 @@ function ResolverButton({
       {option.effectPreview ? (
         <ChoiceEffectPreview preview={option.effectPreview} mutedColor={mutedColor} />
       ) : null}
-    </Pressable>
+    </HapticPressable>
   );
 }
 
@@ -291,7 +284,7 @@ export default function ProceduralNarrativeModule({
       </View>
 
       <View style={styles.footer}>
-        <Pressable
+        <HapticPressable
           onPress={handleConfirm}
           disabled={selectedChoice == null || selectedOption?.locked === true}
           style={({ pressed }) => [
@@ -316,7 +309,7 @@ export default function ProceduralNarrativeModule({
           >
             {confirmLabel}
           </Text>
-        </Pressable>
+        </HapticPressable>
       </View>
     </View>
   );

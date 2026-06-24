@@ -1,7 +1,8 @@
 import React from 'react';
-import { StyleSheet, StatusBar, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { useImmersiveChrome } from './src/hooks/useImmersiveChrome';
 import { TerminalProvider, useTerminal } from './src/context/TerminalContext';
 import { TerminalNavProvider } from './src/context/TerminalNavContext';
 import { PlayerAccountProvider } from './src/context/PlayerAccountContext';
@@ -29,15 +30,10 @@ import GameOverScreen from './src/screens/GameOverScreen';
 function GameRoot(): React.JSX.Element {
   const { theme } = useTerminal();
   const { currentScreen, combatEntryActive, completeCombatEntry } = useGameFlow();
+  useImmersiveChrome(true);
 
   return (
     <View style={[styles.screenContainer, { backgroundColor: theme.backgroundColor }]}>
-      <StatusBar
-        hidden={currentScreen === 'COMBAT'}
-        translucent
-        backgroundColor="transparent"
-        barStyle="light-content"
-      />
       {currentScreen === 'HUB' && <OverworldHubScreen />}
       {currentScreen === 'WELCOME' && <WelcomeScreen />}
       {currentScreen === 'BOUND_REQUISITION' && <BoundRequisitionScreen />}

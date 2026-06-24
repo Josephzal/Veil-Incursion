@@ -1,7 +1,15 @@
-import React from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo } from 'react';
+import { Modal, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import HapticPressable from './HapticPressable';
 import CargoGridBoard from './CargoGridBoard';
 import CargoCreditsHud from './CargoCreditsHud';
+import {
+  cargoOverlayFrameWidth,
+  CARGO_OVERLAY_PANEL_PADDING,
+  resolveCargoOverlayCellSize,
+} from '../constants/cargoOverlayLayout';
+import { useLandscapeMetrics } from '../hooks/useLandscapeMetrics';
+import { countCargoItemInstances } from '../data/cargoGridEngine';
 import type { CargoRunState } from '../types/cargoGrid';
 import type { CargoItemId } from '../types/cargoGrid';
 import type { TerminalTheme } from '../types/theme';
@@ -49,15 +57,43 @@ export default function CargoGridOverlay({
   playerActionPoints,
 }: CargoGridOverlayProps): React.JSX.Element {
   const dismissAfterUse = onDismissSilently ?? onClose;
+  const { height: screenHeight } = useWindowDimensions();
+  const { safeBottom } = useLandscapeMetrics();
+
+  const scannerButtonCount = useMemo(() => {
+    if (!scannerMode) return 0;
+    let count = 0;
+    if (onUseAmpoule && countCargoItemInstances(cargo, 'focusing-ampoule') > 0) count += 1;
+    if (onUseResonanceBribe && countCargoItemInstances(cargo, 'resonance-bribe') > 0) count += 1;
+    if (onUseDeadDrop && countCargoItemInstances(cargo, 'dead-drop-token') > 0) count += 1;
+    return count;
+  }, [cargo, onUseAmpoule, onUseDeadDrop, onUseResonanceBribe, scannerMode]);
+
+  const cellSize = useMemo(
+    () => resolveCargoOverlayCellSize(screenHeight, safeBottom, {
+      combatMode,
+      hasContainment: cargo.containment.length > 0,
+      scannerButtonCount,
+    }),
+    [cargo.containment.length, combatMode, safeBottom, scannerButtonCount, screenHeight],
+  );
+
+  const frameWidth = useMemo(() => cargoOverlayFrameWidth(cellSize), [cellSize]);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable
-          style={[styles.panel, { borderColor: accentColor }]}
+      <HapticPressable style={styles.backdrop} onPress={onClose}>
+        <HapticPressable
+          style={[
+            styles.panel,
+            {
+              borderColor: accentColor,
+              maxWidth: frameWidth + CARGO_OVERLAY_PANEL_PADDING * 2 + 4,
+            },
+          ]}
           onPress={(e) => e.stopPropagation()}
         >
-          <Pressable
+          <HapticPressable
             onPress={onClose}
             style={({ pressed }) => [
               styles.closeX,
@@ -66,7 +102,7 @@ export default function CargoGridOverlay({
             hitSlop={8}
           >
             <Text style={[styles.closeXText, { color: accentColor }]}>✕</Text>
-          </Pressable>
+          </HapticPressable>
 
           <CargoCreditsHud
             credits={runCredits ?? 0}
@@ -86,7 +122,9 @@ export default function CargoGridOverlay({
             scannerMode={scannerMode}
             combatMode={combatMode}
             combatConsumablesEnabled={combatConsumablesEnabled}
+            overlayCompact
             minimal
+            cellSize={cellSize}
             onUseAmpoule={onUseAmpoule ? () => {
               const ok = onUseAmpoule();
               if (ok) dismissAfterUse();
@@ -108,8 +146,8 @@ export default function CargoGridOverlay({
               return ok;
             } : undefined}
           />
-        </Pressable>
-      </Pressable>
+        </HapticPressable>
+      </HapticPressable>
     </Modal>
   );
 }
@@ -125,12 +163,11 @@ const styles = StyleSheet.create({
   panel: {
     borderWidth: 2,
     backgroundColor: '#050608',
-    padding: 14,
+    padding: CARGO_OVERLAY_PANEL_PADDING,
     paddingTop: 36,
-    gap: 10,
+    gap: 8,
     alignItems: 'center',
     width: '100%',
-    maxWidth: 420,
     position: 'relative',
   },
   closeX: {

@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import HapticPressable from './HapticPressable';
 import type { AbilityUnlockCost } from '../types/aegisCombat';
 import {
   canAffordAbilityUnlock,
@@ -106,7 +107,7 @@ export default function ClassLoadoutEditor<T extends string>({
           const def = catalog[abilityId];
           const isSelected = selectedSlot === slotIndex;
           return (
-            <Pressable
+            <HapticPressable
               key={`slot-${slotIndex}`}
               onPress={() => onSelectSlot(slotIndex)}
               style={({ pressed }) => [
@@ -135,7 +136,7 @@ export default function ClassLoadoutEditor<T extends string>({
               >
                 {def?.description ?? ''}
               </Text>
-            </Pressable>
+            </HapticPressable>
           );
         })}
       </View>
@@ -151,7 +152,7 @@ export default function ClassLoadoutEditor<T extends string>({
           const unlocked = isUnlocked(abilityId);
           const affordable = unlocked || canAffordAbilityUnlock(resourceStash, def.unlockCost);
           return (
-            <Pressable
+            <HapticPressable
               key={abilityId}
               onPress={() => handleAbilityPress(abilityId)}
               style={({ pressed }) => [
@@ -186,7 +187,7 @@ export default function ClassLoadoutEditor<T extends string>({
               {assigned >= 0 ? (
                 <Text style={[styles.chipSlot, { color: theme.mutedColor }]}>{`S${assigned + 1}`}</Text>
               ) : null}
-            </Pressable>
+            </HapticPressable>
           );
         })}
       </View>
@@ -195,7 +196,7 @@ export default function ClassLoadoutEditor<T extends string>({
         <Text style={[styles.status, { color: theme.mutedColor }]}>{statusMessage}</Text>
       ) : null}
 
-      <Pressable
+      <HapticPressable
         onPress={onCommit}
         style={({ pressed }) => [
           getInteractiveButtonStyle(theme.accentColor, { pressed, size: 'md' }),
@@ -205,7 +206,7 @@ export default function ClassLoadoutEditor<T extends string>({
         <Text style={[getInteractiveButtonTextStyle('md'), { color: theme.accentColor }]}>
           {commitLabel}
         </Text>
-      </Pressable>
+      </HapticPressable>
     </View>
   );
 }

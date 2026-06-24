@@ -1,5 +1,6 @@
 import React from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, StyleSheet, Text, View } from 'react-native';
+import HapticPressable from './HapticPressable';
 import type { TerminalTheme } from '../types/theme';
 
 interface CargoDiscardConfirmOverlayProps {
@@ -32,7 +33,7 @@ export default function CargoDiscardConfirmOverlay({
           </Text>
 
           <View style={styles.actions}>
-            <Pressable
+            <HapticPressable
               onPress={onCancel}
               style={({ pressed }) => [
                 styles.btn,
@@ -40,8 +41,8 @@ export default function CargoDiscardConfirmOverlay({
               ]}
             >
               <Text style={[styles.btnText, { color: theme.mutedColor }]}>[ NO ]</Text>
-            </Pressable>
-            <Pressable
+            </HapticPressable>
+            <HapticPressable
               onPress={onConfirm}
               style={({ pressed }) => [
                 styles.btn,
@@ -49,7 +50,7 @@ export default function CargoDiscardConfirmOverlay({
               ]}
             >
               <Text style={[styles.btnText, { color: '#ef4444' }]}>[ YES ]</Text>
-            </Pressable>
+            </HapticPressable>
           </View>
         </View>
       </View>

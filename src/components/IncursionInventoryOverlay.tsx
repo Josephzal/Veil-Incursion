@@ -1,13 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import {
-  Image,
-  ImageSourcePropType,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Image, ImageSourcePropType, Modal, StyleSheet, Text, View } from 'react-native';
+import HapticPressable from './HapticPressable';
 import SoulCoreImage from '../../assets/images/item images/soul-core.png';
 import TargetFragmentImage from '../../assets/images/item images/target-fragment.png';
 import VeilShardImage from '../../assets/images/item images/veil-shard.png';
@@ -76,8 +69,8 @@ export default function IncursionInventoryOverlay({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable
+      <HapticPressable style={styles.backdrop} onPress={onClose}>
+        <HapticPressable
           style={[styles.panel, { borderColor: accentColor }]}
           onPress={(e) => e.stopPropagation()}
         >
@@ -90,7 +83,7 @@ export default function IncursionInventoryOverlay({
             {gridCells.map((item, index) => {
               const isSelected = item != null && item.id === selectedId;
               return (
-                <Pressable
+                <HapticPressable
                   key={item?.id ?? `empty-${index}`}
                   disabled={item == null || item.quantity <= 0}
                   onPress={() => item != null && setSelectedId(item.id)}
@@ -125,7 +118,7 @@ export default function IncursionInventoryOverlay({
                       <Text style={[styles.cellEmpty, { color: theme.mutedColor }]}>—</Text>
                     </View>
                   )}
-                </Pressable>
+                </HapticPressable>
               );
             })}
           </View>
@@ -165,7 +158,7 @@ export default function IncursionInventoryOverlay({
           </View>
 
           <View style={styles.actions}>
-            <Pressable
+            <HapticPressable
               onPress={onClose}
               style={({ pressed }) => [
                 styles.btn,
@@ -174,8 +167,8 @@ export default function IncursionInventoryOverlay({
               ]}
             >
               <Text style={[styles.btnText, { color: theme.mutedColor }]}>[ CLOSE ]</Text>
-            </Pressable>
-            <Pressable
+            </HapticPressable>
+            <HapticPressable
               disabled={!useEnabled}
               onPress={() => selectedItem != null && onUse(selectedItem.id)}
               style={({ pressed }) => [
@@ -191,10 +184,10 @@ export default function IncursionInventoryOverlay({
               <Text style={[styles.btnText, { color: useEnabled ? accentColor : USE_DISABLED_TEXT }]}>
                 [ USE ]
               </Text>
-            </Pressable>
+            </HapticPressable>
           </View>
-        </Pressable>
-      </Pressable>
+        </HapticPressable>
+      </HapticPressable>
     </Modal>
   );
 }

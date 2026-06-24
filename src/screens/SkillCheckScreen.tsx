@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import HapticPressable from '../components/HapticPressable';
 import IncursionShell from '../components/IncursionShell';
 import IncursionRunLayout from '../components/IncursionRunLayout';
 import LandscapeSplitPane from '../components/layout/LandscapeSplitPane';
@@ -195,12 +196,12 @@ export default function SkillCheckScreen(): React.JSX.Element {
         </View>
 
         {phase === 'READY' ? (
-          <Pressable
+          <HapticPressable
             onPress={handleCalibrate}
             style={[styles.calibrateButton, { borderColor: TERMINAL_ACCENT }]}
           >
             <Text style={styles.calibrateButtonText}>[ ENGAGE CALIBRATION ]</Text>
-          </Pressable>
+          </HapticPressable>
         ) : null}
       </Animated.View>
 

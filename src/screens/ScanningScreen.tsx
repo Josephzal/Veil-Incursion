@@ -1,11 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  LayoutChangeEvent,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
+import HapticPressable from '../components/HapticPressable';
 import {
   formatScannerNodeIntel,
   generateDepthNodeScanVectors,
@@ -392,7 +387,7 @@ export default function ScanningScreen(): React.JSX.Element {
         )}
       </View>
       {emergencyRecallAvailable ? (
-        <Pressable
+        <HapticPressable
           onPress={handleEmergencyRecall}
           style={({ pressed }) => [
             styles.recallBtn,
@@ -402,7 +397,7 @@ export default function ScanningScreen(): React.JSX.Element {
           <Text style={[styles.recallBtnText, { color: '#fbbf24' }]}>
             [ EMERGENCY RECALL — DEFEND THE RIFT ]
           </Text>
-        </Pressable>
+        </HapticPressable>
       ) : null}
     </View>
   );

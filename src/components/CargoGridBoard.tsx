@@ -1,12 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import {
-  Image,
-  LayoutChangeEvent,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Image, LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
+import HapticPressable from './HapticPressable';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
@@ -31,6 +25,7 @@ import {
 import { useCombatTurnOptional } from '../context/CombatTurnContext';
 import type { CargoItemId, CargoRunState, PlacedCargoItem } from '../types/cargoGrid';
 import { CARGO_GRID_COLS, CARGO_GRID_ROWS, CARGO_ITEM_CATALOG } from '../types/cargoGrid';
+import { HARVEST_EXTERNAL_BAY_MARGIN_TOP } from '../constants/harvestLayout';
 import type { TerminalTheme } from '../types/theme';
 import { countCargoItemInstances } from '../data/cargoGridEngine';
 import { resolveCargoItemIcon } from '../utils/cargoItemIcon';
@@ -44,7 +39,6 @@ import {
   pulseCargoItemPickup,
   pulseCargoItemSelect,
   pulseCargoItemUse,
-  pulseHubButton,
 } from '../utils/hubButtonHaptics';
 
 export const CARGO_CELL_SIZE = 56;
@@ -108,6 +102,8 @@ interface CargoGridBoardProps {
   onDragPositionChange?: (payload: { source: CargoDragSource; x: number; y: number } | null) => void;
   /** Override cell pixel size — hub loadout uses a compact grid. */
   cellSize?: number;
+  /** Incursion cargo modal: tighter gaps and combat detail panel. */
+  overlayCompact?: boolean;
 }
 
 function cellsForItem(itemId: CargoItemId, originRow: number, originCol: number): string[] {
@@ -198,7 +194,7 @@ function DraggableCargoSprite({
 
   if (combatSelectMode && onCombatSelect) {
     return (
-      <Pressable
+      <HapticPressable
         onPress={onCombatSelect}
         style={({ pressed }) => [
           spriteSize,
@@ -213,7 +209,7 @@ function DraggableCargoSprite({
           resizeMode="contain"
           style={[styles.lootSprite, spriteSize, combatSelected ? styles.combatItemSelected : null]}
         />
-      </Pressable>
+      </HapticPressable>
     );
   }
 
@@ -393,8 +389,12 @@ export default function CargoGridBoard({
   onHubExternalDrop,
   onDragPositionChange,
   cellSize: cellSizeProp,
+  overlayCompact = false,
 }: CargoGridBoardProps): React.JSX.Element {
   const cellSize = cellSizeProp ?? CARGO_CELL_SIZE;
+  const combatDetailHeight = overlayCompact ? 108 : COMBAT_DETAIL_PANEL_HEIGHT;
+  const boardGap = overlayCompact ? 10 : undefined;
+  const externalBayMarginTop = overlayCompact ? 10 : 28;
   const { frameWidth, frameHeight, stride } = useMemo(
     () => cargoGridFrameDimensions(cellSize),
     [cellSize],
@@ -675,15 +675,17 @@ export default function CargoGridBoard({
       return;
     }
 
+    if (onHubExternalDrop?.(source, absoluteX, absoluteY)) {
+      clearDrag();
+      onResult(true);
+      return;
+    }
+
     const excludeId = source.source === 'grid' ? source.instanceId : undefined;
     const cell = resolveValidDropCell(absoluteX, absoluteY, source.itemId, excludeId);
 
     if (!cell) {
       clearDrag();
-      if (onHubExternalDrop?.(source, absoluteX, absoluteY)) {
-        onResult(true);
-        return;
-      }
       if (onDiscardItem) {
         setPendingDiscard(source);
         return;
@@ -743,7 +745,7 @@ export default function CargoGridBoard({
             const canDrop = isPreview && previewCells.valid;
 
             return (
-              <Pressable
+              <HapticPressable
                 key={key}
                 disabled={!selectedPlacementItemId || !onPlaceAtCell}
                 onPress={() => onPlaceAtCell?.(row, col)}
@@ -820,8 +822,9 @@ export default function CargoGridBoard({
     <View style={[
       styles.root,
       minimal && styles.rootMinimal,
+      overlayCompact && styles.rootOverlayCompact,
       styles.rootCentered,
-      { width: frameWidth, gap: cellSize < 48 ? 8 : undefined },
+      { width: frameWidth, gap: boardGap ?? (cellSize < 48 ? 8 : undefined) },
     ]}>
       {showCreditsHud ? (
         <CargoCreditsHud credits={runCredits} accentColor={accentColor} style={styles.creditsHud} />
@@ -837,6 +840,7 @@ export default function CargoGridBoard({
           style={[
             styles.externalBay,
             stableExternalBay ? styles.externalBayStable : null,
+            { marginTop: externalBayMarginTop },
           ]}
         >
           <View
@@ -919,7 +923,7 @@ export default function CargoGridBoard({
       </View>
 
       {scannerMode && hasAmpouleInGrid && onUseAmpoule ? (
-        <Pressable
+        <HapticPressable
           onPress={() => {
             pulseCargoItemUse();
             onUseAmpoule();
@@ -929,11 +933,11 @@ export default function CargoGridBoard({
           <Text style={[styles.ampouleBtnText, { color: accentColor }]}>
             [ USE FOCUSING AMPOULE — +1 ATTUNEMENT ]
           </Text>
-        </Pressable>
+        </HapticPressable>
       ) : null}
 
       {scannerMode && onUseResonanceBribe && countCargoItemInstances(displayCargo, 'resonance-bribe') > 0 ? (
-        <Pressable
+        <HapticPressable
           onPress={() => {
             pulseCargoItemUse();
             onUseResonanceBribe();
@@ -943,11 +947,11 @@ export default function CargoGridBoard({
           <Text style={[styles.ampouleBtnText, { color: accentColor }]}>
             [ USE RESONANCE BRIBE — −25% RESONANCE ]
           </Text>
-        </Pressable>
+        </HapticPressable>
       ) : null}
 
       {scannerMode && onUseDeadDrop && countCargoItemInstances(displayCargo, 'dead-drop-token') > 0 ? (
-        <Pressable
+        <HapticPressable
           onPress={() => {
             pulseCargoItemUse();
             onUseDeadDrop();
@@ -957,14 +961,18 @@ export default function CargoGridBoard({
           <Text style={[styles.ampouleBtnText, { color: accentColor }]}>
             [ USE DEAD-DROP TOKEN — VAULT EXTRACT ]
           </Text>
-        </Pressable>
+        </HapticPressable>
       ) : null}
 
       {combatMode && onUseCombatConsumable ? (
         <View
           style={[
             styles.combatDetailPanel,
-            { borderColor: theme.borderColor, height: COMBAT_DETAIL_PANEL_HEIGHT },
+            {
+              borderColor: theme.borderColor,
+              height: combatDetailHeight,
+              width: frameWidth,
+            },
           ]}
         >
           <View style={styles.combatDetailInner}>
@@ -1009,7 +1017,7 @@ export default function CargoGridBoard({
               </Text>
             </View>
 
-            <Pressable
+            <HapticPressable
               disabled={!combatUseEnabled}
               onPress={() => {
                 if (!selectedCombatItemId || !combatUseEnabled) return;
@@ -1039,17 +1047,14 @@ export default function CargoGridBoard({
               >
                 [ USE ITEM ]
               </Text>
-            </Pressable>
+            </HapticPressable>
           </View>
         </View>
       ) : null}
 
       {onContinue && !hideContinueButton ? (
-        <Pressable
-          onPress={() => {
-            pulseHubButton();
-            onContinue();
-          }}
+        <HapticPressable
+          onPress={onContinue}
           style={({ pressed }) => [
             getInteractiveButtonStyle(accentColor, { pressed, size: 'md' }),
             styles.continueBtn,
@@ -1059,7 +1064,7 @@ export default function CargoGridBoard({
           <Text style={[getInteractiveButtonTextStyle('md'), styles.continueBtnText, { color: accentColor }]}>
             {continueLabel}
           </Text>
-        </Pressable>
+        </HapticPressable>
       ) : null}
 
       <CargoDiscardConfirmOverlay
@@ -1093,6 +1098,9 @@ const styles = StyleSheet.create({
   },
   rootMinimal: {
     gap: 28,
+  },
+  rootOverlayCompact: {
+    gap: 10,
   },
   creditsHud: {
     position: 'absolute',
@@ -1165,7 +1173,7 @@ const styles = StyleSheet.create({
   externalBayStable: {
     minHeight: undefined,
     height: 84,
-    marginTop: 28,
+    marginTop: HARVEST_EXTERNAL_BAY_MARGIN_TOP,
   },
   externalRow: {
     flexDirection: 'row',

@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { Image, Pressable, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
+import { Image, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
+import HapticPressable from '../../HapticPressable';
 import type { ClassType } from '../../../types/game';
 import type { CombatTurnOrderEntry, CombatTurnOrderSnapshot } from '../../../utils/combatTurnOrder';
 
@@ -124,13 +125,13 @@ export default function TurnOrderColumn({
               <View key={`${entry.id}-${index}`} style={styles.itemWrap}>
                 {index > 0 ? <View style={[styles.connector, { backgroundColor: mutedColor }]} /> : null}
                 {canPressHostile ? (
-                  <Pressable
+                  <HapticPressable
                     onPress={() => onHostilePress(unitId)}
                     accessibilityRole="button"
                     accessibilityLabel={`Select ${entry.label}`}
                   >
                     {avatar}
-                  </Pressable>
+                  </HapticPressable>
                 ) : (
                   avatar
                 )}

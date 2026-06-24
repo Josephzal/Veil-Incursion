@@ -1,13 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Animated,
-  Easing,
-  Pressable,
-  StyleSheet,
-  Text,
-  Vibration,
-  View,
-} from 'react-native';
+import { Animated, Easing, StyleSheet, Text, Vibration, View } from 'react-native';
+import HapticPressable from '../../HapticPressable';
 import type { TensionMechanicProps } from './tensionMechanicTypes';
 
 const GRID_SIZE = 3;
@@ -82,7 +75,7 @@ function CipherNode({
   }
 
   return (
-    <Pressable
+    <HapticPressable
       onPress={() => onPress(nodeId)}
       disabled={disabled}
       style={({ pressed }) => [
@@ -103,7 +96,7 @@ function CipherNode({
         <View style={[styles.nodeCore, lit || tapped ? styles.nodeCoreLit : null]} />
         <Text style={styles.nodeId}>{String(nodeId + 1).padStart(2, '0')}</Text>
       </Animated.View>
-    </Pressable>
+    </HapticPressable>
   );
 }
 

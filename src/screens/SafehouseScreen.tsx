@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import HapticPressable from '../components/HapticPressable';
 import IncursionShell from '../components/IncursionShell';
 import DecryptionPanel from '../components/DecryptionPanel';
 import IncursionRunLayout from '../components/IncursionRunLayout';
@@ -299,7 +300,7 @@ export default function SafehouseScreen(): React.JSX.Element {
 
               <View style={styles.tabRow}>
                 {(['PAYLOAD', 'LOADOUT', 'BENCH', 'DECRYPT', 'INTEL'] as SafehouseTab[]).map((tab) => (
-                  <Pressable
+                  <HapticPressable
                     key={tab}
                     onPress={() => setActiveTab(tab)}
                     style={[
@@ -311,7 +312,7 @@ export default function SafehouseScreen(): React.JSX.Element {
                     <Text style={[styles.tabLabel, activeTab === tab && styles.tabLabelActive]}>
                       {`[ ${tab} ]`}
                     </Text>
-                  </Pressable>
+                  </HapticPressable>
                 ))}
               </View>
             </>
@@ -319,9 +320,9 @@ export default function SafehouseScreen(): React.JSX.Element {
           footer={(
             <>
               <Text style={[styles.statusLine, { color: theme.mutedColor }]}>{statusLine}</Text>
-              <Pressable onPress={handleUnseal} style={[styles.unsealBtn, { borderColor: TERMINAL_ACCENT }]}>
+              <HapticPressable onPress={handleUnseal} style={[styles.unsealBtn, { borderColor: TERMINAL_ACCENT }]}>
                 <Text style={styles.unsealLabel}>{`[ UNSEAL DOOR : ENTER DISTRICT ${nextDistrict} ]`}</Text>
-              </Pressable>
+              </HapticPressable>
             </>
           )}
         >
@@ -334,7 +335,7 @@ export default function SafehouseScreen(): React.JSX.Element {
                 </Text>
                 <View style={styles.presetRow}>
                   {TRANSFER_PRESETS.map((preset) => (
-                    <Pressable
+                    <HapticPressable
                       key={preset}
                       onPress={() => setTransferPercent(preset)}
                       style={[
@@ -343,13 +344,13 @@ export default function SafehouseScreen(): React.JSX.Element {
                       ]}
                     >
                       <Text style={styles.presetLabel}>{`${preset}%`}</Text>
-                    </Pressable>
+                    </HapticPressable>
                   ))}
                 </View>
                 <Text style={styles.panelMeta}>{`TRANSFER SLICE: ${transferPercent}% (~${Math.floor(cargoValue * transferPercent / 100)} CR)`}</Text>
-                <Pressable onPress={handleTransfer} style={[styles.actionBtn, { borderColor: TERMINAL_ACCENT }]}>
+                <HapticPressable onPress={handleTransfer} style={[styles.actionBtn, { borderColor: TERMINAL_ACCENT }]}>
                   <Text style={styles.actionLabel}>[ EXECUTE BANK TRANSFER ]</Text>
-                </Pressable>
+                </HapticPressable>
               </>
             ) : null}
 
@@ -434,9 +435,9 @@ export default function SafehouseScreen(): React.JSX.Element {
                   <Text style={styles.classTitle}>{operativeClass.replace(/_/g, ' ')}</Text>
                   <Text style={styles.classStatus}>ACTIVE OPERATIVE CLASS</Text>
                   <View style={styles.classActions}>
-                    <Pressable onPress={handleBenchRestore} style={[styles.actionBtn, { borderColor: TERMINAL_ACCENT }]}>
+                    <HapticPressable onPress={handleBenchRestore} style={[styles.actionBtn, { borderColor: TERMINAL_ACCENT }]}>
                       <Text style={styles.actionLabel}>[ RESTORE 25% HEALTH — 10% CARGO ]</Text>
-                    </Pressable>
+                    </HapticPressable>
                   </View>
                 </View>
               </>

@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import HapticPressable from '../HapticPressable';
 import {
   getInteractiveButtonStyle,
   getInteractiveButtonTextStyle,
@@ -32,7 +33,7 @@ export default function CombatResolutionBanner({
         <Text style={[styles.title, { color: accent }]}>
           {isVictory ? 'HOSTILE NEUTRALIZED' : 'OPERATIVE SOUL DISCONNECTED'}
         </Text>
-        <Pressable
+        <HapticPressable
           onPress={() => {
             pulseHubButton();
             onDismiss();
@@ -45,7 +46,7 @@ export default function CombatResolutionBanner({
           <Text style={[getInteractiveButtonTextStyle('md'), { color: btnText }]}>
             {isVictory ? '[ CONTINUE RUN ]' : '[ INCURSION FAILED ]'}
           </Text>
-        </Pressable>
+        </HapticPressable>
       </View>
     </View>
   );

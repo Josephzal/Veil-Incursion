@@ -1,14 +1,22 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import HapticPressable from '../HapticPressable';
 import { FACTION_DEFINITIONS } from '../../data/factions';
 import { calculateSectorControl } from '../../data/shadowWarEngine';
 import { getShadowWarSector } from '../../data/shadowWarSectors';
-import { formatBracketHeader, hubTerminalUi, HUB_DATA_DIVIDER } from '../../styles/hubTerminalUi';
+import {
+  formatBracketHeader,
+  getInteractiveButtonStyle,
+  getInteractiveButtonTextStyle,
+  hubTerminalUi,
+  HUB_DATA_DIVIDER,
+} from '../../styles/hubTerminalUi';
 import { FactionType } from '../../types/game';
 import type { CabalIpPool, ShadowWarSectorId } from '../../types/shadowWar';
 import { TerminalTheme } from '../../types/theme';
 
 const FACTION_ORDER: FactionType[] = ['TERRAN_GRID', 'LEGION', 'SOLARIS'];
+const DONATE_AMBER = '#d4a574';
 
 function InfluenceMeter({
   label,
@@ -35,6 +43,7 @@ interface ShadowWarInfluencePanelProps {
   sectorId: ShadowWarSectorId;
   sectorIp: CabalIpPool;
   weeklyDonatedIP: number;
+  onDonatePress?: () => void;
 }
 
 export default function ShadowWarInfluencePanel({
@@ -42,6 +51,7 @@ export default function ShadowWarInfluencePanel({
   sectorId,
   sectorIp,
   weeklyDonatedIP,
+  onDonatePress,
 }: ShadowWarInfluencePanelProps): React.JSX.Element {
   const sector = getShadowWarSector(sectorId);
   const control = calculateSectorControl(sectorIp);
@@ -52,19 +62,34 @@ export default function ShadowWarInfluencePanel({
 
   return (
     <View style={styles.root}>
-      <View style={styles.readout}>
-        <Text style={[styles.readoutLine, { color: theme.mutedColor }]}>
-          {`SECTOR: ${sector.label.toUpperCase()} // TOTAL IP: ${control.totalIp}`}
-        </Text>
-        <Text style={[styles.readoutLine, { color: statusColor }]}>
-          {`STATUS: ${statusLabel}`}
-        </Text>
-        <Text style={[styles.readoutLine, { color: theme.primaryColor }]}>
-          {`BUFF: ${sector.buffSummary.toUpperCase()}`}
-        </Text>
-        <Text style={[styles.readoutLine, { color: theme.mutedColor }]}>
-          {`YOUR WEEKLY DONATION: ${weeklyDonatedIP} IP`}
-        </Text>
+      <View style={styles.readoutRow}>
+        <View style={styles.readout}>
+          <Text style={[styles.readoutLine, { color: theme.mutedColor }]}>
+            {`SECTOR: ${sector.label.toUpperCase()} // TOTAL IP: ${control.totalIp}`}
+          </Text>
+          <Text style={[styles.readoutLine, { color: statusColor }]}>
+            {`STATUS: ${statusLabel}`}
+          </Text>
+          <Text style={[styles.readoutLine, { color: theme.primaryColor }]}>
+            {`BUFF: ${sector.buffSummary.toUpperCase()}`}
+          </Text>
+          <Text style={[styles.readoutLine, { color: theme.mutedColor }]}>
+            {`YOUR WEEKLY DONATION: ${weeklyDonatedIP} IP`}
+          </Text>
+        </View>
+        {onDonatePress ? (
+          <HapticPressable
+            onPress={onDonatePress}
+            style={({ pressed }) => [
+              getInteractiveButtonStyle(DONATE_AMBER, { pressed, size: 'sm' }),
+              styles.donateBtn,
+            ]}
+          >
+            <Text style={[getInteractiveButtonTextStyle('sm'), { color: DONATE_AMBER }]}>
+              [ DONATE ]
+            </Text>
+          </HapticPressable>
+        ) : null}
       </View>
 
       <View style={styles.influenceBlock}>
@@ -88,33 +113,43 @@ export default function ShadowWarInfluencePanel({
 }
 
 const styles = StyleSheet.create({
-  root: { marginTop: 0 },
-  readout: {
-    paddingVertical: 8,
-    paddingHorizontal: 2,
-    marginBottom: 8,
-    minHeight: 48,
+  root: { flex: 1, minHeight: 0 },
+  readoutRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginBottom: 6,
     borderBottomWidth: 1,
     borderBottomColor: HUB_DATA_DIVIDER,
+    paddingBottom: 6,
+  },
+  readout: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  donateBtn: {
+    flexShrink: 0,
+    minWidth: 72,
+    alignItems: 'center',
   },
   readoutLine: {
     fontFamily: 'monospace',
-    fontSize: 8,
-    letterSpacing: 0.4,
-    lineHeight: 13,
-    marginBottom: 2,
+    fontSize: 7,
+    letterSpacing: 0.3,
+    lineHeight: 11,
   },
-  influenceBlock: { marginTop: 8 },
-  influenceHeader: { marginBottom: 10 },
-  meterRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 2, gap: 8 },
-  meterLabel: { fontFamily: 'monospace', fontSize: 7, width: 72 },
+  influenceBlock: { flex: 1, minHeight: 0 },
+  influenceHeader: { marginBottom: 6 },
+  meterRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 2, gap: 6 },
+  meterLabel: { fontFamily: 'monospace', fontSize: 6, width: 64 },
   meterTrack: {
     flex: 1,
-    height: 6,
+    height: 5,
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
     overflow: 'hidden',
   },
   meterFill: { height: '100%' },
-  meterPct: { fontFamily: 'monospace', fontSize: 8, width: 32, textAlign: 'right' },
-  ipLine: { fontFamily: 'monospace', fontSize: 6, marginBottom: 6, marginLeft: 80 },
+  meterPct: { fontFamily: 'monospace', fontSize: 7, width: 28, textAlign: 'right' },
+  ipLine: { fontFamily: 'monospace', fontSize: 6, marginBottom: 4, marginLeft: 70 },
 });

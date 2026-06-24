@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import HapticPressable from '../../../components/HapticPressable';
 import { TERMINAL_ACCENT } from '../../../components/MacroLogCargoButton';
 import { useCargoOverlay } from '../../../context/CargoOverlayContext';
 import { useRunStatusOverlay } from '../../../context/RunStatusOverlayContext';
@@ -15,7 +16,7 @@ export default function CombatGlobalChrome(): React.JSX.Element {
   return (
     <View style={styles.host} pointerEvents="box-none">
       {cargo?.cargoEnabled ? (
-        <Pressable
+        <HapticPressable
           onPress={cargo.openCargo}
           disabled={cargoDisabled}
           style={({ pressed }) => [
@@ -26,17 +27,17 @@ export default function CombatGlobalChrome(): React.JSX.Element {
           accessibilityLabel="Open cargo grid"
         >
           <Text style={styles.btnText}>CARGO</Text>
-        </Pressable>
+        </HapticPressable>
       ) : null}
       {status?.statusEnabled ? (
-        <Pressable
+        <HapticPressable
           onPress={status.openStatus}
           style={({ pressed }) => [styles.btn, { opacity: pressed ? 0.75 : 1 }]}
           accessibilityRole="button"
           accessibilityLabel="Open operative status"
         >
           <Text style={styles.btnText}>STATUS</Text>
-        </Pressable>
+        </HapticPressable>
       ) : null}
     </View>
   );

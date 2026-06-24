@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import HapticPressable from './HapticPressable';
 import {
   canGraftClassAbility,
   formatClassGraftOfferLine,
@@ -84,7 +85,7 @@ export default function ClassGraftUI({
           const affordable = residueBalance >= graft.cost;
           const selected = selectedGraftId === graftId;
           return (
-            <Pressable
+            <HapticPressable
               key={graftId}
               disabled={!affordable}
               onPress={() => setSelectedGraftId(graftId)}
@@ -103,7 +104,7 @@ export default function ClassGraftUI({
               <Text style={[styles.offerBody, { color: mutedColor }]}>
                 {formatClassGraftOfferLine(activeClass, graftId, residueBalance).split('\n')[1]}
               </Text>
-            </Pressable>
+            </HapticPressable>
           );
         })}
       </View>
@@ -121,7 +122,7 @@ export default function ClassGraftUI({
             && selectedGraftId != null
             && residueBalance >= (selectedGraft?.cost ?? 0);
           return (
-            <Pressable
+            <HapticPressable
               key={abilityId}
               disabled={!canApply}
               onPress={() => {
@@ -156,7 +157,7 @@ export default function ClassGraftUI({
               ) : (
                 <Text style={[styles.graftTag, { color: mutedColor }]}>UNGRAFTED</Text>
               )}
-            </Pressable>
+            </HapticPressable>
           );
         })}
       </View>

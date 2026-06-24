@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import HapticPressable from '../components/HapticPressable';
 import SectorOverworldMap from '../components/SectorOverworldMap';
 import IncursionShell from '../components/IncursionShell';
 import IncursionRunLayout from '../components/IncursionRunLayout';
@@ -41,7 +42,7 @@ export default function RunProgressScreen(): React.JSX.Element {
             />
           )}
           footer={(
-            <Pressable
+            <HapticPressable
               onPress={continueOperation}
               style={({ pressed }) => [
                 styles.continueBtn,
@@ -49,7 +50,7 @@ export default function RunProgressScreen(): React.JSX.Element {
               ]}
             >
               <Text style={[styles.continueBtnText, { color: accent }]}>[ CONTINUE OPERATION ]</Text>
-            </Pressable>
+            </HapticPressable>
           )}
         >
           <View style={styles.pipelineFrame}>

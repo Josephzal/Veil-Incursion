@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import AegisLoadoutEditor from '../AegisLoadoutEditor';
 import ClassLoadoutEditor from '../ClassLoadoutEditor';
-import { formatBracketHeader, hubTerminalUi } from '../../styles/hubTerminalUi';
+import { hubTerminalUi } from '../../styles/hubTerminalUi';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useTerminal } from '../../context/TerminalContext';
 import { isAbilityUnlocked } from '../../data/aegisAbilityUnlockEngine';
@@ -175,27 +175,15 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
     setLoadoutStatus('>> LOADOUT COMMITTED — CARRIES INTO NEXT RUN.');
   }, [account.unlockedEnvoyAbilities, appendHubLog, envoyDraft, setEnvoyLoadout]);
 
-  const headerCopy = account.activeClass === 'HEX_SHOT'
-    ? 'Configure four active ballistic abilities. Phase-Shift Reload is intrinsic on the combat bar.'
-    : account.activeClass === 'ENVOY'
-      ? 'Configure four active spell slots. Rift-Ward triggers automatically on incoming attacks.'
-      : 'Configure four active abilities. Locked protocols require hub resource decryption.';
-
   return (
     <ScrollView
       style={styles.scroll}
       contentContainerStyle={styles.scrollContent}
-      showsVerticalScrollIndicator={false}
+      showsVerticalScrollIndicator
+      persistentScrollbar={Platform.OS === 'android'}
+      indicatorStyle="white"
+      nestedScrollEnabled
     >
-      <View style={hubTerminalUi.dataSectionLeading}>
-        <Text style={[hubTerminalUi.sectionHeaderLg, { color: theme.mutedColor }]}>
-          {formatBracketHeader(`PRE-RUN ${account.activeClass} CONFIG`)}
-        </Text>
-        <Text style={[styles.headerSub, { color: theme.mutedColor }]}>
-          {headerCopy}
-        </Text>
-      </View>
-
       <View style={hubTerminalUi.dataSection}>
         {account.activeClass === 'AEGIS' ? (
           <AegisLoadoutEditor
@@ -279,11 +267,4 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: 24 },
-  headerSub: {
-    fontFamily: 'monospace',
-    fontSize: 8,
-    letterSpacing: 0.6,
-    lineHeight: 12,
-    marginTop: 4,
-  },
 });

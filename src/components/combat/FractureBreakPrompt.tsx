@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import HapticPressable from '../HapticPressable';
 import { FRACTURE_BREAK_PROMPT_MS } from '../../data/combatMasteryEngine';
 
 interface FractureBreakPromptProps {
@@ -36,7 +37,7 @@ export default function FractureBreakPrompt({
   return (
     <View style={styles.overlay} pointerEvents="box-none">
       <View style={styles.dim} pointerEvents="none" />
-      <Pressable
+      <HapticPressable
         style={styles.button}
         onPress={() => {
           if (firedRef.current) return;
@@ -46,7 +47,7 @@ export default function FractureBreakPrompt({
       >
         <Text style={styles.label}>[ FRACTURE BREACH ]</Text>
         <Text style={styles.sub}>{designation ?? 'HOSTILE'} — EXECUTE NOW</Text>
-      </Pressable>
+      </HapticPressable>
     </View>
   );
 }

@@ -1,1 +1,1 @@
-export type TerminalView = 'BADGE' | 'MAP' | 'SAFEHOUSE';
+export type TerminalView = 'BADGE' | 'MAP' | 'SAFEHOUSE' | 'INCURSION' | 'TEST';

@@ -1,12 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Image,
-  ScrollView,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { ScrollView } from 'react-native-gesture-handler';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 import { ALL_RESOURCE_ITEM_IDS, RESOURCE_REGISTRY } from '../../data/resourceRegistry';
@@ -15,6 +15,7 @@ import { useTerminal } from '../../context/TerminalContext';
 import type { CargoItemId } from '../../types/cargoGrid';
 import { resolveCargoItemIcon } from '../../utils/cargoItemIcon';
 import { pulseCargoItemPickup } from '../../utils/hubButtonHaptics';
+import DraggableStashIcon from './DraggableStashIcon';
 
 export type StashEntryKind = 'resource' | 'consumable';
 
@@ -29,90 +30,33 @@ export interface StashEntry {
 interface SafehouseStashPanelProps {
   resourceStash: Partial<Record<string, number>>;
   hubCraftedConsumables: Partial<Record<CargoItemId, number>>;
-  selectedItemId: CargoItemId | null;
   isDropTarget?: boolean;
   onPanelMeasured?: (rect: { pageX: number; pageY: number; width: number; height: number }) => void;
-  onSelectItem: (itemId: CargoItemId) => void;
   onDragStart: (itemId: CargoItemId) => void;
   onDragMove: (itemId: CargoItemId, absoluteX: number, absoluteY: number) => void;
   onDragEnd: (itemId: CargoItemId, absoluteX: number, absoluteY: number) => void;
 }
 
-function DraggableStashRow({
+function StashRow({
   entry,
-  selected,
-  accentColor,
   borderColor,
   mutedColor,
   textColor,
-  primaryColor,
-  onSelectItem,
   onDragStart,
   onDragMove,
   onDragEnd,
 }: {
   entry: StashEntry;
-  selected: boolean;
-  accentColor: string;
   borderColor: string;
   mutedColor: string;
   textColor: string;
-  primaryColor: string;
-  onSelectItem: (itemId: CargoItemId) => void;
   onDragStart: (itemId: CargoItemId) => void;
   onDragMove: (itemId: CargoItemId, absoluteX: number, absoluteY: number) => void;
   onDragEnd: (itemId: CargoItemId, absoluteX: number, absoluteY: number) => void;
 }): React.JSX.Element {
-  const finishDrag = (absoluteX: number, absoluteY: number, translationX: number, translationY: number) => {
-    const dragged = Math.hypot(translationX, translationY) >= 4;
-    if (dragged) {
-      onDragEnd(entry.itemId, absoluteX, absoluteY);
-    }
-  };
-
-  const pan = Gesture.Pan()
-    .minDistance(4)
-    .onBegin((event) => {
-      runOnJS(pulseCargoItemPickup)();
-      runOnJS(onDragStart)(entry.itemId);
-      runOnJS(onDragMove)(entry.itemId, event.absoluteX, event.absoluteY);
-    })
-    .onUpdate((event) => {
-      runOnJS(onDragMove)(entry.itemId, event.absoluteX, event.absoluteY);
-    })
-    .onEnd((event) => {
-      runOnJS(finishDrag)(
-        event.absoluteX,
-        event.absoluteY,
-        event.translationX,
-        event.translationY,
-      );
-    });
-
-  const tap = Gesture.Tap()
-    .maxDistance(8)
-    .onEnd(() => {
-      runOnJS(onSelectItem)(entry.itemId);
-    });
-
-  const gesture = Gesture.Exclusive(pan, tap);
-
   return (
-    <GestureDetector gesture={gesture}>
-      <View
-        style={[
-          styles.row,
-          {
-            borderColor: selected ? accentColor : borderColor,
-            backgroundColor: selected ? `${primaryColor}18` : 'transparent',
-          },
-        ]}
-      >
-        <Image
-          source={resolveCargoItemIcon(entry.itemId)}
-          resizeMode="contain"
-          style={styles.rowIcon}
-        />
+    <View style={[styles.row, { borderColor }]}>
+      <View style={styles.rowMain}>
         <View style={styles.rowCopy}>
           <Text style={[styles.rowName, { color: textColor }]} numberOfLines={1}>
             {entry.name.toUpperCase()}
@@ -122,17 +66,22 @@ function DraggableStashRow({
           </Text>
         </View>
       </View>
-    </GestureDetector>
+      <DraggableStashIcon
+        itemId={entry.itemId}
+        borderColor={mutedColor}
+        onDragStart={onDragStart}
+        onDragMove={onDragMove}
+        onDragEnd={onDragEnd}
+      />
+    </View>
   );
 }
 
 export default function SafehouseStashPanel({
   resourceStash,
   hubCraftedConsumables,
-  selectedItemId,
   isDropTarget = false,
   onPanelMeasured,
-  onSelectItem,
   onDragStart,
   onDragMove,
   onDragEnd,
@@ -140,6 +89,19 @@ export default function SafehouseStashPanel({
   const { theme } = useTerminal();
   const [search, setSearch] = useState('');
   const accent = theme.statusColor;
+  const panelRef = useRef<View>(null);
+
+  const reportPanelMetrics = () => {
+    panelRef.current?.measureInWindow((pageX, pageY, width, height) => {
+      onPanelMeasured?.({ pageX, pageY, width, height });
+    });
+  };
+
+  useEffect(() => {
+    if (isDropTarget) {
+      reportPanelMetrics();
+    }
+  }, [isDropTarget]);
 
   const entries = useMemo(() => {
     const resourceEntries: StashEntry[] = ALL_RESOURCE_ITEM_IDS.flatMap((resourceId) => {
@@ -173,6 +135,8 @@ export default function SafehouseStashPanel({
 
   return (
     <View
+      ref={panelRef}
+      onLayout={reportPanelMetrics}
       style={[
         styles.root,
         {
@@ -180,16 +144,10 @@ export default function SafehouseStashPanel({
           backgroundColor: isDropTarget ? `${theme.primaryColor}12` : theme.backgroundColor,
         },
       ]}
-      ref={(ref) => {
-        if (!ref) return;
-        ref.measureInWindow((pageX, pageY, width, height) => {
-          onPanelMeasured?.({ pageX, pageY, width, height });
-        });
-      }}
     >
       <Text style={[styles.title, { color: accent }]}>HOME STASH</Text>
       <Text style={[styles.subtitle, { color: theme.mutedColor }]}>
-        DRAG ITEMS BETWEEN STASH AND DEPLOYMENT PACK
+        DRAG ICON INTO PACK // DRAG PACK ITEMS BACK HERE
       </Text>
       <TextInput
         value={search}
@@ -207,23 +165,27 @@ export default function SafehouseStashPanel({
           },
         ]}
       />
-      <ScrollView style={styles.list} contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.list}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator
+        persistentScrollbar={Platform.OS === 'android'}
+        indicatorStyle="white"
+        nestedScrollEnabled
+        keyboardShouldPersistTaps="handled"
+      >
         {entries.length === 0 ? (
           <Text style={[styles.empty, { color: theme.mutedColor }]}>
             {search.trim() ? '// NO MATCHING ITEMS' : '// STASH EMPTY'}
           </Text>
         ) : (
           entries.map((entry) => (
-            <DraggableStashRow
+            <StashRow
               key={entry.key}
               entry={entry}
-              selected={selectedItemId === entry.itemId}
-              accentColor={accent}
               borderColor={theme.borderColor}
               mutedColor={theme.mutedColor}
               textColor={theme.textColor}
-              primaryColor={theme.primaryColor}
-              onSelectItem={onSelectItem}
               onDragStart={onDragStart}
               onDragMove={onDragMove}
               onDragEnd={onDragEnd}
@@ -262,18 +224,21 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   list: { flex: 1, minHeight: 0 },
-  listContent: { gap: 6, paddingBottom: 8 },
+  listContent: { gap: 6, paddingBottom: 8, paddingRight: 2 },
   empty: { fontFamily: 'monospace', fontSize: 8, paddingVertical: 12 },
   row: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    alignItems: 'stretch',
     borderWidth: 1,
+    minHeight: 44,
+  },
+  rowMain: {
+    flex: 1,
+    justifyContent: 'center',
     paddingHorizontal: 8,
     paddingVertical: 6,
   },
-  rowIcon: { width: 28, height: 28 },
-  rowCopy: { flex: 1, gap: 2 },
+  rowCopy: { gap: 2 },
   rowName: { fontFamily: 'monospace', fontSize: 8, fontWeight: '700' },
   rowMeta: { fontFamily: 'monospace', fontSize: 7 },
 });

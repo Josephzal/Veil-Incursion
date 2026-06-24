@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import HapticPressable from '../HapticPressable';
 import { ZERO_PROTOCOL_DURATION_MS } from '../../data/combatMasteryEngine';
 
 interface ZeroProtocolGridOverlayProps {
@@ -58,7 +59,7 @@ export default function ZeroProtocolGridOverlay({
   };
 
   return (
-    <Pressable style={styles.overlay} onPress={handlePress} disabled={!channelActive}>
+    <HapticPressable style={styles.overlay} onPress={handlePress} disabled={!channelActive}>
       <View style={styles.hud} pointerEvents="none">
         <Text style={styles.title}>[ ZERO-PROTOCOL // RAPID EXECUTION ]</Text>
         <Text style={styles.timer}>
@@ -66,7 +67,7 @@ export default function ZeroProtocolGridOverlay({
         </Text>
         <Text style={styles.counter}>{`${tapCount} IMPACT${tapCount === 1 ? '' : 'S'}`}</Text>
       </View>
-    </Pressable>
+    </HapticPressable>
   );
 }
 

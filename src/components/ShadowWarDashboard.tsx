@@ -1,173 +1,144 @@
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { ScrollView } from 'react-native-gesture-handler';
+import { Modal, StyleSheet, Text, View } from 'react-native';
+import HapticPressable from './HapticPressable';
 import DonationTerminalPanel from './shadowWar/DonationTerminalPanel';
 import ShadowWarInfluencePanel from './shadowWar/ShadowWarInfluencePanel';
 import ShadowWarMap from './shadowWar/ShadowWarMap';
-import {
-  formatBracketHeader,
-  getInteractiveButtonStyle,
-  getInteractiveButtonTextStyle,
-  hubTerminalUi,
-} from '../styles/hubTerminalUi';
-import { pulseHubButton } from '../utils/hubButtonHaptics';
+import { formatBracketHeader, hubTerminalUi } from '../styles/hubTerminalUi';
 import { useShadowWar } from '../context/ShadowWarContext';
 import type { ShadowWarSectorId } from '../types/shadowWar';
 import { TerminalTheme } from '../types/theme';
 import { SHADOW_WAR_SECTORS } from '../data/shadowWarSectors';
 
-const LOG_BLOCK_HEIGHT = 100;
-
 interface ShadowWarDashboardProps {
   theme: TerminalTheme;
-  hubLog: string[];
-  runDisabled: boolean;
-  onInitiateDeepDive: () => void;
   onAppendLog: (line: string) => void;
-}
-
-function LogLine({ line, color }: { line: string; color: string }) {
-  return (
-    <View style={styles.logRow}>
-      <Text style={[styles.logLine, { color }]}>{line}</Text>
-    </View>
-  );
 }
 
 export default function ShadowWarDashboard({
   theme,
-  hubLog,
-  runDisabled,
-  onInitiateDeepDive,
   onAppendLog,
 }: ShadowWarDashboardProps): React.JSX.Element {
   const { state } = useShadowWar();
   const [activeSectorId, setActiveSectorId] = useState<ShadowWarSectorId>(SHADOW_WAR_SECTORS[0].id);
-
-  const combinedLog = [
-    ...state.donationLog.slice(0, 6),
-    ...hubLog.slice(-4),
-  ];
+  const [donationOpen, setDonationOpen] = useState(false);
 
   return (
     <View style={styles.root}>
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        nestedScrollEnabled
-      >
-        <Text style={[hubTerminalUi.sectionHeaderLg, styles.title, { color: theme.mutedColor }]}>
-          {formatBracketHeader('SHADOW WAR // VEIL CONTROL')}
-        </Text>
-        <Text style={[styles.sub, { color: theme.mutedColor }]}>
-          5 MACRO-SECTORS // ASYNC CABAL TUG-OF-WAR // WEEKLY IP CYCLE
-        </Text>
+      <Text style={[hubTerminalUi.sectionHeaderLg, styles.title, { color: theme.mutedColor }]}>
+        {formatBracketHeader('SHADOW WAR // VEIL CONTROL')}
+      </Text>
+      <Text style={[styles.sub, { color: theme.mutedColor }]}>
+        5 MACRO-SECTORS // ASYNC CABAL TUG-OF-WAR // WEEKLY IP CYCLE
+      </Text>
 
+      <View style={styles.mapRegion}>
         <ShadowWarMap
           theme={theme}
           activeSectorId={activeSectorId}
           sectorIp={state.sectorIp}
           onSectorPress={setActiveSectorId}
-          expandedDetailPanel={(
-            <ShadowWarInfluencePanel
-              theme={theme}
-              sectorId={activeSectorId}
-              sectorIp={state.sectorIp[activeSectorId]}
-              weeklyDonatedIP={state.weeklyDonatedIP}
-            />
-          )}
         />
+      </View>
 
+      <View style={styles.influenceRegion}>
         <ShadowWarInfluencePanel
           theme={theme}
           sectorId={activeSectorId}
           sectorIp={state.sectorIp[activeSectorId]}
           weeklyDonatedIP={state.weeklyDonatedIP}
+          onDonatePress={() => setDonationOpen(true)}
         />
+      </View>
 
-        <DonationTerminalPanel
-          sectorId={activeSectorId}
-          onStatus={onAppendLog}
-        />
-
-        <View style={styles.logPanel}>
-          <Text style={[hubTerminalUi.sectionHeader, styles.logHeader, { color: theme.mutedColor }]}>
-            {formatBracketHeader('SECTOR STATUS // DONATION LOG')}
-          </Text>
-          <ScrollView
-            style={styles.logScroll}
-            contentContainerStyle={styles.logScrollContent}
-            nestedScrollEnabled
-            showsVerticalScrollIndicator={false}
-          >
-            {combinedLog.length === 0 ? (
-              <LogLine line=">> AWAITING SHADOW WAR TELEMETRY..." color={theme.mutedColor} />
-            ) : (
-              combinedLog.map((line, idx) => (
-                <LogLine key={`${line}-${idx}`} line={line} color={theme.statusColor} />
-              ))
-            )}
-            <LogLine
-              line={`>> ACTIVE SECTOR: ${activeSectorId.replace(/_/g, ' ')} // WEEKLY IP: ${state.weeklyDonatedIP}`}
-              color={theme.mutedColor}
-            />
-          </ScrollView>
-        </View>
-      </ScrollView>
-
-      <Pressable
-        onPress={() => {
-          if (runDisabled) return;
-          pulseHubButton();
-          onInitiateDeepDive();
-        }}
-        disabled={runDisabled}
-        style={({ pressed }) => [
-          getInteractiveButtonStyle(theme.statusColor, {
-            disabled: runDisabled,
-            pressed,
-            size: 'lg',
-          }),
-          styles.deepDiveBtn,
-          runDisabled ? null : pressed ? { opacity: 0.85 } : null,
-        ]}
+      <Modal
+        visible={donationOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDonationOpen(false)}
       >
-        <Text style={[getInteractiveButtonTextStyle('lg'), { color: theme.statusColor }]}>
-          BEGIN INCURSION
-        </Text>
-        <Text style={[styles.deepDiveSub, { color: theme.mutedColor }]}>
-          Stage loadout on Safehouse tab — then breach the Veil
-        </Text>
-      </Pressable>
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { borderColor: theme.borderColor, backgroundColor: theme.backgroundColor }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: theme.primaryColor }]}>
+                DONATION TERMINAL
+              </Text>
+              <HapticPressable
+                onPress={() => setDonationOpen(false)}
+                style={[styles.closeBtn, { borderColor: theme.borderColor }]}
+              >
+                <Text style={[styles.closeBtnText, { color: theme.mutedColor }]}>[ CLOSE ]</Text>
+              </HapticPressable>
+            </View>
+            <DonationTerminalPanel
+              sectorId={activeSectorId}
+              onStatus={(line) => {
+                onAppendLog(line);
+              }}
+            />
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
-  scroll: { flex: 1 },
-  scrollContent: { paddingBottom: 12 },
-  title: { marginBottom: 4 },
-  sub: { fontFamily: 'monospace', fontSize: 8, letterSpacing: 0.5, marginBottom: 10 },
-  logPanel: {
-    marginTop: 8,
-    minHeight: LOG_BLOCK_HEIGHT,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.06)',
-    paddingTop: 8,
+  root: {
+    flex: 1,
+    minHeight: 0,
   },
-  logHeader: { marginBottom: 6 },
-  logScroll: { maxHeight: LOG_BLOCK_HEIGHT },
-  logScrollContent: { gap: 2 },
-  logRow: { paddingVertical: 1 },
-  logLine: { fontFamily: 'monospace', fontSize: 7, lineHeight: 11, letterSpacing: 0.3 },
-  deepDiveBtn: { marginTop: 8 },
-  deepDiveSub: {
+  title: { marginBottom: 2, flexShrink: 0 },
+  sub: {
     fontFamily: 'monospace',
     fontSize: 7,
     letterSpacing: 0.4,
-    marginTop: 4,
-    textAlign: 'center',
+    marginBottom: 6,
+    flexShrink: 0,
+  },
+  mapRegion: {
+    height: '40%',
+    minHeight: 120,
+    flexShrink: 0,
+  },
+  influenceRegion: {
+    flex: 1,
+    minHeight: 0,
+    marginTop: 6,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.88)',
+    justifyContent: 'center',
+    padding: 16,
+  },
+  modalCard: {
+    maxHeight: '88%',
+    borderWidth: 1,
+    padding: 12,
+    gap: 8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+  },
+  modalTitle: {
+    fontFamily: 'monospace',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    flex: 1,
+  },
+  closeBtn: {
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  closeBtnText: {
+    fontFamily: 'monospace',
+    fontSize: 7,
+    fontWeight: '700',
   },
 });

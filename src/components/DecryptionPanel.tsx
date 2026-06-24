@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import HapticPressable from './HapticPressable';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import {
   DECRYPTION_COST,
@@ -53,7 +54,7 @@ export default function DecryptionPanel({ onStatus }: DecryptionPanelProps): Rea
               <Text style={styles.cardMeta}>
                 {`COST: ${cost.map((entry) => `${entry.quantity}× ${entry.resourceId}`).join(', ')}`}
               </Text>
-              <Pressable
+              <HapticPressable
                 disabled={!affordable || busyId === item.instanceId}
                 onPress={() => { void handleDecrypt(item.instanceId); }}
                 style={[
@@ -64,7 +65,7 @@ export default function DecryptionPanel({ onStatus }: DecryptionPanelProps): Rea
                 <Text style={styles.actionLabel}>
                   {busyId === item.instanceId ? '[ DECRYPTING... ]' : '[ INITIATE DECRYPTION ]'}
                 </Text>
-              </Pressable>
+              </HapticPressable>
             </View>
           );
         })

@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import HapticPressable from '../../HapticPressable';
 import ConcealSlider from './ConcealSlider';
 import ScavengeBar from './ScavengeBar';
 import GridCipher from './GridCipher';
@@ -48,7 +49,7 @@ function TensionMechanicFallback({
           </Text>
         ) : null}
       </View>
-      <Pressable
+      <HapticPressable
         onPress={onComplete}
         style={({ pressed }) => [
           styles.fallbackCompleteBtn,
@@ -61,7 +62,7 @@ function TensionMechanicFallback({
         <Text style={[styles.fallbackCompleteBtnText, { color: TERMINAL_ACCENT }]}>
           [ COMPLETE PROTOCOL — AUTO SUCCESS ]
         </Text>
-      </Pressable>
+      </HapticPressable>
     </View>
   );
 }

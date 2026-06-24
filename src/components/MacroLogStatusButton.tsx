@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
+import HapticPressable from './HapticPressable';
 import { TERMINAL_ACCENT } from './MacroLogCargoButton';
 
 interface MacroLogStatusButtonProps {
@@ -10,7 +11,7 @@ export default function MacroLogStatusButton({
   onPress,
 }: MacroLogStatusButtonProps): React.JSX.Element {
   return (
-    <Pressable
+    <HapticPressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.btn,
@@ -23,7 +24,7 @@ export default function MacroLogStatusButton({
       accessibilityLabel="Open operative status"
     >
       <Text style={[styles.btnText, { color: TERMINAL_ACCENT }]}>[ STATUS ]</Text>
-    </Pressable>
+    </HapticPressable>
   );
 }
 

@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
+import HapticPressable from './HapticPressable';
 import { useRun } from '../context/RunContext';
 import type { TerminalTheme } from '../types/theme';
 import {
@@ -45,8 +46,8 @@ export default function RunStatusOverlay({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable
+      <HapticPressable style={styles.backdrop} onPress={onClose}>
+        <HapticPressable
           style={[styles.panel, { borderColor: accentColor }]}
           onPress={(e) => e.stopPropagation()}
         >
@@ -83,11 +84,11 @@ export default function RunStatusOverlay({
             )}
           </ScrollView>
 
-          <Pressable onPress={onClose} style={[styles.closeBtn, { borderColor: accentColor }]}>
+          <HapticPressable onPress={onClose} style={[styles.closeBtn, { borderColor: accentColor }]}>
             <Text style={[styles.closeText, { color: accentColor }]}>[ DISMISS ]</Text>
-          </Pressable>
-        </Pressable>
-      </Pressable>
+          </HapticPressable>
+        </HapticPressable>
+      </HapticPressable>
     </Modal>
   );
 }

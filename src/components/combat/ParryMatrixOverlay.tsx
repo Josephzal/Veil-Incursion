@@ -1,12 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import {
-  type GestureResponderEvent,
-  type LayoutChangeEvent,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { type GestureResponderEvent, type LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
+import HapticPressable from '../HapticPressable';
 import {
   Blur,
   Canvas,
@@ -152,7 +146,7 @@ export default function ParryMatrixOverlay({
               </Group>
             </Canvas>
           ) : null}
-          <Pressable style={styles.tapCapture} onPress={handlePress} />
+          <HapticPressable style={styles.tapCapture} onPress={handlePress} />
         </View>
       ) : null}
 

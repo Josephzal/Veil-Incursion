@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import HapticPressable from '../components/HapticPressable';
 import IncursionShell from '../components/IncursionShell';
 import IncursionRunLayout from '../components/IncursionRunLayout';
 import RunEventScreenFrame, { RunEventScreenHeader } from '../components/layout/RunEventScreenFrame';
@@ -97,7 +98,7 @@ export default function ExtractionReviewScreen(): React.JSX.Element {
           footer={(
             <View style={styles.actions}>
               {reviewKind !== 'EMERGENCY_RECALL' ? (
-                <Pressable
+                <HapticPressable
                   onPress={handleContinue}
                   style={({ pressed }) => [
                     styles.actionBtn,
@@ -105,9 +106,9 @@ export default function ExtractionReviewScreen(): React.JSX.Element {
                   ]}
                 >
                   <Text style={[styles.actionText, { color: theme.primaryColor }]}>[ CONTINUE INCURSION ]</Text>
-                </Pressable>
+                </HapticPressable>
               ) : null}
-              <Pressable
+              <HapticPressable
                 onPress={handleExtract}
                 style={({ pressed }) => [
                   styles.actionBtn,
@@ -116,7 +117,7 @@ export default function ExtractionReviewScreen(): React.JSX.Element {
                 ]}
               >
                 <Text style={[styles.actionText, { color: TERMINAL_ACCENT }]}>[ EXTRACT ]</Text>
-              </Pressable>
+              </HapticPressable>
             </View>
           )}
         >

@@ -67,7 +67,9 @@ import {
   equipTacticalFromHub,
   finalizeDescentLoadout,
   HUB_STASH_CAPACITY,
+  returnAllPreRunContainmentToStash as applyReturnAllPreRunContainmentToStash,
   returnCargoItemToHubStash,
+  stageStashItemToCargoContainment,
 } from '../data/hubSafehouseEngine';
 import { depositAllCargoToHubAccount } from '../data/extractionPersistenceEngine';
 import { relocateCargoItem } from '../data/cargoGridEngine';
@@ -273,6 +275,8 @@ interface PlayerAccountContextType {
     col: number,
   ) => { success: boolean; logLine: string };
   returnPreRunCargoToStash: (instanceId: string) => { success: boolean; logLine: string };
+  stageStashItemToPreRunCargo: (itemId: CargoItemId) => { success: boolean; logLine: string };
+  returnAllPreRunContainmentToStash: () => void;
   equipTacticalSlot: (slotIndex: 0 | 1 | 2, itemId: CargoItemId) => { success: boolean; logLine: string };
   clearTacticalSlot: (slotIndex: 0 | 1 | 2) => void;
   purchaseHubContraband: (cargoId: CargoItemId, discountPct?: number) => { success: boolean; logLine: string };
@@ -839,6 +843,50 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
     [updateAccount],
   );
 
+  const stageStashItemToPreRunCargo = useCallback(
+    (itemId: CargoItemId): { success: boolean; logLine: string } => {
+      let success = false;
+      updateAccount((prev) => {
+        const result = stageStashItemToCargoContainment(
+          prev.resourceStash,
+          prev.hubCraftedConsumables,
+          prev.preRunCargo,
+          itemId,
+        );
+        if (!result) return prev;
+        success = true;
+        return {
+          ...prev,
+          resourceStash: result.resourceStash,
+          hubCraftedConsumables: result.hubCraftedConsumables,
+          preRunCargo: result.cargo,
+        };
+      });
+      const label = itemId.replace(/-/g, ' ').toUpperCase();
+      return success
+        ? { success: true, logLine: `>> STASH → PACK — ${label} STAGED FOR PLACEMENT.` }
+        : { success: false, logLine: '>> STAGING REJECTED — STASH EMPTY OR ITEM UNAVAILABLE.' };
+    },
+    [updateAccount],
+  );
+
+  const returnAllPreRunContainmentToStash = useCallback(() => {
+    updateAccount((prev) => {
+      if (prev.preRunCargo.containment.length === 0) return prev;
+      const result = applyReturnAllPreRunContainmentToStash(
+        prev.resourceStash,
+        prev.hubCraftedConsumables,
+        prev.preRunCargo,
+      );
+      return {
+        ...prev,
+        resourceStash: result.resourceStash,
+        hubCraftedConsumables: result.hubCraftedConsumables,
+        preRunCargo: result.cargo,
+      };
+    });
+  }, [updateAccount]);
+
   const equipTacticalSlot = useCallback(
     (slotIndex: 0 | 1 | 2, itemId: CargoItemId): { success: boolean; logLine: string } => {
       let success = false;
@@ -928,14 +976,27 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
   );
 
   const commitDescentLoadout = useCallback((): CargoRunState => {
-    const cargo = finalizeDescentLoadout(account.preRunCargo, account.tacticalLoadout);
+    const returned = applyReturnAllPreRunContainmentToStash(
+      account.resourceStash,
+      account.hubCraftedConsumables,
+      account.preRunCargo,
+    );
+    const cargo = finalizeDescentLoadout(returned.cargo, account.tacticalLoadout);
     updateAccount((prev) => ({
       ...prev,
+      resourceStash: returned.resourceStash,
+      hubCraftedConsumables: returned.hubCraftedConsumables,
       preRunCargo: createDefaultCargoRunState(),
       tacticalLoadout: createDefaultTacticalLoadout(),
     }));
     return cargo;
-  }, [account.preRunCargo, account.tacticalLoadout, updateAccount]);
+  }, [
+    account.hubCraftedConsumables,
+    account.preRunCargo,
+    account.resourceStash,
+    account.tacticalLoadout,
+    updateAccount,
+  ]);
 
   const persistRunExtraction = useCallback(
     (payload: {
@@ -1069,6 +1130,8 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       loadStashResourceToCargo,
       loadStashItemToCargoAtCell,
       returnPreRunCargoToStash,
+      stageStashItemToPreRunCargo,
+      returnAllPreRunContainmentToStash,
       equipTacticalSlot,
       clearTacticalSlot,
       purchaseHubContraband,
@@ -1113,6 +1176,8 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       loadStashResourceToCargo,
       loadStashItemToCargoAtCell,
       returnPreRunCargoToStash,
+      stageStashItemToPreRunCargo,
+      returnAllPreRunContainmentToStash,
       equipTacticalSlot,
       clearTacticalSlot,
       purchaseHubContraband,

@@ -43,18 +43,18 @@ export default function ClassAbilityRoster({
 }
 
 const styles = StyleSheet.create({
-  root: { gap: 6 },
+  root: { gap: 4 },
   header: {
     fontFamily: 'monospace',
-    fontSize: 8,
-    letterSpacing: 1,
+    fontSize: 7,
+    letterSpacing: 0.8,
   },
-  list: { gap: 4 },
+  list: { gap: 2 },
   line: {
     fontFamily: 'monospace',
-    fontSize: 8,
-    letterSpacing: 0.4,
-    lineHeight: 12,
+    fontSize: 7,
+    letterSpacing: 0.3,
+    lineHeight: 9,
   },
   note: {
     fontFamily: 'monospace',

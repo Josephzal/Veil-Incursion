@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import HapticPressable from '../components/HapticPressable';
 import CabalBg from '../../assets/images/location images/cabal.png';
 import IncursionShell from '../components/IncursionShell';
 import IncursionRunLayout from '../components/IncursionRunLayout';
@@ -48,37 +49,22 @@ export default function BoundRequisitionScreen(): React.JSX.Element {
     <IncursionShell>
       <IncursionRunLayout style={{ backgroundColor: theme.backgroundColor }}>
         <RunEventScreenFrame
-          scrollable
+          contentPadding={8}
           backgroundImage={CabalBg}
           header={(
             <RunEventScreenHeader
-              eyebrow="CABAL REQUISITION DESK // PRE-INCURSION LOCK"
               title="BOUND REQUISITION"
               align="left"
               borderColor={theme.borderColor}
-              eyebrowColor={theme.mutedColor}
               titleColor={TERMINAL_ACCENT}
             >
-              <Text style={[styles.levelLine, { color: theme.mutedColor }]}>
-                {`OPERATIVE RANK ${account.operativeRank} // REQUISITION CLEARANCE TIER ${requisitionLevel}`}
-              </Text>
-              <Text style={[styles.instruction, { color: theme.primaryColor }]}>
-                Select one requisition offer. Effects bind for the entire incursion.
+              <Text style={[styles.levelLine, { color: theme.mutedColor }]} numberOfLines={1}>
+                {`RANK ${account.operativeRank} // TIER ${requisitionLevel} // SELECT ONE OFFER`}
               </Text>
               {account.craftedAugments.length > 0 ? (
-                <View style={[styles.forgePassivesBlock, { borderColor: theme.borderColor }]}>
-                  <Text style={[styles.forgePassivesLabel, { color: theme.mutedColor }]}>
-                    FORGE PASSIVES (ALWAYS ACTIVE)
-                  </Text>
-                  {account.craftedAugments.map((augmentId) => {
-                    const def = getBoundRequisitionDefinition(augmentId);
-                    return (
-                      <Text key={augmentId} style={[styles.forgePassiveLine, { color: TERMINAL_ACCENT }]}>
-                        {`>> ${def.name.toUpperCase()} — ${def.effectSummary}`}
-                      </Text>
-                    );
-                  })}
-                </View>
+                <Text style={[styles.forgeLine, { color: TERMINAL_ACCENT }]} numberOfLines={2}>
+                  {`FORGE PASSIVES: ${account.craftedAugments.map((id) => getBoundRequisitionDefinition(id).name).join(' // ')}`}
+                </Text>
               ) : null}
             </RunEventScreenHeader>
           )}
@@ -90,15 +76,16 @@ export default function BoundRequisitionScreen(): React.JSX.Element {
               mutedColor={theme.mutedColor}
               accentColor={theme.primaryColor}
               label="[ LOCK REQUISITION // CONTINUE ]"
+              style={styles.continueBtn}
             />
           )}
         >
-          <View style={styles.choiceCol}>
+          <View style={styles.choiceRow}>
             {boundRequisitionOffers.map((offer) => {
               const isSelected = selectedId === offer.id;
               const isMandate = offer.kind === 'CABAL_MANDATE';
               return (
-                <Pressable
+                <HapticPressable
                   key={offer.id}
                   onPress={() => !confirming && setSelectedId(offer.id)}
                   disabled={confirming}
@@ -111,7 +98,7 @@ export default function BoundRequisitionScreen(): React.JSX.Element {
                     },
                   ]}
                 >
-                  <Text style={[styles.tierTag, { color: theme.mutedColor }]}>
+                  <Text style={[styles.tierTag, { color: theme.mutedColor }]} numberOfLines={1}>
                     {isMandate ? 'CABAL MANDATE' : tierLabel(offer.tier)}
                   </Text>
                   <Text
@@ -119,21 +106,22 @@ export default function BoundRequisitionScreen(): React.JSX.Element {
                       styles.choiceName,
                       { color: isSelected ? TERMINAL_ACCENT : theme.primaryColor },
                     ]}
+                    numberOfLines={2}
                   >
                     {offer.name.toUpperCase()}
                   </Text>
-                  <Text style={[styles.choiceTagline, { color: theme.mutedColor }]}>
+                  <Text style={[styles.choiceTagline, { color: theme.mutedColor }]} numberOfLines={2}>
                     {offer.tagline}
                   </Text>
-                  <Text style={[styles.choiceEffect, { color: theme.primaryColor }]}>
+                  <Text style={[styles.choiceEffect, { color: theme.primaryColor }]} numberOfLines={3}>
                     {offer.effectSummary}
                   </Text>
                   {offer.tradeoffSummary ? (
-                    <Text style={[styles.choiceTradeoff, { color: '#f87171' }]}>
+                    <Text style={[styles.choiceTradeoff, { color: '#f87171' }]} numberOfLines={2}>
                       {`TRADE-OFF: ${offer.tradeoffSummary}`}
                     </Text>
                   ) : null}
-                </Pressable>
+                </HapticPressable>
               );
             })}
           </View>
@@ -146,70 +134,71 @@ export default function BoundRequisitionScreen(): React.JSX.Element {
 const styles = StyleSheet.create({
   levelLine: {
     fontFamily: 'monospace',
-    fontSize: 8,
-    letterSpacing: 0.6,
-    marginTop: 4,
+    fontSize: 7,
+    letterSpacing: 0.5,
+    marginTop: 2,
   },
-  instruction: {
+  forgeLine: {
     fontFamily: 'monospace',
-    fontSize: 9,
-    lineHeight: 14,
+    fontSize: 6,
+    letterSpacing: 0.4,
+    lineHeight: 9,
     marginTop: 4,
   },
-  choiceCol: { gap: 10 },
+  choiceRow: {
+    flex: 1,
+    minHeight: 0,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 8,
+  },
   choiceBtn: {
+    flex: 1,
+    minWidth: 0,
     borderWidth: 1,
     backgroundColor: 'rgba(10, 11, 15, 0.92)',
-    padding: 12,
+    padding: 8,
+    justifyContent: 'flex-start',
   },
   choiceBtnSelected: {
     backgroundColor: 'rgba(14, 22, 36, 0.95)',
   },
   tierTag: {
     fontFamily: 'monospace',
-    fontSize: 7,
-    letterSpacing: 0.8,
-    marginBottom: 4,
+    fontSize: 6,
+    letterSpacing: 0.6,
+    marginBottom: 2,
   },
   choiceName: {
     fontFamily: 'monospace',
-    fontSize: 11,
+    fontSize: 9,
     fontWeight: '700',
-    letterSpacing: 0.6,
-    marginBottom: 4,
+    letterSpacing: 0.4,
+    marginBottom: 2,
+    lineHeight: 11,
   },
   choiceTagline: {
     fontFamily: 'monospace',
-    fontSize: 8,
-    letterSpacing: 0.5,
-    marginBottom: 6,
+    fontSize: 7,
+    letterSpacing: 0.3,
+    marginBottom: 4,
+    lineHeight: 9,
   },
   choiceEffect: {
     fontFamily: 'monospace',
-    fontSize: 9,
-    lineHeight: 14,
+    fontSize: 7,
+    lineHeight: 9,
   },
   choiceTradeoff: {
     fontFamily: 'monospace',
-    fontSize: 8,
-    lineHeight: 13,
-    marginTop: 6,
+    fontSize: 6,
+    lineHeight: 9,
+    marginTop: 4,
   },
-  forgePassivesBlock: {
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    gap: 4,
-  },
-  forgePassivesLabel: {
-    fontFamily: 'monospace',
-    fontSize: 8,
-    letterSpacing: 0.8,
-    marginBottom: 4,
-  },
-  forgePassiveLine: {
-    fontFamily: 'monospace',
-    fontSize: 8,
-    lineHeight: 12,
+  continueBtn: {
+    marginTop: 0,
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 360,
   },
 });

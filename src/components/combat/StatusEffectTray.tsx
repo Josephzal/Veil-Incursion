@@ -1,12 +1,6 @@
 import React, { useCallback, useEffect, useRef } from 'react';
-import {
-  Image,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Image, Modal, StyleSheet, Text, View } from 'react-native';
+import HapticPressable from '../HapticPressable';
 import {
   ENEMY_STATUS_EFFECTS,
   type EnemyStatusEffectDef,
@@ -71,7 +65,7 @@ export default function StatusEffectTray({
         animationType="none"
         onRequestClose={dismissTooltip}
       >
-        <Pressable
+        <HapticPressable
           style={styles.modalScrim}
           onPress={dismissTooltip}
           accessibilityRole="button"
@@ -91,7 +85,7 @@ export default function StatusEffectTray({
           const def = ENEMY_STATUS_EFFECTS[key];
           const selected = tooltipContent?.key === key;
           return (
-            <Pressable
+            <HapticPressable
               key={key}
               onPress={() => showTooltip(def)}
               style={[styles.iconButton, selected ? styles.iconButtonSelected : null]}
@@ -99,7 +93,7 @@ export default function StatusEffectTray({
               accessibilityLabel={`${def.label} status`}
             >
               <Image source={def.icon} style={styles.icon} resizeMode="contain" />
-            </Pressable>
+            </HapticPressable>
           );
         })}
       </View>

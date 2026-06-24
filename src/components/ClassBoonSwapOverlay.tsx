@@ -1,5 +1,6 @@
 import React from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
+import HapticPressable from './HapticPressable';
 import { getClassBoonDisplayName } from '../data/classBoonEngine';
 import type { ClassType } from '../types/game';
 import type { TerminalTheme } from '../types/theme';
@@ -35,8 +36,8 @@ export default function ClassBoonSwapOverlay({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <Pressable style={styles.backdrop} onPress={onCancel}>
-        <Pressable
+      <HapticPressable style={styles.backdrop} onPress={onCancel}>
+        <HapticPressable
           style={[styles.panel, { borderColor: accentColor }]}
           onPress={(e) => e.stopPropagation()}
         >
@@ -52,7 +53,7 @@ export default function ClassBoonSwapOverlay({
 
           <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
             {ownedBoonIds.map((id) => (
-              <Pressable
+              <HapticPressable
                 key={id}
                 onPress={() => onSwap(id)}
                 style={[styles.swapRow, { borderColor: accentColor }]}
@@ -63,17 +64,17 @@ export default function ClassBoonSwapOverlay({
                 <Text style={[styles.swapAction, { color: theme.mutedColor }]}>
                   [ REPLACE WITH INCOMING ]
                 </Text>
-              </Pressable>
+              </HapticPressable>
             ))}
           </ScrollView>
 
-          <Pressable onPress={onCancel} style={[styles.cancelBtn, { borderColor: theme.mutedColor }]}>
+          <HapticPressable onPress={onCancel} style={[styles.cancelBtn, { borderColor: theme.mutedColor }]}>
             <Text style={[styles.cancelText, { color: theme.mutedColor }]}>
               [ DECLINE INCOMING BOON ]
             </Text>
-          </Pressable>
-        </Pressable>
-      </Pressable>
+          </HapticPressable>
+        </HapticPressable>
+      </HapticPressable>
     </Modal>
   );
 }

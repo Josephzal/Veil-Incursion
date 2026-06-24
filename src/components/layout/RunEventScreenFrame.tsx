@@ -9,7 +9,13 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LANDSCAPE_PANEL_PADDING } from '../../constants/landscapeLayout';
+import {
+  resolveImmersiveContentPadding,
+  resolveImmersiveFooterInset,
+  resolveImmersiveHorizontalInset,
+} from '../../constants/immersiveLayout';
 
 interface RunEventScreenHeaderProps {
   eyebrow?: string;
@@ -85,6 +91,14 @@ export default function RunEventScreenFrame({
   scrollContentContainerStyle,
   contentPadding = LANDSCAPE_PANEL_PADDING,
 }: RunEventScreenFrameProps): React.JSX.Element {
+  const insets = useSafeAreaInsets();
+  const horizontal = resolveImmersiveHorizontalInset(insets.left, insets.right);
+  const framePaddingTop = resolveImmersiveContentPadding(insets.top, contentPadding);
+  const footerBottomInset = resolveImmersiveFooterInset(insets.bottom);
+  const framePaddingBottom = footer
+    ? contentPadding
+    : Math.max(contentPadding, footerBottomInset);
+
   const body = scrollable ? (
     <ScrollView
       style={[styles.bodyScroll, bodyStyle]}
@@ -110,10 +124,24 @@ export default function RunEventScreenFrame({
         </>
       ) : null}
 
-      <View style={[styles.frame, { padding: contentPadding }]}>
+      <View
+        style={[
+          styles.frame,
+          {
+            paddingTop: framePaddingTop,
+            paddingBottom: framePaddingBottom,
+            paddingLeft: contentPadding + horizontal.paddingLeft,
+            paddingRight: contentPadding + horizontal.paddingRight,
+          },
+        ]}
+      >
         {header ? <View style={styles.headerSlot}>{header}</View> : null}
         {body}
-        {footer ? <View style={styles.footer}>{footer}</View> : null}
+        {footer ? (
+          <View style={[styles.footer, { paddingBottom: footerBottomInset }]}>
+            {footer}
+          </View>
+        ) : null}
       </View>
 
       {overlay}

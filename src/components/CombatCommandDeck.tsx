@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, ScrollView, StyleSheet, Text, View } from 'react-native';
+import HapticPressable from './HapticPressable';
 import type { AegisAbilityId } from '../types/aegisCombat';
 import { PLAYER_ACTION_POINTS_PER_TURN } from '../types/aegisCombat';
 import CombatApPipRow from './combat/CombatApPipRow';
@@ -38,6 +39,7 @@ interface CombatCommandDeckProps {
   onInitiativeProcComplete?: () => void;
   getStagedHeader: (ability: string) => string;
   getStagedCostImpact: (ability: string) => string;
+  getStagedAbilityDescription: (ability: string) => string;
   getActionAccent?: (ability: string) => string | undefined;
   bloodForTimeAvailable?: boolean;
   bloodForTimeEnabled?: boolean;
@@ -70,6 +72,7 @@ export default function CombatCommandDeck({
   onInitiativeProcComplete,
   getStagedHeader,
   getStagedCostImpact,
+  getStagedAbilityDescription,
   getActionAccent,
   bloodForTimeAvailable = false,
   bloodForTimeEnabled = false,
@@ -236,7 +239,7 @@ export default function CombatCommandDeck({
           },
         ]}
       >
-        <Pressable
+        <HapticPressable
           onPress={() => enabled && onSelectAbility(ability)}
           disabled={!enabled}
           style={[styles.deckTile, { opacity: enabled ? 1 : 0.4 }]}
@@ -253,7 +256,7 @@ export default function CombatCommandDeck({
           >
             {labelFor(ability)}
           </Text>
-        </Pressable>
+        </HapticPressable>
       </View>
     );
   };
@@ -272,7 +275,7 @@ export default function CombatCommandDeck({
           },
         ]}
       >
-        <Pressable
+        <HapticPressable
           onPress={onEndTurn}
           disabled={!canEndTurn}
           style={styles.endTurnPressable}
@@ -280,10 +283,10 @@ export default function CombatCommandDeck({
           <Text style={[styles.endTurnLabel, { color: INITIATIVE_GLOW_PALE }]}>
             [ END TURN ]
           </Text>
-        </Pressable>
+        </HapticPressable>
       </Animated.View>
     ) : (
-      <Pressable
+      <HapticPressable
         onPress={onEndTurn}
         disabled={!canEndTurn}
         style={[
@@ -298,14 +301,14 @@ export default function CombatCommandDeck({
         <Text style={[styles.endTurnLabel, { color: canEndTurn ? primaryColor : mutedColor }]}>
           [ END TURN ]
         </Text>
-      </Pressable>
+      </HapticPressable>
     )
   );
 
   const renderCombatReloadButton = () => {
     if (!combatReloadAvailable) return null;
     return (
-      <Pressable
+      <HapticPressable
         onPress={onCombatReload}
         disabled={!combatReloadEnabled}
         style={[
@@ -327,7 +330,7 @@ export default function CombatCommandDeck({
         >
           [ RELOAD ]
         </Text>
-      </Pressable>
+      </HapticPressable>
     );
   };
 
@@ -336,7 +339,7 @@ export default function CombatCommandDeck({
     return (
       <View style={styles.secondaryActionsRow}>
         {bloodForTimeAvailable ? (
-          <Pressable
+          <HapticPressable
             onPress={onBloodForTime}
             disabled={!bloodForTimeEnabled}
             style={[
@@ -353,7 +356,7 @@ export default function CombatCommandDeck({
             >
               [ BLOOD FOR TIME ]
             </Text>
-          </Pressable>
+          </HapticPressable>
         ) : null}
       </View>
     );
@@ -372,18 +375,18 @@ export default function CombatCommandDeck({
         <View style={styles.execOverlay}>
           <View style={styles.gridRow}>
             <View style={[styles.tileSlot, { borderColor: primaryColor, height: tileHeight }]}>
-              <Pressable
+              <HapticPressable
                 onPress={onConfirm}
                 disabled={!canExecute}
                 style={[styles.deckTile, { opacity: canExecute ? 1 : 0.45 }]}
               >
                 <Text style={[styles.tileLabel, { color: primaryColor }]}>[ EXECUTE ]</Text>
-              </Pressable>
+              </HapticPressable>
             </View>
             <View style={[styles.tileSlot, { borderColor, height: tileHeight }]}>
-              <Pressable onPress={onAbort} style={styles.deckTile}>
+              <HapticPressable onPress={onAbort} style={styles.deckTile}>
                 <Text style={[styles.tileLabel, { color: mutedColor }]}>[ ABORT ]</Text>
-              </Pressable>
+              </HapticPressable>
             </View>
           </View>
           <View style={styles.gridRow}>
@@ -391,9 +394,19 @@ export default function CombatCommandDeck({
               <Text style={[styles.execHeader, { color: primaryColor }]} numberOfLines={1}>
                 {getStagedHeader(selectedAbility)}
               </Text>
-              <Text style={[styles.execDetail, { color: mutedColor }]} numberOfLines={2}>
+              <Text style={[styles.execCost, { color: mutedColor }]}>
                 {getStagedCostImpact(selectedAbility)}
               </Text>
+              <ScrollView
+                style={styles.execDetailScroll}
+                contentContainerStyle={styles.execDetailScrollContent}
+                showsVerticalScrollIndicator={false}
+                nestedScrollEnabled
+              >
+                <Text style={[styles.execDetail, { color: mutedColor }]}>
+                  {getStagedAbilityDescription(selectedAbility)}
+                </Text>
+              </ScrollView>
             </View>
           </View>
         </View>
@@ -466,7 +479,7 @@ export default function CombatCommandDeck({
                 <View style={styles.apActions}>
                   {renderCombatReloadButton()}
                   {bloodForTimeAvailable ? (
-                    <Pressable
+                    <HapticPressable
                       onPress={onBloodForTime}
                       disabled={!bloodForTimeEnabled}
                       style={[
@@ -483,7 +496,7 @@ export default function CombatCommandDeck({
                       >
                         [ BLOOD FOR TIME ]
                       </Text>
-                    </Pressable>
+                    </HapticPressable>
                   ) : null}
                   {renderEndTurnButton()}
                 </View>
@@ -699,8 +712,8 @@ const styles = StyleSheet.create({
   },
   execMetaSlot: {
     flex: 1,
-    height: TILE_HEIGHT,
-    justifyContent: 'center',
+    minHeight: 0,
+    justifyContent: 'flex-start',
     paddingHorizontal: 4,
     gap: 2,
   },
@@ -709,6 +722,21 @@ const styles = StyleSheet.create({
     fontSize: 7,
     fontWeight: 'bold',
     letterSpacing: 0.4,
+    flexShrink: 0,
+  },
+  execCost: {
+    fontFamily: MONO,
+    fontSize: 6,
+    letterSpacing: 0.2,
+    lineHeight: 9,
+    flexShrink: 0,
+  },
+  execDetailScroll: {
+    flex: 1,
+    minHeight: 0,
+  },
+  execDetailScrollContent: {
+    paddingBottom: 4,
   },
   execDetail: {
     fontFamily: MONO,

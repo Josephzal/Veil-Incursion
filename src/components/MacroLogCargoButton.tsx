@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
+import HapticPressable from './HapticPressable';
 import { TACTICAL_HUB_STACKED_RIGHT_INSET } from '../constants/combatLayout';
 
 export const TERMINAL_ACCENT = '#00ff33';
@@ -15,7 +16,7 @@ export default function MacroLogCargoButton({
   onPress,
 }: MacroLogCargoButtonProps): React.JSX.Element {
   return (
-    <Pressable
+    <HapticPressable
       onPress={onPress}
       disabled={disabled}
       style={({ pressed }) => [
@@ -31,7 +32,7 @@ export default function MacroLogCargoButton({
       <Text style={[styles.btnText, { color: TERMINAL_ACCENT }]}>
         {disabled ? '[ CARGO LOCKED ]' : '[ CARGO ]'}
       </Text>
-    </Pressable>
+    </HapticPressable>
   );
 }
 

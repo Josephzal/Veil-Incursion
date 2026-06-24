@@ -234,6 +234,16 @@ export function clampExpandedMapTranslation(
   };
 }
 
+export function splitSectorLabelLines(label: string): string[] {
+  const words = label.toUpperCase().split(/\s+/).filter(Boolean);
+  if (words.length <= 2) return [words.join(' ')];
+  const mid = Math.ceil(words.length / 2);
+  return [
+    words.slice(0, mid).join(' '),
+    words.slice(mid).join(' '),
+  ];
+}
+
 export interface MapDrawMetrics {
   scale: number;
   offsetX: number;
