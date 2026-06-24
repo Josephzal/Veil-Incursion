@@ -872,20 +872,6 @@ export default function TacticalCombatHub({
           accent: '#ff1744',
         };
       }
-    } else if (operativeClass === 'ENVOY' && !cataclysmReadyUi && veilFlux > 0) {
-      const required = 3;
-      const current = Math.min(
-        required,
-        Math.floor(veilFlux / (ENVOY_FLUX_ULTIMATE_THRESHOLD / required)),
-      );
-      if (current > 0) {
-        return {
-          visible: true,
-          current,
-          required,
-          accent: '#a78bfa',
-        };
-      }
     }
     return {
       visible: false,
@@ -897,8 +883,6 @@ export default function TacticalCombatHub({
     operativeClass,
     perfectReloadCount,
     successfulParryCount,
-    cataclysmReadyUi,
-    veilFlux,
   ]);
   const strikeWardPrimed = strikeArPrimed || wardStrikeBonusRef.current;
 
