@@ -648,6 +648,7 @@ export default function TacticalCombatHub({
   const preAppliedHpStrikeRef = useRef(0);
   const enemyStunPendingRef = useRef(false);
   const hitFlashSeqRef = useRef<Record<string, number>>({});
+  const classImpactFxRef = useRef<Record<string, { seq: number; kind: import('../utils/combatTelemetryFormat').CombatClassImpactKind }>>({});
   const critImpactSeqRef = useRef<Record<string, { seq: number; channel: 'KINETIC' | 'OCCULT' | 'TRUE' }>>({});
   const evadeImpactSeqRef = useRef<Record<string, number>>({});
   const statusFloatSeqRef = useRef<Record<string, number>>({});
@@ -1198,6 +1199,8 @@ export default function TacticalCombatHub({
           immuneFloatSeq: sessionExtrasRef.current.immunePopupSeq[unitId] ?? 0,
           immuneFloatLabel: (sessionExtrasRef.current.immunePopupSeq[unitId] ?? 0) > 0 ? 'IMMUNE' : undefined,
           hitFlashSeq: hitFlashSeqRef.current[unitId] ?? 0,
+          classImpactFxSeq: classImpactFxRef.current[unitId]?.seq ?? 0,
+          classImpactFxKind: classImpactFxRef.current[unitId]?.kind,
           isEnraged: u.isEnraged ?? false,
           dissolveSeq: dissolveSeqRef.current[unitId] ?? 0,
           dissolveHidden: dissolvedHiddenRef.current.has(unitId),
@@ -2575,6 +2578,15 @@ export default function TacticalCombatHub({
         log(`>> HOOK WEAVER TETHER — ${penalty} stamina siphoned.`);
       }
       hitFlashSeqRef.current[e.unitId] = (hitFlashSeqRef.current[e.unitId] ?? 0) + 1;
+      if (source && !options?.indirectDamage && !options?.echoHit) {
+        const impactKind = operativeClass === 'AEGIS'
+          ? 'AEGIS_SLICE' as const
+          : operativeClass === 'HEX_SHOT'
+            ? 'HEX_BULLET' as const
+            : 'ENVOY_BURST' as const;
+        const prevImpact = classImpactFxRef.current[e.unitId]?.seq ?? 0;
+        classImpactFxRef.current[e.unitId] = { seq: prevImpact + 1, kind: impactKind };
+      }
       Vibration.vibrate(18);
       if (equippedBlueprintId) {
         const hitResult = runOnHitHooks(equippedBlueprintId, {

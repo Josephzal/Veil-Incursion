@@ -7,6 +7,8 @@ import { resolveActiveEnemyStatuses, type EnemyStatusEffectKey } from './enemySt
 
 export type { EnemyStatusEffectKey } from './enemyStatusEffects';
 
+export type CombatClassImpactKind = 'AEGIS_SLICE' | 'HEX_BULLET' | 'ENVOY_BURST';
+
 export const GAUGE_SOUL_ANCHOR = '#FF453A';
 export const GAUGE_ABYSSAL = '#00D2C4';
 export const GAUGE_MAGAZINE = '#fbbf24';
@@ -238,6 +240,9 @@ export interface CombatGridUnitSnapshot {
   immuneFloatLabel?: string;
   /** Increments when the operative deals HP damage to this unit (drives hit flash). */
   hitFlashSeq?: number;
+  /** Direct player hit class VFX — Aegis slice, Hex bullet, Envoy burst. */
+  classImpactFxSeq?: number;
+  classImpactFxKind?: CombatClassImpactKind;
   /** Increments on eradication — drives dissolve VFX before removal. */
   dissolveSeq?: number;
   /** True once dissolve animation finished — hide from grid. */

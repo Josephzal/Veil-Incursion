@@ -5,6 +5,7 @@ import type { CombatGridUnitSnapshot } from '../../utils/combatTelemetryFormat';
 import { ENEMY_HITBOX_DEBUG } from './combatEnemyBarLayout';
 import CombatEnemyAnchorMotion from './CombatEnemyAnchorMotion';
 import CombatEnemyCritImpact from './CombatEnemyCritImpact';
+import CombatEnemyClassImpact from './CombatEnemyClassImpact';
 import CombatEnemyCritLabel from './CombatEnemyCritLabel';
 import CombatEnemyEvadeLabel from './CombatEnemyEvadeLabel';
 import CombatFloatingStatusText from './CombatFloatingStatusText';
@@ -111,23 +112,28 @@ export default function CombatEnemyUnit({
                 channel={unit.critImpactChannel}
                 onHitStopChange={handleHitStopChange}
               >
-                <CombatEnemyHitEffect
-                  hitFlashSeq={unit.hitFlashSeq}
-                  portraitSource={unit.portraitSource}
+                <CombatEnemyClassImpact
+                  impactFxSeq={unit.classImpactFxSeq}
+                  impactFxKind={unit.classImpactFxKind}
                 >
-                  <CombatSilhouetteShatterEffect trigger={fractured} portraitSource={unit.portraitSource}>
-                    <CombatEnemyPortraitSkia
-                      source={unit.portraitSource}
-                      attackSource={unit.attackPortraitSource}
-                      turnPhase={unit.turnPhase ?? null}
-                      backlineDashSeq={unit.backlineMeleeDashSeq ?? 0}
-                      isBacklineDashing={unit.isBacklineDashing === true}
-                      glow={portraitGlow}
-                      intentShimmer={unit.intentShimmer ?? null}
-                      isEnraged={unit.isEnraged === true}
-                    />
-                  </CombatSilhouetteShatterEffect>
-                </CombatEnemyHitEffect>
+                  <CombatEnemyHitEffect
+                    hitFlashSeq={unit.hitFlashSeq}
+                    portraitSource={unit.portraitSource}
+                  >
+                    <CombatSilhouetteShatterEffect trigger={fractured} portraitSource={unit.portraitSource}>
+                      <CombatEnemyPortraitSkia
+                        source={unit.portraitSource}
+                        attackSource={unit.attackPortraitSource}
+                        turnPhase={unit.turnPhase ?? null}
+                        backlineDashSeq={unit.backlineMeleeDashSeq ?? 0}
+                        isBacklineDashing={unit.isBacklineDashing === true}
+                        glow={portraitGlow}
+                        intentShimmer={unit.intentShimmer ?? null}
+                        isEnraged={unit.isEnraged === true}
+                      />
+                    </CombatSilhouetteShatterEffect>
+                  </CombatEnemyHitEffect>
+                </CombatEnemyClassImpact>
               </CombatEnemyCritImpact>
             </View>
 
