@@ -1,9 +1,9 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import TerminalResultsLayout from '../components/layout/TerminalResultsLayout';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
-import PersistentTerminalLog from '../components/PersistentTerminalLog';
 import TerminalSafeArea from '../components/TerminalSafeArea';
 import { formatTimeAliveMmSs } from '../types/runDeathSummary';
 
@@ -14,10 +14,6 @@ export default function GameOverScreen(): React.JSX.Element {
   const { deathSummary } = useRun();
   const { goToHub } = useGameFlow();
 
-  const handleReturn = () => {
-    goToHub();
-  };
-
   const timeAlive = deathSummary
     ? formatTimeAliveMmSs(deathSummary.timeAliveMs)
     : '--:--';
@@ -27,62 +23,65 @@ export default function GameOverScreen(): React.JSX.Element {
 
   return (
     <TerminalSafeArea>
-      <View style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.title}>INCURSION FAILED</Text>
-        <Text style={[styles.subtitle, { color: TERMINAL_ACCENT }]}>GAME OVER // SOUL ANCHOR SEVERED</Text>
-        <Text style={[styles.body, { color: theme.mutedColor }]}>
-          Operative link to the urban ley-grid has collapsed. All run progress has been purged from the terminal matrix.
-        </Text>
-
-        <View style={[styles.statsPanel, { borderColor: theme.borderColor }]}>
-          <View style={styles.statRow}>
-            <Text style={[styles.statLabel, { color: theme.mutedColor }]}>TIME ALIVE</Text>
-            <Text style={[styles.statValue, { color: theme.primaryColor }]}>{timeAlive}</Text>
-          </View>
-          <View style={styles.statRow}>
-            <Text style={[styles.statLabel, { color: theme.mutedColor }]}>CAUSE OF DEATH</Text>
-            <Text style={[styles.statValue, { color: TERMINAL_ACCENT }]} numberOfLines={2}>
-              {causeOfDeath.toUpperCase()}
+      <TerminalResultsLayout
+        accentBorderColor={`${TERMINAL_ACCENT}55`}
+        narrative={(
+          <>
+            <Text style={styles.title}>INCURSION FAILED</Text>
+            <Text style={[styles.subtitle, { color: TERMINAL_ACCENT }]}>
+              GAME OVER // SOUL ANCHOR SEVERED
             </Text>
+            <Text style={[styles.body, { color: theme.mutedColor }]}>
+              Operative link to the urban ley-grid has collapsed. All run progress has been purged from the terminal matrix.
+            </Text>
+          </>
+        )}
+        summary={(
+          <View style={[styles.statsPanel, { borderColor: theme.borderColor }]}>
+            <View style={styles.statRow}>
+              <Text style={[styles.statLabel, { color: theme.mutedColor }]}>TIME ALIVE</Text>
+              <Text style={[styles.statValue, { color: theme.primaryColor }]}>{timeAlive}</Text>
+            </View>
+            <View style={styles.statRow}>
+              <Text style={[styles.statLabel, { color: theme.mutedColor }]}>CAUSE OF DEATH</Text>
+              <Text style={[styles.statValue, { color: TERMINAL_ACCENT }]} numberOfLines={3}>
+                {causeOfDeath.toUpperCase()}
+              </Text>
+            </View>
+            <View style={styles.statRow}>
+              <Text style={[styles.statLabel, { color: theme.mutedColor }]}>SECTOR NODE</Text>
+              <Text style={[styles.statValue, { color: theme.primaryColor }]}>{sectorNode}</Text>
+            </View>
+            <View style={styles.statRow}>
+              <Text style={[styles.statLabel, { color: theme.mutedColor }]}>DEPTH</Text>
+              <Text style={[styles.statValue, { color: theme.primaryColor }]}>{depthLabel}</Text>
+            </View>
           </View>
-          <View style={styles.statRow}>
-            <Text style={[styles.statLabel, { color: theme.mutedColor }]}>SECTOR NODE</Text>
-            <Text style={[styles.statValue, { color: theme.primaryColor }]}>{sectorNode}</Text>
-          </View>
-          <View style={styles.statRow}>
-            <Text style={[styles.statLabel, { color: theme.mutedColor }]}>DEPTH</Text>
-            <Text style={[styles.statValue, { color: theme.primaryColor }]}>{depthLabel}</Text>
-          </View>
-        </View>
-
-        <Pressable
-          onPress={handleReturn}
-          style={({ pressed }) => [
-            styles.button,
-            { borderColor: TERMINAL_ACCENT, backgroundColor: pressed ? '#1a0a0a' : '#0e1624' },
-          ]}
-        >
-          <Text style={styles.buttonLabel}>[ RETURN TO TERMINAL ]</Text>
-        </Pressable>
-      </View>
-
-      <PersistentTerminalLog />
-      </View>
+        )}
+        footer={(
+          <Pressable
+            onPress={goToHub}
+            style={({ pressed }) => [
+              styles.button,
+              { borderColor: TERMINAL_ACCENT, backgroundColor: pressed ? '#1a0a0a' : '#0e1624' },
+            ]}
+          >
+            <Text style={styles.buttonLabel}>[ RETURN TO TERMINAL ]</Text>
+          </Pressable>
+        )}
+      />
     </TerminalSafeArea>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { flex: 1, paddingHorizontal: 24, justifyContent: 'center' },
   title: {
     fontFamily: 'monospace',
     fontSize: 22,
     fontWeight: '700',
     letterSpacing: 2,
     textAlign: 'center',
-    color: '#ef4444',
+    color: TERMINAL_ACCENT,
     marginBottom: 10,
   },
   subtitle: {
@@ -97,14 +96,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 17,
     textAlign: 'center',
-    marginBottom: 20,
   },
   statsPanel: {
     borderWidth: 1,
     padding: 14,
     gap: 10,
-    marginBottom: 20,
-    backgroundColor: 'rgba(5, 6, 8, 0.92)',
+    backgroundColor: 'rgba(10, 11, 15, 0.88)',
   },
   statRow: {
     flexDirection: 'row',
@@ -126,12 +123,16 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     flex: 1,
   },
-  button: { borderWidth: 2, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
+  button: {
+    borderWidth: 2,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
   buttonLabel: {
     fontFamily: 'monospace',
     fontSize: 12,
     fontWeight: '700',
-    color: '#ef4444',
+    color: TERMINAL_ACCENT,
     letterSpacing: 1.2,
   },
 });

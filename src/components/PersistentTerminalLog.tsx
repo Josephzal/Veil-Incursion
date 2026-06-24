@@ -9,7 +9,7 @@ import { useTerminal } from '../context/TerminalContext';
 const LOG_SURFACE = '#0a0b0f';
 const MACRO_LOG_HORIZONTAL_PADDING = 12;
 
-/** Fixed macro log footprint shared across combat, checkpoint, and scanner screens. */
+/** Fixed macro log height when not using fillRemaining (legacy docked mode). Combat dashboard uses fillRemaining. */
 export const MACRO_LOG_BLOCK_HEIGHT = 110;
 const SCROLL_CONTENT_PADDING_BOTTOM = 24;
 const SCROLL_CONTENT_PADDING_BOTTOM_DASHBOARD = 2;

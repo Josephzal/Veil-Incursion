@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import IncursionShell from '../components/IncursionShell';
-import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
+import IncursionRunLayout from '../components/IncursionRunLayout';
+import LandscapeSplitPane from '../components/layout/LandscapeSplitPane';
+import { LANDSCAPE_PANEL_PADDING } from '../constants/landscapeLayout';
 import { AMBUSH_ENCOUNTERS_ENABLED } from '../data/featureFlags';
 import { useRun } from '../context/RunContext';
 import { useGameFlow } from '../context/GameFlowContext';
@@ -150,70 +152,202 @@ export default function SkillCheckScreen(): React.JSX.Element {
 
   const flickerOpacity = flickerAnim.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] });
 
+  const narrativePane = (
+    <View style={[styles.narrativeBox, { borderColor: theme.borderColor, backgroundColor: '#0d0f14' }]}>
+      <Text style={[styles.narrativeLabel, { color: theme.mutedColor }]}>MACRO EVENT</Text>
+      <Text style={[styles.narrativeText, { color: theme.primaryColor }]}>{event.narrative}</Text>
+    </View>
+  );
+
+  const calibrationPane = (
+    <View style={styles.calibrationPane}>
+      <Animated.View
+        style={[
+          styles.calibrationBox,
+          { borderColor: TERMINAL_ACCENT, opacity: phase === 'LOCKED' ? 1 : flickerOpacity },
+        ]}
+      >
+        <Text style={styles.calibrationLabel}>RIFT INTERFERENCE CALIBRATION</Text>
+        <Text style={[styles.calibrationHint, { color: theme.mutedColor }]}>
+          {phase === 'READY'
+            ? 'Tap to engage pinball lock sequence'
+            : phase === 'PINBALL'
+              ? 'Calibrating...'
+              : `Locked: ${calibrationValue}%`}
+        </Text>
+
+        <View style={[styles.sliderTrack, { borderColor: theme.borderColor }]}>
+          <View
+            style={[
+              styles.sliderFill,
+              {
+                width: `${calibrationValue}%`,
+                backgroundColor:
+                  resultFlash?.includes('SUCCESS') || resultFlash?.includes('CRITICAL SUCCESS')
+                    ? TERMINAL_ACCENT
+                    : resultFlash
+                      ? '#ef4444'
+                      : TERMINAL_ACCENT,
+              },
+            ]}
+          />
+          <View style={[styles.sliderPin, { left: `${Math.min(calibrationValue, 96)}%` }]} />
+        </View>
+
+        {phase === 'READY' ? (
+          <Pressable
+            onPress={handleCalibrate}
+            style={[styles.calibrateButton, { borderColor: TERMINAL_ACCENT }]}
+          >
+            <Text style={styles.calibrateButtonText}>[ ENGAGE CALIBRATION ]</Text>
+          </Pressable>
+        ) : null}
+      </Animated.View>
+
+      {resultFlash ? (
+        <Text
+          style={[
+            styles.resultFlash,
+            {
+              color:
+                resultFlash.includes('FAILURE') || resultFlash.includes('DE-SYNC')
+                  ? '#ef4444'
+                  : TERMINAL_ACCENT,
+            },
+          ]}
+        >
+          {resultFlash}
+        </Text>
+      ) : null}
+    </View>
+  );
+
   return (
     <IncursionShell>
-      <MacroLogAnchoredLayout
-        showMacroLog={runState.runActive}
-        style={{ backgroundColor: theme.backgroundColor }}
-      >
+      <IncursionRunLayout style={{ backgroundColor: theme.backgroundColor }}>
         <View style={styles.container}>
-      <View style={[styles.header, { borderColor: theme.borderColor }]}>
-        <Text style={[styles.headerText, { color: theme.mutedColor }]}>
-          NODE {runState.currentNode + 1}/{runState.totalNodes} // SIGNAL CALIBRATION MATRIX
-        </Text>
-      </View>
-
-      <View style={styles.content}>
-        <View style={[styles.narrativeBox, { borderColor: theme.borderColor, backgroundColor: '#0d0f14' }]}>
-          <Text style={[styles.narrativeLabel, { color: theme.mutedColor }]}>MACRO EVENT</Text>
-          <Text style={[styles.narrativeText, { color: theme.primaryColor }]}>{event.narrative}</Text>
-        </View>
-
-        <Animated.View style={[styles.calibrationBox, { borderColor: TERMINAL_ACCENT, opacity: phase === 'LOCKED' ? 1 : flickerOpacity }]}>
-          <Text style={styles.calibrationLabel}>RIFT INTERFERENCE CALIBRATION</Text>
-          <Text style={[styles.calibrationHint, { color: theme.mutedColor }]}>
-            {phase === 'READY' ? 'Tap to engage pinball lock sequence' : phase === 'PINBALL' ? 'Calibrating...' : `Locked: ${calibrationValue}%`}
-          </Text>
-
-          <View style={[styles.sliderTrack, { borderColor: theme.borderColor }]}>
-            <View style={[styles.sliderFill, { width: `${calibrationValue}%`, backgroundColor: resultFlash?.includes('SUCCESS') || resultFlash?.includes('CRITICAL SUCCESS') ? TERMINAL_ACCENT : resultFlash ? '#ef4444' : TERMINAL_ACCENT }]} />
-            <View style={[styles.sliderPin, { left: `${Math.min(calibrationValue, 96)}%` }]} />
+          <View style={[styles.header, { borderColor: theme.borderColor }]}>
+            <Text style={[styles.headerText, { color: theme.mutedColor }]}>
+              NODE {runState.currentNode + 1}/{runState.totalNodes} // SIGNAL CALIBRATION MATRIX
+            </Text>
           </View>
 
-          {phase === 'READY' && (
-            <Pressable onPress={handleCalibrate} style={[styles.calibrateButton, { borderColor: TERMINAL_ACCENT }]}>
-              <Text style={styles.calibrateButtonText}>[ ENGAGE CALIBRATION ]</Text>
-            </Pressable>
-          )}
-        </Animated.View>
-
-        {resultFlash && (
-          <Text style={[styles.resultFlash, { color: resultFlash.includes('FAILURE') || resultFlash.includes('DE-SYNC') ? '#ef4444' : TERMINAL_ACCENT }]}>
-            {resultFlash}
-          </Text>
-        )}
-      </View>
+          <LandscapeSplitPane
+            style={styles.splitBody}
+            primary={narrativePane}
+            secondary={calibrationPane}
+            primaryStyle={styles.splitPrimary}
+            secondaryStyle={styles.splitSecondary}
+          />
         </View>
-      </MacroLogAnchoredLayout>
+      </IncursionRunLayout>
     </IncursionShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: { borderBottomWidth: 1, paddingVertical: 10, paddingHorizontal: 16 },
-  headerText: { fontFamily: 'monospace', fontSize: 9, letterSpacing: 1.2, textAlign: 'center' },
-  content: { flex: 1, paddingHorizontal: 20, paddingTop: 16 },
-  narrativeBox: { borderWidth: 1, padding: 14, marginBottom: 20 },
-  narrativeLabel: { fontFamily: 'monospace', fontSize: 8, letterSpacing: 1.4, marginBottom: 8 },
-  narrativeText: { fontFamily: 'monospace', fontSize: 11, lineHeight: 17 },
-  calibrationBox: { borderWidth: 2, padding: 16, backgroundColor: '#0a0b0f' },
-  calibrationLabel: { fontFamily: 'monospace', fontSize: 11, fontWeight: '700', color: TERMINAL_ACCENT, letterSpacing: 1, marginBottom: 8 },
-  calibrationHint: { fontFamily: 'monospace', fontSize: 9, marginBottom: 16 },
-  sliderTrack: { height: 20, borderWidth: 1, backgroundColor: '#050608', position: 'relative', marginBottom: 16, overflow: 'hidden' },
+  container: {
+    flex: 1,
+    minHeight: 0,
+  },
+  header: {
+    borderBottomWidth: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    flexShrink: 0,
+  },
+  headerText: {
+    fontFamily: 'monospace',
+    fontSize: 9,
+    letterSpacing: 1.2,
+    textAlign: 'center',
+  },
+  splitBody: {
+    flex: 1,
+    minHeight: 0,
+    padding: LANDSCAPE_PANEL_PADDING,
+  },
+  splitPrimary: {
+    minHeight: 0,
+    justifyContent: 'center',
+  },
+  splitSecondary: {
+    minHeight: 0,
+    justifyContent: 'center',
+  },
+  narrativeBox: {
+    flex: 1,
+    borderWidth: 1,
+    padding: 14,
+    justifyContent: 'center',
+  },
+  narrativeLabel: {
+    fontFamily: 'monospace',
+    fontSize: 8,
+    letterSpacing: 1.4,
+    marginBottom: 8,
+  },
+  narrativeText: {
+    fontFamily: 'monospace',
+    fontSize: 11,
+    lineHeight: 17,
+  },
+  calibrationPane: {
+    flex: 1,
+    minHeight: 0,
+    justifyContent: 'center',
+    gap: 12,
+  },
+  calibrationBox: {
+    borderWidth: 2,
+    padding: 16,
+    backgroundColor: '#0a0b0f',
+  },
+  calibrationLabel: {
+    fontFamily: 'monospace',
+    fontSize: 11,
+    fontWeight: '700',
+    color: TERMINAL_ACCENT,
+    letterSpacing: 1,
+    marginBottom: 8,
+  },
+  calibrationHint: {
+    fontFamily: 'monospace',
+    fontSize: 9,
+    marginBottom: 16,
+  },
+  sliderTrack: {
+    height: 20,
+    borderWidth: 1,
+    backgroundColor: '#050608',
+    position: 'relative',
+    marginBottom: 16,
+    overflow: 'hidden',
+  },
   sliderFill: { height: '100%', opacity: 0.35 },
-  sliderPin: { position: 'absolute', top: 2, width: 4, height: 14, backgroundColor: '#ffffff' },
-  calibrateButton: { borderWidth: 2, paddingVertical: 12, alignItems: 'center' },
-  calibrateButtonText: { fontFamily: 'monospace', fontSize: 11, fontWeight: '700', color: TERMINAL_ACCENT },
-  resultFlash: { fontFamily: 'monospace', fontSize: 14, fontWeight: '700', textAlign: 'center', marginTop: 20, letterSpacing: 1.5 },
+  sliderPin: {
+    position: 'absolute',
+    top: 2,
+    width: 4,
+    height: 14,
+    backgroundColor: '#ffffff',
+  },
+  calibrateButton: {
+    borderWidth: 2,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  calibrateButtonText: {
+    fontFamily: 'monospace',
+    fontSize: 11,
+    fontWeight: '700',
+    color: TERMINAL_ACCENT,
+  },
+  resultFlash: {
+    fontFamily: 'monospace',
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'center',
+    letterSpacing: 1.5,
+  },
 });

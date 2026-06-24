@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Image, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import ResourceHarvestBg from '../../assets/images/location images/resource_harvest.png';
 import CargoPackingPanel from '../components/CargoPackingPanel';
 import ResidueParticle from '../components/harvest/ResidueParticle';
@@ -8,7 +8,8 @@ import VeilVacuumCanisterStack, {
 } from '../components/harvest/VeilVacuumCanisterStack';
 import { CARGO_GRID_FRAME_HEIGHT } from '../components/CargoGridBoard';
 import IncursionShell from '../components/IncursionShell';
-import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
+import IncursionRunLayout from '../components/IncursionRunLayout';
+import RunEventScreenFrame from '../components/layout/RunEventScreenFrame';
 import { MAX_RUN_CANISTER_RESIDUE } from '../constants/veilResidue';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
@@ -262,80 +263,66 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
 
   return (
     <IncursionShell>
-      <MacroLogAnchoredLayout
-        showMacroLog={runState.runActive}
-        style={{ backgroundColor: theme.backgroundColor }}
-      >
-        <View style={styles.screenBody} pointerEvents="box-none">
-          <Image source={ResourceHarvestBg} style={styles.backgroundImage} resizeMode="cover" />
-          <View style={styles.backgroundScrim} pointerEvents="none" />
-
-          <View style={styles.contentForegroundPack} pointerEvents="box-none">
-            <CargoPackingPanel
-              cargo={displayCargo}
-              theme={theme}
-              onRelocateItem={relocateCargoItem}
-              onDiscardItem={discardCargoInstance}
-              showCreditsHud={false}
-              onContinue={handlePackingContinue}
-              continueLabel={
-                activeIncursion.pendingHarvestReturn === 'RESOURCE_CACHE'
-                  ? '[ CONTINUE TO GRID ]'
-                  : '[ CONTINUE RUN ]'
-              }
-              onHarvestFloorMeasured={handleHarvestFloorMeasured}
-              fixedExternalSlotCount={fixedExternalSlotCount}
-              resolveContainmentSlotIndex={resolveContainmentSlotIndex}
-              harvestLayout
-              hideContinueButton
-              gridSidecar={(
-                <VeilVacuumCanisterStack
-                  ref={canisterRef}
-                  harvestPercentage={harvestPercentage}
-                  active={isVacuuming}
-                  disabled={!canVacuum}
-                  onPressIn={handleVacuumStart}
-                  onPressOut={handleVacuumStop}
-                  gridFrameHeight={CARGO_GRID_FRAME_HEIGHT}
+      <IncursionRunLayout style={{ backgroundColor: theme.backgroundColor }}>
+        <RunEventScreenFrame
+          backgroundImage={ResourceHarvestBg}
+          backgroundScrimOpacity={0.72}
+          bodyStyle={styles.contentForegroundPack}
+          overlay={(
+            <View ref={overlayRef} style={styles.particleOverlay} pointerEvents="none">
+              {lootPool.map((particle) => (
+                <ResidueParticle
+                  key={particle.id}
+                  particle={particle}
+                  isVacuuming={isVacuuming}
+                  canisterCoordinates={canisterCoordinates}
+                  onAbsorbed={handleParticleAbsorbed}
                 />
-              )}
-            />
-          </View>
-
-          <View ref={overlayRef} style={styles.particleOverlay} pointerEvents="none">
-            {lootPool.map((particle) => (
-              <ResidueParticle
-                key={particle.id}
-                particle={particle}
-                isVacuuming={isVacuuming}
-                canisterCoordinates={canisterCoordinates}
-                onAbsorbed={handleParticleAbsorbed}
+              ))}
+            </View>
+          )}
+        >
+          <CargoPackingPanel
+            cargo={displayCargo}
+            theme={theme}
+            onRelocateItem={relocateCargoItem}
+            onDiscardItem={discardCargoInstance}
+            showCreditsHud={false}
+            onContinue={handlePackingContinue}
+            continueLabel={
+              activeIncursion.pendingHarvestReturn === 'RESOURCE_CACHE'
+                ? '[ CONTINUE TO GRID ]'
+                : '[ CONTINUE RUN ]'
+            }
+            onHarvestFloorMeasured={handleHarvestFloorMeasured}
+            fixedExternalSlotCount={fixedExternalSlotCount}
+            resolveContainmentSlotIndex={resolveContainmentSlotIndex}
+            harvestLayout
+            hideContinueButton
+            gridSidecar={(
+              <VeilVacuumCanisterStack
+                ref={canisterRef}
+                harvestPercentage={harvestPercentage}
+                active={isVacuuming}
+                disabled={!canVacuum}
+                onPressIn={handleVacuumStart}
+                onPressOut={handleVacuumStop}
+                gridFrameHeight={CARGO_GRID_FRAME_HEIGHT}
               />
-            ))}
-          </View>
-        </View>
-      </MacroLogAnchoredLayout>
+            )}
+          />
+        </RunEventScreenFrame>
+      </IncursionRunLayout>
     </IncursionShell>
   );
 }
 
 const styles = StyleSheet.create({
-  screenBody: {
-    flex: 1,
-    minHeight: 0,
-    overflow: 'hidden',
-    backgroundColor: 'transparent',
-  },
-  backgroundImage: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
-  backgroundScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(5, 6, 8, 0.72)' },
   contentForegroundPack: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 12,
-    position: 'relative',
-    zIndex: 1,
+    pointerEvents: 'box-none',
   },
   particleOverlay: {
     ...StyleSheet.absoluteFillObject,

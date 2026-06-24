@@ -249,6 +249,10 @@ interface RunContextType {
   scanSessionKey: number;
   postCombatMutationChoices: PostCombatBoonOffer[];
   appendRunLog: (text: string) => void;
+  /** Clears log and enables combat-only logging for the next encounter. */
+  beginCombatRunLogSession: () => void;
+  setCombatLogActive: (active: boolean) => void;
+  clearRunLog: () => void;
   startNewRun: (config?: RunStartConfig) => void;
   recordRunKillAttacker: (designation: string) => void;
   boundRequisitionOffers: BoundRequisitionDefinition[];
@@ -258,7 +262,11 @@ interface RunContextType {
     craftedAugments?: readonly BoundRequisitionId[],
   ) => void;
   consumeAdrenalinePrimerAfterCombat: () => void;
-  /** Claims next-combat narrative boons and clears pending state. */
+  /** Read pending next-combat narrative boons without mutating run state. */
+  peekPendingNarrativeCombatBoons: () => PendingNarrativeCombatBoons;
+  /** Clears pending narrative boons after they have been consumed by combat init. */
+  clearPendingNarrativeCombatBoons: () => void;
+  /** @deprecated Use peek + clearPendingNarrativeCombatBoons */
   claimPendingNarrativeCombatBoons: () => PendingNarrativeCombatBoons;
   /** Removes narrative boon entries from the status overlay after combat. */
   clearNarrativeBoonStatusEffects: () => void;
@@ -494,6 +502,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   const [runState, setRunState] = useState<RunState>(createInitialRunState);
   const runStateRef = useRef<RunState>(runState);
   const [runLog, setRunLog] = useState<string[]>([]);
+  const combatLogActiveRef = useRef(false);
+  const pendingRunLogsRef = useRef<string[]>([]);
+  const runLogFlushScheduledRef = useRef(false);
   const [scanSessionKey, setScanSessionKey] = useState(0);
   const scanSessionKeyRef = useRef(scanSessionKey);
   scanSessionKeyRef.current = scanSessionKey;
@@ -513,9 +524,38 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   runStateRef.current = runState;
   activeIncursionRef.current = activeIncursion;
 
-  const appendRunLog = useCallback((text: string) => {
-    setRunLog((prev) => [...prev, text]);
+  const setCombatLogActive = useCallback((active: boolean) => {
+    combatLogActiveRef.current = active;
   }, []);
+
+  const clearRunLog = useCallback(() => {
+    pendingRunLogsRef.current = [];
+    runLogFlushScheduledRef.current = false;
+    setRunLog([]);
+  }, []);
+
+  const beginCombatRunLogSession = useCallback(() => {
+    combatLogActiveRef.current = true;
+    pendingRunLogsRef.current = [];
+    runLogFlushScheduledRef.current = false;
+    setRunLog([]);
+  }, []);
+
+  const flushPendingRunLogs = useCallback(() => {
+    runLogFlushScheduledRef.current = false;
+    const batch = pendingRunLogsRef.current;
+    pendingRunLogsRef.current = [];
+    if (batch.length === 0) return;
+    setRunLog((prev) => [...prev, ...batch]);
+  }, []);
+
+  const appendRunLog = useCallback((text: string) => {
+    if (!combatLogActiveRef.current) return;
+    pendingRunLogsRef.current.push(text);
+    if (runLogFlushScheduledRef.current) return;
+    runLogFlushScheduledRef.current = true;
+    queueMicrotask(flushPendingRunLogs);
+  }, [flushPendingRunLogs]);
 
   const recordRunKillAttacker = useCallback((designation: string) => {
     lastKillingEnemyRef.current = designation;
@@ -637,18 +677,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     setScanSessionKey(1);
     setPostCombatMutationChoices([]);
     setBoundRequisitionOffers([]);
-    setRunLog([
-      '>> RUN INITIALIZED — OPEN SECTOR ENGINE ONLINE.',
-      `>> SECTOR TIER ${sectorTier} — BRANCHING TOPOLOGY PRE-GENERATED.`,
-      `>> SCANNING HUB ACTIVE — SPECTRAL SWEEP INITIALIZING.`,
-      `>> CLIMATE CLUSTER LOCKED: ${clusterDef.name}`,
-      formatDistrictBiomeSelectionLog(pendingBiomeOffers),
-      '>> ENGAGE A COMBAT VECTOR TO LOCK MACRO BIOME FOR DISTRICT 1.',
-      `>> ${clusterDef.tagline}`,
-      `>> SANCTUARY SCHEDULE — D1:[${sanctuarySchedule[1].join(',')}] D2:[${sanctuarySchedule[2].join(',')}] D3:[${sanctuarySchedule[3].join(',')}]`,
-      `>> ALPHA DUEL INDEX — D1 NODE ${initialRunSegment.alphaNodeIndex}`,
-      ...sectorInit.initLogLines,
-    ]);
+    combatLogActiveRef.current = false;
+    setRunLog([]);
   }, []);
 
   const refreshOverworldFeatures = useCallback(() => {
@@ -737,27 +767,48 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     appendRunLog('>> ADRENALINE PRIMER SPENT — FIRST-TURN AP BONUS CONSUMED.');
   }, [appendRunLog]);
 
-  const claimPendingNarrativeCombatBoons = useCallback((): PendingNarrativeCombatBoons => {
+  const peekPendingNarrativeCombatBoons = useCallback((): PendingNarrativeCombatBoons => {
     const inc = activeIncursionRef.current;
-    const claimed = { ...inc.pendingNarrativeCombatBoons };
+    const pending = { ...inc.pendingNarrativeCombatBoons };
     if (
-      !claimed.ghosted
-      && !claimed.scouted
-      && !claimed.overcharged
-      && !claimed.veilWard
+      !pending.ghosted
+      && !pending.scouted
+      && !pending.overcharged
+      && !pending.veilWard
     ) {
       return createDefaultPendingNarrativeCombatBoons();
     }
-    setActiveIncursion((prev) => {
-      const next = {
-        ...prev,
-        pendingNarrativeCombatBoons: createDefaultPendingNarrativeCombatBoons(),
-      };
-      activeIncursionRef.current = next;
-      return next;
-    });
-    return claimed;
+    return pending;
   }, []);
+
+  const clearPendingNarrativeCombatBoons = useCallback(() => {
+    const inc = activeIncursionRef.current;
+    const pending = inc.pendingNarrativeCombatBoons;
+    if (
+      !pending.ghosted
+      && !pending.scouted
+      && !pending.overcharged
+      && !pending.veilWard
+    ) {
+      return;
+    }
+    queueMicrotask(() => {
+      setActiveIncursion((prev) => {
+        const next = {
+          ...prev,
+          pendingNarrativeCombatBoons: createDefaultPendingNarrativeCombatBoons(),
+        };
+        activeIncursionRef.current = next;
+        return next;
+      });
+    });
+  }, []);
+
+  const claimPendingNarrativeCombatBoons = useCallback((): PendingNarrativeCombatBoons => {
+    const claimed = peekPendingNarrativeCombatBoons();
+    clearPendingNarrativeCombatBoons();
+    return claimed;
+  }, [clearPendingNarrativeCombatBoons, peekPendingNarrativeCombatBoons]);
 
   const clearNarrativeBoonStatusEffects = useCallback(() => {
     setActiveIncursion((prev) => {
@@ -1245,7 +1296,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         depthLayer,
       });
     }
-    appendRunLog(`>> RUN TERMINATED — ${reason}`);
+    combatLogActiveRef.current = false;
+    setRunLog([]);
     const reset = createInitialRunState();
     runStateRef.current = reset;
     setRunState(reset);
@@ -1255,7 +1307,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     setActiveIncursion(resetIncursion);
     narrativeNodeRef.current = null;
     narrativeAssemblyRef.current = null;
-  }, [appendRunLog]);
+  }, []);
 
   const startBadgeTestCombat = useCallback((preset: 'easy' | 'hard', config: BadgeTestCombatConfig) => {
     const pendingEnemies = squadFromSingleEnemy(
@@ -1288,6 +1340,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     narrativeNodeRef.current = null;
     narrativeAssemblyRef.current = null;
     setPostCombatMutationChoices([]);
+    combatLogActiveRef.current = true;
     setRunLog([
       '>> BADGE TEST COMBAT — ISOLATED ARENA.',
       `>> OPERATIVE CLASS: ${config.activeClass.replace(/_/g, ' ')}.`,
@@ -1968,6 +2021,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const prepareBossEncounter = useCallback((engagedNode?: IncursionNode | null) => {
+    beginCombatRunLogSession();
     const inc = activeIncursionRef.current;
     const encounterNode = engagedNode ?? resolveActiveVectorNode(inc);
     if (!encounterNode || encounterNode.type !== 'BOSS_COMBAT') return;
@@ -2012,9 +2066,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     appendRunLog('>> AFFINITY CORPOREAL — prime anomaly dense tissue detected.');
     appendRunLog(districtBossLogLine(gateDepth));
     appendRunLog(`>> BOSS SIGNATURE: ${bossProfile.name} // ${bossProfile.maxHp} HP`);
-  }, [appendRunLog]);
+  }, [appendRunLog, beginCombatRunLogSession]);
 
   const prepareStandardCombatEncounter = useCallback((engagedNode?: IncursionNode | null) => {
+    beginCombatRunLogSession();
     const inc = activeIncursionRef.current;
     const encounterNode = engagedNode ?? resolveActiveVectorNode(inc);
     const prev = runStateRef.current;
@@ -2096,9 +2151,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         appendRunLog('>> APEX ANOMALY — full threat budget absorbed; double action economy.');
       }
     });
-  }, [appendRunLog]);
+  }, [appendRunLog, beginCombatRunLogSession]);
 
   const prepareDefendRiftEncounter = useCallback(() => {
+    beginCombatRunLogSession();
     const inc = activeIncursionRef.current;
     const prev = runStateRef.current;
     const sector = prev.currentSector ?? INITIAL_SECTOR_POOL[0];
@@ -2149,9 +2205,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (pendingEnemy) {
       appendRunLog(`>> HOSTILE SIGNATURE: ${pendingEnemy.designation} [${pendingEnemy.class}] HP ${pendingEnemy.maxHp}.`);
     }
-  }, [appendRunLog]);
+  }, [appendRunLog, beginCombatRunLogSession]);
 
   const prepareVeilStalkerEncounter = useCallback(() => {
+    beginCombatRunLogSession();
     const inc = activeIncursionRef.current;
     const encounterNode = resolveActiveVectorNode(inc);
     const prev = runStateRef.current;
@@ -2189,9 +2246,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
     appendRunLog('>> HUNTER AMBUSH — null shade signature locked.');
     appendRunLog(`>> HOSTILE SIGNATURE: ${pendingEnemy.designation} [${pendingEnemy.class}] HP ${pendingEnemy.maxHp}.`);
-  }, [appendRunLog]);
+  }, [appendRunLog, beginCombatRunLogSession]);
 
   const prepareHarvestAmbushEncounter = useCallback(() => {
+    beginCombatRunLogSession();
     const inc = activeIncursionRef.current;
     const encounterNode = resolveActiveVectorNode(inc);
     const prev = runStateRef.current;
@@ -2238,7 +2296,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
     appendRunLog('>> HARVEST AMBUSH — hostile manifest inbound.');
     appendRunLog(`>> HOSTILE SIGNATURE: ${pendingEnemy.designation} [${pendingEnemy.class}] HP ${pendingEnemy.maxHp}.`);
-  }, [appendRunLog]);
+  }, [appendRunLog, beginCombatRunLogSession]);
 
   const advanceIncursionAfterEncounter = useCallback((message: string) => {
     appendRunLog(`>> ${message}`);
@@ -2844,6 +2902,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   }, [appendRunLog]);
 
   const prepareGridHoundEncounter = useCallback(() => {
+    beginCombatRunLogSession();
     const inc = activeIncursionRef.current;
     const prev = runStateRef.current;
     const sector = prev.currentSector ?? INITIAL_SECTOR_POOL[0];
@@ -2888,7 +2947,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (pendingEnemy) {
       appendRunLog(`>> HOSTILE SIGNATURE: ${pendingEnemy.designation} [${pendingEnemy.class}] HP ${pendingEnemy.maxHp}.`);
     }
-  }, [appendRunLog]);
+  }, [appendRunLog, beginCombatRunLogSession]);
 
   const applyResonanceManifestScan = useCallback((_nodeId: string) => {
     // Resonance mechanic disabled — manifest scans no longer accrue heat.
@@ -3379,12 +3438,17 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       scanSessionKey,
       postCombatMutationChoices,
       appendRunLog,
+      beginCombatRunLogSession,
+      setCombatLogActive,
+      clearRunLog,
       startNewRun,
       recordRunKillAttacker,
       boundRequisitionOffers,
       prepareBoundRequisitionOffers,
       confirmBoundRequisition,
       consumeAdrenalinePrimerAfterCombat,
+      peekPendingNarrativeCombatBoons,
+      clearPendingNarrativeCombatBoons,
       claimPendingNarrativeCombatBoons,
       clearNarrativeBoonStatusEffects,
       isPostCombatBoonBlocked,
@@ -3491,11 +3555,16 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       scanSessionKey,
       postCombatMutationChoices,
       appendRunLog,
+      beginCombatRunLogSession,
+      setCombatLogActive,
+      clearRunLog,
       startNewRun,
       boundRequisitionOffers,
       prepareBoundRequisitionOffers,
       confirmBoundRequisition,
       consumeAdrenalinePrimerAfterCombat,
+      peekPendingNarrativeCombatBoons,
+      clearPendingNarrativeCombatBoons,
       claimPendingNarrativeCombatBoons,
       clearNarrativeBoonStatusEffects,
       isPostCombatBoonBlocked,

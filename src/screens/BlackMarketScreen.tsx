@@ -17,7 +17,8 @@ import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useNodeProgression } from '../hooks/useNodeProgression';
 import IncursionShell from '../components/IncursionShell';
-import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
+import IncursionRunLayout from '../components/IncursionRunLayout';
+import RunEventScreenFrame, { RunEventScreenHeader } from '../components/layout/RunEventScreenFrame';
 import SelectionContinueButton from '../components/SelectionContinueButton';
 import type { CargoItemId } from '../types/cargoGrid';
 import { resolveCargoItemIcon } from '../utils/cargoItemIcon';
@@ -31,7 +32,7 @@ const ACTION_DISABLED_TEXT = '#2a4032';
 
 export default function BlackMarketScreen(): React.JSX.Element {
   const { theme } = useTerminal();
-  const { runState, activeIncursion, appendRunLog, purchaseBlackMarketCargo } = useRun();
+  const { activeIncursion, appendRunLog, purchaseBlackMarketCargo } = useRun();
   const { completeCurrentNode } = useNodeProgression();
   const [selectedCargoId, setSelectedCargoId] = useState<CargoItemId | null>(null);
   const [leaving, setLeaving] = useState(false);
@@ -73,203 +74,154 @@ export default function BlackMarketScreen(): React.JSX.Element {
 
   return (
     <IncursionShell>
-      <MacroLogAnchoredLayout
-        showMacroLog={runState.runActive}
-        style={{ backgroundColor: theme.backgroundColor }}
-      >
-        <View style={styles.screenBody}>
-          <View style={styles.content}>
-            <Image source={BlackMarketBg} style={styles.backgroundImage} resizeMode="cover" />
-            <View style={styles.backgroundScrim} pointerEvents="none" />
+      <IncursionRunLayout style={{ backgroundColor: theme.backgroundColor }}>
+        <RunEventScreenFrame
+          scrollable
+          backgroundImage={BlackMarketBg}
+          backgroundScrimOpacity={0.52}
+          header={(
+            <RunEventScreenHeader
+              eyebrow="VEIL UNDERNET // BLACK MARKET NODE"
+              title="BLACK MARKET"
+              align="left"
+              borderColor={theme.borderColor}
+              eyebrowColor={theme.mutedColor}
+              titleColor={TERMINAL_ACCENT}
+            >
+              <Text style={[styles.creditsLine, { color: TERMINAL_ACCENT }]}>
+                RUN CREDITS: {activeIncursion.runCredits}
+                {blackMarketDiscountPct > 0 ? ` // MARKET DISCOUNT -${blackMarketDiscountPct}%` : ''}
+              </Text>
+            </RunEventScreenHeader>
+          )}
+          footer={(
+            <SelectionContinueButton
+              enabled={!leaving}
+              onPress={handleLeave}
+              borderColor={theme.borderColor}
+              mutedColor={theme.mutedColor}
+              label="[ LEAVE MARKET ]"
+            />
+          )}
+        >
+          <View style={[styles.shopPanel, { borderColor: theme.borderColor }]}>
+            <Text style={[styles.shopSubHeader, { color: theme.mutedColor }]}>
+              CARGO CONTRABAND // PRICED PER UNIT // STAGED TO CONTAINMENT
+            </Text>
 
-            <View style={styles.contentForeground}>
-              <View style={[styles.docHeader, { borderBottomColor: theme.borderColor }]}>
-                <Text style={[styles.docLabel, { color: theme.mutedColor }]}>
-                  VEIL UNDERNET // BLACK MARKET NODE
-                </Text>
-                <Text style={styles.docTitle}>BLACK MARKET</Text>
-                <Text style={[styles.creditsLine, { color: TERMINAL_ACCENT }]}>
-                  RUN CREDITS: {activeIncursion.runCredits}
-                  {blackMarketDiscountPct > 0 ? ` // MARKET DISCOUNT -${blackMarketDiscountPct}%` : ''}
-                </Text>
-              </View>
-
-              <View style={[styles.shopPanel, { borderColor: theme.borderColor }]}>
-                <Text style={[styles.shopSubHeader, { color: theme.mutedColor }]}>
-                  CARGO CONTRABAND // PRICED PER UNIT // STAGED TO CONTAINMENT
-                </Text>
-
-                <View style={styles.grid}>
-                  {marketListings.map((listing) => {
-                    const isSelected = listing.id === selectedCargoId;
-                    const owned = countCargoItemInstances(activeIncursion.cargo, listing.id);
-                    return (
-                      <Pressable
-                        key={listing.id}
-                        onPress={() => setSelectedCargoId(listing.id)}
-                        style={({ pressed }) => [
-                          styles.gridCell,
-                          { borderColor: isSelected ? TERMINAL_ACCENT : theme.borderColor },
-                          pressed ? { opacity: 0.75 } : null,
-                        ]}
-                      >
-                        <View style={styles.cellImageWrap}>
-                          <Image
-                            source={resolveCargoItemIcon(listing.id)}
-                            style={styles.cellImage}
-                            resizeMode="contain"
-                          />
-                        </View>
-                        <Text style={[styles.cellPrice, { color: theme.mutedColor }]}>
-                          {priceForListing(listing.price)} CR
-                        </Text>
-                        <Text style={[styles.cellQty, { color: theme.mutedColor }]}>
-                          {owned > 0 ? `x${owned}` : ' '}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-
-                <View style={[styles.detailBlock, { borderColor: theme.borderColor }]}>
-                  {selectedCargoListing != null ? (
-                    <View style={styles.detailHeader}>
-                      <View style={styles.detailImageWrap}>
-                        <Image
-                          source={resolveCargoItemIcon(selectedCargoListing.id)}
-                          style={styles.detailImage}
-                          resizeMode="contain"
-                        />
-                      </View>
-                      <View style={styles.detailCopy}>
-                        <Text style={[styles.detailTitle, { color: TERMINAL_ACCENT }]} numberOfLines={1}>
-                          {selectedCargoListing.name.toUpperCase()}
-                        </Text>
-                        <Text style={[styles.detailBody, { color: theme.primaryColor }]} numberOfLines={3}>
-                          {selectedCargoListing.description}
-                        </Text>
-                        <Text style={[styles.detailEffect, { color: theme.mutedColor }]} numberOfLines={2}>
-                          {selectedCargoListing.effect}
-                        </Text>
-                        <Text style={[styles.detailEffect, { color: theme.mutedColor }]}>
-                          {`OWNED: ${ownedQty} // PRICE: ${selectedPrice} CR`}
-                        </Text>
-                      </View>
-                    </View>
-                  ) : (
-                    <View style={styles.detailPlaceholder}>
-                      <Text style={[styles.detailBody, { color: theme.mutedColor }]}>
-                        SELECT A LISTING TO REVIEW CONTRABAND PROFILE.
-                      </Text>
-                    </View>
-                  )}
-                </View>
-
-                <View style={styles.actions}>
+            <View style={styles.grid}>
+              {marketListings.map((listing) => {
+                const isSelected = listing.id === selectedCargoId;
+                const owned = countCargoItemInstances(activeIncursion.cargo, listing.id);
+                return (
                   <Pressable
-                    disabled={!cargoPurchaseEnabled}
-                    onPress={handleCargoPurchase}
+                    key={listing.id}
+                    onPress={() => setSelectedCargoId(listing.id)}
                     style={({ pressed }) => [
-                      styles.btn,
-                      {
-                        borderColor: cargoPurchaseEnabled ? TERMINAL_ACCENT : ACTION_DISABLED_BORDER,
-                        backgroundColor: cargoPurchaseEnabled ? '#0a0b0f' : ACTION_DISABLED_BG,
-                        opacity: cargoPurchaseEnabled && pressed ? 0.75 : 1,
-                      },
+                      styles.gridCell,
+                      { borderColor: isSelected ? TERMINAL_ACCENT : theme.borderColor },
+                      pressed ? { opacity: 0.75 } : null,
                     ]}
                   >
-                    <Text style={[styles.btnText, { color: cargoPurchaseEnabled ? TERMINAL_ACCENT : ACTION_DISABLED_TEXT }]}>
-                      [ PURCHASE TO CONTAINMENT ]
+                    <View style={styles.cellImageWrap}>
+                      <Image
+                        source={resolveCargoItemIcon(listing.id)}
+                        style={styles.cellImage}
+                        resizeMode="contain"
+                      />
+                    </View>
+                    <Text style={[styles.cellPrice, { color: theme.mutedColor }]}>
+                      {priceForListing(listing.price)} CR
+                    </Text>
+                    <Text style={[styles.cellQty, { color: theme.mutedColor }]}>
+                      {owned > 0 ? `x${owned}` : ' '}
                     </Text>
                   </Pressable>
-                </View>
-              </View>
-
-              <SelectionContinueButton
-                enabled={!leaving}
-                onPress={handleLeave}
-                borderColor={theme.borderColor}
-                mutedColor={theme.mutedColor}
-                label="[ LEAVE MARKET ]"
-              />
+                );
+              })}
             </View>
+
+            <View style={[styles.detailBlock, { borderColor: theme.borderColor }]}>
+              {selectedCargoListing != null ? (
+                <View style={styles.detailHeader}>
+                  <View style={styles.detailImageWrap}>
+                    <Image
+                      source={resolveCargoItemIcon(selectedCargoListing.id)}
+                      style={styles.detailImage}
+                      resizeMode="contain"
+                    />
+                  </View>
+                  <View style={styles.detailCopy}>
+                    <Text style={[styles.detailTitle, { color: TERMINAL_ACCENT }]} numberOfLines={1}>
+                      {selectedCargoListing.name.toUpperCase()}
+                    </Text>
+                    <Text style={[styles.detailBody, { color: theme.primaryColor }]} numberOfLines={3}>
+                      {selectedCargoListing.description}
+                    </Text>
+                    <Text style={[styles.detailEffect, { color: theme.mutedColor }]} numberOfLines={2}>
+                      {selectedCargoListing.effect}
+                    </Text>
+                    <Text style={[styles.detailEffect, { color: theme.mutedColor }]}>
+                      {`OWNED: ${ownedQty} // PRICE: ${selectedPrice} CR`}
+                    </Text>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.detailPlaceholder}>
+                  <Text style={[styles.detailBody, { color: theme.mutedColor }]}>
+                    SELECT A LISTING TO REVIEW CONTRABAND PROFILE.
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            <Pressable
+              disabled={!cargoPurchaseEnabled}
+              onPress={handleCargoPurchase}
+              style={({ pressed }) => [
+                styles.btn,
+                {
+                  borderColor: cargoPurchaseEnabled ? TERMINAL_ACCENT : ACTION_DISABLED_BORDER,
+                  backgroundColor: cargoPurchaseEnabled ? '#0a0b0f' : ACTION_DISABLED_BG,
+                  opacity: cargoPurchaseEnabled && pressed ? 0.75 : 1,
+                },
+              ]}
+            >
+              <Text style={[styles.btnText, { color: cargoPurchaseEnabled ? TERMINAL_ACCENT : ACTION_DISABLED_TEXT }]}>
+                [ PURCHASE TO CONTAINMENT ]
+              </Text>
+            </Pressable>
           </View>
-        </View>
-      </MacroLogAnchoredLayout>
+        </RunEventScreenFrame>
+      </IncursionRunLayout>
     </IncursionShell>
   );
 }
 
 const styles = StyleSheet.create({
-  screenBody: {
-    flex: 1,
-    minHeight: 0,
-  },
-  content: {
-    flex: 1,
-    minHeight: 0,
-    overflow: 'hidden',
-  },
-  backgroundImage: {
-    ...StyleSheet.absoluteFillObject,
-    width: '100%',
-    height: '100%',
-  },
-  backgroundScrim: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(5, 6, 8, 0.52)',
-  },
-  contentForeground: {
-    flex: 1,
-    position: 'relative',
-    zIndex: 1,
-    padding: 14,
-    paddingTop: 10,
-    justifyContent: 'flex-start',
-  },
-  docHeader: {
-    borderBottomWidth: 1,
-    paddingBottom: 8,
-    marginBottom: 10,
-  },
-  docLabel: {
-    fontFamily: 'monospace',
-    fontSize: 7,
-    letterSpacing: 1,
-    marginBottom: 4,
-  },
-  docTitle: {
-    fontFamily: 'monospace',
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1,
-    color: TERMINAL_ACCENT,
-    marginBottom: 4,
-  },
   creditsLine: {
     fontFamily: 'monospace',
     fontSize: 8,
     letterSpacing: 0.8,
+    marginTop: 4,
   },
   shopPanel: {
     borderWidth: 1,
     backgroundColor: 'rgba(10, 11, 15, 0.65)',
     paddingHorizontal: 12,
     paddingVertical: 12,
-    marginBottom: 12,
+    gap: 12,
   },
   shopSubHeader: {
     fontFamily: 'monospace',
     fontSize: 7,
     letterSpacing: 0.8,
     textAlign: 'center',
-    marginBottom: 12,
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    marginBottom: 12,
   },
   gridCell: {
     width: CELL_SIZE,
@@ -307,7 +259,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     backgroundColor: '#0a0b0f',
     padding: 12,
-    marginBottom: 12,
     height: DETAIL_BLOCK_HEIGHT,
     overflow: 'hidden',
   },
@@ -354,12 +305,7 @@ const styles = StyleSheet.create({
     fontSize: 7,
     letterSpacing: 0.8,
   },
-  actions: {
-    flexDirection: 'row',
-    gap: 10,
-  },
   btn: {
-    flex: 1,
     borderWidth: 1,
     paddingVertical: 12,
     alignItems: 'center',

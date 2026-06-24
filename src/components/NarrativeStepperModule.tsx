@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import CityStreetNarrativeBg from '../../assets/narrative images/city-street.png';
 import SelectionContinueButton from './SelectionContinueButton';
+import LandscapeSplitPane from './layout/LandscapeSplitPane';
 import NarrativeOutcomePanel from './narrative/NarrativeOutcomePanel';
 import { CheckStatus, NarrativeChoiceEffectPreview, NarrativeEventNode } from '../types/game';
 import { isOpenSectorNarrative } from '../data/sectorNarrativeEngine';
@@ -73,6 +74,7 @@ function ChoiceEffectPreview({
 interface NarrativeStepperModuleProps {
   node: NarrativeEventNode;
   onComplete: (result: { choice: 'A' | 'B'; status: CheckStatus }) => void;
+  splitLayout?: boolean;
   borderColor?: string;
   mutedColor?: string;
   primaryColor?: string;
@@ -81,6 +83,7 @@ interface NarrativeStepperModuleProps {
 export default function NarrativeStepperModule({
   node,
   onComplete,
+  splitLayout = false,
   borderColor = '#334155',
   mutedColor = '#94a3b8',
   primaryColor = '#f8fafc',
@@ -157,6 +160,92 @@ export default function NarrativeStepperModule({
   const { height: windowHeight } = useWindowDimensions();
   const flavorMaxHeight = Math.round(windowHeight * 0.36);
 
+  const scenarioStory = (
+    <ScrollView
+      style={splitLayout ? styles.flavorScrollFill : [styles.flavorScroll, { maxHeight: flavorMaxHeight }]}
+      contentContainerStyle={styles.flavorScrollContent}
+      showsVerticalScrollIndicator
+      keyboardShouldPersistTaps="handled"
+    >
+      <View style={[styles.docBody, { borderColor }]}>
+        <Text style={[styles.scenarioText, { color: primaryColor }]}>{node.scenarioText}</Text>
+      </View>
+    </ScrollView>
+  );
+
+  const scenarioChoices = (
+    <View style={styles.choicePane}>
+      <View style={styles.choiceSection}>
+        <View style={styles.choiceCol}>
+          <Pressable
+            onPress={() => handleChoiceSelect('A')}
+            style={({ pressed }) => [
+              styles.choiceBtn,
+              showCityStreetBackground && styles.choiceBtnCityStreets,
+              selectedChoice === 'A' && styles.choiceBtnSelected,
+              {
+                borderColor: selectedChoice === 'A' ? TERMINAL_ACCENT : borderColor,
+                opacity: pressed ? 0.7 : 1,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.choiceLabel,
+                { color: selectedChoice === 'A' ? TERMINAL_ACCENT : primaryColor },
+              ]}
+            >
+              {node.choiceA.label}
+            </Text>
+            <Text style={[styles.choiceReq, { color: mutedColor }]}>REQ: {node.choiceA.requirement}</Text>
+            {node.choiceA.effectPreview ? (
+              <ChoiceEffectPreview preview={node.choiceA.effectPreview} mutedColor={mutedColor} />
+            ) : null}
+          </Pressable>
+          <Pressable
+            onPress={() => !node.choiceB.locked && handleChoiceSelect('B')}
+            disabled={node.choiceB.locked === true}
+            style={({ pressed }) => [
+              styles.choiceBtn,
+              showCityStreetBackground && styles.choiceBtnCityStreets,
+              selectedChoice === 'B' && styles.choiceBtnSelected,
+              {
+                borderColor: selectedChoice === 'B' ? TERMINAL_ACCENT : borderColor,
+                opacity: node.choiceB.locked ? 0.4 : pressed ? 0.7 : 1,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.choiceLabel,
+                { color: selectedChoice === 'B' ? TERMINAL_ACCENT : primaryColor },
+              ]}
+            >
+              {node.choiceB.label}
+            </Text>
+            <Text style={[styles.choiceReq, { color: mutedColor }]}>
+              REQ: {node.choiceB.locked && node.choiceB.lockReason
+                ? node.choiceB.lockReason
+                : node.choiceB.requirement}
+            </Text>
+            {node.choiceB.effectPreview ? (
+              <ChoiceEffectPreview preview={node.choiceB.effectPreview} mutedColor={mutedColor} />
+            ) : null}
+          </Pressable>
+        </View>
+      </View>
+
+      <View style={styles.footer}>
+        <SelectionContinueButton
+          enabled={selectedChoice != null}
+          onPress={handleScenarioContinue}
+          borderColor={borderColor}
+          mutedColor={mutedColor}
+        />
+      </View>
+    </View>
+  );
+
   return (
     <View style={[styles.root, showCityStreetBackground && styles.rootWithCityBackground]}>
       {showCityStreetBackground ? (
@@ -179,87 +268,20 @@ export default function NarrativeStepperModule({
         </View>
 
         {phase === 'SCENARIO' ? (
-          <>
-            <ScrollView
-              style={[styles.flavorScroll, { maxHeight: flavorMaxHeight }]}
-              contentContainerStyle={styles.flavorScrollContent}
-              showsVerticalScrollIndicator
-              keyboardShouldPersistTaps="handled"
-            >
-              <View style={[styles.docBody, { borderColor }]}>
-                <Text style={[styles.scenarioText, { color: primaryColor }]}>{node.scenarioText}</Text>
-              </View>
-            </ScrollView>
-
-            <View style={styles.choiceSection}>
-              <View style={styles.choiceCol}>
-                <Pressable
-                  onPress={() => handleChoiceSelect('A')}
-                  style={({ pressed }) => [
-                    styles.choiceBtn,
-                    showCityStreetBackground && styles.choiceBtnCityStreets,
-                    selectedChoice === 'A' && styles.choiceBtnSelected,
-                    {
-                      borderColor: selectedChoice === 'A' ? TERMINAL_ACCENT : borderColor,
-                      opacity: pressed ? 0.7 : 1,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.choiceLabel,
-                      { color: selectedChoice === 'A' ? TERMINAL_ACCENT : primaryColor },
-                    ]}
-                  >
-                    {node.choiceA.label}
-                  </Text>
-                  <Text style={[styles.choiceReq, { color: mutedColor }]}>REQ: {node.choiceA.requirement}</Text>
-                  {node.choiceA.effectPreview ? (
-                    <ChoiceEffectPreview preview={node.choiceA.effectPreview} mutedColor={mutedColor} />
-                  ) : null}
-                </Pressable>
-                <Pressable
-                  onPress={() => !node.choiceB.locked && handleChoiceSelect('B')}
-                  disabled={node.choiceB.locked === true}
-                  style={({ pressed }) => [
-                    styles.choiceBtn,
-                    showCityStreetBackground && styles.choiceBtnCityStreets,
-                    selectedChoice === 'B' && styles.choiceBtnSelected,
-                    {
-                      borderColor: selectedChoice === 'B' ? TERMINAL_ACCENT : borderColor,
-                      opacity: node.choiceB.locked ? 0.4 : pressed ? 0.7 : 1,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.choiceLabel,
-                      { color: selectedChoice === 'B' ? TERMINAL_ACCENT : primaryColor },
-                    ]}
-                  >
-                    {node.choiceB.label}
-                  </Text>
-                  <Text style={[styles.choiceReq, { color: mutedColor }]}>
-                    REQ: {node.choiceB.locked && node.choiceB.lockReason
-                      ? node.choiceB.lockReason
-                      : node.choiceB.requirement}
-                  </Text>
-                  {node.choiceB.effectPreview ? (
-                    <ChoiceEffectPreview preview={node.choiceB.effectPreview} mutedColor={mutedColor} />
-                  ) : null}
-                </Pressable>
-              </View>
-            </View>
-
-            <View style={styles.footer}>
-              <SelectionContinueButton
-                enabled={selectedChoice != null}
-                onPress={handleScenarioContinue}
-                borderColor={borderColor}
-                mutedColor={mutedColor}
-              />
-            </View>
-          </>
+          splitLayout ? (
+            <LandscapeSplitPane
+              style={styles.splitPane}
+              primary={scenarioStory}
+              secondary={scenarioChoices}
+              primaryStyle={styles.splitPrimary}
+              secondaryStyle={styles.splitSecondary}
+            />
+          ) : (
+            <>
+              {scenarioStory}
+              {scenarioChoices}
+            </>
+          )
         ) : null}
 
         {phase === 'SKILL_CHECK' ? (
@@ -350,8 +372,27 @@ const styles = StyleSheet.create({
     flexGrow: 0,
     flexShrink: 1,
   },
+  flavorScrollFill: {
+    flex: 1,
+    minHeight: 0,
+  },
   flavorScrollContent: {
     paddingBottom: 4,
+  },
+  splitPane: {
+    flex: 1,
+    minHeight: 0,
+  },
+  splitPrimary: {
+    minHeight: 0,
+  },
+  splitSecondary: {
+    minHeight: 0,
+  },
+  choicePane: {
+    flex: 1,
+    minHeight: 0,
+    justifyContent: 'space-between',
   },
   choiceSection: {
     flex: 1,

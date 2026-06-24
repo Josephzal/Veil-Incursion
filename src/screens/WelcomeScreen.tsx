@@ -1,23 +1,24 @@
 import React from 'react';
 import {
+  ScrollView,
   StyleSheet,
   View,
   Text,
   Pressable,
-  Dimensions,
-  Platform,
 } from 'react-native';
 import { useTerminal } from '../context/TerminalContext';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import FactionBootLogo from '../components/FactionBootLogo';
+import LandscapeSplitPane from '../components/layout/LandscapeSplitPane';
 import TerminalSafeArea from '../components/TerminalSafeArea';
 import { DEFAULT_HOME_SECTOR_PROFILE_LABEL } from '../constants/homeSector';
-
-const { width } = Dimensions.get('window');
+import { LANDSCAPE_PANEL_PADDING, LANDSCAPE_WELCOME_PRIMARY_RATIO } from '../constants/landscapeLayout';
+import { useLandscapeMetrics } from '../hooks/useLandscapeMetrics';
 
 export default function WelcomeScreen(): React.JSX.Element {
   const { theme, profile } = useTerminal();
+  const { width } = useLandscapeMetrics();
   const { startBoundRequisition } = useGameFlow();
   const { startNewRun } = useRun();
 
@@ -27,94 +28,121 @@ export default function WelcomeScreen(): React.JSX.Element {
   };
   const credentials = profile.operative_profile.credentials;
   const vectors = profile.operative_profile.location_vectors;
+  const gridCellWidth = Math.max(48, (width - LANDSCAPE_PANEL_PADDING * 2) / 8);
+
+  const identityPane = (
+    <ScrollView
+      style={styles.identityScroll}
+      contentContainerStyle={styles.identityScrollContent}
+      showsVerticalScrollIndicator={false}
+    >
+      <FactionBootLogo theme={theme} />
+      <Text style={[styles.welcomeEyebrow, { color: theme.mutedColor }]}>
+        SECURE CHANNEL ESTABLISHED
+      </Text>
+      <Text style={[styles.welcomeTitle, { color: theme.primaryColor }]}>
+        Welcome back,{'\n'}
+        <Text style={{ color: theme.statusColor }}>{credentials.username}</Text>
+      </Text>
+      <Text style={[styles.welcomeBody, { color: theme.mutedColor }]}>
+        Ley-line sensors are nominal. Your soul anchor is synced to the urban grid.
+        Stand by for anomaly sweep authorization.
+      </Text>
+    </ScrollView>
+  );
+
+  const actionPane = (
+    <ScrollView
+      style={styles.actionScroll}
+      contentContainerStyle={styles.actionScrollContent}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={[styles.badgeFrame, { borderColor: theme.primaryColor, shadowColor: theme.primaryColor }]}>
+        <View style={[styles.badgeInner, { borderColor: theme.borderColor, backgroundColor: '#0a0b0f' }]}>
+          <View style={[styles.badgeHeader, { borderBottomColor: theme.borderColor }]}>
+            <Text style={[styles.badgeHeaderText, { color: theme.mutedColor }]}>AGENT BADGE</Text>
+            <View style={[styles.statusDot, { backgroundColor: '#22c55e' }]} />
+          </View>
+
+          <View style={[styles.badgeEmblem, { borderColor: theme.statusColor }]}>
+            <Text style={[styles.badgeEmblemText, { color: theme.statusColor }]}>
+              {credentials.class.slice(0, 1)}
+            </Text>
+          </View>
+
+          <Text style={[styles.badgeClass, { color: theme.primaryColor }]}>{credentials.class} OPERATIVE</Text>
+          <Text style={[styles.badgeCabal, { color: theme.mutedColor }]}>
+            {credentials.cabal_alignment.replace('_', ' ')}
+          </Text>
+        </View>
+      </View>
+
+      <View style={[styles.idReadout, { borderColor: theme.borderColor, backgroundColor: '#0d0f14' }]}>
+        <Text style={[styles.idLabel, { color: theme.mutedColor }]}>OPERATIVE ID READOUT</Text>
+        <Text style={[styles.idValue, { color: theme.statusColor }]}>{credentials.id}</Text>
+        <View style={styles.idMetaRow}>
+          <Text style={[styles.idMeta, { color: theme.mutedColor }]}>HANDLE</Text>
+          <Text style={[styles.idMetaValue, { color: theme.primaryColor }]}>{credentials.username}</Text>
+        </View>
+        <View style={styles.idMetaRow}>
+          <Text style={[styles.idMeta, { color: theme.mutedColor }]}>SECTOR LOCK</Text>
+          <Text style={[styles.idMetaValue, { color: theme.primaryColor }]}>
+            {DEFAULT_HOME_SECTOR_PROFILE_LABEL}
+          </Text>
+        </View>
+      </View>
+
+      <Pressable
+        onPress={handleStartScan}
+        style={({ pressed }) => [
+          styles.scanButton,
+          {
+            borderColor: theme.statusColor,
+            backgroundColor: pressed ? '#083344' : '#0e1624',
+            shadowColor: theme.statusColor,
+          },
+        ]}
+      >
+        <View style={styles.scanButtonGlow} />
+        <Text style={[styles.scanButtonLabel, { color: theme.statusColor }]}>INITIATE ANOMALY SCAN</Text>
+        <Text style={[styles.scanButtonSub, { color: theme.statusColor }]}>// AUTHORIZE LEY-LINE SWEEP</Text>
+      </Pressable>
+    </ScrollView>
+  );
 
   return (
     <TerminalSafeArea>
       <View style={styles.container}>
-      <View style={styles.gridBackdrop} pointerEvents="none">
-        {Array.from({ length: 8 }).map((_, row) => (
-          <View key={`row-${row}`} style={styles.gridRow}>
-            {Array.from({ length: 6 }).map((__, col) => (
-              <View
-                key={`cell-${row}-${col}`}
-                style={[styles.gridCell, { borderColor: `${theme.borderColor}55` }]}
-              />
-            ))}
-          </View>
-        ))}
-      </View>
-
-      <View style={[styles.headerStrip, { borderColor: theme.borderColor }]}>
-        <Text style={[styles.headerStripText, { color: theme.mutedColor }]}>
-          VEIL INCURSION // OPERATIVE TERMINAL // NODE: {vectors.current_node_lock.toUpperCase()}
-        </Text>
-      </View>
-
-      <View style={styles.content}>
-        <FactionBootLogo theme={theme} />
-        <Text style={[styles.welcomeEyebrow, { color: theme.mutedColor }]}>
-          SECURE CHANNEL ESTABLISHED
-        </Text>
-        <Text style={[styles.welcomeTitle, { color: theme.primaryColor }]}>
-          Welcome back,{'\n'}
-          <Text style={{ color: theme.statusColor }}>{credentials.username}</Text>
-        </Text>
-        <Text style={[styles.welcomeBody, { color: theme.mutedColor }]}>
-          Ley-line sensors are nominal. Your soul anchor is synced to the urban grid.
-          Stand by for anomaly sweep authorization.
-        </Text>
-
-        <View style={[styles.badgeFrame, { borderColor: theme.primaryColor, shadowColor: theme.primaryColor }]}>
-          <View style={[styles.badgeInner, { borderColor: theme.borderColor, backgroundColor: '#0a0b0f' }]}>
-            <View style={[styles.badgeHeader, { borderBottomColor: theme.borderColor }]}>
-              <Text style={[styles.badgeHeaderText, { color: theme.mutedColor }]}>AGENT BADGE</Text>
-              <View style={[styles.statusDot, { backgroundColor: '#22c55e' }]} />
+        <View style={styles.gridBackdrop} pointerEvents="none">
+          {Array.from({ length: 8 }).map((_, row) => (
+            <View key={`row-${row}`} style={styles.gridRow}>
+              {Array.from({ length: 8 }).map((__, col) => (
+                <View
+                  key={`cell-${row}-${col}`}
+                  style={[
+                    styles.gridCell,
+                    { width: gridCellWidth, borderColor: `${theme.borderColor}55` },
+                  ]}
+                />
+              ))}
             </View>
-
-            <View style={[styles.badgeEmblem, { borderColor: theme.statusColor }]}>
-              <Text style={[styles.badgeEmblemText, { color: theme.statusColor }]}>
-              {credentials.class.slice(0, 1)}
-            </Text>
-            </View>
-
-            <Text style={[styles.badgeClass, { color: theme.primaryColor }]}>{credentials.class} OPERATIVE</Text>
-            <Text style={[styles.badgeCabal, { color: theme.mutedColor }]}>
-              {credentials.cabal_alignment.replace('_', ' ')}
-            </Text>
-          </View>
+          ))}
         </View>
 
-        <View style={[styles.idReadout, { borderColor: theme.borderColor, backgroundColor: '#0d0f14' }]}>
-          <Text style={[styles.idLabel, { color: theme.mutedColor }]}>OPERATIVE ID READOUT</Text>
-          <Text style={[styles.idValue, { color: theme.statusColor }]}>{credentials.id}</Text>
-          <View style={styles.idMetaRow}>
-            <Text style={[styles.idMeta, { color: theme.mutedColor }]}>HANDLE</Text>
-            <Text style={[styles.idMetaValue, { color: theme.primaryColor }]}>{credentials.username}</Text>
-          </View>
-          <View style={styles.idMetaRow}>
-            <Text style={[styles.idMeta, { color: theme.mutedColor }]}>SECTOR LOCK</Text>
-            <Text style={[styles.idMetaValue, { color: theme.primaryColor }]}>
-              {DEFAULT_HOME_SECTOR_PROFILE_LABEL}
-            </Text>
-          </View>
+        <View style={[styles.headerStrip, { borderColor: theme.borderColor }]}>
+          <Text style={[styles.headerStripText, { color: theme.mutedColor }]}>
+            VEIL INCURSION // OPERATIVE TERMINAL // NODE: {vectors.current_node_lock.toUpperCase()}
+          </Text>
         </View>
 
-        <Pressable
-          onPress={handleStartScan}
-          style={({ pressed }) => [
-            styles.scanButton,
-            {
-              borderColor: theme.statusColor,
-              backgroundColor: pressed ? '#083344' : '#0e1624',
-              shadowColor: theme.statusColor,
-            },
-          ]}
-        >
-          <View style={styles.scanButtonGlow} />
-          <Text style={[styles.scanButtonLabel, { color: theme.statusColor }]}>INITIATE ANOMALY SCAN</Text>
-          <Text style={[styles.scanButtonSub, { color: theme.statusColor }]}>// AUTHORIZE LEY-LINE SWEEP</Text>
-        </Pressable>
-      </View>
+        <LandscapeSplitPane
+          style={styles.splitBody}
+          primary={identityPane}
+          secondary={actionPane}
+          primaryRatio={LANDSCAPE_WELCOME_PRIMARY_RATIO}
+          primaryStyle={styles.splitPane}
+          secondaryStyle={styles.splitPane}
+        />
       </View>
     </TerminalSafeArea>
   );
@@ -123,6 +151,7 @@ export default function WelcomeScreen(): React.JSX.Element {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    minHeight: 0,
   },
   gridBackdrop: {
     ...StyleSheet.absoluteFillObject,
@@ -134,7 +163,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   gridCell: {
-    width: (width - 32) / 6,
     height: 48,
     borderWidth: 0.5,
   },
@@ -142,7 +170,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     paddingVertical: 10,
     paddingHorizontal: 16,
-    marginBottom: 8,
+    flexShrink: 0,
+    zIndex: 1,
   },
   headerStripText: {
     fontFamily: 'monospace',
@@ -150,17 +179,41 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     textAlign: 'center',
   },
-  content: {
+  splitBody: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingBottom: 32,
+    minHeight: 0,
+    padding: LANDSCAPE_PANEL_PADDING,
+    zIndex: 1,
+  },
+  splitPane: {
+    minHeight: 0,
     justifyContent: 'center',
+  },
+  identityScroll: {
+    flex: 1,
+    minHeight: 0,
+  },
+  identityScrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingRight: 4,
+  },
+  actionScroll: {
+    flex: 1,
+    minHeight: 0,
+  },
+  actionScrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    gap: 16,
+    paddingLeft: 4,
   },
   welcomeEyebrow: {
     fontFamily: 'monospace',
     fontSize: 10,
     letterSpacing: 2,
     marginBottom: 8,
+    marginTop: 12,
   },
   welcomeTitle: {
     fontFamily: 'monospace',
@@ -173,12 +226,10 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     fontSize: 11,
     lineHeight: 17,
-    marginBottom: 28,
   },
   badgeFrame: {
     borderWidth: 2,
     padding: 3,
-    marginBottom: 20,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.8,
     shadowRadius: 14,
@@ -238,7 +289,6 @@ const styles = StyleSheet.create({
   idReadout: {
     borderWidth: 1,
     padding: 14,
-    marginBottom: 28,
   },
   idLabel: {
     fontFamily: 'monospace',

@@ -1,4 +1,4 @@
-import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ImageBackground, StatusBar, StyleSheet, View, type ImageSourcePropType } from 'react-native';
 import {
   resolveCombatEnemyPortrait,
@@ -23,7 +23,7 @@ import { pulseCombatTargetSelect } from '../utils/hubButtonHaptics';
 import { triggerShake } from '../utils/combatJuice';
 import type { CombatPlayerViewportRef } from '../components/combat/CombatPlayerViewport';
 import IncursionShell from '../components/IncursionShell';
-import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
+import IncursionRunLayout from '../components/IncursionRunLayout';
 import TacticalCombatHub from '../components/TacticalCombatHub';
 import {
   CombatEnemyChromeProvider,
@@ -51,7 +51,6 @@ import { buildCombatAugmentIcons } from '../utils/combatAugmentIcons';
 import { encounterBudgetForDepth } from '../data/combatEncounterBudget';
 import type { CargoItemId } from '../types/cargoGrid';
 import {
-  createDefaultPendingNarrativeCombatBoons,
   type PendingNarrativeCombatBoons,
 } from '../types/narrativeBonusReward';
 import { depthFromNodesCleared, isDistrictGateDepth } from '../data/districtPacing';
@@ -92,11 +91,14 @@ export default function CombatScreen(): React.JSX.Element {
     grantCombatResourceDrops,
     completeDefendRiftVictory,
     consumeAdrenalinePrimerAfterCombat,
-    claimPendingNarrativeCombatBoons,
+    peekPendingNarrativeCombatBoons,
+    clearPendingNarrativeCombatBoons,
     clearNarrativeBoonStatusEffects,
     isPostCombatBoonBlocked,
     recordRunKillAttacker,
     clearEncounterUltimateDisabled,
+    setCombatLogActive,
+    clearRunLog,
   } = useRun();
   const { completeCurrentNode } = useNodeProgression();
   const { getWeaponCombatStats, account, addLockedContainer } = usePlayerAccount();
@@ -120,16 +122,18 @@ export default function CombatScreen(): React.JSX.Element {
   const shadowWarKineticArmor = activeIncursion.shadowWarBuffs?.kineticArmorBonus ?? 0;
   const kineticBatteryActive = activeIncursion.boundRequisition?.kineticBatteryActive ?? false;
   const firstTurnBonusAp = adrenalinePrimerBonusAp + shadowWarApBonus;
-  const [narrativeCombatBoons, setNarrativeCombatBoons] = useState<PendingNarrativeCombatBoons>(
-    createDefaultPendingNarrativeCombatBoons,
+  const [narrativeCombatBoons] = useState<PendingNarrativeCombatBoons>(
+    peekPendingNarrativeCombatBoons,
   );
-  const narrativeBoonsClaimedRef = useRef(false);
 
-  useLayoutEffect(() => {
-    if (narrativeBoonsClaimedRef.current) return;
-    narrativeBoonsClaimedRef.current = true;
-    setNarrativeCombatBoons(claimPendingNarrativeCombatBoons());
-  }, [claimPendingNarrativeCombatBoons]);
+  useEffect(() => {
+    setCombatLogActive(true);
+    clearPendingNarrativeCombatBoons();
+    return () => {
+      setCombatLogActive(false);
+      clearRunLog();
+    };
+  }, [clearPendingNarrativeCombatBoons, clearRunLog, setCombatLogActive]);
 
   const [squadUi, setSquadUi] = useState<CombatSquadUiSnapshot | null>(null);
   const [operativeTelemetry, setOperativeTelemetry] = useState<CombatOperativeTelemetry | null>(null);
@@ -534,8 +538,7 @@ export default function CombatScreen(): React.JSX.Element {
       <CombatTurnProvider>
         <CombatEnemyChromeProvider>
         <CombatArenaOverlayProvider>
-        <MacroLogAnchoredLayout
-          showMacroLog={false}
+        <IncursionRunLayout
           onConsumableUsed={handleConsumableUsed}
           onDeployCargoItem={handleDeployCargoItem}
           style={styles.combatRoot}
@@ -681,7 +684,7 @@ export default function CombatScreen(): React.JSX.Element {
               <CombatParryScreenOverlay />
             </View>
           </View>
-        </MacroLogAnchoredLayout>
+        </IncursionRunLayout>
         </CombatArenaOverlayProvider>
         </CombatEnemyChromeProvider>
       </CombatTurnProvider>

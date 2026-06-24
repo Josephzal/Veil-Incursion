@@ -12,11 +12,14 @@ import {
 } from '../data/descentEngine';
 import { INITIAL_SECTOR_POOL } from '../data/regions';
 import IncursionShell from '../components/IncursionShell';
-import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
+import IncursionRunLayout from '../components/IncursionRunLayout';
+import LandscapeSplitPane from '../components/layout/LandscapeSplitPane';
 import InlineScannerEngagement from '../components/overworld/InlineScannerEngagement';
 import VectorScanner from '../components/VectorScanner';
 import LeyLineBoonSwapOverlay from '../components/LeyLineBoonSwapOverlay';
 import ClassBoonSwapOverlay from '../components/ClassBoonSwapOverlay';
+import { LANDSCAPE_PANEL_PADDING } from '../constants/landscapeLayout';
+import { useLandscapeMetrics } from '../hooks/useLandscapeMetrics';
 import { useRun } from '../context/RunContext';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useTerminal } from '../context/TerminalContext';
@@ -50,6 +53,7 @@ function scaleRadarDots(dots: RadarDot[], fromSize: number, toSize: number): Rad
 
 export default function ScanningScreen(): React.JSX.Element {
   const { theme } = useTerminal();
+  const { useHorizontalSplit } = useLandscapeMetrics();
   const {
     runState,
     scanSessionKey,
@@ -336,6 +340,73 @@ export default function ScanningScreen(): React.JSX.Element {
     return 'TAP A LOCKED PING TO REVIEW // SELECTED NODE SHOWS BELOW';
   }, [siphonedNodeIds.length]);
 
+  const scannerPane = (
+    <View style={styles.scannerViewport} onLayout={handleScannerViewportLayout}>
+      <View style={[styles.scannerBezel, { borderColor: `${accent}55` }]}>
+        {scannerSize > 0 && scannerDotsReady && vectorDots.length > 0 ? (
+          <VectorScanner
+            key={`scanner-${scanSessionKey}`}
+            cabal={cabal}
+            zoneTint={zoneTint}
+            scannerSize={scannerSize}
+            active
+            continuousScan
+            activeNodes={vectorDots}
+            contactsLocked={false}
+            selectedNodeId={selectedNodeId}
+            typeColoredNodeIds={typeColoredNodeIds}
+            onSelectNode={handleScannerNodeSelect}
+            onSiphonedNodesChange={handleSiphonedNodesChange}
+          />
+        ) : null}
+      </View>
+    </View>
+  );
+
+  const nodeDockPane = (
+    <View
+      style={[
+        styles.nodeDock,
+        useHorizontalSplit ? styles.nodeDockHorizontal : styles.nodeDockVertical,
+        { borderColor: theme.borderColor },
+      ]}
+    >
+      <Text style={[styles.nodesCounter, { color: theme.mutedColor }]}>
+        {`NODES IN FIELD: ${nodesInField} // LOCKED: ${siphonedNodeIds.length}/${nodesInField}`}
+      </Text>
+      <View style={styles.nodeDockBody}>
+        {showNodeDock ? (
+          <InlineScannerEngagement
+            layout="dock"
+            spectralLines={intelLines}
+            canEngage={canEngage}
+            accent={accent}
+            mutedColor={theme.mutedColor}
+            engageLabel="[ BREACH ]"
+            onEngage={handleEngage}
+          />
+        ) : (
+          <Text style={[styles.dockPlaceholder, { color: theme.mutedColor }]}>
+            {dockPlaceholder}
+          </Text>
+        )}
+      </View>
+      {emergencyRecallAvailable ? (
+        <Pressable
+          onPress={handleEmergencyRecall}
+          style={({ pressed }) => [
+            styles.recallBtn,
+            { borderColor: '#f59e0b', opacity: pressed ? 0.75 : 1 },
+          ]}
+        >
+          <Text style={[styles.recallBtnText, { color: '#fbbf24' }]}>
+            [ EMERGENCY RECALL — DEFEND THE RIFT ]
+          </Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+
   if (!isScanningHub) {
     return (
       <View style={[styles.container, { backgroundColor: theme.backgroundColor }]}>
@@ -346,69 +417,17 @@ export default function ScanningScreen(): React.JSX.Element {
 
   return (
     <IncursionShell>
-      <MacroLogAnchoredLayout
-        showMacroLog={runState.runActive}
+      <IncursionRunLayout
         style={{ backgroundColor: theme.backgroundColor }}
       >
-        <View style={styles.body}>
-          <View style={styles.scannerViewport} onLayout={handleScannerViewportLayout}>
-            <View style={[styles.scannerBezel, { borderColor: `${accent}55` }]}>
-              {scannerSize > 0 && scannerDotsReady && vectorDots.length > 0 ? (
-                <VectorScanner
-                  key={`scanner-${scanSessionKey}`}
-                  cabal={cabal}
-                  zoneTint={zoneTint}
-                  scannerSize={scannerSize}
-                  active
-                  continuousScan
-                  activeNodes={vectorDots}
-                  contactsLocked={false}
-                  selectedNodeId={selectedNodeId}
-                  typeColoredNodeIds={typeColoredNodeIds}
-                  onSelectNode={handleScannerNodeSelect}
-                  onSiphonedNodesChange={handleSiphonedNodesChange}
-                />
-              ) : null}
-            </View>
-          </View>
-
-          <View style={[styles.nodeDock, { borderColor: theme.borderColor }]}>
-            <Text style={[styles.nodesCounter, { color: theme.mutedColor }]}>
-              {`NODES IN FIELD: ${nodesInField} // LOCKED: ${siphonedNodeIds.length}/${nodesInField}`}
-            </Text>
-            <View style={styles.nodeDockBody}>
-              {showNodeDock ? (
-                <InlineScannerEngagement
-                  layout="dock"
-                  spectralLines={intelLines}
-                  canEngage={canEngage}
-                  accent={accent}
-                  mutedColor={theme.mutedColor}
-                  engageLabel="[ BREACH ]"
-                  onEngage={handleEngage}
-                />
-              ) : (
-                <Text style={[styles.dockPlaceholder, { color: theme.mutedColor }]}>
-                  {dockPlaceholder}
-                </Text>
-              )}
-            </View>
-            {emergencyRecallAvailable ? (
-              <Pressable
-                onPress={handleEmergencyRecall}
-                style={({ pressed }) => [
-                  styles.recallBtn,
-                  { borderColor: '#f59e0b', opacity: pressed ? 0.75 : 1 },
-                ]}
-              >
-                <Text style={[styles.recallBtnText, { color: '#fbbf24' }]}>
-                  [ EMERGENCY RECALL — DEFEND THE RIFT ]
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
-        </View>
-      </MacroLogAnchoredLayout>
+        <LandscapeSplitPane
+          style={styles.body}
+          primary={scannerPane}
+          secondary={nodeDockPane}
+          primaryStyle={styles.scannerPane}
+          secondaryStyle={styles.nodeDockPaneHost}
+        />
+      </IncursionRunLayout>
 
       <LeyLineBoonSwapOverlay
         visible={activeIncursion.pendingLeyBoonSwap != null}
@@ -443,14 +462,18 @@ const styles = StyleSheet.create({
   body: {
     flex: 1,
     minHeight: 0,
-    flexDirection: 'column',
+    padding: LANDSCAPE_PANEL_PADDING,
+  },
+  scannerPane: {
+    minHeight: 0,
+  },
+  nodeDockPaneHost: {
+    minHeight: 0,
   },
   fallback: { fontFamily: 'monospace', fontSize: 10, textAlign: 'center', padding: 24 },
   scannerViewport: {
     flex: 1,
     minHeight: 0,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
   },
   scannerBezel: {
     flex: 1,
@@ -462,13 +485,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   nodeDock: {
-    flexShrink: 0,
-    borderTopWidth: 1,
     paddingHorizontal: 12,
     paddingVertical: 8,
     backgroundColor: 'rgba(5, 6, 8, 0.96)',
     gap: 4,
+    justifyContent: 'center',
+  },
+  nodeDockVertical: {
+    flexShrink: 0,
+    borderTopWidth: 1,
     minHeight: 76,
+  },
+  nodeDockHorizontal: {
+    flex: 1,
+    borderLeftWidth: 1,
+    minWidth: 200,
   },
   nodesCounter: {
     fontFamily: 'monospace',

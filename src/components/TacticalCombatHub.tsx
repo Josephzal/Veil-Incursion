@@ -1572,7 +1572,7 @@ export default function TacticalCombatHub({
   resolveVictoryRef.current = () => resolve(true);
 
   useEffect(() => {
-    registerKillResolver?.(() => {});
+    registerKillResolver?.(() => resolveVictoryRef.current());
   }, [registerKillResolver]);
 
   const applyHealRef = useRef((amount: number) => {

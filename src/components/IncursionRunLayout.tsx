@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { pulseCargoClose, pulseCargoOpen, pulseStatusDismiss, pulseStatusOpen } from '../utils/hubButtonHaptics';
 import { StyleSheet, View, ViewStyle } from 'react-native';
 import CargoGridOverlay from './CargoGridOverlay';
-import PersistentTerminalLog from './PersistentTerminalLog';
+import RunGlobalChrome from './RunGlobalChrome';
 import RunStatusOverlay from './RunStatusOverlay';
 import { CargoOverlayProvider } from '../context/CargoOverlayContext';
 import { RunStatusOverlayProvider } from '../context/RunStatusOverlayContext';
@@ -12,9 +12,8 @@ import { useTerminal } from '../context/TerminalContext';
 import type { CargoItemId } from '../types/cargoGrid';
 import type { IncursionConsumableUseResult } from '../types/incursionInventory';
 
-interface MacroLogAnchoredLayoutProps {
+interface IncursionRunLayoutProps {
   children: React.ReactNode;
-  showMacroLog?: boolean;
   style?: ViewStyle;
   /**
    * When set (combat), consumable effects apply to the live combat hub instead of run state.
@@ -26,16 +25,14 @@ interface MacroLogAnchoredLayoutProps {
 }
 
 /**
- * Strict two-zone column: scrollable/flex content above, macro log pinned to screen baseline.
- * Use inside IncursionShell for combat, scanner, narrative, boon, and sanctuary screens.
+ * Full-viewport run shell — cargo/status overlays only. Macro log is combat-dashboard-only.
  */
-export default function MacroLogAnchoredLayout({
+export default function IncursionRunLayout({
   children,
-  showMacroLog = true,
   style,
   onConsumableUsed,
   onDeployCargoItem,
-}: MacroLogAnchoredLayoutProps): React.JSX.Element {
+}: IncursionRunLayoutProps): React.JSX.Element {
   const { theme } = useTerminal();
   const {
     runState,
@@ -130,50 +127,43 @@ export default function MacroLogAnchoredLayout({
 
   return (
     <CargoOverlayProvider value={cargoOverlayValue}>
-    <RunStatusOverlayProvider value={statusOverlayValue}>
-      <View style={[styles.root, style]}>
-        <View style={styles.content}>{children}</View>
-        {showMacroLog ? (
-          <PersistentTerminalLog
-            docked
-            showCargo={showRunOverlays}
-            cargoDisabled={showRunOverlays && combatMode && !cargoEnabled}
-            onCargoPress={openCargo}
-            showStatus={showRunOverlays}
-            onStatusPress={openStatus}
-          />
-        ) : null}
+      <RunStatusOverlayProvider value={statusOverlayValue}>
+        <View style={[styles.root, style]}>
+          <View style={styles.content}>
+            {children}
+            {showRunOverlays && !combatMode ? <RunGlobalChrome /> : null}
+          </View>
 
-        {showRunOverlays ? (
-          <CargoGridOverlay
-            visible={cargoOpen}
-            cargo={activeIncursion.cargo}
-            theme={theme}
-            onClose={closeCargo}
-            onDismissSilently={dismissCargoSilently}
-            onRelocateItem={relocateCargoItem}
-            onDiscardItem={discardCargoInstance}
-            runCredits={activeIncursion.runCredits}
-            playerActionPoints={combatTurn?.playerActionPoints}
-            scannerMode={!combatMode}
-            combatMode={combatMode}
-            combatConsumablesEnabled={cargoEnabled}
-            onUseAmpoule={!combatMode ? useFocusingAmpouleFromCargo : undefined}
-            onUseResonanceBribe={!combatMode ? useResonanceBribeFromCargo : undefined}
-            onUseDeadDrop={!combatMode ? useDeadDropTokenFromCargo : undefined}
-            onUseCombatConsumable={combatMode ? handleUseCombatConsumable : undefined}
-          />
-        ) : null}
+          {showRunOverlays ? (
+            <CargoGridOverlay
+              visible={cargoOpen}
+              cargo={activeIncursion.cargo}
+              theme={theme}
+              onClose={closeCargo}
+              onDismissSilently={dismissCargoSilently}
+              onRelocateItem={relocateCargoItem}
+              onDiscardItem={discardCargoInstance}
+              runCredits={activeIncursion.runCredits}
+              playerActionPoints={combatTurn?.playerActionPoints}
+              scannerMode={!combatMode}
+              combatMode={combatMode}
+              combatConsumablesEnabled={cargoEnabled}
+              onUseAmpoule={!combatMode ? useFocusingAmpouleFromCargo : undefined}
+              onUseResonanceBribe={!combatMode ? useResonanceBribeFromCargo : undefined}
+              onUseDeadDrop={!combatMode ? useDeadDropTokenFromCargo : undefined}
+              onUseCombatConsumable={combatMode ? handleUseCombatConsumable : undefined}
+            />
+          ) : null}
 
-        {showRunOverlays ? (
-          <RunStatusOverlay
-            visible={statusOpen}
-            theme={theme}
-            onClose={closeStatus}
-          />
-        ) : null}
-      </View>
-    </RunStatusOverlayProvider>
+          {showRunOverlays ? (
+            <RunStatusOverlay
+              visible={statusOpen}
+              theme={theme}
+              onClose={closeStatus}
+            />
+          ) : null}
+        </View>
+      </RunStatusOverlayProvider>
     </CargoOverlayProvider>
   );
 }
@@ -181,10 +171,11 @@ export default function MacroLogAnchoredLayout({
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    flexDirection: 'column',
+    minHeight: 0,
   },
   content: {
     flex: 1,
     minHeight: 0,
+    position: 'relative',
   },
 });

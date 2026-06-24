@@ -10,7 +10,7 @@ import { useTerminalNav } from '../context/TerminalNavContext';
 import { useShadowWar } from '../context/ShadowWarContext';
 import IdentificationBadgeView from '../components/IdentificationBadgeView';
 import SafehouseHubPanel from '../components/safehouse/SafehouseHubPanel';
-import TerminalNavHeader from '../components/TerminalNavHeader';
+import TerminalHubLayout from '../components/layout/TerminalHubLayout';
 import TerminalSafeArea from '../components/TerminalSafeArea';
 import ShadowWarDashboard from '../components/ShadowWarDashboard';
 import type { FactionType } from '../types/game';
@@ -122,9 +122,11 @@ export default function OverworldHubScreen(): React.JSX.Element {
           ))}
         </View>
 
-        <TerminalNavHeader activeView={terminalView} onSelectView={setTerminalView} />
-
-        <View style={styles.viewport}>
+        <TerminalHubLayout
+          activeView={terminalView}
+          onSelectView={setTerminalView}
+          mainStyle={styles.viewport}
+        >
           {terminalView === 'BADGE' && (
             <IdentificationBadgeView theme={theme} profile={profile} account={account} />
           )}
@@ -138,7 +140,7 @@ export default function OverworldHubScreen(): React.JSX.Element {
             />
           )}
           {terminalView === 'SAFEHOUSE' && <SafehouseHubPanel />}
-        </View>
+        </TerminalHubLayout>
 
         {needsFactionSelection && (
           <View style={styles.factionOverlay}>
@@ -183,7 +185,7 @@ const styles = StyleSheet.create({
   gridBackdrop: { ...StyleSheet.absoluteFillObject, opacity: 0.2 },
   gridRow: { flex: 1, flexDirection: 'row' },
   gridCell: { flex: 1, borderWidth: 0.5 },
-  viewport: { flex: 1, paddingHorizontal: 16, paddingTop: 12, zIndex: 1 },
+  viewport: { flex: 1, minHeight: 0, padding: 0 },
   factionOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.9)',

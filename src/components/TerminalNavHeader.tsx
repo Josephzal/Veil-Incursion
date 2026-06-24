@@ -6,12 +6,7 @@ import { useTerminal } from '../context/TerminalContext';
 import { ALL_OPERATIVE_CLASSES } from '../types/operativeClass';
 import type { ClassType } from '../types/game';
 import { TerminalView } from '../types/terminalNav';
-
-const NAV_ITEMS: Array<{ key: TerminalView; label: string }> = [
-  { key: 'BADGE', label: 'IDENTITY BADGE' },
-  { key: 'MAP', label: 'SHADOW WAR' },
-  { key: 'SAFEHOUSE', label: 'SAFEHOUSE' },
-];
+import { TERMINAL_NAV_ITEMS } from '../constants/terminalNav';
 
 const CLASS_SHORT_LABEL: Record<ClassType, string> = {
   AEGIS: 'AEGIS',
@@ -42,7 +37,7 @@ export default function TerminalNavHeader({
           },
         ]}
       >
-        {NAV_ITEMS.map((item) => {
+        {TERMINAL_NAV_ITEMS.map((item) => {
           const active = activeView === item.key;
           return (
             <Pressable

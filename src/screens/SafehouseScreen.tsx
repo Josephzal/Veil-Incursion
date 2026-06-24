@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import IncursionShell from '../components/IncursionShell';
 import DecryptionPanel from '../components/DecryptionPanel';
-import MacroLogAnchoredLayout from '../components/MacroLogAnchoredLayout';
+import IncursionRunLayout from '../components/IncursionRunLayout';
+import RunEventScreenFrame from '../components/layout/RunEventScreenFrame';
 import AegisLoadoutEditor from '../components/AegisLoadoutEditor';
 import ClassLoadoutEditor from '../components/ClassLoadoutEditor';
 import { useRun } from '../context/RunContext';
@@ -282,39 +283,48 @@ export default function SafehouseScreen(): React.JSX.Element {
 
   return (
     <IncursionShell>
-      <MacroLogAnchoredLayout
-        showMacroLog={runState.runActive}
-        style={{ backgroundColor: '#0b0c0d' }}
-      >
-        <View style={styles.root}>
-          <View style={[styles.header, { borderColor: BORDER }]}>
-            <Text style={styles.headerTitle}>CABAL SAFEHOUSE // CHECKPOINT TERMINAL</Text>
-            <Text style={styles.headerStats}>
-              {`HEALTH ${healthPct}% // SHIELD ${shieldPct}% // CARGO ${cargoPct}% // VAULT ${account.bankedCargo.totalValue}`}
-            </Text>
-            <Text style={[styles.headerSub, { color: TERMINAL_MUTED }]}>
-              {`DISTRICT ${activeIncursion.currentDistrict - 1} SECURED — PREPARE FOR ${DISTRICT_NAMES[nextDistrict].toUpperCase()}`}
-            </Text>
-          </View>
-
-          <View style={styles.tabRow}>
-            {(['PAYLOAD', 'LOADOUT', 'BENCH', 'DECRYPT', 'INTEL'] as SafehouseTab[]).map((tab) => (
-              <Pressable
-                key={tab}
-                onPress={() => setActiveTab(tab)}
-                style={[
-                  styles.tabBtn,
-                  { borderColor: activeTab === tab ? TERMINAL_ACCENT : BORDER },
-                  activeTab === tab && styles.tabBtnActive,
-                ]}
-              >
-                <Text style={[styles.tabLabel, activeTab === tab && styles.tabLabelActive]}>
-                  {`[ ${tab} ]`}
+      <IncursionRunLayout style={{ backgroundColor: '#0b0c0d' }}>
+        <RunEventScreenFrame
+          header={(
+            <>
+              <View style={[styles.header, { borderColor: BORDER }]}>
+                <Text style={styles.headerTitle}>CABAL SAFEHOUSE // CHECKPOINT TERMINAL</Text>
+                <Text style={styles.headerStats}>
+                  {`HEALTH ${healthPct}% // SHIELD ${shieldPct}% // CARGO ${cargoPct}% // VAULT ${account.bankedCargo.totalValue}`}
                 </Text>
-              </Pressable>
-            ))}
-          </View>
+                <Text style={[styles.headerSub, { color: TERMINAL_MUTED }]}>
+                  {`DISTRICT ${activeIncursion.currentDistrict - 1} SECURED — PREPARE FOR ${DISTRICT_NAMES[nextDistrict].toUpperCase()}`}
+                </Text>
+              </View>
 
+              <View style={styles.tabRow}>
+                {(['PAYLOAD', 'LOADOUT', 'BENCH', 'DECRYPT', 'INTEL'] as SafehouseTab[]).map((tab) => (
+                  <Pressable
+                    key={tab}
+                    onPress={() => setActiveTab(tab)}
+                    style={[
+                      styles.tabBtn,
+                      { borderColor: activeTab === tab ? TERMINAL_ACCENT : BORDER },
+                      activeTab === tab && styles.tabBtnActive,
+                    ]}
+                  >
+                    <Text style={[styles.tabLabel, activeTab === tab && styles.tabLabelActive]}>
+                      {`[ ${tab} ]`}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </>
+          )}
+          footer={(
+            <>
+              <Text style={[styles.statusLine, { color: theme.mutedColor }]}>{statusLine}</Text>
+              <Pressable onPress={handleUnseal} style={[styles.unsealBtn, { borderColor: TERMINAL_ACCENT }]}>
+                <Text style={styles.unsealLabel}>{`[ UNSEAL DOOR : ENTER DISTRICT ${nextDistrict} ]`}</Text>
+              </Pressable>
+            </>
+          )}
+        >
           <View style={[styles.panel, { borderColor: BORDER }]}>
             {activeTab === 'PAYLOAD' ? (
               <>
@@ -448,27 +458,13 @@ export default function SafehouseScreen(): React.JSX.Element {
               </>
             ) : null}
           </View>
-
-          <Text style={[styles.statusLine, { color: theme.mutedColor }]}>{statusLine}</Text>
-
-          <Pressable onPress={handleUnseal} style={[styles.unsealBtn, { borderColor: TERMINAL_ACCENT }]}>
-            <Text style={styles.unsealLabel}>{`[ UNSEAL DOOR : ENTER DISTRICT ${nextDistrict} ]`}</Text>
-          </Pressable>
-        </View>
-      </MacroLogAnchoredLayout>
+        </RunEventScreenFrame>
+      </IncursionRunLayout>
     </IncursionShell>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: '#0b0c0d',
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 18,
-    gap: 12,
-  },
   header: {
     borderWidth: 1,
     backgroundColor: PANEL_BG,
@@ -495,6 +491,7 @@ const styles = StyleSheet.create({
   tabRow: {
     flexDirection: 'row',
     gap: 8,
+    marginBottom: 10,
   },
   tabBtn: {
     flex: 1,
@@ -517,6 +514,7 @@ const styles = StyleSheet.create({
   },
   panel: {
     flex: 1,
+    minHeight: 0,
     borderWidth: 1,
     backgroundColor: PANEL_BG,
     padding: 14,
