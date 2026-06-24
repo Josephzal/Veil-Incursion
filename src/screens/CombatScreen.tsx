@@ -540,18 +540,7 @@ export default function CombatScreen(): React.JSX.Element {
           onDeployCargoItem={handleDeployCargoItem}
           style={styles.combatRoot}
         >
-          <ImageBackground
-            source={arenaBackgroundSource}
-            style={styles.landscapeRoot}
-            resizeMode="cover"
-          >
-            {arenaBackgroundScrimColor ? (
-              <View
-                style={[styles.arenaBackgroundScrim, { backgroundColor: arenaBackgroundScrimColor }]}
-                pointerEvents="none"
-              />
-            ) : null}
-
+          <View style={styles.landscapeRoot}>
             <View style={styles.landscapeColumn}>
               <CombatOperativeVitalsOverlay
                 telemetry={operativeTelemetry}
@@ -571,30 +560,45 @@ export default function CombatScreen(): React.JSX.Element {
 
               <CombatJuiceHost style={styles.body}>
                 <View style={styles.arenaPanel}>
-                  <ParticleOverlay biomeId={combatBiomeId} />
+                  <ImageBackground
+                    source={arenaBackgroundSource}
+                    style={styles.arenaBackground}
+                    resizeMode="cover"
+                  >
+                    {arenaBackgroundScrimColor ? (
+                      <View
+                        style={[styles.arenaBackgroundScrim, { backgroundColor: arenaBackgroundScrimColor }]}
+                        pointerEvents="none"
+                      />
+                    ) : null}
+                  </ImageBackground>
 
-                  <CombatLandscapeArena
-                    apparitionRef={apparitionRef}
-                    playerViewportRef={playerViewportRef}
-                    portraitKey={portraitKey}
-                    portraitSource={focusedPortraitSource}
-                    operativeClass={operativeClass}
-                    wardPrimed={wardPrimed}
-                    abilityPrimed={abilityPrimed}
-                    enemySquadPanel={enemySquadPanel}
-                    augmentIcons={combatAugmentIcons}
-                    gridUnits={gridUnits}
-                    onEradicationComplete={handleEradicationComplete}
-                  />
+                  <View style={styles.arenaForeground} pointerEvents="box-none">
+                    <ParticleOverlay biomeId={combatBiomeId} />
 
-                  {showVictoryBanner ? (
-                    <CombatResolutionBanner
-                      outcome="VICTORY"
-                      primaryColor="#00ff33"
-                      defeatColor="#ef4444"
-                      onDismiss={handleResolutionDismiss}
+                    <CombatLandscapeArena
+                      apparitionRef={apparitionRef}
+                      playerViewportRef={playerViewportRef}
+                      portraitKey={portraitKey}
+                      portraitSource={focusedPortraitSource}
+                      operativeClass={operativeClass}
+                      wardPrimed={wardPrimed}
+                      abilityPrimed={abilityPrimed}
+                      enemySquadPanel={enemySquadPanel}
+                      augmentIcons={combatAugmentIcons}
+                      gridUnits={gridUnits}
+                      onEradicationComplete={handleEradicationComplete}
                     />
-                  ) : null}
+
+                    {showVictoryBanner ? (
+                      <CombatResolutionBanner
+                        outcome="VICTORY"
+                        primaryColor="#00ff33"
+                        defeatColor="#ef4444"
+                        onDismiss={handleResolutionDismiss}
+                      />
+                    ) : null}
+                  </View>
                 </View>
 
                 <CombatTacticalDashboard
@@ -676,7 +680,7 @@ export default function CombatScreen(): React.JSX.Element {
 
               <CombatParryScreenOverlay />
             </View>
-          </ImageBackground>
+          </View>
         </MacroLogAnchoredLayout>
         </CombatArenaOverlayProvider>
         </CombatEnemyChromeProvider>
@@ -714,9 +718,14 @@ const styles = StyleSheet.create({
     width: '100%',
     overflow: 'hidden',
     position: 'relative',
-    zIndex: 2,
+  },
+  arenaBackground: {
+    ...StyleSheet.absoluteFillObject,
   },
   arenaBackgroundScrim: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  arenaForeground: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 1,
   },
