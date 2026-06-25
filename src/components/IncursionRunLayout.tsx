@@ -22,7 +22,7 @@ interface IncursionRunLayoutProps {
   onConsumableUsed?: (result: IncursionConsumableUseResult) => void;
   /** Combat-only: validates turn/AP, consumes cargo, then applies via onConsumableUsed. */
   onDeployCargoItem?: (itemId: CargoItemId) => boolean;
-  /** Hide floating STATUS / CARGO chrome (e.g. harvest screen has its own layout). */
+  /** Hide floating STATUS / CARGO chrome; embedded controls may still use overlay context. */
   hideRunChrome?: boolean;
 }
 
@@ -119,13 +119,13 @@ export default function IncursionRunLayout({
   }, []);
 
   const cargoOverlayValue = useMemo(
-    () => ({ openCargo, cargoEnabled: showRunOverlays && cargoEnabled && !hideRunChrome }),
-    [cargoEnabled, hideRunChrome, openCargo, showRunOverlays],
+    () => ({ openCargo, cargoEnabled: showRunOverlays && cargoEnabled }),
+    [cargoEnabled, openCargo, showRunOverlays],
   );
 
   const statusOverlayValue = useMemo(
-    () => ({ openStatus, statusEnabled: showRunOverlays && !hideRunChrome }),
-    [hideRunChrome, openStatus, showRunOverlays],
+    () => ({ openStatus, statusEnabled: showRunOverlays }),
+    [openStatus, showRunOverlays],
   );
 
   return (

@@ -1,11 +1,13 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import HapticPressable from '../HapticPressable';
-import {
-  getInteractiveButtonStyle,
-  getInteractiveButtonTextStyle,
-} from '../../styles/hubTerminalUi';
-import { pulseHubButton } from '../../utils/hubButtonHaptics';
+import { TERMINAL_ACCENT } from '../MacroLogCargoButton';
+import { useCargoOverlay } from '../../context/CargoOverlayContext';
+import { useRunStatusOverlay } from '../../context/RunStatusOverlayContext';
+import ScannerBreachButton from '../scanner/ScannerBreachButton';
+
+const STATE_VIOLET = '#ddd6fe';
+const STATE_VIOLET_GLOW = '#c4b5fd';
 
 export interface InlineScannerEngagementProps {
   headline?: string;
@@ -19,13 +21,79 @@ export interface InlineScannerEngagementProps {
   engageLabel?: string;
 }
 
-function handleEngage(canEngage: boolean, onEngage: () => void): void {
-  if (!canEngage) return;
-  pulseHubButton();
-  onEngage();
+function parseTelemetryLine(line: string): { label: string; value: string } {
+  const trimmed = line.replace(/^>\s*/, '');
+  const splitIndex = trimmed.indexOf(':');
+  if (splitIndex === -1) {
+    return { label: trimmed, value: '' };
+  }
+  return {
+    label: trimmed.slice(0, splitIndex).trim(),
+    value: trimmed.slice(splitIndex + 1).trim(),
+  };
 }
 
-/** Node readout + breach action — card (legacy) or compact dock strip. */
+function TelemetryRow({
+  line,
+  mutedColor,
+}: {
+  line: string;
+  mutedColor: string;
+}): React.JSX.Element {
+  const { label, value } = parseTelemetryLine(line);
+  return (
+    <View style={styles.telemetryRow}>
+      <Text style={[styles.telemetryBracket, { color: mutedColor }]}>{'⟨'}</Text>
+      <View style={styles.telemetryCopy}>
+        <Text style={[styles.telemetryLabel, { color: mutedColor }]} numberOfLines={1}>
+          {label}
+        </Text>
+        {value ? (
+          <Text style={styles.telemetryValue} numberOfLines={2}>
+            {value}
+          </Text>
+        ) : null}
+      </View>
+      <Text style={[styles.telemetryBracket, { color: mutedColor }]}>{'⟩'}</Text>
+    </View>
+  );
+}
+
+function FeedChromeButtons(): React.JSX.Element | null {
+  const cargo = useCargoOverlay();
+  const status = useRunStatusOverlay();
+  const showStatus = status?.statusEnabled ?? false;
+  const showCargo = cargo?.cargoEnabled ?? false;
+
+  if (!showStatus && !showCargo) return null;
+
+  return (
+    <View style={styles.feedChromeRow}>
+      {showStatus ? (
+        <HapticPressable
+          onPress={status!.openStatus}
+          style={({ pressed }) => [styles.feedChromeBtn, { opacity: pressed ? 0.75 : 1 }]}
+          accessibilityRole="button"
+          accessibilityLabel="Open operative status"
+        >
+          <Text style={styles.feedChromeBtnText}>STATUS</Text>
+        </HapticPressable>
+      ) : null}
+      {showCargo ? (
+        <HapticPressable
+          onPress={cargo!.openCargo}
+          style={({ pressed }) => [styles.feedChromeBtn, { opacity: pressed ? 0.75 : 1 }]}
+          accessibilityRole="button"
+          accessibilityLabel="Open cargo grid"
+        >
+          <Text style={styles.feedChromeBtnText}>CARGO</Text>
+        </HapticPressable>
+      ) : null}
+    </View>
+  );
+}
+
+/** Node readout + breach action — card (legacy) or structured data-feed dock. */
 export default function InlineScannerEngagement({
   headline,
   spectralLines,
@@ -40,46 +108,39 @@ export default function InlineScannerEngagement({
   if (layout === 'dock') {
     return (
       <View style={styles.dockRoot}>
-        <View style={styles.dockReadout}>
-          {headline ? (
-            <Text style={[styles.dockHeadline, { color: accent }]} numberOfLines={1}>
-              {headline}
+        <View style={styles.feedFrame}>
+          <View style={styles.feedHeader}>
+            <Text style={[styles.feedEyebrow, { color: mutedColor }]}>
+              DATA FEED // VECTOR TELEMETRY
             </Text>
-          ) : null}
+            <FeedChromeButtons />
+          </View>
           <ScrollView
-            style={styles.dockScroll}
-            contentContainerStyle={styles.dockScrollContent}
+            style={styles.feedScroll}
+            contentContainerStyle={styles.feedScrollContent}
             showsVerticalScrollIndicator={false}
             nestedScrollEnabled
           >
-            {spectralLines.map((line) => (
-              <Text key={line} style={[styles.dockSpectral, { color: mutedColor }]} numberOfLines={2}>
-                {line}
+            {headline ? (
+              <Text style={[styles.feedHeadline, { color: mutedColor }]} numberOfLines={1}>
+                {headline}
               </Text>
-            ))}
-            {statusLines.length > 0 ? (
-              <View style={styles.dockStatusBlock}>
-                {statusLines.map((line) => (
-                  <Text key={line} style={[styles.dockStatus, { color: accent }]} numberOfLines={2}>
-                    {line}
-                  </Text>
-                ))}
-              </View>
             ) : null}
+            {spectralLines.map((line) => (
+              <TelemetryRow key={line} line={line} mutedColor={mutedColor} />
+            ))}
+            {statusLines.map((line) => (
+              <TelemetryRow key={line} line={line} mutedColor={mutedColor} />
+            ))}
           </ScrollView>
         </View>
-        <HapticPressable
-          onPress={() => handleEngage(canEngage, onEngage)}
-          disabled={!canEngage}
-          style={({ pressed }) => [
-            getInteractiveButtonStyle(accent, { disabled: !canEngage, pressed, size: 'sm' }),
-            styles.dockActionBtn,
-          ]}
-        >
-          <Text style={[getInteractiveButtonTextStyle('sm'), { color: canEngage ? accent : mutedColor }]}>
-            {engageLabel}
-          </Text>
-        </HapticPressable>
+        <ScannerBreachButton
+          label={engageLabel}
+          enabled={canEngage}
+          accent={accent}
+          mutedColor={mutedColor}
+          onPress={onEngage}
+        />
       </View>
     );
   }
@@ -105,18 +166,13 @@ export default function InlineScannerEngagement({
           </Text>
         ))}
 
-        <HapticPressable
-          onPress={() => handleEngage(canEngage, onEngage)}
-          disabled={!canEngage}
-          style={({ pressed }) => [
-            getInteractiveButtonStyle(accent, { disabled: !canEngage, pressed, size: 'sm' }),
-            styles.actionBtn,
-          ]}
-        >
-          <Text style={[getInteractiveButtonTextStyle('sm'), { color: canEngage ? accent : mutedColor }]}>
-            {engageLabel}
-          </Text>
-        </HapticPressable>
+        <ScannerBreachButton
+          label={engageLabel}
+          enabled={canEngage}
+          accent={accent}
+          mutedColor={mutedColor}
+          onPress={onEngage}
+        />
       </View>
     </View>
   );
@@ -152,38 +208,101 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
     fontWeight: '600',
   },
-  actionBtn: { marginTop: 4 },
   dockRoot: {
+    flex: 1,
+    minHeight: 0,
+    gap: 10,
+  },
+  feedFrame: {
+    flex: 1,
+    minHeight: 0,
+    borderWidth: 1,
+    borderColor: 'rgba(167, 139, 250, 0.28)',
+    backgroundColor: 'rgba(3, 4, 6, 0.94)',
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  feedHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingVertical: 2,
+    justifyContent: 'space-between',
+    gap: 8,
+    flexShrink: 0,
   },
-  dockReadout: {
+  feedEyebrow: {
     flex: 1,
-    minWidth: 0,
-    gap: 2,
-    maxHeight: 88,
+    fontFamily: 'monospace',
+    fontSize: 6,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
   },
-  dockScroll: { flexGrow: 0, maxHeight: 72 },
-  dockScrollContent: { gap: 1 },
-  dockHeadline: {
+  feedHeadline: {
+    fontFamily: 'monospace',
+    fontSize: 6,
+    letterSpacing: 0.5,
+  },
+  feedScroll: {
+    flex: 1,
+    minHeight: 0,
+  },
+  feedScrollContent: {
+    gap: 6,
+    paddingBottom: 4,
+  },
+  feedChromeRow: {
+    flexDirection: 'row',
+    gap: 6,
+    flexShrink: 0,
+  },
+  feedChromeBtn: {
+    borderWidth: 1,
+    borderColor: 'rgba(0, 255, 51, 0.65)',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    backgroundColor: 'rgba(10, 11, 15, 0.95)',
+    minWidth: 60,
+    alignItems: 'center',
+  },
+  feedChromeBtnText: {
+    fontFamily: 'monospace',
+    fontSize: 7,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    color: TERMINAL_ACCENT,
+  },
+  telemetryRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 4,
+  },
+  telemetryBracket: {
     fontFamily: 'monospace',
     fontSize: 8,
+    lineHeight: 12,
+    opacity: 0.55,
+    marginTop: 1,
+  },
+  telemetryCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 1,
+  },
+  telemetryLabel: {
+    fontFamily: 'monospace',
+    fontSize: 6,
+    letterSpacing: 0.7,
+    textTransform: 'uppercase',
+  },
+  telemetryValue: {
+    fontFamily: 'monospace',
+    fontSize: 9,
+    lineHeight: 12,
+    letterSpacing: 0.5,
     fontWeight: '700',
-    letterSpacing: 0.4,
+    color: STATE_VIOLET,
+    textShadowColor: STATE_VIOLET_GLOW,
+    textShadowRadius: 6,
+    textShadowOffset: { width: 0, height: 0 },
   },
-  dockSpectral: {
-    fontFamily: 'monospace',
-    fontSize: 7,
-    letterSpacing: 0.3,
-  },
-  dockStatusBlock: { marginTop: 3, gap: 1 },
-  dockStatus: {
-    fontFamily: 'monospace',
-    fontSize: 7,
-    letterSpacing: 0.3,
-    fontWeight: '600',
-  },
-  dockActionBtn: { flexShrink: 0 },
 });

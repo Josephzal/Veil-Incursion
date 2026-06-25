@@ -366,25 +366,16 @@ export default function ScanningScreen(): React.JSX.Element {
         { borderColor: theme.borderColor },
       ]}
     >
-      <Text style={[styles.nodesCounter, { color: theme.mutedColor }]}>
-        {`NODES IN FIELD: ${nodesInField} // LOCKED: ${siphonedNodeIds.length}/${nodesInField}`}
-      </Text>
       <View style={styles.nodeDockBody}>
-        {showNodeDock ? (
-          <InlineScannerEngagement
-            layout="dock"
-            spectralLines={intelLines}
-            canEngage={canEngage}
-            accent={accent}
-            mutedColor={theme.mutedColor}
-            engageLabel="[ BREACH ]"
-            onEngage={handleEngage}
-          />
-        ) : (
-          <Text style={[styles.dockPlaceholder, { color: theme.mutedColor }]}>
-            {dockPlaceholder}
-          </Text>
-        )}
+        <InlineScannerEngagement
+          layout="dock"
+          spectralLines={showNodeDock ? intelLines : [dockPlaceholder]}
+          canEngage={canEngage}
+          accent={accent}
+          mutedColor={theme.mutedColor}
+          engageLabel="[ BREACH ]"
+          onEngage={handleEngage}
+        />
       </View>
       {emergencyRecallAvailable ? (
         <HapticPressable
@@ -414,6 +405,7 @@ export default function ScanningScreen(): React.JSX.Element {
     <IncursionShell>
       <IncursionRunLayout
         style={{ backgroundColor: theme.backgroundColor }}
+        hideRunChrome
       >
         <LandscapeSplitPane
           style={styles.body}
@@ -480,38 +472,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   nodeDock: {
-    paddingHorizontal: 12,
+    flex: 1,
+    minHeight: 0,
+    paddingHorizontal: 10,
     paddingVertical: 8,
     backgroundColor: 'rgba(5, 6, 8, 0.96)',
-    gap: 4,
-    justifyContent: 'center',
+    gap: 8,
   },
   nodeDockVertical: {
     flexShrink: 0,
     borderTopWidth: 1,
-    minHeight: 76,
+    minHeight: 120,
   },
   nodeDockHorizontal: {
-    flex: 1,
     borderLeftWidth: 1,
-    minWidth: 200,
-  },
-  nodesCounter: {
-    fontFamily: 'monospace',
-    fontSize: 8,
-    letterSpacing: 0.6,
-    textAlign: 'center',
+    minWidth: 240,
   },
   nodeDockBody: {
-    minHeight: 52,
-    justifyContent: 'center',
-  },
-  dockPlaceholder: {
-    fontFamily: 'monospace',
-    fontSize: 8,
-    letterSpacing: 0.5,
-    textAlign: 'center',
-    lineHeight: 12,
+    flex: 1,
+    minHeight: 0,
   },
   recallBtn: {
     borderWidth: 1,

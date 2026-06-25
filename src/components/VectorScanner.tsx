@@ -11,6 +11,7 @@ import {
   Skia,
   SweepGradient,
   vec,
+  Oval,
 } from '@shopify/react-native-skia';
 import {
   Easing as ReanimatedEasing,
@@ -20,6 +21,13 @@ import {
 } from 'react-native-reanimated';
 import { getCabalScannerTheme } from './scanner/cabalScannerThemes';
 import { mergeScannerThemes } from './scanner/zoneScannerThemes';
+import ScannerCornerBrackets from './scanner/ScannerCornerBrackets';
+import {
+  buildDegreeTicks,
+  buildNonEuclideanGrid,
+  type ScopeArc,
+  type ScopeLine,
+} from './scanner/scannerScopeGeometry';
 import type { CabalScannerTheme, ScannerCabal } from '../types/scanner';
 import type { RadarDot } from '../types/run';
 import { scannerRevealColorForNodeType } from '../utils/scannerNodeRevealColor';
@@ -229,15 +237,20 @@ function VectorScannerComponent({
   const theme = zoneTint
     ? mergeScannerThemes(getCabalScannerTheme(cabal), zoneTint)
     : getCabalScannerTheme(cabal);
-  const coreDiameter = scannerSize * coreScale;
   const radarCenter = scannerSize / 2;
   const sweepRadius = scannerSize / 2;
-  const midRingRadius = (scannerSize * 0.72) / 2;
-  const coreRadius = coreDiameter / 2;
 
   const structuralStroke = useMemo(
     () => accentWithAlpha(theme.primary, STRUCTURAL_LINE_ALPHA),
     [theme.primary],
+  );
+
+  const scopeGeometry = useMemo(
+    () => ({
+      ...buildNonEuclideanGrid(radarCenter, sweepRadius, STRUCTURAL_LINE_ALPHA),
+      ticks: buildDegreeTicks(radarCenter, sweepRadius, STRUCTURAL_LINE_ALPHA),
+    }),
+    [radarCenter, sweepRadius],
   );
 
   const [sweepDeg, setSweepDeg] = useState(0);
@@ -758,6 +771,49 @@ function VectorScannerComponent({
         <Canvas style={{ width: scannerSize, height: scannerSize }}>
           <Rect x={0} y={0} width={scannerSize} height={scannerSize} color={RADAR_CANVAS_BACKDROP} />
 
+          <Group clip={radarClipPath}>
+            {scopeGeometry.arcs.map((arc: ScopeArc, index: number) => (
+              <Group
+                key={`scope-arc-${index}`}
+                origin={vec(radarCenter, radarCenter)}
+                transform={[{ rotate: ((arc.rotationDeg ?? 0) * Math.PI) / 180 }]}
+              >
+                <Oval
+                  x={arc.cx - arc.rx}
+                  y={arc.cy - arc.ry}
+                  width={arc.rx * 2}
+                  height={arc.ry * 2}
+                  color={structuralStroke}
+                  style="stroke"
+                  strokeWidth={STROKE_THIN}
+                  opacity={arc.opacity}
+                />
+              </Group>
+            ))}
+
+            {scopeGeometry.lines.map((line: ScopeLine, index: number) => (
+              <Line
+                key={`scope-line-${index}`}
+                p1={line.p1}
+                p2={line.p2}
+                color={structuralStroke}
+                strokeWidth={line.strokeWidth ?? STROKE_THIN}
+                opacity={line.opacity}
+              />
+            ))}
+
+            {scopeGeometry.ticks.map((tick: ScopeLine, index: number) => (
+              <Line
+                key={`scope-tick-${index}`}
+                p1={tick.p1}
+                p2={tick.p2}
+                color={accentWithAlpha(theme.primary, 0.55)}
+                strokeWidth={tick.strokeWidth ?? STROKE_THIN}
+                opacity={tick.opacity}
+              />
+            ))}
+          </Group>
+
           <Circle
             cx={radarCenter}
             cy={radarCenter}
@@ -768,49 +824,6 @@ function VectorScannerComponent({
           >
             {useDashedOuter ? <DashPathEffect intervals={[6, 5]} /> : null}
           </Circle>
-
-          <Circle
-            cx={radarCenter}
-            cy={radarCenter}
-            r={midRingRadius}
-            color={structuralStroke}
-            style="stroke"
-            strokeWidth={STROKE_THIN}
-          />
-
-          <Circle
-            cx={radarCenter}
-            cy={radarCenter}
-            r={coreRadius}
-            color={structuralStroke}
-            style="stroke"
-            strokeWidth={STROKE_THIN}
-          />
-
-          <Line
-            p1={vec(radarCenter, 0)}
-            p2={vec(radarCenter, scannerSize)}
-            color={structuralStroke}
-            strokeWidth={STROKE_THIN}
-          />
-          <Line
-            p1={vec(0, radarCenter)}
-            p2={vec(scannerSize, radarCenter)}
-            color={structuralStroke}
-            strokeWidth={STROKE_THIN}
-          />
-          <Line
-            p1={vec(radarCenter - sweepRadius * 0.7, radarCenter - sweepRadius * 0.7)}
-            p2={vec(radarCenter + sweepRadius * 0.7, radarCenter + sweepRadius * 0.7)}
-            color={structuralStroke}
-            strokeWidth={STROKE_THIN}
-          />
-          <Line
-            p1={vec(radarCenter - sweepRadius * 0.7, radarCenter + sweepRadius * 0.7)}
-            p2={vec(radarCenter + sweepRadius * 0.7, radarCenter - sweepRadius * 0.7)}
-            color={structuralStroke}
-            strokeWidth={STROKE_THIN}
-          />
 
           {showSweep && (
             <Group clip={radarClipPath} opacity={fogOpacity}>
@@ -1055,7 +1068,7 @@ function VectorScannerComponent({
 
         {children ? <View style={styles.childOverlay}>{children}</View> : null}
 
-        <Text style={[styles.telemetryOverlay, { color: theme.text }]}></Text>
+        <ScannerCornerBrackets color={accentWithAlpha(theme.primary, 0.75)} />
       </View>
 
       <View
