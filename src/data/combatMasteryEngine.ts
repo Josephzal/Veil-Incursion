@@ -1,6 +1,5 @@
 import type { EnvoyAbilityId, HexShotAbilityId } from '../types/operativeClass';
 
-export const PERFECT_RELOADS_FOR_ULTIMATE = 3;
 export const PERFECT_PARRIES_FOR_ULTIMATE = 3;
 export const ENVOY_FLUX_ULTIMATE_THRESHOLD = 100;
 

@@ -128,7 +128,7 @@ export const BOON_RULES: Record<LeyLineMutationId, BoonRule> = {
     id: 'DEEP_LUNGS',
     hook: 'onAbilityResolve',
     tagAll: ['RESTORE'],
-    trigger: 'RESTORE // surge Brands to 3; Demon\'s Lung +30% Reserve',
+    trigger: 'RESTORE // surge Runic Brands to 3',
   },
   BLOOD_PRICE: {
     id: 'BLOOD_PRICE',
@@ -270,7 +270,6 @@ export interface MutationCombatModifiers {
   shatterPointCritBonus: number;
   abyssalResonancePctPerBrand: number;
   bloodTitheHealPctPer10Ar: number;
-  demonLungReserveBonus: number;
   relentlessMomentumReserveGain: number;
   gridGhostReserveRefundPct: number;
   slipstreamReserveCost: number;
@@ -382,7 +381,6 @@ export function aggregateMutationModifiers(
     shatterPointCritBonus: has('SHATTER_POINT') ? 0.20 : 0,
     abyssalResonancePctPerBrand: has('ABYSSAL_RESONANCE') ? 5 : 0,
     bloodTitheHealPctPer10Ar: has('BLACK_LIGHT_SIPHON') ? 3 : 2,
-    demonLungReserveBonus: has('DEEP_LUNGS') ? 30 : 0,
     relentlessMomentumReserveGain: has('RELENTLESS_MOMENTUM') ? 25 : 0,
     gridGhostReserveRefundPct: has('GRID_GHOST') ? 20 : 0,
     slipstreamReserveCost: has('SLIPSTREAM') ? 20 : 0,

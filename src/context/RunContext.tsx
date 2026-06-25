@@ -1164,7 +1164,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const applySanctuaryAttune = useCallback(() => {
     setRunState((prev) => {
-      const restore = Math.floor(prev.maxSoulAnchor * 0.30);
+      const inc = activeIncursionRef.current;
+      const survivalist = inc.activeClass === 'HEX_SHOT'
+        && inc.hexShotBoons.includes('SURVIVALIST');
+      const healMultiplier = survivalist ? 1.5 : 1;
+      const restore = Math.floor(prev.maxSoulAnchor * 0.30 * healMultiplier);
       const next = {
         ...prev,
         soulAnchorIntegrity: Math.min(prev.soulAnchorIntegrity + restore, prev.maxSoulAnchor),
@@ -1172,7 +1176,13 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       runStateRef.current = next;
       return next;
     });
-    appendRunLog('>> SANCTUARY ATTUNE — 30% soul anchor integrity restored.');
+    const survivalist = activeIncursionRef.current.activeClass === 'HEX_SHOT'
+      && activeIncursionRef.current.hexShotBoons.includes('SURVIVALIST');
+    appendRunLog(
+      survivalist
+        ? '>> SANCTUARY ATTUNE — 30% soul anchor restored (+50% Survivalist).'
+        : '>> SANCTUARY ATTUNE — 30% soul anchor integrity restored.',
+    );
   }, [appendRunLog]);
 
   const getVeilResidueBalance = useCallback((): number => {

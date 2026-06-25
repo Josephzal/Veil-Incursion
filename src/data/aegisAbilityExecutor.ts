@@ -362,7 +362,7 @@ export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExe
         return { ok: false, refundAp: def.apCost };
       }
       applyDeepLungsOnRestore(ctx.ownedBoons, ctx.abilityId, ctx.setRunicBrands, ctx.log);
-      ctx.chargeAr((def.reserveGain ?? 30) + ctx.mutationMods.demonLungReserveBonus);
+      ctx.chargeAr(def.reserveGain ?? 30);
       ctx.setAegisOvercharged(true);
       ctx.grantBonusApNextTurn(1);
       ctx.buffState.demonLungCooldown = def.cooldownTurns ?? 3;

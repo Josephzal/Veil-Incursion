@@ -87,6 +87,7 @@ import {
   buildClassGraftCastPlan,
   effectiveGraftAmmoCost,
   isClassUltimateDisabledForEncounter,
+  isDeadMansSwitchReloadGraft,
   scaleClassGraftDamage,
 } from '../data/classGraftEngine';
 import {
@@ -110,7 +111,7 @@ import {
   applyVoidBleedDot,
   getHexShotCritOverrides,
   isOverwatchMasteryActive,
-  markHexShotTacticalReloadPending,
+  runHexShotOnReloadResolveBoons,
   runHexShotKillBurstBoons,
   runHexShotOnAbilityResolveBoons,
   runHexShotOnHitBoons,
@@ -145,6 +146,8 @@ import {
   resolveClassGraftStrikeTargetIds,
 } from '../data/classGraftRuntime';
 import { getHexShotAbilityTags } from '../data/hexShotAbilities';
+import { shouldApplyPhantomFeed } from '../data/hexShotIntrinsics';
+import { resolveHexShotAbilityGraftId } from '../data/hexShotMigration';
 import { getEnvoyAbilityTags } from '../data/envoyAbilities';
 import { normalizeSquad, spawnCombatSquad, squadFromSingleEnemy } from '../data/combatSpawnEngine';
 import {
@@ -223,6 +226,18 @@ import {
   type ActiveReloadResult,
 } from '../types/classCombatResources';
 import { activeReloadLogLine } from '../data/activeReloadEngine';
+import {
+  abilityUsesBallisticTags,
+  canBeginHexShotReload,
+  hexShotReducer,
+  type HexShotReducerAction,
+} from '../reducers/hexShotReducer';
+import {
+  createInitialHexShotCombatState,
+  overchargeFromAmmoAtReloadStart,
+  HEX_RELOAD_AP_COST,
+  type HexShotCombatState,
+} from '../types/hexShotState';
 import ActiveReloadOverlay from './combat/ActiveReloadOverlay';
 import ZeroProtocolGridOverlay from './combat/ZeroProtocolGridOverlay';
 import CataclysmSigilOverlay from './combat/CataclysmSigilOverlay';
@@ -230,7 +245,6 @@ import FractureBreakPrompt from './combat/FractureBreakPrompt';
 import EnvoyWardOverlay, { type EnvoyWardExpansionSpeed } from './combat/EnvoyWardOverlay';
 import { ASHEN_DISSOLVE_TOTAL_MS } from './combat/CombatEnemyDissolveEffect';
 import {
-  PERFECT_RELOADS_FOR_ULTIMATE,
   ENVOY_FLUX_ULTIMATE_THRESHOLD,
   ZERO_PROTOCOL_DAMAGE_PER_TAP,
   CATACLYSM_SUCCESS_AOE,
@@ -289,7 +303,7 @@ import {
   isEnvoyAbilityEnabled,
 } from '../data/envoyAbilityExecutor';
 import {
-  applyBrimstoneBleedDot,
+  applyBleedingPayloadDot,
   applyEnemyApDrainAtTurnStart,
   isEnemyHealBlocked,
   isGhostCamoBlockingAttacks,
@@ -563,14 +577,22 @@ export default function TacticalCombatHub({
   operativeClass = 'AEGIS',
 }: TacticalCombatHubProps): React.JSX.Element {
   const hexShotBoonMods = useMemo(
-    () => aggregateHexShotBoonModifiers(hexShotBoons),
-    [hexShotBoons],
+    () => aggregateHexShotBoonModifiers(
+      hexShotBoons,
+      operativeClass === 'HEX_SHOT' ? sanitizeHexShotCombatLoadout(hexShotLoadout) : undefined,
+    ),
+    [hexShotBoons, hexShotLoadout, operativeClass],
   );
   const envoyBoonMods = useMemo(
     () => aggregateEnvoyBoonModifiers(envoyBoons),
     [envoyBoons],
   );
   const maxAmmo = DEFAULT_MAGAZINE_SIZE + hexShotBoonMods.maxAmmoBonus;
+  const combatMaxSoulAnchor = operativeClass === 'HEX_SHOT'
+    ? Math.floor(maxSoulAnchor * hexShotBoonMods.maxHpMultiplier)
+    : maxSoulAnchor;
+  const combatMaxSoulAnchorRef = useRef(combatMaxSoulAnchor);
+  combatMaxSoulAnchorRef.current = combatMaxSoulAnchor;
   const fluxOverloadThreshold = envoyBoonMods.fluxOverloadThreshold;
   const env = environmentalModifiers ?? {
     isEnemyPhaseShrouded: false,
@@ -638,7 +660,15 @@ export default function TacticalCombatHub({
   const enemyActionStageRef = useRef<EnemyActionStage>(null);
   const [eviscerateTargetUnitId, setEviscerateTargetUnitId] = useState<string | null>(null);
   const [currentAmmo, setCurrentAmmo] = useState(DEFAULT_MAGAZINE_SIZE);
-  const [hexOvercharged, setHexOvercharged] = useState(false);
+  const [hexShotState, setHexShotState] = useState<HexShotCombatState>(() => createInitialHexShotCombatState({
+    hp: initialOperativeHp,
+    maxHp: maxSoulAnchor,
+    stamina: initialStamina,
+    maxStamina,
+    ap: PLAYER_ACTION_POINTS_PER_TURN,
+    ammo: DEFAULT_MAGAZINE_SIZE,
+    maxAmmo: DEFAULT_MAGAZINE_SIZE,
+  }));
   const [aegisOvercharged, setAegisOvercharged] = useState(false);
   const [veilFlux, setVeilFlux] = useState(0);
   const [envoyOverloaded, setEnvoyOverloaded] = useState(false);
@@ -651,7 +681,6 @@ export default function TacticalCombatHub({
   const [cataclysmSigilVisible, setCataclysmSigilVisible] = useState(false);
   const [fractureBreakUnitId, setFractureBreakUnitId] = useState<string | null>(null);
   const [envoyWardSpeed, setEnvoyWardSpeed] = useState<EnvoyWardExpansionSpeed>('normal');
-  const [perfectReloadCount, setPerfectReloadCount] = useState(0);
   const [successfulParryCount, setSuccessfulParryCount] = useState(0);
   const [cataclysmReadyUi, setCataclysmReadyUi] = useState(false);
   const combatPausedRef = useRef(false);
@@ -659,7 +688,7 @@ export default function TacticalCombatHub({
 
   const operativeHpRef = useRef(initialOperativeHp);
   const currentAmmoRef = useRef(DEFAULT_MAGAZINE_SIZE);
-  const hexOverchargedRef = useRef(false);
+  const hexShotStateRef = useRef(hexShotState);
   const veilFluxRef = useRef(0);
   const envoyOverloadedRef = useRef(false);
   const envoySilencedRef = useRef(false);
@@ -863,7 +892,7 @@ export default function TacticalCombatHub({
     && abyssalReserve >= COMBAT_ACTION.ABYSSAL_RESERVE_CAP
     && !isExhausted;
   const zeroProtocolReady = operativeClass === 'HEX_SHOT'
-    && perfectReloadCount >= PERFECT_RELOADS_FOR_ULTIMATE
+    && hexShotState.isUltimateAvailable
     && !isExhausted;
   const cataclysmReady = operativeClass === 'ENVOY'
     && cataclysmReadyUi
@@ -882,27 +911,26 @@ export default function TacticalCombatHub({
     return aegisLoadout;
   }, [operativeClass, hexShotLoadout, envoyLoadout, aegisLoadout]);
   const masteryProgress = useMemo(() => {
-    if (operativeClass === 'HEX_SHOT') {
-      if (perfectReloadCount > 0 && perfectReloadCount < PERFECT_RELOADS_FOR_ULTIMATE) {
-        return {
-          visible: true,
-          current: perfectReloadCount,
-          required: PERFECT_RELOADS_FOR_ULTIMATE,
-          accent: '#fbbf24',
-        };
-      }
-    } else if (operativeClass === 'AEGIS') {
-      // Reserve progress lives in the vitals AR gauge; orbital dots are Hex-only.
+    if (operativeClass !== 'HEX_SHOT') {
+      return { visible: false, current: 0, required: 3, accent: '#94a3b8' };
     }
+    const oc = hexShotState.overchargeMultiplier;
+    if (oc <= 0 || hexShotState.isUltimateAvailable) {
+      return { visible: false, current: 0, required: 5, accent: '#fbbf24' };
+    }
+    const steps = Math.min(5, Math.max(1, Math.round(oc / 0.1)));
     return {
-      visible: false,
-      current: 0,
-      required: 3,
-      accent: '#94a3b8',
+      visible: isPlayerTurn && cycleState === 'TEXT_COMBAT',
+      current: steps,
+      required: 5,
+      accent: '#fbbf24',
     };
   }, [
     operativeClass,
-    perfectReloadCount,
+    hexShotState.overchargeMultiplier,
+    hexShotState.isUltimateAvailable,
+    isPlayerTurn,
+    cycleState,
   ]);
   const strikeWardPrimed = strikeArPrimed || wardStrikeBonusRef.current;
 
@@ -947,6 +975,89 @@ export default function TacticalCombatHub({
     setMagazineAmmo(0);
   };
 
+  useEffect(() => {
+    hexShotStateRef.current = hexShotState;
+  }, [hexShotState]);
+
+  const syncHexShotFromHub = (): HexShotCombatState => ({
+    ...hexShotStateRef.current,
+    hp: operativeHpRef.current,
+    maxHp: maxSoulAnchor,
+    stamina: staminaRef.current,
+    maxStamina,
+    ap: playerApRef.current,
+    ammo: currentAmmoRef.current,
+    maxAmmo,
+  });
+
+  const applyHexShotCombatState = (next: HexShotCombatState) => {
+    hexShotStateRef.current = next;
+    setHexShotState(next);
+    if (next.ammo !== currentAmmoRef.current) setMagazineAmmo(next.ammo);
+    if (next.ap !== playerApRef.current) {
+      playerApRef.current = next.ap;
+      setPlayerActionPoints(next.ap);
+    }
+    if (next.stamina !== staminaRef.current) applyStamina(next.stamina);
+  };
+
+  const dispatchHexShot = (action: HexShotReducerAction) => {
+    const next = hexShotReducer(syncHexShotFromHub(), action);
+    applyHexShotCombatState(next);
+    return next;
+  };
+
+  const resolveDeadMansEject = (totalDamage: number) => {
+    if (totalDamage <= 0) return;
+    const targets = aliveUnits(squadRef.current);
+    for (const unit of targets) {
+      if (!unit.unitId) continue;
+      hurtEnemy(totalDamage, "[DEAD-MAN'S SWITCH]", 'STRIKE', {
+        channel: 'KINETIC',
+        targetId: unit.unitId,
+        rollCrit: false,
+      });
+    }
+    log(`[DEAD-MAN'S SWITCH] >> ${totalDamage} kinetic eject damage to ${targets.length} hostile(s).`);
+    publishSquadUi(squadRef.current);
+  };
+
+  const tryOpenReloadMinigame = (manual: boolean): boolean => {
+    if (operativeClass !== 'HEX_SHOT') return false;
+    if (activeReloadVisible || hexReloadUsedThisTurnRef.current) return false;
+    const before = syncHexShotFromHub();
+    if (!canBeginHexShotReload(before)) {
+      if (before.ap < HEX_RELOAD_AP_COST) {
+        log('[REJECTED] >> Insufficient AP for Phase-Shift Reload.');
+      }
+      return false;
+    }
+    const deadMansSwitch = manual
+      && isDeadMansSwitchReloadGraft(hexShotAbilityGraftsRef.current)
+      && before.ammo > 0;
+    hexReloadUsedThisTurnRef.current = true;
+    setHexReloadUsedThisTurn(true);
+    const ejectDamage = deadMansSwitch ? before.ammo * 10 : 0;
+    const next = dispatchHexShot({ type: 'HEX_BEGIN_RELOAD', manual, deadMansSwitch });
+    if (next.ap === before.ap) return false;
+    if (ejectDamage > 0) {
+      resolveDeadMansEject(ejectDamage);
+    }
+    setActiveReloadVisible(true);
+    log(manual
+      ? '>> [PHASE-SHIFT RELOAD] — tactical reload window open (−1 AP).'
+      : '>> [PHASE-SHIFT RELOAD] — empty mag flow state (−1 AP).');
+    return true;
+  };
+
+  const maybePromptReloadAfterBallistic = () => {
+    if (operativeClass !== 'HEX_SHOT') return;
+    dispatchHexShot({ type: 'HEX_AFTER_BALLISTIC_SPEND' });
+    if (hexShotStateRef.current.autoReloadPending) {
+      tryOpenReloadMinigame(false);
+    }
+  };
+
   const reduceEnemyAp = (unitId: string, amount: number) => {
     const unit = getUnitById(squadRef.current, unitId);
     if (!unit) return;
@@ -986,8 +1097,15 @@ export default function TacticalCombatHub({
     applyStamina(maxStamina);
     if (operativeClass === 'HEX_SHOT') {
       setMagazineAmmo(maxAmmo);
-      hexOverchargedRef.current = false;
-      setHexOvercharged(false);
+      applyHexShotCombatState(createInitialHexShotCombatState({
+        hp: operativeHpRef.current,
+        maxHp: maxSoulAnchor,
+        stamina: staminaRef.current,
+        maxStamina,
+        ap: playerApRef.current,
+        ammo: maxAmmo,
+        maxAmmo,
+      }));
     } else if (operativeClass === 'ENVOY') {
       applyVeilFlux(fluxOverloadThreshold - veilFluxRef.current);
       envoyOverloadedRef.current = false;
@@ -1458,6 +1576,16 @@ export default function TacticalCombatHub({
     },
   });
 
+  const resolveAegisGraftDropLoot = (abilityId?: string | null): string | null => {
+    const active = activeGraftPlanRef.current?.dropLootOnKill;
+    if (active) return active;
+    const resolved = (abilityId ?? lastPlayerAbilityRef.current) as AegisAbilityId | null;
+    if (!resolved) return null;
+    const graftId = abilityGraftsRef.current[resolved];
+    if (!graftId) return null;
+    return getVeilGraftDefinition(graftId).dropLootOnKill ?? null;
+  };
+
   const triggerSpallShatterBurst = (blockedDamage: number) => {
     if (blockedDamage <= 0 || !hasMutation(leyLineMutations, 'SPALL_SHATTER')) return;
     let hitAny = false;
@@ -1646,14 +1774,14 @@ export default function TacticalCombatHub({
 
   const applyHealRef = useRef((amount: number) => {
     setOperativeHp((p) => {
-      const n = Math.min(p + amount, maxSoulAnchor);
+      const n = Math.min(p + amount, combatMaxSoulAnchorRef.current);
       operativeHpRef.current = n;
       return n;
     });
   });
   applyHealRef.current = (amount: number) => {
     setOperativeHp((p) => {
-      const n = Math.min(p + amount, maxSoulAnchor);
+      const n = Math.min(p + amount, combatMaxSoulAnchorRef.current);
       operativeHpRef.current = n;
       return n;
     });
@@ -1661,7 +1789,7 @@ export default function TacticalCombatHub({
 
   useEffect(() => {
     registerHealHandler?.((amount: number) => applyHealRef.current(amount));
-  }, [registerHealHandler, maxSoulAnchor]);
+  }, [registerHealHandler, combatMaxSoulAnchor]);
 
   const interruptsWorldEnderChannel = (e: EnemyCombatProfile) =>
     e.intent === 'CHARGE' || e.intent === 'WORLD_ENDER' || e.chargeTurns > 0;
@@ -2172,11 +2300,16 @@ export default function TacticalCombatHub({
         if (critOverrides.ignoreDefenses) ignoreDefenses = true;
       }
     }
-    const hexOverchargedStrike = operativeClass === 'HEX_SHOT'
-      && hexOverchargedRef.current
+    const hexOverchargeMult = operativeClass === 'HEX_SHOT'
+      ? hexShotStateRef.current.overchargeMultiplier
+      : 0;
+    const hexAbilityForOvercharge = (options?.abilityId ?? lastPlayerAbilityRef.current) as HexShotAbilityId | null;
+    const hexOverchargedStrike = hexOverchargeMult > 0
       && Boolean(source)
       && source !== 'COUNTER'
-      && !options?.echoHit;
+      && !options?.echoHit
+      && hexAbilityForOvercharge != null
+      && abilityUsesBallisticTags(hexAbilityForOvercharge);
     const narrativeOvercharged = Boolean(
       source && sessionExtrasRef.current.overchargedActive,
     );
@@ -2368,7 +2501,15 @@ export default function TacticalCombatHub({
       }
     }
     if (hexOverchargedStrike && dmg > 0) {
-      dmg = Math.floor(dmg * 1.5);
+      dmg = Math.floor(dmg * (1 + hexOverchargeMult));
+      if (
+        options?.abilityId
+        && hasHexShotBoon(hexShotBoons, 'RECOIL_HARNESS')
+        && boonMatchesHexAction(hexShotBoons, 'RECOIL_HARNESS', options.abilityId)
+      ) {
+        dmg = Math.floor(dmg * (1 + hexShotBoonModsRef.current.ballisticOverchargeDamagePct / 100));
+        log('[RECOIL HARNESS] >> Overcharge volley amplified.');
+      }
     }
     const graftPlan = operativeClass === 'AEGIS'
       ? activeGraftPlanRef.current
@@ -2544,9 +2685,9 @@ export default function TacticalCombatHub({
     }
     if ((hexOverchargedStrike || narrativeOvercharged) && source && dmg > 0) {
       if (hexOverchargedStrike) {
-        hexOverchargedRef.current = false;
-        setHexOvercharged(false);
-        log('[OVERCHARGED] >> Perfect reload proc — +50% damage, armor ignored.');
+        dispatchHexShot({ type: 'HEX_CONSUME_BALLISTIC_OVERCHARGE' });
+        const pct = Math.round(hexOverchargeMult * 100);
+        log(`[OVERCHARGE] >> +${pct}% damage consumed on ballistic strike.`);
       }
       if (narrativeOvercharged) {
         sessionExtrasRef.current.overchargedActive = false;
@@ -2641,15 +2782,22 @@ export default function TacticalCombatHub({
       const killGraft = operativeClass === 'AEGIS'
         ? activeGraftPlanRef.current
         : activeClassGraftPlanRef.current;
+      const dropLootKind = operativeClass === 'AEGIS'
+        ? resolveAegisGraftDropLoot(options?.abilityId)
+        : killGraft?.dropLootOnKill ?? null;
       if (killGraft?.refundApOnKill && operativeClass === 'AEGIS') {
         const refund = activeGraftApCostRef.current + 1;
         playerApRef.current += refund;
         setPlayerActionPoints(playerApRef.current);
         log(`>> [${killGraft.graftName.toUpperCase()}] — kill confirmed, AP refunded (+${refund}).`);
       }
-      if (killGraft?.dropLootOnKill && operativeClass === 'AEGIS') {
-        onGraftLootDrop?.(killGraft.dropLootOnKill);
-        log(`>> [${killGraft.graftName.toUpperCase()}] — kill extracts ${killGraft.dropLootOnKill.toLowerCase()}.`);
+      if (dropLootKind) {
+        onGraftLootDrop?.(dropLootKind);
+        const resolvedAbility = (options?.abilityId ?? lastPlayerAbilityRef.current) as AegisAbilityId | null;
+        const fallbackGraftId = resolvedAbility ? abilityGraftsRef.current[resolvedAbility] : undefined;
+        const graftLabel = killGraft?.graftName
+          ?? (fallbackGraftId ? getVeilGraftDefinition(fallbackGraftId).name : 'GRAFT');
+        log(`>> [${graftLabel.toUpperCase()}] — kill extracts ${dropLootKind.toLowerCase()}.`);
       }
       const deathLifecycle = CombatLifecycleManager.runOnDeath(
         working,
@@ -2923,7 +3071,11 @@ export default function TacticalCombatHub({
     }
 
     if (hp <= 0) {
-      const killAbility = options?.abilityId ?? lastPlayerAbilityRef.current;
+      const killAbility = (
+        zeroProtocolActiveRef.current
+          ? 'ZERO_PROTOCOL'
+          : (options?.abilityId ?? lastPlayerAbilityRef.current)
+      );
       const killCtx = {
         abilityId: killAbility,
         log,
@@ -3109,9 +3261,9 @@ export default function TacticalCombatHub({
       }
       log(`[REAVE BLEED] >> ${unit.designation} — jagged debris (${bleedUnits[unitId] ?? 0} turn(s) left).`);
     }
-    classCombatRef.current.brimstoneBleedTurns = applyBrimstoneBleedDot(
+    classCombatRef.current.bleedingPayloadTurns = applyBleedingPayloadDot(
       squadRef.current,
-      classCombatRef.current.brimstoneBleedTurns,
+      classCombatRef.current.bleedingPayloadTurns,
       (raw, tag, options, targetId) => hurtEnemy(raw, tag, undefined, {
         channel: options?.channel ?? 'OCCULT',
         targetId: options?.targetId ?? targetId,
@@ -3840,6 +3992,12 @@ export default function TacticalCombatHub({
     if (operativeClass === 'HEX_SHOT') {
       hexReloadUsedThisTurnRef.current = false;
       setHexReloadUsedThisTurn(false);
+      dispatchHexShot({
+        type: 'HEX_TURN_START',
+        ap: playerApRef.current,
+        encounter: classCombatRef.current,
+        squad: squadRef.current,
+      });
       const panic = tryHexShotPanicButton(
         hexShotBoons,
         classBoonEncounterRef.current,
@@ -3986,26 +4144,23 @@ export default function TacticalCombatHub({
     ) {
       classCombatRef.current.panopticonActive = false;
       const overwatchMastery = isOverwatchMasteryActive(hexShotBoons);
-      if (currentAmmoRef.current > 0 || overwatchMastery) {
-        if (!overwatchMastery) {
-          setMagazineAmmo(currentAmmoRef.current - 1);
-        } else {
-          log('[OVERWATCH MASTERY] >> Panopticon interrupt — 0 Ammo spent.');
-        }
-        patchUnit(enemyId, addCombatTag(currentEnemy, 'CONCUSSED'));
-        const panopticonDmg = overwatchMastery ? 16 : 8;
-        hurtEnemy(panopticonDmg, '[PANOPTICON]', 'STRIKE', {
-          channel: 'KINETIC',
-          targetId: enemyId,
-          abilityId: 'PANOPTICON_PROTOCOL' as AegisAbilityId,
-          rollCrit: false,
-        });
-        log('[PANOPTICON] >> Overwatch interrupt — hostile concussed, attack cancelled.');
-        if (enemyActionQueueRef.current.length > 0) scheduleNextEnemyAction(countering);
-        else if (!allUnitsDefeated(squadRef.current)) endEnemyTurn(true);
-        return;
-      }
-      log('[PANOPTICON] >> Overwatch failed — magazine empty.');
+      patchUnit(enemyId, addCombatTag(currentEnemy, 'CONCUSSED'));
+      const panopticonDmg = overwatchMastery ? 16 : 8;
+      hurtEnemy(panopticonDmg, '[PANOPTICON]', 'STRIKE', {
+        channel: 'KINETIC',
+        targetId: enemyId,
+        abilityId: 'PANOPTICON_PROTOCOL' as AegisAbilityId,
+        rollCrit: false,
+      });
+      log('[PANOPTICON] >> Overwatch interrupt — hostile concussed, attack cancelled.');
+      dispatchHexShot({
+        type: 'HEX_REEVALUATE_ULTIMATE',
+        encounter: classCombatRef.current,
+        squad: squadRef.current,
+      });
+      if (enemyActionQueueRef.current.length > 0) scheduleNextEnemyAction(countering);
+      else if (!allUnitsDefeated(squadRef.current)) endEnemyTurn(true);
+      return;
     }
     if (voidWardPrimedRef.current && openParryWindow(currentEnemy, true)) return;
     if (!countering && operativeClass === 'ENVOY' && openEnvoyWardWindow(currentEnemy)) return;
@@ -4390,8 +4545,6 @@ export default function TacticalCombatHub({
     kineticBatteryChargedRef.current = false;
     combatChanceRef.current = createDefaultCombatChanceState();
     setMagazineAmmo(maxAmmo);
-    hexOverchargedRef.current = false;
-    setHexOvercharged(false);
     setAegisOvercharged(false);
     applyVeilFlux(-veilFluxRef.current);
     envoyOverloadedRef.current = false;
@@ -4405,7 +4558,6 @@ export default function TacticalCombatHub({
     zeroProtocolActiveRef.current = false;
     setCataclysmSigilVisible(false);
     setFractureBreakUnitId(null);
-    setPerfectReloadCount(0);
     setSuccessfulParryCount(0);
     setCataclysmReadyUi(false);
     combatPausedRef.current = false;
@@ -4437,6 +4589,17 @@ export default function TacticalCombatHub({
     const entryAp = PLAYER_ACTION_POINTS_PER_TURN + incursionApBonus + Math.max(0, firstTurnBonusAp) + ghostedAp;
     playerApRef.current = entryAp;
     setPlayerActionPoints(entryAp);
+    if (operativeClass === 'HEX_SHOT') {
+      applyHexShotCombatState(createInitialHexShotCombatState({
+        hp: operativeHpRef.current,
+        maxHp: maxSoulAnchor,
+        stamina: staminaRef.current,
+        maxStamina,
+        ap: entryAp,
+        ammo: maxAmmo,
+        maxAmmo,
+      }));
+    }
     setSelectedAbility(null);
     setResolutionOutcome(null);
     setIsPlayerTurn(true);
@@ -4481,9 +4644,16 @@ export default function TacticalCombatHub({
     if (operativeClass === 'HEX_SHOT') {
       log(`>> MAGAZINE LOADED — ${maxAmmo}/${maxAmmo} rounds chambered.`);
       if (hexShotBoonMods.autoLoaderOnStart) {
-        hexOverchargedRef.current = true;
-        setHexOvercharged(true);
-        log('>> [AUTO-LOADER DECK] — full magazine, OVERCHARGED primed.');
+        log('>> [AUTO-LOADER DECK] — full magazine chambered at engagement.');
+      }
+      if (hexShotBoonMods.maxHpMultiplier > 1) {
+        const boosted = combatMaxSoulAnchorRef.current;
+        setOperativeHp((p) => {
+          const n = Math.min(boosted, p + (boosted - maxSoulAnchor));
+          operativeHpRef.current = n;
+          return n;
+        });
+        log('>> [KINETIC DAMPENERS] — defensive rig expands soul anchor ceiling.');
       }
     }
     if (operativeClass === 'ENVOY') {
@@ -4838,6 +5008,18 @@ export default function TacticalCombatHub({
           }
         },
       });
+      if (graftPlan.effectiveTags.includes('TACTICAL')) {
+        dispatchHexShot({
+          type: 'HEX_REEVALUATE_ULTIMATE',
+          encounter: classCombatRef.current,
+          squad: squadRef.current,
+        });
+      }
+      if (abilityUsesBallisticTags(abilityId)) {
+        maybePromptReloadAfterBallistic();
+      } else if (graftPlan.consumeAllAmmo && currentAmmoRef.current === 0) {
+        maybePromptReloadAfterBallistic();
+      }
     }
     activeClassGraftPlanRef.current = null;
     publishSquadUi(squadRef.current);
@@ -4845,11 +5027,11 @@ export default function TacticalCombatHub({
 
   const executeHexShotClassAbility = (abilityId: HexShotAbilityId) => {
     if (abilityId === 'ZERO_PROTOCOL') {
-      log('[REJECTED] >> Zero-Protocol procs from perfect reload mastery — use the ping.');
+      log('[REJECTED] >> Zero-Protocol channels via the mastery ping when overcharge and debuff align.');
       return;
     }
     if (cycleState !== 'TEXT_COMBAT' || !canPlayerCommand()) return;
-    const graftId = hexShotAbilityGraftsRef.current[abilityId];
+    const graftId = resolveHexShotAbilityGraftId(hexShotAbilityGraftsRef.current, abilityId);
     const graftPlan = buildClassGraftCastPlan('HEX_SHOT', abilityId, graftId);
     activeClassGraftPlanRef.current = graftPlan;
     const cost = resolveClassAbilityCost('HEX_SHOT', abilityId);
@@ -4883,6 +5065,11 @@ export default function TacticalCombatHub({
     lastPlayerAbilityRef.current = abilityId;
     const ammoOverride = effectiveGraftAmmoCost(graftPlan, currentAmmoRef.current);
 
+    if (shouldApplyPhantomFeed(abilityId, graftPlan.effectiveTags)) {
+      dispatchHexShot({ type: 'HEX_PHANTOM_FEED' });
+      log('[PHANTOM FEED] >> Tactical rig cycles +1 round into the magazine.');
+    }
+
     const runExecutor = (ultimatePerformance?: number) => {
       const execResult = executeHexShotAbility({
         abilityId,
@@ -4893,6 +5080,7 @@ export default function TacticalCombatHub({
         maxAmmo,
         maxSoulAnchor,
         classState: classCombatRef.current,
+        effectiveTags: graftPlan.effectiveTags,
         log,
         apCostOverride: graftPlan.apCost,
         ammoCostOverride: ammoOverride,
@@ -4919,14 +5107,7 @@ export default function TacticalCombatHub({
         },
         spendStamina: spendStam,
         spendStaminaPct: (pct) => {
-          let effectivePct = pct;
-          if (
-            hasHexShotBoon(hexShotBoons, 'RECOIL_HARNESS')
-            && getHexShotAbilityTags(abilityId).includes('BALLISTIC')
-          ) {
-            effectivePct = pct * (1 - hexShotBoonModsRef.current.ballisticStaminaDiscountPct / 100);
-          }
-          const costStam = Math.floor(staminaRef.current * (effectivePct / 100));
+          const costStam = Math.floor(staminaRef.current * (pct / 100));
           return costStam > 0 && spendStam(costStam);
         },
         hurtEnemy: buildHexHurtEnemy(),
@@ -5575,6 +5756,7 @@ export default function TacticalCombatHub({
     hurtEnemy(ZERO_PROTOCOL_DAMAGE_PER_TAP, '[ZERO-PROTOCOL]', 'STRIKE', {
       channel: 'TRUE',
       targetId: pick.unitId,
+      abilityId: 'ZERO_PROTOCOL' as AegisAbilityId,
       rollCrit: false,
     });
     triggerHaptic('impactLight');
@@ -5585,9 +5767,14 @@ export default function TacticalCombatHub({
     zeroProtocolActiveRef.current = false;
     setZeroProtocolVisible(false);
     combatPausedRef.current = false;
-    setPerfectReloadCount(0);
-    classCombatRef.current.perfectReloadCount = 0;
-    log(`>> [ZERO-PROTOCOL] >> ${tapCount} impact(s) delivered.`);
+    emptyMagazine();
+    dispatchHexShot({
+      type: 'HEX_EXECUTE_ZERO_PROTOCOL',
+      encounter: classCombatRef.current,
+      squad: squadRef.current,
+    });
+    log(`>> [ZERO-PROTOCOL] >> ${tapCount} impact(s) delivered. Magazine dumped.`);
+    tryOpenReloadMinigame(false);
   };
 
   const handleCataclysmResolve = (success: boolean) => {
@@ -5724,14 +5911,11 @@ export default function TacticalCombatHub({
     if (cycleState !== 'TEXT_COMBAT' || !isPlayerTurn || shadowstepProcRef.current) return;
     if (activeReloadVisible || hexReloadUsedThisTurnRef.current) {
       if (hexReloadUsedThisTurnRef.current) {
-        log('[REJECTED] >> Combat reload already spent this turn.');
+        log('[REJECTED] >> Phase-Shift Reload already spent this turn.');
       }
       return;
     }
-    hexReloadUsedThisTurnRef.current = true;
-    setHexReloadUsedThisTurn(true);
-    setActiveReloadVisible(true);
-    log('>> [COMBAT RELOAD] — active reload window open.');
+    tryOpenReloadMinigame(true);
   };
 
   const onVoidWardPrime = () => {
@@ -5752,51 +5936,42 @@ export default function TacticalCombatHub({
 
   const handleActiveReloadResolve = (result: ActiveReloadResult) => {
     setActiveReloadVisible(false);
-    log(activeReloadLogLine(result));
-    switch (result) {
-      case 'PERFECT':
-        setMagazineAmmo(maxAmmo);
-        hexOverchargedRef.current = true;
-        setHexOvercharged(true);
-        markHexShotTacticalReloadPending(hexShotBoons, classBoonEncounterRef.current, log);
-        triggerHitstop(80);
-        triggerHaptic('impactHeavy');
-        {
-          const nextPerfect = perfectReloadCount + 1;
-          setPerfectReloadCount(nextPerfect);
-          classCombatRef.current.perfectReloadCount = nextPerfect;
-        }
-        if (hasHexShotBoon(hexShotBoons, 'FLAWLESS_DRILL') && hexShotBoonMods.perfectReloadApBonus) {
-          playerApRef.current += 1;
-          setPlayerActionPoints(playerApRef.current);
-          log('[FLAWLESS DRILL] >> Perfect reload — +1 AP.');
-        }
-        if (hasHexShotBoon(hexShotBoons, 'ETHEREAL_MAGAZINES')) {
-          sessionExtrasRef.current.playerShield = (sessionExtrasRef.current.playerShield ?? 0) + 10;
-          log('[ETHEREAL MAGAZINES] >> Occult shield grafted to operative.');
-        }
-        break;
-      case 'STANDARD':
-        setMagazineAmmo(maxAmmo);
-        markHexShotTacticalReloadPending(hexShotBoons, classBoonEncounterRef.current, log);
-        triggerHaptic('impactLight');
-        if (playerApRef.current > 0) {
-          playerApRef.current -= 1;
-          setPlayerActionPoints(playerApRef.current);
-        }
-        break;
-      case 'JAM':
-        setMagazineAmmo(Math.min(2, maxAmmo));
-        playerApRef.current = 0;
-        setPlayerActionPoints(0);
-        triggerShake('light');
-        triggerHaptic('notificationError');
-        if (isPlayerTurnRef.current && cycleRef.current === 'TEXT_COMBAT') {
-          passToEnemy(false);
-        }
-        break;
-      default:
-        break;
+    const wasManual = hexShotStateRef.current.isManualReloadMinigameActive;
+    const deadMansBlocksOvercharge = wasManual
+      && isDeadMansSwitchReloadGraft(hexShotAbilityGraftsRef.current);
+    const ammoAtStart = hexShotStateRef.current.ammoAtReloadStart;
+    const overchargePct = result === 'PERFECT' && !deadMansBlocksOvercharge
+      ? overchargeFromAmmoAtReloadStart(ammoAtStart, maxAmmo)
+      : 0;
+    log(activeReloadLogLine(result, overchargePct));
+    dispatchHexShot({
+      type: 'HEX_RESOLVE_RELOAD',
+      result,
+      encounter: classCombatRef.current,
+      squad: squadRef.current,
+      deadMansSwitchBlocksOvercharge: deadMansBlocksOvercharge,
+    });
+    runHexShotOnReloadResolveBoons({
+      boons: hexShotBoons,
+      result,
+      encounter: classBoonEncounterRef.current,
+      mods: hexShotBoonMods,
+      log,
+      grantOccultShield: (amount) => {
+        sessionExtrasRef.current.playerShield = (sessionExtrasRef.current.playerShield ?? 0) + amount;
+      },
+      grantAp: () => {
+        playerApRef.current += 1;
+        setPlayerActionPoints(playerApRef.current);
+        dispatchHexShot({ type: 'HEX_SYNC_RESOURCES', patch: { ap: playerApRef.current } });
+      },
+    });
+    if (result === 'PERFECT') {
+      triggerHitstop(80);
+      triggerHaptic('impactHeavy');
+    } else {
+      triggerShake('light');
+      triggerHaptic('notificationError');
     }
   };
 
@@ -6184,7 +6359,7 @@ export default function TacticalCombatHub({
       const graftPlan = buildClassGraftCastPlan(
         'HEX_SHOT',
         abilityId,
-        hexShotAbilityGraftsRef.current[abilityId as HexShotAbilityId],
+        resolveHexShotAbilityGraftId(hexShotAbilityGraftsRef.current, abilityId as HexShotAbilityId),
       );
       if (playerActionPoints < graftPlan.apCost) return false;
       return isHexShotAbilityEnabled(
@@ -6308,7 +6483,18 @@ export default function TacticalCombatHub({
   const getStagedAbilityDescription = (abilityId: string): string => {
     const cost = resolveClassAbilityCost(operativeClass, abilityId);
     const tagLine = cost.tags.length > 0 ? `TAGS: ${cost.tags.join(' // ')}` : '';
-    return [cost.description, tagLine].filter(Boolean).join('\n\n');
+    const graftTags = operativeClass === 'HEX_SHOT'
+      ? buildClassGraftCastPlan(
+        'HEX_SHOT',
+        abilityId as HexShotAbilityId,
+        resolveHexShotAbilityGraftId(hexShotAbilityGraftsRef.current, abilityId as HexShotAbilityId),
+      ).effectiveTags
+      : undefined;
+    const phantomFeed = operativeClass === 'HEX_SHOT'
+      && shouldApplyPhantomFeed(abilityId as HexShotAbilityId, graftTags)
+      ? 'INTRINSIC: Phantom Feed — +1 round cycled before resolve.'
+      : '';
+    return [cost.description, tagLine, phantomFeed].filter(Boolean).join('\n\n');
   };
 
   const confirmSelectedAbility = () => {
@@ -6351,7 +6537,7 @@ export default function TacticalCombatHub({
     onOperativeTelemetryChange({
       operativeClass,
       operativeHp,
-      maxSoulAnchor,
+      maxSoulAnchor: combatMaxSoulAnchor,
       abyssalReserve,
       abyssalCap: mutationModsRef.current.abyssalCap,
       stamina,
@@ -6361,13 +6547,13 @@ export default function TacticalCombatHub({
       runicBrands,
       runicBrandCap: RUNIC_BRAND_CAP,
       eviscerateReady: sliceReady,
+      zeroProtocolReady,
       currentAmmo,
       maxAmmo,
-      overcharged: operativeClass === 'HEX_SHOT'
-        ? hexOvercharged
-        : operativeClass === 'AEGIS'
-          ? aegisOvercharged
-          : false,
+      overchargeMultiplier: operativeClass === 'HEX_SHOT'
+        ? hexShotState.overchargeMultiplier
+        : 0,
+      overcharged: operativeClass === 'AEGIS' ? aegisOvercharged : false,
       veilFlux,
       envoyOverloaded,
       envoySilenced,
@@ -6376,7 +6562,7 @@ export default function TacticalCombatHub({
     onOperativeTelemetryChange,
     operativeClass,
     operativeHp,
-    maxSoulAnchor,
+    combatMaxSoulAnchor,
     abyssalReserve,
     stamina,
     maxStamina,
@@ -6384,10 +6570,11 @@ export default function TacticalCombatHub({
     voidWardPrimed,
     runicBrands,
     sliceReady,
+    zeroProtocolReady,
     aegisOvercharged,
     currentAmmo,
     maxAmmo,
-    hexOvercharged,
+    hexShotState.overchargeMultiplier,
     veilFlux,
     envoyOverloaded,
     envoySilenced,
@@ -6645,6 +6832,7 @@ export default function TacticalCombatHub({
       )}
       <ActiveReloadOverlay
         visible={activeReloadVisible}
+        mode={hexShotState.isAutoLoadMinigameActive ? 'flow' : 'tactical'}
         perfectWindowScale={hexShotBoonMods.gunsmithsCurseActive ? 0.5 : 1}
         onResolve={handleActiveReloadResolve}
       />

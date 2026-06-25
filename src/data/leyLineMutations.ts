@@ -150,7 +150,7 @@ export const LEY_LINE_MUTATION_CATALOG: Record<LeyLineMutationId, LeyLineMutatio
     id: 'DEEP_LUNGS',
     name: 'Deep Lungs',
     tier: 'SYSTEM',
-    description: 'RESTORE actions surge Runic Brands to 3; Demon\'s Lung +30% Reserve.',
+    description: 'RESTORE actions surge Runic Brands to 3.',
     effect: effect('DEEP_LUNGS'),
   },
   BLOOD_PRICE: {

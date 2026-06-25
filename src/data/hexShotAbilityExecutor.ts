@@ -4,6 +4,8 @@ import type { CombatGridSlotId } from '../types/combatGrid';
 import { ADJACENT_SLOTS, columnSlotsFor } from '../types/combatGrid';
 import type { EnemyCombatProfile } from '../types/run';
 import { getHexShotAbilityDefinition } from './hexShotAbilities';
+import { graftForcesSingleTarget } from './hexShotIntrinsics';
+import { resolveHexShotResourceCosts } from './hexShotResourceEngine';
 import { addCombatTag } from './combatFractureEngine';
 import {
   aliveUnits,
@@ -50,6 +52,8 @@ export interface HexShotExecutionContext {
   reduceEnemyAp: (unitId: string, amount: number) => void;
   emptyMagazine: () => void;
   ultimatePerformance?: number;
+  /** Graft-modified tags for this cast (e.g. Widow-Choke AoE → single). */
+  effectiveTags?: readonly string[];
 }
 
 export type HexShotExecutionResult =
@@ -78,6 +82,16 @@ function unitsInSlots(squad: EnemyCombatProfile[], slots: CombatGridSlotId[]): E
   return hits;
 }
 
+function resolveHexShotAreaHits(
+  ctx: HexShotExecutionContext,
+  focalUnit: EnemyCombatProfile,
+): EnemyCombatProfile[] {
+  if (graftForcesSingleTarget(ctx.effectiveTags)) {
+    return focalUnit.unitId && isUnitAlive(focalUnit) ? [focalUnit] : [];
+  }
+  return unitsInSlots(ctx.squad, areaSlotsFromTarget(focalUnit));
+}
+
 function ballisticDamage(ctx: HexShotExecutionContext, abilityId: HexShotAbilityId): number {
   const def = getHexShotAbilityDefinition(abilityId);
   if (def.baseDamage > 0) return def.baseDamage;
@@ -92,21 +106,23 @@ function stackBleed(unit: EnemyCombatProfile): EnemyCombatProfile {
 
 export function executeHexShotAbility(ctx: HexShotExecutionContext): HexShotExecutionResult {
   const def = getHexShotAbilityDefinition(ctx.abilityId);
-  const apCost = ctx.apCostOverride ?? def.apCost;
-  const ammoCost = ctx.ammoCostOverride ?? def.ammoCost;
+  const costs = resolveHexShotResourceCosts(def, {
+    apCost: ctx.apCostOverride,
+    ammoCost: ctx.ammoCostOverride,
+  });
+  const { apCost, ammoCost, staminaCost, staminaCostPct } = costs;
 
   if (ammoCost > 0 && !ctx.spendAmmo(ammoCost)) {
     ctx.log('[REJECTED] >> Magazine dry — insufficient rounds.');
     return { ok: false, refundAp: apCost, refundAmmo: 0 };
   }
 
-  if ((def.staminaCostPct ?? 0) > 0) {
-    const pct = def.staminaCostPct ?? 0;
-    if (!ctx.spendStaminaPct(pct)) {
+  if (staminaCostPct > 0) {
+    if (!ctx.spendStaminaPct(staminaCostPct)) {
       ctx.log('[REJECTED] >> Insufficient stamina.');
       return { ok: false, refundAp: apCost, refundAmmo: ammoCost };
     }
-  } else if (def.staminaCost > 0 && !ctx.spendStamina(def.staminaCost)) {
+  } else if (staminaCost > 0 && !ctx.spendStamina(staminaCost)) {
     ctx.log('[REJECTED] >> Insufficient stamina.');
     return { ok: false, refundAp: apCost, refundAmmo: ammoCost };
   }
@@ -213,8 +229,8 @@ export function executeHexShotAbility(ctx: HexShotExecutionContext): HexShotExec
         ctx.log('[REJECTED] >> Phosphorus Hex requires a focal target.');
         return { ok: false, refundAp: def.apCost };
       }
-      const slots = areaSlotsFromTarget(unit);
-      for (const hit of unitsInSlots(ctx.squad, slots)) {
+      const singleTarget = graftForcesSingleTarget(ctx.effectiveTags);
+      for (const hit of resolveHexShotAreaHits(ctx, unit)) {
         if (!hit.unitId) continue;
         ctx.patchUnit(hit.unitId, {
           ...addCombatTag(hit, 'BLINDED'),
@@ -222,7 +238,9 @@ export function executeHexShotAbility(ctx: HexShotExecutionContext): HexShotExec
           evadeActive: false,
         });
       }
-      ctx.log('[PHOSPHORUS HEX] >> Grid blinded — evade stripped.');
+      ctx.log(singleTarget
+        ? '[PHOSPHORUS HEX] >> Widow-Choke focal blind — evade stripped.'
+        : '[PHOSPHORUS HEX] >> Grid blinded — evade stripped.');
       return { ok: true };
     }
 
@@ -250,24 +268,26 @@ export function executeHexShotAbility(ctx: HexShotExecutionContext): HexShotExec
       return { ok: true };
     }
 
-    case 'BRIMSTONE_PAYLOAD': {
+    case 'BLEEDING_PAYLOAD': {
       const unit = targetUnit(ctx);
       if (!unit?.unitId) {
-        ctx.log('[REJECTED] >> Brimstone Payload requires a focal target.');
+        ctx.log('[REJECTED] >> Bleeding Payload requires a focal target.');
         return { ok: false, refundAp: def.apCost, refundAmmo: def.ammoCost };
       }
-      const slots = areaSlotsFromTarget(unit);
-      for (const hit of unitsInSlots(ctx.squad, slots)) {
+      const singleTarget = graftForcesSingleTarget(ctx.effectiveTags);
+      for (const hit of resolveHexShotAreaHits(ctx, unit)) {
         if (!hit.unitId) continue;
-        ctx.hurtEnemy(def.baseDamage, '[BRIMSTONE]', {
+        ctx.hurtEnemy(def.baseDamage, '[BLEEDING PAYLOAD]', {
           channel: 'OCCULT',
           abilityId: ctx.abilityId,
           targetId: hit.unitId,
         }, hit.unitId);
-        ctx.classState.brimstoneBleedTurns[hit.unitId] = 2;
+        ctx.classState.bleedingPayloadTurns[hit.unitId] = 2;
         ctx.patchUnit(hit.unitId, stackBleed(hit));
       }
-      ctx.log('[BRIMSTONE PAYLOAD] >> Void burst — burn hazard seeded.');
+      ctx.log(singleTarget
+        ? '[BLEEDING PAYLOAD] >> Widow-Choke slug — focal burn hazard.'
+        : '[BLEEDING PAYLOAD] >> Void burst — burn hazard seeded.');
       return { ok: true };
     }
 
@@ -363,15 +383,15 @@ export function isHexShotAbilityEnabled(
   ammoCostOverride?: number,
 ): boolean {
   const def = getHexShotAbilityDefinition(abilityId);
-  const ammoCost = ammoCostOverride ?? def.ammoCost;
+  const costs = resolveHexShotResourceCosts(def, { ammoCost: ammoCostOverride });
+  const ammoCost = costs.ammoCost;
   if (abilityId === 'PHASE_SHIFT_RELOAD') return false;
   if (ammoCost > 0 && currentAmmo < ammoCost) return false;
   if (def.requiresFullMag && currentAmmo < maxAmmo) return false;
-  if ((def.staminaCostPct ?? 0) > 0) {
-    const pct = def.staminaCostPct ?? 0;
-    const cost = Math.floor(stamina * (pct / 100));
+  if (costs.staminaCostPct > 0) {
+    const cost = Math.floor(stamina * (costs.staminaCostPct / 100));
     if (cost <= 0 || stamina < cost) return false;
-  } else if (def.staminaCost > 0 && stamina < def.staminaCost) {
+  } else if (costs.staminaCost > 0 && stamina < costs.staminaCost) {
     return false;
   }
   if (abilityId === 'PANOPTICON_PROTOCOL' && classState.panopticonActive) return false;

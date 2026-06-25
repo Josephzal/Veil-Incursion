@@ -24,9 +24,9 @@ export const HEX_SHOT_GRAFT_DATABASE: Record<HexShotGraftId, ClassGraftDefinitio
     'HELL_FIRE_COMPENSATOR',
     'Hell-Fire Compensator',
     15,
-    'Applies 2-stack Bleed. +15 stamina tax.',
+    'Applies 2-stack Bleed. Costs 10% Max HP to fire.',
     '#fb923c',
-    { applyDebuffToTarget: 'BLEED_2', staminaPenalty: 15 },
+    { applyDebuffToTarget: 'BLEED_2', addHpCost: 0.10 },
   ),
   SILENT_VOID_SUPPRESSOR: hex(
     'SILENT_VOID_SUPPRESSOR',
@@ -96,9 +96,9 @@ export const HEX_SHOT_GRAFT_DATABASE: Record<HexShotGraftId, ClassGraftDefinitio
     'GHOST_BEAM_GRAFT',
     'Ghost-Beam Graft',
     25,
-    'Adds ARMOR_PIERCE tag. +20 stamina tax.',
+    'Adds ARMOR_PIERCE tag. +1 AP cost.',
     '#22d3ee',
-    { addTag: 'ARMOR_PIERCE', staminaPenalty: 20 },
+    { addTag: 'ARMOR_PIERCE', addApCost: 1 },
   ),
   PRECOGNITIVE_SCOPE_GRAFT: hex(
     'PRECOGNITIVE_SCOPE_GRAFT',
@@ -139,6 +139,14 @@ export const HEX_SHOT_GRAFT_DATABASE: Record<HexShotGraftId, ClassGraftDefinitio
     'Crits refund 1 AP. Disables Ultimate this encounter.',
     '#fde047',
     { refundApOnCrit: true, disableUltimate: true },
+  ),
+  DEAD_MAN_SWITCH_GRAFT: hex(
+    'DEAD_MAN_SWITCH_GRAFT',
+    "Dead-Man's Switch Graft",
+    25,
+    'Manual reload ejects all rounds as kinetic AoE (10 dmg each). Never grants overcharge.',
+    '#ef4444',
+    { deadMansSwitchOnReload: true },
   ),
 };
 

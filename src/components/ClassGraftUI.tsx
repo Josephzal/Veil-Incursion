@@ -14,7 +14,7 @@ import type {
   OperativeClassGraftId,
 } from '../types/classGraft';
 import type { AbilityGraftMap, VeilGraftId } from '../types/veilGraft';
-import type { EnvoyLoadout, HexShotLoadout } from '../types/operativeClass';
+import type { EnvoyLoadout, HexShotAbilityId, HexShotLoadout } from '../types/operativeClass';
 import type { AegisLoadout } from '../types/aegisCombat';
 
 const TERMINAL_ACCENT = '#00ff33';
@@ -52,15 +52,20 @@ export default function ClassGraftUI({
     : null;
 
   const abilityRows = useMemo(
-    () => loadout.map((abilityId) => {
-      const cost = resolveClassAbilityCost(activeClass, abilityId);
-      return {
-        abilityId,
-        label: cost.label,
-        graftId: (abilityGrafts as Record<string, OperativeClassGraftId | VeilGraftId | undefined>)[abilityId],
-        graftable: canGraftClassAbility(activeClass, abilityId),
-      };
-    }),
+    () => {
+      const abilityIds: string[] = activeClass === 'HEX_SHOT'
+        ? [...loadout, 'PHASE_SHIFT_RELOAD' as HexShotAbilityId]
+        : [...loadout];
+      return abilityIds.map((abilityId) => {
+        const cost = resolveClassAbilityCost(activeClass, abilityId);
+        return {
+          abilityId,
+          label: cost.label,
+          graftId: (abilityGrafts as Record<string, OperativeClassGraftId | VeilGraftId | undefined>)[abilityId],
+          graftable: canGraftClassAbility(activeClass, abilityId),
+        };
+      });
+    },
     [abilityGrafts, activeClass, loadout],
   );
 

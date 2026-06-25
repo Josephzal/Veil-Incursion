@@ -54,12 +54,10 @@ export interface ClassCombatEncounterState {
   enemyApDrainNextTurn: Record<string, number>;
   entropyHexTurns: Record<string, number>;
   fleshWarpUnits: Record<string, boolean>;
-  brimstoneBleedTurns: Record<string, number>;
+  bleedingPayloadTurns: Record<string, number>;
   /** Hex Reactive Camo — once per encounter. */
   reactiveCamoUsed: boolean;
-  /** Hex Shot — perfect active reloads toward Zero Protocol. */
-  perfectReloadCount: number;
-  /** Aegis — successful parries toward Eviscerate proc. */
+  /** Hex Shot — successful parries toward Eviscerate proc. */
   successfulParryCount: number;
   /** Aegis — Runic Brands imprinted on the action layer. */
   runicBrands: number;
@@ -77,9 +75,8 @@ export function createDefaultClassCombatEncounterState(): ClassCombatEncounterSt
     enemyApDrainNextTurn: {},
     entropyHexTurns: {},
     fleshWarpUnits: {},
-    brimstoneBleedTurns: {},
+    bleedingPayloadTurns: {},
     reactiveCamoUsed: false,
-    perfectReloadCount: 0,
     successfulParryCount: 0,
     runicBrands: 0,
     cataclysmReady: false,

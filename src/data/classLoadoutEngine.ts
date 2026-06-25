@@ -19,7 +19,12 @@ import { getEnvoyAbilityDefinition } from './envoyAbilities';
 import { getHexShotAbilityDefinition } from './hexShotAbilities';
 import { getAbilityDefinition } from './aegisAbilities';
 import { CLASS_DEFINITIONS } from './classes';
-import { normalizeUnlockedHexShotAbilities, normalizeUnlockedEnvoyAbilities } from './classAbilityUnlockEngine';
+import {
+  normalizeUnlockedEnvoyAbilities,
+  normalizeUnlockedHexShotAbilities,
+  sanitizeHexShotCombatLoadout,
+} from './classAbilityUnlockEngine';
+import { migrateHexShotAbilityId } from './hexShotMigration';
 
 export function migrateClassType(classId: string | undefined): ClassType {
   if (classId === 'RIFTSHOT') return 'HEX_SHOT';
@@ -33,14 +38,8 @@ export function migrateUnlockedClasses(classes: readonly string[] | undefined): 
 }
 
 function normalizeHexShotLoadout(loadout: readonly string[] | undefined): HexShotLoadout {
-  const fallback = [...DEFAULT_HEX_SHOT_LOADOUT] as HexShotLoadout;
-  if (!loadout?.length) return fallback;
-  return [
-    (loadout[0] as HexShotAbilityId) ?? fallback[0],
-    (loadout[1] as HexShotAbilityId) ?? fallback[1],
-    (loadout[2] as HexShotAbilityId) ?? fallback[2],
-    (loadout[3] as HexShotAbilityId) ?? fallback[3],
-  ];
+  if (!loadout?.length) return [...DEFAULT_HEX_SHOT_LOADOUT];
+  return sanitizeHexShotCombatLoadout(loadout.map((id) => migrateHexShotAbilityId(id)));
 }
 
 function normalizeEnvoyLoadout(loadout: readonly string[] | undefined): EnvoyLoadout {

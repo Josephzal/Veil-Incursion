@@ -3,7 +3,7 @@ import type { HexShotAbilityId } from '../types/operativeClass';
 import type { EnemyCombatProfile } from '../types/run';
 import { getUnitById, isUnitAlive } from './combatSquadEngine';
 
-export const BRIMSTONE_BLEED_DOT = 6;
+export const BLEEDING_PAYLOAD_DOT = 6;
 
 export function isEnemyHealBlocked(
   classState: ClassCombatEncounterState,
@@ -36,7 +36,7 @@ export function resolveAstralLockCrit(
   return { forceCrit: false, consumeLock: false };
 }
 
-export function applyBrimstoneBleedDot(
+export function applyBleedingPayloadDot(
   squad: EnemyCombatProfile[],
   turns: Record<string, number>,
   hurtEnemy: (
@@ -57,14 +57,14 @@ export function applyBrimstoneBleedDot(
   for (const [unitId, remaining] of Object.entries(turns)) {
     const unit = getUnitById(squad, unitId);
     if (!unit?.unitId || !isUnitAlive(unit)) continue;
-    hurtEnemy(BRIMSTONE_BLEED_DOT, '[BRIMSTONE BLEED]', {
+    hurtEnemy(BLEEDING_PAYLOAD_DOT, '[BLEEDING PAYLOAD]', {
       channel: 'OCCULT',
-      abilityId: 'BRIMSTONE_PAYLOAD',
+      abilityId: 'BLEEDING_PAYLOAD',
       targetId: unitId,
       rollCrit: false,
       indirectDamage: true,
     }, unitId);
-    log(`[BRIMSTONE BLEED] >> ${unit.designation} — ${BRIMSTONE_BLEED_DOT} occult burn.`);
+    log(`[BLEEDING PAYLOAD] >> ${unit.designation} — ${BLEEDING_PAYLOAD_DOT} occult burn.`);
     if (remaining > 1) next[unitId] = remaining - 1;
   }
   return next;
@@ -81,5 +81,5 @@ export function applyEnemyApDrainAtTurnStart(
   if (!drain || drain <= 0) return;
   delete classState.enemyApDrainNextTurn[unitId];
   reduceEnemyAp(unitId, drain);
-  log(`[ENTROPY HEX] >> ${designation} — ${drain} AP siphoned.`);
+  log(`[AP SIPHON] >> ${designation} — ${drain} AP siphoned.`);
 }

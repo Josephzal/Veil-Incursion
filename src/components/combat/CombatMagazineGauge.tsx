@@ -4,7 +4,9 @@ import { StyleSheet, Text, View } from 'react-native';
 interface CombatMagazineGaugeProps {
   currentAmmo: number;
   maxAmmo: number;
-  overcharged?: boolean;
+  overchargeMultiplier?: number;
+  /** Zero-Protocol gate open (overcharge + qualifying debuff). */
+  markReady?: boolean;
   labelColor?: string;
   liveColor?: string;
   spentColor?: string;
@@ -14,7 +16,8 @@ interface CombatMagazineGaugeProps {
 export default function CombatMagazineGauge({
   currentAmmo,
   maxAmmo,
-  overcharged = false,
+  overchargeMultiplier = 0,
+  markReady = false,
   labelColor = '#fbbf24',
   liveColor = '#fbbf24',
   spentColor = 'rgba(148, 163, 184, 0.35)',
@@ -24,7 +27,11 @@ export default function CombatMagazineGauge({
   const isStacked = variant === 'stacked';
   const isInline = variant === 'compact' || variant === 'inline';
 
-  const labelText = `MAGAZINE // ${currentAmmo}/${maxAmmo}${overcharged ? ' // OVERCHARGED' : ''}`;
+  const overchargeLabel = overchargeMultiplier > 0
+    ? ` // +${Math.round(overchargeMultiplier * 100)}% OC`
+    : '';
+  const markLabel = markReady ? ' // MARK READY' : '';
+  const labelText = `MAGAZINE // ${currentAmmo}/${maxAmmo}${overchargeLabel}${markLabel}`;
 
   const bulletRow = (
     <View style={styles.bulletRow}>

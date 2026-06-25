@@ -19,6 +19,7 @@ export interface ClassAbilityCatalogEntry {
   description: string;
   unlockCost: AbilityUnlockCost;
   tagsLine: string;
+  costLine?: string;
 }
 
 export interface ClassLoadoutEditorTheme {
@@ -47,6 +48,7 @@ interface ClassLoadoutEditorProps<T extends string> {
   hint?: string;
   commitLabel?: string;
   statusMessage?: string | null;
+  anchorCostLine?: string;
 }
 
 export default function ClassLoadoutEditor<T extends string>({
@@ -67,6 +69,7 @@ export default function ClassLoadoutEditor<T extends string>({
   hint = 'Slot 1 is your anchor ability. Select slots 2–4, then tap an ability to assign or unlock.',
   commitLabel = '[ COMMIT LOADOUT ]',
   statusMessage = null,
+  anchorCostLine,
 }: ClassLoadoutEditorProps<T>): React.JSX.Element {
   const textColor = theme.textColor ?? '#d8e2dc';
 
@@ -98,8 +101,13 @@ export default function ClassLoadoutEditor<T extends string>({
             {anchorLabel}
           </Text>
           <Text style={[styles.slotMeta, { color: theme.mutedColor }]} numberOfLines={2}>
-            {catalog[anchorId]?.description ?? 'Class anchor — fixed.'}
+            {anchorCostLine ? `COST: ${anchorCostLine}` : (catalog[anchorId]?.description ?? 'Class anchor — fixed.')}
           </Text>
+          {anchorCostLine && catalog[anchorId]?.description ? (
+            <Text style={[styles.slotMeta, { color: theme.mutedColor }]} numberOfLines={2}>
+              {catalog[anchorId]?.description}
+            </Text>
+          ) : null}
         </View>
 
         {([1, 2, 3] as const).map((slotIndex) => {
@@ -126,8 +134,18 @@ export default function ClassLoadoutEditor<T extends string>({
                 adjustsFontSizeToFit
                 minimumFontScale={0.65}
               >
-                {def?.tagsLine ?? ''}
+                {def?.costLine ? `COST: ${def.costLine}` : (def?.tagsLine ?? '')}
               </Text>
+              {def?.costLine && def?.tagsLine ? (
+                <Text
+                  style={[styles.chipTags, { color: theme.mutedColor }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.65}
+                >
+                  {def.tagsLine}
+                </Text>
+              ) : null}
               <Text
                 style={[styles.slotMeta, { color: theme.mutedColor }]}
                 numberOfLines={2}
@@ -182,8 +200,18 @@ export default function ClassLoadoutEditor<T extends string>({
                 adjustsFontSizeToFit
                 minimumFontScale={0.65}
               >
-                {def.tagsLine}
+                {def.costLine ? `COST: ${def.costLine}` : def.tagsLine}
               </Text>
+              {def.costLine ? (
+                <Text
+                  style={[styles.chipTags, { color: theme.mutedColor }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.65}
+                >
+                  {def.tagsLine}
+                </Text>
+              ) : null}
               {assigned >= 0 ? (
                 <Text style={[styles.chipSlot, { color: theme.mutedColor }]}>{`S${assigned + 1}`}</Text>
               ) : null}

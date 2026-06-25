@@ -16,7 +16,8 @@ export type HexShotGraftId =
   | 'RICOCHET_DEFLECTOR_GRAFT'
   | 'NEUTRON_SEAR_GRAFT'
   | 'PARASITE_GRIP_GRAFT'
-  | 'APEX_TRIGGER_GRAFT';
+  | 'APEX_TRIGGER_GRAFT'
+  | 'DEAD_MAN_SWITCH_GRAFT';
 
 export type EnvoyGraftId =
   | 'VOID_CONDUCTOR_GRAFT'
@@ -86,6 +87,8 @@ export interface ClassGraftDefinition {
   disableUltimate?: boolean;
   selfDebuffOnFail?: string;
   dropLootOnKill?: string;
+  /** Manual Phase-Shift Reload ejects remaining rounds as kinetic AoE. */
+  deadMansSwitchOnReload?: boolean;
 }
 
 export type HexShotAbilityGraftMap = Partial<

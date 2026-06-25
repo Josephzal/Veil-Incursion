@@ -2,14 +2,19 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import HapticPressable from '../HapticPressable';
 import type { ActiveReloadResult } from '../../types/classCombatResources';
+import { HEX_RELOAD_JAM_STAMINA_PENALTY } from '../../types/hexShotState';
 import {
   ACTIVE_RELOAD_PASS_MS,
   buildReloadZoneConfig,
   resolveActiveReloadZone,
 } from '../../data/activeReloadEngine';
 
+export type ActiveReloadMode = 'flow' | 'tactical';
+
 interface ActiveReloadOverlayProps {
   visible: boolean;
+  /** Flow-state reload after empty mag vs manual tactical reload. */
+  mode?: ActiveReloadMode;
   /** 1 = normal perfect band; 0.5 = Gunsmith's Curse (50% tighter). */
   perfectWindowScale?: number;
   onResolve: (result: ActiveReloadResult, cursorRatio: number) => void;
@@ -20,6 +25,7 @@ const MIN_BAR_WIDTH = 120;
 
 export default function ActiveReloadOverlay({
   visible,
+  mode = 'tactical',
   perfectWindowScale = 1,
   onResolve,
 }: ActiveReloadOverlayProps): React.JSX.Element | null {
@@ -83,31 +89,35 @@ export default function ActiveReloadOverlay({
     : 0;
   const goldLeftPct = zoneConfig.perfectMin * 100;
   const goldWidthPct = (zoneConfig.perfectMax - zoneConfig.perfectMin) * 100;
-  const grayWidthPct = zoneConfig.standardMax * 100;
-  const redMidLeftPct = zoneConfig.standardMax * 100;
-  const redMidWidthPct = Math.max(0, (zoneConfig.perfectMin - zoneConfig.standardMax) * 100);
+  const redLeftPct = 0;
+  const redWidthPct = zoneConfig.perfectMin * 100;
   const redEndLeftPct = zoneConfig.perfectMax * 100;
   const redEndWidthPct = Math.max(0, (1 - zoneConfig.perfectMax) * 100);
   const perfectLabel = `${Math.round(zoneConfig.perfectMin * 100)}–${Math.round(zoneConfig.perfectMax * 100)}%`;
+  const isFlow = mode === 'flow';
+  const title = isFlow
+    ? '[ FLOW-STATE RELOAD // 1 AP ]'
+    : '[ PHASE-SHIFT RELOAD // 1 AP ]';
+  const subtitle = isFlow
+    ? 'Magazine dry — tap the gold band to re-enter the flow. Overcharge scales with how empty you were.'
+    : 'Tactical reload — tap the gold band. Overcharge scales with rounds remaining before reload.';
 
   return (
     <View style={styles.overlay} pointerEvents="auto">
       <HapticPressable onPress={handleTap} style={styles.panel}>
-        <Text style={styles.title}>[ COMBAT RELOAD // SINGLE PASS ]</Text>
-        <Text style={styles.subtitle}>Tap once to stop the playhead — gold band is perfect.</Text>
+        <Text style={styles.title}>{title}</Text>
+        <Text style={styles.subtitle}>{subtitle}</Text>
         <View style={styles.barTrack} onLayout={handleBarLayout}>
-          <View style={[styles.zone, styles.grayZone, { width: `${grayWidthPct}%` }]} />
-          <View style={[styles.zone, styles.redZoneMid, { left: `${redMidLeftPct}%`, width: `${redMidWidthPct}%` }]} />
+          <View style={[styles.zone, styles.redZone, { left: `${redLeftPct}%`, width: `${redWidthPct}%` }]} />
           <View style={[styles.zone, styles.goldZone, { left: `${goldLeftPct}%`, width: `${goldWidthPct}%` }]} />
-          <View style={[styles.zone, styles.redZoneEnd, { left: `${redEndLeftPct}%`, width: `${redEndWidthPct}%` }]} />
+          <View style={[styles.zone, styles.redZone, { left: `${redEndLeftPct}%`, width: `${redEndWidthPct}%` }]} />
           {barWidth > 0 ? (
             <View style={[styles.cursor, { left: cursorLeft, width: CURSOR_WIDTH }]} />
           ) : null}
         </View>
         <View style={styles.legendRow}>
-          <Text style={styles.legendGray}>GRAY 0–60% — full mag, −1 AP</Text>
-          <Text style={styles.legendGold}>{`GOLD ${perfectLabel} — full mag, 0 AP, OVERCHARGED`}</Text>
-          <Text style={styles.legendRed}>RED — jam (weapon locked)</Text>
+          <Text style={styles.legendGold}>{`GOLD ${perfectLabel} — full mag + overcharge buff`}</Text>
+          <Text style={styles.legendRed}>{`MISS — full mag, −${HEX_RELOAD_JAM_STAMINA_PENALTY} STM void-feed jam`}</Text>
         </View>
         <Text style={styles.tapHint}>[ TAP ANYWHERE TO STOP ]</Text>
       </HapticPressable>
@@ -166,18 +176,11 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
   },
-  grayZone: {
-    left: 0,
-    backgroundColor: 'rgba(148, 163, 184, 0.28)',
-  },
-  redZoneMid: {
-    backgroundColor: 'rgba(248, 113, 113, 0.25)',
+  redZone: {
+    backgroundColor: 'rgba(248, 113, 113, 0.3)',
   },
   goldZone: {
     backgroundColor: 'rgba(251, 191, 36, 0.55)',
-  },
-  redZoneEnd: {
-    backgroundColor: 'rgba(248, 113, 113, 0.35)',
   },
   cursor: {
     position: 'absolute',
@@ -190,11 +193,6 @@ const styles = StyleSheet.create({
   legendRow: {
     gap: 2,
     alignItems: 'center',
-  },
-  legendGray: {
-    fontFamily: 'monospace',
-    fontSize: 6,
-    color: '#94a3b8',
   },
   legendGold: {
     fontFamily: 'monospace',

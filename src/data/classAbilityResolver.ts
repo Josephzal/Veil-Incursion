@@ -4,6 +4,7 @@ import type { EnvoyAbilityId, HexShotAbilityId } from '../types/operativeClass';
 import { getAbilityDefinition, getAbilityTags } from './aegisAbilities';
 import { getEnvoyAbilityDefinition, getEnvoyAbilityTags } from './envoyAbilities';
 import { getHexShotAbilityDefinition, getHexShotAbilityTags } from './hexShotAbilities';
+import { resolveHexShotResourceCosts } from './hexShotResourceEngine';
 
 export interface ClassAbilityCostSummary {
   apCost: number;
@@ -32,14 +33,15 @@ export function resolveClassAbilityCost(
   if (classId === 'HEX_SHOT') {
     const def = getHexShotAbilityDefinition(abilityId as HexShotAbilityId);
     const tags = getHexShotAbilityTags(abilityId as HexShotAbilityId);
+    const resolved = resolveHexShotResourceCosts(def);
     return {
-      apCost: def.apCost,
-      ammoCost: def.ammoCost,
+      apCost: resolved.apCost,
+      ammoCost: resolved.ammoCost,
       fluxGen: 0,
       fluxCost: 0,
       minFluxRequired: 0,
-      staminaCost: def.staminaCost,
-      staminaCostPct: def.staminaCostPct ?? 0,
+      staminaCost: resolved.staminaCost,
+      staminaCostPct: resolved.staminaCostPct,
       reserveCost: 0,
       reserveCostPct: 0,
       minReservePct: 0,

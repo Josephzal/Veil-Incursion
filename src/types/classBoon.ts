@@ -116,7 +116,8 @@ export interface PostCombatBoonOffer {
 export interface HexShotBoonCombatModifiers {
   maxAmmoBonus: number;
   ballisticArmorPierce: number;
-  ballisticStaminaDiscountPct: number;
+  /** Ballistic damage +% while overcharge multiplier is active (Recoil Harness). */
+  ballisticOverchargeDamagePct: number;
   ballisticFracturedDamagePct: number;
   ballisticCritBonusFullMag: number;
   ballisticDamageMultiplier: number;
@@ -127,6 +128,8 @@ export interface HexShotBoonCombatModifiers {
   perfectReloadApBonus: boolean;
   autoLoaderOnStart: boolean;
   gunsmithsCurseActive: boolean;
+  /** Sanctuary Bio-Stim heal bonus % (Survivalist). */
+  sanctuaryHealBonusPct: number;
 }
 
 export interface EnvoyBoonCombatModifiers {
@@ -208,7 +211,7 @@ export function defaultHexShotBoonModifiers(): HexShotBoonCombatModifiers {
   return {
     maxAmmoBonus: 0,
     ballisticArmorPierce: 0,
-    ballisticStaminaDiscountPct: 0,
+    ballisticOverchargeDamagePct: 0,
     ballisticFracturedDamagePct: 0,
     ballisticCritBonusFullMag: 0,
     ballisticDamageMultiplier: 1,
@@ -219,6 +222,7 @@ export function defaultHexShotBoonModifiers(): HexShotBoonCombatModifiers {
     perfectReloadApBonus: false,
     autoLoaderOnStart: false,
     gunsmithsCurseActive: false,
+    sanctuaryHealBonusPct: 0,
   };
 }
 

@@ -13,6 +13,7 @@ import type { EnvoyAbilityId, HexShotAbilityId } from '../types/operativeClass';
 import { resolveClassAbilityCost } from './classAbilityResolver';
 import { ENVOY_GRAFT_DATABASE, getEnvoyGraftDefinition, pickRandomEnvoyGraftOffers } from './envoyGrafts';
 import { HEX_SHOT_GRAFT_DATABASE, getHexShotGraftDefinition, pickRandomHexShotGraftOffers } from './hexShotGrafts';
+import { resolveHexShotAbilityGraftId } from './hexShotMigration';
 import { canGraftAbility, rollVeilGraftOffers } from './veilGraftEngine';
 import { GRAFT_DATABASE, getVeilGraftDefinition } from './veilGraftDatabase';
 import type { AegisAbilityId } from '../types/aegisCombat';
@@ -57,8 +58,15 @@ export function canAffordAnySanctuaryGraft(classId: ClassType, residueBalance: n
   return residueBalance >= getMinimumClassGraftCost(classId);
 }
 
+export function isDeadMansSwitchReloadGraft(
+  grafts: HexShotAbilityGraftMap,
+): boolean {
+  return grafts.PHASE_SHIFT_RELOAD === 'DEAD_MAN_SWITCH_GRAFT';
+}
+
 export function canGraftClassAbility(classId: ClassType, abilityId: string): boolean {
   if (classId === 'HEX_SHOT') {
+    if (abilityId === 'PHASE_SHIFT_RELOAD') return true;
     return !HEX_ANCHORS.includes(abilityId as HexShotAbilityId)
       && abilityId !== 'ZERO_PROTOCOL';
   }
@@ -232,7 +240,7 @@ export function getAbilityClassGraftId(
   aegisAbilityGrafts: Partial<Record<AegisAbilityId, VeilGraftId>>,
 ): OperativeClassGraftId | VeilGraftId | undefined {
   if (classId === 'HEX_SHOT') {
-    return hexShotAbilityGrafts[abilityId as HexShotAbilityId];
+    return resolveHexShotAbilityGraftId(hexShotAbilityGrafts, abilityId as HexShotAbilityId);
   }
   if (classId === 'ENVOY') {
     return envoyAbilityGrafts[abilityId as EnvoyAbilityId];

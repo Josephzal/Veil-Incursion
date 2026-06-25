@@ -30,7 +30,10 @@ export interface CombatOperativeTelemetry {
   eviscerateReady?: boolean;
   currentAmmo?: number;
   maxAmmo?: number;
+  overchargeMultiplier?: number;
+  /** Aegis narrative / Demon's Lung overcharge flag. */
   overcharged?: boolean;
+  zeroProtocolReady?: boolean;
   veilFlux?: number;
   envoyOverloaded?: boolean;
   envoySilenced?: boolean;
@@ -70,7 +73,9 @@ export default function CombatOperativeHud({
     eviscerateReady = false,
     currentAmmo = 0,
     maxAmmo = 6,
+    overchargeMultiplier = 0,
     overcharged = false,
+    zeroProtocolReady = false,
     veilFlux = 0,
     envoyOverloaded = false,
     envoySilenced = false,
@@ -96,7 +101,8 @@ export default function CombatOperativeHud({
         <CombatMagazineGauge
           currentAmmo={currentAmmo}
           maxAmmo={maxAmmo}
-          overcharged={overcharged}
+          overchargeMultiplier={overchargeMultiplier}
+          markReady={zeroProtocolReady}
           labelColor="#fbbf24"
           variant={rowVariant === 'stacked' ? 'stacked' : 'compact'}
         />

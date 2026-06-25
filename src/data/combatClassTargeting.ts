@@ -11,6 +11,7 @@ import {
   type AbilityTargetMode,
 } from './combatTargeting';
 import type { EnemyCombatProfile } from '../types/run';
+import { migrateHexShotAbilityId } from './hexShotMigration';
 
 const HEX_TARGET_MODE: Partial<Record<HexShotAbilityId, AbilityTargetMode>> = {
   SILVER_CORE_SIDEARM: 'SINGLE',
@@ -20,7 +21,7 @@ const HEX_TARGET_MODE: Partial<Record<HexShotAbilityId, AbilityTargetMode>> = {
   RIFT_SNARE: 'SINGLE',
   PHOSPHORUS_HEX: 'SINGLE',
   ASTRAL_TARGET_LOCK: 'SINGLE',
-  BRIMSTONE_PAYLOAD: 'SINGLE',
+  BLEEDING_PAYLOAD: 'SINGLE',
   WRAITH_PIERCER_ROUND: 'SINGLE',
   BLOOD_TRACER_ROUND: 'SINGLE',
   STASIS_LOCK_SLUG: 'SINGLE',
@@ -57,7 +58,7 @@ export function classAbilityTargetMode(
   abilityId: string,
 ): AbilityTargetMode {
   if (classId === 'HEX_SHOT') {
-    return HEX_TARGET_MODE[abilityId as HexShotAbilityId] ?? 'SINGLE';
+    return HEX_TARGET_MODE[migrateHexShotAbilityId(abilityId)] ?? 'SINGLE';
   }
   if (classId === 'ENVOY') {
     return ENVOY_TARGET_MODE[abilityId as EnvoyAbilityId] ?? 'SINGLE';

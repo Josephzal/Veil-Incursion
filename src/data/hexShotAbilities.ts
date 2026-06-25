@@ -17,6 +17,8 @@ export interface HexShotAbilityDefinition {
   unlockCost: AbilityUnlockCost;
 }
 
+import { migrateHexShotAbilityId } from './hexShotMigration';
+
 export const HEX_SHOT_ABILITY_CATALOG: Record<HexShotAbilityId, HexShotAbilityDefinition> = {
   SILVER_CORE_SIDEARM: {
     id: 'SILVER_CORE_SIDEARM',
@@ -25,7 +27,7 @@ export const HEX_SHOT_ABILITY_CATALOG: Record<HexShotAbilityId, HexShotAbilityDe
     description: 'Anchor sidearm — baseline ballistic damage. Cannot be removed or grafted.',
     apCost: 1,
     ammoCost: 1,
-    staminaCost: 8,
+    staminaCost: 0,
     baseDamage: 10,
     tags: ['BALLISTIC', 'RANGED', 'KINETIC'],
     unlockCost: {},
@@ -34,12 +36,11 @@ export const HEX_SHOT_ABILITY_CATALOG: Record<HexShotAbilityId, HexShotAbilityDe
     id: 'ZERO_PROTOCOL',
     classId: 'HEX_SHOT',
     label: '[ ZERO-PROTOCOL ]',
-    description: 'Ultimate — rapid-tap execution. Requires full magazine.',
+    description: 'Ultimate — dump the magazine for rapid execution. Requires overcharge and a marked hostile.',
     apCost: 0,
     ammoCost: 0,
     staminaCost: 0,
     baseDamage: 25,
-    requiresFullMag: true,
     tags: ['ULTIMATE', 'TRUE_DAMAGE', 'BALLISTIC'],
     unlockCost: { 'ley-slag': 30 },
   },
@@ -62,7 +63,7 @@ export const HEX_SHOT_ABILITY_CATALOG: Record<HexShotAbilityId, HexShotAbilityDe
     description: '3-round burst — heavy kinetic damage and stagger.',
     apCost: 2,
     ammoCost: 3,
-    staminaCost: 14,
+    staminaCost: 0,
     baseDamage: 22,
     tags: ['BALLISTIC', 'RANGED', 'FRACTURE', 'KINETIC'],
     unlockCost: { 'ley-slag': 12 },
@@ -72,9 +73,9 @@ export const HEX_SHOT_ABILITY_CATALOG: Record<HexShotAbilityId, HexShotAbilityDe
     classId: 'HEX_SHOT',
     label: '[ SINGULARITY SLUG ]',
     description: 'Ignores kinetic armor; permanently reduces target max HP by 10%.',
-    apCost: 2,
+    apCost: 1,
     ammoCost: 1,
-    staminaCost: 12,
+    staminaCost: 0,
     baseDamage: 16,
     tags: ['BALLISTIC', 'RANGED', 'ARMOR_PIERCE', 'KINETIC'],
     unlockCost: { 'ley-slag': 18 },
@@ -86,9 +87,9 @@ export const HEX_SHOT_ABILITY_CATALOG: Record<HexShotAbilityId, HexShotAbilityDe
     description: 'Overwatch — auto-interrupt and Concuss the next acting hostile.',
     apCost: 1,
     ammoCost: 0,
-    staminaCost: 6,
+    staminaCost: 30,
     baseDamage: 8,
-    tags: ['TACTICAL', 'DEFENSIVE', 'BALLISTIC'],
+    tags: ['TACTICAL', 'DEFENSIVE', 'TRAP'],
     unlockCost: { 'ley-slag': 14 },
   },
   REVENANTS_ECHO: {
@@ -98,7 +99,7 @@ export const HEX_SHOT_ABILITY_CATALOG: Record<HexShotAbilityId, HexShotAbilityDe
     description: 'Twin shots — second hit crits for 300% if target is below 30% HP.',
     apCost: 1,
     ammoCost: 2,
-    staminaCost: 10,
+    staminaCost: 0,
     baseDamage: 9,
     tags: ['BALLISTIC', 'RANGED', 'EXECUTION', 'KINETIC'],
     unlockCost: { 'ley-slag': 16 },
@@ -110,7 +111,7 @@ export const HEX_SHOT_ABILITY_CATALOG: Record<HexShotAbilityId, HexShotAbilityDe
     description: 'Places a mine under a target — detonates on their turn for AoE damage.',
     apCost: 1,
     ammoCost: 0,
-    staminaCost: 6,
+    staminaCost: 25,
     baseDamage: 14,
     tags: ['TACTICAL', 'TRAP', 'AOE', 'KINETIC'],
     unlockCost: { 'ley-slag': 10 },
@@ -122,7 +123,7 @@ export const HEX_SHOT_ABILITY_CATALOG: Record<HexShotAbilityId, HexShotAbilityDe
     description: 'Blinds a 2×2 grid — zero evade and −50% hit chance on follow-up attacks.',
     apCost: 1,
     ammoCost: 0,
-    staminaCost: 8,
+    staminaCost: 20,
     baseDamage: 0,
     tags: ['TACTICAL', 'AOE', 'DEBUFF'],
     unlockCost: { 'ley-slag': 12 },
@@ -131,11 +132,10 @@ export const HEX_SHOT_ABILITY_CATALOG: Record<HexShotAbilityId, HexShotAbilityDe
     id: 'NULL_SPACE_CLOAK',
     classId: 'HEX_SHOT',
     label: '[ NULL-SPACE CLOAK ]',
-    description: '100% evade against the next incoming attack (+30% stamina cost).',
+    description: '100% evade against the next incoming attack.',
     apCost: 0,
     ammoCost: 0,
-    staminaCost: 0,
-    staminaCostPct: 30,
+    staminaCost: 40,
     baseDamage: 0,
     tags: ['TACTICAL', 'DEFENSIVE', 'BUFF'],
     unlockCost: { 'ley-slag': 10 },
@@ -145,9 +145,9 @@ export const HEX_SHOT_ABILITY_CATALOG: Record<HexShotAbilityId, HexShotAbilityDe
     classId: 'HEX_SHOT',
     label: '[ GHOST-GRID CAMO ]',
     description: 'Phases operative — untargetable for 1 turn.',
-    apCost: 2,
+    apCost: 1,
     ammoCost: 0,
-    staminaCost: 10,
+    staminaCost: 40,
     baseDamage: 0,
     tags: ['TACTICAL', 'DEFENSIVE', 'BUFF'],
     unlockCost: { 'ley-slag': 20 },
@@ -159,19 +159,19 @@ export const HEX_SHOT_ABILITY_CATALOG: Record<HexShotAbilityId, HexShotAbilityDe
     description: 'Target becomes EXPOSED — next BALLISTIC attack is a guaranteed crit.',
     apCost: 1,
     ammoCost: 0,
-    staminaCost: 6,
+    staminaCost: 25,
     baseDamage: 0,
     tags: ['TACTICAL', 'DEBUFF'],
     unlockCost: { 'ley-slag': 12 },
   },
-  BRIMSTONE_PAYLOAD: {
-    id: 'BRIMSTONE_PAYLOAD',
+  BLEEDING_PAYLOAD: {
+    id: 'BLEEDING_PAYLOAD',
     classId: 'HEX_SHOT',
-    label: '[ BRIMSTONE PAYLOAD ]',
+    label: '[ BLEEDING PAYLOAD ]',
     description: 'Void-ammo burst on a 2×2 grid — leaves burning bleed hazard.',
     apCost: 2,
     ammoCost: 2,
-    staminaCost: 12,
+    staminaCost: 0,
     baseDamage: 12,
     tags: ['VOID_AMMO', 'AOE', 'DEBUFF', 'OCCULT'],
     unlockCost: { 'ley-slag': 14 },
@@ -183,7 +183,7 @@ export const HEX_SHOT_ABILITY_CATALOG: Record<HexShotAbilityId, HexShotAbilityDe
     description: 'Backline occult strike — ignores physical shields.',
     apCost: 1,
     ammoCost: 1,
-    staminaCost: 10,
+    staminaCost: 0,
     baseDamage: 14,
     tags: ['VOID_AMMO', 'RANGED', 'OCCULT'],
     unlockCost: { 'ley-slag': 12 },
@@ -195,7 +195,7 @@ export const HEX_SHOT_ABILITY_CATALOG: Record<HexShotAbilityId, HexShotAbilityDe
     description: 'Heals the operative for 50% of damage dealt.',
     apCost: 1,
     ammoCost: 1,
-    staminaCost: 10,
+    staminaCost: 0,
     baseDamage: 12,
     tags: ['VOID_AMMO', 'RANGED', 'RESTORE', 'OCCULT'],
     unlockCost: { 'ley-slag': 14 },
@@ -207,7 +207,7 @@ export const HEX_SHOT_ABILITY_CATALOG: Record<HexShotAbilityId, HexShotAbilityDe
     description: 'Pins shadow — reduces target AP by 2.',
     apCost: 1,
     ammoCost: 1,
-    staminaCost: 8,
+    staminaCost: 0,
     baseDamage: 8,
     tags: ['VOID_AMMO', 'CONTROL', 'DEBUFF', 'OCCULT'],
     unlockCost: { 'ley-slag': 10 },
@@ -215,9 +215,9 @@ export const HEX_SHOT_ABILITY_CATALOG: Record<HexShotAbilityId, HexShotAbilityDe
 };
 
 export function getHexShotAbilityDefinition(id: HexShotAbilityId): HexShotAbilityDefinition {
-  return HEX_SHOT_ABILITY_CATALOG[id];
+  return HEX_SHOT_ABILITY_CATALOG[migrateHexShotAbilityId(id)];
 }
 
 export function getHexShotAbilityTags(id: HexShotAbilityId): readonly HexShotAbilityTag[] {
-  return HEX_SHOT_ABILITY_CATALOG[id].tags;
+  return HEX_SHOT_ABILITY_CATALOG[migrateHexShotAbilityId(id)].tags;
 }

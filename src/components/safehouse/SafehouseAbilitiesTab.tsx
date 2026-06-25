@@ -20,6 +20,7 @@ import {
 } from '../../data/classAbilityUnlockEngine';
 import { ENVOY_ABILITY_CATALOG } from '../../data/envoyAbilities';
 import { HEX_SHOT_ABILITY_CATALOG } from '../../data/hexShotAbilities';
+import { formatClassAbilityCostLine } from '../../data/classAbilityResolver';
 import type { AegisAbilityId, AegisLoadout } from '../../types/aegisCombat';
 import type { EnvoyAbilityId, EnvoyLoadout, HexShotAbilityId, HexShotLoadout } from '../../types/operativeClass';
 import { validateLoadoutCommit } from '../../utils/aegisLoadoutUtils';
@@ -69,6 +70,7 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
           description: HEX_SHOT_ABILITY_CATALOG[id].description,
           unlockCost: HEX_SHOT_ABILITY_CATALOG[id].unlockCost,
           tagsLine: formatHexShotAbilityTags(id),
+          costLine: formatClassAbilityCostLine('HEX_SHOT', id),
         },
       ]),
     ),
@@ -211,6 +213,7 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
             draft={hexDraft}
             anchorId={HEX_SHOT_ANCHOR}
             anchorLabel={HEX_SHOT_ABILITY_CATALOG[HEX_SHOT_ANCHOR].label}
+            anchorCostLine={formatClassAbilityCostLine('HEX_SHOT', HEX_SHOT_ANCHOR)}
             assignableIds={getAssignableHexShotAbilities()}
             catalog={hexCatalog}
             selectedSlot={selectedFlexSlot}
@@ -227,7 +230,7 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
             resourceStash={account.resourceStash}
             theme={editorTheme}
             title="HEX-SHOT COMBAT LOADOUT // 4 ACTIVE SLOTS"
-            hint="Slot 1 is Silver-Core Sidearm. Zero-Protocol procs from 3 perfect reloads — not a deck slot."
+            hint="Slot 1 is Silver-Core Sidearm. Phase-Shift Reload and Phantom Feed are intrinsic; Zero-Protocol procs when overcharge and a live debuffed hostile align — not a deck slot."
             commitLabel="[ SAVE LOADOUT FOR NEXT RUN ]"
             statusMessage={loadoutStatus}
           />

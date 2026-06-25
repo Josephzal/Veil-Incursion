@@ -95,19 +95,32 @@ export function boonMatchesEnvoyAction(
   return tagsMatch(tags, rule.tagAll, rule.tagAny);
 }
 
+export function loadoutHasDefensiveHexAbility(
+  loadout: readonly HexShotAbilityId[] | undefined,
+): boolean {
+  if (!loadout?.length) return false;
+  return loadout.some((id) => getHexShotAbilityTags(id).includes('DEFENSIVE'));
+}
+
 export function aggregateHexShotBoonModifiers(
   boons: readonly HexShotBoonId[],
+  loadout?: readonly HexShotAbilityId[],
 ): HexShotBoonCombatModifiers {
   const mods = defaultHexShotBoonModifiers();
   if (hasHexShotBoon(boons, 'EXTENDED_MAGS')) mods.maxAmmoBonus += 2;
   if (hasHexShotBoon(boons, 'DEPLETED_URANIUM_TIPS')) mods.ballisticArmorPierce += 1;
-  if (hasHexShotBoon(boons, 'RECOIL_HARNESS')) mods.ballisticStaminaDiscountPct += 50;
+  if (hasHexShotBoon(boons, 'RECOIL_HARNESS')) mods.ballisticOverchargeDamagePct += 20;
   if (hasHexShotBoon(boons, 'SHATTER_RIFLING')) mods.ballisticFracturedDamagePct += 30;
   if (hasHexShotBoon(boons, 'DEAD_EYE')) mods.ballisticCritBonusFullMag += 15;
   if (hasHexShotBoon(boons, 'VOID_BANDOLEER')) mods.voidAmmoHpCostPct += 10;
   if (hasHexShotBoon(boons, 'LEYLINE_PENETRATOR')) mods.voidBacklineDamagePct += 50;
-  if (hasHexShotBoon(boons, 'KINETIC_DAMPENERS')) mods.maxHpMultiplier *= 1.1;
-  if (hasHexShotBoon(boons, 'SURVIVALIST')) mods.maxHpMultiplier *= 1.05;
+  if (
+    hasHexShotBoon(boons, 'KINETIC_DAMPENERS')
+    && loadoutHasDefensiveHexAbility(loadout)
+  ) {
+    mods.maxHpMultiplier *= 1.1;
+  }
+  if (hasHexShotBoon(boons, 'SURVIVALIST')) mods.sanctuaryHealBonusPct = 50;
   if (hasHexShotBoon(boons, 'AUTO_LOADER_DECK')) mods.autoLoaderOnStart = true;
   if (hasHexShotBoon(boons, 'FLAWLESS_DRILL')) mods.perfectReloadApBonus = true;
   if (hasHexShotBoon(boons, 'GUNSMITHS_CURSE')) {

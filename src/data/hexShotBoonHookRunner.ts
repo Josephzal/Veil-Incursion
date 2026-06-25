@@ -1,5 +1,6 @@
 import type { ClassBoonEncounterState, HexShotBoonCombatModifiers } from '../types/classBoon';
 import type { HexShotBoonId } from '../types/classBoon';
+import type { ActiveReloadResult } from '../types/classCombatResources';
 import type { EnemyCombatProfile } from '../types/run';
 import type { HexShotAbilityId } from '../types/operativeClass';
 import { boonMatchesHexAction, hasHexShotBoon } from './classBoonEngine';
@@ -290,7 +291,9 @@ export function runHexShotOnAbilityResolveBoons(ctx: HexShotAbilityResolveContex
 
   if (tags.includes('BALLISTIC')) {
     ctx.encounter.lastActionWasBallistic = true;
-  } else if (!tags.includes('TACTICAL')) {
+  } else if (tags.includes('TACTICAL')) {
+    ctx.encounter.lastActionWasBallistic = false;
+  } else {
     ctx.encounter.lastActionWasBallistic = false;
   }
 
@@ -374,6 +377,31 @@ export function markHexShotTacticalReloadPending(
   if (!hasHexShotBoon(boons, 'TACTICAL_RELOAD')) return;
   encounter.tacticalReloadPending = true;
   log('[TACTICAL RELOAD] >> Magazine cycled — next TACTICAL costs 0 AP.');
+}
+
+export interface HexShotReloadResolveContext {
+  boons: readonly HexShotBoonId[];
+  result: ActiveReloadResult;
+  encounter: ClassBoonEncounterState;
+  mods: HexShotBoonCombatModifiers;
+  log: (msg: string) => void;
+  grantOccultShield?: (amount: number) => void;
+  grantAp?: () => void;
+}
+
+/** Reload boons fire after any resolve that restores a full magazine (perfect or jam). */
+export function runHexShotOnReloadResolveBoons(ctx: HexShotReloadResolveContext): void {
+  markHexShotTacticalReloadPending(ctx.boons, ctx.encounter, ctx.log);
+
+  if (hasHexShotBoon(ctx.boons, 'ETHEREAL_MAGAZINES')) {
+    ctx.grantOccultShield?.(10);
+    ctx.log('[ETHEREAL MAGAZINES] >> Occult shield grafted to operative.');
+  }
+
+  if (ctx.result === 'PERFECT' && ctx.mods.perfectReloadApBonus) {
+    ctx.grantAp?.();
+    ctx.log('[FLAWLESS DRILL] >> Perfect reload — +1 AP.');
+  }
 }
 
 export function tryHexShotPanicButton(
