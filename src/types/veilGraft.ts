@@ -21,6 +21,8 @@ export type VeilGraftId =
 /** Run-scoped graft applied to one loadout slot ability. */
 export type AbilityGraftMap = Partial<Record<AegisAbilityId, VeilGraftId>>;
 
+export type GraftDamageScale = 'RESERVE_CONSUMED';
+
 export interface VeilGraftDefinition {
   id: VeilGraftId;
   name: string;
@@ -28,7 +30,8 @@ export interface VeilGraftDefinition {
   description: string;
   accentColor: string;
   damageMultiplier?: number;
-  staminaPenalty?: number;
+  /** Flat Abyssal Reserve % tax applied on cast. */
+  reservePenalty?: number;
   setApCost?: number;
   addHpCost?: number;
   addApCost?: number;
@@ -36,8 +39,8 @@ export interface VeilGraftDefinition {
   removeTags?: readonly AbilityTag[];
   convertToTrueDamage?: boolean;
   applySelfDebuffOnSurvive?: string;
-  consumeAllStamina?: boolean;
-  damageScale?: 'STAMINA_CONSUMED';
+  consumeAllReserve?: boolean;
+  damageScale?: GraftDamageScale;
   addReserveGeneration?: number;
   addCooldown?: number;
   refundApOnKill?: boolean;
@@ -48,7 +51,8 @@ export interface VeilGraftDefinition {
   applyDebuffToTarget?: string;
   applySelfDebuff?: string;
   addOccultDamage?: number;
-  addStaminaCost?: number;
+  /** Runic Brands consumed on cast. */
+  brandTax?: number;
   healPercentageOfDamage?: number;
   grantShieldHits?: number;
   reduceMaxHp?: number;
@@ -56,14 +60,17 @@ export interface VeilGraftDefinition {
   reduceReserveGeneration?: number;
   executeThreshold?: number;
   disableUltimate?: boolean;
+  bossDamageMultiplier?: number;
 }
 
 export interface GraftCastPlan {
   apCost: number;
   hpCostPct: number;
-  extraStaminaCost: number;
-  consumeAllStamina: boolean;
+  reservePenalty: number;
+  consumeAllReserve: boolean;
+  brandTax: number;
   damageMultiplier: number;
+  bossDamageMultiplier: number;
   hitCount: number;
   duplicateCastRatio: number;
   forceTrueDamage: boolean;
@@ -80,5 +87,6 @@ export interface GraftCastPlan {
   targetDebuff: string | null;
   selfDebuff: string | null;
   evadeBuffPct: number;
+  dropLootOnKill: string | null;
   graftName: string;
 }

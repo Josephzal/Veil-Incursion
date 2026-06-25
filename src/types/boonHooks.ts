@@ -18,7 +18,9 @@ export type BoonHook =
   | 'onTurnStart'
   | 'onTurnEnd'
   | 'onDefensiveFail'
-  | 'onDefensiveSuccess';
+  | 'onDefensiveSuccess'
+  | 'onDefensiveParryPerfect'
+  | 'onDefensiveParryFail';
 
 export interface BoonRule {
   id: LeyLineMutationId;
@@ -64,6 +66,8 @@ export interface BoonEncounterState {
   nextKineticApDiscount: number;
   lastActionTags: readonly AbilityTag[];
   voidResonanceOccultBonus: boolean;
+  /** VOID_RESONANCE — last resolved action carried KINETIC. */
+  voidResonanceKineticPrimed: boolean;
   tarTrappedUnits: Record<string, number>;
   reaveBleedUnits: Record<string, number>;
   veilTarTurnsRemaining: number;
@@ -94,6 +98,7 @@ export function createDefaultBoonEncounterState(): BoonEncounterState {
     nextKineticApDiscount: 0,
     lastActionTags: [],
     voidResonanceOccultBonus: false,
+    voidResonanceKineticPrimed: false,
     tarTrappedUnits: {},
     reaveBleedUnits: {},
     veilTarTurnsRemaining: 0,

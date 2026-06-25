@@ -340,6 +340,8 @@ interface RunContextType {
   beginResourceCachePack: () => void;
   finalizeHarvestScreen: () => void;
   grantCombatResourceDrops: (options: CombatRewardContext) => readonly string[];
+  grantCombatSalvage: (resourceId: import('../types/resourceItem').ResourceItemId, quantity: number) => void;
+  applyVoidsTollSacrifice: () => void;
   absorbVeilResidueParticle: (instanceId: string, value: number, finalizeInstance: boolean) => number;
   prepareBossEncounter: (engagedNode?: IncursionNode | null) => void;
   prepareStandardCombatEncounter: (engagedNode?: IncursionNode | null) => void;
@@ -1942,6 +1944,43 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     return stagedIds;
   }, [appendRunLog]);
 
+  const grantCombatSalvage = useCallback((
+    resourceId: import('../types/resourceItem').ResourceItemId,
+    quantity: number,
+  ) => {
+    if (quantity <= 0) return;
+    const stagedIds: string[] = [];
+    setActiveIncursion((prev) => {
+      let nextCargo = prev.cargo;
+      for (let i = 0; i < quantity; i += 1) {
+        nextCargo = addLootToContainment(nextCargo, resourceId, 1, stagedIds);
+      }
+      const next = { ...prev, cargo: nextCargo };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    appendRunLog(`>> COMBAT SALVAGE — ${quantity}× ${resourceId.toUpperCase()} routed to cargo.`);
+  }, [appendRunLog]);
+
+  const applyVoidsTollSacrifice = useCallback(() => {
+    setRunState((prev) => {
+      const nextMaxHp = Math.max(1, Math.floor(prev.maxSoulAnchor * 0.85));
+      const next = {
+        ...prev,
+        maxSoulAnchor: nextMaxHp,
+        soulAnchorIntegrity: Math.min(prev.soulAnchorIntegrity, nextMaxHp),
+      };
+      runStateRef.current = next;
+      return next;
+    });
+    setActiveIncursion((prev) => {
+      const next = { ...prev, voidsTollApBonus: prev.voidsTollApBonus + 1 };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    appendRunLog(">> [VOID'S TOLL] — +1 max AP this incursion. Max soul anchor −15%.");
+  }, [appendRunLog]);
+
   const finalizeHarvestScreen = useCallback(() => {
     const inc = activeIncursionRef.current;
     const stagingIds = new Set(inc.harvestStagingInstanceIds);
@@ -3523,6 +3562,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       beginResourceCachePack,
       finalizeHarvestScreen,
       grantCombatResourceDrops,
+      grantCombatSalvage,
+      applyVoidsTollSacrifice,
       absorbVeilResidueParticle,
       stageSafeAnchorReview,
       confirmSafeAnchorExtraction,
@@ -3638,6 +3679,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       beginResourceCachePack,
       finalizeHarvestScreen,
       grantCombatResourceDrops,
+      grantCombatSalvage,
+      applyVoidsTollSacrifice,
       absorbVeilResidueParticle,
       stageSafeAnchorReview,
       confirmSafeAnchorExtraction,

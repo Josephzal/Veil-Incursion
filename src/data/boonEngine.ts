@@ -32,7 +32,7 @@ export const BOON_RULES: Record<LeyLineMutationId, BoonRule> = {
   RELENTLESS_MOMENTUM: {
     id: 'RELENTLESS_MOMENTUM',
     hook: 'onKill',
-    trigger: 'Target FRACTURED // +20% stamina',
+    trigger: 'Target FRACTURED // +25% Abyssal Reserve',
   },
   HEAVY_CALIBER: {
     id: 'HEAVY_CALIBER',
@@ -60,7 +60,7 @@ export const BOON_RULES: Record<LeyLineMutationId, BoonRule> = {
     id: 'ABYSSAL_RESONANCE',
     hook: 'onDamageDeal',
     tagAll: ['KINETIC'],
-    trigger: 'KINETIC // +5% dmg per 10% stamina',
+    trigger: 'KINETIC // +5% dmg per Runic Brand',
   },
   EXECUTIONERS_GRIP: {
     id: 'EXECUTIONERS_GRIP',
@@ -128,7 +128,7 @@ export const BOON_RULES: Record<LeyLineMutationId, BoonRule> = {
     id: 'DEEP_LUNGS',
     hook: 'onAbilityResolve',
     tagAll: ['RESTORE'],
-    trigger: 'RESTORE // 100% missing stamina',
+    trigger: 'RESTORE // surge Brands to 3; Demon\'s Lung +30% Reserve',
   },
   BLOOD_PRICE: {
     id: 'BLOOD_PRICE',
@@ -139,7 +139,7 @@ export const BOON_RULES: Record<LeyLineMutationId, BoonRule> = {
   SECOND_WIND: {
     id: 'SECOND_WIND',
     hook: 'onTakeDamage',
-    trigger: 'Below 10% HP // full stamina +2 AP (1×/run)',
+    trigger: 'Below 10% HP // full Reserve +2 AP (1×/encounter)',
   },
   LEY_LINE_TAP: {
     id: 'LEY_LINE_TAP',
@@ -159,17 +159,17 @@ export const BOON_RULES: Record<LeyLineMutationId, BoonRule> = {
   GRID_GHOST: {
     id: 'GRID_GHOST',
     hook: 'onEvadeSuccess',
-    trigger: 'Evade success // stamina + evade stack',
+    trigger: 'Evade success // +20% Reserve + evade stack',
   },
   MASOCISTS_JOY: {
     id: 'MASOCISTS_JOY',
-    hook: 'onDefensiveFail',
+    hook: 'onDefensiveParryFail',
     tagAll: ['DEFENSIVE'],
-    trigger: 'DEFENSIVE fail // +50% next hit',
+    trigger: 'Failed parry // +50% next hit',
   },
   PERFECTED_FORM: {
     id: 'PERFECTED_FORM',
-    hook: 'onDefensiveSuccess',
+    hook: 'onDefensiveParryPerfect',
     tagAll: ['DEFENSIVE'],
     trigger: 'Perfect parry // heal 10% max HP',
   },
@@ -186,7 +186,7 @@ export const BOON_RULES: Record<LeyLineMutationId, BoonRule> = {
   },
   FLAWLESS_CONDUIT: {
     id: 'FLAWLESS_CONDUIT',
-    hook: 'onDefensiveSuccess',
+    hook: 'onDefensiveParryPerfect',
     tagAll: ['DEFENSIVE'],
     trigger: 'Perfect parry // +1 AP next turn',
   },
@@ -227,7 +227,7 @@ export const BOON_RULES: Record<LeyLineMutationId, BoonRule> = {
   VOID_RESONANCE: {
     id: 'VOID_RESONANCE',
     hook: 'onDamageDeal',
-    trigger: 'Alternate KINETIC/OCCULT // +15% damage',
+    trigger: 'OCCULT after KINETIC // +15% damage',
   },
   TAR_TRAPPED: {
     id: 'TAR_TRAPPED',
@@ -239,7 +239,7 @@ export const BOON_RULES: Record<LeyLineMutationId, BoonRule> = {
     id: 'SLIPSTREAM',
     hook: 'onAbilityResolve',
     tagAll: ['MOBILITY'],
-    trigger: 'MOBILITY // 0 stamina, −10 reserve',
+    trigger: 'MOBILITY // −20% Reserve',
   },
   NECROTIC_ATROPHY: {
     id: 'NECROTIC_ATROPHY',
@@ -268,9 +268,12 @@ export interface MutationCombatModifiers {
   graveBindDamage: number;
   graveBindArmorShred: number;
   shatterPointCritBonus: number;
-  abyssalResonancePctPer10Stam: number;
+  abyssalResonancePctPerBrand: number;
   bloodTitheHealPctPer10Ar: number;
-  demonLungStaminaPct: number;
+  demonLungReserveBonus: number;
+  relentlessMomentumReserveGain: number;
+  gridGhostReserveRefundPct: number;
+  slipstreamReserveCost: number;
   crimsonPactHpCostPct: number;
   startingAbyssalPercent: number;
   healMultiplier: number;
@@ -377,9 +380,12 @@ export function aggregateMutationModifiers(
     graveBindDamage: has('HEAVY_CALIBER') ? 15 : 0,
     graveBindArmorShred: has('EXECUTIONERS_GRIP') ? 1 : 0,
     shatterPointCritBonus: has('SHATTER_POINT') ? 0.20 : 0,
-    abyssalResonancePctPer10Stam: has('ABYSSAL_RESONANCE') ? 5 : 0,
+    abyssalResonancePctPerBrand: has('ABYSSAL_RESONANCE') ? 5 : 0,
     bloodTitheHealPctPer10Ar: has('BLACK_LIGHT_SIPHON') ? 3 : 2,
-    demonLungStaminaPct: has('DEEP_LUNGS') ? 80 : 40,
+    demonLungReserveBonus: has('DEEP_LUNGS') ? 30 : 0,
+    relentlessMomentumReserveGain: has('RELENTLESS_MOMENTUM') ? 25 : 0,
+    gridGhostReserveRefundPct: has('GRID_GHOST') ? 20 : 0,
+    slipstreamReserveCost: has('SLIPSTREAM') ? 20 : 0,
     crimsonPactHpCostPct: has('BLOOD_PRICE') ? 5 : 15,
     startingAbyssalPercent: has('LEY_LINE_TAP') ? 50 : 0,
     healMultiplier: has('HYPER_METABOLISM') ? 1.5 : 1,
@@ -413,7 +419,7 @@ export function applyBoonDamageModifiers(
   owned: readonly LeyLineMutationId[],
   abilityId: AegisAbilityId | undefined,
   baseDamage: number,
-  stamina: number,
+  runicBrands: number,
   playerAp: number,
   isFinalStand: boolean,
   voidResonanceBonus: boolean,
@@ -421,8 +427,8 @@ export function applyBoonDamageModifiers(
   let dmg = baseDamage;
   const ctx = buildBoonActionContext(abilityId);
 
-  if (boonMatchesContext(owned, 'ABYSSAL_RESONANCE', ctx) && dmg > 0) {
-    const bonus = Math.floor(stamina / 10) * 5;
+  if (boonMatchesContext(owned, 'ABYSSAL_RESONANCE', ctx) && dmg > 0 && runicBrands > 0) {
+    const bonus = runicBrands * 5;
     dmg = Math.floor(dmg * (1 + bonus / 100));
   }
 

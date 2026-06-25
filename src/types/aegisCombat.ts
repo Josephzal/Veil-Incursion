@@ -59,12 +59,15 @@ export type CombatUnitTag =
 export type DamageChannel = 'KINETIC' | 'OCCULT' | 'TRUE';
 
 export const PLAYER_ACTION_POINTS_PER_TURN = 3;
+export const VOID_WARD_AP_COST = 1;
+export const VOID_WARD_PERFECT_RESERVE_GAIN = 25;
+export const RUNIC_BRAND_CAP = 3;
 
 export const DEFAULT_AEGIS_LOADOUT: AegisLoadout = [
   'STRIKE',
+  'WRAITH_PARRY',
+  'VEIL_PIERCER',
   'RUIN',
-  'SHADOW_STEP',
-  'ASHEN_MANTLE',
 ];
 
 export const ALL_AEGIS_ABILITIES: readonly AegisAbilityId[] = [

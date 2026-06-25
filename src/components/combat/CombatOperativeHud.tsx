@@ -1,9 +1,13 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import type { ClassType } from '../../types/game';
+import { RUNIC_BRAND_CAP } from '../../types/aegisCombat';
 import CombatTelemetryGaugeRow from './CombatHorizontalGauge';
 import CombatMagazineGauge from './CombatMagazineGauge';
+import CombatRunicBrandGauge from './CombatRunicBrandGauge';
 import {
+  formatAegisReserveLabel,
+  formatAegisReserveRatio,
   GAUGE_ABYSSAL,
   GAUGE_SOUL_ANCHOR,
   GAUGE_STAMINA,
@@ -18,7 +22,12 @@ export interface CombatOperativeTelemetry {
   stamina: number;
   maxStamina: number;
   abyssalReserve?: number;
+  abyssalCap?: number;
   counterReady?: boolean;
+  voidWardPrimed?: boolean;
+  runicBrands?: number;
+  runicBrandCap?: number;
+  eviscerateReady?: boolean;
   currentAmmo?: number;
   maxAmmo?: number;
   overcharged?: boolean;
@@ -52,9 +61,13 @@ export default function CombatOperativeHud({
     operativeHp,
     maxSoulAnchor,
     abyssalReserve = 0,
+    abyssalCap = 100,
     stamina,
     maxStamina,
-    counterReady = false,
+    voidWardPrimed = false,
+    runicBrands = 0,
+    runicBrandCap = RUNIC_BRAND_CAP,
+    eviscerateReady = false,
     currentAmmo = 0,
     maxAmmo = 6,
     overcharged = false,
@@ -64,7 +77,7 @@ export default function CombatOperativeHud({
   } = telemetry;
 
   const soulAnchorRatio = maxSoulAnchor > 0 ? operativeHp / maxSoulAnchor : 0;
-  const abyssalRatio = abyssalReserve / 100;
+  const abyssalRatio = formatAegisReserveRatio(abyssalReserve, abyssalCap);
   const staminaRatio = maxStamina > 0 ? stamina / maxStamina : 0;
   const fluxRatio = Math.min(1, veilFlux / 100);
 
@@ -103,15 +116,26 @@ export default function CombatOperativeHud({
       );
     }
     return (
-      <CombatTelemetryGaugeRow
-        label={`AR // ${abyssalReserve}%${counterReady ? ' • CTR' : ''}`}
-        labelColor="#00D2C4"
-        fillColor={GAUGE_ABYSSAL}
-        ratio={abyssalRatio}
-        trackBorderColor={GAUGE_TRACK_BORDER}
-        variant={rowVariant}
-        gaugeWidth="100%"
-      />
+      <>
+        <CombatTelemetryGaugeRow
+          label={formatAegisReserveLabel(abyssalReserve, abyssalCap, {
+            voidWardPrimed,
+            overcharged,
+            eviscerateReady,
+          })}
+          labelColor="#00D2C4"
+          fillColor={GAUGE_ABYSSAL}
+          ratio={abyssalRatio}
+          trackBorderColor={GAUGE_TRACK_BORDER}
+          variant={rowVariant}
+          gaugeWidth="100%"
+        />
+        <CombatRunicBrandGauge
+          currentBrands={runicBrands}
+          maxBrands={runicBrandCap}
+          variant={rowVariant === 'stacked' ? 'stacked' : 'compact'}
+        />
+      </>
     );
   };
 
@@ -133,15 +157,17 @@ export default function CombatOperativeHud({
         gaugeWidth="100%"
       />
       {renderClassResource()}
-      <CombatTelemetryGaugeRow
-        label={`STM // ${stamina}/${maxStamina}`}
-        labelColor={primaryColor}
-        fillColor={GAUGE_STAMINA}
-        ratio={staminaRatio}
-        trackBorderColor={GAUGE_TRACK_BORDER}
-        variant={rowVariant}
-        gaugeWidth="100%"
-      />
+      {operativeClass !== 'AEGIS' ? (
+        <CombatTelemetryGaugeRow
+          label={`STM // ${stamina}/${maxStamina}`}
+          labelColor={primaryColor}
+          fillColor={GAUGE_STAMINA}
+          ratio={staminaRatio}
+          trackBorderColor={GAUGE_TRACK_BORDER}
+          variant={rowVariant}
+          gaugeWidth="100%"
+        />
+      ) : null}
     </View>
   );
 }

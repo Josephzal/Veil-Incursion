@@ -7,8 +7,8 @@ export const GRAFT_DATABASE: Record<VeilGraftId, VeilGraftDefinition> = {
     cost: 15,
     accentColor: '#f87171',
     damageMultiplier: 2,
-    staminaPenalty: 15,
-    description: 'Double damage output. +15 stamina tax on cast.',
+    reservePenalty: 20,
+    description: 'Double damage output. Taxes 20% Abyssal Reserve on cast.',
   },
   SANGUINE_GRAFT: {
     id: 'SANGUINE_GRAFT',
@@ -43,9 +43,9 @@ export const GRAFT_DATABASE: Record<VeilGraftId, VeilGraftDefinition> = {
     cost: 20,
     accentColor: '#38bdf8',
     setApCost: 0,
-    consumeAllStamina: true,
-    damageScale: 'STAMINA_CONSUMED',
-    description: '0 AP — drains all stamina. Damage scales with stamina spent.',
+    consumeAllReserve: true,
+    damageScale: 'RESERVE_CONSUMED',
+    description: '0 AP — detonates all Reserve. Damage scales with Reserve spent.',
   },
   IRON_LUNG_GRAFT: {
     id: 'IRON_LUNG_GRAFT',
@@ -54,7 +54,7 @@ export const GRAFT_DATABASE: Record<VeilGraftId, VeilGraftDefinition> = {
     accentColor: '#22d3ee',
     addReserveGeneration: 30,
     addCooldown: 2,
-    description: '+30 Abyssal Reserve on cast. Adds 2-turn cooldown.',
+    description: '+30% Abyssal Reserve on cast. Adds 2-turn cooldown.',
   },
   GRID_HACKER_GRAFT: {
     id: 'GRID_HACKER_GRAFT',
@@ -108,8 +108,8 @@ export const GRAFT_DATABASE: Record<VeilGraftId, VeilGraftDefinition> = {
     accentColor: '#c084fc',
     addTag: 'OCCULT',
     addOccultDamage: 15,
-    addStaminaCost: 20,
-    description: 'Adds Occult channel +15 flat. +20 stamina cost.',
+    brandTax: 1,
+    description: 'Adds Occult channel +15 flat. Taxes 1 Runic Brand on cast.',
   },
   MARROW_GRAFT: {
     id: 'MARROW_GRAFT',
@@ -145,7 +145,8 @@ export const GRAFT_DATABASE: Record<VeilGraftId, VeilGraftDefinition> = {
     accentColor: '#fde047',
     executeThreshold: 0.2,
     disableUltimate: true,
-    description: 'Executes sub-20% HP non-bosses. Disables Ultimate this encounter.',
+    bossDamageMultiplier: 2,
+    description: 'Executes sub-20% HP non-bosses. Double damage vs bosses. Disables Ultimate.',
   },
 };
 

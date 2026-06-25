@@ -18,17 +18,31 @@ import {
   pullBacklineToFrontline,
   unitAtSlot,
 } from './combatSquadEngine';
-import { columnSlotsFor } from '../types/combatGrid';
+import { columnSlotsFor, FRONTLINE_SLOTS } from '../types/combatGrid';
 import type { CombatGridSlotId } from '../types/combatGrid';
 import { getAbilityDefinition } from './aegisAbilities';
 import type { LeyLineMutationId } from '../types/leyLineMutation';
 import { boonMatchesAction } from './boonEngine';
 import type { MutationCombatModifiers } from './boonEngine';
+import type { BrandConsumeMode } from './aegisResourceEngine';
+import {
+  applyDeepLungsOnRestore,
+  slipstreamMobilityActive,
+} from './aegisBoonHookRunner';
+import {
+  ashenMantleDuration,
+  bloodTitheHealAmount,
+  bloodTitheOccultDamage,
+  canAffordReserveCost,
+  ruinFracturePerBrand,
+} from './aegisResourceEngine';
 
 export interface PlayerCombatBuffState {
   demonLungCooldown: number;
   crimsonPactCharges: number;
   bonusApThisTurn: number;
+  bonusApNextTurn: number;
+  ashenMantleTurnsRemaining: number;
   /** Shadow Step queues initiative hijack until the operative ends their turn. */
   initiativeQueued: boolean;
 }
@@ -40,6 +54,8 @@ export interface AbilityHurtOptions {
   abilityId?: AegisAbilityId;
   rollCrit?: boolean;
   echoHit?: boolean;
+  ignoreDefenses?: boolean;
+  critBonusPct?: number;
 }
 
 export interface AbilityExecutionContext {
@@ -51,6 +67,7 @@ export interface AbilityExecutionContext {
   abyssalReserve: number;
   operativeHp: number;
   maxSoulAnchor: number;
+  runicBrands: number;
   buffState: PlayerCombatBuffState;
   log: (msg: string) => void;
   spendStamina: (cost: number) => boolean;
@@ -66,18 +83,28 @@ export interface AbilityExecutionContext {
   syncSquad: (squad: EnemyCombatProfile[]) => void;
   chargeAr: (pct: number) => void;
   consumeAbyssalPct: (pct: number) => number;
+  consumeAbyssalFlat?: (amount: number) => boolean;
+  imprintBrand: (count: number) => void;
+  setRunicBrands: (count: number) => void;
+  consumeBrands: (mode: BrandConsumeMode) => number;
   healOperative: (amount: number) => void;
   sacrificeHpPct: (pct: number) => boolean;
   grantBonusAp: (amount: number) => void;
+  grantBonusApNextTurn: (amount: number) => void;
+  setAegisOvercharged: (active: boolean) => void;
   restoreStaminaPct: (pct: number) => void;
   reduceEnemyAp: (unitId: string, amount: number) => void;
   setShadowStepEvadeActive?: (active: boolean) => void;
   ownedBoons: readonly LeyLineMutationId[];
   mutationMods: MutationCombatModifiers;
   bloodTitheCooldown: number;
+  ashenMantleCooldown: number;
+  setBloodTitheCooldown: (turns: number) => void;
+  setAshenMantleCooldown: (turns: number) => void;
   setVeilTarTurns?: (turns: number) => void;
   activateBloodBoundCarapace?: () => void;
   applyReaveBleed?: (unitId: string, turns: number) => void;
+  setAshenMantleActive?: (turns: number) => void;
 }
 
 export type AbilityExecutionResult =
@@ -87,6 +114,28 @@ export type AbilityExecutionResult =
 function targetUnit(ctx: AbilityExecutionContext): EnemyCombatProfile | null {
   if (!ctx.targetId) return null;
   return getUnitById(ctx.squad, ctx.targetId) ?? null;
+}
+
+function spendAbilityReserveCost(
+  ctx: AbilityExecutionContext,
+  def: ReturnType<typeof getAbilityDefinition>,
+): boolean {
+  if (def.reserveCost != null && def.reserveCost > 0) {
+    if (!ctx.consumeAbyssalFlat?.(def.reserveCost)) {
+      ctx.log('[REJECTED] >> Insufficient Abyssal Reserve.');
+      return false;
+    }
+    return true;
+  }
+  if (def.reserveCostPct != null && def.reserveCostPct > 0) {
+    const consumed = ctx.consumeAbyssalPct(def.reserveCostPct);
+    if (consumed <= 0) {
+      ctx.log('[REJECTED] >> Insufficient Abyssal Reserve.');
+      return false;
+    }
+    return true;
+  }
+  return true;
 }
 
 function applyFractureToUnit(
@@ -101,19 +150,26 @@ function applyFractureToUnit(
   return applyFractureDamage(unit, amount);
 }
 
+function frontlineUnits(squad: EnemyCombatProfile[]): EnemyCombatProfile[] {
+  return aliveUnits(squad).filter(
+    (unit) => unit.gridSlot && FRONTLINE_SLOTS.includes(unit.gridSlot as CombatGridSlotId),
+  );
+}
+
 export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExecutionResult {
   const def = getAbilityDefinition(ctx.abilityId);
 
   switch (ctx.abilityId) {
     case 'RUIN': {
-      if (!ctx.spendStamina(def.staminaCost)) {
-        ctx.log('[REJECTED] >> Insufficient stamina.');
-        return { ok: false, refundAp: def.apCost };
-      }
+      const brandsSpent = ctx.consumeBrands('ALL');
+      const fractureGain = ruinFracturePerBrand(brandsSpent);
       let eradicated = false;
-      for (const unit of aliveUnits(ctx.squad)) {
+      const targets = frontlineUnits(ctx.squad);
+      const hitTargets = targets.length > 0 ? targets : aliveUnits(ctx.squad);
+      for (const unit of hitTargets) {
         if (!unit.unitId) continue;
-        let next = applyFractureToUnit(unit, 20, true);
+        const instantStun = brandsSpent >= 3 && hasCombatTag(unit, 'CONCUSSED');
+        let next = applyFractureToUnit(unit, fractureGain, instantStun);
         ctx.patchUnit(unit.unitId, next);
         eradicated = ctx.hurtEnemy(12, '[RUIN]', 'STRIKE', {
           channel: 'KINETIC',
@@ -121,8 +177,31 @@ export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExe
           abilityId: 'RUIN',
         }, unit.unitId) || eradicated;
       }
-      ctx.log('[RUIN] >> Fracture shockwave — all hostiles stressed.');
+      ctx.log(
+        brandsSpent > 0
+          ? `[RUIN] >> ${brandsSpent} Brand(s) spent — frontline fracture shockwave (+${fractureGain} fracture).`
+          : '[RUIN] >> Fracture shockwave — no Brands imprinted.',
+      );
       if (eradicated) return { ok: true };
+      return { ok: true };
+    }
+
+    case 'ASHEN_MANTLE': {
+      const freeWard = ctx.mutationMods.ashenMantleFree;
+      if (!freeWard && ctx.ashenMantleCooldown > 0) {
+        ctx.log(`[REJECTED] >> Ashen Mantle on cooldown (${ctx.ashenMantleCooldown} turns).`);
+        return { ok: false, refundAp: def.apCost };
+      }
+      const brandsSpent = ctx.consumeBrands('ALL');
+      const duration = ashenMantleDuration(brandsSpent);
+      ctx.buffState.ashenMantleTurnsRemaining = duration;
+      ctx.setAshenMantleActive?.(duration);
+      if (freeWard) {
+        ctx.setAshenMantleCooldown(3);
+      }
+      ctx.log(
+        `[ASHEN MANTLE] >> ${brandsSpent} Brand(s) consumed — ${duration}-turn mantle (50% damage reduction).`,
+      );
       return { ok: true };
     }
 
@@ -132,8 +211,7 @@ export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExe
         ctx.log('[REJECTED] >> Grave Bind requires a backline target.');
         return { ok: false, refundAp: def.apCost };
       }
-      if (!ctx.spendStamina(def.staminaCost)) {
-        ctx.log('[REJECTED] >> Insufficient stamina.');
+      if (!spendAbilityReserveCost(ctx, def)) {
         return { ok: false, refundAp: def.apCost };
       }
       const pulled = pullBacklineToFrontline(ctx.squad, unit.unitId);
@@ -177,8 +255,20 @@ export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExe
         ctx.log('[REJECTED] >> Shadow Step requires a target.');
         return { ok: false, refundAp: def.apCost };
       }
-      if (!ctx.spendStaminaPct(def.staminaCostPct ?? 50)) {
-        ctx.log('[REJECTED] >> Insufficient stamina.');
+      const slipstreamCost = ctx.mutationMods.slipstreamReserveCost;
+      const useSlipstream = slipstreamCost > 0
+        && slipstreamMobilityActive(ctx.ownedBoons, ctx.abilityId, ctx.mutationMods);
+      if (useSlipstream) {
+        if (ctx.abyssalReserve < slipstreamCost) {
+          ctx.log('[REJECTED] >> Insufficient Reserve for Slipstream mobility.');
+          return { ok: false, refundAp: def.apCost };
+        }
+        if (!ctx.consumeAbyssalFlat?.(slipstreamCost)) {
+          ctx.log('[REJECTED] >> Slipstream Reserve tithe failed.');
+          return { ok: false, refundAp: def.apCost };
+        }
+        ctx.log(`[SLIPSTREAM] >> −${slipstreamCost}% Reserve — mobility tax waived.`);
+      } else if (!spendAbilityReserveCost(ctx, def)) {
         return { ok: false, refundAp: def.apCost };
       }
       const next = applyFractureDamage(unit, 50);
@@ -200,8 +290,7 @@ export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExe
         ctx.log('[REJECTED] >> Nail to Grid requires a target.');
         return { ok: false, refundAp: def.apCost };
       }
-      if (!ctx.spendStamina(def.staminaCost)) {
-        ctx.log('[REJECTED] >> Insufficient stamina.');
+      if (!spendAbilityReserveCost(ctx, def)) {
         return { ok: false, refundAp: def.apCost };
       }
       ctx.reduceEnemyAp(unit.unitId, ctx.mutationMods.nailApDrain);
@@ -223,39 +312,46 @@ export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExe
     }
 
     case 'BLOOD_TITHE': {
+      applyDeepLungsOnRestore(ctx.ownedBoons, ctx.abilityId, ctx.setRunicBrands, ctx.log);
       const unit = targetUnit(ctx);
       if (!unit?.unitId) {
         ctx.log('[REJECTED] >> Blood-Tithe requires a target.');
-        return { ok: false, refundAp: def.apCost };
-      }
-      if (!ctx.spendStamina(def.staminaCost)) {
-        ctx.log('[REJECTED] >> Insufficient stamina.');
         return { ok: false, refundAp: def.apCost };
       }
       if (ctx.bloodTitheCooldown > 0) {
         ctx.log(`[REJECTED] >> Blood-Tithe on cooldown (${ctx.bloodTitheCooldown} turns).`);
         return { ok: false, refundAp: def.apCost };
       }
-      const consumed = ctx.mutationMods.bloodTitheFree ? 0 : ctx.consumeAbyssalPct(30);
+      const minReserve = def.minReservePct ?? 30;
+      if (!ctx.mutationMods.bloodTitheFree && ctx.abyssalReserve < minReserve) {
+        ctx.log(`[REJECTED] >> Abyssal Reserve below ${minReserve}% — tithe refused.`);
+        return { ok: false, refundAp: def.apCost };
+      }
+      const brandsSpent = ctx.consumeBrands('ALL');
+      const consumed = ctx.mutationMods.bloodTitheFree ? 0 : ctx.consumeAbyssalPct(minReserve);
       if (!ctx.mutationMods.bloodTitheFree && consumed <= 0) {
         ctx.log('[REJECTED] >> Abyssal Reserve too low for tithe.');
         return { ok: false, refundAp: def.apCost };
       }
-      const titheBase = consumed > 0 ? consumed : 30;
-      const heal = Math.floor(
-        ctx.maxSoulAnchor * (ctx.mutationMods.bloodTitheHealPctPer10Ar / 100) * Math.floor(titheBase / 10),
+      const titheBase = consumed > 0 ? consumed : minReserve;
+      const heal = bloodTitheHealAmount(
+        ctx.maxSoulAnchor,
+        titheBase,
+        ctx.mutationMods.bloodTitheHealPctPer10Ar,
       );
       if (ctx.mutationMods.bloodTitheCooldown > 0) {
-        ctx.bloodTitheCooldown = ctx.mutationMods.bloodTitheCooldown;
+        ctx.setBloodTitheCooldown(ctx.mutationMods.bloodTitheCooldown);
       }
       if (heal > 0) ctx.healOperative(heal);
-      const occult = Math.max(10, Math.floor(consumed * 0.4));
+      const occult = bloodTitheOccultDamage(titheBase, brandsSpent);
       const eradicated = ctx.hurtEnemy(occult, '[BLOOD-TITHE]', 'STRIKE', {
         channel: 'OCCULT',
         fractureGain: 10,
         abilityId: 'BLOOD_TITHE',
       }, unit.unitId);
-      ctx.log(`[BLOOD-TITHE] >> Reserve tithed (${consumed} AR) — ${heal} HP restored.`);
+      ctx.log(
+        `[BLOOD-TITHE] >> ${titheBase} AR tithed, ${brandsSpent} Brand(s) spent — ${heal} HP restored.`,
+      );
       if (eradicated) return { ok: true };
       return { ok: true };
     }
@@ -265,10 +361,12 @@ export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExe
         ctx.log(`[REJECTED] >> Demon's Lung on cooldown (${ctx.buffState.demonLungCooldown} turns).`);
         return { ok: false, refundAp: def.apCost };
       }
-      ctx.restoreStaminaPct(ctx.mutationMods.demonLungStaminaPct);
-      ctx.grantBonusAp(1);
+      applyDeepLungsOnRestore(ctx.ownedBoons, ctx.abilityId, ctx.setRunicBrands, ctx.log);
+      ctx.chargeAr((def.reserveGain ?? 30) + ctx.mutationMods.demonLungReserveBonus);
+      ctx.setAegisOvercharged(true);
+      ctx.grantBonusApNextTurn(1);
       ctx.buffState.demonLungCooldown = def.cooldownTurns ?? 3;
-      ctx.log("[DEMON'S LUNG] >> Stamina surge — +1 AP this turn.");
+      ctx.log("[DEMON'S LUNG] >> Reserve surge — Overcharged, +1 AP queued for next turn.");
       return { ok: true };
     }
 
@@ -288,10 +386,12 @@ export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExe
         ctx.log('[REJECTED] >> Devastate requires a target.');
         return { ok: false, refundAp: def.apCost };
       }
-      if (!ctx.spendStamina(def.staminaCost)) {
-        ctx.log('[REJECTED] >> Insufficient stamina.');
+      const required = def.requiredBrands ?? 3;
+      if (ctx.runicBrands < required) {
+        ctx.log(`[REJECTED] >> Devastate requires ${required} Runic Brands.`);
         return { ok: false, refundAp: def.apCost };
       }
+      const brandsSpent = ctx.consumeBrands(def.brandsConsumed ?? required);
       const fracturePool = unit.fractureGauge ?? 0;
       ctx.patchUnit(unit.unitId, {
         fractureGauge: 0,
@@ -310,16 +410,15 @@ export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExe
           fractureGain: 0,
           abilityId: 'DEVASTATE',
         }, unit.unitId);
-        ctx.log(`[DEVASTATE] >> Fracture detonated — ${detonation} True damage.`);
+        ctx.log(`[DEVASTATE] >> ${brandsSpent} Brand(s) spent — ${detonation} True damage detonation.`);
       } else {
-        ctx.log('[DEVASTATE] >> Minimal crush — no latent fracture to detonate.');
+        ctx.log('[DEVASTATE] >> Brands spent — no latent fracture to detonate.');
       }
       return { ok: true };
     }
 
     case 'ABYSSAL_FAULT': {
-      if (!ctx.spendStamina(def.staminaCost)) {
-        ctx.log('[REJECTED] >> Insufficient stamina.');
+      if (!spendAbilityReserveCost(ctx, def)) {
         return { ok: false, refundAp: def.apCost };
       }
       ctx.setVeilTarTurns?.(3);
@@ -350,8 +449,7 @@ export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExe
         ctx.log('[REJECTED] >> Reave requires a column target.');
         return { ok: false, refundAp: def.apCost };
       }
-      if (!ctx.spendStaminaPct(def.staminaCostPct ?? 15)) {
-        ctx.log('[REJECTED] >> Insufficient stamina.');
+      if (!spendAbilityReserveCost(ctx, def)) {
         return { ok: false, refundAp: def.apCost };
       }
       const slots = columnSlotsFor(unit.gridSlot as CombatGridSlotId);
@@ -386,26 +484,34 @@ export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExe
 
 export function isExtendedAbilityEnabled(
   abilityId: AegisAbilityId,
-  stamina: number,
+  _stamina: number,
   abyssalReserve: number,
   operativeHp: number,
   maxSoulAnchor: number,
   buffState: PlayerCombatBuffState,
+  runicBrands: number,
+  options?: {
+    ashenMantleCooldown?: number;
+    ashenMantleFree?: boolean;
+  },
 ): boolean {
   const def = getAbilityDefinition(abilityId);
   switch (abilityId) {
     case 'RUIN':
-      return stamina >= def.staminaCost;
+      return true;
+    case 'ASHEN_MANTLE':
+      if (options?.ashenMantleFree) {
+        return (options.ashenMantleCooldown ?? 0) <= 0;
+      }
+      return true;
     case 'GRAVE_BIND':
-      return stamina >= def.staminaCost;
-    case 'SHADOW_STEP': {
-      const cost = Math.floor(stamina * ((def.staminaCostPct ?? 0) / 100));
-      return cost > 0 && stamina >= cost;
-    }
     case 'NAIL_TO_GRID':
-      return stamina >= def.staminaCost;
+    case 'ABYSSAL_FAULT':
+      return canAffordReserveCost(def, abyssalReserve);
+    case 'SHADOW_STEP':
+      return canAffordReserveCost(def, abyssalReserve);
     case 'BLOOD_TITHE':
-      return stamina >= def.staminaCost && abyssalReserve > 0;
+      return abyssalReserve >= (def.minReservePct ?? 30);
     case 'DEMONS_LUNG':
       return buffState.demonLungCooldown <= 0;
     case 'CRIMSON_PACT': {
@@ -413,17 +519,13 @@ export function isExtendedAbilityEnabled(
       return operativeHp > cost;
     }
     case 'DEVASTATE':
-      return stamina >= def.staminaCost;
-    case 'ABYSSAL_FAULT':
-      return stamina >= def.staminaCost;
+      return runicBrands >= (def.requiredBrands ?? 3);
     case 'BLOOD_BOUND_CARAPACE': {
       const cost = Math.ceil(maxSoulAnchor * ((def.hpCostPct ?? 0) / 100));
       return operativeHp > cost;
     }
-    case 'REAVE': {
-      const cost = Math.floor(stamina * ((def.staminaCostPct ?? 0) / 100));
-      return cost > 0 && stamina >= cost;
-    }
+    case 'REAVE':
+      return canAffordReserveCost(def, abyssalReserve);
     default:
       return false;
   }

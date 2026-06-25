@@ -61,6 +61,8 @@ export interface ClassCombatEncounterState {
   perfectReloadCount: number;
   /** Aegis — successful parries toward Eviscerate proc. */
   successfulParryCount: number;
+  /** Aegis — Runic Brands imprinted on the action layer. */
+  runicBrands: number;
   /** Envoy — Cataclysm sigil ready at max flux. */
   cataclysmReady: boolean;
 }
@@ -79,6 +81,7 @@ export function createDefaultClassCombatEncounterState(): ClassCombatEncounterSt
     reactiveCamoUsed: false,
     perfectReloadCount: 0,
     successfulParryCount: 0,
+    runicBrands: 0,
     cataclysmReady: false,
   };
 }

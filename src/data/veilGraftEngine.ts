@@ -31,9 +31,11 @@ export function buildGraftCastPlan(
     return {
       apCost: def.apCost,
       hpCostPct: def.hpCostPct ?? 0,
-      extraStaminaCost: 0,
-      consumeAllStamina: false,
+      reservePenalty: 0,
+      consumeAllReserve: false,
+      brandTax: 0,
       damageMultiplier: 1,
+      bossDamageMultiplier: 1,
       hitCount: 1,
       duplicateCastRatio: 0,
       forceTrueDamage: false,
@@ -50,6 +52,7 @@ export function buildGraftCastPlan(
       targetDebuff: null,
       selfDebuff: null,
       evadeBuffPct: 0,
+      dropLootOnKill: null,
       graftName: '',
     };
   }
@@ -73,9 +76,11 @@ export function buildGraftCastPlan(
   return {
     apCost: Math.max(0, apCost),
     hpCostPct,
-    extraStaminaCost: graft.staminaPenalty ?? graft.addStaminaCost ?? 0,
-    consumeAllStamina: graft.consumeAllStamina === true,
+    reservePenalty: graft.reservePenalty ?? 0,
+    consumeAllReserve: graft.consumeAllReserve === true,
+    brandTax: graft.brandTax ?? 0,
     damageMultiplier: graft.damageMultiplier ?? 1,
+    bossDamageMultiplier: graft.bossDamageMultiplier ?? 1,
     hitCount: graft.hitCount ?? 1,
     duplicateCastRatio: graft.duplicateCast ?? 0,
     forceTrueDamage: graft.convertToTrueDamage === true,
@@ -94,14 +99,51 @@ export function buildGraftCastPlan(
     targetDebuff: graft.applyDebuffToTarget ?? null,
     selfDebuff: graft.applySelfDebuff ?? null,
     evadeBuffPct: graft.addBuff === 'EVADE_30' ? 30 : 0,
+    dropLootOnKill: graft.dropLootOnKill ?? null,
     graftName: graft.name,
   };
 }
 
-export function scaleGraftDamage(baseDamage: number, plan: GraftCastPlan, staminaSpent = 0): number {
-  let damage = Math.floor(baseDamage * plan.damageMultiplier);
-  if (staminaSpent > 0 && plan.consumeAllStamina) {
-    damage += Math.floor(staminaSpent * 0.8);
+export function canAffordGraftResources(
+  plan: GraftCastPlan,
+  abyssalReserve: number,
+  runicBrands: number,
+): { ok: true } | { ok: false; reason: string } {
+  if (plan.brandTax > 0 && runicBrands < plan.brandTax) {
+    return {
+      ok: false,
+      reason: `requires ${plan.brandTax} Runic Brand${plan.brandTax === 1 ? '' : 's'}`,
+    };
+  }
+  if (plan.consumeAllReserve && abyssalReserve <= 0) {
+    return { ok: false, reason: 'requires Abyssal Reserve to detonate' };
+  }
+  if (
+    !plan.consumeAllReserve
+    && plan.reservePenalty > 0
+    && abyssalReserve < plan.reservePenalty
+  ) {
+    return {
+      ok: false,
+      reason: `requires ${plan.reservePenalty}% Reserve tax`,
+    };
+  }
+  return { ok: true };
+}
+
+export function scaleGraftDamage(
+  baseDamage: number,
+  plan: GraftCastPlan,
+  reserveSpent = 0,
+  isBoss = false,
+): number {
+  let multiplier = plan.damageMultiplier;
+  if (isBoss && plan.bossDamageMultiplier > 1) {
+    multiplier *= plan.bossDamageMultiplier;
+  }
+  let damage = Math.floor(baseDamage * multiplier);
+  if (reserveSpent > 0 && plan.consumeAllReserve) {
+    damage += Math.floor(reserveSpent * 0.8);
   }
   damage += plan.occultFlatBonus;
   return Math.max(0, damage);

@@ -31,7 +31,7 @@ export const LEY_LINE_MUTATION_CATALOG: Record<LeyLineMutationId, LeyLineMutatio
     id: 'RELENTLESS_MOMENTUM',
     name: 'Relentless Momentum',
     tier: 'KINETIC',
-    description: 'Killing a Fractured enemy restores 20% Stamina.',
+    description: 'Killing a Fractured enemy restores 25% Abyssal Reserve.',
     effect: effect('RELENTLESS_MOMENTUM'),
   },
   HEAVY_CALIBER: {
@@ -66,7 +66,7 @@ export const LEY_LINE_MUTATION_CATALOG: Record<LeyLineMutationId, LeyLineMutatio
     id: 'ABYSSAL_RESONANCE',
     name: 'Abyssal Resonance',
     tier: 'KINETIC',
-    description: 'Kinetic actions deal +5% damage for every 10% Stamina you hold.',
+    description: 'Kinetic actions deal +5% damage per Runic Brand held.',
     effect: effect('ABYSSAL_RESONANCE'),
   },
   EXECUTIONERS_GRIP: {
@@ -150,7 +150,7 @@ export const LEY_LINE_MUTATION_CATALOG: Record<LeyLineMutationId, LeyLineMutatio
     id: 'DEEP_LUNGS',
     name: 'Deep Lungs',
     tier: 'SYSTEM',
-    description: 'Restore actions refill 100% of missing Stamina.',
+    description: 'RESTORE actions surge Runic Brands to 3; Demon\'s Lung +30% Reserve.',
     effect: effect('DEEP_LUNGS'),
   },
   BLOOD_PRICE: {
@@ -164,7 +164,7 @@ export const LEY_LINE_MUTATION_CATALOG: Record<LeyLineMutationId, LeyLineMutatio
     id: 'SECOND_WIND',
     name: 'Second Wind',
     tier: 'SYSTEM',
-    description: 'Below 10% HP: gain 100% Stamina and +2 AP once per run.',
+    description: 'Below 10% HP: Aegis fills Abyssal Reserve (others refill Stamina) and gain +2 AP once per encounter.',
     effect: effect('SECOND_WIND'),
   },
   LEY_LINE_TAP: {
@@ -192,7 +192,7 @@ export const LEY_LINE_MUTATION_CATALOG: Record<LeyLineMutationId, LeyLineMutatio
     id: 'GRID_GHOST',
     name: 'Grid Ghost',
     tier: 'SYSTEM',
-    description: 'Evading an attack refunds 20% Stamina and grants +5% Evade (stacks 3×).',
+    description: 'Evading an attack refunds 20% Reserve and grants +5% Evade (stacks 3×).',
     effect: effect('GRID_GHOST'),
   },
   MASOCISTS_JOY: {
@@ -276,7 +276,7 @@ export const LEY_LINE_MUTATION_CATALOG: Record<LeyLineMutationId, LeyLineMutatio
     id: 'VOID_RESONANCE',
     name: 'Void Resonance',
     tier: 'SYNAPTIC',
-    description: 'Alternating Kinetic then Occult actions grant +15% damage to the follow-up.',
+    description: 'Occult actions immediately after a Kinetic action deal +15% damage.',
     effect: effect('VOID_RESONANCE'),
   },
   TAR_TRAPPED: {
@@ -290,7 +290,7 @@ export const LEY_LINE_MUTATION_CATALOG: Record<LeyLineMutationId, LeyLineMutatio
     id: 'SLIPSTREAM',
     name: 'Slipstream',
     tier: 'SYNAPTIC',
-    description: 'Mobility actions cost 0 Stamina but consume 10 Abyssal Reserve.',
+    description: 'Mobility actions consume 20% Abyssal Reserve instead of a stamina tithe.',
     effect: effect('SLIPSTREAM'),
   },
   NECROTIC_ATROPHY: {

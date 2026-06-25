@@ -40,9 +40,9 @@ import {
   type CombatFeedbackEvent,
 } from '../types/combatChance';
 import CombatFloatingFeedback from './combat/CombatFloatingFeedback';
-import { DEFAULT_AEGIS_LOADOUT, PLAYER_ACTION_POINTS_PER_TURN, type AegisAbilityId, type AegisLoadout } from '../types/aegisCombat';
+import { DEFAULT_AEGIS_LOADOUT, PLAYER_ACTION_POINTS_PER_TURN, RUNIC_BRAND_CAP, VOID_WARD_AP_COST, VOID_WARD_PERFECT_RESERVE_GAIN, type AegisAbilityId, type AegisLoadout } from '../types/aegisCombat';
 import { getAbilityDefinition } from '../data/aegisAbilities';
-import { buildGraftCastPlan, scaleGraftDamage } from '../data/veilGraftEngine';
+import { buildGraftCastPlan, canAffordGraftResources, scaleGraftDamage } from '../data/veilGraftEngine';
 import { getVeilGraftDefinition } from '../data/veilGraftDatabase';
 import type { GraftCastPlan } from '../types/veilGraft';
 import { COMBAT_CONSUMABLE_AP_COST, absorbByArmor, resolveHostileHpHit } from '../data/aegisAbilityResolver';
@@ -63,6 +63,17 @@ import {
   targetIsExposed,
   type MutationCombatModifiers,
 } from '../data/boonEngine';
+import {
+  applyAbyssalResonanceDamage,
+  applyVoidResonanceDamage,
+  resolveVoidResonanceOnAbilityResolve,
+  runOnEvadeSuccess,
+  runOnFracturedKill,
+  runOnParryFail,
+  runOnParryPerfect,
+  runOnReserveGenerate,
+  type AegisBoonHookContext,
+} from '../data/aegisBoonHookRunner';
 import { getAbilityTags } from '../data/aegisAbilities';
 import type { LeyLineMutationId } from '../types/leyLineMutation';
 import type { EnvoyBoonId, HexShotBoonId } from '../types/classBoon';
@@ -219,7 +230,6 @@ import FractureBreakPrompt from './combat/FractureBreakPrompt';
 import EnvoyWardOverlay, { type EnvoyWardExpansionSpeed } from './combat/EnvoyWardOverlay';
 import { ASHEN_DISSOLVE_TOTAL_MS } from './combat/CombatEnemyDissolveEffect';
 import {
-  PERFECT_PARRIES_FOR_ULTIMATE,
   PERFECT_RELOADS_FOR_ULTIMATE,
   ENVOY_FLUX_ULTIMATE_THRESHOLD,
   ZERO_PROTOCOL_DAMAGE_PER_TAP,
@@ -362,7 +372,6 @@ import {
 const TELEMETRY_DIVIDER = 'rgba(139, 92, 246, 0.2)';
 
 const FRACTURE_HOUND_DOUBLE_STRIKE_CHANCE = 0.35;
-const EVISCERATE_AP_COST = 2;
 
 const DEFEND_ABILITIES: AegisAbilityId[] = ['WRAITH_PARRY', 'ASHEN_MANTLE', 'BLOOD_BOUND_CARAPACE'];
 const BUFF_ABILITIES: AegisAbilityId[] = ['DEMONS_LUNG', 'CRIMSON_PACT'];
@@ -433,6 +442,10 @@ interface TacticalCombatHubProps {
   combatDistrict?: 1 | 2 | 3;
   /** Bound requisition first-turn AP bonus (Adrenaline Primer). */
   firstTurnBonusAp?: number;
+  /** VOID'S TOLL and other incursion-wide AP ceiling bonuses. */
+  incursionApBonus?: number;
+  /** Fired when VOID'S TOLL triggers on an ultimate kill. */
+  onVoidsTollTriggered?: () => void;
   /** Shadow War Slag Works — flat kinetic armor layers on operative. */
   playerKineticArmorBonus?: number;
   /** Bound requisition / forge passive — defend to overcharge next strike. */
@@ -478,6 +491,17 @@ const isAttackIntent = (i: EnemyIntent) =>
   || i === 'VOID_AMBUSH'
   || i === 'RESONANCE_OVERLOAD';
 
+/** Hostile intents that qualify for Void Ward parry (kinetic / melee strikes). */
+const PARRYABLE_KINETIC_MELEE_INTENTS: EnemyIntent[] = [
+  'STRIKE',
+  'PAVEMENT_CRUSHER',
+  'DOUBLE_STRIKE',
+  'OVERDRIVE_DISCHARGE',
+];
+
+const isKineticMeleeEnemyStrike = (e: EnemyCombatProfile): boolean =>
+  PARRYABLE_KINETIC_MELEE_INTENTS.includes(resolveEffectiveEnemyIntent(e));
+
 const ENEMY_INTENT_READ_MS = 1800;
 const ENEMY_TURN_GAP_MS = 500;
 const GOD_MODE_STRIKE_DAMAGE = 1000;
@@ -522,6 +546,8 @@ export default function TacticalCombatHub({
   envoyBoons = [],
   combatDistrict = 1,
   firstTurnBonusAp = 0,
+  incursionApBonus = 0,
+  onVoidsTollTriggered,
   playerKineticArmorBonus = 0,
   kineticBatteryActive = false,
   narrativeCombatBoons,
@@ -582,6 +608,8 @@ export default function TacticalCombatHub({
   /** True after Aegis blocks — next Abyssal Strike gets bonus AR (deck highlight). */
   const [strikeArPrimed, setStrikeArPrimed] = useState(false);
   const [counterPrepActive, setCounterPrepActive] = useState(false);
+  const [voidWardPrimed, setVoidWardPrimed] = useState(false);
+  const [runicBrands, setRunicBrands] = useState(0);
   const [isSuccessState, setIsSuccessState] = useState(false);
   const [isFailureState, setIsFailureState] = useState(false);
   const [parrySuccessBurstActive, setParrySuccessBurstActive] = useState(false);
@@ -611,6 +639,7 @@ export default function TacticalCombatHub({
   const [eviscerateTargetUnitId, setEviscerateTargetUnitId] = useState<string | null>(null);
   const [currentAmmo, setCurrentAmmo] = useState(DEFAULT_MAGAZINE_SIZE);
   const [hexOvercharged, setHexOvercharged] = useState(false);
+  const [aegisOvercharged, setAegisOvercharged] = useState(false);
   const [veilFlux, setVeilFlux] = useState(0);
   const [envoyOverloaded, setEnvoyOverloaded] = useState(false);
   const [envoySilenced, setEnvoySilenced] = useState(false);
@@ -644,7 +673,6 @@ export default function TacticalCombatHub({
   const staminaRef = useRef(initialStamina);
   const abyssalRef = useRef(startingAbyssalReservePercent);
   const skipRegenRef = useRef(false);
-  const abyssalWardRef = useRef(false);
   const wardStrikeBonusRef = useRef(false);
   const kineticBatteryChargedRef = useRef(false);
   const counterRef = useRef(false);
@@ -699,7 +727,7 @@ export default function TacticalCombatHub({
   const enemyStrikeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const voidAmbushWindowRef = useRef<{ unitId: string; damageDealt: number } | null>(null);
   const playerApRef = useRef(PLAYER_ACTION_POINTS_PER_TURN);
-  const wraithParryRef = useRef(false);
+  const voidWardPrimedRef = useRef(false);
   const bloodBoundCarapaceRef = useRef(false);
   const shadowstepProcRef = useRef(false);
   const apRollupFrameRef = useRef<number | null>(null);
@@ -707,6 +735,8 @@ export default function TacticalCombatHub({
     demonLungCooldown: 0,
     crimsonPactCharges: 0,
     bonusApThisTurn: 0,
+    bonusApNextTurn: 0,
+    ashenMantleTurnsRemaining: 0,
     initiativeQueued: false,
   });
   const mutationModsRef = useRef<MutationCombatModifiers>(
@@ -719,7 +749,7 @@ export default function TacticalCombatHub({
   const mutationEncounterRef = useRef(createDefaultBoonEncounterState());
   const classBoonEncounterRef = useRef(createDefaultClassBoonEncounterState());
   const activeGraftPlanRef = useRef<GraftCastPlan | null>(null);
-  const activeGraftStaminaSpentRef = useRef(0);
+  const activeGraftReserveSpentRef = useRef(0);
   const activeGraftApCostRef = useRef(0);
   const graftCooldownsRef = useRef<Partial<Record<AegisAbilityId, number>>>({});
   const abilityGraftsRef = useRef(abilityGrafts);
@@ -828,11 +858,9 @@ export default function TacticalCombatHub({
   const log = (t: string) => onTerminalLog?.(t);
   const parryTimingWindowBonus = parryWindowBonus * 0.02;
   const parryTimingBlindPenalty = env.isPlayerBlinded ? 0.015 : 0;
-  const counterReady = operativeClass === 'AEGIS'
-    && abyssalReserve >= COMBAT_ACTION.COUNTER_ABYSSAL_MIN
-    && !isExhausted;
+  const counterReady = operativeClass === 'AEGIS' && voidWardPrimed;
   const sliceReady = operativeClass === 'AEGIS'
-    && successfulParryCount >= PERFECT_PARRIES_FOR_ULTIMATE
+    && abyssalReserve >= COMBAT_ACTION.ABYSSAL_RESERVE_CAP
     && !isExhausted;
   const zeroProtocolReady = operativeClass === 'HEX_SHOT'
     && perfectReloadCount >= PERFECT_RELOADS_FOR_ULTIMATE
@@ -864,14 +892,7 @@ export default function TacticalCombatHub({
         };
       }
     } else if (operativeClass === 'AEGIS') {
-      if (successfulParryCount > 0 && successfulParryCount < PERFECT_PARRIES_FOR_ULTIMATE) {
-        return {
-          visible: true,
-          current: successfulParryCount,
-          required: PERFECT_PARRIES_FOR_ULTIMATE,
-          accent: '#ff1744',
-        };
-      }
+      // Reserve progress lives in the vitals AR gauge; orbital dots are Hex-only.
     }
     return {
       visible: false,
@@ -882,7 +903,6 @@ export default function TacticalCombatHub({
   }, [
     operativeClass,
     perfectReloadCount,
-    successfulParryCount,
   ]);
   const strikeWardPrimed = strikeArPrimed || wardStrikeBonusRef.current;
 
@@ -986,10 +1006,10 @@ export default function TacticalCombatHub({
     cycleRef.current = cycleState; enemyRef.current = enemy;
     operativeHpRef.current = operativeHp; staminaRef.current = stamina;
     abyssalRef.current = abyssalReserve;
-    counterRef.current = counterPrepActive || wraithParryRef.current;
+    counterRef.current = voidWardPrimedRef.current;
     isPlayerTurnRef.current = isPlayerTurn;
     playerApRef.current = playerActionPoints;
-  }, [cycleState, enemy, operativeHp, stamina, abyssalReserve, counterPrepActive, isPlayerTurn, playerActionPoints]);
+  }, [cycleState, enemy, operativeHp, stamina, abyssalReserve, voidWardPrimed, isPlayerTurn, playerActionPoints]);
 
   const combatTurnPhase = useMemo((): CombatTurnPhase => {
     if (cycleState === 'RESOLUTION') return 'RESOLUTION';
@@ -1390,21 +1410,85 @@ export default function TacticalCombatHub({
 
   const chargeAr = (amt: number, _targetFractured = false) => {
     const scaled = amt;
-    if (hasMutation(leyLineMutations, 'UMBRAL_CARAPACE') && scaled > 0) {
-      const heal = Math.floor(maxSoulAnchor * 0.02 * mutationModsRef.current.healMultiplier);
-      if (heal > 0) {
-        setOperativeHp((p) => {
-          const n = Math.min(p + heal, maxSoulAnchor);
-          operativeHpRef.current = n;
-          return n;
-        });
-      }
+    if (scaled > 0) {
+      runOnReserveGenerate(buildAegisBoonHookCtx(), scaled);
     }
     setAbyssalReserve((p) => {
       const n = Math.min(p + scaled, mutationModsRef.current.abyssalCap);
       abyssalRef.current = n;
       return n;
     });
+  };
+
+  const imprintRunicBrand = (count = 1) => {
+    if (count <= 0) return;
+    setRunicBrands((prev) => {
+      const next = Math.min(RUNIC_BRAND_CAP, prev + count);
+      classCombatRef.current.runicBrands = next;
+      return next;
+    });
+  };
+
+  const consumeRunicBrands = (mode: 'ALL' | number): number => {
+    const current = classCombatRef.current.runicBrands;
+    const consumed = mode === 'ALL' ? current : Math.min(current, mode);
+    const next = current - consumed;
+    setRunicBrands(next);
+    classCombatRef.current.runicBrands = next;
+    return consumed;
+  };
+
+  const setRunicBrandCount = (count: number) => {
+    const next = Math.max(0, Math.min(RUNIC_BRAND_CAP, count));
+    classCombatRef.current.runicBrands = next;
+    setRunicBrands(next);
+  };
+
+  const buildAegisBoonHookCtx = (): AegisBoonHookContext => ({
+    owned: leyLineMutations,
+    mods: mutationModsRef.current,
+    encounter: mutationEncounterRef.current,
+    chance: combatChanceRef.current,
+    log,
+    maxSoulAnchor,
+    runicBrands: classCombatRef.current.runicBrands,
+    healOperative: (amount) => applyHealRef.current(amount),
+    chargeReserve: (amount) => {
+      chargeAr(amount);
+    },
+  });
+
+  const triggerSpallShatterBurst = (blockedDamage: number) => {
+    if (blockedDamage <= 0 || !hasMutation(leyLineMutations, 'SPALL_SHATTER')) return;
+    let hitAny = false;
+    for (const unit of aliveUnits(squadRef.current)) {
+      if (!unit.unitId || !unit.gridSlot?.startsWith('FL')) continue;
+      hurtEnemy(blockedDamage, '[SPALL SHATTER]', 'STRIKE', {
+        channel: 'KINETIC',
+        targetId: unit.unitId,
+        abilityId: 'ASHEN_MANTLE',
+      });
+      hitAny = true;
+    }
+    if (hitAny) {
+      log(`[SPALL SHATTER] >> Mantle collapse — ${blockedDamage} physical burst across frontline.`);
+    }
+  };
+
+  const clearVoidWardShroud = () => {
+    voidWardPrimedRef.current = false;
+    setVoidWardPrimed(false);
+    counterRef.current = false;
+    setCounterPrepActive(false);
+  };
+
+  const primeVoidWardShroud = () => {
+    voidWardPrimedRef.current = true;
+    setVoidWardPrimed(true);
+    counterRef.current = true;
+    setCounterPrepActive(true);
+    markPlayerDefendedRef.current();
+    log('[VOID WARD] >> Shroud primed — kinetic intercept armed for hostile phase.');
   };
   const primeWardStrikeBonus = () => {
     wardStrikeBonusRef.current = true;
@@ -1716,10 +1800,8 @@ export default function TacticalCombatHub({
     const strike = resolveIncomingHpStrike(e);
     if (!strike || strike.raw <= 0) return;
     let dmg = strike.raw;
-    if (!strike.unblockable && abyssalWardRef.current) {
+    if (!strike.unblockable && combatBuffRef.current.ashenMantleTurnsRemaining > 0) {
       dmg = Math.floor(dmg * (1 - COMBAT_ACTION.ABYSSAL_WARD_BLOCK_PCT));
-      abyssalWardRef.current = false;
-      setAbyssalWardActive(false);
       const attacker = enemyRef.current;
       if (attacker) markAttackerDoomed(attacker);
     }
@@ -1853,12 +1935,18 @@ export default function TacticalCombatHub({
         log(`[AETHERIC BULWARK] >> ${absorbed} absorbed (${envoyBulwarkArmor} flux-forged layer${envoyBulwarkArmor === 1 ? '' : 's'}).`);
       }
     }
-    if (!unblockable && abyssalWardRef.current && !bloodBoundCarapaceRef.current) {
+    if (
+      !unblockable
+      && combatBuffRef.current.ashenMantleTurnsRemaining > 0
+      && !bloodBoundCarapaceRef.current
+    ) {
+      const beforeMantle = dmg;
       dmg = Math.floor(dmg * (1 - COMBAT_ACTION.ABYSSAL_WARD_BLOCK_PCT));
-      abyssalWardRef.current = false;
-      setAbyssalWardActive(false);
-      const attacker = enemyRef.current;
-      if (attacker) markAttackerDoomed(attacker);
+      const blocked = beforeMantle - dmg;
+      if (blocked > 0) {
+        mutationEncounterRef.current.spallShatterPending += blocked;
+      }
+      if (options?.attacker) markAttackerDoomed(options.attacker);
     }
     const chanceState = combatChanceRef.current;
     if (
@@ -1880,12 +1968,7 @@ export default function TacticalCombatHub({
         log(msg?.replace(/— \d+.*/, '') ?? `>> ${options.attacker.designation} STRIKES — [ MISS ]`);
         log('[EVADE] >> Operative afterimage — attack whiffed.');
         if (hasMutation(leyLineMutations, 'GRID_GHOST')) {
-          const refund = Math.floor(maxStamina * COMBAT_CHANCE.GRID_GHOST_STAMINA_REFUND_PCT);
-          if (refund > 0) applyStamina(staminaRef.current + refund);
-          if (chanceState.gridGhostEvadeStacks < COMBAT_CHANCE.GRID_GHOST_MAX_STACKS) {
-            chanceState.gridGhostEvadeStacks += 1;
-          }
-          log(`[GRID GHOST] >> Evade successful — +${refund} stamina, +5% evade (${chanceState.gridGhostEvadeStacks}/${COMBAT_CHANCE.GRID_GHOST_MAX_STACKS}).`);
+          runOnEvadeSuccess(buildAegisBoonHookCtx());
         }
         runEnvoyEvadeSuccessBoons(envoyBoons, log, (amount = 1) => {
           playerApRef.current += amount;
@@ -1997,11 +2080,18 @@ export default function TacticalCombatHub({
         && !mutationEncounterRef.current.secondWindUsed
       ) {
         mutationEncounterRef.current.secondWindUsed = true;
-        applyStamina(maxStamina);
+        if (operativeClass === 'AEGIS') {
+          const cap = mutationModsRef.current.abyssalCap;
+          abyssalRef.current = cap;
+          setAbyssalReserve(cap);
+          log('[SECOND WIND] >> Emergency surge — Abyssal Reserve filled, +2 AP.');
+        } else {
+          applyStamina(maxStamina);
+          log('[SECOND WIND] >> Emergency surge — stamina and AP restored.');
+        }
         combatBuffRef.current.bonusApThisTurn += 2;
         playerApRef.current += 2;
         setPlayerActionPoints(playerApRef.current);
-        log('[SECOND WIND] >> Emergency surge — stamina and AP restored.');
       }
       if (n <= 0) resolve(false);
       return n;
@@ -2021,6 +2111,7 @@ export default function TacticalCombatHub({
       echoHit?: boolean;
       /** Burn/bleed/DoT — skip operative attack pose; still flash the damaged unit. */
       indirectDamage?: boolean;
+      ignoreDefenses?: boolean;
     },
   ): boolean => {
     const rawTargetId = options?.targetId
@@ -2066,7 +2157,7 @@ export default function TacticalCombatHub({
     }
     let working = e;
     let critical = false;
-    let ignoreDefenses = false;
+    let ignoreDefenses = options?.ignoreDefenses ?? false;
     let hexForceCrit = false;
     if (operativeClass === 'HEX_SHOT' && source && !options?.echoHit) {
       const hexAbilityId = (options?.abilityId ?? lastPlayerAbilityRef.current) as HexShotAbilityId | null;
@@ -2106,6 +2197,11 @@ export default function TacticalCombatHub({
               ? hexShotBoonModsRef.current.ballisticCritBonusFullMag
               : 0
           ) + (
+            operativeClass === 'AEGIS'
+            && options?.abilityId === 'VEIL_PIERCER'
+              ? (getAbilityDefinition('VEIL_PIERCER').critBonusPct ?? 0)
+              : 0
+          ) + (
             operativeClass === 'ENVOY'
             && hasEnvoyBoon(envoyBoons, 'OVERLOAD_MASTERY')
             && Math.round(veilFluxRef.current) === 99
@@ -2130,6 +2226,21 @@ export default function TacticalCombatHub({
       }
       critical = hit.critical;
       ignoreDefenses = hit.ignoreDefenses;
+      if (
+        critical
+        && operativeClass === 'AEGIS'
+        && combatBuffRef.current.demonLungCooldown > 0
+      ) {
+        combatBuffRef.current.demonLungCooldown -= 1;
+        log("[DEMON'S LUNG] >> Critical hit — cooldown accelerated.");
+      }
+    }
+    if (
+      operativeClass === 'AEGIS'
+      && options?.abilityId === 'VEIL_PIERCER'
+      && raw > 0
+    ) {
+      ignoreDefenses = true;
     }
     if (hexOverchargedStrike && raw > 0) {
       ignoreDefenses = true;
@@ -2264,7 +2375,12 @@ export default function TacticalCombatHub({
       : activeClassGraftPlanRef.current;
     if (graftPlan && dmg > 0) {
       if (operativeClass === 'AEGIS') {
-        dmg = scaleGraftDamage(dmg, graftPlan as GraftCastPlan, activeGraftStaminaSpentRef.current);
+        dmg = scaleGraftDamage(
+          dmg,
+          graftPlan as GraftCastPlan,
+          activeGraftReserveSpentRef.current,
+          Boolean(working.isBoss),
+        );
       }
       if (graftPlan.forceTrueDamage) {
         options = { ...options, channel: 'TRUE' };
@@ -2322,21 +2438,24 @@ export default function TacticalCombatHub({
     }
     if (source) {
       const activeAbility = (options?.abilityId as AegisAbilityId | undefined) ?? lastAegisAbilityRef();
-      if (
-        modifierForAction(leyLineMutations, 'ABYSSAL_RESONANCE', activeAbility, mutationModsRef.current.abyssalResonancePctPer10Stam) > 0
-        && dmg > 0
-      ) {
-        const bonus = Math.floor(staminaRef.current / 10) * mutationModsRef.current.abyssalResonancePctPer10Stam;
-        dmg = Math.floor(dmg * (1 + bonus / 100));
-      }
-      if (
-        mutationEncounterRef.current.voidResonanceOccultBonus
-        && activeAbility
-        && dmg > 0
-      ) {
-        mutationEncounterRef.current.voidResonanceOccultBonus = false;
-        dmg = Math.floor(dmg * 1.15);
-        log('[VOID RESONANCE] >> Alternating channel — +15% damage.');
+      if (source && dmg > 0) {
+        dmg = applyAbyssalResonanceDamage(
+          leyLineMutations,
+          activeAbility,
+          dmg,
+          classCombatRef.current.runicBrands,
+          mutationModsRef.current,
+        );
+        const voidRes = applyVoidResonanceDamage(
+          leyLineMutations,
+          activeAbility,
+          dmg,
+          mutationEncounterRef.current,
+        );
+        dmg = voidRes.damage;
+        if (voidRes.consumed) {
+          log('[VOID RESONANCE] >> Occult follow-up — +15% damage.');
+        }
       }
       if (mutationEncounterRef.current.masochistBuff) {
         dmg = Math.floor(dmg * 1.5);
@@ -2431,6 +2550,9 @@ export default function TacticalCombatHub({
       }
       if (narrativeOvercharged) {
         sessionExtrasRef.current.overchargedActive = false;
+        if (operativeClass === 'AEGIS') {
+          setAegisOvercharged(false);
+        }
         log('[OVERCHARGED BOON] >> First strike bypassed all mitigation.');
       }
     }
@@ -2524,6 +2646,10 @@ export default function TacticalCombatHub({
         playerApRef.current += refund;
         setPlayerActionPoints(playerApRef.current);
         log(`>> [${killGraft.graftName.toUpperCase()}] — kill confirmed, AP refunded (+${refund}).`);
+      }
+      if (killGraft?.dropLootOnKill && operativeClass === 'AEGIS') {
+        onGraftLootDrop?.(killGraft.dropLootOnKill);
+        log(`>> [${killGraft.graftName.toUpperCase()}] — kill extracts ${killGraft.dropLootOnKill.toLowerCase()}.`);
       }
       const deathLifecycle = CombatLifecycleManager.runOnDeath(
         working,
@@ -2750,8 +2876,7 @@ export default function TacticalCombatHub({
       && isEnemyFractured(working)
       && hasMutation(leyLineMutations, 'RELENTLESS_MOMENTUM')
     ) {
-      applyStamina(staminaRef.current + Math.floor(maxStamina * 0.2));
-      log('[RELENTLESS MOMENTUM] >> Fractured kill — 20% stamina restored.');
+      runOnFracturedKill(buildAegisBoonHookCtx());
     }
     const killingAbility = (options?.abilityId as AegisAbilityId | undefined) ?? lastAegisAbilityRef();
     if (
@@ -2771,7 +2896,7 @@ export default function TacticalCombatHub({
       && killingAbility
       && boonMatchesAction(leyLineMutations, 'VOIDS_TOLL', killingAbility)
     ) {
-      mutationEncounterRef.current.voidsTollApBonus += 1;
+      onVoidsTollTriggered?.();
       log("[VOID'S TOLL] >> Ultimate kill — +1 max AP this incursion (−15% max HP).");
     }
     if (
@@ -3018,6 +3143,8 @@ export default function TacticalCombatHub({
     const mods = mutationModsRef.current;
     abyssalRef.current = 0;
     setAbyssalReserve(0);
+    setRunicBrands(0);
+    classCombatRef.current.runicBrands = 0;
     setSuccessfulParryCount(0);
     classCombatRef.current.successfulParryCount = 0;
     for (const unit of aliveUnits(squadRef.current)) {
@@ -3630,9 +3757,17 @@ export default function TacticalCombatHub({
     if (staminaRef.current > 0) {
       combatChanceRef.current.momentumShiftEvadeDisabled = false;
     }
-    setCounterPrepActive(false);
-    counterRef.current = false;
-    wraithParryRef.current = false;
+    clearVoidWardShroud();
+    if (combatBuffRef.current.ashenMantleTurnsRemaining > 0) {
+      combatBuffRef.current.ashenMantleTurnsRemaining -= 1;
+      const mantleActive = combatBuffRef.current.ashenMantleTurnsRemaining > 0;
+      setAbyssalWardActive(mantleActive);
+      if (!mantleActive && mutationEncounterRef.current.spallShatterPending > 0) {
+        const burst = mutationEncounterRef.current.spallShatterPending;
+        mutationEncounterRef.current.spallShatterPending = 0;
+        triggerSpallShatterBurst(burst);
+      }
+    }
     bloodBoundCarapaceRef.current = false;
     riftWardReadyRef.current = operativeClass === 'ENVOY';
     if (operativeClass === 'ENVOY') {
@@ -3654,6 +3789,10 @@ export default function TacticalCombatHub({
     }
     if (combatBuffRef.current.demonLungCooldown > 0) {
       combatBuffRef.current.demonLungCooldown -= 1;
+    }
+    if (combatBuffRef.current.bonusApNextTurn > 0) {
+      combatBuffRef.current.bonusApThisTurn += combatBuffRef.current.bonusApNextTurn;
+      combatBuffRef.current.bonusApNextTurn = 0;
     }
     if (mutationEncounterRef.current.flawlessConduitPending) {
       combatBuffRef.current.bonusApThisTurn += 1;
@@ -3693,7 +3832,7 @@ export default function TacticalCombatHub({
       sessionExtrasRef.current.playerApCapNextTurn = null;
       log(`>> VEIL STATIC RESIDUE — operative AP capped at ${apCap}.`);
     }
-    const baseAp = PLAYER_ACTION_POINTS_PER_TURN + bonusAp - apPenalty;
+    const baseAp = PLAYER_ACTION_POINTS_PER_TURN + incursionApBonus + bonusAp - apPenalty;
     playerApRef.current = apCap != null
       ? Math.max(0, Math.min(apCap, baseAp))
       : Math.max(0, baseAp);
@@ -3811,11 +3950,6 @@ export default function TacticalCombatHub({
     return { dmg, unblockable };
   };
 
-  const canOfferReactiveParry = () =>
-    operativeClass === 'AEGIS'
-    && !isExhausted
-    && abyssalRef.current >= COMBAT_ACTION.COUNTER_ABYSSAL_MIN
-    && staminaRef.current >= COMBAT_ACTION.COUNTER_STAMINA;
 
   const resolveEnemyAction = (countering: boolean) => {
     if (isCombatTerminal()) return;
@@ -3873,9 +4007,8 @@ export default function TacticalCombatHub({
       }
       log('[PANOPTICON] >> Overwatch failed — magazine empty.');
     }
-    if (countering && openParryWindow(currentEnemy, true)) return;
+    if (voidWardPrimedRef.current && openParryWindow(currentEnemy, true)) return;
     if (!countering && operativeClass === 'ENVOY' && openEnvoyWardWindow(currentEnemy)) return;
-    if (!countering && operativeClass === 'AEGIS' && openParryWindow(currentEnemy, false)) return;
     const hpStrikeResolved = commitPendingPlayerDamage(false, undefined, currentEnemy);
     if (hpStrikeResolved && currentEnemy.intent === 'VOID_AMBUSH') {
       finalizeNullShadeVoidAmbush(currentEnemy);
@@ -4112,28 +4245,24 @@ export default function TacticalCombatHub({
     else if (!allUnitsDefeated(squadRef.current)) endEnemyTurn(true);
   };
 
-  const openParryWindow = (e: EnemyCombatProfile, fromCounterStance: boolean): boolean => {
+  const openParryWindow = (e: EnemyCombatProfile, fromVoidWard: boolean): boolean => {
     const effectiveIntent = resolveEffectiveEnemyIntent(e);
     if (effectiveIntent === 'WORLD_ENDER') {
-      if (fromCounterStance) {
-        log('[COUNTER FAILED] >> World-Ender cannot be parried.');
-        counterRef.current = false;
-        setCounterPrepActive(false);
+      if (fromVoidWard) {
+        log('[VOID WARD] >> World-Ender cannot be parried — shroud collapsed.');
+        clearVoidWardShroud();
       }
       return false;
     }
-    if (!isAttackIntent(effectiveIntent)) {
-      if (fromCounterStance) {
-        log('[COUNTER WASTED] >> No attack channel.');
-        counterRef.current = false;
-        setCounterPrepActive(false);
+    if (!isKineticMeleeEnemyStrike(e)) {
+      if (fromVoidWard) {
+        log('[VOID WARD] >> Non-kinetic channel — shroud misaligned.');
+        clearVoidWardShroud();
       }
       return false;
     }
-    if (!fromCounterStance) {
-      if (!canOfferReactiveParry()) return false;
-      if (!spendStam(COMBAT_ACTION.COUNTER_STAMINA)) return false;
-      log('[REACTIVE PARRY] >> Hostile attack incoming — counter window open.');
+    if (!fromVoidWard || !voidWardPrimedRef.current) {
+      return false;
     }
     const { dmg, unblockable } = resolvePendingAttackDamage(e);
     pendingDmgRef.current = dmg;
@@ -4226,7 +4355,6 @@ export default function TacticalCombatHub({
     );
     abyssalRef.current = entryAr;
     skipRegenRef.current = false;
-    abyssalWardRef.current = false;
     wardStrikeBonusRef.current = false;
     setStrikeArPrimed(false);
     counterRef.current = false;
@@ -4236,12 +4364,17 @@ export default function TacticalCombatHub({
     setOperativeHp(initialOperativeHp);
     setAbyssalWardActive(false);
     setCounterPrepActive(false);
-    wraithParryRef.current = false;
+    voidWardPrimedRef.current = false;
+    setVoidWardPrimed(false);
+    setRunicBrands(0);
+    classCombatRef.current.runicBrands = 0;
     riftWardReadyRef.current = operativeClass === 'ENVOY';
     combatBuffRef.current = {
       demonLungCooldown: 0,
       crimsonPactCharges: 0,
       bonusApThisTurn: 0,
+      bonusApNextTurn: 0,
+      ashenMantleTurnsRemaining: 0,
       initiativeQueued: false,
     };
     setInitiativeQueued(false);
@@ -4259,6 +4392,7 @@ export default function TacticalCombatHub({
     setMagazineAmmo(maxAmmo);
     hexOverchargedRef.current = false;
     setHexOvercharged(false);
+    setAegisOvercharged(false);
     applyVeilFlux(-veilFluxRef.current);
     envoyOverloadedRef.current = false;
     envoySilencedRef.current = false;
@@ -4282,6 +4416,9 @@ export default function TacticalCombatHub({
     }
     if (narrativeCombatBoons?.overcharged) {
       sessionExtrasRef.current.overchargedActive = true;
+      if (operativeClass === 'AEGIS') {
+        setAegisOvercharged(true);
+      }
     }
     const preLockedSniper = initialSquad.find(
       (unit) => unit.rosterId === 'coil-spike-sniper'
@@ -4297,7 +4434,7 @@ export default function TacticalCombatHub({
       log(`>> ${preLockedSniper.designation} EXECUTIONER LOCK — target pre-acquired.`);
     }
     const ghostedAp = narrativeCombatBoons?.ghosted ? 1 : 0;
-    const entryAp = PLAYER_ACTION_POINTS_PER_TURN + Math.max(0, firstTurnBonusAp) + ghostedAp;
+    const entryAp = PLAYER_ACTION_POINTS_PER_TURN + incursionApBonus + Math.max(0, firstTurnBonusAp) + ghostedAp;
     playerApRef.current = entryAp;
     setPlayerActionPoints(entryAp);
     setSelectedAbility(null);
@@ -4404,18 +4541,12 @@ export default function TacticalCombatHub({
 
   const applyAbilityResolvedBoons = (abilityId: AegisAbilityId) => {
     lastPlayerAbilityRef.current = abilityId;
-    const prevTags = mutationEncounterRef.current.lastActionTags;
-    const tags = getAbilityTags(abilityId);
-    if (hasMutation(leyLineMutations, 'VOID_RESONANCE')) {
-      if (tags.includes('OCCULT') && prevTags.includes('KINETIC')) {
-        mutationEncounterRef.current.voidResonanceOccultBonus = true;
-        log('[VOID RESONANCE] >> Occult follow-up primed (+15%).');
-      } else if (tags.includes('KINETIC') && prevTags.includes('OCCULT')) {
-        mutationEncounterRef.current.voidResonanceOccultBonus = true;
-        log('[VOID RESONANCE] >> Kinetic follow-up primed (+15%).');
-      }
-    }
-    mutationEncounterRef.current.lastActionTags = tags;
+    resolveVoidResonanceOnAbilityResolve(
+      leyLineMutations,
+      abilityId,
+      mutationEncounterRef.current,
+      log,
+    );
     if (boonMatchesAction(leyLineMutations, 'MOMENTUM_TRANSFER', abilityId)) {
       mutationEncounterRef.current.nextKineticApDiscount = 1;
       log('[MOMENTUM TRANSFER] >> Next [KINETIC] action −1 AP.');
@@ -5023,6 +5154,17 @@ export default function TacticalCombatHub({
       return;
     }
 
+    const graftAfford = canAffordGraftResources(
+      graftPlan,
+      abyssalRef.current,
+      classCombatRef.current.runicBrands,
+    );
+    if (!graftAfford.ok) {
+      log(`[REJECTED] >> Graft ${graftAfford.reason}.`);
+      activeGraftPlanRef.current = null;
+      return;
+    }
+
     let apCost = graftPlan.apCost;
     if (
       mutationEncounterRef.current.nextKineticApDiscount > 0
@@ -5056,17 +5198,35 @@ export default function TacticalCombatHub({
       log(`>> [${graftPlan.graftName.toUpperCase()}] — ${hpCost} HP tithe on cast.`);
     }
 
-    activeGraftStaminaSpentRef.current = 0;
-    if (graftPlan.consumeAllStamina) {
-      activeGraftStaminaSpentRef.current = staminaRef.current;
-      applyStamina(0);
-      log(`>> [${graftPlan.graftName.toUpperCase()}] — all stamina consumed (${activeGraftStaminaSpentRef.current}).`);
-    } else if (graftPlan.extraStaminaCost > 0 && !spendStam(graftPlan.extraStaminaCost)) {
-      log('[REJECTED] >> Insufficient stamina for graft tax.');
-      playerApRef.current += apCost;
-      setPlayerActionPoints(playerApRef.current);
-      activeGraftPlanRef.current = null;
-      return;
+    activeGraftReserveSpentRef.current = 0;
+    if (graftPlan.brandTax > 0) {
+      if (classCombatRef.current.runicBrands < graftPlan.brandTax) {
+        log(`[REJECTED] >> Graft requires ${graftPlan.brandTax} Runic Brand${graftPlan.brandTax === 1 ? '' : 's'}.`);
+        playerApRef.current += apCost;
+        setPlayerActionPoints(playerApRef.current);
+        activeGraftPlanRef.current = null;
+        return;
+      }
+      consumeRunicBrands(graftPlan.brandTax);
+      log(`>> [${graftPlan.graftName.toUpperCase()}] — ${graftPlan.brandTax} Runic Brand${graftPlan.brandTax === 1 ? '' : 's'} tithed.`);
+    }
+    if (graftPlan.consumeAllReserve) {
+      activeGraftReserveSpentRef.current = abyssalRef.current;
+      abyssalRef.current = 0;
+      setAbyssalReserve(0);
+      log(`>> [${graftPlan.graftName.toUpperCase()}] — all Reserve detonated (${activeGraftReserveSpentRef.current}%).`);
+    } else if (graftPlan.reservePenalty > 0) {
+      if (abyssalRef.current < graftPlan.reservePenalty) {
+        log(`[REJECTED] >> Insufficient Reserve for graft tax (${graftPlan.reservePenalty}%).`);
+        playerApRef.current += apCost;
+        setPlayerActionPoints(playerApRef.current);
+        activeGraftPlanRef.current = null;
+        return;
+      }
+      const nextReserve = abyssalRef.current - graftPlan.reservePenalty;
+      abyssalRef.current = nextReserve;
+      setAbyssalReserve(nextReserve);
+      log(`>> [${graftPlan.graftName.toUpperCase()}] — ${graftPlan.reservePenalty}% Reserve taxed.`);
     }
 
     if (graftPlan.grantShieldHits > 0) {
@@ -5094,7 +5254,8 @@ export default function TacticalCombatHub({
             abilityId: 'STRIKE',
           });
           const struck = enemyRef.current;
-          chargeAr(15, struck != null && isEnemyFractured(struck));
+          chargeAr(def.reserveGain ?? 15, struck != null && isEnemyFractured(struck));
+          imprintRunicBrand(def.brandsImprinted ?? 1);
           if (struck && fractureRatio(struck) > 0.5) {
             syncEnemy(addCombatTag(struck, 'CONCUSSED'));
           }
@@ -5103,33 +5264,15 @@ export default function TacticalCombatHub({
           if (eradicated) return;
           break;
         }
-        let strikeStaminaCost = strikeStats.strikeStaminaCost;
-        const strikeTarget = enemyRef.current;
-        const smogCaller = smogCallerActive();
-        if (smogCaller && strikeTarget?.gridSlot?.startsWith('FL')) {
-          const meleeMult = getAlphaMechanic(smogCaller, 'meleeStaminaMultiplier', 2);
-          strikeStaminaCost *= meleeMult;
-          log(`>> SMOG CALLER — choking hazard ×${meleeMult} melee stamina cost.`);
-        }
-        const overdraw = staminaRef.current < strikeStaminaCost;
-        if (overdraw) {
-          markExhausted();
-          log(`[EXHAUSTED] >> Overexertion strike — ${strikeStats.exhaustedStrikeDamage} damage.`);
-        } else if (!spendStam(strikeStaminaCost)) {
-          log('[REJECTED] >> Insufficient stamina.');
-          playerApRef.current += def.apCost;
-          setPlayerActionPoints(playerApRef.current);
-          return;
-        }
-        const exhausted = overdraw || staminaRef.current === 0;
-        const kinetic = exhausted ? strikeStats.exhaustedStrikeDamage : strikeStats.strikeDamage;
+        const kinetic = def.baseKineticDamage ?? 10;
         const eradicated = hurtEnemy(kinetic, '[STRIKE]', 'STRIKE', {
           channel: 'KINETIC',
           fractureGain: 25,
           abilityId: 'STRIKE',
         });
         const struck = enemyRef.current;
-        chargeAr(15, struck != null && isEnemyFractured(struck));
+        chargeAr(def.reserveGain ?? 15, struck != null && isEnemyFractured(struck));
+        imprintRunicBrand(def.brandsImprinted ?? 1);
         if (struck && fractureRatio(struck) > 0.5) {
           syncEnemy(addCombatTag(struck, 'CONCUSSED'));
         }
@@ -5138,66 +5281,33 @@ export default function TacticalCombatHub({
         break;
       }
       case 'VEIL_PIERCER': {
-        if (!spendStam(def.staminaCost)) {
-          log('[REJECTED] >> Insufficient stamina.');
-          playerApRef.current += def.apCost;
-          setPlayerActionPoints(playerApRef.current);
-          return;
-        }
         const occult = Math.max(8, Math.floor(strikeStats.strikeDamage * 0.85));
-        chargeAr(20);
         const eradicated = hurtEnemy(occult, '[VEIL-PIERCER]', 'STRIKE', {
           channel: 'OCCULT',
           fractureGain: 15,
           abilityId: 'VEIL_PIERCER',
+          ignoreDefenses: true,
         });
+        chargeAr(def.reserveGain ?? 20);
+        imprintRunicBrand(def.brandsImprinted ?? 1);
         if (eradicated) return;
         break;
       }
       case 'WRAITH_PARRY': {
-        const stamCost = Math.floor(staminaRef.current * ((def.staminaCostPct ?? 0) / 100));
-        if (stamCost <= 0 || !spendStam(stamCost)) {
-          log('[REJECTED] >> Insufficient stamina for Wraith Parry.');
+        if (voidWardPrimedRef.current) {
+          log('[REJECTED] >> Void Ward Shroud already primed.');
           playerApRef.current += def.apCost;
           setPlayerActionPoints(playerApRef.current);
           return;
         }
-        wraithParryRef.current = true;
-        counterRef.current = true;
-        setCounterPrepActive(true);
-        markPlayerDefendedRef.current();
-        log('[WRAITH PARRY] >> Stance armed — next physical hit reflects 100% as fracture.');
-        break;
-      }
-      case 'ASHEN_MANTLE': {
-        const freeWard = mutationModsRef.current.ashenMantleFree;
-        if (!freeWard && mutationEncounterRef.current.ashenMantleCooldown > 0) {
-          log(`[REJECTED] >> Ashen Mantle on cooldown (${mutationEncounterRef.current.ashenMantleCooldown} turns).`);
-          playerApRef.current += def.apCost;
-          setPlayerActionPoints(playerApRef.current);
-          return;
-        }
-        if (!freeWard && !spendStam(def.staminaCost)) {
-          log('[REJECTED] >> Insufficient stamina.');
-          playerApRef.current += def.apCost;
-          setPlayerActionPoints(playerApRef.current);
-          return;
-        }
-        if (freeWard) {
-          mutationEncounterRef.current.ashenMantleCooldown = 3;
-          playerApRef.current += def.apCost;
-          setPlayerActionPoints(playerApRef.current);
-        }
-        abyssalWardRef.current = true;
-        setAbyssalWardActive(true);
-        markPlayerDefendedRef.current();
-        log('[ASHEN MANTLE] >> Mantle armed — blocks 50% next hit. Attackers gain Doomed.');
+        primeVoidWardShroud();
         break;
       }
       case 'RUIN':
       case 'GRAVE_BIND':
       case 'SHADOW_STEP':
       case 'NAIL_TO_GRID':
+      case 'ASHEN_MANTLE':
       case 'BLOOD_TITHE':
       case 'DEMONS_LUNG':
       case 'CRIMSON_PACT':
@@ -5214,6 +5324,7 @@ export default function TacticalCombatHub({
           abyssalReserve: abyssalRef.current,
           operativeHp: operativeHpRef.current,
           maxSoulAnchor,
+          runicBrands: classCombatRef.current.runicBrands,
           buffState: combatBuffRef.current,
           log,
           spendStamina: (cost) => spendStam(cost),
@@ -5236,6 +5347,13 @@ export default function TacticalCombatHub({
             setAbyssalReserve(next);
             return consumed;
           },
+          consumeAbyssalFlat: (amount) => {
+            if (abyssalRef.current < amount) return false;
+            const next = abyssalRef.current - amount;
+            abyssalRef.current = next;
+            setAbyssalReserve(next);
+            return true;
+          },
           healOperative: (amount) => applyHealRef.current(amount),
           sacrificeHpPct: (pct) => {
             const cost = Math.ceil(maxSoulAnchor * (pct / 100));
@@ -5253,6 +5371,16 @@ export default function TacticalCombatHub({
             playerApRef.current += amount;
             setPlayerActionPoints(playerApRef.current);
           },
+          grantBonusApNextTurn: (amount) => {
+            combatBuffRef.current.bonusApNextTurn += amount;
+          },
+          setAegisOvercharged: (active) => {
+            sessionExtrasRef.current.overchargedActive = active;
+            setAegisOvercharged(active);
+          },
+          imprintBrand: (count) => imprintRunicBrand(count),
+          setRunicBrands: setRunicBrandCount,
+          consumeBrands: (mode) => consumeRunicBrands(mode),
           restoreStaminaPct: (pct) => {
             const restored = Math.floor(maxStamina * (pct / 100));
             applyStamina(staminaRef.current + restored);
@@ -5266,6 +5394,13 @@ export default function TacticalCombatHub({
           ownedBoons: leyLineMutations,
           mutationMods: mutationModsRef.current,
           bloodTitheCooldown: mutationEncounterRef.current.bloodTitheCooldown,
+          ashenMantleCooldown: mutationEncounterRef.current.ashenMantleCooldown,
+          setBloodTitheCooldown: (turns) => {
+            mutationEncounterRef.current.bloodTitheCooldown = turns;
+          },
+          setAshenMantleCooldown: (turns) => {
+            mutationEncounterRef.current.ashenMantleCooldown = turns;
+          },
           setVeilTarTurns: (turns) => {
             mutationEncounterRef.current.veilTarTurnsRemaining = turns;
           },
@@ -5277,6 +5412,11 @@ export default function TacticalCombatHub({
           },
           setShadowStepEvadeActive: (active) => {
             combatChanceRef.current.shadowStepEvadeActive = active;
+          },
+          setAshenMantleActive: (turns) => {
+            combatBuffRef.current.ashenMantleTurnsRemaining = turns;
+            setAbyssalWardActive(turns > 0);
+            markPlayerDefendedRef.current();
           },
         });
         if (
@@ -5330,7 +5470,7 @@ export default function TacticalCombatHub({
     }
 
     activeGraftPlanRef.current = null;
-    activeGraftStaminaSpentRef.current = 0;
+    activeGraftReserveSpentRef.current = 0;
   };
 
   const onInitiativeProcComplete = useCallback(() => {
@@ -5401,7 +5541,7 @@ export default function TacticalCombatHub({
       mutationEncounterRef.current.momentumShiftPending = true;
       combatChanceRef.current.momentumShiftEvadeDisabled = true;
     }
-    passToEnemy(wraithParryRef.current);
+    passToEnemy(voidWardPrimedRef.current);
   };
 
   const onUltimatePing = () => {
@@ -5547,12 +5687,8 @@ export default function TacticalCombatHub({
       return;
     }
     if (isExhausted) { log('[REJECTED] >> Exhausted — eviscerate offline.'); return; }
-    if (playerApRef.current < EVISCERATE_AP_COST) {
-      log(`[REJECTED] >> Eviscerate requires ${EVISCERATE_AP_COST} AP.`);
-      return;
-    }
-    if (!spendActionPoints(EVISCERATE_AP_COST)) {
-      log(`[REJECTED] >> Insufficient action points for Eviscerate.`);
+    if (abyssalRef.current < COMBAT_ACTION.ABYSSAL_RESERVE_CAP) {
+      log('[REJECTED] >> Eviscerate requires 100% Abyssal Reserve.');
       return;
     }
     log('[EVISCERATE] >> Execution aperture open.');
@@ -5596,6 +5732,22 @@ export default function TacticalCombatHub({
     setHexReloadUsedThisTurn(true);
     setActiveReloadVisible(true);
     log('>> [COMBAT RELOAD] — active reload window open.');
+  };
+
+  const onVoidWardPrime = () => {
+    if (operativeClass !== 'AEGIS') return;
+    if (cycleState !== 'TEXT_COMBAT' || !isPlayerTurn || shadowstepProcRef.current) return;
+    if (voidWardPrimedRef.current) {
+      log('[REJECTED] >> Void Ward Shroud already primed.');
+      return;
+    }
+    if (playerApRef.current < VOID_WARD_AP_COST) {
+      log('[REJECTED] >> Insufficient AP for Void Ward Shroud.');
+      return;
+    }
+    playerApRef.current -= VOID_WARD_AP_COST;
+    setPlayerActionPoints(playerApRef.current);
+    primeVoidWardShroud();
   };
 
   const handleActiveReloadResolve = (result: ActiveReloadResult) => {
@@ -5671,8 +5823,8 @@ export default function TacticalCombatHub({
     return;
   };
 
-  /** Exactly one parry outcome — counter damage and parry block cannot diverge. */
-  const finalizeParry = (passed: boolean, unmitigatedOnFail: boolean) => {
+  /** Exactly one parry outcome — void ward reflect and damage cannot diverge. */
+  const finalizeParry = (passed: boolean) => {
     if (parryResolvedRef.current || cycleRef.current !== 'DEFEND_PARRY') return;
     parryResolvedRef.current = true;
     parryTapPendingRef.current = false;
@@ -5701,6 +5853,8 @@ export default function TacticalCombatHub({
       return;
     }
 
+    clearVoidWardShroud();
+
     if (passed) {
       Vibration.vibrate(15);
       triggerHitstop(100);
@@ -5710,59 +5864,55 @@ export default function TacticalCombatHub({
         setSuccessfulParryCount(nextParries);
         classCombatRef.current.successfulParryCount = nextParries;
       }
+      const pendingWeight = preAppliedHpStrikeRef.current > 0
+        ? preAppliedHpStrikeRef.current
+        : pendingDmgRef.current;
       preAppliedHpStrikeRef.current = 0;
-      counterRef.current = false;
-      setCounterPrepActive(false);
-      let killed = false;
-      if (wraithParryRef.current) {
-        const reflect = pendingDmgRef.current;
-        wraithParryRef.current = false;
-        const e = enemyRef.current;
-        if (e?.unitId) {
-          const fractured = applyFractureDamage(e, reflect);
-          patchUnit(e.unitId, fractured);
-          log(`[WRAITH PARRY] >> Parry locked — ${reflect} fracture reflected.`);
-          const reflectPct = mutationModsRef.current.parryReflectPct;
-          if (reflectPct > 0) {
-            const hpReflect = Math.floor(pendingDmgRef.current * (reflectPct / 100));
-            if (hpReflect > 0) {
-              hurtEnemy(hpReflect, '[SPIKED WARD]', 'STRIKE', {
-                channel: 'KINETIC',
-                targetId: e.unitId,
-              });
-              log(`[SPIKED WARD] >> ${hpReflect} HP retaliation.`);
-            }
+      pendingDmgRef.current = 0;
+      const e = enemyRef.current;
+      if (e?.unitId && pendingWeight > 0) {
+        const fractured = applyFractureDamage(e, pendingWeight);
+        patchUnit(e.unitId, fractured);
+        log(`[VOID WARD] >> Perfect lock — ${pendingWeight} fracture reflected.`);
+        const reflectPct = mutationModsRef.current.parryReflectPct;
+        if (reflectPct > 0) {
+          const hpReflect = Math.floor(pendingWeight * (reflectPct / 100));
+          if (hpReflect > 0) {
+            hurtEnemy(hpReflect, '[SPIKED WARD]', 'STRIKE', {
+              channel: 'KINETIC',
+              targetId: e.unitId,
+            });
+            log(`[SPIKED WARD] >> ${hpReflect} HP retaliation.`);
           }
         }
-      } else {
-        const cd = Math.floor(COMBAT_ACTION.COUNTER_DAMAGE * (1 + parryMultiplierBonus));
-        log(`[PERFECT COUNTER] >> Parry locked — ${cd} retaliation damage.`);
-        killed = hurtEnemy(cd, '[COUNTER HIT]', 'COUNTER', { rollCrit: false });
       }
-      if (hasMutation(leyLineMutations, 'PERFECTED_FORM')) {
-        const heal = Math.floor(maxSoulAnchor * 0.1 * mutationModsRef.current.healMultiplier);
-        if (heal > 0) applyHealRef.current(heal);
-        log('[PERFECTED FORM] >> Perfect parry — 10% Soul Anchor restored.');
-      }
-      if (hasMutation(leyLineMutations, 'FLAWLESS_CONDUIT')) {
-        mutationEncounterRef.current.flawlessConduitPending = true;
-      }
+      chargeAr(VOID_WARD_PERFECT_RESERVE_GAIN);
+      imprintRunicBrand(1);
+      log(`[VOID WARD] >> +${VOID_WARD_PERFECT_RESERVE_GAIN}% Reserve — 1 Runic Brand imprinted.`);
+      runOnParryPerfect(buildAegisBoonHookCtx());
       hideParryOverlay();
       startParrySuccessBurst(() => {
-        if (killed) finishParryKillAfterHalo();
-        else endEnemyTurn();
+        endEnemyTurn();
       });
       return;
     }
     hideParryOverlay();
-    if (hasMutation(leyLineMutations, 'MASOCISTS_JOY')) {
-      mutationEncounterRef.current.masochistBuff = true;
-      log("[MASOCHIST'S JOY] >> Failed parry — next attack empowered.");
+    runOnParryFail(buildAegisBoonHookCtx());
+    const pending = preAppliedHpStrikeRef.current > 0
+      ? preAppliedHpStrikeRef.current
+      : pendingDmgRef.current;
+    preAppliedHpStrikeRef.current = 0;
+    pendingDmgRef.current = 0;
+    if (pending > 0) {
+      const mitigated = Math.max(1, Math.floor(pending * 0.5));
+      hurtPlayer(mitigated, pendingUnblockRef.current, `[VOID WARD] >> Barrier ruptured — ${mitigated} impact.`, {
+        skipStrikeFx: true,
+        attacker: enemyRef.current ?? undefined,
+        rollCrit: false,
+      });
+    } else {
+      log('[VOID WARD] >> Parry failed — barrier collapsed.');
     }
-    log(unmitigatedOnFail ? '[PARRY FAILED] >> Mistimed — 100% unmitigated damage.' : '[PARRY FAILED] >> Guard collapsed.');
-    commitPendingPlayerDamage(unmitigatedOnFail);
-    counterRef.current = false;
-    setCounterPrepActive(false);
     if (operativeHpRef.current > 0) endEnemyTurn();
   };
 
@@ -5772,7 +5922,7 @@ export default function TacticalCombatHub({
   const handleParryTimeout = (session: number) => {
     if (parryResolvedRef.current) return;
     if (session !== parrySessionRef.current || parryTapPendingRef.current) return;
-    finalizeParryRef.current(false, false);
+    finalizeParryRef.current(false);
   };
 
   const adjudicateParryTap = (scale: number, tapX: number, tapY: number, session: number) => {
@@ -5786,7 +5936,7 @@ export default function TacticalCombatHub({
       parryTimingWindowBonus,
       parryTimingBlindPenalty,
     );
-    finalizeParryRef.current(passed, true);
+    finalizeParryRef.current(passed);
   };
 
   const adjudicateParryTapRef = useRef(adjudicateParryTap);
@@ -6090,20 +6240,16 @@ export default function TacticalCombatHub({
     const graftPlan = buildGraftCastPlan(abilityId, abilityGraftsRef.current[abilityId]);
     if ((graftCooldownsRef.current[abilityId] ?? 0) > 0) return false;
     if (playerActionPoints < graftPlan.apCost) return false;
+    const graftAfford = canAffordGraftResources(graftPlan, abyssalReserve, runicBrands);
+    if (!graftAfford.ok) return false;
     switch (abilityId) {
       case 'STRIKE':
         return true;
       case 'VEIL_PIERCER':
-        return stamina >= def.staminaCost;
-      case 'WRAITH_PARRY': {
-        const stamCost = Math.floor(stamina * ((def.staminaCostPct ?? 0) / 100));
-        return !isExhausted && stamCost > 0 && stamina >= stamCost;
-      }
+        return true;
+      case 'WRAITH_PARRY':
+        return !voidWardPrimedRef.current;
       case 'ASHEN_MANTLE':
-        if (mutationModsRef.current.ashenMantleFree) {
-          return mutationEncounterRef.current.ashenMantleCooldown <= 0;
-        }
-        return stamina >= def.staminaCost;
       case 'RUIN':
       case 'GRAVE_BIND':
       case 'SHADOW_STEP':
@@ -6122,6 +6268,11 @@ export default function TacticalCombatHub({
           operativeHp,
           maxSoulAnchor,
           combatBuffRef.current,
+          runicBrands,
+          {
+            ashenMantleCooldown: mutationEncounterRef.current.ashenMantleCooldown,
+            ashenMantleFree: mutationModsRef.current.ashenMantleFree,
+          },
         );
       default:
         return false;
@@ -6133,8 +6284,8 @@ export default function TacticalCombatHub({
     const aegisId = abilityId as AegisAbilityId;
     const graftId = abilityGraftsRef.current[aegisId];
     if (graftId) return getVeilGraftDefinition(graftId).accentColor;
-    if (aegisId === 'WRAITH_PARRY' && wraithParryRef.current) return P.parry;
-    if (aegisId === 'ASHEN_MANTLE' && abyssalWardActive) return WARD_STRIKE_ACCENT;
+    if (aegisId === 'WRAITH_PARRY' && voidWardPrimed) return P.parry;
+    if (aegisId === 'ASHEN_MANTLE' && combatBuffRef.current.ashenMantleTurnsRemaining > 0) return WARD_STRIKE_ACCENT;
     return undefined;
   };
 
@@ -6202,12 +6353,21 @@ export default function TacticalCombatHub({
       operativeHp,
       maxSoulAnchor,
       abyssalReserve,
+      abyssalCap: mutationModsRef.current.abyssalCap,
       stamina,
       maxStamina,
       counterReady,
+      voidWardPrimed,
+      runicBrands,
+      runicBrandCap: RUNIC_BRAND_CAP,
+      eviscerateReady: sliceReady,
       currentAmmo,
       maxAmmo,
-      overcharged: hexOvercharged,
+      overcharged: operativeClass === 'HEX_SHOT'
+        ? hexOvercharged
+        : operativeClass === 'AEGIS'
+          ? aegisOvercharged
+          : false,
       veilFlux,
       envoyOverloaded,
       envoySilenced,
@@ -6221,6 +6381,10 @@ export default function TacticalCombatHub({
     stamina,
     maxStamina,
     counterReady,
+    voidWardPrimed,
+    runicBrands,
+    sliceReady,
+    aegisOvercharged,
     currentAmmo,
     maxAmmo,
     hexOvercharged,
@@ -6270,6 +6434,16 @@ export default function TacticalCombatHub({
         && !hexReloadUsedThisTurn
       }
       onCombatReload={onCombatReload}
+      voidWardAvailable={operativeClass === 'AEGIS'}
+      voidWardEnabled={
+        operativeClass === 'AEGIS'
+        && isPlayerTurn
+        && cycleState === 'TEXT_COMBAT'
+        && !shadowstepProcActive
+        && playerActionPoints >= VOID_WARD_AP_COST
+      }
+      voidWardPrimed={voidWardPrimed}
+      onVoidWardPrime={onVoidWardPrime}
       borderColor={theme.borderColor}
       primaryColor={theme.primaryColor}
       mutedColor={theme.mutedColor}
@@ -6359,8 +6533,7 @@ export default function TacticalCombatHub({
       ultimatePingDisabled: !isPlayerTurn
         || cycleState !== 'TEXT_COMBAT'
         || isExhausted
-        || combatPausedRef.current
-        || (sliceReady && playerApRef.current < EVISCERATE_AP_COST),
+        || combatPausedRef.current,
       ultimatePingVariant: ultimatePingVariant,
       masteryProgressVisible: masteryProgress.visible && isPlayerTurn && cycleState === 'TEXT_COMBAT',
       masteryProgressCurrent: masteryProgress.current,

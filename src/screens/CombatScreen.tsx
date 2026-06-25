@@ -87,6 +87,8 @@ export default function CombatScreen(): React.JSX.Element {
     getSelectedVectorNode,
     beginPostCombatHarvest,
     grantCombatResourceDrops,
+    grantCombatSalvage,
+    applyVoidsTollSacrifice,
     completeDefendRiftVictory,
     consumeAdrenalinePrimerAfterCombat,
     peekPendingNarrativeCombatBoons,
@@ -629,6 +631,9 @@ export default function CombatScreen(): React.JSX.Element {
                         if (kind === 'CREDITS') {
                           awardRunCredits(standardKillCredits(activeIncursion.nodesCleared), 'Scavenger Bolt graft');
                         }
+                        if (kind === 'LEY_SLAG') {
+                          grantCombatSalvage('ley-slag', 5);
+                        }
                       }}
                       runCredits={activeIncursion.runCredits}
                       initialOperativeHp={runState.soulAnchorIntegrity}
@@ -653,6 +658,8 @@ export default function CombatScreen(): React.JSX.Element {
                       hexShotBoons={activeIncursion.hexShotBoons}
                       envoyBoons={activeIncursion.envoyBoons}
                       firstTurnBonusAp={firstTurnBonusAp}
+                      incursionApBonus={activeIncursion.voidsTollApBonus}
+                      onVoidsTollTriggered={applyVoidsTollSacrifice}
                       playerKineticArmorBonus={shadowWarKineticArmor}
                       kineticBatteryActive={kineticBatteryActive}
                       narrativeCombatBoons={narrativeCombatBoons}

@@ -11,6 +11,7 @@ export type CombatClassImpactKind = 'AEGIS_SLICE' | 'HEX_BULLET' | 'ENVOY_BURST'
 
 export const GAUGE_SOUL_ANCHOR = '#FF453A';
 export const GAUGE_ABYSSAL = '#00D2C4';
+export const GAUGE_RUNIC_BRAND = '#a855f7';
 export const GAUGE_MAGAZINE = '#fbbf24';
 export const GAUGE_VEIL_FLUX = '#c084fc';
 export const GAUGE_STAMINA = '#5C2D91';
@@ -88,6 +89,35 @@ export function getEnemyDeckStrikeVariant(intent: EnemyIntent): EnemyDeckStrikeV
 export function clampRatio(ratio: number): number {
   if (!Number.isFinite(ratio)) return 0;
   return Math.max(0, Math.min(1, ratio));
+}
+
+export function formatAegisReserveRatio(reserve: number, cap: number): number {
+  if (cap <= 0) return 0;
+  return clampRatio(reserve / cap);
+}
+
+export interface AegisReserveLabelOptions {
+  voidWardPrimed?: boolean;
+  overcharged?: boolean;
+  eviscerateReady?: boolean;
+}
+
+export function formatAegisReserveLabel(
+  reserve: number,
+  cap: number,
+  options: AegisReserveLabelOptions = {},
+): string {
+  const capLabel = cap > 100 ? `${reserve}/${cap}` : `${reserve}%`;
+  const tags: string[] = [];
+  if (options.voidWardPrimed) tags.push('WARD');
+  if (options.overcharged) tags.push('OVERCHARGED');
+  if (options.eviscerateReady) tags.push('EVISCERATE');
+  const suffix = tags.length > 0 ? ` • ${tags.join(' • ')}` : '';
+  return `AR // ${capLabel}${suffix}`;
+}
+
+export function formatRunicBrandsLabel(count: number, cap: number): string {
+  return `BRANDS // ${count}/${cap}`;
 }
 
 export type EnemyPortraitGlow = 'none' | 'player-selected' | 'enemy-attacking' | 'enemy-charging';

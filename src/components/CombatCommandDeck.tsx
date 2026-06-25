@@ -47,6 +47,10 @@ interface CombatCommandDeckProps {
   combatReloadAvailable?: boolean;
   combatReloadEnabled?: boolean;
   onCombatReload?: () => void;
+  voidWardAvailable?: boolean;
+  voidWardEnabled?: boolean;
+  voidWardPrimed?: boolean;
+  onVoidWardPrime?: () => void;
   borderColor: string;
   primaryColor: string;
   mutedColor: string;
@@ -80,6 +84,10 @@ export default function CombatCommandDeck({
   combatReloadAvailable = false,
   combatReloadEnabled = false,
   onCombatReload,
+  voidWardAvailable = false,
+  voidWardEnabled = false,
+  voidWardPrimed = false,
+  onVoidWardPrime,
   borderColor,
   primaryColor,
   mutedColor,
@@ -334,6 +342,37 @@ export default function CombatCommandDeck({
     );
   };
 
+  const renderVoidWardButton = () => {
+    if (!voidWardAvailable) return null;
+    const primed = voidWardPrimed;
+    const enabled = voidWardEnabled && !primed;
+    return (
+      <HapticPressable
+        onPress={onVoidWardPrime}
+        disabled={!enabled}
+        style={[
+          styles.combatReloadBtn,
+          dashboardLayout && styles.combatReloadBtnDashboard,
+          {
+            borderColor: primed ? '#7dd3fc' : enabled ? '#38bdf8' : borderColor,
+            opacity: primed || enabled ? 1 : 0.4,
+          },
+        ]}
+      >
+        <Text
+          style={[
+            styles.combatReloadLabel,
+            dashboardLayout ? styles.combatReloadLabelDashboard : null,
+            { color: primed ? '#bae6fd' : enabled ? '#38bdf8' : mutedColor },
+          ]}
+          numberOfLines={1}
+        >
+          {primed ? '[ WARD ]' : '[ PARRY ]'}
+        </Text>
+      </HapticPressable>
+    );
+  };
+
   const renderSecondaryActions = () => {
     if (!bloodForTimeAvailable) return null;
     return (
@@ -459,6 +498,7 @@ export default function CombatCommandDeck({
                   queued={initiativeQueued}
                 />
                 <View style={styles.apActions}>
+                  {renderVoidWardButton()}
                   {renderCombatReloadButton()}
                   {renderEndTurnButton()}
                 </View>
@@ -477,6 +517,7 @@ export default function CombatCommandDeck({
                   queued={initiativeQueued}
                 />
                 <View style={styles.apActions}>
+                  {renderVoidWardButton()}
                   {renderCombatReloadButton()}
                   {bloodForTimeAvailable ? (
                     <HapticPressable

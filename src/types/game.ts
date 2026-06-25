@@ -442,6 +442,8 @@ export interface ActiveIncursionState {
   sanctuaryGraftOffers: (VeilGraftId | HexShotGraftId | EnvoyGraftId)[] | null;
   /** Set when Apex Graft disables ultimate for the active combat encounter. */
   encounterUltimateDisabled: boolean;
+  /** VOID'S TOLL — permanent +1 AP per ultimate kill this incursion. */
+  voidsTollApBonus: number;
   /** Passive modifiers from secured Shadow War macro-sectors. */
   shadowWarBuffs: import('../data/shadowWarBuffEngine').ShadowWarRunBuffModifiers;
   /** Per-district encounter pacing — alpha duel index, anti-repetition history. */
@@ -531,6 +533,7 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     envoyAbilityGrafts: {},
     sanctuaryGraftOffers: null,
     encounterUltimateDisabled: false,
+    voidsTollApBonus: 0,
     shadowWarBuffs: {
       maxHpBonusPct: 0,
       kineticArmorBonus: 0,

@@ -13,6 +13,9 @@ export interface ClassAbilityCostSummary {
   minFluxRequired: number;
   staminaCost: number;
   staminaCostPct: number;
+  reserveCost: number;
+  reserveCostPct: number;
+  minReservePct: number;
   requiresFullMag: boolean;
   label: string;
   description: string;
@@ -37,6 +40,9 @@ export function resolveClassAbilityCost(
       minFluxRequired: 0,
       staminaCost: def.staminaCost,
       staminaCostPct: def.staminaCostPct ?? 0,
+      reserveCost: 0,
+      reserveCostPct: 0,
+      minReservePct: 0,
       requiresFullMag: def.requiresFullMag ?? false,
       label: def.label,
       description: def.description,
@@ -57,6 +63,9 @@ export function resolveClassAbilityCost(
       minFluxRequired: def.minFluxRequired ?? 0,
       staminaCost: def.staminaCost,
       staminaCostPct: 0,
+      reserveCost: 0,
+      reserveCostPct: 0,
+      minReservePct: 0,
       requiresFullMag: false,
       label: def.label,
       description: def.description,
@@ -76,6 +85,9 @@ export function resolveClassAbilityCost(
     minFluxRequired: 0,
     staminaCost: def.staminaCost,
     staminaCostPct: def.staminaCostPct ?? 0,
+    reserveCost: def.reserveCost ?? 0,
+    reserveCostPct: def.reserveCostPct ?? 0,
+    minReservePct: def.minReservePct ?? 0,
     requiresFullMag: def.requiresFullAbyssal ?? false,
     label: def.label,
     description: def.description,
@@ -96,7 +108,14 @@ export function formatClassAbilityCostLine(classId: ClassType, abilityId: string
     if (cost.fluxCost > 0) parts.push(`−${cost.fluxCost} FLUX`);
     else if (cost.fluxGen > 0) parts.push(`+${cost.fluxGen} FLUX`);
   }
-  if (cost.staminaCost > 0) parts.push(`${cost.staminaCost} STAM`);
-  else if (cost.staminaCostPct > 0) parts.push(`${cost.staminaCostPct}% STAM`);
+  if (classId === 'AEGIS') {
+    if (cost.requiresFullMag) parts.push('100% AR');
+    if (cost.reserveCost > 0) parts.push(`−${cost.reserveCost}% AR`);
+    else if (cost.reserveCostPct > 0) parts.push(`−${cost.reserveCostPct}% AR`);
+    if (cost.minReservePct > 0) parts.push(`≥${cost.minReservePct}% AR`);
+  } else {
+    if (cost.staminaCost > 0) parts.push(`${cost.staminaCost} STAM`);
+    else if (cost.staminaCostPct > 0) parts.push(`${cost.staminaCostPct}% STAM`);
+  }
   return parts.join(' // ');
 }
