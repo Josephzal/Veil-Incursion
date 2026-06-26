@@ -59,7 +59,7 @@ export default function CombatApPipRow({
   );
 }
 
-const HEX_SIZE = 12;
+const HEX_SIZE = 7;
 
 const styles = StyleSheet.create({
   host: {
@@ -82,7 +82,7 @@ const styles = StyleSheet.create({
   pipRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 3,
   },
   hexShell: {
     width: HEX_SIZE,
@@ -94,9 +94,9 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   hexCore: {
-    width: HEX_SIZE * 0.88,
-    height: HEX_SIZE * 0.88,
-    borderWidth: 1.5,
+    width: HEX_SIZE * 0.9,
+    height: HEX_SIZE * 0.9,
+    borderWidth: 1,
     transform: [{ rotate: '45deg' }],
   },
   counter: {

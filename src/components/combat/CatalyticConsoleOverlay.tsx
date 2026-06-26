@@ -88,7 +88,9 @@ export default function CatalyticConsoleOverlay({
   );
 }
 
-const RING = 220;
+const CATALYST_SCALE = 0.7;
+const INNER_RING = Math.round(220 * 1.15 * CATALYST_SCALE);
+const OUTER_RING = Math.round(INNER_RING * 1.2);
 
 const styles = StyleSheet.create({
   overlay: {
@@ -100,23 +102,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   arena: {
-    width: RING + 40,
-    height: RING + 96,
+    width: OUTER_RING + 40,
+    height: OUTER_RING + 96,
     alignItems: 'center',
     justifyContent: 'center',
   },
   outerRing: {
-    width: RING,
-    height: RING,
-    borderRadius: RING / 2,
+    width: OUTER_RING,
+    height: OUTER_RING,
+    borderRadius: OUTER_RING / 2,
     borderWidth: 2,
     borderColor: '#4ade80',
     position: 'absolute',
   },
   innerCircle: {
-    width: RING * 0.92,
-    height: RING * 0.92,
-    borderRadius: (RING * 0.92) / 2,
+    width: INNER_RING * 0.92,
+    height: INNER_RING * 0.92,
+    borderRadius: (INNER_RING * 0.92) / 2,
     backgroundColor: 'rgba(74, 222, 128, 0.28)',
     borderWidth: 1,
     borderColor: '#86efac',
@@ -130,7 +132,7 @@ const styles = StyleSheet.create({
     color: '#bbf7d0',
     letterSpacing: 0.5,
     textAlign: 'center',
-    width: RING + 40,
+    width: OUTER_RING + 40,
   },
   hint: {
     position: 'absolute',

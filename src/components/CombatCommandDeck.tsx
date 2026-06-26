@@ -10,6 +10,8 @@ const TILE_HEIGHT = 40;
 const TILE_HEIGHT_DASHBOARD = 25;
 const TILE_MARGIN_BOTTOM = 8;
 const TILE_MARGIN_BOTTOM_DASHBOARD = 2;
+const DASHBOARD_MINIGAME_BTN_HEIGHT = TILE_HEIGHT_DASHBOARD;
+const DASHBOARD_END_TURN_HEIGHT = TILE_HEIGHT_DASHBOARD - 4;
 const GRID_GAP = 6;
 const AP_ROW_HEIGHT = 22;
 const GRID_BODY_HEIGHT = TILE_HEIGHT * 2 + TILE_MARGIN_BOTTOM * 2 + GRID_GAP;
@@ -298,8 +300,8 @@ export default function CombatCommandDeck({
           disabled={!canEndTurn}
           style={styles.endTurnPressable}
         >
-          <Text style={[styles.endTurnLabel, { color: INITIATIVE_GLOW_PALE }]}>
-            [ END TURN ]
+          <Text style={[styles.endTurnLabel, dashboardLayout && styles.endTurnLabelDashboard, { color: INITIATIVE_GLOW_PALE }]}>
+            END TURN
           </Text>
         </HapticPressable>
       </Animated.View>
@@ -316,8 +318,8 @@ export default function CombatCommandDeck({
           },
         ]}
       >
-        <Text style={[styles.endTurnLabel, { color: canEndTurn ? primaryColor : mutedColor }]}>
-          [ END TURN ]
+        <Text style={[styles.endTurnLabel, dashboardLayout && styles.endTurnLabelDashboard, { color: canEndTurn ? primaryColor : mutedColor }]}>
+          END TURN
         </Text>
       </HapticPressable>
     )
@@ -331,7 +333,7 @@ export default function CombatCommandDeck({
         disabled={!combatReloadEnabled}
         style={[
           styles.combatReloadBtn,
-          dashboardLayout && styles.combatReloadBtnDashboard,
+          dashboardLayout && styles.combatMinigameBtnDashboard,
           {
             borderColor: combatReloadEnabled ? '#fbbf24' : borderColor,
             opacity: combatReloadEnabled ? 1 : 0.4,
@@ -361,7 +363,7 @@ export default function CombatCommandDeck({
         disabled={!catalyticConsoleEnabled}
         style={[
           styles.combatReloadBtn,
-          dashboardLayout && styles.combatReloadBtnDashboard,
+          dashboardLayout && styles.combatMinigameBtnDashboard,
           {
             borderColor: catalyticConsoleEnabled ? accent : borderColor,
             opacity: catalyticConsoleEnabled ? 1 : 0.4,
@@ -376,9 +378,7 @@ export default function CombatCommandDeck({
           ]}
           numberOfLines={1}
         >
-          {catalyticConsoleRotStacks > 0
-            ? `[ CATALYST // ${catalyticConsoleRotStacks} ]`
-            : '[ CATALYST ]'}
+            CATALYST
         </Text>
       </HapticPressable>
     );
@@ -394,7 +394,7 @@ export default function CombatCommandDeck({
         disabled={!enabled}
         style={[
           styles.combatReloadBtn,
-          dashboardLayout && styles.combatReloadBtnDashboard,
+          dashboardLayout && styles.combatMinigameBtnDashboard,
           {
             borderColor: primed ? '#7dd3fc' : enabled ? '#38bdf8' : borderColor,
             opacity: primed || enabled ? 1 : 0.4,
@@ -565,7 +565,7 @@ export default function CombatCommandDeck({
                   mutedColor={mutedColor}
                   queued={initiativeQueued}
                 />
-                <View style={styles.apActions}>
+                <View style={[styles.apActions, styles.apActionsDashboard]}>
                   {renderVoidWardButton()}
                   {renderCatalyticConsoleButton()}
                   {renderCombatReloadButton()}
@@ -715,6 +715,10 @@ const styles = StyleSheet.create({
     gap: GRID_GAP,
     flexShrink: 0,
   },
+  apActionsDashboard: {
+    width: '48%',
+    justifyContent: 'flex-end',
+  },
   bloodForTimeBtn: {
     borderWidth: 1,
     paddingHorizontal: 6,
@@ -733,6 +737,18 @@ const styles = StyleSheet.create({
     maxWidth: 68,
     paddingHorizontal: 3,
     flexShrink: 0,
+  },
+  combatMinigameBtnDashboard: {
+    flex: 1.08,
+    maxWidth: undefined,
+    minWidth: 0,
+    minHeight: DASHBOARD_MINIGAME_BTN_HEIGHT,
+    paddingVertical: 5,
+    justifyContent: 'center',
+  },
+  combatMinigameLabelDashboard: {
+    fontSize: 6,
+    letterSpacing: 0.25,
   },
   combatReloadLabel: {
     fontFamily: MONO,
@@ -758,9 +774,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   endTurnBtnDashboard: {
-    minWidth: 80,
-    paddingHorizontal: 6,
-    flexShrink: 0,
+    flex: 0.92,
+    minWidth: 0,
+    minHeight: DASHBOARD_END_TURN_HEIGHT,
+    paddingHorizontal: 4,
+    paddingVertical: 3,
+    justifyContent: 'center',
   },
   endTurnPressable: {
     width: '100%',
@@ -771,6 +790,10 @@ const styles = StyleSheet.create({
     fontSize: 7,
     fontWeight: 'bold',
     letterSpacing: 0.4,
+  },
+  endTurnLabelDashboard: {
+    fontSize: 5.5,
+    letterSpacing: 0.25,
   },
   deckBody: {
     position: 'relative',

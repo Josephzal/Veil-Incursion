@@ -301,7 +301,8 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
     alignSelf: 'center',
     gap: HARVEST_BOARD_COLUMN_GAP,
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
+    alignItems: 'center',
     paddingBottom: HARVEST_CONTENT_BUFFER,
   },
   boardColumnEmbedded: {
@@ -320,6 +321,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     backgroundColor: '#0a0b0f',
+    alignSelf: 'center',
   },
   headerContainerHarvest: {
     minHeight: 36,

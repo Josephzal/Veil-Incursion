@@ -165,7 +165,7 @@ export function patchRosterAfterIntentExec(
     }
   }
 
-  if (intent === 'EVADE') {
+  if (intent === 'EVADE' && !profile.evadeActive) {
     patch.evadeActive = true;
   }
   if (

@@ -1,10 +1,8 @@
 import React from 'react';
 import { StyleSheet, Text } from 'react-native';
 import HapticPressable from './HapticPressable';
-import { TACTICAL_HUB_STACKED_RIGHT_INSET } from '../constants/combatLayout';
 
 export const TERMINAL_ACCENT = '#00ff33';
-const MACRO_LOG_HORIZONTAL_PADDING = 12;
 
 interface MacroLogCargoButtonProps {
   disabled?: boolean;
@@ -40,9 +38,8 @@ const styles = StyleSheet.create({
   btn: {
     flexShrink: 0,
     borderWidth: 1,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    marginRight: TACTICAL_HUB_STACKED_RIGHT_INSET - MACRO_LOG_HORIZONTAL_PADDING,
+    paddingVertical: 3,
+    paddingHorizontal: 6,
     backgroundColor: '#0a0b0f',
   },
   btnText: {

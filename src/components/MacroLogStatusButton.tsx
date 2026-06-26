@@ -32,8 +32,8 @@ const styles = StyleSheet.create({
   btn: {
     flexShrink: 0,
     borderWidth: 1,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+    paddingVertical: 3,
+    paddingHorizontal: 6,
     backgroundColor: '#0a0b0f',
   },
   btnText: {

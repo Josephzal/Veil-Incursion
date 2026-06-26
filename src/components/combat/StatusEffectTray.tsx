@@ -62,23 +62,25 @@ export default function StatusEffectTray({
       <Modal
         visible={tooltipContent != null}
         transparent
-        animationType="none"
+        animationType="fade"
+        statusBarTranslucent
         onRequestClose={dismissTooltip}
       >
-        <HapticPressable
-          style={styles.modalScrim}
-          onPress={dismissTooltip}
-          accessibilityRole="button"
-          accessibilityLabel="Dismiss status tooltip"
-        />
-      </Modal>
-
-      {tooltipContent ? (
-        <View style={styles.tooltip} pointerEvents="none">
-          <Text style={styles.tooltipHeader}>{`[ ${tooltipContent.label} ]`}</Text>
-          <Text style={styles.tooltipBody}>{tooltipContent.description}</Text>
+        <View style={styles.backdrop}>
+          <HapticPressable
+            style={styles.backdropTap}
+            onPress={dismissTooltip}
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss status tooltip"
+          />
+          {tooltipContent ? (
+            <View style={styles.tooltip} pointerEvents="none">
+              <Text style={styles.tooltipHeader}>{`[ ${tooltipContent.label} ]`}</Text>
+              <Text style={styles.tooltipBody}>{tooltipContent.description}</Text>
+            </View>
+          ) : null}
         </View>
-      ) : null}
+      </Modal>
 
       <View style={styles.trayRow}>
         {activeStatuses.map((key) => {
@@ -107,9 +109,17 @@ const styles = StyleSheet.create({
     marginTop: 4,
     minHeight: ICON_SIZE,
   },
-  modalScrim: {
+  backdrop: {
     flex: 1,
-    backgroundColor: 'transparent',
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  backdropTap: {
+    ...StyleSheet.absoluteFillObject,
   },
   trayRow: {
     flexDirection: 'row',
@@ -141,10 +151,6 @@ const styles = StyleSheet.create({
     opacity: 1,
   },
   tooltip: {
-    position: 'absolute',
-    left: 0,
-    bottom: ICON_SIZE + 8,
-    zIndex: 24,
     minWidth: 168,
     maxWidth: 220,
     paddingHorizontal: 8,
@@ -152,6 +158,7 @@ const styles = StyleSheet.create({
     backgroundColor: TOOLTIP_BG,
     borderWidth: 1,
     borderColor: TOOLTIP_BORDER,
+    zIndex: 2,
   },
   tooltipHeader: {
     fontFamily: MONO,

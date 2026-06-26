@@ -772,7 +772,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       activeIncursionRef.current = next;
       return next;
     });
-    appendRunLog('>> ADRENALINE PRIMER SPENT — FIRST-TURN AP BONUS CONSUMED.');
+    appendRunLog('>> ADRENALINE PRIMER SPENT — COMBAT CHARGE CONSUMED.');
   }, [appendRunLog]);
 
   const peekPendingNarrativeCombatBoons = useCallback((): PendingNarrativeCombatBoons => {

@@ -16,9 +16,9 @@ export function resolveEnemyStatEvadeChance(ctx: EnemyEvadeContext): number {
   if (ctx.defender.isBoss) return 0;
   const statEvade = clampChance(ctx.defender.evadeChance ?? COMBAT_CHANCE.ENEMY_BASE_EVADE);
   const postureEvade = ctx.defender.evadeActive && !ctx.bypassPostureEvade
-    ? COMBAT_CHANCE.EVADE_POSTURE_EVADE_CHANCE
+    ? COMBAT_CHANCE.EVADE_POSTURE_MISS_BONUS
     : 0;
-  return clampChance(Math.max(statEvade, postureEvade));
+  return clampChance(statEvade + postureEvade);
 }
 
 export function resolvePlayerEvadeChance(ctx: PlayerEvadeContext): number {

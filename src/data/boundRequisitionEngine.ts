@@ -142,7 +142,7 @@ export function applyBoundRequisitionAtRunStart(
       break;
     }
     case 'ADRENALINE_PRIMER':
-      logLines.push('>> ADRENALINE PRIMER ARMED — FIRST-TURN +1 AP × 3 COMBATS.');
+      logLines.push('>> ADRENALINE PRIMER ARMED — +1 AP ON YOUR FIRST 3 TURNS × 3 COMBATS.');
       break;
     case 'REINFORCED_TRENCH_COAT':
       runPatch = scaleHp(run, 1.1);

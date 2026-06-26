@@ -3,6 +3,7 @@ import type { EnemyCombatProfile } from '../types/run';
 
 export const FRACTURE_MAX_DEFAULT = 100;
 export const FRACTURED_DAMAGE_BONUS_PCT = 50;
+export const FRACTURED_MAX_HP_PENALTY_PCT = 20;
 
 export function hasCombatTag(enemy: EnemyCombatProfile, tag: CombatUnitTag): boolean {
   return enemy.combatTags?.includes(tag) ?? false;
@@ -61,10 +62,13 @@ export function willFractureBreak(enemy: EnemyCombatProfile, amount: number): bo
   return (enemy.fractureGauge ?? 0) + amount >= max;
 }
 
-/** Break state — stunned, armor stripped, +50% damage taken this round. */
+/** Break state — stunned, armor stripped, +50% damage taken, −20% max HP immediate hit. */
 export function applyFracturedState(enemy: EnemyCombatProfile): EnemyCombatProfile {
+  const hpLoss = Math.max(1, Math.floor(enemy.maxHp * FRACTURED_MAX_HP_PENALTY_PCT / 100));
+  const currentHp = Math.max(1, enemy.currentHp - hpLoss);
   return {
     ...enemy,
+    currentHp,
     fractureGauge: 0,
     combatTags: [...new Set([...(enemy.combatTags ?? []), 'FRACTURED' as CombatUnitTag])],
     kineticArmor: 0,

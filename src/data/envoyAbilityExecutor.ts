@@ -17,6 +17,7 @@ import {
   isUnitAlive,
   unitAtSlot,
 } from './combatSquadEngine';
+import { resolveClassWardenInterceptTarget } from './combatClassTargeting';
 
 export interface EnvoyAbilityHurtOptions {
   channel?: 'KINETIC' | 'OCCULT' | 'TRUE';
@@ -71,6 +72,15 @@ function columnUnits(squad: EnemyCombatProfile[], slot: CombatGridSlotId): Enemy
     .filter((u): u is EnemyCombatProfile => u != null && isUnitAlive(u));
 }
 
+function wardenResolvedUnit(
+  ctx: EnvoyExecutionContext,
+  unit: EnemyCombatProfile & { unitId: string },
+): EnemyCombatProfile & { unitId: string } {
+  const resolvedId = resolveClassWardenInterceptTarget(ctx.squad, 'ENVOY', ctx.abilityId, unit.unitId);
+  const resolved = getUnitById(ctx.squad, resolvedId);
+  return resolved?.unitId ? resolved as EnemyCombatProfile & { unitId: string } : unit;
+}
+
 export function executeEnvoyAbility(ctx: EnvoyExecutionContext): EnvoyExecutionResult {
   const def = getEnvoyAbilityDefinition(ctx.abilityId);
 
@@ -94,11 +104,12 @@ export function executeEnvoyAbility(ctx: EnvoyExecutionContext): EnvoyExecutionR
 
   switch (ctx.abilityId) {
     case 'VEIL_SPLINTER': {
-      const unit = targetUnit(ctx);
-      if (!unit?.unitId) {
+      const raw = targetUnit(ctx);
+      if (!raw?.unitId) {
         ctx.log('[REJECTED] >> Veil-Splinter requires a target.');
         return { ok: false, refundAp: def.apCost };
       }
+      const unit = wardenResolvedUnit(ctx, raw as EnemyCombatProfile & { unitId: string });
       ctx.hurtEnemy(def.baseDamage, '[VEIL-SPLINTER]', {
         channel: 'OCCULT',
         abilityId: ctx.abilityId,
@@ -117,12 +128,13 @@ export function executeEnvoyAbility(ctx: EnvoyExecutionContext): EnvoyExecutionR
       const hits = columnUnits(ctx.squad, unit.gridSlot as CombatGridSlotId);
       for (const hit of hits) {
         if (!hit.unitId) continue;
+        const resolved = wardenResolvedUnit(ctx, hit as EnemyCombatProfile & { unitId: string });
         ctx.hurtEnemy(def.baseDamage, '[ASTRAL LANCE]', {
           channel: 'OCCULT',
           abilityId: ctx.abilityId,
-          targetId: hit.unitId,
-        }, hit.unitId);
-        infectVeilRot(ctx.classState, hit, 1, ctx.log);
+          targetId: resolved.unitId,
+        }, resolved.unitId);
+        infectVeilRot(ctx.classState, resolved, 1, ctx.log);
       }
       return { ok: true, fluxDelta: netFlux };
     }
@@ -135,23 +147,25 @@ export function executeEnvoyAbility(ctx: EnvoyExecutionContext): EnvoyExecutionR
       }
       for (const hit of targets) {
         if (!hit.unitId) continue;
+        const resolved = wardenResolvedUnit(ctx, hit as EnemyCombatProfile & { unitId: string });
         ctx.hurtEnemy(def.baseDamage, '[NECROTIC BLOOM]', {
           channel: 'OCCULT',
           abilityId: ctx.abilityId,
-          targetId: hit.unitId,
-        }, hit.unitId);
-        infectVeilRot(ctx.classState, hit, 2, ctx.log);
+          targetId: resolved.unitId,
+        }, resolved.unitId);
+        infectVeilRot(ctx.classState, resolved, 2, ctx.log);
       }
       ctx.log('[NECROTIC BLOOM] >> Bloom detonated across the hostile grid.');
       return { ok: true, fluxDelta: netFlux };
     }
 
     case 'FLUX_PURGE': {
-      const unit = targetUnit(ctx);
-      if (!unit?.unitId) {
+      const raw = targetUnit(ctx);
+      if (!raw?.unitId) {
         ctx.log('[REJECTED] >> Flux-Purge requires a melee target.');
         return { ok: false, refundAp: def.apCost };
       }
+      const unit = wardenResolvedUnit(ctx, raw as EnemyCombatProfile & { unitId: string });
       if (getVeilRotStacks(ctx.classState, unit.unitId) <= 0) {
         ctx.log('[REJECTED] >> Flux-Purge requires a Veil Rot stack on the target.');
         return { ok: false, refundAp: def.apCost };
@@ -167,11 +181,12 @@ export function executeEnvoyAbility(ctx: EnvoyExecutionContext): EnvoyExecutionR
     }
 
     case 'DIMENSIONAL_SHEAR': {
-      const unit = targetUnit(ctx);
-      if (!unit?.unitId) {
+      const raw = targetUnit(ctx);
+      if (!raw?.unitId) {
         ctx.log('[REJECTED] >> Dimensional Shear requires a target.');
         return { ok: false, refundAp: def.apCost };
       }
+      const unit = wardenResolvedUnit(ctx, raw as EnemyCombatProfile & { unitId: string });
       ctx.patchUnit(unit.unitId, {
         occultWards: 0,
         veilBarrierCharges: undefined,
@@ -211,11 +226,12 @@ export function executeEnvoyAbility(ctx: EnvoyExecutionContext): EnvoyExecutionR
     }
 
     case 'ENTROPY_HEX': {
-      const unit = targetUnit(ctx);
-      if (!unit?.unitId) {
+      const raw = targetUnit(ctx);
+      if (!raw?.unitId) {
         ctx.log('[REJECTED] >> Entropy Hex requires a target.');
         return { ok: false, refundAp: def.apCost };
       }
+      const unit = wardenResolvedUnit(ctx, raw as EnemyCombatProfile & { unitId: string });
       ctx.classState.enemyApDrainNextTurn[unit.unitId] = 1;
       ctx.hurtEnemy(def.baseDamage, '[ENTROPY HEX]', {
         channel: 'OCCULT',
@@ -227,11 +243,12 @@ export function executeEnvoyAbility(ctx: EnvoyExecutionContext): EnvoyExecutionR
     }
 
     case 'FLESH_WARP': {
-      const unit = targetUnit(ctx);
-      if (!unit?.unitId) {
+      const raw = targetUnit(ctx);
+      if (!raw?.unitId) {
         ctx.log('[REJECTED] >> Flesh-Warp requires a target.');
         return { ok: false, refundAp: def.apCost };
       }
+      const unit = wardenResolvedUnit(ctx, raw as EnemyCombatProfile & { unitId: string });
       const reducedMax = Math.max(1, Math.floor(unit.maxHp * 0.85));
       ctx.classState.fleshWarpUnits[unit.unitId] = true;
       ctx.patchUnit(unit.unitId, {
@@ -244,11 +261,12 @@ export function executeEnvoyAbility(ctx: EnvoyExecutionContext): EnvoyExecutionR
     }
 
     case 'PARALYTIC_MIASMA': {
-      const unit = targetUnit(ctx);
-      if (!unit?.unitId) {
+      const raw = targetUnit(ctx);
+      if (!raw?.unitId) {
         ctx.log('[REJECTED] >> Paralytic Miasma requires a target.');
         return { ok: false, refundAp: def.apCost };
       }
+      const unit = wardenResolvedUnit(ctx, raw as EnemyCombatProfile & { unitId: string });
       ctx.patchUnit(unit.unitId, { evadeChance: 0, evadeActive: false });
       ctx.classState.paralyticMiasmaDoubleRotNextTurn[unit.unitId] = true;
       infectVeilRot(ctx.classState, unit, 1, ctx.log);
@@ -257,11 +275,12 @@ export function executeEnvoyAbility(ctx: EnvoyExecutionContext): EnvoyExecutionR
     }
 
     case 'MIND_SUNDER': {
-      const unit = targetUnit(ctx);
-      if (!unit?.unitId) {
+      const raw = targetUnit(ctx);
+      if (!raw?.unitId) {
         ctx.log('[REJECTED] >> Mind-Sunder requires a target.');
         return { ok: false, refundAp: def.apCost };
       }
+      const unit = wardenResolvedUnit(ctx, raw as EnemyCombatProfile & { unitId: string });
       ctx.patchUnit(unit.unitId, addCombatTag(unit, 'CONCUSSED'));
       ctx.cancelEnemyPreparedAttack?.(unit.unitId);
       ctx.hurtEnemy(def.baseDamage, '[MIND-SUNDER]', {

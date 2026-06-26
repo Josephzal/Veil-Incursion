@@ -40,6 +40,7 @@ import {
   type CombatFeedbackEvent,
 } from '../types/combatChance';
 import CombatFloatingFeedback from './combat/CombatFloatingFeedback';
+import CombatCenterStatusFloat from './combat/CombatCenterStatusFloat';
 import { DEFAULT_AEGIS_LOADOUT, PLAYER_ACTION_POINTS_PER_TURN, RUNIC_BRAND_CAP, VOID_WARD_AP_COST, VOID_WARD_PERFECT_RESERVE_GAIN, type AegisAbilityId, type AegisLoadout } from '../types/aegisCombat';
 import { getAbilityDefinition } from '../data/aegisAbilities';
 import { buildGraftCastPlan, canAffordGraftResources, scaleGraftDamage } from '../data/veilGraftEngine';
@@ -167,7 +168,6 @@ import {
   isUnitBlockedForAbility,
   isUnitHookValid,
   validTargetsForAbility,
-  resolveWardenInterceptTarget,
 } from '../data/combatTargeting';
 import {
   BREACHER_STAMINA_DRAIN,
@@ -261,13 +261,13 @@ import {
 import ActiveReloadOverlay from './combat/ActiveReloadOverlay';
 import ZeroProtocolGridOverlay from './combat/ZeroProtocolGridOverlay';
 import CataclysmSigilOverlay from './combat/CataclysmSigilOverlay';
-import FractureBreakPrompt from './combat/FractureBreakPrompt';
 import EnvoyWardOverlay, { type EnvoyWardExpansionSpeed } from './combat/EnvoyWardOverlay';
 import CatalyticConsoleOverlay from './combat/CatalyticConsoleOverlay';
 import { ASHEN_DISSOLVE_TOTAL_MS } from './combat/CombatEnemyDissolveEffect';
 import {
   ZERO_PROTOCOL_DAMAGE_PER_TAP,
   CATACLYSM_FAIL_BACKLASH,
+  FRACTURE_BREAK_PROMPT_MS,
   isEnvoyProcUltimate,
   isHexShotProcUltimate,
 } from '../data/combatMasteryEngine';
@@ -301,6 +301,7 @@ import {
   canTargetWithClassAbility,
   isUnitBlockedForClassAbility,
   isUnitHookValidForClass,
+  resolveClassWardenInterceptTarget,
   validTargetsForClassAbility,
 } from '../data/combatClassTargeting';
 import {
@@ -470,8 +471,10 @@ interface TacticalCombatHubProps {
   hexShotBoons?: HexShotBoonId[];
   envoyBoons?: EnvoyBoonId[];
   combatDistrict?: 1 | 2 | 3;
-  /** Bound requisition first-turn AP bonus (Adrenaline Primer). */
+  /** Shadow War / other first-turn-only AP bonuses (not Adrenaline Primer). */
   firstTurnBonusAp?: number;
+  /** Adrenaline Primer — +1 AP for the operative's first 3 turns this encounter. */
+  adrenalinePrimerActive?: boolean;
   /** VOID'S TOLL and other incursion-wide AP ceiling bonuses. */
   incursionApBonus?: number;
   /** Fired when VOID'S TOLL triggers on an ultimate kill. */
@@ -576,6 +579,7 @@ export default function TacticalCombatHub({
   envoyBoons = [],
   combatDistrict = 1,
   firstTurnBonusAp = 0,
+  adrenalinePrimerActive = false,
   incursionApBonus = 0,
   onVoidsTollTriggered,
   playerKineticArmorBonus = 0,
@@ -743,12 +747,15 @@ export default function TacticalCombatHub({
   const evadeImpactSeqRef = useRef<Record<string, number>>({});
   const statusFloatSeqRef = useRef<Record<string, number>>({});
   const lifecycleFloatLabelsRef = useRef<Record<string, string>>({});
+  const skipTurnUnitIdsRef = useRef<Set<string>>(new Set());
+  const [centerSkipFloatSeq, setCenterSkipFloatSeq] = useState(0);
   const backlineDashSeqRef = useRef<Record<string, number>>({});
   const backlineDashActiveRef = useRef<Record<string, boolean>>({});
   const retributionParryRef = useRef<{ unitId: string; occultDamage: number } | null>(null);
   const pendingDissolveRef = useRef<{ unitId: string; profile: EnemyCombatProfile; hp: number } | null>(null);
   const dissolveSeqRef = useRef<Record<string, number>>({});
   const dissolvedHiddenRef = useRef<Set<string>>(new Set());
+  const adrenalinePrimerTurnsRef = useRef(0);
   const pendingVictoryRef = useRef(false);
   const victoryFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wasEnemyTurnAtVictoryRef = useRef(false);
@@ -940,16 +947,7 @@ export default function TacticalCombatHub({
   }, [operativeClass, hexShotLoadout, envoyLoadout, aegisLoadout]);
   const masteryProgress = useMemo(() => {
     if (operativeClass === 'ENVOY') {
-      const rot = envoyRotStacksUi;
-      if (rot <= 0 || cataclysmReadyUi) {
-        return { visible: false, current: 0, required: CATACLYSM_ROT_GATE, accent: '#a78bfa' };
-      }
-      return {
-        visible: isPlayerTurn && cycleState === 'TEXT_COMBAT',
-        current: Math.min(CATACLYSM_ROT_GATE, rot),
-        required: CATACLYSM_ROT_GATE,
-        accent: '#a78bfa',
-      };
+      return { visible: false, current: 0, required: CATACLYSM_ROT_GATE, accent: '#a78bfa' };
     }
     if (operativeClass !== 'HEX_SHOT') {
       return { visible: false, current: 0, required: 3, accent: '#94a3b8' };
@@ -1351,14 +1349,24 @@ export default function TacticalCombatHub({
           && isUnitBlockedForClassAbility(operativeClass, nextSquad, staged, unitId)
           && !hookValid;
         const motionOptions = { arenaLayout: true, gridSlot: u.gridSlot ?? null };
-        const isActiveActor = resolveActingEnemyId() === unitId
+        const isActiveActor = (
+          skipTurnUnitIdsRef.current.has(unitId)
+          || resolveActingEnemyId() === unitId
+        )
           && enemyActionStageRef.current != null
           && !isPlayerTurnRef.current
           && cycleRef.current === 'TEXT_COMBAT';
         const actingIntent = isActiveActor ? resolveEffectiveEnemyIntent(u) : u.intent;
-        const motionKind = classifyEnemyTurnMotion(actingIntent, motionOptions);
+        const isSkipActor = skipTurnUnitIdsRef.current.has(unitId);
+        const motionKind = isSkipActor
+          ? 'buff'
+          : classifyEnemyTurnMotion(actingIntent, motionOptions);
         const turnPhase = isActiveActor
-          ? resolveEnemyTurnPhase(actingIntent, enemyActionStageRef.current, motionOptions)
+          ? resolveEnemyTurnPhase(
+            isSkipActor ? 'FORTIFY' : actingIntent,
+            enemyActionStageRef.current,
+            motionOptions,
+          )
           : null;
         const sensoryJammed = hasStructuredDebuff(sessionExtrasRef.current, 'SENSORY_JAMMED');
         const displayIntent = sensoryJammed ? ('SENSORY_JAM' as EnemyIntent) : u.intent;
@@ -1409,12 +1417,16 @@ export default function TacticalCombatHub({
           turnPhase,
           statusFloatSeq: statusFloatSeqRef.current[unitId] ?? 0,
           statusFloatLabel: lifecycleFloatLabelsRef.current[unitId]
-            ?? (isActiveActor && motionKind === 'buff' && enemyActionStageRef.current === 'executing'
-              ? getEnemyBuffFloatLabel(u.intent)
-              : undefined),
+            ?? (isSkipActor && enemyActionStageRef.current === 'executing'
+              ? 'Turn Skipped'
+              : isActiveActor && motionKind === 'buff' && enemyActionStageRef.current === 'executing'
+                ? getEnemyBuffFloatLabel(u.intent)
+                : undefined),
           statusFloatTone: lifecycleFloatLabelsRef.current[unitId]
             ? 'fortify'
-            : getStatusFloatTone(u.intent),
+            : isSkipActor
+              ? 'neutral'
+              : getStatusFloatTone(u.intent),
           isBacklineDashing: backlineDashActiveRef.current[unitId] === true,
           backlineMeleeDashSeq: backlineDashSeqRef.current[unitId] ?? 0,
           isBlocked: blocked,
@@ -1464,14 +1476,6 @@ export default function TacticalCombatHub({
     return true;
   };
 
-  const ensureDeadUnitsDissolving = () => {
-    for (const unit of squadRef.current) {
-      if (!unit.unitId || isUnitAlive(unit)) continue;
-      if ((dissolveSeqRef.current[unit.unitId] ?? 0) > 0) continue;
-      beginDissolveForUnit(unit.unitId, unit, 0);
-    }
-  };
-
   const clearVictoryBlockers = () => {
     combatPausedRef.current = false;
     syncFractureBreakTarget(null);
@@ -1485,7 +1489,7 @@ export default function TacticalCombatHub({
     pendingVictoryRef.current = true;
     wasEnemyTurnAtVictoryRef.current = !isPlayerTurnRef.current;
     clearVictoryBlockers();
-    ensureDeadUnitsDissolving();
+    // Only the latest lethal hit triggers dissolve via hurtEnemy — do not replay earlier deaths.
 
     if (victoryFallbackTimerRef.current) {
       clearTimeout(victoryFallbackTimerRef.current);
@@ -1503,6 +1507,8 @@ export default function TacticalCombatHub({
       for (const unit of squadRef.current) {
         if (isUnitAlive(unit)) continue;
         const id = unit.unitId ?? unit.designation;
+        if (dissolvedHiddenRef.current.has(id)) continue;
+        if ((dissolveSeqRef.current[id] ?? 0) > 0) continue;
         dissolvedHiddenRef.current.add(id);
       }
       publishSquadUi(squadRef.current);
@@ -1541,10 +1547,10 @@ export default function TacticalCombatHub({
     hp: number,
   ) => {
     if (hp > 0) return;
-    const live = getUnitById(squadRef.current, unitId);
-    if (live && isUnitAlive(live)) return;
     const bump = (id: string) => {
-      dissolveSeqRef.current[id] = (dissolveSeqRef.current[id] ?? 0) + 1;
+      if (dissolvedHiddenRef.current.has(id)) return;
+      if ((dissolveSeqRef.current[id] ?? 0) > 0) return;
+      dissolveSeqRef.current[id] = 1;
       backlineDashActiveRef.current[id] = false;
     };
     bump(unitId);
@@ -1554,6 +1560,12 @@ export default function TacticalCombatHub({
       });
     }
     publishSquadUi(squadRef.current);
+  };
+
+  const consumeAdrenalinePrimerTurnBonus = (): number => {
+    if (adrenalinePrimerTurnsRef.current <= 0) return 0;
+    adrenalinePrimerTurnsRef.current -= 1;
+    return 1;
   };
 
   const focusEnemy = (unit: EnemyCombatProfile | null) => {
@@ -2046,6 +2058,13 @@ export default function TacticalCombatHub({
   const applyHpStrikeOnDeckImpact = (e: EnemyCombatProfile) => {
     const strike = resolveIncomingHpStrike(e);
     if (!strike || strike.raw <= 0) return;
+    if (
+      voidWardPrimedRef.current
+      && cycleRef.current === 'TEXT_COMBAT'
+      && openParryWindow(e, true)
+    ) {
+      return;
+    }
     let dmg = strike.raw;
     if (!strike.unblockable && combatBuffRef.current.ashenMantleTurnsRemaining > 0) {
       dmg = Math.floor(dmg * (1 - COMBAT_ACTION.ABYSSAL_WARD_BLOCK_PCT));
@@ -2381,7 +2400,12 @@ export default function TacticalCombatHub({
       ?? primaryAliveUnit(squadRef.current)?.unitId;
     const interceptAbility = options?.abilityId ?? 'STRIKE';
     const targetId = rawTargetId
-      ? resolveWardenInterceptTarget(squadRef.current, interceptAbility, rawTargetId)
+      ? resolveClassWardenInterceptTarget(
+        squadRef.current,
+        operativeClass,
+        String(interceptAbility),
+        rawTargetId,
+      )
       : rawTargetId;
     const e = targetId
       ? getUnitById(squadRef.current, targetId)
@@ -3019,14 +3043,14 @@ export default function TacticalCombatHub({
     }
 
     if (working.sharedBossPool && bossRuntimeRef.current) {
-      if (hp <= 0 && e.unitId) beginDissolveForUnit(e.unitId, working, hp);
       bossRuntimeRef.current = { ...bossRuntimeRef.current, currentHp: hp };
       syncSquad(squadRef.current.map((u) =>
         u.sharedBossPool ? { ...u, currentHp: hp } : u,
       ));
-    } else {
       if (hp <= 0 && e.unitId) beginDissolveForUnit(e.unitId, working, hp);
+    } else {
       patchUnit(e.unitId, syncRosterCombatState({ ...working, currentHp: hp }));
+      if (hp <= 0 && e.unitId) beginDissolveForUnit(e.unitId, working, hp);
     }
 
     if (
@@ -3149,7 +3173,6 @@ export default function TacticalCombatHub({
     if (allUnitsDefeated(squadRef.current)) {
       if (cycleRef.current === 'DEFEND_PARRY') {
         pendingVictoryRef.current = true;
-        ensureDeadUnitsDissolving();
         return true;
       }
       if (cycleRef.current === 'OFFENSE_SLICE') {
@@ -3680,7 +3703,7 @@ export default function TacticalCombatHub({
         break;
       }
       case 'EVADE':
-        log(`>> ${e.designation} EVADE posture — 50% evasion chance.`);
+        log(`>> ${e.designation} EVADE posture — +60% miss chance vs operative strikes.`);
         break;
       case 'FORTIFY': {
         log(`>> ${e.designation} FORTIFY — kinetic shell hardened (2 turns).`);
@@ -4037,6 +4060,10 @@ export default function TacticalCombatHub({
         );
       }));
     }
+    if (advanceIntent && aliveUnits(squadRef.current).some((unit) => isEnemyFractured(unit))) {
+      syncSquad(recoverFracturedUnits(squadRef.current));
+      log('>> FRACTURED HOSTILES — armor layers rebuilding.');
+    }
     enemyActionQueueRef.current = [];
     if (operativeClass === 'ENVOY') {
       tickVeilRotEndOfEnemyTurn(
@@ -4131,6 +4158,7 @@ export default function TacticalCombatHub({
     combatBuffRef.current.bonusApThisTurn = 0;
     const apPenalty = sessionExtrasRef.current.playerApPenaltyNextTurn;
     const apCap = sessionExtrasRef.current.playerApCapNextTurn;
+    const primerAp = consumeAdrenalinePrimerTurnBonus();
     if (apPenalty > 0) {
       sessionExtrasRef.current.playerApPenaltyNextTurn = 0;
       log(`>> MIASMA FATIGUE — −${apPenalty} AP this turn.`);
@@ -4139,7 +4167,10 @@ export default function TacticalCombatHub({
       sessionExtrasRef.current.playerApCapNextTurn = null;
       log(`>> VEIL STATIC RESIDUE — operative AP capped at ${apCap}.`);
     }
-    const baseAp = PLAYER_ACTION_POINTS_PER_TURN + incursionApBonus + bonusAp - apPenalty;
+    if (primerAp > 0) {
+      log(`>> ADRENALINE PRIMER — +${primerAp} AP this turn.`);
+    }
+    const baseAp = PLAYER_ACTION_POINTS_PER_TURN + incursionApBonus + bonusAp + primerAp - apPenalty;
     playerApRef.current = apCap != null
       ? Math.max(0, Math.min(apCap, baseAp))
       : Math.max(0, baseAp);
@@ -4265,6 +4296,7 @@ export default function TacticalCombatHub({
       else if (!allUnitsDefeated(squadRef.current)) endEnemyTurn(true);
       return;
     }
+    if (cycleRef.current === 'DEFEND_PARRY' || cycleRef.current === 'DEFEND_WARD') return;
     if (voidWardPrimedRef.current && openParryWindow(currentEnemy, true)) return;
     const hpStrikeResolved = commitPendingPlayerDamage(false, undefined, currentEnemy);
     if (hpStrikeResolved && currentEnemy.intent === 'VOID_AMBUSH') {
@@ -4272,8 +4304,6 @@ export default function TacticalCombatHub({
     } else if (!hpStrikeResolved) {
       execIntent(currentEnemy);
     }
-    if (cycleRef.current === 'DEFEND_PARRY') return;
-    if (cycleRef.current === 'DEFEND_WARD') return;
     if (operativeHpRef.current <= 0) return;
     if (enemyActionQueueRef.current.length > 0) {
       scheduleNextEnemyAction(countering);
@@ -4535,6 +4565,42 @@ export default function TacticalCombatHub({
     return true;
   };
 
+  const runHostileTurnSkipBeat = (
+    unitIds: string[],
+    options: { centerLabel?: string; onComplete: () => void },
+  ) => {
+    if (unitIds.length === 0) {
+      options.onComplete();
+      return;
+    }
+    clearEnemyTurnTimers();
+    skipTurnUnitIdsRef.current = new Set(unitIds);
+    setIsPlayerTurn(false);
+    setEnemyActionStage('reading');
+    if (options.centerLabel) {
+      setCenterSkipFloatSeq((seq) => seq + 1);
+    } else {
+      for (const unitId of unitIds) {
+        statusFloatSeqRef.current[unitId] = (statusFloatSeqRef.current[unitId] ?? 0) + 1;
+      }
+    }
+    publishSquadUi(squadRef.current);
+
+    enemyTurnTimerRef.current = setTimeout(() => {
+      enemyTurnTimerRef.current = null;
+      if (isCombatTerminal()) return;
+      setEnemyActionStage('executing');
+      publishSquadUi(squadRef.current);
+      enemyStrikeTimerRef.current = setTimeout(() => {
+        enemyStrikeTimerRef.current = null;
+        skipTurnUnitIdsRef.current = new Set();
+        setEnemyActionStage(null);
+        publishSquadUi(squadRef.current);
+        options.onComplete();
+      }, ENEMY_BUFF_ANIM_MS);
+    }, ENEMY_INTENT_READ_MS);
+  };
+
   const passToEnemy = (countering = false) => {
     if (isCombatTerminal()) return;
     resolvePlayerTurnEndDebuffsRef.current();
@@ -4549,32 +4615,51 @@ export default function TacticalCombatHub({
     counteringEnemyRef.current = countering;
     tickMutationHazardsOnEnemyPhase();
 
-    if (squadHasFracturedUnits()) {
-      syncSquad(recoverFracturedUnits(squadRef.current));
-      log('>> FRACTURED HOSTILES — turn cycle forfeited. Armor layers rebuilding.');
-      endEnemyTurn(true);
-      return;
-    }
-
     if (enemyStunPendingRef.current) {
       enemyStunPendingRef.current = false;
       log('>> HOSTILE STUNNED — Veil interference; turn forfeited.');
-      endEnemyTurn(false);
+      const skipIds = aliveUnits(squadRef.current)
+        .map((unit) => unit.unitId)
+        .filter((unitId): unitId is string => Boolean(unitId));
+      runHostileTurnSkipBeat(skipIds, {
+        centerLabel: 'Enemy Turn Skipped',
+        onComplete: () => endEnemyTurn(false),
+      });
       return;
     }
 
     const budget = threatBudgetRef.current;
     const picks = pickThreatBudgetActions(squadRef.current, budget);
     if (picks.length === 0) {
-      endEnemyTurn(true);
+      if (aliveUnits(squadRef.current).some((unit) => isEnemyFractured(unit))) {
+        log('>> FRACTURED HOSTILES — staggered hostiles skip action this cycle.');
+      }
+      const skipIds = aliveUnits(squadRef.current)
+        .map((unit) => unit.unitId)
+        .filter((unitId): unitId is string => Boolean(unitId));
+      runHostileTurnSkipBeat(skipIds, {
+        centerLabel: 'Enemy Turn Skipped',
+        onComplete: () => endEnemyTurn(true),
+      });
+      return;
+    }
+    const pickedIds = new Set(picks.map((pick) => pick.unitId));
+    const fracturedSkipIds = aliveUnits(squadRef.current)
+      .filter((unit) => isEnemyFractured(unit) && unit.unitId && !pickedIds.has(unit.unitId))
+      .map((unit) => unit.unitId!)
+      .filter(Boolean);
+    if (fracturedSkipIds.length > 0) {
+      runHostileTurnSkipBeat(fracturedSkipIds, {
+        onComplete: () => {
+          enemyActionQueueRef.current = picks.map((pick) => pick.unitId);
+          runEnemyActionAnimation(countering);
+        },
+      });
       return;
     }
     enemyActionQueueRef.current = picks.map((pick) => pick.unitId);
     runEnemyActionAnimation(countering);
   };
-
-  const squadHasFracturedUnits = () =>
-    aliveUnits(squadRef.current).some((u) => isEnemyFractured(u));
 
   const initCombat = () => {
     let initialSquad = enemySquad?.length
@@ -4663,6 +4748,7 @@ export default function TacticalCombatHub({
     syncFractureBreakTarget(null);
     dissolvedHiddenRef.current = new Set();
     dissolveSeqRef.current = {};
+    adrenalinePrimerTurnsRef.current = adrenalinePrimerActive ? 3 : 0;
     setSuccessfulParryCount(0);
     setCataclysmReadyUi(false);
     cataclysmReadyPrevRef.current = false;
@@ -4694,7 +4780,12 @@ export default function TacticalCombatHub({
       log(`>> ${preLockedSniper.designation} EXECUTIONER LOCK — target pre-acquired.`);
     }
     const ghostedAp = narrativeCombatBoons?.ghosted ? 1 : 0;
-    const entryAp = PLAYER_ACTION_POINTS_PER_TURN + incursionApBonus + Math.max(0, firstTurnBonusAp) + ghostedAp;
+    const entryPrimerAp = consumeAdrenalinePrimerTurnBonus();
+    const entryAp = PLAYER_ACTION_POINTS_PER_TURN
+      + incursionApBonus
+      + Math.max(0, firstTurnBonusAp)
+      + ghostedAp
+      + entryPrimerAp;
     playerApRef.current = entryAp;
     setPlayerActionPoints(entryAp);
     if (operativeClass === 'HEX_SHOT') {
@@ -4725,8 +4816,11 @@ export default function TacticalCombatHub({
     if (narrativeCombatBoons?.overcharged) {
       log('>> OVERCHARGED BOON — first damaging strike ignores all mitigation.');
     }
+    if (entryPrimerAp > 0) {
+      log(`>> ADRENALINE PRIMER — +${entryPrimerAp} AP this turn.`);
+    }
     if (firstTurnBonusAp > 0) {
-      log(`>> ADRENALINE PRIMER — FIRST-TURN +${firstTurnBonusAp} AP.`);
+      log(`>> SHADOW WAR BONUS — FIRST-TURN +${firstTurnBonusAp} AP.`);
     }
     if (ghostedAp > 0) {
       log('>> GHOSTED BOON — +1 AP on operative first turn.');
@@ -6018,6 +6112,14 @@ export default function TacticalCombatHub({
   };
   executeFractureBreakRef.current = executeFractureBreak;
 
+  useEffect(() => {
+    if (!fractureBreakUnitId) return undefined;
+    const timer = setTimeout(() => {
+      expireFractureBreak(fractureBreakUnitId);
+    }, FRACTURE_BREAK_PROMPT_MS);
+    return () => clearTimeout(timer);
+  }, [fractureBreakUnitId]);
+
   const onSlice = () => {
     if (cycleState !== 'TEXT_COMBAT' || !isPlayerTurn) return;
     if (encounterUltimateDisabled) {
@@ -7062,10 +7164,6 @@ export default function TacticalCombatHub({
     ],
   );
 
-  const fractureBreakUnit = fractureBreakUnitId
-    ? getUnitById(squadRef.current, fractureBreakUnitId)
-    : null;
-
   const renderHubOverlays = () => (
     <>
       {!useEnemyArenaChrome ? (
@@ -7145,13 +7243,6 @@ export default function TacticalCombatHub({
         payloadEstimate={envoyCatalyticPayload}
         onRelease={finalizeCatalyticRelease}
       />
-      <FractureBreakPrompt
-        visible={fractureBreakUnitId != null}
-        designation={fractureBreakUnit?.designation}
-        onExpire={() => {
-          if (fractureBreakUnitId) expireFractureBreak(fractureBreakUnitId);
-        }}
-      />
       {!useEnemyArenaChrome && cycleState === 'DEFEND_WARD' ? (
         <EnvoyWardOverlay
           visible
@@ -7182,6 +7273,12 @@ export default function TacticalCombatHub({
           event={combatFeedback?.event ?? null}
           onComplete={() => setCombatFeedback(null)}
         />
+        <View style={styles.combatCenterFloatHost} pointerEvents="none">
+          <CombatCenterStatusFloat
+            triggerSeq={centerSkipFloatSeq}
+            label={centerSkipFloatSeq > 0 ? 'Enemy Turn Skipped' : ''}
+          />
+        </View>
       </CombatArenaOverlaySink>
     </View>
   );
@@ -7206,6 +7303,12 @@ const styles = StyleSheet.create({
   combatOverlayLayer: {
     ...abs,
     zIndex: 25,
+  },
+  combatCenterFloatHost: {
+    ...abs,
+    zIndex: 41,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   parryBurstHost: {
     ...abs,

@@ -1253,7 +1253,8 @@ const styles = StyleSheet.create({
   harvestLeftPane: {
     flexShrink: 0,
     minHeight: 0,
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   cargoPackBacking: {
     flex: 1,
@@ -1262,7 +1263,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 12,
     gap: 8,
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   harvestCenterPane: {
     flex: 1,

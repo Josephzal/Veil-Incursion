@@ -88,7 +88,7 @@ export default function PersistentTerminalLog({
       ]}
     >
       <View style={[styles.headerRow, hideTopBorder ? styles.headerRowDashboard : null]}>
-        <Text style={[styles.header, { color: theme.mutedColor }]}>RUN TERMINAL // MACRO LOG</Text>
+        <Text style={[styles.header, { color: theme.mutedColor }]}>RUN TERMINAL</Text>
         <View style={styles.headerActions}>
           {showStatus && onStatusPress ? (
             <MacroLogStatusButton onPress={onStatusPress} />
@@ -169,6 +169,7 @@ const styles = StyleSheet.create({
   containerDashboard: {
     borderTopWidth: 0,
     paddingTop: 0,
+    paddingHorizontal: 0,
   },
   headerRow: {
     flexDirection: 'row',
@@ -179,7 +180,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   headerRowDashboard: {
-    marginBottom: 2,
+    marginBottom: 10,
     marginTop: 0,
   },
   headerActions: {
@@ -200,6 +201,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 2,
+    paddingTop: 4,
     flexGrow: 1,
   },
   scrollContentFill: {

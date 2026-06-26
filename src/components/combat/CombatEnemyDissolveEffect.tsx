@@ -98,7 +98,7 @@ export default function CombatEnemyDissolveEffect({
 
   useEffect(() => {
     if (active) return;
-    completedRef.current = false;
+    if (completedRef.current) return;
     setShowBurst(false);
     flashOpacity.value = 0;
     spriteOpacity.value = 1;

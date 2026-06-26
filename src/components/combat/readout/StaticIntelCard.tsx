@@ -1,5 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import HapticPressable from '../../HapticPressable';
 import { resolveEnemyThreatTier } from '../../../data/enemyRoster';
 import type { EnemyIntent } from '../../../types/run';
 import {
@@ -10,8 +11,10 @@ import {
   isEnemyDamageIntent,
   type CombatGridUnitSnapshot,
 } from '../../../utils/combatTelemetryFormat';
+import { describeEnemyIntent } from '../../../utils/enemyIntentDescriptions';
 import CombatStatusIconRow from './CombatStatusIconRow';
 import CombatEnemySlotBars from '../CombatEnemySlotBars';
+import EnemyIntentDetailOverlay from './EnemyIntentDetailOverlay';
 import type { EnemyStatusEffectKey } from '../../../utils/enemyStatusEffects';
 import { ENEMY_STATUS_EFFECTS } from '../../../utils/enemyStatusEffects';
 
@@ -59,6 +62,7 @@ export default function StaticIntelCard({
   unit,
   mutedColor,
 }: StaticIntelCardProps): React.JSX.Element {
+  const [intentDetailVisible, setIntentDetailVisible] = useState(false);
   const tier = resolveEnemyThreatTier({
     isBoss: unit.isBoss,
     isApex: unit.isApex,
@@ -69,6 +73,10 @@ export default function StaticIntelCard({
   const intentTone = classifyIntentBoxTone(unit.intent);
   const trayKeys = unit.activeStatuses ?? [];
   const extraTags = useMemo(() => extraStatusTags(unit, trayKeys), [unit, trayKeys]);
+  const intentDetail = useMemo(
+    () => describeEnemyIntent(unit.intent),
+    [unit.intent],
+  );
 
   return (
     <View style={styles.card}>
@@ -105,7 +113,8 @@ export default function StaticIntelCard({
         </View>
       ) : null}
 
-      <View
+      <HapticPressable
+        onPress={() => setIntentDetailVisible(true)}
         style={[
           styles.intentBox,
           intentTone === 'buff' ? styles.intentBoxBuff : styles.intentBoxAttack,
@@ -125,7 +134,14 @@ export default function StaticIntelCard({
         >
           {intentText}
         </Text>
-      </View>
+      </HapticPressable>
+
+      <EnemyIntentDetailOverlay
+        visible={intentDetailVisible}
+        detail={intentDetailVisible ? intentDetail : null}
+        onDismiss={() => setIntentDetailVisible(false)}
+        borderColor={intentTone === 'buff' ? INTENT_BUFF_BORDER : INTENT_ATTACK_BORDER}
+      />
     </View>
   );
 }

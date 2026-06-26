@@ -231,9 +231,7 @@ export default function ProceduralNarrativeModule({
       {phase === 'SCENARIO' ? (
         <View style={styles.scenarioLayout}>
           <View style={styles.decisionDock}>
-            <Text style={[styles.resolverHeader, { color: mutedColor }]}>
-              SELECT EXPEDITION RESOLVER:
-            </Text>
+            
             <View style={styles.choiceCol}>
               {choices.map(({ key, option, showLockIcon }) => (
                 <ResolverButton

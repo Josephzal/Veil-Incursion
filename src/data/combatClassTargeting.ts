@@ -5,8 +5,10 @@ import {
   abilityRequiresTarget as aegisRequiresTarget,
   abilityTargetMode as aegisTargetMode,
   canTargetWithAbility as aegisCanTarget,
+  findLivingWarden,
   isUnitBlockedForAbility as aegisIsBlocked,
   isUnitHookValid as aegisIsHookValid,
+  resolveWardenInterceptTarget,
   validTargetsForAbility as aegisValidTargets,
   type AbilityTargetMode,
 } from './combatTargeting';
@@ -141,4 +143,44 @@ export function validTargetsForClassAbility(
 export function classAbilityRequiresTargetLegacy(classId: ClassType, abilityId: string): boolean {
   if (classId === 'AEGIS') return aegisRequiresTarget(abilityId as AegisAbilityId);
   return classAbilityRequiresTarget(classId, abilityId);
+}
+
+function bypassesWardenIntercept(classId: ClassType, abilityId: string): boolean {
+  if (classId === 'AEGIS') {
+    const aegisId = abilityId as AegisAbilityId;
+    return aegisId === 'GRAVE_BIND' || aegisId === 'VEIL_PIERCER' || aegisId === 'BLOOD_TITHE';
+  }
+  if (classId === 'HEX_SHOT') {
+    return migrateHexShotAbilityId(abilityId) === 'WRAITH_PIERCER_ROUND';
+  }
+  return false;
+}
+
+/** Redirect backline single-target player abilities to a living frontline Warden when applicable. */
+export function resolveClassWardenInterceptTarget(
+  squad: EnemyCombatProfile[],
+  classId: ClassType,
+  abilityId: string,
+  unitId: string,
+): string {
+  if (classId === 'AEGIS') {
+    return resolveWardenInterceptTarget(squad, abilityId as AegisAbilityId, unitId);
+  }
+
+  const unit = squad.find((u) => u.unitId === unitId);
+  const warden = findLivingWarden(squad);
+  if (!warden?.unitId) return unitId;
+
+  const mode = classAbilityTargetMode(classId, abilityId);
+  if (mode === 'ALL') {
+    if (warden.wardenInterceptsAoE && unit?.gridSlot?.startsWith('BL')) {
+      return warden.unitId;
+    }
+    return unitId;
+  }
+  if (mode !== 'SINGLE') return unitId;
+  if (bypassesWardenIntercept(classId, abilityId)) return unitId;
+  if (!unit?.gridSlot?.startsWith('BL')) return unitId;
+
+  return warden.unitId;
 }

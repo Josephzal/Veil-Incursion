@@ -46,7 +46,8 @@ export default function RunStatusOverlay({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <HapticPressable style={styles.backdrop} onPress={onClose}>
+      <View style={styles.backdrop}>
+        <HapticPressable style={styles.backdropTap} onPress={onClose} />
         <HapticPressable
           style={[styles.panel, { borderColor: accentColor }]}
           onPress={(e) => e.stopPropagation()}
@@ -88,7 +89,7 @@ export default function RunStatusOverlay({
             <Text style={[styles.closeText, { color: accentColor }]}>[ DISMISS ]</Text>
           </HapticPressable>
         </HapticPressable>
-      </HapticPressable>
+      </View>
     </Modal>
   );
 }
@@ -96,18 +97,24 @@ export default function RunStatusOverlay({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
+    width: '100%',
     backgroundColor: 'rgba(0,0,0,0.82)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 0,
+  },
+  backdropTap: {
+    ...StyleSheet.absoluteFillObject,
   },
   panel: {
-    width: '100%',
+    width: '92%',
     maxWidth: 420,
     maxHeight: '78%',
     backgroundColor: '#0a0b0f',
     borderWidth: 1,
     padding: 14,
+    zIndex: 2,
   },
   title: {
     fontFamily: 'monospace',

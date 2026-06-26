@@ -30,7 +30,7 @@ export const BOUND_REQUISITION_CATALOG: Record<BoundRequisitionId, BoundRequisit
     tier: 1,
     kind: 'STANDARD',
     tagline: 'COMBAT ENTRY STIM',
-    effectSummary: '+1 Action Point on turn one of your first 3 Combat Nodes.',
+    effectSummary: '+1 Action Point on your first 3 turns in each of your first 3 Combat Nodes.',
   },
   REINFORCED_TRENCH_COAT: {
     id: 'REINFORCED_TRENCH_COAT',

@@ -58,7 +58,6 @@ import { depthFromNodesCleared, isDistrictGateDepth } from '../data/districtPaci
 import { collectFactionTraitLoot, rollGatekeeperLockedTemplate } from '../data/combatRewardEngine';
 import { shouldGrantAdrenalinePrimerAp } from '../data/boundRequisitionEngine';
 import type { IncursionConsumableUseResult } from '../types/incursionInventory';
-import CombatGlobalChrome from './combat/layouts/CombatGlobalChrome';
 import CombatOperativeVitalsOverlay from './combat/layouts/CombatOperativeVitalsOverlay';
 import CombatTacticalDashboard from './combat/layouts/CombatTacticalDashboard';
 import CombatDashboardMacroLog from './combat/layouts/CombatDashboardMacroLog';
@@ -119,11 +118,11 @@ export default function CombatScreen(): React.JSX.Element {
   const env = activeIncursion.environmentalModifiers;
   const combatEntryStamina =
     env.startingStaminaPenalty > 0 ? 50 : runState.currentStamina;
-  const adrenalinePrimerBonusAp = shouldGrantAdrenalinePrimerAp(activeIncursion) ? 1 : 0;
+  const adrenalinePrimerActive = shouldGrantAdrenalinePrimerAp(activeIncursion);
   const shadowWarApBonus = activeIncursion.shadowWarBuffs?.firstTurnApBonus ?? 0;
   const shadowWarKineticArmor = activeIncursion.shadowWarBuffs?.kineticArmorBonus ?? 0;
   const kineticBatteryActive = activeIncursion.boundRequisition?.kineticBatteryActive ?? false;
-  const firstTurnBonusAp = adrenalinePrimerBonusAp + shadowWarApBonus;
+  const firstTurnBonusAp = shadowWarApBonus;
   const [narrativeCombatBoons] = useState<PendingNarrativeCombatBoons>(
     peekPendingNarrativeCombatBoons,
   );
@@ -446,7 +445,7 @@ export default function CombatScreen(): React.JSX.Element {
       slainEnemies: runState.pendingEnemies ?? [],
       rareLootBonusPct: activeIncursion.shadowWarBuffs?.rareLootBonusPct ?? 0,
     });
-    if (adrenalinePrimerBonusAp > 0) {
+    if (adrenalinePrimerActive) {
       consumeAdrenalinePrimerAfterCombat();
     }
 
@@ -492,7 +491,7 @@ export default function CombatScreen(): React.JSX.Element {
   }, [
     activeIncursion.bossProfile,
     activeIncursion.defendRiftActive,
-    adrenalinePrimerBonusAp,
+    adrenalinePrimerActive,
     awardRunCredits,
     grantCombatResourceDrops,
     consumeAdrenalinePrimerAfterCombat,
@@ -538,7 +537,6 @@ export default function CombatScreen(): React.JSX.Element {
                 telemetry={operativeTelemetry}
                 primaryColor={theme.primaryColor}
               />
-              <CombatGlobalChrome />
 
               <TurnOrderSidebar
                 turnOrder={squadUi?.turnOrder}
@@ -640,6 +638,7 @@ export default function CombatScreen(): React.JSX.Element {
                       hexShotBoons={activeIncursion.hexShotBoons}
                       envoyBoons={activeIncursion.envoyBoons}
                       firstTurnBonusAp={firstTurnBonusAp}
+                      adrenalinePrimerActive={adrenalinePrimerActive}
                       incursionApBonus={activeIncursion.voidsTollApBonus}
                       onVoidsTollTriggered={applyVoidsTollSacrifice}
                       playerKineticArmorBonus={shadowWarKineticArmor}

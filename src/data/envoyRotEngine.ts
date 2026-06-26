@@ -9,7 +9,7 @@ export const VEIL_ROT_TICK_DAMAGE = 8;
 
 export const CATALYTIC_CONSOLE_AP_COST = 1;
 export const CATALYTIC_SLOPPY_FLUX_PENALTY = 30;
-export const CATALYTIC_PERFECT_OVERLAP_EPSILON = 0.05;
+export const CATALYTIC_PERFECT_OVERLAP_EPSILON = 0.096;
 
 /** Total Veil Rot stacks across the board required to prime Cataclysm Sigil. */
 export const CATACLYSM_ROT_GATE = 6;

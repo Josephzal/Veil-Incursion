@@ -4,6 +4,7 @@ import type { ClassType } from '../../types/game';
 import { RUNIC_BRAND_CAP } from '../../types/aegisCombat';
 import CombatTelemetryGaugeRow from './CombatHorizontalGauge';
 import CombatMagazineGauge from './CombatMagazineGauge';
+import CombatVeilRotGauge from './CombatVeilRotGauge';
 import {
   COMBAT_HUD_PADDING_X,
 } from './combatGaugeMetrics';
@@ -88,7 +89,6 @@ export default function CombatOperativeHud({
     envoyVoidSiphoned = false,
     envoySilenced = false,
     veilRotStacksTotal = 0,
-    catalyticPayloadEstimate = 0,
   } = telemetry;
 
   const soulAnchorRatio = maxSoulAnchor > 0 ? operativeHp / maxSoulAnchor : 0;
@@ -122,7 +122,7 @@ export default function CombatOperativeHud({
       return (
         <>
           <CombatTelemetryGaugeRow
-            label={`VEIL-FLUX // ${Math.round(veilFlux)}%${envoyVoidSiphoned ? ' // VOID-SIPHONED' : ''}${envoySilenced ? ' // SILENCED' : ''}`}
+            label={`FLUX // ${Math.round(veilFlux)}%${envoyVoidSiphoned ? ' // VOID-SIPHONED' : ''}${envoySilenced ? ' // SILENCED' : ''}`}
             labelColor="#c084fc"
             fillColor={GAUGE_VEIL_FLUX}
             ratio={fluxRatio}
@@ -130,17 +130,10 @@ export default function CombatOperativeHud({
             variant={rowVariant}
             gaugeWidth="100%"
           />
-          {veilRotStacksTotal > 0 ? (
-            <CombatTelemetryGaugeRow
-              label={`VEIL ROT // ${veilRotStacksTotal} STACK${veilRotStacksTotal === 1 ? '' : 'S'} — CATALYST ~${catalyticPayloadEstimate} OCCULT`}
-              labelColor="#4ade80"
-              fillColor="#22c55e"
-              ratio={Math.min(1, veilRotStacksTotal / 12)}
-              trackBorderColor={GAUGE_TRACK_BORDER}
-              variant={rowVariant}
-              gaugeWidth="100%"
-            />
-          ) : null}
+          <CombatVeilRotGauge
+            totalStacks={veilRotStacksTotal}
+            variant={rowVariant === 'stacked' ? 'stacked' : 'compact'}
+          />
         </>
       );
     }
@@ -186,7 +179,7 @@ export default function CombatOperativeHud({
         gaugeWidth="100%"
       />
       {renderClassResource()}
-      {operativeClass !== 'AEGIS' ? (
+      {operativeClass === 'HEX_SHOT' ? (
         <CombatTelemetryGaugeRow
           label={`STM // ${stamina}/${maxStamina}`}
           labelColor={primaryColor}

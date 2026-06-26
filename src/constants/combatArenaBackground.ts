@@ -10,12 +10,12 @@ import OverworldBg from '../../assets/images/environment images/overworld.png';
 import { normalizeBiomeId, type BiomeId } from './biomeConfig';
 
 /** Per-biome arena scrim — tune independently. */
-export const COMBAT_ARENA_BACKROADS_SCRIM = 'rgba(0, 0, 0, 0)';
-export const COMBAT_ARENA_CITY_BUILDINGS_SCRIM = 'rgba(0, 0, 0, 0)';
-export const COMBAT_ARENA_FOREST_SCRIM = 'rgba(0, 0, 0, 0)';
-export const COMBAT_ARENA_CITY_STREETS_SCRIM = 'rgba(0, 0, 0, 0)';
-export const COMBAT_ARENA_UNDERGROUND_SCRIM = 'rgba(0, 0, 0, 0)';
-export const COMBAT_ARENA_DEEP_VEIL_SCRIM = 'rgba(0, 0, 0, 0)';
+export const COMBAT_ARENA_BACKROADS_SCRIM = 'rgba(0, 0, 0, 0.24)';
+export const COMBAT_ARENA_CITY_BUILDINGS_SCRIM = 'rgba(0, 0, 0, 0.24)';
+export const COMBAT_ARENA_FOREST_SCRIM = 'rgba(0, 0, 0, 0.24)';
+export const COMBAT_ARENA_CITY_STREETS_SCRIM = 'rgba(0, 0, 0, 0.24)';
+export const COMBAT_ARENA_UNDERGROUND_SCRIM = 'rgba(0, 0, 0, 0.24)';
+export const COMBAT_ARENA_DEEP_VEIL_SCRIM = 'rgba(0, 0, 0, 0.24)';
 
 const COMBAT_ARENA_BACKGROUNDS: Partial<Record<BiomeId, ImageSourcePropType>> = {
   backroads: BackroadsBg,

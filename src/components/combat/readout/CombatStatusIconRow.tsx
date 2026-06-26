@@ -63,21 +63,23 @@ export default function CombatStatusIconRow({
         visible={tooltipContent != null}
         transparent
         animationType="fade"
+        statusBarTranslucent
         onRequestClose={dismissTooltip}
       >
-        <HapticPressable
-          style={styles.modalBody}
-          onPress={dismissTooltip}
-          accessibilityRole="button"
-          accessibilityLabel="Dismiss status tooltip"
-        >
+        <View style={styles.backdrop}>
+          <HapticPressable
+            style={styles.backdropTap}
+            onPress={dismissTooltip}
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss status tooltip"
+          />
           {tooltipContent ? (
             <View style={styles.tooltip} pointerEvents="none">
               <Text style={styles.tooltipHeader}>{`[ ${tooltipContent.label} ]`}</Text>
               <Text style={styles.tooltipBody}>{tooltipContent.description}</Text>
             </View>
           ) : null}
-        </HapticPressable>
+        </View>
       </Modal>
 
       <View style={styles.iconRow}>
@@ -107,12 +109,17 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     minHeight: ICON_SIZE,
   },
-  modalBody: {
+  backdrop: {
     flex: 1,
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 24,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+  },
+  backdropTap: {
+    ...StyleSheet.absoluteFillObject,
   },
   iconRow: {
     flexDirection: 'row',
@@ -145,6 +152,7 @@ const styles = StyleSheet.create({
     backgroundColor: TOOLTIP_BG,
     borderWidth: 1,
     borderColor: TOOLTIP_BORDER,
+    zIndex: 2,
   },
   tooltipHeader: {
     fontFamily: MONO,

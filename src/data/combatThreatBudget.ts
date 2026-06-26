@@ -1,4 +1,5 @@
 import { isEnemyFractured, recoverFromFracture } from './combatFractureEngine';
+import { resolveEffectiveEnemyIntent } from './enemyIntentUtils';
 import { aliveUnits, isUnitAlive } from './combatSquadEngine';
 import type { EnemyCombatProfile, EnemyIntent } from '../types/run';
 
@@ -14,6 +15,10 @@ const HEAVY_INTENTS: EnemyIntent[] = [
 
 export function intentThreatCost(intent: EnemyIntent): number {
   return HEAVY_INTENTS.includes(intent) ? 2 : 1;
+}
+
+export function unitThreatCost(unit: EnemyCombatProfile): number {
+  return intentThreatCost(resolveEffectiveEnemyIntent(unit));
 }
 
 export interface ThreatActionPick {
@@ -32,17 +37,22 @@ export function pickThreatBudgetActions(
   const candidates = aliveUnits(squad)
     .filter((u) => !isEnemyFractured(u) && (u.enemyActionPoints ?? 1) > 0)
     .sort((a, b) => {
-      const costDiff = intentThreatCost(b.intent) - intentThreatCost(a.intent);
+      const costDiff = unitThreatCost(b) - unitThreatCost(a);
       if (costDiff !== 0) return costDiff;
       return (b.baseDamage ?? 0) - (a.baseDamage ?? 0);
     });
 
   for (const unit of candidates) {
     if (remaining <= 0) break;
-    const cost = intentThreatCost(unit.intent);
+    const cost = unitThreatCost(unit);
     if (cost > remaining) continue;
     picks.push({ unitId: unit.unitId!, threatCost: cost });
     remaining -= cost;
+  }
+
+  if (picks.length === 0 && candidates.length > 0) {
+    const fallback = candidates.find((unit) => unitThreatCost(unit) <= budget) ?? candidates[0];
+    picks.push({ unitId: fallback.unitId!, threatCost: unitThreatCost(fallback) });
   }
 
   return picks;
