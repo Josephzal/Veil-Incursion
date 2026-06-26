@@ -1150,7 +1150,7 @@ export default function CargoGridBoard({
           <View
             ref={dropZoneRef}
             onLayout={handleDropZoneLayout}
-            style={[styles.harvestCenterPane, { borderColor: theme.borderColor }]}
+            style={styles.harvestCenterPane}
           >
             <Text style={[styles.dropZoneLabel, { color: theme.mutedColor }]}>
               FIELD DROP // UNPACKED LOOT
@@ -1268,8 +1268,6 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     minHeight: 0,
-    borderWidth: 1,
-    borderStyle: 'dashed',
     backgroundColor: 'rgba(0, 0, 0, 0.28)',
     paddingHorizontal: 10,
     paddingVertical: 8,

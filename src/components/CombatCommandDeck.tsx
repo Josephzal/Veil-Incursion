@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, Easing, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import HapticPressable from './HapticPressable';
 import type { AegisAbilityId } from '../types/aegisCombat';
 import { PLAYER_ACTION_POINTS_PER_TURN } from '../types/aegisCombat';
@@ -39,7 +39,6 @@ interface CombatCommandDeckProps {
   initiativeQueued?: boolean;
   initiativeProcSeq?: number;
   onInitiativeProcComplete?: () => void;
-  getStagedHeader: (ability: string) => string;
   getStagedCostImpact: (ability: string) => string;
   getStagedAbilityDescription: (ability: string) => string;
   getActionAccent?: (ability: string) => string | undefined;
@@ -82,7 +81,6 @@ export default function CombatCommandDeck({
   initiativeQueued = false,
   initiativeProcSeq = 0,
   onInitiativeProcComplete,
-  getStagedHeader,
   getStagedCostImpact,
   getStagedAbilityDescription,
   getActionAccent,
@@ -445,6 +443,71 @@ export default function CombatCommandDeck({
     );
   };
 
+  const renderStagedActionRow = () => (
+    <View style={[styles.stagedActionRow, dashboardLayout && styles.stagedActionRowDashboard]}>
+      <View style={[styles.tileSlot, { borderColor: primaryColor, height: tileHeight }]}>
+        <HapticPressable
+          onPress={onConfirm}
+          disabled={!canExecute}
+          style={[styles.deckTile, { opacity: canExecute ? 1 : 0.45 }]}
+        >
+          <Text style={[styles.tileLabel, dashboardLayout && styles.tileLabelDashboard, { color: primaryColor }]}>
+            [ EXECUTE ]
+          </Text>
+        </HapticPressable>
+      </View>
+      <View style={[styles.tileSlot, { borderColor, height: tileHeight }]}>
+        <HapticPressable onPress={onAbort} style={styles.deckTile}>
+          <Text style={[styles.tileLabel, dashboardLayout && styles.tileLabelDashboard, { color: mutedColor }]}>
+            [ ABORT ]
+          </Text>
+        </HapticPressable>
+      </View>
+    </View>
+  );
+
+  const renderStagedMeta = () => {
+    if (!selectedAbility) return null;
+    const disableReason = !canExecute ? getActionDisableReason?.(selectedAbility) : null;
+    return (
+      <View style={[styles.stagedMeta, dashboardLayout && styles.stagedMetaDashboard]}>
+        <Text
+          style={[styles.execCost, dashboardLayout && styles.execCostDashboard, { color: mutedColor }]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.7}
+        >
+          {getStagedCostImpact(selectedAbility)}
+        </Text>
+        {disableReason ? (
+          <Text
+            style={[styles.execBlocked, dashboardLayout && styles.execBlockedDashboard]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
+          >
+            {`BLOCKED: ${disableReason}`}
+          </Text>
+        ) : null}
+        <Text
+          style={[styles.execDetail, dashboardLayout && styles.execDetailDashboard, { color: mutedColor }]}
+          numberOfLines={dashboardLayout ? 4 : 3}
+          adjustsFontSizeToFit
+          minimumFontScale={0.62}
+        >
+          {getStagedAbilityDescription(selectedAbility)}
+        </Text>
+      </View>
+    );
+  };
+
+  const renderStagedPanel = () => (
+    <View style={[styles.stagedPanel, dashboardLayout && styles.stagedPanelDashboard]}>
+      {renderStagedActionRow()}
+      {renderStagedMeta()}
+    </View>
+  );
+
   const renderAbilityGrid = () => (
     <View style={[styles.deckBody, dashboardLayout && styles.abilitiesSection]}>
       <View style={[styles.abilityGrid, dashboardLayout && styles.abilityGridDashboard]}>
@@ -453,52 +516,6 @@ export default function CombatCommandDeck({
         {renderTile(loadout[2])}
         {renderTile(loadout[3])}
       </View>
-
-      {selectedAbility ? (
-        <View style={styles.execOverlay}>
-          <View style={styles.gridRow}>
-            <View style={[styles.tileSlot, { borderColor: primaryColor, height: tileHeight }]}>
-              <HapticPressable
-                onPress={onConfirm}
-                disabled={!canExecute}
-                style={[styles.deckTile, { opacity: canExecute ? 1 : 0.45 }]}
-              >
-                <Text style={[styles.tileLabel, { color: primaryColor }]}>[ EXECUTE ]</Text>
-              </HapticPressable>
-            </View>
-            <View style={[styles.tileSlot, { borderColor, height: tileHeight }]}>
-              <HapticPressable onPress={onAbort} style={styles.deckTile}>
-                <Text style={[styles.tileLabel, { color: mutedColor }]}>[ ABORT ]</Text>
-              </HapticPressable>
-            </View>
-          </View>
-          <View style={styles.gridRow}>
-            <View style={styles.execMetaSlot}>
-              <Text style={[styles.execHeader, { color: primaryColor }]} numberOfLines={1}>
-                {getStagedHeader(selectedAbility)}
-              </Text>
-              <Text style={[styles.execCost, { color: mutedColor }]}>
-                {getStagedCostImpact(selectedAbility)}
-              </Text>
-              {!canExecute && getActionDisableReason?.(selectedAbility) ? (
-                <Text style={[styles.execDetail, { color: '#f87171' }]}>
-                  {`BLOCKED: ${getActionDisableReason(selectedAbility)}`}
-                </Text>
-              ) : null}
-              <ScrollView
-                style={styles.execDetailScroll}
-                contentContainerStyle={styles.execDetailScrollContent}
-                showsVerticalScrollIndicator={false}
-                nestedScrollEnabled
-              >
-                <Text style={[styles.execDetail, { color: mutedColor }]}>
-                  {getStagedAbilityDescription(selectedAbility)}
-                </Text>
-              </ScrollView>
-            </View>
-          </View>
-        </View>
-      ) : null}
     </View>
   );
 
@@ -536,7 +553,9 @@ export default function CombatCommandDeck({
         />
 
         <View style={[deckShellStyle, dashboardLayout && styles.commandDeckDashboard]}>
-          {dashboardLayout ? (
+          {selectedAbility ? (
+            renderStagedPanel()
+          ) : dashboardLayout ? (
             <>
               <View style={styles.topBand}>
                 <CombatApPipRow
@@ -767,13 +786,6 @@ const styles = StyleSheet.create({
   abilityGridDashboard: {
     alignContent: 'center',
   },
-  gridRow: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    gap: GRID_GAP,
-    width: '100%',
-    height: TILE_HEIGHT,
-  },
   tileSlot: {
     width: '48%',
     borderWidth: 1,
@@ -796,25 +808,32 @@ const styles = StyleSheet.create({
     fontSize: 6,
     letterSpacing: 0.25,
   },
-  execOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(8, 10, 16, 0.92)',
+  stagedPanel: {
+    width: '100%',
     gap: GRID_GAP,
-    paddingTop: 0,
   },
-  execMetaSlot: {
+  stagedPanelDashboard: {
+    flex: 1,
+    minHeight: 0,
+  },
+  stagedActionRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: GRID_GAP,
+    width: '100%',
+  },
+  stagedActionRowDashboard: {
+    flexShrink: 0,
+  },
+  stagedMeta: {
+    width: '100%',
+    gap: 2,
+    paddingHorizontal: 2,
+  },
+  stagedMetaDashboard: {
     flex: 1,
     minHeight: 0,
     justifyContent: 'flex-start',
-    paddingHorizontal: 4,
-    gap: 2,
-  },
-  execHeader: {
-    fontFamily: MONO,
-    fontSize: 7,
-    fontWeight: 'bold',
-    letterSpacing: 0.4,
-    flexShrink: 0,
   },
   execCost: {
     fontFamily: MONO,
@@ -823,17 +842,31 @@ const styles = StyleSheet.create({
     lineHeight: 9,
     flexShrink: 0,
   },
-  execDetailScroll: {
-    flex: 1,
-    minHeight: 0,
+  execCostDashboard: {
+    fontSize: 8,
+    lineHeight: 12,
   },
-  execDetailScrollContent: {
-    paddingBottom: 4,
+  execBlocked: {
+    fontFamily: MONO,
+    fontSize: 6,
+    letterSpacing: 0.2,
+    lineHeight: 9,
+    color: '#f87171',
+    flexShrink: 0,
+  },
+  execBlockedDashboard: {
+    fontSize: 5.5,
+    lineHeight: 8,
   },
   execDetail: {
     fontFamily: MONO,
     fontSize: 6,
     letterSpacing: 0.2,
     lineHeight: 9,
+    flexShrink: 1,
+  },
+  execDetailDashboard: {
+    fontSize: 8,
+    lineHeight: 12,
   },
 });

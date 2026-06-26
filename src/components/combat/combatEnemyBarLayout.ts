@@ -60,12 +60,26 @@ export const STAGGERED_SOLO_SLOT: StaggeredSlotStyle = {
   scale: 1.05,
 };
 
+/** Shift all enemy slots toward the bottom of the arena (fraction of arena height). */
+export const ENEMY_ARENA_VERTICAL_SHIFT_RATIO = 0.05;
+
+function shiftSlotBottom(bottom: `${number}%`): `${number}%` {
+  const shifted = Math.max(
+    0,
+    Number.parseFloat(bottom) - ENEMY_ARENA_VERTICAL_SHIFT_RATIO * 100,
+  );
+  return `${shifted}%`;
+}
+
 export function staggeredSlotStyle(
   slot: CombatGridSlotId,
   mode: ArenaLayoutMode,
 ): StaggeredSlotStyle {
-  if (mode === 'solo') return STAGGERED_SOLO_SLOT;
-  return STAGGERED_GROUP_SLOTS[slot];
+  const base = mode === 'solo' ? STAGGERED_SOLO_SLOT : STAGGERED_GROUP_SLOTS[slot];
+  return {
+    ...base,
+    bottom: shiftSlotBottom(base.bottom),
+  };
 }
 
 /** Landscape operative anchor — bottom-left of full arena. */
@@ -171,14 +185,18 @@ export function estimateSlotAnchorFraction(
     return estimateStaggeredSlotAnchor(slot, layoutMode);
   }
   if (layoutMode === 'solo') {
-    return { x: 0.5, y: 0.66, footY: 0.82 };
+    return {
+      x: 0.5,
+      y: 0.66 + ENEMY_ARENA_VERTICAL_SHIFT_RATIO,
+      footY: 0.82 + ENEMY_ARENA_VERTICAL_SHIFT_RATIO,
+    };
   }
 
   const isBackline = laneForSlot(slot) === 'BACKLINE';
   const isLeft = slot.endsWith('_0');
   const x = isLeft ? 0.28 : 0.72;
-  const y = isBackline ? 0.34 : 0.68;
-  const footY = isBackline ? 0.48 : 0.84;
+  const y = (isBackline ? 0.34 : 0.68) + ENEMY_ARENA_VERTICAL_SHIFT_RATIO;
+  const footY = (isBackline ? 0.48 : 0.84) + ENEMY_ARENA_VERTICAL_SHIFT_RATIO;
   return { x, y, footY };
 }
 

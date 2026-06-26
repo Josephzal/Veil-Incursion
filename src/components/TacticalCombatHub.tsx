@@ -6706,18 +6706,6 @@ export default function TacticalCombatHub({
     return undefined;
   };
 
-  const getStagedHeader = (abilityId: string): string => {
-    const name = resolveClassAbilityCost(operativeClass, abilityId).label.replace(/^\[|\]$/g, '').trim();
-    if (operativeClass === 'AEGIS') {
-      const aegisId = abilityId as AegisAbilityId;
-      const graftId = abilityGraftsRef.current[aegisId];
-      if (graftId) {
-        return `GRAFT READY // ${getVeilGraftDefinition(graftId).name.toUpperCase()} // ${name}`;
-      }
-    }
-    return `SYSTEM READY // ${name} SELECTED`;
-  };
-
   const getStagedCostImpact = (abilityId: string): string => {
     return `COST: ${formatClassAbilityCostLine(operativeClass, abilityId)}`;
   };
@@ -6736,7 +6724,7 @@ export default function TacticalCombatHub({
       && shouldApplyPhantomFeed(abilityId as HexShotAbilityId, graftTags)
       ? 'INTRINSIC: Phantom Feed — +1 round cycled before resolve.'
       : '';
-    return [cost.description, tagLine, phantomFeed].filter(Boolean).join('\n\n');
+    return [cost.description, tagLine, phantomFeed].filter(Boolean).join(' // ');
   };
 
   const confirmSelectedAbility = () => {
@@ -6856,7 +6844,6 @@ export default function TacticalCombatHub({
       getActionDisableReason={getOperativeAbilityDisableReason}
       getAbilityLabel={(abilityId) => formatAbilityLabel(operativeClass, abilityId)}
       canEndTurn={isPlayerTurn && cycleState === 'TEXT_COMBAT' && !shadowstepProcActive}
-      getStagedHeader={getStagedHeader}
       getStagedCostImpact={getStagedCostImpact}
       getStagedAbilityDescription={getStagedAbilityDescription}
       getActionAccent={getAbilityAccent}

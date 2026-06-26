@@ -1,5 +1,9 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import {
+  COMBAT_DECK_LABEL_WIDTH,
+  COMBAT_DECK_ROW_GAP,
+} from './combatGaugeMetrics';
 
 interface CombatRunicBrandGaugeProps {
   currentBrands: number;
@@ -84,8 +88,7 @@ const styles = StyleSheet.create({
   rootInline: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 6,
+    gap: COMBAT_DECK_ROW_GAP,
     paddingVertical: 1,
   },
   rootStacked: {
@@ -100,7 +103,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
   labelInline: {
-    width: 72,
+    width: COMBAT_DECK_LABEL_WIDTH,
     flexShrink: 0,
     flex: 0,
     fontSize: 7,
@@ -119,7 +122,7 @@ const styles = StyleSheet.create({
     minHeight: SIGIL,
     flexShrink: 1,
     flex: 1,
-    justifyContent: 'flex-end',
+    justifyContent: 'flex-start',
   },
   sigilOuter: {
     width: SIGIL,

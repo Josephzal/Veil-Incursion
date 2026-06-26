@@ -23,6 +23,7 @@ import {
   SOLO_ARENA_SLOT,
   staggeredSlotStyle,
   STAGGERED_SLOT_WIDTH_PCT,
+  ENEMY_ARENA_VERTICAL_SHIFT_RATIO,
   FRONTLINE_BATTLEFIELD_LIFT_RATIO,
   SOLO_BATTLEFIELD_LIFT_RATIO,
 } from './combatEnemyBarLayout';
@@ -229,6 +230,11 @@ export default function CombatEnemyGrid({
       arenaGridVariant,
     };
 
+    const arenaVerticalShiftStyle: ViewStyle | undefined =
+      arenaSize.height > 0
+        ? { transform: [{ translateY: arenaSize.height * ENEMY_ARENA_VERTICAL_SHIFT_RATIO }] }
+        : undefined;
+
     if (arenaGridVariant === 'staggered') {
       const slots = layoutMode === 'solo'
         ? [SOLO_ARENA_SLOT]
@@ -271,7 +277,7 @@ export default function CombatEnemyGrid({
 
       return (
         <View
-          style={[styles.battlefieldContainer, styles.soloBattlefieldContainer]}
+          style={[styles.battlefieldContainer, styles.soloBattlefieldContainer, arenaVerticalShiftStyle]}
           onLayout={handleArenaLayout}
           pointerEvents="box-none"
         >
@@ -291,7 +297,11 @@ export default function CombatEnemyGrid({
         : undefined;
 
     return (
-      <View style={styles.battlefieldContainer} onLayout={handleArenaLayout} pointerEvents="box-none">
+      <View
+        style={[styles.battlefieldContainer, arenaVerticalShiftStyle]}
+        onLayout={handleArenaLayout}
+        pointerEvents="box-none"
+      >
         <View style={styles.backlineRow} pointerEvents="box-none">
           {BACKLINE_SLOTS.map((slot) => (
             <BattlefieldSlot

@@ -4,7 +4,9 @@ import type { ClassType } from '../../types/game';
 import { RUNIC_BRAND_CAP } from '../../types/aegisCombat';
 import CombatTelemetryGaugeRow from './CombatHorizontalGauge';
 import CombatMagazineGauge from './CombatMagazineGauge';
-import CombatRunicBrandGauge from './CombatRunicBrandGauge';
+import {
+  COMBAT_HUD_PADDING_X,
+} from './combatGaugeMetrics';
 import {
   formatAegisReserveLabel,
   formatAegisReserveRatio,
@@ -14,6 +16,7 @@ import {
   GAUGE_TRACK_BORDER,
   GAUGE_VEIL_FLUX,
 } from '../../utils/combatTelemetryFormat';
+import CombatRunicBrandGauge from './CombatRunicBrandGauge';
 
 export interface CombatOperativeTelemetry {
   operativeClass: ClassType;
@@ -228,11 +231,10 @@ const styles = StyleSheet.create({
   },
   rootArenaOverlay: {
     gap: 1,
-    paddingHorizontal: 10,
+    paddingHorizontal: COMBAT_HUD_PADDING_X,
     paddingVertical: 4,
     width: '100%',
-    borderWidth: 1,
-    borderColor: 'rgba(157, 0, 255, 0.2)',
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    borderWidth: 0,
+    backgroundColor: 'transparent',
   },
 });

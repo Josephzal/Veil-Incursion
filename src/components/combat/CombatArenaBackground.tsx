@@ -43,7 +43,7 @@ export default function CombatArenaBackground({
     const width = assetW * scale;
     const height = assetH * scale;
     const left = (containerW - width) / 2;
-    const top = containerH - height + 60;
+    const top = containerH - height + 100;
 
     return { width, height, left, top };
   }, [assetSize, container]);
