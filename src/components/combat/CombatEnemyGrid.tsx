@@ -196,7 +196,7 @@ export default function CombatEnemyGrid({
     }
 
     return (
-      <View key={slot} style={styles.cell} pointerEvents="box-none">
+      <View key={`${slot}-${unit.unitId}`} style={styles.cell} pointerEvents="box-none">
         <EnemyUnitStack
           unit={unit}
           targetingActive={targetingActive}
@@ -244,6 +244,7 @@ export default function CombatEnemyGrid({
           pointerEvents="box-none"
         >
           {slots.map((slot) => {
+            const slotUnit = layoutMode === 'solo' ? soloUnit : unitForSlot(slot);
             const style = staggeredSlotStyle(slot, layoutMode);
             const slotStyle: ViewStyle = {
               position: 'absolute',
@@ -254,9 +255,9 @@ export default function CombatEnemyGrid({
             };
             return (
               <BattlefieldSlot
-                key={slot}
+                key={`${slot}-${slotUnit?.unitId ?? 'empty'}`}
                 slot={slot}
-                unit={layoutMode === 'solo' ? soloUnit : unitForSlot(slot)}
+                unit={slotUnit}
                 wrapperStyle={slotStyle}
                 {...slotProps}
               />
@@ -302,7 +303,7 @@ export default function CombatEnemyGrid({
         <View style={styles.backlineRow} pointerEvents="box-none">
           {BACKLINE_SLOTS.map((slot) => (
             <BattlefieldSlot
-              key={slot}
+              key={`${slot}-${unitForSlot(slot)?.unitId ?? 'empty'}`}
               slot={slot}
               unit={unitForSlot(slot)}
               {...slotProps}
@@ -313,7 +314,7 @@ export default function CombatEnemyGrid({
         <View style={styles.frontlineRow} pointerEvents="box-none">
           {FRONTLINE_SLOTS.map((slot) => (
             <BattlefieldSlot
-              key={slot}
+              key={`${slot}-${unitForSlot(slot)?.unitId ?? 'empty'}`}
               slot={slot}
               unit={unitForSlot(slot)}
               wrapperStyle={frontlineLiftStyle}

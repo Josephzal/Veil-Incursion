@@ -308,30 +308,23 @@ export default function CombatScreen(): React.JSX.Element {
   }, [bootstrappedSquadUi, squadUi]);
 
   const gridUnits = useMemo(() => {
-    const liveById = new Map(effectiveSquadUi.units.map((unit) => [unit.unitId, unit]));
-    const baseUnits = bootstrappedSquadUi.units.length > 0
-      ? bootstrappedSquadUi.units
-      : effectiveSquadUi.units;
-
-    return baseUnits
+    return effectiveSquadUi.units
       .filter(shouldShowUnitInArenaGrid)
       .map((unit) => {
-        const live = liveById.get(unit.unitId);
-        const merged = live ? { ...unit, ...live } : unit;
         const portraitMeta = {
-          isBoss: merged.isBoss,
-          isVeilStalker: merged.isVeilStalker,
-          class: merged.enemyClass ?? 'GREMLIN',
-          rosterId: merged.rosterId,
+          isBoss: unit.isBoss,
+          isVeilStalker: unit.isVeilStalker,
+          class: unit.enemyClass ?? 'GREMLIN',
+          rosterId: unit.rosterId,
         } as const;
         const portraitSource = resolveUnitCombatPortrait(portraitMeta, nodeType);
         return {
-          ...merged,
+          ...unit,
           portraitSource,
           attackPortraitSource: resolveUnitCombatAttackPortrait(portraitMeta, portraitSource),
         };
       });
-  }, [bootstrappedSquadUi.units, effectiveSquadUi.units, nodeType]);
+  }, [effectiveSquadUi.units, nodeType]);
 
   const showVictoryBanner = resolutionOutcome === 'VICTORY';
 
