@@ -179,11 +179,13 @@ export function generateNodeEncounter(
   if (isAlphaDuel) {
     let squad = loadAlphaDuelElite(district, synergyBiome, rand, {
       lastEncounterId: segment.lastEncounterId,
+      encounterOrigin,
     });
     if (!squad) {
       squad = loadAlphaDuelElite(district, synergyBiome, rand, {
         lastEncounterId: null,
         interloper: true,
+        encounterOrigin,
       });
     }
     if (!squad) {
@@ -208,16 +210,10 @@ export function generateNodeEncounter(
     };
   }
 
-  let squad = loadCombatEncounter(district, synergyBiome, rand, {
+  const squad = loadCombatEncounter(district, synergyBiome, rand, {
     lastEncounterId: segment.lastEncounterId,
+    encounterOrigin,
   });
-
-  if (!squad) {
-    squad = loadCombatEncounter(district, synergyBiome, rand, {
-      lastEncounterId: null,
-      interloper: true,
-    });
-  }
 
   if (!squad) {
     return {

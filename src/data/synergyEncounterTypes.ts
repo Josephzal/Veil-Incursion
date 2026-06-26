@@ -29,9 +29,13 @@ export type SynergyBiome =
   | 'FRACTAL_ABYSS'
   | 'SANGUINE_ATRIUM';
 
+export type EncounterSquadOriginTag = 'CABAL' | 'VEIL' | 'ANY';
+
 export interface SynergySquadSpec {
   id: string;
   allowedDepths: readonly (1 | 2 | 3)[];
   allowedBiomes: readonly SynergyBiome[];
   roster: readonly EncounterUnitSpec[];
+  /** When set, gates squad eligibility for CABAL vs VEIL origin deck cards. */
+  encounterSquadOrigin?: EncounterSquadOriginTag;
 }

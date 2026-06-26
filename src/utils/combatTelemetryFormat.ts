@@ -102,6 +102,12 @@ export interface AegisReserveLabelOptions {
   eviscerateReady?: boolean;
 }
 
+export function formatSoulAnchorLabel(current: number, max: number): string {
+  if (max <= 0) return 'SOUL // 0%';
+  const pct = Math.round((current / max) * 100);
+  return `SOUL // ${pct}%`;
+}
+
 export function formatAegisReserveLabel(
   reserve: number,
   cap: number,

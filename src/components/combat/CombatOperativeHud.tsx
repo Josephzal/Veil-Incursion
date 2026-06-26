@@ -10,6 +10,7 @@ import {
 import {
   formatAegisReserveLabel,
   formatAegisReserveRatio,
+  formatSoulAnchorLabel,
   GAUGE_ABYSSAL,
   GAUGE_SOUL_ANCHOR,
   GAUGE_STAMINA,
@@ -176,7 +177,7 @@ export default function CombatOperativeHud({
       arenaOverlay ? styles.rootArenaOverlay : null,
     ]} pointerEvents="none">
       <CombatTelemetryGaugeRow
-        label={`SOUL // ${operativeHp}/${maxSoulAnchor}`}
+        label={formatSoulAnchorLabel(operativeHp, maxSoulAnchor)}
         labelColor={labelColor}
         fillColor={GAUGE_SOUL_ANCHOR}
         ratio={soulAnchorRatio}

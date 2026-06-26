@@ -1,6 +1,11 @@
 import type { MacroBiomeFamily } from '../types/narrativeProcedural';
 import type { DistrictId } from './districtPacing';
+import type { EncounterOrigin } from './originDeckEngine';
 import type { EncounterEnemyKey } from './enemyCombatConfig';
+import {
+  filterSquadsByEncounterOrigin,
+  SQUAD_PICK_ATTEMPTS,
+} from './encounterSquadOrigin';
 import {
   DEPTH_3_EXCLUSIVE_ENEMIES,
   SYNERGY_DATABASE,
@@ -31,7 +36,7 @@ function validateAmalgamPlacement(squad: SynergySquadSpec): boolean {
   return frontOccupiers.length === 0;
 }
 
-function filterDepthPool(currentDepth: DistrictId): SynergySquadSpec[] {
+export function filterSynergyDepthPool(currentDepth: DistrictId): SynergySquadSpec[] {
   return SYNERGY_DATABASE.filter((squad) => {
     if (!squad.allowedDepths.includes(currentDepth)) return false;
     if (currentDepth < 3 && squadUsesDepth3ExclusiveEnemy(squad)) return false;
@@ -63,15 +68,31 @@ function pickFromPool(
   return pool[0] ?? null;
 }
 
+function tryPickSquad(
+  depthPool: SynergySquadSpec[],
+  currentBiome: SynergyBiome,
+  rand: () => number,
+  lastEncounterId: string | null,
+  interloper: boolean | undefined,
+): SynergySquadSpec | null {
+  const biomePool = filterBiomePool(depthPool, currentBiome);
+  const primaryPool = biomePool.length > 0 ? biomePool : depthPool;
+  const useInterloper = interloper ?? rand() > 0.8;
+  const candidatePool = useInterloper ? depthPool : primaryPool;
+  return pickFromPool(candidatePool, rand, lastEncounterId);
+}
+
 export interface LoadCombatEncounterOptions {
   lastEncounterId?: string | null;
   /** When true, skip biome filter (interloper ambush). */
   interloper?: boolean;
+  /** Origin deck card — filters eligible squads when set. */
+  encounterOrigin?: EncounterOrigin | null;
 }
 
 /**
- * Picks a synergy squad for the current district + macro biome.
- * 80% thematic (depth + biome), 20% interloper (depth only).
+ * Picks a synergy squad for the current district + macro biome + origin card.
+ * 80% thematic (depth + biome), 20% interloper (depth only), with origin widening fallback.
  */
 export function loadCombatEncounter(
   currentDepth: DistrictId,
@@ -79,18 +100,29 @@ export function loadCombatEncounter(
   rand: () => number,
   options: LoadCombatEncounterOptions = {},
 ): SynergySquadSpec | null {
-  const depthPool = filterDepthPool(currentDepth);
-  if (depthPool.length === 0) {
-    return null;
+  const depthPool = filterSynergyDepthPool(currentDepth);
+  if (depthPool.length === 0) return null;
+
+  const lastEncounterId = options.lastEncounterId ?? null;
+  const forcedInterloper = options.interloper;
+
+  for (const attempt of SQUAD_PICK_ATTEMPTS) {
+    const originFiltered = attempt.filterOrigin
+      ? filterSquadsByEncounterOrigin(depthPool, options.encounterOrigin)
+      : depthPool;
+    if (originFiltered.length === 0) continue;
+
+    const squad = tryPickSquad(
+      originFiltered,
+      currentBiome,
+      rand,
+      lastEncounterId,
+      forcedInterloper ?? attempt.interloper,
+    );
+    if (squad) return squad;
   }
 
-  const biomePool = filterBiomePool(depthPool, currentBiome);
-  const primaryPool = biomePool.length > 0 ? biomePool : depthPool;
-
-  const useInterloper = options.interloper ?? rand() > 0.8;
-  const candidatePool = useInterloper ? depthPool : primaryPool;
-
-  return pickFromPool(candidatePool, rand, options.lastEncounterId ?? null);
+  return null;
 }
 
 /** Dev-only catalog integrity check. */
@@ -114,13 +146,21 @@ export function verifySynergyDatabase(): void {
     }
   }
 
+  const origins: EncounterOrigin[] = ['CABAL', 'VEIL'];
+
   for (const depth of [1, 2, 3] as const) {
     for (const biome of depth === 3
       ? (['DEEP_VEIL', 'FRACTAL_ABYSS', 'SANGUINE_ATRIUM'] as const)
       : (['CITY_STREETS', 'CITY_BUILDINGS', 'BACKROADS', 'BLACK_SITE_SECTOR', 'UNDERGROUND', 'FORESTS'] as const)) {
-      const pool = filterBiomePool(filterDepthPool(depth), biome);
+      const pool = filterBiomePool(filterSynergyDepthPool(depth), biome);
       if (pool.length === 0) {
         throw new Error(`verifySynergyDatabase: no squads for depth ${depth} biome ${biome}`);
+      }
+    }
+    for (const origin of origins) {
+      const depthOriginPool = filterSquadsByEncounterOrigin(filterSynergyDepthPool(depth), origin);
+      if (depthOriginPool.length === 0) {
+        throw new Error(`verifySynergyDatabase: no ${origin} squads for depth ${depth}`);
       }
     }
   }

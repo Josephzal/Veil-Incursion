@@ -60,6 +60,7 @@ function resolveEliteSlotAssignments(
   runSegment: RunSegmentState | null | undefined,
   encounterSeed: string | undefined,
   macroBiome: MacroBiomeFamily | null | undefined,
+  encounterOrigin?: import('./originDeckEngine').EncounterOrigin | null,
 ): { slots: SpawnSlotAssignment[]; encounterId: string } | null {
   const synergyBiome = macroFamilyToSynergyBiome(macroBiome);
   const localLevel = localLevelFromDepth(depth);
@@ -71,11 +72,13 @@ function resolveEliteSlotAssignments(
   const loader = isAlphaDuel ? loadAlphaDuelElite : loadEliteEncounter;
   let squad = loader(district, synergyBiome, rand, {
     lastEncounterId: runSegment?.lastEncounterId,
+    encounterOrigin,
   });
   if (!squad) {
     squad = loader(district, synergyBiome, rand, {
       lastEncounterId: null,
       interloper: true,
+      encounterOrigin,
     });
   }
   if (!squad) return null;
@@ -124,6 +127,7 @@ export function spawnCombatSquad(options: SpawnSquadOptions): EnemyCombatProfile
       options.runSegment,
       options.encounterSeed,
       options.macroBiome,
+      encounterMeta.encounterOrigin,
     );
     if (elite) {
       slotAssignments = elite.slots;

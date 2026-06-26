@@ -1,4 +1,9 @@
 import type { DistrictId } from './districtPacing';
+import type { EncounterOrigin } from './originDeckEngine';
+import {
+  filterSquadsByEncounterOrigin,
+  SQUAD_PICK_ATTEMPTS,
+} from './encounterSquadOrigin';
 import { DEPTH_3_EXCLUSIVE_ENEMIES } from './synergyDatabase';
 import type { SynergyBiome, SynergySquadSpec } from './synergyEncounterTypes';
 import { ELITE_DATABASE } from './eliteDatabase';
@@ -21,7 +26,7 @@ function validateAmalgamPlacement(squad: SynergySquadSpec): boolean {
   return frontOccupiers.length === 0;
 }
 
-function filterDepthPool(currentDepth: DistrictId): SynergySquadSpec[] {
+export function filterEliteDepthPool(currentDepth: DistrictId): SynergySquadSpec[] {
   return ELITE_DATABASE.filter((squad) => {
     if (!squad.allowedDepths.includes(currentDepth)) return false;
     if (currentDepth < 3 && squadUsesDepth3ExclusiveEnemy(squad)) return false;
@@ -53,9 +58,24 @@ function pickFromPool(
   return pool[0] ?? null;
 }
 
+function tryPickSquad(
+  depthPool: SynergySquadSpec[],
+  currentBiome: SynergyBiome,
+  rand: () => number,
+  lastEncounterId: string | null,
+  interloper: boolean | undefined,
+): SynergySquadSpec | null {
+  const biomePool = filterBiomePool(depthPool, currentBiome);
+  const primaryPool = biomePool.length > 0 ? biomePool : depthPool;
+  const useInterloper = interloper ?? rand() > 0.8;
+  const candidatePool = useInterloper ? depthPool : primaryPool;
+  return pickFromPool(candidatePool, rand, lastEncounterId);
+}
+
 export interface LoadEliteEncounterOptions {
   lastEncounterId?: string | null;
   interloper?: boolean;
+  encounterOrigin?: EncounterOrigin | null;
 }
 
 function loadFromPool(
@@ -72,12 +92,26 @@ function loadFromPool(
   });
   if (depthPool.length === 0) return null;
 
-  const biomePool = filterBiomePool(depthPool, currentBiome);
-  const primaryPool = biomePool.length > 0 ? biomePool : depthPool;
-  const useInterloper = options.interloper ?? rand() > 0.8;
-  const candidatePool = useInterloper ? depthPool : primaryPool;
+  const lastEncounterId = options.lastEncounterId ?? null;
+  const forcedInterloper = options.interloper;
 
-  return pickFromPool(candidatePool, rand, options.lastEncounterId ?? null);
+  for (const attempt of SQUAD_PICK_ATTEMPTS) {
+    const originFiltered = attempt.filterOrigin
+      ? filterSquadsByEncounterOrigin(depthPool, options.encounterOrigin)
+      : depthPool;
+    if (originFiltered.length === 0) continue;
+
+    const squad = tryPickSquad(
+      originFiltered,
+      currentBiome,
+      rand,
+      lastEncounterId,
+      forcedInterloper ?? attempt.interloper,
+    );
+    if (squad) return squad;
+  }
+
+  return null;
 }
 
 /** Curated elite squads — supports commander mixes with per-unit alpha. */
@@ -130,12 +164,12 @@ export function verifyEliteDatabase(): void {
     for (const biome of depth === 3
       ? D3_BIOMES
       : (['CITY_STREETS', 'CITY_BUILDINGS', 'BACKROADS', 'BLACK_SITE_SECTOR', 'UNDERGROUND', 'FORESTS'] as const)) {
-      const pool = filterBiomePool(filterDepthPool(depth), biome);
+      const pool = filterBiomePool(filterEliteDepthPool(depth), biome);
       if (pool.length === 0) {
         throw new Error(`verifyEliteDatabase: no elites for depth ${depth} biome ${biome}`);
       }
       const alphaDuelPool = filterBiomePool(
-        filterDepthPool(depth).filter((squad) => rosterIsAllAlpha(squad.roster)),
+        filterEliteDepthPool(depth).filter((squad) => rosterIsAllAlpha(squad.roster)),
         biome,
       );
       if (alphaDuelPool.length === 0) {
