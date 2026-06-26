@@ -3,7 +3,7 @@ import { Image, LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
 import CargoPackingPanel from '../CargoPackingPanel';
 import SafehouseStashPanel from './SafehouseStashPanel';
 import type { CargoDragSource } from '../CargoGridBoard';
-import { calculateCargoMarketValue, calculateGridOccupancy, canPlaceCargoItem } from '../../data/cargoGridEngine';
+import { canPlaceCargoItem } from '../../data/cargoGridEngine';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useTerminal } from '../../context/TerminalContext';
 import type { CargoItemId } from '../../types/cargoGrid';
@@ -46,15 +46,6 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
   const hubCellSize = useMemo(
     () => resolveHubLoadoutCellSize(cargoAreaSize.width, cargoAreaSize.height),
     [cargoAreaSize.height, cargoAreaSize.width],
-  );
-
-  const occupancyPct = useMemo(
-    () => Math.round(calculateGridOccupancy(account.preRunCargo) * 100),
-    [account.preRunCargo],
-  );
-  const cargoValue = useMemo(
-    () => calculateCargoMarketValue(account.preRunCargo),
-    [account.preRunCargo],
   );
 
   useEffect(() => () => {
@@ -158,12 +149,7 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
         />
 
         <View style={[styles.deploymentPanel, { borderColor: theme.borderColor, backgroundColor: panelBg }]}>
-          <View style={styles.deploymentHeader}>
-            <Text style={[styles.deploymentTitle, { color: accent }]}>DEPLOYMENT PACK</Text>
-            <Text style={[styles.deploymentStats, { color: theme.primaryColor }]}>
-              {`OCCUPANCY ${occupancyPct}% // VALUE ${cargoValue}`}
-            </Text>
-          </View>
+          <Text style={[styles.deploymentTitle, { color: accent }]}>DEPLOYMENT PACK</Text>
 
           <View style={styles.cargoWrap} onLayout={handleCargoAreaLayout}>
             <CargoPackingPanel
@@ -216,27 +202,20 @@ const styles = StyleSheet.create({
   deploymentPanel: {
     flex: 1,
     borderWidth: 1,
-    padding: 10,
+    paddingHorizontal: 10,
+    paddingTop: 6,
+    paddingBottom: 10,
     minHeight: 0,
     flexDirection: 'column',
     justifyContent: 'flex-start',
-  },
-  deploymentHeader: {
-    flexShrink: 0,
-    gap: 4,
-    marginBottom: 8,
-    zIndex: 2,
   },
   deploymentTitle: {
     fontFamily: 'monospace',
     fontSize: 9,
     fontWeight: '700',
     letterSpacing: 0.8,
-  },
-  deploymentStats: {
-    fontFamily: 'monospace',
-    fontSize: 7,
-    letterSpacing: 0.5,
+    marginBottom: 4,
+    flexShrink: 0,
   },
   cargoWrap: {
     flex: 1,
@@ -244,6 +223,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-start',
     overflow: 'hidden',
+    marginTop: -2,
   },
   dragGhostLayer: {
     ...StyleSheet.absoluteFillObject,

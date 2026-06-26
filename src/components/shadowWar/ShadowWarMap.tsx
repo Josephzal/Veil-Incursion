@@ -120,7 +120,7 @@ export default function ShadowWarMap({
     <View style={styles.root} onLayout={handleHostLayout}>
       <GestureHandlerRootView style={styles.gestureRoot}>
         <GestureDetector gesture={tapGesture}>
-          <View style={[styles.mapFrame, { borderColor: theme.borderColor, height: canvasHeight }]}>
+          <View style={[styles.mapFrame, { height: canvasHeight }]}>
             <Svg width={hostWidth} height={canvasHeight}>
               {sectors.map((sector) => {
                 const control = calculateSectorControl(sectorIp[sector.id]);
@@ -189,7 +189,6 @@ const styles = StyleSheet.create({
     flex: 1,
     overflow: 'hidden',
     backgroundColor: MAP_BACKDROP,
-    borderWidth: StyleSheet.hairlineWidth,
   },
   hint: {
     fontFamily: 'monospace',

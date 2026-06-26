@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import HapticPressable from '../HapticPressable';
 import CraftingMenuPanel from '../CraftingMenuPanel';
 import SafehouseAbilitiesTab from './SafehouseAbilitiesTab';
 import SafehouseBlackMarketTab from './SafehouseBlackMarketTab';
 import SafehouseLoadoutTab from './SafehouseLoadoutTab';
-import { formatBracketHeader, hubTerminalUi } from '../../styles/hubTerminalUi';
+import HubScreenShell from '../hub/HubScreenShell';
+import { hubKeyColor } from '../../constants/hubAtmosphere';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useTerminal } from '../../context/TerminalContext';
 
@@ -20,94 +21,96 @@ const NAV_ITEMS: Array<{ key: SafehouseTab; label: string }> = [
 
 export default function SafehouseHubPanel(): React.JSX.Element {
   const { theme } = useTerminal();
-  const { account, getStashCapacitySnapshot } = usePlayerAccount();
+  const { account } = usePlayerAccount();
   const [activeTab, setActiveTab] = useState<SafehouseTab>('FORGE');
 
-  const stashCapacity = getStashCapacitySnapshot();
   const accent = theme.statusColor;
+  const keyColor = hubKeyColor(theme.mutedColor);
+
+  const headerHud = (
+    <>
+      <Text style={[styles.hudCredits, { color: accent }]}>
+        {`${account.cabalCredits} CR`}
+      </Text>
+      <Text style={[styles.hudResidue, { color: theme.statusColor }]}>
+        {`${account.veilResidueBalance} VEIL RESIDUE`}
+      </Text>
+    </>
+  );
 
   return (
-    <View style={styles.root}>
-      <View style={[styles.header, { borderBottomColor: theme.borderColor }]}>
-        <View style={styles.headerLeft}>
-          <Text style={[hubTerminalUi.sectionHeaderLg, { color: theme.mutedColor }]}>
-            {formatBracketHeader('SAFEHOUSE // VEIL PREP')}
-          </Text>
-          <Text style={[styles.headerSub, { color: theme.mutedColor }]}>
-            {`OPERATIVE ${account.username.toUpperCase()} // ${account.activeClass}`}
-          </Text>
-        </View>
-        <View style={styles.headerRight}>
-          <Text style={[styles.creditLine, { color: accent }]}>
-            {`${account.cabalCredits} CR`}
-          </Text>
-          <Text style={[styles.residueLine, { color: theme.primaryColor }]}>
-            {`${account.veilResidueBalance} VEIL RESIDUE`}
-          </Text>
-          <Text style={[styles.stashLine, { color: theme.mutedColor }]}>
-            {`STASH ${stashCapacity.used}/${stashCapacity.max}`}
-          </Text>
+    <HubScreenShell
+      title="SAFEHOUSE // VEIL PREP"
+      subtitle={`OPERATIVE ${account.username.toUpperCase()} // ${account.activeClass}`}
+      headerRight={headerHud}
+    >
+      <View style={styles.stickyNav}>
+        <View style={styles.navRow}>
+          {NAV_ITEMS.map((item) => {
+            const active = activeTab === item.key;
+            return (
+              <HapticPressable
+                key={item.key}
+                onPress={() => setActiveTab(item.key)}
+                style={[
+                  styles.navCell,
+                  active
+                    ? { borderColor: accent, backgroundColor: `${accent}22` }
+                    : styles.navCellInactive,
+                ]}
+              >
+                <Text style={[styles.navLabel, { color: active ? accent : keyColor }]}>
+                  {item.label}
+                </Text>
+              </HapticPressable>
+            );
+          })}
         </View>
       </View>
 
-      <View style={[styles.navRow, { borderBottomColor: theme.borderColor }]}>
-        {NAV_ITEMS.map((item) => {
-          const active = activeTab === item.key;
-          return (
-            <HapticPressable
-              key={item.key}
-              onPress={() => setActiveTab(item.key)}
-              style={[
-                styles.navCell,
-                {
-                  borderColor: active ? accent : theme.borderColor,
-                  backgroundColor: active ? `${theme.primaryColor}14` : 'transparent',
-                },
-              ]}
-            >
-              <Text style={[styles.navLabel, { color: active ? accent : theme.mutedColor }]}>
-                {item.label}
-              </Text>
-            </HapticPressable>
-          );
-        })}
-      </View>
-
-      <View style={styles.tabBody}>
-        {activeTab === 'FORGE' && <CraftingMenuPanel embedded />}
-        {activeTab === 'MARKET' && <SafehouseBlackMarketTab />}
-        {activeTab === 'LOADOUT' && <SafehouseLoadoutTab />}
-        {activeTab === 'ABILITIES' && <SafehouseAbilitiesTab />}
-      </View>
-    </View>
+      <ScrollView
+        style={styles.tabScroll}
+        contentContainerStyle={styles.tabScrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.tabBody}>
+          {activeTab === 'FORGE' && <CraftingMenuPanel embedded />}
+          {activeTab === 'MARKET' && <SafehouseBlackMarketTab />}
+          {activeTab === 'LOADOUT' && <SafehouseLoadoutTab />}
+          {activeTab === 'ABILITIES' && <SafehouseAbilitiesTab />}
+        </View>
+      </ScrollView>
+    </HubScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, minHeight: 0 },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    marginBottom: 8,
-    gap: 12,
+  hudCredits: {
+    fontFamily: 'monospace',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    textAlign: 'right',
   },
-  headerLeft: { flex: 1, gap: 2 },
-  headerRight: { alignItems: 'flex-end', gap: 2 },
-  headerSub: { fontFamily: 'monospace', fontSize: 7, letterSpacing: 0.5 },
-  creditLine: { fontFamily: 'monospace', fontSize: 11, fontWeight: '700', letterSpacing: 0.6 },
-  residueLine: { fontFamily: 'monospace', fontSize: 8, fontWeight: '700', letterSpacing: 0.5 },
-  stashLine: { fontFamily: 'monospace', fontSize: 7, letterSpacing: 0.4 },
+  hudResidue: {
+    fontFamily: 'monospace',
+    fontSize: 7,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textAlign: 'right',
+  },
+  stickyNav: {
+    flexShrink: 0,
+    zIndex: 2,
+    marginBottom: 8,
+  },
   navRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 6,
-    borderBottomWidth: 1,
-    marginBottom: 8,
-    paddingBottom: 8,
   },
   navCell: {
     borderWidth: 1,
@@ -116,12 +119,27 @@ const styles = StyleSheet.create({
     minWidth: 72,
     alignItems: 'center',
   },
+  navCellInactive: {
+    backgroundColor: 'rgba(20, 20, 25, 0.6)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+  },
   navLabel: {
     fontFamily: 'monospace',
-    fontSize: 7,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    textAlign: 'center',
+    fontSize: 8,
+    fontWeight: '800',
+    letterSpacing: 1,
   },
-  tabBody: { flex: 1, minHeight: 0 },
+  tabScroll: {
+    flex: 1,
+    minHeight: 0,
+  },
+  tabScrollContent: {
+    flexGrow: 1,
+    paddingBottom: 8,
+  },
+  tabBody: {
+    flexGrow: 1,
+    minHeight: 240,
+  },
 });

@@ -1,28 +1,34 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import HapticPressable from './HapticPressable';
-import { LANDSCAPE_PANEL_PADDING } from '../constants/landscapeLayout';
-import { resolveImmersiveFooterInset, resolveImmersiveTopInset } from '../constants/immersiveLayout';
+import {
+  HUB_NAV_INACTIVE_BG,
+  HUB_NAV_INACTIVE_BORDER,
+  HUB_NAV_INACTIVE_TOP_HIGHLIGHT,
+} from '../constants/hubAtmosphere';
 import { resolveTerminalNavItems } from '../constants/terminalNav';
 import { useTerminal } from '../context/TerminalContext';
-import { useLandscapeMetrics } from '../hooks/useLandscapeMetrics';
 import { TerminalView } from '../types/terminalNav';
 
 interface TerminalNavRailProps {
   activeView: TerminalView;
   onSelectView: (view: TerminalView) => void;
   width: number;
+  contentTopInset: number;
+  contentBottomInset: number;
 }
 
-/** Vertical hub navigation for wide landscape terminals. */
+/** Vertical hub navigation — tactile hardware-style interface tabs. */
 export default function TerminalNavRail({
   activeView,
   onSelectView,
   width,
+  contentTopInset,
+  contentBottomInset,
 }: TerminalNavRailProps): React.JSX.Element {
   const { theme } = useTerminal();
-  const { safeTop, safeBottom } = useLandscapeMetrics();
   const navItems = resolveTerminalNavItems();
+  const accentColor = theme.statusColor;
 
   return (
     <View
@@ -30,34 +36,37 @@ export default function TerminalNavRail({
         styles.rail,
         {
           width,
-          borderRightColor: theme.borderColor,
-          backgroundColor: theme.backgroundColor,
-          paddingTop: LANDSCAPE_PANEL_PADDING + resolveImmersiveTopInset(safeTop),
-          paddingBottom: resolveImmersiveFooterInset(safeBottom),
+          paddingTop: contentTopInset,
+          paddingBottom: contentBottomInset,
         },
       ]}
     >
-      <Text style={[styles.railTitle, { color: theme.mutedColor }]}>TERMINAL // NAV</Text>
-
       <View style={styles.navStack}>
         {navItems.map((item) => {
           const active = activeView === item.key;
+
           return (
             <HapticPressable
               key={item.key}
               onPress={() => onSelectView(item.key)}
               style={[
-                styles.navCell,
-                {
-                  borderColor: active ? theme.statusColor : theme.borderColor,
-                  borderWidth: active ? theme.borderWidth + 1 : 1,
-                  backgroundColor: active ? `${theme.primaryColor}14` : 'transparent',
-                },
+                styles.navCellPressable,
+                active ? styles.navCellActive : styles.navCellInactive,
+                active
+                  ? {
+                      borderColor: accentColor,
+                      backgroundColor: `${accentColor}24`,
+                      shadowColor: accentColor,
+                    }
+                  : null,
               ]}
             >
               <Text
-                style={[styles.navLabel, { color: active ? theme.statusColor : theme.mutedColor }]}
-                numberOfLines={4}
+                style={[
+                  styles.navLabel,
+                  { color: active ? accentColor : `${theme.mutedColor}bb` },
+                ]}
+                numberOfLines={3}
                 adjustsFontSizeToFit
                 minimumFontScale={0.75}
               >
@@ -75,39 +84,50 @@ const styles = StyleSheet.create({
   rail: {
     flexShrink: 0,
     alignSelf: 'stretch',
-    borderRightWidth: 1,
-    paddingHorizontal: 3,
-    gap: 6,
-  },
-  railTitle: {
-    fontFamily: 'monospace',
-    fontSize: 6,
-    letterSpacing: 0.8,
-    textAlign: 'center',
-    flexShrink: 0,
+    paddingHorizontal: 2,
+    backgroundColor: 'transparent',
   },
   navStack: {
     flex: 1,
-    justifyContent: 'space-evenly',
-    gap: 4,
+    justifyContent: 'flex-start',
+    gap: 5,
   },
-  navCell: {
+  navCellPressable: {
     flex: 1,
-    maxHeight: 48,
-    minHeight: 24,
-    paddingVertical: 4,
-    paddingHorizontal: 4,
+    minHeight: 40,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
     alignItems: 'center',
     justifyContent: 'center',
-    alignSelf: 'center',
-    width: '90%',
+    alignSelf: 'stretch',
+    width: '100%',
+    overflow: 'hidden',
+  },
+  navCellInactive: {
+    backgroundColor: HUB_NAV_INACTIVE_BG,
+    borderWidth: 1,
+    borderColor: HUB_NAV_INACTIVE_BORDER,
+    borderTopWidth: 1,
+    borderTopColor: HUB_NAV_INACTIVE_TOP_HIGHLIGHT,
+  },
+  navCellActive: {
+    borderWidth: 2,
+    ...Platform.select({
+      ios: {
+        shadowOpacity: 0.85,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 0 },
+      },
+      android: { elevation: 8 },
+      default: {},
+    }),
   },
   navLabel: {
     fontFamily: 'monospace',
-    fontSize: 6,
-    fontWeight: '700',
-    letterSpacing: 0.25,
+    fontSize: 7,
+    fontWeight: '800',
+    letterSpacing: 1.1,
     textAlign: 'center',
-    lineHeight: 8,
+    lineHeight: 10,
   },
 });

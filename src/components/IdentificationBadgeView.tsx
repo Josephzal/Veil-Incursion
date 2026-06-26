@@ -4,20 +4,18 @@ import HapticPressable from './HapticPressable';
 import { CLASS_DEFINITIONS } from '../data/classes';
 import { getFactionDefinition } from '../data/factions';
 import { getMacroSector } from '../data/macroSectors';
-import { LANDSCAPE_PANEL_PADDING } from '../constants/landscapeLayout';
+import { hubKeyColor, resolveFactionSlateInnerBorder } from '../constants/hubAtmosphere';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import LandscapeSplitPane from './layout/LandscapeSplitPane';
 import ClassAbilityRoster from './ClassAbilityRoster';
+import HubDataField from './hub/HubDataField';
+import HubScreenShell, { HubSectionHeader } from './hub/HubScreenShell';
 import { PlayerAccount } from '../types/game';
 import { OperativeProfile } from '../types/profile';
 import { TerminalTheme } from '../types/theme';
 import { formatHomeSectorDisplay } from '../constants/homeSector';
 import { formatSnakeCaseToTitleCase } from '../utils/formatDisplayName';
 import { resolvePlayerBadgePortrait } from '../utils/combatPlayerPortrait';
-import {
-  formatBracketHeader,
-  hubTerminalUi,
-} from '../styles/hubTerminalUi';
 import { useLandscapeMetrics } from '../hooks/useLandscapeMetrics';
 
 interface IdentificationBadgeViewProps {
@@ -60,29 +58,6 @@ function BarcodeStrip({ color }: { color: string }): React.JSX.Element {
   );
 }
 
-function DataField({
-  title,
-  value,
-  valueColor,
-  mutedColor,
-}: {
-  title: string;
-  value: string;
-  valueColor: string;
-  mutedColor: string;
-}) {
-  return (
-    <View style={styles.dataField}>
-      <Text style={[hubTerminalUi.sectionHeader, { color: mutedColor }]}>
-        {formatBracketHeader(title)}
-      </Text>
-      <Text style={[styles.fieldValue, { color: valueColor }]} numberOfLines={2}>
-        {value}
-      </Text>
-    </View>
-  );
-}
-
 export default function IdentificationBadgeView({
   theme,
   profile,
@@ -96,7 +71,10 @@ export default function IdentificationBadgeView({
   const factionDef = account.alignedFaction ? getFactionDefinition(account.alignedFaction) : null;
   const classDef = CLASS_DEFINITIONS[account.activeClass];
   const homeSector = getMacroSector(account.regionalPresence.homeMacroSector);
-  const factionColor = factionDef?.accentColor ?? theme.primaryColor;
+  const factionColor = factionDef?.accentColor ?? theme.statusColor;
+  const headerColor = theme.statusColor;
+  const keyColor = hubKeyColor(theme.mutedColor);
+  const slateInnerBorder = resolveFactionSlateInnerBorder(account.alignedFaction);
   const accentFill = `${theme.primaryColor}26`;
   const portraitSource = useMemo(
     () => resolvePlayerBadgePortrait(account.activeClass),
@@ -111,6 +89,7 @@ export default function IdentificationBadgeView({
 
   const identityColumn = (
     <View style={styles.identityColumn}>
+      <HubSectionHeader title="OPERATIVE PROFILE" color={headerColor} />
       <View style={styles.badgeCard}>
         <View style={styles.identityRow}>
           <View style={styles.portraitColumn}>
@@ -119,13 +98,13 @@ export default function IdentificationBadgeView({
                 onPress={() => handleCycleClass(-1)}
                 style={({ pressed }) => [
                   styles.classArrow,
-                  { borderColor: theme.borderColor, opacity: pressed ? 0.6 : 1 },
+                  { borderColor: slateInnerBorder, opacity: pressed ? 0.6 : 1 },
                 ]}
               >
-                <Text style={[styles.classArrowLabel, { color: theme.mutedColor }]}>{'<'}</Text>
+                <Text style={[styles.classArrowLabel, { color: headerColor }]}>{'<'}</Text>
               </HapticPressable>
             ) : null}
-            <View style={[styles.avatarBlock, { backgroundColor: accentFill }]}>
+            <View style={[styles.avatarBlock, { backgroundColor: accentFill, borderColor: slateInnerBorder }]}>
               <Image source={portraitSource} style={styles.avatarImage} resizeMode="contain" />
             </View>
             {canCycleClass ? (
@@ -133,26 +112,26 @@ export default function IdentificationBadgeView({
                 onPress={() => handleCycleClass(1)}
                 style={({ pressed }) => [
                   styles.classArrow,
-                  { borderColor: theme.borderColor, opacity: pressed ? 0.6 : 1 },
+                  { borderColor: slateInnerBorder, opacity: pressed ? 0.6 : 1 },
                 ]}
               >
-                <Text style={[styles.classArrowLabel, { color: theme.mutedColor }]}>{'>'}</Text>
+                <Text style={[styles.classArrowLabel, { color: headerColor }]}>{'>'}</Text>
               </HapticPressable>
             ) : null}
           </View>
 
           <View style={styles.identityDetails}>
             <Text style={styles.operativeName} numberOfLines={1}>{cred.username}</Text>
-            <Text style={[styles.subline, { color: theme.mutedColor }]} numberOfLines={1}>
+            <Text style={[styles.subline, { color: keyColor }]} numberOfLines={1}>
               {`${classDef.displayName.toUpperCase()} // ID ${cred.id}`}
             </Text>
-            <Text style={[styles.rankLine, { color: theme.mutedColor }]} numberOfLines={1}>
+            <Text style={[styles.rankLine, { color: keyColor }]} numberOfLines={1}>
               {classDef.protocolLabel}
             </Text>
-            <Text style={[styles.rankLine, { color: theme.mutedColor }]} numberOfLines={1}>
+            <Text style={[styles.rankLine, { color: keyColor }]} numberOfLines={1}>
               {`${classDef.weaponLine} // ${classDef.interactionLine}`}
             </Text>
-            <Text style={[styles.rankLine, { color: theme.mutedColor }]}>
+            <Text style={[styles.rankLine, { color: keyColor }]}>
               {`RANK ${account.operativeRank} // DEPTH ${account.progressionMatrix.maxDepthUnlocked}`}
             </Text>
           </View>
@@ -165,119 +144,117 @@ export default function IdentificationBadgeView({
       </View>
 
       <View style={styles.loadoutBlock}>
-        <ClassAbilityRoster account={account} theme={theme} />
+        <ClassAbilityRoster account={account} theme={theme} accentColor={headerColor} />
       </View>
     </View>
   );
 
   const telemetryColumn = (
     <View style={styles.telemetryColumn}>
-      <DataField
+      <HubSectionHeader title="OPERATIVE DATA" color={headerColor} />
+      <HubDataField
         title="CABAL ALIGNMENT"
         value={factionDef?.displayName ?? formatSnakeCaseToTitleCase(cred.cabal_alignment)}
         valueColor={factionColor}
         mutedColor={theme.mutedColor}
+        icon="skull-outline"
       />
-      <DataField
+      <HubDataField
         title="TRACKING FREQUENCY"
         value={vectors.active_frequency}
         valueColor={theme.statusColor}
         mutedColor={theme.mutedColor}
+        icon="radio-outline"
       />
-      <DataField
+      <HubDataField
         title="NODE LOCK"
         value={formatSnakeCaseToTitleCase(vectors.current_node_lock)}
         valueColor={theme.textColor}
         mutedColor={theme.mutedColor}
+        icon="locate-outline"
       />
-      <DataField
+      <HubDataField
         title="HOME SECTOR"
         value={formatHomeSectorDisplay(homeSector.id, homeSector.label)}
         valueColor={theme.textColor}
         mutedColor={theme.mutedColor}
+        icon="compass-outline"
       />
-      <View style={styles.dataField}>
-        <Text style={[styles.metaText, { color: theme.mutedColor }]}>
+      <View style={styles.metaFooter}>
+        <Text style={[styles.metaText, { color: theme.statusColor }]}>
           {`${account.cabalCredits} CABAL CR // CLEARANCE ACTIVE`}
         </Text>
       </View>
     </View>
   );
 
-  return (
-    <View style={styles.root}>
-      <Text style={[hubTerminalUi.sectionHeaderLg, styles.screenHeader, { color: theme.mutedColor }]}>
-        {formatBracketHeader('IDENTIFICATION BADGE // OPERATIVE')}
-      </Text>
-
-      {useHorizontalSplit ? (
-        <LandscapeSplitPane
-          style={styles.split}
-          primary={identityColumn}
-          secondary={telemetryColumn}
-          primaryRatio={0.58}
-          primaryStyle={styles.splitPane}
-          secondaryStyle={styles.splitPane}
-        />
-      ) : (
-        <View style={styles.stacked}>
-          {identityColumn}
-          {telemetryColumn}
-        </View>
-      )}
+  const profileBody = useHorizontalSplit ? (
+    <LandscapeSplitPane
+      style={styles.split}
+      primary={identityColumn}
+      secondary={telemetryColumn}
+      primaryRatio={0.58}
+      primaryStyle={styles.splitPane}
+      secondaryStyle={styles.splitPane}
+    />
+  ) : (
+    <View style={styles.stacked}>
+      {identityColumn}
+      {telemetryColumn}
     </View>
+  );
+
+  return (
+    <HubScreenShell title="IDENTIFICATION BADGE // OPERATIVE">
+      {profileBody}
+    </HubScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    minHeight: 0,
-    padding: LANDSCAPE_PANEL_PADDING,
-  },
-  screenHeader: {
-    marginBottom: 6,
-    flexShrink: 0,
-  },
   split: {
     flex: 1,
     minHeight: 0,
+    gap: 18,
   },
   splitPane: {
     minHeight: 0,
     justifyContent: 'flex-start',
+    paddingHorizontal: 2,
   },
   stacked: {
     flex: 1,
     minHeight: 0,
-    gap: 8,
+    gap: 14,
   },
   identityColumn: {
     flex: 1,
     minHeight: 0,
-    gap: 6,
-    justifyContent: 'center',
+    gap: 8,
+    justifyContent: 'flex-start',
+    paddingRight: 6,
   },
   telemetryColumn: {
     flex: 1,
     minHeight: 0,
-    gap: 6,
-    justifyContent: 'center',
+    gap: 10,
+    justifyContent: 'flex-start',
+    paddingLeft: 6,
   },
   badgeCard: {
-    padding: 8,
+    padding: 4,
     minHeight: 0,
     position: 'relative',
   },
   identityRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 8,
+    gap: 10,
   },
   portraitColumn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
+    gap: 4,
     flexShrink: 0,
   },
   classArrow: {
@@ -286,6 +263,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.28)',
   },
   classArrowLabel: {
     fontFamily: 'monospace',
@@ -299,6 +277,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     overflow: 'hidden',
     flexShrink: 0,
+    borderWidth: 1,
   },
   avatarImage: {
     width: '100%',
@@ -307,7 +286,7 @@ const styles = StyleSheet.create({
   identityDetails: {
     flex: 1,
     minWidth: 0,
-    gap: 2,
+    gap: 3,
     paddingTop: 2,
   },
   operativeName: {
@@ -315,18 +294,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
     color: '#f8fafc',
-    letterSpacing: 0.3,
+    letterSpacing: 0.4,
   },
   subline: {
     fontFamily: 'monospace',
     fontSize: 8,
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
     lineHeight: 11,
   },
   rankLine: {
     fontFamily: 'monospace',
     fontSize: 7,
-    letterSpacing: 0.3,
+    letterSpacing: 0.4,
     lineHeight: 10,
   },
   securityFooter: {
@@ -367,22 +346,19 @@ const styles = StyleSheet.create({
   loadoutBlock: {
     flexShrink: 1,
     minHeight: 0,
+    marginTop: 4,
   },
-  dataField: {
-    gap: 2,
-    flexShrink: 0,
-  },
-  fieldValue: {
-    fontFamily: 'monospace',
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.4,
-    lineHeight: 12,
+  metaFooter: {
+    marginTop: 'auto',
+    paddingTop: 8,
+    alignItems: 'flex-end',
   },
   metaText: {
     fontFamily: 'monospace',
-    fontSize: 7,
-    letterSpacing: 0.4,
-    lineHeight: 10,
+    fontSize: 8,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    lineHeight: 11,
+    textAlign: 'right',
   },
 });

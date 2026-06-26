@@ -4,7 +4,7 @@ import HapticPressable from './HapticPressable';
 import DonationTerminalPanel from './shadowWar/DonationTerminalPanel';
 import ShadowWarInfluencePanel from './shadowWar/ShadowWarInfluencePanel';
 import ShadowWarMap from './shadowWar/ShadowWarMap';
-import { formatBracketHeader, hubTerminalUi } from '../styles/hubTerminalUi';
+import HubScreenShell from './hub/HubScreenShell';
 import { useShadowWar } from '../context/ShadowWarContext';
 import type { ShadowWarSectorId } from '../types/shadowWar';
 import { TerminalTheme } from '../types/theme';
@@ -24,32 +24,32 @@ export default function ShadowWarDashboard({
   const [donationOpen, setDonationOpen] = useState(false);
 
   return (
-    <View style={styles.root}>
-      <Text style={[hubTerminalUi.sectionHeaderLg, styles.title, { color: theme.mutedColor }]}>
-        {formatBracketHeader('SHADOW WAR // VEIL CONTROL')}
-      </Text>
-      <Text style={[styles.sub, { color: theme.mutedColor }]}>
-        5 MACRO-SECTORS // ASYNC CABAL TUG-OF-WAR // WEEKLY IP CYCLE
-      </Text>
+    <>
+      <HubScreenShell
+        title="SHADOW WAR // VEIL CONTROL"
+        subtitle="5 MACRO-SECTORS // ASYNC CABAL TUG-OF-WAR // WEEKLY IP CYCLE"
+      >
+        <View style={styles.body}>
+          <View style={styles.mapRegion}>
+            <ShadowWarMap
+              theme={theme}
+              activeSectorId={activeSectorId}
+              sectorIp={state.sectorIp}
+              onSectorPress={setActiveSectorId}
+            />
+          </View>
 
-      <View style={styles.mapRegion}>
-        <ShadowWarMap
-          theme={theme}
-          activeSectorId={activeSectorId}
-          sectorIp={state.sectorIp}
-          onSectorPress={setActiveSectorId}
-        />
-      </View>
-
-      <View style={styles.influenceRegion}>
-        <ShadowWarInfluencePanel
-          theme={theme}
-          sectorId={activeSectorId}
-          sectorIp={state.sectorIp[activeSectorId]}
-          weeklyDonatedIP={state.weeklyDonatedIP}
-          onDonatePress={() => setDonationOpen(true)}
-        />
-      </View>
+          <View style={styles.influenceRegion}>
+            <ShadowWarInfluencePanel
+              theme={theme}
+              sectorId={activeSectorId}
+              sectorIp={state.sectorIp[activeSectorId]}
+              weeklyDonatedIP={state.weeklyDonatedIP}
+              onDonatePress={() => setDonationOpen(true)}
+            />
+          </View>
+        </View>
+      </HubScreenShell>
 
       <Modal
         visible={donationOpen}
@@ -58,9 +58,9 @@ export default function ShadowWarDashboard({
         onRequestClose={() => setDonationOpen(false)}
       >
         <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, { borderColor: theme.borderColor, backgroundColor: theme.backgroundColor }]}>
+          <View style={[styles.modalCard, { borderColor: theme.borderColor, backgroundColor: 'rgba(10, 0, 21, 0.96)' }]}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.primaryColor }]}>
+              <Text style={[styles.modalTitle, { color: theme.statusColor }]}>
                 DONATION TERMINAL
               </Text>
               <HapticPressable
@@ -79,32 +79,28 @@ export default function ShadowWarDashboard({
           </View>
         </View>
       </Modal>
-    </View>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
+  body: {
     flex: 1,
     minHeight: 0,
-  },
-  title: { marginBottom: 2, flexShrink: 0 },
-  sub: {
-    fontFamily: 'monospace',
-    fontSize: 7,
-    letterSpacing: 0.4,
-    marginBottom: 6,
-    flexShrink: 0,
+    overflow: 'hidden',
+    gap: 4,
   },
   mapRegion: {
-    height: '40%',
-    minHeight: 120,
-    flexShrink: 0,
+    flex: 0.42,
+    minHeight: 96,
+    maxHeight: '48%',
+    flexShrink: 1,
+    overflow: 'hidden',
   },
   influenceRegion: {
     flex: 1,
     minHeight: 0,
-    marginTop: 6,
+    overflow: 'hidden',
   },
   modalBackdrop: {
     flex: 1,
@@ -138,7 +134,7 @@ const styles = StyleSheet.create({
   },
   closeBtnText: {
     fontFamily: 'monospace',
-    fontSize: 7,
-    fontWeight: '700',
+    fontSize: 8,
+    letterSpacing: 0.5,
   },
 });

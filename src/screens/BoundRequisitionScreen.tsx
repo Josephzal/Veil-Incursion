@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import HapticPressable from '../components/HapticPressable';
-import CabalBg from '../../assets/images/location images/cabal.png';
 import IncursionShell from '../components/IncursionShell';
 import IncursionRunLayout from '../components/IncursionRunLayout';
 import RunEventScreenFrame, { RunEventScreenHeader } from '../components/layout/RunEventScreenFrame';
@@ -50,7 +49,6 @@ export default function BoundRequisitionScreen(): React.JSX.Element {
       <IncursionRunLayout style={{ backgroundColor: theme.backgroundColor }}>
         <RunEventScreenFrame
           contentPadding={8}
-          backgroundImage={CabalBg}
           header={(
             <RunEventScreenHeader
               title="BOUND REQUISITION"

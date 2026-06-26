@@ -114,16 +114,6 @@ export default function OverworldHubScreen(): React.JSX.Element {
   return (
     <TerminalSafeArea>
       <View style={styles.root}>
-        <View style={styles.gridBackdrop} pointerEvents="none">
-          {Array.from({ length: 8 }).map((_, row) => (
-            <View key={`g-${row}`} style={styles.gridRow}>
-              {Array.from({ length: 4 }).map((__, col) => (
-                <View key={`c-${row}-${col}`} style={[styles.gridCell, { borderColor: `${theme.borderColor}33` }]} />
-              ))}
-            </View>
-          ))}
-        </View>
-
         <TerminalHubLayout
           activeView={terminalView}
           onSelectView={setTerminalView}
@@ -191,9 +181,6 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   loadingRoot: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
   loadingText: { fontFamily: 'monospace', fontSize: 10, letterSpacing: 1 },
-  gridBackdrop: { ...StyleSheet.absoluteFillObject, opacity: 0.2 },
-  gridRow: { flex: 1, flexDirection: 'row' },
-  gridCell: { flex: 1, borderWidth: 0.5 },
   viewport: { flex: 1, minHeight: 0, padding: 0 },
   factionOverlay: {
     ...StyleSheet.absoluteFillObject,

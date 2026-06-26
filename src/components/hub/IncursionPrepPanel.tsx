@@ -5,16 +5,17 @@ import { CLASS_DEFINITIONS } from '../../data/classes';
 import { getFactionDefinition } from '../../data/factions';
 import { shadowWarBuffsToRunModifiers } from '../../data/shadowWarBuffEngine';
 import { SHADOW_WAR_SECTORS } from '../../data/shadowWarSectors';
+import { hubKeyColor } from '../../constants/hubAtmosphere';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useShadowWar } from '../../context/ShadowWarContext';
 import type { PlayerAccount } from '../../types/game';
 import type { ShadowWarBuffId } from '../../types/shadowWar';
 import type { TerminalTheme } from '../../types/theme';
+import HubDataField from './HubDataField';
+import HubScreenShell, { HubSectionHeader } from './HubScreenShell';
 import {
-  formatBracketHeader,
   getInteractiveButtonStyle,
   getInteractiveButtonTextStyle,
-  hubTerminalUi,
 } from '../../styles/hubTerminalUi';
 
 const BUFF_LABELS: Record<ShadowWarBuffId, string> = {
@@ -46,12 +47,12 @@ export default function IncursionPrepPanel({
   const factionDef = account.alignedFaction ? getFactionDefinition(account.alignedFaction) : null;
   const classDef = CLASS_DEFINITIONS[account.activeClass];
   const buffMods = shadowWarBuffsToRunModifiers(activeBuffs);
+  const headerColor = theme.statusColor;
+  const keyColor = hubKeyColor(theme.mutedColor);
 
-  const activeBuffLines = useMemo(() => {
-    if (activeBuffs.length === 0) {
-      return ['No secured sector buffs active — donate on Shadow War tab.'];
-    }
-    return activeBuffs.map((id) => BUFF_LABELS[id] ?? id);
+  const activeBuffSummary = useMemo(() => {
+    if (activeBuffs.length === 0) return 'No secured sector buffs active';
+    return activeBuffs.map((id) => BUFF_LABELS[id] ?? id).join(' // ');
   }, [activeBuffs]);
 
   const securedSectors = useMemo(
@@ -60,63 +61,66 @@ export default function IncursionPrepPanel({
   );
 
   return (
-    <View style={styles.root}>
-      <Text style={[hubTerminalUi.sectionHeaderLg, styles.title, { color: theme.mutedColor }]}>
-        {formatBracketHeader('INCURSION PREP // DESCENT STAGING')}
-      </Text>
-      <Text style={[styles.sub, { color: theme.mutedColor }]}>
-        Lock loadout on Safehouse, then breach the Veil from this terminal.
-      </Text>
+    <HubScreenShell
+      title="INCURSION PREP // DESCENT STAGING"
+      subtitle="Lock loadout on Safehouse, then breach the Veil from this terminal."
+    >
+      <HubSectionHeader title="STAGING MANIFEST" color={headerColor} />
 
       <View style={styles.grid}>
-        <View style={[styles.card, { borderColor: theme.borderColor }]}>
-          <Text style={[styles.cardLabel, { color: theme.mutedColor }]}>OPERATIVE</Text>
-          <Text style={[styles.cardValue, { color: theme.primaryColor }]}>
-            {account.username.toUpperCase()}
-          </Text>
-          <Text style={[styles.cardMeta, { color: theme.mutedColor }]}>
-            {`${classDef.displayName} // RANK ${account.operativeRank}`}
-          </Text>
+        <View style={styles.gridColumn}>
+          <HubDataField
+            title="OPERATIVE"
+            value={account.username.toUpperCase()}
+            valueColor={theme.statusColor}
+            mutedColor={theme.mutedColor}
+            icon="person-outline"
+          />
+          <HubDataField
+            title="CLASS PROTOCOL"
+            value={`${classDef.displayName} // RANK ${account.operativeRank}`}
+            valueColor={theme.textColor}
+            mutedColor={theme.mutedColor}
+            icon="shield-outline"
+          />
         </View>
 
-        <View style={[styles.card, { borderColor: theme.borderColor }]}>
-          <Text style={[styles.cardLabel, { color: theme.mutedColor }]}>CABAL</Text>
-          <Text style={[styles.cardValue, { color: factionDef?.accentColor ?? theme.mutedColor }]}>
-            {factionDef?.displayName ?? 'UNALIGNED'}
-          </Text>
-          <Text style={[styles.cardMeta, { color: theme.mutedColor }]}>
-            {`${account.cabalCredits} CR // DEPTH ${account.progressionMatrix.maxDepthUnlocked}`}
-          </Text>
+        <View style={styles.gridColumn}>
+          <HubDataField
+            title="CABAL"
+            value={factionDef?.displayName ?? 'UNALIGNED'}
+            valueColor={factionDef?.accentColor ?? theme.mutedColor}
+            mutedColor={theme.mutedColor}
+            icon="flag-outline"
+          />
+          <HubDataField
+            title="STASH MANIFEST"
+            value={`${stash.used}/${stash.max} SLOTS`}
+            valueColor={theme.statusColor}
+            mutedColor={theme.mutedColor}
+            icon="cube-outline"
+          />
         </View>
+      </View>
 
-        <View style={[styles.card, { borderColor: theme.borderColor }]}>
-          <Text style={[styles.cardLabel, { color: theme.mutedColor }]}>STASH</Text>
-          <Text style={[styles.cardValue, { color: theme.statusColor }]}>
-            {`${stash.used}/${stash.max} SLOTS`}
+      <View style={styles.buffBlock}>
+        <HubDataField
+          title="SHADOW WAR BUFFS"
+          value={activeBuffSummary}
+          valueColor={theme.statusColor}
+          mutedColor={theme.mutedColor}
+          icon="flash-outline"
+        />
+        {securedSectors.length > 0 ? (
+          <Text style={[styles.buffMeta, { color: keyColor }]}>
+            {`Secured: ${securedSectors.join(', ')}`}
           </Text>
-          <Text style={[styles.cardMeta, { color: theme.mutedColor }]}>
-            Cargo manifest committed on breach
+        ) : null}
+        {buffMods.firstTurnApBonus > 0 || buffMods.maxHpBonusPct > 0 ? (
+          <Text style={[styles.buffMeta, { color: keyColor }]}>
+            {`Run modifiers: +${buffMods.maxHpBonusPct}% HP, +${buffMods.firstTurnApBonus} turn-1 AP`}
           </Text>
-        </View>
-
-        <View style={[styles.card, { borderColor: theme.borderColor }]}>
-          <Text style={[styles.cardLabel, { color: theme.mutedColor }]}>SHADOW WAR BUFFS</Text>
-          {activeBuffLines.map((line) => (
-            <Text key={line} style={[styles.cardMeta, { color: theme.primaryColor }]}>
-              {`• ${line}`}
-            </Text>
-          ))}
-          {securedSectors.length > 0 ? (
-            <Text style={[styles.cardMeta, { color: theme.mutedColor }]}>
-              {`Secured: ${securedSectors.join(', ')}`}
-            </Text>
-          ) : null}
-          {buffMods.firstTurnApBonus > 0 || buffMods.maxHpBonusPct > 0 ? (
-            <Text style={[styles.cardMeta, { color: theme.mutedColor }]}>
-              {`Run modifiers: +${buffMods.maxHpBonusPct}% HP, +${buffMods.firstTurnApBonus} turn-1 AP`}
-            </Text>
-          ) : null}
-        </View>
+        ) : null}
       </View>
 
       <HapticPressable
@@ -142,7 +146,7 @@ export default function IncursionPrepPanel({
             <Text style={[getInteractiveButtonTextStyle('lg'), { color: theme.statusColor }]}>
               BEGIN INCURSION
             </Text>
-            <Text style={[styles.ctaSub, { color: theme.mutedColor }]}>
+            <Text style={[styles.ctaSub, { color: keyColor }]}>
               {runDisabled
                 ? 'Align with a Cabal to unlock descent'
                 : 'Commit loadout and enter Bound Requisition'}
@@ -150,57 +154,34 @@ export default function IncursionPrepPanel({
           </>
         )}
       </HapticPressable>
-    </View>
+    </HubScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    minHeight: 0,
-    justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 4,
-  },
-  title: { marginBottom: 2 },
-  sub: {
-    fontFamily: 'monospace',
-    fontSize: 8,
-    letterSpacing: 0.4,
-    lineHeight: 12,
-    marginBottom: 6,
-  },
   grid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+    gap: 16,
+    marginBottom: 10,
   },
-  card: {
+  gridColumn: {
     flex: 1,
-    minWidth: '45%',
-    borderWidth: 1,
-    padding: 10,
+    minWidth: 0,
+    gap: 10,
+  },
+  buffBlock: {
     gap: 4,
+    marginBottom: 12,
   },
-  cardLabel: {
+  buffMeta: {
     fontFamily: 'monospace',
     fontSize: 7,
-    letterSpacing: 0.8,
-  },
-  cardValue: {
-    fontFamily: 'monospace',
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  cardMeta: {
-    fontFamily: 'monospace',
-    fontSize: 7,
-    letterSpacing: 0.3,
+    letterSpacing: 0.4,
     lineHeight: 10,
+    paddingLeft: 16,
   },
   cta: {
-    marginTop: 4,
+    marginTop: 'auto',
     alignItems: 'center',
     gap: 4,
   },

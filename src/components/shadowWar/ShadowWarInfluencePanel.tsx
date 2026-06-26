@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import HapticPressable from '../HapticPressable';
 import { FACTION_DEFINITIONS } from '../../data/factions';
 import { calculateSectorControl } from '../../data/shadowWarEngine';
@@ -29,11 +29,15 @@ function InfluenceMeter({
 }) {
   return (
     <View style={styles.meterRow}>
-      <Text style={[styles.meterLabel, { color }]} numberOfLines={1}>{label}</Text>
+      <Text style={[styles.meterLabel, { color }]} numberOfLines={1} ellipsizeMode="tail">
+        {label}
+      </Text>
       <View style={styles.meterTrack}>
         <View style={[styles.meterFill, { backgroundColor: color, width: `${Math.min(100, pct)}%` }]} />
       </View>
-      <Text style={[styles.meterPct, { color }]}>{pct}%</Text>
+      <Text style={[styles.meterPct, { color }]} numberOfLines={1}>
+        {`${pct}%`}
+      </Text>
     </View>
   );
 }
@@ -61,19 +65,23 @@ export default function ShadowWarInfluencePanel({
     : `[ SECURED — ${control.controllingFaction?.replace('_', ' ') ?? 'NONE'} ]`;
 
   return (
-    <View style={styles.root}>
+    <ScrollView
+      style={styles.root}
+      contentContainerStyle={styles.rootContent}
+      showsVerticalScrollIndicator={false}
+    >
       <View style={styles.readoutRow}>
         <View style={styles.readout}>
-          <Text style={[styles.readoutLine, { color: theme.mutedColor }]}>
+          <Text style={[styles.readoutLine, { color: theme.mutedColor }]} numberOfLines={1}>
             {`SECTOR: ${sector.label.toUpperCase()} // TOTAL IP: ${control.totalIp}`}
           </Text>
-          <Text style={[styles.readoutLine, { color: statusColor }]}>
+          <Text style={[styles.readoutLine, { color: statusColor }]} numberOfLines={1}>
             {`STATUS: ${statusLabel}`}
           </Text>
-          <Text style={[styles.readoutLine, { color: theme.primaryColor }]}>
+          <Text style={[styles.readoutLine, { color: theme.primaryColor }]} numberOfLines={2}>
             {`BUFF: ${sector.buffSummary.toUpperCase()}`}
           </Text>
-          <Text style={[styles.readoutLine, { color: theme.mutedColor }]}>
+          <Text style={[styles.readoutLine, { color: theme.mutedColor }]} numberOfLines={1}>
             {`YOUR WEEKLY DONATION: ${weeklyDonatedIP} IP`}
           </Text>
         </View>
@@ -93,7 +101,12 @@ export default function ShadowWarInfluencePanel({
       </View>
 
       <View style={styles.influenceBlock}>
-        <Text style={[hubTerminalUi.sectionHeader, styles.influenceHeader, { color: theme.mutedColor }]}>
+        <Text
+          style={[hubTerminalUi.sectionHeader, styles.influenceHeader, { color: theme.mutedColor }]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.75}
+        >
           {formatBracketHeader(`TERRITORIAL INFLUENCE — ${sector.label}`)}
         </Text>
         {FACTION_ORDER.map((factionId) => {
@@ -101,23 +114,26 @@ export default function ShadowWarInfluencePanel({
           const pct = control.displayInfluence[factionId];
           const rawIp = sectorIp[factionId];
           return (
-            <View key={factionId}>
+            <View key={factionId} style={styles.factionBlock}>
               <InfluenceMeter label={def.displayName} pct={pct} color={def.accentColor} />
-              <Text style={[styles.ipLine, { color: theme.mutedColor }]}>{`${rawIp} IP`}</Text>
+              <Text style={[styles.ipLine, { color: theme.mutedColor }]} numberOfLines={1}>
+                {`${rawIp} IP`}
+              </Text>
             </View>
           );
         })}
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, minHeight: 0 },
+  rootContent: { flexGrow: 1, paddingBottom: 4 },
   readoutRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 8,
+    gap: 6,
     marginBottom: 6,
     borderBottomWidth: 1,
     borderBottomColor: HUB_DATA_DIVIDER,
@@ -130,7 +146,7 @@ const styles = StyleSheet.create({
   },
   donateBtn: {
     flexShrink: 0,
-    minWidth: 72,
+    minWidth: 64,
     alignItems: 'center',
   },
   readoutLine: {
@@ -139,17 +155,43 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
     lineHeight: 11,
   },
-  influenceBlock: { flex: 1, minHeight: 0 },
+  influenceBlock: { flexShrink: 0 },
   influenceHeader: { marginBottom: 6 },
-  meterRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 2, gap: 6 },
-  meterLabel: { fontFamily: 'monospace', fontSize: 6, width: 64 },
+  factionBlock: {
+    marginBottom: 2,
+    width: '100%',
+  },
+  meterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    width: '100%',
+  },
+  meterLabel: {
+    fontFamily: 'monospace',
+    fontSize: 6,
+    width: 58,
+    flexShrink: 0,
+  },
   meterTrack: {
     flex: 1,
+    minWidth: 0,
     height: 5,
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
     overflow: 'hidden',
   },
   meterFill: { height: '100%' },
-  meterPct: { fontFamily: 'monospace', fontSize: 7, width: 28, textAlign: 'right' },
-  ipLine: { fontFamily: 'monospace', fontSize: 6, marginBottom: 4, marginLeft: 70 },
+  meterPct: {
+    fontFamily: 'monospace',
+    fontSize: 6,
+    width: 22,
+    flexShrink: 0,
+    textAlign: 'right',
+  },
+  ipLine: {
+    fontFamily: 'monospace',
+    fontSize: 6,
+    marginBottom: 3,
+    marginLeft: 62,
+  },
 });
