@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ImageBackground, StyleSheet, View, type ImageSourcePropType } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import {
   resolveCombatEnemyPortrait,
   resolvePortraitKeySuffix,
@@ -8,6 +8,7 @@ import {
 } from '../utils/combatEnemyPortrait';
 import type { ApparitionViewportRef } from '../components/combat/ApparitionViewport';
 import CombatLandscapeArena from '../components/combat/CombatLandscapeArena';
+import CombatArenaBackground from '../components/combat/CombatArenaBackground';
 import CombatEnemyGrid from '../components/combat/CombatEnemyGrid';
 import { resolveArenaLayoutMode } from '../components/combat/combatEnemyBarLayout';
 import CombatJuiceHost from '../components/combat/CombatJuiceHost';
@@ -562,18 +563,10 @@ export default function CombatScreen(): React.JSX.Element {
 
               <CombatJuiceHost style={styles.body}>
                 <View style={styles.arenaPanel}>
-                  <ImageBackground
+                  <CombatArenaBackground
                     source={arenaBackgroundSource}
-                    style={styles.arenaBackground}
-                    resizeMode="cover"
-                  >
-                    {arenaBackgroundScrimColor ? (
-                      <View
-                        style={[styles.arenaBackgroundScrim, { backgroundColor: arenaBackgroundScrimColor }]}
-                        pointerEvents="none"
-                      />
-                    ) : null}
-                  </ImageBackground>
+                    scrimColor={arenaBackgroundScrimColor}
+                  />
 
                   <View style={styles.arenaForeground} pointerEvents="box-none">
                     <ParticleOverlay biomeId={combatBiomeId} />
@@ -725,12 +718,6 @@ const styles = StyleSheet.create({
     width: '100%',
     overflow: 'hidden',
     position: 'relative',
-  },
-  arenaBackground: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  arenaBackgroundScrim: {
-    ...StyleSheet.absoluteFillObject,
   },
   arenaForeground: {
     ...StyleSheet.absoluteFillObject,

@@ -1,28 +1,33 @@
 import type { ImageSourcePropType } from 'react-native';
 import BackroadsBg from '../../assets/images/environment images/backroads.png';
+import BlackSiteBg from '../../assets/images/environment images/blacksite.png';
 import CityBuildingBg from '../../assets/images/environment images/city_building.png';
+import CityStreetsBg from '../../assets/images/environment images/citystreets.png';
+import DeepVeilBg from '../../assets/images/environment images/deepveil.png';
 import ForestBg from '../../assets/images/environment images/forest.png';
+import UndergroundBg from '../../assets/images/environment images/underground.png';
 import OverworldBg from '../../assets/images/environment images/overworld.png';
 import { normalizeBiomeId, type BiomeId } from './biomeConfig';
 
 /** Per-biome arena scrim — tune independently. */
-export const COMBAT_ARENA_BACKROADS_SCRIM = 'rgba(0, 0, 0, 0.68)';
-export const COMBAT_ARENA_CITY_BUILDINGS_SCRIM = 'rgba(0, 0, 0, 0.8)';
-export const COMBAT_ARENA_FOREST_SCRIM = 'rgba(0, 0, 0, 0.68)';
-export const COMBAT_ARENA_CITY_STREETS_SCRIM = 'rgba(0, 0, 0, 0.54)';
-export const COMBAT_ARENA_UNDERGROUND_SCRIM = 'rgba(0, 0, 0, 0.54)';
+export const COMBAT_ARENA_BACKROADS_SCRIM = 'rgba(0, 0, 0, 0)';
+export const COMBAT_ARENA_CITY_BUILDINGS_SCRIM = 'rgba(0, 0, 0, 0)';
+export const COMBAT_ARENA_FOREST_SCRIM = 'rgba(0, 0, 0, 0)';
+export const COMBAT_ARENA_CITY_STREETS_SCRIM = 'rgba(0, 0, 0, 0)';
+export const COMBAT_ARENA_UNDERGROUND_SCRIM = 'rgba(0, 0, 0, 0)';
+export const COMBAT_ARENA_DEEP_VEIL_SCRIM = 'rgba(0, 0, 0, 0)';
 
 const COMBAT_ARENA_BACKGROUNDS: Partial<Record<BiomeId, ImageSourcePropType>> = {
   backroads: BackroadsBg,
   city_buildings: CityBuildingBg,
   forest: ForestBg,
-  city_streets: OverworldBg,
-  deep_veil: OverworldBg,
-  underground: OverworldBg,
-  sunken_transit: OverworldBg,
-  black_site_sector: CityBuildingBg,
-  fractal_abyss: OverworldBg,
-  sanguine_atrium: OverworldBg,
+  city_streets: CityStreetsBg,
+  deep_veil: DeepVeilBg,
+  underground: UndergroundBg,
+  sunken_transit: UndergroundBg,
+  black_site_sector: BlackSiteBg,
+  fractal_abyss: DeepVeilBg,
+  sanguine_atrium: DeepVeilBg,
 };
 
 const COMBAT_ARENA_SCRIMS: Partial<Record<BiomeId, string>> = {
@@ -32,10 +37,10 @@ const COMBAT_ARENA_SCRIMS: Partial<Record<BiomeId, string>> = {
   city_streets: COMBAT_ARENA_CITY_STREETS_SCRIM,
   underground: COMBAT_ARENA_UNDERGROUND_SCRIM,
   sunken_transit: COMBAT_ARENA_UNDERGROUND_SCRIM,
-  black_site_sector: COMBAT_ARENA_CITY_BUILDINGS_SCRIM,
-  fractal_abyss: COMBAT_ARENA_UNDERGROUND_SCRIM,
-  sanguine_atrium: COMBAT_ARENA_UNDERGROUND_SCRIM,
-  deep_veil: COMBAT_ARENA_UNDERGROUND_SCRIM,
+  black_site_sector: COMBAT_ARENA_UNDERGROUND_SCRIM,
+  deep_veil: COMBAT_ARENA_DEEP_VEIL_SCRIM,
+  fractal_abyss: COMBAT_ARENA_DEEP_VEIL_SCRIM,
+  sanguine_atrium: COMBAT_ARENA_DEEP_VEIL_SCRIM,
 };
 
 export function resolveCombatArenaBackground(
