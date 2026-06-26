@@ -120,7 +120,12 @@ export function formatRunicBrandsLabel(count: number, cap: number): string {
   return `BRANDS // ${count}/${cap}`;
 }
 
-export type EnemyPortraitGlow = 'none' | 'player-selected' | 'enemy-attacking' | 'enemy-charging';
+export type EnemyPortraitGlow =
+  | 'none'
+  | 'player-selected'
+  | 'enemy-attacking'
+  | 'enemy-charging'
+  | 'fracture-breach';
 
 export type EnemyPortraitAnim = 'none' | 'lunge' | 'shimmy';
 
@@ -259,6 +264,8 @@ export interface CombatGridUnitSnapshot {
   isBlocked: boolean;
   isHookValid: boolean;
   isFractured: boolean;
+  /** True while fracture break is pending — tap this hostile to execute breach. */
+  isFractureBreachTarget?: boolean;
   portraitGlow?: EnemyPortraitGlow;
   portraitAnim?: EnemyPortraitAnim;
   intentShimmer?: EnemyIntentShimmer | null;

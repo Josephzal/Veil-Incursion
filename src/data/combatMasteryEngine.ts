@@ -22,7 +22,7 @@ export function isEnvoyProcUltimate(abilityId: string): abilityId is EnvoyAbilit
 
 export const FRACTURE_BREAK_PROMPT_MS = 1500;
 export const ZERO_PROTOCOL_DURATION_MS = 2000;
-export const ZERO_PROTOCOL_DAMAGE_PER_TAP = 3;
+export const ZERO_PROTOCOL_DAMAGE_PER_TAP = 6;
 export const CATACLYSM_SIGIL_DURATION_MS = 1500;
 export const CATACLYSM_SUCCESS_AOE = 50;
 export const CATACLYSM_FAIL_AOE = 15;

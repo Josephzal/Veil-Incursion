@@ -66,6 +66,7 @@ import HostileIntelView from './combat/layouts/HostileIntelView';
 import TurnOrderSidebar from './combat/layouts/TurnOrderSidebar';
 import CombatDashboardCommandColumn from './combat/layouts/CombatDashboardCommandColumn';
 import type { CombatOperativeTelemetry } from '../components/combat/CombatOperativeHud';
+import { shouldShowUnitInArenaGrid } from '../data/combatSquadEngine';
 
 export default function CombatScreen(): React.JSX.Element {
   const { theme } = useTerminal();
@@ -313,11 +314,7 @@ export default function CombatScreen(): React.JSX.Element {
       : effectiveSquadUi.units;
 
     return baseUnits
-      .filter((unit) => {
-        if (unit.dissolveHidden) return false;
-        if (unit.currentHp > 0 && unit.maxHp > 0) return true;
-        return (unit.dissolveSeq ?? 0) > 0;
-      })
+      .filter(shouldShowUnitInArenaGrid)
       .map((unit) => {
         const live = liveById.get(unit.unitId);
         const merged = live ? { ...unit, ...live } : unit;
@@ -330,7 +327,6 @@ export default function CombatScreen(): React.JSX.Element {
         const portraitSource = resolveUnitCombatPortrait(portraitMeta, nodeType);
         return {
           ...merged,
-          isDead: merged.currentHp <= 0,
           portraitSource,
           attackPortraitSource: resolveUnitCombatAttackPortrait(portraitMeta, portraitSource),
         };

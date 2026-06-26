@@ -207,11 +207,11 @@ export type ArenaLayoutUnit = {
   dissolveHidden?: boolean;
 };
 
+import { shouldShowUnitInArenaGrid } from '../../data/combatSquadEngine';
+
 /** Units still occupying a slot — alive, or mid-dissolve before removal. */
 export function unitOccupiesArenaSlot(unit: ArenaLayoutUnit): boolean {
-  if (unit.dissolveHidden) return false;
-  if (!unit.isDead) return true;
-  return (unit.dissolveSeq ?? 0) > 0;
+  return shouldShowUnitInArenaGrid(unit);
 }
 
 /** Backline melee dash-and-return timing (ms). */

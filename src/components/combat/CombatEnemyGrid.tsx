@@ -10,6 +10,7 @@ import CombatEnemyWrapper, {
   GROUP_ENEMY_WRAPPER_WIDTH,
   SOLO_ENEMY_WRAPPER_WIDTH,
 } from './CombatEnemyWrapper';
+import { shouldShowUnitInArenaGrid } from '../../data/combatSquadEngine';
 import {
   BACKLINE_ROW_HEIGHT,
   BACKLINE_SLOTS,
@@ -180,11 +181,7 @@ export default function CombatEnemyGrid({
     ));
   }, []);
 
-  const visibleUnits = units.filter((unit) => {
-    if (unit.dissolveHidden) return false;
-    if (!unit.isDead) return true;
-    return (unit.dissolveSeq ?? 0) > 0;
-  });
+  const visibleUnits = units.filter(shouldShowUnitInArenaGrid);
 
   const unitForSlot = useCallback(
     (slot: CombatGridSlotId) => visibleUnits.find((entry) => entry.slot === slot),

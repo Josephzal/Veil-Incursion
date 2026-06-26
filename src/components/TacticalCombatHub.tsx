@@ -697,6 +697,13 @@ export default function TacticalCombatHub({
   const zeroProtocolActiveRef = useRef(false);
   const [cataclysmSigilVisible, setCataclysmSigilVisible] = useState(false);
   const [fractureBreakUnitId, setFractureBreakUnitId] = useState<string | null>(null);
+  const fractureBreakUnitIdRef = useRef<string | null>(null);
+  const executeFractureBreakRef = useRef<(unitId: string) => void>(() => {});
+
+  const syncFractureBreakTarget = (unitId: string | null) => {
+    fractureBreakUnitIdRef.current = unitId;
+    setFractureBreakUnitId(unitId);
+  };
   const [envoyWardSpeed, setEnvoyWardSpeed] = useState<EnvoyWardExpansionSpeed>('normal');
   const [successfulParryCount, setSuccessfulParryCount] = useState(0);
   const [cataclysmReadyUi, setCataclysmReadyUi] = useState(false);
@@ -1226,6 +1233,9 @@ export default function TacticalCombatHub({
     enemyActionQueueRef.current[0] ?? focusedUnitIdRef.current ?? null;
 
   const resolvePortraitGlow = (unitId: string, intent: EnemyIntent): EnemyPortraitGlow => {
+    if (fractureBreakUnitIdRef.current === unitId) {
+      return 'fracture-breach';
+    }
     if (
       !isPlayerTurnRef.current
       && cycleRef.current === 'TEXT_COMBAT'
@@ -1305,8 +1315,9 @@ export default function TacticalCombatHub({
     const staged = selectedAbility;
     const targetMode = staged ? classAbilityTargetMode(operativeClass, staged) : 'NONE';
     const playerSelecting = canPlayerCommand();
+    const fractureBreachActive = fractureBreakUnitIdRef.current != null;
     const abilityTargeting = staged != null && targetMode === 'SINGLE';
-    const targetingActive = playerSelecting || abilityTargeting;
+    const targetingActive = playerSelecting || abilityTargeting || fractureBreachActive;
     const validTargets = staged && abilityTargeting
       ? validTargetsForClassAbility(operativeClass, nextSquad, staged)
       : [];
@@ -1323,6 +1334,7 @@ export default function TacticalCombatHub({
       }),
       units: nextSquad.map((u) => {
         const unitId = u.unitId ?? u.designation;
+        const isFractureBreachTarget = fractureBreakUnitIdRef.current === unitId;
         const threatTier = resolveEnemyThreatTier({
           isBoss: u.isBoss,
           isApex: u.isApex,
@@ -1330,9 +1342,11 @@ export default function TacticalCombatHub({
         });
         const hookValid = staged != null && isUnitHookValidForClass(operativeClass, staged, u);
         const alive = isUnitAlive(u);
-        const targetable = targetingActive && alive && (
-          !staged || !abilityTargeting || validIds.has(u.unitId!) || hookValid
-        );
+        const targetable = fractureBreachActive
+          ? (alive && isFractureBreachTarget)
+          : targetingActive && alive && (
+            !staged || !abilityTargeting || validIds.has(u.unitId!) || hookValid
+          );
         const blocked = staged != null && abilityTargeting
           && isUnitBlockedForClassAbility(operativeClass, nextSquad, staged, unitId)
           && !hookValid;
@@ -1406,6 +1420,7 @@ export default function TacticalCombatHub({
           isBlocked: blocked,
           isHookValid: hookValid,
           isFractured: isEnemyFractured(u),
+          isFractureBreachTarget,
           portraitGlow: resolvePortraitGlow(unitId, u.intent),
           portraitAnim: resolvePortraitAnim(unitId, u.intent),
           intentShimmer: resolveIntentShimmer(unitId, u),
@@ -1459,7 +1474,7 @@ export default function TacticalCombatHub({
 
   const clearVictoryBlockers = () => {
     combatPausedRef.current = false;
-    setFractureBreakUnitId(null);
+    syncFractureBreakTarget(null);
     setZeroProtocolVisible(false);
     zeroProtocolActiveRef.current = false;
     setCataclysmSigilVisible(false);
@@ -1496,6 +1511,13 @@ export default function TacticalCombatHub({
   };
 
   const handleUnitDissolveComplete = (unitId: string) => {
+    const unit = getUnitById(squadRef.current, unitId);
+    if (unit && isUnitAlive(unit)) {
+      delete dissolveSeqRef.current[unitId];
+      dissolvedHiddenRef.current.delete(unitId);
+      publishSquadUi(squadRef.current);
+      return;
+    }
     dissolvedHiddenRef.current.add(unitId);
     publishSquadUi(squadRef.current);
 
@@ -1519,6 +1541,8 @@ export default function TacticalCombatHub({
     hp: number,
   ) => {
     if (hp > 0) return;
+    const live = getUnitById(squadRef.current, unitId);
+    if (live && isUnitAlive(live)) return;
     const bump = (id: string) => {
       dissolveSeqRef.current[id] = (dissolveSeqRef.current[id] ?? 0) + 1;
       backlineDashActiveRef.current[id] = false;
@@ -1567,6 +1591,13 @@ export default function TacticalCombatHub({
   };
 
   const selectTarget = useCallback((unitId: string) => {
+    const pendingBreachId = fractureBreakUnitIdRef.current;
+    if (pendingBreachId != null) {
+      if (unitId === pendingBreachId) {
+        executeFractureBreakRef.current(pendingBreachId);
+      }
+      return;
+    }
     if (!canPlayerCommand()) return;
     const unit = getUnitById(squadRef.current, unitId);
     if (!unit || !isUnitAlive(unit)) return;
@@ -2519,7 +2550,8 @@ export default function TacticalCombatHub({
       fractureGain > 0
       && (!graftPlanForFracture || graftPlanForFracture.effectiveTags.includes('FRACTURE'))
     ) {
-      if (willFractureBreak(working, fractureGain) && !fractureBreakUnitId) {
+      if (willFractureBreak(working, fractureGain) && !fractureBreakUnitIdRef.current) {
+        fractureBreakUnitIdRef.current = e.unitId;
         working = applyFractureDamage(working, fractureGain, { deferBreak: true });
         patchUnit(e.unitId, working);
         combatPausedRef.current = true;
@@ -4234,7 +4266,6 @@ export default function TacticalCombatHub({
       return;
     }
     if (voidWardPrimedRef.current && openParryWindow(currentEnemy, true)) return;
-    if (!countering && operativeClass === 'ENVOY' && openEnvoyWardWindow(currentEnemy)) return;
     const hpStrikeResolved = commitPendingPlayerDamage(false, undefined, currentEnemy);
     if (hpStrikeResolved && currentEnemy.intent === 'VOID_AMBUSH') {
       finalizeNullShadeVoidAmbush(currentEnemy);
@@ -4629,7 +4660,9 @@ export default function TacticalCombatHub({
     setZeroProtocolVisible(false);
     zeroProtocolActiveRef.current = false;
     setCataclysmSigilVisible(false);
-    setFractureBreakUnitId(null);
+    syncFractureBreakTarget(null);
+    dissolvedHiddenRef.current = new Set();
+    dissolveSeqRef.current = {};
     setSuccessfulParryCount(0);
     setCataclysmReadyUi(false);
     cataclysmReadyPrevRef.current = false;
@@ -5926,13 +5959,14 @@ export default function TacticalCombatHub({
   };
 
   const expireFractureBreak = (unitId: string) => {
-    setFractureBreakUnitId(null);
+    syncFractureBreakTarget(null);
     combatPausedRef.current = false;
     const unit = getUnitById(squadRef.current, unitId);
     if (unit?.unitId) {
       patchUnit(unit.unitId, applyFracturedState(unit));
       log(`>> FRACTURE BREAK EXPIRED — ${unit.designation} enters FRACTURED state.`);
     }
+    publishSquadUi(squadRef.current);
     if (allUnitsDefeated(squadRef.current)) {
       scheduleCombatVictoryResolution();
     }
@@ -5941,8 +5975,9 @@ export default function TacticalCombatHub({
   const executeFractureBreak = (unitId: string) => {
     const unit = getUnitById(squadRef.current, unitId);
     if (!unit?.unitId) {
-      setFractureBreakUnitId(null);
+      syncFractureBreakTarget(null);
       combatPausedRef.current = false;
+      publishSquadUi(squadRef.current);
       return;
     }
     const plan = planFractureBreachStrike(operativeClass, strikeStats);
@@ -5973,13 +6008,15 @@ export default function TacticalCombatHub({
     ) {
       patchUnit(refreshed.unitId, applyFracturedState(refreshed));
     }
-    setFractureBreakUnitId(null);
+    syncFractureBreakTarget(null);
     combatPausedRef.current = false;
     log(`>> FRACTURE BREACH — ${unit.designation} executed (${plan.hitCount} hit(s)).`);
+    publishSquadUi(squadRef.current);
     if (allUnitsDefeated(squadRef.current)) {
       scheduleCombatVictoryResolution();
     }
   };
+  executeFractureBreakRef.current = executeFractureBreak;
 
   const onSlice = () => {
     if (cycleState !== 'TEXT_COMBAT' || !isPlayerTurn) return;
@@ -6921,7 +6958,7 @@ export default function TacticalCombatHub({
             <Text style={styles.exhaustedBanner}>
               {operativeClass === 'AEGIS'
                 ? 'EXHAUSTED — COUNTER/SLICE OFFLINE'
-                : 'EXHAUSTED — REACTIVE DEFENSE OFFLINE'}
+                : 'EXHAUSTED — FLUX RESERVES OFFLINE'}
             </Text>
           ) : null}
           {env.isPlayerBlinded ? (
@@ -7111,9 +7148,6 @@ export default function TacticalCombatHub({
       <FractureBreakPrompt
         visible={fractureBreakUnitId != null}
         designation={fractureBreakUnit?.designation}
-        onBreach={() => {
-          if (fractureBreakUnitId) executeFractureBreak(fractureBreakUnitId);
-        }}
         onExpire={() => {
           if (fractureBreakUnitId) expireFractureBreak(fractureBreakUnitId);
         }}

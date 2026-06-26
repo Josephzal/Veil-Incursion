@@ -1,19 +1,17 @@
 import React, { useEffect, useRef } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import HapticPressable from '../HapticPressable';
 import { FRACTURE_BREAK_PROMPT_MS } from '../../data/combatMasteryEngine';
 
 interface FractureBreakPromptProps {
   visible: boolean;
   designation?: string;
-  onBreach: () => void;
   onExpire: () => void;
 }
 
+/** Non-blocking fracture breach timer — player taps the highlighted hostile in the arena. */
 export default function FractureBreakPrompt({
   visible,
   designation,
-  onBreach,
   onExpire,
 }: FractureBreakPromptProps): React.JSX.Element | null {
   const firedRef = useRef(false);
@@ -35,58 +33,50 @@ export default function FractureBreakPrompt({
   if (!visible) return null;
 
   return (
-    <View style={styles.overlay} pointerEvents="box-none">
-      <View style={styles.dim} pointerEvents="none" />
-      <HapticPressable
-        style={styles.button}
-        onPress={() => {
-          if (firedRef.current) return;
-          firedRef.current = true;
-          onBreach();
-        }}
-      >
-        <Text style={styles.label}>[ FRACTURE BREACH ]</Text>
-        <Text style={styles.sub}>{designation ?? 'HOSTILE'} — EXECUTE NOW</Text>
-      </HapticPressable>
+    <View style={styles.bannerHost} pointerEvents="none">
+      <View style={styles.banner}>
+        <Text style={styles.label}>[ FRACTURE BREAK ]</Text>
+        <Text style={styles.sub}>
+          {`${designation ?? 'HOSTILE'} — TAP TO EXECUTE`}
+        </Text>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
+  bannerHost: {
+    position: 'absolute',
+    top: 8,
+    left: 0,
+    right: 0,
     zIndex: 48,
     elevation: 48,
-    justifyContent: 'center',
     alignItems: 'center',
   },
-  dim: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.55)',
-  },
-  button: {
-    borderWidth: 2,
+  banner: {
+    borderWidth: 1,
     borderColor: '#22d3ee',
-    backgroundColor: 'rgba(8, 47, 73, 0.92)',
-    paddingHorizontal: 22,
-    paddingVertical: 14,
+    backgroundColor: 'rgba(8, 47, 73, 0.88)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     alignItems: 'center',
     shadowColor: '#22d3ee',
-    shadowOpacity: 0.8,
-    shadowRadius: 12,
+    shadowOpacity: 0.65,
+    shadowRadius: 10,
   },
   label: {
     fontFamily: 'monospace',
-    fontSize: 11,
+    fontSize: 9,
     fontWeight: '700',
     color: '#67e8f9',
-    letterSpacing: 1.2,
+    letterSpacing: 1,
   },
   sub: {
     fontFamily: 'monospace',
     fontSize: 7,
     color: '#bae6fd',
-    marginTop: 4,
+    marginTop: 3,
     letterSpacing: 0.5,
   },
 });

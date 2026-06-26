@@ -7,6 +7,19 @@ export function isUnitAlive(unit: EnemyCombatProfile): boolean {
   return unit.currentHp > 0;
 }
 
+/** Arena grid visibility — alive/slumped units stay mounted; dead units only during dissolve VFX. */
+export interface ArenaGridUnitPresence {
+  isDead?: boolean;
+  dissolveHidden?: boolean;
+  dissolveSeq?: number;
+}
+
+export function shouldShowUnitInArenaGrid(unit: ArenaGridUnitPresence): boolean {
+  if (unit.dissolveHidden) return false;
+  if (!unit.isDead) return true;
+  return (unit.dissolveSeq ?? 0) > 0;
+}
+
 export function aliveUnits(squad: EnemyCombatProfile[]): EnemyCombatProfile[] {
   return squad.filter(isUnitAlive);
 }

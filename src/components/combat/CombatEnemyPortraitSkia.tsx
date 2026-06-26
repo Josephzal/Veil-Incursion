@@ -8,18 +8,21 @@ const GLOW_TINT: Record<Exclude<EnemyPortraitGlow, 'none'>, string> = {
   'player-selected': '#f8fafc',
   'enemy-attacking': '#ef4444',
   'enemy-charging': '#fde68a',
+  'fracture-breach': '#22d3ee',
 };
 
 const GLOW_SCALE: Record<Exclude<EnemyPortraitGlow, 'none'>, number> = {
   'player-selected': 1.05,
   'enemy-attacking': 1.05,
   'enemy-charging': 1.09,
+  'fracture-breach': 1.1,
 };
 
 const GLOW_OPACITY: Record<Exclude<EnemyPortraitGlow, 'none'>, number> = {
   'player-selected': 0.3,
   'enemy-attacking': 0.3,
   'enemy-charging': 0.38,
+  'fracture-breach': 0.55,
 };
 
 interface CombatEnemyPortraitSkiaProps {

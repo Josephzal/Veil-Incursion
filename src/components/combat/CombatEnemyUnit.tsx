@@ -68,19 +68,29 @@ export default function CombatEnemyUnit({
 
   if (unit.dissolveHidden) return null;
 
+  const breachTarget = unit.isFractureBreachTarget === true;
+
   const unitBody = (
     <View
       style={[
         styles.enemyContainer,
         isAlpha && styles.alphaGlow,
+        breachTarget && styles.breachTargetRing,
         styles.imageShell,
         isArena ? styles.imageShellArena : styles.imageShellCompact,
         {
-          opacity: unit.isBlocked && targetingActive && !unit.isHookValid ? 0.5 : 1,
+          opacity: breachTarget
+            ? 1
+            : unit.isBlocked && targetingActive && !unit.isHookValid ? 0.5 : 1,
         },
       ]}
       pointerEvents={dissolving ? 'none' : 'box-none'}
     >
+      {breachTarget ? (
+        <Text style={styles.breachCallout} numberOfLines={1}>
+          [ TAP TO BREACH ]
+        </Text>
+      ) : null}
       {isAlpha ? <EliteSkullBadge style={styles.eliteBadge} /> : null}
       {(unit.veilRotStacks ?? 0) > 0 ? (
         <View style={styles.rotBadge}>
@@ -207,6 +217,27 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.45,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 0 },
+  },
+  breachTargetRing: {
+    borderWidth: 2,
+    borderColor: '#22d3ee',
+    shadowColor: '#22d3ee',
+    shadowOpacity: 0.85,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  breachCallout: {
+    position: 'absolute',
+    top: -16,
+    left: 0,
+    right: 0,
+    zIndex: 22,
+    textAlign: 'center',
+    fontFamily: MONO,
+    fontSize: 7,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    color: '#67e8f9',
   },
   eliteBadge: {
     position: 'absolute',
