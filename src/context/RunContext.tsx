@@ -135,6 +135,10 @@ import {
   findVectorInCluster,
   isBossNodeType,
 } from '../data/descentEngine';
+import {
+  sanitizeEnvoyCombatLoadout,
+  sanitizeHexShotCombatLoadout,
+} from '../data/classAbilityUnlockEngine';
 import { clusterOffersCombat, VEIL_BLEED_HP_COST_PCT } from '../data/descentLevelMatrix';
 import {
   buildScannerCluster,
@@ -170,6 +174,7 @@ import {
   applyIncursionStarterCargo,
   removePlacedCargoItem,
 } from '../data/cargoGridEngine';
+import { resolveExtractionVeilResidueDeposit } from '../data/extractionPersistenceEngine';
 import type { RunDeathSummary } from '../types/runDeathSummary';
 import {
   formatCombatResourceDropLog,
@@ -325,6 +330,7 @@ interface RunContextType {
     logLine: string;
     transferredValue?: number;
   };
+  vaultIncursionVeilResidueToAccount: () => { deposited: number };
   restoreHealthFromBench: () => { success: boolean; logLine: string };
   getSafehouseIntel: () => import('../data/districtPacing').DistrictIntelBrief;
   focusPreviewNode: () => boolean;
@@ -651,10 +657,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         ? [...config.aegisLoadout] as AegisLoadout
         : createDefaultActiveIncursionState().aegisLoadout,
       hexShotLoadout: config?.hexShotLoadout
-        ? [...config.hexShotLoadout] as HexShotLoadout
+        ? sanitizeHexShotCombatLoadout(config.hexShotLoadout)
         : createDefaultActiveIncursionState().hexShotLoadout,
       envoyLoadout: config?.envoyLoadout
-        ? [...config.envoyLoadout] as EnvoyLoadout
+        ? sanitizeEnvoyCombatLoadout(config.envoyLoadout)
         : createDefaultActiveIncursionState().envoyLoadout,
       activeClass: config?.activeClass ?? 'AEGIS',
       cargo: applyIncursionStarterCargo(config?.initialCargo ?? createStarterCargoRunState()),
@@ -1344,8 +1350,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       ...createDefaultActiveIncursionState(),
       activeClass: config.activeClass,
       aegisLoadout: [...config.aegisLoadout] as AegisLoadout,
-      hexShotLoadout: [...config.hexShotLoadout] as HexShotLoadout,
-      envoyLoadout: [...config.envoyLoadout] as EnvoyLoadout,
+      hexShotLoadout: sanitizeHexShotCombatLoadout(config.hexShotLoadout),
+      envoyLoadout: sanitizeEnvoyCombatLoadout(config.envoyLoadout),
     };
     activeIncursionRef.current = resetIncursion;
     setActiveIncursion(resetIncursion);
@@ -3029,6 +3035,25 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  const vaultIncursionVeilResidueToAccount = useCallback((): { deposited: number } => {
+    const inc = activeIncursionRef.current;
+    const { totalDeposit, cargoForStash } = resolveExtractionVeilResidueDeposit(
+      inc.cargo,
+      inc.sessionVeilResidueCollected,
+    );
+    if (totalDeposit <= 0) return { deposited: 0 };
+    setActiveIncursion((prev) => {
+      const next = {
+        ...prev,
+        sessionVeilResidueCollected: 0,
+        cargo: cargoForStash,
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    return { deposited: totalDeposit };
+  }, []);
+
   const restoreHealthFromBench = useCallback(() => {
     const inc = activeIncursionRef.current;
     const run = runStateRef.current;
@@ -3426,16 +3451,18 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const setHexShotLoadout = useCallback((loadout: HexShotLoadout) => {
+    const sanitized = sanitizeHexShotCombatLoadout(loadout);
     setActiveIncursion((prev) => {
-      const next = { ...prev, hexShotLoadout: [...loadout] as HexShotLoadout };
+      const next = { ...prev, hexShotLoadout: sanitized };
       activeIncursionRef.current = next;
       return next;
     });
   }, []);
 
   const setEnvoyLoadout = useCallback((loadout: EnvoyLoadout) => {
+    const sanitized = sanitizeEnvoyCombatLoadout(loadout);
     setActiveIncursion((prev) => {
-      const next = { ...prev, envoyLoadout: [...loadout] as EnvoyLoadout };
+      const next = { ...prev, envoyLoadout: sanitized };
       activeIncursionRef.current = next;
       return next;
     });
@@ -3582,6 +3609,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       applyResonanceManifestScan,
       transitionToNextDistrict,
       transferRunCargoToBankVault,
+      vaultIncursionVeilResidueToAccount,
       restoreHealthFromBench,
       getSafehouseIntel,
       initiateEmergencyRecall,
@@ -3699,6 +3727,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       applyResonanceManifestScan,
       transitionToNextDistrict,
       transferRunCargoToBankVault,
+      vaultIncursionVeilResidueToAccount,
       restoreHealthFromBench,
       getSafehouseIntel,
       initiateEmergencyRecall,

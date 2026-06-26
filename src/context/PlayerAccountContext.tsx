@@ -71,7 +71,7 @@ import {
   returnCargoItemToHubStash,
   stageStashItemToCargoContainment,
 } from '../data/hubSafehouseEngine';
-import { depositAllCargoToHubAccount } from '../data/extractionPersistenceEngine';
+import { depositAllCargoToHubAccount, resolveExtractionVeilResidueDeposit } from '../data/extractionPersistenceEngine';
 import { relocateCargoItem } from '../data/cargoGridEngine';
 import { isResourceItemId } from '../data/resourceRegistry';
 import type { FenceableResourceId, ResourceItemId } from '../types/resourceItem';
@@ -289,8 +289,11 @@ interface PlayerAccountContextType {
     aegisLoadout: AegisLoadout;
     hexShotLoadout: HexShotLoadout;
     envoyLoadout: EnvoyLoadout;
+    sessionVeilResidueCollected?: number;
+    /** @deprecated Prefer sessionVeilResidueCollected — cargo residue is resolved automatically. */
     veilResidueCollected?: number;
   }) => void;
+  depositVeilResidueBalance: (amount: number) => number;
   applyShadowWarDonationAccount: (
     nextStash: ResourceQuantity,
     nextVeilResidueBalance: number,
@@ -1011,11 +1014,16 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       aegisLoadout: AegisLoadout;
       hexShotLoadout: HexShotLoadout;
       envoyLoadout: EnvoyLoadout;
+      sessionVeilResidueCollected?: number;
       veilResidueCollected?: number;
     }) => {
-      const residueDeposit = Math.max(0, Math.floor(payload.veilResidueCollected ?? 0));
+      const sessionCollected = payload.sessionVeilResidueCollected ?? payload.veilResidueCollected ?? 0;
+      const { totalDeposit, cargoForStash } = resolveExtractionVeilResidueDeposit(
+        payload.cargo,
+        sessionCollected,
+      );
       updateAccount((prev) => {
-        const deposited = depositAllCargoToHubAccount(payload.cargo, prev, {
+        const deposited = depositAllCargoToHubAccount(cargoForStash, prev, {
           aegisLoadout: payload.aegisLoadout,
           hexShotLoadout: payload.hexShotLoadout,
           envoyLoadout: payload.envoyLoadout,
@@ -1027,9 +1035,22 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
           aegisLoadout: normalizeAegisLoadout(deposited.aegisLoadout),
           hexShotLoadout: normalizeHexShotLoadoutForCommit(deposited.hexShotLoadout),
           envoyLoadout: normalizeEnvoyLoadoutForCommit(deposited.envoyLoadout),
-          veilResidueBalance: prev.veilResidueBalance + residueDeposit,
+          veilResidueBalance: prev.veilResidueBalance + totalDeposit,
         };
       });
+    },
+    [updateAccount],
+  );
+
+  const depositVeilResidueBalance = useCallback(
+    (amount: number): number => {
+      const deposit = Math.max(0, Math.floor(amount));
+      if (deposit <= 0) return 0;
+      updateAccount((prev) => ({
+        ...prev,
+        veilResidueBalance: prev.veilResidueBalance + deposit,
+      }));
+      return deposit;
     },
     [updateAccount],
   );
@@ -1159,6 +1180,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       sellFenceResource,
       commitDescentLoadout,
       persistRunExtraction,
+      depositVeilResidueBalance,
       applyShadowWarDonationAccount,
       getStashCapacitySnapshot,
       replaceResourceStash,
@@ -1206,6 +1228,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       sellFenceResource,
       commitDescentLoadout,
       persistRunExtraction,
+      depositVeilResidueBalance,
       applyShadowWarDonationAccount,
       getStashCapacitySnapshot,
       replaceResourceStash,

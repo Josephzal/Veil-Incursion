@@ -4,15 +4,17 @@ import type { CombatGridSlotId } from '../types/combatGrid';
 import { columnSlotsFor } from '../types/combatGrid';
 import type { EnemyCombatProfile } from '../types/run';
 import { getEnvoyAbilityDefinition } from './envoyAbilities';
+import { isEnvoyCastBlockedByVoidSiphon } from '../types/envoyState';
+import { addCombatTag } from './combatFractureEngine';
 import {
-  addCombatTag,
-  applyFractureDamage,
-} from './combatFractureEngine';
+  consumeVeilRotStacks,
+  getVeilRotStacks,
+  infectVeilRot,
+} from './envoyRotEngine';
 import {
   aliveUnits,
   getUnitById,
   isUnitAlive,
-  pullBacklineToFrontline,
   unitAtSlot,
 } from './combatSquadEngine';
 
@@ -34,7 +36,7 @@ export interface EnvoyExecutionContext {
   classState: ClassCombatEncounterState;
   log: (msg: string) => void;
   apCostOverride?: number;
-  fluxGenOverride?: number;
+  fluxRegenOverride?: number;
   fluxCostOverride?: number;
   spendStamina: (cost: number) => boolean;
   applyFluxDelta: (delta: number) => number;
@@ -77,8 +79,9 @@ export function executeEnvoyAbility(ctx: EnvoyExecutionContext): EnvoyExecutionR
     return { ok: false, refundAp: def.apCost };
   }
 
-  if (def.minFluxRequired != null && ctx.veilFlux < def.minFluxRequired) {
-    ctx.log(`[REJECTED] >> Requires at least ${def.minFluxRequired} Veil-Flux.`);
+  const fluxCost = ctx.fluxCostOverride ?? def.fluxCost;
+  if (fluxCost > 0 && ctx.veilFlux < fluxCost) {
+    ctx.log(`[REJECTED] >> Requires at least ${fluxCost}% Veil-Flux.`);
     return { ok: false, refundAp: def.apCost };
   }
 
@@ -87,7 +90,7 @@ export function executeEnvoyAbility(ctx: EnvoyExecutionContext): EnvoyExecutionR
     return { ok: false, refundAp: def.apCost };
   }
 
-  const netFlux = (ctx.fluxGenOverride ?? def.fluxGen) - (ctx.fluxCostOverride ?? def.fluxCost);
+  const netFlux = (ctx.fluxRegenOverride ?? def.fluxRegen) - fluxCost;
 
   switch (ctx.abilityId) {
     case 'VEIL_SPLINTER': {
@@ -101,6 +104,7 @@ export function executeEnvoyAbility(ctx: EnvoyExecutionContext): EnvoyExecutionR
         abilityId: ctx.abilityId,
         targetId: unit.unitId,
       }, unit.unitId);
+      infectVeilRot(ctx.classState, unit, 1, ctx.log);
       return { ok: true, fluxDelta: netFlux };
     }
 
@@ -118,31 +122,27 @@ export function executeEnvoyAbility(ctx: EnvoyExecutionContext): EnvoyExecutionR
           abilityId: ctx.abilityId,
           targetId: hit.unitId,
         }, hit.unitId);
+        infectVeilRot(ctx.classState, hit, 1, ctx.log);
       }
       return { ok: true, fluxDelta: netFlux };
     }
 
-    case 'SPATIAL_COLLAPSE': {
-      const unit = targetUnit(ctx);
-      if (!unit?.unitId || !unit.gridSlot) {
-        ctx.log('[REJECTED] >> Spatial Collapse requires a focal target.');
+    case 'NECROTIC_BLOOM': {
+      const targets = aliveUnits(ctx.squad);
+      if (targets.length === 0) {
+        ctx.log('[REJECTED] >> No hostiles on grid.');
         return { ok: false, refundAp: def.apCost };
       }
-      const hits = columnUnits(ctx.squad, unit.gridSlot as CombatGridSlotId);
-      for (const hit of hits) {
+      for (const hit of targets) {
         if (!hit.unitId) continue;
-        ctx.patchUnit(hit.unitId, {
-          kineticArmor: 0,
-          occultWards: 0,
-          veilBarrierCharges: undefined,
-        });
-        ctx.hurtEnemy(def.baseDamage, '[SPATIAL COLLAPSE]', {
+        ctx.hurtEnemy(def.baseDamage, '[NECROTIC BLOOM]', {
           channel: 'OCCULT',
           abilityId: ctx.abilityId,
           targetId: hit.unitId,
         }, hit.unitId);
+        infectVeilRot(ctx.classState, hit, 2, ctx.log);
       }
-      ctx.log('[SPATIAL COLLAPSE] >> Cover and wards shredded.');
+      ctx.log('[NECROTIC BLOOM] >> Bloom detonated across the hostile grid.');
       return { ok: true, fluxDelta: netFlux };
     }
 
@@ -152,11 +152,17 @@ export function executeEnvoyAbility(ctx: EnvoyExecutionContext): EnvoyExecutionR
         ctx.log('[REJECTED] >> Flux-Purge requires a melee target.');
         return { ok: false, refundAp: def.apCost };
       }
+      if (getVeilRotStacks(ctx.classState, unit.unitId) <= 0) {
+        ctx.log('[REJECTED] >> Flux-Purge requires a Veil Rot stack on the target.');
+        return { ok: false, refundAp: def.apCost };
+      }
+      consumeVeilRotStacks(ctx.classState, unit.unitId, 1);
       ctx.hurtEnemy(def.baseDamage, '[FLUX-PURGE]', {
         channel: 'OCCULT',
         abilityId: ctx.abilityId,
         targetId: unit.unitId,
       }, unit.unitId);
+      ctx.log(`[FLUX-PURGE] >> Rot siphoned from ${unit.designation} — flux reservoir vented.`);
       return { ok: true, fluxDelta: netFlux };
     }
 
@@ -175,6 +181,8 @@ export function executeEnvoyAbility(ctx: EnvoyExecutionContext): EnvoyExecutionR
         abilityId: ctx.abilityId,
         targetId: unit.unitId,
       }, unit.unitId);
+      infectVeilRot(ctx.classState, unit, 1, ctx.log);
+      ctx.log('[DIMENSIONAL SHEAR] >> Occult wards sheared.');
       return { ok: true, fluxDelta: netFlux };
     }
 
@@ -209,12 +217,12 @@ export function executeEnvoyAbility(ctx: EnvoyExecutionContext): EnvoyExecutionR
         return { ok: false, refundAp: def.apCost };
       }
       ctx.classState.enemyApDrainNextTurn[unit.unitId] = 1;
-      ctx.classState.entropyHexTurns[unit.unitId] = 2;
       ctx.hurtEnemy(def.baseDamage, '[ENTROPY HEX]', {
         channel: 'OCCULT',
         abilityId: ctx.abilityId,
         targetId: unit.unitId,
       }, unit.unitId);
+      infectVeilRot(ctx.classState, unit, 1, ctx.log);
       return { ok: true, fluxDelta: netFlux };
     }
 
@@ -230,29 +238,21 @@ export function executeEnvoyAbility(ctx: EnvoyExecutionContext): EnvoyExecutionR
         maxHp: reducedMax,
         currentHp: Math.min(unit.currentHp, reducedMax),
       });
+      infectVeilRot(ctx.classState, unit, 1, ctx.log);
       ctx.log('[FLESH-WARP] >> Anatomy warped — max HP −15%, healing blocked.');
       return { ok: true, fluxDelta: netFlux };
     }
 
-    case 'GRAVITY_WELL': {
-      let squad = ctx.squad;
-      for (const unit of aliveUnits(squad)) {
-        if (!unit.unitId || !unit.gridSlot?.startsWith('BL')) continue;
-        squad = pullBacklineToFrontline(squad, unit.unitId);
+    case 'PARALYTIC_MIASMA': {
+      const unit = targetUnit(ctx);
+      if (!unit?.unitId) {
+        ctx.log('[REJECTED] >> Paralytic Miasma requires a target.');
+        return { ok: false, refundAp: def.apCost };
       }
-      ctx.syncSquad(squad);
-      for (const unit of aliveUnits(squad)) {
-        if (!unit.unitId) continue;
-        let next = applyFractureDamage(unit, 10);
-        next = { ...next, evadeChance: 0, evadeActive: false };
-        ctx.patchUnit(unit.unitId, addCombatTag(next, 'CONCUSSED'));
-        ctx.hurtEnemy(def.baseDamage, '[GRAVITY WELL]', {
-          channel: 'OCCULT',
-          abilityId: ctx.abilityId,
-          targetId: unit.unitId,
-        }, unit.unitId);
-      }
-      ctx.log('[GRAVITY WELL] >> Hostiles pulled and rooted.');
+      ctx.patchUnit(unit.unitId, { evadeChance: 0, evadeActive: false });
+      ctx.classState.paralyticMiasmaDoubleRotNextTurn[unit.unitId] = true;
+      infectVeilRot(ctx.classState, unit, 1, ctx.log);
+      ctx.log(`[PARALYTIC MIASMA] >> ${unit.designation} rooted — next Veil Rot tick doubled.`);
       return { ok: true, fluxDelta: netFlux };
     }
 
@@ -285,7 +285,7 @@ export function executeEnvoyAbility(ctx: EnvoyExecutionContext): EnvoyExecutionR
         }, unit.unitId);
       }
       ctx.log('[CATACLYSM SIGIL] >> Sigil traced — grid-wide true rupture.');
-      return { ok: true, fluxDelta: -ctx.veilFlux };
+      return { ok: true, fluxDelta: 0 };
     }
 
     default:
@@ -298,36 +298,15 @@ export function isEnvoyAbilityEnabled(
   abilityId: EnvoyAbilityId,
   veilFlux: number,
   stamina: number,
-  envoySilenced: boolean,
+  isVoidSiphoned: boolean,
+  masochisticChannel: boolean,
   fluxCostOverride?: number,
 ): boolean {
   const def = getEnvoyAbilityDefinition(abilityId);
   const fluxCost = fluxCostOverride ?? def.fluxCost;
   if (def.id === 'RIFT_WARD') return false;
-  if (def.minFluxRequired != null && veilFlux < def.minFluxRequired) return false;
-  if (envoySilenced && def.tags.includes('FLUX_GEN')) return false;
+  if (isEnvoyCastBlockedByVoidSiphon(def.tags, isVoidSiphoned, masochisticChannel)) return false;
   if (def.staminaCost > 0 && stamina < def.staminaCost) return false;
   if (fluxCost > 0 && veilFlux < fluxCost) return false;
   return true;
-}
-
-export function applyEntropyHexDot(
-  squad: EnemyCombatProfile[],
-  turns: Record<string, number>,
-  hurtEnemy: EnvoyExecutionContext['hurtEnemy'],
-): Record<string, number> {
-  const next: Record<string, number> = {};
-  for (const [unitId, remaining] of Object.entries(turns)) {
-    const unit = getUnitById(squad, unitId);
-    if (!unit?.unitId || !isUnitAlive(unit)) continue;
-    hurtEnemy(8, '[ENTROPY HEX — DOT]', {
-      channel: 'OCCULT',
-      abilityId: 'ENTROPY_HEX',
-      targetId: unitId,
-      rollCrit: false,
-      indirectDamage: true,
-    }, unitId);
-    if (remaining > 1) next[unitId] = remaining - 1;
-  }
-  return next;
 }

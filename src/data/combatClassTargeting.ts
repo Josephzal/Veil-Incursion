@@ -12,6 +12,7 @@ import {
 } from './combatTargeting';
 import type { EnemyCombatProfile } from '../types/run';
 import { migrateHexShotAbilityId } from './hexShotMigration';
+import { migrateEnvoyAbilityId } from './envoyMigration';
 
 const HEX_TARGET_MODE: Partial<Record<HexShotAbilityId, AbilityTargetMode>> = {
   SILVER_CORE_SIDEARM: 'SINGLE',
@@ -35,7 +36,7 @@ const HEX_TARGET_MODE: Partial<Record<HexShotAbilityId, AbilityTargetMode>> = {
 const ENVOY_TARGET_MODE: Partial<Record<EnvoyAbilityId, AbilityTargetMode>> = {
   VEIL_SPLINTER: 'SINGLE',
   ASTRAL_LANCE: 'SINGLE',
-  SPATIAL_COLLAPSE: 'SINGLE',
+  NECROTIC_BLOOM: 'ALL',
   FLUX_PURGE: 'SINGLE',
   DIMENSIONAL_SHEAR: 'SINGLE',
   ENTROPY_HEX: 'SINGLE',
@@ -43,7 +44,7 @@ const ENVOY_TARGET_MODE: Partial<Record<EnvoyAbilityId, AbilityTargetMode>> = {
   MIND_SUNDER: 'SINGLE',
   SOUL_TETHER: 'SINGLE',
   CATACLYSM_SIGIL: 'ALL',
-  GRAVITY_WELL: 'ALL',
+  PARALYTIC_MIASMA: 'SINGLE',
   PHASE_STEP: 'NONE',
   AETHERIC_TRANSFUSION: 'NONE',
   RIFT_WARD: 'NONE',
@@ -61,7 +62,7 @@ export function classAbilityTargetMode(
     return HEX_TARGET_MODE[migrateHexShotAbilityId(abilityId)] ?? 'SINGLE';
   }
   if (classId === 'ENVOY') {
-    return ENVOY_TARGET_MODE[abilityId as EnvoyAbilityId] ?? 'SINGLE';
+    return ENVOY_TARGET_MODE[migrateEnvoyAbilityId(abilityId)] ?? 'SINGLE';
   }
   return aegisTargetMode(abilityId as AegisAbilityId);
 }

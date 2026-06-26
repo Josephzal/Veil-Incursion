@@ -109,7 +109,7 @@ export function buildClassGraftCastPlan(
   const plan = defaultClassGraftCastPlan(
     cost.apCost,
     cost.ammoCost,
-    cost.fluxGen,
+    cost.fluxRegen,
     cost.fluxCost,
     cost.tags,
   );
@@ -130,12 +130,21 @@ export function buildClassGraftCastPlan(
   if (graft.addAmmoCost != null) plan.ammoCost += graft.addAmmoCost;
   if (graft.ammoCostMultiplier != null) plan.ammoCostMultiplier = graft.ammoCostMultiplier;
 
-  if (graft.setFluxGen != null) plan.fluxGen = graft.setFluxGen;
-  if (graft.setFluxCost != null) plan.fluxCost = graft.setFluxCost;
-  if (graft.addFluxGeneration != null) plan.fluxGen += graft.addFluxGeneration;
-  if (graft.modifyTagFrom === 'FLUX_GEN' && graft.modifyTagTo === 'FLUX_DUMP') {
-    plan.fluxGen = 0;
-    plan.fluxCost = graft.setFluxCost ?? plan.fluxCost;
+  if (graft.setFluxRegen != null) {
+    plan.fluxRegen = graft.setFluxRegen;
+  }
+  if (graft.setFluxCost != null) {
+    if (graft.setFluxCost < 0) {
+      plan.fluxRegen = Math.abs(graft.setFluxCost);
+      plan.fluxCost = 0;
+    } else {
+      plan.fluxCost = graft.setFluxCost;
+    }
+  }
+  if (graft.addFluxCost != null) {
+    plan.fluxCost += graft.addFluxCost;
+  } else if (graft.addFluxGeneration != null) {
+    plan.fluxCost += graft.addFluxGeneration;
   }
 
   if (graft.addHpCost != null) plan.hpCostPct += graft.addHpCost * 100;
@@ -152,6 +161,7 @@ export function buildClassGraftCastPlan(
   plan.refundAmmoOnKill = graft.refundAmmoOnKill === true;
   plan.failDebuff = graft.selfDebuffOnFail ?? null;
   plan.executeThreshold = graft.executeThreshold ?? null;
+  plan.bossDamageMultiplier = graft.bossDamageMultiplier ?? 1;
   plan.guaranteedCrit = graft.setCritChance === 100;
   plan.randomTarget = graft.randomTarget === true;
   plan.consumeAllAmmo = graft.consumeAllAmmo === true;
@@ -175,15 +185,22 @@ export function buildClassGraftCastPlan(
 export function scaleClassGraftDamage(
   baseDamage: number,
   plan: ClassGraftCastPlan,
-  ctx: { currentAmmo: number; maxAmmo: number; veilFlux: number },
+  ctx: { currentAmmo: number; maxAmmo: number; veilFlux: number; fluxMaxCap: number },
 ): number {
+  if (plan.damageScale === 'MISSING_FLUX') {
+    const missing = Math.max(0, ctx.fluxMaxCap - ctx.veilFlux);
+    return Math.max(
+      1,
+      Math.floor(missing * 0.45 * plan.damageMultiplier * plan.baseDamageMultiplier),
+    );
+  }
   let damage = Math.floor(baseDamage * plan.damageMultiplier * plan.baseDamageMultiplier);
   if (plan.damageScale === 'MISSING_AMMO') {
     const missing = Math.max(0, ctx.maxAmmo - ctx.currentAmmo);
     damage += missing * 8;
   }
   if (plan.damageScale === 'CURRENT_FLUX') {
-    damage += Math.floor(ctx.veilFlux * 0.35);
+    damage += Math.floor((ctx.fluxMaxCap - ctx.veilFlux) * 0.35);
   }
   return Math.max(0, damage);
 }

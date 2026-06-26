@@ -11,7 +11,7 @@ export function isEnemyHealBlocked(
   hasFleshRot = false,
 ): boolean {
   if (classState.fleshWarpUnits[unitId] === true) return true;
-  if (hasFleshRot && (classState.entropyHexTurns[unitId] ?? 0) > 0) return true;
+  if (hasFleshRot && (classState.veilRotStacks[unitId] ?? 0) > 0) return true;
   return false;
 }
 

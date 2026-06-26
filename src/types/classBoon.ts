@@ -134,12 +134,12 @@ export interface HexShotBoonCombatModifiers {
 
 export interface EnvoyBoonCombatModifiers {
   spellDamageFluxBonusPct: number;
-  fluxOverloadThreshold: number;
-  startingFlux: number;
+  fluxMaxCap: number;
+  startingFluxPenalty: number;
   damageMultiplier: number;
   maxHpMultiplier: number;
   kineticArmorPer25Flux: number;
-  fluxGenShieldStacks: number;
+  fluxRegenShieldStacks: number;
   overloadMasteryCrit: boolean;
   pendulumDumpBonusPct: number;
   masochisticChannel: boolean;
@@ -153,8 +153,11 @@ export interface ClassBoonEncounterState {
   breachAndClearPending: boolean;
   tacticalReloadPending: boolean;
   lastActionWasBallistic: boolean;
-  lastActionWasFluxGen: boolean;
-  lastActionWasFluxDump: boolean;
+  lastActionConsumedFlux: boolean;
+  lastActionRestoredFlux: boolean;
+  lastActionWasSpell: boolean;
+  pendulumShiftDamageBonus: boolean;
+  deepReservesShieldActive: boolean;
   lastActionWasAoe: boolean;
   phantomTracerUnits: Record<string, number>;
   voidMarkedUnits: Record<string, boolean>;
@@ -184,8 +187,11 @@ export function createDefaultClassBoonEncounterState(): ClassBoonEncounterState 
     breachAndClearPending: false,
     tacticalReloadPending: false,
     lastActionWasBallistic: false,
-    lastActionWasFluxGen: false,
-    lastActionWasFluxDump: false,
+    lastActionConsumedFlux: false,
+    lastActionRestoredFlux: false,
+    lastActionWasSpell: false,
+    pendulumShiftDamageBonus: false,
+    deepReservesShieldActive: false,
     lastActionWasAoe: false,
     phantomTracerUnits: {},
     voidMarkedUnits: {},
@@ -229,12 +235,12 @@ export function defaultHexShotBoonModifiers(): HexShotBoonCombatModifiers {
 export function defaultEnvoyBoonModifiers(): EnvoyBoonCombatModifiers {
   return {
     spellDamageFluxBonusPct: 0,
-    fluxOverloadThreshold: 100,
-    startingFlux: 0,
+    fluxMaxCap: 100,
+    startingFluxPenalty: 0,
     damageMultiplier: 1,
     maxHpMultiplier: 1,
     kineticArmorPer25Flux: 0,
-    fluxGenShieldStacks: 0,
+    fluxRegenShieldStacks: 0,
     overloadMasteryCrit: false,
     pendulumDumpBonusPct: 0,
     masochisticChannel: false,

@@ -1,7 +1,9 @@
 import type { EnvoyAbilityId, HexShotAbilityId } from '../types/operativeClass';
 
 export const PERFECT_PARRIES_FOR_ULTIMATE = 3;
+/** @deprecated Cataclysm gates on total Veil Rot stacks — see CATACLYSM_ROT_GATE. */
 export const ENVOY_FLUX_ULTIMATE_THRESHOLD = 100;
+export { CATACLYSM_ROT_GATE } from './envoyRotEngine';
 
 /** Proc-only mastery ultimates — never appear on the 4-slot command deck. */
 export const HEX_SHOT_PROC_ULTIMATE: HexShotAbilityId = 'ZERO_PROTOCOL';
@@ -25,4 +27,3 @@ export const CATACLYSM_SIGIL_DURATION_MS = 1500;
 export const CATACLYSM_SUCCESS_AOE = 50;
 export const CATACLYSM_FAIL_AOE = 15;
 export const CATACLYSM_FAIL_BACKLASH = 15;
-export const CATACLYSM_FAIL_FLUX = 50;

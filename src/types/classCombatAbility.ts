@@ -32,8 +32,6 @@ export type EnvoyAbilityTag =
   | 'MELEE'
   | 'OCCULT'
   | 'AOE'
-  | 'FLUX_GEN'
-  | 'FLUX_DUMP'
   | 'DEFENSIVE'
   | 'MOBILITY'
   | 'BUFF'
@@ -53,6 +51,10 @@ export interface ClassCombatEncounterState {
   ghostCamoTurnsRemaining: number;
   enemyApDrainNextTurn: Record<string, number>;
   entropyHexTurns: Record<string, number>;
+  /** Envoy — Veil Rot stacks (0–4) per hostile unitId. */
+  veilRotStacks: Record<string, number>;
+  /** Envoy — Paralytic Miasma doubles next Veil Rot tick. */
+  paralyticMiasmaDoubleRotNextTurn: Record<string, boolean>;
   fleshWarpUnits: Record<string, boolean>;
   bleedingPayloadTurns: Record<string, number>;
   /** Hex Reactive Camo — once per encounter. */
@@ -61,7 +63,7 @@ export interface ClassCombatEncounterState {
   successfulParryCount: number;
   /** Aegis — Runic Brands imprinted on the action layer. */
   runicBrands: number;
-  /** Envoy — Cataclysm sigil ready at max flux. */
+  /** Envoy — Cataclysm sigil ready when total Veil Rot stacks ≥ gate. */
   cataclysmReady: boolean;
 }
 
@@ -74,6 +76,8 @@ export function createDefaultClassCombatEncounterState(): ClassCombatEncounterSt
     ghostCamoTurnsRemaining: 0,
     enemyApDrainNextTurn: {},
     entropyHexTurns: {},
+    veilRotStacks: {},
+    paralyticMiasmaDoubleRotNextTurn: {},
     fleshWarpUnits: {},
     bleedingPayloadTurns: {},
     reactiveCamoUsed: false,

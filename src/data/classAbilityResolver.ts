@@ -9,9 +9,8 @@ import { resolveHexShotResourceCosts } from './hexShotResourceEngine';
 export interface ClassAbilityCostSummary {
   apCost: number;
   ammoCost: number;
-  fluxGen: number;
+  fluxRegen: number;
   fluxCost: number;
-  minFluxRequired: number;
   staminaCost: number;
   staminaCostPct: number;
   reserveCost: number;
@@ -22,8 +21,8 @@ export interface ClassAbilityCostSummary {
   description: string;
   tags: readonly string[];
   isUltimate: boolean;
-  isFluxGen: boolean;
-  isFluxDump: boolean;
+  consumesFlux: boolean;
+  restoresFlux: boolean;
 }
 
 export function resolveClassAbilityCost(
@@ -37,9 +36,8 @@ export function resolveClassAbilityCost(
     return {
       apCost: resolved.apCost,
       ammoCost: resolved.ammoCost,
-      fluxGen: 0,
+      fluxRegen: 0,
       fluxCost: 0,
-      minFluxRequired: 0,
       staminaCost: resolved.staminaCost,
       staminaCostPct: resolved.staminaCostPct,
       reserveCost: 0,
@@ -50,8 +48,8 @@ export function resolveClassAbilityCost(
       description: def.description,
       tags,
       isUltimate: tags.includes('ULTIMATE'),
-      isFluxGen: false,
-      isFluxDump: false,
+      consumesFlux: false,
+      restoresFlux: false,
     };
   }
   if (classId === 'ENVOY') {
@@ -60,9 +58,8 @@ export function resolveClassAbilityCost(
     return {
       apCost: def.apCost,
       ammoCost: 0,
-      fluxGen: def.fluxGen,
+      fluxRegen: def.fluxRegen,
       fluxCost: def.fluxCost,
-      minFluxRequired: def.minFluxRequired ?? 0,
       staminaCost: def.staminaCost,
       staminaCostPct: 0,
       reserveCost: 0,
@@ -73,8 +70,8 @@ export function resolveClassAbilityCost(
       description: def.description,
       tags,
       isUltimate: tags.includes('ULTIMATE'),
-      isFluxGen: tags.includes('FLUX_GEN'),
-      isFluxDump: tags.includes('FLUX_DUMP'),
+      consumesFlux: def.fluxCost > 0,
+      restoresFlux: def.fluxRegen > 0,
     };
   }
   const def = getAbilityDefinition(abilityId as AegisAbilityId);
@@ -82,21 +79,20 @@ export function resolveClassAbilityCost(
   return {
     apCost: def.apCost,
     ammoCost: 0,
-    fluxGen: 0,
+    fluxRegen: 0,
     fluxCost: 0,
-    minFluxRequired: 0,
-    staminaCost: def.staminaCost,
+    staminaCost: def.staminaCost ?? 0,
     staminaCostPct: def.staminaCostPct ?? 0,
     reserveCost: def.reserveCost ?? 0,
     reserveCostPct: def.reserveCostPct ?? 0,
     minReservePct: def.minReservePct ?? 0,
-    requiresFullMag: def.requiresFullAbyssal ?? false,
+    requiresFullMag: false,
     label: def.label,
     description: def.description,
     tags,
     isUltimate: tags.includes('ULTIMATE'),
-    isFluxGen: false,
-    isFluxDump: false,
+    consumesFlux: false,
+    restoresFlux: false,
   };
 }
 
@@ -107,14 +103,27 @@ export function formatClassAbilityCostLine(classId: ClassType, abilityId: string
     parts.push(`${cost.ammoCost} AMMO`);
   }
   if (classId === 'ENVOY') {
-    if (cost.fluxCost > 0) parts.push(`−${cost.fluxCost} FLUX`);
-    else if (cost.fluxGen > 0) parts.push(`+${cost.fluxGen} FLUX`);
+    if (cost.fluxCost > 0) parts.push(`−${cost.fluxCost}% FLUX`);
+    else if (cost.fluxRegen > 0) parts.push(`+${cost.fluxRegen}% FLUX`);
   }
   if (classId === 'AEGIS') {
-    if (cost.requiresFullMag) parts.push('100% AR');
+    const def = getAbilityDefinition(abilityId as AegisAbilityId);
     if (cost.reserveCost > 0) parts.push(`−${cost.reserveCost}% AR`);
     else if (cost.reserveCostPct > 0) parts.push(`−${cost.reserveCostPct}% AR`);
     if (cost.minReservePct > 0) parts.push(`≥${cost.minReservePct}% AR`);
+    if (def.brandsImprinted && def.brandsImprinted > 0) {
+      parts.push(`+${def.brandsImprinted} BRAND`);
+    }
+    if (def.requiredBrands && def.requiredBrands > 0) {
+      parts.push(`≥${def.requiredBrands} BRAND`);
+    }
+    if (def.brandsConsumed != null) {
+      if (def.brandsConsumed === 'ALL') {
+        parts.push('−ALL BRANDS');
+      } else {
+        parts.push(`−${def.brandsConsumed} BRAND`);
+      }
+    }
   } else {
     if (cost.staminaCost > 0) parts.push(`${cost.staminaCost} STAM`);
     else if (cost.staminaCostPct > 0) parts.push(`${cost.staminaCostPct}% STAM`);

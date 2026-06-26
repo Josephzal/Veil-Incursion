@@ -35,8 +35,11 @@ export interface CombatOperativeTelemetry {
   overcharged?: boolean;
   zeroProtocolReady?: boolean;
   veilFlux?: number;
-  envoyOverloaded?: boolean;
+  fluxMaxCap?: number;
+  envoyVoidSiphoned?: boolean;
   envoySilenced?: boolean;
+  veilRotStacksTotal?: number;
+  catalyticPayloadEstimate?: number;
 }
 
 interface CombatOperativeHudProps {
@@ -77,14 +80,17 @@ export default function CombatOperativeHud({
     overcharged = false,
     zeroProtocolReady = false,
     veilFlux = 0,
-    envoyOverloaded = false,
+    fluxMaxCap = 100,
+    envoyVoidSiphoned = false,
     envoySilenced = false,
+    veilRotStacksTotal = 0,
+    catalyticPayloadEstimate = 0,
   } = telemetry;
 
   const soulAnchorRatio = maxSoulAnchor > 0 ? operativeHp / maxSoulAnchor : 0;
   const abyssalRatio = formatAegisReserveRatio(abyssalReserve, abyssalCap);
   const staminaRatio = maxStamina > 0 ? stamina / maxStamina : 0;
-  const fluxRatio = Math.min(1, veilFlux / 100);
+  const fluxRatio = fluxMaxCap > 0 ? Math.min(1, veilFlux / fluxMaxCap) : 0;
 
   const compact = deckAligned || wide || dashboardCompact;
   const rowVariant = dashboardCompact
@@ -110,15 +116,28 @@ export default function CombatOperativeHud({
     }
     if (operativeClass === 'ENVOY') {
       return (
-        <CombatTelemetryGaugeRow
-          label={`VEIL-FLUX // ${Math.round(veilFlux)}%${envoyOverloaded ? ' // OVERLOADED' : ''}${envoySilenced ? ' // SILENCED' : ''}`}
-          labelColor="#c084fc"
-          fillColor={GAUGE_VEIL_FLUX}
-          ratio={fluxRatio}
-          trackBorderColor={GAUGE_TRACK_BORDER}
-          variant={rowVariant}
-          gaugeWidth="100%"
-        />
+        <>
+          <CombatTelemetryGaugeRow
+            label={`VEIL-FLUX // ${Math.round(veilFlux)}%${envoyVoidSiphoned ? ' // VOID-SIPHONED' : ''}${envoySilenced ? ' // SILENCED' : ''}`}
+            labelColor="#c084fc"
+            fillColor={GAUGE_VEIL_FLUX}
+            ratio={fluxRatio}
+            trackBorderColor={GAUGE_TRACK_BORDER}
+            variant={rowVariant}
+            gaugeWidth="100%"
+          />
+          {veilRotStacksTotal > 0 ? (
+            <CombatTelemetryGaugeRow
+              label={`VEIL ROT // ${veilRotStacksTotal} STACK${veilRotStacksTotal === 1 ? '' : 'S'} — CATALYST ~${catalyticPayloadEstimate} OCCULT`}
+              labelColor="#4ade80"
+              fillColor="#22c55e"
+              ratio={Math.min(1, veilRotStacksTotal / 12)}
+              trackBorderColor={GAUGE_TRACK_BORDER}
+              variant={rowVariant}
+              gaugeWidth="100%"
+            />
+          ) : null}
+        </>
       );
     }
     return (

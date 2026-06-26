@@ -5,6 +5,8 @@ import { CLASS_DEFINITIONS } from '../data/classes';
 import { getFactionDefinition } from '../data/factions';
 import { getMacroSector } from '../data/macroSectors';
 import { LANDSCAPE_PANEL_PADDING } from '../constants/landscapeLayout';
+import { useGameFlow } from '../context/GameFlowContext';
+import { useRun } from '../context/RunContext';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import LandscapeSplitPane from './layout/LandscapeSplitPane';
 import ClassAbilityRoster from './ClassAbilityRoster';
@@ -16,6 +18,8 @@ import { formatSnakeCaseToTitleCase } from '../utils/formatDisplayName';
 import { resolvePlayerBadgePortrait } from '../utils/combatPlayerPortrait';
 import {
   formatBracketHeader,
+  getInteractiveButtonStyle,
+  getInteractiveButtonTextStyle,
   hubTerminalUi,
 } from '../styles/hubTerminalUi';
 import { useLandscapeMetrics } from '../hooks/useLandscapeMetrics';
@@ -89,6 +93,8 @@ export default function IdentificationBadgeView({
   account,
 }: IdentificationBadgeViewProps): React.JSX.Element {
   const { cycleActiveClass } = usePlayerAccount();
+  const { startCombat } = useGameFlow();
+  const { startBadgeTestCombat } = useRun();
   const { useHorizontalSplit } = useLandscapeMetrics();
 
   const cred = profile.operative_profile.credentials;
@@ -107,6 +113,16 @@ export default function IdentificationBadgeView({
   const handleCycleClass = (direction: 1 | -1) => {
     if (!canCycleClass) return;
     cycleActiveClass(direction);
+  };
+
+  const launchTestCombat = (preset: 'easy' | 'hard') => {
+    startBadgeTestCombat(preset, {
+      activeClass: account.activeClass,
+      aegisLoadout: account.aegisLoadout,
+      hexShotLoadout: account.hexShotLoadout,
+      envoyLoadout: account.envoyLoadout,
+    });
+    startCombat();
   };
 
   const identityColumn = (
@@ -166,6 +182,39 @@ export default function IdentificationBadgeView({
 
       <View style={styles.loadoutBlock}>
         <ClassAbilityRoster account={account} theme={theme} />
+      </View>
+
+      <View style={styles.testArenaBlock}>
+        <Text style={[hubTerminalUi.sectionHeader, { color: theme.mutedColor }]}>
+          {formatBracketHeader('TRAINING ARENA // BADGE COMBAT')}
+        </Text>
+        <Text style={[styles.testArenaHint, { color: theme.mutedColor }]}>
+          {`Deploy ${classDef.displayName.toUpperCase()} loadout against an isolated hostile.`}
+        </Text>
+        <View style={styles.testArenaRow}>
+          <HapticPressable
+            onPress={() => launchTestCombat('easy')}
+            style={({ pressed }) => [
+              getInteractiveButtonStyle(theme.primaryColor, { pressed, size: 'sm' }),
+              styles.testArenaBtn,
+            ]}
+          >
+            <Text style={[getInteractiveButtonTextStyle('sm'), { color: theme.primaryColor }]}>
+              [ EASY COMBAT ]
+            </Text>
+          </HapticPressable>
+          <HapticPressable
+            onPress={() => launchTestCombat('hard')}
+            style={({ pressed }) => [
+              getInteractiveButtonStyle(theme.statusColor, { pressed, size: 'sm' }),
+              styles.testArenaBtn,
+            ]}
+          >
+            <Text style={[getInteractiveButtonTextStyle('sm'), { color: theme.statusColor }]}>
+              [ HARD COMBAT ]
+            </Text>
+          </HapticPressable>
+        </View>
       </View>
     </View>
   );
@@ -367,6 +416,23 @@ const styles = StyleSheet.create({
   loadoutBlock: {
     flexShrink: 1,
     minHeight: 0,
+  },
+  testArenaBlock: {
+    gap: 4,
+    flexShrink: 0,
+  },
+  testArenaHint: {
+    fontFamily: 'monospace',
+    fontSize: 7,
+    letterSpacing: 0.3,
+    lineHeight: 10,
+  },
+  testArenaRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  testArenaBtn: {
+    flex: 1,
   },
   dataField: {
     gap: 2,

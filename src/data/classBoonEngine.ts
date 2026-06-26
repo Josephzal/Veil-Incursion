@@ -134,15 +134,14 @@ export function aggregateEnvoyBoonModifiers(
   boons: readonly EnvoyBoonId[],
 ): EnvoyBoonCombatModifiers {
   const mods = defaultEnvoyBoonModifiers();
-  if (hasEnvoyBoon(boons, 'FLUX_CAPACITOR')) mods.fluxOverloadThreshold = 120;
-  if (hasEnvoyBoon(boons, 'DEEP_RESERVES')) mods.startingFlux = 50;
+  if (hasEnvoyBoon(boons, 'FLUX_CAPACITOR')) mods.fluxMaxCap = 120;
+  if (hasEnvoyBoon(boons, 'VOIDS_BARGAIN')) mods.startingFluxPenalty = 25;
   if (hasEnvoyBoon(boons, 'GLASS_CANNON')) {
     mods.damageMultiplier *= 1.4;
     mods.maxHpMultiplier *= 0.75;
   }
   if (hasEnvoyBoon(boons, 'VOID_TOUCHED')) mods.spellDamageFluxBonusPct += 15;
-  if (hasEnvoyBoon(boons, 'ASTRAL_PIERCER')) mods.spellDamageFluxBonusPct += 0; // handled per-target
-  if (hasEnvoyBoon(boons, 'RESIDUAL_ENERGY')) mods.fluxGenShieldStacks = 2;
+  if (hasEnvoyBoon(boons, 'RESIDUAL_ENERGY')) mods.fluxRegenShieldStacks = 2;
   if (hasEnvoyBoon(boons, 'AETHERIC_BULWARK')) mods.kineticArmorPer25Flux = 1;
   if (hasEnvoyBoon(boons, 'MASOCHISTIC_CHANNEL')) mods.masochisticChannel = true;
   if (hasEnvoyBoon(boons, 'PENDULUM_SHIFT')) mods.pendulumDumpBonusPct += 50;

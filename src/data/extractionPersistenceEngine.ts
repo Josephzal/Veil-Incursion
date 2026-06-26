@@ -2,6 +2,7 @@ import type { CargoItemId, CargoRunState } from '../types/cargoGrid';
 import type { AegisLoadout } from '../types/aegisCombat';
 import type { PlayerAccount } from '../types/game';
 import type { EnvoyLoadout, HexShotLoadout } from '../types/operativeClass';
+import { countVeilResidueInCargo, stripVeilResidueFromCargo } from './cargoGridEngine';
 import { isResourceItemId } from './resourceRegistry';
 import { addToResourceStash } from './resourceStashEngine';
 
@@ -17,6 +18,19 @@ export interface RunExtractionDeposit {
   aegisLoadout: AegisLoadout;
   hexShotLoadout: HexShotLoadout;
   envoyLoadout: EnvoyLoadout;
+}
+
+/** Session canister + unpacked bulk residue in cargo — all vault to safehouse balance on extract. */
+export function resolveExtractionVeilResidueDeposit(
+  cargo: CargoRunState,
+  sessionCollected: number,
+): { totalDeposit: number; cargoForStash: CargoRunState } {
+  const cargoResidue = countVeilResidueInCargo(cargo);
+  const totalDeposit = Math.max(0, Math.floor(sessionCollected)) + cargoResidue;
+  return {
+    totalDeposit,
+    cargoForStash: stripVeilResidueFromCargo(cargo),
+  };
 }
 
 /** Deposits every item from run cargo into persistent hub stash fields. */

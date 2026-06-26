@@ -15,6 +15,7 @@ import {
 import { ENVOY_ABILITY_CATALOG } from './envoyAbilities';
 import { HEX_SHOT_ABILITY_CATALOG } from './hexShotAbilities';
 import { migrateHexShotAbilityId } from './hexShotMigration';
+import { migrateEnvoyAbilityId } from './envoyMigration';
 import {
   canAffordAbilityUnlock,
   deductAbilityUnlockCost,
@@ -79,11 +80,12 @@ export function sanitizeHexShotCombatLoadout(loadout: readonly HexShotAbilityId[
 }
 
 export function sanitizeEnvoyCombatLoadout(loadout: readonly EnvoyAbilityId[]): EnvoyLoadout {
-  if (loadout.length !== 4 || loadout[0] !== ENVOY_ANCHOR) {
+  const migrated = loadout.map((id) => migrateEnvoyAbilityId(id));
+  if (migrated.length !== 4 || migrated[0] !== ENVOY_ANCHOR) {
     return [...DEFAULT_ENVOY_LOADOUT];
   }
-  const used = new Set<string>([loadout[0]]);
-  const flex = loadout.slice(1).map((id) => {
+  const used = new Set<string>([migrated[0]]);
+  const flex = migrated.slice(1).map((id) => {
     if (!isEnvoyProcUltimate(id)) {
       used.add(id);
       return id;
@@ -94,7 +96,7 @@ export function sanitizeEnvoyCombatLoadout(loadout: readonly EnvoyAbilityId[]): 
     used.add(replacement);
     return replacement;
   });
-  return [loadout[0], flex[0], flex[1], flex[2]] as EnvoyLoadout;
+  return [migrated[0], flex[0], flex[1], flex[2]] as EnvoyLoadout;
 }
 
 export function isHexShotAbilityUnlocked(
@@ -110,8 +112,9 @@ export function isEnvoyAbilityUnlocked(
   unlocked: readonly EnvoyAbilityId[],
   abilityId: EnvoyAbilityId,
 ): boolean {
-  if (abilityId === ENVOY_ANCHOR || ENVOY_INTRINSIC.includes(abilityId)) return true;
-  return unlocked.includes(abilityId);
+  const resolved = migrateEnvoyAbilityId(abilityId);
+  if (resolved === ENVOY_ANCHOR || ENVOY_INTRINSIC.includes(resolved)) return true;
+  return unlocked.some((id) => migrateEnvoyAbilityId(id) === resolved);
 }
 
 export function formatHexShotAbilityTags(abilityId: HexShotAbilityId): string {
@@ -119,7 +122,7 @@ export function formatHexShotAbilityTags(abilityId: HexShotAbilityId): string {
 }
 
 export function formatEnvoyAbilityTags(abilityId: EnvoyAbilityId): string {
-  return ENVOY_ABILITY_CATALOG[abilityId].tags.join(' · ');
+  return ENVOY_ABILITY_CATALOG[migrateEnvoyAbilityId(abilityId)].tags.join(' · ');
 }
 
 export function getHexShotUnlockCost(abilityId: HexShotAbilityId): AbilityUnlockCost {
@@ -127,7 +130,7 @@ export function getHexShotUnlockCost(abilityId: HexShotAbilityId): AbilityUnlock
 }
 
 export function getEnvoyUnlockCost(abilityId: EnvoyAbilityId): AbilityUnlockCost {
-  return ENVOY_ABILITY_CATALOG[abilityId].unlockCost;
+  return ENVOY_ABILITY_CATALOG[migrateEnvoyAbilityId(abilityId)].unlockCost;
 }
 
 export function normalizeUnlockedHexShotAbilities(
@@ -153,7 +156,7 @@ export function normalizeUnlockedEnvoyAbilities(
     ...DEFAULT_ENVOY_LOADOUT,
     ...ENVOY_INTRINSIC,
   ]);
-  stored?.forEach((id) => set.add(id));
-  loadout.forEach((id) => set.add(id));
+  stored?.forEach((id) => set.add(migrateEnvoyAbilityId(id)));
+  loadout.forEach((id) => set.add(migrateEnvoyAbilityId(id)));
   return [...set];
 }

@@ -32,7 +32,7 @@ export type EnvoyAbilityId =
   | 'VEIL_SPLINTER'
   | 'CATACLYSM_SIGIL'
   | 'ASTRAL_LANCE'
-  | 'SPATIAL_COLLAPSE'
+  | 'NECROTIC_BLOOM'
   | 'FLUX_PURGE'
   | 'DIMENSIONAL_SHEAR'
   | 'RIFT_WARD'
@@ -41,7 +41,7 @@ export type EnvoyAbilityId =
   | 'SOUL_TETHER'
   | 'ENTROPY_HEX'
   | 'FLESH_WARP'
-  | 'GRAVITY_WELL'
+  | 'PARALYTIC_MIASMA'
   | 'MIND_SUNDER';
 
 export type EnvoyLoadout = readonly [
@@ -64,7 +64,7 @@ export const DEFAULT_ENVOY_LOADOUT: EnvoyLoadout = [
   'VEIL_SPLINTER',
   'ASTRAL_LANCE',
   'ENTROPY_HEX',
-  'SPATIAL_COLLAPSE',
+  'NECROTIC_BLOOM',
 ];
 
 export const DEFAULT_HEX_SHOT_UNLOCKED: readonly HexShotAbilityId[] = [...DEFAULT_HEX_SHOT_LOADOUT];

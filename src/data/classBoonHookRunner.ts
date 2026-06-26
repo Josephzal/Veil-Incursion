@@ -45,7 +45,7 @@ export function runEnvoyTurnStartBoons(
   if (hasEnvoyBoon(boons, 'PARASITIC_LINK') && cursedEnemyCount > 0) {
     const heal = cursedEnemyCount * 2;
     healOperative?.(heal);
-    log(`[PARASITIC LINK] >> ${heal} HP leeched from ${cursedEnemyCount} cursed hostiles.`);
+    log(`[PARASITIC LINK] >> ${heal} HP leeched from ${cursedEnemyCount} rot-infected hostiles.`);
   }
 }
 
@@ -54,20 +54,26 @@ export interface EnvoyRiftWardBoonContext {
   log: (msg: string) => void;
   applyVeilFlux: (delta: number) => void;
   refundAp: (amount?: number) => void;
-  grantUntargetable: (turns: number) => void;
+  grantEvadeBonus: (stacks: number) => void;
 }
 
 export function runEnvoyRiftWardSuccessBoons(ctx: EnvoyRiftWardBoonContext): void {
-  if (!hasEnvoyBoon(ctx.boons, 'PERFECTED_WARD')) return;
-  ctx.applyVeilFlux(-50);
-  ctx.refundAp(1);
-  ctx.log('[PERFECTED WARD] >> Perfect ward — 50 Flux vented, +1 AP restored.');
+  if (hasEnvoyBoon(ctx.boons, 'PERFECTED_WARD')) {
+    ctx.refundAp(1);
+    ctx.log('[PERFECTED WARD] >> Perfect ward — +1 AP restored.');
+  }
 }
 
+export function runEnvoyRiftWardTriggerBoons(ctx: EnvoyRiftWardBoonContext): void {
+  if (hasEnvoyBoon(ctx.boons, 'RIFT_WALKER')) {
+    ctx.grantEvadeBonus(3);
+    ctx.log('[RIFT-WALKER] >> Ward triggered — +15% evade next turn.');
+  }
+}
+
+/** @deprecated Use runEnvoyRiftWardTriggerBoons on ward fail path removal */
 export function runEnvoyRiftWardFailBoons(ctx: EnvoyRiftWardBoonContext): void {
-  if (!hasEnvoyBoon(ctx.boons, 'RIFT_WALKER')) return;
-  ctx.grantUntargetable(1);
-  ctx.log('[RIFT-WALKER] >> Ward shattered — operative phased to safe bearing.');
+  runEnvoyRiftWardTriggerBoons(ctx);
 }
 
 export interface ClassTakeDamageBoonContext {
@@ -85,8 +91,8 @@ export function runClassTakeDamageBoons(ctx: ClassTakeDamageBoonContext): void {
     ctx.log('[REACTIVE CAMO] >> Hit registered — operative untargetable 1 turn.');
   }
   if (hasEnvoyBoon(ctx.envoyBoons, 'ADRENALINE_CHANNEL')) {
-    ctx.applyVeilFlux(-20);
-    ctx.log('[ADRENALINE CHANNEL] >> Pain converts to void — −20 Flux.');
+    ctx.applyVeilFlux(20);
+    ctx.log('[ADRENALINE CHANNEL] >> Pain converts to aether — +20% Flux restored.');
   }
 }
 

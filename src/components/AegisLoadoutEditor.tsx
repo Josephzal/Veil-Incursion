@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import HapticPressable from './HapticPressable';
+import { formatClassAbilityCostLine } from '../data/classAbilityResolver';
 import { AEGIS_ABILITY_CATALOG } from '../data/aegisAbilities';
 import {
   canAffordAbilityUnlock,
@@ -53,7 +54,7 @@ export default function AegisLoadoutEditor({
   resourceStash = {},
   onUnlockAbility,
   title = 'AEGIS COMBAT LOADOUT // 4 ACTIVE SLOTS',
-  hint = 'Select a slot, then tap an unlocked ability. Locked protocols can be decrypted with hub resources.',
+  hint = 'Select a slot, then tap an ability. Costs show AP // Reserve // Brand economy.',
   commitLabel = '[ COMMIT LOADOUT ]',
   statusMessage = null,
 }: AegisLoadoutEditorProps): React.JSX.Element {
@@ -77,6 +78,8 @@ export default function AegisLoadoutEditor({
         {draft.map((abilityId, index) => {
           const isSelected = selectedSlot === index;
           const def = AEGIS_ABILITY_CATALOG[abilityId];
+          const costLine = formatClassAbilityCostLine('AEGIS', abilityId);
+          const tagsLine = formatAbilityTags(abilityId);
           return (
             <HapticPressable
               key={`slot-${index}`}
@@ -97,8 +100,18 @@ export default function AegisLoadoutEditor({
                 adjustsFontSizeToFit
                 minimumFontScale={0.65}
               >
-                {formatAbilityTags(abilityId)}
+                {costLine ? `COST: ${costLine}` : tagsLine}
               </Text>
+              {costLine && tagsLine ? (
+                <Text
+                  style={[styles.chipTags, { color: theme.mutedColor }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.65}
+                >
+                  {tagsLine}
+                </Text>
+              ) : null}
               <Text
                 style={[styles.slotMeta, { color: theme.mutedColor }]}
                 numberOfLines={2}
@@ -116,6 +129,8 @@ export default function AegisLoadoutEditor({
       <View style={styles.pool}>
         {getAssignableAbilities().map((abilityId) => {
           const def = AEGIS_ABILITY_CATALOG[abilityId];
+          const costLine = formatClassAbilityCostLine('AEGIS', abilityId);
+          const tagsLine = formatAbilityTags(abilityId);
           const assigned = draft.indexOf(abilityId);
           const isSelected = draft[selectedSlot] === abilityId;
           const unlocked = isAbilityUnlocked(unlockedAbilities, abilityId);
@@ -151,8 +166,18 @@ export default function AegisLoadoutEditor({
                 adjustsFontSizeToFit
                 minimumFontScale={0.65}
               >
-                {formatAbilityTags(abilityId)}
+                {costLine ? `COST: ${costLine}` : tagsLine}
               </Text>
+              {costLine && tagsLine ? (
+                <Text
+                  style={[styles.chipTags, { color: theme.mutedColor }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.65}
+                >
+                  {tagsLine}
+                </Text>
+              ) : null}
               {assigned >= 0 ? (
                 <Text style={[styles.chipSlot, { color: theme.mutedColor }]}>{`S${assigned + 1}`}</Text>
               ) : null}

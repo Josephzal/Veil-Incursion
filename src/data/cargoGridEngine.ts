@@ -329,6 +329,16 @@ export function countVeilResidueInCargo(cargo: CargoRunState): number {
   return inContainment + inGrid;
 }
 
+export function stripVeilResidueFromCargo(cargo: CargoRunState): CargoRunState {
+  return {
+    ...cargo,
+    containment: cargo.containment.filter((item) => !isVeilResidueCargoItem(item.itemId)),
+    grid: {
+      placed: cargo.grid.placed.filter((item) => !isVeilResidueCargoItem(item.itemId)),
+    },
+  };
+}
+
 /** Removes unclaimed harvest loot. Packed non-residue grid items are kept. */
 export function finalizeHarvestCargoState(
   cargo: CargoRunState,

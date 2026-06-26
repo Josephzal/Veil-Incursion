@@ -62,6 +62,7 @@ export default function SafehouseScreen(): React.JSX.Element {
     appendRunLog,
     transitionToNextDistrict,
     transferRunCargoToBankVault,
+    vaultIncursionVeilResidueToAccount,
     restoreHealthFromBench,
     getSafehouseIntel,
     setAegisLoadout,
@@ -71,6 +72,7 @@ export default function SafehouseScreen(): React.JSX.Element {
   const {
     account,
     depositBankedCargo,
+    depositVeilResidueBalance,
     setAegisLoadout: setAccountAegisLoadout,
     setHexShotLoadout: setAccountHexShotLoadout,
     setEnvoyLoadout: setAccountEnvoyLoadout,
@@ -89,6 +91,15 @@ export default function SafehouseScreen(): React.JSX.Element {
   const [selectedSlot, setSelectedSlot] = useState<0 | 1 | 2 | 3>(0);
   const [selectedFlexSlot, setSelectedFlexSlot] = useState<1 | 2 | 3>(1);
   const [loadoutStatus, setLoadoutStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    const { deposited } = vaultIncursionVeilResidueToAccount();
+    if (deposited <= 0) return;
+    depositVeilResidueBalance(deposited);
+    const line = `>> VEIL RESIDUE VAULTED — ${deposited} UNITS SECURED TO CABAL DEPOSITORY FOR SHADOW WAR DONATION.`;
+    appendRunLog(line);
+    setStatusLine(line);
+  }, [appendRunLog, depositVeilResidueBalance, vaultIncursionVeilResidueToAccount]);
 
   const operativeClass = activeIncursion.activeClass ?? account.activeClass;
 
@@ -117,6 +128,7 @@ export default function SafehouseScreen(): React.JSX.Element {
           description: ENVOY_ABILITY_CATALOG[id].description,
           unlockCost: ENVOY_ABILITY_CATALOG[id].unlockCost,
           tagsLine: formatEnvoyAbilityTags(id),
+          costLine: formatClassAbilityCostLine('ENVOY', id),
         },
       ]),
     ),
@@ -295,6 +307,9 @@ export default function SafehouseScreen(): React.JSX.Element {
                 <Text style={styles.headerStats}>
                   {`HEALTH ${healthPct}% // SHIELD ${shieldPct}% // CARGO ${cargoPct}% // VAULT ${account.bankedCargo.totalValue}`}
                 </Text>
+                <Text style={[styles.headerStats, { color: TERMINAL_ACCENT }]}>
+                  {`${account.veilResidueBalance} VEIL RESIDUE VAULTED // SHADOW WAR DONATABLE`}
+                </Text>
                 <Text style={[styles.headerSub, { color: TERMINAL_MUTED }]}>
                   {`DISTRICT ${activeIncursion.currentDistrict - 1} SECURED — PREPARE FOR ${DISTRICT_NAMES[nextDistrict].toUpperCase()}`}
                 </Text>
@@ -423,7 +438,8 @@ export default function SafehouseScreen(): React.JSX.Element {
                     resourceStash={account.resourceStash}
                     theme={EDITOR_THEME}
                     title="ENVOY COMBAT LOADOUT // 4 ACTIVE SLOTS"
-                    hint="Slot 1 is Veil-Splinter. Rift-Ward is automatic; Cataclysm Sigil procs at Flux 100."
+                    hint="Slot 1 is Veil-Splinter. Rift-Ward is automatic; Catalytic Console detonates Veil Rot; Cataclysm Sigil procs at 6+ stacks."
+                    anchorCostLine={formatClassAbilityCostLine('ENVOY', ENVOY_ANCHOR)}
                     commitLabel="[ COMMIT LOADOUT FOR REMAINING RUN ]"
                     statusMessage={loadoutStatus}
                   />

@@ -82,6 +82,13 @@ export default function CombatEnemyUnit({
       pointerEvents={dissolving ? 'none' : 'box-none'}
     >
       {isAlpha ? <EliteSkullBadge style={styles.eliteBadge} /> : null}
+      {(unit.veilRotStacks ?? 0) > 0 ? (
+        <View style={styles.rotBadge}>
+          <Text style={styles.rotBadgeLabel} numberOfLines={1}>
+            {`ROT ${unit.veilRotStacks}`}
+          </Text>
+        </View>
+      ) : null}
 
       {isAlpha ? (
         <Text style={styles.alphaNameplate} numberOfLines={1} ellipsizeMode="tail">
@@ -206,6 +213,25 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     zIndex: 20,
+  },
+  rotBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    zIndex: 20,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 2,
+    backgroundColor: 'rgba(34, 197, 94, 0.85)',
+    borderWidth: 1,
+    borderColor: '#4ade80',
+  },
+  rotBadgeLabel: {
+    fontFamily: MONO,
+    fontSize: 7,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    color: '#052e16',
   },
   alphaNameplate: {
     position: 'absolute',

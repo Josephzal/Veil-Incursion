@@ -241,7 +241,7 @@ export const LEY_LINE_MUTATION_CATALOG: Record<LeyLineMutationId, LeyLineMutatio
     id: 'MOMENTUM_SHIFT',
     name: 'Momentum Shift',
     tier: 'AP_BOOST',
-    description: 'Ending a turn at 0 Stamina grants +1 AP next turn but disables Evade until stamina returns.',
+    description: 'Ending a turn at 0 Stamina — or 0 Abyssal Reserve for Aegis — grants +1 AP next turn but disables Evade until stamina or reserve returns.',
     effect: effect('MOMENTUM_SHIFT'),
   },
   MOMENTUM_TRANSFER: {

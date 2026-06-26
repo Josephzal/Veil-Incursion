@@ -228,6 +228,8 @@ export interface CombatGridUnitSnapshot {
   fortifyTurnsRemaining?: number;
   chargeTurns?: number;
   doomedStacks?: number;
+  /** Envoy — Veil Rot stacks (0–4) on this hostile. */
+  veilRotStacks?: number;
   /** Icon tray keys — fortified, evading, concussed, doomed. */
   activeStatuses?: readonly EnemyStatusEffectKey[];
   isBoss?: boolean;
@@ -300,6 +302,7 @@ export type EnemyStatusUnitFields = Pick<
   | 'doomedStacks'
   | 'isFractured'
   | 'isEnraged'
+  | 'veilRotStacks'
 >;
 
 /** Human-readable hostile status labels for the intel panel. */
@@ -324,6 +327,11 @@ export function formatEnemyStatusLabels(unit: EnemyStatusUnitFields): string[] {
 
   if (unit.isFractured && !tags.has('FRACTURED')) {
     labels.push('FRACTURED');
+  }
+
+  const rotStacks = unit.veilRotStacks ?? 0;
+  if (rotStacks > 0) {
+    labels.push(rotStacks === 1 ? 'VEIL ROT' : `VEIL ROT x${rotStacks}`);
   }
 
   return labels;
@@ -415,5 +423,6 @@ export interface CombatEnemyTelemetry {
   kineticArmor?: number;
   occultWards?: number;
   combatTags?: string[];
+  veilRotStacks?: number;
   isAlpha?: boolean;
 }

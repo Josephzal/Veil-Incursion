@@ -7,6 +7,7 @@ import { boonMatchesEnvoyAction, hasEnvoyBoon } from './classBoonEngine';
 import { getEnvoyAbilityTags, getEnvoyAbilityDefinition } from './envoyAbilities';
 import { adjacentAliveUnits, aliveUnits, getUnitById, isUnitAlive } from './combatSquadEngine';
 import { addCombatTag, hasCombatTag } from './combatFractureEngine';
+import { addVeilRotStacks, getVeilRotStacks } from './envoyRotEngine';
 
 export function isEnemyCursed(
   unit: EnemyCombatProfile,
@@ -17,6 +18,7 @@ export function isEnemyCursed(
   const id = unit.unitId;
   if (encounter.cursedUnitIds[id]) return true;
   if (classState.fleshWarpUnits[id]) return true;
+  if ((classState.veilRotStacks[id] ?? 0) > 0) return true;
   if (classState.soulTetherUnitId === id) return true;
   if ((classState.entropyHexTurns[id] ?? 0) > 0) return true;
   if ((unit.combatTags ?? []).some((t) => t.includes('CURSE') || t === 'DOOMED')) return true;
@@ -85,12 +87,12 @@ export function adjustEnvoyOutgoingDamage(input: EnvoyDamageAdjustInput): EnvoyD
   }
 
   if (
-    tags.includes('FLUX_DUMP')
-    && encounter.lastActionWasFluxGen
-    && boonMatchesEnvoyAction(boons, 'PENDULUM_SHIFT', abilityId)
+    encounter.pendulumShiftDamageBonus
+    && hasEnvoyBoon(boons, 'PENDULUM_SHIFT')
   ) {
     damage = Math.floor(damage * (1 + mods.pendulumDumpBonusPct / 100));
-    log('[PENDULUM SHIFT] >> Flux dump after generation — +50% damage.');
+    encounter.pendulumShiftDamageBonus = false;
+    log('[PENDULUM SHIFT] >> Restore after spell — +50% damage.');
   }
 
   if (
@@ -108,7 +110,7 @@ export function adjustEnvoyOutgoingDamage(input: EnvoyDamageAdjustInput): EnvoyD
   if (
     channel === 'OCCULT'
     && (hasCombatTag(target, 'CONCUSSED') || (target.combatTags ?? []).includes('CONCUSSED'))
-    && boonMatchesEnvoyAction(boons, 'MIND_PLAGUE', abilityId)
+    && hasEnvoyBoon(boons, 'MIND_PLAGUE')
   ) {
     damage = Math.floor(damage * 2);
     log('[MIND-PLAGUE] >> Concussed target — occult damage doubled.');
@@ -187,6 +189,9 @@ export interface EnvoyAbilityResolveContext {
   classState: ClassCombatEncounterState;
   encounter: ClassBoonEncounterState;
   fluxDelta: number;
+  veilFluxBeforeCast: number;
+  fluxMaxCap: number;
+  maxHp: number;
   log: (msg: string) => void;
   patchUnit: (unitId: string, patch: Partial<EnemyCombatProfile>) => void;
   applyOccultShield: (amount: number) => void;
@@ -199,19 +204,33 @@ export function runEnvoyOnAbilityResolveBoons(ctx: EnvoyAbilityResolveContext): 
   if (!ctx.ok) return ctx.fluxDelta;
 
   const tags = getEnvoyAbilityTags(ctx.abilityId);
+  const def = getEnvoyAbilityDefinition(ctx.abilityId);
   let fluxDelta = ctx.fluxDelta;
 
-  if (tags.includes('FLUX_GEN')) {
-    ctx.encounter.lastActionWasFluxGen = true;
-    ctx.encounter.lastActionWasFluxDump = false;
+  if (def.fluxCost > 0) {
+    ctx.encounter.lastActionConsumedFlux = true;
+    ctx.encounter.lastActionRestoredFlux = false;
   }
-  if (tags.includes('FLUX_DUMP')) {
-    ctx.encounter.lastActionWasFluxDump = true;
-    ctx.encounter.lastActionWasFluxGen = false;
+  if (def.fluxRegen > 0) {
+    ctx.encounter.lastActionRestoredFlux = true;
+    ctx.encounter.lastActionConsumedFlux = false;
+  }
+
+  if (tags.includes('SPELL') && hasEnvoyBoon(ctx.boons, 'PENDULUM_SHIFT')) {
+    ctx.encounter.lastActionWasSpell = true;
+  }
+  if (
+    tags.includes('RESTORE')
+    && ctx.encounter.lastActionWasSpell
+    && hasEnvoyBoon(ctx.boons, 'PENDULUM_SHIFT')
+  ) {
+    ctx.encounter.pendulumShiftDamageBonus = true;
+    ctx.encounter.lastActionWasSpell = false;
+    ctx.log('[PENDULUM SHIFT] >> Restore after spell — next strike primed.');
   }
 
   if (
-    tags.includes('FLUX_GEN')
+    def.fluxRegen > 0
     && boonMatchesEnvoyAction(ctx.boons, 'RESIDUAL_ENERGY', ctx.abilityId)
     && fluxDelta > 0
   ) {
@@ -222,15 +241,17 @@ export function runEnvoyOnAbilityResolveBoons(ctx: EnvoyAbilityResolveContext): 
   }
 
   if (
-    tags.includes('FLUX_DUMP')
-    && boonMatchesEnvoyAction(ctx.boons, 'SAFETY_VALVE', ctx.abilityId)
+    def.fluxCost > 0
     && fluxDelta < 0
+    && hasEnvoyBoon(ctx.boons, 'SAFETY_VALVE')
+    && ctx.fluxMaxCap > 0
+    && ctx.veilFluxBeforeCast / ctx.fluxMaxCap < 0.2
   ) {
     const spent = Math.abs(fluxDelta);
-    const heal = Math.max(1, Math.floor(spent / 10));
+    const heal = Math.max(1, Math.floor(ctx.maxHp * 0.01 * (spent / 5)));
     if (heal > 0) {
       ctx.healOperative(heal);
-      ctx.log(`[SAFETY VALVE] >> Flux vent siphon — +${heal} HP.`);
+      ctx.log(`[SAFETY VALVE] >> Low-flux cast siphon — +${heal} HP.`);
     }
   }
 
@@ -267,19 +288,17 @@ export function runEnvoyOnAbilityResolveBoons(ctx: EnvoyAbilityResolveContext): 
   if (
     tags.includes('DEBUFF')
     && hasEnvoyBoon(ctx.boons, 'DOOMED_FLESH')
+    && ctx.targetId
   ) {
-    for (const unit of aliveUnits(ctx.squad)) {
-      if (!unit.unitId) continue;
-      if (ctx.classState.entropyHexTurns[unit.unitId]) {
-        ctx.classState.entropyHexTurns[unit.unitId] += 1;
-      }
+    const drain = ctx.classState.enemyApDrainNextTurn[ctx.targetId] ?? 0;
+    if (drain > 0) {
+      ctx.classState.enemyApDrainNextTurn[ctx.targetId] = drain + 1;
+      ctx.log('[DOOMED FLESH] >> Debuff duration extended (+1 turn).');
     }
-    ctx.log('[DOOMED FLESH] >> Debuff payload — hazard duration extended.');
   }
 
   if (
-    (tags.includes('AOE') || tags.includes('FLUX_DUMP'))
-    && boonMatchesEnvoyAction(ctx.boons, 'SINGULARITY_COLLAPSE', ctx.abilityId)
+    boonMatchesEnvoyAction(ctx.boons, 'SINGULARITY_COLLAPSE', ctx.abilityId)
   ) {
     ctx.stripAllKineticArmor?.();
     ctx.log('[SINGULARITY COLLAPSE] >> Flux singularity — all kinetic armor stripped.');
@@ -289,12 +308,12 @@ export function runEnvoyOnAbilityResolveBoons(ctx: EnvoyAbilityResolveContext): 
     tags.includes('SPELL')
     && ctx.targetId
     && hasEnvoyBoon(ctx.boons, 'CURSED_AETHER')
-    && fluxDelta > 0
+    && fluxDelta < 0
   ) {
     const curseTarget = getUnitById(ctx.squad, ctx.targetId);
-    if (curseTarget && isEnemyCursed(curseTarget, ctx.classState, ctx.encounter)) {
+    if (curseTarget?.unitId && getVeilRotStacks(ctx.classState, curseTarget.unitId) > 0) {
       fluxDelta = Math.floor(fluxDelta * 0.5);
-      ctx.log('[CURSED AETHER] >> Cursed target dampens flux generation (−50%).');
+      ctx.log('[CURSED AETHER] >> Rot-infected target dampens flux cost (−50%).');
     }
   }
 
@@ -308,15 +327,14 @@ function applyEnvoyCurseResolveEffects(ctx: EnvoyAbilityResolveContext): void {
 
   for (const unit of curseTargets) {
     if (!unit.unitId) continue;
-    const curseTurns = ctx.classState.entropyHexTurns[unit.unitId]
-      ? (ctx.classState.entropyHexTurns[unit.unitId] ?? 2)
-      : 2;
+    const curseTurns = (ctx.classState.veilRotStacks[unit.unitId] ?? 0) > 0 ? 3 : 2;
     markEnemyCursed(unit.unitId, ctx.encounter, curseTurns);
 
     if (boonMatchesEnvoyAction(ctx.boons, 'WITHERED_VIGOR', ctx.abilityId)) {
+      if ((getVeilRotStacks(ctx.classState, unit.unitId) ?? 0) <= 0) continue;
       const reduced = Math.max(1, Math.floor(unit.baseDamage * 0.9));
       ctx.patchUnit(unit.unitId, { baseDamage: reduced });
-      ctx.log(`[WITHERED VIGOR] >> ${unit.designation} — curse withers offensive output.`);
+      ctx.log(`[WITHERED VIGOR] >> ${unit.designation} — rot withers offensive output.`);
     }
 
     if (boonMatchesEnvoyAction(ctx.boons, 'VOID_MARKED', ctx.abilityId)) {
@@ -334,11 +352,15 @@ function applyEnvoyCurseResolveEffects(ctx: EnvoyAbilityResolveContext): void {
     boonMatchesEnvoyAction(ctx.boons, 'HEAVY_GRAVITY', ctx.abilityId)
     && getEnvoyAbilityTags(ctx.abilityId).includes('CONTROL')
   ) {
-    for (const unit of aliveUnits(ctx.squad)) {
+    for (const unit of curseTargets) {
       if (!unit.unitId) continue;
+      const concussed = hasCombatTag(unit, 'CONCUSSED')
+        || (unit.combatTags ?? []).includes('CONCUSSED');
+      const rooted = unit.evadeChance === 0 || unit.evadeActive === false;
+      if (!concussed && !rooted) continue;
       ctx.encounter.heavyGravityApDrain[unit.unitId] = 1;
+      ctx.log(`[HEAVY GRAVITY] >> ${unit.designation} — −1 AP next turn.`);
     }
-    ctx.log('[HEAVY GRAVITY] >> Displaced hostiles — −1 AP next turn.');
   }
 }
 
@@ -362,7 +384,8 @@ export function runEnvoyKillBoonsExtended(ctx: EnvoyKillBoonContext): void {
 
   if (
     boonMatchesEnvoyAction(boons, 'CURSE_EATER', abilityId)
-    && encounter.cursedUnitIds[killedUnitId]
+    && killedUnitId
+    && getVeilRotStacks(ctx.classState, killedUnitId) > 0
   ) {
     const missing = Math.max(0, ctx.maxHp - ctx.currentHp);
     const heal = Math.floor(missing * 0.2);
@@ -374,15 +397,18 @@ export function runEnvoyKillBoonsExtended(ctx: EnvoyKillBoonContext): void {
 
   if (
     boonMatchesEnvoyAction(boons, 'CONTAGIOUS_HEX', abilityId)
-    && encounter.cursedUnitIds[killedUnitId]
   ) {
-    const adj = adjacentAliveUnits(squad, killedUnitId);
-    const spread = adj[0];
-    if (spread?.unitId) {
-      ctx.applyCurseToUnit(spread.unitId);
-      ctx.classState.entropyHexTurns[spread.unitId] = 2;
-      markEnemyCursed(spread.unitId, encounter, 2);
-      ctx.log(`[CONTAGIOUS HEX] >> Curse jumps to ${spread.designation}.`);
+    const rotStacks = getVeilRotStacks(ctx.classState, killedUnitId);
+    if (rotStacks > 0) {
+      const adj = adjacentAliveUnits(squad, killedUnitId);
+      if (adj.length > 0) {
+        const spread = adj[Math.floor(Math.random() * adj.length)];
+        if (spread?.unitId) {
+          addVeilRotStacks(ctx.classState, spread.unitId, rotStacks);
+          markEnemyCursed(spread.unitId, encounter, 2);
+          ctx.log(`[CONTAGIOUS HEX] >> ${rotStacks} Veil Rot stack(s) jump to ${spread.designation}.`);
+        }
+      }
     }
   }
 
@@ -434,9 +460,11 @@ export function resolveEnvoyAethericBulwarkArmor(
   boons: readonly EnvoyBoonId[],
   mods: EnvoyBoonCombatModifiers,
   veilFlux: number,
+  fluxMaxCap: number,
 ): number {
   if (!hasEnvoyBoon(boons, 'AETHERIC_BULWARK')) return 0;
-  return Math.floor(veilFlux / 25) * mods.kineticArmorPer25Flux;
+  if (fluxMaxCap <= 0 || veilFlux / fluxMaxCap <= 0.8) return 0;
+  return mods.kineticArmorPer25Flux;
 }
 
 export interface EnvoyOverloadEntryContext {
@@ -448,12 +476,21 @@ export interface EnvoyOverloadEntryContext {
   dealOccultAoE: (amount: number) => void;
 }
 
-export function runEnvoyOverloadEntryBoons(ctx: EnvoyOverloadEntryContext): void {
-  if (!ctx.firstOverloadThisTurn) return;
+export interface EnvoyVoidSiphonedEntryContext {
+  boons: readonly EnvoyBoonId[];
+  encounter: ClassBoonEncounterState;
+  firstVoidSiphonThisEncounter: boolean;
+  log: (msg: string) => void;
+  resetCooldowns: () => void;
+  dealOccultAoE: (amount: number) => void;
+}
+
+export function runEnvoyVoidSiphonedEntryBoons(ctx: EnvoyVoidSiphonedEntryContext): void {
+  if (!ctx.firstVoidSiphonThisEncounter) return;
 
   if (hasEnvoyBoon(ctx.boons, 'LEYLINE_SURGE')) {
     ctx.resetCooldowns();
-    ctx.log('[LEY-LINE SURGE] >> Overload cascade — all cooldowns reset.');
+    ctx.log('[LEY-LINE SURGE] >> Void-Siphoned — all cooldowns reset.');
   }
 
   if (
@@ -462,8 +499,20 @@ export function runEnvoyOverloadEntryBoons(ctx: EnvoyOverloadEntryContext): void
   ) {
     ctx.encounter.emergencyVentUsed = true;
     ctx.dealOccultAoE(20);
-    ctx.log('[EMERGENCY VENT] >> First overload — 20 occult rupture vented.');
+    ctx.log('[EMERGENCY VENT] >> Flux depleted — 20 occult rupture vented.');
   }
+}
+
+/** @deprecated Use runEnvoyVoidSiphonedEntryBoons */
+export function runEnvoyOverloadEntryBoons(ctx: EnvoyOverloadEntryContext): void {
+  runEnvoyVoidSiphonedEntryBoons({
+    boons: ctx.boons,
+    encounter: ctx.encounter,
+    firstVoidSiphonThisEncounter: ctx.firstOverloadThisTurn,
+    log: ctx.log,
+    resetCooldowns: ctx.resetCooldowns,
+    dealOccultAoE: ctx.dealOccultAoE,
+  });
 }
 
 export function tickEnvoyHexBreaker(
@@ -490,14 +539,44 @@ export function runAgonizingHexOnEnemyTurn(
   boons: readonly EnvoyBoonId[],
   unit: EnemyCombatProfile,
   classState: ClassCombatEncounterState,
-  encounter: ClassBoonEncounterState,
+  _encounter: ClassBoonEncounterState,
   hurtEnemy: (raw: number, targetId: string) => void,
   log: (msg: string) => void,
 ): void {
   if (!hasEnvoyBoon(boons, 'AGONIZING_HEX')) return;
-  if (!unit.unitId || !isEnemyCursed(unit, classState, encounter)) return;
+  if (!unit.unitId || getVeilRotStacks(classState, unit.unitId) <= 0) return;
   hurtEnemy(5, unit.unitId);
-  log(`[AGONIZING HEX] >> ${unit.designation} — curse wracks on action (−5 TRUE).`);
+  log(`[AGONIZING HEX] >> ${unit.designation} — rot wracks on action (−5 TRUE).`);
+}
+
+export function runHexBreakerOnRotPurge(
+  boons: readonly EnvoyBoonId[],
+  unit: EnemyCombatProfile | null,
+  hurtEnemy: (raw: number, targetId: string) => void,
+  log: (msg: string) => void,
+): void {
+  if (!hasEnvoyBoon(boons, 'HEX_BREAKER')) return;
+  if (!unit?.unitId) return;
+  hurtEnemy(15, unit.unitId);
+  log(`[HEX-BREAKER] >> ${unit.designation} — rot purge collapse burst.`);
+}
+
+export function syncEnvoyFleshRotArmorDebuff(
+  boons: readonly EnvoyBoonId[],
+  squad: EnemyCombatProfile[],
+  classState: ClassCombatEncounterState,
+  patchUnit: (unitId: string, patch: Partial<EnemyCombatProfile>) => void,
+): void {
+  if (!hasEnvoyBoon(boons, 'FLESH_ROT')) return;
+  for (const unit of aliveUnits(squad)) {
+    if (!unit.unitId) continue;
+    const stacks = getVeilRotStacks(classState, unit.unitId);
+    const base = unit.baseKineticArmor ?? unit.kineticArmor ?? 0;
+    const nextArmor = stacks > 0 ? Math.max(0, base - stacks) : base;
+    if ((unit.kineticArmor ?? 0) !== nextArmor) {
+      patchUnit(unit.unitId, { kineticArmor: nextArmor });
+    }
+  }
 }
 
 export function applyEnvoyHeavyGravityApDrain(
@@ -514,6 +593,17 @@ export function applyEnvoyHeavyGravityApDrain(
   log(`[HEAVY GRAVITY] >> ${designation} — displacement tax (−${drain} AP).`);
 }
 
+export function applyVoidsBargainStartFluxPenalty(
+  boons: readonly EnvoyBoonId[],
+  applyFluxDelta: (delta: number) => void,
+  log: (msg: string) => void,
+): void {
+  if (!hasEnvoyBoon(boons, 'VOIDS_BARGAIN')) return;
+  applyFluxDelta(-25);
+  log("[VOID'S BARGAIN] >> Encounter tithe — operative enters missing 25% Veil-Flux.");
+}
+
+/** @deprecated Use applyVoidsBargainStartFluxPenalty */
 export function applyVoidsBargainStartBleed(
   boons: readonly EnvoyBoonId[],
   hurtPlayer: (amount: number) => void,

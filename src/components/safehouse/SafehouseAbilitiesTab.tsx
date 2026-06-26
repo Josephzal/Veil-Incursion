@@ -86,6 +86,7 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
           description: ENVOY_ABILITY_CATALOG[id].description,
           unlockCost: ENVOY_ABILITY_CATALOG[id].unlockCost,
           tagsLine: formatEnvoyAbilityTags(id),
+          costLine: formatClassAbilityCostLine('ENVOY', id),
         },
       ]),
     ),
@@ -202,7 +203,7 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
             unlockedAbilities={account.unlockedAegisAbilities}
             resourceStash={account.resourceStash}
             theme={editorTheme}
-            hint="Tap a locked ability to spend resources and unlock it. Eviscerate remains a hidden ultimate at full Abyssal Reserve."
+            hint="Tap a locked ability to spend resources and unlock it. Costs show AP // Reserve // Brand economy."
             commitLabel="[ SAVE LOADOUT FOR NEXT RUN ]"
             statusMessage={loadoutStatus}
           />
@@ -257,7 +258,8 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
             resourceStash={account.resourceStash}
             theme={editorTheme}
             title="ENVOY COMBAT LOADOUT // 4 ACTIVE SLOTS"
-            hint="Slot 1 is Veil-Splinter. Cataclysm Sigil procs at Flux 100 — not a deck slot."
+            hint="Slot 1 is Veil-Splinter. Rift-Ward is automatic; Catalytic Console detonates Veil Rot; Cataclysm Sigil procs at 6+ stacks."
+            anchorCostLine={formatClassAbilityCostLine('ENVOY', ENVOY_ANCHOR)}
             commitLabel="[ SAVE LOADOUT FOR NEXT RUN ]"
             statusMessage={loadoutStatus}
           />

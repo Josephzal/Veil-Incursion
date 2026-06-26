@@ -51,6 +51,7 @@ import type { CargoItemId } from '../types/cargoGrid';
 import type { CombatGridSlotId } from '../types/combatGrid';
 import {
   executeExtendedAbility,
+  getAegisAbilityDisableReason,
   isExtendedAbilityEnabled,
   type PlayerCombatBuffState,
 } from '../data/aegisAbilityExecutor';
@@ -101,8 +102,8 @@ import {
 import {
   runClassTakeDamageBoons,
   runEnvoyEvadeSuccessBoons,
-  runEnvoyRiftWardFailBoons,
   runEnvoyRiftWardSuccessBoons,
+  runEnvoyRiftWardTriggerBoons,
   runEnvoyTurnStartBoons,
   runHexShotKillBoons,
 } from '../data/classBoonHookRunner';
@@ -123,7 +124,6 @@ import {
   adjustEnvoyOutgoingDamage,
   applyEnvoyHeavyGravityApDrain,
   applyEnvoyWardWeaverApDiscount,
-  applyVoidsBargainStartBleed,
   getCataclysmicEchoDamageBonus,
   getEnvoyVolatileMagicCritBonus,
   resolveEnvoyAethericBulwarkArmor,
@@ -131,8 +131,9 @@ import {
   runEnvoyKillBoonsExtended,
   runEnvoyOnAbilityResolveBoons,
   runEnvoyOnHitBoons,
-  runEnvoyOverloadEntryBoons,
-  tickEnvoyHexBreaker,
+  runEnvoyVoidSiphonedEntryBoons,
+  runHexBreakerOnRotPurge,
+  syncEnvoyFleshRotArmorDebuff,
   tryEnvoyBloodMagicCast,
   markEnemyCursed,
 } from '../data/envoyBoonHookRunner';
@@ -221,10 +222,29 @@ import { ResolvedWeaponCombatStats } from '../data/inventory';
 import { BossRuntimeProfile, EnvironmentalModifiers, type ClassType } from '../types/game';
 import {
   DEFAULT_MAGAZINE_SIZE,
-  ENVOY_OVERLOAD_SELF_DAMAGE,
-  ENVOY_OVERLOAD_THRESHOLD,
+  VEIL_FLUX_START,
+  VOID_SIPHONED_SELF_DAMAGE,
   type ActiveReloadResult,
+  type EnvoyCombatState,
 } from '../types/classCombatResources';
+import {
+  createInitialEnvoyCombatState,
+  evaluateEnvoyCataclysmReady,
+  isEnvoyCastBlockedByVoidSiphon,
+} from '../types/envoyState';
+import { envoyReducer, type EnvoyReducerAction } from '../reducers/envoyReducer';
+import {
+  CATALYTIC_CONSOLE_AP_COST,
+  CATALYTIC_SLOPPY_FLUX_PENALTY,
+  CATACLYSM_ROT_GATE,
+  computeCataclysmSigilDamage,
+  executeCatalyticRelease,
+  getVeilRotStacks,
+  purgeAllVeilRotStacks,
+  tickVeilRotEndOfEnemyTurn,
+  totalCatalyticPayload,
+  totalVeilRotStacks,
+} from '../data/envoyRotEngine';
 import { activeReloadLogLine } from '../data/activeReloadEngine';
 import {
   abilityUsesBallisticTags,
@@ -243,14 +263,11 @@ import ZeroProtocolGridOverlay from './combat/ZeroProtocolGridOverlay';
 import CataclysmSigilOverlay from './combat/CataclysmSigilOverlay';
 import FractureBreakPrompt from './combat/FractureBreakPrompt';
 import EnvoyWardOverlay, { type EnvoyWardExpansionSpeed } from './combat/EnvoyWardOverlay';
+import CatalyticConsoleOverlay from './combat/CatalyticConsoleOverlay';
 import { ASHEN_DISSOLVE_TOTAL_MS } from './combat/CombatEnemyDissolveEffect';
 import {
-  ENVOY_FLUX_ULTIMATE_THRESHOLD,
   ZERO_PROTOCOL_DAMAGE_PER_TAP,
-  CATACLYSM_SUCCESS_AOE,
-  CATACLYSM_FAIL_AOE,
   CATACLYSM_FAIL_BACKLASH,
-  CATACLYSM_FAIL_FLUX,
   isEnvoyProcUltimate,
   isHexShotProcUltimate,
 } from '../data/combatMasteryEngine';
@@ -298,7 +315,6 @@ import {
   tickHexShotClassState,
 } from '../data/hexShotAbilityExecutor';
 import {
-  applyEntropyHexDot,
   executeEnvoyAbility,
   isEnvoyAbilityEnabled,
 } from '../data/envoyAbilityExecutor';
@@ -593,7 +609,7 @@ export default function TacticalCombatHub({
     : maxSoulAnchor;
   const combatMaxSoulAnchorRef = useRef(combatMaxSoulAnchor);
   combatMaxSoulAnchorRef.current = combatMaxSoulAnchor;
-  const fluxOverloadThreshold = envoyBoonMods.fluxOverloadThreshold;
+  const fluxMaxCap = envoyBoonMods.fluxMaxCap;
   const env = environmentalModifiers ?? {
     isEnemyPhaseShrouded: false,
     isPlayerBlinded: false,
@@ -670,9 +686,10 @@ export default function TacticalCombatHub({
     maxAmmo: DEFAULT_MAGAZINE_SIZE,
   }));
   const [aegisOvercharged, setAegisOvercharged] = useState(false);
-  const [veilFlux, setVeilFlux] = useState(0);
-  const [envoyOverloaded, setEnvoyOverloaded] = useState(false);
-  const [envoySilenced, setEnvoySilenced] = useState(false);
+  const [veilFlux, setVeilFlux] = useState(VEIL_FLUX_START);
+  const [envoyCombatState, setEnvoyCombatState] = useState<EnvoyCombatState>(() =>
+    createInitialEnvoyCombatState(envoyBoonMods.fluxMaxCap),
+  );
   const [activeReloadVisible, setActiveReloadVisible] = useState(false);
   const [hexReloadUsedThisTurn, setHexReloadUsedThisTurn] = useState(false);
   const hexReloadUsedThisTurnRef = useRef(false);
@@ -683,15 +700,18 @@ export default function TacticalCombatHub({
   const [envoyWardSpeed, setEnvoyWardSpeed] = useState<EnvoyWardExpansionSpeed>('normal');
   const [successfulParryCount, setSuccessfulParryCount] = useState(0);
   const [cataclysmReadyUi, setCataclysmReadyUi] = useState(false);
+  const [envoyRotStacksUi, setEnvoyRotStacksUi] = useState(0);
+  const cataclysmReadyPrevRef = useRef(false);
+  const [catalyticConsoleVisible, setCatalyticConsoleVisible] = useState(false);
   const combatPausedRef = useRef(false);
   const riftWardReadyRef = useRef(false);
 
   const operativeHpRef = useRef(initialOperativeHp);
   const currentAmmoRef = useRef(DEFAULT_MAGAZINE_SIZE);
   const hexShotStateRef = useRef(hexShotState);
-  const veilFluxRef = useRef(0);
-  const envoyOverloadedRef = useRef(false);
-  const envoySilencedRef = useRef(false);
+  const veilFluxRef = useRef(VEIL_FLUX_START);
+  const envoyCombatStateRef = useRef(envoyCombatState);
+  const voidSiphonedEnteredRef = useRef(false);
   const sessionExtrasRef = useRef<CombatSessionExtras>(createDefaultCombatSessionExtras());
   const combatChanceRef = useRef<CombatChanceEncounterState>(createDefaultCombatChanceState());
   const [combatFeedback, setCombatFeedback] = useState<{
@@ -806,6 +826,7 @@ export default function TacticalCombatHub({
     && !activeReloadVisible
     && !zeroProtocolVisible
     && !cataclysmSigilVisible
+    && !catalyticConsoleVisible
     && fractureBreakUnitId == null
     && (isPlayerTurnRef.current || voidAmbushWindowRef.current != null);
 
@@ -911,6 +932,18 @@ export default function TacticalCombatHub({
     return aegisLoadout;
   }, [operativeClass, hexShotLoadout, envoyLoadout, aegisLoadout]);
   const masteryProgress = useMemo(() => {
+    if (operativeClass === 'ENVOY') {
+      const rot = envoyRotStacksUi;
+      if (rot <= 0 || cataclysmReadyUi) {
+        return { visible: false, current: 0, required: CATACLYSM_ROT_GATE, accent: '#a78bfa' };
+      }
+      return {
+        visible: isPlayerTurn && cycleState === 'TEXT_COMBAT',
+        current: Math.min(CATACLYSM_ROT_GATE, rot),
+        required: CATACLYSM_ROT_GATE,
+        accent: '#a78bfa',
+      };
+    }
     if (operativeClass !== 'HEX_SHOT') {
       return { visible: false, current: 0, required: 3, accent: '#94a3b8' };
     }
@@ -927,6 +960,8 @@ export default function TacticalCombatHub({
     };
   }, [
     operativeClass,
+    cataclysmReadyUi,
+    envoyRotStacksUi,
     hexShotState.overchargeMultiplier,
     hexShotState.isUltimateAvailable,
     isPlayerTurn,
@@ -1065,30 +1100,59 @@ export default function TacticalCombatHub({
     patchUnit(unitId, { enemyActionPoints: nextAp });
   };
 
-  const applyVeilFlux = (delta: number) => {
-    const next = Math.max(0, veilFluxRef.current + delta);
-    veilFluxRef.current = next;
-    setVeilFlux(next);
-    if (
-      operativeClass === 'ENVOY'
-      && next >= ENVOY_FLUX_ULTIMATE_THRESHOLD
-      && !cataclysmReadyUi
-    ) {
-      classCombatRef.current.cataclysmReady = true;
-      setCataclysmReadyUi(true);
-      log('>> VEIL-FLUX SATURATED — Cataclysm Sigil primed.');
-    }
-    if (next < fluxOverloadThreshold) {
-      if (envoySilencedRef.current) {
-        envoySilencedRef.current = false;
-        setEnvoySilenced(false);
-      }
-      if (envoyOverloadedRef.current) {
-        envoyOverloadedRef.current = false;
-        setEnvoyOverloaded(false);
-      }
-    }
+  const syncEnvoyCombatState = (next: EnvoyCombatState) => {
+    envoyCombatStateRef.current = next;
+    veilFluxRef.current = next.veilFlux;
+    setVeilFlux(next.veilFlux);
+    setEnvoyCombatState(next);
+  };
+
+  const dispatchEnvoy = (action: EnvoyReducerAction): EnvoyCombatState => {
+    const next = envoyReducer(envoyCombatStateRef.current, action);
+    syncEnvoyCombatState(next);
     return next;
+  };
+
+  const applyVeilFlux = (delta: number) => {
+    if (operativeClass !== 'ENVOY') return veilFluxRef.current;
+    const prev = envoyCombatStateRef.current;
+    const next = dispatchEnvoy({
+      type: 'ENVOY_APPLY_FLUX_DELTA',
+      delta,
+      masochisticChannel: envoyBoonModsRef.current.masochisticChannel,
+    });
+    if (!prev.isVoidSiphoned && next.isVoidSiphoned) {
+      if (!voidSiphonedEnteredRef.current) {
+        voidSiphonedEnteredRef.current = true;
+        runEnvoyVoidSiphonedEntryBoons({
+          boons: envoyBoons,
+          encounter: classBoonEncounterRef.current,
+          firstVoidSiphonThisEncounter: true,
+          log,
+          resetCooldowns: () => {
+            graftCooldownsRef.current = {};
+          },
+          dealOccultAoE: (amount) => {
+            for (const unit of aliveUnits(squadRef.current)) {
+              if (!unit.unitId) continue;
+              hurtEnemy(amount, '[EMERGENCY VENT]', 'STRIKE', {
+                channel: 'OCCULT',
+                targetId: unit.unitId,
+                rollCrit: false,
+              });
+            }
+          },
+        });
+      }
+      log(
+        envoyBoonModsRef.current.masochisticChannel
+          ? '>> [VOID-SIPHONED] — flux depleted // masochistic channel holds cast access open.'
+          : '>> [VOID-SIPHONED] — flux depleted // SPELL and CURSE channels sealed.',
+      );
+    } else if (prev.isVoidSiphoned && !next.isVoidSiphoned) {
+      log('>> [VEIL-FLUX] — reservoir restored // cast channels online.');
+    }
+    return next.veilFlux;
   };
 
   const applyGodModeResources = () => {
@@ -1107,11 +1171,13 @@ export default function TacticalCombatHub({
         maxAmmo,
       }));
     } else if (operativeClass === 'ENVOY') {
-      applyVeilFlux(fluxOverloadThreshold - veilFluxRef.current);
-      envoyOverloadedRef.current = false;
-      envoySilencedRef.current = false;
-      setEnvoyOverloaded(false);
-      setEnvoySilenced(false);
+      voidSiphonedEnteredRef.current = false;
+      dispatchEnvoy({
+        type: 'ENVOY_ENCOUNTER_START',
+        fluxMaxCap,
+        startingFlux: fluxMaxCap,
+        masochisticChannel: envoyBoonModsRef.current.masochisticChannel,
+      });
     } else {
       abyssalRef.current = mutationModsRef.current.abyssalCap;
       setAbyssalReserve(mutationModsRef.current.abyssalCap);
@@ -1215,6 +1281,25 @@ export default function TacticalCombatHub({
   };
 
   const publishSquadUi = (nextSquad: EnemyCombatProfile[]) => {
+    if (operativeClass === 'ENVOY') {
+      const rotTotal = totalVeilRotStacks(classCombatRef.current);
+      setEnvoyRotStacksUi(rotTotal);
+      const ready = evaluateEnvoyCataclysmReady(classCombatRef.current, nextSquad);
+      classCombatRef.current.cataclysmReady = ready;
+      if (ready !== cataclysmReadyPrevRef.current) {
+        cataclysmReadyPrevRef.current = ready;
+        setCataclysmReadyUi(ready);
+        if (ready) {
+          log('>> [CATACLYSM SIGIL] >> Rot saturation critical — trace the void pattern.');
+        }
+      }
+      syncEnvoyFleshRotArmorDebuff(
+        envoyBoons,
+        nextSquad,
+        classCombatRef.current,
+        patchUnit,
+      );
+    }
     if (!onSquadUiChange) return;
     if (nextSquad.length === 0) return;
     const staged = selectedAbility;
@@ -1280,6 +1365,9 @@ export default function TacticalCombatHub({
           fortifyTurnsRemaining: u.fortifyTurnsRemaining ?? 0,
           chargeTurns: u.chargeTurns ?? 0,
           doomedStacks: u.doomedStacks ?? 0,
+          veilRotStacks: operativeClass === 'ENVOY' && u.unitId
+            ? (classCombatRef.current.veilRotStacks[u.unitId] ?? 0)
+            : 0,
           activeStatuses: resolveActiveEnemyStatuses({
             combatTags: u.combatTags ?? [],
             evadeActive: u.evadeActive,
@@ -1992,19 +2080,20 @@ export default function TacticalCombatHub({
           playerApRef.current += amount;
           setPlayerActionPoints(playerApRef.current);
         },
-        grantUntargetable: (turns: number) => {
-          classCombatRef.current.ghostCamoTurnsRemaining = Math.max(
-            classCombatRef.current.ghostCamoTurnsRemaining,
-            turns,
+        grantEvadeBonus: (stacks: number) => {
+          combatChanceRef.current.gridGhostEvadeStacks = Math.min(
+            3,
+            combatChanceRef.current.gridGhostEvadeStacks + stacks,
           );
         },
       };
       if (unblockable) {
         riftWardReadyRef.current = false;
-        runEnvoyRiftWardFailBoons(wardBoonCtx);
+        runEnvoyRiftWardTriggerBoons(wardBoonCtx);
         return;
       }
       riftWardReadyRef.current = false;
+      runEnvoyRiftWardTriggerBoons(wardBoonCtx);
       const reflect = Math.floor(raw * 0.5);
       if (reflect > 0) {
         hurtEnemy(reflect, '[RIFT-WARD]', 'STRIKE', {
@@ -2038,6 +2127,15 @@ export default function TacticalCombatHub({
       }
     }
     const extras = sessionExtrasRef.current;
+    if (
+      operativeClass === 'ENVOY'
+      && classBoonEncounterRef.current.deepReservesShieldActive
+      && dmg > 0
+    ) {
+      classBoonEncounterRef.current.deepReservesShieldActive = false;
+      log('[DEEP RESERVES] >> Kinetic shield absorbs the hit.');
+      return;
+    }
     if (extras.playerShield > 0 && dmg > 0) {
       const absorbed = Math.min(extras.playerShield, dmg);
       extras.playerShield -= absorbed;
@@ -2053,7 +2151,12 @@ export default function TacticalCombatHub({
       }
     }
     const envoyBulwarkArmor = operativeClass === 'ENVOY'
-      ? resolveEnvoyAethericBulwarkArmor(envoyBoons, envoyBoonModsRef.current, veilFluxRef.current)
+      ? resolveEnvoyAethericBulwarkArmor(
+        envoyBoons,
+        envoyBoonModsRef.current,
+        veilFluxRef.current,
+        envoyCombatStateRef.current.fluxMaxCap,
+      )
       : 0;
     if (envoyBulwarkArmor > 0 && dmg > 0) {
       const beforeArmor = dmg;
@@ -2337,7 +2440,7 @@ export default function TacticalCombatHub({
           ) + (
             operativeClass === 'ENVOY'
             && hasEnvoyBoon(envoyBoons, 'OVERLOAD_MASTERY')
-            && Math.round(veilFluxRef.current) === 99
+            && Math.round(veilFluxRef.current) === 1
               ? 100
               : 0
           ),
@@ -2532,6 +2635,14 @@ export default function TacticalCombatHub({
           dmg = working.currentHp;
           log(`>> [${graftPlan.graftName.toUpperCase()}] EXECUTE — sub-threshold cull.`);
         }
+      }
+      if (
+        operativeClass !== 'AEGIS'
+        && graftPlan.bossDamageMultiplier > 1
+        && working.isBoss
+      ) {
+        dmg = Math.floor(dmg * graftPlan.bossDamageMultiplier);
+        log(`>> [${graftPlan.graftName.toUpperCase()}] — boss damage amplified.`);
       }
     }
     if (
@@ -3135,7 +3246,6 @@ export default function TacticalCombatHub({
           currentHp: operativeHpRef.current,
           applyCurseToUnit: (unitId) => {
             markEnemyCursed(unitId, classBoonEncounterRef.current, 2);
-            classCombatRef.current.entropyHexTurns[unitId] = 2;
           },
         });
       }
@@ -3556,7 +3666,7 @@ export default function TacticalCombatHub({
           let healedAny = false;
           for (const ally of aliveUnits(squadRef.current)) {
             if (ally.unitId === e.unitId || ally.currentHp >= ally.maxHp) continue;
-            if (isEnemyHealBlocked(classCombatRef.current, ally.unitId!, hasEnvoyBoon(envoyBoons, 'FLESH_ROT'))) {
+            if (isEnemyHealBlocked(classCombatRef.current, ally.unitId!, false)) {
               continue;
             }
             const pct = e.alphaMechanics?.healPercent ?? 0.15;
@@ -3578,7 +3688,7 @@ export default function TacticalCombatHub({
           log(`>> ${e.designation} FIELD REPAIR — no valid target.`);
           break;
         }
-        if (isEnemyHealBlocked(classCombatRef.current, target.unitId, hasEnvoyBoon(envoyBoons, 'FLESH_ROT'))) {
+        if (isEnemyHealBlocked(classCombatRef.current, target.unitId, false)) {
           log(`>> ${e.designation} FIELD REPAIR BLOCKED — ${target.designation} flesh-warped.`);
           break;
         }
@@ -3700,7 +3810,7 @@ export default function TacticalCombatHub({
       case 'SCAVENGE': {
         if (!e.unitId) break;
         consumeAshToken();
-        if (isEnemyHealBlocked(classCombatRef.current, e.unitId, hasEnvoyBoon(envoyBoons, 'FLESH_ROT'))) {
+        if (isEnemyHealBlocked(classCombatRef.current, e.unitId, false)) {
           log(`>> ${e.designation} SCAVENGE BLOCKED — flesh-warp seal.`);
           break;
         }
@@ -3896,6 +4006,19 @@ export default function TacticalCombatHub({
       }));
     }
     enemyActionQueueRef.current = [];
+    if (operativeClass === 'ENVOY') {
+      tickVeilRotEndOfEnemyTurn(
+        squadRef.current,
+        classCombatRef.current,
+        (raw, tag, options, targetId) => hurtEnemy(raw, tag, 'STRIKE', {
+          channel: options?.channel ?? 'OCCULT',
+          targetId: options?.targetId ?? targetId,
+          rollCrit: options?.rollCrit,
+          indirectDamage: true,
+        }),
+        log,
+      );
+    }
     const nextTarget = nextDefaultTarget(squadRef.current);
     if (nextTarget) selectTarget(nextTarget);
     startPlayerTurn(primaryAliveUnit(squadRef.current)!);
@@ -3906,7 +4029,7 @@ export default function TacticalCombatHub({
     lifecycleFloatLabelsRef.current = {};
     tickCombatSessionExtras(sessionExtrasRef.current);
     combatChanceRef.current.shadowStepEvadeActive = false;
-    if (staminaRef.current > 0) {
+    if (staminaRef.current > 0 || (operativeClass === 'AEGIS' && abyssalRef.current > 0)) {
       combatChanceRef.current.momentumShiftEvadeDisabled = false;
     }
     clearVoidWardShroud();
@@ -3923,12 +4046,12 @@ export default function TacticalCombatHub({
     bloodBoundCarapaceRef.current = false;
     riftWardReadyRef.current = operativeClass === 'ENVOY';
     if (operativeClass === 'ENVOY') {
-      const cursedCount = aliveUnits(squadRef.current).filter(
-        (u) => (u.combatTags ?? []).some((t) => t.includes('CURSE') || t === 'DOOMED'),
+      const rotInfectedCount = aliveUnits(squadRef.current).filter(
+        (u) => u.unitId && (classCombatRef.current.veilRotStacks[u.unitId] ?? 0) > 0,
       ).length;
       runEnvoyTurnStartBoons(
         envoyBoons,
-        cursedCount,
+        rotInfectedCount,
         log,
         (amount) => {
           setOperativeHp((p) => {
@@ -3954,7 +4077,7 @@ export default function TacticalCombatHub({
     if (mutationEncounterRef.current.momentumShiftPending) {
       combatBuffRef.current.bonusApThisTurn += 1;
       mutationEncounterRef.current.momentumShiftPending = false;
-      log('[MOMENTUM SHIFT] >> Zero stamina end — +1 AP this turn. Evade disabled until stamina returns.');
+      log('[MOMENTUM SHIFT] >> Zero resource end — +1 AP this turn. Evade disabled until reserve or stamina returns.');
     }
     if (mutationEncounterRef.current.bloodTitheCooldown > 0) {
       mutationEncounterRef.current.bloodTitheCooldown -= 1;
@@ -4014,16 +4137,6 @@ export default function TacticalCombatHub({
     }
     if (operativeClass === 'ENVOY') {
       classBoonEncounterRef.current.voidsBargainFirstStrike = true;
-      classBoonEncounterRef.current.hexBreakerCurseTurns = tickEnvoyHexBreaker(
-        squadRef.current,
-        classBoonEncounterRef.current.hexBreakerCurseTurns,
-        (raw, targetId) => hurtEnemy(raw, '[HEX-BREAKER]', 'STRIKE', {
-          channel: 'OCCULT',
-          targetId,
-          rollCrit: false,
-        }),
-        log,
-      );
     }
     setIsPlayerTurn(true);
     if (!skipRegenRef.current) {
@@ -4042,59 +4155,17 @@ export default function TacticalCombatHub({
     }
     if (
       operativeClass === 'ENVOY'
-      && veilFluxRef.current > fluxOverloadThreshold
-      && !cataclysmReadyUi
+      && envoyCombatStateRef.current.isVoidSiphoned
       && !godModeRef.current
     ) {
-      if (!envoyOverloadedRef.current) {
-        envoyOverloadedRef.current = true;
-        const masochistic = envoyBoonModsRef.current.masochisticChannel;
-        envoySilencedRef.current = !masochistic;
-        setEnvoyOverloaded(true);
-        setEnvoySilenced(!masochistic);
-        log(masochistic
-          ? '>> [VEIL OVERLOAD] — masochistic channel open // SILENCE waived.'
-          : '>> [VEIL OVERLOAD] — flux cascade // SILENCED until dump below threshold.');
-        runEnvoyOverloadEntryBoons({
-          boons: envoyBoons,
-          encounter: classBoonEncounterRef.current,
-          firstOverloadThisTurn: true,
-          log,
-          resetCooldowns: () => {
-            graftCooldownsRef.current = {};
-          },
-          dealOccultAoE: (amount) => {
-            for (const unit of aliveUnits(squadRef.current)) {
-              if (!unit.unitId) continue;
-              hurtEnemy(amount, '[EMERGENCY VENT]', 'STRIKE', {
-                channel: 'OCCULT',
-                targetId: unit.unitId,
-                rollCrit: false,
-              });
-            }
-          },
-        });
-      }
-      const overloadDmg = envoyBoonModsRef.current.masochisticChannel
-        ? 15
-        : ENVOY_OVERLOAD_SELF_DAMAGE;
+      const siphonDmg = envoyCombatStateRef.current.voidSiphonedTurnDamage;
       hurtPlayer(
-        overloadDmg,
+        siphonDmg,
         true,
-        `>> [VEIL OVERLOAD] — ${overloadDmg} TRUE self-damage.`,
+        `>> [VOID-SIPHONED] — ${siphonDmg} TRUE self-damage.`,
       );
     }
     tickHexShotClassState(classCombatRef.current);
-    classCombatRef.current.entropyHexTurns = applyEntropyHexDot(
-      squadRef.current,
-      classCombatRef.current.entropyHexTurns,
-      (raw, tag, options, targetId) => hurtEnemy(raw, tag, undefined, {
-        channel: options?.channel ?? 'OCCULT',
-        targetId: options?.targetId ?? targetId,
-        rollCrit: options?.rollCrit,
-        indirectDamage: true,
-      }),
-    );
     setCycleState('TEXT_COMBAT');
     log('>> OPERATIVE TURN // Command deck online.');
   };
@@ -4379,21 +4450,26 @@ export default function TacticalCombatHub({
     if (perfect) {
       triggerHitstop(100);
       triggerHaptic('impactHeavy');
-      applyVeilFlux(-30);
+      const restore = hasEnvoyBoon(envoyBoons, 'PERFECTED_WARD') ? 50 : 30;
+      applyVeilFlux(restore);
+      if (hasEnvoyBoon(envoyBoons, 'PERFECTED_WARD')) {
+        playerApRef.current += 1;
+        setPlayerActionPoints(playerApRef.current);
+      }
       preAppliedHpStrikeRef.current = 0;
-      log('[VOID WARD] >> Perfect overlap — 100% negated, −30 flux.');
+      log(`[RIFT-WARD] >> Perfect overlap — 100% negated, +${restore}% flux restored.`);
     } else {
       triggerShake('light');
       triggerHaptic('notificationError');
-      applyVeilFlux(15);
+      applyVeilFlux(-15);
       const mitigated = Math.max(1, Math.floor(pendingDmgRef.current * 0.5));
       hurtPlayer(
         mitigated,
         pendingUnblockRef.current,
-        `[VOID WARD] >> Imperfect seal — ${mitigated} damage, +15 flux.`,
+        `[RIFT-WARD] >> Imperfect seal — ${mitigated} damage, −15% flux.`,
         { rollCrit: false },
       );
-      log('[VOID WARD] >> Ward cracked — partial impact.');
+      log('[RIFT-WARD] >> Ward cracked — partial impact.');
     }
     if (operativeHpRef.current <= 0) return;
     if (enemyActionQueueRef.current.length > 0) scheduleNextEnemyAction(false);
@@ -4546,11 +4622,7 @@ export default function TacticalCombatHub({
     combatChanceRef.current = createDefaultCombatChanceState();
     setMagazineAmmo(maxAmmo);
     setAegisOvercharged(false);
-    applyVeilFlux(-veilFluxRef.current);
-    envoyOverloadedRef.current = false;
-    envoySilencedRef.current = false;
-    setEnvoyOverloaded(false);
-    setEnvoySilenced(false);
+    voidSiphonedEnteredRef.current = false;
     setActiveReloadVisible(false);
     hexReloadUsedThisTurnRef.current = false;
     setHexReloadUsedThisTurn(false);
@@ -4560,6 +4632,9 @@ export default function TacticalCombatHub({
     setFractureBreakUnitId(null);
     setSuccessfulParryCount(0);
     setCataclysmReadyUi(false);
+    cataclysmReadyPrevRef.current = false;
+    setEnvoyRotStacksUi(0);
+    setCatalyticConsoleVisible(false);
     combatPausedRef.current = false;
     classCombatRef.current = createDefaultClassCombatEncounterState();
     if (narrativeCombatBoons?.veilWard) {
@@ -4657,28 +4732,23 @@ export default function TacticalCombatHub({
       }
     }
     if (operativeClass === 'ENVOY') {
-      log(`>> VEIL-FLUX CHANNEL ONLINE — overload threshold ${fluxOverloadThreshold}%.`);
-      if (envoyBoonMods.startingFlux > 0) {
-        applyVeilFlux(envoyBoonMods.startingFlux);
-        log(`>> [DEEP RESERVES] — entry flux ${envoyBoonMods.startingFlux}%.`);
-      }
-      applyVoidsBargainStartBleed(
-        envoyBoons,
-        (amount) => {
-          setOperativeHp((p) => {
-            const n = Math.max(1, p - amount);
-            operativeHpRef.current = n;
-            return n;
-          });
-        },
-        log,
-      );
+      dispatchEnvoy({
+        type: 'ENVOY_ENCOUNTER_START',
+        fluxMaxCap,
+        startingFlux: VEIL_FLUX_START - envoyBoonMods.startingFluxPenalty,
+        masochisticChannel: envoyBoonMods.masochisticChannel,
+      });
+      log(`>> VEIL-FLUX RESERVOIR ONLINE — burn-rate economy capped at ${fluxMaxCap}%.`);
     }
     if (operativeClass === 'HEX_SHOT' && hexShotBoons.length > 0) {
       log(`>> HEX-SHOT BOONS ACTIVE — ${hexShotBoons.length} stacked.`);
     }
     if (operativeClass === 'ENVOY' && envoyBoons.length > 0) {
       log(`>> ENVOY BOONS ACTIVE — ${envoyBoons.length} stacked.`);
+    }
+    if (operativeClass === 'ENVOY' && hasEnvoyBoon(envoyBoons, 'DEEP_RESERVES')) {
+      classBoonEncounterRef.current.deepReservesShieldActive = true;
+      log('[DEEP RESERVES] >> Kinetic shield online.');
     }
     if (leyLineMutations.length > 0) {
       log(`>> LEY-LINE MUTATIONS ACTIVE — ${leyLineMutations.length} stacked.`);
@@ -4757,6 +4827,7 @@ export default function TacticalCombatHub({
       currentAmmo: currentAmmoRef.current,
       maxAmmo,
       veilFlux: veilFluxRef.current,
+      fluxMaxCap: envoyCombatStateRef.current.fluxMaxCap,
     };
     const scaled = plan ? scaleClassGraftDamage(raw, plan, scaleCtx) : raw;
     let channel = options?.channel ?? 'KINETIC';
@@ -4824,6 +4895,7 @@ export default function TacticalCombatHub({
       currentAmmo: currentAmmoRef.current,
       maxAmmo,
       veilFlux: veilFluxRef.current,
+      fluxMaxCap: envoyCombatStateRef.current.fluxMaxCap,
     };
     const scaled = plan ? scaleClassGraftDamage(raw, plan, scaleCtx) : raw;
     let strikeRaw = scaled;
@@ -5134,7 +5206,7 @@ export default function TacticalCombatHub({
 
   const executeEnvoyClassAbility = (abilityId: EnvoyAbilityId) => {
     if (abilityId === 'CATACLYSM_SIGIL') {
-      log('[REJECTED] >> Cataclysm Sigil procs at Flux 100 — use the mastery ping.');
+      log('[REJECTED] >> Cataclysm Sigil procs at 6+ Veil Rot stacks — use the mastery ping.');
       return;
     }
     if (cycleState !== 'TEXT_COMBAT' || !canPlayerCommand()) return;
@@ -5149,8 +5221,12 @@ export default function TacticalCombatHub({
       activeClassGraftPlanRef.current = null;
       return;
     }
-    if (envoySilencedRef.current && cost.isFluxGen && !graftPlan.effectiveTags.includes('FLUX_DUMP')) {
-      log('[REJECTED] >> SILENCED — flux generation blocked until dump below threshold.');
+    if (isEnvoyCastBlockedByVoidSiphon(
+      graftPlan.effectiveTags,
+      envoyCombatStateRef.current.isVoidSiphoned,
+      envoyBoonModsRef.current.masochisticChannel,
+    )) {
+      log('[REJECTED] >> VOID-SIPHONED — SPELL and CURSE channels sealed until flux regenerates.');
       activeClassGraftPlanRef.current = null;
       return;
     }
@@ -5202,7 +5278,7 @@ export default function TacticalCombatHub({
         classState: classCombatRef.current,
         log,
         apCostOverride: graftPlan.apCost,
-        fluxGenOverride: graftPlan.fluxGen,
+        fluxRegenOverride: graftPlan.fluxRegen,
         fluxCostOverride: graftPlan.fluxCost,
         ultimatePerformance,
         spendStamina: spendStam,
@@ -5242,6 +5318,9 @@ export default function TacticalCombatHub({
           classState: classCombatRef.current,
           encounter: classBoonEncounterRef.current,
           fluxDelta,
+          veilFluxBeforeCast: veilFluxRef.current,
+          fluxMaxCap: envoyCombatStateRef.current.fluxMaxCap,
+          maxHp: maxSoulAnchor,
           log,
           patchUnit,
           applyOccultShield: (amount) => {
@@ -5271,6 +5350,12 @@ export default function TacticalCombatHub({
           },
         });
         if (fluxDelta !== 0) applyVeilFlux(fluxDelta);
+        syncEnvoyFleshRotArmorDebuff(
+          envoyBoons,
+          squadRef.current,
+          classCombatRef.current,
+          patchUnit,
+        );
         finalizeClassGraftAfterAbility(
           graftPlan,
           squadBefore,
@@ -5707,18 +5792,24 @@ export default function TacticalCombatHub({
     apRollupFrameRef.current = requestAnimationFrame(tickApRollup);
   }, [log]);
 
+  const isMomentumShiftDepleted = (): boolean => (
+    operativeClass === 'AEGIS'
+      ? abyssalRef.current <= 0
+      : staminaRef.current <= 0
+  );
+
   const onEndTurn = () => {
     if (cycleState !== 'TEXT_COMBAT' || !isPlayerTurn || shadowstepProcRef.current || activeReloadVisible) return;
     Vibration.vibrate(12);
     if (combatBuffRef.current.initiativeQueued) {
-      if (hasMutation(leyLineMutations, 'MOMENTUM_SHIFT') && staminaRef.current === 0) {
+      if (hasMutation(leyLineMutations, 'MOMENTUM_SHIFT') && isMomentumShiftDepleted()) {
         mutationEncounterRef.current.momentumShiftPending = true;
         combatChanceRef.current.momentumShiftEvadeDisabled = true;
       }
       runShadowstepInitiativeProc();
       return;
     }
-    if (hasMutation(leyLineMutations, 'MOMENTUM_SHIFT') && staminaRef.current === 0) {
+    if (hasMutation(leyLineMutations, 'MOMENTUM_SHIFT') && isMomentumShiftDepleted()) {
       mutationEncounterRef.current.momentumShiftPending = true;
       combatChanceRef.current.momentumShiftEvadeDisabled = true;
     }
@@ -5777,28 +5868,45 @@ export default function TacticalCombatHub({
     tryOpenReloadMinigame(false);
   };
 
-  const handleCataclysmResolve = (success: boolean) => {
+  const handleCataclysmResolve = (traceAccuracy: number) => {
     setCataclysmSigilVisible(false);
     combatPausedRef.current = false;
-    setCataclysmReadyUi(false);
-    classCombatRef.current.cataclysmReady = false;
-    const aoe = success ? CATACLYSM_SUCCESS_AOE : CATACLYSM_FAIL_AOE;
+    const rotTotal = totalVeilRotStacks(classCombatRef.current);
+    const damage = computeCataclysmSigilDamage(rotTotal, traceAccuracy);
+    const perfect = traceAccuracy >= 0.99;
+    const hurtFn = buildEnvoyHurtEnemy();
     for (const unit of aliveUnits(squadRef.current)) {
       if (!unit.unitId) continue;
-      hurtEnemy(aoe, '[CATACLYSM SIGIL]', 'STRIKE', {
+      if (getVeilRotStacks(classCombatRef.current, unit.unitId) > 0) {
+        runHexBreakerOnRotPurge(envoyBoons, unit, (raw, targetId) => {
+          hurtFn(raw, '[HEX-BREAKER]', {
+            channel: 'OCCULT',
+            targetId,
+            rollCrit: false,
+          }, targetId);
+        }, log);
+      }
+    }
+    for (const unit of aliveUnits(squadRef.current)) {
+      if (!unit.unitId) continue;
+      hurtFn(damage, '[CATACLYSM SIGIL]', {
         channel: 'TRUE',
         targetId: unit.unitId,
+        abilityId: 'CATACLYSM_SIGIL',
         rollCrit: false,
-      });
+      }, unit.unitId);
     }
-    if (success) {
-      applyVeilFlux(-veilFluxRef.current);
+    purgeAllVeilRotStacks(classCombatRef.current);
+    setCataclysmReadyUi(false);
+    cataclysmReadyPrevRef.current = false;
+    classCombatRef.current.cataclysmReady = false;
+    setEnvoyRotStacksUi(0);
+    if (perfect) {
       triggerHitstop(150);
       triggerShake('heavy');
       triggerHaptic('impactHeavy');
-      log('>> [CATACLYSM SIGIL] >> Pattern locked — 50 TRUE to all hostiles, flux vented.');
+      log(`>> [CATACLYSM SIGIL] >> Pattern locked — ${damage} TRUE to all hostiles. Veil Rot purged.`);
     } else {
-      applyVeilFlux(CATACLYSM_FAIL_FLUX - veilFluxRef.current);
       hurtPlayer(
         CATACLYSM_FAIL_BACKLASH,
         true,
@@ -5807,8 +5915,14 @@ export default function TacticalCombatHub({
       );
       triggerShake('light');
       triggerHaptic('notificationError');
-      log('>> [CATACLYSM SIGIL] >> Pattern failed — partial detonation, flux at 50%.');
+      log(`>> [CATACLYSM SIGIL] >> Pattern failed — ${damage} TRUE rupture (${Math.round(traceAccuracy * 100)}% trace). Veil Rot purged.`);
     }
+    publishSquadUi(squadRef.current);
+    if (allUnitsDefeated(squadRef.current)) {
+      scheduleCombatVictoryResolution();
+      return;
+    }
+    if (operativeHpRef.current <= 0) return;
   };
 
   const expireFractureBreak = (unitId: string) => {
@@ -5904,6 +6018,52 @@ export default function TacticalCombatHub({
     playerApRef.current += 1;
     setPlayerActionPoints(playerApRef.current);
     log(`[BLOOD FOR TIME] >> ${cost} HP tithed — +1 AP granted.`);
+  };
+
+  const onCatalyticConsole = () => {
+    if (operativeClass !== 'ENVOY') return;
+    if (cycleState !== 'TEXT_COMBAT' || !isPlayerTurn || shadowstepProcRef.current) return;
+    if (catalyticConsoleVisible) return;
+    const rotTotal = totalVeilRotStacks(classCombatRef.current);
+    if (rotTotal <= 0) {
+      log('[REJECTED] >> Catalytic Console requires Veil Rot on the board.');
+      return;
+    }
+    if (playerApRef.current < CATALYTIC_CONSOLE_AP_COST) {
+      log('[REJECTED] >> Insufficient AP for Catalytic Console.');
+      return;
+    }
+    playerApRef.current -= CATALYTIC_CONSOLE_AP_COST;
+    setPlayerActionPoints(playerApRef.current);
+    setCatalyticConsoleVisible(true);
+    combatPausedRef.current = true;
+    log('>> [CATALYTIC CONSOLE] >> Hold & release against the infected grid.');
+  };
+
+  const finalizeCatalyticRelease = (overlapRatio: number) => {
+    setCatalyticConsoleVisible(false);
+    combatPausedRef.current = false;
+    const hurtFn = buildEnvoyHurtEnemy();
+    const result = executeCatalyticRelease(
+      squadRef.current,
+      classCombatRef.current,
+      overlapRatio,
+      (raw, tag, options, targetId) => hurtFn(raw, tag, options, targetId),
+      log,
+    );
+    if (!result.perfect) {
+      applyVeilFlux(-CATALYTIC_SLOPPY_FLUX_PENALTY);
+      log(`>> [AETHERIC RUPTURE] — feedback drains ${CATALYTIC_SLOPPY_FLUX_PENALTY}% Veil-Flux.`);
+    } else {
+      triggerHitstop(120);
+      triggerHaptic('impactHeavy');
+    }
+    publishSquadUi(squadRef.current);
+    if (allUnitsDefeated(squadRef.current)) {
+      scheduleCombatVictoryResolution();
+      return;
+    }
+    if (operativeHpRef.current <= 0) return;
   };
 
   const onCombatReload = () => {
@@ -6378,19 +6538,102 @@ export default function TacticalCombatHub({
         envoyAbilityGraftsRef.current[abilityId as EnvoyAbilityId],
       );
       if (playerActionPoints < graftPlan.apCost) return false;
-      if (envoySilencedRef.current && cost.isFluxGen && !graftPlan.effectiveTags.includes('FLUX_DUMP')) {
+      if (isEnvoyCastBlockedByVoidSiphon(
+        graftPlan.effectiveTags,
+        envoyCombatStateRef.current.isVoidSiphoned,
+        envoyBoonModsRef.current.masochisticChannel,
+      )) {
         return false;
       }
       return isEnvoyAbilityEnabled(
         abilityId as EnvoyAbilityId,
         veilFlux,
         stamina,
-        envoySilenced,
+        envoyCombatStateRef.current.isVoidSiphoned,
+        envoyBoonModsRef.current.masochisticChannel,
         graftPlan.fluxCost,
       );
     }
     if (playerActionPoints < cost.apCost) return false;
     return isAbilityEnabled(abilityId as AegisAbilityId);
+  };
+
+  const getOperativeAbilityDisableReason = (abilityId: string): string | null => {
+    if (isOperativeAbilityEnabled(abilityId)) return null;
+    if (!isPlayerTurn || cycleState !== 'TEXT_COMBAT' || shadowstepProcRef.current) {
+      return 'Wait for your combat phase.';
+    }
+    if (operativeClass === 'HEX_SHOT' && isHexShotProcUltimate(abilityId)) {
+      return 'Proc ultimate unavailable.';
+    }
+    if (operativeClass === 'ENVOY' && isEnvoyProcUltimate(abilityId)) {
+      return 'Proc ultimate unavailable.';
+    }
+    const cost = resolveClassAbilityCost(operativeClass, abilityId);
+    const ultimateSealed = encounterUltimateDisabled
+      || (operativeClass === 'HEX_SHOT'
+        ? isClassUltimateDisabledForEncounter('HEX_SHOT', hexShotAbilityGraftsRef.current, {}, false)
+        : operativeClass === 'ENVOY'
+          ? isClassUltimateDisabledForEncounter('ENVOY', {}, envoyAbilityGraftsRef.current, false)
+          : false);
+    if (ultimateSealed && cost.isUltimate) {
+      return 'Ultimate channel sealed by Apex Graft.';
+    }
+    if (operativeClass === 'HEX_SHOT') {
+      const graftPlan = buildClassGraftCastPlan(
+        'HEX_SHOT',
+        abilityId,
+        resolveHexShotAbilityGraftId(hexShotAbilityGraftsRef.current, abilityId as HexShotAbilityId),
+      );
+      if (playerActionPoints < graftPlan.apCost) {
+        return `Requires ${graftPlan.apCost} AP (have ${playerActionPoints}).`;
+      }
+      return 'Insufficient ammo or stamina.';
+    }
+    if (operativeClass === 'ENVOY') {
+      const graftPlan = buildClassGraftCastPlan(
+        'ENVOY',
+        abilityId,
+        envoyAbilityGraftsRef.current[abilityId as EnvoyAbilityId],
+      );
+      if (playerActionPoints < graftPlan.apCost) {
+        return `Requires ${graftPlan.apCost} AP (have ${playerActionPoints}).`;
+      }
+      if (isEnvoyCastBlockedByVoidSiphon(
+        graftPlan.effectiveTags,
+        envoyCombatStateRef.current.isVoidSiphoned,
+        envoyBoonModsRef.current.masochisticChannel,
+      )) {
+        return 'Void Siphon — cast blocked.';
+      }
+      return 'Insufficient Veil Flux or stamina.';
+    }
+    const jammedSlots = sessionExtrasRef.current.jammedAugmentSlots?.length
+      ? sessionExtrasRef.current.jammedAugmentSlots
+      : sessionExtrasRef.current.jammedAugmentSlot != null
+        ? [sessionExtrasRef.current.jammedAugmentSlot]
+        : [];
+    const graftPlan = buildGraftCastPlan(abilityId as AegisAbilityId, abilityGraftsRef.current[abilityId as AegisAbilityId]);
+    return getAegisAbilityDisableReason(abilityId as AegisAbilityId, {
+      isPlayerTurn,
+      cycleState,
+      shadowstepProc: shadowstepProcRef.current,
+      encounterUltimateDisabled,
+      playerAp: playerActionPoints,
+      graftPlan,
+      graftCooldown: graftCooldownsRef.current[abilityId as AegisAbilityId] ?? 0,
+      jammedSlots,
+      loadout: aegisLoadout,
+      rooted: hasStructuredDebuff(sessionExtrasRef.current, 'ROOTED'),
+      voidWardPrimed: voidWardPrimedRef.current,
+      abyssalReserve,
+      operativeHp,
+      maxSoulAnchor,
+      runicBrands,
+      buffState: combatBuffRef.current,
+      ashenMantleCooldown: mutationEncounterRef.current.ashenMantleCooldown,
+      ashenMantleFree: mutationModsRef.current.ashenMantleFree,
+    });
   };
 
   const isAbilityEnabled = (abilityId: AegisAbilityId): boolean => {
@@ -6411,7 +6654,6 @@ export default function TacticalCombatHub({
         ? [sessionExtrasRef.current.jammedAugmentSlot]
         : [];
     if (jammedSlots.some((slot) => aegisLoadout[slot] === abilityId)) return false;
-    const def = getAbilityDefinition(abilityId);
     const graftPlan = buildGraftCastPlan(abilityId, abilityGraftsRef.current[abilityId]);
     if ((graftCooldownsRef.current[abilityId] ?? 0) > 0) return false;
     if (playerActionPoints < graftPlan.apCost) return false;
@@ -6532,6 +6774,13 @@ export default function TacticalCombatHub({
     onAbilityPrimedChange?.(selectedAbility != null);
   }, [selectedAbility, onAbilityPrimedChange]);
 
+  const envoyRotStacksTotal = operativeClass === 'ENVOY'
+    ? totalVeilRotStacks(classCombatRef.current)
+    : 0;
+  const envoyCatalyticPayload = operativeClass === 'ENVOY'
+    ? totalCatalyticPayload(classCombatRef.current)
+    : 0;
+
   useEffect(() => {
     if (!onOperativeTelemetryChange) return;
     onOperativeTelemetryChange({
@@ -6555,8 +6804,11 @@ export default function TacticalCombatHub({
         : 0,
       overcharged: operativeClass === 'AEGIS' ? aegisOvercharged : false,
       veilFlux,
-      envoyOverloaded,
-      envoySilenced,
+      fluxMaxCap: envoyCombatState.fluxMaxCap,
+      envoyVoidSiphoned: envoyCombatState.isVoidSiphoned,
+      envoySilenced: envoyCombatState.isVoidSiphoned && !envoyBoonMods.masochisticChannel,
+      veilRotStacksTotal: envoyRotStacksTotal,
+      catalyticPayloadEstimate: envoyCatalyticPayload,
     });
   }, [
     onOperativeTelemetryChange,
@@ -6576,8 +6828,11 @@ export default function TacticalCombatHub({
     maxAmmo,
     hexShotState.overchargeMultiplier,
     veilFlux,
-    envoyOverloaded,
-    envoySilenced,
+    envoyCombatState.isVoidSiphoned,
+    envoyBoonMods.masochisticChannel,
+    envoyRotStacksTotal,
+    envoyCatalyticPayload,
+    enemy?.currentHp,
   ]);
 
   const enemyAlive = (enemy?.currentHp ?? 0) > 0;
@@ -6597,6 +6852,8 @@ export default function TacticalCombatHub({
       initiativeProcSeq={initiativeProcSeq}
       onInitiativeProcComplete={onInitiativeProcComplete}
       isActionEnabled={isOperativeAbilityEnabled}
+      canSelectActions={isPlayerTurn && cycleState === 'TEXT_COMBAT' && !shadowstepProcActive}
+      getActionDisableReason={getOperativeAbilityDisableReason}
       getAbilityLabel={(abilityId) => formatAbilityLabel(operativeClass, abilityId)}
       canEndTurn={isPlayerTurn && cycleState === 'TEXT_COMBAT' && !shadowstepProcActive}
       getStagedHeader={getStagedHeader}
@@ -6631,6 +6888,19 @@ export default function TacticalCombatHub({
       }
       voidWardPrimed={voidWardPrimed}
       onVoidWardPrime={onVoidWardPrime}
+      catalyticConsoleAvailable={operativeClass === 'ENVOY'}
+      catalyticConsoleEnabled={
+        operativeClass === 'ENVOY'
+        && isPlayerTurn
+        && cycleState === 'TEXT_COMBAT'
+        && !shadowstepProcActive
+        && !catalyticConsoleVisible
+        && !activeReloadVisible
+        && envoyRotStacksTotal > 0
+        && playerActionPoints >= CATALYTIC_CONSOLE_AP_COST
+      }
+      catalyticConsoleRotStacks={envoyRotStacksTotal}
+      onCatalyticConsole={onCatalyticConsole}
       borderColor={theme.borderColor}
       primaryColor={theme.primaryColor}
       mutedColor={theme.mutedColor}
@@ -6844,6 +7114,12 @@ export default function TacticalCombatHub({
       <CataclysmSigilOverlay
         visible={cataclysmSigilVisible}
         onResolve={handleCataclysmResolve}
+      />
+      <CatalyticConsoleOverlay
+        visible={catalyticConsoleVisible}
+        rotStacksTotal={envoyRotStacksTotal}
+        payloadEstimate={envoyCatalyticPayload}
+        onRelease={finalizeCatalyticRelease}
       />
       <FractureBreakPrompt
         visible={fractureBreakUnitId != null}

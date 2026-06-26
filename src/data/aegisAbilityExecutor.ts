@@ -20,7 +20,7 @@ import {
 } from './combatSquadEngine';
 import { columnSlotsFor, FRONTLINE_SLOTS } from '../types/combatGrid';
 import type { CombatGridSlotId } from '../types/combatGrid';
-import { getAbilityDefinition } from './aegisAbilities';
+import { getAbilityDefinition, getAbilityTags } from './aegisAbilities';
 import type { LeyLineMutationId } from '../types/leyLineMutation';
 import { boonMatchesAction } from './boonEngine';
 import type { MutationCombatModifiers } from './boonEngine';
@@ -34,8 +34,11 @@ import {
   bloodTitheHealAmount,
   bloodTitheOccultDamage,
   canAffordReserveCost,
+  requiredReserveAmount,
   ruinFracturePerBrand,
 } from './aegisResourceEngine';
+import { canAffordGraftResources } from './veilGraftEngine';
+import type { GraftCastPlan } from '../types/veilGraft';
 
 export interface PlayerCombatBuffState {
   demonLungCooldown: number;
@@ -528,5 +531,150 @@ export function isExtendedAbilityEnabled(
       return canAffordReserveCost(def, abyssalReserve);
     default:
       return false;
+  }
+}
+
+export interface AegisAbilityDisableContext {
+  isPlayerTurn: boolean;
+  cycleState: string;
+  shadowstepProc: boolean;
+  encounterUltimateDisabled: boolean;
+  playerAp: number;
+  graftPlan: GraftCastPlan;
+  graftCooldown: number;
+  jammedSlots: readonly number[];
+  loadout: readonly AegisAbilityId[];
+  rooted: boolean;
+  voidWardPrimed: boolean;
+  abyssalReserve: number;
+  operativeHp: number;
+  maxSoulAnchor: number;
+  runicBrands: number;
+  buffState: PlayerCombatBuffState;
+  ashenMantleCooldown?: number;
+  ashenMantleFree?: boolean;
+}
+
+function getExtendedAbilityDisableReason(
+  abilityId: AegisAbilityId,
+  abyssalReserve: number,
+  operativeHp: number,
+  maxSoulAnchor: number,
+  buffState: PlayerCombatBuffState,
+  runicBrands: number,
+  options?: {
+    ashenMantleCooldown?: number;
+    ashenMantleFree?: boolean;
+  },
+): string | null {
+  const def = getAbilityDefinition(abilityId);
+  switch (abilityId) {
+    case 'RUIN':
+      return null;
+    case 'ASHEN_MANTLE':
+      if (options?.ashenMantleFree && (options.ashenMantleCooldown ?? 0) > 0) {
+        return `Ashen Mantle cooling down (${options.ashenMantleCooldown} turn${options.ashenMantleCooldown === 1 ? '' : 's'}).`;
+      }
+      return null;
+    case 'GRAVE_BIND':
+    case 'NAIL_TO_GRID':
+    case 'ABYSSAL_FAULT':
+    case 'SHADOW_STEP':
+    case 'REAVE':
+      if (!canAffordReserveCost(def, abyssalReserve)) {
+        const required = requiredReserveAmount(def, abyssalReserve);
+        if (def.reserveCostPct && def.reserveCostPct > 0) {
+          return `Requires ${def.reserveCostPct}% Abyssal Reserve (${required}% at current pool).`;
+        }
+        return required > 0
+          ? `Requires ${required}% Abyssal Reserve.`
+          : 'Insufficient Abyssal Reserve.';
+      }
+      return null;
+    case 'BLOOD_TITHE':
+      if (abyssalReserve < (def.minReservePct ?? 30)) {
+        return `Requires at least ${def.minReservePct ?? 30}% Abyssal Reserve.`;
+      }
+      return null;
+    case 'DEMONS_LUNG':
+      if (buffState.demonLungCooldown > 0) {
+        return `Demon's Lung cooling down (${buffState.demonLungCooldown} turn${buffState.demonLungCooldown === 1 ? '' : 's'}).`;
+      }
+      return null;
+    case 'CRIMSON_PACT':
+    case 'BLOOD_BOUND_CARAPACE': {
+      const cost = Math.ceil(maxSoulAnchor * ((def.hpCostPct ?? 0) / 100));
+      if (operativeHp <= cost) {
+        return `Requires more than ${cost} HP to pay the blood tithe.`;
+      }
+      return null;
+    }
+    case 'DEVASTATE':
+      if (runicBrands < (def.requiredBrands ?? 3)) {
+        return `Requires ${def.requiredBrands ?? 3} Runic Brands (have ${runicBrands}).`;
+      }
+      return null;
+    default:
+      return 'Ability unavailable.';
+  }
+}
+
+export function getAegisAbilityDisableReason(
+  abilityId: AegisAbilityId,
+  ctx: AegisAbilityDisableContext,
+): string | null {
+  if (!ctx.isPlayerTurn || ctx.cycleState !== 'TEXT_COMBAT' || ctx.shadowstepProc) {
+    return 'Wait for your combat phase.';
+  }
+  if (ctx.encounterUltimateDisabled && getAbilityTags(abilityId).includes('ULTIMATE')) {
+    return 'Ultimate channel sealed by Apex Graft.';
+  }
+  if (ctx.rooted && (abilityId === 'WRAITH_PARRY' || abilityId === 'SHADOW_STEP')) {
+    return 'Rooted — parry and mobility blocked.';
+  }
+  if (ctx.jammedSlots.some((slot) => ctx.loadout[slot] === abilityId)) {
+    return 'Augment slot jammed this encounter.';
+  }
+  if (ctx.graftCooldown > 0) {
+    return `Graft cooling down (${ctx.graftCooldown} turn${ctx.graftCooldown === 1 ? '' : 's'}).`;
+  }
+  if (ctx.playerAp < ctx.graftPlan.apCost) {
+    return `Requires ${ctx.graftPlan.apCost} AP (have ${ctx.playerAp}).`;
+  }
+  const graftAfford = canAffordGraftResources(ctx.graftPlan, ctx.abyssalReserve, ctx.runicBrands);
+  if (!graftAfford.ok) return graftAfford.reason;
+
+  switch (abilityId) {
+    case 'STRIKE':
+    case 'VEIL_PIERCER':
+    case 'RUIN':
+      return null;
+    case 'WRAITH_PARRY':
+      return ctx.voidWardPrimed ? 'Void Ward already primed.' : null;
+    case 'ASHEN_MANTLE':
+    case 'GRAVE_BIND':
+    case 'SHADOW_STEP':
+    case 'NAIL_TO_GRID':
+    case 'BLOOD_TITHE':
+    case 'DEMONS_LUNG':
+    case 'CRIMSON_PACT':
+    case 'DEVASTATE':
+    case 'ABYSSAL_FAULT':
+    case 'BLOOD_BOUND_CARAPACE':
+    case 'REAVE':
+      return getExtendedAbilityDisableReason(
+        abilityId,
+        ctx.abyssalReserve,
+        ctx.operativeHp,
+        ctx.maxSoulAnchor,
+        ctx.buffState,
+        ctx.runicBrands,
+        {
+          ashenMantleCooldown: ctx.ashenMantleCooldown,
+          ashenMantleFree: ctx.ashenMantleFree,
+        },
+      );
+    default:
+      return 'Ability unavailable.';
   }
 }

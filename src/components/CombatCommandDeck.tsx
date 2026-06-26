@@ -32,6 +32,8 @@ interface CombatCommandDeckProps {
   displayActionPoints?: number | null;
   maxActionPoints?: number;
   isActionEnabled: (ability: string) => boolean;
+  canSelectActions?: boolean;
+  getActionDisableReason?: (ability: string) => string | null;
   canEndTurn: boolean;
   getAbilityLabel: (ability: string) => string;
   initiativeQueued?: boolean;
@@ -51,6 +53,10 @@ interface CombatCommandDeckProps {
   voidWardEnabled?: boolean;
   voidWardPrimed?: boolean;
   onVoidWardPrime?: () => void;
+  catalyticConsoleAvailable?: boolean;
+  catalyticConsoleEnabled?: boolean;
+  catalyticConsoleRotStacks?: number;
+  onCatalyticConsole?: () => void;
   borderColor: string;
   primaryColor: string;
   mutedColor: string;
@@ -69,6 +75,8 @@ export default function CombatCommandDeck({
   displayActionPoints = null,
   maxActionPoints = PLAYER_ACTION_POINTS_PER_TURN,
   isActionEnabled,
+  canSelectActions = true,
+  getActionDisableReason,
   canEndTurn,
   getAbilityLabel,
   initiativeQueued = false,
@@ -88,6 +96,10 @@ export default function CombatCommandDeck({
   voidWardEnabled = false,
   voidWardPrimed = false,
   onVoidWardPrime,
+  catalyticConsoleAvailable = false,
+  catalyticConsoleEnabled = false,
+  catalyticConsoleRotStacks = 0,
+  onCatalyticConsole,
   borderColor,
   primaryColor,
   mutedColor,
@@ -248,8 +260,8 @@ export default function CombatCommandDeck({
         ]}
       >
         <HapticPressable
-          onPress={() => enabled && onSelectAbility(ability)}
-          disabled={!enabled}
+          onPress={() => canSelectActions && onSelectAbility(ability)}
+          disabled={!canSelectActions}
           style={[styles.deckTile, { opacity: enabled ? 1 : 0.4 }]}
         >
           <Text
@@ -337,6 +349,38 @@ export default function CombatCommandDeck({
           numberOfLines={1}
         >
           [ RELOAD ]
+        </Text>
+      </HapticPressable>
+    );
+  };
+
+  const renderCatalyticConsoleButton = () => {
+    if (!catalyticConsoleAvailable) return null;
+    const accent = catalyticConsoleRotStacks > 0 ? '#4ade80' : borderColor;
+    return (
+      <HapticPressable
+        onPress={onCatalyticConsole}
+        disabled={!catalyticConsoleEnabled}
+        style={[
+          styles.combatReloadBtn,
+          dashboardLayout && styles.combatReloadBtnDashboard,
+          {
+            borderColor: catalyticConsoleEnabled ? accent : borderColor,
+            opacity: catalyticConsoleEnabled ? 1 : 0.4,
+          },
+        ]}
+      >
+        <Text
+          style={[
+            styles.combatReloadLabel,
+            dashboardLayout ? styles.combatReloadLabelDashboard : null,
+            { color: catalyticConsoleEnabled ? accent : mutedColor },
+          ]}
+          numberOfLines={1}
+        >
+          {catalyticConsoleRotStacks > 0
+            ? `[ CATALYST // ${catalyticConsoleRotStacks} ]`
+            : '[ CATALYST ]'}
         </Text>
       </HapticPressable>
     );
@@ -436,6 +480,11 @@ export default function CombatCommandDeck({
               <Text style={[styles.execCost, { color: mutedColor }]}>
                 {getStagedCostImpact(selectedAbility)}
               </Text>
+              {!canExecute && getActionDisableReason?.(selectedAbility) ? (
+                <Text style={[styles.execDetail, { color: '#f87171' }]}>
+                  {`BLOCKED: ${getActionDisableReason(selectedAbility)}`}
+                </Text>
+              ) : null}
               <ScrollView
                 style={styles.execDetailScroll}
                 contentContainerStyle={styles.execDetailScrollContent}
@@ -499,6 +548,7 @@ export default function CombatCommandDeck({
                 />
                 <View style={styles.apActions}>
                   {renderVoidWardButton()}
+                  {renderCatalyticConsoleButton()}
                   {renderCombatReloadButton()}
                   {renderEndTurnButton()}
                 </View>
@@ -518,6 +568,7 @@ export default function CombatCommandDeck({
                 />
                 <View style={styles.apActions}>
                   {renderVoidWardButton()}
+                  {renderCatalyticConsoleButton()}
                   {renderCombatReloadButton()}
                   {bloodForTimeAvailable ? (
                     <HapticPressable

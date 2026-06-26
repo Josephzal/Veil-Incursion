@@ -8,6 +8,7 @@ import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useDescentNavigator } from '../hooks/useDescentNavigator';
+import { resolveExtractionVeilResidueDeposit } from '../data/extractionPersistenceEngine';
 import { getSectorZone } from '../data/sectorZoneEngine';
 import {
   EMERGENCY_EXTRACT_CARGO_BLEED_PCT,
@@ -44,6 +45,14 @@ export default function ExtractionReviewScreen(): React.JSX.Element {
     }
     return total;
   }, [activeIncursion.primeExtractionBonus, activeIncursion.runCredits, reviewKind]);
+
+  const residueVaultPreview = useMemo(
+    () => resolveExtractionVeilResidueDeposit(
+      activeIncursion.cargo,
+      activeIncursion.sessionVeilResidueCollected,
+    ).totalDeposit,
+    [activeIncursion.cargo, activeIncursion.sessionVeilResidueCollected],
+  );
 
   const headerMeta = useMemo(() => {
     switch (reviewKind) {
@@ -139,6 +148,11 @@ export default function ExtractionReviewScreen(): React.JSX.Element {
             <Text style={[styles.line, { color: theme.primaryColor }]}>
               {`CARGO ITEMS ${cargoItemCount} → HOME STASH`}
             </Text>
+            {residueVaultPreview > 0 ? (
+              <Text style={[styles.line, { color: TERMINAL_ACCENT }]}>
+                {`VEIL RESIDUE ${residueVaultPreview} → SAFEHOUSE VAULT (SHADOW WAR DONATABLE)`}
+              </Text>
+            ) : null}
             {reviewKind === 'EMERGENCY_RECALL' ? (
               <Text style={[styles.line, { color: '#fbbf24' }]}>
                 {`EMERGENCY BLEED — −${EMERGENCY_EXTRACT_CARGO_BLEED_PCT}% cargo items lost on extract`}

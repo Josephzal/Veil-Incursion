@@ -39,7 +39,7 @@ export type EnvoyGraftId =
 
 export type OperativeClassGraftId = HexShotGraftId | EnvoyGraftId;
 
-export type ClassGraftDamageScale = 'MISSING_AMMO' | 'CURRENT_FLUX';
+export type ClassGraftDamageScale = 'MISSING_AMMO' | 'MISSING_FLUX' | 'CURRENT_FLUX';
 
 export interface ClassGraftDefinition {
   id: OperativeClassGraftId;
@@ -70,8 +70,14 @@ export interface ClassGraftDefinition {
   refundAmmoOnKill?: boolean;
   refundApOnKill?: boolean;
   refundApOnCrit?: boolean;
-  setFluxGen?: number;
   setFluxCost?: number;
+  /** Additional Veil-Flux % consumed on cast (burn-rate economy). */
+  addFluxCost?: number;
+  /** Overrides or sets Veil-Flux % restored on cast. */
+  setFluxRegen?: number;
+  /** @deprecated Use addFluxCost */
+  setFluxGen?: number;
+  /** @deprecated Use addFluxCost */
   addFluxGeneration?: number;
   reduceDamage?: number;
   healPercentageOfDamage?: number;
@@ -83,6 +89,8 @@ export interface ClassGraftDefinition {
   convertToAoE?: boolean;
   dealSelfDamage?: number;
   executeThreshold?: number;
+  /** Multiplier applied to damage vs boss targets (Apex-Channel). */
+  bossDamageMultiplier?: number;
   setCritChance?: number;
   disableUltimate?: boolean;
   selfDebuffOnFail?: string;
@@ -105,7 +113,7 @@ export interface ClassGraftCastPlan {
   extraStaminaCost: number;
   ammoCost: number;
   ammoCostMultiplier: number;
-  fluxGen: number;
+  fluxRegen: number;
   fluxCost: number;
   damageMultiplier: number;
   baseDamageMultiplier: number;
@@ -120,6 +128,7 @@ export interface ClassGraftCastPlan {
   refundAmmoOnKill: boolean;
   failDebuff: string | null;
   executeThreshold: number | null;
+  bossDamageMultiplier: number;
   guaranteedCrit: boolean;
   randomTarget: boolean;
   consumeAllAmmo: boolean;
@@ -139,7 +148,7 @@ export interface ClassGraftCastPlan {
 export function defaultClassGraftCastPlan(
   apCost: number,
   ammoCost: number,
-  fluxGen: number,
+  fluxRegen: number,
   fluxCost: number,
   tags: readonly string[],
 ): ClassGraftCastPlan {
@@ -149,7 +158,7 @@ export function defaultClassGraftCastPlan(
     extraStaminaCost: 0,
     ammoCost,
     ammoCostMultiplier: 1,
-    fluxGen,
+    fluxRegen,
     fluxCost,
     damageMultiplier: 1,
     baseDamageMultiplier: 1,
@@ -164,6 +173,7 @@ export function defaultClassGraftCastPlan(
     refundAmmoOnKill: false,
     failDebuff: null,
     executeThreshold: null,
+    bossDamageMultiplier: 1,
     guaranteedCrit: false,
     randomTarget: false,
     consumeAllAmmo: false,

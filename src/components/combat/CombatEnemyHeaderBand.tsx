@@ -32,7 +32,11 @@ export default function CombatEnemyHeaderBand({
   const hpRatio = enemy.maxHp > 0 ? enemy.currentHp / enemy.maxHp : 0;
   const fractureMax = enemy.fractureMax ?? 100;
   const fractureRatio = clampRatio(fractureMax > 0 ? (enemy.fractureGauge ?? 0) / fractureMax : 0);
-  const armorLine = `KA ${enemy.kineticArmor ?? 0} // OW ${enemy.occultWards ?? 0}`;
+  const armorLine = (() => {
+    const base = `KA ${enemy.kineticArmor ?? 0} // OW ${enemy.occultWards ?? 0}`;
+    const rot = enemy.veilRotStacks ?? 0;
+    return rot > 0 ? `${base} // ROT ${rot}` : base;
+  })();
   const tagLine = enemy.combatTags?.length ? enemy.combatTags.join(' / ') : null;
   const shellStyle = arena ? styles.bandArena : compact ? styles.bandCompact : null;
 

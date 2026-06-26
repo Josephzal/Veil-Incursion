@@ -25,10 +25,15 @@ const PATTERNS: Record<SigilPattern, { id: SigilPattern; points: { x: number; y:
 
 interface CataclysmSigilOverlayProps {
   visible: boolean;
-  onResolve: (success: boolean) => void;
+  onResolve: (traceAccuracy: number) => void;
 }
 
 const HIT_RADIUS = 28;
+
+function resolveTraceAccuracy(completedSteps: number, totalSteps: number): number {
+  if (totalSteps <= 0) return 0;
+  return Math.max(0, Math.min(1, completedSteps / totalSteps));
+}
 
 export default function CataclysmSigilOverlay({
   visible,
@@ -58,15 +63,15 @@ export default function CataclysmSigilOverlay({
     const timer = setTimeout(() => {
       if (resolvedRef.current) return;
       resolvedRef.current = true;
-      onResolve(false);
+      onResolve(resolveTraceAccuracy(progressRef.current, pattern.order.length));
     }, CATACLYSM_SIGIL_DURATION_MS);
     return () => clearTimeout(timer);
-  }, [visible, onResolve]);
+  }, [visible, onResolve, pattern.order.length]);
 
-  const finish = (success: boolean) => {
+  const finish = (accuracy: number) => {
     if (resolvedRef.current) return;
     resolvedRef.current = true;
-    onResolve(success);
+    onResolve(accuracy);
   };
 
   const panResponder = useMemo(() => PanResponder.create({
@@ -84,7 +89,7 @@ export default function CataclysmSigilOverlay({
     onPanResponderRelease: () => {
       if (!resolvedRef.current && progressRef.current < pattern.order.length) {
         liftedRef.current = true;
-        finish(false);
+        finish(resolveTraceAccuracy(progressRef.current, pattern.order.length));
       }
     },
   }), [pattern, visible]);
@@ -100,7 +105,7 @@ export default function CataclysmSigilOverlay({
     progressRef.current = next;
     setProgress(next);
     if (next >= pattern.order.length) {
-      finish(true);
+      finish(1);
     }
   };
 
