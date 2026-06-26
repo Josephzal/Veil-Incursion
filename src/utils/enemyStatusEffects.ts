@@ -41,8 +41,8 @@ export const ENEMY_STATUS_EFFECTS: Record<EnemyStatusEffectKey, EnemyStatusEffec
   },
   evading: {
     key: 'evading',
-    label: 'Evading',
-    description: 'Guaranteed dodge of the next targeted attack.',
+    label: 'Evade Posture',
+    description: '+60% miss chance vs operative strikes — not a guaranteed dodge.',
     icon: EvadingIcon,
   },
   enraged: {

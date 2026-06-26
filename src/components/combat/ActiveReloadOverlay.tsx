@@ -1,5 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+} from 'react-native-reanimated';
 import HapticPressable from '../HapticPressable';
 import type { ActiveReloadResult } from '../../types/classCombatResources';
 import { HEX_RELOAD_JAM_STAMINA_PENALTY } from '../../types/hexShotState';
@@ -13,9 +17,7 @@ export type ActiveReloadMode = 'flow' | 'tactical';
 
 interface ActiveReloadOverlayProps {
   visible: boolean;
-  /** Flow-state reload after empty mag vs manual tactical reload. */
   mode?: ActiveReloadMode;
-  /** 1 = normal perfect band; 0.5 = Gunsmith's Curse (50% tighter). */
   perfectWindowScale?: number;
   onResolve: (result: ActiveReloadResult, cursorRatio: number) => void;
 }
@@ -23,21 +25,25 @@ interface ActiveReloadOverlayProps {
 const CURSOR_WIDTH = 8;
 const MIN_BAR_WIDTH = 120;
 
-export default function ActiveReloadOverlay({
+function ActiveReloadOverlay({
   visible,
   mode = 'tactical',
   perfectWindowScale = 1,
   onResolve,
 }: ActiveReloadOverlayProps): React.JSX.Element | null {
-  const [cursorRatio, setCursorRatio] = useState(0);
   const [barWidth, setBarWidth] = useState(0);
+  const cursorRatio = useSharedValue(0);
   const startMsRef = useRef(0);
   const resolvingRef = useRef(false);
   const rafRef = useRef<number | null>(null);
+  const onResolveRef = useRef(onResolve);
+  onResolveRef.current = onResolve;
   const zoneConfig = useMemo(
     () => buildReloadZoneConfig(perfectWindowScale),
     [perfectWindowScale],
   );
+  const zoneConfigRef = useRef(zoneConfig);
+  zoneConfigRef.current = zoneConfig;
 
   const handleBarLayout = useCallback((event: LayoutChangeEvent) => {
     const { width } = event.nativeEvent.layout;
@@ -47,21 +53,22 @@ export default function ActiveReloadOverlay({
   useEffect(() => {
     if (!visible) {
       resolvingRef.current = false;
-      setCursorRatio(0);
+      cursorRatio.value = 0;
       if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
       return;
     }
     startMsRef.current = Date.now();
     resolvingRef.current = false;
+    cursorRatio.value = 0;
 
     const tick = () => {
       const elapsed = Date.now() - startMsRef.current;
       const ratio = Math.min(1, elapsed / ACTIVE_RELOAD_PASS_MS);
-      setCursorRatio(ratio);
+      cursorRatio.value = ratio;
       if (ratio >= 1 && !resolvingRef.current) {
         resolvingRef.current = true;
-        onResolve(resolveActiveReloadZone(1, zoneConfig), 1);
+        onResolveRef.current(resolveActiveReloadZone(1, zoneConfigRef.current), 1);
         return;
       }
       rafRef.current = requestAnimationFrame(tick);
@@ -70,7 +77,13 @@ export default function ActiveReloadOverlay({
     return () => {
       if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
     };
-  }, [visible, onResolve, zoneConfig]);
+  }, [visible, cursorRatio]);
+
+  const cursorStyle = useAnimatedStyle(() => {
+    const track = Math.max(MIN_BAR_WIDTH, barWidth) - CURSOR_WIDTH;
+    const left = Math.max(0, Math.min(track, cursorRatio.value * track));
+    return { transform: [{ translateX: left }] };
+  }, [barWidth]);
 
   if (!visible) return null;
 
@@ -78,41 +91,37 @@ export default function ActiveReloadOverlay({
     if (resolvingRef.current) return;
     resolvingRef.current = true;
     if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
-    onResolve(resolveActiveReloadZone(cursorRatio, zoneConfig), cursorRatio);
+    onResolveRef.current(
+      resolveActiveReloadZone(cursorRatio.value, zoneConfig),
+      cursorRatio.value,
+    );
   };
 
-  const cursorLeft = barWidth > 0
-    ? Math.max(
-      0,
-      Math.min(barWidth - CURSOR_WIDTH, cursorRatio * (barWidth - CURSOR_WIDTH)),
-    )
-    : 0;
   const goldLeftPct = zoneConfig.perfectMin * 100;
   const goldWidthPct = (zoneConfig.perfectMax - zoneConfig.perfectMin) * 100;
-  const redLeftPct = 0;
   const redWidthPct = zoneConfig.perfectMin * 100;
   const redEndLeftPct = zoneConfig.perfectMax * 100;
   const redEndWidthPct = Math.max(0, (1 - zoneConfig.perfectMax) * 100);
   const perfectLabel = `${Math.round(zoneConfig.perfectMin * 100)}–${Math.round(zoneConfig.perfectMax * 100)}%`;
   const isFlow = mode === 'flow';
-  const title = isFlow
-    ? '[ FLOW-STATE RELOAD // 1 AP ]'
-    : '[ PHASE-SHIFT RELOAD // 1 AP ]';
-  const subtitle = isFlow
-    ? 'Magazine dry — tap the gold band to re-enter the flow. Overcharge scales with how empty you were.'
-    : 'Tactical reload — tap the gold band. Overcharge scales with rounds remaining before reload.';
 
   return (
     <View style={styles.overlay} pointerEvents="auto">
       <HapticPressable onPress={handleTap} style={styles.panel}>
-        <Text style={styles.title}>{title}</Text>
-        <Text style={styles.subtitle}>{subtitle}</Text>
+        <Text style={styles.title}>
+          {isFlow ? '[ FLOW-STATE RELOAD // 1 AP ]' : '[ PHASE-SHIFT RELOAD // 1 AP ]'}
+        </Text>
+        <Text style={styles.subtitle}>
+          {isFlow
+            ? 'Magazine dry — tap the gold band to re-enter the flow.'
+            : 'Tactical reload — tap the gold band before the cursor passes.'}
+        </Text>
         <View style={styles.barTrack} onLayout={handleBarLayout}>
-          <View style={[styles.zone, styles.redZone, { left: `${redLeftPct}%`, width: `${redWidthPct}%` }]} />
+          <View style={[styles.zone, styles.redZone, { left: '0%', width: `${redWidthPct}%` }]} />
           <View style={[styles.zone, styles.goldZone, { left: `${goldLeftPct}%`, width: `${goldWidthPct}%` }]} />
           <View style={[styles.zone, styles.redZone, { left: `${redEndLeftPct}%`, width: `${redEndWidthPct}%` }]} />
           {barWidth > 0 ? (
-            <View style={[styles.cursor, { left: cursorLeft, width: CURSOR_WIDTH }]} />
+            <Animated.View style={[styles.cursor, { width: CURSOR_WIDTH }, cursorStyle]} />
           ) : null}
         </View>
         <View style={styles.legendRow}>
@@ -125,12 +134,12 @@ export default function ActiveReloadOverlay({
   );
 }
 
+export default memo(ActiveReloadOverlay);
+
 const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 45,
-    elevation: 45,
-    backgroundColor: 'rgba(0, 0, 0, 0.72)',
+    backgroundColor: 'rgba(0, 0, 0, 0.88)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 16,
@@ -186,6 +195,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 1,
     bottom: 1,
+    left: 0,
     backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#fbbf24',

@@ -90,7 +90,12 @@ function BattlefieldSlot({
   }, [onUnitDissolveComplete, unit]);
 
   const dissolving = unit != null && (unit.dissolveSeq ?? 0) > 0 && !unit.dissolveHidden;
-  const zIndex = unit?.isBacklineDashing ? 50 : presentation.zIndex;
+  const isBackline = laneForSlot(slot) === 'BACKLINE';
+  const zIndex = unit?.isBacklineDashing
+    ? 50
+    : targetingActive && isBackline
+      ? Math.max(presentation.zIndex, 14)
+      : presentation.zIndex;
 
   return (
     <CombatEnemyWrapper

@@ -1,10 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { memo, useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import HapticPressable from '../HapticPressable';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
 } from 'react-native-reanimated';
+import HapticPressable from '../HapticPressable';
+import { COMBAT_MINIGAME_GREEN as GREEN } from '../../constants/combatMinigameTheme';
 
 /** Board-wide catalytic hold & release — same ring resolver as Rift-Ward. */
 const EXPANSION_RATE = 0.024;
@@ -16,7 +17,7 @@ interface CatalyticConsoleOverlayProps {
   onRelease: (overlapRatio: number) => void;
 }
 
-export default function CatalyticConsoleOverlay({
+function CatalyticConsoleOverlay({
   visible,
   rotStacksTotal,
   payloadEstimate,
@@ -27,6 +28,8 @@ export default function CatalyticConsoleOverlay({
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const innerRatioRef = useRef(0);
   const resolvedRef = useRef(false);
+  const onReleaseRef = useRef(onRelease);
+  onReleaseRef.current = onRelease;
 
   useEffect(() => {
     if (!visible) {
@@ -65,7 +68,7 @@ export default function CatalyticConsoleOverlay({
     setHolding(false);
     if (tickRef.current) clearInterval(tickRef.current);
     tickRef.current = null;
-    onRelease(innerRatioRef.current);
+    onReleaseRef.current(innerRatioRef.current);
   };
 
   return (
@@ -88,6 +91,8 @@ export default function CatalyticConsoleOverlay({
   );
 }
 
+export default memo(CatalyticConsoleOverlay);
+
 const CATALYST_SCALE = 0.7;
 const INNER_RING = Math.round(220 * 1.15 * CATALYST_SCALE);
 const OUTER_RING = Math.round(INNER_RING * 1.2);
@@ -95,9 +100,7 @@ const OUTER_RING = Math.round(INNER_RING * 1.2);
 const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 42,
-    elevation: 42,
-    backgroundColor: 'rgba(0, 0, 0, 0.72)',
+    backgroundColor: GREEN.backdrop,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -112,16 +115,16 @@ const styles = StyleSheet.create({
     height: OUTER_RING,
     borderRadius: OUTER_RING / 2,
     borderWidth: 2,
-    borderColor: '#4ade80',
+    borderColor: GREEN.ring,
     position: 'absolute',
   },
   innerCircle: {
     width: INNER_RING * 0.92,
     height: INNER_RING * 0.92,
     borderRadius: (INNER_RING * 0.92) / 2,
-    backgroundColor: 'rgba(74, 222, 128, 0.28)',
+    backgroundColor: GREEN.fill,
     borderWidth: 1,
-    borderColor: '#86efac',
+    borderColor: GREEN.ringSoft,
     position: 'absolute',
   },
   meta: {
@@ -129,7 +132,7 @@ const styles = StyleSheet.create({
     top: 0,
     fontFamily: 'monospace',
     fontSize: 7,
-    color: '#bbf7d0',
+    color: GREEN.text,
     letterSpacing: 0.5,
     textAlign: 'center',
     width: OUTER_RING + 40,
@@ -139,7 +142,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     fontFamily: 'monospace',
     fontSize: 8,
-    color: '#dcfce7',
+    color: GREEN.textBright,
     letterSpacing: 0.6,
   },
 });

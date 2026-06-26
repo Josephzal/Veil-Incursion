@@ -22,7 +22,7 @@ const INTENT_READOUT: Record<EnemyIntent, string> = {
   STRIKE: 'STRIKE',
   STRIP_STAMINA: 'TARGETING STAMINA RES',
   SIPHON_ABYSSAL: 'SIPHON ABYSSAL RES',
-  EVADE: 'EVADE POSTURE',
+  EVADE: '+60% DODGE',
   CHARGE: 'CHARGING WORLD-ENDER',
   WORLD_ENDER: 'WORLD-ENDER UNBLOCK',
   FORTIFY: 'FORTIFY',
@@ -147,7 +147,19 @@ const ENEMY_DAMAGE_INTENTS: EnemyIntent[] = [
   'RESONANCE_OVERLOAD',
 ];
 const ENEMY_SIPHON_INTENTS: EnemyIntent[] = ['STRIP_STAMINA', 'SIPHON_ABYSSAL'];
+/** Wind-up turns — no attack sprite / lunge until the follow-through intent fires. */
+const ENEMY_WINDUP_INTENTS: EnemyIntent[] = [
+  'CHARGE',
+  'PAVEMENT_CRUSHER_CHARGE',
+  'ARTILLERY_CHARGE',
+  'TARGET_LOCK',
+  'LASER_SIGHT',
+];
 const ENEMY_CHARGE_INTENTS: EnemyIntent[] = ['FORTIFY', 'CHARGE'];
+
+export function isEnemyWindUpIntent(intent: EnemyIntent): boolean {
+  return ENEMY_WINDUP_INTENTS.includes(intent);
+}
 
 export function isEnemyDamageIntent(intent: EnemyIntent): boolean {
   return ENEMY_DAMAGE_INTENTS.includes(intent);
@@ -163,11 +175,12 @@ export function isEnemySiphonIntent(intent: EnemyIntent): boolean {
 }
 
 export function isEnemyChargeIntent(intent: EnemyIntent): boolean {
-  return ENEMY_CHARGE_INTENTS.includes(intent);
+  return ENEMY_CHARGE_INTENTS.includes(intent) || isEnemyWindUpIntent(intent);
 }
 
 export function isEnemyBuffIntent(intent: EnemyIntent): boolean {
-  return intent === 'FORTIFY' || intent === 'EVADE' || intent === 'CHARGE' || intent === 'FIELD_REPAIR';
+  return intent === 'FORTIFY' || intent === 'EVADE' || intent === 'CHARGE' || intent === 'FIELD_REPAIR'
+    || isEnemyWindUpIntent(intent);
 }
 
 export type EnemyTurnMotionKind = 'buff' | 'melee' | 'ranged';
@@ -206,7 +219,7 @@ const BUFF_FLOAT_LABELS: Partial<Record<EnemyIntent, string>> = {
   OCCULT_TETHER: 'Tether',
   VEIL_STATIC: 'Static',
   SINKING_INTO_GRID: 'Phase',
-  EVADE: 'Evade',
+  EVADE: '+60% Dodge',
   CHARGE: 'Charge',
   FIELD_REPAIR: 'Repair',
 };

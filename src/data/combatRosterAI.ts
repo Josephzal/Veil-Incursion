@@ -257,6 +257,7 @@ export function decideRosterIntent(
     if (squad && synced.unitId && squadNeedsFixerRepair(squad, synced.unitId)) {
       return 'FIELD_REPAIR';
     }
+    if (isRedundantBuffIntent('EVADE', synced)) return 'STRIKE';
     return 'EVADE';
   }
 

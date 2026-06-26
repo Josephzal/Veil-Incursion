@@ -61,6 +61,7 @@ export default function CombatEnemyUnit({
 
   const isArena = variant === 'arena';
   const isAlpha = unit.isAlpha === true;
+  const isBacklineSlot = unit.slot?.startsWith('BL') === true;
   const fractured = unit.isFractured;
   const dissolving = (unit.dissolveSeq ?? 0) > 0 && !unit.dissolveHidden;
   const portraitGlow = unit.portraitGlow ?? (unit.isSelected ? 'player-selected' : 'none');
@@ -175,7 +176,10 @@ export default function CombatEnemyUnit({
             {onPress && !dissolving ? (
               <HapticPressable
                 onPress={onPress}
-                style={[styles.hitbox, ENEMY_HITBOX_DEBUG ? styles.hitboxDebug : null]}
+                style={[
+                  isBacklineSlot ? styles.hitbox : styles.hitboxFrontline,
+                  ENEMY_HITBOX_DEBUG ? styles.hitboxDebug : null,
+                ]}
                 pointerEvents="auto"
               />
             ) : null}
@@ -280,7 +284,7 @@ const styles = StyleSheet.create({
   },
   statusAnchor: {
     position: 'absolute',
-    top: '-25%',
+    top: '38%',
     width: '100%',
     alignItems: 'center',
     zIndex: 12,
@@ -289,6 +293,14 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: '100%',
     height: '100%',
+    zIndex: 10,
+  },
+  hitboxFrontline: {
+    position: 'absolute',
+    width: '62%',
+    height: '72%',
+    bottom: 0,
+    left: '19%',
     zIndex: 10,
   },
   hitboxDebug: {

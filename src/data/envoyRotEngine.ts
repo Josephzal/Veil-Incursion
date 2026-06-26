@@ -33,13 +33,14 @@ export function isCataclysmSigilReady(
   return totalVeilRotStacks(classState) >= CATACLYSM_ROT_GATE;
 }
 
-/** Grid-wide TRUE rupture — exponential in harvested rot × trace accuracy (0–1). */
+/** Grid-wide TRUE rupture — exponential in harvested rot × trace multiplier (0–1). */
 export function computeCataclysmSigilDamage(
   rotTotal: number,
-  traceAccuracy: number,
+  traceMultiplier: number,
 ): number {
   if (rotTotal <= 0) return 0;
-  const trace = Math.max(0, Math.min(1, traceAccuracy));
+  const trace = Math.max(0, Math.min(1, traceMultiplier));
+  if (trace <= 0) return 0;
   const harvestedTicks = rotTotal * VEIL_ROT_TICK_DAMAGE;
   const exponentialScale = Math.pow(1.35, rotTotal);
   return Math.max(1, Math.floor(harvestedTicks * exponentialScale * trace));

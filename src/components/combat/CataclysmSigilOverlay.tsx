@@ -1,9 +1,17 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { PanResponder, StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle, Line } from 'react-native-svg';
+import { Canvas, Circle, Line } from '@shopify/react-native-skia';
 import { CATACLYSM_SIGIL_DURATION_MS } from '../../data/combatMasteryEngine';
+import { COMBAT_MINIGAME_GREEN as GREEN } from '../../constants/combatMinigameTheme';
 
 type SigilPattern = 'triangle' | 'line' | 'zigzag';
+
+const CANVAS_W = 300;
+const CANVAS_H = 240;
+const HIT_RADIUS = 38;
+const FINAL_NODE_HIT_RADIUS = 52;
+/** Extra time to reach the last node after the base timer expires. */
+const FINAL_NODE_GRACE_MS = 1400;
 
 const PATTERNS: Record<SigilPattern, { id: SigilPattern; points: { x: number; y: number }[]; order: number[] }> = {
   triangle: {
@@ -25,17 +33,11 @@ const PATTERNS: Record<SigilPattern, { id: SigilPattern; points: { x: number; y:
 
 interface CataclysmSigilOverlayProps {
   visible: boolean;
-  onResolve: (traceAccuracy: number) => void;
+  /** Number of nodes successfully traced (0–3). */
+  onResolve: (nodesCompleted: number) => void;
 }
 
-const HIT_RADIUS = 28;
-
-function resolveTraceAccuracy(completedSteps: number, totalSteps: number): number {
-  if (totalSteps <= 0) return 0;
-  return Math.max(0, Math.min(1, completedSteps / totalSteps));
-}
-
-export default function CataclysmSigilOverlay({
+function CataclysmSigilOverlay({
   visible,
   onResolve,
 }: CataclysmSigilOverlayProps): React.JSX.Element | null {
@@ -43,138 +45,295 @@ export default function CataclysmSigilOverlay({
     () => PATTERNS[(['triangle', 'line', 'zigzag'] as SigilPattern[])[Math.floor(Math.random() * 3)]],
     [visible],
   );
-  const [progress, setProgress] = useState(0);
-  const progressRef = useRef(0);
+
+  const [nodesLocked, setNodesLocked] = useState(0);
+  const [awaitingTap, setAwaitingTap] = useState(true);
+  const [dragPoint, setDragPoint] = useState<{ x: number; y: number } | null>(null);
+  const [timeLeftMs, setTimeLeftMs] = useState(CATACLYSM_SIGIL_DURATION_MS);
+
+  const nodesLockedRef = useRef(0);
+  const awaitingTapRef = useRef(true);
   const resolvedRef = useRef(false);
-  const liftedRef = useRef(false);
+  const dragRafRef = useRef<number | null>(null);
+  const pendingDragRef = useRef<{ x: number; y: number } | null>(null);
+  const onResolveRef = useRef(onResolve);
+  const graceDeadlineRef = useRef<number | null>(null);
+  const draggingRef = useRef(false);
+  onResolveRef.current = onResolve;
+
+  const finish = (completed: number) => {
+    if (resolvedRef.current) return;
+    resolvedRef.current = true;
+    onResolveRef.current(completed);
+  };
+
+  const resetSession = () => {
+    resolvedRef.current = false;
+    nodesLockedRef.current = 0;
+    awaitingTapRef.current = true;
+    draggingRef.current = false;
+    graceDeadlineRef.current = null;
+    setNodesLocked(0);
+    setAwaitingTap(true);
+    setDragPoint(null);
+    setTimeLeftMs(CATACLYSM_SIGIL_DURATION_MS);
+    pendingDragRef.current = null;
+    if (dragRafRef.current != null) {
+      cancelAnimationFrame(dragRafRef.current);
+      dragRafRef.current = null;
+    }
+  };
 
   useEffect(() => {
     if (!visible) {
-      resolvedRef.current = false;
-      liftedRef.current = false;
-      progressRef.current = 0;
-      setProgress(0);
+      resetSession();
       return;
     }
-    resolvedRef.current = false;
-    liftedRef.current = false;
-    progressRef.current = 0;
-    setProgress(0);
-    const timer = setTimeout(() => {
-      if (resolvedRef.current) return;
-      resolvedRef.current = true;
-      onResolve(resolveTraceAccuracy(progressRef.current, pattern.order.length));
-    }, CATACLYSM_SIGIL_DURATION_MS);
-    return () => clearTimeout(timer);
-  }, [visible, onResolve, pattern.order.length]);
-
-  const finish = (accuracy: number) => {
-    if (resolvedRef.current) return;
-    resolvedRef.current = true;
-    onResolve(accuracy);
-  };
-
-  const panResponder = useMemo(() => PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: () => true,
-    onPanResponderGrant: (evt) => {
-      liftedRef.current = false;
-      const { locationX, locationY } = evt.nativeEvent;
-      tryHit(locationX, locationY);
-    },
-    onPanResponderMove: (evt) => {
-      const { locationX, locationY } = evt.nativeEvent;
-      tryHit(locationX, locationY);
-    },
-    onPanResponderRelease: () => {
-      if (!resolvedRef.current && progressRef.current < pattern.order.length) {
-        liftedRef.current = true;
-        finish(resolveTraceAccuracy(progressRef.current, pattern.order.length));
+    resetSession();
+    const startedAt = Date.now();
+    const timer = setInterval(() => {
+      if (resolvedRef.current) {
+        clearInterval(timer);
+        return;
       }
-    },
-  }), [pattern, visible]);
+      const now = Date.now();
+      const baseRemaining = Math.max(0, CATACLYSM_SIGIL_DURATION_MS - (now - startedAt));
+      const graceRemaining = graceDeadlineRef.current != null
+        ? Math.max(0, graceDeadlineRef.current - now)
+        : 0;
+      const remaining = Math.max(baseRemaining, graceRemaining);
+      setTimeLeftMs(remaining);
 
-  const tryHit = (x: number, y: number) => {
-    if (resolvedRef.current || liftedRef.current) return;
-    const targetIdx = pattern.order[progressRef.current];
-    if (targetIdx == null) return;
-    const pt = pattern.points[targetIdx];
-    const dist = Math.hypot(x - pt.x, y - pt.y);
-    if (dist > HIT_RADIUS) return;
-    const next = progressRef.current + 1;
-    progressRef.current = next;
-    setProgress(next);
-    if (next >= pattern.order.length) {
-      finish(1);
+      const onFinalSegment = nodesLockedRef.current === pattern.order.length - 1;
+      const canExtendGrace = onFinalSegment
+        && (draggingRef.current || pendingDragRef.current != null);
+
+      if (baseRemaining <= 0 && canExtendGrace && graceDeadlineRef.current == null) {
+        graceDeadlineRef.current = now + FINAL_NODE_GRACE_MS;
+        return;
+      }
+
+      if (remaining <= 0 && !canExtendGrace) {
+        clearInterval(timer);
+        finish(nodesLockedRef.current);
+      }
+    }, 50);
+    return () => clearInterval(timer);
+  }, [visible, pattern.order.length]);
+
+  const advanceToNode = (nextLocked: number) => {
+    nodesLockedRef.current = nextLocked;
+    setNodesLocked(nextLocked);
+    if (nextLocked >= pattern.order.length) {
+      finish(nextLocked);
     }
   };
+
+  const tryHitNode = (x: number, y: number): boolean => {
+    if (resolvedRef.current) return false;
+    const targetIdx = pattern.order[nodesLockedRef.current];
+    if (targetIdx == null) return false;
+    const pt = pattern.points[targetIdx];
+    const isFinalNode = nodesLockedRef.current === pattern.order.length - 1;
+    const radius = isFinalNode ? FINAL_NODE_HIT_RADIUS : HIT_RADIUS;
+    const dist = Math.hypot(x - pt.x, y - pt.y);
+    if (dist > radius) return false;
+
+    if (awaitingTapRef.current) {
+      awaitingTapRef.current = false;
+      setAwaitingTap(false);
+    }
+    advanceToNode(nodesLockedRef.current + 1);
+    return true;
+  };
+
+  const scheduleDragPoint = (x: number, y: number) => {
+    pendingDragRef.current = { x, y };
+    if (dragRafRef.current != null) return;
+    dragRafRef.current = requestAnimationFrame(() => {
+      dragRafRef.current = null;
+      setDragPoint(pendingDragRef.current);
+    });
+  };
+
+  const panResponder = useMemo(
+    () => PanResponder.create({
+      onStartShouldSetPanResponder: () => visible,
+      onMoveShouldSetPanResponder: () => visible && !awaitingTapRef.current,
+      onPanResponderGrant: (evt) => {
+        draggingRef.current = true;
+        const { locationX, locationY } = evt.nativeEvent;
+        if (awaitingTapRef.current) {
+          tryHitNode(locationX, locationY);
+          return;
+        }
+        scheduleDragPoint(locationX, locationY);
+        tryHitNode(locationX, locationY);
+      },
+      onPanResponderMove: (evt) => {
+        if (awaitingTapRef.current || resolvedRef.current) return;
+        const { locationX, locationY } = evt.nativeEvent;
+        scheduleDragPoint(locationX, locationY);
+        tryHitNode(locationX, locationY);
+      },
+      onPanResponderRelease: () => {
+        draggingRef.current = false;
+        setDragPoint(null);
+        pendingDragRef.current = null;
+      },
+      onPanResponderTerminate: () => {
+        draggingRef.current = false;
+        setDragPoint(null);
+        pendingDragRef.current = null;
+      },
+    }),
+    [pattern, visible],
+  );
 
   if (!visible) return null;
 
+  const targetPointIdx = nodesLocked < pattern.order.length ? pattern.order[nodesLocked] : null;
+  const lastLockedIdx = nodesLocked > 0 ? pattern.order[nodesLocked - 1] : null;
+  const lastLockedPt = lastLockedIdx != null ? pattern.points[lastLockedIdx] : null;
+  const timerPct = timeLeftMs / (CATACLYSM_SIGIL_DURATION_MS + FINAL_NODE_GRACE_MS);
+
+  const committedSegments = pattern.order.slice(1, nodesLocked).map((idx, i) => {
+    const from = pattern.points[pattern.order[i]];
+    const to = pattern.points[idx];
+    return { key: `seg-${i}`, from, to };
+  });
+
+  const damageLabel = nodesLocked >= 3 ? '100%' : nodesLocked === 2 ? '60%' : nodesLocked === 1 ? '30%' : '0%';
+
   return (
     <View style={styles.overlay} {...panResponder.panHandlers}>
-      <Text style={styles.title}>[ CATACLYSM SIGIL // TRACE PATTERN ]</Text>
-      <Text style={styles.sub}>Connect dots in sequence — do not lift finger.</Text>
-      <Svg width={300} height={240} style={styles.svg}>
-        {pattern.points.map((pt, i) => (
-          <Circle
-            key={`dot-${i}`}
-            cx={pt.x}
-            cy={pt.y}
-            r={i < progress ? 10 : 8}
-            fill={i < progress ? '#c4b5fd' : 'rgba(167, 139, 250, 0.35)'}
-            stroke="#a78bfa"
-            strokeWidth={2}
-          />
-        ))}
-        {progress > 1 && pattern.order.slice(0, progress).map((idx, i) => {
-          if (i === 0) return null;
-          const a = pattern.points[pattern.order[i - 1]];
-          const b = pattern.points[idx];
-          return (
-            <Line
-              key={`seg-${i}`}
-              x1={a.x}
-              y1={a.y}
-              x2={b.x}
-              y2={b.y}
-              stroke="#a78bfa"
-              strokeWidth={3}
-            />
-          );
-        })}
-      </Svg>
+      <View style={styles.panel}>
+        <Text style={styles.title}>[ CATACLYSM SIGIL // TRACE PATTERN ]</Text>
+        <Text style={styles.sub}>
+          {awaitingTap
+            ? 'Tap the highlighted node to begin.'
+            : 'Drag through each node in order — keep finger down.'}
+        </Text>
+        <View style={styles.timerTrack}>
+          <View style={[styles.timerFill, { width: `${Math.min(1, timerPct) * 100}%` }]} />
+        </View>
+        <Text style={styles.timerLabel}>
+          {`${(timeLeftMs / 1000).toFixed(1)}s — PAYLOAD ${damageLabel}`}
+        </Text>
+        <View style={styles.canvasWrap}>
+          <Canvas style={styles.canvas} pointerEvents="none">
+            {committedSegments.map(({ key, from, to }) => (
+              <Line key={key} p1={from} p2={to} color={GREEN.active} strokeWidth={3.5} />
+            ))}
+            {dragPoint && lastLockedPt && nodesLocked > 0 && nodesLocked < pattern.order.length ? (
+              <Line
+                p1={lastLockedPt}
+                p2={dragPoint}
+                color={GREEN.ringSoft}
+                strokeWidth={2.5}
+                opacity={0.9}
+              />
+            ) : null}
+            {pattern.points.map((pt, i) => {
+              const orderPos = pattern.order.indexOf(i);
+              const isCompleted = orderPos >= 0 && orderPos < nodesLocked;
+              const isTarget = i === targetPointIdx;
+              const isFinalTarget = isTarget && nodesLocked === pattern.order.length - 1;
+              return (
+                <Circle
+                  key={`fill-${i}`}
+                  cx={pt.x}
+                  cy={pt.y}
+                  r={isFinalTarget ? 13 : isTarget ? 11 : isCompleted ? 10 : 8}
+                  color={isCompleted ? GREEN.completed : isTarget ? GREEN.fillStrong : GREEN.idle}
+                />
+              );
+            })}
+            {pattern.points.map((pt, i) => {
+              const orderPos = pattern.order.indexOf(i);
+              const isCompleted = orderPos >= 0 && orderPos < nodesLocked;
+              const isTarget = i === targetPointIdx;
+              const isFinalTarget = isTarget && nodesLocked === pattern.order.length - 1;
+              return (
+                <Circle
+                  key={`ring-${i}`}
+                  cx={pt.x}
+                  cy={pt.y}
+                  r={isFinalTarget ? 18 : isTarget ? 15 : isCompleted ? 12 : 10}
+                  color={isTarget ? GREEN.ring : isCompleted ? GREEN.completed : GREEN.ringSoft}
+                  style="stroke"
+                  strokeWidth={isFinalTarget ? 3 : isTarget ? 2.5 : 1.5}
+                  opacity={isTarget ? 1 : 0.55}
+                />
+              );
+            })}
+          </Canvas>
+        </View>
+      </View>
     </View>
   );
 }
 
+export default memo(CataclysmSigilOverlay);
+
 const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 50,
-    elevation: 50,
-    backgroundColor: 'rgba(0, 0, 0, 0.82)',
+    backgroundColor: GREEN.backdrop,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 40,
+    paddingHorizontal: 16,
+  },
+  panel: {
+    width: '100%',
+    maxWidth: 360,
+    alignItems: 'center',
   },
   title: {
     fontFamily: 'monospace',
     fontSize: 10,
     fontWeight: '700',
-    color: '#c4b5fd',
+    color: GREEN.textBright,
     letterSpacing: 1,
     marginBottom: 6,
+    textAlign: 'center',
   },
   sub: {
     fontFamily: 'monospace',
     fontSize: 7,
     color: '#94a3b8',
-    marginBottom: 16,
+    marginBottom: 10,
+    textAlign: 'center',
+    paddingHorizontal: 8,
   },
-  svg: {
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+  timerTrack: {
+    width: CANVAS_W,
+    height: 4,
+    backgroundColor: 'rgba(74, 222, 128, 0.15)',
+    borderRadius: 2,
+    overflow: 'hidden',
+    marginBottom: 4,
+  },
+  timerFill: {
+    height: '100%',
+    backgroundColor: GREEN.ring,
+  },
+  timerLabel: {
+    fontFamily: 'monospace',
+    fontSize: 7,
+    color: GREEN.text,
+    marginBottom: 10,
+    letterSpacing: 0.5,
+  },
+  canvasWrap: {
+    width: CANVAS_W,
+    height: CANVAS_H,
     borderWidth: 1,
-    borderColor: 'rgba(167, 139, 250, 0.4)',
+    borderColor: GREEN.panelBorder,
+    backgroundColor: GREEN.panel,
+  },
+  canvas: {
+    width: CANVAS_W,
+    height: CANVAS_H,
   },
 });

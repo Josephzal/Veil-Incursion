@@ -23,7 +23,16 @@ export function isEnvoyProcUltimate(abilityId: string): abilityId is EnvoyAbilit
 export const FRACTURE_BREAK_PROMPT_MS = 1500;
 export const ZERO_PROTOCOL_DURATION_MS = 2000;
 export const ZERO_PROTOCOL_DAMAGE_PER_TAP = 6;
-export const CATACLYSM_SIGIL_DURATION_MS = 1500;
+export const CATACLYSM_SIGIL_DURATION_MS = 2000;
+
+/** Trace multiplier by nodes completed (1 → 30%, 2 → 60%, 3 → 100%). */
+export function cataclysmSigilTraceMultiplier(nodesCompleted: number): number {
+  if (nodesCompleted >= 3) return 1;
+  if (nodesCompleted === 2) return 0.6;
+  if (nodesCompleted === 1) return 0.3;
+  return 0;
+}
+
 export const CATACLYSM_SUCCESS_AOE = 50;
 export const CATACLYSM_FAIL_AOE = 15;
 export const CATACLYSM_FAIL_BACKLASH = 15;

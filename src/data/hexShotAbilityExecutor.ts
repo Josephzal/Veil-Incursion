@@ -1,7 +1,5 @@
 import type { HexShotAbilityId } from '../types/operativeClass';
 import type { ClassCombatEncounterState } from '../types/classCombatAbility';
-import type { CombatGridSlotId } from '../types/combatGrid';
-import { ADJACENT_SLOTS, columnSlotsFor } from '../types/combatGrid';
 import type { EnemyCombatProfile } from '../types/run';
 import { getHexShotAbilityDefinition } from './hexShotAbilities';
 import { graftForcesSingleTarget } from './hexShotIntrinsics';
@@ -11,7 +9,6 @@ import {
   aliveUnits,
   getUnitById,
   isUnitAlive,
-  unitAtSlot,
 } from './combatSquadEngine';
 import type { ResolvedWeaponCombatStats } from './inventory';
 
@@ -65,23 +62,6 @@ function targetUnit(ctx: HexShotExecutionContext): EnemyCombatProfile | null {
   return getUnitById(ctx.squad, ctx.targetId) ?? null;
 }
 
-function areaSlotsFromTarget(unit: EnemyCombatProfile): CombatGridSlotId[] {
-  const slot = unit.gridSlot as CombatGridSlotId | undefined;
-  if (!slot) return [];
-  const column = columnSlotsFor(slot);
-  const adj = ADJACENT_SLOTS[slot] ?? [];
-  return [...new Set([...column, ...adj])];
-}
-
-function unitsInSlots(squad: EnemyCombatProfile[], slots: CombatGridSlotId[]): EnemyCombatProfile[] {
-  const hits: EnemyCombatProfile[] = [];
-  for (const slot of slots) {
-    const u = unitAtSlot(squad, slot);
-    if (u?.unitId && isUnitAlive(u)) hits.push(u);
-  }
-  return hits;
-}
-
 function resolveHexShotAreaHits(
   ctx: HexShotExecutionContext,
   focalUnit: EnemyCombatProfile,
@@ -89,7 +69,7 @@ function resolveHexShotAreaHits(
   if (graftForcesSingleTarget(ctx.effectiveTags)) {
     return focalUnit.unitId && isUnitAlive(focalUnit) ? [focalUnit] : [];
   }
-  return unitsInSlots(ctx.squad, areaSlotsFromTarget(focalUnit));
+  return aliveUnits(ctx.squad);
 }
 
 function ballisticDamage(ctx: HexShotExecutionContext, abilityId: HexShotAbilityId): number {

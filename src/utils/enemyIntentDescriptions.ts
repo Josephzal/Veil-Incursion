@@ -31,7 +31,7 @@ const INTENT_DETAILS: Partial<Record<EnemyIntent, Omit<EnemyIntentDetail, 'title
   },
   EVADE: {
     summary: 'Defensive posture — hostile prioritizes avoidance.',
-    effect: 'Grants 50% evade chance against player attacks while active. Hostile spends the turn buffing instead of striking.',
+    effect: 'Adds +60% miss chance to operative strikes while active (not a guaranteed dodge). Hostile spends the turn buffing instead of striking.',
     counterplay: 'Do not over-commit AP on a single evading target. Strip evade with concuss or guaranteed-hit abilities.',
   },
   FORTIFY: {

@@ -268,6 +268,7 @@ import {
   ZERO_PROTOCOL_DAMAGE_PER_TAP,
   CATACLYSM_FAIL_BACKLASH,
   FRACTURE_BREAK_PROMPT_MS,
+  cataclysmSigilTraceMultiplier,
   isEnvoyProcUltimate,
   isHexShotProcUltimate,
 } from '../data/combatMasteryEngine';
@@ -345,6 +346,7 @@ import {
   useCombatEnemyChromeOptional,
 } from '../context/CombatEnemyChromeContext';
 import { CombatArenaOverlaySink } from '../context/CombatArenaOverlayContext';
+import { CombatMinigameOverlaySink, CombatMinigameActiveBridge } from '../context/CombatMinigameOverlayContext';
 import {
   type CombatTurnPhase,
   useCombatTurnOptional,
@@ -357,6 +359,7 @@ import {
   isEnemyChargeIntent,
   isEnemyDamageIntent,
   isEnemySiphonIntent,
+  isEnemyWindUpIntent,
   classifyEnemyTurnMotion,
   resolveEnemyTurnPhase,
   getEnemyBuffFloatLabel,
@@ -1266,6 +1269,7 @@ export default function TacticalCombatHub({
       if (
         enemyActionStageRef.current === 'executing'
         && isEnemyDamageIntent(intent)
+        && !isEnemyWindUpIntent(intent)
       ) {
         return 'lunge';
       }
@@ -3703,6 +3707,10 @@ export default function TacticalCombatHub({
         break;
       }
       case 'EVADE':
+        if (e.evadeActive) {
+          log(`>> ${e.designation} holds evade posture — dodge chance remains elevated.`);
+          break;
+        }
         log(`>> ${e.designation} EVADE posture — +60% miss chance vs operative strikes.`);
         break;
       case 'FORTIFY': {
@@ -4105,6 +4113,11 @@ export default function TacticalCombatHub({
     bloodBoundCarapaceRef.current = false;
     riftWardReadyRef.current = operativeClass === 'ENVOY';
     if (operativeClass === 'ENVOY') {
+      const fluxRestore = Math.round(envoyCombatStateRef.current.fluxMaxCap * 0.15);
+      if (fluxRestore > 0) {
+        applyVeilFlux(fluxRestore);
+        log('[VEIL FLUX] >> Operative siphon — +15% flux restored.');
+      }
       const rotInfectedCount = aliveUnits(squadRef.current).filter(
         (u) => u.unitId && (classCombatRef.current.veilRotStacks[u.unitId] ?? 0) > 0,
       ).length;
@@ -5995,12 +6008,13 @@ export default function TacticalCombatHub({
     tryOpenReloadMinigame(false);
   };
 
-  const handleCataclysmResolve = (traceAccuracy: number) => {
+  const handleCataclysmResolve = (nodesCompleted: number) => {
     setCataclysmSigilVisible(false);
     combatPausedRef.current = false;
     const rotTotal = totalVeilRotStacks(classCombatRef.current);
-    const damage = computeCataclysmSigilDamage(rotTotal, traceAccuracy);
-    const perfect = traceAccuracy >= 0.99;
+    const traceMultiplier = cataclysmSigilTraceMultiplier(nodesCompleted);
+    const damage = computeCataclysmSigilDamage(rotTotal, traceMultiplier);
+    const perfect = nodesCompleted >= 3;
     const hurtFn = buildEnvoyHurtEnemy();
     for (const unit of aliveUnits(squadRef.current)) {
       if (!unit.unitId) continue;
@@ -6016,6 +6030,7 @@ export default function TacticalCombatHub({
     }
     for (const unit of aliveUnits(squadRef.current)) {
       if (!unit.unitId) continue;
+      if (damage <= 0) break;
       hurtFn(damage, '[CATACLYSM SIGIL]', {
         channel: 'TRUE',
         targetId: unit.unitId,
@@ -6033,7 +6048,7 @@ export default function TacticalCombatHub({
       triggerShake('heavy');
       triggerHaptic('impactHeavy');
       log(`>> [CATACLYSM SIGIL] >> Pattern locked — ${damage} TRUE to all hostiles. Veil Rot purged.`);
-    } else {
+    } else if (nodesCompleted <= 0) {
       hurtPlayer(
         CATACLYSM_FAIL_BACKLASH,
         true,
@@ -6042,7 +6057,13 @@ export default function TacticalCombatHub({
       );
       triggerShake('light');
       triggerHaptic('notificationError');
-      log(`>> [CATACLYSM SIGIL] >> Pattern failed — ${damage} TRUE rupture (${Math.round(traceAccuracy * 100)}% trace). Veil Rot purged.`);
+      log('>> [CATACLYSM SIGIL] >> Pattern failed — sigil collapsed. Veil Rot purged.');
+    } else {
+      triggerShake('light');
+      triggerHaptic('impactLight');
+      log(
+        `>> [CATACLYSM SIGIL] >> Partial trace (${Math.round(traceMultiplier * 100)}%) — ${damage} TRUE rupture. Veil Rot purged.`,
+      );
     }
     publishSquadUi(squadRef.current);
     if (allUnitsDefeated(squadRef.current)) {
@@ -7041,12 +7062,19 @@ export default function TacticalCombatHub({
   const resolutionActive =
     cycleState === 'RESOLUTION' && resolutionOutcome != null;
 
+  const classMinigameActive =
+    activeReloadVisible
+    || zeroProtocolVisible
+    || cataclysmSigilVisible
+    || catalyticConsoleVisible;
+
   const renderCommandDeckDimOverlay = () =>
     resolutionActive ? (
       <View style={styles.commandDeckDimOverlay} pointerEvents="none" />
     ) : null;
 
   const renderStatusFeed = () => (
+    !classMinigameActive ? (
     <View
       style={styles.statusFeedSlotStacked}
       pointerEvents="none"
@@ -7071,6 +7099,7 @@ export default function TacticalCombatHub({
         </>
       ) : null}
     </View>
+    ) : null
   );
 
   const renderEnemyTurnPanel = () => {
@@ -7093,12 +7122,14 @@ export default function TacticalCombatHub({
   };
 
   const showCommandDeck =
-    (cycleState === 'TEXT_COMBAT' && isPlayerTurn)
-    || (holdVictoryChrome && !wasEnemyTurnAtVictoryRef.current);
+    !classMinigameActive
+    && ((cycleState === 'TEXT_COMBAT' && isPlayerTurn)
+    || (holdVictoryChrome && !wasEnemyTurnAtVictoryRef.current));
 
   const showEnemyTurnPanel =
-    (cycleState === 'TEXT_COMBAT' && !isPlayerTurn)
-    || (holdVictoryChrome && wasEnemyTurnAtVictoryRef.current);
+    !classMinigameActive
+    && ((cycleState === 'TEXT_COMBAT' && !isPlayerTurn)
+    || (holdVictoryChrome && wasEnemyTurnAtVictoryRef.current));
 
   const renderCommandDeckSlot = () => (
     <View style={styles.commandDeckAnchor}>
@@ -7164,6 +7195,32 @@ export default function TacticalCombatHub({
     ],
   );
 
+  const renderClassMinigameOverlays = () => (
+    <>
+      <ActiveReloadOverlay
+        visible={activeReloadVisible}
+        mode={hexShotState.isAutoLoadMinigameActive ? 'flow' : 'tactical'}
+        perfectWindowScale={hexShotBoonMods.gunsmithsCurseActive ? 0.5 : 1}
+        onResolve={handleActiveReloadResolve}
+      />
+      <ZeroProtocolGridOverlay
+        visible={zeroProtocolVisible}
+        onTap={handleZeroProtocolTap}
+        onComplete={finishZeroProtocol}
+      />
+      <CataclysmSigilOverlay
+        visible={cataclysmSigilVisible}
+        onResolve={handleCataclysmResolve}
+      />
+      <CatalyticConsoleOverlay
+        visible={catalyticConsoleVisible}
+        rotStacksTotal={envoyRotStacksTotal}
+        payloadEstimate={envoyCatalyticPayload}
+        onRelease={finalizeCatalyticRelease}
+      />
+    </>
+  );
+
   const renderHubOverlays = () => (
     <>
       {!useEnemyArenaChrome ? (
@@ -7222,27 +7279,6 @@ export default function TacticalCombatHub({
           </View>
         </View>
       )}
-      <ActiveReloadOverlay
-        visible={activeReloadVisible}
-        mode={hexShotState.isAutoLoadMinigameActive ? 'flow' : 'tactical'}
-        perfectWindowScale={hexShotBoonMods.gunsmithsCurseActive ? 0.5 : 1}
-        onResolve={handleActiveReloadResolve}
-      />
-      <ZeroProtocolGridOverlay
-        visible={zeroProtocolVisible}
-        onTap={handleZeroProtocolTap}
-        onComplete={finishZeroProtocol}
-      />
-      <CataclysmSigilOverlay
-        visible={cataclysmSigilVisible}
-        onResolve={handleCataclysmResolve}
-      />
-      <CatalyticConsoleOverlay
-        visible={catalyticConsoleVisible}
-        rotStacksTotal={envoyRotStacksTotal}
-        payloadEstimate={envoyCatalyticPayload}
-        onRelease={finalizeCatalyticRelease}
-      />
       {!useEnemyArenaChrome && cycleState === 'DEFEND_WARD' ? (
         <EnvoyWardOverlay
           visible
@@ -7266,6 +7302,10 @@ export default function TacticalCombatHub({
         {renderCommandDeckSlot()}
         {renderCommandDeckDimOverlay()}
       </View>
+      <CombatMinigameActiveBridge active={classMinigameActive} />
+      <CombatMinigameOverlaySink>
+        {renderClassMinigameOverlays()}
+      </CombatMinigameOverlaySink>
       <CombatArenaOverlaySink>
         {renderHubOverlays()}
         <CombatFloatingFeedback

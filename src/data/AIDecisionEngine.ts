@@ -69,12 +69,28 @@ const DEFENSIVE_CRISIS_WEIGHT = 6;
 type IntentFilterRule = (pool: EnemyIntent[], ctx: AIDecisionContext) => EnemyIntent[];
 type IntentWeightRule = (weights: WeightedIntent[], ctx: AIDecisionContext) => WeightedIntent[];
 
+const ARTILLERY_ROSTER_IDS = new Set([
+  'sapper',
+  'coil-spike-sniper',
+  'resonance-caster',
+  'tar-spitter',
+  'splinter',
+  'spotter',
+]);
+
+function pruneArtilleryFortify(pool: EnemyIntent[], ctx: AIDecisionContext): EnemyIntent[] {
+  const rosterId = ctx.enemy.rosterId;
+  if (!rosterId || !ARTILLERY_ROSTER_IDS.has(rosterId)) return pool;
+  return pool.filter((intent) => intent !== 'FORTIFY');
+}
+
 /** Prune zero-value actions before weighting. Add new filters here. */
 export const INTENT_FILTER_RULES: IntentFilterRule[] = [
   pruneSiphonByRoster,
   pruneSiphonWhenAbyssalEmpty,
   pruneStaminaDrainWhenStaminaEmpty,
   pruneNonStackingBuffs,
+  pruneArtilleryFortify,
   pruneHealAtFullHp,
   // Example future rule: pruneMeleeWhenPlayerRetaliating,
 ];
