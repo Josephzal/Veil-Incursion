@@ -103,6 +103,39 @@ export interface SpawnSquadOptions {
   macroBiome?: MacroBiomeFamily | null;
 }
 
+export function resolveEngagedEncounterSnapshot(options: SpawnSquadOptions): {
+  encounterId: string;
+  encounterOrigin?: import('./originDeckEngine').EncounterOrigin;
+} {
+  const depth = depthFromNodesCleared(options.nodeIndex);
+  const district = options.district ?? getDistrictFromDepth(depth);
+  const meta = resolveEncounterMetaForDepth(
+    depth,
+    options.runSegment ?? undefined,
+    options.encounterSeed,
+    options.macroBiome,
+  );
+
+  if (options.isElite === true) {
+    const elite = resolveEliteSlotAssignments(
+      depth,
+      district,
+      options.runSegment,
+      options.encounterSeed,
+      options.macroBiome,
+      meta.encounterOrigin,
+    );
+    if (elite) {
+      return { encounterId: elite.encounterId, encounterOrigin: meta.encounterOrigin };
+    }
+  }
+
+  return {
+    encounterId: meta.encounterId ?? 'fallback-unknown',
+    encounterOrigin: meta.encounterOrigin,
+  };
+}
+
 /** Spawns from LEVEL_DATA encounter layouts (levels 1–45). Boss gates return empty — bosses use district boss flow. */
 export function spawnCombatSquad(options: SpawnSquadOptions): EnemyCombatProfile[] {
   const depth = depthFromNodesCleared(options.nodeIndex);

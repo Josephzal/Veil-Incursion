@@ -191,12 +191,12 @@ import {
   VEIL_STALKER_AMBUSH_CHANCE,
 } from '../types/sector';
 import { rollSanctuarySchedule } from '../data/sanctuaryScheduleEngine';
-import { createRunSegment, applyEncounterToSegment, generateNodeEncounter } from '../data/encounterGenerator';
+import { createRunSegment, applyEncounterToSegment } from '../data/encounterGenerator';
 import { districtBossLogLine } from '../data/districtBosses';
 import { spawnDistrictBossSquad } from '../data/bossCombat';
 import { createDefaultIncursionInventory } from '../data/incursionInventory';
 import { encounterBudgetForDepth } from '../data/combatEncounterBudget';
-import { spawnCombatSquad, squadFromSingleEnemy } from '../data/combatSpawnEngine';
+import { spawnCombatSquad, resolveEngagedEncounterSnapshot, squadFromSingleEnemy } from '../data/combatSpawnEngine';
 import { listingsForStock, rollBlackMarketStock } from '../data/blackMarket';
 import {
   getClassBoonDisplayName,
@@ -2423,17 +2423,19 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     let nextRunSegment = inc.runSegment;
     const wasCombat =
       completedNode?.type === 'STANDARD_COMBAT' || completedNode?.type === 'ELITE_COMBAT';
-    if (wasCombat && inc.runSegment) {
-      const generated = generateNodeEncounter(
-        clearedDepth,
-        inc.runSegment,
-        `clear:${completedIndex}:${completedNode?.id ?? 'node'}`,
-        { macroBiome: inc.currentMacroBiomeFamily },
-      );
+    if (wasCombat && inc.runSegment && completedNode) {
+      const snapshot = resolveEngagedEncounterSnapshot({
+        nodeIndex: completedIndex,
+        isElite: completedNode.type === 'ELITE_COMBAT',
+        district: getDistrictFromDepth(clearedDepth),
+        runSegment: inc.runSegment,
+        encounterSeed: `engage:${completedIndex}:${completedNode.id}`,
+        macroBiome: inc.currentMacroBiomeFamily,
+      });
       nextRunSegment = applyEncounterToSegment(
         inc.runSegment,
-        generated.encounterId,
-        generated.encounterOrigin,
+        snapshot.encounterId,
+        snapshot.encounterOrigin,
       );
     }
     if (wasBoss && isDistrictGateDepth(clearedDepth) && nextDistrict !== inc.currentDistrict) {

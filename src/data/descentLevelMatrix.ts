@@ -131,6 +131,40 @@ function isCombatKind(kind: MatrixSpawnKind): boolean {
   return kind === 'STANDARD_COMBAT' || kind === 'ELITE_COMBAT' || kind === 'BOSS_COMBAT';
 }
 
+/** Groups combat variants so scanner never shows redundant duplicate combat vectors. */
+export function scannerSpawnDedupeKey(kind: MatrixSpawnKind): string {
+  return isCombatKind(kind) ? 'COMBAT' : kind;
+}
+
+export function dedupeMatrixSpawnKinds(kinds: readonly MatrixSpawnKind[]): MatrixSpawnKind[] {
+  const seen = new Set<string>();
+  const result: MatrixSpawnKind[] = [];
+  for (const kind of kinds) {
+    const key = scannerSpawnDedupeKey(kind);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(kind);
+  }
+  return result;
+}
+
+export function dedupeScannerClusterNodes(cluster: readonly IncursionNode[]): IncursionNode[] {
+  if (isDistrictBiomeChoiceCluster(cluster)) return [...cluster];
+
+  const seen = new Set<string>();
+  const result: IncursionNode[] = [];
+  for (const node of cluster) {
+    const key =
+      node.type === 'STANDARD_COMBAT' || node.type === 'ELITE_COMBAT' || node.type === 'BOSS_COMBAT'
+        ? 'COMBAT'
+        : node.type;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(node);
+  }
+  return result;
+}
+
 export function clusterOffersCombat(nodes: readonly IncursionNode[]): boolean {
   return nodes.some(
     (node) => node.type === 'STANDARD_COMBAT'
@@ -325,21 +359,25 @@ function makeMatrixNode(
   };
 }
 
-function pickPoolSlots(
+function pickUniquePoolSlots(
   pool: MatrixSpawnKind[],
   count: number,
   rand: () => number,
-  forceCombat: boolean,
+  reservedKeys: Set<string>,
 ): MatrixSpawnKind[] {
-  if (count <= 0) return [];
+  if (count <= 0 || pool.length === 0) return [];
+
+  let available = pool.filter((kind) => !reservedKeys.has(scannerSpawnDedupeKey(kind)));
   const picks: MatrixSpawnKind[] = [];
-  for (let i = 0; i < count; i += 1) {
-    picks.push(pool[Math.floor(rand() * pool.length)] ?? pool[0]);
+
+  for (let i = 0; i < count && available.length > 0; i += 1) {
+    const idx = Math.floor(rand() * available.length);
+    const pick = available[idx];
+    picks.push(pick);
+    reservedKeys.add(scannerSpawnDedupeKey(pick));
+    available = available.filter((kind) => !reservedKeys.has(scannerSpawnDedupeKey(kind)));
   }
-  if (forceCombat && !picks.some(isCombatKind) && pool.some(isCombatKind)) {
-    const combatOptions = pool.filter(isCombatKind);
-    picks[picks.length - 1] = combatOptions[Math.floor(rand() * combatOptions.length)];
-  }
+
   return picks;
 }
 
@@ -394,14 +432,17 @@ export function materializeLevelCluster(params: MaterializeLevelClusterParams): 
     : spec.minChoices + Math.floor(rand() * (spec.maxChoices - spec.minChoices + 1));
 
   const forceCombat = !lastLevelOfferedCombat;
-  const guaranteed = [...spec.guaranteed];
-  const fillCount = Math.max(0, choiceCount - guaranteed.length);
-  const poolPicks = pickPoolSlots(spec.pool, fillCount, rand, forceCombat);
+  const reservedKeys = new Set<string>();
+  const guaranteed = dedupeMatrixSpawnKinds(spec.guaranteed);
+  guaranteed.forEach((kind) => reservedKeys.add(scannerSpawnDedupeKey(kind)));
 
-  let kinds = [...guaranteed, ...poolPicks].slice(0, choiceCount);
+  const fillCount = Math.max(0, choiceCount - guaranteed.length);
+  const poolPicks = pickUniquePoolSlots(spec.pool, fillCount, rand, reservedKeys);
+
+  let kinds = dedupeMatrixSpawnKinds([...guaranteed, ...poolPicks]);
 
   if (forceCombat && !kinds.some(isCombatKind)) {
-    kinds = [...kinds.slice(0, -1), 'STANDARD_COMBAT'];
+    kinds = dedupeMatrixSpawnKinds([...kinds, 'STANDARD_COMBAT']);
   }
 
   if (isDistrictGateDepth(graphDepth)) {

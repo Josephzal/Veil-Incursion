@@ -29,6 +29,7 @@ import {
 } from './macroBiomeEngine';
 import {
   buildDistrictBiomeChoiceCluster,
+  dedupeScannerClusterNodes,
   materializeLevelCluster,
   maxVectorsForLocalLevel,
 } from './descentLevelMatrix';
@@ -744,6 +745,7 @@ export function buildScannerCluster(options: BuildScannerClusterOptions): Incurs
   const baseCap = collapseActive
     ? SCANNER_MAX_VECTORS
     : maxVectorsForLocalLevel(localLevel);
+  cluster = dedupeScannerClusterNodes(cluster);
   const vectorCap = Math.max(baseCap, Math.min(cluster.length, SCANNER_MAX_VECTORS + 2));
   const trimmed = cluster.slice(0, vectorCap);
   if (macroBiomeFamily) {

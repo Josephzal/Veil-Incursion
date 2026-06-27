@@ -47,15 +47,13 @@ function pickFromPool(
   lastEncounterId: string | null,
 ): SynergySquadSpec | null {
   if (pool.length === 0) return null;
-  let attempts = 0;
-  while (attempts < 8) {
-    const idx = Math.floor(rand() * pool.length);
-    const pick = pool[idx];
-    if (!pick) break;
-    if (pick.id !== lastEncounterId || pool.length === 1) return pick;
-    attempts += 1;
-  }
-  return pool[0] ?? null;
+
+  const candidates = lastEncounterId != null
+    ? pool.filter((squad) => squad.id !== lastEncounterId)
+    : pool;
+  const pickPool = candidates.length > 0 ? candidates : pool;
+  const idx = Math.floor(rand() * pickPool.length);
+  return pickPool[idx] ?? null;
 }
 
 function tryPickSquad(
