@@ -81,6 +81,7 @@ export default function OverworldHubScreen(): React.JSX.Element {
       alignedFaction: account.alignedFaction,
       initialCargo,
       shadowWarBuffs,
+      startingVeilResidueBalance: account.veilResidueBalance,
     });
     startBoundRequisition();
     setLaunchingIncursion(false);

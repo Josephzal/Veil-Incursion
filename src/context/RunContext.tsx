@@ -8,6 +8,7 @@ import {
   rollClassGraftOffers,
 } from '../data/classGraftEngine';
 import { MAX_RUN_CANISTER_RESIDUE } from '../constants/veilResidue';
+import { resolveStartingRunCanisterResidue } from '../data/veilResidueRunEngine';
 import {
   createEasyTestEnemy,
   createHardTestEnemy,
@@ -225,6 +226,7 @@ import {
   tickChalkLineWardAfterNodeClear,
 } from '../data/boundRequisitionEngine';
 import type { PlayerAccount } from '../types/game';
+import { usePlayerAccount } from './PlayerAccountContext';
 
 export interface RunStartConfig {
   factionPerks?: FactionModifiers;
@@ -237,6 +239,8 @@ export interface RunStartConfig {
   alignedFaction?: FactionType | null;
   /** Safehouse cargo grid + tactical slots committed on descent. */
   initialCargo?: import('../types/cargoGrid').CargoRunState;
+  /** Persistent Veil Residue balance loaded into the run canister at descent. */
+  startingVeilResidueBalance?: number;
   shadowWarBuffs?: import('../data/shadowWarBuffEngine').ShadowWarRunBuffModifiers;
 }
 
@@ -507,6 +511,7 @@ function createInitialRunState(): RunState {
 }
 
 export function RunProvider({ children }: { children: React.ReactNode }) {
+  const { transferVeilResidueIntoRun, restoreVeilResidueBaseline } = usePlayerAccount();
   const [runState, setRunState] = useState<RunState>(createInitialRunState);
   const runStateRef = useRef<RunState>(runState);
   const [runLog, setRunLog] = useState<string[]>([]);
@@ -599,6 +604,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const pendingBiomeOffers = rollDistrictBiomeOptions(1, [], runSeed);
     const sanctuarySchedule = rollSanctuarySchedule(`run:${Date.now()}:${sectorTier}`);
     const initialRunSegment = createRunSegment(1, runSeed, config?.alignedFaction ?? null);
+    const startingCanisterResidue = resolveStartingRunCanisterResidue(
+      config?.startingVeilResidueBalance ?? 0,
+    );
     const incursion: ActiveIncursionState = {
       ...createDefaultActiveIncursionState(),
       isRunActive: true,
@@ -674,10 +682,15 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         firstTurnApBonus: 0,
       },
       runSegment: initialRunSegment,
+      sessionVeilResidueCollected: startingCanisterResidue,
+      runVeilResidueBaseline: startingCanisterResidue,
     };
     const expandedIncursion = persistExpandedSectorGraph(incursion);
     activeIncursionRef.current = expandedIncursion;
     setActiveIncursion(expandedIncursion);
+    if (startingCanisterResidue > 0) {
+      transferVeilResidueIntoRun(startingCanisterResidue);
+    }
     narrativeNodeRef.current = null;
     narrativeAssemblyRef.current = null;
     narrativeAssemblyRef.current = null;
@@ -686,8 +699,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     setPostCombatMutationChoices([]);
     setBoundRequisitionOffers([]);
     combatLogActiveRef.current = false;
-    setRunLog([]);
-  }, []);
+    setRunLog(
+      startingCanisterResidue > 0
+        ? [`>> VEIL RESIDUE CANISTER PRELOADED — ${startingCanisterResidue} UNITS FROM CABAL VAULT.`]
+        : [],
+    );
+  }, [transferVeilResidueIntoRun]);
 
   const refreshOverworldFeatures = useCallback(() => {
     const inc = activeIncursionRef.current;
@@ -1304,6 +1321,14 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       reason.includes('DESTROYED')
       || reason.includes('DEFEATED')
       || reason.includes('FAILED');
+    const extractionSecured = reason.includes('SECTOR EXTRACTION SECURED');
+    if (
+      inc.isRunActive
+      && !extractionSecured
+      && (isRunFailure || reason.includes('WITHDRAWAL') || reason.includes('ABORTED'))
+    ) {
+      restoreVeilResidueBaseline(inc.runVeilResidueBaseline);
+    }
     if (isRunFailure && runStateRef.current.runActive && runStartedAtMsRef.current != null) {
       const depth = depthFromNodesCleared(inc.nodesCleared);
       const depthLayer = getDistrictFromDepth(depth);
@@ -1325,7 +1350,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     setActiveIncursion(resetIncursion);
     narrativeNodeRef.current = null;
     narrativeAssemblyRef.current = null;
-  }, []);
+  }, [restoreVeilResidueBaseline]);
 
   const startBadgeTestCombat = useCallback((preset: 'easy' | 'hard', config: BadgeTestCombatConfig) => {
     const pendingEnemies = squadFromSingleEnemy(
@@ -3048,6 +3073,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       const next = {
         ...prev,
         sessionVeilResidueCollected: 0,
+        runVeilResidueBaseline: 0,
         cargo: cargoForStash,
       };
       activeIncursionRef.current = next;

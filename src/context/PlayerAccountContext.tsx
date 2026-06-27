@@ -294,6 +294,10 @@ interface PlayerAccountContextType {
     veilResidueCollected?: number;
   }) => void;
   depositVeilResidueBalance: (amount: number) => number;
+  /** Moves vaulted residue into the active run canister at descent. */
+  transferVeilResidueIntoRun: (amount: number) => void;
+  /** Returns carried-in residue after a failed or aborted run. */
+  restoreVeilResidueBaseline: (amount: number) => void;
   applyShadowWarDonationAccount: (
     nextStash: ResourceQuantity,
     nextVeilResidueBalance: number,
@@ -1042,6 +1046,30 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
     [updateAccount],
   );
 
+  const transferVeilResidueIntoRun = useCallback(
+    (amount: number) => {
+      const transfer = Math.max(0, Math.floor(amount));
+      if (transfer <= 0) return;
+      updateAccount((prev) => ({
+        ...prev,
+        veilResidueBalance: Math.max(0, prev.veilResidueBalance - transfer),
+      }));
+    },
+    [updateAccount],
+  );
+
+  const restoreVeilResidueBaseline = useCallback(
+    (amount: number) => {
+      const restore = Math.max(0, Math.floor(amount));
+      if (restore <= 0) return;
+      updateAccount((prev) => ({
+        ...prev,
+        veilResidueBalance: prev.veilResidueBalance + restore,
+      }));
+    },
+    [updateAccount],
+  );
+
   const depositVeilResidueBalance = useCallback(
     (amount: number): number => {
       const deposit = Math.max(0, Math.floor(amount));
@@ -1181,6 +1209,8 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       commitDescentLoadout,
       persistRunExtraction,
       depositVeilResidueBalance,
+      transferVeilResidueIntoRun,
+      restoreVeilResidueBaseline,
       applyShadowWarDonationAccount,
       getStashCapacitySnapshot,
       replaceResourceStash,
@@ -1229,6 +1259,8 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       commitDescentLoadout,
       persistRunExtraction,
       depositVeilResidueBalance,
+      transferVeilResidueIntoRun,
+      restoreVeilResidueBaseline,
       applyShadowWarDonationAccount,
       getStashCapacitySnapshot,
       replaceResourceStash,

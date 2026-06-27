@@ -10,6 +10,7 @@ import IncursionShell from '../components/IncursionShell';
 import IncursionRunLayout from '../components/IncursionRunLayout';
 import RunEventScreenFrame from '../components/layout/RunEventScreenFrame';
 import { MAX_RUN_CANISTER_RESIDUE } from '../constants/veilResidue';
+import { resolveVeilResidueCanisterFillPercent } from '../data/veilResidueRunEngine';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
@@ -70,7 +71,9 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
   lootPoolRef.current = lootPool;
   lootFloorRef.current = lootFloor;
 
-  const harvestPercentage = (activeIncursion.sessionVeilResidueCollected / MAX_RUN_CANISTER_RESIDUE) * 100;
+  const harvestPercentage = resolveVeilResidueCanisterFillPercent(
+    activeIncursion.sessionVeilResidueCollected,
+  );
   const canisterFull = activeIncursion.sessionVeilResidueCollected >= MAX_RUN_CANISTER_RESIDUE;
   const canVacuum = lootPool.length > 0 && !canisterFull;
 

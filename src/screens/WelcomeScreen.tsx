@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, View, Text } from 'react-native';
 import HapticPressable from '../components/HapticPressable';
 import { useTerminal } from '../context/TerminalContext';
 import { useGameFlow } from '../context/GameFlowContext';
+import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useRun } from '../context/RunContext';
 import FactionBootLogo from '../components/FactionBootLogo';
 import LandscapeSplitPane from '../components/layout/LandscapeSplitPane';
@@ -18,9 +19,10 @@ export default function WelcomeScreen(): React.JSX.Element {
   const immersivePadding = useImmersiveScreenPadding();
   const { startBoundRequisition } = useGameFlow();
   const { startNewRun } = useRun();
+  const { account } = usePlayerAccount();
 
   const handleStartScan = () => {
-    startNewRun();
+    startNewRun({ startingVeilResidueBalance: account.veilResidueBalance });
     startBoundRequisition();
   };
   const credentials = profile.operative_profile.credentials;
