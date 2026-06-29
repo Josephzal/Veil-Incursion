@@ -4,6 +4,30 @@ import { CabalInfluenceBalance, MacroSectorDefinition, MapPoint } from '../types
 
 const FACTION_ORDER: FactionType[] = ['TERRAN_GRID', 'LEGION', 'SOLARIS'];
 
+/** Territorial influence bar + holographic map stroke palette. */
+export const SHADOW_WAR_FACTION_VISUAL: Record<FactionType, { stroke: string; fill: string; bar: string }> = {
+  TERRAN_GRID: {
+    stroke: '#64748b',
+    fill: '#94a3b8',
+    bar: '#475569',
+  },
+  LEGION: {
+    stroke: '#6b21a8',
+    fill: '#7c3aed',
+    bar: '#5b21b6',
+  },
+  SOLARIS: {
+    stroke: '#991b1b',
+    fill: '#dc2626',
+    bar: '#b91c1c',
+  },
+};
+
+export const NEUTRAL_SECTOR_STROKE = '#3f3f46';
+export const CONTESTED_SECTOR_STROKE = '#ef4444';
+export const HOLOGRAPHIC_FILL_OPACITY = 0.1;
+export const HOLOGRAPHIC_STROKE_OPACITY = 1;
+
 const DEFAULT_TINT_OPACITY = 0.38;
 const ACTIVE_TINT_OPACITY = 0.58;
 const DEFAULT_STROKE_OPACITY = 0.72;
@@ -42,6 +66,35 @@ export function getSectorCabalStrokeColor(
   const dominant = getDominantFaction(influence);
   const accent = FACTION_DEFINITIONS[dominant].accentColor;
   return hexToRgba(accent, isActive ? ACTIVE_STROKE_OPACITY : DEFAULT_STROKE_OPACITY);
+}
+
+export function getHolographicSectorFill(
+  influence: CabalInfluenceBalance,
+  isContested: boolean,
+  controllingFaction: FactionType | null,
+  totalIp: number,
+): string {
+  if (totalIp <= 0) return hexToRgba(NEUTRAL_SECTOR_STROKE, HOLOGRAPHIC_FILL_OPACITY);
+  if (isContested) return hexToRgba(CONTESTED_SECTOR_STROKE, HOLOGRAPHIC_FILL_OPACITY);
+  const faction = controllingFaction ?? getDominantFaction(influence);
+  const wash = SHADOW_WAR_FACTION_VISUAL[faction].fill;
+  return hexToRgba(wash, HOLOGRAPHIC_FILL_OPACITY);
+}
+
+export function getHolographicSectorStroke(
+  influence: CabalInfluenceBalance,
+  isContested: boolean,
+  controllingFaction: FactionType | null,
+  totalIp: number,
+): string {
+  if (totalIp <= 0) return NEUTRAL_SECTOR_STROKE;
+  if (isContested) return CONTESTED_SECTOR_STROKE;
+  const faction = controllingFaction ?? getDominantFaction(influence);
+  return SHADOW_WAR_FACTION_VISUAL[faction].stroke;
+}
+
+export function isNeutralSector(totalIp: number): boolean {
+  return totalIp <= 0;
 }
 
 export function resolveSectorInfluence(

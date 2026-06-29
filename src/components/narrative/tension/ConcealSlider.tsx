@@ -284,7 +284,7 @@ const styles = StyleSheet.create({
     borderColor: '#d1d5db',
   },
   standbyOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(10, 11, 15, 0.55)',

@@ -2,21 +2,32 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   LayoutChangeEvent,
   StyleSheet,
-  Text,
   Vibration,
   View,
 } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
-import Svg, { Path, Text as SvgText } from 'react-native-svg';
+import Svg, {
+  Circle,
+  Defs,
+  Line,
+  Path,
+  Pattern,
+  Rect,
+  Text as SvgText,
+} from 'react-native-svg';
+import TerminalText from '../TerminalText';
+import ContestedSectorPath from './ContestedSectorPath';
 import { calculateSectorControl } from '../../data/shadowWarEngine';
 import { SHADOW_WAR_SECTORS, SHADOW_WAR_VIEWBOX } from '../../data/shadowWarSectors';
 import type { CabalIpPool, ShadowWarSectorId } from '../../types/shadowWar';
 import { TerminalTheme } from '../../types/theme';
 import {
-  getSectorCabalStrokeColor,
-  getSectorTintColor,
+  getHolographicSectorFill,
+  getHolographicSectorStroke,
   hitTestSectorAtPoint,
+  isNeutralSector,
+  polygonCentroid,
   resolveMapDrawMetrics,
   screenPointToViewBoxExpanded,
   SECTOR_SELECT_HAPTIC_MS,
@@ -24,16 +35,51 @@ import {
   viewBoxPointToCanvas,
 } from '../../utils/sectorInfluenceVisual';
 
-const MAP_BACKDROP = '#06080d';
-const CONTESTED_COLOR = '#ef4444';
-const CONTESTED_FILL = 'rgba(239, 68, 68, 0.42)';
-const SECTOR_LABEL_COLOR = '#ffffff';
+const MAP_BACKDROP = '#04060a';
+const NODE_RADIUS_DESKTOP = 4.5;
+const NODE_RADIUS_MOBILE = 3.5;
 
 interface ShadowWarMapProps {
   theme: TerminalTheme;
   activeSectorId: ShadowWarSectorId;
   sectorIp: Record<ShadowWarSectorId, CabalIpPool>;
   onSectorPress: (id: ShadowWarSectorId) => void;
+  isDesktop?: boolean;
+}
+
+function ShadowWarBlueprintGrid({
+  width,
+  height,
+}: {
+  width: number;
+  height: number;
+}): React.JSX.Element {
+  const cx = width / 2;
+  const cy = height / 2;
+  const maxRadius = Math.max(width, height) * 0.55;
+
+  return (
+    <>
+      <Defs>
+        <Pattern id="shadowWarGrid" width={28} height={28} patternUnits="userSpaceOnUse">
+          <Line x1={0} y1={0} x2={28} y2={0} stroke="rgba(100, 116, 139, 0.05)" strokeWidth={0.6} />
+          <Line x1={0} y1={0} x2={0} y2={28} stroke="rgba(100, 116, 139, 0.05)" strokeWidth={0.6} />
+        </Pattern>
+      </Defs>
+      <Rect x={0} y={0} width={width} height={height} fill="url(#shadowWarGrid)" />
+      {[0.2, 0.4, 0.6, 0.8, 1].map((ratio) => (
+        <Circle
+          key={ratio}
+          cx={cx}
+          cy={cy}
+          r={maxRadius * ratio}
+          fill="none"
+          stroke="rgba(100, 116, 139, 0.04)"
+          strokeWidth={0.8}
+        />
+      ))}
+    </>
+  );
 }
 
 export default function ShadowWarMap({
@@ -41,6 +87,7 @@ export default function ShadowWarMap({
   activeSectorId,
   sectorIp,
   onSectorPress,
+  isDesktop = false,
 }: ShadowWarMapProps): React.JSX.Element {
   const sectors = SHADOW_WAR_SECTORS;
   const [hostWidth, setHostWidth] = useState(320);
@@ -62,10 +109,13 @@ export default function ShadowWarMap({
   );
 
   const labelFontSize = useMemo(
-    () => Math.max(5, Math.min(8, drawMetrics.scale * 5.5)),
-    [drawMetrics.scale],
+    () => Math.max(4.5, Math.min(isDesktop ? 7 : 6, drawMetrics.scale * (isDesktop ? 4.8 : 4.2))),
+    [drawMetrics.scale, isDesktop],
   );
-  const labelLineHeight = labelFontSize + 1.5;
+  const labelLineHeight = labelFontSize + 1.2;
+  const strokeWidth = isDesktop ? 3 : 2;
+  const activeStrokeWidth = isDesktop ? 3.5 : 2.5;
+  const nodeRadius = isDesktop ? NODE_RADIUS_DESKTOP : NODE_RADIUS_MOBILE;
 
   const handleHostLayout = useCallback((event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
@@ -122,38 +172,75 @@ export default function ShadowWarMap({
         <GestureDetector gesture={tapGesture}>
           <View style={[styles.mapFrame, { height: canvasHeight }]}>
             <Svg width={hostWidth} height={canvasHeight}>
+              <ShadowWarBlueprintGrid width={hostWidth} height={canvasHeight} />
+
               {sectors.map((sector) => {
-                const control = calculateSectorControl(sectorIp[sector.id]);
+                const pool = sectorIp[sector.id];
+                const control = calculateSectorControl(pool);
                 const isActive = sector.id === activeSectorId;
                 const isContested = control.status === 'CONTESTED';
-                const fill = isContested
-                  ? CONTESTED_FILL
-                  : getSectorTintColor(control.displayInfluence, isActive);
-                const stroke = isContested
-                  ? CONTESTED_COLOR
-                  : getSectorCabalStrokeColor(control.displayInfluence, isActive);
+                const neutral = isNeutralSector(control.totalIp);
+                const fill = getHolographicSectorFill(
+                  control.displayInfluence,
+                  isContested,
+                  control.controllingFaction,
+                  control.totalIp,
+                );
+                const stroke = getHolographicSectorStroke(
+                  control.displayInfluence,
+                  isContested,
+                  control.controllingFaction,
+                  control.totalIp,
+                );
                 const canvasPoly = sector.mapGeometry.polygon.map((pt) =>
                   viewBoxPointToCanvas(pt, drawMetrics),
                 );
                 const pathD = canvasPoly.length
                   ? `M ${canvasPoly.map((p) => `${p.x} ${p.y}`).join(' L ')} Z`
                   : '';
-                const labelAnchor = viewBoxPointToCanvas(sector.mapGeometry.labelAnchor, drawMetrics);
+                const nodeAnchor = viewBoxPointToCanvas(
+                  sector.mapGeometry.labelAnchor ?? polygonCentroid(sector.mapGeometry.polygon),
+                  drawMetrics,
+                );
                 const labelLines = splitSectorLabelLines(sector.label);
                 const labelBlockHeight = labelLines.length * labelLineHeight;
-                const labelStartY = labelAnchor.y - labelBlockHeight / 2 + labelFontSize * 0.35;
+                const labelStartY = nodeAnchor.y + nodeRadius + 4;
+                const pathStrokeWidth = isActive ? activeStrokeWidth : strokeWidth;
+                const pathProps = {
+                  d: pathD,
+                  fill,
+                  stroke,
+                  strokeWidth: pathStrokeWidth,
+                  strokeDasharray: neutral ? '6 4' : undefined,
+                };
+
                 return (
                   <React.Fragment key={sector.id}>
-                    <Path d={pathD} fill={fill} stroke={stroke} strokeWidth={isActive ? 2.5 : 1.5} />
+                    {isContested ? (
+                      <ContestedSectorPath {...pathProps} />
+                    ) : (
+                      <Path {...pathProps} strokeOpacity={1} />
+                    )}
+
+                    <Circle
+                      cx={nodeAnchor.x}
+                      cy={nodeAnchor.y}
+                      r={nodeRadius}
+                      fill={stroke}
+                      stroke={isActive ? '#f8fafc' : 'rgba(248, 250, 252, 0.35)'}
+                      strokeWidth={isActive ? 1.5 : 0.8}
+                    />
+
                     {labelLines.map((line, lineIndex) => (
                       <SvgText
                         key={`${sector.id}-label-${lineIndex}`}
-                        x={labelAnchor.x}
+                        x={nodeAnchor.x}
                         y={labelStartY + lineIndex * labelLineHeight}
-                        fill={SECTOR_LABEL_COLOR}
+                        fill={isActive ? '#f8fafc' : 'rgba(226, 232, 240, 0.72)'}
                         fontSize={labelFontSize}
                         fontFamily="monospace"
-                        fontWeight={isActive ? '700' : '400'}
+                        fontWeight={isActive ? '700' : '500'}
+                        letterSpacing={isDesktop ? 1.2 : 0.8}
                         textAnchor="middle"
                       >
                         {line}
@@ -167,9 +254,13 @@ export default function ShadowWarMap({
         </GestureDetector>
       </GestureHandlerRootView>
 
-      <Text style={[styles.hint, { color: theme.mutedColor }]}>
+      <TerminalText
+        size={6}
+        letterSpacing={0.4}
+        style={[styles.hint, { color: theme.mutedColor }]}
+      >
         TAP SECTOR TO SELECT
-      </Text>
+      </TerminalText>
     </View>
   );
 }
@@ -191,9 +282,6 @@ const styles = StyleSheet.create({
     backgroundColor: MAP_BACKDROP,
   },
   hint: {
-    fontFamily: 'monospace',
-    fontSize: 6,
-    letterSpacing: 0.3,
     marginTop: 4,
     textAlign: 'center',
     flexShrink: 0,

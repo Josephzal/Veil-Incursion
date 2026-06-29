@@ -16,8 +16,8 @@ export interface TacticalButtonProps {
   onPress: () => void;
   accentColor: string;
   mutedColor: string;
-  /** Nav rail hardware tab (vertical stack) vs inline hub tab. */
-  variant?: 'rail' | 'inline';
+  /** Nav rail hardware tab (vertical stack) vs inline hub tab vs full-width CTA. */
+  variant?: 'rail' | 'inline' | 'cta';
   style?: StyleProp<ViewStyle>;
 }
 
@@ -33,30 +33,34 @@ export default function TacticalButton({
 }: TacticalButtonProps): React.JSX.Element {
   const { scaleSize, scaleSpacing } = useResponsiveScale();
   const isRail = variant === 'rail';
+  const isCta = variant === 'cta';
 
   const metrics = useMemo(
     () => ({
-      minHeight: scaleSize(isRail ? 40 : 36),
-      paddingVertical: scaleSpacing(isRail ? 10 : 8),
-      paddingHorizontal: scaleSpacing(isRail ? 6 : 12),
-      minWidth: isRail ? undefined : scaleSize(72),
+      minHeight: scaleSize(isCta ? 48 : isRail ? 40 : 36),
+      paddingVertical: scaleSpacing(isCta ? 14 : isRail ? 10 : 8),
+      paddingHorizontal: scaleSpacing(isCta ? 16 : isRail ? 6 : 12),
+      minWidth: !isRail && !isCta ? scaleSize(72) : undefined,
+      fontSize: isCta ? 11 : isRail ? 7 : 8,
+      lineHeight: isCta ? 14 : isRail ? 10 : 12,
+      letterSpacing: isCta ? 1.2 : isRail ? 1.1 : 1,
     }),
-    [isRail, scaleSize, scaleSpacing],
+    [isCta, isRail, scaleSize, scaleSpacing],
   );
 
   return (
     <HapticPressable
       onPress={onPress}
       style={[
-        isRail ? styles.railCell : styles.inlineCell,
-        active ? styles.cellActive : styles.cellInactive,
+        isRail ? styles.railCell : isCta ? styles.ctaCell : styles.inlineCell,
+        active || isCta ? styles.cellActive : styles.cellInactive,
         {
           minHeight: metrics.minHeight,
           paddingVertical: metrics.paddingVertical,
           paddingHorizontal: metrics.paddingHorizontal,
-          minWidth: metrics.minWidth,
+          ...(metrics.minWidth != null ? { minWidth: metrics.minWidth } : null),
         },
-        active
+        active || isCta
           ? {
               borderColor: accentColor,
               backgroundColor: `${accentColor}24`,
@@ -72,12 +76,12 @@ export default function TacticalButton({
       ]}
     >
       <TerminalText
-        size={isRail ? 7 : 8}
-        lineHeight={isRail ? 10 : 12}
-        letterSpacing={isRail ? 1.1 : 1}
+        size={metrics.fontSize}
+        lineHeight={metrics.lineHeight}
+        letterSpacing={metrics.letterSpacing}
         style={[
           styles.label,
-          { color: active ? accentColor : `${mutedColor}bb` },
+          { color: active || isCta ? accentColor : `${mutedColor}bb` },
         ]}
         numberOfLines={isRail ? 3 : 1}
         adjustsFontSizeToFit={isRail}
@@ -102,6 +106,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  ctaCell: {
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'stretch',
+    width: '100%',
   },
   cellInactive: {
     backgroundColor: HUB_NAV_INACTIVE_BG,
