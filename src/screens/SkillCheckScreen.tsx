@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import { USE_NATIVE_DRIVER } from '../utils/platformMotion';
 import HapticPressable from '../components/HapticPressable';
 import IncursionShell from '../components/IncursionShell';
 import IncursionRunLayout from '../components/IncursionRunLayout';
@@ -56,8 +57,8 @@ export default function SkillCheckScreen(): React.JSX.Element {
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(flickerAnim, { toValue: 1, duration: 120, useNativeDriver: true }),
-        Animated.timing(flickerAnim, { toValue: 0.3, duration: 80, useNativeDriver: true }),
+        Animated.timing(flickerAnim, { toValue: 1, duration: 120, useNativeDriver: USE_NATIVE_DRIVER }),
+        Animated.timing(flickerAnim, { toValue: 0.3, duration: 80, useNativeDriver: USE_NATIVE_DRIVER }),
       ]),
     );
     if (phase === 'READY') loop.start();

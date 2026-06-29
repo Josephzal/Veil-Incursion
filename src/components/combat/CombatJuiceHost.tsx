@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, type ViewProps } from 'react-native';
+import { USE_NATIVE_DRIVER } from '../../utils/platformMotion';
 import {
   registerCombatJuiceShake,
   unregisterCombatJuiceShake,
@@ -34,15 +35,15 @@ export default function CombatJuiceHost({
         const dy = intensity === 'heavy' ? (i % 3 === 0 ? offset * 0.6 : -offset * 0.4) : 0;
         anims.push(
           Animated.parallel([
-            Animated.timing(shakeX, { toValue: dx, duration: 28, useNativeDriver: true }),
-            Animated.timing(shakeY, { toValue: dy, duration: 28, useNativeDriver: true }),
+            Animated.timing(shakeX, { toValue: dx, duration: 28, useNativeDriver: USE_NATIVE_DRIVER }),
+            Animated.timing(shakeY, { toValue: dy, duration: 28, useNativeDriver: USE_NATIVE_DRIVER }),
           ]),
         );
       }
       anims.push(
         Animated.parallel([
-          Animated.timing(shakeX, { toValue: 0, duration: 40, useNativeDriver: true }),
-          Animated.timing(shakeY, { toValue: 0, duration: 40, useNativeDriver: true }),
+          Animated.timing(shakeX, { toValue: 0, duration: 40, useNativeDriver: USE_NATIVE_DRIVER }),
+          Animated.timing(shakeY, { toValue: 0, duration: 40, useNativeDriver: USE_NATIVE_DRIVER }),
         ]),
       );
       Animated.sequence(anims).start();

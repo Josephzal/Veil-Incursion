@@ -1,7 +1,7 @@
 import type { FactionType } from '../types/game';
 import type { EnemyCombatProfile } from '../types/run';
 import type { ResourceItemId } from '../types/resourceItem';
-import { factionForDistrict } from './enemyRoster';
+import { factionForDistrict } from './districtFactionMap';
 import type { DistrictId } from './districtPacing';
 
 export type FactionTraitId = 'ENTRENCHED' | 'COLD_VACUUM' | 'VOLATILE_CORE';

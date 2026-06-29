@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import { USE_NATIVE_DRIVER } from '../../utils/platformMotion';
+import { textGlow } from '../../utils/adaptiveStyles';
 import type { CombatFeedbackEvent } from '../../types/combatChance';
 
 const MONO = 'monospace';
@@ -42,26 +44,26 @@ export default function CombatFloatingFeedback({
         toValue: 1,
         duration: 120,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.timing(scale, {
         toValue: 1,
         duration: 180,
         easing: Easing.out(Easing.back(1.2)),
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.timing(translateY, {
         toValue: -6,
         duration: 420,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
     ]).start(() => {
       Animated.timing(opacity, {
         toValue: 0,
         duration: 280,
         delay: 320,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }).start(() => {
         setVisible(null);
         onComplete?.();
@@ -74,7 +76,7 @@ export default function CombatFloatingFeedback({
   const color = COLORS[visible];
 
   return (
-    <View style={styles.host} pointerEvents="none">
+    <View style={[styles.host, styles.hostPointerLock]}>
       <Animated.Text
         style={[
           styles.label,
@@ -82,8 +84,7 @@ export default function CombatFloatingFeedback({
             color,
             opacity,
             transform: [{ scale }, { translateY }],
-            textShadowColor: 'rgba(0,0,0,0.85)',
-            textShadowRadius: 4,
+            ...textGlow({ color: 'rgba(0,0,0,0.85)', radius: 4, offset: { width: 0, height: 1 } }),
           },
         ]}
       >
@@ -100,11 +101,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 40,
   },
+  hostPointerLock: {
+    pointerEvents: 'none',
+  },
   label: {
     fontFamily: MONO,
     fontSize: 11,
     letterSpacing: 1.2,
     fontWeight: '700',
-    textShadowOffset: { width: 0, height: 1 },
   },
 });

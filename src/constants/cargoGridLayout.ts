@@ -1,0 +1,11 @@
+import { CARGO_GRID_COLS, CARGO_GRID_ROWS } from '../types/cargoGrid';
+
+export const CARGO_CELL_SIZE = 56;
+export const CARGO_CELL_GAP = 2;
+
+export const CARGO_GRID_FRAME_WIDTH =
+  CARGO_GRID_COLS * CARGO_CELL_SIZE + (CARGO_GRID_COLS - 1) * CARGO_CELL_GAP;
+export const CARGO_GRID_FRAME_HEIGHT =
+  CARGO_GRID_ROWS * CARGO_CELL_SIZE + (CARGO_GRID_ROWS - 1) * CARGO_CELL_GAP;
+/** @deprecated Use CARGO_GRID_FRAME_WIDTH / HEIGHT for non-square grids. */
+export const CARGO_GRID_FRAME_SIZE = CARGO_GRID_FRAME_WIDTH;

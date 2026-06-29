@@ -1,8 +1,15 @@
-import { vec, type SkPoint } from '@shopify/react-native-skia';
+export interface ScopePoint {
+  x: number;
+  y: number;
+}
+
+function point(x: number, y: number): ScopePoint {
+  return { x, y };
+}
 
 export interface ScopeLine {
-  p1: SkPoint;
-  p2: SkPoint;
+  p1: ScopePoint;
+  p2: ScopePoint;
   opacity: number;
   strokeWidth?: number;
 }
@@ -28,8 +35,8 @@ export function buildNonEuclideanGrid(
     const rad = (deg * Math.PI) / 180;
     const isMajor = deg % 45 === 0;
     lines.push({
-      p1: vec(center, center),
-      p2: vec(center + radius * Math.cos(rad), center + radius * Math.sin(rad)),
+      p1: point(center, center),
+      p2: point(center + radius * Math.cos(rad), center + radius * Math.sin(rad)),
       opacity: isMajor ? strokeBase * 1.35 : strokeBase * 0.55,
       strokeWidth: isMajor ? 1 : 0.5,
     });
@@ -60,8 +67,8 @@ export function buildNonEuclideanGrid(
       const offset = i * step;
       const half = radius;
       lines.push({
-        p1: vec(center + px * offset - dx * half, center + py * offset - dy * half),
-        p2: vec(center + px * offset + dx * half, center + py * offset + dy * half),
+        p1: point(center + px * offset - dx * half, center + py * offset - dy * half),
+        p2: point(center + px * offset + dx * half, center + py * offset + dy * half),
         opacity: strokeBase * (0.28 + layerIndex * 0.04),
         strokeWidth: 0.5,
       });
@@ -82,8 +89,8 @@ export function buildNonEuclideanGrid(
         const a1 = start + (end - start) * t1;
         const bulge = 1 + Math.sin(t0 * Math.PI) * 0.14;
         lines.push({
-          p1: vec(center + warpR * bulge * Math.cos(a0), center + warpR * bulge * Math.sin(a0)),
-          p2: vec(center + warpR * bulge * Math.cos(a1), center + warpR * bulge * Math.sin(a1)),
+          p1: point(center + warpR * bulge * Math.cos(a0), center + warpR * bulge * Math.sin(a0)),
+          p2: point(center + warpR * bulge * Math.cos(a1), center + warpR * bulge * Math.sin(a1)),
           opacity: strokeBase * 0.32,
           strokeWidth: 0.5,
         });
@@ -101,8 +108,8 @@ export function buildDegreeTicks(center: number, radius: number, strokeBase: num
     const outer = radius * 0.98;
     const inner = radius * (deg % 30 === 0 ? 0.9 : 0.94);
     ticks.push({
-      p1: vec(center + inner * Math.cos(rad), center + inner * Math.sin(rad)),
-      p2: vec(center + outer * Math.cos(rad), center + outer * Math.sin(rad)),
+      p1: point(center + inner * Math.cos(rad), center + inner * Math.sin(rad)),
+      p2: point(center + outer * Math.cos(rad), center + outer * Math.sin(rad)),
       opacity: deg % 30 === 0 ? strokeBase * 1.1 : strokeBase * 0.45,
       strokeWidth: deg % 30 === 0 ? 1 : 0.5,
     });

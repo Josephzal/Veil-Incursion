@@ -1,10 +1,12 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Image,
   StyleSheet,
   View,
   type ImageSourcePropType,
   type LayoutChangeEvent,
+  type NativeSyntheticEvent,
+  type ImageLoadEventData,
 } from 'react-native';
 
 interface CombatArenaBackgroundProps {
@@ -17,19 +19,49 @@ interface ContainerSize {
   height: number;
 }
 
+interface AssetSize {
+  width: number;
+  height: number;
+}
+
+const DEFAULT_ASSET_SIZE: AssetSize = { width: 16, height: 9 };
+
+function resolveImageAssetSize(source: ImageSourcePropType): AssetSize {
+  const resolveAssetSource = (
+    Image as {
+      resolveAssetSource?: (
+        src: ImageSourcePropType,
+      ) => { width?: number; height?: number } | undefined;
+    }
+  ).resolveAssetSource;
+
+  if (typeof resolveAssetSource === 'function') {
+    const resolved = resolveAssetSource(source);
+    if (resolved?.width && resolved?.height) {
+      return { width: resolved.width, height: resolved.height };
+    }
+  }
+
+  if (source && typeof source === 'object' && !Array.isArray(source)) {
+    const { width, height } = source as { width?: number; height?: number };
+    if (width && height) {
+      return { width, height };
+    }
+  }
+
+  return DEFAULT_ASSET_SIZE;
+}
+
 /** Cover-fit arena backdrop — fills the panel edge-to-edge, bottom-anchored, uniform scale. */
 export default function CombatArenaBackground({
   source,
   scrimColor = null,
 }: CombatArenaBackgroundProps): React.JSX.Element {
   const [container, setContainer] = useState<ContainerSize>({ width: 0, height: 0 });
+  const [assetSize, setAssetSize] = useState<AssetSize>(() => resolveImageAssetSize(source));
 
-  const assetSize = useMemo(() => {
-    const resolved = Image.resolveAssetSource(source);
-    return {
-      width: resolved?.width ?? 16,
-      height: resolved?.height ?? 9,
-    };
+  useEffect(() => {
+    setAssetSize(resolveImageAssetSize(source));
   }, [source]);
 
   const imageFrame = useMemo(() => {
@@ -57,11 +89,28 @@ export default function CombatArenaBackground({
     ));
   }, []);
 
+  const handleImageLoad = useCallback((event: NativeSyntheticEvent<ImageLoadEventData>) => {
+    const native = event.nativeEvent as ImageLoadEventData & {
+      width?: number;
+      height?: number;
+      source?: { width?: number; height?: number };
+    };
+    const width = native.source?.width ?? native.width;
+    const height = native.source?.height ?? native.height;
+    if (!width || !height || width <= 0 || height <= 0) return;
+    setAssetSize((prev) => (
+      prev.width === width && prev.height === height
+        ? prev
+        : { width, height }
+    ));
+  }, []);
+
   return (
-    <View style={styles.host} pointerEvents="none" onLayout={handleLayout}>
+    <View style={[styles.host, styles.hostPointerLock]} onLayout={handleLayout}>
       {imageFrame ? (
         <Image
           source={source}
+          onLoad={handleImageLoad}
           style={[
             styles.image,
             {
@@ -85,6 +134,9 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     overflow: 'hidden',
     backgroundColor: '#0a0a0c',
+  },
+  hostPointerLock: {
+    pointerEvents: 'none',
   },
   image: {
     position: 'absolute',

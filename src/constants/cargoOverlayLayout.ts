@@ -1,4 +1,4 @@
-import { CARGO_CELL_GAP, CARGO_CELL_SIZE } from '../components/CargoGridBoard';
+import { CARGO_CELL_GAP, CARGO_CELL_SIZE } from './cargoGridLayout';
 import { HARVEST_EXTERNAL_BAY_HEIGHT, HARVEST_EXTERNAL_BAY_MARGIN_TOP } from './harvestLayout';
 import { resolveImmersiveFooterInset } from './immersiveLayout';
 import { CARGO_GRID_COLS, CARGO_GRID_ROWS } from '../types/cargoGrid';

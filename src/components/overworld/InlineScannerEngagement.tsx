@@ -1,5 +1,6 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { textGlow } from '../../utils/adaptiveStyles';
 import HapticPressable from '../HapticPressable';
 import { TERMINAL_ACCENT } from '../MacroLogCargoButton';
 import { useCargoOverlay } from '../../context/CargoOverlayContext';
@@ -301,8 +302,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     fontWeight: '700',
     color: STATE_VIOLET,
-    textShadowColor: STATE_VIOLET_GLOW,
-    textShadowRadius: 6,
-    textShadowOffset: { width: 0, height: 0 },
+    ...textGlow({ color: STATE_VIOLET_GLOW, radius: 6, offset: { width: 0, height: 0 } }),
   },
 });

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import { USE_NATIVE_DRIVER } from '../../utils/platformMotion';
 
 const MONO = 'monospace';
 
@@ -32,20 +33,20 @@ export default function CombatEntryTransition({
         toValue: 1,
         duration: 220,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.parallel([
         Animated.timing(labelOpacity, {
           toValue: 1,
           duration: 280,
           easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
+          useNativeDriver: USE_NATIVE_DRIVER,
         }),
         Animated.timing(labelScale, {
           toValue: 1,
           duration: 280,
           easing: Easing.out(Easing.back(1.1)),
-          useNativeDriver: true,
+          useNativeDriver: USE_NATIVE_DRIVER,
         }),
         Animated.sequence([
           Animated.delay(60),
@@ -53,13 +54,13 @@ export default function CombatEntryTransition({
             Animated.timing(slashOpacity, {
               toValue: 1,
               duration: 180,
-              useNativeDriver: true,
+              useNativeDriver: USE_NATIVE_DRIVER,
             }),
             Animated.timing(slashScale, {
               toValue: 1,
               duration: 240,
               easing: Easing.out(Easing.cubic),
-              useNativeDriver: true,
+              useNativeDriver: USE_NATIVE_DRIVER,
             }),
           ]),
         ]),
@@ -67,7 +68,7 @@ export default function CombatEntryTransition({
           toValue: 320,
           duration: 560,
           easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
+          useNativeDriver: USE_NATIVE_DRIVER,
         }),
       ]),
       Animated.delay(120),
@@ -75,7 +76,7 @@ export default function CombatEntryTransition({
         toValue: 0,
         duration: 280,
         easing: Easing.in(Easing.cubic),
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
     ]);
 

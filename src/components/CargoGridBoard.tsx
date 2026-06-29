@@ -27,6 +27,13 @@ import type { CargoItemId, CargoRunState, PlacedCargoItem } from '../types/cargo
 import { CARGO_GRID_COLS, CARGO_GRID_ROWS, CARGO_ITEM_CATALOG } from '../types/cargoGrid';
 import { HARVEST_EXTERNAL_BAY_MARGIN_TOP, HARVEST_TRI_PANE_GAP, harvestExternalBayHeight } from '../constants/harvestLayout';
 import { COMBAT_OVERLAY_SPLIT_GAP, resolveCombatOverlaySplitWidths } from '../constants/cargoOverlayLayout';
+import {
+  CARGO_CELL_GAP,
+  CARGO_CELL_SIZE,
+  CARGO_GRID_FRAME_HEIGHT,
+  CARGO_GRID_FRAME_SIZE,
+  CARGO_GRID_FRAME_WIDTH,
+} from '../constants/cargoGridLayout';
 import type { TerminalTheme } from '../types/theme';
 import { countCargoItemInstances } from '../data/cargoGridEngine';
 import { resolveCargoItemIcon } from '../utils/cargoItemIcon';
@@ -42,15 +49,13 @@ import {
   pulseCargoItemUse,
 } from '../utils/hubButtonHaptics';
 
-export const CARGO_CELL_SIZE = 56;
-export const CARGO_CELL_GAP = 2;
-
-export const CARGO_GRID_FRAME_WIDTH =
-  CARGO_GRID_COLS * CARGO_CELL_SIZE + (CARGO_GRID_COLS - 1) * CARGO_CELL_GAP;
-export const CARGO_GRID_FRAME_HEIGHT =
-  CARGO_GRID_ROWS * CARGO_CELL_SIZE + (CARGO_GRID_ROWS - 1) * CARGO_CELL_GAP;
-/** @deprecated Use CARGO_GRID_FRAME_WIDTH / HEIGHT for non-square grids. */
-export const CARGO_GRID_FRAME_SIZE = CARGO_GRID_FRAME_WIDTH;
+export {
+  CARGO_CELL_GAP,
+  CARGO_CELL_SIZE,
+  CARGO_GRID_FRAME_HEIGHT,
+  CARGO_GRID_FRAME_SIZE,
+  CARGO_GRID_FRAME_WIDTH,
+} from '../constants/cargoGridLayout';
 
 interface GridMetrics {
   pageX: number;

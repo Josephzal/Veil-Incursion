@@ -44,7 +44,7 @@ export default function TerminalHubLayout({
       style={[styles.root, styles.rootRail, style]}
       resizeMode="cover"
     >
-      <View style={styles.scrim} pointerEvents="none" />
+      <View style={[styles.scrim, styles.scrimPointerLock]} />
       <View style={styles.content}>
         <TerminalNavRail
           activeView={activeView}
@@ -72,6 +72,9 @@ const styles = StyleSheet.create({
   scrim: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: HUB_ATMOSPHERE_SCRIM,
+  },
+  scrimPointerLock: {
+    pointerEvents: 'none',
   },
   content: {
     flex: 1,

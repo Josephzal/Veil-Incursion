@@ -14,6 +14,8 @@ import type { DistrictId } from './districtPacing';
 import { depthFromNodesCleared, localLevelFromDepth } from './districtPacing';
 import type { ThreatTier } from './combatEncounterBudget';
 
+export { factionForDistrict } from './districtFactionMap';
+
 export type EnemyRosterId =
   | 'concrete-gargoyle'
   | 'gutter-goliath'
@@ -666,12 +668,6 @@ export const ALLOWED_BOSS_ROSTER_IDS: readonly EnemyRosterId[] = [
   'boss-choir-of-rust',
   'boss-primeval-rift-walker',
 ];
-
-export function factionForDistrict(district: 1 | 2 | 3): FactionType {
-  if (district === 1) return 'TERRAN_GRID';
-  if (district === 2) return 'SOLARIS';
-  return 'LEGION';
-}
 
 export function rosterPoolForFaction(faction: FactionType, isElite: boolean): EnemyRosterEntry[] {
   return GRUNT_ROSTER_BY_FACTION[faction]

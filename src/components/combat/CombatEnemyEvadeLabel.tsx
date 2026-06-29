@@ -1,5 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, Text } from 'react-native';
+import { USE_NATIVE_DRIVER } from '../../utils/platformMotion';
+import { textGlow } from '../../utils/adaptiveStyles';
 
 const MONO = 'monospace';
 const EVADE_COLOR = '#9ca3af';
@@ -31,26 +33,26 @@ export default function CombatEnemyEvadeLabel({
         toValue: 1,
         duration: 70,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.timing(scale, {
         toValue: 1.08,
         duration: 160,
         easing: Easing.out(Easing.back(1.6)),
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.timing(translateY, {
         toValue: -22,
         duration: 480,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
     ]).start(() => {
       Animated.timing(opacity, {
         toValue: 0,
         duration: 240,
         delay: 180,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }).start(() => setVisible(false));
     });
   }, [evadeImpactSeq, opacity, scale, translateY]);
@@ -65,10 +67,10 @@ export default function CombatEnemyEvadeLabel({
           color: EVADE_COLOR,
           opacity,
           transform: [{ scale }, { translateY }],
-          textShadowColor: EVADE_COLOR,
+          ...textGlow({ color: EVADE_COLOR, radius: 8, offset: { width: 0, height: 0 } }),
+          pointerEvents: 'none',
         },
       ]}
-      pointerEvents="none"
     >
       EVADED
     </Animated.Text>
@@ -81,8 +83,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1.1,
-    textAlign: 'center',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 8,
+    textAlign: 'center'
   },
 });

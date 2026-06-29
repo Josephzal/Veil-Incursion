@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, Vibration, View } from 'react-native';
+import { USE_NATIVE_DRIVER } from '../../../utils/platformMotion';
 import HapticPressable from '../../HapticPressable';
 import type { TensionMechanicProps } from './tensionMechanicTypes';
 
@@ -53,13 +54,13 @@ function CipherNode({
         toValue: 1.12,
         duration: 90,
         easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.timing(scale, {
         toValue: 1,
         duration: 120,
         easing: Easing.inOut(Easing.quad),
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
     ]).start();
   }, [lit, scale, tapped]);
@@ -154,12 +155,12 @@ export default function GridCipher({
       Animated.timing(failOverlay, {
         toValue: 0.45,
         duration: 80,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.timing(failOverlay, {
         toValue: 0,
         duration: 220,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
     ]).start();
     queueTimeout(() => onFailure(), 260);

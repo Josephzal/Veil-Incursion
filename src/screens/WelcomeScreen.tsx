@@ -12,6 +12,7 @@ import { DEFAULT_HOME_SECTOR_PROFILE_LABEL } from '../constants/homeSector';
 import { LANDSCAPE_PANEL_PADDING, LANDSCAPE_WELCOME_PRIMARY_RATIO } from '../constants/landscapeLayout';
 import { useImmersiveScreenPadding } from '../hooks/useImmersiveScreenPadding';
 import { useLandscapeMetrics } from '../hooks/useLandscapeMetrics';
+import { viewShadow } from '../utils/adaptiveStyles';
 
 export default function WelcomeScreen(): React.JSX.Element {
   const { theme, profile } = useTerminal();
@@ -56,7 +57,20 @@ export default function WelcomeScreen(): React.JSX.Element {
       contentContainerStyle={styles.actionScrollContent}
       showsVerticalScrollIndicator={false}
     >
-      <View style={[styles.badgeFrame, { borderColor: theme.primaryColor, shadowColor: theme.primaryColor }]}>
+      <View
+        style={[
+          styles.badgeFrame,
+          {
+            borderColor: theme.primaryColor,
+            ...viewShadow({
+              color: theme.primaryColor,
+              opacity: 0.8,
+              radius: 14,
+              offset: { width: 0, height: 0 },
+            }),
+          },
+        ]}
+      >
         <View style={[styles.badgeInner, { borderColor: theme.borderColor, backgroundColor: '#0a0b0f' }]}>
           <View style={[styles.badgeHeader, { borderBottomColor: theme.borderColor }]}>
             <Text style={[styles.badgeHeaderText, { color: theme.mutedColor }]}>AGENT BADGE</Text>
@@ -98,7 +112,12 @@ export default function WelcomeScreen(): React.JSX.Element {
           {
             borderColor: theme.statusColor,
             backgroundColor: pressed ? '#083344' : '#0e1624',
-            shadowColor: theme.statusColor,
+            ...viewShadow({
+              color: theme.statusColor,
+              opacity: 0.9,
+              radius: 16,
+              offset: { width: 0, height: 0 },
+            }),
           },
         ]}
       >
@@ -112,7 +131,7 @@ export default function WelcomeScreen(): React.JSX.Element {
   return (
     <TerminalSafeArea style={immersivePadding}>
       <View style={styles.container}>
-        <View style={styles.gridBackdrop} pointerEvents="none">
+        <View style={[styles.gridBackdrop, styles.gridBackdropPointerLock]}>
           {Array.from({ length: 8 }).map((_, row) => (
             <View key={`row-${row}`} style={styles.gridRow}>
               {Array.from({ length: 8 }).map((__, col) => (
@@ -157,6 +176,9 @@ const styles = StyleSheet.create({
     opacity: 0.35,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  gridBackdropPointerLock: {
+    pointerEvents: 'none',
   },
   gridRow: {
     flexDirection: 'row',
@@ -229,9 +251,6 @@ const styles = StyleSheet.create({
   badgeFrame: {
     borderWidth: 2,
     padding: 3,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 14,
     elevation: 8,
   },
   badgeInner: {
@@ -322,9 +341,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     alignItems: 'center',
     overflow: 'hidden',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.9,
-    shadowRadius: 16,
     elevation: 10,
   },
   scanButtonGlow: {

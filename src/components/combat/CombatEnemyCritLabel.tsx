@@ -1,5 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, Text } from 'react-native';
+import { USE_NATIVE_DRIVER } from '../../utils/platformMotion';
+import { textGlow } from '../../utils/adaptiveStyles';
 import type { DamageChannel } from '../../types/aegisCombat';
 
 const MONO = 'monospace';
@@ -37,26 +39,26 @@ export default function CombatEnemyCritLabel({
         toValue: 1,
         duration: 70,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.timing(scale, {
         toValue: 1.08,
         duration: 160,
         easing: Easing.out(Easing.back(1.6)),
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.timing(translateY, {
         toValue: -22,
         duration: 480,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
     ]).start(() => {
       Animated.timing(opacity, {
         toValue: 0,
         duration: 240,
         delay: 180,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }).start(() => setVisible(false));
     });
   }, [channel, critImpactSeq, opacity, scale, translateY]);
@@ -73,10 +75,10 @@ export default function CombatEnemyCritLabel({
           color,
           opacity,
           transform: [{ scale }, { translateY }],
-          textShadowColor: color,
+          ...textGlow({ color, radius: 8, offset: { width: 0, height: 0 } }),
+          pointerEvents: 'none',
         },
       ]}
-      pointerEvents="none"
     >
       CRITICAL
     </Animated.Text>
@@ -89,8 +91,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1.1,
-    textAlign: 'center',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 8,
+    textAlign: 'center'
   },
 });

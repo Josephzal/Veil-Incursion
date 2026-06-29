@@ -1,5 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import { USE_NATIVE_DRIVER } from '../utils/platformMotion';
+import { textGlow, viewShadow } from '../utils/adaptiveStyles';
 import HapticPressable from './HapticPressable';
 import type { AegisAbilityId } from '../types/aegisCombat';
 import { PLAYER_ACTION_POINTS_PER_TURN } from '../types/aegisCombat';
@@ -159,31 +161,31 @@ export default function CombatCommandDeck({
         toValue: 1,
         duration: 80,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.timing(surgeScale, {
         toValue: 1.08,
         duration: INITIATIVE_SURGE_MS,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.timing(floatOpacity, {
         toValue: 1,
         duration: Math.min(120, riseMs),
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.timing(floatTranslateY, {
         toValue: -28,
         duration: riseMs,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.timing(floatScale, {
         toValue: 1.08,
         duration: riseMs,
         easing: Easing.out(Easing.back(1.12)),
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
     ]).start(() => {
       Animated.parallel([
@@ -191,13 +193,13 @@ export default function CombatCommandDeck({
           toValue: 0,
           duration: Math.max(120, INITIATIVE_SURGE_MS - 80),
           easing: Easing.in(Easing.quad),
-          useNativeDriver: true,
+          useNativeDriver: USE_NATIVE_DRIVER,
         }),
         Animated.timing(surgeScale, {
           toValue: 1.16,
           duration: Math.max(120, INITIATIVE_SURGE_MS - 80),
           easing: Easing.in(Easing.quad),
-          useNativeDriver: true,
+          useNativeDriver: USE_NATIVE_DRIVER,
         }),
       ]).start();
     });
@@ -208,7 +210,7 @@ export default function CombatCommandDeck({
         toValue: 0,
         duration: fadeMs,
         easing: Easing.in(Easing.quad),
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
     ]).start(() => {
       setFloatVisible(false);
@@ -529,10 +531,10 @@ export default function CombatCommandDeck({
               color: INITIATIVE_GLOW_PALE,
               opacity: floatOpacity,
               transform: [{ translateY: floatTranslateY }, { scale: floatScale }],
-              textShadowColor: INITIATIVE_GLOW,
+              ...textGlow({ color: INITIATIVE_GLOW, radius: 8, offset: { width: 0, height: 0 } }),
+              pointerEvents: 'none',
             },
           ]}
-          pointerEvents="none"
         >
           INITIATIVE SEIZED
         </Animated.Text>
@@ -540,14 +542,19 @@ export default function CombatCommandDeck({
 
       <View style={[styles.deckShellWrap, dashboardLayout && styles.deckShellWrapDashboard]}>
         <Animated.View
-          pointerEvents="none"
           style={[
             styles.surgeRing,
             {
               opacity: surgeOpacity,
               transform: [{ scale: surgeScale }],
               borderColor: INITIATIVE_GLOW_PALE,
-              shadowColor: INITIATIVE_GLOW,
+              ...viewShadow({
+                color: INITIATIVE_GLOW,
+                opacity: 0.85,
+                radius: 14,
+                offset: { width: 0, height: 0 },
+              }),
+              pointerEvents: 'none',
             },
           ]}
         />
@@ -642,9 +649,6 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     borderWidth: 2,
     borderRadius: 2,
-    shadowOpacity: 0.85,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 0 },
     backgroundColor: 'rgba(167, 139, 250, 0.08)',
   },
   initiativeFloat: {
@@ -657,8 +661,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1.6,
     textAlign: 'center',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 8,
   },
   commandDeck: {
     flexShrink: 0,

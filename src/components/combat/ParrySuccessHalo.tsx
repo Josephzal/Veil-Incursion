@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
+import { USE_NATIVE_DRIVER } from '../../utils/platformMotion';
 import { PARRY_HALO_DURATION_MS } from '../../utils/parryCollision';
 
 const PARRY_SUCCESS = '#fff9c4';
@@ -34,7 +35,7 @@ export default function ParrySuccessHalo({
         duration: PARRY_HALO_DURATION_MS,
         delay,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       });
     const anim = Animated.parallel([
       run(progress0, RIPPLE_DELAYS_MS[0]),

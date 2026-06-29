@@ -9,7 +9,7 @@ export default function ScannerCornerBrackets({
   color,
 }: ScannerCornerBracketsProps): React.JSX.Element {
   return (
-    <View style={styles.root} pointerEvents="none">
+    <View style={styles.root}>
       <Text style={[styles.bracket, styles.tl, { color }]}>{'┌'}</Text>
       <Text style={[styles.bracket, styles.tr, { color }]}>{'┐'}</Text>
       <Text style={[styles.bracket, styles.bl, { color }]}>{'└'}</Text>
@@ -21,6 +21,7 @@ export default function ScannerCornerBrackets({
 const styles = StyleSheet.create({
   root: {
     ...StyleSheet.absoluteFillObject,
+    pointerEvents: 'none',
   },
   bracket: {
     position: 'absolute',

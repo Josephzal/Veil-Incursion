@@ -55,16 +55,16 @@ export default function CombatEnemyPortraitSkia({
   const idlePortraitGlow = glow !== 'none' && !isAttackGlow ? glow : null;
 
   return (
-    <View style={styles.root} pointerEvents="none" collapsable={false}>
+    <View style={[styles.root, styles.pointerLock]} collapsable={false}>
       {idlePortraitGlow && glowTint ? (
-        <View style={styles.glowDuplicate} pointerEvents="none">
+        <View style={[styles.glowDuplicate, styles.pointerLock]}>
           <Image
             source={source}
             resizeMode="contain"
+            tintColor={glowTint}
             style={[
               enemySpriteStyles.enemySprite,
               {
-                tintColor: glowTint,
                 opacity: glowOpacity,
                 transform: [{ scale: glowScale }],
               },
@@ -72,7 +72,7 @@ export default function CombatEnemyPortraitSkia({
           />
         </View>
       ) : null}
-      <View style={styles.enemySpriteStack} pointerEvents="none">
+      <View style={[styles.enemySpriteStack, styles.pointerLock]}>
         <AnimatedEnemySprite
           idleSource={source}
           attackSource={resolvedAttackSource}
@@ -105,6 +105,9 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     overflow: 'visible',
     backgroundColor: 'transparent',
+  },
+  pointerLock: {
+    pointerEvents: 'none',
   },
   enemySpriteStack: {
     width: '100%',

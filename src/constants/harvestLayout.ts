@@ -1,4 +1,4 @@
-import { CARGO_CELL_GAP, CARGO_CELL_SIZE, CARGO_GRID_FRAME_WIDTH } from '../components/CargoGridBoard';
+import { CARGO_CELL_GAP, CARGO_CELL_SIZE, CARGO_GRID_FRAME_WIDTH } from './cargoGridLayout';
 import { LANDSCAPE_PANEL_PADDING } from './landscapeLayout';
 import {
   resolveImmersiveContentPadding,

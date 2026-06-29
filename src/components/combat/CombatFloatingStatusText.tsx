@@ -1,5 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, Text } from 'react-native';
+import { USE_NATIVE_DRIVER } from '../../utils/platformMotion';
+import { textGlow } from '../../utils/adaptiveStyles';
 import type { StatusFloatTone } from '../../utils/combatTelemetryFormat';
 
 const MONO = 'monospace';
@@ -47,26 +49,26 @@ export default function CombatFloatingStatusText({
         toValue: 1,
         duration: Math.min(120, riseMs),
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.timing(translateY, {
         toValue: -26,
         duration: riseMs,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.timing(scale, {
         toValue: 1,
         duration: riseMs,
         easing: Easing.out(Easing.back(1.15)),
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
     ]).start(() => {
       Animated.timing(opacity, {
         toValue: 0,
         duration: fadeMs,
         easing: Easing.in(Easing.quad),
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }).start(() => setVisible(false));
     });
   }, [durationMs, label, opacity, scale, translateY, triggerSeq]);
@@ -83,10 +85,10 @@ export default function CombatFloatingStatusText({
           color,
           opacity,
           transform: [{ translateY }, { scale }],
-          textShadowColor: color,
+          ...textGlow({ color, radius: 6, offset: { width: 0, height: 0 } }),
+          pointerEvents: 'none',
         },
       ]}
-      pointerEvents="none"
     >
       {label.toUpperCase()}
     </Animated.Text>
@@ -99,8 +101,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 1.4,
-    textAlign: 'center',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 6,
+    textAlign: 'center'
   },
 });

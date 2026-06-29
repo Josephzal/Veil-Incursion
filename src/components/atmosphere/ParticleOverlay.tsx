@@ -1,3 +1,4 @@
+import { USE_NATIVE_DRIVER } from '../../utils/platformMotion';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Animated,
@@ -63,12 +64,12 @@ function RainLayer({ width, height }: RainLayerProps): React.JSX.Element {
             toValue: height + 20,
             duration: particle.duration,
             easing: Easing.linear,
-            useNativeDriver: true,
+            useNativeDriver: USE_NATIVE_DRIVER,
           }),
           Animated.timing(particle.translateY, {
             toValue: -20,
             duration: 0,
-            useNativeDriver: true,
+            useNativeDriver: USE_NATIVE_DRIVER,
           }),
         ]),
       );

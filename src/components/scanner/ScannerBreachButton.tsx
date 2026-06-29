@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import { USE_NATIVE_DRIVER } from '../../utils/platformMotion';
 import HapticPressable from '../HapticPressable';
 import { pulseHubButton } from '../../utils/hubButtonHaptics';
 
@@ -29,7 +30,7 @@ export default function ScannerBreachButton({
         toValue: 1,
         duration: 2200,
         easing: Easing.linear,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
     );
     loop.start();

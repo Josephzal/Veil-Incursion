@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import { USE_NATIVE_DRIVER } from '../../../utils/platformMotion';
 import HapticPressable from '../../HapticPressable';
 import type { TensionMechanicProps, TensionMechanicSuccessResult } from './tensionMechanicTypes';
 
@@ -87,13 +88,13 @@ export default function ScavengeBar({
             toValue: 1,
             duration: 220,
             easing: Easing.out(Easing.cubic),
-            useNativeDriver: true,
+            useNativeDriver: USE_NATIVE_DRIVER,
           }),
           Animated.timing(unlockPulse, {
             toValue: 0,
             duration: 480,
             easing: Easing.inOut(Easing.sin),
-            useNativeDriver: true,
+            useNativeDriver: USE_NATIVE_DRIVER,
           }),
         ]),
         Animated.timing(unlockFlash, {

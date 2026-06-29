@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
+import { USE_NATIVE_DRIVER } from '../../utils/platformMotion';
 import type { EnemyDeckStrikeVariant } from '../../utils/combatTelemetryFormat';
 
 const VARIANT_COLORS: Record<EnemyDeckStrikeVariant, string> = {
@@ -24,13 +25,13 @@ export default function CombatDeckStrikeOverlay({
         toValue: 1,
         duration: 120,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.timing(opacity, {
         toValue: 0.72,
         duration: 380,
         easing: Easing.inOut(Easing.quad),
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
     ]).start();
   }, [opacity, variant]);

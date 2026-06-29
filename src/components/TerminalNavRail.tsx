@@ -7,6 +7,7 @@ import {
   HUB_NAV_INACTIVE_TOP_HIGHLIGHT,
 } from '../constants/hubAtmosphere';
 import { resolveTerminalNavItems } from '../constants/terminalNav';
+import { viewShadow } from '../utils/adaptiveStyles';
 import { useTerminal } from '../context/TerminalContext';
 import { TerminalView } from '../types/terminalNav';
 
@@ -56,7 +57,12 @@ export default function TerminalNavRail({
                   ? {
                       borderColor: accentColor,
                       backgroundColor: `${accentColor}24`,
-                      shadowColor: accentColor,
+                      ...viewShadow({
+                        color: accentColor,
+                        opacity: 0.85,
+                        radius: 12,
+                        offset: { width: 0, height: 0 },
+                      }),
                     }
                   : null,
               ]}
@@ -113,11 +119,6 @@ const styles = StyleSheet.create({
   navCellActive: {
     borderWidth: 2,
     ...Platform.select({
-      ios: {
-        shadowOpacity: 0.85,
-        shadowRadius: 12,
-        shadowOffset: { width: 0, height: 0 },
-      },
       android: { elevation: 8 },
       default: {},
     }),

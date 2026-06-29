@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { StyleSheet, View, Text, Animated, Easing, Dimensions, Vibration, PanResponder } from 'react-native';
+import { USE_NATIVE_DRIVER } from '../utils/platformMotion';
 import HapticPressable from './HapticPressable';
 import {
   cancelAnimation,
@@ -1778,9 +1779,9 @@ export default function TacticalCombatHub({
   const flash = (color: string, done?: () => void) => {
     setScreenFlashColor(color); setScreenFlashActive(true); screenFlashAnim.setValue(0);
     Animated.sequence([
-      Animated.timing(screenFlashAnim, { toValue: 0.38, duration: 90, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-      Animated.timing(screenFlashAnim, { toValue: 0.26, duration: 160, useNativeDriver: true }),
-      Animated.timing(screenFlashAnim, { toValue: 0, duration: 520, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(screenFlashAnim, { toValue: 0.38, duration: 90, easing: Easing.out(Easing.cubic), useNativeDriver: USE_NATIVE_DRIVER }),
+      Animated.timing(screenFlashAnim, { toValue: 0.26, duration: 160, useNativeDriver: USE_NATIVE_DRIVER }),
+      Animated.timing(screenFlashAnim, { toValue: 0, duration: 520, easing: Easing.inOut(Easing.cubic), useNativeDriver: USE_NATIVE_DRIVER }),
     ]).start(() => { setScreenFlashActive(false); done?.(); });
   };
 

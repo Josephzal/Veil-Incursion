@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
+import { USE_NATIVE_DRIVER } from '../utils/platformMotion';
 import { TerminalTheme } from '../types/theme';
 
 interface FactionBootLogoProps {
@@ -17,8 +18,8 @@ export default function FactionBootLogo({ theme, flashActive = false }: FactionB
     }
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 0.35, duration: 280, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 1, duration: 280, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.35, duration: 280, useNativeDriver: USE_NATIVE_DRIVER }),
+        Animated.timing(pulse, { toValue: 1, duration: 280, useNativeDriver: USE_NATIVE_DRIVER }),
       ]),
     );
     loop.start();
