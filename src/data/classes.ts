@@ -13,7 +13,7 @@ export const CLASS_DEFINITIONS: Record<ClassType, Omit<ClassDefinition, 'unlocke
   AEGIS: {
     id: 'AEGIS',
     displayName: 'AEGIS SLAYER',
-    protocolLabel: 'OPERATIVE PROTOCOL: BRANDED AEGIS SLAYER [ACTIVE]',
+    protocolLabel: 'OPERATIVE PROTOCOL: AEGIS SLAYER [ACTIVE]',
     weaponLine: 'WEAPON: ANOMALY-TREATED SWORD',
     interactionLine: 'INTERACTION: KINETIC SCAR BRAND',
   },

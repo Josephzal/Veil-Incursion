@@ -389,7 +389,7 @@ export default function CombatScreen(): React.JSX.Element {
     if (runState.combatTestPreset) {
       exitCombatToBadge();
       goToHub();
-      setTerminalView('BADGE');
+      setTerminalView('DEPLOYMENT');
       return;
     }
 

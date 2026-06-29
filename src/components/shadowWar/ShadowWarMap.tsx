@@ -36,8 +36,6 @@ import {
 } from '../../utils/sectorInfluenceVisual';
 
 const MAP_BACKDROP = '#04060a';
-const NODE_RADIUS_DESKTOP = 4.5;
-const NODE_RADIUS_MOBILE = 3.5;
 
 interface ShadowWarMapProps {
   theme: TerminalTheme;
@@ -109,13 +107,12 @@ export default function ShadowWarMap({
   );
 
   const labelFontSize = useMemo(
-    () => Math.max(4.5, Math.min(isDesktop ? 7 : 6, drawMetrics.scale * (isDesktop ? 4.8 : 4.2))),
+    () => Math.max(4.5, Math.min(isDesktop ? 10 : 6, drawMetrics.scale * (isDesktop ? 6.2 : 4.2))),
     [drawMetrics.scale, isDesktop],
   );
-  const labelLineHeight = labelFontSize + 1.2;
+  const labelLineHeight = labelFontSize + (isDesktop ? 2 : 1.2);
   const strokeWidth = isDesktop ? 3 : 2;
   const activeStrokeWidth = isDesktop ? 3.5 : 2.5;
-  const nodeRadius = isDesktop ? NODE_RADIUS_DESKTOP : NODE_RADIUS_MOBILE;
 
   const handleHostLayout = useCallback((event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
@@ -203,8 +200,9 @@ export default function ShadowWarMap({
                   drawMetrics,
                 );
                 const labelLines = splitSectorLabelLines(sector.label);
-                const labelBlockHeight = labelLines.length * labelLineHeight;
-                const labelStartY = nodeAnchor.y + nodeRadius + 4;
+                const labelStartY = nodeAnchor.y
+                  - ((labelLines.length - 1) * labelLineHeight) / 2
+                  + labelFontSize * 0.35;
                 const pathStrokeWidth = isActive ? activeStrokeWidth : strokeWidth;
                 const pathProps = {
                   d: pathD,
@@ -222,15 +220,6 @@ export default function ShadowWarMap({
                       <Path {...pathProps} strokeOpacity={1} />
                     )}
 
-                    <Circle
-                      cx={nodeAnchor.x}
-                      cy={nodeAnchor.y}
-                      r={nodeRadius}
-                      fill={stroke}
-                      stroke={isActive ? '#f8fafc' : 'rgba(248, 250, 252, 0.35)'}
-                      strokeWidth={isActive ? 1.5 : 0.8}
-                    />
-
                     {labelLines.map((line, lineIndex) => (
                       <SvgText
                         key={`${sector.id}-label-${lineIndex}`}
@@ -240,7 +229,7 @@ export default function ShadowWarMap({
                         fontSize={labelFontSize}
                         fontFamily="monospace"
                         fontWeight={isActive ? '700' : '500'}
-                        letterSpacing={isDesktop ? 1.2 : 0.8}
+                        letterSpacing={isDesktop ? 1.4 : 0.8}
                         textAnchor="middle"
                       >
                         {line}
@@ -259,7 +248,7 @@ export default function ShadowWarMap({
         letterSpacing={0.4}
         style={[styles.hint, { color: theme.mutedColor }]}
       >
-        TAP SECTOR TO SELECT
+        SELECT SECTOR TO DISPLAY SHADOW WAR INFLUENCE
       </TerminalText>
     </View>
   );

@@ -13,6 +13,10 @@ interface CabalPanelProps {
   contentStyle?: StyleProp<ViewStyle>;
   /** Override player alignment for border tint. */
   faction?: FactionType | null;
+  /** Size to content (modals) instead of stretching in a flex parent. */
+  shrinkWrap?: boolean;
+  /** When shrinkWrap, allow inner content to fill a stretched parent height. */
+  fillHeight?: boolean;
 }
 
 /** Faction-tinted glass slate — shared hub / war-board container. */
@@ -21,6 +25,8 @@ export default function CabalPanel({
   style,
   contentStyle,
   faction,
+  shrinkWrap = false,
+  fillHeight = false,
 }: CabalPanelProps): React.JSX.Element {
   const { account } = usePlayerAccount();
   const aligned = faction ?? account.alignedFaction;
@@ -28,8 +34,22 @@ export default function CabalPanel({
   const slateBorder = resolveFactionSlateInnerBorder(aligned);
 
   return (
-    <View style={[styles.outer, { backgroundColor: slateBg }, style]}>
-      <View style={[styles.inner, { borderColor: slateBorder }, contentStyle]}>
+    <View
+      style={[
+        shrinkWrap ? styles.shrinkOuter : styles.outer,
+        shrinkWrap && fillHeight ? styles.shrinkOuterFill : null,
+        { backgroundColor: slateBg },
+        style,
+      ]}
+    >
+      <View
+        style={[
+          shrinkWrap ? styles.shrinkInner : styles.inner,
+          fillHeight ? styles.shrinkInnerFill : null,
+          { borderColor: slateBorder },
+          contentStyle,
+        ]}
+      >
         {children}
       </View>
     </View>
@@ -47,5 +67,20 @@ const styles = StyleSheet.create({
     minHeight: 0,
     borderWidth: 1,
     overflow: 'hidden',
+  },
+  shrinkOuter: {
+    alignSelf: 'center',
+  },
+  shrinkOuterFill: {
+    flex: 1,
+    alignSelf: 'stretch',
+    minHeight: '100%',
+  },
+  shrinkInner: {
+    borderWidth: 1,
+  },
+  shrinkInnerFill: {
+    flex: 1,
+    minHeight: '100%',
   },
 });

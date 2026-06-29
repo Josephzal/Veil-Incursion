@@ -14,6 +14,8 @@ interface HubDataFieldProps {
   valueColor: string;
   mutedColor: string;
   icon: HubFieldIcon;
+  /** Override icon tint (e.g. faction accent for Cabal Alignment). */
+  iconColor?: string;
 }
 
 export default function HubDataField({
@@ -22,14 +24,16 @@ export default function HubDataField({
   valueColor,
   mutedColor,
   icon,
+  iconColor,
 }: HubDataFieldProps): React.JSX.Element {
   const { scaleSize, scaleSpacing } = useResponsiveScale();
   const keyColor = hubKeyColor(mutedColor);
+  const iconTint = iconColor ?? keyColor;
 
   return (
     <View style={[styles.root, { gap: scaleSpacing(3) }]}>
       <View style={[styles.headerRow, { gap: scaleSpacing(5) }]}>
-        <Ionicons name={icon} size={scaleSize(11)} color={keyColor} style={styles.icon} />
+        <Ionicons name={icon} size={scaleSize(11)} color={iconTint} style={styles.icon} />
         <TerminalText size={8} letterSpacing={1} style={[styles.key, { color: keyColor }]}>
           {formatBracketHeader(title)}
         </TerminalText>

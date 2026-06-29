@@ -97,15 +97,17 @@ function hubKeyColorFromTheme(mutedColor: string): string {
 export function HubSectionHeader({
   title,
   color,
+  size = 9,
 }: {
   title: string;
   color: string;
+  size?: number;
 }): React.JSX.Element {
   const { scaleSpacing } = useResponsiveScale();
 
   return (
     <TerminalText
-      size={9}
+      size={size}
       letterSpacing={1.1}
       style={[styles.sectionHeader, { color, marginBottom: scaleSpacing(6) }]}
     >

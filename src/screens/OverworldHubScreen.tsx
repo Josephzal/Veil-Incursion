@@ -9,13 +9,12 @@ import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useTerminalNav } from '../context/TerminalNavContext';
 import { useShadowWar } from '../context/ShadowWarContext';
-import IdentificationBadgeView from '../components/IdentificationBadgeView';
+import DeploymentDeckPanel from '../components/hub/DeploymentDeckPanel';
+import DevTestHubPanel from '../components/hub/DevTestHubPanel';
 import SafehouseHubPanel from '../components/safehouse/SafehouseHubPanel';
 import TerminalHubLayout from '../components/layout/TerminalHubLayout';
 import TerminalSafeArea from '../components/TerminalSafeArea';
 import ShadowWarDashboard from '../components/ShadowWarDashboard';
-import IncursionPrepPanel from '../components/hub/IncursionPrepPanel';
-import DevTestHubPanel from '../components/hub/DevTestHubPanel';
 import type { FactionType } from '../types/game';
 
 const FACTION_ORDER: FactionType[] = ['TERRAN_GRID', 'LEGION', 'SOLARIS'];
@@ -120,8 +119,15 @@ export default function OverworldHubScreen(): React.JSX.Element {
           onSelectView={setTerminalView}
           mainStyle={styles.viewport}
         >
-          {terminalView === 'BADGE' && (
-            <IdentificationBadgeView theme={theme} profile={profile} account={account} />
+          {terminalView === 'DEPLOYMENT' && (
+            <DeploymentDeckPanel
+              theme={theme}
+              profile={profile}
+              account={account}
+              runDisabled={needsFactionSelection || launchingIncursion}
+              launching={launchingIncursion}
+              onBeginIncursion={handleInitiateDeepDive}
+            />
           )}
           {terminalView === 'MAP' && (
             <ShadowWarDashboard
@@ -130,15 +136,6 @@ export default function OverworldHubScreen(): React.JSX.Element {
             />
           )}
           {terminalView === 'SAFEHOUSE' && <SafehouseHubPanel />}
-          {terminalView === 'INCURSION' && (
-            <IncursionPrepPanel
-              theme={theme}
-              account={account}
-              runDisabled={needsFactionSelection || launchingIncursion}
-              launching={launchingIncursion}
-              onBeginIncursion={handleInitiateDeepDive}
-            />
-          )}
           {terminalView === 'TEST' && <DevTestHubPanel />}
         </TerminalHubLayout>
 

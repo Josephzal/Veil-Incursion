@@ -17,6 +17,11 @@ export const DESKTOP_BADGE_SECONDARY_RATIO = 0.45;
 export const DESKTOP_SAFEHOUSE_LEFT_RATIO = 0.42;
 export const DESKTOP_SAFEHOUSE_RIGHT_RATIO = 0.58;
 
+/** Deployment deck — section min-heights (base px, scaled via scaleSize). */
+export const DESKTOP_DEPLOYMENT_IDENTITY_BLOCK_MIN_HEIGHT = 118;
+export const DESKTOP_DEPLOYMENT_LOADOUT_BLOCK_MIN_HEIGHT = 72;
+export const DESKTOP_DEPLOYMENT_AVATAR_SIZE = 120;
+
 export function resolveDesktopScale(width: number): number {
   if (width < DESKTOP_MIN_WIDTH) return 1;
   const span = DESKTOP_REFERENCE_WIDTH - DESKTOP_MIN_WIDTH;

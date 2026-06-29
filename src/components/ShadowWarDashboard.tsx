@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { Modal, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { LayoutChangeEvent, Modal, Platform, StyleSheet, View } from 'react-native';
 import HapticPressable from './HapticPressable';
 import CabalPanel from './hub/CabalPanel';
 import DonationTerminalPanel from './shadowWar/DonationTerminalPanel';
+import HackingTerminalOverlay from './shadowWar/HackingTerminalOverlay';
 import ShadowWarInfluencePanel from './shadowWar/ShadowWarInfluencePanel';
 import ShadowWarMap from './shadowWar/ShadowWarMap';
 import HubScreenShell from './hub/HubScreenShell';
@@ -25,6 +26,12 @@ export default function ShadowWarDashboard({
   const { isDesktop, scaleSpacing } = useResponsiveScale();
   const [activeSectorId, setActiveSectorId] = useState<ShadowWarSectorId>(SHADOW_WAR_SECTORS[0].id);
   const [donationOpen, setDonationOpen] = useState(false);
+  const [mapViewportHeight, setMapViewportHeight] = useState(0);
+
+  const handleMapStackLayout = useCallback((event: LayoutChangeEvent) => {
+    const { height } = event.nativeEvent.layout;
+    setMapViewportHeight((prev) => (prev === height ? prev : height));
+  }, []);
 
   return (
     <>
@@ -44,15 +51,20 @@ export default function ShadowWarDashboard({
               styles.mapColumn,
               isDesktop ? styles.mapColumnDesktop : styles.mapColumnMobile,
             ]}
-            contentStyle={styles.panelContent}
+            contentStyle={[styles.panelContent, styles.mapPanelContent]}
           >
-            <ShadowWarMap
-              theme={theme}
-              activeSectorId={activeSectorId}
-              sectorIp={state.sectorIp}
-              onSectorPress={setActiveSectorId}
-              isDesktop={isDesktop}
-            />
+            <View style={styles.mapStack} onLayout={handleMapStackLayout}>
+              <View style={styles.mapLayer}>
+                <ShadowWarMap
+                  theme={theme}
+                  activeSectorId={activeSectorId}
+                  sectorIp={state.sectorIp}
+                  onSectorPress={setActiveSectorId}
+                  isDesktop={isDesktop}
+                />
+              </View>
+              <HackingTerminalOverlay viewportHeight={mapViewportHeight} />
+            </View>
           </CabalPanel>
 
           <CabalPanel
@@ -80,25 +92,26 @@ export default function ShadowWarDashboard({
         animationType="fade"
         onRequestClose={() => setDonationOpen(false)}
       >
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, { borderColor: theme.borderColor, backgroundColor: 'rgba(10, 0, 21, 0.96)' }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.statusColor }]}>
-                DONATION TERMINAL
-              </Text>
-              <HapticPressable
-                onPress={() => setDonationOpen(false)}
-                style={[styles.closeBtn, { borderColor: theme.borderColor }]}
-              >
-                <Text style={[styles.closeBtnText, { color: theme.mutedColor }]}>[ CLOSE ]</Text>
-              </HapticPressable>
-            </View>
-            <DonationTerminalPanel
-              sectorId={activeSectorId}
-              onStatus={(line) => {
-                onAppendLog(line);
-              }}
-            />
+        <View style={styles.modalRoot}>
+          <HapticPressable
+            style={styles.modalBackdrop}
+            onPress={() => setDonationOpen(false)}
+            accessibilityLabel="Close donation terminal"
+          />
+          <View style={styles.modalPanelHost} pointerEvents="box-none">
+            <CabalPanel
+              shrinkWrap
+              style={styles.modalPanel}
+              contentStyle={styles.modalPanelContent}
+            >
+              <DonationTerminalPanel
+                sectorId={activeSectorId}
+                onClose={() => setDonationOpen(false)}
+                onStatus={(line) => {
+                  onAppendLog(line);
+                }}
+              />
+            </CabalPanel>
           </View>
         </View>
       </Modal>
@@ -144,44 +157,53 @@ const styles = StyleSheet.create({
   },
   panelContent: {
     padding: 10,
+    flex: 1,
+    minHeight: 0,
+  },
+  mapPanelContent: {
+    position: 'relative',
+  },
+  mapStack: {
+    flex: 1,
+    minHeight: 0,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  mapLayer: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 1,
   },
   intelPanelContent: {
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
-  modalBackdrop: {
+  modalRoot: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.88)',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0, 0, 5, 0.85)',
+    ...Platform.select({
+      web: {
+        backdropFilter: 'blur(18px)',
+        // @ts-expect-error — web-only vendor prefix
+        WebkitBackdropFilter: 'blur(18px)',
+      },
+      default: {},
+    }),
+  },
+  modalPanelHost: {
+    ...StyleSheet.absoluteFill,
     justifyContent: 'center',
+    alignItems: 'center',
     padding: 16,
   },
-  modalCard: {
+  modalPanel: {
+    width: '90%',
+    maxWidth: 600,
     maxHeight: '88%',
-    borderWidth: 1,
-    padding: 12,
-    gap: 8,
   },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 8,
-  },
-  modalTitle: {
-    fontFamily: 'monospace',
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    flex: 1,
-  },
-  closeBtn: {
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  closeBtnText: {
-    fontFamily: 'monospace',
-    fontSize: 8,
-    letterSpacing: 0.5,
+  modalPanelContent: {
+    maxHeight: '100%',
   },
 });

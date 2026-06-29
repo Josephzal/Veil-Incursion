@@ -1,35 +1,59 @@
 import React, { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import HapticPressable from '../HapticPressable';
+import TerminalOverlay from '../TerminalOverlay';
+import TerminalText from '../TerminalText';
+import TacticalButton from '../TacticalButton';
 import {
   calculateDonationDraftIp,
   listDonatableStashResources,
   validateDonationDraft,
 } from '../../data/shadowWarEngine';
+import { FACTION_DEFINITIONS } from '../../data/factions';
 import { VEIL_RESIDUE_DONATION_IP } from '../../constants/veilResidue';
 import { RESOURCE_REGISTRY } from '../../data/resourceRegistry';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useShadowWar } from '../../context/ShadowWarContext';
 import { useTerminal } from '../../context/TerminalContext';
+import { useResponsiveScale } from '../../hooks/useResponsiveScale';
+import { textGlow } from '../../utils/adaptiveStyles';
+import type { FactionType } from '../../types/game';
 import type { ResourceItemId } from '../../types/resourceItem';
 import type { ShadowWarDonationDraft, ShadowWarSectorId } from '../../types/shadowWar';
 
-const AMBER = '#d4a574';
+const FACTION_CTA_BG: Record<FactionType, string> = {
+  TERRAN_GRID: '#334155',
+  LEGION: '#5b21b6',
+  SOLARIS: '#991b1b',
+};
+
+const META_DIM = 'rgba(255, 255, 255, 0.5)';
 
 interface DonationTerminalPanelProps {
   sectorId: ShadowWarSectorId;
   onStatus: (line: string) => void;
+  onClose: () => void;
 }
 
 export default function DonationTerminalPanel({
   sectorId,
   onStatus,
+  onClose,
 }: DonationTerminalPanelProps): React.JSX.Element {
   const { theme } = useTerminal();
   const { account, applyShadowWarDonationAccount } = usePlayerAccount();
   const { donateToSector } = useShadowWar();
+  const { isDesktop, scaleSize, scaleSpacing } = useResponsiveScale();
   const [draft, setDraft] = useState<ShadowWarDonationDraft>({ items: {} });
   const [uploading, setUploading] = useState(false);
+
+  const factionDef = account.alignedFaction
+    ? FACTION_DEFINITIONS[account.alignedFaction]
+    : null;
+  const cabalAccent = factionDef?.accentColor ?? theme.statusColor;
+  const cabalCtaBg = account.alignedFaction
+    ? FACTION_CTA_BG[account.alignedFaction]
+    : '#334155';
 
   const donatable = useMemo(
     () => listDonatableStashResources(account.resourceStash),
@@ -85,121 +109,221 @@ export default function DonationTerminalPanel({
     setUploading(false);
   };
 
-  return (
-    <View style={[styles.root, { borderColor: '#3a3028' }]}>
-      <Text style={[styles.title, { color: AMBER }]}>DONATION TERMINAL</Text>
-      <Text style={[styles.sub, { color: theme.mutedColor }]}>
-        Convert stash salvage or vaulted Veil Residue into Influence Points for your Cabal.
-      </Text>
+  const renderDial = (qty: number, onDecrement: () => void, onIncrement: () => void) => (
+    <View style={[styles.dial, { paddingHorizontal: scaleSpacing(6), gap: scaleSpacing(6) }]}>
+      <HapticPressable onPress={onDecrement} style={[styles.stepBtn, { width: scaleSize(28), height: scaleSize(28) }]}>
+        <TerminalText size={12} style={styles.stepBtnText}>-</TerminalText>
+      </HapticPressable>
+      <TerminalText size={11} style={[styles.qty, { color: cabalAccent, minWidth: scaleSize(22) }]}>
+        {qty}
+      </TerminalText>
+      <HapticPressable onPress={onIncrement} style={[styles.stepBtn, { width: scaleSize(28), height: scaleSize(28) }]}>
+        <TerminalText size={12} style={styles.stepBtnText}>+</TerminalText>
+      </HapticPressable>
+    </View>
+  );
 
-      <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
+  return (
+    <View style={styles.root}>
+      <TerminalOverlay />
+
+      <View style={[styles.header, { borderBottomColor: `${cabalAccent}44`, paddingBottom: scaleSpacing(10) }]}>
+        <TerminalText
+          size={isDesktop ? 9 : 8}
+          letterSpacing={1.4}
+          style={[styles.headerTitle, { color: cabalAccent }]}
+        >
+          {'>> UPLINK ESTABLISHED // PAYLOAD ROUTING'}
+        </TerminalText>
+        <HapticPressable onPress={onClose} style={styles.closeBtn}>
+          <TerminalText size={8} letterSpacing={0.6} style={{ color: theme.mutedColor }}>
+            [ CLOSE ]
+          </TerminalText>
+        </HapticPressable>
+      </View>
+
+      <TerminalText
+        size={7}
+        lineHeight={11}
+        style={[styles.sub, { color: theme.mutedColor, marginTop: scaleSpacing(10) }]}
+      >
+        Convert stash salvage or vaulted Veil Residue into Influence Points for your Cabal.
+      </TerminalText>
+
+      <ScrollView
+        style={[styles.list, { maxHeight: isDesktop ? scaleSize(280) : 180 }]}
+        contentContainerStyle={[styles.listContent, { gap: scaleSpacing(8), paddingVertical: scaleSpacing(4) }]}
+      >
         {account.veilResidueBalance > 0 ? (
-          <View style={[styles.row, styles.residueRow, { borderColor: '#3a4538' }]}>
+          <View style={[styles.row, styles.residueRow]}>
             <View style={styles.rowInfo}>
-              <Text style={[styles.rowName, { color: theme.textColor }]}>VEIL RESIDUE</Text>
-              <Text style={[styles.rowMeta, { color: theme.mutedColor }]}>
+              <TerminalText size={10} style={[styles.rowName, { color: theme.textColor }]}>
+                VEIL RESIDUE
+              </TerminalText>
+              <TerminalText size={7} style={[styles.rowMeta, { color: META_DIM }]}>
                 {`${account.veilResidueBalance} vaulted // ${VEIL_RESIDUE_DONATION_IP} IP each`}
-              </Text>
+              </TerminalText>
             </View>
-            <View style={styles.rowControls}>
-              <HapticPressable onPress={() => adjustResidueDraft(-1)} style={styles.stepBtn}>
-                <Text style={styles.stepBtnText}>-</Text>
-              </HapticPressable>
-              <Text style={[styles.qty, { color: AMBER }]}>{residueDraftQty}</Text>
-              <HapticPressable onPress={() => adjustResidueDraft(1)} style={styles.stepBtn}>
-                <Text style={styles.stepBtnText}>+</Text>
-              </HapticPressable>
-            </View>
+            {renderDial(residueDraftQty, () => adjustResidueDraft(-1), () => adjustResidueDraft(1))}
           </View>
         ) : null}
 
         {donatable.length === 0 ? (
-          <Text style={[styles.empty, { color: theme.mutedColor }]}>
+          <TerminalText size={8} style={{ color: theme.mutedColor }}>
             {account.veilResidueBalance > 0
               ? 'NO DONATABLE STASH RESOURCES — VEIL RESIDUE AVAILABLE ABOVE.'
               : 'NO DONATABLE RESOURCES IN STASH.'}
-          </Text>
+          </TerminalText>
         ) : (
           donatable.map((entry) => {
             const qty = draft.items[entry.resourceId] ?? 0;
             return (
-              <View key={entry.resourceId} style={[styles.row, { borderColor: '#2a2f36' }]}>
+              <View key={entry.resourceId} style={styles.row}>
                 <View style={styles.rowInfo}>
-                  <Text style={[styles.rowName, { color: theme.textColor }]}>
-                    {RESOURCE_REGISTRY[entry.resourceId].name}
-                  </Text>
-                  <Text style={[styles.rowMeta, { color: theme.mutedColor }]}>
+                  <TerminalText size={10} style={[styles.rowName, { color: theme.textColor }]}>
+                    {RESOURCE_REGISTRY[entry.resourceId].name.toUpperCase()}
+                  </TerminalText>
+                  <TerminalText size={7} style={[styles.rowMeta, { color: META_DIM }]}>
                     {`${entry.quantity} owned // ${entry.ipValue} IP each`}
-                  </Text>
+                  </TerminalText>
                 </View>
-                <View style={styles.rowControls}>
-                  <HapticPressable onPress={() => adjustDraft(entry.resourceId, -1)} style={styles.stepBtn}>
-                    <Text style={styles.stepBtnText}>-</Text>
-                  </HapticPressable>
-                  <Text style={[styles.qty, { color: AMBER }]}>{qty}</Text>
-                  <HapticPressable onPress={() => adjustDraft(entry.resourceId, 1)} style={styles.stepBtn}>
-                    <Text style={styles.stepBtnText}>+</Text>
-                  </HapticPressable>
-                </View>
+                {renderDial(qty, () => adjustDraft(entry.resourceId, -1), () => adjustDraft(entry.resourceId, 1))}
               </View>
             );
           })
         )}
       </ScrollView>
 
-      <Text style={[styles.yield, { color: AMBER }]}>{`UPLOAD YIELD: ${draftIp} IP`}</Text>
+      <View style={[styles.footer, { marginTop: scaleSpacing(12), gap: scaleSpacing(10) }]}>
+        <View style={styles.yieldBlock}>
+          <TerminalText
+            size={7}
+            letterSpacing={1.2}
+            style={[styles.yieldLabel, { color: META_DIM }]}
+          >
+            UPLOAD YIELD
+          </TerminalText>
+          <TerminalText
+            size={isDesktop ? 32 : 26}
+            letterSpacing={1}
+            style={[
+              styles.yieldValue,
+              { color: cabalAccent },
+              textGlow({ color: cabalAccent, radius: 14 }),
+            ]}
+          >
+            {`${draftIp} IP`}
+          </TerminalText>
+        </View>
 
-      <HapticPressable
-        disabled={!canUpload}
-        onPress={handleUpload}
-        style={[styles.uploadBtn, { borderColor: canUpload ? AMBER : '#3a3028', opacity: canUpload ? 1 : 0.45 }]}
-      >
-        <Text style={[styles.uploadText, { color: canUpload ? AMBER : '#5a4a38' }]}>
-          [ INITIATE UPLOAD ]
-        </Text>
-      </HapticPressable>
+        <TacticalButton
+          label="[ INITIATE UPLOAD ]"
+          active={canUpload}
+          onPress={handleUpload}
+          accentColor={cabalAccent}
+          mutedColor={theme.mutedColor}
+          variant="cta"
+          style={[
+            {
+              backgroundColor: cabalCtaBg,
+              borderColor: cabalAccent,
+            },
+            !canUpload ? { opacity: 0.4 } : null,
+          ]}
+        />
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: {
-    borderWidth: 1,
-    backgroundColor: '#0d0f12',
-    padding: 10,
-    gap: 8,
-    marginTop: 8,
+    position: 'relative',
+    overflow: 'hidden',
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    paddingTop: 14,
   },
-  title: { fontFamily: 'monospace', fontSize: 9, fontWeight: '700', letterSpacing: 0.6 },
-  sub: { fontFamily: 'monospace', fontSize: 7, lineHeight: 11 },
-  list: { maxHeight: 160 },
-  listContent: { gap: 6 },
-  empty: { fontFamily: 'monospace', fontSize: 8 },
+  header: {
+    position: 'relative',
+    borderBottomWidth: 1,
+    paddingRight: 72,
+    zIndex: 2,
+  },
+  headerTitle: {
+    fontWeight: '700',
+  },
+  closeBtn: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    zIndex: 3,
+  },
+  sub: {
+    zIndex: 2,
+  },
+  list: {
+    zIndex: 2,
+  },
+  listContent: {},
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    padding: 8,
-    gap: 8,
+    justifyContent: 'space-between',
+    gap: 12,
+    zIndex: 2,
   },
   residueRow: {
     backgroundColor: 'rgba(0, 255, 51, 0.04)',
+    borderRadius: 2,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
   },
-  rowInfo: { flex: 1, gap: 2 },
-  rowName: { fontFamily: 'monospace', fontSize: 8, fontWeight: '700' },
-  rowMeta: { fontFamily: 'monospace', fontSize: 7 },
-  rowControls: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  rowInfo: {
+    flex: 1,
+    flexShrink: 1,
+    gap: 3,
+    paddingRight: 8,
+  },
+  rowName: {
+    fontWeight: '800',
+  },
+  rowMeta: {},
+  dial: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 2,
+    flexShrink: 0,
+  },
   stepBtn: {
     borderWidth: 1,
-    borderColor: '#3a3028',
-    width: 24,
-    height: 24,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepBtnText: { color: '#fff', fontFamily: 'monospace', fontSize: 12, fontWeight: '700' },
-  qty: { fontFamily: 'monospace', fontSize: 10, fontWeight: '700', width: 20, textAlign: 'center' },
-  yield: { fontFamily: 'monospace', fontSize: 8, fontWeight: '700', textAlign: 'center' },
-  uploadBtn: { borderWidth: 1, paddingVertical: 10, alignItems: 'center' },
-  uploadText: { fontFamily: 'monospace', fontSize: 8, fontWeight: '700', letterSpacing: 0.5 },
+  stepBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+  },
+  qty: {
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  footer: {
+    zIndex: 2,
+  },
+  yieldBlock: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  yieldLabel: {
+    fontWeight: '600',
+  },
+  yieldValue: {
+    fontWeight: '900',
+    textAlign: 'center',
+  },
 });
