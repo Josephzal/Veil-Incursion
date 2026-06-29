@@ -1,13 +1,8 @@
 import React from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
-import HapticPressable from './HapticPressable';
-import {
-  HUB_NAV_INACTIVE_BG,
-  HUB_NAV_INACTIVE_BORDER,
-  HUB_NAV_INACTIVE_TOP_HIGHLIGHT,
-} from '../constants/hubAtmosphere';
+import { StyleSheet, View } from 'react-native';
+import TacticalButton from './TacticalButton';
 import { resolveTerminalNavItems } from '../constants/terminalNav';
-import { viewShadow } from '../utils/adaptiveStyles';
+import { useResponsiveScale } from '../hooks/useResponsiveScale';
 import { useTerminal } from '../context/TerminalContext';
 import { TerminalView } from '../types/terminalNav';
 
@@ -28,6 +23,7 @@ export default function TerminalNavRail({
   contentBottomInset,
 }: TerminalNavRailProps): React.JSX.Element {
   const { theme } = useTerminal();
+  const { scaleSpacing } = useResponsiveScale();
   const navItems = resolveTerminalNavItems();
   const accentColor = theme.statusColor;
 
@@ -42,45 +38,18 @@ export default function TerminalNavRail({
         },
       ]}
     >
-      <View style={styles.navStack}>
-        {navItems.map((item) => {
-          const active = activeView === item.key;
-
-          return (
-            <HapticPressable
-              key={item.key}
-              onPress={() => onSelectView(item.key)}
-              style={[
-                styles.navCellPressable,
-                active ? styles.navCellActive : styles.navCellInactive,
-                active
-                  ? {
-                      borderColor: accentColor,
-                      backgroundColor: `${accentColor}24`,
-                      ...viewShadow({
-                        color: accentColor,
-                        opacity: 0.85,
-                        radius: 12,
-                        offset: { width: 0, height: 0 },
-                      }),
-                    }
-                  : null,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.navLabel,
-                  { color: active ? accentColor : `${theme.mutedColor}bb` },
-                ]}
-                numberOfLines={3}
-                adjustsFontSizeToFit
-                minimumFontScale={0.75}
-              >
-                {item.label}
-              </Text>
-            </HapticPressable>
-          );
-        })}
+      <View style={[styles.navStack, { gap: scaleSpacing(5) }]}>
+        {navItems.map((item) => (
+          <TacticalButton
+            key={item.key}
+            label={item.label}
+            active={activeView === item.key}
+            onPress={() => onSelectView(item.key)}
+            accentColor={accentColor}
+            mutedColor={theme.mutedColor}
+            variant="rail"
+          />
+        ))}
       </View>
     </View>
   );
@@ -96,39 +65,5 @@ const styles = StyleSheet.create({
   navStack: {
     flex: 1,
     justifyContent: 'flex-start',
-    gap: 5,
-  },
-  navCellPressable: {
-    flex: 1,
-    minHeight: 40,
-    paddingVertical: 10,
-    paddingHorizontal: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'stretch',
-    width: '100%',
-    overflow: 'hidden',
-  },
-  navCellInactive: {
-    backgroundColor: HUB_NAV_INACTIVE_BG,
-    borderWidth: 1,
-    borderColor: HUB_NAV_INACTIVE_BORDER,
-    borderTopWidth: 1,
-    borderTopColor: HUB_NAV_INACTIVE_TOP_HIGHLIGHT,
-  },
-  navCellActive: {
-    borderWidth: 2,
-    ...Platform.select({
-      android: { elevation: 8 },
-      default: {},
-    }),
-  },
-  navLabel: {
-    fontFamily: 'monospace',
-    fontSize: 7,
-    fontWeight: '800',
-    letterSpacing: 1.1,
-    textAlign: 'center',
-    lineHeight: 10,
   },
 });

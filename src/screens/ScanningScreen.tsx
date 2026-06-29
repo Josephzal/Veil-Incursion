@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
+import TerminalText from '../components/TerminalText';
 import HapticPressable from '../components/HapticPressable';
 import {
   formatScannerNodeIntel,
@@ -13,8 +14,8 @@ import InlineScannerEngagement from '../components/overworld/InlineScannerEngage
 import VectorScanner from '../components/VectorScanner';
 import LeyLineBoonSwapOverlay from '../components/LeyLineBoonSwapOverlay';
 import ClassBoonSwapOverlay from '../components/ClassBoonSwapOverlay';
-import { LANDSCAPE_PANEL_PADDING } from '../constants/landscapeLayout';
 import { useLandscapeMetrics } from '../hooks/useLandscapeMetrics';
+import { useResponsiveScale } from '../hooks/useResponsiveScale';
 import { useRun } from '../context/RunContext';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useTerminal } from '../context/TerminalContext';
@@ -48,7 +49,8 @@ function scaleRadarDots(dots: RadarDot[], fromSize: number, toSize: number): Rad
 
 export default function ScanningScreen(): React.JSX.Element {
   const { theme } = useTerminal();
-  const { useHorizontalSplit } = useLandscapeMetrics();
+  const { useHorizontalSplit, panelPadding } = useLandscapeMetrics();
+  const { scannerPrimaryRatio, isDesktop } = useResponsiveScale();
   const {
     runState,
     scanSessionKey,
@@ -363,6 +365,7 @@ export default function ScanningScreen(): React.JSX.Element {
       style={[
         styles.nodeDock,
         useHorizontalSplit ? styles.nodeDockHorizontal : styles.nodeDockVertical,
+        isDesktop && styles.nodeDockHorizontalDesktop,
         { borderColor: theme.borderColor },
       ]}
     >
@@ -385,9 +388,9 @@ export default function ScanningScreen(): React.JSX.Element {
             { borderColor: '#f59e0b', opacity: pressed ? 0.75 : 1 },
           ]}
         >
-          <Text style={[styles.recallBtnText, { color: '#fbbf24' }]}>
+          <TerminalText size={8} letterSpacing={0.6} style={[styles.recallBtnText, { color: '#fbbf24' }]}>
             [ EMERGENCY RECALL — DEFEND THE RIFT ]
-          </Text>
+          </TerminalText>
         </HapticPressable>
       ) : null}
     </View>
@@ -408,9 +411,10 @@ export default function ScanningScreen(): React.JSX.Element {
         hideRunChrome
       >
         <LandscapeSplitPane
-          style={styles.body}
+          style={[styles.body, { padding: panelPadding }]}
           primary={scannerPane}
           secondary={nodeDockPane}
+          primaryRatio={scannerPrimaryRatio}
           primaryStyle={styles.scannerPane}
           secondaryStyle={styles.nodeDockPaneHost}
         />
@@ -449,7 +453,6 @@ const styles = StyleSheet.create({
   body: {
     flex: 1,
     minHeight: 0,
-    padding: LANDSCAPE_PANEL_PADDING,
   },
   scannerPane: {
     minHeight: 0,
@@ -487,6 +490,9 @@ const styles = StyleSheet.create({
   nodeDockHorizontal: {
     borderLeftWidth: 1,
     minWidth: 240,
+  },
+  nodeDockHorizontalDesktop: {
+    minWidth: 0,
   },
   nodeDockBody: {
     flex: 1,

@@ -1,7 +1,9 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import TerminalText from '../TerminalText';
 import { hubKeyColor } from '../../constants/hubAtmosphere';
+import { useResponsiveScale } from '../../hooks/useResponsiveScale';
 import { formatBracketHeader } from '../../styles/hubTerminalUi';
 
 type HubFieldIcon = keyof typeof Ionicons.glyphMap;
@@ -21,49 +23,46 @@ export default function HubDataField({
   mutedColor,
   icon,
 }: HubDataFieldProps): React.JSX.Element {
+  const { scaleSize, scaleSpacing } = useResponsiveScale();
   const keyColor = hubKeyColor(mutedColor);
 
   return (
-    <View style={styles.root}>
-      <View style={styles.headerRow}>
-        <Ionicons name={icon} size={11} color={keyColor} style={styles.icon} />
-        <Text style={[styles.key, { color: keyColor }]}>
+    <View style={[styles.root, { gap: scaleSpacing(3) }]}>
+      <View style={[styles.headerRow, { gap: scaleSpacing(5) }]}>
+        <Ionicons name={icon} size={scaleSize(11)} color={keyColor} style={styles.icon} />
+        <TerminalText size={8} letterSpacing={1} style={[styles.key, { color: keyColor }]}>
           {formatBracketHeader(title)}
-        </Text>
+        </TerminalText>
       </View>
-      <Text style={[styles.value, { color: valueColor }]} numberOfLines={2}>
+      <TerminalText
+        size={10}
+        lineHeight={13}
+        letterSpacing={0.5}
+        style={[styles.value, { color: valueColor, paddingLeft: scaleSpacing(16) }]}
+        numberOfLines={2}
+      >
         {value}
-      </Text>
+      </TerminalText>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: {
-    gap: 3,
     flexShrink: 0,
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
   },
   icon: {
     flexShrink: 0,
   },
   key: {
-    fontFamily: 'monospace',
-    fontSize: 8,
     fontWeight: '700',
-    letterSpacing: 1,
     flex: 1,
   },
   value: {
-    fontFamily: 'monospace',
-    fontSize: 10,
     fontWeight: '800',
-    letterSpacing: 0.5,
-    lineHeight: 13,
-    paddingLeft: 16,
   },
 });

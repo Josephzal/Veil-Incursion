@@ -13,6 +13,10 @@ export const HARVEST_EXTERNAL_ROW_GAP = 20;
 export const HARVEST_LEFT_PANE_RATIO = 0.27;
 export const HARVEST_RIGHT_PANE_RATIO = 0.23;
 export const HARVEST_TRI_PANE_GAP = 8;
+/** Web desktop flex weights — cargo left, drop center, extractor right. */
+export const HARVEST_DESKTOP_LEFT_FLEX = 0.28;
+export const HARVEST_DESKTOP_CENTER_FLEX = 0.44;
+export const HARVEST_DESKTOP_RIGHT_FLEX = 0.28;
 export const HARVEST_CARGO_BACKING_PADDING = 12;
 /** Padding below the containment slot row inside the external bay. */
 export const HARVEST_EXTERNAL_BAY_EXTRA = 28;

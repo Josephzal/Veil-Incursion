@@ -1,7 +1,8 @@
 import React from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import { LANDSCAPE_PRIMARY_SPLIT_RATIO } from '../../constants/landscapeLayout';
+import { LANDSCAPE_PRIMARY_SPLIT_RATIO, LANDSCAPE_PANEL_GAP } from '../../constants/landscapeLayout';
 import { useLandscapeMetrics } from '../../hooks/useLandscapeMetrics';
+import { useResponsiveScale } from '../../hooks/useResponsiveScale';
 
 interface LandscapeSplitPaneProps {
   primary: React.ReactNode;
@@ -28,12 +29,14 @@ export default function LandscapeSplitPane({
   secondaryStyle,
 }: LandscapeSplitPaneProps): React.JSX.Element {
   const { useHorizontalSplit } = useLandscapeMetrics();
+  const { scaleSpacing } = useResponsiveScale();
   const horizontal = allowHorizontalSplit && useHorizontalSplit;
   const secondaryFlex = Math.max(0.2, 1 - primaryRatio);
+  const paneGap = scaleSpacing(LANDSCAPE_PANEL_GAP);
 
   if (horizontal) {
     return (
-      <View style={[styles.root, styles.rootHorizontal, style]}>
+      <View style={[styles.root, styles.rootHorizontal, { gap: paneGap }, style]}>
         <View style={[styles.primaryHorizontal, { flex: primaryRatio }, primaryStyle]}>
           {primary}
         </View>
@@ -45,7 +48,7 @@ export default function LandscapeSplitPane({
   }
 
   return (
-    <View style={[styles.root, styles.rootVertical, style]}>
+    <View style={[styles.root, styles.rootVertical, { gap: paneGap }, style]}>
       <View style={[styles.primaryVertical, primaryStyle]}>{primary}</View>
       <View style={[styles.secondaryVertical, secondaryStyle]}>{secondary}</View>
     </View>
@@ -59,11 +62,9 @@ const styles = StyleSheet.create({
   },
   rootHorizontal: {
     flexDirection: 'row',
-    gap: 8,
   },
   rootVertical: {
     flexDirection: 'column',
-    gap: 8,
   },
   primaryHorizontal: {
     minWidth: 0,

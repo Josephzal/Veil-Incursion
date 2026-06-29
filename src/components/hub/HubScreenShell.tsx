@@ -1,11 +1,13 @@
 import React from 'react';
-import { ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import TerminalText from '../TerminalText';
 import {
   resolveFactionSlateBackground,
   resolveFactionSlateInnerBorder,
 } from '../../constants/hubAtmosphere';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useTerminal } from '../../context/TerminalContext';
+import { useResponsiveScale } from '../../hooks/useResponsiveScale';
 import { formatBracketHeader } from '../../styles/hubTerminalUi';
 
 interface HubScreenShellProps {
@@ -28,6 +30,7 @@ export default function HubScreenShell({
 }: HubScreenShellProps): React.JSX.Element {
   const { theme } = useTerminal();
   const { account } = usePlayerAccount();
+  const { scaleSpacing } = useResponsiveScale();
   const slateBg = resolveFactionSlateBackground(account.alignedFaction);
   const slateInnerBorder = resolveFactionSlateInnerBorder(account.alignedFaction);
   const headerColor = theme.statusColor;
@@ -35,7 +38,7 @@ export default function HubScreenShell({
   const body = scrollable ? (
     <ScrollView
       style={styles.scroll}
-      contentContainerStyle={[styles.scrollContent, contentStyle]}
+      contentContainerStyle={[styles.scrollContent, { gap: scaleSpacing(8), paddingBottom: scaleSpacing(8) }, contentStyle]}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
     >
@@ -48,19 +51,34 @@ export default function HubScreenShell({
   return (
     <View style={styles.root}>
       <View style={[styles.slateOuter, { backgroundColor: slateBg }]}>
-        <View style={[styles.slateInner, { borderColor: slateInnerBorder }]}>
-          <View style={styles.headerRow}>
+        <View
+          style={[
+            styles.slateInner,
+            {
+              borderColor: slateInnerBorder,
+              paddingHorizontal: scaleSpacing(10),
+              paddingVertical: scaleSpacing(8),
+              gap: scaleSpacing(6),
+            },
+          ]}
+        >
+          <View style={[styles.headerRow, { gap: scaleSpacing(8), marginBottom: scaleSpacing(4) }]}>
             <View style={styles.headerText}>
-              <Text style={[styles.screenTitle, { color: headerColor }]}>
+              <TerminalText size={10} letterSpacing={1.2} style={[styles.screenTitle, { color: headerColor }]}>
                 {formatBracketHeader(title)}
-              </Text>
+              </TerminalText>
               {subtitle ? (
-                <Text style={[styles.screenSubtitle, { color: hubKeyColorFromTheme(theme.mutedColor) }]}>
+                <TerminalText
+                  size={7}
+                  lineHeight={10}
+                  letterSpacing={0.5}
+                  style={[styles.screenSubtitle, { color: hubKeyColorFromTheme(theme.mutedColor), marginTop: scaleSpacing(2) }]}
+                >
                   {subtitle}
-                </Text>
+                </TerminalText>
               ) : null}
             </View>
-            {headerRight ? <View style={styles.headerRight}>{headerRight}</View> : null}
+            {headerRight ? <View style={[styles.headerRight, { gap: scaleSpacing(2) }]}>{headerRight}</View> : null}
           </View>
           {body}
         </View>
@@ -83,10 +101,16 @@ export function HubSectionHeader({
   title: string;
   color: string;
 }): React.JSX.Element {
+  const { scaleSpacing } = useResponsiveScale();
+
   return (
-    <Text style={[styles.sectionHeader, { color }]}>
+    <TerminalText
+      size={9}
+      letterSpacing={1.1}
+      style={[styles.sectionHeader, { color, marginBottom: scaleSpacing(6) }]}
+    >
       {formatBracketHeader(title)}
-    </Text>
+    </TerminalText>
   );
 }
 
@@ -99,8 +123,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    gap: 8,
-    marginBottom: 4,
     flexShrink: 0,
   },
   headerText: {
@@ -110,22 +132,13 @@ const styles = StyleSheet.create({
   headerRight: {
     flexShrink: 0,
     alignItems: 'flex-end',
-    gap: 2,
     maxWidth: '42%',
   },
   screenTitle: {
-    fontFamily: 'monospace',
-    fontSize: 10,
     fontWeight: '800',
-    letterSpacing: 1.2,
     flexShrink: 0,
   },
   screenSubtitle: {
-    fontFamily: 'monospace',
-    fontSize: 7,
-    letterSpacing: 0.5,
-    lineHeight: 10,
-    marginTop: 2,
     flexShrink: 0,
   },
   slateOuter: {
@@ -136,9 +149,6 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    gap: 6,
     overflow: 'hidden',
   },
   slateBody: {
@@ -152,15 +162,9 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 8,
-    gap: 8,
   },
   sectionHeader: {
-    fontFamily: 'monospace',
-    fontSize: 9,
     fontWeight: '800',
-    letterSpacing: 1.1,
-    marginBottom: 6,
     flexShrink: 0,
   },
 });

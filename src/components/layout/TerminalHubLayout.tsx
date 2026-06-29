@@ -4,6 +4,7 @@ import { HUB_ATMOSPHERE_BACKGROUND, HUB_ATMOSPHERE_SCRIM } from '../../constants
 import { HUB_NAV_MAIN_GAP, LANDSCAPE_PANEL_PADDING } from '../../constants/landscapeLayout';
 import { resolveImmersiveFooterInset, resolveImmersiveTopInset } from '../../constants/immersiveLayout';
 import { useLandscapeMetrics } from '../../hooks/useLandscapeMetrics';
+import { useResponsiveScale } from '../../hooks/useResponsiveScale';
 import TerminalNavRail from '../TerminalNavRail';
 import type { TerminalView } from '../../types/terminalNav';
 
@@ -16,8 +17,11 @@ interface TerminalHubLayoutProps {
 }
 
 /** Shared top inset so nav buttons align with the CabalPanel slate border. */
-export function resolveHubContentTopInset(safeTop: number): number {
-  return LANDSCAPE_PANEL_PADDING + resolveImmersiveTopInset(safeTop);
+export function resolveHubContentTopInset(
+  safeTop: number,
+  panelPadding: number = LANDSCAPE_PANEL_PADDING,
+): number {
+  return panelPadding + resolveImmersiveTopInset(safeTop);
 }
 
 /** Overworld hub shell — atmospheric backdrop, left nav rail, main viewport. */
@@ -28,14 +32,15 @@ export default function TerminalHubLayout({
   style,
   mainStyle,
 }: TerminalHubLayoutProps): React.JSX.Element {
-  const { hubNavRailWidth, safeTop, safeBottom, safeRight } = useLandscapeMetrics();
-  const contentTopInset = resolveHubContentTopInset(safeTop);
+  const { hubNavRailWidth, safeTop, safeBottom, safeRight, panelPadding } = useLandscapeMetrics();
+  const { scaleSpacing } = useResponsiveScale();
+  const contentTopInset = resolveHubContentTopInset(safeTop, panelPadding);
   const contentBottomInset = resolveImmersiveFooterInset(safeBottom);
   const mainRailStyle = {
     paddingTop: contentTopInset,
-    paddingRight: Math.max(6, safeRight),
+    paddingRight: Math.max(scaleSpacing(6), safeRight),
     paddingBottom: contentBottomInset,
-    paddingLeft: 2,
+    paddingLeft: scaleSpacing(2),
   };
 
   return (
@@ -53,7 +58,7 @@ export default function TerminalHubLayout({
           contentTopInset={contentTopInset}
           contentBottomInset={contentBottomInset}
         />
-        <View style={styles.mainGap} />
+        <View style={[styles.mainGap, { width: scaleSpacing(HUB_NAV_MAIN_GAP) }]} />
         <View style={[styles.mainRail, mainRailStyle, mainStyle]}>{children}</View>
       </View>
     </ImageBackground>
@@ -83,7 +88,6 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   mainGap: {
-    width: HUB_NAV_MAIN_GAP,
     flexShrink: 0,
   },
   mainRail: {

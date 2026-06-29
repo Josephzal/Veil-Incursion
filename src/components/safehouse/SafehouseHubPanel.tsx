@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import HapticPressable from '../HapticPressable';
+import { ScrollView, StyleSheet, View } from 'react-native';
+import TacticalButton from '../TacticalButton';
+import TerminalText from '../TerminalText';
 import CraftingMenuPanel from '../CraftingMenuPanel';
 import SafehouseAbilitiesTab from './SafehouseAbilitiesTab';
 import SafehouseBlackMarketTab from './SafehouseBlackMarketTab';
 import SafehouseLoadoutTab from './SafehouseLoadoutTab';
 import HubScreenShell from '../hub/HubScreenShell';
-import { hubKeyColor } from '../../constants/hubAtmosphere';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useTerminal } from '../../context/TerminalContext';
+import { useResponsiveScale } from '../../hooks/useResponsiveScale';
 
 export type SafehouseTab = 'FORGE' | 'MARKET' | 'LOADOUT' | 'ABILITIES';
 
@@ -22,19 +23,19 @@ const NAV_ITEMS: Array<{ key: SafehouseTab; label: string }> = [
 export default function SafehouseHubPanel(): React.JSX.Element {
   const { theme } = useTerminal();
   const { account } = usePlayerAccount();
+  const { scaleSpacing } = useResponsiveScale();
   const [activeTab, setActiveTab] = useState<SafehouseTab>('FORGE');
 
   const accent = theme.statusColor;
-  const keyColor = hubKeyColor(theme.mutedColor);
 
   const headerHud = (
     <>
-      <Text style={[styles.hudCredits, { color: accent }]}>
+      <TerminalText size={10} letterSpacing={0.6} style={[styles.hudCredits, { color: accent }]}>
         {`${account.cabalCredits} CR`}
-      </Text>
-      <Text style={[styles.hudResidue, { color: theme.statusColor }]}>
+      </TerminalText>
+      <TerminalText size={7} letterSpacing={0.5} style={[styles.hudResidue, { color: theme.statusColor }]}>
         {`${account.veilResidueBalance} VEIL RESIDUE`}
-      </Text>
+      </TerminalText>
     </>
   );
 
@@ -44,33 +45,25 @@ export default function SafehouseHubPanel(): React.JSX.Element {
       subtitle={`OPERATIVE ${account.username.toUpperCase()} // ${account.activeClass}`}
       headerRight={headerHud}
     >
-      <View style={styles.stickyNav}>
-        <View style={styles.navRow}>
-          {NAV_ITEMS.map((item) => {
-            const active = activeTab === item.key;
-            return (
-              <HapticPressable
-                key={item.key}
-                onPress={() => setActiveTab(item.key)}
-                style={[
-                  styles.navCell,
-                  active
-                    ? { borderColor: accent, backgroundColor: `${accent}22` }
-                    : styles.navCellInactive,
-                ]}
-              >
-                <Text style={[styles.navLabel, { color: active ? accent : keyColor }]}>
-                  {item.label}
-                </Text>
-              </HapticPressable>
-            );
-          })}
+      <View style={[styles.stickyNav, { marginBottom: scaleSpacing(8) }]}>
+        <View style={[styles.navRow, { gap: scaleSpacing(6) }]}>
+          {NAV_ITEMS.map((item) => (
+            <TacticalButton
+              key={item.key}
+              label={item.label}
+              active={activeTab === item.key}
+              onPress={() => setActiveTab(item.key)}
+              accentColor={accent}
+              mutedColor={theme.mutedColor}
+              variant="inline"
+            />
+          ))}
         </View>
       </View>
 
       <ScrollView
         style={styles.tabScroll}
-        contentContainerStyle={styles.tabScrollContent}
+        contentContainerStyle={[styles.tabScrollContent, { paddingBottom: scaleSpacing(8) }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
@@ -87,48 +80,22 @@ export default function SafehouseHubPanel(): React.JSX.Element {
 
 const styles = StyleSheet.create({
   hudCredits: {
-    fontFamily: 'monospace',
-    fontSize: 10,
     fontWeight: '800',
-    letterSpacing: 0.6,
     textAlign: 'right',
   },
   hudResidue: {
-    fontFamily: 'monospace',
-    fontSize: 7,
     fontWeight: '700',
-    letterSpacing: 0.5,
     textAlign: 'right',
   },
   stickyNav: {
     flexShrink: 0,
     zIndex: 2,
-    marginBottom: 8,
   },
   navRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 6,
-  },
-  navCell: {
-    borderWidth: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    minWidth: 72,
-    alignItems: 'center',
-  },
-  navCellInactive: {
-    backgroundColor: 'rgba(20, 20, 25, 0.6)',
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderTopColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  navLabel: {
-    fontFamily: 'monospace',
-    fontSize: 8,
-    fontWeight: '800',
-    letterSpacing: 1,
   },
   tabScroll: {
     flex: 1,
@@ -136,7 +103,6 @@ const styles = StyleSheet.create({
   },
   tabScrollContent: {
     flexGrow: 1,
-    paddingBottom: 8,
   },
   tabBody: {
     flexGrow: 1,

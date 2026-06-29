@@ -335,6 +335,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     width: '100%',
+    alignSelf: 'stretch',
   },
   particleOverlay: {
     ...StyleSheet.absoluteFillObject,

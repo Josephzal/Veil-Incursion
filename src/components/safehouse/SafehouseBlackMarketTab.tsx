@@ -13,6 +13,8 @@ import { shadowWarBuffsToRunModifiers } from '../../data/shadowWarBuffEngine';
 import { useTerminal } from '../../context/TerminalContext';
 import type { CargoItemId } from '../../types/cargoGrid';
 import { resolveCargoItemIcon } from '../../utils/cargoItemIcon';
+import TerminalText from '../TerminalText';
+import { useResponsiveScale } from '../../hooks/useResponsiveScale';
 
 export default function SafehouseBlackMarketTab(): React.JSX.Element {
   const { theme } = useTerminal();
@@ -23,6 +25,9 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
 
   const accent = theme.statusColor;
   const panelBg = theme.backgroundColor;
+  const { safehouseLeftRatio, isDesktop, scaleSpacing } = useResponsiveScale();
+  const buyFlex = isDesktop ? safehouseLeftRatio : 1;
+  const sellFlex = isDesktop ? 1 - safehouseLeftRatio : 1;
 
   const selectedListing = selectedListingId != null
     ? BLACK_MARKET_CARGO_LISTINGS.find((entry) => entry.id === selectedListingId) ?? null
@@ -45,12 +50,25 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
 
   return (
     <View style={styles.root}>
-      <View style={styles.splitRow}>
-        <View style={[styles.panel, { borderColor: theme.borderColor, backgroundColor: panelBg }]}>
-          <Text style={[styles.panelTitle, { color: accent }]}>BUY CONTRABAND</Text>
-          <Text style={[styles.panelSub, { color: theme.mutedColor }]}>
+      <View style={[styles.splitRow, { gap: scaleSpacing(10) }]}>
+        <View
+          style={[
+            styles.panel,
+            {
+              flex: buyFlex,
+              borderColor: theme.borderColor,
+              backgroundColor: panelBg,
+              padding: scaleSpacing(10),
+              gap: scaleSpacing(8),
+            },
+          ]}
+        >
+          <TerminalText size={9} letterSpacing={0.8} style={[styles.panelTitle, { color: accent }]}>
+            BUY CONTRABAND
+          </TerminalText>
+          <TerminalText size={7} lineHeight={11} style={[styles.panelSub, { color: theme.mutedColor }]}>
             High-end field gear — purchases stage in hub consumable vault.
-          </Text>
+          </TerminalText>
           <ScrollView style={styles.listScroll} contentContainerStyle={styles.listContent}>
             {BLACK_MARKET_CARGO_LISTINGS.map((listing) => {
               const price = hubContrabandPrice(listing.price, marketDiscount);
@@ -97,11 +115,24 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
           </HapticPressable>
         </View>
 
-        <View style={[styles.panel, { borderColor: theme.borderColor, backgroundColor: panelBg }]}>
-          <Text style={[styles.panelTitle, { color: accent }]}>FENCE // LIQUIDATE</Text>
-          <Text style={[styles.panelSub, { color: theme.mutedColor }]}>
+        <View
+          style={[
+            styles.panel,
+            {
+              flex: sellFlex,
+              borderColor: theme.borderColor,
+              backgroundColor: panelBg,
+              padding: scaleSpacing(10),
+              gap: scaleSpacing(8),
+            },
+          ]}
+        >
+          <TerminalText size={9} letterSpacing={0.8} style={[styles.panelTitle, { color: accent }]}>
+            FENCE // LIQUIDATE
+          </TerminalText>
+          <TerminalText size={7} lineHeight={11} style={[styles.panelSub, { color: theme.mutedColor }]}>
             Sell dog tags, ledgers, and excess ley-slag for Cabal Credits.
-          </Text>
+          </TerminalText>
           <ScrollView style={styles.listScroll} contentContainerStyle={styles.listContent}>
             {fenceEntries.length === 0 ? (
               <Text style={[styles.emptyText, { color: theme.mutedColor }]}>
@@ -146,24 +177,14 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  splitRow: { flex: 1, flexDirection: 'row', gap: 10 },
+  splitRow: { flex: 1, flexDirection: 'row' },
   panel: {
-    flex: 1,
     borderWidth: 1,
-    padding: 10,
-    gap: 8,
   },
   panelTitle: {
-    fontFamily: 'monospace',
-    fontSize: 9,
     fontWeight: '700',
-    letterSpacing: 0.8,
   },
-  panelSub: {
-    fontFamily: 'monospace',
-    fontSize: 7,
-    lineHeight: 11,
-  },
+  panelSub: {},
   listScroll: { flex: 1 },
   listContent: { gap: 8, paddingBottom: 8 },
   listingCard: {

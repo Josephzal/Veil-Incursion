@@ -4,11 +4,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   LANDSCAPE_PANEL_PADDING,
   resolveLandscapeBreakpoint,
-  resolveHubNavRailWidth,
   shouldUseHorizontalSplit,
   shouldUseHubNavRail,
   type LandscapeBreakpoint,
 } from '../constants/landscapeLayout';
+import { useResponsiveScale } from './useResponsiveScale';
 
 export interface LandscapeMetrics {
   width: number;
@@ -27,6 +27,7 @@ export interface LandscapeMetrics {
 export function useLandscapeMetrics(): LandscapeMetrics {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const { scaleSpacing, hubNavRailWidth: resolveHubNavRailWidthScaled } = useResponsiveScale();
 
   return useMemo(
     () => ({
@@ -35,13 +36,22 @@ export function useLandscapeMetrics(): LandscapeMetrics {
       breakpoint: resolveLandscapeBreakpoint(width, height),
       useHorizontalSplit: shouldUseHorizontalSplit(width, height),
       useHubNavRail: shouldUseHubNavRail(width, height),
-      hubNavRailWidth: resolveHubNavRailWidth(width),
-      panelPadding: LANDSCAPE_PANEL_PADDING,
+      hubNavRailWidth: resolveHubNavRailWidthScaled(width),
+      panelPadding: scaleSpacing(LANDSCAPE_PANEL_PADDING),
       safeTop: insets.top,
       safeBottom: insets.bottom,
       safeLeft: insets.left,
       safeRight: insets.right,
     }),
-    [height, insets.bottom, insets.left, insets.right, insets.top, width],
+    [
+      height,
+      insets.bottom,
+      insets.left,
+      insets.right,
+      insets.top,
+      resolveHubNavRailWidthScaled,
+      scaleSpacing,
+      width,
+    ],
   );
 }

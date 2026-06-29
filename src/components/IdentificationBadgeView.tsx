@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import HapticPressable from './HapticPressable';
+import TerminalText from './TerminalText';
 import { CLASS_DEFINITIONS } from '../data/classes';
 import { getFactionDefinition } from '../data/factions';
 import { getMacroSector } from '../data/macroSectors';
@@ -17,6 +18,7 @@ import { formatHomeSectorDisplay } from '../constants/homeSector';
 import { formatSnakeCaseToTitleCase } from '../utils/formatDisplayName';
 import { resolvePlayerBadgePortrait } from '../utils/combatPlayerPortrait';
 import { useLandscapeMetrics } from '../hooks/useLandscapeMetrics';
+import { useResponsiveScale } from '../hooks/useResponsiveScale';
 
 interface IdentificationBadgeViewProps {
   theme: TerminalTheme;
@@ -65,6 +67,7 @@ export default function IdentificationBadgeView({
 }: IdentificationBadgeViewProps): React.JSX.Element {
   const { cycleActiveClass } = usePlayerAccount();
   const { useHorizontalSplit } = useLandscapeMetrics();
+  const { badgePrimaryRatio, scaleSize } = useResponsiveScale();
 
   const cred = profile.operative_profile.credentials;
   const vectors = profile.operative_profile.location_vectors;
@@ -98,13 +101,28 @@ export default function IdentificationBadgeView({
                 onPress={() => handleCycleClass(-1)}
                 style={({ pressed }) => [
                   styles.classArrow,
-                  { borderColor: slateInnerBorder, opacity: pressed ? 0.6 : 1 },
+                  {
+                    width: scaleSize(18),
+                    height: scaleSize(64),
+                    borderColor: slateInnerBorder,
+                    opacity: pressed ? 0.6 : 1,
+                  },
                 ]}
               >
-                <Text style={[styles.classArrowLabel, { color: headerColor }]}>{'<'}</Text>
+                <TerminalText size={14} style={[styles.classArrowLabel, { color: headerColor }]}>{'<'}</TerminalText>
               </HapticPressable>
             ) : null}
-            <View style={[styles.avatarBlock, { backgroundColor: accentFill, borderColor: slateInnerBorder }]}>
+            <View
+              style={[
+                styles.avatarBlock,
+                {
+                  width: scaleSize(64),
+                  height: scaleSize(64),
+                  backgroundColor: accentFill,
+                  borderColor: slateInnerBorder,
+                },
+              ]}
+            >
               <Image source={portraitSource} style={styles.avatarImage} resizeMode="contain" />
             </View>
             {canCycleClass ? (
@@ -112,28 +130,33 @@ export default function IdentificationBadgeView({
                 onPress={() => handleCycleClass(1)}
                 style={({ pressed }) => [
                   styles.classArrow,
-                  { borderColor: slateInnerBorder, opacity: pressed ? 0.6 : 1 },
+                  {
+                    width: scaleSize(18),
+                    height: scaleSize(64),
+                    borderColor: slateInnerBorder,
+                    opacity: pressed ? 0.6 : 1,
+                  },
                 ]}
               >
-                <Text style={[styles.classArrowLabel, { color: headerColor }]}>{'>'}</Text>
+                <TerminalText size={14} style={[styles.classArrowLabel, { color: headerColor }]}>{'>'}</TerminalText>
               </HapticPressable>
             ) : null}
           </View>
 
           <View style={styles.identityDetails}>
-            <Text style={styles.operativeName} numberOfLines={1}>{cred.username}</Text>
-            <Text style={[styles.subline, { color: keyColor }]} numberOfLines={1}>
+            <Text style={[styles.operativeName, { fontSize: scaleSize(16) }]} numberOfLines={1}>{cred.username}</Text>
+            <TerminalText size={8} lineHeight={11} letterSpacing={0.6} style={[styles.subline, { color: keyColor }]} numberOfLines={1}>
               {`${classDef.displayName.toUpperCase()} // ID ${cred.id}`}
-            </Text>
-            <Text style={[styles.rankLine, { color: keyColor }]} numberOfLines={1}>
+            </TerminalText>
+            <TerminalText size={7} lineHeight={10} letterSpacing={0.4} style={[styles.rankLine, { color: keyColor }]} numberOfLines={1}>
               {classDef.protocolLabel}
-            </Text>
-            <Text style={[styles.rankLine, { color: keyColor }]} numberOfLines={1}>
+            </TerminalText>
+            <TerminalText size={7} lineHeight={10} letterSpacing={0.4} style={[styles.rankLine, { color: keyColor }]} numberOfLines={1}>
               {`${classDef.weaponLine} // ${classDef.interactionLine}`}
-            </Text>
-            <Text style={[styles.rankLine, { color: keyColor }]}>
+            </TerminalText>
+            <TerminalText size={7} lineHeight={10} letterSpacing={0.4} style={[styles.rankLine, { color: keyColor }]}>
               {`RANK ${account.operativeRank} // DEPTH ${account.progressionMatrix.maxDepthUnlocked}`}
-            </Text>
+            </TerminalText>
           </View>
         </View>
 
@@ -181,9 +204,9 @@ export default function IdentificationBadgeView({
         icon="compass-outline"
       />
       <View style={styles.metaFooter}>
-        <Text style={[styles.metaText, { color: theme.statusColor }]}>
+        <TerminalText size={8} lineHeight={11} letterSpacing={0.6} style={[styles.metaText, { color: theme.statusColor }]}>
           {`${account.cabalCredits} CABAL CR // CLEARANCE ACTIVE`}
-        </Text>
+        </TerminalText>
       </View>
     </View>
   );
@@ -193,7 +216,7 @@ export default function IdentificationBadgeView({
       style={styles.split}
       primary={identityColumn}
       secondary={telemetryColumn}
-      primaryRatio={0.58}
+      primaryRatio={badgePrimaryRatio}
       primaryStyle={styles.splitPane}
       secondaryStyle={styles.splitPane}
     />

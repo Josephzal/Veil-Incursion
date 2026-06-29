@@ -25,7 +25,15 @@ import {
 import { useCombatTurnOptional } from '../context/CombatTurnContext';
 import type { CargoItemId, CargoRunState, PlacedCargoItem } from '../types/cargoGrid';
 import { CARGO_GRID_COLS, CARGO_GRID_ROWS, CARGO_ITEM_CATALOG } from '../types/cargoGrid';
-import { HARVEST_EXTERNAL_BAY_MARGIN_TOP, HARVEST_TRI_PANE_GAP, harvestExternalBayHeight } from '../constants/harvestLayout';
+import {
+  HARVEST_DESKTOP_CENTER_FLEX,
+  HARVEST_DESKTOP_LEFT_FLEX,
+  HARVEST_DESKTOP_RIGHT_FLEX,
+  HARVEST_EXTERNAL_BAY_MARGIN_TOP,
+  HARVEST_TRI_PANE_GAP,
+  harvestExternalBayHeight,
+} from '../constants/harvestLayout';
+import { useResponsiveScale } from '../hooks/useResponsiveScale';
 import { COMBAT_OVERLAY_SPLIT_GAP, resolveCombatOverlaySplitWidths } from '../constants/cargoOverlayLayout';
 import {
   CARGO_CELL_GAP,
@@ -415,6 +423,8 @@ export default function CargoGridBoard({
   rightPaneWidth,
 }: CargoGridBoardProps): React.JSX.Element {
   const cellSize = cellSizeProp ?? CARGO_CELL_SIZE;
+  const { isDesktop, scaleSpacing } = useResponsiveScale();
+  const harvestPaneGap = scaleSpacing(HARVEST_TRI_PANE_GAP);
   const combatDetailHeight = overlayCompact ? 168 : COMBAT_DETAIL_PANEL_HEIGHT;
   const boardGap = overlayCompact ? 10 : undefined;
   const externalBayMarginTop = stableExternalBay
@@ -1141,10 +1151,26 @@ export default function CargoGridBoard({
         <View
           ref={boardRef}
           onLayout={captureMetrics}
-          style={styles.harvestTriPaneRow}
+          style={[styles.harvestTriPaneRow, { gap: harvestPaneGap }]}
         >
-          <View style={[styles.harvestLeftPane, leftPaneWidth != null ? { width: leftPaneWidth } : null]}>
-            <View style={[styles.cargoPackBacking, { borderColor: theme.borderColor }]}>
+          <View
+            style={[
+              styles.harvestLeftPane,
+              isDesktop
+                ? styles.harvestLeftPaneDesktop
+                : leftPaneWidth != null
+                  ? { width: leftPaneWidth }
+                  : null,
+              isDesktop ? { flex: HARVEST_DESKTOP_LEFT_FLEX } : null,
+            ]}
+          >
+            <View
+              style={[
+                styles.cargoPackBacking,
+                { borderColor: theme.borderColor },
+                isDesktop ? styles.cargoPackBackingDesktop : null,
+              ]}
+            >
               {leftPaneHeader}
               <View style={[styles.boardShell, { width: frameWidth }]}>
                 <View style={styles.gridDock}>{gridBlock}</View>
@@ -1155,7 +1181,10 @@ export default function CargoGridBoard({
           <View
             ref={dropZoneRef}
             onLayout={handleDropZoneLayout}
-            style={styles.harvestCenterPane}
+            style={[
+              styles.harvestCenterPane,
+              isDesktop ? { flex: HARVEST_DESKTOP_CENTER_FLEX } : null,
+            ]}
           >
             <Text style={[styles.dropZoneLabel, { color: theme.mutedColor }]}>
               FIELD DROP // UNPACKED LOOT
@@ -1163,7 +1192,17 @@ export default function CargoGridBoard({
             {externalBayNode}
           </View>
 
-          <View style={[styles.harvestRightPane, rightPaneWidth != null ? { width: rightPaneWidth } : null]}>
+          <View
+            style={[
+              styles.harvestRightPane,
+              isDesktop
+                ? styles.harvestRightPaneDesktop
+                : rightPaneWidth != null
+                  ? { width: rightPaneWidth }
+                  : null,
+              isDesktop ? { flex: HARVEST_DESKTOP_RIGHT_FLEX } : null,
+            ]}
+          >
             {rightPaneSlot}
           </View>
 
@@ -1244,14 +1283,17 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     gap: 0,
+    width: '100%',
     alignSelf: 'stretch',
+    alignItems: 'stretch',
   },
   harvestTriPaneRow: {
     flex: 1,
     minHeight: 0,
+    width: '100%',
+    alignSelf: 'stretch',
     flexDirection: 'row',
     alignItems: 'stretch',
-    gap: HARVEST_TRI_PANE_GAP,
     position: 'relative',
     overflow: 'visible',
   },
@@ -1260,6 +1302,12 @@ const styles = StyleSheet.create({
     minHeight: 0,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  harvestLeftPaneDesktop: {
+    flexShrink: 1,
+    minWidth: 0,
+    alignItems: 'stretch',
+    justifyContent: 'flex-start',
   },
   cargoPackBacking: {
     flex: 1,
@@ -1271,6 +1319,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  cargoPackBackingDesktop: {
+    alignItems: 'flex-start',
+    justifyContent: 'flex-start',
+  },
   harvestCenterPane: {
     flex: 1,
     minWidth: 0,
@@ -1280,6 +1332,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     gap: 8,
     overflow: 'visible',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
   },
   dropZoneLabel: {
     fontFamily: 'monospace',
@@ -1292,6 +1346,10 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     minHeight: 0,
     alignSelf: 'stretch',
+  },
+  harvestRightPaneDesktop: {
+    flexShrink: 1,
+    minWidth: 0,
   },
   creditsHud: {
     position: 'absolute',

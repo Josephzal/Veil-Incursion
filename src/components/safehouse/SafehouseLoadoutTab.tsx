@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Image, LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
+import { Image, LayoutChangeEvent, StyleSheet, View } from 'react-native';
+import TerminalText from '../TerminalText';
 import CargoPackingPanel from '../CargoPackingPanel';
 import SafehouseStashPanel from './SafehouseStashPanel';
 import type { CargoDragSource } from '../CargoGridBoard';
@@ -8,6 +9,7 @@ import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useTerminal } from '../../context/TerminalContext';
 import type { CargoItemId } from '../../types/cargoGrid';
 import { resolveCargoItemIcon } from '../../utils/cargoItemIcon';
+import { useResponsiveScale } from '../../hooks/useResponsiveScale';
 import {
   pointInWindowRect,
   resolveCargoGridCellFromWindow,
@@ -42,6 +44,9 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
 
   const accent = theme.statusColor;
   const panelBg = theme.backgroundColor;
+  const { safehouseLeftRatio, isDesktop, scaleSpacing } = useResponsiveScale();
+  const stashFlex = isDesktop ? safehouseLeftRatio : 1;
+  const deploymentFlex = isDesktop ? 1 - safehouseLeftRatio : 1;
 
   const hubCellSize = useMemo(
     () => resolveHubLoadoutCellSize(cargoAreaSize.width, cargoAreaSize.height),
@@ -135,8 +140,9 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
 
   return (
     <View ref={rootRef} style={styles.root}>
-      <View style={styles.split}>
-        <SafehouseStashPanel
+      <View style={[styles.split, { gap: scaleSpacing(10) }]}>
+        <View style={{ flex: stashFlex, minWidth: 0, minHeight: 0 }}>
+          <SafehouseStashPanel
           resourceStash={account.resourceStash}
           hubCraftedConsumables={account.hubCraftedConsumables}
           isDropTarget={stashDropActive}
@@ -147,9 +153,24 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
           onDragMove={handleStashDragMove}
           onDragEnd={handleStashDragEnd}
         />
+        </View>
 
-        <View style={[styles.deploymentPanel, { borderColor: theme.borderColor, backgroundColor: panelBg }]}>
-          <Text style={[styles.deploymentTitle, { color: accent }]}>DEPLOYMENT PACK</Text>
+        <View
+          style={[
+            styles.deploymentPanel,
+            {
+              flex: deploymentFlex,
+              borderColor: theme.borderColor,
+              backgroundColor: panelBg,
+              paddingHorizontal: scaleSpacing(10),
+              paddingTop: scaleSpacing(6),
+              paddingBottom: scaleSpacing(10),
+            },
+          ]}
+        >
+          <TerminalText size={9} letterSpacing={0.8} style={[styles.deploymentTitle, { color: accent, marginBottom: scaleSpacing(4) }]}>
+            DEPLOYMENT PACK
+          </TerminalText>
 
           <View style={styles.cargoWrap} onLayout={handleCargoAreaLayout}>
             <CargoPackingPanel
@@ -196,25 +217,16 @@ const styles = StyleSheet.create({
   split: {
     flex: 1,
     flexDirection: 'row',
-    gap: 10,
     minHeight: 0,
   },
   deploymentPanel: {
-    flex: 1,
     borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingTop: 6,
-    paddingBottom: 10,
     minHeight: 0,
     flexDirection: 'column',
     justifyContent: 'flex-start',
   },
   deploymentTitle: {
-    fontFamily: 'monospace',
-    fontSize: 9,
     fontWeight: '700',
-    letterSpacing: 0.8,
-    marginBottom: 4,
     flexShrink: 0,
   },
   cargoWrap: {
