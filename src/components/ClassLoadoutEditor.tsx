@@ -1,15 +1,18 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import HapticPressable from './HapticPressable';
+import TacticalTagRow, { parseTagsLine } from './hub/TacticalTagRow';
 import type { AbilityUnlockCost } from '../types/aegisCombat';
 import {
   canAffordAbilityUnlock,
   formatAbilityUnlockCost,
 } from '../data/classAbilityUnlockEngine';
+import { useResponsiveScale } from '../hooks/useResponsiveScale';
 import {
   getInteractiveButtonStyle,
   getInteractiveButtonTextStyle,
 } from '../styles/hubTerminalUi';
+import { terminalHoverStyle, readPressableHover } from '../utils/terminalHoverStyle';
 import type { ResourceQuantity } from '../types/resourceItem';
 
 const MONO = 'monospace';
@@ -72,6 +75,7 @@ export default function ClassLoadoutEditor<T extends string>({
   anchorCostLine,
 }: ClassLoadoutEditorProps<T>): React.JSX.Element {
   const textColor = theme.textColor ?? '#d8e2dc';
+  const { isDesktop } = useResponsiveScale();
 
   const handleAbilityPress = (abilityId: T) => {
     const unlocked = isUnlocked(abilityId);
@@ -87,7 +91,7 @@ export default function ClassLoadoutEditor<T extends string>({
       <Text style={[styles.title, { color: theme.mutedColor }]}>{title}</Text>
       <Text style={[styles.hint, { color: theme.mutedColor }]}>{hint}</Text>
 
-      <View style={styles.slotRow}>
+      <View style={[styles.slotRow, isDesktop && styles.slotRowDesktop]}>
         <View
           style={[
             getInteractiveButtonStyle(theme.accentColor, { pressed: false, size: 'sm' }),
@@ -118,34 +122,29 @@ export default function ClassLoadoutEditor<T extends string>({
             <HapticPressable
               key={`slot-${slotIndex}`}
               onPress={() => onSelectSlot(slotIndex)}
-              style={({ pressed }) => [
-                getInteractiveButtonStyle(theme.accentColor, { pressed, size: 'sm' }),
+              style={(state) => [
+                getInteractiveButtonStyle(theme.accentColor, { pressed: state.pressed, size: 'sm' }),
                 styles.slot,
+                isDesktop && styles.slotDesktop,
                 !isSelected && { borderColor: theme.borderColor },
+                terminalHoverStyle(readPressableHover(state), state.pressed),
               ]}
             >
               <Text style={[styles.slotLabel, { color: theme.mutedColor }]}>{`S${slotIndex + 1}`}</Text>
               <Text style={[styles.slotAbility, { color: textColor }]} numberOfLines={2}>
                 {def?.label ?? abilityId}
               </Text>
-              <Text
-                style={[styles.tagLine, { color: theme.mutedColor }]}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.65}
-              >
-                {def?.costLine ? `COST: ${def.costLine}` : (def?.tagsLine ?? '')}
-              </Text>
-              {def?.costLine && def?.tagsLine ? (
+              {def?.costLine ? (
                 <Text
-                  style={[styles.chipTags, { color: theme.mutedColor }]}
+                  style={[styles.tagLine, { color: theme.mutedColor }]}
                   numberOfLines={1}
                   adjustsFontSizeToFit
                   minimumFontScale={0.65}
                 >
-                  {def.tagsLine}
+                  {`COST: ${def.costLine}`}
                 </Text>
               ) : null}
+              {def?.tagsLine ? <TacticalTagRow tags={parseTagsLine(def.tagsLine)} /> : null}
               <Text
                 style={[styles.slotMeta, { color: theme.mutedColor }]}
                 numberOfLines={2}
@@ -162,7 +161,7 @@ export default function ClassLoadoutEditor<T extends string>({
       <Text style={[styles.poolLabel, { color: theme.mutedColor }]}>
         ABILITY POOL // TAP TO ASSIGN OR UNLOCK
       </Text>
-      <View style={styles.pool}>
+      <View style={[styles.pool, isDesktop && styles.poolDesktop]}>
         {assignableIds.map((abilityId) => {
           const def = catalog[abilityId];
           const assigned = draft.indexOf(abilityId);
@@ -173,12 +172,14 @@ export default function ClassLoadoutEditor<T extends string>({
             <HapticPressable
               key={abilityId}
               onPress={() => handleAbilityPress(abilityId)}
-              style={({ pressed }) => [
-                getInteractiveButtonStyle(theme.accentColor, { pressed, size: 'sm' }),
+              style={(state) => [
+                getInteractiveButtonStyle(theme.accentColor, { pressed: state.pressed, size: 'sm' }),
                 styles.chip,
+                isDesktop && styles.chipDesktop,
                 !isSelected && { borderColor: theme.borderColor },
                 !unlocked && !affordable && styles.chipLocked,
                 !unlocked && affordable && styles.chipUnlockable,
+                terminalHoverStyle(readPressableHover(state), state.pressed),
               ]}
             >
               <Text style={[styles.chipLabel, { color: isSelected ? theme.accentColor : textColor }]}>
@@ -202,15 +203,8 @@ export default function ClassLoadoutEditor<T extends string>({
               >
                 {def.costLine ? `COST: ${def.costLine}` : def.tagsLine}
               </Text>
-              {def.costLine ? (
-                <Text
-                  style={[styles.chipTags, { color: theme.mutedColor }]}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.65}
-                >
-                  {def.tagsLine}
-                </Text>
+              {def.costLine && def.tagsLine ? (
+                <TacticalTagRow tags={parseTagsLine(def.tagsLine)} />
               ) : null}
               {assigned >= 0 ? (
                 <Text style={[styles.chipSlot, { color: theme.mutedColor }]}>{`S${assigned + 1}`}</Text>
@@ -257,12 +251,21 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
   },
+  slotRowDesktop: {
+    gap: 16,
+  },
   slot: {
     flexBasis: '47%',
     flexGrow: 1,
     alignItems: 'flex-start',
     gap: 4,
     minHeight: 72,
+  },
+  slotDesktop: {
+    flexBasis: '48%',
+    flexGrow: 0,
+    minWidth: 350,
+    maxWidth: 400,
   },
   anchorSlot: {
     opacity: 0.92,
@@ -300,11 +303,20 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 6,
   },
+  poolDesktop: {
+    gap: 16,
+  },
   chip: {
     alignItems: 'flex-start',
     gap: 2,
     minWidth: '30%',
     flexGrow: 1,
+  },
+  chipDesktop: {
+    flexBasis: '48%',
+    flexGrow: 0,
+    minWidth: 350,
+    maxWidth: 400,
   },
   chipLocked: {
     opacity: 0.55,

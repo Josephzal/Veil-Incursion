@@ -12,6 +12,7 @@ import { runOnJS } from 'react-native-reanimated';
 import { ALL_RESOURCE_ITEM_IDS, RESOURCE_REGISTRY } from '../../data/resourceRegistry';
 import { listHubStagedConsumables } from '../../data/hubSafehouseEngine';
 import { useTerminal } from '../../context/TerminalContext';
+import { useResponsiveScale } from '../../hooks/useResponsiveScale';
 import type { CargoItemId } from '../../types/cargoGrid';
 import { resolveCargoItemIcon } from '../../utils/cargoItemIcon';
 import { pulseCargoItemPickup } from '../../utils/hubButtonHaptics';
@@ -42,6 +43,7 @@ function StashRow({
   borderColor,
   mutedColor,
   textColor,
+  compact,
   onDragStart,
   onDragMove,
   onDragEnd,
@@ -50,12 +52,13 @@ function StashRow({
   borderColor: string;
   mutedColor: string;
   textColor: string;
+  compact?: boolean;
   onDragStart: (itemId: CargoItemId) => void;
   onDragMove: (itemId: CargoItemId, absoluteX: number, absoluteY: number) => void;
   onDragEnd: (itemId: CargoItemId, absoluteX: number, absoluteY: number) => void;
 }): React.JSX.Element {
   return (
-    <View style={[styles.row, { borderColor }]}>
+    <View style={[styles.row, compact && styles.rowCompact, { borderColor }]}>
       <View style={styles.rowMain}>
         <View style={styles.rowCopy}>
           <Text style={[styles.rowName, { color: textColor }]} numberOfLines={1}>
@@ -87,6 +90,7 @@ export default function SafehouseStashPanel({
   onDragEnd,
 }: SafehouseStashPanelProps): React.JSX.Element {
   const { theme } = useTerminal();
+  const { isDesktop } = useResponsiveScale();
   const [search, setSearch] = useState('');
   const accent = theme.statusColor;
   const panelRef = useRef<View>(null);
@@ -186,6 +190,7 @@ export default function SafehouseStashPanel({
               borderColor={theme.borderColor}
               mutedColor={theme.mutedColor}
               textColor={theme.textColor}
+              compact={isDesktop}
               onDragStart={onDragStart}
               onDragMove={onDragMove}
               onDragEnd={onDragEnd}
@@ -231,6 +236,9 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
     borderWidth: 1,
     minHeight: 44,
+  },
+  rowCompact: {
+    minHeight: 36,
   },
   rowMain: {
     flex: 1,

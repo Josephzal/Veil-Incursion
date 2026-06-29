@@ -141,7 +141,7 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
   return (
     <View ref={rootRef} style={styles.root}>
       <View style={[styles.split, { gap: scaleSpacing(10) }]}>
-        <View style={{ flex: stashFlex, minWidth: 0, minHeight: 0 }}>
+        <View style={{ flex: stashFlex, minWidth: 0, minHeight: 0, maxWidth: isDesktop ? 420 : undefined }}>
           <SafehouseStashPanel
           resourceStash={account.resourceStash}
           hubCraftedConsumables={account.hubCraftedConsumables}
@@ -172,8 +172,15 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
             DEPLOYMENT PACK
           </TerminalText>
 
-          <View style={styles.cargoWrap} onLayout={handleCargoAreaLayout}>
-            <CargoPackingPanel
+          <View
+            style={[
+              styles.containmentField,
+              isDesktop && styles.containmentFieldDesktop,
+              { borderColor: 'rgba(255, 255, 255, 0.1)' },
+            ]}
+          >
+            <View style={styles.cargoWrap} onLayout={handleCargoAreaLayout}>
+              <CargoPackingPanel
               cargo={account.preRunCargo}
               theme={theme}
               accentColor={accent}
@@ -189,6 +196,7 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
               onHubExternalDrop={handleHubExternalDrop}
               onDragPositionChange={handleCargoDragPosition}
             />
+            </View>
           </View>
         </View>
       </View>
@@ -229,16 +237,25 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     flexShrink: 0,
   },
-  cargoWrap: {
+  containmentField: {
     flex: 1,
     minHeight: 0,
+    borderWidth: 2,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
     alignItems: 'center',
-    justifyContent: 'flex-start',
+    padding: 8,
+  },
+  containmentFieldDesktop: {
+    padding: 16,
+  },
+  cargoWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
     overflow: 'hidden',
-    marginTop: -2,
   },
   dragGhostLayer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 20,
   },
   dragGhostIcon: {

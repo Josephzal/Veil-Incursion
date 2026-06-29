@@ -16,6 +16,7 @@ export const DESKTOP_BADGE_SECONDARY_RATIO = 0.45;
 /** Safehouse split panes: favor the right (detail) column on wide monitors. */
 export const DESKTOP_SAFEHOUSE_LEFT_RATIO = 0.42;
 export const DESKTOP_SAFEHOUSE_RIGHT_RATIO = 0.58;
+export const DESKTOP_SAFEHOUSE_MAX_WIDTH = 1200;
 
 /** Deployment deck — section min-heights (base px, scaled via scaleSize). */
 export const DESKTOP_DEPLOYMENT_IDENTITY_BLOCK_MIN_HEIGHT = 118;

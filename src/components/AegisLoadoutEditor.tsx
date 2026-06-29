@@ -1,8 +1,9 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import HapticPressable from './HapticPressable';
+import TacticalTagRow, { parseTagsLine } from './hub/TacticalTagRow';
 import { formatClassAbilityCostLine } from '../data/classAbilityResolver';
-import { AEGIS_ABILITY_CATALOG } from '../data/aegisAbilities';
+import { AEGIS_ABILITY_CATALOG, getAbilityDefinition } from '../data/aegisAbilities';
 import {
   canAffordAbilityUnlock,
   formatAbilityTags,
@@ -10,10 +11,12 @@ import {
   getAssignableAbilities,
   isAbilityUnlocked,
 } from '../data/aegisAbilityUnlockEngine';
+import { useResponsiveScale } from '../hooks/useResponsiveScale';
 import {
   getInteractiveButtonStyle,
   getInteractiveButtonTextStyle,
 } from '../styles/hubTerminalUi';
+import { terminalHoverStyle, readPressableHover } from '../utils/terminalHoverStyle';
 import type { AegisAbilityId } from '../types/aegisCombat';
 import type { ResourceQuantity } from '../types/resourceItem';
 
@@ -59,6 +62,7 @@ export default function AegisLoadoutEditor({
   statusMessage = null,
 }: AegisLoadoutEditorProps): React.JSX.Element {
   const textColor = theme.textColor ?? '#d8e2dc';
+  const { isDesktop } = useResponsiveScale();
 
   const handleAbilityPress = (abilityId: AegisAbilityId) => {
     const unlocked = isAbilityUnlocked(unlockedAbilities, abilityId);
@@ -74,44 +78,39 @@ export default function AegisLoadoutEditor({
       <Text style={[styles.title, { color: theme.mutedColor }]}>{title}</Text>
       <Text style={[styles.hint, { color: theme.mutedColor }]}>{hint}</Text>
 
-      <View style={styles.slotRow}>
+      <View style={[styles.slotRow, isDesktop && styles.slotRowDesktop]}>
         {draft.map((abilityId, index) => {
           const isSelected = selectedSlot === index;
           const def = AEGIS_ABILITY_CATALOG[abilityId];
           const costLine = formatClassAbilityCostLine('AEGIS', abilityId);
-          const tagsLine = formatAbilityTags(abilityId);
+          const tags = getAbilityDefinition(abilityId).tags;
           return (
             <HapticPressable
               key={`slot-${index}`}
               onPress={() => onSelectSlot(index as 0 | 1 | 2 | 3)}
-              style={({ pressed }) => [
-                getInteractiveButtonStyle(theme.accentColor, { pressed, size: 'sm' }),
+              style={(state) => [
+                getInteractiveButtonStyle(theme.accentColor, { pressed: state.pressed, size: 'sm' }),
                 styles.slot,
+                isDesktop && styles.slotDesktop,
                 !isSelected && { borderColor: theme.borderColor },
+                terminalHoverStyle(readPressableHover(state), state.pressed),
               ]}
             >
               <Text style={[styles.slotLabel, { color: theme.mutedColor }]}>{`S${index + 1}`}</Text>
               <Text style={[styles.slotAbility, { color: textColor }]} numberOfLines={2}>
                 {def.label}
               </Text>
-              <Text
-                style={[styles.tagLine, { color: theme.mutedColor }]}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.65}
-              >
-                {costLine ? `COST: ${costLine}` : tagsLine}
-              </Text>
-              {costLine && tagsLine ? (
+              {costLine ? (
                 <Text
-                  style={[styles.chipTags, { color: theme.mutedColor }]}
+                  style={[styles.tagLine, { color: theme.mutedColor }]}
                   numberOfLines={1}
                   adjustsFontSizeToFit
                   minimumFontScale={0.65}
                 >
-                  {tagsLine}
+                  {`COST: ${costLine}`}
                 </Text>
               ) : null}
+              <TacticalTagRow tags={tags} />
               <Text
                 style={[styles.slotMeta, { color: theme.mutedColor }]}
                 numberOfLines={2}
@@ -126,11 +125,11 @@ export default function AegisLoadoutEditor({
       </View>
 
       <Text style={[styles.poolLabel, { color: theme.mutedColor }]}>ABILITY POOL // TAP TO ASSIGN OR UNLOCK</Text>
-      <View style={styles.pool}>
+      <View style={[styles.pool, isDesktop && styles.poolDesktop]}>
         {getAssignableAbilities().map((abilityId) => {
           const def = AEGIS_ABILITY_CATALOG[abilityId];
           const costLine = formatClassAbilityCostLine('AEGIS', abilityId);
-          const tagsLine = formatAbilityTags(abilityId);
+          const tags = getAbilityDefinition(abilityId).tags;
           const assigned = draft.indexOf(abilityId);
           const isSelected = draft[selectedSlot] === abilityId;
           const unlocked = isAbilityUnlocked(unlockedAbilities, abilityId);
@@ -139,12 +138,14 @@ export default function AegisLoadoutEditor({
             <HapticPressable
               key={abilityId}
               onPress={() => handleAbilityPress(abilityId)}
-              style={({ pressed }) => [
-                getInteractiveButtonStyle(theme.accentColor, { pressed, size: 'sm' }),
+              style={(state) => [
+                getInteractiveButtonStyle(theme.accentColor, { pressed: state.pressed, size: 'sm' }),
                 styles.chip,
+                isDesktop && styles.chipDesktop,
                 !isSelected && { borderColor: theme.borderColor },
                 !unlocked && !affordable && styles.chipLocked,
                 !unlocked && affordable && styles.chipUnlockable,
+                terminalHoverStyle(readPressableHover(state), state.pressed),
               ]}
             >
               <Text style={[styles.chipLabel, { color: isSelected ? theme.accentColor : textColor }]}>
@@ -166,18 +167,9 @@ export default function AegisLoadoutEditor({
                 adjustsFontSizeToFit
                 minimumFontScale={0.65}
               >
-                {costLine ? `COST: ${costLine}` : tagsLine}
+                {costLine ? `COST: ${costLine}` : formatAbilityTags(abilityId)}
               </Text>
-              {costLine && tagsLine ? (
-                <Text
-                  style={[styles.chipTags, { color: theme.mutedColor }]}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.65}
-                >
-                  {tagsLine}
-                </Text>
-              ) : null}
+              {costLine ? <TacticalTagRow tags={tags} /> : null}
               {assigned >= 0 ? (
                 <Text style={[styles.chipSlot, { color: theme.mutedColor }]}>{`S${assigned + 1}`}</Text>
               ) : null}
@@ -223,12 +215,21 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
   },
+  slotRowDesktop: {
+    gap: 16,
+  },
   slot: {
     flexBasis: '47%',
     flexGrow: 1,
     alignItems: 'flex-start',
     gap: 4,
     minHeight: 72,
+  },
+  slotDesktop: {
+    flexBasis: '48%',
+    flexGrow: 0,
+    minWidth: 350,
+    maxWidth: 400,
   },
   slotLabel: {
     fontFamily: MONO,
@@ -263,11 +264,20 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 6,
   },
+  poolDesktop: {
+    gap: 16,
+  },
   chip: {
     alignItems: 'flex-start',
     gap: 2,
     minWidth: '30%',
     flexGrow: 1,
+  },
+  chipDesktop: {
+    flexBasis: '48%',
+    flexGrow: 0,
+    minWidth: 350,
+    maxWidth: 400,
   },
   chipLocked: {
     opacity: 0.55,

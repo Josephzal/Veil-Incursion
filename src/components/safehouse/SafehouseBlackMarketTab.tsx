@@ -11,10 +11,13 @@ import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useShadowWar } from '../../context/ShadowWarContext';
 import { shadowWarBuffsToRunModifiers } from '../../data/shadowWarBuffEngine';
 import { useTerminal } from '../../context/TerminalContext';
+import { getFactionAccent } from '../../data/factions';
 import type { CargoItemId } from '../../types/cargoGrid';
 import { resolveCargoItemIcon } from '../../utils/cargoItemIcon';
 import TerminalText from '../TerminalText';
+import TacticalButton from '../TacticalButton';
 import { useResponsiveScale } from '../../hooks/useResponsiveScale';
+import { terminalHoverStyle, readPressableHover } from '../../utils/terminalHoverStyle';
 
 export default function SafehouseBlackMarketTab(): React.JSX.Element {
   const { theme } = useTerminal();
@@ -25,6 +28,8 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
 
   const accent = theme.statusColor;
   const panelBg = theme.backgroundColor;
+  const economyColor = getFactionAccent(account.alignedFaction);
+  const terminalGreen = '#4ade80';
   const { safehouseLeftRatio, isDesktop, scaleSpacing } = useResponsiveScale();
   const buyFlex = isDesktop ? safehouseLeftRatio : 1;
   const sellFlex = isDesktop ? 1 - safehouseLeftRatio : 1;
@@ -69,7 +74,10 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
           <TerminalText size={7} lineHeight={11} style={[styles.panelSub, { color: theme.mutedColor }]}>
             High-end field gear — purchases stage in hub consumable vault.
           </TerminalText>
-          <ScrollView style={styles.listScroll} contentContainerStyle={styles.listContent}>
+          <ScrollView
+            style={styles.listScroll}
+            contentContainerStyle={[styles.listContent, isDesktop && styles.listContentDesktop]}
+          >
             {BLACK_MARKET_CARGO_LISTINGS.map((listing) => {
               const price = hubContrabandPrice(listing.price, marketDiscount);
               const selected = selectedListingId === listing.id;
@@ -78,41 +86,39 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
                 <HapticPressable
                   key={listing.id}
                   onPress={() => setSelectedListingId(listing.id)}
-                  style={[
+                  style={(state) => [
                     styles.listingCard,
+                    isDesktop && styles.listingCardDesktop,
                     {
-                      borderColor: selected ? accent : theme.borderColor,
+                      borderColor: selected ? economyColor : theme.borderColor,
                       opacity: affordable ? 1 : 0.55,
                     },
+                    terminalHoverStyle(readPressableHover(state), state.pressed),
                   ]}
                 >
                   <Image source={resolveCargoItemIcon(listing.id)} style={styles.listingIcon} />
                   <View style={styles.listingBody}>
-                    <Text style={[styles.listingName, { color: selected ? accent : theme.textColor }]}>
+                    <Text style={[styles.listingName, { color: selected ? economyColor : theme.textColor }]}>
                       {listing.name.toUpperCase()}
                     </Text>
                     <Text style={[styles.listingEffect, { color: theme.mutedColor }]} numberOfLines={2}>
                       {listing.effect}
                     </Text>
-                    <Text style={[styles.listingPrice, { color: accent }]}>{`${price} CR`}</Text>
+                    <Text style={[styles.listingPrice, { color: terminalGreen }]}>{`${price} CR`}</Text>
                   </View>
                 </HapticPressable>
               );
             })}
           </ScrollView>
-          <HapticPressable
-            disabled={!canBuy}
+          <TacticalButton
+            label="[ BUY ]"
+            active={canBuy}
             onPress={handleBuy}
-            style={[
-              styles.actionBtn,
-              {
-                borderColor: canBuy ? accent : theme.borderColor,
-                opacity: canBuy ? 1 : 0.45,
-              },
-            ]}
-          >
-            <Text style={[styles.actionBtnText, { color: canBuy ? accent : theme.mutedColor }]}>[ BUY ]</Text>
-          </HapticPressable>
+            accentColor={economyColor}
+            mutedColor={theme.mutedColor}
+            variant="cta"
+            style={!canBuy ? { opacity: 0.45 } : undefined}
+          />
         </View>
 
         <View
@@ -140,29 +146,37 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
               </Text>
             ) : (
               fenceEntries.map((entry) => (
-                <View key={entry.resourceId} style={[styles.fenceRow, { borderColor: theme.borderColor }]}>
+                <View
+                  key={entry.resourceId}
+                  style={[styles.fenceRow, isDesktop && styles.fenceRowDesktop, { borderColor: theme.borderColor }]}
+                >
                   <View style={styles.fenceInfo}>
                     <Text style={[styles.fenceName, { color: theme.textColor }]}>
                       {RESOURCE_REGISTRY[entry.resourceId].name.toUpperCase()}
                     </Text>
                     <Text style={[styles.fenceMeta, { color: theme.mutedColor }]}>
-                      {`${entry.quantity}× @ ${entry.sellValue} CR`}
+                      {`${entry.quantity}× @ `}
+                      <Text style={{ color: terminalGreen, fontWeight: '700' }}>{`${entry.sellValue} CR`}</Text>
                     </Text>
                   </View>
                   <View style={styles.fenceActions}>
-                    <HapticPressable
+                    <TacticalButton
+                      label="[ SELL 1 ]"
+                      active={false}
                       onPress={() => handleSell(entry.resourceId, 1)}
-                      style={[styles.sellBtn, { borderColor: accent }]}
-                    >
-                      <Text style={[styles.sellBtnText, { color: accent }]}>SELL 1</Text>
-                    </HapticPressable>
+                      accentColor={economyColor}
+                      mutedColor={theme.mutedColor}
+                      variant="inline"
+                    />
                     {entry.quantity > 1 ? (
-                      <HapticPressable
+                      <TacticalButton
+                        label="[ ALL ]"
+                        active={false}
                         onPress={() => handleSell(entry.resourceId, entry.quantity)}
-                        style={[styles.sellBtn, { borderColor: accent }]}
-                      >
-                        <Text style={[styles.sellBtnText, { color: accent }]}>ALL</Text>
-                      </HapticPressable>
+                        accentColor={economyColor}
+                        mutedColor={theme.mutedColor}
+                        variant="inline"
+                      />
                     ) : null}
                   </View>
                 </View>
@@ -187,11 +201,21 @@ const styles = StyleSheet.create({
   panelSub: {},
   listScroll: { flex: 1 },
   listContent: { gap: 8, paddingBottom: 8 },
+  listContentDesktop: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
   listingCard: {
     flexDirection: 'row',
     borderWidth: 1,
     padding: 8,
     gap: 8,
+  },
+  listingCardDesktop: {
+    maxWidth: 300,
+    flexBasis: '47%',
+    flexGrow: 0,
   },
   listingIcon: { width: 40, height: 40, resizeMode: 'contain' },
   listingBody: { flex: 1, gap: 2 },
@@ -205,17 +229,12 @@ const styles = StyleSheet.create({
     padding: 8,
     gap: 8,
   },
-  fenceInfo: { flex: 1, gap: 2 },
+  fenceRowDesktop: {
+    flexWrap: 'wrap',
+  },
+  fenceInfo: { flex: 1, gap: 2, minWidth: 140 },
   fenceName: { fontFamily: 'monospace', fontSize: 8, fontWeight: '700' },
   fenceMeta: { fontFamily: 'monospace', fontSize: 7 },
-  fenceActions: { flexDirection: 'row', gap: 4 },
-  sellBtn: { borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4 },
-  sellBtnText: { fontFamily: 'monospace', fontSize: 7, fontWeight: '700' },
-  actionBtn: {
-    borderWidth: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  actionBtnText: { fontFamily: 'monospace', fontSize: 8, fontWeight: '700', letterSpacing: 0.6 },
+  fenceActions: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
   emptyText: { fontFamily: 'monospace', fontSize: 8, lineHeight: 12 },
 });
