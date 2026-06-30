@@ -6,6 +6,8 @@ import { resolveImmersiveFooterInset, resolveImmersiveTopInset } from '../../con
 import { useLandscapeMetrics } from '../../hooks/useLandscapeMetrics';
 import { useResponsiveScale } from '../../hooks/useResponsiveScale';
 import TerminalNavRail from '../TerminalNavRail';
+import TerminalOverlay from '../TerminalOverlay';
+import TerminalGlitchTransition from '../ui/TerminalGlitchTransition';
 import type { TerminalView } from '../../types/terminalNav';
 
 interface TerminalHubLayoutProps {
@@ -59,7 +61,14 @@ export default function TerminalHubLayout({
           contentBottomInset={contentBottomInset}
         />
         <View style={[styles.mainGap, { width: scaleSpacing(HUB_NAV_MAIN_GAP) }]} />
-        <View style={[styles.mainRail, mainRailStyle, mainStyle]}>{children}</View>
+        <View style={[styles.mainRail, mainRailStyle, mainStyle]}>
+          <View style={styles.terminalOverlayHost} pointerEvents="none">
+            <TerminalOverlay />
+          </View>
+          <TerminalGlitchTransition transitionKey={activeView} style={styles.glitchViewport}>
+            {children}
+          </TerminalGlitchTransition>
+        </View>
       </View>
     </ImageBackground>
   );
@@ -75,7 +84,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   scrim: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: HUB_ATMOSPHERE_SCRIM,
   },
   scrimPointerLock: {
@@ -94,5 +103,13 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     minHeight: 0,
+    position: 'relative',
+  },
+  terminalOverlayHost: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 0,
+  },
+  glitchViewport: {
+    zIndex: 1,
   },
 });

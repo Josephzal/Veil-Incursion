@@ -1,6 +1,5 @@
 import React, { useMemo } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import TerminalOverlay from '../TerminalOverlay';
 import TerminalText from '../TerminalText';
 import TacticalButton from '../TacticalButton';
 import CabalPanel from './CabalPanel';
@@ -220,7 +219,6 @@ export default function DeploymentDeckPanel({
       contentStyle={styles.shellBody}
     >
       <View style={styles.stage}>
-        <TerminalOverlay />
         {isDesktop ? (
           <View style={[styles.deckHost, { paddingHorizontal: scaleSpacing(8) }]}>
             {deckContent}

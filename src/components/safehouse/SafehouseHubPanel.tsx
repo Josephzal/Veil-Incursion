@@ -3,7 +3,7 @@ import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 import CraftingMenuPanel from '../CraftingMenuPanel';
 import HapticPressable from '../HapticPressable';
 import HubScreenShell from '../hub/HubScreenShell';
-import TerminalOverlay from '../TerminalOverlay';
+import TerminalGlitchTransition from '../ui/TerminalGlitchTransition';
 import TerminalText from '../TerminalText';
 import SafehouseAbilitiesTab from './SafehouseAbilitiesTab';
 import SafehouseBlackMarketTab from './SafehouseBlackMarketTab';
@@ -54,10 +54,6 @@ export default function SafehouseHubPanel(): React.JSX.Element {
       contentStyle={styles.shellBody}
     >
       <View style={styles.safehouseStage}>
-        <View style={StyleSheet.absoluteFill} pointerEvents="none">
-          <TerminalOverlay />
-        </View>
-
         <View style={[styles.masterContent, isDesktop && styles.masterContentDesktop]}>
           <View
             style={[
@@ -107,12 +103,12 @@ export default function SafehouseHubPanel(): React.JSX.Element {
             showsVerticalScrollIndicator={Platform.OS === 'web'}
             keyboardShouldPersistTaps="handled"
           >
-            <View style={styles.tabBody}>
+            <TerminalGlitchTransition transitionKey={activeTab} style={styles.tabBody}>
               {activeTab === 'FORGE' && <CraftingMenuPanel embedded />}
               {activeTab === 'MARKET' && <SafehouseBlackMarketTab />}
               {activeTab === 'LOADOUT' && <SafehouseLoadoutTab />}
               {activeTab === 'ABILITIES' && <SafehouseAbilitiesTab />}
-            </View>
+            </TerminalGlitchTransition>
           </ScrollView>
         </View>
       </View>
@@ -181,7 +177,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   tabBody: {
-    flex: 1,
+    flexGrow: 1,
     minHeight: 0,
   },
 });
