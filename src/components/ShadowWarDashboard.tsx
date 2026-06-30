@@ -8,6 +8,7 @@ import ShadowWarInfluencePanel from './shadowWar/ShadowWarInfluencePanel';
 import ShadowWarMap from './shadowWar/ShadowWarMap';
 import HubScreenShell from './hub/HubScreenShell';
 import { useShadowWar } from '../context/ShadowWarContext';
+import { HUB_BORDER_INSET } from '../constants/hubCta';
 import { useHubLayout } from '../context/HubLayoutContext';
 import type { ShadowWarSectorId } from '../types/shadowWar';
 import { TerminalTheme } from '../types/theme';
@@ -25,6 +26,7 @@ export default function ShadowWarDashboard({
   const { state } = useShadowWar();
   const {
     isDesktop,
+    scaleSpacing,
     gap,
     contentWidth,
     shadowWarMapLaneWidth,
@@ -45,52 +47,74 @@ export default function ShadowWarDashboard({
         title="SHADOW WAR // VEIL CONTROL"
         subtitle="5 MACRO-SECTORS // ASYNC CABAL TUG-OF-WAR // WEEKLY IP CYCLE"
       >
-        <View
-          style={[
-            styles.body,
-            isDesktop ? styles.bodyDesktop : styles.bodyMobile,
-            isDesktop ? { gap } : null,
-          ]}
-        >
-          <CabalPanel
+        <View style={styles.stage}>
+          <View
             style={[
-              styles.mapColumn,
+              styles.body,
+              isDesktop ? styles.bodyDesktop : styles.bodyMobile,
               isDesktop
-                ? { width: shadowWarMapLaneWidth, flexShrink: 0 }
-                : styles.mapColumnMobile,
+                ? {
+                    gap,
+                    flex: 1,
+                    alignSelf: 'stretch',
+                    paddingHorizontal: HUB_BORDER_INSET,
+                    paddingBottom: scaleSpacing(8),
+                    maxWidth: contentWidth,
+                    width: contentWidth,
+                  }
+                : null,
             ]}
-            contentStyle={[styles.panelContent, styles.mapPanelContent]}
           >
-            <View style={styles.mapStack} onLayout={handleMapStackLayout}>
-              <View style={styles.mapLayer}>
-                <ShadowWarMap
-                  theme={theme}
-                  activeSectorId={activeSectorId}
-                  sectorIp={state.sectorIp}
-                  onSectorPress={setActiveSectorId}
-                />
+            <CabalPanel
+              fillHeight={isDesktop}
+              style={[
+                styles.mapColumn,
+                isDesktop
+                  ? { width: shadowWarMapLaneWidth, flexShrink: 0 }
+                  : styles.mapColumnMobile,
+              ]}
+              contentStyle={[
+                styles.panelContent,
+                styles.mapPanelContent,
+                { padding: scaleSpacing(isDesktop ? 12 : 10) },
+              ]}
+            >
+              <View style={styles.mapStack} onLayout={handleMapStackLayout}>
+                <View style={styles.mapLayer}>
+                  <ShadowWarMap
+                    theme={theme}
+                    activeSectorId={activeSectorId}
+                    sectorIp={state.sectorIp}
+                    onSectorPress={setActiveSectorId}
+                  />
+                </View>
+                <HackingTerminalOverlay viewportHeight={mapViewportHeight} />
               </View>
-              <HackingTerminalOverlay viewportHeight={mapViewportHeight} />
-            </View>
-          </CabalPanel>
+            </CabalPanel>
 
-          <CabalPanel
-            style={[
-              styles.intelColumn,
-              isDesktop
-                ? { flex: 1, minWidth: shadowWarIntelLaneWidth }
-                : styles.intelColumnMobile,
-            ]}
-            contentStyle={[styles.panelContent, styles.intelPanelContent]}
-          >
-            <ShadowWarInfluencePanel
-              theme={theme}
-              sectorId={activeSectorId}
-              sectorIp={state.sectorIp[activeSectorId]}
-              weeklyDonatedIP={state.weeklyDonatedIP}
-              onDonatePress={() => setDonationOpen(true)}
-            />
-          </CabalPanel>
+            <View
+              style={[
+                styles.intelColumn,
+                isDesktop
+                  ? {
+                      flex: 1,
+                      minWidth: shadowWarIntelLaneWidth,
+                      minHeight: 0,
+                      alignSelf: 'stretch',
+                      justifyContent: 'space-between',
+                    }
+                  : styles.intelColumnMobile,
+              ]}
+            >
+              <ShadowWarInfluencePanel
+                theme={theme}
+                sectorId={activeSectorId}
+                sectorIp={state.sectorIp[activeSectorId]}
+                weeklyDonatedIP={state.weeklyDonatedIP}
+                onDonatePress={() => setDonationOpen(true)}
+              />
+            </View>
+          </View>
         </View>
       </HubScreenShell>
 
@@ -128,10 +152,13 @@ export default function ShadowWarDashboard({
 }
 
 const styles = StyleSheet.create({
+  stage: {
+    flex: 1,
+    minHeight: 0,
+  },
   body: {
     flex: 1,
     minHeight: 0,
-    overflow: 'hidden',
   },
   bodyMobile: {
     flexDirection: 'column',
@@ -143,7 +170,6 @@ const styles = StyleSheet.create({
   },
   mapColumn: {
     minHeight: 0,
-    overflow: 'hidden',
   },
   mapColumnMobile: {
     flex: 0.42,
@@ -152,13 +178,12 @@ const styles = StyleSheet.create({
   },
   intelColumn: {
     minHeight: 0,
-    overflow: 'hidden',
+    minWidth: 0,
   },
   intelColumnMobile: {
     flex: 1,
   },
   panelContent: {
-    padding: 10,
     flex: 1,
     minHeight: 0,
   },
@@ -174,10 +199,6 @@ const styles = StyleSheet.create({
   mapLayer: {
     ...StyleSheet.absoluteFill,
     zIndex: 1,
-  },
-  intelPanelContent: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
   },
   modalRoot: {
     flex: 1,

@@ -244,7 +244,7 @@ export default function ShadowWarMap({
       </GestureHandlerRootView>
 
       <TerminalText
-        size={6}
+        variant="micro"
         letterSpacing={0.4}
         style={[styles.hint, { color: theme.mutedColor }]}
       >

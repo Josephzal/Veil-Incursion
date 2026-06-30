@@ -22,8 +22,8 @@ export const DESKTOP_SAFEHOUSE_RIGHT_RATIO = 0.58;
 /** Deployment deck — dossier vs staging manifest. */
 export const DESKTOP_DEPLOYMENT_DOSSIER_RATIO = 0.5;
 
-/** Shadow War dashboard — holographic map vs influence intel. */
-export const DESKTOP_SHADOW_WAR_MAP_RATIO = 0.6;
+/** Shadow War dashboard — same primary lane as deployment dossier / map. */
+export const DESKTOP_SHADOW_WAR_MAP_RATIO = DESKTOP_DEPLOYMENT_DOSSIER_RATIO;
 import { MAX_VIEWPORT_WIDTH } from './layoutTokens';
 
 /** @deprecated Use MAX_VIEWPORT_WIDTH from layoutTokens. */

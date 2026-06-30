@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import HapticPressable from '../HapticPressable';
-import { Grid, GridCell } from '../layout/Grid';
 import { BLACK_MARKET_CARGO_LISTINGS } from '../../data/blackMarket';
 import {
   hubContrabandPrice,
@@ -18,8 +17,75 @@ import { resolveCargoItemIcon } from '../../utils/cargoItemIcon';
 import TerminalText from '../TerminalText';
 import TacticalButton from '../TacticalButton';
 import { useHubLayout } from '../../context/HubLayoutContext';
-import { useSafehouseTypography } from '../../hooks/useSafehouseTypography';
+import { useHubTypography } from '../../hooks/useHubTypography';
 import { terminalHoverStyle, readPressableHover } from '../../utils/terminalHoverStyle';
+
+const TERMINAL_GREEN = '#4ade80';
+
+interface MarketListingRowProps {
+  listing: (typeof BLACK_MARKET_CARGO_LISTINGS)[number];
+  price: number;
+  selected: boolean;
+  affordable: boolean;
+  economyColor: string;
+  borderColor: string;
+  textColor: string;
+  mutedColor: string;
+  iconSize: number;
+  isDesktop: boolean;
+  onPress: () => void;
+}
+
+function MarketListingRow({
+  listing,
+  price,
+  selected,
+  affordable,
+  economyColor,
+  borderColor,
+  textColor,
+  mutedColor,
+  iconSize,
+  isDesktop,
+  onPress,
+}: MarketListingRowProps): React.JSX.Element {
+  return (
+    <HapticPressable
+      onPress={onPress}
+      style={(state) => [
+        styles.listingRow,
+        isDesktop && styles.listingRowDesktop,
+        {
+          borderColor: selected ? economyColor : borderColor,
+          opacity: affordable ? 1 : 0.55,
+        },
+        terminalHoverStyle(readPressableHover(state), state.pressed),
+      ]}
+    >
+      <View style={styles.listingMain}>
+        <View style={styles.listingCopy}>
+          <TerminalText
+            variant="body"
+            style={{ color: selected ? economyColor : textColor, fontWeight: '700' }}
+            numberOfLines={1}
+          >
+            {listing.name.toUpperCase()}
+          </TerminalText>
+          <TerminalText variant="caption" style={{ color: mutedColor }} numberOfLines={2}>
+            {listing.effect}
+          </TerminalText>
+          <TerminalText variant="body" style={{ color: TERMINAL_GREEN, fontWeight: '700' }}>
+            {`${price} CR`}
+          </TerminalText>
+        </View>
+        <Image
+          source={resolveCargoItemIcon(listing.id)}
+          style={{ width: iconSize, height: iconSize, resizeMode: 'contain' }}
+        />
+      </View>
+    </HapticPressable>
+  );
+}
 
 export default function SafehouseBlackMarketTab(): React.JSX.Element {
   const { theme } = useTerminal();
@@ -31,15 +97,13 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
   const accent = theme.statusColor;
   const panelBg = theme.backgroundColor;
   const economyColor = getFactionAccent(account.alignedFaction);
-  const terminalGreen = '#4ade80';
   const {
     isDesktop,
     scaleSpacing,
     marketBuyLaneWidth,
     deploymentLaneWidth,
-    marketBuyColumnWidth,
   } = useHubLayout();
-  const { iconSize } = useSafehouseTypography();
+  const { iconSize } = useHubTypography();
 
   const selectedListing = selectedListingId != null
     ? BLACK_MARKET_CARGO_LISTINGS.find((entry) => entry.id === selectedListingId) ?? null
@@ -60,187 +124,157 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
     appendHubLog(result.logLine);
   };
 
+  const panelFrameStyle = {
+    borderColor: theme.borderColor,
+    backgroundColor: panelBg,
+    padding: scaleSpacing(10),
+    gap: scaleSpacing(8),
+  };
+
   return (
     <View style={styles.root}>
-      <View style={[styles.splitRow, { gap: scaleSpacing(10) }]}>
+      <View style={[styles.splitRow, isDesktop && styles.splitDesktop, { gap: scaleSpacing(10) }]}>
         <View
           style={[
-            styles.panel,
+            styles.buyColumn,
+            Platform.OS === 'web' && styles.buyColumnWeb,
             isDesktop ? { width: marketBuyLaneWidth, flexShrink: 0 } : { flex: 1 },
-            {
-              borderColor: theme.borderColor,
-              backgroundColor: panelBg,
-              padding: scaleSpacing(10),
-              gap: scaleSpacing(8),
-            },
           ]}
         >
-          <TerminalText size={9} letterSpacing={0.8} style={[styles.panelTitle, { color: accent }]}>
-            BUY CONTRABAND
-          </TerminalText>
-          <TerminalText size={7} lineHeight={11} style={[styles.panelSub, { color: theme.mutedColor }]}>
-            High-end field gear — purchases stage in hub consumable vault.
-          </TerminalText>
-          <ScrollView style={styles.listScroll} contentContainerStyle={styles.listContent}>
-            {isDesktop ? (
-              <Grid>
-                {BLACK_MARKET_CARGO_LISTINGS.map((listing) => {
-                  const price = hubContrabandPrice(listing.price, marketDiscount);
-                  const selected = selectedListingId === listing.id;
-                  const affordable = account.cabalCredits >= price;
-                  return (
-                    <GridCell key={listing.id} width={marketBuyColumnWidth}>
-                      <HapticPressable
-                        onPress={() => setSelectedListingId(listing.id)}
-                        style={(state) => [
-                          styles.listingCard,
-                          styles.listingCardDesktop,
-                          {
-                            borderColor: selected ? economyColor : theme.borderColor,
-                            opacity: affordable ? 1 : 0.55,
-                          },
-                          terminalHoverStyle(readPressableHover(state), state.pressed),
-                        ]}
-                      >
-                        <Image
-                          source={resolveCargoItemIcon(listing.id)}
-                          style={{ width: iconSize, height: iconSize, resizeMode: 'contain' }}
-                        />
-                        <View style={styles.listingBody}>
-                          <TerminalText
-                            size={9}
-                            style={{ color: selected ? economyColor : theme.textColor, fontWeight: '700' }}
-                          >
-                            {listing.name.toUpperCase()}
-                          </TerminalText>
-                          <TerminalText size={8} lineHeight={12} style={{ color: theme.mutedColor }} numberOfLines={2}>
-                            {listing.effect}
-                          </TerminalText>
-                          <TerminalText size={9} style={{ color: terminalGreen, fontWeight: '700' }}>
-                            {`${price} CR`}
-                          </TerminalText>
-                        </View>
-                      </HapticPressable>
-                    </GridCell>
-                  );
-                })}
-              </Grid>
-            ) : (
-              BLACK_MARKET_CARGO_LISTINGS.map((listing) => {
+          <View
+            style={[
+              styles.panel,
+              styles.panelColumn,
+              Platform.OS === 'web' && styles.panelFill,
+              panelFrameStyle,
+            ]}
+          >
+            <TerminalText variant="panelTitle" letterSpacing={0.8} style={[styles.panelTitle, { color: accent }]}>
+              BUY CONTRABAND
+            </TerminalText>
+            <TerminalText variant="caption" style={[styles.panelSub, { color: theme.mutedColor }]}>
+              High-end field gear — purchases stage in hub consumable vault.
+            </TerminalText>
+            <ScrollView
+              style={[styles.listScroll, Platform.OS === 'web' && styles.listScrollWeb]}
+              contentContainerStyle={styles.listContent}
+              showsVerticalScrollIndicator
+              nestedScrollEnabled
+              keyboardShouldPersistTaps="handled"
+            >
+              {BLACK_MARKET_CARGO_LISTINGS.map((listing) => {
                 const price = hubContrabandPrice(listing.price, marketDiscount);
                 const selected = selectedListingId === listing.id;
                 const affordable = account.cabalCredits >= price;
                 return (
-                  <HapticPressable
+                  <MarketListingRow
                     key={listing.id}
+                    listing={listing}
+                    price={price}
+                    selected={selected}
+                    affordable={affordable}
+                    economyColor={economyColor}
+                    borderColor={theme.borderColor}
+                    textColor={theme.textColor}
+                    mutedColor={theme.mutedColor}
+                    iconSize={iconSize}
+                    isDesktop={isDesktop}
                     onPress={() => setSelectedListingId(listing.id)}
-                    style={(state) => [
-                      styles.listingCard,
-                      {
-                        borderColor: selected ? economyColor : theme.borderColor,
-                        opacity: affordable ? 1 : 0.55,
-                      },
-                      terminalHoverStyle(readPressableHover(state), state.pressed),
-                    ]}
-                  >
-                    <Image
-                      source={resolveCargoItemIcon(listing.id)}
-                      style={{ width: iconSize, height: iconSize, resizeMode: 'contain' }}
-                    />
-                    <View style={styles.listingBody}>
-                      <TerminalText
-                        size={8}
-                        style={{ color: selected ? economyColor : theme.textColor, fontWeight: '700' }}
-                      >
-                        {listing.name.toUpperCase()}
-                      </TerminalText>
-                      <TerminalText size={7} lineHeight={10} style={{ color: theme.mutedColor }} numberOfLines={2}>
-                        {listing.effect}
-                      </TerminalText>
-                      <TerminalText size={8} style={{ color: terminalGreen, fontWeight: '700' }}>
-                        {`${price} CR`}
-                      </TerminalText>
-                    </View>
-                  </HapticPressable>
+                  />
                 );
-              })
-            )}
-          </ScrollView>
-          <TacticalButton
-            label="[ BUY ]"
-            active={canBuy}
-            onPress={handleBuy}
-            accentColor={economyColor}
-            mutedColor={theme.mutedColor}
-            variant="cta"
-            style={!canBuy ? { opacity: 0.45 } : undefined}
-          />
+              })}
+            </ScrollView>
+            <TacticalButton
+              label="[ BUY ]"
+              active={canBuy}
+              onPress={handleBuy}
+              accentColor={economyColor}
+              mutedColor={theme.mutedColor}
+              variant="cta"
+              style={[styles.buyButton, !canBuy ? { opacity: 0.45 } : null]}
+            />
+          </View>
         </View>
 
         <View
           style={[
-            styles.panel,
-            isDesktop ? { flex: 1, minWidth: deploymentLaneWidth } : { flex: 1 },
-            {
-              borderColor: theme.borderColor,
-              backgroundColor: panelBg,
-              padding: scaleSpacing(10),
-              gap: scaleSpacing(8),
-            },
+            styles.fenceColumn,
+            isDesktop && styles.fenceColumnDesktop,
+            Platform.OS === 'web' && styles.fenceColumnWeb,
+            isDesktop ? { minWidth: deploymentLaneWidth } : { flex: 1 },
           ]}
         >
-          <TerminalText size={9} letterSpacing={0.8} style={[styles.panelTitle, { color: accent }]}>
-            FENCE // LIQUIDATE
-          </TerminalText>
-          <TerminalText size={7} lineHeight={11} style={[styles.panelSub, { color: theme.mutedColor }]}>
-            Sell dog tags, ledgers, and excess ley-slag for Cabal Credits.
-          </TerminalText>
-          <ScrollView style={styles.listScroll} contentContainerStyle={styles.listContent}>
-            {fenceEntries.length === 0 ? (
-              <Text style={[styles.emptyText, { color: theme.mutedColor }]}>
-                NO FENCEABLE SALVAGE IN STASH.
-              </Text>
-            ) : (
-              fenceEntries.map((entry) => (
-                <View
-                  key={entry.resourceId}
-                  style={[styles.fenceRow, isDesktop && styles.fenceRowDesktop, { borderColor: theme.borderColor }]}
-                >
-                  <View style={styles.fenceInfo}>
-                    <TerminalText size={isDesktop ? 9 : 8} style={{ color: theme.textColor, fontWeight: '700' }}>
-                      {RESOURCE_REGISTRY[entry.resourceId].name.toUpperCase()}
-                    </TerminalText>
-                    <TerminalText size={isDesktop ? 8 : 7} style={{ color: theme.mutedColor }}>
-                      {`${entry.quantity}× @ `}
-                      <Text style={{ color: terminalGreen, fontWeight: '700', fontFamily: 'monospace' }}>
-                        {`${entry.sellValue} CR`}
-                      </Text>
-                    </TerminalText>
-                  </View>
-                  <View style={styles.fenceActions}>
-                    <TacticalButton
-                      label="[ SELL 1 ]"
-                      active
-                      onPress={() => handleSell(entry.resourceId, 1)}
-                      accentColor={economyColor}
-                      mutedColor={theme.mutedColor}
-                      variant="inline"
-                    />
-                    {entry.quantity > 1 ? (
+          <View
+            style={[
+              styles.panel,
+              styles.panelColumn,
+              Platform.OS === 'web' && styles.panelFill,
+              panelFrameStyle,
+            ]}
+          >
+            <TerminalText variant="panelTitle" letterSpacing={0.8} style={[styles.panelTitle, { color: accent }]}>
+              FENCE // LIQUIDATE
+            </TerminalText>
+            <TerminalText variant="caption" style={[styles.panelSub, { color: theme.mutedColor }]}>
+              Sell dog tags, ledgers, and excess ley-slag for Cabal Credits.
+            </TerminalText>
+            <ScrollView
+              style={[styles.listScroll, Platform.OS === 'web' && styles.listScrollWeb]}
+              contentContainerStyle={styles.listContent}
+              showsVerticalScrollIndicator
+              nestedScrollEnabled
+              keyboardShouldPersistTaps="handled"
+            >
+              {fenceEntries.length === 0 ? (
+                <TerminalText variant="caption" style={{ color: theme.mutedColor }}>
+                  NO FENCEABLE SALVAGE IN STASH.
+                </TerminalText>
+              ) : (
+                fenceEntries.map((entry) => (
+                  <View
+                    key={entry.resourceId}
+                    style={[
+                      styles.fenceRow,
+                      isDesktop && styles.fenceRowDesktop,
+                      { borderColor: theme.borderColor },
+                    ]}
+                  >
+                    <View style={styles.fenceInfo}>
+                      <TerminalText variant="body" style={{ color: theme.textColor, fontWeight: '700' }}>
+                        {RESOURCE_REGISTRY[entry.resourceId].name.toUpperCase()}
+                      </TerminalText>
+                      <TerminalText variant="caption" style={{ color: theme.mutedColor }}>
+                        {`${entry.quantity}× @ `}
+                        <Text style={{ color: TERMINAL_GREEN, fontWeight: '700', fontFamily: 'monospace' }}>
+                          {`${entry.sellValue} CR`}
+                        </Text>
+                      </TerminalText>
+                    </View>
+                    <View style={styles.fenceActions}>
                       <TacticalButton
-                        label="[ ALL ]"
+                        label="[ SELL 1 ]"
                         active
-                        onPress={() => handleSell(entry.resourceId, entry.quantity)}
+                        onPress={() => handleSell(entry.resourceId, 1)}
                         accentColor={economyColor}
                         mutedColor={theme.mutedColor}
                         variant="inline"
                       />
-                    ) : null}
+                      {entry.quantity > 1 ? (
+                        <TacticalButton
+                          label="[ ALL ]"
+                          active
+                          onPress={() => handleSell(entry.resourceId, entry.quantity)}
+                          accentColor={economyColor}
+                          mutedColor={theme.mutedColor}
+                          variant="inline"
+                        />
+                      ) : null}
+                    </View>
                   </View>
-                </View>
-              ))
-            )}
-          </ScrollView>
+                ))
+              )}
+            </ScrollView>
+          </View>
         </View>
       </View>
     </View>
@@ -248,39 +282,118 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
-  splitRow: { flex: 1, flexDirection: 'row' },
+  root: {
+    flex: 1,
+    minHeight: 0,
+  },
+  splitRow: {
+    flex: 1,
+    flexDirection: 'row',
+    minHeight: 0,
+  },
+  splitDesktop: {
+    alignItems: 'flex-start',
+  },
+  buyColumn: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 0,
+  },
+  buyColumnWeb: {
+    alignSelf: 'stretch',
+    height: '100%',
+  },
+  fenceColumn: {
+    minWidth: 0,
+    minHeight: 0,
+  },
+  fenceColumnDesktop: {
+    flex: 1,
+  },
+  fenceColumnWeb: Platform.select({
+    web: {
+      position: 'sticky',
+      top: 0,
+      alignSelf: 'stretch',
+      height: '100%',
+      flexShrink: 0,
+    },
+    default: {
+      flexShrink: 0,
+    },
+  }),
   panel: {
     borderWidth: 1,
+    minWidth: 0,
+  },
+  panelColumn: {
+    flex: 1,
+    minHeight: 0,
+    flexDirection: 'column',
+  },
+  panelFill: {
+    height: '100%',
+    alignSelf: 'stretch',
   },
   panelTitle: {
     fontWeight: '700',
+    flexShrink: 0,
   },
-  panelSub: {},
-  listScroll: { flex: 1 },
-  listContent: { gap: 8, paddingBottom: 8 },
-  listingCard: {
-    flexDirection: 'row',
+  panelSub: {
+    flexShrink: 0,
+  },
+  listScroll: {
+    flex: 1,
+    minHeight: 0,
+  },
+  listScrollWeb: {
+    flex: 1,
+    minHeight: 0,
+    height: 0,
+    overflow: 'scroll',
+  },
+  listContent: {
+    gap: 6,
+    paddingBottom: 8,
+  },
+  buyButton: {
+    flexShrink: 0,
+  },
+  listingRow: {
+    width: '100%',
     borderWidth: 1,
-    padding: 8,
-    gap: 8,
-    alignItems: 'flex-start',
+    minHeight: 44,
   },
-  listingCardDesktop: {
-    minHeight: 100,
+  listingRowDesktop: {
+    minHeight: 56,
   },
-  listingBody: { flex: 1, gap: 4 },
+  listingMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 10,
+  },
+  listingCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4,
+  },
   fenceRow: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
     padding: 8,
     gap: 8,
+    width: '100%',
   },
   fenceRowDesktop: {
-    flexWrap: 'wrap',
+    minHeight: 56,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
-  fenceInfo: { flex: 1, gap: 4, minWidth: 140 },
-  fenceActions: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  emptyText: { fontFamily: 'monospace', fontSize: 8, lineHeight: 12 },
+  fenceInfo: { flex: 1, gap: 4, minWidth: 0 },
+  fenceActions: { flexDirection: 'row', gap: 6, flexWrap: 'wrap', flexShrink: 0 },
 });

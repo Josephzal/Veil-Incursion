@@ -12,7 +12,7 @@ import { resolveFactionSlateBackground } from '../../constants/hubAtmosphere';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useTerminal } from '../../context/TerminalContext';
 import { getFactionAccent } from '../../data/factions';
-import { useResponsiveScale } from '../../hooks/useResponsiveScale';
+import { useHubLayout } from '../../context/HubLayoutContext';
 import { readPressableHover, terminalHoverStyle } from '../../utils/terminalHoverStyle';
 
 export type SafehouseTab = 'FORGE' | 'MARKET' | 'LOADOUT' | 'ABILITIES';
@@ -27,7 +27,7 @@ const NAV_ITEMS: Array<{ key: SafehouseTab; label: string }> = [
 export default function SafehouseHubPanel(): React.JSX.Element {
   const { theme } = useTerminal();
   const { account } = usePlayerAccount();
-  const { isDesktop, scaleSpacing } = useResponsiveScale();
+  const { isDesktop, scaleSpacing } = useHubLayout();
   const [activeTab, setActiveTab] = useState<SafehouseTab>('FORGE');
 
   const accent = theme.statusColor;
@@ -36,10 +36,10 @@ export default function SafehouseHubPanel(): React.JSX.Element {
 
   const headerHud = (
     <>
-      <TerminalText size={10} letterSpacing={0.6} style={[styles.hudCredits, { color: accent }]}>
+      <TerminalText variant="body" letterSpacing={0.6} style={[styles.hudCredits, { color: accent, fontWeight: '700' }]}>
         {`${account.cabalCredits} CR`}
       </TerminalText>
-      <TerminalText size={7} letterSpacing={0.5} style={[styles.hudResidue, { color: theme.statusColor }]}>
+      <TerminalText variant="caption" letterSpacing={0.5} style={[styles.hudResidue, { color: theme.statusColor }]}>
         {`${account.veilResidueBalance} VEIL RESIDUE`}
       </TerminalText>
     </>
@@ -84,7 +84,7 @@ export default function SafehouseHubPanel(): React.JSX.Element {
                     ]}
                   >
                     <TerminalText
-                      size={isDesktop ? 9 : 8}
+                      variant="body"
                       letterSpacing={1}
                       style={{ color: active ? factionAccent : theme.mutedColor, fontWeight: '700' }}
                     >
@@ -96,19 +96,26 @@ export default function SafehouseHubPanel(): React.JSX.Element {
             </View>
           </View>
 
-          <ScrollView
-            style={styles.tabScroll}
-            contentContainerStyle={[styles.tabScrollContent, { paddingBottom: scaleSpacing(8) }]}
-            showsVerticalScrollIndicator={Platform.OS === 'web'}
-            keyboardShouldPersistTaps="handled"
-          >
-            <TerminalGlitchTransition transitionKey={activeTab} style={styles.tabBody}>
-              {activeTab === 'FORGE' && <CraftingMenuPanel embedded />}
-              {activeTab === 'MARKET' && <SafehouseBlackMarketTab />}
-              {activeTab === 'LOADOUT' && <SafehouseLoadoutTab />}
-              {activeTab === 'ABILITIES' && <SafehouseAbilitiesTab />}
-            </TerminalGlitchTransition>
-          </ScrollView>
+          {activeTab === 'LOADOUT' || activeTab === 'MARKET' ? (
+            <View style={styles.tabBodyFixed}>
+              <TerminalGlitchTransition transitionKey={activeTab} style={styles.tabBodyFill}>
+                {activeTab === 'LOADOUT' && <SafehouseLoadoutTab />}
+                {activeTab === 'MARKET' && <SafehouseBlackMarketTab />}
+              </TerminalGlitchTransition>
+            </View>
+          ) : (
+            <ScrollView
+              style={styles.tabScroll}
+              contentContainerStyle={[styles.tabScrollContent, { paddingBottom: scaleSpacing(8) }]}
+              showsVerticalScrollIndicator={Platform.OS === 'web'}
+              keyboardShouldPersistTaps="handled"
+            >
+              <TerminalGlitchTransition transitionKey={activeTab} style={styles.tabBody}>
+                {activeTab === 'FORGE' && <CraftingMenuPanel embedded />}
+                {activeTab === 'ABILITIES' && <SafehouseAbilitiesTab />}
+              </TerminalGlitchTransition>
+            </ScrollView>
+          )}
         </View>
       </View>
     </HubScreenShell>
@@ -173,6 +180,14 @@ const styles = StyleSheet.create({
   },
   tabBody: {
     flexGrow: 1,
+    minHeight: 0,
+  },
+  tabBodyFixed: {
+    flex: 1,
+    minHeight: 0,
+  },
+  tabBodyFill: {
+    flex: 1,
     minHeight: 0,
   },
 });

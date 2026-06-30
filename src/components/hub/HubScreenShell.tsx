@@ -7,7 +7,7 @@ import {
 } from '../../constants/hubAtmosphere';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useTerminal } from '../../context/TerminalContext';
-import { useResponsiveScale } from '../../hooks/useResponsiveScale';
+import { useHubLayout } from '../../context/HubLayoutContext';
 import { formatBracketHeader } from '../../styles/hubTerminalUi';
 
 interface HubScreenShellProps {
@@ -30,7 +30,7 @@ export default function HubScreenShell({
 }: HubScreenShellProps): React.JSX.Element {
   const { theme } = useTerminal();
   const { account } = usePlayerAccount();
-  const { scaleSpacing } = useResponsiveScale();
+  const { scaleSpacing } = useHubLayout();
   const slateBg = resolveFactionSlateBackground(account.alignedFaction);
   const slateInnerBorder = resolveFactionSlateInnerBorder(account.alignedFaction);
   const headerColor = theme.statusColor;
@@ -64,13 +64,12 @@ export default function HubScreenShell({
         >
           <View style={[styles.headerRow, { gap: scaleSpacing(8), marginBottom: scaleSpacing(4) }]}>
             <View style={styles.headerText}>
-              <TerminalText size={10} letterSpacing={1.2} style={[styles.screenTitle, { color: headerColor }]}>
+              <TerminalText variant="screenTitle" letterSpacing={1.2} style={[styles.screenTitle, { color: headerColor }]}>
                 {formatBracketHeader(title)}
               </TerminalText>
               {subtitle ? (
                 <TerminalText
-                  size={7}
-                  lineHeight={10}
+                  variant="caption"
                   letterSpacing={0.5}
                   style={[styles.screenSubtitle, { color: hubKeyColorFromTheme(theme.mutedColor), marginTop: scaleSpacing(2) }]}
                 >
@@ -103,11 +102,11 @@ export function HubSectionHeader({
   color: string;
   size?: number;
 }): React.JSX.Element {
-  const { scaleSpacing } = useResponsiveScale();
+  const { scaleSpacing } = useHubLayout();
 
   return (
     <TerminalText
-      size={size}
+      {...(size != null ? { size } : { variant: 'section' as const })}
       letterSpacing={1.1}
       style={[styles.sectionHeader, { color, marginBottom: scaleSpacing(6) }]}
     >
@@ -151,7 +150,6 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     borderWidth: 1,
-    overflow: 'hidden',
   },
   slateBody: {
     flex: 1,

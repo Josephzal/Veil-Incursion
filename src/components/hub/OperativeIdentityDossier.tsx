@@ -73,7 +73,6 @@ export default function OperativeIdentityDossier({
   const loadoutBlockMinHeight = isDesktop
     ? scaleSize(DESKTOP_DEPLOYMENT_LOADOUT_BLOCK_MIN_HEIGHT)
     : undefined;
-  const detailLineHeight = isDesktop ? 11 : 10;
 
   const cred = profile.operative_profile.credentials;
   const classDef = CLASS_DEFINITIONS[account.activeClass];
@@ -91,10 +90,7 @@ export default function OperativeIdentityDossier({
 
   const avatarSize = isDesktop ? scaleSize(DESKTOP_DEPLOYMENT_AVATAR_SIZE) : scaleSize(64);
   const arrowWidth = isDesktop ? scaleSize(20) : scaleSize(18);
-  const sectionHeaderSize = isDesktop ? 10 : 9;
-  const bodyTextSize = isDesktop ? 8 : 7;
-  const sublineSize = isDesktop ? 9 : 8;
-  const operativeNameSize = isDesktop ? scaleSize(18) : scaleSize(16);
+  const operativeNameSize = scaleSize(11);
 
   const handleCycleClass = (direction: 1 | -1) => {
     if (!canCycleClass) return;
@@ -103,7 +99,7 @@ export default function OperativeIdentityDossier({
 
   return (
     <View style={[styles.root, isDesktop ? styles.rootDesktop : null]}>
-      <HubSectionHeader title="OPERATIVE PROFILE" color={headerColor} size={sectionHeaderSize} />
+      <HubSectionHeader title="OPERATIVE PROFILE" color={headerColor} />
       <View style={[styles.badgeCard, isDesktop ? styles.badgeCardDesktop : null]}>
         <View style={[styles.portraitRow, { marginBottom: scaleSpacing(10), height: avatarSize }]}>
           {canCycleClass ? (
@@ -166,8 +162,8 @@ export default function OperativeIdentityDossier({
             {cred.username}
           </Text>
           <TerminalText
-            size={sublineSize}
-            lineHeight={isDesktop ? 12 : 11}
+            variant="body"
+            lineHeight={11}
             letterSpacing={0.6}
             style={[styles.subline, { color: keyColor }]}
             numberOfLines={1}
@@ -175,8 +171,7 @@ export default function OperativeIdentityDossier({
             {`${classDef.displayName.toUpperCase()} // ID ${cred.id}`}
           </TerminalText>
           <TerminalText
-            size={bodyTextSize}
-            lineHeight={detailLineHeight}
+            variant="caption"
             letterSpacing={0.4}
             style={[styles.detailLine, { color: keyColor }]}
             numberOfLines={1}
@@ -184,8 +179,7 @@ export default function OperativeIdentityDossier({
             {classDef.protocolLabel}
           </TerminalText>
           <TerminalText
-            size={bodyTextSize}
-            lineHeight={detailLineHeight}
+            variant="caption"
             letterSpacing={0.4}
             style={[styles.detailLine, { color: keyColor }]}
             numberOfLines={1}
@@ -193,8 +187,7 @@ export default function OperativeIdentityDossier({
             {classDef.weaponLine}
           </TerminalText>
           <TerminalText
-            size={bodyTextSize}
-            lineHeight={detailLineHeight}
+            variant="caption"
             letterSpacing={0.4}
             style={[styles.detailLine, { color: keyColor }]}
             numberOfLines={1}
@@ -202,8 +195,7 @@ export default function OperativeIdentityDossier({
             {classDef.interactionLine}
           </TerminalText>
           <TerminalText
-            size={bodyTextSize}
-            lineHeight={detailLineHeight}
+            variant="caption"
             letterSpacing={0.4}
             style={[styles.detailLine, { color: keyColor }]}
             numberOfLines={1}

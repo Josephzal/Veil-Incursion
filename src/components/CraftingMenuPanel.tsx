@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import TerminalText from './TerminalText';
 import HapticPressable from './HapticPressable';
-import { Grid, GridCell } from './layout/Grid';
 import {
   getRecipesByKind,
   isRecipeOutputOwned,
@@ -14,7 +14,6 @@ import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useHubLayout } from '../context/HubLayoutContext';
 import { useSafehouseTypography } from '../hooks/useSafehouseTypography';
-import { ABILITY_CARD_MIN_HEIGHT } from '../constants/layoutTokens';
 import { terminalHoverStyle, readPressableHover } from '../utils/terminalHoverStyle';
 import type { ResourceItemId } from '../types/resourceItem';
 
@@ -123,6 +122,27 @@ function RecipeCard({
   );
 }
 
+function StashSummaryPanel({
+  title,
+  theme,
+  isDesktop,
+  children,
+}: {
+  title: string;
+  theme: ReturnType<typeof useTerminal>['theme'];
+  isDesktop: boolean;
+  children: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <View style={[styles.stashPanel, isDesktop && styles.stashPanelDesktop, { borderColor: theme.borderColor }]}>
+      <TerminalText variant="section" style={{ color: theme.mutedColor, fontWeight: '700' }}>
+        {title}
+      </TerminalText>
+      {children}
+    </View>
+  );
+}
+
 function ResourceStashPanel({
   stash,
   theme,
@@ -132,30 +152,27 @@ function ResourceStashPanel({
   theme: ReturnType<typeof useTerminal>['theme'];
   isDesktop: boolean;
 }): React.JSX.Element {
-  const { bodySize, captionSize } = useSafehouseTypography();
-
   return (
-    <View style={[styles.stashPanel, isDesktop && styles.stashPanelDesktop, { borderColor: theme.borderColor }]}>
-      <Text style={[styles.sectionLabel, { color: theme.mutedColor, fontSize: captionSize(7) }]}>RESOURCE STASH</Text>
+    <StashSummaryPanel title="RESOURCE STASH" theme={theme} isDesktop={isDesktop}>
       {Object.keys(stash).length === 0 ? (
-        <Text style={[styles.emptyText, { color: theme.mutedColor, fontSize: bodySize(8), lineHeight: bodySize(12) }]}>
+        <TerminalText variant="caption" style={{ color: theme.mutedColor }}>
           No resources banked — extract salvage from incursions to craft.
-        </Text>
+        </TerminalText>
       ) : (
         Object.entries(stash).map(([id, count]) => (
-          <Text
+          <TerminalText
             key={id}
+            variant="body"
             style={[
               styles.stashLine,
-              isDesktop && styles.stashLineDesktop,
-              { color: theme.textColor, fontSize: isDesktop ? bodySize(10) : bodySize(8), lineHeight: isDesktop ? bodySize(14) : bodySize(11) },
+              { color: theme.textColor, fontWeight: isDesktop ? '700' : '400' },
             ]}
           >
             {`${count}x ${RESOURCE_REGISTRY[id as ResourceItemId]?.name ?? id}`}
-          </Text>
+          </TerminalText>
         ))
       )}
-    </View>
+    </StashSummaryPanel>
   );
 }
 
@@ -165,7 +182,7 @@ export default function CraftingMenuPanel({
 }: CraftingMenuPanelProps): React.JSX.Element {
   const { theme } = useTerminal();
   const { account, craftRecipe, appendHubLog } = usePlayerAccount();
-  const { isDesktop, forgeStashWidth, forgeRecipeColumnWidth } = useHubLayout();
+  const { isDesktop, forgeStashWidth } = useHubLayout();
   const useForgeDesktop = embedded && isDesktop;
 
   const recipesByKind = useMemo(
@@ -187,95 +204,66 @@ export default function CraftingMenuPanel({
 
   const renderRecipeSection = (kind: CraftingRecipeKind) => (
     <View key={kind} style={styles.recipeSection}>
-      <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>
+      <TerminalText variant="section" style={[styles.sectionLabel, { color: theme.mutedColor }]}>
         {SECTION_LABELS[kind]}
-      </Text>
-      {useForgeDesktop ? (
-        <Grid>
-          {recipesByKind[kind].map((recipe) => {
-            const affordable = canAffordRecipe(account.resourceStash, recipe);
-            const alreadyOwned = isRecipeOutputOwned(
-              recipe.outputId,
-              account.unlockedBlueprints,
-              account.craftedAugments,
-            );
-            return (
-              <GridCell key={recipe.id} width={forgeRecipeColumnWidth}>
-                <RecipeCard
-                  recipe={recipe}
-                  affordable={affordable}
-                  alreadyOwned={alreadyOwned}
-                  stash={account.resourceStash}
-                  onCraft={handleCraft}
-                  theme={theme}
-                  isDesktop
-                />
-              </GridCell>
-            );
-          })}
-        </Grid>
-      ) : (
-        <View style={styles.recipeGrid}>
-          {recipesByKind[kind].map((recipe) => {
-            const affordable = canAffordRecipe(account.resourceStash, recipe);
-            const alreadyOwned = isRecipeOutputOwned(
-              recipe.outputId,
-              account.unlockedBlueprints,
-              account.craftedAugments,
-            );
-            return (
-              <RecipeCard
-                key={recipe.id}
-                recipe={recipe}
-                affordable={affordable}
-                alreadyOwned={alreadyOwned}
-                stash={account.resourceStash}
-                onCraft={handleCraft}
-                theme={theme}
-                isDesktop={false}
-              />
-            );
-          })}
-        </View>
-      )}
+      </TerminalText>
+      <View style={styles.recipeStack}>
+        {recipesByKind[kind].map((recipe) => {
+          const affordable = canAffordRecipe(account.resourceStash, recipe);
+          const alreadyOwned = isRecipeOutputOwned(
+            recipe.outputId,
+            account.unlockedBlueprints,
+            account.craftedAugments,
+          );
+          return (
+            <RecipeCard
+              key={recipe.id}
+              recipe={recipe}
+              affordable={affordable}
+              alreadyOwned={alreadyOwned}
+              stash={account.resourceStash}
+              onCraft={handleCraft}
+              theme={theme}
+              isDesktop={useForgeDesktop}
+            />
+          );
+        })}
+      </View>
     </View>
   );
 
   const footerPanels = (
     <>
       {account.unlockedBlueprints.length > 0 ? (
-        <View style={[styles.stashPanel, { borderColor: theme.borderColor }]}>
-          <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>UNLOCKED LOADOUTS</Text>
+        <StashSummaryPanel title="UNLOCKED LOADOUTS" theme={theme} isDesktop={useForgeDesktop}>
           {account.unlockedBlueprints.map((blueprintId) => (
-            <Text key={blueprintId} style={[styles.stashLine, { color: theme.statusColor }]}>
+            <TerminalText key={blueprintId} variant="body" style={{ color: theme.statusColor, fontWeight: '700' }}>
               {blueprintId.replace(/_/g, ' ').toUpperCase()}
-            </Text>
+            </TerminalText>
           ))}
-        </View>
+        </StashSummaryPanel>
       ) : null}
 
       {account.craftedAugments.length > 0 ? (
-        <View style={[styles.stashPanel, { borderColor: theme.borderColor }]}>
-          <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>FORGED AUGMENTS</Text>
+        <StashSummaryPanel title="FORGED AUGMENTS" theme={theme} isDesktop={useForgeDesktop}>
           {account.craftedAugments.map((augmentId) => (
-            <Text key={augmentId} style={[styles.stashLine, { color: theme.statusColor }]}>
+            <TerminalText key={augmentId} variant="body" style={{ color: theme.statusColor, fontWeight: '700' }}>
               {augmentId.replace(/_/g, ' ')}
-            </Text>
+            </TerminalText>
           ))}
-        </View>
+        </StashSummaryPanel>
       ) : null}
 
       {stagedConsumableCount > 0 ? (
-        <View style={[styles.stashPanel, { borderColor: theme.borderColor }]}>
-          <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>STAGED CONSUMABLES</Text>
+        <StashSummaryPanel title="STAGED CONSUMABLES" theme={theme} isDesktop={useForgeDesktop}>
           {Object.entries(account.hubCraftedConsumables).map(([id, count]) => (
             count && count > 0 ? (
-              <Text key={id} style={[styles.stashLine, { color: theme.textColor }]}>
+              <TerminalText key={id} variant="body" style={{ color: theme.textColor, fontWeight: useForgeDesktop ? '700' : '400' }}>
                 {`${count}x ${id.replace(/-/g, ' ').toUpperCase()}`}
-              </Text>
+              </TerminalText>
             ) : null
           ))}
-        </View>
+        </StashSummaryPanel>
       ) : null}
     </>
   );
@@ -410,6 +398,9 @@ const styles = StyleSheet.create({
   recipeSection: {
     gap: 6,
   },
+  recipeStack: {
+    gap: 8,
+  },
   recipeGrid: {
     gap: 8,
   },
@@ -418,13 +409,10 @@ const styles = StyleSheet.create({
     padding: 10,
     gap: 6,
     backgroundColor: '#0a0b0f',
-    marginBottom: 8,
+    width: '100%',
   },
   recipeCardDesktop: {
-    marginBottom: 0,
-    minHeight: ABILITY_CARD_MIN_HEIGHT,
     justifyContent: 'space-between',
-    width: '100%',
   },
   recipeCopy: {
     gap: 6,

@@ -9,8 +9,8 @@ import { ScrollView } from 'react-native-gesture-handler';
 import { ALL_RESOURCE_ITEM_IDS, RESOURCE_REGISTRY } from '../../data/resourceRegistry';
 import { listHubStagedConsumables } from '../../data/hubSafehouseEngine';
 import { useTerminal } from '../../context/TerminalContext';
-import { useResponsiveScale } from '../../hooks/useResponsiveScale';
-import { useSafehouseTypography } from '../../hooks/useSafehouseTypography';
+import { useHubLayout } from '../../context/HubLayoutContext';
+import { useHubTypography } from '../../hooks/useHubTypography';
 import type { CargoItemId } from '../../types/cargoGrid';
 import TerminalText from '../TerminalText';
 import DraggableStashIcon from './DraggableStashIcon';
@@ -29,6 +29,8 @@ interface SafehouseStashPanelProps {
   resourceStash: Partial<Record<string, number>>;
   hubCraftedConsumables: Partial<Record<CargoItemId, number>>;
   isDropTarget?: boolean;
+  /** Stretch panel to fill a fixed-height loadout column (desktop web scroll). */
+  fillHeight?: boolean;
   onPanelMeasured?: (rect: { pageX: number; pageY: number; width: number; height: number }) => void;
   onDragStart: (itemId: CargoItemId) => void;
   onDragMove: (itemId: CargoItemId, absoluteX: number, absoluteY: number) => void;
@@ -59,13 +61,13 @@ function StashRow({
       <View style={styles.rowMain}>
         <View style={styles.rowCopy}>
           <TerminalText
-            size={isDesktop ? 10 : 8}
+            variant="body"
             style={{ color: textColor, fontWeight: '700' }}
             numberOfLines={1}
           >
             {entry.name.toUpperCase()}
           </TerminalText>
-          <TerminalText size={isDesktop ? 8 : 7} style={{ color: mutedColor }}>
+          <TerminalText variant="caption" style={{ color: mutedColor }}>
             {`${entry.quantity}× // ${entry.kind === 'resource' ? 'RESOURCE' : 'CONSUMABLE'}`}
           </TerminalText>
         </View>
@@ -85,14 +87,15 @@ export default function SafehouseStashPanel({
   resourceStash,
   hubCraftedConsumables,
   isDropTarget = false,
+  fillHeight = false,
   onPanelMeasured,
   onDragStart,
   onDragMove,
   onDragEnd,
 }: SafehouseStashPanelProps): React.JSX.Element {
   const { theme } = useTerminal();
-  const { isDesktop } = useResponsiveScale();
-  const { bodySize } = useSafehouseTypography();
+  const { isDesktop } = useHubLayout();
+  const { bodySize } = useHubTypography();
   const [search, setSearch] = useState('');
   const accent = theme.statusColor;
   const panelRef = useRef<View>(null);
@@ -145,16 +148,17 @@ export default function SafehouseStashPanel({
       onLayout={reportPanelMetrics}
       style={[
         styles.root,
+        fillHeight && styles.rootFill,
         {
           borderColor: isDropTarget ? accent : theme.borderColor,
           backgroundColor: isDropTarget ? `${theme.primaryColor}12` : theme.backgroundColor,
         },
       ]}
     >
-      <TerminalText size={isDesktop ? 11 : 9} letterSpacing={0.8} style={{ color: accent, fontWeight: '700' }}>
+      <TerminalText variant="panelTitle" letterSpacing={0.8} style={{ color: accent, fontWeight: '700' }}>
         HOME STASH
       </TerminalText>
-      <TerminalText size={isDesktop ? 8 : 7} lineHeight={isDesktop ? 14 : 10} style={{ color: theme.mutedColor }}>
+      <TerminalText variant="caption" style={{ color: theme.mutedColor }}>
         DRAG ICON INTO PACK // DRAG PACK ITEMS BACK HERE
       </TerminalText>
       <TextInput
@@ -176,7 +180,7 @@ export default function SafehouseStashPanel({
         ]}
       />
       <ScrollView
-        style={styles.list}
+        style={[styles.list, Platform.OS === 'web' && styles.listWeb]}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator
         persistentScrollbar={Platform.OS === 'android'}
@@ -185,7 +189,7 @@ export default function SafehouseStashPanel({
         keyboardShouldPersistTaps="handled"
       >
         {entries.length === 0 ? (
-          <TerminalText size={8} style={{ color: theme.mutedColor, paddingVertical: 12 }}>
+          <TerminalText variant="caption" style={{ color: theme.mutedColor, paddingVertical: 12 }}>
             {search.trim() ? '// NO MATCHING ITEMS' : '// STASH EMPTY'}
           </TerminalText>
         ) : (
@@ -216,6 +220,10 @@ const styles = StyleSheet.create({
     gap: 8,
     minHeight: 0,
   },
+  rootFill: {
+    height: '100%',
+    alignSelf: 'stretch',
+  },
   searchInput: {
     borderWidth: 1,
     fontFamily: 'monospace',
@@ -227,6 +235,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   list: { flex: 1, minHeight: 0 },
+  listWeb: {
+    flex: 1,
+    minHeight: 0,
+    height: 0,
+    overflow: 'scroll',
+  },
   listContent: { gap: 6, paddingBottom: 8, paddingRight: 2 },
   row: {
     flexDirection: 'row',

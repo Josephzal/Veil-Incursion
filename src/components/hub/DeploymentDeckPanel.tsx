@@ -10,6 +10,7 @@ import { hubKeyColor } from '../../constants/hubAtmosphere';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useShadowWar } from '../../context/ShadowWarContext';
 import { useHubLayout } from '../../context/HubLayoutContext';
+import { HUB_BORDER_INSET, hubCtaButtonStyle } from '../../constants/hubCta';
 import { formatBracketHeader } from '../../styles/hubTerminalUi';
 import type { PlayerAccount } from '../../types/game';
 import type { ShadowWarBuffId } from '../../types/shadowWar';
@@ -32,22 +33,20 @@ interface StagingFieldProps {
   label: string;
   value: string;
   valueColor: string;
-  isDesktop: boolean;
 }
 
-function StagingField({ label, value, valueColor, isDesktop }: StagingFieldProps): React.JSX.Element {
+function StagingField({ label, value, valueColor }: StagingFieldProps): React.JSX.Element {
   return (
     <View style={styles.stagingField}>
       <TerminalText
-        size={isDesktop ? 7 : 7}
+        variant="caption"
         letterSpacing={0.8}
         style={styles.stagingLabel}
       >
         {formatBracketHeader(label)}
       </TerminalText>
       <TerminalText
-        size={isDesktop ? 11 : 11}
-        lineHeight={isDesktop ? 14 : 14}
+        variant="display"
         letterSpacing={0.5}
         style={[styles.stagingValue, { color: valueColor }]}
       >
@@ -94,7 +93,6 @@ export default function DeploymentDeckPanel({
   const sectionHeaderSize = isDesktop ? 10 : 9;
   const buffMods = shadowWarBuffsToRunModifiers(activeBuffs);
   const canLaunch = !runDisabled && !launching;
-  const ctaFill = `${factionColor}33`;
 
   const activeBuffSummary = useMemo(() => {
     if (activeBuffs.length === 0) return 'No secured sector buffs active';
@@ -113,25 +111,21 @@ export default function DeploymentDeckPanel({
         label="CABAL"
         value={factionDef?.displayName ?? 'UNALIGNED'}
         valueColor={factionColor}
-        isDesktop={isDesktop}
       />
       <StagingField
         label="STASH MANIFEST"
         value={`${stash.used}/${stash.max} SLOTS`}
         valueColor={theme.statusColor}
-        isDesktop={isDesktop}
       />
       <View style={styles.buffBlock}>
         <StagingField
           label="SHADOW WAR BUFFS"
           value={activeBuffSummary}
           valueColor={theme.statusColor}
-          isDesktop={isDesktop}
         />
         {securedSectors.length > 0 ? (
           <TerminalText
-            size={isDesktop ? 7 : 7}
-            lineHeight={isDesktop ? 10 : 10}
+            variant="caption"
             letterSpacing={0.3}
             style={[styles.buffMeta, { color: keyColor }]}
           >
@@ -140,8 +134,7 @@ export default function DeploymentDeckPanel({
         ) : null}
         {buffMods.firstTurnApBonus > 0 || buffMods.maxHpBonusPct > 0 ? (
           <TerminalText
-            size={isDesktop ? 7 : 7}
-            lineHeight={isDesktop ? 10 : 10}
+            variant="caption"
             letterSpacing={0.3}
             style={[styles.buffMeta, { color: keyColor }]}
           >
@@ -155,14 +148,13 @@ export default function DeploymentDeckPanel({
   const dropSection = (
     <View style={styles.dropSection}>
       <TerminalText
-        size={isDesktop ? 7 : 7}
-        lineHeight={isDesktop ? 10 : 10}
+        variant="caption"
         letterSpacing={0.4}
         style={[styles.dropHint, { color: keyColor }]}
       >
         {runDisabled
           ? 'Align with a Cabal to unlock descent'
-          : 'Commit loadout and enter Bound Requisition'}
+          : ''}
       </TerminalText>
       <TacticalButton
         label={launching ? '[ INITIATING DESCENT... ]' : '[ BEGIN INCURSION ]'}
@@ -171,21 +163,7 @@ export default function DeploymentDeckPanel({
         accentColor={factionColor}
         mutedColor={theme.mutedColor}
         variant="cta"
-        style={[
-          styles.dropButton,
-          isDesktop
-            ? {
-                minHeight: scaleSize(40),
-                paddingVertical: scaleSpacing(10),
-              }
-            : null,
-          {
-            backgroundColor: ctaFill,
-            borderColor: factionColor,
-            borderWidth: 1,
-          },
-          !canLaunch ? { opacity: 0.4 } : null,
-        ]}
+        style={hubCtaButtonStyle(factionColor, scaleSize, scaleSpacing, !canLaunch)}
       />
     </View>
   );
@@ -198,6 +176,9 @@ export default function DeploymentDeckPanel({
         isDesktop
           ? {
               gap,
+              flex: 1,
+              alignSelf: 'stretch',
+              paddingHorizontal: HUB_BORDER_INSET,
               paddingBottom: scaleSpacing(8),
               maxWidth: contentWidth,
               width: contentWidth,
@@ -215,7 +196,7 @@ export default function DeploymentDeckPanel({
         contentStyle={[
           styles.dossierContent,
           isDesktop ? styles.dossierContentDesktop : null,
-          { padding: scaleSpacing(isDesktop ? 14 : 12), paddingBottom: scaleSpacing(isDesktop ? 14 : 16) },
+          { padding: scaleSpacing(isDesktop ? 12 : 10) },
         ]}
       >
         <OperativeIdentityDossier theme={theme} profile={profile} account={account} />
@@ -249,7 +230,7 @@ export default function DeploymentDeckPanel({
     >
       <View style={styles.stage}>
         {isDesktop ? (
-          <View style={[styles.deckHost, { paddingHorizontal: scaleSpacing(8) }]}>
+          <View style={styles.deckHost}>
             {deckContent}
           </View>
         ) : (
@@ -278,14 +259,13 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     position: 'relative',
-    overflow: 'hidden',
   },
   deckHost: {
     flex: 1,
     minHeight: 0,
     width: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'flex-start',
+    alignItems: 'stretch',
     zIndex: 2,
   },
   scroll: {
@@ -345,12 +325,10 @@ const styles = StyleSheet.create({
   dropSection: {
     gap: 6,
     flexShrink: 0,
+    paddingHorizontal: HUB_BORDER_INSET,
+    overflow: 'visible',
   },
   dropHint: {
     textAlign: 'center',
-  },
-  dropButton: {
-    width: '100%',
-    alignSelf: 'stretch',
   },
 });

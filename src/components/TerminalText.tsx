@@ -1,16 +1,19 @@
 import React, { useMemo } from 'react';
 import { StyleSheet, Text, type StyleProp, type TextProps, type TextStyle } from 'react-native';
-import { useResponsiveScale } from '../hooks/useResponsiveScale';
+import { HUB_LINE_HEIGHT, HUB_TYPE, type HubTypeToken } from '../constants/hubTypography';
+import { useHubLayout } from '../context/HubLayoutContext';
 
 export interface TerminalTextProps extends TextProps {
   style?: StyleProp<TextStyle>;
-  /** Base font size before desktop scaling. */
+  /** Base font size before desktop scaling. Overrides `variant`. */
   size?: number;
   /** Base line height before desktop scaling. */
   lineHeight?: number;
   /** Base letter spacing before desktop scaling. */
   letterSpacing?: number;
-  /** Secondary/body tier — extra ~1.35× on desktop. */
+  /** Semantic hub type token — used when `size` is omitted. */
+  variant?: HubTypeToken;
+  /** @deprecated Use `variant="body"` or `variant="caption"`. */
   tier?: 'body' | 'caption';
 }
 
@@ -20,26 +23,35 @@ export default function TerminalText({
   size,
   lineHeight,
   letterSpacing,
+  variant,
   tier,
   ...rest
 }: TerminalTextProps): React.JSX.Element {
-  const { isDesktop, scaleSize, scaleSpacing } = useResponsiveScale();
+  const { scaleFont, scaleSpacing } = useHubLayout();
 
   const scaledStyle = useMemo(() => {
     const flat = StyleSheet.flatten(style) ?? {};
-    const tierMul = tier === 'caption' ? 1.5 : tier === 'body' ? 1.35 : 1;
-    const desktopMul = isDesktop ? tierMul : 1;
-    const baseSize = size ?? (typeof flat.fontSize === 'number' ? flat.fontSize : undefined);
-    const baseLineHeight = lineHeight ?? (typeof flat.lineHeight === 'number' ? flat.lineHeight : undefined);
+    const tierToken: HubTypeToken | undefined = tier === 'caption'
+      ? 'caption'
+      : tier === 'body'
+        ? 'body'
+        : undefined;
+    const token = variant ?? tierToken;
+    const baseSize = size
+      ?? (token != null ? HUB_TYPE[token] : undefined)
+      ?? (typeof flat.fontSize === 'number' ? flat.fontSize : undefined);
+    const baseLineHeight = lineHeight
+      ?? (token != null ? HUB_LINE_HEIGHT[token] : undefined)
+      ?? (typeof flat.lineHeight === 'number' ? flat.lineHeight : undefined);
     const baseLetterSpacing = letterSpacing
       ?? (typeof flat.letterSpacing === 'number' ? flat.letterSpacing : undefined);
 
     return {
-      ...(baseSize != null ? { fontSize: scaleSize(baseSize * desktopMul) } : null),
-      ...(baseLineHeight != null ? { lineHeight: scaleSize(baseLineHeight * desktopMul) } : null),
+      ...(baseSize != null ? { fontSize: scaleFont(baseSize) } : null),
+      ...(baseLineHeight != null ? { lineHeight: scaleFont(baseLineHeight) } : null),
       ...(baseLetterSpacing != null ? { letterSpacing: scaleSpacing(baseLetterSpacing) } : null),
     };
-  }, [isDesktop, letterSpacing, lineHeight, scaleSize, scaleSpacing, size, style, tier]);
+  }, [letterSpacing, lineHeight, scaleFont, scaleSpacing, size, style, tier, variant]);
 
   return (
     <Text

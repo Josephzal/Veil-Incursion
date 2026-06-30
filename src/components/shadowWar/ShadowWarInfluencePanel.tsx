@@ -7,6 +7,7 @@ import { calculateSectorControl } from '../../data/shadowWarEngine';
 import { getShadowWarSector } from '../../data/shadowWarSectors';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useHubLayout } from '../../context/HubLayoutContext';
+import { HUB_BORDER_INSET, hubCtaButtonStyle } from '../../constants/hubCta';
 import { formatBracketHeader, HUB_DATA_DIVIDER } from '../../styles/hubTerminalUi';
 import { FactionType } from '../../types/game';
 import type { CabalIpPool, ShadowWarSectorId } from '../../types/shadowWar';
@@ -34,13 +35,13 @@ function InfluenceMeter({
   scaleSpacing: (value: number) => number;
   mutedColor: string;
 }) {
-  const barHeight = isDesktop ? scaleSize(28) : 5;
+  const barHeight = isDesktop ? scaleSize(28) : scaleSize(5);
   const clampedPct = Math.min(100, Math.max(0, pct));
 
   return (
     <View style={[styles.meterBlock, { marginBottom: scaleSpacing(isDesktop ? 10 : 2) }]}>
       <TerminalText
-        size={isDesktop ? 8 : 6}
+        variant="caption"
         letterSpacing={0.6}
         style={{ color: barColor, marginBottom: scaleSpacing(isDesktop ? 4 : 2) }}
         numberOfLines={1}
@@ -59,18 +60,14 @@ function InfluenceMeter({
           ]}
         >
           {isDesktop && clampedPct >= 12 ? (
-            <TerminalText
-              size={8}
-              letterSpacing={0.5}
-              style={styles.meterPctInside}
-            >
+            <TerminalText variant="body" letterSpacing={0.5} style={styles.meterPctInside}>
               {`${clampedPct}%`}
             </TerminalText>
           ) : null}
         </View>
         {(!isDesktop || clampedPct < 12) ? (
           <TerminalText
-            size={isDesktop ? 8 : 6}
+            variant={isDesktop ? 'body' : 'micro'}
             style={[
               styles.meterPctEdge,
               {
@@ -84,7 +81,7 @@ function InfluenceMeter({
         ) : null}
       </View>
       <TerminalText
-        size={isDesktop ? 7 : 6}
+        variant="micro"
         style={{ color: mutedColor, marginTop: scaleSpacing(2), marginLeft: scaleSpacing(isDesktop ? 2 : 0) }}
         numberOfLines={1}
       >
@@ -124,45 +121,19 @@ export default function ShadowWarInfluencePanel({
 
   const readout = (
     <View style={[styles.readout, { gap: scaleSpacing(isDesktop ? 6 : 2) }]}>
-      <TerminalText
-        size={isDesktop ? 11 : 7}
-        lineHeight={isDesktop ? 16 : 11}
-        letterSpacing={0.5}
-        style={{ color: theme.textColor }}
-        numberOfLines={1}
-      >
+      <TerminalText variant="display" letterSpacing={0.5} style={{ color: theme.textColor }} numberOfLines={1}>
         {sector.label.toUpperCase()}
       </TerminalText>
-      <TerminalText
-        size={isDesktop ? 8 : 7}
-        lineHeight={isDesktop ? 12 : 11}
-        style={{ color: theme.mutedColor }}
-        numberOfLines={1}
-      >
+      <TerminalText variant="caption" style={{ color: theme.mutedColor }} numberOfLines={1}>
         {`TOTAL IP: ${control.totalIp}`}
       </TerminalText>
-      <TerminalText
-        size={isDesktop ? 9 : 7}
-        lineHeight={isDesktop ? 13 : 11}
-        style={{ color: statusColor }}
-        numberOfLines={1}
-      >
+      <TerminalText variant="body" style={{ color: statusColor }} numberOfLines={1}>
         {`STATUS: ${statusLabel}`}
       </TerminalText>
-      <TerminalText
-        size={isDesktop ? 8 : 7}
-        lineHeight={isDesktop ? 12 : 11}
-        style={{ color: theme.primaryColor }}
-        numberOfLines={isDesktop ? 3 : 2}
-      >
+      <TerminalText variant="caption" style={{ color: theme.primaryColor }} numberOfLines={isDesktop ? 3 : 2}>
         {`BUFF: ${sector.buffSummary.toUpperCase()}`}
       </TerminalText>
-      <TerminalText
-        size={isDesktop ? 8 : 7}
-        lineHeight={isDesktop ? 12 : 11}
-        style={{ color: theme.mutedColor }}
-        numberOfLines={1}
-      >
+      <TerminalText variant="caption" style={{ color: theme.mutedColor }} numberOfLines={1}>
         {`YOUR WEEKLY DONATION: ${weeklyDonatedIP} IP`}
       </TerminalText>
     </View>
@@ -171,7 +142,7 @@ export default function ShadowWarInfluencePanel({
   const influenceBlock = (
     <View style={styles.influenceBlock}>
       <TerminalText
-        size={isDesktop ? 10 : 9}
+        variant="section"
         letterSpacing={1.1}
         style={[
           styles.influenceHeader,
@@ -213,7 +184,7 @@ export default function ShadowWarInfluencePanel({
       accentColor={ctaAccent}
       mutedColor={theme.mutedColor}
       variant="cta"
-      style={[styles.deployBtn, { marginTop: scaleSpacing(isDesktop ? 16 : 8) }]}
+      style={hubCtaButtonStyle(ctaAccent, scaleSize, scaleSpacing)}
     />
   ) : null;
 
@@ -229,7 +200,11 @@ export default function ShadowWarInfluencePanel({
           <View style={[styles.divider, { borderBottomColor: HUB_DATA_DIVIDER, marginVertical: scaleSpacing(12) }]} />
           {influenceBlock}
         </ScrollView>
-        {donateButton}
+        {donateButton ? (
+          <View style={styles.dropSection}>
+            {donateButton}
+          </View>
+        ) : null}
       </View>
     );
   }
@@ -252,6 +227,8 @@ const styles = StyleSheet.create({
   desktopColumn: {
     flex: 1,
     minHeight: 0,
+    justifyContent: 'space-between',
+    gap: 12,
   },
   scroll: {
     flex: 1,
@@ -300,5 +277,11 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'stretch',
     flexShrink: 0,
+  },
+  dropSection: {
+    gap: 6,
+    flexShrink: 0,
+    paddingHorizontal: HUB_BORDER_INSET,
+    overflow: 'visible',
   },
 });

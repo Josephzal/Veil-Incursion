@@ -60,13 +60,11 @@ const styles = StyleSheet.create({
   outer: {
     flex: 1,
     minHeight: 0,
-    overflow: 'hidden',
   },
   inner: {
     flex: 1,
     minHeight: 0,
     borderWidth: 1,
-    overflow: 'hidden',
   },
   shrinkOuter: {
     alignSelf: 'center',

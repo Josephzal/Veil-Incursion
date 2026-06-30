@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Image, LayoutChangeEvent, StyleSheet, View } from 'react-native';
+import { Image, LayoutChangeEvent, Platform, StyleSheet, View } from 'react-native';
 import TerminalText from '../TerminalText';
 import CargoPackingPanel from '../CargoPackingPanel';
 import SafehouseStashPanel from './SafehouseStashPanel';
@@ -145,17 +145,22 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
 
   return (
     <View ref={rootRef} style={styles.root}>
-      <View style={[styles.split, { gap: scaleSpacing(10) }]}>
+      <View style={[styles.split, isDesktop && styles.splitDesktop, { gap: scaleSpacing(10) }]}>
         <View
-          style={{
-            flex: isDesktop ? undefined : 1,
-            width: isDesktop ? stashLaneWidth : undefined,
-            minWidth: 0,
-            minHeight: 0,
-            flexShrink: isDesktop ? 0 : 1,
-          }}
+          style={[
+            styles.stashColumn,
+            Platform.OS === 'web' && styles.stashColumnWeb,
+            {
+              flex: isDesktop ? 1 : undefined,
+              width: isDesktop ? stashLaneWidth : undefined,
+              minWidth: 0,
+              minHeight: 0,
+              flexShrink: isDesktop ? 1 : 1,
+            },
+          ]}
         >
           <SafehouseStashPanel
+          fillHeight={Platform.OS === 'web'}
           resourceStash={account.resourceStash}
           hubCraftedConsumables={account.hubCraftedConsumables}
           isDropTarget={stashDropActive}
@@ -171,8 +176,9 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
         <View
           style={[
             styles.deploymentPanel,
+            isDesktop && styles.deploymentPanelDesktop,
             {
-              flex: 1,
+              flex: isDesktop ? undefined : 1,
               minWidth: isDesktop ? deploymentLaneWidth : 0,
               borderColor: theme.borderColor,
               backgroundColor: panelBg,
@@ -182,7 +188,7 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
             },
           ]}
         >
-          <TerminalText size={9} letterSpacing={0.8} style={[styles.deploymentTitle, { color: accent, marginBottom: scaleSpacing(4) }]}>
+          <TerminalText variant="panelTitle" letterSpacing={0.8} style={[styles.deploymentTitle, { color: accent, marginBottom: scaleSpacing(4) }]}>
             DEPLOYMENT PACK
           </TerminalText>
 
@@ -243,32 +249,52 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     minHeight: 0,
   },
+  splitDesktop: {
+    alignItems: 'flex-start',
+  },
+  stashColumn: {
+    flex: 1,
+    minHeight: 0,
+  },
+  stashColumnWeb: {
+    alignSelf: 'stretch',
+    height: '100%',
+  },
   deploymentPanel: {
     borderWidth: 1,
     minHeight: 0,
     flexDirection: 'column',
     justifyContent: 'flex-start',
   },
+  deploymentPanelDesktop: Platform.select({
+    web: {
+      position: 'sticky',
+      top: 0,
+      alignSelf: 'flex-start',
+      flexShrink: 0,
+    },
+    default: {
+      flexShrink: 0,
+    },
+  }),
   deploymentTitle: {
     fontWeight: '700',
     flexShrink: 0,
   },
   containmentField: {
-    flex: 1,
-    minHeight: 0,
+    flexShrink: 0,
     borderWidth: 2,
     backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     alignItems: 'center',
     padding: 8,
   },
   containmentFieldDesktop: {
-    padding: 16,
+    padding: 12,
   },
   cargoWrap: {
     alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
+    justifyContent: 'flex-start',
   },
   dragGhostLayer: {
     ...StyleSheet.absoluteFill,

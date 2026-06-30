@@ -77,26 +77,30 @@ export default function AegisLoadoutEditor({
     onUnlockAbility?.(abilityId);
   };
 
-  const cardShellStyle = isDesktop ? styles.cardDesktop : null;
+  const cardStyle = isDesktop ? styles.cardDesktop : null;
 
   return (
     <View style={styles.root}>
       <Text style={[styles.title, { color: theme.mutedColor }]}>{title}</Text>
       <Text style={[styles.hint, { color: theme.mutedColor }]}>{hint}</Text>
 
-      <Grid>
+      <Text style={[styles.sectionLabel, { color: theme.mutedColor, fontSize: captionSize(7) }]}>
+        ACTIVE LOADOUT // TAP SLOT TO SELECT
+      </Text>
+      <Grid columns={2}>
         {draft.map((abilityId, index) => {
           const isSelected = selectedSlot === index;
           const def = AEGIS_ABILITY_CATALOG[abilityId];
           const costLine = formatClassAbilityCostLine('AEGIS', abilityId);
           const tags = getAbilityDefinition(abilityId).tags;
           return (
-            <GridCell key={`slot-${index}`} style={cardShellStyle}>
+            <GridCell key={`slot-${index}`}>
               <HapticPressable
                 onPress={() => onSelectSlot(index as 0 | 1 | 2 | 3)}
                 style={(state) => [
                   getInteractiveButtonStyle(theme.accentColor, { pressed: state.pressed, size: 'sm' }),
                   styles.card,
+                  cardStyle,
                   !isSelected && { borderColor: theme.borderColor },
                   terminalHoverStyle(readPressableHover(state), state.pressed),
                 ]}
@@ -134,7 +138,7 @@ export default function AegisLoadoutEditor({
       <Text style={[styles.poolLabel, { color: theme.mutedColor, fontSize: captionSize(7) }]}>
         ABILITY POOL // TAP TO ASSIGN OR UNLOCK
       </Text>
-      <Grid>
+      <Grid columns={2}>
         {getAssignableAbilities().map((abilityId) => {
           const def = AEGIS_ABILITY_CATALOG[abilityId];
           const costLine = formatClassAbilityCostLine('AEGIS', abilityId);
@@ -144,12 +148,13 @@ export default function AegisLoadoutEditor({
           const unlocked = isAbilityUnlocked(unlockedAbilities, abilityId);
           const affordable = unlocked || canAffordAbilityUnlock(resourceStash, def.unlockCost);
           return (
-            <GridCell key={abilityId} style={cardShellStyle}>
+            <GridCell key={abilityId}>
               <HapticPressable
                 onPress={() => handleAbilityPress(abilityId)}
                 style={(state) => [
                   getInteractiveButtonStyle(theme.accentColor, { pressed: state.pressed, size: 'sm' }),
                   styles.card,
+                  cardStyle,
                   !isSelected && { borderColor: theme.borderColor },
                   !unlocked && !affordable && styles.chipLocked,
                   !unlocked && affordable && styles.chipUnlockable,
@@ -231,6 +236,7 @@ const styles = StyleSheet.create({
   },
   cardDesktop: {
     minHeight: ABILITY_CARD_MIN_HEIGHT,
+    height: '100%',
   },
   slotLabel: {
     fontFamily: MONO,
@@ -250,7 +256,11 @@ const styles = StyleSheet.create({
   poolLabel: {
     fontFamily: MONO,
     letterSpacing: 0.8,
-    marginTop: 2,
+    marginTop: 8,
+  },
+  sectionLabel: {
+    fontFamily: MONO,
+    letterSpacing: 0.8,
   },
   chipLocked: {
     opacity: 0.55,
