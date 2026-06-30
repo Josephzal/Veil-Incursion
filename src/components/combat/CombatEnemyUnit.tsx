@@ -180,6 +180,7 @@ export default function CombatEnemyUnit({
               <HapticPressable
                 onPress={onPress}
                 style={[
+                  styles.hitboxArena,
                   isArena && hitboxStyle ? hitboxStyle : (isBacklineSlot ? styles.hitbox : styles.hitboxFrontline),
                   ENEMY_HITBOX_DEBUG ? styles.hitboxDebug : null,
                 ]}
@@ -304,6 +305,10 @@ const styles = StyleSheet.create({
     height: '72%',
     bottom: 0,
     left: '19%',
+    zIndex: 10,
+  },
+  hitboxArena: {
+    position: 'absolute',
     zIndex: 10,
   },
   hitboxDebug: {

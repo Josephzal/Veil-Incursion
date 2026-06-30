@@ -20,7 +20,7 @@ import Animated, {
 export type IntentShimmerKind = 'fortify' | 'evade';
 
 export const ENRAGE_TINT = '#8B0000';
-export const ENRAGE_PULSE_MS = 2000;
+export const ENRAGE_PULSE_MS = 2800;
 
 const AnimatedImage = Animated.createAnimatedComponent(Image);
 
@@ -54,14 +54,14 @@ function useIntentShimmerAnimation(kind: IntentShimmerKind | null) {
     if (kind === 'fortify') {
       glowOpacity.value = withRepeat(
         withSequence(
-          withTiming(0.52, { duration: 550, easing: Easing.inOut(Easing.cubic) }),
-          withTiming(0.22, { duration: 550, easing: Easing.inOut(Easing.cubic) }),
+          withTiming(0.52, { duration: 850, easing: Easing.inOut(Easing.cubic) }),
+          withTiming(0.22, { duration: 850, easing: Easing.inOut(Easing.cubic) }),
         ),
         -1,
         false,
       );
       tintOpacity.value = withRepeat(
-        withTiming(0.38, { duration: 1100, easing: Easing.inOut(Easing.cubic) }),
+        withTiming(0.38, { duration: 1700, easing: Easing.inOut(Easing.cubic) }),
         -1,
         true,
       );
@@ -73,14 +73,14 @@ function useIntentShimmerAnimation(kind: IntentShimmerKind | null) {
 
     glowOpacity.value = withRepeat(
       withSequence(
-        withTiming(0.42, { duration: 320, easing: Easing.inOut(Easing.cubic) }),
-        withTiming(0.12, { duration: 280, easing: Easing.inOut(Easing.cubic) }),
+        withTiming(0.42, { duration: 520, easing: Easing.inOut(Easing.cubic) }),
+        withTiming(0.12, { duration: 480, easing: Easing.inOut(Easing.cubic) }),
       ),
       -1,
       false,
     );
     evadePhase.value = withRepeat(
-      withTiming(1, { duration: 900, easing: Easing.inOut(Easing.cubic) }),
+      withTiming(1, { duration: 1400, easing: Easing.inOut(Easing.cubic) }),
       -1,
       true,
     );

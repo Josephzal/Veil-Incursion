@@ -65,7 +65,7 @@ export const RUNIC_BRAND_CAP = 3;
 
 export const DEFAULT_AEGIS_LOADOUT: AegisLoadout = [
   'STRIKE',
-  'WRAITH_PARRY',
+  'ASHEN_MANTLE',
   'VEIL_PIERCER',
   'RUIN',
 ];

@@ -9,7 +9,25 @@ export const VEIL_ROT_TICK_DAMAGE = 8;
 
 export const CATALYTIC_CONSOLE_AP_COST = 1;
 export const CATALYTIC_SLOPPY_FLUX_PENALTY = 30;
-export const CATALYTIC_PERFECT_OVERLAP_EPSILON = 0.096;
+/** Catalyst ring stroke thickness (+25% vs baseline borderWidth). */
+export const CATALYTIC_RING_STROKE_SCALE = 1.25;
+/** Inner sprite diameter / inner ring constant — must match CatalyticConsoleOverlay. */
+export const CATALYTIC_INNER_BASE_RATIO = 0.92;
+/** Outer ring diameter / inner ring constant — must match CatalyticConsoleOverlay. */
+export const CATALYTIC_OUTER_TO_INNER_RATIO = 1.2;
+/** Scale where the expanding inner ring meets the static outer ring. */
+export const CATALYTIC_RING_TOUCH_SCALE =
+  CATALYTIC_OUTER_TO_INNER_RATIO / CATALYTIC_INNER_BASE_RATIO;
+/** Release slightly before contact still counts as a pass. */
+export const CATALYTIC_RING_PASS_EPSILON = 0.096 * CATALYTIC_RING_STROKE_SCALE;
+/** Small grace after contact while rings still overlap. */
+export const CATALYTIC_RING_LATE_PASS_MARGIN = 0.035;
+/** Past this beyond contact the charge overfills and auto-fails. */
+export const CATALYTIC_RING_OVERCHARGE_MARGIN = 0.075;
+export const CATALYTIC_RING_MAX_CHARGE_SCALE =
+  CATALYTIC_RING_TOUCH_SCALE + CATALYTIC_RING_OVERCHARGE_MARGIN;
+/** @deprecated Use CATALYTIC_RING_PASS_EPSILON */
+export const CATALYTIC_PERFECT_OVERLAP_EPSILON = CATALYTIC_RING_PASS_EPSILON;
 
 /** Total Veil Rot stacks across the board required to prime Cataclysm Sigil. */
 export const CATACLYSM_ROT_GATE = 6;
@@ -162,7 +180,13 @@ export function totalCatalyticPayload(classState: ClassCombatEncounterState): nu
 }
 
 export function isCatalyticReleasePerfect(overlapRatio: number): boolean {
-  return Math.abs(overlapRatio - 1.0) <= CATALYTIC_PERFECT_OVERLAP_EPSILON;
+  const minPass = CATALYTIC_RING_TOUCH_SCALE - CATALYTIC_RING_PASS_EPSILON;
+  const maxPass = CATALYTIC_RING_TOUCH_SCALE + CATALYTIC_RING_LATE_PASS_MARGIN;
+  return overlapRatio >= minPass && overlapRatio <= maxPass;
+}
+
+export function isCatalyticReleaseOvercharge(overlapRatio: number): boolean {
+  return overlapRatio > CATALYTIC_RING_TOUCH_SCALE + CATALYTIC_RING_LATE_PASS_MARGIN;
 }
 
 export interface CatalyticReleaseResult {

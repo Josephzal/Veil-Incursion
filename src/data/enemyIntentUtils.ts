@@ -18,3 +18,8 @@ export function resolveEffectiveEnemyIntent(profile: EnemyCombatProfile): EnemyI
   }
   return profile.intent;
 }
+
+/** Skip executing a buff intent when the posture is already active. */
+export function isRedundantBuffExecution(profile: EnemyCombatProfile): boolean {
+  return isRedundantBuffIntent(profile.intent, profile);
+}

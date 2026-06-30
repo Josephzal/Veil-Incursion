@@ -272,11 +272,6 @@ export function advanceEnemyIntent(
     nextIntent = 'STRIKE';
   }
 
-  const clearsEvadePosture = nextIntent === 'STRIKE'
-    || nextIntent === 'DOUBLE_STRIKE'
-    || nextIntent === 'WORLD_ENDER'
-    || nextIntent === 'PAVEMENT_CRUSHER';
-
   const telegraphLocked = synced.rosterId === 'concrete-gargoyle'
     && (synced.queuedAction === 'SLAM' || synced.isCharging);
   const nextCharging = synced.rosterId === 'concrete-gargoyle'
@@ -291,7 +286,7 @@ export function advanceEnemyIntent(
     ...synced,
     chargeTurns,
     intent: nextIntent,
-    evadeActive: telegraphLocked ? false : clearsEvadePosture ? false : synced.evadeActive,
+    evadeActive: telegraphLocked ? false : synced.evadeActive,
     isCharging: nextCharging,
     rosterAbilityCooldown: synced.rosterId === 'null-shade' && (synced.rosterAbilityCooldown ?? 0) > 0
       ? (synced.rosterAbilityCooldown ?? 0) - 1

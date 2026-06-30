@@ -1,4 +1,4 @@
-import { Dimensions } from 'react-native';
+import { Dimensions, type ViewStyle } from 'react-native';
 import type { CombatGridSlotId } from '../../types/combatGrid';
 import { ALL_GRID_SLOTS, laneForSlot } from '../../types/combatGrid';
 
@@ -20,20 +20,26 @@ export const ARENA_STAGE_PADDING_BOTTOM = 20;
 /** Toggle red hitbox overlay — set false once overlap is verified. */
 export const ENEMY_HITBOX_DEBUG = false;
 
-export interface EnemyHitboxRect {
-  width: `${number}%`;
-  height: `${number}%`;
-  bottom: `${number}%`;
-  left: `${number}%`;
+/** Hit-test layer for backline — above frontline draw order without changing visuals. */
+export const BACKLINE_TARGET_OVERLAY_Z_INDEX = 30;
+
+function clampHitboxPercent(value: number): number {
+  return Math.max(8, Math.min(92, Math.round(value)));
 }
 
-function clampHitboxPercent(value: number): `${number}%` {
-  return `${Math.max(8, Math.min(92, Math.round(value)))}%`;
-}
-
-function scaleHitboxPercent(base: number, layoutUnitScale: number): `${number}%` {
+function scaleHitboxPercent(base: number, layoutUnitScale: number): number {
   const scaleFactor = Math.max(0.72, Math.min(1.12, layoutUnitScale));
   return clampHitboxPercent(base * scaleFactor);
+}
+
+/** Horizontally centers the tap target — matches EnemyEntity hpBarContainer (57.5% wide, centered). */
+function centerHitboxStyle(widthPct: number, heightPct: number): ViewStyle {
+  return {
+    width: `${widthPct}%`,
+    height: `${heightPct}%`,
+    bottom: 0,
+    left: `${Math.round((100 - widthPct) / 2)}%`,
+  };
 }
 
 /** Torso-focused tap target — scales with slot depth and sprite scale. */
@@ -41,24 +47,21 @@ export function resolveEnemyHitbox(
   slot: CombatGridSlotId | undefined,
   layoutUnitScale: number,
   isAlpha: boolean,
-): EnemyHitboxRect {
+): ViewStyle {
   const isBackline = slot?.startsWith('BL') === true;
   if (isBackline) {
-    return {
-      width: scaleHitboxPercent(44, layoutUnitScale),
-      height: scaleHitboxPercent(40, layoutUnitScale),
-      bottom: clampHitboxPercent(14),
-      left: clampHitboxPercent(28),
-    };
+    return centerHitboxStyle(
+      scaleHitboxPercent(90, layoutUnitScale),
+      scaleHitboxPercent(110, layoutUnitScale),
+      
+    );
   }
 
-  const widthBase = isAlpha ? 42 : 46;
-  return {
-    width: scaleHitboxPercent(widthBase, layoutUnitScale),
-    height: scaleHitboxPercent(56, layoutUnitScale),
-    bottom: clampHitboxPercent(4),
-    left: clampHitboxPercent(isAlpha ? 29 : 27),
-  };
+  const widthBase = isAlpha ? 90 : 70;
+  return centerHitboxStyle(
+    scaleHitboxPercent(widthBase, layoutUnitScale),
+    scaleHitboxPercent(100, layoutUnitScale),
+  );
 }
 
 export {
@@ -88,8 +91,8 @@ export interface StaggeredSlotStyle {
 }
 
 export const STAGGERED_GROUP_SLOTS: Record<CombatGridSlotId, StaggeredSlotStyle> = {
-  FL_0: { bottom: '20%', left: '12%', zIndex: 4, scale: 1.1 },
-  FL_1: { bottom: '24%', right: '18%', zIndex: 3, scale: 1.0 },
+  FL_0: { bottom: '20%', left: '5%', zIndex: 4, scale: 1.3 },
+  FL_1: { bottom: '24%', right: '18%', zIndex: 3, scale: 1.2 },
   BL_0: { bottom: '42%', left: '28%', zIndex: 2, scale: 0.85 },
   BL_1: { bottom: '52%', right: '16%', zIndex: 1, scale: 0.75 },
 };

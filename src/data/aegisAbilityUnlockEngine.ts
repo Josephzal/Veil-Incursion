@@ -95,6 +95,6 @@ export function abilityHasTag(
 
 export function getAssignableAbilities(): AegisAbilityId[] {
   return (Object.keys(AEGIS_ABILITY_CATALOG) as AegisAbilityId[]).filter(
-    (id) => id !== 'EVISCERATE',
+    (id) => id !== 'EVISCERATE' && id !== 'WRAITH_PARRY',
   );
 }

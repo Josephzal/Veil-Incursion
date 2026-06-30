@@ -88,7 +88,7 @@ export default function PersistentTerminalLog({
     : SCROLL_CONTENT_PADDING_BOTTOM;
 
   const dashboardMode = hideTopBorder && fillRemaining;
-  const logFontSize = dashboardMode && isCombatDesktop ? scaleCombatFont(11) : 9;
+  const logFontSize = dashboardMode && isCombatDesktop ? scaleCombatFont(10) : 9;
   const logLineHeight = dashboardMode && isCombatDesktop ? scaleCombatFont(15) : 13;
   const chromeButtonFontSize = dashboardMode && isCombatDesktop ? combatPopupFont(7) : undefined;
 

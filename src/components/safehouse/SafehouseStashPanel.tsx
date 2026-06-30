@@ -11,6 +11,10 @@ import { listHubStagedConsumables } from '../../data/hubSafehouseEngine';
 import { useTerminal } from '../../context/TerminalContext';
 import { useHubLayout } from '../../context/HubLayoutContext';
 import { useHubTypography } from '../../hooks/useHubTypography';
+import {
+  HIDDEN_SCROLLBAR_VIEW_STYLE,
+  HIDDEN_SCROLLVIEW_PROPS,
+} from '../../utils/hiddenScrollbarStyle';
 import type { CargoItemId } from '../../types/cargoGrid';
 import TerminalText from '../TerminalText';
 import DraggableStashIcon from './DraggableStashIcon';
@@ -180,11 +184,9 @@ export default function SafehouseStashPanel({
         ]}
       />
       <ScrollView
-        style={[styles.list, Platform.OS === 'web' && styles.listWeb]}
+        style={[styles.list, Platform.OS === 'web' && styles.listWeb, HIDDEN_SCROLLBAR_VIEW_STYLE]}
         contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator
-        persistentScrollbar={Platform.OS === 'android'}
-        indicatorStyle="white"
+        {...HIDDEN_SCROLLVIEW_PROPS}
         nestedScrollEnabled
         keyboardShouldPersistTaps="handled"
       >
@@ -239,7 +241,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     height: 0,
-    overflow: 'scroll',
+    overflow: 'auto',
   },
   listContent: { gap: 6, paddingBottom: 8, paddingRight: 2 },
   row: {

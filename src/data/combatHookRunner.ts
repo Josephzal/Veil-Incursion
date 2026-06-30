@@ -85,7 +85,8 @@ export function tickCombatSessionExtras(extras: CombatSessionExtras): void {
   });
 }
 
-export function runOnCombatStartHooks(
+/** Operative turn start — Diplomatic Hex Sigil marks a random hostile Vulnerable. */
+export function runOnPlayerTurnStartHooks(
   blueprintId: BlueprintId | null,
   ctx: CombatHookContext,
   extras: CombatSessionExtras,

@@ -29,7 +29,7 @@ export const BLUEPRINT_DEFINITIONS: Record<BlueprintId, BlueprintDefinition> = {
     id: 'envoy_hex',
     name: 'Diplomatic Hex Sigil',
     classId: 'ENVOY',
-    description: 'Combat start — one random hostile gains Vulnerable (+15% damage taken).',
+    description: 'Each operative turn — one random hostile gains Vulnerable (+15% damage taken).',
   },
 };
 

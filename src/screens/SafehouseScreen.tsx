@@ -32,6 +32,7 @@ import { HEX_SHOT_ABILITY_CATALOG } from '../data/hexShotAbilities';
 import { formatClassAbilityCostLine } from '../data/classAbilityResolver';
 import type { EnvoyAbilityId, EnvoyLoadout, HexShotAbilityId, HexShotLoadout } from '../types/operativeClass';
 import { validateLoadoutCommit } from '../utils/aegisLoadoutUtils';
+import { HIDDEN_SCROLLBAR_VIEW_STYLE, HIDDEN_SCROLLVIEW_PROPS } from '../utils/hiddenScrollbarStyle';
 import {
   validateEnvoyLoadoutCommit,
   validateHexShotLoadoutCommit,
@@ -372,7 +373,11 @@ export default function SafehouseScreen(): React.JSX.Element {
             ) : null}
 
             {activeTab === 'LOADOUT' ? (
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.loadoutScroll}>
+              <ScrollView
+                {...HIDDEN_SCROLLVIEW_PROPS}
+                style={HIDDEN_SCROLLBAR_VIEW_STYLE}
+                contentContainerStyle={styles.loadoutScroll}
+              >
                 <Text style={styles.panelTitle}>
                   {`${operativeClass.replace(/_/g, ' ')} COMBAT LOADOUT`}
                 </Text>

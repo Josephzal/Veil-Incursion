@@ -5,11 +5,18 @@ import {
   type AegisLoadout,
 } from '../types/aegisCombat';
 
-type AssignableAegisAbilityId = Exclude<AegisAbilityId, 'EVISCERATE'>;
+type AssignableAegisAbilityId = Exclude<AegisAbilityId, 'EVISCERATE' | 'WRAITH_PARRY'>;
 
 const LOADOUT_POOL = new Set<AssignableAegisAbilityId>(
-  ALL_AEGIS_ABILITIES.filter((id): id is AssignableAegisAbilityId => id !== 'EVISCERATE'),
+  ALL_AEGIS_ABILITIES.filter((id): id is AssignableAegisAbilityId => (
+    id !== 'EVISCERATE' && id !== 'WRAITH_PARRY'
+  )),
 );
+
+function resolveLoadoutSlotId(id: unknown, slotIndex: number): AssignableAegisAbilityId | null {
+  if (id === 'WRAITH_PARRY') return DEFAULT_AEGIS_LOADOUT[slotIndex] as AssignableAegisAbilityId;
+  return isAssignableAbility(id) ? id : null;
+}
 
 function isAssignableAbility(id: unknown): id is AssignableAegisAbilityId {
   return typeof id === 'string' && LOADOUT_POOL.has(id as AssignableAegisAbilityId);
@@ -19,7 +26,7 @@ export function normalizeAegisLoadout(input: unknown): AegisLoadout {
   if (!Array.isArray(input) || input.length !== 4) {
     return [...DEFAULT_AEGIS_LOADOUT];
   }
-  const slots = input.map((id) => (isAssignableAbility(id) ? id : null));
+  const slots = input.map((id, index) => resolveLoadoutSlotId(id, index));
   if (slots.some((id) => id == null)) return [...DEFAULT_AEGIS_LOADOUT];
   return [
     slots[0]!,
@@ -38,8 +45,8 @@ export function validateLoadoutCommit(
   unlocked?: readonly AegisAbilityId[],
 ): string | null {
   if (loadout.length !== 4) return '>> LOADOUT REJECTED — FOUR SLOTS REQUIRED.';
-  if (loadout.some((id) => id === 'EVISCERATE')) {
-    return '>> LOADOUT REJECTED — EVISCERATE IS A HIDDEN ULTIMATE.';
+  if (loadout.some((id) => id === 'EVISCERATE' || id === 'WRAITH_PARRY')) {
+    return '>> LOADOUT REJECTED — ABILITY RESERVED FOR COMBAT CONTROLS.';
   }
   if (hasDuplicateLoadoutSlots(loadout)) {
     return '>> LOADOUT REJECTED — DUPLICATE ABILITY SLOTS DETECTED.';

@@ -1,5 +1,10 @@
 import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { PanResponder, StyleSheet, Text, View } from 'react-native';
+import {
+  type GestureResponderEvent,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import Svg, { Circle, Line } from 'react-native-svg';
 import { CATACLYSM_SIGIL_DURATION_MS } from '../../data/combatMasteryEngine';
 import { COMBAT_MINIGAME_GREEN as GREEN } from '../../constants/combatMinigameTheme';
@@ -154,39 +159,49 @@ function CataclysmSigilOverlay({
     });
   };
 
-  const panResponder = useMemo(
-    () => PanResponder.create({
-      onStartShouldSetPanResponder: () => visible,
-      onMoveShouldSetPanResponder: () => visible && !awaitingTapRef.current,
-      onPanResponderGrant: (evt) => {
-        draggingRef.current = true;
-        const { locationX, locationY } = evt.nativeEvent;
-        if (awaitingTapRef.current) {
-          tryHitNode(locationX, locationY);
-          return;
-        }
-        scheduleDragPoint(locationX, locationY);
-        tryHitNode(locationX, locationY);
-      },
-      onPanResponderMove: (evt) => {
-        if (awaitingTapRef.current || resolvedRef.current) return;
-        const { locationX, locationY } = evt.nativeEvent;
-        scheduleDragPoint(locationX, locationY);
-        tryHitNode(locationX, locationY);
-      },
-      onPanResponderRelease: () => {
-        draggingRef.current = false;
-        setDragPoint(null);
-        pendingDragRef.current = null;
-      },
-      onPanResponderTerminate: () => {
-        draggingRef.current = false;
-        setDragPoint(null);
-        pendingDragRef.current = null;
-      },
-    }),
-    [pattern, visible],
-  );
+  const handleCanvasPoint = (x: number, y: number, phase: 'down' | 'move' | 'up') => {
+    if (resolvedRef.current && phase !== 'up') return;
+    if (phase === 'down') {
+      draggingRef.current = true;
+      if (awaitingTapRef.current) {
+        tryHitNode(x, y);
+        return;
+      }
+      scheduleDragPoint(x, y);
+      tryHitNode(x, y);
+      return;
+    }
+    if (phase === 'move') {
+      if (awaitingTapRef.current || resolvedRef.current) return;
+      scheduleDragPoint(x, y);
+      tryHitNode(x, y);
+      return;
+    }
+    draggingRef.current = false;
+    setDragPoint(null);
+    pendingDragRef.current = null;
+  };
+
+  const onCanvasPointerDown = (evt: GestureResponderEvent) => {
+    const target = evt.currentTarget as unknown as HTMLElement | null;
+    target?.setPointerCapture?.(evt.nativeEvent.pointerId ?? 1);
+    const { locationX, locationY } = evt.nativeEvent;
+    handleCanvasPoint(locationX, locationY, 'down');
+  };
+
+  const onCanvasPointerMove = (evt: GestureResponderEvent) => {
+    if (!draggingRef.current) return;
+    const { locationX, locationY } = evt.nativeEvent;
+    handleCanvasPoint(locationX, locationY, 'move');
+  };
+
+  const onCanvasPointerEnd = (evt?: GestureResponderEvent) => {
+    if (evt) {
+      const target = evt.currentTarget as unknown as HTMLElement | null;
+      target?.releasePointerCapture?.(evt.nativeEvent.pointerId ?? 1);
+    }
+    handleCanvasPoint(0, 0, 'up');
+  };
 
   if (!visible) return null;
 
@@ -204,13 +219,13 @@ function CataclysmSigilOverlay({
   const damageLabel = nodesLocked >= 3 ? '100%' : nodesLocked === 2 ? '60%' : nodesLocked === 1 ? '30%' : '0%';
 
   return (
-    <View style={styles.overlay} {...panResponder.panHandlers}>
+    <View style={styles.overlay}>
       <View style={styles.panel}>
         <Text style={styles.title}>[ CATACLYSM SIGIL // TRACE PATTERN ]</Text>
         <Text style={styles.sub}>
           {awaitingTap
-            ? 'Tap the highlighted node to begin.'
-            : 'Drag through each node in order — keep finger down.'}
+            ? 'Click the highlighted node to begin.'
+            : 'Click and drag through each node in order — keep mouse held.'}
         </Text>
         <View style={styles.timerTrack}>
           <View style={[styles.timerFill, { width: `${Math.min(1, timerPct) * 100}%` }]} />
@@ -218,7 +233,17 @@ function CataclysmSigilOverlay({
         <Text style={styles.timerLabel}>
           {`${(timeLeftMs / 1000).toFixed(1)}s — PAYLOAD ${damageLabel}`}
         </Text>
-        <View style={styles.canvasWrap}>
+        <View
+          style={styles.canvasWrap}
+          onPointerDown={onCanvasPointerDown}
+          onPointerMove={onCanvasPointerMove}
+          onPointerUp={onCanvasPointerEnd}
+          onPointerCancel={onCanvasPointerEnd}
+          onPointerLeave={(evt) => {
+            if (draggingRef.current) return;
+            onCanvasPointerEnd(evt);
+          }}
+        >
           <Svg width={CANVAS_W} height={CANVAS_H} pointerEvents="none">
             {committedSegments.map(({ key, from, to }) => (
               <Line
@@ -339,5 +364,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: GREEN.panelBorder,
     backgroundColor: GREEN.panel,
-  },
+    cursor: 'crosshair',
+    touchAction: 'none',
+  } as View['props']['style'],
 });

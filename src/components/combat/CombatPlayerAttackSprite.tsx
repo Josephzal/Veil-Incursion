@@ -1,5 +1,5 @@
-import React, { forwardRef, useCallback, useImperativeHandle, useRef } from 'react';
-import { StyleSheet, View, type ImageSourcePropType } from 'react-native';
+import React, { forwardRef, useCallback, useImperativeHandle, useRef, useState } from 'react';
+import { StyleSheet, View, type ImageSourcePropType, type LayoutChangeEvent } from 'react-native';
 import Animated, {
   cancelAnimation,
   Easing,
@@ -18,6 +18,13 @@ import {
   RANGED_ATTACK_SPRITE_IN_MS,
   RANGED_ATTACK_SPRITE_OUT_MS,
 } from './combatEnemyBarLayout';
+import type { ClassType } from '../../types/game';
+import {
+  computeFootprintAttackLayout,
+  computeFootprintIdleLayout,
+  playerCombatAttackArtLayerStyle,
+  type FootprintBox,
+} from '../../utils/combatPlayerPortrait';
 
 const LINEAR = Easing.linear;
 
@@ -29,14 +36,32 @@ export type CombatPlayerAttackSpriteHandle = {
 interface CombatPlayerAttackSpriteProps {
   idleSource: ImageSourcePropType;
   attackSource: ImageSourcePropType;
+  operativeClass?: ClassType;
+  attackArtScale?: number;
+  /** Keep attack art locked to the idle footprint — no size/position offset. */
+  lockAttackFootprint?: boolean;
 }
 
 /** Idle/attack crossfade with a locked art box so portrait swaps never resize the frame. */
 const CombatPlayerAttackSprite = forwardRef<CombatPlayerAttackSpriteHandle, CombatPlayerAttackSpriteProps>(
-  function CombatPlayerAttackSprite({ idleSource, attackSource }, ref) {
+  function CombatPlayerAttackSprite({
+    idleSource,
+    attackSource,
+    operativeClass = 'AEGIS',
+    attackArtScale = 1,
+    lockAttackFootprint = false,
+  }, ref) {
     const idleOpacity = useSharedValue(1);
     const attackOpacity = useSharedValue(0);
     const runningRef = useRef(false);
+    const [footprintBox, setFootprintBox] = useState<FootprintBox>({ width: 0, height: 0 });
+
+    const onArtBoxLayout = useCallback((event: LayoutChangeEvent) => {
+      const { width, height } = event.nativeEvent.layout;
+      setFootprintBox((prev) => (
+        prev.width === width && prev.height === height ? prev : { width, height }
+      ));
+    }, []);
 
     const runCrossfade = useCallback(
       (inMs: number, holdMs: number, outMs: number) =>
@@ -106,19 +131,29 @@ const CombatPlayerAttackSprite = forwardRef<CombatPlayerAttackSpriteHandle, Comb
     }));
 
     const hasDistinctAttackArt = idleSource !== attackSource;
+    const idleLayerStyle = lockAttackFootprint
+      ? computeFootprintIdleLayout(footprintBox, operativeClass)
+      : styles.spriteLayer;
+    const attackLayerStyle = lockAttackFootprint
+      ? computeFootprintAttackLayout(footprintBox, operativeClass)
+      : [styles.spriteLayer, playerCombatAttackArtLayerStyle(attackArtScale)];
 
     return (
-      <View style={styles.artBox} pointerEvents="none">
+      <View
+        style={[styles.artBox, lockAttackFootprint && styles.artBoxFootprintLock]}
+        onLayout={lockAttackFootprint ? onArtBoxLayout : undefined}
+        pointerEvents="none"
+      >
         <Animated.Image
           source={idleSource}
           resizeMode="contain"
-          style={[styles.spriteLayer, idleStyle]}
+          style={[idleLayerStyle, idleStyle]}
         />
         {hasDistinctAttackArt ? (
           <Animated.Image
             source={attackSource}
             resizeMode="contain"
-            style={[styles.spriteLayer, attackStyle]}
+            style={[attackLayerStyle, attackStyle]}
           />
         ) : null}
       </View>
@@ -139,8 +174,15 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     backgroundColor: 'transparent',
   },
+  artBoxFootprintLock: {
+    overflow: 'visible',
+  },
   spriteLayer: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     width: '100%',
     height: '100%',
     minHeight: 120,

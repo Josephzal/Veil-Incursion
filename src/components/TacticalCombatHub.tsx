@@ -12,7 +12,7 @@ import {
 } from 'react-native-reanimated';
 import { useTerminal } from '../context/TerminalContext';
 import { advanceEnemyIntent } from '../data/enemies';
-import { resolveEffectiveEnemyIntent } from '../data/enemyIntentUtils';
+import { resolveEffectiveEnemyIntent, isRedundantBuffExecution } from '../data/enemyIntentUtils';
 import { resolveActiveEnemyStatuses } from '../utils/enemyStatusEffects';
 import type { PlayerAIState } from '../data/AIDecisionEngine';
 import {
@@ -212,7 +212,7 @@ import {
   getEnemyAccuracyPenalty,
   getEnemyDamageTakenMultiplier,
   patchEnemyTagsFromExtras,
-  runOnCombatStartHooks,
+  runOnPlayerTurnStartHooks,
   runOnFireHooks,
   runOnHitHooks,
   tickCombatSessionExtras,
@@ -277,6 +277,7 @@ import {
   sanitizeEnvoyCombatLoadout,
   sanitizeHexShotCombatLoadout,
 } from '../data/classAbilityUnlockEngine';
+import { normalizeAegisLoadout } from '../utils/aegisLoadoutUtils';
 import { planFractureBreachStrike } from '../data/combatFractureBreachEngine';
 import {
   isHitstopActive,
@@ -409,7 +410,7 @@ const TELEMETRY_DIVIDER = 'rgba(139, 92, 246, 0.2)';
 
 const FRACTURE_HOUND_DOUBLE_STRIKE_CHANCE = 0.35;
 
-const DEFEND_ABILITIES: AegisAbilityId[] = ['WRAITH_PARRY', 'ASHEN_MANTLE', 'BLOOD_BOUND_CARAPACE'];
+const DEFEND_ABILITIES: AegisAbilityId[] = ['ASHEN_MANTLE', 'BLOOD_BOUND_CARAPACE'];
 const BUFF_ABILITIES: AegisAbilityId[] = ['DEMONS_LUNG', 'CRIMSON_PACT'];
 
 const { width, height: windowHeight } = Dimensions.get('window');
@@ -949,7 +950,7 @@ export default function TacticalCombatHub({
   const activeLoadout = useMemo((): readonly string[] => {
     if (operativeClass === 'HEX_SHOT') return sanitizeHexShotCombatLoadout(hexShotLoadout);
     if (operativeClass === 'ENVOY') return sanitizeEnvoyCombatLoadout(envoyLoadout);
-    return aegisLoadout;
+    return normalizeAegisLoadout(aegisLoadout);
   }, [operativeClass, hexShotLoadout, envoyLoadout, aegisLoadout]);
   const masteryProgress = useMemo(() => {
     if (operativeClass === 'ENVOY') {
@@ -1591,6 +1592,29 @@ export default function TacticalCombatHub({
     if (focused?.unitId) focusedUnitIdRef.current = focused.unitId;
     focusEnemy(focused);
     publishSquadUi(tagged);
+  };
+
+  const applyPlayerTurnBlueprintHooks = () => {
+    if (!equippedBlueprintId) return;
+    const hooks = runOnPlayerTurnStartHooks(
+      equippedBlueprintId,
+      {
+        blueprintId: equippedBlueprintId,
+        player: {
+          hp: operativeHpRef.current,
+          maxHp: maxSoulAnchor,
+          shield: sessionExtrasRef.current.playerShield,
+          shieldTurnsRemaining: sessionExtrasRef.current.playerShieldTurnsRemaining,
+          debuffs: sessionExtrasRef.current.playerDebuffs,
+        },
+        squad: squadRef.current,
+      },
+      sessionExtrasRef.current,
+    );
+    hooks.logLines.forEach((line) => log(line));
+    if (hooks.enemyStatusApplied?.length) {
+      syncSquad(squadRef.current);
+    }
   };
 
   const patchUnit = (unitId: string, patch: Partial<EnemyCombatProfile>) => {
@@ -3657,6 +3681,14 @@ export default function TacticalCombatHub({
   };
 
   const execIntent = (e: EnemyCombatProfile) => {
+    if (isRedundantBuffExecution(e)) {
+      if (e.intent === 'EVADE') {
+        log(`>> ${e.designation} holds evade posture — dodge chance remains elevated.`);
+      } else if (e.intent === 'FORTIFY') {
+        log(`>> ${e.designation} holds fortify posture — kinetic shell remains hardened.`);
+      }
+      return;
+    }
     const intent = resolveEffectiveEnemyIntent(e);
     const blindPenalty = getEnemyAccuracyPenalty(e, sessionExtrasRef.current);
     if (blindPenalty > 0 && isAttackIntent(intent) && Math.random() < blindPenalty) {
@@ -3710,10 +3742,6 @@ export default function TacticalCombatHub({
         break;
       }
       case 'EVADE':
-        if (e.evadeActive) {
-          log(`>> ${e.designation} holds evade posture — dodge chance remains elevated.`);
-          break;
-        }
         log(`>> ${e.designation} EVADE posture — +60% miss chance vs operative strikes.`);
         break;
       case 'FORTIFY': {
@@ -4116,6 +4144,7 @@ export default function TacticalCombatHub({
     bloodBoundCarapaceRef.current = false;
     riftWardReadyRef.current = operativeClass === 'ENVOY';
     if (operativeClass === 'ENVOY') {
+      applyPlayerTurnBlueprintHooks();
       const fluxRestore = Math.round(envoyCombatStateRef.current.fluxMaxCap * 0.15);
       if (fluxRestore > 0) {
         applyVeilFlux(fluxRestore);
@@ -4695,20 +4724,6 @@ export default function TacticalCombatHub({
       ?? (initialSquad.length >= 3 ? THREAT_BUDGET_ELITE : THREAT_BUDGET_STANDARD);
     arenaLayoutModeRef.current = resolveArenaLayoutMode(initialSquad.length);
     syncSquad(initialSquad);
-    if (equippedBlueprintId) {
-      const startHooks = runOnCombatStartHooks(equippedBlueprintId, {
-        blueprintId: equippedBlueprintId,
-        player: {
-          hp: initialOperativeHp,
-          maxHp: maxSoulAnchor,
-          shield: 0,
-          shieldTurnsRemaining: 0,
-          debuffs: [],
-        },
-        squad: initialSquad,
-      }, sessionExtrasRef.current);
-      startHooks.logLines.forEach((line) => log(line));
-    }
     const defaultTarget = nextDefaultTarget(initialSquad);
     if (defaultTarget) selectTarget(defaultTarget);
     operativeHpRef.current = initialOperativeHp; staminaRef.current = initialStamina;
@@ -4841,6 +4856,7 @@ export default function TacticalCombatHub({
     if (ghostedAp > 0) {
       log('>> GHOSTED BOON — +1 AP on operative first turn.');
     }
+    applyPlayerTurnBlueprintHooks();
     log('>> OPERATIVE TURN // Command deck online.');
     log(`>> WEAPON LINK: ${strikeStats.label} // STRIKE ${strikeStats.strikeDamage} DMG / ${strikeStats.strikeStaminaCost} STAM`);
     if (env.isPlayerBlinded) log('>> ENV: OPERATIVE BLINDED — Counter Stance window tightened 15%.');
@@ -5702,16 +5718,11 @@ export default function TacticalCombatHub({
         if (eradicated) return;
         break;
       }
-      case 'WRAITH_PARRY': {
-        if (voidWardPrimedRef.current) {
-          log('[REJECTED] >> Void Ward Shroud already primed.');
-          playerApRef.current += def.apCost;
-          setPlayerActionPoints(playerApRef.current);
-          return;
-        }
-        primeVoidWardShroud();
-        break;
-      }
+      case 'WRAITH_PARRY':
+        log('[REJECTED] >> Void Ward is primed via [ PARRY ] — remove Wraith Parry from loadout.');
+        playerApRef.current += def.apCost;
+        setPlayerActionPoints(playerApRef.current);
+        return;
       case 'RUIN':
       case 'GRAVE_BIND':
       case 'SHADOW_STEP':

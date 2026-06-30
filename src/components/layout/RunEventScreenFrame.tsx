@@ -16,6 +16,7 @@ import {
   resolveImmersiveFooterInset,
   resolveImmersiveHorizontalInset,
 } from '../../constants/immersiveLayout';
+import { HIDDEN_SCROLLBAR_VIEW_STYLE, HIDDEN_SCROLLVIEW_PROPS } from '../../utils/hiddenScrollbarStyle';
 
 interface RunEventScreenHeaderProps {
   eyebrow?: string;
@@ -101,9 +102,9 @@ export default function RunEventScreenFrame({
 
   const body = scrollable ? (
     <ScrollView
-      style={[styles.bodyScroll, bodyStyle]}
+      style={[styles.bodyScroll, HIDDEN_SCROLLBAR_VIEW_STYLE, bodyStyle]}
       contentContainerStyle={[styles.scrollContent, scrollContentContainerStyle]}
-      showsVerticalScrollIndicator={false}
+      {...HIDDEN_SCROLLVIEW_PROPS}
       keyboardShouldPersistTaps="handled"
     >
       {children}

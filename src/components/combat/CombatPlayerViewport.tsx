@@ -37,6 +37,7 @@ import {
   RANGED_ATTACK_SPRITE_OUT_MS,
 } from './combatEnemyBarLayout';
 import CombatPlayerAttackSprite, { type CombatPlayerAttackSpriteHandle } from './CombatPlayerAttackSprite';
+import { playerCombatAttackArtLayerStyle } from '../../utils/combatPlayerPortrait';
 
 const SHAKE_AMPLITUDE = 10;
 const DEFAULT_LUNGE = { x: 48, y: 0 };
@@ -74,6 +75,10 @@ export interface CombatPlayerViewportRef {
 interface CombatPlayerViewportProps {
   imageSource: ImageSourcePropType;
   attackImageSource?: ImageSourcePropType;
+  operativeClass?: ClassType;
+  attackArtScale?: number;
+  /** Crossfade attack art only — no lunge, scale, or strike aura. */
+  stationaryAttack?: boolean;
   style?: StyleProp<ViewStyle>;
   wardPrimed?: boolean;
   abilityPrimed?: boolean;
@@ -81,7 +86,16 @@ interface CombatPlayerViewportProps {
 
 const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerViewportProps>(
   function CombatPlayerViewport(
-    { imageSource, attackImageSource, style, wardPrimed = false, abilityPrimed = false },
+    {
+      imageSource,
+      attackImageSource,
+      operativeClass = 'AEGIS',
+      attackArtScale = 1,
+      stationaryAttack = false,
+      style,
+      wardPrimed = false,
+      abilityPrimed = false,
+    },
     ref,
   ) {
     const shakeX = useSharedValue(0);
@@ -95,6 +109,7 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
     const glowOpacity = useSharedValue(0);
     const attackSpriteRef = useRef<CombatPlayerAttackSpriteHandle>(null);
     const resolvedAttackSource = attackImageSource ?? imageSource;
+    const attackArtLayerStyle = playerCombatAttackArtLayerStyle(attackArtScale);
 
     const primed = wardPrimed || abilityPrimed;
 
@@ -155,7 +170,24 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
       );
     };
 
+    const runSpriteCrossfade = (melee: boolean) => {
+      if (melee) {
+        void attackSpriteRef.current?.executeAttackAnimation();
+      } else {
+        void attackSpriteRef.current?.executeRangedAttackAnimation();
+      }
+      cancelAnimation(strikeAuraOpacity);
+      strikeAuraOpacity.value = 0;
+      lungeX.value = 0;
+      lungeY.value = 0;
+      attackScale.value = 1;
+    };
+
     const runTargetedLunge = (delta: PlayerAttackLungeDelta, faction?: FactionType) => {
+      if (stationaryAttack) {
+        runSpriteCrossfade(true);
+        return;
+      }
       void attackSpriteRef.current?.executeAttackAnimation();
       runStrikeAura(
         faction,
@@ -177,6 +209,10 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
     };
 
     const runRangedAttack = (faction?: FactionType) => {
+      if (stationaryAttack) {
+        runSpriteCrossfade(false);
+        return;
+      }
       void attackSpriteRef.current?.executeRangedAttackAnimation();
       runStrikeAura(
         faction,
@@ -220,7 +256,7 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
         }
         glowOpacity.value = withTiming(0, { duration: GLOW_PULSE_MS });
       },
-    }), [attackScale, damageFlashOpacity, strikeAuraOpacity, lungeX, lungeY, shakeX, glowOpacity]);
+    }), [attackScale, damageFlashOpacity, stationaryAttack, strikeAuraOpacity, lungeX, lungeY, shakeX, glowOpacity]);
 
     const frameAnimatedStyle = useAnimatedStyle(() => ({
       transform: [
@@ -259,7 +295,12 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
               <Image
                 source={resolvedAttackSource}
                 resizeMode="contain"
-                style={[styles.spriteLayer, styles.auraImage, { tintColor: strikeTint }]}
+                style={[
+                  styles.spriteLayer,
+                  attackArtLayerStyle,
+                  styles.auraImage,
+                  { tintColor: strikeTint },
+                ]}
               />
             </View>
           </Animated.View>
@@ -268,6 +309,9 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
               ref={attackSpriteRef}
               idleSource={imageSource}
               attackSource={resolvedAttackSource}
+              operativeClass={operativeClass}
+              attackArtScale={attackArtScale}
+              lockAttackFootprint={stationaryAttack}
             />
             <Animated.View style={[styles.damageFlashWrap, damageFlashStyle]} pointerEvents="none">
               <View style={styles.flashArtBox} pointerEvents="none">
@@ -313,12 +357,13 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     backgroundColor: 'transparent',
     zIndex: 2,
+    overflow: 'visible',
   },
   glowArtBox: {
     width: '100%',
     height: '100%',
     minHeight: 120,
-    overflow: 'hidden',
+    overflow: 'visible',
     alignItems: 'center',
     justifyContent: 'flex-end',
   },
@@ -326,7 +371,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     minHeight: 120,
-    overflow: 'hidden',
+    overflow: 'visible',
     alignItems: 'center',
     justifyContent: 'flex-end',
   },

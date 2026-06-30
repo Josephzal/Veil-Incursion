@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Platform, StyleSheet, Text, View } from 'react-native';
 import { USE_NATIVE_DRIVER } from '../utils/platformMotion';
 import { textGlow, viewShadow } from '../utils/adaptiveStyles';
 import HapticPressable from './HapticPressable';
@@ -114,6 +114,7 @@ export default function CombatCommandDeck({
 }: CombatCommandDeckProps): React.JSX.Element {
   const { isCombatDesktop, fontScale, scaleCombatFont, scaleCombatSize } = useCombatDesktopLayout();
   const desktopDeck = dashboardLayout && isCombatDesktop;
+  const webStagedFocus = Platform.OS === 'web' && selectedAbility != null;
   const shownAp = displayActionPoints ?? actionPoints;
   const lastProcSeqRef = useRef(0);
   const queuePulse = useRef(new Animated.Value(0)).current;
@@ -265,13 +266,35 @@ export default function CombatCommandDeck({
 
   const dashboardTwinBtnStyle = dashboardLayout ? styles.dashboardTwinActionBtn : null;
 
-  const renderClassActionButtons = (includeEndTurn: boolean) => (
-    <>
-      {renderVoidWardButton()}
-      {renderCatalyticConsoleButton()}
-      {renderCombatReloadButton()}
-      {includeEndTurn ? renderEndTurnButton() : null}
-    </>
+  const renderClassActionButtons = (includeEndTurn: boolean) => {
+    if (webStagedFocus) return null;
+    return (
+      <>
+        {renderVoidWardButton()}
+        {renderCatalyticConsoleButton()}
+        {renderCombatReloadButton()}
+        {includeEndTurn ? renderEndTurnButton() : null}
+      </>
+    );
+  };
+
+  const renderWebStagedApRow = () => (
+    <View style={[styles.topBand, dashboardLayout && styles.topBandDashboard]}>
+      <View style={[styles.apColumn, webStagedFocus && styles.webStagedApColumn]}>
+        <CombatApPipRow
+          current={shownAp}
+          max={maxActionPoints}
+          accent={primaryColor}
+          mutedColor={mutedColor}
+          queued={initiativeQueued}
+          fontScale={desktopDeck ? fontScale : 1}
+          labelFontSize={apTypography?.labelFontSize}
+          hexSize={apTypography?.hexSize}
+          compact={dashboardLayout}
+          centered={dashboardLayout || webStagedFocus}
+        />
+      </View>
+    </View>
   );
 
   const renderDashboardTopBand = (includeEndTurn: boolean) => (
@@ -623,14 +646,16 @@ export default function CombatCommandDeck({
     ];
     return (
       <View style={[styles.stagedMeta, dashboardLayout && styles.stagedMetaDashboard]}>
-        <Text
-          style={metaTextStyle}
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.75}
-        >
-          {getStagedCostImpact(selectedAbility)}
-        </Text>
+        {!webStagedFocus ? (
+          <Text
+            style={metaTextStyle}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.75}
+          >
+            {getStagedCostImpact(selectedAbility)}
+          </Text>
+        ) : null}
         {disableReason ? (
           <Text
             style={[
@@ -664,7 +689,9 @@ export default function CombatCommandDeck({
 
   const renderStagedPanel = () => (
     <View style={[styles.stagedPanel, dashboardLayout && styles.stagedPanelDashboard]}>
-      {dashboardLayout ? renderDashboardTopBand(false) : null}
+      {webStagedFocus
+        ? renderWebStagedApRow()
+        : (dashboardLayout ? renderDashboardTopBand(false) : null)}
       {renderStagedActionRow()}
       {renderStagedMeta()}
     </View>
@@ -848,6 +875,9 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  webStagedApColumn: {
+    width: '100%',
   },
   secondaryActionsRow: {
     flexDirection: 'row',

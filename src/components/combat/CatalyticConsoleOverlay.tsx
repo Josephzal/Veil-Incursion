@@ -1,14 +1,27 @@
-import React, { memo, useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import Animated, {
+  Easing,
+  runOnJS,
   useAnimatedStyle,
   useSharedValue,
+  withTiming,
 } from 'react-native-reanimated';
 import HapticPressable from '../HapticPressable';
 import { COMBAT_MINIGAME_GREEN as GREEN } from '../../constants/combatMinigameTheme';
+import {
+  CATALYTIC_RING_MAX_CHARGE_SCALE,
+  CATALYTIC_RING_STROKE_SCALE,
+  CATALYTIC_RING_TOUCH_SCALE,
+  isCatalyticReleaseOvercharge,
+  isCatalyticReleasePerfect,
+} from '../../data/envoyRotEngine';
 
-/** Board-wide catalytic hold & release — same ring resolver as Rift-Ward. */
+/** Board-wide catalytic hold & release — inner ring expands until it meets the outer target. */
 const EXPANSION_RATE = 0.024;
+const TICK_MS = 16;
+const FAIL_BURST_MS = 520;
+const IS_WEB = Platform.OS === 'web';
 
 interface CatalyticConsoleOverlayProps {
   visible: boolean;
@@ -24,52 +37,153 @@ function CatalyticConsoleOverlay({
   onRelease,
 }: CatalyticConsoleOverlayProps): React.JSX.Element | null {
   const [holding, setHolding] = useState(false);
+  const [chargeRatio, setChargeRatio] = useState(0);
+  const [failBurstEpoch, setFailBurstEpoch] = useState(0);
   const innerScale = useSharedValue(0);
+  const burstScale = useSharedValue(0.4);
+  const burstOpacity = useSharedValue(0);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const innerRatioRef = useRef(0);
   const resolvedRef = useRef(false);
   const onReleaseRef = useRef(onRelease);
   onReleaseRef.current = onRelease;
 
+  const clearTick = useCallback(() => {
+    if (tickRef.current) {
+      clearInterval(tickRef.current);
+      tickRef.current = null;
+    }
+  }, []);
+
+  const finishRelease = useCallback((overlapRatio: number) => {
+    onReleaseRef.current(overlapRatio);
+  }, []);
+
+  const playOverchargeBurst = useCallback((overlapRatio: number) => {
+    setFailBurstEpoch((epoch) => epoch + 1);
+    burstScale.value = 0.45;
+    burstOpacity.value = 0.9;
+    burstScale.value = withTiming(2.4, {
+      duration: FAIL_BURST_MS,
+      easing: Easing.out(Easing.cubic),
+    });
+    burstOpacity.value = withTiming(0, {
+      duration: FAIL_BURST_MS,
+      easing: Easing.out(Easing.cubic),
+    }, () => {
+      runOnJS(finishRelease)(overlapRatio);
+    });
+  }, [burstOpacity, burstScale, finishRelease]);
+
+  const resolveRelease = useCallback((overlapRatio: number, forcedOvercharge = false) => {
+    if (resolvedRef.current) return;
+    resolvedRef.current = true;
+    setHolding(false);
+    clearTick();
+
+    const overcharge = forcedOvercharge || isCatalyticReleaseOvercharge(overlapRatio);
+    if (overcharge) {
+      playOverchargeBurst(overlapRatio);
+      return;
+    }
+    finishRelease(overlapRatio);
+  }, [clearTick, finishRelease, playOverchargeBurst]);
+
+  const tickCharge = useCallback(() => {
+    if (resolvedRef.current) return;
+    const next = innerRatioRef.current + EXPANSION_RATE;
+    if (next >= CATALYTIC_RING_MAX_CHARGE_SCALE) {
+      innerRatioRef.current = CATALYTIC_RING_MAX_CHARGE_SCALE;
+      innerScale.value = CATALYTIC_RING_MAX_CHARGE_SCALE;
+      setChargeRatio(CATALYTIC_RING_MAX_CHARGE_SCALE);
+      resolveRelease(CATALYTIC_RING_MAX_CHARGE_SCALE, true);
+      return;
+    }
+    innerRatioRef.current = next;
+    innerScale.value = next;
+    setChargeRatio(next);
+  }, [innerScale, resolveRelease]);
+
+  const startHold = useCallback(() => {
+    if (resolvedRef.current || !visible) return;
+    setHolding(true);
+    clearTick();
+    tickRef.current = setInterval(tickCharge, TICK_MS);
+  }, [clearTick, tickCharge, visible]);
+
+  const endHold = useCallback(() => {
+    if (resolvedRef.current || !visible) return;
+    resolveRelease(innerRatioRef.current);
+  }, [resolveRelease, visible]);
+
   useEffect(() => {
     if (!visible) {
       resolvedRef.current = false;
       innerRatioRef.current = 0;
       innerScale.value = 0;
+      burstOpacity.value = 0;
+      setChargeRatio(0);
       setHolding(false);
-      if (tickRef.current) clearInterval(tickRef.current);
+      clearTick();
       return;
     }
     resolvedRef.current = false;
     innerRatioRef.current = 0;
     innerScale.value = 0;
-  }, [visible, innerScale]);
+    burstOpacity.value = 0;
+    setChargeRatio(0);
+  }, [burstOpacity, clearTick, innerScale, visible]);
 
-  const innerStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: innerScale.value }],
-    opacity: 0.35 + innerScale.value * 0.45,
+  useEffect(() => {
+    if (!visible || !IS_WEB || typeof window === 'undefined') return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.code !== 'Space' && event.key !== ' ') return;
+      if (event.repeat) return;
+      event.preventDefault();
+      startHold();
+    };
+
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.code !== 'Space' && event.key !== ' ') return;
+      event.preventDefault();
+      endHold();
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    };
+  }, [endHold, startHold, visible]);
+
+  const innerStyle = useAnimatedStyle(() => {
+    const pastTouch = innerScale.value >= CATALYTIC_RING_TOUCH_SCALE;
+    return {
+      transform: [{ scale: innerScale.value }],
+      opacity: 0.35 + innerScale.value * 0.45,
+      borderColor: pastTouch ? GREEN.active : GREEN.ringSoft,
+      backgroundColor: pastTouch ? GREEN.fillStrong : GREEN.fill,
+    };
+  });
+
+  const burstStyle = useAnimatedStyle(() => ({
+    opacity: burstOpacity.value,
+    transform: [{ scale: burstScale.value }],
   }));
 
   if (!visible) return null;
 
-  const startHold = () => {
-    if (resolvedRef.current) return;
-    setHolding(true);
-    if (tickRef.current) clearInterval(tickRef.current);
-    tickRef.current = setInterval(() => {
-      innerRatioRef.current = Math.min(1.25, innerRatioRef.current + EXPANSION_RATE);
-      innerScale.value = innerRatioRef.current;
-    }, 16);
-  };
-
-  const endHold = () => {
-    if (resolvedRef.current) return;
-    resolvedRef.current = true;
-    setHolding(false);
-    if (tickRef.current) clearInterval(tickRef.current);
-    tickRef.current = null;
-    onReleaseRef.current(innerRatioRef.current);
-  };
+  const inPassWindow = isCatalyticReleasePerfect(chargeRatio);
+  const pastTouch = chargeRatio >= CATALYTIC_RING_TOUCH_SCALE;
+  const hint = holding
+    ? (pastTouch && !inPassWindow
+      ? 'OVERCHARGE — RELEASE NOW'
+      : inPassWindow
+        ? 'RELEASE — RINGS ALIGNED'
+        : 'RELEASE ON RING OVERLAP')
+    : (IS_WEB ? 'HOLD [SPACE] OR TAP TO CHARGE CATALYST' : 'HOLD TO CHARGE CATALYST');
 
   return (
     <View style={styles.overlay} pointerEvents="auto">
@@ -80,12 +194,17 @@ function CatalyticConsoleOverlay({
       >
         <View style={styles.outerRing} />
         <Animated.View style={[styles.innerCircle, innerStyle]} />
+        {failBurstEpoch > 0 ? (
+          <Animated.View
+            key={`catalytic-fail-burst-${failBurstEpoch}`}
+            style={[styles.failBurst, burstStyle]}
+            pointerEvents="none"
+          />
+        ) : null}
         <Text style={styles.meta}>
           {`ROT // ${rotStacksTotal} STACKS — ~${payloadEstimate} OCCULT PAYLOAD`}
         </Text>
-        <Text style={styles.hint}>
-          {holding ? 'RELEASE ON RING OVERLAP' : 'HOLD TO CHARGE CATALYST'}
-        </Text>
+        <Text style={styles.hint}>{hint}</Text>
       </HapticPressable>
     </View>
   );
@@ -93,9 +212,11 @@ function CatalyticConsoleOverlay({
 
 export default memo(CatalyticConsoleOverlay);
 
-const CATALYST_SCALE = 0.7;
+const CATALYST_SCALE = 1.5;
 const INNER_RING = Math.round(220 * 1.15 * CATALYST_SCALE);
 const OUTER_RING = Math.round(INNER_RING * 1.2);
+const OUTER_RING_BORDER = 10 * CATALYTIC_RING_STROKE_SCALE;
+const INNER_RING_BORDER = 8 * CATALYTIC_RING_STROKE_SCALE;
 
 const styles = StyleSheet.create({
   overlay: {
@@ -114,7 +235,7 @@ const styles = StyleSheet.create({
     width: OUTER_RING,
     height: OUTER_RING,
     borderRadius: OUTER_RING / 2,
-    borderWidth: 2,
+    borderWidth: OUTER_RING_BORDER,
     borderColor: GREEN.ring,
     position: 'absolute',
   },
@@ -123,9 +244,22 @@ const styles = StyleSheet.create({
     height: INNER_RING * 0.92,
     borderRadius: (INNER_RING * 0.92) / 2,
     backgroundColor: GREEN.fill,
-    borderWidth: 1,
+    borderWidth: INNER_RING_BORDER,
     borderColor: GREEN.ringSoft,
     position: 'absolute',
+  },
+  failBurst: {
+    position: 'absolute',
+    width: OUTER_RING,
+    height: OUTER_RING,
+    borderRadius: OUTER_RING / 2,
+    borderWidth: OUTER_RING_BORDER * 1.4,
+    borderColor: GREEN.ring,
+    backgroundColor: GREEN.fillStrong,
+    shadowColor: GREEN.active,
+    shadowOpacity: 0.85,
+    shadowRadius: 28,
+    shadowOffset: { width: 0, height: 0 },
   },
   meta: {
     position: 'absolute',
@@ -144,5 +278,7 @@ const styles = StyleSheet.create({
     fontSize: 8,
     color: GREEN.textBright,
     letterSpacing: 0.6,
+    textAlign: 'center',
+    width: OUTER_RING + 40,
   },
 });

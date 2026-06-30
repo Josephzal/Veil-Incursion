@@ -3,10 +3,12 @@ import { StyleSheet, View, type ViewStyle } from 'react-native';
 import type { LayoutChangeEvent } from 'react-native';
 import type { CombatGridSlotId } from '../../types/combatGrid';
 import { laneForSlot } from '../../types/combatGrid';
+import HapticPressable from '../HapticPressable';
 import type { CombatGridUnitView } from './CombatEnemyUnit';
 import CombatEnemyUnit from './CombatEnemyUnit';
 import CombatEnemyDissolveEffect from './CombatEnemyDissolveEffect';
 import CombatEnemyWrapper, {
+  ENEMY_WRAPPER_ASPECT_RATIO,
   GROUP_ENEMY_WRAPPER_WIDTH,
   SOLO_ENEMY_WRAPPER_WIDTH,
 } from './CombatEnemyWrapper';
@@ -14,12 +16,15 @@ import { shouldShowUnitInArenaGrid } from '../../data/combatSquadEngine';
 import {
   BACKLINE_ROW_HEIGHT,
   BACKLINE_SLOTS,
+  BACKLINE_TARGET_OVERLAY_Z_INDEX,
   backlineMeleeDashDelta,
+  ENEMY_HITBOX_DEBUG,
   FRONTLINE_ROW_HEIGHT,
   FRONTLINE_ROW_OVERLAP_MARGIN,
   FRONTLINE_SLOTS,
   type ArenaGridVariant,
   type ArenaLayoutMode,
+  resolveEnemyHitbox,
   resolveSlotPresentation,
   SOLO_ARENA_SLOT,
   staggeredSlotStyle,
@@ -28,6 +33,57 @@ import {
   FRONTLINE_BATTLEFIELD_LIFT_RATIO,
   SOLO_BATTLEFIELD_LIFT_RATIO,
 } from './combatEnemyBarLayout';
+
+const HITBOX_DEBUG_FILL = 'rgba(255, 0, 0, 0.35)';
+
+interface BacklineHitOverlayProps {
+  slot: CombatGridSlotId;
+  unit: CombatGridUnitView;
+  layoutMode: ArenaLayoutMode;
+  onUnitPress: (unitId: string) => void;
+}
+
+/** Transparent tap layer — backline hits win over overlapping frontline sprites. */
+function BacklineHitOverlay({
+  slot,
+  unit,
+  layoutMode,
+  onUnitPress,
+}: BacklineHitOverlayProps): React.JSX.Element {
+  const presentation = resolveSlotPresentation(slot, layoutMode, 'staggered');
+  const anchor = staggeredSlotStyle(slot, layoutMode);
+  const hitbox = resolveEnemyHitbox(slot, presentation.unitScale, unit.isAlpha === true);
+  const scaled =
+    presentation.unitScale !== 1
+      ? { transform: [{ scale: presentation.unitScale }] as ViewStyle['transform'] }
+      : undefined;
+
+  return (
+    <View
+      style={[
+        styles.backlineHitFrame,
+        {
+          bottom: anchor.bottom,
+          width: `${STAGGERED_SLOT_WIDTH_PCT}%`,
+          zIndex: BACKLINE_TARGET_OVERLAY_Z_INDEX,
+          ...(anchor.left != null ? { left: anchor.left } : { right: anchor.right }),
+        },
+      ]}
+      pointerEvents="box-none"
+    >
+      <View style={[styles.backlineHitInner, scaled]} pointerEvents="box-none">
+        <HapticPressable
+          onPress={() => onUnitPress(unit.unitId)}
+          style={[
+            styles.backlineHitPressable,
+            hitbox,
+            ENEMY_HITBOX_DEBUG ? styles.backlineHitDebug : null,
+          ]}
+        />
+      </View>
+    </View>
+  );
+}
 
 const SLOT_ORDER: CombatGridSlotId[] = ['FL_0', 'FL_1', 'BL_0', 'BL_1'];
 
@@ -90,12 +146,7 @@ function BattlefieldSlot({
   }, [onUnitDissolveComplete, unit]);
 
   const dissolving = unit != null && (unit.dissolveSeq ?? 0) > 0 && !unit.dissolveHidden;
-  const isBackline = laneForSlot(slot) === 'BACKLINE';
-  const zIndex = unit?.isBacklineDashing
-    ? 50
-    : targetingActive && isBackline
-      ? Math.max(presentation.zIndex, 14)
-      : presentation.zIndex;
+  const zIndex = unit?.isBacklineDashing ? 50 : presentation.zIndex;
 
   return (
     <CombatEnemyWrapper
@@ -268,6 +319,21 @@ export default function CombatEnemyGrid({
               />
             );
           })}
+          {targetingActive && layoutMode === 'group'
+            ? BACKLINE_SLOTS.map((slot) => {
+              const unit = unitForSlot(slot);
+              if (!unit?.isTargetable) return null;
+              return (
+                <BacklineHitOverlay
+                  key={`bl-target-${slot}-${unit.unitId}`}
+                  slot={slot}
+                  unit={unit}
+                  layoutMode={layoutMode}
+                  onUnitPress={onUnitPress}
+                />
+              );
+            })
+            : null}
         </View>
       );
     }
@@ -413,5 +479,24 @@ const styles = StyleSheet.create({
   cellEmpty: {
     flex: 1,
     minHeight: 64,
+  },
+  backlineHitFrame: {
+    position: 'absolute',
+    aspectRatio: ENEMY_WRAPPER_ASPECT_RATIO,
+    justifyContent: 'flex-end',
+    overflow: 'visible',
+  },
+  backlineHitInner: {
+    width: '100%',
+    height: '100%',
+    position: 'relative',
+    overflow: 'visible',
+  },
+  backlineHitPressable: {
+    position: 'absolute',
+    zIndex: 10,
+  },
+  backlineHitDebug: {
+    backgroundColor: HITBOX_DEBUG_FILL,
   },
 });

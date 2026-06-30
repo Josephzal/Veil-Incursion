@@ -3,6 +3,7 @@ import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import type { ClassType } from '../../types/game';
 import CombatPlayerViewport, { type CombatPlayerViewportRef } from './CombatPlayerViewport';
 import {
+  resolvePlayerCombatAttackArtScale,
   resolvePlayerCombatAttackPortrait,
   resolvePlayerCombatIdlePortrait,
 } from '../../utils/combatPlayerPortrait';
@@ -30,6 +31,9 @@ export default function PlayerEntity({
         ref={playerViewportRef}
         imageSource={resolvePlayerCombatIdlePortrait(operativeClass)}
         attackImageSource={resolvePlayerCombatAttackPortrait(operativeClass)}
+        operativeClass={operativeClass}
+        attackArtScale={resolvePlayerCombatAttackArtScale(operativeClass)}
+        stationaryAttack
         wardPrimed={wardPrimed}
         abilityPrimed={abilityPrimed}
         style={styles.sprite}

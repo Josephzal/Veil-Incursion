@@ -19,6 +19,10 @@ import TacticalButton from '../TacticalButton';
 import { useHubLayout } from '../../context/HubLayoutContext';
 import { useHubTypography } from '../../hooks/useHubTypography';
 import { terminalHoverStyle, readPressableHover } from '../../utils/terminalHoverStyle';
+import {
+  HIDDEN_SCROLLBAR_VIEW_STYLE,
+  HIDDEN_SCROLLVIEW_PROPS,
+} from '../../utils/hiddenScrollbarStyle';
 
 const TERMINAL_GREEN = '#4ade80';
 
@@ -156,9 +160,13 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
               High-end field gear — purchases stage in hub consumable vault.
             </TerminalText>
             <ScrollView
-              style={[styles.listScroll, Platform.OS === 'web' && styles.listScrollWeb]}
+              style={[
+                styles.listScroll,
+                Platform.OS === 'web' && styles.listScrollWeb,
+                HIDDEN_SCROLLBAR_VIEW_STYLE,
+              ]}
               contentContainerStyle={styles.listContent}
-              showsVerticalScrollIndicator
+              {...HIDDEN_SCROLLVIEW_PROPS}
               nestedScrollEnabled
               keyboardShouldPersistTaps="handled"
             >
@@ -219,9 +227,13 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
               Sell dog tags, ledgers, and excess ley-slag for Cabal Credits.
             </TerminalText>
             <ScrollView
-              style={[styles.listScroll, Platform.OS === 'web' && styles.listScrollWeb]}
+              style={[
+                styles.listScroll,
+                Platform.OS === 'web' && styles.listScrollWeb,
+                HIDDEN_SCROLLBAR_VIEW_STYLE,
+              ]}
               contentContainerStyle={styles.listContent}
-              showsVerticalScrollIndicator
+              {...HIDDEN_SCROLLVIEW_PROPS}
               nestedScrollEnabled
               keyboardShouldPersistTaps="handled"
             >
@@ -350,7 +362,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     height: 0,
-    overflow: 'scroll',
+    overflow: 'auto',
   },
   listContent: {
     gap: 6,
