@@ -8,6 +8,11 @@ import {
   formatAbilityUnlockCost,
 } from '../data/classAbilityUnlockEngine';
 import { useResponsiveScale } from '../hooks/useResponsiveScale';
+import { useSafehouseTypography } from '../hooks/useSafehouseTypography';
+import {
+  desktopTwoColumnCard,
+  desktopTwoColumnGrid,
+} from '../constants/safehouseDesktopLayout';
 import {
   getInteractiveButtonStyle,
   getInteractiveButtonTextStyle,
@@ -76,6 +81,7 @@ export default function ClassLoadoutEditor<T extends string>({
 }: ClassLoadoutEditorProps<T>): React.JSX.Element {
   const textColor = theme.textColor ?? '#d8e2dc';
   const { isDesktop } = useResponsiveScale();
+  const { bodySize, captionSize } = useSafehouseTypography();
 
   const handleAbilityPress = (abilityId: T) => {
     const unlocked = isUnlocked(abilityId);
@@ -91,24 +97,34 @@ export default function ClassLoadoutEditor<T extends string>({
       <Text style={[styles.title, { color: theme.mutedColor }]}>{title}</Text>
       <Text style={[styles.hint, { color: theme.mutedColor }]}>{hint}</Text>
 
-      <View style={[styles.slotRow, isDesktop && styles.slotRowDesktop]}>
+      <View style={[styles.slotRow, isDesktop && desktopTwoColumnGrid]}>
         <View
           style={[
             getInteractiveButtonStyle(theme.accentColor, { pressed: false, size: 'sm' }),
             styles.slot,
             styles.anchorSlot,
+            isDesktop && desktopTwoColumnCard,
             { borderColor: theme.accentColor },
           ]}
         >
-          <Text style={[styles.slotLabel, { color: theme.mutedColor }]}>S1 // ANCHOR</Text>
-          <Text style={[styles.slotAbility, { color: textColor }]} numberOfLines={2}>
+          <Text style={[styles.slotLabel, { color: theme.mutedColor, fontSize: captionSize(8) }]}>S1 // ANCHOR</Text>
+          <Text
+            style={[styles.slotAbility, { color: textColor, fontSize: bodySize(8), lineHeight: bodySize(11) }]}
+            numberOfLines={2}
+          >
             {anchorLabel}
           </Text>
-          <Text style={[styles.slotMeta, { color: theme.mutedColor }]} numberOfLines={2}>
+          <Text
+            style={[styles.slotMeta, { color: theme.mutedColor, fontSize: captionSize(6), lineHeight: captionSize(9) }]}
+            numberOfLines={2}
+          >
             {anchorCostLine ? `COST: ${anchorCostLine}` : (catalog[anchorId]?.description ?? 'Class anchor — fixed.')}
           </Text>
           {anchorCostLine && catalog[anchorId]?.description ? (
-            <Text style={[styles.slotMeta, { color: theme.mutedColor }]} numberOfLines={2}>
+            <Text
+              style={[styles.slotMeta, { color: theme.mutedColor, fontSize: captionSize(6), lineHeight: captionSize(9) }]}
+              numberOfLines={2}
+            >
               {catalog[anchorId]?.description}
             </Text>
           ) : null}
@@ -125,31 +141,32 @@ export default function ClassLoadoutEditor<T extends string>({
               style={(state) => [
                 getInteractiveButtonStyle(theme.accentColor, { pressed: state.pressed, size: 'sm' }),
                 styles.slot,
-                isDesktop && styles.slotDesktop,
+                isDesktop && desktopTwoColumnCard,
                 !isSelected && { borderColor: theme.borderColor },
                 terminalHoverStyle(readPressableHover(state), state.pressed),
               ]}
             >
-              <Text style={[styles.slotLabel, { color: theme.mutedColor }]}>{`S${slotIndex + 1}`}</Text>
-              <Text style={[styles.slotAbility, { color: textColor }]} numberOfLines={2}>
+              <Text style={[styles.slotLabel, { color: theme.mutedColor, fontSize: captionSize(8) }]}>
+                {`S${slotIndex + 1}`}
+              </Text>
+              <Text
+                style={[styles.slotAbility, { color: textColor, fontSize: bodySize(8), lineHeight: bodySize(11) }]}
+                numberOfLines={2}
+              >
                 {def?.label ?? abilityId}
               </Text>
               {def?.costLine ? (
                 <Text
-                  style={[styles.tagLine, { color: theme.mutedColor }]}
+                  style={[styles.tagLine, { color: theme.mutedColor, fontSize: captionSize(6), lineHeight: captionSize(8) }]}
                   numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.65}
                 >
                   {`COST: ${def.costLine}`}
                 </Text>
               ) : null}
               {def?.tagsLine ? <TacticalTagRow tags={parseTagsLine(def.tagsLine)} /> : null}
               <Text
-                style={[styles.slotMeta, { color: theme.mutedColor }]}
+                style={[styles.slotMeta, { color: theme.mutedColor, fontSize: captionSize(6), lineHeight: captionSize(9) }]}
                 numberOfLines={2}
-                adjustsFontSizeToFit
-                minimumFontScale={0.65}
               >
                 {def?.description ?? ''}
               </Text>
@@ -158,10 +175,10 @@ export default function ClassLoadoutEditor<T extends string>({
         })}
       </View>
 
-      <Text style={[styles.poolLabel, { color: theme.mutedColor }]}>
+      <Text style={[styles.poolLabel, { color: theme.mutedColor, fontSize: captionSize(7) }]}>
         ABILITY POOL // TAP TO ASSIGN OR UNLOCK
       </Text>
-      <View style={[styles.pool, isDesktop && styles.poolDesktop]}>
+      <View style={[styles.pool, isDesktop && desktopTwoColumnGrid]}>
         {assignableIds.map((abilityId) => {
           const def = catalog[abilityId];
           const assigned = draft.indexOf(abilityId);
@@ -175,31 +192,34 @@ export default function ClassLoadoutEditor<T extends string>({
               style={(state) => [
                 getInteractiveButtonStyle(theme.accentColor, { pressed: state.pressed, size: 'sm' }),
                 styles.chip,
-                isDesktop && styles.chipDesktop,
+                isDesktop && desktopTwoColumnCard,
                 !isSelected && { borderColor: theme.borderColor },
                 !unlocked && !affordable && styles.chipLocked,
                 !unlocked && affordable && styles.chipUnlockable,
                 terminalHoverStyle(readPressableHover(state), state.pressed),
               ]}
             >
-              <Text style={[styles.chipLabel, { color: isSelected ? theme.accentColor : textColor }]}>
+              <Text
+                style={[
+                  styles.chipLabel,
+                  { color: isSelected ? theme.accentColor : textColor, fontSize: bodySize(7) },
+                ]}
+              >
                 {def.label}
               </Text>
               {!unlocked ? (
                 <Text
                   style={[
                     styles.chipCost,
-                    { color: affordable ? '#4ade80' : '#f87171' },
+                    { color: affordable ? '#4ade80' : '#f87171', fontSize: captionSize(6), lineHeight: captionSize(9) },
                   ]}
                 >
                   {`LOCKED // ${formatAbilityUnlockCost(def.unlockCost)}`}
                 </Text>
               ) : null}
               <Text
-                style={[styles.chipTags, { color: theme.mutedColor }]}
+                style={[styles.chipTags, { color: theme.mutedColor, fontSize: captionSize(5), lineHeight: captionSize(7) }]}
                 numberOfLines={2}
-                adjustsFontSizeToFit
-                minimumFontScale={0.65}
               >
                 {def.costLine ? `COST: ${def.costLine}` : def.tagsLine}
               </Text>
@@ -207,7 +227,9 @@ export default function ClassLoadoutEditor<T extends string>({
                 <TacticalTagRow tags={parseTagsLine(def.tagsLine)} />
               ) : null}
               {assigned >= 0 ? (
-                <Text style={[styles.chipSlot, { color: theme.mutedColor }]}>{`S${assigned + 1}`}</Text>
+                <Text style={[styles.chipSlot, { color: theme.mutedColor, fontSize: captionSize(6) }]}>
+                  {`S${assigned + 1}`}
+                </Text>
               ) : null}
             </HapticPressable>
           );
@@ -251,21 +273,12 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
   },
-  slotRowDesktop: {
-    gap: 16,
-  },
   slot: {
     flexBasis: '47%',
     flexGrow: 1,
     alignItems: 'flex-start',
     gap: 4,
     minHeight: 72,
-  },
-  slotDesktop: {
-    flexBasis: '48%',
-    flexGrow: 0,
-    minWidth: 350,
-    maxWidth: 400,
   },
   anchorSlot: {
     opacity: 0.92,
@@ -303,20 +316,11 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 6,
   },
-  poolDesktop: {
-    gap: 16,
-  },
   chip: {
     alignItems: 'flex-start',
     gap: 2,
     minWidth: '30%',
     flexGrow: 1,
-  },
-  chipDesktop: {
-    flexBasis: '48%',
-    flexGrow: 0,
-    minWidth: 350,
-    maxWidth: 400,
   },
   chipLocked: {
     opacity: 0.55,

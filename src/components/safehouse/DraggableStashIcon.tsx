@@ -2,6 +2,7 @@ import React from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
+import { useSafehouseTypography } from '../../hooks/useSafehouseTypography';
 import type { CargoItemId } from '../../types/cargoGrid';
 import { resolveCargoItemIcon } from '../../utils/cargoItemIcon';
 import { pulseCargoItemPickup } from '../../utils/hubButtonHaptics';
@@ -21,6 +22,9 @@ export default function DraggableStashIcon({
   onDragMove,
   onDragEnd,
 }: DraggableStashIconProps): React.JSX.Element {
+  const { iconSize } = useSafehouseTypography();
+  const handleWidth = iconSize + 16;
+
   const dragGesture = Gesture.Pan()
     .minDistance(6)
     .onBegin((event) => {
@@ -37,11 +41,11 @@ export default function DraggableStashIcon({
 
   return (
     <GestureDetector gesture={dragGesture}>
-      <View style={[styles.dragHandle, { borderColor }]}>
+      <View style={[styles.dragHandle, { borderColor, width: handleWidth }]}>
         <Image
           source={resolveCargoItemIcon(itemId)}
           resizeMode="contain"
-          style={styles.dragIcon}
+          style={{ width: iconSize, height: iconSize }}
         />
       </View>
     </GestureDetector>
@@ -50,15 +54,10 @@ export default function DraggableStashIcon({
 
 const styles = StyleSheet.create({
   dragHandle: {
-    width: 44,
     borderLeftWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 6,
     backgroundColor: '#0a0b0f',
-  },
-  dragIcon: {
-    width: 28,
-    height: 28,
   },
 });

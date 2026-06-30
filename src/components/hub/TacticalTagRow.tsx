@@ -37,10 +37,12 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   pill: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
     borderRadius: 2,
     paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingVertical: 3,
   },
   pillText: {
     color: 'rgba(255, 255, 255, 0.55)',

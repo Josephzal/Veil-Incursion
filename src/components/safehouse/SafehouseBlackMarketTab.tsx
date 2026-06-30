@@ -17,6 +17,11 @@ import { resolveCargoItemIcon } from '../../utils/cargoItemIcon';
 import TerminalText from '../TerminalText';
 import TacticalButton from '../TacticalButton';
 import { useResponsiveScale } from '../../hooks/useResponsiveScale';
+import { useSafehouseTypography } from '../../hooks/useSafehouseTypography';
+import {
+  desktopTwoColumnCard,
+  desktopTwoColumnGrid,
+} from '../../constants/safehouseDesktopLayout';
 import { terminalHoverStyle, readPressableHover } from '../../utils/terminalHoverStyle';
 
 export default function SafehouseBlackMarketTab(): React.JSX.Element {
@@ -31,6 +36,7 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
   const economyColor = getFactionAccent(account.alignedFaction);
   const terminalGreen = '#4ade80';
   const { safehouseLeftRatio, isDesktop, scaleSpacing } = useResponsiveScale();
+  const { iconSize } = useSafehouseTypography();
   const buyFlex = isDesktop ? safehouseLeftRatio : 1;
   const sellFlex = isDesktop ? 1 - safehouseLeftRatio : 1;
 
@@ -76,7 +82,10 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
           </TerminalText>
           <ScrollView
             style={styles.listScroll}
-            contentContainerStyle={[styles.listContent, isDesktop && styles.listContentDesktop]}
+            contentContainerStyle={[
+              styles.listContent,
+              isDesktop && desktopTwoColumnGrid,
+            ]}
           >
             {BLACK_MARKET_CARGO_LISTINGS.map((listing) => {
               const price = hubContrabandPrice(listing.price, marketDiscount);
@@ -88,6 +97,7 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
                   onPress={() => setSelectedListingId(listing.id)}
                   style={(state) => [
                     styles.listingCard,
+                    isDesktop && desktopTwoColumnCard,
                     isDesktop && styles.listingCardDesktop,
                     {
                       borderColor: selected ? economyColor : theme.borderColor,
@@ -96,15 +106,23 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
                     terminalHoverStyle(readPressableHover(state), state.pressed),
                   ]}
                 >
-                  <Image source={resolveCargoItemIcon(listing.id)} style={styles.listingIcon} />
+                  <Image
+                    source={resolveCargoItemIcon(listing.id)}
+                    style={{ width: iconSize, height: iconSize, resizeMode: 'contain' }}
+                  />
                   <View style={styles.listingBody}>
-                    <Text style={[styles.listingName, { color: selected ? economyColor : theme.textColor }]}>
+                    <TerminalText
+                      size={isDesktop ? 9 : 8}
+                      style={{ color: selected ? economyColor : theme.textColor, fontWeight: '700' }}
+                    >
                       {listing.name.toUpperCase()}
-                    </Text>
-                    <Text style={[styles.listingEffect, { color: theme.mutedColor }]} numberOfLines={2}>
+                    </TerminalText>
+                    <TerminalText size={isDesktop ? 8 : 7} lineHeight={isDesktop ? 12 : 10} style={{ color: theme.mutedColor }} numberOfLines={2}>
                       {listing.effect}
-                    </Text>
-                    <Text style={[styles.listingPrice, { color: terminalGreen }]}>{`${price} CR`}</Text>
+                    </TerminalText>
+                    <TerminalText size={isDesktop ? 9 : 8} style={{ color: terminalGreen, fontWeight: '700' }}>
+                      {`${price} CR`}
+                    </TerminalText>
                   </View>
                 </HapticPressable>
               );
@@ -151,18 +169,20 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
                   style={[styles.fenceRow, isDesktop && styles.fenceRowDesktop, { borderColor: theme.borderColor }]}
                 >
                   <View style={styles.fenceInfo}>
-                    <Text style={[styles.fenceName, { color: theme.textColor }]}>
+                    <TerminalText size={isDesktop ? 9 : 8} style={{ color: theme.textColor, fontWeight: '700' }}>
                       {RESOURCE_REGISTRY[entry.resourceId].name.toUpperCase()}
-                    </Text>
-                    <Text style={[styles.fenceMeta, { color: theme.mutedColor }]}>
+                    </TerminalText>
+                    <TerminalText size={isDesktop ? 8 : 7} style={{ color: theme.mutedColor }}>
                       {`${entry.quantity}× @ `}
-                      <Text style={{ color: terminalGreen, fontWeight: '700' }}>{`${entry.sellValue} CR`}</Text>
-                    </Text>
+                      <Text style={{ color: terminalGreen, fontWeight: '700', fontFamily: 'monospace' }}>
+                        {`${entry.sellValue} CR`}
+                      </Text>
+                    </TerminalText>
                   </View>
                   <View style={styles.fenceActions}>
                     <TacticalButton
                       label="[ SELL 1 ]"
-                      active={false}
+                      active
                       onPress={() => handleSell(entry.resourceId, 1)}
                       accentColor={economyColor}
                       mutedColor={theme.mutedColor}
@@ -171,7 +191,7 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
                     {entry.quantity > 1 ? (
                       <TacticalButton
                         label="[ ALL ]"
-                        active={false}
+                        active
                         onPress={() => handleSell(entry.resourceId, entry.quantity)}
                         accentColor={economyColor}
                         mutedColor={theme.mutedColor}
@@ -201,27 +221,17 @@ const styles = StyleSheet.create({
   panelSub: {},
   listScroll: { flex: 1 },
   listContent: { gap: 8, paddingBottom: 8 },
-  listContentDesktop: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
   listingCard: {
     flexDirection: 'row',
     borderWidth: 1,
     padding: 8,
     gap: 8,
+    alignItems: 'flex-start',
   },
   listingCardDesktop: {
-    maxWidth: 300,
-    flexBasis: '47%',
-    flexGrow: 0,
+    minHeight: 100,
   },
-  listingIcon: { width: 40, height: 40, resizeMode: 'contain' },
-  listingBody: { flex: 1, gap: 2 },
-  listingName: { fontFamily: 'monospace', fontSize: 8, fontWeight: '700' },
-  listingEffect: { fontFamily: 'monospace', fontSize: 7, lineHeight: 10 },
-  listingPrice: { fontFamily: 'monospace', fontSize: 8, fontWeight: '700' },
+  listingBody: { flex: 1, gap: 4 },
   fenceRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -232,9 +242,7 @@ const styles = StyleSheet.create({
   fenceRowDesktop: {
     flexWrap: 'wrap',
   },
-  fenceInfo: { flex: 1, gap: 2, minWidth: 140 },
-  fenceName: { fontFamily: 'monospace', fontSize: 8, fontWeight: '700' },
-  fenceMeta: { fontFamily: 'monospace', fontSize: 7 },
+  fenceInfo: { flex: 1, gap: 4, minWidth: 140 },
   fenceActions: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
   emptyText: { fontFamily: 'monospace', fontSize: 8, lineHeight: 12 },
 });

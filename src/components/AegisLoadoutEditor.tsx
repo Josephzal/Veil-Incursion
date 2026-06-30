@@ -12,6 +12,11 @@ import {
   isAbilityUnlocked,
 } from '../data/aegisAbilityUnlockEngine';
 import { useResponsiveScale } from '../hooks/useResponsiveScale';
+import { useSafehouseTypography } from '../hooks/useSafehouseTypography';
+import {
+  desktopTwoColumnCard,
+  desktopTwoColumnGrid,
+} from '../constants/safehouseDesktopLayout';
 import {
   getInteractiveButtonStyle,
   getInteractiveButtonTextStyle,
@@ -63,6 +68,7 @@ export default function AegisLoadoutEditor({
 }: AegisLoadoutEditorProps): React.JSX.Element {
   const textColor = theme.textColor ?? '#d8e2dc';
   const { isDesktop } = useResponsiveScale();
+  const { bodySize, captionSize } = useSafehouseTypography();
 
   const handleAbilityPress = (abilityId: AegisAbilityId) => {
     const unlocked = isAbilityUnlocked(unlockedAbilities, abilityId);
@@ -78,7 +84,7 @@ export default function AegisLoadoutEditor({
       <Text style={[styles.title, { color: theme.mutedColor }]}>{title}</Text>
       <Text style={[styles.hint, { color: theme.mutedColor }]}>{hint}</Text>
 
-      <View style={[styles.slotRow, isDesktop && styles.slotRowDesktop]}>
+      <View style={[styles.slotRow, isDesktop && desktopTwoColumnGrid]}>
         {draft.map((abilityId, index) => {
           const isSelected = selectedSlot === index;
           const def = AEGIS_ABILITY_CATALOG[abilityId];
@@ -91,31 +97,32 @@ export default function AegisLoadoutEditor({
               style={(state) => [
                 getInteractiveButtonStyle(theme.accentColor, { pressed: state.pressed, size: 'sm' }),
                 styles.slot,
-                isDesktop && styles.slotDesktop,
+                isDesktop && desktopTwoColumnCard,
                 !isSelected && { borderColor: theme.borderColor },
                 terminalHoverStyle(readPressableHover(state), state.pressed),
               ]}
             >
-              <Text style={[styles.slotLabel, { color: theme.mutedColor }]}>{`S${index + 1}`}</Text>
-              <Text style={[styles.slotAbility, { color: textColor }]} numberOfLines={2}>
+              <Text style={[styles.slotLabel, { color: theme.mutedColor, fontSize: captionSize(8) }]}>
+                {`S${index + 1}`}
+              </Text>
+              <Text
+                style={[styles.slotAbility, { color: textColor, fontSize: bodySize(8), lineHeight: bodySize(11) }]}
+                numberOfLines={2}
+              >
                 {def.label}
               </Text>
               {costLine ? (
                 <Text
-                  style={[styles.tagLine, { color: theme.mutedColor }]}
+                  style={[styles.tagLine, { color: theme.mutedColor, fontSize: captionSize(6), lineHeight: captionSize(8) }]}
                   numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.65}
                 >
                   {`COST: ${costLine}`}
                 </Text>
               ) : null}
               <TacticalTagRow tags={tags} />
               <Text
-                style={[styles.slotMeta, { color: theme.mutedColor }]}
+                style={[styles.slotMeta, { color: theme.mutedColor, fontSize: captionSize(6), lineHeight: captionSize(9) }]}
                 numberOfLines={2}
-                adjustsFontSizeToFit
-                minimumFontScale={0.65}
               >
                 {def.description}
               </Text>
@@ -124,8 +131,10 @@ export default function AegisLoadoutEditor({
         })}
       </View>
 
-      <Text style={[styles.poolLabel, { color: theme.mutedColor }]}>ABILITY POOL // TAP TO ASSIGN OR UNLOCK</Text>
-      <View style={[styles.pool, isDesktop && styles.poolDesktop]}>
+      <Text style={[styles.poolLabel, { color: theme.mutedColor, fontSize: captionSize(7) }]}>
+        ABILITY POOL // TAP TO ASSIGN OR UNLOCK
+      </Text>
+      <View style={[styles.pool, isDesktop && desktopTwoColumnGrid]}>
         {getAssignableAbilities().map((abilityId) => {
           const def = AEGIS_ABILITY_CATALOG[abilityId];
           const costLine = formatClassAbilityCostLine('AEGIS', abilityId);
@@ -141,37 +150,42 @@ export default function AegisLoadoutEditor({
               style={(state) => [
                 getInteractiveButtonStyle(theme.accentColor, { pressed: state.pressed, size: 'sm' }),
                 styles.chip,
-                isDesktop && styles.chipDesktop,
+                isDesktop && desktopTwoColumnCard,
                 !isSelected && { borderColor: theme.borderColor },
                 !unlocked && !affordable && styles.chipLocked,
                 !unlocked && affordable && styles.chipUnlockable,
                 terminalHoverStyle(readPressableHover(state), state.pressed),
               ]}
             >
-              <Text style={[styles.chipLabel, { color: isSelected ? theme.accentColor : textColor }]}>
+              <Text
+                style={[
+                  styles.chipLabel,
+                  { color: isSelected ? theme.accentColor : textColor, fontSize: bodySize(7) },
+                ]}
+              >
                 {def.label}
               </Text>
               {!unlocked ? (
                 <Text
                   style={[
                     styles.chipCost,
-                    { color: affordable ? '#4ade80' : '#f87171' },
+                    { color: affordable ? '#4ade80' : '#f87171', fontSize: captionSize(6), lineHeight: captionSize(9) },
                   ]}
                 >
                   {`LOCKED // ${formatAbilityUnlockCost(def.unlockCost)}`}
                 </Text>
               ) : null}
               <Text
-                style={[styles.chipTags, { color: theme.mutedColor }]}
+                style={[styles.chipTags, { color: theme.mutedColor, fontSize: captionSize(5), lineHeight: captionSize(7) }]}
                 numberOfLines={2}
-                adjustsFontSizeToFit
-                minimumFontScale={0.65}
               >
                 {costLine ? `COST: ${costLine}` : formatAbilityTags(abilityId)}
               </Text>
               {costLine ? <TacticalTagRow tags={tags} /> : null}
               {assigned >= 0 ? (
-                <Text style={[styles.chipSlot, { color: theme.mutedColor }]}>{`S${assigned + 1}`}</Text>
+                <Text style={[styles.chipSlot, { color: theme.mutedColor, fontSize: captionSize(6) }]}>
+                  {`S${assigned + 1}`}
+                </Text>
               ) : null}
             </HapticPressable>
           );
@@ -215,21 +229,12 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
   },
-  slotRowDesktop: {
-    gap: 16,
-  },
   slot: {
     flexBasis: '47%',
     flexGrow: 1,
     alignItems: 'flex-start',
     gap: 4,
     minHeight: 72,
-  },
-  slotDesktop: {
-    flexBasis: '48%',
-    flexGrow: 0,
-    minWidth: 350,
-    maxWidth: 400,
   },
   slotLabel: {
     fontFamily: MONO,
@@ -264,20 +269,11 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 6,
   },
-  poolDesktop: {
-    gap: 16,
-  },
   chip: {
     alignItems: 'flex-start',
     gap: 2,
     minWidth: '30%',
     flexGrow: 1,
-  },
-  chipDesktop: {
-    flexBasis: '48%',
-    flexGrow: 0,
-    minWidth: 350,
-    maxWidth: 400,
   },
   chipLocked: {
     opacity: 0.55,

@@ -12,6 +12,12 @@ import { RESOURCE_REGISTRY } from '../data/resourceRegistry';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useResponsiveScale } from '../hooks/useResponsiveScale';
+import { useSafehouseTypography } from '../hooks/useSafehouseTypography';
+import {
+  DESKTOP_FORGE_STASH_WIDTH,
+  desktopTwoColumnCard,
+  desktopTwoColumnGrid,
+} from '../constants/safehouseDesktopLayout';
 import { terminalHoverStyle, readPressableHover } from '../utils/terminalHoverStyle';
 import type { ResourceItemId } from '../types/resourceItem';
 
@@ -44,6 +50,7 @@ function RecipeCard({
   isDesktop: boolean;
 }): React.JSX.Element {
   const craftDisabled = !affordable || (recipe.kind !== 'CONSUMABLE' && alreadyOwned);
+  const { bodySize, captionSize } = useSafehouseTypography();
   const craftLabel = recipe.kind === 'CONSUMABLE'
     ? '[ CRAFT ]'
     : alreadyOwned
@@ -54,17 +61,24 @@ function RecipeCard({
     <View
       style={[
         styles.recipeCard,
+        isDesktop && desktopTwoColumnCard,
         isDesktop && styles.recipeCardDesktop,
         { borderColor: affordable ? theme.statusColor : theme.borderColor },
       ]}
     >
       <View style={styles.recipeCopy}>
-        <Text style={[styles.recipeTitle, { color: theme.primaryColor }]}>{recipe.label.toUpperCase()}</Text>
+        <Text style={[styles.recipeTitle, { color: theme.primaryColor, fontSize: bodySize(9) }]}>
+          {recipe.label.toUpperCase()}
+        </Text>
         {recipe.effectSummary ? (
-          <Text style={[styles.recipeBody, { color: theme.mutedColor }]}>{recipe.effectSummary}</Text>
+          <Text style={[styles.recipeBody, { color: theme.mutedColor, fontSize: bodySize(8), lineHeight: bodySize(12) }]}>
+            {recipe.effectSummary}
+          </Text>
         ) : null}
         {recipe.description ? (
-          <Text style={[styles.recipeBody, { color: theme.mutedColor }]}>{recipe.description}</Text>
+          <Text style={[styles.recipeBody, { color: theme.mutedColor, fontSize: bodySize(8), lineHeight: bodySize(12) }]}>
+            {recipe.description}
+          </Text>
         ) : null}
         <View style={styles.reqBlock}>
           {recipe.requirements.map((req) => (
@@ -72,8 +86,10 @@ function RecipeCard({
               key={`${recipe.id}-${req.resourceId}`}
               style={[
                 styles.reqLine,
-                isDesktop && styles.reqLineDesktop,
                 {
+                  fontSize: captionSize(7),
+                  lineHeight: captionSize(10),
+                  fontWeight: isDesktop ? '600' : '400',
                   color: getStashCount(stash, req.resourceId) >= req.quantity
                     ? theme.textColor
                     : '#ef4444',
@@ -120,11 +136,13 @@ function ResourceStashPanel({
   theme: ReturnType<typeof useTerminal>['theme'];
   isDesktop: boolean;
 }): React.JSX.Element {
+  const { bodySize, captionSize } = useSafehouseTypography();
+
   return (
     <View style={[styles.stashPanel, isDesktop && styles.stashPanelDesktop, { borderColor: theme.borderColor }]}>
-      <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>RESOURCE STASH</Text>
+      <Text style={[styles.sectionLabel, { color: theme.mutedColor, fontSize: captionSize(7) }]}>RESOURCE STASH</Text>
       {Object.keys(stash).length === 0 ? (
-        <Text style={[styles.emptyText, { color: theme.mutedColor }]}>
+        <Text style={[styles.emptyText, { color: theme.mutedColor, fontSize: bodySize(8), lineHeight: bodySize(12) }]}>
           No resources banked — extract salvage from incursions to craft.
         </Text>
       ) : (
@@ -134,7 +152,7 @@ function ResourceStashPanel({
             style={[
               styles.stashLine,
               isDesktop && styles.stashLineDesktop,
-              { color: theme.textColor },
+              { color: theme.textColor, fontSize: isDesktop ? bodySize(10) : bodySize(8), lineHeight: isDesktop ? bodySize(14) : bodySize(11) },
             ]}
           >
             {`${count}x ${RESOURCE_REGISTRY[id as ResourceItemId]?.name ?? id}`}
@@ -176,7 +194,7 @@ export default function CraftingMenuPanel({
       <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>
         {SECTION_LABELS[kind]}
       </Text>
-      <View style={[styles.recipeGrid, useForgeDesktop && styles.recipeGridDesktop]}>
+      <View style={[styles.recipeGrid, useForgeDesktop && desktopTwoColumnGrid]}>
         {recipesByKind[kind].map((recipe) => {
           const affordable = canAffordRecipe(account.resourceStash, recipe);
           const alreadyOwned = isRecipeOutputOwned(
@@ -324,9 +342,11 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   forgeStashColumn: {
-    flex: 0.3,
-    minWidth: 0,
+    width: DESKTOP_FORGE_STASH_WIDTH,
+    flexShrink: 0,
+    flexGrow: 0,
     gap: 10,
+    alignSelf: 'flex-start',
   },
   forgeRecipesColumn: {
     flex: 0.7,
@@ -372,11 +392,6 @@ const styles = StyleSheet.create({
   recipeGrid: {
     gap: 8,
   },
-  recipeGridDesktop: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
   recipeCard: {
     borderWidth: 1,
     padding: 10,
@@ -385,11 +400,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   recipeCardDesktop: {
-    flexBasis: '48%',
-    flexGrow: 0,
-    minWidth: 280,
-    maxWidth: 420,
     marginBottom: 0,
+    minHeight: 140,
     justifyContent: 'space-between',
   },
   recipeCopy: {
@@ -431,6 +443,8 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 12,
     marginTop: 8,
+    width: 'auto',
+    maxWidth: '100%',
   },
   craftBtnText: {
     fontFamily: 'monospace',

@@ -38,10 +38,17 @@ export function pointInWindowRect(
 }
 
 /** Fit cargo grid cells within the deployment pack content area. */
-export function resolveHubLoadoutCellSize(areaWidth: number, areaHeight: number): number {
-  if (areaWidth <= 0 || areaHeight <= 0) return 44;
+export function resolveHubLoadoutCellSize(
+  areaWidth: number,
+  areaHeight: number,
+  isDesktop = false,
+): number {
+  if (areaWidth <= 0 || areaHeight <= 0) return isDesktop ? 80 : 44;
   const maxByWidth = Math.floor((areaWidth - (CARGO_GRID_COLS - 1) * CARGO_CELL_GAP) / CARGO_GRID_COLS);
   const maxByHeight = Math.floor((areaHeight - (CARGO_GRID_ROWS - 1) * CARGO_CELL_GAP) / CARGO_GRID_ROWS);
   const fitted = Math.min(maxByWidth, maxByHeight);
+  if (isDesktop) {
+    return Math.max(80, Math.min(100, fitted));
+  }
   return Math.max(38, Math.min(50, fitted));
 }

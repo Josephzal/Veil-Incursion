@@ -2,20 +2,17 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Platform,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { runOnJS } from 'react-native-reanimated';
 import { ALL_RESOURCE_ITEM_IDS, RESOURCE_REGISTRY } from '../../data/resourceRegistry';
 import { listHubStagedConsumables } from '../../data/hubSafehouseEngine';
 import { useTerminal } from '../../context/TerminalContext';
 import { useResponsiveScale } from '../../hooks/useResponsiveScale';
+import { useSafehouseTypography } from '../../hooks/useSafehouseTypography';
 import type { CargoItemId } from '../../types/cargoGrid';
-import { resolveCargoItemIcon } from '../../utils/cargoItemIcon';
-import { pulseCargoItemPickup } from '../../utils/hubButtonHaptics';
+import TerminalText from '../TerminalText';
 import DraggableStashIcon from './DraggableStashIcon';
 
 export type StashEntryKind = 'resource' | 'consumable';
@@ -43,7 +40,7 @@ function StashRow({
   borderColor,
   mutedColor,
   textColor,
-  compact,
+  isDesktop,
   onDragStart,
   onDragMove,
   onDragEnd,
@@ -52,21 +49,25 @@ function StashRow({
   borderColor: string;
   mutedColor: string;
   textColor: string;
-  compact?: boolean;
+  isDesktop: boolean;
   onDragStart: (itemId: CargoItemId) => void;
   onDragMove: (itemId: CargoItemId, absoluteX: number, absoluteY: number) => void;
   onDragEnd: (itemId: CargoItemId, absoluteX: number, absoluteY: number) => void;
 }): React.JSX.Element {
   return (
-    <View style={[styles.row, compact && styles.rowCompact, { borderColor }]}>
+    <View style={[styles.row, isDesktop && styles.rowDesktop, { borderColor }]}>
       <View style={styles.rowMain}>
         <View style={styles.rowCopy}>
-          <Text style={[styles.rowName, { color: textColor }]} numberOfLines={1}>
+          <TerminalText
+            size={isDesktop ? 10 : 8}
+            style={{ color: textColor, fontWeight: '700' }}
+            numberOfLines={1}
+          >
             {entry.name.toUpperCase()}
-          </Text>
-          <Text style={[styles.rowMeta, { color: mutedColor }]}>
+          </TerminalText>
+          <TerminalText size={isDesktop ? 8 : 7} style={{ color: mutedColor }}>
             {`${entry.quantity}× // ${entry.kind === 'resource' ? 'RESOURCE' : 'CONSUMABLE'}`}
-          </Text>
+          </TerminalText>
         </View>
       </View>
       <DraggableStashIcon
@@ -91,6 +92,7 @@ export default function SafehouseStashPanel({
 }: SafehouseStashPanelProps): React.JSX.Element {
   const { theme } = useTerminal();
   const { isDesktop } = useResponsiveScale();
+  const { bodySize } = useSafehouseTypography();
   const [search, setSearch] = useState('');
   const accent = theme.statusColor;
   const panelRef = useRef<View>(null);
@@ -149,10 +151,12 @@ export default function SafehouseStashPanel({
         },
       ]}
     >
-      <Text style={[styles.title, { color: accent }]}>HOME STASH</Text>
-      <Text style={[styles.subtitle, { color: theme.mutedColor }]}>
+      <TerminalText size={isDesktop ? 11 : 9} letterSpacing={0.8} style={{ color: accent, fontWeight: '700' }}>
+        HOME STASH
+      </TerminalText>
+      <TerminalText size={isDesktop ? 8 : 7} lineHeight={isDesktop ? 14 : 10} style={{ color: theme.mutedColor }}>
         DRAG ICON INTO PACK // DRAG PACK ITEMS BACK HERE
-      </Text>
+      </TerminalText>
       <TextInput
         value={search}
         onChangeText={setSearch}
@@ -162,10 +166,12 @@ export default function SafehouseStashPanel({
         autoCorrect={false}
         style={[
           styles.searchInput,
+          isDesktop && styles.searchInputDesktop,
           {
             borderColor: theme.borderColor,
             color: theme.textColor,
             backgroundColor: '#0a0b0f',
+            fontSize: bodySize(8),
           },
         ]}
       />
@@ -179,9 +185,9 @@ export default function SafehouseStashPanel({
         keyboardShouldPersistTaps="handled"
       >
         {entries.length === 0 ? (
-          <Text style={[styles.empty, { color: theme.mutedColor }]}>
+          <TerminalText size={8} style={{ color: theme.mutedColor, paddingVertical: 12 }}>
             {search.trim() ? '// NO MATCHING ITEMS' : '// STASH EMPTY'}
-          </Text>
+          </TerminalText>
         ) : (
           entries.map((entry) => (
             <StashRow
@@ -190,7 +196,7 @@ export default function SafehouseStashPanel({
               borderColor={theme.borderColor}
               mutedColor={theme.mutedColor}
               textColor={theme.textColor}
-              compact={isDesktop}
+              isDesktop={isDesktop}
               onDragStart={onDragStart}
               onDragMove={onDragMove}
               onDragEnd={onDragEnd}
@@ -210,43 +216,32 @@ const styles = StyleSheet.create({
     gap: 8,
     minHeight: 0,
   },
-  title: {
-    fontFamily: 'monospace',
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-  },
-  subtitle: {
-    fontFamily: 'monospace',
-    fontSize: 7,
-    lineHeight: 10,
-  },
   searchInput: {
     borderWidth: 1,
     fontFamily: 'monospace',
-    fontSize: 8,
     paddingHorizontal: 8,
     paddingVertical: 6,
   },
+  searchInputDesktop: {
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+  },
   list: { flex: 1, minHeight: 0 },
   listContent: { gap: 6, paddingBottom: 8, paddingRight: 2 },
-  empty: { fontFamily: 'monospace', fontSize: 8, paddingVertical: 12 },
   row: {
     flexDirection: 'row',
     alignItems: 'stretch',
     borderWidth: 1,
     minHeight: 44,
   },
-  rowCompact: {
-    minHeight: 36,
+  rowDesktop: {
+    minHeight: 56,
   },
   rowMain: {
     flex: 1,
     justifyContent: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
-  rowCopy: { gap: 2 },
-  rowName: { fontFamily: 'monospace', fontSize: 8, fontWeight: '700' },
-  rowMeta: { fontFamily: 'monospace', fontSize: 7 },
+  rowCopy: { gap: 4 },
 });

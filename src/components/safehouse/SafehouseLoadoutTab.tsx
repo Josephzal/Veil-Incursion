@@ -10,6 +10,8 @@ import { useTerminal } from '../../context/TerminalContext';
 import type { CargoItemId } from '../../types/cargoGrid';
 import { resolveCargoItemIcon } from '../../utils/cargoItemIcon';
 import { useResponsiveScale } from '../../hooks/useResponsiveScale';
+import { useSafehouseTypography } from '../../hooks/useSafehouseTypography';
+import { DESKTOP_STASH_MAX_WIDTH } from '../../constants/safehouseDesktopLayout';
 import {
   pointInWindowRect,
   resolveCargoGridCellFromWindow,
@@ -45,12 +47,13 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
   const accent = theme.statusColor;
   const panelBg = theme.backgroundColor;
   const { safehouseLeftRatio, isDesktop, scaleSpacing } = useResponsiveScale();
+  const { iconSize } = useSafehouseTypography();
   const stashFlex = isDesktop ? safehouseLeftRatio : 1;
   const deploymentFlex = isDesktop ? 1 - safehouseLeftRatio : 1;
 
   const hubCellSize = useMemo(
-    () => resolveHubLoadoutCellSize(cargoAreaSize.width, cargoAreaSize.height),
-    [cargoAreaSize.height, cargoAreaSize.width],
+    () => resolveHubLoadoutCellSize(cargoAreaSize.width, cargoAreaSize.height, isDesktop),
+    [cargoAreaSize.height, cargoAreaSize.width, isDesktop],
   );
 
   useEffect(() => () => {
@@ -141,7 +144,15 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
   return (
     <View ref={rootRef} style={styles.root}>
       <View style={[styles.split, { gap: scaleSpacing(10) }]}>
-        <View style={{ flex: stashFlex, minWidth: 0, minHeight: 0, maxWidth: isDesktop ? 420 : undefined }}>
+        <View
+          style={{
+            flex: stashFlex,
+            minWidth: 0,
+            minHeight: 0,
+            maxWidth: isDesktop ? DESKTOP_STASH_MAX_WIDTH : undefined,
+            flexShrink: isDesktop ? 0 : 1,
+          }}
+        >
           <SafehouseStashPanel
           resourceStash={account.resourceStash}
           hubCraftedConsumables={account.hubCraftedConsumables}
@@ -209,8 +220,10 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
             style={[
               styles.dragGhostIcon,
               {
-                left: dragGhost.x - rootOffsetRef.current.x - 14,
-                top: dragGhost.y - rootOffsetRef.current.y - 14,
+                width: iconSize,
+                height: iconSize,
+                left: dragGhost.x - rootOffsetRef.current.x - iconSize / 2,
+                top: dragGhost.y - rootOffsetRef.current.y - iconSize / 2,
               },
             ]}
           />
@@ -241,7 +254,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     borderWidth: 2,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 8,
@@ -260,8 +273,6 @@ const styles = StyleSheet.create({
   },
   dragGhostIcon: {
     position: 'absolute',
-    width: 28,
-    height: 28,
     opacity: 0.92,
   },
 });
