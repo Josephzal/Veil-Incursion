@@ -5,8 +5,9 @@ import type { ClassType } from '../../../types/game';
 import type { CombatTurnOrderSnapshot } from '../../../utils/combatTurnOrder';
 import type { ImageSourcePropType } from 'react-native';
 import {
-  TACTICAL_DASHBOARD_HEIGHT_PERCENT,
+  OPERATIVE_VITALS_OVERLAY_TOP,
 } from '../../../constants/combatLayout';
+import { useCombatDesktopLayout } from '../../../hooks/useCombatDesktopLayout';
 
 interface TurnOrderSidebarProps {
   turnOrder?: CombatTurnOrderSnapshot | null;
@@ -28,8 +29,16 @@ export default function TurnOrderSidebar({
   selectedUnitId,
   onHostilePress,
 }: TurnOrderSidebarProps): React.JSX.Element {
+  const { isCombatDesktop, scaleCombatSize } = useCombatDesktopLayout();
+
   return (
-    <View style={styles.sidebar} pointerEvents="box-none">
+    <View
+      style={[
+        styles.sidebar,
+        isCombatDesktop ? { width: scaleCombatSize(80), paddingHorizontal: scaleCombatSize(6) } : null,
+      ]}
+      pointerEvents="box-none"
+    >
       <TurnOrderColumn
         turnOrder={turnOrder}
         gridUnits={gridUnits}
@@ -48,14 +57,13 @@ const styles = StyleSheet.create({
   sidebar: {
     position: 'absolute',
     right: 0,
-    top: 0,
-    bottom: TACTICAL_DASHBOARD_HEIGHT_PERCENT,
+    top: OPERATIVE_VITALS_OVERLAY_TOP,
     width: 60,
     zIndex: 20,
     elevation: 20,
     pointerEvents: 'box-none',
-    justifyContent: 'center',
+    alignItems: 'flex-end',
+    justifyContent: 'flex-start',
     paddingHorizontal: 4,
-    paddingVertical: 8,
   },
 });

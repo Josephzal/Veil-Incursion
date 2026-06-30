@@ -3,6 +3,7 @@ import { Image, StyleSheet, Text, View, type ImageSourcePropType } from 'react-n
 import HapticPressable from '../../HapticPressable';
 import type { ClassType } from '../../../types/game';
 import type { CombatTurnOrderEntry, CombatTurnOrderSnapshot } from '../../../utils/combatTurnOrder';
+import { useCombatDesktopLayout } from '../../../hooks/useCombatDesktopLayout';
 
 const MONO = 'monospace';
 const HOSTILE_ACCENT = '#ef4444';
@@ -65,20 +66,31 @@ export default function TurnOrderColumn({
   selectedUnitId,
   onHostilePress,
 }: TurnOrderColumnProps): React.JSX.Element {
+  const { isCombatDesktop, scaleCombatFont, scaleCombatSize } = useCombatDesktopLayout();
   const entries = turnOrder?.entries ?? [];
   const portraitById = useMemo(
     () => new Map(gridUnits.map((unit) => [unit.unitId, unit.portraitSource])),
     [gridUnits],
   );
 
-  const baseSize = entries.length > 7 ? 22 : entries.length > 5 ? 26 : 30;
-  const activeSize = baseSize + 6;
+  const baseSize = isCombatDesktop
+    ? scaleCombatSize(38)
+    : entries.length > 7 ? 22 : entries.length > 5 ? 26 : 30;
+  const activeSize = baseSize + (isCombatDesktop ? scaleCombatSize(8) : 6);
 
   return (
     <View style={[styles.host, overlay && styles.hostOverlay]}>
-      <Text style={[styles.header, { color: mutedColor }]}>TURN ORDER</Text>
+      {!overlay ? (
+        <Text style={[
+          styles.header,
+          { color: mutedColor, fontSize: isCombatDesktop ? scaleCombatFont(8) : 6 },
+        ]}>TURN ORDER</Text>
+      ) : null}
       {entries.length === 0 ? (
-        <Text style={[styles.empty, { color: mutedColor }]}>Awaiting telemetry…</Text>
+        <Text style={[
+          styles.empty,
+          { color: mutedColor, fontSize: isCombatDesktop ? scaleCombatFont(7) : 6 },
+        ]}>Awaiting telemetry…</Text>
       ) : (
         <View style={[styles.column, overlay && styles.columnOverlay]}>
           {entries.map((entry, index) => {
@@ -114,7 +126,10 @@ export default function TurnOrderColumn({
                 {entry.kind === 'hostile' && portraitSource ? (
                   <Image source={portraitSource} style={styles.portrait} resizeMode="cover" />
                 ) : (
-                  <Text style={styles.operativeGlyph} numberOfLines={1}>
+                  <Text style={[
+                    styles.operativeGlyph,
+                    isCombatDesktop ? { fontSize: scaleCombatFont(9) } : null,
+                  ]} numberOfLines={1}>
                     {entry.label.slice(0, 2)}
                   </Text>
                 )}
@@ -214,7 +229,6 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 0 },
     elevation: 3,
-    transform: [{ scale: 1.08 }],
   },
   avatarRingIntelSelected: {
     borderWidth: 2,

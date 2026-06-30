@@ -11,6 +11,7 @@ interface CombatMagazineGaugeProps {
   liveColor?: string;
   spentColor?: string;
   variant?: 'compact' | 'inline' | 'stacked';
+  labelFontScale?: number;
 }
 
 export default function CombatMagazineGauge({
@@ -22,6 +23,7 @@ export default function CombatMagazineGauge({
   liveColor = '#fbbf24',
   spentColor = 'rgba(148, 163, 184, 0.35)',
   variant = 'compact',
+  labelFontScale = 1,
 }: CombatMagazineGaugeProps): React.JSX.Element {
   const slots = Math.max(1, maxAmmo);
   const isStacked = variant === 'stacked';
@@ -34,7 +36,11 @@ export default function CombatMagazineGauge({
   const labelText = `MAGAZINE // ${currentAmmo}/${maxAmmo}${overchargeLabel}${markLabel}`;
 
   const bulletRow = (
-    <View style={styles.bulletRow}>
+    <View style={[
+      styles.bulletRow,
+      isStacked ? styles.bulletRowStacked : null,
+      isInline ? styles.bulletRowInline : null,
+    ]}>
       {Array.from({ length: slots }).map((_, index) => {
         const live = index < currentAmmo;
         return (
@@ -61,6 +67,10 @@ export default function CombatMagazineGauge({
           styles.label,
           isStacked ? styles.labelStacked : null,
           isInline ? styles.labelInline : null,
+          labelFontScale !== 1 ? {
+            fontSize: (isStacked ? 8 : 7) * labelFontScale,
+            lineHeight: (isStacked ? 10 : 9) * labelFontScale,
+          } : null,
           { color: labelColor },
         ]}
         numberOfLines={1}
@@ -81,7 +91,7 @@ const styles = StyleSheet.create({
   rootInline: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     gap: 6,
     paddingVertical: 1,
   },
@@ -115,8 +125,15 @@ const styles = StyleSheet.create({
     gap: 3,
     minHeight: 8,
     flexShrink: 1,
+  },
+  bulletRowStacked: {
+    flex: 0,
+    justifyContent: 'flex-start',
+    width: '100%',
+  },
+  bulletRowInline: {
     flex: 1,
-    justifyContent: 'flex-end',
+    justifyContent: 'flex-start',
   },
   bullet: {
     width: 7,

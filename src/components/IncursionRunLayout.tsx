@@ -163,6 +163,7 @@ export default function IncursionRunLayout({
               visible={statusOpen}
               theme={theme}
               onClose={closeStatus}
+              combatMode={combatMode}
             />
           ) : null}
         </View>

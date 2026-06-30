@@ -7,11 +7,13 @@ export const TERMINAL_ACCENT = '#00ff33';
 interface MacroLogCargoButtonProps {
   disabled?: boolean;
   onPress: () => void;
+  fontSize?: number;
 }
 
 export default function MacroLogCargoButton({
   disabled = false,
   onPress,
+  fontSize = 7,
 }: MacroLogCargoButtonProps): React.JSX.Element {
   return (
     <HapticPressable
@@ -27,7 +29,7 @@ export default function MacroLogCargoButton({
       accessibilityRole="button"
       accessibilityLabel={disabled ? 'Cargo unavailable during hostile turn' : 'Open cargo grid'}
     >
-      <Text style={[styles.btnText, { color: TERMINAL_ACCENT }]}>
+      <Text style={[styles.btnText, { color: TERMINAL_ACCENT, fontSize }]}>
         {disabled ? '[ CARGO LOCKED ]' : '[ CARGO ]'}
       </Text>
     </HapticPressable>

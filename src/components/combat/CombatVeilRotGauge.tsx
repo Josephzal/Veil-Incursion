@@ -13,6 +13,7 @@ interface CombatVeilRotGaugeProps {
   liveColor?: string;
   spentColor?: string;
   variant?: 'compact' | 'inline' | 'stacked';
+  labelFontScale?: number;
 }
 
 /** Catalyst-aligned orb row — tracks total Veil Rot toward Cataclysm gate. */
@@ -23,6 +24,7 @@ export default function CombatVeilRotGauge({
   liveColor = '#4ade80',
   spentColor = 'rgba(34, 197, 94, 0.28)',
   variant = 'compact',
+  labelFontScale = 1,
 }: CombatVeilRotGaugeProps): React.JSX.Element | null {
   if (totalStacks <= 0) return null;
 
@@ -69,6 +71,10 @@ export default function CombatVeilRotGauge({
           styles.label,
           isStacked ? styles.labelStacked : null,
           isInline ? styles.labelInline : null,
+          labelFontScale !== 1 ? {
+            fontSize: (isStacked ? 8 : 7) * labelFontScale,
+            lineHeight: (isStacked ? 10 : 9) * labelFontScale,
+          } : null,
           { color: labelColor },
         ]}
         numberOfLines={1}

@@ -19,6 +19,7 @@ import {
   GAUGE_VEIL_FLUX,
 } from '../../utils/combatTelemetryFormat';
 import CombatRunicBrandGauge from './CombatRunicBrandGauge';
+import { useCombatDesktopLayout } from '../../hooks/useCombatDesktopLayout';
 
 export interface CombatOperativeTelemetry {
   operativeClass: ClassType;
@@ -67,6 +68,10 @@ export default function CombatOperativeHud({
   dashboardCompact = false,
   arenaOverlay = false,
 }: CombatOperativeHudProps): React.JSX.Element {
+  const { isCombatDesktop, fontScale, scaleCombatSize } = useCombatDesktopLayout();
+  const desktopArena = arenaOverlay && isCombatDesktop;
+  const labelScale = desktopArena ? fontScale : 1;
+  const gaugeHeight = desktopArena ? scaleCombatSize(14) : undefined;
   const {
     operativeClass,
     operativeHp,
@@ -97,13 +102,21 @@ export default function CombatOperativeHud({
   const fluxRatio = fluxMaxCap > 0 ? Math.min(1, veilFlux / fluxMaxCap) : 0;
 
   const compact = deckAligned || wide || dashboardCompact;
-  const rowVariant = dashboardCompact
-    ? 'compact' as const
-    : compact
+  const rowVariant = desktopArena
+    ? 'stacked' as const
+    : dashboardCompact
       ? 'compact' as const
-      : wide
-        ? 'stacked' as const
-        : 'inline' as const;
+      : compact
+        ? 'compact' as const
+        : wide
+          ? 'stacked' as const
+          : 'inline' as const;
+  const resourceVariant = desktopArena ? 'stacked' as const : rowVariant === 'stacked' ? 'stacked' as const : 'compact' as const;
+  const gaugeProps = {
+    labelFontScale: labelScale,
+    trackHeight: gaugeHeight,
+    gaugeWidth: '100%' as const,
+  };
 
   const renderClassResource = () => {
     if (operativeClass === 'HEX_SHOT') {
@@ -114,7 +127,8 @@ export default function CombatOperativeHud({
           overchargeMultiplier={overchargeMultiplier}
           markReady={zeroProtocolReady}
           labelColor="#fbbf24"
-          variant={rowVariant === 'stacked' ? 'stacked' : 'compact'}
+          variant={resourceVariant}
+          labelFontScale={labelScale}
         />
       );
     }
@@ -128,11 +142,12 @@ export default function CombatOperativeHud({
             ratio={fluxRatio}
             trackBorderColor={GAUGE_TRACK_BORDER}
             variant={rowVariant}
-            gaugeWidth="100%"
+            {...gaugeProps}
           />
           <CombatVeilRotGauge
             totalStacks={veilRotStacksTotal}
-            variant={rowVariant === 'stacked' ? 'stacked' : 'compact'}
+            variant={resourceVariant}
+            labelFontScale={labelScale}
           />
         </>
       );
@@ -150,12 +165,14 @@ export default function CombatOperativeHud({
           ratio={abyssalRatio}
           trackBorderColor={GAUGE_TRACK_BORDER}
           variant={rowVariant}
-          gaugeWidth="100%"
+          {...gaugeProps}
         />
         <CombatRunicBrandGauge
           currentBrands={runicBrands}
           maxBrands={runicBrandCap}
-          variant={rowVariant === 'stacked' ? 'stacked' : 'compact'}
+          variant={resourceVariant}
+          labelFontScale={labelScale}
+          sigilScale={desktopArena ? fontScale : 1}
         />
       </>
     );
@@ -168,6 +185,7 @@ export default function CombatOperativeHud({
       deckAligned && !arenaOverlay ? styles.rootDeckAligned : null,
       dashboardCompact ? styles.rootDashboardCompact : null,
       arenaOverlay ? styles.rootArenaOverlay : null,
+      desktopArena ? styles.rootArenaOverlayDesktop : null,
     ]} pointerEvents="none">
       <CombatTelemetryGaugeRow
         label={formatSoulAnchorLabel(operativeHp, maxSoulAnchor)}
@@ -176,7 +194,7 @@ export default function CombatOperativeHud({
         ratio={soulAnchorRatio}
         trackBorderColor={GAUGE_TRACK_BORDER}
         variant={rowVariant}
-        gaugeWidth="100%"
+        {...gaugeProps}
       />
       {renderClassResource()}
       {operativeClass === 'HEX_SHOT' ? (
@@ -187,7 +205,7 @@ export default function CombatOperativeHud({
           ratio={staminaRatio}
           trackBorderColor={GAUGE_TRACK_BORDER}
           variant={rowVariant}
-          gaugeWidth="100%"
+          {...gaugeProps}
         />
       ) : null}
     </View>
@@ -224,11 +242,15 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.55)',
   },
   rootArenaOverlay: {
-    gap: 1,
+    gap: 2,
     paddingHorizontal: COMBAT_HUD_PADDING_X,
     paddingVertical: 4,
     width: '100%',
     borderWidth: 0,
     backgroundColor: 'transparent',
+  },
+  rootArenaOverlayDesktop: {
+    gap: 4,
+    paddingVertical: 6,
   },
 });

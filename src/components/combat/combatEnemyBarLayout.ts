@@ -20,6 +20,47 @@ export const ARENA_STAGE_PADDING_BOTTOM = 20;
 /** Toggle red hitbox overlay — set false once overlap is verified. */
 export const ENEMY_HITBOX_DEBUG = false;
 
+export interface EnemyHitboxRect {
+  width: `${number}%`;
+  height: `${number}%`;
+  bottom: `${number}%`;
+  left: `${number}%`;
+}
+
+function clampHitboxPercent(value: number): `${number}%` {
+  return `${Math.max(8, Math.min(92, Math.round(value)))}%`;
+}
+
+function scaleHitboxPercent(base: number, layoutUnitScale: number): `${number}%` {
+  const scaleFactor = Math.max(0.72, Math.min(1.12, layoutUnitScale));
+  return clampHitboxPercent(base * scaleFactor);
+}
+
+/** Torso-focused tap target — scales with slot depth and sprite scale. */
+export function resolveEnemyHitbox(
+  slot: CombatGridSlotId | undefined,
+  layoutUnitScale: number,
+  isAlpha: boolean,
+): EnemyHitboxRect {
+  const isBackline = slot?.startsWith('BL') === true;
+  if (isBackline) {
+    return {
+      width: scaleHitboxPercent(44, layoutUnitScale),
+      height: scaleHitboxPercent(40, layoutUnitScale),
+      bottom: clampHitboxPercent(14),
+      left: clampHitboxPercent(28),
+    };
+  }
+
+  const widthBase = isAlpha ? 42 : 46;
+  return {
+    width: scaleHitboxPercent(widthBase, layoutUnitScale),
+    height: scaleHitboxPercent(56, layoutUnitScale),
+    bottom: clampHitboxPercent(4),
+    left: clampHitboxPercent(isAlpha ? 29 : 27),
+  };
+}
+
 export {
   COMBAT_GAUGE_BLOCK_HEIGHT_COMPACT as ARENA_GAUGE_BLOCK_HEIGHT,
   COMBAT_GAUGE_ROW_GAP_COMPACT as ARENA_GAUGE_ROW_GAP,

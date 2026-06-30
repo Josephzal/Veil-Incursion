@@ -14,7 +14,6 @@ export function isRedundantBuffIntent(intent: EnemyIntent, profile: EnemyCombatP
 /** When a hostile already has Evade/Fortify active, spend the turn on a strike instead. */
 export function resolveEffectiveEnemyIntent(profile: EnemyCombatProfile): EnemyIntent {
   if (isRedundantBuffIntent(profile.intent, profile)) {
-    if (profile.intent === 'EVADE' && profile.evadeActive) return 'EVADE';
     return 'STRIKE';
   }
   return profile.intent;

@@ -5,10 +5,12 @@ import { TERMINAL_ACCENT } from './MacroLogCargoButton';
 
 interface MacroLogStatusButtonProps {
   onPress: () => void;
+  fontSize?: number;
 }
 
 export default function MacroLogStatusButton({
   onPress,
+  fontSize = 7,
 }: MacroLogStatusButtonProps): React.JSX.Element {
   return (
     <HapticPressable
@@ -23,7 +25,7 @@ export default function MacroLogStatusButton({
       accessibilityRole="button"
       accessibilityLabel="Open operative status"
     >
-      <Text style={[styles.btnText, { color: TERMINAL_ACCENT }]}>[ STATUS ]</Text>
+      <Text style={[styles.btnText, { color: TERMINAL_ACCENT, fontSize }]}>[ STATUS ]</Text>
     </HapticPressable>
   );
 }

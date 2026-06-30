@@ -17,6 +17,7 @@ import CombatEnemySlotBars from '../CombatEnemySlotBars';
 import EnemyIntentDetailOverlay from './EnemyIntentDetailOverlay';
 import type { EnemyStatusEffectKey } from '../../../utils/enemyStatusEffects';
 import { ENEMY_STATUS_EFFECTS } from '../../../utils/enemyStatusEffects';
+import { useCombatDesktopLayout } from '../../../hooks/useCombatDesktopLayout';
 
 const MONO = 'monospace';
 const HOSTILE_ACCENT = '#ef4444';
@@ -62,6 +63,7 @@ export default function StaticIntelCard({
   unit,
   mutedColor,
 }: StaticIntelCardProps): React.JSX.Element {
+  const { isCombatDesktop, scaleCombatFont, scaleCombatSize } = useCombatDesktopLayout();
   const [intentDetailVisible, setIntentDetailVisible] = useState(false);
   const tier = resolveEnemyThreatTier({
     isBoss: unit.isBoss,
@@ -80,38 +82,73 @@ export default function StaticIntelCard({
 
   return (
     <View style={styles.card}>
-      <View style={styles.headerRow}>
-        <Text
-          style={[
-            styles.name,
-            { color: unit.isAlpha ? '#ff4444' : HOSTILE_ACCENT },
-          ]}
-          numberOfLines={1}
-          ellipsizeMode="tail"
-        >
-          {formatHostileId(unit.designation)}
-        </Text>
-        <Text style={[styles.tier, { color: mutedColor }]} numberOfLines={1}>
-          {`TIER // ${tierLabel}`}
-        </Text>
-      </View>
-
-      <View style={styles.vitalsRow}>
-        <CombatEnemySlotBars unit={unit} />
-      </View>
-
-      {(trayKeys.length > 0 || extraTags.length > 0) ? (
-        <View style={styles.statusRow}>
-          <CombatStatusIconRow statusKeys={trayKeys} />
-          {extraTags.map((tag) => (
-            <View key={tag} style={styles.extraTagChip}>
-              <Text style={styles.extraTagLabel} numberOfLines={1}>
-                {tag}
-              </Text>
-            </View>
-          ))}
+      <View style={styles.intelBody}>
+        <View style={styles.headerRow}>
+          <Text
+            style={[
+              styles.name,
+              {
+                color: unit.isAlpha ? '#ff4444' : HOSTILE_ACCENT,
+                fontSize: isCombatDesktop ? scaleCombatFont(10) : 8,
+              },
+            ]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {formatHostileId(unit.designation)}
+          </Text>
+          <Text
+            style={[
+              styles.tier,
+              {
+                color: mutedColor,
+                fontSize: isCombatDesktop ? scaleCombatFont(7) : 5,
+              },
+            ]}
+            numberOfLines={1}
+          >
+            {`TIER // ${tierLabel}`}
+          </Text>
         </View>
-      ) : null}
+
+        <CombatEnemySlotBars
+          unit={unit}
+          trackHeight={isCombatDesktop ? scaleCombatSize(14) : undefined}
+        />
+
+        {(trayKeys.length > 0 || extraTags.length > 0) ? (
+          <View style={styles.statusRow}>
+            <CombatStatusIconRow
+              statusKeys={trayKeys}
+              iconSize={isCombatDesktop ? scaleCombatSize(38) : undefined}
+            />
+            {extraTags.map((tag) => (
+              <View
+                key={tag}
+                style={[
+                  styles.extraTagChip,
+                  isCombatDesktop ? {
+                    paddingHorizontal: scaleCombatSize(6),
+                    paddingVertical: scaleCombatSize(2),
+                    minHeight: scaleCombatSize(38),
+                    justifyContent: 'center',
+                  } : null,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.extraTagLabel,
+                    isCombatDesktop ? { fontSize: scaleCombatFont(7) } : null,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {tag}
+                </Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+      </View>
 
       <HapticPressable
         onPress={() => setIntentDetailVisible(true)}
@@ -120,13 +157,23 @@ export default function StaticIntelCard({
           intentTone === 'buff' ? styles.intentBoxBuff : styles.intentBoxAttack,
         ]}
       >
-        <Text style={styles.intentLabel} numberOfLines={1}>
+        <Text
+          style={[
+            styles.intentLabel,
+            isCombatDesktop ? { fontSize: scaleCombatFont(7) } : null,
+          ]}
+          numberOfLines={1}
+        >
           NEXT //
         </Text>
         <Text
           style={[
             styles.intentValue,
-            { color: intentTone === 'buff' ? '#93c5fd' : '#fca5a5' },
+            {
+              color: intentTone === 'buff' ? '#93c5fd' : '#fca5a5',
+              fontSize: isCombatDesktop ? scaleCombatFont(9) : 7,
+              lineHeight: isCombatDesktop ? scaleCombatFont(12) : 9,
+            },
           ]}
           numberOfLines={2}
           adjustsFontSizeToFit
@@ -156,9 +203,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingTop: 0,
     paddingBottom: 5,
-    overflow: 'visible',
+    overflow: 'hidden',
     justifyContent: 'space-between',
     gap: 4,
+  },
+  intelBody: {
+    flex: 1,
+    minHeight: 0,
+    gap: 4,
+    flexShrink: 1,
   },
   headerRow: {
     flexDirection: 'row',
@@ -181,10 +234,6 @@ const styles = StyleSheet.create({
     fontSize: 5,
     fontWeight: '700',
     letterSpacing: 0.3,
-  },
-  vitalsRow: {
-    flexShrink: 0,
-    width: '100%',
   },
   statusRow: {
     flexDirection: 'row',

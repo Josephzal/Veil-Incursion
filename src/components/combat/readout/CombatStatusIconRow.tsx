@@ -6,25 +6,34 @@ import {
   type EnemyStatusEffectDef,
   type EnemyStatusEffectKey,
 } from '../../../utils/enemyStatusEffects';
+import {
+  COMBAT_POPUP_BODY_FONT,
+  COMBAT_POPUP_SCALE,
+} from '../../../constants/combatOverlayTypography';
 
 const MONO = 'monospace';
 const VIOLET = '#a78bfa';
-const VIOLET_DIM = '#7c6bb0';
 const TOOLTIP_BG = 'rgba(12, 8, 22, 0.96)';
 const TOOLTIP_BORDER = '#8b5cf6';
-const ICON_SIZE = 18;
+const DEFAULT_ICON_SIZE = 18;
 const TOOLTIP_DISMISS_MS = 3000;
 
 interface CombatStatusIconRowProps {
   statusKeys: readonly EnemyStatusEffectKey[];
+  iconSize?: number;
 }
 
 /** Icon-only status row with press tooltips for the intel stat block. */
 export default function CombatStatusIconRow({
   statusKeys,
+  iconSize = DEFAULT_ICON_SIZE,
 }: CombatStatusIconRowProps): React.JSX.Element | null {
   const [tooltipContent, setTooltipContent] = useState<EnemyStatusEffectDef | null>(null);
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tooltipMinWidth = Math.round(160 * COMBAT_POPUP_SCALE);
+  const tooltipMaxWidth = Math.round(280 * COMBAT_POPUP_SCALE);
+  const tooltipPaddingH = Math.round(10 * COMBAT_POPUP_SCALE);
+  const tooltipPaddingV = Math.round(8 * COMBAT_POPUP_SCALE);
 
   const clearDismissTimer = useCallback(() => {
     if (dismissTimerRef.current != null) {
@@ -58,7 +67,7 @@ export default function CombatStatusIconRow({
   if (statusKeys.length === 0) return null;
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { minHeight: iconSize }]}>
       <Modal
         visible={tooltipContent != null}
         transparent
@@ -74,9 +83,20 @@ export default function CombatStatusIconRow({
             accessibilityLabel="Dismiss status tooltip"
           />
           {tooltipContent ? (
-            <View style={styles.tooltip} pointerEvents="none">
-              <Text style={styles.tooltipHeader}>{`[ ${tooltipContent.label} ]`}</Text>
-              <Text style={styles.tooltipBody}>{tooltipContent.description}</Text>
+            <View
+              style={[
+                styles.tooltip,
+                {
+                  minWidth: tooltipMinWidth,
+                  maxWidth: tooltipMaxWidth,
+                  paddingHorizontal: tooltipPaddingH,
+                  paddingVertical: tooltipPaddingV,
+                },
+              ]}
+              pointerEvents="none"
+            >
+              <Text style={styles.tooltipText}>{`[ ${tooltipContent.label} ]`}</Text>
+              <Text style={styles.tooltipText}>{tooltipContent.description}</Text>
             </View>
           ) : null}
         </View>
@@ -90,11 +110,19 @@ export default function CombatStatusIconRow({
             <HapticPressable
               key={key}
               onPress={() => showTooltip(def)}
-              style={[styles.iconButton, selected ? styles.iconButtonSelected : null]}
+              style={[
+                styles.iconButton,
+                { width: iconSize, height: iconSize },
+                selected ? styles.iconButtonSelected : null,
+              ]}
               accessibilityRole="button"
               accessibilityLabel={def.label}
             >
-              <Image source={def.icon} style={styles.icon} resizeMode="contain" />
+              <Image
+                source={def.icon}
+                style={{ width: iconSize - 2, height: iconSize - 2 }}
+                resizeMode="contain"
+              />
             </HapticPressable>
           );
         })}
@@ -107,7 +135,6 @@ const styles = StyleSheet.create({
   root: {
     position: 'relative',
     alignSelf: 'flex-start',
-    minHeight: ICON_SIZE,
   },
   backdrop: {
     flex: 1,
@@ -119,7 +146,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   backdropTap: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   iconRow: {
     flexDirection: 'row',
@@ -128,8 +155,6 @@ const styles = StyleSheet.create({
     zIndex: 22,
   },
   iconButton: {
-    width: ICON_SIZE,
-    height: ICON_SIZE,
     borderWidth: 1,
     borderColor: 'rgba(196, 167, 255, 0.72)',
     backgroundColor: 'rgba(28, 16, 48, 0.92)',
@@ -140,34 +165,19 @@ const styles = StyleSheet.create({
     borderColor: '#ddd6fe',
     backgroundColor: 'rgba(124, 58, 237, 0.55)',
   },
-  icon: {
-    width: ICON_SIZE - 2,
-    height: ICON_SIZE - 2,
-  },
   tooltip: {
-    minWidth: 160,
-    maxWidth: 280,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
     backgroundColor: TOOLTIP_BG,
     borderWidth: 1,
     borderColor: TOOLTIP_BORDER,
     zIndex: 2,
+    gap: 4,
   },
-  tooltipHeader: {
+  tooltipText: {
     fontFamily: MONO,
-    fontSize: 7,
+    fontSize: COMBAT_POPUP_BODY_FONT,
     fontWeight: '700',
-    letterSpacing: 0.5,
-    lineHeight: 10,
+    letterSpacing: 0.35,
+    lineHeight: COMBAT_POPUP_BODY_FONT + 4,
     color: VIOLET,
-    marginBottom: 4,
-  },
-  tooltipBody: {
-    fontFamily: MONO,
-    fontSize: 6,
-    letterSpacing: 0.3,
-    lineHeight: 9,
-    color: VIOLET_DIM,
   },
 });

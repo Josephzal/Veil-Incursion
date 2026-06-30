@@ -107,7 +107,7 @@ function roll(rng?: () => number): number {
 
 export function buildEnemyActiveBuffs(profile: EnemyCombatProfile): string[] {
   const buffs: string[] = [];
-  if (profile.evadeActive || profile.intent === 'EVADE') buffs.push('Evade');
+  if (profile.evadeActive) buffs.push('Evade');
   if ((profile.fortifyTurnsRemaining ?? 0) > 0) buffs.push('Fortify');
   if ((profile.chargeTurns ?? 0) > 0 || profile.intent === 'CHARGE') buffs.push('Charging');
   return buffs;

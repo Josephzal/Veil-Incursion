@@ -7,8 +7,12 @@ interface CombatApPipRowProps {
   accent: string;
   mutedColor?: string;
   queued?: boolean;
-  /** Narrow column layout — no flex grow. */
   compact?: boolean;
+  fontScale?: number;
+  centered?: boolean;
+  /** Overrides label/counter size — matches ability tile typography when set. */
+  labelFontSize?: number;
+  hexSize?: number;
 }
 
 /** Glowing hex AP pip row for the command deck header. */
@@ -19,10 +23,21 @@ export default function CombatApPipRow({
   mutedColor = '#94a3b8',
   queued = false,
   compact = false,
+  centered = false,
+  fontScale = 1,
+  labelFontSize,
+  hexSize,
 }: CombatApPipRowProps): React.JSX.Element {
+  const resolvedLabelSize = labelFontSize ?? 7 * fontScale;
+  const resolvedHexSize = hexSize ?? HEX_SIZE * fontScale;
+
   return (
-    <View style={[styles.host, compact && styles.hostCompact]}>
-      <Text style={[styles.label, { color: mutedColor }]}>AP</Text>
+    <View style={[
+      styles.host,
+      compact && styles.hostCompact,
+      centered && styles.hostCentered,
+    ]}>
+      <Text style={[styles.label, { color: mutedColor, fontSize: resolvedLabelSize }]}>AP</Text>
       <View style={styles.pipRow}>
         {Array.from({ length: max }, (_, index) => {
           const filled = index < current;
@@ -34,17 +49,14 @@ export default function CombatApPipRow({
           return (
             <View
               key={`ap-pip-${index}`}
-              style={[
-                styles.hexShell,
-                filled && {
-                  shadowColor: accent,
-                },
-              ]}
+              style={[styles.hexShell, { width: resolvedHexSize, height: resolvedHexSize }, filled && { shadowColor: accent }]}
             >
               <View
                 style={[
                   styles.hexCore,
                   {
+                    width: resolvedHexSize * 0.9,
+                    height: resolvedHexSize * 0.9,
                     borderColor,
                     backgroundColor: fillColor,
                   },
@@ -54,7 +66,9 @@ export default function CombatApPipRow({
           );
         })}
       </View>
-      <Text style={[styles.counter, { color: mutedColor }]}>{`${current}/${max}`}</Text>
+      <Text style={[styles.counter, { color: mutedColor, fontSize: resolvedLabelSize }]}>
+        {`${current}/${max}`}
+      </Text>
     </View>
   );
 }
@@ -73,9 +87,12 @@ const styles = StyleSheet.create({
     flex: 0,
     alignSelf: 'flex-end',
   },
+  hostCentered: {
+    flex: 0,
+    alignSelf: 'center',
+  },
   label: {
     fontFamily: 'monospace',
-    fontSize: 7,
     fontWeight: '700',
     letterSpacing: 0.6,
   },
@@ -85,8 +102,6 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   hexShell: {
-    width: HEX_SIZE,
-    height: HEX_SIZE,
     alignItems: 'center',
     justifyContent: 'center',
     shadowOpacity: 0.8,
@@ -94,14 +109,11 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   hexCore: {
-    width: HEX_SIZE * 0.9,
-    height: HEX_SIZE * 0.9,
     borderWidth: 1,
     transform: [{ rotate: '45deg' }],
   },
   counter: {
     fontFamily: 'monospace',
-    fontSize: 6,
     letterSpacing: 0.4,
   },
 });

@@ -12,6 +12,8 @@ interface CombatRunicBrandGaugeProps {
   liveColor?: string;
   spentColor?: string;
   variant?: 'compact' | 'inline' | 'stacked';
+  labelFontScale?: number;
+  sigilScale?: number;
 }
 
 /** Runic Brand pips — occult sigil slots that light as brands are imprinted. */
@@ -22,11 +24,14 @@ export default function CombatRunicBrandGauge({
   liveColor = '#a855f7',
   spentColor = 'rgba(88, 28, 135, 0.22)',
   variant = 'compact',
+  labelFontScale = 1,
+  sigilScale = 1,
 }: CombatRunicBrandGaugeProps): React.JSX.Element {
   const slots = Math.max(1, maxBrands);
   const isStacked = variant === 'stacked';
   const isInline = variant === 'compact' || variant === 'inline';
   const labelText = `BRANDS // ${currentBrands}/${maxBrands}`;
+  const sigilSize = SIGIL * sigilScale;
 
   const sigilRow = (
     <View style={styles.sigilRow}>
@@ -37,7 +42,7 @@ export default function CombatRunicBrandGauge({
             key={index}
             style={[
               styles.sigilOuter,
-              {
+              { width: sigilSize, height: sigilSize,
                 borderColor: live ? liveColor : 'rgba(88, 28, 135, 0.45)',
                 shadowColor: live ? liveColor : 'transparent',
                 opacity: live ? 1 : 0.4,
@@ -48,6 +53,8 @@ export default function CombatRunicBrandGauge({
               style={[
                 styles.sigilInner,
                 {
+                  width: sigilSize - 4,
+                  height: sigilSize - 4,
                   backgroundColor: live ? liveColor : spentColor,
                   borderColor: live ? '#e9d5ff' : 'rgba(88, 28, 135, 0.35)',
                 },
@@ -66,6 +73,10 @@ export default function CombatRunicBrandGauge({
           styles.label,
           isStacked ? styles.labelStacked : null,
           isInline ? styles.labelInline : null,
+          labelFontScale !== 1 ? {
+            fontSize: (isStacked ? 8 : 7) * labelFontScale,
+            lineHeight: (isStacked ? 10 : 9) * labelFontScale,
+          } : null,
           { color: labelColor },
         ]}
         numberOfLines={1}

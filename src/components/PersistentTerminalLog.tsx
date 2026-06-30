@@ -5,6 +5,8 @@ import MacroLogCargoButton, { TERMINAL_ACCENT } from './MacroLogCargoButton';
 import MacroLogStatusButton from './MacroLogStatusButton';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
+import { useCombatDesktopLayout } from '../hooks/useCombatDesktopLayout';
+import { combatPopupFont } from '../constants/combatOverlayTypography';
 
 const LOG_SURFACE = '#0a0b0f';
 const MACRO_LOG_HORIZONTAL_PADDING = 12;
@@ -32,10 +34,20 @@ function resolveBottomInset(insetsBottom: number): number {
   return Math.max(insetsBottom, Platform.OS === 'android' ? 4 : 0);
 }
 
-function LogLine({ line, color }: { line: string; color: string }) {
+function LogLine({
+  line,
+  color,
+  fontSize,
+  lineHeight,
+}: {
+  line: string;
+  color: string;
+  fontSize: number;
+  lineHeight: number;
+}) {
   return (
     <View style={styles.lineRow}>
-      <Text style={[styles.line, { color }]}>{line}</Text>
+      <Text style={[styles.line, { color, fontSize, lineHeight }]}>{line}</Text>
     </View>
   );
 }
@@ -53,6 +65,7 @@ export default function PersistentTerminalLog({
 }: PersistentTerminalLogProps): React.JSX.Element | null {
   const { runLog } = useRun();
   const { theme } = useTerminal();
+  const { isCombatDesktop, scaleCombatFont } = useCombatDesktopLayout();
   const scrollRef = useRef<ScrollView>(null);
   const insets = useSafeAreaInsets();
   const [scrollHeight, setScrollHeight] = useState(0);
@@ -74,6 +87,11 @@ export default function PersistentTerminalLog({
     ? SCROLL_CONTENT_PADDING_BOTTOM_DASHBOARD
     : SCROLL_CONTENT_PADDING_BOTTOM;
 
+  const dashboardMode = hideTopBorder && fillRemaining;
+  const logFontSize = dashboardMode && isCombatDesktop ? scaleCombatFont(11) : 9;
+  const logLineHeight = dashboardMode && isCombatDesktop ? scaleCombatFont(15) : 13;
+  const chromeButtonFontSize = dashboardMode && isCombatDesktop ? combatPopupFont(7) : undefined;
+
   const logBlock = (
     <View
       style={[
@@ -88,13 +106,19 @@ export default function PersistentTerminalLog({
       ]}
     >
       <View style={[styles.headerRow, hideTopBorder ? styles.headerRowDashboard : null]}>
-        <Text style={[styles.header, { color: theme.mutedColor }]}>RUN TERMINAL</Text>
+        <Text style={[
+          styles.header,
+          {
+            color: theme.mutedColor,
+            ...(dashboardMode && isCombatDesktop ? { fontSize: scaleCombatFont(9) } : null),
+          },
+        ]}>RUN TERMINAL</Text>
         <View style={styles.headerActions}>
           {showStatus && onStatusPress ? (
-            <MacroLogStatusButton onPress={onStatusPress} />
+            <MacroLogStatusButton onPress={onStatusPress} fontSize={chromeButtonFontSize} />
           ) : null}
           {showCargo && onCargoPress ? (
-            <MacroLogCargoButton disabled={cargoDisabled} onPress={onCargoPress} />
+            <MacroLogCargoButton disabled={cargoDisabled} onPress={onCargoPress} fontSize={chromeButtonFontSize} />
           ) : null}
         </View>
       </View>
@@ -114,7 +138,13 @@ export default function PersistentTerminalLog({
         onContentSizeChange={(_width, height) => setContentHeight(height)}
       >
         {runLog.map((line, idx) => (
-          <LogLine key={`${idx}-${line.slice(0, 12)}`} line={line} color={TERMINAL_ACCENT} />
+          <LogLine
+            key={`${idx}-${line.slice(0, 12)}`}
+            line={line}
+            color={TERMINAL_ACCENT}
+            fontSize={logFontSize}
+            lineHeight={logLineHeight}
+          />
         ))}
       </ScrollView>
     </View>
@@ -220,8 +250,6 @@ const styles = StyleSheet.create({
   },
   line: {
     fontFamily: 'monospace',
-    fontSize: 9,
-    lineHeight: 13,
     marginBottom: 2,
     flexShrink: 1,
     flexWrap: 'wrap',

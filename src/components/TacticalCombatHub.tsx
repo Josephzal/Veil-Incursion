@@ -396,6 +396,7 @@ import {
   formatAbyssalSiphonLog,
 } from '../utils/combatResourceState';
 import { useReactiveCombatStatus } from '../hooks/useReactiveCombatStatus';
+import { useCombatDesktopLayout } from '../hooks/useCombatDesktopLayout';
 import {
   isParryAttemptSuccessful,
   PARRY_HALO_DURATION_MS,
@@ -632,6 +633,7 @@ export default function TacticalCombatHub({
     label: 'Standard Blade',
   };
   const { theme, profile, awardCurrencies } = useTerminal();
+  const { isCombatDesktop, scaleCombatFont } = useCombatDesktopLayout();
 
   const [cycleState, setCycleState] = useState<CombatPhase>('TEXT_COMBAT');
   const [squad, setSquad] = useState<EnemyCombatProfile[]>([]);
@@ -7106,14 +7108,19 @@ export default function TacticalCombatHub({
   const renderEnemyTurnPanel = () => {
     const intentLabel = enemy ? formatIntentReadout(enemy.intent) : 'RESOLVING';
     const isReading = enemyActionStage === 'reading';
+    const deckLabelFont = isCombatDesktop ? scaleCombatFont(9) : 9;
+    const deckLabelStyle = {
+      fontSize: deckLabelFont,
+      letterSpacing: isCombatDesktop ? 0.35 : 0.5,
+    };
     return (
       <View style={styles.enemyTurnPanel}>
-        <Text style={[styles.enemyTurnTitle, { color: P.enemyHp }]}>
+        <Text style={[styles.enemyTurnTitle, deckLabelStyle, { color: P.enemyHp }]}>
           {isReading
             ? `>> HOSTILE CHANNEL // ${intentLabel}`
             : `>> HOSTILE ATTACK // ${intentLabel}`}
         </Text>
-        <Text style={[styles.enemyTurnHint, { color: theme.mutedColor }]}>
+        <Text style={[styles.enemyTurnHint, deckLabelStyle, { color: theme.mutedColor }]}>
           {isReading
             ? 'Read incoming intent — command deck offline'
             : 'Strike channel active — brace for impact'}
@@ -7422,14 +7429,10 @@ const styles = StyleSheet.create({
   },
   enemyTurnTitle: {
     fontFamily: MONO,
-    fontSize: 8,
     fontWeight: '700',
-    letterSpacing: 0.6,
   },
   enemyTurnHint: {
     fontFamily: MONO,
-    fontSize: 7,
-    letterSpacing: 0.5,
   },
   statusFeedCompact: {
     flexShrink: 0,

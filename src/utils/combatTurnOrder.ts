@@ -2,7 +2,7 @@ import type { CombatTurnPhase } from '../context/CombatTurnContext';
 import type { CombatGridSlotId } from '../types/combatGrid';
 import type { EnemyCombatProfile } from '../types/run';
 import type { ClassType } from '../types/game';
-import { aliveUnits, getUnitById, isUnitAlive } from '../data/combatSquadEngine';
+import { aliveUnits } from '../data/combatSquadEngine';
 import { formatHostileId, formatIntentReadout } from './combatTelemetryFormat';
 
 export type CombatTurnOrderEntryState = 'active' | 'queued' | 'waiting' | 'defeated';
@@ -50,6 +50,21 @@ function operativeIsActive(phase: CombatTurnPhase): boolean {
     || phase === 'SLICE';
 }
 
+function hostileStateForPhase(
+  unitId: string,
+  operativeActive: boolean,
+  enemyQueue: readonly string[],
+): CombatTurnOrderEntryState {
+  if (operativeActive) return 'queued';
+
+  const currentId = enemyQueue[0] ?? null;
+  if (unitId === currentId) return 'active';
+
+  if (enemyQueue.slice(1).includes(unitId)) return 'queued';
+
+  return 'waiting';
+}
+
 export function buildCombatTurnOrder(input: {
   squad: readonly EnemyCombatProfile[];
   operativeClass: ClassType;
@@ -59,67 +74,32 @@ export function buildCombatTurnOrder(input: {
   const { squad, operativeClass, phase, enemyQueue } = input;
   const squadList = [...squad];
   const alive = sortByGridSlot(aliveUnits(squadList));
+  const operativeActive = operativeIsActive(phase);
+
   const operativeEntry: CombatTurnOrderEntry = {
     id: 'operative',
     kind: 'operative',
     label: OPERATIVE_LABEL[operativeClass] ?? 'OPS',
-    state: operativeIsActive(phase) ? 'active' : 'waiting',
+    state: operativeActive ? 'active' : 'waiting',
   };
 
   if (phase === 'RESOLUTION' || alive.length === 0) {
     return { phase, entries: [operativeEntry] };
   }
 
-  if (operativeIsActive(phase)) {
-    const entries: CombatTurnOrderEntry[] = [
-      operativeEntry,
-      ...alive.map((unit) => {
-        const unitId = unit.unitId ?? unit.designation;
-        return {
-          id: unitId,
-          kind: 'hostile' as const,
-          label: hostileLabel(unit),
-          state: 'queued' as const,
-          intentLabel: formatIntentReadout(unit.intent),
-        };
-      }),
-    ];
-    return { phase, entries };
-  }
-
-  const entries: CombatTurnOrderEntry[] = [{ ...operativeEntry, state: 'waiting' }];
-  const seen = new Set<string>();
-
-  const pushHostile = (
-    unitId: string,
-    state: CombatTurnOrderEntryState,
-    allowDuplicate = false,
-  ) => {
-    if (!allowDuplicate && seen.has(unitId)) return;
-    const unit = getUnitById(squadList, unitId);
-    if (!unit || !isUnitAlive(unit)) return;
-    seen.add(unitId);
-    entries.push({
-      id: `${unitId}-${entries.length}`,
-      kind: 'hostile',
-      label: hostileLabel(unit),
-      state,
-      intentLabel: formatIntentReadout(unit.intent),
-    });
-  };
-
-  const queue = enemyQueue.length > 0
-    ? enemyQueue
-    : alive.map((unit) => unit.unitId ?? unit.designation);
-
-  queue.forEach((unitId, index) => {
-    pushHostile(unitId, index === 0 ? 'active' : 'queued', true);
-  });
-
-  for (const unit of alive) {
-    const unitId = unit.unitId ?? unit.designation;
-    pushHostile(unitId, 'waiting');
-  }
+  const entries: CombatTurnOrderEntry[] = [
+    operativeEntry,
+    ...alive.map((unit) => {
+      const unitId = unit.unitId ?? unit.designation;
+      return {
+        id: unitId,
+        kind: 'hostile' as const,
+        label: hostileLabel(unit),
+        state: hostileStateForPhase(unitId, operativeActive, enemyQueue),
+        intentLabel: formatIntentReadout(unit.intent),
+      };
+    }),
+  ];
 
   return { phase, entries };
 }

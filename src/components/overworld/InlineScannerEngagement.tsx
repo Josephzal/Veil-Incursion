@@ -159,6 +159,8 @@ function TelemetryIdlePrompt({
         style={[
           styles.readoutLabel,
           {
+            color: mutedColor,
+            opacity: 1,
             fontSize: 6 * fontScale,
             lineHeight: 9 * fontScale,
             letterSpacing: 1.2 * fontScale,

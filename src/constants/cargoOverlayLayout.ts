@@ -1,10 +1,11 @@
 import { CARGO_CELL_GAP, CARGO_CELL_SIZE } from './cargoGridLayout';
+import { COMBAT_POPUP_SCALE } from './combatOverlayTypography';
 import { HARVEST_EXTERNAL_BAY_HEIGHT, HARVEST_EXTERNAL_BAY_MARGIN_TOP } from './harvestLayout';
 import { resolveImmersiveFooterInset } from './immersiveLayout';
 import { CARGO_GRID_COLS, CARGO_GRID_ROWS } from '../types/cargoGrid';
 
 export const CARGO_OVERLAY_PANEL_PADDING = 14;
-export const COMBAT_OVERLAY_PANEL_PADDING = 10;
+export const COMBAT_OVERLAY_PANEL_PADDING = Math.round(10 * COMBAT_POPUP_SCALE);
 export const CARGO_OVERLAY_HEADER_RESERVE = 40;
 export const CARGO_OVERLAY_BACKDROP_PADDING = 16;
 export const CARGO_OVERLAY_COMBAT_DETAIL_HEIGHT = 168;
@@ -56,7 +57,7 @@ export function resolveCombatOverlayCellSize(
 
   return Math.min(
     CARGO_CELL_SIZE,
-    Math.max(CARGO_OVERLAY_MIN_CELL_SIZE, heightCell),
+    Math.max(CARGO_OVERLAY_MIN_CELL_SIZE, Math.floor(heightCell * COMBAT_POPUP_SCALE)),
   );
 }
 

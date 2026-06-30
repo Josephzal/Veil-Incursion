@@ -7,6 +7,7 @@ import {
   OPERATIVE_VITALS_OVERLAY_TOP,
   TACTICAL_DASHBOARD_COLUMN_WIDTH_PERCENT,
 } from '../../../constants/combatLayout';
+import { useCombatDesktopLayout } from '../../../hooks/useCombatDesktopLayout';
 
 interface CombatOperativeVitalsOverlayProps {
   telemetry: CombatOperativeTelemetry | null;
@@ -18,10 +19,18 @@ export default function CombatOperativeVitalsOverlay({
   telemetry,
   primaryColor,
 }: CombatOperativeVitalsOverlayProps): React.JSX.Element | null {
+  const { isCombatDesktop, scaleCombatSize } = useCombatDesktopLayout();
+
   if (!telemetry) return null;
 
   return (
-    <View style={styles.host} pointerEvents="none">
+    <View
+      style={[
+        styles.host,
+        isCombatDesktop ? { paddingHorizontal: scaleCombatSize(10) } : null,
+      ]}
+      pointerEvents="none"
+    >
       <CombatOperativeHud
         telemetry={telemetry}
         primaryColor={primaryColor}
@@ -40,5 +49,6 @@ const styles = StyleSheet.create({
     width: TACTICAL_DASHBOARD_COLUMN_WIDTH_PERCENT,
     zIndex: 25,
     elevation: 25,
+    overflow: 'hidden',
   },
 });

@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import HapticPressable from '../HapticPressable';
 import type { ImageSourcePropType } from 'react-native';
 import type { CombatGridUnitSnapshot } from '../../utils/combatTelemetryFormat';
-import { ENEMY_HITBOX_DEBUG } from './combatEnemyBarLayout';
+import { ENEMY_HITBOX_DEBUG, resolveEnemyHitbox } from './combatEnemyBarLayout';
 import CombatEnemyAnchorMotion from './CombatEnemyAnchorMotion';
 import CombatEnemyCritImpact from './CombatEnemyCritImpact';
 import CombatEnemyClassImpact from './CombatEnemyClassImpact';
@@ -62,6 +62,9 @@ export default function CombatEnemyUnit({
   const isArena = variant === 'arena';
   const isAlpha = unit.isAlpha === true;
   const isBacklineSlot = unit.slot?.startsWith('BL') === true;
+  const hitboxStyle = isArena
+    ? resolveEnemyHitbox(unit.slot, layoutUnitScale, isAlpha)
+    : null;
   const fractured = unit.isFractured;
   const dissolving = (unit.dissolveSeq ?? 0) > 0 && !unit.dissolveHidden;
   const portraitGlow = unit.portraitGlow ?? (unit.isSelected ? 'player-selected' : 'none');
@@ -177,7 +180,7 @@ export default function CombatEnemyUnit({
               <HapticPressable
                 onPress={onPress}
                 style={[
-                  isBacklineSlot ? styles.hitbox : styles.hitboxFrontline,
+                  isArena && hitboxStyle ? hitboxStyle : (isBacklineSlot ? styles.hitbox : styles.hitboxFrontline),
                   ENEMY_HITBOX_DEBUG ? styles.hitboxDebug : null,
                 ]}
                 pointerEvents="auto"

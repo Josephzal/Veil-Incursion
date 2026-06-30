@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import type { ImageSourcePropType } from 'react-native';
 import { ApparitionViewport, type ApparitionViewportRef } from './ApparitionViewport';
 import CombatOrbitalUltimate from './CombatOrbitalUltimate';
@@ -11,8 +11,15 @@ import CombatOperativeAugmentRow from './CombatOperativeAugmentRow';
 import PlayerEntity from './PlayerEntity';
 import type { CombatAugmentIcon } from '../../utils/combatAugmentIcons';
 import { OPERATIVE_ARENA_SPRITE_WIDTH, OPERATIVE_ARENA_LEFT_INSET, OPERATIVE_ARENA_TOP_INSET } from '../../constants/combatLayout';
+import { useCombatDesktopLayout } from '../../hooks/useCombatDesktopLayout';
 import type { ClassType } from '../../types/game';
 import type { CombatPlayerViewportRef } from './CombatPlayerViewport';
+
+function operativeScaleForClass(operativeClass: ClassType, isCombatDesktop: boolean): number {
+  if (!isCombatDesktop) return 1;
+  if (operativeClass === 'AEGIS') return 1.4;
+  return 1.15;
+}
 
 interface CombatLandscapeArenaProps {
   apparitionRef: React.RefObject<ApparitionViewportRef | null>;
@@ -42,6 +49,9 @@ export default function CombatLandscapeArena({
   gridUnits,
   onEradicationComplete,
 }: CombatLandscapeArenaProps): React.JSX.Element {
+  const { isCombatDesktop, scaleCombatSize } = useCombatDesktopLayout();
+  const operativeScale = operativeScaleForClass(operativeClass, isCombatDesktop);
+  const operativeLeft = isCombatDesktop ? '10%' : 0;
   const { ui } = useCombatEnemyChrome();
   const eviscerateTargetPortrait = useMemo(() => {
     if (!ui.eviscerateTargetUnitId) return null;
@@ -60,9 +70,28 @@ export default function CombatLandscapeArena({
         />
       </View>
 
-      <View style={styles.operativeZone} pointerEvents="box-none">
+      <View
+        style={[
+          styles.operativeZone,
+          isCombatDesktop ? {
+            left: operativeLeft,
+            width: OPERATIVE_ARENA_SPRITE_WIDTH * operativeScale + scaleCombatSize(28),
+            paddingLeft: scaleCombatSize(OPERATIVE_ARENA_LEFT_INSET),
+            paddingTop: scaleCombatSize(OPERATIVE_ARENA_TOP_INSET),
+          } : null,
+        ]}
+        pointerEvents="box-none"
+      >
         <CombatOperativeAugmentRow icons={augmentIcons} />
-        <View style={styles.operativeSpriteSlot}>
+        <View
+          style={[
+            styles.operativeSpriteSlot,
+            operativeScale !== 1 ? {
+              transform: [{ scale: operativeScale }],
+              ...(Platform.OS === 'web' ? { transformOrigin: 'bottom center' } : null),
+            } : null,
+          ]}
+        >
           <PlayerEntity
             playerViewportRef={playerViewportRef}
             operativeClass={operativeClass}
@@ -98,7 +127,7 @@ const styles = StyleSheet.create({
     overflow: 'visible',
   },
   hiddenApparition: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     opacity: 0,
     zIndex: 0,
   },
@@ -126,13 +155,13 @@ const styles = StyleSheet.create({
     overflow: 'visible',
   },
   enemyGridHost: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 10,
     elevation: 10,
     overflow: 'visible',
   },
   overlayHost: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 25,
     elevation: 25,
   },

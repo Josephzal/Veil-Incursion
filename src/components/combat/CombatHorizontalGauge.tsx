@@ -17,6 +17,7 @@ interface CombatHorizontalGaugeProps {
   valueCaptionColor?: string;
   width?: number | '100%';
   compact?: boolean;
+  trackHeight?: number;
   /** Enemy overhead — fill track only, no border box. */
   borderless?: boolean;
   /** Taller high-contrast bar for enemy overhead HUD. */
@@ -31,6 +32,7 @@ export function CombatHorizontalGauge({
   valueCaptionColor = '#FF453A',
   width,
   compact = false,
+  trackHeight,
   borderless = false,
   overhead = false,
 }: CombatHorizontalGaugeProps): React.JSX.Element {
@@ -50,9 +52,13 @@ export function CombatHorizontalGauge({
     outputRange: ['0%', '100%'],
   });
 
-  const gaugeStyle = width != null
-    ? [styles.gaugeColumn, typeof width === 'number' ? { width } : styles.gaugeFullWidth]
-    : styles.gaugeColumn;
+  const gaugeStyle = width === '100%' && compact
+    ? [styles.gaugeFlex, styles.gaugeFullWidth]
+    : width != null
+      ? [styles.gaugeColumn, typeof width === 'number' ? { width } : styles.gaugeFullWidth]
+      : compact
+        ? [styles.gaugeFlex]
+        : styles.gaugeColumn;
 
   return (
     <View style={gaugeStyle}>
@@ -65,6 +71,7 @@ export function CombatHorizontalGauge({
         styles.trackOuter,
         overhead ? styles.trackOuterOverhead : null,
         !overhead && compact ? styles.trackOuterCompact : null,
+        trackHeight != null ? { height: trackHeight } : null,
         borderless ? styles.trackOuterBorderless : { borderColor: trackBorderColor },
       ]}>
         <Animated.View style={[styles.trackFill, { width: fillWidth, backgroundColor: fillColor }]} />
@@ -81,6 +88,8 @@ interface CombatTelemetryGaugeRowProps {
   trackBorderColor?: string;
   variant?: 'inline' | 'stacked' | 'compact';
   gaugeWidth?: number | '100%';
+  labelFontScale?: number;
+  trackHeight?: number;
 }
 
 export default function CombatTelemetryGaugeRow({
@@ -91,6 +100,8 @@ export default function CombatTelemetryGaugeRow({
   trackBorderColor,
   variant = 'inline',
   gaugeWidth,
+  labelFontScale = 1,
+  trackHeight,
 }: CombatTelemetryGaugeRowProps): React.JSX.Element {
   const isCompact = variant === 'compact';
   const isStacked = variant === 'stacked';
@@ -105,6 +116,10 @@ export default function CombatTelemetryGaugeRow({
         styles.rowLabel,
         isStacked ? styles.rowLabelStacked : null,
         isCompact ? styles.rowLabelCompact : null,
+        labelFontScale !== 1 ? {
+          fontSize: (isCompact ? 7 : isStacked ? 8 : 8) * labelFontScale,
+          lineHeight: (isCompact ? 9 : 11) * labelFontScale,
+        } : null,
         { color: labelColor },
       ]} numberOfLines={1} ellipsizeMode="tail">
         {label}
@@ -113,8 +128,9 @@ export default function CombatTelemetryGaugeRow({
         fillColor={fillColor}
         ratio={ratio}
         trackBorderColor={trackBorderColor}
-        width={gaugeWidth}
+        width={isCompact ? '100%' : gaugeWidth}
         compact={isCompact}
+        trackHeight={trackHeight}
       />
     </View>
   );
@@ -146,6 +162,13 @@ const styles = StyleSheet.create({
   gaugeFullWidth: {
     width: '100%',
     flexShrink: 1,
+  },
+  gaugeFlex: {
+    flex: 1,
+    minWidth: 0,
+    flexShrink: 1,
+    alignItems: 'stretch',
+    gap: 2,
   },
   rowStacked: {
     flexDirection: 'column',

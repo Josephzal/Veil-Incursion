@@ -1,6 +1,15 @@
 import React from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { EnemyIntentDetail } from '../../../utils/enemyIntentDescriptions';
+import {
+  COMBAT_POPUP_BODY_FONT,
+  COMBAT_POPUP_SCALE,
+} from '../../../constants/combatOverlayTypography';
+
+const MONO = 'monospace';
+const PANEL_MAX_WIDTH = Math.round(340 * COMBAT_POPUP_SCALE);
+const PANEL_PADDING_H = Math.round(14 * COMBAT_POPUP_SCALE);
+const PANEL_PADDING_V = Math.round(12 * COMBAT_POPUP_SCALE);
 
 interface EnemyIntentDetailOverlayProps {
   visible: boolean;
@@ -15,6 +24,11 @@ export default function EnemyIntentDetailOverlay({
   onDismiss,
   borderColor = '#ef4444',
 }: EnemyIntentDetailOverlayProps): React.JSX.Element {
+  const bodyStyle = {
+    fontSize: COMBAT_POPUP_BODY_FONT,
+    lineHeight: COMBAT_POPUP_BODY_FONT + 4,
+  };
+
   return (
     <Modal
       visible={visible}
@@ -25,21 +39,32 @@ export default function EnemyIntentDetailOverlay({
     >
       <View style={styles.backdrop}>
         <Pressable style={styles.backdropTap} onPress={onDismiss} />
-        <Pressable style={[styles.card, { borderColor }]} onPress={(event) => event.stopPropagation()}>
+        <Pressable
+          style={[
+            styles.card,
+            {
+              borderColor,
+              maxWidth: PANEL_MAX_WIDTH,
+              paddingHorizontal: PANEL_PADDING_H,
+              paddingVertical: PANEL_PADDING_V,
+            },
+          ]}
+          onPress={(event) => event.stopPropagation()}
+        >
           {detail ? (
             <>
-              <Text style={styles.kicker}>HOSTILE INTENT // ANALYSIS</Text>
-              <Text style={styles.title}>{detail.title}</Text>
-              <Text style={styles.body}>{detail.summary}</Text>
-              <Text style={styles.sectionLabel}>EFFECT</Text>
-              <Text style={styles.body}>{detail.effect}</Text>
+              <Text style={[styles.body, bodyStyle]}>HOSTILE INTENT // ANALYSIS</Text>
+              <Text style={[styles.body, bodyStyle, styles.titleTone]}>{detail.title}</Text>
+              <Text style={[styles.body, bodyStyle]}>{detail.summary}</Text>
+              <Text style={[styles.body, bodyStyle, styles.sectionTone]}>EFFECT</Text>
+              <Text style={[styles.body, bodyStyle]}>{detail.effect}</Text>
               {detail.counterplay ? (
                 <>
-                  <Text style={styles.sectionLabel}>COUNTERPLAY</Text>
-                  <Text style={styles.body}>{detail.counterplay}</Text>
+                  <Text style={[styles.body, bodyStyle, styles.sectionTone]}>COUNTERPLAY</Text>
+                  <Text style={[styles.body, bodyStyle]}>{detail.counterplay}</Text>
                 </>
               ) : null}
-              <Text style={styles.dismissHint}>TAP OUTSIDE TO CLOSE</Text>
+              <Text style={[styles.body, bodyStyle, styles.hintTone]}>TAP OUTSIDE TO CLOSE</Text>
             </>
           ) : null}
         </Pressable>
@@ -59,52 +84,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
   },
   backdropTap: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   card: {
     width: '92%',
-    maxWidth: 340,
     backgroundColor: 'rgba(10, 11, 15, 0.97)',
     borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
     gap: 6,
     zIndex: 2,
   },
-  kicker: {
-    fontFamily: 'monospace',
-    fontSize: 6,
-    fontWeight: '700',
-    color: 'rgba(248, 250, 252, 0.55)',
-    letterSpacing: 0.8,
-  },
-  title: {
-    fontFamily: 'monospace',
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#fca5a5',
-    letterSpacing: 0.6,
-  },
-  sectionLabel: {
-    fontFamily: 'monospace',
-    fontSize: 6,
-    fontWeight: '700',
-    color: '#93c5fd',
-    letterSpacing: 0.7,
-    marginTop: 4,
-  },
   body: {
-    fontFamily: 'monospace',
-    fontSize: 7,
-    lineHeight: 11,
+    fontFamily: MONO,
     color: '#e2e8f0',
     letterSpacing: 0.25,
   },
-  dismissHint: {
-    fontFamily: 'monospace',
-    fontSize: 6,
+  titleTone: {
+    color: '#fca5a5',
+    fontWeight: '800',
+  },
+  sectionTone: {
+    color: '#93c5fd',
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  hintTone: {
     color: 'rgba(148, 163, 184, 0.85)',
-    letterSpacing: 0.5,
     marginTop: 6,
     textAlign: 'center',
   },
