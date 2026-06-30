@@ -12,7 +12,7 @@ import { PlayerAccount } from '../../types/game';
 import { OperativeProfile } from '../../types/profile';
 import { TerminalTheme } from '../../types/theme';
 import { resolvePlayerBadgePortrait } from '../../utils/combatPlayerPortrait';
-import { useResponsiveScale } from '../../hooks/useResponsiveScale';
+import { useHubLayout } from '../../context/HubLayoutContext';
 import {
   DESKTOP_DEPLOYMENT_AVATAR_SIZE,
   DESKTOP_DEPLOYMENT_IDENTITY_BLOCK_MIN_HEIGHT,
@@ -66,7 +66,7 @@ export default function OperativeIdentityDossier({
   account,
 }: OperativeIdentityDossierProps): React.JSX.Element {
   const { cycleActiveClass } = usePlayerAccount();
-  const { isDesktop, scaleSize, scaleSpacing } = useResponsiveScale();
+  const { isDesktop, scaleSize, scaleSpacing } = useHubLayout();
   const identityBlockMinHeight = isDesktop
     ? scaleSize(DESKTOP_DEPLOYMENT_IDENTITY_BLOCK_MIN_HEIGHT)
     : undefined;

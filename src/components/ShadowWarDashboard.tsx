@@ -8,7 +8,7 @@ import ShadowWarInfluencePanel from './shadowWar/ShadowWarInfluencePanel';
 import ShadowWarMap from './shadowWar/ShadowWarMap';
 import HubScreenShell from './hub/HubScreenShell';
 import { useShadowWar } from '../context/ShadowWarContext';
-import { useResponsiveScale } from '../hooks/useResponsiveScale';
+import { useHubLayout } from '../context/HubLayoutContext';
 import type { ShadowWarSectorId } from '../types/shadowWar';
 import { TerminalTheme } from '../types/theme';
 import { SHADOW_WAR_SECTORS } from '../data/shadowWarSectors';
@@ -23,7 +23,13 @@ export default function ShadowWarDashboard({
   onAppendLog,
 }: ShadowWarDashboardProps): React.JSX.Element {
   const { state } = useShadowWar();
-  const { isDesktop, scaleSpacing } = useResponsiveScale();
+  const {
+    isDesktop,
+    gap,
+    contentWidth,
+    shadowWarMapLaneWidth,
+    shadowWarIntelLaneWidth,
+  } = useHubLayout();
   const [activeSectorId, setActiveSectorId] = useState<ShadowWarSectorId>(SHADOW_WAR_SECTORS[0].id);
   const [donationOpen, setDonationOpen] = useState(false);
   const [mapViewportHeight, setMapViewportHeight] = useState(0);
@@ -43,13 +49,15 @@ export default function ShadowWarDashboard({
           style={[
             styles.body,
             isDesktop ? styles.bodyDesktop : styles.bodyMobile,
-            isDesktop ? { gap: scaleSpacing(24) } : null,
+            isDesktop ? { gap } : null,
           ]}
         >
           <CabalPanel
             style={[
               styles.mapColumn,
-              isDesktop ? styles.mapColumnDesktop : styles.mapColumnMobile,
+              isDesktop
+                ? { width: shadowWarMapLaneWidth, flexShrink: 0 }
+                : styles.mapColumnMobile,
             ]}
             contentStyle={[styles.panelContent, styles.mapPanelContent]}
           >
@@ -60,7 +68,6 @@ export default function ShadowWarDashboard({
                   activeSectorId={activeSectorId}
                   sectorIp={state.sectorIp}
                   onSectorPress={setActiveSectorId}
-                  isDesktop={isDesktop}
                 />
               </View>
               <HackingTerminalOverlay viewportHeight={mapViewportHeight} />
@@ -70,7 +77,9 @@ export default function ShadowWarDashboard({
           <CabalPanel
             style={[
               styles.intelColumn,
-              isDesktop ? styles.intelColumnDesktop : styles.intelColumnMobile,
+              isDesktop
+                ? { flex: 1, minWidth: shadowWarIntelLaneWidth }
+                : styles.intelColumnMobile,
             ]}
             contentStyle={[styles.panelContent, styles.intelPanelContent]}
           >
@@ -80,7 +89,6 @@ export default function ShadowWarDashboard({
               sectorIp={state.sectorIp[activeSectorId]}
               weeklyDonatedIP={state.weeklyDonatedIP}
               onDonatePress={() => setDonationOpen(true)}
-              isDesktop={isDesktop}
             />
           </CabalPanel>
         </View>
@@ -101,7 +109,7 @@ export default function ShadowWarDashboard({
           <View style={styles.modalPanelHost} pointerEvents="box-none">
             <CabalPanel
               shrinkWrap
-              style={styles.modalPanel}
+              style={[styles.modalPanel, { maxWidth: Math.min(600, Math.floor(contentWidth * 0.92)) }]}
               contentStyle={styles.modalPanelContent}
             >
               <DonationTerminalPanel
@@ -142,18 +150,12 @@ const styles = StyleSheet.create({
     maxHeight: '48%',
     flexShrink: 1,
   },
-  mapColumnDesktop: {
-    flex: 0.6,
-  },
   intelColumn: {
     minHeight: 0,
     overflow: 'hidden',
   },
   intelColumnMobile: {
     flex: 1,
-  },
-  intelColumnDesktop: {
-    flex: 0.4,
   },
   panelContent: {
     padding: 10,
@@ -186,7 +188,6 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         backdropFilter: 'blur(18px)',
-        // @ts-expect-error — web-only vendor prefix
         WebkitBackdropFilter: 'blur(18px)',
       },
       default: {},

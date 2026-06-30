@@ -9,7 +9,7 @@ import { SHADOW_WAR_SECTORS } from '../../data/shadowWarSectors';
 import { hubKeyColor } from '../../constants/hubAtmosphere';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useShadowWar } from '../../context/ShadowWarContext';
-import { useResponsiveScale } from '../../hooks/useResponsiveScale';
+import { useHubLayout } from '../../context/HubLayoutContext';
 import { formatBracketHeader } from '../../styles/hubTerminalUi';
 import type { PlayerAccount } from '../../types/game';
 import type { ShadowWarBuffId } from '../../types/shadowWar';
@@ -76,7 +76,15 @@ export default function DeploymentDeckPanel({
 }: DeploymentDeckPanelProps): React.JSX.Element {
   const { activeBuffs } = useShadowWar();
   const { getStashCapacitySnapshot } = usePlayerAccount();
-  const { isDesktop, scaleSize, scaleSpacing } = useResponsiveScale();
+  const {
+    isDesktop,
+    scaleSize,
+    scaleSpacing,
+    contentWidth,
+    gap,
+    deploymentDossierLaneWidth,
+    deploymentStagingLaneWidth,
+  } = useHubLayout();
 
   const stash = getStashCapacitySnapshot();
   const factionDef = account.alignedFaction ? getFactionDefinition(account.alignedFaction) : null;
@@ -188,14 +196,22 @@ export default function DeploymentDeckPanel({
         styles.deck,
         isDesktop ? styles.deckDesktop : styles.deckMobile,
         isDesktop
-          ? { gap: scaleSpacing(20), paddingBottom: scaleSpacing(8) }
+          ? {
+              gap,
+              paddingBottom: scaleSpacing(8),
+              maxWidth: contentWidth,
+              width: contentWidth,
+            }
           : { gap: scaleSpacing(16) },
       ]}
     >
       <CabalPanel
         shrinkWrap={!isDesktop}
         fillHeight={isDesktop}
-        style={[styles.dossierColumn, isDesktop ? styles.deckColumnDesktop : null]}
+        style={[
+          styles.dossierColumn,
+          isDesktop ? { width: deploymentDossierLaneWidth, flexShrink: 0 } : null,
+        ]}
         contentStyle={[
           styles.dossierContent,
           isDesktop ? styles.dossierContentDesktop : null,
@@ -205,7 +221,20 @@ export default function DeploymentDeckPanel({
         <OperativeIdentityDossier theme={theme} profile={profile} account={account} />
       </CabalPanel>
 
-      <View style={[styles.stagingColumn, isDesktop ? styles.stagingColumnDesktop : null]}>
+      <View
+        style={[
+          styles.stagingColumn,
+          isDesktop
+            ? {
+                flex: 1,
+                minWidth: deploymentStagingLaneWidth,
+                minHeight: 0,
+                alignSelf: 'stretch',
+                justifyContent: 'space-between',
+              }
+            : null,
+        ]}
+      >
         {stagingSection}
         {dropSection}
       </View>
@@ -274,19 +303,11 @@ const styles = StyleSheet.create({
   deckDesktop: {
     flex: 1,
     maxHeight: '100%',
-    width: '100%',
-    maxWidth: 1000,
     flexDirection: 'row',
     alignItems: 'stretch',
   },
   deckMobile: {
     flexDirection: 'column',
-  },
-  deckColumnDesktop: {
-    flex: 0.5,
-    minWidth: 0,
-    minHeight: 0,
-    alignSelf: 'stretch',
   },
   dossierColumn: {
     width: '100%',
@@ -302,13 +323,6 @@ const styles = StyleSheet.create({
   stagingColumn: {
     width: '100%',
     gap: 12,
-  },
-  stagingColumnDesktop: {
-    flex: 0.5,
-    minWidth: 0,
-    minHeight: 0,
-    alignSelf: 'stretch',
-    justifyContent: 'space-between',
   },
   stagingTop: {
     gap: 10,

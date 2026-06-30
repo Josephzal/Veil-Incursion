@@ -9,7 +9,6 @@ import SafehouseAbilitiesTab from './SafehouseAbilitiesTab';
 import SafehouseBlackMarketTab from './SafehouseBlackMarketTab';
 import SafehouseLoadoutTab from './SafehouseLoadoutTab';
 import { resolveFactionSlateBackground } from '../../constants/hubAtmosphere';
-import { DESKTOP_SAFEHOUSE_MAX_WIDTH } from '../../constants/responsiveScale';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useTerminal } from '../../context/TerminalContext';
 import { getFactionAccent } from '../../data/factions';
@@ -54,7 +53,7 @@ export default function SafehouseHubPanel(): React.JSX.Element {
       contentStyle={styles.shellBody}
     >
       <View style={styles.safehouseStage}>
-        <View style={[styles.masterContent, isDesktop && styles.masterContentDesktop]}>
+        <View style={styles.masterContent}>
           <View
             style={[
               styles.stickyNav,
@@ -130,11 +129,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     zIndex: 1,
-  },
-  masterContentDesktop: {
     width: '100%',
-    maxWidth: DESKTOP_SAFEHOUSE_MAX_WIDTH,
-    alignSelf: 'center',
   },
   hudCredits: {
     fontWeight: '700',

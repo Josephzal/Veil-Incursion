@@ -15,7 +15,7 @@ import { RESOURCE_REGISTRY } from '../../data/resourceRegistry';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useShadowWar } from '../../context/ShadowWarContext';
 import { useTerminal } from '../../context/TerminalContext';
-import { useResponsiveScale } from '../../hooks/useResponsiveScale';
+import { useHubLayout } from '../../context/HubLayoutContext';
 import { textGlow } from '../../utils/adaptiveStyles';
 import type { FactionType } from '../../types/game';
 import type { ResourceItemId } from '../../types/resourceItem';
@@ -43,7 +43,7 @@ export default function DonationTerminalPanel({
   const { theme } = useTerminal();
   const { account, applyShadowWarDonationAccount } = usePlayerAccount();
   const { donateToSector } = useShadowWar();
-  const { isDesktop, scaleSize, scaleSpacing } = useResponsiveScale();
+  const { isDesktop, scaleSize, scaleSpacing } = useHubLayout();
   const [draft, setDraft] = useState<ShadowWarDonationDraft>({ items: {} });
   const [uploading, setUploading] = useState(false);
 

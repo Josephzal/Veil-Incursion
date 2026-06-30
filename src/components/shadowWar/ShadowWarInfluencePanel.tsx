@@ -6,7 +6,7 @@ import { FACTION_DEFINITIONS } from '../../data/factions';
 import { calculateSectorControl } from '../../data/shadowWarEngine';
 import { getShadowWarSector } from '../../data/shadowWarSectors';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
-import { useResponsiveScale } from '../../hooks/useResponsiveScale';
+import { useHubLayout } from '../../context/HubLayoutContext';
 import { formatBracketHeader, HUB_DATA_DIVIDER } from '../../styles/hubTerminalUi';
 import { FactionType } from '../../types/game';
 import type { CabalIpPool, ShadowWarSectorId } from '../../types/shadowWar';
@@ -100,7 +100,6 @@ interface ShadowWarInfluencePanelProps {
   sectorIp: CabalIpPool;
   weeklyDonatedIP: number;
   onDonatePress?: () => void;
-  isDesktop?: boolean;
 }
 
 export default function ShadowWarInfluencePanel({
@@ -109,11 +108,9 @@ export default function ShadowWarInfluencePanel({
   sectorIp,
   weeklyDonatedIP,
   onDonatePress,
-  isDesktop: isDesktopProp,
 }: ShadowWarInfluencePanelProps): React.JSX.Element {
   const { account } = usePlayerAccount();
-  const { isDesktop: isDesktopScale, scaleSize, scaleSpacing } = useResponsiveScale();
-  const isDesktop = isDesktopProp ?? isDesktopScale;
+  const { isDesktop, scaleSize, scaleSpacing } = useHubLayout();
 
   const sector = getShadowWarSector(sectorId);
   const control = calculateSectorControl(sectorIp);

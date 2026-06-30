@@ -1,6 +1,8 @@
 /** Web desktop scaling — mobile/native always uses scale 1.0. */
 
-export const DESKTOP_MIN_WIDTH = 1024;
+import { BREAKPOINT_DESKTOP } from './layoutTokens';
+
+export const DESKTOP_MIN_WIDTH = BREAKPOINT_DESKTOP;
 export const DESKTOP_REFERENCE_WIDTH = 1920;
 export const DESKTOP_SCALE_MIN = 1.35;
 export const DESKTOP_SCALE_MAX = 1.65;
@@ -16,7 +18,16 @@ export const DESKTOP_BADGE_SECONDARY_RATIO = 0.45;
 /** Safehouse split panes: favor the right (detail) column on wide monitors. */
 export const DESKTOP_SAFEHOUSE_LEFT_RATIO = 0.42;
 export const DESKTOP_SAFEHOUSE_RIGHT_RATIO = 0.58;
-export const DESKTOP_SAFEHOUSE_MAX_WIDTH = 1200;
+
+/** Deployment deck — dossier vs staging manifest. */
+export const DESKTOP_DEPLOYMENT_DOSSIER_RATIO = 0.5;
+
+/** Shadow War dashboard — holographic map vs influence intel. */
+export const DESKTOP_SHADOW_WAR_MAP_RATIO = 0.6;
+import { MAX_VIEWPORT_WIDTH } from './layoutTokens';
+
+/** @deprecated Use MAX_VIEWPORT_WIDTH from layoutTokens. */
+export const DESKTOP_SAFEHOUSE_MAX_WIDTH = MAX_VIEWPORT_WIDTH;
 
 /** Deployment deck — section min-heights (base px, scaled via scaleSize). */
 export const DESKTOP_DEPLOYMENT_IDENTITY_BLOCK_MIN_HEIGHT = 118;

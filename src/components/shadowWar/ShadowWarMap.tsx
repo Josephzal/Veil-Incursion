@@ -16,6 +16,7 @@ import Svg, {
   Rect,
   Text as SvgText,
 } from 'react-native-svg';
+import { useHubLayout } from '../../context/HubLayoutContext';
 import TerminalText from '../TerminalText';
 import ContestedSectorPath from './ContestedSectorPath';
 import { calculateSectorControl } from '../../data/shadowWarEngine';
@@ -42,7 +43,6 @@ interface ShadowWarMapProps {
   activeSectorId: ShadowWarSectorId;
   sectorIp: Record<ShadowWarSectorId, CabalIpPool>;
   onSectorPress: (id: ShadowWarSectorId) => void;
-  isDesktop?: boolean;
 }
 
 function ShadowWarBlueprintGrid({
@@ -85,8 +85,8 @@ export default function ShadowWarMap({
   activeSectorId,
   sectorIp,
   onSectorPress,
-  isDesktop = false,
 }: ShadowWarMapProps): React.JSX.Element {
+  const { isDesktop } = useHubLayout();
   const sectors = SHADOW_WAR_SECTORS;
   const [hostWidth, setHostWidth] = useState(320);
   const [hostHeight, setHostHeight] = useState(160);

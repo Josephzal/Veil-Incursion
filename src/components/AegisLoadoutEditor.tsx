@@ -1,7 +1,10 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import HapticPressable from './HapticPressable';
+import { Grid, GridCell } from './layout/Grid';
 import TacticalTagRow, { parseTagsLine } from './hub/TacticalTagRow';
+import { useHubLayout } from '../context/HubLayoutContext';
+import { ABILITY_CARD_MIN_HEIGHT } from '../constants/layoutTokens';
 import { formatClassAbilityCostLine } from '../data/classAbilityResolver';
 import { AEGIS_ABILITY_CATALOG, getAbilityDefinition } from '../data/aegisAbilities';
 import {
@@ -11,12 +14,7 @@ import {
   getAssignableAbilities,
   isAbilityUnlocked,
 } from '../data/aegisAbilityUnlockEngine';
-import { useResponsiveScale } from '../hooks/useResponsiveScale';
 import { useSafehouseTypography } from '../hooks/useSafehouseTypography';
-import {
-  desktopTwoColumnCard,
-  desktopTwoColumnGrid,
-} from '../constants/safehouseDesktopLayout';
 import {
   getInteractiveButtonStyle,
   getInteractiveButtonTextStyle,
@@ -67,7 +65,7 @@ export default function AegisLoadoutEditor({
   statusMessage = null,
 }: AegisLoadoutEditorProps): React.JSX.Element {
   const textColor = theme.textColor ?? '#d8e2dc';
-  const { isDesktop } = useResponsiveScale();
+  const { isDesktop } = useHubLayout();
   const { bodySize, captionSize } = useSafehouseTypography();
 
   const handleAbilityPress = (abilityId: AegisAbilityId) => {
@@ -79,62 +77,64 @@ export default function AegisLoadoutEditor({
     onUnlockAbility?.(abilityId);
   };
 
+  const cardShellStyle = isDesktop ? styles.cardDesktop : null;
+
   return (
     <View style={styles.root}>
       <Text style={[styles.title, { color: theme.mutedColor }]}>{title}</Text>
       <Text style={[styles.hint, { color: theme.mutedColor }]}>{hint}</Text>
 
-      <View style={[styles.slotRow, isDesktop && desktopTwoColumnGrid]}>
+      <Grid>
         {draft.map((abilityId, index) => {
           const isSelected = selectedSlot === index;
           const def = AEGIS_ABILITY_CATALOG[abilityId];
           const costLine = formatClassAbilityCostLine('AEGIS', abilityId);
           const tags = getAbilityDefinition(abilityId).tags;
           return (
-            <HapticPressable
-              key={`slot-${index}`}
-              onPress={() => onSelectSlot(index as 0 | 1 | 2 | 3)}
-              style={(state) => [
-                getInteractiveButtonStyle(theme.accentColor, { pressed: state.pressed, size: 'sm' }),
-                styles.slot,
-                isDesktop && desktopTwoColumnCard,
-                !isSelected && { borderColor: theme.borderColor },
-                terminalHoverStyle(readPressableHover(state), state.pressed),
-              ]}
-            >
-              <Text style={[styles.slotLabel, { color: theme.mutedColor, fontSize: captionSize(8) }]}>
-                {`S${index + 1}`}
-              </Text>
-              <Text
-                style={[styles.slotAbility, { color: textColor, fontSize: bodySize(8), lineHeight: bodySize(11) }]}
-                numberOfLines={2}
+            <GridCell key={`slot-${index}`} style={cardShellStyle}>
+              <HapticPressable
+                onPress={() => onSelectSlot(index as 0 | 1 | 2 | 3)}
+                style={(state) => [
+                  getInteractiveButtonStyle(theme.accentColor, { pressed: state.pressed, size: 'sm' }),
+                  styles.card,
+                  !isSelected && { borderColor: theme.borderColor },
+                  terminalHoverStyle(readPressableHover(state), state.pressed),
+                ]}
               >
-                {def.label}
-              </Text>
-              {costLine ? (
-                <Text
-                  style={[styles.tagLine, { color: theme.mutedColor, fontSize: captionSize(6), lineHeight: captionSize(8) }]}
-                  numberOfLines={1}
-                >
-                  {`COST: ${costLine}`}
+                <Text style={[styles.slotLabel, { color: theme.mutedColor, fontSize: captionSize(8) }]}>
+                  {`S${index + 1}`}
                 </Text>
-              ) : null}
-              <TacticalTagRow tags={tags} />
-              <Text
-                style={[styles.slotMeta, { color: theme.mutedColor, fontSize: captionSize(6), lineHeight: captionSize(9) }]}
-                numberOfLines={2}
-              >
-                {def.description}
-              </Text>
-            </HapticPressable>
+                <Text
+                  style={[styles.slotAbility, { color: textColor, fontSize: bodySize(8), lineHeight: bodySize(11) }]}
+                  numberOfLines={2}
+                >
+                  {def.label}
+                </Text>
+                {costLine ? (
+                  <Text
+                    style={[styles.tagLine, { color: theme.mutedColor, fontSize: captionSize(6), lineHeight: captionSize(8) }]}
+                    numberOfLines={1}
+                  >
+                    {`COST: ${costLine}`}
+                  </Text>
+                ) : null}
+                <TacticalTagRow tags={tags} />
+                <Text
+                  style={[styles.slotMeta, { color: theme.mutedColor, fontSize: captionSize(6), lineHeight: captionSize(9) }]}
+                  numberOfLines={2}
+                >
+                  {def.description}
+                </Text>
+              </HapticPressable>
+            </GridCell>
           );
         })}
-      </View>
+      </Grid>
 
       <Text style={[styles.poolLabel, { color: theme.mutedColor, fontSize: captionSize(7) }]}>
         ABILITY POOL // TAP TO ASSIGN OR UNLOCK
       </Text>
-      <View style={[styles.pool, isDesktop && desktopTwoColumnGrid]}>
+      <Grid>
         {getAssignableAbilities().map((abilityId) => {
           const def = AEGIS_ABILITY_CATALOG[abilityId];
           const costLine = formatClassAbilityCostLine('AEGIS', abilityId);
@@ -144,53 +144,53 @@ export default function AegisLoadoutEditor({
           const unlocked = isAbilityUnlocked(unlockedAbilities, abilityId);
           const affordable = unlocked || canAffordAbilityUnlock(resourceStash, def.unlockCost);
           return (
-            <HapticPressable
-              key={abilityId}
-              onPress={() => handleAbilityPress(abilityId)}
-              style={(state) => [
-                getInteractiveButtonStyle(theme.accentColor, { pressed: state.pressed, size: 'sm' }),
-                styles.chip,
-                isDesktop && desktopTwoColumnCard,
-                !isSelected && { borderColor: theme.borderColor },
-                !unlocked && !affordable && styles.chipLocked,
-                !unlocked && affordable && styles.chipUnlockable,
-                terminalHoverStyle(readPressableHover(state), state.pressed),
-              ]}
-            >
-              <Text
-                style={[
-                  styles.chipLabel,
-                  { color: isSelected ? theme.accentColor : textColor, fontSize: bodySize(7) },
+            <GridCell key={abilityId} style={cardShellStyle}>
+              <HapticPressable
+                onPress={() => handleAbilityPress(abilityId)}
+                style={(state) => [
+                  getInteractiveButtonStyle(theme.accentColor, { pressed: state.pressed, size: 'sm' }),
+                  styles.card,
+                  !isSelected && { borderColor: theme.borderColor },
+                  !unlocked && !affordable && styles.chipLocked,
+                  !unlocked && affordable && styles.chipUnlockable,
+                  terminalHoverStyle(readPressableHover(state), state.pressed),
                 ]}
               >
-                {def.label}
-              </Text>
-              {!unlocked ? (
                 <Text
                   style={[
-                    styles.chipCost,
-                    { color: affordable ? '#4ade80' : '#f87171', fontSize: captionSize(6), lineHeight: captionSize(9) },
+                    styles.chipLabel,
+                    { color: isSelected ? theme.accentColor : textColor, fontSize: bodySize(7) },
                   ]}
                 >
-                  {`LOCKED // ${formatAbilityUnlockCost(def.unlockCost)}`}
+                  {def.label}
                 </Text>
-              ) : null}
-              <Text
-                style={[styles.chipTags, { color: theme.mutedColor, fontSize: captionSize(5), lineHeight: captionSize(7) }]}
-                numberOfLines={2}
-              >
-                {costLine ? `COST: ${costLine}` : formatAbilityTags(abilityId)}
-              </Text>
-              {costLine ? <TacticalTagRow tags={tags} /> : null}
-              {assigned >= 0 ? (
-                <Text style={[styles.chipSlot, { color: theme.mutedColor, fontSize: captionSize(6) }]}>
-                  {`S${assigned + 1}`}
+                {!unlocked ? (
+                  <Text
+                    style={[
+                      styles.chipCost,
+                      { color: affordable ? '#4ade80' : '#f87171', fontSize: captionSize(6), lineHeight: captionSize(9) },
+                    ]}
+                  >
+                    {`LOCKED // ${formatAbilityUnlockCost(def.unlockCost)}`}
+                  </Text>
+                ) : null}
+                <Text
+                  style={[styles.chipTags, { color: theme.mutedColor, fontSize: captionSize(5), lineHeight: captionSize(7) }]}
+                  numberOfLines={2}
+                >
+                  {costLine ? `COST: ${costLine}` : formatAbilityTags(abilityId)}
                 </Text>
-              ) : null}
-            </HapticPressable>
+                {costLine ? <TacticalTagRow tags={tags} /> : null}
+                {assigned >= 0 ? (
+                  <Text style={[styles.chipSlot, { color: theme.mutedColor, fontSize: captionSize(6) }]}>
+                    {`S${assigned + 1}`}
+                  </Text>
+                ) : null}
+              </HapticPressable>
+            </GridCell>
           );
         })}
-      </View>
+      </Grid>
 
       {statusMessage ? (
         <Text style={[styles.status, { color: theme.mutedColor }]}>{statusMessage}</Text>
@@ -224,56 +224,33 @@ const styles = StyleSheet.create({
     lineHeight: 12,
     letterSpacing: 0.4,
   },
-  slotRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  slot: {
-    flexBasis: '47%',
-    flexGrow: 1,
+  card: {
     alignItems: 'flex-start',
     gap: 4,
-    minHeight: 72,
+    width: '100%',
+  },
+  cardDesktop: {
+    minHeight: ABILITY_CARD_MIN_HEIGHT,
   },
   slotLabel: {
     fontFamily: MONO,
-    fontSize: 8,
     letterSpacing: 0.6,
   },
   slotAbility: {
     fontFamily: MONO,
-    fontSize: 8,
-    lineHeight: 11,
     fontWeight: '700',
   },
   tagLine: {
     fontFamily: MONO,
-    fontSize: 6,
-    lineHeight: 8,
     letterSpacing: 0.3,
   },
   slotMeta: {
     fontFamily: MONO,
-    fontSize: 6,
-    lineHeight: 9,
   },
   poolLabel: {
     fontFamily: MONO,
-    fontSize: 7,
     letterSpacing: 0.8,
     marginTop: 2,
-  },
-  pool: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  chip: {
-    alignItems: 'flex-start',
-    gap: 2,
-    minWidth: '30%',
-    flexGrow: 1,
   },
   chipLocked: {
     opacity: 0.55,
@@ -283,24 +260,18 @@ const styles = StyleSheet.create({
   },
   chipLabel: {
     fontFamily: MONO,
-    fontSize: 7,
     letterSpacing: 0.4,
   },
   chipCost: {
     fontFamily: MONO,
-    fontSize: 6,
     letterSpacing: 0.4,
-    lineHeight: 9,
   },
   chipTags: {
     fontFamily: MONO,
-    fontSize: 5,
-    lineHeight: 7,
     letterSpacing: 0.3,
   },
   chipSlot: {
     fontFamily: MONO,
-    fontSize: 6,
     letterSpacing: 0.5,
   },
   status: {

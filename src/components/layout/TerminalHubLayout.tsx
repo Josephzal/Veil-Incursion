@@ -4,9 +4,11 @@ import { HUB_ATMOSPHERE_BACKGROUND, HUB_ATMOSPHERE_SCRIM } from '../../constants
 import { HUB_NAV_MAIN_GAP, LANDSCAPE_PANEL_PADDING } from '../../constants/landscapeLayout';
 import { resolveImmersiveFooterInset, resolveImmersiveTopInset } from '../../constants/immersiveLayout';
 import { useLandscapeMetrics } from '../../hooks/useLandscapeMetrics';
-import { useResponsiveScale } from '../../hooks/useResponsiveScale';
+import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
+import { HubLayoutProvider } from '../../context/HubLayoutContext';
 import TerminalNavRail from '../TerminalNavRail';
 import TerminalOverlay from '../TerminalOverlay';
+import HubViewport from './HubViewport';
 import TerminalGlitchTransition from '../ui/TerminalGlitchTransition';
 import type { TerminalView } from '../../types/terminalNav';
 
@@ -34,8 +36,9 @@ export default function TerminalHubLayout({
   style,
   mainStyle,
 }: TerminalHubLayoutProps): React.JSX.Element {
+  const layout = useResponsiveLayout();
   const { hubNavRailWidth, safeTop, safeBottom, safeRight, panelPadding } = useLandscapeMetrics();
-  const { scaleSpacing } = useResponsiveScale();
+  const { scaleSpacing } = layout;
   const contentTopInset = resolveHubContentTopInset(safeTop, panelPadding);
   const contentBottomInset = resolveImmersiveFooterInset(safeBottom);
   const mainRailStyle = {
@@ -65,9 +68,13 @@ export default function TerminalHubLayout({
           <View style={styles.terminalOverlayHost} pointerEvents="none">
             <TerminalOverlay />
           </View>
-          <TerminalGlitchTransition transitionKey={activeView} style={styles.glitchViewport}>
-            {children}
-          </TerminalGlitchTransition>
+          <HubLayoutProvider value={layout}>
+            <HubViewport>
+              <TerminalGlitchTransition transitionKey={activeView} style={styles.glitchViewport}>
+                {children}
+              </TerminalGlitchTransition>
+            </HubViewport>
+          </HubLayoutProvider>
         </View>
       </View>
     </ImageBackground>

@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import HapticPressable from './HapticPressable';
+import { Grid, GridCell } from './layout/Grid';
 import {
   getRecipesByKind,
   isRecipeOutputOwned,
@@ -11,13 +12,9 @@ import { canAffordRecipe, getStashCount } from '../data/resourceStashEngine';
 import { RESOURCE_REGISTRY } from '../data/resourceRegistry';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useTerminal } from '../context/TerminalContext';
-import { useResponsiveScale } from '../hooks/useResponsiveScale';
+import { useHubLayout } from '../context/HubLayoutContext';
 import { useSafehouseTypography } from '../hooks/useSafehouseTypography';
-import {
-  DESKTOP_FORGE_STASH_WIDTH,
-  desktopTwoColumnCard,
-  desktopTwoColumnGrid,
-} from '../constants/safehouseDesktopLayout';
+import { ABILITY_CARD_MIN_HEIGHT } from '../constants/layoutTokens';
 import { terminalHoverStyle, readPressableHover } from '../utils/terminalHoverStyle';
 import type { ResourceItemId } from '../types/resourceItem';
 
@@ -61,7 +58,6 @@ function RecipeCard({
     <View
       style={[
         styles.recipeCard,
-        isDesktop && desktopTwoColumnCard,
         isDesktop && styles.recipeCardDesktop,
         { borderColor: affordable ? theme.statusColor : theme.borderColor },
       ]}
@@ -169,7 +165,7 @@ export default function CraftingMenuPanel({
 }: CraftingMenuPanelProps): React.JSX.Element {
   const { theme } = useTerminal();
   const { account, craftRecipe, appendHubLog } = usePlayerAccount();
-  const { isDesktop } = useResponsiveScale();
+  const { isDesktop, forgeStashWidth, forgeRecipeColumnWidth } = useHubLayout();
   const useForgeDesktop = embedded && isDesktop;
 
   const recipesByKind = useMemo(
@@ -194,28 +190,54 @@ export default function CraftingMenuPanel({
       <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>
         {SECTION_LABELS[kind]}
       </Text>
-      <View style={[styles.recipeGrid, useForgeDesktop && desktopTwoColumnGrid]}>
-        {recipesByKind[kind].map((recipe) => {
-          const affordable = canAffordRecipe(account.resourceStash, recipe);
-          const alreadyOwned = isRecipeOutputOwned(
-            recipe.outputId,
-            account.unlockedBlueprints,
-            account.craftedAugments,
-          );
-          return (
-            <RecipeCard
-              key={recipe.id}
-              recipe={recipe}
-              affordable={affordable}
-              alreadyOwned={alreadyOwned}
-              stash={account.resourceStash}
-              onCraft={handleCraft}
-              theme={theme}
-              isDesktop={useForgeDesktop}
-            />
-          );
-        })}
-      </View>
+      {useForgeDesktop ? (
+        <Grid>
+          {recipesByKind[kind].map((recipe) => {
+            const affordable = canAffordRecipe(account.resourceStash, recipe);
+            const alreadyOwned = isRecipeOutputOwned(
+              recipe.outputId,
+              account.unlockedBlueprints,
+              account.craftedAugments,
+            );
+            return (
+              <GridCell key={recipe.id} width={forgeRecipeColumnWidth}>
+                <RecipeCard
+                  recipe={recipe}
+                  affordable={affordable}
+                  alreadyOwned={alreadyOwned}
+                  stash={account.resourceStash}
+                  onCraft={handleCraft}
+                  theme={theme}
+                  isDesktop
+                />
+              </GridCell>
+            );
+          })}
+        </Grid>
+      ) : (
+        <View style={styles.recipeGrid}>
+          {recipesByKind[kind].map((recipe) => {
+            const affordable = canAffordRecipe(account.resourceStash, recipe);
+            const alreadyOwned = isRecipeOutputOwned(
+              recipe.outputId,
+              account.unlockedBlueprints,
+              account.craftedAugments,
+            );
+            return (
+              <RecipeCard
+                key={recipe.id}
+                recipe={recipe}
+                affordable={affordable}
+                alreadyOwned={alreadyOwned}
+                stash={account.resourceStash}
+                onCraft={handleCraft}
+                theme={theme}
+                isDesktop={false}
+              />
+            );
+          })}
+        </View>
+      )}
     </View>
   );
 
@@ -273,7 +295,7 @@ export default function CraftingMenuPanel({
 
       {useForgeDesktop ? (
         <View style={styles.forgeDesktopRow}>
-          <View style={styles.forgeStashColumn}>
+          <View style={[styles.forgeStashColumn, { width: forgeStashWidth }]}>
             <ResourceStashPanel stash={account.resourceStash} theme={theme} isDesktop />
             {footerPanels}
           </View>
@@ -342,7 +364,6 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   forgeStashColumn: {
-    width: DESKTOP_FORGE_STASH_WIDTH,
     flexShrink: 0,
     flexGrow: 0,
     gap: 10,
@@ -401,8 +422,9 @@ const styles = StyleSheet.create({
   },
   recipeCardDesktop: {
     marginBottom: 0,
-    minHeight: 140,
+    minHeight: ABILITY_CARD_MIN_HEIGHT,
     justifyContent: 'space-between',
+    width: '100%',
   },
   recipeCopy: {
     gap: 6,

@@ -1,18 +1,16 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import HapticPressable from './HapticPressable';
+import { Grid, GridCell } from './layout/Grid';
 import TacticalTagRow, { parseTagsLine } from './hub/TacticalTagRow';
+import { useHubLayout } from '../context/HubLayoutContext';
+import { ABILITY_CARD_MIN_HEIGHT } from '../constants/layoutTokens';
 import type { AbilityUnlockCost } from '../types/aegisCombat';
 import {
   canAffordAbilityUnlock,
   formatAbilityUnlockCost,
 } from '../data/classAbilityUnlockEngine';
-import { useResponsiveScale } from '../hooks/useResponsiveScale';
 import { useSafehouseTypography } from '../hooks/useSafehouseTypography';
-import {
-  desktopTwoColumnCard,
-  desktopTwoColumnGrid,
-} from '../constants/safehouseDesktopLayout';
 import {
   getInteractiveButtonStyle,
   getInteractiveButtonTextStyle,
@@ -80,8 +78,9 @@ export default function ClassLoadoutEditor<T extends string>({
   anchorCostLine,
 }: ClassLoadoutEditorProps<T>): React.JSX.Element {
   const textColor = theme.textColor ?? '#d8e2dc';
-  const { isDesktop } = useResponsiveScale();
+  const { isDesktop } = useHubLayout();
   const { bodySize, captionSize } = useSafehouseTypography();
+  const cardShellStyle = isDesktop ? styles.cardDesktop : null;
 
   const handleAbilityPress = (abilityId: T) => {
     const unlocked = isUnlocked(abilityId);
@@ -97,88 +96,89 @@ export default function ClassLoadoutEditor<T extends string>({
       <Text style={[styles.title, { color: theme.mutedColor }]}>{title}</Text>
       <Text style={[styles.hint, { color: theme.mutedColor }]}>{hint}</Text>
 
-      <View style={[styles.slotRow, isDesktop && desktopTwoColumnGrid]}>
-        <View
-          style={[
-            getInteractiveButtonStyle(theme.accentColor, { pressed: false, size: 'sm' }),
-            styles.slot,
-            styles.anchorSlot,
-            isDesktop && desktopTwoColumnCard,
-            { borderColor: theme.accentColor },
-          ]}
-        >
-          <Text style={[styles.slotLabel, { color: theme.mutedColor, fontSize: captionSize(8) }]}>S1 // ANCHOR</Text>
-          <Text
-            style={[styles.slotAbility, { color: textColor, fontSize: bodySize(8), lineHeight: bodySize(11) }]}
-            numberOfLines={2}
+      <Grid>
+        <GridCell style={cardShellStyle}>
+          <View
+            style={[
+              getInteractiveButtonStyle(theme.accentColor, { pressed: false, size: 'sm' }),
+              styles.card,
+              styles.anchorSlot,
+              { borderColor: theme.accentColor },
+            ]}
           >
-            {anchorLabel}
-          </Text>
-          <Text
-            style={[styles.slotMeta, { color: theme.mutedColor, fontSize: captionSize(6), lineHeight: captionSize(9) }]}
-            numberOfLines={2}
-          >
-            {anchorCostLine ? `COST: ${anchorCostLine}` : (catalog[anchorId]?.description ?? 'Class anchor — fixed.')}
-          </Text>
-          {anchorCostLine && catalog[anchorId]?.description ? (
+            <Text style={[styles.slotLabel, { color: theme.mutedColor, fontSize: captionSize(8) }]}>S1 // ANCHOR</Text>
+            <Text
+              style={[styles.slotAbility, { color: textColor, fontSize: bodySize(8), lineHeight: bodySize(11) }]}
+              numberOfLines={2}
+            >
+              {anchorLabel}
+            </Text>
             <Text
               style={[styles.slotMeta, { color: theme.mutedColor, fontSize: captionSize(6), lineHeight: captionSize(9) }]}
               numberOfLines={2}
             >
-              {catalog[anchorId]?.description}
+              {anchorCostLine ? `COST: ${anchorCostLine}` : (catalog[anchorId]?.description ?? 'Class anchor — fixed.')}
             </Text>
-          ) : null}
-        </View>
+            {anchorCostLine && catalog[anchorId]?.description ? (
+              <Text
+                style={[styles.slotMeta, { color: theme.mutedColor, fontSize: captionSize(6), lineHeight: captionSize(9) }]}
+                numberOfLines={2}
+              >
+                {catalog[anchorId]?.description}
+              </Text>
+            ) : null}
+          </View>
+        </GridCell>
 
         {([1, 2, 3] as const).map((slotIndex) => {
           const abilityId = draft[slotIndex];
           const def = catalog[abilityId];
           const isSelected = selectedSlot === slotIndex;
           return (
-            <HapticPressable
-              key={`slot-${slotIndex}`}
-              onPress={() => onSelectSlot(slotIndex)}
-              style={(state) => [
-                getInteractiveButtonStyle(theme.accentColor, { pressed: state.pressed, size: 'sm' }),
-                styles.slot,
-                isDesktop && desktopTwoColumnCard,
-                !isSelected && { borderColor: theme.borderColor },
-                terminalHoverStyle(readPressableHover(state), state.pressed),
-              ]}
-            >
-              <Text style={[styles.slotLabel, { color: theme.mutedColor, fontSize: captionSize(8) }]}>
-                {`S${slotIndex + 1}`}
-              </Text>
-              <Text
-                style={[styles.slotAbility, { color: textColor, fontSize: bodySize(8), lineHeight: bodySize(11) }]}
-                numberOfLines={2}
+            <GridCell key={`slot-${slotIndex}`} style={cardShellStyle}>
+              <HapticPressable
+                onPress={() => onSelectSlot(slotIndex)}
+                style={(state) => [
+                  getInteractiveButtonStyle(theme.accentColor, { pressed: state.pressed, size: 'sm' }),
+                  styles.card,
+                  !isSelected && { borderColor: theme.borderColor },
+                  terminalHoverStyle(readPressableHover(state), state.pressed),
+                ]}
               >
-                {def?.label ?? abilityId}
-              </Text>
-              {def?.costLine ? (
-                <Text
-                  style={[styles.tagLine, { color: theme.mutedColor, fontSize: captionSize(6), lineHeight: captionSize(8) }]}
-                  numberOfLines={1}
-                >
-                  {`COST: ${def.costLine}`}
+                <Text style={[styles.slotLabel, { color: theme.mutedColor, fontSize: captionSize(8) }]}>
+                  {`S${slotIndex + 1}`}
                 </Text>
-              ) : null}
-              {def?.tagsLine ? <TacticalTagRow tags={parseTagsLine(def.tagsLine)} /> : null}
-              <Text
-                style={[styles.slotMeta, { color: theme.mutedColor, fontSize: captionSize(6), lineHeight: captionSize(9) }]}
-                numberOfLines={2}
-              >
-                {def?.description ?? ''}
-              </Text>
-            </HapticPressable>
+                <Text
+                  style={[styles.slotAbility, { color: textColor, fontSize: bodySize(8), lineHeight: bodySize(11) }]}
+                  numberOfLines={2}
+                >
+                  {def?.label ?? abilityId}
+                </Text>
+                {def?.costLine ? (
+                  <Text
+                    style={[styles.tagLine, { color: theme.mutedColor, fontSize: captionSize(6), lineHeight: captionSize(8) }]}
+                    numberOfLines={1}
+                  >
+                    {`COST: ${def.costLine}`}
+                  </Text>
+                ) : null}
+                {def?.tagsLine ? <TacticalTagRow tags={parseTagsLine(def.tagsLine)} /> : null}
+                <Text
+                  style={[styles.slotMeta, { color: theme.mutedColor, fontSize: captionSize(6), lineHeight: captionSize(9) }]}
+                  numberOfLines={2}
+                >
+                  {def?.description ?? ''}
+                </Text>
+              </HapticPressable>
+            </GridCell>
           );
         })}
-      </View>
+      </Grid>
 
       <Text style={[styles.poolLabel, { color: theme.mutedColor, fontSize: captionSize(7) }]}>
         ABILITY POOL // TAP TO ASSIGN OR UNLOCK
       </Text>
-      <View style={[styles.pool, isDesktop && desktopTwoColumnGrid]}>
+      <Grid>
         {assignableIds.map((abilityId) => {
           const def = catalog[abilityId];
           const assigned = draft.indexOf(abilityId);
@@ -186,55 +186,55 @@ export default function ClassLoadoutEditor<T extends string>({
           const unlocked = isUnlocked(abilityId);
           const affordable = unlocked || canAffordAbilityUnlock(resourceStash, def.unlockCost);
           return (
-            <HapticPressable
-              key={abilityId}
-              onPress={() => handleAbilityPress(abilityId)}
-              style={(state) => [
-                getInteractiveButtonStyle(theme.accentColor, { pressed: state.pressed, size: 'sm' }),
-                styles.chip,
-                isDesktop && desktopTwoColumnCard,
-                !isSelected && { borderColor: theme.borderColor },
-                !unlocked && !affordable && styles.chipLocked,
-                !unlocked && affordable && styles.chipUnlockable,
-                terminalHoverStyle(readPressableHover(state), state.pressed),
-              ]}
-            >
-              <Text
-                style={[
-                  styles.chipLabel,
-                  { color: isSelected ? theme.accentColor : textColor, fontSize: bodySize(7) },
+            <GridCell key={abilityId} style={cardShellStyle}>
+              <HapticPressable
+                onPress={() => handleAbilityPress(abilityId)}
+                style={(state) => [
+                  getInteractiveButtonStyle(theme.accentColor, { pressed: state.pressed, size: 'sm' }),
+                  styles.card,
+                  !isSelected && { borderColor: theme.borderColor },
+                  !unlocked && !affordable && styles.chipLocked,
+                  !unlocked && affordable && styles.chipUnlockable,
+                  terminalHoverStyle(readPressableHover(state), state.pressed),
                 ]}
               >
-                {def.label}
-              </Text>
-              {!unlocked ? (
                 <Text
                   style={[
-                    styles.chipCost,
-                    { color: affordable ? '#4ade80' : '#f87171', fontSize: captionSize(6), lineHeight: captionSize(9) },
+                    styles.chipLabel,
+                    { color: isSelected ? theme.accentColor : textColor, fontSize: bodySize(7) },
                   ]}
                 >
-                  {`LOCKED // ${formatAbilityUnlockCost(def.unlockCost)}`}
+                  {def.label}
                 </Text>
-              ) : null}
-              <Text
-                style={[styles.chipTags, { color: theme.mutedColor, fontSize: captionSize(5), lineHeight: captionSize(7) }]}
-                numberOfLines={2}
-              >
-                {def.costLine ? `COST: ${def.costLine}` : def.tagsLine}
-              </Text>
-              {def.costLine && def.tagsLine ? (
-                <TacticalTagRow tags={parseTagsLine(def.tagsLine)} />
-              ) : null}
-              {assigned >= 0 ? (
-                <Text style={[styles.chipSlot, { color: theme.mutedColor, fontSize: captionSize(6) }]}>
-                  {`S${assigned + 1}`}
+                {!unlocked ? (
+                  <Text
+                    style={[
+                      styles.chipCost,
+                      { color: affordable ? '#4ade80' : '#f87171', fontSize: captionSize(6), lineHeight: captionSize(9) },
+                    ]}
+                  >
+                    {`LOCKED // ${formatAbilityUnlockCost(def.unlockCost)}`}
+                  </Text>
+                ) : null}
+                <Text
+                  style={[styles.chipTags, { color: theme.mutedColor, fontSize: captionSize(5), lineHeight: captionSize(7) }]}
+                  numberOfLines={2}
+                >
+                  {def.costLine ? `COST: ${def.costLine}` : def.tagsLine}
                 </Text>
-              ) : null}
-            </HapticPressable>
+                {def.costLine && def.tagsLine ? (
+                  <TacticalTagRow tags={parseTagsLine(def.tagsLine)} />
+                ) : null}
+                {assigned >= 0 ? (
+                  <Text style={[styles.chipSlot, { color: theme.mutedColor, fontSize: captionSize(6) }]}>
+                    {`S${assigned + 1}`}
+                  </Text>
+                ) : null}
+              </HapticPressable>
+            </GridCell>
           );
         })}
-      </View>
+      </Grid>
 
       {statusMessage ? (
         <Text style={[styles.status, { color: theme.mutedColor }]}>{statusMessage}</Text>
@@ -268,59 +268,36 @@ const styles = StyleSheet.create({
     lineHeight: 12,
     letterSpacing: 0.4,
   },
-  slotRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  slot: {
-    flexBasis: '47%',
-    flexGrow: 1,
+  card: {
     alignItems: 'flex-start',
     gap: 4,
-    minHeight: 72,
+    width: '100%',
+  },
+  cardDesktop: {
+    minHeight: ABILITY_CARD_MIN_HEIGHT,
   },
   anchorSlot: {
     opacity: 0.92,
   },
   slotLabel: {
     fontFamily: MONO,
-    fontSize: 8,
     letterSpacing: 0.6,
   },
   slotAbility: {
     fontFamily: MONO,
-    fontSize: 8,
-    lineHeight: 11,
     fontWeight: '700',
   },
   tagLine: {
     fontFamily: MONO,
-    fontSize: 6,
-    lineHeight: 8,
     letterSpacing: 0.3,
   },
   slotMeta: {
     fontFamily: MONO,
-    fontSize: 6,
-    lineHeight: 9,
   },
   poolLabel: {
     fontFamily: MONO,
-    fontSize: 7,
     letterSpacing: 0.8,
     marginTop: 2,
-  },
-  pool: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  chip: {
-    alignItems: 'flex-start',
-    gap: 2,
-    minWidth: '30%',
-    flexGrow: 1,
   },
   chipLocked: {
     opacity: 0.55,

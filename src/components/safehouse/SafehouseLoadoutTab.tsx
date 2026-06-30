@@ -9,9 +9,7 @@ import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useTerminal } from '../../context/TerminalContext';
 import type { CargoItemId } from '../../types/cargoGrid';
 import { resolveCargoItemIcon } from '../../utils/cargoItemIcon';
-import { useResponsiveScale } from '../../hooks/useResponsiveScale';
-import { useSafehouseTypography } from '../../hooks/useSafehouseTypography';
-import { DESKTOP_STASH_MAX_WIDTH } from '../../constants/safehouseDesktopLayout';
+import { useHubLayout } from '../../context/HubLayoutContext';
 import {
   pointInWindowRect,
   resolveCargoGridCellFromWindow,
@@ -46,14 +44,18 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
 
   const accent = theme.statusColor;
   const panelBg = theme.backgroundColor;
-  const { safehouseLeftRatio, isDesktop, scaleSpacing } = useResponsiveScale();
-  const { iconSize } = useSafehouseTypography();
-  const stashFlex = isDesktop ? safehouseLeftRatio : 1;
-  const deploymentFlex = isDesktop ? 1 - safehouseLeftRatio : 1;
+  const {
+    isDesktop,
+    scaleSpacing,
+    stashLaneWidth,
+    deploymentLaneWidth,
+    inventoryCellSize,
+    iconSize,
+  } = useHubLayout();
 
   const hubCellSize = useMemo(
-    () => resolveHubLoadoutCellSize(cargoAreaSize.width, cargoAreaSize.height, isDesktop),
-    [cargoAreaSize.height, cargoAreaSize.width, isDesktop],
+    () => resolveHubLoadoutCellSize(cargoAreaSize.width, cargoAreaSize.height, inventoryCellSize),
+    [cargoAreaSize.height, cargoAreaSize.width, inventoryCellSize],
   );
 
   useEffect(() => () => {
@@ -146,10 +148,10 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
       <View style={[styles.split, { gap: scaleSpacing(10) }]}>
         <View
           style={{
-            flex: stashFlex,
+            flex: isDesktop ? undefined : 1,
+            width: isDesktop ? stashLaneWidth : undefined,
             minWidth: 0,
             minHeight: 0,
-            maxWidth: isDesktop ? DESKTOP_STASH_MAX_WIDTH : undefined,
             flexShrink: isDesktop ? 0 : 1,
           }}
         >
@@ -170,7 +172,8 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
           style={[
             styles.deploymentPanel,
             {
-              flex: deploymentFlex,
+              flex: 1,
+              minWidth: isDesktop ? deploymentLaneWidth : 0,
               borderColor: theme.borderColor,
               backgroundColor: panelBg,
               paddingHorizontal: scaleSpacing(10),

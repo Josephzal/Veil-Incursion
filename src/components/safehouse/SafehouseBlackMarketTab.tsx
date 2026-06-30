@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import HapticPressable from '../HapticPressable';
+import { Grid, GridCell } from '../layout/Grid';
 import { BLACK_MARKET_CARGO_LISTINGS } from '../../data/blackMarket';
 import {
   hubContrabandPrice,
@@ -16,12 +17,8 @@ import type { CargoItemId } from '../../types/cargoGrid';
 import { resolveCargoItemIcon } from '../../utils/cargoItemIcon';
 import TerminalText from '../TerminalText';
 import TacticalButton from '../TacticalButton';
-import { useResponsiveScale } from '../../hooks/useResponsiveScale';
+import { useHubLayout } from '../../context/HubLayoutContext';
 import { useSafehouseTypography } from '../../hooks/useSafehouseTypography';
-import {
-  desktopTwoColumnCard,
-  desktopTwoColumnGrid,
-} from '../../constants/safehouseDesktopLayout';
 import { terminalHoverStyle, readPressableHover } from '../../utils/terminalHoverStyle';
 
 export default function SafehouseBlackMarketTab(): React.JSX.Element {
@@ -35,10 +32,14 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
   const panelBg = theme.backgroundColor;
   const economyColor = getFactionAccent(account.alignedFaction);
   const terminalGreen = '#4ade80';
-  const { safehouseLeftRatio, isDesktop, scaleSpacing } = useResponsiveScale();
+  const {
+    isDesktop,
+    scaleSpacing,
+    marketBuyLaneWidth,
+    deploymentLaneWidth,
+    marketBuyColumnWidth,
+  } = useHubLayout();
   const { iconSize } = useSafehouseTypography();
-  const buyFlex = isDesktop ? safehouseLeftRatio : 1;
-  const sellFlex = isDesktop ? 1 - safehouseLeftRatio : 1;
 
   const selectedListing = selectedListingId != null
     ? BLACK_MARKET_CARGO_LISTINGS.find((entry) => entry.id === selectedListingId) ?? null
@@ -65,8 +66,8 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
         <View
           style={[
             styles.panel,
+            isDesktop ? { width: marketBuyLaneWidth, flexShrink: 0 } : { flex: 1 },
             {
-              flex: buyFlex,
               borderColor: theme.borderColor,
               backgroundColor: panelBg,
               padding: scaleSpacing(10),
@@ -80,53 +81,90 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
           <TerminalText size={7} lineHeight={11} style={[styles.panelSub, { color: theme.mutedColor }]}>
             High-end field gear — purchases stage in hub consumable vault.
           </TerminalText>
-          <ScrollView
-            style={styles.listScroll}
-            contentContainerStyle={[
-              styles.listContent,
-              isDesktop && desktopTwoColumnGrid,
-            ]}
-          >
-            {BLACK_MARKET_CARGO_LISTINGS.map((listing) => {
-              const price = hubContrabandPrice(listing.price, marketDiscount);
-              const selected = selectedListingId === listing.id;
-              const affordable = account.cabalCredits >= price;
-              return (
-                <HapticPressable
-                  key={listing.id}
-                  onPress={() => setSelectedListingId(listing.id)}
-                  style={(state) => [
-                    styles.listingCard,
-                    isDesktop && desktopTwoColumnCard,
-                    isDesktop && styles.listingCardDesktop,
-                    {
-                      borderColor: selected ? economyColor : theme.borderColor,
-                      opacity: affordable ? 1 : 0.55,
-                    },
-                    terminalHoverStyle(readPressableHover(state), state.pressed),
-                  ]}
-                >
-                  <Image
-                    source={resolveCargoItemIcon(listing.id)}
-                    style={{ width: iconSize, height: iconSize, resizeMode: 'contain' }}
-                  />
-                  <View style={styles.listingBody}>
-                    <TerminalText
-                      size={isDesktop ? 9 : 8}
-                      style={{ color: selected ? economyColor : theme.textColor, fontWeight: '700' }}
-                    >
-                      {listing.name.toUpperCase()}
-                    </TerminalText>
-                    <TerminalText size={isDesktop ? 8 : 7} lineHeight={isDesktop ? 12 : 10} style={{ color: theme.mutedColor }} numberOfLines={2}>
-                      {listing.effect}
-                    </TerminalText>
-                    <TerminalText size={isDesktop ? 9 : 8} style={{ color: terminalGreen, fontWeight: '700' }}>
-                      {`${price} CR`}
-                    </TerminalText>
-                  </View>
-                </HapticPressable>
-              );
-            })}
+          <ScrollView style={styles.listScroll} contentContainerStyle={styles.listContent}>
+            {isDesktop ? (
+              <Grid>
+                {BLACK_MARKET_CARGO_LISTINGS.map((listing) => {
+                  const price = hubContrabandPrice(listing.price, marketDiscount);
+                  const selected = selectedListingId === listing.id;
+                  const affordable = account.cabalCredits >= price;
+                  return (
+                    <GridCell key={listing.id} width={marketBuyColumnWidth}>
+                      <HapticPressable
+                        onPress={() => setSelectedListingId(listing.id)}
+                        style={(state) => [
+                          styles.listingCard,
+                          styles.listingCardDesktop,
+                          {
+                            borderColor: selected ? economyColor : theme.borderColor,
+                            opacity: affordable ? 1 : 0.55,
+                          },
+                          terminalHoverStyle(readPressableHover(state), state.pressed),
+                        ]}
+                      >
+                        <Image
+                          source={resolveCargoItemIcon(listing.id)}
+                          style={{ width: iconSize, height: iconSize, resizeMode: 'contain' }}
+                        />
+                        <View style={styles.listingBody}>
+                          <TerminalText
+                            size={9}
+                            style={{ color: selected ? economyColor : theme.textColor, fontWeight: '700' }}
+                          >
+                            {listing.name.toUpperCase()}
+                          </TerminalText>
+                          <TerminalText size={8} lineHeight={12} style={{ color: theme.mutedColor }} numberOfLines={2}>
+                            {listing.effect}
+                          </TerminalText>
+                          <TerminalText size={9} style={{ color: terminalGreen, fontWeight: '700' }}>
+                            {`${price} CR`}
+                          </TerminalText>
+                        </View>
+                      </HapticPressable>
+                    </GridCell>
+                  );
+                })}
+              </Grid>
+            ) : (
+              BLACK_MARKET_CARGO_LISTINGS.map((listing) => {
+                const price = hubContrabandPrice(listing.price, marketDiscount);
+                const selected = selectedListingId === listing.id;
+                const affordable = account.cabalCredits >= price;
+                return (
+                  <HapticPressable
+                    key={listing.id}
+                    onPress={() => setSelectedListingId(listing.id)}
+                    style={(state) => [
+                      styles.listingCard,
+                      {
+                        borderColor: selected ? economyColor : theme.borderColor,
+                        opacity: affordable ? 1 : 0.55,
+                      },
+                      terminalHoverStyle(readPressableHover(state), state.pressed),
+                    ]}
+                  >
+                    <Image
+                      source={resolveCargoItemIcon(listing.id)}
+                      style={{ width: iconSize, height: iconSize, resizeMode: 'contain' }}
+                    />
+                    <View style={styles.listingBody}>
+                      <TerminalText
+                        size={8}
+                        style={{ color: selected ? economyColor : theme.textColor, fontWeight: '700' }}
+                      >
+                        {listing.name.toUpperCase()}
+                      </TerminalText>
+                      <TerminalText size={7} lineHeight={10} style={{ color: theme.mutedColor }} numberOfLines={2}>
+                        {listing.effect}
+                      </TerminalText>
+                      <TerminalText size={8} style={{ color: terminalGreen, fontWeight: '700' }}>
+                        {`${price} CR`}
+                      </TerminalText>
+                    </View>
+                  </HapticPressable>
+                );
+              })
+            )}
           </ScrollView>
           <TacticalButton
             label="[ BUY ]"
@@ -142,8 +180,8 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
         <View
           style={[
             styles.panel,
+            isDesktop ? { flex: 1, minWidth: deploymentLaneWidth } : { flex: 1 },
             {
-              flex: sellFlex,
               borderColor: theme.borderColor,
               backgroundColor: panelBg,
               padding: scaleSpacing(10),
