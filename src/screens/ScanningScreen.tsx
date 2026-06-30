@@ -147,6 +147,7 @@ export default function ScanningScreen(): React.JSX.Element {
   }, [selectedNode, nodeIndexById, activeIncursion.currentMacroBiomeFamily]);
 
   const showNodeDock = hasSelection;
+  const allNodesLocked = nodesInField > 0 && siphonedNodeIds.length >= nodesInField;
 
   useEffect(() => {
     vectorDotsRef.current = vectorDots;
@@ -372,7 +373,9 @@ export default function ScanningScreen(): React.JSX.Element {
       <View style={styles.nodeDockBody}>
         <InlineScannerEngagement
           layout="dock"
-          spectralLines={showNodeDock ? intelLines : [dockPlaceholder]}
+          spectralLines={showNodeDock ? intelLines : []}
+          idleMessage={showNodeDock ? undefined : dockPlaceholder}
+          signalDecrypted={allNodesLocked}
           canEngage={canEngage}
           accent={accent}
           mutedColor={theme.mutedColor}

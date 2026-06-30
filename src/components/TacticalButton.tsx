@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Platform, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { Platform, StyleSheet, type PressableProps } from 'react-native';
 import HapticPressable from './HapticPressable';
 import TerminalText from './TerminalText';
 import { viewShadow } from '../utils/adaptiveStyles';
@@ -18,7 +18,9 @@ export interface TacticalButtonProps {
   mutedColor: string;
   /** Nav rail hardware tab (vertical stack) vs inline hub tab vs full-width CTA. */
   variant?: 'rail' | 'inline' | 'cta';
-  style?: StyleProp<ViewStyle>;
+  style?: PressableProps['style'];
+  labelSize?: number;
+  labelLineHeight?: number;
 }
 
 /** Scaled terminal nav / action button — desktop web typography only. */
@@ -30,6 +32,8 @@ export default function TacticalButton({
   mutedColor,
   variant = 'rail',
   style,
+  labelSize,
+  labelLineHeight,
 }: TacticalButtonProps): React.JSX.Element {
   const { scaleSize, scaleSpacing } = useResponsiveScale();
   const isRail = variant === 'rail';
@@ -51,7 +55,7 @@ export default function TacticalButton({
   return (
     <HapticPressable
       onPress={onPress}
-      style={[
+      style={(state) => [
         isRail ? styles.railCell : isCta ? styles.ctaCell : styles.inlineCell,
         active || isCta ? styles.cellActive : styles.cellInactive,
         {
@@ -72,12 +76,12 @@ export default function TacticalButton({
               }),
             }
           : null,
-        style,
+        typeof style === 'function' ? style(state) : style,
       ]}
     >
       <TerminalText
-        size={metrics.fontSize}
-        lineHeight={metrics.lineHeight}
+        size={labelSize ?? metrics.fontSize}
+        lineHeight={labelLineHeight ?? metrics.lineHeight}
         letterSpacing={metrics.letterSpacing}
         style={[
           styles.label,

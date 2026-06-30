@@ -60,6 +60,8 @@ export interface ResponsiveLayoutMetrics extends ResponsiveScaleMetrics {
   shadowWarIntelLaneWidth: number;
   /** Single typography scaler — prefer TerminalText over manual use. */
   scaleFont: (baseSize: number) => number;
+  /** Desktop UI multiplier (1 on native). */
+  fontScale: number;
 }
 
 export function useResponsiveLayout(): ResponsiveLayoutMetrics {
@@ -165,6 +167,7 @@ export function useResponsiveLayout(): ResponsiveLayoutMetrics {
       shadowWarMapLaneWidth: isDesktop ? shadowWarMapLaneWidth : contentWidth,
       shadowWarIntelLaneWidth: isDesktop ? shadowWarIntelLaneWidth : contentWidth,
       scaleFont: (baseSize: number) => scaleSize(baseSize),
+      fontScale: scale.scale,
     };
   }, [landscape.hubNavRailWidth, landscape.safeRight, scale]);
 }
