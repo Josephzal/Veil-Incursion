@@ -3,11 +3,14 @@ import { Platform, ScrollView, StyleSheet, Text, View, type ViewStyle } from 're
 import type { NarrativeOutcomeSummary } from '../../data/narrative/narrativeOutcomeSummary';
 import { readPressableHover, terminalHoverStyle } from '../../utils/terminalHoverStyle';
 import { hubCtaButtonStyle, resolveHubCtaFill } from '../../constants/hubCta';
+import {
+  NARRATIVE_UNIFIED_PANEL_BG,
+  NARRATIVE_UNIFIED_PANEL_BORDER,
+  NARRATIVE_UNIFIED_PANEL_PADDING,
+} from '../../constants/narrativeLayout';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 import TacticalButton from '../TacticalButton';
 
-const SLATE_BORDER = '#475569';
-const PANEL_BORDER = '#334155';
 const MUTED_WHITE = '#F8FAFC';
 const BODY_MUTED = '#94A3B8';
 const TERMINAL_GREEN = '#00ff33';
@@ -56,7 +59,7 @@ export default function NarrativeOutcomePanel({
       bodyLine: 15 * fontScale,
       detail: 9 * fontScale,
       detailLine: 14 * fontScale,
-      panelPad: scaleSpacing(32),
+      panelPad: scaleSpacing(NARRATIVE_UNIFIED_PANEL_PADDING),
       panelPadBottom: scaleSpacing(40),
       sectionGap: scaleSpacing(16),
     }),
@@ -254,9 +257,9 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     minHeight: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
-    borderWidth: 2,
-    borderColor: PANEL_BORDER,
+    backgroundColor: NARRATIVE_UNIFIED_PANEL_BG,
+    borderWidth: 1,
+    borderColor: NARRATIVE_UNIFIED_PANEL_BORDER,
     justifyContent: 'flex-start',
   },
   docHeader: {

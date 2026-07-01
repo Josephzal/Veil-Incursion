@@ -3,11 +3,15 @@ import { Platform, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { readPressableHover, terminalHoverStyle } from '../../../utils/terminalHoverStyle';
 import TacticalButton from '../../TacticalButton';
 import { hubCtaButtonStyle, resolveHubCtaFill } from '../../../constants/hubCta';
+import {
+  NARRATIVE_UNIFIED_PANEL_BG,
+  NARRATIVE_UNIFIED_PANEL_BORDER,
+  NARRATIVE_UNIFIED_PANEL_PADDING,
+} from '../../../constants/narrativeLayout';
 import { useResponsiveLayout } from '../../../hooks/useResponsiveLayout';
 import type { TensionMechanicProps, TensionMechanicSuccessResult } from './tensionMechanicTypes';
 
 const SLATE_BORDER = '#475569';
-const PANEL_BORDER = '#334155';
 const MUTED_WHITE = '#F8FAFC';
 const BODY_MUTED = '#94A3B8';
 const SIPHON_LABEL = '#FFFFFF';
@@ -156,7 +160,7 @@ export default function InstabilityProtocol({
       residueHint: 9 * fontScale,
       residueHintLine: 13 * fontScale,
       penalty: 10 * fontScale,
-      panelPad: scaleSpacing(32),
+      panelPad: scaleSpacing(NARRATIVE_UNIFIED_PANEL_PADDING),
       panelPadBottom: scaleSpacing(40),
       actionGap: scaleSpacing(16),
     }),
@@ -412,9 +416,9 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     minHeight: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
-    borderWidth: 2,
-    borderColor: PANEL_BORDER,
+    backgroundColor: NARRATIVE_UNIFIED_PANEL_BG,
+    borderWidth: 1,
+    borderColor: NARRATIVE_UNIFIED_PANEL_BORDER,
     justifyContent: 'flex-start',
   },
   header: {

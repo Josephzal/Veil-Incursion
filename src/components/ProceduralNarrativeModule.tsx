@@ -16,6 +16,9 @@ import {
   NARRATIVE_CHOICE_PADDING_V,
   NARRATIVE_DIVIDER_COLOR,
   NARRATIVE_TERMINAL_BODY_MIN_HEIGHT,
+  NARRATIVE_UNIFIED_PANEL_BG,
+  NARRATIVE_UNIFIED_PANEL_BORDER,
+  NARRATIVE_UNIFIED_PANEL_PADDING,
 } from '../constants/narrativeLayout';
 import { hubCtaButtonStyle } from '../constants/hubCta';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
@@ -439,10 +442,10 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     minHeight: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    backgroundColor: NARRATIVE_UNIFIED_PANEL_BG,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    padding: 24,
+    borderColor: NARRATIVE_UNIFIED_PANEL_BORDER,
+    padding: NARRATIVE_UNIFIED_PANEL_PADDING,
   },
   topAnchor: {
     flexShrink: 0,

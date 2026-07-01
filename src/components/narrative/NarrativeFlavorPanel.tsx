@@ -1,6 +1,6 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { NARRATIVE_BODY_LINE_HEIGHT } from '../../constants/narrativeLayout';
+import { NARRATIVE_BODY_LINE_HEIGHT, NARRATIVE_UNIFIED_PANEL_BG, NARRATIVE_UNIFIED_PANEL_BORDER, NARRATIVE_UNIFIED_PANEL_PADDING } from '../../constants/narrativeLayout';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 
 interface NarrativeFlavorPanelProps {
@@ -20,7 +20,7 @@ export default function NarrativeFlavorPanel({
   mutedColor = '#94a3b8',
 }: NarrativeFlavorPanelProps): React.JSX.Element {
   const { scaleFont, scaleSpacing, fontScale } = useResponsiveLayout();
-  const panelPadding = scaleSpacing(32);
+  const panelPadding = scaleSpacing(NARRATIVE_UNIFIED_PANEL_PADDING);
 
   return (
     <View
@@ -72,9 +72,9 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     minHeight: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    backgroundColor: NARRATIVE_UNIFIED_PANEL_BG,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: NARRATIVE_UNIFIED_PANEL_BORDER,
     justifyContent: 'flex-start',
   },
   panelLabel: {

@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
     width: '100%',
     minHeight: 0,
     alignSelf: 'center',
-    alignItems: 'flex-start',
+    alignItems: 'stretch',
   },
   column: {
     flex: 1,

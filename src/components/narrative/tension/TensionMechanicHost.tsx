@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import HapticPressable from '../../HapticPressable';
-import ConcealSlider from './ConcealSlider';
+import ConcealmentMatrix from './ConcealmentMatrix';
 import InstabilityProtocol from './InstabilityProtocol';
 import GridCipher from './GridCipher';
 import {
@@ -96,7 +96,7 @@ export default function TensionMechanicHost({
     case 'Mechanic_ConcealSlider':
       return (
         <View style={styles.mechanicHost}>
-          <ConcealSlider {...mechanicProps} />
+          <ConcealmentMatrix {...mechanicProps} />
         </View>
       );
     default:
