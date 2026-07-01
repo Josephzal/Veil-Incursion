@@ -9,87 +9,85 @@ interface NarrativeFlavorPanelProps {
   mutedColor?: string;
 }
 
+const MUTED_WHITE = '#F8FAFC';
+
 /**
- * Left-column event brief — narrative flavor over the background art,
- * separate from the right-side expedition resolver terminal.
+ * Left-column field report — Terran Grid document panel over narrative art.
  */
 export default function NarrativeFlavorPanel({
   flavorText,
-  primaryColor = '#f8fafc',
+  primaryColor = MUTED_WHITE,
   mutedColor = '#94a3b8',
 }: NarrativeFlavorPanelProps): React.JSX.Element {
-  const { scaleFont, scaleSpacing, isDesktop } = useResponsiveLayout();
-  const panelPadding = isDesktop ? scaleSpacing(24) : scaleSpacing(16);
+  const { scaleFont, scaleSpacing, fontScale } = useResponsiveLayout();
+  const panelPadding = scaleSpacing(32);
 
   return (
-    <View style={[styles.root, { padding: panelPadding }]}>
-      <View
+    <View
+      style={[
+        styles.panel,
+        {
+          padding: panelPadding,
+        },
+      ]}
+    >
+      <Text
         style={[
-          styles.panel,
+          styles.panelLabel,
           {
-            padding: panelPadding,
-            maxHeight: isDesktop ? '72%' : '88%',
+            color: mutedColor,
+            fontSize: 9 * fontScale,
+            lineHeight: 13 * fontScale,
+            marginBottom: scaleSpacing(12),
           },
         ]}
       >
+        FIELD REPORT // EVENT BRIEF
+      </Text>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator
+        keyboardShouldPersistTaps="handled"
+      >
         <Text
           style={[
-            styles.panelLabel,
+            styles.flavorText,
             {
-              color: mutedColor,
-              fontSize: scaleFont(8),
-              lineHeight: scaleFont(11),
-              marginBottom: scaleSpacing(10),
+              color: primaryColor,
+              fontSize: scaleFont(11),
+              lineHeight: scaleFont(NARRATIVE_BODY_LINE_HEIGHT),
             },
           ]}
         >
-          FIELD REPORT // EVENT BRIEF
+          {flavorText}
         </Text>
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator
-          keyboardShouldPersistTaps="handled"
-        >
-          <Text
-            style={[
-              styles.flavorText,
-              {
-                color: primaryColor,
-                fontSize: scaleFont(11),
-                lineHeight: scaleFont(NARRATIVE_BODY_LINE_HEIGHT),
-              },
-            ]}
-          >
-            {flavorText}
-          </Text>
-        </ScrollView>
-      </View>
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    minWidth: 0,
-    minHeight: 0,
-    justifyContent: 'center',
-  },
   panel: {
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    flex: 1,
+    width: '100%',
+    minHeight: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
     borderWidth: 1,
-    borderColor: 'rgba(167, 139, 250, 0.35)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'flex-start',
   },
   panelLabel: {
     fontFamily: 'monospace',
     letterSpacing: 1,
+    fontWeight: '700',
   },
   scroll: {
-    flex: 1,
-    minHeight: 0,
+    flexGrow: 0,
   },
   scrollContent: {
+    flexGrow: 0,
+    justifyContent: 'flex-start',
     paddingBottom: 8,
   },
   flavorText: {

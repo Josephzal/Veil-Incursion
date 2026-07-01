@@ -295,8 +295,40 @@ export default function ProceduralNarrativeModule({
     return '[ CONFIRM RESOLVER ]';
   })();
 
+  if (phase === 'TENSION') {
+    return (
+      <View style={styles.tensionRoot}>
+        <TensionMechanicHost
+          tensionMechanic={node.proceduralMeta?.tensionMechanic ?? 'Mechanic_ScavengeBar'}
+          onSuccess={handleTensionSuccess}
+          onFailure={handleTensionFailure}
+          defaultPenalty={node.proceduralMeta?.defaultPenalty}
+          fallbackLabel={tensionMechanicLabel}
+          borderColor={borderColor}
+          mutedColor={mutedColor}
+          primaryColor={primaryColor}
+        />
+      </View>
+    );
+  }
+
+  if (phase === 'OUTCOME' && outcomeSummary) {
+    return (
+      <View style={styles.tensionRoot}>
+        <NarrativeOutcomePanel
+          summary={outcomeSummary}
+          bonusLine={bonusLine}
+          onContinue={handleContinue}
+          borderColor={borderColor}
+          mutedColor={mutedColor}
+          primaryColor={primaryColor}
+        />
+      </View>
+    );
+  }
+
   return (
-    <View style={styles.root}>
+    <View style={styles.scenarioShell}>
       <View style={styles.topAnchor}>
         <Text
           style={[
@@ -375,32 +407,6 @@ export default function ProceduralNarrativeModule({
             </View>
           </View>
         ) : null}
-
-        {phase === 'TENSION' ? (
-          <View style={styles.tensionArea}>
-            <TensionMechanicHost
-              tensionMechanic={node.proceduralMeta?.tensionMechanic ?? 'Mechanic_ScavengeBar'}
-              onSuccess={handleTensionSuccess}
-              onFailure={handleTensionFailure}
-              defaultPenalty={node.proceduralMeta?.defaultPenalty}
-              fallbackLabel={tensionMechanicLabel}
-              borderColor={borderColor}
-              mutedColor={mutedColor}
-              primaryColor={primaryColor}
-            />
-          </View>
-        ) : null}
-
-        {phase === 'OUTCOME' && outcomeSummary ? (
-          <NarrativeOutcomePanel
-            summary={outcomeSummary}
-            bonusLine={bonusLine}
-            onContinue={handleContinue}
-            borderColor={borderColor}
-            mutedColor={mutedColor}
-            primaryColor={primaryColor}
-          />
-        ) : null}
       </View>
 
       <View style={styles.footerSlot}>
@@ -424,9 +430,19 @@ export default function ProceduralNarrativeModule({
 }
 
 const styles = StyleSheet.create({
-  root: {
+  tensionRoot: {
     flex: 1,
+    width: '100%',
     minHeight: 0,
+  },
+  scenarioShell: {
+    flex: 1,
+    width: '100%',
+    minHeight: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    padding: 24,
   },
   topAnchor: {
     flexShrink: 0,

@@ -7,10 +7,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import NarrativeFlavorPanel from './NarrativeFlavorPanel';
-import {
-  NARRATIVE_TERMINAL_BORDER_WIDTH,
-  NARRATIVE_TERMINAL_GLASS,
-} from '../../constants/narrativeLayout';
+import TerminalOverlay from '../TerminalOverlay';
 import {
   resolveImmersiveFooterInset,
   resolveImmersiveHorizontalInset,
@@ -28,12 +25,10 @@ interface NarrativeArtTerminalFrameProps {
 }
 
 /**
- * Full-bleed narrative canvas: background edge-to-edge, flavor brief left,
- * glass resolver terminal right (safe-area aware).
+ * Full-bleed narrative canvas: field report left, resolver / tension terminal right.
  */
 export default function NarrativeArtTerminalFrame({
   backgroundImage,
-  accentColor = '#00ff33',
   flavorText,
   flavorPrimaryColor,
   flavorMutedColor,
@@ -46,10 +41,7 @@ export default function NarrativeArtTerminalFrame({
     activeViewportWidth,
     columnWidth,
     gap,
-    scaleSpacing,
   } = useResponsiveLayout();
-
-  const terminalPadding = isDesktop ? scaleSpacing(24) : scaleSpacing(18);
 
   return (
     <View style={styles.root}>
@@ -58,6 +50,9 @@ export default function NarrativeArtTerminalFrame({
         style={styles.backgroundImage}
         resizeMode="cover"
       />
+      <View style={styles.overlayHost} pointerEvents="none">
+        <TerminalOverlay />
+      </View>
 
       <View
         style={[
@@ -74,16 +69,16 @@ export default function NarrativeArtTerminalFrame({
           style={[
             styles.masterContainer,
             {
-              maxWidth: isDesktop ? activeViewportWidth : undefined,
-              gap: isDesktop ? gap : 0,
+              maxWidth: activeViewportWidth,
+              flexDirection: isDesktop ? 'row' : 'column',
+              gap,
             },
           ]}
         >
           <View
             style={[
-              styles.artZone,
-              isDesktop ? styles.desktopColumn : styles.mobileArtZone,
-              isDesktop ? { width: columnWidth } : null,
+              styles.column,
+              isDesktop ? { width: columnWidth } : styles.mobileColumn,
             ]}
           >
             <NarrativeFlavorPanel
@@ -94,13 +89,8 @@ export default function NarrativeArtTerminalFrame({
           </View>
           <View
             style={[
-              styles.terminal,
-              isDesktop ? styles.desktopColumn : styles.mobileTerminal,
-              isDesktop ? { width: columnWidth } : null,
-              {
-                borderLeftColor: accentColor,
-                padding: terminalPadding,
-              },
+              styles.column,
+              isDesktop ? { width: columnWidth } : styles.mobileColumn,
             ]}
           >
             {children}
@@ -122,40 +112,30 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  overlayHost: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 1,
+  },
   safeHost: {
     flex: 1,
     minHeight: 0,
     alignItems: 'center',
+    zIndex: 2,
   },
   masterContainer: {
+    flex: 1,
     width: '100%',
-    flex: 1,
     minHeight: 0,
-    flexDirection: 'row',
     alignSelf: 'center',
-    alignItems: 'stretch',
+    alignItems: 'flex-start',
   },
-  desktopColumn: {
+  column: {
     flex: 1,
     minWidth: 0,
     minHeight: 0,
+    alignSelf: 'stretch',
   },
-  mobileArtZone: {
-    flex: 0.58,
-    minWidth: 0,
-    minHeight: 0,
-  },
-  mobileTerminal: {
-    flex: 0.42,
-    minWidth: 0,
-    minHeight: 0,
-  },
-  artZone: {
-    minHeight: 0,
-  },
-  terminal: {
-    minHeight: 0,
-    backgroundColor: NARRATIVE_TERMINAL_GLASS,
-    borderLeftWidth: NARRATIVE_TERMINAL_BORDER_WIDTH,
+  mobileColumn: {
+    width: '100%',
   },
 });

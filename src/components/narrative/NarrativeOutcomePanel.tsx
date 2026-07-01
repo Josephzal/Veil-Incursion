@@ -1,14 +1,26 @@
-import React from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useMemo } from 'react';
+import { Platform, ScrollView, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import type { NarrativeOutcomeSummary } from '../../data/narrative/narrativeOutcomeSummary';
-import SelectionContinueButton from '../SelectionContinueButton';
+import { readPressableHover, terminalHoverStyle } from '../../utils/terminalHoverStyle';
+import { hubCtaButtonStyle, resolveHubCtaFill } from '../../constants/hubCta';
+import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
+import TacticalButton from '../TacticalButton';
 
-const TERMINAL_ACCENT = '#00ff33';
-const BONUS_ACCENT = '#7dd3fc';
-const FAILURE_ACCENT = '#f87171';
-const REWARD_ACCENT = '#4ade80';
-const PENALTY_ACCENT = '#fb923c';
-const AMBUSH_ACCENT = '#f472b6';
+const SLATE_BORDER = '#475569';
+const PANEL_BORDER = '#334155';
+const MUTED_WHITE = '#F8FAFC';
+const BODY_MUTED = '#94A3B8';
+const TERMINAL_GREEN = '#00ff33';
+const FAILURE_RED = '#EF4444';
+const REWARD_GREEN = '#86EFAC';
+const PENALTY_ORANGE = '#FB923C';
+const AMBUSH_PINK = '#F472B6';
+const BONUS_BLUE = '#7DD3FC';
+
+const FLAT_CTA_OVERRIDE: ViewStyle = Platform.select({
+  web: { boxShadow: 'none' },
+  default: { shadowOpacity: 0, shadowRadius: 0, elevation: 0 },
+}) ?? { shadowOpacity: 0, shadowRadius: 0, elevation: 0 };
 
 interface NarrativeOutcomePanelProps {
   summary: NarrativeOutcomeSummary;
@@ -20,84 +32,217 @@ interface NarrativeOutcomePanelProps {
   cityStreets?: boolean;
 }
 
+/** Terran Grid expedition resolve report — matches Instability Protocol panel styling. */
 export default function NarrativeOutcomePanel({
   summary,
   bonusLine,
   onContinue,
-  borderColor = '#334155',
-  mutedColor = '#94a3b8',
-  primaryColor = '#f8fafc',
-  cityStreets = false,
+  mutedColor = BODY_MUTED,
+  primaryColor = MUTED_WHITE,
 }: NarrativeOutcomePanelProps): React.JSX.Element {
-  const accent = summary.status === 'SUCCESS' ? TERMINAL_ACCENT : FAILURE_ACCENT;
+  const { fontScale, scaleSize, scaleSpacing } = useResponsiveLayout();
+  const isSuccess = summary.status === 'SUCCESS';
+  const statusAccent = isSuccess ? TERMINAL_GREEN : FAILURE_RED;
+
+  const scales = useMemo(
+    () => ({
+      header: 9 * fontScale,
+      headerLine: 12 * fontScale,
+      headline: 13 * fontScale,
+      headlineLine: 18 * fontScale,
+      section: 8 * fontScale,
+      sectionLine: 11 * fontScale,
+      body: 10 * fontScale,
+      bodyLine: 15 * fontScale,
+      detail: 9 * fontScale,
+      detailLine: 14 * fontScale,
+      panelPad: scaleSpacing(32),
+      panelPadBottom: scaleSpacing(40),
+      sectionGap: scaleSpacing(16),
+    }),
+    [fontScale, scaleSpacing],
+  );
+
+  const continueButtonStyle = useCallback(
+    (state: { pressed: boolean; hovered?: boolean }) => [
+      hubCtaButtonStyle(TERMINAL_GREEN, scaleSize, scaleSpacing, false),
+      FLAT_CTA_OVERRIDE,
+      {
+        justifyContent: 'center' as const,
+        alignItems: 'center' as const,
+        borderColor: TERMINAL_GREEN,
+        borderWidth: 2,
+        backgroundColor: resolveHubCtaFill(TERMINAL_GREEN),
+        opacity: 1,
+      },
+      terminalHoverStyle(readPressableHover(state), state.pressed),
+    ],
+    [scaleSize, scaleSpacing],
+  );
 
   return (
-    <View style={styles.root}>
+    <View
+      style={[
+        styles.panel,
+        {
+          paddingTop: scales.panelPad,
+          paddingHorizontal: scales.panelPad,
+          paddingBottom: scales.panelPadBottom,
+        },
+      ]}
+    >
+      <Text
+        style={[
+          styles.docHeader,
+          { fontSize: scales.header, lineHeight: scales.headerLine },
+        ]}
+      >
+        EXPEDITION LOG // RESOLVE REPORT
+      </Text>
+
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { gap: scales.sectionGap, paddingTop: scaleSpacing(12) },
+        ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <View
+        <Text
           style={[
-            styles.panel,
-            { borderColor: accent },
-            cityStreets && styles.panelCityStreets,
+            styles.headline,
+            {
+              color: statusAccent,
+              fontSize: scales.headline,
+              lineHeight: scales.headlineLine,
+            },
           ]}
         >
-          <Text style={[styles.headline, { color: accent }]}>{summary.headline}</Text>
-          <Text style={[styles.sectionLabel, { color: mutedColor }]}>OUTCOME</Text>
+          {summary.headline}
+        </Text>
+
+        <View style={styles.section}>
+          <Text
+            style={[
+              styles.sectionLabel,
+              { color: mutedColor, fontSize: scales.section, lineHeight: scales.sectionLine },
+            ]}
+          >
+            OUTCOME
+          </Text>
           {summary.outcomeLines.map((line) => (
-            <Text key={line} style={[styles.outcomeLine, { color: primaryColor }]}>
+            <Text
+              key={line}
+              style={[
+                styles.bodyLine,
+                {
+                  color: primaryColor,
+                  fontSize: scales.body,
+                  lineHeight: scales.bodyLine,
+                },
+              ]}
+            >
               {line}
             </Text>
           ))}
-
-          {summary.rewardLines.length > 0 ? (
-            <>
-              <Text style={[styles.sectionLabel, styles.sectionGap, { color: mutedColor }]}>
-                REWARDS
-              </Text>
-              {summary.rewardLines.map((line) => (
-                <Text key={line} style={[styles.rewardLine, { color: REWARD_ACCENT }]}>
-                  {line}
-                </Text>
-              ))}
-              {bonusLine ? (
-                <Text style={[styles.bonusLine, { color: BONUS_ACCENT }]}>{bonusLine}</Text>
-              ) : null}
-            </>
-          ) : null}
-
-          {summary.penaltyLines.length > 0 ? (
-            <>
-              <Text style={[styles.sectionLabel, styles.sectionGap, { color: mutedColor }]}>
-                CONSEQUENCES
-              </Text>
-              {summary.penaltyLines.map((line) => (
-                <Text key={line} style={[styles.penaltyLine, { color: PENALTY_ACCENT }]}>
-                  {line}
-                </Text>
-              ))}
-            </>
-          ) : null}
-
-          {summary.ambushPending ? (
-            <Text style={[styles.ambushLine, { color: AMBUSH_ACCENT }]}>
-              {'>> HOSTILE SIGNATURES DETECTED — COMBAT IMMINENT'}
-            </Text>
-          ) : null}
         </View>
+
+        {summary.rewardLines.length > 0 ? (
+          <View style={styles.section}>
+            <Text
+              style={[
+                styles.sectionLabel,
+                { color: mutedColor, fontSize: scales.section, lineHeight: scales.sectionLine },
+              ]}
+            >
+              REWARDS
+            </Text>
+            {summary.rewardLines.map((line) => (
+              <Text
+                key={line}
+                style={[
+                  styles.detailLine,
+                  {
+                    color: REWARD_GREEN,
+                    fontSize: scales.detail,
+                    lineHeight: scales.detailLine,
+                  },
+                ]}
+              >
+                {line}
+              </Text>
+            ))}
+            {bonusLine ? (
+              <Text
+                style={[
+                  styles.detailLine,
+                  {
+                    color: BONUS_BLUE,
+                    fontSize: scales.detail,
+                    lineHeight: scales.detailLine,
+                  },
+                ]}
+              >
+                {bonusLine}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+
+        {summary.penaltyLines.length > 0 ? (
+          <View style={styles.section}>
+            <Text
+              style={[
+                styles.sectionLabel,
+                { color: mutedColor, fontSize: scales.section, lineHeight: scales.sectionLine },
+              ]}
+            >
+              CONSEQUENCES
+            </Text>
+            {summary.penaltyLines.map((line) => (
+              <Text
+                key={line}
+                style={[
+                  styles.detailLine,
+                  {
+                    color: PENALTY_ORANGE,
+                    fontSize: scales.detail,
+                    lineHeight: scales.detailLine,
+                  },
+                ]}
+              >
+                {line}
+              </Text>
+            ))}
+          </View>
+        ) : null}
+
+        {summary.ambushPending ? (
+          <Text
+            style={[
+              styles.ambushLine,
+              {
+                color: AMBUSH_PINK,
+                fontSize: scales.detail,
+                lineHeight: scales.detailLine,
+              },
+            ]}
+          >
+            {'>> HOSTILE SIGNATURES DETECTED — COMBAT IMMINENT'}
+          </Text>
+        ) : null}
       </ScrollView>
 
-      <View style={styles.footer}>
-        <SelectionContinueButton
-          enabled
+      <View style={[styles.footer, { marginTop: scaleSpacing(24) }]}>
+        <TacticalButton
+          label={summary.continueLabel.replace(/^\[|\]$/g, '').trim() || 'CONTINUE'}
+          active
           onPress={onContinue}
-          label={summary.continueLabel}
-          borderColor={borderColor}
-          mutedColor={mutedColor}
+          accentColor={TERMINAL_GREEN}
+          mutedColor={BODY_MUTED}
+          variant="cta"
+          style={continueButtonStyle}
         />
       </View>
     </View>
@@ -105,78 +250,57 @@ export default function NarrativeOutcomePanel({
 }
 
 const styles = StyleSheet.create({
-  root: {
+  panel: {
     flex: 1,
+    width: '100%',
     minHeight: 0,
-    justifyContent: 'space-between',
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    borderWidth: 2,
+    borderColor: PANEL_BORDER,
+    justifyContent: 'flex-start',
+  },
+  docHeader: {
+    fontFamily: 'monospace',
+    letterSpacing: 1,
+    color: BODY_MUTED,
+    fontWeight: '700',
   },
   scroll: {
     flex: 1,
     minHeight: 0,
   },
   scrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    paddingVertical: 8,
-  },
-  panel: {
-    borderWidth: 2,
-    padding: 16,
-    gap: 6,
-  },
-  panelCityStreets: {
-    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    flexGrow: 0,
+    justifyContent: 'flex-start',
   },
   headline: {
     fontFamily: 'monospace',
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 1.2,
-    marginBottom: 4,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  section: {
+    gap: 6,
   },
   sectionLabel: {
     fontFamily: 'monospace',
-    fontSize: 8,
     letterSpacing: 1,
-    marginTop: 2,
+    fontWeight: '700',
   },
-  sectionGap: {
-    marginTop: 10,
-  },
-  outcomeLine: {
+  bodyLine: {
     fontFamily: 'monospace',
-    fontSize: 11,
-    lineHeight: 17,
+    letterSpacing: 0.25,
   },
-  rewardLine: {
+  detailLine: {
     fontFamily: 'monospace',
-    fontSize: 10,
-    lineHeight: 15,
-    letterSpacing: 0.3,
-  },
-  bonusLine: {
-    fontFamily: 'monospace',
-    fontSize: 10,
-    lineHeight: 15,
-    marginTop: 4,
-    letterSpacing: 0.4,
-  },
-  penaltyLine: {
-    fontFamily: 'monospace',
-    fontSize: 10,
-    lineHeight: 15,
     letterSpacing: 0.3,
   },
   ambushLine: {
     fontFamily: 'monospace',
-    fontSize: 9,
-    lineHeight: 14,
     letterSpacing: 0.5,
-    marginTop: 10,
+    fontWeight: '700',
   },
   footer: {
+    width: '100%',
     flexShrink: 0,
-    paddingTop: 8,
-    paddingBottom: 4,
   },
 });

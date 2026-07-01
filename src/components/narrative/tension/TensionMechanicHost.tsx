@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import HapticPressable from '../../HapticPressable';
 import ConcealSlider from './ConcealSlider';
-import ScavengeBar from './ScavengeBar';
+import InstabilityProtocol from './InstabilityProtocol';
 import GridCipher from './GridCipher';
 import {
   formatTensionMechanicLabel,
@@ -90,7 +90,7 @@ export default function TensionMechanicHost({
     case 'Mechanic_ScavengeBar':
       return (
         <View style={styles.mechanicHost}>
-          <ScavengeBar {...mechanicProps} />
+          <InstabilityProtocol {...mechanicProps} />
         </View>
       );
     case 'Mechanic_ConcealSlider':
