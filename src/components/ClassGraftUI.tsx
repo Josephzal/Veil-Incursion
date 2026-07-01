@@ -1,12 +1,12 @@
-import React, { useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import HapticPressable from './HapticPressable';
 import {
   canGraftClassAbility,
-  formatClassGraftOfferLine,
   getClassGraftDefinition,
 } from '../data/classGraftEngine';
 import { resolveClassAbilityCost } from '../data/classAbilityResolver';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import type { ClassType } from '../types/game';
 import type {
   EnvoyAbilityGraftMap,
@@ -16,11 +16,24 @@ import type {
 import type { AbilityGraftMap, VeilGraftId } from '../types/veilGraft';
 import type { EnvoyLoadout, HexShotAbilityId, HexShotLoadout } from '../types/operativeClass';
 import type { AegisLoadout } from '../types/aegisCombat';
+import { readPressableHover, terminalHoverStyle } from '../utils/terminalHoverStyle';
 
 const TERMINAL_ACCENT = '#00ff33';
+const GRAFT_SELECT_ACCENT = '#06B6D4';
+const MUTED_TEXT = '#94A3B8';
+const PANEL_BORDER = '#334155';
+const CARD_BG = '#0F172A';
+const CARD_BORDER = '#1e293b';
+const PANEL_BG = 'rgba(0, 0, 0, 0.8)';
 
 type ClassLoadout = AegisLoadout | HexShotLoadout | EnvoyLoadout;
 type ClassGraftMap = AbilityGraftMap | HexShotAbilityGraftMap | EnvoyAbilityGraftMap;
+
+export interface GraftInjectSelection {
+  graftId: string | null;
+  abilityId: string | null;
+  canInject: boolean;
+}
 
 interface ClassGraftUIProps {
   activeClass: ClassType;
@@ -28,7 +41,8 @@ interface ClassGraftUIProps {
   offers: readonly (OperativeClassGraftId | import('../types/veilGraft').VeilGraftId)[];
   residueBalance: number;
   abilityGrafts: ClassGraftMap;
-  onApply: (abilityId: string, graftId: string) => void;
+  onSelectionChange?: (selection: GraftInjectSelection) => void;
+  compact?: boolean;
   borderColor: string;
   primaryColor: string;
   mutedColor: string;
@@ -40,16 +54,31 @@ export default function ClassGraftUI({
   offers,
   residueBalance,
   abilityGrafts,
-  onApply,
-  borderColor,
+  onSelectionChange,
+  compact = false,
+  borderColor: _borderColor,
   primaryColor,
-  mutedColor,
+  mutedColor: _mutedColor,
 }: ClassGraftUIProps): React.JSX.Element {
+  const { fontScale, scaleFont, scaleSpacing } = useResponsiveLayout();
   const [selectedGraftId, setSelectedGraftId] = useState<string | null>(null);
+  const [selectedAbilityId, setSelectedAbilityId] = useState<string | null>(null);
 
   const selectedGraft = selectedGraftId
     ? getClassGraftDefinition(activeClass, selectedGraftId)
     : null;
+
+  const panelPadding = scaleSpacing(compact ? 16 : 24);
+  const cardPadding = scaleSpacing(compact ? 10 : 16);
+  const cardGap = scaleSpacing(compact ? 8 : 12);
+  const slotMinHeight = scaleSpacing(compact ? 52 : 72);
+  const headerSize = scaleFont(compact ? 10 : 11);
+  const residueSize = scaleFont(compact ? 11 : 12);
+  const subheaderSize = scaleFont(compact ? 9 : 10);
+  const cardTitleSize = (compact ? 9 : 10) * fontScale * 1.1;
+  const cardBodySize = scaleFont(compact ? 8 : 9);
+  const abilityLabelSize = scaleFont(compact ? 9 : 10);
+  const tagSize = scaleFont(compact ? 7 : 8);
 
   const abilityRows = useMemo(
     () => {
@@ -75,172 +104,351 @@ export default function ClassGraftUI({
       ? 'ENVOY GRAFT'
       : 'VEIL-GRAFT';
 
+  useEffect(() => {
+    const canInject = selectedGraftId != null
+      && selectedAbilityId != null
+      && selectedGraft != null
+      && residueBalance >= selectedGraft.cost
+      && canGraftClassAbility(activeClass, selectedAbilityId);
+
+    onSelectionChange?.({
+      graftId: selectedGraftId,
+      abilityId: selectedAbilityId,
+      canInject,
+    });
+  }, [
+    activeClass,
+    onSelectionChange,
+    residueBalance,
+    selectedAbilityId,
+    selectedGraft,
+    selectedGraftId,
+  ]);
+
+  const handleSelectGraft = (graftId: string) => {
+    setSelectedGraftId(graftId);
+    setSelectedAbilityId(null);
+  };
+
+  const handleSelectAbility = (abilityId: string, graftable: boolean) => {
+    if (!selectedGraftId || !graftable) return;
+    if (!selectedGraft || residueBalance < selectedGraft.cost) return;
+    setSelectedAbilityId(abilityId);
+  };
+
+  const dashedBorder = Platform.OS === 'web'
+    ? ({ borderStyle: 'dashed' as const })
+    : ({ borderStyle: 'dashed' as const });
+
   return (
-    <View style={[styles.overlay, { borderColor }]}>
-      <Text style={[styles.header, { color: TERMINAL_ACCENT }]}>
-        {classLabel} TERMINAL // RESIDUE {residueBalance}
-      </Text>
-      <Text style={[styles.subheader, { color: mutedColor }]}>
-        Select a graft, then an ability slot. Anchor and Ultimate abilities are locked.
+    <View
+      style={[
+        styles.panel,
+        {
+          padding: panelPadding,
+          marginTop: compact ? 0 : scaleSpacing(24),
+          borderColor: PANEL_BORDER,
+        },
+      ]}
+    >
+      <View style={styles.headerRow}>
+        <Text
+          style={[
+            styles.headerPrefix,
+            {
+              color: TERMINAL_ACCENT,
+              fontSize: headerSize,
+              lineHeight: headerSize * 1.3,
+            },
+          ]}
+        >
+          {`${classLabel} TERMINAL // RESIDUE `}
+        </Text>
+        <Text
+          style={[
+            styles.headerResidue,
+            {
+              color: GRAFT_SELECT_ACCENT,
+              fontSize: residueSize,
+              lineHeight: residueSize * 1.25,
+            },
+          ]}
+        >
+          {residueBalance}
+        </Text>
+      </View>
+
+      <Text
+        style={[
+          styles.subheader,
+          {
+            color: MUTED_TEXT,
+            fontSize: subheaderSize,
+            lineHeight: subheaderSize * 1.45,
+            marginTop: scaleSpacing(compact ? 4 : 8),
+          },
+        ]}
+      >
+        Select a graft cartridge, patch an ability slot, then inject. Anchor and Ultimate abilities are locked.
       </Text>
 
-      <View style={styles.offerCol}>
+      <View style={[styles.offerCol, { gap: cardGap, marginTop: scaleSpacing(compact ? 10 : 20) }]}>
         {offers.map((graftId) => {
           const graft = getClassGraftDefinition(activeClass, graftId);
           const affordable = residueBalance >= graft.cost;
           const selected = selectedGraftId === graftId;
+          const dimmed = selectedGraftId != null && !selected;
+
           return (
             <HapticPressable
               key={graftId}
               disabled={!affordable}
-              onPress={() => setSelectedGraftId(graftId)}
-              style={({ pressed }) => [
-                styles.offerBtn,
+              onPress={() => handleSelectGraft(graftId)}
+              style={(state) => [
+                styles.offerCard,
                 {
-                  borderColor: selected ? graft.accentColor : borderColor,
-                  backgroundColor: selected ? `${graft.accentColor}18` : '#0a0b0f',
-                  opacity: affordable ? pressed ? 0.75 : 1 : 0.35,
+                  padding: cardPadding,
+                  borderColor: selected ? GRAFT_SELECT_ACCENT : CARD_BORDER,
+                  backgroundColor: selected ? 'rgba(6, 182, 212, 0.1)' : CARD_BG,
+                  opacity: !affordable ? 0.35 : dimmed ? 0.4 : state.pressed ? 0.88 : 1,
+                  transform: selected ? [{ scale: 1.02 }] : undefined,
                 },
+                terminalHoverStyle(readPressableHover(state), state.pressed),
               ]}
             >
-              <Text style={[styles.offerTitle, { color: selected ? graft.accentColor : primaryColor }]}>
-                {graft.name.toUpperCase()} — {graft.cost} RESIDUE
-              </Text>
-              <Text style={[styles.offerBody, { color: mutedColor }]}>
-                {formatClassGraftOfferLine(activeClass, graftId, residueBalance).split('\n')[1]}
+              <View style={styles.offerTitleRow}>
+                <Text
+                  style={[
+                    styles.offerTitle,
+                    {
+                      color: selected ? GRAFT_SELECT_ACCENT : primaryColor,
+                      fontSize: cardTitleSize,
+                      lineHeight: cardTitleSize * 1.25,
+                    },
+                  ]}
+                >
+                  {graft.name.toUpperCase()}
+                </Text>
+                <Text
+                  style={[
+                    styles.offerCost,
+                    {
+                      color: selected ? GRAFT_SELECT_ACCENT : primaryColor,
+                      fontSize: cardTitleSize,
+                      lineHeight: cardTitleSize * 1.25,
+                    },
+                  ]}
+                >
+                  {`${graft.cost} RESIDUE`}
+                </Text>
+              </View>
+              <Text
+                style={[
+                  styles.offerBody,
+                  {
+                    color: MUTED_TEXT,
+                    fontSize: cardBodySize,
+                    lineHeight: cardBodySize * 1.4,
+                    marginTop: scaleSpacing(compact ? 4 : 6),
+                  },
+                ]}
+                numberOfLines={compact ? 2 : 3}
+              >
+                {graft.description}
               </Text>
             </HapticPressable>
           );
         })}
       </View>
 
-      {selectedGraft ? (
-        <Text style={[styles.hint, { color: primaryColor }]}>
-          {`APPLY ${selectedGraft.name.toUpperCase()} TO:`}
-        </Text>
-      ) : null}
+      <View
+        style={[
+          styles.abilitySection,
+          {
+            borderTopColor: CARD_BORDER,
+            paddingTop: scaleSpacing(compact ? 12 : 24),
+            marginTop: scaleSpacing(compact ? 8 : 12),
+          },
+        ]}
+      >
+        <View
+          style={[
+            styles.loadoutGrid,
+            {
+              gap: cardGap,
+            },
+          ]}
+        >
+          {abilityRows.map(({ abilityId, label, graftId, graftable }) => {
+            const existing = graftId ? getClassGraftDefinition(activeClass, graftId) : null;
+            const slotSelected = selectedAbilityId === abilityId;
+            const canSelect = graftable
+              && selectedGraftId != null
+              && selectedGraft != null
+              && residueBalance >= selectedGraft.cost;
+            const dimmed = selectedAbilityId != null
+              && selectedAbilityId !== abilityId
+              && graftable
+              && canSelect;
 
-      <View style={styles.loadoutGrid}>
-        {abilityRows.map(({ abilityId, label, graftId, graftable }) => {
-          const existing = graftId ? getClassGraftDefinition(activeClass, graftId) : null;
-          const canApply = graftable
-            && selectedGraftId != null
-            && residueBalance >= (selectedGraft?.cost ?? 0);
-          return (
-            <HapticPressable
-              key={abilityId}
-              disabled={!canApply}
-              onPress={() => {
-                if (!selectedGraftId) return;
-                onApply(abilityId, selectedGraftId);
-                setSelectedGraftId(null);
-              }}
-              style={({ pressed }) => [
-                styles.abilitySlot,
-                {
-                  borderColor: existing?.accentColor ?? (graftable ? borderColor : '#475569'),
-                  backgroundColor: existing ? `${existing.accentColor}14` : '#0a0b0f',
-                  opacity: !graftable ? 0.45 : canApply ? pressed ? 0.7 : 1 : 0.85,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.abilityLabel,
-                  { color: existing?.accentColor ?? (graftable ? primaryColor : mutedColor) },
+            const slotAccent = slotSelected
+              ? GRAFT_SELECT_ACCENT
+              : existing?.accentColor ?? PANEL_BORDER;
+
+            return (
+              <HapticPressable
+                key={abilityId}
+                disabled={!canSelect}
+                onPress={() => handleSelectAbility(abilityId, graftable)}
+                style={(state) => [
+                  styles.abilitySlot,
+                  dashedBorder,
+                  {
+                    width: '48%',
+                    minHeight: slotMinHeight,
+                    borderColor: slotAccent,
+                    borderWidth: slotSelected ? 2 : 2,
+                    paddingVertical: compact ? 6 : 10,
+                    paddingHorizontal: compact ? 6 : 8,
+                    backgroundColor: slotSelected
+                      ? 'rgba(6, 182, 212, 0.12)'
+                      : existing
+                        ? `${existing.accentColor}14`
+                        : 'rgba(0, 0, 0, 0.5)',
+                    opacity: !graftable
+                      ? 0.45
+                      : dimmed
+                        ? 0.4
+                        : canSelect
+                          ? state.pressed
+                            ? 0.82
+                            : 1
+                          : 0.7,
+                  },
+                  terminalHoverStyle(readPressableHover(state), state.pressed),
                 ]}
-                numberOfLines={1}
               >
-                {label}
-              </Text>
-              {!graftable ? (
-                <Text style={[styles.lockTag, { color: mutedColor }]}>ANCHOR LOCK</Text>
-              ) : existing ? (
-                <Text style={[styles.graftTag, { color: existing.accentColor }]}>
-                  {existing.name.toUpperCase()}
+                <Text
+                  style={[
+                    styles.abilityLabel,
+                    {
+                      color: slotSelected
+                        ? GRAFT_SELECT_ACCENT
+                        : existing?.accentColor ?? (graftable ? primaryColor : MUTED_TEXT),
+                      fontSize: abilityLabelSize,
+                      lineHeight: abilityLabelSize * 1.3,
+                    },
+                  ]}
+                  numberOfLines={2}
+                >
+                  {label}
                 </Text>
-              ) : (
-                <Text style={[styles.graftTag, { color: mutedColor }]}>UNGRAFTED</Text>
-              )}
-            </HapticPressable>
-          );
-        })}
+                {!graftable ? (
+                  <Text style={[styles.slotTag, { color: MUTED_TEXT, fontSize: tagSize }]}>
+                    ANCHOR LOCK
+                  </Text>
+                ) : existing ? (
+                  <Text style={[styles.slotTag, { color: existing.accentColor, fontSize: tagSize }]}>
+                    {existing.name.toUpperCase()}
+                  </Text>
+                ) : slotSelected ? (
+                  <Text style={[styles.slotTag, { color: GRAFT_SELECT_ACCENT, fontSize: tagSize }]}>
+                    PATCH READY
+                  </Text>
+                ) : (
+                  <Text style={[styles.slotTag, { color: MUTED_TEXT, fontSize: tagSize }]}>
+                    UNGRAFTED
+                  </Text>
+                )}
+              </HapticPressable>
+            );
+          })}
+        </View>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
+  panel: {
+    width: '100%',
+    backgroundColor: PANEL_BG,
     borderWidth: 1,
-    padding: 12,
-    gap: 10,
-    backgroundColor: 'rgba(5, 6, 8, 0.94)',
+    gap: 0,
   },
-  header: {
+  headerRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'baseline',
+    gap: 4,
+  },
+  headerPrefix: {
     fontFamily: 'monospace',
-    fontSize: 9,
-    fontWeight: '700',
+    fontWeight: '800',
     letterSpacing: 0.8,
+  },
+  headerResidue: {
+    fontFamily: 'monospace',
+    fontWeight: '800',
+    letterSpacing: 0.6,
   },
   subheader: {
     fontFamily: 'monospace',
-    fontSize: 7,
-    letterSpacing: 0.4,
-    lineHeight: 11,
+    letterSpacing: 0.35,
   },
-  offerCol: { gap: 6 },
-  offerBtn: {
+  offerCol: {
+    width: '100%',
+  },
+  offerCard: {
     borderWidth: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    width: '100%',
+  },
+  offerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
   },
   offerTitle: {
     fontFamily: 'monospace',
-    fontSize: 8,
-    fontWeight: '700',
-    letterSpacing: 0.4,
-    marginBottom: 4,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    flex: 1,
+  },
+  offerCost: {
+    fontFamily: 'monospace',
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    flexShrink: 0,
   },
   offerBody: {
     fontFamily: 'monospace',
-    fontSize: 7,
-    lineHeight: 10,
+    letterSpacing: 0.25,
   },
-  hint: {
-    fontFamily: 'monospace',
-    fontSize: 7,
-    fontWeight: '700',
-    letterSpacing: 0.6,
+  abilitySection: {
+    borderTopWidth: 1,
+    width: '100%',
   },
   loadoutGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    justifyContent: 'space-between',
+    width: '100%',
   },
   abilitySlot: {
-    width: '48%',
-    borderWidth: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    minHeight: 56,
+    alignItems: 'center',
     justifyContent: 'center',
+    gap: 4,
   },
   abilityLabel: {
     fontFamily: 'monospace',
-    fontSize: 7,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-    marginBottom: 4,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+    textAlign: 'center',
   },
-  graftTag: {
+  slotTag: {
     fontFamily: 'monospace',
-    fontSize: 6,
     letterSpacing: 0.5,
-  },
-  lockTag: {
-    fontFamily: 'monospace',
-    fontSize: 6,
-    letterSpacing: 0.5,
+    textAlign: 'center',
   },
 });

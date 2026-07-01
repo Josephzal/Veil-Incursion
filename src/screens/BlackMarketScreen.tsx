@@ -1,34 +1,67 @@
-import React, { useState } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import {
+  Image,
+  Platform,
+  StyleSheet,
+  Text,
+  View,
+  type ViewStyle,
+} from 'react-native';
 import HapticPressable from '../components/HapticPressable';
+import TacticalButton from '../components/TacticalButton';
+import TerminalOverlay from '../components/TerminalOverlay';
 import BlackMarketBg from '../../assets/images/location images/black_market.png';
 import { listingsForStock } from '../data/blackMarket';
 import {
   getBlackMarketDiscountPct,
   getEffectiveBlackMarketPrice,
 } from '../data/boundRequisitionEngine';
-import { countCargoItemInstances } from '../data/cargoGridEngine';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useNodeProgression } from '../hooks/useNodeProgression';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import { hubCtaButtonStyle } from '../constants/hubCta';
+import {
+  NARRATIVE_UNIFIED_PANEL_BG,
+  NARRATIVE_UNIFIED_PANEL_BORDER,
+} from '../constants/narrativeLayout';
 import IncursionShell from '../components/IncursionShell';
 import IncursionRunLayout from '../components/IncursionRunLayout';
-import RunEventScreenFrame, { RunEventScreenHeader } from '../components/layout/RunEventScreenFrame';
-import SelectionContinueButton from '../components/SelectionContinueButton';
+import RunEventScreenFrame from '../components/layout/RunEventScreenFrame';
 import type { CargoItemId } from '../types/cargoGrid';
 import { resolveCargoItemIcon } from '../utils/cargoItemIcon';
+import { readPressableHover, terminalHoverStyle } from '../utils/terminalHoverStyle';
 
-const TERMINAL_ACCENT = '#00ff33';
-const CELL_SIZE = 84;
-const DETAIL_BLOCK_HEIGHT = 110;
-const ACTION_DISABLED_BORDER = '#1a2e22';
-const ACTION_DISABLED_BG = '#070809';
-const ACTION_DISABLED_TEXT = '#2a4032';
+const MUTED_SLATE = '#94A3B8';
+const STARK_WHITE = '#F8FAFC';
+const PHOSPHOR_GREEN = '#4ADE80';
+const RUST_COST = '#C2410C';
+const SELECT_BORDER = '#475569';
+const HEADER_BORDER = '#334155';
+const LEAVE_ACCENT = '#64748B';
+const ROW_BG = 'rgba(15, 23, 42, 0.6)';
+const SELECT_FILL = 'rgba(71, 85, 105, 0.18)';
+
+const FLAT_CTA_OVERRIDE: ViewStyle = Platform.select({
+  web: { boxShadow: 'none' },
+  default: { shadowOpacity: 0, shadowRadius: 0, elevation: 0 },
+}) ?? { shadowOpacity: 0, shadowRadius: 0, elevation: 0 };
+
+const SPLIT_MAX_WIDTH = 1200;
 
 export default function BlackMarketScreen(): React.JSX.Element {
   const { theme } = useTerminal();
   const { activeIncursion, appendRunLog, purchaseBlackMarketCargo } = useRun();
   const { completeCurrentNode } = useNodeProgression();
+  const {
+    isDesktop,
+    activeViewportWidth,
+    fontScale,
+    gap,
+    scaleSize,
+    scaleSpacing,
+  } = useResponsiveLayout();
+
   const [selectedCargoId, setSelectedCargoId] = useState<CargoItemId | null>(null);
   const [leaving, setLeaving] = useState(false);
 
@@ -40,6 +73,7 @@ export default function BlackMarketScreen(): React.JSX.Element {
   const blackMarketDiscountPct = getBlackMarketDiscountPct(activeIncursion);
   const priceForListing = (basePrice: number) =>
     getEffectiveBlackMarketPrice(basePrice, blackMarketDiscountPct);
+
   const selectedCargoListing = selectedCargoId != null
     ? marketListings.find((entry) => entry.id === selectedCargoId) ?? null
     : null;
@@ -50,9 +84,37 @@ export default function BlackMarketScreen(): React.JSX.Element {
   const cargoPurchaseEnabled = selectedCargoListing != null
     && activeIncursion.runCredits >= selectedPrice;
 
-  const ownedQty = selectedCargoId != null
-    ? countCargoItemInstances(activeIncursion.cargo, selectedCargoId)
-    : 0;
+  const splitMaxWidth = useMemo(
+    () => Math.min(activeViewportWidth * 0.9, SPLIT_MAX_WIDTH),
+    [activeViewportWidth],
+  );
+
+  const s = useMemo(() => {
+    const listBudget = 260 * fontScale;
+    const computedRowHeight = listBudget / Math.max(marketListings.length, 1);
+    const rowMinHeight = Math.max(36 * fontScale, Math.min(52 * fontScale, computedRowHeight));
+
+    return {
+      panelPad: 16 * fontScale,
+      rowGap: 6 * fontScale,
+      rowMinHeight,
+      rowPadH: 12 * fontScale,
+      rowIcon: Math.min(40 * fontScale, rowMinHeight * 0.65),
+      creditPad: 10 * fontScale,
+      headerPadBottom: 12 * fontScale,
+      headerMarginBottom: 12 * fontScale,
+      eyebrow: 9 * fontScale,
+      title: 13 * fontScale,
+      section: 8 * fontScale,
+      rowName: 10 * fontScale,
+      rowPrice: 10 * fontScale,
+      empty: 10 * fontScale,
+      dossierMeta: 8 * fontScale,
+      creditLabel: 8 * fontScale,
+      creditValue: 13 * fontScale,
+      actionGap: 10 * fontScale,
+    };
+  }, [fontScale, marketListings.length]);
 
   const handleCargoPurchase = () => {
     if (!selectedCargoId || !cargoPurchaseEnabled) return;
@@ -64,128 +126,282 @@ export default function BlackMarketScreen(): React.JSX.Element {
   const handleLeave = () => {
     if (leaving) return;
     setLeaving(true);
-    completeCurrentNode('Black market visit concluded.');
+    completeCurrentNode('Contraband cache visit concluded.');
   };
+
+  const purchaseButtonStyle = useCallback(
+    (state: { pressed: boolean; hovered?: boolean }) => [
+      hubCtaButtonStyle(PHOSPHOR_GREEN, scaleSize, scaleSpacing, !cargoPurchaseEnabled),
+      FLAT_CTA_OVERRIDE,
+      {
+        opacity: cargoPurchaseEnabled ? (state.pressed ? 0.85 : 1) : 0.2,
+      },
+      terminalHoverStyle(readPressableHover(state), state.pressed),
+    ],
+    [cargoPurchaseEnabled, scaleSize, scaleSpacing],
+  );
+
+  const leaveButtonStyle = useCallback(
+    (state: { pressed: boolean; hovered?: boolean }) => [
+      hubCtaButtonStyle(LEAVE_ACCENT, scaleSize, scaleSpacing, leaving),
+      FLAT_CTA_OVERRIDE,
+      {
+        opacity: leaving ? 0.2 : state.pressed ? 0.85 : 1,
+      },
+      terminalHoverStyle(readPressableHover(state), state.pressed),
+    ],
+    [leaving, scaleSize, scaleSpacing],
+  );
 
   return (
     <IncursionShell>
       <IncursionRunLayout style={{ backgroundColor: theme.backgroundColor }}>
         <RunEventScreenFrame
-          scrollable
+          scrollable={false}
           backgroundImage={BlackMarketBg}
           backgroundScrimOpacity={0.52}
-          header={(
-            <RunEventScreenHeader
-              eyebrow="VEIL UNDERNET // BLACK MARKET NODE"
-              title="BLACK MARKET"
-              align="left"
-              borderColor={theme.borderColor}
-              eyebrowColor={theme.mutedColor}
-              titleColor={TERMINAL_ACCENT}
-            >
-              <Text style={[styles.creditsLine, { color: TERMINAL_ACCENT }]}>
-                RUN CREDITS: {activeIncursion.runCredits}
-                {blackMarketDiscountPct > 0 ? ` // MARKET DISCOUNT -${blackMarketDiscountPct}%` : ''}
-              </Text>
-            </RunEventScreenHeader>
-          )}
-          footer={(
-            <SelectionContinueButton
-              enabled={!leaving}
-              onPress={handleLeave}
-              borderColor={theme.borderColor}
-              mutedColor={theme.mutedColor}
-              label="[ LEAVE MARKET ]"
-            />
-          )}
+          overlay={<TerminalOverlay />}
+          contentPadding={16 * fontScale}
+          bodyStyle={styles.frameBody}
         >
-          <View style={[styles.shopPanel, { borderColor: theme.borderColor }]}>
-            <Text style={[styles.shopSubHeader, { color: theme.mutedColor }]}>
-              CARGO CONTRABAND // PRICED PER UNIT // STAGED TO CONTAINMENT
-            </Text>
-
-            <View style={styles.grid}>
-              {marketListings.map((listing) => {
-                const isSelected = listing.id === selectedCargoId;
-                const owned = countCargoItemInstances(activeIncursion.cargo, listing.id);
-                return (
-                  <HapticPressable
-                    key={listing.id}
-                    onPress={() => setSelectedCargoId(listing.id)}
-                    style={({ pressed }) => [
-                      styles.gridCell,
-                      { borderColor: isSelected ? TERMINAL_ACCENT : theme.borderColor },
-                      pressed ? { opacity: 0.75 } : null,
-                    ]}
-                  >
-                    <View style={styles.cellImageWrap}>
-                      <Image
-                        source={resolveCargoItemIcon(listing.id)}
-                        style={styles.cellImage}
-                        resizeMode="contain"
-                      />
-                    </View>
-                    <Text style={[styles.cellPrice, { color: theme.mutedColor }]}>
-                      {priceForListing(listing.price)} CR
-                    </Text>
-                    <Text style={[styles.cellQty, { color: theme.mutedColor }]}>
-                      {owned > 0 ? `x${owned}` : ' '}
-                    </Text>
-                  </HapticPressable>
-                );
-              })}
-            </View>
-
-            <View style={[styles.detailBlock, { borderColor: theme.borderColor }]}>
-              {selectedCargoListing != null ? (
-                <View style={styles.detailHeader}>
-                  <View style={styles.detailImageWrap}>
-                    <Image
-                      source={resolveCargoItemIcon(selectedCargoListing.id)}
-                      style={styles.detailImage}
-                      resizeMode="contain"
-                    />
-                  </View>
-                  <View style={styles.detailCopy}>
-                    <Text style={[styles.detailTitle, { color: TERMINAL_ACCENT }]} numberOfLines={1}>
-                      {selectedCargoListing.name.toUpperCase()}
-                    </Text>
-                    <Text style={[styles.detailBody, { color: theme.primaryColor }]} numberOfLines={3}>
-                      {selectedCargoListing.description}
-                    </Text>
-                    <Text style={[styles.detailEffect, { color: theme.mutedColor }]} numberOfLines={2}>
-                      {selectedCargoListing.effect}
-                    </Text>
-                    <Text style={[styles.detailEffect, { color: theme.mutedColor }]}>
-                      {`OWNED: ${ownedQty} // PRICE: ${selectedPrice} CR`}
-                    </Text>
-                  </View>
-                </View>
-              ) : (
-                <View style={styles.detailPlaceholder}>
-                  <Text style={[styles.detailBody, { color: theme.mutedColor }]}>
-                    SELECT A LISTING TO REVIEW CONTRABAND PROFILE.
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            <HapticPressable
-              disabled={!cargoPurchaseEnabled}
-              onPress={handleCargoPurchase}
-              style={({ pressed }) => [
-                styles.btn,
+          <View style={[styles.masterShell, { maxWidth: splitMaxWidth, gap: s.headerMarginBottom }]}>
+            <View
+              style={[
+                styles.globalHeader,
                 {
-                  borderColor: cargoPurchaseEnabled ? TERMINAL_ACCENT : ACTION_DISABLED_BORDER,
-                  backgroundColor: cargoPurchaseEnabled ? '#0a0b0f' : ACTION_DISABLED_BG,
-                  opacity: cargoPurchaseEnabled && pressed ? 0.75 : 1,
+                  borderBottomColor: HEADER_BORDER,
+                  paddingBottom: s.headerPadBottom,
                 },
               ]}
             >
-              <Text style={[styles.btnText, { color: cargoPurchaseEnabled ? TERMINAL_ACCENT : ACTION_DISABLED_TEXT }]}>
-                [ PURCHASE TO CONTAINMENT ]
+              <Text
+                style={[
+                  styles.headerEyebrow,
+                  {
+                    color: MUTED_SLATE,
+                    fontSize: s.eyebrow,
+                    lineHeight: s.eyebrow * 1.35,
+                  },
+                ]}
+              >
+                VEIL UNDERNET // CONTRABAND CACHE
               </Text>
-            </HapticPressable>
+              <Text
+                style={[
+                  styles.headerTitle,
+                  {
+                    color: STARK_WHITE,
+                    fontSize: s.title,
+                    lineHeight: s.title * 1.3,
+                  },
+                ]}
+              >
+                CONTRABAND CACHE
+              </Text>
+            </View>
+
+            <View
+              style={[
+                styles.splitWrap,
+                {
+                  flexDirection: isDesktop ? 'row' : 'column',
+                  gap,
+                },
+              ]}
+            >
+              <View
+                style={[
+                  styles.panel,
+                  styles.manifestPanel,
+                  { padding: s.panelPad },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.sectionLabel,
+                    {
+                      color: MUTED_SLATE,
+                      fontSize: s.section,
+                      lineHeight: s.section * 1.4,
+                      marginBottom: s.rowGap * 1.5,
+                    },
+                  ]}
+                >
+                  MANIFEST // CONTRABAND DOSSIER LIST
+                </Text>
+
+                <View style={[styles.manifestList, { gap: s.rowGap }]}>
+                  {marketListings.map((listing) => {
+                    const isSelected = listing.id === selectedCargoId;
+                    const effectivePrice = priceForListing(listing.price);
+                    const affordable = activeIncursion.runCredits >= effectivePrice;
+
+                    return (
+                      <HapticPressable
+                        key={listing.id}
+                        onPress={() => setSelectedCargoId(listing.id)}
+                        style={(state) => [
+                          styles.manifestRow,
+                          {
+                            minHeight: s.rowMinHeight,
+                            paddingHorizontal: s.rowPadH,
+                            gap: 10 * fontScale,
+                            borderColor: isSelected ? SELECT_BORDER : HEADER_BORDER,
+                            backgroundColor: isSelected ? SELECT_FILL : ROW_BG,
+                            opacity: state.pressed ? 0.88 : 1,
+                          },
+                          terminalHoverStyle(readPressableHover(state), state.pressed),
+                        ]}
+                      >
+                        <Image
+                          source={resolveCargoItemIcon(listing.id)}
+                          style={{ width: s.rowIcon, height: s.rowIcon }}
+                          resizeMode="contain"
+                        />
+                        <View style={styles.rowCopy}>
+                          <Text
+                            style={[
+                              styles.rowName,
+                              {
+                                color: isSelected ? STARK_WHITE : theme.primaryColor,
+                                fontSize: s.rowName,
+                                lineHeight: s.rowName * 1.3,
+                              },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {listing.name.toUpperCase()}
+                          </Text>
+                          <Text
+                            style={[
+                              styles.rowMeta,
+                              {
+                                color: MUTED_SLATE,
+                                fontSize: s.dossierMeta,
+                                lineHeight: s.dossierMeta * 1.4,
+                              },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {listing.effect}
+                          </Text>
+                        </View>
+                        <Text
+                          style={[
+                            styles.rowPrice,
+                            {
+                              color: affordable ? PHOSPHOR_GREEN : RUST_COST,
+                              fontSize: s.rowPrice,
+                              lineHeight: s.rowPrice * 1.3,
+                            },
+                          ]}
+                        >
+                          {`${effectivePrice} CR`}
+                        </Text>
+                      </HapticPressable>
+                    );
+                  })}
+                </View>
+              </View>
+
+              <View
+                style={[
+                  styles.panel,
+                  styles.actionPanel,
+                  { padding: s.panelPad, gap: s.actionGap },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.creditsReadout,
+                    {
+                      padding: s.creditPad,
+                      borderColor: HEADER_BORDER,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.creditLabel,
+                      {
+                        color: MUTED_SLATE,
+                        fontSize: s.creditLabel,
+                        lineHeight: s.creditLabel * 1.35,
+                      },
+                    ]}
+                  >
+                    RUN CREDITS
+                  </Text>
+                  <Text
+                    style={[
+                      styles.creditValue,
+                      {
+                        color: PHOSPHOR_GREEN,
+                        fontSize: s.creditValue,
+                        lineHeight: s.creditValue * 1.15,
+                      },
+                    ]}
+                  >
+                    {activeIncursion.runCredits}
+                  </Text>
+                  {blackMarketDiscountPct > 0 ? (
+                    <Text
+                      style={[
+                        styles.creditNote,
+                        {
+                          color: MUTED_SLATE,
+                          fontSize: s.dossierMeta,
+                          lineHeight: s.dossierMeta * 1.35,
+                          marginTop: 4 * fontScale,
+                        },
+                      ]}
+                    >
+                      {`−${blackMarketDiscountPct}% CACHE TARIFF`}
+                    </Text>
+                  ) : null}
+                </View>
+
+                <View style={styles.actionMiddle}>
+                  {selectedCargoListing == null ? (
+                    <Text
+                      style={[
+                        styles.emptyStateText,
+                        {
+                          color: MUTED_SLATE,
+                          fontSize: s.empty,
+                          lineHeight: s.empty * 1.5,
+                        },
+                      ]}
+                    >
+                      SELECT A LISTING TO BIND CONTRABAND
+                    </Text>
+                  ) : null}
+                </View>
+
+                <View style={[styles.actionCol, { gap: s.actionGap }]}>
+                  <TacticalButton
+                    label="[ BIND TO CONTAINMENT ]"
+                    active={cargoPurchaseEnabled}
+                    onPress={handleCargoPurchase}
+                    accentColor={PHOSPHOR_GREEN}
+                    mutedColor={theme.mutedColor}
+                    variant="cta"
+                    disabled={!cargoPurchaseEnabled}
+                    style={purchaseButtonStyle}
+                  />
+                  <TacticalButton
+                    label="[ LEAVE CACHE ]"
+                    active={!leaving}
+                    onPress={handleLeave}
+                    accentColor={LEAVE_ACCENT}
+                    mutedColor={theme.mutedColor}
+                    variant="cta"
+                    disabled={leaving}
+                    style={leaveButtonStyle}
+                  />
+                </View>
+              </View>
+            </View>
           </View>
         </RunEventScreenFrame>
       </IncursionRunLayout>
@@ -194,121 +410,123 @@ export default function BlackMarketScreen(): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
-  creditsLine: {
-    fontFamily: 'monospace',
-    fontSize: 8,
-    letterSpacing: 0.8,
-    marginTop: 4,
+  frameBody: {
+    flex: 1,
+    minHeight: 0,
   },
-  shopPanel: {
-    borderWidth: 1,
-    backgroundColor: 'rgba(10, 11, 15, 0.65)',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    gap: 12,
-  },
-  shopSubHeader: {
-    fontFamily: 'monospace',
-    fontSize: 7,
-    letterSpacing: 0.8,
-    textAlign: 'center',
-  },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  gridCell: {
-    width: CELL_SIZE,
-    height: CELL_SIZE,
-    borderWidth: 1,
-    backgroundColor: '#0a0b0f',
-    padding: 5,
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  cellImageWrap: {
+  masterShell: {
     flex: 1,
     width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignSelf: 'center',
+    minHeight: 0,
   },
-  cellImage: {
+  globalHeader: {
     width: '100%',
-    height: '100%',
-  },
-  cellPrice: {
-    fontFamily: 'monospace',
-    fontSize: 7,
-    letterSpacing: 0.6,
-  },
-  cellQty: {
-    fontFamily: 'monospace',
-    fontSize: 7,
-    letterSpacing: 0.6,
-    alignSelf: 'flex-end',
-    minHeight: 9,
-    lineHeight: 9,
-  },
-  detailBlock: {
-    borderWidth: 1,
-    backgroundColor: '#0a0b0f',
-    padding: 12,
-    height: DETAIL_BLOCK_HEIGHT,
-    overflow: 'hidden',
-  },
-  detailHeader: {
-    flexDirection: 'row',
-    gap: 10,
-    alignItems: 'flex-start',
-  },
-  detailImageWrap: {
-    width: 56,
-    height: 56,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderBottomWidth: 1,
+    gap: 4,
     flexShrink: 0,
   },
-  detailImage: {
-    width: '100%',
-    height: '100%',
+  headerEyebrow: {
+    fontFamily: 'monospace',
+    letterSpacing: 1,
+    fontWeight: '600',
   },
-  detailCopy: {
+  headerTitle: {
+    fontFamily: 'monospace',
+    letterSpacing: 0.8,
+    fontWeight: '800',
+  },
+  splitWrap: {
+    flex: 1,
+    width: '100%',
+    alignItems: 'stretch',
+    minHeight: 0,
+  },
+  panel: {
+    backgroundColor: NARRATIVE_UNIFIED_PANEL_BG,
+    borderWidth: 1,
+    borderColor: NARRATIVE_UNIFIED_PANEL_BORDER,
+    minHeight: 0,
+  },
+  manifestPanel: {
+    flex: 1,
+    justifyContent: 'flex-start',
+  },
+  manifestList: {
+    flex: 1,
+    minHeight: 0,
+    justifyContent: 'flex-start',
+  },
+  actionPanel: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  sectionLabel: {
+    fontFamily: 'monospace',
+    letterSpacing: 0.8,
+    fontWeight: '700',
+    flexShrink: 0,
+  },
+  manifestRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+  },
+  rowCopy: {
     flex: 1,
     minWidth: 0,
+    gap: 2,
   },
-  detailPlaceholder: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  detailTitle: {
+  rowName: {
     fontFamily: 'monospace',
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.6,
-    marginBottom: 6,
+    fontWeight: '800',
+    letterSpacing: 0.4,
   },
-  detailBody: {
+  rowMeta: {
     fontFamily: 'monospace',
-    fontSize: 9,
-    lineHeight: 14,
-    letterSpacing: 0.2,
-    marginBottom: 4,
+    letterSpacing: 0.35,
   },
-  detailEffect: {
+  rowPrice: {
     fontFamily: 'monospace',
-    fontSize: 7,
-    letterSpacing: 0.8,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    flexShrink: 0,
   },
-  btn: {
+  creditsReadout: {
     borderWidth: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
+    backgroundColor: 'rgba(9, 9, 11, 0.85)',
+    flexShrink: 0,
   },
-  btnText: {
+  creditLabel: {
     fontFamily: 'monospace',
-    fontSize: 10,
+    letterSpacing: 0.8,
     fontWeight: '700',
-    letterSpacing: 1,
+  },
+  creditValue: {
+    fontFamily: 'monospace',
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  creditNote: {
+    fontFamily: 'monospace',
+    letterSpacing: 0.4,
+    fontWeight: '600',
+  },
+  actionMiddle: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    minHeight: 0,
+  },
+  emptyStateText: {
+    fontFamily: 'monospace',
+    letterSpacing: 0.6,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  actionCol: {
+    flexShrink: 0,
+    width: '100%',
   },
 });

@@ -31,6 +31,45 @@ function formatPenalty(penalty: NarrativePenalty): string {
   return `+${penalty.amount}% Veil Resonance`;
 }
 
+function hpAmountMentionedInText(text: string, amount: number): boolean {
+  return new RegExp(
+    `(?:cost:|[-−]?\\s*|\\+\\s*)${amount}\\s*(?:%\\s*)?(?:current\\s+|max\\s+)?hp\\b`,
+    'i',
+  ).test(text);
+}
+
+function resonanceAmountMentionedInText(text: string, amount: number): boolean {
+  return new RegExp(
+    `(?:cost:|\\+|[-−]?\\s*)${amount}\\s*(?:%\\s*)?(?:veil\\s*)?resonance\\b`,
+    'i',
+  ).test(text);
+}
+
+function penaltyAlreadyReflectedInOutcome(outcomeText: string, penalty: NarrativePenalty): boolean {
+  if (penalty.type === 'HP') {
+    return hpAmountMentionedInText(outcomeText, penalty.amount);
+  }
+  return resonanceAmountMentionedInText(outcomeText, penalty.amount);
+}
+
+function failurePreviewReflectedInOutcome(outcomeText: string, previewText: string): boolean {
+  const normalizedOutcome = outcomeText.trim().toLowerCase();
+  const normalizedPreview = previewText.trim().toLowerCase();
+  if (normalizedOutcome.includes(normalizedPreview)) return true;
+
+  const hpMatch = previewText.match(/(\d+)\s*(?:%\s*(?:current|max)\s+)?hp/i);
+  if (hpMatch) {
+    return hpAmountMentionedInText(outcomeText, Number(hpMatch[1]));
+  }
+
+  const resonanceMatch = previewText.match(/(\d+)\s*(?:%\s*)?(?:veil\s*)?resonance/i);
+  if (resonanceMatch) {
+    return resonanceAmountMentionedInText(outcomeText, Number(resonanceMatch[1]));
+  }
+
+  return false;
+}
+
 function buildSuccessRewards(
   node: NarrativeEventNode,
   choice: NarrativeChoiceKey,
@@ -63,16 +102,24 @@ function buildSuccessRewards(
   return lines;
 }
 
-function buildFailurePenalties(node: NarrativeEventNode, failureText: string): string[] {
+function buildFailurePenalties(
+  node: NarrativeEventNode,
+  failureText: string,
+  outcomeText: string,
+): string[] {
   const lines: string[] = [];
   const penalty = node.proceduralMeta?.defaultPenalty;
-  if (penalty) {
+  const penaltyReflectedInOutcome = penalty
+    ? penaltyAlreadyReflectedInOutcome(outcomeText, penalty)
+    : false;
+
+  if (penalty && !penaltyReflectedInOutcome) {
     lines.push(formatPenalty(penalty));
   }
   if (triggersAmbush(failureText)) {
     lines.push('Hostile ambush inbound');
   }
-  if (lines.length === 0) {
+  if (lines.length === 0 && !penaltyReflectedInOutcome) {
     lines.push('Resolver failed — hazard applied');
   }
   return lines;
@@ -93,16 +140,17 @@ export function buildProceduralOutcomeSummary(
   const resultText = isSuccess
     ? (choiceOption?.successText ?? '>> RESOLVER SUCCESS')
     : (choiceOption?.failureText ?? '>> RESOLVER FAILURE');
+  const outcomeLine = stripOutcomePrefix(resultText);
   const ambushPending = !isSuccess && choice === 'A' && triggersAmbush(node.choiceA.failureText);
 
   return {
     headline: isSuccess ? 'EXPEDITION RESOLVED' : 'EXPEDITION COMPROMISED',
     status: isSuccess ? 'SUCCESS' : 'FAILURE',
-    outcomeLines: [stripOutcomePrefix(resultText)],
+    outcomeLines: [outcomeLine],
     rewardLines: isSuccess && choice !== 'D'
       ? buildSuccessRewards(node, choice, tensionBonusCredits)
       : [],
-    penaltyLines: isSuccess ? [] : buildFailurePenalties(node, node.choiceA.failureText),
+    penaltyLines: isSuccess ? [] : buildFailurePenalties(node, node.choiceA.failureText, outcomeLine),
     ambushPending,
     continueLabel: ambushPending ? '[ CONTINUE — ENGAGE HOSTILES ]' : '[ CONTINUE ]',
   };
@@ -116,6 +164,7 @@ export function buildLegacyOutcomeSummary(
   const isSuccess = status === 'SUCCESS';
   const choiceDef = choice === 'A' ? node.choiceA : node.choiceB;
   const resultText = isSuccess ? choiceDef.successText : choiceDef.failureText;
+  const outcomeLine = stripOutcomePrefix(resultText);
   const ambushPending = triggersAmbush(resultText);
 
   const rewardLines: string[] = [];
@@ -128,15 +177,22 @@ export function buildLegacyOutcomeSummary(
     else rewardLines.push(`+${defaultNarrativeResolverCredits()} Run Credits`);
   } else {
     const preview = choiceDef.effectPreview;
-    if (preview?.onFailure) penaltyLines.push(preview.onFailure);
+    const failurePreviewReflected = preview?.onFailure
+      ? failurePreviewReflectedInOutcome(outcomeLine, preview.onFailure)
+      : false;
+    if (preview?.onFailure && !failurePreviewReflected) {
+      penaltyLines.push(preview.onFailure);
+    }
     if (ambushPending) penaltyLines.push('Hostile ambush inbound');
-    if (penaltyLines.length === 0) penaltyLines.push('Calibration failed — field hazard applied');
+    if (penaltyLines.length === 0 && !failurePreviewReflected) {
+      penaltyLines.push('Calibration failed — field hazard applied');
+    }
   }
 
   return {
     headline: isSuccess ? 'CALIBRATION SUCCESS' : 'CALIBRATION FAILURE',
     status: isSuccess ? 'SUCCESS' : 'FAILURE',
-    outcomeLines: [stripOutcomePrefix(resultText)],
+    outcomeLines: [outcomeLine],
     rewardLines,
     penaltyLines,
     ambushPending,

@@ -4,15 +4,24 @@ import type { ClassType } from '../types/game';
 
 import AegisCombatAttack from '../../assets/images/character images/aegis/aegis_attacking.png';
 import AegisCombatIdle from '../../assets/images/character images/aegis/aegis_combat.png';
+import AegisIcon from '../../assets/images/character images/aegis/aegis_icon.png';
 import HexShotAttack from '../../assets/images/character images/hex-shot/hex_shot_attack.png';
 import HexShotIdle from '../../assets/images/character images/hex-shot/hex_shot_idle.png';
+import HexShotIcon from '../../assets/images/character images/hex-shot/hex_shot_icon.png';
 import EnvoyAttack from '../../assets/images/character images/envoy/envoy_attack.png';
 import EnvoyIdle from '../../assets/images/character images/envoy/envoy_idle.png';
+import EnvoyIcon from '../../assets/images/character images/envoy/envoy_icon.png';
 
 const CLASS_PORTRAITS: Record<ClassType, { idle: ImageSourcePropType; attack: ImageSourcePropType }> = {
   AEGIS: { idle: AegisCombatIdle, attack: AegisCombatAttack },
   HEX_SHOT: { idle: HexShotIdle, attack: HexShotAttack },
   ENVOY: { idle: EnvoyIdle, attack: EnvoyAttack },
+};
+
+const CLASS_BADGE_ICONS: Record<ClassType, ImageSourcePropType> = {
+  AEGIS: AegisIcon,
+  HEX_SHOT: HexShotIcon,
+  ENVOY: EnvoyIcon,
 };
 
 /** PNG layout metadata — feet row and canvas size drive alignment without drift. */
@@ -162,5 +171,5 @@ export function playerCombatAttackArtLayerStyle(scale: number): ImageStyle {
 }
 
 export function resolvePlayerBadgePortrait(classId: ClassType = 'AEGIS'): ImageSourcePropType {
-  return CLASS_PORTRAITS[classId].idle;
+  return CLASS_BADGE_ICONS[classId];
 }

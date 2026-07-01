@@ -1,15 +1,20 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, Vibration, View } from 'react-native';
+import {
+  NARRATIVE_UNIFIED_PANEL_BG,
+  NARRATIVE_UNIFIED_PANEL_BORDER,
+  NARRATIVE_UNIFIED_PANEL_PADDING,
+} from '../../../constants/narrativeLayout';
 import { USE_NATIVE_DRIVER } from '../../../utils/platformMotion';
+import { useResponsiveLayout } from '../../../hooks/useResponsiveLayout';
 import HapticPressable from '../../HapticPressable';
 import type { TensionMechanicProps } from './tensionMechanicTypes';
-import { tensionPanelStyles as s } from './tensionPanelLayout';
 
 const GRID_SIZE = 3;
 const NODE_COUNT = GRID_SIZE * GRID_SIZE;
-const CELL = 64;
-const GAP = 10;
-const GRID_WIDTH = GRID_SIZE * CELL + (GRID_SIZE - 1) * GAP;
+const GRID_GAP = 12;
+const CELL_DESKTOP = 80;
+const CELL_MOBILE = 64;
 
 const PREVIEW_STEP_MS = 400;
 const NODE_FLASH_MS = 320;
@@ -17,10 +22,14 @@ const TAP_FLASH_MS = 180;
 const SEQUENCE_MIN = 4;
 const SEQUENCE_MAX = 6;
 
-const NODE_IDLE = '#1f2937';
+const NODE_IDLE_BG = '#0F172A';
+const NODE_IDLE_BORDER = '#334155';
+const NODE_IDLE_LABEL = '#475569';
 const NODE_LIT = '#22d3ee';
 const NODE_TAPPED = '#065f46';
 const FAIL_FLASH = '#ef4444';
+const BODY_MUTED = '#94A3B8';
+const COLLAPSE_RED = '#EF4444';
 
 type CipherPhase = 'preview' | 'input' | 'resolved';
 
@@ -35,12 +44,16 @@ function CipherNode({
   tapped,
   disabled,
   onPress,
+  cellSize,
+  labelSize,
 }: {
   nodeId: number;
   lit: boolean;
   tapped: boolean;
   disabled: boolean;
   onPress: (id: number) => void;
+  cellSize: number;
+  labelSize: number;
 }): React.JSX.Element {
   const scale = useRef(new Animated.Value(1)).current;
 
@@ -63,8 +76,9 @@ function CipherNode({
     ]).start();
   }, [lit, scale, tapped]);
 
-  let backgroundColor = NODE_IDLE;
-  let borderColor = '#374151';
+  const isIdle = !lit && !tapped;
+  let backgroundColor = NODE_IDLE_BG;
+  let borderColor = NODE_IDLE_BORDER;
   if (tapped) {
     backgroundColor = NODE_TAPPED;
     borderColor = '#34d399';
@@ -79,31 +93,56 @@ function CipherNode({
       disabled={disabled}
       style={({ pressed }) => [
         styles.nodePressable,
-        { opacity: disabled ? 0.55 : pressed ? 0.88 : 1 },
+        {
+          width: cellSize,
+          height: cellSize,
+          opacity: disabled ? 0.55 : pressed ? 0.88 : 1,
+        },
       ]}
     >
       <Animated.View
         style={[
           styles.node,
           {
+            width: cellSize,
+            height: cellSize,
             backgroundColor,
             borderColor,
+            borderWidth: isIdle ? 1 : 2,
+            borderRadius: 2,
             transform: [{ scale }],
           },
         ]}
       >
         <View style={[styles.nodeCore, lit || tapped ? styles.nodeCoreLit : null]} />
-        <Text style={styles.nodeId}>{String(nodeId + 1).padStart(2, '0')}</Text>
+        <Text
+          style={[
+            styles.nodeId,
+            {
+              fontSize: labelSize,
+              color: isIdle ? NODE_IDLE_LABEL : '#ecfeff',
+            },
+          ]}
+        >
+          {String(nodeId + 1).padStart(2, '0')}
+        </Text>
       </Animated.View>
     </HapticPressable>
   );
 }
 
+/** Terran Grid sequential cipher keypad — structural shell matches sibling tension panels. */
 export default function GridCipher({
   onSuccess,
   onFailure,
   defaultPenalty,
 }: TensionMechanicProps): React.JSX.Element {
+  const { isDesktop, fontScale, scaleSize, scaleSpacing, scaleFont } = useResponsiveLayout();
+  const cellSize = scaleSize(isDesktop ? CELL_DESKTOP : CELL_MOBILE);
+  const gridGap = scaleSpacing(GRID_GAP);
+  const gridWidth = GRID_SIZE * cellSize + (GRID_SIZE - 1) * gridGap;
+  const panelPad = scaleSpacing(NARRATIVE_UNIFIED_PANEL_PADDING);
+
   const targetSequence = useMemo(() => generateTargetSequence(), []);
   const [phase, setPhase] = useState<CipherPhase>('preview');
   const [playerInputIndex, setPlayerInputIndex] = useState(0);
@@ -241,6 +280,19 @@ export default function GridCipher({
       : `FAILURE COST: +${defaultPenalty.amount} RESONANCE`
     : null;
 
+  const scales = useMemo(
+    () => ({
+      header: 9 * fontScale,
+      headerLine: 12 * fontScale,
+      cipherMeta: 11 * fontScale,
+      cipherMetaLine: 15 * fontScale,
+      nodeLabel: 10 * fontScale,
+      penalty: scaleFont(11),
+      penaltyLine: scaleFont(14),
+    }),
+    [fontScale, scaleFont],
+  );
+
   const instructionText = (() => {
     if (phase === 'preview') return 'Observe the cipher sequence — input locked.';
     if (phase === 'input') {
@@ -249,73 +301,148 @@ export default function GridCipher({
     return failFlash ? 'Cipher rejected — breach detected.' : 'Cipher accepted — access granted.';
   })();
 
+  const confirmedText = phase === 'input'
+    ? `${playerInputIndex}/${targetSequence.length} symbols confirmed`
+    : phase === 'preview'
+      ? `0/${targetSequence.length} symbols confirmed`
+      : ' ';
+
   return (
-    <View style={s.root}>
-      <Text style={s.header}>GRID CIPHER // SEQUENTIAL BYPASS</Text>
-      <View style={s.panel}>
-        <Text style={s.instructions}>{instructionText}</Text>
+    <View
+      style={[
+        styles.panel,
+        { padding: panelPad },
+      ]}
+    >
+      <Text
+        style={[
+          styles.header,
+          { fontSize: scales.header, lineHeight: scales.headerLine },
+        ]}
+      >
+        GRID CIPHER // SEQUENTIAL BYPASS
+      </Text>
 
-        <View style={styles.gridWrap}>
-          <View style={styles.grid}>
-            {Array.from({ length: NODE_COUNT }, (_, nodeId) => (
-              <CipherNode
-                key={nodeId}
-                nodeId={nodeId}
-                lit={previewLitNode === nodeId || tapLitNode === nodeId}
-                tapped={confirmedNodes.includes(nodeId)}
-                disabled={inputLocked || phase !== 'input'}
-                onPress={handleNodePress}
-              />
-            ))}
-          </View>
+      <Text
+        style={[
+          styles.cipherMeta,
+          {
+            fontSize: scales.cipherMeta,
+            lineHeight: scales.cipherMetaLine,
+            marginBottom: scaleSpacing(32),
+            marginTop: scaleSpacing(12),
+          },
+        ]}
+      >
+        {instructionText}
+      </Text>
 
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              styles.failOverlay,
-              { backgroundColor: FAIL_FLASH, opacity: failOverlay },
-            ]}
-          />
+      <View
+        style={[
+          styles.gridWrap,
+          {
+            width: gridWidth,
+            gap: gridGap,
+          },
+        ]}
+      >
+        <View
+          style={[
+            styles.grid,
+            {
+              width: gridWidth,
+              gap: gridGap,
+            },
+          ]}
+        >
+          {Array.from({ length: NODE_COUNT }, (_, nodeId) => (
+            <CipherNode
+              key={nodeId}
+              nodeId={nodeId}
+              lit={previewLitNode === nodeId || tapLitNode === nodeId}
+              tapped={confirmedNodes.includes(nodeId)}
+              disabled={inputLocked || phase !== 'input'}
+              onPress={handleNodePress}
+              cellSize={cellSize}
+              labelSize={scales.nodeLabel}
+            />
+          ))}
         </View>
 
-        <View style={s.feedbackSlot}>
-          <Text style={s.feedbackText}>
-            {phase === 'input'
-              ? `${playerInputIndex}/${targetSequence.length} symbols confirmed`
-              : ' '}
-          </Text>
-        </View>
-
-        {penaltyHint ? (
-          <Text style={s.penalty}>{penaltyHint}</Text>
-        ) : (
-          <Text style={s.penalty}> </Text>
-        )}
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.failOverlay,
+            { backgroundColor: FAIL_FLASH, opacity: failOverlay },
+          ]}
+        />
       </View>
+
+      <Text
+        style={[
+          styles.cipherMeta,
+          {
+            fontSize: scales.cipherMeta,
+            lineHeight: scales.cipherMetaLine,
+            marginTop: scaleSpacing(12),
+            minHeight: scales.cipherMetaLine,
+          },
+        ]}
+      >
+        {confirmedText}
+      </Text>
+
+      {penaltyHint ? (
+        <Text
+          style={[
+            styles.penalty,
+            {
+              fontSize: scales.penalty,
+              lineHeight: scales.penaltyLine,
+              marginTop: scaleSpacing(32),
+            },
+          ]}
+        >
+          {penaltyHint}
+        </Text>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  panel: {
+    flex: 1,
+    width: '100%',
+    minHeight: 0,
+    backgroundColor: NARRATIVE_UNIFIED_PANEL_BG,
+    borderWidth: 1,
+    borderColor: NARRATIVE_UNIFIED_PANEL_BORDER,
+    justifyContent: 'flex-start',
+  },
+  header: {
+    fontFamily: 'monospace',
+    letterSpacing: 1,
+    color: BODY_MUTED,
+    fontWeight: '700',
+  },
+  cipherMeta: {
+    fontFamily: 'monospace',
+    letterSpacing: 0.5,
+    color: BODY_MUTED,
+    textAlign: 'center',
+    alignSelf: 'center',
+  },
   gridWrap: {
     alignSelf: 'center',
-    width: GRID_WIDTH,
     position: 'relative',
   },
   grid: {
-    width: GRID_WIDTH,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: GAP,
   },
-  nodePressable: {
-    width: CELL,
-    height: CELL,
-  },
+  nodePressable: {},
   node: {
-    width: CELL,
-    height: CELL,
-    borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
@@ -331,11 +458,17 @@ const styles = StyleSheet.create({
   },
   nodeId: {
     fontFamily: 'monospace',
-    fontSize: 8,
-    color: '#6b7280',
     letterSpacing: 0.4,
   },
   failOverlay: {
     ...StyleSheet.absoluteFillObject,
+  },
+  penalty: {
+    fontFamily: 'monospace',
+    letterSpacing: 1.2,
+    color: COLLAPSE_RED,
+    textAlign: 'center',
+    fontWeight: '800',
+    alignSelf: 'center',
   },
 });
