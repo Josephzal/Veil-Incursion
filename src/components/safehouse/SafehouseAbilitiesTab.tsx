@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import AegisLoadoutEditor from '../AegisLoadoutEditor';
 import ClassLoadoutEditor from '../ClassLoadoutEditor';
-import { hubTerminalUi } from '../../styles/hubTerminalUi';
+import { useHubLayout } from '../../context/HubLayoutContext';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useTerminal } from '../../context/TerminalContext';
 import { isAbilityUnlocked } from '../../data/aegisAbilityUnlockEngine';
@@ -31,6 +31,7 @@ import {
 
 export default function SafehouseAbilitiesTab(): React.JSX.Element {
   const { theme } = useTerminal();
+  const { scaleSpacing } = useHubLayout();
   const {
     account,
     setAegisLoadout,
@@ -181,13 +182,13 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
   return (
     <ScrollView
       style={styles.scroll}
-      contentContainerStyle={styles.scrollContent}
+      contentContainerStyle={[styles.scrollContent, { paddingBottom: scaleSpacing(24) }]}
       showsVerticalScrollIndicator
       persistentScrollbar={Platform.OS === 'android'}
       indicatorStyle="white"
       nestedScrollEnabled
     >
-      <View style={hubTerminalUi.dataSection}>
+      <View style={styles.editorHost}>
         {account.activeClass === 'AEGIS' ? (
           <AegisLoadoutEditor
             draft={aegisDraft}
@@ -271,5 +272,11 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
 
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
-  scrollContent: { paddingBottom: 24 },
+  scrollContent: {
+    flexGrow: 1,
+  },
+  editorHost: {
+    gap: 10,
+    paddingVertical: 4,
+  },
 });

@@ -8,6 +8,7 @@ import {
 import { ScrollView } from 'react-native-gesture-handler';
 import { ALL_RESOURCE_ITEM_IDS, RESOURCE_REGISTRY } from '../../data/resourceRegistry';
 import { listHubStagedConsumables } from '../../data/hubSafehouseEngine';
+import { DOSSIER_FOREGROUND, DOSSIER_ROW_BG } from '../../constants/dossierSurface';
 import { useTerminal } from '../../context/TerminalContext';
 import { useHubLayout } from '../../context/HubLayoutContext';
 import { useHubTypography } from '../../hooks/useHubTypography';
@@ -33,6 +34,8 @@ interface SafehouseStashPanelProps {
   resourceStash: Partial<Record<string, number>>;
   hubCraftedConsumables: Partial<Record<CargoItemId, number>>;
   isDropTarget?: boolean;
+  /** When true, panel sits inside DossierCardShell — no outer chrome. */
+  shellWrapped?: boolean;
   /** Stretch panel to fill a fixed-height loadout column (desktop web scroll). */
   fillHeight?: boolean;
   onPanelMeasured?: (rect: { pageX: number; pageY: number; width: number; height: number }) => void;
@@ -61,7 +64,7 @@ function StashRow({
   onDragEnd: (itemId: CargoItemId, absoluteX: number, absoluteY: number) => void;
 }): React.JSX.Element {
   return (
-    <View style={[styles.row, isDesktop && styles.rowDesktop, { borderColor }]}>
+    <View style={[styles.row, isDesktop && styles.rowDesktop, { borderColor, backgroundColor: DOSSIER_ROW_BG }]}>
       <View style={styles.rowMain}>
         <View style={styles.rowCopy}>
           <TerminalText
@@ -91,6 +94,7 @@ export default function SafehouseStashPanel({
   resourceStash,
   hubCraftedConsumables,
   isDropTarget = false,
+  shellWrapped = false,
   fillHeight = false,
   onPanelMeasured,
   onDragStart,
@@ -153,9 +157,13 @@ export default function SafehouseStashPanel({
       style={[
         styles.root,
         fillHeight && styles.rootFill,
-        {
+        shellWrapped && styles.rootShellWrapped,
+        !shellWrapped && {
           borderColor: isDropTarget ? accent : theme.borderColor,
           backgroundColor: isDropTarget ? `${theme.primaryColor}12` : theme.backgroundColor,
+        },
+        shellWrapped && isDropTarget && {
+          backgroundColor: `${theme.primaryColor}12`,
         },
       ]}
     >
@@ -178,7 +186,7 @@ export default function SafehouseStashPanel({
           {
             borderColor: theme.borderColor,
             color: theme.textColor,
-            backgroundColor: '#0a0b0f',
+            backgroundColor: DOSSIER_FOREGROUND,
             fontSize: bodySize(8),
           },
         ]}
@@ -217,10 +225,13 @@ export default function SafehouseStashPanel({
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    borderWidth: 1,
     padding: 10,
     gap: 8,
     minHeight: 0,
+  },
+  rootShellWrapped: {
+    padding: 0,
+    gap: 8,
   },
   rootFill: {
     height: '100%',

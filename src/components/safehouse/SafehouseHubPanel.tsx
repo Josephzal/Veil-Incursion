@@ -58,7 +58,6 @@ export default function SafehouseHubPanel(): React.JSX.Element {
             style={[
               styles.stickyNav,
               {
-                borderBottomColor: theme.borderColor,
                 backgroundColor: panelBg,
                 marginBottom: scaleSpacing(8),
                 paddingVertical: scaleSpacing(4),
@@ -77,7 +76,6 @@ export default function SafehouseHubPanel(): React.JSX.Element {
                       isDesktop && styles.hardwareTabDesktop,
                       {
                         borderColor: active ? factionAccent : theme.borderColor,
-                        borderBottomColor: active ? factionAccent : 'transparent',
                         backgroundColor: active ? `${factionAccent}14` : 'rgba(0, 0, 0, 0.35)',
                       },
                       terminalHoverStyle(readPressableHover(state), state.pressed),
@@ -147,7 +145,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   stickyNav: {
-    borderBottomWidth: 1,
     zIndex: 2,
   },
   navRow: {
@@ -159,7 +156,6 @@ const styles = StyleSheet.create({
   },
   hardwareTab: {
     borderWidth: 1,
-    borderBottomWidth: 2,
     paddingHorizontal: 10,
     paddingVertical: 8,
     minWidth: 72,

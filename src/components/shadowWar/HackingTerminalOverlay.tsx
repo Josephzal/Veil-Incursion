@@ -9,8 +9,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Defs, Pattern, Rect } from 'react-native-svg';
 
-/** Static horizontal scanlines — barely visible phosphor grid. */
-const SCANLINE_OPACITY = 0.022;
+/** Static horizontal scanlines — phosphor grid over the map viewport. */
+const SCANLINE_OPACITY = 0.075;
 /** Occasional downward sweep — Fallout hacking-style retrace. */
 const BEAM_COLOR = 'rgba(130, 255, 210, 0.14)';
 
@@ -109,7 +109,7 @@ export default function HackingTerminalOverlay({
         <Svg width="100%" height="100%" style={styles.svgFill}>
           <Defs>
             <Pattern id="hackingScanlines" width={1} height={4} patternUnits="userSpaceOnUse">
-              <Rect width={1} height={1} fill="rgba(0, 0, 0, 0.55)" />
+              <Rect width={1} height={1} fill="rgba(255, 255, 255, 0.35)" />
               <Rect y={1} width={1} height={3} fill="transparent" />
             </Pattern>
           </Defs>

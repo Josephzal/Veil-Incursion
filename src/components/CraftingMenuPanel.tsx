@@ -8,6 +8,8 @@ import {
 } from 'react-native';
 import HapticPressable from './HapticPressable';
 import HubCargoIconBox from './safehouse/HubCargoIconBox';
+import TerminalText from './TerminalText';
+import TacticalButton from './TacticalButton';
 import {
   getRecipesByKind,
   isRecipeOutputOwned,
@@ -19,11 +21,10 @@ import { ALL_RESOURCE_ITEM_IDS, RESOURCE_REGISTRY } from '../data/resourceRegist
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useHubTypography } from '../hooks/useHubTypography';
+import { useHubLayout } from '../context/HubLayoutContext';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
-import { viewShadow } from '../utils/adaptiveStyles';
-import { DOSSIER_FOREGROUND } from '../constants/dossierSurface';
+import { DOSSIER_ROW_BG, dossierOpaqueCtaStyle } from '../constants/dossierSurface';
 import DossierCardShell from './hub/DossierCardShell';
-import { readPressableHover, terminalHoverStyle } from '../utils/terminalHoverStyle';
 import {
   HIDDEN_SCROLLBAR_VIEW_STYLE,
   HIDDEN_SCROLLVIEW_PROPS,
@@ -36,92 +37,82 @@ const MUTED_SLATE = '#94A3B8';
 const ACCENT_CYAN = '#06B6D4';
 const PHOSPHOR_GREEN = '#4ADE80';
 const RUST_RED = '#EF4444';
-const LEDGER_BG = 'rgba(9, 9, 11, 0.9)';
-const LEDGER_BORDER = '#1e293b';
-const CARD_BG = '#0f172a';
-const CARD_BORDER = '#1e293b';
-const CHIP_BG = 'rgba(9, 9, 11, 0.85)';
-const CHIP_BORDER = '#334155';
 
 interface CraftingMenuPanelProps {
   onClose?: () => void;
   embedded?: boolean;
 }
 
-interface ResourceTileProps {
+interface ResourceLedgerRowProps {
   resourceId: ResourceItemId;
   quantity: number;
   borderColor: string;
+  textColor: string;
+  mutedColor: string;
   iconSize: number;
-  fontScale: number;
+  isDesktop: boolean;
 }
 
-function ResourceTile({
+function ResourceLedgerRow({
   resourceId,
   quantity,
   borderColor,
+  textColor,
+  mutedColor,
   iconSize,
-  fontScale,
-}: ResourceTileProps): React.JSX.Element {
+  isDesktop,
+}: ResourceLedgerRowProps): React.JSX.Element {
   const def = RESOURCE_REGISTRY[resourceId];
+  const itemTypeLabel = def.itemType.replace(/_/g, ' ');
 
   return (
     <View
       style={[
-        styles.resourceTile,
-        {
-          paddingVertical: 8 * fontScale,
-          gap: 6 * fontScale,
-        },
+        styles.ledgerRow,
+        isDesktop && styles.ledgerRowDesktop,
+        { borderColor, backgroundColor: DOSSIER_ROW_BG },
       ]}
     >
-      <HubCargoIconBox
-        itemId={resourceId}
-        borderColor={borderColor}
-        iconSize={iconSize}
-        variant="tile"
-      />
-      <Text
-        style={[
-          styles.resourceQty,
-          {
-            color: STARK_WHITE,
-            fontSize: 13 * fontScale,
-            lineHeight: 13 * fontScale * 1.2,
-          },
-        ]}
-      >
-        {quantity}
-      </Text>
-      <Text
-        style={[
-          styles.resourceName,
-          {
-            color: MUTED_SLATE,
-            fontSize: 8 * fontScale,
-            lineHeight: 8 * fontScale * 1.35,
-          },
-        ]}
-        numberOfLines={2}
-      >
-        {def.name.toUpperCase()}
-      </Text>
+      <View style={styles.ledgerRowMain}>
+        <View style={styles.ledgerRowCopy}>
+          <TerminalText variant="body" style={{ color: textColor, fontWeight: '700' }} numberOfLines={1}>
+            {def.name.toUpperCase()}
+          </TerminalText>
+          <TerminalText variant="caption" style={{ color: mutedColor }} numberOfLines={1}>
+            {`${quantity}× // ${itemTypeLabel}`}
+          </TerminalText>
+          <TerminalText variant="body" style={{ color: PHOSPHOR_GREEN, fontWeight: '700' }}>
+            {`${quantity} IN STASH`}
+          </TerminalText>
+        </View>
+        <HubCargoIconBox
+          itemId={resourceId}
+          borderColor={mutedColor}
+          iconSize={iconSize}
+        />
+      </View>
     </View>
   );
 }
 
 interface ResourceLedgerProps {
   stash: ResourceQuantity;
-  fontScale: number;
   borderColor: string;
   iconSize: number;
+  titleColor: string;
+  textColor: string;
+  mutedColor: string;
+  isDesktop: boolean;
 }
 
 function ResourceLedger({
   stash,
-  fontScale,
   borderColor,
   iconSize,
+  titleColor,
+  textColor,
+  mutedColor,
+  isDesktop,
 }: ResourceLedgerProps): React.JSX.Element {
   const ownedResources = useMemo(
     () => ALL_RESOURCE_ITEM_IDS.filter((resourceId) => getStashCount(stash, resourceId) > 0),
@@ -129,128 +120,71 @@ function ResourceLedger({
   );
 
   return (
-    <View
-      style={[
-        styles.ledgerPanel,
-        {
-          padding: 24 * fontScale,
-        },
-      ]}
-    >
-      <Text
-        style={[
-          styles.panelEyebrow,
-          {
-            color: MUTED_SLATE,
-            fontSize: 8 * fontScale,
-            lineHeight: 8 * fontScale * 1.4,
-            marginBottom: 12 * fontScale,
-          },
-        ]}
+    <>
+      <TerminalText
+        variant="panelTitle"
+        letterSpacing={0.8}
+        style={[styles.panelTitle, { color: titleColor }]}
       >
         RESOURCE LEDGER
-      </Text>
+      </TerminalText>
       <ScrollView
         style={[
           styles.ledgerScroll,
           Platform.OS === 'web' && styles.ledgerScrollWeb,
           HIDDEN_SCROLLBAR_VIEW_STYLE,
         ]}
-        contentContainerStyle={styles.ledgerGrid}
+        contentContainerStyle={styles.ledgerList}
         {...HIDDEN_SCROLLVIEW_PROPS}
         nestedScrollEnabled
         keyboardShouldPersistTaps="handled"
       >
         {ownedResources.length === 0 ? (
-          <Text
-            style={[
-              styles.emptyLedger,
-              {
-                color: MUTED_SLATE,
-                fontSize: 9 * fontScale,
-                lineHeight: 9 * fontScale * 1.45,
-              },
-            ]}
-          >
+          <TerminalText variant="caption" style={{ color: mutedColor, paddingVertical: 12, textAlign: 'center' }}>
             // NO RESOURCES IN STASH
-          </Text>
+          </TerminalText>
         ) : (
           ownedResources.map((resourceId) => (
-            <View key={resourceId} style={styles.ledgerGridCell}>
-              <ResourceTile
-                resourceId={resourceId}
-                quantity={getStashCount(stash, resourceId)}
-                borderColor={borderColor}
-                iconSize={iconSize}
-                fontScale={fontScale}
-              />
-            </View>
+            <ResourceLedgerRow
+              key={resourceId}
+              resourceId={resourceId}
+              quantity={getStashCount(stash, resourceId)}
+              borderColor={borderColor}
+              textColor={textColor}
+              mutedColor={mutedColor}
+              iconSize={iconSize}
+              isDesktop={isDesktop}
+            />
           ))
         )}
       </ScrollView>
-    </View>
+    </>
   );
 }
 
-interface RequirementChipProps {
-  resourceId: ResourceItemId;
-  requiredCount: number;
-  ownedCount: number;
-  fontScale: number;
-}
-
-function RequirementChip({
-  resourceId,
-  requiredCount,
-  ownedCount,
-  fontScale,
-}: RequirementChipProps): React.JSX.Element {
-  const satisfied = ownedCount >= requiredCount;
-  const name = RESOURCE_REGISTRY[resourceId].name.toUpperCase();
-
-  return (
-    <View
-      style={[
-        styles.requirementChip,
-        {
-          paddingHorizontal: 10 * fontScale,
-          paddingVertical: 6 * fontScale,
-          borderColor: satisfied ? 'rgba(74, 222, 128, 0.35)' : 'rgba(239, 68, 68, 0.35)',
-        },
-      ]}
-    >
-      <Text
-        style={[
-          styles.chipText,
-          {
-            color: satisfied ? PHOSPHOR_GREEN : RUST_RED,
-            fontSize: 8 * fontScale,
-            lineHeight: 8 * fontScale * 1.4,
-          },
-        ]}
-        numberOfLines={1}
-      >
-        {`${name} ${ownedCount}/${requiredCount}`}
-      </Text>
-    </View>
-  );
-}
-
-interface AugmentFabricationCardProps {
+interface FabricationRowProps {
   recipe: CraftingRecipe;
   stash: ResourceQuantity;
   alreadyOwned: boolean;
   onFabricate: (recipeId: string) => void;
-  fontScale: number;
+  accentColor: string;
+  borderColor: string;
+  textColor: string;
+  mutedColor: string;
+  isDesktop: boolean;
 }
 
-function AugmentFabricationCard({
+function FabricationRow({
   recipe,
   stash,
   alreadyOwned,
   onFabricate,
-  fontScale,
-}: AugmentFabricationCardProps): React.JSX.Element {
+  accentColor,
+  borderColor,
+  textColor,
+  mutedColor,
+  isDesktop,
+}: FabricationRowProps): React.JSX.Element {
   const affordable = canAffordRecipe(stash, recipe);
   const canFabricate = affordable && !alreadyOwned;
   const description = recipe.effectSummary ?? recipe.description ?? '';
@@ -258,89 +192,53 @@ function AugmentFabricationCard({
   return (
     <View
       style={[
-        styles.augmentCard,
-        viewShadow({
-          color: '#000000',
-          opacity: 0.45,
-          radius: 12,
-          offset: { width: 0, height: 4 },
-        }),
-        {
-          padding: 24 * fontScale,
-          gap: 12 * fontScale,
-        },
+        styles.fabricationRow,
+        isDesktop && styles.fabricationRowDesktop,
+        { borderColor, backgroundColor: DOSSIER_ROW_BG },
       ]}
     >
-      <View style={{ gap: 6 * fontScale }}>
-        <Text
-          style={[
-            styles.augmentTitle,
-            {
-              color: STARK_WHITE,
-              fontSize: 13 * fontScale,
-              lineHeight: 13 * fontScale * 1.25,
-            },
-          ]}
-        >
+      <View style={styles.fabricationInfo}>
+        <TerminalText variant="body" style={{ color: textColor, fontWeight: '700' }} numberOfLines={1}>
           {recipe.label.toUpperCase()}
-        </Text>
+        </TerminalText>
         {description ? (
-          <Text
-            style={[
-              styles.augmentDescription,
-              {
-                color: MUTED_SLATE,
-                fontSize: 9 * fontScale,
-                lineHeight: 9 * fontScale * 1.5,
-              },
-            ]}
-          >
+          <TerminalText variant="caption" style={{ color: mutedColor }} numberOfLines={2}>
             {description}
-          </Text>
+          </TerminalText>
         ) : null}
-      </View>
-
-      <View style={styles.cardFooter}>
-        <View style={[styles.chipRow, { gap: 6 * fontScale }]}>
-          {recipe.requirements.map((req) => (
-            <RequirementChip
-              key={`${recipe.id}-${req.resourceId}`}
-              resourceId={req.resourceId}
-              requiredCount={req.quantity}
-              ownedCount={getStashCount(stash, req.resourceId)}
-              fontScale={fontScale}
-            />
-          ))}
+        <View style={styles.requirementLine}>
+          {recipe.requirements.map((req, index) => {
+            const ownedCount = getStashCount(stash, req.resourceId);
+            const satisfied = ownedCount >= req.quantity;
+            const name = RESOURCE_REGISTRY[req.resourceId].name.toUpperCase();
+            return (
+              <Text
+                key={`${recipe.id}-${req.resourceId}`}
+                style={[
+                  styles.requirementText,
+                  { color: satisfied ? PHOSPHOR_GREEN : RUST_RED },
+                ]}
+              >
+                {`${index > 0 ? ' • ' : ''}${name} ${ownedCount}/${req.quantity}`}
+              </Text>
+            );
+          })}
         </View>
-
-        <HapticPressable
-          disabled={!canFabricate}
+      </View>
+      <View style={styles.fabricationActions}>
+        <TacticalButton
+          label={alreadyOwned ? '[ FORGED ]' : '[ FABRICATE ]'}
+          active={canFabricate}
           onPress={() => onFabricate(recipe.id)}
-          style={(state) => [
-            styles.fabricateBtn,
-            {
-              borderColor: canFabricate ? ACCENT_CYAN : CHIP_BORDER,
-              opacity: alreadyOwned ? 0.25 : canFabricate ? (state.pressed ? 0.85 : 1) : 0.1,
-              paddingHorizontal: 14 * fontScale,
-              paddingVertical: 10 * fontScale,
-              minWidth: 108 * fontScale,
-            },
-            terminalHoverStyle(readPressableHover(state), state.pressed),
+          accentColor={accentColor}
+          mutedColor={mutedColor}
+          variant="inline"
+          disabled={!canFabricate}
+          style={[
+            dossierOpaqueCtaStyle(accentColor),
+            !canFabricate ? { opacity: alreadyOwned ? 0.45 : 0.25 } : null,
           ]}
-        >
-          <Text
-            style={[
-              styles.fabricateBtnText,
-              {
-                color: canFabricate ? STARK_WHITE : MUTED_SLATE,
-                fontSize: 9 * fontScale,
-                lineHeight: 9 * fontScale * 1.3,
-              },
-            ]}
-          >
-            {alreadyOwned ? '[ FORGED ]' : '[ FABRICATE ]'}
-          </Text>
-        </HapticPressable>
+        />
       </View>
     </View>
   );
@@ -350,43 +248,46 @@ interface FabricationMatrixProps {
   recipes: readonly CraftingRecipe[];
   stash: ResourceQuantity;
   onFabricate: (recipeId: string) => void;
-  fontScale: number;
   sectionLabel?: string;
   isOwned: (recipe: CraftingRecipe) => boolean;
+  accentColor: string;
+  borderColor: string;
+  textColor: string;
+  mutedColor: string;
+  isDesktop: boolean;
 }
 
 function FabricationMatrix({
   recipes,
   stash,
   onFabricate,
-  fontScale,
   sectionLabel,
   isOwned,
+  accentColor,
+  borderColor,
+  textColor,
+  mutedColor,
+  isDesktop,
 }: FabricationMatrixProps): React.JSX.Element {
   return (
-    <View style={{ gap: 16 * fontScale }}>
+    <View style={styles.fabricationSection}>
       {sectionLabel ? (
-        <Text
-          style={[
-            styles.panelEyebrow,
-            {
-              color: MUTED_SLATE,
-              fontSize: 8 * fontScale,
-              lineHeight: 8 * fontScale * 1.4,
-            },
-          ]}
-        >
+        <TerminalText variant="caption" letterSpacing={0.8} style={{ color: mutedColor, fontWeight: '700' }}>
           {sectionLabel}
-        </Text>
+        </TerminalText>
       ) : null}
       {recipes.map((recipe) => (
-        <AugmentFabricationCard
+        <FabricationRow
           key={recipe.id}
           recipe={recipe}
           stash={stash}
           alreadyOwned={isOwned(recipe)}
           onFabricate={onFabricate}
-          fontScale={fontScale}
+          accentColor={accentColor}
+          borderColor={borderColor}
+          textColor={textColor}
+          mutedColor={mutedColor}
+          isDesktop={isDesktop}
         />
       ))}
     </View>
@@ -400,7 +301,9 @@ export default function CraftingMenuPanel({
   const { theme } = useTerminal();
   const { account, craftRecipe, appendHubLog } = usePlayerAccount();
   const { isDesktop, fontScale } = useResponsiveLayout();
+  const { scaleSpacing } = useHubLayout();
   const { iconSize } = useHubTypography();
+  const panelPadding = scaleSpacing(10);
 
   const secondaryRecipes = useMemo(
     () => ({
@@ -424,25 +327,20 @@ export default function CraftingMenuPanel({
   const matrixContent = (
     <DossierCardShell
       fillHeight
-      padding={32 * fontScale}
+      padding={panelPadding}
       contentStyle={styles.matrixPanel}
     >
-      <Text
-        style={[
-          styles.matrixTitle,
-          {
-            color: STARK_WHITE,
-            fontSize: 11 * fontScale,
-            lineHeight: 11 * fontScale * 1.35,
-          },
-        ]}
+      <TerminalText
+        variant="panelTitle"
+        letterSpacing={0.8}
+        style={[styles.panelTitle, { color: theme.statusColor, marginBottom: scaleSpacing(4) }]}
       >
         FABRICATION MATRIX
-      </Text>
+      </TerminalText>
 
       <ScrollView
         style={[styles.matrixScroll, HIDDEN_SCROLLBAR_VIEW_STYLE]}
-        contentContainerStyle={{ gap: 24 * fontScale, paddingBottom: 16 * fontScale }}
+        contentContainerStyle={styles.fabricationList}
         {...HIDDEN_SCROLLVIEW_PROPS}
         nestedScrollEnabled
         keyboardShouldPersistTaps="handled"
@@ -451,8 +349,12 @@ export default function CraftingMenuPanel({
           recipes={PERMANENT_AUGMENTS}
           stash={account.resourceStash}
           onFabricate={handleFabricate}
-          fontScale={fontScale}
           isOwned={isOutputOwned}
+          accentColor={theme.statusColor}
+          borderColor={theme.borderColor}
+          textColor={theme.textColor}
+          mutedColor={theme.mutedColor}
+          isDesktop={isDesktop}
         />
 
         {secondaryRecipes.LOADOUT.length > 0 ? (
@@ -460,9 +362,13 @@ export default function CraftingMenuPanel({
             recipes={secondaryRecipes.LOADOUT}
             stash={account.resourceStash}
             onFabricate={handleFabricate}
-            fontScale={fontScale}
             sectionLabel="LOADOUT SCHEMATICS"
             isOwned={isOutputOwned}
+            accentColor={theme.statusColor}
+            borderColor={theme.borderColor}
+            textColor={theme.textColor}
+            mutedColor={theme.mutedColor}
+            isDesktop={isDesktop}
           />
         ) : null}
 
@@ -471,9 +377,13 @@ export default function CraftingMenuPanel({
             recipes={secondaryRecipes.CONSUMABLE}
             stash={account.resourceStash}
             onFabricate={handleFabricate}
-            fontScale={fontScale}
             sectionLabel="TACTICAL CONSUMABLES"
             isOwned={() => false}
+            accentColor={theme.statusColor}
+            borderColor={theme.borderColor}
+            textColor={theme.textColor}
+            mutedColor={theme.mutedColor}
+            isDesktop={isDesktop}
           />
         ) : null}
       </ScrollView>
@@ -503,22 +413,28 @@ export default function CraftingMenuPanel({
       <View
         style={[
           styles.dashboard,
-          { flexDirection: isDesktop ? 'row' : 'column' },
+          { flexDirection: isDesktop ? 'row' : 'column', gap: scaleSpacing(10) },
         ]}
       >
-        <View
+        <DossierCardShell
+          fillHeight
+          padding={panelPadding}
           style={[
             styles.ledgerColumn,
             isDesktop ? styles.ledgerColumnDesktop : styles.ledgerColumnMobile,
           ]}
+          contentStyle={styles.ledgerContent}
         >
           <ResourceLedger
             stash={account.resourceStash}
-            fontScale={fontScale}
             borderColor={theme.borderColor}
             iconSize={iconSize}
+            titleColor={theme.statusColor}
+            textColor={theme.textColor}
+            mutedColor={theme.mutedColor}
+            isDesktop={isDesktop}
           />
-        </View>
+        </DossierCardShell>
 
         <View style={[styles.matrixColumn, isDesktop ? styles.matrixColumnDesktop : null]}>
           {matrixContent}
@@ -569,6 +485,7 @@ const styles = StyleSheet.create({
   },
   ledgerColumn: {
     minHeight: 0,
+    minWidth: 0,
   },
   ledgerColumnMobile: {
     maxHeight: 300,
@@ -576,8 +493,14 @@ const styles = StyleSheet.create({
   },
   ledgerColumnDesktop: {
     flex: 0.35,
-    borderRightWidth: 1,
-    borderRightColor: LEDGER_BORDER,
+  },
+  ledgerContent: {
+    flex: 1,
+    minHeight: 0,
+  },
+  panelTitle: {
+    fontWeight: '700',
+    flexShrink: 0,
   },
   matrixColumn: {
     flex: 1,
@@ -585,16 +508,6 @@ const styles = StyleSheet.create({
   },
   matrixColumnDesktop: {
     flex: 0.65,
-  },
-  ledgerPanel: {
-    flex: 1,
-    minHeight: 0,
-    backgroundColor: LEDGER_BG,
-  },
-  panelEyebrow: {
-    fontFamily: 'monospace',
-    fontWeight: '700',
-    letterSpacing: 1,
   },
   ledgerScroll: {
     flex: 1,
@@ -604,108 +517,84 @@ const styles = StyleSheet.create({
     web: { height: 0, overflow: 'auto' as const },
     default: {},
   }),
-  ledgerGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'flex-start',
-    width: '100%',
-  },
-  ledgerGridCell: {
-    width: '50%',
-    maxWidth: '50%',
-    flexGrow: 0,
-    flexShrink: 0,
-    paddingHorizontal: 4,
+  ledgerList: {
+    gap: 6,
     paddingBottom: 8,
   },
-  resourceTile: {
-    alignItems: 'center',
+  ledgerRow: {
     width: '100%',
+    borderWidth: 1,
+    minHeight: 44,
+    overflow: 'hidden',
   },
-  emptyLedger: {
-    fontFamily: 'monospace',
-    fontWeight: '600',
-    letterSpacing: 0.5,
-    width: '100%',
-    textAlign: 'center',
-    paddingVertical: 12,
+  ledgerRowDesktop: {
+    minHeight: 56,
   },
-  resourceQty: {
-    fontFamily: 'monospace',
-    fontWeight: '800',
-    letterSpacing: 0.4,
+  ledgerRowMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    minHeight: 44,
   },
-  resourceName: {
-    fontFamily: 'monospace',
-    fontWeight: '600',
-    letterSpacing: 0.35,
-    textAlign: 'center',
-    width: '100%',
+  ledgerRowCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4,
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
   matrixPanel: {
     flex: 1,
     minHeight: 0,
-  },
-  matrixTitle: {
-    fontFamily: 'monospace',
-    fontWeight: '800',
-    letterSpacing: 1.2,
-    flexShrink: 0,
+    gap: 8,
   },
   matrixScroll: {
     flex: 1,
     minHeight: 0,
   },
-  augmentCard: {
-    backgroundColor: CARD_BG,
-    borderWidth: 1,
-    borderColor: CARD_BORDER,
+  fabricationList: {
+    gap: 16,
+    paddingBottom: 8,
   },
-  augmentTitle: {
-    fontFamily: 'monospace',
-    fontWeight: '800',
-    letterSpacing: 0.6,
+  fabricationSection: {
+    gap: 6,
   },
-  augmentDescription: {
-    fontFamily: 'monospace',
-    fontWeight: '600',
-    letterSpacing: 0.35,
-  },
-  cardFooter: {
+  fabricationRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    gap: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    width: '100%',
+    overflow: 'hidden',
   },
-  chipRow: {
+  fabricationRowDesktop: {
+    minHeight: 56,
+  },
+  fabricationInfo: {
     flex: 1,
+    gap: 4,
+    minWidth: 0,
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  requirementLine: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    alignItems: 'center',
-    minWidth: 0,
   },
-  requirementChip: {
-    backgroundColor: CHIP_BG,
-    borderWidth: 1,
-    borderColor: CHIP_BORDER,
-    borderRadius: 2,
-  },
-  chipText: {
+  requirementText: {
     fontFamily: 'monospace',
-    fontWeight: '700',
+    fontSize: 8,
+    lineHeight: 12,
     letterSpacing: 0.35,
+    fontWeight: '700',
   },
-  fabricateBtn: {
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
+  fabricationActions: {
+    flexDirection: 'row',
+    gap: 6,
     flexShrink: 0,
-    backgroundColor: DOSSIER_FOREGROUND,
-  },
-  fabricateBtnText: {
-    fontFamily: 'monospace',
-    fontWeight: '800',
-    letterSpacing: 0.8,
-    textAlign: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 8,
   },
 });

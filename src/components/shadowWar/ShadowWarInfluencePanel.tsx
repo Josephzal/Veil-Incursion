@@ -8,7 +8,7 @@ import { getShadowWarSector } from '../../data/shadowWarSectors';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useHubLayout } from '../../context/HubLayoutContext';
 import { HUB_BORDER_INSET, hubCtaButtonStyle } from '../../constants/hubCta';
-import { DOSSIER_FOREGROUND, dossierOpaqueCtaStyle } from '../../constants/dossierSurface';
+import { DOSSIER_METER_TRACK, dossierOpaqueCtaStyle } from '../../constants/dossierSurface';
 import { formatBracketHeader, HUB_DATA_DIVIDER } from '../../styles/hubTerminalUi';
 import { FactionType } from '../../types/game';
 import type { CabalIpPool, ShadowWarSectorId } from '../../types/shadowWar';
@@ -256,7 +256,7 @@ const styles = StyleSheet.create({
   },
   meterTrack: {
     width: '100%',
-    backgroundColor: DOSSIER_FOREGROUND,
+    backgroundColor: DOSSIER_METER_TRACK,
     overflow: 'hidden',
     position: 'relative',
     justifyContent: 'center',

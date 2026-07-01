@@ -59,9 +59,6 @@ export default function DossierCardShell({
         style,
         {
           borderColor: DOSSIER_BORDER,
-          ...(showAccentStripe && accentColor
-            ? { borderLeftColor: accentColor, borderLeftWidth: 4 }
-            : null),
           ...viewShadow({
             color: glowColor,
             opacity: 0.18,
@@ -74,6 +71,12 @@ export default function DossierCardShell({
       <View style={styles.backgroundLayer} pointerEvents="none">
         <DossierScanlineOverlay patternId={scanlinePatternId} />
       </View>
+      {showAccentStripe && accentColor ? (
+        <View
+          pointerEvents="none"
+          style={[styles.accentStripe, { backgroundColor: accentColor }]}
+        />
+      ) : null}
       <View style={[styles.content, { padding }, contentStyle]}>{children}</View>
     </View>
   );
@@ -103,6 +106,14 @@ const styles = StyleSheet.create({
   scanlineLayer: {
     ...StyleSheet.absoluteFill,
     opacity: 0.05,
+  },
+  accentStripe: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+    zIndex: 1,
   },
   content: {
     position: 'relative',

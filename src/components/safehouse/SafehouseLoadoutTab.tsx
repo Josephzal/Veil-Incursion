@@ -154,7 +154,9 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
   return (
     <View ref={rootRef} style={styles.root}>
       <View style={[styles.split, isDesktop && styles.splitDesktop, { gap: scaleSpacing(10) }]}>
-        <View
+        <DossierCardShell
+          fillHeight
+          padding={scaleSpacing(10)}
           style={[
             styles.stashColumn,
             Platform.OS === 'web' && styles.stashColumnWeb,
@@ -166,20 +168,22 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
               flexShrink: isDesktop ? 1 : 1,
             },
           ]}
+          contentStyle={styles.stashContent}
         >
           <SafehouseStashPanel
-          fillHeight={Platform.OS === 'web'}
-          resourceStash={account.resourceStash}
-          hubCraftedConsumables={account.hubCraftedConsumables}
-          isDropTarget={stashDropActive}
-          onPanelMeasured={(rect) => {
-            stashMetricsRef.current = rect;
-          }}
-          onDragStart={handleStashDragStart}
-          onDragMove={handleStashDragMove}
-          onDragEnd={handleStashDragEnd}
-        />
-        </View>
+            fillHeight={Platform.OS === 'web'}
+            shellWrapped
+            resourceStash={account.resourceStash}
+            hubCraftedConsumables={account.hubCraftedConsumables}
+            isDropTarget={stashDropActive}
+            onPanelMeasured={(rect) => {
+              stashMetricsRef.current = rect;
+            }}
+            onDragStart={handleStashDragStart}
+            onDragMove={handleStashDragMove}
+            onDragEnd={handleStashDragEnd}
+          />
+        </DossierCardShell>
 
         <DossierCardShell
           fillHeight
@@ -203,7 +207,6 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
             style={[
               styles.containmentField,
               isDesktop && styles.containmentFieldDesktop,
-              { borderColor: 'rgba(255, 255, 255, 0.1)' },
             ]}
           >
             <View style={styles.cargoWrap} onLayout={handleCargoAreaLayout}>
@@ -267,6 +270,10 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     height: '100%',
   },
+  stashContent: {
+    flex: 1,
+    minHeight: 0,
+  },
   deploymentPanel: {
     minHeight: 0,
     flexDirection: 'column',
@@ -275,7 +282,6 @@ const styles = StyleSheet.create({
   deploymentContent: {
     flex: 1,
     minHeight: 0,
-    paddingTop: 6,
   },
   deploymentPanelDesktop: {
     flexShrink: 0,
@@ -291,7 +297,6 @@ const styles = StyleSheet.create({
   containmentField: {
     flex: 1,
     minHeight: 0,
-    borderWidth: 2,
     backgroundColor: DOSSIER_FOREGROUND,
     justifyContent: 'center',
     alignItems: 'center',

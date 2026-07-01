@@ -1,8 +1,11 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import HapticPressable from './HapticPressable';
 import { Grid, GridCell } from './layout/Grid';
 import TacticalTagRow, { parseTagsLine } from './hub/TacticalTagRow';
+import DossierCardShell from './hub/DossierCardShell';
+import TerminalText from './TerminalText';
+import { DOSSIER_CTA_BG, DOSSIER_ROW_BG } from '../constants/dossierSurface';
 import { useHubLayout } from '../context/HubLayoutContext';
 import { ABILITY_CARD_MIN_HEIGHT } from '../constants/layoutTokens';
 import { formatClassAbilityCostLine } from '../data/classAbilityResolver';
@@ -18,12 +21,38 @@ import { useSafehouseTypography } from '../hooks/useSafehouseTypography';
 import {
   getInteractiveButtonStyle,
   getInteractiveButtonTextStyle,
+  hubTerminalUi,
 } from '../styles/hubTerminalUi';
 import { terminalHoverStyle, readPressableHover } from '../utils/terminalHoverStyle';
+import { viewShadow } from '../utils/adaptiveStyles';
 import type { AegisAbilityId } from '../types/aegisCombat';
 import type { ResourceQuantity } from '../types/resourceItem';
 
 const MONO = 'monospace';
+
+function loadoutSlotSurface(selected: boolean, accentColor: string, borderColor: string): ViewStyle {
+  return {
+    backgroundColor: DOSSIER_CTA_BG,
+    borderColor: selected ? accentColor : borderColor,
+    borderWidth: selected ? 2 : 1,
+    ...(selected
+      ? viewShadow({
+        color: accentColor,
+        opacity: 0.5,
+        radius: 12,
+        offset: { width: 0, height: 0 },
+      })
+      : null),
+  };
+}
+
+function poolChipSurface(assigned: boolean, accentColor: string, borderColor: string): ViewStyle {
+  return {
+    backgroundColor: DOSSIER_ROW_BG,
+    borderColor: assigned ? accentColor : borderColor,
+    borderWidth: assigned ? 2 : 1,
+  };
+}
 
 export interface AegisLoadoutEditorTheme {
   accentColor: string;
@@ -65,8 +94,9 @@ export default function AegisLoadoutEditor({
   statusMessage = null,
 }: AegisLoadoutEditorProps): React.JSX.Element {
   const textColor = theme.textColor ?? '#d8e2dc';
-  const { isDesktop } = useHubLayout();
+  const { isDesktop, scaleSpacing } = useHubLayout();
   const { bodySize, captionSize } = useSafehouseTypography();
+  const panelPadding = scaleSpacing(10);
 
   const handleAbilityPress = (abilityId: AegisAbilityId) => {
     const unlocked = isAbilityUnlocked(unlockedAbilities, abilityId);
@@ -84,10 +114,18 @@ export default function AegisLoadoutEditor({
       <Text style={[styles.title, { color: theme.mutedColor }]}>{title}</Text>
       <Text style={[styles.hint, { color: theme.mutedColor }]}>{hint}</Text>
 
-      <Text style={[styles.sectionLabel, { color: theme.mutedColor, fontSize: captionSize(7) }]}>
-        ACTIVE LOADOUT // TAP SLOT TO SELECT
-      </Text>
-      <Grid columns={2}>
+      <DossierCardShell
+        padding={panelPadding}
+        style={styles.sectionShell}
+        contentStyle={styles.sectionContent}
+      >
+        <TerminalText variant="panelTitle" letterSpacing={0.8} style={[styles.sectionTitle, { color: theme.accentColor }]}>
+          ACTIVE LOADOUT
+        </TerminalText>
+        <TerminalText variant="caption" style={{ color: theme.mutedColor }}>
+          TAP SLOT TO SELECT
+        </TerminalText>
+        <Grid columns={2}>
         {draft.map((abilityId, index) => {
           const isSelected = selectedSlot === index;
           const def = AEGIS_ABILITY_CATALOG[abilityId];
@@ -98,10 +136,11 @@ export default function AegisLoadoutEditor({
               <HapticPressable
                 onPress={() => onSelectSlot(index as 0 | 1 | 2 | 3)}
                 style={(state) => [
-                  getInteractiveButtonStyle(theme.accentColor, { pressed: state.pressed, size: 'sm' }),
+                  hubTerminalUi.interactiveButton,
+                  hubTerminalUi.interactiveButtonSm,
                   styles.card,
                   cardStyle,
-                  !isSelected && { borderColor: theme.borderColor },
+                  loadoutSlotSurface(isSelected, theme.accentColor, theme.borderColor),
                   terminalHoverStyle(readPressableHover(state), state.pressed),
                 ]}
               >
@@ -109,7 +148,14 @@ export default function AegisLoadoutEditor({
                   {`S${index + 1}`}
                 </Text>
                 <Text
-                  style={[styles.slotAbility, { color: textColor, fontSize: bodySize(8), lineHeight: bodySize(11) }]}
+                  style={[
+                    styles.slotAbility,
+                    {
+                      color: isSelected ? theme.accentColor : textColor,
+                      fontSize: bodySize(8),
+                      lineHeight: bodySize(11),
+                    },
+                  ]}
                   numberOfLines={2}
                 >
                   {def.label}
@@ -133,12 +179,21 @@ export default function AegisLoadoutEditor({
             </GridCell>
           );
         })}
-      </Grid>
+        </Grid>
+      </DossierCardShell>
 
-      <Text style={[styles.poolLabel, { color: theme.mutedColor, fontSize: captionSize(7) }]}>
-        ABILITY POOL // TAP TO ASSIGN OR UNLOCK
-      </Text>
-      <Grid columns={2}>
+      <DossierCardShell
+        padding={panelPadding}
+        style={styles.sectionShell}
+        contentStyle={styles.sectionContent}
+      >
+        <TerminalText variant="panelTitle" letterSpacing={0.8} style={[styles.sectionTitle, { color: theme.accentColor }]}>
+          ABILITY POOL
+        </TerminalText>
+        <TerminalText variant="caption" style={{ color: theme.mutedColor }}>
+          TAP TO ASSIGN OR UNLOCK
+        </TerminalText>
+        <Grid columns={2}>
         {getAssignableAbilities().map((abilityId) => {
           const def = AEGIS_ABILITY_CATALOG[abilityId];
           const costLine = formatClassAbilityCostLine('AEGIS', abilityId);
@@ -152,10 +207,11 @@ export default function AegisLoadoutEditor({
               <HapticPressable
                 onPress={() => handleAbilityPress(abilityId)}
                 style={(state) => [
-                  getInteractiveButtonStyle(theme.accentColor, { pressed: state.pressed, size: 'sm' }),
+                  hubTerminalUi.interactiveButton,
+                  hubTerminalUi.interactiveButtonSm,
                   styles.card,
                   cardStyle,
-                  !isSelected && { borderColor: theme.borderColor },
+                  poolChipSurface(assigned >= 0, theme.accentColor, theme.borderColor),
                   !unlocked && !affordable && styles.chipLocked,
                   !unlocked && affordable && styles.chipUnlockable,
                   terminalHoverStyle(readPressableHover(state), state.pressed),
@@ -164,7 +220,10 @@ export default function AegisLoadoutEditor({
                 <Text
                   style={[
                     styles.chipLabel,
-                    { color: isSelected ? theme.accentColor : textColor, fontSize: bodySize(7) },
+                    {
+                      color: assigned >= 0 || isSelected ? theme.accentColor : textColor,
+                      fontSize: bodySize(7),
+                    },
                   ]}
                 >
                   {def.label}
@@ -187,15 +246,16 @@ export default function AegisLoadoutEditor({
                 </Text>
                 {costLine ? <TacticalTagRow tags={tags} /> : null}
                 {assigned >= 0 ? (
-                  <Text style={[styles.chipSlot, { color: theme.mutedColor, fontSize: captionSize(6) }]}>
-                    {`S${assigned + 1}`}
+                  <Text style={[styles.chipSlot, { color: theme.accentColor, fontSize: captionSize(6), fontWeight: '800' }]}>
+                    {`EQUIPPED // S${assigned + 1}`}
                   </Text>
                 ) : null}
               </HapticPressable>
             </GridCell>
           );
         })}
-      </Grid>
+        </Grid>
+      </DossierCardShell>
 
       {statusMessage ? (
         <Text style={[styles.status, { color: theme.mutedColor }]}>{statusMessage}</Text>
@@ -218,6 +278,16 @@ export default function AegisLoadoutEditor({
 
 const styles = StyleSheet.create({
   root: { gap: 10 },
+  sectionShell: {
+    width: '100%',
+  },
+  sectionContent: {
+    gap: 8,
+  },
+  sectionTitle: {
+    fontWeight: '700',
+    flexShrink: 0,
+  },
   title: {
     fontFamily: MONO,
     fontSize: 8,
@@ -252,15 +322,6 @@ const styles = StyleSheet.create({
   },
   slotMeta: {
     fontFamily: MONO,
-  },
-  poolLabel: {
-    fontFamily: MONO,
-    letterSpacing: 0.8,
-    marginTop: 8,
-  },
-  sectionLabel: {
-    fontFamily: MONO,
-    letterSpacing: 0.8,
   },
   chipLocked: {
     opacity: 0.55,
