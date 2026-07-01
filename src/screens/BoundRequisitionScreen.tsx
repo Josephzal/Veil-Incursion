@@ -3,7 +3,8 @@ import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import HapticPressable from '../components/HapticPressable';
 import IncursionShell from '../components/IncursionShell';
 import IncursionRunLayout from '../components/IncursionRunLayout';
-import RunEventScreenFrame, { RunEventScreenHeader } from '../components/layout/RunEventScreenFrame';
+import RunEventScreenFrame from '../components/layout/RunEventScreenFrame';
+import RunEventNodeHeader from '../components/layout/RunEventNodeHeader';
 import TerminalOverlay from '../components/TerminalOverlay';
 import TacticalButton from '../components/TacticalButton';
 import { tierLabel, getBoundRequisitionDefinition } from '../data/boundRequisitions';
@@ -209,10 +210,19 @@ export default function BoundRequisitionScreen(): React.JSX.Element {
     () => [
       styles.continueBtn,
       { marginTop: scaleSpacing(48) },
-      hubCtaButtonStyle(cabalAccent, scaleSize, scaleSpacing, !canContinue),
+      hubCtaButtonStyle(TERMINAL_ACCENT, scaleSize, scaleSpacing, !canContinue),
     ],
-    [cabalAccent, canContinue, scaleSize, scaleSpacing],
+    [canContinue, scaleSize, scaleSpacing],
   );
+
+  const headerSubtitle = useMemo(() => {
+    const base = `RANK ${account.operativeRank} // TIER ${requisitionLevel} // SELECT ONE OFFER`;
+    if (account.craftedAugments.length === 0) return base;
+    const passives = account.craftedAugments
+      .map((id) => getBoundRequisitionDefinition(id).name)
+      .join(' // ');
+    return `${base} // FORGE PASSIVES: ${passives}`;
+  }, [account.craftedAugments, account.operativeRank, requisitionLevel]);
 
   useEffect(() => {
     if (boundRequisitionOffers.length === 0) {
@@ -230,49 +240,18 @@ export default function BoundRequisitionScreen(): React.JSX.Element {
 
   return (
     <IncursionShell>
-      <IncursionRunLayout style={{ backgroundColor: theme.backgroundColor }}>
+      <IncursionRunLayout hideRunChrome style={{ backgroundColor: theme.backgroundColor }}>
         <RunEventScreenFrame
           contentPadding={isDesktop ? scaleSpacing(16) : 8}
           overlay={<TerminalOverlay />}
-          header={(
-            <RunEventScreenHeader
-              title="BOUND REQUISITION"
-              align="left"
-              borderColor={theme.borderColor}
-              titleColor={TERMINAL_ACCENT}
-            >
-              <Text
-                style={[
-                  styles.levelLine,
-                  {
-                    color: theme.mutedColor,
-                    fontSize: scaleFont(7),
-                    lineHeight: scaleFont(10),
-                  },
-                ]}
-                numberOfLines={1}
-              >
-                {`RANK ${account.operativeRank} // TIER ${requisitionLevel} // SELECT ONE OFFER`}
-              </Text>
-              {account.craftedAugments.length > 0 ? (
-                <Text
-                  style={[
-                    styles.forgeLine,
-                    {
-                      color: TERMINAL_ACCENT,
-                      fontSize: scaleFont(6),
-                      lineHeight: scaleFont(9),
-                    },
-                  ]}
-                  numberOfLines={2}
-                >
-                  {`FORGE PASSIVES: ${account.craftedAugments.map((id) => getBoundRequisitionDefinition(id).name).join(' // ')}`}
-                </Text>
-              ) : null}
-            </RunEventScreenHeader>
-          )}
         >
           <View style={styles.masterStage}>
+            <RunEventNodeHeader
+              title="BOUND REQUISITION"
+              subtitle={headerSubtitle}
+              fontScale={fontScale}
+            />
+
             <View style={styles.spreadStage}>
               <View
                 style={[
@@ -315,7 +294,7 @@ export default function BoundRequisitionScreen(): React.JSX.Element {
                 label="[ LOCK REQUISITION ]"
                 active={canContinue}
                 onPress={handleContinue}
-                accentColor={cabalAccent}
+                accentColor={TERMINAL_ACCENT}
                 mutedColor={theme.mutedColor}
                 variant="cta"
                 style={continueButtonStyle}
@@ -334,7 +313,7 @@ const styles = StyleSheet.create({
     minHeight: 0,
     width: '100%',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'stretch',
   },
   spreadStage: {
     flex: 1,
@@ -390,16 +369,6 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     color: '#f87171',
     letterSpacing: 0.3,
-  },
-  levelLine: {
-    fontFamily: 'monospace',
-    letterSpacing: 0.5,
-    marginTop: 2,
-  },
-  forgeLine: {
-    fontFamily: 'monospace',
-    letterSpacing: 0.4,
-    marginTop: 4,
   },
   continueBtn: {
     flexShrink: 0,

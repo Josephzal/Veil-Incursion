@@ -99,3 +99,13 @@ export function listingsForStock(stock: readonly CargoItemId[]): BlackMarketCarg
   const set = new Set(stock);
   return BLACK_MARKET_CARGO_LISTINGS.filter((entry) => set.has(entry.id));
 }
+
+export function resolveBlackMarketListingPrice(itemId: CargoItemId): number {
+  const listing = BLACK_MARKET_CARGO_LISTINGS.find((entry) => entry.id === itemId);
+  return listing?.price ?? CARGO_ITEM_CATALOG[itemId]?.baseValue ?? 60;
+}
+
+/** Run black market fence payout — one third of catalog listing price. */
+export function blackMarketFencePrice(itemId: CargoItemId): number {
+  return Math.floor(resolveBlackMarketListingPrice(itemId) / 3);
+}

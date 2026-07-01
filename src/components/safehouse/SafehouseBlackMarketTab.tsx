@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Image, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import HapticPressable from '../HapticPressable';
 import { BLACK_MARKET_CARGO_LISTINGS } from '../../data/blackMarket';
 import {
@@ -13,9 +13,9 @@ import { shadowWarBuffsToRunModifiers } from '../../data/shadowWarBuffEngine';
 import { useTerminal } from '../../context/TerminalContext';
 import { getFactionAccent } from '../../data/factions';
 import type { CargoItemId } from '../../types/cargoGrid';
-import { resolveCargoItemIcon } from '../../utils/cargoItemIcon';
 import TerminalText from '../TerminalText';
 import TacticalButton from '../TacticalButton';
+import HubCargoIconBox from './HubCargoIconBox';
 import { useHubLayout } from '../../context/HubLayoutContext';
 import { useHubTypography } from '../../hooks/useHubTypography';
 import { terminalHoverStyle, readPressableHover } from '../../utils/terminalHoverStyle';
@@ -82,9 +82,10 @@ function MarketListingRow({
             {`${price} CR`}
           </TerminalText>
         </View>
-        <Image
-          source={resolveCargoItemIcon(listing.id)}
-          style={{ width: iconSize, height: iconSize, resizeMode: 'contain' }}
+        <HubCargoIconBox
+          itemId={listing.id}
+          borderColor={mutedColor}
+          iconSize={iconSize}
         />
       </View>
     </HapticPressable>
@@ -282,6 +283,11 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
                         />
                       ) : null}
                     </View>
+                    <HubCargoIconBox
+                      itemId={entry.resourceId}
+                      borderColor={theme.mutedColor}
+                      iconSize={iconSize}
+                    />
                   </View>
                 ))
               )}
@@ -304,7 +310,7 @@ const styles = StyleSheet.create({
     minHeight: 0,
   },
   splitDesktop: {
-    alignItems: 'flex-start',
+    alignItems: 'stretch',
   },
   buyColumn: {
     flex: 1,
@@ -375,6 +381,7 @@ const styles = StyleSheet.create({
     width: '100%',
     borderWidth: 1,
     minHeight: 44,
+    overflow: 'hidden',
   },
   listingRowDesktop: {
     minHeight: 56,
@@ -382,30 +389,42 @@ const styles = StyleSheet.create({
   listingMain: {
     flex: 1,
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    gap: 10,
+    alignItems: 'stretch',
+    minHeight: 44,
   },
   listingCopy: {
     flex: 1,
     minWidth: 0,
     gap: 4,
-  },
-  fenceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    padding: 8,
-    gap: 8,
-    width: '100%',
-  },
-  fenceRowDesktop: {
-    minHeight: 56,
+    justifyContent: 'center',
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
-  fenceInfo: { flex: 1, gap: 4, minWidth: 0 },
-  fenceActions: { flexDirection: 'row', gap: 6, flexWrap: 'wrap', flexShrink: 0 },
+  fenceRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    borderWidth: 1,
+    width: '100%',
+    overflow: 'hidden',
+  },
+  fenceRowDesktop: {
+    minHeight: 56,
+  },
+  fenceInfo: {
+    flex: 1,
+    gap: 4,
+    minWidth: 0,
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  fenceActions: {
+    flexDirection: 'row',
+    gap: 6,
+    flexWrap: 'wrap',
+    flexShrink: 0,
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+  },
 });

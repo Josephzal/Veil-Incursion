@@ -96,11 +96,12 @@ export default function SafehouseHubPanel(): React.JSX.Element {
             </View>
           </View>
 
-          {activeTab === 'LOADOUT' || activeTab === 'MARKET' ? (
+          {activeTab === 'LOADOUT' || activeTab === 'MARKET' || activeTab === 'FORGE' ? (
             <View style={styles.tabBodyFixed}>
               <TerminalGlitchTransition transitionKey={activeTab} style={styles.tabBodyFill}>
                 {activeTab === 'LOADOUT' && <SafehouseLoadoutTab />}
                 {activeTab === 'MARKET' && <SafehouseBlackMarketTab />}
+                {activeTab === 'FORGE' && <CraftingMenuPanel embedded />}
               </TerminalGlitchTransition>
             </View>
           ) : (
@@ -111,7 +112,6 @@ export default function SafehouseHubPanel(): React.JSX.Element {
               keyboardShouldPersistTaps="handled"
             >
               <TerminalGlitchTransition transitionKey={activeTab} style={styles.tabBody}>
-                {activeTab === 'FORGE' && <CraftingMenuPanel embedded />}
                 {activeTab === 'ABILITIES' && <SafehouseAbilitiesTab />}
               </TerminalGlitchTransition>
             </ScrollView>

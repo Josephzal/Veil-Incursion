@@ -284,10 +284,12 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   rootEmbedded: {
-    flex: 0,
-    flexGrow: 0,
+    flex: 1,
+    flexGrow: 1,
+    minHeight: 0,
     paddingVertical: 0,
     width: '100%',
+    alignSelf: 'stretch',
   },
   boardColumn: {
     alignItems: 'center',
@@ -307,9 +309,11 @@ const styles = StyleSheet.create({
     paddingBottom: HARVEST_CONTENT_BUFFER,
   },
   boardColumnEmbedded: {
+    flex: 1,
+    minHeight: 0,
     gap: 0,
     maxWidth: '100%',
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
     alignSelf: 'stretch',
   },
   gridAnchor: {

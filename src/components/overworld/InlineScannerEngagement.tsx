@@ -3,7 +3,6 @@ import { Animated, Easing, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { textGlow } from '../../utils/adaptiveStyles';
 import TerminalText from '../TerminalText';
 import TacticalButton from '../TacticalButton';
-import RunFeedChromeButtons from '../run/RunFeedChromeButtons';
 import { hubCtaButtonStyle } from '../../constants/hubCta';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 import { readPressableHover, terminalHoverStyle } from '../../utils/terminalHoverStyle';
@@ -403,16 +402,6 @@ function SignalWaveform({
   );
 }
 
-function FeedChromeButtons({
-  accent,
-  mutedColor,
-}: {
-  accent: string;
-  mutedColor: string;
-}): React.JSX.Element | null {
-  return <RunFeedChromeButtons accent={accent} mutedColor={mutedColor} />;
-}
-
 /** Node readout + breach action — card (legacy) or structured data-feed dock. */
 export default function InlineScannerEngagement({
   headline,
@@ -543,7 +532,6 @@ export default function InlineScannerEngagement({
             >
               DATA FEED // VECTOR TELEMETRY
             </Text>
-            <FeedChromeButtons accent={accent} mutedColor={mutedColor} />
           </View>
           {telemetryBlock}
         </View>
@@ -643,7 +631,7 @@ const styles = StyleSheet.create({
   feedHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     gap: 8,
     flexShrink: 0,
     marginBottom: 8,

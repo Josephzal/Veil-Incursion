@@ -202,6 +202,74 @@ export function placeCargoFromContainment(
   };
 }
 
+/** Purchases and places a catalog item directly on the cargo grid at the given cell. */
+export function placePurchasedCargoAtCell(
+  cargo: CargoRunState,
+  itemId: CargoItemId,
+  originRow: number,
+  originCol: number,
+): CargoRunState | null {
+  if (!canPlaceCargoItem(cargo, itemId, originRow, originCol)) return null;
+  const def = CARGO_ITEM_CATALOG[itemId];
+  return {
+    ...cargo,
+    grid: {
+      placed: [
+        ...cargo.grid.placed,
+        {
+          instanceId: createCargoInstanceId(itemId),
+          itemId,
+          originRow,
+          originCol,
+          currentValue: def.baseValue,
+        },
+      ],
+    },
+  };
+}
+
+/** Places a black-market listing on-grid without charging — pending bind. */
+export function placeStagedBlackMarketCargoAtCell(
+  cargo: CargoRunState,
+  itemId: CargoItemId,
+  originRow: number,
+  originCol: number,
+): CargoRunState | null {
+  if (!canPlaceCargoItem(cargo, itemId, originRow, originCol)) return null;
+  const def = CARGO_ITEM_CATALOG[itemId];
+  return {
+    ...cargo,
+    grid: {
+      placed: [
+        ...cargo.grid.placed,
+        {
+          instanceId: createCargoInstanceId(itemId),
+          itemId,
+          originRow,
+          originCol,
+          currentValue: def.baseValue,
+          blackMarketStaged: true,
+        },
+      ],
+    },
+  };
+}
+
+export function clearBlackMarketStagedFlags(cargo: CargoRunState): CargoRunState {
+  return {
+    ...cargo,
+    grid: {
+      placed: cargo.grid.placed.map((item) => (
+        item.blackMarketStaged ? { ...item, blackMarketStaged: undefined } : item
+      )),
+    },
+  };
+}
+
+export function listStagedBlackMarketPlacements(cargo: CargoRunState): PlacedCargoItem[] {
+  return cargo.grid.placed.filter((item) => item.blackMarketStaged === true);
+}
+
 export function addLootToContainment(
   cargo: CargoRunState,
   itemId: CargoItemId,

@@ -15,6 +15,7 @@ import VectorScanner from '../components/VectorScanner';
 import LeyLineBoonSwapOverlay from '../components/LeyLineBoonSwapOverlay';
 import ClassBoonSwapOverlay from '../components/ClassBoonSwapOverlay';
 import { useLandscapeMetrics } from '../hooks/useLandscapeMetrics';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { useResponsiveScale } from '../hooks/useResponsiveScale';
 import { useRun } from '../context/RunContext';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
@@ -25,7 +26,9 @@ import { getFactionDefinition } from '../data/factions';
 import { RadarDot } from '../types/run';
 import type { ScannerCabal } from '../types/scanner';
 import { getZoneScannerTint } from '../components/scanner/zoneScannerThemes';
+import RunEventNodeHeader from '../components/layout/RunEventNodeHeader';
 import { formatRiftManifestLog } from '../utils/overworldBlindScout';
+import { resolveRunEventNodeHeaderFromNode } from '../utils/resolveRunEventNodeHeader';
 import {
   getSectorZone,
   isEmergencyRecallAvailable,
@@ -51,6 +54,7 @@ export default function ScanningScreen(): React.JSX.Element {
   const { theme } = useTerminal();
   const { useHorizontalSplit, panelPadding } = useLandscapeMetrics();
   const { scannerPrimaryRatio, isDesktop } = useResponsiveScale();
+  const { fontScale } = useResponsiveLayout();
   const {
     runState,
     scanSessionKey,
@@ -125,6 +129,15 @@ export default function ScanningScreen(): React.JSX.Element {
 
   const selectedNode = getPreviewNode();
   const hasSelection = selectedNode != null;
+  const scannerHeader = useMemo(() => {
+    if (selectedNode) {
+      return resolveRunEventNodeHeaderFromNode(selectedNode, 'DEPTH SCANNER');
+    }
+    return {
+      title: 'DEPTH SCANNER',
+      subtitle: `SECTOR T${activeIncursion.sectorTier} // NODE ${activeIncursion.nodesCleared + 1} — SWEEP VECTOR FIELD`,
+    };
+  }, [activeIncursion.nodesCleared, activeIncursion.sectorTier, selectedNode]);
   const emergencyRecallAvailable = isEmergencyRecallAvailable(nodeIndex);
   const zoneId = getSectorZone(nodeIndex, activeIncursion.collapseActive);
   const zoneTint = useMemo(() => getZoneScannerTint(zoneId), [zoneId]);
@@ -413,14 +426,22 @@ export default function ScanningScreen(): React.JSX.Element {
         style={{ backgroundColor: theme.backgroundColor }}
         hideRunChrome
       >
-        <LandscapeSplitPane
-          style={[styles.body, { padding: panelPadding }]}
-          primary={scannerPane}
-          secondary={nodeDockPane}
-          primaryRatio={scannerPrimaryRatio}
-          primaryStyle={styles.scannerPane}
-          secondaryStyle={styles.nodeDockPaneHost}
-        />
+        <View style={[styles.body, { padding: panelPadding }]}>
+          <RunEventNodeHeader
+            title={scannerHeader.title}
+            subtitle={scannerHeader.subtitle}
+            fontScale={fontScale}
+            showRunChrome
+          />
+          <LandscapeSplitPane
+            style={styles.splitBody}
+            primary={scannerPane}
+            secondary={nodeDockPane}
+            primaryRatio={scannerPrimaryRatio}
+            primaryStyle={styles.scannerPane}
+            secondaryStyle={styles.nodeDockPaneHost}
+          />
+        </View>
       </IncursionRunLayout>
 
       <LeyLineBoonSwapOverlay
@@ -454,6 +475,10 @@ export default function ScanningScreen(): React.JSX.Element {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   body: {
+    flex: 1,
+    minHeight: 0,
+  },
+  splitBody: {
     flex: 1,
     minHeight: 0,
   },

@@ -59,23 +59,49 @@ export function resolveLaneColumnWidth(
   return getGridMetrics(Math.max(0, laneWidth - lanePadding * 2), columns, gap).columnWidth;
 }
 
-/** Fit cargo grid cells — caps at target size when container allows. */
+/** Width of hub stash icon boxes — matches HubCargoIconBox (`iconSize + 16`). */
+export function resolveHubStashIconSquareSize(iconSize: number): number {
+  return iconSize + 16;
+}
+
+/** Hub cargo grids (loadout, extraction, black market) render 20% larger than legacy baseline. */
+export const HUB_CARGO_CELL_SCALE = 1.2;
+
+export function scaleHubCargoCellSize(base: number): number {
+  return Math.round(base * HUB_CARGO_CELL_SCALE);
+}
+
+export const HUB_CARGO_DEFAULT_TARGET = scaleHubCargoCellSize(44);
+export const HUB_CARGO_INCURSION_CELL_TARGET = scaleHubCargoCellSize(52);
+export const HUB_CARGO_INCURSION_CELL_MAX = scaleHubCargoCellSize(72);
+export const HUB_CARGO_EXTRACTION_CELL_MAX = scaleHubCargoCellSize(96);
+export const HUB_CARGO_EXTRACTION_CELL_TARGET_BASE = scaleHubCargoCellSize(52);
+export const HUB_CARGO_EXTRACTION_CELL_TARGET_FONT_BASE = scaleHubCargoCellSize(58);
+
+/** Fit cargo grid cells to the available pane — prefers target size when it fits. */
 export function resolveHubLoadoutCellSize(
   areaWidth: number,
   areaHeight: number,
-  targetCellSize?: number,
+  targetCellSize = HUB_CARGO_DEFAULT_TARGET,
+  maxCellSize = targetCellSize,
 ): number {
   if (areaWidth <= 0 || areaHeight <= 0) {
-    return targetCellSize ?? 44;
+    return targetCellSize;
   }
   const maxByWidth = Math.floor((areaWidth - (CARGO_GRID_COLS - 1) * CARGO_CELL_GAP) / CARGO_GRID_COLS);
   const maxByHeight = Math.floor((areaHeight - (CARGO_GRID_ROWS - 1) * CARGO_CELL_GAP) / CARGO_GRID_ROWS);
   const fitted = Math.min(maxByWidth, maxByHeight);
 
-  if (targetCellSize != null && targetCellSize > 0) {
-    const capped = fitted > 0 ? Math.min(targetCellSize, fitted) : targetCellSize;
-    return Math.max(38, capped);
+  if (fitted <= 0) {
+    return targetCellSize;
   }
 
-  return Math.max(38, Math.min(50, fitted));
+  if (fitted >= targetCellSize) {
+    if (maxCellSize > targetCellSize) {
+      return Math.min(fitted, maxCellSize);
+    }
+    return targetCellSize;
+  }
+
+  return Math.max(scaleHubCargoCellSize(38), Math.min(fitted, Math.max(targetCellSize, maxCellSize)));
 }

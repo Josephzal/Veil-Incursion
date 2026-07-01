@@ -21,6 +21,7 @@ interface NarrativeArtTerminalFrameProps {
   flavorText: string;
   flavorPrimaryColor?: string;
   flavorMutedColor?: string;
+  header?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -32,6 +33,7 @@ export default function NarrativeArtTerminalFrame({
   flavorText,
   flavorPrimaryColor,
   flavorMutedColor,
+  header,
   children,
 }: NarrativeArtTerminalFrameProps): React.JSX.Element {
   const insets = useSafeAreaInsets();
@@ -70,11 +72,22 @@ export default function NarrativeArtTerminalFrame({
             styles.masterContainer,
             {
               maxWidth: activeViewportWidth,
-              flexDirection: isDesktop ? 'row' : 'column',
               gap,
             },
           ]}
         >
+          {header ? (
+            <View style={styles.headerSlot}>
+              {header}
+            </View>
+          ) : null}
+          <View
+            style={[
+              styles.columnsRow,
+              isDesktop ? styles.columnsRowDesktop : null,
+              { gap },
+            ]}
+          >
           <View
             style={[
               styles.column,
@@ -94,6 +107,7 @@ export default function NarrativeArtTerminalFrame({
             ]}
           >
             {children}
+          </View>
           </View>
         </View>
       </View>
@@ -119,7 +133,7 @@ const styles = StyleSheet.create({
   safeHost: {
     flex: 1,
     minHeight: 0,
-    alignItems: 'center',
+    alignItems: 'stretch',
     zIndex: 2,
   },
   masterContainer: {
@@ -128,6 +142,19 @@ const styles = StyleSheet.create({
     minHeight: 0,
     alignSelf: 'center',
     alignItems: 'stretch',
+  },
+  headerSlot: {
+    width: '100%',
+    flexShrink: 0,
+  },
+  columnsRow: {
+    flex: 1,
+    width: '100%',
+    minHeight: 0,
+    flexDirection: 'column',
+  },
+  columnsRowDesktop: {
+    flexDirection: 'row',
   },
   column: {
     flex: 1,

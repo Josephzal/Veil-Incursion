@@ -1,178 +1,393 @@
 import React, { useMemo } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import TerminalText from './TerminalText';
+import {
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import HapticPressable from './HapticPressable';
+import HubCargoIconBox from './safehouse/HubCargoIconBox';
 import {
   getRecipesByKind,
   isRecipeOutputOwned,
+  PERMANENT_AUGMENTS,
   type CraftingRecipe,
-  type CraftingRecipeKind,
 } from '../data/craftingRegistry';
 import { canAffordRecipe, getStashCount } from '../data/resourceStashEngine';
-import { RESOURCE_REGISTRY } from '../data/resourceRegistry';
+import { ALL_RESOURCE_ITEM_IDS, RESOURCE_REGISTRY } from '../data/resourceRegistry';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useTerminal } from '../context/TerminalContext';
-import { useHubLayout } from '../context/HubLayoutContext';
-import { useSafehouseTypography } from '../hooks/useSafehouseTypography';
-import { terminalHoverStyle, readPressableHover } from '../utils/terminalHoverStyle';
+import { useHubTypography } from '../hooks/useHubTypography';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import { viewShadow } from '../utils/adaptiveStyles';
+import { readPressableHover, terminalHoverStyle } from '../utils/terminalHoverStyle';
+import {
+  HIDDEN_SCROLLBAR_VIEW_STYLE,
+  HIDDEN_SCROLLVIEW_PROPS,
+} from '../utils/hiddenScrollbarStyle';
 import type { ResourceItemId } from '../types/resourceItem';
+import type { ResourceQuantity } from '../types/resourceItem';
+
+const STARK_WHITE = '#F8FAFC';
+const MUTED_SLATE = '#94A3B8';
+const ACCENT_CYAN = '#06B6D4';
+const PHOSPHOR_GREEN = '#4ADE80';
+const RUST_RED = '#EF4444';
+const LEDGER_BG = 'rgba(9, 9, 11, 0.9)';
+const LEDGER_BORDER = '#1e293b';
+const CARD_BG = 'rgba(15, 23, 42, 0.6)';
+const CARD_BORDER = '#1e293b';
+const CHIP_BG = 'rgba(9, 9, 11, 0.85)';
+const CHIP_BORDER = '#334155';
 
 interface CraftingMenuPanelProps {
   onClose?: () => void;
   embedded?: boolean;
 }
 
-const SECTION_LABELS: Record<CraftingRecipeKind, string> = {
-  LOADOUT: 'LOADOUT SCHEMATICS',
-  AUGMENT: 'PERMANENT AUGMENTS',
-  CONSUMABLE: 'TACTICAL CONSUMABLES',
-};
+interface ResourceTileProps {
+  resourceId: ResourceItemId;
+  quantity: number;
+  borderColor: string;
+  iconSize: number;
+  fontScale: number;
+}
 
-function RecipeCard({
-  recipe,
-  affordable,
-  alreadyOwned,
-  stash,
-  onCraft,
-  theme,
-  isDesktop,
-}: {
-  recipe: CraftingRecipe;
-  affordable: boolean;
-  alreadyOwned: boolean;
-  stash: ReturnType<typeof usePlayerAccount>['account']['resourceStash'];
-  onCraft: (recipeId: string) => void;
-  theme: ReturnType<typeof useTerminal>['theme'];
-  isDesktop: boolean;
-}): React.JSX.Element {
-  const craftDisabled = !affordable || (recipe.kind !== 'CONSUMABLE' && alreadyOwned);
-  const { bodySize, captionSize } = useSafehouseTypography();
-  const craftLabel = recipe.kind === 'CONSUMABLE'
-    ? '[ CRAFT ]'
-    : alreadyOwned
-      ? '[ ALREADY FORGED ]'
-      : '[ FABRICATE ]';
+function ResourceTile({
+  resourceId,
+  quantity,
+  borderColor,
+  iconSize,
+  fontScale,
+}: ResourceTileProps): React.JSX.Element {
+  const def = RESOURCE_REGISTRY[resourceId];
 
   return (
     <View
       style={[
-        styles.recipeCard,
-        isDesktop && styles.recipeCardDesktop,
-        { borderColor: affordable ? theme.statusColor : theme.borderColor },
+        styles.resourceTile,
+        {
+          paddingVertical: 8 * fontScale,
+          gap: 6 * fontScale,
+        },
       ]}
     >
-      <View style={styles.recipeCopy}>
-        <Text style={[styles.recipeTitle, { color: theme.primaryColor, fontSize: bodySize(9) }]}>
-          {recipe.label.toUpperCase()}
-        </Text>
-        {recipe.effectSummary ? (
-          <Text style={[styles.recipeBody, { color: theme.mutedColor, fontSize: bodySize(8), lineHeight: bodySize(12) }]}>
-            {recipe.effectSummary}
-          </Text>
-        ) : null}
-        {recipe.description ? (
-          <Text style={[styles.recipeBody, { color: theme.mutedColor, fontSize: bodySize(8), lineHeight: bodySize(12) }]}>
-            {recipe.description}
-          </Text>
-        ) : null}
-        <View style={styles.reqBlock}>
-          {recipe.requirements.map((req) => (
-            <Text
-              key={`${recipe.id}-${req.resourceId}`}
-              style={[
-                styles.reqLine,
-                {
-                  fontSize: captionSize(7),
-                  lineHeight: captionSize(10),
-                  fontWeight: isDesktop ? '600' : '400',
-                  color: getStashCount(stash, req.resourceId) >= req.quantity
-                    ? theme.textColor
-                    : '#ef4444',
-                },
-              ]}
-            >
-              {`${req.quantity}x ${RESOURCE_REGISTRY[req.resourceId].name} (owned: ${getStashCount(stash, req.resourceId)})`}
-            </Text>
-          ))}
-        </View>
-      </View>
-      <HapticPressable
-        disabled={craftDisabled}
-        onPress={() => onCraft(recipe.id)}
-        style={(state) => [
-          styles.craftBtn,
-          isDesktop && styles.craftBtnDesktop,
+      <HubCargoIconBox
+        itemId={resourceId}
+        borderColor={borderColor}
+        iconSize={iconSize}
+        variant="tile"
+      />
+      <Text
+        style={[
+          styles.resourceQty,
           {
-            borderColor: !craftDisabled ? theme.statusColor : '#1a2e22',
-            opacity: craftDisabled ? 0.3 : state.pressed ? 0.75 : 1,
+            color: STARK_WHITE,
+            fontSize: 13 * fontScale,
+            lineHeight: 13 * fontScale * 1.2,
           },
-          terminalHoverStyle(readPressableHover(state), state.pressed),
         ]}
       >
-        <Text
-          style={[
-            styles.craftBtnText,
-            { color: !craftDisabled ? theme.statusColor : '#2a4032' },
-          ]}
-        >
-          {craftLabel}
-        </Text>
-      </HapticPressable>
+        {quantity}
+      </Text>
+      <Text
+        style={[
+          styles.resourceName,
+          {
+            color: MUTED_SLATE,
+            fontSize: 8 * fontScale,
+            lineHeight: 8 * fontScale * 1.35,
+          },
+        ]}
+        numberOfLines={2}
+      >
+        {def.name.toUpperCase()}
+      </Text>
     </View>
   );
 }
 
-function StashSummaryPanel({
-  title,
-  theme,
-  isDesktop,
-  children,
-}: {
-  title: string;
-  theme: ReturnType<typeof useTerminal>['theme'];
-  isDesktop: boolean;
-  children: React.ReactNode;
-}): React.JSX.Element {
-  return (
-    <View style={[styles.stashPanel, isDesktop && styles.stashPanelDesktop, { borderColor: theme.borderColor }]}>
-      <TerminalText variant="section" style={{ color: theme.mutedColor, fontWeight: '700' }}>
-        {title}
-      </TerminalText>
-      {children}
-    </View>
-  );
+interface ResourceLedgerProps {
+  stash: ResourceQuantity;
+  fontScale: number;
+  borderColor: string;
+  iconSize: number;
 }
 
-function ResourceStashPanel({
+function ResourceLedger({
   stash,
-  theme,
-  isDesktop,
-}: {
-  stash: ReturnType<typeof usePlayerAccount>['account']['resourceStash'];
-  theme: ReturnType<typeof useTerminal>['theme'];
-  isDesktop: boolean;
-}): React.JSX.Element {
+  fontScale,
+  borderColor,
+  iconSize,
+}: ResourceLedgerProps): React.JSX.Element {
+  const ownedResources = useMemo(
+    () => ALL_RESOURCE_ITEM_IDS.filter((resourceId) => getStashCount(stash, resourceId) > 0),
+    [stash],
+  );
+
   return (
-    <StashSummaryPanel title="RESOURCE STASH" theme={theme} isDesktop={isDesktop}>
-      {Object.keys(stash).length === 0 ? (
-        <TerminalText variant="caption" style={{ color: theme.mutedColor }}>
-          No resources banked — extract salvage from incursions to craft.
-        </TerminalText>
-      ) : (
-        Object.entries(stash).map(([id, count]) => (
-          <TerminalText
-            key={id}
-            variant="body"
+    <View
+      style={[
+        styles.ledgerPanel,
+        {
+          padding: 24 * fontScale,
+        },
+      ]}
+    >
+      <Text
+        style={[
+          styles.panelEyebrow,
+          {
+            color: MUTED_SLATE,
+            fontSize: 8 * fontScale,
+            lineHeight: 8 * fontScale * 1.4,
+            marginBottom: 12 * fontScale,
+          },
+        ]}
+      >
+        RESOURCE LEDGER
+      </Text>
+      <ScrollView
+        style={[
+          styles.ledgerScroll,
+          Platform.OS === 'web' && styles.ledgerScrollWeb,
+          HIDDEN_SCROLLBAR_VIEW_STYLE,
+        ]}
+        contentContainerStyle={styles.ledgerGrid}
+        {...HIDDEN_SCROLLVIEW_PROPS}
+        nestedScrollEnabled
+        keyboardShouldPersistTaps="handled"
+      >
+        {ownedResources.length === 0 ? (
+          <Text
             style={[
-              styles.stashLine,
-              { color: theme.textColor, fontWeight: isDesktop ? '700' : '400' },
+              styles.emptyLedger,
+              {
+                color: MUTED_SLATE,
+                fontSize: 9 * fontScale,
+                lineHeight: 9 * fontScale * 1.45,
+              },
             ]}
           >
-            {`${count}x ${RESOURCE_REGISTRY[id as ResourceItemId]?.name ?? id}`}
-          </TerminalText>
-        ))
-      )}
-    </StashSummaryPanel>
+            // NO RESOURCES IN STASH
+          </Text>
+        ) : (
+          ownedResources.map((resourceId) => (
+            <View key={resourceId} style={styles.ledgerGridCell}>
+              <ResourceTile
+                resourceId={resourceId}
+                quantity={getStashCount(stash, resourceId)}
+                borderColor={borderColor}
+                iconSize={iconSize}
+                fontScale={fontScale}
+              />
+            </View>
+          ))
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+
+interface RequirementChipProps {
+  resourceId: ResourceItemId;
+  requiredCount: number;
+  ownedCount: number;
+  fontScale: number;
+}
+
+function RequirementChip({
+  resourceId,
+  requiredCount,
+  ownedCount,
+  fontScale,
+}: RequirementChipProps): React.JSX.Element {
+  const satisfied = ownedCount >= requiredCount;
+  const name = RESOURCE_REGISTRY[resourceId].name.toUpperCase();
+
+  return (
+    <View
+      style={[
+        styles.requirementChip,
+        {
+          paddingHorizontal: 10 * fontScale,
+          paddingVertical: 6 * fontScale,
+          borderColor: satisfied ? 'rgba(74, 222, 128, 0.35)' : 'rgba(239, 68, 68, 0.35)',
+        },
+      ]}
+    >
+      <Text
+        style={[
+          styles.chipText,
+          {
+            color: satisfied ? PHOSPHOR_GREEN : RUST_RED,
+            fontSize: 8 * fontScale,
+            lineHeight: 8 * fontScale * 1.4,
+          },
+        ]}
+        numberOfLines={1}
+      >
+        {`${name} ${ownedCount}/${requiredCount}`}
+      </Text>
+    </View>
+  );
+}
+
+interface AugmentFabricationCardProps {
+  recipe: CraftingRecipe;
+  stash: ResourceQuantity;
+  alreadyOwned: boolean;
+  onFabricate: (recipeId: string) => void;
+  fontScale: number;
+}
+
+function AugmentFabricationCard({
+  recipe,
+  stash,
+  alreadyOwned,
+  onFabricate,
+  fontScale,
+}: AugmentFabricationCardProps): React.JSX.Element {
+  const affordable = canAffordRecipe(stash, recipe);
+  const canFabricate = affordable && !alreadyOwned;
+  const description = recipe.effectSummary ?? recipe.description ?? '';
+
+  return (
+    <View
+      style={[
+        styles.augmentCard,
+        viewShadow({
+          color: '#000000',
+          opacity: 0.45,
+          radius: 12,
+          offset: { width: 0, height: 4 },
+        }),
+        {
+          padding: 24 * fontScale,
+          gap: 12 * fontScale,
+        },
+      ]}
+    >
+      <View style={{ gap: 6 * fontScale }}>
+        <Text
+          style={[
+            styles.augmentTitle,
+            {
+              color: STARK_WHITE,
+              fontSize: 13 * fontScale,
+              lineHeight: 13 * fontScale * 1.25,
+            },
+          ]}
+        >
+          {recipe.label.toUpperCase()}
+        </Text>
+        {description ? (
+          <Text
+            style={[
+              styles.augmentDescription,
+              {
+                color: MUTED_SLATE,
+                fontSize: 9 * fontScale,
+                lineHeight: 9 * fontScale * 1.5,
+              },
+            ]}
+          >
+            {description}
+          </Text>
+        ) : null}
+      </View>
+
+      <View style={styles.cardFooter}>
+        <View style={[styles.chipRow, { gap: 6 * fontScale }]}>
+          {recipe.requirements.map((req) => (
+            <RequirementChip
+              key={`${recipe.id}-${req.resourceId}`}
+              resourceId={req.resourceId}
+              requiredCount={req.quantity}
+              ownedCount={getStashCount(stash, req.resourceId)}
+              fontScale={fontScale}
+            />
+          ))}
+        </View>
+
+        <HapticPressable
+          disabled={!canFabricate}
+          onPress={() => onFabricate(recipe.id)}
+          style={(state) => [
+            styles.fabricateBtn,
+            {
+              borderColor: canFabricate ? ACCENT_CYAN : CHIP_BORDER,
+              opacity: alreadyOwned ? 0.25 : canFabricate ? (state.pressed ? 0.85 : 1) : 0.1,
+              paddingHorizontal: 14 * fontScale,
+              paddingVertical: 10 * fontScale,
+              minWidth: 108 * fontScale,
+            },
+            terminalHoverStyle(readPressableHover(state), state.pressed),
+          ]}
+        >
+          <Text
+            style={[
+              styles.fabricateBtnText,
+              {
+                color: canFabricate ? STARK_WHITE : MUTED_SLATE,
+                fontSize: 9 * fontScale,
+                lineHeight: 9 * fontScale * 1.3,
+              },
+            ]}
+          >
+            {alreadyOwned ? '[ FORGED ]' : '[ FABRICATE ]'}
+          </Text>
+        </HapticPressable>
+      </View>
+    </View>
+  );
+}
+
+interface FabricationMatrixProps {
+  recipes: readonly CraftingRecipe[];
+  stash: ResourceQuantity;
+  onFabricate: (recipeId: string) => void;
+  fontScale: number;
+  sectionLabel?: string;
+  isOwned: (recipe: CraftingRecipe) => boolean;
+}
+
+function FabricationMatrix({
+  recipes,
+  stash,
+  onFabricate,
+  fontScale,
+  sectionLabel,
+  isOwned,
+}: FabricationMatrixProps): React.JSX.Element {
+  return (
+    <View style={{ gap: 16 * fontScale }}>
+      {sectionLabel ? (
+        <Text
+          style={[
+            styles.panelEyebrow,
+            {
+              color: MUTED_SLATE,
+              fontSize: 8 * fontScale,
+              lineHeight: 8 * fontScale * 1.4,
+            },
+          ]}
+        >
+          {sectionLabel}
+        </Text>
+      ) : null}
+      {recipes.map((recipe) => (
+        <AugmentFabricationCard
+          key={recipe.id}
+          recipe={recipe}
+          stash={stash}
+          alreadyOwned={isOwned(recipe)}
+          onFabricate={onFabricate}
+          fontScale={fontScale}
+        />
+      ))}
+    </View>
   );
 }
 
@@ -182,122 +397,135 @@ export default function CraftingMenuPanel({
 }: CraftingMenuPanelProps): React.JSX.Element {
   const { theme } = useTerminal();
   const { account, craftRecipe, appendHubLog } = usePlayerAccount();
-  const { isDesktop, forgeStashWidth } = useHubLayout();
-  const useForgeDesktop = embedded && isDesktop;
+  const { isDesktop, fontScale } = useResponsiveLayout();
+  const { iconSize } = useHubTypography();
 
-  const recipesByKind = useMemo(
+  const secondaryRecipes = useMemo(
     () => ({
       LOADOUT: getRecipesByKind('LOADOUT'),
-      AUGMENT: getRecipesByKind('AUGMENT'),
       CONSUMABLE: getRecipesByKind('CONSUMABLE'),
     }),
     [],
   );
 
-  const handleCraft = (recipeId: string) => {
+  const handleFabricate = (recipeId: string) => {
     const result = craftRecipe(recipeId);
     appendHubLog(result.logLine);
   };
 
-  const stagedConsumableCount = Object.values(account.hubCraftedConsumables)
-    .reduce((sum, count) => sum + (count ?? 0), 0);
+  const isOutputOwned = (recipe: CraftingRecipe) => isRecipeOutputOwned(
+    recipe.outputId,
+    account.unlockedBlueprints,
+    account.craftedAugments,
+  );
 
-  const renderRecipeSection = (kind: CraftingRecipeKind) => (
-    <View key={kind} style={styles.recipeSection}>
-      <TerminalText variant="section" style={[styles.sectionLabel, { color: theme.mutedColor }]}>
-        {SECTION_LABELS[kind]}
-      </TerminalText>
-      <View style={styles.recipeStack}>
-        {recipesByKind[kind].map((recipe) => {
-          const affordable = canAffordRecipe(account.resourceStash, recipe);
-          const alreadyOwned = isRecipeOutputOwned(
-            recipe.outputId,
-            account.unlockedBlueprints,
-            account.craftedAugments,
-          );
-          return (
-            <RecipeCard
-              key={recipe.id}
-              recipe={recipe}
-              affordable={affordable}
-              alreadyOwned={alreadyOwned}
-              stash={account.resourceStash}
-              onCraft={handleCraft}
-              theme={theme}
-              isDesktop={useForgeDesktop}
-            />
-          );
-        })}
-      </View>
+  const matrixContent = (
+    <View
+      style={[
+        styles.matrixPanel,
+        {
+          padding: 32 * fontScale,
+          gap: 24 * fontScale,
+        },
+      ]}
+    >
+      <Text
+        style={[
+          styles.matrixTitle,
+          {
+            color: STARK_WHITE,
+            fontSize: 11 * fontScale,
+            lineHeight: 11 * fontScale * 1.35,
+          },
+        ]}
+      >
+        FABRICATION MATRIX
+      </Text>
+
+      <ScrollView
+        style={[styles.matrixScroll, HIDDEN_SCROLLBAR_VIEW_STYLE]}
+        contentContainerStyle={{ gap: 24 * fontScale, paddingBottom: 16 * fontScale }}
+        {...HIDDEN_SCROLLVIEW_PROPS}
+        nestedScrollEnabled
+        keyboardShouldPersistTaps="handled"
+      >
+        <FabricationMatrix
+          recipes={PERMANENT_AUGMENTS}
+          stash={account.resourceStash}
+          onFabricate={handleFabricate}
+          fontScale={fontScale}
+          isOwned={isOutputOwned}
+        />
+
+        {secondaryRecipes.LOADOUT.length > 0 ? (
+          <FabricationMatrix
+            recipes={secondaryRecipes.LOADOUT}
+            stash={account.resourceStash}
+            onFabricate={handleFabricate}
+            fontScale={fontScale}
+            sectionLabel="LOADOUT SCHEMATICS"
+            isOwned={isOutputOwned}
+          />
+        ) : null}
+
+        {secondaryRecipes.CONSUMABLE.length > 0 ? (
+          <FabricationMatrix
+            recipes={secondaryRecipes.CONSUMABLE}
+            stash={account.resourceStash}
+            onFabricate={handleFabricate}
+            fontScale={fontScale}
+            sectionLabel="TACTICAL CONSUMABLES"
+            isOwned={() => false}
+          />
+        ) : null}
+      </ScrollView>
     </View>
   );
 
-  const footerPanels = (
-    <>
-      {account.unlockedBlueprints.length > 0 ? (
-        <StashSummaryPanel title="UNLOCKED LOADOUTS" theme={theme} isDesktop={useForgeDesktop}>
-          {account.unlockedBlueprints.map((blueprintId) => (
-            <TerminalText key={blueprintId} variant="body" style={{ color: theme.statusColor, fontWeight: '700' }}>
-              {blueprintId.replace(/_/g, ' ').toUpperCase()}
-            </TerminalText>
-          ))}
-        </StashSummaryPanel>
-      ) : null}
-
-      {account.craftedAugments.length > 0 ? (
-        <StashSummaryPanel title="FORGED AUGMENTS" theme={theme} isDesktop={useForgeDesktop}>
-          {account.craftedAugments.map((augmentId) => (
-            <TerminalText key={augmentId} variant="body" style={{ color: theme.statusColor, fontWeight: '700' }}>
-              {augmentId.replace(/_/g, ' ')}
-            </TerminalText>
-          ))}
-        </StashSummaryPanel>
-      ) : null}
-
-      {stagedConsumableCount > 0 ? (
-        <StashSummaryPanel title="STAGED CONSUMABLES" theme={theme} isDesktop={useForgeDesktop}>
-          {Object.entries(account.hubCraftedConsumables).map(([id, count]) => (
-            count && count > 0 ? (
-              <TerminalText key={id} variant="body" style={{ color: theme.textColor, fontWeight: useForgeDesktop ? '700' : '400' }}>
-                {`${count}x ${id.replace(/-/g, ' ').toUpperCase()}`}
-              </TerminalText>
-            ) : null
-          ))}
-        </StashSummaryPanel>
-      ) : null}
-    </>
-  );
-
   return (
-    <View style={[styles.root, embedded ? styles.rootEmbedded : null, { borderColor: theme.borderColor, backgroundColor: '#050608' }]}>
+    <View style={[styles.root, embedded ? styles.rootEmbedded : null]}>
       {!embedded ? (
         <View style={[styles.header, { borderBottomColor: theme.borderColor }]}>
-          <Text style={[styles.title, { color: theme.primaryColor }]}>FABRICATION BENCH // METRO HUB</Text>
+          <Text style={[styles.headerTitle, { color: STARK_WHITE, fontSize: 10 * fontScale }]}>
+            FABRICATION MATRIX // METRO HUB
+          </Text>
           {onClose ? (
-            <HapticPressable onPress={onClose} style={[styles.closeBtn, { borderColor: theme.statusColor }]}>
-              <Text style={[styles.closeBtnText, { color: theme.statusColor }]}>[ CLOSE ]</Text>
+            <HapticPressable
+              onPress={onClose}
+              style={[styles.closeBtn, { borderColor: ACCENT_CYAN }]}
+            >
+              <Text style={[styles.closeBtnText, { color: ACCENT_CYAN, fontSize: 8 * fontScale }]}>
+                [ CLOSE ]
+              </Text>
             </HapticPressable>
           ) : null}
         </View>
       ) : null}
 
-      {useForgeDesktop ? (
-        <View style={styles.forgeDesktopRow}>
-          <View style={[styles.forgeStashColumn, { width: forgeStashWidth }]}>
-            <ResourceStashPanel stash={account.resourceStash} theme={theme} isDesktop />
-            {footerPanels}
-          </View>
-          <ScrollView style={styles.forgeRecipesColumn} contentContainerStyle={styles.forgeRecipesContent}>
-            {(['AUGMENT', 'CONSUMABLE', 'LOADOUT'] as CraftingRecipeKind[]).map(renderRecipeSection)}
-          </ScrollView>
+      <View
+        style={[
+          styles.dashboard,
+          { flexDirection: isDesktop ? 'row' : 'column' },
+        ]}
+      >
+        <View
+          style={[
+            styles.ledgerColumn,
+            isDesktop ? styles.ledgerColumnDesktop : styles.ledgerColumnMobile,
+          ]}
+        >
+          <ResourceLedger
+            stash={account.resourceStash}
+            fontScale={fontScale}
+            borderColor={theme.borderColor}
+            iconSize={iconSize}
+          />
         </View>
-      ) : (
-        <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-          <ResourceStashPanel stash={account.resourceStash} theme={theme} isDesktop={false} />
-          {(['AUGMENT', 'CONSUMABLE', 'LOADOUT'] as CraftingRecipeKind[]).map(renderRecipeSection)}
-          {footerPanels}
-        </ScrollView>
-      )}
+
+        <View style={[styles.matrixColumn, isDesktop ? styles.matrixColumnDesktop : null]}>
+          {matrixContent}
+        </View>
+      </View>
     </View>
   );
 }
@@ -305,161 +533,181 @@ export default function CraftingMenuPanel({
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    borderWidth: 1,
-    minHeight: 280,
+    minHeight: 0,
+    backgroundColor: '#050608',
   },
   rootEmbedded: {
-    borderWidth: 0,
     minHeight: 0,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderBottomWidth: 1,
+    flexShrink: 0,
   },
-  title: {
+  headerTitle: {
     fontFamily: 'monospace',
-    fontSize: 8,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+    fontWeight: '800',
+    letterSpacing: 0.8,
     flex: 1,
   },
   closeBtn: {
     borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
   closeBtnText: {
     fontFamily: 'monospace',
-    fontSize: 7,
     fontWeight: '700',
-  },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 10,
-    gap: 10,
-  },
-  forgeDesktopRow: {
-    flex: 1,
-    flexDirection: 'row',
-    minHeight: 0,
-    gap: 12,
-    padding: 10,
-  },
-  forgeStashColumn: {
-    flexShrink: 0,
-    flexGrow: 0,
-    gap: 10,
-    alignSelf: 'flex-start',
-  },
-  forgeRecipesColumn: {
-    flex: 0.7,
-    minWidth: 0,
-  },
-  forgeRecipesContent: {
-    gap: 12,
-    paddingBottom: 12,
-  },
-  sectionLabel: {
-    fontFamily: 'monospace',
-    fontSize: 7,
     letterSpacing: 0.6,
-    fontWeight: '700',
-    marginBottom: 6,
   },
-  stashPanel: {
-    borderWidth: 1,
-    padding: 8,
-    gap: 4,
-  },
-  stashPanelDesktop: {
-    padding: 12,
-    gap: 6,
-  },
-  stashLine: {
-    fontFamily: 'monospace',
-    fontSize: 8,
-  },
-  stashLineDesktop: {
-    fontSize: 9,
-    fontWeight: '700',
-    lineHeight: 14,
-  },
-  emptyText: {
-    fontFamily: 'monospace',
-    fontSize: 8,
-    lineHeight: 12,
-  },
-  recipeSection: {
-    gap: 6,
-  },
-  recipeStack: {
-    gap: 8,
-  },
-  recipeGrid: {
-    gap: 8,
-  },
-  recipeCard: {
-    borderWidth: 1,
-    padding: 10,
-    gap: 6,
-    backgroundColor: '#0a0b0f',
+  dashboard: {
+    flex: 1,
+    minHeight: 0,
     width: '100%',
   },
-  recipeCardDesktop: {
-    justifyContent: 'space-between',
+  ledgerColumn: {
+    minHeight: 0,
   },
-  recipeCopy: {
-    gap: 6,
-    flexShrink: 1,
+  ledgerColumnMobile: {
+    maxHeight: 300,
+    flexShrink: 0,
   },
-  recipeTitle: {
+  ledgerColumnDesktop: {
+    flex: 0.35,
+    borderRightWidth: 1,
+    borderRightColor: LEDGER_BORDER,
+  },
+  matrixColumn: {
+    flex: 1,
+    minHeight: 0,
+  },
+  matrixColumnDesktop: {
+    flex: 0.65,
+  },
+  ledgerPanel: {
+    flex: 1,
+    minHeight: 0,
+    backgroundColor: LEDGER_BG,
+  },
+  panelEyebrow: {
     fontFamily: 'monospace',
-    fontSize: 9,
     fontWeight: '700',
+    letterSpacing: 1,
+  },
+  ledgerScroll: {
+    flex: 1,
+    minHeight: 0,
+  },
+  ledgerScrollWeb: Platform.select({
+    web: { height: 0, overflow: 'auto' as const },
+    default: {},
+  }),
+  ledgerGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'flex-start',
+    width: '100%',
+  },
+  ledgerGridCell: {
+    width: '50%',
+    maxWidth: '50%',
+    flexGrow: 0,
+    flexShrink: 0,
+    paddingHorizontal: 4,
+    paddingBottom: 8,
+  },
+  resourceTile: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  emptyLedger: {
+    fontFamily: 'monospace',
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    width: '100%',
+    textAlign: 'center',
+    paddingVertical: 12,
+  },
+  resourceQty: {
+    fontFamily: 'monospace',
+    fontWeight: '800',
     letterSpacing: 0.4,
   },
-  recipeBody: {
+  resourceName: {
     fontFamily: 'monospace',
-    fontSize: 8,
-    lineHeight: 12,
-  },
-  reqBlock: {
-    gap: 2,
-  },
-  reqLine: {
-    fontFamily: 'monospace',
-    fontSize: 7,
-  },
-  reqLineDesktop: {
-    fontSize: 8,
     fontWeight: '600',
-    lineHeight: 12,
+    letterSpacing: 0.35,
+    textAlign: 'center',
+    width: '100%',
   },
-  craftBtn: {
-    borderWidth: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    alignItems: 'center',
-    marginTop: 4,
+  matrixPanel: {
+    flex: 1,
+    minHeight: 0,
   },
-  craftBtnDesktop: {
-    alignSelf: 'flex-end',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    marginTop: 8,
-    width: 'auto',
-    maxWidth: '100%',
-  },
-  craftBtnText: {
+  matrixTitle: {
     fontFamily: 'monospace',
-    fontSize: 8,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    flexShrink: 0,
+  },
+  matrixScroll: {
+    flex: 1,
+    minHeight: 0,
+  },
+  augmentCard: {
+    backgroundColor: CARD_BG,
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+  },
+  augmentTitle: {
+    fontFamily: 'monospace',
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+  augmentDescription: {
+    fontFamily: 'monospace',
+    fontWeight: '600',
+    letterSpacing: 0.35,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  chipRow: {
+    flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    minWidth: 0,
+  },
+  requirementChip: {
+    backgroundColor: CHIP_BG,
+    borderWidth: 1,
+    borderColor: CHIP_BORDER,
+    borderRadius: 2,
+  },
+  chipText: {
+    fontFamily: 'monospace',
     fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: 0.35,
+  },
+  fabricateBtn: {
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    backgroundColor: 'rgba(6, 182, 212, 0.1)',
+  },
+  fabricateBtnText: {
+    fontFamily: 'monospace',
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    textAlign: 'center',
   },
 });

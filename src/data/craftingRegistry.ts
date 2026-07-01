@@ -182,6 +182,9 @@ export function getRecipesByKind(kind: CraftingRecipeKind): CraftingRecipe[] {
   return CRAFTING_REGISTRY.filter((recipe) => recipe.kind === kind);
 }
 
+/** Permanent hub augments — passive rule-benders forged at the Fabrication Matrix. */
+export const PERMANENT_AUGMENTS: readonly CraftingRecipe[] = getRecipesByKind('AUGMENT');
+
 export function isAugmentOutputId(outputId: string): outputId is BoundRequisitionId {
   return getCraftingRecipeByOutput(outputId)?.kind === 'AUGMENT';
 }

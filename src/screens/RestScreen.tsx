@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Platform, ScrollView, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import { Platform, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import HapticPressable from '../components/HapticPressable';
-import SanctuaryNarrativeBg from '../../assets/narrative images/sanctuary.png';
+import SanctuaryBg from '../../assets/images/location images/sanctuary.png';
 import ClassGraftUI, { type GraftInjectSelection } from '../components/ClassGraftUI';
 import TacticalButton from '../components/TacticalButton';
 import TerminalOverlay from '../components/TerminalOverlay';
@@ -13,8 +13,10 @@ import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { resolveHubCtaFill } from '../constants/hubCta';
 import IncursionShell from '../components/IncursionShell';
 import IncursionRunLayout from '../components/IncursionRunLayout';
-import RunEventScreenFrame from '../components/layout/RunEventScreenFrame';
+import RunEventImmersiveBackdrop from '../components/layout/RunEventImmersiveBackdrop';
+import RunEventNodeHeader from '../components/layout/RunEventNodeHeader';
 import { readPressableHover, terminalHoverStyle } from '../utils/terminalHoverStyle';
+import { resolveRunEventNodeHeaderFromNode } from '../utils/resolveRunEventNodeHeader';
 
 const TERMINAL_ACCENT = '#00ff33';
 const MUTED_STAT = '#94A3B8';
@@ -22,7 +24,7 @@ const HEAL_GREEN = '#4ade80';
 const GRAFT_PURPLE = '#c084fc';
 const CANCEL_ACCENT = '#64748B';
 const CHOICE_BORDER = '#334155';
-const TELEMETRY_BG = 'rgba(0, 0, 0, 0.85)';
+const TELEMETRY_BG = 'rgba(15, 23, 42, 0.85)';
 const TELEMETRY_BORDER = 'rgba(255, 255, 255, 0.1)';
 
 const FLAT_CTA_OVERRIDE: ViewStyle = Platform.select({
@@ -130,6 +132,7 @@ export default function RestScreen(): React.JSX.Element {
     openSanctuaryGraftTerminal,
     applyClassGraftToAbility,
     getVeilResidueBalance,
+    getSelectedVectorNode,
   } = useRun();
   const { completeCurrentNode } = useNodeProgression();
   const {
@@ -168,6 +171,7 @@ export default function RestScreen(): React.JSX.Element {
     return activeIncursion.abilityGrafts;
   }, [activeClass, activeIncursion.abilityGrafts, activeIncursion.envoyAbilityGrafts, activeIncursion.hexShotAbilityGrafts]);
 
+  const contentPadding = isDesktop ? scaleSpacing(graftTerminalOpen ? 12 : 16) : scaleSpacing(10);
   const contentMaxWidth = isDesktop
     ? Math.min(
       graftTerminalOpen ? GRAFT_CONTENT_MAX_WIDTH : CONTENT_MAX_WIDTH,
@@ -175,16 +179,20 @@ export default function RestScreen(): React.JSX.Element {
     )
     : activeViewportWidth;
 
-  const telemetryPadding = scaleSpacing(graftTerminalOpen ? 12 : 24);
-  const choicePaddingVertical = scaleSpacing(16);
-  const choicePaddingHorizontal = scaleSpacing(24);
-  const choiceGap = scaleSpacing(16);
-  const headerMarginBottom = scaleSpacing(graftTerminalOpen ? 8 : 24);
-  const columnGap = scaleSpacing(graftTerminalOpen ? 10 : 20);
+  const vectorNode = getSelectedVectorNode();
+  const headerCopy = resolveRunEventNodeHeaderFromNode(
+    vectorNode,
+    'SANCTUARY',
+    'RE-TUNE CONDUIT',
+  );
 
-  const eyebrowSize = scaleFont(9);
-  const titleSize = scaleFont(14);
-  const narrativeSize = scaleFont(11);
+  const telemetryPadding = scaleSpacing(graftTerminalOpen ? 10 : 16);
+  const choicePaddingVertical = scaleSpacing(graftTerminalOpen ? 12 : 14);
+  const choicePaddingHorizontal = scaleSpacing(graftTerminalOpen ? 16 : 20);
+  const choiceGap = scaleSpacing(graftTerminalOpen ? 8 : 12);
+  const columnGap = scaleSpacing(graftTerminalOpen ? 8 : 12);
+
+  const narrativeSize = scaleFont(graftTerminalOpen ? 10 : 11);
   const statSize = scaleFont(9);
   const choicePrimarySize = 11 * fontScale * 1.2;
   const choiceSecondarySize = scaleFont(10);
@@ -317,52 +325,16 @@ export default function RestScreen(): React.JSX.Element {
     [choicePaddingHorizontal, choicePaddingVertical, scaleFont],
   );
 
-  const sanctuaryContent = (
-    <View
-      style={[
-        styles.contentColumn,
-        {
-          maxWidth: contentMaxWidth,
-          gap: columnGap,
-        },
-      ]}
-    >
-      {!graftTerminalOpen ? (
-        <View style={[styles.headerBlock, { marginBottom: headerMarginBottom }]}>
-          <Text
-            style={[
-              styles.headerEyebrow,
-              {
-                color: MUTED_STAT,
-                fontSize: eyebrowSize,
-                lineHeight: eyebrowSize * 1.35,
-              },
-            ]}
-          >
-            AGENCY SANCTUARY DOCUMENT // RE-TUNE NODE
-          </Text>
-          <Text
-            style={[
-              styles.headerTitle,
-              {
-                color: TERMINAL_ACCENT,
-                fontSize: titleSize,
-                lineHeight: titleSize * 1.3,
-              },
-            ]}
-          >
-            SANCTUARY // MUTUAL EXCLUSION PROTOCOL
-          </Text>
-        </View>
-      ) : null}
-
+  const leftPanelContent = (
+    <>
       <View
         style={[
           styles.telemetryBox,
           {
             padding: telemetryPadding,
             borderColor: TELEMETRY_BORDER,
-            gap: graftTerminalOpen ? 0 : 20,
+            gap: graftTerminalOpen ? 0 : 12,
+            flexShrink: graftTerminalOpen ? 1 : 0,
           },
         ]}
       >
@@ -461,22 +433,28 @@ export default function RestScreen(): React.JSX.Element {
           />
         </View>
       ) : (
-        <ClassGraftUI
-          activeClass={activeClass}
-          loadout={loadout}
-          offers={graftOffers}
-          residueBalance={residueBalance}
-          abilityGrafts={abilityGrafts}
-          onSelectionChange={handleGraftSelectionChange}
-          compact
-          borderColor={theme.borderColor}
-          primaryColor={theme.primaryColor}
-          mutedColor={theme.mutedColor}
-        />
+        <View style={styles.graftHost}>
+          <ClassGraftUI
+            activeClass={activeClass}
+            loadout={loadout}
+            offers={graftOffers}
+            residueBalance={residueBalance}
+            abilityGrafts={abilityGrafts}
+            onSelectionChange={handleGraftSelectionChange}
+            compact
+            borderColor={theme.borderColor}
+            primaryColor={theme.primaryColor}
+            mutedColor={theme.mutedColor}
+          />
+        </View>
       )}
+    </>
+  );
 
+  const actionColumn = (
+    <View style={[styles.actionCol, { gap: scaleSpacing(12) }]}>
       {showInjectButton ? (
-        <View style={[styles.actionRow, { gap: scaleSpacing(12) }]}>
+        <>
           <TacticalButton
             label="[ CANCEL ]"
             active
@@ -497,7 +475,7 @@ export default function RestScreen(): React.JSX.Element {
             disabled={!actionEnabled}
             style={continueButtonStyle}
           />
-        </View>
+        </>
       ) : (
         <TacticalButton
           label={actionLabel}
@@ -515,77 +493,64 @@ export default function RestScreen(): React.JSX.Element {
 
   return (
     <IncursionShell>
-      <IncursionRunLayout style={{ backgroundColor: theme.backgroundColor }}>
-        <RunEventScreenFrame
-          scrollable={false}
-          backgroundImage={SanctuaryNarrativeBg}
-          backgroundScrimOpacity={0.8}
+      <IncursionRunLayout hideRunChrome={!graftTerminalOpen} style={{ backgroundColor: theme.backgroundColor }}>
+        <RunEventImmersiveBackdrop
+          backgroundImage={SanctuaryBg}
+          contentPadding={contentPadding}
           overlay={<TerminalOverlay />}
-          contentPadding={isDesktop ? scaleSpacing(graftTerminalOpen ? 16 : 24) : scaleSpacing(12)}
-          bodyStyle={styles.frameBody}
         >
-          <ScrollView
-            style={styles.scroll}
-            contentContainerStyle={[
-              styles.scrollContent,
-              { paddingVertical: scaleSpacing(graftTerminalOpen ? 8 : 16) },
-            ]}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
-            <View style={styles.masterStage}>
-              {sanctuaryContent}
+          {!graftTerminalOpen ? (
+            <RunEventNodeHeader
+              title={headerCopy.title}
+              subtitle={headerCopy.subtitle}
+              fontScale={fontScale}
+              showRunChrome
+            />
+          ) : null}
+
+          <View style={styles.bodyStage}>
+            <View
+              style={[
+                styles.contentColumn,
+                {
+                  maxWidth: contentMaxWidth,
+                  gap: columnGap,
+                  flex: 1,
+                  minHeight: 0,
+                },
+              ]}
+            >
+              {leftPanelContent}
+              {actionColumn}
             </View>
-          </ScrollView>
-        </RunEventScreenFrame>
+          </View>
+        </RunEventImmersiveBackdrop>
       </IncursionRunLayout>
     </IncursionShell>
   );
 }
 
 const styles = StyleSheet.create({
-  frameBody: {
+  bodyStage: {
     flex: 1,
-    minHeight: 0,
-  },
-  masterStage: {
     width: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  scroll: {
-    flex: 1,
     minHeight: 0,
-    width: '100%',
-  },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
     alignItems: 'center',
   },
   contentColumn: {
     width: '100%',
     alignSelf: 'center',
   },
-  headerBlock: {
+  graftHost: {
+    flex: 1,
+    minHeight: 0,
     width: '100%',
-    gap: 6,
-  },
-  headerEyebrow: {
-    fontFamily: 'monospace',
-    letterSpacing: 1,
-    fontWeight: '600',
-  },
-  headerTitle: {
-    fontFamily: 'monospace',
-    letterSpacing: 0.8,
-    fontWeight: '800',
   },
   telemetryBox: {
     width: '100%',
     backgroundColor: TELEMETRY_BG,
     borderWidth: 1,
-    gap: 20,
+    gap: 12,
   },
   narrativeText: {
     fontFamily: 'monospace',
@@ -628,9 +593,8 @@ const styles = StyleSheet.create({
     width: '100%',
     marginTop: 4,
   },
-  actionRow: {
+  actionCol: {
     width: '100%',
-    flexDirection: 'row',
-    alignItems: 'stretch',
+    flexShrink: 0,
   },
 });

@@ -85,7 +85,7 @@ export default function RunEventScreenFrame({
   footer,
   scrollable = false,
   backgroundImage,
-  backgroundScrimOpacity = 0.78,
+  backgroundScrimOpacity = 0.75,
   overlay,
   style,
   bodyStyle,
@@ -119,7 +119,7 @@ export default function RunEventScreenFrame({
         <>
           <Image source={backgroundImage} style={styles.backgroundImage} resizeMode="cover" />
           <View
-            style={[styles.backgroundScrim, { backgroundColor: `rgba(5, 6, 8, ${backgroundScrimOpacity})` }]}
+            style={[styles.backgroundScrim, { backgroundColor: `rgba(9, 9, 11, ${backgroundScrimOpacity})` }]}
             pointerEvents="none"
           />
         </>

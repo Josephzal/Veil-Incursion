@@ -11,9 +11,9 @@ import type { CargoItemId } from '../../types/cargoGrid';
 import { resolveCargoItemIcon } from '../../utils/cargoItemIcon';
 import { useHubLayout } from '../../context/HubLayoutContext';
 import {
-  pointInWindowRect,
-  resolveCargoGridCellFromWindow,
   resolveHubLoadoutCellSize,
+  resolveHubStashIconSquareSize,
+  scaleHubCargoCellSize,
   type CargoGridWindowMetrics,
 } from '../../utils/cargoGridLayout';
 
@@ -49,13 +49,20 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
     scaleSpacing,
     stashLaneWidth,
     deploymentLaneWidth,
-    inventoryCellSize,
     iconSize,
   } = useHubLayout();
 
+  const stashIconSquareSize = resolveHubStashIconSquareSize(iconSize);
+  const cargoCellTarget = scaleHubCargoCellSize(stashIconSquareSize);
+
   const hubCellSize = useMemo(
-    () => resolveHubLoadoutCellSize(cargoAreaSize.width, cargoAreaSize.height, inventoryCellSize),
-    [cargoAreaSize.height, cargoAreaSize.width, inventoryCellSize],
+    () => resolveHubLoadoutCellSize(
+      cargoAreaSize.width,
+      cargoAreaSize.height,
+      cargoCellTarget,
+      cargoCellTarget,
+    ),
+    [cargoAreaSize.height, cargoAreaSize.width, cargoCellTarget],
   );
 
   useEffect(() => () => {
@@ -177,8 +184,9 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
           style={[
             styles.deploymentPanel,
             isDesktop && styles.deploymentPanelDesktop,
+            Platform.OS === 'web' && styles.deploymentPanelWeb,
             {
-              flex: isDesktop ? undefined : 1,
+              flex: 1,
               minWidth: isDesktop ? deploymentLaneWidth : 0,
               borderColor: theme.borderColor,
               backgroundColor: panelBg,
@@ -229,10 +237,10 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
             style={[
               styles.dragGhostIcon,
               {
-                width: iconSize,
-                height: iconSize,
-                left: dragGhost.x - rootOffsetRef.current.x - iconSize / 2,
-                top: dragGhost.y - rootOffsetRef.current.y - iconSize / 2,
+                width: stashIconSquareSize,
+                height: stashIconSquareSize,
+                left: dragGhost.x - rootOffsetRef.current.x - stashIconSquareSize / 2,
+                top: dragGhost.y - rootOffsetRef.current.y - stashIconSquareSize / 2,
               },
             ]}
           />
@@ -250,7 +258,7 @@ const styles = StyleSheet.create({
     minHeight: 0,
   },
   splitDesktop: {
-    alignItems: 'flex-start',
+    alignItems: 'stretch',
   },
   stashColumn: {
     flex: 1,
@@ -266,26 +274,23 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     justifyContent: 'flex-start',
   },
-  deploymentPanelDesktop: Platform.select({
-    web: {
-      position: 'sticky',
-      top: 0,
-      alignSelf: 'flex-start',
-      flexShrink: 0,
-    },
-    default: {
-      flexShrink: 0,
-    },
-  }),
+  deploymentPanelDesktop: {
+    flexShrink: 0,
+  },
+  deploymentPanelWeb: {
+    alignSelf: 'stretch',
+    height: '100%',
+  },
   deploymentTitle: {
     fontWeight: '700',
     flexShrink: 0,
   },
   containmentField: {
-    flexShrink: 0,
+    flex: 1,
+    minHeight: 0,
     borderWidth: 2,
     backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
     alignItems: 'center',
     padding: 8,
   },
@@ -293,8 +298,11 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   cargoWrap: {
+    flex: 1,
+    width: '100%',
+    minHeight: 0,
     alignItems: 'center',
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
   },
   dragGhostLayer: {
     ...StyleSheet.absoluteFill,

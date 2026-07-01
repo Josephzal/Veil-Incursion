@@ -165,6 +165,9 @@ import {
   getCargoResonanceMultiplier,
   isVeilResidueCargoItem,
   placeCargoFromContainment,
+  placeStagedBlackMarketCargoAtCell,
+  clearBlackMarketStagedFlags,
+  listStagedBlackMarketPlacements,
   finalizeHarvestCargoState,
   relocateCargoItem as relocateCargoItemState,
   resetCargoInstanceCounter,
@@ -198,7 +201,7 @@ import { spawnDistrictBossSquad } from '../data/bossCombat';
 import { createDefaultIncursionInventory } from '../data/incursionInventory';
 import { encounterBudgetForDepth } from '../data/combatEncounterBudget';
 import { spawnCombatSquad, resolveEngagedEncounterSnapshot, squadFromSingleEnemy } from '../data/combatSpawnEngine';
-import { listingsForStock, rollBlackMarketStock } from '../data/blackMarket';
+import { listingsForStock, rollBlackMarketStock, resolveBlackMarketListingPrice, blackMarketFencePrice } from '../data/blackMarket';
 import {
   buildDevSandboxCombatNode,
   buildDevSandboxEligibility,
@@ -391,6 +394,15 @@ interface RunContextType {
   setHexShotLoadout: (loadout: HexShotLoadout) => void;
   setEnvoyLoadout: (loadout: EnvoyLoadout) => void;
   purchaseBlackMarketCargo: (itemId: CargoItemId) => { success: boolean; logLine: string } | null;
+  purchaseBlackMarketCargoAtCell: (
+    itemId: CargoItemId,
+    row: number,
+    col: number,
+  ) => { success: boolean; logLine: string } | null;
+  returnStagedBlackMarketCargo: (instanceId: string) => { success: boolean; logLine: string } | null;
+  commitBlackMarketBindings: () => { success: boolean; logLine: string } | null;
+  sellPlacedCargoToBlackMarket: (instanceId: string) => { success: boolean; logLine: string } | null;
+  revertBlackMarketStaging: () => void;
   stageSafeAnchorReview: (anchorIndex: 1 | 2 | 3) => void;
   confirmSafeAnchorExtraction: (anchorIndex: 1 | 2 | 3) => void;
   continueFromExtractionReview: () => void;
@@ -3668,6 +3680,154 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  const purchaseBlackMarketCargoAtCell = useCallback((
+    itemId: CargoItemId,
+    row: number,
+    col: number,
+  ): { success: boolean; logLine: string } | null => {
+    const inc = activeIncursionRef.current;
+    const stock = inc.blackMarketStock.length > 0 ? inc.blackMarketStock : rollBlackMarketStock();
+    if (stock.length > 0 && !stock.includes(itemId)) {
+      return { success: false, logLine: '[REJECTED] >> Item not in current market stock.' };
+    }
+    const placed = placeStagedBlackMarketCargoAtCell(inc.cargo, itemId, row, col);
+    if (!placed) {
+      return { success: false, logLine: '[REJECTED] >> Grid cell blocked — cannot stage contraband here.' };
+    }
+
+    const stockIndex = stock.indexOf(itemId);
+    const nextStock = stockIndex >= 0
+      ? [...stock.slice(0, stockIndex), ...stock.slice(stockIndex + 1)]
+      : stock;
+
+    setActiveIncursion((prev) => {
+      const next = {
+        ...prev,
+        blackMarketStock: nextStock,
+        cargo: placed,
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+
+    return {
+      success: true,
+      logLine: `>> BLACK MARKET — ${CARGO_ITEM_CATALOG[itemId].name} staged on cargo grid. Bind to purchase.`,
+    };
+  }, []);
+
+  const returnStagedBlackMarketCargo = useCallback((instanceId: string): { success: boolean; logLine: string } | null => {
+    const inc = activeIncursionRef.current;
+    const staged = inc.cargo.grid.placed.find((item) => item.instanceId === instanceId);
+    if (!staged?.blackMarketStaged) {
+      return { success: false, logLine: '[REJECTED] >> Only staged market cargo can be returned to manifest.' };
+    }
+
+    setActiveIncursion((prev) => {
+      const next = {
+        ...prev,
+        blackMarketStock: [...prev.blackMarketStock, staged.itemId],
+        cargo: removePlacedCargoItem(prev.cargo, instanceId),
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+
+    return {
+      success: true,
+      logLine: `>> MANIFEST RETURN — ${CARGO_ITEM_CATALOG[staged.itemId].name} returned to cache stock.`,
+    };
+  }, []);
+
+  const commitBlackMarketBindings = useCallback((): { success: boolean; logLine: string } | null => {
+    const inc = activeIncursionRef.current;
+    const staged = listStagedBlackMarketPlacements(inc.cargo);
+    if (staged.length === 0) {
+      return { success: false, logLine: '[REJECTED] >> No staged contraband to bind.' };
+    }
+
+    const discountPct = getBlackMarketDiscountPct(inc);
+    const totalPrice = staged.reduce((sum, item) => {
+      const base = resolveBlackMarketListingPrice(item.itemId);
+      return sum + getEffectiveBlackMarketPrice(base, discountPct);
+    }, 0);
+
+    if (inc.runCredits < totalPrice) {
+      return { success: false, logLine: '[REJECTED] >> Insufficient run credits to bind staged cargo.' };
+    }
+
+    setActiveIncursion((prev) => {
+      let nextReq = prev.boundRequisition;
+      if (nextReq?.scavengerMarkBlackMarketPending) {
+        nextReq = consumeScavengerMarkDiscount(nextReq);
+      }
+      const next = {
+        ...prev,
+        runCredits: prev.runCredits - totalPrice,
+        cargo: clearBlackMarketStagedFlags(prev.cargo),
+        boundRequisition: nextReq,
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+
+    const discountNote = discountPct > 0 ? ` // SCAVENGER MARK -${discountPct}%` : '';
+    return {
+      success: true,
+      logLine: `>> CARGO BOUND — ${staged.length} contraband item(s) secured. -${totalPrice} RUN CREDITS.${discountNote}`,
+    };
+  }, []);
+
+  const sellPlacedCargoToBlackMarket = useCallback((instanceId: string): { success: boolean; logLine: string } | null => {
+    const inc = activeIncursionRef.current;
+    const placed = inc.cargo.grid.placed.find((item) => item.instanceId === instanceId);
+    if (!placed) {
+      return { success: false, logLine: '[REJECTED] >> Cargo item not found on grid.' };
+    }
+    if (placed.blackMarketStaged) {
+      return { success: false, logLine: '[REJECTED] >> Return staged market cargo to manifest — cannot fence.' };
+    }
+
+    const payout = blackMarketFencePrice(placed.itemId);
+
+    setActiveIncursion((prev) => {
+      const next = {
+        ...prev,
+        runCredits: prev.runCredits + payout,
+        cargo: removePlacedCargoItem(prev.cargo, instanceId),
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+
+    return {
+      success: true,
+      logLine: `>> FENCE PAYOUT — ${CARGO_ITEM_CATALOG[placed.itemId].name} sold for ${payout} CR.`,
+    };
+  }, []);
+
+  const revertBlackMarketStaging = useCallback(() => {
+    const inc = activeIncursionRef.current;
+    const staged = listStagedBlackMarketPlacements(inc.cargo);
+    if (staged.length === 0) return;
+
+    setActiveIncursion((prev) => {
+      let nextCargo = prev.cargo;
+      let nextStock = [...prev.blackMarketStock];
+      staged.forEach((item) => {
+        nextCargo = removePlacedCargoItem(nextCargo, item.instanceId);
+        nextStock = [...nextStock, item.itemId];
+      });
+      const next = {
+        ...prev,
+        blackMarketStock: nextStock,
+        cargo: nextCargo,
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+  }, []);
+
   const value = useMemo(
     () => ({
       runState,
@@ -3751,6 +3911,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       setHexShotLoadout,
       setEnvoyLoadout,
       purchaseBlackMarketCargo,
+      purchaseBlackMarketCargoAtCell,
+      returnStagedBlackMarketCargo,
+      commitBlackMarketBindings,
+      sellPlacedCargoToBlackMarket,
+      revertBlackMarketStaging,
       focusPreviewNode,
       spendAttunementCharge,
       calculateSectorExtractionPayout,
@@ -3872,6 +4037,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       setHexShotLoadout,
       setEnvoyLoadout,
       purchaseBlackMarketCargo,
+      purchaseBlackMarketCargoAtCell,
+      returnStagedBlackMarketCargo,
+      commitBlackMarketBindings,
+      sellPlacedCargoToBlackMarket,
+      revertBlackMarketStaging,
       focusPreviewNode,
       spendAttunementCharge,
       calculateSectorExtractionPayout,

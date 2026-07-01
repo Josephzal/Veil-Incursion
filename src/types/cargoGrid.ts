@@ -83,6 +83,8 @@ export interface PlacedCargoItem {
   originRow: number;
   originCol: number;
   currentValue: number;
+  /** Black market visit — staged on grid, not charged until bind. */
+  blackMarketStaged?: boolean;
 }
 
 export interface ContainmentItem {

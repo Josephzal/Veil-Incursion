@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import SafehouseBg from '../../assets/images/location images/safehouse.png';
 import HapticPressable from '../components/HapticPressable';
 import IncursionShell from '../components/IncursionShell';
 import DecryptionPanel from '../components/DecryptionPanel';
 import IncursionRunLayout from '../components/IncursionRunLayout';
 import RunEventScreenFrame from '../components/layout/RunEventScreenFrame';
+import RunEventNodeHeader from '../components/layout/RunEventNodeHeader';
 import AegisLoadoutEditor from '../components/AegisLoadoutEditor';
 import ClassLoadoutEditor from '../components/ClassLoadoutEditor';
 import { useRun } from '../context/RunContext';
@@ -12,6 +14,7 @@ import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useDevSandboxExit } from '../hooks/useDevSandboxExit';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { calculateCargoMarketValue, calculateGridOccupancy } from '../data/cargoGridEngine';
 import { DISTRICT_NAMES } from '../data/districtPacing';
 import type { AegisAbilityId, AegisLoadout } from '../types/aegisCombat';
@@ -33,7 +36,6 @@ import { HEX_SHOT_ABILITY_CATALOG } from '../data/hexShotAbilities';
 import { formatClassAbilityCostLine } from '../data/classAbilityResolver';
 import type { EnvoyAbilityId, EnvoyLoadout, HexShotAbilityId, HexShotLoadout } from '../types/operativeClass';
 import { validateLoadoutCommit } from '../utils/aegisLoadoutUtils';
-import { HIDDEN_SCROLLBAR_VIEW_STYLE, HIDDEN_SCROLLVIEW_PROPS } from '../utils/hiddenScrollbarStyle';
 import {
   validateEnvoyLoadoutCommit,
   validateHexShotLoadoutCommit,
@@ -84,6 +86,7 @@ export default function SafehouseScreen(): React.JSX.Element {
   } = usePlayerAccount();
   const { startScanning } = useGameFlow();
   const { exitToDevTestHub } = useDevSandboxExit();
+  const { fontScale } = useResponsiveLayout();
 
   const [activeTab, setActiveTab] = useState<SafehouseTab>('PAYLOAD');
   const [transferPercent, setTransferPercent] = useState(50);
@@ -302,22 +305,25 @@ export default function SafehouseScreen(): React.JSX.Element {
 
   return (
     <IncursionShell>
-      <IncursionRunLayout style={{ backgroundColor: '#0b0c0d' }}>
+      <IncursionRunLayout hideRunChrome style={{ backgroundColor: '#0b0c0d' }}>
         <RunEventScreenFrame
+          scrollable={false}
+          backgroundImage={SafehouseBg}
+          backgroundScrimOpacity={0.75}
           header={(
             <>
-              <View style={[styles.header, { borderColor: BORDER }]}>
-                <Text style={styles.headerTitle}>CABAL SAFEHOUSE // CHECKPOINT TERMINAL</Text>
-                <Text style={styles.headerStats}>
-                  {`HEALTH ${healthPct}% // SHIELD ${shieldPct}% // CARGO ${cargoPct}% // VAULT ${account.bankedCargo.totalValue}`}
-                </Text>
-                <Text style={[styles.headerStats, { color: TERMINAL_ACCENT }]}>
-                  {`${account.veilResidueBalance} VEIL RESIDUE VAULTED // SHADOW WAR DONATABLE`}
-                </Text>
-                <Text style={[styles.headerSub, { color: TERMINAL_MUTED }]}>
-                  {`DISTRICT ${activeIncursion.currentDistrict - 1} SECURED — PREPARE FOR ${DISTRICT_NAMES[nextDistrict].toUpperCase()}`}
-                </Text>
-              </View>
+              <RunEventNodeHeader
+                title="CABAL SAFEHOUSE"
+                subtitle={`DISTRICT ${activeIncursion.currentDistrict - 1} SECURED — PREPARE FOR ${DISTRICT_NAMES[nextDistrict].toUpperCase()}`}
+                fontScale={fontScale}
+                showRunChrome
+              />
+              <Text style={[styles.headerStats, { marginBottom: 8 }]}>
+                {`HEALTH ${healthPct}% // SHIELD ${shieldPct}% // CARGO ${cargoPct}% // VAULT ${account.bankedCargo.totalValue}`}
+              </Text>
+              <Text style={[styles.headerStats, { color: TERMINAL_ACCENT, marginBottom: 8 }]}>
+                {`${account.veilResidueBalance} VEIL RESIDUE VAULTED // SHADOW WAR DONATABLE`}
+              </Text>
 
               <View style={styles.tabRow}>
                 {(['PAYLOAD', 'LOADOUT', 'BENCH', 'DECRYPT', 'INTEL'] as SafehouseTab[]).map((tab) => (
@@ -347,7 +353,7 @@ export default function SafehouseScreen(): React.JSX.Element {
             </>
           )}
         >
-          <View style={[styles.panel, { borderColor: BORDER }]}>
+          <View style={[styles.panel, { borderColor: BORDER, flex: 1, minHeight: 0 }]}>
             {activeTab === 'PAYLOAD' ? (
               <>
                 <Text style={styles.panelTitle}>PAYLOAD VAULT TRANSFER</Text>
@@ -376,11 +382,7 @@ export default function SafehouseScreen(): React.JSX.Element {
             ) : null}
 
             {activeTab === 'LOADOUT' ? (
-              <ScrollView
-                {...HIDDEN_SCROLLVIEW_PROPS}
-                style={HIDDEN_SCROLLBAR_VIEW_STYLE}
-                contentContainerStyle={styles.loadoutScroll}
-              >
+              <View style={styles.loadoutBody}>
                 <Text style={styles.panelTitle}>
                   {`${operativeClass.replace(/_/g, ' ')} COMBAT LOADOUT`}
                 </Text>
@@ -452,7 +454,7 @@ export default function SafehouseScreen(): React.JSX.Element {
                     statusMessage={loadoutStatus}
                   />
                 ) : null}
-              </ScrollView>
+              </View>
             ) : null}
 
             {activeTab === 'BENCH' ? (
@@ -551,6 +553,11 @@ const styles = StyleSheet.create({
   loadoutScroll: {
     gap: 12,
     paddingBottom: 8,
+  },
+  loadoutBody: {
+    flex: 1,
+    minHeight: 0,
+    gap: 8,
   },
   panelTitle: {
     fontFamily: 'monospace',

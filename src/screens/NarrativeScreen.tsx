@@ -13,7 +13,10 @@ import { useDevSandboxExit } from '../hooks/useDevSandboxExit';
 import { isProceduralNarrative } from '../data/sectorNarrativeEngine';
 import { CheckStatus, NarrativeChoiceKey } from '../types/game';
 import { resolveNarrativeCreditPayout } from '../data/combatCredits';
+import RunEventNodeHeader from '../components/layout/RunEventNodeHeader';
+import { resolveRunEventNodeHeaderFromNode } from '../utils/resolveRunEventNodeHeader';
 import { resolveNarrativeBackgroundImage } from '../utils/resolveNarrativeBackground';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 export default function NarrativeScreen(): React.JSX.Element {
   const { theme } = useTerminal();
@@ -24,13 +27,21 @@ export default function NarrativeScreen(): React.JSX.Element {
     awardRunCredits,
     prepareStandardCombatEncounter,
     getCurrentEncounterNode,
+    getSelectedVectorNode,
   } = useRun();
   const { startResourceHarvest, startScanning, startCombat } = useGameFlow();
   const { finalizeIncursionAdvance } = useDescentNavigator();
   const { exitToDevTestHub } = useDevSandboxExit();
+  const { fontScale } = useResponsiveLayout();
   const resolvingRef = useRef(false);
 
   const node = getCurrentNarrativeNode();
+  const vectorNode = getSelectedVectorNode();
+  const headerCopy = resolveRunEventNodeHeaderFromNode(
+    vectorNode,
+    'NARRATIVE EVENT',
+    'ANOMALY RESOLVER',
+  );
   const isProcedural = node != null && isProceduralNarrative(node);
 
   const backgroundImage = useMemo(
@@ -132,6 +143,14 @@ export default function NarrativeScreen(): React.JSX.Element {
           flavorText={node.scenarioText}
           flavorPrimaryColor={theme.primaryColor}
           flavorMutedColor={theme.mutedColor}
+          header={(
+            <RunEventNodeHeader
+              title={headerCopy.title}
+              subtitle={headerCopy.subtitle}
+              fontScale={fontScale}
+              showRunChrome
+            />
+          )}
         >
           {isProcedural ? (
             <ProceduralNarrativeModule
