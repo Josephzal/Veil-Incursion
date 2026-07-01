@@ -200,6 +200,13 @@ import { encounterBudgetForDepth } from '../data/combatEncounterBudget';
 import { spawnCombatSquad, resolveEngagedEncounterSnapshot, squadFromSingleEnemy } from '../data/combatSpawnEngine';
 import { listingsForStock, rollBlackMarketStock } from '../data/blackMarket';
 import {
+  buildDevSandboxCombatNode,
+  buildDevSandboxEligibility,
+  buildDevSandboxNarrativeEncounter,
+  resolveDevSandboxTensionMechanic,
+} from '../data/devSandboxEngine';
+import type { DevSandboxPreset } from '../types/devSandbox';
+import {
   getClassBoonDisplayName,
   preparePostCombatBoonOffers,
 } from '../data/classBoonEngine';
@@ -249,10 +256,13 @@ export interface BadgeTestCombatConfig {
   aegisLoadout: AegisLoadout;
   hexShotLoadout: HexShotLoadout;
   envoyLoadout: EnvoyLoadout;
+  alignedFaction?: FactionType | null;
 }
 
 interface RunContextType {
   runState: RunState;
+  /** Active dev TEST tab sandbox preset, if any. */
+  devSandboxPreset: DevSandboxPreset | null;
   runLog: string[];
   deathSummary: import('../types/runDeathSummary').RunDeathSummary | null;
   scanSessionKey: number;
@@ -368,7 +378,9 @@ interface RunContextType {
   confirmScanPreview: () => import('../types/game').RunNodeType | null;
   getPreviewNode: () => import('../types/game').IncursionNode | null;
   startBadgeTestCombat: (preset: 'easy' | 'hard', config: BadgeTestCombatConfig) => void;
+  startDevSandboxNode: (preset: DevSandboxPreset, config: BadgeTestCombatConfig) => void;
   finishBadgeTestCombat: () => void;
+  finishDevSandbox: () => void;
   /** Clears run or badge test combat (caller navigates to hub / badge). */
   exitCombatToBadge: () => void;
   useIncursionConsumable: (itemId: CargoItemId) => IncursionConsumableUseResult | null;
@@ -507,6 +519,7 @@ function createInitialRunState(): RunState {
     startingAbyssalReservePercent: 0,
     combatNodesCleared: 0,
     combatTestPreset: null,
+    devSandboxPreset: null,
   };
 }
 
@@ -1352,49 +1365,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     narrativeAssemblyRef.current = null;
   }, [restoreVeilResidueBaseline]);
 
-  const startBadgeTestCombat = useCallback((preset: 'easy' | 'hard', config: BadgeTestCombatConfig) => {
-    const pendingEnemies = squadFromSingleEnemy(
-      preset === 'easy' ? createEasyTestEnemy() : createHardTestEnemy(),
-    );
-    const pendingEnemy = pendingEnemies[0] ?? null;
-    const next: RunState = {
-      ...createInitialRunState(),
-      runActive: true,
-      maxSoulAnchor: BASE_MAX_SOUL_ANCHOR,
-      soulAnchorIntegrity: BASE_MAX_SOUL_ANCHOR,
-      maxStamina: BASE_MAX_STAMINA,
-      currentStamina: BASE_MAX_STAMINA,
-      currentSector: INITIAL_SECTOR_POOL[0],
-      pendingEnemy,
-      pendingEnemies,
-      combatTestPreset: preset,
-    };
-    runStateRef.current = next;
-    setRunState(next);
-    const resetIncursion: ActiveIncursionState = {
-      ...createDefaultActiveIncursionState(),
-      activeClass: config.activeClass,
-      aegisLoadout: [...config.aegisLoadout] as AegisLoadout,
-      hexShotLoadout: sanitizeHexShotCombatLoadout(config.hexShotLoadout),
-      envoyLoadout: sanitizeEnvoyCombatLoadout(config.envoyLoadout),
-    };
-    activeIncursionRef.current = resetIncursion;
-    setActiveIncursion(resetIncursion);
-    narrativeNodeRef.current = null;
-    narrativeAssemblyRef.current = null;
-    setPostCombatMutationChoices([]);
-    combatLogActiveRef.current = true;
-    setRunLog([
-      '>> BADGE TEST COMBAT — ISOLATED ARENA.',
-      `>> OPERATIVE CLASS: ${config.activeClass.replace(/_/g, ' ')}.`,
-      `>> HOSTILE: ${pendingEnemy?.designation ?? 'UNKNOWN'} // ${pendingEnemy?.maxHp ?? 0} HP.`,
-      preset === 'easy'
-        ? '>> ENEMY PROFILE: STRIKE ONLY.'
-        : '>> ENEMY PROFILE: STANDARD ABILITIES (NO WORLD-ENDER).',
-    ]);
-  }, []);
-
-  const finishBadgeTestCombat = useCallback(() => {
+  const finishDevSandbox = useCallback(() => {
     const reset = createInitialRunState();
     runStateRef.current = reset;
     setRunState(reset);
@@ -1404,16 +1375,63 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     setActiveIncursion(resetIncursion);
     narrativeNodeRef.current = null;
     narrativeAssemblyRef.current = null;
-    appendRunLog('>> TEST COMBAT CONCLUDED — RETURNING TO IDENTITY BADGE.');
+    combatLogActiveRef.current = false;
+    appendRunLog('>> DEV SANDBOX CONCLUDED — RETURNING TO TEST HUB.');
   }, [appendRunLog]);
 
+  const finishBadgeTestCombat = finishDevSandbox;
+
+  const applyDevSandboxBaseRun = useCallback((
+    preset: DevSandboxPreset,
+    config: BadgeTestCombatConfig,
+  ) => {
+    const combatPreset = preset === 'combat-easy'
+      ? 'easy' as const
+      : preset === 'combat-hard'
+        ? 'hard' as const
+        : null;
+    const next: RunState = {
+      ...createInitialRunState(),
+      runActive: true,
+      maxSoulAnchor: BASE_MAX_SOUL_ANCHOR,
+      soulAnchorIntegrity: BASE_MAX_SOUL_ANCHOR,
+      maxStamina: BASE_MAX_STAMINA,
+      currentStamina: BASE_MAX_STAMINA,
+      currentSector: INITIAL_SECTOR_POOL[0],
+      combatTestPreset: combatPreset,
+      devSandboxPreset: preset,
+    };
+    runStateRef.current = next;
+    setRunState(next);
+    const resetIncursion: ActiveIncursionState = {
+      ...createDefaultActiveIncursionState(),
+      isRunActive: true,
+      activeClass: config.activeClass,
+      aegisLoadout: [...config.aegisLoadout] as AegisLoadout,
+      hexShotLoadout: sanitizeHexShotCombatLoadout(config.hexShotLoadout),
+      envoyLoadout: sanitizeEnvoyCombatLoadout(config.envoyLoadout),
+      alignedFaction: config.alignedFaction ?? null,
+      runCredits: 750,
+      nodesCleared: 4,
+      currentDistrict: 2 as const,
+      mapMode: 'NODE_ENGAGED',
+    };
+    activeIncursionRef.current = resetIncursion;
+    setActiveIncursion(resetIncursion);
+    narrativeNodeRef.current = null;
+    narrativeAssemblyRef.current = null;
+    setPostCombatMutationChoices([]);
+    combatLogActiveRef.current = true;
+    setRunLog([`>> DEV SANDBOX — ${preset.replace(/-/g, ' ').toUpperCase()}.`]);
+  }, []);
+
   const exitCombatToBadge = useCallback(() => {
-    if (runStateRef.current.combatTestPreset) {
-      finishBadgeTestCombat();
+    if (runStateRef.current.devSandboxPreset || runStateRef.current.combatTestPreset) {
+      finishDevSandbox();
       return;
     }
     endRun('OPERATIVE WITHDRAWAL — RUN ABORTED');
-  }, [endRun, finishBadgeTestCombat]);
+  }, [endRun, finishDevSandbox]);
 
   const setIncursionMapMode = useCallback((mode: IncursionMapMode) => {
     setActiveIncursion((prev) => {
@@ -2232,6 +2250,122 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       }
     });
   }, [appendRunLog, beginCombatRunLogSession]);
+
+  const startDevSandboxNode = useCallback((preset: DevSandboxPreset, config: BadgeTestCombatConfig) => {
+    applyDevSandboxBaseRun(preset, config);
+
+    if (preset === 'combat-easy' || preset === 'combat-hard') {
+      const pendingEnemies = squadFromSingleEnemy(
+        preset === 'combat-easy' ? createEasyTestEnemy() : createHardTestEnemy(),
+      );
+      const pendingEnemy = pendingEnemies[0] ?? null;
+      setRunState((prev) => {
+        const next = { ...prev, pendingEnemy, pendingEnemies };
+        runStateRef.current = next;
+        return next;
+      });
+      appendRunLog(`>> HOSTILE: ${pendingEnemy?.designation ?? 'UNKNOWN'}.`);
+      return;
+    }
+
+    const inc = activeIncursionRef.current;
+    const eligibility = buildDevSandboxEligibility(
+      config.activeClass,
+      inc.alignedFaction,
+    );
+
+    const tensionMechanic = resolveDevSandboxTensionMechanic(preset);
+    if (tensionMechanic) {
+      const picked = buildDevSandboxNarrativeEncounter(tensionMechanic, eligibility);
+      narrativeNodeRef.current = picked.node;
+      narrativeAssemblyRef.current = picked.assembly;
+      setActiveIncursion((prev) => {
+        const next = {
+          ...prev,
+          currentNarrativeId: picked.node.id,
+          mapMode: 'NODE_ENGAGED' as IncursionMapMode,
+        };
+        activeIncursionRef.current = next;
+        return next;
+      });
+      appendRunLog(`>> NARRATIVE PREVIEW — ${tensionMechanic.replace('Mechanic_', '').replace(/_/g, ' ')}.`);
+      return;
+    }
+
+    if (preset === 'standard-combat' || preset === 'elite-combat') {
+      const mockNode = buildDevSandboxCombatNode(
+        preset === 'elite-combat' ? 'ELITE_COMBAT' : 'STANDARD_COMBAT',
+      );
+      prepareStandardCombatEncounter(mockNode);
+      appendRunLog(`>> ${mockNode.label}.`);
+      return;
+    }
+
+    if (preset === 'sanctuary') {
+      setActiveIncursion((prev) => {
+        const next = {
+          ...prev,
+          mapMode: 'NODE_ENGAGED' as IncursionMapMode,
+          sessionVeilResidueCollected: 120,
+        };
+        activeIncursionRef.current = next;
+        return next;
+      });
+      appendRunLog('>> SANCTUARY NODE — ATTUNE OR GRAFT PREVIEW.');
+      return;
+    }
+
+    if (preset === 'black-market') {
+      const stock = rollBlackMarketStock();
+      setActiveIncursion((prev) => {
+        const next = {
+          ...prev,
+          blackMarketStock: stock,
+          mapMode: 'NODE_ENGAGED' as IncursionMapMode,
+          runCredits: 1200,
+        };
+        activeIncursionRef.current = next;
+        return next;
+      });
+      appendRunLog('>> BLACK MARKET STOCK ROLLED — CONTRABAND TERMINAL LIVE.');
+      return;
+    }
+
+    if (preset === 'extraction') {
+      setActiveIncursion((prev) => {
+        const next = {
+          ...prev,
+          mapMode: 'NODE_ENGAGED' as IncursionMapMode,
+          extractionReviewKind: 'SAFE_ANCHOR' as const,
+          pendingSafeAnchorIndex: 1 as const,
+          runCredits: 420,
+        };
+        activeIncursionRef.current = next;
+        return next;
+      });
+      appendRunLog('>> EXTRACTION REVIEW — SAFE ANCHOR 1 PREVIEW.');
+      return;
+    }
+
+    if (preset === 'incursion-safehouse') {
+      setActiveIncursion((prev) => {
+        const next = {
+          ...prev,
+          mapMode: 'SAFEHOUSE_INTERMISSION' as IncursionMapMode,
+          currentDistrict: 2 as const,
+          nodesCleared: 5,
+          runCredits: 600,
+        };
+        activeIncursionRef.current = next;
+        return next;
+      });
+      appendRunLog('>> INCURSION SAFEHOUSE — DISTRICT CHECKPOINT PREVIEW.');
+    }
+  }, [appendRunLog, applyDevSandboxBaseRun, prepareStandardCombatEncounter]);
+
+  const startBadgeTestCombat = useCallback((preset: 'easy' | 'hard', config: BadgeTestCombatConfig) => {
+    startDevSandboxNode(preset === 'easy' ? 'combat-easy' : 'combat-hard', config);
+  }, [startDevSandboxNode]);
 
   const prepareDefendRiftEncounter = useCallback(() => {
     beginCombatRunLogSession();
@@ -3537,6 +3671,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo(
     () => ({
       runState,
+      devSandboxPreset: runState.devSandboxPreset,
       runLog,
       deathSummary,
       scanSessionKey,
@@ -3605,7 +3740,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       purgeEncounterState,
       commitNodeEncounter,
       startBadgeTestCombat,
+      startDevSandboxNode,
       finishBadgeTestCombat,
+      finishDevSandbox,
       exitCombatToBadge,
       useIncursionConsumable,
       applyIncursionConsumableHeal,
@@ -3724,7 +3861,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       purgeEncounterState,
       commitNodeEncounter,
       startBadgeTestCombat,
+      startDevSandboxNode,
       finishBadgeTestCombat,
+      finishDevSandbox,
       exitCombatToBadge,
       useIncursionConsumable,
       applyIncursionConsumableHeal,

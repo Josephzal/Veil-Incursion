@@ -239,6 +239,8 @@ export interface RunState {
   combatNodesCleared: number;
   /** Set when launching test fights from the identity badge screen. */
   combatTestPreset: 'easy' | 'hard' | null;
+  /** Dev TEST tab — isolated node preview; continue returns to TEST hub. */
+  devSandboxPreset: import('./devSandbox').DevSandboxPreset | null;
 }
 
 export const BASE_MAX_STAMINA = 100;

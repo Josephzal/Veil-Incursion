@@ -34,10 +34,10 @@ import { CombatMinigameOverlayProvider, CombatMinigameOverlayHost } from '../con
 import { CombatTurnProvider } from '../context/CombatTurnContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useGameFlow } from '../context/GameFlowContext';
-import { useTerminalNav } from '../context/TerminalNavContext';
 import { useRun } from '../context/RunContext';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useNodeProgression } from '../hooks/useNodeProgression';
+import { useDevSandboxExit } from '../hooks/useDevSandboxExit';
 import {
   districtBossKillCredits,
   eliteKillCredits,
@@ -70,15 +70,14 @@ import { shouldShowUnitInArenaGrid } from '../data/combatSquadEngine';
 
 export default function CombatScreen(): React.JSX.Element {
   const { theme } = useTerminal();
-  const { startResourceHarvest, startPostCombatBoon, startGameOver, startExtractionReview, goToHub } = useGameFlow();
-  const { setTerminalView } = useTerminalNav();
+  const { startResourceHarvest, startPostCombatBoon, startGameOver, startExtractionReview } = useGameFlow();
+  const { exitToDevTestHub } = useDevSandboxExit();
   const {
     runState,
     syncAfterCombat,
     appendRunLog,
     useIncursionConsumable,
     endRun,
-    exitCombatToBadge,
     refillStaminaAfterCombat,
     preparePostCombatMutations,
     clearPendingAmbush,
@@ -386,10 +385,8 @@ export default function CombatScreen(): React.JSX.Element {
     remainingHp: number;
     remainingStamina: number;
   }) => {
-    if (runState.combatTestPreset) {
-      exitCombatToBadge();
-      goToHub();
-      setTerminalView('DEPLOYMENT');
+    if (runState.devSandboxPreset || runState.combatTestPreset) {
+      exitToDevTestHub();
       return;
     }
 
@@ -503,16 +500,15 @@ export default function CombatScreen(): React.JSX.Element {
     clearPendingAmbush,
     completeCurrentNode,
     endRun,
-    exitCombatToBadge,
+    exitToDevTestHub,
     getSelectedVectorNode,
-    goToHub,
     incrementCombatNodesCleared,
     beginPostCombatHarvest,
     refillStaminaAfterCombat,
     runState.combatTestPreset,
+    runState.devSandboxPreset,
     runState.pendingAmbush,
     runState.pendingEnemy?.isBoss,
-    setTerminalView,
     startExtractionReview,
     startGameOver,
     startPostCombatBoon,

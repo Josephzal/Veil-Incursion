@@ -8,6 +8,7 @@ import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useDescentNavigator } from '../hooks/useDescentNavigator';
+import { useDevSandboxExit } from '../hooks/useDevSandboxExit';
 import { resolveExtractionVeilResidueDeposit } from '../data/extractionPersistenceEngine';
 import { getSectorZone } from '../data/sectorZoneEngine';
 import {
@@ -29,6 +30,7 @@ export default function ExtractionReviewScreen(): React.JSX.Element {
   } = useRun();
   const { startScanning } = useGameFlow();
   const { finalizeSectorExtraction } = useDescentNavigator();
+  const { exitToDevTestHub } = useDevSandboxExit();
 
   const reviewKind = activeIncursion.extractionReviewKind;
   const anchorIndex = activeIncursion.pendingSafeAnchorIndex;
@@ -75,6 +77,7 @@ export default function ExtractionReviewScreen(): React.JSX.Element {
   }, [anchorIndex, reviewKind]);
 
   const handleExtract = () => {
+    if (exitToDevTestHub()) return;
     if (reviewKind === 'SAFE_ANCHOR' && anchorIndex != null) {
       confirmSafeAnchorExtraction(anchorIndex);
     } else if (reviewKind === 'MASTER_LINK') {
@@ -86,6 +89,7 @@ export default function ExtractionReviewScreen(): React.JSX.Element {
   };
 
   const handleContinue = () => {
+    if (exitToDevTestHub()) return;
     continueFromExtractionReview();
     startScanning();
   };

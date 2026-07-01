@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
   mechanicHost: {
     flex: 1,
     minHeight: 0,
-    justifyContent: 'center',
+    width: '100%',
   },
   fallbackCol: {
     gap: 8,

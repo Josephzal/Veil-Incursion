@@ -3,6 +3,7 @@ import { Animated, Easing, StyleSheet, Text, Vibration, View } from 'react-nativ
 import { USE_NATIVE_DRIVER } from '../../../utils/platformMotion';
 import HapticPressable from '../../HapticPressable';
 import type { TensionMechanicProps } from './tensionMechanicTypes';
+import { tensionPanelStyles as s } from './tensionPanelLayout';
 
 const GRID_SIZE = 3;
 const NODE_COUNT = GRID_SIZE * GRID_SIZE;
@@ -16,12 +17,9 @@ const TAP_FLASH_MS = 180;
 const SEQUENCE_MIN = 4;
 const SEQUENCE_MAX = 6;
 
-const PANEL_BG = '#141418';
 const NODE_IDLE = '#1f2937';
 const NODE_LIT = '#22d3ee';
 const NODE_TAPPED = '#065f46';
-const ACCENT_MUTED = '#9ca3af';
-const DANGER_MUTED = '#7f1d1d';
 const FAIL_FLASH = '#ef4444';
 
 type CipherPhase = 'preview' | 'input' | 'resolved';
@@ -252,10 +250,10 @@ export default function GridCipher({
   })();
 
   return (
-    <View style={styles.root}>
-      <Text style={styles.header}>GRID CIPHER // SEQUENTIAL BYPASS</Text>
-      <View style={styles.panel}>
-        <Text style={styles.instructions}>{instructionText}</Text>
+    <View style={s.root}>
+      <Text style={s.header}>GRID CIPHER // SEQUENTIAL BYPASS</Text>
+      <View style={s.panel}>
+        <Text style={s.instructions}>{instructionText}</Text>
 
         <View style={styles.gridWrap}>
           <View style={styles.grid}>
@@ -280,46 +278,25 @@ export default function GridCipher({
           />
         </View>
 
-        {phase === 'input' ? (
-          <Text style={styles.progress}>
-            {`${playerInputIndex}/${targetSequence.length} symbols confirmed`}
+        <View style={s.feedbackSlot}>
+          <Text style={s.feedbackText}>
+            {phase === 'input'
+              ? `${playerInputIndex}/${targetSequence.length} symbols confirmed`
+              : ' '}
           </Text>
-        ) : null}
+        </View>
 
         {penaltyHint ? (
-          <Text style={styles.penalty}>{penaltyHint}</Text>
-        ) : null}
+          <Text style={s.penalty}>{penaltyHint}</Text>
+        ) : (
+          <Text style={s.penalty}> </Text>
+        )}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    justifyContent: 'center',
-    gap: 8,
-  },
-  header: {
-    fontFamily: 'monospace',
-    fontSize: 9,
-    letterSpacing: 1,
-    color: ACCENT_MUTED,
-  },
-  panel: {
-    borderWidth: 1,
-    borderColor: '#1f2937',
-    backgroundColor: PANEL_BG,
-    padding: 14,
-    gap: 12,
-  },
-  instructions: {
-    fontFamily: 'monospace',
-    fontSize: 10,
-    lineHeight: 14,
-    color: ACCENT_MUTED,
-    letterSpacing: 0.4,
-  },
   gridWrap: {
     alignSelf: 'center',
     width: GRID_WIDTH,
@@ -360,19 +337,5 @@ const styles = StyleSheet.create({
   },
   failOverlay: {
     ...StyleSheet.absoluteFillObject,
-  },
-  progress: {
-    fontFamily: 'monospace',
-    fontSize: 9,
-    letterSpacing: 0.6,
-    color: '#d1d5db',
-    textAlign: 'center',
-  },
-  penalty: {
-    fontFamily: 'monospace',
-    fontSize: 9,
-    letterSpacing: 0.5,
-    color: DANGER_MUTED,
-    textAlign: 'center',
   },
 });

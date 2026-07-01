@@ -11,6 +11,7 @@ import { useRun } from '../context/RunContext';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useGameFlow } from '../context/GameFlowContext';
+import { useDevSandboxExit } from '../hooks/useDevSandboxExit';
 import { calculateCargoMarketValue, calculateGridOccupancy } from '../data/cargoGridEngine';
 import { DISTRICT_NAMES } from '../data/districtPacing';
 import type { AegisAbilityId, AegisLoadout } from '../types/aegisCombat';
@@ -82,6 +83,7 @@ export default function SafehouseScreen(): React.JSX.Element {
     unlockEnvoyAbility,
   } = usePlayerAccount();
   const { startScanning } = useGameFlow();
+  const { exitToDevTestHub } = useDevSandboxExit();
 
   const [activeTab, setActiveTab] = useState<SafehouseTab>('PAYLOAD');
   const [transferPercent, setTransferPercent] = useState(50);
@@ -180,9 +182,10 @@ export default function SafehouseScreen(): React.JSX.Element {
   }, [appendRunLog, restoreHealthFromBench]);
 
   const handleUnseal = useCallback(() => {
+    if (exitToDevTestHub()) return;
     transitionToNextDistrict();
     startScanning();
-  }, [startScanning, transitionToNextDistrict]);
+  }, [exitToDevTestHub, startScanning, transitionToNextDistrict]);
 
   const assignAbilityToSlot = useCallback((abilityId: AegisAbilityId) => {
     if (abilityId === 'EVISCERATE') return;

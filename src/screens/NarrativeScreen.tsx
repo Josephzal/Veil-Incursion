@@ -9,6 +9,7 @@ import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useDescentNavigator } from '../hooks/useDescentNavigator';
+import { useDevSandboxExit } from '../hooks/useDevSandboxExit';
 import { isProceduralNarrative } from '../data/sectorNarrativeEngine';
 import { CheckStatus, NarrativeChoiceKey } from '../types/game';
 import { resolveNarrativeCreditPayout } from '../data/combatCredits';
@@ -26,6 +27,7 @@ export default function NarrativeScreen(): React.JSX.Element {
   } = useRun();
   const { startResourceHarvest, startScanning, startCombat } = useGameFlow();
   const { finalizeIncursionAdvance } = useDescentNavigator();
+  const { exitToDevTestHub } = useDevSandboxExit();
   const resolvingRef = useRef(false);
 
   const node = getCurrentNarrativeNode();
@@ -43,6 +45,11 @@ export default function NarrativeScreen(): React.JSX.Element {
   ) => {
     if (resolvingRef.current) return;
     resolvingRef.current = true;
+
+    if (exitToDevTestHub()) {
+      resolvingRef.current = false;
+      return;
+    }
 
     const {
       outcomeText,

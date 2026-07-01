@@ -8,17 +8,15 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import NarrativeFlavorPanel from './NarrativeFlavorPanel';
 import {
-  NARRATIVE_ART_ZONE_FLEX,
   NARRATIVE_TERMINAL_BORDER_WIDTH,
-  NARRATIVE_TERMINAL_FLEX,
   NARRATIVE_TERMINAL_GLASS,
-  NARRATIVE_TERMINAL_PADDING,
 } from '../../constants/narrativeLayout';
 import {
   resolveImmersiveFooterInset,
   resolveImmersiveHorizontalInset,
   resolveImmersiveTopInset,
 } from '../../constants/immersiveLayout';
+import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 
 interface NarrativeArtTerminalFrameProps {
   backgroundImage: ImageSourcePropType;
@@ -43,6 +41,15 @@ export default function NarrativeArtTerminalFrame({
 }: NarrativeArtTerminalFrameProps): React.JSX.Element {
   const insets = useSafeAreaInsets();
   const horizontal = resolveImmersiveHorizontalInset(insets.left, insets.right);
+  const {
+    isDesktop,
+    activeViewportWidth,
+    columnWidth,
+    gap,
+    scaleSpacing,
+  } = useResponsiveLayout();
+
+  const terminalPadding = isDesktop ? scaleSpacing(24) : scaleSpacing(18);
 
   return (
     <View style={styles.root}>
@@ -63,8 +70,22 @@ export default function NarrativeArtTerminalFrame({
           },
         ]}
       >
-        <View style={styles.splitRow}>
-          <View style={styles.artZone}>
+        <View
+          style={[
+            styles.masterContainer,
+            {
+              maxWidth: isDesktop ? activeViewportWidth : undefined,
+              gap: isDesktop ? gap : 0,
+            },
+          ]}
+        >
+          <View
+            style={[
+              styles.artZone,
+              isDesktop ? styles.desktopColumn : styles.mobileArtZone,
+              isDesktop ? { width: columnWidth } : null,
+            ]}
+          >
             <NarrativeFlavorPanel
               flavorText={flavorText}
               primaryColor={flavorPrimaryColor}
@@ -74,9 +95,11 @@ export default function NarrativeArtTerminalFrame({
           <View
             style={[
               styles.terminal,
+              isDesktop ? styles.desktopColumn : styles.mobileTerminal,
+              isDesktop ? { width: columnWidth } : null,
               {
                 borderLeftColor: accentColor,
-                padding: NARRATIVE_TERMINAL_PADDING,
+                padding: terminalPadding,
               },
             ]}
           >
@@ -102,21 +125,35 @@ const styles = StyleSheet.create({
   safeHost: {
     flex: 1,
     minHeight: 0,
+    alignItems: 'center',
   },
-  splitRow: {
+  masterContainer: {
+    width: '100%',
     flex: 1,
     minHeight: 0,
     flexDirection: 'row',
+    alignSelf: 'center',
     alignItems: 'stretch',
   },
-  artZone: {
-    flex: NARRATIVE_ART_ZONE_FLEX,
+  desktopColumn: {
+    flex: 1,
     minWidth: 0,
     minHeight: 0,
   },
-  terminal: {
-    flex: NARRATIVE_TERMINAL_FLEX,
+  mobileArtZone: {
+    flex: 0.58,
     minWidth: 0,
+    minHeight: 0,
+  },
+  mobileTerminal: {
+    flex: 0.42,
+    minWidth: 0,
+    minHeight: 0,
+  },
+  artZone: {
+    minHeight: 0,
+  },
+  terminal: {
     minHeight: 0,
     backgroundColor: NARRATIVE_TERMINAL_GLASS,
     borderLeftWidth: NARRATIVE_TERMINAL_BORDER_WIDTH,

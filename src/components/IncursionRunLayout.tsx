@@ -62,8 +62,11 @@ export default function IncursionRunLayout({
   }, [cargoEnabled, cargoOpen]);
 
   const showRunOverlays = useMemo(
-    () => runState.runActive && activeIncursion.isRunActive && runState.combatTestPreset == null,
-    [activeIncursion.isRunActive, runState.combatTestPreset, runState.runActive],
+    () => runState.runActive
+      && activeIncursion.isRunActive
+      && runState.combatTestPreset == null
+      && runState.devSandboxPreset == null,
+    [activeIncursion.isRunActive, runState.combatTestPreset, runState.devSandboxPreset, runState.runActive],
   );
 
   const handleUseCombatConsumable = useCallback((itemId: CargoItemId) => {

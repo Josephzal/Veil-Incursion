@@ -18,6 +18,7 @@ export interface TacticalButtonProps {
   mutedColor: string;
   /** Nav rail hardware tab (vertical stack) vs inline hub tab vs full-width CTA. */
   variant?: 'rail' | 'inline' | 'cta';
+  disabled?: boolean;
   style?: PressableProps['style'];
   labelSize?: number;
   labelLineHeight?: number;
@@ -31,6 +32,7 @@ export default function TacticalButton({
   accentColor,
   mutedColor,
   variant = 'rail',
+  disabled = false,
   style,
   labelSize,
   labelLineHeight,
@@ -55,6 +57,7 @@ export default function TacticalButton({
   return (
     <HapticPressable
       onPress={onPress}
+      disabled={disabled}
       style={(state) => [
         isRail ? styles.railCell : isCta ? styles.ctaCell : styles.inlineCell,
         active || isCta ? styles.cellActive : styles.cellInactive,

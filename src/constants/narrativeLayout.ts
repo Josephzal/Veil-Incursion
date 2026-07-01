@@ -14,3 +14,10 @@ export const NARRATIVE_DIVIDER_COLOR = '#a78bfa';
 export const NARRATIVE_CHOICE_GAP = 4;
 export const NARRATIVE_CHOICE_PADDING_V = 6;
 export const NARRATIVE_CHOICE_PADDING_H = 6;
+
+/** Reserved lines in tension mini-game panels — prevents layout jump on interaction. */
+export const NARRATIVE_TENSION_FEEDBACK_MIN_HEIGHT = 28;
+export const NARRATIVE_TENSION_INSTRUCTION_MIN_HEIGHT = 28;
+export const NARRATIVE_TENSION_HINT_MIN_HEIGHT = 24;
+/** Minimum height for the resolver / tension body slot in the right terminal. */
+export const NARRATIVE_TERMINAL_BODY_MIN_HEIGHT = 380;

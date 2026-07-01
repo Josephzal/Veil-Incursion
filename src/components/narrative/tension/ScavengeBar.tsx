@@ -3,10 +3,9 @@ import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { USE_NATIVE_DRIVER } from '../../../utils/platformMotion';
 import HapticPressable from '../../HapticPressable';
 import type { TensionMechanicProps, TensionMechanicSuccessResult } from './tensionMechanicTypes';
+import { tensionPanelStyles as s } from './tensionPanelLayout';
 
-const PANEL_BG = '#141418';
 const ACCENT_MUTED = '#9ca3af';
-const DANGER_MUTED = '#7f1d1d';
 const EXTRACT_READY = '#6ee7b7';
 const EXTRACT_LOCKED = '#374151';
 const GAUGE_TRACK = '#1f2937';
@@ -151,10 +150,10 @@ export default function ScavengeBar({
   });
 
   return (
-    <View style={styles.root}>
-      <Text style={styles.header}>SCAVENGE BAR // INSTABILITY PROTOCOL</Text>
-      <View style={styles.panel}>
-        <Text style={styles.instructions}>
+    <View style={s.root}>
+      <Text style={s.header}>SCAVENGE BAR // INSTABILITY PROTOCOL</Text>
+      <View style={s.panel}>
+        <Text style={s.instructions}>
           Push deeper for escalating credit yield. Extraction unlocks only after instability crosses the medium band ({EXTRACT_MIN_INSTABILITY}%+).
         </Text>
 
@@ -177,17 +176,19 @@ export default function ScavengeBar({
             />
           </View>
           <Text style={styles.tierReadout}>{tierLabel(instability)}</Text>
-          {lastGain != null ? (
-            <Text style={styles.lastGain}>
-              {`Last ransack: +${lastGain}% instability${lastCreditGain != null ? ` // +${lastCreditGain} credits` : ''}`}
+          <View style={s.feedbackSlot}>
+            <Text style={s.feedbackText}>
+              {lastGain != null
+                ? `Last ransack: +${lastGain}% instability${lastCreditGain != null ? ` // +${lastCreditGain} credits` : ''}`
+                : ' '}
             </Text>
-          ) : null}
+          </View>
         </View>
 
         <View style={styles.rewardBlock}>
           <Text style={styles.rewardLabel}>RUN CREDITS BANKED</Text>
           <Text style={styles.rewardValue}>{totalCredits}</Text>
-          <Text style={styles.rewardHint}>
+          <Text style={styles.rewardHint} numberOfLines={2}>
             {!canExtract
               ? totalCredits === 0
                 ? 'Ransack to build yield — extraction locked until medium instability.'
@@ -250,39 +251,16 @@ export default function ScavengeBar({
         </View>
 
         {penaltyHint ? (
-          <Text style={styles.penalty}>{penaltyHint}</Text>
-        ) : null}
+          <Text style={s.penalty}>{penaltyHint}</Text>
+        ) : (
+          <Text style={s.penalty}> </Text>
+        )}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    justifyContent: 'center',
-    gap: 8,
-  },
-  header: {
-    fontFamily: 'monospace',
-    fontSize: 9,
-    letterSpacing: 1,
-    color: ACCENT_MUTED,
-  },
-  panel: {
-    borderWidth: 1,
-    borderColor: '#1f2937',
-    backgroundColor: PANEL_BG,
-    padding: 14,
-    gap: 14,
-  },
-  instructions: {
-    fontFamily: 'monospace',
-    fontSize: 10,
-    lineHeight: 14,
-    color: ACCENT_MUTED,
-    letterSpacing: 0.4,
-  },
   gaugeBlock: {
     gap: 6,
   },
@@ -317,12 +295,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     color: '#9ca3af',
   },
-  lastGain: {
-    fontFamily: 'monospace',
-    fontSize: 8,
-    color: '#6b7280',
-    letterSpacing: 0.4,
-  },
   rewardBlock: {
     borderWidth: 1,
     borderColor: '#1f2937',
@@ -347,6 +319,7 @@ const styles = StyleSheet.create({
     fontSize: 9,
     lineHeight: 12,
     color: '#6b7280',
+    minHeight: 24,
   },
   actionRow: {
     gap: 8,
@@ -387,12 +360,5 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.8,
-  },
-  penalty: {
-    fontFamily: 'monospace',
-    fontSize: 9,
-    letterSpacing: 0.5,
-    color: DANGER_MUTED,
-    textAlign: 'center',
   },
 });

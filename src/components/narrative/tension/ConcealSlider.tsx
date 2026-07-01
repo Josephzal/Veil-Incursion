@@ -1,10 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Easing, PanResponder, StyleSheet, Text, View } from 'react-native';
 import type { TensionMechanicProps } from './tensionMechanicTypes';
+import { tensionPanelStyles as s } from './tensionPanelLayout';
 
-const PANEL_BG = '#141418';
-const ACCENT_MUTED = '#9ca3af';
-const DANGER_MUTED = '#7f1d1d';
 const TRACK_HEIGHT = 240;
 const HANDLE_HEIGHT = 18;
 const ZONE_HEIGHT = 56;
@@ -164,10 +162,10 @@ export default function ConcealSlider({
     : null;
 
   return (
-    <View style={styles.root}>
-      <Text style={styles.header}>CONCEAL SLIDER // STEALTH HOLD</Text>
-      <View style={styles.panel}>
-        <Text style={styles.instructions}>
+    <View style={s.root}>
+      <Text style={s.header}>CONCEAL SLIDER // STEALTH HOLD</Text>
+      <View style={s.panel}>
+        <Text style={s.instructions}>
           {hasStarted
             ? 'Keep the handle inside the safe zone for 8 seconds. The zone drifts — stay with it.'
             : 'Press and hold the bar to begin concealment.'}
@@ -203,46 +201,23 @@ export default function ConcealSlider({
           />
         </View>
 
-        <Text style={styles.hint}>
+        <Text style={s.hint}>
           {hasStarted
             ? 'Drag the handle vertically to match the safe zone.'
             : 'Touch the bar and hold to engage stealth tracking.'}
         </Text>
 
         {penaltyHint ? (
-          <Text style={styles.penalty}>{penaltyHint}</Text>
-        ) : null}
+          <Text style={s.penalty}>{penaltyHint}</Text>
+        ) : (
+          <Text style={s.penalty}> </Text>
+        )}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    justifyContent: 'center',
-    gap: 8,
-  },
-  header: {
-    fontFamily: 'monospace',
-    fontSize: 9,
-    letterSpacing: 1,
-    color: ACCENT_MUTED,
-  },
-  panel: {
-    borderWidth: 1,
-    borderColor: '#1f2937',
-    backgroundColor: PANEL_BG,
-    padding: 14,
-    gap: 12,
-  },
-  instructions: {
-    fontFamily: 'monospace',
-    fontSize: 10,
-    lineHeight: 14,
-    color: ACCENT_MUTED,
-    letterSpacing: 0.4,
-  },
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -282,32 +257,5 @@ const styles = StyleSheet.create({
     backgroundColor: '#9ca3af',
     borderWidth: 1,
     borderColor: '#d1d5db',
-  },
-  standbyOverlay: {
-    ...StyleSheet.absoluteFill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(10, 11, 15, 0.55)',
-    zIndex: 2,
-  },
-  standbyText: {
-    fontFamily: 'monospace',
-    fontSize: 8,
-    letterSpacing: 1,
-    color: '#d1d5db',
-  },
-  hint: {
-    fontFamily: 'monospace',
-    fontSize: 9,
-    lineHeight: 12,
-    color: '#6b7280',
-    textAlign: 'center',
-  },
-  penalty: {
-    fontFamily: 'monospace',
-    fontSize: 9,
-    letterSpacing: 0.5,
-    color: DANGER_MUTED,
-    textAlign: 'center',
   },
 });
