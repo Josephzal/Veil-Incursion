@@ -47,6 +47,7 @@ export default function DevTestHubPanel(): React.JSX.Element {
     startBlackMarket,
     startExtractionReview,
     startSafehouse,
+    startResourceHarvest,
   } = useGameFlow();
   const { startDevSandboxNode } = useRun();
   const { account } = usePlayerAccount();
@@ -166,6 +167,11 @@ export default function DevTestHubPanel(): React.JSX.Element {
           label="[ INCURSION SAFEHOUSE ]"
           accentColor={TERMINAL_ACCENT}
           onPress={() => launchSandbox('incursion-safehouse', startSafehouse)}
+        />
+        <SandboxLaunchButton
+          label="[ RESOURCE HARVEST ]"
+          accentColor={TERMINAL_ACCENT}
+          onPress={() => launchSandbox('resource-harvest', startResourceHarvest)}
         />
       </View>
 

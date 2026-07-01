@@ -195,7 +195,7 @@ export default function NarrativeStepperModule({
             <SelectionContinueButton
               enabled={selectedChoice != null}
               onPress={handleScenarioContinue}
-              label={selectedChoice === 'A' ? '[ ENGAGE TENSION PROTOCOL ]' : '[ CONFIRM RESOLVER ]'}
+              label={selectedChoice === 'A' ? '[ ENGAGE TENSION PROTOCOL ]' : '[ CONFIRM CHOICE]'}
               borderColor={borderColor}
               mutedColor={mutedColor}
               size="sm"

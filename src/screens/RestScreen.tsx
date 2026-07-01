@@ -387,7 +387,6 @@ export default function RestScreen(): React.JSX.Element {
               },
             ]}
           >
-            {`ACTIVE CLASS: ${activeClass.replace(/_/g, ' ')}`}
           </Text>
         </View>
       </View>

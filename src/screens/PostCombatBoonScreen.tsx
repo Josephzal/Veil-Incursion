@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import HapticPressable from '../components/HapticPressable';
-import CabalBg from '../../assets/images/location images/cabal.png';
+import BoonsBg from '../../assets/images/location images/boons.png';
 import IncursionShell from '../components/IncursionShell';
 import IncursionRunLayout from '../components/IncursionRunLayout';
 import RunEventScreenFrame, { RunEventScreenHeader } from '../components/layout/RunEventScreenFrame';
@@ -117,7 +117,8 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
     <IncursionShell>
       <IncursionRunLayout style={{ backgroundColor: theme.backgroundColor }}>
         <RunEventScreenFrame
-          backgroundImage={CabalBg}
+          backgroundImage={BoonsBg}
+          backgroundScrimOpacity={0.75}
           contentPadding={8}
           header={(
             <RunEventScreenHeader

@@ -146,6 +146,7 @@ const styles = StyleSheet.create({
   headerSlot: {
     width: '100%',
     flexShrink: 0,
+    zIndex: 3,
   },
   columnsRow: {
     flex: 1,

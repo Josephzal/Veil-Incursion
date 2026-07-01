@@ -10,7 +10,8 @@ export type DevSandboxPreset =
   | 'sanctuary'
   | 'extraction'
   | 'black-market'
-  | 'incursion-safehouse';
+  | 'incursion-safehouse'
+  | 'resource-harvest';
 
 export const DEV_SANDBOX_NARRATIVE_PRESETS = [
   'narrative-scavenge',

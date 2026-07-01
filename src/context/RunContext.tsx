@@ -2372,8 +2372,14 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         return next;
       });
       appendRunLog('>> INCURSION SAFEHOUSE — DISTRICT CHECKPOINT PREVIEW.');
+      return;
     }
-  }, [appendRunLog, applyDevSandboxBaseRun, prepareStandardCombatEncounter]);
+
+    if (preset === 'resource-harvest') {
+      beginResourceNodeHarvest();
+      appendRunLog('>> RESOURCE HARVEST — VEIL RESIDUE EXTRACTION PREVIEW.');
+    }
+  }, [appendRunLog, applyDevSandboxBaseRun, beginResourceNodeHarvest, prepareStandardCombatEncounter]);
 
   const startBadgeTestCombat = useCallback((preset: 'easy' | 'hard', config: BadgeTestCombatConfig) => {
     startDevSandboxNode(preset === 'easy' ? 'combat-easy' : 'combat-hard', config);

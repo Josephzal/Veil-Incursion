@@ -50,7 +50,9 @@ export default function RunEventImmersiveBackdrop({
       <View
         style={[styles.scrim, { backgroundColor: RUN_EVENT_IMMERSIVE_SCRIM }]}
         pointerEvents="none"
-      />
+      >
+        {overlay}
+      </View>
       <View
         style={[
           styles.contentShell,
@@ -65,7 +67,6 @@ export default function RunEventImmersiveBackdrop({
       >
         {children}
       </View>
-      {overlay}
     </View>
   );
 }
@@ -88,7 +89,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     width: '100%',
-    zIndex: 1,
+    zIndex: 2,
     alignItems: 'stretch',
   },
 });

@@ -14,7 +14,6 @@ import type { NarrativeOutcomeSummary } from '../data/narrative/narrativeOutcome
 import {
   NARRATIVE_CHOICE_PADDING_H,
   NARRATIVE_CHOICE_PADDING_V,
-  NARRATIVE_DIVIDER_COLOR,
   NARRATIVE_TERMINAL_BODY_MIN_HEIGHT,
   NARRATIVE_UNIFIED_PANEL_BG,
   NARRATIVE_UNIFIED_PANEL_BORDER,
@@ -199,8 +198,6 @@ export default function ProceduralNarrativeModule({
   const [bonusLine, setBonusLine] = useState<string | null>(null);
 
   const typography = useMemo(() => ({
-    docLabelSize: scaleFont(8),
-    docLabelLineHeight: scaleFont(11),
     resolverHeaderSize: scaleFont(7),
     resolverHeaderLineHeight: scaleFont(10),
     choiceLabelSize: scaleFont(9),
@@ -228,13 +225,12 @@ export default function ProceduralNarrativeModule({
   const canConfirm = selectedChoice != null && selectedOption?.locked !== true;
 
   const confirmButtonStyle = useMemo(
-    () => hubCtaButtonStyle(TERMINAL_ACCENT, scaleSize, scaleSpacing, !canConfirm),
+    () => [
+      styles.confirmButton,
+      hubCtaButtonStyle(TERMINAL_ACCENT, scaleSize, scaleSpacing, !canConfirm),
+    ],
     [canConfirm, scaleSize, scaleSpacing],
   );
-
-  const headerLabel = phase === 'OUTCOME'
-    ? 'EXPEDITION LOG // RESOLVE REPORT'
-    : 'EXPEDITION LOG // PROCEDURAL ASSEMBLY';
 
   const showOutcome = (
     choice: NarrativeChoiceKey,
@@ -295,7 +291,7 @@ export default function ProceduralNarrativeModule({
     }
     if (selectedChoice === 'B') return '[ CONFIRM CABAL BYPASS ]';
     if (selectedChoice === 'C') return '[ CONFIRM ITEM BYPASS ]';
-    return '[ CONFIRM RESOLVER ]';
+    return '[ CONFIRM CHOICE ]';
   })();
 
   if (phase === 'TENSION') {
@@ -332,22 +328,6 @@ export default function ProceduralNarrativeModule({
 
   return (
     <View style={styles.scenarioShell}>
-      <View style={styles.topAnchor}>
-        <Text
-          style={[
-            styles.docLabel,
-            {
-              color: mutedColor,
-              fontSize: typography.docLabelSize,
-              lineHeight: typography.docLabelLineHeight,
-            },
-          ]}
-        >
-          {headerLabel}
-        </Text>
-        <View style={[styles.divider, { backgroundColor: NARRATIVE_DIVIDER_COLOR, marginTop: scaleSpacing(8) }]} />
-      </View>
-
       <View
         style={[
           styles.contentStage,
@@ -423,6 +403,8 @@ export default function ProceduralNarrativeModule({
             mutedColor={mutedColor}
             variant="cta"
             style={confirmButtonStyle}
+            labelSize={scaleFont(9)}
+            labelLineHeight={scaleFont(12)}
           />
         ) : (
           <View style={[styles.footerSpacer, { minHeight: scaleSize(48) }]} pointerEvents="none" />
@@ -442,13 +424,11 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     minHeight: 0,
+    overflow: 'hidden',
     backgroundColor: NARRATIVE_UNIFIED_PANEL_BG,
     borderWidth: 1,
     borderColor: NARRATIVE_UNIFIED_PANEL_BORDER,
     padding: NARRATIVE_UNIFIED_PANEL_PADDING,
-  },
-  topAnchor: {
-    flexShrink: 0,
   },
   contentStage: {
     flex: 1,
@@ -458,14 +438,17 @@ const styles = StyleSheet.create({
   footerSlot: {
     flexShrink: 0,
     width: '100%',
+    minWidth: 0,
+    overflow: 'hidden',
+  },
+  confirmButton: {
+    width: '100%',
+    maxWidth: '100%',
+    alignSelf: 'stretch',
+    minWidth: 0,
   },
   footerSpacer: {
     width: '100%',
-  },
-  divider: {
-    height: 1,
-    flexShrink: 0,
-    marginBottom: 10,
   },
   resolverBlock: {
     flex: 1,
@@ -479,10 +462,6 @@ const styles = StyleSheet.create({
   },
   optionDHintSlot: {
     minHeight: 24,
-  },
-  docLabel: {
-    fontFamily: 'monospace',
-    letterSpacing: 1,
   },
   choiceCol: {
     width: '100%',

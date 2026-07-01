@@ -1,6 +1,8 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import RunFeedChromeButtons from '../run/RunFeedChromeButtons';
+import TacticalButton from '../TacticalButton';
+import { useCargoOverlay } from '../../context/CargoOverlayContext';
+import { useRunStatusOverlay } from '../../context/RunStatusOverlayContext';
 import { useTerminal } from '../../context/TerminalContext';
 
 const STARK_WHITE = '#F8FAFC';
@@ -15,6 +17,43 @@ export interface RunEventNodeHeaderProps {
   showRunChrome?: boolean;
 }
 
+function RunEventHeaderChrome(): React.JSX.Element | null {
+  const { theme } = useTerminal();
+  const cargo = useCargoOverlay();
+  const status = useRunStatusOverlay();
+
+  if (!cargo && !status) {
+    return null;
+  }
+
+  return (
+    <View style={styles.headerChromeRow}>
+      {status ? (
+        <TacticalButton
+          label="STATUS"
+          active={false}
+          onPress={status.openStatus}
+          accentColor={theme.statusColor}
+          mutedColor={theme.mutedColor}
+          variant="inline"
+          disabled={!status.statusEnabled}
+        />
+      ) : null}
+      {cargo ? (
+        <TacticalButton
+          label="CARGO"
+          active={false}
+          onPress={cargo.openCargo}
+          accentColor={theme.statusColor}
+          mutedColor={theme.mutedColor}
+          variant="inline"
+          disabled={!cargo.cargoEnabled}
+        />
+      ) : null}
+    </View>
+  );
+}
+
 /** Upper-left run event title strip — matches evac / extraction screen styling. */
 export default function RunEventNodeHeader({
   title,
@@ -22,7 +61,6 @@ export default function RunEventNodeHeader({
   fontScale,
   showRunChrome = false,
 }: RunEventNodeHeaderProps): React.JSX.Element {
-  const { theme } = useTerminal();
   const titleSize = 16 * fontScale;
   const subtitleSize = 9 * fontScale;
   const headerPadBottom = 14 * fontScale;
@@ -70,10 +108,7 @@ export default function RunEventNodeHeader({
         </View>
         {showRunChrome ? (
           <View style={styles.headerChrome}>
-            <RunFeedChromeButtons
-              accent={theme.statusColor}
-              mutedColor={theme.mutedColor}
-            />
+            <RunEventHeaderChrome />
           </View>
         ) : null}
       </View>
@@ -87,6 +122,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     flexShrink: 0,
     alignSelf: 'stretch',
+    zIndex: 3,
   },
   headerRow: {
     width: '100%',
@@ -104,6 +140,12 @@ const styles = StyleSheet.create({
   headerChrome: {
     flexShrink: 0,
     alignSelf: 'flex-end',
+    zIndex: 4,
+  },
+  headerChromeRow: {
+    flexDirection: 'row',
+    gap: 6,
+    flexShrink: 0,
   },
   title: {
     fontFamily: 'monospace',

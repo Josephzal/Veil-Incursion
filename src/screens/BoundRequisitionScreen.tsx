@@ -7,6 +7,7 @@ import RunEventScreenFrame from '../components/layout/RunEventScreenFrame';
 import RunEventNodeHeader from '../components/layout/RunEventNodeHeader';
 import TerminalOverlay from '../components/TerminalOverlay';
 import TacticalButton from '../components/TacticalButton';
+import BoonsBg from '../../assets/images/location images/boons.png';
 import { tierLabel, getBoundRequisitionDefinition } from '../data/boundRequisitions';
 import { getBoundRequisitionLevel } from '../data/boundRequisitionProgression';
 import { getFactionAccent } from '../data/factions';
@@ -242,6 +243,8 @@ export default function BoundRequisitionScreen(): React.JSX.Element {
     <IncursionShell>
       <IncursionRunLayout hideRunChrome style={{ backgroundColor: theme.backgroundColor }}>
         <RunEventScreenFrame
+          backgroundImage={BoonsBg}
+          backgroundScrimOpacity={0.75}
           contentPadding={isDesktop ? scaleSpacing(16) : 8}
           overlay={<TerminalOverlay />}
         >
