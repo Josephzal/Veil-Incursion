@@ -21,6 +21,8 @@ import { useTerminal } from '../context/TerminalContext';
 import { useHubTypography } from '../hooks/useHubTypography';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { viewShadow } from '../utils/adaptiveStyles';
+import { DOSSIER_FOREGROUND } from '../constants/dossierSurface';
+import DossierCardShell from './hub/DossierCardShell';
 import { readPressableHover, terminalHoverStyle } from '../utils/terminalHoverStyle';
 import {
   HIDDEN_SCROLLBAR_VIEW_STYLE,
@@ -36,7 +38,7 @@ const PHOSPHOR_GREEN = '#4ADE80';
 const RUST_RED = '#EF4444';
 const LEDGER_BG = 'rgba(9, 9, 11, 0.9)';
 const LEDGER_BORDER = '#1e293b';
-const CARD_BG = 'rgba(15, 23, 42, 0.6)';
+const CARD_BG = '#0f172a';
 const CARD_BORDER = '#1e293b';
 const CHIP_BG = 'rgba(9, 9, 11, 0.85)';
 const CHIP_BORDER = '#334155';
@@ -420,14 +422,10 @@ export default function CraftingMenuPanel({
   );
 
   const matrixContent = (
-    <View
-      style={[
-        styles.matrixPanel,
-        {
-          padding: 32 * fontScale,
-          gap: 24 * fontScale,
-        },
-      ]}
+    <DossierCardShell
+      fillHeight
+      padding={32 * fontScale}
+      contentStyle={styles.matrixPanel}
     >
       <Text
         style={[
@@ -479,7 +477,7 @@ export default function CraftingMenuPanel({
           />
         ) : null}
       </ScrollView>
-    </View>
+    </DossierCardShell>
   );
 
   return (
@@ -702,7 +700,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
-    backgroundColor: 'rgba(6, 182, 212, 0.1)',
+    backgroundColor: DOSSIER_FOREGROUND,
   },
   fabricateBtnText: {
     fontFamily: 'monospace',

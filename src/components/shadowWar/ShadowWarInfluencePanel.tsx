@@ -8,6 +8,7 @@ import { getShadowWarSector } from '../../data/shadowWarSectors';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useHubLayout } from '../../context/HubLayoutContext';
 import { HUB_BORDER_INSET, hubCtaButtonStyle } from '../../constants/hubCta';
+import { DOSSIER_FOREGROUND, dossierOpaqueCtaStyle } from '../../constants/dossierSurface';
 import { formatBracketHeader, HUB_DATA_DIVIDER } from '../../styles/hubTerminalUi';
 import { FactionType } from '../../types/game';
 import type { CabalIpPool, ShadowWarSectorId } from '../../types/shadowWar';
@@ -184,7 +185,7 @@ export default function ShadowWarInfluencePanel({
       accentColor={ctaAccent}
       mutedColor={theme.mutedColor}
       variant="cta"
-      style={hubCtaButtonStyle(ctaAccent, scaleSize, scaleSpacing)}
+      style={[hubCtaButtonStyle(ctaAccent, scaleSize, scaleSpacing), dossierOpaqueCtaStyle(ctaAccent)]}
     />
   ) : null;
 
@@ -255,7 +256,7 @@ const styles = StyleSheet.create({
   },
   meterTrack: {
     width: '100%',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: DOSSIER_FOREGROUND,
     overflow: 'hidden',
     position: 'relative',
     justifyContent: 'center',

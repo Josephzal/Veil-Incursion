@@ -2,7 +2,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Image, LayoutChangeEvent, Platform, StyleSheet, View } from 'react-native';
 import TerminalText from '../TerminalText';
 import CargoPackingPanel from '../CargoPackingPanel';
+import DossierCardShell from '../hub/DossierCardShell';
 import SafehouseStashPanel from './SafehouseStashPanel';
+import { DOSSIER_FOREGROUND } from '../../constants/dossierSurface';
 import type { CargoDragSource } from '../CargoGridBoard';
 import { canPlaceCargoItem } from '../../data/cargoGridEngine';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
@@ -43,7 +45,6 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
   const rootOffsetRef = useRef({ x: 0, y: 0 });
 
   const accent = theme.statusColor;
-  const panelBg = theme.backgroundColor;
   const {
     isDesktop,
     scaleSpacing,
@@ -180,7 +181,9 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
         />
         </View>
 
-        <View
+        <DossierCardShell
+          fillHeight
+          padding={scaleSpacing(10)}
           style={[
             styles.deploymentPanel,
             isDesktop && styles.deploymentPanelDesktop,
@@ -188,13 +191,9 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
             {
               flex: 1,
               minWidth: isDesktop ? deploymentLaneWidth : 0,
-              borderColor: theme.borderColor,
-              backgroundColor: panelBg,
-              paddingHorizontal: scaleSpacing(10),
-              paddingTop: scaleSpacing(6),
-              paddingBottom: scaleSpacing(10),
             },
           ]}
+          contentStyle={styles.deploymentContent}
         >
           <TerminalText variant="panelTitle" letterSpacing={0.8} style={[styles.deploymentTitle, { color: accent, marginBottom: scaleSpacing(4) }]}>
             DEPLOYMENT PACK
@@ -226,7 +225,7 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
             />
             </View>
           </View>
-        </View>
+        </DossierCardShell>
       </View>
 
       {dragGhost ? (
@@ -269,10 +268,14 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   deploymentPanel: {
-    borderWidth: 1,
     minHeight: 0,
     flexDirection: 'column',
     justifyContent: 'flex-start',
+  },
+  deploymentContent: {
+    flex: 1,
+    minHeight: 0,
+    paddingTop: 6,
   },
   deploymentPanelDesktop: {
     flexShrink: 0,
@@ -289,7 +292,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     borderWidth: 2,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    backgroundColor: DOSSIER_FOREGROUND,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 8,
@@ -303,6 +306,7 @@ const styles = StyleSheet.create({
     minHeight: 0,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: DOSSIER_FOREGROUND,
   },
   dragGhostLayer: {
     ...StyleSheet.absoluteFill,

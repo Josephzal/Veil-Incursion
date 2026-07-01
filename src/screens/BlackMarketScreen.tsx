@@ -317,6 +317,7 @@ export default function BlackMarketScreen(): React.JSX.Element {
         <RunEventImmersiveBackdrop
           backgroundImage={BlackMarketBg}
           contentPadding={16 * fontScale}
+          scrimOpacity={0}
           overlay={<TerminalOverlay />}
         >
           <View ref={rootRef} style={styles.masterShell}>

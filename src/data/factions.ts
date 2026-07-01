@@ -82,3 +82,14 @@ export function getFactionAccent(faction: FactionType | null): string {
   if (!faction) return '#00ff33';
   return FACTION_DEFINITIONS[faction].accentColor;
 }
+
+/** Dossier left accent stripe — distinct from UI accent chips. */
+export function getDossierFactionAccent(faction: FactionType | null): string {
+  if (!faction) return '#64748B';
+  const accents: Record<FactionType, string> = {
+    TERRAN_GRID: '#64748B',
+    LEGION: '#7C3AED',
+    SOLARIS: '#D97706',
+  };
+  return accents[faction];
+}

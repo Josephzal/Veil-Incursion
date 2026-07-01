@@ -15,7 +15,9 @@ import { getFactionAccent } from '../../data/factions';
 import type { CargoItemId } from '../../types/cargoGrid';
 import TerminalText from '../TerminalText';
 import TacticalButton from '../TacticalButton';
+import DossierCardShell from '../hub/DossierCardShell';
 import HubCargoIconBox from './HubCargoIconBox';
+import { DOSSIER_FOREGROUND, dossierOpaqueCtaStyle } from '../../constants/dossierSurface';
 import { useHubLayout } from '../../context/HubLayoutContext';
 import { useHubTypography } from '../../hooks/useHubTypography';
 import { terminalHoverStyle, readPressableHover } from '../../utils/terminalHoverStyle';
@@ -100,7 +102,6 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
   const [selectedListingId, setSelectedListingId] = useState<CargoItemId | null>(null);
 
   const accent = theme.statusColor;
-  const panelBg = theme.backgroundColor;
   const economyColor = getFactionAccent(account.alignedFaction);
   const {
     isDesktop,
@@ -131,7 +132,7 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
 
   const panelFrameStyle = {
     borderColor: theme.borderColor,
-    backgroundColor: panelBg,
+    backgroundColor: theme.backgroundColor,
     padding: scaleSpacing(10),
     gap: scaleSpacing(8),
   };
@@ -205,22 +206,17 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
           </View>
         </View>
 
-        <View
+        <DossierCardShell
+          fillHeight
+          padding={scaleSpacing(10)}
           style={[
             styles.fenceColumn,
             isDesktop && styles.fenceColumnDesktop,
             Platform.OS === 'web' && styles.fenceColumnWeb,
             isDesktop ? { minWidth: deploymentLaneWidth } : { flex: 1 },
           ]}
+          contentStyle={[styles.panelColumn, Platform.OS === 'web' ? styles.panelFill : null]}
         >
-          <View
-            style={[
-              styles.panel,
-              styles.panelColumn,
-              Platform.OS === 'web' && styles.panelFill,
-              panelFrameStyle,
-            ]}
-          >
             <TerminalText variant="panelTitle" letterSpacing={0.8} style={[styles.panelTitle, { color: accent }]}>
               FENCE // LIQUIDATE
             </TerminalText>
@@ -249,7 +245,7 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
                     style={[
                       styles.fenceRow,
                       isDesktop && styles.fenceRowDesktop,
-                      { borderColor: theme.borderColor },
+                      { borderColor: theme.borderColor, backgroundColor: DOSSIER_FOREGROUND },
                     ]}
                   >
                     <View style={styles.fenceInfo}>
@@ -271,6 +267,7 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
                         accentColor={economyColor}
                         mutedColor={theme.mutedColor}
                         variant="inline"
+                        style={dossierOpaqueCtaStyle(economyColor)}
                       />
                       {entry.quantity > 1 ? (
                         <TacticalButton
@@ -280,6 +277,7 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
                           accentColor={economyColor}
                           mutedColor={theme.mutedColor}
                           variant="inline"
+                          style={dossierOpaqueCtaStyle(economyColor)}
                         />
                       ) : null}
                     </View>
@@ -292,8 +290,7 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
                 ))
               )}
             </ScrollView>
-          </View>
-        </View>
+        </DossierCardShell>
       </View>
     </View>
   );

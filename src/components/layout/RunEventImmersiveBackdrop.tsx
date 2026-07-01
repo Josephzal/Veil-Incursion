@@ -23,6 +23,8 @@ interface RunEventImmersiveBackdropProps {
   contentPadding?: number;
   contentStyle?: StyleProp<ViewStyle>;
   overlay?: React.ReactNode;
+  /** Scrim darkness over background art — 0 shows art at full brightness. */
+  scrimOpacity?: number;
 }
 
 export default function RunEventImmersiveBackdrop({
@@ -31,6 +33,7 @@ export default function RunEventImmersiveBackdrop({
   contentPadding = 16,
   contentStyle,
   overlay,
+  scrimOpacity = 0.75,
 }: RunEventImmersiveBackdropProps): React.JSX.Element {
   const insets = useSafeAreaInsets();
   const horizontal = resolveImmersiveHorizontalInset(insets.left, insets.right);
@@ -48,7 +51,10 @@ export default function RunEventImmersiveBackdrop({
         resizeMode="cover"
       />
       <View
-        style={[styles.scrim, { backgroundColor: RUN_EVENT_IMMERSIVE_SCRIM }]}
+        style={[
+          styles.scrim,
+          { backgroundColor: `rgba(9, 9, 11, ${scrimOpacity})` },
+        ]}
         pointerEvents="none"
       >
         {overlay}
