@@ -36,6 +36,7 @@ const CARGO_ITEM_IMAGES: Partial<Record<CargoItemId, ImageSourcePropType>> = {
   'eclipse-flare': EclipseFlareImage,
   'grave-dust-ampoule': GraveDustAmpouleImage,
   'grid-cracker-mag': GridCrackerMagImage,
+  'sonar-ping': GridCrackerMagImage,
   'resonance-bribe': ResonanceBribeImage,
   'spall-weave-vest': SpallWeaveVestImage,
   'void-surge-catalyst': VoidSurgeCatalystImage,

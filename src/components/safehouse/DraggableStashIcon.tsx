@@ -24,7 +24,8 @@ export default function DraggableStashIcon({
   const { iconSize } = useSafehouseTypography();
 
   const dragGesture = Gesture.Pan()
-    .minDistance(6)
+    .activeOffsetX([-10, 10])
+    .failOffsetY([-14, 14])
     .onStart((event) => {
       runOnJS(pulseCargoItemPickup)();
       runOnJS(onDragStart)(itemId);

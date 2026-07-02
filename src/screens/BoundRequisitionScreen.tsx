@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
-import HapticPressable from '../components/HapticPressable';
+import { StyleSheet, View } from 'react-native';
 import IncursionShell from '../components/IncursionShell';
 import IncursionRunLayout from '../components/IncursionRunLayout';
 import RunEventScreenFrame from '../components/layout/RunEventScreenFrame';
 import RunEventNodeHeader from '../components/layout/RunEventNodeHeader';
+import RunEventChoiceCard from '../components/layout/RunEventChoiceCard';
 import TerminalOverlay from '../components/TerminalOverlay';
 import TacticalButton from '../components/TacticalButton';
 import BoonsBg from '../../assets/images/location images/boons.png';
@@ -17,164 +17,9 @@ import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { HUB_BORDER_INSET, hubCtaButtonStyle } from '../constants/hubCta';
-import type { BoundRequisitionDefinition, BoundRequisitionId } from '../types/boundRequisition';
-import { viewShadow } from '../utils/adaptiveStyles';
-import { readPressableHover, terminalHoverStyle } from '../utils/terminalHoverStyle';
+import type { BoundRequisitionId } from '../types/boundRequisition';
 
 const TERMINAL_ACCENT = '#00ff33';
-const CARD_ASPECT_RATIO = 0.65;
-
-interface RequisitionChoiceCardProps {
-  offer: BoundRequisitionDefinition;
-  cardWidth: number | '100%';
-  cardPadding: number;
-  isDesktop: boolean;
-  isSelected: boolean;
-  isDimmed: boolean;
-  confirming: boolean;
-  cabalAccent: string;
-  borderColor: string;
-  textColor: string;
-  mutedColor: string;
-  fontScale: number;
-  scaleFont: (base: number) => number;
-  onSelect: (id: BoundRequisitionId) => void;
-}
-
-function RequisitionChoiceCard({
-  offer,
-  cardWidth,
-  cardPadding,
-  isDesktop,
-  isSelected,
-  isDimmed,
-  confirming,
-  cabalAccent,
-  borderColor,
-  textColor,
-  mutedColor,
-  fontScale,
-  scaleFont,
-  onSelect,
-}: RequisitionChoiceCardProps): React.JSX.Element {
-  const isMandate = offer.kind === 'CABAL_MANDATE';
-  const tierText = isMandate ? 'CABAL MANDATE' : tierLabel(offer.tier);
-  const selectedBorder = isMandate && offer.cabal
-    ? getFactionAccent(offer.cabal)
-    : cabalAccent;
-
-  const cardFrameStyle: ViewStyle = isDesktop && typeof cardWidth === 'number'
-    ? { width: cardWidth, aspectRatio: CARD_ASPECT_RATIO }
-    : { width: '100%', minHeight: scaleFont(220) };
-
-  return (
-    <HapticPressable
-      onPress={() => !confirming && onSelect(offer.id)}
-      disabled={confirming}
-      style={(state) => {
-        const hovered = readPressableHover(state);
-        return [
-          styles.choiceCard,
-          cardFrameStyle,
-          {
-            padding: cardPadding,
-            borderColor: isSelected ? selectedBorder : borderColor,
-            borderWidth: isSelected ? 2 : 1,
-            backgroundColor: isSelected
-              ? 'rgba(8, 12, 20, 0.88)'
-              : 'rgba(0, 0, 0, 0.6)',
-            opacity: isDimmed ? 0.4 : 1,
-            transform: isSelected ? [{ scale: 1.02 }] : undefined,
-          },
-          isSelected
-            ? viewShadow({
-              color: selectedBorder,
-              opacity: 0.9,
-              radius: 16,
-              offset: { width: 0, height: 0 },
-            })
-            : null,
-          isSelected
-            ? { cursor: 'pointer' as const }
-            : terminalHoverStyle(hovered, state.pressed),
-        ];
-      }}
-    >
-      <View style={styles.cardHeader}>
-        <Text
-          style={[
-            styles.tierTag,
-            {
-              color: mutedColor,
-              fontSize: 6 * fontScale,
-              lineHeight: 9 * fontScale,
-            },
-          ]}
-          numberOfLines={1}
-        >
-          {`[ ${tierText} ]`}
-        </Text>
-        <Text
-          style={[
-            styles.choiceName,
-            {
-              color: isSelected ? selectedBorder : textColor,
-              fontSize: 11 * fontScale,
-              lineHeight: 14 * fontScale,
-            },
-          ]}
-          numberOfLines={2}
-        >
-          {offer.name.toUpperCase()}
-        </Text>
-        <Text
-          style={[
-            styles.choiceTagline,
-            {
-              color: mutedColor,
-              fontSize: 7 * fontScale,
-              lineHeight: 10 * fontScale,
-            },
-          ]}
-          numberOfLines={2}
-        >
-          {offer.tagline}
-        </Text>
-      </View>
-
-      <View style={styles.visualAnchor} />
-
-      <View style={styles.cardDescription}>
-        <Text
-          style={[
-            styles.choiceEffect,
-            {
-              color: textColor,
-              fontSize: 8 * fontScale,
-              lineHeight: 12 * fontScale,
-            },
-          ]}
-        >
-          {offer.effectSummary}
-        </Text>
-        {offer.tradeoffSummary ? (
-          <Text
-            style={[
-              styles.choiceTradeoff,
-              {
-                fontSize: 7 * fontScale,
-                lineHeight: 11 * fontScale,
-              },
-            ]}
-            numberOfLines={3}
-          >
-            {`TRADE-OFF: ${offer.tradeoffSummary}`}
-          </Text>
-        ) : null}
-      </View>
-    </HapticPressable>
-  );
-}
 
 export default function BoundRequisitionScreen(): React.JSX.Element {
   const { theme } = useTerminal();
@@ -267,25 +112,37 @@ export default function BoundRequisitionScreen(): React.JSX.Element {
                   },
                 ]}
               >
-                {boundRequisitionOffers.map((offer) => (
-                  <RequisitionChoiceCard
-                    key={offer.id}
-                    offer={offer}
-                    cardWidth={reqCardWidth}
-                    cardPadding={cardPadding}
-                    isDesktop={isDesktop}
-                    isSelected={selectedId === offer.id}
-                    isDimmed={selectedId != null && selectedId !== offer.id}
-                    confirming={confirming}
-                    cabalAccent={cabalAccent}
-                    borderColor={theme.borderColor}
-                    textColor={theme.primaryColor}
-                    mutedColor={theme.mutedColor}
-                    fontScale={fontScale}
-                    scaleFont={scaleFont}
-                    onSelect={setSelectedId}
-                  />
-                ))}
+                {boundRequisitionOffers.map((offer) => {
+                  const isMandate = offer.kind === 'CABAL_MANDATE';
+                  const tierText = isMandate ? 'CABAL MANDATE' : tierLabel(offer.tier);
+                  const cardAccent = isMandate && offer.cabal
+                    ? getFactionAccent(offer.cabal)
+                    : cabalAccent;
+
+                  return (
+                    <RunEventChoiceCard
+                      key={offer.id}
+                      tierTag={`[ ${tierText} ]`}
+                      name={offer.name.toUpperCase()}
+                      tagline={offer.tagline}
+                      effectSummary={offer.effectSummary}
+                      tradeoffSummary={offer.tradeoffSummary}
+                      cardWidth={reqCardWidth}
+                      cardPadding={cardPadding}
+                      isDesktop={isDesktop}
+                      isSelected={selectedId === offer.id}
+                      isDimmed={selectedId != null && selectedId !== offer.id}
+                      disabled={confirming}
+                      accentColor={cardAccent}
+                      borderColor={theme.borderColor}
+                      textColor={theme.primaryColor}
+                      mutedColor={theme.mutedColor}
+                      fontScale={fontScale}
+                      scaleFont={scaleFont}
+                      onPress={() => setSelectedId(offer.id)}
+                    />
+                  );
+                })}
               </View>
             </View>
 
@@ -333,47 +190,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     alignItems: 'stretch',
     width: '100%',
-  },
-  choiceCard: {
-    justifyContent: 'space-between',
-    overflow: 'hidden',
-  },
-  cardHeader: {
-    flexShrink: 0,
-    gap: 6,
-  },
-  tierTag: {
-    fontFamily: 'monospace',
-    letterSpacing: 0.8,
-    fontWeight: '600',
-  },
-  choiceName: {
-    fontFamily: 'monospace',
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  choiceTagline: {
-    fontFamily: 'monospace',
-    letterSpacing: 0.35,
-  },
-  visualAnchor: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: 24,
-  },
-  cardDescription: {
-    flexShrink: 0,
-    gap: 8,
-  },
-  choiceEffect: {
-    fontFamily: 'monospace',
-    letterSpacing: 0.35,
-  },
-  choiceTradeoff: {
-    fontFamily: 'monospace',
-    color: '#f87171',
-    letterSpacing: 0.3,
   },
   continueBtn: {
     flexShrink: 0,

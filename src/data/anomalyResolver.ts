@@ -1,11 +1,12 @@
-export type AnomalyResolution = 'NARRATIVE' | 'AMBUSH_COMBAT' | 'BLACK_MARKET';
+export type AnomalyResolution = 'NARRATIVE' | 'AMBUSH_COMBAT' | 'BLACK_MARKET' | 'RESOURCE_HARVEST';
 
-/** Roll anomaly outcome on engage: 65% narrative, 20% ambush, 15% black market. */
+/** Roll anomaly outcome on engage: 55% narrative, 20% ambush, 15% market, 10% resource harvest. */
 export function resolveAnomalyNode(rng: () => number = Math.random): AnomalyResolution {
   const roll = rng();
-  if (roll < 0.66) return 'NARRATIVE';
-  if (roll < 0.86) return 'AMBUSH_COMBAT';
-  return 'BLACK_MARKET';
+  if (roll < 0.55) return 'NARRATIVE';
+  if (roll < 0.75) return 'AMBUSH_COMBAT';
+  if (roll < 0.90) return 'BLACK_MARKET';
+  return 'RESOURCE_HARVEST';
 }
 
 export function anomalyResolutionLogLine(resolution: AnomalyResolution): string {
@@ -16,6 +17,8 @@ export function anomalyResolutionLogLine(resolution: AnomalyResolution): string 
       return '>> SIGNAL SPOOF DETECTED — HOSTILE MANIFEST INBOUND.';
     case 'BLACK_MARKET':
       return '>> SIGNAL ROUTED — UNDERCITY CONDUIT OPEN.';
+    case 'RESOURCE_HARVEST':
+      return '>> SIGNAL DECODED — VOLATILE RESOURCE CLUSTER LOCKED.';
     default:
       return '>> ANOMALY RESOLVED.';
   }

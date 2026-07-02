@@ -6,13 +6,14 @@ import DossierCardShell from '../hub/DossierCardShell';
 import SafehouseStashPanel from './SafehouseStashPanel';
 import { DOSSIER_FOREGROUND } from '../../constants/dossierSurface';
 import type { CargoDragSource } from '../CargoGridBoard';
-import { canPlaceCargoItem } from '../../data/cargoGridEngine';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useTerminal } from '../../context/TerminalContext';
 import type { CargoItemId } from '../../types/cargoGrid';
 import { resolveCargoItemIcon } from '../../utils/cargoItemIcon';
 import { useHubLayout } from '../../context/HubLayoutContext';
 import {
+  pointInWindowRect,
+  resolveCargoGridCellFromWindow,
   resolveHubLoadoutCellSize,
   resolveHubStashIconSquareSize,
   scaleHubCargoCellSize,
@@ -29,6 +30,7 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
     account,
     relocatePreRunCargoItem,
     loadStashItemToCargoAtCell,
+    stageStashItemToPreRunCargo,
     returnPreRunCargoToStash,
     returnAllPreRunContainmentToStash,
     appendHubLog,
@@ -40,7 +42,9 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
   const [cargoAreaSize, setCargoAreaSize] = useState({ width: 0, height: 0 });
 
   const gridMetricsRef = useRef<CargoGridWindowMetrics | null>(null);
+  const cargoAreaMetricsRef = useRef<WindowRect | null>(null);
   const stashMetricsRef = useRef<WindowRect | null>(null);
+  const cargoAreaRef = useRef<View>(null);
   const rootRef = useRef<View>(null);
   const rootOffsetRef = useRef({ x: 0, y: 0 });
 
@@ -70,9 +74,20 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
     returnAllPreRunContainmentToStash();
   }, [returnAllPreRunContainmentToStash]);
 
+  const reportCargoAreaMetrics = useCallback(() => {
+    cargoAreaRef.current?.measureInWindow((pageX, pageY, width, height) => {
+      cargoAreaMetricsRef.current = { pageX, pageY, width, height };
+    });
+  }, []);
+
   const isOverStash = useCallback((absoluteX: number, absoluteY: number) => {
     const stash = stashMetricsRef.current;
     return stash ? pointInWindowRect(absoluteX, absoluteY, stash, STASH_DROP_PADDING) : false;
+  }, []);
+
+  const isOverCargoArea = useCallback((absoluteX: number, absoluteY: number) => {
+    const area = cargoAreaMetricsRef.current;
+    return area ? pointInWindowRect(absoluteX, absoluteY, area, 8) : false;
   }, []);
 
   const updateStashDropHighlight = useCallback((absoluteX: number, absoluteY: number) => {
@@ -91,32 +106,37 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
   }, [isOverStash, returnCargoToStash]);
 
   const placeStashItemAtPoint = useCallback((itemId: CargoItemId, absoluteX: number, absoluteY: number) => {
-    const metrics = gridMetricsRef.current;
-    if (!metrics) return false;
-    const cell = resolveCargoGridCellFromWindow(absoluteX, absoluteY, metrics);
-    if (!cell) return false;
-    if (!canPlaceCargoItem(account.preRunCargo, itemId, cell.row, cell.col)) return false;
+    if (!isOverCargoArea(absoluteX, absoluteY)) return false;
 
-    const result = loadStashItemToCargoAtCell(itemId, cell.row, cell.col);
-    appendHubLog(result.logLine);
-    return result.success;
-  }, [account.preRunCargo, appendHubLog, loadStashItemToCargoAtCell]);
+    const metrics = gridMetricsRef.current;
+    const cell = metrics ? resolveCargoGridCellFromWindow(absoluteX, absoluteY, metrics) : null;
+    if (cell) {
+      const result = loadStashItemToCargoAtCell(itemId, cell.row, cell.col);
+      appendHubLog(result.logLine);
+      return result.success;
+    }
+
+    const staged = stageStashItemToPreRunCargo(itemId);
+    appendHubLog(staged.logLine);
+    return staged.success;
+  }, [appendHubLog, isOverCargoArea, loadStashItemToCargoAtCell, stageStashItemToPreRunCargo]);
 
   const handleStashDragStart = useCallback((_itemId: CargoItemId) => {
     rootRef.current?.measureInWindow((x, y) => {
       rootOffsetRef.current = { x, y };
     });
+    reportCargoAreaMetrics();
     setExternalHover(null);
     setStashDropActive(false);
-  }, []);
+  }, [reportCargoAreaMetrics]);
 
   const handleStashDragMove = useCallback((itemId: CargoItemId, absoluteX: number, absoluteY: number) => {
     setDragGhost({ itemId, x: absoluteX, y: absoluteY });
     updateStashDropHighlight(absoluteX, absoluteY);
     const metrics = gridMetricsRef.current;
-    if (metrics) {
+    if (metrics && isOverCargoArea(absoluteX, absoluteY)) {
       const cell = resolveCargoGridCellFromWindow(absoluteX, absoluteY, metrics);
-      if (cell && canPlaceCargoItem(account.preRunCargo, itemId, cell.row, cell.col)) {
+      if (cell) {
         setExternalHover({ itemId, row: cell.row, col: cell.col });
       } else {
         setExternalHover(null);
@@ -124,7 +144,7 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
     } else {
       setExternalHover(null);
     }
-  }, [account.preRunCargo, updateStashDropHighlight]);
+  }, [isOverCargoArea, updateStashDropHighlight]);
 
   const handleStashDragEnd = useCallback((itemId: CargoItemId, absoluteX: number, absoluteY: number) => {
     setDragGhost(null);
@@ -209,7 +229,14 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
               isDesktop && styles.containmentFieldDesktop,
             ]}
           >
-            <View style={styles.cargoWrap} onLayout={handleCargoAreaLayout}>
+            <View
+              ref={cargoAreaRef}
+              style={styles.cargoWrap}
+              onLayout={(event) => {
+                handleCargoAreaLayout(event);
+                reportCargoAreaMetrics();
+              }}
+            >
               <CargoPackingPanel
               cargo={account.preRunCargo}
               theme={theme}

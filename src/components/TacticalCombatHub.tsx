@@ -645,6 +645,7 @@ export default function TacticalCombatHub({
   const selectedTargetIdRef = useRef<string | null>(null);
   const focusedUnitIdRef = useRef<string | null>(null);
   const enemyActionQueueRef = useRef<string[]>([]);
+  const rabidFlurryExpandedRef = useRef<Set<string>>(new Set());
   const counteringEnemyRef = useRef(false);
   const threatBudgetRef = useRef(threatBudget ?? THREAT_BUDGET_STANDARD);
   const arenaLayoutModeRef = useRef<ArenaLayoutMode>('group');
@@ -4104,6 +4105,7 @@ export default function TacticalCombatHub({
       log('>> FRACTURED HOSTILES — armor layers rebuilding.');
     }
     enemyActionQueueRef.current = [];
+    rabidFlurryExpandedRef.current = new Set();
     if (operativeClass === 'ENVOY') {
       tickVeilRotEndOfEnemyTurn(
         squadRef.current,
@@ -4415,13 +4417,22 @@ export default function TacticalCombatHub({
       && enemyActionQueueRef.current[0] === unit.unitId
     ) {
       const attacksPerTurn = getAlphaMechanic(unit, 'attacksPerTurn', 0);
-      const queuedSame = enemyActionQueueRef.current.filter((id) => id === unit.unitId).length;
-      if (attacksPerTurn >= 2 && unit.isAlpha && queuedSame === 1) {
+      const alreadyExpanded = unit.unitId
+        ? rabidFlurryExpandedRef.current.has(unit.unitId)
+        : false;
+      if (
+        attacksPerTurn >= 2
+        && unit.isAlpha
+        && unit.unitId
+        && !alreadyExpanded
+      ) {
+        rabidFlurryExpandedRef.current.add(unit.unitId);
         const extra = attacksPerTurn - 1;
         enemyActionQueueRef.current.splice(1, 0, ...Array(extra).fill(unit.unitId));
         log(`>> ${unit.designation} RABID FLURRY — ${attacksPerTurn} strikes queued.`);
       } else if (
-        enemyActionQueueRef.current[1] !== unit.unitId
+        !alreadyExpanded
+        && enemyActionQueueRef.current[1] !== unit.unitId
         && Math.random() < FRACTURE_HOUND_DOUBLE_STRIKE_CHANCE
       ) {
         enemyActionQueueRef.current.splice(1, 0, unit.unitId);
@@ -4658,6 +4669,7 @@ export default function TacticalCombatHub({
     }));
     clearEnemyTurnTimers();
     counteringEnemyRef.current = countering;
+    rabidFlurryExpandedRef.current = new Set();
     tickMutationHazardsOnEnemyPhase();
 
     if (enemyStunPendingRef.current) {

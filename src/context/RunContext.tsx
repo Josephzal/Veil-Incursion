@@ -51,7 +51,9 @@ import {
   IncursionNode,
   NarrativeEventNode,
 } from '../types/game';
+import { buildProceduralScannerCluster, getAvailableProceduralNodeIds, isProceduralRunActive } from '../data/proceduralScannerBridge';
 import { initializeSectorRun } from '../data/macroStoryPipeline';
+import { rollProceduralResourcePool } from '../data/proceduralResourceEngine';
 import {
   primeNarrativeEnvironment,
   resolveMatrixNarrativeChoice,
@@ -358,8 +360,10 @@ interface RunContextType {
   discardCargoInstance: (instanceId: string) => boolean;
   applyHarvestChoice: (tier: HarvestYieldTier) => { logLines: string[]; ambushTriggered: boolean };
   useFocusingAmpouleFromCargo: () => boolean;
+  useSonarPingOnNode: (nodeId: string) => boolean;
+  hasSonarPingInCargo: () => boolean;
   beginPostCombatHarvest: (initialStagingIds?: readonly string[]) => void;
-  beginResourceNodeHarvest: () => void;
+  beginResourceNodeHarvest: (resourcePool?: readonly string[]) => void;
   beginResourceCachePack: () => void;
   finalizeHarvestScreen: () => void;
   grantCombatResourceDrops: (options: CombatRewardContext) => readonly string[];
@@ -463,6 +467,9 @@ function districtBiomeLockPatch(
 }
 
 function buildSectorCluster(inc: ActiveIncursionState): IncursionNode[] {
+  if (isProceduralRunActive(inc)) {
+    return buildProceduralScannerCluster(inc);
+  }
   if (!inc.sectorGraph.entryId) return [];
   const clusterOptions = {
     graph: inc.sectorGraph,
@@ -651,6 +658,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       lastCheckpointMessage: null,
       runCredits: 0,
       sectorGraph: sectorInit.sectorGraph,
+      proceduralRunTree: sectorInit.proceduralRunTree,
+      revealedSonarNodeIds: [],
+      pendingProceduralResourcePool: [],
       currentNodeId: sectorInit.currentNodeId,
       nodesCleared: sectorInit.nodesCleared,
       attunement: sectorInit.attunement,
@@ -1892,7 +1902,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const node = resolveActiveVectorNode(inc);
     const option = HARVEST_YIELD_OPTIONS.find((entry) => entry.tier === tier)!;
     const isElite = node?.type === 'ELITE_COMBAT' || node?.sectorMeta?.combatTier === 'ELITE';
-    const lootIds = buildHarvestLoot(tier, inc.sectorTier, isElite, inc.nodesCleared);
+    const proceduralPool = inc.pendingProceduralResourcePool;
+    const lootIds = proceduralPool.length > 0
+      ? [...proceduralPool] as import('../types/cargoGrid').CargoItemId[]
+      : buildHarvestLoot(tier, inc.sectorTier, isElite, inc.nodesCleared);
 
     let nextCargo = inc.cargo;
     const stagedIds: string[] = [];
@@ -1902,7 +1915,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     });
     const ambushTriggered = AMBUSH_ENCOUNTERS_ENABLED && Math.random() * 100 < option.ambushRiskPct;
     const logLines = [
-      `>> ${option.label} — ${option.yieldPct}% yield routed to containment.`,
+      proceduralPool.length > 0
+        ? `>> RESOURCE NODE YIELD — ${proceduralPool.length} salvage bundle(s) routed to containment.`
+        : `>> ${option.label} — ${option.yieldPct}% yield routed to containment.`,
     ];
     if (ambushTriggered) logLines.push('>> DEEP EXTRACT HEAT — hostile ambush frequency detected.');
 
@@ -1911,6 +1926,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         ...prev,
         cargo: nextCargo,
         harvestStagingInstanceIds: [...new Set([...prev.harvestStagingInstanceIds, ...stagedIds])],
+        pendingProceduralResourcePool: [],
       };
       activeIncursionRef.current = next;
       return next;
@@ -1959,6 +1975,54 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     return true;
   }, [appendRunLog]);
 
+  const hasSonarPingInCargo = useCallback((): boolean => {
+    const inc = activeIncursionRef.current;
+    return inc.cargo.grid.placed.some((item) => item.itemId === 'sonar-ping');
+  }, []);
+
+  const useSonarPingOnNode = useCallback((nodeId: string): boolean => {
+    const inc = activeIncursionRef.current;
+    if (!inc.proceduralRunTree) {
+      appendRunLog('[REJECTED] >> No procedural run tree active.');
+      return false;
+    }
+    if (inc.revealedSonarNodeIds.includes(nodeId)) {
+      appendRunLog('[REJECTED] >> Sonar trace already mapped for this vector.');
+      return false;
+    }
+    const treeNode = inc.proceduralRunTree.nodes[nodeId];
+    if (!treeNode) {
+      appendRunLog('[REJECTED] >> Invalid sonar target.');
+      return false;
+    }
+    const availableIds = getAvailableProceduralNodeIds(inc);
+    if (!availableIds.includes(nodeId)) {
+      appendRunLog('[REJECTED] >> Sonar target not on current depth layer.');
+      return false;
+    }
+    const ping = inc.cargo.grid.placed.find((item) => item.itemId === 'sonar-ping');
+    if (!ping) {
+      appendRunLog('[REJECTED] >> No Sonar-Ping packed in cargo grid.');
+      return false;
+    }
+
+    const nextPlaced = inc.cargo.grid.placed.filter((item) => item.instanceId !== ping.instanceId);
+    setActiveIncursion((prev) => {
+      const next = {
+        ...prev,
+        revealedSonarNodeIds: [...prev.revealedSonarNodeIds, nodeId],
+        cargo: {
+          ...prev.cargo,
+          grid: { placed: nextPlaced },
+        },
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    appendRunLog('>> SONAR-PING DEPLOYED — downstream vector types illuminated.');
+    return true;
+  }, [appendRunLog]);
+
   const beginPostCombatHarvest = useCallback((initialStagingIds: readonly string[] = []) => {
     setActiveIncursion((prev) => {
       const next = {
@@ -1972,13 +2036,14 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const beginResourceNodeHarvest = useCallback(() => {
+  const beginResourceNodeHarvest = useCallback((resourcePool?: readonly string[]) => {
     setActiveIncursion((prev) => {
       const next = {
         ...prev,
         pendingHarvestReturn: 'COMPLETE_NODE' as const,
         mapMode: 'NODE_ENGAGED' as IncursionMapMode,
         harvestStagingInstanceIds: [],
+        ...(resourcePool?.length ? { pendingProceduralResourcePool: resourcePool } : {}),
       };
       activeIncursionRef.current = next;
       return next;
@@ -2801,12 +2866,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (node.type === 'RESOURCE_HARVEST') {
-      beginResourceNodeHarvest();
-      setActiveIncursion((prev) => {
-        const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
-        activeIncursionRef.current = next;
-        return next;
-      });
+      const treeNode = inc.proceduralRunTree?.nodes[node.id];
+      const depth = inc.nodesCleared + 1;
+      const pool = treeNode?.resourcePool?.length
+        ? [...treeNode.resourcePool]
+        : rollProceduralResourcePool(depth, `resource-engage:${node.id}`);
+      beginResourceNodeHarvest(pool);
       return node.type;
     }
 
@@ -2857,6 +2922,15 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
           return next;
         });
         return 'STANDARD_COMBAT';
+      }
+
+      if (resolution === 'RESOURCE_HARVEST') {
+        const pool = rollProceduralResourcePool(
+          inc.nodesCleared + 1,
+          `anomaly-resource:${node.id}`,
+        );
+        beginResourceNodeHarvest(pool);
+        return 'RESOURCE_HARVEST';
       }
 
       rollBlackMarketStockForNode();
@@ -3930,6 +4004,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       discardCargoInstance,
       applyHarvestChoice,
       useFocusingAmpouleFromCargo,
+      useSonarPingOnNode,
+      hasSonarPingInCargo,
       beginPostCombatHarvest,
       beginResourceNodeHarvest,
       beginResourceCachePack,
@@ -4055,6 +4131,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       relocateCargoItem,
       applyHarvestChoice,
       useFocusingAmpouleFromCargo,
+      useSonarPingOnNode,
+      hasSonarPingInCargo,
       beginPostCombatHarvest,
       beginResourceNodeHarvest,
       beginResourceCachePack,

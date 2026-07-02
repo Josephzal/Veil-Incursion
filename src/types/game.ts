@@ -450,6 +450,12 @@ export interface ActiveIncursionState {
   shadowWarBuffs: import('../data/shadowWarBuffEngine').ShadowWarRunBuffModifiers;
   /** Per-district encounter pacing — alpha duel index, anti-repetition history. */
   runSegment: import('../data/encounterGenerator').RunSegmentState | null;
+  /** Pre-generated StS-style 15-depth branching map for scanner routing. */
+  proceduralRunTree: import('./proceduralRunTree').ProceduralRunTree | null;
+  /** Scanner nodes sonar-pinged — immediate child types revealed. */
+  revealedSonarNodeIds: readonly string[];
+  /** Pre-rolled procedural resource harvest loot for the active node engage. */
+  pendingProceduralResourcePool: readonly string[];
 }
 
 export function createDefaultEnvironmentalModifiers(): EnvironmentalModifiers {
@@ -545,5 +551,8 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
       firstTurnApBonus: 0,
     },
     runSegment: null,
+    proceduralRunTree: null,
+    revealedSonarNodeIds: [],
+    pendingProceduralResourcePool: [],
   };
 }

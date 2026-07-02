@@ -1,5 +1,9 @@
 import { CARGO_GRID_COLS, CARGO_GRID_ROWS } from '../types/cargoGrid';
-import { CARGO_CELL_GAP } from '../components/CargoGridBoard';
+import { CARGO_CELL_GAP, cargoGridFrameDimensions } from '../components/CargoGridBoard';
+import {
+  HUB_CARGO_MAT_INSET,
+  resolveHubCargoMatShellMetrics,
+} from '../constants/cargoGridVisual';
 import { getGridMetrics } from './layoutGrid';
 
 export interface CargoGridWindowMetrics {
@@ -104,4 +108,37 @@ export function resolveHubLoadoutCellSize(
   }
 
   return Math.max(scaleHubCargoCellSize(38), Math.min(fitted, Math.max(targetCellSize, maxCellSize)));
+}
+
+/** Like resolveHubLoadoutCellSize but ensures the hub cargo mat shell fits inside the pane. */
+export function resolveHubMatAwareLoadoutCellSize(
+  areaWidth: number,
+  areaHeight: number,
+  scaleSpacing: (value: number) => number,
+  targetCellSize = HUB_CARGO_INCURSION_CELL_TARGET,
+  maxCellSize = HUB_CARGO_INCURSION_CELL_MAX,
+  matInset = HUB_CARGO_MAT_INSET,
+): number {
+  if (areaWidth <= 0 || areaHeight <= 0) {
+    return targetCellSize;
+  }
+
+  let cellSize = resolveHubLoadoutCellSize(areaWidth, areaHeight, targetCellSize, maxCellSize);
+  const minCell = scaleHubCargoCellSize(38);
+
+  while (cellSize > minCell) {
+    const frame = cargoGridFrameDimensions(cellSize);
+    const mat = resolveHubCargoMatShellMetrics(
+      frame.frameWidth,
+      frame.frameHeight,
+      scaleSpacing,
+      matInset,
+    );
+    if (mat.width <= areaWidth && mat.height <= areaHeight) {
+      return cellSize;
+    }
+    cellSize -= 1;
+  }
+
+  return Math.max(minCell, cellSize);
 }

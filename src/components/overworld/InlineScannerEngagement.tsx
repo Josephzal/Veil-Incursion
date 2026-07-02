@@ -28,6 +28,7 @@ export interface InlineScannerEngagementProps {
   onEngage: () => void;
   layout?: 'card' | 'dock';
   engageLabel?: string;
+  sonarPrompt?: React.ReactNode;
 }
 
 function parseTelemetryLine(line: string): { label: string; value: string } {
@@ -416,6 +417,7 @@ export default function InlineScannerEngagement({
   onEngage,
   layout = 'card',
   engageLabel = '[ ENGAGE ]',
+  sonarPrompt,
 }: InlineScannerEngagementProps): React.JSX.Element {
   const { isDesktop, fontScale, gap, scaleFont, scaleSize, scaleSpacing } = useResponsiveLayout();
 
@@ -547,6 +549,8 @@ export default function InlineScannerEngagement({
             />
           </View>
         ) : null}
+
+        {sonarPrompt}
 
         {breachControl}
       </View>

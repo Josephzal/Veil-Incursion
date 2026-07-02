@@ -1,3 +1,4 @@
+import type { ProceduralRunTree } from '../types/proceduralRunTree';
 import {
   ActiveIncursionState,
   FactionType,
@@ -16,6 +17,7 @@ import {
 import { INCURSION_ENCOUNTER_COUNT } from '../types/run';
 import { createPlaceholderDepthPath, generateDepthEncounterMatrix } from './descentEngine';
 import { generateSectorGraph } from './sectorGraphEngine';
+import { generateRunTree } from './nodeGenerator';
 import { MAX_ATTUNEMENT, STARTING_ATTUNEMENT } from '../types/sector';
 
 export const SECTOR_BLOCK_LAYOUT: readonly SectorBlockSpec[] = [
@@ -245,6 +247,7 @@ export function initializeIncursionPipeline(
 
 export interface SectorRunInit {
   sectorGraph: ReturnType<typeof generateSectorGraph>;
+  proceduralRunTree: ProceduralRunTree;
   currentNodeId: string;
   nodesCleared: number;
   attunement: { current: number; max: number };
@@ -265,6 +268,7 @@ export function initializeSectorRun(
 ): SectorRunInit {
   const macroStory = rollMacroStoryRunProfile(alignedFaction);
   const sectorGraph = generateSectorGraph(sectorTier);
+  const proceduralRunTree = generateRunTree(Date.now());
 
   const progress: IncursionProgressState = {
     ...createDefaultIncursionProgressState(),
@@ -274,11 +278,13 @@ export function initializeSectorRun(
   const initLogLines = [
     macroStoryModeLogLine(macroStory),
     `>> OPEN SECTOR GRAPH GENERATED — MAX ${sectorGraph.maxGraphDepth} NODES // TIER ${sectorTier}`,
+    `>> PROCEDURAL RUN TREE LOCKED — ${proceduralRunTree.maxDepth} DEPTHS // SCOUT-READY`,
     '>> NODES 1–4: INFILTRATION ONLY — SAFE ANCHOR EXTRACTION LOCKED UNTIL NODE 5',
   ];
 
   return {
     sectorGraph,
+    proceduralRunTree,
     currentNodeId: sectorGraph.entryId,
     nodesCleared: 0,
     attunement: { current: STARTING_ATTUNEMENT, max: MAX_ATTUNEMENT },

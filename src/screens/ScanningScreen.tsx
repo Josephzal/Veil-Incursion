@@ -10,6 +10,7 @@ import { INITIAL_SECTOR_POOL } from '../data/regions';
 import IncursionShell from '../components/IncursionShell';
 import IncursionRunLayout from '../components/IncursionRunLayout';
 import LandscapeSplitPane from '../components/layout/LandscapeSplitPane';
+import RunEventNodeHeader from '../components/layout/RunEventNodeHeader';
 import InlineScannerEngagement from '../components/overworld/InlineScannerEngagement';
 import VectorScanner from '../components/VectorScanner';
 import LeyLineBoonSwapOverlay from '../components/LeyLineBoonSwapOverlay';
@@ -26,7 +27,8 @@ import { getFactionDefinition } from '../data/factions';
 import { RadarDot } from '../types/run';
 import type { ScannerCabal } from '../types/scanner';
 import { getZoneScannerTint } from '../components/scanner/zoneScannerThemes';
-import RunEventNodeHeader from '../components/layout/RunEventNodeHeader';
+import ScannerSonarChildHints from '../components/scanner/ScannerSonarChildHints';
+import ScannerSonarPrompt from '../components/scanner/ScannerSonarPrompt';
 import DossierCardShell from '../components/hub/DossierCardShell';
 import { DOSSIER_ROW_BG } from '../constants/dossierSurface';
 import { resolveFactionSlateBackgroundSolid } from '../constants/hubAtmosphere';
@@ -75,6 +77,8 @@ export default function ScanningScreen(): React.JSX.Element {
     cancelLeyBoonSwap,
     swapClassBoon,
     cancelClassBoonSwap,
+    useSonarPingOnNode,
+    hasSonarPingInCargo,
   } = useRun();
   const { account } = usePlayerAccount();
   const { isScanningHub, finalizeSectorExtraction } = useDescentNavigator();
@@ -355,24 +359,44 @@ export default function ScanningScreen(): React.JSX.Element {
     return 'TAP A LOCKED PING TO REVIEW // SELECTED NODE SHOWS BELOW';
   }, [siphonedNodeIds.length]);
 
+  const showSonarPrompt = Boolean(
+    selectedNodeId
+    && hasSonarPingInCargo()
+    && activeIncursion.proceduralRunTree
+    && !activeIncursion.revealedSonarNodeIds.includes(selectedNodeId),
+  );
+
   const scannerPane = (
     <View style={styles.scannerViewport} onLayout={handleScannerViewportLayout}>
       <View style={[styles.scannerBezel, { borderColor: `${accent}55` }]}>
         {scannerSize > 0 && scannerDotsReady && vectorDots.length > 0 ? (
-          <VectorScanner
-            key={`scanner-${scanSessionKey}`}
-            cabal={cabal}
-            zoneTint={zoneTint}
-            scannerSize={scannerSize}
-            active
-            continuousScan
-            activeNodes={vectorDots}
-            contactsLocked={false}
-            selectedNodeId={selectedNodeId}
-            typeColoredNodeIds={typeColoredNodeIds}
-            onSelectNode={handleScannerNodeSelect}
-            onSiphonedNodesChange={handleSiphonedNodesChange}
-          />
+          <>
+            <VectorScanner
+              key={`scanner-${scanSessionKey}`}
+              cabal={cabal}
+              zoneTint={zoneTint}
+              scannerSize={scannerSize}
+              active
+              continuousScan
+              activeNodes={vectorDots}
+              contactsLocked={false}
+              selectedNodeId={selectedNodeId}
+              typeColoredNodeIds={typeColoredNodeIds}
+              onSelectNode={handleScannerNodeSelect}
+              onSiphonedNodesChange={handleSiphonedNodesChange}
+            />
+            {activeIncursion.proceduralRunTree
+              ? activeIncursion.revealedSonarNodeIds.map((nodeId) => (
+                <ScannerSonarChildHints
+                  key={`sonar-${nodeId}`}
+                  tree={activeIncursion.proceduralRunTree!}
+                  parentNodeId={nodeId}
+                  radarDots={vectorDots}
+                  scannerSize={scannerSize}
+                />
+              ))
+              : null}
+          </>
         ) : null}
       </View>
     </View>
@@ -401,6 +425,14 @@ export default function ScanningScreen(): React.JSX.Element {
           mutedColor={theme.mutedColor}
           engageLabel="[ BREACH ]"
           onEngage={handleEngage}
+          sonarPrompt={showSonarPrompt ? (
+            <ScannerSonarPrompt
+              visible
+              onUse={() => {
+                if (selectedNodeId) useSonarPingOnNode(selectedNodeId);
+              }}
+            />
+          ) : null}
         />
       </View>
       {emergencyRecallAvailable ? (
@@ -508,6 +540,8 @@ const styles = StyleSheet.create({
     padding: SCANNER_BEZEL_PADDING,
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
+    overflow: 'hidden',
   },
   nodeDock: {
     flex: 1,
