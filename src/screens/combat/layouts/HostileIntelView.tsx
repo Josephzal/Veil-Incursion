@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import StaticIntelCard from '../../../components/combat/readout/StaticIntelCard';
+import { DOSSIER_ROW_BG } from '../../../constants/dossierSurface';
 import type { CombatGridUnitSnapshot } from '../../../utils/combatTelemetryFormat';
 
 interface HostileIntelViewProps {
@@ -47,7 +48,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderWidth: 1,
     borderColor: 'rgba(51, 51, 51, 0.9)',
-    backgroundColor: 'rgba(10, 11, 15, 0.96)',
+    backgroundColor: DOSSIER_ROW_BG,
     overflow: 'hidden',
   },
   standbyTitle: {

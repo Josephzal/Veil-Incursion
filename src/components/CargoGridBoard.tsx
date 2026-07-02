@@ -26,8 +26,21 @@ import { useCombatTurnOptional } from '../context/CombatTurnContext';
 import type { CargoItemId, CargoRunState, PlacedCargoItem } from '../types/cargoGrid';
 import { CARGO_GRID_COLS, CARGO_GRID_ROWS, CARGO_ITEM_CATALOG } from '../types/cargoGrid';
 import { resolveCargoGridCellBackground } from '../constants/cargoGridVisual';
-import CargoGridBackdrop from './cargo/CargoGridBackdrop';
 import {
+  HARVEST_CONTAINMENT_BORDER,
+  HARVEST_GRID_CELL_BORDER,
+  HARVEST_MUTED_SLATE,
+  resolveHarvestGridCellBackground,
+} from '../constants/harvestScreenVisual';
+import CargoGridBackdrop from './cargo/CargoGridBackdrop';
+import DossierCardShell from './hub/DossierCardShell';
+import {
+  HUB_CARGO_INCURSION_CELL_MAX,
+  HUB_CARGO_INCURSION_CELL_TARGET,
+  resolveHubLoadoutCellSize,
+} from '../utils/cargoGridLayout';
+import {
+  HARVEST_CARGO_BACKING_PADDING,
   HARVEST_DESKTOP_CENTER_FLEX,
   HARVEST_DESKTOP_LEFT_FLEX,
   HARVEST_DESKTOP_RIGHT_FLEX,
@@ -36,6 +49,7 @@ import {
   harvestExternalBayHeight,
 } from '../constants/harvestLayout';
 import { useResponsiveScale } from '../hooks/useResponsiveScale';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { COMBAT_OVERLAY_SPLIT_GAP, resolveCombatOverlaySplitWidths } from '../constants/cargoOverlayLayout';
 import {
   CARGO_CELL_GAP,
@@ -124,12 +138,20 @@ interface CargoGridBoardProps {
   overlayCombatSplit?: boolean;
   /** Full inner width of the combat overlay panel (excluding modal padding). */
   contentWidth?: number;
-  /** Harvest tri-pane: grid left, drop zone center, extractor right. */
+  /** Harvest tri-pane: extractor left, containment center, cargo right. */
   harvestTriPaneLayout?: boolean;
-  leftPaneHeader?: React.ReactNode;
-  rightPaneSlot?: React.ReactNode;
+  /** Cargo deck header — rendered in the right pane. */
+  rightPaneHeader?: React.ReactNode;
+  /** Veil extractor column — rendered in the left pane. */
+  leftPaneSlot?: React.ReactNode;
+  /** Pinned CTA under the containment field. */
+  centerPaneFooter?: React.ReactNode;
   leftPaneWidth?: number;
   rightPaneWidth?: number;
+  /** @deprecated Use rightPaneHeader */
+  leftPaneHeader?: React.ReactNode;
+  /** @deprecated Use leftPaneSlot */
+  rightPaneSlot?: React.ReactNode;
   /** Tactical cargo mat texture behind grid cells. */
   cargoBackdrop?: boolean;
 }
@@ -421,15 +443,39 @@ export default function CargoGridBoard({
   overlayCombatSplit = false,
   contentWidth,
   harvestTriPaneLayout = false,
+  rightPaneHeader,
+  leftPaneSlot,
+  centerPaneFooter,
   leftPaneHeader,
   rightPaneSlot,
   leftPaneWidth,
   rightPaneWidth,
   cargoBackdrop = false,
 }: CargoGridBoardProps): React.JSX.Element {
-  const cellSize = cellSizeProp ?? CARGO_CELL_SIZE;
+  const [harvestDeckSize, setHarvestDeckSize] = useState({ width: 0, height: 0 });
+  const cellSize = useMemo(() => {
+    if (
+      harvestTriPaneLayout
+      && harvestDeckSize.width > 0
+      && harvestDeckSize.height > 0
+    ) {
+      return resolveHubLoadoutCellSize(
+        harvestDeckSize.width,
+        harvestDeckSize.height,
+        HUB_CARGO_INCURSION_CELL_TARGET,
+        HUB_CARGO_INCURSION_CELL_MAX,
+      );
+    }
+    return cellSizeProp ?? CARGO_CELL_SIZE;
+  }, [cellSizeProp, harvestDeckSize.height, harvestDeckSize.width, harvestTriPaneLayout]);
   const { isDesktop, scaleSpacing } = useResponsiveScale();
+  const { fontScale } = useResponsiveLayout();
   const harvestPaneGap = scaleSpacing(HARVEST_TRI_PANE_GAP);
+  const harvestCenterMargin = scaleSpacing(16);
+  const harvestPanelPadding = scaleSpacing(24);
+  const harvestMatPadding = scaleSpacing(HARVEST_CARGO_BACKING_PADDING);
+  const resolvedRightPaneHeader = rightPaneHeader ?? leftPaneHeader;
+  const resolvedLeftPaneSlot = leftPaneSlot ?? rightPaneSlot;
   const combatDetailHeight = overlayCompact ? 168 : COMBAT_DETAIL_PANEL_HEIGHT;
   const boardGap = overlayCompact ? 10 : undefined;
   const externalBayMarginTop = stableExternalBay
@@ -786,6 +832,13 @@ export default function CargoGridBoard({
     transform: [{ scale: dragGhostScale.value }],
   }));
 
+  const handleHarvestDeckLayout = useCallback((event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout;
+    setHarvestDeckSize((prev) => (
+      prev.width === width && prev.height === height ? prev : { width, height }
+    ));
+  }, []);
+
   const gridBlock = (
     <View
       ref={gridRef}
@@ -815,13 +868,31 @@ export default function CargoGridBoard({
                     height: cellSize,
                     borderColor: isPreview
                       ? (canDrop ? accentColor : '#ef4444')
-                      : theme.borderColor,
-                    backgroundColor: resolveCargoGridCellBackground({
-                      occupied,
-                      isPreview,
-                      canDrop,
-                      cargoBackdrop,
-                    }),
+                      : harvestTriPaneLayout && cargoBackdrop
+                        ? theme.borderColor
+                        : harvestTriPaneLayout
+                          ? HARVEST_GRID_CELL_BORDER
+                          : theme.borderColor,
+                    backgroundColor: harvestTriPaneLayout && cargoBackdrop
+                      ? resolveCargoGridCellBackground({
+                        occupied,
+                        isPreview,
+                        canDrop,
+                        cargoBackdrop: true,
+                      })
+                      : harvestTriPaneLayout
+                        ? resolveHarvestGridCellBackground({
+                          occupied,
+                          isPreview,
+                          canDrop,
+                          accentColor,
+                        })
+                        : resolveCargoGridCellBackground({
+                          occupied,
+                          isPreview,
+                          canDrop,
+                          cargoBackdrop,
+                        }),
                   },
                 ]}
               />
@@ -1160,7 +1231,7 @@ export default function CargoGridBoard({
         <View
           ref={boardRef}
           onLayout={captureMetrics}
-          style={[styles.harvestTriPaneRow, { gap: harvestPaneGap }]}
+          style={[styles.harvestTriPaneRow, { gap: harvestPaneGap }, !isDesktop ? styles.harvestTriPaneRowMobile : null]}
         >
           <View
             style={[
@@ -1173,20 +1244,7 @@ export default function CargoGridBoard({
               isDesktop ? { flex: HARVEST_DESKTOP_LEFT_FLEX } : null,
             ]}
           >
-            <View
-              style={[
-                styles.cargoPackBacking,
-                cargoBackdrop ? styles.cargoPackBackingTextured : null,
-                { borderColor: theme.borderColor },
-                isDesktop ? styles.cargoPackBackingDesktop : null,
-              ]}
-            >
-              {cargoBackdrop ? <CargoGridBackdrop /> : null}
-              {leftPaneHeader}
-              <View style={[styles.boardShell, { width: frameWidth }]}>
-                <View style={styles.gridDock}>{gridBlock}</View>
-              </View>
-            </View>
+            {resolvedLeftPaneSlot}
           </View>
 
           <View
@@ -1194,13 +1252,45 @@ export default function CargoGridBoard({
             onLayout={handleDropZoneLayout}
             style={[
               styles.harvestCenterPane,
+              {
+                marginHorizontal: harvestCenterMargin,
+                borderRadius: scaleSpacing(8),
+              },
               isDesktop ? { flex: HARVEST_DESKTOP_CENTER_FLEX } : null,
             ]}
           >
-            <Text style={[styles.dropZoneLabel, { color: theme.mutedColor }]}>
-              FIELD DROP // UNPACKED LOOT
+            <Text
+              style={[
+                styles.containmentLabel,
+                {
+                  color: HARVEST_MUTED_SLATE,
+                  fontSize: 9 * fontScale,
+                  lineHeight: 13 * fontScale,
+                },
+              ]}
+            >
+              [ CONTAINMENT FIELD ]
             </Text>
-            {externalBayNode}
+            <Text
+              style={[
+                styles.containmentSubLabel,
+                {
+                  color: HARVEST_MUTED_SLATE,
+                  fontSize: 7 * fontScale,
+                  lineHeight: 11 * fontScale,
+                },
+              ]}
+            >
+              UNPACKED ANOMALY FRAGMENTS // DRAG TO CARGO DECK
+            </Text>
+            <View style={styles.containmentLootArea}>
+              {externalBayNode}
+            </View>
+            {centerPaneFooter ? (
+              <View style={styles.centerPaneFooter}>
+                {centerPaneFooter}
+              </View>
+            ) : null}
           </View>
 
           <View
@@ -1214,7 +1304,36 @@ export default function CargoGridBoard({
               isDesktop ? { flex: HARVEST_DESKTOP_RIGHT_FLEX } : null,
             ]}
           >
-            {rightPaneSlot}
+            <DossierCardShell
+              fillHeight
+              padding={harvestPanelPadding}
+              accentColor={accentColor}
+              style={styles.harvestCargoShell}
+              contentStyle={styles.harvestCargoContent}
+            >
+              {resolvedRightPaneHeader}
+              <View
+                style={styles.harvestCargoMatSlot}
+                onLayout={handleHarvestDeckLayout}
+              >
+                <View
+                  style={[
+                    styles.harvestGridBackdropHost,
+                    cargoBackdrop ? styles.harvestGridBackdropHostTextured : null,
+                    {
+                      width: frameWidth + harvestMatPadding * 4,
+                      height: frameHeight + harvestMatPadding * 4,
+                      padding: harvestMatPadding,
+                    },
+                  ]}
+                >
+                  {cargoBackdrop ? <CargoGridBackdrop /> : null}
+                  <View style={[styles.boardShell, { width: frameWidth }]}>
+                    <View style={styles.gridDock}>{gridBlock}</View>
+                  </View>
+                </View>
+              </View>
+            </DossierCardShell>
           </View>
 
           {dragGhostOverlay}
@@ -1308,11 +1427,14 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'visible',
   },
+  harvestTriPaneRowMobile: {
+    flexDirection: 'column',
+  },
   harvestLeftPane: {
     flexShrink: 0,
     minHeight: 0,
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'stretch',
   },
   harvestLeftPaneDesktop: {
     flexShrink: 1,
@@ -1343,13 +1465,75 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     minHeight: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.28)',
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    borderWidth: 1,
+    borderColor: HARVEST_CONTAINMENT_BORDER,
     paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingVertical: 12,
     gap: 8,
-    overflow: 'visible',
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'flex-start',
+    position: 'relative',
+  },
+  containmentLabel: {
+    fontFamily: 'monospace',
+    fontWeight: '800',
+    letterSpacing: 0.9,
+    textAlign: 'center',
+    zIndex: 1,
+  },
+  containmentSubLabel: {
+    fontFamily: 'monospace',
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    textAlign: 'center',
+    zIndex: 1,
+  },
+  containmentLootArea: {
+    flex: 1,
+    minHeight: 0,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1,
+    overflow: 'visible',
+  },
+  centerPaneFooter: {
+    width: '100%',
+    flexShrink: 0,
+    zIndex: 1,
+    marginTop: 'auto',
+  },
+  harvestCargoShell: {
+    flex: 1,
+    minHeight: 0,
+    width: '100%',
+  },
+  harvestCargoContent: {
+    flex: 1,
+    minHeight: 0,
+    gap: 8,
+    alignItems: 'stretch',
+    justifyContent: 'flex-start',
+  },
+  harvestCargoMatSlot: {
+    flex: 1,
+    minHeight: 0,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  harvestGridBackdropHost: {
+    position: 'relative',
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    flexShrink: 0,
+  },
+  harvestGridBackdropHostTextured: {
+    backgroundColor: 'rgba(5, 6, 8, 0.55)',
   },
   dropZoneLabel: {
     fontFamily: 'monospace',

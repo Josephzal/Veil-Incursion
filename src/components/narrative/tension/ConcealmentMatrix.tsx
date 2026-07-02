@@ -228,9 +228,8 @@ export default function ConcealmentMatrix({
   );
 
   const leftStat = hasStarted ? `HOLD ${progressPct}%` : '';
-  const rightStat = hasStarted ? `EXPOSURE ${exposurePct}%` : 'HOLD SLIDER TO BEGIN';
+  const rightStat = hasStarted ? `EXPOSURE ${exposurePct}%` : '';
   const exposureWarn = hasStarted && outsideMs > MAX_OUTSIDE_MS * 0.6;
-  const telemetryIdle = !hasStarted;
 
   const hintText = hasStarted
     ? 'Drag the handle vertically to match the safe zone.'
@@ -277,31 +276,47 @@ export default function ConcealmentMatrix({
         ]}
       >
         <View style={[styles.statsRow, { marginBottom: scaleSpacing(12) }]}>
-          <Text
-            style={[
-              styles.telemetry,
-              telemetryIdle && styles.telemetryIdle,
-              {
-                fontSize: scales.telemetry,
-                lineHeight: scales.telemetryLine,
-              },
-            ]}
-          >
-            {leftStat}
-          </Text>
-          <Text
-            style={[
-              styles.telemetry,
-              telemetryIdle && styles.telemetryIdle,
-              exposureWarn && styles.telemetryWarn,
-              {
-                fontSize: scales.telemetry,
-                lineHeight: scales.telemetryLine,
-              },
-            ]}
-          >
-            {rightStat}
-          </Text>
+          {hasStarted ? (
+            <>
+              <Text
+                style={[
+                  styles.telemetry,
+                  {
+                    fontSize: scales.telemetry,
+                    lineHeight: scales.telemetryLine,
+                  },
+                ]}
+              >
+                {leftStat}
+              </Text>
+              <Text
+                style={[
+                  styles.telemetry,
+                  exposureWarn && styles.telemetryWarn,
+                  {
+                    fontSize: scales.telemetry,
+                    lineHeight: scales.telemetryLine,
+                  },
+                ]}
+              >
+                {rightStat}
+              </Text>
+            </>
+          ) : (
+            <Text
+              style={[
+                styles.telemetry,
+                styles.telemetryIdle,
+                styles.telemetryCentered,
+                {
+                  fontSize: scales.telemetry,
+                  lineHeight: scales.telemetryLine,
+                },
+              ]}
+            >
+              HOLD SLIDER TO BEGIN
+            </Text>
+          )}
         </View>
 
         <View
@@ -400,6 +415,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     width: '100%',
+  },
+  telemetryCentered: {
+    flex: 1,
+    width: '100%',
+    textAlign: 'center',
   },
   telemetry: {
     fontFamily: 'monospace',

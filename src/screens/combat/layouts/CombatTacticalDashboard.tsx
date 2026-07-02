@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
+import CombatDashboardTexturedBackdrop from '../../../components/combat/CombatDashboardTexturedBackdrop';
 import {
   TACTICAL_DASHBOARD_PANEL_BORDER_COLOR,
   TACTICAL_DASHBOARD_PANEL_CONTENT_PADDING_TOP,
@@ -16,6 +17,15 @@ function DashboardPanelContent({ children }: { children: React.ReactNode }): Rea
   return <View style={styles.panelContent}>{children}</View>;
 }
 
+function TexturedDashboardPanel({ children }: { children: React.ReactNode }): React.JSX.Element {
+  return (
+    <View style={styles.texturedPanel}>
+      <CombatDashboardTexturedBackdrop />
+      <DashboardPanelContent>{children}</DashboardPanelContent>
+    </View>
+  );
+}
+
 /** Fixed bottom 30% — strict 3-column command / log / intel layout. */
 export default function CombatTacticalDashboard({
   commandDeck,
@@ -25,13 +35,13 @@ export default function CombatTacticalDashboard({
   return (
     <View style={styles.dashboard}>
       <View style={[styles.panel, styles.panelLeft]}>
-        <DashboardPanelContent>{commandDeck}</DashboardPanelContent>
+        <TexturedDashboardPanel>{commandDeck}</TexturedDashboardPanel>
       </View>
       <View style={[styles.panel, styles.panelCenter]}>
         <DashboardPanelContent>{macroLog}</DashboardPanelContent>
       </View>
       <View style={[styles.panel, styles.panelRight]}>
-        <DashboardPanelContent>{hostileIntel}</DashboardPanelContent>
+        <TexturedDashboardPanel>{hostileIntel}</TexturedDashboardPanel>
       </View>
     </View>
   );
@@ -57,6 +67,14 @@ const styles = StyleSheet.create({
     borderRightWidth: 1,
     borderRightColor: '#222',
     overflow: 'hidden',
+    position: 'relative',
+  },
+  texturedPanel: {
+    flex: 1,
+    minHeight: 0,
+    width: '100%',
+    position: 'relative',
+    overflow: 'hidden',
   },
   panelContent: {
     flex: 1,
@@ -65,6 +83,8 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: TACTICAL_DASHBOARD_PANEL_BORDER_COLOR,
     paddingTop: TACTICAL_DASHBOARD_PANEL_CONTENT_PADDING_TOP,
+    position: 'relative',
+    zIndex: 1,
   },
   panelLeft: {
     flexDirection: 'column',

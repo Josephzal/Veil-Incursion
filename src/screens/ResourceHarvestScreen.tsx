@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { resolveImmersiveFooterInset } from '../constants/immersiveLayout';
 import ResourceHarvestBg from '../../assets/images/location images/resource_harvest.png';
 import CargoPackingPanel from '../components/CargoPackingPanel';
 import ResidueParticle from '../components/harvest/ResidueParticle';
@@ -8,14 +10,16 @@ import VeilVacuumCanisterStack, {
 } from '../components/harvest/VeilVacuumCanisterStack';
 import IncursionShell from '../components/IncursionShell';
 import IncursionRunLayout from '../components/IncursionRunLayout';
-import RunEventScreenFrame from '../components/layout/RunEventScreenFrame';
+import RunEventImmersiveBackdrop from '../components/layout/RunEventImmersiveBackdrop';
 import { MAX_RUN_CANISTER_RESIDUE } from '../constants/veilResidue';
+import { getFactionAccent } from '../data/factions';
 import { resolveVeilResidueCanisterFillPercent } from '../data/veilResidueRunEngine';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { isVeilResidueCargoItem } from '../data/cargoGridEngine';
 import { useNodeProgression } from '../hooks/useNodeProgression';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import type { HarvestFloorBounds, ResidueParticleData } from '../types/residueParticle';
 import {
   startVacuumHoldHaptics,
@@ -33,6 +37,7 @@ const VALUE_EPSILON = 0.001;
 
 export default function ResourceHarvestScreen(): React.JSX.Element {
   const { theme } = useTerminal();
+  const { fontScale } = useResponsiveLayout();
   const {
     runState,
     activeIncursion,
@@ -74,15 +79,21 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
   const harvestPercentage = resolveVeilResidueCanisterFillPercent(
     activeIncursion.sessionVeilResidueCollected,
   );
+  const activeCabal = getFactionAccent(activeIncursion.alignedFaction ?? null);
   const canisterFull = activeIncursion.sessionVeilResidueCollected >= MAX_RUN_CANISTER_RESIDUE;
   const canVacuum = lootPool.length > 0 && !canisterFull;
 
   const continueLabel = useMemo(
     () => (activeIncursion.pendingHarvestReturn === 'RESOURCE_CACHE'
-      ? '[ CONTINUE TO GRID ]'
-      : '[ CONTINUE RUN ]'),
+      ? '[ SEAL RIFT ]'
+      : '[ CONTINUE DESCENT ]'),
     [activeIncursion.pendingHarvestReturn],
   );
+
+  const insets = useSafeAreaInsets();
+  const masterPadding = 24 * fontScale;
+  const layoutGap = 16 * fontScale;
+  const verticalPadding = Math.max(masterPadding, resolveImmersiveFooterInset(insets.bottom));
 
   const residueInstanceIds = useMemo(
     () => activeIncursion.cargo.containment
@@ -273,10 +284,11 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
   return (
     <IncursionShell>
       <IncursionRunLayout hideRunChrome style={{ backgroundColor: theme.backgroundColor }}>
-        <RunEventScreenFrame
+        <RunEventImmersiveBackdrop
           backgroundImage={ResourceHarvestBg}
-          backgroundScrimOpacity={0.72}
-          bodyStyle={styles.harvestBody}
+          scrimOpacity={0.75}
+          contentPadding={masterPadding}
+          contentStyle={[styles.harvestBody, { paddingTop: verticalPadding }]}
           overlay={(
             <View ref={overlayRef} style={styles.particleOverlay} pointerEvents="none">
               {lootPool.map((particle) => (
@@ -291,35 +303,37 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
             </View>
           )}
         >
-          <View style={styles.harvestStage}>
-            <CargoPackingPanel
-              cargo={displayCargo}
-              theme={theme}
-              onRelocateItem={relocateCargoItem}
-              onDiscardItem={discardCargoInstance}
-              showCreditsHud={false}
-              onContinue={handlePackingContinue}
-              continueLabel={continueLabel}
-              onHarvestFloorMeasured={handleHarvestFloorMeasured}
-              fixedExternalSlotCount={fixedExternalSlotCount}
-              resolveContainmentSlotIndex={resolveContainmentSlotIndex}
-              harvestTriPane
-              harvestPercentage={harvestPercentage}
-              gridSidecar={(
-                <VeilVacuumCanisterStack
-                  ref={canisterRef}
-                  harvestPercentage={harvestPercentage}
-                  active={isVacuuming}
-                  disabled={!canVacuum}
-                  onPressIn={handleVacuumStart}
-                  onPressOut={handleVacuumStop}
-                  sizeMode="extractor-block"
-                />
-              )}
-              cargoBackdrop
-            />
+          <View style={[styles.masterContainment, { gap: layoutGap }]}>
+            <View style={styles.harvestStage}>
+              <CargoPackingPanel
+                cargo={displayCargo}
+                theme={theme}
+                accentColor={activeCabal}
+                onRelocateItem={relocateCargoItem}
+                onDiscardItem={discardCargoInstance}
+                showCreditsHud={false}
+                onContinue={handlePackingContinue}
+                continueLabel={continueLabel}
+                onHarvestFloorMeasured={handleHarvestFloorMeasured}
+                fixedExternalSlotCount={fixedExternalSlotCount}
+                resolveContainmentSlotIndex={resolveContainmentSlotIndex}
+                harvestTriPane
+                harvestPercentage={harvestPercentage}
+                gridSidecar={(
+                  <VeilVacuumCanisterStack
+                    ref={canisterRef}
+                    harvestPercentage={harvestPercentage}
+                    active={isVacuuming}
+                    disabled={!canVacuum}
+                    onPressIn={handleVacuumStart}
+                    onPressOut={handleVacuumStop}
+                    sizeMode="extractor-block"
+                  />
+                )}
+              />
+            </View>
           </View>
-        </RunEventScreenFrame>
+        </RunEventImmersiveBackdrop>
       </IncursionRunLayout>
     </IncursionShell>
   );
@@ -329,8 +343,15 @@ const styles = StyleSheet.create({
   harvestBody: {
     flex: 1,
     minHeight: 0,
-    paddingTop: 0,
     pointerEvents: 'box-none',
+  },
+  masterContainment: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    minHeight: 0,
+    justifyContent: 'space-between',
+    alignItems: 'stretch',
   },
   harvestStage: {
     flex: 1,
@@ -339,7 +360,7 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
   },
   particleOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 2,
   },
 });

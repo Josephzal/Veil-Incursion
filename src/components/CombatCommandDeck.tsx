@@ -7,6 +7,7 @@ import type { AegisAbilityId } from '../types/aegisCombat';
 import { PLAYER_ACTION_POINTS_PER_TURN } from '../types/aegisCombat';
 import CombatApPipRow from './combat/CombatApPipRow';
 import { useCombatDesktopLayout } from '../hooks/useCombatDesktopLayout';
+import { DOSSIER_CTA_BG, DOSSIER_ROW_BG } from '../constants/dossierSurface';
 
 const MONO = 'monospace';
 const TILE_HEIGHT = 40;
@@ -334,7 +335,7 @@ export default function CombatCommandDeck({
           {
             borderColor: isSelected ? primaryColor : tileBorderColor,
             borderWidth: desktopDeck ? 2 : 1,
-            backgroundColor: isSelected ? 'rgba(139, 92, 246, 0.12)' : 'transparent',
+            backgroundColor: isSelected ? DOSSIER_CTA_BG : DOSSIER_ROW_BG,
             ...(tileHeight != null ? { height: tileHeight } : null),
             minHeight: desktopDeck ? scaleCombatSize(44) : undefined,
             marginBottom: tileMarginBottom,
@@ -407,7 +408,7 @@ export default function CombatCommandDeck({
           dashboardLayout ? styles.dashboardTwinActionBtn : styles.endTurnBtn,
           {
             borderColor: canEndTurn ? END_TURN_BORDER : END_TURN_BORDER_MUTED,
-            backgroundColor: canEndTurn ? 'rgba(220, 38, 38, 0.12)' : 'transparent',
+            backgroundColor: canEndTurn ? '#1a1212' : DOSSIER_ROW_BG,
             opacity: canEndTurn ? 1 : 0.4,
             ...desktopBtnStyle,
           },
@@ -922,6 +923,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: DOSSIER_ROW_BG,
   },
   bloodForTimeBtn: {
     borderWidth: 1,
@@ -929,6 +931,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     maxWidth: 108,
     alignItems: 'center',
+    backgroundColor: DOSSIER_ROW_BG,
   },
   combatReloadBtn: {
     borderWidth: 1,
@@ -936,6 +939,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     maxWidth: 88,
     alignItems: 'center',
+    backgroundColor: DOSSIER_ROW_BG,
   },
   combatReloadBtnDashboard: {
     maxWidth: 68,
@@ -976,6 +980,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     minWidth: 88,
     alignItems: 'center',
+    backgroundColor: DOSSIER_ROW_BG,
   },
   endTurnBtnDashboard: {
     flex: 1,
@@ -1023,6 +1028,7 @@ const styles = StyleSheet.create({
   tileSlot: {
     width: '48%',
     borderWidth: 1,
+    backgroundColor: DOSSIER_ROW_BG,
   },
   deckTile: {
     flex: 1,

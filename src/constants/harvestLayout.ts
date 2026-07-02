@@ -9,14 +9,14 @@ import { CARGO_GRID_COLS, CARGO_GRID_ROWS } from '../types/cargoGrid';
 export const HARVEST_HORIZONTAL_PADDING = 8;
 export const GRID_CANISTER_GAP = 6;
 export const HARVEST_EXTERNAL_ROW_GAP = 20;
-/** Tri-pane harvest column ratios. */
-export const HARVEST_LEFT_PANE_RATIO = 0.27;
-export const HARVEST_RIGHT_PANE_RATIO = 0.23;
+/** Tri-pane harvest column ratios — extractor left, containment center, cargo right. */
+export const HARVEST_LEFT_PANE_RATIO = 0.25;
+export const HARVEST_RIGHT_PANE_RATIO = 0.25;
 export const HARVEST_TRI_PANE_GAP = 8;
-/** Web desktop flex weights — cargo left, drop center, extractor right. */
-export const HARVEST_DESKTOP_LEFT_FLEX = 0.28;
-export const HARVEST_DESKTOP_CENTER_FLEX = 0.44;
-export const HARVEST_DESKTOP_RIGHT_FLEX = 0.28;
+/** Web desktop flex weights — extractor left, containment center, cargo right. */
+export const HARVEST_DESKTOP_LEFT_FLEX = 0.25;
+export const HARVEST_DESKTOP_CENTER_FLEX = 0.5;
+export const HARVEST_DESKTOP_RIGHT_FLEX = 0.25;
 export const HARVEST_CARGO_BACKING_PADDING = 12;
 /** Padding below the containment slot row inside the external bay. */
 export const HARVEST_EXTERNAL_BAY_EXTRA = 28;
@@ -88,12 +88,12 @@ export function resolveHarvestTriPaneCellSize(
   const framePaddingBottom = LANDSCAPE_PANEL_PADDING;
   const headerReserve = HARVEST_HEADER_RESERVE + HARVEST_BOARD_COLUMN_GAP;
 
-  const leftPaneInnerWidth =
-    Math.floor(screenWidth * HARVEST_LEFT_PANE_RATIO)
+  const rightPaneInnerWidth =
+    Math.floor(screenWidth * HARVEST_RIGHT_PANE_RATIO)
     - HARVEST_CARGO_BACKING_PADDING * 2
     - 2;
   const widthCell = Math.floor(
-    (leftPaneInnerWidth - (CARGO_GRID_COLS - 1) * CARGO_CELL_GAP) / CARGO_GRID_COLS,
+    (rightPaneInnerWidth - (CARGO_GRID_COLS - 1) * CARGO_CELL_GAP) / CARGO_GRID_COLS,
   );
 
   const rowGaps = (CARGO_GRID_ROWS - 1) * CARGO_CELL_GAP;

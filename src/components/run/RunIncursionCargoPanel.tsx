@@ -9,6 +9,7 @@ import {
   HUB_CARGO_INCURSION_CELL_MAX,
   HUB_CARGO_INCURSION_CELL_TARGET,
 } from '../../utils/cargoGridLayout';
+import { HUB_CARGO_MAT_INSET } from '../../constants/cargoGridVisual';
 
 interface RunIncursionCargoPanelProps {
   accentColor: string;
@@ -85,6 +86,7 @@ export default function RunIncursionCargoPanel({
         onHubExternalDrop={onHubExternalDrop}
         onDragPositionChange={onDragPositionChange}
         cargoBackdrop
+        hubCargoMatInset={HUB_CARGO_MAT_INSET}
       />
     </View>
   );

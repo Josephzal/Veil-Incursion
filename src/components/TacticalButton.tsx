@@ -22,6 +22,8 @@ export interface TacticalButtonProps {
   style?: PressableProps['style'];
   labelSize?: number;
   labelLineHeight?: number;
+  /** Skip accent glow shadow when active (compact inline controls). */
+  suppressGlow?: boolean;
 }
 
 /** Scaled terminal nav / action button — desktop web typography only. */
@@ -36,6 +38,7 @@ export default function TacticalButton({
   style,
   labelSize,
   labelLineHeight,
+  suppressGlow = false,
 }: TacticalButtonProps): React.JSX.Element {
   const { scaleSize, scaleSpacing } = useResponsiveScale();
   const isRail = variant === 'rail';
@@ -68,18 +71,34 @@ export default function TacticalButton({
           ...(metrics.minWidth != null ? { minWidth: metrics.minWidth } : null),
         },
         active || isCta
-          ? {
-              borderColor: accentColor,
-              backgroundColor: `${accentColor}24`,
-              ...viewShadow({
-                color: accentColor,
-                opacity: 0.85,
-                radius: 12,
-                offset: { width: 0, height: 0 },
-              }),
-            }
+          ? suppressGlow && !isCta
+            ? {
+                borderColor: accentColor,
+                ...Platform.select({
+                  web: { boxShadow: 'none' },
+                  default: { shadowOpacity: 0, shadowRadius: 0, elevation: 0 },
+                }),
+              }
+            : {
+                borderColor: accentColor,
+                backgroundColor: `${accentColor}24`,
+                ...viewShadow({
+                  color: accentColor,
+                  opacity: 0.85,
+                  radius: 12,
+                  offset: { width: 0, height: 0 },
+                }),
+              }
           : null,
         typeof style === 'function' ? style(state) : style,
+        !disabled && state.pressed
+          ? suppressGlow
+            ? {
+                opacity: 0.72,
+                backgroundColor: `${accentColor}28`,
+              }
+            : { opacity: 0.85 }
+          : null,
       ]}
     >
       <TerminalText

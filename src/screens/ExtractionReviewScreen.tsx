@@ -29,7 +29,7 @@ import {
   resolveImmersiveHorizontalInset,
 } from '../constants/immersiveLayout';
 import { CARGO_CELL_GAP } from '../constants/cargoGridLayout';
-import { resolveCargoGridCellBackground } from '../constants/cargoGridVisual';
+import { resolveCargoGridCellBackground, resolveHubCargoMatShellMetrics } from '../constants/cargoGridVisual';
 import CargoGridBackdrop from '../components/cargo/CargoGridBackdrop';
 import {
   EMERGENCY_EXTRACT_CARGO_BLEED_PCT,
@@ -51,9 +51,8 @@ import {
 import { resolveCargoItemIcon } from '../utils/cargoItemIcon';
 import {
   resolveHubLoadoutCellSize,
-  HUB_CARGO_EXTRACTION_CELL_MAX,
-  HUB_CARGO_EXTRACTION_CELL_TARGET_BASE,
-  HUB_CARGO_EXTRACTION_CELL_TARGET_FONT_BASE,
+  HUB_CARGO_INCURSION_CELL_MAX,
+  HUB_CARGO_INCURSION_CELL_TARGET,
 } from '../utils/cargoGridLayout';
 import { readPressableHover, terminalHoverStyle } from '../utils/terminalHoverStyle';
 
@@ -136,17 +135,21 @@ function TelemetryRow({ label, value, labelSize, valueSize }: TelemetryRowProps)
 interface EvacuationCargoPreviewProps {
   cargo: CargoRunState;
   cellSize: number;
-  fontScale: number;
+  scaleSpacing: (value: number) => number;
 }
 
 function EvacuationCargoPreview({
   cargo,
   cellSize,
-  fontScale,
+  scaleSpacing,
 }: EvacuationCargoPreviewProps): React.JSX.Element {
   const { frameWidth, frameHeight } = useMemo(
     () => cargoGridFrameDimensions(cellSize),
     [cellSize],
+  );
+  const matShell = useMemo(
+    () => resolveHubCargoMatShellMetrics(frameWidth, frameHeight, scaleSpacing),
+    [frameHeight, frameWidth, scaleSpacing],
   );
 
   const occupiedCells = useMemo(() => {
@@ -158,13 +161,7 @@ function EvacuationCargoPreview({
   }, [cargo.grid.placed]);
 
   return (
-    <View
-      style={[
-        styles.cargoRiskShell,
-        styles.cargoRiskShellTextured,
-        { padding: 12 * fontScale },
-      ]}
-    >
+    <View style={[styles.hubCargoMatShell, styles.hubCargoMatShellTextured, matShell]}>
       <CargoGridBackdrop />
       <View
         style={[
@@ -381,13 +378,10 @@ export default function ExtractionReviewScreen(): React.JSX.Element {
     () => resolveHubLoadoutCellSize(
       cargoDeckSize.width,
       cargoDeckSize.height,
-      Math.max(
-        HUB_CARGO_EXTRACTION_CELL_TARGET_BASE,
-        HUB_CARGO_EXTRACTION_CELL_TARGET_FONT_BASE * fontScale,
-      ),
-      HUB_CARGO_EXTRACTION_CELL_MAX,
+      HUB_CARGO_INCURSION_CELL_TARGET,
+      HUB_CARGO_INCURSION_CELL_MAX,
     ),
-    [cargoDeckSize.height, cargoDeckSize.width, fontScale],
+    [cargoDeckSize.height, cargoDeckSize.width],
   );
 
   const handleCargoDeckLayout = useCallback((event: LayoutChangeEvent) => {
@@ -482,10 +476,7 @@ export default function ExtractionReviewScreen(): React.JSX.Element {
                     />
                   </View>
 
-                  <View
-                    style={styles.cargoDeckSection}
-                    onLayout={handleCargoDeckLayout}
-                  >
+                  <View style={styles.cargoDeckSection}>
                     <Text
                       style={[
                         styles.sectionLabel,
@@ -498,11 +489,13 @@ export default function ExtractionReviewScreen(): React.JSX.Element {
                     >
                       CARGO DECK // AT RISK
                     </Text>
-                    <EvacuationCargoPreview
-                      cargo={activeIncursion.cargo}
-                      cellSize={cargoCellSize}
-                      fontScale={fontScale}
-                    />
+                    <View style={styles.cargoPreviewMeasure} onLayout={handleCargoDeckLayout}>
+                      <EvacuationCargoPreview
+                        cargo={activeIncursion.cargo}
+                        cellSize={cargoCellSize}
+                        scaleSpacing={scaleSpacing}
+                      />
+                    </View>
                   </View>
                 </DossierCardShell>
 
@@ -625,17 +618,22 @@ const styles = StyleSheet.create({
     minHeight: 0,
     gap: 10,
   },
-  cargoRiskShell: {
+  cargoPreviewMeasure: {
     flex: 1,
-    alignSelf: 'stretch',
-    justifyContent: 'center',
-    alignItems: 'center',
     minHeight: 0,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  cargoRiskShellTextured: {
+  hubCargoMatShell: {
     position: 'relative',
     overflow: 'hidden',
-    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  hubCargoMatShellTextured: {
+    backgroundColor: 'rgba(5, 6, 8, 0.55)',
   },
   cargoGridFrame: {
     position: 'relative',

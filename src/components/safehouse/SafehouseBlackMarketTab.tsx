@@ -122,6 +122,7 @@ function FenceRow({
   isDesktop,
   onSell,
 }: FenceRowProps): React.JSX.Element {
+  const { scaleSize, scaleSpacing } = useHubLayout();
   const [sellQty, setSellQty] = useState(1);
 
   useEffect(() => {
@@ -130,6 +131,15 @@ function FenceRow({
 
   const decrement = () => setSellQty((prev) => Math.max(1, prev - 1));
   const increment = () => setSellQty((prev) => Math.min(quantity, prev + 1));
+  const inlineButtonHeight = {
+    minHeight: scaleSize(36),
+    paddingVertical: scaleSpacing(8),
+  };
+  const stepButtonStyle = {
+    ...inlineButtonHeight,
+    minWidth: scaleSize(26),
+    paddingHorizontal: scaleSpacing(4),
+  };
 
   return (
     <View
@@ -152,25 +162,31 @@ function FenceRow({
       </View>
       <View style={styles.fenceActions}>
         <TacticalButton
-          label="[ − ]"
+          label="−"
           active={sellQty > 1}
           onPress={decrement}
           accentColor={economyColor}
           mutedColor={mutedColor}
           variant="inline"
-          style={dossierOpaqueCtaStyle(economyColor)}
+          labelSize={8}
+          labelLineHeight={12}
+          suppressGlow
+          style={[dossierOpaqueCtaStyle(economyColor), stepButtonStyle]}
         />
         <TerminalText variant="body" style={[styles.fenceQty, { color: textColor }]}>
           {sellQty}
         </TerminalText>
         <TacticalButton
-          label="[ + ]"
+          label="+"
           active={sellQty < quantity}
           onPress={increment}
           accentColor={economyColor}
           mutedColor={mutedColor}
           variant="inline"
-          style={dossierOpaqueCtaStyle(economyColor)}
+          labelSize={8}
+          labelLineHeight={12}
+          suppressGlow
+          style={[dossierOpaqueCtaStyle(economyColor), stepButtonStyle]}
         />
         <TacticalButton
           label="[ SELL ]"
@@ -179,7 +195,7 @@ function FenceRow({
           accentColor={economyColor}
           mutedColor={mutedColor}
           variant="inline"
-          style={dossierOpaqueCtaStyle(economyColor)}
+          style={[dossierOpaqueCtaStyle(economyColor), inlineButtonHeight]}
         />
       </View>
       <HubCargoIconBox
@@ -472,7 +488,7 @@ const styles = StyleSheet.create({
   },
   fenceActions: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 4,
     flexShrink: 0,
     alignItems: 'center',
     paddingHorizontal: 8,

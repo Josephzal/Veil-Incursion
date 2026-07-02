@@ -1,15 +1,22 @@
 import React from 'react';
-import { Image, StyleSheet, View } from 'react-native';
+import { Image, StyleSheet, View, type ImageResizeMode } from 'react-native';
 import { CARGO_GRID_BACKGROUND, CARGO_GRID_BACKDROP_DIM } from '../../constants/cargoGridVisual';
 
+interface CargoGridBackdropProps {
+  /** contain preserves mat artwork; cover fills the host. */
+  resizeMode?: ImageResizeMode;
+}
+
 /** Full-bleed tactical cargo mat behind the grid cells. */
-export default function CargoGridBackdrop(): React.JSX.Element {
+export default function CargoGridBackdrop({
+  resizeMode = 'cover',
+}: CargoGridBackdropProps): React.JSX.Element {
   return (
     <View pointerEvents="none" style={styles.layer}>
       <Image
         source={CARGO_GRID_BACKGROUND}
         style={styles.image}
-        resizeMode="cover"
+        resizeMode={resizeMode}
       />
       <View style={styles.dimOverlay} />
     </View>

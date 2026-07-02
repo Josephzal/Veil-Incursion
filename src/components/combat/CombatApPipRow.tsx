@@ -43,7 +43,7 @@ export default function CombatApPipRow({
           const filled = index < current;
           const fillColor = filled
             ? (queued ? 'rgba(186, 230, 253, 0.95)' : accent)
-            : 'rgba(15, 23, 42, 0.65)';
+            : '#0f172a';
           const borderColor = filled ? accent : 'rgba(148, 163, 184, 0.45)';
 
           return (

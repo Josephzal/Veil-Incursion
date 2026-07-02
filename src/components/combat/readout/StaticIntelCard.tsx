@@ -17,6 +17,7 @@ import CombatEnemySlotBars from '../CombatEnemySlotBars';
 import EnemyIntentDetailOverlay from './EnemyIntentDetailOverlay';
 import type { EnemyStatusEffectKey } from '../../../utils/enemyStatusEffects';
 import { ENEMY_STATUS_EFFECTS } from '../../../utils/enemyStatusEffects';
+import { DOSSIER_ROW_BG } from '../../../constants/dossierSurface';
 import { useCombatDesktopLayout } from '../../../hooks/useCombatDesktopLayout';
 
 const MONO = 'monospace';
@@ -199,7 +200,6 @@ const styles = StyleSheet.create({
     minHeight: 0,
     maxHeight: '100%',
     width: '100%',
-    backgroundColor: 'rgba(10, 11, 15, 0.96)',
     paddingHorizontal: 6,
     paddingTop: 0,
     paddingBottom: 5,
@@ -246,7 +246,7 @@ const styles = StyleSheet.create({
   extraTagChip: {
     borderWidth: 1,
     borderColor: 'rgba(139, 92, 246, 0.45)',
-    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    backgroundColor: DOSSIER_ROW_BG,
     paddingHorizontal: 4,
     paddingVertical: 1,
   },

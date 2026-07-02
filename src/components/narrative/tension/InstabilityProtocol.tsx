@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { Platform, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { readPressableHover, terminalHoverStyle } from '../../../utils/terminalHoverStyle';
 import TacticalButton from '../../TacticalButton';
 import { hubCtaButtonStyle, resolveHubCtaFill } from '../../../constants/hubCta';
@@ -161,8 +161,8 @@ export default function InstabilityProtocol({
       residueHintLine: 13 * fontScale,
       penalty: 10 * fontScale,
       panelPad: scaleSpacing(NARRATIVE_UNIFIED_PANEL_PADDING),
-      panelPadBottom: scaleSpacing(40),
-      actionGap: scaleSpacing(16),
+      actionGap: scaleSpacing(12),
+      scrollBottomPad: scaleSpacing(16),
     }),
     [fontScale, scaleSpacing, scaledGaugeHeight],
   );
@@ -221,191 +221,204 @@ export default function InstabilityProtocol({
         {
           paddingTop: scales.panelPad,
           paddingHorizontal: scales.panelPad,
-          paddingBottom: scales.panelPadBottom,
+          paddingBottom: scales.panelPad,
         },
       ]}
     >
-      <Text
-        style={[
-          styles.header,
-          { fontSize: scales.header, lineHeight: scales.headerLine },
+      <ScrollView
+        style={styles.scrollBody}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: scales.scrollBottomPad },
         ]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        SIPHON MATRIX // INSTABILITY PROTOCOL
-      </Text>
+        <Text
+          style={[
+            styles.header,
+            { fontSize: scales.header, lineHeight: scales.headerLine },
+          ]}
+        >
+          SIPHON MATRIX // INSTABILITY PROTOCOL
+        </Text>
 
-      <Text
-        style={[
-          styles.instructions,
-          {
-            fontSize: scales.body,
-            lineHeight: scales.bodyLine,
-            marginBottom: 24,
-          },
-        ]}
-      >
-        Draw deeper from the rift to escalate raw occult extraction. Extraction route opens only after instability crosses the medium threshold ({EXTRACT_MIN_INSTABILITY}%+).
-      </Text>
+        <Text
+          style={[
+            styles.instructions,
+            {
+              fontSize: scales.body,
+              lineHeight: scales.bodyLine,
+              marginBottom: scaleSpacing(12),
+            },
+          ]}
+        >
+          Draw deeper from the rift to escalate raw occult extraction. Extraction route opens only after instability crosses the medium threshold ({EXTRACT_MIN_INSTABILITY}%+).
+        </Text>
 
-      <Text
-        style={[
-          styles.gaugeLabel,
-          { fontSize: scales.gaugeLabel, lineHeight: scales.gaugeLabel + 3 },
-        ]}
-      >
-        INSTABILITY GAUGE
-      </Text>
+        <Text
+          style={[
+            styles.gaugeLabel,
+            { fontSize: scales.gaugeLabel, lineHeight: scales.gaugeLabel + 3 },
+          ]}
+        >
+          INSTABILITY GAUGE
+        </Text>
 
-      <View
-        style={[
-          styles.gaugeTrack,
-          {
-            height: scaledGaugeHeight,
-            marginTop: scaleSpacing(8),
-          },
-        ]}
-      >
         <View
           style={[
-            styles.gaugeFill,
+            styles.gaugeTrack,
             {
-              width: `${instability}%`,
-              backgroundColor: fillColor,
-            },
-          ]}
-        />
-        <Text
-          style={[
-            styles.gaugePct,
-            {
-              fontSize: scales.gaugePct,
-              lineHeight: scales.gaugePctLine,
               height: scaledGaugeHeight,
-            },
-          ]}
-        >
-          {instability}%
-        </Text>
-      </View>
-
-      <Text
-        style={[
-          styles.tier,
-          {
-            fontSize: scales.tier,
-            lineHeight: scales.tier + 4,
-            marginTop: scaleSpacing(8),
-          },
-        ]}
-      >
-        {tierLabel(instability)}
-      </Text>
-
-      <View
-        style={[
-          styles.feedbackSlot,
-          {
-            minHeight: scales.feedbackLine,
-            marginTop: scaleSpacing(6),
-          },
-        ]}
-      >
-        <Text
-          style={[
-            styles.feedback,
-            {
-              fontSize: scales.feedback,
-              lineHeight: scales.feedbackLine,
-            },
-          ]}
-        >
-          {feedbackLine}
-        </Text>
-      </View>
-
-      <View
-        style={[
-          styles.residueBox,
-          {
-            padding: scaleSpacing(24),
-            marginTop: scaleSpacing(32),
-          },
-        ]}
-      >
-        <Text
-          style={[
-            styles.residueLabel,
-            { fontSize: scales.residueLabel, lineHeight: scales.residueLabel + 4 },
-          ]}
-        >
-          VEIL RESIDUE SECURED
-        </Text>
-        <Text
-          style={[
-            styles.residueValue,
-            {
-              fontSize: scales.residueValue,
-              lineHeight: scales.residueValue + 4,
               marginTop: scaleSpacing(8),
             },
           ]}
         >
-          {totalCredits}
-        </Text>
-        <Text
-          style={[
-            styles.residueHint,
-            {
-              fontSize: scales.residueHint,
-              lineHeight: scales.residueHintLine,
-              minHeight: scales.residueHintLine * 2,
-              marginTop: scaleSpacing(8),
-            },
-          ]}
-          numberOfLines={2}
-        >
-          {residueSubtext(canExtract, totalCredits, instability)}
-        </Text>
-      </View>
-
-      <View style={[styles.actionCol, { gap: scales.actionGap, marginTop: scaleSpacing(24) }]}>
-        <TacticalButton
-          label="SIPHON ANOMALY"
-          active
-          disabled={resolvedRefState}
-          onPress={handleSiphon}
-          accentColor={SIPHON_LABEL}
-          mutedColor={BODY_MUTED}
-          variant="cta"
-          style={siphonButtonStyle}
-        />
-
-        <TacticalButton
-          label="SEAL RIFT"
-          active={canExtract}
-          disabled={extractLocked}
-          onPress={handleExtract}
-          accentColor={canExtract && !resolvedRefState ? TERMINAL_GREEN : LOCKED_LABEL}
-          mutedColor={BODY_MUTED}
-          variant="cta"
-          style={extractButtonStyle}
-        />
-      </View>
-
-      <View style={[styles.penaltySlot, { minHeight: scales.penalty + 4, marginTop: scaleSpacing(16) }]}>
-        {penaltyHint ? (
+          <View
+            style={[
+              styles.gaugeFill,
+              {
+                width: `${instability}%`,
+                backgroundColor: fillColor,
+              },
+            ]}
+          />
           <Text
             style={[
-              styles.penalty,
+              styles.gaugePct,
               {
-                fontSize: scales.penalty,
-                lineHeight: scales.penalty + 4,
+                fontSize: scales.gaugePct,
+                lineHeight: scales.gaugePctLine,
+                height: scaledGaugeHeight,
               },
             ]}
           >
-            {penaltyHint}
+            {instability}%
           </Text>
-        ) : null}
+        </View>
+
+        <Text
+          style={[
+            styles.tier,
+            {
+              fontSize: scales.tier,
+              lineHeight: scales.tier + 4,
+              marginTop: scaleSpacing(8),
+            },
+          ]}
+        >
+          {tierLabel(instability)}
+        </Text>
+
+        <View
+          style={[
+            styles.feedbackSlot,
+            {
+              minHeight: scales.feedbackLine,
+              marginTop: scaleSpacing(6),
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.feedback,
+              {
+                fontSize: scales.feedback,
+                lineHeight: scales.feedbackLine,
+              },
+            ]}
+          >
+            {feedbackLine}
+          </Text>
+        </View>
+
+        <View
+          style={[
+            styles.residueBox,
+            {
+              padding: scaleSpacing(14),
+              marginTop: scaleSpacing(10),
+              marginBottom: scaleSpacing(4),
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.residueLabel,
+              { fontSize: scales.residueLabel, lineHeight: scales.residueLabel + 4 },
+            ]}
+          >
+            VEIL RESIDUE SECURED
+          </Text>
+          <Text
+            style={[
+              styles.residueValue,
+              {
+                fontSize: scales.residueValue,
+                lineHeight: scales.residueValue + 4,
+                marginTop: scaleSpacing(8),
+              },
+            ]}
+          >
+            {totalCredits}
+          </Text>
+          <Text
+            style={[
+              styles.residueHint,
+              {
+                fontSize: scales.residueHint,
+                lineHeight: scales.residueHintLine,
+                minHeight: scales.residueHintLine * 2,
+                marginTop: scaleSpacing(8),
+              },
+            ]}
+            numberOfLines={2}
+          >
+            {residueSubtext(canExtract, totalCredits, instability)}
+          </Text>
+        </View>
+      </ScrollView>
+
+      <View style={[styles.actionFooter, { paddingTop: scaleSpacing(16) }]}>
+        <View style={[styles.actionCol, { gap: scales.actionGap }]}>
+          <TacticalButton
+            label="SIPHON ANOMALY"
+            active
+            disabled={resolvedRefState}
+            onPress={handleSiphon}
+            accentColor={SIPHON_LABEL}
+            mutedColor={BODY_MUTED}
+            variant="cta"
+            style={siphonButtonStyle}
+          />
+
+          <TacticalButton
+            label="SEAL RIFT"
+            active={canExtract}
+            disabled={extractLocked}
+            onPress={handleExtract}
+            accentColor={canExtract && !resolvedRefState ? TERMINAL_GREEN : LOCKED_LABEL}
+            mutedColor={BODY_MUTED}
+            variant="cta"
+            style={extractButtonStyle}
+          />
+        </View>
+
+        <View style={[styles.penaltySlot, { minHeight: scales.penalty + 4 }]}>
+          {penaltyHint ? (
+            <Text
+              style={[
+                styles.penalty,
+                {
+                  fontSize: scales.penalty,
+                  lineHeight: scales.penalty + 4,
+                },
+              ]}
+            >
+              {penaltyHint}
+            </Text>
+          ) : null}
+        </View>
       </View>
     </View>
   );
@@ -419,7 +432,18 @@ const styles = StyleSheet.create({
     backgroundColor: NARRATIVE_UNIFIED_PANEL_BG,
     borderWidth: 1,
     borderColor: NARRATIVE_UNIFIED_PANEL_BORDER,
-    justifyContent: 'flex-start',
+    overflow: 'hidden',
+  },
+  scrollBody: {
+    flex: 1,
+    minHeight: 0,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
+  actionFooter: {
+    flexShrink: 0,
+    width: '100%',
   },
   header: {
     fontFamily: 'monospace',

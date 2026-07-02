@@ -5,6 +5,8 @@ import NarrativeStepperModule from '../components/NarrativeStepperModule';
 import ProceduralNarrativeModule from '../components/ProceduralNarrativeModule';
 import NarrativeArtTerminalFrame from '../components/narrative/NarrativeArtTerminalFrame';
 import IncursionRunLayout from '../components/IncursionRunLayout';
+import RunEventImmersiveBackdrop from '../components/layout/RunEventImmersiveBackdrop';
+import TerminalOverlay from '../components/TerminalOverlay';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
@@ -137,45 +139,65 @@ export default function NarrativeScreen(): React.JSX.Element {
   return (
     <IncursionShell>
       <IncursionRunLayout hideRunChrome style={{ backgroundColor: theme.backgroundColor }}>
-        <NarrativeArtTerminalFrame
+        <RunEventImmersiveBackdrop
           backgroundImage={backgroundImage}
-          accentColor={theme.primaryColor}
-          flavorText={node.scenarioText}
-          flavorPrimaryColor={theme.primaryColor}
-          flavorMutedColor={theme.mutedColor}
-          header={(
+          contentPadding={16 * fontScale}
+          scrimOpacity={0}
+          overlay={<TerminalOverlay />}
+        >
+          <View style={styles.masterShell}>
             <RunEventNodeHeader
               title={headerCopy.title}
               subtitle={headerCopy.subtitle}
               fontScale={fontScale}
               showRunChrome
             />
-          )}
-        >
-          {isProcedural ? (
-            <ProceduralNarrativeModule
-              node={node}
-              onResolve={handleProceduralResolve}
-              borderColor={theme.borderColor}
-              mutedColor={theme.mutedColor}
-              primaryColor={theme.primaryColor}
-            />
-          ) : (
-            <NarrativeStepperModule
-              node={node}
-              onComplete={handleLegacyComplete}
-              borderColor={theme.borderColor}
-              mutedColor={theme.mutedColor}
-              primaryColor={theme.primaryColor}
-            />
-          )}
-        </NarrativeArtTerminalFrame>
+
+            <View style={styles.bodyStage}>
+              <NarrativeArtTerminalFrame
+                flavorText={node.scenarioText}
+                flavorPrimaryColor={theme.primaryColor}
+                flavorMutedColor={theme.mutedColor}
+              >
+                {isProcedural ? (
+                  <ProceduralNarrativeModule
+                    node={node}
+                    onResolve={handleProceduralResolve}
+                    borderColor={theme.borderColor}
+                    mutedColor={theme.mutedColor}
+                    primaryColor={theme.primaryColor}
+                  />
+                ) : (
+                  <NarrativeStepperModule
+                    node={node}
+                    onComplete={handleLegacyComplete}
+                    borderColor={theme.borderColor}
+                    mutedColor={theme.mutedColor}
+                    primaryColor={theme.primaryColor}
+                  />
+                )}
+              </NarrativeArtTerminalFrame>
+            </View>
+          </View>
+        </RunEventImmersiveBackdrop>
       </IncursionRunLayout>
     </IncursionShell>
   );
 }
 
 const styles = StyleSheet.create({
+  masterShell: {
+    flex: 1,
+    width: '100%',
+    minHeight: 0,
+    alignItems: 'stretch',
+  },
+  bodyStage: {
+    flex: 1,
+    width: '100%',
+    minHeight: 0,
+    alignItems: 'center',
+  },
   fallbackHost: {
     flex: 1,
     justifyContent: 'center',

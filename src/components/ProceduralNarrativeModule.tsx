@@ -284,7 +284,7 @@ export default function ProceduralNarrativeModule({
   };
 
   const confirmLabel = (() => {
-    if (!selectedChoice) return '[ CONFIRM RESOLVER ]';
+    if (!selectedChoice) return '[ CONFIRM ]';
     if (selectedChoice === 'A') return '[ ENGAGE TENSION PROTOCOL ]';
     if (selectedChoice === 'D') {
       if (optionDVariant === 'Retreat') return '[ CONFIRM ABORT — RETURN TO MAP ]';

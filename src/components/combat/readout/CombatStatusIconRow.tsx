@@ -157,13 +157,13 @@ const styles = StyleSheet.create({
   iconButton: {
     borderWidth: 1,
     borderColor: 'rgba(196, 167, 255, 0.72)',
-    backgroundColor: 'rgba(28, 16, 48, 0.92)',
+    backgroundColor: '#1c1030',
     alignItems: 'center',
     justifyContent: 'center',
   },
   iconButtonSelected: {
     borderColor: '#ddd6fe',
-    backgroundColor: 'rgba(124, 58, 237, 0.55)',
+    backgroundColor: '#4c1d95',
   },
   tooltip: {
     backgroundColor: TOOLTIP_BG,
