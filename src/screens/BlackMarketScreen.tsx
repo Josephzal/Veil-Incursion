@@ -22,10 +22,8 @@ import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useNodeProgression } from '../hooks/useNodeProgression';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import { DOSSIER_CTA_BG, dossierOpaqueCtaStyle } from '../constants/dossierSurface';
 import { hubCtaButtonStyle } from '../constants/hubCta';
-import {
-  NARRATIVE_UNIFIED_PANEL_BORDER,
-} from '../constants/narrativeLayout';
 import IncursionShell from '../components/IncursionShell';
 import IncursionRunLayout from '../components/IncursionRunLayout';
 import RunEventImmersiveBackdrop from '../components/layout/RunEventImmersiveBackdrop';
@@ -33,10 +31,10 @@ import RunEventNodeHeader from '../components/layout/RunEventNodeHeader';
 import RunIncursionCargoPanel from '../components/run/RunIncursionCargoPanel';
 import DraggableMarketListing from '../components/run/DraggableMarketListing';
 import BlackMarketFenceBay from '../components/run/BlackMarketFenceBay';
+import DossierCardShell from '../components/hub/DossierCardShell';
 import type { CargoDragSource } from '../components/CargoGridBoard';
 import type { CargoItemId } from '../types/cargoGrid';
 import { resolveCargoItemIcon } from '../utils/cargoItemIcon';
-import { readPressableHover, terminalHoverStyle } from '../utils/terminalHoverStyle';
 import {
   pointInWindowRect,
   resolveCargoGridCellFromWindow,
@@ -49,11 +47,7 @@ import { HIDDEN_SCROLLBAR_VIEW_STYLE, HIDDEN_SCROLLVIEW_PROPS } from '../utils/h
 const MUTED_SLATE = '#94A3B8';
 const PHOSPHOR_GREEN = '#4ADE80';
 const LEAVE_ACCENT = '#CBD5E1';
-const LEAVE_BORDER = '#94A3B8';
-const HEADER_BORDER = '#334155';
-const MANIFEST_RETURN_TINT = 'rgba(74, 222, 128, 0.08)';
-const IMMERSIVE_PANEL_BG = 'rgba(15, 23, 42, 0.85)';
-const IMMERSIVE_PANEL_BORDER = '#1e293b';
+const MANIFEST_ACTIVE_BG = DOSSIER_CTA_BG;
 
 const FLAT_CTA_OVERRIDE: ViewStyle = Platform.select({
   web: { boxShadow: 'none' },
@@ -141,12 +135,23 @@ export default function BlackMarketScreen(): React.JSX.Element {
   const s = useMemo(() => ({
     panelPad: 14 * fontScale,
     section: 8 * fontScale,
-    creditLabel: 8 * fontScale,
     creditValue: 13 * fontScale,
     dossierMeta: 8 * fontScale,
     actionGap: 10 * fontScale,
     listGap: 6 * fontScale,
   }), [fontScale]);
+
+  const sectionLabelStyle = useMemo(
+    () => [
+      styles.sectionLabel,
+      {
+        color: MUTED_SLATE,
+        fontSize: s.section,
+        lineHeight: s.section * 1.4,
+      },
+    ],
+    [s.section],
+  );
 
   const isOverManifest = useCallback((x: number, y: number) => {
     const rect = manifestMetricsRef.current;
@@ -289,10 +294,10 @@ export default function BlackMarketScreen(): React.JSX.Element {
     (state: { pressed: boolean; hovered?: boolean }) => [
       hubCtaButtonStyle(PHOSPHOR_GREEN, scaleSize, scaleSpacing, !canBind),
       FLAT_CTA_OVERRIDE,
+      dossierOpaqueCtaStyle(PHOSPHOR_GREEN),
       {
         opacity: canBind ? (state.pressed ? 0.85 : 1) : 0.35,
       },
-      terminalHoverStyle(readPressableHover(state), state.pressed),
     ],
     [canBind, scaleSize, scaleSpacing],
   );
@@ -301,12 +306,10 @@ export default function BlackMarketScreen(): React.JSX.Element {
     (state: { pressed: boolean; hovered?: boolean }) => [
       hubCtaButtonStyle(LEAVE_ACCENT, scaleSize, scaleSpacing, leaving),
       FLAT_CTA_OVERRIDE,
+      dossierOpaqueCtaStyle(LEAVE_ACCENT),
       {
-        backgroundColor: 'rgba(148, 163, 184, 0.1)',
-        borderColor: LEAVE_BORDER,
         opacity: leaving ? 0.5 : state.pressed ? 0.88 : 1,
       },
-      terminalHoverStyle(readPressableHover(state), state.pressed),
     ],
     [leaving, scaleSize, scaleSpacing],
   );
@@ -339,29 +342,14 @@ export default function BlackMarketScreen(): React.JSX.Element {
                   },
                 ]}
               >
-              <View
-                style={[
-                  styles.panel,
-                  styles.marketPanel,
-                  { padding: s.panelPad, gap: s.actionGap },
-                ]}
+              <DossierCardShell
+                fillHeight
+                padding={s.panelPad}
+                style={styles.marketPanel}
+                contentStyle={[styles.panelContent, { gap: s.actionGap }]}
               >
-                <View
-                  style={[
-                    styles.creditsReadout,
-                    { borderColor: HEADER_BORDER, padding: 10 * fontScale },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.creditLabel,
-                      {
-                        color: MUTED_SLATE,
-                        fontSize: s.creditLabel,
-                        lineHeight: s.creditLabel * 1.35,
-                      },
-                    ]}
-                  >
+                <View style={styles.creditsReadout}>
+                  <Text style={sectionLabelStyle}>
                     RUN CREDITS
                   </Text>
                   <Text
@@ -384,7 +372,6 @@ export default function BlackMarketScreen(): React.JSX.Element {
                           color: MUTED_SLATE,
                           fontSize: s.dossierMeta,
                           lineHeight: s.dossierMeta * 1.35,
-                          marginTop: 4 * fontScale,
                         },
                       ]}
                     >
@@ -428,7 +415,7 @@ export default function BlackMarketScreen(): React.JSX.Element {
                           listing={listing}
                           price={effectivePrice}
                           fontScale={fontScale}
-                          borderColor={NARRATIVE_UNIFIED_PANEL_BORDER}
+                          borderColor={theme.borderColor}
                           onDragStart={handleMarketDragStart}
                           onDragMove={handleMarketDragMove}
                           onDragEnd={handleMarketDragEnd}
@@ -465,25 +452,15 @@ export default function BlackMarketScreen(): React.JSX.Element {
                   disabled={leaving}
                   style={leaveButtonStyle}
                 />
-              </View>
+              </DossierCardShell>
 
-              <View
-                style={[
-                  styles.panel,
-                  styles.cargoPanel,
-                  { padding: s.panelPad, gap: s.actionGap },
-                ]}
+              <DossierCardShell
+                fillHeight
+                padding={s.panelPad}
+                style={styles.cargoPanel}
+                contentStyle={[styles.panelContent, { gap: s.actionGap }]}
               >
-                <Text
-                  style={[
-                    styles.sectionLabel,
-                    {
-                      color: MUTED_SLATE,
-                      fontSize: s.section,
-                      lineHeight: s.section * 1.4,
-                    },
-                  ]}
-                >
+                <Text style={sectionLabelStyle}>
                   CARGO DECK
                 </Text>
                 <RunIncursionCargoPanel
@@ -503,7 +480,7 @@ export default function BlackMarketScreen(): React.JSX.Element {
                     fenceMetricsRef.current = rect;
                   }}
                 />
-              </View>
+              </DossierCardShell>
               </View>
             </View>
 
@@ -551,17 +528,19 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
     minHeight: 0,
   },
-  panel: {
-    backgroundColor: IMMERSIVE_PANEL_BG,
-    borderWidth: 1,
-    borderColor: IMMERSIVE_PANEL_BORDER,
+  panelContent: {
+    flex: 1,
     minHeight: 0,
   },
   marketPanel: {
     flex: 1,
+    minHeight: 0,
+    minWidth: 0,
   },
   cargoPanel: {
     flex: 1,
+    minHeight: 0,
+    minWidth: 0,
     justifyContent: 'flex-start',
   },
   sectionLabel: {
@@ -576,7 +555,7 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   manifestZoneActive: {
-    backgroundColor: MANIFEST_RETURN_TINT,
+    backgroundColor: MANIFEST_ACTIVE_BG,
     borderWidth: 1,
     borderColor: PHOSPHOR_GREEN,
   },
@@ -591,14 +570,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   creditsReadout: {
-    borderWidth: 1,
-    backgroundColor: 'rgba(9, 9, 11, 0.85)',
     flexShrink: 0,
-  },
-  creditLabel: {
-    fontFamily: 'monospace',
-    letterSpacing: 0.8,
-    fontWeight: '700',
+    gap: 4,
   },
   creditValue: {
     fontFamily: 'monospace',

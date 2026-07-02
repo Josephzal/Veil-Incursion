@@ -3,6 +3,7 @@ import { useGameFlow } from '../context/GameFlowContext';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useRun } from '../context/RunContext';
 import { resolveExtractionVeilResidueDeposit } from '../data/extractionPersistenceEngine';
+import { transitionActions } from '../stores/transitionStore';
 import { RunNodeType } from '../types/game';
 
 export type DescentRoute =
@@ -103,28 +104,30 @@ export function useDescentNavigator() {
   }, [commitNodeEncounter, startBlackMarket, startNarrative, startCombat, startRest, startResourceHarvest, startPostCombatBoon]);
 
   const finalizeSectorExtraction = useCallback(() => {
-    const inc = incursionRef.current;
-    const { totalDeposit: residueVaulted } = resolveExtractionVeilResidueDeposit(
-      inc.cargo,
-      inc.sessionVeilResidueCollected,
-    );
-    persistRunExtraction({
-      cargo: inc.cargo,
-      aegisLoadout: inc.aegisLoadout,
-      hexShotLoadout: inc.hexShotLoadout,
-      envoyLoadout: inc.envoyLoadout,
-      sessionVeilResidueCollected: inc.sessionVeilResidueCollected,
+    transitionActions.startExtracting(() => {
+      const inc = incursionRef.current;
+      const { totalDeposit: residueVaulted } = resolveExtractionVeilResidueDeposit(
+        inc.cargo,
+        inc.sessionVeilResidueCollected,
+      );
+      persistRunExtraction({
+        cargo: inc.cargo,
+        aegisLoadout: inc.aegisLoadout,
+        hexShotLoadout: inc.hexShotLoadout,
+        envoyLoadout: inc.envoyLoadout,
+        sessionVeilResidueCollected: inc.sessionVeilResidueCollected,
+      });
+      const credits = calculateSectorExtractionPayout();
+      const riftIron = Math.max(5, Math.floor(credits / 40));
+      addCredits(credits);
+      addRiftIron(riftIron);
+      const residueLine = residueVaulted > 0
+        ? ` +${residueVaulted} VEIL RESIDUE VAULTED`
+        : '';
+      appendRunLog(`>> SECTOR EXTRACTION COMPLETE — +${credits} CREDITS, LOOT ROUTED TO HOME STASH, +${riftIron} RIFT IRON${residueLine}.`);
+      endRun('SECTOR EXTRACTION SECURED');
+      goToHub();
     });
-    const credits = calculateSectorExtractionPayout();
-    const riftIron = Math.max(5, Math.floor(credits / 40));
-    addCredits(credits);
-    addRiftIron(riftIron);
-    const residueLine = residueVaulted > 0
-      ? ` +${residueVaulted} VEIL RESIDUE VAULTED`
-      : '';
-    appendRunLog(`>> SECTOR EXTRACTION COMPLETE — +${credits} CREDITS, LOOT ROUTED TO HOME STASH, +${riftIron} RIFT IRON${residueLine}.`);
-    endRun('SECTOR EXTRACTION SECURED');
-    goToHub();
     return { route: 'EXTRACT_SUCCESS' as const };
   }, [addCredits, addRiftIron, appendRunLog, calculateSectorExtractionPayout, endRun, goToHub, persistRunExtraction]);
 

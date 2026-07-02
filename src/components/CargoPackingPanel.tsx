@@ -3,6 +3,7 @@ import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import HapticPressable from './HapticPressable';
 import HarvestExtractorPanel from './harvest/HarvestExtractorPanel';
 import SelectionContinueButton from './SelectionContinueButton';
+import CargoGridBackdrop from './cargo/CargoGridBackdrop';
 import {
   HARVEST_BOARD_COLUMN_GAP,
   HARVEST_CONTENT_BUFFER,
@@ -72,6 +73,8 @@ interface CargoPackingPanelProps {
     absoluteY: number,
   ) => boolean;
   onDragPositionChange?: (payload: { source: CargoDragSource; x: number; y: number } | null) => void;
+  /** Tactical cargo mat behind the grid cells. */
+  cargoBackdrop?: boolean;
 }
 
 export default function CargoPackingPanel({
@@ -104,6 +107,7 @@ export default function CargoPackingPanel({
   stableExternalBay = false,
   onHubExternalDrop,
   onDragPositionChange,
+  cargoBackdrop = false,
 }: CargoPackingPanelProps): React.JSX.Element {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const { safeBottom, safeTop } = useLandscapeMetrics();
@@ -192,6 +196,7 @@ export default function CargoPackingPanel({
       onGridMetricsMeasured={onGridMetricsMeasured}
       onHubExternalDrop={onHubExternalDrop}
       onDragPositionChange={onDragPositionChange}
+      cargoBackdrop={cargoBackdrop}
       cellSize={cellSize}
       harvestTriPaneLayout={harvestTriPane}
       leftPaneHeader={harvestTriPane ? packHeader : undefined}
@@ -219,10 +224,12 @@ export default function CargoPackingPanel({
         styles.boardColumn,
         harvestLayout ? styles.boardColumnHarvest : null,
         embedded ? styles.boardColumnEmbedded : null,
+        cargoBackdrop && !harvestTriPane ? styles.boardColumnBackdropHost : null,
       ]}>
+        {cargoBackdrop && !harvestTriPane ? <CargoGridBackdrop /> : null}
         {packHeader}
 
-        <View style={harvestLayout ? [styles.gridAnchor, { width: frame.frameWidth }] : undefined}>
+        <View style={harvestLayout ? [styles.gridAnchor, { width: frame.frameWidth }] : styles.backdropContent}>
           {board}
         </View>
 
@@ -315,6 +322,20 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
     justifyContent: 'center',
     alignSelf: 'stretch',
+  },
+  boardColumnBackdropHost: {
+    position: 'relative',
+    overflow: 'hidden',
+    flex: 1,
+    width: '100%',
+    alignSelf: 'stretch',
+    justifyContent: 'center',
+  },
+  backdropContent: {
+    position: 'relative',
+    zIndex: 1,
+    width: '100%',
+    alignItems: 'center',
   },
   gridAnchor: {
     position: 'relative',

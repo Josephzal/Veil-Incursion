@@ -316,6 +316,7 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
                   sizeMode="extractor-block"
                 />
               )}
+              cargoBackdrop
             />
           </View>
         </RunEventScreenFrame>

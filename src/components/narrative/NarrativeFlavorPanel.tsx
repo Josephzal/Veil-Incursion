@@ -1,6 +1,7 @@
 import React from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { NARRATIVE_BODY_LINE_HEIGHT, NARRATIVE_UNIFIED_PANEL_BG, NARRATIVE_UNIFIED_PANEL_BORDER, NARRATIVE_UNIFIED_PANEL_PADDING } from '../../constants/narrativeLayout';
+import { ScrollView, StyleSheet, Text } from 'react-native';
+import DossierCardShell from '../hub/DossierCardShell';
+import { NARRATIVE_BODY_LINE_HEIGHT, NARRATIVE_UNIFIED_PANEL_PADDING } from '../../constants/narrativeLayout';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 
 interface NarrativeFlavorPanelProps {
@@ -12,7 +13,7 @@ interface NarrativeFlavorPanelProps {
 const MUTED_WHITE = '#F8FAFC';
 
 /**
- * Left-column field report — Terran Grid document panel over narrative art.
+ * Left-column field report — dossier panel over narrative art.
  */
 export default function NarrativeFlavorPanel({
   flavorText,
@@ -23,13 +24,11 @@ export default function NarrativeFlavorPanel({
   const panelPadding = scaleSpacing(NARRATIVE_UNIFIED_PANEL_PADDING);
 
   return (
-    <View
-      style={[
-        styles.panel,
-        {
-          padding: panelPadding,
-        },
-      ]}
+    <DossierCardShell
+      fillHeight
+      padding={panelPadding}
+      style={styles.panelShell}
+      contentStyle={styles.panelContent}
     >
       <Text
         style={[
@@ -63,30 +62,33 @@ export default function NarrativeFlavorPanel({
           {flavorText}
         </Text>
       </ScrollView>
-    </View>
+    </DossierCardShell>
   );
 }
 
 const styles = StyleSheet.create({
-  panel: {
+  panelShell: {
     flex: 1,
     width: '100%',
     minHeight: 0,
-    backgroundColor: NARRATIVE_UNIFIED_PANEL_BG,
-    borderWidth: 1,
-    borderColor: NARRATIVE_UNIFIED_PANEL_BORDER,
+  },
+  panelContent: {
+    flex: 1,
+    minHeight: 0,
     justifyContent: 'flex-start',
   },
   panelLabel: {
     fontFamily: 'monospace',
     letterSpacing: 1,
     fontWeight: '700',
+    flexShrink: 0,
   },
   scroll: {
-    flexGrow: 0,
+    flex: 1,
+    minHeight: 0,
   },
   scrollContent: {
-    flexGrow: 0,
+    flexGrow: 1,
     justifyContent: 'flex-start',
     paddingBottom: 8,
   },

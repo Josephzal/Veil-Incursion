@@ -25,6 +25,8 @@ import {
 import { useCombatTurnOptional } from '../context/CombatTurnContext';
 import type { CargoItemId, CargoRunState, PlacedCargoItem } from '../types/cargoGrid';
 import { CARGO_GRID_COLS, CARGO_GRID_ROWS, CARGO_ITEM_CATALOG } from '../types/cargoGrid';
+import { resolveCargoGridCellBackground } from '../constants/cargoGridVisual';
+import CargoGridBackdrop from './cargo/CargoGridBackdrop';
 import {
   HARVEST_DESKTOP_CENTER_FLEX,
   HARVEST_DESKTOP_LEFT_FLEX,
@@ -128,6 +130,8 @@ interface CargoGridBoardProps {
   rightPaneSlot?: React.ReactNode;
   leftPaneWidth?: number;
   rightPaneWidth?: number;
+  /** Tactical cargo mat texture behind grid cells. */
+  cargoBackdrop?: boolean;
 }
 
 function cellsForItem(itemId: CargoItemId, originRow: number, originCol: number): string[] {
@@ -421,6 +425,7 @@ export default function CargoGridBoard({
   rightPaneSlot,
   leftPaneWidth,
   rightPaneWidth,
+  cargoBackdrop = false,
 }: CargoGridBoardProps): React.JSX.Element {
   const cellSize = cellSizeProp ?? CARGO_CELL_SIZE;
   const { isDesktop, scaleSpacing } = useResponsiveScale();
@@ -785,7 +790,10 @@ export default function CargoGridBoard({
     <View
       ref={gridRef}
       onLayout={handleGridLayout}
-      style={[styles.gridFrame, { width: frameWidth, height: frameHeight }]}
+      style={[
+        styles.gridFrame,
+        { width: frameWidth, height: frameHeight },
+      ]}
     >
       <View style={[styles.cellsLayer, { gap: CARGO_CELL_GAP }]}>
         {Array.from({ length: CARGO_GRID_ROWS }, (_, row) =>
@@ -808,11 +816,12 @@ export default function CargoGridBoard({
                     borderColor: isPreview
                       ? (canDrop ? accentColor : '#ef4444')
                       : theme.borderColor,
-                    backgroundColor: isPreview
-                      ? (canDrop ? 'rgba(0, 255, 51, 0.18)' : 'rgba(239, 68, 68, 0.14)')
-                      : occupied
-                        ? 'rgba(0, 255, 51, 0.06)'
-                        : '#0a0b0f',
+                    backgroundColor: resolveCargoGridCellBackground({
+                      occupied,
+                      isPreview,
+                      canDrop,
+                      cargoBackdrop,
+                    }),
                   },
                 ]}
               />
@@ -1167,10 +1176,12 @@ export default function CargoGridBoard({
             <View
               style={[
                 styles.cargoPackBacking,
+                cargoBackdrop ? styles.cargoPackBackingTextured : null,
                 { borderColor: theme.borderColor },
                 isDesktop ? styles.cargoPackBackingDesktop : null,
               ]}
             >
+              {cargoBackdrop ? <CargoGridBackdrop /> : null}
               {leftPaneHeader}
               <View style={[styles.boardShell, { width: frameWidth }]}>
                 <View style={styles.gridDock}>{gridBlock}</View>
@@ -1319,6 +1330,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  cargoPackBackingTextured: {
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: 'rgba(5, 6, 8, 0.55)',
+  },
   cargoPackBackingDesktop: {
     alignItems: 'flex-start',
     justifyContent: 'flex-start',
@@ -1384,6 +1400,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: CARGO_CELL_GAP,
+    zIndex: 1,
   },
   cell: {
     width: CARGO_CELL_SIZE,
@@ -1393,6 +1410,7 @@ const styles = StyleSheet.create({
   placedLayer: {
     ...StyleSheet.absoluteFillObject,
     overflow: 'visible',
+    zIndex: 2,
   },
   placedLayerCombat: {
     zIndex: 4,

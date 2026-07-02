@@ -10,11 +10,12 @@ import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useNodeProgression } from '../hooks/useNodeProgression';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
-import { resolveHubCtaFill } from '../constants/hubCta';
 import IncursionShell from '../components/IncursionShell';
 import IncursionRunLayout from '../components/IncursionRunLayout';
 import RunEventImmersiveBackdrop from '../components/layout/RunEventImmersiveBackdrop';
 import RunEventNodeHeader from '../components/layout/RunEventNodeHeader';
+import DossierCardShell from '../components/hub/DossierCardShell';
+import { DOSSIER_CTA_BG, DOSSIER_ROW_BG, dossierOpaqueCtaStyle } from '../constants/dossierSurface';
 import { readPressableHover, terminalHoverStyle } from '../utils/terminalHoverStyle';
 import { resolveRunEventNodeHeaderFromNode } from '../utils/resolveRunEventNodeHeader';
 
@@ -24,8 +25,6 @@ const HEAL_GREEN = '#4ade80';
 const GRAFT_PURPLE = '#c084fc';
 const CANCEL_ACCENT = '#64748B';
 const CHOICE_BORDER = '#334155';
-const TELEMETRY_BG = 'rgba(15, 23, 42, 0.85)';
-const TELEMETRY_BORDER = 'rgba(255, 255, 255, 0.1)';
 
 const FLAT_CTA_OVERRIDE: ViewStyle = Platform.select({
   web: { boxShadow: 'none' },
@@ -89,10 +88,10 @@ function SanctuaryChoiceBlock({
           paddingHorizontal,
           borderColor,
           borderWidth: 2,
-          backgroundColor: selected ? `${accentColor}14` : TELEMETRY_BG,
+          backgroundColor: selected ? DOSSIER_CTA_BG : DOSSIER_ROW_BG,
           opacity: dimmed ? 0.35 : locked ? 0.4 : state.pressed ? 0.85 : 1,
         },
-        terminalHoverStyle(readPressableHover(state), state.pressed),
+        !selected ? terminalHoverStyle(readPressableHover(state), state.pressed) : null,
       ]}
     >
       <Text
@@ -284,7 +283,6 @@ export default function RestScreen(): React.JSX.Element {
         width: showInjectButton ? undefined : '100%' as const,
         flex: showInjectButton ? 1 : undefined,
         alignSelf: 'stretch' as const,
-        backgroundColor: resolveHubCtaFill(actionAccent),
         borderColor: actionAccent,
         borderWidth: 2,
         minHeight: choicePaddingVertical * 2 + scaleFont(14),
@@ -293,7 +291,7 @@ export default function RestScreen(): React.JSX.Element {
         opacity: actionEnabled ? (state.pressed ? 0.85 : 1) : 0.2,
       },
       FLAT_CTA_OVERRIDE,
-      terminalHoverStyle(readPressableHover(state), state.pressed),
+      dossierOpaqueCtaStyle(actionAccent),
     ],
     [
       actionAccent,
@@ -311,7 +309,6 @@ export default function RestScreen(): React.JSX.Element {
       {
         flex: 1,
         alignSelf: 'stretch' as const,
-        backgroundColor: 'rgba(100, 116, 139, 0.12)',
         borderColor: CANCEL_ACCENT,
         borderWidth: 2,
         minHeight: choicePaddingVertical * 2 + scaleFont(14),
@@ -320,22 +317,19 @@ export default function RestScreen(): React.JSX.Element {
         opacity: state.pressed ? 0.85 : 1,
       },
       FLAT_CTA_OVERRIDE,
-      terminalHoverStyle(readPressableHover(state), state.pressed),
+      dossierOpaqueCtaStyle(CANCEL_ACCENT),
     ],
     [choicePaddingHorizontal, choicePaddingVertical, scaleFont],
   );
 
   const leftPanelContent = (
     <>
-      <View
-        style={[
-          styles.telemetryBox,
-          {
-            padding: telemetryPadding,
-            borderColor: TELEMETRY_BORDER,
-            gap: graftTerminalOpen ? 0 : 12,
-            flexShrink: graftTerminalOpen ? 1 : 0,
-          },
+      <DossierCardShell
+        padding={telemetryPadding}
+        style={styles.telemetryShell}
+        contentStyle={[
+          styles.telemetryContent,
+          { gap: graftTerminalOpen ? 0 : 12, flexShrink: graftTerminalOpen ? 1 : 0 },
         ]}
       >
         {!graftTerminalOpen ? (
@@ -389,7 +383,7 @@ export default function RestScreen(): React.JSX.Element {
           >
           </Text>
         </View>
-      </View>
+      </DossierCardShell>
 
       {!graftTerminalOpen ? (
         <View style={[styles.choiceCol, { gap: choiceGap }]}>
@@ -545,11 +539,11 @@ const styles = StyleSheet.create({
     minHeight: 0,
     width: '100%',
   },
-  telemetryBox: {
+  telemetryShell: {
     width: '100%',
-    backgroundColor: TELEMETRY_BG,
-    borderWidth: 1,
-    gap: 12,
+  },
+  telemetryContent: {
+    width: '100%',
   },
   narrativeText: {
     fontFamily: 'monospace',

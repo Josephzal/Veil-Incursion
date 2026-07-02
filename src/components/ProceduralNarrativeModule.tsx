@@ -15,10 +15,10 @@ import {
   NARRATIVE_CHOICE_PADDING_H,
   NARRATIVE_CHOICE_PADDING_V,
   NARRATIVE_TERMINAL_BODY_MIN_HEIGHT,
-  NARRATIVE_UNIFIED_PANEL_BG,
-  NARRATIVE_UNIFIED_PANEL_BORDER,
   NARRATIVE_UNIFIED_PANEL_PADDING,
 } from '../constants/narrativeLayout';
+import { DOSSIER_CTA_BG, DOSSIER_ROW_BG, dossierOpaqueCtaStyle } from '../constants/dossierSurface';
+import DossierCardShell from './hub/DossierCardShell';
 import { hubCtaButtonStyle } from '../constants/hubCta';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
@@ -228,6 +228,7 @@ export default function ProceduralNarrativeModule({
     () => [
       styles.confirmButton,
       hubCtaButtonStyle(TERMINAL_ACCENT, scaleSize, scaleSpacing, !canConfirm),
+      dossierOpaqueCtaStyle(TERMINAL_ACCENT),
     ],
     [canConfirm, scaleSize, scaleSpacing],
   );
@@ -327,7 +328,12 @@ export default function ProceduralNarrativeModule({
   }
 
   return (
-    <View style={styles.scenarioShell}>
+    <DossierCardShell
+      fillHeight
+      padding={NARRATIVE_UNIFIED_PANEL_PADDING}
+      style={styles.scenarioShell}
+      contentStyle={styles.scenarioContent}
+    >
       <View
         style={[
           styles.contentStage,
@@ -410,7 +416,7 @@ export default function ProceduralNarrativeModule({
           <View style={[styles.footerSpacer, { minHeight: scaleSize(48) }]} pointerEvents="none" />
         )}
       </View>
-    </View>
+    </DossierCardShell>
   );
 }
 
@@ -424,11 +430,11 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     minHeight: 0,
+  },
+  scenarioContent: {
+    flex: 1,
+    minHeight: 0,
     overflow: 'hidden',
-    backgroundColor: NARRATIVE_UNIFIED_PANEL_BG,
-    borderWidth: 1,
-    borderColor: NARRATIVE_UNIFIED_PANEL_BORDER,
-    padding: NARRATIVE_UNIFIED_PANEL_PADDING,
   },
   contentStage: {
     flex: 1,
@@ -474,14 +480,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: 4,
     width: '100%',
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    backgroundColor: DOSSIER_ROW_BG,
     justifyContent: 'center',
   },
   choiceBtnSelected: {
-    backgroundColor: 'rgba(0, 255, 51, 0.08)',
+    backgroundColor: DOSSIER_CTA_BG,
   },
   choiceBtnLocked: {
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    backgroundColor: DOSSIER_ROW_BG,
   },
   choiceLabelRow: {
     flexDirection: 'row',

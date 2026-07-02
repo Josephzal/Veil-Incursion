@@ -225,6 +225,7 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
               }}
               onHubExternalDrop={handleHubExternalDrop}
               onDragPositionChange={handleCargoDragPosition}
+              cargoBackdrop
             />
             </View>
           </View>

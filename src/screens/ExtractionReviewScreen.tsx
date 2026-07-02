@@ -21,6 +21,7 @@ import { useDescentNavigator } from '../hooks/useDescentNavigator';
 import { useDevSandboxExit } from '../hooks/useDevSandboxExit';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import RunEventNodeHeader from '../components/layout/RunEventNodeHeader';
+import DossierCardShell from '../components/hub/DossierCardShell';
 import { hubCtaButtonStyle } from '../constants/hubCta';
 import {
   resolveImmersiveContentPadding,
@@ -28,6 +29,8 @@ import {
   resolveImmersiveHorizontalInset,
 } from '../constants/immersiveLayout';
 import { CARGO_CELL_GAP } from '../constants/cargoGridLayout';
+import { resolveCargoGridCellBackground } from '../constants/cargoGridVisual';
+import CargoGridBackdrop from '../components/cargo/CargoGridBackdrop';
 import {
   EMERGENCY_EXTRACT_CARGO_BLEED_PCT,
 } from '../types/sectorPacing';
@@ -56,12 +59,9 @@ import { readPressableHover, terminalHoverStyle } from '../utils/terminalHoverSt
 
 const MUTED_SLATE = '#94A3B8';
 const STARK_WHITE = '#F8FAFC';
-const HEADER_BORDER = '#334155';
 const EXTRACT_CYAN = '#06B6D4';
 const DESCENT_ORANGE = '#EA580C';
 const DESCENT_BORDER = '#7C2D12';
-const LEFT_PANEL_BG = 'rgba(15, 23, 42, 0.85)';
-const LEFT_PANEL_BORDER = '#1e293b';
 const MASTER_MAX_WIDTH = 1100;
 
 const FLAT_CTA_OVERRIDE: ViewStyle = Platform.select({
@@ -161,10 +161,17 @@ function EvacuationCargoPreview({
     <View
       style={[
         styles.cargoRiskShell,
+        styles.cargoRiskShellTextured,
         { padding: 12 * fontScale },
       ]}
     >
-      <View style={[styles.cargoGridFrame, { width: frameWidth, height: frameHeight }]}>
+      <CargoGridBackdrop />
+      <View
+        style={[
+          styles.cargoGridFrame,
+          { width: frameWidth, height: frameHeight },
+        ]}
+      >
         <View style={[styles.cellsLayer, { gap: CARGO_CELL_GAP }]}>
           {Array.from({ length: CARGO_GRID_ROWS }, (_, row) =>
             Array.from({ length: CARGO_GRID_COLS }, (_, col) => {
@@ -179,7 +186,12 @@ function EvacuationCargoPreview({
                       width: cellSize,
                       height: cellSize,
                       borderColor: occupied ? 'rgba(148, 163, 184, 0.35)' : 'rgba(51, 65, 85, 0.8)',
-                      backgroundColor: occupied ? 'rgba(148, 163, 184, 0.08)' : 'rgba(9, 9, 11, 0.65)',
+                      backgroundColor: resolveCargoGridCellBackground({
+                        occupied,
+                        isPreview: false,
+                        canDrop: false,
+                        cargoBackdrop: true,
+                      }),
                     },
                   ]}
                 />
@@ -437,14 +449,11 @@ export default function ExtractionReviewScreen(): React.JSX.Element {
                   },
                 ]}
               >
-                <View
-                  style={[
-                    styles.leftPanel,
-                    {
-                      padding: s.panelPad,
-                      gap: s.panelGap,
-                    },
-                  ]}
+                <DossierCardShell
+                  fillHeight
+                  padding={s.panelPad}
+                  style={styles.leftPanel}
+                  contentStyle={{ gap: s.panelGap }}
                 >
                   <View style={{ gap: 10 * fontScale }}>
                     <Text
@@ -495,7 +504,7 @@ export default function ExtractionReviewScreen(): React.JSX.Element {
                       fontScale={fontScale}
                     />
                   </View>
-                </View>
+                </DossierCardShell>
 
                 <View
                   style={[
@@ -582,9 +591,6 @@ const styles = StyleSheet.create({
   },
   leftPanel: {
     flex: 1,
-    backgroundColor: LEFT_PANEL_BG,
-    borderWidth: 1,
-    borderColor: LEFT_PANEL_BORDER,
     minHeight: 0,
   },
   rightPanel: {
@@ -626,20 +632,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     minHeight: 0,
   },
+  cargoRiskShellTextured: {
+    position: 'relative',
+    overflow: 'hidden',
+    width: '100%',
+  },
   cargoGridFrame: {
     position: 'relative',
     alignSelf: 'center',
+    zIndex: 1,
   },
   cellsLayer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     width: '100%',
+    zIndex: 1,
   },
   cargoCell: {
     borderWidth: 1,
   },
   placedLayer: {
     ...StyleSheet.absoluteFillObject,
+    zIndex: 2,
   },
   placedItemAnchor: {
     position: 'absolute',

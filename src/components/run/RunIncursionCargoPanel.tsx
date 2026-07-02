@@ -84,6 +84,7 @@ export default function RunIncursionCargoPanel({
         onGridMetricsMeasured={onGridMetricsMeasured}
         onHubExternalDrop={onHubExternalDrop}
         onDragPositionChange={onDragPositionChange}
+        cargoBackdrop
       />
     </View>
   );

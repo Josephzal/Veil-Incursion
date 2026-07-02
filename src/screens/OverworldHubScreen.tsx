@@ -15,6 +15,8 @@ import SafehouseHubPanel from '../components/safehouse/SafehouseHubPanel';
 import TerminalHubLayout from '../components/layout/TerminalHubLayout';
 import TerminalSafeArea from '../components/TerminalSafeArea';
 import ShadowWarDashboard from '../components/ShadowWarDashboard';
+import { resolveBreachTransitionColor } from '../constants/breachTransitionColors';
+import { transitionActions } from '../stores/transitionStore';
 import type { FactionType } from '../types/game';
 
 const FACTION_ORDER: FactionType[] = ['TERRAN_GRID', 'LEGION', 'SOLARIS'];
@@ -67,23 +69,26 @@ export default function OverworldHubScreen(): React.JSX.Element {
   const handleInitiateDeepDive = useCallback(() => {
     if (needsFactionSelection || launchingIncursion) return;
     setLaunchingIncursion(true);
-    const initialCargo = commitDescentLoadout();
-    const shadowWarBuffs = shadowWarBuffsToRunModifiers(activeBuffs);
-    appendHubLog('>> DESCENT LOADOUT LOCKED — CARGO MANIFEST COMMITTED TO RUN STATE.');
-    startNewRun({
-      factionPerks: account.factionPerks,
-      unlockedBiomes: account.unlockedBiomes,
-      aegisLoadout: account.aegisLoadout,
-      hexShotLoadout: account.hexShotLoadout,
-      envoyLoadout: account.envoyLoadout,
-      activeClass: account.activeClass,
-      alignedFaction: account.alignedFaction,
-      initialCargo,
-      shadowWarBuffs,
-      startingVeilResidueBalance: account.veilResidueBalance,
+    const breachColor = resolveBreachTransitionColor(account.alignedFaction);
+    transitionActions.startBreaching(breachColor, () => {
+      const initialCargo = commitDescentLoadout();
+      const shadowWarBuffs = shadowWarBuffsToRunModifiers(activeBuffs);
+      appendHubLog('>> DESCENT LOADOUT LOCKED — CARGO MANIFEST COMMITTED TO RUN STATE.');
+      startNewRun({
+        factionPerks: account.factionPerks,
+        unlockedBiomes: account.unlockedBiomes,
+        aegisLoadout: account.aegisLoadout,
+        hexShotLoadout: account.hexShotLoadout,
+        envoyLoadout: account.envoyLoadout,
+        activeClass: account.activeClass,
+        alignedFaction: account.alignedFaction,
+        initialCargo,
+        shadowWarBuffs,
+        startingVeilResidueBalance: account.veilResidueBalance,
+      });
+      startBoundRequisition();
+      setLaunchingIncursion(false);
     });
-    startBoundRequisition();
-    setLaunchingIncursion(false);
   }, [
     account,
     activeBuffs,

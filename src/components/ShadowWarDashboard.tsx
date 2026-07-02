@@ -105,7 +105,6 @@ export default function ShadowWarDashboard({
               fillHeight
               padding={panelPadding}
               accentColor={dossierAccent}
-              showAccentStripe
               style={[
                 styles.intelColumn,
                 isDesktop

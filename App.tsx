@@ -23,6 +23,7 @@ import ResourceHarvestScreen from './src/screens/ResourceHarvestScreen';
 import ExtractionReviewScreen from './src/screens/ExtractionReviewScreen';
 import CombatScreen from './src/screens/CombatScreen';
 import CombatEntryTransition from './src/components/combat/CombatEntryTransition';
+import TransitionOverlay from './src/components/transitions/TransitionOverlay';
 import RunCompleteScreen from './src/screens/RunCompleteScreen';
 import SafehouseScreen from './src/screens/SafehouseScreen';
 import GameOverScreen from './src/screens/GameOverScreen';
@@ -33,26 +34,28 @@ function GameRoot(): React.JSX.Element {
   useImmersiveChrome(true);
 
   return (
-    <View style={[styles.screenContainer, { backgroundColor: theme.backgroundColor }]}>
-      {currentScreen === 'HUB' && <OverworldHubScreen />}
-      {currentScreen === 'WELCOME' && <WelcomeScreen />}
-      {currentScreen === 'BOUND_REQUISITION' && <BoundRequisitionScreen />}
-      {currentScreen === 'SCANNING' && <ScanningScreen />}
-      {currentScreen === 'NARRATIVE' && <NarrativeScreen />}
-      {currentScreen === 'POST_COMBAT_BOON' && <PostCombatBoonScreen />}
-      {currentScreen === 'SKILL_CHECK' && <SkillCheckScreen />}
-      {currentScreen === 'REST' && <RestScreen />}
-      {currentScreen === 'BLACK_MARKET' && <BlackMarketScreen />}
-      {currentScreen === 'RESOURCE_HARVEST' && <ResourceHarvestScreen />}
-      {currentScreen === 'EXTRACTION_REVIEW' && <ExtractionReviewScreen />}
-      {currentScreen === 'COMBAT' && <CombatScreen />}
-      {currentScreen === 'RUN_COMPLETE' && <RunCompleteScreen />}
-      {currentScreen === 'SAFEHOUSE' && <SafehouseScreen />}
-      {currentScreen === 'GAME_OVER' && <GameOverScreen />}
-      {combatEntryActive ? (
-        <CombatEntryTransition onComplete={completeCombatEntry} />
-      ) : null}
-    </View>
+    <TransitionOverlay>
+      <View style={[styles.screenContainer, { backgroundColor: theme.backgroundColor }]}>
+        {currentScreen === 'HUB' && <OverworldHubScreen />}
+        {currentScreen === 'WELCOME' && <WelcomeScreen />}
+        {currentScreen === 'BOUND_REQUISITION' && <BoundRequisitionScreen />}
+        {currentScreen === 'SCANNING' && <ScanningScreen />}
+        {currentScreen === 'NARRATIVE' && <NarrativeScreen />}
+        {currentScreen === 'POST_COMBAT_BOON' && <PostCombatBoonScreen />}
+        {currentScreen === 'SKILL_CHECK' && <SkillCheckScreen />}
+        {currentScreen === 'REST' && <RestScreen />}
+        {currentScreen === 'BLACK_MARKET' && <BlackMarketScreen />}
+        {currentScreen === 'RESOURCE_HARVEST' && <ResourceHarvestScreen />}
+        {currentScreen === 'EXTRACTION_REVIEW' && <ExtractionReviewScreen />}
+        {currentScreen === 'COMBAT' && <CombatScreen />}
+        {currentScreen === 'RUN_COMPLETE' && <RunCompleteScreen />}
+        {currentScreen === 'SAFEHOUSE' && <SafehouseScreen />}
+        {currentScreen === 'GAME_OVER' && <GameOverScreen />}
+        {combatEntryActive ? (
+          <CombatEntryTransition onComplete={completeCombatEntry} />
+        ) : null}
+      </View>
+    </TransitionOverlay>
   );
 }
 

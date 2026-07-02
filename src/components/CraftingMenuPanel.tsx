@@ -68,23 +68,25 @@ function ResourceLedgerRow({
   return (
     <View
       style={[
-        styles.ledgerRow,
-        isDesktop && styles.ledgerRowDesktop,
+        styles.fabricationRow,
+        isDesktop && styles.fabricationRowDesktop,
         { borderColor, backgroundColor: DOSSIER_ROW_BG },
       ]}
     >
-      <View style={styles.ledgerRowMain}>
-        <View style={styles.ledgerRowCopy}>
-          <TerminalText variant="body" style={{ color: textColor, fontWeight: '700' }} numberOfLines={1}>
-            {def.name.toUpperCase()}
-          </TerminalText>
-          <TerminalText variant="caption" style={{ color: mutedColor }} numberOfLines={1}>
-            {`${quantity}× // ${itemTypeLabel}`}
-          </TerminalText>
-          <TerminalText variant="body" style={{ color: PHOSPHOR_GREEN, fontWeight: '700' }}>
+      <View style={styles.fabricationInfo}>
+        <TerminalText variant="body" style={{ color: textColor, fontWeight: '700' }} numberOfLines={1}>
+          {def.name.toUpperCase()}
+        </TerminalText>
+        <TerminalText variant="caption" style={{ color: mutedColor }} numberOfLines={1}>
+          {`${quantity}× // ${itemTypeLabel}`}
+        </TerminalText>
+        <View style={styles.requirementLine}>
+          <Text style={[styles.requirementText, { color: PHOSPHOR_GREEN }]}>
             {`${quantity} IN STASH`}
-          </TerminalText>
+          </Text>
         </View>
+      </View>
+      <View style={styles.fabricationActions}>
         <HubCargoIconBox
           itemId={resourceId}
           borderColor={mutedColor}
@@ -114,6 +116,7 @@ function ResourceLedger({
   mutedColor,
   isDesktop,
 }: ResourceLedgerProps): React.JSX.Element {
+  const { scaleSpacing } = useHubLayout();
   const ownedResources = useMemo(
     () => ALL_RESOURCE_ITEM_IDS.filter((resourceId) => getStashCount(stash, resourceId) > 0),
     [stash],
@@ -124,7 +127,7 @@ function ResourceLedger({
       <TerminalText
         variant="panelTitle"
         letterSpacing={0.8}
-        style={[styles.panelTitle, { color: titleColor }]}
+        style={[styles.panelTitle, { color: titleColor, marginBottom: scaleSpacing(4) }]}
       >
         RESOURCE LEDGER
       </TerminalText>
@@ -134,7 +137,7 @@ function ResourceLedger({
           Platform.OS === 'web' && styles.ledgerScrollWeb,
           HIDDEN_SCROLLBAR_VIEW_STYLE,
         ]}
-        contentContainerStyle={styles.ledgerList}
+        contentContainerStyle={styles.fabricationSection}
         {...HIDDEN_SCROLLVIEW_PROPS}
         nestedScrollEnabled
         keyboardShouldPersistTaps="handled"
@@ -497,6 +500,7 @@ const styles = StyleSheet.create({
   ledgerContent: {
     flex: 1,
     minHeight: 0,
+    gap: 8,
   },
   panelTitle: {
     fontWeight: '700',
@@ -517,33 +521,6 @@ const styles = StyleSheet.create({
     web: { height: 0, overflow: 'auto' as const },
     default: {},
   }),
-  ledgerList: {
-    gap: 6,
-    paddingBottom: 8,
-  },
-  ledgerRow: {
-    width: '100%',
-    borderWidth: 1,
-    minHeight: 44,
-    overflow: 'hidden',
-  },
-  ledgerRowDesktop: {
-    minHeight: 56,
-  },
-  ledgerRowMain: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    minHeight: 44,
-  },
-  ledgerRowCopy: {
-    flex: 1,
-    minWidth: 0,
-    gap: 4,
-    justifyContent: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
   matrixPanel: {
     flex: 1,
     minHeight: 0,
@@ -559,6 +536,7 @@ const styles = StyleSheet.create({
   },
   fabricationSection: {
     gap: 6,
+    paddingBottom: 8,
   },
   fabricationRow: {
     flexDirection: 'row',

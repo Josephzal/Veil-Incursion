@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 import type { BlackMarketCargoListing } from '../../data/blackMarket';
+import { DOSSIER_ROW_BG } from '../../constants/dossierSurface';
 import HubCargoIconBox from '../safehouse/HubCargoIconBox';
 import { pulseCargoItemPickup } from '../../utils/hubButtonHaptics';
 import type { CargoItemId } from '../../types/cargoGrid';
@@ -115,7 +116,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'stretch',
     borderWidth: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.72)',
+    backgroundColor: DOSSIER_ROW_BG,
     overflow: 'hidden',
   },
   copy: {

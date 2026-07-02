@@ -1,10 +1,9 @@
 import React, { useRef } from 'react';
 import { LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
+import { DOSSIER_CTA_BG, DOSSIER_ROW_BG } from '../../constants/dossierSurface';
 
 const FENCE_YELLOW = '#CA8A04';
 const FENCE_YELLOW_PALE = '#FEF9C3';
-const FENCE_YELLOW_BG = 'rgba(254, 249, 195, 0.14)';
-const FENCE_YELLOW_ACTIVE_BG = 'rgba(250, 204, 21, 0.28)';
 const FENCE_YELLOW_BORDER = 'rgba(234, 179, 8, 0.55)';
 const FENCE_YELLOW_ACTIVE_BORDER = 'rgba(250, 204, 21, 0.95)';
 
@@ -37,7 +36,7 @@ export default function BlackMarketFenceBay({
       style={[
         styles.bay,
         {
-          backgroundColor: dropActive ? FENCE_YELLOW_ACTIVE_BG : FENCE_YELLOW_BG,
+          backgroundColor: dropActive ? DOSSIER_CTA_BG : DOSSIER_ROW_BG,
           borderColor: dropActive ? FENCE_YELLOW_ACTIVE_BORDER : FENCE_YELLOW_BORDER,
           minHeight: 72 * fontScale,
           paddingVertical: 12 * fontScale,
@@ -113,7 +112,7 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(254, 249, 195, 0.06)',
+    backgroundColor: DOSSIER_ROW_BG,
   },
   dropGlyph: {
     fontFamily: 'monospace',

@@ -15,7 +15,10 @@ import {
   NARRATIVE_CHOICE_PADDING_H,
   NARRATIVE_CHOICE_PADDING_V,
   NARRATIVE_DIVIDER_COLOR,
+  NARRATIVE_UNIFIED_PANEL_PADDING,
 } from '../constants/narrativeLayout';
+import { DOSSIER_CTA_BG, DOSSIER_ROW_BG, dossierOpaqueCtaStyle } from '../constants/dossierSurface';
+import DossierCardShell from './hub/DossierCardShell';
 import type { TensionMechanic } from '../types/narrativeAssembly';
 
 const TERMINAL_ACCENT = '#00ff33';
@@ -124,7 +127,12 @@ export default function NarrativeStepperModule({
   };
 
   return (
-    <View style={styles.root}>
+    <DossierCardShell
+      fillHeight
+      padding={NARRATIVE_UNIFIED_PANEL_PADDING}
+      style={styles.root}
+      contentStyle={styles.shellContent}
+    >
       <View style={styles.header}>
         <Text style={[styles.docLabel, { color: mutedColor }]}>
           EXPEDITION LOG // RESOLVER TERMINAL
@@ -199,7 +207,7 @@ export default function NarrativeStepperModule({
               borderColor={borderColor}
               mutedColor={mutedColor}
               size="sm"
-              style={styles.continueBtn}
+              style={{ ...styles.continueBtn, ...dossierOpaqueCtaStyle(TERMINAL_ACCENT) }}
             />
           </View>
         </View>
@@ -228,12 +236,17 @@ export default function NarrativeStepperModule({
           primaryColor={primaryColor}
         />
       ) : null}
-    </View>
+    </DossierCardShell>
   );
 }
 
 const styles = StyleSheet.create({
   root: {
+    flex: 1,
+    minHeight: 0,
+    width: '100%',
+  },
+  shellContent: {
     flex: 1,
     minHeight: 0,
   },
@@ -276,10 +289,10 @@ const styles = StyleSheet.create({
     paddingVertical: NARRATIVE_CHOICE_PADDING_V,
     paddingHorizontal: NARRATIVE_CHOICE_PADDING_H,
     width: '100%',
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    backgroundColor: DOSSIER_ROW_BG,
   },
   choiceBtnSelected: {
-    backgroundColor: 'rgba(0, 255, 51, 0.08)',
+    backgroundColor: DOSSIER_CTA_BG,
   },
   choiceLabel: {
     fontFamily: 'monospace',

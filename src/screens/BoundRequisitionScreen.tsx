@@ -94,7 +94,9 @@ function RequisitionChoiceCard({
               offset: { width: 0, height: 0 },
             })
             : null,
-          terminalHoverStyle(hovered, state.pressed),
+          isSelected
+            ? { cursor: 'pointer' as const }
+            : terminalHoverStyle(hovered, state.pressed),
         ];
       }}
     >
