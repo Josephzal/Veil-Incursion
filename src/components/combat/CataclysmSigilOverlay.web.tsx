@@ -13,8 +13,9 @@ type SigilPattern = 'triangle' | 'line' | 'zigzag';
 
 const CANVAS_W = 300;
 const CANVAS_H = 240;
-const HIT_RADIUS = 38;
-const FINAL_NODE_HIT_RADIUS = 52;
+const HIT_RADIUS = 28;
+const FINAL_NODE_HIT_RADIUS = 36;
+const NODE_EXIT_PADDING = 10;
 const FINAL_NODE_GRACE_MS = 1400;
 
 const PATTERNS: Record<SigilPattern, { id: SigilPattern; points: { x: number; y: number }[]; order: number[] }> = {
@@ -40,6 +41,36 @@ interface CataclysmSigilOverlayProps {
   onResolve: (nodesCompleted: number) => void;
 }
 
+type PointerNativeEvent = {
+  locationX?: number;
+  locationY?: number;
+  clientX?: number;
+  clientY?: number;
+  pageX?: number;
+  pageY?: number;
+  pointerId?: number;
+};
+
+function resolveCanvasPoint(
+  evt: GestureResponderEvent,
+  canvasEl: HTMLElement | null,
+): { x: number; y: number } {
+  const native = evt.nativeEvent as PointerNativeEvent;
+  if (canvasEl?.getBoundingClientRect) {
+    const rect = canvasEl.getBoundingClientRect();
+    const clientX = native.clientX ?? native.pageX ?? 0;
+    const clientY = native.clientY ?? native.pageY ?? 0;
+    return {
+      x: clientX - rect.left,
+      y: clientY - rect.top,
+    };
+  }
+  return {
+    x: native.locationX ?? 0,
+    y: native.locationY ?? 0,
+  };
+}
+
 function CataclysmSigilOverlay({
   visible,
   onResolve,
@@ -54,6 +85,7 @@ function CataclysmSigilOverlay({
   const [dragPoint, setDragPoint] = useState<{ x: number; y: number } | null>(null);
   const [timeLeftMs, setTimeLeftMs] = useState(CATACLYSM_SIGIL_DURATION_MS);
 
+  const canvasRef = useRef<View>(null);
   const nodesLockedRef = useRef(0);
   const awaitingTapRef = useRef(true);
   const resolvedRef = useRef(false);
@@ -62,6 +94,8 @@ function CataclysmSigilOverlay({
   const onResolveRef = useRef(onResolve);
   const graceDeadlineRef = useRef<number | null>(null);
   const draggingRef = useRef(false);
+  const exitedPreviousNodeRef = useRef(true);
+  const lastLockedPointRef = useRef<{ x: number; y: number } | null>(null);
   onResolveRef.current = onResolve;
 
   const finish = (completed: number) => {
@@ -76,6 +110,8 @@ function CataclysmSigilOverlay({
     awaitingTapRef.current = true;
     draggingRef.current = false;
     graceDeadlineRef.current = null;
+    exitedPreviousNodeRef.current = true;
+    lastLockedPointRef.current = null;
     setNodesLocked(0);
     setAwaitingTap(true);
     setDragPoint(null);
@@ -124,16 +160,35 @@ function CataclysmSigilOverlay({
     return () => clearInterval(timer);
   }, [visible, pattern.order.length]);
 
-  const advanceToNode = (nextLocked: number) => {
+  const advanceToNode = (nextLocked: number, lockedPoint: { x: number; y: number }) => {
     nodesLockedRef.current = nextLocked;
+    lastLockedPointRef.current = lockedPoint;
+    exitedPreviousNodeRef.current = false;
     setNodesLocked(nextLocked);
     if (nextLocked >= pattern.order.length) {
       finish(nextLocked);
     }
   };
 
+  const canAcceptNextNodeHit = (x: number, y: number): boolean => {
+    if (nodesLockedRef.current === 0) return true;
+    if (exitedPreviousNodeRef.current) return true;
+    const lastPoint = lastLockedPointRef.current;
+    if (!lastPoint) return true;
+    const isFinalNode = nodesLockedRef.current === pattern.order.length - 1;
+    const exitRadius = (isFinalNode ? FINAL_NODE_HIT_RADIUS : HIT_RADIUS) + NODE_EXIT_PADDING;
+    const dist = Math.hypot(x - lastPoint.x, y - lastPoint.y);
+    if (dist > exitRadius) {
+      exitedPreviousNodeRef.current = true;
+      return true;
+    }
+    return false;
+  };
+
   const tryHitNode = (x: number, y: number): boolean => {
     if (resolvedRef.current) return false;
+    if (!canAcceptNextNodeHit(x, y)) return false;
+
     const targetIdx = pattern.order[nodesLockedRef.current];
     if (targetIdx == null) return false;
     const pt = pattern.points[targetIdx];
@@ -146,7 +201,7 @@ function CataclysmSigilOverlay({
       awaitingTapRef.current = false;
       setAwaitingTap(false);
     }
-    advanceToNode(nodesLockedRef.current + 1);
+    advanceToNode(nodesLockedRef.current + 1, pt);
     return true;
   };
 
@@ -159,24 +214,35 @@ function CataclysmSigilOverlay({
     });
   };
 
-  const handleCanvasPoint = (x: number, y: number, phase: 'down' | 'move' | 'up') => {
+  const handleCanvasPoint = (
+    evt: GestureResponderEvent,
+    phase: 'down' | 'move' | 'up',
+  ) => {
     if (resolvedRef.current && phase !== 'up') return;
+
+    const canvasEl = canvasRef.current as unknown as HTMLElement | null;
+    const { x, y } = resolveCanvasPoint(evt, canvasEl);
+
     if (phase === 'down') {
-      draggingRef.current = true;
       if (awaitingTapRef.current) {
-        tryHitNode(x, y);
+        const hit = tryHitNode(x, y);
+        if (hit) draggingRef.current = true;
         return;
       }
+      draggingRef.current = true;
       scheduleDragPoint(x, y);
       tryHitNode(x, y);
       return;
     }
+
     if (phase === 'move') {
-      if (awaitingTapRef.current || resolvedRef.current) return;
+      if (!draggingRef.current || awaitingTapRef.current || resolvedRef.current) return;
       scheduleDragPoint(x, y);
+      canAcceptNextNodeHit(x, y);
       tryHitNode(x, y);
       return;
     }
+
     draggingRef.current = false;
     setDragPoint(null);
     pendingDragRef.current = null;
@@ -185,14 +251,12 @@ function CataclysmSigilOverlay({
   const onCanvasPointerDown = (evt: GestureResponderEvent) => {
     const target = evt.currentTarget as unknown as HTMLElement | null;
     target?.setPointerCapture?.(evt.nativeEvent.pointerId ?? 1);
-    const { locationX, locationY } = evt.nativeEvent;
-    handleCanvasPoint(locationX, locationY, 'down');
+    handleCanvasPoint(evt, 'down');
   };
 
   const onCanvasPointerMove = (evt: GestureResponderEvent) => {
     if (!draggingRef.current) return;
-    const { locationX, locationY } = evt.nativeEvent;
-    handleCanvasPoint(locationX, locationY, 'move');
+    handleCanvasPoint(evt, 'move');
   };
 
   const onCanvasPointerEnd = (evt?: GestureResponderEvent) => {
@@ -200,7 +264,13 @@ function CataclysmSigilOverlay({
       const target = evt.currentTarget as unknown as HTMLElement | null;
       target?.releasePointerCapture?.(evt.nativeEvent.pointerId ?? 1);
     }
-    handleCanvasPoint(0, 0, 'up');
+    if (evt) {
+      handleCanvasPoint(evt, 'up');
+    } else {
+      draggingRef.current = false;
+      setDragPoint(null);
+      pendingDragRef.current = null;
+    }
   };
 
   if (!visible) return null;
@@ -234,6 +304,7 @@ function CataclysmSigilOverlay({
           {`${(timeLeftMs / 1000).toFixed(1)}s — PAYLOAD ${damageLabel}`}
         </Text>
         <View
+          ref={canvasRef}
           style={styles.canvasWrap}
           onPointerDown={onCanvasPointerDown}
           onPointerMove={onCanvasPointerMove}

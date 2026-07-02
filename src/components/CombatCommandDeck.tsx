@@ -250,7 +250,6 @@ export default function CombatCommandDeck({
   const tileHeight = dashboardLayout
     ? (desktopDeck ? undefined : TILE_HEIGHT_DASHBOARD)
     : TILE_HEIGHT;
-  const tileMarginBottom = dashboardLayout ? TILE_MARGIN_BOTTOM_DASHBOARD : TILE_MARGIN_BOTTOM;
   const desktopBtnStyle = desktopDeck ? {
     borderWidth: 2,
     minHeight: scaleCombatSize(44),
@@ -338,7 +337,6 @@ export default function CombatCommandDeck({
             backgroundColor: isSelected ? DOSSIER_CTA_BG : DOSSIER_ROW_BG,
             ...(tileHeight != null ? { height: tileHeight } : null),
             minHeight: desktopDeck ? scaleCombatSize(44) : undefined,
-            marginBottom: tileMarginBottom,
           },
         ]}
       >
@@ -701,10 +699,14 @@ export default function CombatCommandDeck({
   const renderAbilityGrid = () => (
     <View style={[styles.deckBody, dashboardLayout && styles.abilitiesSection]}>
       <View style={[styles.abilityGrid, dashboardLayout && styles.abilityGridDashboard]}>
-        {renderTile(loadout[0])}
-        {renderTile(loadout[1])}
-        {renderTile(loadout[2])}
-        {renderTile(loadout[3])}
+        <View style={[styles.abilityRow, dashboardLayout && styles.abilityRowDashboard]}>
+          {renderTile(loadout[0])}
+          {renderTile(loadout[1])}
+        </View>
+        <View style={[styles.abilityRow, dashboardLayout && styles.abilityRowDashboard]}>
+          {renderTile(loadout[2])}
+          {renderTile(loadout[3])}
+        </View>
       </View>
     </View>
   );
@@ -1009,24 +1011,30 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   abilityGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
     width: '100%',
-    rowGap: GRID_GAP,
+    gap: GRID_GAP,
   },
   abilityGridDashboard: {
     flex: 1,
     minHeight: 0,
-    alignContent: 'stretch',
+  },
+  abilityRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: GRID_GAP,
+    width: '100%',
+  },
+  abilityRowDashboard: {
+    flex: 1,
+    minHeight: 0,
   },
   tileSlotDashboardFill: {
-    flexGrow: 1,
-    flexBasis: '48%',
-    maxHeight: '48%',
+    minHeight: 0,
   },
   tileSlot: {
-    width: '48%',
+    flex: 1,
+    flexBasis: 0,
+    minWidth: 0,
     borderWidth: 1,
     backgroundColor: DOSSIER_ROW_BG,
   },

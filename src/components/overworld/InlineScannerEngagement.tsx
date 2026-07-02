@@ -4,6 +4,7 @@ import { textGlow } from '../../utils/adaptiveStyles';
 import TerminalText from '../TerminalText';
 import TacticalButton from '../TacticalButton';
 import { hubCtaButtonStyle } from '../../constants/hubCta';
+import { DOSSIER_ROW_BG, dossierOpaqueCtaStyle } from '../../constants/dossierSurface';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 import { readPressableHover, terminalHoverStyle } from '../../utils/terminalHoverStyle';
 import ScannerBreachButton from '../scanner/ScannerBreachButton';
@@ -493,6 +494,7 @@ export default function InlineScannerEngagement({
         style={(state) => [
           styles.breachButton,
           hubCtaButtonStyle(accent, scaleSize, scaleSpacing, !canEngage),
+          dossierOpaqueCtaStyle(accent),
           isDesktop && canEngage
             ? terminalHoverStyle(readPressableHover(state), state.pressed)
             : null,
@@ -667,7 +669,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   readoutCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    backgroundColor: DOSSIER_ROW_BG,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
     gap: 8,

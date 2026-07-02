@@ -27,6 +27,9 @@ import { RadarDot } from '../types/run';
 import type { ScannerCabal } from '../types/scanner';
 import { getZoneScannerTint } from '../components/scanner/zoneScannerThemes';
 import RunEventNodeHeader from '../components/layout/RunEventNodeHeader';
+import DossierCardShell from '../components/hub/DossierCardShell';
+import { DOSSIER_ROW_BG } from '../constants/dossierSurface';
+import { resolveFactionSlateBackgroundSolid } from '../constants/hubAtmosphere';
 import { formatRiftManifestLog } from '../utils/overworldBlindScout';
 import { resolveRunEventNodeHeaderFromNode } from '../utils/resolveRunEventNodeHeader';
 import {
@@ -86,6 +89,7 @@ export default function ScanningScreen(): React.JSX.Element {
   } = useGameFlow();
 
   const cabal: ScannerCabal = account.alignedFaction ?? 'TERRAN_GRID';
+  const scannerBackground = resolveFactionSlateBackgroundSolid(account.alignedFaction);
   const accent =
     account.alignedFaction != null
       ? getFactionDefinition(account.alignedFaction).accentColor
@@ -375,13 +379,16 @@ export default function ScanningScreen(): React.JSX.Element {
   );
 
   const nodeDockPane = (
-    <View
+    <DossierCardShell
+      fillHeight
+      padding={0}
+      accentColor={accent}
       style={[
         styles.nodeDock,
         useHorizontalSplit ? styles.nodeDockHorizontal : styles.nodeDockVertical,
         isDesktop && styles.nodeDockHorizontalDesktop,
-        { borderColor: theme.borderColor },
       ]}
+      contentStyle={styles.nodeDockContent}
     >
       <View style={styles.nodeDockBody}>
         <InlineScannerEngagement
@@ -409,7 +416,7 @@ export default function ScanningScreen(): React.JSX.Element {
           </TerminalText>
         </HapticPressable>
       ) : null}
-    </View>
+    </DossierCardShell>
   );
 
   if (!isScanningHub) {
@@ -423,7 +430,7 @@ export default function ScanningScreen(): React.JSX.Element {
   return (
     <IncursionShell>
       <IncursionRunLayout
-        style={{ backgroundColor: theme.backgroundColor }}
+        style={{ backgroundColor: scannerBackground }}
         hideRunChrome
       >
         <View style={[styles.body, { padding: panelPadding }]}>
@@ -505,18 +512,19 @@ const styles = StyleSheet.create({
   nodeDock: {
     flex: 1,
     minHeight: 0,
+  },
+  nodeDockContent: {
+    flex: 1,
+    minHeight: 0,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    backgroundColor: 'rgba(5, 6, 8, 0.96)',
     gap: 8,
   },
   nodeDockVertical: {
     flexShrink: 0,
-    borderTopWidth: 1,
     minHeight: 120,
   },
   nodeDockHorizontal: {
-    borderLeftWidth: 1,
     minWidth: 240,
   },
   nodeDockHorizontalDesktop: {
@@ -530,7 +538,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingVertical: 8,
     alignItems: 'center',
-    backgroundColor: 'rgba(245, 158, 11, 0.06)',
+    backgroundColor: DOSSIER_ROW_BG,
   },
   recallBtnText: {
     fontFamily: 'monospace',

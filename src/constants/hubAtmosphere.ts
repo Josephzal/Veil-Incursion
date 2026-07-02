@@ -30,6 +30,17 @@ export function resolveFactionSlateBackground(faction: FactionType | null): stri
   return FACTION_SLATE_BG[faction];
 }
 
+/** Opaque slate fill for run screens without hub backdrop art. */
+export function resolveFactionSlateBackgroundSolid(faction: FactionType | null): string {
+  if (!faction) return '#080a12';
+  const solid: Record<FactionType, string> = {
+    LEGION: '#0a0015',
+    TERRAN_GRID: '#080e18',
+    SOLARIS: '#150604',
+  };
+  return solid[faction];
+}
+
 export function resolveFactionSlateInnerBorder(faction: FactionType | null): string {
   if (!faction) return '#64748b';
   return FACTION_SLATE_INNER_BORDER[faction];
