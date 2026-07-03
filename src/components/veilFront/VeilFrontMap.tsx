@@ -17,17 +17,14 @@ import Svg, {
   Text as SvgText,
 } from 'react-native-svg';
 import { useHubLayout } from '../../context/HubLayoutContext';
-import TerminalText from '../TerminalText';
 import {
   SECTOR_MAP_DEFINITIONS,
   SECTOR_MAP_VIEWBOX,
 } from '../../data/sectorWorldCatalog';
 import type { SectorId, SectorState } from '../../types/worldState';
 import { TerminalTheme } from '../../types/theme';
-import {
-  getVeilSectorFill,
-  getVeilSectorStroke,
-} from '../../utils/veilFrontBriefingUi';
+import { sectorAbbreviation, VEIL_BIOME_VISUALS } from '../../utils/veilFrontSectorUi';
+import { hexToRgba } from '../../utils/sectorInfluenceVisual';
 import {
   hitTestSectorAtPoint,
   polygonCentroid,
@@ -38,7 +35,15 @@ import {
   viewBoxPointToCanvas,
 } from '../../utils/sectorInfluenceVisual';
 
-const MAP_BACKDROP = '#04060a';
+const MAP_ASPECT = SECTOR_MAP_VIEWBOX.height / SECTOR_MAP_VIEWBOX.width;
+const CONNECTION_IDS: Array<[SectorId, SectorId]> = [
+  ['THE_NULL_ZONE', 'THE_SLAG_WORKS'],
+  ['THE_NULL_ZONE', 'THE_BLACKLINE_TERMINUS'],
+  ['THE_NULL_ZONE', 'THE_ASHEN_WASTES'],
+  ['THE_SLAG_WORKS', 'THE_ABYSSAL_SINK'],
+  ['THE_ASHEN_WASTES', 'THE_ABYSSAL_SINK'],
+  ['THE_BLACKLINE_TERMINUS', 'THE_ASHEN_WASTES'],
+];
 
 interface VeilFrontMapProps {
   theme: TerminalTheme;
@@ -47,13 +52,7 @@ interface VeilFrontMapProps {
   onSectorPress: (id: SectorId) => void;
 }
 
-function VeilFrontBlueprintGrid({
-  width,
-  height,
-}: {
-  width: number;
-  height: number;
-}): React.JSX.Element {
+function VeilFrontBlueprintGrid({ width, height }: { width: number; height: number }): React.JSX.Element {
   const cx = width / 2;
   const cy = height / 2;
   const maxRadius = Math.max(width, height) * 0.55;
@@ -62,19 +61,19 @@ function VeilFrontBlueprintGrid({
     <>
       <Defs>
         <Pattern id="veilFrontGrid" width={28} height={28} patternUnits="userSpaceOnUse">
-          <Line x1={0} y1={0} x2={28} y2={0} stroke="rgba(100, 116, 139, 0.05)" strokeWidth={0.6} />
-          <Line x1={0} y1={0} x2={0} y2={28} stroke="rgba(100, 116, 139, 0.05)" strokeWidth={0.6} />
+          <Line x1={0} y1={0} x2={28} y2={0} stroke="rgba(100, 116, 139, 0.035)" strokeWidth={0.6} />
+          <Line x1={0} y1={0} x2={0} y2={28} stroke="rgba(100, 116, 139, 0.035)" strokeWidth={0.6} />
         </Pattern>
       </Defs>
       <Rect x={0} y={0} width={width} height={height} fill="url(#veilFrontGrid)" />
-      {[0.2, 0.4, 0.6, 0.8, 1].map((ratio) => (
+      {[0.25, 0.5, 0.75, 1].map((ratio) => (
         <Circle
           key={ratio}
           cx={cx}
           cy={cy}
           r={maxRadius * ratio}
           fill="none"
-          stroke="rgba(100, 116, 139, 0.04)"
+          stroke="rgba(100, 116, 139, 0.035)"
           strokeWidth={0.8}
         />
       ))}
@@ -82,8 +81,8 @@ function VeilFrontBlueprintGrid({
   );
 }
 
+/** Sector map canvas — SVG viewBox scaling only; chrome lives in SectorMapPanel overlays. */
 export default function VeilFrontMap({
-  theme,
   sectors,
   activeSectorId,
   onSectorPress,
@@ -94,36 +93,42 @@ export default function VeilFrontMap({
     () => new Map(sectors.map((sector) => [sector.id, sector])),
     [sectors],
   );
-  const [hostWidth, setHostWidth] = useState(320);
-  const [hostHeight, setHostHeight] = useState(160);
+  const [hostSize, setHostSize] = useState({ width: 320, height: 240 });
 
-  const canvasHeight = hostHeight > 0
-    ? hostHeight
-    : hostWidth * (SECTOR_MAP_VIEWBOX.height / SECTOR_MAP_VIEWBOX.width);
+  const { canvasWidth, canvasHeight } = useMemo(() => {
+    const availableWidth = Math.max(1, hostSize.width);
+    const availableHeight = Math.max(1, hostSize.height);
+    const widthFromHeight = availableHeight / MAP_ASPECT;
+    if (widthFromHeight <= availableWidth) {
+      return { canvasWidth: widthFromHeight, canvasHeight: availableHeight };
+    }
+    return { canvasWidth: availableWidth, canvasHeight: availableWidth * MAP_ASPECT };
+  }, [hostSize.height, hostSize.width]);
 
   const drawMetrics = useMemo(
     () => resolveMapDrawMetrics(
-      hostWidth,
+      canvasWidth,
       canvasHeight,
       SECTOR_MAP_VIEWBOX.width,
       SECTOR_MAP_VIEWBOX.height,
       'contain',
     ),
-    [canvasHeight, hostWidth],
+    [canvasHeight, canvasWidth],
   );
 
   const labelFontSize = useMemo(
-    () => Math.max(4.5, Math.min(isDesktop ? 10 : 6, drawMetrics.scale * (isDesktop ? 6.2 : 4.2))),
+    () => Math.max(5, Math.min(isDesktop ? 11 : 7, drawMetrics.scale * (isDesktop ? 6.8 : 5))),
     [drawMetrics.scale, isDesktop],
   );
-  const labelLineHeight = labelFontSize + (isDesktop ? 2 : 1.2);
-  const strokeWidth = isDesktop ? 3 : 2;
-  const activeStrokeWidth = isDesktop ? 3.5 : 2.5;
+  const labelLineHeight = labelFontSize + (isDesktop ? 2.5 : 1.5);
+  const strokeWidth = isDesktop ? 2.5 : 2;
+  const activeStrokeWidth = isDesktop ? 4 : 3;
 
   const handleHostLayout = useCallback((event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
-    setHostWidth(width);
-    setHostHeight(height);
+    setHostSize((prev) =>
+      prev.width === width && prev.height === height ? prev : { width, height },
+    );
   }, []);
 
   const macroLikeSectors = useMemo(
@@ -169,20 +174,53 @@ export default function VeilFrontMap({
       runOnJS(handleMapPress)(event.x, event.y);
     });
 
+  const connectionLines = useMemo(() => {
+    return CONNECTION_IDS.map(([a, b]) => {
+      const defA = mapDefinitions.find((s) => s.id === a);
+      const defB = mapDefinitions.find((s) => s.id === b);
+      if (!defA || !defB) return null;
+      const ptA = viewBoxPointToCanvas(
+        defA.mapGeometry.labelAnchor ?? polygonCentroid(defA.mapGeometry.polygon),
+        drawMetrics,
+      );
+      const ptB = viewBoxPointToCanvas(
+        defB.mapGeometry.labelAnchor ?? polygonCentroid(defB.mapGeometry.polygon),
+        drawMetrics,
+      );
+      return { key: `${a}-${b}`, ptA, ptB };
+    }).filter((line): line is NonNullable<typeof line> => line != null);
+  }, [drawMetrics, mapDefinitions]);
+
   return (
-    <View style={styles.root} onLayout={handleHostLayout}>
-      <GestureHandlerRootView style={styles.gestureRoot}>
+    <GestureHandlerRootView style={styles.gestureRoot}>
+      <View style={styles.mapMeasure} onLayout={handleHostLayout}>
         <GestureDetector gesture={tapGesture}>
-          <View style={[styles.mapFrame, { height: canvasHeight }]}>
-            <Svg width={hostWidth} height={canvasHeight}>
-              <VeilFrontBlueprintGrid width={hostWidth} height={canvasHeight} />
+          <View style={[styles.mapFrame, { width: canvasWidth, height: canvasHeight }]}>
+            <Svg width={canvasWidth} height={canvasHeight}>
+              <VeilFrontBlueprintGrid width={canvasWidth} height={canvasHeight} />
+
+              {connectionLines.map((line) => (
+                <Line
+                  key={line.key}
+                  x1={line.ptA.x}
+                  y1={line.ptA.y}
+                  x2={line.ptB.x}
+                  y2={line.ptB.y}
+                  stroke="rgba(100, 116, 139, 0.18)"
+                  strokeWidth={1}
+                  strokeDasharray="4 6"
+                />
+              ))}
 
               {mapDefinitions.map((sector) => {
                 const sectorState = sectorById.get(sector.id);
-                const echoActivity = sectorState?.echoActivity ?? 'LOW';
+                const veilBiome = sectorState?.veilBiome ?? 'NULL_ZONE';
+                const biomeVisual = VEIL_BIOME_VISUALS[veilBiome];
                 const isActive = sector.id === activeSectorId;
-                const fill = getVeilSectorFill(echoActivity, isActive);
-                const stroke = getVeilSectorStroke(echoActivity, isActive, theme.statusColor);
+                const fill = hexToRgba(biomeVisual.fill, isActive ? 0.38 : 0.16);
+                const stroke = isActive
+                  ? biomeVisual.glow
+                  : hexToRgba(biomeVisual.stroke, 0.65);
                 const canvasPoly = sector.mapGeometry.polygon.map((pt) =>
                   viewBoxPointToCanvas(pt, drawMetrics),
                 );
@@ -193,29 +231,53 @@ export default function VeilFrontMap({
                   sector.mapGeometry.labelAnchor ?? polygonCentroid(sector.mapGeometry.polygon),
                   drawMetrics,
                 );
-                const labelLines = splitSectorLabelLines(sector.label);
+                const shortLabel = sectorAbbreviation(sector.label);
+                const labelLines = splitSectorLabelLines(shortLabel);
                 const labelStartY = nodeAnchor.y
                   - ((labelLines.length - 1) * labelLineHeight) / 2
                   + labelFontSize * 0.35;
+                const hasAnchor = sectorState?.activeAnchor != null;
+                const highEcho = sectorState?.echoActivity === 'ELEVATED'
+                  || sectorState?.echoActivity === 'CRITICAL';
+                const highReward = (sectorState?.rewardLevel ?? 0) >= 4;
+                const markerY = nodeAnchor.y - labelLineHeight * labelLines.length - 8;
 
                 return (
                   <React.Fragment key={sector.id}>
+                    {isActive ? (
+                      <Path
+                        d={pathD}
+                        fill="none"
+                        stroke={biomeVisual.glow}
+                        strokeWidth={activeStrokeWidth + 3}
+                        opacity={0.35}
+                      />
+                    ) : null}
                     <Path
                       d={pathD}
                       fill={fill}
                       stroke={stroke}
                       strokeWidth={isActive ? activeStrokeWidth : strokeWidth}
                     />
+                    {hasAnchor ? (
+                      <Circle cx={nodeAnchor.x + 14} cy={markerY} r={3.5} fill="#a855f7" opacity={0.9} />
+                    ) : null}
+                    {highEcho ? (
+                      <Circle cx={nodeAnchor.x - 14} cy={markerY} r={3} fill="#818cf8" opacity={0.85} />
+                    ) : null}
+                    {highReward ? (
+                      <Circle cx={nodeAnchor.x} cy={markerY - 8} r={2.5} fill="#fbbf24" opacity={0.9} />
+                    ) : null}
                     {labelLines.map((line, lineIndex) => (
                       <SvgText
                         key={`${sector.id}-label-${lineIndex}`}
                         x={nodeAnchor.x}
                         y={labelStartY + lineIndex * labelLineHeight}
-                        fill={isActive ? '#f8fafc' : 'rgba(226, 232, 240, 0.72)'}
+                        fill={isActive ? '#f8fafc' : 'rgba(226, 232, 240, 0.78)'}
                         fontSize={labelFontSize}
                         fontFamily="monospace"
                         fontWeight={isActive ? '700' : '500'}
-                        letterSpacing={isDesktop ? 1.4 : 0.8}
+                        letterSpacing={isDesktop ? 1.2 : 0.8}
                         textAnchor="middle"
                       >
                         {line}
@@ -227,38 +289,27 @@ export default function VeilFrontMap({
             </Svg>
           </View>
         </GestureDetector>
-      </GestureHandlerRootView>
-
-      <TerminalText
-        variant="micro"
-        letterSpacing={0.4}
-        style={[styles.hint, { color: theme.mutedColor }]}
-      >
-        SELECT SECTOR TO REVIEW BREACH DOSSIER
-      </TerminalText>
-    </View>
+      </View>
+    </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    minHeight: 0,
-    width: '100%',
-  },
   gestureRoot: {
     flex: 1,
     minHeight: 0,
+    width: '100%',
+  },
+  mapMeasure: {
+    flex: 1,
+    minHeight: 0,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   mapFrame: {
-    width: '100%',
-    flex: 1,
     overflow: 'hidden',
-    backgroundColor: MAP_BACKDROP,
-  },
-  hint: {
-    marginTop: 4,
-    textAlign: 'center',
-    flexShrink: 0,
+    backgroundColor: 'transparent',
+    position: 'relative',
   },
 });

@@ -1,0 +1,231 @@
+import type { VeilBiome } from '../types/encounterSpawn';
+import type {
+  EchoActivityLevel,
+  OperationContributionRules,
+  OperationObjectiveKind,
+  SectorId,
+  SectorState,
+  VeilAnchorState,
+} from '../types/worldState';
+import { formatOperationObjectiveKind } from './veilFrontBriefingUi';
+
+export interface BiomeVisualTheme {
+  fill: string;
+  stroke: string;
+  glow: string;
+  icon: string;
+  label: string;
+}
+
+export const VEIL_BIOME_VISUALS: Record<VeilBiome, BiomeVisualTheme> = {
+  ABYSSAL_SINK: {
+    fill: '#14532d',
+    stroke: '#4ade80',
+    glow: '#22c55e',
+    icon: '◆',
+    label: 'Organic / Overgrown',
+  },
+  NULL_ZONE: {
+    fill: '#0c4a6e',
+    stroke: '#38bdf8',
+    glow: '#0ea5e9',
+    icon: '▣',
+    label: 'Urban Grid',
+  },
+  ASHEN_WASTE: {
+    fill: '#78350f',
+    stroke: '#fbbf24',
+    glow: '#d97706',
+    icon: '▤',
+    label: 'Barren Wastes',
+  },
+  SLAG_WORKS: {
+    fill: '#7c2d12',
+    stroke: '#fb923c',
+    glow: '#ea580c',
+    icon: '⚙',
+    label: 'Industrial Slag',
+  },
+  BLACKLINE_TERMINUS: {
+    fill: '#1e293b',
+    stroke: '#e2e8f0',
+    glow: '#ef4444',
+    icon: '⬡',
+    label: 'Military Compound',
+  },
+};
+
+export const SECTOR_FLAVOR_LINES: Record<SectorId, string> = {
+  THE_SLAG_WORKS: 'Collapsed transit arteries and machinery fused with Veil resonance.',
+  THE_ABYSSAL_SINK: 'Submerged caverns where null fields swallow signal and memory.',
+  THE_NULL_ZONE: 'Dead urban grid where ley veins fracture and loot density spikes.',
+  THE_BLACKLINE_TERMINUS: 'Military transit compounds warped by churning Veil engines.',
+  THE_ASHEN_WASTES: 'Barren backroads calcified by recursive ash.',
+};
+
+/** UI-only short labels for compact map intel chips. */
+const RESOURCE_FOCUS_SHORT_NAMES: Record<string, string> = {
+  'Encrypted Grid Drive': 'Encrypted Drive',
+  'Echo Glass Shard': 'Echo Glass',
+  'Anomalous Core': 'Anomalous Core',
+  'Echo Cores': 'Echo Cores',
+  'Null Filament': 'Null Filament',
+  'Ley Slag': 'Ley Slag',
+  'Transit Scrap': 'Transit Scrap',
+};
+
+export function compactResourceDisplayName(name: string): string {
+  return RESOURCE_FOCUS_SHORT_NAMES[name] ?? name;
+}
+
+export function hazardLabel(level: number): 'Low' | 'Medium' | 'High' | 'Extreme' {
+  if (level <= 1) return 'Low';
+  if (level <= 2) return 'Medium';
+  if (level <= 3) return 'High';
+  return 'Extreme';
+}
+
+export function rewardLabel(level: number): 'Low' | 'Medium' | 'High' | 'Exceptional' {
+  if (level <= 1) return 'Low';
+  if (level <= 2) return 'Medium';
+  if (level <= 3) return 'High';
+  return 'Exceptional';
+}
+
+export function hazardPipCount(level: number): number {
+  if (level <= 1) return 1;
+  if (level <= 2) return 2;
+  if (level <= 3) return 3;
+  return 4;
+}
+
+export function rewardPipCount(level: number): number {
+  if (level <= 1) return 1;
+  if (level <= 2) return 2;
+  if (level <= 3) return 3;
+  return 4;
+}
+
+export function echoPipCount(level: EchoActivityLevel): number {
+  switch (level) {
+    case 'LOW':
+      return 1;
+    case 'ELEVATED':
+      return 2;
+    case 'CRITICAL':
+      return 4;
+    default:
+      return 1;
+  }
+}
+
+export function anchorStatusLabel(sector: SectorState): { label: string; pips: number } {
+  if (sector.activeAnchor) return { label: 'Active', pips: 4 };
+  return { label: 'None', pips: 0 };
+}
+
+export function describeAnchorInRunPressure(anchor: VeilAnchorState): string[] {
+  const lines: string[] = [];
+  const { realityRules: r, type } = anchor;
+
+  if (type === 'CHOIR_SPIRE' || r.echoBias >= 0.15) {
+    lines.push('Increased Anchor Signal chance');
+  }
+  if (r.echoBias >= 0.1) {
+    lines.push('Elevated Echo Activity');
+  }
+  if (r.lootBias >= 0.1) {
+    lines.push('Higher rare resource potential');
+  }
+  if (r.eliteBias >= 0.15) {
+    lines.push('Increased elite encounter pressure');
+  }
+  if (r.extractionRiskBias >= 0.15) {
+    lines.push('Higher extraction risk near anchor bleed');
+  }
+  if (lines.length === 0) {
+    lines.push('Sector instability elevated near anchor signature');
+  }
+  return lines;
+}
+
+export function formatOperationContributes(rules: OperationContributionRules): string[] {
+  const lines: string[] = [];
+  if (rules.defeatAnchorElite) lines.push('Clear Anchor Signal nodes');
+  if (rules.clearAnchorCore) lines.push('Defeat Anchor Core');
+  if (rules.defeatEcho) lines.push('Defeat Echo signatures');
+  if (rules.extractTargetResource) lines.push('Extract with recovered Anchor matter');
+  if (rules.defeatDepthBoss) lines.push('Suppress region-prime anomalies');
+  if (rules.successfulExtraction) lines.push('Successful extraction runs');
+  return lines;
+}
+
+export function resolveRecommendedFor(sector: SectorState): string[] {
+  const recs: string[] = [];
+  const { activeOperation: op, echoActivity, hazardLevel, rewardLevel } = sector;
+
+  if (op.objectiveKind === 'ANCHOR_ASSAULT') {
+    recs.push('Anchor assault attempts');
+    recs.push('Rare materials');
+    recs.push('High-risk runs');
+  }
+  if (op.objectiveKind === 'ECHO_RECOVERY' || echoActivity === 'ELEVATED' || echoActivity === 'CRITICAL') {
+    recs.push('Echo hunting');
+    recs.push('Relic chances');
+  }
+  if (op.objectiveKind === 'EXTRACTION_SURGE' || op.objectiveKind === 'RESOURCE_SURVEY') {
+    recs.push('Resource extraction');
+  }
+  if (rewardLevel >= 4) {
+    recs.push('High-value material extraction');
+  }
+  if (hazardLevel <= 2) {
+    recs.push('Safer breach / recovery runs');
+  }
+  if (recs.length === 0) {
+    recs.push('Standard breach operations');
+  }
+  return [...new Set(recs)].slice(0, 4);
+}
+
+export function sectorPriorityScore(sector: SectorState): number {
+  let score = 0;
+  if (sector.activeAnchor) score += 1000;
+  if (sector.activeOperation.objectiveKind === 'ANCHOR_ASSAULT') score += 500;
+  score += sector.rewardLevel * 10;
+  score += sector.hazardLevel;
+  return score;
+}
+
+export function resolvePrioritySectorId(sectors: SectorState[]): SectorId {
+  const sorted = [...sectors].sort((a, b) => sectorPriorityScore(b) - sectorPriorityScore(a));
+  return sorted[0]?.id ?? 'THE_SLAG_WORKS';
+}
+
+export function operationTypeChip(kind: OperationObjectiveKind): string {
+  return formatOperationObjectiveKind(kind).toUpperCase();
+}
+
+export function sectorAbbreviation(displayName: string): string {
+  return displayName.replace(/^The\s+/i, '').toUpperCase();
+}
+
+export function threatMeterColor(level: number): string {
+  if (level <= 1) return '#22d3ee';
+  if (level <= 2) return '#fbbf24';
+  if (level <= 3) return '#f97316';
+  return '#ef4444';
+}
+
+export function echoMeterColor(level: EchoActivityLevel): string {
+  switch (level) {
+    case 'LOW':
+      return '#22d3ee';
+    case 'ELEVATED':
+      return '#a78bfa';
+    case 'CRITICAL':
+      return '#c084fc';
+    default:
+      return '#64748b';
+  }
+}

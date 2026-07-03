@@ -1,38 +1,31 @@
-import React, { useState } from 'react';
-import { Platform, ScrollView, StyleSheet, View } from 'react-native';
-import CraftingMenuPanel from '../CraftingMenuPanel';
-import HapticPressable from '../HapticPressable';
-import HubScreenShell from '../hub/HubScreenShell';
-import TerminalGlitchTransition from '../ui/TerminalGlitchTransition';
+import React, { useMemo } from 'react';
+import { ScrollView, StyleSheet, View } from 'react-native';
+import HubScreenShell, { HubSectionHeader } from '../hub/HubScreenShell';
+import DossierCardShell from '../hub/DossierCardShell';
 import TerminalText from '../TerminalText';
-import SafehouseAbilitiesTab from './SafehouseAbilitiesTab';
-import SafehouseBlackMarketTab from './SafehouseBlackMarketTab';
-import SafehouseLoadoutTab from './SafehouseLoadoutTab';
-import { resolveFactionSlateBackground } from '../../constants/hubAtmosphere';
+import { CLASS_DEFINITIONS } from '../../data/classes';
+import { FACTION_DEFINITIONS } from '../../data/factions';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useTerminal } from '../../context/TerminalContext';
-import { getFactionAccent } from '../../data/factions';
 import { useHubLayout } from '../../context/HubLayoutContext';
-import { readPressableHover, terminalHoverStyle } from '../../utils/terminalHoverStyle';
-
-export type SafehouseTab = 'FORGE' | 'MARKET' | 'LOADOUT' | 'ABILITIES';
-
-const NAV_ITEMS: Array<{ key: SafehouseTab; label: string }> = [
-  { key: 'FORGE', label: 'FORGE' },
-  { key: 'MARKET', label: 'MARKET' },
-  { key: 'LOADOUT', label: 'LOADOUT' },
-  { key: 'ABILITIES', label: 'ABILITIES' },
-];
+import { HIDDEN_SCROLLVIEW_PROPS, mergeHiddenScrollbarStyle } from '../../utils/hiddenScrollbarStyle';
 
 export default function SafehouseHubPanel(): React.JSX.Element {
   const { theme } = useTerminal();
   const { account } = usePlayerAccount();
-  const { isDesktop, scaleSpacing } = useHubLayout();
-  const [activeTab, setActiveTab] = useState<SafehouseTab>('FORGE');
+  const { scaleSpacing } = useHubLayout();
 
   const accent = theme.statusColor;
-  const factionAccent = getFactionAccent(account.alignedFaction);
-  const panelBg = resolveFactionSlateBackground(account.alignedFaction);
+  const classDef = CLASS_DEFINITIONS[account.activeClass];
+  const factionName = account.alignedFaction
+    ? FACTION_DEFINITIONS[account.alignedFaction].displayName
+    : 'UNALIGNED';
+
+  const stashSummary = useMemo(() => {
+    const resourceCount = Object.values(account.resourceStash).reduce((sum, qty) => sum + (qty ?? 0), 0);
+    const consumableKinds = Object.keys(account.hubCraftedConsumables).length;
+    return { resourceCount, consumableKinds };
+  }, [account.hubCraftedConsumables, account.resourceStash]);
 
   const headerHud = (
     <>
@@ -48,75 +41,88 @@ export default function SafehouseHubPanel(): React.JSX.Element {
   return (
     <HubScreenShell
       title="SAFEHOUSE // VEIL PREP"
-      subtitle={`OPERATIVE ${account.username.toUpperCase()} // ${account.activeClass}`}
+      subtitle={`OPERATIVE ${account.username.toUpperCase()} // ${classDef.displayName.toUpperCase()}`}
       headerRight={headerHud}
       contentStyle={styles.shellBody}
     >
-      <View style={styles.safehouseStage}>
-        <View style={styles.masterContent}>
-          <View
-            style={[
-              styles.stickyNav,
-              {
-                backgroundColor: panelBg,
-                marginBottom: scaleSpacing(8),
-                paddingVertical: scaleSpacing(4),
-              },
-            ]}
-          >
-            <View style={[styles.navRow, isDesktop && styles.navRowDesktop, { gap: scaleSpacing(isDesktop ? 8 : 6) }]}>
-              {NAV_ITEMS.map((item) => {
-                const active = activeTab === item.key;
-                return (
-                  <HapticPressable
-                    key={item.key}
-                    onPress={() => setActiveTab(item.key)}
-                    style={(state) => [
-                      styles.hardwareTab,
-                      isDesktop && styles.hardwareTabDesktop,
-                      {
-                        borderColor: active ? factionAccent : theme.borderColor,
-                        backgroundColor: active ? `${factionAccent}14` : 'rgba(0, 0, 0, 0.35)',
-                      },
-                      terminalHoverStyle(readPressableHover(state), state.pressed),
-                    ]}
-                  >
-                    <TerminalText
-                      variant="body"
-                      letterSpacing={1}
-                      style={{ color: active ? factionAccent : theme.mutedColor, fontWeight: '700' }}
-                    >
-                      {item.label}
-                    </TerminalText>
-                  </HapticPressable>
-                );
-              })}
-            </View>
+      <ScrollView
+        {...HIDDEN_SCROLLVIEW_PROPS}
+        style={mergeHiddenScrollbarStyle(styles.scroll)}
+        contentContainerStyle={[styles.scrollContent, { gap: scaleSpacing(10), paddingBottom: scaleSpacing(12) }]}
+        keyboardShouldPersistTaps="handled"
+      >
+        <DossierCardShell padding={scaleSpacing(14)} accentColor={accent} showAccentStripe>
+          <HubSectionHeader title="OPERATIVE STATUS" color={accent} />
+          <View style={styles.statusGrid}>
+            <StatusRow label="CLASS" value={classDef.displayName} accent={accent} muted={theme.mutedColor} />
+            <StatusRow label="CABAL" value={factionName} accent={accent} muted={theme.mutedColor} />
+            <StatusRow label="RANK" value={`${account.operativeRank}`} accent={accent} muted={theme.mutedColor} />
+            <StatusRow
+              label="DEPTH UNLOCKED"
+              value={`${account.progressionMatrix.maxDepthUnlocked}`}
+              accent={accent}
+              muted={theme.mutedColor}
+            />
           </View>
+        </DossierCardShell>
 
-          {activeTab === 'LOADOUT' || activeTab === 'MARKET' || activeTab === 'FORGE' ? (
-            <View style={styles.tabBodyFixed}>
-              <TerminalGlitchTransition transitionKey={activeTab} style={styles.tabBodyFill}>
-                {activeTab === 'LOADOUT' && <SafehouseLoadoutTab />}
-                {activeTab === 'MARKET' && <SafehouseBlackMarketTab />}
-                {activeTab === 'FORGE' && <CraftingMenuPanel embedded />}
-              </TerminalGlitchTransition>
-            </View>
-          ) : (
-            <ScrollView
-              style={styles.tabScroll}
-              contentContainerStyle={[styles.tabScrollContent, { paddingBottom: scaleSpacing(8) }]}
-              showsVerticalScrollIndicator={Platform.OS === 'web'}
-              keyboardShouldPersistTaps="handled"
-            >
-              <TerminalGlitchTransition transitionKey={activeTab} style={styles.tabBody}>
-                {activeTab === 'ABILITIES' && <SafehouseAbilitiesTab />}
-              </TerminalGlitchTransition>
-            </ScrollView>
-          )}
-        </View>
-      </View>
+        <DossierCardShell padding={scaleSpacing(14)} accentColor={accent} showAccentStripe>
+          <HubSectionHeader title="VAULT SUMMARY" color={accent} />
+          <View style={styles.statusGrid}>
+            <StatusRow
+              label="RESOURCE UNITS"
+              value={`${stashSummary.resourceCount}`}
+              accent={accent}
+              muted={theme.mutedColor}
+            />
+            <StatusRow
+              label="STAGED CONSUMABLES"
+              value={`${stashSummary.consumableKinds}`}
+              accent={accent}
+              muted={theme.mutedColor}
+            />
+            <StatusRow
+              label="BLUEPRINTS"
+              value={`${account.unlockedBlueprints.length}`}
+              accent={accent}
+              muted={theme.mutedColor}
+            />
+            <StatusRow
+              label="FORGE PASSIVES"
+              value={`${account.craftedAugments.length}`}
+              accent={accent}
+              muted={theme.mutedColor}
+            />
+          </View>
+          <TerminalText variant="caption" style={[styles.prepNote, { color: theme.mutedColor, marginTop: scaleSpacing(10) }]}>
+            Stage combat deck and pack descent cargo in Loadout, procure contraband at the Black Market, then breach from Veil Front.
+          </TerminalText>
+        </DossierCardShell>
+      </ScrollView>
     </HubScreenShell>
+  );
+}
+
+function StatusRow({
+  label,
+  value,
+  accent,
+  muted,
+}: {
+  label: string;
+  value: string;
+  accent: string;
+  muted: string;
+}): React.JSX.Element {
+  return (
+    <View style={styles.statusRow}>
+      <TerminalText variant="caption" letterSpacing={0.8} style={[styles.statusLabel, { color: muted }]}>
+        {label}
+      </TerminalText>
+      <TerminalText variant="body" letterSpacing={0.4} style={[styles.statusValue, { color: accent }]}>
+        {value}
+      </TerminalText>
+    </View>
   );
 }
 
@@ -125,16 +131,12 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
   },
-  safehouseStage: {
+  scroll: {
     flex: 1,
     minHeight: 0,
-    position: 'relative',
   },
-  masterContent: {
-    flex: 1,
-    minHeight: 0,
-    zIndex: 1,
-    width: '100%',
+  scrollContent: {
+    flexGrow: 1,
   },
   hudCredits: {
     fontWeight: '700',
@@ -144,46 +146,25 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     marginTop: 2,
   },
-  stickyNav: {
-    zIndex: 2,
-  },
-  navRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  navRowDesktop: {
+  statusGrid: {
     gap: 8,
   },
-  hardwareTab: {
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    minWidth: 72,
+  statusRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 12,
   },
-  hardwareTabDesktop: {
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    minWidth: 96,
+  statusLabel: {
+    fontWeight: '700',
+    flexShrink: 0,
   },
-  tabScroll: {
+  statusValue: {
+    fontWeight: '800',
+    textAlign: 'right',
     flex: 1,
-    minHeight: 0,
   },
-  tabScrollContent: {
-    flexGrow: 1,
-  },
-  tabBody: {
-    flexGrow: 1,
-    minHeight: 0,
-  },
-  tabBodyFixed: {
-    flex: 1,
-    minHeight: 0,
-  },
-  tabBodyFill: {
-    flex: 1,
-    minHeight: 0,
+  prepNote: {
+    lineHeight: 14,
   },
 });

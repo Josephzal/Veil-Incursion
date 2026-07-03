@@ -1,267 +1,462 @@
-import React from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import React, { useState } from 'react';
+import { Platform, StyleSheet, View } from 'react-native';
+import HapticPressable from '../HapticPressable';
 import TerminalText from '../TerminalText';
-import { useHubLayout } from '../../context/HubLayoutContext';
-import { useWorldState } from '../../context/WorldStateContext';
-import { DOSSIER_METER_TRACK } from '../../constants/dossierSurface';
-import { formatBracketHeader, HUB_DATA_DIVIDER } from '../../styles/hubTerminalUi';
-import type { SectorState } from '../../types/worldState';
-import { TerminalTheme } from '../../types/theme';
+import { ProgressBar } from './VeilFrontUiPrimitives';
+import { useVeilFrontLayout } from './useVeilFrontLayout';
+import { FACTION_DEFINITIONS } from '../../data/factions';
 import { operationProgressPercent } from '../../data/worldStateHelpers';
 import { anchorIdForSector, getSectorWorldTemplate } from '../../data/sectorWorldCatalog';
+import { HUB_DATA_DIVIDER } from '../../styles/hubTerminalUi';
+import type { CabalEmployerId, SectorState } from '../../types/worldState';
+import { TerminalTheme } from '../../types/theme';
 import {
-  formatEchoActivity,
-  formatOperationObjectiveKind,
-  qualitativeLevel,
-} from '../../utils/veilFrontBriefingUi';
+  describeAnchorInRunPressure,
+  formatOperationContributes,
+  operationTypeChip,
+} from '../../utils/veilFrontSectorUi';
+import {
+  describeEmployerPerks,
+  employerSponsorLabel,
+} from '../../utils/employerContractUi';
+import { useWorldState } from '../../context/WorldStateContext';
+import { viewShadow } from '../../utils/adaptiveStyles';
+
+const ALL_EMPLOYERS: CabalEmployerId[] = ['TERRAN_GRID', 'LEGION', 'SOLARIS'];
+type BriefingTab = 'operation' | 'anchor' | 'contracts';
 
 interface SectorBriefingPanelProps {
   theme: TerminalTheme;
   sector: SectorState;
+  selectedEmployer: CabalEmployerId | null;
+  onSelectEmployer: (employer: CabalEmployerId | null) => void;
+  onRequestDeploy: () => void;
+  runDisabled: boolean;
+  launching: boolean;
 }
 
-function BriefRow({
-  label,
-  value,
-  mutedColor,
-  textColor,
-  accentColor,
-  scaleSpacing,
-}: {
-  label: string;
-  value: string;
-  mutedColor: string;
-  textColor: string;
-  accentColor: string;
-  scaleSpacing: (n: number) => number;
-}) {
+function TypeChip({ label, accentColor }: { label: string; accentColor: string }) {
+  const { scaleFont, scaleSpacing } = useVeilFrontLayout();
   return (
-    <View style={[styles.row, { marginBottom: scaleSpacing(8) }]}>
-      <TerminalText variant="caption" letterSpacing={0.8} style={{ color: mutedColor }}>
-        {label.toUpperCase()}
+    <View style={[styles.typeChip, { borderColor: `${accentColor}55`, paddingHorizontal: scaleSpacing(6), paddingVertical: scaleSpacing(3), alignSelf: 'flex-start' }]}>
+      <TerminalText size={scaleFont(6)} style={{ color: accentColor }}>
+        {label}
       </TerminalText>
-      <TerminalText variant="body" letterSpacing={0.5} style={{ color: textColor, marginTop: scaleSpacing(2) }}>
-        {value}
-      </TerminalText>
-      <View style={[styles.rowRule, { backgroundColor: accentColor, opacity: 0.15, marginTop: scaleSpacing(4) }]} />
     </View>
   );
 }
 
-export default function SectorBriefingPanel({
+function ContributionRow({ label, color }: { label: string; color: string }) {
+  const { scaleFont, scaleSpacing } = useVeilFrontLayout();
+  return (
+    <View style={[styles.contributionRow, { gap: scaleSpacing(5) }]}>
+      <TerminalText size={scaleFont(6)} style={{ color }}>{'•'}</TerminalText>
+      <TerminalText size={scaleFont(6.5)} style={[styles.contributionText, { color }]} selectable={false}>
+        {label}
+      </TerminalText>
+    </View>
+  );
+}
+
+function BriefingTabs({
   theme,
-  sector,
-}: SectorBriefingPanelProps): React.JSX.Element {
-  const { isDesktop, scaleSpacing, scaleSize } = useHubLayout();
-  const { persisted } = useWorldState();
+  activeTab,
+  onSelectTab,
+}: {
+  theme: TerminalTheme;
+  activeTab: BriefingTab;
+  onSelectTab: (tab: BriefingTab) => void;
+}) {
+  const { scaleSpacing, scaleFont } = useVeilFrontLayout();
+  const tabs: { id: BriefingTab; label: string }[] = [
+    { id: 'operation', label: 'OPERATION' },
+    { id: 'anchor', label: 'ANCHOR' },
+    { id: 'contracts', label: 'CONTRACTS' },
+  ];
+
+  return (
+    <View style={[styles.tabRow, { borderColor: `${theme.statusColor}20`, padding: scaleSpacing(3) }]}>
+      {tabs.map((tab) => {
+        const isActive = activeTab === tab.id;
+        return (
+          <HapticPressable
+            key={tab.id}
+            onPress={() => onSelectTab(tab.id)}
+            style={({ pressed }) => [
+              styles.tab,
+              {
+                borderColor: isActive ? `${theme.statusColor}88` : 'transparent',
+                backgroundColor: isActive ? `${theme.statusColor}18` : 'transparent',
+                minHeight: scaleSpacing(32),
+                paddingHorizontal: scaleSpacing(6),
+                opacity: pressed ? 0.88 : 1,
+              },
+            ]}
+          >
+            <TerminalText
+              size={scaleFont(6.2)}
+              letterSpacing={0.35}
+              style={{ color: isActive ? theme.statusColor : theme.mutedColor, fontWeight: isActive ? '800' : '600' }}
+            >
+              {tab.label}
+            </TerminalText>
+          </HapticPressable>
+        );
+      })}
+    </View>
+  );
+}
+
+function OperationTabContent({ theme, sector }: { theme: TerminalTheme; sector: SectorState }) {
+  const { scaleFont, scaleSize, scaleSpacing, descriptionLines, showOptionalCopy } = useVeilFrontLayout();
   const operationPct = operationProgressPercent(
     sector.activeOperation.progressCurrent,
     sector.activeOperation.progressRequired,
   );
+  const contributes = formatOperationContributes(sector.activeOperation.contributionRules);
+
+  return (
+    <View style={[styles.tabBody, { gap: scaleSpacing(9) }]}>
+      <TerminalText size={scaleFont(6)} letterSpacing={0.7} style={{ color: theme.statusColor, fontWeight: '700' }}>
+        ACTIVE OPERATION
+      </TerminalText>
+      <TerminalText size={scaleFont(8.2)} style={[styles.wrapText, { color: theme.textColor, fontWeight: '800', lineHeight: scaleSize(11) }]}>
+        {sector.activeOperation.title}
+      </TerminalText>
+      <TypeChip label={operationTypeChip(sector.activeOperation.objectiveKind)} accentColor={theme.statusColor} />
+      {showOptionalCopy ? (
+        <TerminalText
+          size={scaleFont(6.8)}
+          style={[styles.wrapText, { color: theme.mutedColor, lineHeight: scaleSize(11) }]}
+          numberOfLines={descriptionLines}
+        >
+          {sector.activeOperation.description}
+        </TerminalText>
+      ) : null}
+      <View style={{ gap: scaleSpacing(4) }}>
+        <TerminalText size={scaleFont(6)} style={{ color: theme.mutedColor }}>
+          {`Progress: ${operationPct}%`}
+        </TerminalText>
+        <ProgressBar percent={operationPct} accentColor={theme.statusColor} height={scaleSize(5)} />
+      </View>
+      {contributes.length > 0 ? (
+        <View style={[styles.listBlock, { gap: scaleSpacing(5), borderTopColor: `${theme.statusColor}24`, paddingTop: scaleSpacing(7) }]}>
+          <TerminalText size={scaleFont(5.5)} letterSpacing={0.6} style={{ color: theme.mutedColor }}>
+            CONTRIBUTES
+          </TerminalText>
+          <View style={styles.contributionList}>
+            {contributes.map((line) => (
+              <ContributionRow key={line} label={line} color={theme.textColor} />
+            ))}
+          </View>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function AnchorTabContent({ theme, sector }: { theme: TerminalTheme; sector: SectorState }) {
+  const { scaleFont, scaleSize, scaleSpacing, isCompactHeight, showOptionalCopy } = useVeilFrontLayout();
+  const { persisted } = useWorldState();
   const sectorTemplate = getSectorWorldTemplate(sector.id);
   const dormantAnchorRunsRemaining = sectorTemplate.anchor
     ? persisted.dormantAnchorRuns[anchorIdForSector(sector.id, sectorTemplate.anchor.type)] ?? 0
     : 0;
+  const pressureLines = sector.activeAnchor ? describeAnchorInRunPressure(sector.activeAnchor) : [];
 
   return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={[styles.scrollContent, { paddingBottom: scaleSpacing(12) }]}
-      showsVerticalScrollIndicator={false}
-    >
-      <TerminalText
-        variant="section"
-        letterSpacing={1}
-        style={{ color: theme.statusColor, marginBottom: scaleSpacing(10) }}
-      >
-        {formatBracketHeader('Sector Dossier')}
-      </TerminalText>
-
-      <TerminalText
-        variant="display"
-        letterSpacing={1.2}
-        style={{ color: theme.textColor, marginBottom: scaleSpacing(4) }}
-      >
-        {sector.displayName.toUpperCase()}
-      </TerminalText>
-      <TerminalText variant="caption" style={{ color: theme.mutedColor, marginBottom: scaleSpacing(12) }}>
-        {sector.biome.toUpperCase()}
-      </TerminalText>
-
-      <View style={[styles.divider, { borderTopColor: HUB_DATA_DIVIDER, marginBottom: scaleSpacing(12) }]} />
-
-      <BriefRow
-        label="Hazard"
-        value={qualitativeLevel(sector.hazardLevel)}
-        mutedColor={theme.mutedColor}
-        textColor={theme.textColor}
-        accentColor={theme.statusColor}
-        scaleSpacing={scaleSpacing}
-      />
-      <BriefRow
-        label="Reward"
-        value={qualitativeLevel(sector.rewardLevel)}
-        mutedColor={theme.mutedColor}
-        textColor={theme.textColor}
-        accentColor={theme.statusColor}
-        scaleSpacing={scaleSpacing}
-      />
-      <BriefRow
-        label="Echo Activity"
-        value={formatEchoActivity(sector.echoActivity)}
-        mutedColor={theme.mutedColor}
-        textColor={theme.textColor}
-        accentColor={theme.statusColor}
-        scaleSpacing={scaleSpacing}
-      />
-      <BriefRow
-        label="Resource Focus"
-        value={sector.resourceFocus.join(' / ')}
-        mutedColor={theme.mutedColor}
-        textColor={theme.textColor}
-        accentColor={theme.statusColor}
-        scaleSpacing={scaleSpacing}
-      />
-
-      <View style={[styles.divider, { borderTopColor: HUB_DATA_DIVIDER, marginVertical: scaleSpacing(12) }]} />
-
-      <TerminalText
-        variant="caption"
-        letterSpacing={0.8}
-        style={{ color: theme.mutedColor, marginBottom: scaleSpacing(4) }}
-      >
+    <View style={[styles.tabBody, { gap: scaleSpacing(9) }]}>
+      <TerminalText size={scaleFont(6)} letterSpacing={0.7} style={{ color: '#a855f7', fontWeight: '700' }}>
         ACTIVE ANCHOR
       </TerminalText>
-      <TerminalText
-        variant="body"
-        letterSpacing={0.6}
-        style={{ color: sector.activeAnchor ? theme.statusColor : theme.mutedColor, marginBottom: scaleSpacing(4) }}
-      >
-        {sector.activeAnchor?.displayName.toUpperCase() ?? 'NONE DETECTED'}
-      </TerminalText>
       {sector.activeAnchor ? (
-        <TerminalText variant="micro" style={{ color: theme.mutedColor, lineHeight: scaleSize(14), marginBottom: scaleSpacing(12) }}>
-          {sector.activeAnchor.description}
-        </TerminalText>
-      ) : dormantAnchorRunsRemaining > 0 && sectorTemplate.anchor ? (
         <>
-          <TerminalText variant="micro" style={{ color: theme.statusColor, marginBottom: scaleSpacing(4) }}>
-            {`${sectorTemplate.anchor.displayName.toUpperCase()} — DORMANT`}
+          <TerminalText size={scaleFont(8.2)} style={[styles.wrapText, { color: theme.textColor, fontWeight: '800', lineHeight: scaleSize(11) }]}>
+            {sector.activeAnchor.displayName}
           </TerminalText>
-          <TerminalText variant="micro" style={{ color: theme.mutedColor, marginBottom: scaleSpacing(12) }}>
-            {`Veil signature suppressed for ${dormantAnchorRunsRemaining} more run${dormantAnchorRunsRemaining === 1 ? '' : 's'}.`}
-          </TerminalText>
+          {showOptionalCopy ? (
+            <TerminalText
+              size={scaleFont(6.8)}
+              style={[styles.wrapText, { color: theme.mutedColor, lineHeight: scaleSize(11.5) }]}
+              numberOfLines={isCompactHeight ? 2 : 3}
+            >
+              {sector.activeAnchor.description}
+            </TerminalText>
+          ) : null}
+          {pressureLines.length > 0 ? (
+            <View style={[styles.listBlock, { gap: scaleSpacing(5), borderTopColor: 'rgba(168, 85, 247, 0.2)', paddingTop: scaleSpacing(7) }]}>
+              <TerminalText size={scaleFont(5.5)} letterSpacing={0.6} style={{ color: theme.mutedColor }}>
+                PRESSURE
+              </TerminalText>
+              <View style={styles.contributionList}>
+                {pressureLines.map((line) => (
+                  <ContributionRow key={line} label={line} color={theme.textColor} />
+                ))}
+              </View>
+            </View>
+          ) : null}
         </>
+      ) : dormantAnchorRunsRemaining > 0 && sectorTemplate.anchor ? (
+        <TerminalText size={scaleFont(6.5)} style={[styles.wrapText, { color: theme.mutedColor }]}>
+          {`${sectorTemplate.anchor.displayName} dormant — ${dormantAnchorRunsRemaining} run(s) remaining.`}
+        </TerminalText>
       ) : (
-        <TerminalText variant="micro" style={{ color: theme.mutedColor, marginBottom: scaleSpacing(12) }}>
-          No active Veil anchor signatures in this sector.
+        <TerminalText size={scaleFont(6.5)} style={[styles.wrapText, { color: theme.mutedColor }]}>
+          No active anchor. Standard breach conditions apply.
         </TerminalText>
       )}
+    </View>
+  );
+}
 
-      <View style={[styles.divider, { borderTopColor: HUB_DATA_DIVIDER, marginBottom: scaleSpacing(12) }]} />
+function ContractsTabContent({
+  theme,
+  sector,
+  selectedEmployer,
+  onSelectEmployer,
+}: {
+  theme: TerminalTheme;
+  sector: SectorState;
+  selectedEmployer: CabalEmployerId | null;
+  onSelectEmployer: (employer: CabalEmployerId | null) => void;
+}) {
+  const { scaleSpacing } = useVeilFrontLayout();
+  const availableEmployers = ALL_EMPLOYERS.filter(
+    (id) => sector.employerPresence?.includes(id) ?? true,
+  );
 
-      <TerminalText
-        variant="caption"
-        letterSpacing={0.8}
-        style={{ color: theme.mutedColor, marginBottom: scaleSpacing(4) }}
-      >
-        ACTIVE OPERATION
-      </TerminalText>
-      <TerminalText variant="body" letterSpacing={0.5} style={{ color: theme.textColor, marginBottom: scaleSpacing(4) }}>
-        {sector.activeOperation.title}
-      </TerminalText>
-      <TerminalText variant="micro" style={{ color: theme.statusColor, marginBottom: scaleSpacing(4) }}>
-        {formatOperationObjectiveKind(sector.activeOperation.objectiveKind).toUpperCase()}
-      </TerminalText>
-      <TerminalText variant="micro" style={{ color: theme.mutedColor, lineHeight: scaleSize(14), marginBottom: scaleSpacing(8) }}>
-        {sector.activeOperation.description}
-      </TerminalText>
+  return (
+    <View style={[styles.tabBody, { gap: scaleSpacing(7) }]}>
+      <ContractCard
+        title="NO SPONSOR"
+        perks={[]}
+        isSelected={selectedEmployer === null}
+        accentColor={theme.statusColor}
+        textColor={theme.textColor}
+        onPress={() => onSelectEmployer(null)}
+      />
+      {availableEmployers.map((employerId) => {
+        const def = FACTION_DEFINITIONS[employerId];
+        return (
+          <ContractCard
+            key={employerId}
+            title={employerSponsorLabel(employerId).toUpperCase()}
+            perks={describeEmployerPerks(employerId)}
+            isSelected={selectedEmployer === employerId}
+            accentColor={def.accentColor}
+            textColor={theme.textColor}
+            onPress={() => onSelectEmployer(employerId)}
+          />
+        );
+      })}
+    </View>
+  );
+}
 
-      <View style={[styles.progressTrack, { height: scaleSize(isDesktop ? 22 : 8), backgroundColor: DOSSIER_METER_TRACK }]}>
-        <View
-          style={[
-            styles.progressFill,
-            {
-              width: `${operationPct}%`,
-              backgroundColor: theme.statusColor,
-              minWidth: operationPct > 0 ? scaleSize(8) : 0,
-            },
-          ]}
-        />
-      </View>
-      <TerminalText variant="micro" style={{ color: theme.mutedColor, marginTop: scaleSpacing(4) }}>
-        {`${operationPct}% COMMUNITY PROGRESS`}
-      </TerminalText>
+function ContractCard({
+  title,
+  perks,
+  isSelected,
+  accentColor,
+  textColor,
+  onPress,
+}: {
+  title: string;
+  perks: string[];
+  isSelected: boolean;
+  accentColor: string;
+  textColor: string;
+  onPress: () => void;
+}) {
+  const { cardPadding, scaleFont, scaleSpacing } = useVeilFrontLayout();
 
-      {persisted.temporarySectorModifiers.some((mod) => mod.sectorId === sector.id && mod.runsRemaining > 0) ? (
-        <>
-          <View style={[styles.divider, { borderTopColor: HUB_DATA_DIVIDER, marginVertical: scaleSpacing(12) }]} />
-          <TerminalText variant="caption" letterSpacing={0.8} style={{ color: theme.mutedColor, marginBottom: scaleSpacing(4) }}>
-            ACTIVE SECTOR MODIFIERS
-          </TerminalText>
-          {persisted.temporarySectorModifiers
-            .filter((mod) => mod.sectorId === sector.id && mod.runsRemaining > 0)
-            .map((mod) => (
-              <TerminalText key={mod.label} variant="micro" style={{ color: theme.statusColor, marginBottom: scaleSpacing(2) }}>
-                {`• ${mod.label} — ${mod.runsRemaining} run${mod.runsRemaining === 1 ? '' : 's'} remaining`}
+  return (
+    <HapticPressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.contractCard,
+        {
+          borderColor: isSelected ? accentColor : HUB_DATA_DIVIDER,
+          backgroundColor: isSelected ? `${accentColor}14` : 'rgba(15, 23, 42, 0.28)',
+          paddingHorizontal: cardPadding,
+          paddingVertical: scaleSpacing(6),
+          opacity: pressed ? 0.9 : 1,
+        },
+      ]}
+    >
+      <TerminalText size={scaleFont(6.8)} style={{ color: isSelected ? accentColor : textColor, fontWeight: '700' }}>
+        {title}
+      </TerminalText>
+      {perks.length > 0 ? (
+        <View style={[styles.perkList, { gap: scaleSpacing(3), marginTop: scaleSpacing(4) }]}>
+          {perks.map((perk) => (
+            <View
+              key={perk}
+              style={[styles.perkChip, { borderColor: `${accentColor}44`, paddingHorizontal: scaleSpacing(5), paddingVertical: scaleSpacing(2) }]}
+            >
+              <TerminalText size={scaleFont(5.5)} style={{ color: textColor }}>
+                {perk}
               </TerminalText>
-            ))}
-        </>
-      ) : null}
-
-      {persisted.operationLog.length > 0 ? (
-        <>
-          <View style={[styles.divider, { borderTopColor: HUB_DATA_DIVIDER, marginVertical: scaleSpacing(12) }]} />
-          <TerminalText variant="caption" letterSpacing={0.8} style={{ color: theme.mutedColor, marginBottom: scaleSpacing(4) }}>
-            OPERATION LOG
-          </TerminalText>
-          {persisted.operationLog.slice(0, 4).map((line) => (
-            <TerminalText key={line} variant="micro" style={{ color: theme.mutedColor, marginBottom: scaleSpacing(3), lineHeight: scaleSize(13) }}>
-              {line.replace(/^>>\s*/, '')}
-            </TerminalText>
+            </View>
           ))}
-        </>
+        </View>
       ) : null}
+    </HapticPressable>
+  );
+}
 
-      {sector.employerPresence && sector.employerPresence.length > 0 ? (
-        <>
-          <View style={[styles.divider, { borderTopColor: HUB_DATA_DIVIDER, marginVertical: scaleSpacing(12) }]} />
-          <TerminalText variant="caption" letterSpacing={0.8} style={{ color: theme.mutedColor, marginBottom: scaleSpacing(4) }}>
-            EMPLOYERS ACTIVE IN SECTOR
-          </TerminalText>
-          {sector.employerPresence.map((employer) => (
-            <TerminalText key={employer} variant="micro" style={{ color: theme.textColor, marginBottom: scaleSpacing(2) }}>
-              {`• ${employer.replace('_', ' ')} — sponsor packages available`}
-            </TerminalText>
-          ))}
-        </>
-      ) : null}
-    </ScrollView>
+/** Right panel — tabs + tab content + deploy only. Summary lives on map top band. */
+export default function SectorBriefingPanel({
+  theme,
+  sector,
+  selectedEmployer,
+  onSelectEmployer,
+  onRequestDeploy,
+  runDisabled,
+  launching,
+}: SectorBriefingPanelProps): React.JSX.Element {
+  const {
+    sectionGap,
+    cardPadding,
+    scaleFont,
+    deployButtonHeight,
+  } = useVeilFrontLayout();
+  const [activeTab, setActiveTab] = useState<BriefingTab>('operation');
+
+  const canLaunch = !runDisabled && !launching;
+  const deployLabel = launching
+    ? '[ DEPLOYING... ]'
+    : '[ INITIATE BREACH ]';
+
+  return (
+    <View style={[styles.panel, { gap: sectionGap }]}>
+      <BriefingTabs theme={theme} activeTab={activeTab} onSelectTab={setActiveTab} />
+
+      <View style={[styles.tabContent, { padding: cardPadding, borderColor: `${theme.statusColor}33` }]}>
+        {activeTab === 'operation' ? (
+          <OperationTabContent theme={theme} sector={sector} />
+        ) : activeTab === 'anchor' ? (
+          <AnchorTabContent theme={theme} sector={sector} />
+        ) : (
+          <ContractsTabContent
+            theme={theme}
+            sector={sector}
+            selectedEmployer={selectedEmployer}
+            onSelectEmployer={onSelectEmployer}
+          />
+        )}
+      </View>
+
+      <HapticPressable
+        onPress={onRequestDeploy}
+        disabled={!canLaunch}
+        style={({ pressed }) => [
+          styles.deployButton,
+          {
+            borderColor: theme.statusColor,
+            backgroundColor: `${theme.statusColor}28`,
+            height: deployButtonHeight,
+            opacity: !canLaunch ? 0.45 : pressed ? 0.88 : 1,
+            ...viewShadow({
+              color: theme.statusColor,
+              opacity: !canLaunch ? 0.2 : 0.75,
+              radius: 10,
+              offset: { width: 0, height: 0 },
+            }),
+          },
+        ]}
+      >
+        <TerminalText
+          size={scaleFont(7)}
+          letterSpacing={0.6}
+          style={{ color: canLaunch ? theme.statusColor : theme.mutedColor, fontWeight: '800' }}
+        >
+          {deployLabel}
+        </TerminalText>
+      </HapticPressable>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll: {
+  panel: {
     flex: 1,
     minHeight: 0,
-  },
-  scrollContent: {
-    flexGrow: 1,
-  },
-  divider: {
-    borderTopWidth: 1,
-  },
-  row: {},
-  rowRule: {
-    height: 1,
-    width: '40%',
-  },
-  progressTrack: {
-    width: '100%',
-    borderRadius: 2,
+    minWidth: 0,
     overflow: 'hidden',
   },
-  progressFill: {
-    height: '100%',
+  tabRow: {
+    flexDirection: 'row',
+    flexShrink: 0,
+    borderWidth: 1,
+    backgroundColor: 'rgba(8, 13, 22, 0.5)',
+  },
+  tab: {
+    flex: 1,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 0,
+    ...Platform.select({
+      web: { cursor: 'pointer' as const },
+      default: {},
+    }),
+  },
+  tabContent: {
+    flex: 1,
+    minHeight: 0,
+    borderWidth: 1,
+    backgroundColor: 'rgba(18, 28, 44, 0.72)',
+    overflow: 'hidden',
+  },
+  tabBody: {
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
+  },
+  wrapText: {
+    flexShrink: 1,
+  },
+  typeChip: {
+    borderWidth: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.5)',
+  },
+  contributionList: {
+    gap: 3,
+  },
+  listBlock: {
+    borderTopWidth: 1,
+  },
+  contributionRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  contributionText: {
+    flex: 1,
+    flexShrink: 1,
+  },
+  perkList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  perkChip: {
+    borderWidth: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.5)',
+  },
+  contractCard: {
+    borderWidth: 1,
+    borderLeftWidth: 2,
+    overflow: 'visible',
+    ...Platform.select({
+      web: { cursor: 'pointer' as const },
+      default: {},
+    }),
+  },
+  deployButton: {
+    width: '100%',
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
 });

@@ -55,6 +55,12 @@ import Warden from '../../assets/enemy images/warden.png';
 import WardenAttacking from '../../assets/enemy images/warden_attack.png';
 import Fixer from '../../assets/enemy images/fixer.png';
 import FixerAttacking from '../../assets/enemy images/fixer_attack.png';
+import Reaver from '../../assets/enemy images/reaver_idle.png';
+import ReaverAttacking from '../../assets/enemy images/reaver_attack.png';
+import Hexer from '../../assets/enemy images/hexer_idle.png';
+import HexerAttacking from '../../assets/enemy images/hexer_attack.png';
+import Veilbinder from '../../assets/enemy images/veilbinder_idle.png';
+import VeilbinderAttacking from '../../assets/enemy images/veilbinder_attack.png';
 import Spotter from '../../assets/enemy images/spotter.png';
 import SpotterAttacking from '../../assets/enemy images/spotter_attacking.png';
 import Burner from '../../assets/enemy images/burner.png';
@@ -105,9 +111,9 @@ const ROSTER_PORTRAITS: Partial<Record<EnemyRosterId, ImageSourcePropType>> = {
   'fixer': Fixer,
   'spotter': Spotter,
   'burner': Burner,
-  'rival-hexer': Fixer,
-  'rival-veilbinder': NullShade,
-  'rival-reaver': Warden,
+  'rival-hexer': Hexer,
+  'rival-veilbinder': Veilbinder,
+  'rival-reaver': Reaver,
   'amalgam': Amalgam,
   'wire-ghoul': WireGhoul,
   'hollow-lung': HollowLung,
@@ -145,9 +151,9 @@ const ROSTER_ATTACK_PORTRAITS: Partial<Record<EnemyRosterId, ImageSourcePropType
   'fixer': FixerAttacking,
   'spotter': SpotterAttacking,
   'burner': BurnerAttacking,
-  'rival-hexer': FixerAttacking,
-  'rival-veilbinder': NullShadeAttacking,
-  'rival-reaver': WardenAttacking,
+  'rival-hexer': HexerAttacking,
+  'rival-veilbinder': VeilbinderAttacking,
+  'rival-reaver': ReaverAttacking,
   'amalgam': AmalgamAttacking,
   'wire-ghoul': WireGhoulAttacking,
   'hollow-lung': HollowLungAttacking,

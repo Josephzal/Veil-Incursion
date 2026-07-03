@@ -220,7 +220,7 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
           contentStyle={styles.deploymentContent}
         >
           <TerminalText variant="panelTitle" letterSpacing={0.8} style={[styles.deploymentTitle, { color: accent, marginBottom: scaleSpacing(4) }]}>
-            DEPLOYMENT PACK
+            TACTICAL CARGO
           </TerminalText>
 
           <View

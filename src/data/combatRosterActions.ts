@@ -2,6 +2,7 @@ import type { DistrictId } from './districtPacing';
 import type { PlayerAIState } from './AIDecisionEngine';
 import type { EnemyCombatProfile, EnemyIntent } from '../types/run';
 import { getAlphaMechanic, resolveCoilSniperLockWindUp } from './enemyAlphaConfig';
+import { isEvadePostureActive } from './enemyIntentUtils';
 import {
   decideRosterIntent as decideRosterIntentFromAI,
   isRosterSpecificIntent,
@@ -165,8 +166,9 @@ export function patchRosterAfterIntentExec(
     }
   }
 
-  if (intent === 'EVADE' && !profile.evadeActive) {
+  if (intent === 'EVADE' && !isEvadePostureActive(profile)) {
     patch.evadeActive = true;
+    patch.evadeTurnsRemaining = 2;
   }
   if (
     intent === 'STRIKE'
@@ -178,6 +180,7 @@ export function patchRosterAfterIntentExec(
     || intent === 'ARTILLERY_FIRE'
   ) {
     patch.evadeActive = false;
+    patch.evadeTurnsRemaining = 0;
   }
 
   return patch;

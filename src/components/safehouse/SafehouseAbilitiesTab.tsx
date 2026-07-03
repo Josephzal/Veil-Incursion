@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import AegisLoadoutEditor from '../AegisLoadoutEditor';
 import ClassLoadoutEditor from '../ClassLoadoutEditor';
 import { useHubLayout } from '../../context/HubLayoutContext';
@@ -180,15 +180,7 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
   }, [account.unlockedEnvoyAbilities, appendHubLog, envoyDraft, setEnvoyLoadout]);
 
   return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={[styles.scrollContent, { paddingBottom: scaleSpacing(24) }]}
-      showsVerticalScrollIndicator
-      persistentScrollbar={Platform.OS === 'android'}
-      indicatorStyle="white"
-      nestedScrollEnabled
-    >
-      <View style={styles.editorHost}>
+    <View style={[styles.editorHost, { paddingBottom: scaleSpacing(24) }]}>
         {account.activeClass === 'AEGIS' ? (
           <AegisLoadoutEditor
             draft={aegisDraft}
@@ -265,16 +257,11 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
             statusMessage={loadoutStatus}
           />
         ) : null}
-      </View>
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll: { flex: 1 },
-  scrollContent: {
-    flexGrow: 1,
-  },
   editorHost: {
     gap: 10,
     paddingVertical: 4,

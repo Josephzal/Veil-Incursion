@@ -18,7 +18,7 @@ import {
   pullBacklineToFrontline,
   unitAtSlot,
 } from './combatSquadEngine';
-import { columnSlotsFor, FRONTLINE_SLOTS } from '../types/combatGrid';
+import { columnSlotsFor, ALL_GRID_SLOTS } from '../types/combatGrid';
 import type { CombatGridSlotId } from '../types/combatGrid';
 import { getAbilityDefinition, getAbilityTags } from './aegisAbilities';
 import type { LeyLineMutationId } from '../types/leyLineMutation';
@@ -153,9 +153,9 @@ function applyFractureToUnit(
   return applyFractureDamage(unit, amount);
 }
 
-function frontlineUnits(squad: EnemyCombatProfile[]): EnemyCombatProfile[] {
+function fullGridUnits(squad: EnemyCombatProfile[]): EnemyCombatProfile[] {
   return aliveUnits(squad).filter(
-    (unit) => unit.gridSlot && FRONTLINE_SLOTS.includes(unit.gridSlot as CombatGridSlotId),
+    (unit) => unit.gridSlot && ALL_GRID_SLOTS.includes(unit.gridSlot as CombatGridSlotId),
   );
 }
 
@@ -167,7 +167,7 @@ export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExe
       const brandsSpent = ctx.consumeBrands('ALL');
       const fractureGain = ruinFracturePerBrand(brandsSpent);
       let eradicated = false;
-      const targets = frontlineUnits(ctx.squad);
+      const targets = fullGridUnits(ctx.squad);
       const hitTargets = targets.length > 0 ? targets : aliveUnits(ctx.squad);
       for (const unit of hitTargets) {
         if (!unit.unitId) continue;
@@ -182,7 +182,7 @@ export function executeExtendedAbility(ctx: AbilityExecutionContext): AbilityExe
       }
       ctx.log(
         brandsSpent > 0
-          ? `[RUIN] >> ${brandsSpent} Brand(s) spent — frontline fracture shockwave (+${fractureGain} fracture).`
+          ? `[RUIN] >> ${brandsSpent} Brand(s) spent — full-grid fracture shockwave (+${fractureGain} fracture).`
           : '[RUIN] >> Fracture shockwave — no Brands imprinted.',
       );
       if (eradicated) return { ok: true };

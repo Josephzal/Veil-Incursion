@@ -259,7 +259,7 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
           contentStyle={[styles.panelColumn, Platform.OS === 'web' ? styles.panelFill : null]}
         >
           <TerminalText variant="panelTitle" letterSpacing={0.8} style={[styles.panelTitle, { color: accent }]}>
-            BUY CONTRABAND
+            VENDOR // CONTRABAND
           </TerminalText>
           <TerminalText variant="caption" style={[styles.panelSub, { color: theme.mutedColor }]}>
             High-end field gear — purchases stage in hub consumable vault.

@@ -37,7 +37,7 @@ export function GameFlowProvider({ children }: { children: React.ReactNode }) {
 
   const goToHub = useCallback(() => setCurrentScreen('HUB'), []);
   const openSafehouse = useCallback(() => {
-    setTerminalView('SAFEHOUSE');
+    setTerminalView('LOADOUT');
     setCurrentScreen('HUB');
   }, [setTerminalView]);
   const goToWelcome = useCallback(() => setCurrentScreen('WELCOME'), []);

@@ -12,7 +12,7 @@ import {
 } from 'react-native-reanimated';
 import { useTerminal } from '../context/TerminalContext';
 import { advanceEnemyIntent } from '../data/enemies';
-import { resolveEffectiveEnemyIntent, isRedundantBuffExecution } from '../data/enemyIntentUtils';
+import { resolveEffectiveEnemyIntent, isEvadePostureActive } from '../data/enemyIntentUtils';
 import { resolveActiveEnemyStatuses } from '../utils/enemyStatusEffects';
 import type { PlayerAIState } from '../data/AIDecisionEngine';
 import {
@@ -1310,7 +1310,7 @@ export default function TacticalCombatHub({
   };
 
   const resolveIntentShimmer = (unitId: string, u: EnemyCombatProfile): EnemyIntentShimmer | null => {
-    if (u.evadeActive || u.intent === 'EVADE') return 'evade';
+    if (isEvadePostureActive(u)) return 'evade';
     if ((u.fortifyTurnsRemaining ?? 0) > 0) return 'fortify';
     if (
       u.intent === 'FORTIFY'
@@ -1420,6 +1420,7 @@ export default function TacticalCombatHub({
           occultWards: u.occultWards ?? 0,
           combatTags: u.combatTags ?? [],
           evadeActive: u.evadeActive,
+          evadeTurnsRemaining: u.evadeTurnsRemaining ?? 0,
           fortifyTurnsRemaining: u.fortifyTurnsRemaining ?? 0,
           chargeTurns: u.chargeTurns ?? 0,
           doomedStacks: u.doomedStacks ?? 0,
@@ -1429,6 +1430,7 @@ export default function TacticalCombatHub({
           activeStatuses: resolveActiveEnemyStatuses({
             combatTags: u.combatTags ?? [],
             evadeActive: u.evadeActive,
+            evadeTurnsRemaining: u.evadeTurnsRemaining ?? 0,
             intent: u.intent,
             fortifyTurnsRemaining: u.fortifyTurnsRemaining ?? 0,
             doomedStacks: u.doomedStacks ?? 0,
@@ -2966,7 +2968,7 @@ export default function TacticalCombatHub({
       }
       if (boonMatchesAction(leyLineMutations, 'TAR_TRAPPED', activeAbility)) {
         mutationEncounterRef.current.tarTrappedUnits[e.unitId] = 2;
-        patchUnit(e.unitId, { evadeChance: 0, evadeActive: false });
+        patchUnit(e.unitId, { evadeChance: 0, evadeActive: false, evadeTurnsRemaining: 0 });
         log('[TAR-TRAPPED] >> Target cannot evade for 2 turns.');
       }
       if (
@@ -3733,14 +3735,6 @@ export default function TacticalCombatHub({
   };
 
   const execIntent = (e: EnemyCombatProfile) => {
-    if (isRedundantBuffExecution(e)) {
-      if (e.intent === 'EVADE') {
-        log(`>> ${e.designation} holds evade posture — dodge chance remains elevated.`);
-      } else if (e.intent === 'FORTIFY') {
-        log(`>> ${e.designation} holds fortify posture — kinetic shell remains hardened.`);
-      }
-      return;
-    }
     const intent = resolveEffectiveEnemyIntent(e);
     const blindPenalty = getEnemyAccuracyPenalty(e, sessionExtrasRef.current);
     if (blindPenalty > 0 && isAttackIntent(intent) && Math.random() < blindPenalty) {
@@ -3806,7 +3800,11 @@ export default function TacticalCombatHub({
         break;
       }
       case 'EVADE':
-        log(`>> ${e.designation} EVADE posture — +60% miss chance vs operative strikes.`);
+        log(`>> ${e.designation} EVADE posture — +50% miss chance vs operative strikes (2 turns).`);
+        if (e.unitId) {
+          patchUnit(e.unitId, { evadeActive: true, evadeTurnsRemaining: 2 });
+          publishSquadUi(squadRef.current);
+        }
         break;
       case 'FORTIFY': {
         log(`>> ${e.designation} FORTIFY — kinetic shell hardened (2 turns).`);
@@ -4777,9 +4775,21 @@ export default function TacticalCombatHub({
     tickCombatSessionExtras(sessionExtrasRef.current);
     setSelectedAbility(null);
     syncSquad(squadRef.current.map((unit) => {
-      const remaining = unit.fortifyTurnsRemaining ?? 0;
-      if (remaining <= 0) return unit;
-      return { ...unit, fortifyTurnsRemaining: remaining - 1 };
+      const fortifyRemaining = unit.fortifyTurnsRemaining ?? 0;
+      const evadeRemaining = unit.evadeTurnsRemaining ?? 0;
+      let next = unit;
+      if (fortifyRemaining > 0) {
+        next = { ...next, fortifyTurnsRemaining: fortifyRemaining - 1 };
+      }
+      if (evadeRemaining > 0) {
+        const remaining = evadeRemaining - 1;
+        next = {
+          ...next,
+          evadeTurnsRemaining: remaining,
+          evadeActive: remaining > 0,
+        };
+      }
+      return next;
     }));
     clearEnemyTurnTimers();
     counteringEnemyRef.current = countering;

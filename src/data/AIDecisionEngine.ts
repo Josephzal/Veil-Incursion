@@ -1,4 +1,6 @@
 import type { DistrictId } from './districtPacing';
+import { canRosterUseFortify } from './enemyPostureConfig';
+import { isEvadePostureActive } from './enemyIntentUtils';
 import type { EnemyClass, EnemyCombatProfile, EnemyIntent } from '../types/run';
 
 /** Operative snapshot for hostile intent selection. */
@@ -84,6 +86,11 @@ function pruneArtilleryFortify(pool: EnemyIntent[], ctx: AIDecisionContext): Ene
   return pool.filter((intent) => intent !== 'FORTIFY');
 }
 
+function pruneBlockedRosterFortify(pool: EnemyIntent[], ctx: AIDecisionContext): EnemyIntent[] {
+  if (canRosterUseFortify(ctx.enemy.rosterId)) return pool;
+  return pool.filter((intent) => intent !== 'FORTIFY');
+}
+
 /** Prune zero-value actions before weighting. Add new filters here. */
 export const INTENT_FILTER_RULES: IntentFilterRule[] = [
   pruneSiphonByRoster,
@@ -91,6 +98,7 @@ export const INTENT_FILTER_RULES: IntentFilterRule[] = [
   pruneStaminaDrainWhenStaminaEmpty,
   pruneNonStackingBuffs,
   pruneArtilleryFortify,
+  pruneBlockedRosterFortify,
   pruneHealAtFullHp,
   // Example future rule: pruneMeleeWhenPlayerRetaliating,
 ];
@@ -107,7 +115,7 @@ function roll(rng?: () => number): number {
 
 export function buildEnemyActiveBuffs(profile: EnemyCombatProfile): string[] {
   const buffs: string[] = [];
-  if (profile.evadeActive) buffs.push('Evade');
+  if (isEvadePostureActive(profile)) buffs.push('Evade');
   if ((profile.fortifyTurnsRemaining ?? 0) > 0) buffs.push('Fortify');
   if ((profile.chargeTurns ?? 0) > 0 || profile.intent === 'CHARGE') buffs.push('Charging');
   return buffs;

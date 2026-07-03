@@ -43,11 +43,12 @@ export default function TerminalNavRail({
           <TacticalButton
             key={item.key}
             label={item.label}
-            active={activeView === item.key}
-            onPress={() => onSelectView(item.key)}
-            accentColor={accentColor}
-            mutedColor={theme.mutedColor}
-            variant="rail"
+        active={activeView === item.key}
+        onPress={() => onSelectView(item.key)}
+        accentColor={accentColor}
+        mutedColor={theme.mutedColor}
+        variant="rail"
+        style={activeView === item.key ? styles.activeRailTab : undefined}
           />
         ))}
       </View>
@@ -65,5 +66,9 @@ const styles = StyleSheet.create({
   navStack: {
     flex: 1,
     justifyContent: 'flex-start',
+  },
+  activeRailTab: {
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.35)',
   },
 });

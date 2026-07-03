@@ -117,6 +117,8 @@ export interface EnemyCombatProfile {
   faction?: FactionType;
   /** Player-turn windows remaining where incoming damage is reduced after FORTIFY resolves. */
   fortifyTurnsRemaining?: number;
+  /** Player-turn windows remaining where EVADE posture bonus applies after EVADE resolves. */
+  evadeTurnsRemaining?: number;
   /** Passive stat evade — full miss on connect (EVADE posture uses EVADE_POSTURE_EVADE_CHANCE). */
   evadeChance?: number;
   /** Passive crit chance on attacks. Bosses should remain 0. */

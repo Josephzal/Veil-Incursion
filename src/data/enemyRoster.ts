@@ -1,4 +1,4 @@
-import type { FactionType } from '../types/game';
+import { COMBAT_CHANCE } from '../types/combatChance';
 import type { CombatGridLane } from '../types/combatGrid';
 import type { EnemyClass, EnemyCombatProfile } from '../types/run';
 import { resolveEnemyCombatStats, ENCOUNTER_KEY_TO_ROSTER } from './enemyCombatConfig';
@@ -8,7 +8,7 @@ import { rollEnemyIntent } from './enemyIntentRoll';
 import { initEnemyCombatLayers } from './combatFractureEngine';
 import { initRosterLifecycleDefaults } from './combatLifecycleEngine';
 import { CONCRETE_GARGOYLE_FRACTURE_MAX } from './combatRosterActions';
-import { defaultPostureIntentForRoster } from './enemyPostureConfig';
+import { canRosterUseFortify, defaultPostureIntentForRoster } from './enemyPostureConfig';
 import type { DistrictId } from './districtPacing';
 import { depthFromNodesCleared, localLevelFromDepth } from './districtPacing';
 import type { ThreatTier } from './combatEncounterBudget';
@@ -755,7 +755,10 @@ export function spawnRosterUnit(
     ?? Math.floor(entry.hp * (elite ? 1.15 : 1));
   const baseDamage = resolvedStats?.baseDamage ?? entry.damage;
   const postureIntent = defaultPostureIntentForRoster(entry.id);
-  const intent = postureIntent ?? rollEnemyIntent(entry.class, 0, options?.district ?? 1);
+  let intent = postureIntent ?? rollEnemyIntent(entry.class, 0, options?.district ?? 1);
+  if (!canRosterUseFortify(entry.id) && intent === 'FORTIFY') {
+    intent = postureIntent === 'EVADE' ? 'EVADE' : 'STRIKE';
+  }
   const originFlags = resolveOriginFlags(entry);
   const base: EnemyCombatProfile = {
     class: entry.class,
@@ -771,7 +774,7 @@ export function spawnRosterUnit(
     rosterId: entry.id,
     faction: entry.faction,
     ...originFlags,
-    evadeChance: entry.evadeChance,
+    evadeChance: Math.min(entry.evadeChance, COMBAT_CHANCE.ENEMY_MAX_EVADE_CHANCE),
     critChance: entry.critChance,
   };
   const localLevel = localLevelFromDepth(depth);

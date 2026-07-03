@@ -56,7 +56,7 @@ export function scaleSpacingMetric(value: number, scale: number): number {
 
 export function resolveDesktopHubNavRailWidth(screenWidth: number, scale: number): number {
   const base = Math.round(screenWidth * 0.14);
-  const clamped = Math.max(128, Math.min(168, base));
+  const clamped = Math.max(116, Math.min(152, base));
   if (scale === 1) return clamped;
   return Math.round(clamped * Math.min(scale, 1.45));
 }

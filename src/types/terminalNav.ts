@@ -1,1 +1,5 @@
-export type TerminalView = 'DEPLOYMENT' | 'MAP' | 'SAFEHOUSE' | 'TEST';
+export type TerminalView =
+  | 'MAP'
+  | 'BLACK_MARKET'
+  | 'LOADOUT'
+  | 'TEST';

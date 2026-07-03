@@ -9,9 +9,9 @@ import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useTerminalNav } from '../context/TerminalNavContext';
 import OperationalBriefingPanel from '../components/OperationalBriefingPanel';
-import DeploymentDeckPanel from '../components/hub/DeploymentDeckPanel';
+import BlackMarketHubPanel from '../components/hub/BlackMarketHubPanel';
+import LoadoutHubPanel from '../components/hub/LoadoutHubPanel';
 import DevTestHubPanel from '../components/hub/DevTestHubPanel';
-import SafehouseHubPanel from '../components/safehouse/SafehouseHubPanel';
 import TerminalHubLayout from '../components/layout/TerminalHubLayout';
 import TerminalSafeArea from '../components/TerminalSafeArea';
 import { resolveBreachTransitionColor } from '../constants/breachTransitionColors';
@@ -21,7 +21,7 @@ import type { FactionType } from '../types/game';
 const FACTION_ORDER: FactionType[] = ['TERRAN_GRID', 'LEGION', 'SOLARIS'];
 
 export default function OverworldHubScreen(): React.JSX.Element {
-  const { theme, profile, updateCabalAlignment, alignment } = useTerminal();
+  const { theme, updateCabalAlignment, alignment } = useTerminal();
   const { terminalView, setTerminalView } = useTerminalNav();
   const {
     account,
@@ -102,16 +102,6 @@ export default function OverworldHubScreen(): React.JSX.Element {
           onSelectView={setTerminalView}
           mainStyle={styles.viewport}
         >
-          {terminalView === 'DEPLOYMENT' && (
-            <DeploymentDeckPanel
-              theme={theme}
-              profile={profile}
-              account={account}
-              runDisabled={needsFactionSelection || launchingIncursion}
-              launching={launchingIncursion}
-              onBeginIncursion={handleInitiateDeepDive}
-            />
-          )}
           {terminalView === 'MAP' && (
             <OperationalBriefingPanel
               theme={theme}
@@ -121,7 +111,8 @@ export default function OverworldHubScreen(): React.JSX.Element {
               launching={launchingIncursion}
             />
           )}
-          {terminalView === 'SAFEHOUSE' && <SafehouseHubPanel />}
+          {terminalView === 'BLACK_MARKET' && <BlackMarketHubPanel />}
+          {terminalView === 'LOADOUT' && <LoadoutHubPanel />}
           {terminalView === 'TEST' && <DevTestHubPanel />}
         </TerminalHubLayout>
 
@@ -135,7 +126,7 @@ export default function OverworldHubScreen(): React.JSX.Element {
             >
               <Text style={[styles.factionModalTitle, { color: theme.primaryColor }]}>CABAL ALIGNMENT MATRIX</Text>
               <Text style={[styles.factionModalSub, { color: theme.mutedColor }]}>
-                Select allegiance to unlock Safehouse prep, Veil Front briefing, and incursion access.
+                Select allegiance to unlock Loadout prep, Veil Front briefing, and incursion access.
               </Text>
               {FACTION_ORDER.map((factionId) => {
                 const def = FACTION_DEFINITIONS[factionId];

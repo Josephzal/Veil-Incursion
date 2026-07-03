@@ -52,7 +52,7 @@ export const AEGIS_ABILITY_CATALOG: Record<AegisAbilityId, AegisAbilityDefinitio
     apCost: 2,
     staminaCost: 0,
     brandsConsumed: 'ALL',
-    description: 'Consume all Brands — frontline AoE. +30 fracture per Brand. 3 Brands + Concussed = fracture stun.',
+    description: 'Consume all Brands — full 2×2 grid AoE (front + back). +30 fracture per Brand. 3 Brands + Concussed = fracture stun.',
     tags: ['KINETIC', 'AOE', 'FRACTURE', 'CONTROL'],
     unlockCost: { 'ley-slag': 15 },
   },

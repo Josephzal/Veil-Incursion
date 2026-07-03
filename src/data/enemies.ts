@@ -6,6 +6,7 @@ import {
   type PlayerAIState,
 } from './AIDecisionEngine';
 import { decideRosterIntent, syncRosterCombatState } from './combatRosterActions';
+import { canRosterUseFortify } from './enemyPostureConfig';
 import { ENEMY_ROSTER, spawnRosterUnit } from './enemyRoster';
 import { isRedundantBuffIntent } from './enemyIntentUtils';
 import { getNodeScale } from './enemyNodeScale';
@@ -269,6 +270,9 @@ export function advanceEnemyIntent(
       });
 
   if (isRedundantBuffIntent(nextIntent, synced)) {
+    nextIntent = 'STRIKE';
+  }
+  if (!canRosterUseFortify(synced.rosterId) && nextIntent === 'FORTIFY') {
     nextIntent = 'STRIKE';
   }
 

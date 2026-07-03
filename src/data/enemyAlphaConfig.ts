@@ -103,7 +103,7 @@ export const ENEMY_ALPHA_CONFIG: Record<EncounterEnemyKey, AlphaModifiers> = {
   FRACTURE_HOUND: alpha('Rabid', { attacksPerTurn: 3, shieldDamage: 10 }),
   NULL_SHADE: alpha('Void', { shieldCastTarget: 'AOE' }),
   SPATIAL_GLITCH: alpha('Paradox', { staminaDrainOnTeleport: 15 }),
-  SCUTTLER: alpha('Apex', { evadeChance: 0.75 }),
+  SCUTTLER: alpha('Apex', { evadeChance: 0.50 }),
   SPALL: alpha('Volatile', { explosionDamage: 30, piercesDefend: true }),
   THRALL: alpha('Undying', { reviveTurns: 1, reviveHpPercent: 1.0 }),
   CUTTER: alpha('Phantom', { evadeBuffAfterSwap: 1.0 }),

@@ -261,6 +261,7 @@ export interface CombatGridUnitSnapshot {
   occultWards?: number;
   combatTags?: string[];
   evadeActive?: boolean;
+  evadeTurnsRemaining?: number;
   fortifyTurnsRemaining?: number;
   chargeTurns?: number;
   doomedStacks?: number;
@@ -334,6 +335,7 @@ export type EnemyStatusUnitFields = Pick<
   CombatGridUnitSnapshot,
   | 'combatTags'
   | 'evadeActive'
+  | 'evadeTurnsRemaining'
   | 'fortifyTurnsRemaining'
   | 'intent'
   | 'chargeTurns'
@@ -349,7 +351,7 @@ export function formatEnemyStatusLabels(unit: EnemyStatusUnitFields): string[] {
   const tags = new Set(unit.combatTags ?? []);
 
   if (unit.isEnraged) labels.push('ENRAGED');
-  if (unit.evadeActive || unit.intent === 'EVADE') labels.push('EVADING');
+  if (unit.evadeActive || (unit.evadeTurnsRemaining ?? 0) > 0) labels.push('EVADING');
   if ((unit.fortifyTurnsRemaining ?? 0) > 0) labels.push('FORTIFIED');
   if ((unit.chargeTurns ?? 0) > 0 || unit.intent === 'CHARGE') labels.push('CHARGING');
   if (unit.intent === 'WORLD_ENDER') labels.push('WORLD-ENDER');

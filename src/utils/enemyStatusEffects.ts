@@ -11,6 +11,7 @@ export type EnemyStatusEffectKey = 'fortified' | 'evading' | 'enraged' | 'concus
 export interface EnemyActiveStatusSource {
   combatTags?: readonly string[];
   evadeActive?: boolean;
+  evadeTurnsRemaining?: number;
   intent?: EnemyIntent;
   fortifyTurnsRemaining?: number;
   doomedStacks?: number;
@@ -42,7 +43,7 @@ export const ENEMY_STATUS_EFFECTS: Record<EnemyStatusEffectKey, EnemyStatusEffec
   evading: {
     key: 'evading',
     label: 'Evade Posture',
-    description: '+60% miss chance vs operative strikes — not a guaranteed dodge.',
+    description: '+50% miss chance vs operative strikes for 2 turns — not a guaranteed dodge.',
     icon: EvadingIcon,
   },
   enraged: {
@@ -71,7 +72,7 @@ export function resolveActiveEnemyStatuses(unit: EnemyActiveStatusSource): Enemy
   const statuses: EnemyStatusEffectKey[] = [];
 
   if ((unit.fortifyTurnsRemaining ?? 0) > 0) statuses.push('fortified');
-  if (unit.evadeActive || unit.intent === 'EVADE') statuses.push('evading');
+  if ((unit.evadeTurnsRemaining ?? 0) > 0 || unit.evadeActive) statuses.push('evading');
   if (unit.isEnraged) statuses.push('enraged');
   if (tags.has('CONCUSSED')) statuses.push('concussed');
   if (tags.has('DOOMED') || (unit.doomedStacks ?? 0) > 0) statuses.push('doomed');

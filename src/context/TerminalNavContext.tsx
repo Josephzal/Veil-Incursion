@@ -9,7 +9,7 @@ interface TerminalNavContextType {
 const TerminalNavContext = createContext<TerminalNavContextType | undefined>(undefined);
 
 export function TerminalNavProvider({ children }: { children: React.ReactNode }) {
-  const [terminalView, setTerminalView] = useState<TerminalView>('DEPLOYMENT');
+  const [terminalView, setTerminalView] = useState<TerminalView>('MAP');
 
   const value = useMemo(
     () => ({ terminalView, setTerminalView }),

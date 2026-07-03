@@ -13,7 +13,9 @@ export const COMBAT_CHANCE = {
   SHATTER_POINT_CRIT_BONUS: 0.20,
   GRID_GHOST_EVADE_PER_STACK: 0.05,
   /** EVADE intent posture — bonus miss chance stacked atop stat evade (not guaranteed). */
-  EVADE_POSTURE_MISS_BONUS: 0.60,
+  EVADE_POSTURE_MISS_BONUS: 0.50,
+  /** Maximum passive hostile evade stat rolled at spawn. */
+  ENEMY_MAX_EVADE_CHANCE: 0.50,
   GRID_GHOST_MAX_STACKS: 3,
   GRID_GHOST_STAMINA_REFUND_PCT: 0.20,
   PHANTOM_CRIT_SPLIT_PCT: 0.50,
