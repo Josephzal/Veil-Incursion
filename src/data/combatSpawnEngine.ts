@@ -13,10 +13,14 @@ import {
   resolveSpawnSlotsForDepth,
   resolveEncounterMetaForDepth,
   isAlphaDuelDepth,
+  type ResolveLevelEncounterOptions,
 } from './levelEncounterData';
 import { seededRandom } from './encounterGenerator';
 import type { RunSegmentState } from './encounterGenerator';
-import type { MacroBiomeFamily } from '../types/narrativeProcedural';
+import type { EncounterOrigin, EncounterSpawnOverride } from '../types/encounterSpawn';
+import type { NodeContextModifiers } from '../types/worldState';
+import { echoEncounterId, resolveEchoSpawnOverride } from './encounterEchoOverride';
+import { spawnEchoEliteSquad } from './echoRecoveryEngine';
 import { apexResonanceAmbushComposition, entriesFromComposition } from './encounterCompositionEngine';
 import type { EnemyCombatProfile, SectorDefinition } from '../types/run';
 import type { DistrictId } from './districtPacing';
@@ -26,6 +30,7 @@ import { loadAlphaDuelElite, loadEliteEncounter } from './eliteSpawnEngine';
 import { macroFamilyToSynergyBiome } from './synergySpawnEngine';
 import { rosterToSpawnSlots } from './rosterSpawnSlots';
 import type { SpawnSlotAssignment } from './levelEncounterData';
+import { rollEncounterOrigin } from './originRollEngine';
 
 let unitSeq = 0;
 
@@ -59,26 +64,34 @@ function resolveEliteSlotAssignments(
   district: DistrictId,
   runSegment: RunSegmentState | null | undefined,
   encounterSeed: string | undefined,
-  macroBiome: MacroBiomeFamily | null | undefined,
-  encounterOrigin?: import('./originDeckEngine').EncounterOrigin | null,
+  encounterOptions: ResolveLevelEncounterOptions,
+  encounterOrigin?: EncounterOrigin | null,
 ): { slots: SpawnSlotAssignment[]; encounterId: string } | null {
-  const synergyBiome = macroFamilyToSynergyBiome(macroBiome);
+  const synergyBiome = macroFamilyToSynergyBiome(encounterOptions.macroBiome);
   const localLevel = localLevelFromDepth(depth);
   const isAlphaDuel = runSegment != null && isAlphaDuelDepth(depth, runSegment);
   const rand = seededRandom(
     `${encounterSeed ?? 'elite'}:spawn:${depth}:${localLevel}:${runSegment?.alphaNodeIndex ?? 0}`,
   );
 
+  const origin = encounterOrigin
+    ?? rollEncounterOrigin(
+      district,
+      'ELITE',
+      `${encounterSeed ?? 'elite'}:origin:${depth}`,
+      runSegment?.lastEncounterOrigin,
+    );
+
   const loader = isAlphaDuel ? loadAlphaDuelElite : loadEliteEncounter;
   let squad = loader(district, synergyBiome, rand, {
     lastEncounterId: runSegment?.lastEncounterId,
-    encounterOrigin,
+    encounterOrigin: origin,
   });
   if (!squad) {
     squad = loader(district, synergyBiome, rand, {
       lastEncounterId: null,
       interloper: true,
-      encounterOrigin,
+      encounterOrigin: origin,
     });
   }
   if (!squad) return null;
@@ -100,20 +113,46 @@ export interface SpawnSquadOptions {
   district?: DistrictId;
   runSegment?: RunSegmentState | null;
   encounterSeed?: string;
-  macroBiome?: MacroBiomeFamily | null;
+  macroBiome?: ResolveLevelEncounterOptions['macroBiome'];
+  veilBiome?: ResolveLevelEncounterOptions['veilBiome'];
+  /** Node echo override — bypasses origin roll and procedural squad pick. */
+  contextModifiers?: NodeContextModifiers | null;
 }
 
-export function resolveEngagedEncounterSnapshot(options: SpawnSquadOptions): {
+export interface EngagedEncounterSnapshot {
   encounterId: string;
-  encounterOrigin?: import('./originDeckEngine').EncounterOrigin;
-} {
+  encounterOrigin?: EncounterOrigin;
+  spawnOverride?: EncounterSpawnOverride;
+  echoTemplateId?: string;
+}
+
+function encounterOptionsFromSpawn(options: SpawnSquadOptions): ResolveLevelEncounterOptions {
+  return {
+    macroBiome: options.macroBiome,
+    veilBiome: options.veilBiome,
+    isElite: options.isElite,
+    contextModifiers: options.contextModifiers,
+  };
+}
+
+export function resolveEngagedEncounterSnapshot(options: SpawnSquadOptions): EngagedEncounterSnapshot {
+  const echoTemplate = resolveEchoSpawnOverride(options.contextModifiers);
+  if (echoTemplate) {
+    return {
+      encounterId: echoEncounterId(echoTemplate.id),
+      spawnOverride: 'ECHO',
+      echoTemplateId: echoTemplate.id,
+    };
+  }
+
   const depth = depthFromNodesCleared(options.nodeIndex);
   const district = options.district ?? getDistrictFromDepth(depth);
+  const encounterOptions = encounterOptionsFromSpawn(options);
   const meta = resolveEncounterMetaForDepth(
     depth,
     options.runSegment ?? undefined,
     options.encounterSeed,
-    options.macroBiome,
+    encounterOptions,
   );
 
   if (options.isElite === true) {
@@ -122,7 +161,7 @@ export function resolveEngagedEncounterSnapshot(options: SpawnSquadOptions): {
       district,
       options.runSegment,
       options.encounterSeed,
-      options.macroBiome,
+      encounterOptions,
       meta.encounterOrigin,
     );
     if (elite) {
@@ -145,12 +184,28 @@ export function spawnCombatSquad(options: SpawnSquadOptions): EnemyCombatProfile
     return [];
   }
 
+  const echoTemplate = resolveEchoSpawnOverride(options.contextModifiers);
+  if (echoTemplate) {
+    const resonancePercent = options.spawnOptions?.resonancePercent ?? 0;
+    const squad = spawnEchoEliteSquad(
+      echoTemplate,
+      options.nodeIndex,
+      district,
+      resonancePercent,
+    );
+    if (options.unitCount != null) {
+      return squad.slice(0, Math.min(4, options.unitCount));
+    }
+    return squad;
+  }
+
+  const encounterOptions = encounterOptionsFromSpawn(options);
   let slotAssignments: SpawnSlotAssignment[];
   let encounterMeta = resolveEncounterMetaForDepth(
     depth,
     options.runSegment ?? undefined,
     options.encounterSeed,
-    options.macroBiome,
+    encounterOptions,
   );
 
   if (options.isElite === true) {
@@ -159,7 +214,7 @@ export function spawnCombatSquad(options: SpawnSquadOptions): EnemyCombatProfile
       district,
       options.runSegment,
       options.encounterSeed,
-      options.macroBiome,
+      encounterOptions,
       encounterMeta.encounterOrigin,
     );
     if (elite) {
@@ -170,7 +225,7 @@ export function spawnCombatSquad(options: SpawnSquadOptions): EnemyCombatProfile
         depth,
         options.runSegment ?? undefined,
         options.encounterSeed,
-        options.macroBiome,
+        encounterOptions,
       );
     }
   } else {
@@ -178,11 +233,9 @@ export function spawnCombatSquad(options: SpawnSquadOptions): EnemyCombatProfile
       depth,
       options.runSegment ?? undefined,
       options.encounterSeed,
-      options.macroBiome,
+      encounterOptions,
     );
   }
-
-  const cabalFaction = encounterMeta.cabalFaction;
 
   if (slotAssignments.length === 0 && options.isAmbush) {
     const ambush = entriesFromComposition(apexResonanceAmbushComposition());
@@ -208,7 +261,6 @@ export function spawnCombatSquad(options: SpawnSquadOptions): EnemyCombatProfile
         forcedElite: options.isElite === true,
         district,
         isAlpha,
-        cabalFaction: cabalFaction ?? undefined,
       }),
       slot,
       gridWidth,

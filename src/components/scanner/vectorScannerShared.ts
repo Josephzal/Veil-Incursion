@@ -3,6 +3,7 @@ import { getCabalScannerTheme } from './cabalScannerThemes';
 import { mergeScannerThemes } from './zoneScannerThemes';
 import type { CabalScannerTheme, ScannerCabal } from '../../types/scanner';
 import type { RadarDot } from '../../types/run';
+import { primaryScannerSignalAccent } from '../../data/scannerSignalEngine';
 import { scannerRevealColorForNodeType } from '../../utils/scannerNodeRevealColor';
 
 export const SCAN_SWEEP_MS = 2200;
@@ -120,6 +121,8 @@ export function resolveBlipAccent(
   if (opts.isHostilePatrol) return HOSTILE_PATROL_COLOR;
   if (opts.uniformSelectable) return opts.selectionAccent;
   if ((opts.typeColored || opts.selected) && opts.siphoned && node.nodeType) {
+    const signalAccent = primaryScannerSignalAccent(node.veilSignals);
+    if (signalAccent) return signalAccent;
     return scannerRevealColorForNodeType(node.nodeType);
   }
   if (opts.selected) return opts.selectionAccent;

@@ -1,22 +1,7 @@
-import type { CombatGridSlotId } from '../types/combatGrid';
-import { FRONTLINE_SLOTS } from '../types/combatGrid';
-import type { FactionType } from '../types/game';
 import type { DistrictId } from './districtPacing';
 import { getDistrictFromDepth, localLevelFromDepth } from './districtPacing';
 import {
-  ENEMY_ROSTER,
-  GRUNT_ROSTER_BY_FACTION,
-  factionForDistrict,
-  type EnemyRosterEntry,
-  type EnemyRosterId,
-} from './enemyRoster';
-import {
-  assignDiagonalStaggerSlots,
-} from './combatGridPlacement';
-import {
-  entriesFromComposition,
   maxEnemiesForDistrict,
-  pickEncounterComposition,
   spawnBudgetForDistrict,
 } from './encounterCompositionEngine';
 
@@ -34,18 +19,11 @@ export interface EncounterBudgetResult {
   phaseBudget: number;
 }
 
-export interface DraftedEncounter {
-  entries: EnemyRosterEntry[];
-  slots: CombatGridSlotId[];
-  spawnBudget: number;
-  spent: number;
-  isApex?: boolean;
-}
-
 export function depthInDistrict(depth: number, district: DistrictId): number {
   return localLevelFromDepth(depth);
 }
 
+/** Threat budget metadata for UI / ambush flows — procedural squads use encounterThreatBudget. */
 export function encounterBudgetForDepth(params: EncounterBudgetParams): EncounterBudgetResult {
   const { depth, isElite = false, isAmbush = false } = params;
   const district = getDistrictFromDepth(depth);
@@ -56,193 +34,4 @@ export function encounterBudgetForDepth(params: EncounterBudgetParams): Encounte
     : spawnBudgetForDistrict(district, local, isElite);
   const phaseBudget = Math.min(4, Math.max(2, Math.ceil(spawnBudget / 2)));
   return { spawnBudget, maxEnemies, phaseBudget };
-}
-
-function factionPool(faction: FactionType): EnemyRosterEntry[] {
-  return GRUNT_ROSTER_BY_FACTION[faction].map((id) => ENEMY_ROSTER[id]);
-}
-
-function canAddEntry(
-  picks: EnemyRosterEntry[],
-  entry: EnemyRosterEntry,
-  remaining: number,
-  disruptorCount: number,
-  tier3Count: number,
-): boolean {
-  if (entry.threatTier > remaining) return false;
-  if (picks.some((p) => p.id === entry.id)) return false;
-  if (entry.isDisruptor && disruptorCount >= 1) return false;
-  if (entry.threatTier === 3 && tier3Count >= 2) return false;
-  return true;
-}
-
-function assignSlots(entries: EnemyRosterEntry[]): CombatGridSlotId[] {
-  const diagonal = assignDiagonalStaggerSlots(entries);
-  if (diagonal) return diagonal;
-
-  const front = entries.filter((e) => e.role === 'FRONTLINE');
-  const back = entries.filter((e) => e.role === 'BACKLINE');
-
-  const slots: CombatGridSlotId[] = [];
-  const frontSlots: CombatGridSlotId[] = ['FL_0', 'FL_1'];
-  const backSlots: CombatGridSlotId[] = ['BL_0', 'BL_1'];
-
-  front.forEach((_, i) => {
-    if (frontSlots[i]) slots.push(frontSlots[i]);
-  });
-  back.forEach((_, i) => {
-    if (backSlots[i]) slots.push(backSlots[i]);
-  });
-
-  if (slots.length === 0 && entries.length > 0) {
-    return ['FL_0'];
-  }
-  return slots;
-}
-
-function ensureFrontlineRule(
-  entries: EnemyRosterEntry[],
-  faction: FactionType,
-  budget: number,
-): EnemyRosterEntry[] {
-  const hasBack = entries.some((e) => e.role === 'BACKLINE');
-  const hasFront = entries.some((e) => e.role === 'FRONTLINE');
-  if (!hasBack || hasFront) return entries;
-
-  const frontCandidates = factionPool(faction)
-    .filter((e) => e.role === 'FRONTLINE')
-    .sort((a, b) => a.threatTier - b.threatTier);
-  const spent = entries.reduce((sum, e) => sum + e.threatTier, 0);
-  const cheapest = frontCandidates.find(
-    (e) => !entries.some((p) => p.id === e.id) && spent + e.threatTier <= budget,
-  );
-  if (!cheapest) {
-    const grunt = frontCandidates.find((e) => e.threatTier === 1 && spent + 1 <= budget);
-    if (grunt) return [...entries, grunt];
-    return entries;
-  }
-  return [...entries, cheapest];
-}
-
-function pickWeighted(
-  pool: EnemyRosterEntry[],
-  preferHighTier: boolean,
-  depthWeights?: Partial<Record<EnemyRosterId, number>> | null,
-): EnemyRosterEntry {
-  const sorted = [...pool].sort((a, b) =>
-    preferHighTier ? b.threatTier - a.threatTier : a.threatTier - b.threatTier,
-  );
-  const weights = sorted.map((e) => {
-    const depthWeight = depthWeights?.[e.id];
-    const base = preferHighTier ? e.threatTier : 4 - e.threatTier;
-    return depthWeight != null ? base * depthWeight : base;
-  });
-  const total = weights.reduce((s, w) => s + w, 0);
-  let roll = Math.random() * total;
-  for (let i = 0; i < sorted.length; i++) {
-    roll -= weights[i];
-    if (roll <= 0) return sorted[i];
-  }
-  return sorted[sorted.length - 1];
-}
-
-/** Single enemy absorbs the full threat budget — Apex anomaly rules. */
-function applyApexRule(
-  entries: EnemyRosterEntry[],
-  faction: FactionType,
-  budget: number,
-): { entries: EnemyRosterEntry[]; isApex: boolean } {
-  if (entries.length !== 1) return { entries, isApex: false };
-
-  const pool = factionPool(faction)
-    .filter((e) => e.threatTier <= budget)
-    .sort((a, b) => b.threatTier - a.threatTier);
-  const apexEntry = pool[0] ?? entries[0];
-  return { entries: [apexEntry], isApex: true };
-}
-
-export function draftEncounterSquad(
-  faction: FactionType,
-  budget: number,
-  maxEnemies: number,
-  depthWeights?: Partial<Record<EnemyRosterId, number>> | null,
-): DraftedEncounter {
-  const pool = factionPool(faction);
-  const picks: EnemyRosterEntry[] = [];
-  let remaining = budget;
-  let disruptorCount = 0;
-  let tier3Count = 0;
-  const preferHighTier = budget >= 5;
-
-  while (picks.length < maxEnemies && remaining > 0) {
-    const affordable = pool.filter((e) =>
-      canAddEntry(picks, e, remaining, disruptorCount, tier3Count),
-    );
-    if (affordable.length === 0) break;
-
-    const needsFront = !picks.some((e) => e.role === 'FRONTLINE');
-    const hasBack = picks.some((e) => e.role === 'BACKLINE');
-    let candidates = affordable;
-    if (needsFront && picks.length > 0) {
-      const frontOnly = affordable.filter((e) => e.role === 'FRONTLINE');
-      if (frontOnly.length > 0) candidates = frontOnly;
-    } else if (!hasBack && picks.length < maxEnemies - 1 && Math.random() < 0.4 && budget >= 3) {
-      const backOnly = affordable.filter((e) => e.role === 'BACKLINE');
-      if (backOnly.length > 0) candidates = backOnly;
-    }
-
-    const entry = pickWeighted(candidates, preferHighTier, depthWeights);
-    picks.push(entry);
-    remaining -= entry.threatTier;
-    if (entry.isDisruptor) disruptorCount += 1;
-    if (entry.threatTier === 3) tier3Count += 1;
-  }
-
-  let finalEntries = ensureFrontlineRule(picks, faction, budget);
-  if (finalEntries.length > maxEnemies) {
-    finalEntries = finalEntries.slice(0, maxEnemies);
-  }
-
-  const apexResult = applyApexRule(finalEntries, faction, budget);
-  finalEntries = apexResult.entries;
-
-  const spent = apexResult.isApex ? budget : finalEntries.reduce((sum, e) => sum + e.threatTier, 0);
-  const slots = assignSlots(finalEntries).slice(0, finalEntries.length);
-
-  return {
-    entries: finalEntries,
-    slots,
-    spawnBudget: budget,
-    spent,
-    isApex: apexResult.isApex,
-  };
-}
-
-export function draftEncounterForDepth(
-  depth: number,
-  options?: { isElite?: boolean; isAmbush?: boolean; district?: DistrictId; seed?: string },
-): DraftedEncounter {
-  const { spawnBudget } = encounterBudgetForDepth({
-    depth,
-    isElite: options?.isElite,
-    isAmbush: options?.isAmbush,
-  });
-  const composition = pickEncounterComposition(depth, {
-    isElite: options?.isElite,
-    isAmbush: options?.isAmbush,
-    seed: options?.seed,
-  });
-  const { entries, slots, isApex } = entriesFromComposition(composition);
-  const spent = isApex ? spawnBudget : entries.reduce((sum, e) => sum + e.threatTier, 0);
-  return {
-    entries,
-    slots,
-    spawnBudget,
-    spent,
-    isApex,
-  };
-}
-
-export function allGridSlots(): CombatGridSlotId[] {
-  return [...FRONTLINE_SLOTS, 'BL_0', 'BL_1'];
 }

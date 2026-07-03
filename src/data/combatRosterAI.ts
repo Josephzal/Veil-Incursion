@@ -78,6 +78,9 @@ const ROSTER_INTENTS: Partial<Record<string, EnemyIntent[]>> = {
   'fixer': ['FIELD_REPAIR', 'EVADE'],
   'spotter': ['TARGET_LOCK', 'ARTILLERY_FIRE'],
   'burner': ['STRIKE'],
+  'rival-hexer': ['HEX_MARK', 'STRIKE', 'EVADE'],
+  'rival-veilbinder': ['BINDING_WARD', 'FIELD_REPAIR', 'EVADE'],
+  'rival-reaver': ['STRIKE', 'FORTIFY'],
   'amalgam': ['STRIKE', 'FORTIFY'],
   'wire-ghoul': ['STRIKE', 'EVADE'],
   'hollow-lung': ['STRIKE'],
@@ -322,5 +325,7 @@ export function isRosterSpecificIntent(intent: EnemyIntent): boolean {
     || intent === 'TAR_BIND'
     || intent === 'LASER_SIGHT'
     || intent === 'STAMINA_TETHER'
-    || intent === 'JAM_AUGMENT';
+    || intent === 'JAM_AUGMENT'
+    || intent === 'HEX_MARK'
+    || intent === 'BINDING_WARD';
 }

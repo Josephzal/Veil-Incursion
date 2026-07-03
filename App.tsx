@@ -7,7 +7,7 @@ import { TerminalProvider, useTerminal } from './src/context/TerminalContext';
 import { TerminalNavProvider } from './src/context/TerminalNavContext';
 import { PlayerAccountProvider } from './src/context/PlayerAccountContext';
 import { RegionalShatterProvider } from './src/context/RegionalShatterContext';
-import { ShadowWarProvider } from './src/context/ShadowWarContext';
+import { WorldStateProvider } from './src/context/WorldStateContext';
 import { GameFlowProvider, useGameFlow } from './src/context/GameFlowContext';
 import { RunProvider } from './src/context/RunContext';
 import OverworldHubScreen from './src/screens/OverworldHubScreen';
@@ -25,6 +25,7 @@ import CombatScreen from './src/screens/CombatScreen';
 import CombatEntryTransition from './src/components/combat/CombatEntryTransition';
 import TransitionOverlay from './src/components/transitions/TransitionOverlay';
 import RunCompleteScreen from './src/screens/RunCompleteScreen';
+import OperationDebriefScreen from './src/screens/OperationDebriefScreen';
 import SafehouseScreen from './src/screens/SafehouseScreen';
 import GameOverScreen from './src/screens/GameOverScreen';
 
@@ -49,6 +50,7 @@ function GameRoot(): React.JSX.Element {
         {currentScreen === 'EXTRACTION_REVIEW' && <ExtractionReviewScreen />}
         {currentScreen === 'COMBAT' && <CombatScreen />}
         {currentScreen === 'RUN_COMPLETE' && <RunCompleteScreen />}
+        {currentScreen === 'OPERATION_DEBRIEF' && <OperationDebriefScreen />}
         {currentScreen === 'SAFEHOUSE' && <SafehouseScreen />}
         {currentScreen === 'GAME_OVER' && <GameOverScreen />}
         {combatEntryActive ? (
@@ -65,7 +67,7 @@ export default function App(): React.JSX.Element {
       <SafeAreaProvider>
         <PlayerAccountProvider>
           <RegionalShatterProvider>
-            <ShadowWarProvider>
+            <WorldStateProvider>
             <TerminalProvider>
               <TerminalNavProvider>
                 <RunProvider>
@@ -75,7 +77,7 @@ export default function App(): React.JSX.Element {
                 </RunProvider>
               </TerminalNavProvider>
             </TerminalProvider>
-            </ShadowWarProvider>
+            </WorldStateProvider>
           </RegionalShatterProvider>
         </PlayerAccountProvider>
       </SafeAreaProvider>

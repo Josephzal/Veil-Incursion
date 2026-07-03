@@ -53,6 +53,7 @@ export type CombatUnitTag =
   | 'DOOMED'
   | 'EXPOSED'
   | 'FRACTURED'
+  | 'ROOTED'
   | 'VULNERABLE'
   | 'BLINDED';
 

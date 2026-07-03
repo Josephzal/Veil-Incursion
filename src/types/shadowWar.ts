@@ -7,7 +7,7 @@ export type ShadowWarSectorId =
   | 'THE_ABYSSAL_SINK'
   | 'THE_NULL_ZONE'
   | 'THE_BLACKLINE_TERMINUS'
-  | 'THE_FRACTAL_WASTES';
+  | 'THE_ASHEN_WASTES';
 
 export type ShadowWarBuffId =
   | 'KINETIC_ARMOR_PLUS_1'

@@ -29,13 +29,17 @@ export type SynergyBiome =
   | 'FRACTAL_ABYSS'
   | 'SANGUINE_ATRIUM';
 
-export type EncounterSquadOriginTag = 'CABAL' | 'VEIL' | 'ANY';
+export type EncounterSquadOriginTag = 'RIVAL_MERC' | 'VEIL' | 'ANY';
 
 export interface SynergySquadSpec {
   id: string;
   allowedDepths: readonly (1 | 2 | 3)[];
   allowedBiomes: readonly SynergyBiome[];
   roster: readonly EncounterUnitSpec[];
-  /** When set, gates squad eligibility for CABAL vs VEIL origin deck cards. */
+  /** Sector-aligned biome when squad is biome-specific. */
+  veilBiome?: import('../types/encounterSpawn').VeilBiome;
+  /** Reusable deck template archetype (Phase 6). */
+  templateKind?: string;
+  /** When set, gates squad eligibility for RIVAL_MERC vs VEIL origin rolls. */
   encounterSquadOrigin?: EncounterSquadOriginTag;
 }

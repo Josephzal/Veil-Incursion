@@ -96,7 +96,7 @@ export default function SafehouseScreen(): React.JSX.Element {
     const { deposited } = vaultIncursionVeilResidueToAccount();
     if (deposited <= 0) return;
     depositVeilResidueBalance(deposited);
-    const line = `>> VEIL RESIDUE VAULTED — ${deposited} UNITS SECURED TO CABAL DEPOSITORY FOR SHADOW WAR DONATION.`;
+    const line = `>> VEIL RESIDUE VAULTED — ${deposited} UNITS SECURED TO OPERATIVE VAULT.`;
     appendRunLog(line);
     setStatusLine(line);
   }, [appendRunLog, depositVeilResidueBalance, vaultIncursionVeilResidueToAccount]);
@@ -348,7 +348,7 @@ export default function SafehouseScreen(): React.JSX.Element {
           <View style={styles.stage}>
             <RunEventNodeHeader
               title="CABAL SAFEHOUSE"
-              subtitle={`DISTRICT ${activeIncursion.currentDistrict - 1} SECURED — PREPARE FOR ${DISTRICT_NAMES[nextDistrict].toUpperCase()}`}
+              subtitle={`DEPTH ${activeIncursion.currentDistrict - 1} SECURED — PREPARE FOR ${DISTRICT_NAMES[nextDistrict].toUpperCase()}`}
               fontScale={fontScale}
             />
 

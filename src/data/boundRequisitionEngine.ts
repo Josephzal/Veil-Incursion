@@ -275,7 +275,7 @@ export function getEffectiveBlackMarketPrice(basePrice: number, discountPct: num
 }
 
 export function getBlackMarketDiscountPct(incursion: ActiveIncursionState): number {
-  let discount = incursion.shadowWarBuffs?.blackMarketDiscountPct ?? 0;
+  let discount = incursion.runModifiers?.blackMarketDiscountPct ?? 0;
   const req = incursion.boundRequisition;
   if (req?.scavengerMarkBlackMarketPending) {
     discount = Math.max(discount, req.blackMarketDiscountPct);

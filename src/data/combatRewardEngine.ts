@@ -53,7 +53,7 @@ export interface CombatRewardContext {
   extraLoot?: ResourceItemId[];
   /** Slain squad members — drives per-enemy salvage tables. */
   slainEnemies?: Array<Pick<EnemyCombatProfile, 'rosterId' | 'currentHp' | 'isSlumped'>>;
-  /** Shadow War Null Zone buff — extra salvage roll chance (%). */
+  /** Run modifier — extra salvage roll chance (%). */
   rareLootBonusPct?: number;
 }
 
@@ -122,18 +122,6 @@ function pickEliteDrops(
 ): ResourceItemId[] {
   const rare = factionRarePool(profile, tier);
   return [pickFromPool(rare, rng), pickFromPool(rare, rng)];
-}
-
-export function collectFactionTraitLoot(
-  enemies: Array<Pick<EnemyCombatProfile, 'isCabalHuman' | 'factionLootId' | 'currentHp' | 'isSlumped'>>,
-): ResourceItemId[] {
-  const drops: ResourceItemId[] = [];
-  for (const enemy of enemies) {
-    if (!enemy.isCabalHuman || !enemy.factionLootId) continue;
-    if (enemy.currentHp > 0 || enemy.isSlumped) continue;
-    drops.push(enemy.factionLootId as ResourceItemId);
-  }
-  return drops;
 }
 
 export function rollCombatResourceDrops(ctx: CombatRewardContext): ResourceItemId[] {

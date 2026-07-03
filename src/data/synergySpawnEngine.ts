@@ -1,16 +1,23 @@
 import type { MacroBiomeFamily } from '../types/narrativeProcedural';
 import type { DistrictId } from './districtPacing';
-import type { EncounterOrigin } from './originDeckEngine';
+import type { EncounterOrigin } from '../types/encounterSpawn';
 import type { EncounterEnemyKey } from './enemyCombatConfig';
 import {
   filterSquadsByEncounterOrigin,
-  SQUAD_PICK_ATTEMPTS,
 } from './encounterSquadOrigin';
 import {
   DEPTH_3_EXCLUSIVE_ENEMIES,
   SYNERGY_DATABASE,
 } from './synergyDatabase';
 import type { SynergyBiome, SynergySquadSpec } from './synergyEncounterTypes';
+import {
+  enemyAllowedAtDepth,
+  squadAllowedAtDepth,
+  squadUnitKeysPassSpawnGates,
+  type SpawnGateContext,
+} from './encounterSpawnGateEngine';
+import type { VeilBiome } from '../types/encounterSpawn';
+import { ALL_VEIL_BIOMES } from './sectorBiomeBridge';
 
 /** Sunken Transit shares the Underground synergy pool. */
 export function macroFamilyToSynergyBiome(
@@ -27,6 +34,25 @@ function squadUsesDepth3ExclusiveEnemy(squad: SynergySquadSpec): boolean {
   );
 }
 
+function squadPassesDefinitionDepthGates(squad: SynergySquadSpec, depth: DistrictId): boolean {
+  const unitKeys = squad.roster.map((u) => u.type);
+  if (!squadAllowedAtDepth(unitKeys, depth)) return false;
+  for (const unit of squad.roster) {
+    if (!enemyAllowedAtDepth(unit.type, depth)) return false;
+  }
+  return true;
+}
+
+export function filterSquadsBySpawnGates(
+  squads: SynergySquadSpec[],
+  ctx: SpawnGateContext,
+): SynergySquadSpec[] {
+  return squads.filter((squad) => {
+    const unitKeys = squad.roster.map((u) => u.type);
+    return squadUnitKeysPassSpawnGates(unitKeys, ctx);
+  });
+}
+
 function validateAmalgamPlacement(squad: SynergySquadSpec): boolean {
   const hasAmalgam = squad.roster.some((u) => u.type === 'AMALGAM');
   if (!hasAmalgam) return true;
@@ -40,87 +66,42 @@ export function filterSynergyDepthPool(currentDepth: DistrictId): SynergySquadSp
   return SYNERGY_DATABASE.filter((squad) => {
     if (!squad.allowedDepths.includes(currentDepth)) return false;
     if (currentDepth < 3 && squadUsesDepth3ExclusiveEnemy(squad)) return false;
+    if (!squadPassesDefinitionDepthGates(squad, currentDepth)) return false;
     return validateAmalgamPlacement(squad);
   });
 }
 
-function filterBiomePool(
-  depthPool: SynergySquadSpec[],
-  currentBiome: SynergyBiome,
-): SynergySquadSpec[] {
-  return depthPool.filter((squad) => squad.allowedBiomes.includes(currentBiome));
-}
-
-function pickFromPool(
-  pool: SynergySquadSpec[],
-  rand: () => number,
-  lastEncounterId: string | null,
-): SynergySquadSpec | null {
-  if (pool.length === 0) return null;
-
-  const candidates = lastEncounterId != null
-    ? pool.filter((squad) => squad.id !== lastEncounterId)
-    : pool;
-  const pickPool = candidates.length > 0 ? candidates : pool;
-  const idx = Math.floor(rand() * pickPool.length);
-  return pickPool[idx] ?? null;
-}
-
-function tryPickSquad(
-  depthPool: SynergySquadSpec[],
-  currentBiome: SynergyBiome,
-  rand: () => number,
-  lastEncounterId: string | null,
-  interloper: boolean | undefined,
-): SynergySquadSpec | null {
-  const biomePool = filterBiomePool(depthPool, currentBiome);
-  const primaryPool = biomePool.length > 0 ? biomePool : depthPool;
-  const useInterloper = interloper ?? rand() > 0.8;
-  const candidatePool = useInterloper ? depthPool : primaryPool;
-  return pickFromPool(candidatePool, rand, lastEncounterId);
-}
-
-export interface LoadCombatEncounterOptions {
-  lastEncounterId?: string | null;
-  /** When true, skip biome filter (interloper ambush). */
-  interloper?: boolean;
-  /** Origin deck card — filters eligible squads when set. */
-  encounterOrigin?: EncounterOrigin | null;
-}
-
-/**
- * Picks a synergy squad for the current district + macro biome + origin card.
- * 80% thematic (depth + biome), 20% interloper (depth only), with origin widening fallback.
- */
-export function loadCombatEncounter(
-  currentDepth: DistrictId,
-  currentBiome: SynergyBiome,
-  rand: () => number,
-  options: LoadCombatEncounterOptions = {},
-): SynergySquadSpec | null {
-  const depthPool = filterSynergyDepthPool(currentDepth);
-  if (depthPool.length === 0) return null;
-
-  const lastEncounterId = options.lastEncounterId ?? null;
-  const forcedInterloper = options.interloper;
-
-  for (const attempt of SQUAD_PICK_ATTEMPTS) {
-    const originFiltered = attempt.filterOrigin
-      ? filterSquadsByEncounterOrigin(depthPool, options.encounterOrigin)
-      : depthPool;
-    if (originFiltered.length === 0) continue;
-
-    const squad = tryPickSquad(
-      originFiltered,
-      currentBiome,
-      rand,
-      lastEncounterId,
-      forcedInterloper ?? attempt.interloper,
-    );
-    if (squad) return squad;
+/** Map legacy synergy biome to Veil Front biome for spawn-gate checks. */
+export function synergyBiomeToVeilBiome(biome: SynergyBiome): VeilBiome | undefined {
+  switch (biome) {
+    case 'CITY_STREETS':
+    case 'BLACK_SITE_SECTOR':
+      return 'NULL_ZONE';
+    case 'CITY_BUILDINGS':
+      return 'BLACKLINE_TERMINUS';
+    case 'FORESTS':
+    case 'SANGUINE_ATRIUM':
+      return 'ABYSSAL_SINK';
+    case 'BACKROADS':
+      return 'ASHEN_WASTE';
+    case 'UNDERGROUND':
+      return 'SLAG_WORKS';
+    case 'DEEP_VEIL':
+    case 'FRACTAL_ABYSS':
+      return 'BLACKLINE_TERMINUS';
+    default:
+      return undefined;
   }
+}
 
-  return null;
+function filterVeilBiomePool(
+  depthPool: SynergySquadSpec[],
+  veilBiome: VeilBiome,
+): SynergySquadSpec[] {
+  const locked = depthPool.filter(
+    (squad) => squad.veilBiome === veilBiome || squad.veilBiome == null,
+  );
+  return locked.length > 0 ? locked : depthPool;
 }
 
 /** Dev-only catalog integrity check. */
@@ -141,18 +122,19 @@ export function verifySynergyDatabase(): void {
       if (depth < 3 && squadUsesDepth3ExclusiveEnemy(squad)) {
         throw new Error(`verifySynergyDatabase: depth-3 exclusive enemy in ${squad.id} at depth ${depth}`);
       }
+      if (!squadPassesDefinitionDepthGates(squad, depth)) {
+        throw new Error(`verifySynergyDatabase: spawn gate depth violation in ${squad.id} at depth ${depth}`);
+      }
     }
   }
 
-  const origins: EncounterOrigin[] = ['CABAL', 'VEIL'];
+  const origins: EncounterOrigin[] = ['RIVAL_MERC', 'VEIL'];
 
   for (const depth of [1, 2, 3] as const) {
-    for (const biome of depth === 3
-      ? (['DEEP_VEIL', 'FRACTAL_ABYSS', 'SANGUINE_ATRIUM'] as const)
-      : (['CITY_STREETS', 'CITY_BUILDINGS', 'BACKROADS', 'BLACK_SITE_SECTOR', 'UNDERGROUND', 'FORESTS'] as const)) {
-      const pool = filterBiomePool(filterSynergyDepthPool(depth), biome);
+    for (const veilBiome of ALL_VEIL_BIOMES) {
+      const pool = filterVeilBiomePool(filterSynergyDepthPool(depth), veilBiome);
       if (pool.length === 0) {
-        throw new Error(`verifySynergyDatabase: no squads for depth ${depth} biome ${biome}`);
+        throw new Error(`verifySynergyDatabase: no squads for depth ${depth} veilBiome ${veilBiome}`);
       }
     }
     for (const origin of origins) {

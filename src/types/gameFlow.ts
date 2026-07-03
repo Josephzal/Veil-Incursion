@@ -13,6 +13,7 @@ export type AppScreen =
   | 'COMBAT'
   | 'RUN_PROGRESS'
   | 'RUN_COMPLETE'
+  | 'OPERATION_DEBRIEF'
   | 'SAFEHOUSE'
   | 'GAME_OVER';
 

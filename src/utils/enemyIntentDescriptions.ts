@@ -69,6 +69,16 @@ const INTENT_DETAILS: Partial<Record<EnemyIntent, Omit<EnemyIntentDetail, 'title
     effect: 'Heals lowest-HP ally or AoE-repairs the squad depending on profile.',
     counterplay: 'Focus the fixer first. Burst wounded allies before repair resolves.',
   },
+  HEX_MARK: {
+    summary: 'Hex mark — taxes your next ability.',
+    effect: 'Applies HEXED: next ability costs +10 stamina; occult abilities deal 20% less damage.',
+    counterplay: 'Use a cheap kinetic action to clear the hex, or spend the turn defensively.',
+  },
+  BINDING_WARD: {
+    summary: 'Protective ward on a rival ally.',
+    effect: 'Shields one allied merc — absorbs the next hit. Light breaks grant the ally +1 AP.',
+    counterplay: 'Break the ward with a heavy strike, or focus the Veilbinder before the warded ally.',
+  },
   OCCULT_TETHER: {
     summary: 'Links hostiles in an occult tether network.',
     effect: 'Applies tether state that can redirect or share pressure across the squad.',

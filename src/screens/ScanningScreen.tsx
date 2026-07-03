@@ -29,6 +29,8 @@ import type { ScannerCabal } from '../types/scanner';
 import { getZoneScannerTint } from '../components/scanner/zoneScannerThemes';
 import ScannerSonarChildHints from '../components/scanner/ScannerSonarChildHints';
 import ScannerSonarPrompt from '../components/scanner/ScannerSonarPrompt';
+import ScannerSignalOverlays from '../components/scanner/ScannerSignalOverlays';
+import ScannerVeilFrontLegend from '../components/scanner/ScannerVeilFrontLegend';
 import DossierCardShell from '../components/hub/DossierCardShell';
 import { DOSSIER_ROW_BG } from '../constants/dossierSurface';
 import { resolveFactionSlateBackgroundSolid } from '../constants/hubAtmosphere';
@@ -164,8 +166,20 @@ export default function ScanningScreen(): React.JSX.Element {
   const intelLines = useMemo(() => {
     if (!selectedNode) return [];
     const optionIndex = nodeIndexById.get(selectedNode.id) ?? 0;
-    return formatScannerNodeIntel(selectedNode, activeIncursion.currentMacroBiomeFamily, optionIndex);
-  }, [selectedNode, nodeIndexById, activeIncursion.currentMacroBiomeFamily]);
+    return formatScannerNodeIntel(
+      selectedNode,
+      activeIncursion.currentMacroBiomeFamily,
+      optionIndex,
+      activeIncursion.runGenerationContext,
+      activeIncursion.runVeilBiome,
+    );
+  }, [
+    selectedNode,
+    nodeIndexById,
+    activeIncursion.currentMacroBiomeFamily,
+    activeIncursion.runVeilBiome,
+    activeIncursion.runGenerationContext,
+  ]);
 
   const showNodeDock = hasSelection;
   const allNodesLocked = nodesInField > 0 && siphonedNodeIds.length >= nodesInField;
@@ -215,7 +229,13 @@ export default function ScanningScreen(): React.JSX.Element {
 
     if (needsSpawn) {
       const sector = runState.currentSector ?? INITIAL_SECTOR_POOL[0];
-      const dots = generateDepthNodeScanVectors(vectorCluster, scannerSize, sector);
+      const dots = generateDepthNodeScanVectors(
+        vectorCluster,
+        scannerSize,
+        sector,
+        undefined,
+        activeIncursion.runGenerationContext,
+      );
       spawnedDotsRef.current = dots;
       spawnedForSessionRef.current = scanSessionKey;
       spawnedClusterKeyRef.current = clusterNodeIdsKey;
@@ -242,6 +262,7 @@ export default function ScanningScreen(): React.JSX.Element {
     scannerSize,
     scanSessionKey,
     runState.currentSector,
+    activeIncursion.runGenerationContext,
   ]);
 
   const handleScannerViewportLayout = useCallback((event: LayoutChangeEvent) => {
@@ -384,6 +405,16 @@ export default function ScanningScreen(): React.JSX.Element {
               typeColoredNodeIds={typeColoredNodeIds}
               onSelectNode={handleScannerNodeSelect}
               onSiphonedNodesChange={handleSiphonedNodesChange}
+            />
+            <ScannerVeilFrontLegend
+              runContext={activeIncursion.runGenerationContext}
+              mutedColor={theme.mutedColor}
+              accentColor={accent}
+            />
+            <ScannerSignalOverlays
+              radarDots={vectorDots}
+              siphonedNodeIds={siphonedNodeIds}
+              selectedNodeId={selectedNodeId}
             />
             {activeIncursion.proceduralRunTree
               ? activeIncursion.revealedSonarNodeIds.map((nodeId) => (

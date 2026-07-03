@@ -20,7 +20,7 @@ interface HackingTerminalOverlayProps {
 }
 
 /**
- * Subtle Fallout-style terminal veil for the Shadow War map.
+ * Subtle Fallout-style terminal veil for the Veil Front map.
  * - Rare, soft brightness dips (not a constant loop)
  * - Single scan lines that drift downward, then vanish until the next random cue
  */

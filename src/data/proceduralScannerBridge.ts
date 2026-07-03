@@ -1,19 +1,15 @@
-import type { ActiveIncursionState, FactionType, IncursionNode, RunNodeType } from '../types/game';
-import type { MacroBiomeFamily } from '../types/narrativeProcedural';
+import type { ActiveIncursionState, IncursionNode, RunNodeType } from '../types/game';
+import type { VeilBiome } from '../types/encounterSpawn';
 import {
   PROCEDURAL_RUN_MAX_DEPTH,
   type ProceduralNodeType,
   type ProceduralRunNode,
   type ProceduralRunTree,
 } from '../types/proceduralRunTree';
+import { LEVELS_PER_DISTRICT, MAX_RUN_GRAPH_DEPTH } from '../types/sectorPacing';
+import { veilBiomeDisplayName, veilBiomeToLegacyMacroBiome } from './sectorBiomeBridge';
 
 const VECTOR_LABELS = ['ALPHA', 'BETA', 'GAMMA', 'DELTA', 'EPSILON'] as const;
-
-const FACTION_BIOME: Record<FactionType, MacroBiomeFamily> = {
-  SOLARIS: 'CITY_BUILDINGS',
-  LEGION: 'SANGUINE_ATRIUM',
-  TERRAN_GRID: 'CITY_STREETS',
-};
 
 function proceduralTypeToRunType(type: ProceduralNodeType): RunNodeType {
   switch (type) {
@@ -55,12 +51,24 @@ function encounterTypeFor(type: ProceduralNodeType): IncursionNode['encounterTyp
   }
 }
 
+function vectorLabelPrefix(runVeilBiome: VeilBiome | null | undefined): string {
+  if (!runVeilBiome) return '';
+  return `${veilBiomeDisplayName(runVeilBiome).toUpperCase()} // `;
+}
+
 export function proceduralNodeToIncursionNode(
   node: ProceduralRunNode,
   encounterIndex: number,
+  runVeilBiome?: VeilBiome | null,
 ): IncursionNode {
   const runType = proceduralTypeToRunType(node.type);
   const labelSuffix = VECTOR_LABELS[encounterIndex % VECTOR_LABELS.length] ?? 'VECTOR';
+  const signalTags: string[] = [];
+  if (node.contextModifiers?.anchorSignal) signalTags.push('ANCHOR');
+  if (node.contextModifiers?.echoSignal) signalTags.push('ECHO');
+  const signalSuffix = signalTags.length > 0 ? ` // ${signalTags.join('+')}` : '';
+  const biomePrefix = vectorLabelPrefix(runVeilBiome);
+
   return {
     id: node.id,
     encounterIndex,
@@ -68,15 +76,26 @@ export function proceduralNodeToIncursionNode(
     encounterType: encounterTypeFor(node.type),
     type: runType,
     label: node.type === 'GATEKEEPER'
-      ? 'GATEKEEPER'
+      ? `${biomePrefix}GATEKEEPER${signalSuffix}`
       : node.type === 'RESOURCE'
-        ? 'RESOURCE NODE'
-        : `VECTOR ${labelSuffix}`,
+        ? `${biomePrefix}RESOURCE NODE${signalSuffix}`
+        : `${biomePrefix}VECTOR ${labelSuffix}${signalSuffix}`,
     isCompleted: false,
-    isPreDiscovered: node.type === 'GATEKEEPER',
+    isPreDiscovered: node.type === 'GATEKEEPER' || node.contextModifiers?.anchorSignal === true,
     isExtractionNode: node.type === 'EXTRACTION',
-    offeredMacroBiome: node.faction ? FACTION_BIOME[node.faction] : undefined,
+    offeredMacroBiome: runVeilBiome ? veilBiomeToLegacyMacroBiome(runVeilBiome) : undefined,
+    contextModifiers: node.contextModifiers,
   };
+}
+
+/** Cleared nodes within the active macro depth (0–14). */
+export function localProceduralNodesCleared(nodesCleared: number): number {
+  return nodesCleared % LEVELS_PER_DISTRICT;
+}
+
+/** Player-facing layer within the active 15-node procedural tree (1–15). */
+export function localProceduralDepth(nodesCleared: number): number {
+  return localProceduralNodesCleared(nodesCleared) + 1;
 }
 
 /** Resolve scanner choices for the current tree depth (StS-style). */
@@ -84,10 +103,11 @@ export function getAvailableProceduralNodeIds(inc: ActiveIncursionState): string
   const tree = inc.proceduralRunTree;
   if (!tree) return [];
 
-  const currentDepth = Math.min(PROCEDURAL_RUN_MAX_DEPTH, inc.nodesCleared + 1);
+  const localCleared = localProceduralNodesCleared(inc.nodesCleared);
+  const currentDepth = localProceduralDepth(inc.nodesCleared);
   if (currentDepth > PROCEDURAL_RUN_MAX_DEPTH) return [];
 
-  if (inc.nodesCleared === 0) {
+  if (localCleared === 0) {
     return tree.depthIndex[1] ?? [];
   }
 
@@ -108,7 +128,11 @@ export function buildProceduralScannerCluster(inc: ActiveIncursionState): Incurs
   return ids
     .map((id) => tree.nodes[id])
     .filter((node): node is ProceduralRunNode => node != null)
-    .map((node, index) => proceduralNodeToIncursionNode(node, inc.nodesCleared + index));
+    .map((node, index) => proceduralNodeToIncursionNode(
+      node,
+      inc.nodesCleared + index,
+      inc.runVeilBiome,
+    ));
 }
 
 export function getSonarChildTypes(
@@ -123,5 +147,12 @@ export function getSonarChildTypes(
 }
 
 export function isProceduralRunActive(inc: ActiveIncursionState): boolean {
-  return inc.proceduralRunTree != null && inc.nodesCleared < PROCEDURAL_RUN_MAX_DEPTH;
+  return inc.proceduralRunTree != null && inc.nodesCleared < MAX_RUN_GRAPH_DEPTH;
+}
+
+export function getProceduralNodeContext(
+  inc: ActiveIncursionState,
+  nodeId: string,
+): ProceduralRunNode['contextModifiers'] | undefined {
+  return inc.proceduralRunTree?.nodes[nodeId]?.contextModifiers;
 }

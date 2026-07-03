@@ -4,6 +4,7 @@ import { USE_NATIVE_DRIVER } from '../utils/platformMotion';
 import Svg, { Circle, ClipPath, Defs, Ellipse, G, Line, Path, Rect } from 'react-native-svg';
 import ScannerCornerBrackets from './scanner/ScannerCornerBrackets';
 import { useVectorScannerEngine } from './scanner/useVectorScannerEngine';
+import { primaryScannerSignalAccent } from '../data/scannerSignalEngine';
 import {
   DOT_HIT_SIZE,
   HOSTILE_PATROL_COLOR,
@@ -336,6 +337,9 @@ function VectorScannerWebComponent({
               selectionAccent,
               defaultAccent: theme.blipAccent,
             });
+            const signalAccent = isSiphoned
+              ? primaryScannerSignalAccent(node.node.veilSignals)
+              : null;
 
             return (
               <G key={node.id}>
@@ -345,6 +349,14 @@ function VectorScannerWebComponent({
                     cy={node.canvasY}
                     r={node.visualRadius * scale * 2.1}
                     fill={accentWithAlpha(HOSTILE_PATROL_COLOR, 0.22)}
+                  />
+                ) : null}
+                {signalAccent ? (
+                  <Circle
+                    cx={node.canvasX}
+                    cy={node.canvasY}
+                    r={node.visualRadius * scale * 2.4}
+                    fill={accentWithAlpha(signalAccent, 0.24)}
                   />
                 ) : null}
                 <Circle

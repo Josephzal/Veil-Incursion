@@ -89,7 +89,7 @@ export interface PlayerAccount {
   operativeRank: number;
   experiencePoints: number;
   cabalCredits: number;
-  /** Persistent Veil Residue harvested across incursions — donatable to Shadow War. */
+  /** Persistent Veil Residue harvested across incursions — vaulted at extraction. */
   veilResidueBalance: number;
   alignedFaction: FactionType | null;
   factionPerks: FactionModifiers;
@@ -301,8 +301,10 @@ export interface IncursionNode {
   narrativeTags?: readonly string[];
   /** High-stakes narrative band (Act III squeeze). */
   isHardNarrative?: boolean;
-  /** District-entry combat vectors — engaging locks this biome for the chapter. */
+  /** @deprecated Legacy district-entry offer — sector runVeilBiome is authoritative. */
   offeredMacroBiome?: import('./narrativeProcedural').MacroBiomeFamily;
+  /** Veil Front node context from procedural generation. */
+  contextModifiers?: import('./worldState').NodeContextModifiers;
 }
 
 export interface BossPhaseConfiguration {
@@ -378,18 +380,20 @@ export interface ActiveIncursionState {
   envoyBoons: EnvoyBoonId[];
   /** Cabal locked at run start — gates procedural narrative resolvers. */
   alignedFaction: FactionType | null;
+  /** Veil Front sector biome — locked for entire run (Phase 2+ spawn authority). */
+  runVeilBiome: import('./encounterSpawn').VeilBiome | null;
   /** Active macro biome — locked for the current district after first combat engage. */
   currentMacroBiomeFamily: import('./narrativeProcedural').MacroBiomeFamily | null;
   /** Previous district's locked biome (telemetry only). */
   lastMacroBiomeFamily: import('./narrativeProcedural').MacroBiomeFamily | null;
-  /** Two biome offers on district-entry scanner hubs until combat is engaged. */
+  /** @deprecated District biome choice removed — kept for save compatibility. */
   pendingDistrictBiomeOffers: readonly [
     import('./narrativeProcedural').MacroBiomeFamily,
     import('./narrativeProcedural').MacroBiomeFamily,
   ] | null;
-  /** True until the player engages a biome-tagged combat vector this district. */
+  /** @deprecated District biome choice removed — kept for save compatibility. */
   awaitingDistrictBiomeChoice: boolean;
-  /** District 1 pick — excluded from district 2 offer pool. */
+  /** @deprecated District biome choice removed — kept for save compatibility. */
   depth1MacroBiomeChoice: import('./narrativeProcedural').MacroBiomeFamily | null;
   /** Buffs, debuffs, and timed boons — powers status popup. */
   runStatusEffects: import('./narrativeProcedural').RunStatusEffect[];
@@ -446,8 +450,10 @@ export interface ActiveIncursionState {
   encounterUltimateDisabled: boolean;
   /** VOID'S TOLL — permanent +1 AP per ultimate kill this incursion. */
   voidsTollApBonus: number;
-  /** Passive modifiers from secured Shadow War macro-sectors. */
-  shadowWarBuffs: import('../data/shadowWarBuffEngine').ShadowWarRunBuffModifiers;
+  /** Passive modifiers derived from Veil Front sector + employer selection. */
+  runModifiers: import('../types/worldState').RunModifierSnapshot;
+  /** Full meta-to-run context frozen at descent — depth resolved per node later. */
+  runGenerationContext: import('../types/worldState').RunGenerationContext | null;
   /** Per-district encounter pacing — alpha duel index, anti-repetition history. */
   runSegment: import('../data/encounterGenerator').RunSegmentState | null;
   /** Pre-generated StS-style 15-depth branching map for scanner routing. */
@@ -456,6 +462,10 @@ export interface ActiveIncursionState {
   revealedSonarNodeIds: readonly string[];
   /** Pre-rolled procedural resource harvest loot for the active node engage. */
   pendingProceduralResourcePool: readonly string[];
+  /** Anchor Assault operation progress tracked during the run. */
+  anchorAssaultProgress: import('../data/anchorAssaultEngine').AnchorAssaultProgress;
+  /** Echo Recovery residue defeats tracked during the run. */
+  echoRecoveryProgress: import('../data/echoRecoveryEngine').EchoRecoveryProgress;
 }
 
 export function createDefaultEnvironmentalModifiers(): EnvironmentalModifiers {
@@ -504,6 +514,7 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     hexShotBoons: [],
     envoyBoons: [],
     alignedFaction: null,
+    runVeilBiome: null,
     currentMacroBiomeFamily: null,
     lastMacroBiomeFamily: null,
     pendingDistrictBiomeOffers: null,
@@ -543,16 +554,19 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     sanctuaryGraftOffers: null,
     encounterUltimateDisabled: false,
     voidsTollApBonus: 0,
-    shadowWarBuffs: {
+    runModifiers: {
       maxHpBonusPct: 0,
       kineticArmorBonus: 0,
       rareLootBonusPct: 0,
       blackMarketDiscountPct: 0,
       firstTurnApBonus: 0,
     },
+    runGenerationContext: null,
     runSegment: null,
     proceduralRunTree: null,
     revealedSonarNodeIds: [],
     pendingProceduralResourcePool: [],
+    anchorAssaultProgress: { elitesDefeated: 0, coreCleared: false },
+    echoRecoveryProgress: { echoesDefeated: 0, legendaryDefeated: 0 },
   };
 }

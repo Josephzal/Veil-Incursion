@@ -5,11 +5,13 @@ import {
   RunNodeType,
 } from '../types/game';
 import { getMacroBiomeDisplayLabel, resolveDisplayedMacroBiome } from './macroBiomeEngine';
+import { veilBiomeDisplayName } from './sectorBiomeBridge';
 import type { MacroBiomeFamily } from '../types/narrativeProcedural';
 import { formatSpectralBlock } from './sectorGraphEngine';
 import { ELITE_MODIFIER_LABELS } from './eliteModifierEngine';
-import { EncounterType, RadarDot, SectorDefinition } from '../types/run';
-import { INCURSION_ENCOUNTER_COUNT } from '../types/run';
+import type { RunGenerationContext } from '../types/worldState';
+import { formatVeilFrontSignalIntel, resolveNodeScannerSignals } from './scannerSignalEngine';
+import { EncounterType, INCURSION_ENCOUNTER_COUNT, RadarDot, SectorDefinition } from '../types/run';
 import {
   createRadarDotFromPolar,
   layoutRadarDotsOnScanner,
@@ -275,6 +277,7 @@ export function generateDepthNodeScanVectors(
   scannerSizePx: number,
   sector: SectorDefinition = INITIAL_SECTOR_POOL[0],
   rng: () => number = Math.random,
+  runContext?: RunGenerationContext | null,
 ): RadarDot[] {
   if (nodes.length === 0) return [];
 
@@ -283,6 +286,8 @@ export function generateDepthNodeScanVectors(
     scannerSizePx,
     (node, index, position) => {
       const masked = buildMaskedScanTelemetry(node.id, index);
+      const veilSignals = resolveNodeScannerSignals(node, runContext);
+      const anchorPing = veilSignals.some((s) => s.kind.startsWith('ANCHOR_'));
       return createRadarDotFromPolar(
         node,
         index,
@@ -292,8 +297,11 @@ export function generateDepthNodeScanVectors(
           encounterType: incursionEncounterToRadarType(node.encounterType),
           label: masked.label,
           pingLabel: node.isPreDiscovered
-            ? 'PRIORITY TARGET // MANIFESTED CORE'
+            ? anchorPing
+              ? 'PRIORITY TARGET // ANCHOR SIGNATURE'
+              : 'PRIORITY TARGET // MANIFESTED CORE'
             : masked.pingLabel,
+          veilSignals,
         },
       );
     },
@@ -356,20 +364,29 @@ export function resolveVectorLabel(node: IncursionNode, optionIndex = 0): string
   return buildMaskedScanTelemetry(node.id, optionIndex).pingLabel;
 }
 
-/** Scanner dock readout — macro biome, vector designation, and node type only. */
+/** Scanner dock readout — macro biome, vector designation, node type, and Veil signals. */
 export function formatScannerNodeIntel(
   node: IncursionNode,
   macroFamily: MacroBiomeFamily | null | undefined,
   optionIndex = 0,
+  runContext?: RunGenerationContext | null,
+  runVeilBiome?: import('../types/encounterSpawn').VeilBiome | null,
 ): string[] {
   const vector = resolveVectorLabel(node, optionIndex);
   const nodeType = node.type.replace(/_/g, ' ');
-  const displayBiome = resolveDisplayedMacroBiome(node, macroFamily);
-  return [
+  const displayBiome = resolveDisplayedMacroBiome(node, macroFamily, runVeilBiome);
+  const lines = [
     `> MACRO BIOME: ${getMacroBiomeDisplayLabel(displayBiome).toUpperCase()}`,
     `> VECTOR: ${vector}`,
     `> NODE TYPE: ${nodeType.toUpperCase()}`,
   ];
+
+  const signalLines = formatVeilFrontSignalIntel(node, runContext);
+  if (signalLines.length > 0) {
+    lines.push(...signalLines);
+  }
+
+  return lines;
 }
 
 /** Modifier status lines for the scanner dock. */
@@ -392,7 +409,12 @@ export function formatCombatEncounterIntel(
   node: IncursionNode | null,
   incursion: Pick<
     ActiveIncursionState,
-    'sectorTier' | 'nodesCleared' | 'environmentalModifiers' | 'defendRiftActive' | 'currentMacroBiomeFamily'
+    | 'sectorTier'
+    | 'nodesCleared'
+    | 'environmentalModifiers'
+    | 'defendRiftActive'
+    | 'currentMacroBiomeFamily'
+    | 'runVeilBiome'
   >,
   optionIndex = 0,
 ): string[] {
@@ -400,8 +422,12 @@ export function formatCombatEncounterIntel(
     return ['> ENCOUNTER DATA // AWAITING VECTOR LOCK'];
   }
 
+  const macroLabel = incursion.runVeilBiome
+    ? veilBiomeDisplayName(incursion.runVeilBiome)
+    : getMacroBiomeDisplayLabel(incursion.currentMacroBiomeFamily);
+
   const lines: string[] = [
-    `> MACRO BIOME: ${getMacroBiomeDisplayLabel(incursion.currentMacroBiomeFamily).toUpperCase()}`,
+    `> MACRO BIOME: ${macroLabel.toUpperCase()}`,
     `> VECTOR: ${resolveVectorLabel(node, optionIndex)}`,
     `> NODE TYPE: ${node.type.replace(/_/g, ' ').toUpperCase()}`,
     `> ENCOUNTER: ${getEncounterDisplayLabel(node.encounterType, node.encounterIndex).toUpperCase()}`,

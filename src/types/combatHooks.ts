@@ -12,7 +12,9 @@ export type PlayerDebuffId =
   | 'JAMMED_AUGMENT'
   | 'ROOTED'
   | 'SEARING'
-  | 'LASER_SIGHT';
+  | 'LASER_SIGHT'
+  | 'HEXED'
+  | 'MAX_ANCHOR_DEBT';
 
 export interface StructuredPlayerDebuff {
   type: PlayerDebuffId;
@@ -93,6 +95,13 @@ export interface CombatSessionExtras {
   jammedAugmentSlots?: number[];
   /** Envoy Flesh-Warp — unit ids with healing negated. */
   fleshWarpUnitIds: Record<string, boolean>;
+  /** Hollow Lung — temporary max HP debt (cleared after combat). */
+  playerTrueMaxHp: number;
+  playerMaxHpDebt: number;
+  /** Reaver — damaged by player this turn (blocks Blood Rush). */
+  reaverDamagedThisPlayerTurn: boolean;
+  /** Reaver Guard Break — consecutive player defends. */
+  consecutivePlayerDefends: number;
 }
 
 export function createDefaultCombatSessionExtras(): CombatSessionExtras {
@@ -115,6 +124,10 @@ export function createDefaultCombatSessionExtras(): CombatSessionExtras {
     jammedAugmentSlot: null,
     jammedAugmentSlots: [],
     fleshWarpUnitIds: {},
+    playerTrueMaxHp: 0,
+    playerMaxHpDebt: 0,
+    reaverDamagedThisPlayerTurn: false,
+    consecutivePlayerDefends: 0,
   };
 }
 

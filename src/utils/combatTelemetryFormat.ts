@@ -52,6 +52,8 @@ const INTENT_READOUT: Record<EnemyIntent, string> = {
   JAM_AUGMENT: 'JAM AUGMENT',
   MEMORY_LEECH: 'MEMORY LEECH',
   FIELD_REPAIR: 'FIELD REPAIR',
+  HEX_MARK: 'HEX MARK',
+  BINDING_WARD: 'BINDING WARD',
 };
 
 export function formatHostileId(designation: string): string {
@@ -102,9 +104,19 @@ export interface AegisReserveLabelOptions {
   eviscerateReady?: boolean;
 }
 
-export function formatSoulAnchorLabel(current: number, max: number): string {
+export function formatSoulAnchorLabel(
+  current: number,
+  max: number,
+  options?: { debt?: number; trueMax?: number },
+): string {
   if (max <= 0) return 'SOUL // 0%';
   const pct = Math.round((current / max) * 100);
+  const debt = options?.debt ?? 0;
+  const trueMax = options?.trueMax ?? max;
+  if (debt > 0 && trueMax > 0) {
+    const debtPct = Math.round((debt / trueMax) * 100);
+    return `SOUL // ${pct}% • DEBT ${debtPct}% (TEMP)`;
+  }
   return `SOUL // ${pct}%`;
 }
 

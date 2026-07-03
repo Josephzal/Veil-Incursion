@@ -8,7 +8,7 @@ export interface TerminalNavItem {
 
 export const TERMINAL_NAV_ITEMS: TerminalNavItem[] = [
   { key: 'DEPLOYMENT', label: 'DEPLOYMENT', shortLabel: 'DEPLOY' },
-  { key: 'MAP', label: 'SHADOW WAR', shortLabel: 'WAR' },
+  { key: 'MAP', label: 'VEIL FRONT', shortLabel: 'FRONT' },
   { key: 'SAFEHOUSE', label: 'SAFEHOUSE', shortLabel: 'HOUSE' },
 ];
 

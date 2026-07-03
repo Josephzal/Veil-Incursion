@@ -343,7 +343,7 @@ export default function RestScreen(): React.JSX.Element {
               },
             ]}
           >
-            Stabilizing ley-energy hums through the anchor chapel. Choose attunement or graft mutation — not both.
+            Stabilizing ley-energy hums through the anchor chapel. A brief respite from the void. Choose attunement or graft mutation.
           </Text>
         ) : null}
         <View style={[styles.statsGrid, isDesktop ? styles.statsGridDesktop : null]}>

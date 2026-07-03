@@ -56,7 +56,7 @@ import {
   type PendingNarrativeCombatBoons,
 } from '../types/narrativeBonusReward';
 import { depthFromNodesCleared, isDistrictGateDepth } from '../data/districtPacing';
-import { collectFactionTraitLoot, rollGatekeeperLockedTemplate } from '../data/combatRewardEngine';
+import { rollGatekeeperLockedTemplate } from '../data/combatRewardEngine';
 import { shouldGrantAdrenalinePrimerAp } from '../data/boundRequisitionEngine';
 import type { IncursionConsumableUseResult } from '../types/incursionInventory';
 import CombatOperativeVitalsOverlay from './combat/layouts/CombatOperativeVitalsOverlay';
@@ -119,10 +119,10 @@ export default function CombatScreen(): React.JSX.Element {
   const combatEntryStamina =
     env.startingStaminaPenalty > 0 ? 50 : runState.currentStamina;
   const adrenalinePrimerActive = shouldGrantAdrenalinePrimerAp(activeIncursion);
-  const shadowWarApBonus = activeIncursion.shadowWarBuffs?.firstTurnApBonus ?? 0;
-  const shadowWarKineticArmor = activeIncursion.shadowWarBuffs?.kineticArmorBonus ?? 0;
+  const runApBonus = activeIncursion.runModifiers?.firstTurnApBonus ?? 0;
+  const runKineticArmor = activeIncursion.runModifiers?.kineticArmorBonus ?? 0;
   const kineticBatteryActive = activeIncursion.boundRequisition?.kineticBatteryActive ?? false;
-  const firstTurnBonusAp = shadowWarApBonus;
+  const firstTurnBonusAp = runApBonus;
   const [narrativeCombatBoons] = useState<PendingNarrativeCombatBoons>(
     peekPendingNarrativeCombatBoons,
   );
@@ -432,16 +432,14 @@ export default function CombatScreen(): React.JSX.Element {
       addLockedContainer(lockedTemplate);
       appendRunLog('>> GATEKEEPER SALVAGE — sealed container routed to Safehouse decryption vault.');
     }
-    const factionLoot = collectFactionTraitLoot(runState.pendingEnemies ?? []);
     const combatDropInstanceIds = grantCombatResourceDrops({
       depth,
       isElite: nodeType === 'ELITE_COMBAT',
       isGatekeeper,
       rosterId: runState.pendingEnemy?.rosterId,
       seed: `combat:${depth}:${nodeType ?? 'std'}:${runState.pendingEnemy?.rosterId ?? 'unknown'}`,
-      extraLoot: factionLoot,
       slainEnemies: runState.pendingEnemies ?? [],
-      rareLootBonusPct: activeIncursion.shadowWarBuffs?.rareLootBonusPct ?? 0,
+      rareLootBonusPct: activeIncursion.runModifiers?.rareLootBonusPct ?? 0,
     });
     if (adrenalinePrimerActive) {
       consumeAdrenalinePrimerAfterCombat();
@@ -639,7 +637,7 @@ export default function CombatScreen(): React.JSX.Element {
                       adrenalinePrimerActive={adrenalinePrimerActive}
                       incursionApBonus={activeIncursion.voidsTollApBonus}
                       onVoidsTollTriggered={applyVoidsTollSacrifice}
-                      playerKineticArmorBonus={shadowWarKineticArmor}
+                      playerKineticArmorBonus={runKineticArmor}
                       kineticBatteryActive={kineticBatteryActive}
                       narrativeCombatBoons={narrativeCombatBoons}
                       equippedBlueprintId={account.equippedBlueprintId}

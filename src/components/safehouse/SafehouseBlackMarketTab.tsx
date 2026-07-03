@@ -8,8 +8,7 @@ import {
 } from '../../data/hubSafehouseEngine';
 import { RESOURCE_REGISTRY } from '../../data/resourceRegistry';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
-import { useShadowWar } from '../../context/ShadowWarContext';
-import { shadowWarBuffsToRunModifiers } from '../../data/shadowWarBuffEngine';
+import { useWorldState } from '../../context/WorldStateContext';
 import { useTerminal } from '../../context/TerminalContext';
 import { getFactionAccent } from '../../data/factions';
 import type { CargoItemId } from '../../types/cargoGrid';
@@ -210,8 +209,8 @@ function FenceRow({
 export default function SafehouseBlackMarketTab(): React.JSX.Element {
   const { theme } = useTerminal();
   const { account, purchaseHubContraband, sellFenceResource, appendHubLog } = usePlayerAccount();
-  const { activeBuffs } = useShadowWar();
-  const marketDiscount = shadowWarBuffsToRunModifiers(activeBuffs).blackMarketDiscountPct;
+  const { hubBlackMarketDiscountPct } = useWorldState();
+  const marketDiscount = hubBlackMarketDiscountPct;
   const [selectedListingId, setSelectedListingId] = useState<CargoItemId | null>(null);
 
   const accent = theme.statusColor;

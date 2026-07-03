@@ -1,27 +1,20 @@
-import type { EncounterOrigin } from './originDeckEngine';
+import type { EncounterOrigin } from '../types/encounterSpawn';
 import type { SynergySquadSpec } from './synergyEncounterTypes';
+import { getEnemyOrigin } from './enemyDefinitions';
 
-/** Curated squad affinity for the run origin deck (CABAL vs VEIL cards). */
-export type EncounterSquadOriginTag = 'CABAL' | 'VEIL' | 'ANY';
-
-/** Mixed rosters that may appear on either origin card. */
-const ANY_SQUAD_IDS = new Set<string>([
-  'CORRUPT_AUTO_DEFENSE',
-  'CORRUPT_KINETIC_CASCADE',
-]);
-
-const CABAL_ELITE_IDS = new Set<string>([
-  'ELITE_WARDEN',
-  'ELITE_BREACHER',
-  'ELITE_FIXER_NODE',
-  'ELITE_COIL_SNIPER',
-]);
+/** Curated squad affinity for procedural origin roll (RIVAL_MERC vs VEIL). */
+export type EncounterSquadOriginTag = 'RIVAL_MERC' | 'VEIL' | 'ANY';
 
 export function resolveSquadEncounterOriginTag(squad: SynergySquadSpec): EncounterSquadOriginTag {
   if (squad.encounterSquadOrigin) return squad.encounterSquadOrigin;
-  if (ANY_SQUAD_IDS.has(squad.id)) return 'ANY';
-  if (squad.id.startsWith('CABAL_') || CABAL_ELITE_IDS.has(squad.id)) return 'CABAL';
-  return 'VEIL';
+  const origins = new Set(
+    squad.roster
+      .map((unit) => getEnemyOrigin(unit.type))
+      .filter((origin): origin is EncounterOrigin => origin != null),
+  );
+  if (origins.size === 0) return 'VEIL';
+  if (origins.size > 1) return 'ANY';
+  return origins.values().next().value ?? 'VEIL';
 }
 
 export function squadMatchesEncounterOrigin(

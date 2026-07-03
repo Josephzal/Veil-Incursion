@@ -456,79 +456,12 @@ export function materializeLevelCluster(params: MaterializeLevelClusterParams): 
   );
 }
 
-function makeDistrictBiomeCombatNode(
-  offeredMacroBiome: MacroBiomeFamily,
-  graphDepth: number,
-  district: DistrictId,
-  localLevel: number,
-  slotIndex: number,
-  stepIndex: number,
-  sectorTier: number,
-): IncursionNode {
-  const mapped = spawnKindToTypes('STANDARD_COMBAT');
-  const nodeId = `district-biome-d${district}-l${localLevel}-s${slotIndex}`;
-  const designation = VECTOR_DESIGNATIONS[slotIndex % VECTOR_DESIGNATIONS.length];
-  const baseLabel = mapped.label.replace('VECTOR', `VECTOR ${designation}`);
-
-  return {
-    id: nodeId,
-    encounterIndex: stepIndex,
-    index: stepIndex,
-    encounterType: mapped.encounterType,
-    type: mapped.type,
-    label: `${MACRO_BIOME_DISPLAY[offeredMacroBiome].toUpperCase()} // ${baseLabel}`,
-    isCompleted: false,
-    isAnomalyNest: false,
-    isPreDiscovered: false,
-    narrativeTags: mapped.narrativeTags,
-    isHardNarrative: mapped.isHardNarrative,
-    offeredMacroBiome,
-    sectorMeta: buildMatrixSectorMeta(
-      nodeId,
-      mapped.encounterType,
-      mapped.type,
-      graphDepth,
-      sectorTier,
-      mapped.combatTier,
-    ),
-  };
-}
-
-/** District entry — exactly two combat vectors, each tagged with a distinct biome offer. */
-export function buildDistrictBiomeChoiceCluster(
-  params: MaterializeLevelClusterParams,
-  biomes: readonly [MacroBiomeFamily, MacroBiomeFamily],
-): IncursionNode[] {
-  const { graphDepth, district, nodesCleared: stepIndex, sectorTier } = params;
-  const localLevel = localLevelFromDepth(graphDepth);
-  return biomes.map((biome, slotIndex) =>
-    makeDistrictBiomeCombatNode(
-      biome,
-      graphDepth,
-      district,
-      localLevel,
-      slotIndex,
-      stepIndex,
-      sectorTier,
-    ),
-  );
-}
-
+/** Legacy cluster shape from pre-sector-lock runs — used for dedupe/layout only. */
 export function isDistrictBiomeChoiceCluster(cluster: readonly IncursionNode[]): boolean {
   return cluster.length === 2
     && cluster.every(
       (node) => node.type === 'STANDARD_COMBAT' && node.offeredMacroBiome != null,
     );
-}
-
-/** @deprecated Use buildDistrictBiomeChoiceCluster */
-export function buildDepth1TestScannerCluster(params: MaterializeLevelClusterParams): IncursionNode[] {
-  return buildDistrictBiomeChoiceCluster(params, ['CITY_STREETS', 'CITY_BUILDINGS']);
-}
-
-/** @deprecated Use isDistrictBiomeChoiceCluster */
-export function isDepth1TestScannerCluster(cluster: readonly IncursionNode[]): boolean {
-  return isDistrictBiomeChoiceCluster(cluster);
 }
 
 export function requiresVeilBleedBoon(localLevel: number): boolean {

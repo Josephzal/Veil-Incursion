@@ -37,8 +37,8 @@ const RAW_SECTORS: Array<Omit<ShadowWarSectorDefinition, 'mapGeometry'> & { path
     defaultIp: { TERRAN_GRID: 520, LEGION: 240, SOLARIS: 190 },
   },
   {
-    id: 'THE_FRACTAL_WASTES',
-    label: 'Fractal Wastes',
+    id: 'THE_ASHEN_WASTES',
+    label: 'Ashen Wastes',
     buffSummary: '+1 Max AP on combat Turn 1',
     buffId: 'FIRST_TURN_AP_PLUS_1',
     path: 'M 300 190 L 420 175 L 460 260 L 360 290 L 280 240 Z',

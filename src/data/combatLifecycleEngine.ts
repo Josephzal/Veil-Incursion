@@ -4,7 +4,6 @@ import type { EnemyCombatProfile } from '../types/run';
 import { aliveUnits, getUnitById, updateUnit } from './combatSquadEngine';
 import { isFragileArchetype } from './enemyCombatConfig';
 import { getAlphaMechanic } from './enemyAlphaConfig';
-import { isLightKillingBlow, SOLARIS_VOLATILE_TRUE_DAMAGE } from './factionTraitEngine';
 import type {
   CombatLifecycleContext,
   DeathHandler,
@@ -194,55 +193,39 @@ const resonanceCasterTurnStart: TurnStartHandler = (enemy, ctx) => {
   };
 };
 
-const hollowLungTurnStart: TurnStartHandler = (enemy, ctx) => {
-  if (enemy.rosterId !== 'hollow-lung' || !enemy.unitId) return { ...EMPTY_TURN, squad: ctx.squad };
-  const drainPercent = getAlphaMechanic(enemy, 'maxHpDrainPercent', 0.05);
-  const debt = Math.max(1, Math.floor(ctx.player.maxHp * drainPercent));
-  return {
-    squad: ctx.squad,
-    logLines: [`>> ${enemy.designation} SUFFOCATION AURA — max anchor debt ${debt}.`],
-    playerHpDelta: -debt,
-  };
-};
+const hollowLungTurnStart: TurnStartHandler = (_enemy, ctx) => ({ ...EMPTY_TURN, squad: ctx.squad });
 
 const graveRobberTurnStart: TurnStartHandler = (enemy, ctx) => {
   if (enemy.rosterId !== 'grave-robber' || !enemy.unitId) return { ...EMPTY_TURN, squad: ctx.squad };
-  const corpsesOnly = getAlphaMechanic(enemy, 'consumesOnlyCorpses', true);
-  let feedTarget = ctx.squad.find(
+  const feeds = enemy.graveRobberFeeds ?? 0;
+  if (feeds >= 3) return { squad: ctx.squad, logLines: [] };
+
+  const corpse = ctx.squad.find(
     (u) => u.unitId !== enemy.unitId && (u.isSlumped || u.currentHp <= 0),
   );
-  if (!feedTarget?.unitId && !corpsesOnly) {
-    const livingPrey = aliveUnits(ctx.squad)
-      .filter((u) => u.unitId !== enemy.unitId)
-      .sort((a, b) => a.currentHp - b.currentHp);
-    feedTarget = livingPrey[0];
-  }
-  if (!feedTarget?.unitId) return { squad: ctx.squad, logLines: [] };
-  const livingSacrifice = feedTarget.currentHp > 0 && !feedTarget.isSlumped;
-  const feeds = (enemy.graveRobberFeeds ?? 0) + 1;
-  const hpBonus = Math.floor(enemy.maxHp * 0.3);
-  const dmgBonus = Math.floor(enemy.baseDamage * 0.2);
+  if (!corpse?.unitId) return { squad: ctx.squad, logLines: [] };
+
+  const hpBonus = Math.floor(enemy.maxHp * 0.2);
+  const dmgBonus = Math.floor(enemy.baseDamage * 0.1);
   const nextMaxHp = enemy.maxHp + hpBonus;
   const growthBlocked = ctx.extras.fleshWarpUnitIds[enemy.unitId] === true;
   const nextHp = growthBlocked
     ? enemy.currentHp
     : Math.min(nextMaxHp, enemy.currentHp + hpBonus);
   let squad = patchUnitInSquad(ctx.squad, enemy.unitId, {
-    graveRobberFeeds: feeds,
+    graveRobberFeeds: feeds + 1,
     maxHp: nextMaxHp,
     currentHp: nextHp,
     baseDamage: enemy.baseDamage + dmgBonus,
   });
-  squad = squad.filter((u) => u.unitId !== feedTarget.unitId);
+  squad = squad.filter((u) => u.unitId !== corpse.unitId);
   return {
     squad,
     logLines: [
-      livingSacrifice
-        ? `>> ${enemy.designation} GORGING FEED — devoured ${feedTarget.designation}.`
-        : `>> ${enemy.designation} CORPSE FEED — consumed ${feedTarget.designation}.`,
+      `>> ${enemy.designation} MACABRE HARVEST — consumed ${corpse.designation}.`,
       growthBlocked
         ? '>> GROWTH — HP gain blocked by flesh-warp seal.'
-        : `>> GROWTH — +${hpBonus} HP pool, +${dmgBonus} damage.`,
+        : `>> FEAST — +${hpBonus} max HP, +${dmgBonus} damage (${feeds + 1}/3).`,
     ],
   };
 };
@@ -509,21 +492,6 @@ const spallDeath: DeathHandler = (enemy, _killingBlow, ctx) => {
   };
 };
 
-const solarisVolatileDeath: DeathHandler = (enemy, killingBlow, ctx) => {
-  if (!enemy.isCabalHuman || enemy.factionTrait !== 'VOLATILE_CORE') {
-    return { ...EMPTY_DEATH, squad: ctx.squad };
-  }
-  if (!isLightKillingBlow(killingBlow.damage, killingBlow.source)) {
-    return { ...EMPTY_DEATH, squad: ctx.squad };
-  }
-  return {
-    squad: ctx.squad,
-    logLines: [`>> ${enemy.designation} VOLATILE CORE DETONATION — ${SOLARIS_VOLATILE_TRUE_DAMAGE} true damage.`],
-    playerHpDelta: -SOLARIS_VOLATILE_TRUE_DAMAGE,
-    ashTokenSlot: enemy.gridSlot,
-  };
-};
-
 const thrallDeath: DeathHandler = (enemy, killingBlow, ctx) => {
   if (enemy.rosterId !== 'thrall' || !enemy.unitId) return { ...EMPTY_DEATH, squad: ctx.squad };
   const isHeavy = killingBlow.damage >= 25
@@ -590,7 +558,6 @@ const HIT_TAKEN_HANDLERS: HitTakenHandler[] = [
 ];
 
 const DEATH_HANDLERS: DeathHandler[] = [
-  solarisVolatileDeath,
   thrallDeath,
   spallDeath,
   leySirenDeath,
@@ -766,6 +733,10 @@ export function initRosterLifecycleDefaults(
     resonanceStack: profile.resonanceStack ?? 0,
     spotterLockedOn: profile.spotterLockedOn ?? false,
     graveRobberFeeds: profile.graveRobberFeeds ?? 0,
+    emergencySwapUsed: profile.emergencySwapUsed ?? false,
+    bloodRushActive: profile.bloodRushActive ?? false,
+    guardBreakPrimed: profile.guardBreakPrimed ?? false,
+    rivalWardCharges: profile.rivalWardCharges ?? 0,
     laserLockTurnsRemaining: profile.laserLockTurnsRemaining ?? 0,
   };
 

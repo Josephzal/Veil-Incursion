@@ -1,6 +1,7 @@
 import type { DistrictId } from './districtPacing';
 import { getDistrictFromDepth } from './districtPacing';
 import type { EnemyRosterId } from './enemyRoster';
+import { resolveDefinitionStats } from './enemyDefinitions';
 
 export type EncounterEnemyKey =
   | 'FRACTURE_HOUND'
@@ -34,6 +35,9 @@ export type EncounterEnemyKey =
   | 'FIXER'
   | 'SPOTTER'
   | 'BURNER'
+  | 'RIVAL_HEXER'
+  | 'RIVAL_VEILBINDER'
+  | 'RIVAL_REAVER'
   | 'AMALGAM'
   | 'WIRE_GHOUL'
   | 'HOLLOW_LUNG'
@@ -73,6 +77,9 @@ export const ENCOUNTER_KEY_TO_ROSTER: Record<EncounterEnemyKey, EnemyRosterId> =
   FIXER: 'fixer',
   SPOTTER: 'spotter',
   BURNER: 'burner',
+  RIVAL_HEXER: 'rival-hexer',
+  RIVAL_VEILBINDER: 'rival-veilbinder',
+  RIVAL_REAVER: 'rival-reaver',
   AMALGAM: 'amalgam',
   WIRE_GHOUL: 'wire-ghoul',
   HOLLOW_LUNG: 'hollow-lung',
@@ -112,6 +119,9 @@ const ROSTER_STAT_KEY: Record<EnemyRosterId, StatKey | null> = {
   'fixer': 'FIXER',
   'spotter': 'SPOTTER',
   'burner': 'BURNER',
+  'rival-hexer': 'RIVAL_HEXER',
+  'rival-veilbinder': 'RIVAL_VEILBINDER',
+  'rival-reaver': 'RIVAL_REAVER',
   'amalgam': 'AMALGAM',
   'wire-ghoul': 'WIRE_GHOUL',
   'hollow-lung': 'HOLLOW_LUNG',
@@ -153,6 +163,9 @@ export const ENEMY_BASE_STATS = {
   FIXER: { maxHp: 88, baseDamage: 8, armor: 0 },
   SPOTTER: { maxHp: 84, baseDamage: 12, armor: 0 },
   BURNER: { maxHp: 86, baseDamage: 9, armor: 0 },
+  RIVAL_HEXER: { maxHp: 82, baseDamage: 9, armor: 0 },
+  RIVAL_VEILBINDER: { maxHp: 88, baseDamage: 8, armor: 0 },
+  RIVAL_REAVER: { maxHp: 120, baseDamage: 16, armor: 0 },
   AMALGAM: { maxHp: 160, baseDamage: 17, armor: 12 },
   WIRE_GHOUL: { maxHp: 72, baseDamage: 10, armor: 0 },
   HOLLOW_LUNG: { maxHp: 92, baseDamage: 10, armor: 0 },
@@ -198,6 +211,9 @@ export const ENEMY_ARCHETYPE: Partial<Record<EnemyRosterId, EnemySpawnArchetype>
   'fixer': 'SUPPORT',
   'spotter': 'ARTILLERY',
   'burner': 'SUPPORT',
+  'rival-hexer': 'SUPPORT',
+  'rival-veilbinder': 'SUPPORT',
+  'rival-reaver': 'MELEE',
   'amalgam': 'HEAVY',
   'wire-ghoul': 'MELEE',
   'hollow-lung': 'SUPPORT',
@@ -222,6 +238,7 @@ export const HEAVY_ROSTER_IDS: readonly EnemyRosterId[] = [
   'slag-blood',
   'amalgam',
   'warden',
+  'rival-reaver',
 ];
 
 export const ARTILLERY_ROSTER_IDS: readonly EnemyRosterId[] = [
@@ -250,12 +267,14 @@ export function resolveEnemyCombatStats(
   const statKey = ROSTER_STAT_KEY[rosterId];
   if (!statKey) return null;
 
-  const base = ENEMY_BASE_STATS[statKey];
   const district = getDistrictFromDepth(depth);
-  const scaling = DEPTH_SCALING[district];
+  const definitionStats = resolveDefinitionStats(statKey, district);
 
-  let maxHp = Math.floor(base.maxHp * scaling.hpMult);
-  let baseDamage = Math.floor(base.baseDamage * scaling.dmgMult);
+  let maxHp = definitionStats?.maxHp ?? Math.floor(ENEMY_BASE_STATS[statKey].maxHp * DEPTH_SCALING[district].hpMult);
+  let baseDamage = definitionStats?.baseDamage ?? Math.floor(ENEMY_BASE_STATS[statKey].baseDamage * DEPTH_SCALING[district].dmgMult);
+  const kineticArmor = definitionStats?.kineticArmor ?? ENEMY_BASE_STATS[statKey].armor;
+  const occultWards = definitionStats?.occultArmor
+    ?? (rosterId === 'ley-siren' ? 2 : rosterId === 'null-shade' ? 0 : 0);
 
   if (options?.isAlpha) {
     maxHp = Math.floor(maxHp * ALPHA_MODIFIER.hpMult);
@@ -265,8 +284,8 @@ export function resolveEnemyCombatStats(
   return {
     maxHp,
     baseDamage,
-    kineticArmor: base.armor,
-    occultWards: rosterId === 'ley-siren' ? 2 : rosterId === 'null-shade' ? 0 : 0,
+    kineticArmor,
+    occultWards,
     archetype: ENEMY_ARCHETYPE[rosterId],
   };
 }
@@ -314,6 +333,9 @@ export const ENEMY_ARCHETYPE_FOR_KEY: Record<EncounterEnemyKey, EnemySpawnArchet
   FIXER: 'SUPPORT',
   SPOTTER: 'ARTILLERY',
   BURNER: 'SUPPORT',
+  RIVAL_HEXER: 'SUPPORT',
+  RIVAL_VEILBINDER: 'SUPPORT',
+  RIVAL_REAVER: 'MELEE',
   AMALGAM: 'HEAVY',
   WIRE_GHOUL: 'MELEE',
   HOLLOW_LUNG: 'SUPPORT',

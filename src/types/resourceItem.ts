@@ -24,7 +24,7 @@ export interface ResourceItemDefinition {
   baseCapitalValue: number;
   /** Hub fence sell price in Cabal Credits. */
   sellValue: number;
-  /** Shadow War donation influence yield. */
+  /** Legacy influence yield metadata (deprecated donation system). */
   ipValue: number;
   itemType: ResourceItemType;
 }

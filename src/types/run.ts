@@ -43,7 +43,9 @@ export type EnemyIntent =
   | 'STAMINA_TETHER'
   | 'JAM_AUGMENT'
   | 'MEMORY_LEECH'
-  | 'FIELD_REPAIR';
+  | 'FIELD_REPAIR'
+  | 'HEX_MARK'
+  | 'BINDING_WARD';
 
 /** Reactive combat debuffs derived from resource pools (stamina === 0 → EXHAUSTED). */
 export type CombatStatusEffect = 'EXHAUSTED';
@@ -152,15 +154,10 @@ export interface EnemyCombatProfile {
   resonanceStack?: number;
   /** Hook Weaver tether target unit id. */
   tetheredAllyUnitId?: string | null;
-  /** Cabal human operative — receives faction trait at spawn. */
-  isCabalHuman?: boolean;
-  /** Advanced Veil anomaly — no Cabal faction traits. */
+  /** Rival merc contractor (Marathon-style hostile extraction team). */
+  isRivalMerc?: boolean;
+  /** Advanced Veil anomaly entity. */
   isVeilEntity?: boolean;
-  /** Controlling Cabal faction for this depth (Cabal humans only). */
-  cabalFaction?: FactionType;
-  factionTrait?: 'ENTRENCHED' | 'COLD_VACUUM' | 'VOLATILE_CORE';
-  /** Faction trait loot dropped on true death. */
-  factionLootId?: string;
   /** Wide frontline unit (e.g. Amalgam occupies FL_0 + FL_1). */
   gridWidth?: number;
   /** Secondary occupied slot for wide units. */
@@ -192,6 +189,15 @@ export interface EnemyCombatProfile {
   alphaLockOnTurns?: number;
   /** Coil sniper — charge cycles remaining before TRUE SHOT. */
   laserLockTurnsRemaining?: number;
+  /** Rival Veilbinder — ward absorbs one hit on a protected ally. */
+  rivalWardCharges?: number;
+  bindingWardOwnerId?: string | null;
+  /** Rival Veilbinder — one emergency swap per encounter. */
+  emergencySwapUsed?: boolean;
+  /** Rival Reaver — next attack amplified when player skipped damage. */
+  bloodRushActive?: boolean;
+  /** Rival Reaver — bonus stamina/fracture after double defend. */
+  guardBreakPrimed?: boolean;
 }
 
 export interface Trinket {
@@ -267,6 +273,8 @@ export interface RadarDot {
   isHostilePatrol?: boolean;
   /** Incursion node type — drives reveal color when locked + selected. */
   nodeType?: RunNodeType;
+  /** Veil Front scanner overlays (anchor / echo / operation / risk). */
+  veilSignals?: readonly import('./scannerSignals').RadarVeilSignal[];
 }
 
 export interface RadarScanResult {

@@ -25,6 +25,8 @@ export interface CombatOperativeTelemetry {
   operativeClass: ClassType;
   operativeHp: number;
   maxSoulAnchor: number;
+  maxAnchorDebt?: number;
+  trueMaxSoulAnchor?: number;
   stamina: number;
   maxStamina: number;
   abyssalReserve?: number;
@@ -76,6 +78,8 @@ export default function CombatOperativeHud({
     operativeClass,
     operativeHp,
     maxSoulAnchor,
+    maxAnchorDebt = 0,
+    trueMaxSoulAnchor,
     abyssalReserve = 0,
     abyssalCap = 100,
     stamina,
@@ -96,7 +100,8 @@ export default function CombatOperativeHud({
     veilRotStacksTotal = 0,
   } = telemetry;
 
-  const soulAnchorRatio = maxSoulAnchor > 0 ? operativeHp / maxSoulAnchor : 0;
+  const effectiveMax = maxSoulAnchor;
+  const soulAnchorRatio = effectiveMax > 0 ? operativeHp / effectiveMax : 0;
   const abyssalRatio = formatAegisReserveRatio(abyssalReserve, abyssalCap);
   const staminaRatio = maxStamina > 0 ? stamina / maxStamina : 0;
   const fluxRatio = fluxMaxCap > 0 ? Math.min(1, veilFlux / fluxMaxCap) : 0;
@@ -188,7 +193,10 @@ export default function CombatOperativeHud({
       desktopArena ? styles.rootArenaOverlayDesktop : null,
     ]} pointerEvents="none">
       <CombatTelemetryGaugeRow
-        label={formatSoulAnchorLabel(operativeHp, maxSoulAnchor)}
+        label={formatSoulAnchorLabel(operativeHp, effectiveMax, {
+          debt: maxAnchorDebt,
+          trueMax: trueMaxSoulAnchor ?? effectiveMax,
+        })}
         labelColor={labelColor}
         fillColor={GAUGE_SOUL_ANCHOR}
         ratio={soulAnchorRatio}

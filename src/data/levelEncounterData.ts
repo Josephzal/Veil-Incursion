@@ -12,6 +12,8 @@ import {
 import type { EncounterUnitSpec } from './synergyEncounterTypes';
 import { rosterToSpawnSlots } from './rosterSpawnSlots';
 import type { MacroBiomeFamily } from '../types/narrativeProcedural';
+import type { EncounterOrigin, EncounterSpawnOverride, VeilBiome } from '../types/encounterSpawn';
+import type { NodeContextModifiers } from '../types/worldState';
 
 export type EncounterLayout = {
   frontLeft: EncounterEnemyKey | null;
@@ -28,8 +30,9 @@ export interface LevelEncounterEntry {
   roster?: readonly EncounterUnitSpec[];
   poolTier?: EncounterPoolTier;
   encounterId?: string;
-  encounterOrigin?: import('./originDeckEngine').EncounterOrigin;
-  cabalFaction?: import('../types/game').FactionType;
+  encounterOrigin?: EncounterOrigin;
+  spawnOverride?: EncounterSpawnOverride;
+  echoTemplateId?: string;
 }
 
 const SLOT_MAP: Record<keyof EncounterLayout, CombatGridSlotId> = {
@@ -67,14 +70,21 @@ function defaultSegmentForDepth(depth: number): RunSegmentState {
   return createRunSegment(district, `fallback:${depth}`);
 }
 
+export interface ResolveLevelEncounterOptions {
+  macroBiome?: MacroBiomeFamily | null;
+  veilBiome?: VeilBiome | null;
+  isElite?: boolean;
+  contextModifiers?: NodeContextModifiers | null;
+}
+
 export function resolveLevelEncounter(
   depth: number,
   segment?: RunSegmentState,
   seed?: string,
-  macroBiome?: MacroBiomeFamily | null,
+  options: ResolveLevelEncounterOptions = {},
 ): LevelEncounterEntry {
   const seg = segment ?? defaultSegmentForDepth(depth);
-  const generated = generateNodeEncounter(depth, seg, seed ?? `level:${depth}`, { macroBiome });
+  const generated = generateNodeEncounter(depth, seg, seed ?? `level:${depth}`, options);
   return {
     level: depth,
     layout: generated.layout,
@@ -83,7 +93,8 @@ export function resolveLevelEncounter(
     poolTier: generated.poolTier,
     encounterId: generated.encounterId,
     encounterOrigin: generated.encounterOrigin,
-    cabalFaction: generated.cabalFaction,
+    spawnOverride: generated.spawnOverride,
+    echoTemplateId: generated.echoTemplateId,
   };
 }
 
@@ -134,11 +145,11 @@ export function resolveSpawnSlotsForDepth(
   depth: number,
   segment?: RunSegmentState,
   seed?: string,
-  macroBiome?: MacroBiomeFamily | null,
+  options: ResolveLevelEncounterOptions = {},
 ): SpawnSlotAssignment[] {
   if (isDistrictGateDepth(depth)) return [];
 
-  const entry = resolveLevelEncounter(depth, segment, seed, macroBiome);
+  const entry = resolveLevelEncounter(depth, segment, seed, options);
   const hasAnyEnemy = entry.roster?.length
     ? true
     : Object.values(entry.layout).some((v) => v != null);
@@ -155,9 +166,9 @@ export function resolveEncounterMetaForDepth(
   depth: number,
   segment?: RunSegmentState,
   seed?: string,
-  macroBiome?: MacroBiomeFamily | null,
-): Pick<LevelEncounterEntry, 'encounterOrigin' | 'cabalFaction' | 'encounterId'> {
-  return resolveLevelEncounter(depth, segment, seed, macroBiome);
+  options: ResolveLevelEncounterOptions = {},
+): Pick<LevelEncounterEntry, 'encounterOrigin' | 'encounterId' | 'spawnOverride' | 'echoTemplateId'> {
+  return resolveLevelEncounter(depth, segment, seed, options);
 }
 
 export function isAlphaDuelDepth(depth: number, segment: RunSegmentState): boolean {

@@ -1,0 +1,36 @@
+import type { EncounterEnemyKey } from './enemyCombatConfig';
+import type { VeilBiome } from '../types/encounterSpawn';
+import { ALL_VEIL_BIOMES } from './sectorBiomeBridge';
+
+/** Authoritative veil enemy roster hints per biome × depth (spawn gates filter at build time). */
+export const BIOME_DEPTH_ENEMY_HINTS: Record<VeilBiome, Record<1 | 2 | 3, readonly EncounterEnemyKey[]>> = {
+  ABYSSAL_SINK: {
+    1: ['MIASMA_SWARM', 'SCUTTLER', 'FRACTURE_HOUND', 'THRALL', 'ASH_WEEPER', 'SPALL'],
+    2: ['HOOK_WEAVER', 'LEY_SIREN', 'MIASMA_SWARM', 'FRACTURE_HOUND', 'THRALL', 'SCUTTLER', 'SPALL'],
+    3: ['AMALGAM', 'HOLLOW_LUNG', 'GRAVE_ROBBER', 'NULL_SHADE', 'LEY_SIREN', 'HOOK_WEAVER', 'THRALL', 'MIASMA_SWARM'],
+  },
+  NULL_ZONE: {
+    1: ['SCUTTLER', 'ECHOING_BRUTE', 'THRALL', 'ASH_WEEPER'],
+    2: ['CONCRETE_GARGOYLE', 'SMOG_CALLER', 'GUTTER_GOLIATH', 'SPATIAL_GLITCH', 'WIRE_GHOUL', 'SCUTTLER'],
+    3: ['CONCRETE_GARGOYLE', 'AMALGAM', 'MEMORY_LEECH', 'NULL_SHADE', 'SPATIAL_GLITCH', 'HOLLOW_LUNG', 'GRAVE_ROBBER', 'ECHOING_BRUTE'],
+  },
+  ASHEN_WASTE: {
+    1: ['SPALL', 'ASH_WEEPER', 'FRACTURE_HOUND', 'MIASMA_SWARM', 'THRALL', 'SLAG_BLOOD'],
+    2: ['SAPPER', 'SPLINTER', 'TAR_SPITTER', 'GUTTER_GOLIATH', 'SLAG_BLOOD', 'SPALL', 'FRACTURE_HOUND'],
+    3: ['COIL_SPIKE_SNIPER', 'SAPPER', 'SPLINTER', 'RESONANCE_CASTER', 'HOLLOW_LUNG', 'GRAVE_ROBBER', 'NULL_SHADE', 'SLAG_BLOOD'],
+  },
+  SLAG_WORKS: {
+    1: ['ECHOING_BRUTE', 'MIASMA_SWARM', 'TAR_SPITTER', 'SCUTTLER', 'SPALL'],
+    2: ['GOLEM', 'HOOK_WEAVER', 'SAPPER', 'SPLINTER', 'GUTTER_GOLIATH', 'WIRE_GHOUL'],
+    3: ['AMALGAM', 'GOLEM', 'CHURN', 'IRON_MAIDEN', 'HOOK_WEAVER', 'SAPPER', 'SPLINTER', 'GRAVE_ROBBER'],
+  },
+  BLACKLINE_TERMINUS: {
+    1: ['SPLINTER', 'SCUTTLER'],
+    2: ['SAPPER', 'LEY_SIREN', 'WIRE_GHOUL', 'SPATIAL_GLITCH', 'SPLINTER'],
+    3: ['AMALGAM', 'GRAVE_ROBBER', 'HOLLOW_LUNG', 'NULL_SHADE', 'MEMORY_LEECH', 'LEY_SIREN', 'COIL_SPIKE_SNIPER', 'RESONANCE_CASTER', 'SPATIAL_GLITCH'],
+  },
+};
+
+export const ALL_BIOME_DEPTH_KEYS = ALL_VEIL_BIOMES.flatMap((biome) =>
+  ([1, 2, 3] as const).map((depth) => ({ biome, depth })),
+);

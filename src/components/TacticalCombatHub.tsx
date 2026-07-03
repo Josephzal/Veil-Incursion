@@ -172,9 +172,8 @@ import {
 } from '../data/combatTargeting';
 import {
   BREACHER_STAMINA_DRAIN,
-  LEGION_COLD_VACUUM_STAMINA,
   SPOTTER_ARTILLERY_TRUE_DAMAGE,
-} from '../data/factionTraitEngine';
+} from '../data/rivalMercCombatConstants';
 import {
   pickThreatBudgetActions,
   recoverFracturedUnits,
@@ -197,6 +196,26 @@ import {
 } from '../data/combatFractureEngine';
 import type { BlueprintId } from '../types/equipmentBlueprint';
 import { CombatLifecycleManager, applyHookWeaverTetherAction, applyLeySirenTetherAction } from '../data/combatLifecycleEngine';
+import {
+  applyAshenBreathDebt,
+  applyBindingWardToAlly,
+  applyBloodRushToReavers,
+  applyRivalHexMark,
+  applyRivalHexedOccultMultiplier,
+  clampPlayerHpToEffectiveMax,
+  clearPlayerMaxHpDebt,
+  consumeRivalHexedDebuff,
+  getEffectivePlayerMaxHp,
+  hollowLungsActive,
+  initPlayerMaxHpDebtTracking,
+  primeReaverGuardBreak,
+  recordPlayerDefendStreak,
+  resolveReaverAttackDamage,
+  rivalHexedStaminaTax,
+  tryAbsorbRivalBindingWard,
+  tryRivalEmergencySwap,
+  rivalWardBreakPatch,
+} from '../data/encounterMechanicsEngine';
 import { isRosterSpecificIntent, isNullShadeVoidAmbush, nullShadeVoidAmbushCleanupPatch, patchRosterAfterIntentExec, resolveRosterEnemyDamage, ROSTER_AI_WEIGHTS, syncRosterCombatState, VOID_AMBUSH_CRIT_CHANCE, VOID_AMBUSH_INTERRUPT_THRESHOLD } from '../data/combatRosterActions';
 import { getAlphaMechanic } from '../data/enemyAlphaConfig';
 import {
@@ -477,7 +496,7 @@ interface TacticalCombatHubProps {
   hexShotBoons?: HexShotBoonId[];
   envoyBoons?: EnvoyBoonId[];
   combatDistrict?: 1 | 2 | 3;
-  /** Shadow War / other first-turn-only AP bonuses (not Adrenaline Primer). */
+  /** Veil Front / employer first-turn-only AP bonuses (not Adrenaline Primer). */
   firstTurnBonusAp?: number;
   /** Adrenaline Primer — +1 AP for the operative's first 3 turns this encounter. */
   adrenalinePrimerActive?: boolean;
@@ -485,7 +504,7 @@ interface TacticalCombatHubProps {
   incursionApBonus?: number;
   /** Fired when VOID'S TOLL triggers on an ultimate kill. */
   onVoidsTollTriggered?: () => void;
-  /** Shadow War Slag Works — flat kinetic armor layers on operative. */
+  /** Employer sponsor package — flat kinetic armor layers on operative. */
   playerKineticArmorBonus?: number;
   /** Bound requisition / forge passive — defend to overcharge next strike. */
   kineticBatteryActive?: boolean;
@@ -619,6 +638,8 @@ export default function TacticalCombatHub({
     : maxSoulAnchor;
   const combatMaxSoulAnchorRef = useRef(combatMaxSoulAnchor);
   combatMaxSoulAnchorRef.current = combatMaxSoulAnchor;
+  const getEffectiveMaxSoulAnchor = () =>
+    getEffectivePlayerMaxHp(sessionExtrasRef.current, combatMaxSoulAnchorRef.current);
   const fluxMaxCap = envoyBoonMods.fluxMaxCap;
   const env = environmentalModifiers ?? {
     isEnemyPhaseShrouded: false,
@@ -732,6 +753,7 @@ export default function TacticalCombatHub({
   const envoyCombatStateRef = useRef(envoyCombatState);
   const voidSiphonedEnteredRef = useRef(false);
   const sessionExtrasRef = useRef<CombatSessionExtras>(createDefaultCombatSessionExtras());
+  const [playerMaxAnchorDebt, setPlayerMaxAnchorDebt] = useState(0);
   const combatChanceRef = useRef<CombatChanceEncounterState>(createDefaultCombatChanceState());
   const [combatFeedback, setCombatFeedback] = useState<{
     nonce: number;
@@ -854,7 +876,7 @@ export default function TacticalCombatHub({
 
   const buildPlayerAIState = (): PlayerAIState => ({
     hp: operativeHpRef.current,
-    maxHp: maxSoulAnchor,
+    maxHp: getEffectiveMaxSoulAnchor(),
     stamina: staminaRef.current,
     maxStamina,
     abyssalReserve: abyssalRef.current,
@@ -890,7 +912,12 @@ export default function TacticalCombatHub({
   const applyLifecyclePlayerDelta = (delta?: number) => {
     if (delta == null || delta === 0) return;
     setOperativeHp((prev) => {
-      const next = Math.max(0, Math.min(maxSoulAnchor, prev + delta));
+      const effectiveMax = getEffectiveMaxSoulAnchor();
+      const next = clampPlayerHpToEffectiveMax(
+        Math.max(0, prev + delta),
+        sessionExtrasRef.current,
+        combatMaxSoulAnchorRef.current,
+      );
       operativeHpRef.current = next;
       return next;
     });
@@ -1900,6 +1927,8 @@ export default function TacticalCombatHub({
 
   const resolve = (victory: boolean) => {
     if (resolutionRef.current != null) return;
+    clearPlayerMaxHpDebt(sessionExtrasRef.current);
+    setPlayerMaxAnchorDebt(0);
     if (victoryFallbackTimerRef.current) {
       clearTimeout(victoryFallbackTimerRef.current);
       victoryFallbackTimerRef.current = null;
@@ -1944,7 +1973,7 @@ export default function TacticalCombatHub({
   });
   applyHealRef.current = (amount: number) => {
     setOperativeHp((p) => {
-      const n = Math.min(p + amount, combatMaxSoulAnchorRef.current);
+      const n = Math.min(p + amount, getEffectiveMaxSoulAnchor());
       operativeHpRef.current = n;
       return n;
     });
@@ -2473,6 +2502,15 @@ export default function TacticalCombatHub({
       publishSquadUi(squadRef.current);
       return false;
     }
+    if ((e.rivalWardCharges ?? 0) > 0 && raw > 0) {
+      const ward = tryAbsorbRivalBindingWard(e, raw, source);
+      if (ward.absorbed) {
+        if (ward.logLine) log(`${tag} ${ward.logLine}`);
+        patchUnit(e.unitId, rivalWardBreakPatch(e, ward.lightBreak));
+        publishSquadUi(squadRef.current);
+        return false;
+      }
+    }
     let working = e;
     let critical = false;
     let ignoreDefenses = options?.ignoreDefenses ?? false;
@@ -2621,6 +2659,9 @@ export default function TacticalCombatHub({
       }
     }
     let dmg = raw;
+    if (source && dmg > 0) {
+      dmg = applyRivalHexedOccultMultiplier(sessionExtrasRef.current, options?.channel, dmg);
+    }
     let pendingEnvoyKineticSplash: number | undefined;
     if (operativeClass === 'HEX_SHOT' && dmg > 0) {
       dmg = Math.floor(dmg * hexShotBoonModsRef.current.damageMultiplier);
@@ -2940,15 +2981,6 @@ export default function TacticalCombatHub({
         log(`[ABYSSAL ERUPTION] >> +${mutationModsRef.current.abyssalEruptionPerHit} reserve from AoE hit.`);
       }
     }
-    if (
-      source
-      && dmg > 0
-      && working.factionTrait === 'COLD_VACUUM'
-      && (options?.channel === 'KINETIC' || options?.channel === 'TRUE')
-    ) {
-      applyStamina(staminaRef.current - LEGION_COLD_VACUUM_STAMINA);
-      log(`${tag} >> COLD VACUUM — +${LEGION_COLD_VACUUM_STAMINA} stamina tax.`);
-    }
     if (source && dmg > 0 && !options?.indirectDamage && !options?.echoHit) {
       const rosterEntry = working.rosterId
         ? ENEMY_ROSTER[working.rosterId as EnemyRosterId]
@@ -3074,6 +3106,9 @@ export default function TacticalCombatHub({
       }
     }
 
+    if (source && dmg > 0 && working.rosterId === 'rival-reaver') {
+      sessionExtrasRef.current.reaverDamagedThisPlayerTurn = true;
+    }
     if (working.sharedBossPool && bossRuntimeRef.current) {
       bossRuntimeRef.current = { ...bossRuntimeRef.current, currentHp: hp };
       syncSquad(squadRef.current.map((u) =>
@@ -3083,6 +3118,13 @@ export default function TacticalCombatHub({
     } else {
       patchUnit(e.unitId, syncRosterCombatState({ ...working, currentHp: hp }));
       if (hp <= 0 && e.unitId) beginDissolveForUnit(e.unitId, working, hp);
+      else if (e.unitId && source && dmg > 0 && working.isRivalMerc) {
+        const swap = tryRivalEmergencySwap(squadRef.current, e.unitId);
+        if (swap.logLine) {
+          log(swap.logLine);
+          syncSquad(swap.squad);
+        }
+      }
     }
 
     if (
@@ -3533,8 +3575,13 @@ export default function TacticalCombatHub({
   };
   const adjustedStaminaCost = (cost: number) => {
     const reduction = 0;
-    if (reduction <= 0) return cost;
-    return Math.max(1, Math.floor(cost * (1 - reduction / 100)));
+    let adjusted = cost;
+    if (reduction <= 0) {
+      adjusted = cost;
+    } else {
+      adjusted = Math.max(1, Math.floor(cost * (1 - reduction / 100)));
+    }
+    return adjusted + rivalHexedStaminaTax(sessionExtrasRef.current);
   };
 
   const spendActionPoints = (cost: number): boolean => {
@@ -3553,6 +3600,10 @@ export default function TacticalCombatHub({
       return true;
     }
     const n = applyStamina(staminaRef.current - effectiveCost);
+    if (hasStructuredDebuff(sessionExtrasRef.current, 'HEXED') && cost > 0) {
+      consumeRivalHexedDebuff(sessionExtrasRef.current);
+      log('>> HEXED — curse lifted after ability use.');
+    }
     if (n <= 0) {
       skipRegenRef.current = true;
       applyTetanusGlitch();
@@ -3710,7 +3761,19 @@ export default function TacticalCombatHub({
     }
     switch (intent) {
       case 'STRIKE': {
-        const { dmg, unblockable } = attackDmg(e);
+        let { dmg, unblockable } = attackDmg(e);
+        const reaverFx = resolveReaverAttackDamage(e, dmg);
+        dmg = reaverFx.damage;
+        reaverFx.logLines.forEach((line) => log(line));
+        if (e.unitId && Object.keys(reaverFx.patch).length > 0) {
+          patchUnit(e.unitId, reaverFx.patch);
+        }
+        if (reaverFx.guardBreakStamina > 0) {
+          applyStamina(staminaRef.current - reaverFx.guardBreakStamina);
+        }
+        if (e.rosterId === 'rival-hexer') {
+          log(applyRivalHexMark(sessionExtrasRef.current));
+        }
         if (e.rosterId === 'fracture-hound' && !e.isEnraged) applyFractureHoundShieldDrain(e);
         if (e.rosterId === 'breacher') {
           const staminaShred = getAlphaMechanic(e, 'concussiveDamageToStamina', BREACHER_STAMINA_DRAIN);
@@ -3926,6 +3989,16 @@ export default function TacticalCombatHub({
         log(`>> ${e.designation} SENSORY JAM — hostile intents obscured (${jamTurns} turn${jamTurns > 1 ? 's' : ''}).`);
         break;
       }
+      case 'HEX_MARK': {
+        log(applyRivalHexMark(sessionExtrasRef.current));
+        break;
+      }
+      case 'BINDING_WARD': {
+        const ward = applyBindingWardToAlly(squadRef.current, e);
+        if (ward.logLine) log(ward.logLine);
+        if (ward.squad.length > 0) syncSquad(ward.squad);
+        break;
+      }
       case 'VEIL_BARRIER': {
         const isAoeBarrier = getAlphaMechanic<string>(e, 'shieldCastTarget', 'SINGLE') === 'AOE';
         const charges = 2;
@@ -4121,12 +4194,39 @@ export default function TacticalCombatHub({
     }
     const nextTarget = nextDefaultTarget(squadRef.current);
     if (nextTarget) selectTarget(nextTarget);
+    if (hollowLungsActive(squadRef.current)) {
+      const breath = applyAshenBreathDebt(
+        sessionExtrasRef.current,
+        combatMaxSoulAnchorRef.current,
+      );
+      log(breath.logLine);
+      setPlayerMaxAnchorDebt(sessionExtrasRef.current.playerMaxHpDebt);
+      setOperativeHp((prev) => {
+        const next = clampPlayerHpToEffectiveMax(
+          prev,
+          sessionExtrasRef.current,
+          combatMaxSoulAnchorRef.current,
+        );
+        operativeHpRef.current = next;
+        return next;
+      });
+    }
     startPlayerTurn(primaryAliveUnit(squadRef.current)!);
   };
 
   const startPlayerTurn = (_e: EnemyCombatProfile) => {
     if (isCombatTerminal()) return;
     lifecycleFloatLabelsRef.current = {};
+    sessionExtrasRef.current.reaverDamagedThisPlayerTurn = false;
+    setOperativeHp((prev) => {
+      const next = clampPlayerHpToEffectiveMax(
+        prev,
+        sessionExtrasRef.current,
+        combatMaxSoulAnchorRef.current,
+      );
+      operativeHpRef.current = next;
+      return next;
+    });
     tickCombatSessionExtras(sessionExtrasRef.current);
     combatChanceRef.current.shadowStepEvadeActive = false;
     if (staminaRef.current > 0 || (operativeClass === 'AEGIS' && abyssalRef.current > 0)) {
@@ -4659,6 +4759,20 @@ export default function TacticalCombatHub({
 
   const passToEnemy = (countering = false) => {
     if (isCombatTerminal()) return;
+    recordPlayerDefendStreak(
+      sessionExtrasRef.current,
+      sessionExtrasRef.current.playerDefendedThisTurn,
+    );
+    const guardBreak = primeReaverGuardBreak(squadRef.current, sessionExtrasRef.current);
+    guardBreak.logLines.forEach((line) => log(line));
+    if (guardBreak.squad.length > 0) syncSquad(guardBreak.squad);
+    const bloodRush = applyBloodRushToReavers(squadRef.current, sessionExtrasRef.current);
+    bloodRush.logLines.forEach((line) => log(line));
+    if (bloodRush.squad.length > 0) syncSquad(bloodRush.squad);
+    if (hasStructuredDebuff(sessionExtrasRef.current, 'HEXED')) {
+      consumeRivalHexedDebuff(sessionExtrasRef.current);
+      log('>> HEXED — curse fades at turn end.');
+    }
     resolvePlayerTurnEndDebuffsRef.current();
     tickCombatSessionExtras(sessionExtrasRef.current);
     setSelectedAbility(null);
@@ -4777,6 +4891,8 @@ export default function TacticalCombatHub({
     classBoonEncounterRef.current = createDefaultClassBoonEncounterState();
     lastPlayerAbilityRef.current = null;
     sessionExtrasRef.current = createDefaultCombatSessionExtras();
+    initPlayerMaxHpDebtTracking(sessionExtrasRef.current, combatMaxSoulAnchorRef.current);
+    setPlayerMaxAnchorDebt(0);
     kineticBatteryChargedRef.current = false;
     combatChanceRef.current = createDefaultCombatChanceState();
     setMagazineAmmo(maxAmmo);
@@ -4863,7 +4979,7 @@ export default function TacticalCombatHub({
       log(`>> ADRENALINE PRIMER — +${entryPrimerAp} AP this turn.`);
     }
     if (firstTurnBonusAp > 0) {
-      log(`>> SHADOW WAR BONUS — FIRST-TURN +${firstTurnBonusAp} AP.`);
+      log(`>> VEIL FRONT BONUS — FIRST-TURN +${firstTurnBonusAp} AP.`);
     }
     if (ghostedAp > 0) {
       log('>> GHOSTED BOON — +1 AP on operative first turn.');
@@ -6960,7 +7076,9 @@ export default function TacticalCombatHub({
     onOperativeTelemetryChange({
       operativeClass,
       operativeHp,
-      maxSoulAnchor: combatMaxSoulAnchor,
+      maxSoulAnchor: getEffectiveMaxSoulAnchor(),
+      maxAnchorDebt: playerMaxAnchorDebt,
+      trueMaxSoulAnchor: combatMaxSoulAnchor,
       abyssalReserve,
       abyssalCap: mutationModsRef.current.abyssalCap,
       stamina,
@@ -6989,6 +7107,7 @@ export default function TacticalCombatHub({
     operativeClass,
     operativeHp,
     combatMaxSoulAnchor,
+    playerMaxAnchorDebt,
     abyssalReserve,
     stamina,
     maxStamina,

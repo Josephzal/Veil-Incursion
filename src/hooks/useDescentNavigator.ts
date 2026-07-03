@@ -2,7 +2,9 @@ import { useCallback, useRef } from 'react';
 import { useGameFlow } from '../context/GameFlowContext';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useRun } from '../context/RunContext';
+import { useWorldState } from '../context/WorldStateContext';
 import { resolveExtractionVeilResidueDeposit } from '../data/extractionPersistenceEngine';
+import { computeRunOperationContribution, buildOperationDebriefPayload } from '../data/runDebriefEngine';
 import { transitionActions } from '../stores/transitionStore';
 import { RunNodeType } from '../types/game';
 
@@ -65,8 +67,14 @@ export function useDescentNavigator() {
     startResourceHarvest,
     startPostCombatBoon,
     goToHub,
+    startOperationDebrief,
   } = useGameFlow();
   const { addCredits, addRiftIron, persistRunExtraction } = usePlayerAccount();
+  const {
+    applyOperationContribution,
+    tickAfterRunComplete,
+    setPendingDebrief,
+  } = useWorldState();
 
   const incursionRef = useRef(activeIncursion);
   incursionRef.current = activeIncursion;
@@ -105,31 +113,72 @@ export function useDescentNavigator() {
 
   const finalizeSectorExtraction = useCallback(() => {
     transitionActions.startExtracting(() => {
-      const inc = incursionRef.current;
-      const { totalDeposit: residueVaulted } = resolveExtractionVeilResidueDeposit(
-        inc.cargo,
-        inc.sessionVeilResidueCollected,
-      );
-      persistRunExtraction({
-        cargo: inc.cargo,
-        aegisLoadout: inc.aegisLoadout,
-        hexShotLoadout: inc.hexShotLoadout,
-        envoyLoadout: inc.envoyLoadout,
-        sessionVeilResidueCollected: inc.sessionVeilResidueCollected,
-      });
-      const credits = calculateSectorExtractionPayout();
-      const riftIron = Math.max(5, Math.floor(credits / 40));
-      addCredits(credits);
-      addRiftIron(riftIron);
-      const residueLine = residueVaulted > 0
-        ? ` +${residueVaulted} VEIL RESIDUE VAULTED`
-        : '';
-      appendRunLog(`>> SECTOR EXTRACTION COMPLETE — +${credits} CREDITS, LOOT ROUTED TO HOME STASH, +${riftIron} RIFT IRON${residueLine}.`);
-      endRun('SECTOR EXTRACTION SECURED');
-      goToHub();
+      void (async () => {
+        const inc = incursionRef.current;
+        const { totalDeposit: residueVaulted } = resolveExtractionVeilResidueDeposit(
+          inc.cargo,
+          inc.sessionVeilResidueCollected,
+        );
+        persistRunExtraction({
+          cargo: inc.cargo,
+          aegisLoadout: inc.aegisLoadout,
+          hexShotLoadout: inc.hexShotLoadout,
+          envoyLoadout: inc.envoyLoadout,
+          sessionVeilResidueCollected: inc.sessionVeilResidueCollected,
+        });
+        const credits = calculateSectorExtractionPayout();
+        const riftIron = Math.max(5, Math.floor(credits / 40));
+        addCredits(credits);
+        addRiftIron(riftIron);
+        const residueLine = residueVaulted > 0
+          ? ` +${residueVaulted} VEIL RESIDUE VAULTED`
+          : '';
+        appendRunLog(`>> SECTOR EXTRACTION COMPLETE — +${credits} CREDITS, LOOT ROUTED TO HOME STASH, +${riftIron} RIFT IRON${residueLine}.`);
+
+        const contribution = computeRunOperationContribution(inc);
+        let contributionResult: Awaited<ReturnType<typeof applyOperationContribution>> | null = null;
+        if (contribution.operationId && contribution.total > 0) {
+          contributionResult = await applyOperationContribution(contribution.operationId, contribution.total);
+          contributionResult.logLines.forEach((line) => appendRunLog(line));
+        }
+
+        tickAfterRunComplete();
+        endRun('SECTOR EXTRACTION SECURED');
+
+        const debrief = buildOperationDebriefPayload(inc, {
+          progressBefore: contributionResult?.progressBefore ?? inc.runGenerationContext?.activeOperation.progressCurrent ?? 0,
+          progressAfter: contributionResult?.progressAfter ?? inc.runGenerationContext?.activeOperation.progressCurrent ?? 0,
+          progressRequired: contributionResult?.progressRequired ?? inc.runGenerationContext?.activeOperation.progressRequired ?? 100,
+          completed: contributionResult?.completed ?? false,
+          completionLogLines: contributionResult?.logLines ?? [],
+          credits,
+          riftIron,
+          residueVaulted,
+          nextOperationTitle: contributionResult?.nextOperationTitle,
+        });
+
+        if (debrief) {
+          setPendingDebrief(debrief);
+          startOperationDebrief();
+        } else {
+          goToHub();
+        }
+      })();
     });
     return { route: 'EXTRACT_SUCCESS' as const };
-  }, [addCredits, addRiftIron, appendRunLog, calculateSectorExtractionPayout, endRun, goToHub, persistRunExtraction]);
+  }, [
+    addCredits,
+    addRiftIron,
+    appendRunLog,
+    applyOperationContribution,
+    calculateSectorExtractionPayout,
+    endRun,
+    goToHub,
+    persistRunExtraction,
+    setPendingDebrief,
+    startOperationDebrief,
+    tickAfterRunComplete,
+  ]);
 
   const finalizeIncursionAdvance = useCallback(
     (message: string) => {

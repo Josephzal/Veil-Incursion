@@ -1,11 +1,23 @@
 import type { FactionType } from '../types/game';
+import type { RunGenerationContext } from '../types/worldState';
 import {
   PROCEDURAL_RUN_MAX_DEPTH,
   type ProceduralNodeType,
   type ProceduralRunNode,
   type ProceduralRunTree,
 } from '../types/proceduralRunTree';
+import {
+  applyGatekeeperAnchorCore,
+  createNodeModifierRollState,
+  resolveTypeWeightsForDepth,
+  rollNodeContextModifiers,
+} from './nodeGenerationContextEngine';
 import { rollProceduralResourcePool } from './proceduralResourceEngine';
+
+export interface RunTreeGenerationParams {
+  runGenerationContext?: RunGenerationContext | null;
+  depthIndex?: 1 | 2 | 3;
+}
 
 const FACTION_POOL: FactionType[] = ['SOLARIS', 'LEGION', 'TERRAN_GRID'];
 
@@ -30,6 +42,14 @@ const TYPE_WEIGHTS: { type: ProceduralNodeType; weight: number }[] = [
   { type: 'SANCTUARY', weight: 5 },
   { type: 'RESOURCE', weight: 4 },
 ];
+
+function resolveLayerTypeWeights(
+  depth: number,
+  params?: RunTreeGenerationParams,
+): { type: ProceduralNodeType; weight: number }[] {
+  const depthIndex = params?.depthIndex ?? 1;
+  return resolveTypeWeightsForDepth(depth, depthIndex, params?.runGenerationContext);
+}
 
 function mulberry32(seed: number): () => number {
   let t = seed >>> 0;
@@ -122,13 +142,16 @@ function isUtilityType(type: ProceduralNodeType): boolean {
 function candidateTypesForNode(
   depth: number,
   parentTypes: ProceduralNodeType[],
+  params?: RunTreeGenerationParams,
 ): { type: ProceduralNodeType; weight: number }[] {
   const forbidden = new Set<ProceduralNodeType>();
   parentTypes.forEach((parentType) => {
     if (parentType !== 'COMBAT') forbidden.add(parentType);
   });
 
-  return TYPE_WEIGHTS.filter((entry) => {
+  const layerWeights = resolveLayerTypeWeights(depth, params);
+
+  return layerWeights.filter((entry) => {
     if (forbidden.has(entry.type)) return false;
     if (depth <= EARLY_DEPTH_MAX && (entry.type === 'MARKET' || entry.type === 'SANCTUARY' || entry.type === 'EXTRACTION')) {
       return false;
@@ -141,13 +164,14 @@ function assignNodeType(
   node: ProceduralRunNode,
   parentTypes: ProceduralNodeType[],
   rng: () => number,
+  params?: RunTreeGenerationParams,
   forceType?: ProceduralNodeType,
 ): void {
   if (forceType) {
     node.type = forceType;
     return;
   }
-  const candidates = candidateTypesForNode(node.depth, parentTypes);
+  const candidates = candidateTypesForNode(node.depth, parentTypes, params);
   node.type = pickWeightedType(candidates.length > 0 ? candidates : [{ type: 'COMBAT', weight: 1 }], rng);
 }
 
@@ -274,7 +298,8 @@ function attachResourcePools(
       delete node.resourcePool;
       return;
     }
-    node.resourcePool = rollProceduralResourcePool(node.depth, `${seed}:resource:${node.id}`);
+    const tierSuffix = node.contextModifiers?.highValueResource ? ':high' : '';
+    node.resourcePool = rollProceduralResourcePool(node.depth, `${seed}:resource:${node.id}${tierSuffix}`);
   });
 }
 
@@ -293,11 +318,54 @@ function createNode(
   };
 }
 
-/** Generate a full 15-depth branching run tree at run start. */
-export function generateRunTree(seed = Date.now()): ProceduralRunTree {
-  const rng = mulberry32(seed);
+function stampNodeContextModifiers(
+  nodes: Record<string, ProceduralRunNode>,
+  bossNodeId: string,
+  params: RunTreeGenerationParams | undefined,
+  rng: () => number,
+): void {
+  const depthIndex = params?.depthIndex ?? 1;
+  const runContext = params?.runGenerationContext ?? null;
+  const rollState = createNodeModifierRollState();
+
+  Object.values(nodes).forEach((node) => {
+    if (node.type === 'GATEKEEPER') return;
+    node.contextModifiers = rollNodeContextModifiers(
+      node.depth,
+      node.type,
+      depthIndex,
+      runContext,
+      rng,
+      rollState,
+    );
+  });
+
+  const boss = nodes[bossNodeId];
+  if (boss) {
+    let bossModifiers = rollNodeContextModifiers(
+      boss.depth,
+      boss.type,
+      depthIndex,
+      runContext,
+      rng,
+      rollState,
+    );
+    bossModifiers = applyGatekeeperAnchorCore(bossModifiers, depthIndex, runContext, rng);
+    boss.contextModifiers = bossModifiers;
+  }
+}
+
+/** Generate a full 15-depth branching run tree for one macro depth chapter. */
+export function generateRunTree(
+  seed: string | number = Date.now(),
+  params?: RunTreeGenerationParams,
+): ProceduralRunTree {
+  const numericSeed = typeof seed === 'string'
+    ? seed.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0)
+    : seed;
+  const rng = mulberry32(numericSeed);
   const nodes: Record<string, ProceduralRunNode> = {};
-  const depthIndex: Record<number, string[]> = {};
+  const depthLayerIndex: Record<number, string[]> = {};
   let idCounter = 0;
   const nextId = (depth: number) => {
     idCounter += 1;
@@ -306,8 +374,8 @@ export function generateRunTree(seed = Date.now()): ProceduralRunTree {
 
   const register = (node: ProceduralRunNode) => {
     nodes[node.id] = node;
-    if (!depthIndex[node.depth]) depthIndex[node.depth] = [];
-    depthIndex[node.depth].push(node.id);
+    if (!depthLayerIndex[node.depth]) depthLayerIndex[node.depth] = [];
+    depthLayerIndex[node.depth].push(node.id);
   };
 
   let sanctuarySpawned = false;
@@ -332,7 +400,7 @@ export function generateRunTree(seed = Date.now()): ProceduralRunTree {
     layer.forEach((node, index) => {
       const parentTypes = getParentTypes(node, nodes);
       const forceSanctuary = depth === 7 && !sanctuarySpawned && index === count - 1;
-      assignNodeType(node, parentTypes, rng, forceSanctuary ? 'SANCTUARY' : undefined);
+      assignNodeType(node, parentTypes, rng, params, forceSanctuary ? 'SANCTUARY' : undefined);
       if (node.type === 'SANCTUARY') sanctuarySpawned = true;
     });
     previousLayer = layer;
@@ -350,9 +418,9 @@ export function generateRunTree(seed = Date.now()): ProceduralRunTree {
   depth14.forEach((node, index) => {
     const parentTypes = getParentTypes(node, nodes);
     if (index === 0) {
-      assignNodeType(node, parentTypes, rng, 'SANCTUARY');
+      assignNodeType(node, parentTypes, rng, params, 'SANCTUARY');
     } else {
-      assignNodeType(node, parentTypes, rng);
+      assignNodeType(node, parentTypes, rng, params);
     }
     if (node.type === 'SANCTUARY') depth14Sanctuary = true;
   });
@@ -368,14 +436,18 @@ export function generateRunTree(seed = Date.now()): ProceduralRunTree {
     }
   });
 
-  repairPathConstraints(nodes, depthIndex, boss.id, rng);
-  attachResourcePools(nodes, seed);
+  repairPathConstraints(nodes, depthLayerIndex, boss.id, rng);
+  stampNodeContextModifiers(nodes, boss.id, params, rng);
+  attachResourcePools(nodes, numericSeed);
+
+  const macroDepthIndex = params?.depthIndex ?? 1;
 
   return {
     nodes,
-    depthIndex,
+    depthIndex: depthLayerIndex,
     bossNodeId: boss.id,
     maxDepth: PROCEDURAL_RUN_MAX_DEPTH,
+    macroDepthIndex,
   };
 }
 

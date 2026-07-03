@@ -13,7 +13,7 @@ import {
   INVENTORY_CELL,
   MAX_VIEWPORT_WIDTH,
 } from '../constants/layoutTokens';
-import { DESKTOP_DEPLOYMENT_DOSSIER_RATIO, DESKTOP_SAFEHOUSE_LEFT_RATIO, DESKTOP_SHADOW_WAR_MAP_RATIO } from '../constants/responsiveScale';
+import { DESKTOP_DEPLOYMENT_DOSSIER_RATIO, DESKTOP_SAFEHOUSE_LEFT_RATIO, DESKTOP_VEIL_FRONT_MAP_RATIO } from '../constants/responsiveScale';
 import {
   getGridMetrics,
   resolveHubContentWidth,
@@ -54,9 +54,13 @@ export interface ResponsiveLayoutMetrics extends ResponsiveScaleMetrics {
   deploymentDossierLaneWidth: number;
   /** Staging manifest column in deployment deck split. */
   deploymentStagingLaneWidth: number;
-  /** Map column in Shadow War dashboard. */
+  /** Map column in Veil Front briefing. */
+  veilFrontMapLaneWidth: number;
+  /** Sector dossier column in Veil Front briefing. */
+  veilFrontIntelLaneWidth: number;
+  /** @deprecated Use veilFrontMapLaneWidth */
   shadowWarMapLaneWidth: number;
-  /** Influence intel column in Shadow War dashboard. */
+  /** @deprecated Use veilFrontIntelLaneWidth */
   shadowWarIntelLaneWidth: number;
   /** Single typography scaler — prefer TerminalText over manual use. */
   scaleFont: (baseSize: number) => number;
@@ -127,10 +131,10 @@ export function useResponsiveLayout(): ResponsiveLayoutMetrics {
       paneGap,
       DESKTOP_DEPLOYMENT_DOSSIER_RATIO,
     );
-    const { leftWidth: shadowWarMapLaneWidth, rightWidth: shadowWarIntelLaneWidth } = resolveSplitLanes(
+    const { leftWidth: veilFrontMapLaneWidth, rightWidth: veilFrontIntelLaneWidth } = resolveSplitLanes(
       contentWidth,
       paneGap,
-      DESKTOP_SHADOW_WAR_MAP_RATIO,
+      DESKTOP_VEIL_FRONT_MAP_RATIO,
     );
 
     const iconToken = isDesktop
@@ -164,8 +168,10 @@ export function useResponsiveLayout(): ResponsiveLayoutMetrics {
       forgeRecipeColumnWidth,
       deploymentDossierLaneWidth: isDesktop ? deploymentDossierLaneWidth : contentWidth,
       deploymentStagingLaneWidth: isDesktop ? deploymentStagingLaneWidth : contentWidth,
-      shadowWarMapLaneWidth: isDesktop ? shadowWarMapLaneWidth : contentWidth,
-      shadowWarIntelLaneWidth: isDesktop ? shadowWarIntelLaneWidth : contentWidth,
+      veilFrontMapLaneWidth: isDesktop ? veilFrontMapLaneWidth : contentWidth,
+      veilFrontIntelLaneWidth: isDesktop ? veilFrontIntelLaneWidth : contentWidth,
+      shadowWarMapLaneWidth: isDesktop ? veilFrontMapLaneWidth : contentWidth,
+      shadowWarIntelLaneWidth: isDesktop ? veilFrontIntelLaneWidth : contentWidth,
       scaleFont: (baseSize: number) => scaleSize(baseSize),
       fontScale: scale.scale,
     };

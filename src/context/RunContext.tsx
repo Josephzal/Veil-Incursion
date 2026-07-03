@@ -20,6 +20,24 @@ import {
   ELITE_MODIFIER_LABELS,
   rollEliteModifier,
 } from '../data/eliteModifierEngine';
+import {
+  anchorAssaultEngageLogLines,
+  anchorAssaultClearLogLine,
+  applyAnchorAssaultSpawnScaling,
+  applyAnchorCoreBossProfile,
+  applyAnchorRealityToEnvironment,
+  createDefaultAnchorAssaultProgress,
+  recordAnchorAssaultVictory,
+  resolveAnchorAssaultContext,
+} from '../data/anchorAssaultEngine';
+import {
+  applyEchoResidueToEnvironment,
+  createDefaultEchoRecoveryProgress,
+  echoRecoveryClearLogLine,
+  echoRecoveryEngageLogLines,
+  recordEchoRecoveryVictory,
+  resolveEchoRecoveryContext,
+} from '../data/echoRecoveryEngine';
 import { isCollapseForwardNode } from '../data/pocketDimensionEngine';
 import {
   buildEncounter,
@@ -52,7 +70,7 @@ import {
   NarrativeEventNode,
 } from '../types/game';
 import { buildProceduralScannerCluster, getAvailableProceduralNodeIds, isProceduralRunActive } from '../data/proceduralScannerBridge';
-import { initializeSectorRun } from '../data/macroStoryPipeline';
+import { initializeSectorRun, regenerateProceduralRunTree } from '../data/macroStoryPipeline';
 import { rollProceduralResourcePool } from '../data/proceduralResourceEngine';
 import {
   primeNarrativeEnvironment,
@@ -77,11 +95,14 @@ import type { PendingNarrativeCombatBoons } from '../types/narrativeBonusReward'
 import { createDefaultPendingNarrativeCombatBoons } from '../types/narrativeBonusReward';
 import type { ProceduralNarrativeAssembly } from '../types/narrativeProcedural';
 import {
-  formatDistrictBiomeSelectionLog,
   formatMacroBiomeLogLine,
   getMacroBiomeContextLog,
-  rollDistrictBiomeOptions,
 } from '../data/macroBiomeEngine';
+import {
+  sectorIdToLegacyMacroBiome,
+  sectorIdToVeilBiome,
+  veilBiomeDisplayName,
+} from '../data/sectorBiomeBridge';
 import {
   createGridHound,
   generateOverworldFeatures,
@@ -107,7 +128,7 @@ import {
 import {
   depthFromNodesCleared,
   getDistrictFromDepth,
-  getUpcomingDistrictIntel,
+  buildDistrictIntelForRun,
   isDistrictGateDepth,
   isPrimeBossDepth,
   localLevelFromDepth,
@@ -253,7 +274,8 @@ export interface RunStartConfig {
   initialCargo?: import('../types/cargoGrid').CargoRunState;
   /** Persistent Veil Residue balance loaded into the run canister at descent. */
   startingVeilResidueBalance?: number;
-  shadowWarBuffs?: import('../data/shadowWarBuffEngine').ShadowWarRunBuffModifiers;
+  runGenerationContext?: import('../types/worldState').RunGenerationContext;
+  runModifiers?: import('../types/worldState').RunModifierSnapshot;
 }
 
 export interface BadgeTestCombatConfig {
@@ -452,20 +474,6 @@ function activateGridHoundOnIncursion(inc: ActiveIncursionState): ActiveIncursio
   };
 }
 
-function districtBiomeLockPatch(
-  inc: ActiveIncursionState,
-  node: IncursionNode,
-): Partial<ActiveIncursionState> {
-  if (!inc.awaitingDistrictBiomeChoice || !node.offeredMacroBiome) return {};
-  const locked = node.offeredMacroBiome;
-  return {
-    currentMacroBiomeFamily: locked,
-    awaitingDistrictBiomeChoice: false,
-    pendingDistrictBiomeOffers: null,
-    depth1MacroBiomeChoice: inc.currentDistrict === 1 ? locked : inc.depth1MacroBiomeChoice,
-  };
-}
-
 function buildSectorCluster(inc: ActiveIncursionState): IncursionNode[] {
   if (isProceduralRunActive(inc)) {
     return buildProceduralScannerCluster(inc);
@@ -484,8 +492,6 @@ function buildSectorCluster(inc: ActiveIncursionState): IncursionNode[] {
     extractionDecoyPending: inc.resonanceEscalations.extractionDecoyPending,
     relayExtractionNodeId: inc.resonanceEscalations.relayExtractionNodeId,
     macroBiomeFamily: inc.currentMacroBiomeFamily,
-    pendingDistrictBiomeOffers: inc.pendingDistrictBiomeOffers,
-    awaitingDistrictBiomeChoice: inc.awaitingDistrictBiomeChoice,
     lastLevelOfferedCombat: inc.lastLevelOfferedCombat,
     sanctuarySchedule: inc.sanctuarySchedule,
     runSegment: inc.runSegment,
@@ -613,7 +619,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const cluster = pickRandomClimateCluster();
     const clusterDef = getClusterDefinition(cluster);
     const hpBonus = config?.factionPerks?.maxHpBonus ?? 0;
-    const shadowHpBonus = config?.shadowWarBuffs?.maxHpBonusPct ?? 0;
+    const shadowHpBonus = config?.runModifiers?.maxHpBonusPct ?? 0;
     const stamBonus = config?.factionPerks?.maxStaminaBonus ?? 0;
     const maxSoulAnchor = Math.floor((BASE_MAX_SOUL_ANCHOR + hpBonus) * (1 + shadowHpBonus / 100));
     const maxStamina = BASE_MAX_STAMINA + stamBonus;
@@ -631,11 +637,17 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     runStateRef.current = next;
     setRunState(next);
     const sectorTier = config?.sectorTier ?? 1;
-    const sectorInit = initializeSectorRun(sectorTier);
     const runSeed = `run:${Date.now()}:${sectorTier}`;
-    const pendingBiomeOffers = rollDistrictBiomeOptions(1, [], runSeed);
+    const runSectorId = config?.runGenerationContext?.sectorState.id;
+    const runVeilBiome = runSectorId ? sectorIdToVeilBiome(runSectorId) : null;
+    const lockedMacroBiome = runSectorId ? sectorIdToLegacyMacroBiome(runSectorId) : null;
+    const sectorInit = initializeSectorRun(sectorTier, config?.alignedFaction ?? null, {
+      runGenerationContext: config?.runGenerationContext ?? null,
+      treeSeed: runSeed,
+      depthIndex: 1,
+    });
     const sanctuarySchedule = rollSanctuarySchedule(`run:${Date.now()}:${sectorTier}`);
-    const initialRunSegment = createRunSegment(1, runSeed, config?.alignedFaction ?? null);
+    const initialRunSegment = createRunSegment(1, runSeed);
     const startingCanisterResidue = resolveStartingRunCanisterResidue(
       config?.startingVeilResidueBalance ?? 0,
     );
@@ -673,11 +685,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       hexShotBoons: [],
       envoyBoons: [],
       alignedFaction: config?.alignedFaction ?? null,
-      currentMacroBiomeFamily: null,
+      runVeilBiome,
+      currentMacroBiomeFamily: lockedMacroBiome,
       lastMacroBiomeFamily: null,
-      pendingDistrictBiomeOffers: pendingBiomeOffers,
-      awaitingDistrictBiomeChoice: true,
-      depth1MacroBiomeChoice: null,
+      pendingDistrictBiomeOffers: null,
+      awaitingDistrictBiomeChoice: false,
+      depth1MacroBiomeChoice: lockedMacroBiome,
       runStatusEffects: [],
       overworldSession: generateOverworldFeatures(
         0,
@@ -709,13 +722,14 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       cargo: applyIncursionStarterCargo(config?.initialCargo ?? createStarterCargoRunState()),
       sanctuarySchedule,
       strikeDamageBonusPct: 0,
-      shadowWarBuffs: config?.shadowWarBuffs ?? {
+      runModifiers: config?.runModifiers ?? {
         maxHpBonusPct: 0,
         kineticArmorBonus: 0,
         rareLootBonusPct: 0,
         blackMarketDiscountPct: 0,
         firstTurnApBonus: 0,
       },
+      runGenerationContext: config?.runGenerationContext ?? null,
       runSegment: initialRunSegment,
       sessionVeilResidueCollected: startingCanisterResidue,
       runVeilResidueBaseline: startingCanisterResidue,
@@ -734,11 +748,16 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     setPostCombatMutationChoices([]);
     setBoundRequisitionOffers([]);
     combatLogActiveRef.current = false;
-    setRunLog(
-      startingCanisterResidue > 0
-        ? [`>> VEIL RESIDUE CANISTER PRELOADED — ${startingCanisterResidue} UNITS FROM CABAL VAULT.`]
-        : [],
-    );
+    const initialLog: string[] = [];
+    if (startingCanisterResidue > 0) {
+      initialLog.push(`>> VEIL RESIDUE CANISTER PRELOADED — ${startingCanisterResidue} UNITS FROM CABAL VAULT.`);
+    }
+    if (runVeilBiome && lockedMacroBiome) {
+      initialLog.push(`>> VEIL BIOME LOCKED — ${veilBiomeDisplayName(runVeilBiome).toUpperCase()}.`);
+      initialLog.push(formatMacroBiomeLogLine(lockedMacroBiome));
+      initialLog.push(`>> ${getMacroBiomeContextLog(lockedMacroBiome)}`);
+    }
+    setRunLog(initialLog);
   }, [transferVeilResidueIntoRun]);
 
   const refreshOverworldFeatures = useCallback(() => {
@@ -938,6 +957,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
           district: getDistrictFromDepth(depthFromNodesCleared(nodeIndex)),
           runSegment: activeIncursionRef.current.runSegment,
           macroBiome: activeIncursionRef.current.currentMacroBiomeFamily,
+          veilBiome: activeIncursionRef.current.runVeilBiome,
         })
         : [];
     const pendingEnemy = pendingEnemies[0] ?? null;
@@ -2202,16 +2222,30 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (!encounterNode || encounterNode.type !== 'BOSS_COMBAT') return;
 
     const gateDepth = depthFromNodesCleared(inc.nodesCleared);
-    const bossProfile = createBossProfileForDepth(gateDepth);
+    const anchorCtx = resolveAnchorAssaultContext(encounterNode, inc.runGenerationContext);
+    let bossProfile = createBossProfileForDepth(gateDepth);
+    if (anchorCtx?.isCoreEncounter) {
+      bossProfile = applyAnchorCoreBossProfile(bossProfile, anchorCtx);
+    }
     const sector = runStateRef.current.currentSector ?? INITIAL_SECTOR_POOL[0];
-    const pendingEnemies = spawnDistrictBossSquad(
+    let pendingEnemies = spawnDistrictBossSquad(
       bossProfile,
       sector,
       inc.nodesCleared,
       gateDepth,
     );
+    if (anchorCtx?.isCoreEncounter) {
+      pendingEnemies = applyAnchorAssaultSpawnScaling(pendingEnemies, anchorCtx);
+    }
     const pendingEnemy = pendingEnemies[0] ?? null;
-    const envModifiers = buildEnvironmentalModifiersForNode(inc.resonance.percent);
+    let envModifiers = buildEnvironmentalModifiersForNode(inc.resonance.percent);
+    if (anchorCtx) {
+      envModifiers = applyAnchorRealityToEnvironment(
+        envModifiers,
+        anchorCtx.anchor,
+        anchorCtx.stage,
+      );
+    }
 
     setActiveIncursion((prev) => {
       const next = { ...prev, bossProfile, environmentalModifiers: envModifiers };
@@ -2238,8 +2272,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (inc.currentMacroBiomeFamily) {
       appendRunLog(`>> ${getMacroBiomeContextLog(inc.currentMacroBiomeFamily)}`);
     }
-    appendRunLog('>> AFFINITY CORPOREAL — prime anomaly dense tissue detected.');
-    appendRunLog(districtBossLogLine(gateDepth));
+    if (anchorCtx) {
+      anchorAssaultEngageLogLines(anchorCtx).forEach((line) => appendRunLog(line));
+    } else {
+      appendRunLog('>> AFFINITY CORPOREAL — prime anomaly dense tissue detected.');
+      appendRunLog(districtBossLogLine(gateDepth));
+    }
     appendRunLog(`>> BOSS SIGNATURE: ${bossProfile.name} // ${bossProfile.maxHp} HP`);
   }, [appendRunLog, beginCombatRunLogSession]);
 
@@ -2259,10 +2297,23 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     ) return;
 
     const sector = prev.currentSector ?? INITIAL_SECTOR_POOL[0];
-    const isElite = isResonanceAmbush || encounterNode.type === 'ELITE_COMBAT';
+    const echoCtx = resolveEchoRecoveryContext(encounterNode, inc.runGenerationContext);
+    const isEchoEncounter = echoCtx != null;
+    const isElite = isResonanceAmbush || encounterNode.type === 'ELITE_COMBAT' || isEchoEncounter;
+    const anchorCtx = resolveAnchorAssaultContext(encounterNode, inc.runGenerationContext);
     let envModifiers = buildEnvironmentalModifiersForNode(inc.resonance.percent);
+    if (anchorCtx) {
+      envModifiers = applyAnchorRealityToEnvironment(
+        envModifiers,
+        anchorCtx.anchor,
+        anchorCtx.stage,
+      );
+    }
+    if (echoCtx) {
+      envModifiers = applyEchoResidueToEnvironment(envModifiers, echoCtx.template);
+    }
     if (isElite) {
-      const modifier = rollEliteModifier(encounterNode.id);
+      const modifier = echoCtx?.template.eliteModifier ?? rollEliteModifier(encounterNode.id);
       envModifiers = applyEliteModifierToEnvironment(envModifiers, modifier);
       appendRunLog(`>> ELITE MODIFIER — ${ELITE_MODIFIER_LABELS[modifier]}`);
     }
@@ -2273,7 +2324,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       isElite,
       isAmbush: prev.pendingAmbush,
     });
-    const pendingEnemies = spawnCombatSquad({
+    let pendingEnemies = spawnCombatSquad({
       nodeIndex: inc.nodesCleared,
       isElite,
       isAmbush: prev.pendingAmbush,
@@ -2281,10 +2332,15 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       runSegment: inc.runSegment,
       encounterSeed: `engage:${inc.nodesCleared}:${encounterNode.id}`,
       macroBiome: inc.currentMacroBiomeFamily,
+      veilBiome: inc.runVeilBiome,
+      contextModifiers: encounterNode.contextModifiers,
       spawnOptions: {
         resonancePercent: inc.resonance.percent,
       },
     });
+    if (anchorCtx && isElite && !echoCtx) {
+      pendingEnemies = applyAnchorAssaultSpawnScaling(pendingEnemies, anchorCtx);
+    }
     const pendingEnemy = pendingEnemies[0] ?? null;
     const pendingEncounter = buildEncounter(
       inc.currentEncounterIndex,
@@ -2316,6 +2372,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
     if (inc.currentMacroBiomeFamily) {
       appendRunLog(`>> ${getMacroBiomeContextLog(inc.currentMacroBiomeFamily)}`);
+    }
+    if (anchorCtx && isElite && !echoCtx) {
+      anchorAssaultEngageLogLines(anchorCtx).forEach((line) => appendRunLog(line));
+    }
+    if (echoCtx) {
+      echoRecoveryEngageLogLines(echoCtx).forEach((line) => appendRunLog(line));
     }
     appendRunLog(
       `>> HOSTILE CLUSTER — ${pendingEnemies.length} signature(s) // threat budget ${spawnBudget.spawnBudget} pts.`,
@@ -2465,6 +2527,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       district,
       runSegment: inc.runSegment,
       macroBiome: inc.currentMacroBiomeFamily,
+      veilBiome: inc.runVeilBiome,
     });
     const pendingEnemy = pendingEnemies[0] ?? null;
 
@@ -2560,6 +2623,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       district,
       runSegment: inc.runSegment,
       macroBiome: inc.currentMacroBiomeFamily,
+      veilBiome: inc.runVeilBiome,
       spawnOptions: { resonancePercent: inc.resonance.percent },
     });
     const pendingEnemy = pendingEnemies[0] ?? null;
@@ -2618,6 +2682,22 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     }
 
     const wasBoss = completedNode?.type === 'BOSS_COMBAT' || completedNode?.isAnomalyNest === true;
+    const anchorCtx = resolveAnchorAssaultContext(completedNode, inc.runGenerationContext);
+    const anchorVictory = anchorCtx && completedNode
+      ? recordAnchorAssaultVictory(
+          inc.anchorAssaultProgress ?? createDefaultAnchorAssaultProgress(),
+          completedNode,
+          anchorCtx,
+        )
+      : null;
+    const echoCtx = resolveEchoRecoveryContext(completedNode, inc.runGenerationContext);
+    const echoVictory = echoCtx && completedNode
+      ? recordEchoRecoveryVictory(
+          inc.echoRecoveryProgress ?? createDefaultEchoRecoveryProgress(),
+          completedNode,
+          echoCtx,
+        )
+      : null;
     const nextNodesCleared = completedIndex + 1;
     const nextCurrentNodeId =
       completedNode?.id && graphNodes[completedNode.id]
@@ -2643,48 +2723,35 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const nextPatrolState = inc.patrolState;
     const districtChanged = nextDistrict !== inc.currentDistrict;
 
-    const nextBiome = districtChanged ? null : inc.currentMacroBiomeFamily;
-    let pendingOffers = inc.pendingDistrictBiomeOffers;
-    let depth1Choice = inc.depth1MacroBiomeChoice;
-    let awaitingChoice = inc.awaitingDistrictBiomeChoice;
-
-    if (districtChanged) {
-      if (inc.currentDistrict === 1 && inc.currentMacroBiomeFamily) {
-        depth1Choice = inc.currentMacroBiomeFamily;
-      }
-      awaitingChoice = true;
-      const exclude =
-        nextDistrict === 2 && depth1Choice ? [depth1Choice] : [];
-      pendingOffers = rollDistrictBiomeOptions(
-        nextDistrict,
-        exclude,
-        `district-entry:${nextDistrict}:${nextNodesCleared}`,
-      );
-    }
+    const nextBiome = inc.currentMacroBiomeFamily;
+    const depth1Choice = inc.depth1MacroBiomeChoice ?? inc.currentMacroBiomeFamily;
 
     let nextRunSegment = inc.runSegment;
     const wasCombat =
       completedNode?.type === 'STANDARD_COMBAT' || completedNode?.type === 'ELITE_COMBAT';
     if (wasCombat && inc.runSegment && completedNode) {
+      const echoCtx = resolveEchoRecoveryContext(completedNode, inc.runGenerationContext);
       const snapshot = resolveEngagedEncounterSnapshot({
         nodeIndex: completedIndex,
-        isElite: completedNode.type === 'ELITE_COMBAT',
+        isElite: completedNode.type === 'ELITE_COMBAT' || echoCtx != null,
         district: getDistrictFromDepth(clearedDepth),
         runSegment: inc.runSegment,
         encounterSeed: `engage:${completedIndex}:${completedNode.id}`,
         macroBiome: inc.currentMacroBiomeFamily,
+        veilBiome: inc.runVeilBiome,
+        contextModifiers: completedNode.contextModifiers,
       });
       nextRunSegment = applyEncounterToSegment(
         inc.runSegment,
         snapshot.encounterId,
         snapshot.encounterOrigin,
+        snapshot.spawnOverride,
       );
     }
     if (wasBoss && isDistrictGateDepth(clearedDepth) && nextDistrict !== inc.currentDistrict) {
       nextRunSegment = createRunSegment(
         nextDistrict,
         `district:${nextDistrict}:${nextNodesCleared}`,
-        inc.alignedFaction,
       );
       appendRunLog(`>> ALPHA DUEL INDEX — D${nextDistrict} NODE ${nextRunSegment.alphaNodeIndex}`);
     }
@@ -2720,8 +2787,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       currentDistrict: nextDistrict,
       lastMacroBiomeFamily: inc.currentMacroBiomeFamily,
       currentMacroBiomeFamily: nextBiome,
-      pendingDistrictBiomeOffers: pendingOffers,
-      awaitingDistrictBiomeChoice: awaitingChoice,
+      pendingDistrictBiomeOffers: null,
+      awaitingDistrictBiomeChoice: false,
       depth1MacroBiomeChoice: depth1Choice,
       runStatusEffects: inc.runStatusEffects.filter(
         (effect) => effect.expiresAtNodesCleared == null || effect.expiresAtNodesCleared > nextNodesCleared,
@@ -2733,6 +2800,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       patrolState: nextPatrolState,
       bossDefeated: wasBoss || inc.bossDefeated,
       primeExtractionBonus: wasBoss ? true : inc.primeExtractionBonus,
+      anchorAssaultProgress: anchorVictory?.progress
+        ?? inc.anchorAssaultProgress
+        ?? createDefaultAnchorAssaultProgress(),
+      echoRecoveryProgress: echoVictory?.recorded
+        ? echoVictory.progress
+        : inc.echoRecoveryProgress ?? createDefaultEchoRecoveryProgress(),
       pendingHarvestReturn: null,
       currentNarrativeId: null,
       activeChoice: null,
@@ -2783,15 +2856,20 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       appendRunLog('>> DISTRICT GATE CLEARED — VECTOR STABILIZED.');
     }
 
+    if (anchorVictory?.kind && anchorCtx) {
+      appendRunLog(anchorAssaultClearLogLine(anchorCtx, anchorVictory.kind));
+    }
+
+    if (echoVictory?.recorded && echoCtx) {
+      appendRunLog(echoRecoveryClearLogLine(echoCtx));
+    }
+
     if (nextNodesCleared >= MAX_SECTOR_NODES && !inc.collapseActive) {
       appendRunLog('>> SECTOR CAP REACHED — MASTER EXTRACTION LINK OR COLLAPSE RIFT ONLY.');
     } else if (inc.collapseActive) {
       appendRunLog(`>> COLLAPSE RIFT NODE ${nextNodesCleared} — POCKET DIMENSION UNSTABLE.`);
     } else if (!enteringSafehouse) {
-      if (awaitingChoice && pendingOffers) {
-        appendRunLog(formatDistrictBiomeSelectionLog(pendingOffers));
-        appendRunLog(`>> ENGAGE A COMBAT VECTOR TO LOCK MACRO BIOME FOR DISTRICT ${nextDistrict}.`);
-      } else if (nextBiome) {
+      if (nextBiome) {
         appendRunLog(formatMacroBiomeLogLine(nextBiome));
       }
       appendRunLog(`>> NODE ${nextNodesCleared}/${MAX_SECTOR_NODES} CLEARED — SCANNING HUB READY.`);
@@ -2830,8 +2908,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       appendRunLog('>> POCKET DIMENSION COLLAPSE — sector geometry destabilizing.');
     }
 
-    const lockPatch = districtBiomeLockPatch(inc, node);
-
     const encounterPath = [...inc.encounterPath];
     encounterPath[inc.nodesCleared] = {
       ...node,
@@ -2839,15 +2915,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       encounterIndex: inc.nodesCleared,
     };
 
-    if (lockPatch.currentMacroBiomeFamily) {
-      appendRunLog(formatMacroBiomeLogLine(lockPatch.currentMacroBiomeFamily));
-      appendRunLog(`>> ${getMacroBiomeContextLog(lockPatch.currentMacroBiomeFamily)}`);
-    }
-
     setActiveIncursion((prev) => {
       const next = {
         ...prev,
-        ...lockPatch,
         encounterPath,
         selectedVectorId: node.id,
         collapseActive: enteringCollapse || prev.collapseActive,
@@ -3263,7 +3333,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const getSafehouseIntel = useCallback(() => {
     const inc = activeIncursionRef.current;
-    return getUpcomingDistrictIntel(inc.currentDistrict);
+    return buildDistrictIntelForRun(inc.currentDistrict, inc.runGenerationContext);
   }, []);
 
   const transferRunCargoToBankVault = useCallback((percent: number) => {
@@ -3340,6 +3410,13 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const inc = activeIncursionRef.current;
     if (inc.mapMode !== 'SAFEHOUSE_INTERMISSION') return;
 
+    const depthIndex = inc.currentDistrict as 1 | 2 | 3;
+    const proceduralRunTree = regenerateProceduralRunTree(
+      depthIndex,
+      inc.runGenerationContext,
+      `district-${depthIndex}:${inc.nodesCleared}:${Date.now()}`,
+    );
+
     const nextPatrolState = createEmptyPatrolState();
     const next: ActiveIncursionState = persistExpandedSectorGraph({
       ...inc,
@@ -3347,12 +3424,16 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       patrolState: nextPatrolState,
       mapMode: 'SCANNING_HUB',
       resonanceManifestNodeIds: [],
+      proceduralRunTree,
+      revealedSonarNodeIds: [],
     });
 
     activeIncursionRef.current = next;
     setActiveIncursion(next);
     setScanSessionKey((k) => k + 1);
-    appendRunLog(`>> UNSEAL DOOR — ENTERING DISTRICT ${next.currentDistrict}.`);
+    const depthStage = depthIndex === 1 ? 'THRESHOLD' : depthIndex === 2 ? 'BREACH' : 'DEEP_VEIL';
+    appendRunLog(`>> UNSEAL DOOR — ENTERING DISTRICT ${next.currentDistrict} // ${depthStage}.`);
+    appendRunLog(`>> PROCEDURAL VECTOR MAP REGENERATED — ${proceduralRunTree.maxDepth} LAYERS // D${depthIndex}.`);
   }, [appendRunLog]);
 
   const stageSafeAnchorReview = useCallback((anchorIndex: 1 | 2 | 3) => {

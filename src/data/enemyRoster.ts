@@ -1,7 +1,7 @@
 import type { FactionType } from '../types/game';
 import type { CombatGridLane } from '../types/combatGrid';
 import type { EnemyClass, EnemyCombatProfile } from '../types/run';
-import { resolveEnemyCombatStats } from './enemyCombatConfig';
+import { resolveEnemyCombatStats, ENCOUNTER_KEY_TO_ROSTER } from './enemyCombatConfig';
 import { applyAlphaToEnemyProfile } from './enemyAlphaConfig';
 import { getNodeScale } from './enemyNodeScale';
 import { rollEnemyIntent } from './enemyIntentRoll';
@@ -9,10 +9,11 @@ import { initEnemyCombatLayers } from './combatFractureEngine';
 import { initRosterLifecycleDefaults } from './combatLifecycleEngine';
 import { CONCRETE_GARGOYLE_FRACTURE_MAX } from './combatRosterActions';
 import { defaultPostureIntentForRoster } from './enemyPostureConfig';
-import { applyFactionTrait } from './factionTraitEngine';
 import type { DistrictId } from './districtPacing';
 import { depthFromNodesCleared, localLevelFromDepth } from './districtPacing';
 import type { ThreatTier } from './combatEncounterBudget';
+import { getEnemyDefinition } from './enemyDefinitions';
+import type { EncounterEnemyKey } from './enemyCombatConfig';
 
 export { factionForDistrict } from './districtFactionMap';
 
@@ -47,6 +48,9 @@ export type EnemyRosterId =
   | 'fixer'
   | 'spotter'
   | 'burner'
+  | 'rival-hexer'
+  | 'rival-veilbinder'
+  | 'rival-reaver'
   | 'amalgam'
   | 'wire-ghoul'
   | 'hollow-lung'
@@ -70,9 +74,9 @@ export interface EnemyRosterEntry {
   elite?: boolean;
   evadeChance: number;
   critChance: number;
-  isCabalHuman?: boolean;
+  /** Rival merc contractor — spawns under RIVAL_MERC origin (Phase 3). */
+  isRivalMerc?: boolean;
   isVeilEntity?: boolean;
-  cabalClassLabel?: string;
 }
 
 export const ENEMY_ROSTER: Record<EnemyRosterId, EnemyRosterEntry> = {
@@ -430,8 +434,7 @@ export const ENEMY_ROSTER: Record<EnemyRosterId, EnemyRosterEntry> = {
     kineticArmor: 0,
     occultWards: 0,
     threatTier: 2,
-    isCabalHuman: true,
-    cabalClassLabel: 'BREACHER',
+    isRivalMerc: true,
     evadeChance: 0,
     critChance: 0,
   },
@@ -446,8 +449,7 @@ export const ENEMY_ROSTER: Record<EnemyRosterId, EnemyRosterEntry> = {
     kineticArmor: 0,
     occultWards: 0,
     threatTier: 1,
-    isCabalHuman: true,
-    cabalClassLabel: 'CUTTER',
+    isRivalMerc: true,
     evadeChance: 0.15,
     critChance: 0,
   },
@@ -462,8 +464,7 @@ export const ENEMY_ROSTER: Record<EnemyRosterId, EnemyRosterEntry> = {
     kineticArmor: 8,
     occultWards: 0,
     threatTier: 3,
-    isCabalHuman: true,
-    cabalClassLabel: 'WARDEN',
+    isRivalMerc: true,
     evadeChance: 0,
     critChance: 0.05,
   },
@@ -478,8 +479,7 @@ export const ENEMY_ROSTER: Record<EnemyRosterId, EnemyRosterEntry> = {
     kineticArmor: 0,
     occultWards: 0,
     threatTier: 2,
-    isCabalHuman: true,
-    cabalClassLabel: 'FIXER',
+    isRivalMerc: true,
     evadeChance: 0.10,
     critChance: 0,
   },
@@ -494,8 +494,7 @@ export const ENEMY_ROSTER: Record<EnemyRosterId, EnemyRosterEntry> = {
     kineticArmor: 0,
     occultWards: 0,
     threatTier: 2,
-    isCabalHuman: true,
-    cabalClassLabel: 'SPOTTER',
+    isRivalMerc: true,
     evadeChance: 0.10,
     critChance: 0,
   },
@@ -510,10 +509,55 @@ export const ENEMY_ROSTER: Record<EnemyRosterId, EnemyRosterEntry> = {
     kineticArmor: 0,
     occultWards: 0,
     threatTier: 2,
-    isCabalHuman: true,
-    cabalClassLabel: 'BURNER',
+    isRivalMerc: true,
     evadeChance: 0,
     critChance: 0,
+  },
+  'rival-hexer': {
+    id: 'rival-hexer',
+    designation: 'RIVAL HEXER',
+    faction: 'LEGION',
+    class: 'APPARITION',
+    role: 'BACKLINE',
+    hp: 82,
+    damage: 9,
+    kineticArmor: 0,
+    occultWards: 1,
+    threatTier: 2,
+    isDisruptor: true,
+    isRivalMerc: true,
+    evadeChance: 0.10,
+    critChance: 0,
+  },
+  'rival-veilbinder': {
+    id: 'rival-veilbinder',
+    designation: 'RIVAL VEILBINDER',
+    faction: 'SOLARIS',
+    class: 'APPARITION',
+    role: 'BACKLINE',
+    hp: 88,
+    damage: 8,
+    kineticArmor: 0,
+    occultWards: 1,
+    threatTier: 2,
+    isRivalMerc: true,
+    evadeChance: 0.10,
+    critChance: 0,
+  },
+  'rival-reaver': {
+    id: 'rival-reaver',
+    designation: 'RIVAL REAVER',
+    faction: 'TERRAN_GRID',
+    class: 'ABOMINATION',
+    role: 'FRONTLINE',
+    hp: 120,
+    damage: 16,
+    kineticArmor: 0,
+    occultWards: 0,
+    threatTier: 3,
+    isRivalMerc: true,
+    evadeChance: 0,
+    critChance: 0.10,
   },
   'amalgam': {
     id: 'amalgam',
@@ -619,13 +663,6 @@ export const ENEMY_ROSTER: Record<EnemyRosterId, EnemyRosterEntry> = {
   },
 };
 
-/** Grunts eligible for threat-budget encounter drafting. */
-export const GRUNT_ROSTER_BY_FACTION: Record<FactionType, EnemyRosterId[]> = {
-  TERRAN_GRID: ['concrete-gargoyle', 'gutter-goliath', 'echoing-brute', 'iron-maiden', 'golem', 'slag-blood', 'sapper'],
-  SOLARIS: ['ley-siren', 'ash-weeper', 'miasma-tick-swarm', 'spall', 'scuttler', 'smog-caller', 'resonance-caster', 'tar-spitter', 'splinter'],
-  LEGION: ['fracture-hound', 'null-shade', 'spatial-glitch', 'thrall', 'hook-weaver', 'memory-leech', 'coil-spike-sniper', 'churn'],
-};
-
 export const ALLOWED_GRUNT_ROSTER_IDS: readonly EnemyRosterId[] = [
   'concrete-gargoyle',
   'gutter-goliath',
@@ -657,6 +694,9 @@ export const ALLOWED_GRUNT_ROSTER_IDS: readonly EnemyRosterId[] = [
   'fixer',
   'spotter',
   'burner',
+  'rival-hexer',
+  'rival-veilbinder',
+  'rival-reaver',
   'amalgam',
   'wire-ghoul',
   'hollow-lung',
@@ -669,29 +709,30 @@ export const ALLOWED_BOSS_ROSTER_IDS: readonly EnemyRosterId[] = [
   'boss-primeval-rift-walker',
 ];
 
-export function rosterPoolForFaction(faction: FactionType, isElite: boolean): EnemyRosterEntry[] {
-  return GRUNT_ROSTER_BY_FACTION[faction]
-    .map((id) => ENEMY_ROSTER[id])
-    .filter((entry) => (isElite ? entry.elite === true : !entry.elite));
-}
-
-export function pickRosterEntry(
-  faction: FactionType,
-  role: CombatGridLane,
-  isElite: boolean,
-  exclude: Set<EnemyRosterId> = new Set(),
-): EnemyRosterEntry {
-  const pool = rosterPoolForFaction(faction, isElite);
-  const roleMatches = pool.filter((e) => e.role === role && !exclude.has(e.id));
-  const candidates = roleMatches.length > 0 ? roleMatches : pool.filter((e) => !exclude.has(e.id));
-  if (candidates.length === 0) return pool[0];
-  return candidates[Math.floor(Math.random() * candidates.length)];
-}
-
 export function districtBossRosterId(gateDepth: number): EnemyRosterId {
   if (gateDepth >= 45) return 'boss-primeval-rift-walker';
   if (gateDepth === 30) return 'boss-choir-of-rust';
   return 'boss-hollowed-precinct';
+}
+
+function encounterKeyForRoster(rosterId: EnemyRosterId): EncounterEnemyKey | null {
+  for (const [key, id] of Object.entries(ENCOUNTER_KEY_TO_ROSTER) as Array<[EncounterEnemyKey, EnemyRosterId]>) {
+    if (id === rosterId) return key;
+  }
+  return null;
+}
+
+function resolveOriginFlags(
+  entry: EnemyRosterEntry,
+): Pick<EnemyCombatProfile, 'isRivalMerc' | 'isVeilEntity'> {
+  const encounterKey = encounterKeyForRoster(entry.id);
+  const def = encounterKey ? getEnemyDefinition(encounterKey) : undefined;
+  const isRivalMerc = entry.isRivalMerc ?? def?.origin === 'RIVAL_MERC';
+  const isVeilEntity = entry.isVeilEntity ?? def?.origin === 'VEIL';
+  return {
+    isRivalMerc,
+    isVeilEntity,
+  };
 }
 
 export function spawnRosterUnit(
@@ -704,7 +745,6 @@ export function spawnRosterUnit(
     isApex?: boolean;
     apexBudget?: number;
     isAlpha?: boolean;
-    cabalFaction?: FactionType;
   },
 ): EnemyCombatProfile {
   const scale = getNodeScale(nodeIndex);
@@ -716,6 +756,7 @@ export function spawnRosterUnit(
   const baseDamage = resolvedStats?.baseDamage ?? entry.damage;
   const postureIntent = defaultPostureIntentForRoster(entry.id);
   const intent = postureIntent ?? rollEnemyIntent(entry.class, 0, options?.district ?? 1);
+  const originFlags = resolveOriginFlags(entry);
   const base: EnemyCombatProfile = {
     class: entry.class,
     designation: entry.designation,
@@ -729,8 +770,7 @@ export function spawnRosterUnit(
     scale,
     rosterId: entry.id,
     faction: entry.faction,
-    isCabalHuman: entry.isCabalHuman,
-    isVeilEntity: entry.isVeilEntity,
+    ...originFlags,
     evadeChance: entry.evadeChance,
     critChance: entry.critChance,
   };
@@ -761,9 +801,6 @@ export function spawnRosterUnit(
       enemyMaxActionPoints: 2,
       designation: `APEX ${entry.designation}`,
     };
-  }
-  if (entry.isCabalHuman && options?.cabalFaction) {
-    profile = applyFactionTrait(profile, options.cabalFaction);
   }
   if (entry.id === 'amalgam') {
     profile = {

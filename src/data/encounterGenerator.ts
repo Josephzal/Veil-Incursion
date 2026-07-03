@@ -1,25 +1,32 @@
-import type { FactionType } from '../types/game';
+import type { EncounterOrigin, EncounterNodeTier, EncounterSpawnOverride, VeilBiome } from '../types/encounterSpawn';
 import type { MacroBiomeFamily } from '../types/narrativeProcedural';
 import type { DistrictId } from './districtPacing';
 import { getDistrictFromDepth, isDistrictGateDepth, localLevelFromDepth } from './districtPacing';
 import type { EncounterLayout } from './levelEncounterData';
 import type { EncounterEnemyKey } from './enemyCombatConfig';
-import { buildOriginDeck, peekEncounterOrigin, type EncounterOrigin } from './originDeckEngine';
-import { rollFactionControl } from './factionTraitEngine';
 import {
   loadAlphaDuelElite,
-  loadEliteEncounter,
-  verifyEliteDatabase,
+  verifyEliteDecks,
 } from './eliteSpawnEngine';
+import { rollEncounterOrigin } from './originRollEngine';
+import { pickProceduralSynergySquad, verifyEncounterSpawnPipeline } from './encounterSpawnEngine';
 import {
-  loadCombatEncounter,
   macroFamilyToSynergyBiome,
   verifySynergyDatabase,
   ALL_SYNERGY_ENEMY_KEYS,
 } from './synergySpawnEngine';
+import { verifyEncounterDecks } from './synergyDatabase';
+import { verifyEncounterCatalog } from './encounterCatalogAuditEngine';
+import { verifyEnemyDefinitions } from './encounterSpawnGateEngine';
+import { echoEncounterId, resolveEchoSpawnOverride, verifyEchoSpawnPipeline } from './encounterEchoOverride';
+import { verifyEncounterSpawnValidation } from './encounterSpawnValidationEngine';
+import type { EchoEliteTemplate } from '../types/echoElite';
+import type { NodeContextModifiers } from '../types/worldState';
 import type { EncounterGridPos, EncounterUnitSpec, SynergySquadSpec } from './synergyEncounterTypes';
 import { rosterHasMixedAlpha } from './rosterSpawnSlots';
+import { veilBiomeToLegacyMacroBiome } from './sectorBiomeBridge';
 
+export type { EncounterOrigin } from '../types/encounterSpawn';
 export type { EncounterGridPos, EncounterUnitSpec, EncounterSquadSpec, SynergySquadSpec } from './synergyEncounterTypes';
 
 export interface RunSegmentState {
@@ -27,9 +34,6 @@ export interface RunSegmentState {
   alphaNodeIndex: number;
   lastEncounterId: string | null;
   history: string[];
-  currentFactionControl: FactionType;
-  originDeck: EncounterOrigin[];
-  originDeckIndex: number;
   lastEncounterOrigin: EncounterOrigin | null;
 }
 
@@ -46,7 +50,9 @@ export interface GeneratedEncounter {
   roster?: readonly EncounterUnitSpec[];
   breathingRoomKind?: BreathingRoomKind;
   encounterOrigin?: EncounterOrigin;
-  cabalFaction?: FactionType;
+  /** Echo node override — not a rolled origin. */
+  spawnOverride?: EncounterSpawnOverride;
+  echoTemplateId?: string;
 }
 
 const POS_TO_LAYOUT: Record<EncounterGridPos, keyof EncounterLayout> = {
@@ -79,19 +85,12 @@ export function rollAlphaNodeIndex(seed: string): number {
   return 6 + Math.floor(rand() * 5);
 }
 
-export function createRunSegment(
-  district: DistrictId,
-  seed: string,
-  playerFaction?: FactionType | null,
-): RunSegmentState {
+export function createRunSegment(district: DistrictId, seed: string): RunSegmentState {
   return {
     depth: district,
     alphaNodeIndex: rollAlphaNodeIndex(`${seed}:alpha:${district}`),
     lastEncounterId: null,
     history: [],
-    currentFactionControl: rollFactionControl(district, playerFaction, seed),
-    originDeck: buildOriginDeck(district, seed),
-    originDeckIndex: 0,
     lastEncounterOrigin: null,
   };
 }
@@ -126,21 +125,27 @@ function rollBreathingRoomKind(rand: () => number): BreathingRoomKind {
   return rand() < 0.5 ? 'BLACK_MARKET' : 'RESOURCE_HARVEST';
 }
 
-function resolveEncounterOrigin(segment: RunSegmentState, seed: string, district: DistrictId): EncounterOrigin {
-  if (segment.originDeckIndex < segment.originDeck.length) {
-    return segment.originDeck[segment.originDeckIndex];
-  }
-  return peekEncounterOrigin(
-    segment.originDeck,
-    segment.originDeckIndex,
-    district,
-    segment.lastEncounterOrigin,
-    seed,
-  );
-}
-
 export interface GenerateNodeEncounterOptions {
   macroBiome?: MacroBiomeFamily | null;
+  veilBiome?: VeilBiome | null;
+  isElite?: boolean;
+  contextModifiers?: NodeContextModifiers | null;
+}
+
+function buildEchoGeneratedEncounter(template: EchoEliteTemplate): GeneratedEncounter {
+  const pseudoSquad = { roster: template.roster } as SynergySquadSpec;
+  const { layout, isAlpha: squadAlpha } = squadToLayout(pseudoSquad);
+  const useRoster = rosterHasMixedAlpha(template.roster) || template.roster.some((u) => u.isAlpha);
+
+  return {
+    layout,
+    roster: useRoster ? template.roster : undefined,
+    isAlpha: squadAlpha,
+    encounterId: echoEncounterId(template.id),
+    poolTier: 'ELITE',
+    spawnOverride: 'ECHO',
+    echoTemplateId: template.id,
+  };
 }
 
 export function generateNodeEncounter(
@@ -151,8 +156,13 @@ export function generateNodeEncounter(
 ): GeneratedEncounter {
   const district = getDistrictFromDepth(globalDepth);
   const localLevel = localLevelFromDepth(globalDepth);
-  const rand = seededRandom(`${seed}:enc:${globalDepth}:${segment.alphaNodeIndex}:${segment.originDeckIndex}`);
-  const synergyBiome = macroFamilyToSynergyBiome(options.macroBiome);
+  const rand = seededRandom(`${seed}:enc:${globalDepth}:${segment.alphaNodeIndex}`);
+  const veilBiome = options.veilBiome ?? null;
+  const macroBiome = options.macroBiome
+    ?? (veilBiome ? veilBiomeToLegacyMacroBiome(veilBiome) : null);
+  const synergyBiome = macroFamilyToSynergyBiome(macroBiome);
+  const squadTier = options.isElite ? 'ELITE' : 'NORMAL';
+  const nodeTier: EncounterNodeTier = options.isElite ? 'ELITE' : 'NORMAL';
 
   if (isDistrictGateDepth(globalDepth)) {
     return {
@@ -173,10 +183,20 @@ export function generateNodeEncounter(
     };
   }
 
-  const encounterOrigin = resolveEncounterOrigin(segment, seed, district);
+  const echoTemplate = resolveEchoSpawnOverride(options.contextModifiers);
+  if (echoTemplate) {
+    return buildEchoGeneratedEncounter(echoTemplate);
+  }
+
   const isAlphaDuel = localLevel === segment.alphaNodeIndex;
 
   if (isAlphaDuel) {
+    const encounterOrigin = rollEncounterOrigin(
+      district,
+      'ELITE',
+      `${seed}:alpha-origin:${globalDepth}`,
+      segment.lastEncounterOrigin,
+    );
     let squad = loadAlphaDuelElite(district, synergyBiome, rand, {
       lastEncounterId: segment.lastEncounterId,
       encounterOrigin,
@@ -206,16 +226,22 @@ export function generateNodeEncounter(
       encounterId: squad.id,
       poolTier: 'ALPHA_DUEL',
       encounterOrigin,
-      cabalFaction: encounterOrigin === 'CABAL' ? segment.currentFactionControl : undefined,
     };
   }
 
-  const squad = loadCombatEncounter(district, synergyBiome, rand, {
+  const picked = pickProceduralSynergySquad({
+    globalDepth,
+    district,
+    seed,
+    veilBiome,
+    macroBiome,
+    squadTier,
+    nodeTier,
     lastEncounterId: segment.lastEncounterId,
-    encounterOrigin,
+    lastEncounterOrigin: segment.lastEncounterOrigin,
   });
 
-  if (!squad) {
+  if (!picked) {
     return {
       layout: { frontLeft: 'FRACTURE_HOUND', frontRight: null, backLeft: null, backRight: null },
       isAlpha: false,
@@ -225,6 +251,7 @@ export function generateNodeEncounter(
     };
   }
 
+  const { squad, encounterOrigin } = picked;
   const { layout, isAlpha: squadAlpha } = squadToLayout(squad);
   const useRoster = rosterHasMixedAlpha(squad.roster) || squad.roster.some((u) => u.isAlpha);
 
@@ -235,7 +262,6 @@ export function generateNodeEncounter(
     encounterId: squad.id,
     poolTier: 'SYNERGY',
     encounterOrigin,
-    cabalFaction: encounterOrigin === 'CABAL' ? segment.currentFactionControl : undefined,
   };
 }
 
@@ -243,14 +269,16 @@ export function applyEncounterToSegment(
   segment: RunSegmentState,
   encounterId: string,
   encounterOrigin?: EncounterOrigin | null,
+  spawnOverride?: EncounterSpawnOverride | null,
 ): RunSegmentState {
-  const consumedOrigin = encounterOrigin === 'CABAL' || encounterOrigin === 'VEIL';
+  const preserveOrigin = spawnOverride === 'ECHO';
   return {
     ...segment,
     lastEncounterId: encounterId,
     history: [...segment.history, encounterId],
-    originDeckIndex: consumedOrigin ? segment.originDeckIndex + 1 : segment.originDeckIndex,
-    lastEncounterOrigin: encounterOrigin ?? segment.lastEncounterOrigin,
+    lastEncounterOrigin: preserveOrigin
+      ? segment.lastEncounterOrigin
+      : (encounterOrigin ?? segment.lastEncounterOrigin),
   };
 }
 
@@ -265,6 +293,12 @@ export function isAlphaDuelLevel(segment: RunSegmentState, localLevel: number): 
 export const ALL_POOL_ENEMY_KEYS: EncounterEnemyKey[] = ALL_SYNERGY_ENEMY_KEYS;
 
 export function verifyEncounterGenerator(): void {
+  verifyEnemyDefinitions();
+  verifyEncounterDecks();
+  verifyEncounterCatalog();
   verifySynergyDatabase();
-  verifyEliteDatabase();
+  verifyEliteDecks();
+  verifyEncounterSpawnPipeline();
+  verifyEchoSpawnPipeline();
+  verifyEncounterSpawnValidation();
 }

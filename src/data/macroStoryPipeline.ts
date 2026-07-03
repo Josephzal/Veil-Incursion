@@ -17,7 +17,19 @@ import {
 import { INCURSION_ENCOUNTER_COUNT } from '../types/run';
 import { createPlaceholderDepthPath, generateDepthEncounterMatrix } from './descentEngine';
 import { generateSectorGraph } from './sectorGraphEngine';
-import { generateRunTree } from './nodeGenerator';
+import { generateRunTree, type RunTreeGenerationParams } from './nodeGenerator';
+
+export function regenerateProceduralRunTree(
+  depthIndex: 1 | 2 | 3,
+  runGenerationContext?: import('../types/worldState').RunGenerationContext | null,
+  seed?: string | number,
+): ProceduralRunTree {
+  const params: RunTreeGenerationParams = {
+    depthIndex,
+    runGenerationContext: runGenerationContext ?? null,
+  };
+  return generateRunTree(seed ?? `district-${depthIndex}:${Date.now()}`, params);
+}
 import { MAX_ATTUNEMENT, STARTING_ATTUNEMENT } from '../types/sector';
 
 export const SECTOR_BLOCK_LAYOUT: readonly SectorBlockSpec[] = [
@@ -261,24 +273,40 @@ export interface SectorRunInit {
   initLogLines: string[];
 }
 
+export interface SectorRunInitOptions {
+  runGenerationContext?: import('../types/worldState').RunGenerationContext | null;
+  treeSeed?: string | number;
+  depthIndex?: 1 | 2 | 3;
+}
+
 /** Pre-generate open-sector graph and attunement state at run start. */
 export function initializeSectorRun(
   sectorTier = 1,
   alignedFaction: FactionType | null = null,
+  options?: SectorRunInitOptions,
 ): SectorRunInit {
   const macroStory = rollMacroStoryRunProfile(alignedFaction);
   const sectorGraph = generateSectorGraph(sectorTier);
-  const proceduralRunTree = generateRunTree(Date.now());
+  const depthIndex = options?.depthIndex ?? 1;
+  const treeParams: RunTreeGenerationParams = {
+    runGenerationContext: options?.runGenerationContext ?? null,
+    depthIndex,
+  };
+  const proceduralRunTree = generateRunTree(options?.treeSeed ?? Date.now(), treeParams);
 
   const progress: IncursionProgressState = {
     ...createDefaultIncursionProgressState(),
     macroStory,
   };
 
+  const depthStageLabel = depthIndex === 1 ? 'THRESHOLD' : depthIndex === 2 ? 'BREACH' : 'DEEP_VEIL';
+  const sectorLabel = options?.runGenerationContext?.sectorState.displayName;
+
   const initLogLines = [
     macroStoryModeLogLine(macroStory),
     `>> OPEN SECTOR GRAPH GENERATED — MAX ${sectorGraph.maxGraphDepth} NODES // TIER ${sectorTier}`,
-    `>> PROCEDURAL RUN TREE LOCKED — ${proceduralRunTree.maxDepth} DEPTHS // SCOUT-READY`,
+    `>> PROCEDURAL RUN TREE LOCKED — D${depthIndex} ${depthStageLabel} // ${proceduralRunTree.maxDepth} VECTORS`,
+    ...(sectorLabel ? [`>> VEIL FRONT SECTOR — ${sectorLabel.toUpperCase()}`] : []),
     '>> NODES 1–4: INFILTRATION ONLY — SAFE ANCHOR EXTRACTION LOCKED UNTIL NODE 5',
   ];
 

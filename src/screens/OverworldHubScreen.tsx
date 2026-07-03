@@ -2,19 +2,18 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import HapticPressable from '../components/HapticPressable';
 import { FACTION_DEFINITIONS } from '../data/factions';
-import { shadowWarBuffsToRunModifiers } from '../data/shadowWarBuffEngine';
+import { useWorldState } from '../context/WorldStateContext';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useTerminalNav } from '../context/TerminalNavContext';
-import { useShadowWar } from '../context/ShadowWarContext';
+import OperationalBriefingPanel from '../components/OperationalBriefingPanel';
 import DeploymentDeckPanel from '../components/hub/DeploymentDeckPanel';
 import DevTestHubPanel from '../components/hub/DevTestHubPanel';
 import SafehouseHubPanel from '../components/safehouse/SafehouseHubPanel';
 import TerminalHubLayout from '../components/layout/TerminalHubLayout';
 import TerminalSafeArea from '../components/TerminalSafeArea';
-import ShadowWarDashboard from '../components/ShadowWarDashboard';
 import { resolveBreachTransitionColor } from '../constants/breachTransitionColors';
 import { transitionActions } from '../stores/transitionStore';
 import type { FactionType } from '../types/game';
@@ -29,37 +28,14 @@ export default function OverworldHubScreen(): React.JSX.Element {
     isHydrated,
     commitFactionAlignment,
     appendHubLog,
-    addCredits,
-    depositResourceStash,
     commitDescentLoadout,
   } = usePlayerAccount();
-  const { refreshCycleIfNeeded, isHydrated: shadowWarHydrated, activeBuffs } = useShadowWar();
+  const { buildRunContextForDescent, isHydrated: worldStateHydrated } = useWorldState();
   const { startBoundRequisition } = useGameFlow();
   const { startNewRun } = useRun();
   const [launchingIncursion, setLaunchingIncursion] = useState(false);
 
   const needsFactionSelection = account.alignedFaction === null;
-
-  useEffect(() => {
-    if (!isHydrated || !shadowWarHydrated) return;
-    refreshCycleIfNeeded(account.alignedFaction).then((result) => {
-      result.logs.forEach((line) => appendHubLog(line));
-      if (result.creditGrant > 0) addCredits(result.creditGrant);
-      Object.entries(result.resourceGrants).forEach(([id, qty]) => {
-        if (qty && qty > 0) {
-          depositResourceStash({ [id as import('../types/resourceItem').ResourceItemId]: qty });
-        }
-      });
-    });
-  }, [
-    isHydrated,
-    shadowWarHydrated,
-    account.alignedFaction,
-    refreshCycleIfNeeded,
-    appendHubLog,
-    addCredits,
-    depositResourceStash,
-  ]);
 
   useEffect(() => {
     if (!account.alignedFaction || account.alignedFaction === alignment) return;
@@ -72,8 +48,9 @@ export default function OverworldHubScreen(): React.JSX.Element {
     const breachColor = resolveBreachTransitionColor(account.alignedFaction);
     transitionActions.startBreaching(breachColor, () => {
       const initialCargo = commitDescentLoadout();
-      const shadowWarBuffs = shadowWarBuffsToRunModifiers(activeBuffs);
+      const { runGenerationContext, runModifiers } = buildRunContextForDescent();
       appendHubLog('>> DESCENT LOADOUT LOCKED — CARGO MANIFEST COMMITTED TO RUN STATE.');
+      appendHubLog(`>> VEIL FRONT BREACH — ${runGenerationContext.sectorState.displayName.toUpperCase()} // ${runGenerationContext.activeOperation.title.toUpperCase()}`);
       startNewRun({
         factionPerks: account.factionPerks,
         unlockedBiomes: account.unlockedBiomes,
@@ -83,7 +60,8 @@ export default function OverworldHubScreen(): React.JSX.Element {
         activeClass: account.activeClass,
         alignedFaction: account.alignedFaction,
         initialCargo,
-        shadowWarBuffs,
+        runGenerationContext,
+        runModifiers,
         startingVeilResidueBalance: account.veilResidueBalance,
       });
       startBoundRequisition();
@@ -91,8 +69,8 @@ export default function OverworldHubScreen(): React.JSX.Element {
     });
   }, [
     account,
-    activeBuffs,
     appendHubLog,
+    buildRunContextForDescent,
     commitDescentLoadout,
     launchingIncursion,
     needsFactionSelection,
@@ -105,7 +83,7 @@ export default function OverworldHubScreen(): React.JSX.Element {
     updateCabalAlignment(faction);
   };
 
-  if (!isHydrated) {
+  if (!isHydrated || !worldStateHydrated) {
     return (
       <TerminalSafeArea>
         <View style={styles.loadingRoot}>
@@ -135,9 +113,12 @@ export default function OverworldHubScreen(): React.JSX.Element {
             />
           )}
           {terminalView === 'MAP' && (
-            <ShadowWarDashboard
+            <OperationalBriefingPanel
               theme={theme}
               onAppendLog={appendHubLog}
+              onBeginIncursion={handleInitiateDeepDive}
+              runDisabled={needsFactionSelection || launchingIncursion}
+              launching={launchingIncursion}
             />
           )}
           {terminalView === 'SAFEHOUSE' && <SafehouseHubPanel />}
@@ -154,7 +135,7 @@ export default function OverworldHubScreen(): React.JSX.Element {
             >
               <Text style={[styles.factionModalTitle, { color: theme.primaryColor }]}>CABAL ALIGNMENT MATRIX</Text>
               <Text style={[styles.factionModalSub, { color: theme.mutedColor }]}>
-                Select allegiance to unlock Safehouse prep, Shadow War donations, and incursion access.
+                Select allegiance to unlock Safehouse prep, Veil Front briefing, and incursion access.
               </Text>
               {FACTION_ORDER.map((factionId) => {
                 const def = FACTION_DEFINITIONS[factionId];

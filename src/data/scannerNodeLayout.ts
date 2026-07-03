@@ -128,6 +128,7 @@ export function createRadarDotFromPolar(
     encounterType: RadarDot['encounterType'];
     label: string;
     pingLabel: string;
+    veilSignals?: RadarDot['veilSignals'];
   },
 ): RadarDot {
   return {
@@ -143,5 +144,6 @@ export function createRadarDotFromPolar(
     isPreDiscovered: node.isPreDiscovered,
     encounterIndex: node.encounterIndex,
     nodeType: node.type,
+    veilSignals: meta.veilSignals,
   };
 }

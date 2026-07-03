@@ -1,13 +1,14 @@
 import type { DistrictId } from './districtPacing';
-import type { EncounterOrigin } from './originDeckEngine';
+import type { EncounterOrigin } from '../types/encounterSpawn';
 import {
   filterSquadsByEncounterOrigin,
   SQUAD_PICK_ATTEMPTS,
 } from './encounterSquadOrigin';
 import { DEPTH_3_EXCLUSIVE_ENEMIES } from './synergyDatabase';
 import type { SynergyBiome, SynergySquadSpec } from './synergyEncounterTypes';
-import { ELITE_DATABASE } from './eliteDatabase';
+import { ELITE_DATABASE, verifyEliteDecks } from './eliteDatabase';
 import { rosterIsAllAlpha } from './rosterSpawnSlots';
+import { squadAllowedAtDepth } from './encounterSpawnGateEngine';
 
 const D3_BIOMES: readonly SynergyBiome[] = ['DEEP_VEIL', 'FRACTAL_ABYSS', 'SANGUINE_ATRIUM'];
 
@@ -30,6 +31,8 @@ export function filterEliteDepthPool(currentDepth: DistrictId): SynergySquadSpec
   return ELITE_DATABASE.filter((squad) => {
     if (!squad.allowedDepths.includes(currentDepth)) return false;
     if (currentDepth < 3 && squadUsesDepth3ExclusiveEnemy(squad)) return false;
+    const unitKeys = squad.roster.map((u) => u.type);
+    if (!squadAllowedAtDepth(unitKeys, currentDepth)) return false;
     return validateAmalgamPlacement(squad);
   });
 }
@@ -133,46 +136,9 @@ export function loadAlphaDuelElite(
   return loadFromPool(alphaDuelPool, currentDepth, currentBiome, rand, options);
 }
 
-export function verifyEliteDatabase(): void {
-  const ids = new Set<string>();
-  for (const squad of ELITE_DATABASE) {
-    if (ids.has(squad.id)) {
-      throw new Error(`verifyEliteDatabase: duplicate squad id ${squad.id}`);
-    }
-    ids.add(squad.id);
-    if (squad.roster.length === 0) {
-      throw new Error(`verifyEliteDatabase: empty roster for ${squad.id}`);
-    }
-    if (!validateAmalgamPlacement(squad)) {
-      throw new Error(`verifyEliteDatabase: invalid AMALGAM placement for ${squad.id}`);
-    }
-    for (const depth of squad.allowedDepths) {
-      if (depth < 3 && squadUsesDepth3ExclusiveEnemy(squad)) {
-        throw new Error(`verifyEliteDatabase: depth-3 exclusive enemy in ${squad.id} at depth ${depth}`);
-      }
-      for (const biome of squad.allowedBiomes) {
-        if (depth < 3 && (D3_BIOMES as readonly string[]).includes(biome)) {
-          throw new Error(`verifyEliteDatabase: D3 biome ${biome} on ${squad.id} at depth ${depth}`);
-        }
-      }
-    }
-  }
+export { verifyEliteDecks } from './eliteDatabase';
 
-  for (const depth of [1, 2, 3] as const) {
-    for (const biome of depth === 3
-      ? D3_BIOMES
-      : (['CITY_STREETS', 'CITY_BUILDINGS', 'BACKROADS', 'BLACK_SITE_SECTOR', 'UNDERGROUND', 'FORESTS'] as const)) {
-      const pool = filterBiomePool(filterEliteDepthPool(depth), biome);
-      if (pool.length === 0) {
-        throw new Error(`verifyEliteDatabase: no elites for depth ${depth} biome ${biome}`);
-      }
-      const alphaDuelPool = filterBiomePool(
-        filterEliteDepthPool(depth).filter((squad) => rosterIsAllAlpha(squad.roster)),
-        biome,
-      );
-      if (alphaDuelPool.length === 0) {
-        throw new Error(`verifyEliteDatabase: no alpha-duel elites for depth ${depth} biome ${biome}`);
-      }
-    }
-  }
+/** @deprecated Use verifyEliteDecks */
+export function verifyEliteDatabase(): void {
+  verifyEliteDecks();
 }

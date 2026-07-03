@@ -1,4 +1,5 @@
 import { DISTRICT_GATE_DEPTHS, LEVELS_PER_DISTRICT, MAX_RUN_GRAPH_DEPTH } from '../types/sectorPacing';
+import type { RunGenerationContext } from '../types/worldState';
 
 export type DistrictId = 1 | 2 | 3;
 
@@ -66,40 +67,63 @@ export function districtGateLabel(depth: number): string {
 export interface DistrictIntelBrief {
   district: DistrictId;
   districtName: string;
-  dominantFaction: string;
-  factionTag: string;
+  depthStageLabel: string;
+  anchorStageLabel: string;
+  pressureProfile: string;
   hazardSummary: string;
   tacticHint: string;
+  operationTitle?: string;
+  activeAnchorName?: string;
 }
 
-const UPCOMING_DISTRICT_INTEL: Record<DistrictId, DistrictIntelBrief> = {
+const UPCOMING_DISTRICT_INTEL: Record<DistrictId, Omit<DistrictIntelBrief, 'operationTitle' | 'activeAnchorName'>> = {
   1: {
     district: 1,
     districtName: DISTRICT_NAMES[1],
-    dominantFaction: 'Terran Grid',
-    factionTag: 'TERRAN_GRID',
+    depthStageLabel: 'Threshold',
+    anchorStageLabel: 'Trace',
+    pressureProfile: 'Light Veil signature — foreshadow only',
     hazardSummary: 'Baseline veil signatures. Standard patrol response.',
     tacticHint: 'Aegis shielding recommended for street-level breaches.',
   },
   2: {
     district: 2,
     districtName: DISTRICT_NAMES[2],
-    dominantFaction: 'Solaris Cabal',
-    factionTag: 'SOLARIS',
+    depthStageLabel: 'Breach',
+    anchorStageLabel: 'Breach',
+    pressureProfile: 'Unstable reality bleed — anchor interference likely',
     hazardSummary: 'Advanced hostile tactics. Resonance scan gain elevated.',
-    tacticHint: 'Solaris phalanx units punish rushed breaches — focus perception first.',
+    tacticHint: 'Expect anomaly distortion and first serious Echo residue.',
   },
   3: {
     district: 3,
     districtName: DISTRICT_NAMES[3],
-    dominantFaction: 'Legion Remnant',
-    factionTag: 'LEGION',
+    depthStageLabel: 'Deep Veil',
+    anchorStageLabel: 'Core',
+    pressureProfile: 'Critical anchor proximity — elite and Core vectors',
     hazardSummary: 'Elite hazards and prime boss vectors. Critical heat likely.',
-    tacticHint: 'Legion elites armor-plate — counter modules before engaging.',
+    tacticHint: 'Anchor Core possible — counter modules before engaging elites.',
   },
 };
 
 /** Intel for the district the player is about to enter after unsealing the safehouse door. */
 export function getUpcomingDistrictIntel(nextDistrict: DistrictId): DistrictIntelBrief {
-  return UPCOMING_DISTRICT_INTEL[nextDistrict];
+  return { ...UPCOMING_DISTRICT_INTEL[nextDistrict] };
+}
+
+/** Merge run-level Veil Front context into district intel for mid-run safehouse readouts. */
+export function buildDistrictIntelForRun(
+  district: DistrictId,
+  runContext?: RunGenerationContext | null,
+): DistrictIntelBrief {
+  const base = getUpcomingDistrictIntel(district);
+  if (!runContext) {
+    return base;
+  }
+
+  return {
+    ...base,
+    operationTitle: runContext.activeOperation.title,
+    activeAnchorName: runContext.activeAnchor?.displayName,
+  };
 }

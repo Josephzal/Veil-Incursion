@@ -30,6 +30,7 @@ import {
 } from './scanner/scannerScopeGeometry';
 import type { CabalScannerTheme, ScannerCabal } from '../types/scanner';
 import type { RadarDot } from '../types/run';
+import { primaryScannerSignalAccent } from '../data/scannerSignalEngine';
 
 export {
   SCAN_SWEEP_MS,
@@ -930,6 +931,10 @@ function VectorScannerComponent({
               defaultAccent: theme.blipAccent,
             });
 
+            const signalAccent = isSiphoned
+              ? primaryScannerSignalAccent(node.node.veilSignals)
+              : null;
+
             return (
               <Group key={node.id}>
                 {node.isHostilePatrol ? (
@@ -942,6 +947,18 @@ function VectorScannerComponent({
                     style="fill"
                   >
                     <Blur blur={10} />
+                  </Circle>
+                ) : null}
+                {signalAccent ? (
+                  <Circle
+                    cx={node.canvasX}
+                    cy={node.canvasY}
+                    r={node.visualRadius * scale * 2.4}
+                    color={accentWithAlpha(signalAccent, 0.65)}
+                    opacity={0.28}
+                    style="fill"
+                  >
+                    <Blur blur={12} />
                   </Circle>
                 ) : null}
                 <Circle

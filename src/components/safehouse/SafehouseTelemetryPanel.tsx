@@ -103,8 +103,18 @@ export default function SafehouseTelemetryPanel({
 
       <View style={[styles.intelBlock, { borderLeftColor: activeCabal, padding: 12 * fontScale }]}>
         <Text style={[styles.intelMeta, { fontSize: labelSize, color: MUTED_SLATE }]}>
-          {`TARGET: ${intel.districtName.toUpperCase()} // ${intel.dominantFaction.toUpperCase()}`}
+          {`TARGET: ${intel.districtName.toUpperCase()} // ${intel.depthStageLabel.toUpperCase()} // ${intel.anchorStageLabel.toUpperCase()}`}
         </Text>
+        {intel.activeAnchorName ? (
+          <Text style={[styles.intelMeta, { fontSize: labelSize, color: MUTED_SLATE, marginTop: 4 * fontScale }]}>
+            {`ANCHOR: ${intel.activeAnchorName.toUpperCase()}`}
+          </Text>
+        ) : null}
+        {intel.operationTitle ? (
+          <Text style={[styles.intelMeta, { fontSize: labelSize, color: MUTED_SLATE, marginTop: 4 * fontScale }]}>
+            {`OPERATION: ${intel.operationTitle.toUpperCase()}`}
+          </Text>
+        ) : null}
         <Text style={[styles.intelWarn, { fontSize: labelSize, lineHeight: labelSize * 1.5, color: STARK_WHITE }]}>
           {formatIntelWarning(intel)}
         </Text>
