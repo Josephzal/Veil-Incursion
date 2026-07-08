@@ -24,7 +24,6 @@ interface GameFlowContextType {
   startRunComplete: () => void;
   startOperationDebrief: () => void;
   startSafehouse: () => void;
-  startGameOver: () => void;
   deployEncounter: (encounterType: EncounterType) => void;
 }
 
@@ -59,7 +58,6 @@ export function GameFlowProvider({ children }: { children: React.ReactNode }) {
   const startRunComplete = useCallback(() => setCurrentScreen('RUN_COMPLETE'), []);
   const startOperationDebrief = useCallback(() => setCurrentScreen('OPERATION_DEBRIEF'), []);
   const startSafehouse = useCallback(() => setCurrentScreen('SAFEHOUSE'), []);
-  const startGameOver = useCallback(() => setCurrentScreen('GAME_OVER'), []);
 
   const deployEncounter = useCallback((encounterType: EncounterType) => {
     switch (encounterType) {
@@ -99,7 +97,6 @@ export function GameFlowProvider({ children }: { children: React.ReactNode }) {
       startRunComplete,
       startOperationDebrief,
       startSafehouse,
-      startGameOver,
       deployEncounter,
     }),
     [
@@ -123,7 +120,6 @@ export function GameFlowProvider({ children }: { children: React.ReactNode }) {
       startRunComplete,
       startOperationDebrief,
       startSafehouse,
-      startGameOver,
       deployEncounter,
     ],
   );

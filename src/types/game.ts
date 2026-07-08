@@ -9,6 +9,11 @@ import type { PatrolState } from './overworldPatrol';
 import type { AegisLoadout, AegisAbilityId } from './aegisCombat';
 import { createDefaultPendingNarrativeCombatBoons } from './narrativeBonusReward';
 import type { ResourceQuantity } from './resourceItem';
+import {
+  createEmptyRunPhysicalBankSnapshot,
+  createEmptyRunResourceLedger,
+} from './runResourceLedger';
+import { createEmptyContractRunProgress } from './contract';
 import type { LeyLineMutationId } from './leyLineMutation';
 import type { EnvoyBoonId, HexShotBoonId } from './classBoon';
 import type { EnvoyGraftId, HexShotGraftId } from './classGraft';
@@ -92,6 +97,8 @@ export interface PlayerAccount {
   /** Persistent Veil Residue harvested across incursions — vaulted at extraction. */
   veilResidueBalance: number;
   alignedFaction: FactionType | null;
+  /** Per-sponsor reputation from completed contracts. */
+  sponsorReputation: Partial<Record<FactionType, number>>;
   factionPerks: FactionModifiers;
   activeClass: ClassType;
   unlockedClasses: ClassType[];
@@ -450,10 +457,16 @@ export interface ActiveIncursionState {
   encounterUltimateDisabled: boolean;
   /** VOID'S TOLL — permanent +1 AP per ultimate kill this incursion. */
   voidsTollApBonus: number;
-  /** Passive modifiers derived from Veil Front sector + employer selection. */
+  /** Passive modifiers derived from Veil Front sector + contract selection. */
   runModifiers: import('../types/worldState').RunModifierSnapshot;
   /** Full meta-to-run context frozen at descent — depth resolved per node later. */
   runGenerationContext: import('../types/worldState').RunGenerationContext | null;
+  /** Sponsor contract snapshot frozen at descent. */
+  activeContract: import('../types/contract').ActiveRunContract | null;
+  /** Contract-specific run facts consumed by the contract resolver at debrief. */
+  contractRunProgress: import('../types/contract').ContractRunProgress;
+  /** Operation contribution already applied mid-run (operation/anchor signal clears). */
+  operationContributionTransmitted: number;
   /** Per-district encounter pacing — alpha duel index, anti-repetition history. */
   runSegment: import('../data/encounterGenerator').RunSegmentState | null;
   /** Pre-generated StS-style 15-depth branching map for scanner routing. */
@@ -466,6 +479,10 @@ export interface ActiveIncursionState {
   anchorAssaultProgress: import('../data/anchorAssaultEngine').AnchorAssaultProgress;
   /** Echo Recovery residue defeats tracked during the run. */
   echoRecoveryProgress: import('../data/echoRecoveryEngine').EchoRecoveryProgress;
+  /** In-run safehouse physical bank — survives death within the same run. */
+  runBankedSnapshot: import('../types/runResourceLedger').RunPhysicalBankSnapshot;
+  /** Per-run resource collection, banking, extraction, and loss accounting. */
+  runResourceLedger: import('../types/runResourceLedger').RunResourceLedger;
 }
 
 export function createDefaultEnvironmentalModifiers(): EnvironmentalModifiers {
@@ -562,11 +579,16 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
       firstTurnApBonus: 0,
     },
     runGenerationContext: null,
+    activeContract: null,
+    contractRunProgress: createEmptyContractRunProgress(),
+    operationContributionTransmitted: 0,
     runSegment: null,
     proceduralRunTree: null,
     revealedSonarNodeIds: [],
     pendingProceduralResourcePool: [],
     anchorAssaultProgress: { elitesDefeated: 0, coreCleared: false },
     echoRecoveryProgress: { echoesDefeated: 0, legendaryDefeated: 0 },
+    runBankedSnapshot: createEmptyRunPhysicalBankSnapshot(),
+    runResourceLedger: createEmptyRunResourceLedger(),
   };
 }

@@ -7,10 +7,17 @@ import { SectionFrame } from './VeilFrontUiPrimitives';
 import { useHubLayout } from '../../context/HubLayoutContext';
 import type { PlayerAccount } from '../../types/game';
 import type { OperativeProfile } from '../../types/profile';
-import type { CabalEmployerId, SectorState } from '../../types/worldState';
+import type { SectorState } from '../../types/worldState';
+import type { SelectedContractState } from '../../types/contract';
 import { TerminalTheme } from '../../types/theme';
-import { employerSponsorLabel } from '../../utils/employerContractUi';
-import { hazardLabel } from '../../utils/veilFrontSectorUi';
+import {
+  contractSectorWarning,
+  formatContractRewardSummary,
+  sponsorDisplayName,
+  type ContractSectorCompatibility,
+} from '../../utils/contractUi';
+import { hazardLabel, formatOperationLifecycleStatus } from '../../utils/veilFrontSectorUi';
+import { describeEmployerPerks } from '../../utils/employerContractUi';
 
 interface VeilFrontDeployConfirmModalProps {
   visible: boolean;
@@ -18,7 +25,8 @@ interface VeilFrontDeployConfirmModalProps {
   profile: OperativeProfile;
   account: PlayerAccount;
   sector: SectorState;
-  selectedEmployer: CabalEmployerId | null;
+  selectedContract: SelectedContractState;
+  sectorCompatibility: ContractSectorCompatibility;
   launching: boolean;
   onContinue: () => void;
   onAbort: () => void;
@@ -54,16 +62,22 @@ export default function VeilFrontDeployConfirmModal({
   profile,
   account,
   sector,
-  selectedEmployer,
+  selectedContract,
+  sectorCompatibility,
   launching,
   onContinue,
   onAbort,
 }: VeilFrontDeployConfirmModalProps): React.JSX.Element {
   const { scaleSpacing, scaleSize } = useHubLayout();
-  const sponsorSummary = selectedEmployer
-    ? employerSponsorLabel(selectedEmployer)
-    : 'No Sponsor';
   const rewardFocus = sector.resourceFocus.slice(0, 2).join(' / ');
+  const sectorWarning = contractSectorWarning(sectorCompatibility);
+  const isSponsor = selectedContract.kind === 'SPONSOR';
+  const contract = isSponsor ? selectedContract.contract : null;
+  const operationLifecycle = formatOperationLifecycleStatus(
+    sector.activeOperation.lifecycleStatus,
+    sector.activeOperation.runsRemaining,
+  );
+  const sponsorPerks = isSponsor ? describeEmployerPerks(contract!.sponsorId) : [];
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onAbort}>
@@ -90,11 +104,49 @@ export default function VeilFrontDeployConfirmModal({
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: scaleSpacing(8) }}>
             <OperativeIdentityDossier theme={theme} profile={profile} account={account} compact />
 
+            {sectorWarning ? (
+              <View
+                style={[
+                  styles.warningBanner,
+                  {
+                    borderColor: sectorCompatibility === 'UNAVAILABLE' ? '#f87171' : theme.mutedColor,
+                    marginTop: scaleSpacing(12),
+                    padding: scaleSpacing(8),
+                  },
+                ]}
+              >
+                <TerminalText variant="micro" style={{ color: sectorCompatibility === 'UNAVAILABLE' ? '#f87171' : theme.mutedColor }}>
+                  {sectorWarning.toUpperCase()}
+                </TerminalText>
+              </View>
+            ) : null}
+
             <View style={{ marginTop: scaleSpacing(16) }}>
               <SectionFrame title="Deployment Summary" accentColor={theme.statusColor}>
                 <SummaryRow label="Sector" value={sector.displayName} mutedColor={theme.mutedColor} textColor={theme.textColor} />
-                <SummaryRow label="Sponsor" value={sponsorSummary} mutedColor={theme.mutedColor} textColor={theme.textColor} />
+                <SummaryRow
+                  label="Contract"
+                  value={isSponsor ? contract!.title : 'Independent Breach'}
+                  mutedColor={theme.mutedColor}
+                  textColor={theme.textColor}
+                />
+                <SummaryRow
+                  label="Sponsor"
+                  value={isSponsor ? sponsorDisplayName(contract!.sponsorId) : 'No Sponsor'}
+                  mutedColor={theme.mutedColor}
+                  textColor={theme.textColor}
+                />
+                {isSponsor ? (
+                  <>
+                    <SummaryRow label="Objective" value={contract!.objectiveText} mutedColor={theme.mutedColor} textColor={theme.textColor} />
+                    <SummaryRow label="Reward" value={formatContractRewardSummary(contract!)} mutedColor={theme.mutedColor} textColor={theme.statusColor} />
+                    {sponsorPerks.length > 0 ? (
+                      <SummaryRow label="Perks" value={sponsorPerks.join(' · ')} mutedColor={theme.mutedColor} textColor={theme.textColor} />
+                    ) : null}
+                  </>
+                ) : null}
                 <SummaryRow label="Operation" value={sector.activeOperation.title} mutedColor={theme.mutedColor} textColor={theme.textColor} />
+                <SummaryRow label="Op Status" value={operationLifecycle} mutedColor={theme.mutedColor} textColor={theme.textColor} />
                 <SummaryRow label="Threat" value={hazardLabel(sector.hazardLevel)} mutedColor={theme.mutedColor} textColor={theme.textColor} />
                 <SummaryRow label="Reward Focus" value={rewardFocus} mutedColor={theme.mutedColor} textColor={theme.textColor} />
                 {sector.activeAnchor ? (
@@ -158,6 +210,10 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 620,
     borderWidth: 2,
+  },
+  warningBanner: {
+    borderWidth: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
   },
   summaryRow: {
     flexDirection: 'row',

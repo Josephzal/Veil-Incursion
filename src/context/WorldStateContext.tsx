@@ -14,17 +14,25 @@ import {
   buildRunGenerationContext,
   createDefaultWorldState,
   getHubBlackMarketDiscount,
-  resolveSectorOperationIndex,
+  refreshContractBoardAfterRun,
   runGenerationContextToModifiers,
   tickTemporarySectorModifiers,
 } from '../data/worldStateEngine';
-import { getNextSectorOperationTemplate, getSectorWorldTemplate } from '../data/sectorWorldCatalog';
+import { tickAllSectorOperationLifecycles } from '../data/operationLifecycleEngine';
+import { generateContractBoard } from '../data/contractGenerator';
 import {
   LocalOperationProgressProvider,
   SimulatedGlobalOperationProgressProvider,
 } from '../data/operationProgressProvider';
 import { DEFAULT_OPERATION_PROGRESS_REQUIRED } from '../data/worldStateHelpers';
 import { migrateWorldStateSectorKeys, normalizeSectorId } from '../data/sectorBiomeBridge';
+import type {
+  GeneratedContract,
+  SelectedContractState,
+} from '../types/contract';
+import {
+  createIndependentSelectedContract,
+} from '../types/contract';
 import type {
   CabalEmployerId,
   RunGenerationContext,
@@ -59,7 +67,9 @@ interface WorldStateContextType {
   setPendingDebrief: (payload: OperationDebriefPayload | null) => void;
   clearPendingDebrief: () => void;
   setSelectedSectorId: (sectorId: SectorId) => void;
-  setSelectedEmployerCabal: (employer: CabalEmployerId | null) => void;
+  selectContract: (contract: GeneratedContract) => void;
+  selectIndependentContract: () => void;
+  abandonSelectedContract: () => void;
   buildRunContextForDescent: () => {
     runGenerationContext: RunGenerationContext;
     runModifiers: RunModifierSnapshot;
@@ -73,18 +83,39 @@ interface WorldStateContextType {
 
 const WorldStateContext = createContext<WorldStateContextType | undefined>(undefined);
 
-function mergePersistedState(parsed: Partial<WorldStatePersistedState>): WorldStatePersistedState {
+function mergePersistedState(parsed: Partial<WorldStatePersistedState> & { selectedEmployerCabal?: CabalEmployerId | null }): WorldStatePersistedState {
   const defaults = createDefaultWorldState();
+  const deployRunIndex = parsed.deployRunIndex ?? defaults.deployRunIndex;
+  const baseBoard = parsed.contractBoard ?? {
+    contracts: generateContractBoard(deployRunIndex),
+    selectedContract: createIndependentSelectedContract(),
+    boardRefreshRunIndex: deployRunIndex,
+    lastUsedSponsorId: null,
+  };
+  const contractBoard = {
+    ...baseBoard,
+    lastUsedSponsorId: baseBoard.lastUsedSponsorId ?? parsed.selectedEmployerCabal ?? null,
+  };
+  if (!contractBoard.contracts || contractBoard.contracts.length === 0) {
+    contractBoard.contracts = generateContractBoard(deployRunIndex);
+  }
+
   const merged: WorldStatePersistedState = {
     ...defaults,
     ...parsed,
     selectedSectorId: normalizeSectorId(parsed.selectedSectorId ?? defaults.selectedSectorId),
+    contractBoard,
+    deployRunIndex,
     operationProgress: { ...defaults.operationProgress, ...parsed.operationProgress },
     activeOperationIndex: { ...defaults.activeOperationIndex, ...parsed.activeOperationIndex },
     temporarySectorModifiers: parsed.temporarySectorModifiers ?? defaults.temporarySectorModifiers,
     dormantAnchorRuns: { ...defaults.dormantAnchorRuns, ...parsed.dormantAnchorRuns },
+    sectorOperationLifecycle: {
+      ...defaults.sectorOperationLifecycle,
+      ...parsed.sectorOperationLifecycle,
+    },
     operationLog: parsed.operationLog ?? defaults.operationLog,
-    version: 1,
+    version: 2,
   };
   return migrateWorldStateSectorKeys(merged);
 }
@@ -155,21 +186,40 @@ export function WorldStateProvider({ children }: { children: React.ReactNode }) 
   );
 
   const setSelectedSectorId = useCallback((sectorId: SectorId) => {
-    setPersisted((prev) => {
-      const template = getSectorWorldTemplate(sectorId);
-      const employerValid = prev.selectedEmployerCabal == null
-        || template.employerPresence.includes(prev.selectedEmployerCabal);
-      return {
-        ...prev,
-        selectedSectorId: sectorId,
-        selectedEmployerCabal: employerValid ? prev.selectedEmployerCabal : null,
-      };
-    });
+    setPersisted((prev) => ({
+      ...prev,
+      selectedSectorId: sectorId,
+    }));
   }, []);
 
-  const setSelectedEmployerCabal = useCallback((employer: CabalEmployerId | null) => {
-    setPersisted((prev) => ({ ...prev, selectedEmployerCabal: employer }));
+  const selectContract = useCallback((contract: GeneratedContract) => {
+    setPersisted((prev) => ({
+      ...prev,
+      contractBoard: {
+        ...prev.contractBoard,
+        lastUsedSponsorId: contract.sponsorId,
+        selectedContract: {
+          kind: 'SPONSOR',
+          contract,
+          selectedAtRunIndex: prev.deployRunIndex,
+        } satisfies SelectedContractState,
+      },
+    }));
   }, []);
+
+  const selectIndependentContract = useCallback(() => {
+    setPersisted((prev) => ({
+      ...prev,
+      contractBoard: {
+        ...prev.contractBoard,
+        selectedContract: createIndependentSelectedContract(),
+      },
+    }));
+  }, []);
+
+  const abandonSelectedContract = useCallback(() => {
+    selectIndependentContract();
+  }, [selectIndependentContract]);
 
   const buildRunContextForDescent = useCallback(() => {
     const context = buildRunGenerationContext(persisted, operationProgress);
@@ -216,8 +266,6 @@ export function WorldStateProvider({ children }: { children: React.ReactNode }) 
           });
           next = resolved.next;
           logLines = [...logLines, ...resolved.logLines];
-          const currentIndex = resolveSectorOperationIndex(sector.id, prev);
-          nextOperationTitle = getNextSectorOperationTemplate(sector.id, currentIndex).title;
         }
 
         return next;
@@ -241,7 +289,11 @@ export function WorldStateProvider({ children }: { children: React.ReactNode }) 
   }, []);
 
   const tickAfterRunComplete = useCallback(() => {
-    setPersisted((prev) => tickTemporarySectorModifiers(prev));
+    setPersisted((prev) => {
+      const afterModifiers = tickTemporarySectorModifiers(prev);
+      const { next: afterLifecycle } = tickAllSectorOperationLifecycles(afterModifiers);
+      return refreshContractBoardAfterRun(afterLifecycle);
+    });
   }, []);
 
   const value = useMemo(
@@ -257,7 +309,9 @@ export function WorldStateProvider({ children }: { children: React.ReactNode }) 
       setPendingDebrief,
       clearPendingDebrief,
       setSelectedSectorId,
-      setSelectedEmployerCabal,
+      selectContract,
+      selectIndependentContract,
+      abandonSelectedContract,
       buildRunContextForDescent,
       applyOperationContribution,
       tickAfterRunComplete,
@@ -272,7 +326,9 @@ export function WorldStateProvider({ children }: { children: React.ReactNode }) 
       hubBlackMarketDiscountPct,
       pendingDebrief,
       setSelectedSectorId,
-      setSelectedEmployerCabal,
+      selectContract,
+      selectIndependentContract,
+      abandonSelectedContract,
       buildRunContextForDescent,
       applyOperationContribution,
       clearPendingDebrief,

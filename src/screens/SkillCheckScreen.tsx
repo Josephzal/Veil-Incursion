@@ -11,6 +11,7 @@ import { useRun } from '../context/RunContext';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useNodeProgression } from '../hooks/useNodeProgression';
+import { useRunDeathFinalizer } from '../hooks/useRunDeathFinalizer';
 
 const TERMINAL_ACCENT = '#00ff33';
 
@@ -39,11 +40,11 @@ export default function SkillCheckScreen(): React.JSX.Element {
     getCurrentSkillCheck,
     applySkillCheckTier,
     appendRunLog,
-    endRun,
     setPendingAmbush,
   } = useRun();
-  const { startCombat, startGameOver } = useGameFlow();
+  const { startCombat } = useGameFlow();
   const { completeCurrentNode } = useNodeProgression();
+  const { finalizeRunDeath } = useRunDeathFinalizer();
   const event = getCurrentSkillCheck();
 
   const [phase, setPhase] = useState<CalibrationPhase>('READY');
@@ -131,8 +132,7 @@ export default function SkillCheckScreen(): React.JSX.Element {
 
     setTimeout(() => {
       if (projectedHp <= 0 && tier !== 'CRITICAL_SUCCESS') {
-        endRun('SOUL ANCHOR DESTROYED');
-        startGameOver();
+        finalizeRunDeath('SOUL ANCHOR DESTROYED');
         return;
       }
 

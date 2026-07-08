@@ -3,6 +3,8 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import InventoryMatrixRow from '../InventoryMatrixRow';
 import { formatBracketHeader, hubTerminalUi } from '../../styles/hubTerminalUi';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
+import { useRun } from '../../context/RunContext';
+import { summarizeBankSnapshot } from '../../data/runResourceLedgerEngine';
 import { useTerminal } from '../../context/TerminalContext';
 
 function ManifestRow({
@@ -27,6 +29,8 @@ function ManifestRow({
 export default function SafehouseInventoryTab(): React.JSX.Element {
   const { theme, profile } = useTerminal();
   const { account } = usePlayerAccount();
+  const { activeIncursion } = useRun();
+  const bankSummary = summarizeBankSnapshot(activeIncursion.runBankedSnapshot);
 
   const manifest = profile.operative_profile.payload_manifest;
   const currencies = manifest.currencies;
@@ -66,7 +70,12 @@ export default function SafehouseInventoryTab(): React.JSX.Element {
         <ManifestRow label="CABAL_TRIBUTES" value={String(currencies.cabal_tributes)} mutedColor={theme.mutedColor} textColor={theme.textColor} />
         <ManifestRow label="FREQUENCY_TOKENS" value={String(currencies.frequency_tokens)} mutedColor={theme.mutedColor} textColor={theme.textColor} />
         <ManifestRow label="CABAL_CREDITS" value={String(account.cabalCredits)} mutedColor={theme.mutedColor} textColor={theme.textColor} />
-        <ManifestRow label="BANKED CARGO VALUE" value={`${account.bankedCargo.totalValue} CR`} mutedColor={theme.mutedColor} textColor={theme.textColor} />
+        <ManifestRow
+          label="SAFEHOUSE BANK (RUN)"
+          value={`${bankSummary.resourceCount} RES // ${bankSummary.consumableCount} ITEM`}
+          mutedColor={theme.mutedColor}
+          textColor={theme.textColor}
+        />
       </View>
 
       <View style={hubTerminalUi.dataSection}>

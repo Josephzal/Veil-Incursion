@@ -71,7 +71,8 @@ import {
   returnCargoItemToHubStash,
   stageStashItemToCargoContainment,
 } from '../data/hubSafehouseEngine';
-import { depositAllCargoToHubAccount, resolveExtractionVeilResidueDeposit } from '../data/extractionPersistenceEngine';
+import { depositAllCargoToHubAccount, depositPhysicalBankSnapshot, resolveExtractionVeilResidueDeposit } from '../data/extractionPersistenceEngine';
+import type { RunPhysicalBankSnapshot } from '../types/runResourceLedger';
 import { relocateCargoItem } from '../data/cargoGridEngine';
 import { isResourceItemId } from '../data/resourceRegistry';
 import type { FenceableResourceId, ResourceItemId } from '../types/resourceItem';
@@ -118,7 +119,8 @@ export function createDefaultPlayerAccount(): PlayerAccount {
     experiencePoints: 0,
     cabalCredits: 500,
     veilResidueBalance: 0,
-    alignedFaction: null,
+    alignedFaction: 'TERRAN_GRID',
+    sponsorReputation: {},
     factionPerks: { ...NEUTRAL_FACTION_PERKS },
     activeClass: 'AEGIS',
     unlockedClasses: ['AEGIS', 'HEX_SHOT', 'ENVOY'],
@@ -200,6 +202,8 @@ function mergeStoredAccount(parsed: Partial<PlayerAccount>): PlayerAccount {
       ...createEmptyResourceStash(),
       ...parsed.resourceStash,
     },
+    alignedFaction: parsed.alignedFaction ?? defaults.alignedFaction ?? 'TERRAN_GRID',
+    sponsorReputation: { ...defaults.sponsorReputation, ...parsed.sponsorReputation },
     unlockedBlueprints: parsed.unlockedBlueprints ?? defaults.unlockedBlueprints,
     craftedAugments: parsed.craftedAugments ?? defaults.craftedAugments,
     hubCraftedConsumables: {
@@ -236,6 +240,7 @@ interface PlayerAccountContextType {
   commitFactionAlignment: (faction: FactionType) => void;
   addCredits: (amount: number) => void;
   addRiftIron: (amount: number) => void;
+  grantContractRewards: (result: import('../types/contract').ContractResult) => void;
   addExperience: (amount: number) => void;
   equipInventoryItem: (itemId: string) => void;
   decryptTier1Cache: () => Promise<string[]>;
@@ -293,6 +298,8 @@ interface PlayerAccountContextType {
     /** @deprecated Prefer sessionVeilResidueCollected — cargo residue is resolved automatically. */
     veilResidueCollected?: number;
   }) => void;
+  /** Routes safehouse-banked run cargo into hub stash (e.g. after death with banked payload). */
+  persistRunBankedSnapshot: (bank: RunPhysicalBankSnapshot) => void;
   depositVeilResidueBalance: (amount: number) => number;
   /** Moves vaulted residue into the active run canister at descent. */
   transferVeilResidueIntoRun: (amount: number) => void;
@@ -392,6 +399,30 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
           },
         },
       }));
+    },
+    [updateAccount],
+  );
+
+  const grantContractRewards = useCallback(
+    (result: import('../types/contract').ContractResult) => {
+      if (result.status !== 'SUCCESS' || !result.sponsorId) return;
+      updateAccount((prev) => {
+        const nextStash = { ...prev.resourceStash };
+        result.resourceBonusIds.forEach((resourceId) => {
+          nextStash[resourceId] = (nextStash[resourceId] ?? 0) + 1;
+        });
+        const totalCredits = result.creditsAwarded + result.bonusCreditsAwarded;
+        const totalReputation = result.reputationAwarded + result.bonusReputationAwarded;
+        return {
+          ...prev,
+          cabalCredits: prev.cabalCredits + totalCredits,
+          sponsorReputation: {
+            ...prev.sponsorReputation,
+            [result.sponsorId!]: (prev.sponsorReputation[result.sponsorId!] ?? 0) + totalReputation,
+          },
+          resourceStash: nextStash,
+        };
+      });
     },
     [updateAccount],
   );
@@ -1012,6 +1043,16 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
     updateAccount,
   ]);
 
+  const persistRunBankedSnapshot = useCallback(
+    (bank: RunPhysicalBankSnapshot) => {
+      updateAccount((prev) => ({
+        ...prev,
+        ...depositPhysicalBankSnapshot(bank, prev),
+      }));
+    },
+    [updateAccount],
+  );
+
   const persistRunExtraction = useCallback(
     (payload: {
       cargo: CargoRunState;
@@ -1172,6 +1213,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       commitFactionAlignment,
       addCredits,
       addRiftIron,
+      grantContractRewards,
       addExperience,
       equipInventoryItem,
       decryptTier1Cache,
@@ -1208,6 +1250,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       sellFenceResource,
       commitDescentLoadout,
       persistRunExtraction,
+      persistRunBankedSnapshot,
       depositVeilResidueBalance,
       transferVeilResidueIntoRun,
       restoreVeilResidueBaseline,
@@ -1222,6 +1265,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       commitFactionAlignment,
       addCredits,
       addRiftIron,
+      grantContractRewards,
       addExperience,
       equipInventoryItem,
       decryptTier1Cache,
@@ -1258,6 +1302,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       sellFenceResource,
       commitDescentLoadout,
       persistRunExtraction,
+      persistRunBankedSnapshot,
       depositVeilResidueBalance,
       transferVeilResidueIntoRun,
       restoreVeilResidueBaseline,

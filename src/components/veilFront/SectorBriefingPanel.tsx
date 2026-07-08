@@ -2,34 +2,31 @@ import React, { useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import HapticPressable from '../HapticPressable';
 import TerminalText from '../TerminalText';
+import SelectedContractSummary from './SelectedContractSummary';
 import { ProgressBar } from './VeilFrontUiPrimitives';
 import { useVeilFrontLayout } from './useVeilFrontLayout';
-import { FACTION_DEFINITIONS } from '../../data/factions';
 import { operationProgressPercent } from '../../data/worldStateHelpers';
 import { anchorIdForSector, getSectorWorldTemplate } from '../../data/sectorWorldCatalog';
-import { HUB_DATA_DIVIDER } from '../../styles/hubTerminalUi';
-import type { CabalEmployerId, SectorState } from '../../types/worldState';
+import type { SelectedContractState } from '../../types/contract';
+import type { SectorState } from '../../types/worldState';
 import { TerminalTheme } from '../../types/theme';
 import {
   describeAnchorInRunPressure,
   formatOperationContributes,
+  formatOperationLifecycleStatus,
   operationTypeChip,
 } from '../../utils/veilFrontSectorUi';
-import {
-  describeEmployerPerks,
-  employerSponsorLabel,
-} from '../../utils/employerContractUi';
+import { contractSectorWarning, type ContractSectorCompatibility } from '../../utils/contractUi';
 import { useWorldState } from '../../context/WorldStateContext';
 import { viewShadow } from '../../utils/adaptiveStyles';
 
-const ALL_EMPLOYERS: CabalEmployerId[] = ['TERRAN_GRID', 'LEGION', 'SOLARIS'];
-type BriefingTab = 'operation' | 'anchor' | 'contracts';
+type BriefingTab = 'operation' | 'anchor' | 'contract';
 
 interface SectorBriefingPanelProps {
   theme: TerminalTheme;
   sector: SectorState;
-  selectedEmployer: CabalEmployerId | null;
-  onSelectEmployer: (employer: CabalEmployerId | null) => void;
+  selectedContract: SelectedContractState;
+  sectorCompatibility: ContractSectorCompatibility;
   onRequestDeploy: () => void;
   runDisabled: boolean;
   launching: boolean;
@@ -71,7 +68,7 @@ function BriefingTabs({
   const tabs: { id: BriefingTab; label: string }[] = [
     { id: 'operation', label: 'OPERATION' },
     { id: 'anchor', label: 'ANCHOR' },
-    { id: 'contracts', label: 'CONTRACTS' },
+    { id: 'contract', label: 'CONTRACT' },
   ];
 
   return (
@@ -107,30 +104,47 @@ function BriefingTabs({
   );
 }
 
-function OperationTabContent({ theme, sector }: { theme: TerminalTheme; sector: SectorState }) {
+function OperationTabContent({
+  theme,
+  sector,
+  operationLog,
+}: {
+  theme: TerminalTheme;
+  sector: SectorState;
+  operationLog: string[];
+}) {
   const { scaleFont, scaleSize, scaleSpacing, descriptionLines, showOptionalCopy } = useVeilFrontLayout();
+  const operation = sector.activeOperation;
   const operationPct = operationProgressPercent(
-    sector.activeOperation.progressCurrent,
-    sector.activeOperation.progressRequired,
+    operation.progressCurrent,
+    operation.progressRequired,
   );
-  const contributes = formatOperationContributes(sector.activeOperation.contributionRules);
+  const contributes = formatOperationContributes(operation.contributionRules);
+  const lifecycleLabel = formatOperationLifecycleStatus(
+    operation.lifecycleStatus,
+    operation.runsRemaining,
+  );
+  const recentLog = operationLog.slice(0, 4);
 
   return (
     <View style={[styles.tabBody, { gap: scaleSpacing(9) }]}>
       <TerminalText size={scaleFont(6)} letterSpacing={0.7} style={{ color: theme.statusColor, fontWeight: '700' }}>
         ACTIVE OPERATION
       </TerminalText>
-      <TerminalText size={scaleFont(8.2)} style={[styles.wrapText, { color: theme.textColor, fontWeight: '800', lineHeight: scaleSize(11) }]}>
-        {sector.activeOperation.title}
+      <TerminalText size={scaleFont(5.8)} style={{ color: theme.mutedColor }}>
+        {lifecycleLabel}
       </TerminalText>
-      <TypeChip label={operationTypeChip(sector.activeOperation.objectiveKind)} accentColor={theme.statusColor} />
+      <TerminalText size={scaleFont(8.2)} style={[styles.wrapText, { color: theme.textColor, fontWeight: '800', lineHeight: scaleSize(11) }]}>
+        {operation.title}
+      </TerminalText>
+      <TypeChip label={operationTypeChip(operation.objectiveKind)} accentColor={theme.statusColor} />
       {showOptionalCopy ? (
         <TerminalText
           size={scaleFont(6.8)}
           style={[styles.wrapText, { color: theme.mutedColor, lineHeight: scaleSize(11) }]}
           numberOfLines={descriptionLines}
         >
-          {sector.activeOperation.description}
+          {operation.description}
         </TerminalText>
       ) : null}
       <View style={{ gap: scaleSpacing(4) }}>
@@ -149,6 +163,18 @@ function OperationTabContent({ theme, sector }: { theme: TerminalTheme; sector: 
               <ContributionRow key={line} label={line} color={theme.textColor} />
             ))}
           </View>
+        </View>
+      ) : null}
+      {recentLog.length > 0 ? (
+        <View style={[styles.listBlock, { gap: scaleSpacing(4), borderTopColor: `${theme.statusColor}24`, paddingTop: scaleSpacing(7) }]}>
+          <TerminalText size={scaleFont(5.5)} letterSpacing={0.6} style={{ color: theme.mutedColor }}>
+            OPERATION INTEL
+          </TerminalText>
+          {recentLog.map((line) => (
+            <TerminalText key={line} size={scaleFont(5.8)} style={{ color: theme.mutedColor }} numberOfLines={2}>
+              {line.replace(/^>>\s*/, '')}
+            </TerminalText>
+          ))}
         </View>
       ) : null}
     </View>
@@ -209,108 +235,12 @@ function AnchorTabContent({ theme, sector }: { theme: TerminalTheme; sector: Sec
   );
 }
 
-function ContractsTabContent({
-  theme,
-  sector,
-  selectedEmployer,
-  onSelectEmployer,
-}: {
-  theme: TerminalTheme;
-  sector: SectorState;
-  selectedEmployer: CabalEmployerId | null;
-  onSelectEmployer: (employer: CabalEmployerId | null) => void;
-}) {
-  const { scaleSpacing } = useVeilFrontLayout();
-  const availableEmployers = ALL_EMPLOYERS.filter(
-    (id) => sector.employerPresence?.includes(id) ?? true,
-  );
-
-  return (
-    <View style={[styles.tabBody, { gap: scaleSpacing(7) }]}>
-      <ContractCard
-        title="NO SPONSOR"
-        perks={[]}
-        isSelected={selectedEmployer === null}
-        accentColor={theme.statusColor}
-        textColor={theme.textColor}
-        onPress={() => onSelectEmployer(null)}
-      />
-      {availableEmployers.map((employerId) => {
-        const def = FACTION_DEFINITIONS[employerId];
-        return (
-          <ContractCard
-            key={employerId}
-            title={employerSponsorLabel(employerId).toUpperCase()}
-            perks={describeEmployerPerks(employerId)}
-            isSelected={selectedEmployer === employerId}
-            accentColor={def.accentColor}
-            textColor={theme.textColor}
-            onPress={() => onSelectEmployer(employerId)}
-          />
-        );
-      })}
-    </View>
-  );
-}
-
-function ContractCard({
-  title,
-  perks,
-  isSelected,
-  accentColor,
-  textColor,
-  onPress,
-}: {
-  title: string;
-  perks: string[];
-  isSelected: boolean;
-  accentColor: string;
-  textColor: string;
-  onPress: () => void;
-}) {
-  const { cardPadding, scaleFont, scaleSpacing } = useVeilFrontLayout();
-
-  return (
-    <HapticPressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.contractCard,
-        {
-          borderColor: isSelected ? accentColor : HUB_DATA_DIVIDER,
-          backgroundColor: isSelected ? `${accentColor}14` : 'rgba(15, 23, 42, 0.28)',
-          paddingHorizontal: cardPadding,
-          paddingVertical: scaleSpacing(6),
-          opacity: pressed ? 0.9 : 1,
-        },
-      ]}
-    >
-      <TerminalText size={scaleFont(6.8)} style={{ color: isSelected ? accentColor : textColor, fontWeight: '700' }}>
-        {title}
-      </TerminalText>
-      {perks.length > 0 ? (
-        <View style={[styles.perkList, { gap: scaleSpacing(3), marginTop: scaleSpacing(4) }]}>
-          {perks.map((perk) => (
-            <View
-              key={perk}
-              style={[styles.perkChip, { borderColor: `${accentColor}44`, paddingHorizontal: scaleSpacing(5), paddingVertical: scaleSpacing(2) }]}
-            >
-              <TerminalText size={scaleFont(5.5)} style={{ color: textColor }}>
-                {perk}
-              </TerminalText>
-            </View>
-          ))}
-        </View>
-      ) : null}
-    </HapticPressable>
-  );
-}
-
 /** Right panel — tabs + tab content + deploy only. Summary lives on map top band. */
 export default function SectorBriefingPanel({
   theme,
   sector,
-  selectedEmployer,
-  onSelectEmployer,
+  selectedContract,
+  sectorCompatibility,
   onRequestDeploy,
   runDisabled,
   launching,
@@ -319,14 +249,17 @@ export default function SectorBriefingPanel({
     sectionGap,
     cardPadding,
     scaleFont,
+    scaleSpacing,
     deployButtonHeight,
   } = useVeilFrontLayout();
+  const { persisted } = useWorldState();
   const [activeTab, setActiveTab] = useState<BriefingTab>('operation');
 
   const canLaunch = !runDisabled && !launching;
   const deployLabel = launching
     ? '[ DEPLOYING... ]'
     : '[ INITIATE BREACH ]';
+  const sectorWarning = contractSectorWarning(sectorCompatibility);
 
   return (
     <View style={[styles.panel, { gap: sectionGap }]}>
@@ -334,18 +267,22 @@ export default function SectorBriefingPanel({
 
       <View style={[styles.tabContent, { padding: cardPadding, borderColor: `${theme.statusColor}33` }]}>
         {activeTab === 'operation' ? (
-          <OperationTabContent theme={theme} sector={sector} />
+          <OperationTabContent theme={theme} sector={sector} operationLog={persisted.operationLog} />
         ) : activeTab === 'anchor' ? (
           <AnchorTabContent theme={theme} sector={sector} />
         ) : (
-          <ContractsTabContent
-            theme={theme}
-            sector={sector}
-            selectedEmployer={selectedEmployer}
-            onSelectEmployer={onSelectEmployer}
-          />
+          <SelectedContractSummary theme={theme} selectedContract={selectedContract} />
         )}
       </View>
+
+      {sectorWarning ? (
+        <TerminalText
+          size={scaleFont(5.5)}
+          style={{ color: sectorCompatibility === 'UNAVAILABLE' ? '#f87171' : theme.mutedColor, lineHeight: scaleSpacing(8) }}
+        >
+          {sectorWarning}
+        </TerminalText>
+      ) : null}
 
       <HapticPressable
         onPress={onRequestDeploy}
@@ -442,15 +379,6 @@ const styles = StyleSheet.create({
   perkChip: {
     borderWidth: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.5)',
-  },
-  contractCard: {
-    borderWidth: 1,
-    borderLeftWidth: 2,
-    overflow: 'visible',
-    ...Platform.select({
-      web: { cursor: 'pointer' as const },
-      default: {},
-    }),
   },
   deployButton: {
     width: '100%',

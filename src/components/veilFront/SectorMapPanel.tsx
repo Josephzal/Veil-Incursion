@@ -4,17 +4,20 @@ import TerminalText from '../TerminalText';
 import VeilFrontMap from './VeilFrontMap';
 import { MapSectorSummary, SectorIntel } from './MapSectorOverlays';
 import { useVeilFrontLayout } from './useVeilFrontLayout';
+import type { SelectedContractState } from '../../types/contract';
 import type { SectorId, SectorState } from '../../types/worldState';
 import { TerminalTheme } from '../../types/theme';
+import { getContractSectorCompatibility, getSelectedContractForCompatibility } from '../../utils/contractUi';
 
 interface SectorMapPanelProps {
   theme: TerminalTheme;
   sectors: SectorState[];
   activeSectorId: SectorId;
   onSectorPress: (id: SectorId) => void;
+  selectedContract: SelectedContractState;
 }
 
-function MapLegend({ theme }: { theme: TerminalTheme }): React.JSX.Element {
+function MapLegend({ theme, showContractLegend }: { theme: TerminalTheme; showContractLegend: boolean }): React.JSX.Element {
   const { scaleSpacing, isCompactHeight } = useVeilFrontLayout();
   const items = [
     { color: '#a855f7', label: 'Anchor' },
@@ -22,6 +25,13 @@ function MapLegend({ theme }: { theme: TerminalTheme }): React.JSX.Element {
     { color: '#fbbf24', label: 'Reward' },
     { color: theme.statusColor, label: 'Selected' },
   ];
+  if (showContractLegend) {
+    items.push(
+      { color: '#34d399', label: 'Ideal' },
+      { color: '#fbbf24', label: 'Valid' },
+      { color: '#f87171', label: 'Blocked' },
+    );
+  }
 
   return (
     <View style={[styles.legend, { gap: scaleSpacing(isCompactHeight ? 6 : 8) }]}>
@@ -43,12 +53,26 @@ export default function SectorMapPanel({
   sectors,
   activeSectorId,
   onSectorPress,
+  selectedContract,
 }: SectorMapPanelProps): React.JSX.Element {
   const { sectionPadding, scaleSpacing, isCompactHeight, isMapTopBandStacked } = useVeilFrontLayout();
   const activeSector = useMemo(
     () => sectors.find((s) => s.id === activeSectorId) ?? sectors[0],
     [sectors, activeSectorId],
   );
+
+  const contractForMap = useMemo(
+    () => getSelectedContractForCompatibility(selectedContract),
+    [selectedContract],
+  );
+
+  const sectorCompatibilityById = useMemo(() => {
+    if (!contractForMap) return {} as Partial<Record<SectorId, ReturnType<typeof getContractSectorCompatibility>>>;
+    return sectors.reduce<Partial<Record<SectorId, ReturnType<typeof getContractSectorCompatibility>>>>((acc, sector) => {
+      acc[sector.id] = getContractSectorCompatibility(contractForMap, sector.id);
+      return acc;
+    }, {});
+  }, [contractForMap, sectors]);
 
   return (
     <View style={[styles.panel, { padding: sectionPadding, gap: scaleSpacing(isCompactHeight ? 10 : 14) }]}>
@@ -70,10 +94,11 @@ export default function SectorMapPanel({
           sectors={sectors}
           activeSectorId={activeSectorId}
           onSectorPress={onSectorPress}
+          sectorCompatibilityById={sectorCompatibilityById}
         />
       </View>
 
-      <MapLegend theme={theme} />
+      <MapLegend theme={theme} showContractLegend={contractForMap != null} />
     </View>
   );
 }

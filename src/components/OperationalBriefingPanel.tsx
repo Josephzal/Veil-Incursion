@@ -13,8 +13,13 @@ import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useWorldState } from '../context/WorldStateContext';
 import { HUB_BORDER_INSET } from '../constants/hubCta';
-import type { CabalEmployerId, SectorId } from '../types/worldState';
+import type { SectorId } from '../types/worldState';
 import { TerminalTheme } from '../types/theme';
+import {
+  contractSectorWarning,
+  getContractSectorCompatibility,
+  getSelectedContractForCompatibility,
+} from '../utils/contractUi';
 
 interface OperationalBriefingPanelProps {
   theme: TerminalTheme;
@@ -37,7 +42,6 @@ export default function OperationalBriefingPanel({
     sectors,
     persisted,
     setSelectedSectorId,
-    setSelectedEmployerCabal,
   } = useWorldState();
   const {
     isTwoColumnShell,
@@ -53,28 +57,24 @@ export default function OperationalBriefingPanel({
   const [deployModalVisible, setDeployModalVisible] = useState(false);
 
   const dossierAccent = getDossierFactionAccent(account.alignedFaction);
+  const selectedContract = persisted.contractBoard.selectedContract;
   const activeSector = useMemo(
     () => sectors.find((s) => s.id === persisted.selectedSectorId) ?? sectors[0],
     [sectors, persisted.selectedSectorId],
   );
 
+  const sectorCompatibility = useMemo(
+    () => getContractSectorCompatibility(
+      getSelectedContractForCompatibility(selectedContract),
+      activeSector.id,
+    ),
+    [activeSector.id, selectedContract],
+  );
+
   const handleSectorPress = useCallback((sectorId: SectorId) => {
     setSelectedSectorId(sectorId);
-    const sector = sectors.find((s) => s.id === sectorId);
-    if (sector && persisted.selectedEmployerCabal) {
-      const sponsorValid = sector.employerPresence?.includes(persisted.selectedEmployerCabal) ?? true;
-      if (!sponsorValid) {
-        setSelectedEmployerCabal(null);
-      }
-    }
     onAppendLog(`>> VEIL FRONT — SECTOR SELECTED: ${sectorId.replace(/_/g, ' ')}`);
-  }, [
-    onAppendLog,
-    persisted.selectedEmployerCabal,
-    sectors,
-    setSelectedEmployerCabal,
-    setSelectedSectorId,
-  ]);
+  }, [onAppendLog, setSelectedSectorId]);
 
   const handleMapLayout = useCallback((event: LayoutChangeEvent) => {
     const { height } = event.nativeEvent.layout;
@@ -92,17 +92,17 @@ export default function OperationalBriefingPanel({
   }, [launching]);
 
   const handleContinueDeploy = useCallback(() => {
-    const sponsorLine = persisted.selectedEmployerCabal
-      ? ` // SPONSOR: ${persisted.selectedEmployerCabal.replace('_', ' ')}`
-      : '';
-    onAppendLog(`>> BREACH VECTOR LOCKED — ${activeSector.displayName.toUpperCase()}${sponsorLine}`);
+    const contractLine = selectedContract.kind === 'SPONSOR'
+      ? ` // CONTRACT: ${selectedContract.contract.title.toUpperCase()}`
+      : ' // INDEPENDENT BREACH';
+    const warning = contractSectorWarning(sectorCompatibility);
+    if (warning) {
+      onAppendLog(`>> WARNING — ${warning.toUpperCase()}`);
+    }
+    onAppendLog(`>> BREACH VECTOR LOCKED — ${activeSector.displayName.toUpperCase()}${contractLine}`);
     setDeployModalVisible(false);
     onBeginIncursion();
-  }, [activeSector.displayName, onAppendLog, onBeginIncursion, persisted.selectedEmployerCabal]);
-
-  const handleSelectEmployer = useCallback((employer: CabalEmployerId | null) => {
-    setSelectedEmployerCabal(employer);
-  }, [setSelectedEmployerCabal]);
+  }, [activeSector.displayName, onAppendLog, onBeginIncursion, sectorCompatibility, selectedContract]);
 
   const body = (
     <View style={styles.stage}>
@@ -138,6 +138,7 @@ export default function OperationalBriefingPanel({
                 sectors={sectors}
                 activeSectorId={persisted.selectedSectorId}
                 onSectorPress={handleSectorPress}
+                selectedContract={selectedContract}
               />
             </View>
             <HackingTerminalOverlay viewportHeight={mapViewportHeight} />
@@ -159,8 +160,8 @@ export default function OperationalBriefingPanel({
           <SectorBriefingPanel
             theme={theme}
             sector={activeSector}
-            selectedEmployer={persisted.selectedEmployerCabal}
-            onSelectEmployer={handleSelectEmployer}
+            selectedContract={selectedContract}
+            sectorCompatibility={sectorCompatibility}
             onRequestDeploy={handleRequestDeploy}
             runDisabled={runDisabled}
             launching={launching}
@@ -174,7 +175,8 @@ export default function OperationalBriefingPanel({
         profile={profile}
         account={account}
         sector={activeSector}
-        selectedEmployer={persisted.selectedEmployerCabal}
+        selectedContract={selectedContract}
+        sectorCompatibility={sectorCompatibility}
         launching={launching}
         onContinue={handleContinueDeploy}
         onAbort={handleAbortDeploy}
@@ -190,7 +192,7 @@ export default function OperationalBriefingPanel({
         <VeilFrontHeaderSummary
           theme={theme}
           sector={activeSector}
-          selectedEmployer={persisted.selectedEmployerCabal}
+          selectedContract={selectedContract}
         />
       ) : null}
     >

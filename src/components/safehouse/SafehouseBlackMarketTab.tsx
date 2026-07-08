@@ -6,7 +6,7 @@ import {
   hubContrabandPrice,
   listFenceableStashEntries,
 } from '../../data/hubSafehouseEngine';
-import { RESOURCE_REGISTRY } from '../../data/resourceRegistry';
+import { getResourceDisplayName, getResourceCategory } from '../../data/resourceRegistry';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useWorldState } from '../../context/WorldStateContext';
 import { useTerminal } from '../../context/TerminalContext';
@@ -150,10 +150,10 @@ function FenceRow({
     >
       <View style={styles.fenceInfo}>
         <TerminalText variant="body" style={{ color: textColor, fontWeight: '700' }}>
-          {RESOURCE_REGISTRY[resourceId].name.toUpperCase()}
+          {getResourceDisplayName(resourceId, true).toUpperCase()}
         </TerminalText>
         <TerminalText variant="caption" style={{ color: mutedColor }}>
-          {`${quantity}× @ `}
+          {`${getResourceCategory(resourceId)} // ${quantity}× @ `}
           <Text style={{ color: TERMINAL_GREEN, fontWeight: '700', fontFamily: 'monospace' }}>
             {`${sellValue} CR`}
           </Text>

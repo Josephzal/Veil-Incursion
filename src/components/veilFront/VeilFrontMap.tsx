@@ -23,6 +23,7 @@ import {
 } from '../../data/sectorWorldCatalog';
 import type { SectorId, SectorState } from '../../types/worldState';
 import { TerminalTheme } from '../../types/theme';
+import { type ContractSectorCompatibility } from '../../utils/contractUi';
 import { sectorAbbreviation, VEIL_BIOME_VISUALS } from '../../utils/veilFrontSectorUi';
 import { hexToRgba } from '../../utils/sectorInfluenceVisual';
 import {
@@ -50,6 +51,20 @@ interface VeilFrontMapProps {
   sectors: SectorState[];
   activeSectorId: SectorId;
   onSectorPress: (id: SectorId) => void;
+  sectorCompatibilityById?: Partial<Record<SectorId, ContractSectorCompatibility>>;
+}
+
+function contractMarkerColor(compatibility: ContractSectorCompatibility | undefined): string | null {
+  switch (compatibility) {
+    case 'RECOMMENDED':
+      return '#34d399';
+    case 'VALID':
+      return '#fbbf24';
+    case 'UNAVAILABLE':
+      return '#f87171';
+    default:
+      return null;
+  }
 }
 
 function VeilFrontBlueprintGrid({ width, height }: { width: number; height: number }): React.JSX.Element {
@@ -86,6 +101,7 @@ export default function VeilFrontMap({
   sectors,
   activeSectorId,
   onSectorPress,
+  sectorCompatibilityById = {},
 }: VeilFrontMapProps): React.JSX.Element {
   const { isDesktop } = useHubLayout();
   const mapDefinitions = SECTOR_MAP_DEFINITIONS;
@@ -241,6 +257,7 @@ export default function VeilFrontMap({
                   || sectorState?.echoActivity === 'CRITICAL';
                 const highReward = (sectorState?.rewardLevel ?? 0) >= 4;
                 const markerY = nodeAnchor.y - labelLineHeight * labelLines.length - 8;
+                const contractMarker = contractMarkerColor(sectorCompatibilityById[sector.id]);
 
                 return (
                   <React.Fragment key={sector.id}>
@@ -267,6 +284,9 @@ export default function VeilFrontMap({
                     ) : null}
                     {highReward ? (
                       <Circle cx={nodeAnchor.x} cy={markerY - 8} r={2.5} fill="#fbbf24" opacity={0.9} />
+                    ) : null}
+                    {contractMarker ? (
+                      <Circle cx={nodeAnchor.x} cy={markerY - 16} r={3} fill={contractMarker} opacity={0.95} />
                     ) : null}
                     {labelLines.map((line, lineIndex) => (
                       <SvgText

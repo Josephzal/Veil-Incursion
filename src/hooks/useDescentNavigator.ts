@@ -4,8 +4,13 @@ import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useRun } from '../context/RunContext';
 import { useWorldState } from '../context/WorldStateContext';
 import { resolveExtractionVeilResidueDeposit } from '../data/extractionPersistenceEngine';
+import { resolveRunExtractionResourceState } from '../data/runResourceLedgerEngine';
+import { resolveContractResult } from '../data/contractResolver';
 import { computeRunOperationContribution, buildOperationDebriefPayload } from '../data/runDebriefEngine';
+import { buildExtractedResourceSections } from '../data/runDebriefResourceEngine';
 import { transitionActions } from '../stores/transitionStore';
+import type { ContractExtractionKind } from '../types/contract';
+import type { ActiveIncursionState } from '../types/game';
 import { RunNodeType } from '../types/game';
 
 export type DescentRoute =
@@ -18,7 +23,14 @@ export type DescentRoute =
   | 'RESOURCE_HARVEST'
   | 'VEIL_BLEED_BOON'
   | 'HUB_VICTORY'
-  | 'EXTRACT_SUCCESS'
+  | 'EXTRACT_SUCCESS';
+
+function resolveExtractionKind(inc: ActiveIncursionState): ContractExtractionKind {
+  if (inc.contractRunProgress.emergencyRecallCompleted) return 'EMERGENCY_RECALL';
+  if (inc.masterLinkUsed) return 'MASTER_LINK';
+  if (inc.clearedSafeAnchors.length > 0) return 'SAFE_ANCHOR';
+  return 'STANDARD';
+}
 
 function routeForNodeType(type: RunNodeType | null): DescentRoute {
   switch (type) {
@@ -69,7 +81,7 @@ export function useDescentNavigator() {
     goToHub,
     startOperationDebrief,
   } = useGameFlow();
-  const { addCredits, addRiftIron, persistRunExtraction } = usePlayerAccount();
+  const { addCredits, addRiftIron, grantContractRewards, persistRunExtraction } = usePlayerAccount();
   const {
     applyOperationContribution,
     tickAfterRunComplete,
@@ -115,12 +127,31 @@ export function useDescentNavigator() {
     transitionActions.startExtracting(() => {
       void (async () => {
         const inc = incursionRef.current;
-        const { totalDeposit: residueVaulted } = resolveExtractionVeilResidueDeposit(
+        const extractionResources = resolveRunExtractionResourceState(
           inc.cargo,
+          inc.runBankedSnapshot,
+          inc.runResourceLedger,
+        );
+        const incWithLedger = {
+          ...inc,
+          runResourceLedger: extractionResources.ledger,
+        };
+        const extractionKind = resolveExtractionKind(inc);
+        const contractResult = resolveContractResult({
+          contract: inc.activeContract,
+          ledger: extractionResources.ledger,
+          progress: inc.contractRunProgress,
+          extractedSuccessfully: true,
+          extractionKind,
+        });
+        const resourceSections = buildExtractedResourceSections(extractionResources.ledger);
+
+        const { totalDeposit: residueVaulted } = resolveExtractionVeilResidueDeposit(
+          extractionResources.mergedCargo,
           inc.sessionVeilResidueCollected,
         );
         persistRunExtraction({
-          cargo: inc.cargo,
+          cargo: extractionResources.mergedCargo,
           aegisLoadout: inc.aegisLoadout,
           hexShotLoadout: inc.hexShotLoadout,
           envoyLoadout: inc.envoyLoadout,
@@ -130,12 +161,25 @@ export function useDescentNavigator() {
         const riftIron = Math.max(5, Math.floor(credits / 40));
         addCredits(credits);
         addRiftIron(riftIron);
+
+        if (contractResult.status === 'SUCCESS') {
+          grantContractRewards(contractResult);
+          appendRunLog(
+            `>> CONTRACT COMPLETE — ${contractResult.title.toUpperCase()} // +${contractResult.creditsAwarded + contractResult.bonusCreditsAwarded} CR // +${contractResult.reputationAwarded + contractResult.bonusReputationAwarded} REP`,
+          );
+          if (contractResult.bonusObjectiveMet && contractResult.bonusObjectiveText) {
+            appendRunLog(`>> BONUS OBJECTIVE — ${contractResult.bonusObjectiveText.toUpperCase()}`);
+          }
+        } else if (contractResult.status === 'FAILED') {
+          appendRunLog(`>> CONTRACT FAILED — ${contractResult.title.toUpperCase()} // ${contractResult.progressText}`);
+        }
+
         const residueLine = residueVaulted > 0
           ? ` +${residueVaulted} VEIL RESIDUE VAULTED`
           : '';
         appendRunLog(`>> SECTOR EXTRACTION COMPLETE — +${credits} CREDITS, LOOT ROUTED TO HOME STASH, +${riftIron} RIFT IRON${residueLine}.`);
 
-        const contribution = computeRunOperationContribution(inc);
+        const contribution = computeRunOperationContribution(incWithLedger, { extractedSuccessfully: true });
         let contributionResult: Awaited<ReturnType<typeof applyOperationContribution>> | null = null;
         if (contribution.operationId && contribution.total > 0) {
           contributionResult = await applyOperationContribution(contribution.operationId, contribution.total);
@@ -145,7 +189,7 @@ export function useDescentNavigator() {
         tickAfterRunComplete();
         endRun('SECTOR EXTRACTION SECURED');
 
-        const debrief = buildOperationDebriefPayload(inc, {
+        const debrief = buildOperationDebriefPayload(incWithLedger, {
           progressBefore: contributionResult?.progressBefore ?? inc.runGenerationContext?.activeOperation.progressCurrent ?? 0,
           progressAfter: contributionResult?.progressAfter ?? inc.runGenerationContext?.activeOperation.progressCurrent ?? 0,
           progressRequired: contributionResult?.progressRequired ?? inc.runGenerationContext?.activeOperation.progressRequired ?? 100,
@@ -155,6 +199,11 @@ export function useDescentNavigator() {
           riftIron,
           residueVaulted,
           nextOperationTitle: contributionResult?.nextOperationTitle,
+          extractedSuccessfully: true,
+          contractResult,
+          extractionKind,
+          resourceSections,
+          midRunContributionTransmitted: inc.operationContributionTransmitted,
         });
 
         if (debrief) {
@@ -174,6 +223,7 @@ export function useDescentNavigator() {
     calculateSectorExtractionPayout,
     endRun,
     goToHub,
+    grantContractRewards,
     persistRunExtraction,
     setPendingDebrief,
     startOperationDebrief,

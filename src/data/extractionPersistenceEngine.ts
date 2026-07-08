@@ -4,6 +4,8 @@ import type { PlayerAccount } from '../types/game';
 import type { EnvoyLoadout, HexShotLoadout } from '../types/operativeClass';
 import { countVeilResidueInCargo, stripVeilResidueFromCargo } from './cargoGridEngine';
 import { isResourceItemId } from './resourceRegistry';
+import type { ResourceItemId } from '../types/resourceItem';
+import type { RunPhysicalBankSnapshot } from '../types/runResourceLedger';
 import { addToResourceStash } from './resourceStashEngine';
 
 export interface RunExtractionLoadouts {
@@ -31,6 +33,31 @@ export function resolveExtractionVeilResidueDeposit(
     totalDeposit,
     cargoForStash: stripVeilResidueFromCargo(cargo),
   };
+}
+
+/** Deposits safehouse-banked physical cargo into persistent hub stash fields. */
+export function depositPhysicalBankSnapshot(
+  bank: RunPhysicalBankSnapshot,
+  account: Pick<PlayerAccount, 'resourceStash' | 'hubCraftedConsumables'>,
+): Pick<PlayerAccount, 'resourceStash' | 'hubCraftedConsumables'> {
+  let resourceStash = account.resourceStash;
+  const hubCraftedConsumables = { ...account.hubCraftedConsumables };
+
+  (Object.entries(bank.resources) as Array<[ResourceItemId, number | undefined]>).forEach(
+    ([resourceId, quantity]) => {
+      if (!quantity || quantity <= 0) return;
+      resourceStash = addToResourceStash(resourceStash, resourceId, quantity);
+    },
+  );
+
+  (Object.entries(bank.consumables) as Array<[CargoItemId, number | undefined]>).forEach(
+    ([itemId, quantity]) => {
+      if (!quantity || quantity <= 0) return;
+      hubCraftedConsumables[itemId] = (hubCraftedConsumables[itemId] ?? 0) + quantity;
+    },
+  );
+
+  return { resourceStash, hubCraftedConsumables };
 }
 
 /** Deposits every item from run cargo into persistent hub stash fields. */

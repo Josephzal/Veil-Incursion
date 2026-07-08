@@ -37,6 +37,7 @@ import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useNodeProgression } from '../hooks/useNodeProgression';
+import { useRunDeathFinalizer } from '../hooks/useRunDeathFinalizer';
 import { useDevSandboxExit } from '../hooks/useDevSandboxExit';
 import {
   districtBossKillCredits,
@@ -70,8 +71,9 @@ import { shouldShowUnitInArenaGrid } from '../data/combatSquadEngine';
 
 export default function CombatScreen(): React.JSX.Element {
   const { theme } = useTerminal();
-  const { startResourceHarvest, startPostCombatBoon, startGameOver, startExtractionReview } = useGameFlow();
+  const { startResourceHarvest, startPostCombatBoon, startExtractionReview } = useGameFlow();
   const { exitToDevTestHub } = useDevSandboxExit();
+  const { finalizeRunDeath } = useRunDeathFinalizer();
   const {
     runState,
     syncAfterCombat,
@@ -392,8 +394,9 @@ export default function CombatScreen(): React.JSX.Element {
 
     if (!result.victory || result.remainingHp <= 0) {
       clearNarrativeBoonStatusEffects();
-      endRun(result.remainingHp <= 0 ? 'SOUL ANCHOR DESTROYED' : 'OPERATIVE DEFEATED IN COMBAT');
-      startGameOver();
+      finalizeRunDeath(
+        result.remainingHp <= 0 ? 'SOUL ANCHOR DESTROYED' : 'OPERATIVE DEFEATED IN COMBAT',
+      );
       return;
     }
 
@@ -497,8 +500,8 @@ export default function CombatScreen(): React.JSX.Element {
     completeDefendRiftVictory,
     clearPendingAmbush,
     completeCurrentNode,
-    endRun,
     exitToDevTestHub,
+    finalizeRunDeath,
     getSelectedVectorNode,
     incrementCombatNodesCleared,
     beginPostCombatHarvest,
@@ -508,7 +511,6 @@ export default function CombatScreen(): React.JSX.Element {
     runState.pendingAmbush,
     runState.pendingEnemy?.isBoss,
     startExtractionReview,
-    startGameOver,
     startPostCombatBoon,
     startResourceHarvest,
     syncAfterCombat,

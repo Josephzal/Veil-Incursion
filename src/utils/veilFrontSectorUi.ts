@@ -151,13 +151,27 @@ export function describeAnchorInRunPressure(anchor: VeilAnchorState): string[] {
 
 export function formatOperationContributes(rules: OperationContributionRules): string[] {
   const lines: string[] = [];
-  if (rules.defeatAnchorElite) lines.push('Clear Anchor Signal nodes');
-  if (rules.clearAnchorCore) lines.push('Defeat Anchor Core');
-  if (rules.defeatEcho) lines.push('Defeat Echo signatures');
-  if (rules.extractTargetResource) lines.push('Extract with recovered Anchor matter');
+  if (rules.defeatAnchorElite) lines.push('Neutralize anchor elites');
+  if (rules.clearAnchorCore) lines.push('Defeat anchor core');
+  if (rules.defeatEcho) lines.push('Defeat echo signatures');
+  if (rules.clearOperationTarget) lines.push('Clear operation target / anchor signal nodes');
+  if (rules.extractTargetResource) lines.push('Extract with recovered anchor matter');
   if (rules.defeatDepthBoss) lines.push('Suppress region-prime anomalies');
   if (rules.successfulExtraction) lines.push('Successful extraction runs');
   return lines;
+}
+
+export function formatOperationLifecycleStatus(
+  lifecycleStatus: import('../types/worldState').OperationLifecycleStatus,
+  runsRemaining: number,
+): string {
+  if (lifecycleStatus === 'AFTERMATH') {
+    return `AFTERMATH — ${runsRemaining} run${runsRemaining === 1 ? '' : 's'} remaining`;
+  }
+  if (lifecycleStatus === 'EXPIRED') {
+    return 'EXPIRED — rotating soon';
+  }
+  return `ACTIVE — expires in ${runsRemaining} run${runsRemaining === 1 ? '' : 's'}`;
 }
 
 export function resolveRecommendedFor(sector: SectorState): string[] {

@@ -1,7 +1,7 @@
 import type { CargoItemId, CargoRunState } from '../types/cargoGrid';
 import type { ResourceItemId, ResourceQuantity } from '../types/resourceItem';
 import type { CraftingRecipe } from './craftingRegistry';
-import { isResourceItemId } from './resourceRegistry';
+import { canResourceBeCraftingIngredient, isResourceItemId } from './resourceRegistry';
 
 export function createEmptyResourceStash(): ResourceQuantity {
   return {};
@@ -25,7 +25,9 @@ export function addToResourceStash(
 
 export function canAffordRecipe(stash: ResourceQuantity, recipe: CraftingRecipe): boolean {
   return recipe.requirements.every(
-    (req) => getStashCount(stash, req.resourceId) >= req.quantity,
+    (req) =>
+      canResourceBeCraftingIngredient(req.resourceId)
+      && getStashCount(stash, req.resourceId) >= req.quantity,
   );
 }
 

@@ -1,3 +1,8 @@
+import type {
+  ActiveRunContract,
+  ContractBoardState,
+  SelectedContractState,
+} from './contract';
 import type { FactionType } from './game';
 import type { VeilBiome } from './encounterSpawn';
 
@@ -60,6 +65,17 @@ export interface OperationContributionRules {
   extractTargetResource?: number;
   defeatDepthBoss?: number;
   successfulExtraction?: number;
+  clearOperationTarget?: number;
+}
+
+export type OperationLifecycleStatus = 'ACTIVE' | 'AFTERMATH' | 'EXPIRED';
+
+export interface SectorOperationLifecycle {
+  operationId: string;
+  status: OperationLifecycleStatus;
+  runsSinceActivation: number;
+  maxRunsActive: number;
+  aftermathRunsRemaining: number;
 }
 
 export interface RewardEmphasis {
@@ -80,6 +96,8 @@ export interface OperationState {
   progressRequired: number;
   rewardEmphasis: RewardEmphasis;
   contributionRules: OperationContributionRules;
+  lifecycleStatus: OperationLifecycleStatus;
+  runsRemaining: number;
 }
 
 export interface DepthStageModifiers {
@@ -134,7 +152,9 @@ export interface RunGenerationContext {
   sectorState: SectorState;
   activeOperation: OperationState;
   activeAnchor: VeilAnchorState | null;
+  /** Sponsor from selected contract — not a player allegiance lock. */
   employerCabal: CabalEmployerId | null;
+  activeContract: ActiveRunContract;
   rewardModifiers: RewardModifiers;
   encounterBias: EncounterBias;
   scannerSignalBias: ScannerSignalBias;
@@ -178,14 +198,18 @@ export interface TemporarySectorModifier {
 
 export interface WorldStatePersistedState {
   selectedSectorId: SectorId;
-  selectedEmployerCabal: CabalEmployerId | null;
+  contractBoard: ContractBoardState;
+  /** Monotonic counter — used for contract refresh and selection timestamps. */
+  deployRunIndex: number;
   operationProgress: Record<string, number>;
   /** Rotating operation queue index per sector. */
   activeOperationIndex: Partial<Record<SectorId, number>>;
   temporarySectorModifiers: TemporarySectorModifier[];
   dormantAnchorRuns: Record<string, number>;
   operationLog: string[];
-  version: 1;
+  /** Per-sector operation lifecycle (expiration, aftermath). */
+  sectorOperationLifecycle: Partial<Record<SectorId, SectorOperationLifecycle>>;
+  version: 2;
 }
 
 /** Combat-facing snapshot derived from RunGenerationContext at run start. */

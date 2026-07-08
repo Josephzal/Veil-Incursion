@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useImmersiveChrome } from './src/hooks/useImmersiveChrome';
+import { logResourceValidationWarnings } from './src/data/resourceValidation';
 import { TerminalProvider, useTerminal } from './src/context/TerminalContext';
 import { TerminalNavProvider } from './src/context/TerminalNavContext';
 import { PlayerAccountProvider } from './src/context/PlayerAccountContext';
@@ -25,14 +26,18 @@ import CombatScreen from './src/screens/CombatScreen';
 import CombatEntryTransition from './src/components/combat/CombatEntryTransition';
 import TransitionOverlay from './src/components/transitions/TransitionOverlay';
 import RunCompleteScreen from './src/screens/RunCompleteScreen';
+import RunWorldStateBridge from './src/components/RunWorldStateBridge';
 import OperationDebriefScreen from './src/screens/OperationDebriefScreen';
 import SafehouseScreen from './src/screens/SafehouseScreen';
-import GameOverScreen from './src/screens/GameOverScreen';
 
 function GameRoot(): React.JSX.Element {
   const { theme } = useTerminal();
   const { currentScreen, combatEntryActive, completeCombatEntry } = useGameFlow();
   useImmersiveChrome(true);
+
+  useEffect(() => {
+    logResourceValidationWarnings();
+  }, []);
 
   return (
     <TransitionOverlay>
@@ -52,7 +57,6 @@ function GameRoot(): React.JSX.Element {
         {currentScreen === 'RUN_COMPLETE' && <RunCompleteScreen />}
         {currentScreen === 'OPERATION_DEBRIEF' && <OperationDebriefScreen />}
         {currentScreen === 'SAFEHOUSE' && <SafehouseScreen />}
-        {currentScreen === 'GAME_OVER' && <GameOverScreen />}
         {combatEntryActive ? (
           <CombatEntryTransition onComplete={completeCombatEntry} />
         ) : null}
@@ -72,6 +76,7 @@ export default function App(): React.JSX.Element {
               <TerminalNavProvider>
                 <RunProvider>
                   <GameFlowProvider>
+                    <RunWorldStateBridge />
                     <GameRoot />
                   </GameFlowProvider>
                 </RunProvider>

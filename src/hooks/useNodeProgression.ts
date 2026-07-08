@@ -1,14 +1,14 @@
 import { useCallback } from 'react';
-import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import { useDescentNavigator } from './useDescentNavigator';
 import { useDevSandboxExit } from './useDevSandboxExit';
+import { useRunDeathFinalizer } from './useRunDeathFinalizer';
 
 export function useNodeProgression() {
-  const { runState, appendRunLog, endRun } = useRun();
-  const { startGameOver } = useGameFlow();
+  const { runState, endRun } = useRun();
   const { finalizeIncursionAdvance } = useDescentNavigator();
   const { exitToDevTestHub } = useDevSandboxExit();
+  const { finalizeRunDeath } = useRunDeathFinalizer();
 
   const completeCurrentNode = useCallback(
     (clearMessage: string, remainingHp?: number) => {
@@ -18,8 +18,7 @@ export function useNodeProgression() {
 
       const hp = remainingHp ?? runState.soulAnchorIntegrity;
       if (hp <= 0) {
-        endRun('SOUL ANCHOR DESTROYED');
-        startGameOver();
+        finalizeRunDeath('SOUL ANCHOR DESTROYED');
         return;
       }
 
@@ -28,9 +27,7 @@ export function useNodeProgression() {
     [
       exitToDevTestHub,
       runState.soulAnchorIntegrity,
-      appendRunLog,
-      endRun,
-      startGameOver,
+      finalizeRunDeath,
       finalizeIncursionAdvance,
     ],
   );

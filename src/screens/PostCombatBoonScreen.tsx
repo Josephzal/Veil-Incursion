@@ -15,6 +15,7 @@ import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useDescentNavigator } from '../hooks/useDescentNavigator';
+import { useRunDeathFinalizer } from '../hooks/useRunDeathFinalizer';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { HUB_BORDER_INSET, hubCtaButtonStyle } from '../constants/hubCta';
 import type { ClassType } from '../types/game';
@@ -37,12 +38,12 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
     postCombatMutationChoices,
     preparePostCombatMutations,
     completeNodeAfterMutation,
-    endRun,
     swapClassBoon,
     cancelClassBoonSwap,
   } = useRun();
-  const { startGameOver, startResourceHarvest } = useGameFlow();
+  const { startResourceHarvest } = useGameFlow();
   const { finalizeIncursionAdvance } = useDescentNavigator();
+  const { finalizeRunDeath } = useRunDeathFinalizer();
   const {
     isDesktop,
     activeViewportWidth,
@@ -138,8 +139,7 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
     selectingRef.current = true;
 
     if (runState.soulAnchorIntegrity <= 0) {
-      endRun('SOUL ANCHOR DESTROYED');
-      startGameOver();
+      finalizeRunDeath('SOUL ANCHOR DESTROYED');
       return;
     }
 

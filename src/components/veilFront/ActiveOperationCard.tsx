@@ -6,7 +6,7 @@ import { useVeilFrontLayout } from './useVeilFrontLayout';
 import { operationProgressPercent } from '../../data/worldStateHelpers';
 import type { SectorState } from '../../types/worldState';
 import { TerminalTheme } from '../../types/theme';
-import { formatOperationContributes, operationTypeChip } from '../../utils/veilFrontSectorUi';
+import { formatOperationContributes, formatOperationLifecycleStatus, operationTypeChip } from '../../utils/veilFrontSectorUi';
 
 interface ActiveOperationCardProps {
   theme: TerminalTheme;
@@ -23,6 +23,10 @@ export default function ActiveOperationCard({
     sector.activeOperation.progressRequired,
   );
   const contributes = formatOperationContributes(sector.activeOperation.contributionRules);
+  const lifecycleLabel = formatOperationLifecycleStatus(
+    sector.activeOperation.lifecycleStatus,
+    sector.activeOperation.runsRemaining,
+  );
   const visibleContributes = contributes.slice(0, 3);
   const overflowCount = contributes.length - visibleContributes.length;
 
@@ -43,6 +47,14 @@ export default function ActiveOperationCard({
         style={{ color: theme.statusColor, fontWeight: '700' }}
       >
         ACTIVE OPERATION
+      </TerminalText>
+
+      <TerminalText
+        size={scaleFont(6.5)}
+        letterSpacing={0.6}
+        style={{ color: theme.mutedColor }}
+      >
+        {lifecycleLabel}
       </TerminalText>
 
       <View style={styles.bodyContent}>

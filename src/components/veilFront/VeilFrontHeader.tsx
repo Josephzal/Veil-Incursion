@@ -2,25 +2,29 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import TerminalText from '../TerminalText';
 import { useHubLayout } from '../../context/HubLayoutContext';
-import type { CabalEmployerId, SectorState } from '../../types/worldState';
+import type { SelectedContractState } from '../../types/contract';
+import type { SectorState } from '../../types/worldState';
 import { TerminalTheme } from '../../types/theme';
-import { employerSponsorLabel } from '../../utils/employerContractUi';
+import { sponsorDisplayName } from '../../utils/contractUi';
 import { formatOperationObjectiveKind } from '../../utils/veilFrontBriefingUi';
 
 interface VeilFrontHeaderSummaryProps {
   theme: TerminalTheme;
   sector: SectorState;
-  selectedEmployer: CabalEmployerId | null;
+  selectedContract: SelectedContractState;
 }
 
 export default function VeilFrontHeaderSummary({
   theme,
   sector,
-  selectedEmployer,
+  selectedContract,
 }: VeilFrontHeaderSummaryProps): React.JSX.Element {
   const { scaleSpacing } = useHubLayout();
-  const sponsorLabel = selectedEmployer
-    ? employerSponsorLabel(selectedEmployer)
+  const contractLabel = selectedContract.kind === 'SPONSOR'
+    ? selectedContract.contract.title
+    : 'Independent Breach';
+  const sponsorLabel = selectedContract.kind === 'SPONSOR'
+    ? sponsorDisplayName(selectedContract.contract.sponsorId)
     : 'No Sponsor';
 
   return (
@@ -32,6 +36,7 @@ export default function VeilFrontHeaderSummary({
         mutedColor={theme.mutedColor}
         textColor={theme.statusColor}
       />
+      <SummaryRow label="Contract" value={contractLabel} mutedColor={theme.mutedColor} textColor={theme.textColor} />
       <SummaryRow label="Sponsor" value={sponsorLabel} mutedColor={theme.mutedColor} textColor={theme.textColor} />
     </View>
   );

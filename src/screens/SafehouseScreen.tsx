@@ -60,7 +60,6 @@ export default function SafehouseScreen(): React.JSX.Element {
   } = useRun();
   const {
     account,
-    depositBankedCargo,
     depositVeilResidueBalance,
     setAegisLoadout: setAccountAegisLoadout,
     setHexShotLoadout: setAccountHexShotLoadout,
@@ -317,13 +316,7 @@ export default function SafehouseScreen(): React.JSX.Element {
     const result = transferRunCargoToBankVault(100);
     appendRunLog(result.logLine);
     setStatusLine(result.logLine);
-    if (result.success && 'transferredValue' in result && result.transferredValue) {
-      depositBankedCargo({
-        totalValue: result.transferredValue,
-        lastTransferValue: result.transferredValue,
-      });
-    }
-  }, [appendRunLog, depositBankedCargo, transferRunCargoToBankVault]);
+  }, [appendRunLog, transferRunCargoToBankVault]);
 
   const handleBenchRestore = useCallback(() => {
     const result = restoreHealthFromBench();

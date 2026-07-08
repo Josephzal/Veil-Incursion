@@ -55,12 +55,16 @@ export const DEFAULT_OPERATION_PROGRESS_REQUIRED = 100;
 
 export const OPERATION_CONTRIBUTION_VALUES = {
   successfulExtraction: 1,
-  defeatDepthBoss: 2,
+  defeatDepthBoss: 5,
   defeatEcho: 3,
   defeatAnchorElite: 4,
   clearAnchorCore: 10,
+  clearOperationTarget: 2,
   extractTargetResourceStack: 1,
 } as const;
+
+export const DEFAULT_OPERATION_MAX_RUNS = 8;
+export const DEFAULT_OPERATION_AFTERMATH_RUNS = 2;
 
 export function getDepthStage(depthIndex: 1 | 2 | 3): DepthStage {
   if (depthIndex === 1) return 'THRESHOLD';

@@ -10,14 +10,26 @@ import type {
   WorldStatePersistedState,
 } from '../types/worldState';
 import {
+  createDefaultContractBoard,
+  createIndependentSelectedContract,
+  freezeContractForRun,
+  getSelectedContractSponsorId,
+} from '../types/contract';
+import { generateContractBoard } from './contractGenerator';
+import {
   DEFAULT_OPERATION_PROGRESS_REQUIRED,
+  DEFAULT_OPERATION_AFTERMATH_RUNS,
   OPERATION_CONTRIBUTION_VALUES,
 } from './worldStateHelpers';
 import {
+  beginOperationAftermath,
+  getSectorOperationLifecycle,
+  operationRunsRemaining,
+} from './operationLifecycleEngine';
+import { resolveSectorOperationTemplate } from './operationGenerator';
+import {
   anchorIdForSector,
   defaultAnchorRealityRules,
-  getActiveSectorOperationTemplate,
-  getNextSectorOperationTemplate,
   getSectorWorldTemplate,
   SECTOR_WORLD_TEMPLATES,
 } from './sectorWorldCatalog';
@@ -60,15 +72,21 @@ export const EMPLOYER_PACKAGES: Record<CabalEmployerId, EmployerPackage> = {
 };
 
 export function createDefaultWorldState(): WorldStatePersistedState {
+  const deployRunIndex = 0;
   return {
     selectedSectorId: 'THE_SLAG_WORKS',
-    selectedEmployerCabal: null,
+    contractBoard: {
+      ...createDefaultContractBoard(deployRunIndex),
+      contracts: generateContractBoard(deployRunIndex),
+    },
+    deployRunIndex,
     operationProgress: {},
     activeOperationIndex: {},
     temporarySectorModifiers: [],
     dormantAnchorRuns: {},
     operationLog: [],
-    version: 1,
+    sectorOperationLifecycle: {},
+    version: 2,
   };
 }
 
@@ -119,10 +137,13 @@ export function buildOperationState(
   persisted: WorldStatePersistedState,
 ): OperationState {
   const template = getSectorWorldTemplate(sectorId);
-  const operationTemplate = getActiveSectorOperationTemplate(
+  const operationIndex = resolveSectorOperationIndex(sectorId, persisted);
+  const operationTemplate = resolveSectorOperationTemplate(
     sectorId,
-    resolveSectorOperationIndex(sectorId, persisted),
+    operationIndex,
+    persisted.deployRunIndex,
   );
+  const lifecycle = getSectorOperationLifecycle(persisted, sectorId, operationTemplate.id);
   const anchor = template.anchor
     ? anchorIdForSector(sectorId, template.anchor.type)
     : undefined;
@@ -143,8 +164,11 @@ export function buildOperationState(
       defeatEcho: OPERATION_CONTRIBUTION_VALUES.defeatEcho,
       defeatAnchorElite: OPERATION_CONTRIBUTION_VALUES.defeatAnchorElite,
       clearAnchorCore: OPERATION_CONTRIBUTION_VALUES.clearAnchorCore,
+      clearOperationTarget: OPERATION_CONTRIBUTION_VALUES.clearOperationTarget,
       extractTargetResource: OPERATION_CONTRIBUTION_VALUES.extractTargetResourceStack,
     },
+    lifecycleStatus: lifecycle.status,
+    runsRemaining: operationRunsRemaining(lifecycle),
   };
 }
 
@@ -154,9 +178,10 @@ export function buildSectorState(
   operationProgress: Record<string, number>,
 ): SectorState {
   const template = getSectorWorldTemplate(sectorId);
-  const operationTemplate = getActiveSectorOperationTemplate(
+  const operationTemplate = resolveSectorOperationTemplate(
     sectorId,
     resolveSectorOperationIndex(sectorId, persisted),
+    persisted.deployRunIndex,
   );
   const progressCurrent = operationProgress[operationTemplate.id] ?? 0;
   const rewardBoost = resolveRewardLevelBoost(sectorId, persisted);
@@ -192,8 +217,12 @@ export function buildRunGenerationContext(
     persisted,
     operationProgress,
   );
-  const employer = persisted.selectedEmployerCabal;
+  const employer = getSelectedContractSponsorId(persisted.contractBoard.selectedContract);
   const employerPackage = employer ? EMPLOYER_PACKAGES[employer] : null;
+  const activeContract = freezeContractForRun(
+    persisted.contractBoard.selectedContract,
+    persisted.deployRunIndex,
+  );
   const anchor = sectorState.activeAnchor;
 
   const rewardModifiers = {
@@ -227,6 +256,7 @@ export function buildRunGenerationContext(
     activeOperation: sectorState.activeOperation,
     activeAnchor: anchor,
     employerCabal: employer,
+    activeContract,
     rewardModifiers,
     encounterBias,
     scannerSignalBias,
@@ -272,7 +302,7 @@ export function applyOperationCompletion(
     `>> OPERATION COMPLETE — ${operation.title.toUpperCase()}`,
   ];
 
-  const next: WorldStatePersistedState = {
+  let next: WorldStatePersistedState = {
     ...persisted,
     operationProgress: {
       ...persisted.operationProgress,
@@ -305,14 +335,13 @@ export function applyOperationCompletion(
   }
 
   if (effect.rotateToNextOperation) {
-    const currentIndex = resolveSectorOperationIndex(sectorId, persisted);
-    const nextIndex = currentIndex + 1;
-    next.activeOperationIndex = {
-      ...persisted.activeOperationIndex,
-      [sectorId]: nextIndex,
-    };
-    const nextOperation = getNextSectorOperationTemplate(sectorId, currentIndex);
-    logLines.push(`>> NEW OPERATION: ${nextOperation.title.toUpperCase()}.`);
+    next = beginOperationAftermath(
+      next,
+      sectorId,
+      operation.id,
+      DEFAULT_OPERATION_AFTERMATH_RUNS + 1,
+    );
+    logLines.push('>> OPERATION AFTERMATH — COMMUNITY PROGRESS LOCKED UNTIL ROTATION.');
   }
 
   logLines.push('>> CHECK OPERATIONAL BRIEFING FOR UPDATED SECTOR STATUS.');
@@ -335,6 +364,23 @@ export function tickTemporarySectorModifiers(
   );
 
   return { ...persisted, temporarySectorModifiers, dormantAnchorRuns };
+}
+
+export function refreshContractBoardAfterRun(
+  persisted: WorldStatePersistedState,
+): WorldStatePersistedState {
+  const deployRunIndex = persisted.deployRunIndex + 1;
+  const runSponsorId = getSelectedContractSponsorId(persisted.contractBoard.selectedContract);
+  return {
+    ...persisted,
+    deployRunIndex,
+    contractBoard: {
+      contracts: generateContractBoard(deployRunIndex),
+      selectedContract: createIndependentSelectedContract(),
+      boardRefreshRunIndex: deployRunIndex,
+      lastUsedSponsorId: runSponsorId ?? persisted.contractBoard.lastUsedSponsorId ?? null,
+    },
+  };
 }
 
 export function getHubBlackMarketDiscount(

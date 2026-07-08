@@ -202,6 +202,23 @@ import {
   removePlacedCargoItem,
 } from '../data/cargoGridEngine';
 import { resolveExtractionVeilResidueDeposit } from '../data/extractionPersistenceEngine';
+import {
+  bankAllPhysicalRunCargo,
+  recordNewResourcesFromCargoDelta,
+  recordResourcesBanked,
+  resolveRunDeathResourceState,
+  summarizeBankSnapshot,
+} from '../data/runResourceLedgerEngine';
+import {
+  createInitialContractRunProgress,
+  recordContractDepthBossDefeated,
+  recordContractDepthReached,
+  recordContractEliteKill,
+  recordContractEmergencyRecall,
+  recordContractOperationTargetCleared,
+  recordContractAnomalyCleared,
+} from '../data/contractRunProgressEngine';
+import { resolveContractResult } from '../data/contractResolver';
 import type { RunDeathSummary } from '../types/runDeathSummary';
 import {
   formatCombatResourceDropLog,
@@ -341,6 +358,11 @@ interface RunContextType {
   getCurrentEncounter: () => EncounterNode | null;
   getCurrentSkillCheck: () => SkillCheckEvent | null;
   endRun: (reason: string) => void;
+  getRunElapsedMs: () => number | null;
+  getLastKillingEnemyDesignation: () => string | null;
+  registerOperationContributionApplier: (
+    applier: ((operationId: string, amount: number) => Promise<void>) | null,
+  ) => void;
   setPendingAmbush: (value: boolean) => void;
   clearPendingAmbush: () => void;
   assignNarrativeForCombat: (encounterNode?: IncursionNode | null) => void;
@@ -549,7 +571,7 @@ function createInitialRunState(): RunState {
 }
 
 export function RunProvider({ children }: { children: React.ReactNode }) {
-  const { transferVeilResidueIntoRun, restoreVeilResidueBaseline } = usePlayerAccount();
+  const { transferVeilResidueIntoRun, restoreVeilResidueBaseline, persistRunBankedSnapshot } = usePlayerAccount();
   const [runState, setRunState] = useState<RunState>(createInitialRunState);
   const runStateRef = useRef<RunState>(runState);
   const [runLog, setRunLog] = useState<string[]>([]);
@@ -570,6 +592,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   const narrativeAssemblyRef = useRef<ProceduralNarrativeAssembly | null>(null);
   const runStartedAtMsRef = useRef<number | null>(null);
   const lastKillingEnemyRef = useRef<string | null>(null);
+  const operationContributionApplierRef = useRef<
+    ((operationId: string, amount: number) => Promise<void>) | null
+  >(null);
   const [deathSummary, setDeathSummary] = useState<RunDeathSummary | null>(null);
 
   runStateRef.current = runState;
@@ -730,6 +755,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         firstTurnApBonus: 0,
       },
       runGenerationContext: config?.runGenerationContext ?? null,
+      activeContract: config?.runGenerationContext?.activeContract ?? null,
+      contractRunProgress: createInitialContractRunProgress(),
       runSegment: initialRunSegment,
       sessionVeilResidueCollected: startingCanisterResidue,
       runVeilResidueBaseline: startingCanisterResidue,
@@ -1387,11 +1414,29 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (isRunFailure && runStateRef.current.runActive && runStartedAtMsRef.current != null) {
       const depth = depthFromNodesCleared(inc.nodesCleared);
       const depthLayer = getDistrictFromDepth(depth);
+      const deathResources = resolveRunDeathResourceState(
+        inc.cargo,
+        inc.runBankedSnapshot,
+        inc.runResourceLedger,
+      );
+      if (Object.keys(deathResources.bankedResources).length > 0
+        || Object.keys(inc.runBankedSnapshot.consumables).length > 0) {
+        persistRunBankedSnapshot(inc.runBankedSnapshot);
+      }
       setDeathSummary({
         timeAliveMs: Date.now() - runStartedAtMsRef.current,
         causeOfDeath: lastKillingEnemyRef.current ?? reason,
         sectorLevel: localLevelFromDepth(depth),
         depthLayer,
+        lostResources: deathResources.lostResources,
+        bankedResourcesSurvived: deathResources.bankedResources,
+        resourceLedger: deathResources.ledger,
+        contractResult: resolveContractResult({
+          contract: inc.activeContract,
+          ledger: deathResources.ledger,
+          progress: inc.contractRunProgress,
+          extractedSuccessfully: false,
+        }),
       });
     }
     combatLogActiveRef.current = false;
@@ -1405,7 +1450,24 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     setActiveIncursion(resetIncursion);
     narrativeNodeRef.current = null;
     narrativeAssemblyRef.current = null;
-  }, [restoreVeilResidueBaseline]);
+  }, [persistRunBankedSnapshot, restoreVeilResidueBaseline]);
+
+  const getRunElapsedMs = useCallback(() => {
+    if (!runStateRef.current.runActive || runStartedAtMsRef.current == null) return null;
+    return Date.now() - runStartedAtMsRef.current;
+  }, []);
+
+  const getLastKillingEnemyDesignation = useCallback(
+    () => lastKillingEnemyRef.current,
+    [],
+  );
+
+  const registerOperationContributionApplier = useCallback(
+    (applier: ((operationId: string, amount: number) => Promise<void>) | null) => {
+      operationContributionApplierRef.current = applier;
+    },
+    [],
+  );
 
   const finishDevSandbox = useCallback(() => {
     const reset = createInitialRunState();
@@ -1669,6 +1731,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const creditReward = (result.pendingRunCredits ?? 0) + tensionBonus;
     const triggerCombatAmbush = AMBUSH_ENCOUNTERS_ENABLED && result.triggerCombatAmbush;
     setActiveIncursion((prev) => {
+      const beforeCargo = prev.cargo;
       let nextCargo = result.cargoPatch ?? prev.cargo;
       const stagedIds: string[] = [];
       if (resourceCacheId) {
@@ -1702,6 +1765,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         pendingHarvestReturn: requiresResourcePack ? 'RESOURCE_CACHE' : prev.pendingHarvestReturn,
         pendingNarrativeCombatBoons: nextPendingBoons,
         runStatusEffects: nextStatusEffects,
+        runResourceLedger: recordNewResourcesFromCargoDelta(prev.runResourceLedger, beforeCargo, nextCargo),
       };
       if (result.spawnGridHound) {
         next = activateGridHoundOnIncursion(next);
@@ -1942,11 +2006,13 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (ambushTriggered) logLines.push('>> DEEP EXTRACT HEAT — hostile ambush frequency detected.');
 
     setActiveIncursion((prev) => {
+      const beforeCargo = prev.cargo;
       const next = {
         ...prev,
         cargo: nextCargo,
         harvestStagingInstanceIds: [...new Set([...prev.harvestStagingInstanceIds, ...stagedIds])],
         pendingProceduralResourcePool: [],
+        runResourceLedger: recordNewResourcesFromCargoDelta(prev.runResourceLedger, beforeCargo, nextCargo),
       };
       activeIncursionRef.current = next;
       return next;
@@ -2088,11 +2154,16 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (drops.length === 0) return [];
     const stagedIds: string[] = [];
     setActiveIncursion((prev) => {
-      let nextCargo = prev.cargo;
+      const beforeCargo = prev.cargo;
+      let nextCargo = beforeCargo;
       drops.forEach((resourceId) => {
         nextCargo = addLootToContainment(nextCargo, resourceId, 1, stagedIds);
       });
-      const next = { ...prev, cargo: nextCargo };
+      const next = {
+        ...prev,
+        cargo: nextCargo,
+        runResourceLedger: recordNewResourcesFromCargoDelta(prev.runResourceLedger, beforeCargo, nextCargo),
+      };
       activeIncursionRef.current = next;
       return next;
     });
@@ -2107,11 +2178,16 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (quantity <= 0) return;
     const stagedIds: string[] = [];
     setActiveIncursion((prev) => {
-      let nextCargo = prev.cargo;
+      const beforeCargo = prev.cargo;
+      let nextCargo = beforeCargo;
       for (let i = 0; i < quantity; i += 1) {
         nextCargo = addLootToContainment(nextCargo, resourceId, 1, stagedIds);
       }
-      const next = { ...prev, cargo: nextCargo };
+      const next = {
+        ...prev,
+        cargo: nextCargo,
+        runResourceLedger: recordNewResourcesFromCargoDelta(prev.runResourceLedger, beforeCargo, nextCargo),
+      };
       activeIncursionRef.current = next;
       return next;
     });
@@ -2776,6 +2852,29 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       nodesCleared: nextNodesCleared,
     });
 
+    let nextContractProgress = recordContractDepthReached(
+      inc.contractRunProgress,
+      Math.max(clearedDepth, nextDepth),
+    );
+    if (completedNode?.type === 'ELITE_COMBAT') {
+      nextContractProgress = recordContractEliteKill(nextContractProgress);
+    }
+    if (wasBoss) {
+      nextContractProgress = recordContractDepthBossDefeated(nextContractProgress);
+    }
+    const operationTargetsBefore = inc.contractRunProgress.operationTargetsCleared;
+    nextContractProgress = recordContractOperationTargetCleared(nextContractProgress, completedNode);
+    let transmittedContribution = 0;
+    if (nextContractProgress.operationTargetsCleared > operationTargetsBefore) {
+      const activeOperation = inc.runGenerationContext?.activeOperation;
+      const operationId = activeOperation?.id;
+      const targetAmount = activeOperation?.contributionRules.clearOperationTarget;
+      if (operationId && targetAmount && operationContributionApplierRef.current) {
+        void operationContributionApplierRef.current(operationId, targetAmount);
+        transmittedContribution = targetAmount;
+      }
+    }
+
     const incAfterClear: ActiveIncursionState = {
       ...expandedInc,
       sectorGraph: nextSectorGraph,
@@ -2800,6 +2899,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       patrolState: nextPatrolState,
       bossDefeated: wasBoss || inc.bossDefeated,
       primeExtractionBonus: wasBoss ? true : inc.primeExtractionBonus,
+      contractRunProgress: nextContractProgress,
+      operationContributionTransmitted: inc.operationContributionTransmitted + transmittedContribution,
       anchorAssaultProgress: anchorVictory?.progress
         ?? inc.anchorAssaultProgress
         ?? createDefaultAnchorAssaultProgress(),
@@ -2959,6 +3060,14 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       appendRunLog('>> ANALYZING UNIDENTIFIED SIGNAL...');
       const resolution = resolveAnomalyNode();
       appendRunLog(anomalyResolutionLogLine(resolution));
+      setActiveIncursion((prev) => {
+        const next = {
+          ...prev,
+          contractRunProgress: recordContractAnomalyCleared(prev.contractRunProgress),
+        };
+        activeIncursionRef.current = next;
+        return next;
+      });
 
       if (resolution === 'NARRATIVE') {
         assignNarrativeForCombat(node);
@@ -3337,24 +3446,51 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const transferRunCargoToBankVault = useCallback((percent: number) => {
-    const inc = activeIncursionRef.current;
-    const result = transferRunCargoToBank(
-      inc.cargo,
-      { totalValue: 0, lastTransferValue: 0 },
-      percent,
-    );
-    if (!result) {
-      return { success: false, logLine: '>> PAYLOAD TRANSFER FAILED — NO CARGO TO BANK.' };
+    if (percent < 100) {
+      const inc = activeIncursionRef.current;
+      const result = transferRunCargoToBank(
+        inc.cargo,
+        { totalValue: 0, lastTransferValue: 0 },
+        percent,
+      );
+      if (!result) {
+        return { success: false, logLine: '>> PARTIAL TRANSFER FAILED — NO CARGO TO BANK.' };
+      }
+      setActiveIncursion((prev) => {
+        const next = { ...prev, cargo: result.cargo };
+        activeIncursionRef.current = next;
+        return next;
+      });
+      return {
+        success: true,
+        logLine: `>> PARTIAL VALUE TRANSFER — ${result.transferredValue} VALUE PURGED FROM CARGO.`,
+        transferredValue: result.transferredValue,
+      };
     }
+
+    const inc = activeIncursionRef.current;
+    const bankResult = bankAllPhysicalRunCargo(inc.cargo, inc.runBankedSnapshot);
+    if (Object.keys(bankResult.bankedResources).length === 0
+      && Object.keys(bankResult.bankedConsumables).length === 0) {
+      return { success: false, logLine: '>> CARGO BANK FAILED — NO PHYSICAL PAYLOAD TO SECURE.' };
+    }
+
+    const { resourceCount, consumableCount } = summarizeBankSnapshot(bankResult.bank);
     setActiveIncursion((prev) => {
-      const next = { ...prev, cargo: result.cargo };
+      const next = {
+        ...prev,
+        cargo: bankResult.cargo,
+        runBankedSnapshot: bankResult.bank,
+        runResourceLedger: recordResourcesBanked(prev.runResourceLedger, bankResult.bankedResources),
+      };
       activeIncursionRef.current = next;
       return next;
     });
+
     return {
       success: true,
-      logLine: `>> PAYLOAD BANKED — ${result.transferredValue} VALUE SECURED TO CABAL VAULT.`,
-      transferredValue: result.transferredValue,
+      logLine: `>> CARGO BANKED AT SAFEHOUSE — ${resourceCount} RESOURCE(S), ${consumableCount} ITEM(S) SECURED. SURVIVES DEATH IF NOT RE-LOOTED.`,
+      transferredValue: 0,
     };
   }, []);
 
@@ -3529,14 +3665,23 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const bleedResult = applyEmergencyExtractBleed(inc.cargo, EMERGENCY_EXTRACT_CARGO_BLEED_PCT);
     if (bleedResult.drainedValue > 0) {
       setActiveIncursion((prev) => {
-        const next = { ...prev, cargo: bleedResult.cargo, extractionReviewKind: null };
+        const next = {
+          ...prev,
+          cargo: bleedResult.cargo,
+          extractionReviewKind: null,
+          contractRunProgress: recordContractEmergencyRecall(prev.contractRunProgress),
+        };
         activeIncursionRef.current = next;
         return next;
       });
       appendRunLog(`>> EMERGENCY EXTRACT BLEED — −${bleedResult.drainedValue} cargo value purged.`);
     } else {
       setActiveIncursion((prev) => {
-        const next = { ...prev, extractionReviewKind: null };
+        const next = {
+          ...prev,
+          extractionReviewKind: null,
+          contractRunProgress: recordContractEmergencyRecall(prev.contractRunProgress),
+        };
         activeIncursionRef.current = next;
         return next;
       });
@@ -4036,6 +4181,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       getCurrentEncounter,
       getCurrentSkillCheck,
       endRun,
+      getRunElapsedMs,
+      getLastKillingEnemyDesignation,
+      registerOperationContributionApplier,
       setPendingAmbush,
       clearPendingAmbush,
       assignNarrativeForCombat,
@@ -4164,6 +4312,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       getCurrentEncounter,
       getCurrentSkillCheck,
       endRun,
+      getRunElapsedMs,
+      getLastKillingEnemyDesignation,
+      registerOperationContributionApplier,
       setPendingAmbush,
       clearPendingAmbush,
       assignNarrativeForCombat,

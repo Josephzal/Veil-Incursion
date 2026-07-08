@@ -6,7 +6,8 @@ import {
   View,
 } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
-import { ALL_RESOURCE_ITEM_IDS, RESOURCE_REGISTRY } from '../../data/resourceRegistry';
+import type { ResourceItemId } from '../../types/resourceItem';
+import { ALL_RESOURCE_ITEM_IDS, getResourceDisplayName, getResourceCategory } from '../../data/resourceRegistry';
 import { listHubStagedConsumables } from '../../data/hubSafehouseEngine';
 import { DOSSIER_FOREGROUND, DOSSIER_ROW_BG } from '../../constants/dossierSurface';
 import { useTerminal } from '../../context/TerminalContext';
@@ -75,7 +76,7 @@ function StashRow({
             {entry.name.toUpperCase()}
           </TerminalText>
           <TerminalText variant="caption" style={{ color: mutedColor }}>
-            {`${entry.quantity}× // ${entry.kind === 'resource' ? 'RESOURCE' : 'CONSUMABLE'}`}
+            {`${entry.quantity}× // ${entry.kind === 'resource' ? getResourceCategory(entry.itemId as ResourceItemId) : 'CONSUMABLE'}`}
           </TerminalText>
         </View>
       </View>
@@ -128,7 +129,7 @@ export default function SafehouseStashPanel({
         key: `resource-${resourceId}`,
         kind: 'resource' as const,
         itemId: resourceId as CargoItemId,
-        name: RESOURCE_REGISTRY[resourceId].name,
+        name: getResourceDisplayName(resourceId, true),
         quantity,
       }];
     });

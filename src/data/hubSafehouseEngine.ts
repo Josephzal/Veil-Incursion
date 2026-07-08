@@ -9,11 +9,13 @@ import {
 import type { CargoItemId, CargoRunState } from '../types/cargoGrid';
 import { createDefaultCargoRunState } from '../types/cargoGrid';
 import type { ResourceItemId, ResourceQuantity } from '../types/resourceItem';
+import type { FenceableResourceId } from '../types/resourceItem';
 import {
-  FENCEABLE_RESOURCE_IDS,
-  type FenceableResourceId,
-} from '../types/resourceItem';
-import { getResourceSellValue, isResourceItemId } from './resourceRegistry';
+  getFenceableResourceIds,
+  getResourceSellValue,
+  isFenceableResourceId,
+  isResourceItemId,
+} from './resourceRegistry';
 import { getStashCount } from './resourceStashEngine';
 import { CARGO_ITEM_CATALOG } from '../types/cargoGrid';
 
@@ -76,6 +78,7 @@ export function applyFenceSale(
   resourceId: FenceableResourceId,
   quantity = 1,
 ): { stash: ResourceQuantity; cabalCredits: number; creditsEarned: number } | null {
+  if (!isFenceableResourceId(resourceId)) return null;
   const owned = getStashCount(stash, resourceId);
   if (quantity <= 0 || owned < quantity) return null;
   const unitValue = getResourceSellValue(resourceId);
@@ -97,7 +100,7 @@ export function applyFenceSale(
 export function listFenceableStashEntries(
   stash: ResourceQuantity,
 ): Array<{ resourceId: FenceableResourceId; quantity: number; sellValue: number }> {
-  return FENCEABLE_RESOURCE_IDS.flatMap((resourceId) => {
+  return getFenceableResourceIds().flatMap((resourceId) => {
     const quantity = getStashCount(stash, resourceId);
     if (quantity <= 0) return [];
     return [{
