@@ -533,6 +533,8 @@ interface TacticalCombatHubProps {
   operativeClass?: ClassType;
   /** Unstable cargo heal penalty/bonus multiplier (1 = neutral). */
   cargoHealReceivedMultiplier?: number;
+  /** Rusted Flare — temporary shield hits at combat start. */
+  keepsakeCombatShieldHits?: number;
 }
 interface SliceLineConfig {
   id: number;
@@ -623,6 +625,7 @@ export default function TacticalCombatHub({
   onGraftLootDrop,
   operativeClass = 'AEGIS',
   cargoHealReceivedMultiplier = 1,
+  keepsakeCombatShieldHits = 0,
 }: TacticalCombatHubProps): React.JSX.Element {
   const hexShotBoonMods = useMemo(
     () => aggregateHexShotBoonModifiers(
@@ -4937,6 +4940,16 @@ export default function TacticalCombatHub({
       sessionExtrasRef.current.playerShield = 15;
       sessionExtrasRef.current.narrativeVeilWardActive = true;
     }
+    if (keepsakeCombatShieldHits > 0) {
+      sessionExtrasRef.current.playerShield = Math.max(
+        sessionExtrasRef.current.playerShield,
+        keepsakeCombatShieldHits,
+      );
+      sessionExtrasRef.current.playerShieldTurnsRemaining = Math.max(
+        sessionExtrasRef.current.playerShieldTurnsRemaining,
+        99,
+      );
+    }
     if (narrativeCombatBoons?.overcharged) {
       sessionExtrasRef.current.overchargedActive = true;
       if (operativeClass === 'AEGIS') {
@@ -4989,6 +5002,9 @@ export default function TacticalCombatHub({
     }
     if (narrativeCombatBoons?.veilWard) {
       log('>> VEIL WARD BOON — +15 shield capacity active for this encounter.');
+    }
+    if (keepsakeCombatShieldHits > 0) {
+      log(`>> RUSTED FLARE — ${keepsakeCombatShieldHits}-hit emergency shield online.`);
     }
     if (narrativeCombatBoons?.overcharged) {
       log('>> OVERCHARGED BOON — first damaging strike ignores all mitigation.');

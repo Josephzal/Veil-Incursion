@@ -54,7 +54,7 @@ export default function NarrativeScreen(): React.JSX.Element {
   const finishNarrative = (
     choice: NarrativeChoiceKey,
     status: CheckStatus = 'SUCCESS',
-    options?: { tensionBonusCredits?: number },
+    options?: { tensionBonusCredits?: number; counterfeitMandate?: boolean },
   ) => {
     if (resolvingRef.current) return;
     resolvingRef.current = true;
@@ -117,7 +117,7 @@ export default function NarrativeScreen(): React.JSX.Element {
   const handleProceduralResolve = (
     choice: NarrativeChoiceKey,
     status: CheckStatus = 'SUCCESS',
-    options?: { tensionBonusCredits?: number },
+    options?: { tensionBonusCredits?: number; counterfeitMandate?: boolean },
   ) => {
     finishNarrative(choice, status, options);
   };

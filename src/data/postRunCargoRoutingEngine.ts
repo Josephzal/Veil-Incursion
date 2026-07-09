@@ -40,6 +40,8 @@ import { addToResourceStash } from './resourceStashEngine';
 import { rollSealedCasketOpenReward } from './sealedCasketOpenEngine';
 import { mergeResourceQuantities } from './runResourceLedgerEngine';
 import { OPERATION_CONTRIBUTION_VALUES } from './worldStateHelpers';
+import { applyKeepsakeDeliveredQuantityBonus, resolveKeepsakeFenceValueMultiplier } from './expeditionKeepsakeCargoEngine';
+import type { KeepsakeRuntime } from '../types/expeditionKeepsake';
 
 function normalizeResourceLabel(label: string): string {
   return label.toLowerCase().replace(/[\s-]/g, '');
@@ -347,6 +349,7 @@ export function applyCargoRoutingDecisions({
   stash,
   cabalCredits,
   operationContributionPerStack,
+  keepsakeRuntime,
 }: {
   decisions: CargoRoutingDecision[];
   items: RoutableCargoItem[];
@@ -354,6 +357,7 @@ export function applyCargoRoutingDecisions({
   stash: ResourceQuantity;
   cabalCredits: number;
   operationContributionPerStack: number;
+  keepsakeRuntime?: KeepsakeRuntime | null;
 }): {
   result: CargoRoutingResult;
   stash: ResourceQuantity;
@@ -412,7 +416,16 @@ export function applyCargoRoutingDecisions({
         if (!isFenceableResourceId(decision.resourceId)) {
           throw new Error(`Fence sale failed for ${decision.resourceId}.`);
         }
-        const sale = creditFenceSale(nextCredits, decision.resourceId, decision.quantity);
+        const valueMultiplier = resolveKeepsakeFenceValueMultiplier(
+          keepsakeRuntime,
+          decision.resourceId,
+        );
+        const sale = creditFenceSale(
+          nextCredits,
+          decision.resourceId,
+          decision.quantity,
+          valueMultiplier,
+        );
         if (!sale) {
           throw new Error(`Fence sale failed for ${decision.resourceId}.`);
         }
@@ -549,7 +562,12 @@ export function resolveFinalContractResultAfterRouting(
   deliveredResources: ResourceQuantity,
   extractedSuccessfully: boolean,
   ledger?: RunResourceLedger,
+  keepsakeRuntime?: KeepsakeRuntime | null,
 ): ContractResult {
+  const adjustedDelivered = applyKeepsakeDeliveredQuantityBonus(
+    deliveredResources,
+    keepsakeRuntime,
+  );
   if (!routingState.initialContractPendingDelivery) {
     if (
       routingState.activeContract?.objectiveKind
@@ -567,7 +585,7 @@ export function resolveFinalContractResultAfterRouting(
     return resolveContractAfterRouting({
       contract: routingState.activeContract,
       progress: routingState.contractProgress,
-      deliveredResources,
+      deliveredResources: adjustedDelivered,
       extractedSuccessfully,
       extractionKind: routingState.extractionKind,
       skipResourceDelivery: true,
@@ -576,7 +594,7 @@ export function resolveFinalContractResultAfterRouting(
   return resolveContractAfterRouting({
     contract: routingState.activeContract,
     progress: routingState.contractProgress,
-    deliveredResources,
+    deliveredResources: adjustedDelivered,
     extractedSuccessfully,
     extractionKind: routingState.extractionKind,
   });
@@ -597,11 +615,13 @@ export function previewPostRunCargoRouting({
   items,
   routingState,
   ledger,
+  keepsakeRuntime,
 }: {
   decisions: CargoRoutingDecision[];
   items: RoutableCargoItem[];
   routingState: PostRunRoutingDebriefState;
   ledger?: RunResourceLedger;
+  keepsakeRuntime?: KeepsakeRuntime | null;
 }): PostRunCargoRoutingPreview {
   const issues = validateCargoRoutingDecisions(items, decisions);
   if (issues.length > 0) {
@@ -624,12 +644,14 @@ export function previewPostRunCargoRouting({
       stash: {},
       cabalCredits: 0,
       operationContributionPerStack: routingState.operationContributionPerStack,
+      keepsakeRuntime,
     });
     const contract = resolveFinalContractResultAfterRouting(
       routingState,
       applied.result.deliveredResourcesForContract,
       true,
       ledger,
+      keepsakeRuntime,
     );
     return {
       valid: true,

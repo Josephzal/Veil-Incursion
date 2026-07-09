@@ -5,6 +5,7 @@ import type { ProceduralNarrativeAssembly } from '../../types/narrativeProcedura
 import type { NarrativePenalty } from '../../types/narrativeAssembly';
 import {
   isOptionABruteForce,
+  isOptionBClassResolver,
   isOptionDRetreat,
   jsonItemToCargoItemId,
 } from '../../types/narrativeAssembly';
@@ -113,6 +114,7 @@ export function resolveAssemblyNarrativeChoice(
   env: EnvironmentalModifiers,
   snapshot: OperativeResourceSnapshot,
   eligibility: ProceduralEligibilityContext,
+  options?: { counterfeitMandate?: boolean },
 ): NarrativeResolutionResult {
   const encounter = lookupAssemblyEncounterParts(assembly);
   if (!encounter) {
@@ -234,8 +236,12 @@ export function resolveAssemblyNarrativeChoice(
 
   if (choice === 'B') {
     const gate = evaluateOptionBEligibility(resolverSet.optionB, eligibility);
-    if (gate.locked) {
+    const counterfeitBypass = options?.counterfeitMandate === true && gate.locked;
+    if (gate.locked && !counterfeitBypass) {
       return blockedResult(progress, env, `>> ${gate.lockReason ?? 'REQUIREMENTS NOT MET'}.`);
+    }
+    if (counterfeitBypass && isOptionBClassResolver(resolverSet.optionB)) {
+      return blockedResult(progress, env, '>> COUNTERFEIT MANDATE — class authorization cannot be spoofed.');
     }
     pendingRunCredits = parseCredits(resolverSet.optionB.onSuccess)
       || creditsFromReward(complication.defaultReward);

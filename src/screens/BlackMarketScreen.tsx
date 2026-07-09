@@ -14,6 +14,11 @@ import TerminalOverlay from '../components/TerminalOverlay';
 import BlackMarketBg from '../../assets/images/location images/black_market.png';
 import { listingsForStock, resolveBlackMarketListingPrice } from '../data/blackMarket';
 import {
+  canUseKeepsakeNullLedgerCredit,
+  isKeepsakeMarkedShelfItem,
+  resolveKeepsakeMarkedShelfPrice,
+} from '../data/expeditionKeepsakeEconomyEngine';
+import {
   getBlackMarketDiscountPct,
   getEffectiveBlackMarketPrice,
 } from '../data/boundRequisitionEngine';
@@ -67,6 +72,7 @@ export default function BlackMarketScreen(): React.JSX.Element {
     purchaseBlackMarketCargoAtCell,
     returnStagedBlackMarketCargo,
     commitBlackMarketBindings,
+    commitBlackMarketCreditPurchase,
     sellPlacedCargoToBlackMarket,
     revertBlackMarketStaging,
     getSelectedVectorNode,
@@ -108,8 +114,14 @@ export default function BlackMarketScreen(): React.JSX.Element {
       : ['soul-core'],
   );
   const blackMarketDiscountPct = getBlackMarketDiscountPct(activeIncursion);
-  const priceForListing = (basePrice: number) =>
-    getEffectiveBlackMarketPrice(basePrice, blackMarketDiscountPct);
+  const priceForListing = (basePrice: number, itemId: CargoItemId) => (
+    resolveKeepsakeMarkedShelfPrice(
+      basePrice,
+      itemId,
+      activeIncursion.keepsakeRuntime,
+      blackMarketDiscountPct,
+    ).price
+  );
 
   const stagedPurchases = useMemo(
     () => listStagedBlackMarketPlacements(activeIncursion.cargo),
@@ -118,11 +130,15 @@ export default function BlackMarketScreen(): React.JSX.Element {
   const hasStagedPurchases = stagedPurchases.length > 0;
   const bindTotalCost = useMemo(
     () => stagedPurchases.reduce(
-      (sum, item) => sum + priceForListing(resolveBlackMarketListingPrice(item.itemId)),
+      (sum, item) => sum + priceForListing(resolveBlackMarketListingPrice(item.itemId), item.itemId),
       0,
     ),
     [priceForListing, stagedPurchases],
   );
+  const canCreditBind = hasStagedPurchases
+    && stagedPurchases.length === 1
+    && canUseKeepsakeNullLedgerCredit(activeIncursion.keepsakeRuntime)
+    && !binding;
   const canBind = hasStagedPurchases
     && activeIncursion.runCredits >= bindTotalCost
     && !binding;
@@ -283,6 +299,16 @@ export default function BlackMarketScreen(): React.JSX.Element {
     setBinding(false);
   };
 
+  const handleCreditBind = () => {
+    if (!canCreditBind) return;
+    setBinding(true);
+    const result = commitBlackMarketCreditPurchase();
+    if (result) {
+      appendRunLog(result.logLine);
+    }
+    setBinding(false);
+  };
+
   const handleLeave = () => {
     if (leaving) return;
     setLeaving(true);
@@ -408,12 +434,13 @@ export default function BlackMarketScreen(): React.JSX.Element {
                     contentContainerStyle={{ gap: s.listGap, paddingBottom: 4 }}
                   >
                     {marketListings.map((listing) => {
-                      const effectivePrice = priceForListing(listing.price);
+                      const effectivePrice = priceForListing(listing.price, listing.id);
                       return (
                         <DraggableMarketListing
                           key={listing.id}
                           listing={listing}
                           price={effectivePrice}
+                          markedShelf={isKeepsakeMarkedShelfItem(activeIncursion.keepsakeRuntime, listing.id)}
                           fontScale={fontScale}
                           borderColor={theme.borderColor}
                           onDragStart={handleMarketDragStart}
@@ -441,6 +468,19 @@ export default function BlackMarketScreen(): React.JSX.Element {
                   disabled={!canBind}
                   style={bindButtonStyle}
                 />
+
+                {canUseKeepsakeNullLedgerCredit(activeIncursion.keepsakeRuntime) ? (
+                  <TacticalButton
+                    label="[ NULL LEDGER CREDIT ]"
+                    active={canCreditBind}
+                    onPress={handleCreditBind}
+                    accentColor="#FBBF24"
+                    mutedColor={theme.mutedColor}
+                    variant="cta"
+                    disabled={!canCreditBind}
+                    style={bindButtonStyle}
+                  />
+                ) : null}
 
                 <TacticalButton
                   label="[ LEAVE CACHE ]"

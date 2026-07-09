@@ -8,8 +8,13 @@ import type {
 } from '../types/contract';
 import type { ResourceItemId, ResourceQuantity } from '../types/resourceItem';
 import type { RunResourceLedger } from '../types/runResourceLedger';
+import type { CargoRunState } from '../types/cargoGrid';
 import { getResourceCategory, getResourceDisplayName, RESOURCE_REGISTRY } from './resourceRegistry';
 import { mergeResourceQuantities } from './runResourceLedgerEngine';
+import {
+  applyKeepsakeSealedClauseBonuses,
+  evaluateKeepsakeSealedClause,
+} from './expeditionKeepsakeContractEngine';
 
 const RESOURCE_CONTRACT_OBJECTIVES = new Set<ContractObjectiveKind>([
   'EXTRACT_STABLE_RESOURCE',
@@ -204,6 +209,9 @@ function buildContractResult({
   succeeded,
   progressText,
   statusOverride,
+  cargo,
+  ledger,
+  bankedMultiplier = 1,
 }: {
   contract: ActiveRunContract;
   progress: ContractRunProgress;
@@ -212,6 +220,9 @@ function buildContractResult({
   succeeded: boolean;
   progressText: string;
   statusOverride?: ContractResult['status'];
+  cargo?: import('../types/cargoGrid').CargoRunState;
+  ledger?: RunResourceLedger;
+  bankedMultiplier?: number;
 }): ContractResult {
   const emptyBonus = {
     bonusObjectiveMet: false,
@@ -246,6 +257,34 @@ function buildContractResult({
   const status = statusOverride ?? (succeeded ? 'SUCCESS' : 'FAILED');
   const awardsGranted = status === 'SUCCESS';
 
+  let sealedClauseMet = false;
+  let sealedClauseText: string | undefined;
+  let sealedClauseProgressText: string | undefined;
+  let sealedClauseCreditsBonus = 0;
+  let sealedClauseReputationBonus = 0;
+  let reputationAwarded = awardsGranted ? (contract.reward?.reputation ?? 0) : 0;
+
+  if (contract.keepsakeSealedClause && succeeded && ledger && cargo) {
+    const clauseEval = evaluateKeepsakeSealedClause(
+      contract.keepsakeSealedClause,
+      progress,
+      extractionKind,
+      ledger,
+      cargo,
+      bankedMultiplier,
+    );
+    sealedClauseText = contract.keepsakeSealedClause.text;
+    sealedClauseProgressText = clauseEval.progressText;
+    sealedClauseMet = clauseEval.met;
+    if (clauseEval.met) {
+      const sealedBonus = applyKeepsakeSealedClauseBonuses(reputationAwarded, clauseEval);
+      sealedClauseCreditsBonus = sealedBonus.creditsBonus;
+      sealedClauseReputationBonus = sealedBonus.reputation - reputationAwarded;
+      reputationAwarded = sealedBonus.reputation;
+      bonusCreditsAwarded += sealedBonus.creditsBonus;
+    }
+  }
+
   return {
     status,
     title: contract.title,
@@ -253,7 +292,7 @@ function buildContractResult({
     objectiveText: contract.objectiveText,
     progressText,
     reward: contract.reward,
-    reputationAwarded: awardsGranted ? (contract.reward?.reputation ?? 0) : 0,
+    reputationAwarded,
     creditsAwarded: awardsGranted ? (contract.reward?.credits ?? 0) : 0,
     resourceBonusIds: awardsGranted ? resourceBonusIdsFor(contract) : [],
     bonusObjectiveMet,
@@ -261,6 +300,11 @@ function buildContractResult({
     bonusProgressText,
     bonusCreditsAwarded: awardsGranted ? bonusCreditsAwarded : 0,
     bonusReputationAwarded: awardsGranted ? bonusReputationAwarded : 0,
+    sealedClauseMet,
+    sealedClauseText,
+    sealedClauseProgressText,
+    sealedClauseCreditsBonus,
+    sealedClauseReputationBonus,
   };
 }
 
@@ -333,6 +377,9 @@ export function resolveContractAfterRouting({
   extractedSuccessfully,
   extractionKind,
   skipResourceDelivery = false,
+  ledger,
+  cargo,
+  bankedMultiplier = 1,
 }: {
   contract: ActiveRunContract | null;
   progress: ContractRunProgress;
@@ -340,6 +387,9 @@ export function resolveContractAfterRouting({
   extractedSuccessfully: boolean;
   extractionKind?: ContractExtractionKind;
   skipResourceDelivery?: boolean;
+  ledger?: RunResourceLedger;
+  cargo?: CargoRunState;
+  bankedMultiplier?: number;
 }): ContractResult {
   const emptyBonus = {
     bonusObjectiveMet: false,
@@ -382,6 +432,9 @@ export function resolveContractAfterRouting({
     extractionKind: resolvedExtractionKind,
     succeeded: evaluation.succeeded,
     progressText: evaluation.progressText,
+    ledger,
+    cargo,
+    bankedMultiplier,
   });
 }
 
@@ -391,12 +444,16 @@ export function resolveContractResult({
   progress,
   extractedSuccessfully,
   extractionKind,
+  cargo,
+  bankedMultiplier = 1,
 }: {
   contract: ActiveRunContract | null;
   ledger: RunResourceLedger;
   progress: ContractRunProgress;
   extractedSuccessfully: boolean;
   extractionKind?: ContractExtractionKind;
+  cargo?: CargoRunState;
+  bankedMultiplier?: number;
 }): ContractResult {
   const emptyBonus = {
     bonusObjectiveMet: false,
@@ -437,5 +494,8 @@ export function resolveContractResult({
     extractionKind: resolvedExtractionKind,
     succeeded: evaluation.succeeded,
     progressText: evaluation.progressText,
+    ledger,
+    cargo,
+    bankedMultiplier,
   });
 }

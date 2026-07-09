@@ -11,6 +11,8 @@ import {
 } from '../types/unstableCargoEffects';
 import { countCargoItemInstances } from './cargoGridEngine';
 import { getResourceDisplayName } from './resourceRegistry';
+import { applyKeepsakeUnstableDampening } from './expeditionKeepsakeCargoEngine';
+import type { KeepsakeRuntime } from '../types/expeditionKeepsake';
 
 const DEFAULT_AGGREGATED: AggregatedCarriedCargoModifiers = {
   rareLootBonusPct: 0,
@@ -129,43 +131,55 @@ function aggregateCarriedModifiers(
 /** Each unique unstable cargo effect applies once — duplicate copies do not stack. */
 export function buildActiveCarriedCargoSnapshot(
   cargo: CargoRunState,
+  keepsakeRuntime?: import('../types/expeditionKeepsake').KeepsakeRuntime | null,
 ): ActiveCarriedCargoSnapshot {
   const activeEffects = UNSTABLE_CARRIED_EFFECT_IDS
     .filter((resourceId) => countPhysicalCargoResource(cargo, resourceId) > 0)
     .map((resourceId) => UNSTABLE_CARRIED_EFFECTS[resourceId]);
 
+  const dampened = applyKeepsakeUnstableDampening(activeEffects, keepsakeRuntime);
+
   return {
-    activeEffects,
-    aggregated: aggregateCarriedModifiers(activeEffects),
+    activeEffects: dampened,
+    aggregated: aggregateCarriedModifiers(dampened),
   };
 }
 
-export function hasActiveCarriedCargoEffects(cargo: CargoRunState): boolean {
-  return buildActiveCarriedCargoSnapshot(cargo).activeEffects.length > 0;
+export function hasActiveCarriedCargoEffects(
+  cargo: CargoRunState,
+  keepsakeRuntime?: KeepsakeRuntime | null,
+): boolean {
+  return buildActiveCarriedCargoSnapshot(cargo, keepsakeRuntime).activeEffects.length > 0;
 }
 
 export function resolveEffectiveRareLootBonusPct(
   baseRareLootBonusPct: number,
   cargo: CargoRunState,
+  keepsakeRuntime?: KeepsakeRuntime | null,
 ): number {
   return baseRareLootBonusPct
-    + buildActiveCarriedCargoSnapshot(cargo).aggregated.rareLootBonusPct;
+    + buildActiveCarriedCargoSnapshot(cargo, keepsakeRuntime).aggregated.rareLootBonusPct;
 }
 
 export function resolveEffectiveOccultRewardBonusPct(
   cargo: CargoRunState,
+  keepsakeRuntime?: KeepsakeRuntime | null,
 ): number {
-  return buildActiveCarriedCargoSnapshot(cargo).aggregated.occultRewardBonusPct;
+  return buildActiveCarriedCargoSnapshot(cargo, keepsakeRuntime).aggregated.occultRewardBonusPct;
 }
 
-export function resolveCargoHealReceivedMultiplier(cargo: CargoRunState): number {
-  return buildActiveCarriedCargoSnapshot(cargo).aggregated.healReceivedMultiplier;
+export function resolveCargoHealReceivedMultiplier(
+  cargo: CargoRunState,
+  keepsakeRuntime?: KeepsakeRuntime | null,
+): number {
+  return buildActiveCarriedCargoSnapshot(cargo, keepsakeRuntime).aggregated.healReceivedMultiplier;
 }
 
 export function buildCarriedCargoContextRollBias(
   cargo: CargoRunState,
+  keepsakeRuntime?: KeepsakeRuntime | null,
 ): CarriedCargoContextRollBias {
-  const agg = buildActiveCarriedCargoSnapshot(cargo).aggregated;
+  const agg = buildActiveCarriedCargoSnapshot(cargo, keepsakeRuntime).aggregated;
   return {
     anchorSignalChanceMultiplier: agg.anchorSignalMultiplier,
     highValueResourceChanceMultiplier: 1 + agg.rareLootBonusPct / 100,
@@ -182,8 +196,9 @@ export interface CarriedCargoTypeWeightBias {
 
 export function buildCarriedCargoTypeWeightBias(
   cargo: CargoRunState,
+  keepsakeRuntime?: KeepsakeRuntime | null,
 ): CarriedCargoTypeWeightBias {
-  const agg = buildActiveCarriedCargoSnapshot(cargo).aggregated;
+  const agg = buildActiveCarriedCargoSnapshot(cargo, keepsakeRuntime).aggregated;
   return {
     eliteWeightDelta: agg.eliteWeightDelta,
     anomalyWeightDelta: agg.anomalyWeightDelta,
@@ -227,9 +242,10 @@ export function applyCargoHealReceived(
   baseHealAmount: number,
   cargo: CargoRunState,
   boonHealMultiplier = 1,
+  keepsakeRuntime?: KeepsakeRuntime | null,
 ): number {
   if (baseHealAmount <= 0) return 0;
-  const cargoMultiplier = resolveCargoHealReceivedMultiplier(cargo);
+  const cargoMultiplier = resolveCargoHealReceivedMultiplier(cargo, keepsakeRuntime);
   return Math.floor(baseHealAmount * boonHealMultiplier * cargoMultiplier);
 }
 

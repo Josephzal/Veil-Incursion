@@ -8,7 +8,7 @@ import {
   createEmptyRunPhysicalBankSnapshot,
   createEmptyRunResourceLedger,
 } from '../types/runResourceLedger';
-import { addLootToContainment } from './cargoGridEngine';
+import { addLootToContainment, removePlacedCargoItem } from './cargoGridEngine';
 import { isResourceItemId } from './resourceRegistry';
 import { addToResourceStash } from './resourceStashEngine';
 
@@ -179,6 +179,52 @@ export function bankAllPhysicalRunCargo(
     },
     bankedResources,
     bankedConsumables,
+  };
+}
+
+/** Banks a single cargo instance into the in-run safehouse snapshot. */
+export function bankSingleCargoInstance(
+  cargo: CargoRunState,
+  bank: RunPhysicalBankSnapshot,
+  instanceId: string,
+): {
+  cargo: CargoRunState;
+  bank: RunPhysicalBankSnapshot;
+  bankedResources: ResourceQuantity;
+} | null {
+  const placed = cargo.grid.placed.find((item) => item.instanceId === instanceId);
+  const contained = cargo.containment.find((item) => item.instanceId === instanceId);
+  const item = placed ?? contained;
+  if (!item) return null;
+
+  let nextCargo = cargo;
+  if (placed) {
+    nextCargo = removePlacedCargoItem(nextCargo, instanceId);
+  } else {
+    nextCargo = {
+      ...nextCargo,
+      containment: nextCargo.containment.filter((entry) => entry.instanceId !== instanceId),
+    };
+  }
+
+  const bankedResources: ResourceQuantity = {};
+  let nextResources = { ...bank.resources };
+  const nextConsumables = { ...bank.consumables };
+
+  if (isResourceItemId(item.itemId)) {
+    nextResources = addToResourceStash(nextResources, item.itemId, 1);
+    bankedResources[item.itemId] = 1;
+  } else {
+    nextConsumables[item.itemId] = (nextConsumables[item.itemId] ?? 0) + 1;
+  }
+
+  return {
+    cargo: nextCargo,
+    bank: {
+      resources: nextResources,
+      consumables: nextConsumables,
+    },
+    bankedResources,
   };
 }
 

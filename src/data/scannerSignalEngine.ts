@@ -85,9 +85,18 @@ export function resolveNodeScannerSignals(
   if (ctx?.highValueResource && node.type === 'RESOURCE_HARVEST') {
     signals.push({
       kind: 'OPERATION',
-      label: 'HIGH VALUE',
+      label: ctx.keepsakeDeadDrop ? 'DEAD DROP CACHE' : 'HIGH VALUE',
       color: SCANNER_SIGNAL_COLORS.OPERATION,
-      intensity: 0.55,
+      intensity: ctx.keepsakeDeadDrop ? 0.85 : 0.55,
+    });
+  }
+
+  if (ctx?.keepsakeHarmonic) {
+    signals.push({
+      kind: 'HIGH_RISK',
+      label: 'HARMONIC NODE',
+      color: SCANNER_SIGNAL_COLORS.HIGH_RISK,
+      intensity: 1,
     });
   }
 
@@ -141,9 +150,11 @@ export function shouldShowScannerSignalOverlay(
     selectedNodeId: string | null;
     isPreDiscovered?: boolean;
     hasSignals: boolean;
+    fullyInterpretedNodeIds?: readonly string[];
   },
 ): boolean {
   if (!opts.hasSignals) return false;
+  if (opts.fullyInterpretedNodeIds?.includes(nodeId)) return true;
   if (opts.siphonedNodeIds.includes(nodeId)) return true;
   if (opts.selectedNodeId === nodeId) return true;
   if (opts.isPreDiscovered) return true;
@@ -156,8 +167,10 @@ export function scannerOverlayOpacity(
     siphonedNodeIds: readonly string[];
     selectedNodeId: string | null;
     isPreDiscovered?: boolean;
+    fullyInterpretedNodeIds?: readonly string[];
   },
 ): number {
+  if (opts.fullyInterpretedNodeIds?.includes(nodeId)) return 0.92;
   if (opts.siphonedNodeIds.includes(nodeId)) return 1;
   if (opts.selectedNodeId === nodeId) return 0.92;
   if (opts.isPreDiscovered) return 0.55;

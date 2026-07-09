@@ -65,6 +65,19 @@ export interface ContractBoardState {
   lastUsedSponsorId: CabalEmployerId | null;
 }
 
+export type KeepsakeSealedClauseKind =
+  | 'OPERATION_TARGET'
+  | 'EXTRACT_TWO_CARGO'
+  | 'DEFEAT_ELITE'
+  | 'CLEAR_ANCHOR'
+  | 'COMPLETE_DEPTH_2'
+  | 'NO_DIRTY_EXTRACTION';
+
+export interface KeepsakeSealedClause {
+  kind: KeepsakeSealedClauseKind;
+  text: string;
+}
+
 /** Frozen snapshot copied into run state at descent — cannot change mid-run. */
 export interface ActiveRunContract {
   contractId: string | null;
@@ -88,6 +101,8 @@ export interface ActiveRunContract {
   bonusReward?: Partial<ContractRewardPackage>;
   difficulty: ContractDifficulty;
   selectedAtRunIndex: number;
+  /** Contract Seal — optional sealed clause appended at run start. */
+  keepsakeSealedClause?: KeepsakeSealedClause | null;
 }
 
 export interface ContractRunProgress {
@@ -97,6 +112,7 @@ export interface ContractRunProgress {
   emergencyRecallCompleted: boolean;
   operationTargetsCleared: number;
   anomaliesCleared: number;
+  anchorSignalsCleared: number;
 }
 
 export type ContractExtractionKind =
@@ -122,6 +138,11 @@ export interface ContractResult {
   bonusProgressText?: string;
   bonusCreditsAwarded: number;
   bonusReputationAwarded: number;
+  sealedClauseMet?: boolean;
+  sealedClauseText?: string;
+  sealedClauseProgressText?: string;
+  sealedClauseCreditsBonus?: number;
+  sealedClauseReputationBonus?: number;
 }
 
 export function createEmptyContractRunProgress(): ContractRunProgress {
@@ -132,6 +153,7 @@ export function createEmptyContractRunProgress(): ContractRunProgress {
     emergencyRecallCompleted: false,
     operationTargetsCleared: 0,
     anomaliesCleared: 0,
+    anchorSignalsCleared: 0,
   };
 }
 

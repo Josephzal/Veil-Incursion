@@ -28,6 +28,8 @@ import { RadarDot } from '../types/run';
 import type { ScannerCabal } from '../types/scanner';
 import { getZoneScannerTint } from '../components/scanner/zoneScannerThemes';
 import ScannerSonarChildHints from '../components/scanner/ScannerSonarChildHints';
+import KeepsakeCartographGhostHint from '../components/scanner/KeepsakeCartographGhostHint';
+import KeepsakeStampedExtractionHint from '../components/scanner/KeepsakeStampedExtractionHint';
 import ScannerSonarPrompt from '../components/scanner/ScannerSonarPrompt';
 import ScannerSignalOverlays from '../components/scanner/ScannerSignalOverlays';
 import ScannerVeilFrontLegend from '../components/scanner/ScannerVeilFrontLegend';
@@ -36,6 +38,12 @@ import { DOSSIER_ROW_BG } from '../constants/dossierSurface';
 import { resolveFactionSlateBackgroundSolid } from '../constants/hubAtmosphere';
 import { formatRiftManifestLog } from '../utils/overworldBlindScout';
 import { resolveRunEventNodeHeaderFromNode } from '../utils/resolveRunEventNodeHeader';
+import { getKeepsakeCartographGhostType } from '../data/expeditionKeepsakeScannerEngine';
+import {
+  computeBaseSectorExtractionPayout,
+  previewKeepsakeStampedExtractionPayout,
+} from '../data/expeditionKeepsakeEconomyEngine';
+import { formatKeepsakeNextDepthPreviewLine } from '../data/expeditionKeepsakeSafehouseEngine';
 import {
   getSectorZone,
   isEmergencyRecallAvailable,
@@ -181,20 +189,57 @@ export default function ScanningScreen(): React.JSX.Element {
   const intelLines = useMemo(() => {
     if (!selectedNode) return [];
     const optionIndex = nodeIndexById.get(selectedNode.id) ?? 0;
-    return formatScannerNodeIntel(
+    const lines = formatScannerNodeIntel(
       selectedNode,
       activeIncursion.currentMacroBiomeFamily,
       optionIndex,
       activeIncursion.runGenerationContext,
       activeIncursion.runVeilBiome,
     );
+    const polaroid = activeIncursion.keepsakeGravePolaroidPreview;
+    if (polaroid && polaroid.nodeId === selectedNode.id) {
+      return [...lines, ...polaroid.lines];
+    }
+    if (activeIncursion.keepsakeStampedExtractionNodeId === selectedNode.id) {
+      const base = computeBaseSectorExtractionPayout(activeIncursion);
+      const preview = previewKeepsakeStampedExtractionPayout(
+        activeIncursion.keepsakeRuntime,
+        activeIncursion,
+        base,
+        selectedNode.id,
+      );
+      return [
+        ...lines,
+        `>> STAMPED EVAC — verified payout preview: ${preview} CR (+1 free bank on extract).`,
+      ];
+    }
+    const depthPreview = formatKeepsakeNextDepthPreviewLine(
+      activeIncursion.keepsakeNextDepthNodeTypePreview,
+    );
+    if (depthPreview) {
+      return [...lines, depthPreview];
+    }
+    return lines;
   }, [
     selectedNode,
     nodeIndexById,
     activeIncursion.currentMacroBiomeFamily,
     activeIncursion.runVeilBiome,
     activeIncursion.runGenerationContext,
+    activeIncursion.keepsakeGravePolaroidPreview,
+    activeIncursion.keepsakeStampedExtractionNodeId,
+    activeIncursion.keepsakeRuntime,
+    activeIncursion.keepsakeNextDepthNodeTypePreview,
+    activeIncursion,
   ]);
+
+  const cartographGhostType = useMemo(() => {
+    if (!activeIncursion.keepsakeCartographGhostNodeId) return null;
+    return getKeepsakeCartographGhostType(
+      activeIncursion,
+      activeIncursion.keepsakeCartographGhostNodeId,
+    );
+  }, [activeIncursion]);
 
   const showNodeDock = hasSelection;
   const allNodesLocked = nodesInField > 0 && siphonedNodeIds.length >= nodesInField;
@@ -219,7 +264,7 @@ export default function ScanningScreen(): React.JSX.Element {
 
     setSelectedNodeId(null);
     setSiphonedNodeIds([]);
-    setTypeColoredNodeIds(new Set());
+    setTypeColoredNodeIds(new Set(activeIncursion.keepsakeFullyInterpretedNodeIds));
     setScannerDotsReady(false);
     setVectorDots([]);
     lastManifestedSiphonsRef.current = new Set();
@@ -229,7 +274,7 @@ export default function ScanningScreen(): React.JSX.Element {
     spawnedScannerSizeRef.current = 0;
     setNodesInField(vectorCluster.length);
     closeScanPreview();
-  }, [isScanningHub, scanSessionKey, vectorCluster, nodeIndex, closeScanPreview]);
+  }, [isScanningHub, scanSessionKey, vectorCluster, nodeIndex, closeScanPreview, activeIncursion.keepsakeFullyInterpretedNodeIds]);
 
   useEffect(() => {
     if (!isScanningHub || vectorCluster.length === 0 || scannerSize <= 0) {
@@ -293,6 +338,12 @@ export default function ScanningScreen(): React.JSX.Element {
       return new Set([...prev, nodeId]);
     });
   }, []);
+
+  useEffect(() => {
+    activeIncursion.keepsakeFullyInterpretedNodeIds.forEach((nodeId) => {
+      markNodeTypeColored(nodeId);
+    });
+  }, [activeIncursion.keepsakeFullyInterpretedNodeIds, markNodeTypeColored]);
 
   useEffect(() => {
     if (selectedNodeId) markNodeTypeColored(selectedNodeId);
@@ -432,7 +483,21 @@ export default function ScanningScreen(): React.JSX.Element {
               radarDots={vectorDots}
               siphonedNodeIds={siphonedNodeIds}
               selectedNodeId={selectedNodeId}
+              fullyInterpretedNodeIds={activeIncursion.keepsakeFullyInterpretedNodeIds}
             />
+            {activeIncursion.keepsakeCartographGhostNodeId && cartographGhostType ? (
+              <KeepsakeCartographGhostHint
+                nodeId={activeIncursion.keepsakeCartographGhostNodeId}
+                ghostType={cartographGhostType}
+                radarDots={vectorDots}
+              />
+            ) : null}
+            {activeIncursion.keepsakeStampedExtractionNodeId ? (
+              <KeepsakeStampedExtractionHint
+                nodeId={activeIncursion.keepsakeStampedExtractionNodeId}
+                radarDots={vectorDots}
+              />
+            ) : null}
             {activeIncursion.proceduralRunTree
               ? activeIncursion.revealedSonarNodeIds.map((nodeId) => (
                 <ScannerSonarChildHints

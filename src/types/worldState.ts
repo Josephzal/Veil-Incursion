@@ -198,6 +198,12 @@ export interface NodeContextModifiers {
   operationTag?: OperationObjectiveKind;
   highRisk?: boolean;
   highValueResource?: boolean;
+  /** Dead-Drop Receiver — buried cache with elevated risk. */
+  keepsakeDeadDrop?: boolean;
+  /** Choir Tuning Fork — harmonized operation + resource signal. */
+  keepsakeHarmonic?: boolean;
+  /** Black Market Mark — corrupted future vector after marked purchase. */
+  keepsakeMarkedCorruption?: boolean;
 }
 
 /** Tracks per-run caps while lazily rolling node context at engagement. */

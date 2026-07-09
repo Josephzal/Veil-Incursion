@@ -158,6 +158,8 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
     deferredWorldTick,
     runResourceLedger,
     cargoRoutingRunState,
+    keepsakeSummary,
+    keepsakeRuntime,
   } = pendingDebrief;
 
   const displayContractResult = resolvedContractResult ?? contractResult;
@@ -197,9 +199,10 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
         items: routingState.pendingItems,
         routingState,
         ledger: runResourceLedger,
+        keepsakeRuntime,
       })
       : null
-  ), [routingState, decisions, routingApplied, runResourceLedger]);
+  ), [routingState, decisions, routingApplied, runResourceLedger, keepsakeRuntime]);
 
   const canConfirmRouting = routingState?.requiresRouting
     ? routingValidationIssues.length === 0 && (routingPreview?.valid ?? false)
@@ -227,12 +230,14 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
         decisions,
         routingState,
         autoStashAlreadyDeposited: true,
+        keepsakeRuntime,
       });
       const finalContract = resolveFinalContractResultAfterRouting(
         routingState,
         result.deliveredResourcesForContract,
         true,
         runResourceLedger,
+        keepsakeRuntime,
       );
       if (finalContract.status === 'SUCCESS') {
         grantContractRewards(finalContract);
@@ -362,6 +367,16 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
           <Text style={[styles.stat, { color: theme.mutedColor }]}>
             {displayContractResult.progressText}
           </Text>
+          {displayContractResult.sealedClauseText ? (
+            <Text style={[styles.stat, { color: theme.mutedColor }]}>
+              {`SEALED CLAUSE — ${displayContractResult.sealedClauseText}`}
+            </Text>
+          ) : null}
+          {displayContractResult.sealedClauseProgressText ? (
+            <Text style={[styles.stat, { color: displayContractResult.sealedClauseMet ? theme.statusColor : theme.mutedColor }]}>
+              {displayContractResult.sealedClauseProgressText.toUpperCase()}
+            </Text>
+          ) : null}
           <Text
             style={[
               styles.statAccent,
@@ -508,6 +523,28 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
                     <Text style={[styles.stat, { color: theme.textColor }]}>
                       {`ECHO SIGNALS: ${echoSummary.signalsDiscovered} discovered / ${echoSummary.signalsResolved} resolved`}
                     </Text>
+                  </>
+                ) : null}
+                {keepsakeSummary ? (
+                  <>
+                    <View style={styles.sectionGap} />
+                    <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>EXPEDITION KEEPSAKE</Text>
+                    <Text style={[styles.statAccent, { color: accentColor }]}>
+                      {keepsakeSummary.name.toUpperCase()}
+                    </Text>
+                    <Text style={[styles.stat, { color: theme.mutedColor }]}>
+                      {keepsakeSummary.effectSummary.toUpperCase()}
+                    </Text>
+                    <Text style={[styles.stat, { color: keepsakeSummary.triggered ? TERMINAL_ACCENT : theme.mutedColor }]}>
+                      {keepsakeSummary.triggered
+                        ? `TRIGGERED ${keepsakeSummary.triggerCount} TIME(S)`
+                        : 'KEEPSAKE EFFECT DID NOT TRIGGER THIS RUN.'}
+                    </Text>
+                    {keepsakeSummary.statLines.map((line) => (
+                      <Text key={line} style={[styles.stat, { color: theme.textColor }]}>
+                        {line.toUpperCase()}
+                      </Text>
+                    ))}
                   </>
                 ) : null}
                 {cargoRoutingSummary ? (

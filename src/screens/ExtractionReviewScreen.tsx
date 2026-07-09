@@ -39,6 +39,11 @@ import {
   countSpecialCargoHeldInRun,
   resolveCargoRoutingContextFromIncursion,
 } from '../data/postRunCargoRoutingRunState';
+import {
+  computeBaseSectorExtractionPayout,
+  isKeepsakeStampedExtractionNode,
+  previewKeepsakeStampedExtractionPayout,
+} from '../data/expeditionKeepsakeEconomyEngine';
 import type { ClassType } from '../types/game';
 import type { RunState } from '../types/run';
 import { calculateGridOccupancy } from '../data/cargoGridEngine';
@@ -412,6 +417,16 @@ export default function ExtractionReviewScreen(): React.JSX.Element {
     [activeIncursion.cargo],
   );
 
+  const stampedPayoutPreview = useMemo(() => {
+    if (!isKeepsakeStampedExtractionNode(activeIncursion)) return null;
+    const base = computeBaseSectorExtractionPayout(activeIncursion);
+    return previewKeepsakeStampedExtractionPayout(
+      activeIncursion.keepsakeRuntime,
+      activeIncursion,
+      base,
+    );
+  }, [activeIncursion]);
+
   const handleCargoDeckLayout = useCallback((event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
     setCargoDeckSize({ width, height });
@@ -504,6 +519,14 @@ export default function ExtractionReviewScreen(): React.JSX.Element {
                       labelSize={s.telemetryLabel}
                       valueSize={s.telemetryValue}
                     />
+                    {stampedPayoutPreview != null ? (
+                      <TelemetryRow
+                        label="STAMPED PAYOUT"
+                        value={`${stampedPayoutPreview} CR`}
+                        labelSize={s.telemetryLabel}
+                        valueSize={s.telemetryValue}
+                      />
+                    ) : null}
                   </View>
 
                   <View style={styles.cargoDeckSection}>

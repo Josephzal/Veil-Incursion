@@ -232,6 +232,7 @@ import {
   recordContractEliteKill,
   recordContractEmergencyRecall,
   recordContractOperationTargetCleared,
+  recordContractAnchorSignalCleared,
   recordContractAnomalyCleared,
 } from '../data/contractRunProgressEngine';
 import { resolveContractResult } from '../data/contractResolver';
@@ -301,6 +302,69 @@ import {
 import { buildPostRunRoutingDebriefState } from '../data/postRunCargoRoutingEngine';
 import { resolveContractExtractionKind } from '../data/contractExtractionKind';
 import {
+  applyKeepsakeOnRunStart,
+  initializeKeepsakeRuntime,
+} from '../data/expeditionKeepsakeEngine';
+import {
+  applyKeepsakeOnNodeRevealed,
+  applyKeepsakeOnNodeSelected,
+  applyKeepsakeScannerLayerEffects,
+} from '../data/expeditionKeepsakeScannerEngine';
+import {
+  applyKeepsakeDeadDropHarvestBonus,
+  applyKeepsakeLeySiphonOverdraw,
+  applyKeepsakeOnNodeEngagedForLeySiphon,
+  clearKeepsakeJettisonLocks,
+  isKeepsakeJettisonBlocked,
+  isKeepsakeSafehouseBankBlocked,
+  processKeepsakeStagedCargoPickup,
+} from '../data/expeditionKeepsakeCargoEngine';
+import {
+  applyKeepsakeMarkedShelfCorruption,
+  applyKeepsakeNullLedgerCreditPurchase,
+  applyKeepsakeOnBlackMarketOpen,
+  applyKeepsakeOnDirtyExtractionStart,
+  applyKeepsakeOnSafeExtractionSkip,
+  applyKeepsakeOnStampedSafeExtractionConfirm,
+  applyKeepsakeOverextendedOnNodeClear,
+  applyKeepsakeRustedFlareCargoProtection,
+  canUseKeepsakeNullLedgerCredit,
+  consumeKeepsakeDirtyExtractionThreat,
+  isKeepsakeMarkedShelfItem,
+  resolveKeepsakeExtractionPayoutAdjustments,
+  resolveKeepsakeMarkedPurchaseCreditSaved,
+  resolveKeepsakeMarkedShelfPrice,
+  shouldApplyKeepsakeDirtyExtractionThreat,
+  computeBaseSectorExtractionPayout,
+} from '../data/expeditionKeepsakeEconomyEngine';
+import {
+  applyKeepsakeContractSealOnRunStart,
+  applyKeepsakeCounterfeitMandateOnResolver,
+  applyKeepsakeCounterfeitRewardPenalty,
+} from '../data/expeditionKeepsakeContractEngine';
+import {
+  applyKeepsakeOnCombatStart,
+  applyKeepsakeOnSafehouseEnter,
+  commitKeepsakeSafehouseCoinService as applyKeepsakeSafehouseCoinService,
+  type SafehouseCoinService,
+} from '../data/expeditionKeepsakeSafehouseEngine';
+import {
+  appendKeepsakeThreatReinforcement,
+  applyKeepsakeAnchorCharmOnCombatEngage,
+  applyKeepsakeAnchorCharmOnSignalClear,
+  applyKeepsakeEchoLureCargoBonus,
+  applyKeepsakeEchoLureOnCombatEngage,
+  applyKeepsakeGravePolaroidOnNodeClear,
+  applyKeepsakeOnEchoSignalResolved,
+  scaleKeepsakeEchoCredits,
+} from '../data/expeditionKeepsakeAnchorEchoEngine';
+import type { KeepsakeId } from '../types/expeditionKeepsake';
+import {
+  formatKeepsakeIncursionDebugSnapshot,
+  formatKeepsakeDebugValidation,
+  previewKeepsakeDebriefFromIncursion,
+} from '../data/expeditionKeepsakeDebugEngine';
+import {
   applyCargoCollectedLedgerDelta,
   formatCargoRoutingRunStateSnapshot,
   recordCargoRoutingResourcesBanked,
@@ -362,6 +426,7 @@ export interface RunStartConfig {
   startingVeilResidueBalance?: number;
   runGenerationContext?: import('../types/worldState').RunGenerationContext;
   runModifiers?: import('../types/worldState').RunModifierSnapshot;
+  equippedKeepsakeId?: KeepsakeId | null;
 }
 
 export interface BadgeTestCombatConfig {
@@ -439,7 +504,7 @@ interface RunContextType {
   resolveNarrativeChoice: (
     choice: import('../types/game').NarrativeChoiceKey,
     status?: CheckStatus,
-    options?: { tensionBonusCredits?: number },
+    options?: { tensionBonusCredits?: number; counterfeitMandate?: boolean },
   ) => {
     outcomeText: string;
     aborted: boolean;
@@ -462,6 +527,7 @@ interface RunContextType {
     logLine: string;
     transferredValue?: number;
   };
+  commitKeepsakeSafehouseCoinService: (service: SafehouseCoinService) => void;
   vaultIncursionVeilResidueToAccount: () => { deposited: number };
   restoreHealthFromBench: () => { success: boolean; logLine: string };
   getSafehouseIntel: () => import('../data/districtPacing').DistrictIntelBrief;
@@ -521,9 +587,10 @@ interface RunContextType {
   ) => { success: boolean; logLine: string } | null;
   returnStagedBlackMarketCargo: (instanceId: string) => { success: boolean; logLine: string } | null;
   commitBlackMarketBindings: () => { success: boolean; logLine: string } | null;
+  commitBlackMarketCreditPurchase: () => { success: boolean; logLine: string } | null;
   sellPlacedCargoToBlackMarket: (instanceId: string) => { success: boolean; logLine: string } | null;
   revertBlackMarketStaging: () => void;
-  stageSafeAnchorReview: (anchorIndex: 1 | 2 | 3) => void;
+  stageSafeAnchorReview: (anchorIndex: 1 | 2 | 3, nodeId?: string) => void;
   confirmSafeAnchorExtraction: (anchorIndex: 1 | 2 | 3) => void;
   continueFromExtractionReview: () => void;
   adjustResonance: (amount: number, reason: string) => number;
@@ -550,6 +617,9 @@ interface RunContextType {
   devQueueHostileEchoTemplate: (templateId: string, sourceClass?: ClassType) => void;
   devLogEchoRunState: () => string;
   devLogCargoRoutingRunState: () => string;
+  devLogKeepsakeRunState: () => string;
+  devPreviewKeepsakeDebrief: () => string;
+  devValidateKeepsakePipeline: () => string;
   devPreviewEchoDebrief: () => string;
   devValidateEchoPipeline: () => string;
   devPreviewPostRunRouting: () => string;
@@ -770,6 +840,20 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       config?.startingVeilResidueBalance ?? 0,
     );
     const starterCargo = applyIncursionStarterCargo(config?.initialCargo ?? createStarterCargoRunState());
+    const keepsakeRuntimeBase = initializeKeepsakeRuntime(config?.equippedKeepsakeId ?? null);
+    const keepsakeStart = applyKeepsakeOnRunStart(
+      keepsakeRuntimeBase,
+      config?.runGenerationContext ?? null,
+    );
+    let activeContract = config?.runGenerationContext?.activeContract ?? null;
+    const contractSeal = applyKeepsakeContractSealOnRunStart(keepsakeStart.runtime, activeContract);
+    if (contractSeal.runtime) {
+      keepsakeStart.runtime = contractSeal.runtime;
+    }
+    if (contractSeal.contract) {
+      activeContract = contractSeal.contract;
+    }
+    contractSeal.logLines.forEach((line) => keepsakeStart.logLines.push(line));
     const incursion: ActiveIncursionState = {
       ...createDefaultActiveIncursionState(),
       isRunActive: true,
@@ -849,13 +933,22 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         firstTurnApBonus: 0,
       },
       runGenerationContext: config?.runGenerationContext ?? null,
-      activeContract: config?.runGenerationContext?.activeContract ?? null,
+      activeContract: activeContract ?? null,
       contractRunProgress: createInitialContractRunProgress(),
       runSegment: initialRunSegment,
       unstableCargoPickupLogged: [],
       unstableCargoEffectsSeen: mergeUnstableCargoEffectsSeen([], starterCargo),
       sessionVeilResidueCollected: startingCanisterResidue,
       runVeilResidueBaseline: startingCanisterResidue,
+      keepsakeRuntime: keepsakeStart.runtime,
+      keepsakeFullyInterpretedNodeIds: [],
+      keepsakeCartographGhostNodeId: null,
+      keepsakeGravePolaroidPreview: null,
+      keepsakeJettisonLockedInstanceIds: [],
+      keepsakeStampedExtractionNodeId: null,
+      pendingExtractionNodeId: null,
+      keepsakeNextDepthNodeTypePreview: null,
+      keepsakeCombatShieldHits: 0,
     };
     const expandedIncursion = persistExpandedSectorGraph(incursion);
     activeIncursionRef.current = expandedIncursion;
@@ -880,6 +973,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       initialLog.push(formatMacroBiomeLogLine(lockedMacroBiome));
       initialLog.push(`>> ${getMacroBiomeContextLog(lockedMacroBiome)}`);
     }
+    keepsakeStart.logLines.forEach((line) => initialLog.push(line));
     setRunLog(initialLog);
   }, [transferVeilResidueIntoRun]);
 
@@ -1252,12 +1346,19 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   }, [applyEnvoyBoon, applyHexShotBoon, applyLeyLineMutation]);
 
   const rollBlackMarketStockForNode = useCallback(() => {
+    const inc = activeIncursionRef.current;
     const stock = rollBlackMarketStock();
+    const keepsakeOpen = applyKeepsakeOnBlackMarketOpen(inc.keepsakeRuntime, stock);
     setActiveIncursion((prev) => {
-      const next = { ...prev, blackMarketStock: stock };
+      const next = {
+        ...prev,
+        blackMarketStock: stock,
+        keepsakeRuntime: keepsakeOpen.runtime,
+      };
       activeIncursionRef.current = next;
       return next;
     });
+    keepsakeOpen.logLines.forEach((line) => appendRunLog(line));
     appendRunLog(`>> BLACK MARKET STOCK — ${stock.length} listings available.`);
   }, [appendRunLog]);
 
@@ -1279,6 +1380,13 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       runStateRef.current = next;
       return next;
     });
+    if (activeIncursionRef.current.keepsakeCombatShieldHits > 0) {
+      setActiveIncursion((prev) => {
+        const next = { ...prev, keepsakeCombatShieldHits: 0 };
+        activeIncursionRef.current = next;
+        return next;
+      });
+    }
   }, []);
 
   const refillStaminaAfterCombat = useCallback(() => {
@@ -1370,7 +1478,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         && inc.hexShotBoons.includes('SURVIVALIST');
       const boonMultiplier = survivalist ? 1.5 : 1;
       const restore = Math.floor(
-        prev.maxSoulAnchor * 0.30 * boonMultiplier * resolveCargoHealReceivedMultiplier(inc.cargo),
+        prev.maxSoulAnchor * 0.30 * boonMultiplier * resolveCargoHealReceivedMultiplier(
+          inc.cargo,
+          inc.keepsakeRuntime,
+        ),
       );
       const next = {
         ...prev,
@@ -1636,6 +1747,30 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const devValidateEchoPipeline = useCallback((): string => {
     const report = formatEchoValidationReport(activeIncursionRef.current.proceduralRunTree);
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      appendRunLog(`>> ${report.replace(/\n/g, ' // ')}`);
+    }
+    return report;
+  }, [appendRunLog]);
+
+  const devLogKeepsakeRunState = useCallback((): string => {
+    const report = formatKeepsakeIncursionDebugSnapshot(activeIncursionRef.current);
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      appendRunLog(`>> ${report.replace(/\n/g, ' // ')}`);
+    }
+    return report;
+  }, [appendRunLog]);
+
+  const devPreviewKeepsakeDebrief = useCallback((): string => {
+    const report = previewKeepsakeDebriefFromIncursion(activeIncursionRef.current);
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      appendRunLog(`>> ${report.replace(/\n/g, ' // ')}`);
+    }
+    return report;
+  }, [appendRunLog]);
+
+  const devValidateKeepsakePipeline = useCallback((): string => {
+    const report = formatKeepsakeDebugValidation();
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
       appendRunLog(`>> ${report.replace(/\n/g, ' // ')}`);
     }
@@ -1972,7 +2107,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   const resolveNarrativeChoice = useCallback((
     choice: import('../types/game').NarrativeChoiceKey,
     status: CheckStatus = 'SUCCESS',
-    options?: { tensionBonusCredits?: number },
+    options?: { tensionBonusCredits?: number; counterfeitMandate?: boolean },
   ): { outcomeText: string; aborted: boolean; creditReward: number; requiresResourcePack: boolean; triggerCombatAmbush: boolean } => {
     const node = narrativeNodeRef.current;
     if (!node) {
@@ -2034,6 +2169,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
             cargo: inc.cargo,
             activeClass: inc.activeClass ?? 'AEGIS',
           },
+          options?.counterfeitMandate ? { counterfeitMandate: true } : undefined,
         )
         : resolveProceduralNarrativeChoice(
           assembly,
@@ -2065,8 +2201,16 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const resourceCacheId = result.resourceCacheId;
     let requiresResourcePack = false;
     const tensionBonus = options?.tensionBonusCredits ?? 0;
-    const creditReward = (result.pendingRunCredits ?? 0) + tensionBonus;
+    let creditReward = (result.pendingRunCredits ?? 0) + tensionBonus;
+    let narrativeKeepsakeRuntime = inc.keepsakeRuntime;
+    if (options?.counterfeitMandate) {
+      const mandate = applyKeepsakeCounterfeitMandateOnResolver(inc.keepsakeRuntime);
+      mandate.logLines.forEach((line) => appendRunLog(line));
+      narrativeKeepsakeRuntime = mandate.runtime;
+      creditReward = applyKeepsakeCounterfeitRewardPenalty(creditReward);
+    }
     const triggerCombatAmbush = AMBUSH_ENCOUNTERS_ENABLED && result.triggerCombatAmbush;
+    let narrativeKeepsakeLogs: string[] = [];
     setActiveIncursion((prev) => {
       const beforeCargo = prev.cargo;
       let nextCargo = result.cargoPatch ?? prev.cargo;
@@ -2104,6 +2248,18 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         runStatusEffects: nextStatusEffects,
         ...applyCargoCollectedLedgerDelta(prev, beforeCargo, nextCargo),
       };
+      const keepsakePickup = processKeepsakeStagedCargoPickup(
+        narrativeKeepsakeRuntime ?? next.keepsakeRuntime,
+        nextCargo,
+        stagedIds,
+        next.keepsakeJettisonLockedInstanceIds,
+      );
+      next = {
+        ...next,
+        keepsakeRuntime: keepsakePickup.runtime,
+        keepsakeJettisonLockedInstanceIds: keepsakePickup.jettisonLockedInstanceIds,
+      };
+      narrativeKeepsakeLogs = keepsakePickup.logLines;
       if (result.spawnGridHound) {
         next = activateGridHoundOnIncursion(next);
       }
@@ -2126,6 +2282,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     narrativeAssemblyRef.current = null;
 
     result.logLines.forEach((line) => appendRunLog(line));
+    narrativeKeepsakeLogs.forEach((line) => appendRunLog(line));
     return {
       outcomeText: result.outcomeText,
       aborted: false,
@@ -2150,32 +2307,59 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const getCurrentVectorCluster = useCallback(() => buildSectorCluster(activeIncursionRef.current), []);
 
-  const syncProceduralScannerTypes = useCallback(() => {
-    setActiveIncursion((prev) => {
-      if (!isProceduralRunActive(prev)) return prev;
-      const prepared = prepareProceduralScannerIncursion(prev);
-      const signalsUsed = prepared.proceduralRunTree?.modifierRollState?.echoSignalsUsed ?? 0;
-      const next = {
-        ...prepared,
-        unstableCargoEffectsSeen: mergeUnstableCargoEffectsSeen(
-          prev.unstableCargoEffectsSeen,
-          prev.cargo,
-        ),
-        echoRunState: mergeEchoRunState(prepared.echoRunState, {
-          echoSignalsDiscovered: Math.max(
-            prepared.echoRunState?.echoSignalsDiscovered ?? 0,
-            signalsUsed,
-          ),
-        }),
-      };
-      if (next.proceduralRunTree === prev.proceduralRunTree
-        && next.echoRunState.echoSignalsDiscovered === prev.echoRunState?.echoSignalsDiscovered) {
-        return prev;
-      }
-      activeIncursionRef.current = next;
-      return next;
-    });
+  const mergeKeepsakeCargoPickup = useCallback((
+    inc: ActiveIncursionState,
+    cargo: CargoRunState,
+    stagedInstanceIds: readonly string[],
+  ): Pick<ActiveIncursionState, 'keepsakeRuntime' | 'keepsakeJettisonLockedInstanceIds'> & {
+    logLines: string[];
+  } => {
+    const pickup = processKeepsakeStagedCargoPickup(
+      inc.keepsakeRuntime,
+      cargo,
+      stagedInstanceIds,
+      inc.keepsakeJettisonLockedInstanceIds,
+    );
+    return {
+      keepsakeRuntime: pickup.runtime,
+      keepsakeJettisonLockedInstanceIds: pickup.jettisonLockedInstanceIds,
+      logLines: pickup.logLines,
+    };
   }, []);
+
+  const syncProceduralScannerTypes = useCallback(() => {
+    const prev = activeIncursionRef.current;
+    if (!isProceduralRunActive(prev)) return;
+
+    const prepared = prepareProceduralScannerIncursion(prev);
+    const keepsakeResult = applyKeepsakeScannerLayerEffects(prepared);
+    const signalsUsed = keepsakeResult.incursion.proceduralRunTree?.modifierRollState?.echoSignalsUsed ?? 0;
+    const next = {
+      ...keepsakeResult.incursion,
+      keepsakeRuntime: keepsakeResult.runtime,
+      unstableCargoEffectsSeen: mergeUnstableCargoEffectsSeen(
+        prev.unstableCargoEffectsSeen,
+        prev.cargo,
+      ),
+      echoRunState: mergeEchoRunState(keepsakeResult.incursion.echoRunState, {
+        echoSignalsDiscovered: Math.max(
+          keepsakeResult.incursion.echoRunState?.echoSignalsDiscovered ?? 0,
+          signalsUsed,
+        ),
+      }),
+    };
+
+    if (next.proceduralRunTree === prev.proceduralRunTree
+      && next.keepsakeRuntime === prev.keepsakeRuntime
+      && next.keepsakeFullyInterpretedNodeIds === prev.keepsakeFullyInterpretedNodeIds
+      && next.echoRunState.echoSignalsDiscovered === prev.echoRunState?.echoSignalsDiscovered) {
+      return;
+    }
+
+    activeIncursionRef.current = next;
+    setActiveIncursion(next);
+    keepsakeResult.logLines.forEach((line) => appendRunLog(line));
+  }, [appendRunLog]);
 
   const getSelectedVectorNode = useCallback(() => {
     const inc = activeIncursionRef.current;
@@ -2272,15 +2456,21 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const calculateSectorExtractionPayout = useCallback((): number => {
     const inc = activeIncursionRef.current;
-    const pathBonus = inc.encounterPath.reduce((sum, node) => sum + (node.sectorMeta?.creditBonus ?? 0), 0);
-    let total = inc.runCredits + pathBonus + 150;
-    if (inc.primeExtractionBonus) total = Math.floor(total * 1.5);
-    if (inc.masterLinkUsed) {
-      total = Math.floor(total * MASTER_EXTRACTION_PAYOUT_MULTIPLIER);
+    const base = computeBaseSectorExtractionPayout(inc);
+
+    const adjusted = resolveKeepsakeExtractionPayoutAdjustments(
+      inc.keepsakeRuntime,
+      inc.cargo,
+      base,
+    );
+    if (adjusted.runtime !== inc.keepsakeRuntime) {
+      const next = { ...inc, keepsakeRuntime: adjusted.runtime };
+      activeIncursionRef.current = next;
+      setActiveIncursion(next);
     }
-    if (getGreedZoneActive(inc.nodesCleared)) total = Math.floor(total * 1.25);
-    return total;
-  }, []);
+    adjusted.logLines.forEach((line) => appendRunLog(line));
+    return adjusted.payout;
+  }, [appendRunLog]);
 
   const relocateCargoItem = useCallback((instanceId: string, row: number, col: number) => {
     let placed = false;
@@ -2311,6 +2501,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   }, [appendRunLog]);
 
   const discardCargoInstance = useCallback((instanceId: string) => {
+    const inc = activeIncursionRef.current;
+    if (isKeepsakeJettisonBlocked(inc.keepsakeRuntime, instanceId, inc.keepsakeJettisonLockedInstanceIds)) {
+      appendRunLog('[REJECTED] >> CARGO SEAL ACTIVE — sealed unstable payload cannot be jettisoned.');
+      return false;
+    }
+
     let removed = false;
     let itemName = 'Unknown item';
 
@@ -2361,6 +2557,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       const count = scaledLootCount(option.yieldPct, itemId === 'veil-residue-bulk' ? 1 : 1);
       nextCargo = addLootToContainment(nextCargo, itemId, count, stagedIds);
     });
+
     const ambushTriggered = AMBUSH_ENCOUNTERS_ENABLED && Math.random() * 100 < option.ambushRiskPct;
     const logLines = [
       proceduralPool.length > 0
@@ -2369,11 +2566,39 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     ];
     if (ambushTriggered) logLines.push('>> DEEP EXTRACT HEAT — hostile ambush frequency detected.');
 
+    const leySiphon = applyKeepsakeLeySiphonOverdraw(
+      inc.keepsakeRuntime,
+      nextCargo,
+      node?.id ?? 'harvest',
+      stagedIds,
+    );
+    nextCargo = leySiphon.cargo;
+    logLines.push(...leySiphon.logLines);
+
+    const deadDrop = applyKeepsakeDeadDropHarvestBonus(
+      leySiphon.runtime,
+      nextCargo,
+      node,
+      stagedIds,
+    );
+    nextCargo = deadDrop.cargo;
+    logLines.push(...deadDrop.logLines);
+
+    const keepsakePickup = processKeepsakeStagedCargoPickup(
+      deadDrop.runtime,
+      nextCargo,
+      stagedIds,
+      inc.keepsakeJettisonLockedInstanceIds,
+    );
+    logLines.push(...keepsakePickup.logLines);
+
     setActiveIncursion((prev) => {
       const beforeCargo = prev.cargo;
       const next = {
         ...prev,
         cargo: nextCargo,
+        keepsakeRuntime: keepsakePickup.runtime,
+        keepsakeJettisonLockedInstanceIds: keepsakePickup.jettisonLockedInstanceIds,
         harvestStagingInstanceIds: [...new Set([...prev.harvestStagingInstanceIds, ...stagedIds])],
         pendingProceduralResourcePool: [],
         ...applyCargoCollectedLedgerDelta(prev, beforeCargo, nextCargo),
@@ -2518,8 +2743,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const rareLootBonusPct = resolveEffectiveRareLootBonusPct(
       options.rareLootBonusPct ?? inc.runModifiers?.rareLootBonusPct ?? 0,
       inc.cargo,
+      inc.keepsakeRuntime,
     );
-    const occultRewardBonusPct = resolveEffectiveOccultRewardBonusPct(inc.cargo);
+    const occultRewardBonusPct = resolveEffectiveOccultRewardBonusPct(
+      inc.cargo,
+      inc.keepsakeRuntime,
+    );
     const drops = rollCombatResourceDrops({
       ...options,
       rareLootBonusPct,
@@ -2528,12 +2757,15 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (drops.length === 0) return [];
     const stagedIds: string[] = [];
     let pickupLogs: string[] = [];
+    let keepsakeLogs: string[] = [];
     setActiveIncursion((prev) => {
       const beforeCargo = prev.cargo;
       let nextCargo = beforeCargo;
       drops.forEach((resourceId) => {
         nextCargo = addLootToContainment(nextCargo, resourceId, 1, stagedIds);
       });
+      const keepsakePickup = mergeKeepsakeCargoPickup(prev, nextCargo, stagedIds);
+      keepsakeLogs = keepsakePickup.logLines;
       const newPickups = detectNewUnstableCargoPickups(
         beforeCargo,
         nextCargo,
@@ -2543,6 +2775,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       const next = {
         ...prev,
         cargo: nextCargo,
+        keepsakeRuntime: keepsakePickup.keepsakeRuntime,
+        keepsakeJettisonLockedInstanceIds: keepsakePickup.keepsakeJettisonLockedInstanceIds,
         unstableCargoPickupLogged: mergeUnstableCargoPickupLog(
           beforeCargo,
           nextCargo,
@@ -2558,9 +2792,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
     pickupLogs.forEach((line) => appendRunLog(line));
+    keepsakeLogs.forEach((line) => appendRunLog(line));
     appendRunLog(formatCombatResourceDropLog(drops));
     return stagedIds;
-  }, [appendRunLog]);
+  }, [appendRunLog, mergeKeepsakeCargoPickup]);
 
   const grantCombatSalvage = useCallback((
     resourceId: import('../types/resourceItem').ResourceItemId,
@@ -2569,12 +2804,15 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (quantity <= 0) return;
     const stagedIds: string[] = [];
     let pickupLogs: string[] = [];
+    let keepsakeLogs: string[] = [];
     setActiveIncursion((prev) => {
       const beforeCargo = prev.cargo;
       let nextCargo = beforeCargo;
       for (let i = 0; i < quantity; i += 1) {
         nextCargo = addLootToContainment(nextCargo, resourceId, 1, stagedIds);
       }
+      const keepsakePickup = mergeKeepsakeCargoPickup(prev, nextCargo, stagedIds);
+      keepsakeLogs = keepsakePickup.logLines;
       const newPickups = detectNewUnstableCargoPickups(
         beforeCargo,
         nextCargo,
@@ -2584,6 +2822,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       const next = {
         ...prev,
         cargo: nextCargo,
+        keepsakeRuntime: keepsakePickup.keepsakeRuntime,
+        keepsakeJettisonLockedInstanceIds: keepsakePickup.keepsakeJettisonLockedInstanceIds,
         unstableCargoPickupLogged: mergeUnstableCargoPickupLog(
           beforeCargo,
           nextCargo,
@@ -2599,8 +2839,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
     pickupLogs.forEach((line) => appendRunLog(line));
+    keepsakeLogs.forEach((line) => appendRunLog(line));
     appendRunLog(`>> COMBAT SALVAGE — ${quantity}× ${resourceId.toUpperCase()} routed to cargo.`);
-  }, [appendRunLog]);
+  }, [appendRunLog, mergeKeepsakeCargoPickup]);
 
   const grantHostileEchoRewards = useCallback((
     ctx: EchoRecoveryCombatContext,
@@ -2616,33 +2857,57 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     });
     if (roll.resources.length === 0 && roll.credits <= 0) return [];
 
+    const lure = applyKeepsakeOnEchoSignalResolved(inc.keepsakeRuntime);
+    const adjustedCredits = scaleKeepsakeEchoCredits(roll.credits, lure.creditMultiplier);
+    const adjustedResources = [...roll.resources];
+    if (lure.extraEchoGlass > 0) {
+      const glassEntry = adjustedResources.find((entry) => entry.resourceId === 'echo-glass-shard');
+      if (glassEntry) {
+        glassEntry.quantity += lure.extraEchoGlass;
+      } else {
+        adjustedResources.push({ resourceId: 'echo-glass-shard', quantity: lure.extraEchoGlass });
+      }
+    }
+    const adjustedEchoGlassTotal = adjustedResources
+      .filter((entry) => entry.resourceId === 'echo-glass-shard')
+      .reduce((sum, entry) => sum + entry.quantity, 0);
+
     roll.logLines.forEach((line) => appendRunLog(line));
+    lure.logLines.forEach((line) => appendRunLog(line));
+    if (adjustedCredits > roll.credits) {
+      appendRunLog(`>> ECHO LURE YIELD — +${adjustedCredits - roll.credits} bonus run credits.`);
+    }
 
     const stagedIds: string[] = [];
     let pickupLogs: string[] = [];
+    let keepsakeLogs: string[] = [];
     setActiveIncursion((prev) => {
       const beforeCargo = prev.cargo;
       let nextCargo = beforeCargo;
-      roll.resources.forEach(({ resourceId, quantity }) => {
+      adjustedResources.forEach(({ resourceId, quantity }) => {
         for (let i = 0; i < quantity; i += 1) {
           nextCargo = addLootToContainment(nextCargo, resourceId, 1, stagedIds);
         }
       });
+      const keepsakePickup = mergeKeepsakeCargoPickup(prev, nextCargo, stagedIds);
+      keepsakeLogs = keepsakePickup.logLines;
       const newPickups = detectNewUnstableCargoPickups(
         beforeCargo,
         nextCargo,
         prev.unstableCargoPickupLogged,
       );
       pickupLogs = newPickups.map((id) => formatUnstableCargoPickupLog(id));
-      const rewardCount = roll.resources.reduce((sum, entry) => sum + entry.quantity, 0);
+      const rewardCount = adjustedResources.reduce((sum, entry) => sum + entry.quantity, 0);
       const next = {
         ...prev,
         cargo: nextCargo,
-        runCredits: prev.runCredits + roll.credits,
+        keepsakeRuntime: lure.runtime ?? keepsakePickup.keepsakeRuntime,
+        keepsakeJettisonLockedInstanceIds: keepsakePickup.keepsakeJettisonLockedInstanceIds,
+        runCredits: prev.runCredits + adjustedCredits,
         echoRunState: recordEchoRewardsExtracted(
           mergeEchoRunState(prev.echoRunState, {
-            echoGlassRecovered: (prev.echoRunState?.echoGlassRecovered ?? 0) + roll.echoGlassTotal,
-            echoCreditsRecovered: (prev.echoRunState?.echoCreditsRecovered ?? 0) + roll.credits,
+            echoGlassRecovered: (prev.echoRunState?.echoGlassRecovered ?? 0) + adjustedEchoGlassTotal,
+            echoCreditsRecovered: (prev.echoRunState?.echoCreditsRecovered ?? 0) + adjustedCredits,
             echoOperationProgress: (prev.echoRunState?.echoOperationProgress ?? 0) + roll.operationProgress,
           }),
           rewardCount,
@@ -2662,8 +2927,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
     pickupLogs.forEach((line) => appendRunLog(line));
+    keepsakeLogs.forEach((line) => appendRunLog(line));
     return stagedIds;
-  }, [appendRunLog]);
+  }, [appendRunLog, mergeKeepsakeCargoPickup]);
 
   const applyVoidsTollSacrifice = useCallback(() => {
     setRunState((prev) => {
@@ -2888,6 +3154,38 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (anchorCtx && isElite && !echoCtx) {
       pendingEnemies = applyAnchorAssaultSpawnScaling(pendingEnemies, anchorCtx);
     }
+
+    let keepsakeCombatRuntime = inc.keepsakeRuntime;
+    const keepsakeCombatLogs: string[] = [];
+    const anchorThreat = applyKeepsakeAnchorCharmOnCombatEngage(keepsakeCombatRuntime, anchorCtx);
+    keepsakeCombatRuntime = anchorThreat.runtime;
+    keepsakeCombatLogs.push(...anchorThreat.logLines);
+    const echoThreat = applyKeepsakeEchoLureOnCombatEngage(
+      keepsakeCombatRuntime,
+      echoCtx,
+      encounterNode.contextModifiers?.echoEncounterKind,
+    );
+    keepsakeCombatRuntime = echoThreat.runtime;
+    keepsakeCombatLogs.push(...echoThreat.logLines);
+    const extraThreatUnits = (anchorThreat.extraCombatUnits ?? 0) + (echoThreat.extraCombatUnits ?? 0);
+    if (extraThreatUnits > 0) {
+      pendingEnemies = appendKeepsakeThreatReinforcement(
+        pendingEnemies,
+        inc.nodesCleared,
+        extraThreatUnits,
+      );
+    }
+    if (keepsakeCombatRuntime !== inc.keepsakeRuntime) {
+      setActiveIncursion((prevState) => ({
+        ...prevState,
+        keepsakeRuntime: keepsakeCombatRuntime,
+      }));
+      activeIncursionRef.current = {
+        ...activeIncursionRef.current,
+        keepsakeRuntime: keepsakeCombatRuntime,
+      };
+    }
+    keepsakeCombatLogs.forEach((line) => appendRunLog(line));
     const pendingEnemy = pendingEnemies[0] ?? null;
     const pendingEncounter = buildEncounter(
       inc.currentEncounterIndex,
@@ -2935,6 +3233,26 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         appendRunLog('>> APEX ANOMALY — full threat budget absorbed; double action economy.');
       }
     });
+
+    const wellFed = applyKeepsakeOnCombatStart(activeIncursionRef.current.keepsakeRuntime);
+    wellFed.logLines.forEach((line) => appendRunLog(line));
+    if (wellFed.runtime !== activeIncursionRef.current.keepsakeRuntime) {
+      setActiveIncursion((prev) => {
+        const next = { ...prev, keepsakeRuntime: wellFed.runtime };
+        activeIncursionRef.current = next;
+        return next;
+      });
+    }
+    if (wellFed.staminaBonus > 0) {
+      setRunState((prevState) => {
+        const next = {
+          ...prevState,
+          currentStamina: Math.min(prevState.maxStamina, prevState.currentStamina + wellFed.staminaBonus),
+        };
+        runStateRef.current = next;
+        return next;
+      });
+    }
   }, [appendRunLog, beginCombatRunLogSession]);
 
   const startDevSandboxNode = useCallback((preset: DevSandboxPreset, config: BadgeTestCombatConfig) => {
@@ -3074,16 +3392,29 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const depth = depthFromNodesCleared(inc.nodesCleared);
     const district = getDistrictFromDepth(depth);
     const envModifiers = buildEnvironmentalModifiersForNode(inc.resonance.percent);
+    const dirtyThreat = shouldApplyKeepsakeDirtyExtractionThreat(inc.keepsakeRuntime);
     const pendingEnemies = spawnCombatSquad({
       nodeIndex: inc.nodesCleared,
       isElite: true,
-      unitCount: 1,
+      unitCount: dirtyThreat ? 2 : 1,
       district,
       runSegment: inc.runSegment,
       macroBiome: inc.currentMacroBiomeFamily,
       veilBiome: inc.runVeilBiome,
     });
     const pendingEnemy = pendingEnemies[0] ?? null;
+    if (dirtyThreat) {
+      const nextRuntime = consumeKeepsakeDirtyExtractionThreat(inc.keepsakeRuntime);
+      setActiveIncursion((prevState) => ({
+        ...prevState,
+        keepsakeRuntime: nextRuntime,
+      }));
+      activeIncursionRef.current = {
+        ...activeIncursionRef.current,
+        keepsakeRuntime: nextRuntime,
+      };
+      appendRunLog('>> OVEREXTENDED HEAT — dirty extraction intercept reinforced (+1 elite).');
+    }
 
     setActiveIncursion((prevState) => ({
       ...prevState,
@@ -3260,6 +3591,71 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
     const nextCargo = inc.cargo;
 
+    let keepsakeRuntime = inc.keepsakeRuntime;
+    let cargoAfterKeepsake = nextCargo;
+    let overextendedOperationDelta = 0;
+    let keepsakeOperationDelta = 0;
+    const overextendedKind = completedNode?.type === 'RESOURCE_HARVEST'
+      ? 'RESOURCE' as const
+      : anchorVictory?.kind
+        ? 'ANCHOR' as const
+        : echoVictory?.recorded
+          ? 'ECHO' as const
+          : null;
+    if (overextendedKind) {
+      const operationRelevant = Boolean(inc.runGenerationContext?.activeOperation?.objectiveKind);
+      const overextended = applyKeepsakeOverextendedOnNodeClear(
+        keepsakeRuntime,
+        cargoAfterKeepsake,
+        overextendedKind,
+        operationRelevant,
+      );
+      keepsakeRuntime = overextended.runtime;
+      if (overextended.cargo) cargoAfterKeepsake = overextended.cargo;
+      overextendedOperationDelta = overextended.operationProgressDelta ?? 0;
+      overextended.logLines.forEach((line) => appendRunLog(line));
+    }
+
+    if (anchorVictory?.kind) {
+      const operationRelevant = Boolean(inc.runGenerationContext?.activeOperation?.objectiveKind);
+      const anchorCharm = applyKeepsakeAnchorCharmOnSignalClear(
+        keepsakeRuntime,
+        cargoAfterKeepsake,
+        operationRelevant,
+      );
+      keepsakeRuntime = anchorCharm.runtime;
+      if (anchorCharm.cargo) cargoAfterKeepsake = anchorCharm.cargo;
+      keepsakeOperationDelta += anchorCharm.operationProgressDelta ?? 0;
+      anchorCharm.logLines.forEach((line) => appendRunLog(line));
+    }
+
+    if (echoVictory?.recorded && completedNode?.contextModifiers?.echoEncounterKind !== 'HOSTILE_ECHO') {
+      const echoLure = applyKeepsakeEchoLureCargoBonus(
+        keepsakeRuntime,
+        cargoAfterKeepsake,
+        `${completedNode?.id ?? 'echo'}:clear`,
+      );
+      keepsakeRuntime = echoLure.runtime;
+      if (echoLure.cargo) cargoAfterKeepsake = echoLure.cargo;
+      echoLure.logLines.forEach((line) => appendRunLog(line));
+    }
+
+    let gravePolaroidPatch: Partial<ActiveIncursionState> = {};
+    if (completedNode) {
+      const polaroid = applyKeepsakeGravePolaroidOnNodeClear(
+        inc,
+        keepsakeRuntime,
+        cargoAfterKeepsake,
+        completedNode.id,
+      );
+      keepsakeRuntime = polaroid.runtime;
+      if (polaroid.cargo) cargoAfterKeepsake = polaroid.cargo;
+      if (polaroid.incursionPatch) {
+        gravePolaroidPatch = polaroid.incursionPatch;
+      }
+      polaroid.logLines.forEach((line) => appendRunLog(line));
+    }
+
     const resolvedNextNodeId = resolveScannerGraphNodeId(
       { ...inc.sectorGraph, nodes: graphNodes },
       nextCurrentNodeId,
@@ -3342,6 +3738,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     }
     const operationTargetsBefore = inc.contractRunProgress.operationTargetsCleared;
     nextContractProgress = recordContractOperationTargetCleared(nextContractProgress, completedNode);
+    if (anchorVictory?.kind) {
+      nextContractProgress = recordContractAnchorSignalCleared(nextContractProgress);
+    }
     let transmittedContribution = 0;
     if (nextContractProgress.operationTargetsCleared > operationTargetsBefore) {
       const activeOperation = inc.runGenerationContext?.activeOperation;
@@ -3373,12 +3772,16 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       overworldSession: nextOverworldSession,
       currentEncounterIndex: nextNodesCleared,
       encounterPath,
-      cargo: nextCargo,
+      cargo: cargoAfterKeepsake,
+      keepsakeRuntime,
       patrolState: nextPatrolState,
       bossDefeated: wasBoss || inc.bossDefeated,
       primeExtractionBonus: wasBoss ? true : inc.primeExtractionBonus,
       contractRunProgress: nextContractProgress,
-      operationContributionTransmitted: inc.operationContributionTransmitted + transmittedContribution,
+      operationContributionTransmitted: inc.operationContributionTransmitted
+        + transmittedContribution
+        + overextendedOperationDelta
+        + keepsakeOperationDelta,
       anchorAssaultProgress: anchorVictory?.progress
         ?? inc.anchorAssaultProgress
         ?? createDefaultAnchorAssaultProgress(),
@@ -3401,6 +3804,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       mapMode: 'SCANNING_HUB',
       lastCheckpointMessage: null,
       lastLevelOfferedCombat,
+      ...gravePolaroidPatch,
     };
 
     setRunState((prev) => {
@@ -3422,11 +3826,22 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
           ...incAfterClear,
           mapMode: 'SAFEHOUSE_INTERMISSION',
           runStatusEffects: incAfterClear.runStatusEffects.filter((effect) => !effect.expiresAtSafehouse),
+          keepsakeJettisonLockedInstanceIds: clearKeepsakeJettisonLocks(),
         }
       : persistExpandedSectorGraph(incAfterClear);
 
     activeIncursionRef.current = incWithMode;
     setActiveIncursion(incWithMode);
+
+    if (enteringSafehouse) {
+      const safehouseKeepsake = applyKeepsakeOnSafehouseEnter(incWithMode.keepsakeRuntime, incWithMode);
+      safehouseKeepsake.logLines.forEach((line) => appendRunLog(line));
+      if (safehouseKeepsake.runtime !== incWithMode.keepsakeRuntime) {
+        const patched = { ...incWithMode, keepsakeRuntime: safehouseKeepsake.runtime };
+        activeIncursionRef.current = patched;
+        setActiveIncursion(patched);
+      }
+    }
 
     if (!enteringSafehouse) {
       setScanSessionKey((k) => k + 1);
@@ -3547,6 +3962,36 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       `>> VECTOR ENGAGED — NODE ${inc.nodesCleared + 1} // ${engagedNode.label.split(' // ').slice(1).join(' // ') || engagedNode.label}`,
     );
 
+    const leySiphonEngage = applyKeepsakeOnNodeEngagedForLeySiphon(
+      activeIncursionRef.current.keepsakeRuntime,
+      engagedNode.type,
+    );
+    if (leySiphonEngage.runtime !== activeIncursionRef.current.keepsakeRuntime) {
+      setActiveIncursion((prev) => {
+        const next = {
+          ...prev,
+          keepsakeRuntime: leySiphonEngage.runtime,
+        };
+        activeIncursionRef.current = next;
+        return next;
+      });
+    }
+    leySiphonEngage.logLines.forEach((line) => appendRunLog(line));
+
+    const cartographResult = applyKeepsakeOnNodeSelected(activeIncursionRef.current, engagedNode.id);
+    if (cartographResult.logLines.length > 0 || cartographResult.runtime !== activeIncursionRef.current.keepsakeRuntime) {
+      setActiveIncursion((prev) => {
+        const next = {
+          ...prev,
+          keepsakeRuntime: cartographResult.runtime,
+          keepsakeCartographGhostNodeId: cartographResult.incursion.keepsakeCartographGhostNodeId,
+        };
+        activeIncursionRef.current = next;
+        return next;
+      });
+      cartographResult.logLines.forEach((line) => appendRunLog(line));
+    }
+
     const echoKind = engagedNode.contextModifiers?.echoEncounterKind;
     if (echoKind && engagedNode.contextModifiers?.echoSignal) {
       setActiveIncursion((prev) => {
@@ -3581,21 +4026,56 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
             ? resolveCargoEcho(activeInc, engagedNode.id)
             : resolveExtractionEcho(activeInc, engagedNode);
         echoResult.logLines.forEach((line) => appendRunLog(line));
+        const echoLure = applyKeepsakeOnEchoSignalResolved(activeInc.keepsakeRuntime);
+        echoLure.logLines.forEach((line) => appendRunLog(line));
+        const echoCreditBonus = scaleKeepsakeEchoCredits(
+          echoResult.runCreditsDelta ?? 0,
+          echoLure.creditMultiplier,
+        );
+        if (echoCreditBonus > (echoResult.runCreditsDelta ?? 0)) {
+          appendRunLog(
+            `>> ECHO LURE YIELD — +${echoCreditBonus - (echoResult.runCreditsDelta ?? 0)} bonus run credits.`,
+          );
+        }
+        let echoKeepsakeLogs: string[] = [];
         setActiveIncursion((prev) => {
           const revealed = echoResult.revealedSonarNodeIds ?? [];
+          const beforeCargo = prev.cargo;
+          let nextCargo = echoResult.cargo ?? prev.cargo;
+          if (echoLure.extraEchoGlass > 0) {
+            for (let i = 0; i < echoLure.extraEchoGlass; i += 1) {
+              nextCargo = addLootToContainment(nextCargo, 'echo-glass-shard', 1, []);
+            }
+          }
+          const beforeIds = new Set([
+            ...beforeCargo.containment.map((item) => item.instanceId),
+            ...beforeCargo.grid.placed.map((item) => item.instanceId),
+          ]);
+          const stagedIds = [
+            ...nextCargo.containment,
+            ...nextCargo.grid.placed,
+          ]
+            .filter((item) => !beforeIds.has(item.instanceId))
+            .map((item) => item.instanceId);
+          const keepsakePickup = mergeKeepsakeCargoPickup(prev, nextCargo, stagedIds);
+          echoKeepsakeLogs = keepsakePickup.logLines;
           const next = {
             ...prev,
             echoRunState: echoResult.echoRunState,
-            cargo: echoResult.cargo ?? prev.cargo,
-            runCredits: prev.runCredits + (echoResult.runCreditsDelta ?? 0),
+            cargo: nextCargo,
+            keepsakeRuntime: echoLure.runtime ?? keepsakePickup.keepsakeRuntime,
+            keepsakeJettisonLockedInstanceIds: keepsakePickup.keepsakeJettisonLockedInstanceIds,
+            runCredits: prev.runCredits + echoCreditBonus,
             progress: echoResult.progressPatch ?? prev.progress,
             revealedSonarNodeIds: revealed.length > 0
               ? [...prev.revealedSonarNodeIds, ...revealed.filter((id) => !prev.revealedSonarNodeIds.includes(id))]
               : prev.revealedSonarNodeIds,
+            ...applyCargoCollectedLedgerDelta(prev, beforeCargo, nextCargo),
           };
           activeIncursionRef.current = next;
           return next;
         });
+        echoKeepsakeLogs.forEach((line) => appendRunLog(line));
 
         if (echoResult.triggerCombatAmbush) {
           setRunState((prev) => {
@@ -3779,12 +4259,17 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     return engageVectorNode(node);
   }, [engageVectorNode]);
 
-  const stageExtractionReview = useCallback((kind: ExtractionReviewKind, anchorIndex?: 1 | 2 | 3) => {
+  const stageExtractionReview = useCallback((
+    kind: ExtractionReviewKind,
+    anchorIndex?: 1 | 2 | 3,
+    nodeId?: string | null,
+  ) => {
     setActiveIncursion((prev) => {
       const next = {
         ...prev,
         extractionReviewKind: kind,
         pendingSafeAnchorIndex: kind === 'SAFE_ANCHOR' ? (anchorIndex ?? null) : null,
+        pendingExtractionNodeId: nodeId ?? null,
         previewNodeId: null,
         scanConfirmOverlayVisible: false,
       };
@@ -4035,9 +4520,41 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     }
   }, [appendRunLog, beginCombatRunLogSession]);
 
-  const applyResonanceManifestScan = useCallback((_nodeId: string) => {
-    // Resonance mechanic disabled — manifest scans no longer accrue heat.
-  }, []);
+  const applyResonanceManifestScan = useCallback((nodeId: string) => {
+    const prev = activeIncursionRef.current;
+    const revealResult = applyKeepsakeOnNodeRevealed(prev, nodeId);
+    if (
+      revealResult.logLines.length === 0
+      && revealResult.runtime === prev.keepsakeRuntime
+      && revealResult.incursion.keepsakeGravePolaroidPreview === prev.keepsakeGravePolaroidPreview
+      && revealResult.incursion.proceduralRunTree === prev.proceduralRunTree
+    ) {
+      return;
+    }
+
+    const next = {
+      ...revealResult.incursion,
+      keepsakeRuntime: revealResult.runtime,
+    };
+    activeIncursionRef.current = next;
+    setActiveIncursion(next);
+    revealResult.logLines.forEach((line) => appendRunLog(line));
+  }, [appendRunLog]);
+
+  const commitKeepsakeSafehouseCoinService = useCallback((service: SafehouseCoinService) => {
+    const inc = activeIncursionRef.current;
+    const result = applyKeepsakeSafehouseCoinService(inc.keepsakeRuntime, inc, service);
+    result.logLines.forEach((line) => appendRunLog(line));
+    setActiveIncursion((prev) => {
+      const next = {
+        ...prev,
+        ...result.incursionPatch,
+        keepsakeRuntime: result.runtime,
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+  }, [appendRunLog]);
 
   const getSafehouseIntel = useCallback(() => {
     const inc = activeIncursionRef.current;
@@ -4045,8 +4562,22 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const transferRunCargoToBankVault = useCallback((percent: number) => {
+    const inc = activeIncursionRef.current;
+    const hasWrappedContraband = [
+      ...inc.cargo.containment,
+      ...inc.cargo.grid.placed,
+    ].some((item) => isKeepsakeSafehouseBankBlocked(
+      inc.keepsakeRuntime,
+      item.itemId as import('../types/resourceItem').ResourceItemId,
+    ));
+    if (hasWrappedContraband) {
+      return {
+        success: false,
+        logLine: ">> SMUGGLER'S WRAP — wrapped contraband cannot route through safehouse vault.",
+      };
+    }
+
     if (percent < 100) {
-      const inc = activeIncursionRef.current;
       const result = transferRunCargoToBank(
         inc.cargo,
         { totalValue: 0, lastTransferValue: 0 },
@@ -4074,7 +4605,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       };
     }
 
-    const inc = activeIncursionRef.current;
     const bankResult = bankAllPhysicalRunCargo(inc.cargo, inc.runBankedSnapshot);
     if (Object.keys(bankResult.bankedResources).length === 0
       && Object.keys(bankResult.bankedConsumables).length === 0) {
@@ -4147,7 +4677,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (!bench) {
       return { success: false, logLine: '>> BENCH RESTORE FAILED — INSUFFICIENT CARGO.' };
     }
-    const cargoHealMultiplier = resolveCargoHealReceivedMultiplier(inc.cargo);
+    const cargoHealMultiplier = resolveCargoHealReceivedMultiplier(
+      inc.cargo,
+      inc.keepsakeRuntime,
+    );
     const restoreAmount = Math.floor(run.maxSoulAnchor * 0.25 * cargoHealMultiplier);
     const nextHp = Math.min(run.maxSoulAnchor, run.soulAnchorIntegrity + restoreAmount);
     setActiveIncursion((prev) => {
@@ -4186,6 +4719,13 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       resonanceManifestNodeIds: [],
       proceduralRunTree,
       revealedSonarNodeIds: [],
+      keepsakeFullyInterpretedNodeIds: [],
+      keepsakeCartographGhostNodeId: null,
+      keepsakeGravePolaroidPreview: null,
+      keepsakeStampedExtractionNodeId: null,
+      pendingExtractionNodeId: null,
+      keepsakeNextDepthNodeTypePreview: null,
+      keepsakeCombatShieldHits: 0,
     });
 
     activeIncursionRef.current = next;
@@ -4196,21 +4736,28 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     appendRunLog(`>> PROCEDURAL VECTOR MAP REGENERATED — ${proceduralRunTree.maxDepth} LAYERS // D${depthIndex}.`);
   }, [appendRunLog]);
 
-  const stageSafeAnchorReview = useCallback((anchorIndex: 1 | 2 | 3) => {
-    stageExtractionReview('SAFE_ANCHOR', anchorIndex);
+  const stageSafeAnchorReview = useCallback((anchorIndex: 1 | 2 | 3, nodeId?: string) => {
+    stageExtractionReview('SAFE_ANCHOR', anchorIndex, nodeId ?? null);
     appendRunLog(`>> SAFE ANCHOR ${anchorIndex} — CLEAN EVAC REVIEW STAGED.`);
   }, [appendRunLog, stageExtractionReview]);
 
   const confirmSafeAnchorExtraction = useCallback((anchorIndex: 1 | 2 | 3) => {
+    const inc = activeIncursionRef.current;
+    const stamped = applyKeepsakeOnStampedSafeExtractionConfirm(inc.keepsakeRuntime, inc);
+    stamped.logLines.forEach((line) => appendRunLog(line));
     setActiveIncursion((prev) => {
       const cleared = prev.clearedSafeAnchors.includes(anchorIndex)
         ? prev.clearedSafeAnchors
         : [...prev.clearedSafeAnchors, anchorIndex];
       const next = {
         ...prev,
+        ...stamped.incursionPatch,
         clearedSafeAnchors: cleared,
         pendingSafeAnchorIndex: null,
+        pendingExtractionNodeId: null,
         extractionReviewKind: null,
+        keepsakeRuntime: stamped.runtime,
+        keepsakeJettisonLockedInstanceIds: clearKeepsakeJettisonLocks(),
       };
       activeIncursionRef.current = next;
       return next;
@@ -4219,11 +4766,24 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   }, [appendRunLog]);
 
   const continueFromExtractionReview = useCallback(() => {
-    const kind = activeIncursionRef.current.extractionReviewKind;
+    const inc = activeIncursionRef.current;
+    const kind = inc.extractionReviewKind;
+    if (kind === 'SAFE_ANCHOR') {
+      const skip = applyKeepsakeOnSafeExtractionSkip(inc.keepsakeRuntime);
+      skip.logLines.forEach((line) => appendRunLog(line));
+      if (skip.runtime) {
+        setActiveIncursion((prev) => {
+          const next = { ...prev, keepsakeRuntime: skip.runtime };
+          activeIncursionRef.current = next;
+          return next;
+        });
+      }
+    }
     setActiveIncursion((prev) => {
       const next = {
         ...prev,
         pendingSafeAnchorIndex: null,
+        pendingExtractionNodeId: null,
         extractionReviewKind: null,
       };
       activeIncursionRef.current = next;
@@ -4247,6 +4807,19 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (inc.defendRiftActive) return false;
     if (hasVeilAshCanisterCarried(inc.cargo)) {
       appendRunLog(formatEmergencyRecallVeilAshWarning());
+    }
+    const flare = applyKeepsakeOnDirtyExtractionStart(inc.keepsakeRuntime);
+    flare.logLines.forEach((line) => appendRunLog(line));
+    if (flare.runtime || flare.incursionPatch) {
+      setActiveIncursion((prev) => {
+        const next = {
+          ...prev,
+          ...flare.incursionPatch,
+          keepsakeRuntime: flare.runtime,
+        };
+        activeIncursionRef.current = next;
+        return next;
+      });
     }
     appendRunLog('>> EMERGENCY RECALL INITIATED — elite intercept staging.');
     prepareDefendRiftEncounter();
@@ -4280,6 +4853,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         masterLinkUsed: true,
         extractionReviewKind: null,
         pendingSafeAnchorIndex: null,
+        keepsakeJettisonLockedInstanceIds: clearKeepsakeJettisonLocks(),
       };
       activeIncursionRef.current = next;
       return next;
@@ -4290,15 +4864,23 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   const applyEmergencyRecallCargoBleed = useCallback((): number => {
     const inc = activeIncursionRef.current;
     const recallBonus = inc.echoRunState?.extractionRecallBonusPending === true;
-    const bleedPct = recallBonus
+    let bleedPct = recallBonus
       ? EMERGENCY_EXTRACT_CARGO_BLEED_PCT - 5
       : EMERGENCY_EXTRACT_CARGO_BLEED_PCT;
+    const flareProtection = applyKeepsakeRustedFlareCargoProtection(
+      inc.keepsakeRuntime,
+      bleedPct,
+      inc.cargo,
+    );
+    bleedPct = flareProtection.bleedPct;
+    flareProtection.logLines.forEach((line) => appendRunLog(line));
     const bleedResult = applyEmergencyExtractBleed(inc.cargo, bleedPct);
     if (bleedResult.drainedValue > 0) {
       setActiveIncursion((prev) => {
         const next = {
           ...prev,
           cargo: bleedResult.cargo,
+          keepsakeRuntime: flareProtection.runtime,
           extractionReviewKind: null,
           unstableCargoEffectsSeen: mergeUnstableCargoEffectsSeen(
             prev.unstableCargoEffectsSeen,
@@ -4342,15 +4924,16 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const node = findVectorInCluster(cluster, nodeId);
     if (!node) return null;
 
-    if (node.type === 'SAFE_ANCHOR_EXTRACTION' && node.safeAnchorIndex != null) {
+    if (node.type === 'SAFE_ANCHOR_EXTRACTION') {
+      const anchorIndex = node.safeAnchorIndex ?? 1;
       appendRunLog('>> SAFE ANCHOR ENGAGED — extraction review opening.');
-      stageSafeAnchorReview(node.safeAnchorIndex);
+      stageSafeAnchorReview(anchorIndex, node.id);
       return node.type;
     }
 
     if (node.type === 'MASTER_EXTRACTION_LINK') {
       appendRunLog('>> MASTER EXTRACTION LINK ENGAGED — prime evac review opening.');
-      stageExtractionReview('MASTER_LINK');
+      stageExtractionReview('MASTER_LINK', undefined, node.id);
       return node.type;
     }
 
@@ -4546,7 +5129,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   }, [appendRunLog]);
 
   const applyIncursionConsumableHeal = useCallback((amount: number) => {
-    const cargoMultiplier = resolveCargoHealReceivedMultiplier(activeIncursionRef.current.cargo);
+    const inc = activeIncursionRef.current;
+    const cargoMultiplier = resolveCargoHealReceivedMultiplier(
+      inc.cargo,
+      inc.keepsakeRuntime,
+    );
     const effectiveAmount = Math.floor(amount * cargoMultiplier);
     setRunState((prev) => {
       const next = {
@@ -4609,8 +5196,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       return { success: false, logLine: '[REJECTED] >> Insufficient run credits for cargo purchase.' };
     }
 
+    let keepsakeLogs: string[] = [];
     setActiveIncursion((prev) => {
-      const nextCargo = addLootToContainment(prev.cargo, itemId, 1);
+      const stagedIds: string[] = [];
+      const nextCargo = addLootToContainment(prev.cargo, itemId, 1, stagedIds);
+      const keepsakePickup = mergeKeepsakeCargoPickup(prev, nextCargo, stagedIds);
+      keepsakeLogs = keepsakePickup.logLines;
       let nextReq = prev.boundRequisition;
       if (nextReq?.scavengerMarkBlackMarketPending) {
         nextReq = consumeScavengerMarkDiscount(nextReq);
@@ -4619,18 +5210,21 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         ...prev,
         runCredits: prev.runCredits - price,
         cargo: nextCargo,
+        keepsakeRuntime: keepsakePickup.keepsakeRuntime,
+        keepsakeJettisonLockedInstanceIds: keepsakePickup.keepsakeJettisonLockedInstanceIds,
         boundRequisition: nextReq,
       };
       activeIncursionRef.current = next;
       return next;
     });
+    keepsakeLogs.forEach((line) => appendRunLog(line));
 
     const discountNote = discountPct > 0 ? ` // SCAVENGER MARK -${discountPct}%` : '';
     return {
       success: true,
       logLine: `>> BLACK MARKET CARGO — ${CARGO_ITEM_CATALOG[itemId].name} staged in containment. -${price} RUN CREDITS.${discountNote}`,
     };
-  }, []);
+  }, [appendRunLog, mergeKeepsakeCargoPickup]);
 
   const purchaseBlackMarketCargoAtCell = useCallback((
     itemId: CargoItemId,
@@ -4701,12 +5295,38 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const discountPct = getBlackMarketDiscountPct(inc);
     const totalPrice = staged.reduce((sum, item) => {
       const base = resolveBlackMarketListingPrice(item.itemId);
-      return sum + getEffectiveBlackMarketPrice(base, discountPct);
+      const priced = resolveKeepsakeMarkedShelfPrice(
+        base,
+        item.itemId,
+        inc.keepsakeRuntime,
+        discountPct,
+      );
+      return sum + priced.price;
     }, 0);
 
     if (inc.runCredits < totalPrice) {
       return { success: false, logLine: '[REJECTED] >> Insufficient run credits to bind staged cargo.' };
     }
+
+    const purchasedMarked = staged.some((item) => (
+      isKeepsakeMarkedShelfItem(inc.keepsakeRuntime, item.itemId)
+    ));
+    let keepsakeRuntime = inc.keepsakeRuntime;
+    staged.forEach((item) => {
+      const base = resolveBlackMarketListingPrice(item.itemId);
+      const priced = resolveKeepsakeMarkedShelfPrice(
+        base,
+        item.itemId,
+        keepsakeRuntime,
+        discountPct,
+      );
+      keepsakeRuntime = resolveKeepsakeMarkedPurchaseCreditSaved(
+        keepsakeRuntime,
+        item.itemId,
+        base,
+        priced.price,
+      );
+    });
 
     setActiveIncursion((prev) => {
       let nextReq = prev.boundRequisition;
@@ -4718,17 +5338,103 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         runCredits: prev.runCredits - totalPrice,
         cargo: clearBlackMarketStagedFlags(prev.cargo),
         boundRequisition: nextReq,
+        keepsakeRuntime,
       };
       activeIncursionRef.current = next;
       return next;
     });
+
+    if (purchasedMarked) {
+      const corruption = applyKeepsakeMarkedShelfCorruption(
+        keepsakeRuntime,
+        inc.proceduralRunTree,
+        inc.nodesCleared,
+        true,
+      );
+      corruption.logLines.forEach((line) => appendRunLog(line));
+      if (corruption.runtime || corruption.incursionPatch) {
+        setActiveIncursion((prev) => {
+          const next = {
+            ...prev,
+            ...corruption.incursionPatch,
+            keepsakeRuntime: corruption.runtime,
+          };
+          activeIncursionRef.current = next;
+          return next;
+        });
+      }
+    }
 
     const discountNote = discountPct > 0 ? ` // SCAVENGER MARK -${discountPct}%` : '';
     return {
       success: true,
       logLine: `>> CARGO BOUND — ${staged.length} contraband item(s) secured. -${totalPrice} RUN CREDITS.${discountNote}`,
     };
-  }, []);
+  }, [appendRunLog]);
+
+  const commitBlackMarketCreditPurchase = useCallback((): { success: boolean; logLine: string } | null => {
+    const inc = activeIncursionRef.current;
+    if (!canUseKeepsakeNullLedgerCredit(inc.keepsakeRuntime)) {
+      return { success: false, logLine: '[REJECTED] >> Null Ledger credit already spent this run.' };
+    }
+    const staged = listStagedBlackMarketPlacements(inc.cargo);
+    if (staged.length !== 1) {
+      return { success: false, logLine: '[REJECTED] >> Null Ledger covers exactly one staged contraband item.' };
+    }
+
+    const item = staged[0]!;
+    const discountPct = getBlackMarketDiscountPct(inc);
+    const base = resolveBlackMarketListingPrice(item.itemId);
+    const credit = applyKeepsakeNullLedgerCreditPurchase(
+      inc.keepsakeRuntime,
+      item.itemId,
+      base,
+      discountPct,
+    );
+    credit.logLines.forEach((line) => appendRunLog(line));
+
+    const purchasedMarked = isKeepsakeMarkedShelfItem(inc.keepsakeRuntime, item.itemId);
+    setActiveIncursion((prev) => {
+      let nextReq = prev.boundRequisition;
+      if (nextReq?.scavengerMarkBlackMarketPending) {
+        nextReq = consumeScavengerMarkDiscount(nextReq);
+      }
+      const next = {
+        ...prev,
+        cargo: clearBlackMarketStagedFlags(prev.cargo),
+        boundRequisition: nextReq,
+        keepsakeRuntime: credit.runtime,
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+
+    if (purchasedMarked) {
+      const corruption = applyKeepsakeMarkedShelfCorruption(
+        credit.runtime,
+        inc.proceduralRunTree,
+        inc.nodesCleared,
+        true,
+      );
+      corruption.logLines.forEach((line) => appendRunLog(line));
+      if (corruption.runtime || corruption.incursionPatch) {
+        setActiveIncursion((prev) => {
+          const next = {
+            ...prev,
+            ...corruption.incursionPatch,
+            keepsakeRuntime: corruption.runtime,
+          };
+          activeIncursionRef.current = next;
+          return next;
+        });
+      }
+    }
+
+    return {
+      success: true,
+      logLine: `>> NULL LEDGER BIND — ${CARGO_ITEM_CATALOG[item.itemId].name} secured on extraction credit.`,
+    };
+  }, [appendRunLog]);
 
   const sellPlacedCargoToBlackMarket = useCallback((instanceId: string): { success: boolean; logLine: string } | null => {
     const inc = activeIncursionRef.current;
@@ -4870,6 +5576,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       purchaseBlackMarketCargoAtCell,
       returnStagedBlackMarketCargo,
       commitBlackMarketBindings,
+      commitBlackMarketCreditPurchase,
       sellPlacedCargoToBlackMarket,
       revertBlackMarketStaging,
       focusPreviewNode,
@@ -4898,6 +5605,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       applyResonanceManifestScan,
       transitionToNextDistrict,
       transferRunCargoToBankVault,
+      commitKeepsakeSafehouseCoinService,
       vaultIncursionVeilResidueToAccount,
       restoreHealthFromBench,
       getSafehouseIntel,
@@ -4920,6 +5628,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       devQueueHostileEchoTemplate,
       devLogEchoRunState,
       devLogCargoRoutingRunState,
+      devLogKeepsakeRunState,
+      devPreviewKeepsakeDebrief,
+      devValidateKeepsakePipeline,
       devPreviewEchoDebrief,
       devValidateEchoPipeline,
       devPreviewPostRunRouting,
@@ -5023,6 +5734,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       purchaseBlackMarketCargoAtCell,
       returnStagedBlackMarketCargo,
       commitBlackMarketBindings,
+      commitBlackMarketCreditPurchase,
       sellPlacedCargoToBlackMarket,
       revertBlackMarketStaging,
       focusPreviewNode,
@@ -5050,6 +5762,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       applyResonanceManifestScan,
       transitionToNextDistrict,
       transferRunCargoToBankVault,
+      commitKeepsakeSafehouseCoinService,
       vaultIncursionVeilResidueToAccount,
       restoreHealthFromBench,
       getSafehouseIntel,
@@ -5072,6 +5785,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       devQueueHostileEchoTemplate,
       devLogEchoRunState,
       devLogCargoRoutingRunState,
+      devLogKeepsakeRunState,
+      devPreviewKeepsakeDebrief,
+      devValidateKeepsakePipeline,
       devPreviewEchoDebrief,
       devValidateEchoPipeline,
       devPreviewPostRunRouting,

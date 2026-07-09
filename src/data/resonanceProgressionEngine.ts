@@ -1,4 +1,5 @@
 import { getCargoResonanceMultiplier } from './cargoGridEngine';
+import { resolveKeepsakeCargoResonanceMultiplier } from './expeditionKeepsakeCargoEngine';
 import { getZoneResonanceBase } from './sectorZoneEngine';
 import {
   HARVEST_RESONANCE_SPIKE_COMMON,
@@ -6,6 +7,7 @@ import {
   VOLATILE_CARGO_RESONANCE_PER_ITEM,
 } from '../types/sectorPacing';
 import type { CargoRunState, HarvestYieldTier } from '../types/cargoGrid';
+import type { KeepsakeRuntime } from '../types/expeditionKeepsake';
 import { CARGO_ITEM_CATALOG } from '../types/cargoGrid';
 import { applyResonanceDelta } from './sectorGraphEngine';
 import { COLLAPSE_RESONANCE_SOFT_CAP } from '../types/sectorPacing';
@@ -30,18 +32,25 @@ export function countVolatileCargoItems(cargo: CargoRunState): number {
   return count;
 }
 
-export function computeCargoOccupancyMultiplier(cargo: CargoRunState): number {
-  return getCargoResonanceMultiplier(cargo);
+export function computeCargoOccupancyMultiplier(
+  cargo: CargoRunState,
+  keepsakeRuntime?: KeepsakeRuntime | null,
+): number {
+  const base = getCargoResonanceMultiplier(cargo);
+  const keepsakeFactor = resolveKeepsakeCargoResonanceMultiplier(cargo, keepsakeRuntime);
+  if (keepsakeFactor === 1) return base;
+  return 1 + (base - 1) * keepsakeFactor;
 }
 
 export function computeNodeProgressionGain(
   nodesCleared: number,
   cargo: CargoRunState,
   collapseActive = false,
+  keepsakeRuntime?: KeepsakeRuntime | null,
 ): Omit<NodeResonanceTickResult, 'nextPercent' | 'logLine' | 'appliedGain'> & { rawGain: number } {
   const zoneBase = getZoneResonanceBase(nodesCleared, collapseActive);
   const volatileBonus = countVolatileCargoItems(cargo) * VOLATILE_CARGO_RESONANCE_PER_ITEM;
-  const cargoMultiplier = computeCargoOccupancyMultiplier(cargo);
+  const cargoMultiplier = computeCargoOccupancyMultiplier(cargo, keepsakeRuntime);
   const rawGain = (zoneBase + volatileBonus) * cargoMultiplier;
   return { zoneBase, volatileBonus, cargoMultiplier, rawGain };
 }
@@ -52,11 +61,13 @@ export function applyNodeProgressionResonance(
   cargo: CargoRunState,
   collapseActive = false,
   extraMultiplier = 1,
+  keepsakeRuntime?: KeepsakeRuntime | null,
 ): NodeResonanceTickResult {
   const { zoneBase, volatileBonus, cargoMultiplier, rawGain } = computeNodeProgressionGain(
     nodesCleared,
     cargo,
     collapseActive,
+    keepsakeRuntime,
   );
   const appliedGain = Math.round(rawGain * extraMultiplier * 10) / 10;
   const nextPercent = applyResonanceDelta(

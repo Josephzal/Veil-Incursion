@@ -38,6 +38,7 @@ import {
 import { formatEchoValidationReport } from '../data/echoDebugEngine';
 import { formatPostRunRoutingDebugValidation } from '../data/postRunCargoRoutingDebugEngine';
 import { auditReportPostRunCargoRouting } from '../data/postRunCargoRoutingAuditEngine';
+import { formatKeepsakeDebugValidation } from '../data/expeditionKeepsakeDebugEngine';
 import {
   LocalOperationProgressProvider,
   SimulatedGlobalOperationProgressProvider,
@@ -391,7 +392,8 @@ export function WorldStateProvider({ children }: { children: React.ReactNode }) 
     const echoReport = formatEchoValidationReport();
     const routingReport = formatPostRunRoutingDebugValidation();
     const auditReport = auditReportPostRunCargoRouting();
-    return `${worldReport}\n\n${echoReport}\n\n${routingReport}\n\n${auditReport}`;
+    const keepsakeReport = formatKeepsakeDebugValidation();
+    return `${worldReport}\n\n${echoReport}\n\n${routingReport}\n\n${auditReport}\n\n${keepsakeReport}`;
   }, [persisted, sectors]);
 
   const devGetDebugSnapshot = useCallback(() => {

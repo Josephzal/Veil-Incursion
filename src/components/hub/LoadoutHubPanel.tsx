@@ -8,7 +8,7 @@ import TerminalGlitchTransition from '../ui/TerminalGlitchTransition';
 import TerminalText from '../TerminalText';
 import SafehouseAbilitiesTab from '../safehouse/SafehouseAbilitiesTab';
 import SafehouseLoadoutTab from '../safehouse/SafehouseLoadoutTab';
-import { BOUND_REQUISITION_CATALOG } from '../../data/boundRequisitions';
+import KeepsakeLoadoutPanel from './KeepsakeLoadoutPanel';
 import { CLASS_DEFINITIONS } from '../../data/classes';
 import { getFactionAccent } from '../../data/factions';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
@@ -84,29 +84,6 @@ export default function LoadoutHubPanel(): React.JSX.Element {
       secondary: 'Stock class chassis — decrypt or forge a masterwork blueprint at the Black Market.',
     };
   }, [account.equippedBlueprintId, classDef.weaponLine]);
-
-  const trinketDisplay = useMemo(() => {
-    const trinketId = account.equipment.trinketId;
-    if (trinketId) {
-      return {
-        primary: trinketId.replace(/_/g, ' ').toUpperCase(),
-        secondary: 'Socketed trinket — modifiers carry into the next incursion.',
-      };
-    }
-    if (account.craftedAugments.length > 0) {
-      const names = account.craftedAugments
-        .map((id) => BOUND_REQUISITION_CATALOG[id]?.name ?? id)
-        .join(' // ');
-      return {
-        primary: 'FORGE PASSIVES STAGED',
-        secondary: names,
-      };
-    }
-    return {
-      primary: 'NONE EQUIPPED',
-      secondary: 'Trinket sockets unlock through run rewards and contraband vendors.',
-    };
-  }, [account.craftedAugments, account.equipment.trinketId]);
 
   return (
     <HubScreenShell
@@ -190,14 +167,9 @@ export default function LoadoutHubPanel(): React.JSX.Element {
                     accent={accent}
                     muted={muted}
                   />
-                  <EquipmentSlotCard
-                    title="TRINKET SOCKET"
-                    primary={trinketDisplay.primary}
-                    secondary={trinketDisplay.secondary}
-                    accent={accent}
-                    muted={muted}
-                  />
                 </View>
+
+                <KeepsakeLoadoutPanel accent={accent} muted={muted} />
 
                 <View style={styles.abilitiesSection}>
                   <TerminalText variant="section" letterSpacing={1.1} style={[styles.abilitiesHeader, { color: accent }]}>

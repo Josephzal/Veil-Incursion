@@ -150,6 +150,10 @@ export interface PlayerAccount {
   unidentifiedStash: import('./unidentifiedItem').UnidentifiedStashItem[];
   /** Career totals from post-run cargo routing decisions. */
   careerCargoRouting: import('../data/postRunCargoRoutingRunState').CareerCargoRoutingStats;
+  /** Pre-run expedition keepsake equipped for the next incursion (Trinkets v1.5). */
+  equippedKeepsakeId: import('../types/expeditionKeepsake').KeepsakeId | null;
+  /** Hub-unlocked expedition keepsakes available for equip. */
+  unlockedKeepsakeIds: readonly import('../types/expeditionKeepsake').KeepsakeId[];
 }
 
 export interface CombatNodeState {
@@ -489,6 +493,27 @@ export interface ActiveIncursionState {
   echoRunState: import('../data/echoRunState').EchoRunState;
   /** Special cargo acquisition and banking tracked for debrief and telemetry. */
   cargoRoutingRunState: import('../data/postRunCargoRoutingRunState').CargoRoutingRunState;
+  /** Expedition keepsake runtime for this incursion (Trinkets v1.5). */
+  keepsakeRuntime: import('../types/expeditionKeepsake').KeepsakeRuntime | null;
+  /** Signal Compass — nodes fully interpreted on the active scanner layer. */
+  keepsakeFullyInterpretedNodeIds: readonly string[];
+  /** Ashen Cartograph — next-depth node id receiving a ghost type preview. */
+  keepsakeCartographGhostNodeId: string | null;
+  /** Grave Polaroid — imprint intel shown before echo entry. */
+  keepsakeGravePolaroidPreview: {
+    nodeId: string;
+    lines: readonly string[];
+  } | null;
+  /** Cargo Seal — sealed unstable instances cannot be jettisoned until safehouse/extract. */
+  keepsakeJettisonLockedInstanceIds: readonly string[];
+  /** Extraction Token — stamped safe extraction node highlighted on scanner. */
+  keepsakeStampedExtractionNodeId: string | null;
+  /** Node id for active extraction review (safe anchor / master link). */
+  pendingExtractionNodeId: string | null;
+  /** Safehouse Coin — next depth node type preview for scanner intel. */
+  keepsakeNextDepthNodeTypePreview: import('./proceduralRunTree').ProceduralNodeType | null;
+  /** Rusted Flare — +1 temp shield for next combat after dirty extraction start. */
+  keepsakeCombatShieldHits: number;
   /** In-run safehouse physical bank — survives death within the same run. */
   runBankedSnapshot: import('../types/runResourceLedger').RunPhysicalBankSnapshot;
   /** Per-run resource collection, banking, extraction, and loss accounting. */
@@ -622,6 +647,15 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
       specialCargoStacksBanked: 0,
       pendingRoutingStacksAtExtract: 0,
     },
+    keepsakeRuntime: null,
+    keepsakeFullyInterpretedNodeIds: [],
+    keepsakeCartographGhostNodeId: null,
+    keepsakeGravePolaroidPreview: null,
+    keepsakeJettisonLockedInstanceIds: [],
+    keepsakeStampedExtractionNodeId: null,
+    pendingExtractionNodeId: null,
+    keepsakeNextDepthNodeTypePreview: null,
+    keepsakeCombatShieldHits: 0,
     runBankedSnapshot: createEmptyRunPhysicalBankSnapshot(),
     runResourceLedger: createEmptyRunResourceLedger(),
   };

@@ -11,6 +11,7 @@ interface ScannerSignalOverlaysProps {
   radarDots: readonly RadarDot[];
   siphonedNodeIds: readonly string[];
   selectedNodeId: string | null;
+  fullyInterpretedNodeIds?: readonly string[];
 }
 
 function SignalChip({
@@ -44,6 +45,7 @@ export default function ScannerSignalOverlays({
   radarDots,
   siphonedNodeIds,
   selectedNodeId,
+  fullyInterpretedNodeIds = [],
 }: ScannerSignalOverlaysProps): React.JSX.Element {
   const visibleOverlays = useMemo(
     () => radarDots.flatMap((dot) => {
@@ -55,6 +57,7 @@ export default function ScannerSignalOverlays({
         selectedNodeId,
         isPreDiscovered: dot.isPreDiscovered,
         hasSignals: true,
+        fullyInterpretedNodeIds,
       });
       if (!show) return [];
 
@@ -62,6 +65,7 @@ export default function ScannerSignalOverlays({
         siphonedNodeIds,
         selectedNodeId,
         isPreDiscovered: dot.isPreDiscovered,
+        fullyInterpretedNodeIds,
       });
 
       return [{
@@ -70,7 +74,7 @@ export default function ScannerSignalOverlays({
         opacity,
       }];
     }),
-    [radarDots, selectedNodeId, siphonedNodeIds],
+    [radarDots, selectedNodeId, siphonedNodeIds, fullyInterpretedNodeIds],
   );
 
   if (visibleOverlays.length === 0) return <></>;

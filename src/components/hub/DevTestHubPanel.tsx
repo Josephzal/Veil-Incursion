@@ -73,6 +73,9 @@ export default function DevTestHubPanel(): React.JSX.Element {
     devQueueHostileEchoTemplate,
     devLogEchoRunState,
     devLogCargoRoutingRunState,
+    devLogKeepsakeRunState,
+    devPreviewKeepsakeDebrief,
+    devValidateKeepsakePipeline,
     devPreviewEchoDebrief,
     devValidateEchoPipeline,
     devPreviewPostRunRouting,
@@ -89,7 +92,7 @@ export default function DevTestHubPanel(): React.JSX.Element {
     devInjectRoutingTestCargo,
     devSetActiveContract,
   } = useRun();
-  const { account } = usePlayerAccount();
+  const { account, setEquippedKeepsake, unlockAllKeepsakes } = usePlayerAccount();
   const {
     selectedSector,
     persisted,
@@ -149,8 +152,15 @@ export default function DevTestHubPanel(): React.JSX.Element {
     setDebugReport([
       devGetDebugSnapshot(),
       formatCareerCargoRoutingDebugSnapshot(account.careerCargoRouting),
+      `equipped keepsake: ${account.equippedKeepsakeId ?? 'none'}`,
+      `unlocked keepsakes: ${account.unlockedKeepsakeIds.length}`,
     ].join('\n\n'));
-  }, [account.careerCargoRouting, devGetDebugSnapshot]);
+  }, [
+    account.careerCargoRouting,
+    account.equippedKeepsakeId,
+    account.unlockedKeepsakeIds.length,
+    devGetDebugSnapshot,
+  ]);
 
   const forceRoutingContract = useCallback((
     kind: 'RECOVER_ECONOMY_INTEL' | 'RECOVER_CONTRABAND',
@@ -412,6 +422,185 @@ export default function DevTestHubPanel(): React.JSX.Element {
           label="[ LOG CARGO ROUTING STATE ]"
           accentColor={theme.primaryColor}
           onPress={() => setDebugReport(devLogCargoRoutingRunState())}
+        />
+      </View>
+
+      <HubSectionHeader title="KEEPSAKE // DEBUG" color={theme.mutedColor} />
+      <View style={styles.grid}>
+        <SandboxLaunchButton
+          label="[ UNLOCK ALL KEEPSAKES ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            unlockAllKeepsakes();
+            setDebugReport('KEEPSAKE DEBUG — all 20 keepsakes unlocked.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ EQUIP SIGNAL COMPASS ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            setEquippedKeepsake('signal_compass');
+            setDebugReport('KEEPSAKE DEBUG — equipped signal_compass.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ EQUIP ECHO LURE ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            setEquippedKeepsake('echo_lure');
+            setDebugReport('KEEPSAKE DEBUG — equipped echo_lure.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ EQUIP LEY SIPHON ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            setEquippedKeepsake('ley_siphon_needle');
+            setDebugReport('KEEPSAKE DEBUG — equipped ley_siphon_needle.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ EQUIP CARGO SEAL ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            setEquippedKeepsake('cargo_seal');
+            setDebugReport('KEEPSAKE DEBUG — equipped cargo_seal.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ EQUIP MAP TUBE ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            setEquippedKeepsake('lead_lined_map_tube');
+            setDebugReport('KEEPSAKE DEBUG — equipped lead_lined_map_tube.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ EQUIP SMUGGLER WRAP ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            setEquippedKeepsake('smugglers_wrap');
+            setDebugReport('KEEPSAKE DEBUG — equipped smugglers_wrap.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ EQUIP BLACK MARKET MARK ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            setEquippedKeepsake('black_market_mark');
+            setDebugReport('KEEPSAKE DEBUG — equipped black_market_mark.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ EQUIP NULL LEDGER ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            setEquippedKeepsake('null_ledger');
+            setDebugReport('KEEPSAKE DEBUG — equipped null_ledger.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ EQUIP EXTRACTION TOKEN ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            setEquippedKeepsake('extraction_token');
+            setDebugReport('KEEPSAKE DEBUG — equipped extraction_token.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ EQUIP LAST LIGHT MATCHBOOK ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            setEquippedKeepsake('last_light_matchbook');
+            setDebugReport('KEEPSAKE DEBUG — equipped last_light_matchbook.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ EQUIP RUSTED FLARE ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            setEquippedKeepsake('rusted_flare');
+            setDebugReport('KEEPSAKE DEBUG — equipped rusted_flare.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ EQUIP SAFEHOUSE COIN ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            setEquippedKeepsake('safehouse_coin');
+            setDebugReport('KEEPSAKE DEBUG — equipped safehouse_coin.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ EQUIP FIELD RATIONS ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            setEquippedKeepsake('field_rations');
+            setDebugReport('KEEPSAKE DEBUG — equipped field_rations.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ EQUIP CONTRACT SEAL ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            setEquippedKeepsake('contract_seal');
+            setDebugReport('KEEPSAKE DEBUG — equipped contract_seal.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ EQUIP COUNTERFEIT MANDATE ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            setEquippedKeepsake('counterfeit_mandate');
+            setDebugReport('KEEPSAKE DEBUG — equipped counterfeit_mandate.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ EQUIP ANCHOR CHARM ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            setEquippedKeepsake('anchor_charm');
+            setDebugReport('KEEPSAKE DEBUG — equipped anchor_charm.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ EQUIP CHOIR TUNING FORK ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            setEquippedKeepsake('choir_tuning_fork');
+            setDebugReport('KEEPSAKE DEBUG — equipped choir_tuning_fork.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ EQUIP GRAVE POLAROID ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            setEquippedKeepsake('grave_polaroid');
+            setDebugReport('KEEPSAKE DEBUG — equipped grave_polaroid.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ CLEAR KEEPSAKE ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            setEquippedKeepsake(null);
+            setDebugReport('KEEPSAKE DEBUG — keepsake cleared.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ VALIDATE KEEPSAKES ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(devValidateKeepsakePipeline())}
+        />
+        <SandboxLaunchButton
+          label="[ LOG KEEPSAKE STATE ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(devLogKeepsakeRunState())}
+        />
+        <SandboxLaunchButton
+          label="[ PREVIEW KEEPSAKE DEBRIEF ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(devPreviewKeepsakeDebrief())}
         />
       </View>
 

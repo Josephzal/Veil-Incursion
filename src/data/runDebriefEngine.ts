@@ -13,6 +13,9 @@ import type { EchoDebriefSummary } from './runDebriefEchoEngine';
 import { buildEchoDebriefSummary } from './runDebriefEchoEngine';
 import type { ExtractCargoRoutingDebriefSummary } from './runDebriefCargoRoutingEngine';
 import { buildExtractCargoRoutingDebriefSummary } from './runDebriefCargoRoutingEngine';
+import { buildKeepsakeDebriefSummary } from './runDebriefKeepsakeEngine';
+import { resolveKeepsakeBankedResourceMultiplier } from './expeditionKeepsakeSafehouseEngine';
+import type { KeepsakeDebriefSummary } from '../types/expeditionKeepsake';
 import type { PostRunRoutingDebriefState, CargoRoutingResult } from '../types/postRunCargoRouting';
 import { createDefaultEchoRunState, ECHO_OPERATION_PROGRESS } from './echoRunState';
 import { ALL_RESOURCE_ITEM_IDS, RESOURCE_REGISTRY } from './resourceRegistry';
@@ -95,6 +98,8 @@ export interface OperationDebriefPayload {
   deferredWorldTick?: boolean;
   runResourceLedger?: RunResourceLedger;
   cargoRoutingRunState?: import('./postRunCargoRoutingRunState').CargoRoutingRunState | null;
+  keepsakeSummary: KeepsakeDebriefSummary | null;
+  keepsakeRuntime: import('../types/expeditionKeepsake').KeepsakeRuntime | null;
 }
 
 export function computeRunOperationContribution(
@@ -300,6 +305,8 @@ export function buildOperationDebriefPayload(
     progress: incursion.contractRunProgress,
     extractedSuccessfully,
     extractionKind,
+    cargo: incursion.cargo,
+    bankedMultiplier: resolveKeepsakeBankedResourceMultiplier(incursion.keepsakeRuntime),
   });
   const resourceSections = opts.resourceSections
     ?? buildExtractedResourceSections(incursion.runResourceLedger);
@@ -312,6 +319,7 @@ export function buildOperationDebriefPayload(
     opts.routingState ?? null,
     incursion.cargoRoutingRunState,
   );
+  const keepsakeSummary = buildKeepsakeDebriefSummary(incursion.keepsakeRuntime);
   const progressDelta = Math.max(0, opts.progressAfter - opts.progressBefore);
   const totalContributionThisRun = computeTotalContributionThisRun(
     contribution.total,
@@ -350,5 +358,7 @@ export function buildOperationDebriefPayload(
     deferredWorldTick: opts.deferredWorldTick ?? false,
     runResourceLedger: opts.runResourceLedger ?? incursion.runResourceLedger,
     cargoRoutingRunState: incursion.cargoRoutingRunState,
+    keepsakeSummary,
+    keepsakeRuntime: incursion.keepsakeRuntime,
   };
 }

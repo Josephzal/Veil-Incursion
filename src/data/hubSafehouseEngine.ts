@@ -76,11 +76,12 @@ export function creditFenceSale(
   cabalCredits: number,
   resourceId: FenceableResourceId,
   quantity = 1,
+  valueMultiplier = 1,
 ): { cabalCredits: number; creditsEarned: number } | null {
   if (!isFenceableResourceId(resourceId)) return null;
   if (quantity <= 0) return null;
   const unitValue = getResourceSellValue(resourceId);
-  const creditsEarned = unitValue * quantity;
+  const creditsEarned = Math.round(unitValue * quantity * valueMultiplier);
   return {
     cabalCredits: cabalCredits + creditsEarned,
     creditsEarned,

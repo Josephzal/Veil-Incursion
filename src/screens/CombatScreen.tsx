@@ -128,8 +128,11 @@ export default function CombatScreen(): React.JSX.Element {
   const runKineticArmor = activeIncursion.runModifiers?.kineticArmorBonus ?? 0;
   const kineticBatteryActive = activeIncursion.boundRequisition?.kineticBatteryActive ?? false;
   const cargoHealReceivedMultiplier = useMemo(
-    () => resolveCargoHealReceivedMultiplier(activeIncursion.cargo),
-    [activeIncursion.cargo],
+    () => resolveCargoHealReceivedMultiplier(
+      activeIncursion.cargo,
+      activeIncursion.keepsakeRuntime,
+    ),
+    [activeIncursion.cargo, activeIncursion.keepsakeRuntime],
   );
   const firstTurnBonusAp = runApBonus;
   const [narrativeCombatBoons] = useState<PendingNarrativeCombatBoons>(
@@ -665,6 +668,7 @@ export default function CombatScreen(): React.JSX.Element {
                       envoyAbilityGrafts={activeIncursion.envoyAbilityGrafts}
                       encounterUltimateDisabled={activeIncursion.encounterUltimateDisabled}
                       cargoHealReceivedMultiplier={cargoHealReceivedMultiplier}
+                      keepsakeCombatShieldHits={activeIncursion.keepsakeCombatShieldHits}
                       operativeClass={operativeClass}
                     />
                     </CombatDashboardCommandColumn>

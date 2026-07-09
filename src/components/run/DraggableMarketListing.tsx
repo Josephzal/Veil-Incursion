@@ -17,6 +17,7 @@ interface DraggableMarketListingProps {
   price: number;
   fontScale: number;
   borderColor: string;
+  markedShelf?: boolean;
   onDragStart: (itemId: CargoItemId) => void;
   onDragMove: (itemId: CargoItemId, absoluteX: number, absoluteY: number) => void;
   onDragEnd: (itemId: CargoItemId, absoluteX: number, absoluteY: number) => void;
@@ -27,6 +28,7 @@ export default function DraggableMarketListing({
   price,
   fontScale,
   borderColor,
+  markedShelf = false,
   onDragStart,
   onDragMove,
   onDragEnd,
@@ -74,6 +76,20 @@ export default function DraggableMarketListing({
           >
             {listing.name.toUpperCase()}
           </Text>
+          {markedShelf ? (
+            <Text
+              style={[
+                styles.effect,
+                {
+                  color: '#FBBF24',
+                  fontSize: metaSize,
+                  lineHeight: metaSize * 1.2,
+                },
+              ]}
+            >
+              MARKED SHELF // -40%
+            </Text>
+          ) : null}
           <Text
             style={[
               styles.effect,

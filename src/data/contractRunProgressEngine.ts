@@ -56,6 +56,15 @@ export function recordContractOperationTargetCleared(
   };
 }
 
+export function recordContractAnchorSignalCleared(
+  progress: ContractRunProgress,
+): ContractRunProgress {
+  return {
+    ...progress,
+    anchorSignalsCleared: progress.anchorSignalsCleared + 1,
+  };
+}
+
 export function recordContractAnomalyCleared(
   progress: ContractRunProgress,
 ): ContractRunProgress {
