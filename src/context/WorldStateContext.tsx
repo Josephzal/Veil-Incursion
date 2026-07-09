@@ -23,6 +23,7 @@ import { generateContractBoard } from '../data/contractGenerator';
 import {
   devClearAnchorDormant,
   devForceOperationCompletion as devForceOperationCompletionState,
+  devForceRoutingTestContract as devForceRoutingTestContractState,
   devForceSectorOperation,
   devRegenerateAllSectorOperations,
   devSetAnchorDormant,
@@ -35,6 +36,8 @@ import {
   validateWorldState,
 } from '../data/worldStateValidation';
 import { formatEchoValidationReport } from '../data/echoDebugEngine';
+import { formatPostRunRoutingDebugValidation } from '../data/postRunCargoRoutingDebugEngine';
+import { auditReportPostRunCargoRouting } from '../data/postRunCargoRoutingAuditEngine';
 import {
   LocalOperationProgressProvider,
   SimulatedGlobalOperationProgressProvider,
@@ -101,6 +104,7 @@ interface WorldStateContextType {
   devForceOperationCompletion: (sectorId?: SectorId) => void;
   devSetAnchorDormant: (sectorId: SectorId, runs: number) => void;
   devClearAnchorDormant: (sectorId: SectorId) => void;
+  devForceRoutingTestContract: (kind: 'RECOVER_ECONOMY_INTEL' | 'RECOVER_CONTRABAND') => void;
   devGetValidationReport: () => string;
   devGetDebugSnapshot: () => string;
 }
@@ -374,11 +378,20 @@ export function WorldStateProvider({ children }: { children: React.ReactNode }) 
     setPersisted((prev) => devClearAnchorDormant(prev, sectorId));
   }, []);
 
+  const devForceRoutingTestContract = useCallback((
+    kind: 'RECOVER_ECONOMY_INTEL' | 'RECOVER_CONTRABAND',
+  ) => {
+    if (typeof __DEV__ === 'undefined' || !__DEV__) return;
+    setPersisted((prev) => devForceRoutingTestContractState(prev, kind));
+  }, []);
+
   const devGetValidationReport = useCallback(() => {
     const issues = validateWorldState(persisted, sectors);
     const worldReport = formatWorldStateValidationReport(issues);
     const echoReport = formatEchoValidationReport();
-    return `${worldReport}\n\n${echoReport}`;
+    const routingReport = formatPostRunRoutingDebugValidation();
+    const auditReport = auditReportPostRunCargoRouting();
+    return `${worldReport}\n\n${echoReport}\n\n${routingReport}\n\n${auditReport}`;
   }, [persisted, sectors]);
 
   const devGetDebugSnapshot = useCallback(() => {
@@ -410,6 +423,7 @@ export function WorldStateProvider({ children }: { children: React.ReactNode }) 
       devForceOperationCompletion,
       devSetAnchorDormant: devSetAnchorDormantRuns,
       devClearAnchorDormant: devClearAnchorDormantRuns,
+      devForceRoutingTestContract,
       devGetValidationReport,
       devGetDebugSnapshot,
     }),
@@ -436,6 +450,7 @@ export function WorldStateProvider({ children }: { children: React.ReactNode }) 
       devForceOperationCompletion,
       devSetAnchorDormantRuns,
       devClearAnchorDormantRuns,
+      devForceRoutingTestContract,
       devGetValidationReport,
       devGetDebugSnapshot,
     ],

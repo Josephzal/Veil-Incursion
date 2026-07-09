@@ -1,6 +1,7 @@
 import type { ActiveIncursionState } from '../types/game';
-import type { ContractExtractionKind, ContractResult } from '../types/contract';
+import type { ActiveRunContract, ContractExtractionKind, ContractResult } from '../types/contract';
 import type { ResourceItemId } from '../types/resourceItem';
+import type { RunResourceLedger } from '../types/runResourceLedger';
 import { resolveContractResult } from './contractResolver';
 import {
   buildExtractedResourceSections,
@@ -10,6 +11,9 @@ import type { UnstableCargoDebriefSummary } from './runDebriefUnstableCargoEngin
 import { buildUnstableCargoDebriefSummary } from './runDebriefUnstableCargoEngine';
 import type { EchoDebriefSummary } from './runDebriefEchoEngine';
 import { buildEchoDebriefSummary } from './runDebriefEchoEngine';
+import type { ExtractCargoRoutingDebriefSummary } from './runDebriefCargoRoutingEngine';
+import { buildExtractCargoRoutingDebriefSummary } from './runDebriefCargoRoutingEngine';
+import type { PostRunRoutingDebriefState, CargoRoutingResult } from '../types/postRunCargoRouting';
 import { createDefaultEchoRunState, ECHO_OPERATION_PROGRESS } from './echoRunState';
 import { ALL_RESOURCE_ITEM_IDS, RESOURCE_REGISTRY } from './resourceRegistry';
 import {
@@ -19,6 +23,7 @@ import {
   operationProgressPercent,
 } from './worldStateHelpers';
 import { computeTotalContributionThisRun } from '../utils/operationDebriefUi';
+import { resolveContractExtractionKind } from './contractExtractionKind';
 
 function normalizeResourceLabel(label: string): string {
   return label.toLowerCase().replace(/[\s-]/g, '');
@@ -77,12 +82,19 @@ export interface OperationDebriefPayload {
   residueVaulted: number;
   nextOperationTitle?: string;
   contractResult: ContractResult;
+  activeContract: ActiveRunContract | null;
   resourceSections: DebriefResourceSection[];
   unstableCargoSummary: UnstableCargoDebriefSummary | null;
   echoSummary: EchoDebriefSummary | null;
+  cargoRoutingSummary: ExtractCargoRoutingDebriefSummary | null;
   extractionKind: ContractExtractionKind;
   deathStats?: RunDebriefDeathStats;
   midRunContributionTransmitted?: number;
+  routingState?: PostRunRoutingDebriefState | null;
+  cargoRoutingResult?: CargoRoutingResult | null;
+  deferredWorldTick?: boolean;
+  runResourceLedger?: RunResourceLedger;
+  cargoRoutingRunState?: import('./postRunCargoRoutingRunState').CargoRoutingRunState | null;
 }
 
 export function computeRunOperationContribution(
@@ -90,6 +102,8 @@ export function computeRunOperationContribution(
   opts?: {
     extractedSuccessfully?: boolean;
     extractionKind?: ContractExtractionKind;
+    /** When true, target-resource stack credit waits for post-run cargo routing. */
+    deferTargetResourceCredit?: boolean;
   },
 ): RunDebriefContribution {
   const context = incursion.runGenerationContext;
@@ -222,7 +236,12 @@ export function computeRunOperationContribution(
     incursion.runResourceLedger,
     operation.rewardEmphasis.targetResources,
   );
-  if (targetResourceStacks > 0 && extractedSuccessfully && rules.extractTargetResource) {
+  if (
+    targetResourceStacks > 0
+    && extractedSuccessfully
+    && rules.extractTargetResource
+    && !opts?.deferTargetResourceCredit
+  ) {
     const creditedStacks = Math.min(
       targetResourceStacks,
       MAX_OPERATION_TARGET_RESOURCE_STACKS_PER_RUN,
@@ -260,23 +279,20 @@ export function buildOperationDebriefPayload(
     resourceSections?: DebriefResourceSection[];
     deathStats?: RunDebriefDeathStats;
     midRunContributionTransmitted?: number;
+    routingState?: PostRunRoutingDebriefState | null;
+    deferredWorldTick?: boolean;
+    runResourceLedger?: RunResourceLedger;
   },
 ): OperationDebriefPayload | null {
   const context = incursion.runGenerationContext;
   if (!context) return null;
 
   const extractedSuccessfully = opts.extractedSuccessfully ?? true;
-  const extractionKind = opts.extractionKind
-    ?? (incursion.contractRunProgress.emergencyRecallCompleted
-      ? 'EMERGENCY_RECALL'
-      : incursion.masterLinkUsed
-        ? 'MASTER_LINK'
-        : incursion.clearedSafeAnchors.length > 0
-          ? 'SAFE_ANCHOR'
-          : 'STANDARD');
+  const extractionKind = opts.extractionKind ?? resolveContractExtractionKind(incursion);
   const contribution = computeRunOperationContribution(incursion, {
     extractedSuccessfully,
     extractionKind,
+    deferTargetResourceCredit: Boolean(opts.routingState?.requiresRouting),
   });
   const contractResult = opts.contractResult ?? resolveContractResult({
     contract: incursion.activeContract,
@@ -292,6 +308,10 @@ export function buildOperationDebriefPayload(
     incursion.unstableCargoEffectsSeen,
   );
   const echoSummary = buildEchoDebriefSummary(incursion);
+  const cargoRoutingSummary = buildExtractCargoRoutingDebriefSummary(
+    opts.routingState ?? null,
+    incursion.cargoRoutingRunState,
+  );
   const progressDelta = Math.max(0, opts.progressAfter - opts.progressBefore);
   const totalContributionThisRun = computeTotalContributionThisRun(
     contribution.total,
@@ -318,11 +338,17 @@ export function buildOperationDebriefPayload(
     residueVaulted: opts.residueVaulted,
     nextOperationTitle: opts.nextOperationTitle,
     contractResult,
+    activeContract: incursion.activeContract,
     resourceSections,
     unstableCargoSummary,
     echoSummary,
+    cargoRoutingSummary,
     extractionKind,
     deathStats: opts.deathStats,
     midRunContributionTransmitted: opts.midRunContributionTransmitted,
+    routingState: opts.routingState ?? null,
+    deferredWorldTick: opts.deferredWorldTick ?? false,
+    runResourceLedger: opts.runResourceLedger ?? incursion.runResourceLedger,
+    cargoRoutingRunState: incursion.cargoRoutingRunState,
   };
 }

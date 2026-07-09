@@ -8,6 +8,8 @@ import { FACTION_DEFINITIONS } from '../../data/factions';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useTerminal } from '../../context/TerminalContext';
 import { useHubLayout } from '../../context/HubLayoutContext';
+import { formatCargoRoutingSafehouseIntelLines } from '../../data/cargoRoutingIntelEngine';
+import { formatCareerCargoRoutingSummary } from '../../data/postRunCargoRoutingRunState';
 import { HIDDEN_SCROLLVIEW_PROPS, mergeHiddenScrollbarStyle } from '../../utils/hiddenScrollbarStyle';
 
 export default function SafehouseHubPanel(): React.JSX.Element {
@@ -97,6 +99,24 @@ export default function SafehouseHubPanel(): React.JSX.Element {
           <TerminalText variant="caption" style={[styles.prepNote, { color: theme.mutedColor, marginTop: scaleSpacing(10) }]}>
             Stage combat deck and pack descent cargo in Loadout, procure contraband at the Black Market, then breach from Veil Front.
           </TerminalText>
+          {formatCargoRoutingSafehouseIntelLines().map((line) => (
+            <TerminalText
+              key={line}
+              variant="caption"
+              style={[styles.prepNote, { color: theme.mutedColor, marginTop: scaleSpacing(6) }]}
+            >
+              {line}
+            </TerminalText>
+          ))}
+          {account.careerCargoRouting.deliveredToSponsor
+            + account.careerCargoRouting.fencedAtDebrief
+            + account.careerCargoRouting.contributedToOperation
+            + account.careerCargoRouting.casketsOpened
+            + account.careerCargoRouting.keptInStash > 0 ? (
+            <TerminalText variant="caption" style={[styles.prepNote, { color: theme.mutedColor, marginTop: scaleSpacing(8) }]}>
+              {formatCareerCargoRoutingSummary(account.careerCargoRouting)}
+            </TerminalText>
+          ) : null}
         </DossierCardShell>
       </ScrollView>
     </HubScreenShell>

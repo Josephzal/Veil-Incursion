@@ -423,6 +423,8 @@ export default function ScanningScreen(): React.JSX.Element {
             />
             <ScannerVeilFrontLegend
               runContext={activeIncursion.runGenerationContext}
+              ledger={activeIncursion.runResourceLedger}
+              contract={activeIncursion.activeContract}
               mutedColor={theme.mutedColor}
               accentColor={accent}
             />

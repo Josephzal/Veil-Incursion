@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import HapticPressable from '../components/HapticPressable';
 import TerminalResultsLayout from '../components/layout/TerminalResultsLayout';
+import CargoRoutingPanel from '../components/debrief/CargoRoutingPanel';
 import { useGameFlow } from '../context/GameFlowContext';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useWorldState } from '../context/WorldStateContext';
@@ -9,13 +10,29 @@ import { useTerminal } from '../context/TerminalContext';
 import TerminalSafeArea from '../components/TerminalSafeArea';
 import { useImmersiveScreenPadding } from '../hooks/useImmersiveScreenPadding';
 import { formatDebriefResourceLine } from '../data/runDebriefResourceEngine';
-import {
-  formatUnstableCargoDebriefLine,
-} from '../data/runDebriefUnstableCargoEngine';
+import { formatUnstableCargoDebriefLine } from '../data/runDebriefUnstableCargoEngine';
 import {
   formatEchoDebriefContributionLine,
   formatEchoGlassResolutionLine,
 } from '../data/runDebriefEchoEngine';
+import {
+  buildDefaultRoutingDecisions,
+  formatAutoStashedSummary,
+  previewPostRunCargoRouting,
+  resolveFinalContractResultAfterRouting,
+  validateCargoRoutingDecisions,
+} from '../data/postRunCargoRoutingEngine';
+import type { ContractResult } from '../types/contract';
+import type { CargoRoutingAction, CargoRoutingDecision, CargoRoutingResult } from '../types/postRunCargoRouting';
+import {
+  buildDeathCargoRoutingSummary,
+  formatCasketOpenRewardsSummary,
+  formatCargoRoutingDebriefContributionLine,
+  formatSessionCargoRoutingDebriefLines,
+} from '../data/runDebriefCargoRoutingEngine';
+import { formatActiveContractCargoDeliveryHints } from '../data/cargoRoutingIntelEngine';
+import { formatCareerCargoRoutingSummary } from '../data/postRunCargoRoutingRunState';
+import { operationProgressPercent } from '../data/worldStateHelpers';
 import { formatExtractionKindLabel, sponsorDisplayName } from '../utils/contractUi';
 import { getResourceDisplayName } from '../data/resourceRegistry';
 import { formatTimeAliveMmSs } from '../types/runDeathSummary';
@@ -27,13 +44,89 @@ import {
 
 const TERMINAL_ACCENT = '#00ff33';
 const FAILURE_ACCENT = '#ef4444';
+const PENDING_ACCENT = '#f59e0b';
+
+type DebriefStep = 'SUMMARY' | 'CONTRACT' | 'OPERATION' | 'ROUTING' | 'REWARDS';
+
+function contractStatusLabel(status: ContractResult['status']): string {
+  switch (status) {
+    case 'SUCCESS':
+      return 'CONTRACT COMPLETE';
+    case 'PENDING_DELIVERY':
+      return 'AWAITING SPONSOR DELIVERY';
+    case 'FAILED':
+      return 'CONTRACT FAILED';
+    default:
+      return 'NO CONTRACT';
+  }
+}
+
+function contractStatusColor(status: ContractResult['status']): string {
+  switch (status) {
+    case 'SUCCESS':
+      return TERMINAL_ACCENT;
+    case 'PENDING_DELIVERY':
+      return PENDING_ACCENT;
+    case 'FAILED':
+      return FAILURE_ACCENT;
+    default:
+      return '#94a3b8';
+  }
+}
 
 export default function OperationDebriefScreen(): React.JSX.Element | null {
   const { theme } = useTerminal();
-  const { pendingDebrief, clearPendingDebrief, tickAfterRunComplete } = useWorldState();
-  const { appendHubLog } = usePlayerAccount();
+  const { pendingDebrief, setPendingDebrief, clearPendingDebrief, tickAfterRunComplete, applyOperationContribution } = useWorldState();
+  const { appendHubLog, applyPostRunCargoRouting, grantContractRewards, account } = usePlayerAccount();
   const { goToHub } = useGameFlow();
   const immersivePadding = useImmersiveScreenPadding();
+
+  const [stepIndex, setStepIndex] = useState(0);
+  const [decisions, setDecisions] = useState<CargoRoutingDecision[]>([]);
+  const [routingResult, setRoutingResult] = useState<CargoRoutingResult | null>(null);
+  const [resolvedContractResult, setResolvedContractResult] = useState<ContractResult | null>(null);
+  const [routingApplied, setRoutingApplied] = useState(false);
+  const [cargoOperationProgress, setCargoOperationProgress] = useState(0);
+  const [displayProgressAfterPct, setDisplayProgressAfterPct] = useState<number | null>(null);
+  const [routingError, setRoutingError] = useState<string | null>(null);
+
+  const routingState = pendingDebrief?.routingState ?? null;
+
+  useEffect(() => {
+    if (!routingState?.requiresRouting) {
+      setDecisions([]);
+      return;
+    }
+    setDecisions(buildDefaultRoutingDecisions(routingState.pendingItems));
+    setRoutingResult(null);
+    setResolvedContractResult(null);
+    setRoutingApplied(false);
+    setCargoOperationProgress(0);
+    setDisplayProgressAfterPct(null);
+    setRoutingError(null);
+    setStepIndex(0);
+  }, [pendingDebrief, routingState]);
+
+  const steps = useMemo<DebriefStep[]>(() => {
+    if (!pendingDebrief) return ['SUMMARY'];
+    const compactExtract = pendingDebrief.runOutcome === 'EXTRACTED' && !routingState?.requiresRouting;
+    const compactFailure = pendingDebrief.runOutcome === 'FAILED';
+    if (compactExtract || compactFailure) {
+      return ['SUMMARY', 'REWARDS'];
+    }
+    const list: DebriefStep[] = ['SUMMARY'];
+    if (pendingDebrief.contractResult.status !== 'NONE') {
+      list.push('CONTRACT');
+    }
+    list.push('OPERATION');
+    if (routingState?.requiresRouting) {
+      list.push('ROUTING');
+    }
+    list.push('REWARDS');
+    return list;
+  }, [pendingDebrief, routingState?.requiresRouting]);
+
+  const currentStep = steps[stepIndex] ?? 'SUMMARY';
 
   if (!pendingDebrief) {
     return null;
@@ -54,35 +147,176 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
     residueVaulted,
     nextOperationTitle,
     contractResult,
+    activeContract,
     resourceSections,
     unstableCargoSummary,
     echoSummary,
+    cargoRoutingSummary,
     extractionKind,
     deathStats,
     midRunContributionTransmitted,
+    deferredWorldTick,
+    runResourceLedger,
+    cargoRoutingRunState,
   } = pendingDebrief;
 
+  const displayContractResult = resolvedContractResult ?? contractResult;
   const isFailure = runOutcome === 'FAILED';
   const accentColor = isFailure ? FAILURE_ACCENT : TERMINAL_ACCENT;
+  const resolvedProgressAfterPct = displayProgressAfterPct ?? progressAfterPct;
   const progressThisRunLine = formatProgressThisRunLine({
-    totalContributionThisRun,
+    totalContributionThisRun: totalContributionThisRun + cargoOperationProgress,
     progressBeforePct,
-    progressAfterPct,
+    progressAfterPct: resolvedProgressAfterPct,
     midRunTransmitted: midRunContributionTransmitted,
     extractedSuccessfully: !isFailure,
   });
-  const communityProgressLine = formatCommunityProgressLine(progressBeforePct, progressAfterPct);
-  const hasExtractContribution = contribution.breakdown.length > 0;
-  const showNoProgressGenerated = totalContributionThisRun <= 0;
+  const communityProgressLine = formatCommunityProgressLine(progressBeforePct, resolvedProgressAfterPct);
+  const hasExtractContribution = contribution.breakdown.length > 0 || cargoOperationProgress > 0;
+  const showNoProgressGenerated = totalContributionThisRun + cargoOperationProgress <= 0;
   const completionEffectLines = filterDebriefCompletionEffectLines(completionLogLines);
+  const isFinalStep = stepIndex >= steps.length - 1;
+  const isCompactFlow = steps.length === 2;
 
-  const handleContinue = () => {
+  const deathCargoSummary = useMemo(() => (
+    isFailure && runResourceLedger
+      ? buildDeathCargoRoutingSummary(runResourceLedger, cargoRoutingRunState)
+      : null
+  ), [isFailure, runResourceLedger, cargoRoutingRunState]);
+
+  const routingValidationIssues = useMemo(() => (
+    routingState?.requiresRouting
+      ? validateCargoRoutingDecisions(routingState.pendingItems, decisions)
+      : []
+  ), [routingState, decisions]);
+
+  const routingPreview = useMemo(() => (
+    routingState?.requiresRouting && !routingApplied
+      ? previewPostRunCargoRouting({
+        decisions,
+        items: routingState.pendingItems,
+        routingState,
+        ledger: runResourceLedger,
+      })
+      : null
+  ), [routingState, decisions, routingApplied, runResourceLedger]);
+
+  const canConfirmRouting = routingState?.requiresRouting
+    ? routingValidationIssues.length === 0 && (routingPreview?.valid ?? false)
+    : true;
+
+  const handleDecisionChange = (resourceId: CargoRoutingDecision['resourceId'], action: CargoRoutingAction) => {
+    setRoutingError(null);
+    setDecisions((prev) => prev.map((entry) => (
+      entry.resourceId === resourceId ? { ...entry, action } : entry
+    )));
+  };
+
+  const handleQuantityChange = (resourceId: CargoRoutingDecision['resourceId'], quantity: number) => {
+    setRoutingError(null);
+    setDecisions((prev) => prev.map((entry) => (
+      entry.resourceId === resourceId ? { ...entry, quantity } : entry
+    )));
+  };
+
+  const applyRouting = async (): Promise<boolean> => {
+    if (!routingState || routingApplied || !canConfirmRouting) return false;
+    try {
+      setRoutingError(null);
+      const result = applyPostRunCargoRouting({
+        decisions,
+        routingState,
+        autoStashAlreadyDeposited: true,
+      });
+      const finalContract = resolveFinalContractResultAfterRouting(
+        routingState,
+        result.deliveredResourcesForContract,
+        true,
+        runResourceLedger,
+      );
+      if (finalContract.status === 'SUCCESS') {
+        grantContractRewards(finalContract);
+        appendHubLog(
+          `>> CONTRACT PAID — ${finalContract.title.toUpperCase()} // +${finalContract.creditsAwarded + finalContract.bonusCreditsAwarded} CR`,
+        );
+      } else if (finalContract.status === 'PENDING_DELIVERY') {
+        appendHubLog(
+          `>> CONTRACT AWAITING DELIVERY — ${finalContract.title.toUpperCase()} // ${finalContract.progressText}`,
+        );
+      }
+      result.outcomeLines.forEach((line) => {
+        appendHubLog(`>> CARGO ROUTING — ${line.label.toUpperCase()}`);
+      });
+      if (result.creditsFromFence > 0) {
+        appendHubLog(`>> CARGO ROUTING — FENCE PAYOUT +${result.creditsFromFence} CR`);
+      }
+      if (result.creditsFromCasketOpen > 0) {
+        appendHubLog(`>> CARGO ROUTING — CASKET PAYOUT +${result.creditsFromCasketOpen} CR`);
+      }
+      if (result.operationProgressFromCargo > 0) {
+        appendHubLog(`>> CARGO ROUTING — OPERATION +${result.operationProgressFromCargo} FROM CARGO`);
+      }
+      let routedOperationProgress = 0;
+      let nextProgressAfter = pendingDebrief?.progressAfter ?? 0;
+      let nextProgressAfterPct = pendingDebrief?.progressAfterPct ?? progressAfterPct;
+      if (result.operationProgressFromCargo > 0 && routingState.operationId) {
+        const contributionResult = await applyOperationContribution(
+          routingState.operationId,
+          result.operationProgressFromCargo,
+        );
+        routedOperationProgress = result.operationProgressFromCargo;
+        nextProgressAfter = contributionResult.progressAfter;
+        nextProgressAfterPct = operationProgressPercent(
+          contributionResult.progressAfter,
+          contributionResult.progressRequired,
+        );
+        setDisplayProgressAfterPct(nextProgressAfterPct);
+      }
+      setRoutingResult(result);
+      setResolvedContractResult(finalContract);
+      setCargoOperationProgress(routedOperationProgress);
+      setRoutingApplied(true);
+      if (pendingDebrief) {
+        setPendingDebrief({
+          ...pendingDebrief,
+          cargoRoutingResult: result,
+          progressAfter: nextProgressAfter,
+          progressAfterPct: nextProgressAfterPct,
+          progressDelta: nextProgressAfter - pendingDebrief.progressBefore,
+          totalContributionThisRun: pendingDebrief.totalContributionThisRun + routedOperationProgress,
+        });
+      }
+      return true;
+    } catch (error) {
+      setRoutingError(error instanceof Error ? error.message : 'Cargo routing failed.');
+      return false;
+    }
+  };
+
+  const handleAdvance = async () => {
+    if (currentStep === 'ROUTING' && routingState?.requiresRouting && !routingApplied) {
+      const applied = await applyRouting();
+      if (applied) {
+        setStepIndex((index) => Math.min(index + 1, steps.length - 1));
+      }
+      return;
+    }
+
+    if (!isFinalStep) {
+      setStepIndex((index) => index + 1);
+      return;
+    }
+
     appendHubLog(
-      `>> RUN DEBRIEF — ${sectorName.toUpperCase()} // ${runOutcome} // +${totalContributionThisRun} OPERATION`,
+      `>> RUN DEBRIEF — ${sectorName.toUpperCase()} // ${runOutcome} // +${totalContributionThisRun + cargoOperationProgress} OPERATION`,
     );
-    if (contractResult.status === 'SUCCESS') {
+    if (displayContractResult.status === 'SUCCESS' && !routingApplied) {
       appendHubLog(
-        `>> CONTRACT PAID — ${contractResult.title.toUpperCase()} // +${contractResult.creditsAwarded + contractResult.bonusCreditsAwarded} CR`,
+        `>> CONTRACT PAID — ${displayContractResult.title.toUpperCase()} // +${displayContractResult.creditsAwarded + displayContractResult.bonusCreditsAwarded} CR`,
+      );
+    } else if (displayContractResult.status === 'FAILED') {
+      appendHubLog(
+        `>> CONTRACT UNPAID — ${displayContractResult.title.toUpperCase()} // ${displayContractResult.progressText}`,
       );
     }
     if (completed) {
@@ -91,12 +325,81 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
         appendHubLog(`>> NEW OPERATION ACTIVE: ${nextOperationTitle.toUpperCase()}`);
       }
     }
-    if (isFailure) {
+    if (isFailure || deferredWorldTick) {
       tickAfterRunComplete();
     }
     clearPendingDebrief();
     goToHub();
   };
+
+  const stepLabel = currentStep.replace('_', ' ');
+  const footerLabel = currentStep === 'ROUTING'
+    ? (canConfirmRouting ? '[ CONFIRM CARGO ROUTING ]' : '[ FIX ROUTING ISSUES ]')
+    : isFinalStep
+      ? '[ RETURN TO OPERATIONAL BRIEFING ]'
+      : `[ CONTINUE — ${stepLabel} ]`;
+  const footerDisabled = currentStep === 'ROUTING' && routingState?.requiresRouting && !canConfirmRouting;
+
+  const contractForDeliveryHints = routingState?.activeContract ?? activeContract;
+
+  const renderContractBlock = () => (
+    <>
+      <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>CONTRACT RESULT</Text>
+      {displayContractResult.status === 'NONE' ? (
+        <Text style={[styles.stat, { color: theme.mutedColor }]}>
+          Independent Breach — no sponsor contract.
+        </Text>
+      ) : (
+        <>
+          <Text style={[styles.stat, { color: theme.textColor }]}>
+            {displayContractResult.title.toUpperCase()}
+          </Text>
+          {displayContractResult.sponsorId ? (
+            <Text style={[styles.stat, { color: theme.mutedColor }]}>
+              {sponsorDisplayName(displayContractResult.sponsorId).toUpperCase()}
+            </Text>
+          ) : null}
+          <Text style={[styles.stat, { color: theme.mutedColor }]}>
+            {displayContractResult.progressText}
+          </Text>
+          <Text
+            style={[
+              styles.statAccent,
+              { color: contractStatusColor(displayContractResult.status) },
+            ]}
+          >
+            {contractStatusLabel(displayContractResult.status)}
+          </Text>
+          {displayContractResult.status === 'SUCCESS' ? (
+            <>
+              <Text style={[styles.stat, { color: theme.statusColor }]}>
+                {`+${displayContractResult.creditsAwarded + displayContractResult.bonusCreditsAwarded} CR // +${displayContractResult.reputationAwarded + displayContractResult.bonusReputationAwarded} REP`}
+              </Text>
+              {displayContractResult.resourceBonusIds.length > 0 ? (
+                <Text style={[styles.stat, { color: theme.mutedColor }]}>
+                  {`Bonus cargo: ${displayContractResult.resourceBonusIds.map((id) => getResourceDisplayName(id, true)).join(', ')}`}
+                </Text>
+              ) : null}
+            </>
+          ) : null}
+          {displayContractResult.status === 'PENDING_DELIVERY' && contractForDeliveryHints ? (
+            <>
+              <View style={styles.sectionGap} />
+              <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>POST-RUN DELIVERY</Text>
+              {formatActiveContractCargoDeliveryHints(contractForDeliveryHints).map((line) => (
+                <Text key={line} style={[styles.stat, { color: PENDING_ACCENT }]}>
+                  {line.toUpperCase()}
+                </Text>
+              ))}
+              <Text style={[styles.stat, { color: theme.mutedColor }]}>
+                CONFIRM SPONSOR DELIVERY ON THE UPCOMING CARGO ROUTING STEP.
+              </Text>
+            </>
+          ) : null}
+        </>
+      )}
+    </>
+  );
 
   return (
     <TerminalSafeArea style={immersivePadding}>
@@ -110,8 +413,14 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
             </Text>
             <Text style={[styles.body, { color: theme.mutedColor }]}>
               {isFailure
-                ? 'Incursion failed. Banked safehouse cargo routed to hub stash; unbanked cargo lost.'
-                : 'Sector extraction secured. Payload archived to hub stash.'}
+                ? deathCargoSummary?.headline
+                  ?? 'Incursion failed. Banked safehouse cargo routed to hub stash; unbanked cargo lost.'
+                : routingState?.requiresRouting
+                  ? 'Sector extraction secured. Route special cargo before returning to the Veil Front.'
+                  : 'Sector extraction secured. Payload archived to hub stash.'}
+            </Text>
+            <Text style={[styles.stepBanner, { color: theme.mutedColor }]}>
+              {`STEP ${stepIndex + 1}/${steps.length} — ${stepLabel}`}
             </Text>
             {completed ? (
               <Text style={[styles.completeBanner, { color: TERMINAL_ACCENT }]}>
@@ -122,304 +431,320 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
         )}
         summary={(
           <View style={[styles.statsBox, { borderColor: theme.borderColor }]}>
-            <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>RUN OUTCOME</Text>
-            <Text style={[styles.statAccent, { color: accentColor }]}>
-              {runOutcome === 'EXTRACTED' ? 'EXTRACTION SECURED' : 'INCURSION FAILED'}
-            </Text>
-            {runOutcome === 'EXTRACTED' ? (
-              <Text style={[styles.stat, { color: theme.mutedColor }]}>
-                {formatExtractionKindLabel(extractionKind).toUpperCase()}
-              </Text>
-            ) : null}
-
-            {deathStats ? (
+            {currentStep === 'SUMMARY' ? (
               <>
-                <View style={styles.sectionGap} />
-                <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>RUN STATS</Text>
-                <Text style={[styles.stat, { color: theme.primaryColor }]}>
-                  {`TIME ALIVE: ${formatTimeAliveMmSs(deathStats.timeAliveMs)}`}
+                <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>RUN OUTCOME</Text>
+                <Text style={[styles.statAccent, { color: accentColor }]}>
+                  {runOutcome === 'EXTRACTED' ? 'EXTRACTION SECURED' : 'INCURSION FAILED'}
                 </Text>
-                <Text style={[styles.stat, { color: FAILURE_ACCENT }]}>
-                  {`CAUSE: ${deathStats.causeOfDeath.toUpperCase()}`}
-                </Text>
-                <Text style={[styles.stat, { color: theme.mutedColor }]}>
-                  {`LEVEL ${deathStats.sectorLevel} // DEPTH ${deathStats.depthLayer}`}
-                </Text>
-              </>
-            ) : null}
-
-            {runOutcome === 'EXTRACTED' ? (
-              <>
-                <View style={styles.sectionGap} />
-                <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>EXTRACTION PAYOUT</Text>
-                <Text style={[styles.stat, { color: theme.primaryColor }]}>
-                  +{credits} CREDITS // +{riftIron} RIFT IRON
-                </Text>
-                {residueVaulted > 0 ? (
+                {runOutcome === 'EXTRACTED' ? (
                   <Text style={[styles.stat, { color: theme.mutedColor }]}>
-                    +{residueVaulted} VEIL RESIDUE VAULTED
+                    {formatExtractionKindLabel(extractionKind).toUpperCase()}
                   </Text>
                 ) : null}
-              </>
-            ) : null}
-
-            <View style={styles.sectionGap} />
-
-            <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>CONTRACT RESULT</Text>
-            {contractResult.status === 'NONE' ? (
-              <Text style={[styles.stat, { color: theme.mutedColor }]}>
-                Independent Breach — no sponsor contract.
-              </Text>
-            ) : (
-              <>
-                <Text style={[styles.stat, { color: theme.textColor }]}>
-                  {contractResult.title.toUpperCase()}
-                </Text>
-                {contractResult.sponsorId ? (
-                  <Text style={[styles.stat, { color: theme.mutedColor }]}>
-                    {sponsorDisplayName(contractResult.sponsorId).toUpperCase()}
-                  </Text>
-                ) : null}
-                <Text style={[styles.stat, { color: theme.mutedColor }]}>
-                  {contractResult.progressText}
-                </Text>
-                <Text
-                  style={[
-                    styles.statAccent,
-                    { color: contractResult.status === 'SUCCESS' ? TERMINAL_ACCENT : FAILURE_ACCENT },
-                  ]}
-                >
-                  {contractResult.status === 'SUCCESS' ? 'CONTRACT COMPLETE' : 'CONTRACT FAILED'}
-                </Text>
-                {contractResult.status === 'SUCCESS' ? (
+                {deathStats ? (
                   <>
-                    <Text style={[styles.stat, { color: theme.statusColor }]}>
-                      {`+${contractResult.creditsAwarded + contractResult.bonusCreditsAwarded} CR // +${contractResult.reputationAwarded + contractResult.bonusReputationAwarded} REP`}
+                    <View style={styles.sectionGap} />
+                    <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>RUN STATS</Text>
+                    <Text style={[styles.stat, { color: theme.primaryColor }]}>
+                      {`TIME ALIVE: ${formatTimeAliveMmSs(deathStats.timeAliveMs)}`}
                     </Text>
-                    {contractResult.resourceBonusIds.length > 0 ? (
+                    <Text style={[styles.stat, { color: FAILURE_ACCENT }]}>
+                      {`CAUSE: ${deathStats.causeOfDeath.toUpperCase()}`}
+                    </Text>
+                  </>
+                ) : null}
+                {deathCargoSummary ? (
+                  <>
+                    <View style={styles.sectionGap} />
+                    <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>CARGO RESOLUTION</Text>
+                    <Text style={[styles.stat, { color: deathCargoSummary.bankedTotal > 0 ? TERMINAL_ACCENT : theme.mutedColor }]}>
+                      {`BANKED AT SAFEHOUSE: ${deathCargoSummary.bankedSummary.toUpperCase()}`}
+                    </Text>
+                    <Text style={[styles.stat, { color: deathCargoSummary.lostTotal > 0 ? FAILURE_ACCENT : theme.mutedColor }]}>
+                      {`LOST IN THE VEIL: ${deathCargoSummary.lostSummary.toUpperCase()}`}
+                    </Text>
+                    {deathCargoSummary.runTelemetryLines.map((line) => (
+                      <Text key={line} style={[styles.stat, { color: theme.textColor }]}>
+                        {line.toUpperCase()}
+                      </Text>
+                    ))}
+                    {deathCargoSummary.extractRoutingNote ? (
                       <Text style={[styles.stat, { color: theme.mutedColor }]}>
-                        {`Bonus cargo: ${contractResult.resourceBonusIds.map((id) => getResourceDisplayName(id, true)).join(', ')}`}
-                      </Text>
-                    ) : null}
-                    {contractResult.bonusObjectiveText ? (
-                      <Text style={[styles.stat, { color: contractResult.bonusObjectiveMet ? theme.statusColor : theme.mutedColor }]}>
-                        {`Bonus: ${contractResult.bonusObjectiveText}${contractResult.bonusObjectiveMet ? ' — MET' : contractResult.bonusProgressText ? ` — ${contractResult.bonusProgressText}` : ' — MISSED'}`}
+                        {deathCargoSummary.extractRoutingNote.toUpperCase()}
                       </Text>
                     ) : null}
                   </>
-                ) : contractResult.bonusProgressText ? (
-                  <Text style={[styles.stat, { color: theme.mutedColor }]}>
-                    {contractResult.bonusProgressText}
-                  </Text>
                 ) : null}
-              </>
-            )}
-
-            {unstableCargoSummary ? (
-              <>
-                <View style={styles.sectionGap} />
-                <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>CARGO PRESSURE</Text>
-                {unstableCargoSummary.hadCarriedPressure ? (
-                  <Text style={[styles.stat, { color: theme.textColor }]}>
-                    {`CARRIED EFFECTS ACTIVE: ${unstableCargoSummary.carriedEffectsSeen.join(', ').toUpperCase()}`}
-                  </Text>
-                ) : null}
-                {unstableCargoSummary.resolution.extracted.length > 0 ? (
+                {runOutcome === 'EXTRACTED' ? (
                   <>
-                    <Text style={[styles.stat, { color: theme.textColor, fontWeight: '700' }]}>
-                      EXTRACTED UNSTABLE CARGO
+                    <View style={styles.sectionGap} />
+                    <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>EXTRACTION PAYOUT</Text>
+                    <Text style={[styles.stat, { color: theme.primaryColor }]}>
+                      +{credits} CREDITS // +{riftIron} RIFT IRON
                     </Text>
-                    {unstableCargoSummary.resolution.extracted.map((line) => (
-                      <Text
-                        key={`extracted-${line.resourceId}`}
-                        style={[styles.stat, { color: theme.mutedColor }]}
-                      >
-                        {formatUnstableCargoDebriefLine(line)}
+                    {residueVaulted > 0 ? (
+                      <Text style={[styles.stat, { color: theme.mutedColor }]}>
+                        +{residueVaulted} VEIL RESIDUE VAULTED
+                      </Text>
+                    ) : null}
+                  </>
+                ) : null}
+                {unstableCargoSummary ? (
+                  <>
+                    <View style={styles.sectionGap} />
+                    <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>CARGO PRESSURE</Text>
+                    {unstableCargoSummary.resolution.lost.length > 0 ? (
+                      <Text style={[styles.stat, { color: FAILURE_ACCENT }]}>
+                        {`LOST UNSTABLE CARGO: ${unstableCargoSummary.resolution.lost.length} STACK(S)`}
+                      </Text>
+                    ) : null}
+                  </>
+                ) : null}
+                {echoSummary && echoSummary.signalsDiscovered > 0 ? (
+                  <>
+                    <View style={styles.sectionGap} />
+                    <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>ECHOES</Text>
+                    <Text style={[styles.stat, { color: theme.textColor }]}>
+                      {`ECHO SIGNALS: ${echoSummary.signalsDiscovered} discovered / ${echoSummary.signalsResolved} resolved`}
+                    </Text>
+                  </>
+                ) : null}
+                {cargoRoutingSummary ? (
+                  <>
+                    <View style={styles.sectionGap} />
+                    <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>CARGO ROUTING</Text>
+                    <Text style={[styles.stat, { color: PENDING_ACCENT }]}>
+                      {`${cargoRoutingSummary.pendingStackCount} SPECIAL STACK(S) AWAIT ROUTING`}
+                    </Text>
+                    <Text style={[styles.stat, { color: theme.mutedColor }]}>
+                      {`AUTO-STASHED: ${cargoRoutingSummary.autoStashedSummary.toUpperCase()}`}
+                    </Text>
+                    {cargoRoutingSummary.contractAwaitingDelivery ? (
+                      <Text style={[styles.stat, { color: PENDING_ACCENT }]}>
+                        CONTRACT AWAITING SPONSOR DELIVERY
+                      </Text>
+                    ) : null}
+                    {cargoRoutingSummary.specialCargoStacksAcquired > 0 ? (
+                      <Text style={[styles.stat, { color: theme.textColor }]}>
+                        {`SPECIAL ACQUIRED THIS RUN: ${cargoRoutingSummary.specialCargoStacksAcquired}`}
+                      </Text>
+                    ) : null}
+                    {cargoRoutingSummary.specialCargoStacksBanked > 0 ? (
+                      <Text style={[styles.stat, { color: theme.textColor }]}>
+                        {`SPECIAL BANKED AT SAFEHOUSE: ${cargoRoutingSummary.specialCargoStacksBanked}`}
+                      </Text>
+                    ) : null}
+                    {cargoRoutingRunState && cargoRoutingRunState.pendingRoutingStacksAtExtract > 0 ? (
+                      <Text style={[styles.stat, { color: PENDING_ACCENT }]}>
+                        {`PENDING AT EXTRACT: ${cargoRoutingRunState.pendingRoutingStacksAtExtract} STACK(S)`}
+                      </Text>
+                    ) : null}
+                    {cargoRoutingSummary.pendingItemLines.map((line) => (
+                      <Text key={line} style={[styles.stat, { color: theme.textColor }]}>
+                        {line.toUpperCase()}
                       </Text>
                     ))}
                   </>
                 ) : null}
-                {unstableCargoSummary.resolution.banked.length > 0 ? (
+                {isCompactFlow ? (
                   <>
-                    <Text style={[styles.stat, { color: theme.textColor, fontWeight: '700' }]}>
-                      BANKED UNSTABLE CARGO
+                    <View style={styles.sectionGap} />
+                    {renderContractBlock()}
+                    <View style={styles.sectionGap} />
+                    <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>OPERATION CONTRIBUTION</Text>
+                    <Text style={[styles.statAccent, { color: showNoProgressGenerated ? theme.mutedColor : accentColor }]}>
+                      {progressThisRunLine.toUpperCase()}
                     </Text>
-                    {unstableCargoSummary.resolution.banked.map((line) => (
-                      <Text
-                        key={`banked-${line.resourceId}`}
-                        style={[styles.stat, { color: theme.mutedColor }]}
-                      >
-                        {formatUnstableCargoDebriefLine(line)}
-                      </Text>
-                    ))}
-                  </>
-                ) : null}
-                {unstableCargoSummary.resolution.lost.length > 0 ? (
-                  <>
-                    <Text style={[styles.stat, { color: FAILURE_ACCENT, fontWeight: '700' }]}>
-                      LOST UNSTABLE CARGO
-                    </Text>
-                    {unstableCargoSummary.resolution.lost.map((line) => (
-                      <Text
-                        key={`lost-${line.resourceId}`}
-                        style={[styles.stat, { color: theme.mutedColor }]}
-                      >
-                        {formatUnstableCargoDebriefLine(line)}
-                      </Text>
-                    ))}
+                    {hasExtractContribution ? contribution.breakdown.map((line) => (
+                      <Text key={line} style={[styles.stat, { color: theme.textColor }]}>{line}</Text>
+                    )) : null}
                   </>
                 ) : null}
               </>
             ) : null}
 
-            {echoSummary ? (
+            {currentStep === 'CONTRACT' ? renderContractBlock() : null}
+
+            {currentStep === 'OPERATION' ? (
               <>
-                <View style={styles.sectionGap} />
-                <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>ECHOES</Text>
-                {echoSummary.signalsDiscovered > 0 ? (
+                <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>OPERATION CONTRIBUTION</Text>
+                <Text style={[styles.statAccent, { color: showNoProgressGenerated ? theme.mutedColor : accentColor }]}>
+                  {progressThisRunLine.toUpperCase()}
+                </Text>
+                {hasExtractContribution ? contribution.breakdown.map((line) => (
+                  <Text key={line} style={[styles.stat, { color: theme.textColor }]}>{line}</Text>
+                )) : (
+                  <Text style={[styles.stat, { color: theme.mutedColor }]}>
+                    No qualifying run events credited toward this operation.
+                  </Text>
+                )}
+                {cargoRoutingSummary && cargoRoutingSummary.deferredContributionLines.length > 0 ? (
+                  <>
+                    <View style={styles.sectionGap} />
+                    <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>PENDING CARGO CONTRIBUTION</Text>
+                    {cargoRoutingSummary.deferredContributionLines.map((line) => (
+                      <Text
+                        key={line.label}
+                        style={[styles.stat, { color: PENDING_ACCENT }]}
+                      >
+                        {formatCargoRoutingDebriefContributionLine(line).toUpperCase()}
+                      </Text>
+                    ))}
+                  </>
+                ) : null}
+                <Text style={[styles.stat, { color: theme.textColor }]}>
+                  {communityProgressLine.toUpperCase()}
+                </Text>
+              </>
+            ) : null}
+
+            {currentStep === 'ROUTING' && routingState ? (
+              <>
+                <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>CARGO ROUTING</Text>
+                <CargoRoutingPanel
+                  items={routingState.pendingItems}
+                  decisions={decisions}
+                  autoStashedSummary={formatAutoStashedSummary(routingState.autoStashed)}
+                  validationIssues={
+                    routingValidationIssues.length > 0
+                      ? routingValidationIssues
+                      : (routingPreview?.valid === false ? routingPreview.issues : [])
+                  }
+                  previewContractStatus={
+                    routingPreview?.contractStatus
+                      ? contractStatusLabel(routingPreview.contractStatus)
+                      : null
+                  }
+                  previewContractProgress={routingPreview?.contractProgressText ?? null}
+                  previewOperationProgress={routingPreview?.operationProgressFromCargo ?? 0}
+                  previewFenceCredits={routingPreview?.creditsFromFence ?? 0}
+                  previewCasketCredits={routingPreview?.creditsFromCasketOpen ?? 0}
+                  onDecisionChange={handleDecisionChange}
+                  onQuantityChange={handleQuantityChange}
+                  textColor={theme.textColor}
+                  mutedColor={theme.mutedColor}
+                  borderColor={theme.borderColor}
+                />
+                {routingError ? (
+                  <Text style={[styles.stat, { color: FAILURE_ACCENT }]}>{routingError.toUpperCase()}</Text>
+                ) : null}
+              </>
+            ) : null}
+
+            {currentStep === 'REWARDS' ? (
+              <>
+                <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>FINAL REWARDS</Text>
+                {routingState ? (
                   <Text style={[styles.stat, { color: theme.textColor }]}>
-                    {`ECHO SIGNALS DISCOVERED: ${echoSummary.signalsDiscovered}`}
+                    {`AUTO-STASHED: ${formatAutoStashedSummary(routingState.autoStashed).toUpperCase()}`}
                   </Text>
                 ) : null}
-                {echoSummary.signalsResolved > 0 ? (
-                  <Text style={[styles.stat, { color: theme.textColor }]}>
-                    {`ECHOES RESOLVED: ${echoSummary.signalsResolved}`}
+                {routingResult ? (
+                  <>
+                    {routingResult.outcomeLines.map((line) => (
+                      <Text key={line.label} style={[styles.stat, { color: theme.mutedColor }]}>
+                        {line.label.toUpperCase()}
+                      </Text>
+                    ))}
+                    {routingResult.creditsFromFence > 0 ? (
+                      <Text style={[styles.statAccent, { color: TERMINAL_ACCENT }]}>
+                        {`FENCE PAYOUT: +${routingResult.creditsFromFence} CR`}
+                      </Text>
+                    ) : null}
+                    {Object.keys(routingResult.opened).length > 0 ? (
+                      <Text style={[styles.stat, { color: theme.mutedColor }]}>
+                        {`CASKET REWARDS: ${formatCasketOpenRewardsSummary(routingResult).toUpperCase()}`}
+                      </Text>
+                    ) : null}
+                    {routingResult.creditsFromCasketOpen > 0 ? (
+                      <Text style={[styles.statAccent, { color: TERMINAL_ACCENT }]}>
+                        {`CASKET OPEN PAYOUT: +${routingResult.creditsFromCasketOpen} CR`}
+                      </Text>
+                    ) : null}
+                    {routingResult.operationProgressFromCargo > 0 ? (
+                      <Text style={[styles.statAccent, { color: TERMINAL_ACCENT }]}>
+                        {`OPERATION PROGRESS FROM CARGO: +${routingResult.operationProgressFromCargo}`}
+                      </Text>
+                    ) : null}
+                    <View style={styles.sectionGap} />
+                    <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>THIS RUN ROUTING</Text>
+                    {formatSessionCargoRoutingDebriefLines(routingResult, cargoRoutingRunState).map((line) => (
+                      <Text key={line} style={[styles.stat, { color: theme.textColor }]}>
+                        {line.toUpperCase()}
+                      </Text>
+                    ))}
+                    <View style={styles.sectionGap} />
+                    <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>CAREER ROUTING</Text>
+                    <Text style={[styles.stat, { color: theme.mutedColor }]}>
+                      {formatCareerCargoRoutingSummary(account.careerCargoRouting).toUpperCase()}
+                    </Text>
+                  </>
+                ) : isFailure && deathCargoSummary ? (
+                  <>
+                    <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>CARGO RESOLUTION</Text>
+                    <Text style={[styles.stat, { color: deathCargoSummary.bankedTotal > 0 ? TERMINAL_ACCENT : theme.mutedColor }]}>
+                      {`BANKED AT SAFEHOUSE: ${deathCargoSummary.bankedSummary.toUpperCase()}`}
+                    </Text>
+                    <Text style={[styles.stat, { color: deathCargoSummary.lostTotal > 0 ? FAILURE_ACCENT : theme.mutedColor }]}>
+                      {`LOST IN THE VEIL: ${deathCargoSummary.lostSummary.toUpperCase()}`}
+                    </Text>
+                    {formatSessionCargoRoutingDebriefLines(null, cargoRoutingRunState).map((line) => (
+                      <Text key={line} style={[styles.stat, { color: theme.textColor }]}>
+                        {line.toUpperCase()}
+                      </Text>
+                    ))}
+                    {deathCargoSummary.extractRoutingNote ? (
+                      <Text style={[styles.stat, { color: theme.mutedColor }]}>
+                        {deathCargoSummary.extractRoutingNote.toUpperCase()}
+                      </Text>
+                    ) : null}
+                  </>
+                ) : !isFailure ? (
+                  <Text style={[styles.stat, { color: theme.mutedColor }]}>
+                    All cargo routed automatically to hub stash.
                   </Text>
                 ) : null}
-                {echoSummary.hostileEchoesDefeated > 0 ? (
-                  <Text style={[styles.stat, { color: theme.textColor }]}>
-                    {`HOSTILE ECHOES DEFEATED: ${echoSummary.hostileEchoesDefeated}`}
-                  </Text>
+                {isCompactFlow && unstableCargoSummary ? (
+                  <>
+                    <View style={styles.sectionGap} />
+                    <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>CARGO PRESSURE</Text>
+                    {unstableCargoSummary.resolution.lost.map((line) => (
+                      <Text key={`l-${line.resourceId}`} style={[styles.stat, { color: FAILURE_ACCENT }]}>
+                        {`LOST: ${formatUnstableCargoDebriefLine(line).toUpperCase()}`}
+                      </Text>
+                    ))}
+                    {unstableCargoSummary.resolution.extracted.map((line) => (
+                      <Text key={`u-${line.resourceId}`} style={[styles.stat, { color: theme.mutedColor }]}>
+                        {formatUnstableCargoDebriefLine(line).toUpperCase()}
+                      </Text>
+                    ))}
+                  </>
                 ) : null}
-                {echoSummary.cargoEchoesRecovered > 0 ? (
-                  <Text style={[styles.stat, { color: theme.textColor }]}>
-                    {`ECHO CARGO RECOVERED: ${echoSummary.cargoEchoesRecovered}`}
-                  </Text>
-                ) : null}
-                {echoSummary.echoGlassRecovered > 0 ? (
+                {isCompactFlow && echoSummary && echoSummary.echoGlassRecovered > 0 ? (
                   <Text style={[styles.stat, { color: theme.statusColor }]}>
                     {`ECHO-GLASS RECOVERED: ${echoSummary.echoGlassRecovered}`}
                   </Text>
                 ) : null}
-                {echoSummary.echoCreditsRecovered > 0 ? (
-                  <Text style={[styles.stat, { color: theme.mutedColor }]}>
-                    {`ECHO IMPRINT CREDITS: +${echoSummary.echoCreditsRecovered}`}
-                  </Text>
-                ) : null}
-                {echoSummary.echoRewardsExtracted > 0 ? (
-                  <Text style={[styles.stat, { color: theme.mutedColor }]}>
-                    {`ECHO REWARD STACKS RECOVERED: ${echoSummary.echoRewardsExtracted}`}
-                  </Text>
-                ) : null}
-                {echoSummary.isEchoRecoveryOperation && echoSummary.contributionLines.length > 0 ? (
+                <View style={styles.sectionGap} />
+                {renderContractBlock()}
+                {resourceSections.length > 0 ? (
                   <>
-                    <Text style={[styles.stat, { color: theme.textColor, fontWeight: '700', marginTop: 4 }]}>
-                      ECHO RECOVERY PROGRESS
-                    </Text>
-                    {echoSummary.contributionLines.map((line) => (
-                      <Text
-                        key={`${line.label}-${line.progress}`}
-                        style={[styles.stat, { color: theme.mutedColor }]}
-                      >
-                        {formatEchoDebriefContributionLine(line)}
-                      </Text>
+                    <View style={styles.sectionGap} />
+                    <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>RESOURCE RESOLUTION</Text>
+                    {resourceSections.map((section) => (
+                      <View key={section.group} style={styles.resourceBlock}>
+                        <Text style={[styles.stat, { color: theme.textColor, fontWeight: '700' }]}>
+                          {section.title.toUpperCase()} ({section.totalItems})
+                        </Text>
+                        {section.lines.map((line) => (
+                          <Text key={`${section.group}-${line.resourceId}`} style={[styles.stat, { color: theme.mutedColor }]}>
+                            {formatDebriefResourceLine(line)}
+                          </Text>
+                        ))}
+                      </View>
                     ))}
-                    <Text style={[styles.statAccent, { color: accentColor }]}>
-                      {`ECHO OPERATION TOTAL: +${echoSummary.echoOperationProgress}`}
-                    </Text>
                   </>
-                ) : null}
-                {(['extracted', 'banked', 'lost'] as const).map((kind) => {
-                  const line = formatEchoGlassResolutionLine(kind, echoSummary.glassResolution[kind]);
-                  if (!line) return null;
-                  return (
-                    <Text
-                      key={kind}
-                      style={[
-                        styles.stat,
-                        { color: kind === 'lost' ? FAILURE_ACCENT : theme.mutedColor },
-                      ]}
-                    >
-                      {line.toUpperCase()}
-                    </Text>
-                  );
-                })}
-              </>
-            ) : null}
-
-            {resourceSections.length > 0 ? (
-              <>
-                <View style={styles.sectionGap} />
-                <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>RESOURCE RESOLUTION</Text>
-                {resourceSections.map((section) => (
-                  <View key={section.group} style={styles.resourceBlock}>
-                    <Text style={[styles.stat, { color: theme.textColor, fontWeight: '700' }]}>
-                      {section.title.toUpperCase()} ({section.totalItems})
-                    </Text>
-                    {section.lines.map((line) => (
-                      <Text key={`${section.group}-${line.resourceId}`} style={[styles.stat, { color: theme.mutedColor }]}>
-                        {formatDebriefResourceLine(line)}
-                      </Text>
-                    ))}
-                  </View>
-                ))}
-              </>
-            ) : null}
-
-            <View style={styles.sectionGap} />
-
-            <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>OPERATION CONTRIBUTION</Text>
-            <Text
-              style={[
-                styles.statAccent,
-                { color: showNoProgressGenerated ? theme.mutedColor : accentColor },
-              ]}
-            >
-              {progressThisRunLine.toUpperCase()}
-            </Text>
-            {(midRunContributionTransmitted ?? 0) > 0 ? (
-              <Text style={[styles.stat, { color: theme.statusColor }]}>
-                {`Mid-incursion transmission: +${midRunContributionTransmitted}`}
-              </Text>
-            ) : null}
-            {hasExtractContribution ? (
-              contribution.breakdown.map((line) => (
-                <Text key={line} style={[styles.stat, { color: theme.textColor }]}>
-                  {line}
-                </Text>
-              ))
-            ) : showNoProgressGenerated ? (
-              <Text style={[styles.stat, { color: theme.mutedColor }]}>
-                No qualifying run events credited toward this operation.
-              </Text>
-            ) : null}
-            {!showNoProgressGenerated ? (
-              <Text style={[styles.statAccent, { color: accentColor }]}>
-                TOTAL THIS RUN: +{totalContributionThisRun}
-                {isFailure ? ' (not applied — extraction required)' : ''}
-              </Text>
-            ) : null}
-
-            <View style={styles.sectionGap} />
-
-            <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>COMMUNITY PROGRESS</Text>
-            <Text style={[styles.stat, { color: theme.textColor }]}>
-              {communityProgressLine.toUpperCase()}
-            </Text>
-
-            {completed && completionEffectLines.length > 0 ? (
-              <>
-                <View style={styles.sectionGap} />
-                <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>COMPLETION EFFECTS</Text>
-                {completionEffectLines.map((line) => (
-                  <Text key={line} style={[styles.stat, { color: theme.mutedColor }]}>
-                    {line.replace(/^>>\s*/, '')}
-                  </Text>
-                ))}
-                {nextOperationTitle ? (
-                  <Text style={[styles.statAccent, { color: theme.statusColor }]}>
-                    NEXT: {nextOperationTitle.toUpperCase()}
-                  </Text>
                 ) : null}
               </>
             ) : null}
@@ -427,13 +752,18 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
         )}
         footer={(
           <HapticPressable
-            onPress={handleContinue}
+            disabled={footerDisabled}
+            onPress={() => { void handleAdvance(); }}
             style={({ pressed }) => [
               styles.button,
-              { borderColor: accentColor, backgroundColor: pressed ? '#0d1a12' : '#0e1624' },
+              {
+                borderColor: accentColor,
+                backgroundColor: pressed ? '#0d1a12' : '#0e1624',
+                opacity: footerDisabled ? 0.45 : 1,
+              },
             ]}
           >
-            <Text style={[styles.buttonLabel, { color: accentColor }]}>[ RETURN TO OPERATIONAL BRIEFING ]</Text>
+            <Text style={[styles.buttonLabel, { color: accentColor }]}>{footerLabel}</Text>
           </HapticPressable>
         )}
       />
@@ -462,6 +792,13 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 17,
     textAlign: 'center',
+  },
+  stepBanner: {
+    fontFamily: 'monospace',
+    fontSize: 10,
+    letterSpacing: 1,
+    textAlign: 'center',
+    marginTop: 12,
   },
   completeBanner: {
     fontFamily: 'monospace',

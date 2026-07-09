@@ -8,6 +8,8 @@ interface ScannerVeilFrontLegendProps {
   runContext: RunGenerationContext | null | undefined;
   mutedColor: string;
   accentColor: string;
+  ledger?: import('../../types/runResourceLedger').RunResourceLedger;
+  contract?: import('../../types/contract').ActiveRunContract | null;
 }
 
 /** Sector-level Veil Front telemetry strip on the scanner bezel. */
@@ -15,8 +17,10 @@ export default function ScannerVeilFrontLegend({
   runContext,
   mutedColor,
   accentColor,
+  ledger,
+  contract,
 }: ScannerVeilFrontLegendProps): React.JSX.Element | null {
-  const lines = formatScannerFieldTelemetry(runContext);
+  const lines = formatScannerFieldTelemetry(runContext, { ledger, contract });
   if (lines.length === 0) return null;
 
   return (

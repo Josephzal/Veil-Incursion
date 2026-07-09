@@ -7,6 +7,7 @@ import { useCargoOverlay } from '../context/CargoOverlayContext';
 import { useRunStatusOverlay } from '../context/RunStatusOverlayContext';
 import { useRun } from '../context/RunContext';
 import { hasActiveCarriedCargoEffects } from '../data/unstableCargoEffectsEngine';
+import { resolveSpecialCargoStacksForIncursion } from '../data/postRunCargoRoutingRunState';
 
 /** Floating cargo / status controls for non-combat run screens. */
 export default function RunGlobalChrome(): React.JSX.Element | null {
@@ -16,7 +17,9 @@ export default function RunGlobalChrome(): React.JSX.Element | null {
   const status = useRunStatusOverlay();
   const showStatus = status?.statusEnabled ?? false;
   const showCargo = cargo?.cargoEnabled ?? false;
-  const showCargoPressure = hasActiveCarriedCargoEffects(activeIncursion.cargo);
+  const specialCargoStacks = resolveSpecialCargoStacksForIncursion(activeIncursion);
+  const showCargoPressure = hasActiveCarriedCargoEffects(activeIncursion.cargo)
+    || specialCargoStacks > 0;
 
   if (!showStatus && !showCargo && !showCargoPressure) return null;
 
@@ -26,6 +29,7 @@ export default function RunGlobalChrome(): React.JSX.Element | null {
         <View style={styles.pressureHost}>
           <CargoPressurePanel
             cargo={activeIncursion.cargo}
+            specialCargoStacks={specialCargoStacks}
             accentColor="#f59e0b"
             mutedColor={theme.mutedColor}
             compact

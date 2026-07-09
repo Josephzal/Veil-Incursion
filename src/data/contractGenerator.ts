@@ -244,3 +244,16 @@ export function generateContractBoard(runIndex: number): GeneratedContract[] {
 export function seedExampleContracts(runIndex: number): GeneratedContract[] {
   return generateContractBoard(runIndex);
 }
+
+export function generateContractForObjectiveKind(
+  kind: 'RECOVER_ECONOMY_INTEL' | 'RECOVER_CONTRABAND',
+  runIndex: number,
+  sponsorId?: CabalEmployerId,
+): GeneratedContract | null {
+  const spec = CONTRACT_TEMPLATE_SPECS.find((entry) => entry.kind === kind);
+  if (!spec) return null;
+  const sponsor = sponsorId && spec.sponsors.includes(sponsorId)
+    ? sponsorId
+    : spec.sponsors[0];
+  return instantiateTemplate(spec, sponsor, runIndex, 777);
+}

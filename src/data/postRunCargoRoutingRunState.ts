@@ -1,0 +1,286 @@
+import type { ActiveRunContract } from '../types/contract';
+import type { CargoRunState } from '../types/cargoGrid';
+import type { ActiveIncursionState } from '../types/game';
+import type { CargoRoutingContext } from '../types/postRunCargoRouting';
+import type { CargoRoutingResult } from '../types/postRunCargoRouting';
+import type { ResourceItemId, ResourceQuantity } from '../types/resourceItem';
+import type { RunGenerationContext } from '../types/worldState';
+import type { RunPhysicalBankSnapshot, RunResourceLedger } from '../types/runResourceLedger';
+import {
+  buildCargoRoutingContext,
+  isContractTargetResource,
+  isOperationTargetResource,
+  requiresPostRunRouting,
+} from './postRunCargoRoutingEngine';
+import {
+  countResourcesInCargo,
+  mergeResourceQuantities,
+  recordNewResourcesFromCargoDelta,
+} from './runResourceLedgerEngine';
+import { createEmptyRunPhysicalBankSnapshot } from '../types/runResourceLedger';
+
+export interface CargoRoutingRunState {
+  specialCargoStacksAcquired: number;
+  contractTargetStacksAcquired: number;
+  operationTargetStacksAcquired: number;
+  specialCargoStacksBanked: number;
+  pendingRoutingStacksAtExtract: number;
+}
+
+export interface CareerCargoRoutingStats {
+  deliveredToSponsor: number;
+  fencedAtDebrief: number;
+  contributedToOperation: number;
+  casketsOpened: number;
+  keptInStash: number;
+}
+
+export function createDefaultCargoRoutingRunState(): CargoRoutingRunState {
+  return {
+    specialCargoStacksAcquired: 0,
+    contractTargetStacksAcquired: 0,
+    operationTargetStacksAcquired: 0,
+    specialCargoStacksBanked: 0,
+    pendingRoutingStacksAtExtract: 0,
+  };
+}
+
+export function createDefaultCareerCargoRoutingStats(): CareerCargoRoutingStats {
+  return {
+    deliveredToSponsor: 0,
+    fencedAtDebrief: 0,
+    contributedToOperation: 0,
+    casketsOpened: 0,
+    keptInStash: 0,
+  };
+}
+
+export function mergeCargoRoutingRunState(
+  state: CargoRoutingRunState | undefined,
+  patch: Partial<CargoRoutingRunState>,
+): CargoRoutingRunState {
+  return { ...(state ?? createDefaultCargoRoutingRunState()), ...patch };
+}
+
+function sumResourceQuantityMap(map: Partial<Record<ResourceItemId, number>>): number {
+  return Object.values(map).reduce((sum, quantity) => sum + (quantity ?? 0), 0);
+}
+
+export function recordCargoRoutingResourcesCollected(
+  state: CargoRoutingRunState | undefined,
+  resources: ResourceQuantity,
+  contract: ActiveRunContract | null,
+  ctx: CargoRoutingContext,
+): CargoRoutingRunState {
+  let next = state ?? createDefaultCargoRoutingRunState();
+
+  (Object.entries(resources) as Array<[ResourceItemId, number | undefined]>).forEach(
+    ([resourceId, quantity]) => {
+      const qty = quantity ?? 0;
+      if (qty <= 0) return;
+      if (!requiresPostRunRouting(resourceId, qty, ctx)) return;
+
+      next = {
+        ...next,
+        specialCargoStacksAcquired: next.specialCargoStacksAcquired + qty,
+      };
+      if (isContractTargetResource(resourceId, contract)) {
+        next = {
+          ...next,
+          contractTargetStacksAcquired: next.contractTargetStacksAcquired + qty,
+        };
+      }
+      if (isOperationTargetResource(resourceId, ctx)) {
+        next = {
+          ...next,
+          operationTargetStacksAcquired: next.operationTargetStacksAcquired + qty,
+        };
+      }
+    },
+  );
+
+  return next;
+}
+
+export function recordCargoRoutingResourcesBanked(
+  state: CargoRoutingRunState | undefined,
+  resources: ResourceQuantity,
+  contract: ActiveRunContract | null,
+  ctx: CargoRoutingContext,
+): CargoRoutingRunState {
+  let next = state ?? createDefaultCargoRoutingRunState();
+
+  (Object.entries(resources) as Array<[ResourceItemId, number | undefined]>).forEach(
+    ([resourceId, quantity]) => {
+      const qty = quantity ?? 0;
+      if (qty <= 0) return;
+      if (!requiresPostRunRouting(resourceId, qty, ctx)) return;
+      next = {
+        ...next,
+        specialCargoStacksBanked: next.specialCargoStacksBanked + qty,
+      };
+    },
+  );
+
+  return next;
+}
+
+export function recordPendingRoutingAtExtract(
+  state: CargoRoutingRunState | undefined,
+  pendingStackCount: number,
+): CargoRoutingRunState {
+  return mergeCargoRoutingRunState(state, {
+    pendingRoutingStacksAtExtract: Math.max(0, pendingStackCount),
+  });
+}
+
+export function resolveCargoRoutingContextFromIncursion(
+  incursion: Pick<ActiveIncursionState, 'activeContract' | 'runGenerationContext'>,
+): CargoRoutingContext | null {
+  const context = incursion.runGenerationContext;
+  if (!context) return null;
+  return buildCargoRoutingContext(
+    incursion.activeContract,
+    context.activeOperation.objectiveKind,
+    context.activeOperation.rewardEmphasis.targetResources,
+  );
+}
+
+export function applyCargoCollectedLedgerDelta(
+  incursion: Pick<
+    ActiveIncursionState,
+    'runResourceLedger' | 'cargoRoutingRunState' | 'activeContract' | 'runGenerationContext'
+  >,
+  beforeCargo: CargoRunState,
+  afterCargo: CargoRunState,
+): Pick<ActiveIncursionState, 'runResourceLedger' | 'cargoRoutingRunState'> {
+  const ledger = recordNewResourcesFromCargoDelta(
+    incursion.runResourceLedger,
+    beforeCargo,
+    afterCargo,
+  );
+  const routingContext = resolveCargoRoutingContextFromIncursion(incursion);
+  if (!routingContext) {
+    return { runResourceLedger: ledger, cargoRoutingRunState: incursion.cargoRoutingRunState };
+  }
+
+  const beforeCounts = countResourcesInCargo(beforeCargo);
+  const afterCounts = countResourcesInCargo(afterCargo);
+  const delta: ResourceQuantity = {};
+  const allIds = new Set([
+    ...Object.keys(beforeCounts),
+    ...Object.keys(afterCounts),
+  ]) as Set<ResourceItemId>;
+
+  allIds.forEach((resourceId) => {
+    const diff = (afterCounts[resourceId] ?? 0) - (beforeCounts[resourceId] ?? 0);
+    if (diff > 0) delta[resourceId] = diff;
+  });
+
+  return {
+    runResourceLedger: ledger,
+    cargoRoutingRunState: recordCargoRoutingResourcesCollected(
+      incursion.cargoRoutingRunState,
+      delta,
+      incursion.activeContract,
+      routingContext,
+    ),
+  };
+}
+
+export function countSpecialCargoHeldInRun(
+  cargo: CargoRunState,
+  bank: RunPhysicalBankSnapshot,
+  contract: ActiveRunContract | null,
+  ctx: CargoRoutingContext,
+): number {
+  const held = mergeResourceQuantities(
+    countResourcesInCargo(cargo),
+    bank.resources,
+  );
+  return sumResourceQuantityMap(
+    Object.fromEntries(
+      (Object.entries(held) as Array<[ResourceItemId, number | undefined]>).filter(
+        ([resourceId, quantity]) => requiresPostRunRouting(resourceId, quantity ?? 0, ctx),
+      ),
+    ) as Partial<Record<ResourceItemId, number>>,
+  );
+}
+
+export function resolveSpecialCargoStacksForIncursion(
+  incursion: Pick<
+    ActiveIncursionState,
+    'cargo' | 'runBankedSnapshot' | 'activeContract' | 'runGenerationContext'
+  >,
+): number {
+  const ctx = resolveCargoRoutingContextFromIncursion(incursion);
+  if (!ctx) return 0;
+  return countSpecialCargoHeldInRun(
+    incursion.cargo,
+    incursion.runBankedSnapshot,
+    incursion.activeContract,
+    ctx,
+  );
+}
+
+export function countSpecialCargoInPreRunCargo(
+  cargo: CargoRunState,
+  contract: ActiveRunContract | null,
+  runGenerationContext: RunGenerationContext | null,
+): number {
+  const ctx = runGenerationContext
+    ? buildCargoRoutingContext(
+      contract,
+      runGenerationContext.activeOperation.objectiveKind,
+      runGenerationContext.activeOperation.rewardEmphasis.targetResources,
+    )
+    : buildCargoRoutingContext(contract, null, undefined);
+  return countSpecialCargoHeldInRun(
+    cargo,
+    createEmptyRunPhysicalBankSnapshot(),
+    contract,
+    ctx,
+  );
+}
+
+export function formatCareerCargoRoutingSummary(stats: CareerCargoRoutingStats): string {
+  return [
+    `Delivered to sponsor: ${stats.deliveredToSponsor}`,
+    `Fenced at debrief: ${stats.fencedAtDebrief}`,
+    `Contributed to operation: ${stats.contributedToOperation}`,
+    `Caskets opened: ${stats.casketsOpened}`,
+    `Kept in stash: ${stats.keptInStash}`,
+  ].join(' // ');
+}
+
+export function formatCareerCargoRoutingDebugSnapshot(stats: CareerCargoRoutingStats): string {
+  return ['CAREER CARGO ROUTING', formatCareerCargoRoutingSummary(stats)].join('\n');
+}
+
+export function incrementCareerCargoRoutingFromResult(
+  stats: CareerCargoRoutingStats | undefined,
+  result: CargoRoutingResult,
+): CareerCargoRoutingStats {
+  const base = stats ?? createDefaultCareerCargoRoutingStats();
+  return {
+    deliveredToSponsor: base.deliveredToSponsor + sumResourceQuantityMap(result.delivered),
+    fencedAtDebrief: base.fencedAtDebrief + sumResourceQuantityMap(result.fenced),
+    contributedToOperation: base.contributedToOperation + sumResourceQuantityMap(result.contributed),
+    casketsOpened: base.casketsOpened + sumResourceQuantityMap(result.opened),
+    keptInStash: base.keptInStash + sumResourceQuantityMap(result.kept),
+  };
+}
+
+export function formatCargoRoutingRunStateSnapshot(
+  state: CargoRoutingRunState | undefined,
+): string {
+  const cargo = state ?? createDefaultCargoRoutingRunState();
+  return [
+    'CARGO ROUTING RUN STATE',
+    `special acquired: ${cargo.specialCargoStacksAcquired}`,
+    `contract targets acquired: ${cargo.contractTargetStacksAcquired}`,
+    `operation targets acquired: ${cargo.operationTargetStacksAcquired}`,
+    `special banked: ${cargo.specialCargoStacksBanked}`,
+    `pending at extract: ${cargo.pendingRoutingStacksAtExtract}`,
+  ].join('\n');
+}

@@ -4,6 +4,9 @@ import type { NodeContextModifiers } from '../types/worldState';
 import type { RadarVeilSignal, ScannerSignalKind } from '../types/scannerSignals';
 import { SCANNER_SIGNAL_COLORS } from '../types/scannerSignals';
 import { formatEchoScannerTelemetry } from './echoIntelEngine';
+import { formatCargoRoutingScannerTelemetry } from './cargoRoutingIntelEngine';
+import type { ActiveRunContract } from '../types/contract';
+import type { RunResourceLedger } from '../types/runResourceLedger';
 import { getNodePressureBand } from './worldStateHelpers';
 
 function anchorSignalKind(anchorStage?: NodeContextModifiers['anchorStage']): ScannerSignalKind {
@@ -164,6 +167,10 @@ export function scannerOverlayOpacity(
 /** Sector-level scanner bias readout — operation + anchor name only. */
 export function formatScannerFieldTelemetry(
   runContext: RunGenerationContext | null | undefined,
+  opts?: {
+    ledger?: RunResourceLedger;
+    contract?: ActiveRunContract | null;
+  },
 ): string[] {
   if (!runContext) return [];
 
@@ -179,6 +186,7 @@ export function formatScannerFieldTelemetry(
   }
 
   lines.push(...formatEchoScannerTelemetry(runContext));
+  lines.push(...formatCargoRoutingScannerTelemetry(runContext, opts?.ledger, opts?.contract));
 
   return lines;
 }

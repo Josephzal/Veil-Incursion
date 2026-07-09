@@ -6,12 +6,24 @@ import { useRun } from '../../context/RunContext';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useTerminal } from '../../context/TerminalContext';
 import { useWorldState } from '../../context/WorldStateContext';
+import { formatCareerCargoRoutingDebugSnapshot } from '../../data/postRunCargoRoutingRunState';
+import {
+  formatPostRunCargoRoutingValidationReport,
+  validateCareerCargoRoutingStats,
+} from '../../data/postRunCargoRoutingValidation';
+import {
+  buildDevRoutingDebriefLaunchPayload,
+  buildMinimalDevIncursion,
+  POST_RUN_ROUTING_TEST_LEDGER,
+} from '../../data/postRunCargoRoutingDebugEngine';
 import { SECTOR_WORLD_TEMPLATES } from '../../data/sectorWorldCatalog';
 import ExplorationHubPanel from '../ExplorationHubPanel';
 import HubScreenShell, { HubSectionHeader } from './HubScreenShell';
 import { hubKeyColor } from '../../constants/hubAtmosphere';
 import type { DevSandboxPreset } from '../../types/devSandbox';
 import type { OperationObjectiveKind, SectorId } from '../../types/worldState';
+import { generateContractForObjectiveKind } from '../../data/contractGenerator';
+import { freezeContractForRun } from '../../types/contract';
 import {
   formatBracketHeader,
   getInteractiveButtonStyle,
@@ -51,13 +63,39 @@ export default function DevTestHubPanel(): React.JSX.Element {
     startExtractionReview,
     startSafehouse,
     startResourceHarvest,
+    startOperationDebrief,
   } = useGameFlow();
-  const { startDevSandboxNode, devQueueEchoOverlay, devQueueEchoEncounterKind, devQueueHostileEchoTemplate, devLogEchoRunState, devPreviewEchoDebrief, devValidateEchoPipeline } = useRun();
+  const {
+    activeIncursion,
+    startDevSandboxNode,
+    devQueueEchoOverlay,
+    devQueueEchoEncounterKind,
+    devQueueHostileEchoTemplate,
+    devLogEchoRunState,
+    devLogCargoRoutingRunState,
+    devPreviewEchoDebrief,
+    devValidateEchoPipeline,
+    devPreviewPostRunRouting,
+    devSimulatePostRunRoutingSell,
+    devSimulatePostRunRoutingDeliver,
+    devSimulatePostRunRoutingContribute,
+    devSimulatePostRunRoutingOpenCaskets,
+    devSimulatePostRunRoutingPartialDogTags,
+    devPreviewPostRunDebrief,
+    devValidatePostRunRouting,
+    devAuditPostRunRouting,
+    devSimulateDeathRouting,
+    devSimulateBankThenDeathRouting,
+    devInjectRoutingTestCargo,
+    devSetActiveContract,
+  } = useRun();
   const { account } = usePlayerAccount();
   const {
     selectedSector,
     persisted,
+    runGenerationContext,
     setSelectedSectorId,
+    setPendingDebrief,
     tickAfterRunComplete,
     devRegenerateAllOperations,
     devForceSectorOperation,
@@ -65,6 +103,7 @@ export default function DevTestHubPanel(): React.JSX.Element {
     devForceOperationCompletion,
     devSetAnchorDormant,
     devClearAnchorDormant,
+    devForceRoutingTestContract,
     devGetValidationReport,
     devGetDebugSnapshot,
   } = useWorldState();
@@ -107,8 +146,59 @@ export default function DevTestHubPanel(): React.JSX.Element {
   }, [devGetValidationReport]);
 
   const showDebugSnapshot = useCallback(() => {
-    setDebugReport(devGetDebugSnapshot());
-  }, [devGetDebugSnapshot]);
+    setDebugReport([
+      devGetDebugSnapshot(),
+      formatCareerCargoRoutingDebugSnapshot(account.careerCargoRouting),
+    ].join('\n\n'));
+  }, [account.careerCargoRouting, devGetDebugSnapshot]);
+
+  const forceRoutingContract = useCallback((
+    kind: 'RECOVER_ECONOMY_INTEL' | 'RECOVER_CONTRABAND',
+  ) => {
+    const onBoard = persisted.contractBoard.contracts.find((contract) => contract.objectiveKind === kind);
+    const contract = onBoard ?? generateContractForObjectiveKind(kind, persisted.deployRunIndex);
+    if (!contract) {
+      setDebugReport(`ROUTING CONTRACT — failed to resolve ${kind}.`);
+      return;
+    }
+    devForceRoutingTestContract(kind);
+    if (activeIncursion.isRunActive) {
+      devSetActiveContract(freezeContractForRun({
+        kind: 'SPONSOR',
+        contract,
+        selectedAtRunIndex: persisted.deployRunIndex,
+      }));
+    }
+    setDebugReport(`ROUTING CONTRACT — selected ${contract.title} (${contract.objectiveKind}).`);
+  }, [
+    activeIncursion.isRunActive,
+    devForceRoutingTestContract,
+    devSetActiveContract,
+    persisted.contractBoard.contracts,
+    persisted.deployRunIndex,
+  ]);
+
+  const launchRoutingDebriefPreview = useCallback(() => {
+    if (!runGenerationContext) {
+      setDebugReport('ROUTING DEBRIEF LAUNCH — no run generation context for selected sector.');
+      return;
+    }
+    const baseIncursion = activeIncursion.isRunActive
+      ? activeIncursion
+      : buildMinimalDevIncursion(runGenerationContext);
+    const payload = buildDevRoutingDebriefLaunchPayload(
+      baseIncursion,
+      runGenerationContext,
+      POST_RUN_ROUTING_TEST_LEDGER,
+    );
+    if (!payload) {
+      setDebugReport('ROUTING DEBRIEF LAUNCH — failed to build debrief payload.');
+      return;
+    }
+    setPendingDebrief(payload);
+    startOperationDebrief();
+    setDebugReport('ROUTING DEBRIEF LAUNCH — opened OperationDebriefScreen with test cargo.');
+  }, [activeIncursion, runGenerationContext, setPendingDebrief, startOperationDebrief]);
 
   const selectSector = useCallback((sectorId: SectorId) => {
     setSelectedSectorId(sectorId);
@@ -216,6 +306,112 @@ export default function DevTestHubPanel(): React.JSX.Element {
           label="[ RESOURCE HARVEST ]"
           accentColor={TERMINAL_ACCENT}
           onPress={() => launchSandbox('resource-harvest', startResourceHarvest)}
+        />
+      </View>
+
+      <HubSectionHeader title="CARGO ROUTING // DEBUG" color={theme.mutedColor} />
+      <View style={styles.grid}>
+        <SandboxLaunchButton
+          label="[ INJECT TEST CARGO ]"
+          accentColor={TERMINAL_ACCENT}
+          onPress={() => devInjectRoutingTestCargo('FULL')}
+        />
+        <SandboxLaunchButton
+          label="[ INJECT LEDGER ]"
+          accentColor={TERMINAL_ACCENT}
+          onPress={() => devInjectRoutingTestCargo('LEDGER')}
+        />
+        <SandboxLaunchButton
+          label="[ INJECT CASKET ]"
+          accentColor={TERMINAL_ACCENT}
+          onPress={() => devInjectRoutingTestCargo('CASKET')}
+        />
+        <SandboxLaunchButton
+          label="[ INJECT DOG TAGS ]"
+          accentColor={TERMINAL_ACCENT}
+          onPress={() => devInjectRoutingTestCargo('DOG_TAGS')}
+        />
+        <SandboxLaunchButton
+          label="[ FORCE INTEL CONTRACT ]"
+          accentColor={TERMINAL_ACCENT}
+          onPress={() => forceRoutingContract('RECOVER_ECONOMY_INTEL')}
+        />
+        <SandboxLaunchButton
+          label="[ FORCE CONTRABAND CONTRACT ]"
+          accentColor={TERMINAL_ACCENT}
+          onPress={() => forceRoutingContract('RECOVER_CONTRABAND')}
+        />
+        <SandboxLaunchButton
+          label="[ PREVIEW ROUTING ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(devPreviewPostRunRouting())}
+        />
+        <SandboxLaunchButton
+          label="[ SIM SELL ALL ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(devSimulatePostRunRoutingSell())}
+        />
+        <SandboxLaunchButton
+          label="[ SIM DELIVER ALL ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(devSimulatePostRunRoutingDeliver())}
+        />
+        <SandboxLaunchButton
+          label="[ SIM CONTRIBUTE ALL ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(devSimulatePostRunRoutingContribute())}
+        />
+        <SandboxLaunchButton
+          label="[ SIM OPEN CASKET ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(devSimulatePostRunRoutingOpenCaskets())}
+        />
+        <SandboxLaunchButton
+          label="[ SIM PARTIAL DOG TAGS ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(devSimulatePostRunRoutingPartialDogTags())}
+        />
+        <SandboxLaunchButton
+          label="[ PREVIEW DEBRIEF ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(devPreviewPostRunDebrief())}
+        />
+        <SandboxLaunchButton
+          label="[ LAUNCH ROUTING DEBRIEF ]"
+          accentColor={theme.statusColor}
+          onPress={launchRoutingDebriefPreview}
+        />
+        <SandboxLaunchButton
+          label="[ SIM DEATH LOSS ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(devSimulateDeathRouting())}
+        />
+        <SandboxLaunchButton
+          label="[ SIM BANK + DEATH ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(devSimulateBankThenDeathRouting())}
+        />
+        <SandboxLaunchButton
+          label="[ VALIDATE ROUTING ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            const careerIssues = validateCareerCargoRoutingStats(account.careerCargoRouting);
+            const report = [
+              devValidatePostRunRouting(),
+              formatPostRunCargoRoutingValidationReport(careerIssues),
+            ].join('\n\n');
+            setDebugReport(report);
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ AUDIT ROUTING ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(devAuditPostRunRouting())}
+        />
+        <SandboxLaunchButton
+          label="[ LOG CARGO ROUTING STATE ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(devLogCargoRoutingRunState())}
         />
       </View>
 

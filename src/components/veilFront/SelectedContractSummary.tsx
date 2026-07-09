@@ -10,6 +10,8 @@ import {
   sponsorDisplayName,
 } from '../../utils/contractUi';
 import { describeEmployerPerks } from '../../utils/employerContractUi';
+import { formatContractCargoDeliveryHints } from '../../data/cargoRoutingIntelEngine';
+import { isResourceContractObjective } from '../../data/contractResolver';
 
 interface SelectedContractSummaryProps {
   theme: TerminalTheme;
@@ -41,6 +43,9 @@ export default function SelectedContractSummary({
   const contract = selectedContract.contract;
   const sponsorAccent = FACTION_DEFINITIONS[contract.sponsorId].accentColor;
   const perks = describeEmployerPerks(contract.sponsorId);
+  const cargoDeliveryHints = isResourceContractObjective(contract.objectiveKind)
+    ? formatContractCargoDeliveryHints(contract)
+    : [];
 
   return (
     <View style={[styles.body, { gap: scaleSpacing(8) }]}>
@@ -78,6 +83,18 @@ export default function SelectedContractSummary({
         <TerminalText size={scaleFont(5.8)} style={{ color: theme.mutedColor }}>
           {`BONUS: ${contract.bonusObjective.text}`}
         </TerminalText>
+      ) : null}
+      {cargoDeliveryHints.length > 0 ? (
+        <View style={{ gap: scaleSpacing(4) }}>
+          <TerminalText size={scaleFont(5.5)} letterSpacing={0.6} style={{ color: theme.mutedColor }}>
+            POST-RUN DELIVERY
+          </TerminalText>
+          {cargoDeliveryHints.map((line) => (
+            <TerminalText key={line} size={scaleFont(5.8)} style={{ color: '#fbbf24', lineHeight: scaleSize(10) }}>
+              {`• ${line}`}
+            </TerminalText>
+          ))}
+        </View>
       ) : null}
       <TerminalText size={scaleFont(5.5)} style={{ color: theme.mutedColor }}>
         Change contract on the Contract Board tab.

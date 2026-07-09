@@ -34,6 +34,11 @@ import { HUB_CARGO_MAT_INSET } from '../constants/cargoGridVisual';
 import {
   EMERGENCY_EXTRACT_CARGO_BLEED_PCT,
 } from '../types/sectorPacing';
+import { formatCargoRoutingExtractionReviewLine } from '../data/cargoRoutingIntelEngine';
+import {
+  countSpecialCargoHeldInRun,
+  resolveCargoRoutingContextFromIncursion,
+} from '../data/postRunCargoRoutingRunState';
 import type { ClassType } from '../types/game';
 import type { RunState } from '../types/run';
 import { calculateGridOccupancy } from '../data/cargoGridEngine';
@@ -335,11 +340,22 @@ export default function ExtractionReviewScreen(): React.JSX.Element {
     if (reviewKind === 'EMERGENCY_RECALL') {
       return `Emergency bleed — ${EMERGENCY_EXTRACT_CARGO_BLEED_PCT}% cargo lost. End incursion now.`;
     }
+    const routingContext = resolveCargoRoutingContextFromIncursion(activeIncursion);
+    const specialCargoLine = routingContext
+      ? formatCargoRoutingExtractionReviewLine(countSpecialCargoHeldInRun(
+        activeIncursion.cargo,
+        activeIncursion.runBankedSnapshot,
+        activeIncursion.activeContract,
+        routingContext,
+      ))
+      : null;
     if (reviewKind === 'MASTER_LINK') {
-      return 'Prime conduit — anchor payload to Cabal HQ. Guaranteed severance.';
+      const base = 'Prime conduit — anchor payload to Cabal HQ. Guaranteed severance.';
+      return specialCargoLine ? `${base} ${specialCargoLine}` : base;
     }
-    return 'Anchor payload to Cabal HQ. Sever the Veil tether.';
-  }, [reviewKind]);
+    const base = 'Anchor payload to Cabal HQ. Sever the Veil tether.';
+    return specialCargoLine ? `${base} ${specialCargoLine}` : base;
+  }, [activeIncursion, reviewKind]);
 
   const evacHeaderSubtitle = useMemo(() => {
     if (reviewKind === 'SAFE_ANCHOR' && anchorIndex != null) {

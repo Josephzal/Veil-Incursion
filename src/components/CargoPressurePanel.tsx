@@ -12,6 +12,8 @@ interface CargoPressurePanelProps {
   mutedColor?: string;
   /** Compact single-column layout for narrow chrome areas. */
   compact?: boolean;
+  /** Intel/contraband/contract stacks requiring post-run routing on extract. */
+  specialCargoStacks?: number;
 }
 
 export default function CargoPressurePanel({
@@ -19,40 +21,62 @@ export default function CargoPressurePanel({
   accentColor = '#f59e0b',
   mutedColor = '#94a3b8',
   compact = false,
+  specialCargoStacks = 0,
 }: CargoPressurePanelProps): React.JSX.Element | null {
   const snapshot = useMemo(() => buildActiveCarriedCargoSnapshot(cargo), [cargo]);
 
-  if (snapshot.activeEffects.length === 0) return null;
+  if (snapshot.activeEffects.length === 0 && specialCargoStacks <= 0) return null;
+
+  const specialAccent = '#22d3ee';
 
   return (
     <View style={[styles.root, compact ? styles.rootCompact : null]}>
-      <Text style={[styles.heading, { color: accentColor }]}>
-        CARGO PRESSURE
-      </Text>
-      {snapshot.activeEffects.map((effect) => (
-        <View key={effect.resourceId} style={styles.effectBlock}>
-          <Text style={[styles.itemName, { color: accentColor }]}>
-            {effect.itemName}
+      {snapshot.activeEffects.length > 0 ? (
+        <>
+          <Text style={[styles.heading, { color: accentColor }]}>
+            CARGO PRESSURE
           </Text>
-          {effect.displayLines.map((line) => (
-            <Text
-              key={`${effect.resourceId}-${line.kind}-${line.text}`}
-              style={[
-                styles.effectLine,
-                { color: line.kind === 'upside' ? '#86efac' : '#fca5a5' },
-              ]}
-            >
-              {formatCarriedEffectDisplayPrefix(line.kind)}
-              {' '}
-              {line.text}
-            </Text>
+          {snapshot.activeEffects.map((effect) => (
+            <View key={effect.resourceId} style={styles.effectBlock}>
+              <Text style={[styles.itemName, { color: accentColor }]}>
+                {effect.itemName}
+              </Text>
+              {effect.displayLines.map((line) => (
+                <Text
+                  key={`${effect.resourceId}-${line.kind}-${line.text}`}
+                  style={[
+                    styles.effectLine,
+                    { color: line.kind === 'upside' ? '#86efac' : '#fca5a5' },
+                  ]}
+                >
+                  {formatCarriedEffectDisplayPrefix(line.kind)}
+                  {' '}
+                  {line.text}
+                </Text>
+              ))}
+            </View>
           ))}
-        </View>
-      ))}
-      {!compact ? (
-        <Text style={[styles.hint, { color: mutedColor }]}>
-          Bank at safehouse to suspend carried effects.
-        </Text>
+          {!compact ? (
+            <Text style={[styles.hint, { color: mutedColor }]}>
+              Bank at safehouse to suspend carried effects.
+            </Text>
+          ) : null}
+        </>
+      ) : null}
+      {specialCargoStacks > 0 ? (
+        <>
+          <Text style={[styles.heading, { color: specialAccent }]}>
+            SPECIAL CARGO
+          </Text>
+          <Text style={[styles.effectLine, { color: specialAccent }]}>
+            {`${specialCargoStacks} stack(s) — post-run routing on extract`}
+          </Text>
+          {!compact ? (
+            <Text style={[styles.hint, { color: mutedColor }]}>
+              Bank at safehouse to secure before death.
+            </Text>
+          ) : null}
+        </>
       ) : null}
     </View>
   );

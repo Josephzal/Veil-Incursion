@@ -6,6 +6,7 @@ import {
   hubContrabandPrice,
   listFenceableStashEntries,
 } from '../../data/hubSafehouseEngine';
+import { formatCargoRoutingBlackMarketIntelLines } from '../../data/cargoRoutingIntelEngine';
 import { getResourceDisplayName, getResourceCategory } from '../../data/resourceRegistry';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useWorldState } from '../../context/WorldStateContext';
@@ -328,7 +329,10 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
             FENCE // LIQUIDATE
           </TerminalText>
           <TerminalText variant="caption" style={[styles.panelSub, { color: theme.mutedColor }]}>
-            Sell dog tags, ledgers, and excess ley-slag for Cabal Credits.
+            {formatCargoRoutingBlackMarketIntelLines()[0]}
+          </TerminalText>
+          <TerminalText variant="caption" style={[styles.panelSub, { color: theme.mutedColor, marginTop: 4 }]}>
+            {formatCargoRoutingBlackMarketIntelLines()[1]}
           </TerminalText>
           <ScrollView
             style={[

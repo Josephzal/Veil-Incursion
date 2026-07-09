@@ -25,6 +25,7 @@ export default function ActiveOperationCard({
   const contributes = formatOperationContributesForObjective(
     sector.activeOperation.objectiveKind,
     sector.activeOperation.contributionRules,
+    sector.activeOperation.rewardEmphasis.targetResources,
   );
   const lifecycleLabel = formatOperationLifecycleStatus(
     sector.activeOperation.lifecycleStatus,

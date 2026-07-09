@@ -2,6 +2,7 @@ import { useCallback, useRef } from 'react';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import { useWorldState } from '../context/WorldStateContext';
+import { resolveContractExtractionKind } from '../data/contractExtractionKind';
 import { resolveContractResult } from '../data/contractResolver';
 import { buildOperationDebriefPayload } from '../data/runDebriefEngine';
 import { buildDeathResourceSections } from '../data/runDebriefResourceEngine';
@@ -11,15 +12,7 @@ import {
   getDistrictFromDepth,
   localLevelFromDepth,
 } from '../data/districtPacing';
-import type { ContractExtractionKind } from '../types/contract';
 import type { ActiveIncursionState } from '../types/game';
-
-function resolveExtractionKind(inc: ActiveIncursionState): ContractExtractionKind {
-  if (inc.contractRunProgress.emergencyRecallCompleted) return 'EMERGENCY_RECALL';
-  if (inc.masterLinkUsed) return 'MASTER_LINK';
-  if (inc.clearedSafeAnchors.length > 0) return 'SAFE_ANCHOR';
-  return 'STANDARD';
-}
 
 export function useRunDeathFinalizer() {
   const {
@@ -44,7 +37,7 @@ export function useRunDeathFinalizer() {
       ...inc,
       runResourceLedger: deathResources.ledger,
     };
-    const extractionKind = resolveExtractionKind(inc);
+    const extractionKind = resolveContractExtractionKind(inc);
     const contractResult = resolveContractResult({
       contract: inc.activeContract,
       ledger: deathResources.ledger,

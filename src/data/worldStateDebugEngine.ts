@@ -13,6 +13,7 @@ import type {
   WorldStatePersistedState,
 } from '../types/worldState';
 import { DEFAULT_OPERATION_PROGRESS_REQUIRED } from './worldStateHelpers';
+import { generateContractForObjectiveKind } from './contractGenerator';
 
 export function stripDevFieldsForPersistence(
   persisted: WorldStatePersistedState,
@@ -182,4 +183,35 @@ export function formatWorldStateDebugSnapshot(
     persisted.operationLog.slice(0, 6).forEach((line) => lines.push(`  ${line}`));
   }
   return lines.join('\n');
+}
+
+export function devForceRoutingTestContract(
+  persisted: WorldStatePersistedState,
+  kind: 'RECOVER_ECONOMY_INTEL' | 'RECOVER_CONTRABAND',
+): WorldStatePersistedState {
+  const onBoard = persisted.contractBoard.contracts.find((contract) => contract.objectiveKind === kind);
+  const contract = onBoard ?? generateContractForObjectiveKind(kind, persisted.deployRunIndex);
+  if (!contract) return persisted;
+
+  const contracts = onBoard
+    ? persisted.contractBoard.contracts
+    : [contract, ...persisted.contractBoard.contracts].slice(0, 6);
+
+  return {
+    ...persisted,
+    contractBoard: {
+      ...persisted.contractBoard,
+      contracts,
+      lastUsedSponsorId: contract.sponsorId,
+      selectedContract: {
+        kind: 'SPONSOR',
+        contract,
+        selectedAtRunIndex: persisted.deployRunIndex,
+      },
+    },
+    operationLog: [
+      `>> DEV — FORCED ROUTING CONTRACT: ${contract.title}`,
+      ...persisted.operationLog,
+    ].slice(0, 24),
+  };
 }

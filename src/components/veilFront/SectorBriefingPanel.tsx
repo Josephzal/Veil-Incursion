@@ -13,6 +13,7 @@ import { TerminalTheme } from '../../types/theme';
 import {
   describeAnchorInRunPressure,
   formatEchoBriefingIntel,
+  formatCargoRoutingBriefingIntel,
   formatOperationContributesForObjective,
   formatOperationLifecycleStatus,
   formatOperationProgressLabel,
@@ -113,10 +114,12 @@ function OperationTabContent({
   theme,
   sector,
   operationLog,
+  selectedContract,
 }: {
   theme: TerminalTheme;
   sector: SectorState;
   operationLog: string[];
+  selectedContract: SelectedContractState;
 }) {
   const { scaleFont, scaleSize, scaleSpacing, descriptionLines, showOptionalCopy } = useVeilFrontLayout();
   const operation = sector.activeOperation;
@@ -127,8 +130,10 @@ function OperationTabContent({
   const contributes = formatOperationContributesForObjective(
     operation.objectiveKind,
     operation.contributionRules,
+    operation.rewardEmphasis.targetResources,
   );
   const echoIntel = formatEchoBriefingIntel(sector);
+  const cargoIntel = formatCargoRoutingBriefingIntel(sector, selectedContract);
   const lifecycleLabel = formatOperationLifecycleStatus(
     operation.lifecycleStatus,
     operation.runsRemaining,
@@ -169,6 +174,18 @@ function OperationTabContent({
           </TerminalText>
           {echoIntel.map((line) => (
             <TerminalText key={line} size={scaleFont(5.8)} style={{ color: theme.statusColor }} numberOfLines={3}>
+              {line}
+            </TerminalText>
+          ))}
+        </View>
+      ) : null}
+      {cargoIntel.length > 0 ? (
+        <View style={[styles.listBlock, { gap: scaleSpacing(4), borderTopColor: `${theme.statusColor}24`, paddingTop: scaleSpacing(7) }]}>
+          <TerminalText size={scaleFont(5.5)} letterSpacing={0.6} style={{ color: theme.mutedColor }}>
+            CARGO ROUTING
+          </TerminalText>
+          {cargoIntel.map((line) => (
+            <TerminalText key={line} size={scaleFont(5.8)} style={{ color: '#fbbf24' }} numberOfLines={3}>
               {line}
             </TerminalText>
           ))}
@@ -310,7 +327,12 @@ export default function SectorBriefingPanel({
 
       <View style={[styles.tabContent, { padding: cardPadding, borderColor: `${theme.statusColor}33` }]}>
         {activeTab === 'operation' ? (
-          <OperationTabContent theme={theme} sector={sector} operationLog={persisted.operationLog} />
+          <OperationTabContent
+            theme={theme}
+            sector={sector}
+            operationLog={persisted.operationLog}
+            selectedContract={selectedContract}
+          />
         ) : activeTab === 'anchor' ? (
           <AnchorTabContent theme={theme} sector={sector} />
         ) : (

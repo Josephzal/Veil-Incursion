@@ -16,7 +16,7 @@ import {
   sponsorDisplayName,
   type ContractSectorCompatibility,
 } from '../../utils/contractUi';
-import { hazardLabel, formatEchoBriefingIntel, formatOperationContributesForObjective, formatOperationLifecycleStatus, operationLifecycleAccentColor } from '../../utils/veilFrontSectorUi';
+import { hazardLabel, formatCargoRoutingBriefingIntel, formatEchoBriefingIntel, formatOperationContributesForObjective, formatOperationLifecycleStatus, operationLifecycleAccentColor } from '../../utils/veilFrontSectorUi';
 import { describeEmployerPerks } from '../../utils/employerContractUi';
 
 interface VeilFrontDeployConfirmModalProps {
@@ -84,10 +84,12 @@ export default function VeilFrontDeployConfirmModal({
   const operationContributes = formatOperationContributesForObjective(
     sector.activeOperation.objectiveKind,
     sector.activeOperation.contributionRules,
+    sector.activeOperation.rewardEmphasis.targetResources,
   )
     .slice(0, 4)
     .join(' · ');
   const echoBriefing = formatEchoBriefingIntel(sector)[0] ?? null;
+  const cargoBriefing = formatCargoRoutingBriefingIntel(sector, selectedContract)[0] ?? null;
   const sponsorPerks = isSponsor ? describeEmployerPerks(contract!.sponsorId) : [];
 
   return (
@@ -176,6 +178,14 @@ export default function VeilFrontDeployConfirmModal({
                   <SummaryRow
                     label="Echo Intel"
                     value={echoBriefing}
+                    mutedColor={theme.mutedColor}
+                    textColor={theme.statusColor}
+                  />
+                ) : null}
+                {cargoBriefing ? (
+                  <SummaryRow
+                    label="Cargo Routing"
+                    value={cargoBriefing}
                     mutedColor={theme.mutedColor}
                     textColor={theme.statusColor}
                   />

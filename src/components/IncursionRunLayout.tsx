@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { pulseCargoClose, pulseCargoOpen, pulseStatusDismiss, pulseStatusOpen } from '../utils/hubButtonHaptics';
 import { StyleSheet, View, ViewStyle } from 'react-native';
+import { resolveSpecialCargoStacksForIncursion } from '../data/postRunCargoRoutingRunState';
 import CargoGridOverlay from './CargoGridOverlay';
 import RunGlobalChrome from './RunGlobalChrome';
 import RunStatusOverlay from './RunStatusOverlay';
@@ -131,6 +132,11 @@ export default function IncursionRunLayout({
     [openStatus, showRunOverlays],
   );
 
+  const specialCargoStacks = useMemo(
+    () => resolveSpecialCargoStacksForIncursion(activeIncursion),
+    [activeIncursion],
+  );
+
   return (
     <CargoOverlayProvider value={cargoOverlayValue}>
       <RunStatusOverlayProvider value={statusOverlayValue}>
@@ -144,6 +150,7 @@ export default function IncursionRunLayout({
             <CargoGridOverlay
               visible={cargoOpen}
               cargo={activeIncursion.cargo}
+              specialCargoStacks={specialCargoStacks}
               theme={theme}
               onClose={closeCargo}
               onDismissSilently={dismissCargoSilently}

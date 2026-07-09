@@ -148,6 +148,8 @@ export interface PlayerAccount {
   equippedBlueprintId: import('./equipmentBlueprint').BlueprintId | null;
   /** Safehouse decryption queue — gatekeeper cores/caskets land here as locked containers. */
   unidentifiedStash: import('./unidentifiedItem').UnidentifiedStashItem[];
+  /** Career totals from post-run cargo routing decisions. */
+  careerCargoRouting: import('../data/postRunCargoRoutingRunState').CareerCargoRoutingStats;
 }
 
 export interface CombatNodeState {
@@ -485,6 +487,8 @@ export interface ActiveIncursionState {
   echoRecoveryProgress: import('../data/echoRecoveryEngine').EchoRecoveryProgress;
   /** Echo encounter activity tracked for debrief and operations. */
   echoRunState: import('../data/echoRunState').EchoRunState;
+  /** Special cargo acquisition and banking tracked for debrief and telemetry. */
+  cargoRoutingRunState: import('../data/postRunCargoRoutingRunState').CargoRoutingRunState;
   /** In-run safehouse physical bank — survives death within the same run. */
   runBankedSnapshot: import('../types/runResourceLedger').RunPhysicalBankSnapshot;
   /** Per-run resource collection, banking, extraction, and loss accounting. */
@@ -610,6 +614,13 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
       echoCreditsRecovered: 0,
       echoRewardsExtracted: 0,
       extractionRecallBonusPending: false,
+    },
+    cargoRoutingRunState: {
+      specialCargoStacksAcquired: 0,
+      contractTargetStacksAcquired: 0,
+      operationTargetStacksAcquired: 0,
+      specialCargoStacksBanked: 0,
+      pendingRoutingStacksAtExtract: 0,
     },
     runBankedSnapshot: createEmptyRunPhysicalBankSnapshot(),
     runResourceLedger: createEmptyRunResourceLedger(),

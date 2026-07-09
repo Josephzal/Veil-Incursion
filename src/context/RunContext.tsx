@@ -220,7 +220,6 @@ import {
 import { resolveExtractionVeilResidueDeposit } from '../data/extractionPersistenceEngine';
 import {
   bankAllPhysicalRunCargo,
-  recordNewResourcesFromCargoDelta,
   recordResourcesBanked,
   recordSafehouseBankAction,
   resolveRunDeathResourceState,
@@ -284,6 +283,30 @@ import {
   formatEchoRunStateSnapshot,
   formatEchoValidationReport,
 } from '../data/echoDebugEngine';
+import {
+  buildBankThenDeathRoutingPreview,
+  buildDeathRoutingPreview,
+  buildDevPostRunDebriefPreview,
+  buildPostRunRoutingPreview,
+  formatPostRunRoutingDebugValidation,
+  mergeTestResourcesIntoLedger,
+  POST_RUN_ROUTING_TEST_LEDGER,
+  simulatePostRunRoutingContributeAll,
+  simulatePostRunRoutingDeliverAll,
+  simulatePostRunRoutingOpenCaskets,
+  simulatePostRunRoutingPartialDogTags,
+  simulatePostRunRoutingSellAll,
+  auditPostRunCargoRoutingReport,
+} from '../data/postRunCargoRoutingDebugEngine';
+import { buildPostRunRoutingDebriefState } from '../data/postRunCargoRoutingEngine';
+import { resolveContractExtractionKind } from '../data/contractExtractionKind';
+import {
+  applyCargoCollectedLedgerDelta,
+  formatCargoRoutingRunStateSnapshot,
+  recordCargoRoutingResourcesBanked,
+  resolveCargoRoutingContextFromIncursion,
+} from '../data/postRunCargoRoutingRunState';
+import type { ResourceItemId } from '../types/resourceItem';
 import type { DevSandboxPreset } from '../types/devSandbox';
 import {
   getClassBoonDisplayName,
@@ -526,8 +549,22 @@ interface RunContextType {
   devQueueEchoEncounterKind: (kind: EchoEncounterKind) => void;
   devQueueHostileEchoTemplate: (templateId: string, sourceClass?: ClassType) => void;
   devLogEchoRunState: () => string;
+  devLogCargoRoutingRunState: () => string;
   devPreviewEchoDebrief: () => string;
   devValidateEchoPipeline: () => string;
+  devPreviewPostRunRouting: () => string;
+  devSimulatePostRunRoutingSell: () => string;
+  devSimulatePostRunRoutingDeliver: () => string;
+  devSimulatePostRunRoutingContribute: () => string;
+  devSimulatePostRunRoutingOpenCaskets: () => string;
+  devSimulatePostRunRoutingPartialDogTags: () => string;
+  devPreviewPostRunDebrief: () => string;
+  devValidatePostRunRouting: () => string;
+  devAuditPostRunRouting: () => string;
+  devSimulateDeathRouting: () => string;
+  devSimulateBankThenDeathRouting: () => string;
+  devInjectRoutingTestCargo: (preset?: 'FULL' | 'LEDGER' | 'CASKET' | 'DOG_TAGS') => void;
+  devSetActiveContract: (contract: import('../types/contract').ActiveRunContract) => void;
 }
 
 const RunContext = createContext<RunContextType | undefined>(undefined);
@@ -1579,6 +1616,16 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     return report;
   }, [appendRunLog]);
 
+  const devLogCargoRoutingRunState = useCallback((): string => {
+    const report = formatCargoRoutingRunStateSnapshot(
+      activeIncursionRef.current.cargoRoutingRunState,
+    );
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      appendRunLog(`>> ${report.replace(/\n/g, ' // ')}`);
+    }
+    return report;
+  }, [appendRunLog]);
+
   const devPreviewEchoDebrief = useCallback((): string => {
     const report = formatEchoDebriefPreview(activeIncursionRef.current);
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
@@ -1593,6 +1640,139 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       appendRunLog(`>> ${report.replace(/\n/g, ' // ')}`);
     }
     return report;
+  }, [appendRunLog]);
+
+  const devPreviewPostRunRouting = useCallback((): string => {
+    const report = buildPostRunRoutingPreview(activeIncursionRef.current);
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      appendRunLog(`>> ${report.replace(/\n/g, ' // ')}`);
+    }
+    return report;
+  }, [appendRunLog]);
+
+  const devSimulatePostRunRoutingSell = useCallback((): string => {
+    const report = simulatePostRunRoutingSellAll(activeIncursionRef.current);
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      appendRunLog(`>> ${report.replace(/\n/g, ' // ')}`);
+    }
+    return report;
+  }, [appendRunLog]);
+
+  const devSimulatePostRunRoutingDeliver = useCallback((): string => {
+    const report = simulatePostRunRoutingDeliverAll(activeIncursionRef.current);
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      appendRunLog(`>> ${report.replace(/\n/g, ' // ')}`);
+    }
+    return report;
+  }, [appendRunLog]);
+
+  const devSimulatePostRunRoutingContribute = useCallback((): string => {
+    const report = simulatePostRunRoutingContributeAll(activeIncursionRef.current);
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      appendRunLog(`>> ${report.replace(/\n/g, ' // ')}`);
+    }
+    return report;
+  }, [appendRunLog]);
+
+  const devSimulatePostRunRoutingOpenCaskets = useCallback((): string => {
+    const report = simulatePostRunRoutingOpenCaskets(activeIncursionRef.current);
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      appendRunLog(`>> ${report.replace(/\n/g, ' // ')}`);
+    }
+    return report;
+  }, [appendRunLog]);
+
+  const devSimulatePostRunRoutingPartialDogTags = useCallback((): string => {
+    const report = simulatePostRunRoutingPartialDogTags(activeIncursionRef.current);
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      appendRunLog(`>> ${report.replace(/\n/g, ' // ')}`);
+    }
+    return report;
+  }, [appendRunLog]);
+
+  const devPreviewPostRunDebrief = useCallback((): string => {
+    const report = buildDevPostRunDebriefPreview(activeIncursionRef.current);
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      appendRunLog(`>> ${report.replace(/\n/g, ' // ')}`);
+    }
+    return report;
+  }, [appendRunLog]);
+
+  const devValidatePostRunRouting = useCallback((): string => {
+    const incursion = activeIncursionRef.current;
+    const context = incursion.runGenerationContext;
+    const routingState = context
+      ? buildPostRunRoutingDebriefState({
+        ledger: incursion.runResourceLedger,
+        contract: incursion.activeContract,
+        operationObjectiveKind: context.activeOperation.objectiveKind,
+        operationTargetResourceNames: context.activeOperation.rewardEmphasis.targetResources,
+        operationId: context.activeOperation.id,
+        contractProgress: incursion.contractRunProgress,
+        extractionKind: resolveContractExtractionKind(incursion),
+      })
+      : null;
+    const report = formatPostRunRoutingDebugValidation(routingState);
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      appendRunLog(`>> ${report.replace(/\n/g, ' // ')}`);
+    }
+    return report;
+  }, [appendRunLog]);
+
+  const devAuditPostRunRouting = useCallback((): string => {
+    const report = auditPostRunCargoRoutingReport();
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      appendRunLog(`>> ${report.replace(/\n/g, ' // ')}`);
+    }
+    return report;
+  }, [appendRunLog]);
+
+  const devSimulateDeathRouting = useCallback((): string => {
+    const report = buildDeathRoutingPreview(POST_RUN_ROUTING_TEST_LEDGER, {});
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      appendRunLog(`>> ${report.replace(/\n/g, ' // ')}`);
+    }
+    return report;
+  }, [appendRunLog]);
+
+  const devSimulateBankThenDeathRouting = useCallback((): string => {
+    const report = buildBankThenDeathRoutingPreview(
+      { 'sanguine-ampoule': 2, 'encrypted-grid-drive': 1 },
+      { 'smugglers-ledger': 1, 'tarnished-dog-tags': 3 },
+    );
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      appendRunLog(`>> ${report.replace(/\n/g, ' // ')}`);
+    }
+    return report;
+  }, [appendRunLog]);
+
+  const devInjectRoutingTestCargo = useCallback((preset: 'FULL' | 'LEDGER' | 'CASKET' | 'DOG_TAGS' = 'FULL') => {
+    const resources: Partial<Record<ResourceItemId, number>> = preset === 'LEDGER'
+      ? { 'smugglers-ledger': 1 }
+      : preset === 'CASKET'
+        ? { 'sealed-containment-casket': 1 }
+        : preset === 'DOG_TAGS'
+          ? { 'tarnished-dog-tags': 3 }
+          : POST_RUN_ROUTING_TEST_LEDGER;
+
+    setActiveIncursion((prev) => {
+      const next = {
+        ...prev,
+        runResourceLedger: mergeTestResourcesIntoLedger(prev.runResourceLedger, resources),
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    appendRunLog(`>> DEV ROUTING CARGO INJECTED — ${preset}`);
+  }, [appendRunLog]);
+
+  const devSetActiveContract = useCallback((contract: import('../types/contract').ActiveRunContract) => {
+    setActiveIncursion((prev) => {
+      const next = { ...prev, activeContract: contract };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    appendRunLog(`>> DEV ACTIVE CONTRACT SET — ${contract.title.toUpperCase()}`);
   }, [appendRunLog]);
 
   const applyDevSandboxBaseRun = useCallback((
@@ -1922,7 +2102,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         pendingHarvestReturn: requiresResourcePack ? 'RESOURCE_CACHE' : prev.pendingHarvestReturn,
         pendingNarrativeCombatBoons: nextPendingBoons,
         runStatusEffects: nextStatusEffects,
-        runResourceLedger: recordNewResourcesFromCargoDelta(prev.runResourceLedger, beforeCargo, nextCargo),
+        ...applyCargoCollectedLedgerDelta(prev, beforeCargo, nextCargo),
       };
       if (result.spawnGridHound) {
         next = activateGridHoundOnIncursion(next);
@@ -2196,7 +2376,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         cargo: nextCargo,
         harvestStagingInstanceIds: [...new Set([...prev.harvestStagingInstanceIds, ...stagedIds])],
         pendingProceduralResourcePool: [],
-        runResourceLedger: recordNewResourcesFromCargoDelta(prev.runResourceLedger, beforeCargo, nextCargo),
+        ...applyCargoCollectedLedgerDelta(prev, beforeCargo, nextCargo),
       };
       activeIncursionRef.current = next;
       return next;
@@ -2372,7 +2552,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
           prev.unstableCargoEffectsSeen,
           nextCargo,
         ),
-        runResourceLedger: recordNewResourcesFromCargoDelta(prev.runResourceLedger, beforeCargo, nextCargo),
+        ...applyCargoCollectedLedgerDelta(prev, beforeCargo, nextCargo),
       };
       activeIncursionRef.current = next;
       return next;
@@ -2413,7 +2593,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
           prev.unstableCargoEffectsSeen,
           nextCargo,
         ),
-        runResourceLedger: recordNewResourcesFromCargoDelta(prev.runResourceLedger, beforeCargo, nextCargo),
+        ...applyCargoCollectedLedgerDelta(prev, beforeCargo, nextCargo),
       };
       activeIncursionRef.current = next;
       return next;
@@ -2476,7 +2656,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
           prev.unstableCargoEffectsSeen,
           nextCargo,
         ),
-        runResourceLedger: recordNewResourcesFromCargoDelta(prev.runResourceLedger, beforeCargo, nextCargo),
+        ...applyCargoCollectedLedgerDelta(prev, beforeCargo, nextCargo),
       };
       activeIncursionRef.current = next;
       return next;
@@ -3903,6 +4083,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
     const { resourceCount, consumableCount } = summarizeBankSnapshot(bankResult.bank);
     setActiveIncursion((prev) => {
+      const routingContext = resolveCargoRoutingContextFromIncursion(prev);
       const next = {
         ...prev,
         cargo: bankResult.cargo,
@@ -3914,6 +4095,14 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         runResourceLedger: recordSafehouseBankAction(
           recordResourcesBanked(prev.runResourceLedger, bankResult.bankedResources),
         ),
+        cargoRoutingRunState: routingContext
+          ? recordCargoRoutingResourcesBanked(
+            prev.cargoRoutingRunState,
+            bankResult.bankedResources,
+            prev.activeContract,
+            routingContext,
+          )
+          : prev.cargoRoutingRunState,
       };
       activeIncursionRef.current = next;
       return next;
@@ -4730,8 +4919,22 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       devQueueEchoEncounterKind,
       devQueueHostileEchoTemplate,
       devLogEchoRunState,
+      devLogCargoRoutingRunState,
       devPreviewEchoDebrief,
       devValidateEchoPipeline,
+      devPreviewPostRunRouting,
+      devSimulatePostRunRoutingSell,
+      devSimulatePostRunRoutingDeliver,
+      devSimulatePostRunRoutingContribute,
+      devSimulatePostRunRoutingOpenCaskets,
+      devSimulatePostRunRoutingPartialDogTags,
+      devPreviewPostRunDebrief,
+      devValidatePostRunRouting,
+      devAuditPostRunRouting,
+      devSimulateDeathRouting,
+      devSimulateBankThenDeathRouting,
+      devInjectRoutingTestCargo,
+      devSetActiveContract,
     }),
     [
       runState,
@@ -4868,8 +5071,22 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       devQueueEchoEncounterKind,
       devQueueHostileEchoTemplate,
       devLogEchoRunState,
+      devLogCargoRoutingRunState,
       devPreviewEchoDebrief,
       devValidateEchoPipeline,
+      devPreviewPostRunRouting,
+      devSimulatePostRunRoutingSell,
+      devSimulatePostRunRoutingDeliver,
+      devSimulatePostRunRoutingContribute,
+      devSimulatePostRunRoutingOpenCaskets,
+      devSimulatePostRunRoutingPartialDogTags,
+      devPreviewPostRunDebrief,
+      devValidatePostRunRouting,
+      devAuditPostRunRouting,
+      devSimulateDeathRouting,
+      devSimulateBankThenDeathRouting,
+      devInjectRoutingTestCargo,
+      devSetActiveContract,
     ],
   );
 

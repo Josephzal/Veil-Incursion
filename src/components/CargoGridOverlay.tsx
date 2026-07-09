@@ -45,6 +45,7 @@ interface CargoGridOverlayProps {
   onDiscardItem?: (instanceId: string) => boolean;
   runCredits?: number;
   playerActionPoints?: number;
+  specialCargoStacks?: number;
 }
 
 export default function CargoGridOverlay({
@@ -65,6 +66,7 @@ export default function CargoGridOverlay({
   onDiscardItem,
   runCredits,
   playerActionPoints,
+  specialCargoStacks = 0,
 }: CargoGridOverlayProps): React.JSX.Element {
   const dismissAfterUse = onDismissSilently ?? onClose;
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
@@ -154,6 +156,7 @@ export default function CargoGridOverlay({
 
             <CargoPressurePanel
               cargo={cargo}
+              specialCargoStacks={specialCargoStacks}
               accentColor={accentColor}
               mutedColor={theme.mutedColor}
             />

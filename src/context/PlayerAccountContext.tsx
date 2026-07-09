@@ -72,7 +72,13 @@ import {
   stageStashItemToCargoContainment,
 } from '../data/hubSafehouseEngine';
 import { depositAllCargoToHubAccount, depositPhysicalBankSnapshot, resolveExtractionVeilResidueDeposit } from '../data/extractionPersistenceEngine';
-import type { RunPhysicalBankSnapshot } from '../types/runResourceLedger';
+import type { CargoRoutingDecision, PostRunRoutingDebriefState } from '../types/postRunCargoRouting';
+import { applyCargoRoutingDecisions } from '../data/postRunCargoRoutingEngine';
+import { createDefaultCareerCargoRoutingStats, incrementCareerCargoRoutingFromResult } from '../data/postRunCargoRoutingRunState';
+import {
+  formatPostRunCargoRoutingValidationReport,
+  validateCargoRoutingResultIntegrity,
+} from '../data/postRunCargoRoutingValidation';
 import { relocateCargoItem } from '../data/cargoGridEngine';
 import { isResourceItemId } from '../data/resourceRegistry';
 import type { FenceableResourceId, ResourceItemId } from '../types/resourceItem';
@@ -82,6 +88,7 @@ import { getCraftingRecipe, isRecipeOutputOwned } from '../data/craftingRegistry
 import type { ResourceQuantity } from '../types/resourceItem';
 import type { BoundRequisitionId } from '../types/boundRequisition';
 import type { CargoItemId } from '../types/cargoGrid';
+import type { RunPhysicalBankSnapshot } from '../types/runResourceLedger';
 import { rollDecryptionLoot } from '../data/decryptionLootEngine';
 import {
   blueprintForClass,
@@ -161,6 +168,7 @@ export function createDefaultPlayerAccount(): PlayerAccount {
     tacticalLoadout: createDefaultTacticalLoadout(),
     equippedBlueprintId: null,
     unidentifiedStash: [],
+    careerCargoRouting: createDefaultCareerCargoRoutingStats(),
   };
 }
 
@@ -214,6 +222,10 @@ function mergeStoredAccount(parsed: Partial<PlayerAccount>): PlayerAccount {
     tacticalLoadout: parsed.tacticalLoadout ?? defaults.tacticalLoadout,
     equippedBlueprintId: parsed.equippedBlueprintId ?? defaults.equippedBlueprintId,
     unidentifiedStash: parsed.unidentifiedStash ?? defaults.unidentifiedStash,
+    careerCargoRouting: {
+      ...defaults.careerCargoRouting,
+      ...parsed.careerCargoRouting,
+    },
     veilResidueBalance: parsed.veilResidueBalance ?? defaults.veilResidueBalance,
   };
 }
@@ -297,7 +309,13 @@ interface PlayerAccountContextType {
     sessionVeilResidueCollected?: number;
     /** @deprecated Prefer sessionVeilResidueCollected — cargo residue is resolved automatically. */
     veilResidueCollected?: number;
+    excludeResourceIds?: ReadonlySet<ResourceItemId>;
   }) => void;
+  applyPostRunCargoRouting: (payload: {
+    decisions: CargoRoutingDecision[];
+    routingState: PostRunRoutingDebriefState;
+    autoStashAlreadyDeposited?: boolean;
+  }) => import('../types/postRunCargoRouting').CargoRoutingResult;
   /** Routes safehouse-banked run cargo into hub stash (e.g. after death with banked payload). */
   persistRunBankedSnapshot: (bank: RunPhysicalBankSnapshot) => void;
   depositVeilResidueBalance: (amount: number) => number;
@@ -1061,6 +1079,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       envoyLoadout: EnvoyLoadout;
       sessionVeilResidueCollected?: number;
       veilResidueCollected?: number;
+      excludeResourceIds?: ReadonlySet<ResourceItemId>;
     }) => {
       const sessionCollected = payload.sessionVeilResidueCollected ?? payload.veilResidueCollected ?? 0;
       const { totalDeposit, cargoForStash } = resolveExtractionVeilResidueDeposit(
@@ -1072,6 +1091,8 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
           aegisLoadout: payload.aegisLoadout,
           hexShotLoadout: payload.hexShotLoadout,
           envoyLoadout: payload.envoyLoadout,
+        }, {
+          excludeResourceIds: payload.excludeResourceIds,
         });
         return {
           ...prev,
@@ -1083,6 +1104,51 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
           veilResidueBalance: prev.veilResidueBalance + totalDeposit,
         };
       });
+    },
+    [updateAccount],
+  );
+
+  const applyPostRunCargoRouting = useCallback(
+    (payload: {
+      decisions: CargoRoutingDecision[];
+      routingState: PostRunRoutingDebriefState;
+      autoStashAlreadyDeposited?: boolean;
+    }) => {
+      let result = null as ReturnType<typeof applyCargoRoutingDecisions> | null;
+      updateAccount((prev) => {
+        const applied = applyCargoRoutingDecisions({
+          decisions: payload.decisions,
+          items: payload.routingState.pendingItems,
+          autoStashed: payload.autoStashAlreadyDeposited ? {} : payload.routingState.autoStashed,
+          stash: prev.resourceStash,
+          cabalCredits: prev.cabalCredits,
+          operationContributionPerStack: payload.routingState.operationContributionPerStack,
+        });
+        result = applied;
+        return {
+          ...prev,
+          resourceStash: applied.stash,
+          cabalCredits: applied.cabalCredits,
+          careerCargoRouting: incrementCareerCargoRoutingFromResult(
+            prev.careerCargoRouting,
+            applied.result,
+          ),
+        };
+      });
+      if (!result) {
+        throw new Error('Post-run cargo routing failed to apply.');
+      }
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        const integrityIssues = validateCargoRoutingResultIntegrity(
+          payload.routingState.pendingItems,
+          payload.decisions,
+          result.result,
+        );
+        if (integrityIssues.length > 0) {
+          console.warn(formatPostRunCargoRoutingValidationReport(integrityIssues));
+        }
+      }
+      return result.result;
     },
     [updateAccount],
   );
@@ -1250,6 +1316,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       sellFenceResource,
       commitDescentLoadout,
       persistRunExtraction,
+      applyPostRunCargoRouting,
       persistRunBankedSnapshot,
       depositVeilResidueBalance,
       transferVeilResidueIntoRun,
@@ -1302,6 +1369,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       sellFenceResource,
       commitDescentLoadout,
       persistRunExtraction,
+      applyPostRunCargoRouting,
       persistRunBankedSnapshot,
       depositVeilResidueBalance,
       transferVeilResidueIntoRun,

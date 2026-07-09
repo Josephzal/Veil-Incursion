@@ -9,6 +9,11 @@ import type {
 } from '../types/worldState';
 import { getAnchorPressureLines } from '../data/anchorRegistry';
 import { formatEchoOperationContributionHints, formatEchoSectorIntelLines } from '../data/echoIntelEngine';
+import {
+  formatCargoRoutingOperationContributionHints,
+  formatCargoRoutingSectorIntelLines,
+} from '../data/cargoRoutingIntelEngine';
+import type { SelectedContractState } from '../types/contract';
 import { formatOperationObjectiveKind } from './veilFrontBriefingUi';
 
 export interface BiomeVisualTheme {
@@ -172,15 +177,27 @@ export function formatOperationContributes(rules: OperationContributionRules): s
 export function formatOperationContributesForObjective(
   objectiveKind: OperationObjectiveKind,
   rules: OperationContributionRules,
+  operationTargetResourceNames?: string[],
 ): string[] {
   const base = formatOperationContributes(rules);
   const echoHints = formatEchoOperationContributionHints(objectiveKind);
-  if (echoHints.length === 0) return base;
-  return [...base, ...echoHints];
+  const cargoHints = formatCargoRoutingOperationContributionHints(
+    rules,
+    operationTargetResourceNames,
+  );
+  if (echoHints.length === 0 && cargoHints.length === 0) return base;
+  return [...base, ...echoHints, ...cargoHints];
 }
 
 export function formatEchoBriefingIntel(sector: SectorState): string[] {
   return formatEchoSectorIntelLines(sector);
+}
+
+export function formatCargoRoutingBriefingIntel(
+  sector: SectorState,
+  selectedContract: SelectedContractState,
+): string[] {
+  return formatCargoRoutingSectorIntelLines(sector, selectedContract);
 }
 
 export function formatOperationLifecycleStatus(
@@ -248,6 +265,10 @@ export function resolveRecommendedFor(sector: SectorState): string[] {
   }
   if (op.objectiveKind === 'EXTRACTION_SURGE' || op.objectiveKind === 'RESOURCE_SURVEY') {
     recs.push('Resource extraction');
+  }
+  if (op.contributionRules.extractTargetResource) {
+    recs.push('Post-run cargo contribution');
+    recs.push('Fence-value intel');
   }
   if (rewardLevel >= 4) {
     recs.push('High-value material extraction');

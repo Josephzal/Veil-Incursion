@@ -105,7 +105,7 @@ export type ContractExtractionKind =
   | 'MASTER_LINK'
   | 'STANDARD';
 
-export type ContractResultStatus = 'NONE' | 'SUCCESS' | 'FAILED';
+export type ContractResultStatus = 'NONE' | 'SUCCESS' | 'FAILED' | 'PENDING_DELIVERY';
 
 export interface ContractResult {
   status: ContractResultStatus;

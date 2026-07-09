@@ -68,7 +68,12 @@ export function depositAllCargoToHubAccount(
     'resourceStash' | 'hubCraftedConsumables' | 'aegisLoadout' | 'hexShotLoadout' | 'envoyLoadout'
   >,
   loadouts: RunExtractionLoadouts,
+  opts?: {
+    /** Resource stacks held for post-run cargo routing — not deposited yet. */
+    excludeResourceIds?: ReadonlySet<ResourceItemId>;
+  },
 ): RunExtractionDeposit {
+  const exclude = opts?.excludeResourceIds;
   let resourceStash = account.resourceStash;
   const hubCraftedConsumables = { ...account.hubCraftedConsumables };
   const itemCounts = new Map<CargoItemId, number>();
@@ -80,6 +85,7 @@ export function depositAllCargoToHubAccount(
   itemCounts.forEach((quantity, itemId) => {
     if (quantity <= 0) return;
     if (isResourceItemId(itemId)) {
+      if (exclude?.has(itemId)) return;
       resourceStash = addToResourceStash(resourceStash, itemId, quantity);
     } else {
       hubCraftedConsumables[itemId] = (hubCraftedConsumables[itemId] ?? 0) + quantity;

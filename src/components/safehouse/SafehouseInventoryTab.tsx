@@ -5,6 +5,11 @@ import { formatBracketHeader, hubTerminalUi } from '../../styles/hubTerminalUi';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useRun } from '../../context/RunContext';
 import { summarizeBankSnapshot } from '../../data/runResourceLedgerEngine';
+import {
+  countSpecialCargoHeldInRun,
+  resolveCargoRoutingContextFromIncursion,
+} from '../../data/postRunCargoRoutingRunState';
+import { formatCargoRoutingSafehouseIntelLines } from '../../data/cargoRoutingIntelEngine';
 import { useTerminal } from '../../context/TerminalContext';
 
 function ManifestRow({
@@ -31,6 +36,15 @@ export default function SafehouseInventoryTab(): React.JSX.Element {
   const { account } = usePlayerAccount();
   const { activeIncursion } = useRun();
   const bankSummary = summarizeBankSnapshot(activeIncursion.runBankedSnapshot);
+  const routingContext = resolveCargoRoutingContextFromIncursion(activeIncursion);
+  const specialCargoInRun = routingContext
+    ? countSpecialCargoHeldInRun(
+      activeIncursion.cargo,
+      activeIncursion.runBankedSnapshot,
+      activeIncursion.activeContract,
+      routingContext,
+    )
+    : 0;
 
   const manifest = profile.operative_profile.payload_manifest;
   const currencies = manifest.currencies;
@@ -76,6 +90,25 @@ export default function SafehouseInventoryTab(): React.JSX.Element {
           mutedColor={theme.mutedColor}
           textColor={theme.textColor}
         />
+        {specialCargoInRun > 0 ? (
+          <ManifestRow
+            label="SPECIAL CARGO (RUN)"
+            value={`${specialCargoInRun} STACK(S) — ROUTE ON EXTRACT`}
+            mutedColor={theme.mutedColor}
+            textColor={theme.statusColor}
+          />
+        ) : null}
+      </View>
+
+      <View style={hubTerminalUi.dataSection}>
+        <Text style={[hubTerminalUi.sectionHeader, { color: theme.mutedColor }]}>
+          {formatBracketHeader('CARGO ROUTING')}
+        </Text>
+        {formatCargoRoutingSafehouseIntelLines().map((line) => (
+          <Text key={line} style={[styles.headerSub, { color: theme.mutedColor, marginBottom: 4 }]}>
+            {line}
+          </Text>
+        ))}
       </View>
 
       <View style={hubTerminalUi.dataSection}>

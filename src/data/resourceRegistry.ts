@@ -294,7 +294,7 @@ export const RESOURCE_REGISTRY: Record<ResourceItemId, ResourceItemDefinition> =
     id: 'sealed-containment-casket',
     name: 'Sealed Containment Casket',
     shortName: 'Casket',
-    description: 'Sealed contraband container — contents unknown until hub appraisal (future).',
+    description: 'Sealed contraband container — open at hub during post-run routing for salvage, credits, or contraband windfalls.',
     category: 'CONTRABAND',
     primaryRole: 'UNIDENTIFIED_CONTAINER',
     usageTags: [

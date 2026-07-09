@@ -15,6 +15,8 @@ import {
   formatContractRewardSummary,
   sponsorDisplayName,
 } from '../../utils/contractUi';
+import { formatContractCargoDeliveryHints } from '../../data/cargoRoutingIntelEngine';
+import { isResourceContractObjective } from '../../data/contractResolver';
 import { readPressableHover, terminalHoverStyle } from '../../utils/terminalHoverStyle';
 
 const TERRAN_ACCENT = FACTION_DEFINITIONS.TERRAN_GRID.accentColor;
@@ -75,6 +77,18 @@ function ContractJobCard({
         <TerminalText size={scaleFont(5.5)} style={{ color: theme.mutedColor }}>
           {`BONUS: ${contract.bonusObjective.text}`}
         </TerminalText>
+      ) : null}
+      {isResourceContractObjective(contract.objectiveKind) ? (
+        <>
+          <TerminalText size={scaleFont(5.8)} style={{ color: theme.mutedColor, marginTop: scaleSpacing(4) }}>
+            POST-RUN DELIVERY
+          </TerminalText>
+          {formatContractCargoDeliveryHints(contract).map((line) => (
+            <TerminalText key={line} size={scaleFont(5.5)} style={{ color: theme.mutedColor }}>
+              {line}
+            </TerminalText>
+          ))}
+        </>
       ) : null}
       <View style={styles.jobFooter}>
         <TerminalText size={scaleFont(5.5)} style={{ color: theme.mutedColor }}>

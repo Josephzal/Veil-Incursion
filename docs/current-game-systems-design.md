@@ -1,6 +1,6 @@
 # Veil Incursion Current Systems Design
 
-Last updated: 2026-07-08 (echo encounters v1 phase 4)
+Last updated: 2026-07-08 (post-run cargo routing v1 phase 10)
 
 This document captures the current implemented design surface for Veil Incursion: player-facing hub systems, run progression, economy, cargo/items, enemies, combat mechanics, and known partial implementations. It is intended as a working reference for design iteration and balancing, not a final player-facing manual.
 
@@ -158,6 +158,104 @@ Black Market is a hub screen with two internal tabs:
 - Vendor: contraband cargo/consumable shop.
 
 Vendor stock includes Soul Core as an always-stocked item plus a rotating pool of combat and scanner tools.
+
+**Fence (v1):** Hub Vendor tab lists fence-eligible stash resources via `listFenceableStashEntries` + `sellFenceResource` → `applyFenceSale`. Post-run cargo routing uses the same `creditFenceSale` path for immediate fencing during debrief (`postRunCargoRoutingEngine.ts`). In-run Black Market fences consumable cargo only (not registry resources).
+
+### Post-Run Cargo Routing v1 (Phases 1–10)
+
+After successful extraction, stable materials auto-stash. Special cargo requires manual routing on the debrief **Cargo Routing** step (skipped when no special cargo is present).
+
+**Special cargo:** UNSTABLE, INTEL, CONTRABAND, contract targets, operation targets (even when category is STABLE).
+
+**Routing actions:** Keep in Stash, Deliver to Sponsor, Sell to Black Market, Contribute to Operation, Open at Hub (Sealed Containment Casket v1 — basic reward table, no appraisal animation).
+
+**Partial routing (Phase 4):** Stackable items (e.g. Tarnished Dog Tags) support routing a subset; remainder auto-keeps in stash.
+
+**Polish pass (Phase 5):** Live projected outcome preview, inline validation, error handling, fence payout labels, casket reward breakdown, expanded dev sims, routable-item validation in debug validate.
+
+**Veil Front + hub intel (Phase 6):** `cargoRoutingIntelEngine.ts` surfaces post-run routing expectations on deploy confirmation, sector briefing (CARGO ROUTING block), contract tab (POST-RUN DELIVERY for resource contracts), operation contribution hints (debrief contribute), Black Market fence copy, and `validateCargoRoutingIntelReferences` in the validation pipeline.
+
+**Integration pass (Phase 7):** `postRunCargoRoutingRunState.ts` tracks special cargo acquired/banked per run; `buildExtractCargoRoutingDebriefSummary` wires through `runDebriefEngine` as `cargoRoutingSummary` (SUMMARY + OPERATION deferred contribution lines); hub Contract Board POST-RUN DELIVERY hints; safehouse + extraction review intel; in-run scanner special-cargo telemetry; `careerCargoRouting` account persistence; `validateAllSpecialCargoRoutingFixtures` in global validation; dev `[ LOG CARGO ROUTING STATE ]`; removed unused `depositAutoStashResources`.
+
+**Polish + shipping pass (Phase 8):** `recordPendingRoutingAtExtract` wired at extract finalize; CONTRACT debrief POST-RUN DELIVERY hints before ROUTING step; hub log on routing confirm (outcomes + contract pending/paid); enriched death cargo resolution with run telemetry; REWARDS career routing totals; loadout CARGO pre-run hints; `CargoPressurePanel` SPECIAL CARGO strip in run chrome; SUMMARY acquired/banked telemetry lines.
+
+**Final v1 audit pass (Phase 9):** `postRunCargoRoutingAuditEngine.ts` mirrors encounter catalog audit (`verifyPostRunCargoRouting` + `auditReportPostRunCargoRouting` + `__DEV__` boot verify); validation pipeline extended with sealed-casket reward table checks, default-apply integrity, synthetic routing sim scenarios, and career-stats validation; `formatSessionCargoRoutingDebriefLines` + `formatActiveContractCargoDeliveryHints` unify debrief copy; `formatCareerCargoRoutingDebugSnapshot` for dev inspect; cargo grid overlay surfaces SPECIAL CARGO; debrief REWARDS splits THIS RUN vs CAREER routing; dev `[ AUDIT ROUTING ]` + enriched `[ VALIDATE ROUTING ]` / `[ INSPECT STATE ]`; global validation report appends routing audit stats.
+
+**Cleanup + ship pass (Phase 10):** `verifyPostRunCargoRoutingEngine()` central aggregator + `verifyLegacyRoutingCleanup()`; shared `contractExtractionKind.ts` + `postRunCargoRoutingFixtures.ts` dedupe extraction-kind and test-ledger helpers; removed dead exports (`buildPendingDeliveryContractResult`, `previewSplitForTestResources`); consolidated contract delivery hint formatters; compact death debrief REWARDS shows cargo resolution instead of auto-stash copy; `activeContract` on debrief payload enables POST-RUN DELIVERY hints without routing state; compact REWARDS shows unstable cargo lost lines.
+
+**Contract delivery:** Resource contracts enter `PENDING_DELIVERY` until sponsor delivery is confirmed in routing. Keeping or selling contract cargo prevents completion (no betrayal penalties in v1).
+
+**Extraction flow:** `useDescentNavigator.finalizeSectorExtraction` excludes pending resources from `persistRunExtraction`, defers contract rewards and world tick until routing completes.
+
+**Key files:** `postRunCargoRoutingEngine.ts`, `postRunCargoRoutingRunState.ts`, `cargoRoutingIntelEngine.ts`, `sealedCasketOpenEngine.ts`, `runDebriefCargoRoutingEngine.ts`, `postRunCargoRoutingValidation.ts`, `postRunCargoRoutingAuditEngine.ts`, `postRunCargoRoutingFixtures.ts`, `contractExtractionKind.ts`, `CargoRoutingPanel.tsx`, `OperationDebriefScreen.tsx`, `VeilFrontDeployConfirmModal.tsx`, `SectorBriefingPanel.tsx`, `ContractBoardPanel.tsx`, `SafehouseBlackMarketTab.tsx`, `ExtractionReviewScreen.tsx`.
+
+**Veil Front surfaces:** Deploy confirmation Cargo Routing row, sector briefing CARGO ROUTING intel block, operation CONTRIBUTES chips for debrief contribution, contract POST-RUN DELIVERY hints, recommended sector tags for fence-value / post-run contribution runs.
+
+**Post-run cargo routing v1 — acceptance criteria (Phases 1–10):**
+
+1. ✅ Successful extraction opens Cargo Routing when special cargo is present.
+2. ✅ Stable resources auto-stash by default.
+3. ✅ Unstable cargo routable (keep / deliver / sell / contribute when valid).
+4. ✅ Intel items routable when valid.
+5. ✅ Contraband routable when valid.
+6. ✅ Smuggler's Ledger behaves as INTEL / FENCE_VALUE (not crafting).
+7. ✅ Tarnished Dog Tags stackable INTEL / FENCE_VALUE with partial routing.
+8. ✅ Sealed Containment Casket CONTRABAND with Open at Hub v1 reward table.
+9. ✅ Contract cargo deliverable to sponsor for payout/reputation.
+10. ✅ Keeping/selling contract cargo prevents contract completion.
+11. ✅ Operation target cargo contributable for operation progress.
+12. ✅ Hub Black Market sells fence-eligible stash items.
+13. ✅ Sold items grant credits and leave inventory.
+14. ✅ Routed items cannot be duplicated (validation in `postRunCargoRoutingValidation.ts`).
+15. ✅ Debrief clearly shows where each valuable item went (outcome lines + projected preview).
+16. ✅ Death destroys unbanked cargo (no manual routing on death); clearer banked vs lost messaging.
+17. ✅ Banked safehouse cargo survives death (existing flow).
+18. ✅ No bribes or betrayal.
+19. ✅ No full appraisal/unboxing animation system.
+20. ✅ Existing runs remain playable (compact debrief when no routing; ROUTING step skipped).
+21. ✅ Runtime integrity validation on `applyPostRunCargoRouting` in `__DEV__`.
+22. ✅ Operation progress after debrief reflects cargo routing contribution.
+23. ✅ Routing confirm disabled until decisions validate; errors surfaced to player.
+24. ✅ Dev validate includes routable-item action checks for active pending cargo.
+25. ✅ Veil Front deploy + briefing explain post-run cargo routing expectations.
+26. ✅ Resource contracts show post-run delivery hints on contract tab.
+27. ✅ Black Market fence copy distinguishes hub stash sales vs debrief routing.
+28. ✅ Cargo routing intel references validated in `validateCargoRoutingIntelReferences`.
+29. ✅ `cargoRoutingRunState` tracks special cargo acquired/banked during runs.
+30. ✅ Extract debrief SUMMARY shows structured cargo routing preview before ROUTING step.
+31. ✅ OPERATION step shows deferred contribution lines when routing is pending.
+32. ✅ Hub Contract Board shows POST-RUN DELIVERY hints for resource contracts.
+33. ✅ Safehouse + extraction review explain banking vs post-run routing.
+34. ✅ Scanner telemetry surfaces held special cargo count.
+35. ✅ `careerCargoRouting` persists routing career totals on player account.
+36. ✅ Global validation includes synthetic routable-item fixtures for all special resources.
+37. ✅ Dev panel includes `[ LOG CARGO ROUTING STATE ]`.
+38. ✅ Unused `depositAutoStashResources` dead code removed.
+39. ✅ `pendingRoutingStacksAtExtract` stamped at extract finalize.
+40. ✅ CONTRACT debrief step shows POST-RUN DELIVERY hints before ROUTING.
+41. ✅ Hub log emits cargo routing outcomes on routing confirm (not only debrief exit).
+42. ✅ Death debrief CARGO RESOLUTION includes special-cargo run telemetry + extract-only routing note.
+43. ✅ REWARDS step shows full career routing totals after routing apply.
+44. ✅ Loadout CARGO tab shows pre-run special cargo count + routing reminder.
+45. ✅ In-run cargo pressure chrome surfaces SPECIAL CARGO alongside unstable effects.
+46. ✅ SUMMARY shows special acquired/banked telemetry before ROUTING step.
+47. ✅ `verifyPostRunCargoRouting` throws on pipeline errors; `__DEV__` boot warns on failure.
+48. ✅ `auditReportPostRunCargoRouting` reports catalog coverage stats (special/fence/contract/operation/hub-open/partial).
+49. ✅ Validation pipeline includes sealed-casket reward table, default-apply integrity, and synthetic routing sim scenarios.
+50. ✅ `validateCareerCargoRoutingStats` guards account career routing totals.
+51. ✅ Debrief REWARDS shows THIS RUN routing lines separate from CAREER totals.
+52. ✅ Cargo grid overlay passes special cargo stacks to `CargoPressurePanel`.
+53. ✅ Dev `[ AUDIT ROUTING ]` surfaces audit report; `[ VALIDATE ROUTING ]` includes career stats.
+54. ✅ `[ INSPECT STATE ]` appends `formatCareerCargoRoutingDebugSnapshot`.
+55. ✅ Global `devGetValidationReport` appends routing audit stats alongside pipeline validation.
+56. ✅ `verifyPostRunCargoRoutingEngine()` centralizes pipeline + legacy cleanup verify on boot.
+57. ✅ Shared `resolveContractExtractionKind` replaces duplicated extraction-kind helpers.
+58. ✅ Test routing fixtures consolidated in `postRunCargoRoutingFixtures.ts` (no duplicate ledgers).
+59. ✅ Dead routing exports removed (`buildPendingDeliveryContractResult`, `previewSplitForTestResources`).
+60. ✅ Contract delivery hint formatters share one core implementation.
+61. ✅ Compact death debrief REWARDS shows banked/lost cargo resolution (not auto-stash copy).
+62. ✅ `activeContract` on debrief payload enables POST-RUN DELIVERY hints without routing state.
+63. ✅ Compact REWARDS shows unstable cargo lost lines on death runs.
 
 ### Loadout
 
@@ -769,6 +867,7 @@ Current world/narrative surface includes:
 - **Contract loop v1 (complete):** Resource model, physical banking, contract board, Veil Front integration, run event tracking, contract resolver, unified run debrief (extract + death via `OperationDebriefScreen`), procedural operation generation, operation lifecycle (ACTIVE / COMPLETED / expiration / AFTERMATH rotation), mid-run operation target contribution with debrief transmission line, sponsor perks on deploy/contract summary, operation intel log on Veil Front briefing, expanded operation contribution on extract, **debrief progress headline** (`+N progress this run`), **reward preview** on Veil Front cards/briefing/deploy modal, and **world state validation + dev debug tooling** (Phases A–F).
 - **Unstable cargo carried effects v1 (complete):** Three unstable resources with deduped carried modifiers, lazy procedural type/context rolls, cargo pressure UI, debrief Cargo Pressure block, volatile resonance tagging, occupancy resonance multiplier, emergency recall Veil-Ash warning log.
 - **Echo encounters v1 (complete — Phases 1–6):** Echo scanner overlays at layer unlock, per-depth/run caps, weighted encounter kinds, fallen-runner narrative, assist/cargo/extraction immediate resolution, hostile combat routing, class-based hostile templates with depth scaling, hostile echo reward rolls, debrief Echo section, dev forcing tools, echo pipeline validation (reward-resource existence + Echo Recovery contribution rules), `echoRunState` tracking, Veil Front echo intel surfaces, reward-stack extraction tracking, Smuggler's Ledger fallen-runner drop, extraction echo emergency-recall bleed bonus. Acceptance criteria (20) verified in the Echo Encounters v1 section below.
+- **Post-run cargo routing v1 (complete — Phases 1–10):** Full post-extract cargo routing pipeline with Veil Front + hub intel surfaces, live debrief preview/validation, partial stackable routing, casket open-at-hub v1, deferred contract delivery, death cargo messaging, runtime + intel + fixture + sim validation, catalog audit engine, cleanup/ship pass, `cargoRoutingRunState` + `careerCargoRouting` tracking, debrief summary wiring, hub contract board + safehouse + extraction review + scanner + loadout + cargo pressure surfaces, hub log on routing confirm, dev audit/validate/inspect tooling, compact debrief parity. Acceptance criteria (63) in Post-Run Cargo Routing v1 section.
 - **Safehouse banking:** Physical in-run banking via `runBankedSnapshot` — banked cargo survives death and routes to hub stash. Unbanked cargo is lost on death (`runResourceLedger.lostOnDeath`). Extraction merges banked + carried cargo before deposit.
 - Target Fragment has a catalogued combat effect but is marked `unimplemented`.
 - Kinetic Hollow Points / Veil-Vial is described as next attack +15 damage but is marked `unimplemented`.

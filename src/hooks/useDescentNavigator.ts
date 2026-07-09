@@ -5,11 +5,19 @@ import { useRun } from '../context/RunContext';
 import { useWorldState } from '../context/WorldStateContext';
 import { resolveExtractionVeilResidueDeposit } from '../data/extractionPersistenceEngine';
 import { resolveRunExtractionResourceState } from '../data/runResourceLedgerEngine';
-import { resolveContractResult } from '../data/contractResolver';
+import { resolveContractExtractionKind } from '../data/contractExtractionKind';
+import {
+  resolveContractPendingDelivery,
+  resolveContractResult,
+} from '../data/contractResolver';
 import { computeRunOperationContribution, buildOperationDebriefPayload } from '../data/runDebriefEngine';
+import { recordPendingRoutingAtExtract } from '../data/postRunCargoRoutingRunState';
 import { buildExtractedResourceSections } from '../data/runDebriefResourceEngine';
+import {
+  buildPostRunRoutingDebriefState,
+  collectPendingRoutingResourceIds,
+} from '../data/postRunCargoRoutingEngine';
 import { transitionActions } from '../stores/transitionStore';
-import type { ContractExtractionKind } from '../types/contract';
 import type { ActiveIncursionState } from '../types/game';
 import { RunNodeType } from '../types/game';
 
@@ -24,13 +32,6 @@ export type DescentRoute =
   | 'VEIL_BLEED_BOON'
   | 'HUB_VICTORY'
   | 'EXTRACT_SUCCESS';
-
-function resolveExtractionKind(inc: ActiveIncursionState): ContractExtractionKind {
-  if (inc.contractRunProgress.emergencyRecallCompleted) return 'EMERGENCY_RECALL';
-  if (inc.masterLinkUsed) return 'MASTER_LINK';
-  if (inc.clearedSafeAnchors.length > 0) return 'SAFE_ANCHOR';
-  return 'STANDARD';
-}
 
 function routeForNodeType(type: RunNodeType | null): DescentRoute {
   switch (type) {
@@ -132,18 +133,45 @@ export function useDescentNavigator() {
           inc.runBankedSnapshot,
           inc.runResourceLedger,
         );
+        const extractionKind = resolveContractExtractionKind(inc);
+        const operation = inc.runGenerationContext?.activeOperation;
+        const routingState = buildPostRunRoutingDebriefState({
+          ledger: extractionResources.ledger,
+          contract: inc.activeContract,
+          operationObjectiveKind: operation?.objectiveKind ?? null,
+          operationTargetResourceNames: operation?.rewardEmphasis.targetResources,
+          operationId: operation?.id ?? null,
+          contractProgress: inc.contractRunProgress,
+          extractionKind,
+        });
+        const pendingStackCount = routingState.pendingItems.reduce(
+          (sum, item) => sum + item.quantity,
+          0,
+        );
+        const cargoRoutingRunState = recordPendingRoutingAtExtract(
+          inc.cargoRoutingRunState,
+          pendingStackCount,
+        );
         const incWithLedger = {
           ...inc,
           runResourceLedger: extractionResources.ledger,
+          cargoRoutingRunState,
         };
-        const extractionKind = resolveExtractionKind(inc);
-        const contractResult = resolveContractResult({
-          contract: inc.activeContract,
-          ledger: extractionResources.ledger,
-          progress: inc.contractRunProgress,
-          extractedSuccessfully: true,
-          extractionKind,
-        });
+
+        const contractResult = routingState.requiresRouting
+          ? resolveContractPendingDelivery({
+            contract: inc.activeContract,
+            ledger: extractionResources.ledger,
+            progress: inc.contractRunProgress,
+            extractionKind,
+          })
+          : resolveContractResult({
+            contract: inc.activeContract,
+            ledger: extractionResources.ledger,
+            progress: inc.contractRunProgress,
+            extractedSuccessfully: true,
+            extractionKind,
+          });
         const resourceSections = buildExtractedResourceSections(extractionResources.ledger);
 
         const { totalDeposit: residueVaulted } = resolveExtractionVeilResidueDeposit(
@@ -156,6 +184,9 @@ export function useDescentNavigator() {
           hexShotLoadout: inc.hexShotLoadout,
           envoyLoadout: inc.envoyLoadout,
           sessionVeilResidueCollected: inc.sessionVeilResidueCollected,
+          excludeResourceIds: routingState.requiresRouting
+            ? collectPendingRoutingResourceIds(routingState.pendingItems)
+            : undefined,
         });
         const credits = calculateSectorExtractionPayout();
         const riftIron = Math.max(5, Math.floor(credits / 40));
@@ -170,6 +201,8 @@ export function useDescentNavigator() {
           if (contractResult.bonusObjectiveMet && contractResult.bonusObjectiveText) {
             appendRunLog(`>> BONUS OBJECTIVE — ${contractResult.bonusObjectiveText.toUpperCase()}`);
           }
+        } else if (contractResult.status === 'PENDING_DELIVERY') {
+          appendRunLog(`>> CONTRACT PENDING — ${contractResult.title.toUpperCase()} // ${contractResult.progressText}`);
         } else if (contractResult.status === 'FAILED') {
           appendRunLog(`>> CONTRACT FAILED — ${contractResult.title.toUpperCase()} // ${contractResult.progressText}`);
         }
@@ -177,16 +210,24 @@ export function useDescentNavigator() {
         const residueLine = residueVaulted > 0
           ? ` +${residueVaulted} VEIL RESIDUE VAULTED`
           : '';
-        appendRunLog(`>> SECTOR EXTRACTION COMPLETE — +${credits} CREDITS, LOOT ROUTED TO HOME STASH, +${riftIron} RIFT IRON${residueLine}.`);
+        const lootLine = routingState.requiresRouting
+          ? 'SPECIAL CARGO AWAITING ROUTING'
+          : 'LOOT ROUTED TO HOME STASH';
+        appendRunLog(`>> SECTOR EXTRACTION COMPLETE — +${credits} CREDITS, ${lootLine}, +${riftIron} RIFT IRON${residueLine}.`);
 
-        const contribution = computeRunOperationContribution(incWithLedger, { extractedSuccessfully: true });
+        const contribution = computeRunOperationContribution(incWithLedger, {
+          extractedSuccessfully: true,
+          deferTargetResourceCredit: routingState.requiresRouting,
+        });
         let contributionResult: Awaited<ReturnType<typeof applyOperationContribution>> | null = null;
         if (contribution.operationId && contribution.total > 0) {
           contributionResult = await applyOperationContribution(contribution.operationId, contribution.total);
           contributionResult.logLines.forEach((line) => appendRunLog(line));
         }
 
-        tickAfterRunComplete();
+        if (!routingState.requiresRouting) {
+          tickAfterRunComplete();
+        }
         endRun('SECTOR EXTRACTION SECURED');
 
         const debrief = buildOperationDebriefPayload(incWithLedger, {
@@ -204,6 +245,9 @@ export function useDescentNavigator() {
           extractionKind,
           resourceSections,
           midRunContributionTransmitted: inc.operationContributionTransmitted,
+          routingState,
+          deferredWorldTick: routingState.requiresRouting,
+          runResourceLedger: extractionResources.ledger,
         });
 
         if (debrief) {

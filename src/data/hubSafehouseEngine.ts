@@ -72,6 +72,21 @@ export function applyHubContrabandPurchase(
   };
 }
 
+export function creditFenceSale(
+  cabalCredits: number,
+  resourceId: FenceableResourceId,
+  quantity = 1,
+): { cabalCredits: number; creditsEarned: number } | null {
+  if (!isFenceableResourceId(resourceId)) return null;
+  if (quantity <= 0) return null;
+  const unitValue = getResourceSellValue(resourceId);
+  const creditsEarned = unitValue * quantity;
+  return {
+    cabalCredits: cabalCredits + creditsEarned,
+    creditsEarned,
+  };
+}
+
 export function applyFenceSale(
   stash: ResourceQuantity,
   cabalCredits: number,
@@ -81,8 +96,8 @@ export function applyFenceSale(
   if (!isFenceableResourceId(resourceId)) return null;
   const owned = getStashCount(stash, resourceId);
   if (quantity <= 0 || owned < quantity) return null;
-  const unitValue = getResourceSellValue(resourceId);
-  const creditsEarned = unitValue * quantity;
+  const credit = creditFenceSale(cabalCredits, resourceId, quantity);
+  if (!credit) return null;
   const nextStash = { ...stash };
   const remaining = owned - quantity;
   if (remaining <= 0) {
@@ -92,8 +107,8 @@ export function applyFenceSale(
   }
   return {
     stash: nextStash,
-    cabalCredits: cabalCredits + creditsEarned,
-    creditsEarned,
+    cabalCredits: credit.cabalCredits,
+    creditsEarned: credit.creditsEarned,
   };
 }
 

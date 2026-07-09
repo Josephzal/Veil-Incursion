@@ -7,6 +7,15 @@ import SafehouseStashPanel from './SafehouseStashPanel';
 import { DOSSIER_FOREGROUND } from '../../constants/dossierSurface';
 import type { CargoDragSource } from '../CargoGridBoard';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
+import { useWorldState } from '../../context/WorldStateContext';
+import {
+  countSpecialCargoInPreRunCargo,
+} from '../../data/postRunCargoRoutingRunState';
+import {
+  formatCargoRoutingPostExtractReminder,
+  formatContractCargoDeliveryHints,
+} from '../../data/cargoRoutingIntelEngine';
+import { isResourceContractObjective } from '../../data/contractResolver';
 import { useTerminal } from '../../context/TerminalContext';
 import type { CargoItemId } from '../../types/cargoGrid';
 import { resolveCargoItemIcon } from '../../utils/cargoItemIcon';
@@ -35,6 +44,24 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
     returnAllPreRunContainmentToStash,
     appendHubLog,
   } = usePlayerAccount();
+  const { persisted, runGenerationContext } = useWorldState();
+  const selectedContract = persisted.contractBoard.selectedContract;
+
+  const specialPreRunStacks = useMemo(
+    () => countSpecialCargoInPreRunCargo(
+      account.preRunCargo,
+      null,
+      runGenerationContext,
+    ),
+    [account.preRunCargo, runGenerationContext],
+  );
+
+  const contractDeliveryHints = useMemo(() => (
+    selectedContract.kind === 'SPONSOR'
+      && isResourceContractObjective(selectedContract.contract.objectiveKind)
+      ? formatContractCargoDeliveryHints(selectedContract.contract)
+      : []
+  ), [selectedContract]);
 
   const [externalHover, setExternalHover] = useState<{ itemId: CargoItemId; row: number; col: number } | null>(null);
   const [dragGhost, setDragGhost] = useState<{ itemId: CargoItemId; x: number; y: number } | null>(null);
@@ -222,6 +249,19 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
           <TerminalText variant="panelTitle" letterSpacing={0.8} style={[styles.deploymentTitle, { color: accent, marginBottom: scaleSpacing(4) }]}>
             TACTICAL CARGO
           </TerminalText>
+          {specialPreRunStacks > 0 ? (
+            <TerminalText variant="caption" style={{ color: accent, marginBottom: scaleSpacing(4) }}>
+              {`${specialPreRunStacks} special stack(s) staged — post-run routing on extract.`}
+            </TerminalText>
+          ) : null}
+          <TerminalText variant="caption" style={{ color: theme.mutedColor, marginBottom: scaleSpacing(6) }}>
+            {formatCargoRoutingPostExtractReminder()}
+          </TerminalText>
+          {contractDeliveryHints.map((line) => (
+            <TerminalText key={line} variant="caption" style={{ color: theme.mutedColor, marginBottom: scaleSpacing(4) }}>
+              {line}
+            </TerminalText>
+          ))}
 
           <View
             style={[
