@@ -56,7 +56,17 @@ export const ECHO_SIGNAL_CHANCE: Record<
 };
 
 export const MAX_ECHO_ENCOUNTERS_PER_RUN = 2;
+export const MAX_ECHO_ENCOUNTERS_ECHO_RECOVERY_RUN = 3;
+export const MAX_ECHO_SIGNALS_PER_DEPTH = 1;
 export const MAX_LEGENDARY_ECHO_ENCOUNTERS_PER_RUN = 1;
+
+export function resolveMaxEchoEncountersPerRun(
+  isEchoRecoveryOperation: boolean,
+): number {
+  return isEchoRecoveryOperation
+    ? MAX_ECHO_ENCOUNTERS_ECHO_RECOVERY_RUN
+    : MAX_ECHO_ENCOUNTERS_PER_RUN;
+}
 
 export const DEFAULT_OPERATION_PROGRESS_REQUIRED = 100;
 

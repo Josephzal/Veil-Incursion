@@ -45,6 +45,7 @@ export function resolveContributionRules(
         defeatElite: v.defeatElite,
         defeatDepthBoss: v.defeatDepthBoss,
         clearOperationTarget: v.clearOperationTarget,
+        defeatEcho: v.defeatEcho,
       };
     default:
       return { successfulExtraction: v.successfulExtraction };

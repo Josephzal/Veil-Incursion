@@ -10,9 +10,6 @@ import type { ProceduralNodeType } from '../types/proceduralRunTree';
 import {
   ANCHOR_ASSAULT_CORE_CHANCE,
   DEPTH_STAGE_MODIFIERS,
-  ECHO_SIGNAL_CHANCE,
-  MAX_ECHO_ENCOUNTERS_PER_RUN,
-  MAX_LEGENDARY_ECHO_ENCOUNTERS_PER_RUN,
   OPERATION_TARGET_CHANCE,
   buildDepthGenerationContext,
   getAnchorStage,
@@ -20,7 +17,6 @@ import {
   getNodePressureBand,
 } from './worldStateHelpers';
 import { getAnchorDefinition } from './anchorRegistry';
-import { stampEchoTemplateOnModifiers } from './echoRecoveryEngine';
 
 export interface RunTreeGenerationOptions {
   runGenerationContext?: RunGenerationContext | null;
@@ -106,7 +102,7 @@ export function resolveTypeWeightsForDepth(
 }
 
 export function createNodeModifierRollState(): NodeModifierRollState {
-  return { echoSignalsUsed: 0, legendaryEchoUsed: 0 };
+  return { echoSignalsUsed: 0, legendaryEchoUsed: 0, echoSignalsByDepth: {} };
 }
 
 const OPERATION_TARGET_NODE_TYPES: readonly ProceduralNodeType[] = [
@@ -234,8 +230,6 @@ export function rollNodeContextModifiers(
 
   if (!runContext) return modifiers;
 
-  const echoActivity = runContext.sectorState.echoActivity;
-  const scannerBias = runContext.scannerSignalBias;
   const anchorType = runContext.activeAnchor?.type ?? null;
   const anchorDef = anchorType ? getAnchorDefinition(anchorType) : null;
   const nodeBoost = resolveNodeTypeSignalBoost(
@@ -249,36 +243,9 @@ export function rollNodeContextModifiers(
     anchorRoll = Math.min(0.95, anchorRoll * cargoBias.anchorSignalChanceMultiplier);
   }
 
-  const echoBase = ECHO_SIGNAL_CHANCE[echoActivity][depthStage]
-    * pressureScale
-    * scannerBias.echoSignalMultiplier
-    * (anchorDef?.signalRollModifiers.echoSignalChance ?? 1);
-  const echoRoll = nodeType === 'ELITE' || nodeType === 'COMBAT' ? echoBase * 1.2 : echoBase;
-
   if (runContext.activeAnchor?.isActive && rng() < anchorRoll) {
     modifiers.anchorSignal = true;
     modifiers.anchorStage = anchorStage;
-  }
-
-  if (
-    rollState.echoSignalsUsed < MAX_ECHO_ENCOUNTERS_PER_RUN
-    && (nodeType === 'ELITE' || nodeType === 'COMBAT' || nodeType === 'ANOMALY')
-    && rng() < Math.min(0.85, echoRoll)
-  ) {
-    const allowLegendary =
-      rollState.legendaryEchoUsed < MAX_LEGENDARY_ECHO_ENCOUNTERS_PER_RUN;
-    modifiers = stampEchoTemplateOnModifiers(
-      modifiers,
-      depthIndex,
-      `${depthStage}:${proceduralDepth}:${nodeType}:${rollState.echoSignalsUsed}`,
-      allowLegendary,
-    );
-    if (modifiers.echoSignal) {
-      rollState.echoSignalsUsed += 1;
-      if (modifiers.echoTier === 'LEGENDARY') {
-        rollState.legendaryEchoUsed += 1;
-      }
-    }
   }
 
   const operationTargetRoll = resolveOperationTargetRollChance(

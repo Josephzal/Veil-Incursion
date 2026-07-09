@@ -37,7 +37,22 @@ import {
   echoRecoveryEngageLogLines,
   recordEchoRecoveryVictory,
   resolveEchoRecoveryContext,
+  type EchoRecoveryCombatContext,
 } from '../data/echoRecoveryEngine';
+import { rollHostileEchoRewards } from '../data/echoRewardEngine';
+import {
+  echoKindRequiresCombat,
+  echoKindResolvesImmediately,
+  echoKindUsesNarrative,
+  mergeEchoRunState,
+  recordEchoSignalDiscovered,
+  resolveAssistEcho,
+  resolveCargoEcho,
+  resolveEchoFallenRunnerChoice,
+  resolveExtractionEcho,
+} from '../data/echoEncounterResolver';
+import { buildEchoFallenRunnerNarrativeNode, ECHO_FALLEN_RUNNER_NARRATIVE_ID } from '../data/echoNarrativeEngine';
+import { createDefaultEchoRunState, recordEchoRewardsExtracted } from '../data/echoRunState';
 import { isCollapseForwardNode } from '../data/pocketDimensionEngine';
 import {
   buildEncounter,
@@ -258,9 +273,17 @@ import { listingsForStock, rollBlackMarketStock, resolveBlackMarketListingPrice,
 import {
   buildDevSandboxCombatNode,
   buildDevSandboxEligibility,
+  buildDevSandboxHostileEchoNode,
   buildDevSandboxNarrativeEncounter,
   resolveDevSandboxTensionMechanic,
 } from '../data/devSandboxEngine';
+import type { EchoEncounterKind } from '../types/echoEncounter';
+import {
+  devQueueEchoForce,
+  formatEchoDebriefPreview,
+  formatEchoRunStateSnapshot,
+  formatEchoValidationReport,
+} from '../data/echoDebugEngine';
 import type { DevSandboxPreset } from '../types/devSandbox';
 import {
   getClassBoonDisplayName,
@@ -435,6 +458,7 @@ interface RunContextType {
   finalizeHarvestScreen: () => void;
   grantCombatResourceDrops: (options: CombatRewardContext) => readonly string[];
   grantCombatSalvage: (resourceId: import('../types/resourceItem').ResourceItemId, quantity: number) => void;
+  grantHostileEchoRewards: (ctx: EchoRecoveryCombatContext, depth: number) => readonly string[];
   applyVoidsTollSacrifice: () => void;
   absorbVeilResidueParticle: (instanceId: string, value: number, finalizeInstance: boolean) => number;
   prepareBossEncounter: (engagedNode?: IncursionNode | null) => void;
@@ -498,6 +522,12 @@ interface RunContextType {
   swapClassBoon: (outgoingId: string) => void;
   cancelClassBoonSwap: () => void;
   prepareGridHoundEncounter: () => void;
+  devQueueEchoOverlay: () => void;
+  devQueueEchoEncounterKind: (kind: EchoEncounterKind) => void;
+  devQueueHostileEchoTemplate: (templateId: string, sourceClass?: ClassType) => void;
+  devLogEchoRunState: () => string;
+  devPreviewEchoDebrief: () => string;
+  devValidateEchoPipeline: () => string;
 }
 
 const RunContext = createContext<RunContextType | undefined>(undefined);
@@ -1516,6 +1546,55 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const finishBadgeTestCombat = finishDevSandbox;
 
+  const devQueueEchoOverlay = useCallback(() => {
+    if (typeof __DEV__ === 'undefined' || !__DEV__) return;
+    devQueueEchoForce({ forceOverlayOnNextLayer: true });
+    appendRunLog('>> DEV — ECHO SIGNAL QUEUED FOR NEXT SCANNER LAYER.');
+  }, [appendRunLog]);
+
+  const devQueueEchoEncounterKind = useCallback((kind: EchoEncounterKind) => {
+    if (typeof __DEV__ === 'undefined' || !__DEV__) return;
+    devQueueEchoForce({ encounterKind: kind });
+    appendRunLog(`>> DEV — ECHO KIND QUEUED: ${kind}.`);
+  }, [appendRunLog]);
+
+  const devQueueHostileEchoTemplate = useCallback((
+    templateId: string,
+    sourceClass?: ClassType,
+  ) => {
+    if (typeof __DEV__ === 'undefined' || !__DEV__) return;
+    devQueueEchoForce({
+      encounterKind: 'HOSTILE_ECHO',
+      hostileTemplateId: templateId,
+      sourceClass,
+    });
+    appendRunLog(`>> DEV — HOSTILE ECHO TEMPLATE QUEUED: ${templateId}.`);
+  }, [appendRunLog]);
+
+  const devLogEchoRunState = useCallback((): string => {
+    const report = formatEchoRunStateSnapshot(activeIncursionRef.current.echoRunState);
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      appendRunLog(`>> ${report.replace(/\n/g, ' // ')}`);
+    }
+    return report;
+  }, [appendRunLog]);
+
+  const devPreviewEchoDebrief = useCallback((): string => {
+    const report = formatEchoDebriefPreview(activeIncursionRef.current);
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      appendRunLog(`>> ${report.replace(/\n/g, ' // ')}`);
+    }
+    return report;
+  }, [appendRunLog]);
+
+  const devValidateEchoPipeline = useCallback((): string => {
+    const report = formatEchoValidationReport(activeIncursionRef.current.proceduralRunTree);
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      appendRunLog(`>> ${report.replace(/\n/g, ' // ')}`);
+    }
+    return report;
+  }, [appendRunLog]);
+
   const applyDevSandboxBaseRun = useCallback((
     preset: DevSandboxPreset,
     config: BadgeTestCombatConfig,
@@ -1619,6 +1698,29 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  const assignEchoFallenRunnerNarrative = useCallback((encounterNode: IncursionNode) => {
+    const node = buildEchoFallenRunnerNarrativeNode(encounterNode);
+    narrativeNodeRef.current = node;
+    narrativeAssemblyRef.current = null;
+    const primed = primeNarrativeEnvironment(node);
+    setActiveIncursion((prev) => {
+      const next = {
+        ...prev,
+        currentNarrativeId: node.id,
+        lastCheckStatus: 'NOT_TESTED' as CheckStatus,
+        activeChoice: null,
+        mapMode: 'NODE_ENGAGED' as IncursionMapMode,
+        environmentalModifiers: {
+          ...prev.environmentalModifiers,
+          ...primed,
+        },
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    appendRunLog('>> FALLEN RUNNER ECHO — imprint resolver online.');
+  }, [appendRunLog]);
+
   const assignNarrativeForCombat = useCallback((encounterNode?: IncursionNode | null) => {
     const inc = activeIncursionRef.current;
     const vectorNode = encounterNode ?? resolveActiveVectorNode(inc);
@@ -1704,6 +1806,30 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     }
 
     const inc = activeIncursionRef.current;
+    if (node.id === ECHO_FALLEN_RUNNER_NARRATIVE_ID) {
+      const echoResult = resolveEchoFallenRunnerChoice(choice, inc, node.id);
+      echoResult.logLines.forEach((line) => appendRunLog(line));
+      setActiveIncursion((prev) => {
+        const next = {
+          ...prev,
+          echoRunState: echoResult.echoRunState,
+          cargo: echoResult.cargo ?? prev.cargo,
+          runCredits: prev.runCredits + (echoResult.runCreditsDelta ?? 0),
+        };
+        activeIncursionRef.current = next;
+        return next;
+      });
+      const outcomeText = echoResult.logLines[echoResult.logLines.length - 1]
+        ?? '>> ECHO RESOLVED.';
+      return {
+        outcomeText,
+        aborted: false,
+        creditReward: echoResult.runCreditsDelta ?? 0,
+        requiresResourcePack: false,
+        triggerCombatAmbush: echoResult.triggerCombatAmbush === true,
+      };
+    }
+
     const prevRun = runStateRef.current;
     const snapshot = {
       maxSoulAnchor: prevRun.maxSoulAnchor,
@@ -1848,14 +1974,24 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     setActiveIncursion((prev) => {
       if (!isProceduralRunActive(prev)) return prev;
       const prepared = prepareProceduralScannerIncursion(prev);
-      if (prepared.proceduralRunTree === prev.proceduralRunTree) return prev;
+      const signalsUsed = prepared.proceduralRunTree?.modifierRollState?.echoSignalsUsed ?? 0;
       const next = {
         ...prepared,
         unstableCargoEffectsSeen: mergeUnstableCargoEffectsSeen(
           prev.unstableCargoEffectsSeen,
           prev.cargo,
         ),
+        echoRunState: mergeEchoRunState(prepared.echoRunState, {
+          echoSignalsDiscovered: Math.max(
+            prepared.echoRunState?.echoSignalsDiscovered ?? 0,
+            signalsUsed,
+          ),
+        }),
       };
+      if (next.proceduralRunTree === prev.proceduralRunTree
+        && next.echoRunState.echoSignalsDiscovered === prev.echoRunState?.echoSignalsDiscovered) {
+        return prev;
+      }
       activeIncursionRef.current = next;
       return next;
     });
@@ -2286,6 +2422,69 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     appendRunLog(`>> COMBAT SALVAGE — ${quantity}× ${resourceId.toUpperCase()} routed to cargo.`);
   }, [appendRunLog]);
 
+  const grantHostileEchoRewards = useCallback((
+    ctx: EchoRecoveryCombatContext,
+    depth: number,
+  ): readonly string[] => {
+    const inc = activeIncursionRef.current;
+    const depthIndex = inc.currentDistrict as 1 | 2 | 3;
+    const roll = rollHostileEchoRewards(ctx.template, {
+      depthIndex,
+      tier: ctx.tier,
+      isEchoRecoveryOp: ctx.isEchoRecoveryOp,
+      seed: `echo-reward:${ctx.template.id}:${depth}:${inc.currentEncounterIndex}`,
+    });
+    if (roll.resources.length === 0 && roll.credits <= 0) return [];
+
+    roll.logLines.forEach((line) => appendRunLog(line));
+
+    const stagedIds: string[] = [];
+    let pickupLogs: string[] = [];
+    setActiveIncursion((prev) => {
+      const beforeCargo = prev.cargo;
+      let nextCargo = beforeCargo;
+      roll.resources.forEach(({ resourceId, quantity }) => {
+        for (let i = 0; i < quantity; i += 1) {
+          nextCargo = addLootToContainment(nextCargo, resourceId, 1, stagedIds);
+        }
+      });
+      const newPickups = detectNewUnstableCargoPickups(
+        beforeCargo,
+        nextCargo,
+        prev.unstableCargoPickupLogged,
+      );
+      pickupLogs = newPickups.map((id) => formatUnstableCargoPickupLog(id));
+      const rewardCount = roll.resources.reduce((sum, entry) => sum + entry.quantity, 0);
+      const next = {
+        ...prev,
+        cargo: nextCargo,
+        runCredits: prev.runCredits + roll.credits,
+        echoRunState: recordEchoRewardsExtracted(
+          mergeEchoRunState(prev.echoRunState, {
+            echoGlassRecovered: (prev.echoRunState?.echoGlassRecovered ?? 0) + roll.echoGlassTotal,
+            echoCreditsRecovered: (prev.echoRunState?.echoCreditsRecovered ?? 0) + roll.credits,
+            echoOperationProgress: (prev.echoRunState?.echoOperationProgress ?? 0) + roll.operationProgress,
+          }),
+          rewardCount,
+        ),
+        unstableCargoPickupLogged: mergeUnstableCargoPickupLog(
+          beforeCargo,
+          nextCargo,
+          prev.unstableCargoPickupLogged,
+        ),
+        unstableCargoEffectsSeen: mergeUnstableCargoEffectsSeen(
+          prev.unstableCargoEffectsSeen,
+          nextCargo,
+        ),
+        runResourceLedger: recordNewResourcesFromCargoDelta(prev.runResourceLedger, beforeCargo, nextCargo),
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    pickupLogs.forEach((line) => appendRunLog(line));
+    return stagedIds;
+  }, [appendRunLog]);
+
   const applyVoidsTollSacrifice = useCallback(() => {
     setRunState((prev) => {
       const nextMaxHp = Math.max(1, Math.floor(prev.maxSoulAnchor * 0.85));
@@ -2603,6 +2802,13 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       const mockNode = buildDevSandboxCombatNode(
         preset === 'elite-combat' ? 'ELITE_COMBAT' : 'STANDARD_COMBAT',
       );
+      prepareStandardCombatEncounter(mockNode);
+      appendRunLog(`>> ${mockNode.label}.`);
+      return;
+    }
+
+    if (preset === 'hostile-echo-combat') {
+      const mockNode = buildDevSandboxHostileEchoNode('ECHO_FALLEN_AEGIS');
       prepareStandardCombatEncounter(mockNode);
       appendRunLog(`>> ${mockNode.label}.`);
       return;
@@ -2999,6 +3205,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       echoRecoveryProgress: echoVictory?.recorded
         ? echoVictory.progress
         : inc.echoRecoveryProgress ?? createDefaultEchoRecoveryProgress(),
+      echoRunState: echoVictory?.recorded
+        ? mergeEchoRunState(inc.echoRunState, {
+          hostileEchoesDefeated: (inc.echoRunState?.hostileEchoesDefeated ?? 0) + 1,
+          echoSignalsResolved: (inc.echoRunState?.echoSignalsResolved ?? 0) + 1,
+        })
+        : inc.echoRunState ?? createDefaultEchoRunState(),
       pendingHarvestReturn: null,
       currentNarrativeId: null,
       activeChoice: null,
@@ -3108,10 +3320,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
           rollResult.node,
           inc.nodesCleared,
           inc.runVeilBiome,
+          inc.currentDistrict as 1 | 2 | 3,
         );
         if (rollResult.cargoPressureLog) {
           appendRunLog(rollResult.cargoPressureLog);
         }
+        rollResult.echoEngageLogs.forEach((line) => appendRunLog(line));
       }
     }
 
@@ -3152,6 +3366,87 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     appendRunLog(
       `>> VECTOR ENGAGED — NODE ${inc.nodesCleared + 1} // ${engagedNode.label.split(' // ').slice(1).join(' // ') || engagedNode.label}`,
     );
+
+    const echoKind = engagedNode.contextModifiers?.echoEncounterKind;
+    if (echoKind && engagedNode.contextModifiers?.echoSignal) {
+      setActiveIncursion((prev) => {
+        const next = {
+          ...prev,
+          echoRunState: recordEchoSignalDiscovered(prev.echoRunState),
+        };
+        activeIncursionRef.current = next;
+        return next;
+      });
+
+      if (echoKindUsesNarrative(echoKind)) {
+        assignEchoFallenRunnerNarrative(engagedNode);
+        return 'NARRATIVE_EVENT';
+      }
+
+      if (echoKindRequiresCombat(echoKind)) {
+        prepareStandardCombatEncounter(engagedNode);
+        setActiveIncursion((prev) => {
+          const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
+          activeIncursionRef.current = next;
+          return next;
+        });
+        return engagedNode.type === 'ELITE_COMBAT' ? 'ELITE_COMBAT' : 'STANDARD_COMBAT';
+      }
+
+      if (echoKindResolvesImmediately(echoKind)) {
+        const activeInc = activeIncursionRef.current;
+        const echoResult = echoKind === 'ASSIST_ECHO'
+          ? resolveAssistEcho(activeInc, engagedNode.id)
+          : echoKind === 'CARGO_ECHO'
+            ? resolveCargoEcho(activeInc, engagedNode.id)
+            : resolveExtractionEcho(activeInc, engagedNode);
+        echoResult.logLines.forEach((line) => appendRunLog(line));
+        setActiveIncursion((prev) => {
+          const revealed = echoResult.revealedSonarNodeIds ?? [];
+          const next = {
+            ...prev,
+            echoRunState: echoResult.echoRunState,
+            cargo: echoResult.cargo ?? prev.cargo,
+            runCredits: prev.runCredits + (echoResult.runCreditsDelta ?? 0),
+            progress: echoResult.progressPatch ?? prev.progress,
+            revealedSonarNodeIds: revealed.length > 0
+              ? [...prev.revealedSonarNodeIds, ...revealed.filter((id) => !prev.revealedSonarNodeIds.includes(id))]
+              : prev.revealedSonarNodeIds,
+          };
+          activeIncursionRef.current = next;
+          return next;
+        });
+
+        if (echoResult.triggerCombatAmbush) {
+          setRunState((prev) => {
+            const next = {
+              ...prev,
+              pendingAmbush: true,
+              currentStamina: 0,
+            };
+            runStateRef.current = next;
+            return next;
+          });
+          prepareStandardCombatEncounter({
+            ...engagedNode,
+            encounterType: 'COMBAT',
+            type: 'STANDARD_COMBAT',
+            label: engagedNode.label.includes('ECHO')
+              ? engagedNode.label
+              : `${engagedNode.label} // ECHO AMBUSH`,
+          });
+          setActiveIncursion((prev) => {
+            const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
+            activeIncursionRef.current = next;
+            return next;
+          });
+          return 'STANDARD_COMBAT';
+        }
+
+        advanceIncursionAfterEncounter('>> Echo imprint cleared — scanning hub ready.');
+        return null;
+      }
+    }
 
     if (engagedNode.type === 'EMERGENCY_EXTRACTION') {
       appendRunLog('>> EMERGENCY EXTRACTION LINK ENGAGED — EVAC CONDUIT OPEN.');
@@ -3277,8 +3572,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
     return null;
   }, [
+    advanceIncursionAfterEncounter,
     appendRunLog,
     applyVeilBleedHpCost,
+    assignEchoFallenRunnerNarrative,
     assignNarrativeForCombat,
     beginResourceNodeHarvest,
     prepareBossEncounter,
@@ -3803,7 +4100,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const applyEmergencyRecallCargoBleed = useCallback((): number => {
     const inc = activeIncursionRef.current;
-    const bleedResult = applyEmergencyExtractBleed(inc.cargo, EMERGENCY_EXTRACT_CARGO_BLEED_PCT);
+    const recallBonus = inc.echoRunState?.extractionRecallBonusPending === true;
+    const bleedPct = recallBonus
+      ? EMERGENCY_EXTRACT_CARGO_BLEED_PCT - 5
+      : EMERGENCY_EXTRACT_CARGO_BLEED_PCT;
+    const bleedResult = applyEmergencyExtractBleed(inc.cargo, bleedPct);
     if (bleedResult.drainedValue > 0) {
       setActiveIncursion((prev) => {
         const next = {
@@ -3815,10 +4116,16 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
             bleedResult.cargo,
           ),
           contractRunProgress: recordContractEmergencyRecall(prev.contractRunProgress),
+          echoRunState: recallBonus
+            ? mergeEchoRunState(prev.echoRunState, { extractionRecallBonusPending: false })
+            : prev.echoRunState,
         };
         activeIncursionRef.current = next;
         return next;
       });
+      if (recallBonus) {
+        appendRunLog('>> EXTRACTION ECHO BONUS — emergency recall bleed reduced.');
+      }
       appendRunLog(`>> EMERGENCY EXTRACT BLEED — −${bleedResult.drainedValue} cargo value purged.`);
     } else {
       setActiveIncursion((prev) => {
@@ -3826,6 +4133,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
           ...prev,
           extractionReviewKind: null,
           contractRunProgress: recordContractEmergencyRecall(prev.contractRunProgress),
+          echoRunState: recallBonus
+            ? mergeEchoRunState(prev.echoRunState, { extractionRecallBonusPending: false })
+            : prev.echoRunState,
         };
         activeIncursionRef.current = next;
         return next;
@@ -4389,6 +4699,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       finalizeHarvestScreen,
       grantCombatResourceDrops,
       grantCombatSalvage,
+      grantHostileEchoRewards,
       applyVoidsTollSacrifice,
       absorbVeilResidueParticle,
       stageSafeAnchorReview,
@@ -4415,6 +4726,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       swapClassBoon,
       cancelClassBoonSwap,
       prepareGridHoundEncounter,
+      devQueueEchoOverlay,
+      devQueueEchoEncounterKind,
+      devQueueHostileEchoTemplate,
+      devLogEchoRunState,
+      devPreviewEchoDebrief,
+      devValidateEchoPipeline,
     }),
     [
       runState,
@@ -4520,6 +4837,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       finalizeHarvestScreen,
       grantCombatResourceDrops,
       grantCombatSalvage,
+      grantHostileEchoRewards,
       applyVoidsTollSacrifice,
       absorbVeilResidueParticle,
       stageSafeAnchorReview,
@@ -4546,6 +4864,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       swapClassBoon,
       cancelClassBoonSwap,
       prepareGridHoundEncounter,
+      devQueueEchoOverlay,
+      devQueueEchoEncounterKind,
+      devQueueHostileEchoTemplate,
+      devLogEchoRunState,
+      devPreviewEchoDebrief,
+      devValidateEchoPipeline,
     ],
   );
 

@@ -59,6 +59,7 @@ import {
 } from '../types/narrativeBonusReward';
 import { depthFromNodesCleared, isDistrictGateDepth } from '../data/districtPacing';
 import { rollGatekeeperLockedTemplate } from '../data/combatRewardEngine';
+import { resolveEchoRecoveryContext } from '../data/echoRecoveryEngine';
 import { shouldGrantAdrenalinePrimerAp } from '../data/boundRequisitionEngine';
 import type { IncursionConsumableUseResult } from '../types/incursionInventory';
 import CombatOperativeVitalsOverlay from './combat/layouts/CombatOperativeVitalsOverlay';
@@ -92,6 +93,7 @@ export default function CombatScreen(): React.JSX.Element {
     beginPostCombatHarvest,
     grantCombatResourceDrops,
     grantCombatSalvage,
+    grantHostileEchoRewards,
     applyVoidsTollSacrifice,
     completeDefendRiftVictory,
     consumeAdrenalinePrimerAfterCombat,
@@ -449,6 +451,11 @@ export default function CombatScreen(): React.JSX.Element {
       slainEnemies: runState.pendingEnemies ?? [],
       rareLootBonusPct: activeIncursion.runModifiers?.rareLootBonusPct ?? 0,
     });
+    const echoCtx = resolveEchoRecoveryContext(vectorNode, activeIncursion.runGenerationContext);
+    const echoDropInstanceIds = echoCtx && vectorNode?.contextModifiers?.echoEncounterKind === 'HOSTILE_ECHO'
+      ? grantHostileEchoRewards(echoCtx, depth)
+      : [];
+    const harvestStagingIds = [...combatDropInstanceIds, ...echoDropInstanceIds];
     if (adrenalinePrimerActive) {
       consumeAdrenalinePrimerAfterCombat();
     }
@@ -484,7 +491,7 @@ export default function CombatScreen(): React.JSX.Element {
       return;
     }
 
-    beginPostCombatHarvest(combatDropInstanceIds);
+    beginPostCombatHarvest(harvestStagingIds);
 
     if (isPostCombatBoonBlocked()) {
       startResourceHarvest();
@@ -498,6 +505,7 @@ export default function CombatScreen(): React.JSX.Element {
     adrenalinePrimerActive,
     awardRunCredits,
     grantCombatResourceDrops,
+    grantHostileEchoRewards,
     consumeAdrenalinePrimerAfterCombat,
     addLockedContainer,
     appendRunLog,
@@ -521,6 +529,7 @@ export default function CombatScreen(): React.JSX.Element {
     syncAfterCombat,
     clearNarrativeBoonStatusEffects,
     activeIncursion.pendingHarvestReturn,
+    activeIncursion.runGenerationContext,
   ]);
 
   return (

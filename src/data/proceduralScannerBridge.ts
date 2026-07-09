@@ -9,6 +9,7 @@ import {
 import { LEVELS_PER_DISTRICT, MAX_RUN_GRAPH_DEPTH } from '../types/sectorPacing';
 import { veilBiomeDisplayName, veilBiomeToLegacyMacroBiome } from './sectorBiomeBridge';
 import { assignPendingDepthTypes } from './nodeGenerator';
+import { assignEchoOverlaysForDepth, resolveDisplayContextModifiers } from './echoEncounterEngine';
 
 const VECTOR_LABELS = ['ALPHA', 'BETA', 'GAMMA', 'DELTA', 'EPSILON'] as const;
 
@@ -61,13 +62,15 @@ export function proceduralNodeToIncursionNode(
   node: ProceduralRunNode,
   encounterIndex: number,
   runVeilBiome?: VeilBiome | null,
+  macroDepthIndex: 1 | 2 | 3 = 1,
 ): IncursionNode {
   const runType = proceduralTypeToRunType(node.type);
   const labelSuffix = VECTOR_LABELS[encounterIndex % VECTOR_LABELS.length] ?? 'VECTOR';
+  const displayContext = resolveDisplayContextModifiers(node, macroDepthIndex);
   const signalTags: string[] = [];
-  if (node.contextModifiers?.anchorSignal) signalTags.push('ANCHOR');
-  if (node.contextModifiers?.operationTag) signalTags.push('OP');
-  if (node.contextModifiers?.echoSignal) signalTags.push('ECHO');
+  if (displayContext?.anchorSignal) signalTags.push('ANCHOR');
+  if (displayContext?.operationTag) signalTags.push('OP');
+  if (displayContext?.echoSignal) signalTags.push('ECHO');
   const signalSuffix = signalTags.length > 0 ? ` // ${signalTags.join('+')}` : '';
   const biomePrefix = vectorLabelPrefix(runVeilBiome);
 
@@ -83,10 +86,10 @@ export function proceduralNodeToIncursionNode(
         ? `${biomePrefix}RESOURCE NODE${signalSuffix}`
         : `${biomePrefix}VECTOR ${labelSuffix}${signalSuffix}`,
     isCompleted: false,
-    isPreDiscovered: node.type === 'GATEKEEPER' || node.contextModifiers?.anchorSignal === true,
+    isPreDiscovered: node.type === 'GATEKEEPER' || displayContext?.anchorSignal === true,
     isExtractionNode: node.type === 'EXTRACTION',
     offeredMacroBiome: runVeilBiome ? veilBiomeToLegacyMacroBiome(runVeilBiome) : undefined,
-    contextModifiers: node.contextModifiers,
+    contextModifiers: displayContext,
   };
 }
 
@@ -129,11 +132,15 @@ export function prepareProceduralScannerIncursion(
   if (!tree?.rollSeed) return inc;
 
   const depth = localProceduralDepth(inc.nodesCleared);
-  const nextTree = assignPendingDepthTypes(tree, depth, {
+  const depthIndex = inc.currentDistrict as 1 | 2 | 3;
+  const assignmentParams = {
     runGenerationContext: inc.runGenerationContext,
-    depthIndex: inc.currentDistrict as 1 | 2 | 3,
+    depthIndex,
     cargo: inc.cargo,
-  });
+  };
+
+  let nextTree = assignPendingDepthTypes(tree, depth, assignmentParams);
+  nextTree = assignEchoOverlaysForDepth(nextTree, depth, assignmentParams);
 
   if (nextTree === tree) return inc;
   return { ...inc, proceduralRunTree: nextTree };
@@ -151,6 +158,7 @@ export function buildProceduralScannerCluster(inc: ActiveIncursionState): Incurs
       node,
       inc.nodesCleared + index,
       inc.runVeilBiome,
+      inc.currentDistrict as 1 | 2 | 3,
     ));
 }
 

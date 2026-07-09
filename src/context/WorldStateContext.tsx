@@ -34,6 +34,7 @@ import {
   logWorldStateValidationWarnings,
   validateWorldState,
 } from '../data/worldStateValidation';
+import { formatEchoValidationReport } from '../data/echoDebugEngine';
 import {
   LocalOperationProgressProvider,
   SimulatedGlobalOperationProgressProvider,
@@ -375,7 +376,9 @@ export function WorldStateProvider({ children }: { children: React.ReactNode }) 
 
   const devGetValidationReport = useCallback(() => {
     const issues = validateWorldState(persisted, sectors);
-    return formatWorldStateValidationReport(issues);
+    const worldReport = formatWorldStateValidationReport(issues);
+    const echoReport = formatEchoValidationReport();
+    return `${worldReport}\n\n${echoReport}`;
   }, [persisted, sectors]);
 
   const devGetDebugSnapshot = useCallback(() => {

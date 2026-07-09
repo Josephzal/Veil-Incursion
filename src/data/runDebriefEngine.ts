@@ -8,6 +8,9 @@ import {
 } from './runDebriefResourceEngine';
 import type { UnstableCargoDebriefSummary } from './runDebriefUnstableCargoEngine';
 import { buildUnstableCargoDebriefSummary } from './runDebriefUnstableCargoEngine';
+import type { EchoDebriefSummary } from './runDebriefEchoEngine';
+import { buildEchoDebriefSummary } from './runDebriefEchoEngine';
+import { createDefaultEchoRunState, ECHO_OPERATION_PROGRESS } from './echoRunState';
 import { ALL_RESOURCE_ITEM_IDS, RESOURCE_REGISTRY } from './resourceRegistry';
 import {
   MAX_OPERATION_TARGET_RESOURCE_STACKS_PER_RUN,
@@ -76,6 +79,7 @@ export interface OperationDebriefPayload {
   contractResult: ContractResult;
   resourceSections: DebriefResourceSection[];
   unstableCargoSummary: UnstableCargoDebriefSummary | null;
+  echoSummary: EchoDebriefSummary | null;
   extractionKind: ContractExtractionKind;
   deathStats?: RunDebriefDeathStats;
   midRunContributionTransmitted?: number;
@@ -173,8 +177,41 @@ export function computeRunOperationContribution(
   }
 
   const echoProgress = incursion.echoRecoveryProgress;
-  if (echoProgress.echoesDefeated > 0) {
-    const perEcho = rules.defeatEcho ?? OPERATION_CONTRIBUTION_VALUES.defeatEcho;
+  const echoState = incursion.echoRunState ?? createDefaultEchoRunState();
+  const isEchoRecovery = operation.objectiveKind === 'ECHO_RECOVERY';
+
+  if (isEchoRecovery && extractedSuccessfully) {
+    const addEchoEvent = (label: string, count: number, perEvent: number) => {
+      if (count <= 0 || perEvent <= 0) return;
+      add(label, perEvent * count);
+    };
+    addEchoEvent(
+      'Fallen runner imprint looted',
+      echoState.fallenEchoesLooted,
+      ECHO_OPERATION_PROGRESS.resolveFallenRunner,
+    );
+    addEchoEvent(
+      'Fallen runner stabilized',
+      echoState.echoesStabilized,
+      ECHO_OPERATION_PROGRESS.stabilizeEcho,
+    );
+    addEchoEvent(
+      'Hostile echo defeated',
+      echoState.hostileEchoesDefeated,
+      ECHO_OPERATION_PROGRESS.defeatHostileEcho,
+    );
+    addEchoEvent(
+      'Echo cargo recovered',
+      echoState.cargoEchoesRecovered,
+      ECHO_OPERATION_PROGRESS.recoverEchoCargo,
+    );
+    addEchoEvent(
+      'Extraction echo used',
+      echoState.extractionEchoesUsed,
+      ECHO_OPERATION_PROGRESS.extractionEchoUsed,
+    );
+  } else if (rules.defeatEcho && echoProgress.echoesDefeated > 0 && extractedSuccessfully) {
+    const perEcho = rules.defeatEcho;
     add(
       `Echo${echoProgress.echoesDefeated > 1 ? 'es' : ''} neutralized (${echoProgress.echoesDefeated})`,
       perEcho * echoProgress.echoesDefeated,
@@ -254,6 +291,7 @@ export function buildOperationDebriefPayload(
     incursion.runResourceLedger,
     incursion.unstableCargoEffectsSeen,
   );
+  const echoSummary = buildEchoDebriefSummary(incursion);
   const progressDelta = Math.max(0, opts.progressAfter - opts.progressBefore);
   const totalContributionThisRun = computeTotalContributionThisRun(
     contribution.total,
@@ -282,6 +320,7 @@ export function buildOperationDebriefPayload(
     contractResult,
     resourceSections,
     unstableCargoSummary,
+    echoSummary,
     extractionKind,
     deathStats: opts.deathStats,
     midRunContributionTransmitted: opts.midRunContributionTransmitted,

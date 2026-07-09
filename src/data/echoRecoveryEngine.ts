@@ -1,9 +1,12 @@
 import type { EnvironmentalModifiers, IncursionNode } from '../types/game';
+import type { ClassType } from '../types/game';
 import type { EchoEliteTemplate, EchoTier } from '../types/echoElite';
 import type { EnemyCombatProfile } from '../types/run';
 import type { DepthStage, NodeContextModifiers, RunGenerationContext } from '../types/worldState';
 import type { DistrictId } from './districtPacing';
-import { getDepthStage } from './worldStateHelpers';
+import { depthFromNodesCleared, getDistrictFromDepth } from './districtPacing';
+import { resolveEchoEncounterAtEngagement } from './echoEncounterEngine';
+import { MAX_LEGENDARY_ECHO_ENCOUNTERS_PER_RUN } from './worldStateHelpers';
 import { ECHO_ELITE_CATALOG, getEchoEliteTemplate } from './echoEliteCatalog';
 import { ENEMY_ROSTER, spawnRosterUnit } from './enemyRoster';
 import { rosterToSpawnSlots } from './rosterSpawnSlots';
@@ -30,6 +33,9 @@ export function resolveEchoRecoveryContext(
   node: IncursionNode | null | undefined,
   runContext: RunGenerationContext | null | undefined,
 ): EchoRecoveryCombatContext | null {
+  const kind = node?.contextModifiers?.echoEncounterKind;
+  if (kind && kind !== 'HOSTILE_ECHO') return null;
+
   const templateId = node?.contextModifiers?.echoTemplateId;
   if (!node?.contextModifiers?.echoSignal || !templateId) return null;
 
@@ -49,8 +55,9 @@ export function pickEchoTemplateForNode(
   depthStage: DepthStage,
   templateSeed: string,
   allowLegendary: boolean,
+  preferredClass?: ClassType,
 ): EchoEliteTemplate | null {
-  const pool = ECHO_ELITE_CATALOG.filter((entry) => {
+  const eligible = ECHO_ELITE_CATALOG.filter((entry) => {
     if (!entry.allowedDepths.includes(depthIndex)) return false;
     if (entry.allowedDepthStages && !entry.allowedDepthStages.includes(depthStage)) {
       return false;
@@ -59,32 +66,72 @@ export function pickEchoTemplateForNode(
     return true;
   });
 
-  if (pool.length === 0) return null;
+  if (eligible.length === 0) return null;
 
-  const rand = seededRandom(`echo-template:${templateSeed}:${depthIndex}:${depthStage}`);
-  const standardPool = pool.filter((entry) => entry.tier === 'STANDARD');
-  const legendaryPool = pool.filter((entry) => entry.tier === 'LEGENDARY');
+  const rand = seededRandom(
+    `echo-template:${templateSeed}:${depthIndex}:${depthStage}:${preferredClass ?? 'any'}`,
+  );
 
-  if (allowLegendary && legendaryPool.length > 0 && rand() < 0.22) {
-    return legendaryPool[Math.floor(rand() * legendaryPool.length)] ?? null;
+  const classEligible = preferredClass
+    ? eligible.filter((entry) => entry.isClassEcho && entry.sourceClass === preferredClass)
+    : [];
+  const classLegendary = classEligible.filter((entry) => entry.tier === 'LEGENDARY');
+  const classStandard = classEligible.filter((entry) => entry.tier === 'STANDARD');
+  const genericEligible = eligible.filter((entry) => !entry.isClassEcho);
+  const genericLegendary = genericEligible.filter((entry) => entry.tier === 'LEGENDARY');
+  const genericStandard = genericEligible.filter((entry) => entry.tier === 'STANDARD');
+
+  if (allowLegendary && rand() < 0.22) {
+    if (classLegendary.length > 0 && rand() < 0.6) {
+      return classLegendary[Math.floor(rand() * classLegendary.length)] ?? null;
+    }
+    if (genericLegendary.length > 0) {
+      return genericLegendary[Math.floor(rand() * genericLegendary.length)] ?? null;
+    }
   }
 
-  const pickPool = standardPool.length > 0 ? standardPool : pool;
+  const preferClass = preferredClass && classStandard.length > 0 && rand() < 0.78;
+  const pickPool = preferClass
+    ? classStandard
+    : genericStandard.length > 0
+      ? genericStandard
+      : classStandard.length > 0
+        ? classStandard
+        : eligible;
+
   return pickPool[Math.floor(rand() * pickPool.length)] ?? null;
 }
 
+const CLASS_FALLEN_LABELS: Record<ClassType, string> = {
+  AEGIS: 'FALLEN AEGIS',
+  HEX_SHOT: 'FALLEN HEX SHOT',
+  ENVOY: 'FALLEN ENVOY',
+};
+
 export function echoRecoveryEngageLogLines(ctx: EchoRecoveryCombatContext): string[] {
-  const tierLabel = ctx.tier === 'LEGENDARY' ? 'LEGENDARY ECHO' : 'ECHO RESIDUE';
-  return [
+  const tierLabel = ctx.tier === 'LEGENDARY'
+    ? (ctx.template.isClassEcho ? 'CORRUPTED CLASS ECHO' : 'LEGENDARY ECHO')
+    : ctx.template.isClassEcho && ctx.template.sourceClass
+      ? CLASS_FALLEN_LABELS[ctx.template.sourceClass]
+      : 'ECHO RESIDUE';
+  const lines = [
     `>> ${tierLabel} — ${ctx.template.displayName.toUpperCase()}`,
     `>> ${ctx.template.engageLogLine}`,
-    ...(ctx.isEchoRecoveryOp
-      ? ['>> ECHO RECOVERY OPERATION — residue capture authorized.']
-      : []),
   ];
+  if (ctx.template.loadoutSummary) {
+    lines.push(`>> IMPRINT — ${ctx.template.loadoutSummary}`);
+  }
+  if (ctx.isEchoRecoveryOp) {
+    lines.push('>> ECHO RECOVERY OPERATION — residue capture authorized.');
+  }
+  return lines;
 }
 
 export function echoRecoveryClearLogLine(ctx: EchoRecoveryCombatContext): string {
+  if (ctx.template.isClassEcho && ctx.template.sourceClass) {
+    const classLabel = CLASS_FALLEN_LABELS[ctx.template.sourceClass];
+    return `>> ${classLabel} NEUTRALIZED — ${ctx.template.displayName} archived.`;
+  }
   const tierLabel = ctx.tier === 'LEGENDARY' ? 'Legendary echo' : 'Echo residue';
   return `>> ${tierLabel.toUpperCase()} NEUTRALIZED — ${ctx.template.displayName} archived.`;
 }
@@ -116,8 +163,19 @@ export function spawnEchoEliteSquad(
   resonancePercent: number,
 ): EnemyCombatProfile[] {
   const slots = rosterToSpawnSlots(template.roster);
-  const hpScale = template.hpScale ?? (template.tier === 'LEGENDARY' ? 1.3 : 1.12);
-  const dmgScale = template.damageScale ?? (template.tier === 'LEGENDARY' ? 1.12 : 1.06);
+  const depthIndex = getDistrictFromDepth(depthFromNodesCleared(nodeIndex)) as 1 | 2 | 3;
+  let hpScale = template.hpScale ?? (template.tier === 'LEGENDARY' ? 1.3 : 1.12);
+  let dmgScale = template.damageScale ?? (template.tier === 'LEGENDARY' ? 1.12 : 1.06);
+
+  if (template.isClassEcho) {
+    if (depthIndex === 1) {
+      hpScale *= 0.88;
+      dmgScale *= 0.9;
+    } else if (depthIndex === 3 && template.tier === 'STANDARD') {
+      hpScale *= 1.1;
+      dmgScale *= 1.06;
+    }
+  }
 
   const profiles = slots.map(({ rosterId, slot, isAlpha }, index) => {
     const profile = spawnRosterUnit(ENEMY_ROSTER[rosterId], nodeIndex, {
@@ -168,14 +226,25 @@ export function stampEchoTemplateOnModifiers(
   templateSeed: string,
   allowLegendary: boolean,
 ): NodeContextModifiers {
-  const depthStage = getDepthStage(depthIndex);
-  const template = pickEchoTemplateForNode(depthIndex, depthStage, templateSeed, allowLegendary);
-  if (!template) return modifiers;
-
-  return {
+  const rollState = {
+    echoSignalsUsed: 0,
+    legendaryEchoUsed: 0,
+    echoSignalsByDepth: {},
+  };
+  const withSignal = {
     ...modifiers,
     echoSignal: true,
-    echoTemplateId: template.id,
-    echoTier: template.tier,
+    echoSignalLabel: modifiers.echoSignalLabel ?? 'ECHO SIGNAL',
   };
+  if (!allowLegendary) {
+    rollState.legendaryEchoUsed = MAX_LEGENDARY_ECHO_ENCOUNTERS_PER_RUN;
+  }
+  return resolveEchoEncounterAtEngagement(
+    withSignal,
+    depthIndex,
+    'COMBAT',
+    null,
+    templateSeed,
+    rollState,
+  );
 }

@@ -6,7 +6,7 @@ import { useVeilFrontLayout } from './useVeilFrontLayout';
 import { operationProgressPercent } from '../../data/worldStateHelpers';
 import type { SectorState } from '../../types/worldState';
 import { TerminalTheme } from '../../types/theme';
-import { formatOperationContributes, formatOperationLifecycleStatus, formatOperationProgressLabel, formatOperationProgressLockMessage, isOperationProgressLocked, operationLifecycleAccentColor, operationTypeChip } from '../../utils/veilFrontSectorUi';
+import { formatOperationContributesForObjective, formatOperationLifecycleStatus, formatOperationProgressLabel, formatOperationProgressLockMessage, isOperationProgressLocked, operationLifecycleAccentColor, operationTypeChip } from '../../utils/veilFrontSectorUi';
 
 interface ActiveOperationCardProps {
   theme: TerminalTheme;
@@ -22,7 +22,10 @@ export default function ActiveOperationCard({
     sector.activeOperation.progressCurrent,
     sector.activeOperation.progressRequired,
   );
-  const contributes = formatOperationContributes(sector.activeOperation.contributionRules);
+  const contributes = formatOperationContributesForObjective(
+    sector.activeOperation.objectiveKind,
+    sector.activeOperation.contributionRules,
+  );
   const lifecycleLabel = formatOperationLifecycleStatus(
     sector.activeOperation.lifecycleStatus,
     sector.activeOperation.runsRemaining,

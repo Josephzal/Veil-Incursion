@@ -483,6 +483,8 @@ export interface ActiveIncursionState {
   anchorAssaultProgress: import('../data/anchorAssaultEngine').AnchorAssaultProgress;
   /** Echo Recovery residue defeats tracked during the run. */
   echoRecoveryProgress: import('../data/echoRecoveryEngine').EchoRecoveryProgress;
+  /** Echo encounter activity tracked for debrief and operations. */
+  echoRunState: import('../data/echoRunState').EchoRunState;
   /** In-run safehouse physical bank — survives death within the same run. */
   runBankedSnapshot: import('../types/runResourceLedger').RunPhysicalBankSnapshot;
   /** Per-run resource collection, banking, extraction, and loss accounting. */
@@ -594,6 +596,21 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     pendingProceduralResourcePool: [],
     anchorAssaultProgress: { elitesDefeated: 0, coreCleared: false },
     echoRecoveryProgress: { echoesDefeated: 0, legendaryDefeated: 0 },
+    echoRunState: {
+      echoSignalsDiscovered: 0,
+      echoSignalsResolved: 0,
+      fallenEchoesLooted: 0,
+      echoesStabilized: 0,
+      hostileEchoesDefeated: 0,
+      cargoEchoesRecovered: 0,
+      assistEchoesTriggered: 0,
+      extractionEchoesUsed: 0,
+      echoOperationProgress: 0,
+      echoGlassRecovered: 0,
+      echoCreditsRecovered: 0,
+      echoRewardsExtracted: 0,
+      extractionRecallBonusPending: false,
+    },
     runBankedSnapshot: createEmptyRunPhysicalBankSnapshot(),
     runResourceLedger: createEmptyRunResourceLedger(),
   };

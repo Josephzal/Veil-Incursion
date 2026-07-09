@@ -12,6 +12,9 @@ export function echoEncounterId(templateId: string): string {
 export function resolveEchoSpawnOverride(
   contextModifiers?: NodeContextModifiers | null,
 ): EchoEliteTemplate | null {
+  const kind = contextModifiers?.echoEncounterKind;
+  if (kind && kind !== 'HOSTILE_ECHO') return null;
+
   const templateId = contextModifiers?.echoTemplateId;
   if (!contextModifiers?.echoSignal || !templateId) return null;
   return getEchoEliteTemplate(templateId) ?? null;

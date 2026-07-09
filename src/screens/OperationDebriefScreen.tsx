@@ -12,6 +12,10 @@ import { formatDebriefResourceLine } from '../data/runDebriefResourceEngine';
 import {
   formatUnstableCargoDebriefLine,
 } from '../data/runDebriefUnstableCargoEngine';
+import {
+  formatEchoDebriefContributionLine,
+  formatEchoGlassResolutionLine,
+} from '../data/runDebriefEchoEngine';
 import { formatExtractionKindLabel, sponsorDisplayName } from '../utils/contractUi';
 import { getResourceDisplayName } from '../data/resourceRegistry';
 import { formatTimeAliveMmSs } from '../types/runDeathSummary';
@@ -52,6 +56,7 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
     contractResult,
     resourceSections,
     unstableCargoSummary,
+    echoSummary,
     extractionKind,
     deathStats,
     midRunContributionTransmitted,
@@ -264,6 +269,81 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
                     ))}
                   </>
                 ) : null}
+              </>
+            ) : null}
+
+            {echoSummary ? (
+              <>
+                <View style={styles.sectionGap} />
+                <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>ECHOES</Text>
+                {echoSummary.signalsDiscovered > 0 ? (
+                  <Text style={[styles.stat, { color: theme.textColor }]}>
+                    {`ECHO SIGNALS DISCOVERED: ${echoSummary.signalsDiscovered}`}
+                  </Text>
+                ) : null}
+                {echoSummary.signalsResolved > 0 ? (
+                  <Text style={[styles.stat, { color: theme.textColor }]}>
+                    {`ECHOES RESOLVED: ${echoSummary.signalsResolved}`}
+                  </Text>
+                ) : null}
+                {echoSummary.hostileEchoesDefeated > 0 ? (
+                  <Text style={[styles.stat, { color: theme.textColor }]}>
+                    {`HOSTILE ECHOES DEFEATED: ${echoSummary.hostileEchoesDefeated}`}
+                  </Text>
+                ) : null}
+                {echoSummary.cargoEchoesRecovered > 0 ? (
+                  <Text style={[styles.stat, { color: theme.textColor }]}>
+                    {`ECHO CARGO RECOVERED: ${echoSummary.cargoEchoesRecovered}`}
+                  </Text>
+                ) : null}
+                {echoSummary.echoGlassRecovered > 0 ? (
+                  <Text style={[styles.stat, { color: theme.statusColor }]}>
+                    {`ECHO-GLASS RECOVERED: ${echoSummary.echoGlassRecovered}`}
+                  </Text>
+                ) : null}
+                {echoSummary.echoCreditsRecovered > 0 ? (
+                  <Text style={[styles.stat, { color: theme.mutedColor }]}>
+                    {`ECHO IMPRINT CREDITS: +${echoSummary.echoCreditsRecovered}`}
+                  </Text>
+                ) : null}
+                {echoSummary.echoRewardsExtracted > 0 ? (
+                  <Text style={[styles.stat, { color: theme.mutedColor }]}>
+                    {`ECHO REWARD STACKS RECOVERED: ${echoSummary.echoRewardsExtracted}`}
+                  </Text>
+                ) : null}
+                {echoSummary.isEchoRecoveryOperation && echoSummary.contributionLines.length > 0 ? (
+                  <>
+                    <Text style={[styles.stat, { color: theme.textColor, fontWeight: '700', marginTop: 4 }]}>
+                      ECHO RECOVERY PROGRESS
+                    </Text>
+                    {echoSummary.contributionLines.map((line) => (
+                      <Text
+                        key={`${line.label}-${line.progress}`}
+                        style={[styles.stat, { color: theme.mutedColor }]}
+                      >
+                        {formatEchoDebriefContributionLine(line)}
+                      </Text>
+                    ))}
+                    <Text style={[styles.statAccent, { color: accentColor }]}>
+                      {`ECHO OPERATION TOTAL: +${echoSummary.echoOperationProgress}`}
+                    </Text>
+                  </>
+                ) : null}
+                {(['extracted', 'banked', 'lost'] as const).map((kind) => {
+                  const line = formatEchoGlassResolutionLine(kind, echoSummary.glassResolution[kind]);
+                  if (!line) return null;
+                  return (
+                    <Text
+                      key={kind}
+                      style={[
+                        styles.stat,
+                        { color: kind === 'lost' ? FAILURE_ACCENT : theme.mutedColor },
+                      ]}
+                    >
+                      {line.toUpperCase()}
+                    </Text>
+                  );
+                })}
               </>
             ) : null}
 

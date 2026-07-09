@@ -12,7 +12,8 @@ import type { SectorState } from '../../types/worldState';
 import { TerminalTheme } from '../../types/theme';
 import {
   describeAnchorInRunPressure,
-  formatOperationContributes,
+  formatEchoBriefingIntel,
+  formatOperationContributesForObjective,
   formatOperationLifecycleStatus,
   formatOperationProgressLabel,
   formatOperationProgressLockMessage,
@@ -123,7 +124,11 @@ function OperationTabContent({
     operation.progressCurrent,
     operation.progressRequired,
   );
-  const contributes = formatOperationContributes(operation.contributionRules);
+  const contributes = formatOperationContributesForObjective(
+    operation.objectiveKind,
+    operation.contributionRules,
+  );
+  const echoIntel = formatEchoBriefingIntel(sector);
   const lifecycleLabel = formatOperationLifecycleStatus(
     operation.lifecycleStatus,
     operation.runsRemaining,
@@ -156,6 +161,18 @@ function OperationTabContent({
         >
           {operation.description}
         </TerminalText>
+      ) : null}
+      {echoIntel.length > 0 ? (
+        <View style={[styles.listBlock, { gap: scaleSpacing(4), borderTopColor: `${theme.statusColor}24`, paddingTop: scaleSpacing(7) }]}>
+          <TerminalText size={scaleFont(5.5)} letterSpacing={0.6} style={{ color: theme.mutedColor }}>
+            ECHO INTEL
+          </TerminalText>
+          {echoIntel.map((line) => (
+            <TerminalText key={line} size={scaleFont(5.8)} style={{ color: theme.statusColor }} numberOfLines={3}>
+              {line}
+            </TerminalText>
+          ))}
+        </View>
       ) : null}
       <View style={{ gap: scaleSpacing(4) }}>
         <TerminalText size={scaleFont(6)} style={{ color: theme.mutedColor }}>

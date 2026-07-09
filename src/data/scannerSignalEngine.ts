@@ -3,6 +3,7 @@ import type { RunGenerationContext } from '../types/worldState';
 import type { NodeContextModifiers } from '../types/worldState';
 import type { RadarVeilSignal, ScannerSignalKind } from '../types/scannerSignals';
 import { SCANNER_SIGNAL_COLORS } from '../types/scannerSignals';
+import { formatEchoScannerTelemetry } from './echoIntelEngine';
 import { getNodePressureBand } from './worldStateHelpers';
 
 function anchorSignalKind(anchorStage?: NodeContextModifiers['anchorStage']): ScannerSignalKind {
@@ -45,10 +46,14 @@ export function resolveNodeScannerSignals(
   }
 
   if (ctx?.echoSignal) {
+    const label = ctx.echoSignalLabel?.toUpperCase() ?? 'ECHO SIGNAL';
+    const kind: ScannerSignalKind = ctx.echoEncounterKind
+      ? 'ECHO_RESIDUE'
+      : 'ECHO_SIGNAL';
     signals.push({
-      kind: 'ECHO_RESIDUE',
-      label: 'ECHO RESIDUE',
-      color: SCANNER_SIGNAL_COLORS.ECHO_RESIDUE,
+      kind,
+      label,
+      color: SCANNER_SIGNAL_COLORS[kind],
       intensity: baseIntensity,
     });
   }
@@ -113,6 +118,7 @@ export function primaryScannerSignalAccent(signals: readonly RadarVeilSignal[] |
     'ANCHOR_BREACH',
     'ANCHOR_TRACE',
     'HIGH_RISK',
+    'ECHO_SIGNAL',
     'ECHO_RESIDUE',
     'OPERATION',
   ];
@@ -171,6 +177,8 @@ export function formatScannerFieldTelemetry(
   if (op.title) {
     lines.push(`> ACTIVE OPERATION: ${op.title.toUpperCase()}`);
   }
+
+  lines.push(...formatEchoScannerTelemetry(runContext));
 
   return lines;
 }

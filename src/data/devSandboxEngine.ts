@@ -3,6 +3,8 @@ import type { ProceduralNarrativeAssembly } from '../types/narrativeProcedural';
 import type { TensionMechanic } from '../types/narrativeAssembly';
 import type { DevSandboxPreset } from '../types/devSandbox';
 import { createDefaultCargoRunState } from '../types/cargoGrid';
+import { stampEchoTemplateOnModifiers } from './echoRecoveryEngine';
+import { getEchoEliteTemplate } from './echoEliteCatalog';
 import {
   pickAssemblyNarrativeEncounter,
 } from './narrative/narrativeAssemblyBridge';
@@ -76,6 +78,34 @@ export function buildDevSandboxCombatNode(type: 'STANDARD_COMBAT' | 'ELITE_COMBA
     type,
     label: type === 'ELITE_COMBAT' ? 'DEV ELITE HOSTILE CLUSTER' : 'DEV STANDARD HOSTILE CLUSTER',
     isCompleted: false,
+  };
+}
+
+export function buildDevSandboxHostileEchoNode(
+  templateId = 'ECHO_FALLEN_AEGIS',
+): IncursionNode {
+  const template = getEchoEliteTemplate(templateId);
+  const modifiers = stampEchoTemplateOnModifiers(
+    {
+      depthStage: 'BREACH',
+      nodePressureBand: 'MEDIUM',
+      echoSignal: true,
+      echoSignalLabel: 'ECHO SIGNAL',
+    },
+    2,
+    `dev-hostile-echo:${templateId}`,
+    false,
+  );
+
+  return {
+    id: 'dev-sandbox-hostile-echo',
+    encounterIndex: 4,
+    index: 4,
+    encounterType: 'COMBAT',
+    type: 'STANDARD_COMBAT',
+    label: `DEV HOSTILE ECHO // ${template?.displayName.toUpperCase() ?? templateId}`,
+    isCompleted: false,
+    contextModifiers: modifiers,
   };
 }
 

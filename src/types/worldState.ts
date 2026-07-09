@@ -186,8 +186,15 @@ export interface NodeContextModifiers {
   anchorSignal?: boolean;
   anchorStage?: AnchorStage;
   echoSignal?: boolean;
+  /** Scanner-facing label — set at overlay roll. */
+  echoSignalLabel?: string;
+  /** Resolved at engagement — kind picks narrative vs combat path. */
+  echoEncounterKind?: import('./echoEncounter').EchoEncounterKind;
+  /** Hostile echo combat template — set at engagement for HOSTILE_ECHO. */
   echoTemplateId?: string;
   echoTier?: 'STANDARD' | 'LEGENDARY';
+  /** Future player snapshot hook — authored echoes only in v1. */
+  echoSnapshot?: import('./echoEncounter').EchoSnapshotPlaceholder;
   operationTag?: OperationObjectiveKind;
   highRisk?: boolean;
   highValueResource?: boolean;
@@ -197,6 +204,8 @@ export interface NodeContextModifiers {
 export interface NodeModifierRollState {
   echoSignalsUsed: number;
   legendaryEchoUsed: number;
+  /** Procedural tree depth (1–15) → echo overlays placed this run. */
+  echoSignalsByDepth: Record<number, number>;
 }
 
 export interface OperationCompletionEffect {

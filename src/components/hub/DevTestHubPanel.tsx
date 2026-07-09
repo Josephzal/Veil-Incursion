@@ -52,7 +52,7 @@ export default function DevTestHubPanel(): React.JSX.Element {
     startSafehouse,
     startResourceHarvest,
   } = useGameFlow();
-  const { startDevSandboxNode } = useRun();
+  const { startDevSandboxNode, devQueueEchoOverlay, devQueueEchoEncounterKind, devQueueHostileEchoTemplate, devLogEchoRunState, devPreviewEchoDebrief, devValidateEchoPipeline } = useRun();
   const { account } = usePlayerAccount();
   const {
     selectedSector,
@@ -183,6 +183,11 @@ export default function DevTestHubPanel(): React.JSX.Element {
           accentColor={theme.statusColor}
           onPress={() => launchSandbox('combat-hard', startCombat)}
         />
+        <SandboxLaunchButton
+          label="[ HOSTILE ECHO ]"
+          accentColor={theme.statusColor}
+          onPress={() => launchSandbox('hostile-echo-combat', startCombat)}
+        />
       </View>
 
       <HubSectionHeader title="INCURSION // FIELD NODES" color={theme.mutedColor} />
@@ -211,6 +216,45 @@ export default function DevTestHubPanel(): React.JSX.Element {
           label="[ RESOURCE HARVEST ]"
           accentColor={TERMINAL_ACCENT}
           onPress={() => launchSandbox('resource-harvest', startResourceHarvest)}
+        />
+      </View>
+
+      <HubSectionHeader title="ECHO // DEBUG" color={theme.mutedColor} />
+      <View style={styles.grid}>
+        <SandboxLaunchButton
+          label="[ FORCE ECHO SIGNAL ]"
+          accentColor={TERMINAL_ACCENT}
+          onPress={devQueueEchoOverlay}
+        />
+        <SandboxLaunchButton
+          label="[ FORCE HOSTILE ECHO ]"
+          accentColor={TERMINAL_ACCENT}
+          onPress={() => devQueueHostileEchoTemplate('ECHO_FALLEN_AEGIS', 'AEGIS')}
+        />
+        <SandboxLaunchButton
+          label="[ FORCE FALLEN RUNNER ]"
+          accentColor={TERMINAL_ACCENT}
+          onPress={() => devQueueEchoEncounterKind('FALLEN_RUNNER_ECHO')}
+        />
+        <SandboxLaunchButton
+          label="[ FORCE CARGO ECHO ]"
+          accentColor={TERMINAL_ACCENT}
+          onPress={() => devQueueEchoEncounterKind('CARGO_ECHO')}
+        />
+        <SandboxLaunchButton
+          label="[ LOG ECHO STATE ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(devLogEchoRunState())}
+        />
+        <SandboxLaunchButton
+          label="[ PREVIEW ECHO DEBRIEF ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(devPreviewEchoDebrief())}
+        />
+        <SandboxLaunchButton
+          label="[ VALIDATE ECHO ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(devValidateEchoPipeline())}
         />
       </View>
 

@@ -13,6 +13,7 @@ import {
 import { rollProceduralResourcePool } from './proceduralResourceEngine';
 import type { CargoRunState } from '../types/cargoGrid';
 import { applyCarriedCargoTypeWeightBias } from './unstableCargoEffectsEngine';
+import { assignEchoOverlaysForDepth } from './echoEncounterEngine';
 
 export interface RunTreeGenerationParams {
   runGenerationContext?: RunGenerationContext | null;
@@ -492,7 +493,7 @@ export function generateRunTree(
 
   const macroDepthIndex = params?.depthIndex ?? 1;
 
-  return {
+  let tree: ProceduralRunTree = {
     nodes,
     depthIndex: depthLayerIndex,
     bossNodeId: boss.id,
@@ -502,6 +503,15 @@ export function generateRunTree(
     rollSeed: numericSeed,
     sanctuarySpawned: false,
   };
+
+  if (params?.runGenerationContext) {
+    tree = assignEchoOverlaysForDepth(tree, 1, {
+      runGenerationContext: params.runGenerationContext,
+      depthIndex: macroDepthIndex,
+    });
+  }
+
+  return tree;
 }
 
 export {

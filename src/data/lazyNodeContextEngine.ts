@@ -6,6 +6,13 @@ import {
   rollNodeContextModifiers,
 } from './nodeGenerationContextEngine';
 import {
+  formatEchoEncounterKindLog,
+  formatEchoSignalEngageLog,
+  mergeEchoOverlayIntoModifiers,
+  resolveEchoEncounterAtEngagement,
+} from './echoEncounterEngine';
+import { devApplyForcedEchoEncounter } from './echoDebugEngine';
+import {
   buildCarriedCargoContextRollBias,
   formatLazyRollCargoPressureLog,
 } from './unstableCargoEffectsEngine';
@@ -47,6 +54,7 @@ export interface LazyNodeContextRollResult {
   node: ProceduralRunNode | null;
   freshlyRolled: boolean;
   cargoPressureLog: string | null;
+  echoEngageLogs: string[];
 }
 
 /** Roll Veil Front context modifiers at vector engagement using current cargo. */
@@ -58,16 +66,17 @@ export function ensureNodeContextModifiersAtEngagement(
 ): LazyNodeContextRollResult {
   const node = tree.nodes[nodeId] ?? null;
   if (!node) {
-    return { tree, node: null, freshlyRolled: false, cargoPressureLog: null };
+    return { tree, node: null, freshlyRolled: false, cargoPressureLog: null, echoEngageLogs: [] };
   }
 
   if (!isLazyContextRollTree(tree) || node.contextModifiers != null) {
-    return { tree, node, freshlyRolled: false, cargoPressureLog: null };
+    return { tree, node, freshlyRolled: false, cargoPressureLog: null, echoEngageLogs: [] };
   }
 
   const rollState = {
     echoSignalsUsed: tree.modifierRollState!.echoSignalsUsed,
     legendaryEchoUsed: tree.modifierRollState!.legendaryEchoUsed,
+    echoSignalsByDepth: { ...tree.modifierRollState!.echoSignalsByDepth },
   };
   const rng = createNodeContextRng(tree.rollSeed!, nodeId);
   const cargoBias = buildCarriedCargoContextRollBias(cargo);
@@ -83,13 +92,54 @@ export function ensureNodeContextModifiersAtEngagement(
     cargoBias,
   );
 
+  modifiers = mergeEchoOverlayIntoModifiers(modifiers, node.echoOverlay);
+
   if (node.type === 'GATEKEEPER') {
     modifiers = applyGatekeeperAnchorCore(modifiers, depthIndex, runContext, rng);
+  }
+
+  if (modifiers.echoSignal) {
+    let resolved = modifiers;
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      const forced = devApplyForcedEchoEncounter(
+        modifiers,
+        depthIndex,
+        node.type,
+        runContext,
+        `${nodeId}:${node.depth}:${node.type}`,
+        rollState,
+      );
+      if (forced.echoEncounterKind) {
+        resolved = forced;
+      }
+    }
+    if (!resolved.echoEncounterKind) {
+      resolved = resolveEchoEncounterAtEngagement(
+        modifiers,
+        depthIndex,
+        node.type,
+        runContext,
+        `${nodeId}:${node.depth}:${node.type}`,
+        rollState,
+      );
+    }
+    modifiers = resolved;
+  }
+
+  const echoEngageLogs: string[] = [];
+  if (modifiers.echoSignal) {
+    echoEngageLogs.push(
+      formatEchoSignalEngageLog(modifiers.echoSignalLabel ?? 'ECHO SIGNAL'),
+    );
+    if (modifiers.echoEncounterKind) {
+      echoEngageLogs.push(formatEchoEncounterKindLog(modifiers.echoEncounterKind));
+    }
   }
 
   const updatedNode: ProceduralRunNode = {
     ...node,
     contextModifiers: modifiers,
+    echoOverlay: undefined,
   };
 
   const nextTree: ProceduralRunTree = {
@@ -106,5 +156,6 @@ export function ensureNodeContextModifiersAtEngagement(
     node: updatedNode,
     freshlyRolled: true,
     cargoPressureLog: formatLazyRollCargoPressureLog(modifiers, cargo),
+    echoEngageLogs,
   };
 }

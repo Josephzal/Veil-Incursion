@@ -27,6 +27,8 @@ export interface ProceduralRunNode {
   typeAssigned?: boolean;
   /** Veil Front context — anchor/echo/operation signals for scanner and combat. */
   contextModifiers?: NodeContextModifiers;
+  /** Echo overlay stamped at scanner layer unlock — merged at engagement. */
+  echoOverlay?: import('./echoEncounter').ProceduralEchoOverlay;
 }
 
 export interface ProceduralRunTree {

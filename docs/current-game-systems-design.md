@@ -1,6 +1,6 @@
 # Veil Incursion Current Systems Design
 
-Last updated: 2026-07-08 (unstable cargo carried effects v1 complete)
+Last updated: 2026-07-08 (echo encounters v1 phase 4)
 
 This document captures the current implemented design surface for Veil Incursion: player-facing hub systems, run progression, economy, cargo/items, enemies, combat mechanics, and known partial implementations. It is intended as a working reference for design iteration and balancing, not a final player-facing manual.
 
@@ -117,9 +117,36 @@ Persistent world state drives run generation. Each of the 5 sectors has exactly 
 
 **Scanner integration:** Depth-based probabilistic rolls for anchor signals and operation targets (`nodeGenerationContextEngine.ts`). Operation target overlays only appear on rolled nodes; mid-run clears contribute immediately.
 
-**Key files:** `anchorRegistry.ts`, `operationGenerator.ts`, `operationRulesEngine.ts`, `operationLifecycleEngine.ts`, `worldStateValidation.ts`, `worldStateDebugEngine.ts` (dev only).
+**Echo encounters (v1 — Phases 1–6):** Echo signals are scanner overlays, not enemy origin rolls. `assignEchoOverlaysForDepth` stamps `echoOverlay` at scanner layer unlock (and depth 1 at tree gen). Caps: max 1 echo signal per procedural depth, max 2/run (3 during `ECHO_RECOVERY`). At engagement, `resolveEchoEncounterAtEngagement` weights and picks encounter kind: `FALLEN_RUNNER_ECHO` (narrative loot/stabilize/leave), `HOSTILE_ECHO` (authored combat template), `ASSIST_ECHO` (next-combat buff), `CARGO_ECHO` (salvage + ambush risk), `EXTRACTION_ECHO` (route reveal). **Phase 3:** three class-inspired hostile templates (Fallen Aegis / Hex Shot / Envoy) plus depth-3 corrupted legendary variants; `pickEchoTemplateForNode` prefers class templates when snapshot `sourceClass` matches; depth scaling softens class echoes at depth 1 and toughens standard class echoes at depth 3; `echoRewardEngine.ts` rolls Echo-Glass, credits, and class-biased bonus salvage on hostile victory via `grantHostileEchoRewards`. **Phase 4:** `runDebriefEchoEngine.ts` builds Echo debrief block (signals, resolutions, glass extracted/banked/lost, Echo Recovery progress lines); `computeRunOperationContribution` credits granular echo events on `ECHO_RECOVERY` runs; dev echo forcing via `echoDebugEngine.ts` + Dev Test hub buttons. **Phase 6:** Veil Front player-facing echo intel — `echoIntelEngine.ts` feeds scanner telemetry (`scannerSignalEngine.ts`), sector briefing ECHO INTEL block (`SectorBriefingPanel.tsx`), deploy confirm Echo Intel line (`VeilFrontDeployConfirmModal.tsx`), and objective-aware contribution hints (`formatOperationContributesForObjective` on `ActiveOperationCard.tsx` + briefing); `echoRunState.echoRewardsExtracted` tracks reward stacks banked/extracted; fallen-runner loot can drop Smuggler's Ledger (8% on cargo echo); extraction echo sets `extractionRecallBonusPending` for a one-time −5% emergency recall cargo bleed (`RunContext.applyEmergencyRecallCargoBleed`); world-state dev validation appends static echo pipeline checks (`validateEchoEncounterPipeline` via `WorldStateContext.devGetValidationReport`). Run tracking via `echoRunState` on incursion. Source: `src/types/echoEncounter.ts`, `src/types/echoElite.ts`, `src/data/echoEncounterEngine.ts`, `src/data/echoEncounterKindEngine.ts`, `src/data/echoEncounterResolver.ts`, `src/data/echoNarrativeEngine.ts`, `src/data/echoEliteCatalog.ts`, `src/data/echoRecoveryEngine.ts`, `src/data/echoRewardEngine.ts`, `src/data/echoRunState.ts`, `src/data/echoIntelEngine.ts`, `src/data/runDebriefEchoEngine.ts`, `src/data/echoDebugEngine.ts`.
 
-**Veil Front surfaces:** Active operation/anchor cards, sector intel (operation type + lifecycle), briefing tabs, deploy confirmation (reward preview + contribution hints), operation intel log.
+**Echo encounters v1 — acceptance criteria (all met):**
+
+1. ✅ Echo Signal exists as a scanner overlay/context (`ProceduralEchoOverlay`, `NodeContextModifiers.echoSignal`).
+2. ✅ Echo Signal spawn scales with sector `echoActivity`, depth stage, anchor bias (`signalRollModifiers.echoSignalChance`), and `ECHO_RECOVERY` operation (`resolveEchoSignalRollChance`).
+3. ✅ Echo Signal is a node-context overlay, never a normal enemy origin roll (`encounterEchoOverride.ts` bypasses origin roll only for stamped echo nodes).
+4. ✅ Echo Signal nodes resolve into authored encounters at engagement (`resolveEchoEncounterAtEngagement`).
+5. ✅ Fallen Runner Echo (narrative loot/stabilize/leave — `echoNarrativeEngine.ts`).
+6. ✅ Hostile Echo (authored combat template).
+7. ✅ Assist Echo (next-combat buff / reveal).
+8. ✅ Cargo Echo (salvage + ambush risk).
+9. ✅ Extraction Echo (route reveal).
+10. ✅ Three class hostile templates — Fallen Aegis / Hex Shot / Envoy (+ depth-3 corrupted variants) in `echoEliteCatalog.ts`.
+11. ✅ Echo rewards granted via `echoRewardEngine.ts` + resolvers.
+12. ✅ Echo rewards route through cargo (`addLootToContainment`) and follow normal extraction/bank/death ledger rules.
+13. ✅ `ECHO_RECOVERY` operations gain progress from echo events (`computeRunOperationContribution`).
+14. ✅ Debrief shows Echo activity + contribution (`runDebriefEchoEngine.ts`, `OperationDebriefScreen`).
+15. ✅ Dev tools force/test echoes (`echoDebugEngine.ts`, Dev Test hub ECHO // DEBUG row, `hostile-echo-combat` sandbox preset).
+16. ✅ No real player snapshot system (only `EchoSnapshotPlaceholder` future-hook fields).
+17. ✅ No online multiplayer sync.
+18. ✅ No bribe/betrayal system.
+19. ✅ No faction territory/control system.
+20. ✅ Existing runs remain playable (echo hooks are additive; no new pre-existing typecheck regressions).
+
+**Future player-snapshot hooks (not implemented):** `EchoSnapshotPlaceholder` reserves `sourcePlayerId`, `sourceRunId`, `sourceClass`, `sourceLoadoutSummary`, `sourceDeathDepth`, `sourceCargoSummary`, `echoRarity`; `EchoEliteTemplate.loadoutSummary` carries authored flavor in v1.
+
+**Key files:** `anchorRegistry.ts`, `operationGenerator.ts`, `operationRulesEngine.ts`, `operationLifecycleEngine.ts`, `echoEncounterEngine.ts`, `echoValidation.ts`, `worldStateValidation.ts`, `worldStateDebugEngine.ts` (dev only).
+
+**Veil Front surfaces:** Active operation/anchor cards, sector intel (operation type + lifecycle), briefing tabs, deploy confirmation (reward preview + contribution hints + echo intel), operation intel log, ECHO RECOVERY contribution hints on active operation card.
 
 **Debrief surfaces:** `+N progress this run` headline, mid-incursion transmission, per-type completion effect lines, community progress bar.
 
@@ -334,7 +361,7 @@ Three UNSTABLE resources apply **carried effects** while physically present in r
 **Scanner lazy rolls (procedural runs):**
 
 1. **Type assignment (layer unlock):** Depths 2–14 start as COMBAT placeholders until the scanner layer unlocks. `assignPendingDepthTypes` rolls final node types with cargo bias (Anomalous Core → ELITE weight; Veil-Ash → ANOMALY weight). Triggered via `syncProceduralScannerTypes` when depth advances or cargo changes.
-2. **Context modifiers (breach):** Anchor / echo / high-value / hazard context modifiers roll at node engagement, not at tree generation. Cargo biases anchor signal and high-value rolls (`ensureNodeContextModifiersAtEngagement`). Pre-breach scanner shows node **types** only; context signals appear after engagement.
+2. **Context modifiers (breach):** Anchor / high-value / hazard context modifiers roll at node engagement. Cargo biases anchor signal and high-value rolls (`ensureNodeContextModifiersAtEngagement`). **Echo signal overlays** are visible on scanner after layer unlock; hostile template + `echoEncounterKind` resolve at engagement.
 
 **UI:** `CargoPressurePanel` on cargo overlay, run chrome, and event headers when effects are active. First pickup logs once per type per incursion (`unstableCargoPickupLogged`).
 
@@ -730,7 +757,7 @@ Current world/narrative surface includes:
 - Scanner signal generation.
 - Scanner anomalies.
 - Anchor assault.
-- Echo elite override/recovery.
+- Echo elite override/recovery (Phase 1–4: overlay at layer unlock, hostile resolution at breach, class templates + reward engine + debrief + dev tools).
 - Patrol spawn.
 - Resonance escalation.
 - Narrative events and D20 skill checks.
@@ -741,6 +768,7 @@ Current world/narrative surface includes:
 
 - **Contract loop v1 (complete):** Resource model, physical banking, contract board, Veil Front integration, run event tracking, contract resolver, unified run debrief (extract + death via `OperationDebriefScreen`), procedural operation generation, operation lifecycle (ACTIVE / COMPLETED / expiration / AFTERMATH rotation), mid-run operation target contribution with debrief transmission line, sponsor perks on deploy/contract summary, operation intel log on Veil Front briefing, expanded operation contribution on extract, **debrief progress headline** (`+N progress this run`), **reward preview** on Veil Front cards/briefing/deploy modal, and **world state validation + dev debug tooling** (Phases A–F).
 - **Unstable cargo carried effects v1 (complete):** Three unstable resources with deduped carried modifiers, lazy procedural type/context rolls, cargo pressure UI, debrief Cargo Pressure block, volatile resonance tagging, occupancy resonance multiplier, emergency recall Veil-Ash warning log.
+- **Echo encounters v1 (complete — Phases 1–6):** Echo scanner overlays at layer unlock, per-depth/run caps, weighted encounter kinds, fallen-runner narrative, assist/cargo/extraction immediate resolution, hostile combat routing, class-based hostile templates with depth scaling, hostile echo reward rolls, debrief Echo section, dev forcing tools, echo pipeline validation (reward-resource existence + Echo Recovery contribution rules), `echoRunState` tracking, Veil Front echo intel surfaces, reward-stack extraction tracking, Smuggler's Ledger fallen-runner drop, extraction echo emergency-recall bleed bonus. Acceptance criteria (20) verified in the Echo Encounters v1 section below.
 - **Safehouse banking:** Physical in-run banking via `runBankedSnapshot` — banked cargo survives death and routes to hub stash. Unbanked cargo is lost on death (`runResourceLedger.lostOnDeath`). Extraction merges banked + carried cargo before deposit.
 - Target Fragment has a catalogued combat effect but is marked `unimplemented`.
 - Kinetic Hollow Points / Veil-Vial is described as next attack +15 damage but is marked `unimplemented`.

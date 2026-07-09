@@ -45,8 +45,9 @@ function countContributionRules(rules: OperationContributionRules): number {
 
 function operationHasCompletablePath(objectiveKind: OperationObjectiveKind): boolean {
   const rules = resolveContributionRules(objectiveKind);
-  if (countContributionRules(rules) === 0) return false;
-  if (rules.defeatEcho) return false;
+  const ruleCount = countContributionRules(rules);
+  if (ruleCount === 0) return false;
+  if (rules.defeatEcho && ruleCount <= 1) return false;
   return true;
 }
 

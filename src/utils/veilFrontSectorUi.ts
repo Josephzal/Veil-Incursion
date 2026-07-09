@@ -8,6 +8,7 @@ import type {
   VeilAnchorState,
 } from '../types/worldState';
 import { getAnchorPressureLines } from '../data/anchorRegistry';
+import { formatEchoOperationContributionHints, formatEchoSectorIntelLines } from '../data/echoIntelEngine';
 import { formatOperationObjectiveKind } from './veilFrontBriefingUi';
 
 export interface BiomeVisualTheme {
@@ -166,6 +167,20 @@ export function formatOperationContributes(rules: OperationContributionRules): s
   if (rules.bankAtSafehouse) lines.push('Bank cargo at safehouse');
   if (rules.defeatElite) lines.push('Suppress elite encounters');
   return lines;
+}
+
+export function formatOperationContributesForObjective(
+  objectiveKind: OperationObjectiveKind,
+  rules: OperationContributionRules,
+): string[] {
+  const base = formatOperationContributes(rules);
+  const echoHints = formatEchoOperationContributionHints(objectiveKind);
+  if (echoHints.length === 0) return base;
+  return [...base, ...echoHints];
+}
+
+export function formatEchoBriefingIntel(sector: SectorState): string[] {
+  return formatEchoSectorIntelLines(sector);
 }
 
 export function formatOperationLifecycleStatus(
