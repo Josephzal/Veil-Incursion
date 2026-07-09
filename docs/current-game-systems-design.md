@@ -1,6 +1,6 @@
 # Veil Incursion Current Systems Design
 
-Last updated: 2026-07-08 (contract loop v1 complete)
+Last updated: 2026-07-08 (procedural operations polish pass complete)
 
 This document captures the current implemented design surface for Veil Incursion: player-facing hub systems, run progression, economy, cargo/items, enemies, combat mechanics, and known partial implementations. It is intended as a working reference for design iteration and balancing, not a final player-facing manual.
 
@@ -10,7 +10,8 @@ Primary data and implementation files:
 
 - Hub navigation and screens: `src/constants/terminalNav.ts`, `src/screens/OverworldHubScreen.tsx`, `src/components/hub/LoadoutHubPanel.tsx`, `src/components/hub/BlackMarketHubPanel.tsx`, `src/components/hub/ContractBoardPanel.tsx`
 - Contracts: `src/types/contract.ts`, `src/data/contractTemplates.ts`, `src/data/contractGenerator.ts`, `src/data/contractResolver.ts`, `src/data/contractRunProgressEngine.ts`, `src/utils/contractUi.ts`
-- Debrief: `src/data/runDebriefEngine.ts`, `src/data/runDebriefResourceEngine.ts`, `src/screens/OperationDebriefScreen.tsx`, `src/hooks/useRunDeathFinalizer.ts`
+- Debrief: `src/data/runDebriefEngine.ts`, `src/data/runDebriefResourceEngine.ts`, `src/screens/OperationDebriefScreen.tsx`, `src/hooks/useRunDeathFinalizer.ts`, `src/utils/operationDebriefUi.ts`
+- World state / operations: `src/data/worldStateEngine.ts`, `src/data/anchorRegistry.ts`, `src/data/operationGenerator.ts`, `src/data/operationRulesEngine.ts`, `src/data/operationLifecycleEngine.ts`, `src/context/WorldStateContext.tsx`
 - Run flow: `src/context/RunContext.tsx`, `src/context/GameFlowContext.tsx`, `src/data/descentEngine.ts`, `src/data/sectorGraphEngine.ts`
 - Cargo/items/resources: `src/types/resourceItem.ts`, `src/types/runResourceLedger.ts`, `src/types/cargoGrid.ts`, `src/data/resourceRegistry.ts`, `src/data/resourceValidation.ts`, `src/data/runResourceLedgerEngine.ts`, `src/data/extractionPersistenceEngine.ts`, `src/data/blackMarket.ts`, `src/data/craftingRegistry.ts`, `src/data/consumableRegistry.ts`
 - Enemies: `src/data/enemyRoster.ts`, `src/data/enemyDefinitions.ts`, `src/data/enemyCombatConfig.ts`, `src/data/combatRosterAI.ts`, `src/data/enemyAlphaConfig.ts`
@@ -59,11 +60,11 @@ Primary data and implementation files:
 - Boss kill operation contribution requires **successful extraction** (`computeRunOperationContribution`).
 - Bonus objectives (clean extraction, early extract, depth boss, depth extract, anomaly clear) award extra credits/reputation when the primary contract succeeds.
 
-**Debrief sections (extraction):** Run Outcome, Extraction Method, Extraction Payout, Contract Result (+ bonus), Resource Resolution (grouped by category), Operation Contribution (including mid-run "already transmitted" when applicable), Community Progress.
+**Debrief sections (extraction):** Run Outcome, Extraction Method, Extraction Payout, Contract Result (+ bonus), Resource Resolution (grouped by category), Operation Contribution (`+N progress this run` headline, mid-run transmission, extract breakdown, total this run), Community Progress (before→after %).
 
-**Debrief sections (death):** Run stats, grouped Resource Resolution (lost vs banked), failed Contract Result, Operation Contribution (informational; mid-run contribution shown as "already transmitted").
+**Debrief sections (death):** Run stats, grouped Resource Resolution (lost vs banked), failed Contract Result, Operation Contribution (informational; shows `No operation progress generated this run` when nothing credited, or mid-run transmission when applicable), Community Progress.
 
-**Mid-run operation contribution:** Clearing operation target or anchor signal nodes applies `clearOperationTarget` contribution immediately during the run (`RunWorldStateBridge` + `RunContext`). Tracked on incursion as `operationContributionTransmitted` and surfaced on debrief.
+**Mid-run operation contribution:** Clearing operation target or anchor signal nodes applies `clearOperationTarget` contribution immediately during the run (`RunWorldStateBridge` + `RunContext`). Tracked on incursion as `operationContributionTransmitted` and surfaced on debrief as **Mid-incursion transmission**.
 
 **Operation contribution rule:** Depth boss contribution credits apply only when the player **successfully extracts** (`runDebriefEngine.ts`).
 
@@ -85,14 +86,42 @@ Safehouse was removed from the main hub navigation. In-run safehouse remains ava
 Veil Front is the main deployment screen. It contains:
 
 - Sector map and active sector briefing.
-- Operation tab: lifecycle status, contribution rules, and recent **operation intel** log lines.
+- Operation tab: lifecycle status, run window, **reward preview**, contribution rules, progress (`current/required` + %), and recent **operation intel** log lines.
 - Anchor tab; compact **selected contract** summary with sponsor perks (`SelectedContractSummary`).
 - Sector threat/reward/echo/anchor/resource readouts.
 - Sector compatibility markers for the selected contract (`getContractSectorCompatibility`).
-- Deployment confirmation modal (operation lifecycle, sponsor perks when applicable).
+- Deployment confirmation modal (operation lifecycle, **operation reward preview**, sponsor perks when applicable).
 - Initiate Breach call to action.
 
 The main deploy/start-run button is consolidated here. Veil Front does **not** show the full contract board.
+
+### Procedural Operations & Anchor Behavior
+
+Persistent world state drives run generation. Each of the 5 sectors has exactly one **Veil Anchor** (fixed per sector) and one **active Operation** (rotates over time).
+
+**Anchor types (sector-locked):**
+
+| Sector | Anchor | Run pressure focus |
+|--------|--------|-------------------|
+| Slag Works | Choir Spire | Echo / resonance bleed |
+| Abyssal Sink | Null Monolith | Scanner distortion / intel |
+| Null Zone | Ley Nexus | Resource density |
+| Blackline Terminus | Rift Engine | Combat / industrial pressure |
+| Ashen Wastes | Ashen Heart | Elite / boss pressure |
+
+**Operation types (5 archetypes):** `ANCHOR_ASSAULT`, `ECHO_RECOVERY`, `EXTRACTION_SURGE`, `RESOURCE_SURVEY`, `BOSS_SUPPRESSION`. After each sector's 2 hand-authored starter operations, procedural generation weighted by anchor type rolls new instances with **title/description variants** and sector-specific reward emphasis.
+
+**Lifecycle:** `ACTIVE` (5 runs) → `COMPLETED` → `AFTERMATH` (2 runs) → rotate to next operation. Expired operations rotate without completion. Completed operations deactivate linked anchors for a type-specific duration and apply per-type completion effects (reward surge, scanner visibility, elite pressure reduction, etc.).
+
+**Contribution:** Per-operation-type rules in `operationRulesEngine.ts`. Credits apply on successful extraction unless mid-run transmission (scanner node clears). Sources include extraction, emergency recall, safehouse banking, depth boss, elites, anchor elites/core, target resources (capped), and operation target nodes.
+
+**Scanner integration:** Depth-based probabilistic rolls for anchor signals and operation targets (`nodeGenerationContextEngine.ts`). Operation target overlays only appear on rolled nodes; mid-run clears contribute immediately.
+
+**Key files:** `anchorRegistry.ts`, `operationGenerator.ts`, `operationRulesEngine.ts`, `operationLifecycleEngine.ts`, `worldStateValidation.ts`, `worldStateDebugEngine.ts` (dev only).
+
+**Veil Front surfaces:** Active operation/anchor cards, sector intel (operation type + lifecycle), briefing tabs, deploy confirmation (reward preview + contribution hints), operation intel log.
+
+**Debrief surfaces:** `+N progress this run` headline, mid-incursion transmission, per-type completion effect lines, community progress bar.
 
 ### Black Market
 
@@ -671,7 +700,7 @@ Current world/narrative surface includes:
 
 ## Known Partial Implementations / Design Debt
 
-- **Contract loop v1 (complete):** Resource model, physical banking, contract board, Veil Front integration, run event tracking, contract resolver, unified run debrief (extract + death via `OperationDebriefScreen`), procedural operation generation, operation lifecycle (ACTIVE / expiration / AFTERMATH rotation), mid-run operation target contribution with "already transmitted" debrief line, sponsor perks on deploy/contract summary, operation intel log on Veil Front briefing, and expanded operation contribution on extract.
+- **Contract loop v1 (complete):** Resource model, physical banking, contract board, Veil Front integration, run event tracking, contract resolver, unified run debrief (extract + death via `OperationDebriefScreen`), procedural operation generation, operation lifecycle (ACTIVE / COMPLETED / expiration / AFTERMATH rotation), mid-run operation target contribution with debrief transmission line, sponsor perks on deploy/contract summary, operation intel log on Veil Front briefing, expanded operation contribution on extract, **debrief progress headline** (`+N progress this run`), **reward preview** on Veil Front cards/briefing/deploy modal, and **world state validation + dev debug tooling** (Phases A–F).
 - **Safehouse banking:** Physical in-run banking via `runBankedSnapshot` — banked cargo survives death and routes to hub stash. Unbanked cargo is lost on death (`runResourceLedger.lostOnDeath`). Extraction merges banked + carried cargo before deposit.
 - Target Fragment has a catalogued combat effect but is marked `unimplemented`.
 - Kinetic Hollow Points / Veil-Vial is described as next attack +15 damage but is marked `unimplemented`.

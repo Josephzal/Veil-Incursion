@@ -5,10 +5,13 @@ import { useGameFlow } from '../../context/GameFlowContext';
 import { useRun } from '../../context/RunContext';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useTerminal } from '../../context/TerminalContext';
+import { useWorldState } from '../../context/WorldStateContext';
+import { SECTOR_WORLD_TEMPLATES } from '../../data/sectorWorldCatalog';
 import ExplorationHubPanel from '../ExplorationHubPanel';
 import HubScreenShell, { HubSectionHeader } from './HubScreenShell';
 import { hubKeyColor } from '../../constants/hubAtmosphere';
 import type { DevSandboxPreset } from '../../types/devSandbox';
+import type { OperationObjectiveKind, SectorId } from '../../types/worldState';
 import {
   formatBracketHeader,
   getInteractiveButtonStyle,
@@ -51,8 +54,31 @@ export default function DevTestHubPanel(): React.JSX.Element {
   } = useGameFlow();
   const { startDevSandboxNode } = useRun();
   const { account } = usePlayerAccount();
+  const {
+    selectedSector,
+    persisted,
+    setSelectedSectorId,
+    tickAfterRunComplete,
+    devRegenerateAllOperations,
+    devForceSectorOperation,
+    devSimulateContribution,
+    devForceOperationCompletion,
+    devSetAnchorDormant,
+    devClearAnchorDormant,
+    devGetValidationReport,
+    devGetDebugSnapshot,
+  } = useWorldState();
   const [hubOpen, setHubOpen] = useState(false);
+  const [debugReport, setDebugReport] = useState<string | null>(null);
   const keyColor = hubKeyColor(theme.mutedColor);
+
+  const operationKinds = useMemo<OperationObjectiveKind[]>(() => [
+    'EXTRACTION_SURGE',
+    'RESOURCE_SURVEY',
+    'ANCHOR_ASSAULT',
+    'BOSS_SUPPRESSION',
+    'ECHO_RECOVERY',
+  ], []);
 
   const sandboxConfig = useMemo(() => ({
     activeClass: account.activeClass,
@@ -75,6 +101,19 @@ export default function DevTestHubPanel(): React.JSX.Element {
     startDevSandboxNode(preset, sandboxConfig);
     navigate();
   }, [sandboxConfig, startDevSandboxNode]);
+
+  const showValidationReport = useCallback(() => {
+    setDebugReport(devGetValidationReport());
+  }, [devGetValidationReport]);
+
+  const showDebugSnapshot = useCallback(() => {
+    setDebugReport(devGetDebugSnapshot());
+  }, [devGetDebugSnapshot]);
+
+  const selectSector = useCallback((sectorId: SectorId) => {
+    setSelectedSectorId(sectorId);
+    setDebugReport(`Selected sector: ${sectorId}`);
+  }, [setSelectedSectorId]);
 
   if (hubOpen) {
     return (
@@ -175,6 +214,80 @@ export default function DevTestHubPanel(): React.JSX.Element {
         />
       </View>
 
+      <HubSectionHeader title="WORLD STATE // DEBUG" color={theme.mutedColor} />
+      <Text style={[styles.debugMeta, { color: keyColor }]}>
+        Deploy run {persisted.deployRunIndex} · {selectedSector.displayName} · {selectedSector.activeOperation.objectiveKind}
+      </Text>
+      <View style={styles.grid}>
+        <SandboxLaunchButton
+          label="[ VALIDATE STATE ]"
+          accentColor={theme.primaryColor}
+          onPress={showValidationReport}
+        />
+        <SandboxLaunchButton
+          label="[ INSPECT STATE ]"
+          accentColor={theme.primaryColor}
+          onPress={showDebugSnapshot}
+        />
+        <SandboxLaunchButton
+          label="[ REGEN ALL OPS ]"
+          accentColor={theme.statusColor}
+          onPress={devRegenerateAllOperations}
+        />
+        <SandboxLaunchButton
+          label="[ TICK RUN ]"
+          accentColor={theme.statusColor}
+          onPress={tickAfterRunComplete}
+        />
+        <SandboxLaunchButton
+          label="[ +1 CONTRIB ]"
+          accentColor={TERMINAL_ACCENT}
+          onPress={() => { void devSimulateContribution(1); }}
+        />
+        <SandboxLaunchButton
+          label="[ FORCE COMPLETE ]"
+          accentColor={TERMINAL_ACCENT}
+          onPress={() => devForceOperationCompletion()}
+        />
+        <SandboxLaunchButton
+          label="[ ANCHOR DORMANT ]"
+          accentColor={theme.mutedColor}
+          onPress={() => devSetAnchorDormant(selectedSector.id, 3)}
+        />
+        <SandboxLaunchButton
+          label="[ ANCHOR ACTIVE ]"
+          accentColor={theme.mutedColor}
+          onPress={() => devClearAnchorDormant(selectedSector.id)}
+        />
+      </View>
+      <Text style={[styles.debugMeta, { color: keyColor }]}>Sector select</Text>
+      <View style={styles.grid}>
+        {SECTOR_WORLD_TEMPLATES.map((sector) => (
+          <SandboxLaunchButton
+            key={sector.id}
+            label={`[ ${sector.displayName.toUpperCase()} ]`}
+            accentColor={selectedSector.id === sector.id ? theme.statusColor : theme.primaryColor}
+            onPress={() => selectSector(sector.id)}
+          />
+        ))}
+      </View>
+      <Text style={[styles.debugMeta, { color: keyColor }]}>Force operation type (selected sector)</Text>
+      <View style={styles.grid}>
+        {operationKinds.map((kind) => (
+          <SandboxLaunchButton
+            key={kind}
+            label={`[ ${kind.replace(/_/g, ' ')} ]`}
+            accentColor={theme.statusColor}
+            onPress={() => devForceSectorOperation(selectedSector.id, kind)}
+          />
+        ))}
+      </View>
+      {debugReport ? (
+        <View style={[styles.debugPanel, { borderColor: theme.mutedColor }]}>
+          <Text style={[styles.debugText, { color: theme.primaryColor }]}>{debugReport}</Text>
+        </View>
+      ) : null}
+
       <HapticPressable
         onPress={() => setHubOpen(true)}
         style={({ pressed }) => [
@@ -220,5 +333,21 @@ const styles = StyleSheet.create({
   hubPanel: {
     flex: 1,
     minHeight: 280,
+  },
+  debugMeta: {
+    fontFamily: 'monospace',
+    fontSize: 8,
+    letterSpacing: 0.4,
+    marginBottom: 6,
+  },
+  debugPanel: {
+    borderWidth: 1,
+    padding: 8,
+    marginBottom: 12,
+  },
+  debugText: {
+    fontFamily: 'monospace',
+    fontSize: 8,
+    lineHeight: 12,
   },
 });

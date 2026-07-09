@@ -4,8 +4,13 @@ import type { ResourceItemId } from '../types/resourceItem';
 import { resolveContractResult } from './contractResolver';
 import { buildExtractedResourceSections, type DebriefResourceSection } from './runDebriefResourceEngine';
 import { ALL_RESOURCE_ITEM_IDS, RESOURCE_REGISTRY } from './resourceRegistry';
-import { OPERATION_CONTRIBUTION_VALUES } from './worldStateHelpers';
-import { operationProgressPercent } from './worldStateHelpers';
+import {
+  MAX_OPERATION_TARGET_RESOURCE_STACKS_PER_RUN,
+  MAX_SAFEHOUSE_BANK_CONTRIBUTION_ACTIONS,
+  OPERATION_CONTRIBUTION_VALUES,
+  operationProgressPercent,
+} from './worldStateHelpers';
+import { computeTotalContributionThisRun } from '../utils/operationDebriefUi';
 
 function normalizeResourceLabel(label: string): string {
   return label.toLowerCase().replace(/[\s-]/g, '');
@@ -55,6 +60,8 @@ export interface OperationDebriefPayload {
   progressRequired: number;
   progressBeforePct: number;
   progressAfterPct: number;
+  progressDelta: number;
+  totalContributionThisRun: number;
   completed: boolean;
   completionLogLines: string[];
   credits: number;
@@ -70,7 +77,10 @@ export interface OperationDebriefPayload {
 
 export function computeRunOperationContribution(
   incursion: ActiveIncursionState,
-  opts?: { extractedSuccessfully?: boolean },
+  opts?: {
+    extractedSuccessfully?: boolean;
+    extractionKind?: ContractExtractionKind;
+  },
 ): RunDebriefContribution {
   const context = incursion.runGenerationContext;
   if (!context) {
@@ -78,6 +88,14 @@ export function computeRunOperationContribution(
   }
 
   const extractedSuccessfully = opts?.extractedSuccessfully ?? true;
+  const extractionKind = opts?.extractionKind
+    ?? (incursion.contractRunProgress.emergencyRecallCompleted
+      ? 'EMERGENCY_RECALL'
+      : incursion.masterLinkUsed
+        ? 'MASTER_LINK'
+        : incursion.clearedSafeAnchors.length > 0
+          ? 'SAFE_ANCHOR'
+          : 'STANDARD');
 
   const operation = context.activeOperation;
   const rules = operation.contributionRules;
@@ -90,16 +108,53 @@ export function computeRunOperationContribution(
     breakdown.push(`${label}: +${amount}`);
   };
 
-  add('Successful extraction', extractedSuccessfully
-    ? (rules.successfulExtraction ?? OPERATION_CONTRIBUTION_VALUES.successfulExtraction)
-    : undefined);
+  if (extractedSuccessfully) {
+    if (
+      extractionKind === 'EMERGENCY_RECALL'
+      && rules.emergencyRecallExtraction
+    ) {
+      add(
+        'Emergency recall extraction',
+        rules.emergencyRecallExtraction
+          ?? OPERATION_CONTRIBUTION_VALUES.emergencyRecallExtraction,
+      );
+    } else if (rules.successfulExtraction) {
+      add(
+        'Successful extraction',
+        rules.successfulExtraction ?? OPERATION_CONTRIBUTION_VALUES.successfulExtraction,
+      );
+    }
+  }
+
+  if (rules.bankAtSafehouse && extractedSuccessfully) {
+    const bankActions = incursion.runResourceLedger.safehouseBankActions ?? 0;
+    const creditedActions = Math.min(bankActions, MAX_SAFEHOUSE_BANK_CONTRIBUTION_ACTIONS);
+    if (creditedActions > 0) {
+      const perAction = rules.bankAtSafehouse ?? OPERATION_CONTRIBUTION_VALUES.bankAtSafehouse;
+      add(
+        `Cargo banked at safehouse (${creditedActions})`,
+        perAction * creditedActions,
+      );
+    }
+  }
 
   if (incursion.bossDefeated && extractedSuccessfully) {
     add('Depth boss suppressed', rules.defeatDepthBoss ?? OPERATION_CONTRIBUTION_VALUES.defeatDepthBoss);
   }
 
+  if (rules.defeatElite && extractedSuccessfully) {
+    const eliteKills = incursion.contractRunProgress.eliteKills;
+    if (eliteKills > 0) {
+      const perElite = rules.defeatElite ?? OPERATION_CONTRIBUTION_VALUES.defeatElite;
+      add(
+        `Elite${eliteKills > 1 ? 's' : ''} suppressed (${eliteKills})`,
+        perElite * eliteKills,
+      );
+    }
+  }
+
   const anchorProgress = incursion.anchorAssaultProgress;
-  if (anchorProgress.elitesDefeated > 0) {
+  if (rules.defeatAnchorElite && anchorProgress.elitesDefeated > 0) {
     const perElite = rules.defeatAnchorElite ?? OPERATION_CONTRIBUTION_VALUES.defeatAnchorElite;
     add(
       `Anchor elite${anchorProgress.elitesDefeated > 1 ? 's' : ''} neutralized (${anchorProgress.elitesDefeated})`,
@@ -124,12 +179,16 @@ export function computeRunOperationContribution(
     incursion.runResourceLedger,
     operation.rewardEmphasis.targetResources,
   );
-  if (targetResourceStacks > 0 && extractedSuccessfully) {
+  if (targetResourceStacks > 0 && extractedSuccessfully && rules.extractTargetResource) {
+    const creditedStacks = Math.min(
+      targetResourceStacks,
+      MAX_OPERATION_TARGET_RESOURCE_STACKS_PER_RUN,
+    );
     const perStack = rules.extractTargetResource ?? OPERATION_CONTRIBUTION_VALUES.extractTargetResourceStack;
     const targetLabel = operation.rewardEmphasis.targetResources?.join(', ') ?? 'target resource';
     add(
-      `${targetLabel} extracted (${targetResourceStacks})`,
-      perStack * targetResourceStacks,
+      `${targetLabel} extracted (${creditedStacks}${creditedStacks < targetResourceStacks ? ` of ${targetResourceStacks}` : ''})`,
+      perStack * creditedStacks,
     );
   }
 
@@ -164,16 +223,6 @@ export function buildOperationDebriefPayload(
   if (!context) return null;
 
   const extractedSuccessfully = opts.extractedSuccessfully ?? true;
-  const contribution = computeRunOperationContribution(incursion, { extractedSuccessfully });
-  const contractResult = opts.contractResult ?? resolveContractResult({
-    contract: incursion.activeContract,
-    ledger: incursion.runResourceLedger,
-    progress: incursion.contractRunProgress,
-    extractedSuccessfully,
-    extractionKind: opts.extractionKind,
-  });
-  const resourceSections = opts.resourceSections
-    ?? buildExtractedResourceSections(incursion.runResourceLedger);
   const extractionKind = opts.extractionKind
     ?? (incursion.contractRunProgress.emergencyRecallCompleted
       ? 'EMERGENCY_RECALL'
@@ -182,6 +231,25 @@ export function buildOperationDebriefPayload(
         : incursion.clearedSafeAnchors.length > 0
           ? 'SAFE_ANCHOR'
           : 'STANDARD');
+  const contribution = computeRunOperationContribution(incursion, {
+    extractedSuccessfully,
+    extractionKind,
+  });
+  const contractResult = opts.contractResult ?? resolveContractResult({
+    contract: incursion.activeContract,
+    ledger: incursion.runResourceLedger,
+    progress: incursion.contractRunProgress,
+    extractedSuccessfully,
+    extractionKind,
+  });
+  const resourceSections = opts.resourceSections
+    ?? buildExtractedResourceSections(incursion.runResourceLedger);
+  const progressDelta = Math.max(0, opts.progressAfter - opts.progressBefore);
+  const totalContributionThisRun = computeTotalContributionThisRun(
+    contribution.total,
+    opts.midRunContributionTransmitted,
+    extractedSuccessfully,
+  );
 
   return {
     runOutcome: extractedSuccessfully ? 'EXTRACTED' : 'FAILED',
@@ -193,6 +261,8 @@ export function buildOperationDebriefPayload(
     progressRequired: opts.progressRequired,
     progressBeforePct: operationProgressPercent(opts.progressBefore, opts.progressRequired),
     progressAfterPct: operationProgressPercent(opts.progressAfter, opts.progressRequired),
+    progressDelta,
+    totalContributionThisRun,
     completed: opts.completed,
     completionLogLines: opts.completionLogLines,
     credits: opts.credits,

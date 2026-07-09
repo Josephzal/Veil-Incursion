@@ -6,7 +6,7 @@ import { useVeilFrontLayout } from './useVeilFrontLayout';
 import { operationProgressPercent } from '../../data/worldStateHelpers';
 import type { SectorState } from '../../types/worldState';
 import { TerminalTheme } from '../../types/theme';
-import { formatOperationContributes, formatOperationLifecycleStatus, operationTypeChip } from '../../utils/veilFrontSectorUi';
+import { formatOperationContributes, formatOperationLifecycleStatus, formatOperationProgressLabel, formatOperationProgressLockMessage, isOperationProgressLocked, operationLifecycleAccentColor, operationTypeChip } from '../../utils/veilFrontSectorUi';
 
 interface ActiveOperationCardProps {
   theme: TerminalTheme;
@@ -27,6 +27,12 @@ export default function ActiveOperationCard({
     sector.activeOperation.lifecycleStatus,
     sector.activeOperation.runsRemaining,
   );
+  const lifecycleColor = operationLifecycleAccentColor(
+    sector.activeOperation.lifecycleStatus,
+    theme.statusColor,
+  );
+  const progressLocked = isOperationProgressLocked(sector.activeOperation.lifecycleStatus);
+  const progressLockMessage = formatOperationProgressLockMessage(sector.activeOperation.lifecycleStatus);
   const visibleContributes = contributes.slice(0, 3);
   const overflowCount = contributes.length - visibleContributes.length;
 
@@ -52,9 +58,12 @@ export default function ActiveOperationCard({
       <TerminalText
         size={scaleFont(6.5)}
         letterSpacing={0.6}
-        style={{ color: theme.mutedColor }}
+        style={{ color: lifecycleColor, fontWeight: '700' }}
       >
         {lifecycleLabel}
+      </TerminalText>
+      <TerminalText size={scaleFont(6)} style={{ color: theme.mutedColor }}>
+        {`Run window: ${sector.activeOperation.generatedAtRunIndex} → ${sector.activeOperation.expiresAtRunIndex}`}
       </TerminalText>
 
       <View style={styles.bodyContent}>
@@ -96,9 +105,35 @@ export default function ActiveOperationCard({
           letterSpacing={0.6}
           style={{ color: theme.mutedColor, marginTop: scaleSpacing(8) }}
         >
-          {`Community Progress: ${operationPct}%`}
+          {`Community Progress: ${formatOperationProgressLabel(
+            sector.activeOperation.progressCurrent,
+            sector.activeOperation.progressRequired,
+            operationPct,
+          )}`}
         </TerminalText>
-        <ProgressBar percent={operationPct} accentColor={theme.statusColor} height={scaleSize(7)} />
+        <ProgressBar
+          percent={operationPct}
+          accentColor={progressLocked ? theme.mutedColor : theme.statusColor}
+          height={scaleSize(7)}
+        />
+        {progressLockMessage ? (
+          <TerminalText
+            size={scaleFont(6)}
+            style={{ color: lifecycleColor, marginTop: scaleSpacing(4) }}
+            numberOfLines={2}
+          >
+            {progressLockMessage}
+          </TerminalText>
+        ) : null}
+
+        <TerminalText
+          size={scaleFont(6.2)}
+          letterSpacing={0.5}
+          style={{ color: theme.statusColor, marginTop: scaleSpacing(6) }}
+          numberOfLines={2}
+        >
+          {`Reward preview: ${sector.activeOperation.rewardPreview}`}
+        </TerminalText>
 
         {visibleContributes.length > 0 ? (
           <View style={{ marginTop: scaleSpacing(8) }}>

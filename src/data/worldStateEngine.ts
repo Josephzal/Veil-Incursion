@@ -18,22 +18,29 @@ import {
 import { generateContractBoard } from './contractGenerator';
 import {
   DEFAULT_OPERATION_PROGRESS_REQUIRED,
-  DEFAULT_OPERATION_AFTERMATH_RUNS,
-  OPERATION_CONTRIBUTION_VALUES,
 } from './worldStateHelpers';
 import {
-  beginOperationAftermath,
+  describeCompletionEffectLines,
+  formatOperationRewardPreview,
+  resolveCompletionEffect,
+  resolveContributionRules,
+} from './operationRulesEngine';
+import {
+  beginOperationCompleted,
   getSectorOperationLifecycle,
   operationRunsRemaining,
 } from './operationLifecycleEngine';
 import { resolveSectorOperationTemplate } from './operationGenerator';
 import {
   anchorIdForSector,
-  defaultAnchorRealityRules,
   getSectorWorldTemplate,
   SECTOR_WORLD_TEMPLATES,
 } from './sectorWorldCatalog';
 import { sectorIdToVeilBiome } from './sectorBiomeBridge';
+import {
+  buildScannerSignalBiasFromAnchor,
+  getAnchorRealityRules,
+} from './anchorRegistry';
 
 export interface EmployerPackage {
   maxHpBonusPct: number;
@@ -127,7 +134,7 @@ export function buildVeilAnchorState(
     displayName: template.anchor.displayName,
     description: template.anchor.description,
     isActive: true,
-    realityRules: defaultAnchorRealityRules(template.anchor.type),
+    realityRules: getAnchorRealityRules(template.anchor.type),
   };
 }
 
@@ -142,6 +149,7 @@ export function buildOperationState(
     sectorId,
     operationIndex,
     persisted.deployRunIndex,
+    persisted.sectorOperationOverrides,
   );
   const lifecycle = getSectorOperationLifecycle(persisted, sectorId, operationTemplate.id);
   const anchor = template.anchor
@@ -158,17 +166,12 @@ export function buildOperationState(
     progressCurrent,
     progressRequired: DEFAULT_OPERATION_PROGRESS_REQUIRED,
     rewardEmphasis: operationTemplate.rewardEmphasis,
-    contributionRules: {
-      successfulExtraction: OPERATION_CONTRIBUTION_VALUES.successfulExtraction,
-      defeatDepthBoss: OPERATION_CONTRIBUTION_VALUES.defeatDepthBoss,
-      defeatEcho: OPERATION_CONTRIBUTION_VALUES.defeatEcho,
-      defeatAnchorElite: OPERATION_CONTRIBUTION_VALUES.defeatAnchorElite,
-      clearAnchorCore: OPERATION_CONTRIBUTION_VALUES.clearAnchorCore,
-      clearOperationTarget: OPERATION_CONTRIBUTION_VALUES.clearOperationTarget,
-      extractTargetResource: OPERATION_CONTRIBUTION_VALUES.extractTargetResourceStack,
-    },
+    contributionRules: resolveContributionRules(operationTemplate.objectiveKind),
     lifecycleStatus: lifecycle.status,
     runsRemaining: operationRunsRemaining(lifecycle),
+    generatedAtRunIndex: lifecycle.generatedAtRunIndex,
+    expiresAtRunIndex: lifecycle.expiresAtRunIndex,
+    rewardPreview: formatOperationRewardPreview(operationTemplate.rewardEmphasis),
   };
 }
 
@@ -182,6 +185,7 @@ export function buildSectorState(
     sectorId,
     resolveSectorOperationIndex(sectorId, persisted),
     persisted.deployRunIndex,
+    persisted.sectorOperationOverrides,
   );
   const progressCurrent = operationProgress[operationTemplate.id] ?? 0;
   const rewardBoost = resolveRewardLevelBoost(sectorId, persisted);
@@ -240,16 +244,11 @@ export function buildRunGenerationContext(
     echoWeightDelta: anchor?.realityRules.echoBias ?? 0,
   };
 
-  const scannerSignalBias = {
-    anchorSignalMultiplier: anchor?.isActive ? 1 + sectorState.hazardLevel * 0.05 : 0.5,
-    echoSignalMultiplier: sectorState.echoActivity === 'CRITICAL'
-      ? 1.4
-      : sectorState.echoActivity === 'ELEVATED'
-        ? 1.15
-        : 0.85,
-    operationSignalMultiplier: 1.1,
-    highRiskMultiplier: 1 + sectorState.hazardLevel * 0.08,
-  };
+  const scannerSignalBias = buildScannerSignalBiasFromAnchor(anchor?.type ?? null, {
+    hazardLevel: sectorState.hazardLevel,
+    echoActivity: sectorState.echoActivity,
+    anchorActive: anchor?.isActive ?? false,
+  });
 
   return {
     sectorState,
@@ -282,13 +281,11 @@ export function resolveOperationCompletionEffect(
   sectorId: SectorId,
   operation: OperationState,
 ): OperationCompletionEffect {
-  const template = getSectorWorldTemplate(sectorId);
-  return {
-    rotateToNextOperation: true,
-    increaseRewardLevelForRuns: 3,
-    deactivateAnchorForRuns: operation.linkedAnchorId ? 5 : undefined,
-    unlockResourceFocus: template.resourceFocus[0],
-  };
+  return resolveCompletionEffect(
+    operation.objectiveKind,
+    sectorId,
+    operation.linkedAnchorId,
+  );
 }
 
 export function applyOperationCompletion(
@@ -316,9 +313,14 @@ export function applyOperationCompletion(
 
   if (effect.deactivateAnchorForRuns && operation.linkedAnchorId) {
     next.dormantAnchorRuns[operation.linkedAnchorId] = effect.deactivateAnchorForRuns;
-    const anchorName = template.anchor?.displayName ?? 'Anchor';
-    logLines.push(`>> ${anchorName.toUpperCase()} DORMANT — ECHO ACTIVITY REDUCED FOR ${effect.deactivateAnchorForRuns} RUNS.`);
   }
+
+  const effectLines = describeCompletionEffectLines(
+    operation.objectiveKind,
+    template.anchor?.displayName ?? 'Anchor',
+    effect,
+  );
+  logLines.push(...effectLines);
 
   if (effect.increaseRewardLevelForRuns) {
     next.temporarySectorModifiers.push({
@@ -327,21 +329,19 @@ export function applyOperationCompletion(
       runsRemaining: effect.increaseRewardLevelForRuns,
       label: `${template.displayName} post-operation surge`,
     });
-    logLines.push(`>> SECTOR REWARD SURGE — +1 REWARD LEVEL FOR ${effect.increaseRewardLevelForRuns} RUNS IN ${template.displayName.toUpperCase()}.`);
+    const rewardAlreadyLogged = effectLines.some((line) =>
+      /REWARD|PAYOUT|SURGE|YIELD/i.test(line));
+    if (!rewardAlreadyLogged) {
+      logLines.push(`>> SECTOR REWARD SURGE — +1 REWARD LEVEL FOR ${effect.increaseRewardLevelForRuns} RUNS IN ${template.displayName.toUpperCase()}.`);
+    }
   }
 
-  if (effect.unlockResourceFocus) {
+  if (effect.unlockResourceFocus && !effectLines.some((line) => line.includes('RESOURCE FOCUS UNLOCKED'))) {
     logLines.push(`>> RESOURCE FOCUS UNLOCKED — ${effect.unlockResourceFocus.toUpperCase()}.`);
   }
 
   if (effect.rotateToNextOperation) {
-    next = beginOperationAftermath(
-      next,
-      sectorId,
-      operation.id,
-      DEFAULT_OPERATION_AFTERMATH_RUNS + 1,
-    );
-    logLines.push('>> OPERATION AFTERMATH — COMMUNITY PROGRESS LOCKED UNTIL ROTATION.');
+    next = beginOperationCompleted(next, sectorId, operation.id);
   }
 
   logLines.push('>> CHECK OPERATIONAL BRIEFING FOR UPDATED SECTOR STATUS.');

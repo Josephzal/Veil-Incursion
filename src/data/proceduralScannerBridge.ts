@@ -65,6 +65,7 @@ export function proceduralNodeToIncursionNode(
   const labelSuffix = VECTOR_LABELS[encounterIndex % VECTOR_LABELS.length] ?? 'VECTOR';
   const signalTags: string[] = [];
   if (node.contextModifiers?.anchorSignal) signalTags.push('ANCHOR');
+  if (node.contextModifiers?.operationTag) signalTags.push('OP');
   if (node.contextModifiers?.echoSignal) signalTags.push('ECHO');
   const signalSuffix = signalTags.length > 0 ? ` // ${signalTags.join('+')}` : '';
   const biomePrefix = vectorLabelPrefix(runVeilBiome);

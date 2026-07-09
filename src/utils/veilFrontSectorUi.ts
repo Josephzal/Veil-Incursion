@@ -7,6 +7,7 @@ import type {
   SectorState,
   VeilAnchorState,
 } from '../types/worldState';
+import { getAnchorPressureLines } from '../data/anchorRegistry';
 import { formatOperationObjectiveKind } from './veilFrontBriefingUi';
 
 export interface BiomeVisualTheme {
@@ -125,6 +126,9 @@ export function anchorStatusLabel(sector: SectorState): { label: string; pips: n
 }
 
 export function describeAnchorInRunPressure(anchor: VeilAnchorState): string[] {
+  const registryLines = [...getAnchorPressureLines(anchor.type)];
+  if (registryLines.length > 0) return registryLines;
+
   const lines: string[] = [];
   const { realityRules: r, type } = anchor;
 
@@ -158,6 +162,9 @@ export function formatOperationContributes(rules: OperationContributionRules): s
   if (rules.extractTargetResource) lines.push('Extract with recovered anchor matter');
   if (rules.defeatDepthBoss) lines.push('Suppress region-prime anomalies');
   if (rules.successfulExtraction) lines.push('Successful extraction runs');
+  if (rules.emergencyRecallExtraction) lines.push('Emergency recall extraction');
+  if (rules.bankAtSafehouse) lines.push('Bank cargo at safehouse');
+  if (rules.defeatElite) lines.push('Suppress elite encounters');
   return lines;
 }
 
@@ -165,6 +172,9 @@ export function formatOperationLifecycleStatus(
   lifecycleStatus: import('../types/worldState').OperationLifecycleStatus,
   runsRemaining: number,
 ): string {
+  if (lifecycleStatus === 'COMPLETED') {
+    return 'COMPLETED — aftermath begins next run';
+  }
   if (lifecycleStatus === 'AFTERMATH') {
     return `AFTERMATH — ${runsRemaining} run${runsRemaining === 1 ? '' : 's'} remaining`;
   }
@@ -172,6 +182,40 @@ export function formatOperationLifecycleStatus(
     return 'EXPIRED — rotating soon';
   }
   return `ACTIVE — expires in ${runsRemaining} run${runsRemaining === 1 ? '' : 's'}`;
+}
+
+export function operationLifecycleAccentColor(
+  lifecycleStatus: import('../types/worldState').OperationLifecycleStatus,
+  statusColor: string,
+): string {
+  switch (lifecycleStatus) {
+    case 'COMPLETED':
+      return '#34d399';
+    case 'AFTERMATH':
+      return '#fbbf24';
+    case 'EXPIRED':
+      return '#f87171';
+    default:
+      return statusColor;
+  }
+}
+
+export function isOperationProgressLocked(
+  lifecycleStatus: import('../types/worldState').OperationLifecycleStatus,
+): boolean {
+  return lifecycleStatus === 'COMPLETED' || lifecycleStatus === 'AFTERMATH';
+}
+
+export function formatOperationProgressLockMessage(
+  lifecycleStatus: import('../types/worldState').OperationLifecycleStatus,
+): string | null {
+  if (lifecycleStatus === 'COMPLETED') {
+    return 'Community progress locked — operation complete.';
+  }
+  if (lifecycleStatus === 'AFTERMATH') {
+    return 'Community progress frozen — new operation incoming.';
+  }
+  return null;
 }
 
 export function resolveRecommendedFor(sector: SectorState): string[] {
@@ -242,4 +286,12 @@ export function echoMeterColor(level: EchoActivityLevel): string {
     default:
       return '#64748b';
   }
+}
+
+export function formatOperationProgressLabel(
+  progressCurrent: number,
+  progressRequired: number,
+  progressPct: number,
+): string {
+  return `${progressCurrent}/${progressRequired} (${progressPct}%)`;
 }

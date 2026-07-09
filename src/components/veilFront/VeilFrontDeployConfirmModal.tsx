@@ -16,7 +16,7 @@ import {
   sponsorDisplayName,
   type ContractSectorCompatibility,
 } from '../../utils/contractUi';
-import { hazardLabel, formatOperationLifecycleStatus } from '../../utils/veilFrontSectorUi';
+import { hazardLabel, formatOperationContributes, formatOperationLifecycleStatus, operationLifecycleAccentColor } from '../../utils/veilFrontSectorUi';
 import { describeEmployerPerks } from '../../utils/employerContractUi';
 
 interface VeilFrontDeployConfirmModalProps {
@@ -77,6 +77,13 @@ export default function VeilFrontDeployConfirmModal({
     sector.activeOperation.lifecycleStatus,
     sector.activeOperation.runsRemaining,
   );
+  const operationLifecycleColor = operationLifecycleAccentColor(
+    sector.activeOperation.lifecycleStatus,
+    theme.statusColor,
+  );
+  const operationContributes = formatOperationContributes(sector.activeOperation.contributionRules)
+    .slice(0, 3)
+    .join(' · ');
   const sponsorPerks = isSponsor ? describeEmployerPerks(contract!.sponsorId) : [];
 
   return (
@@ -146,7 +153,21 @@ export default function VeilFrontDeployConfirmModal({
                   </>
                 ) : null}
                 <SummaryRow label="Operation" value={sector.activeOperation.title} mutedColor={theme.mutedColor} textColor={theme.textColor} />
-                <SummaryRow label="Op Status" value={operationLifecycle} mutedColor={theme.mutedColor} textColor={theme.textColor} />
+                <SummaryRow label="Op Status" value={operationLifecycle} mutedColor={theme.mutedColor} textColor={operationLifecycleColor} />
+                <SummaryRow
+                  label="Op Reward"
+                  value={sector.activeOperation.rewardPreview}
+                  mutedColor={theme.mutedColor}
+                  textColor={theme.statusColor}
+                />
+                {operationContributes.length > 0 ? (
+                  <SummaryRow
+                    label="Op Credit"
+                    value={operationContributes}
+                    mutedColor={theme.mutedColor}
+                    textColor={theme.textColor}
+                  />
+                ) : null}
                 <SummaryRow label="Threat" value={hazardLabel(sector.hazardLevel)} mutedColor={theme.mutedColor} textColor={theme.textColor} />
                 <SummaryRow label="Reward Focus" value={rewardFocus} mutedColor={theme.mutedColor} textColor={theme.textColor} />
                 {sector.activeAnchor ? (

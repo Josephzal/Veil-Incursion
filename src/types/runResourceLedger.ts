@@ -19,6 +19,8 @@ export interface RunResourceLedger {
   lostOnDeath: ResourceQuantity;
   /** Resources destroyed or spent during the run (bench, bleed, etc.). */
   consumed: ResourceQuantity;
+  /** Physical cargo bank actions at in-run safehouse (Extraction Surge contribution). */
+  safehouseBankActions: number;
 }
 
 export function createEmptyRunPhysicalBankSnapshot(): RunPhysicalBankSnapshot {
@@ -32,5 +34,6 @@ export function createEmptyRunResourceLedger(): RunResourceLedger {
     extracted: {},
     lostOnDeath: {},
     consumed: {},
+    safehouseBankActions: 0,
   };
 }

@@ -14,6 +14,10 @@ import {
   describeAnchorInRunPressure,
   formatOperationContributes,
   formatOperationLifecycleStatus,
+  formatOperationProgressLabel,
+  formatOperationProgressLockMessage,
+  isOperationProgressLocked,
+  operationLifecycleAccentColor,
   operationTypeChip,
 } from '../../utils/veilFrontSectorUi';
 import { contractSectorWarning, type ContractSectorCompatibility } from '../../utils/contractUi';
@@ -124,6 +128,9 @@ function OperationTabContent({
     operation.lifecycleStatus,
     operation.runsRemaining,
   );
+  const lifecycleColor = operationLifecycleAccentColor(operation.lifecycleStatus, theme.statusColor);
+  const progressLocked = isOperationProgressLocked(operation.lifecycleStatus);
+  const progressLockMessage = formatOperationProgressLockMessage(operation.lifecycleStatus);
   const recentLog = operationLog.slice(0, 4);
 
   return (
@@ -131,8 +138,11 @@ function OperationTabContent({
       <TerminalText size={scaleFont(6)} letterSpacing={0.7} style={{ color: theme.statusColor, fontWeight: '700' }}>
         ACTIVE OPERATION
       </TerminalText>
-      <TerminalText size={scaleFont(5.8)} style={{ color: theme.mutedColor }}>
+      <TerminalText size={scaleFont(5.8)} style={{ color: lifecycleColor, fontWeight: '700' }}>
         {lifecycleLabel}
+      </TerminalText>
+      <TerminalText size={scaleFont(5.5)} style={{ color: theme.mutedColor }}>
+        {`Run window: ${operation.generatedAtRunIndex} → ${operation.expiresAtRunIndex}`}
       </TerminalText>
       <TerminalText size={scaleFont(8.2)} style={[styles.wrapText, { color: theme.textColor, fontWeight: '800', lineHeight: scaleSize(11) }]}>
         {operation.title}
@@ -149,10 +159,26 @@ function OperationTabContent({
       ) : null}
       <View style={{ gap: scaleSpacing(4) }}>
         <TerminalText size={scaleFont(6)} style={{ color: theme.mutedColor }}>
-          {`Progress: ${operationPct}%`}
+          {`Progress: ${formatOperationProgressLabel(
+            operation.progressCurrent,
+            operation.progressRequired,
+            operationPct,
+          )}`}
         </TerminalText>
-        <ProgressBar percent={operationPct} accentColor={theme.statusColor} height={scaleSize(5)} />
+        <ProgressBar
+          percent={operationPct}
+          accentColor={progressLocked ? theme.mutedColor : theme.statusColor}
+          height={scaleSize(5)}
+        />
+        {progressLockMessage ? (
+          <TerminalText size={scaleFont(5.5)} style={{ color: lifecycleColor }}>
+            {progressLockMessage}
+          </TerminalText>
+        ) : null}
       </View>
+      <TerminalText size={scaleFont(5.8)} letterSpacing={0.4} style={{ color: theme.statusColor }} numberOfLines={2}>
+        {`Reward preview: ${operation.rewardPreview}`}
+      </TerminalText>
       {contributes.length > 0 ? (
         <View style={[styles.listBlock, { gap: scaleSpacing(5), borderTopColor: `${theme.statusColor}24`, paddingTop: scaleSpacing(7) }]}>
           <TerminalText size={scaleFont(5.5)} letterSpacing={0.6} style={{ color: theme.mutedColor }}>

@@ -18,8 +18,22 @@ import {
   runGenerationContextToModifiers,
   tickTemporarySectorModifiers,
 } from '../data/worldStateEngine';
-import { tickAllSectorOperationLifecycles } from '../data/operationLifecycleEngine';
+import { tickAllSectorOperationLifecycles, normalizeSectorOperationLifecycle } from '../data/operationLifecycleEngine';
 import { generateContractBoard } from '../data/contractGenerator';
+import {
+  devClearAnchorDormant,
+  devForceOperationCompletion as devForceOperationCompletionState,
+  devForceSectorOperation,
+  devRegenerateAllSectorOperations,
+  devSetAnchorDormant,
+  formatWorldStateDebugSnapshot,
+  stripDevFieldsForPersistence,
+} from '../data/worldStateDebugEngine';
+import {
+  formatWorldStateValidationReport,
+  logWorldStateValidationWarnings,
+  validateWorldState,
+} from '../data/worldStateValidation';
 import {
   LocalOperationProgressProvider,
   SimulatedGlobalOperationProgressProvider,
@@ -35,6 +49,7 @@ import {
 } from '../types/contract';
 import type {
   CabalEmployerId,
+  OperationObjectiveKind,
   RunGenerationContext,
   RunModifierSnapshot,
   SectorId,
@@ -79,6 +94,14 @@ interface WorldStateContextType {
     amount: number,
   ) => Promise<OperationContributionResult>;
   tickAfterRunComplete: () => void;
+  devRegenerateAllOperations: () => void;
+  devForceSectorOperation: (sectorId: SectorId, objectiveKind: OperationObjectiveKind) => void;
+  devSimulateContribution: (amount: number) => Promise<OperationContributionResult>;
+  devForceOperationCompletion: (sectorId?: SectorId) => void;
+  devSetAnchorDormant: (sectorId: SectorId, runs: number) => void;
+  devClearAnchorDormant: (sectorId: SectorId) => void;
+  devGetValidationReport: () => string;
+  devGetDebugSnapshot: () => string;
 }
 
 const WorldStateContext = createContext<WorldStateContextType | undefined>(undefined);
@@ -100,6 +123,16 @@ function mergePersistedState(parsed: Partial<WorldStatePersistedState> & { selec
     contractBoard.contracts = generateContractBoard(deployRunIndex);
   }
 
+  const sectorOperationLifecycle = Object.fromEntries(
+    Object.entries({
+      ...defaults.sectorOperationLifecycle,
+      ...parsed.sectorOperationLifecycle,
+    }).map(([sectorId, lifecycle]) => [
+      sectorId,
+      normalizeSectorOperationLifecycle(lifecycle, deployRunIndex),
+    ]),
+  ) as WorldStatePersistedState['sectorOperationLifecycle'];
+
   const merged: WorldStatePersistedState = {
     ...defaults,
     ...parsed,
@@ -110,10 +143,7 @@ function mergePersistedState(parsed: Partial<WorldStatePersistedState> & { selec
     activeOperationIndex: { ...defaults.activeOperationIndex, ...parsed.activeOperationIndex },
     temporarySectorModifiers: parsed.temporarySectorModifiers ?? defaults.temporarySectorModifiers,
     dormantAnchorRuns: { ...defaults.dormantAnchorRuns, ...parsed.dormantAnchorRuns },
-    sectorOperationLifecycle: {
-      ...defaults.sectorOperationLifecycle,
-      ...parsed.sectorOperationLifecycle,
-    },
+    sectorOperationLifecycle,
     operationLog: parsed.operationLog ?? defaults.operationLog,
     version: 2,
   };
@@ -157,13 +187,18 @@ export function WorldStateProvider({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     if (!isHydrated) return;
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(persisted)).catch(() => {});
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(stripDevFieldsForPersistence(persisted))).catch(() => {});
   }, [persisted, isHydrated]);
 
   const sectors = useMemo(
     () => buildAllSectorStates(persisted, operationProgress),
     [persisted, operationProgress],
   );
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    logWorldStateValidationWarnings(persisted, sectors);
+  }, [isHydrated, persisted, sectors]);
 
   const selectedSector = useMemo(
     () => sectors.find((s) => s.id === persisted.selectedSectorId) ?? sectors[0],
@@ -296,6 +331,57 @@ export function WorldStateProvider({ children }: { children: React.ReactNode }) 
     });
   }, []);
 
+  const devRegenerateAllOperations = useCallback(() => {
+    if (typeof __DEV__ === 'undefined' || !__DEV__) return;
+    setPersisted((prev) => devRegenerateAllSectorOperations(prev));
+    setOperationProgress({});
+    localProgressRef.current.hydrate({});
+  }, []);
+
+  const devForceSectorOperationType = useCallback((
+    sectorId: SectorId,
+    objectiveKind: OperationObjectiveKind,
+  ) => {
+    if (typeof __DEV__ === 'undefined' || !__DEV__) return;
+    setPersisted((prev) => devForceSectorOperation(prev, sectorId, objectiveKind));
+    setOperationProgress({});
+    localProgressRef.current.hydrate({});
+  }, []);
+
+  const devSimulateContribution = useCallback((amount: number) => {
+    const operationId = selectedSector.activeOperation.id;
+    return applyOperationContribution(operationId, amount);
+  }, [applyOperationContribution, selectedSector.activeOperation.id]);
+
+  const devForceOperationCompletion = useCallback((sectorId?: SectorId) => {
+    if (typeof __DEV__ === 'undefined' || !__DEV__) return;
+    const target = sectors.find((s) => s.id === (sectorId ?? persisted.selectedSectorId));
+    if (!target) return;
+    const { next } = devForceOperationCompletionState(persisted, target);
+    setPersisted(next);
+    setOperationProgress({ ...next.operationProgress });
+    localProgressRef.current.hydrate({ ...next.operationProgress });
+  }, [persisted, sectors]);
+
+  const devSetAnchorDormantRuns = useCallback((sectorId: SectorId, runs: number) => {
+    if (typeof __DEV__ === 'undefined' || !__DEV__) return;
+    setPersisted((prev) => devSetAnchorDormant(prev, sectorId, runs));
+  }, []);
+
+  const devClearAnchorDormantRuns = useCallback((sectorId: SectorId) => {
+    if (typeof __DEV__ === 'undefined' || !__DEV__) return;
+    setPersisted((prev) => devClearAnchorDormant(prev, sectorId));
+  }, []);
+
+  const devGetValidationReport = useCallback(() => {
+    const issues = validateWorldState(persisted, sectors);
+    return formatWorldStateValidationReport(issues);
+  }, [persisted, sectors]);
+
+  const devGetDebugSnapshot = useCallback(() => {
+    return formatWorldStateDebugSnapshot(persisted, sectors);
+  }, [persisted, sectors]);
+
   const value = useMemo(
     () => ({
       persisted,
@@ -315,6 +401,14 @@ export function WorldStateProvider({ children }: { children: React.ReactNode }) 
       buildRunContextForDescent,
       applyOperationContribution,
       tickAfterRunComplete,
+      devRegenerateAllOperations,
+      devForceSectorOperation: devForceSectorOperationType,
+      devSimulateContribution,
+      devForceOperationCompletion,
+      devSetAnchorDormant: devSetAnchorDormantRuns,
+      devClearAnchorDormant: devClearAnchorDormantRuns,
+      devGetValidationReport,
+      devGetDebugSnapshot,
     }),
     [
       persisted,
@@ -333,6 +427,14 @@ export function WorldStateProvider({ children }: { children: React.ReactNode }) 
       applyOperationContribution,
       clearPendingDebrief,
       tickAfterRunComplete,
+      devRegenerateAllOperations,
+      devForceSectorOperationType,
+      devSimulateContribution,
+      devForceOperationCompletion,
+      devSetAnchorDormantRuns,
+      devClearAnchorDormantRuns,
+      devGetValidationReport,
+      devGetDebugSnapshot,
     ],
   );
 

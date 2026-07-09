@@ -3,18 +3,22 @@ import type {
   NodePressureBand,
   OperationObjectiveKind,
   RunGenerationContext,
+  VeilAnchorType,
 } from '../types/worldState';
 import type { ProceduralNodeType } from '../types/proceduralRunTree';
 import {
   ANCHOR_ASSAULT_CORE_CHANCE,
+  DEPTH_STAGE_MODIFIERS,
   ECHO_SIGNAL_CHANCE,
   MAX_ECHO_ENCOUNTERS_PER_RUN,
   MAX_LEGENDARY_ECHO_ENCOUNTERS_PER_RUN,
+  OPERATION_TARGET_CHANCE,
   buildDepthGenerationContext,
   getAnchorStage,
   getDepthStage,
   getNodePressureBand,
 } from './worldStateHelpers';
+import { getAnchorDefinition } from './anchorRegistry';
 import { stampEchoTemplateOnModifiers } from './echoRecoveryEngine';
 
 export interface RunTreeGenerationOptions {
@@ -109,6 +113,109 @@ export function createNodeModifierRollState(): NodeModifierRollState {
   return { echoSignalsUsed: 0, legendaryEchoUsed: 0 };
 }
 
+const OPERATION_TARGET_NODE_TYPES: readonly ProceduralNodeType[] = [
+  'COMBAT',
+  'ELITE',
+  'ANOMALY',
+  'RESOURCE',
+  'GATEKEEPER',
+];
+
+function isOperationTargetEligible(nodeType: ProceduralNodeType): boolean {
+  return OPERATION_TARGET_NODE_TYPES.includes(nodeType);
+}
+
+function resolveNodeTypeSignalBoost(
+  anchorType: VeilAnchorType | null,
+  nodeType: ProceduralNodeType,
+  activeOperationKind?: OperationObjectiveKind,
+): { anchorSignal: number; operationTarget: number; highValueResource: number } {
+  let anchorSignal = 1;
+  let operationTarget = 1;
+  let highValueResource = 1;
+  if (!anchorType) return { anchorSignal, operationTarget, highValueResource };
+
+  switch (anchorType) {
+    case 'NULL_MONOLITH':
+      if (nodeType === 'ANOMALY') operationTarget *= 1.4;
+      break;
+    case 'RIFT_ENGINE':
+      if (nodeType === 'COMBAT' || nodeType === 'ELITE') {
+        anchorSignal *= 1.2;
+        operationTarget *= 1.25;
+      }
+      break;
+    case 'ASHEN_HEART':
+      if (nodeType === 'ELITE' || nodeType === 'GATEKEEPER') operationTarget *= 1.3;
+      break;
+    case 'LEY_NEXUS':
+      if (nodeType === 'RESOURCE') highValueResource *= 1.5;
+      break;
+    default:
+      break;
+  }
+
+  if (activeOperationKind === 'BOSS_SUPPRESSION' && (nodeType === 'ELITE' || nodeType === 'COMBAT')) {
+    operationTarget *= 1.25;
+  }
+
+  return { anchorSignal, operationTarget, highValueResource };
+}
+
+export function resolveAnchorSignalRollChance(
+  depthStage: ReturnType<typeof getDepthStage>,
+  pressureScale: number,
+  nodeType: ProceduralNodeType,
+  runContext: RunGenerationContext,
+): number {
+  const stageMods = DEPTH_STAGE_MODIFIERS[depthStage];
+  const scannerBias = runContext.scannerSignalBias;
+  const anchorType = runContext.activeAnchor?.type ?? null;
+  const anchorDef = anchorType ? getAnchorDefinition(anchorType) : null;
+  const nodeBoost = resolveNodeTypeSignalBoost(anchorType, nodeType, runContext.activeOperation.objectiveKind);
+
+  let chance = stageMods.anchorSignalChance * pressureScale * scannerBias.anchorSignalMultiplier;
+  if (runContext.activeAnchor?.isActive) {
+    chance += runContext.activeAnchor.realityRules.anomalyBias * 0.05;
+  }
+  if (nodeType === 'GATEKEEPER' || nodeType === 'ELITE') {
+    chance *= 1.35;
+  }
+  if (anchorDef) {
+    chance *= anchorDef.signalRollModifiers.anchorSignalChance * nodeBoost.anchorSignal;
+  }
+
+  return Math.min(0.95, chance);
+}
+
+export function resolveOperationTargetRollChance(
+  depthStage: ReturnType<typeof getDepthStage>,
+  pressureScale: number,
+  nodeType: ProceduralNodeType,
+  runContext: RunGenerationContext,
+): number {
+  if (!isOperationTargetEligible(nodeType)) return 0;
+
+  const anchorType = runContext.activeAnchor?.type ?? null;
+  const anchorDef = anchorType ? getAnchorDefinition(anchorType) : null;
+  const nodeBoost = resolveNodeTypeSignalBoost(
+    anchorType,
+    nodeType,
+    runContext.activeOperation.objectiveKind,
+  );
+
+  let chance = OPERATION_TARGET_CHANCE[depthStage]
+    * pressureScale
+    * runContext.scannerSignalBias.operationSignalMultiplier
+    * nodeBoost.operationTarget;
+
+  if (anchorDef) {
+    chance *= anchorDef.signalRollModifiers.operationTargetChance;
+  }
+
+  return Math.min(0.9, chance);
+}
+
 export function rollNodeContextModifiers(
   proceduralDepth: number,
   nodeType: ProceduralNodeType,
@@ -132,19 +239,23 @@ export function rollNodeContextModifiers(
 
   const echoActivity = runContext.sectorState.echoActivity;
   const scannerBias = runContext.scannerSignalBias;
+  const anchorType = runContext.activeAnchor?.type ?? null;
+  const anchorDef = anchorType ? getAnchorDefinition(anchorType) : null;
+  const nodeBoost = resolveNodeTypeSignalBoost(
+    anchorType,
+    nodeType,
+    runContext.activeOperation.objectiveKind,
+  );
 
-  let anchorRoll = stageMods.anchorSignalChance * pressureScale * scannerBias.anchorSignalMultiplier;
-  if (runContext.activeAnchor?.isActive) {
-    anchorRoll += runContext.activeAnchor.realityRules.anomalyBias * 0.05;
-  }
-  if (nodeType === 'GATEKEEPER' || nodeType === 'ELITE') {
-    anchorRoll *= 1.35;
-  }
+  const anchorRoll = resolveAnchorSignalRollChance(depthStage, pressureScale, nodeType, runContext);
 
-  const echoBase = ECHO_SIGNAL_CHANCE[echoActivity][depthStage] * pressureScale * scannerBias.echoSignalMultiplier;
+  const echoBase = ECHO_SIGNAL_CHANCE[echoActivity][depthStage]
+    * pressureScale
+    * scannerBias.echoSignalMultiplier
+    * (anchorDef?.signalRollModifiers.echoSignalChance ?? 1);
   const echoRoll = nodeType === 'ELITE' || nodeType === 'COMBAT' ? echoBase * 1.2 : echoBase;
 
-  if (runContext.activeAnchor?.isActive && rng() < Math.min(0.95, anchorRoll)) {
+  if (runContext.activeAnchor?.isActive && rng() < anchorRoll) {
     modifiers.anchorSignal = true;
     modifiers.anchorStage = anchorStage;
   }
@@ -170,13 +281,28 @@ export function rollNodeContextModifiers(
     }
   }
 
-  modifiers.operationTag = runContext.activeOperation.objectiveKind;
+  const operationTargetRoll = resolveOperationTargetRollChance(
+    depthStage,
+    pressureScale,
+    nodeType,
+    runContext,
+  );
+  if (rng() < operationTargetRoll) {
+    modifiers.operationTag = runContext.activeOperation.objectiveKind;
+  }
 
   const hazard = runContext.sectorState.hazardLevel;
   modifiers.highRisk = pressureBand === 'HIGH' && (depthStage === 'DEEP_VEIL' || hazard >= 4);
+  if (anchorDef && anchorType === 'ASHEN_HEART' && (nodeType === 'ELITE' || nodeType === 'GATEKEEPER')) {
+    modifiers.highRisk = modifiers.highRisk || rng() < 0.25 * pressureScale;
+  }
 
   if (nodeType === 'RESOURCE' && (pressureBand === 'HIGH' || stageMods.rareLootBias > 0.15)) {
-    modifiers.highValueResource = rng() < 0.35 + stageMods.rareLootBias;
+    const highValueBase = 0.35 + stageMods.rareLootBias;
+    const highValueChance = highValueBase
+      * (anchorDef?.signalRollModifiers.highValueResourceChance ?? 1)
+      * nodeBoost.highValueResource;
+    modifiers.highValueResource = rng() < Math.min(0.85, highValueChance);
   }
 
   return modifiers;

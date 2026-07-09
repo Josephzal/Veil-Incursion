@@ -9,14 +9,18 @@ import {
   anchorStatusLabel,
   compactResourceDisplayName,
   echoPipCount,
+  formatOperationLifecycleStatus,
   hazardLabel,
   hazardPipCount,
+  operationTypeChip,
   rewardLabel,
   rewardPipCount,
   SECTOR_FLAVOR_LINES,
   threatMeterColor,
   VEIL_BIOME_VISUALS,
 } from '../../utils/veilFrontSectorUi';
+import { useWorldState } from '../../context/WorldStateContext';
+import { anchorIdForSector, getSectorWorldTemplate } from '../../data/sectorWorldCatalog';
 
 interface MapSectorOverlaysProps {
   theme: TerminalTheme;
@@ -100,8 +104,21 @@ export function MapSectorSummary({ theme, sector }: MapSectorOverlaysProps): Rea
 /** Upper-right sector intel: status rows + resources. */
 export function SectorIntel({ theme, sector }: MapSectorOverlaysProps): React.JSX.Element {
   const { scaleSpacing, isMapTopBandStacked } = useVeilFrontLayout();
-  const anchor = anchorStatusLabel(sector);
+  const { persisted } = useWorldState();
+  const sectorTemplate = getSectorWorldTemplate(sector.id);
+  const dormantAnchorRunsRemaining = sectorTemplate.anchor
+    ? persisted.dormantAnchorRuns[anchorIdForSector(sector.id, sectorTemplate.anchor.type)] ?? 0
+    : 0;
+  const anchor = sector.activeAnchor
+    ? anchorStatusLabel(sector)
+    : dormantAnchorRunsRemaining > 0
+      ? { label: `Dormant (${dormantAnchorRunsRemaining})`, pips: 1 }
+      : anchorStatusLabel(sector);
   const resourceLine = sector.resourceFocus.map(compactResourceDisplayName).join(' / ');
+  const operationLabel = `${operationTypeChip(sector.activeOperation.objectiveKind)} · ${formatOperationLifecycleStatus(
+    sector.activeOperation.lifecycleStatus,
+    sector.activeOperation.runsRemaining,
+  ).split(' — ')[0]}`;
 
   return (
     <View
@@ -136,6 +153,12 @@ export function SectorIntel({ theme, sector }: MapSectorOverlaysProps): React.JS
         value={formatEchoActivity(sector.echoActivity)}
         mutedColor={theme.mutedColor}
         textColor={theme.textColor}
+      />
+      <IntelRow
+        label="Operation"
+        value={operationLabel}
+        mutedColor={theme.mutedColor}
+        textColor={theme.statusColor}
       />
       <IntelRow
         label="Anchor"

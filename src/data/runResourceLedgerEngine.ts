@@ -91,6 +91,13 @@ export function recordResourcesBanked(
   };
 }
 
+export function recordSafehouseBankAction(ledger: RunResourceLedger): RunResourceLedger {
+  return {
+    ...ledger,
+    safehouseBankActions: ledger.safehouseBankActions + 1,
+  };
+}
+
 export function recordResourcesExtracted(
   ledger: RunResourceLedger,
   resources: ResourceQuantity,

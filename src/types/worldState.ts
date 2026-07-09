@@ -65,10 +65,13 @@ export interface OperationContributionRules {
   extractTargetResource?: number;
   defeatDepthBoss?: number;
   successfulExtraction?: number;
+  emergencyRecallExtraction?: number;
+  bankAtSafehouse?: number;
+  defeatElite?: number;
   clearOperationTarget?: number;
 }
 
-export type OperationLifecycleStatus = 'ACTIVE' | 'AFTERMATH' | 'EXPIRED';
+export type OperationLifecycleStatus = 'ACTIVE' | 'COMPLETED' | 'AFTERMATH' | 'EXPIRED';
 
 export interface SectorOperationLifecycle {
   operationId: string;
@@ -76,6 +79,12 @@ export interface SectorOperationLifecycle {
   runsSinceActivation: number;
   maxRunsActive: number;
   aftermathRunsRemaining: number;
+  /** Deploy run index when this operation instance was generated. */
+  generatedAtRunIndex: number;
+  /** Deploy run index when this operation expires if not completed. */
+  expiresAtRunIndex: number;
+  /** Deploy run index when the operation was completed, if applicable. */
+  completedAtRunIndex?: number;
 }
 
 export interface RewardEmphasis {
@@ -98,6 +107,9 @@ export interface OperationState {
   contributionRules: OperationContributionRules;
   lifecycleStatus: OperationLifecycleStatus;
   runsRemaining: number;
+  generatedAtRunIndex: number;
+  expiresAtRunIndex: number;
+  rewardPreview: string;
 }
 
 export interface DepthStageModifiers {
@@ -196,6 +208,14 @@ export interface TemporarySectorModifier {
   label: string;
 }
 
+export interface SectorOperationTemplateSnapshot {
+  id: string;
+  title: string;
+  description: string;
+  objectiveKind: OperationObjectiveKind;
+  rewardEmphasis: RewardEmphasis;
+}
+
 export interface WorldStatePersistedState {
   selectedSectorId: SectorId;
   contractBoard: ContractBoardState;
@@ -209,6 +229,8 @@ export interface WorldStatePersistedState {
   operationLog: string[];
   /** Per-sector operation lifecycle (expiration, aftermath). */
   sectorOperationLifecycle: Partial<Record<SectorId, SectorOperationLifecycle>>;
+  /** Dev-only forced operation templates — stripped before AsyncStorage persistence. */
+  sectorOperationOverrides?: Partial<Record<SectorId, SectorOperationTemplateSnapshot>>;
   version: 2;
 }
 

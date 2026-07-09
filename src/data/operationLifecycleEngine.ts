@@ -19,6 +19,7 @@ function resolveSectorOperationIndex(
 
 export function createSectorOperationLifecycle(
   operationId: string,
+  deployRunIndex: number,
   maxRunsActive = DEFAULT_OPERATION_MAX_RUNS,
 ): SectorOperationLifecycle {
   return {
@@ -27,6 +28,24 @@ export function createSectorOperationLifecycle(
     runsSinceActivation: 0,
     maxRunsActive,
     aftermathRunsRemaining: 0,
+    generatedAtRunIndex: deployRunIndex,
+    expiresAtRunIndex: deployRunIndex + maxRunsActive,
+  };
+}
+
+export function normalizeSectorOperationLifecycle(
+  lifecycle: SectorOperationLifecycle,
+  deployRunIndex: number,
+): SectorOperationLifecycle {
+  if (lifecycle.generatedAtRunIndex != null && lifecycle.expiresAtRunIndex != null) {
+    return lifecycle;
+  }
+  const maxRuns = lifecycle.maxRunsActive ?? DEFAULT_OPERATION_MAX_RUNS;
+  const runsLeft = Math.max(0, maxRuns - lifecycle.runsSinceActivation);
+  return {
+    ...lifecycle,
+    generatedAtRunIndex: lifecycle.generatedAtRunIndex ?? deployRunIndex,
+    expiresAtRunIndex: lifecycle.expiresAtRunIndex ?? deployRunIndex + runsLeft,
   };
 }
 
@@ -36,11 +55,16 @@ export function getSectorOperationLifecycle(
   operationId: string,
 ): SectorOperationLifecycle {
   const existing = persisted.sectorOperationLifecycle[sectorId];
-  if (existing?.operationId === operationId) return existing;
-  return createSectorOperationLifecycle(operationId);
+  if (existing?.operationId === operationId) {
+    return normalizeSectorOperationLifecycle(existing, persisted.deployRunIndex);
+  }
+  return createSectorOperationLifecycle(operationId, persisted.deployRunIndex);
 }
 
 export function operationRunsRemaining(lifecycle: SectorOperationLifecycle): number {
+  if (lifecycle.status === 'COMPLETED') {
+    return 0;
+  }
   if (lifecycle.status === 'AFTERMATH') {
     return lifecycle.aftermathRunsRemaining;
   }
@@ -54,6 +78,18 @@ export interface OperationRotationResult {
   nextOperationTitle?: string;
 }
 
+function clearSectorOperationOverride(
+  persisted: WorldStatePersistedState,
+  sectorId: SectorId,
+): WorldStatePersistedState['sectorOperationOverrides'] {
+  if (!persisted.sectorOperationOverrides?.[sectorId]) {
+    return persisted.sectorOperationOverrides;
+  }
+  const next = { ...persisted.sectorOperationOverrides };
+  delete next[sectorId];
+  return next;
+}
+
 function rotateSectorOperation(
   persisted: WorldStatePersistedState,
   sectorId: SectorId,
@@ -65,10 +101,14 @@ function rotateSectorOperation(
     sectorId,
     nextIndex,
     persisted.deployRunIndex,
+    persisted.sectorOperationOverrides,
   );
   const sectorName = getSectorWorldTemplate(sectorId).displayName;
 
-  const nextLifecycle = createSectorOperationLifecycle(nextTemplate.id);
+  const nextLifecycle = createSectorOperationLifecycle(
+    nextTemplate.id,
+    persisted.deployRunIndex,
+  );
   const logLines = [
     `>> OPERATION ${reason.toUpperCase()} — ${sectorName.toUpperCase()}`,
     `>> NEW OPERATION: ${nextTemplate.title.toUpperCase()}.`,
@@ -80,6 +120,7 @@ function rotateSectorOperation(
     logLines,
     next: {
       ...persisted,
+      sectorOperationOverrides: clearSectorOperationOverride(persisted, sectorId),
       activeOperationIndex: {
         ...persisted.activeOperationIndex,
         [sectorId]: nextIndex,
@@ -103,6 +144,29 @@ export function tickSectorOperationLifecycleAfterRun(
   operationId: string,
 ): OperationRotationResult {
   const lifecycle = getSectorOperationLifecycle(persisted, sectorId, operationId);
+  const sectorName = getSectorWorldTemplate(sectorId).displayName;
+
+  if (lifecycle.status === 'COMPLETED') {
+    const logLines = [
+      `>> OPERATION AFTERMATH — ${sectorName.toUpperCase()} // COMMUNITY PROGRESS LOCKED.`,
+    ];
+    return {
+      rotated: false,
+      logLines,
+      next: {
+        ...persisted,
+        sectorOperationLifecycle: {
+          ...persisted.sectorOperationLifecycle,
+          [sectorId]: {
+            ...lifecycle,
+            status: 'AFTERMATH',
+            aftermathRunsRemaining: DEFAULT_OPERATION_AFTERMATH_RUNS,
+          },
+        },
+        operationLog: [...logLines, ...persisted.operationLog].slice(0, 24),
+      },
+    };
+  }
 
   if (lifecycle.status === 'AFTERMATH') {
     const aftermathRunsRemaining = lifecycle.aftermathRunsRemaining - 1;
@@ -146,11 +210,11 @@ export function tickSectorOperationLifecycleAfterRun(
   };
 }
 
-export function beginOperationAftermath(
+/** Marks an operation complete — transitions to AFTERMATH on the next lifecycle tick. */
+export function beginOperationCompleted(
   persisted: WorldStatePersistedState,
   sectorId: SectorId,
   operationId: string,
-  aftermathRuns = DEFAULT_OPERATION_AFTERMATH_RUNS,
 ): WorldStatePersistedState {
   const lifecycle = getSectorOperationLifecycle(persisted, sectorId, operationId);
   return {
@@ -159,11 +223,22 @@ export function beginOperationAftermath(
       ...persisted.sectorOperationLifecycle,
       [sectorId]: {
         ...lifecycle,
-        status: 'AFTERMATH',
-        aftermathRunsRemaining: aftermathRuns,
+        status: 'COMPLETED',
+        completedAtRunIndex: persisted.deployRunIndex,
+        aftermathRunsRemaining: 0,
       },
     },
   };
+}
+
+/** @deprecated Use beginOperationCompleted */
+export function beginOperationAftermath(
+  persisted: WorldStatePersistedState,
+  sectorId: SectorId,
+  operationId: string,
+  _aftermathRuns = DEFAULT_OPERATION_AFTERMATH_RUNS,
+): WorldStatePersistedState {
+  return beginOperationCompleted(persisted, sectorId, operationId);
 }
 
 export function tickAllSectorOperationLifecycles(
@@ -178,6 +253,7 @@ export function tickAllSectorOperationLifecycles(
       sector.id,
       operationIndex,
       next.deployRunIndex,
+      next.sectorOperationOverrides,
     );
     const result = tickSectorOperationLifecycleAfterRun(next, sector.id, template.id);
     next = result.next;

@@ -12,6 +12,11 @@ import { formatDebriefResourceLine } from '../data/runDebriefResourceEngine';
 import { formatExtractionKindLabel, sponsorDisplayName } from '../utils/contractUi';
 import { getResourceDisplayName } from '../data/resourceRegistry';
 import { formatTimeAliveMmSs } from '../types/runDeathSummary';
+import {
+  formatCommunityProgressLine,
+  formatProgressThisRunLine,
+  filterDebriefCompletionEffectLines,
+} from '../utils/operationDebriefUi';
 
 const TERMINAL_ACCENT = '#00ff33';
 const FAILURE_ACCENT = '#ef4444';
@@ -34,6 +39,7 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
     contribution,
     progressBeforePct,
     progressAfterPct,
+    totalContributionThisRun,
     completed,
     completionLogLines,
     credits,
@@ -49,10 +55,21 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
 
   const isFailure = runOutcome === 'FAILED';
   const accentColor = isFailure ? FAILURE_ACCENT : TERMINAL_ACCENT;
+  const progressThisRunLine = formatProgressThisRunLine({
+    totalContributionThisRun,
+    progressBeforePct,
+    progressAfterPct,
+    midRunTransmitted: midRunContributionTransmitted,
+    extractedSuccessfully: !isFailure,
+  });
+  const communityProgressLine = formatCommunityProgressLine(progressBeforePct, progressAfterPct);
+  const hasExtractContribution = contribution.breakdown.length > 0;
+  const showNoProgressGenerated = totalContributionThisRun <= 0;
+  const completionEffectLines = filterDebriefCompletionEffectLines(completionLogLines);
 
   const handleContinue = () => {
     appendHubLog(
-      `>> RUN DEBRIEF — ${sectorName.toUpperCase()} // ${runOutcome} // +${contribution.total} OPERATION`,
+      `>> RUN DEBRIEF — ${sectorName.toUpperCase()} // ${runOutcome} // +${totalContributionThisRun} OPERATION`,
     );
     if (contractResult.status === 'SUCCESS') {
       appendHubLog(
@@ -211,46 +228,53 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
             <View style={styles.sectionGap} />
 
             <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>OPERATION CONTRIBUTION</Text>
+            <Text
+              style={[
+                styles.statAccent,
+                { color: showNoProgressGenerated ? theme.mutedColor : accentColor },
+              ]}
+            >
+              {progressThisRunLine.toUpperCase()}
+            </Text>
             {(midRunContributionTransmitted ?? 0) > 0 ? (
               <Text style={[styles.stat, { color: theme.statusColor }]}>
-                {`Already transmitted: +${midRunContributionTransmitted}`}
+                {`Mid-incursion transmission: +${midRunContributionTransmitted}`}
               </Text>
             ) : null}
-            {contribution.breakdown.length > 0 ? (
+            {hasExtractContribution ? (
               contribution.breakdown.map((line) => (
                 <Text key={line} style={[styles.stat, { color: theme.textColor }]}>
                   {line}
                 </Text>
               ))
-            ) : (
-              <Text style={[styles.stat, { color: theme.mutedColor }]}>No operation credit this run.</Text>
-            )}
-            <Text style={[styles.statAccent, { color: accentColor }]}>
-              TOTAL CONTRIBUTION: +{contribution.total}
-              {isFailure ? ' (not applied — extraction required)' : ''}
-            </Text>
+            ) : showNoProgressGenerated ? (
+              <Text style={[styles.stat, { color: theme.mutedColor }]}>
+                No qualifying run events credited toward this operation.
+              </Text>
+            ) : null}
+            {!showNoProgressGenerated ? (
+              <Text style={[styles.statAccent, { color: accentColor }]}>
+                TOTAL THIS RUN: +{totalContributionThisRun}
+                {isFailure ? ' (not applied — extraction required)' : ''}
+              </Text>
+            ) : null}
 
             <View style={styles.sectionGap} />
 
             <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>COMMUNITY PROGRESS</Text>
             <Text style={[styles.stat, { color: theme.textColor }]}>
-              {`${progressBeforePct}% → ${progressAfterPct}%`}
+              {communityProgressLine.toUpperCase()}
             </Text>
 
-            {completed && completionLogLines.length > 0 ? (
+            {completed && completionEffectLines.length > 0 ? (
               <>
                 <View style={styles.sectionGap} />
                 <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>COMPLETION EFFECTS</Text>
-                {completionLogLines
-                  .filter((line) => line.includes('OPERATION COMPLETE')
-                    || line.includes('DORMANT')
-                    || line.includes('REWARD SURGE')
-                    || line.includes('NEW OPERATION'))
-                  .map((line) => (
-                    <Text key={line} style={[styles.stat, { color: theme.mutedColor }]}>
-                      {line.replace(/^>>\s*/, '')}
-                    </Text>
-                  ))}
+                {completionEffectLines.map((line) => (
+                  <Text key={line} style={[styles.stat, { color: theme.mutedColor }]}>
+                    {line.replace(/^>>\s*/, '')}
+                  </Text>
+                ))}
                 {nextOperationTitle ? (
                   <Text style={[styles.statAccent, { color: theme.statusColor }]}>
                     NEXT: {nextOperationTitle.toUpperCase()}

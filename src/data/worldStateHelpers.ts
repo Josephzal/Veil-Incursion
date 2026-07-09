@@ -39,6 +39,13 @@ export const ANCHOR_ASSAULT_CORE_CHANCE: Record<DepthStage, number> = {
   DEEP_VEIL: 0.35,
 };
 
+/** Base chance a node receives an Operation Target overlay by macro depth. */
+export const OPERATION_TARGET_CHANCE: Record<DepthStage, number> = {
+  THRESHOLD: 0.08,
+  BREACH: 0.22,
+  DEEP_VEIL: 0.38,
+};
+
 export const ECHO_SIGNAL_CHANCE: Record<
   'LOW' | 'ELEVATED' | 'CRITICAL',
   Record<DepthStage, number>
@@ -55,7 +62,10 @@ export const DEFAULT_OPERATION_PROGRESS_REQUIRED = 100;
 
 export const OPERATION_CONTRIBUTION_VALUES = {
   successfulExtraction: 1,
+  emergencyRecallExtraction: 2,
+  bankAtSafehouse: 1,
   defeatDepthBoss: 5,
+  defeatElite: 3,
   defeatEcho: 3,
   defeatAnchorElite: 4,
   clearAnchorCore: 10,
@@ -63,7 +73,13 @@ export const OPERATION_CONTRIBUTION_VALUES = {
   extractTargetResourceStack: 1,
 } as const;
 
-export const DEFAULT_OPERATION_MAX_RUNS = 8;
+/** Max target-resource stacks credited toward operation progress per run. */
+export const MAX_OPERATION_TARGET_RESOURCE_STACKS_PER_RUN = 5;
+
+/** Max safehouse bank actions credited toward Extraction Surge per run. */
+export const MAX_SAFEHOUSE_BANK_CONTRIBUTION_ACTIONS = 2;
+
+export const DEFAULT_OPERATION_MAX_RUNS = 5;
 export const DEFAULT_OPERATION_AFTERMATH_RUNS = 2;
 
 export function getDepthStage(depthIndex: 1 | 2 | 3): DepthStage {

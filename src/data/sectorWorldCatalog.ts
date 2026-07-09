@@ -6,6 +6,7 @@ import type {
   VeilAnchorType,
 } from '../types/worldState';
 import { parseLowPolyPath, polygonCentroid } from '../utils/sectorInfluenceVisual';
+import { getAnchorRealityRules } from './anchorRegistry';
 
 export const SECTOR_MAP_VIEWBOX = { width: 480, height: 320 };
 
@@ -252,20 +253,7 @@ export function anchorIdForSector(sectorId: SectorId, anchorType: VeilAnchorType
 }
 
 export function defaultAnchorRealityRules(anchorType: VeilAnchorType): import('../types/worldState').AnchorRealityRules {
-  switch (anchorType) {
-    case 'CHOIR_SPIRE':
-      return { combatBias: 0.05, eliteBias: 0.1, anomalyBias: 0.15, echoBias: 0.2, lootBias: 0.05, extractionRiskBias: 0.1 };
-    case 'LEY_NEXUS':
-      return { combatBias: 0, eliteBias: 0, anomalyBias: 0.1, echoBias: 0, lootBias: 0.25, extractionRiskBias: 0.05 };
-    case 'NULL_MONOLITH':
-      return { combatBias: 0.1, eliteBias: 0.15, anomalyBias: 0.2, echoBias: 0.25, lootBias: 0, extractionRiskBias: 0.15 };
-    case 'RIFT_ENGINE':
-      return { combatBias: 0.15, eliteBias: 0.1, anomalyBias: 0.25, echoBias: 0.1, lootBias: 0.1, extractionRiskBias: 0.2 };
-    case 'ASHEN_HEART':
-      return { combatBias: 0.05, eliteBias: 0.25, anomalyBias: 0.15, echoBias: 0.3, lootBias: 0.15, extractionRiskBias: 0.25 };
-    default:
-      return { combatBias: 0, eliteBias: 0, anomalyBias: 0, echoBias: 0, lootBias: 0, extractionRiskBias: 0 };
-  }
+  return getAnchorRealityRules(anchorType);
 }
 
 export function centroidForSector(id: SectorId): MapPoint {

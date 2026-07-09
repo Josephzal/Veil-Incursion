@@ -206,6 +206,7 @@ import {
   bankAllPhysicalRunCargo,
   recordNewResourcesFromCargoDelta,
   recordResourcesBanked,
+  recordSafehouseBankAction,
   resolveRunDeathResourceState,
   summarizeBankSnapshot,
 } from '../data/runResourceLedgerEngine';
@@ -3481,7 +3482,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         ...prev,
         cargo: bankResult.cargo,
         runBankedSnapshot: bankResult.bank,
-        runResourceLedger: recordResourcesBanked(prev.runResourceLedger, bankResult.bankedResources),
+        runResourceLedger: recordSafehouseBankAction(
+          recordResourcesBanked(prev.runResourceLedger, bankResult.bankedResources),
+        ),
       };
       activeIncursionRef.current = next;
       return next;
