@@ -53,6 +53,7 @@ import {
 import { buildCombatAugmentIcons } from '../utils/combatAugmentIcons';
 import { encounterBudgetForDepth } from '../data/combatEncounterBudget';
 import type { CargoItemId } from '../types/cargoGrid';
+import { resolveCargoHealReceivedMultiplier } from '../data/unstableCargoEffectsEngine';
 import {
   type PendingNarrativeCombatBoons,
 } from '../types/narrativeBonusReward';
@@ -124,6 +125,10 @@ export default function CombatScreen(): React.JSX.Element {
   const runApBonus = activeIncursion.runModifiers?.firstTurnApBonus ?? 0;
   const runKineticArmor = activeIncursion.runModifiers?.kineticArmorBonus ?? 0;
   const kineticBatteryActive = activeIncursion.boundRequisition?.kineticBatteryActive ?? false;
+  const cargoHealReceivedMultiplier = useMemo(
+    () => resolveCargoHealReceivedMultiplier(activeIncursion.cargo),
+    [activeIncursion.cargo],
+  );
   const firstTurnBonusAp = runApBonus;
   const [narrativeCombatBoons] = useState<PendingNarrativeCombatBoons>(
     peekPendingNarrativeCombatBoons,
@@ -650,6 +655,7 @@ export default function CombatScreen(): React.JSX.Element {
                       hexShotAbilityGrafts={activeIncursion.hexShotAbilityGrafts}
                       envoyAbilityGrafts={activeIncursion.envoyAbilityGrafts}
                       encounterUltimateDisabled={activeIncursion.encounterUltimateDisabled}
+                      cargoHealReceivedMultiplier={cargoHealReceivedMultiplier}
                       operativeClass={operativeClass}
                     />
                     </CombatDashboardCommandColumn>

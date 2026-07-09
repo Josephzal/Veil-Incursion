@@ -67,6 +67,7 @@ export default function ScanningScreen(): React.JSX.Element {
     scanSessionKey,
     activeIncursion,
     getCurrentVectorCluster,
+    syncProceduralScannerTypes,
     ensureScannerGraphExpanded,
     openScanPreview,
     closeScanPreview,
@@ -133,9 +134,23 @@ export default function ScanningScreen(): React.JSX.Element {
       activeIncursion.nodesCleared,
       activeIncursion.resonance.percent,
       activeIncursion.bossDefeated,
+      activeIncursion.proceduralRunTree,
+      activeIncursion.cargo,
       nodeIndex,
     ],
   );
+
+  useEffect(() => {
+    if (isScanningHub && activeIncursion.proceduralRunTree) {
+      syncProceduralScannerTypes();
+    }
+  }, [
+    isScanningHub,
+    activeIncursion.nodesCleared,
+    activeIncursion.cargo,
+    activeIncursion.proceduralRunTree,
+    syncProceduralScannerTypes,
+  ]);
 
   const selectedNode = getPreviewNode();
   const hasSelection = selectedNode != null;

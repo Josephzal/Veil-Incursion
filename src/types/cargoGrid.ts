@@ -150,6 +150,27 @@ export const HARVEST_YIELD_OPTIONS: HarvestYieldOption[] = [
   },
 ];
 
+function buildResourceCargoTags(resource: (typeof RESOURCE_REGISTRY)[ResourceItemId]): string[] {
+  const tags: string[] = ['RESOURCE', resource.itemType];
+  if (resource.category === 'UNSTABLE') {
+    tags.push('UNSTABLE');
+  }
+  switch (resource.primaryRole) {
+    case 'VOLATILE_CARGO':
+      tags.push('VOLATILE');
+      break;
+    case 'APEX_CARGO':
+      tags.push('APEX');
+      break;
+    case 'OCCULT_CARGO':
+      tags.push('OCCULT');
+      break;
+    default:
+      break;
+  }
+  return tags;
+}
+
 function buildResourceCargoCatalogEntries(): Record<ResourceItemId, CargoItemDefinition> {
   const entries = {} as Record<ResourceItemId, CargoItemDefinition>;
   ALL_RESOURCE_ITEM_IDS.forEach((id) => {
@@ -161,7 +182,7 @@ function buildResourceCargoCatalogEntries(): Record<ResourceItemId, CargoItemDef
       height: resource.gridHeight,
       baseValue: resource.baseCapitalValue,
       resonanceWeight: 1,
-      tags: ['RESOURCE', resource.itemType],
+      tags: buildResourceCargoTags(resource),
     };
   });
   return entries;

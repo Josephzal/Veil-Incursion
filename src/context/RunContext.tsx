@@ -69,7 +69,8 @@ import {
   IncursionNode,
   NarrativeEventNode,
 } from '../types/game';
-import { buildProceduralScannerCluster, getAvailableProceduralNodeIds, isProceduralRunActive } from '../data/proceduralScannerBridge';
+import { buildProceduralScannerCluster, getAvailableProceduralNodeIds, isProceduralRunActive, prepareProceduralScannerIncursion, proceduralNodeToIncursionNode } from '../data/proceduralScannerBridge';
+import { ensureNodeContextModifiersAtEngagement } from '../data/lazyNodeContextEngine';
 import { initializeSectorRun, regenerateProceduralRunTree } from '../data/macroStoryPipeline';
 import { rollProceduralResourcePool } from '../data/proceduralResourceEngine';
 import {
@@ -228,6 +229,17 @@ import {
 } from '../data/combatRewardEngine';
 import { applyResourceBundleToCargo } from '../data/resourceCargoBridge';
 import { getResourceCacheBundle } from '../data/resourceCacheBundles';
+import {
+  detectNewUnstableCargoPickups,
+  formatEmergencyRecallVeilAshWarning,
+  formatUnstableCargoPickupLog,
+  hasVeilAshCanisterCarried,
+  mergeUnstableCargoEffectsSeen,
+  resolveCargoHealReceivedMultiplier,
+  resolveEffectiveOccultRewardBonusPct,
+  resolveEffectiveRareLootBonusPct,
+} from '../data/unstableCargoEffectsEngine';
+import type { CargoRunState } from '../types/cargoGrid';
 import { CARGO_ITEM_CATALOG, HARVEST_YIELD_OPTIONS } from '../types/cargoGrid';
 import type { HarvestYieldTier } from '../types/cargoGrid';
 import {
@@ -278,6 +290,16 @@ import {
 } from '../data/boundRequisitionEngine';
 import type { PlayerAccount } from '../types/game';
 import { usePlayerAccount } from './PlayerAccountContext';
+import type { UnstableCargoEffectId } from '../types/unstableCargoEffects';
+
+function mergeUnstableCargoPickupLog(
+  beforeCargo: CargoRunState,
+  afterCargo: CargoRunState,
+  alreadyLogged: readonly UnstableCargoEffectId[],
+): UnstableCargoEffectId[] {
+  const newPickups = detectNewUnstableCargoPickups(beforeCargo, afterCargo, alreadyLogged);
+  return [...alreadyLogged, ...newPickups];
+}
 
 export interface RunStartConfig {
   factionPerks?: FactionModifiers;
@@ -423,6 +445,8 @@ interface RunContextType {
   purgeEncounterState: () => void;
   commitNodeEncounter: (nodeId: string) => import('../types/game').RunNodeType | null;
   getCurrentVectorCluster: () => import('../types/game').IncursionNode[];
+  /** Persists lazy type rolls for the current scanner depth (Phase 3). */
+  syncProceduralScannerTypes: () => void;
   ensureScannerGraphExpanded: () => void;
   getSelectedVectorNode: () => import('../types/game').IncursionNode | null;
   openScanPreview: (nodeId: string) => void;
@@ -499,7 +523,8 @@ function activateGridHoundOnIncursion(inc: ActiveIncursionState): ActiveIncursio
 
 function buildSectorCluster(inc: ActiveIncursionState): IncursionNode[] {
   if (isProceduralRunActive(inc)) {
-    return buildProceduralScannerCluster(inc);
+    const prepared = prepareProceduralScannerIncursion(inc);
+    return buildProceduralScannerCluster(prepared);
   }
   if (!inc.sectorGraph.entryId) return [];
   const clusterOptions = {
@@ -677,6 +702,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const startingCanisterResidue = resolveStartingRunCanisterResidue(
       config?.startingVeilResidueBalance ?? 0,
     );
+    const starterCargo = applyIncursionStarterCargo(config?.initialCargo ?? createStarterCargoRunState());
     const incursion: ActiveIncursionState = {
       ...createDefaultActiveIncursionState(),
       isRunActive: true,
@@ -745,7 +771,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         ? sanitizeEnvoyCombatLoadout(config.envoyLoadout)
         : createDefaultActiveIncursionState().envoyLoadout,
       activeClass: config?.activeClass ?? 'AEGIS',
-      cargo: applyIncursionStarterCargo(config?.initialCargo ?? createStarterCargoRunState()),
+      cargo: starterCargo,
       sanctuarySchedule,
       strikeDamageBonusPct: 0,
       runModifiers: config?.runModifiers ?? {
@@ -759,6 +785,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       activeContract: config?.runGenerationContext?.activeContract ?? null,
       contractRunProgress: createInitialContractRunProgress(),
       runSegment: initialRunSegment,
+      unstableCargoPickupLogged: [],
+      unstableCargoEffectsSeen: mergeUnstableCargoEffectsSeen([], starterCargo),
       sessionVeilResidueCollected: startingCanisterResidue,
       runVeilResidueBaseline: startingCanisterResidue,
     };
@@ -1273,8 +1301,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       const inc = activeIncursionRef.current;
       const survivalist = inc.activeClass === 'HEX_SHOT'
         && inc.hexShotBoons.includes('SURVIVALIST');
-      const healMultiplier = survivalist ? 1.5 : 1;
-      const restore = Math.floor(prev.maxSoulAnchor * 0.30 * healMultiplier);
+      const boonMultiplier = survivalist ? 1.5 : 1;
+      const restore = Math.floor(
+        prev.maxSoulAnchor * 0.30 * boonMultiplier * resolveCargoHealReceivedMultiplier(inc.cargo),
+      );
       const next = {
         ...prev,
         soulAnchorIntegrity: Math.min(prev.soulAnchorIntegrity + restore, prev.maxSoulAnchor),
@@ -1814,6 +1844,23 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const getCurrentVectorCluster = useCallback(() => buildSectorCluster(activeIncursionRef.current), []);
 
+  const syncProceduralScannerTypes = useCallback(() => {
+    setActiveIncursion((prev) => {
+      if (!isProceduralRunActive(prev)) return prev;
+      const prepared = prepareProceduralScannerIncursion(prev);
+      if (prepared.proceduralRunTree === prev.proceduralRunTree) return prev;
+      const next = {
+        ...prepared,
+        unstableCargoEffectsSeen: mergeUnstableCargoEffectsSeen(
+          prev.unstableCargoEffectsSeen,
+          prev.cargo,
+        ),
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+  }, []);
+
   const getSelectedVectorNode = useCallback(() => {
     const inc = activeIncursionRef.current;
     if (!inc.selectedVectorId) return inc.encounterPath[inc.nodesCleared] ?? null;
@@ -2151,23 +2198,50 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const grantCombatResourceDrops = useCallback((options: CombatRewardContext): readonly string[] => {
-    const drops = rollCombatResourceDrops(options);
+    const inc = activeIncursionRef.current;
+    const rareLootBonusPct = resolveEffectiveRareLootBonusPct(
+      options.rareLootBonusPct ?? inc.runModifiers?.rareLootBonusPct ?? 0,
+      inc.cargo,
+    );
+    const occultRewardBonusPct = resolveEffectiveOccultRewardBonusPct(inc.cargo);
+    const drops = rollCombatResourceDrops({
+      ...options,
+      rareLootBonusPct,
+      occultRewardBonusPct,
+    });
     if (drops.length === 0) return [];
     const stagedIds: string[] = [];
+    let pickupLogs: string[] = [];
     setActiveIncursion((prev) => {
       const beforeCargo = prev.cargo;
       let nextCargo = beforeCargo;
       drops.forEach((resourceId) => {
         nextCargo = addLootToContainment(nextCargo, resourceId, 1, stagedIds);
       });
+      const newPickups = detectNewUnstableCargoPickups(
+        beforeCargo,
+        nextCargo,
+        prev.unstableCargoPickupLogged,
+      );
+      pickupLogs = newPickups.map((id) => formatUnstableCargoPickupLog(id));
       const next = {
         ...prev,
         cargo: nextCargo,
+        unstableCargoPickupLogged: mergeUnstableCargoPickupLog(
+          beforeCargo,
+          nextCargo,
+          prev.unstableCargoPickupLogged,
+        ),
+        unstableCargoEffectsSeen: mergeUnstableCargoEffectsSeen(
+          prev.unstableCargoEffectsSeen,
+          nextCargo,
+        ),
         runResourceLedger: recordNewResourcesFromCargoDelta(prev.runResourceLedger, beforeCargo, nextCargo),
       };
       activeIncursionRef.current = next;
       return next;
     });
+    pickupLogs.forEach((line) => appendRunLog(line));
     appendRunLog(formatCombatResourceDropLog(drops));
     return stagedIds;
   }, [appendRunLog]);
@@ -2178,20 +2252,37 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   ) => {
     if (quantity <= 0) return;
     const stagedIds: string[] = [];
+    let pickupLogs: string[] = [];
     setActiveIncursion((prev) => {
       const beforeCargo = prev.cargo;
       let nextCargo = beforeCargo;
       for (let i = 0; i < quantity; i += 1) {
         nextCargo = addLootToContainment(nextCargo, resourceId, 1, stagedIds);
       }
+      const newPickups = detectNewUnstableCargoPickups(
+        beforeCargo,
+        nextCargo,
+        prev.unstableCargoPickupLogged,
+      );
+      pickupLogs = newPickups.map((id) => formatUnstableCargoPickupLog(id));
       const next = {
         ...prev,
         cargo: nextCargo,
+        unstableCargoPickupLogged: mergeUnstableCargoPickupLog(
+          beforeCargo,
+          nextCargo,
+          prev.unstableCargoPickupLogged,
+        ),
+        unstableCargoEffectsSeen: mergeUnstableCargoEffectsSeen(
+          prev.unstableCargoEffectsSeen,
+          nextCargo,
+        ),
         runResourceLedger: recordNewResourcesFromCargoDelta(prev.runResourceLedger, beforeCargo, nextCargo),
       };
       activeIncursionRef.current = next;
       return next;
     });
+    pickupLogs.forEach((line) => appendRunLog(line));
     appendRunLog(`>> COMBAT SALVAGE — ${quantity}× ${resourceId.toUpperCase()} routed to cargo.`);
   }, [appendRunLog]);
 
@@ -2997,14 +3088,39 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   }, [advanceIncursionAfterEncounter]);
 
   const engageVectorNode = useCallback((node: IncursionNode): import('../types/game').RunNodeType | null => {
-    const inc = activeIncursionRef.current;
+    let inc = activeIncursionRef.current;
+    let engagedNode = node;
+
+    if (inc.proceduralRunTree?.nodes[node.id]) {
+      const rollResult = ensureNodeContextModifiersAtEngagement(
+        inc.proceduralRunTree,
+        node.id,
+        inc.runGenerationContext,
+        inc.cargo,
+      );
+      if (rollResult.freshlyRolled && rollResult.node) {
+        inc = {
+          ...inc,
+          proceduralRunTree: rollResult.tree,
+        };
+        activeIncursionRef.current = inc;
+        engagedNode = proceduralNodeToIncursionNode(
+          rollResult.node,
+          inc.nodesCleared,
+          inc.runVeilBiome,
+        );
+        if (rollResult.cargoPressureLog) {
+          appendRunLog(rollResult.cargoPressureLog);
+        }
+      }
+    }
 
     let enteringCollapse = inc.collapseActive;
     if (
       !inc.collapseActive
       && inc.bossDefeated
-      && node.type !== 'MASTER_EXTRACTION_LINK'
-      && (isCollapseForwardNode(node) || inc.nodesCleared >= MAX_SECTOR_NODES)
+      && engagedNode.type !== 'MASTER_EXTRACTION_LINK'
+      && (isCollapseForwardNode(engagedNode) || inc.nodesCleared >= MAX_SECTOR_NODES)
     ) {
       enteringCollapse = true;
       appendRunLog('>> POCKET DIMENSION COLLAPSE — sector geometry destabilizing.');
@@ -3012,7 +3128,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
     const encounterPath = [...inc.encounterPath];
     encounterPath[inc.nodesCleared] = {
-      ...node,
+      ...engagedNode,
       index: inc.nodesCleared,
       encounterIndex: inc.nodesCleared,
     };
@@ -3021,43 +3137,48 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       const next = {
         ...prev,
         encounterPath,
-        selectedVectorId: node.id,
+        selectedVectorId: engagedNode.id,
+        proceduralRunTree: inc.proceduralRunTree,
         collapseActive: enteringCollapse || prev.collapseActive,
+        unstableCargoEffectsSeen: mergeUnstableCargoEffectsSeen(
+          prev.unstableCargoEffectsSeen,
+          prev.cargo,
+        ),
       };
       activeIncursionRef.current = next;
       return next;
     });
 
     appendRunLog(
-      `>> VECTOR ENGAGED — NODE ${inc.nodesCleared + 1} // ${node.label.split(' // ').slice(1).join(' // ') || node.label}`,
+      `>> VECTOR ENGAGED — NODE ${inc.nodesCleared + 1} // ${engagedNode.label.split(' // ').slice(1).join(' // ') || engagedNode.label}`,
     );
 
-    if (node.type === 'EMERGENCY_EXTRACTION') {
+    if (engagedNode.type === 'EMERGENCY_EXTRACTION') {
       appendRunLog('>> EMERGENCY EXTRACTION LINK ENGAGED — EVAC CONDUIT OPEN.');
-      return node.type;
+      return engagedNode.type;
     }
 
-    if (node.type === 'RESOURCE_HARVEST') {
-      const treeNode = inc.proceduralRunTree?.nodes[node.id];
+    if (engagedNode.type === 'RESOURCE_HARVEST') {
+      const treeNode = inc.proceduralRunTree?.nodes[engagedNode.id];
       const depth = inc.nodesCleared + 1;
       const pool = treeNode?.resourcePool?.length
         ? [...treeNode.resourcePool]
-        : rollProceduralResourcePool(depth, `resource-engage:${node.id}`);
+        : rollProceduralResourcePool(depth, `resource-engage:${engagedNode.id}`);
       beginResourceNodeHarvest(pool);
-      return node.type;
+      return engagedNode.type;
     }
 
-    if (node.type === 'STANDARD_COMBAT' || node.type === 'ELITE_COMBAT') {
-      prepareStandardCombatEncounter(node);
+    if (engagedNode.type === 'STANDARD_COMBAT' || engagedNode.type === 'ELITE_COMBAT') {
+      prepareStandardCombatEncounter(engagedNode);
       setActiveIncursion((prev) => {
         const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
         activeIncursionRef.current = next;
         return next;
       });
-      return node.type;
+      return engagedNode.type;
     }
 
-    if (node.type === 'ANOMALY') {
+    if (engagedNode.type === 'ANOMALY') {
       appendRunLog('>> ANALYZING UNIDENTIFIED SIGNAL...');
       const resolution = resolveAnomalyNode();
       appendRunLog(anomalyResolutionLogLine(resolution));
@@ -3071,7 +3192,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (resolution === 'NARRATIVE') {
-        assignNarrativeForCombat(node);
+        assignNarrativeForCombat(engagedNode);
         setActiveIncursion((prev) => {
           const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
           activeIncursionRef.current = next;
@@ -3091,10 +3212,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
           return next;
         });
         prepareStandardCombatEncounter({
-          ...node,
+          ...engagedNode,
           encounterType: 'COMBAT',
           type: 'STANDARD_COMBAT',
-          label: node.label.replace('UNIDENTIFIED SIGNAL', 'AMBUSH MANIFEST'),
+          label: engagedNode.label.replace('UNIDENTIFIED SIGNAL', 'AMBUSH MANIFEST'),
         });
         setActiveIncursion((prev) => {
           const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
@@ -3107,7 +3228,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       if (resolution === 'RESOURCE_HARVEST') {
         const pool = rollProceduralResourcePool(
           inc.nodesCleared + 1,
-          `anomaly-resource:${node.id}`,
+          `anomaly-resource:${engagedNode.id}`,
         );
         beginResourceNodeHarvest(pool);
         return 'RESOURCE_HARVEST';
@@ -3122,18 +3243,18 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       return 'BLACK_MARKET';
     }
 
-    if (node.type === 'NARRATIVE_EVENT') {
-      assignNarrativeForCombat(node);
+    if (engagedNode.type === 'NARRATIVE_EVENT') {
+      assignNarrativeForCombat(engagedNode);
       setActiveIncursion((prev) => {
         const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
         activeIncursionRef.current = next;
         return next;
       });
-      return node.type;
+      return engagedNode.type;
     }
 
-    if (node.type === 'SANCTUARY' || node.type === 'BLACK_MARKET') {
-      if (node.type === 'BLACK_MARKET') {
+    if (engagedNode.type === 'SANCTUARY' || engagedNode.type === 'BLACK_MARKET') {
+      if (engagedNode.type === 'BLACK_MARKET') {
         rollBlackMarketStockForNode();
       }
       setActiveIncursion((prev) => {
@@ -3141,17 +3262,17 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         activeIncursionRef.current = next;
         return next;
       });
-      return node.type;
+      return engagedNode.type;
     }
 
-    if (node.type === 'BOSS_COMBAT') {
-      prepareBossEncounter(node);
+    if (engagedNode.type === 'BOSS_COMBAT') {
+      prepareBossEncounter(engagedNode);
       setActiveIncursion((prev) => {
         const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
         activeIncursionRef.current = next;
         return next;
       });
-      return node.type;
+      return engagedNode.type;
     }
 
     return null;
@@ -3458,7 +3579,14 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         return { success: false, logLine: '>> PARTIAL TRANSFER FAILED — NO CARGO TO BANK.' };
       }
       setActiveIncursion((prev) => {
-        const next = { ...prev, cargo: result.cargo };
+        const next = {
+          ...prev,
+          cargo: result.cargo,
+          unstableCargoEffectsSeen: mergeUnstableCargoEffectsSeen(
+            prev.unstableCargoEffectsSeen,
+            result.cargo,
+          ),
+        };
         activeIncursionRef.current = next;
         return next;
       });
@@ -3482,6 +3610,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         ...prev,
         cargo: bankResult.cargo,
         runBankedSnapshot: bankResult.bank,
+        unstableCargoEffectsSeen: mergeUnstableCargoEffectsSeen(
+          prev.unstableCargoEffectsSeen,
+          bankResult.cargo,
+        ),
         runResourceLedger: recordSafehouseBankAction(
           recordResourcesBanked(prev.runResourceLedger, bankResult.bankedResources),
         ),
@@ -3529,13 +3661,16 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (!bench) {
       return { success: false, logLine: '>> BENCH RESTORE FAILED — INSUFFICIENT CARGO.' };
     }
+    const cargoHealMultiplier = resolveCargoHealReceivedMultiplier(inc.cargo);
+    const restoreAmount = Math.floor(run.maxSoulAnchor * 0.25 * cargoHealMultiplier);
+    const nextHp = Math.min(run.maxSoulAnchor, run.soulAnchorIntegrity + restoreAmount);
     setActiveIncursion((prev) => {
       const next = { ...prev, cargo: bench.cargo };
       activeIncursionRef.current = next;
       return next;
     });
     setRunState((prev) => {
-      const next = { ...prev, soulAnchorIntegrity: bench.nextHp };
+      const next = { ...prev, soulAnchorIntegrity: nextHp };
       runStateRef.current = next;
       return next;
     });
@@ -3624,6 +3759,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       return false;
     }
     if (inc.defendRiftActive) return false;
+    if (hasVeilAshCanisterCarried(inc.cargo)) {
+      appendRunLog(formatEmergencyRecallVeilAshWarning());
+    }
     appendRunLog('>> EMERGENCY RECALL INITIATED — elite intercept staging.');
     prepareDefendRiftEncounter();
     return true;
@@ -3672,6 +3810,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
           ...prev,
           cargo: bleedResult.cargo,
           extractionReviewKind: null,
+          unstableCargoEffectsSeen: mergeUnstableCargoEffectsSeen(
+            prev.unstableCargoEffectsSeen,
+            bleedResult.cargo,
+          ),
           contractRunProgress: recordContractEmergencyRecall(prev.contractRunProgress),
         };
         activeIncursionRef.current = next;
@@ -3905,10 +4047,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   }, [appendRunLog]);
 
   const applyIncursionConsumableHeal = useCallback((amount: number) => {
+    const cargoMultiplier = resolveCargoHealReceivedMultiplier(activeIncursionRef.current.cargo);
+    const effectiveAmount = Math.floor(amount * cargoMultiplier);
     setRunState((prev) => {
       const next = {
         ...prev,
-        soulAnchorIntegrity: Math.min(prev.maxSoulAnchor, prev.soulAnchorIntegrity + amount),
+        soulAnchorIntegrity: Math.min(prev.maxSoulAnchor, prev.soulAnchorIntegrity + effectiveAmount),
       };
       runStateRef.current = next;
       return next;
@@ -4196,6 +4340,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       activeIncursion,
       getCurrentEncounterNode,
       getCurrentVectorCluster,
+      syncProceduralScannerTypes,
       ensureScannerGraphExpanded,
       getSelectedVectorNode,
       openScanPreview,
@@ -4327,6 +4472,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       activeIncursion,
       getCurrentEncounterNode,
       getCurrentVectorCluster,
+      syncProceduralScannerTypes,
       ensureScannerGraphExpanded,
       getSelectedVectorNode,
       openScanPreview,

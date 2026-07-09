@@ -1,5 +1,6 @@
 import type {
   NodeContextModifiers,
+  NodeModifierRollState,
   NodePressureBand,
   OperationObjectiveKind,
   RunGenerationContext,
@@ -102,11 +103,6 @@ export function resolveTypeWeightsForDepth(
   }
 
   return weights;
-}
-
-export interface NodeModifierRollState {
-  echoSignalsUsed: number;
-  legendaryEchoUsed: number;
 }
 
 export function createNodeModifierRollState(): NodeModifierRollState {
@@ -223,6 +219,7 @@ export function rollNodeContextModifiers(
   runContext: RunGenerationContext | null | undefined,
   rng: () => number,
   rollState: NodeModifierRollState,
+  cargoBias?: import('../types/unstableCargoEffects').CarriedCargoContextRollBias,
 ): NodeContextModifiers {
   const depthStage = getDepthStage(depthIndex);
   const pressureBand = getNodePressureBand(proceduralDepth);
@@ -247,7 +244,10 @@ export function rollNodeContextModifiers(
     runContext.activeOperation.objectiveKind,
   );
 
-  const anchorRoll = resolveAnchorSignalRollChance(depthStage, pressureScale, nodeType, runContext);
+  let anchorRoll = resolveAnchorSignalRollChance(depthStage, pressureScale, nodeType, runContext);
+  if (cargoBias) {
+    anchorRoll = Math.min(0.95, anchorRoll * cargoBias.anchorSignalChanceMultiplier);
+  }
 
   const echoBase = ECHO_SIGNAL_CHANCE[echoActivity][depthStage]
     * pressureScale
@@ -296,13 +296,31 @@ export function rollNodeContextModifiers(
   if (anchorDef && anchorType === 'ASHEN_HEART' && (nodeType === 'ELITE' || nodeType === 'GATEKEEPER')) {
     modifiers.highRisk = modifiers.highRisk || rng() < 0.25 * pressureScale;
   }
+  if (cargoBias && cargoBias.highRiskRollBonus > 0) {
+    const anomalyPressureRoll = cargoBias.highRiskRollBonus
+      + (nodeType === 'ANOMALY' ? cargoBias.highRiskRollBonus * 0.5 : 0);
+    modifiers.highRisk = modifiers.highRisk || rng() < Math.min(0.45, anomalyPressureRoll);
+  }
 
   if (nodeType === 'RESOURCE' && (pressureBand === 'HIGH' || stageMods.rareLootBias > 0.15)) {
     const highValueBase = 0.35 + stageMods.rareLootBias;
-    const highValueChance = highValueBase
+    let highValueChance = highValueBase
       * (anchorDef?.signalRollModifiers.highValueResourceChance ?? 1)
       * nodeBoost.highValueResource;
+    if (cargoBias) {
+      highValueChance *= cargoBias.highValueResourceChanceMultiplier;
+      if (cargoBias.occultRewardChanceBonus > 0) {
+        highValueChance *= 1 + cargoBias.occultRewardChanceBonus;
+      }
+    }
     modifiers.highValueResource = rng() < Math.min(0.85, highValueChance);
+  } else if (
+    cargoBias
+    && cargoBias.occultRewardChanceBonus > 0
+    && (nodeType === 'ANOMALY' || nodeType === 'RESOURCE')
+  ) {
+    const occultResourceRoll = 0.12 + cargoBias.occultRewardChanceBonus * 0.35;
+    modifiers.highValueResource = rng() < Math.min(0.5, occultResourceRoll);
   }
 
   return modifiers;
@@ -331,3 +349,4 @@ export function applyGatekeeperAnchorCore(
 }
 
 export { BASE_TYPE_WEIGHTS };
+export type { NodeModifierRollState } from '../types/worldState';

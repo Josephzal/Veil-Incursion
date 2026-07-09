@@ -293,8 +293,11 @@ export function calculateGridOccupancy(cargo: CargoRunState): number {
   return occupiedCells / totalCells;
 }
 
-export function getCargoResonanceMultiplier(_cargo: CargoRunState): number {
-  return 1;
+export function getCargoResonanceMultiplier(cargo: CargoRunState): number {
+  const occupancy = calculateGridOccupancy(cargo);
+  return occupancy >= CARGO_OCCUPANCY_RESONANCE_THRESHOLD
+    ? CARGO_RESONANCE_MULTIPLIER
+    : 1;
 }
 
 export function calculateCargoMarketValue(cargo: CargoRunState): number {

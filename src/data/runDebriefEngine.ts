@@ -2,7 +2,12 @@ import type { ActiveIncursionState } from '../types/game';
 import type { ContractExtractionKind, ContractResult } from '../types/contract';
 import type { ResourceItemId } from '../types/resourceItem';
 import { resolveContractResult } from './contractResolver';
-import { buildExtractedResourceSections, type DebriefResourceSection } from './runDebriefResourceEngine';
+import {
+  buildExtractedResourceSections,
+  type DebriefResourceSection,
+} from './runDebriefResourceEngine';
+import type { UnstableCargoDebriefSummary } from './runDebriefUnstableCargoEngine';
+import { buildUnstableCargoDebriefSummary } from './runDebriefUnstableCargoEngine';
 import { ALL_RESOURCE_ITEM_IDS, RESOURCE_REGISTRY } from './resourceRegistry';
 import {
   MAX_OPERATION_TARGET_RESOURCE_STACKS_PER_RUN,
@@ -70,6 +75,7 @@ export interface OperationDebriefPayload {
   nextOperationTitle?: string;
   contractResult: ContractResult;
   resourceSections: DebriefResourceSection[];
+  unstableCargoSummary: UnstableCargoDebriefSummary | null;
   extractionKind: ContractExtractionKind;
   deathStats?: RunDebriefDeathStats;
   midRunContributionTransmitted?: number;
@@ -244,6 +250,10 @@ export function buildOperationDebriefPayload(
   });
   const resourceSections = opts.resourceSections
     ?? buildExtractedResourceSections(incursion.runResourceLedger);
+  const unstableCargoSummary = buildUnstableCargoDebriefSummary(
+    incursion.runResourceLedger,
+    incursion.unstableCargoEffectsSeen,
+  );
   const progressDelta = Math.max(0, opts.progressAfter - opts.progressBefore);
   const totalContributionThisRun = computeTotalContributionThisRun(
     contribution.total,
@@ -271,6 +281,7 @@ export function buildOperationDebriefPayload(
     nextOperationTitle: opts.nextOperationTitle,
     contractResult,
     resourceSections,
+    unstableCargoSummary,
     extractionKind,
     deathStats: opts.deathStats,
     midRunContributionTransmitted: opts.midRunContributionTransmitted,

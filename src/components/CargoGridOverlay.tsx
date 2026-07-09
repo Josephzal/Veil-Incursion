@@ -9,6 +9,7 @@ import {
 import HapticPressable from './HapticPressable';
 import CargoGridBoard from './CargoGridBoard';
 import CargoCreditsHud from './CargoCreditsHud';
+import CargoPressurePanel from './CargoPressurePanel';
 import {
   CARGO_OVERLAY_PANEL_PADDING,
   COMBAT_OVERLAY_PANEL_PADDING,
@@ -150,6 +151,12 @@ export default function CargoGridOverlay({
                 <Text style={[styles.closeXText, { color: accentColor }]}>✕</Text>
               </HapticPressable>
             </View>
+
+            <CargoPressurePanel
+              cargo={cargo}
+              accentColor={accentColor}
+              mutedColor={theme.mutedColor}
+            />
 
             <CargoGridBoard
               cargo={cargo}

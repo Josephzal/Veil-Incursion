@@ -1,5 +1,5 @@
 import type { FactionType } from './game';
-import type { NodeContextModifiers } from './worldState';
+import type { NodeContextModifiers, NodeModifierRollState } from './worldState';
 
 /** Procedural StS-style map node types (depth 1–15). */
 export type ProceduralNodeType =
@@ -23,6 +23,8 @@ export interface ProceduralRunNode {
   resourcePool?: string[];
   /** IDs of nodes at depth + 1 this node connects to. */
   children: string[];
+  /** False until lazy type roll assigns a real vector type (Phase 3). */
+  typeAssigned?: boolean;
   /** Veil Front context — anchor/echo/operation signals for scanner and combat. */
   contextModifiers?: NodeContextModifiers;
 }
@@ -35,6 +37,12 @@ export interface ProceduralRunTree {
   maxDepth: number;
   /** Macro depth chapter (Threshold / Breach / Deep Veil). */
   macroDepthIndex?: 1 | 2 | 3;
+  /** Per-run echo caps — mutated as nodes are engaged and rolled. */
+  modifierRollState?: NodeModifierRollState;
+  /** Stable seed for deterministic per-node context rolls at engagement. */
+  rollSeed?: number;
+  /** Whether a sanctuary node has been placed in this district tree. */
+  sanctuarySpawned?: boolean;
 }
 
 export const PROCEDURAL_RUN_MAX_DEPTH = 15;

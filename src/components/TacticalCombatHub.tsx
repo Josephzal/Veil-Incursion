@@ -531,6 +531,8 @@ interface TacticalCombatHubProps {
   onGraftLootDrop?: (kind: string) => void;
   /** Active operative class — drives magazine / veil-flux resources (Phase 2). */
   operativeClass?: ClassType;
+  /** Unstable cargo heal penalty/bonus multiplier (1 = neutral). */
+  cargoHealReceivedMultiplier?: number;
 }
 interface SliceLineConfig {
   id: number;
@@ -620,6 +622,7 @@ export default function TacticalCombatHub({
   encounterUltimateDisabled = false,
   onGraftLootDrop,
   operativeClass = 'AEGIS',
+  cargoHealReceivedMultiplier = 1,
 }: TacticalCombatHubProps): React.JSX.Element {
   const hexShotBoonMods = useMemo(
     () => aggregateHexShotBoonModifiers(
@@ -1966,6 +1969,9 @@ export default function TacticalCombatHub({
     registerKillResolver?.(() => resolveVictoryRef.current());
   }, [registerKillResolver]);
 
+  const cargoHealMultRef = useRef(cargoHealReceivedMultiplier);
+  cargoHealMultRef.current = cargoHealReceivedMultiplier;
+
   const applyHealRef = useRef((amount: number) => {
     setOperativeHp((p) => {
       const n = Math.min(p + amount, combatMaxSoulAnchorRef.current);
@@ -1974,8 +1980,10 @@ export default function TacticalCombatHub({
     });
   });
   applyHealRef.current = (amount: number) => {
+    const effectiveAmount = Math.floor(amount * cargoHealMultRef.current);
+    if (effectiveAmount <= 0) return;
     setOperativeHp((p) => {
-      const n = Math.min(p + amount, getEffectiveMaxSoulAnchor());
+      const n = Math.min(p + effectiveAmount, getEffectiveMaxSoulAnchor());
       operativeHpRef.current = n;
       return n;
     });

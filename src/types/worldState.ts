@@ -193,6 +193,12 @@ export interface NodeContextModifiers {
   highValueResource?: boolean;
 }
 
+/** Tracks per-run caps while lazily rolling node context at engagement. */
+export interface NodeModifierRollState {
+  echoSignalsUsed: number;
+  legendaryEchoUsed: number;
+}
+
 export interface OperationCompletionEffect {
   deactivateAnchorForRuns?: number;
   unlockTemporarySectorModifier?: string;

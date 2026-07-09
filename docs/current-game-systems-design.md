@@ -1,6 +1,6 @@
 # Veil Incursion Current Systems Design
 
-Last updated: 2026-07-08 (procedural operations polish pass complete)
+Last updated: 2026-07-08 (unstable cargo carried effects v1 complete)
 
 This document captures the current implemented design surface for Veil Incursion: player-facing hub systems, run progression, economy, cargo/items, enemies, combat mechanics, and known partial implementations. It is intended as a working reference for design iteration and balancing, not a final player-facing manual.
 
@@ -13,7 +13,7 @@ Primary data and implementation files:
 - Debrief: `src/data/runDebriefEngine.ts`, `src/data/runDebriefResourceEngine.ts`, `src/screens/OperationDebriefScreen.tsx`, `src/hooks/useRunDeathFinalizer.ts`, `src/utils/operationDebriefUi.ts`
 - World state / operations: `src/data/worldStateEngine.ts`, `src/data/anchorRegistry.ts`, `src/data/operationGenerator.ts`, `src/data/operationRulesEngine.ts`, `src/data/operationLifecycleEngine.ts`, `src/context/WorldStateContext.tsx`
 - Run flow: `src/context/RunContext.tsx`, `src/context/GameFlowContext.tsx`, `src/data/descentEngine.ts`, `src/data/sectorGraphEngine.ts`
-- Cargo/items/resources: `src/types/resourceItem.ts`, `src/types/runResourceLedger.ts`, `src/types/cargoGrid.ts`, `src/data/resourceRegistry.ts`, `src/data/resourceValidation.ts`, `src/data/runResourceLedgerEngine.ts`, `src/data/extractionPersistenceEngine.ts`, `src/data/blackMarket.ts`, `src/data/craftingRegistry.ts`, `src/data/consumableRegistry.ts`
+- Cargo/items/resources: `src/types/resourceItem.ts`, `src/types/runResourceLedger.ts`, `src/types/cargoGrid.ts`, `src/types/unstableCargoEffects.ts`, `src/data/resourceRegistry.ts`, `src/data/resourceValidation.ts`, `src/data/runResourceLedgerEngine.ts`, `src/data/extractionPersistenceEngine.ts`, `src/data/unstableCargoEffectsEngine.ts`, `src/data/lazyNodeContextEngine.ts`, `src/data/runDebriefUnstableCargoEngine.ts`, `src/data/blackMarket.ts`, `src/data/craftingRegistry.ts`, `src/data/consumableRegistry.ts`
 - Enemies: `src/data/enemyRoster.ts`, `src/data/enemyDefinitions.ts`, `src/data/enemyCombatConfig.ts`, `src/data/combatRosterAI.ts`, `src/data/enemyAlphaConfig.ts`
 - Combat execution: `src/components/TacticalCombatHub.tsx`, `src/data/combatRosterActions.ts`, `src/data/combatFractureEngine.ts`
 - Class abilities: `src/data/aegisAbilities.ts`, `src/data/hexShotAbilities.ts`, `src/data/envoyAbilities.ts`
@@ -281,11 +281,23 @@ Category does **not** decide all behavior. Example: Encrypted Grid-Drive is INTE
 
 Each resource also defines `validSectorIds` for contract generation validation.
 
-#### Debrief Grouping (planned)
+#### Debrief Grouping
 
-Stable Materials, Unstable Cargo, Intel Recovered, Contraband, Fence-Value Items, Lost in the Veil — driven by category and usage tags.
+Run debrief resource resolution groups materials by category and role (`runDebriefResourceEngine.ts`):
 
-Resources are mirrored into the cargo catalog as cargo-compatible items.
+| Group | Source |
+|---|---|
+| Stable Materials | Extracted STABLE category resources |
+| Extracted Unstable Cargo | Extracted UNSTABLE category resources |
+| Intel Recovered | INTEL category |
+| Contraband | CONTRABAND category |
+| Fence-Value Items | FENCE_VALUE / ECONOMY_INTEL roles and fence-eligible items |
+| Banked at Safehouse | Physical cargo secured in-run (death debrief) |
+| Lost in the Veil | Unbanked cargo lost on death |
+
+**Cargo Pressure debrief block** (`runDebriefUnstableCargoEngine.ts`): when unstable cargo was carried or resolved this run, debrief shows which carried-effect types were active and a per-outcome unstable cargo tally (extracted / banked / lost).
+
+Resources are mirrored into the cargo catalog as cargo-compatible items with role tags (`UNSTABLE`, `VOLATILE`, `APEX`, `OCCULT`) for resonance and future systems.
 
 ### Cargo Grid
 
@@ -293,7 +305,7 @@ Current cargo grid constants:
 
 - Grid: 4 rows x 3 columns.
 - Occupancy resonance threshold: 70%.
-- Resonance multiplier: 2.
+- Resonance multiplier: 2× when grid occupancy ≥ 70% (`getCargoResonanceMultiplier`).
 
 Cargo items have:
 
@@ -304,6 +316,33 @@ Cargo items have:
 - Optional scanner use.
 - Optional combat use.
 - Optional combat effect and AP cost.
+
+#### Unstable Cargo Carried Effects (v1)
+
+Three UNSTABLE resources apply **carried effects** while physically present in run cargo (grid or containment). Effects read live cargo — banking removes physical copies and ends pressure; safehouse bank snapshot does not apply carried modifiers.
+
+| Resource | Role | Upside | Downside |
+|---|---|---|---|
+| Anomalous Core | APEX_CARGO (2×2) | +10% rare loot | +10% ELITE type weight; +10% Anchor signal at breach |
+| Veil-Ash Canister | VOLATILE_CARGO (1×2) | — | +10% ANOMALY type weight; +10% anomaly/context pressure at breach; emergency recall hazard log |
+| Ossified Ley-Knot | OCCULT_CARGO (1×1) | +10% occult loot | −10% healing received (multiplicative) |
+
+**Stacking:** Each unique unstable type applies once — duplicate copies do not stack (`buildActiveCarriedCargoSnapshot`).
+
+**Combat / economy hooks:** Rare and occult drop bonuses in `grantCombatResourceDrops`; healing multiplier in combat consumables, sanctuary attune, and bench restore.
+
+**Scanner lazy rolls (procedural runs):**
+
+1. **Type assignment (layer unlock):** Depths 2–14 start as COMBAT placeholders until the scanner layer unlocks. `assignPendingDepthTypes` rolls final node types with cargo bias (Anomalous Core → ELITE weight; Veil-Ash → ANOMALY weight). Triggered via `syncProceduralScannerTypes` when depth advances or cargo changes.
+2. **Context modifiers (breach):** Anchor / echo / high-value / hazard context modifiers roll at node engagement, not at tree generation. Cargo biases anchor signal and high-value rolls (`ensureNodeContextModifiersAtEngagement`). Pre-breach scanner shows node **types** only; context signals appear after engagement.
+
+**UI:** `CargoPressurePanel` on cargo overlay, run chrome, and event headers when effects are active. First pickup logs once per type per incursion (`unstableCargoPickupLogged`).
+
+**Debrief:** `unstableCargoEffectsSeen` tracks types that were physically carried; debrief Cargo Pressure section summarizes carried pressure and unstable resolution.
+
+**Resonance:** Veil-Ash Canister catalog tag `VOLATILE` contributes per-item volatile resonance bonus. Grid occupancy ≥ 70% applies the 2× cargo resonance multiplier.
+
+Source: `src/types/unstableCargoEffects.ts`, `src/data/unstableCargoEffectsEngine.ts`, `src/data/lazyNodeContextEngine.ts`, `src/data/nodeGenerator.ts`, `src/data/proceduralScannerBridge.ts`, `src/components/CargoPressurePanel.tsx`.
 
 ### Cargo And Consumable Items
 
@@ -701,6 +740,7 @@ Current world/narrative surface includes:
 ## Known Partial Implementations / Design Debt
 
 - **Contract loop v1 (complete):** Resource model, physical banking, contract board, Veil Front integration, run event tracking, contract resolver, unified run debrief (extract + death via `OperationDebriefScreen`), procedural operation generation, operation lifecycle (ACTIVE / COMPLETED / expiration / AFTERMATH rotation), mid-run operation target contribution with debrief transmission line, sponsor perks on deploy/contract summary, operation intel log on Veil Front briefing, expanded operation contribution on extract, **debrief progress headline** (`+N progress this run`), **reward preview** on Veil Front cards/briefing/deploy modal, and **world state validation + dev debug tooling** (Phases A–F).
+- **Unstable cargo carried effects v1 (complete):** Three unstable resources with deduped carried modifiers, lazy procedural type/context rolls, cargo pressure UI, debrief Cargo Pressure block, volatile resonance tagging, occupancy resonance multiplier, emergency recall Veil-Ash warning log.
 - **Safehouse banking:** Physical in-run banking via `runBankedSnapshot` — banked cargo survives death and routes to hub stash. Unbanked cargo is lost on death (`runResourceLedger.lostOnDeath`). Extraction merges banked + carried cargo before deposit.
 - Target Fragment has a catalogued combat effect but is marked `unimplemented`.
 - Kinetic Hollow Points / Veil-Vial is described as next attack +15 damage but is marked `unimplemented`.

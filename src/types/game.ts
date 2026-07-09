@@ -469,6 +469,10 @@ export interface ActiveIncursionState {
   operationContributionTransmitted: number;
   /** Per-district encounter pacing — alpha duel index, anti-repetition history. */
   runSegment: import('../data/encounterGenerator').RunSegmentState | null;
+  /** Unstable cargo types that already triggered first-pickup run log this incursion. */
+  unstableCargoPickupLogged: import('./unstableCargoEffects').UnstableCargoEffectId[];
+  /** Unstable cargo carried-effect types that were physically active at any point this incursion. */
+  unstableCargoEffectsSeen: import('./unstableCargoEffects').UnstableCargoEffectId[];
   /** Pre-generated StS-style 15-depth branching map for scanner routing. */
   proceduralRunTree: import('./proceduralRunTree').ProceduralRunTree | null;
   /** Scanner nodes sonar-pinged — immediate child types revealed. */
@@ -583,6 +587,8 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     contractRunProgress: createEmptyContractRunProgress(),
     operationContributionTransmitted: 0,
     runSegment: null,
+    unstableCargoPickupLogged: [],
+    unstableCargoEffectsSeen: [],
     proceduralRunTree: null,
     revealedSonarNodeIds: [],
     pendingProceduralResourcePool: [],

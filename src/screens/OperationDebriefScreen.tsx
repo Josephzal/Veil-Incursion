@@ -9,6 +9,9 @@ import { useTerminal } from '../context/TerminalContext';
 import TerminalSafeArea from '../components/TerminalSafeArea';
 import { useImmersiveScreenPadding } from '../hooks/useImmersiveScreenPadding';
 import { formatDebriefResourceLine } from '../data/runDebriefResourceEngine';
+import {
+  formatUnstableCargoDebriefLine,
+} from '../data/runDebriefUnstableCargoEngine';
 import { formatExtractionKindLabel, sponsorDisplayName } from '../utils/contractUi';
 import { getResourceDisplayName } from '../data/resourceRegistry';
 import { formatTimeAliveMmSs } from '../types/runDeathSummary';
@@ -48,6 +51,7 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
     nextOperationTitle,
     contractResult,
     resourceSections,
+    unstableCargoSummary,
     extractionKind,
     deathStats,
     midRunContributionTransmitted,
@@ -205,6 +209,63 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
                 ) : null}
               </>
             )}
+
+            {unstableCargoSummary ? (
+              <>
+                <View style={styles.sectionGap} />
+                <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>CARGO PRESSURE</Text>
+                {unstableCargoSummary.hadCarriedPressure ? (
+                  <Text style={[styles.stat, { color: theme.textColor }]}>
+                    {`CARRIED EFFECTS ACTIVE: ${unstableCargoSummary.carriedEffectsSeen.join(', ').toUpperCase()}`}
+                  </Text>
+                ) : null}
+                {unstableCargoSummary.resolution.extracted.length > 0 ? (
+                  <>
+                    <Text style={[styles.stat, { color: theme.textColor, fontWeight: '700' }]}>
+                      EXTRACTED UNSTABLE CARGO
+                    </Text>
+                    {unstableCargoSummary.resolution.extracted.map((line) => (
+                      <Text
+                        key={`extracted-${line.resourceId}`}
+                        style={[styles.stat, { color: theme.mutedColor }]}
+                      >
+                        {formatUnstableCargoDebriefLine(line)}
+                      </Text>
+                    ))}
+                  </>
+                ) : null}
+                {unstableCargoSummary.resolution.banked.length > 0 ? (
+                  <>
+                    <Text style={[styles.stat, { color: theme.textColor, fontWeight: '700' }]}>
+                      BANKED UNSTABLE CARGO
+                    </Text>
+                    {unstableCargoSummary.resolution.banked.map((line) => (
+                      <Text
+                        key={`banked-${line.resourceId}`}
+                        style={[styles.stat, { color: theme.mutedColor }]}
+                      >
+                        {formatUnstableCargoDebriefLine(line)}
+                      </Text>
+                    ))}
+                  </>
+                ) : null}
+                {unstableCargoSummary.resolution.lost.length > 0 ? (
+                  <>
+                    <Text style={[styles.stat, { color: FAILURE_ACCENT, fontWeight: '700' }]}>
+                      LOST UNSTABLE CARGO
+                    </Text>
+                    {unstableCargoSummary.resolution.lost.map((line) => (
+                      <Text
+                        key={`lost-${line.resourceId}`}
+                        style={[styles.stat, { color: theme.mutedColor }]}
+                      >
+                        {formatUnstableCargoDebriefLine(line)}
+                      </Text>
+                    ))}
+                  </>
+                ) : null}
+              </>
+            ) : null}
 
             {resourceSections.length > 0 ? (
               <>

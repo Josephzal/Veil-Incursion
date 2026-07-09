@@ -113,7 +113,11 @@ function bucketResources(resources: ResourceQuantity): Partial<Record<DebriefRes
 }
 
 export function buildExtractedResourceSections(ledger: RunResourceLedger): DebriefResourceSection[] {
-  return buildSections(bucketResources(ledger.extracted));
+  return buildSections(bucketResources(ledger.extracted)).map((section) => (
+    section.group === 'UNSTABLE_CARGO'
+      ? { ...section, title: 'Extracted Unstable Cargo' }
+      : section
+  ));
 }
 
 export function buildDeathResourceSections(ledger: RunResourceLedger): DebriefResourceSection[] {

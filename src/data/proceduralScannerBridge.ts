@@ -8,6 +8,7 @@ import {
 } from '../types/proceduralRunTree';
 import { LEVELS_PER_DISTRICT, MAX_RUN_GRAPH_DEPTH } from '../types/sectorPacing';
 import { veilBiomeDisplayName, veilBiomeToLegacyMacroBiome } from './sectorBiomeBridge';
+import { assignPendingDepthTypes } from './nodeGenerator';
 
 const VECTOR_LABELS = ['ALPHA', 'BETA', 'GAMMA', 'DELTA', 'EPSILON'] as const;
 
@@ -119,6 +120,23 @@ export function getAvailableProceduralNodeIds(inc: ActiveIncursionState): string
 
   const parent = tree.nodes[lastChosen.id];
   return parent?.children ?? [];
+}
+
+export function prepareProceduralScannerIncursion(
+  inc: ActiveIncursionState,
+): ActiveIncursionState {
+  const tree = inc.proceduralRunTree;
+  if (!tree?.rollSeed) return inc;
+
+  const depth = localProceduralDepth(inc.nodesCleared);
+  const nextTree = assignPendingDepthTypes(tree, depth, {
+    runGenerationContext: inc.runGenerationContext,
+    depthIndex: inc.currentDistrict as 1 | 2 | 3,
+    cargo: inc.cargo,
+  });
+
+  if (nextTree === tree) return inc;
+  return { ...inc, proceduralRunTree: nextTree };
 }
 
 export function buildProceduralScannerCluster(inc: ActiveIncursionState): IncursionNode[] {

@@ -55,6 +55,8 @@ export interface CombatRewardContext {
   slainEnemies?: Array<Pick<EnemyCombatProfile, 'rosterId' | 'currentHp' | 'isSlumped'>>;
   /** Run modifier — extra salvage roll chance (%). */
   rareLootBonusPct?: number;
+  /** Carried unstable cargo — occult-biased salvage roll chance (%). */
+  occultRewardBonusPct?: number;
 }
 
 export function lootDepthTierFromDepth(depth: number): LootDepthTier {
@@ -151,6 +153,10 @@ export function rollCombatResourceDrops(ctx: CombatRewardContext): ResourceItemI
     if (rareBonusPct > 0 && rng() * 100 < rareBonusPct) {
       drops.push(pickFromPool(factionRarePool(profile, tier), rng));
     }
+    const occultBonusPct = ctx.occultRewardBonusPct ?? 0;
+    if (occultBonusPct > 0 && rng() * 100 < occultBonusPct) {
+      drops.push(pickFromPool(factionRarePool('SOLARIS', tier), rng));
+    }
     return drops;
   }
 
@@ -163,6 +169,10 @@ export function rollCombatResourceDrops(ctx: CombatRewardContext): ResourceItemI
   const rareBonusPct = ctx.rareLootBonusPct ?? 0;
   if (rareBonusPct > 0 && rng() * 100 < rareBonusPct) {
     drops.push(pickFromPool(factionRarePool(profile, tier), rng));
+  }
+  const occultBonusPct = ctx.occultRewardBonusPct ?? 0;
+  if (occultBonusPct > 0 && rng() * 100 < occultBonusPct) {
+    drops.push(pickFromPool(factionRarePool('SOLARIS', tier), rng));
   }
 
   return drops;

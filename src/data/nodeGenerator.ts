@@ -7,12 +7,12 @@ import {
   type ProceduralRunTree,
 } from '../types/proceduralRunTree';
 import {
-  applyGatekeeperAnchorCore,
   createNodeModifierRollState,
   resolveTypeWeightsForDepth,
-  rollNodeContextModifiers,
 } from './nodeGenerationContextEngine';
 import { rollProceduralResourcePool } from './proceduralResourceEngine';
+import type { CargoRunState } from '../types/cargoGrid';
+import { applyCarriedCargoTypeWeightBias } from './unstableCargoEffectsEngine';
 
 export interface RunTreeGenerationParams {
   runGenerationContext?: RunGenerationContext | null;
@@ -143,13 +143,17 @@ function candidateTypesForNode(
   depth: number,
   parentTypes: ProceduralNodeType[],
   params?: RunTreeGenerationParams,
+  cargo?: CargoRunState,
 ): { type: ProceduralNodeType; weight: number }[] {
   const forbidden = new Set<ProceduralNodeType>();
   parentTypes.forEach((parentType) => {
     if (parentType !== 'COMBAT') forbidden.add(parentType);
   });
 
-  const layerWeights = resolveLayerTypeWeights(depth, params);
+  let layerWeights = resolveLayerTypeWeights(depth, params);
+  if (cargo) {
+    layerWeights = applyCarriedCargoTypeWeightBias(layerWeights, cargo);
+  }
 
   return layerWeights.filter((entry) => {
     if (forbidden.has(entry.type)) return false;
@@ -166,13 +170,16 @@ function assignNodeType(
   rng: () => number,
   params?: RunTreeGenerationParams,
   forceType?: ProceduralNodeType,
+  cargo?: CargoRunState,
 ): void {
   if (forceType) {
     node.type = forceType;
+    node.typeAssigned = true;
     return;
   }
-  const candidates = candidateTypesForNode(node.depth, parentTypes, params);
+  const candidates = candidateTypesForNode(node.depth, parentTypes, params, cargo);
   node.type = pickWeightedType(candidates.length > 0 ? candidates : [{ type: 'COMBAT', weight: 1 }], rng);
+  node.typeAssigned = true;
 }
 
 function enumeratePaths(
@@ -212,11 +219,16 @@ function countPathType(path: ProceduralRunNode[], matcher: (type: ProceduralNode
   return path.filter((node) => node.type !== 'GATEKEEPER' && matcher(node.type)).length;
 }
 
+function isNodeTypeLockedForRepair(node: ProceduralRunNode): boolean {
+  return node.typeAssigned !== false;
+}
+
 function repairPathConstraints(
   nodes: Record<string, ProceduralRunNode>,
   depthIndex: Record<number, string[]>,
   bossNodeId: string,
   rng: () => number,
+  maxRepairedDepth?: number,
 ): void {
   const maxPasses = 48;
   for (let pass = 0; pass < maxPasses; pass += 1) {
@@ -228,17 +240,21 @@ function repairPathConstraints(
         const prev = path[i - 1];
         const curr = path[i];
         if (curr.type === 'GATEKEEPER') continue;
-        if (prev.type === curr.type && curr.type !== 'COMBAT') {
+        if (!isNodeTypeLockedForRepair(curr)) continue;
+        if (maxRepairedDepth != null && curr.depth > maxRepairedDepth) continue;
+        if (prev.type === curr.type && prev.type !== 'COMBAT') {
           curr.type = 'COMBAT';
           repaired = true;
         }
       }
 
-      let utilityCount = countPathType(path, isUtilityType);
+      let utilityCount = countPathType(path, (type) => isUtilityType(type));
       if (utilityCount > MAX_UTILITY_PER_PATH) {
         for (let i = path.length - 2; i >= 1 && utilityCount > MAX_UTILITY_PER_PATH; i -= 1) {
           const node = path[i];
           if (node.type === 'GATEKEEPER') continue;
+          if (!isNodeTypeLockedForRepair(node)) continue;
+          if (maxRepairedDepth != null && node.depth > maxRepairedDepth) continue;
           if (isUtilityType(node.type)) {
             node.type = 'COMBAT';
             utilityCount -= 1;
@@ -251,6 +267,8 @@ function repairPathConstraints(
       if (eliteCount > MAX_ELITE_PER_PATH) {
         for (let i = 1; i < path.length - 1 && eliteCount > MAX_ELITE_PER_PATH; i += 1) {
           const node = path[i];
+          if (!isNodeTypeLockedForRepair(node)) continue;
+          if (maxRepairedDepth != null && node.depth > maxRepairedDepth) continue;
           if (node.type === 'ELITE') {
             node.type = 'COMBAT';
             eliteCount -= 1;
@@ -263,6 +281,8 @@ function repairPathConstraints(
       if (eliteCount < MIN_ELITE_PER_PATH) {
         for (let i = 1; i < path.length - 1 && eliteCount < MIN_ELITE_PER_PATH; i += 1) {
           const node = path[i];
+          if (!isNodeTypeLockedForRepair(node)) continue;
+          if (maxRepairedDepth != null && node.depth > maxRepairedDepth) continue;
           const parentTypes = getParentTypes(node, nodes);
           if (node.type === 'COMBAT' && !parentTypes.includes('ELITE')) {
             node.type = 'ELITE';
@@ -277,6 +297,8 @@ function repairPathConstraints(
   }
 
   Object.values(nodes).forEach((node) => {
+    if (!isNodeTypeLockedForRepair(node)) return;
+    if (maxRepairedDepth != null && node.depth > maxRepairedDepth) return;
     if (node.depth <= EARLY_DEPTH_MAX && (node.type === 'MARKET' || node.type === 'SANCTUARY' || node.type === 'EXTRACTION')) {
       node.type = 'COMBAT';
     }
@@ -294,13 +316,20 @@ function attachResourcePools(
   seed: number,
 ): void {
   Object.values(nodes).forEach((node) => {
-    if (node.type !== 'RESOURCE') {
-      delete node.resourcePool;
-      return;
-    }
-    const tierSuffix = node.contextModifiers?.highValueResource ? ':high' : '';
-    node.resourcePool = rollProceduralResourcePool(node.depth, `${seed}:resource:${node.id}${tierSuffix}`);
+    attachResourcePoolForNode(node, seed);
   });
+}
+
+export function attachResourcePoolForNode(
+  node: ProceduralRunNode,
+  seed: number,
+): void {
+  if (node.type !== 'RESOURCE') {
+    delete node.resourcePool;
+    return;
+  }
+  const tierSuffix = node.contextModifiers?.highValueResource ? ':high' : '';
+  node.resourcePool = rollProceduralResourcePool(node.depth, `${seed}:resource:${node.id}${tierSuffix}`);
 }
 
 function createNode(
@@ -308,51 +337,96 @@ function createNode(
   depth: number,
   type: ProceduralNodeType,
   faction?: FactionType,
+  typeAssigned = true,
 ): ProceduralRunNode {
   return {
     id,
     depth,
     type,
     children: [],
+    typeAssigned,
     ...(faction != null ? { faction } : {}),
   };
 }
 
-function stampNodeContextModifiers(
-  nodes: Record<string, ProceduralRunNode>,
-  bossNodeId: string,
-  params: RunTreeGenerationParams | undefined,
-  rng: () => number,
-): void {
-  const depthIndex = params?.depthIndex ?? 1;
-  const runContext = params?.runGenerationContext ?? null;
-  const rollState = createNodeModifierRollState();
+export function isNodeTypePending(node: ProceduralRunNode | null | undefined): boolean {
+  return node?.typeAssigned === false;
+}
 
-  Object.values(nodes).forEach((node) => {
-    if (node.type === 'GATEKEEPER') return;
-    node.contextModifiers = rollNodeContextModifiers(
-      node.depth,
-      node.type,
-      depthIndex,
-      runContext,
-      rng,
-      rollState,
-    );
+export interface LazyTypeAssignmentParams {
+  runGenerationContext?: RunGenerationContext | null;
+  depthIndex?: 1 | 2 | 3;
+  cargo?: CargoRunState;
+}
+
+export function assignPendingDepthTypes(
+  tree: ProceduralRunTree,
+  depth: number,
+  params: LazyTypeAssignmentParams,
+): ProceduralRunTree {
+  if (tree.rollSeed == null) return tree;
+
+  const layerIds = tree.depthIndex[depth] ?? [];
+  const pendingIds = layerIds.filter((id) => isNodeTypePending(tree.nodes[id]));
+  if (pendingIds.length === 0) return tree;
+
+  const nodes = { ...tree.nodes };
+  let sanctuarySpawned = tree.sanctuarySpawned ?? false;
+  const genParams: RunTreeGenerationParams = {
+    runGenerationContext: params.runGenerationContext ?? null,
+    depthIndex: params.depthIndex ?? tree.macroDepthIndex ?? 1,
+  };
+
+  pendingIds.forEach((nodeId, index) => {
+    const node = { ...nodes[nodeId] };
+    const parentTypes = getParentTypes(node, nodes);
+    const rng = mulberry32(hashDepthTypeRollSeed(tree.rollSeed!, depth, nodeId));
+
+    let forceType: ProceduralNodeType | undefined;
+    if (depth === 7 && !sanctuarySpawned && index === pendingIds.length - 1) {
+      forceType = 'SANCTUARY';
+    } else if (depth === 14 && index === 0) {
+      forceType = 'SANCTUARY';
+    }
+
+    assignNodeType(node, parentTypes, rng, genParams, forceType, params.cargo);
+    if (node.type === 'SANCTUARY') {
+      sanctuarySpawned = true;
+    }
+    attachResourcePoolForNode(node, tree.rollSeed!);
+    nodes[nodeId] = node;
   });
 
-  const boss = nodes[bossNodeId];
-  if (boss) {
-    let bossModifiers = rollNodeContextModifiers(
-      boss.depth,
-      boss.type,
-      depthIndex,
-      runContext,
-      rng,
-      rollState,
-    );
-    bossModifiers = applyGatekeeperAnchorCore(bossModifiers, depthIndex, runContext, rng);
-    boss.contextModifiers = bossModifiers;
+  if (depth === 14) {
+    const depth14Ids = tree.depthIndex[14] ?? [];
+    const hasSanctuary = depth14Ids.some((id) => nodes[id]?.type === 'SANCTUARY');
+    if (!hasSanctuary && depth14Ids[0]) {
+      const fallback = { ...nodes[depth14Ids[0]] };
+      fallback.type = 'SANCTUARY';
+      fallback.typeAssigned = true;
+      nodes[depth14Ids[0]] = fallback;
+      sanctuarySpawned = true;
+    }
   }
+
+  const mergedNodes = { ...nodes };
+  const depthIndex = { ...tree.depthIndex };
+  repairPathConstraints(mergedNodes, depthIndex, tree.bossNodeId, mulberry32(tree.rollSeed! + depth), depth);
+
+  return {
+    ...tree,
+    nodes: mergedNodes,
+    depthIndex,
+    sanctuarySpawned,
+  };
+}
+
+function hashDepthTypeRollSeed(treeSeed: number, depth: number, nodeId: string): number {
+  let hash = (treeSeed + depth * 997) >>> 0;
+  for (let i = 0; i < nodeId.length; i += 1) {
+    hash = (hash * 31 + nodeId.charCodeAt(i)) >>> 0;
+  }
+  return hash;
 }
 
 /** Generate a full 15-depth branching run tree for one macro depth chapter. */
@@ -378,11 +452,10 @@ export function generateRunTree(
     depthLayerIndex[node.depth].push(node.id);
   };
 
-  let sanctuarySpawned = false;
   const [factionA, factionB] = pickTwoFactions(rng);
   const depth1: ProceduralRunNode[] = [
-    createNode(nextId(1), 1, 'COMBAT', factionA),
-    createNode(nextId(1), 1, 'COMBAT', factionB),
+    createNode(nextId(1), 1, 'COMBAT', factionA, true),
+    createNode(nextId(1), 1, 'COMBAT', factionB, true),
   ];
   depth1.forEach(register);
 
@@ -392,41 +465,22 @@ export function generateRunTree(
     const count = Math.floor(rng() * 4) + 1;
     const layer: ProceduralRunNode[] = [];
     for (let i = 0; i < count; i += 1) {
-      const node = createNode(nextId(depth), depth, 'COMBAT');
+      const node = createNode(nextId(depth), depth, 'COMBAT', undefined, false);
       layer.push(node);
       register(node);
     }
     connectDepthLayers(previousLayer, layer, rng);
-    layer.forEach((node, index) => {
-      const parentTypes = getParentTypes(node, nodes);
-      const forceSanctuary = depth === 7 && !sanctuarySpawned && index === count - 1;
-      assignNodeType(node, parentTypes, rng, params, forceSanctuary ? 'SANCTUARY' : undefined);
-      if (node.type === 'SANCTUARY') sanctuarySpawned = true;
-    });
     previousLayer = layer;
   }
 
   const depth14Count = Math.floor(rng() * 3) + 1;
   const depth14: ProceduralRunNode[] = [];
-  let depth14Sanctuary = false;
   for (let i = 0; i < depth14Count; i += 1) {
-    const node = createNode(nextId(14), 14, 'COMBAT');
+    const node = createNode(nextId(14), 14, 'COMBAT', undefined, false);
     depth14.push(node);
     register(node);
   }
   connectDepthLayers(previousLayer, depth14, rng);
-  depth14.forEach((node, index) => {
-    const parentTypes = getParentTypes(node, nodes);
-    if (index === 0) {
-      assignNodeType(node, parentTypes, rng, params, 'SANCTUARY');
-    } else {
-      assignNodeType(node, parentTypes, rng, params);
-    }
-    if (node.type === 'SANCTUARY') depth14Sanctuary = true;
-  });
-  if (!depth14Sanctuary) {
-    depth14[0].type = 'SANCTUARY';
-  }
 
   const boss = createNode(nextId(15), 15, 'GATEKEEPER');
   register(boss);
@@ -436,10 +490,6 @@ export function generateRunTree(
     }
   });
 
-  repairPathConstraints(nodes, depthLayerIndex, boss.id, rng);
-  stampNodeContextModifiers(nodes, boss.id, params, rng);
-  attachResourcePools(nodes, numericSeed);
-
   const macroDepthIndex = params?.depthIndex ?? 1;
 
   return {
@@ -448,6 +498,9 @@ export function generateRunTree(
     bossNodeId: boss.id,
     maxDepth: PROCEDURAL_RUN_MAX_DEPTH,
     macroDepthIndex,
+    modifierRollState: createNodeModifierRollState(),
+    rollSeed: numericSeed,
+    sanctuarySpawned: false,
   };
 }
 

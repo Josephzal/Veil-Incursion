@@ -3,8 +3,14 @@ import {
   ALL_RESOURCE_ITEM_IDS,
   CONTRACT_TARGET_RESOURCE_IDS,
   RESOURCE_REGISTRY,
+  RESOURCES_BY_CATEGORY,
   canResourceSpawnInSector,
 } from './resourceRegistry';
+import {
+  UNSTABLE_CARRIED_EFFECTS,
+} from './unstableCargoEffectsEngine';
+import { UNSTABLE_CARRIED_EFFECT_IDS } from '../types/unstableCargoEffects';
+import type { UnstableCargoEffectId } from '../types/unstableCargoEffects';
 import type { ResourceItemId } from '../types/resourceItem';
 import type { SectorId } from '../types/worldState';
 
@@ -136,7 +142,52 @@ export function validateResourceRegistry(): ResourceValidationIssue[] {
     }
   });
 
+  validateUnstableCarriedEffects(issues);
+
   return issues;
+}
+
+function validateUnstableCarriedEffects(issues: ResourceValidationIssue[]): void {
+  UNSTABLE_CARRIED_EFFECT_IDS.forEach((resourceId: UnstableCargoEffectId) => {
+    const def = RESOURCE_REGISTRY[resourceId];
+    const carried = UNSTABLE_CARRIED_EFFECTS[resourceId];
+
+    if (def.category !== 'UNSTABLE') {
+      pushIssue(issues, {
+        severity: 'error',
+        resourceId,
+        message: 'Carried effect resource must be UNSTABLE category.',
+      });
+    }
+
+    if (!carried.warningText.trim()) {
+      pushIssue(issues, {
+        severity: 'error',
+        resourceId,
+        message: 'Unstable carried effect missing warning text.',
+      });
+    }
+
+    const hasUpside = carried.displayLines.some((line) => line.kind === 'upside');
+    const hasDownside = carried.displayLines.some((line) => line.kind === 'downside');
+    if (!hasUpside && !hasDownside) {
+      pushIssue(issues, {
+        severity: 'error',
+        resourceId,
+        message: 'Unstable carried effect must have at least one upside or downside display line.',
+      });
+    }
+  });
+
+  RESOURCES_BY_CATEGORY.UNSTABLE.forEach((resourceId) => {
+    if (!(UNSTABLE_CARRIED_EFFECT_IDS as readonly string[]).includes(resourceId)) {
+      pushIssue(issues, {
+        severity: 'warn',
+        resourceId,
+        message: 'Unstable resource has no v1 carried effect definition.',
+      });
+    }
+  });
 }
 
 /** Logs validation issues in dev builds. */
