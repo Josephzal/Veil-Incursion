@@ -42,9 +42,10 @@ export default function OverworldHubScreen(): React.JSX.Element {
     setLaunchingIncursion(true);
     const breachColor = resolveBreachTransitionColor(breachFaction);
     transitionActions.startBreaching(breachColor, () => {
-      const initialCargo = commitDescentLoadout();
+      const { cargo: initialCargo, runItems: initialRunItems } = commitDescentLoadout();
       const { runGenerationContext, runModifiers } = buildRunContextForDescent();
       appendHubLog('>> DESCENT LOADOUT LOCKED — CARGO MANIFEST COMMITTED TO RUN STATE.');
+      appendHubLog('>> RUN ITEM SLOTS LOCKED — TACTICAL MANIFEST COMMITTED.');
       appendHubLog(`>> VEIL FRONT BREACH — ${runGenerationContext.sectorState.displayName.toUpperCase()} // ${runGenerationContext.activeOperation.title.toUpperCase()}`);
       startNewRun({
         factionPerks: account.factionPerks,
@@ -55,6 +56,7 @@ export default function OverworldHubScreen(): React.JSX.Element {
         activeClass: account.activeClass,
         alignedFaction: breachFaction,
         initialCargo,
+        initialRunItems,
         runGenerationContext,
         runModifiers,
         startingVeilResidueBalance: account.veilResidueBalance,

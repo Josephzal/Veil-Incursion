@@ -26,12 +26,43 @@ export interface IncursionConsumableUseResult {
   stripOccultWards?: number;
   clearDebuffs?: boolean;
   clearPlayerDebuffs?: PlayerCombatDebuffId[];
+  /** Clear any supported player debuffs present in session extras. */
+  clearSupportedPlayerDebuffs?: boolean;
   frontlineBlindTurns?: number;
   maxAbyssalReserve?: boolean;
   grantBonusAp?: number;
   restoreStaminaPct?: number;
   absorbNextHit?: boolean;
+  /** Spall-Weave — deal this damage to attacker when vest breaks. */
+  spallShrapnelDamage?: number;
   enableGodMode?: boolean;
   apCost?: number;
+  /** Temporary HP shield points (CombatSessionExtras.playerShield). */
+  grantTemporaryShield?: number;
+  /** Apply EXPOSED to selected/primary target for N turns (tag only). */
+  applyExposed?: boolean;
+  /** Root up to N living enemies (evadeChance 0 + ROOTED tag). */
+  applyRootedToUpTo?: number;
+  /** Apply FRACTURED to selected target. */
+  applyFracture?: boolean;
+  /** Interrupt charging/channeling target; else minor fracture only. */
+  interruptChargingTarget?: boolean;
+  /** Lose this much stamina at start of next player turn. */
+  staminaLossNextTurn?: number;
+  /** Survive lethal hit at 1 HP once this combat. */
+  bloodwireLethalPrevention?: boolean;
+  /** Untargetable until next enemy action resolves; then dump stamina. */
+  nullSpaceUntargetable?: boolean;
+  /** Redirect next single-target attack to decoy. */
+  voidglassDecoy?: boolean;
+  /** Place delayed AoE marker on selected target. */
+  delayedCylinder?: boolean;
+  /** Echo last non-ultimate offensive ability at half power. */
+  mirrorSaltEcho?: boolean;
+  /** Stamina lost immediately on armor-break misfire. */
+  misfireStaminaLoss?: number;
+  /** Require ≥1 kinetic armor stripped before applying Exposed. */
+  exposedRequiresArmorStripped?: number;
   logLine: string;
+  secondaryLogLine?: string;
 }

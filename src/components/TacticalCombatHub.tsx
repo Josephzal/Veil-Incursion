@@ -424,6 +424,9 @@ import {
   PARRY_RING_SCALE_START,
   type ParryArenaLayout,
 } from '../utils/parryCollision';
+import { useRun } from '../context/RunContext';
+import { tryNormalizeRunItemId } from '../data/runItemIdAliases';
+import { getRunItemInCombatSlot } from '../data/runItemInventoryEngine';
 
 const TELEMETRY_DIVIDER = 'rgba(139, 92, 246, 0.2)';
 
@@ -625,6 +628,23 @@ export default function TacticalCombatHub({
   operativeClass = 'AEGIS',
   cargoHealReceivedMultiplier = 1,
 }: TacticalCombatHubProps): React.JSX.Element {
+  const {
+    notifyRunItemPlayerTurnStart,
+    notifyRunItemCombatStart,
+    activeIncursion,
+  } = useRun();
+  const activeIncursionRefLocal = useRef(activeIncursion);
+  activeIncursionRefLocal.current = activeIncursion;
+  const runItemCombatFlagsRef = useRef({
+    bloodwireActive: false,
+    bloodwireSpent: false,
+    nullSpaceActive: false,
+    voidglassDecoyActive: false,
+    delayedCylinderTargetId: null as string | null,
+    delayedCylinderDamage: 0,
+    staminaLossNextTurn: 0,
+    healingReceivedPenaltyPct: 0,
+  });
   const hexShotBoonMods = useMemo(
     () => aggregateHexShotBoonModifiers(
       hexShotBoons,
@@ -1981,7 +2001,11 @@ export default function TacticalCombatHub({
     });
   });
   applyHealRef.current = (amount: number) => {
-    const effectiveAmount = Math.floor(amount * cargoHealMultRef.current);
+    const penalty = runItemCombatFlagsRef.current.healingReceivedPenaltyPct;
+    const penalized = penalty > 0
+      ? Math.floor(amount * (1 - penalty / 100))
+      : amount;
+    const effectiveAmount = Math.floor(penalized * cargoHealMultRef.current);
     if (effectiveAmount <= 0) return;
     setOperativeHp((p) => {
       const n = Math.min(p + effectiveAmount, getEffectiveMaxSoulAnchor());
@@ -2023,26 +2047,68 @@ export default function TacticalCombatHub({
       log('[REJECTED] >> Insufficient action points for cargo deploy.');
       return;
     }
-    const healAmt = Math.floor(result.healAmount * mutationModsRef.current.healMultiplier);
+    let healAmt = Math.floor(result.healAmount * mutationModsRef.current.healMultiplier);
+    if (result.clearSupportedPlayerDebuffs) {
+      const clearable = new Set(['BLEEDING', 'FRACTURED', 'ROOTED', 'SEARING', 'HEXED', 'ECHO_DEBUFF']);
+      const before = sessionExtrasRef.current.structuredDebuffs.length;
+      sessionExtrasRef.current.structuredDebuffs = sessionExtrasRef.current.structuredDebuffs.filter(
+        (d) => !clearable.has(d.type),
+      );
+      sessionExtrasRef.current.playerDebuffs = sessionExtrasRef.current.structuredDebuffs.map((d) => d.type);
+      const cleared = before - sessionExtrasRef.current.structuredDebuffs.length;
+      if (cleared > 0) {
+        healAmt = Math.floor(maxSoulAnchor * 0.05 * cleared * mutationModsRef.current.healMultiplier);
+        log(`>> TRAUMA PATCH — purged ${cleared} debuff(s).`);
+      }
+    }
     if (healAmt > 0) applyHealRef.current(healAmt);
     if (result.stunsEnemy) applyVeilShardFracture();
     if (result.shatterKineticArmor) {
       const targetId = selectedTargetIdRef.current ?? primaryAliveUnit(squadRef.current)?.unitId;
       const unit = targetId ? getUnitById(squadRef.current, targetId) : null;
       if (unit?.unitId) {
+        const beforeArmor = unit.kineticArmor ?? 0;
+        const stripped = Math.min(beforeArmor, result.shatterKineticArmor);
         patchUnit(unit.unitId, {
-          kineticArmor: Math.max(0, (unit.kineticArmor ?? 0) - result.shatterKineticArmor),
+          kineticArmor: Math.max(0, beforeArmor - result.shatterKineticArmor),
         });
+        if (stripped === 0 && result.misfireStaminaLoss) {
+          applyStamina(-result.misfireStaminaLoss);
+          log(result.secondaryLogLine ?? '>> GRID-CRACKER MAG // No plating found. Recoil backlash.');
+        } else if (
+          result.applyExposed
+          && stripped >= (result.exposedRequiresArmorStripped ?? 1)
+        ) {
+          const refreshed = getUnitById(squadRef.current, unit.unitId);
+          if (refreshed) patchUnit(unit.unitId, addCombatTag(refreshed, 'EXPOSED'));
+        }
       }
     }
     if (result.stripOccultWards) {
       const targetId = selectedTargetIdRef.current ?? primaryAliveUnit(squadRef.current)?.unitId;
       const unit = targetId ? getUnitById(squadRef.current, targetId) : null;
       if (unit?.unitId) {
+        const beforeWards = unit.occultWards ?? 0;
+        const stripped = Math.min(beforeWards, result.stripOccultWards);
         patchUnit(unit.unitId, {
-          occultWards: Math.max(0, (unit.occultWards ?? 0) - result.stripOccultWards),
+          occultWards: Math.max(0, beforeWards - result.stripOccultWards),
         });
+        if (stripped > 0 && result.frontlineBlindTurns) {
+          const blindResult = applyFrontlineBlinded(
+            squadRef.current,
+            sessionExtrasRef.current,
+            result.frontlineBlindTurns,
+          );
+          blindResult.logLines.forEach((line) => log(line));
+        }
       }
+    } else if (result.frontlineBlindTurns && result.frontlineBlindTurns > 0) {
+      const blindResult = applyFrontlineBlinded(
+        squadRef.current,
+        sessionExtrasRef.current,
+        result.frontlineBlindTurns,
+      );
+      blindResult.logLines.forEach((line) => log(line));
     }
     if (result.clearPlayerDebuffs && result.clearPlayerDebuffs.length > 0) {
       sessionExtrasRef.current.structuredDebuffs = sessionExtrasRef.current.structuredDebuffs.filter(
@@ -2052,14 +2118,6 @@ export default function TacticalCombatHub({
         },
       );
       sessionExtrasRef.current.playerDebuffs = sessionExtrasRef.current.structuredDebuffs.map((d) => d.type);
-    }
-    if (result.frontlineBlindTurns && result.frontlineBlindTurns > 0) {
-      const blindResult = applyFrontlineBlinded(
-        squadRef.current,
-        sessionExtrasRef.current,
-        result.frontlineBlindTurns,
-      );
-      blindResult.logLines.forEach((line) => log(line));
     }
     if (result.clearDebuffs) {
       const targetId = selectedTargetIdRef.current ?? primaryAliveUnit(squadRef.current)?.unitId;
@@ -2080,14 +2138,108 @@ export default function TacticalCombatHub({
     if (result.restoreStaminaPct) {
       applyStamina(Math.floor(maxStamina * (result.restoreStaminaPct / 100)));
     }
+    if (result.misfireStaminaLoss && !result.shatterKineticArmor) {
+      applyStamina(-result.misfireStaminaLoss);
+    }
     if (result.absorbNextHit) {
       mutationEncounterRef.current.spallWeaveActive = true;
+      if (result.spallShrapnelDamage) {
+        mutationEncounterRef.current.spallShatterPending = result.spallShrapnelDamage;
+      }
+    }
+    if (result.grantTemporaryShield) {
+      sessionExtrasRef.current.playerShield += result.grantTemporaryShield;
+      sessionExtrasRef.current.playerShieldTurnsRemaining = Math.max(
+        sessionExtrasRef.current.playerShieldTurnsRemaining,
+        1,
+      );
+    }
+    if (result.applyRootedToUpTo) {
+      // Prefer live squad count over engine estimate (RunContext has no squad ref).
+      const rootCap = Math.min(2, Math.max(1, result.applyRootedToUpTo));
+      const targets = aliveUnits(squadRef.current).slice(0, rootCap);
+      targets.forEach((unit) => {
+        if (!unit.unitId) return;
+        patchUnit(unit.unitId, {
+          ...addCombatTag(unit, 'ROOTED'),
+          evadeChance: 0,
+          evadeActive: false,
+          evadeTurnsRemaining: 0,
+        });
+      });
+      if (targets.length > 0) {
+        log(`>> RAZORWIRE — ${targets.length} hostile(s) rooted.`);
+      }
+    }
+    if (result.interruptChargingTarget || result.applyFracture) {
+      const targetId = selectedTargetIdRef.current ?? primaryAliveUnit(squadRef.current)?.unitId;
+      const unit = targetId ? getUnitById(squadRef.current, targetId) : null;
+      if (unit?.unitId) {
+        const interruptible = unit.isCharging === true || unit.spotterLockedOn === true;
+        if (result.interruptChargingTarget && interruptible) {
+          patchUnit(unit.unitId, applyFracturedState({
+            ...unit,
+            isCharging: false,
+            spotterLockedOn: false,
+          }));
+          log('>> BLACK-IRON WEDGE // Telegraph spike interrupted.');
+        } else if (result.applyFracture) {
+          patchUnit(unit.unitId, applyFracturedState(unit));
+          if (result.interruptChargingTarget) {
+            log('>> BLACK-IRON WEDGE // No interrupt window. Partial fracture only.');
+          }
+        }
+      }
+    }
+    if (result.delayedCylinder) {
+      const targetId = selectedTargetIdRef.current ?? primaryAliveUnit(squadRef.current)?.unitId;
+      if (targetId) {
+        runItemCombatFlagsRef.current.delayedCylinderTargetId = targetId;
+        runItemCombatFlagsRef.current.delayedCylinderDamage = 18;
+        log('>> RIGGED CYLINDER // Volatile charge armed.');
+      }
+    }
+    if (result.bloodwireLethalPrevention) {
+      runItemCombatFlagsRef.current.bloodwireActive = true;
+    }
+    if (result.nullSpaceUntargetable) {
+      runItemCombatFlagsRef.current.nullSpaceActive = true;
+      classCombatRef.current.ghostCamoTurnsRemaining = Math.max(
+        classCombatRef.current.ghostCamoTurnsRemaining,
+        1,
+      );
+    }
+    if (result.voidglassDecoy) {
+      runItemCombatFlagsRef.current.voidglassDecoyActive = true;
+      log('>> VOIDGLASS DECOY // False body projected.');
+    }
+    if (result.mirrorSaltEcho) {
+      const lastAbility = lastPlayerAbilityRef.current;
+      if (lastAbility && lastAbility !== 'EVISCERATE' && lastAbility !== 'DEVASTATE') {
+        // Half-power kinetic poke fallback — full ability echo lands in Phase D polish.
+        const targetId = selectedTargetIdRef.current ?? primaryAliveUnit(squadRef.current)?.unitId;
+        if (targetId) {
+          hurtEnemy(12, '[MIRROR-SALT]', 'STRIKE', {
+            channel: 'OCCULT',
+            rollCrit: false,
+            targetId,
+          });
+          log(`>> MIRROR-SALT // Echo of ${lastAbility} at half-density.`);
+        }
+      } else {
+        log('>> MIRROR-SALT // No valid offensive ability to echo.');
+      }
+      if (result.misfireStaminaLoss) applyStamina(-result.misfireStaminaLoss);
+    }
+    if (result.staminaLossNextTurn) {
+      runItemCombatFlagsRef.current.staminaLossNextTurn = result.staminaLossNextTurn;
     }
     if (result.enableGodMode) {
       godModeRef.current = true;
       applyGodModeResources();
     }
     log(result.logLine);
+    if (result.secondaryLogLine) log(`>> ${result.secondaryLogLine}`);
     playerApRef.current = Math.max(0, playerApRef.current - apCost);
     setPlayerActionPoints(playerApRef.current);
     setSelectedAbility(null);
@@ -2099,10 +2251,13 @@ export default function TacticalCombatHub({
   }, [registerConsumableHandler]);
 
   useEffect(() => {
-    registerCanDeployCargoHandler?.((itemId: CargoItemId) => (
-      canPlayerCommand()
-      && playerApRef.current >= combatConsumableApCost(itemId)
-    ));
+    registerCanDeployCargoHandler?.((itemId: CargoItemId) => {
+      const runItemId = tryNormalizeRunItemId(itemId);
+      const fromRunSlot = runItemId != null
+        && getRunItemInCombatSlot(activeIncursionRefLocal.current.runItems, runItemId) != null;
+      const apNeeded = fromRunSlot ? 0 : combatConsumableApCost(itemId);
+      return canPlayerCommand() && playerApRef.current >= apNeeded;
+    });
   }, [registerCanDeployCargoHandler]);
 
   useEffect(() => {
@@ -2185,7 +2340,29 @@ export default function TacticalCombatHub({
     }
     if (mutationEncounterRef.current.spallWeaveActive && raw > 0) {
       mutationEncounterRef.current.spallWeaveActive = false;
+      const shrapnel = mutationEncounterRef.current.spallShatterPending;
+      mutationEncounterRef.current.spallShatterPending = 0;
       log('[SPALL-WEAVE] >> Vest absorbed incoming damage.');
+      if (shrapnel > 0 && options?.attacker?.unitId) {
+        hurtEnemy(shrapnel, '[SPALL SHRAPNEL]', 'STRIKE', {
+          channel: 'KINETIC',
+          rollCrit: false,
+          targetId: options.attacker.unitId,
+        });
+        log('>> SPALL-WEAVE VEST // Mesh ruptured. Shrapnel returned.');
+      }
+      return;
+    }
+    if (runItemCombatFlagsRef.current.voidglassDecoyActive && raw > 0 && options?.attacker) {
+      runItemCombatFlagsRef.current.voidglassDecoyActive = false;
+      log('>> VOIDGLASS DECOY // Decoy shattered. Hostile intent refracted.');
+      return;
+    }
+    if (runItemCombatFlagsRef.current.nullSpaceActive && raw > 0 && options?.attacker) {
+      runItemCombatFlagsRef.current.nullSpaceActive = false;
+      classCombatRef.current.ghostCamoTurnsRemaining = 0;
+      applyStamina(-staminaRef.current);
+      log('>> NULL-SPACE INJECTOR // Spatial re-entry exhausted stamina.');
       return;
     }
     if (
@@ -2421,7 +2598,26 @@ export default function TacticalCombatHub({
       }
     }
     setOperativeHp((p) => {
-      const n = Math.max(p - dmg, 0);
+      let incoming = dmg;
+      if (
+        runItemCombatFlagsRef.current.bloodwireActive
+        && !runItemCombatFlagsRef.current.bloodwireSpent
+        && p - incoming <= 0
+        && incoming > 0
+      ) {
+        runItemCombatFlagsRef.current.bloodwireActive = false;
+        runItemCombatFlagsRef.current.bloodwireSpent = true;
+        runItemCombatFlagsRef.current.healingReceivedPenaltyPct = 25;
+        addStructuredDebuff(sessionExtrasRef.current, {
+          type: 'BLEEDING',
+          amount: 2,
+          turnsRemaining: 99,
+        });
+        log('>> BLOODWIRE TOURNIQUET // Lethal threshold denied.');
+        log('>> BLOODWIRE TOURNIQUET // Circulation debt applied.');
+        incoming = Math.max(0, p - 1);
+      }
+      const n = Math.max(p - incoming, 0);
       operativeHpRef.current = n;
       if (n <= 0 && options?.attacker?.designation) {
         onLethalEnemyStrike?.(options.attacker.designation);
@@ -4278,6 +4474,16 @@ export default function TacticalCombatHub({
     if (combatBuffRef.current.demonLungCooldown > 0) {
       combatBuffRef.current.demonLungCooldown -= 1;
     }
+    const runItemTurn = notifyRunItemPlayerTurnStart();
+    const pendingStaminaCrash = Math.max(
+      runItemTurn.staminaLoss,
+      runItemCombatFlagsRef.current.staminaLossNextTurn,
+    );
+    runItemCombatFlagsRef.current.staminaLossNextTurn = 0;
+    if (pendingStaminaCrash > 0) {
+      applyStamina(-pendingStaminaCrash);
+      log(`>> GRAVE-DUST AMPOULE // Crash response detected (−${pendingStaminaCrash} Stamina).`);
+    }
     if (combatBuffRef.current.bonusApNextTurn > 0) {
       combatBuffRef.current.bonusApThisTurn += combatBuffRef.current.bonusApNextTurn;
       combatBuffRef.current.bonusApNextTurn = 0;
@@ -4467,6 +4673,21 @@ export default function TacticalCombatHub({
   };
 
   const runEnemyActionAnimation = (countering: boolean) => {
+    if (runItemCombatFlagsRef.current.delayedCylinderTargetId) {
+      const cylinderTargetId = runItemCombatFlagsRef.current.delayedCylinderTargetId;
+      const cylinderDamage = runItemCombatFlagsRef.current.delayedCylinderDamage || 18;
+      runItemCombatFlagsRef.current.delayedCylinderTargetId = null;
+      runItemCombatFlagsRef.current.delayedCylinderDamage = 0;
+      const cylinderTarget = getUnitById(squadRef.current, cylinderTargetId);
+      if (cylinderTarget?.unitId && (cylinderTarget.currentHp ?? 0) > 0) {
+        hurtEnemy(cylinderDamage, '[RIGGED CYLINDER]', 'STRIKE', {
+          channel: 'KINETIC',
+          rollCrit: false,
+          targetId: cylinderTarget.unitId,
+        });
+        log('>> RIGGED CYLINDER // Delayed combustion event.');
+      }
+    }
     const unitId = enemyActionQueueRef.current[0];
     const unit = unitId ? getUnitById(squadRef.current, unitId) : enemyRef.current;
     if (!unit) {
@@ -4909,6 +5130,17 @@ export default function TacticalCombatHub({
     mutationEncounterRef.current = createDefaultBoonEncounterState();
     classBoonEncounterRef.current = createDefaultClassBoonEncounterState();
     lastPlayerAbilityRef.current = null;
+    runItemCombatFlagsRef.current = {
+      bloodwireActive: false,
+      bloodwireSpent: false,
+      nullSpaceActive: false,
+      voidglassDecoyActive: false,
+      delayedCylinderTargetId: null,
+      delayedCylinderDamage: 0,
+      staminaLossNextTurn: 0,
+      healingReceivedPenaltyPct: 0,
+    };
+    notifyRunItemCombatStart();
     sessionExtrasRef.current = createDefaultCombatSessionExtras();
     initPlayerMaxHpDebtTracking(sessionExtrasRef.current, combatMaxSoulAnchorRef.current);
     setPlayerMaxAnchorDebt(0);

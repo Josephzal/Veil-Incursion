@@ -63,9 +63,12 @@ import {
   loadStashResourceIntoCargoAtCell,
   calculateStashUsed,
   clearTacticalSlotState,
+  clearRunItemLoadoutSlotState,
   createDefaultTacticalLoadout,
+  equipRunItemFromHub,
   equipTacticalFromHub,
   finalizeDescentLoadout,
+  finalizeDescentRunItems,
   HUB_STASH_CAPACITY,
   returnAllPreRunContainmentToStash as applyReturnAllPreRunContainmentToStash,
   returnCargoItemToHubStash,
@@ -76,6 +79,9 @@ import type { CargoRoutingDecision, PostRunRoutingDebriefState } from '../types/
 import { applyCargoRoutingDecisions } from '../data/postRunCargoRoutingEngine';
 import { createDefaultCareerCargoRoutingStats, incrementCareerCargoRoutingFromResult } from '../data/postRunCargoRoutingRunState';
 import { DEFAULT_UNLOCKED_KEEPSAKE_IDS, isKeepsakeId } from '../data/expeditionKeepsakeRegistry';
+import { migrateTacticalRunItemsToLoadout } from '../data/runItemInventoryEngine';
+import { createDefaultRunItemsSlotState } from '../types/runItem';
+import type { RunItemsSlotState } from '../types/runItem';
 import { createDefaultKeepsakeDeployment } from '../data/keepsakeRunState';
 import type {
   KeepsakeAttunement,
@@ -175,6 +181,7 @@ export function createDefaultPlayerAccount(): PlayerAccount {
     hubCraftedConsumables: {},
     preRunCargo: createDefaultCargoRunState(),
     tacticalLoadout: createDefaultTacticalLoadout(),
+    runItemLoadout: createDefaultRunItemsSlotState(),
     equippedBlueprintId: null,
     unidentifiedStash: [],
     careerCargoRouting: createDefaultCareerCargoRoutingStats(),
@@ -231,7 +238,16 @@ function mergeStoredAccount(parsed: Partial<PlayerAccount>): PlayerAccount {
       ...parsed.hubCraftedConsumables,
     },
     preRunCargo: parsed.preRunCargo ?? defaults.preRunCargo,
-    tacticalLoadout: parsed.tacticalLoadout ?? defaults.tacticalLoadout,
+    ...(() => {
+      const migrated = migrateTacticalRunItemsToLoadout(
+        parsed.tacticalLoadout ?? defaults.tacticalLoadout,
+        parsed.runItemLoadout ?? defaults.runItemLoadout,
+      );
+      return {
+        tacticalLoadout: migrated.tacticalLoadout as PlayerAccount['tacticalLoadout'],
+        runItemLoadout: migrated.runItemLoadout,
+      };
+    })(),
     equippedBlueprintId: parsed.equippedBlueprintId ?? defaults.equippedBlueprintId,
     unidentifiedStash: parsed.unidentifiedStash ?? defaults.unidentifiedStash,
     careerCargoRouting: {
@@ -326,9 +342,15 @@ interface PlayerAccountContextType {
   returnAllPreRunContainmentToStash: () => void;
   equipTacticalSlot: (slotIndex: 0 | 1 | 2, itemId: CargoItemId) => { success: boolean; logLine: string };
   clearTacticalSlot: (slotIndex: 0 | 1 | 2) => void;
+  equipRunItemLoadoutSlot: (
+    slotType: 'COMBAT' | 'FIELD',
+    slotIndex: 0 | 1,
+    itemId: CargoItemId,
+  ) => { success: boolean; logLine: string };
+  clearRunItemLoadoutSlot: (slotType: 'COMBAT' | 'FIELD', slotIndex: 0 | 1) => void;
   purchaseHubContraband: (cargoId: CargoItemId, discountPct?: number) => { success: boolean; logLine: string };
   sellFenceResource: (resourceId: FenceableResourceId, quantity?: number) => { success: boolean; logLine: string };
-  commitDescentLoadout: () => CargoRunState;
+  commitDescentLoadout: () => { cargo: CargoRunState; runItems: RunItemsSlotState };
   persistRunExtraction: (payload: {
     cargo: CargoRunState;
     aegisLoadout: AegisLoadout;
@@ -1071,6 +1093,58 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
     [updateAccount],
   );
 
+  const equipRunItemLoadoutSlot = useCallback(
+    (
+      slotType: 'COMBAT' | 'FIELD',
+      slotIndex: 0 | 1,
+      itemId: CargoItemId,
+    ): { success: boolean; logLine: string } => {
+      let success = false;
+      updateAccount((prev) => {
+        const result = equipRunItemFromHub(
+          prev.hubCraftedConsumables,
+          prev.runItemLoadout,
+          slotType,
+          slotIndex,
+          itemId,
+        );
+        if (!result) return prev;
+        success = true;
+        return {
+          ...prev,
+          hubCraftedConsumables: result.hubCraftedConsumables,
+          runItemLoadout: result.runItemLoadout,
+        };
+      });
+      return success
+        ? {
+          success: true,
+          logLine: `>> RUN ITEM SLOT ARMED — ${itemId.replace(/-/g, ' ').toUpperCase()}.`,
+        }
+        : { success: false, logLine: '>> RUN ITEM EQUIP REJECTED — CHECK STASH AND SLOT TYPE.' };
+    },
+    [updateAccount],
+  );
+
+  const clearRunItemLoadoutSlot = useCallback(
+    (slotType: 'COMBAT' | 'FIELD', slotIndex: 0 | 1) => {
+      updateAccount((prev) => {
+        const result = clearRunItemLoadoutSlotState(
+          prev.hubCraftedConsumables,
+          prev.runItemLoadout,
+          slotType,
+          slotIndex,
+        );
+        return {
+          ...prev,
+          hubCraftedConsumables: result.hubCraftedConsumables,
+          runItemLoadout: result.runItemLoadout,
+        };
+      });
+    },
+    [updateAccount],
+  );
+
   const purchaseHubContraband = useCallback(
     (cargoId: CargoItemId, discountPct = 0): { success: boolean; logLine: string } => {
       let success = false;
@@ -1116,25 +1190,28 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
     [updateAccount],
   );
 
-  const commitDescentLoadout = useCallback((): CargoRunState => {
+  const commitDescentLoadout = useCallback((): { cargo: CargoRunState; runItems: RunItemsSlotState } => {
     const returned = applyReturnAllPreRunContainmentToStash(
       account.resourceStash,
       account.hubCraftedConsumables,
       account.preRunCargo,
     );
     const cargo = finalizeDescentLoadout(returned.cargo, account.tacticalLoadout);
+    const runItems = finalizeDescentRunItems(account.runItemLoadout);
     updateAccount((prev) => ({
       ...prev,
       resourceStash: returned.resourceStash,
       hubCraftedConsumables: returned.hubCraftedConsumables,
       preRunCargo: createDefaultCargoRunState(),
       tacticalLoadout: createDefaultTacticalLoadout(),
+      runItemLoadout: createDefaultRunItemsSlotState(),
     }));
-    return cargo;
+    return { cargo, runItems };
   }, [
     account.hubCraftedConsumables,
     account.preRunCargo,
     account.resourceStash,
+    account.runItemLoadout,
     account.tacticalLoadout,
     updateAccount,
   ]);
@@ -1397,6 +1474,8 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       returnAllPreRunContainmentToStash,
       equipTacticalSlot,
       clearTacticalSlot,
+      equipRunItemLoadoutSlot,
+      clearRunItemLoadoutSlot,
       purchaseHubContraband,
       sellFenceResource,
       commitDescentLoadout,
@@ -1455,6 +1534,8 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       returnAllPreRunContainmentToStash,
       equipTacticalSlot,
       clearTacticalSlot,
+      equipRunItemLoadoutSlot,
+      clearRunItemLoadoutSlot,
       purchaseHubContraband,
       sellFenceResource,
       commitDescentLoadout,

@@ -104,6 +104,9 @@ interface CargoGridBoardProps {
   onUseAmpoule?: () => boolean;
   onUseResonanceBribe?: () => boolean;
   onUseDeadDrop?: () => boolean;
+  showDeadDropFieldTool?: boolean;
+  onUseAshSeal?: () => boolean;
+  onUseContainmentFoam?: () => boolean;
   scannerMode?: boolean;
   combatMode?: boolean;
   combatConsumablesEnabled?: boolean;
@@ -417,6 +420,9 @@ export default function CargoGridBoard({
   onUseAmpoule,
   onUseResonanceBribe,
   onUseDeadDrop,
+  showDeadDropFieldTool = false,
+  onUseAshSeal,
+  onUseContainmentFoam,
   scannerMode = false,
   combatMode = false,
   combatConsumablesEnabled = true,
@@ -1175,7 +1181,7 @@ export default function CargoGridBoard({
         </HapticPressable>
       ) : null}
 
-      {scannerMode && onUseDeadDrop && countCargoItemInstances(displayCargo, 'dead-drop-token') > 0 ? (
+      {scannerMode && onUseDeadDrop && (showDeadDropFieldTool || countCargoItemInstances(displayCargo, 'dead-drop-token') > 0) ? (
         <HapticPressable
           onPress={() => {
             pulseCargoItemUse();
@@ -1185,6 +1191,34 @@ export default function CargoGridBoard({
         >
           <Text style={[styles.ampouleBtnText, { color: accentColor }]}>
             [ USE DEAD-DROP TOKEN — VAULT EXTRACT ]
+          </Text>
+        </HapticPressable>
+      ) : null}
+
+      {scannerMode && onUseAshSeal ? (
+        <HapticPressable
+          onPress={() => {
+            pulseCargoItemUse();
+            onUseAshSeal();
+          }}
+          style={[styles.ampouleBtn, { borderColor: accentColor }]}
+        >
+          <Text style={[styles.ampouleBtnText, { color: accentColor }]}>
+            [ USE ASH-SEAL — DAMPEN UNSTABLE CARGO ]
+          </Text>
+        </HapticPressable>
+      ) : null}
+
+      {scannerMode && onUseContainmentFoam ? (
+        <HapticPressable
+          onPress={() => {
+            pulseCargoItemUse();
+            onUseContainmentFoam();
+          }}
+          style={[styles.ampouleBtn, { borderColor: accentColor }]}
+        >
+          <Text style={[styles.ampouleBtnText, { color: accentColor }]}>
+            [ USE CONTAINMENT FOAM — PROTECT CARGO ]
           </Text>
         </HapticPressable>
       ) : null}

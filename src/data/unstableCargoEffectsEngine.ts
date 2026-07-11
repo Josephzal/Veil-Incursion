@@ -1,5 +1,6 @@
 import type { CargoRunState } from '../types/cargoGrid';
 import type { ResourceItemId } from '../types/resourceItem';
+import type { RunItemRuntime } from '../types/runItem';
 import {
   type ActiveCarriedCargoSnapshot,
   type AggregatedCarriedCargoModifiers,
@@ -132,17 +133,53 @@ function aggregateCarriedModifiers(
 export function buildActiveCarriedCargoSnapshot(
   cargo: CargoRunState,
   keepsakeRuntime?: import('../types/expeditionKeepsake').KeepsakeRuntime | null,
+  itemRuntime?: RunItemRuntime | null,
 ): ActiveCarriedCargoSnapshot {
   const activeEffects = UNSTABLE_CARRIED_EFFECT_IDS
     .filter((resourceId) => countPhysicalCargoResource(cargo, resourceId) > 0)
     .map((resourceId) => UNSTABLE_CARRIED_EFFECTS[resourceId]);
 
-  const dampened = applyKeepsakeUnstableDampening(activeEffects, keepsakeRuntime);
+  const dampenedKeepsake = applyKeepsakeUnstableDampening(activeEffects, keepsakeRuntime);
+  const dampened = applyRunItemAshSealDampening(dampenedKeepsake, itemRuntime);
 
   return {
     activeEffects: dampened,
     aggregated: aggregateCarriedModifiers(dampened),
   };
+}
+
+/** Ash-Seal Canister — 50% downside dampen (25% if cracked). */
+export function applyRunItemAshSealDampening(
+  effects: readonly UnstableCarriedEffectDefinition[],
+  itemRuntime?: RunItemRuntime | null,
+): UnstableCarriedEffectDefinition[] {
+  const seal = itemRuntime?.ashSeal;
+  if (!seal) return [...effects];
+
+  const dampenFactor = seal.cracked ? 0.25 : 0.5;
+
+  return effects.map((effect) => {
+    if (effect.resourceId !== seal.targetEffectId) return effect;
+    const mods = effect.modifiers;
+    return {
+      ...effect,
+      modifiers: {
+        ...mods,
+        healReceivedMultiplier: mods.healReceivedMultiplier != null
+          ? 1 - (1 - mods.healReceivedMultiplier) * dampenFactor
+          : mods.healReceivedMultiplier,
+        eliteWeightDelta: mods.eliteWeightDelta != null
+          ? mods.eliteWeightDelta * dampenFactor
+          : mods.eliteWeightDelta,
+        anomalyWeightDelta: mods.anomalyWeightDelta != null
+          ? mods.anomalyWeightDelta * dampenFactor
+          : mods.anomalyWeightDelta,
+        anchorSignalMultiplier: mods.anchorSignalMultiplier != null
+          ? 1 - (mods.anchorSignalMultiplier - 1) * dampenFactor
+          : mods.anchorSignalMultiplier,
+      },
+    };
+  });
 }
 
 export function hasActiveCarriedCargoEffects(

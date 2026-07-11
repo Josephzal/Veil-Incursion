@@ -5,6 +5,9 @@ import { resolveImmersiveFooterInset } from '../constants/immersiveLayout';
 import ResourceHarvestBg from '../../assets/images/location images/resource_harvest.png';
 import CargoPackingPanel from '../components/CargoPackingPanel';
 import ResidueParticle from '../components/harvest/ResidueParticle';
+import HapticPressable from '../components/HapticPressable';
+import TerminalText from '../components/TerminalText';
+import { hasFieldRunItem } from '../data/runItemFieldEngine';
 import VeilVacuumCanisterStack, {
   type VeilVacuumCanisterStackHandle,
 } from '../components/harvest/VeilVacuumCanisterStack';
@@ -48,6 +51,7 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
     prepareHarvestAmbushEncounter,
     absorbVeilResidueParticle,
     finalizeHarvestScreen,
+    useLeySlagSplitter,
   } = useRun();
   const { startCombat } = useGameFlow();
   const { completeCurrentNode } = useNodeProgression();
@@ -82,6 +86,10 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
   const activeCabal = getFactionAccent(activeIncursion.alignedFaction ?? null);
   const canisterFull = activeIncursion.sessionVeilResidueCollected >= MAX_RUN_CANISTER_RESIDUE;
   const canVacuum = lootPool.length > 0 && !canisterFull;
+
+  const showSplitterPrompt = hasFieldRunItem(activeIncursion.runItems, 'ley-slag-splitter')
+    && !activeIncursion.itemRuntime.leySlagSplitterArmed
+    && activeIncursion.pendingHarvestReturn !== 'RESOURCE_CACHE';
 
   const continueLabel = useMemo(
     () => (activeIncursion.pendingHarvestReturn === 'RESOURCE_CACHE'
@@ -123,11 +131,23 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
   useEffect(() => {
     if (harvestAppliedRef.current) return;
     if (activeIncursion.pendingHarvestReturn === 'RESOURCE_CACHE') return;
+    if (
+      hasFieldRunItem(activeIncursion.runItems, 'ley-slag-splitter')
+      && !activeIncursion.itemRuntime.leySlagSplitterArmed
+    ) {
+      return;
+    }
     harvestAppliedRef.current = true;
     const result = applyHarvestChoice('FULL');
     result.logLines.forEach((line) => appendRunLog(line));
     setResidueSpawnGeneration((gen) => gen + 1);
-  }, [activeIncursion.pendingHarvestReturn, appendRunLog, applyHarvestChoice]);
+  }, [
+    activeIncursion.itemRuntime.leySlagSplitterArmed,
+    activeIncursion.pendingHarvestReturn,
+    activeIncursion.runItems,
+    appendRunLog,
+    applyHarvestChoice,
+  ]);
 
   useEffect(() => {
     if (activeIncursion.pendingHarvestReturn !== 'RESOURCE_CACHE') return;
@@ -254,6 +274,11 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
 
   const handlePackingContinue = () => {
     handleVacuumStop();
+    if (!harvestAppliedRef.current) {
+      harvestAppliedRef.current = true;
+      const result = applyHarvestChoice('FULL');
+      result.logLines.forEach((line) => appendRunLog(line));
+    }
     if (!harvestFinalizedRef.current) {
       harvestFinalizedRef.current = true;
       finalizeHarvestScreen();
@@ -304,6 +329,26 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
           )}
         >
           <View style={[styles.masterContainment, { gap: layoutGap }]}>
+            {showSplitterPrompt ? (
+              <HapticPressable
+                onPress={() => {
+                  if (!useLeySlagSplitter()) return;
+                  if (harvestAppliedRef.current) return;
+                  harvestAppliedRef.current = true;
+                  const result = applyHarvestChoice('FULL');
+                  result.logLines.forEach((line) => appendRunLog(line));
+                  setResidueSpawnGeneration((gen) => gen + 1);
+                }}
+                style={({ pressed }) => [
+                  styles.splitterBtn,
+                  { borderColor: activeCabal, opacity: pressed ? 0.82 : 1 },
+                ]}
+              >
+                <TerminalText size={9} letterSpacing={0.8} style={{ color: activeCabal, fontWeight: '700' }}>
+                  [ LEY-SLAG SPLITTER ] — ARM +2 RESOURCE VEINS
+                </TerminalText>
+              </HapticPressable>
+            ) : null}
             <View style={styles.harvestStage}>
               <CargoPackingPanel
                 cargo={displayCargo}
@@ -352,6 +397,12 @@ const styles = StyleSheet.create({
     minHeight: 0,
     justifyContent: 'space-between',
     alignItems: 'stretch',
+  },
+  splitterBtn: {
+    borderWidth: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    alignSelf: 'stretch',
   },
   harvestStage: {
     flex: 1,

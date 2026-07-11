@@ -2,6 +2,7 @@ import type { BoundRequisitionId } from '../types/boundRequisition';
 import type { CargoItemId } from '../types/cargoGrid';
 import type { ResourceItemId } from '../types/resourceItem';
 import { isBlueprintId } from '../types/equipmentBlueprint';
+import { buildRunItemCraftingRecipes } from './runItemCraftingBridge';
 
 export type CraftingRecipeKind = 'LOADOUT' | 'AUGMENT' | 'CONSUMABLE';
 
@@ -130,17 +131,20 @@ export const CRAFTING_REGISTRY: CraftingRecipe[] = [
     id: 'craft_standard_coagulant',
     kind: 'CONSUMABLE',
     label: 'Standard Coagulant',
-    outputId: 'coagulation-stitch',
-    effectSummary: 'Heals 25 HP in combat.',
+    outputId: 'standard-coagulant',
+    effectSummary: 'Heals 25% HP in combat; clutch shield below 30% HP.',
     requirements: [{ resourceId: 'ley-slag', quantity: 2 }],
   },
   {
     id: 'craft_trauma_patch',
     kind: 'CONSUMABLE',
     label: 'Trauma Patch',
-    outputId: 'sanguine-coagulant',
-    effectSummary: 'Heals 50% HP and clears Bleed / Fracture.',
-    requirements: [{ resourceId: 'sanguine-ampoule', quantity: 3 }],
+    outputId: 'trauma-patch',
+    effectSummary: 'Clears supported debuffs; restores HP based on debuffs cleared.',
+    requirements: [
+      { resourceId: 'sanguine-ampoule', quantity: 3 },
+      { resourceId: 'ley-slag', quantity: 1 },
+    ],
   },
   {
     id: 'craft_kinetic_hollow_points',
@@ -161,7 +165,7 @@ export const CRAFTING_REGISTRY: CraftingRecipe[] = [
     effectSummary: 'AoE blind to the entire enemy frontline.',
     requirements: [
       { resourceId: 'veil-ash-canister', quantity: 1 },
-      { resourceId: 'echo-glass-shard', quantity: 3 },
+      { resourceId: 'combustion-cylinder', quantity: 1 },
     ],
   },
   {
@@ -174,8 +178,13 @@ export const CRAFTING_REGISTRY: CraftingRecipe[] = [
   },
 ];
 
+function getRunItemCraftRecipes(): CraftingRecipe[] {
+  return buildRunItemCraftingRecipes();
+}
+
 export function getCraftingRecipe(id: string): CraftingRecipe | undefined {
-  return CRAFTING_REGISTRY.find((recipe) => recipe.id === id);
+  return CRAFTING_REGISTRY.find((recipe) => recipe.id === id)
+    ?? getRunItemCraftRecipes().find((recipe) => recipe.id === id);
 }
 
 export function getRecipesByKind(kind: CraftingRecipeKind): CraftingRecipe[] {
@@ -199,7 +208,8 @@ export function isLoadoutOutputId(outputId: string): boolean {
 }
 
 function getCraftingRecipeByOutput(outputId: string): CraftingRecipe | undefined {
-  return CRAFTING_REGISTRY.find((recipe) => recipe.outputId === outputId);
+  return CRAFTING_REGISTRY.find((recipe) => recipe.outputId === outputId)
+    ?? getRunItemCraftRecipes().find((recipe) => recipe.outputId === outputId);
 }
 
 export function isRecipeOutputOwned(

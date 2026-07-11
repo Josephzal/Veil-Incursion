@@ -5,14 +5,21 @@ import { resolveSpecialCargoStacksForIncursion } from '../data/postRunCargoRouti
 import CargoGridOverlay from './CargoGridOverlay';
 import RunGlobalChrome from './RunGlobalChrome';
 import KeepsakeTriggerToast from './KeepsakeTriggerToast';
+import RunItemTriggerToast from './RunItemTriggerToast';
 import RunStatusOverlay from './RunStatusOverlay';
+import RunItemsOverlay from './RunItemsOverlay';
+import RunItemSlotChoiceModal from './run/RunItemSlotChoiceModal';
 import { CargoOverlayProvider } from '../context/CargoOverlayContext';
 import { RunStatusOverlayProvider } from '../context/RunStatusOverlayContext';
+import { RunItemOverlayProvider } from '../context/RunItemOverlayContext';
 import { useCombatTurnOptional } from '../context/CombatTurnContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import type { CargoItemId } from '../types/cargoGrid';
+import type { RunItemId, RunItemOfferResolution } from '../types/runItem';
 import type { IncursionConsumableUseResult } from '../types/incursionInventory';
+import type { RunItemActiveContext } from '../data/runItemUseEngine';
+import { hasFieldRunItem } from '../data/runItemFieldEngine';
 
 interface IncursionRunLayoutProps {
   children: React.ReactNode;
@@ -50,6 +57,9 @@ export default function IncursionRunLayout({
     useFocusingAmpouleFromCargo,
     useResonanceBribeFromCargo,
     useDeadDropTokenFromCargo,
+    useAshSealFromFieldTools,
+    useContainmentFoamFromFieldTools,
+    resolvePendingRunItemOffer,
   } = useRun();
   const [cargoOpen, setCargoOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
@@ -138,14 +148,68 @@ export default function IncursionRunLayout({
     [activeIncursion],
   );
 
+  const runItemActiveContext = useMemo((): RunItemActiveContext => {
+    if (combatMode) return 'COMBAT';
+    if (activeIncursion.mapMode === 'SCANNING_HUB') return 'SCANNER';
+    return 'UNKNOWN';
+  }, [activeIncursion.mapMode, combatMode]);
+
+  const handleUseRunItemFromSlot = useCallback((itemId: RunItemId) => {
+    if (!cargoEnabled && combatMode) return false;
+    if (onDeployCargoItem) {
+      return onDeployCargoItem(itemId as CargoItemId);
+    }
+    const result = useIncursionConsumable(itemId as CargoItemId);
+    if (!result) return false;
+    if (onConsumableUsed) {
+      onConsumableUsed(result);
+    } else if (result.healAmount > 0) {
+      applyIncursionConsumableHeal(result.healAmount);
+    }
+    appendRunLog(result.logLine);
+    return true;
+  }, [
+    appendRunLog,
+    applyIncursionConsumableHeal,
+    cargoEnabled,
+    combatMode,
+    onConsumableUsed,
+    onDeployCargoItem,
+    useIncursionConsumable,
+  ]);
+
+  const handleResolveRunItemOffer = useCallback((
+    resolution: RunItemOfferResolution,
+    slotIndex?: number,
+  ) => {
+    const resolved = resolvePendingRunItemOffer(resolution, slotIndex);
+    appendRunLog(resolved.logLine);
+    if (resolved.usedNow && resolved.itemId && runItemActiveContext === 'COMBAT') {
+      handleUseRunItemFromSlot(resolved.itemId);
+    }
+  }, [
+    appendRunLog,
+    handleUseRunItemFromSlot,
+    resolvePendingRunItemOffer,
+    runItemActiveContext,
+  ]);
+
+  const fieldDeadDropAvailable = hasFieldRunItem(activeIncursion.runItems, 'dead-drop-token');
+  const fieldAshSealAvailable = hasFieldRunItem(activeIncursion.runItems, 'ash-seal-canister')
+    && activeIncursion.itemRuntime.ashSeal == null;
+  const fieldFoamAvailable = hasFieldRunItem(activeIncursion.runItems, 'containment-foam')
+    && activeIncursion.itemRuntime.foamedCargoInstanceId == null;
+
   return (
+    <RunItemOverlayProvider itemsEnabled={showRunOverlays}>
     <CargoOverlayProvider value={cargoOverlayValue}>
       <RunStatusOverlayProvider value={statusOverlayValue}>
         <View style={[styles.root, style]}>
           <View style={styles.content}>
             {children}
             {showRunOverlays ? <KeepsakeTriggerToast /> : null}
-            {showRunOverlays && !combatMode && !hideRunChrome ? <RunGlobalChrome /> : null}
+            {showRunOverlays ? <RunItemTriggerToast /> : null}
+            {showRunOverlays && !hideRunChrome ? <RunGlobalChrome /> : null}
           </View>
 
           {showRunOverlays ? (
@@ -166,6 +230,9 @@ export default function IncursionRunLayout({
               onUseAmpoule={!combatMode ? useFocusingAmpouleFromCargo : undefined}
               onUseResonanceBribe={!combatMode ? useResonanceBribeFromCargo : undefined}
               onUseDeadDrop={!combatMode ? useDeadDropTokenFromCargo : undefined}
+              showDeadDropFieldTool={!combatMode && fieldDeadDropAvailable}
+              onUseAshSeal={!combatMode && fieldAshSealAvailable ? useAshSealFromFieldTools : undefined}
+              onUseContainmentFoam={!combatMode && fieldFoamAvailable ? useContainmentFoamFromFieldTools : undefined}
               onUseCombatConsumable={combatMode ? handleUseCombatConsumable : undefined}
             />
           ) : null}
@@ -178,9 +245,29 @@ export default function IncursionRunLayout({
               combatMode={combatMode}
             />
           ) : null}
+
+          {showRunOverlays ? (
+            <RunItemsOverlay
+              combatMode={combatMode}
+              onUseCombatItem={combatMode ? handleUseRunItemFromSlot : undefined}
+            />
+          ) : null}
+
+          {showRunOverlays ? (
+            <RunItemSlotChoiceModal
+              visible={activeIncursion.itemRuntime.pendingOffer != null}
+              offer={activeIncursion.itemRuntime.pendingOffer}
+              slots={activeIncursion.runItems}
+              accentColor={theme.statusColor}
+              mutedColor={theme.mutedColor}
+              activeContext={runItemActiveContext}
+              onResolve={handleResolveRunItemOffer}
+            />
+          ) : null}
         </View>
       </RunStatusOverlayProvider>
     </CargoOverlayProvider>
+    </RunItemOverlayProvider>
   );
 }
 

@@ -1,0 +1,532 @@
+import type { CargoItemId, CargoRunState } from '../types/cargoGrid';
+import { CARGO_ITEM_CATALOG } from '../types/cargoGrid';
+import type { ActiveIncursionState } from '../types/game';
+import type { ProceduralRunTree } from '../types/proceduralRunTree';
+import type {
+  RunItemAshSealState,
+  RunItemFieldChoice,
+  RunItemId,
+  RunItemRuntime,
+  RunItemsSlotState,
+} from '../types/runItem';
+import type { UnstableCargoEffectId } from '../types/unstableCargoEffects';
+import { UNSTABLE_CARRIED_EFFECT_IDS } from '../types/unstableCargoEffects';
+import { ensureNodeContextModifiersAtEngagement } from './lazyNodeContextEngine';
+import { getAvailableProceduralNodeIds } from './proceduralScannerBridge';
+import { patchKeepsakeNodeModifiers } from './expeditionKeepsakeRouteEngine';
+import { countPhysicalCargoResource } from './unstableCargoEffectsEngine';
+import { getRunItemDefinition } from './runItemRegistry';
+import {
+  consumeRunItemFromFieldSlot,
+  getRunItemInFieldSlot,
+} from './runItemInventoryEngine';
+import { mergeRunItemRuntime, recordRunItemTrigger } from './runItemRunState';
+import { rollBlackMarketStock } from './blackMarket';
+import {
+  buildAnchorNeedleFieldChoice,
+  buildEchoTuningForkFieldChoice,
+} from './runItemFieldChoiceEngine';
+
+export interface RunItemFieldUseOutcome {
+  success: boolean;
+  logLine: string;
+  runItems?: RunItemsSlotState;
+  itemRuntime?: RunItemRuntime;
+  cargo?: CargoRunState;
+  blackMarketStock?: CargoItemId[];
+  revealedSonarNodeIds?: readonly string[];
+  runCredits?: number;
+  bankedValue?: number;
+  proceduralRunTree?: ProceduralRunTree;
+  keepsakeFullyInterpretedNodeIds?: readonly string[];
+  pendingFieldChoice?: RunItemFieldChoice | null;
+}
+
+function consumeField(
+  slots: RunItemsSlotState,
+  itemId: RunItemId,
+  runtime: RunItemRuntime,
+  triggerText: string,
+): { slots: RunItemsSlotState; runtime: RunItemRuntime } | null {
+  const nextSlots = consumeRunItemFromFieldSlot(slots, itemId);
+  if (!nextSlots) return null;
+  return {
+    slots: nextSlots,
+    runtime: recordRunItemTrigger(runtime, triggerText),
+  };
+}
+
+export function hasFieldRunItem(slots: RunItemsSlotState, itemId: RunItemId): boolean {
+  return getRunItemInFieldSlot(slots, itemId) != null;
+}
+
+/** Sonar-Ping — reveal one scanner node; consume from field slot. */
+export function useSonarPingFieldTool(
+  incursion: Pick<ActiveIncursionState, 'runItems' | 'itemRuntime' | 'revealedSonarNodeIds'>,
+  nodeId: string,
+): RunItemFieldUseOutcome {
+  const itemId: RunItemId = 'sonar-ping';
+  const def = getRunItemDefinition(itemId);
+  if (!hasFieldRunItem(incursion.runItems, itemId)) {
+    return { success: false, logLine: '[REJECTED] >> No Sonar-Ping in Field Tool slots.' };
+  }
+  if (incursion.revealedSonarNodeIds.includes(nodeId)) {
+    return { success: false, logLine: '[REJECTED] >> Sonar trace already mapped for this vector.' };
+  }
+  const consumed = consumeField(incursion.runItems, itemId, incursion.itemRuntime, def.triggerText);
+  if (!consumed) {
+    return { success: false, logLine: '[REJECTED] >> Sonar-Ping consume failed.' };
+  }
+  const noise = consumed.runtime.scannerNoise + 1;
+  let runtime = mergeRunItemRuntime(consumed.runtime, {
+    scannerNoise: noise,
+    stats: {
+      ...consumed.runtime.stats,
+      scannerRevealsByItems: consumed.runtime.stats.scannerRevealsByItems + 1,
+      riskAddedByItems: consumed.runtime.stats.riskAddedByItems + (noise >= 2 ? 1 : 0),
+    },
+  });
+  if (noise >= 2) {
+    runtime = recordRunItemTrigger(runtime, 'SONAR-PING // Scanner noise detected.');
+  }
+  return {
+    success: true,
+    logLine: `>> ${def.triggerText}`,
+    runItems: consumed.slots,
+    itemRuntime: runtime,
+    revealedSonarNodeIds: [...incursion.revealedSonarNodeIds, nodeId],
+  };
+}
+
+/** Dead-Drop Token — bank first containment item (non-apex). */
+export function useDeadDropTokenFieldTool(
+  incursion: Pick<ActiveIncursionState, 'runItems' | 'itemRuntime' | 'cargo'>,
+): RunItemFieldUseOutcome {
+  const itemId: RunItemId = 'dead-drop-token';
+  const def = getRunItemDefinition(itemId);
+  if (!hasFieldRunItem(incursion.runItems, itemId)) {
+    return { success: false, logLine: '[REJECTED] >> No Dead-Drop Token in Field Tool slots.' };
+  }
+  const containment = incursion.cargo.containment[0];
+  if (!containment) {
+    return { success: false, logLine: '[REJECTED] >> Dead-Drop Token requires cargo in containment.' };
+  }
+  const apexBlocked = containment.itemId === 'anomalous-core'
+    || containment.itemId === 'sealed-containment-casket';
+  if (apexBlocked) {
+    return { success: false, logLine: '[REJECTED] >> Dead-Drop Token cannot bank Apex cargo.' };
+  }
+  const consumed = consumeField(incursion.runItems, itemId, incursion.itemRuntime, def.triggerText);
+  if (!consumed) {
+    return { success: false, logLine: '[REJECTED] >> Dead-Drop Token consume failed.' };
+  }
+  const value = containment.currentValue ?? CARGO_ITEM_CATALOG[containment.itemId]?.baseValue ?? 0;
+  const nextCargo: CargoRunState = {
+    ...incursion.cargo,
+    containment: incursion.cargo.containment.filter((c) => c.instanceId !== containment.instanceId),
+  };
+  const runtime = mergeRunItemRuntime(consumed.runtime, {
+    deadDropRiskPending: true,
+    stats: {
+      ...consumed.runtime.stats,
+      cargoBankedByItems: consumed.runtime.stats.cargoBankedByItems + 1,
+      riskAddedByItems: consumed.runtime.stats.riskAddedByItems + 1,
+    },
+  });
+  return {
+    success: true,
+    logLine: `>> ${def.triggerText} ${CARGO_ITEM_CATALOG[containment.itemId]?.name ?? containment.itemId} secured (+${value} CR value).`,
+    runItems: consumed.slots,
+    itemRuntime: recordRunItemTrigger(runtime, 'DEAD-DROP TOKEN // Routing signature exposed.'),
+    cargo: nextCargo,
+    bankedValue: value,
+  };
+}
+
+/** Broker Flashcard — reroll black market stock; mark one listing cheaper. */
+export function useBrokerFlashcardFieldTool(
+  incursion: Pick<ActiveIncursionState, 'runItems' | 'itemRuntime' | 'blackMarketStock'>,
+): RunItemFieldUseOutcome {
+  const itemId: RunItemId = 'broker-flashcard';
+  const def = getRunItemDefinition(itemId);
+  if (!hasFieldRunItem(incursion.runItems, itemId)) {
+    return { success: false, logLine: '[REJECTED] >> No Broker Flashcard in Field Tool slots.' };
+  }
+  if (incursion.blackMarketStock.length === 0) {
+    return { success: false, logLine: '[REJECTED] >> No Black Market inventory to spoof.' };
+  }
+  const consumed = consumeField(incursion.runItems, itemId, incursion.itemRuntime, def.triggerText);
+  if (!consumed) {
+    return { success: false, logLine: '[REJECTED] >> Broker Flashcard consume failed.' };
+  }
+  const nextStock = rollBlackMarketStock();
+  const marked = nextStock.find((id) => id !== 'soul-core') ?? nextStock[0] ?? null;
+  const runtime = mergeRunItemRuntime(consumed.runtime, {
+    brokerMarkedItemId: marked,
+    stats: {
+      ...consumed.runtime.stats,
+      creditsSavedByItems: consumed.runtime.stats.creditsSavedByItems,
+    },
+  });
+  return {
+    success: true,
+    logLine: `>> ${def.triggerText}${marked ? ` Broker-Marked: ${CARGO_ITEM_CATALOG[marked]?.name ?? marked}.` : ''}`,
+    runItems: consumed.slots,
+    itemRuntime: runtime,
+    blackMarketStock: nextStock,
+  };
+}
+
+/** Relay Spike — plant on a non-boss node id (pending modifier). */
+export function useRelaySpikeFieldTool(
+  incursion: Pick<ActiveIncursionState, 'runItems' | 'itemRuntime'>,
+  nodeId: string,
+  isBossNode: boolean,
+): RunItemFieldUseOutcome {
+  const itemId: RunItemId = 'relay-spike';
+  const def = getRunItemDefinition(itemId);
+  if (!hasFieldRunItem(incursion.runItems, itemId)) {
+    return { success: false, logLine: '[REJECTED] >> No Relay Spike in Field Tool slots.' };
+  }
+  if (isBossNode) {
+    return { success: false, logLine: '[REJECTED] >> Relay Spike cannot modify boss nodes.' };
+  }
+  const consumed = consumeField(incursion.runItems, itemId, incursion.itemRuntime, def.triggerText);
+  if (!consumed) {
+    return { success: false, logLine: '[REJECTED] >> Relay Spike consume failed.' };
+  }
+  const runtime = mergeRunItemRuntime(
+    recordRunItemTrigger(consumed.runtime, 'RELAY SPIKE // Relay noise bleeding into future route.'),
+    {
+      pendingRelayModifier: {
+        plantedNodeId: nodeId,
+        relayAction: null,
+      },
+      stats: {
+        ...consumed.runtime.stats,
+        riskAddedByItems: consumed.runtime.stats.riskAddedByItems + 1,
+      },
+    },
+  );
+  return {
+    success: true,
+    logLine: `>> ${def.triggerText}`,
+    runItems: consumed.slots,
+    itemRuntime: runtime,
+  };
+}
+
+/** Generic field-tool consume for tools that need UI choice before effect (echo/anchor/etc). */
+export function beginFieldToolChoice(
+  incursion: Pick<ActiveIncursionState, 'runItems' | 'itemRuntime'>,
+  itemId: RunItemId,
+): RunItemFieldUseOutcome {
+  const def = getRunItemDefinition(itemId);
+  if (def.family !== 'FIELD_TOOL') {
+    return { success: false, logLine: '[REJECTED] >> Not a field tool.' };
+  }
+  if (!hasFieldRunItem(incursion.runItems, itemId)) {
+    return { success: false, logLine: `[REJECTED] >> ${def.name} not in Field Tool slots.` };
+  }
+  return {
+    success: true,
+    logLine: `>> ${def.name.toUpperCase()} READY — select mode.`,
+  };
+}
+
+export function getBrokerMarkedDiscountPrice(basePrice: number, marked: boolean): number {
+  if (!marked) return basePrice;
+  return Math.max(1, Math.floor(basePrice * 0.65));
+}
+
+const APEX_CARGO_IDS = new Set<CargoItemId>(['anomalous-core', 'sealed-containment-casket']);
+
+function isApexCargoItem(itemId: CargoItemId): boolean {
+  return APEX_CARGO_IDS.has(itemId);
+}
+
+function firstUnstableEffectInCargo(
+  cargo: CargoRunState,
+): UnstableCargoEffectId | null {
+  return UNSTABLE_CARRIED_EFFECT_IDS.find(
+    (resourceId) => countPhysicalCargoResource(cargo, resourceId) > 0,
+  ) ?? null;
+}
+
+/** Null-Lens Filter — fully interpret one visible scanner node. */
+export function useNullLensFieldTool(
+  incursion: Pick<
+    ActiveIncursionState,
+    'runItems' | 'itemRuntime' | 'proceduralRunTree' | 'runGenerationContext'
+    | 'cargo' | 'keepsakeFullyInterpretedNodeIds'
+  >,
+  nodeId: string,
+): RunItemFieldUseOutcome {
+  const itemId: RunItemId = 'null-lens-filter';
+  const def = getRunItemDefinition(itemId);
+  if (!hasFieldRunItem(incursion.runItems, itemId)) {
+    return { success: false, logLine: '[REJECTED] >> No Null-Lens Filter in Field Tool slots.' };
+  }
+  if (!incursion.proceduralRunTree?.nodes[nodeId]) {
+    return { success: false, logLine: '[REJECTED] >> Invalid Null-Lens target.' };
+  }
+  if (incursion.keepsakeFullyInterpretedNodeIds.includes(nodeId)) {
+    return { success: false, logLine: '[REJECTED] >> Node signature already fully interpreted.' };
+  }
+  const availableIds = getAvailableProceduralNodeIds(incursion as ActiveIncursionState);
+  if (!availableIds.includes(nodeId)) {
+    return { success: false, logLine: '[REJECTED] >> Null-Lens target not on current depth layer.' };
+  }
+
+  const consumed = consumeField(incursion.runItems, itemId, incursion.itemRuntime, def.triggerText);
+  if (!consumed) {
+    return { success: false, logLine: '[REJECTED] >> Null-Lens Filter consume failed.' };
+  }
+
+  const rolled = ensureNodeContextModifiersAtEngagement(
+    incursion.proceduralRunTree,
+    nodeId,
+    incursion.runGenerationContext,
+    incursion.cargo,
+  );
+
+  const interpretedIds = incursion.keepsakeFullyInterpretedNodeIds.includes(nodeId)
+    ? incursion.keepsakeFullyInterpretedNodeIds
+    : [...incursion.keepsakeFullyInterpretedNodeIds, nodeId];
+
+  const runtime = mergeRunItemRuntime(consumed.runtime, {
+    stats: {
+      ...consumed.runtime.stats,
+      scannerRevealsByItems: consumed.runtime.stats.scannerRevealsByItems + 1,
+    },
+  });
+
+  return {
+    success: true,
+    logLine: `>> ${def.triggerText}`,
+    runItems: consumed.slots,
+    itemRuntime: runtime,
+    proceduralRunTree: rolled.tree,
+    keepsakeFullyInterpretedNodeIds: interpretedIds,
+  };
+}
+
+/** Ash-Seal Canister — dampen one unstable cargo downside until depth transition. */
+export function useAshSealFieldTool(
+  incursion: Pick<ActiveIncursionState, 'runItems' | 'itemRuntime' | 'cargo' | 'currentDepth'>,
+  targetEffectId?: UnstableCargoEffectId,
+): RunItemFieldUseOutcome {
+  const itemId: RunItemId = 'ash-seal-canister';
+  const def = getRunItemDefinition(itemId);
+  if (!hasFieldRunItem(incursion.runItems, itemId)) {
+    return { success: false, logLine: '[REJECTED] >> No Ash-Seal Canister in Field Tool slots.' };
+  }
+  if (incursion.itemRuntime.ashSeal) {
+    return { success: false, logLine: '[REJECTED] >> Ash-Seal already active on unstable payload.' };
+  }
+  const effectId = targetEffectId ?? firstUnstableEffectInCargo(incursion.cargo);
+  if (!effectId) {
+    return { success: false, logLine: '[REJECTED] >> Ash-Seal requires unstable cargo in inventory.' };
+  }
+
+  const consumed = consumeField(incursion.runItems, itemId, incursion.itemRuntime, def.triggerText);
+  if (!consumed) {
+    return { success: false, logLine: '[REJECTED] >> Ash-Seal Canister consume failed.' };
+  }
+
+  const ashSeal: RunItemAshSealState = {
+    targetEffectId: effectId,
+    armedAtDepth: incursion.currentDepth,
+    cracked: false,
+  };
+  const runtime = mergeRunItemRuntime(consumed.runtime, {
+    ashSeal,
+    stats: {
+      ...consumed.runtime.stats,
+      unstablePenaltiesReducedByItems: consumed.runtime.stats.unstablePenaltiesReducedByItems + 1,
+    },
+  });
+
+  const label = CARGO_ITEM_CATALOG[effectId]?.name ?? effectId;
+  return {
+    success: true,
+    logLine: `>> ${def.triggerText} Target: ${label}.`,
+    runItems: consumed.slots,
+    itemRuntime: runtime,
+  };
+}
+
+/** Containment Foam — protect one non-apex cargo item from the next loss event. */
+export function useContainmentFoamFieldTool(
+  incursion: Pick<ActiveIncursionState, 'runItems' | 'itemRuntime' | 'cargo'>,
+  instanceId: string,
+): RunItemFieldUseOutcome {
+  const itemId: RunItemId = 'containment-foam';
+  const def = getRunItemDefinition(itemId);
+  if (!hasFieldRunItem(incursion.runItems, itemId)) {
+    return { success: false, logLine: '[REJECTED] >> No Containment Foam in Field Tool slots.' };
+  }
+  if (incursion.itemRuntime.foamedCargoInstanceId) {
+    return { success: false, logLine: '[REJECTED] >> Containment Foam already applied.' };
+  }
+
+  const target = incursion.cargo.containment.find((c) => c.instanceId === instanceId)
+    ?? incursion.cargo.grid.placed.find((c) => c.instanceId === instanceId);
+  if (!target) {
+    return { success: false, logLine: '[REJECTED] >> Foam target not found in cargo.' };
+  }
+  if (isApexCargoItem(target.itemId)) {
+    return { success: false, logLine: '[REJECTED] >> Containment Foam cannot protect Apex cargo.' };
+  }
+
+  const consumed = consumeField(incursion.runItems, itemId, incursion.itemRuntime, def.triggerText);
+  if (!consumed) {
+    return { success: false, logLine: '[REJECTED] >> Containment Foam consume failed.' };
+  }
+
+  const runtime = mergeRunItemRuntime(consumed.runtime, {
+    foamedCargoInstanceId: instanceId,
+    stats: {
+      ...consumed.runtime.stats,
+      cargoPreservedByItems: consumed.runtime.stats.cargoPreservedByItems + 1,
+    },
+  });
+
+  const label = CARGO_ITEM_CATALOG[target.itemId]?.name ?? target.itemId;
+  return {
+    success: true,
+    logLine: `>> ${def.triggerText} ${label} foamed.`,
+    runItems: consumed.slots,
+    itemRuntime: runtime,
+  };
+}
+
+/** Ley-Slag Splitter — arm +2 stable resource rolls for current harvest. */
+export function useLeySlagSplitterFieldTool(
+  incursion: Pick<ActiveIncursionState, 'runItems' | 'itemRuntime'>,
+): RunItemFieldUseOutcome {
+  const itemId: RunItemId = 'ley-slag-splitter';
+  const def = getRunItemDefinition(itemId);
+  if (!hasFieldRunItem(incursion.runItems, itemId)) {
+    return { success: false, logLine: '[REJECTED] >> No Ley-Slag Splitter in Field Tool slots.' };
+  }
+  if (incursion.itemRuntime.leySlagSplitterArmed) {
+    return { success: false, logLine: '[REJECTED] >> Ley-Slag Splitter already armed.' };
+  }
+
+  const consumed = consumeField(incursion.runItems, itemId, incursion.itemRuntime, def.triggerText);
+  if (!consumed) {
+    return { success: false, logLine: '[REJECTED] >> Ley-Slag Splitter consume failed.' };
+  }
+
+  const runtime = mergeRunItemRuntime(consumed.runtime, {
+    leySlagSplitterArmed: true,
+    stats: {
+      ...consumed.runtime.stats,
+      resourceBonusRollsByItems: consumed.runtime.stats.resourceBonusRollsByItems + 2,
+      riskAddedByItems: consumed.runtime.stats.riskAddedByItems + 1,
+    },
+  });
+
+  return {
+    success: true,
+    logLine: `>> ${def.triggerText}`,
+    runItems: consumed.slots,
+    itemRuntime: runtime,
+  };
+}
+
+/** Apply dead-drop route risk on next combat engage. */
+export function applyDeadDropRouteRisk(
+  inc: Pick<ActiveIncursionState, 'itemRuntime' | 'proceduralRunTree'>,
+): { runtime: RunItemRuntime; tree: ProceduralRunTree | null; logLine: string | null } {
+  if (!inc.itemRuntime.deadDropRiskPending || !inc.proceduralRunTree) {
+    return { runtime: inc.itemRuntime, tree: inc.proceduralRunTree ?? null, logLine: null };
+  }
+
+  const candidates = getAvailableProceduralNodeIds(inc as ActiveIncursionState).filter((id) => {
+    const node = inc.proceduralRunTree!.nodes[id];
+    return node?.type !== 'GATEKEEPER';
+  });
+  const riskNode = candidates[0];
+  let tree = inc.proceduralRunTree;
+  if (riskNode) {
+    tree = patchKeepsakeNodeModifiers(tree, riskNode, { highRisk: true });
+  }
+
+  const runtime = mergeRunItemRuntime(inc.itemRuntime, {
+    deadDropRiskPending: false,
+    stats: {
+      ...inc.itemRuntime.stats,
+      riskAddedByItems: inc.itemRuntime.stats.riskAddedByItems + 1,
+    },
+  });
+
+  return {
+    runtime,
+    tree,
+    logLine: riskNode
+      ? '>> DEAD-DROP TOKEN // Routing signature exposed — HIGH RISK injected on route.'
+      : '>> DEAD-DROP TOKEN // Routing signature exposed.',
+  };
+}
+
+/** Crack ash-seal after dirty extraction; clear on depth transition. */
+export function crackRunItemAshSealOnDirtyExtract(runtime: RunItemRuntime): RunItemRuntime {
+  if (!runtime.ashSeal || runtime.ashSeal.cracked) return runtime;
+  return mergeRunItemRuntime(runtime, {
+    ashSeal: { ...runtime.ashSeal, cracked: true },
+  });
+}
+
+export function clearRunItemAshSealOnDepthTransition(runtime: RunItemRuntime): RunItemRuntime {
+  if (!runtime.ashSeal) return runtime;
+  return mergeRunItemRuntime(runtime, { ashSeal: null });
+}
+
+/** Break containment foam instead of losing cargo. */
+export function breakRunItemContainmentFoam(runtime: RunItemRuntime): RunItemRuntime {
+  if (!runtime.foamedCargoInstanceId) return runtime;
+  return mergeRunItemRuntime(runtime, { foamedCargoInstanceId: null });
+}
+
+export function isRunItemFoamProtected(runtime: RunItemRuntime, instanceId: string): boolean {
+  return runtime.foamedCargoInstanceId === instanceId;
+}
+
+/** Defer scanner engage until echo/anchor field-tool mode is chosen. */
+export function tryDeferEngageForFieldToolChoice(
+  inc: Pick<ActiveIncursionState, 'runItems' | 'itemRuntime'>,
+  nodeId: string,
+  nodeType: string | null | undefined,
+  contextModifiers: ActiveIncursionState['encounterPath'][number]['contextModifiers'] | null | undefined,
+): RunItemFieldUseOutcome {
+  if (inc.itemRuntime.pendingFieldChoice) {
+    return { success: false, logLine: '[REJECTED] >> Resolve pending field-tool choice first.' };
+  }
+
+  const isEcho = Boolean(contextModifiers?.echoSignal || contextModifiers?.echoEncounterKind);
+  const isAnchor = Boolean(contextModifiers?.anchorSignal);
+
+  if (isEcho && getRunItemInFieldSlot(inc.runItems, 'echo-tuning-fork') != null && !inc.itemRuntime.echoTuningMode) {
+    return {
+      success: true,
+      logLine: '>> ECHO TUNING FORK — select frequency.',
+      pendingFieldChoice: buildEchoTuningForkFieldChoice(nodeId),
+    };
+  }
+
+  if (isAnchor && getRunItemInFieldSlot(inc.runItems, 'anchor-needle') != null && !inc.itemRuntime.anchorNeedleMode) {
+    return {
+      success: true,
+      logLine: '>> ANCHOR NEEDLE — select mode.',
+      pendingFieldChoice: buildAnchorNeedleFieldChoice(nodeId),
+    };
+  }
+
+  if (nodeType === 'NARRATIVE_EVENT' && isEcho) {
+    return { success: false, logLine: '' };
+  }
+
+  return { success: false, logLine: '' };
+}

@@ -374,6 +374,13 @@ import {
   previewKeepsakeDebriefFromIncursion,
 } from '../data/expeditionKeepsakeDebugEngine';
 import {
+  formatRunItemIncursionDebugSnapshot,
+  formatRunItemDebugValidation,
+  previewRunItemDebriefFromIncursion,
+  formatRunItemAcceptanceDebugReport,
+} from '../data/runItemDebugEngine';
+import { ALL_RUN_ITEM_IDS } from '../types/runItem';
+import {
   applyCargoCollectedLedgerDelta,
   formatCargoRoutingRunStateSnapshot,
   recordCargoRoutingResourcesBanked,
@@ -391,6 +398,56 @@ import type { LeyLineMutationId } from '../types/leyLineMutation';
 import type { AegisLoadout } from '../types/aegisCombat';
 import type { EnvoyLoadout, HexShotLoadout } from '../types/operativeClass';
 import type { CargoItemId } from '../types/cargoGrid';
+import type {
+  RunItemId,
+  RunItemOfferResolution,
+  RunItemOfferSource,
+  RunItemsSlotState,
+} from '../types/runItem';
+import { createDefaultRunItemsSlotState } from '../types/runItem';
+import {
+  clearRunItemAtSlot,
+  cloneRunItemsSlots,
+  consumeRunItemFromCombatSlot,
+  getRunItemInCombatSlot,
+  isRunItemCatalogId,
+  resolveRunItemOffer,
+  tryAutoPlaceRunItem,
+} from '../data/runItemInventoryEngine';
+import { getRunItemDefinition } from '../data/runItemRegistry';
+import { tryNormalizeRunItemId } from '../data/runItemIdAliases';
+import {
+  hydrateRunItemIncursionFields,
+  mergeRunItemRuntime,
+  recordRunItemTrigger,
+  resetRunItemCombatCounters,
+  resetRunItemTurnCounters,
+} from '../data/runItemRunState';
+import { resolveRunItemCombatUse, consumeGraveDustStaminaCrash } from '../data/runItemCombatEngine';
+import {
+  getBrokerMarkedDiscountPrice,
+  useBrokerFlashcardFieldTool,
+  useDeadDropTokenFieldTool,
+  useRelaySpikeFieldTool,
+  useSonarPingFieldTool,
+  useNullLensFieldTool,
+  useAshSealFieldTool,
+  useContainmentFoamFieldTool,
+  useLeySlagSplitterFieldTool,
+  applyDeadDropRouteRisk,
+  crackRunItemAshSealOnDirtyExtract,
+  clearRunItemAshSealOnDepthTransition,
+  breakRunItemContainmentFoam,
+  isRunItemFoamProtected,
+  tryDeferEngageForFieldToolChoice,
+  hasFieldRunItem,
+} from '../data/runItemFieldEngine';
+import {
+  applyRunItemAnchorNeedlePayoff,
+  applyRunItemEchoTuningPayoff,
+  commitRunItemFieldChoice as commitRunItemFieldChoiceEngine,
+  tryOpenRelaySpikePayoffChoice,
+} from '../data/runItemFieldChoiceEngine';
 import type { IncursionConsumableId, IncursionConsumableUseResult } from '../types/incursionInventory';
 import type { BoundRequisitionDefinition, BoundRequisitionId } from '../types/boundRequisition';
 import { rollBoundRequisitionOffers } from '../data/boundRequisitions';
@@ -431,6 +488,8 @@ export interface RunStartConfig {
   alignedFaction?: FactionType | null;
   /** Safehouse cargo grid + tactical slots committed on descent. */
   initialCargo?: import('../types/cargoGrid').CargoRunState;
+  /** Pre-run Run Item v2 slots committed on descent. */
+  initialRunItems?: RunItemsSlotState;
   /** Persistent Veil Residue balance loaded into the run canister at descent. */
   startingVeilResidueBalance?: number;
   runGenerationContext?: import('../types/worldState').RunGenerationContext;
@@ -582,6 +641,29 @@ interface RunContextType {
   /** Clears run or badge test combat (caller navigates to hub / badge). */
   exitCombatToBadge: () => void;
   useIncursionConsumable: (itemId: CargoItemId) => IncursionConsumableUseResult | null;
+  receiveRunItem: (
+    itemId: RunItemId,
+    source: RunItemOfferSource,
+    options?: { purchaseCost?: number },
+  ) => { success: boolean; logLine: string; needsChoice?: boolean };
+  resolvePendingRunItemOffer: (
+    resolution: RunItemOfferResolution,
+    slotIndex?: number,
+  ) => { success: boolean; logLine: string; usedNow?: boolean; itemId?: RunItemId };
+  clearRunItemSlot: (slotType: 'COMBAT' | 'FIELD', slotIndex: 0 | 1) => void;
+  devGrantRunItem: (itemId: RunItemId) => { success: boolean; logLine: string };
+  /** Reset per-turn Run Item combat counters (call at player turn start). */
+  notifyRunItemPlayerTurnStart: () => { staminaLoss: number; message: string | null };
+  /** Reset per-combat Run Item counters (call at combat start). */
+  notifyRunItemCombatStart: () => void;
+  useBrokerFlashcard: () => boolean;
+  useRelaySpikeOnNode: (nodeId: string, isBossNode?: boolean) => boolean;
+  useNullLensOnNode: (nodeId: string) => boolean;
+  useAshSealFromFieldTools: () => boolean;
+  useContainmentFoamFromFieldTools: () => boolean;
+  useLeySlagSplitter: () => boolean;
+  tryDeferEngageForFieldTool: (nodeId: string) => boolean;
+  commitRunItemFieldChoice: (selectedValue: string) => boolean;
   /** Applies consumable heal to run state (non-combat screens). */
   applyIncursionConsumableHeal: (amount: number) => void;
   awardRunCredits: (amount: number, reason: string) => void;
@@ -629,6 +711,11 @@ interface RunContextType {
   devLogCargoRoutingRunState: () => string;
   devLogKeepsakeRunState: () => string;
   devPreviewKeepsakeDebrief: () => string;
+  devLogRunItemRunState: () => string;
+  devPreviewRunItemDebrief: () => string;
+  devValidateRunItemPipeline: () => string;
+  devValidateRunItemAcceptance: () => string;
+  devGrantAllRunItems: () => string;
   devValidateKeepsakePipeline: () => string;
   devPreviewEchoDebrief: () => string;
   devValidateEchoPipeline: () => string;
@@ -952,6 +1039,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         : createDefaultActiveIncursionState().envoyLoadout,
       activeClass: config?.activeClass ?? 'AEGIS',
       cargo: starterCargo,
+      runItems: config?.initialRunItems ?? createDefaultRunItemsSlotState(),
+      runItemsAtRunStart: cloneRunItemsSlots(
+        config?.initialRunItems ?? createDefaultRunItemsSlotState(),
+      ),
       sanctuarySchedule,
       strikeDamageBonusPct: 0,
       runModifiers: config?.runModifiers ?? {
@@ -1375,7 +1466,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const rollBlackMarketStockForNode = useCallback(() => {
     const inc = activeIncursionRef.current;
-    const stock = rollBlackMarketStock();
+    const depth = inc.currentDepth ?? 1;
+    const stock = rollBlackMarketStock(depth);
     const keepsakeOpen = applyKeepsakeOnBlackMarketOpen(inc.keepsakeRuntime, stock);
     setActiveIncursion((prev) => {
       const next = {
@@ -1784,6 +1876,38 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const devPreviewKeepsakeDebrief = useCallback((): string => {
     const report = previewKeepsakeDebriefFromIncursion(activeIncursionRef.current);
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      appendRunLog(`>> ${report.replace(/\n/g, ' // ')}`);
+    }
+    return report;
+  }, [appendRunLog]);
+
+  const devLogRunItemRunState = useCallback((): string => {
+    const report = formatRunItemIncursionDebugSnapshot(activeIncursionRef.current);
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      appendRunLog(`>> ${report.replace(/\n/g, ' // ')}`);
+    }
+    return report;
+  }, [appendRunLog]);
+
+  const devPreviewRunItemDebrief = useCallback((): string => {
+    const report = previewRunItemDebriefFromIncursion(activeIncursionRef.current);
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      appendRunLog(`>> ${report.replace(/\n/g, ' // ')}`);
+    }
+    return report;
+  }, [appendRunLog]);
+
+  const devValidateRunItemPipeline = useCallback((): string => {
+    const report = formatRunItemDebugValidation(activeIncursionRef.current);
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      appendRunLog(`>> ${report.replace(/\n/g, ' // ')}`);
+    }
+    return report;
+  }, [appendRunLog]);
+
+  const devValidateRunItemAcceptance = useCallback((): string => {
+    const report = formatRunItemAcceptanceDebugReport();
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
       appendRunLog(`>> ${report.replace(/\n/g, ' // ')}`);
     }
@@ -2521,6 +2645,18 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const discardCargoInstance = useCallback((instanceId: string) => {
     const inc = activeIncursionRef.current;
+    if (isRunItemFoamProtected(inc.itemRuntime, instanceId)) {
+      setActiveIncursion((prev) => {
+        const next = {
+          ...prev,
+          itemRuntime: breakRunItemContainmentFoam(prev.itemRuntime),
+        };
+        activeIncursionRef.current = next;
+        return next;
+      });
+      appendRunLog('>> CONTAINMENT FOAM // Buffer spent — cargo preserved.');
+      return true;
+    }
     if (isKeepsakeJettisonBlocked(inc.keepsakeRuntime, instanceId, inc.keepsakeJettisonLockedInstanceIds)) {
       appendRunLog('[REJECTED] >> CARGO SEAL ACTIVE — sealed unstable payload cannot be jettisoned.');
       return false;
@@ -2578,17 +2714,37 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
     let nextCargo = inc.cargo;
     const stagedIds: string[] = [];
+    const logLines: string[] = [];
     lootIds.forEach((itemId) => {
       const count = scaledLootCount(option.yieldPct, itemId === 'veil-residue-bulk' ? 1 : 1);
       nextCargo = addLootToContainment(nextCargo, itemId, count, stagedIds);
     });
 
+    let itemRuntime = inc.itemRuntime;
+    const bonusResourceRolls: import('../types/resourceItem').ResourceItemId[] = [];
+    if (itemRuntime.leySlagSplitterArmed) {
+      bonusResourceRolls.push('ley-slag', 'ley-slag');
+      itemRuntime = mergeRunItemRuntime(itemRuntime, { leySlagSplitterArmed: false });
+      logLines.push('>> LEY-SLAG SPLITTER // +2 stable resource veins opened.');
+    }
+    const relayCachePending = itemRuntime.pendingEffects.some((e) => e.kind === 'relay_cache_route');
+    if (relayCachePending) {
+      bonusResourceRolls.push('ley-slag');
+      itemRuntime = mergeRunItemRuntime(itemRuntime, {
+        pendingEffects: itemRuntime.pendingEffects.filter((e) => e.kind !== 'relay_cache_route'),
+      });
+      logLines.push('>> RELAY CACHE ROUTE — bonus salvage roll delivered.');
+    }
+    bonusResourceRolls.forEach((resourceId) => {
+      nextCargo = addLootToContainment(nextCargo, resourceId, 1, stagedIds);
+    });
+
     const ambushTriggered = AMBUSH_ENCOUNTERS_ENABLED && Math.random() * 100 < option.ambushRiskPct;
-    const logLines = [
+    logLines.unshift(
       proceduralPool.length > 0
         ? `>> RESOURCE NODE YIELD — ${proceduralPool.length} salvage bundle(s) routed to containment.`
         : `>> ${option.label} — ${option.yieldPct}% yield routed to containment.`,
-    ];
+    );
     if (ambushTriggered) logLines.push('>> DEEP EXTRACT HEAT — hostile ambush frequency detected.');
 
     const leySiphon = applyKeepsakeLeySiphonOverdraw(
@@ -2622,6 +2778,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       const next = {
         ...prev,
         cargo: nextCargo,
+        itemRuntime,
         keepsakeRuntime: keepsakePickup.runtime,
         keepsakeJettisonLockedInstanceIds: keepsakePickup.jettisonLockedInstanceIds,
         harvestStagingInstanceIds: [...new Set([...prev.harvestStagingInstanceIds, ...stagedIds])],
@@ -2677,7 +2834,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const hasSonarPingInCargo = useCallback((): boolean => {
     const inc = activeIncursionRef.current;
-    return inc.cargo.grid.placed.some((item) => item.itemId === 'sonar-ping');
+    return hasFieldRunItem(inc.runItems, 'sonar-ping')
+      || inc.cargo.grid.placed.some((item) => item.itemId === 'sonar-ping');
   }, []);
 
   const useSonarPingOnNode = useCallback((nodeId: string): boolean => {
@@ -2700,9 +2858,30 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       appendRunLog('[REJECTED] >> Sonar target not on current depth layer.');
       return false;
     }
+
+    if (hasFieldRunItem(inc.runItems, 'sonar-ping')) {
+      const outcome = useSonarPingFieldTool(inc, nodeId);
+      if (!outcome.success) {
+        appendRunLog(outcome.logLine);
+        return false;
+      }
+      setActiveIncursion((prev) => {
+        const next = {
+          ...prev,
+          revealedSonarNodeIds: outcome.revealedSonarNodeIds ?? prev.revealedSonarNodeIds,
+          runItems: outcome.runItems ?? prev.runItems,
+          itemRuntime: outcome.itemRuntime ?? prev.itemRuntime,
+        };
+        activeIncursionRef.current = next;
+        return next;
+      });
+      appendRunLog(outcome.logLine);
+      return true;
+    }
+
     const ping = inc.cargo.grid.placed.find((item) => item.itemId === 'sonar-ping');
     if (!ping) {
-      appendRunLog('[REJECTED] >> No Sonar-Ping packed in cargo grid.');
+      appendRunLog('[REJECTED] >> No Sonar-Ping in Field Tool slots or cargo grid.');
       return false;
     }
 
@@ -3122,7 +3301,20 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   const prepareStandardCombatEncounter = useCallback((engagedNode?: IncursionNode | null) => {
     beginCombatRunLogSession();
     const inc = activeIncursionRef.current;
-    const encounterNode = engagedNode ?? resolveActiveVectorNode(inc);
+    const deadDropRisk = applyDeadDropRouteRisk(inc);
+    if (deadDropRisk.logLine) {
+      setActiveIncursion((prev) => {
+        const next = {
+          ...prev,
+          itemRuntime: deadDropRisk.runtime,
+          proceduralRunTree: deadDropRisk.tree ?? prev.proceduralRunTree,
+        };
+        activeIncursionRef.current = next;
+        return next;
+      });
+      appendRunLog(deadDropRisk.logLine);
+    }
+    const encounterNode = engagedNode ?? resolveActiveVectorNode(activeIncursionRef.current);
     const prev = runStateRef.current;
     const isResonanceAmbush = prev.pendingAmbush === true;
     if (
@@ -3560,6 +3752,14 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const completedIndex = inc.nodesCleared;
     const clearedDepth = depthFromNodesCleared(completedIndex);
 
+    let itemRuntime = inc.itemRuntime;
+    if (completedNode?.id) {
+      const relayChoice = tryOpenRelaySpikePayoffChoice(itemRuntime, completedNode.id);
+      if (relayChoice) {
+        itemRuntime = relayChoice;
+      }
+    }
+
     const encounterPath = inc.encounterPath.map((node, index) =>
       index === completedIndex ? { ...node, isCompleted: true } : node,
     );
@@ -3601,6 +3801,23 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     let cargoAfterKeepsake = nextCargo;
     let overextendedOperationDelta = 0;
     let keepsakeOperationDelta = 0;
+    let runItemCreditsDelta = 0;
+
+    if (echoVictory?.recorded) {
+      const echoPayoff = applyRunItemEchoTuningPayoff(itemRuntime);
+      itemRuntime = echoPayoff.runtime;
+      runItemCreditsDelta += echoPayoff.runCreditsDelta ?? 0;
+      echoPayoff.logLines.forEach((line) => appendRunLog(line));
+    }
+
+    if (anchorVictory?.kind) {
+      const anchorPayoff = applyRunItemAnchorNeedlePayoff(itemRuntime, cargoAfterKeepsake, []);
+      itemRuntime = anchorPayoff.runtime;
+      if (anchorPayoff.cargo) cargoAfterKeepsake = anchorPayoff.cargo;
+      keepsakeOperationDelta += anchorPayoff.operationProgressDelta ?? 0;
+      anchorPayoff.logLines.forEach((line) => appendRunLog(line));
+    }
+
     const overextendedKind = completedNode?.type === 'RESOURCE_HARVEST'
       ? 'RESOURCE' as const
       : anchorVictory?.kind
@@ -3692,6 +3909,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
     const nextDepth = depthFromNodesCleared(nextNodesCleared);
     const nextDistrict = getDistrictFromDepth(nextDepth);
+    if (nextDepth !== clearedDepth) {
+      itemRuntime = clearRunItemAshSealOnDepthTransition(itemRuntime);
+    }
 
     const nextSectorGraph = expandedInc.sectorGraph;
     const nextPatrolState = inc.patrolState;
@@ -3828,7 +4048,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       mapMode: 'SCANNING_HUB',
       lastCheckpointMessage: null,
       lastLevelOfferedCombat,
-      runCredits: inc.runCredits + phaseDCredits,
+      runCredits: inc.runCredits + phaseDCredits + runItemCreditsDelta,
+      itemRuntime,
       ...phaseDPatch,
       ...gravePolaroidPatch,
     };
@@ -4059,6 +4280,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
             ? resolveCargoEcho(activeInc, engagedNode.id)
             : resolveExtractionEcho(activeInc, engagedNode);
         echoResult.logLines.forEach((line) => appendRunLog(line));
+        const echoPayoff = applyRunItemEchoTuningPayoff(activeInc.itemRuntime);
+        echoPayoff.logLines.forEach((line) => appendRunLog(line));
         const echoLure = applyKeepsakeOnEchoSignalResolved(activeInc.keepsakeRuntime);
         echoLure.logLines.forEach((line) => appendRunLog(line));
         const echoCreditBonus = scaleKeepsakeEchoCredits(
@@ -4096,9 +4319,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
             ...prev,
             echoRunState: echoResult.echoRunState,
             cargo: nextCargo,
+            itemRuntime: echoPayoff.runtime,
             keepsakeRuntime: echoLure.runtime ?? keepsakePickup.keepsakeRuntime,
             keepsakeJettisonLockedInstanceIds: keepsakePickup.keepsakeJettisonLockedInstanceIds,
-            runCredits: prev.runCredits + echoCreditBonus,
+            runCredits: prev.runCredits + echoCreditBonus + (echoPayoff.runCreditsDelta ?? 0),
             progress: echoResult.progressPatch ?? prev.progress,
             revealedSonarNodeIds: revealed.length > 0
               ? [...prev.revealedSonarNodeIds, ...revealed.filter((id) => !prev.revealedSonarNodeIds.includes(id))]
@@ -4921,6 +5145,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     bentNailStrip.logLines.forEach((line) => appendRunLog(line));
     let bleedCargo = bentNailStrip.cargo;
     let bleedRuntime = bentNailStrip.runtime ?? inc.keepsakeRuntime;
+    const crackedAshSeal = crackRunItemAshSealOnDirtyExtract(inc.itemRuntime);
+    if (crackedAshSeal !== inc.itemRuntime && inc.itemRuntime.ashSeal && !inc.itemRuntime.ashSeal.cracked) {
+      appendRunLog('>> ASH-SEAL CANISTER // Seal cracked — dampening reduced after dirty extraction.');
+    }
     let bleedPct = recallBonus
       ? EMERGENCY_EXTRACT_CARGO_BLEED_PCT - 5
       : EMERGENCY_EXTRACT_CARGO_BLEED_PCT;
@@ -4931,6 +5159,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
           ...prev,
           cargo: bleedResult.cargo,
           keepsakeRuntime: bleedRuntime,
+          itemRuntime: crackedAshSeal,
           extractionReviewKind: null,
           unstableCargoEffectsSeen: mergeUnstableCargoEffectsSeen(
             prev.unstableCargoEffectsSeen,
@@ -4997,6 +5226,35 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     return engageVectorNode(node);
   }, [appendRunLog, engageVectorNode, stageExtractionReview, stageSafeAnchorReview]);
 
+  const commitRunItemFieldChoice = useCallback((selectedValue: string): boolean => {
+    const inc = activeIncursionRef.current;
+    const outcome = commitRunItemFieldChoiceEngine(inc, selectedValue);
+    if (!outcome.success) {
+      outcome.logLines.forEach((line) => appendRunLog(line));
+      return false;
+    }
+    setActiveIncursion((prev) => {
+      const next = {
+        ...prev,
+        runItems: outcome.runItems ?? prev.runItems,
+        itemRuntime: outcome.runtime ?? prev.itemRuntime,
+        cargo: outcome.cargo ?? prev.cargo,
+        proceduralRunTree: outcome.proceduralRunTree ?? prev.proceduralRunTree,
+        revealedSonarNodeIds: outcome.revealedSonarNodeIds ?? prev.revealedSonarNodeIds,
+        runCredits: prev.runCredits + (outcome.runCredits ?? 0),
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    outcome.logLines.forEach((line) => appendRunLog(line));
+    if (outcome.resumeEngage) {
+      setTimeout(() => {
+        confirmScanPreview();
+      }, 0);
+    }
+    return true;
+  }, [appendRunLog, confirmScanPreview]);
+
   const shiftBossPhase = useCallback((phase: number) => {
     setActiveIncursion((prev) => {
       if (!prev.bossProfile) return prev;
@@ -5029,8 +5287,179 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     }
   }, [appendRunLog]);
 
+  const receiveRunItem = useCallback((
+    itemId: RunItemId,
+    source: RunItemOfferSource,
+    options?: { purchaseCost?: number },
+  ): { success: boolean; logLine: string; needsChoice?: boolean } => {
+    const def = getRunItemDefinition(itemId);
+    let placed = false;
+    let needsChoice = false;
+    setActiveIncursion((prev) => {
+      const hydrated = hydrateRunItemIncursionFields(prev);
+      const auto = tryAutoPlaceRunItem(hydrated.runItems, itemId);
+      if (auto.placed) {
+        placed = true;
+        const next = {
+          ...hydrated,
+          runItems: auto.slots,
+          itemRuntime: recordRunItemTrigger(
+            hydrated.itemRuntime,
+            `${def.triggerText}`,
+          ),
+        };
+        activeIncursionRef.current = next;
+        return next;
+      }
+      needsChoice = true;
+      const next = {
+        ...hydrated,
+        itemRuntime: mergeRunItemRuntime(hydrated.itemRuntime, {
+          pendingOffer: {
+            itemId,
+            source,
+            slotType: def.slotType,
+            purchaseCost: options?.purchaseCost,
+          },
+        }),
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    if (placed) {
+      return {
+        success: true,
+        logLine: `>> RUN ITEM ACQUIRED — ${def.name} slotted (${def.slotType}).`,
+      };
+    }
+    if (needsChoice) {
+      return {
+        success: false,
+        needsChoice: true,
+        logLine: `>> RUN ITEM PENDING — ${def.name} waiting for slot decision.`,
+      };
+    }
+    return { success: false, logLine: '[REJECTED] >> Run Item could not be received.' };
+  }, []);
+
+  const resolvePendingRunItemOffer = useCallback((
+    resolution: RunItemOfferResolution,
+    slotIndex?: number,
+  ): { success: boolean; logLine: string; usedNow?: boolean; itemId?: RunItemId } => {
+    const inc = activeIncursionRef.current;
+    const offer = inc.itemRuntime.pendingOffer;
+    if (!offer) {
+      return { success: false, logLine: '[REJECTED] >> No pending Run Item offer.' };
+    }
+    const def = getRunItemDefinition(offer.itemId);
+    const resolved = resolveRunItemOffer(inc.runItems, offer, resolution, slotIndex);
+    let logLine = '';
+    let usedNow = false;
+
+    setActiveIncursion((prev) => {
+      const hydrated = hydrateRunItemIncursionFields(prev);
+      const currentOffer = hydrated.itemRuntime.pendingOffer;
+      if (!currentOffer) return prev;
+
+      let nextCredits = hydrated.runCredits;
+      if (resolution === 'cancel_purchase' && currentOffer.purchaseCost) {
+        nextCredits += currentOffer.purchaseCost;
+        logLine = `>> PURCHASE CANCELLED — +${currentOffer.purchaseCost} run credits refunded.`;
+      } else if (resolution === 'discard') {
+        logLine = `>> RUN ITEM DISCARDED — ${def.name} dropped.`;
+      } else if (resolution === 'replace' && slotIndex != null) {
+        logLine = `>> RUN ITEM REPLACED — ${def.name} equipped in ${def.slotType} slot ${slotIndex + 1}.`;
+      } else if (resolution === 'use_now') {
+        usedNow = resolved.consumedFromSlot;
+        logLine = `>> RUN ITEM USED — ${def.triggerText}`;
+      } else {
+        logLine = '[REJECTED] >> Could not resolve Run Item offer.';
+      }
+
+      const next = {
+        ...hydrated,
+        runCredits: nextCredits,
+        runItems: resolved.slots,
+        itemRuntime: mergeRunItemRuntime(
+          recordRunItemTrigger(hydrated.itemRuntime, logLine),
+          { pendingOffer: null },
+        ),
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+
+    return {
+      success: resolution !== 'discard' || true,
+      logLine,
+      usedNow,
+      itemId: offer.itemId,
+    };
+  }, []);
+
+  const clearRunItemSlot = useCallback((slotType: 'COMBAT' | 'FIELD', slotIndex: 0 | 1) => {
+    setActiveIncursion((prev) => {
+      const hydrated = hydrateRunItemIncursionFields(prev);
+      const cleared = clearRunItemAtSlot(hydrated.runItems, slotType, slotIndex);
+      const next = { ...hydrated, runItems: cleared.slots };
+      activeIncursionRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const devGrantRunItem = useCallback((itemId: RunItemId): { success: boolean; logLine: string } => {
+    const result = receiveRunItem(itemId, 'DEBUG');
+    if (result.needsChoice) {
+      return { success: true, logLine: result.logLine };
+    }
+    return { success: result.success, logLine: result.logLine };
+  }, [receiveRunItem]);
+
+  const devGrantAllRunItems = useCallback((): string => {
+    const lines = ALL_RUN_ITEM_IDS.map((itemId) => devGrantRunItem(itemId).logLine);
+    const report = lines.join('\n');
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      appendRunLog(`>> RUN ITEM GRANT ALL — ${ALL_RUN_ITEM_IDS.length} grant attempts queued.`);
+    }
+    return report;
+  }, [appendRunLog, devGrantRunItem]);
+
   const useIncursionConsumable = useCallback((itemId: CargoItemId): IncursionConsumableUseResult | null => {
     const inc = activeIncursionRef.current;
+    const normalizedRunItem = tryNormalizeRunItemId(itemId);
+    const fromRunItemSlot = normalizedRunItem
+      && getRunItemInCombatSlot(inc.runItems, normalizedRunItem) != null;
+
+    if (fromRunItemSlot && normalizedRunItem) {
+      const livingEnemyCount = 1; // combat hub re-targets; engine uses this for root fallback sizing
+      const resolved = resolveRunItemCombatUse(normalizedRunItem, {
+        maxSoulAnchor: runStateRef.current.maxSoulAnchor,
+        currentSoulAnchor: runStateRef.current.soulAnchorIntegrity,
+        currentStamina: runStateRef.current.currentStamina,
+        maxStamina: runStateRef.current.maxStamina,
+        runtime: inc.itemRuntime,
+        livingEnemyCount,
+      });
+      if (resolved.rejected) {
+        appendRunLog(resolved.result.logLine);
+        return null;
+      }
+      const nextRunItems = consumeRunItemFromCombatSlot(inc.runItems, normalizedRunItem);
+      if (!nextRunItems) return null;
+
+      setActiveIncursion((prev) => {
+        const next: ActiveIncursionState = {
+          ...prev,
+          runItems: nextRunItems,
+          itemRuntime: resolved.runtime,
+        };
+        activeIncursionRef.current = next;
+        return next;
+      });
+
+      return resolved.result;
+    }
+
     const def = CARGO_ITEM_CATALOG[itemId];
     if (!def?.usableInCombat || def.combatEffect === 'unimplemented' || !hasCargoItem(inc.cargo, itemId)) {
       return null;
@@ -5147,7 +5576,164 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       apCost: def.apCost ?? 2,
       logLine,
     };
+  }, [appendRunLog]);
+
+  const notifyRunItemPlayerTurnStart = useCallback((): { staminaLoss: number; message: string | null } => {
+    let staminaLoss = 0;
+    let message: string | null = null;
+    setActiveIncursion((prev) => {
+      const hydrated = hydrateRunItemIncursionFields(prev);
+      const crashed = consumeGraveDustStaminaCrash(hydrated.itemRuntime);
+      staminaLoss = crashed.staminaLoss;
+      message = crashed.message;
+      const next = {
+        ...hydrated,
+        itemRuntime: resetRunItemTurnCounters(crashed.runtime),
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    if (message) appendRunLog(`>> ${message}`);
+    return { staminaLoss, message };
+  }, [appendRunLog]);
+
+  const notifyRunItemCombatStart = useCallback(() => {
+    setActiveIncursion((prev) => {
+      const hydrated = hydrateRunItemIncursionFields(prev);
+      const next = {
+        ...hydrated,
+        itemRuntime: resetRunItemCombatCounters(hydrated.itemRuntime),
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
   }, []);
+
+  const useBrokerFlashcard = useCallback((): boolean => {
+    const inc = activeIncursionRef.current;
+    const outcome = useBrokerFlashcardFieldTool(inc);
+    if (!outcome.success) {
+      appendRunLog(outcome.logLine);
+      return false;
+    }
+    setActiveIncursion((prev) => {
+      const next = {
+        ...prev,
+        runItems: outcome.runItems ?? prev.runItems,
+        itemRuntime: outcome.itemRuntime ?? prev.itemRuntime,
+        blackMarketStock: outcome.blackMarketStock ?? prev.blackMarketStock,
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    appendRunLog(outcome.logLine);
+    return true;
+  }, [appendRunLog]);
+
+  const useRelaySpikeOnNode = useCallback((nodeId: string, isBossNode = false): boolean => {
+    const inc = activeIncursionRef.current;
+    const outcome = useRelaySpikeFieldTool(inc, nodeId, isBossNode);
+    if (!outcome.success) {
+      appendRunLog(outcome.logLine);
+      return false;
+    }
+    setActiveIncursion((prev) => {
+      const next = {
+        ...prev,
+        runItems: outcome.runItems ?? prev.runItems,
+        itemRuntime: outcome.itemRuntime ?? prev.itemRuntime,
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    appendRunLog(outcome.logLine);
+    return true;
+  }, [appendRunLog]);
+
+  const applyRunItemFieldOutcome = useCallback((
+    outcome: import('../data/runItemFieldEngine').RunItemFieldUseOutcome,
+  ): boolean => {
+    if (!outcome.success && outcome.logLine) {
+      appendRunLog(outcome.logLine);
+      return false;
+    }
+    setActiveIncursion((prev) => {
+      const next = {
+        ...prev,
+        runItems: outcome.runItems ?? prev.runItems,
+        itemRuntime: outcome.itemRuntime ?? prev.itemRuntime,
+        cargo: outcome.cargo ?? prev.cargo,
+        blackMarketStock: outcome.blackMarketStock ?? prev.blackMarketStock,
+        revealedSonarNodeIds: outcome.revealedSonarNodeIds ?? prev.revealedSonarNodeIds,
+        proceduralRunTree: outcome.proceduralRunTree ?? prev.proceduralRunTree,
+        keepsakeFullyInterpretedNodeIds:
+          outcome.keepsakeFullyInterpretedNodeIds ?? prev.keepsakeFullyInterpretedNodeIds,
+      };
+      if (outcome.pendingFieldChoice !== undefined) {
+        next.itemRuntime = mergeRunItemRuntime(next.itemRuntime, {
+          pendingFieldChoice: outcome.pendingFieldChoice,
+        });
+      }
+      activeIncursionRef.current = next;
+      return next;
+    });
+    if (outcome.logLine) appendRunLog(outcome.logLine);
+    return true;
+  }, [appendRunLog]);
+
+  const useNullLensOnNode = useCallback((nodeId: string): boolean => {
+    const inc = activeIncursionRef.current;
+    return applyRunItemFieldOutcome(useNullLensFieldTool(inc, nodeId));
+  }, [applyRunItemFieldOutcome]);
+
+  const useAshSealFromFieldTools = useCallback((): boolean => {
+    const inc = activeIncursionRef.current;
+    return applyRunItemFieldOutcome(useAshSealFieldTool(inc));
+  }, [applyRunItemFieldOutcome]);
+
+  const useContainmentFoamFromFieldTools = useCallback((): boolean => {
+    const inc = activeIncursionRef.current;
+    const target = inc.cargo.containment[0] ?? inc.cargo.grid.placed[0];
+    if (!target) {
+      appendRunLog('[REJECTED] >> Containment Foam requires cargo to protect.');
+      return false;
+    }
+    return applyRunItemFieldOutcome(useContainmentFoamFieldTool(inc, target.instanceId));
+  }, [applyRunItemFieldOutcome, appendRunLog]);
+
+  const useLeySlagSplitter = useCallback((): boolean => {
+    const inc = activeIncursionRef.current;
+    return applyRunItemFieldOutcome(useLeySlagSplitterFieldTool(inc));
+  }, [applyRunItemFieldOutcome]);
+
+  const tryDeferEngageForFieldTool = useCallback((nodeId: string): boolean => {
+    const inc = activeIncursionRef.current;
+    const cluster = buildSectorCluster(inc);
+    const node = findVectorInCluster(cluster, nodeId);
+    if (!node) return false;
+    const outcome = tryDeferEngageForFieldToolChoice(
+      inc,
+      nodeId,
+      node.type,
+      node.contextModifiers,
+    );
+    if (!outcome.pendingFieldChoice) {
+      if (outcome.logLine) appendRunLog(outcome.logLine);
+      return false;
+    }
+    setActiveIncursion((prev) => {
+      const next = {
+        ...prev,
+        itemRuntime: mergeRunItemRuntime(prev.itemRuntime, {
+          pendingFieldChoice: outcome.pendingFieldChoice ?? null,
+        }),
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    appendRunLog(outcome.logLine);
+    return true;
+  }, [appendRunLog]);
 
   const useResonanceBribeFromCargo = useCallback((): boolean => {
     appendRunLog('[REJECTED] >> Resonance tracking offline this incursion.');
@@ -5156,6 +5742,25 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const useDeadDropTokenFromCargo = useCallback((): boolean => {
     const inc = activeIncursionRef.current;
+    if (hasFieldRunItem(inc.runItems, 'dead-drop-token')) {
+      const outcome = useDeadDropTokenFieldTool(inc);
+      if (!outcome.success) {
+        appendRunLog(outcome.logLine);
+        return false;
+      }
+      setActiveIncursion((prev) => {
+        const next = {
+          ...prev,
+          runItems: outcome.runItems ?? prev.runItems,
+          itemRuntime: outcome.itemRuntime ?? prev.itemRuntime,
+          cargo: outcome.cargo ?? prev.cargo,
+        };
+        activeIncursionRef.current = next;
+        return next;
+      });
+      appendRunLog(outcome.logLine);
+      return true;
+    }
     if (!hasCargoItem(inc.cargo, 'dead-drop-token')) return false;
     const containment = inc.cargo.containment[0];
     if (!containment) {
@@ -5238,12 +5843,79 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       ?? listingsForStock(rollBlackMarketStock()).find((entry) => entry.id === itemId);
     const basePrice = listing?.price ?? CARGO_ITEM_CATALOG[itemId]?.baseValue ?? 60;
     const discountPct = getBlackMarketDiscountPct(inc);
-    const price = getEffectiveBlackMarketPrice(basePrice, discountPct);
+    const brokerMarked = inc.itemRuntime.brokerMarkedItemId === itemId;
+    const price = getBrokerMarkedDiscountPrice(
+      getEffectiveBlackMarketPrice(basePrice, discountPct),
+      brokerMarked,
+    );
     if (stock.length > 0 && !stock.includes(itemId)) {
       return { success: false, logLine: '[REJECTED] >> Item not in current market stock.' };
     }
     if (inc.runCredits < price) {
       return { success: false, logLine: '[REJECTED] >> Insufficient run credits for cargo purchase.' };
+    }
+
+    const normalizedRunItem = tryNormalizeRunItemId(itemId);
+    if (normalizedRunItem && isRunItemCatalogId(itemId)) {
+      const stockIndex = stock.indexOf(itemId);
+      const nextStock = stockIndex >= 0
+        ? [...stock.slice(0, stockIndex), ...stock.slice(stockIndex + 1)]
+        : stock;
+
+      setActiveIncursion((prev) => {
+        let nextRuntime = prev.itemRuntime;
+        if (brokerMarked) {
+          nextRuntime = mergeRunItemRuntime(
+            recordRunItemTrigger(prev.itemRuntime, 'BROKER FLASHCARD // Discount accepted. Future signal corrupted.'),
+            {
+              brokerMarkedItemId: null,
+              stats: {
+                ...prev.itemRuntime.stats,
+                creditsSavedByItems: prev.itemRuntime.stats.creditsSavedByItems
+                  + Math.max(0, getEffectiveBlackMarketPrice(basePrice, discountPct) - price),
+                riskAddedByItems: prev.itemRuntime.stats.riskAddedByItems + 1,
+              },
+            },
+          );
+        }
+        const next = {
+          ...prev,
+          runCredits: prev.runCredits - price,
+          blackMarketStock: nextStock,
+          itemRuntime: nextRuntime,
+        };
+        activeIncursionRef.current = next;
+        return next;
+      });
+      const received = receiveRunItem(normalizedRunItem, 'BUY', { purchaseCost: price });
+      if (received.needsChoice) {
+        return {
+          success: true,
+          logLine: `>> BLACK MARKET — ${getRunItemDefinition(normalizedRunItem).name} purchased (-${price} CR). Choose a slot.`,
+        };
+      }
+      if (!received.success) {
+        setActiveIncursion((prev) => {
+          const next = {
+            ...prev,
+            runCredits: prev.runCredits + price,
+            blackMarketStock: prev.blackMarketStock.includes(itemId)
+              ? prev.blackMarketStock
+              : [...prev.blackMarketStock, itemId],
+          };
+          activeIncursionRef.current = next;
+          return next;
+        });
+        return { success: false, logLine: received.logLine };
+      }
+      const discountNote = [
+        discountPct > 0 ? `SCAVENGER MARK -${discountPct}%` : null,
+        brokerMarked ? 'BROKER-MARKED −35%' : null,
+      ].filter(Boolean).join(' // ');
+      return {
+        success: true,
+        logLine: `>> BLACK MARKET RUN ITEM — ${getRunItemDefinition(normalizedRunItem).name} slotted. -${price} RUN CREDITS.${discountNote ? ` // ${discountNote}` : ''}`,
+      };
     }
 
     let keepsakeLogs: string[] = [];
@@ -5256,6 +5928,21 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       if (nextReq?.scavengerMarkBlackMarketPending) {
         nextReq = consumeScavengerMarkDiscount(nextReq);
       }
+      let nextRuntime = prev.itemRuntime;
+      if (brokerMarked) {
+        nextRuntime = mergeRunItemRuntime(
+          recordRunItemTrigger(prev.itemRuntime, 'BROKER FLASHCARD // Discount accepted. Future signal corrupted.'),
+          {
+            brokerMarkedItemId: null,
+            stats: {
+              ...prev.itemRuntime.stats,
+              creditsSavedByItems: prev.itemRuntime.stats.creditsSavedByItems
+                + Math.max(0, getEffectiveBlackMarketPrice(basePrice, discountPct) - price),
+              riskAddedByItems: prev.itemRuntime.stats.riskAddedByItems + 1,
+            },
+          },
+        );
+      }
       const next = {
         ...prev,
         runCredits: prev.runCredits - price,
@@ -5263,18 +5950,22 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         keepsakeRuntime: keepsakePickup.keepsakeRuntime,
         keepsakeJettisonLockedInstanceIds: keepsakePickup.keepsakeJettisonLockedInstanceIds,
         boundRequisition: nextReq,
+        itemRuntime: nextRuntime,
       };
       activeIncursionRef.current = next;
       return next;
     });
     keepsakeLogs.forEach((line) => appendRunLog(line));
 
-    const discountNote = discountPct > 0 ? ` // SCAVENGER MARK -${discountPct}%` : '';
+    const discountNote = [
+      discountPct > 0 ? `SCAVENGER MARK -${discountPct}%` : null,
+      brokerMarked ? 'BROKER-MARKED −35%' : null,
+    ].filter(Boolean).join(' // ');
     return {
       success: true,
-      logLine: `>> BLACK MARKET CARGO — ${CARGO_ITEM_CATALOG[itemId].name} staged in containment. -${price} RUN CREDITS.${discountNote}`,
+      logLine: `>> BLACK MARKET CARGO — ${CARGO_ITEM_CATALOG[itemId].name} staged in containment. -${price} RUN CREDITS.${discountNote ? ` // ${discountNote}` : ''}`,
     };
-  }, [appendRunLog, mergeKeepsakeCargoPickup]);
+  }, [appendRunLog, mergeKeepsakeCargoPickup, receiveRunItem]);
 
   const purchaseBlackMarketCargoAtCell = useCallback((
     itemId: CargoItemId,
@@ -5285,6 +5976,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const stock = inc.blackMarketStock.length > 0 ? inc.blackMarketStock : rollBlackMarketStock();
     if (stock.length > 0 && !stock.includes(itemId)) {
       return { success: false, logLine: '[REJECTED] >> Item not in current market stock.' };
+    }
+    if (isRunItemCatalogId(itemId)) {
+      return {
+        success: false,
+        logLine: '[REJECTED] >> Run items route to dedicated slots — tap BUY on the listing.',
+      };
     }
     const placed = placeStagedBlackMarketCargoAtCell(inc.cargo, itemId, row, col);
     if (!placed) {
@@ -5617,6 +6314,20 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       finishDevSandbox,
       exitCombatToBadge,
       useIncursionConsumable,
+      receiveRunItem,
+      resolvePendingRunItemOffer,
+      clearRunItemSlot,
+      devGrantRunItem,
+      notifyRunItemPlayerTurnStart,
+      notifyRunItemCombatStart,
+      useBrokerFlashcard,
+      useRelaySpikeOnNode,
+      useNullLensOnNode,
+      useAshSealFromFieldTools,
+      useContainmentFoamFromFieldTools,
+      useLeySlagSplitter,
+      tryDeferEngageForFieldTool,
+      commitRunItemFieldChoice,
       applyIncursionConsumableHeal,
       awardRunCredits,
       setAegisLoadout,
@@ -5680,6 +6391,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       devLogCargoRoutingRunState,
       devLogKeepsakeRunState,
       devPreviewKeepsakeDebrief,
+      devLogRunItemRunState,
+    devPreviewRunItemDebrief,
+    devValidateRunItemPipeline,
+    devValidateRunItemAcceptance,
+    devGrantAllRunItems,
       devValidateKeepsakePipeline,
       devPreviewEchoDebrief,
       devValidateEchoPipeline,
@@ -5775,6 +6491,20 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       finishDevSandbox,
       exitCombatToBadge,
       useIncursionConsumable,
+      receiveRunItem,
+      resolvePendingRunItemOffer,
+      clearRunItemSlot,
+      devGrantRunItem,
+      notifyRunItemPlayerTurnStart,
+      notifyRunItemCombatStart,
+      useBrokerFlashcard,
+      useRelaySpikeOnNode,
+      useNullLensOnNode,
+      useAshSealFromFieldTools,
+      useContainmentFoamFromFieldTools,
+      useLeySlagSplitter,
+      tryDeferEngageForFieldTool,
+      commitRunItemFieldChoice,
       applyIncursionConsumableHeal,
       awardRunCredits,
       setAegisLoadout,
@@ -5837,6 +6567,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       devLogCargoRoutingRunState,
       devLogKeepsakeRunState,
       devPreviewKeepsakeDebrief,
+      devLogRunItemRunState,
+    devPreviewRunItemDebrief,
+    devValidateRunItemPipeline,
+    devValidateRunItemAcceptance,
+    devGrantAllRunItems,
       devValidateKeepsakePipeline,
       devPreviewEchoDebrief,
       devValidateEchoPipeline,

@@ -41,6 +41,8 @@ export type LegacyCargoItemId =
   | 'grid-cracker-mag'
   | 'eclipse-flare'
   | 'coagulation-stitch'
+  | 'standard-coagulant'
+  | 'trauma-patch'
   | 'dead-drop-token'
   | 'resonance-bribe'
   | 'spall-weave-vest'
@@ -49,6 +51,21 @@ export type LegacyCargoItemId =
   | 'veil-ash-grenade'
   | 'kinetic-hollow-points'
   | 'sonar-ping'
+  | 'rigged-combustion-cylinder'
+  | 'mirror-salt-vial'
+  | 'bloodwire-tourniquet'
+  | 'null-space-injector'
+  | 'black-iron-wedge'
+  | 'razorwire-spool'
+  | 'voidglass-decoy'
+  | 'broker-flashcard'
+  | 'relay-spike'
+  | 'null-lens-filter'
+  | 'ash-seal-canister'
+  | 'containment-foam'
+  | 'ley-slag-splitter'
+  | 'echo-tuning-fork'
+  | 'anchor-needle'
   | 'smoke-ampoule'
   | 'null-key'
   | 'hazmat-shielding'
@@ -338,10 +355,36 @@ export const CARGO_ITEM_CATALOG: Record<CargoItemId, CargoItemDefinition> = {
     height: 1,
     baseValue: 55,
     resonanceWeight: 1,
-    tags: ['CONSUMABLE', 'COMBAT', 'HEAL'],
+    tags: ['CONSUMABLE', 'COMBAT', 'HEAL', 'LEGACY'],
     usableInCombat: true,
     combatEffect: 'clear_debuffs',
     healPercent: 10,
+  },
+  'standard-coagulant': {
+    id: 'standard-coagulant',
+    name: 'Standard Coagulant',
+    width: 1,
+    height: 1,
+    baseValue: 45,
+    resonanceWeight: 0,
+    tags: ['RUN_ITEM', 'CONSUMABLE', 'COMBAT', 'HEAL'],
+    usableInCombat: true,
+    combatEffect: 'heal',
+    healPercent: 25,
+    apCost: 0,
+  },
+  'trauma-patch': {
+    id: 'trauma-patch',
+    name: 'Trauma Patch',
+    width: 1,
+    height: 1,
+    baseValue: 90,
+    resonanceWeight: 0,
+    tags: ['RUN_ITEM', 'CONSUMABLE', 'COMBAT', 'HEAL'],
+    usableInCombat: true,
+    combatEffect: 'sanguine_coagulant',
+    healPercent: 15,
+    apCost: 0,
   },
   'dead-drop-token': {
     id: 'dead-drop-token',
@@ -425,11 +468,173 @@ export const CARGO_ITEM_CATALOG: Record<CargoItemId, CargoItemDefinition> = {
     width: 1,
     height: 1,
     baseValue: 40,
-    resonanceWeight: 1,
-    tags: ['CONSUMABLE', 'SCANNER', 'EXTRACTION'],
+    resonanceWeight: 0,
+    tags: ['RUN_ITEM', 'TOOL', 'SCANNER', 'EXTRACTION'],
     usableOnScanner: true,
     usableInCombat: false,
     combatEffect: 'unimplemented',
+  },
+  'rigged-combustion-cylinder': {
+    id: 'rigged-combustion-cylinder',
+    name: 'Rigged Combustion Cylinder',
+    width: 1,
+    height: 1,
+    baseValue: 65,
+    resonanceWeight: 0,
+    tags: ['RUN_ITEM', 'CONSUMABLE', 'COMBAT', 'AOE'],
+    usableInCombat: true,
+    combatEffect: 'unimplemented',
+    apCost: 0,
+  },
+  'mirror-salt-vial': {
+    id: 'mirror-salt-vial',
+    name: 'Mirror-Salt Vial',
+    width: 1,
+    height: 1,
+    baseValue: 130,
+    resonanceWeight: 0,
+    tags: ['RUN_ITEM', 'CONSUMABLE', 'COMBAT', 'TEMPO'],
+    usableInCombat: true,
+    combatEffect: 'unimplemented',
+    apCost: 0,
+  },
+  'bloodwire-tourniquet': {
+    id: 'bloodwire-tourniquet',
+    name: 'Bloodwire Tourniquet',
+    width: 1,
+    height: 1,
+    baseValue: 125,
+    resonanceWeight: 0,
+    tags: ['RUN_ITEM', 'CONSUMABLE', 'COMBAT', 'SURVIVAL'],
+    usableInCombat: true,
+    combatEffect: 'unimplemented',
+    apCost: 0,
+  },
+  'null-space-injector': {
+    id: 'null-space-injector',
+    name: 'Null-Space Injector',
+    width: 1,
+    height: 1,
+    baseValue: 125,
+    resonanceWeight: 0,
+    tags: ['RUN_ITEM', 'CONSUMABLE', 'COMBAT', 'SURVIVAL'],
+    usableInCombat: true,
+    combatEffect: 'unimplemented',
+    apCost: 0,
+  },
+  'black-iron-wedge': {
+    id: 'black-iron-wedge',
+    name: 'Black-Iron Wedge',
+    width: 1,
+    height: 1,
+    baseValue: 100,
+    resonanceWeight: 0,
+    tags: ['RUN_ITEM', 'CONSUMABLE', 'COMBAT', 'INTERRUPT'],
+    usableInCombat: true,
+    combatEffect: 'unimplemented',
+    apCost: 0,
+  },
+  'razorwire-spool': {
+    id: 'razorwire-spool',
+    name: 'Razorwire Spool',
+    width: 1,
+    height: 1,
+    baseValue: 95,
+    resonanceWeight: 0,
+    tags: ['RUN_ITEM', 'CONSUMABLE', 'COMBAT', 'GRID_CONTROL'],
+    usableInCombat: true,
+    combatEffect: 'unimplemented',
+    apCost: 0,
+  },
+  'voidglass-decoy': {
+    id: 'voidglass-decoy',
+    name: 'Voidglass Decoy',
+    width: 1,
+    height: 1,
+    baseValue: 100,
+    resonanceWeight: 0,
+    tags: ['RUN_ITEM', 'CONSUMABLE', 'COMBAT', 'SHIELD'],
+    usableInCombat: true,
+    combatEffect: 'unimplemented',
+    apCost: 0,
+  },
+  'broker-flashcard': {
+    id: 'broker-flashcard',
+    name: 'Broker Flashcard',
+    width: 1,
+    height: 1,
+    baseValue: 90,
+    resonanceWeight: 0,
+    tags: ['RUN_ITEM', 'TOOL', 'MARKET'],
+    usableOnScanner: false,
+    usableInCombat: false,
+  },
+  'relay-spike': {
+    id: 'relay-spike',
+    name: 'Relay Spike',
+    width: 1,
+    height: 1,
+    baseValue: 120,
+    resonanceWeight: 0,
+    tags: ['RUN_ITEM', 'TOOL', 'SCANNER', 'ROUTE'],
+    usableOnScanner: true,
+    usableInCombat: false,
+  },
+  'null-lens-filter': {
+    id: 'null-lens-filter',
+    name: 'Null-Lens Filter',
+    width: 1,
+    height: 1,
+    baseValue: 115,
+    resonanceWeight: 0,
+    tags: ['RUN_ITEM', 'TOOL', 'SCANNER'],
+    usableOnScanner: true,
+    usableInCombat: false,
+  },
+  'ash-seal-canister': {
+    id: 'ash-seal-canister',
+    name: 'Ash-Seal Canister',
+    width: 1,
+    height: 1,
+    baseValue: 100,
+    resonanceWeight: 0,
+    tags: ['RUN_ITEM', 'TOOL', 'CARGO', 'UNSTABLE'],
+  },
+  'containment-foam': {
+    id: 'containment-foam',
+    name: 'Containment Foam',
+    width: 1,
+    height: 1,
+    baseValue: 120,
+    resonanceWeight: 0,
+    tags: ['RUN_ITEM', 'TOOL', 'CARGO', 'SURVIVAL'],
+  },
+  'ley-slag-splitter': {
+    id: 'ley-slag-splitter',
+    name: 'Ley-Slag Splitter',
+    width: 1,
+    height: 1,
+    baseValue: 110,
+    resonanceWeight: 0,
+    tags: ['RUN_ITEM', 'TOOL', 'RESOURCE'],
+  },
+  'echo-tuning-fork': {
+    id: 'echo-tuning-fork',
+    name: 'Echo Tuning Fork',
+    width: 1,
+    height: 1,
+    baseValue: 105,
+    resonanceWeight: 0,
+    tags: ['RUN_ITEM', 'TOOL', 'ECHO'],
+  },
+  'anchor-needle': {
+    id: 'anchor-needle',
+    name: 'Anchor Needle',
+    width: 1,
+    height: 1,
+    baseValue: 115,
+    resonanceWeight: 0,
+    tags: ['RUN_ITEM', 'TOOL', 'ANCHOR', 'OPERATION'],
   },
   'god-mode': {
     id: 'god-mode',

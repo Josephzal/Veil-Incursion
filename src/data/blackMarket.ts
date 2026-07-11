@@ -1,5 +1,11 @@
 import type { CargoItemId } from '../types/cargoGrid';
 import { CARGO_ITEM_CATALOG } from '../types/cargoGrid';
+import {
+  isRunItemMarketId,
+  resolveRunItemMarketPrice,
+  rollRunItemMarketStock,
+  runItemMarketListing,
+} from './runItemMarketEngine';
 
 export interface BlackMarketCargoListing {
   id: CargoItemId;
@@ -9,6 +15,8 @@ export interface BlackMarketCargoListing {
   price: number;
   /** Always stocked when true (Soul Core). */
   alwaysStocked?: boolean;
+  /** Run items route to dedicated slots instead of cargo grid. */
+  isRunItem?: boolean;
 }
 
 export const BLACK_MARKET_CARGO_LISTINGS: readonly BlackMarketCargoListing[] = [
@@ -28,27 +36,6 @@ export const BLACK_MARKET_CARGO_LISTINGS: readonly BlackMarketCargoListing[] = [
     price: 100,
   },
   {
-    id: 'grave-dust-ampoule',
-    name: CARGO_ITEM_CATALOG['grave-dust-ampoule'].name,
-    description: 'Pulverized bone and synthetic amphetamines. Overclocks the nervous system mid-fight.',
-    effect: 'EFFECT: 100% STAMINA +1 AP // 1×1',
-    price: 75,
-  },
-  {
-    id: 'grid-cracker-mag',
-    name: CARGO_ITEM_CATALOG['grid-cracker-mag'].name,
-    description: 'Terran Grid breaching munitions. Silent concussive wave shatters kinetic plating.',
-    effect: 'EFFECT: −2 KINETIC ARMOR // 1×1',
-    price: 50,
-  },
-  {
-    id: 'eclipse-flare',
-    name: CARGO_ITEM_CATALOG['eclipse-flare'].name,
-    description: 'Anti-magic black-light flare. Burns occult wards off the target.',
-    effect: 'EFFECT: −2 OCCULT WARDS // 1×1',
-    price: 50,
-  },
-  {
     id: 'coagulation-stitch',
     name: CARGO_ITEM_CATALOG['coagulation-stitch'].name,
     description: 'Enchanted self-tying suture thread. Binds shut hexes and arterial bleed.',
@@ -56,25 +43,11 @@ export const BLACK_MARKET_CARGO_LISTINGS: readonly BlackMarketCargoListing[] = [
     price: 40,
   },
   {
-    id: 'dead-drop-token',
-    name: CARGO_ITEM_CATALOG['dead-drop-token'].name,
-    description: 'One-time ley-line router. Secures one cargo piece to the Cabal vault from the field.',
-    effect: 'EFFECT: INSTANT CARGO EXTRACT // 1×1',
-    price: 150,
-  },
-  {
     id: 'resonance-bribe',
     name: CARGO_ITEM_CATALOG['resonance-bribe'].name,
     description: 'Encrypted false-anomaly data bundle. Scrambles faction trackers on the overworld.',
     effect: 'EFFECT: −25% RESONANCE // SCANNER USE',
     price: 130,
-  },
-  {
-    id: 'spall-weave-vest',
-    name: CARGO_ITEM_CATALOG['spall-weave-vest'].name,
-    description: 'Disposable kevlar and warding ash weave. Absorbs the next lethal strike entirely.',
-    effect: 'EFFECT: ABSORB NEXT HIT // 1×1',
-    price: 65,
   },
   {
     id: 'void-surge-catalyst',
@@ -85,22 +58,51 @@ export const BLACK_MARKET_CARGO_LISTINGS: readonly BlackMarketCargoListing[] = [
   },
 ] as const;
 
-const ROTATING_POOL = BLACK_MARKET_CARGO_LISTINGS
+const ROTATING_CARGO_POOL = BLACK_MARKET_CARGO_LISTINGS
   .filter((entry) => !entry.alwaysStocked)
+  .filter((entry) => !isRunItemMarketId(entry.id))
   .map((entry) => entry.id);
 
-export function rollBlackMarketStock(): CargoItemId[] {
-  const extraCount = 2 + Math.floor(Math.random() * 3);
-  const shuffled = [...ROTATING_POOL].sort(() => Math.random() - 0.5);
-  return ['soul-core', ...shuffled.slice(0, extraCount)];
+export function rollBlackMarketStock(depth = 1): CargoItemId[] {
+  const runItems = rollRunItemMarketStock(depth);
+  const cargoExtraCount = Math.max(0, 1 + Math.floor(Math.random() * 2) - Math.floor(runItems.length / 3));
+  const shuffledCargo = [...ROTATING_CARGO_POOL].sort(() => Math.random() - 0.5);
+  const cargoExtras = shuffledCargo.slice(0, cargoExtraCount);
+  const merged = ['soul-core', ...runItems, ...cargoExtras] as CargoItemId[];
+  const unique = [...new Set(merged)];
+  return unique.slice(0, 5);
 }
 
 export function listingsForStock(stock: readonly CargoItemId[]): BlackMarketCargoListing[] {
-  const set = new Set(stock);
-  return BLACK_MARKET_CARGO_LISTINGS.filter((entry) => set.has(entry.id));
+  return stock.map((itemId) => {
+    if (isRunItemMarketId(itemId)) {
+      const listing = runItemMarketListing(itemId);
+      return {
+        id: itemId,
+        name: listing.name,
+        description: listing.description,
+        effect: listing.effect,
+        price: listing.price,
+        isRunItem: true,
+      };
+    }
+    const entry = BLACK_MARKET_CARGO_LISTINGS.find((listing) => listing.id === itemId);
+    if (entry) return entry;
+    const catalog = CARGO_ITEM_CATALOG[itemId];
+    return {
+      id: itemId,
+      name: catalog?.name ?? itemId,
+      description: 'Black market cargo listing.',
+      effect: `EFFECT: ${(catalog?.name ?? itemId).toUpperCase()} // 1×1 CARGO`,
+      price: catalog?.baseValue ?? 60,
+    };
+  });
 }
 
 export function resolveBlackMarketListingPrice(itemId: CargoItemId): number {
+  if (isRunItemMarketId(itemId)) {
+    return resolveRunItemMarketPrice(itemId);
+  }
   const listing = BLACK_MARKET_CARGO_LISTINGS.find((entry) => entry.id === itemId);
   return listing?.price ?? CARGO_ITEM_CATALOG[itemId]?.baseValue ?? 60;
 }

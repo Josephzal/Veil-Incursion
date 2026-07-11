@@ -1,6 +1,6 @@
 # Veil Incursion Current Systems Design
 
-Last updated: 2026-07-10 (expedition relics v2 phase F polish)
+Last updated: 2026-07-10 (run items v2 polish pass)
 
 This document captures the current implemented design surface for Veil Incursion: player-facing hub systems, run progression, economy, cargo/items, enemies, combat mechanics, and known partial implementations. It is intended as a working reference for design iteration and balancing, not a final player-facing manual.
 
@@ -19,6 +19,7 @@ Primary data and implementation files:
 - Class abilities: `src/data/aegisAbilities.ts`, `src/data/hexShotAbilities.ts`, `src/data/envoyAbilities.ts`
 - Progression and boons: `src/data/boundRequisitions.ts`, `src/data/leyLineMutations.ts`, `src/data/regions.ts`
 - Expedition relics (Trinkets v2): `src/types/expeditionKeepsake.ts`, `src/data/expeditionKeepsakeRegistry.ts`, `src/data/keepsakeRunState.ts`, `src/data/expeditionKeepsakeEngine.ts`, `src/data/expeditionKeepsake*Engine.ts`, `src/components/hub/KeepsakeLoadoutPanel.tsx`, `src/data/runDebriefKeepsakeEngine.ts`, `src/data/expeditionKeepsakeValidation.ts`, `src/data/expeditionKeepsakeAcceptanceEngine.ts`, `src/data/expeditionKeepsakeAuditEngine.ts`
+- Run Items v2: `src/types/runItem.ts`, `src/data/runItemRegistry.ts`, `src/data/runItemRunState.ts`, `src/data/runItemCombatEngine.ts`, `src/data/runItemFieldEngine.ts`, `src/data/runItem*Engine.ts`, `src/components/hub/RunItemLoadoutPanel.tsx`, `src/data/runDebriefRunItemEngine.ts`, `src/data/runItemValidation.ts`, `src/data/runItemAcceptanceEngine.ts`, `src/data/runItemAuditEngine.ts`
 
 ## High-Level Game Loop
 
@@ -309,6 +310,57 @@ The class selector is a compact operative identity strip with class cycling. Wea
 10. ✅ Duplication guards validated: matchbook max 4, dead-drop run-once, anchor trail run-once, per-depth false beacon, no-relic regression.
 11. ✅ Runs without equipped relic remain no-ops across core hooks.
 12. ✅ No relic assigns combat-stat hooks or modifies operative max HP / parry / damage.
+
+### Run Items v2 (Combat Consumables + Field Tools)
+
+**Run Items** are one-use clutch tools — distinct from **Bound Requisitions** (start-of-run sponsor blessings), **cargo grid loot**, and **Expedition Relics**. Players stage up to **2 combat consumables** and **2 field tools** in dedicated slots before descent; runtime state lives on `ActiveIncursionState.runItems` + `itemRuntime`.
+
+**Design pillars:**
+
+- **Clutch one-use effects** — healing, armor break, scanner intel, cargo banking, echo/anchor mode picks — not passive stat sticks.
+- **Separate storage** — never stored in the cargo grid; bought/crafted/found items route to run item slots with replace/discard/use-now flow when full.
+- **Guard rails** — 1 combat item per turn, 0 AP default, Bloodwire once/combat, Mirror-Salt once/turn, Apex cargo blocked for Dead-Drop / Containment Foam, Relay Spike cannot target boss nodes.
+
+**Roster (24):** 14 combat consumables (Standard Coagulant through Voidglass Decoy) + 10 field tools (Broker Flashcard through Anchor Needle). Bound Requisition ids (`chalk-line-ward`, `adrenaline-primer`, `scanner-override`, `smugglers-pockets`) are **out of scope**.
+
+**Runtime model:** `RunItemRuntime` tracks turn/combat guards, scanner noise, pending field choices, relay/dead-drop/foam/ash-seal state, `stats` (debrief lines), and `messages` (trigger log).
+
+**Hook domains:** combat (`runItemCombatEngine`), field/scanner/cargo/market (`runItemFieldEngine`, `runItemFieldChoiceEngine`), inventory/slots (`runItemInventoryEngine`), market/crafting bridge (`runItemMarketEngine`, `runItemCraftingBridge`), orchestration in `RunContext.tsx`.
+
+**Player-facing surfaces:**
+
+- **Hub loadout** — `RunItemLoadoutPanel` stages crafted items into descent slots.
+- **Run chrome** — `RunGlobalChrome` RUN ITEMS chip + live counters (noise, dead-drop, foam, relay, …).
+- **Trigger toasts** — `RunItemTriggerToast` on new `itemRuntime.messages`.
+- **Field choice modals** — `RunItemFieldChoiceOverlay` for relay/echo/anchor modes.
+- **Black Market** — rotating run item subset mixed with legacy cargo listings; run items use tap-to-buy (`RunItemMarketListing` → `purchaseBlackMarketCargo`); cargo listings remain drag-to-grid. Broker Flashcard reroll.
+- **Fabrication Matrix** — ALL / COMBAT / FIELD filters for registry-driven recipes; rows show market price + hub staged count.
+- **Debrief** — RUN ITEMS block: brought-at-start vs remaining loadout, risks, stat lines, trigger log.
+- **Dev** — validate registry + acceptance sims, full audit, grant all, simulate debrief/market/recipe gaps.
+
+**Key files:** `runItemRegistry.ts`, `runItemRunState.ts`, `runItemCombatEngine.ts`, `runItemFieldEngine.ts`, `runItemRunUiEngine.ts`, `runDebriefRunItemEngine.ts`, `RunItemLoadoutPanel.tsx`, `OperationDebriefScreen.tsx`.
+
+**Run Items v2 — acceptance criteria (Phases A–F):**
+
+1. ✅ 24-item roster (14 combat + 10 field), kebab-case ids + snake_case alias map.
+2. ✅ Dedicated `runItems` slots (2+2) separate from cargo grid.
+3. ✅ Combat consumables: 0 AP, 1 per turn, all 14 behaviors wired.
+4. ✅ Field tools: context gating, echo/anchor/relay choice modals, scanner/cargo/market hooks.
+5. ✅ Slot-full replace/discard/use-now/cancel purchase flow.
+6. ✅ Hub crafting from registry + market rotating subset with depth-aware rare filtering.
+7. ✅ Live HUD counters + trigger toasts + debrief parity.
+8. ✅ `verifyRunItemEngine()` boot verify (registry + acceptance sims).
+9. ✅ Duplication guards validated: per-turn combat, Bloodwire/combat, Mirror-Salt/turn, Grave-Dust crash-once, Apex cargo blocks, Relay boss block, full-slot auto-place.
+10. ✅ Empty loadout remains no-op across debrief/HUD/status helpers.
+11. ✅ Bound Requisitions untouched — not registered as Run Items.
+
+**Polish pass (post Phase F):**
+
+- ✅ Black Market run-item purchase UX — tap-to-buy routes to dedicated slots; drag-to-grid rejected for run items with clear message; stock decrements on purchase.
+- ✅ `runItemsAtRunStart` snapshot on descent — debrief shows BROUGHT vs REMAINING loadout lines.
+- ✅ Run chrome chip visible when live counters or pending slot offer active (even if slots empty).
+- ✅ Fabrication Matrix run-item rows show market price + hub staged count.
+- ✅ Legacy duplicate cargo market entries removed for items now sold exclusively as run items (`grave-dust-ampoule`, `grid-cracker-mag`, `eclipse-flare`, `dead-drop-token`, `spall-weave-vest`). Cargo-only `coagulation-stitch` remains distinct from run-item `standard-coagulant`.
 
 ## Run And Progression Systems
 
@@ -913,6 +965,7 @@ Current world/narrative surface includes:
 - **Unstable cargo carried effects v1 (complete):** Three unstable resources with deduped carried modifiers, lazy procedural type/context rolls, cargo pressure UI, debrief Cargo Pressure block, volatile resonance tagging, occupancy resonance multiplier, emergency recall Veil-Ash warning log.
 - **Echo encounters v1 (complete — Phases 1–6):** Echo scanner overlays at layer unlock, per-depth/run caps, weighted encounter kinds, fallen-runner narrative, assist/cargo/extraction immediate resolution, hostile combat routing, class-based hostile templates with depth scaling, hostile echo reward rolls, debrief Echo section, dev forcing tools, echo pipeline validation (reward-resource existence + Echo Recovery contribution rules), `echoRunState` tracking, Veil Front echo intel surfaces, reward-stack extraction tracking, Smuggler's Ledger fallen-runner drop, extraction echo emergency-recall bleed bonus. Acceptance criteria (20) verified in the Echo Encounters v1 section below.
 - **Expedition relics v2 (complete — Phases A–F):** 20-relic pre-run loadout with deployment choices, in-run branch modals, scanner/cargo/economy/contract/safehouse/echo hooks, live HUD counters, trigger toasts, debrief parity, registry + acceptance + combat-stat audit on boot. Internal code uses `Keepsake*` naming; player-facing copy uses **Expedition Relic**.
+- **Run Items v2 (complete — Phases A–F + polish):** 24-item combat consumable + field tool roster in dedicated 2+2 slots, combat/field engines, hub loadout + fabrication filters, black market tap-to-buy + cargo drag split, live HUD + toasts + brought/remaining debrief, registry + acceptance + boot audit. Bound Requisitions remain separate.
 - **Post-run cargo routing v1 (complete — Phases 1–10):** Full post-extract cargo routing pipeline with Veil Front + hub intel surfaces, live debrief preview/validation, partial stackable routing, casket open-at-hub v1, deferred contract delivery, death cargo messaging, runtime + intel + fixture + sim validation, catalog audit engine, cleanup/ship pass, `cargoRoutingRunState` + `careerCargoRouting` tracking, debrief summary wiring, hub contract board + safehouse + extraction review + scanner + loadout + cargo pressure surfaces, hub log on routing confirm, dev audit/validate/inspect tooling, compact debrief parity. Acceptance criteria (63) in Post-Run Cargo Routing v1 section.
 - **Safehouse banking:** Physical in-run banking via `runBankedSnapshot` — banked cargo survives death and routes to hub stash. Unbanked cargo is lost on death (`runResourceLedger.lostOnDeath`). Extraction merges banked + carried cargo before deposit.
 - Target Fragment has a catalogued combat effect but is marked `unimplemented`.

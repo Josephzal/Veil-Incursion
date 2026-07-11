@@ -18,9 +18,9 @@ import {
   isKeepsakeMarkedShelfItem,
   resolveKeepsakeMarkedShelfPrice,
 } from '../data/expeditionKeepsakeEconomyEngine';
+import { getBrokerMarkedDiscountPrice, hasFieldRunItem } from '../data/runItemFieldEngine';
 import {
   getBlackMarketDiscountPct,
-  getEffectiveBlackMarketPrice,
 } from '../data/boundRequisitionEngine';
 import { canPlaceCargoItem, listStagedBlackMarketPlacements } from '../data/cargoGridEngine';
 import { useRun } from '../context/RunContext';
@@ -35,6 +35,7 @@ import RunEventImmersiveBackdrop from '../components/layout/RunEventImmersiveBac
 import RunEventNodeHeader from '../components/layout/RunEventNodeHeader';
 import RunIncursionCargoPanel from '../components/run/RunIncursionCargoPanel';
 import DraggableMarketListing from '../components/run/DraggableMarketListing';
+import RunItemMarketListing from '../components/run/RunItemMarketListing';
 import BlackMarketFenceBay from '../components/run/BlackMarketFenceBay';
 import DossierCardShell from '../components/hub/DossierCardShell';
 import type { CargoDragSource } from '../components/CargoGridBoard';
@@ -69,6 +70,7 @@ export default function BlackMarketScreen(): React.JSX.Element {
   const {
     activeIncursion,
     appendRunLog,
+    purchaseBlackMarketCargo,
     purchaseBlackMarketCargoAtCell,
     returnStagedBlackMarketCargo,
     commitBlackMarketBindings,
@@ -76,6 +78,7 @@ export default function BlackMarketScreen(): React.JSX.Element {
     sellPlacedCargoToBlackMarket,
     revertBlackMarketStaging,
     getSelectedVectorNode,
+    useBrokerFlashcard,
   } = useRun();
   const { completeCurrentNode } = useNodeProgression();
   const {
@@ -87,6 +90,7 @@ export default function BlackMarketScreen(): React.JSX.Element {
     scaleSpacing,
   } = useResponsiveLayout();
 
+  const [buyingRunItemId, setBuyingRunItemId] = useState<CargoItemId | null>(null);
   const [leaving, setLeaving] = useState(false);
   const [binding, setBinding] = useState(false);
   const [externalHover, setExternalHover] = useState<{ itemId: CargoItemId; row: number; col: number } | null>(null);
@@ -114,14 +118,17 @@ export default function BlackMarketScreen(): React.JSX.Element {
       : ['soul-core'],
   );
   const blackMarketDiscountPct = getBlackMarketDiscountPct(activeIncursion);
-  const priceForListing = (basePrice: number, itemId: CargoItemId) => (
-    resolveKeepsakeMarkedShelfPrice(
+  const brokerMarkedId = activeIncursion.itemRuntime.brokerMarkedItemId;
+  const hasBrokerFlashcard = hasFieldRunItem(activeIncursion.runItems, 'broker-flashcard');
+  const priceForListing = (basePrice: number, itemId: CargoItemId) => {
+    const keepsakePrice = resolveKeepsakeMarkedShelfPrice(
       basePrice,
       itemId,
       activeIncursion.keepsakeRuntime,
       blackMarketDiscountPct,
-    ).price
-  );
+    ).price;
+    return getBrokerMarkedDiscountPrice(keepsakePrice, brokerMarkedId === itemId);
+  };
 
   const stagedPurchases = useMemo(
     () => listStagedBlackMarketPlacements(activeIncursion.cargo),
@@ -309,6 +316,16 @@ export default function BlackMarketScreen(): React.JSX.Element {
     setBinding(false);
   };
 
+  const handleRunItemBuy = useCallback((itemId: CargoItemId) => {
+    if (buyingRunItemId) return;
+    setBuyingRunItemId(itemId);
+    const result = purchaseBlackMarketCargo(itemId);
+    if (result) {
+      appendRunLog(result.logLine);
+    }
+    setBuyingRunItemId(null);
+  }, [appendRunLog, buyingRunItemId, purchaseBlackMarketCargo]);
+
   const handleLeave = () => {
     if (leaving) return;
     setLeaving(true);
@@ -425,7 +442,7 @@ export default function BlackMarketScreen(): React.JSX.Element {
                       },
                     ]}
                   >
-                    MANIFEST // DRAG TO CARGO GRID
+                    MANIFEST // DRAG CARGO OR TAP RUN ITEMS
                   </Text>
 
                   <ScrollView
@@ -435,12 +452,35 @@ export default function BlackMarketScreen(): React.JSX.Element {
                   >
                     {marketListings.map((listing) => {
                       const effectivePrice = priceForListing(listing.price, listing.id);
+                      const brokerMarked = brokerMarkedId === listing.id;
+                      if (listing.isRunItem) {
+                        const canBuy = activeIncursion.runCredits >= effectivePrice && buyingRunItemId == null;
+                        return (
+                          <RunItemMarketListing
+                            key={listing.id}
+                            listing={listing}
+                            price={effectivePrice}
+                            markedShelf={
+                              isKeepsakeMarkedShelfItem(activeIncursion.keepsakeRuntime, listing.id)
+                              || brokerMarked
+                            }
+                            fontScale={fontScale}
+                            borderColor={theme.borderColor}
+                            canBuy={canBuy}
+                            buying={buyingRunItemId === listing.id}
+                            onBuy={handleRunItemBuy}
+                          />
+                        );
+                      }
                       return (
                         <DraggableMarketListing
                           key={listing.id}
                           listing={listing}
                           price={effectivePrice}
-                          markedShelf={isKeepsakeMarkedShelfItem(activeIncursion.keepsakeRuntime, listing.id)}
+                          markedShelf={
+                            isKeepsakeMarkedShelfItem(activeIncursion.keepsakeRuntime, listing.id)
+                            || brokerMarked
+                          }
                           fontScale={fontScale}
                           borderColor={theme.borderColor}
                           onDragStart={handleMarketDragStart}
@@ -450,6 +490,20 @@ export default function BlackMarketScreen(): React.JSX.Element {
                       );
                     })}
                   </ScrollView>
+
+                  {hasBrokerFlashcard ? (
+                    <TacticalButton
+                      label="[ BROKER FLASHCARD ] — REROLL STOCK"
+                      active
+                      onPress={() => {
+                        useBrokerFlashcard();
+                      }}
+                      accentColor="#FBBF24"
+                      mutedColor={theme.mutedColor}
+                      variant="cta"
+                      style={bindButtonStyle}
+                    />
+                  ) : null}
 
                   {manifestDropActive ? (
                     <Text style={[styles.dropHint, { fontSize: s.dossierMeta, color: PHOSPHOR_GREEN }]}>

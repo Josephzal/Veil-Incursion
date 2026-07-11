@@ -9,6 +9,7 @@ import type { ClassType } from '../types/game';
 import { MACRO_BIOME_DISPLAY } from '../data/macroBiomeEngine';
 import type { MacroBiomeFamily } from '../types/narrativeProcedural';
 import { buildKeepsakeRunStatusEntries } from '../data/expeditionKeepsakeRunUiEngine';
+import { buildRunItemRunStatusEntries } from '../data/runItemRunUiEngine';
 
 export type RunStatusCategory = 'BOON' | 'HAZARD' | 'MACRO' | 'ENVIRONMENT' | 'RESONANCE' | 'SECTOR';
 
@@ -275,6 +276,7 @@ export function buildRunStatusSnapshot(inc: ActiveIncursionState): RunStatusEntr
 
   entries.push(...classBoonEntries(inc.activeClass ?? 'AEGIS', inc));
   entries.push(...buildKeepsakeRunStatusEntries(inc.keepsakeRuntime));
+  entries.push(...buildRunItemRunStatusEntries(inc.itemRuntime, inc.runItems));
   entries.push(...statusEffectEntries(inc.runStatusEffects));
   entries.push(...flagEntries(inc.progress.collectedFlags));
   entries.push(...envModifierEntries(inc.environmentalModifiers));

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Platform,
   ScrollView,
@@ -16,6 +16,14 @@ import {
   PERMANENT_AUGMENTS,
   type CraftingRecipe,
 } from '../data/craftingRegistry';
+import {
+  buildRunItemCraftingRecipes,
+  filterRunItemCraftingRecipes,
+  isRunItemCraftOutput,
+  type RunItemCraftFilter,
+} from '../data/runItemCraftingBridge';
+import { getRunItemDefinition } from '../data/runItemRegistry';
+import type { RunItemId } from '../types/runItem';
 import { canAffordRecipe, getStashCount } from '../data/resourceStashEngine';
 import { ALL_RESOURCE_ITEM_IDS, RESOURCE_REGISTRY } from '../data/resourceRegistry';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
@@ -175,6 +183,7 @@ interface FabricationRowProps {
   textColor: string;
   mutedColor: string;
   isDesktop: boolean;
+  footerMeta?: string;
 }
 
 function FabricationRow({
@@ -187,6 +196,7 @@ function FabricationRow({
   textColor,
   mutedColor,
   isDesktop,
+  footerMeta,
 }: FabricationRowProps): React.JSX.Element {
   const affordable = canAffordRecipe(stash, recipe);
   const canFabricate = affordable && !alreadyOwned;
@@ -227,6 +237,11 @@ function FabricationRow({
             );
           })}
         </View>
+        {footerMeta ? (
+          <Text style={[styles.requirementText, { color: MUTED_SLATE }]}>
+            {footerMeta}
+          </Text>
+        ) : null}
       </View>
       <View style={styles.fabricationActions}>
         <TacticalButton
@@ -307,11 +322,19 @@ export default function CraftingMenuPanel({
   const { scaleSpacing } = useHubLayout();
   const { iconSize } = useHubTypography();
   const panelPadding = scaleSpacing(10);
+  const [runItemFilter, setRunItemFilter] = useState<RunItemCraftFilter>('ALL');
+
+  const runItemRecipes = useMemo(
+    () => filterRunItemCraftingRecipes(buildRunItemCraftingRecipes(), runItemFilter),
+    [runItemFilter],
+  );
 
   const secondaryRecipes = useMemo(
     () => ({
       LOADOUT: getRecipesByKind('LOADOUT'),
-      CONSUMABLE: getRecipesByKind('CONSUMABLE'),
+      CONSUMABLE: getRecipesByKind('CONSUMABLE').filter(
+        (recipe) => !isRunItemCraftOutput(recipe.outputId),
+      ),
     }),
     [],
   );
@@ -373,6 +396,61 @@ export default function CraftingMenuPanel({
             mutedColor={theme.mutedColor}
             isDesktop={isDesktop}
           />
+        ) : null}
+
+        {runItemRecipes.length > 0 ? (
+          <>
+            <View style={styles.filterRow}>
+              {(['ALL', 'COMBAT', 'FIELD'] as const).map((filter) => (
+                <HapticPressable
+                  key={filter}
+                  onPress={() => setRunItemFilter(filter)}
+                  style={[
+                    styles.filterChip,
+                    {
+                      borderColor: theme.borderColor,
+                      backgroundColor: runItemFilter === filter ? DOSSIER_ROW_BG : 'transparent',
+                    },
+                  ]}
+                >
+                  <TerminalText
+                    variant="caption"
+                    style={{
+                      color: runItemFilter === filter ? theme.statusColor : theme.mutedColor,
+                      fontWeight: '700',
+                    }}
+                  >
+                    {filter === 'ALL' ? 'ALL RUN ITEMS' : filter}
+                  </TerminalText>
+                </HapticPressable>
+              ))}
+            </View>
+            <View style={styles.fabricationSection}>
+              <TerminalText variant="caption" letterSpacing={0.8} style={{ color: theme.mutedColor, fontWeight: '700' }}>
+                RUN ITEM SCHEMATICS
+              </TerminalText>
+              {runItemRecipes.map((recipe) => {
+                const itemId = recipe.outputId as RunItemId;
+                const def = getRunItemDefinition(itemId);
+                const staged = account.hubCraftedConsumables[itemId] ?? 0;
+                return (
+                  <FabricationRow
+                    key={recipe.id}
+                    recipe={recipe}
+                    stash={account.resourceStash}
+                    alreadyOwned={false}
+                    onFabricate={handleFabricate}
+                    accentColor={theme.statusColor}
+                    borderColor={theme.borderColor}
+                    textColor={theme.textColor}
+                    mutedColor={theme.mutedColor}
+                    isDesktop={isDesktop}
+                    footerMeta={`MARKET ${def.marketPrice} CR // ${staged} STAGED AT HUB`}
+                  />
+                );
+              })}
+            </View>
+          </>
         ) : null}
 
         {secondaryRecipes.CONSUMABLE.length > 0 ? (
@@ -537,6 +615,16 @@ const styles = StyleSheet.create({
   fabricationSection: {
     gap: 6,
     paddingBottom: 8,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  filterChip: {
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
   fabricationRow: {
     flexDirection: 'row',

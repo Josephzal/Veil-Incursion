@@ -9,6 +9,7 @@ import TerminalText from '../TerminalText';
 import SafehouseAbilitiesTab from '../safehouse/SafehouseAbilitiesTab';
 import SafehouseLoadoutTab from '../safehouse/SafehouseLoadoutTab';
 import KeepsakeLoadoutPanel from './KeepsakeLoadoutPanel';
+import RunItemLoadoutPanel from './RunItemLoadoutPanel';
 import { CLASS_DEFINITIONS } from '../../data/classes';
 import { getFactionAccent } from '../../data/factions';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
@@ -170,6 +171,10 @@ export default function LoadoutHubPanel(): React.JSX.Element {
                 </View>
 
                 <KeepsakeLoadoutPanel accent={accent} muted={muted} />
+
+                <DossierCardShell padding={scaleSpacing(10)} accentColor={accent}>
+                  <RunItemLoadoutPanel accent={accent} muted={muted} />
+                </DossierCardShell>
 
                 <View style={styles.abilitiesSection}>
                   <TerminalText variant="section" letterSpacing={1.1} style={[styles.abilitiesHeader, { color: accent }]}>

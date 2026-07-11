@@ -18,6 +18,16 @@ import {
 } from './resourceRegistry';
 import { getStashCount } from './resourceStashEngine';
 import { CARGO_ITEM_CATALOG } from '../types/cargoGrid';
+import type { RunItemId, RunItemsSlotState } from '../types/runItem';
+import {
+  clearRunItemAtSlot,
+  cloneRunItemsSlots,
+  isRunItemCatalogId,
+  normalizeHubRunItemId,
+  replaceRunItemAtSlot,
+  tryAutoPlaceRunItem,
+} from './runItemInventoryEngine';
+import { getRunItemDefinition } from './runItemRegistry';
 
 export const HUB_STASH_CAPACITY = 500;
 
@@ -345,6 +355,7 @@ export function equipTacticalFromHub(
   hubCraftedConsumables: Partial<Record<CargoItemId, number>>;
   tacticalLoadout: TacticalLoadoutSlots;
 } | null {
+  if (isRunItemCatalogId(itemId)) return null;
   const available = hubCraftedConsumables[itemId] ?? 0;
   if (available <= 0) return null;
   const nextLoadout: TacticalLoadoutSlots = [...tacticalLoadout];
@@ -386,7 +397,7 @@ export function finalizeDescentLoadout(
     ? { ...preRunCargo, grid: { placed: [...preRunCargo.grid.placed] }, containment: [...preRunCargo.containment] }
     : createDefaultCargoRunState();
   tacticalLoadout.forEach((itemId) => {
-    if (itemId) {
+    if (itemId && !isRunItemCatalogId(itemId)) {
       cargo = addLootToContainment(cargo, itemId, 1);
     }
   });
@@ -411,4 +422,69 @@ export function listHubStagedConsumables(
       name: CARGO_ITEM_CATALOG[itemId]?.name ?? id,
     }];
   });
+}
+
+export function equipRunItemFromHub(
+  hubCraftedConsumables: Partial<Record<CargoItemId, number>>,
+  runItemLoadout: RunItemsSlotState,
+  slotType: 'COMBAT' | 'FIELD',
+  slotIndex: 0 | 1,
+  itemId: CargoItemId,
+): {
+  hubCraftedConsumables: Partial<Record<CargoItemId, number>>;
+  runItemLoadout: RunItemsSlotState;
+} | null {
+  const runItemId = normalizeHubRunItemId(itemId);
+  if (!runItemId) return null;
+  const def = getRunItemDefinition(runItemId);
+  if (def.slotType !== slotType) return null;
+  const available = hubCraftedConsumables[itemId] ?? 0;
+  if (available <= 0) return null;
+
+  const nextConsumables = { ...hubCraftedConsumables };
+  nextConsumables[itemId] = available - 1;
+  if (nextConsumables[itemId] <= 0) delete nextConsumables[itemId];
+
+  const replaced = replaceRunItemAtSlot(runItemLoadout, slotType, slotIndex, runItemId);
+  if (replaced.displaced) {
+    const legacyId = replaced.displaced as CargoItemId;
+    nextConsumables[legacyId] = (nextConsumables[legacyId] ?? 0) + 1;
+  }
+
+  return {
+    hubCraftedConsumables: nextConsumables,
+    runItemLoadout: replaced.slots,
+  };
+}
+
+export function clearRunItemLoadoutSlotState(
+  hubCraftedConsumables: Partial<Record<CargoItemId, number>>,
+  runItemLoadout: RunItemsSlotState,
+  slotType: 'COMBAT' | 'FIELD',
+  slotIndex: 0 | 1,
+): {
+  hubCraftedConsumables: Partial<Record<CargoItemId, number>>;
+  runItemLoadout: RunItemsSlotState;
+} {
+  const cleared = clearRunItemAtSlot(runItemLoadout, slotType, slotIndex);
+  if (!cleared.removed) {
+    return { hubCraftedConsumables, runItemLoadout };
+  }
+  const legacyId = cleared.removed as CargoItemId;
+  const nextConsumables = { ...hubCraftedConsumables };
+  nextConsumables[legacyId] = (nextConsumables[legacyId] ?? 0) + 1;
+  return {
+    hubCraftedConsumables: nextConsumables,
+    runItemLoadout: cleared.slots,
+  };
+}
+
+export function isRunItemHubConsumable(itemId: CargoItemId): boolean {
+  return isRunItemCatalogId(itemId);
+}
+
+export function finalizeDescentRunItems(
+  runItemLoadout: RunItemsSlotState,
+): RunItemsSlotState {
+  return cloneRunItemsSlots(runItemLoadout);
 }

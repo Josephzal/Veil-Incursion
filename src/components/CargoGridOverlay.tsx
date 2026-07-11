@@ -42,6 +42,10 @@ interface CargoGridOverlayProps {
   onUseCombatConsumable?: (itemId: CargoItemId) => boolean;
   onUseResonanceBribe?: () => boolean;
   onUseDeadDrop?: () => boolean;
+  /** Field-slot dead-drop (no cargo-grid token required). */
+  showDeadDropFieldTool?: boolean;
+  onUseAshSeal?: () => boolean;
+  onUseContainmentFoam?: () => boolean;
   onDiscardItem?: (instanceId: string) => boolean;
   runCredits?: number;
   playerActionPoints?: number;
@@ -63,6 +67,9 @@ export default function CargoGridOverlay({
   onUseCombatConsumable,
   onUseResonanceBribe,
   onUseDeadDrop,
+  showDeadDropFieldTool = false,
+  onUseAshSeal,
+  onUseContainmentFoam,
   onDiscardItem,
   runCredits,
   playerActionPoints,
@@ -77,9 +84,11 @@ export default function CargoGridOverlay({
     let count = 0;
     if (onUseAmpoule && countCargoItemInstances(cargo, 'focusing-ampoule') > 0) count += 1;
     if (onUseResonanceBribe && countCargoItemInstances(cargo, 'resonance-bribe') > 0) count += 1;
-    if (onUseDeadDrop && countCargoItemInstances(cargo, 'dead-drop-token') > 0) count += 1;
+    if (onUseDeadDrop && (showDeadDropFieldTool || countCargoItemInstances(cargo, 'dead-drop-token') > 0)) count += 1;
+    if (onUseAshSeal) count += 1;
+    if (onUseContainmentFoam) count += 1;
     return count;
-  }, [cargo, onUseAmpoule, onUseDeadDrop, onUseResonanceBribe, scannerMode]);
+  }, [cargo, onUseAmpoule, onUseAshSeal, onUseContainmentFoam, onUseDeadDrop, onUseResonanceBribe, scannerMode, showDeadDropFieldTool]);
 
   const cellSize = useMemo(() => {
     if (combatMode) {
@@ -190,6 +199,17 @@ export default function CargoGridOverlay({
               } : undefined}
               onUseDeadDrop={onUseDeadDrop ? () => {
                 const ok = onUseDeadDrop();
+                if (ok) dismissAfterUse();
+                return ok;
+              } : undefined}
+              showDeadDropFieldTool={showDeadDropFieldTool}
+              onUseAshSeal={onUseAshSeal ? () => {
+                const ok = onUseAshSeal();
+                if (ok) dismissAfterUse();
+                return ok;
+              } : undefined}
+              onUseContainmentFoam={onUseContainmentFoam ? () => {
+                const ok = onUseContainmentFoam();
                 if (ok) dismissAfterUse();
                 return ok;
               } : undefined}

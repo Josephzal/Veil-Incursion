@@ -40,6 +40,13 @@ import {
 import {
   resolveKeepsakeDeploymentWarnings,
 } from '../../data/expeditionKeepsakeDeploymentEngine';
+import {
+  formatRunItemAcceptanceDebugReport,
+  formatRunItemDebugValidation,
+  formatRunItemMarketSimulationReport,
+  formatRunItemRecipeGapReport,
+} from '../../data/runItemDebugEngine';
+import { ALL_RUN_ITEM_IDS, type RunItemId } from '../../types/runItem';
 
 interface SandboxLaunchButtonProps {
   label: string;
@@ -86,6 +93,12 @@ export default function DevTestHubPanel(): React.JSX.Element {
     devLogCargoRoutingRunState,
     devLogKeepsakeRunState,
     devPreviewKeepsakeDebrief,
+    devLogRunItemRunState,
+    devPreviewRunItemDebrief,
+    devValidateRunItemPipeline,
+    devValidateRunItemAcceptance,
+    devGrantAllRunItems,
+    devGrantRunItem,
     devPreviewEchoDebrief,
     devValidateEchoPipeline,
     devPreviewPostRunRouting,
@@ -585,6 +598,58 @@ export default function DevTestHubPanel(): React.JSX.Element {
           accentColor={theme.primaryColor}
           onPress={() => setDebugReport(devPreviewKeepsakeDebrief())}
         />
+      </View>
+
+      <HubSectionHeader title="RUN ITEMS // DEBUG" color={theme.mutedColor} />
+      <View style={styles.grid}>
+        <SandboxLaunchButton
+          label="[ VALIDATE RUN ITEMS ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(formatRunItemDebugValidation(activeIncursion))}
+        />
+        <SandboxLaunchButton
+          label="[ RUN ITEM ACCEPTANCE ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(devValidateRunItemAcceptance())}
+        />
+        <SandboxLaunchButton
+          label="[ FULL RUN ITEM AUDIT ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(formatRunItemAcceptanceDebugReport())}
+        />
+        <SandboxLaunchButton
+          label="[ LOG RUN ITEM STATE ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(devLogRunItemRunState())}
+        />
+        <SandboxLaunchButton
+          label="[ SIMULATE RUN ITEM DEBRIEF ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(devPreviewRunItemDebrief())}
+        />
+        <SandboxLaunchButton
+          label="[ SIMULATE MARKET STOCK ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(formatRunItemMarketSimulationReport(activeIncursion.currentDepth ?? 1))}
+        />
+        <SandboxLaunchButton
+          label="[ RECIPE GAP REPORT ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(formatRunItemRecipeGapReport(account.resourceStash))}
+        />
+        <SandboxLaunchButton
+          label="[ GRANT ALL RUN ITEMS ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(devGrantAllRunItems())}
+        />
+        {ALL_RUN_ITEM_IDS.map((itemId: RunItemId) => (
+          <SandboxLaunchButton
+            key={itemId}
+            label={`[ GRANT ${itemId.replace(/-/g, ' ').toUpperCase()} ]`}
+            accentColor={theme.mutedColor}
+            onPress={() => setDebugReport(devGrantRunItem(itemId).logLine)}
+          />
+        ))}
       </View>
 
       <HubSectionHeader title="ECHO // DEBUG" color={theme.mutedColor} />

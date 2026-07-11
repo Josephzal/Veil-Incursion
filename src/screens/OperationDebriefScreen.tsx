@@ -160,6 +160,7 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
     cargoRoutingRunState,
     keepsakeSummary,
     keepsakeRuntime,
+    runItemSummary,
   } = pendingDebrief;
 
   const displayContractResult = resolvedContractResult ?? contractResult;
@@ -584,6 +585,63 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
                     {keepsakeSummary.note ? (
                       <Text style={[styles.stat, { color: theme.mutedColor }]}>
                         {keepsakeSummary.note.toUpperCase()}
+                      </Text>
+                    ) : null}
+                  </>
+                ) : null}
+                {runItemSummary ? (
+                  <>
+                    <View style={styles.sectionGap} />
+                    <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>RUN ITEMS</Text>
+                    <Text style={[styles.stat, { color: theme.textColor }]}>
+                      {`BROUGHT — COMBAT: ${runItemSummary.combatBrought.map((id) => id.replace(/-/g, ' ')).join(', ').toUpperCase() || 'NONE'}`}
+                    </Text>
+                    <Text style={[styles.stat, { color: theme.textColor }]}>
+                      {`BROUGHT — FIELD: ${runItemSummary.fieldBrought.map((id) => id.replace(/-/g, ' ')).join(', ').toUpperCase() || 'NONE'}`}
+                    </Text>
+                    <Text style={[styles.stat, { color: theme.mutedColor, marginTop: 4 }]}>
+                      {`REMAINING — COMBAT: ${runItemSummary.combatSlotted.map((id) => id.replace(/-/g, ' ')).join(', ').toUpperCase() || 'NONE'}`}
+                    </Text>
+                    <Text style={[styles.stat, { color: theme.mutedColor }]}>
+                      {`REMAINING — FIELD: ${runItemSummary.fieldSlotted.map((id) => id.replace(/-/g, ' ')).join(', ').toUpperCase() || 'NONE'}`}
+                    </Text>
+                    <Text style={[styles.stat, { color: runItemSummary.triggered ? TERMINAL_ACCENT : theme.mutedColor }]}>
+                      {runItemSummary.triggered
+                        ? `TRIGGERED ${runItemSummary.triggerCount} TIME(S)`
+                        : 'RUN ITEMS WERE NOT USED.'}
+                    </Text>
+                    {runItemSummary.riskLines.length > 0 ? (
+                      <>
+                        <Text style={[styles.stat, { color: theme.mutedColor, marginTop: 4 }]}>
+                          RISKS ADDED
+                        </Text>
+                        {runItemSummary.riskLines.map((line) => (
+                          <Text key={`run-item-risk-${line}`} style={[styles.stat, { color: PENDING_ACCENT }]}>
+                            {line.toUpperCase()}
+                          </Text>
+                        ))}
+                      </>
+                    ) : null}
+                    {runItemSummary.statLines.map((line) => (
+                      <Text key={`run-item-stat-${line}`} style={[styles.stat, { color: theme.textColor }]}>
+                        {line.toUpperCase()}
+                      </Text>
+                    ))}
+                    {runItemSummary.messages.length > 0 ? (
+                      <>
+                        <Text style={[styles.stat, { color: theme.mutedColor, marginTop: 4 }]}>
+                          TRIGGER LOG
+                        </Text>
+                        {runItemSummary.messages.map((message) => (
+                          <Text key={`run-item-msg-${message}`} style={[styles.stat, { color: theme.mutedColor }]}>
+                            {message.toUpperCase()}
+                          </Text>
+                        ))}
+                      </>
+                    ) : null}
+                    {runItemSummary.note ? (
+                      <Text style={[styles.stat, { color: theme.mutedColor }]}>
+                        {runItemSummary.note.toUpperCase()}
                       </Text>
                     ) : null}
                   </>

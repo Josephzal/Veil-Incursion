@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import TacticalButton from '../TacticalButton';
 import { useCargoOverlay } from '../../context/CargoOverlayContext';
 import { useRunStatusOverlay } from '../../context/RunStatusOverlayContext';
+import { useRunItemOverlay } from '../../context/RunItemOverlayContext';
 
 interface RunFeedChromeButtonsProps {
   accent: string;
@@ -16,10 +17,12 @@ export default function RunFeedChromeButtons({
 }: RunFeedChromeButtonsProps): React.JSX.Element | null {
   const cargo = useCargoOverlay();
   const status = useRunStatusOverlay();
+  const runItems = useRunItemOverlay();
   const showStatus = status?.statusEnabled ?? false;
   const showCargo = cargo?.cargoEnabled ?? false;
+  const showItems = runItems?.itemsEnabled ?? false;
 
-  if (!showStatus && !showCargo) return null;
+  if (!showStatus && !showCargo && !showItems) return null;
 
   return (
     <View style={styles.row}>
@@ -28,6 +31,16 @@ export default function RunFeedChromeButtons({
           label="STATUS"
           active={false}
           onPress={status!.openStatus}
+          accentColor={accent}
+          mutedColor={mutedColor}
+          variant="inline"
+        />
+      ) : null}
+      {showItems ? (
+        <TacticalButton
+          label="ITEMS"
+          active={false}
+          onPress={runItems!.openItems}
           accentColor={accent}
           mutedColor={mutedColor}
           variant="inline"

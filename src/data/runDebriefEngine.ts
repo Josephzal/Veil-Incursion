@@ -14,8 +14,10 @@ import { buildEchoDebriefSummary } from './runDebriefEchoEngine';
 import type { ExtractCargoRoutingDebriefSummary } from './runDebriefCargoRoutingEngine';
 import { buildExtractCargoRoutingDebriefSummary } from './runDebriefCargoRoutingEngine';
 import { buildKeepsakeDebriefSummary } from './runDebriefKeepsakeEngine';
+import { buildRunItemDebriefSummary } from './runDebriefRunItemEngine';
 import { resolveKeepsakeBankedResourceMultiplier } from './expeditionKeepsakeSafehouseEngine';
 import type { KeepsakeDebriefSummary } from '../types/expeditionKeepsake';
+import type { RunItemDebriefSummary } from '../types/runItem';
 import type { PostRunRoutingDebriefState, CargoRoutingResult } from '../types/postRunCargoRouting';
 import { createDefaultEchoRunState, ECHO_OPERATION_PROGRESS } from './echoRunState';
 import { ALL_RESOURCE_ITEM_IDS, RESOURCE_REGISTRY } from './resourceRegistry';
@@ -100,6 +102,7 @@ export interface OperationDebriefPayload {
   cargoRoutingRunState?: import('./postRunCargoRoutingRunState').CargoRoutingRunState | null;
   keepsakeSummary: KeepsakeDebriefSummary | null;
   keepsakeRuntime: import('../types/expeditionKeepsake').KeepsakeRuntime | null;
+  runItemSummary: RunItemDebriefSummary | null;
 }
 
 export function computeRunOperationContribution(
@@ -320,6 +323,11 @@ export function buildOperationDebriefPayload(
     incursion.cargoRoutingRunState,
   );
   const keepsakeSummary = buildKeepsakeDebriefSummary(incursion.keepsakeRuntime);
+  const runItemSummary = buildRunItemDebriefSummary(
+    incursion.itemRuntime,
+    incursion.runItems,
+    incursion.runItemsAtRunStart,
+  );
   const progressDelta = Math.max(0, opts.progressAfter - opts.progressBefore);
   const totalContributionThisRun = computeTotalContributionThisRun(
     contribution.total,
@@ -360,5 +368,6 @@ export function buildOperationDebriefPayload(
     cargoRoutingRunState: incursion.cargoRoutingRunState,
     keepsakeSummary,
     keepsakeRuntime: incursion.keepsakeRuntime,
+    runItemSummary,
   };
 }

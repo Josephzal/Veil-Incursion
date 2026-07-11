@@ -38,6 +38,7 @@ import { DOSSIER_ROW_BG } from '../constants/dossierSurface';
 import { resolveFactionSlateBackgroundSolid } from '../constants/hubAtmosphere';
 import { formatRiftManifestLog } from '../utils/overworldBlindScout';
 import { resolveRunEventNodeHeaderFromNode } from '../utils/resolveRunEventNodeHeader';
+import { hasFieldRunItem } from '../data/runItemFieldEngine';
 import { getKeepsakeCartographGhostType } from '../data/expeditionKeepsakeScannerEngine';
 import {
   computeBaseSectorExtractionPayout,
@@ -89,6 +90,9 @@ export default function ScanningScreen(): React.JSX.Element {
     cancelClassBoonSwap,
     useSonarPingOnNode,
     hasSonarPingInCargo,
+    useRelaySpikeOnNode,
+    useNullLensOnNode,
+    tryDeferEngageForFieldTool,
   } = useRun();
   const { account } = usePlayerAccount();
   const { isScanningHub, finalizeSectorExtraction } = useDescentNavigator();
@@ -413,9 +417,12 @@ export default function ScanningScreen(): React.JSX.Element {
   ]);
 
   const handleEngage = useCallback(() => {
+    if (selectedNodeId && tryDeferEngageForFieldTool(selectedNodeId)) {
+      return;
+    }
     const nodeType = confirmScanPreview();
     routeAfterEngage(nodeType);
-  }, [confirmScanPreview, routeAfterEngage]);
+  }, [confirmScanPreview, routeAfterEngage, selectedNodeId, tryDeferEngageForFieldTool]);
 
   const handleEmergencyRecall = useCallback(() => {
     if (initiateEmergencyRecall()) {
@@ -435,6 +442,16 @@ export default function ScanningScreen(): React.JSX.Element {
     && hasSonarPingInCargo()
     && activeIncursion.proceduralRunTree
     && !activeIncursion.revealedSonarNodeIds.includes(selectedNodeId),
+  );
+  const showRelaySpikePrompt = Boolean(
+    selectedNodeId
+    && hasFieldRunItem(activeIncursion.runItems, 'relay-spike')
+    && activeIncursion.itemRuntime.pendingRelayModifier == null,
+  );
+  const showNullLensPrompt = Boolean(
+    selectedNodeId
+    && hasFieldRunItem(activeIncursion.runItems, 'null-lens-filter')
+    && !activeIncursion.keepsakeFullyInterpretedNodeIds.includes(selectedNodeId),
   );
 
   const scannerPane = (
@@ -532,13 +549,49 @@ export default function ScanningScreen(): React.JSX.Element {
           mutedColor={theme.mutedColor}
           engageLabel="[ BREACH ]"
           onEngage={handleEngage}
-          sonarPrompt={showSonarPrompt ? (
-            <ScannerSonarPrompt
-              visible
-              onUse={() => {
-                if (selectedNodeId) useSonarPingOnNode(selectedNodeId);
-              }}
-            />
+          sonarPrompt={showSonarPrompt || showRelaySpikePrompt || showNullLensPrompt ? (
+            <View style={{ gap: 6 }}>
+              {showSonarPrompt ? (
+                <ScannerSonarPrompt
+                  visible
+                  onUse={() => {
+                    if (selectedNodeId) useSonarPingOnNode(selectedNodeId);
+                  }}
+                />
+              ) : null}
+              {showNullLensPrompt ? (
+                <HapticPressable
+                  onPress={() => {
+                    if (selectedNodeId) useNullLensOnNode(selectedNodeId);
+                  }}
+                  style={({ pressed }) => [
+                    { borderWidth: 1, borderColor: accent, padding: 8, opacity: pressed ? 0.8 : 1 },
+                  ]}
+                >
+                  <TerminalText size={9} letterSpacing={0.8} style={{ color: accent, fontWeight: '700' }}>
+                    [ NULL-LENS ] — FULL INTERPRET NODE
+                  </TerminalText>
+                </HapticPressable>
+              ) : null}
+              {showRelaySpikePrompt ? (
+                <HapticPressable
+                  onPress={() => {
+                    if (!selectedNodeId) return;
+                    const tree = activeIncursion.proceduralRunTree;
+                    const isBoss = tree?.bossNodeId === selectedNodeId
+                      || tree?.nodes[selectedNodeId]?.type === 'GATEKEEPER';
+                    useRelaySpikeOnNode(selectedNodeId, Boolean(isBoss));
+                  }}
+                  style={({ pressed }) => [
+                    { borderWidth: 1, borderColor: accent, padding: 8, opacity: pressed ? 0.8 : 1 },
+                  ]}
+                >
+                  <TerminalText size={9} letterSpacing={0.8} style={{ color: accent, fontWeight: '700' }}>
+                    [ RELAY SPIKE ] — PLANT ON NODE
+                  </TerminalText>
+                </HapticPressable>
+              ) : null}
+            </View>
           ) : null}
         />
       </View>

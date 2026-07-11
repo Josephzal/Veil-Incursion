@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import RunFeedChromeButtons from './run/RunFeedChromeButtons';
 import CargoPressurePanel from './CargoPressurePanel';
+import TerminalText from './TerminalText';
 import { useTerminal } from '../context/TerminalContext';
 import { useCargoOverlay } from '../context/CargoOverlayContext';
 import { useRunStatusOverlay } from '../context/RunStatusOverlayContext';
@@ -10,6 +11,8 @@ import { hasActiveCarriedCargoEffects } from '../data/unstableCargoEffectsEngine
 import { resolveSpecialCargoStacksForIncursion } from '../data/postRunCargoRoutingRunState';
 import { getEquippedKeepsakeShortLabel } from '../data/expeditionKeepsakeEngine';
 import { buildKeepsakeLiveCounters } from '../data/expeditionKeepsakeRunUiEngine';
+import { buildRunItemLiveCounters, shouldShowRunItemChromeChip } from '../data/runItemRunUiEngine';
+import { countOccupiedRunItemSlots } from '../data/runItemRunState';
 
 /** Floating cargo / status controls for non-combat run screens. */
 export default function RunGlobalChrome(): React.JSX.Element | null {
@@ -25,10 +28,19 @@ export default function RunGlobalChrome(): React.JSX.Element | null {
     () => buildKeepsakeLiveCounters(activeIncursion.keepsakeRuntime),
     [activeIncursion.keepsakeRuntime],
   );
+  const runItemCount = countOccupiedRunItemSlots(activeIncursion.runItems);
+  const showRunItemsChip = shouldShowRunItemChromeChip(
+    activeIncursion.itemRuntime,
+    activeIncursion.runItems,
+  );
+  const runItemCounters = useMemo(
+    () => buildRunItemLiveCounters(activeIncursion.itemRuntime, activeIncursion.runItems),
+    [activeIncursion.itemRuntime, activeIncursion.runItems],
+  );
   const showCargoPressure = hasActiveCarriedCargoEffects(activeIncursion.cargo)
     || specialCargoStacks > 0;
 
-  if (!showStatus && !showCargo && !showCargoPressure && !keepsakeLabel) return null;
+  if (!showStatus && !showCargo && !showCargoPressure && !keepsakeLabel && !showRunItemsChip) return null;
 
   return (
     <View style={styles.host} pointerEvents="box-none">
@@ -40,6 +52,32 @@ export default function RunGlobalChrome(): React.JSX.Element | null {
           {keepsakeCounters.length > 0 ? (
             <View style={styles.counterRow}>
               {keepsakeCounters.map((counter) => {
+                const color = counter.tone === 'warning'
+                  ? '#f59e0b'
+                  : counter.tone === 'accent'
+                    ? theme.statusColor
+                    : theme.mutedColor;
+                return (
+                  <Text
+                    key={counter.key}
+                    style={[styles.counterText, { color }]}
+                  >
+                    {`${counter.label} ${counter.value}`}
+                  </Text>
+                );
+              })}
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+      {showRunItemsChip ? (
+        <View style={[styles.keepsakeChip, { borderColor: `${theme.statusColor}66` }]}>
+          <TerminalText variant="caption" style={{ color: theme.statusColor, fontSize: 9, fontWeight: '700' }}>
+            {runItemCount > 0 ? `RUN ITEMS // ${runItemCount}/4` : 'RUN ITEMS // ACTIVE'}
+          </TerminalText>
+          {runItemCounters.length > 0 ? (
+            <View style={styles.counterRow}>
+              {runItemCounters.map((counter) => {
                 const color = counter.tone === 'warning'
                   ? '#f59e0b'
                   : counter.tone === 'accent'

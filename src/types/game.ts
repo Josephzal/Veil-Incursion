@@ -10,6 +10,10 @@ import type { AegisLoadout, AegisAbilityId } from './aegisCombat';
 import { createDefaultPendingNarrativeCombatBoons } from './narrativeBonusReward';
 import type { ResourceQuantity } from './resourceItem';
 import {
+  createDefaultRunItemRuntime,
+  createDefaultRunItemsSlotState,
+} from './runItem';
+import {
   createEmptyRunPhysicalBankSnapshot,
   createEmptyRunResourceLedger,
 } from './runResourceLedger';
@@ -138,12 +142,14 @@ export interface PlayerAccount {
   hubCraftedConsumables: Partial<Record<import('./cargoGrid').CargoItemId, number>>;
   /** Pre-run cargo grid draft staged at the Safehouse. */
   preRunCargo: import('./cargoGrid').CargoRunState;
-  /** Three tactical consumable slots armed for the next descent. */
+  /** Three tactical consumable slots armed for the next descent (legacy non-run items). */
   tacticalLoadout: [
     import('./cargoGrid').CargoItemId | null,
     import('./cargoGrid').CargoItemId | null,
     import('./cargoGrid').CargoItemId | null,
   ];
+  /** Pre-run Run Item v2 slots — 2 combat + 2 field, separate from cargo grid. */
+  runItemLoadout: import('./runItem').RunItemsSlotState;
   /** Class weapon blueprint actively wired into combat hooks. */
   equippedBlueprintId: import('./equipmentBlueprint').BlueprintId | null;
   /** Safehouse decryption queue — gatekeeper cores/caskets land here as locked containers. */
@@ -518,6 +524,12 @@ export interface ActiveIncursionState {
   runBankedSnapshot: import('../types/runResourceLedger').RunPhysicalBankSnapshot;
   /** Per-run resource collection, banking, extraction, and loss accounting. */
   runResourceLedger: import('../types/runResourceLedger').RunResourceLedger;
+  /** Run Item v2 slot inventory — separate from cargo grid (2 combat + 2 field). */
+  runItems: import('../types/runItem').RunItemsSlotState;
+  /** Snapshot of run items committed at descent — used for debrief "brought" lines. */
+  runItemsAtRunStart: import('../types/runItem').RunItemsSlotState;
+  /** Run Item v2 per-run counters, triggers, and pending effects. */
+  itemRuntime: import('../types/runItem').RunItemRuntime;
 }
 
 export function createDefaultEnvironmentalModifiers(): EnvironmentalModifiers {
@@ -657,5 +669,8 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     pendingExtractionNodeId: null,
     runBankedSnapshot: createEmptyRunPhysicalBankSnapshot(),
     runResourceLedger: createEmptyRunResourceLedger(),
+    runItems: createDefaultRunItemsSlotState(),
+    runItemsAtRunStart: createDefaultRunItemsSlotState(),
+    itemRuntime: createDefaultRunItemRuntime(),
   };
 }
