@@ -103,6 +103,15 @@ export interface ActiveRunContract {
   selectedAtRunIndex: number;
   /** Contract Seal — optional sealed clause appended at run start. */
   keepsakeSealedClause?: KeepsakeSealedClause | null;
+  /** Mirror Writ — mirrored side objective for double-or-break payout. */
+  keepsakeMirroredObjective?: KeepsakeMirroredObjective | null;
+}
+
+export interface KeepsakeMirroredObjective {
+  category: import('./expeditionKeepsake').KeepsakeMirrorCategory;
+  text: string;
+  targetValue: number;
+  progressValue?: number;
 }
 
 export interface ContractRunProgress {
@@ -143,6 +152,11 @@ export interface ContractResult {
   sealedClauseProgressText?: string;
   sealedClauseCreditsBonus?: number;
   sealedClauseReputationBonus?: number;
+  mirroredObjectiveMet?: boolean;
+  mirroredObjectiveText?: string;
+  mirroredObjectiveProgressText?: string;
+  mirroredCreditsBonus?: number;
+  mirroredReputationBonus?: number;
 }
 
 export function createEmptyContractRunProgress(): ContractRunProgress {

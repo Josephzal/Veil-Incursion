@@ -15,6 +15,7 @@ import {
   applyKeepsakeSealedClauseBonuses,
   evaluateKeepsakeSealedClause,
 } from './expeditionKeepsakeContractEngine';
+import { evaluateKeepsakeMirroredObjective } from './expeditionKeepsakePhaseDEngine';
 
 const RESOURCE_CONTRACT_OBJECTIVES = new Set<ContractObjectiveKind>([
   'EXTRACT_STABLE_RESOURCE',
@@ -212,6 +213,7 @@ function buildContractResult({
   cargo,
   ledger,
   bankedMultiplier = 1,
+  runCredits = 0,
 }: {
   contract: ActiveRunContract;
   progress: ContractRunProgress;
@@ -223,6 +225,7 @@ function buildContractResult({
   cargo?: import('../types/cargoGrid').CargoRunState;
   ledger?: RunResourceLedger;
   bankedMultiplier?: number;
+  runCredits?: number;
 }): ContractResult {
   const emptyBonus = {
     bonusObjectiveMet: false,
@@ -285,6 +288,31 @@ function buildContractResult({
     }
   }
 
+  let mirroredObjectiveMet = false;
+  let mirroredObjectiveText: string | undefined;
+  let mirroredObjectiveProgressText: string | undefined;
+  let mirroredCreditsBonus = 0;
+  let mirroredReputationBonus = 0;
+
+  if (contract.keepsakeMirroredObjective && succeeded && cargo) {
+    const mirrorEval = evaluateKeepsakeMirroredObjective(
+      contract.keepsakeMirroredObjective,
+      progress,
+      runCredits,
+      cargo,
+      false,
+    );
+    mirroredObjectiveText = contract.keepsakeMirroredObjective.text;
+    mirroredObjectiveProgressText = mirrorEval.progressText;
+    mirroredObjectiveMet = mirrorEval.met;
+    if (mirrorEval.met) {
+      mirroredCreditsBonus = mirrorEval.creditsBonus;
+      mirroredReputationBonus = mirrorEval.reputationBonus;
+      reputationAwarded += mirrorEval.reputationBonus;
+      bonusCreditsAwarded += mirrorEval.creditsBonus;
+    }
+  }
+
   return {
     status,
     title: contract.title,
@@ -305,6 +333,11 @@ function buildContractResult({
     sealedClauseProgressText,
     sealedClauseCreditsBonus,
     sealedClauseReputationBonus,
+    mirroredObjectiveMet,
+    mirroredObjectiveText,
+    mirroredObjectiveProgressText,
+    mirroredCreditsBonus,
+    mirroredReputationBonus,
   };
 }
 
@@ -446,6 +479,7 @@ export function resolveContractResult({
   extractionKind,
   cargo,
   bankedMultiplier = 1,
+  runCredits = 0,
 }: {
   contract: ActiveRunContract | null;
   ledger: RunResourceLedger;
@@ -454,6 +488,7 @@ export function resolveContractResult({
   extractionKind?: ContractExtractionKind;
   cargo?: CargoRunState;
   bankedMultiplier?: number;
+  runCredits?: number;
 }): ContractResult {
   const emptyBonus = {
     bonusObjectiveMet: false,

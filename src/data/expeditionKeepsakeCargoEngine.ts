@@ -14,6 +14,15 @@ import {
 import { getKeepsakeDefinition } from './expeditionKeepsakeRegistry';
 import { patchKeepsakeStats } from './keepsakeRunState';
 import {
+  applyKeepsakeLeyContamination,
+  buildDeadDropChoice,
+  buildLeySiphonOverdrawChoice,
+  buildSmugglersDoubleWrapChoice,
+  clearLeyOverdrawConfirmedFlag,
+  isLeyOverdrawConfirmed,
+  queueKeepsakePendingChoice,
+} from './expeditionKeepsakeChoiceEngine';
+import {
   getResourceCategory,
 } from './resourceRegistry';
 import { isUnstableCargoEffectId } from '../types/unstableCargoEffects';
@@ -25,6 +34,10 @@ export interface KeepsakeCargoApplyResult {
   leySiphonOverdrawPending?: boolean;
   jettisonLockedInstanceIds?: string[];
 }
+
+const CARGO_SEAL_VALUE_GROWTH_PCT = 5;
+const CARGO_SEAL_VALUE_CAP_PCT = 25;
+const SMUGGLERS_DOUBLE_WRAP_BONUS = 0.15;
 
 const LEY_SIPHON_BYPRODUCTS: readonly ResourceItemId[] = [
   'veil-ash-canister',
@@ -113,17 +126,20 @@ export function resolveKeepsakeFenceValueMultiplier(
   resourceId: ResourceItemId,
 ): number {
   const tag = getKeepsakeCargoTagForResource(runtime, resourceId);
-  if (tag === 'lead_lined') return 1.1;
-  if (tag === 'wrapped') return 1.25;
+  if (tag === 'wrapped') {
+    let multiplier = 1.25;
+    if (runtime?.smugglersHunterMarkActive) {
+      multiplier += SMUGGLERS_DOUBLE_WRAP_BONUS;
+    }
+    return multiplier;
+  }
   return 1;
 }
 
 export function resolveKeepsakeContractValueMultiplier(
-  runtime: KeepsakeRuntime | null | undefined,
-  resourceId: ResourceItemId,
+  _runtime: KeepsakeRuntime | null | undefined,
+  _resourceId: ResourceItemId,
 ): number {
-  const tag = getKeepsakeCargoTagForResource(runtime, resourceId);
-  if (tag === 'lead_lined') return 1.1;
   return 1;
 }
 
@@ -147,31 +163,7 @@ export function applyKeepsakeUnstableDampening(
   effects: readonly UnstableCarriedEffectDefinition[],
   runtime: KeepsakeRuntime | null | undefined,
 ): UnstableCarriedEffectDefinition[] {
-  let next = dampenSealedUnstableEffects(effects, runtime);
-  if (!runtime?.safehouseCoinStabilizePayloadActive || next.length === 0) {
-    return next;
-  }
-  const [first, ...rest] = next;
-  const mods = first.modifiers;
-  const dampenedFirst: UnstableCarriedEffectDefinition = {
-    ...first,
-    modifiers: {
-      ...mods,
-      healReceivedMultiplier: mods.healReceivedMultiplier != null
-        ? 1 - (1 - mods.healReceivedMultiplier) * 0.25
-        : mods.healReceivedMultiplier,
-      eliteWeightDelta: mods.eliteWeightDelta != null
-        ? mods.eliteWeightDelta * 0.75
-        : mods.eliteWeightDelta,
-      anomalyWeightDelta: mods.anomalyWeightDelta != null
-        ? mods.anomalyWeightDelta * 0.75
-        : mods.anomalyWeightDelta,
-      anchorSignalMultiplier: mods.anchorSignalMultiplier != null
-        ? 1 - (mods.anchorSignalMultiplier - 1) * 0.25
-        : mods.anchorSignalMultiplier,
-    },
-  };
-  return [dampenedFirst, ...rest];
+  return dampenSealedUnstableEffects(effects, runtime);
 }
 
 export function dampenSealedUnstableEffects(
@@ -186,6 +178,8 @@ export function dampenSealedUnstableEffects(
   );
   if (sealedResources.size === 0) return [...effects];
 
+  const dampenFactor = runtime.cargoSealCracked ? 0.25 : 0.5;
+
   return effects.map((effect) => {
     if (!sealedResources.has(effect.resourceId)) return effect;
     const mods = effect.modifiers;
@@ -194,16 +188,16 @@ export function dampenSealedUnstableEffects(
       modifiers: {
         ...mods,
         healReceivedMultiplier: mods.healReceivedMultiplier != null
-          ? 1 - (1 - mods.healReceivedMultiplier) * 0.5
+          ? 1 - (1 - mods.healReceivedMultiplier) * dampenFactor
           : mods.healReceivedMultiplier,
         eliteWeightDelta: mods.eliteWeightDelta != null
-          ? mods.eliteWeightDelta * 0.5
+          ? mods.eliteWeightDelta * dampenFactor
           : mods.eliteWeightDelta,
         anomalyWeightDelta: mods.anomalyWeightDelta != null
-          ? mods.anomalyWeightDelta * 0.5
+          ? mods.anomalyWeightDelta * dampenFactor
           : mods.anomalyWeightDelta,
         anchorSignalMultiplier: mods.anchorSignalMultiplier != null
-          ? 1 - (mods.anchorSignalMultiplier - 1) * 0.5
+          ? 1 - (mods.anchorSignalMultiplier - 1) * dampenFactor
           : mods.anchorSignalMultiplier,
       },
     };
@@ -244,19 +238,6 @@ export function applyKeepsakeOnCargoPickup(
     }
   }
 
-  if (runtime.keepsakeId === 'lead_lined_map_tube' && category === 'INTEL') {
-    const def = getKeepsakeDefinition('lead_lined_map_tube');
-    const trigger = tryKeepsakeTrigger(runtime, def.primaryTriggerKey, 'run');
-    if (trigger.triggered && trigger.runtime) {
-      nextRuntime = tagCargoInstances(trigger.runtime, resourceId, 'lead_lined', instanceIds);
-      nextRuntime = patchKeepsakeStats(nextRuntime, {
-        cargoValueBonus: nextRuntime.stats.cargoValueBonus + 1,
-      });
-      logLines.push(formatKeepsakeLogLine('Map Tube', def.triggerMessage));
-      return { runtime: nextRuntime, logLines };
-    }
-  }
-
   if (runtime.keepsakeId === 'smugglers_wrap' && category === 'CONTRABAND') {
     const def = getKeepsakeDefinition('smugglers_wrap');
     const trigger = tryKeepsakeTrigger(runtime, def.primaryTriggerKey, 'run');
@@ -264,8 +245,12 @@ export function applyKeepsakeOnCargoPickup(
       nextRuntime = tagCargoInstances(trigger.runtime, resourceId, 'wrapped', instanceIds);
       nextRuntime = patchKeepsakeStats(nextRuntime, {
         cargoValueBonus: nextRuntime.stats.cargoValueBonus + 1,
+        contrabandWrapped: nextRuntime.stats.contrabandWrapped + 1,
       });
       logLines.push(formatKeepsakeLogLine('Wrap', def.triggerMessage));
+      if (!nextRuntime.pendingChoice) {
+        nextRuntime = queueKeepsakePendingChoice(nextRuntime, buildSmugglersDoubleWrapChoice());
+      }
       return { runtime: nextRuntime, logLines };
     }
   }
@@ -276,6 +261,7 @@ export function applyKeepsakeOnCargoPickup(
 export function applyKeepsakeOnNodeEngagedForLeySiphon(
   runtime: KeepsakeRuntime | null,
   nodeType: IncursionNode['type'],
+  nodeId: string,
 ): KeepsakeCargoApplyResult {
   if (!runtime || runtime.keepsakeId !== 'ley_siphon_needle') {
     return { runtime, logLines: [] };
@@ -283,12 +269,17 @@ export function applyKeepsakeOnNodeEngagedForLeySiphon(
   if (nodeType !== 'RESOURCE_HARVEST' && nodeType !== 'ANOMALY') {
     return { runtime, logLines: [] };
   }
-  if (runtime.triggersUsed.ley_siphon_needle_first_anomaly) {
-    return { runtime, logLines: [] };
+
+  let nextRuntime: KeepsakeRuntime = {
+    ...runtime,
+    leySiphonOverdrawPending: true,
+  };
+  if (!nextRuntime.pendingChoice) {
+    nextRuntime = queueKeepsakePendingChoice(nextRuntime, buildLeySiphonOverdrawChoice(nodeId));
   }
 
   return {
-    runtime: { ...runtime, leySiphonOverdrawPending: true },
+    runtime: nextRuntime,
     logLines: [],
     leySiphonOverdrawPending: true,
   };
@@ -307,11 +298,14 @@ export function applyKeepsakeLeySiphonOverdraw(
   if (!runtime?.leySiphonOverdrawPending || runtime.keepsakeId !== 'ley_siphon_needle') {
     return { runtime, cargo, logLines: [] };
   }
+  if (!isLeyOverdrawConfirmed(runtime)) {
+    return { runtime, cargo, logLines: [] };
+  }
 
   const def = getKeepsakeDefinition('ley_siphon_needle');
-  const trigger = tryKeepsakeTrigger(runtime, def.primaryTriggerKey, 'run');
+  const trigger = tryKeepsakeTrigger(runtime, `${def.primaryTriggerKey}:${nodeId}`, 'none');
   if (!trigger.triggered || !trigger.runtime) {
-    return { runtime, cargo, logLines: [] };
+    return { runtime: clearLeyOverdrawConfirmedFlag(runtime), cargo, logLines: [] };
   }
 
   const bonusResource = pickDeadDropBonus(nodeId);
@@ -321,19 +315,20 @@ export function applyKeepsakeLeySiphonOverdraw(
   nextCargo = addLootToContainment(nextCargo, byproduct, 1, staged);
   stagedInstanceIds.push(...staged);
 
-  const nextRuntime = patchKeepsakeStats(
-    { ...trigger.runtime, leySiphonOverdrawPending: false },
-    {
-      bonusResourcesGenerated: trigger.runtime.stats.bonusResourcesGenerated + 2,
-    },
+  let nextRuntime = applyKeepsakeLeyContamination(
+    clearLeyOverdrawConfirmedFlag(trigger.runtime),
   );
+
+  nextRuntime = patchKeepsakeStats(nextRuntime!, {
+    bonusResourcesGenerated: trigger.runtime.stats.bonusResourcesGenerated + 2,
+  });
 
   return {
     runtime: nextRuntime,
     cargo: nextCargo,
     logLines: [
       formatKeepsakeLogLine('Siphon', def.triggerMessage),
-      '>> LEY-SIPHON OVERDRAW — bonus salvage routed; unstable byproduct detected.',
+      '>> LEY-SIPHON OVERDRAW — bonus salvage routed; contamination +1.',
     ],
   };
 }
@@ -360,10 +355,13 @@ export function applyKeepsakeDeadDropHarvestBonus(
   stagedInstanceIds.push(...staged);
 
   const nextRuntime = patchKeepsakeStats(
-    {
-      ...runtime,
-      triggersUsed: { ...runtime.triggersUsed, dead_drop_receiver_harvest_bonus: true },
-    },
+    queueKeepsakePendingChoice(
+      {
+        ...runtime,
+        triggersUsed: { ...runtime.triggersUsed, dead_drop_receiver_harvest_bonus: true },
+      },
+      buildDeadDropChoice(node.id),
+    ),
     { bonusResourcesGenerated: runtime.stats.bonusResourcesGenerated + 1 },
   );
 
@@ -419,6 +417,41 @@ export function processKeepsakeStagedCargoPickup(
 
 export function clearKeepsakeJettisonLocks(): readonly string[] {
   return [];
+}
+
+export function applyKeepsakeCargoSealOnNodeClear(
+  runtime: KeepsakeRuntime | null,
+): KeepsakeRuntime | null {
+  if (!runtime || runtime.keepsakeId !== 'cargo_seal') return runtime;
+  const hasSealed = runtime.taggedCargo.some((entry) => entry.tag === 'sealed');
+  if (!hasSealed) return runtime;
+
+  const currentBonus = runtime.counters.sealedValueBonusPct ?? 0;
+  if (currentBonus >= CARGO_SEAL_VALUE_CAP_PCT) return runtime;
+
+  const nextBonus = Math.min(CARGO_SEAL_VALUE_CAP_PCT, currentBonus + CARGO_SEAL_VALUE_GROWTH_PCT);
+  return patchKeepsakeStats(
+    {
+      ...runtime,
+      counters: { ...runtime.counters, sealedValueBonusPct: nextBonus },
+    },
+    { cargoValueBonus: runtime.stats.cargoValueBonus + 1 },
+  );
+}
+
+export function applyKeepsakeCargoSealOnDirtyExtract(
+  runtime: KeepsakeRuntime | null,
+): { runtime: KeepsakeRuntime | null; logLines: string[] } {
+  if (!runtime || runtime.keepsakeId !== 'cargo_seal' || runtime.cargoSealCracked) {
+    return { runtime, logLines: [] };
+  }
+  const hasSealed = runtime.taggedCargo.some((entry) => entry.tag === 'sealed');
+  if (!hasSealed) return { runtime, logLines: [] };
+
+  return {
+    runtime: { ...runtime, cargoSealCracked: true },
+    logLines: ['>> CARGO SEAL CRACKED — unstable dampening reduced to 25% after dirty extraction.'],
+  };
 }
 
 /** Lead-lined intel counts as +10% toward sponsor contract delivery thresholds. */

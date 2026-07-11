@@ -43,7 +43,6 @@ import {
   computeBaseSectorExtractionPayout,
   previewKeepsakeStampedExtractionPayout,
 } from '../data/expeditionKeepsakeEconomyEngine';
-import { formatKeepsakeNextDepthPreviewLine } from '../data/expeditionKeepsakeSafehouseEngine';
 import {
   getSectorZone,
   isEmergencyRecallAvailable,
@@ -213,12 +212,6 @@ export default function ScanningScreen(): React.JSX.Element {
         `>> STAMPED EVAC — verified payout preview: ${preview} CR (+1 free bank on extract).`,
       ];
     }
-    const depthPreview = formatKeepsakeNextDepthPreviewLine(
-      activeIncursion.keepsakeNextDepthNodeTypePreview,
-    );
-    if (depthPreview) {
-      return [...lines, depthPreview];
-    }
     return lines;
   }, [
     selectedNode,
@@ -229,17 +222,8 @@ export default function ScanningScreen(): React.JSX.Element {
     activeIncursion.keepsakeGravePolaroidPreview,
     activeIncursion.keepsakeStampedExtractionNodeId,
     activeIncursion.keepsakeRuntime,
-    activeIncursion.keepsakeNextDepthNodeTypePreview,
     activeIncursion,
   ]);
-
-  const cartographGhostType = useMemo(() => {
-    if (!activeIncursion.keepsakeCartographGhostNodeId) return null;
-    return getKeepsakeCartographGhostType(
-      activeIncursion,
-      activeIncursion.keepsakeCartographGhostNodeId,
-    );
-  }, [activeIncursion]);
 
   const showNodeDock = hasSelection;
   const allNodesLocked = nodesInField > 0 && siphonedNodeIds.length >= nodesInField;
@@ -485,13 +469,23 @@ export default function ScanningScreen(): React.JSX.Element {
               selectedNodeId={selectedNodeId}
               fullyInterpretedNodeIds={activeIncursion.keepsakeFullyInterpretedNodeIds}
             />
-            {activeIncursion.keepsakeCartographGhostNodeId && cartographGhostType ? (
-              <KeepsakeCartographGhostHint
-                nodeId={activeIncursion.keepsakeCartographGhostNodeId}
-                ghostType={cartographGhostType}
-                radarDots={vectorDots}
-              />
-            ) : null}
+            {(activeIncursion.keepsakeCartographGhostNodeIds.length > 0
+              ? activeIncursion.keepsakeCartographGhostNodeIds
+              : activeIncursion.keepsakeCartographGhostNodeId
+                ? [activeIncursion.keepsakeCartographGhostNodeId]
+                : []
+            ).map((ghostNodeId) => {
+              const ghostType = getKeepsakeCartographGhostType(activeIncursion, ghostNodeId);
+              if (!ghostType) return null;
+              return (
+                <KeepsakeCartographGhostHint
+                  key={`cartograph-ghost-${ghostNodeId}`}
+                  nodeId={ghostNodeId}
+                  ghostType={ghostType}
+                  radarDots={vectorDots}
+                />
+              );
+            })}
             {activeIncursion.keepsakeStampedExtractionNodeId ? (
               <KeepsakeStampedExtractionHint
                 nodeId={activeIncursion.keepsakeStampedExtractionNodeId}

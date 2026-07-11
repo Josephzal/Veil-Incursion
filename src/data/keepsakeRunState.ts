@@ -1,4 +1,6 @@
 import type {
+  KeepsakeDecision,
+  KeepsakeDeployment,
   KeepsakeId,
   KeepsakeRuntime,
   KeepsakeRuntimeStats,
@@ -8,6 +10,7 @@ export function createDefaultKeepsakeRuntimeStats(): KeepsakeRuntimeStats {
   return {
     nodeDetailsRevealed: 0,
     futureNodesPreviewed: 0,
+    routeNodesLocked: 0,
     bonusResourcesGenerated: 0,
     unstablePenaltiesReduced: 0,
     creditsSaved: 0,
@@ -15,24 +18,52 @@ export function createDefaultKeepsakeRuntimeStats(): KeepsakeRuntimeStats {
     extractionDebtPaid: 0,
     cargoValueBonus: 0,
     cargoPreserved: 0,
+    cargoBankedByTrinket: 0,
     operationProgressAdded: 0,
     sponsorRepBonus: 0,
     echoSignalsGenerated: 0,
+    echoThreadGenerated: 0,
+    echoIntelRevealed: 0,
     echoGlassBonus: 0,
-    staminaPreserved: 0,
+    anchorSignalsGenerated: 0,
+    anchorTrailCleared: 0,
+    contaminationAdded: 0,
+    contaminationPurged: 0,
+    matchesLit: 0,
+    safeExtractionsSkipped: 0,
+    contrabandWrapped: 0,
+    markedShelfPurchases: 0,
+    debtWarningsTriggered: 0,
+    rivalQuarriesCleared: 0,
+    falseBeaconsPlanted: 0,
+    keysUsed: 0,
+    outsideCargoNodesCarried: 0,
     safehouseServiceUsed: null,
-    harmonicNodesGenerated: 0,
-    narrativeResolversSpoofed: 0,
     triggerCount: 0,
   };
 }
 
-export function createKeepsakeRuntime(keepsakeId: KeepsakeId): KeepsakeRuntime {
+export function createDefaultKeepsakeDeployment(): KeepsakeDeployment {
+  return {
+    attunement: null,
+    routeDoctrine: null,
+    mirrorCategory: null,
+  };
+}
+
+export function createKeepsakeRuntime(
+  keepsakeId: KeepsakeId,
+  deployment?: Partial<KeepsakeDeployment> | null,
+): KeepsakeRuntime {
   return {
     keepsakeId,
+    deployment: { ...createDefaultKeepsakeDeployment(), ...(deployment ?? {}) },
     triggersUsed: {},
     perDepthTriggersUsed: {},
     messages: [],
+    decisions: [],
+    flags: {},
+    counters: {},
     stats: createDefaultKeepsakeRuntimeStats(),
     taggedCargo: [],
     cargoTagByResource: {},
@@ -46,14 +77,10 @@ export function createKeepsakeRuntime(keepsakeId: KeepsakeId): KeepsakeRuntime {
     overextendedActive: false,
     overextendedBonusConsumed: false,
     overextendedDirtyThreatPending: false,
-    rustedFlareShieldPending: false,
-    rustedFlareCargoProtectionAvailable: false,
-    safehouseCoinServicePending: false,
-    safehouseCoinServiceUsed: null,
-    safehouseCoinRouteCargoBonus: false,
-    safehouseCoinNextDepthPreviewType: null,
-    safehouseCoinStabilizePayloadActive: false,
-    wellFedCombatsRemaining: 0,
+    pendingChoice: null,
+    cargoSealCracked: false,
+    smugglersHunterMarkActive: false,
+    extractionTokenBurns: 0,
   };
 }
 
@@ -65,9 +92,13 @@ export function mergeKeepsakeRuntime(
   return {
     ...runtime,
     ...patch,
+    deployment: patch.deployment ?? runtime.deployment,
     triggersUsed: { ...runtime.triggersUsed, ...patch.triggersUsed },
     perDepthTriggersUsed: patch.perDepthTriggersUsed ?? runtime.perDepthTriggersUsed,
     messages: patch.messages ?? runtime.messages,
+    decisions: patch.decisions ?? runtime.decisions,
+    flags: patch.flags ? { ...runtime.flags, ...patch.flags } : runtime.flags,
+    counters: patch.counters ? { ...runtime.counters, ...patch.counters } : runtime.counters,
     stats: { ...runtime.stats, ...patch.stats },
     taggedCargo: patch.taggedCargo ?? runtime.taggedCargo,
     cargoTagByResource: patch.cargoTagByResource ?? runtime.cargoTagByResource,
@@ -81,14 +112,44 @@ export function mergeKeepsakeRuntime(
     overextendedActive: patch.overextendedActive ?? runtime.overextendedActive,
     overextendedBonusConsumed: patch.overextendedBonusConsumed ?? runtime.overextendedBonusConsumed,
     overextendedDirtyThreatPending: patch.overextendedDirtyThreatPending ?? runtime.overextendedDirtyThreatPending,
-    rustedFlareShieldPending: patch.rustedFlareShieldPending ?? runtime.rustedFlareShieldPending,
-    rustedFlareCargoProtectionAvailable: patch.rustedFlareCargoProtectionAvailable ?? runtime.rustedFlareCargoProtectionAvailable,
-    safehouseCoinServicePending: patch.safehouseCoinServicePending ?? runtime.safehouseCoinServicePending,
-    safehouseCoinServiceUsed: patch.safehouseCoinServiceUsed ?? runtime.safehouseCoinServiceUsed,
-    safehouseCoinRouteCargoBonus: patch.safehouseCoinRouteCargoBonus ?? runtime.safehouseCoinRouteCargoBonus,
-    safehouseCoinNextDepthPreviewType: patch.safehouseCoinNextDepthPreviewType ?? runtime.safehouseCoinNextDepthPreviewType,
-    safehouseCoinStabilizePayloadActive: patch.safehouseCoinStabilizePayloadActive ?? runtime.safehouseCoinStabilizePayloadActive,
-    wellFedCombatsRemaining: patch.wellFedCombatsRemaining ?? runtime.wellFedCombatsRemaining,
+    pendingChoice: patch.pendingChoice !== undefined ? patch.pendingChoice : runtime.pendingChoice,
+    cargoSealCracked: patch.cargoSealCracked ?? runtime.cargoSealCracked,
+    smugglersHunterMarkActive: patch.smugglersHunterMarkActive ?? runtime.smugglersHunterMarkActive,
+    extractionTokenBurns: patch.extractionTokenBurns ?? runtime.extractionTokenBurns,
+  };
+}
+
+/** Safe numeric counter update (spec: incrementTrinketStat / counters). */
+export function incrementKeepsakeCounter(
+  runtime: KeepsakeRuntime,
+  key: string,
+  amount = 1,
+): KeepsakeRuntime {
+  return {
+    ...runtime,
+    counters: { ...runtime.counters, [key]: (runtime.counters[key] ?? 0) + amount },
+  };
+}
+
+export function setKeepsakeFlag(
+  runtime: KeepsakeRuntime,
+  key: string,
+  value: boolean,
+): KeepsakeRuntime {
+  return {
+    ...runtime,
+    flags: { ...runtime.flags, [key]: value },
+  };
+}
+
+/** Record a player-facing decision for the debrief (spec: appendTrinketDecision). */
+export function appendKeepsakeDecision(
+  runtime: KeepsakeRuntime,
+  decision: KeepsakeDecision,
+): KeepsakeRuntime {
+  return {
+    ...runtime,
+    decisions: [...runtime.decisions, decision],
   };
 }
 
@@ -143,12 +204,18 @@ export function canUseKeepsakeTrigger(
 }
 
 export function formatKeepsakeRuntimeDebugSnapshot(runtime: KeepsakeRuntime | null | undefined): string {
-  if (!runtime) return 'KEEPSAKE RUNTIME — none equipped.';
+  if (!runtime) return 'EXPEDITION RELIC RUNTIME — none equipped.';
   const lines = [
-    'KEEPSAKE RUNTIME',
+    'EXPEDITION RELIC RUNTIME',
     `id: ${runtime.keepsakeId}`,
+    ...(runtime.deployment.attunement ? [`attunement: ${runtime.deployment.attunement}`] : []),
+    ...(runtime.deployment.routeDoctrine ? [`routeDoctrine: ${runtime.deployment.routeDoctrine}`] : []),
+    ...(runtime.deployment.mirrorCategory ? [`mirrorCategory: ${runtime.deployment.mirrorCategory}`] : []),
     `triggers: ${runtime.stats.triggerCount}`,
     `messages: ${runtime.messages.length}`,
+    ...(runtime.decisions.length > 0
+      ? [`decisions: ${runtime.decisions.map((d) => `${d.label}=${d.value}`).join('; ')}`]
+      : []),
     ...Object.entries(runtime.stats)
       .filter(([, value]) => typeof value === 'number' && value > 0)
       .map(([key, value]) => `${key}: ${value}`),

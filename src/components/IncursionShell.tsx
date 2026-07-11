@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import TerminalSafeArea from './TerminalSafeArea';
+import KeepsakeInRunChoiceOverlay from './KeepsakeInRunChoiceOverlay';
 
 interface IncursionShellProps {
   children: React.ReactNode;
@@ -10,7 +11,10 @@ interface IncursionShellProps {
 export default function IncursionShell({ children }: IncursionShellProps): React.JSX.Element {
   return (
     <TerminalSafeArea edges={[]}>
-      <View style={styles.root}>{children}</View>
+      <View style={styles.root}>
+        {children}
+        <KeepsakeInRunChoiceOverlay />
+      </View>
     </TerminalSafeArea>
   );
 }

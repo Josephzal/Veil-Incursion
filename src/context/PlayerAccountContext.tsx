@@ -75,8 +75,15 @@ import { depositAllCargoToHubAccount, depositPhysicalBankSnapshot, resolveExtrac
 import type { CargoRoutingDecision, PostRunRoutingDebriefState } from '../types/postRunCargoRouting';
 import { applyCargoRoutingDecisions } from '../data/postRunCargoRoutingEngine';
 import { createDefaultCareerCargoRoutingStats, incrementCareerCargoRoutingFromResult } from '../data/postRunCargoRoutingRunState';
-import { DEFAULT_UNLOCKED_KEEPSAKE_IDS } from '../data/expeditionKeepsakeRegistry';
-import type { KeepsakeId } from '../types/expeditionKeepsake';
+import { DEFAULT_UNLOCKED_KEEPSAKE_IDS, isKeepsakeId } from '../data/expeditionKeepsakeRegistry';
+import { createDefaultKeepsakeDeployment } from '../data/keepsakeRunState';
+import type {
+  KeepsakeAttunement,
+  KeepsakeDeployment,
+  KeepsakeId,
+  KeepsakeMirrorCategory,
+  KeepsakeRouteDoctrine,
+} from '../types/expeditionKeepsake';
 import {
   formatPostRunCargoRoutingValidationReport,
   validateCargoRoutingResultIntegrity,
@@ -173,6 +180,7 @@ export function createDefaultPlayerAccount(): PlayerAccount {
     careerCargoRouting: createDefaultCareerCargoRoutingStats(),
     equippedKeepsakeId: null,
     unlockedKeepsakeIds: [...DEFAULT_UNLOCKED_KEEPSAKE_IDS],
+    keepsakeDeployment: createDefaultKeepsakeDeployment(),
   };
 }
 
@@ -230,10 +238,17 @@ function mergeStoredAccount(parsed: Partial<PlayerAccount>): PlayerAccount {
       ...defaults.careerCargoRouting,
       ...parsed.careerCargoRouting,
     },
-    equippedKeepsakeId: parsed.equippedKeepsakeId ?? defaults.equippedKeepsakeId,
+    equippedKeepsakeId:
+      parsed.equippedKeepsakeId && isKeepsakeId(parsed.equippedKeepsakeId)
+        ? parsed.equippedKeepsakeId
+        : defaults.equippedKeepsakeId,
     unlockedKeepsakeIds: parsed.unlockedKeepsakeIds?.length
-      ? [...parsed.unlockedKeepsakeIds]
+      ? parsed.unlockedKeepsakeIds.filter((id): id is KeepsakeId => isKeepsakeId(id))
       : [...defaults.unlockedKeepsakeIds],
+    keepsakeDeployment: {
+      ...defaults.keepsakeDeployment,
+      ...parsed.keepsakeDeployment,
+    },
     veilResidueBalance: parsed.veilResidueBalance ?? defaults.veilResidueBalance,
   };
 }
@@ -295,6 +310,9 @@ interface PlayerAccountContextType {
   decryptUnidentifiedItem: (instanceId: string) => Promise<string[]>;
   setEquippedBlueprint: (blueprintId: BlueprintId | null) => void;
   setEquippedKeepsake: (keepsakeId: KeepsakeId | null) => void;
+  setKeepsakeAttunement: (attunement: KeepsakeAttunement | null) => void;
+  setKeepsakeRouteDoctrine: (routeDoctrine: KeepsakeRouteDoctrine | null) => void;
+  setKeepsakeMirrorCategory: (mirrorCategory: KeepsakeMirrorCategory | null) => void;
   unlockAllKeepsakes: () => void;
   relocatePreRunCargoItem: (instanceId: string, row: number, col: number) => boolean;
   loadStashResourceToCargo: (resourceId: ResourceItemId) => { success: boolean; logLine: string };
@@ -835,6 +853,36 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
     [updateAccount],
   );
 
+  const setKeepsakeAttunement = useCallback(
+    (attunement: KeepsakeAttunement | null) => {
+      updateAccount((prev) => ({
+        ...prev,
+        keepsakeDeployment: { ...prev.keepsakeDeployment, attunement },
+      }));
+    },
+    [updateAccount],
+  );
+
+  const setKeepsakeRouteDoctrine = useCallback(
+    (routeDoctrine: KeepsakeRouteDoctrine | null) => {
+      updateAccount((prev) => ({
+        ...prev,
+        keepsakeDeployment: { ...prev.keepsakeDeployment, routeDoctrine },
+      }));
+    },
+    [updateAccount],
+  );
+
+  const setKeepsakeMirrorCategory = useCallback(
+    (mirrorCategory: KeepsakeMirrorCategory | null) => {
+      updateAccount((prev) => ({
+        ...prev,
+        keepsakeDeployment: { ...prev.keepsakeDeployment, mirrorCategory },
+      }));
+    },
+    [updateAccount],
+  );
+
   const unlockAllKeepsakes = useCallback(() => {
     updateAccount((prev) => ({
       ...prev,
@@ -1337,6 +1385,9 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       decryptUnidentifiedItem,
       setEquippedBlueprint,
       setEquippedKeepsake,
+      setKeepsakeAttunement,
+      setKeepsakeRouteDoctrine,
+      setKeepsakeMirrorCategory,
       unlockAllKeepsakes,
       relocatePreRunCargoItem,
       loadStashResourceToCargo,
@@ -1392,6 +1443,9 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       decryptUnidentifiedItem,
       setEquippedBlueprint,
       setEquippedKeepsake,
+      setKeepsakeAttunement,
+      setKeepsakeRouteDoctrine,
+      setKeepsakeMirrorCategory,
       unlockAllKeepsakes,
       relocatePreRunCargoItem,
       loadStashResourceToCargo,

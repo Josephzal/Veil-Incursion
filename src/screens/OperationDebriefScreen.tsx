@@ -528,7 +528,7 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
                 {keepsakeSummary ? (
                   <>
                     <View style={styles.sectionGap} />
-                    <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>EXPEDITION KEEPSAKE</Text>
+                    <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>EXPEDITION RELIC</Text>
                     <Text style={[styles.statAccent, { color: accentColor }]}>
                       {keepsakeSummary.name.toUpperCase()}
                     </Text>
@@ -538,13 +538,54 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
                     <Text style={[styles.stat, { color: keepsakeSummary.triggered ? TERMINAL_ACCENT : theme.mutedColor }]}>
                       {keepsakeSummary.triggered
                         ? `TRIGGERED ${keepsakeSummary.triggerCount} TIME(S)`
-                        : 'KEEPSAKE EFFECT DID NOT TRIGGER THIS RUN.'}
+                        : 'RELIC EFFECT DID NOT TRIGGER THIS RUN.'}
                     </Text>
+                    {keepsakeSummary.decisionLines.length > 0 ? (
+                      <>
+                        <Text style={[styles.stat, { color: theme.mutedColor, marginTop: 4 }]}>
+                          DECISIONS MADE
+                        </Text>
+                        {keepsakeSummary.decisionLines.map((line) => (
+                          <Text key={`decision-${line}`} style={[styles.stat, { color: theme.textColor }]}>
+                            {line.toUpperCase()}
+                          </Text>
+                        ))}
+                      </>
+                    ) : null}
+                    {keepsakeSummary.riskLines.length > 0 ? (
+                      <>
+                        <Text style={[styles.stat, { color: theme.mutedColor, marginTop: 4 }]}>
+                          RISKS ADDED
+                        </Text>
+                        {keepsakeSummary.riskLines.map((line) => (
+                          <Text key={`risk-${line}`} style={[styles.stat, { color: PENDING_ACCENT }]}>
+                            {line.toUpperCase()}
+                          </Text>
+                        ))}
+                      </>
+                    ) : null}
                     {keepsakeSummary.statLines.map((line) => (
                       <Text key={line} style={[styles.stat, { color: theme.textColor }]}>
                         {line.toUpperCase()}
                       </Text>
                     ))}
+                    {keepsakeSummary.messages.length > 0 ? (
+                      <>
+                        <Text style={[styles.stat, { color: theme.mutedColor, marginTop: 4 }]}>
+                          TRIGGER LOG
+                        </Text>
+                        {keepsakeSummary.messages.map((message) => (
+                          <Text key={`msg-${message}`} style={[styles.stat, { color: theme.mutedColor }]}>
+                            {message.toUpperCase()}
+                          </Text>
+                        ))}
+                      </>
+                    ) : null}
+                    {keepsakeSummary.note ? (
+                      <Text style={[styles.stat, { color: theme.mutedColor }]}>
+                        {keepsakeSummary.note.toUpperCase()}
+                      </Text>
+                    ) : null}
                   </>
                 ) : null}
                 {cargoRoutingSummary ? (

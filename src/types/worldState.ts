@@ -204,6 +204,14 @@ export interface NodeContextModifiers {
   keepsakeHarmonic?: boolean;
   /** Black Market Mark — corrupted future vector after marked purchase. */
   keepsakeMarkedCorruption?: boolean;
+  /** Hollow Keyring — occult lock requiring a Hollow Key to unlock options. */
+  keepsakeOccultLock?: boolean;
+  /** Bloodhound Tag — tagged rival/elite quarry node. */
+  keepsakeTaggedQuarry?: boolean;
+  /** False Evac Beacon — decoy/lure/scramble beacon planted on route. */
+  keepsakeFalseBeacon?: boolean;
+  /** Mirror Writ — mirrored side-objective node. */
+  keepsakeMirrored?: boolean;
 }
 
 /** Tracks per-run caps while lazily rolling node context at engagement. */

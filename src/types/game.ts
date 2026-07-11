@@ -150,10 +150,12 @@ export interface PlayerAccount {
   unidentifiedStash: import('./unidentifiedItem').UnidentifiedStashItem[];
   /** Career totals from post-run cargo routing decisions. */
   careerCargoRouting: import('../data/postRunCargoRoutingRunState').CareerCargoRoutingStats;
-  /** Pre-run expedition keepsake equipped for the next incursion (Trinkets v1.5). */
+  /** Pre-run Expedition Relic equipped for the next incursion (Trinkets v2). */
   equippedKeepsakeId: import('../types/expeditionKeepsake').KeepsakeId | null;
-  /** Hub-unlocked expedition keepsakes available for equip. */
+  /** Hub-unlocked Expedition Relics available for equip. */
   unlockedKeepsakeIds: readonly import('../types/expeditionKeepsake').KeepsakeId[];
+  /** Pre-run deployment choices for relics that expose configuration (attunement/doctrine/mirror category). */
+  keepsakeDeployment: import('../types/expeditionKeepsake').KeepsakeDeployment;
 }
 
 export interface CombatNodeState {
@@ -499,6 +501,8 @@ export interface ActiveIncursionState {
   keepsakeFullyInterpretedNodeIds: readonly string[];
   /** Ashen Cartograph — next-depth node id receiving a ghost type preview. */
   keepsakeCartographGhostNodeId: string | null;
+  /** Ashen Cartograph — two-step ghost route preview node ids. */
+  keepsakeCartographGhostNodeIds: readonly string[];
   /** Grave Polaroid — imprint intel shown before echo entry. */
   keepsakeGravePolaroidPreview: {
     nodeId: string;
@@ -510,10 +514,6 @@ export interface ActiveIncursionState {
   keepsakeStampedExtractionNodeId: string | null;
   /** Node id for active extraction review (safe anchor / master link). */
   pendingExtractionNodeId: string | null;
-  /** Safehouse Coin — next depth node type preview for scanner intel. */
-  keepsakeNextDepthNodeTypePreview: import('./proceduralRunTree').ProceduralNodeType | null;
-  /** Rusted Flare — +1 temp shield for next combat after dirty extraction start. */
-  keepsakeCombatShieldHits: number;
   /** In-run safehouse physical bank — survives death within the same run. */
   runBankedSnapshot: import('../types/runResourceLedger').RunPhysicalBankSnapshot;
   /** Per-run resource collection, banking, extraction, and loss accounting. */
@@ -650,12 +650,11 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     keepsakeRuntime: null,
     keepsakeFullyInterpretedNodeIds: [],
     keepsakeCartographGhostNodeId: null,
+    keepsakeCartographGhostNodeIds: [],
     keepsakeGravePolaroidPreview: null,
     keepsakeJettisonLockedInstanceIds: [],
     keepsakeStampedExtractionNodeId: null,
     pendingExtractionNodeId: null,
-    keepsakeNextDepthNodeTypePreview: null,
-    keepsakeCombatShieldHits: 0,
     runBankedSnapshot: createEmptyRunPhysicalBankSnapshot(),
     runResourceLedger: createEmptyRunResourceLedger(),
   };

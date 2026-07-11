@@ -59,6 +59,7 @@ export default function OverworldHubScreen(): React.JSX.Element {
         runModifiers,
         startingVeilResidueBalance: account.veilResidueBalance,
         equippedKeepsakeId: account.equippedKeepsakeId,
+        keepsakeDeployment: account.keepsakeDeployment,
       });
       startBoundRequisition();
       setLaunchingIncursion(false);

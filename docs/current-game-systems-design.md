@@ -1,6 +1,6 @@
 # Veil Incursion Current Systems Design
 
-Last updated: 2026-07-08 (post-run cargo routing v1 phase 10)
+Last updated: 2026-07-10 (expedition relics v2 phase F polish)
 
 This document captures the current implemented design surface for Veil Incursion: player-facing hub systems, run progression, economy, cargo/items, enemies, combat mechanics, and known partial implementations. It is intended as a working reference for design iteration and balancing, not a final player-facing manual.
 
@@ -18,6 +18,7 @@ Primary data and implementation files:
 - Combat execution: `src/components/TacticalCombatHub.tsx`, `src/data/combatRosterActions.ts`, `src/data/combatFractureEngine.ts`
 - Class abilities: `src/data/aegisAbilities.ts`, `src/data/hexShotAbilities.ts`, `src/data/envoyAbilities.ts`
 - Progression and boons: `src/data/boundRequisitions.ts`, `src/data/leyLineMutations.ts`, `src/data/regions.ts`
+- Expedition relics (Trinkets v2): `src/types/expeditionKeepsake.ts`, `src/data/expeditionKeepsakeRegistry.ts`, `src/data/keepsakeRunState.ts`, `src/data/expeditionKeepsakeEngine.ts`, `src/data/expeditionKeepsake*Engine.ts`, `src/components/hub/KeepsakeLoadoutPanel.tsx`, `src/data/runDebriefKeepsakeEngine.ts`, `src/data/expeditionKeepsakeValidation.ts`, `src/data/expeditionKeepsakeAcceptanceEngine.ts`, `src/data/expeditionKeepsakeAuditEngine.ts`
 
 ## High-Level Game Loop
 
@@ -26,12 +27,12 @@ Primary data and implementation files:
    - **Contract Board:** select sponsor contract or Independent Breach (`selectedContract` in world state).
    - **Veil Front:** sector briefing, selected contract summary, sector compatibility markers, and breach deployment.
    - **Black Market:** Forge and Vendor.
-   - **Loadout:** class/weapon/trinket/ability deck and cargo packing.
+   - **Loadout:** class/weapon/expedition relic/ability deck and cargo packing.
 3. Player initiates a breach from Veil Front.
 4. Current loadout and cargo are committed into run state; **active contract** frozen on incursion (`freezeContractForRun`).
 5. The run proceeds through procedural depths/nodes.
 6. Nodes can include combat, elite combat, boss combat, narrative events, sanctuary, black market, resource harvest, extraction vectors, and boon nodes.
-7. Combat and events award resources, credits, trinkets, boons, cargo, or progression. Run events update `contractRunProgress` (depth, elites, boss, emergency recall, operation targets, anomalies).
+7. Combat and events award resources, credits, legacy combat trinkets, boons, cargo, or progression. Run events update `contractRunProgress` (depth, elites, boss, emergency recall, operation targets, anomalies). **Expedition relic** hooks fire on scanner, cargo, economy, contract, safehouse, echo/anchor, and extraction lifecycle events (no direct combat stat bonuses).
 8. **Extraction** resolves through **Run Debrief** (`OperationDebriefScreen`): run outcome, extraction method, contract result (+ bonus objectives), grouped resource resolution, operation contribution, and community progress. Contract rewards and sponsor reputation grant on successful extraction only.
 9. **Death** resolves through the same **Run Debrief** screen (failed outcome): run stats, grouped resource resolution (lost vs banked), failed contract result, informational operation contribution (not applied without extraction). Banked safehouse cargo persists to hub stash.
 10. After any run, contract board refreshes to Independent Breach with a new job board.
@@ -261,10 +262,53 @@ After successful extraction, stable materials auto-stash. Special cargo requires
 
 Loadout is a hub screen with two internal tabs:
 
-- Loadout: operative class selector, weapon chassis, trinket socket, and ability deck editor.
-- Cargo: pre-run cargo grid and stash packing interface.
+- **Loadout:** operative class selector, weapon chassis, **Expedition Relic** socket (equip 1 of 20), and ability deck editor.
+- **Cargo:** pre-run cargo grid and stash packing interface.
 
-The class selector is a compact operative identity strip with class cycling. Weapons and trinkets are surfaced even though trinket equipment is still limited.
+The class selector is a compact operative identity strip with class cycling. Weapons and the expedition relic loadout are surfaced on the Loadout tab. Relics with deployment choices (Signal Compass attunement, Ashen Cartograph route doctrine, Mirror Writ mirrored category) require pre-run configuration before equipping.
+
+### Expedition Relics (Trinkets v2)
+
+**Expedition Relics** are pre-run loadout modifiers — distinct from legacy **combat trinkets** picked up mid-run (`RunState.activeTrinkets` / post-combat boon pool). Players equip **one relic** from a roster of **20** before descent; runtime state lives on `ActiveIncursionState.keepsakeRuntime`.
+
+**Design pillars:**
+
+- **Decisions over passives** — deployment choices, in-run modals (Dead-Drop, Extraction Token, Contract Seal clauses, Mourner's Bell, etc.).
+- **No combat stat creep** — relics affect routing, cargo, economy, scanner intel, and extraction tension; they do not modify max HP, parry, or damage.
+- **Once-per-run / per-depth guards** — `triggersUsed`, `perDepthTriggersUsed`, and acceptance tests prevent duplicate firing.
+
+**Roster (20):** Signal Compass, Ashen Cartograph, Dead-Drop Receiver, Ley-Siphon Needle, Cargo Seal, Smuggler's Wrap, Black Market Mark, Null Ledger, Extraction Token, Last Light Matchbook, Contract Seal, Anchor Charm, Mourner's Bell, Grave Polaroid, Hollow Keyring, Bloodhound Tag, False Evac Beacon, Gutter Crown, Mirror Writ, Bent Nail.
+
+**Runtime model:** `KeepsakeRuntime` tracks deployment config, trigger guards, `decisions[]`, `flags`, `counters` (matches, contamination, echo thread, scent, keys, …), `stats` (debrief lines), `messages` (trigger log), and `pendingChoice` (in-run modal queue).
+
+**Hook domains:** scanner/route (`expeditionKeepsakeScannerEngine`, `expeditionKeepsakeRouteEngine`), cargo (`expeditionKeepsakeCargoEngine`), economy/extraction (`expeditionKeepsakeEconomyEngine`), contract (`expeditionKeepsakeContractEngine`), safehouse (`expeditionKeepsakeSafehouseEngine`), anchor/echo (`expeditionKeepsakeAnchorEchoEngine`), phase-D relics 13–20 (`expeditionKeepsakePhaseDEngine`), orchestration in `RunContext.tsx`.
+
+**Player-facing surfaces:**
+
+- **Hub loadout** — relic dossier (role, run style, risk, deployment warnings, configure/equip).
+- **Run chrome** — `RunGlobalChrome` relic chip + live counters (match, debt, contam, thread, scent, keys).
+- **Trigger toasts** — `KeepsakeTriggerToast` on new `runtime.messages`.
+- **In-run choices** — `KeepsakeInRunChoiceOverlay` for pending branch modals.
+- **Status overlay** — equipped relic, counters, and active risks in run manifest.
+- **Debrief** — EXPEDITION RELIC block: decisions, risks, stat lines, trigger log.
+- **Dev** — validate registry + acceptance, simulate debrief, force equip, deployment debug.
+
+**Key files:** `expeditionKeepsakeRegistry.ts`, `keepsakeRunState.ts`, `expeditionKeepsakeChoiceEngine.ts`, `expeditionKeepsakeDeploymentEngine.ts`, `runDebriefKeepsakeEngine.ts`, `expeditionKeepsakeRunUiEngine.ts`, `KeepsakeLoadoutPanel.tsx`, `OperationDebriefScreen.tsx`.
+
+**Expedition relics v2 — acceptance criteria (Phases A–F):**
+
+1. ✅ 20-relic roster in registry with unique primary trigger keys and hook metadata.
+2. ✅ v2 runtime shape: deployment, decisions, flags, counters, expanded debrief stats.
+3. ✅ Account storage: `equippedKeepsakeId`, `unlockedKeepsakeIds`, `keepsakeDeployment`.
+4. ✅ Loadout UI renamed to Expedition Relic; rich inspect + deployment modals (Compass / Cartograph / Mirror Writ).
+5. ✅ Deployment warnings at equip/inspect time (anchor, echo, sponsor, contraband contexts).
+6. ✅ Retained relics 1–12 deepened: attunement, route doctrine/lock, dead-drop chain, ley contamination, cargo seal, smuggler double-wrap, null ledger credit line, matchbook ladder, extraction token, contract clauses, anchor trail, polaroid develop.
+7. ✅ New relics 13–20: Mourner's Bell, Hollow Keyring, Bloodhound Tag, False Evac Beacon, Gutter Crown, Mirror Writ, Bent Nail outside hook.
+8. ✅ Live HUD counters + trigger toasts + debrief decisions/risks/stats/trigger log.
+9. ✅ `verifyExpeditionKeepsakeEngine()` boot verify (registry + combat-stat audit + acceptance sims).
+10. ✅ Duplication guards validated: matchbook max 4, dead-drop run-once, anchor trail run-once, per-depth false beacon, no-relic regression.
+11. ✅ Runs without equipped relic remain no-ops across core hooks.
+12. ✅ No relic assigns combat-stat hooks or modifies operative max HP / parry / damage.
 
 ## Run And Progression Systems
 
@@ -279,7 +323,8 @@ Run state tracks:
 - Active cargo and containment.
 - **`runBankedSnapshot`** — physical cargo secured at in-run safehouse (survives death).
 - **`runResourceLedger`** — collected, banked, extracted, lost, consumed resource counts.
-- Active trinkets and run modifiers.
+- **`keepsakeRuntime`** — equipped expedition relic state (null when none equipped).
+- Legacy mid-run combat trinkets and run modifiers.
 - Resonance, sector state, operation state, and world context.
 - Run log and encounter/session flags.
 
@@ -563,9 +608,9 @@ Consumable recipes:
 | Pulse Shot Rifle | Hex Shot | On fire, self 5% HP; spectral targets take 2x damage |
 | Diplomatic Hex Sigil | Envoy | Each operative turn, one random hostile gains Vulnerable (+15% damage taken) |
 
-### Trinkets
+### Trinkets (Legacy Combat)
 
-Run-time trinkets:
+Mid-run combat trinkets (distinct from Expedition Relics):
 
 - Tuning Fork: +20% parry window, -5% slice damage.
 - Ghost Battery: start fights with 25% Abyssal Reserve.
@@ -867,12 +912,13 @@ Current world/narrative surface includes:
 - **Contract loop v1 (complete):** Resource model, physical banking, contract board, Veil Front integration, run event tracking, contract resolver, unified run debrief (extract + death via `OperationDebriefScreen`), procedural operation generation, operation lifecycle (ACTIVE / COMPLETED / expiration / AFTERMATH rotation), mid-run operation target contribution with debrief transmission line, sponsor perks on deploy/contract summary, operation intel log on Veil Front briefing, expanded operation contribution on extract, **debrief progress headline** (`+N progress this run`), **reward preview** on Veil Front cards/briefing/deploy modal, and **world state validation + dev debug tooling** (Phases A–F).
 - **Unstable cargo carried effects v1 (complete):** Three unstable resources with deduped carried modifiers, lazy procedural type/context rolls, cargo pressure UI, debrief Cargo Pressure block, volatile resonance tagging, occupancy resonance multiplier, emergency recall Veil-Ash warning log.
 - **Echo encounters v1 (complete — Phases 1–6):** Echo scanner overlays at layer unlock, per-depth/run caps, weighted encounter kinds, fallen-runner narrative, assist/cargo/extraction immediate resolution, hostile combat routing, class-based hostile templates with depth scaling, hostile echo reward rolls, debrief Echo section, dev forcing tools, echo pipeline validation (reward-resource existence + Echo Recovery contribution rules), `echoRunState` tracking, Veil Front echo intel surfaces, reward-stack extraction tracking, Smuggler's Ledger fallen-runner drop, extraction echo emergency-recall bleed bonus. Acceptance criteria (20) verified in the Echo Encounters v1 section below.
+- **Expedition relics v2 (complete — Phases A–F):** 20-relic pre-run loadout with deployment choices, in-run branch modals, scanner/cargo/economy/contract/safehouse/echo hooks, live HUD counters, trigger toasts, debrief parity, registry + acceptance + combat-stat audit on boot. Internal code uses `Keepsake*` naming; player-facing copy uses **Expedition Relic**.
 - **Post-run cargo routing v1 (complete — Phases 1–10):** Full post-extract cargo routing pipeline with Veil Front + hub intel surfaces, live debrief preview/validation, partial stackable routing, casket open-at-hub v1, deferred contract delivery, death cargo messaging, runtime + intel + fixture + sim validation, catalog audit engine, cleanup/ship pass, `cargoRoutingRunState` + `careerCargoRouting` tracking, debrief summary wiring, hub contract board + safehouse + extraction review + scanner + loadout + cargo pressure surfaces, hub log on routing confirm, dev audit/validate/inspect tooling, compact debrief parity. Acceptance criteria (63) in Post-Run Cargo Routing v1 section.
 - **Safehouse banking:** Physical in-run banking via `runBankedSnapshot` — banked cargo survives death and routes to hub stash. Unbanked cargo is lost on death (`runResourceLedger.lostOnDeath`). Extraction merges banked + carried cargo before deposit.
 - Target Fragment has a catalogued combat effect but is marked `unimplemented`.
 - Kinetic Hollow Points / Veil-Vial is described as next attack +15 damage but is marked `unimplemented`.
 - Gravity Grapple exists as a cargo tool tag but does not have a wired combat/scanner handler in the inspected files.
-- Hub trinket equipment is mostly placeholder; run-time trinkets work in run state.
+- Hub legacy `equipment.trinketId` socket remains a separate placeholder from expedition relic equip flow.
 - Some item descriptions and implementation values drift:
   - Standard Coagulant craft description says 25 HP, while Coagulation Stitch catalog uses 10% HP.
 - SafehouseHubPanel still exists in code but is no longer in the hub navigation.
@@ -885,6 +931,6 @@ Current world/narrative surface includes:
 - Resource taxonomy now separates category from role (crafting intel vs economy intel vs fence value).
 - Enemy identity is strong, but intent documentation should become a player-facing codex or internal balancing table.
 - Cargo is doing several jobs at once: loot value, tactical consumables, scanner tools, extraction tension, and resonance risk. This should remain central to run identity.
-- Loadout now functions as the correct home for class, ability deck, weapon display, trinket display, and cargo prep.
+- Loadout is the home for class, ability deck, weapon display, **expedition relic** equip, and cargo prep.
 - Black Market now has a clean split: Forge for crafting, Vendor for contraband.
 

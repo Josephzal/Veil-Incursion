@@ -23,7 +23,11 @@ export default function WelcomeScreen(): React.JSX.Element {
   const { account } = usePlayerAccount();
 
   const handleStartScan = () => {
-    startNewRun({ startingVeilResidueBalance: account.veilResidueBalance, equippedKeepsakeId: account.equippedKeepsakeId });
+    startNewRun({
+      startingVeilResidueBalance: account.veilResidueBalance,
+      equippedKeepsakeId: account.equippedKeepsakeId,
+      keepsakeDeployment: account.keepsakeDeployment,
+    });
     startBoundRequisition();
   };
   const credentials = profile.operative_profile.credentials;

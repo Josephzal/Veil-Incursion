@@ -8,6 +8,7 @@ import { HEX_SHOT_BOON_CATALOG } from '../data/hexShotBoons';
 import type { ClassType } from '../types/game';
 import { MACRO_BIOME_DISPLAY } from '../data/macroBiomeEngine';
 import type { MacroBiomeFamily } from '../types/narrativeProcedural';
+import { buildKeepsakeRunStatusEntries } from '../data/expeditionKeepsakeRunUiEngine';
 
 export type RunStatusCategory = 'BOON' | 'HAZARD' | 'MACRO' | 'ENVIRONMENT' | 'RESONANCE' | 'SECTOR';
 
@@ -273,6 +274,7 @@ export function buildRunStatusSnapshot(inc: ActiveIncursionState): RunStatusEntr
   if (sector) entries.push(sector);
 
   entries.push(...classBoonEntries(inc.activeClass ?? 'AEGIS', inc));
+  entries.push(...buildKeepsakeRunStatusEntries(inc.keepsakeRuntime));
   entries.push(...statusEffectEntries(inc.runStatusEffects));
   entries.push(...flagEntries(inc.progress.collectedFlags));
   entries.push(...envModifierEntries(inc.environmentalModifiers));

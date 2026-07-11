@@ -29,6 +29,17 @@ import {
   getInteractiveButtonStyle,
   getInteractiveButtonTextStyle,
 } from '../../styles/hubTerminalUi';
+import {
+  ALL_KEEPSAKE_IDS,
+  getKeepsakeDefinition,
+} from '../../data/expeditionKeepsakeRegistry';
+import {
+  formatKeepsakeDebugValidation,
+  formatKeepsakeAcceptanceDebugReport,
+} from '../../data/expeditionKeepsakeDebugEngine';
+import {
+  resolveKeepsakeDeploymentWarnings,
+} from '../../data/expeditionKeepsakeDeploymentEngine';
 
 interface SandboxLaunchButtonProps {
   label: string;
@@ -75,7 +86,6 @@ export default function DevTestHubPanel(): React.JSX.Element {
     devLogCargoRoutingRunState,
     devLogKeepsakeRunState,
     devPreviewKeepsakeDebrief,
-    devValidateKeepsakePipeline,
     devPreviewEchoDebrief,
     devValidateEchoPipeline,
     devPreviewPostRunRouting,
@@ -92,7 +102,14 @@ export default function DevTestHubPanel(): React.JSX.Element {
     devInjectRoutingTestCargo,
     devSetActiveContract,
   } = useRun();
-  const { account, setEquippedKeepsake, unlockAllKeepsakes } = usePlayerAccount();
+  const {
+    account,
+    setEquippedKeepsake,
+    unlockAllKeepsakes,
+    setKeepsakeAttunement,
+    setKeepsakeRouteDoctrine,
+    setKeepsakeMirrorCategory,
+  } = usePlayerAccount();
   const {
     selectedSector,
     persisted,
@@ -152,12 +169,18 @@ export default function DevTestHubPanel(): React.JSX.Element {
     setDebugReport([
       devGetDebugSnapshot(),
       formatCareerCargoRoutingDebugSnapshot(account.careerCargoRouting),
-      `equipped keepsake: ${account.equippedKeepsakeId ?? 'none'}`,
-      `unlocked keepsakes: ${account.unlockedKeepsakeIds.length}`,
+      `equipped relic: ${account.equippedKeepsakeId ?? 'none'}`,
+      `deployment attunement: ${account.keepsakeDeployment.attunement ?? 'none'}`,
+      `deployment doctrine: ${account.keepsakeDeployment.routeDoctrine ?? 'none'}`,
+      `deployment mirror: ${account.keepsakeDeployment.mirrorCategory ?? 'none'}`,
+      `unlocked relics: ${account.unlockedKeepsakeIds.length}`,
     ].join('\n\n'));
   }, [
     account.careerCargoRouting,
     account.equippedKeepsakeId,
+    account.keepsakeDeployment.attunement,
+    account.keepsakeDeployment.routeDoctrine,
+    account.keepsakeDeployment.mirrorCategory,
     account.unlockedKeepsakeIds.length,
     devGetDebugSnapshot,
   ]);
@@ -425,180 +448,140 @@ export default function DevTestHubPanel(): React.JSX.Element {
         />
       </View>
 
-      <HubSectionHeader title="KEEPSAKE // DEBUG" color={theme.mutedColor} />
+      <HubSectionHeader title="RELIC // DEBUG" color={theme.mutedColor} />
       <View style={styles.grid}>
         <SandboxLaunchButton
-          label="[ UNLOCK ALL KEEPSAKES ]"
+          label="[ UNLOCK ALL RELICS ]"
           accentColor={theme.primaryColor}
           onPress={() => {
             unlockAllKeepsakes();
-            setDebugReport('KEEPSAKE DEBUG — all 20 keepsakes unlocked.');
+            setDebugReport('RELIC DEBUG — all 20 expedition relics unlocked.');
           }}
         />
+        {ALL_KEEPSAKE_IDS.map((keepsakeId) => {
+          const def = getKeepsakeDefinition(keepsakeId);
+          return (
+            <SandboxLaunchButton
+              key={keepsakeId}
+              label={`[ EQUIP ${def.name.toUpperCase()} ]`}
+              accentColor={theme.primaryColor}
+              onPress={() => {
+                setEquippedKeepsake(keepsakeId);
+                setDebugReport(`RELIC DEBUG — equipped ${keepsakeId}.`);
+              }}
+            />
+          );
+        })}
         <SandboxLaunchButton
-          label="[ EQUIP SIGNAL COMPASS ]"
-          accentColor={theme.primaryColor}
-          onPress={() => {
-            setEquippedKeepsake('signal_compass');
-            setDebugReport('KEEPSAKE DEBUG — equipped signal_compass.');
-          }}
-        />
-        <SandboxLaunchButton
-          label="[ EQUIP ECHO LURE ]"
-          accentColor={theme.primaryColor}
-          onPress={() => {
-            setEquippedKeepsake('echo_lure');
-            setDebugReport('KEEPSAKE DEBUG — equipped echo_lure.');
-          }}
-        />
-        <SandboxLaunchButton
-          label="[ EQUIP LEY SIPHON ]"
-          accentColor={theme.primaryColor}
-          onPress={() => {
-            setEquippedKeepsake('ley_siphon_needle');
-            setDebugReport('KEEPSAKE DEBUG — equipped ley_siphon_needle.');
-          }}
-        />
-        <SandboxLaunchButton
-          label="[ EQUIP CARGO SEAL ]"
-          accentColor={theme.primaryColor}
-          onPress={() => {
-            setEquippedKeepsake('cargo_seal');
-            setDebugReport('KEEPSAKE DEBUG — equipped cargo_seal.');
-          }}
-        />
-        <SandboxLaunchButton
-          label="[ EQUIP MAP TUBE ]"
-          accentColor={theme.primaryColor}
-          onPress={() => {
-            setEquippedKeepsake('lead_lined_map_tube');
-            setDebugReport('KEEPSAKE DEBUG — equipped lead_lined_map_tube.');
-          }}
-        />
-        <SandboxLaunchButton
-          label="[ EQUIP SMUGGLER WRAP ]"
-          accentColor={theme.primaryColor}
-          onPress={() => {
-            setEquippedKeepsake('smugglers_wrap');
-            setDebugReport('KEEPSAKE DEBUG — equipped smugglers_wrap.');
-          }}
-        />
-        <SandboxLaunchButton
-          label="[ EQUIP BLACK MARKET MARK ]"
-          accentColor={theme.primaryColor}
-          onPress={() => {
-            setEquippedKeepsake('black_market_mark');
-            setDebugReport('KEEPSAKE DEBUG — equipped black_market_mark.');
-          }}
-        />
-        <SandboxLaunchButton
-          label="[ EQUIP NULL LEDGER ]"
-          accentColor={theme.primaryColor}
-          onPress={() => {
-            setEquippedKeepsake('null_ledger');
-            setDebugReport('KEEPSAKE DEBUG — equipped null_ledger.');
-          }}
-        />
-        <SandboxLaunchButton
-          label="[ EQUIP EXTRACTION TOKEN ]"
-          accentColor={theme.primaryColor}
-          onPress={() => {
-            setEquippedKeepsake('extraction_token');
-            setDebugReport('KEEPSAKE DEBUG — equipped extraction_token.');
-          }}
-        />
-        <SandboxLaunchButton
-          label="[ EQUIP LAST LIGHT MATCHBOOK ]"
-          accentColor={theme.primaryColor}
-          onPress={() => {
-            setEquippedKeepsake('last_light_matchbook');
-            setDebugReport('KEEPSAKE DEBUG — equipped last_light_matchbook.');
-          }}
-        />
-        <SandboxLaunchButton
-          label="[ EQUIP RUSTED FLARE ]"
-          accentColor={theme.primaryColor}
-          onPress={() => {
-            setEquippedKeepsake('rusted_flare');
-            setDebugReport('KEEPSAKE DEBUG — equipped rusted_flare.');
-          }}
-        />
-        <SandboxLaunchButton
-          label="[ EQUIP SAFEHOUSE COIN ]"
-          accentColor={theme.primaryColor}
-          onPress={() => {
-            setEquippedKeepsake('safehouse_coin');
-            setDebugReport('KEEPSAKE DEBUG — equipped safehouse_coin.');
-          }}
-        />
-        <SandboxLaunchButton
-          label="[ EQUIP FIELD RATIONS ]"
-          accentColor={theme.primaryColor}
-          onPress={() => {
-            setEquippedKeepsake('field_rations');
-            setDebugReport('KEEPSAKE DEBUG — equipped field_rations.');
-          }}
-        />
-        <SandboxLaunchButton
-          label="[ EQUIP CONTRACT SEAL ]"
-          accentColor={theme.primaryColor}
-          onPress={() => {
-            setEquippedKeepsake('contract_seal');
-            setDebugReport('KEEPSAKE DEBUG — equipped contract_seal.');
-          }}
-        />
-        <SandboxLaunchButton
-          label="[ EQUIP COUNTERFEIT MANDATE ]"
-          accentColor={theme.primaryColor}
-          onPress={() => {
-            setEquippedKeepsake('counterfeit_mandate');
-            setDebugReport('KEEPSAKE DEBUG — equipped counterfeit_mandate.');
-          }}
-        />
-        <SandboxLaunchButton
-          label="[ EQUIP ANCHOR CHARM ]"
-          accentColor={theme.primaryColor}
-          onPress={() => {
-            setEquippedKeepsake('anchor_charm');
-            setDebugReport('KEEPSAKE DEBUG — equipped anchor_charm.');
-          }}
-        />
-        <SandboxLaunchButton
-          label="[ EQUIP CHOIR TUNING FORK ]"
-          accentColor={theme.primaryColor}
-          onPress={() => {
-            setEquippedKeepsake('choir_tuning_fork');
-            setDebugReport('KEEPSAKE DEBUG — equipped choir_tuning_fork.');
-          }}
-        />
-        <SandboxLaunchButton
-          label="[ EQUIP GRAVE POLAROID ]"
-          accentColor={theme.primaryColor}
-          onPress={() => {
-            setEquippedKeepsake('grave_polaroid');
-            setDebugReport('KEEPSAKE DEBUG — equipped grave_polaroid.');
-          }}
-        />
-        <SandboxLaunchButton
-          label="[ CLEAR KEEPSAKE ]"
+          label="[ CLEAR RELIC ]"
           accentColor={theme.primaryColor}
           onPress={() => {
             setEquippedKeepsake(null);
-            setDebugReport('KEEPSAKE DEBUG — keepsake cleared.');
+            setDebugReport('RELIC DEBUG — expedition relic cleared.');
           }}
         />
         <SandboxLaunchButton
-          label="[ VALIDATE KEEPSAKES ]"
+          label="[ VALIDATE RELICS ]"
           accentColor={theme.primaryColor}
-          onPress={() => setDebugReport(devValidateKeepsakePipeline())}
+          onPress={() => setDebugReport(formatKeepsakeDebugValidation(
+            account.equippedKeepsakeId,
+            account.unlockedKeepsakeIds,
+            account.keepsakeDeployment,
+          ))}
         />
         <SandboxLaunchButton
-          label="[ LOG KEEPSAKE STATE ]"
+          label="[ VALIDATE RELIC ACCEPTANCE ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(formatKeepsakeAcceptanceDebugReport())}
+        />
+        <SandboxLaunchButton
+          label="[ LOG DEPLOYMENT WARNINGS ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            if (!account.equippedKeepsakeId) {
+              setDebugReport('RELIC DEBUG — no relic equipped.');
+              return;
+            }
+            const warnings = resolveKeepsakeDeploymentWarnings(
+              account.equippedKeepsakeId,
+              selectedSector,
+              persisted.contractBoard.selectedContract,
+            );
+            setDebugReport([
+              'RELIC DEPLOYMENT WARNINGS',
+              `relic: ${account.equippedKeepsakeId}`,
+              `sector: ${selectedSector.displayName}`,
+              ...(warnings.length > 0
+                ? warnings.map((warning) => `[${warning.severity}] ${warning.message}`)
+                : ['none']),
+            ].join('\n'));
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ SET ATTUNEMENT: ECHO ]"
+          accentColor={theme.mutedColor}
+          onPress={() => {
+            setKeepsakeAttunement('ECHO_RESIDUE');
+            setDebugReport('RELIC DEBUG — attunement set to ECHO_RESIDUE.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ SET ATTUNEMENT: ANCHOR ]"
+          accentColor={theme.mutedColor}
+          onPress={() => {
+            setKeepsakeAttunement('ANCHOR_SIGNAL');
+            setDebugReport('RELIC DEBUG — attunement set to ANCHOR_SIGNAL.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ SET DOCTRINE: GREED ]"
+          accentColor={theme.mutedColor}
+          onPress={() => {
+            setKeepsakeRouteDoctrine('GREED');
+            setDebugReport('RELIC DEBUG — route doctrine set to GREED.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ SET DOCTRINE: HUNT ]"
+          accentColor={theme.mutedColor}
+          onPress={() => {
+            setKeepsakeRouteDoctrine('HUNT');
+            setDebugReport('RELIC DEBUG — route doctrine set to HUNT.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ SET MIRROR: CREDITS ]"
+          accentColor={theme.mutedColor}
+          onPress={() => {
+            setKeepsakeMirrorCategory('CREDITS');
+            setDebugReport('RELIC DEBUG — mirror category set to CREDITS.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ SET MIRROR: SPONSOR REP ]"
+          accentColor={theme.mutedColor}
+          onPress={() => {
+            setKeepsakeMirrorCategory('SPONSOR_REP');
+            setDebugReport('RELIC DEBUG — mirror category set to SPONSOR_REP.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ CLEAR DEPLOYMENT ]"
+          accentColor={theme.mutedColor}
+          onPress={() => {
+            setKeepsakeAttunement(null);
+            setKeepsakeRouteDoctrine(null);
+            setKeepsakeMirrorCategory(null);
+            setDebugReport('RELIC DEBUG — deployment choices cleared.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ LOG RELIC STATE ]"
           accentColor={theme.primaryColor}
           onPress={() => setDebugReport(devLogKeepsakeRunState())}
         />
         <SandboxLaunchButton
-          label="[ PREVIEW KEEPSAKE DEBRIEF ]"
+          label="[ SIMULATE RELIC DEBRIEF ]"
           accentColor={theme.primaryColor}
           onPress={() => setDebugReport(devPreviewKeepsakeDebrief())}
         />

@@ -22,9 +22,6 @@ import DossierCardShell from './hub/DossierCardShell';
 import { hubCtaButtonStyle } from '../constants/hubCta';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { useRun } from '../context/RunContext';
-import {
-  canUseKeepsakeCounterfeitMandate,
-} from '../data/expeditionKeepsakeContractEngine';
 
 const TERMINAL_ACCENT = '#00ff33';
 const LOCK_ICON_COLOR = '#ff453a';
@@ -34,7 +31,7 @@ type ModulePhase = 'SCENARIO' | 'TENSION' | 'OUTCOME';
 interface PendingResolve {
   choice: NarrativeChoiceKey;
   status: CheckStatus;
-  options?: { tensionBonusCredits?: number; counterfeitMandate?: boolean };
+  options?: { tensionBonusCredits?: number };
 }
 
 type OptionDVariant = 'Retreat' | 'BruteForce';
@@ -228,9 +225,6 @@ export default function ProceduralNarrativeModule({
   const selectedOption = choices.find((entry) => entry.key === selectedChoice)?.option;
   const tensionMechanicLabel = formatTensionMechanicLabel(node.proceduralMeta?.tensionMechanic);
   const canConfirm = selectedChoice != null && selectedOption?.locked !== true;
-  const counterfeitMandateAvailable = canUseKeepsakeCounterfeitMandate(activeIncursion.keepsakeRuntime)
-    && node.choiceB.locked === true
-    && (node.choiceB.lockReason ?? '').toUpperCase().includes('CABAL');
 
   const confirmButtonStyle = useMemo(
     () => [
@@ -244,7 +238,7 @@ export default function ProceduralNarrativeModule({
   const showOutcome = (
     choice: NarrativeChoiceKey,
     status: CheckStatus = 'SUCCESS',
-    options?: { tensionBonusCredits?: number; counterfeitMandate?: boolean },
+    options?: { tensionBonusCredits?: number },
   ) => {
     const summary = buildProceduralOutcomeSummary(node, choice, status, options);
     const bonusReward = node.proceduralMeta?.bonusReward;
@@ -276,14 +270,9 @@ export default function ProceduralNarrativeModule({
     choice: NarrativeChoiceKey,
     _resultText: string,
     status: CheckStatus = 'SUCCESS',
-    options?: { tensionBonusCredits?: number; counterfeitMandate?: boolean },
+    options?: { tensionBonusCredits?: number },
   ) => {
     showOutcome(choice, status, options);
-  };
-
-  const handleCounterfeitMandate = () => {
-    if (!counterfeitMandateAvailable) return;
-    finishWithResult('B', node.choiceB.successText, 'SUCCESS', { counterfeitMandate: true });
   };
 
   const handleTensionSuccess = (result?: { bonusCredits?: number }) => {
@@ -389,19 +378,6 @@ export default function ProceduralNarrativeModule({
                 />
               ))}
             </View>
-            {counterfeitMandateAvailable ? (
-              <HapticPressable
-                onPress={handleCounterfeitMandate}
-                style={(state) => [
-                  styles.mandateBtn,
-                  { opacity: state.pressed ? 0.8 : 1, borderColor: '#f97316' },
-                ]}
-              >
-                <Text style={[styles.mandateLabel, { fontSize: typography.choiceSubtextSize }]}>
-                  [ COUNTERFEIT MANDATE — SPOOF CABAL AUTH (−25% REWARD) ]
-                </Text>
-              </HapticPressable>
-            ) : null}
             <View style={styles.optionDHintSlot}>
               {selectedChoice === 'D' && optionDVariant ? (
                 <Text

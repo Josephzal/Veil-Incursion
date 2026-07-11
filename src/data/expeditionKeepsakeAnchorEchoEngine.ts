@@ -16,10 +16,10 @@ import {
 import { getKeepsakeDefinition } from './expeditionKeepsakeRegistry';
 import { patchKeepsakeStats } from './keepsakeRunState';
 import { seededRandom } from './encounterGenerator';
+import { applyKeepsakeMournersBellOnEchoResolved } from './expeditionKeepsakePhaseDEngine';
 
 const ANCHOR_CHARM_OPERATION_PROGRESS = 2;
 const ANCHOR_CHARM_RESOURCE_ID: ResourceItemId = 'ossified-ley-knot';
-const ECHO_LURE_REWARD_MULTIPLIER = 1.15;
 const GRAVE_POLAROID_STABLE_RESOURCE: ResourceItemId = 'ley-slag';
 
 export interface KeepsakeAnchorEchoApplyResult {
@@ -90,6 +90,7 @@ export function applyKeepsakeAnchorCharmOnSignalClear(
   const nextRuntime = patchKeepsakeStats(trigger.runtime, {
     bonusResourcesGenerated: trigger.runtime.stats.bonusResourcesGenerated + 1,
     operationProgressAdded: trigger.runtime.stats.operationProgressAdded + operationProgressDelta,
+    anchorTrailCleared: trigger.runtime.stats.anchorTrailCleared + 1,
   });
 
   return {
@@ -106,81 +107,37 @@ export function applyKeepsakeAnchorCharmOnSignalClear(
   };
 }
 
-/** Echo Lure — first hostile echo encounter spawns +1 hostile. */
+/**
+ * Echo reward hooks — retired with the Echo Lure relic (Trinkets v1.5).
+ * Kept as neutral no-ops so the echo reward flow in RunContext stays intact;
+ * Mourner's Bell / echo work reintroduces echo reward adjustments in a later phase.
+ */
 export function applyKeepsakeEchoLureOnCombatEngage(
   runtime: KeepsakeRuntime | null,
-  echoCtx: EchoRecoveryCombatContext | null,
-  echoKind: EchoEncounterKind | null | undefined,
+  _echoCtx: EchoRecoveryCombatContext | null,
+  _echoKind: EchoEncounterKind | null | undefined,
 ): KeepsakeAnchorEchoApplyResult {
-  if (!runtime || runtime.keepsakeId !== 'echo_lure' || !echoCtx || echoKind !== 'HOSTILE_ECHO') {
-    return { runtime, logLines: [] };
-  }
-
-  const trigger = tryKeepsakeTrigger(runtime, 'echo_lure_hostile_threat', 'run');
-  if (!trigger.triggered || !trigger.runtime) {
-    return { runtime, logLines: [] };
-  }
-
-  const def = getKeepsakeDefinition('echo_lure');
-  return {
-    runtime: trigger.runtime,
-    extraCombatUnits: 1,
-    logLines: [
-      formatKeepsakeLogLine(def.shortName, 'Hostile echo pattern amplified — reinforcement inbound.'),
-    ],
-  };
+  return { runtime, logLines: [] };
 }
 
-/** Echo Lure — first echo signal clear: +1 echo-glass and +15% echo reward value. */
 export function applyKeepsakeOnEchoSignalResolved(
   runtime: KeepsakeRuntime | null,
 ): KeepsakeEchoRewardAdjustments {
-  if (!runtime || runtime.keepsakeId !== 'echo_lure') {
-    return { runtime, extraEchoGlass: 0, creditMultiplier: 1, logLines: [] };
-  }
-
-  const def = getKeepsakeDefinition('echo_lure');
-  const trigger = tryKeepsakeTrigger(runtime, def.primaryTriggerKey, 'run');
-  if (!trigger.triggered || !trigger.runtime) {
-    return { runtime, extraEchoGlass: 0, creditMultiplier: 1, logLines: [] };
-  }
-
-  const nextRuntime = patchKeepsakeStats(trigger.runtime, {
-    echoGlassBonus: trigger.runtime.stats.echoGlassBonus + 1,
-  });
-
+  const mourners = applyKeepsakeMournersBellOnEchoResolved(runtime);
   return {
-    runtime: nextRuntime,
-    extraEchoGlass: 1,
-    creditMultiplier: ECHO_LURE_REWARD_MULTIPLIER,
-    logLines: [
-      formatKeepsakeLogLine(def.shortName, def.triggerMessage),
-      '>> ECHO LURE BONUS — +1 ECHO-GLASS; echo salvage yield +15%.',
-    ],
+    runtime: mourners.runtime,
+    extraEchoGlass: mourners.extraEchoGlass,
+    creditMultiplier: mourners.creditMultiplier,
+    logLines: mourners.logLines,
   };
 }
 
 export function applyKeepsakeEchoLureCargoBonus(
   runtime: KeepsakeRuntime | null,
-  cargo: CargoRunState,
-  seed: string,
+  _cargo: CargoRunState,
+  _seed: string,
 ): KeepsakeAnchorEchoApplyResult {
-  const lure = applyKeepsakeOnEchoSignalResolved(runtime);
-  if (!lure.runtime || lure.extraEchoGlass <= 0) {
-    return { runtime: lure.runtime, logLines: lure.logLines };
-  }
-
-  const staged: string[] = [];
-  let nextCargo = cargo;
-  for (let i = 0; i < lure.extraEchoGlass; i += 1) {
-    nextCargo = addLootToContainment(nextCargo, 'echo-glass-shard', 1, staged);
-  }
-
-  return {
-    runtime: lure.runtime,
-    cargo: nextCargo,
-    logLines: lure.logLines,
-  };
+  return { runtime, logLines: [] };
 }
 
 export function scaleKeepsakeEchoCredits(

@@ -13,7 +13,7 @@ import {
   tryKeepsakeTrigger,
 } from './expeditionKeepsakeEngine';
 import { getKeepsakeDefinition } from './expeditionKeepsakeRegistry';
-import { patchKeepsakeStats } from './keepsakeRunState';
+import { patchKeepsakeStats, incrementKeepsakeCounter } from './keepsakeRunState';
 import { resolveBlackMarketListingPrice } from './blackMarket';
 import { localProceduralDepth } from './proceduralScannerBridge';
 import { getResourceCategory } from './resourceRegistry';
@@ -21,7 +21,14 @@ import {
   bankSingleCargoInstance,
   recordResourcesBanked,
 } from './runResourceLedgerEngine';
+import {
+  buildExtractionTokenChoice,
+  canAccrueNullLedgerDebt,
+  queueKeepsakePendingChoice,
+} from './expeditionKeepsakeChoiceEngine';
 
+const MATCHBOOK_MAX_MATCHES = 4;
+const MATCHBOOK_SKIP_CREDITS = [0, 15, 30, 50, 75];
 const MARKED_SHELF_DISCOUNT_PCT = 40;
 const NULL_LEDGER_DEBT_SURCHARGE_PCT = 25;
 const STAMPED_STABLE_CARGO_VALUE_BONUS_PCT = 10;
@@ -47,6 +54,7 @@ export interface KeepsakeEconomyApplyResult {
   runtime: KeepsakeRuntime | null;
   incursionPatch?: Partial<ActiveIncursionState>;
   logLines: string[];
+  runCreditsDelta?: number;
 }
 
 function pickMarkedShelfItem(stock: readonly CargoItemId[]): CargoItemId | null {
@@ -101,9 +109,11 @@ export function resolveKeepsakeMarkedShelfPrice(
 
 export function canUseKeepsakeNullLedgerCredit(
   runtime: KeepsakeRuntime | null | undefined,
+  purchasePrice = 0,
 ): boolean {
   if (!runtime || runtime.keepsakeId !== 'null_ledger') return false;
-  return !runtime.triggersUsed.null_ledger_credit_purchase;
+  if (runtime.triggersUsed.null_ledger_credit_purchase) return false;
+  return canAccrueNullLedgerDebt(runtime, Math.ceil(purchasePrice * 1.25));
 }
 
 export function applyKeepsakeOnBlackMarketOpen(
@@ -323,19 +333,46 @@ export function applyKeepsakeOnSafeExtractionSkip(
     return { runtime, logLines: [] };
   }
 
+  const matchesLit = runtime.counters.matches ?? 0;
+  if (matchesLit >= MATCHBOOK_MAX_MATCHES) {
+    return { runtime, logLines: ['>> MATCHBOOK SPENT — all matches lit. Next exit is critical.'] };
+  }
+
   const def = getKeepsakeDefinition('last_light_matchbook');
-  const trigger = tryKeepsakeTrigger(runtime, def.primaryTriggerKey, 'run');
+  const trigger = tryKeepsakeTrigger(
+    runtime,
+    `${def.primaryTriggerKey}:${matchesLit + 1}`,
+    'none',
+  );
   if (!trigger.triggered || !trigger.runtime) {
     return { runtime, logLines: [] };
   }
 
+  const nextMatch = matchesLit + 1;
+  let nextRuntime = incrementKeepsakeCounter(trigger.runtime, 'matches', 1);
+  nextRuntime = patchKeepsakeStats(nextRuntime, {
+    matchesLit: nextMatch,
+    safeExtractionsSkipped: nextRuntime.stats.safeExtractionsSkipped + 1,
+  });
+  nextRuntime = {
+    ...nextRuntime,
+    overextendedActive: true,
+    overextendedBonusConsumed: false,
+    overextendedDirtyThreatPending: true,
+  };
+
+  const bonusCredits = MATCHBOOK_SKIP_CREDITS[nextMatch] ?? 0;
+  const logLines = [
+    formatKeepsakeLogLine('Matchbook', def.triggerMessage),
+    `>> MATCH ${nextMatch}/${MATCHBOOK_MAX_MATCHES} LIT — greed bonus armed.`,
+  ];
+
   return {
-    runtime: {
-      ...trigger.runtime,
-      overextendedActive: true,
-      overextendedDirtyThreatPending: true,
-    },
-    logLines: [formatKeepsakeLogLine('Matchbook', def.triggerMessage)],
+    runtime: nextRuntime,
+    runCreditsDelta: bonusCredits > 0 ? bonusCredits : undefined,
+    logLines: bonusCredits > 0
+      ? [...logLines, `>> MATCHBOOK HEAT — +${bonusCredits} run credits for declining evac.`]
+      : logLines,
   };
 }
 
@@ -345,6 +382,12 @@ export function applyKeepsakeOnStampedSafeExtractionConfirm(
 ): KeepsakeEconomyApplyResult {
   if (!runtime || !isKeepsakeStampedExtractionNode(inc)) {
     return { runtime, logLines: [] };
+  }
+  if (runtime.keepsakeId === 'extraction_token' && !runtime.stampedExtractionConfirmed) {
+    return {
+      runtime,
+      logLines: ['>> EXTRACTION TOKEN — resolve token choice before confirming evac.'],
+    };
   }
 
   const logLines: string[] = [];
@@ -413,21 +456,26 @@ export function applyKeepsakeOverextendedOnNodeClear(
     return { runtime, logLines: [] };
   }
 
+  const matchTier = runtime.counters.matches ?? 1;
+  const bonusRolls = Math.min(matchTier, 3);
   const staged: string[] = [];
-  let nextCargo = addLootToContainment(cargo, 'ley-slag', 1, staged);
+  let nextCargo = cargo;
+  for (let i = 0; i < bonusRolls; i += 1) {
+    nextCargo = addLootToContainment(nextCargo, 'ley-slag', 1, staged);
+  }
   let operationProgressDelta = 0;
   if (operationRelevant) {
-    operationProgressDelta = 1;
+    operationProgressDelta = Math.min(matchTier, 2);
   }
 
   const nextRuntime = patchKeepsakeStats(
     {
       ...runtime,
-      overextendedActive: false,
-      overextendedBonusConsumed: true,
+      overextendedActive: matchTier < MATCHBOOK_MAX_MATCHES,
+      overextendedBonusConsumed: matchTier >= MATCHBOOK_MAX_MATCHES,
     },
     {
-      bonusResourcesGenerated: runtime.stats.bonusResourcesGenerated + 1,
+      bonusResourcesGenerated: runtime.stats.bonusResourcesGenerated + bonusRolls,
       operationProgressAdded: runtime.stats.operationProgressAdded + operationProgressDelta,
     },
   );
@@ -437,9 +485,9 @@ export function applyKeepsakeOverextendedOnNodeClear(
     cargo: nextCargo,
     operationProgressDelta,
     logLines: [
-      `>> OVEREXTENDED BONUS — +1 stable salvage after ${kind} clear.`,
+      `>> OVEREXTENDED BONUS (MATCH ${matchTier}) — +${bonusRolls} stable salvage after ${kind} clear.`,
       ...(operationProgressDelta > 0
-        ? ['>> OVEREXTENDED BONUS — +1 operation progress transmitted.']
+        ? [`>> OVEREXTENDED BONUS — +${operationProgressDelta} operation progress transmitted.`]
         : []),
     ],
   };
@@ -458,62 +506,28 @@ export function consumeKeepsakeDirtyExtractionThreat(
   return { ...runtime, overextendedDirtyThreatPending: false };
 }
 
+/**
+ * Dirty-extraction relic hook.
+ * v2 placeholder: Rusted Flare (v1.5) was retired from the roster. Last Light Matchbook's
+ * dirty-extraction threat is handled via shouldApplyKeepsakeDirtyExtractionThreat.
+ */
 export function applyKeepsakeOnDirtyExtractionStart(
   runtime: KeepsakeRuntime | null,
 ): KeepsakeEconomyApplyResult {
-  if (!runtime || runtime.keepsakeId !== 'rusted_flare') {
-    return { runtime, logLines: [] };
-  }
-  if (runtime.triggersUsed.rusted_flare_first_dirty) {
-    return { runtime, logLines: [] };
-  }
-
-  const def = getKeepsakeDefinition('rusted_flare');
-  const trigger = tryKeepsakeTrigger(runtime, def.primaryTriggerKey, 'run');
-  if (!trigger.triggered || !trigger.runtime) {
-    return { runtime, logLines: [] };
-  }
-
-  return {
-    runtime: {
-      ...trigger.runtime,
-      rustedFlareShieldPending: true,
-      rustedFlareCargoProtectionAvailable: true,
-    },
-    incursionPatch: { keepsakeCombatShieldHits: RUSTED_FLARE_SHIELD_HITS },
-    logLines: [formatKeepsakeLogLine('Flare', def.triggerMessage)],
-  };
+  return { runtime, logLines: [] };
 }
 
+/** Retired with Rusted Flare — kept as a neutral passthrough. */
 export function applyKeepsakeRustedFlareCargoProtection(
   runtime: KeepsakeRuntime | null,
   bleedPct: number,
-  cargo: CargoRunState,
+  _cargo: CargoRunState,
 ): {
   runtime: KeepsakeRuntime | null;
   bleedPct: number;
   logLines: string[];
 } {
-  if (!runtime?.rustedFlareCargoProtectionAvailable) {
-    return { runtime, bleedPct, logLines: [] };
-  }
-
-  const itemCount = cargo.containment.length + cargo.grid.placed.length;
-  if (itemCount <= 1) {
-    return { runtime, bleedPct, logLines: [] };
-  }
-
-  const reducedBleed = Math.max(0, bleedPct - Math.ceil(bleedPct / Math.max(itemCount, 2)));
-  const nextRuntime = patchKeepsakeStats(
-    { ...runtime, rustedFlareCargoProtectionAvailable: false },
-    { cargoPreserved: runtime.stats.cargoPreserved + 1 },
-  );
-
-  return {
-    runtime: nextRuntime,
-    bleedPct: reducedBleed,
-    logLines: ['>> RUSTED FLARE — cargo loss dampened; one salvage bundle preserved.'],
-  };
+  return { runtime, bleedPct, logLines: [] };
 }
 
 export function previewKeepsakeStampedExtractionPayout(
@@ -541,8 +555,40 @@ export function resolveKeepsakeMarkedPurchaseCreditSaved(
 ): KeepsakeRuntime | null {
   if (!runtime || !isKeepsakeMarkedShelfItem(runtime, itemId)) return runtime;
   const saved = Math.max(0, basePrice - paidPrice);
-  if (saved <= 0) return runtime;
-  return patchKeepsakeStats(runtime, {
-    creditsSaved: runtime.stats.creditsSaved + saved,
-  });
+  let next = runtime;
+  if (saved > 0) {
+    next = patchKeepsakeStats(next, {
+      creditsSaved: runtime.stats.creditsSaved + saved,
+      markedShelfPurchases: runtime.stats.markedShelfPurchases + 1,
+    });
+  }
+  return next;
+}
+
+export function stageKeepsakeExtractionTokenChoice(
+  runtime: KeepsakeRuntime | null,
+  inc: ActiveIncursionState,
+): KeepsakeEconomyApplyResult {
+  if (!runtime || runtime.keepsakeId !== 'extraction_token') {
+    return { runtime, logLines: [] };
+  }
+  if (!isKeepsakeStampedExtractionNode(inc) || runtime.pendingChoice) {
+    return { runtime, logLines: [] };
+  }
+  if (runtime.triggersUsed.extraction_token_choice_staged) {
+    return { runtime, logLines: [] };
+  }
+
+  const nextRuntime = queueKeepsakePendingChoice(
+    {
+      ...runtime,
+      triggersUsed: { ...runtime.triggersUsed, extraction_token_choice_staged: true },
+    },
+    buildExtractionTokenChoice(),
+  );
+
+  return {
+    runtime: nextRuntime,
+    logLines: ['>> EXTRACTION TOKEN — choose how to spend the stamped evac clearance.'],
+  };
 }

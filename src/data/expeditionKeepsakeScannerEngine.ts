@@ -21,7 +21,23 @@ import {
 import { getKeepsakeDefinition } from './expeditionKeepsakeRegistry';
 import { patchKeepsakeStats } from './keepsakeRunState';
 import { localProceduralDepth } from './proceduralScannerBridge';
+import {
+  applyKeepsakePhaseDOnNodeRevealed,
+  applyKeepsakePhaseDOnNodeSelected,
+  applyKeepsakePhaseDScannerLayerEffects,
+} from './expeditionKeepsakePhaseDEngine';
 import { applyKeepsakeOnExtractionNodeReveal } from './expeditionKeepsakeEconomyEngine';
+import {
+  buildCartographLockChoice,
+  buildPolaroidDevelopChoice,
+  queueKeepsakePendingChoice,
+} from './expeditionKeepsakeChoiceEngine';
+import {
+  patchKeepsakeNodeModifiers,
+  rankNodeIdsByScore,
+  scoreNodeForAttunement,
+  scoreNodeTypeForDoctrine,
+} from './expeditionKeepsakeRouteEngine';
 
 const RUNNER_IMPRINT_LABELS = [
   'RESIDUAL RUNNER SIGNATURE',
@@ -118,94 +134,6 @@ function rollScannerLayerContext(
   };
 }
 
-function stampHarmonicNode(
-  tree: ProceduralRunTree,
-  nodeId: string,
-  runContext: RunGenerationContext,
-): ProceduralRunTree {
-  const node = tree.nodes[nodeId];
-  if (!node) return tree;
-
-  const depthIndex = tree.macroDepthIndex ?? 1;
-  const existing = node.contextModifiers;
-  const pressureBand = existing?.nodePressureBand ?? 'MEDIUM';
-  const depthStage = existing?.depthStage ?? 'THRESHOLD';
-
-  const modifiers: NodeContextModifiers = {
-    depthStage,
-    nodePressureBand: pressureBand,
-    operationTag: runContext.activeOperation.objectiveKind,
-    highValueResource: node.type === 'RESOURCE' || existing?.highValueResource === true,
-    highRisk: true,
-    keepsakeHarmonic: true,
-    ...(existing?.echoSignal ? {
-      echoSignal: existing.echoSignal,
-      echoSignalLabel: existing.echoSignalLabel,
-    } : {}),
-  };
-
-  return {
-    ...tree,
-    nodes: {
-      ...tree.nodes,
-      [nodeId]: { ...node, contextModifiers: modifiers },
-    },
-  };
-}
-
-function applyEchoLureBonusSignal(
-  tree: ProceduralRunTree,
-  depth: number,
-  runtime: KeepsakeRuntime,
-): { tree: ProceduralRunTree; runtime: KeepsakeRuntime; triggered: boolean } {
-  if (tree.rollSeed == null || tree.modifierRollState == null) {
-    return { tree, runtime, triggered: false };
-  }
-
-  const trigger = tryKeepsakeTrigger(runtime, 'echo_lure_bonus_signal', 'run');
-  if (!trigger.triggered) {
-    return { tree, runtime, triggered: false };
-  }
-
-  const layerIds = (tree.depthIndex[depth] ?? []).filter((id) => {
-    const node = tree.nodes[id];
-    return node
-      && !node.echoOverlay
-      && !node.contextModifiers?.echoSignal
-      && isEchoOverlayNodeTypeEligible(node.type);
-  });
-  const targetId = pickDeterministicNodeId(layerIds, tree.rollSeed, depth, 'echo_lure');
-  if (!targetId) {
-    return { tree, runtime: trigger.runtime!, triggered: false };
-  }
-
-  const rollState = {
-    echoSignalsUsed: tree.modifierRollState.echoSignalsUsed,
-    legendaryEchoUsed: tree.modifierRollState.legendaryEchoUsed,
-    echoSignalsByDepth: { ...tree.modifierRollState.echoSignalsByDepth },
-  };
-  recordEchoOverlayPlacement(rollState, depth);
-
-  const node = tree.nodes[targetId]!;
-  const nextTree: ProceduralRunTree = {
-    ...tree,
-    modifierRollState: rollState,
-    nodes: {
-      ...tree.nodes,
-      [targetId]: {
-        ...node,
-        echoOverlay: createEchoOverlay(`lure:${depth}:${targetId}`),
-      },
-    },
-  };
-
-  const nextRuntime = patchKeepsakeStats(trigger.runtime!, {
-    echoSignalsGenerated: trigger.runtime!.stats.echoSignalsGenerated + 1,
-  });
-
-  return { tree: nextTree, runtime: nextRuntime, triggered: true };
-}
-
 function applySignalCompass(
   inc: ActiveIncursionState,
   tree: ProceduralRunTree,
@@ -224,12 +152,17 @@ function applySignalCompass(
     return { incursion: inc, runtime, logLines };
   }
 
-  const targetId = pickDeterministicNodeId(
-    layerIds.filter((id) => tree.nodes[id]?.type !== 'GATEKEEPER'),
-    tree.rollSeed!,
-    depth,
-    'signal_compass',
-  );
+  const attunement = runtime.deployment.attunement;
+  const eligible = layerIds.filter((id) => tree.nodes[id]?.type !== 'GATEKEEPER');
+  const scoreCompassNode = (nodeId: string): number => {
+    const node = tree.nodes[nodeId];
+    if (!node) return 0;
+    return scoreNodeForAttunement(node.type, node.contextModifiers, attunement);
+  };
+  const attuned = eligible.filter((id) => scoreCompassNode(id) >= 40);
+  const pool = attuned.length > 0 ? attuned : eligible;
+  const targetId = rankNodeIdsByScore(pool, tree, scoreCompassNode)[0]
+    ?? pickDeterministicNodeId(eligible, tree.rollSeed!, depth, 'signal_compass');
   if (!targetId) {
     return { incursion: inc, runtime: trigger.runtime, logLines };
   }
@@ -364,47 +297,6 @@ function applyDeadDropReceiver(
   };
 }
 
-function applyChoirTuningFork(
-  inc: ActiveIncursionState,
-  tree: ProceduralRunTree,
-  depth: number,
-  layerIds: readonly string[],
-  runtime: KeepsakeRuntime,
-  logLines: string[],
-): KeepsakeScannerApplyResult {
-  const runContext = inc.runGenerationContext;
-  if (!runContext || isOperationProgressLocked(runContext.activeOperation.lifecycleStatus)) {
-    return { incursion: inc, runtime, logLines };
-  }
-
-  const def = getKeepsakeDefinition('choir_tuning_fork');
-  const trigger = tryKeepsakeTrigger(runtime, def.primaryTriggerKey, 'run');
-  if (!trigger.triggered || !trigger.runtime || tree.rollSeed == null) {
-    return { incursion: inc, runtime, logLines };
-  }
-
-  const resourceIds = layerIds.filter((id) => tree.nodes[id]?.type === 'RESOURCE');
-  const eligibleIds = resourceIds.length > 0 ? resourceIds : layerIds.filter((id) => {
-    const type = tree.nodes[id]?.type;
-    return type && type !== 'GATEKEEPER' && type !== 'EXTRACTION';
-  });
-  const targetId = pickDeterministicNodeId(eligibleIds, tree.rollSeed, depth, 'choir_harmonic');
-  if (!targetId) {
-    return { incursion: inc, runtime: trigger.runtime, logLines };
-  }
-
-  const nextTree = stampHarmonicNode(tree, targetId, runContext);
-  logLines.push(formatKeepsakeLogLine('Fork', def.triggerMessage));
-
-  return {
-    incursion: { ...inc, proceduralRunTree: nextTree },
-    runtime: patchKeepsakeStats(trigger.runtime, {
-      harmonicNodesGenerated: trigger.runtime.stats.harmonicNodesGenerated + 1,
-    }),
-    logLines,
-  };
-}
-
 /** Apply scanner-layer keepsake hooks after procedural types and echo overlays resolve. */
 export function applyKeepsakeScannerLayerEffects(
   inc: ActiveIncursionState,
@@ -439,20 +331,11 @@ export function applyKeepsakeScannerLayerEffects(
     runtime = result.runtime;
   }
 
-  if (equippedKeepsakeId(runtime) === 'choir_tuning_fork' && runtime) {
-    const result = applyChoirTuningFork(nextInc, nextTree, depth, layerIds, runtime, logLines);
-    nextInc = result.incursion;
-    nextTree = result.incursion.proceduralRunTree ?? nextTree;
-    runtime = result.runtime;
-  }
-
-  if (equippedKeepsakeId(runtime) === 'echo_lure' && runtime) {
-    const lure = applyEchoLureBonusSignal(nextTree, depth, runtime);
-    nextTree = lure.tree;
-    if (lure.triggered) {
-      logLines.push(formatKeepsakeLogLine('Lure', getKeepsakeDefinition('echo_lure').triggerMessage));
-    }
-    runtime = lure.runtime;
+  if (equippedKeepsakeId(runtime) === 'anchor_charm' && runtime) {
+    const trail = applyAnchorCharmScannerTrail(nextInc, nextTree, depth, layerIds, runtime, logLines);
+    nextInc = trail.incursion;
+    nextTree = trail.incursion.proceduralRunTree ?? nextTree;
+    runtime = trail.runtime;
   }
 
   if (runtime) {
@@ -462,6 +345,20 @@ export function applyKeepsakeScannerLayerEffects(
     if (extractionReveal.incursionPatch) {
       nextInc = { ...nextInc, ...extractionReveal.incursionPatch };
     }
+  }
+
+  if (runtime) {
+    const phaseD = applyKeepsakePhaseDScannerLayerEffects(
+      nextInc,
+      nextTree,
+      depth,
+      layerIds,
+      runtime,
+      logLines,
+    );
+    nextInc = phaseD.incursion;
+    nextTree = phaseD.incursion.proceduralRunTree ?? nextTree;
+    runtime = phaseD.runtime;
   }
 
   return {
@@ -503,54 +400,84 @@ function buildGravePolaroidLines(
   return lines;
 }
 
-/** Ashen Cartograph — ghost one child route after node selection. */
+/** Ashen Cartograph + False Evac Beacon — node selection hooks. */
 export function applyKeepsakeOnNodeSelected(
   inc: ActiveIncursionState,
   selectedNodeId: string,
 ): KeepsakeScannerApplyResult {
-  const runtime = inc.keepsakeRuntime;
+  let runtime = inc.keepsakeRuntime;
   const logLines: string[] = [];
-  if (!runtime || runtime.keepsakeId !== 'ashen_cartograph') {
+  if (!runtime) {
     return { incursion: inc, runtime, logLines };
   }
 
-  const tree = inc.proceduralRunTree;
-  if (!tree) return { incursion: inc, runtime, logLines };
+  if (runtime.keepsakeId === 'ashen_cartograph') {
+    const tree = inc.proceduralRunTree;
+    if (tree) {
+      const depth = localProceduralDepth(inc.nodesCleared);
+      const trigger = tryKeepsakeTrigger(
+        runtime,
+        getKeepsakeDefinition('ashen_cartograph').primaryTriggerKey,
+        'depth',
+        depth,
+      );
+      if (trigger.triggered && trigger.runtime) {
+        const parent = tree.nodes[selectedNodeId];
+        const childIds = parent?.children ?? [];
+        const doctrine = trigger.runtime.deployment.routeDoctrine;
+        const scoreChild = (nodeId: string): number => {
+          const node = tree.nodes[nodeId];
+          if (!node) return 0;
+          return scoreNodeTypeForDoctrine(node.type, node.contextModifiers, doctrine);
+        };
+        const rankedChildren = rankNodeIdsByScore(
+          childIds.filter((id) => tree.nodes[id] != null),
+          tree,
+          scoreChild,
+        );
+        const ghostIds = rankedChildren.slice(0, 2);
+        const ghostId = ghostIds[0] ?? pickDeterministicNodeId(
+          childIds.filter((id) => tree.nodes[id] != null),
+          tree.rollSeed ?? 0,
+          depth,
+          'ashen_cartograph',
+        );
 
-  const depth = localProceduralDepth(inc.nodesCleared);
-  const trigger = tryKeepsakeTrigger(
-    runtime,
-    getKeepsakeDefinition('ashen_cartograph').primaryTriggerKey,
-    'depth',
-    depth,
-  );
-  if (!trigger.triggered || !trigger.runtime) {
-    return { incursion: inc, runtime, logLines };
+        if (ghostId) {
+          logLines.push(formatKeepsakeLogLine('Cartograph', getKeepsakeDefinition('ashen_cartograph').triggerMessage));
+          let nextRuntime = patchKeepsakeStats(trigger.runtime, {
+            futureNodesPreviewed: trigger.runtime.stats.futureNodesPreviewed + ghostIds.length,
+          });
+          if (!nextRuntime.pendingChoice) {
+            nextRuntime = queueKeepsakePendingChoice(
+              nextRuntime,
+              buildCartographLockChoice(ghostId),
+            );
+          }
+          runtime = nextRuntime;
+          return {
+            incursion: {
+              ...inc,
+              keepsakeRuntime: runtime,
+              keepsakeCartographGhostNodeId: ghostId,
+              keepsakeCartographGhostNodeIds: ghostIds,
+            },
+            runtime,
+            logLines,
+          };
+        }
+        runtime = trigger.runtime;
+      }
+    }
   }
 
-  const parent = tree.nodes[selectedNodeId];
-  const childIds = parent?.children ?? [];
-  const ghostId = pickDeterministicNodeId(
-    childIds.filter((id) => tree.nodes[id] != null),
-    tree.rollSeed ?? 0,
-    depth,
-    'ashen_cartograph',
-  );
-
-  if (!ghostId) {
-    return { incursion: inc, runtime: trigger.runtime, logLines };
-  }
-
-  logLines.push(formatKeepsakeLogLine('Cartograph', getKeepsakeDefinition('ashen_cartograph').triggerMessage));
+  const phaseD = applyKeepsakePhaseDOnNodeSelected(inc, selectedNodeId, runtime);
+  runtime = phaseD.runtime ?? runtime;
+  logLines.push(...phaseD.logLines);
 
   return {
-    incursion: {
-      ...inc,
-      keepsakeCartographGhostNodeId: ghostId,
-    },
-    runtime: patchKeepsakeStats(trigger.runtime, {
-      futureNodesPreviewed: trigger.runtime.stats.futureNodesPreviewed + 1,
-    }),
+    incursion: { ...inc, keepsakeRuntime: runtime },
+    runtime,
     logLines,
   };
 }
@@ -584,6 +511,9 @@ export function applyKeepsakeOnNodeRevealed(
   }
 
   if (runtime.keepsakeId !== 'grave_polaroid') {
+    const phaseDReveal = applyKeepsakePhaseDOnNodeRevealed(nextInc, nodeId, runtime);
+    if (phaseDReveal.runtime) runtime = phaseDReveal.runtime;
+    logLines.push(...phaseDReveal.logLines);
     return { incursion: nextInc, runtime, logLines };
   }
 
@@ -617,14 +547,77 @@ export function applyKeepsakeOnNodeRevealed(
   const previewLines = buildGravePolaroidLines(modifiers, node.type);
   logLines.push(formatKeepsakeLogLine('Polaroid', getKeepsakeDefinition('grave_polaroid').triggerMessage));
 
+  let nextRuntime = patchKeepsakeStats(trigger.runtime, {
+    echoGlassBonus: trigger.runtime.stats.echoGlassBonus + 1,
+  });
+  if (!nextRuntime.pendingChoice) {
+    nextRuntime = queueKeepsakePendingChoice(
+      nextRuntime,
+      buildPolaroidDevelopChoice(nodeId),
+    );
+  }
+
+  const phaseDReveal = applyKeepsakePhaseDOnNodeRevealed(nextInc, nodeId, nextRuntime);
+  nextRuntime = phaseDReveal.runtime ?? nextRuntime;
+  logLines.push(...phaseDReveal.logLines);
+
   return {
     incursion: {
       ...nextInc,
       proceduralRunTree: nextTree,
       keepsakeGravePolaroidPreview: { nodeId, lines: previewLines },
     },
+    runtime: nextRuntime,
+    logLines,
+  };
+}
+
+function applyAnchorCharmScannerTrail(
+  inc: ActiveIncursionState,
+  tree: ProceduralRunTree,
+  depth: number,
+  layerIds: readonly string[],
+  runtime: KeepsakeRuntime,
+  logLines: string[],
+): KeepsakeScannerApplyResult {
+  if (runtime.triggersUsed.anchor_charm_trail_started) {
+    return { incursion: inc, runtime, logLines };
+  }
+
+  const trigger = tryKeepsakeTrigger(runtime, 'anchor_charm_trail_started', 'run');
+  if (!trigger.triggered || !trigger.runtime) {
+    return { incursion: inc, runtime, logLines };
+  }
+
+  const candidates = layerIds.filter((id) => {
+    const node = tree.nodes[id];
+    return node
+      && node.type !== 'GATEKEEPER'
+      && node.type !== 'EXTRACTION'
+      && !node.contextModifiers?.anchorSignal;
+  });
+  const targetId = pickDeterministicNodeId(
+    candidates,
+    tree.rollSeed ?? 0,
+    depth,
+    'anchor_charm_trail',
+  );
+  if (!targetId) {
+    return { incursion: inc, runtime: trigger.runtime, logLines };
+  }
+
+  const nextTree = patchKeepsakeNodeModifiers(tree, targetId, {
+    anchorSignal: true,
+    keepsakeHarmonic: true,
+    highRisk: true,
+  });
+
+  logLines.push(formatKeepsakeLogLine('Charm', 'Anchor trail harmonic staged on scanner layer.'));
+
+  return {
+    incursion: { ...inc, proceduralRunTree: nextTree },
     runtime: patchKeepsakeStats(trigger.runtime, {
-      echoGlassBonus: trigger.runtime.stats.echoGlassBonus + 1,
+      anchorSignalsGenerated: trigger.runtime.stats.anchorSignalsGenerated + 1,
     }),
     logLines,
   };
@@ -641,6 +634,11 @@ export function getKeepsakeCartographGhostType(
   inc: ActiveIncursionState,
   nodeId: string,
 ): ProceduralNodeType | null {
-  if (inc.keepsakeCartographGhostNodeId !== nodeId) return null;
+  const ghostIds = inc.keepsakeCartographGhostNodeIds?.length
+    ? inc.keepsakeCartographGhostNodeIds
+    : inc.keepsakeCartographGhostNodeId
+      ? [inc.keepsakeCartographGhostNodeId]
+      : [];
+  if (!ghostIds.includes(nodeId)) return null;
   return inc.proceduralRunTree?.nodes[nodeId]?.type ?? null;
 }

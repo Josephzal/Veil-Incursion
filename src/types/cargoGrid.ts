@@ -98,10 +98,19 @@ export interface CargoGridState {
   placed: PlacedCargoItem[];
 }
 
+export interface OutsideCargoHook {
+  instanceId: string;
+  itemId: CargoItemId;
+  currentValue: number;
+  scent: number;
+}
+
 export interface CargoRunState {
   grid: CargoGridState;
   containment: ContainmentItem[];
   dataBleedActive: boolean;
+  /** Bent Nail — 1×1 outside-cargo hook (lost first on dirty extraction). */
+  outsideHook?: OutsideCargoHook | null;
 }
 
 /** Persistent cabal vault — survives district transitions and hub returns. */
@@ -469,5 +478,6 @@ export function createDefaultCargoRunState(): CargoRunState {
     grid: { placed: [] },
     containment: [],
     dataBleedActive: false,
+    outsideHook: null,
   };
 }

@@ -1,20 +1,25 @@
-import type { KeepsakeId } from '../types/expeditionKeepsake';
+import type { KeepsakeDeployment, KeepsakeId } from '../types/expeditionKeepsake';
 import type { ActiveIncursionState } from '../types/game';
-import { buildKeepsakeDebriefSummary, formatKeepsakeDebriefPreview } from './runDebriefKeepsakeEngine';
+import { formatKeepsakeDebriefPreview, simulateKeepsakeDebriefReport } from './runDebriefKeepsakeEngine';
+import { auditReportExpeditionKeepsake, formatExpeditionKeepsakeEngineReport } from './expeditionKeepsakeAuditEngine';
+import { formatKeepsakeAcceptanceReport, validateExpeditionKeepsakeAcceptance } from './expeditionKeepsakeAcceptanceEngine';
 import { formatKeepsakeRuntimeDebugSnapshot } from './keepsakeRunState';
-import {
-  formatKeepsakeValidationReport,
-  validateExpeditionKeepsakePipeline,
-} from './expeditionKeepsakeValidation';
 import { ALL_KEEPSAKE_IDS } from './expeditionKeepsakeRegistry';
 
 export function formatKeepsakeDebugValidation(
   equippedKeepsakeId?: KeepsakeId | null,
   unlockedKeepsakeIds?: readonly KeepsakeId[],
+  deployment?: KeepsakeDeployment | null,
 ): string {
-  return formatKeepsakeValidationReport(
-    validateExpeditionKeepsakePipeline(equippedKeepsakeId, unlockedKeepsakeIds),
-  );
+  return formatExpeditionKeepsakeEngineReport(equippedKeepsakeId, unlockedKeepsakeIds, deployment);
+}
+
+export function formatKeepsakeAcceptanceDebugReport(): string {
+  return [
+    auditReportExpeditionKeepsake(),
+    '',
+    formatKeepsakeAcceptanceReport(validateExpeditionKeepsakeAcceptance()),
+  ].join('\n');
 }
 
 export function formatKeepsakeIncursionDebugSnapshot(incursion: ActiveIncursionState): string {
@@ -30,13 +35,5 @@ export function listKeepsakeDebugIds(): string {
 }
 
 export function previewKeepsakeDebriefFromIncursion(incursion: ActiveIncursionState): string {
-  const summary = buildKeepsakeDebriefSummary(incursion.keepsakeRuntime);
-  if (!summary) return 'KEEPSAKE DEBRIEF PREVIEW — none equipped.';
-  return [
-    'KEEPSAKE DEBRIEF PREVIEW',
-    `name: ${summary.name}`,
-    `triggered: ${summary.triggered}`,
-    `triggers: ${summary.triggerCount}`,
-    ...(summary.note ? [summary.note] : summary.statLines),
-  ].join('\n');
+  return simulateKeepsakeDebriefReport(incursion.keepsakeRuntime);
 }

@@ -12,7 +12,6 @@ import SafehouseBenchPanel, {
   type BenchSlotView,
 } from '../components/safehouse/SafehouseBenchPanel';
 import SafehousePayloadRouter from '../components/safehouse/SafehousePayloadRouter';
-import SafehouseCoinModal from '../components/safehouse/SafehouseCoinModal';
 import { useRun } from '../context/RunContext';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useTerminal } from '../context/TerminalContext';
@@ -58,7 +57,6 @@ export default function SafehouseScreen(): React.JSX.Element {
     setHexShotLoadout,
     setEnvoyLoadout,
     relocateCargoItem,
-    commitKeepsakeSafehouseCoinService,
   } = useRun();
   const {
     account,
@@ -87,10 +85,6 @@ export default function SafehouseScreen(): React.JSX.Element {
     () => (activeIncursion.activeClass ?? account.activeClass) === 'AEGIS' ? 0 : 1,
   );
   const [loadoutStatus, setLoadoutStatus] = useState<string | null>(null);
-  const [coinModalDismissed, setCoinModalDismissed] = useState(false);
-
-  const showSafehouseCoinModal = activeIncursion.keepsakeRuntime?.safehouseCoinServicePending === true
-    && !coinModalDismissed;
 
   const operativeClass = activeIncursion.activeClass ?? account.activeClass;
   const intel = getSafehouseIntel();
@@ -330,12 +324,6 @@ export default function SafehouseScreen(): React.JSX.Element {
     setStatusLine(result.logLine);
   }, [appendRunLog, restoreHealthFromBench]);
 
-  const handleCoinService = useCallback((service: import('../data/expeditionKeepsakeSafehouseEngine').SafehouseCoinService) => {
-    commitKeepsakeSafehouseCoinService(service);
-    setCoinModalDismissed(true);
-    setStatusLine('>> SAFEHOUSE COIN — favor committed.');
-  }, [commitKeepsakeSafehouseCoinService]);
-
   const handleUnseal = useCallback(() => {
     if (exitToDevTestHub()) return;
     transitionToNextDistrict();
@@ -448,12 +436,6 @@ export default function SafehouseScreen(): React.JSX.Element {
             </View>
           </View>
         </RunEventImmersiveBackdrop>
-        <SafehouseCoinModal
-          visible={showSafehouseCoinModal}
-          accentColor={activeCabal}
-          fontScale={fontScale}
-          onSelect={handleCoinService}
-        />
       </IncursionRunLayout>
     </IncursionShell>
   );

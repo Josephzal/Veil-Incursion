@@ -100,6 +100,42 @@ export function resolveNodeScannerSignals(
     });
   }
 
+  if (ctx?.keepsakeOccultLock) {
+    signals.push({
+      kind: 'HIGH_RISK',
+      label: 'OCCULT LOCK',
+      color: SCANNER_SIGNAL_COLORS.HIGH_RISK,
+      intensity: 0.9,
+    });
+  }
+
+  if (ctx?.keepsakeTaggedQuarry) {
+    signals.push({
+      kind: 'HIGH_RISK',
+      label: 'TAGGED QUARRY',
+      color: SCANNER_SIGNAL_COLORS.HIGH_RISK,
+      intensity: 0.95,
+    });
+  }
+
+  if (ctx?.keepsakeFalseBeacon) {
+    signals.push({
+      kind: 'HIGH_RISK',
+      label: 'FALSE BEACON',
+      color: SCANNER_SIGNAL_COLORS.HIGH_RISK,
+      intensity: 0.8,
+    });
+  }
+
+  if (ctx?.keepsakeMirrored) {
+    signals.push({
+      kind: 'OPERATION',
+      label: 'MIRRORED NODE',
+      color: SCANNER_SIGNAL_COLORS.OPERATION,
+      intensity: 0.75,
+    });
+  }
+
   return dedupeSignals(signals);
 }
 

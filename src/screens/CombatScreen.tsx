@@ -668,7 +668,6 @@ export default function CombatScreen(): React.JSX.Element {
                       envoyAbilityGrafts={activeIncursion.envoyAbilityGrafts}
                       encounterUltimateDisabled={activeIncursion.encounterUltimateDisabled}
                       cargoHealReceivedMultiplier={cargoHealReceivedMultiplier}
-                      keepsakeCombatShieldHits={activeIncursion.keepsakeCombatShieldHits}
                       operativeClass={operativeClass}
                     />
                     </CombatDashboardCommandColumn>

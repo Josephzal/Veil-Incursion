@@ -4,6 +4,7 @@ import { StyleSheet, View, ViewStyle } from 'react-native';
 import { resolveSpecialCargoStacksForIncursion } from '../data/postRunCargoRoutingRunState';
 import CargoGridOverlay from './CargoGridOverlay';
 import RunGlobalChrome from './RunGlobalChrome';
+import KeepsakeTriggerToast from './KeepsakeTriggerToast';
 import RunStatusOverlay from './RunStatusOverlay';
 import { CargoOverlayProvider } from '../context/CargoOverlayContext';
 import { RunStatusOverlayProvider } from '../context/RunStatusOverlayContext';
@@ -143,6 +144,7 @@ export default function IncursionRunLayout({
         <View style={[styles.root, style]}>
           <View style={styles.content}>
             {children}
+            {showRunOverlays ? <KeepsakeTriggerToast /> : null}
             {showRunOverlays && !combatMode && !hideRunChrome ? <RunGlobalChrome /> : null}
           </View>
 
