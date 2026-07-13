@@ -24,6 +24,7 @@ import {
 } from './expeditionKeepsakeChoiceEngine';
 import {
   getResourceCategory,
+  isResourceItemId,
 } from './resourceRegistry';
 import { isUnstableCargoEffectId } from '../types/unstableCargoEffects';
 import type { UnstableCarriedEffectDefinition } from '../types/unstableCargoEffects';
@@ -214,6 +215,10 @@ export function applyKeepsakeOnCargoPickup(
     return { runtime, logLines };
   }
 
+  if (!isResourceItemId(resourceId)) {
+    return { runtime, logLines };
+  }
+
   let nextRuntime = runtime;
   const category = getResourceCategory(resourceId);
 
@@ -391,7 +396,8 @@ export function processKeepsakeStagedCargoPickup(
     const item = cargo.containment.find((entry) => entry.instanceId === instanceId)
       ?? cargo.grid.placed.find((entry) => entry.instanceId === instanceId);
     if (!item) return;
-    const resourceId = item.itemId as ResourceItemId;
+    if (!isResourceItemId(item.itemId)) return;
+    const resourceId = item.itemId;
     const list = byResource.get(resourceId) ?? [];
     list.push(instanceId);
     byResource.set(resourceId, list);
