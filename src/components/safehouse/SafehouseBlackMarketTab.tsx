@@ -7,6 +7,8 @@ import {
   listFenceableStashEntries,
 } from '../../data/hubSafehouseEngine';
 import { formatCargoRoutingBlackMarketIntelLines } from '../../data/cargoRoutingIntelEngine';
+import { getAppraisalBandLabel } from '../../data/sealedCasketAppraisalEngine';
+import { listSealedStashEntries, SEALED_CASKET_CONFIG } from '../../data/sealedCargoEngine';
 import { getResourceDisplayName, getResourceCategory } from '../../data/resourceRegistry';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useWorldState } from '../../context/WorldStateContext';
@@ -207,9 +209,93 @@ function FenceRow({
   );
 }
 
+interface SealedAppraisalRowProps {
+  stackId: string;
+  state: 'SEALED' | 'APPRAISED';
+  valueBand?: import('../../types/sealedCargo').AppraisalValueBand;
+  sellValue: number;
+  cabalCredits: number;
+  economyColor: string;
+  borderColor: string;
+  textColor: string;
+  mutedColor: string;
+  onAppraise: () => void;
+  onOpen: () => void;
+  onSell: () => void;
+}
+
+function SealedAppraisalRow({
+  state,
+  valueBand,
+  sellValue,
+  cabalCredits,
+  economyColor,
+  borderColor,
+  textColor,
+  mutedColor,
+  onAppraise,
+  onOpen,
+  onSell,
+}: SealedAppraisalRowProps): React.JSX.Element {
+  const { scaleSize, scaleSpacing } = useHubLayout();
+  const inlineButtonHeight = {
+    minHeight: scaleSize(36),
+    paddingVertical: scaleSpacing(8),
+  };
+  const canAppraise = state === 'SEALED' && cabalCredits >= SEALED_CASKET_CONFIG.appraisalFee;
+  const openingFee = state === 'APPRAISED' ? 0 : SEALED_CASKET_CONFIG.openingFee;
+  const canOpen = cabalCredits >= openingFee;
+
+  return (
+    <View style={[styles.fenceRow, { borderColor, backgroundColor: DOSSIER_ROW_BG }]}>
+      <View style={styles.fenceInfo}>
+        <TerminalText variant="body" style={{ color: textColor, fontWeight: '700' }}>
+          SEALED CONTAINMENT CASKET
+        </TerminalText>
+        <TerminalText variant="caption" style={{ color: mutedColor }}>
+          {state === 'APPRAISED' && valueBand
+            ? `${getAppraisalBandLabel(valueBand).toUpperCase()} // SELL ${sellValue} CR`
+            : `UNAPPRAISED // SELL ${sellValue} CR // APPRAISE ${SEALED_CASKET_CONFIG.appraisalFee} CR`}
+        </TerminalText>
+      </View>
+      <View style={styles.fenceActions}>
+        {state === 'SEALED' ? (
+          <TacticalButton
+            label="[ APPRAISE ]"
+            active={canAppraise}
+            onPress={onAppraise}
+            accentColor={economyColor}
+            mutedColor={mutedColor}
+            variant="inline"
+            style={[dossierOpaqueCtaStyle(economyColor), inlineButtonHeight, !canAppraise ? { opacity: 0.45 } : null]}
+          />
+        ) : null}
+        <TacticalButton
+          label={openingFee > 0 ? `[ OPEN −${openingFee} ]` : '[ OPEN ]'}
+          active={canOpen}
+          onPress={onOpen}
+          accentColor={economyColor}
+          mutedColor={mutedColor}
+          variant="inline"
+          style={[dossierOpaqueCtaStyle(economyColor), inlineButtonHeight, !canOpen ? { opacity: 0.45 } : null]}
+        />
+        <TacticalButton
+          label="[ SELL ]"
+          active
+          onPress={onSell}
+          accentColor={economyColor}
+          mutedColor={mutedColor}
+          variant="inline"
+          style={[dossierOpaqueCtaStyle(economyColor), inlineButtonHeight]}
+        />
+      </View>
+    </View>
+  );
+}
+
 export default function SafehouseBlackMarketTab(): React.JSX.Element {
   const { theme } = useTerminal();
-  const { account, purchaseHubContraband, sellFenceResource, appendHubLog } = usePlayerAccount();
+  const { account, purchaseHubContraband, sellFenceResource, appendHubLog, appraiseSealedCargoInHub, openSealedCargoInHub, sellSealedCargoInHub } = usePlayerAccount();
   const { hubBlackMarketDiscountPct } = useWorldState();
   const marketDiscount = hubBlackMarketDiscountPct;
   const [selectedListingId, setSelectedListingId] = useState<CargoItemId | null>(null);
@@ -231,7 +317,9 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
   const selectedPrice = selectedListing ? hubContrabandPrice(selectedListing.price, marketDiscount) : 0;
   const canBuy = selectedListing != null && account.cabalCredits >= selectedPrice;
 
-  const fenceEntries = listFenceableStashEntries(account.resourceStash);
+  const fenceEntries = listFenceableStashEntries(account.resourceStash)
+    .filter((entry) => entry.resourceId !== 'sealed-containment-casket');
+  const sealedEntries = listSealedStashEntries(account.resourceStash, account.sealedCargoStacks ?? []);
 
   const handleBuy = () => {
     if (!selectedListingId) return;
@@ -369,6 +457,39 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
           </ScrollView>
         </DossierCardShell>
       </View>
+
+      {sealedEntries.length > 0 ? (
+        <DossierCardShell
+          padding={panelPadding}
+          style={[styles.appraisalPanel, { marginTop: scaleSpacing(10) }]}
+        >
+          <TerminalText variant="panelTitle" letterSpacing={0.8} style={[styles.panelTitle, { color: accent }]}>
+            APPRAISAL // SEALED CARGO
+          </TerminalText>
+          <TerminalText variant="caption" style={[styles.panelSub, { color: theme.mutedColor }]}>
+            Appraise to reveal value band. Opening fee waived after appraisal. Selling forfeits hidden contents.
+          </TerminalText>
+          <View style={styles.listContent}>
+            {sealedEntries.map((entry) => (
+              <SealedAppraisalRow
+                key={entry.stackId}
+                stackId={entry.stackId}
+                state={entry.state === 'APPRAISED' ? 'APPRAISED' : 'SEALED'}
+                valueBand={entry.valueBand}
+                sellValue={entry.sellValue}
+                cabalCredits={account.cabalCredits}
+                economyColor={economyColor}
+                borderColor={theme.borderColor}
+                textColor={theme.textColor}
+                mutedColor={theme.mutedColor}
+                onAppraise={() => appendHubLog(appraiseSealedCargoInHub(entry.stackId).logLine)}
+                onOpen={() => appendHubLog(openSealedCargoInHub(entry.stackId).logLine)}
+                onSell={() => appendHubLog(sellSealedCargoInHub(entry.stackId).logLine)}
+              />
+            ))}
+          </View>
+        </DossierCardShell>
+      ) : null}
     </View>
   );
 }
@@ -502,5 +623,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '800',
     fontFamily: 'monospace',
+  },
+  appraisalPanel: {
+    flexShrink: 0,
   },
 });

@@ -390,7 +390,7 @@ export function validateAllRoutingSimIntegrity(): PostRunCargoRoutingValidationI
     { 'smugglers-ledger': 'SELL_FENCE', 'tarnished-dog-tags': 'SELL_FENCE' },
     { 'smugglers-ledger': 'DELIVER_SPONSOR' },
     { 'ley-slag': 'CONTRIBUTE_OPERATION' },
-    { 'sealed-containment-casket': 'OPEN_AT_HUB' },
+    { 'sealed-containment-casket': 'OPEN_SEALED' },
     { 'tarnished-dog-tags': 'SELL_FENCE' },
   ];
 
@@ -499,7 +499,9 @@ export function validateCargoRoutingResultIntegrity(
   Object.entries(result.fenced).forEach(([resourceId, quantity]) => {
     if (!quantity || quantity <= 0) return;
     const id = resourceId as ResourceItemId;
-    const expectedCredits = getResourceSellValue(id) * quantity;
+    const item = items.find((entry) => entry.resourceId === id);
+    const unitSellValue = item?.sealedSellValue ?? getResourceSellValue(id);
+    const expectedCredits = unitSellValue * quantity;
     const fencedCredits = result.outcomeLines
       .filter((line) => line.resourceId === id && line.action === 'SELL_FENCE')
       .reduce((sum, line) => sum + (line.creditsGained ?? 0), 0);

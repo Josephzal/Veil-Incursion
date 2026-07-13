@@ -1,4 +1,5 @@
 import type { BetrayalActionPreview, BetrayalEvent, BribeOffer } from './betrayal';
+import type { AppraisalValueBand, CasketAppraisalResult, CasketOpenResult, SealedCargoState } from './sealedCargo';
 import type { ActiveRunContract, ContractExtractionKind, ContractRunProgress } from './contract';
 import type { ResourceItemId, ResourceQuantity } from './resourceItem';
 import type { CabalEmployerId, OperationObjectiveKind } from './worldState';
@@ -9,6 +10,7 @@ export type CargoRoutingAction =
   | 'DELIVER_RIVAL_SPONSOR'
   | 'SELL_FENCE'
   | 'CONTRIBUTE_OPERATION'
+  | 'OPEN_SEALED'
   | 'OPEN_AT_HUB';
 
 export type RoutableCargoSource = 'EXTRACTED' | 'BANKED';
@@ -32,6 +34,13 @@ export interface RoutableCargoItem {
   trackedContractCargo: boolean;
   bribeOffer: BribeOffer | null;
   betrayalPreviewByAction: Partial<Record<CargoRoutingAction, BetrayalActionPreview>>;
+  sealedItemKey?: string;
+  sealedState?: SealedCargoState;
+  valueBand?: AppraisalValueBand;
+  appraisalFee?: number;
+  openingFee?: number;
+  sealedSellValue?: number;
+  canAppraise?: boolean;
 }
 
 export interface CargoRoutingContext {
@@ -87,6 +96,11 @@ export interface CargoRoutingResult {
   deliveredResourcesForContract: ResourceQuantity;
   rivalDeliveryRewards: RivalDeliveryReward[];
   betrayalEvents: BetrayalEvent[];
+  casketAppraisalResults: CasketAppraisalResult[];
+  casketOpenResults: CasketOpenResult[];
+  appraisalFeesPaid: number;
+  openingFeesPaid: number;
+  generatedSpecialResources: ResourceQuantity;
 }
 
 export interface PostRunRoutingDebriefState {
@@ -101,4 +115,5 @@ export interface PostRunRoutingDebriefState {
   operationId: string | null;
   operationContributionPerStack: number;
   bribeOfferSeed: string;
+  sealedAppraisalByItemKey: Record<string, { state: SealedCargoState; valueBand?: AppraisalValueBand }>;
 }

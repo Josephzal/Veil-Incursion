@@ -17,11 +17,15 @@ import {
 } from '../data/runDebriefEchoEngine';
 import {
   buildDefaultRoutingDecisions,
+  enrichRoutableItemsWithSealedMeta,
+  appraiseSealedRoutingItem,
   formatAutoStashedSummary,
   previewPostRunCargoRouting,
   resolveFinalContractResultAfterRouting,
   validateCargoRoutingDecisions,
 } from '../data/postRunCargoRoutingEngine';
+import { getAppraisalBandLabel } from '../data/sealedCasketAppraisalEngine';
+import type { AppraisalValueBand, CasketAppraisalResult, SealedCargoState } from '../types/sealedCargo';
 import type { ContractResult } from '../types/contract';
 import type { CargoRoutingAction, CargoRoutingDecision, CargoRoutingResult } from '../types/postRunCargoRouting';
 import {
@@ -85,7 +89,7 @@ function contractStatusColor(status: ContractResult['status']): string {
 export default function OperationDebriefScreen(): React.JSX.Element | null {
   const { theme } = useTerminal();
   const { pendingDebrief, setPendingDebrief, clearPendingDebrief, tickAfterRunComplete, applyOperationContribution, persisted, sectors } = useWorldState();
-  const { appendHubLog, applyPostRunCargoRouting, applyBetrayalConsequences, grantContractRewards, account } = usePlayerAccount();
+  const { appendHubLog, applyPostRunCargoRouting, applyBetrayalConsequences, grantContractRewards, account, addCredits } = usePlayerAccount();
   const { goToHub } = useGameFlow();
   const immersivePadding = useImmersiveScreenPadding();
 
@@ -97,8 +101,23 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
   const [cargoOperationProgress, setCargoOperationProgress] = useState(0);
   const [displayProgressAfterPct, setDisplayProgressAfterPct] = useState<number | null>(null);
   const [routingError, setRoutingError] = useState<string | null>(null);
+  const [sealedAppraisalByItemKey, setSealedAppraisalByItemKey] = useState<
+    Record<string, { state: SealedCargoState; valueBand?: AppraisalValueBand }>
+  >({});
+  const [routingAppraisalResults, setRoutingAppraisalResults] = useState<CasketAppraisalResult[]>([]);
+  const [routingAppraisalCount, setRoutingAppraisalCount] = useState(0);
 
   const routingState = pendingDebrief?.routingState ?? null;
+
+  const pendingRoutingItems = useMemo(() => {
+    if (!routingState?.requiresRouting) return [];
+    return enrichRoutableItemsWithSealedMeta(
+      routingState.pendingItems,
+      sealedAppraisalByItemKey,
+      routingState.routingContext,
+      routingState.bribeOfferSeed,
+    );
+  }, [routingState, sealedAppraisalByItemKey]);
 
   useEffect(() => {
     if (!routingState?.requiresRouting) {
@@ -112,6 +131,9 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
     setCargoOperationProgress(0);
     setDisplayProgressAfterPct(null);
     setRoutingError(null);
+    setSealedAppraisalByItemKey({});
+    setRoutingAppraisalResults([]);
+    setRoutingAppraisalCount(0);
     setStepIndex(0);
   }, [pendingDebrief, routingState]);
 
@@ -210,21 +232,28 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
 
   const routingValidationIssues = useMemo(() => (
     routingState?.requiresRouting
-      ? validateCargoRoutingDecisions(routingState.pendingItems, decisions)
+      ? validateCargoRoutingDecisions(pendingRoutingItems, decisions)
       : []
-  ), [routingState, decisions]);
+  ), [routingState, pendingRoutingItems, decisions]);
+
+  const activeRoutingState = useMemo(() => (
+    routingState
+      ? { ...routingState, pendingItems: pendingRoutingItems, sealedAppraisalByItemKey }
+      : null
+  ), [routingState, pendingRoutingItems, sealedAppraisalByItemKey]);
 
   const routingPreview = useMemo(() => (
-    routingState?.requiresRouting && !routingApplied
+    activeRoutingState?.requiresRouting && !routingApplied
       ? previewPostRunCargoRouting({
         decisions,
-        items: routingState.pendingItems,
-        routingState,
+        items: pendingRoutingItems,
+        routingState: activeRoutingState,
         ledger: runResourceLedger,
         keepsakeRuntime,
+        cabalCredits: account.cabalCredits,
       })
       : null
-  ), [routingState, decisions, routingApplied, runResourceLedger, keepsakeRuntime]);
+  ), [activeRoutingState, pendingRoutingItems, decisions, routingApplied, runResourceLedger, keepsakeRuntime, account.cabalCredits]);
 
   const canConfirmRouting = routingState?.requiresRouting
     ? routingValidationIssues.length === 0 && (routingPreview?.valid ?? false)
@@ -234,7 +263,7 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
     setRoutingError(null);
     setDecisions((prev) => prev.map((entry) => {
       if (entry.resourceId !== resourceId) return entry;
-      const item = routingState?.pendingItems.find((pending) => pending.resourceId === resourceId);
+      const item = pendingRoutingItems.find((pending) => pending.resourceId === resourceId);
       return {
         ...entry,
         action,
@@ -252,21 +281,43 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
     )));
   };
 
+  const handleAppraiseSealed = (resourceId: CargoRoutingDecision['resourceId']) => {
+    if (!activeRoutingState) return;
+    const item = pendingRoutingItems.find((entry) => entry.resourceId === resourceId);
+    if (!item?.canAppraise) return;
+    setRoutingError(null);
+    const appraisal = appraiseSealedRoutingItem({
+      item,
+      cabalCredits: account.cabalCredits,
+      sealedAppraisalByItemKey,
+    });
+    if (!appraisal.ok || !appraisal.result) {
+      setRoutingError(appraisal.error ?? 'Appraisal failed.');
+      return;
+    }
+    addCredits(-appraisal.result.feePaid);
+    setSealedAppraisalByItemKey(appraisal.nextSealedAppraisalByItemKey);
+    setRoutingAppraisalResults((prev) => [...prev, appraisal.result!]);
+    setRoutingAppraisalCount((prev) => prev + 1);
+    appendHubLog(`>> APPRAISED — ${getAppraisalBandLabel(appraisal.result.valueBand).toUpperCase()} (−${appraisal.result.feePaid} CR)`);
+  };
+
   const applyRouting = async (): Promise<boolean> => {
-    if (!routingState || routingApplied || !canConfirmRouting) return false;
+    if (!activeRoutingState || routingApplied || !canConfirmRouting) return false;
     try {
       setRoutingError(null);
       const result = applyPostRunCargoRouting({
         decisions,
-        routingState,
+        routingState: activeRoutingState,
         autoStashAlreadyDeposited: true,
         keepsakeRuntime,
+        routingAppraisalCount,
       });
       const finalContract = resolveFinalContractResultAfterRouting(
-        routingState,
+        activeRoutingState,
         result,
         decisions,
-        routingState.pendingItems,
+        pendingRoutingItems,
         true,
         runResourceLedger,
         keepsakeRuntime,
@@ -274,10 +325,10 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
       applyBetrayalConsequences({
         contractResult: finalContract,
         routingResult: result,
-        routingState,
+        routingState: activeRoutingState,
         decisions,
         playerClass: account.activeClass,
-        depthReached: routingState.contractProgress.highestDepthReached,
+        depthReached: activeRoutingState.contractProgress.highestDepthReached,
       });
       if (finalContract.status === 'SUCCESS') {
         grantContractRewards(finalContract);
@@ -309,9 +360,9 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
       let routedOperationProgress = 0;
       let nextProgressAfter = pendingDebrief?.progressAfter ?? 0;
       let nextProgressAfterPct = pendingDebrief?.progressAfterPct ?? progressAfterPct;
-      if (result.operationProgressFromCargo > 0 && routingState.operationId) {
+      if (result.operationProgressFromCargo > 0 && activeRoutingState.operationId) {
         const contributionResult = await applyOperationContribution(
-          routingState.operationId,
+          activeRoutingState.operationId,
           result.operationProgressFromCargo,
         );
         routedOperationProgress = result.operationProgressFromCargo;
@@ -822,9 +873,10 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
               <>
                 <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>CARGO ROUTING</Text>
                 <CargoRoutingPanel
-                  items={routingState.pendingItems}
+                  items={pendingRoutingItems}
                   decisions={decisions}
                   autoStashedSummary={formatAutoStashedSummary(routingState.autoStashed)}
+                  cabalCredits={account.cabalCredits}
                   validationIssues={
                     routingValidationIssues.length > 0
                       ? routingValidationIssues
@@ -841,6 +893,7 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
                   previewRivalCredits={routingPreview?.creditsFromRivalDelivery ?? 0}
                   previewCasketCredits={routingPreview?.creditsFromCasketOpen ?? 0}
                   previewBetrayalSummary={routingPreview?.betrayalSummary ?? null}
+                  onAppraise={handleAppraiseSealed}
                   onDecisionChange={handleDecisionChange}
                   onQuantityChange={handleQuantityChange}
                   textColor={theme.textColor}

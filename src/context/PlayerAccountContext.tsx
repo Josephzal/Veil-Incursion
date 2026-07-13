@@ -76,8 +76,11 @@ import {
 } from '../data/hubSafehouseEngine';
 import { depositAllCargoToHubAccount, depositPhysicalBankSnapshot, resolveExtractionVeilResidueDeposit } from '../data/extractionPersistenceEngine';
 import type { CargoRoutingDecision, PostRunRoutingDebriefState } from '../types/postRunCargoRouting';
-import { applyCargoRoutingDecisions } from '../data/postRunCargoRoutingEngine';
+import { applyCargoRoutingDecisions, buildDefaultRoutingDecisions, buildSecondaryRoutingPendingItems, mergeCargoRoutingResults } from '../data/postRunCargoRoutingEngine';
 import { createDefaultCareerCargoRoutingStats, incrementCareerCargoRoutingFromResult } from '../data/postRunCargoRoutingRunState';
+import { createDefaultCareerSealedCargoStats } from '../types/sealedCargo';
+import { appraiseSealedCargoInStash, incrementCareerSealedFromRouting, openSealedCargoInStash, sellSealedCargoInStash, syncSealedStacksAfterRouting } from '../data/sealedCargoHubEngine';
+import { debugGrantSealedCasket } from '../data/sealedCargoDebugEngine';
 import { applyBetrayalConsequencesToAccount } from '../data/betrayalConsequencesEngine';
 import { buildBetrayalEventsFromRouting } from '../data/contractBetrayalResolver';
 import { DEFAULT_UNLOCKED_KEEPSAKE_IDS, isKeepsakeId } from '../data/expeditionKeepsakeRegistry';
@@ -201,6 +204,8 @@ export function createDefaultPlayerAccount(): PlayerAccount {
     careerCargoRouting: createDefaultCareerCargoRoutingStats(),
     sponsorTrustStats: {},
     betrayalHistory: [],
+    sealedCargoStacks: [],
+    careerSealedCargo: createDefaultCareerSealedCargoStats(),
     equippedKeepsakeId: null,
     unlockedKeepsakeIds: [...DEFAULT_UNLOCKED_KEEPSAKE_IDS],
     keepsakeDeployment: createDefaultKeepsakeDeployment(),
@@ -276,6 +281,11 @@ function mergeStoredAccount(parsed: Partial<PlayerAccount>): PlayerAccount {
       ...parsed.sponsorTrustStats,
     },
     betrayalHistory: parsed.betrayalHistory ?? defaults.betrayalHistory,
+    sealedCargoStacks: parsed.sealedCargoStacks ?? defaults.sealedCargoStacks,
+    careerSealedCargo: {
+      ...defaults.careerSealedCargo,
+      ...parsed.careerSealedCargo,
+    },
     equippedKeepsakeId:
       parsed.equippedKeepsakeId && isKeepsakeId(parsed.equippedKeepsakeId)
         ? parsed.equippedKeepsakeId
@@ -393,6 +403,7 @@ interface PlayerAccountContextType {
     routingState: PostRunRoutingDebriefState;
     autoStashAlreadyDeposited?: boolean;
     keepsakeRuntime?: import('../types/expeditionKeepsake').KeepsakeRuntime | null;
+    routingAppraisalCount?: number;
   }) => import('../types/postRunCargoRouting').CargoRoutingResult;
   applyBetrayalConsequences: (payload: {
     contractResult: import('../types/contract').ContractResult;
@@ -416,6 +427,10 @@ interface PlayerAccountContextType {
   ) => void;
   getStashCapacitySnapshot: () => { used: number; max: number };
   replaceResourceStash: (stash: ResourceQuantity) => void;
+  appraiseSealedCargoInHub: (stackId: string) => { success: boolean; logLine: string };
+  openSealedCargoInHub: (stackId: string) => { success: boolean; logLine: string };
+  sellSealedCargoInHub: (stackId: string) => { success: boolean; logLine: string };
+  grantSealedCasketInHub: (quantity?: number) => void;
 }
 
 const PlayerAccountContext = createContext<PlayerAccountContextType | undefined>(undefined);
@@ -1389,8 +1404,10 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       routingState: PostRunRoutingDebriefState;
       autoStashAlreadyDeposited?: boolean;
       keepsakeRuntime?: import('../types/expeditionKeepsake').KeepsakeRuntime | null;
+      routingAppraisalCount?: number;
     }) => {
       let result = null as ReturnType<typeof applyCargoRoutingDecisions> | null;
+      let finalResult = null as import('../types/postRunCargoRouting').CargoRoutingResult | null;
       updateAccount((prev) => {
         const applied = applyCargoRoutingDecisions({
           decisions: payload.decisions,
@@ -1400,28 +1417,121 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
           cabalCredits: prev.cabalCredits,
           operationContributionPerStack: payload.routingState.operationContributionPerStack,
           keepsakeRuntime: payload.keepsakeRuntime ?? null,
+          routingContext: payload.routingState.routingContext,
         });
         result = applied;
+
+        let mergedResult = applied.result;
+        let mergedStash = applied.stash;
+        let mergedCredits = applied.cabalCredits;
+
+        const secondaryItems = buildSecondaryRoutingPendingItems(
+          applied.result.generatedSpecialResources,
+          payload.routingState.routingContext,
+          payload.routingState.bribeOfferSeed,
+        );
+        if (secondaryItems.length > 0) {
+          const secondaryDecisions = buildDefaultRoutingDecisions(secondaryItems);
+          const secondaryApplied = applyCargoRoutingDecisions({
+            decisions: secondaryDecisions,
+            items: secondaryItems,
+            autoStashed: {},
+            stash: mergedStash,
+            cabalCredits: mergedCredits,
+            operationContributionPerStack: payload.routingState.operationContributionPerStack,
+            keepsakeRuntime: payload.keepsakeRuntime ?? null,
+            routingContext: payload.routingState.routingContext,
+          });
+          mergedResult = mergeCargoRoutingResults(mergedResult, secondaryApplied.result);
+          mergedStash = secondaryApplied.stash;
+          mergedCredits = secondaryApplied.cabalCredits;
+        }
+
+        const sealedStacks = syncSealedStacksAfterRouting(
+          prev,
+          mergedStash,
+          payload.routingState.pendingItems,
+          mergedResult,
+          payload.routingState.sealedAppraisalByItemKey,
+        );
+
+        finalResult = mergedResult;
+
         return {
           ...prev,
-          resourceStash: applied.stash,
-          cabalCredits: applied.cabalCredits,
+          resourceStash: mergedStash,
+          cabalCredits: mergedCredits,
+          sealedCargoStacks: sealedStacks,
+          careerSealedCargo: incrementCareerSealedFromRouting(
+            prev.careerSealedCargo ?? createDefaultCareerSealedCargoStats(),
+            mergedResult,
+            payload.routingAppraisalCount ?? 0,
+          ),
         };
       });
-      if (!result) {
+      if (!result || !finalResult) {
         throw new Error('Post-run cargo routing failed to apply.');
       }
       if (typeof __DEV__ !== 'undefined' && __DEV__) {
         const integrityIssues = validateCargoRoutingResultIntegrity(
           payload.routingState.pendingItems,
           payload.decisions,
-          result.result,
+          finalResult,
         );
         if (integrityIssues.length > 0) {
           console.warn(formatPostRunCargoRoutingValidationReport(integrityIssues));
         }
       }
-      return result.result;
+      return finalResult;
+    },
+    [updateAccount],
+  );
+
+  const appraiseSealedCargoInHub = useCallback(
+    (stackId: string): { success: boolean; logLine: string } => {
+      let logLine = '>> APPRAISAL FAILED — STACK NOT FOUND.';
+      updateAccount((prev) => {
+        const action = appraiseSealedCargoInStash(prev, stackId);
+        if (!action.ok || !action.accountPatch) return prev;
+        logLine = action.logLine ?? logLine;
+        return { ...prev, ...action.accountPatch };
+      });
+      return { success: logLine.includes('APPRAISED'), logLine };
+    },
+    [updateAccount],
+  );
+
+  const openSealedCargoInHub = useCallback(
+    (stackId: string): { success: boolean; logLine: string } => {
+      let logLine = '>> OPEN FAILED — STACK NOT FOUND.';
+      updateAccount((prev) => {
+        const action = openSealedCargoInStash(prev, stackId);
+        if (!action.ok || !action.accountPatch) return prev;
+        logLine = action.logLine ?? logLine;
+        return { ...prev, ...action.accountPatch };
+      });
+      return { success: logLine.includes('CASKET OPENED'), logLine };
+    },
+    [updateAccount],
+  );
+
+  const sellSealedCargoInHub = useCallback(
+    (stackId: string): { success: boolean; logLine: string } => {
+      let logLine = '>> SALE FAILED — STACK NOT FOUND.';
+      updateAccount((prev) => {
+        const action = sellSealedCargoInStash(prev, stackId);
+        if (!action.ok || !action.accountPatch) return prev;
+        logLine = action.logLine ?? logLine;
+        return { ...prev, ...action.accountPatch };
+      });
+      return { success: logLine.includes('SOLD SEALED'), logLine };
+    },
+    [updateAccount],
+  );
+
+  const grantSealedCasketInHub = useCallback(
+    (quantity = 1) => {
+      updateAccount((prev) => debugGrantSealedCasket(prev, quantity));
     },
     [updateAccount],
   );
@@ -1649,6 +1759,10 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       applyShadowWarDonationAccount,
       getStashCapacitySnapshot,
       replaceResourceStash,
+      appraiseSealedCargoInHub,
+      openSealedCargoInHub,
+      sellSealedCargoInHub,
+      grantSealedCasketInHub,
     }),
     [
       account,
@@ -1715,6 +1829,10 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       applyShadowWarDonationAccount,
       getStashCapacitySnapshot,
       replaceResourceStash,
+      appraiseSealedCargoInHub,
+      openSealedCargoInHub,
+      sellSealedCargoInHub,
+      grantSealedCasketInHub,
     ],
   );
 

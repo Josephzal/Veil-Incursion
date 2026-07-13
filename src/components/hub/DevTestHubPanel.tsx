@@ -26,6 +26,13 @@ import {
   debugSimulateRivalDelivery,
   debugValidateBetrayalOffers,
 } from '../../data/betrayalDebugEngine';
+import {
+  debugForceAppraisalBand,
+  debugForceOpenTier,
+  debugPreviewSealedStash,
+  debugSimulateOpenRolls,
+  debugValidateSealedCargo,
+} from '../../data/sealedCargoDebugEngine';
 import { SECTOR_WORLD_TEMPLATES } from '../../data/sectorWorldCatalog';
 import ExplorationHubPanel from '../ExplorationHubPanel';
 import HubScreenShell, { HubSectionHeader } from './HubScreenShell';
@@ -155,6 +162,7 @@ export default function DevTestHubPanel(): React.JSX.Element {
     equipWeaponFamily,
     upgradeWeaponFamilyTier,
     appendHubLog,
+    grantSealedCasketInHub,
   } = usePlayerAccount();
   const {
     selectedSector,
@@ -493,6 +501,45 @@ export default function DevTestHubPanel(): React.JSX.Element {
           label="[ BETRAYAL ACCOUNT LOG ]"
           accentColor={WARNING_ACCENT}
           onPress={() => setDebugReport(debugPrintBetrayalAccountSnapshot(account))}
+        />
+        <SandboxLaunchButton
+          label="[ GRANT SEALED CASKET ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            grantSealedCasketInHub(1);
+            setDebugReport(debugPreviewSealedStash(account));
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ PREVIEW SEALED STASH ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(debugPreviewSealedStash(account))}
+        />
+        <SandboxLaunchButton
+          label="[ SIM OPEN ROLLS ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(debugSimulateOpenRolls(20))}
+        />
+        <SandboxLaunchButton
+          label="[ FORCE APEX BAND ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            debugForceAppraisalBand('APEX_VALUE');
+            setDebugReport('Forced next appraisal roll to APEX_VALUE.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ FORCE APEX OPEN TIER ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            debugForceOpenTier('APEX_CACHE');
+            setDebugReport('Forced next casket open to APEX_CACHE.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ VALIDATE SEALED CARGO ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(debugValidateSealedCargo(account))}
         />
         <SandboxLaunchButton
           label="[ PREVIEW DEBRIEF ]"

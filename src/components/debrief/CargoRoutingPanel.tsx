@@ -6,6 +6,8 @@ import {
   formatCargoRoutingActionLabel,
   supportsPartialCargoRouting,
 } from '../../data/postRunCargoRoutingEngine';
+import { getAppraisalBandLabel } from '../../data/sealedCasketAppraisalEngine';
+import { formatSealedCargoWarning } from '../../data/sealedCargoEngine';
 import {
   getResourceCategory,
   getResourceDisplayName,
@@ -31,6 +33,8 @@ interface CargoRoutingPanelProps {
   previewRivalCredits?: number;
   previewCasketCredits?: number;
   previewBetrayalSummary?: string | null;
+  cabalCredits?: number;
+  onAppraise?: (resourceId: CargoRoutingDecision['resourceId']) => void;
   onDecisionChange: (resourceId: CargoRoutingDecision['resourceId'], action: CargoRoutingAction) => void;
   onQuantityChange?: (resourceId: CargoRoutingDecision['resourceId'], quantity: number) => void;
   textColor: string;
@@ -50,8 +54,18 @@ function actionChipLabel(
   }
   const base = formatCargoRoutingActionLabel(action);
   if (action === 'SELL_FENCE') {
-    const payout = getResourceSellValue(item.resourceId) * routedQuantity;
-    if (payout > 0) return `${base} (+${payout} CR)`;
+    const unitValue = item.sealedSellValue ?? getResourceSellValue(item.resourceId);
+    const payout = unitValue * routedQuantity;
+    if (payout > 0) {
+      return item.resourceId === 'sealed-containment-casket'
+        ? `Sell Sealed (+${payout} CR)`
+        : `${base} (+${payout} CR)`;
+    }
+  }
+  if (action === 'OPEN_SEALED' || action === 'OPEN_AT_HUB') {
+    const fee = item.openingFee ?? 0;
+    const feeLabel = fee > 0 ? ` (−${fee} CR)` : ' (fee waived)';
+    return `${base}${feeLabel}`;
   }
   if (action === 'CONTRIBUTE_OPERATION') {
     return `${base} (+progress)`;
@@ -67,6 +81,7 @@ function sourceLabel(source: RoutableCargoItem['source']): string {
 }
 
 function sectionTitleForItem(item: RoutableCargoItem): string {
+  if (item.resourceId === 'sealed-containment-casket') return 'Sealed Cargo / Contraband';
   if (item.isContractTarget) return 'Contract Cargo';
   if (item.isOperationTarget) return 'Operation Target';
   const category = getResourceCategory(item.resourceId);
@@ -96,6 +111,8 @@ export default function CargoRoutingPanel({
   previewRivalCredits = 0,
   previewCasketCredits = 0,
   previewBetrayalSummary = null,
+  cabalCredits = 0,
+  onAppraise,
   onDecisionChange,
   onQuantityChange,
   textColor,
@@ -190,7 +207,16 @@ export default function CargoRoutingPanel({
             const selectedAction = actionFor(item.resourceId);
             const routedQuantity = quantityFor(item);
             const partialRouting = supportsPartialCargoRouting(item);
-            const sellValue = getResourceSellValue(item.resourceId);
+            const sellValue = item.sealedSellValue ?? getResourceSellValue(item.resourceId);
+            const sealedWarning = item.resourceId === 'sealed-containment-casket'
+              ? formatSealedCargoWarning(item.isContractTarget, 'OPEN')
+              : null;
+            const appraiseWarning = item.resourceId === 'sealed-containment-casket' && item.canAppraise
+              ? formatSealedCargoWarning(item.isContractTarget, 'APPRAISE')
+              : null;
+            const sellSealedWarning = item.resourceId === 'sealed-containment-casket'
+              ? formatSealedCargoWarning(item.isContractTarget, 'SELL')
+              : null;
             return (
               <View key={item.resourceId} style={[styles.itemCard, { borderColor }]}>
                 <Text style={[styles.itemTitle, { color: textColor }]}>
@@ -228,10 +254,29 @@ export default function CargoRoutingPanel({
                 {item.isOperationTarget ? (
                   <Text style={[styles.flag, { color: TERMINAL_GREEN }]}>OPERATION TARGET</Text>
                 ) : null}
-                {sellValue > 0 && hasResourceUsageTag(item.resourceId, 'FENCE_VALUE') ? (
+                {sellValue > 0 && (hasResourceUsageTag(item.resourceId, 'FENCE_VALUE') || item.sealedSellValue) ? (
                   <Text style={[styles.itemMeta, { color: mutedColor }]}>
-                    {`Fence value: ${sellValue} CR each`}
+                    {item.sealedState === 'APPRAISED' && item.valueBand
+                      ? `Appraised: ${getAppraisalBandLabel(item.valueBand).toUpperCase()} // Sell sealed: ${sellValue} CR`
+                      : `Fence value: ${sellValue} CR each`}
                   </Text>
+                ) : null}
+                {item.sealedState === 'SEALED' && item.appraisalFee ? (
+                  <Text style={[styles.itemMeta, { color: mutedColor }]}>
+                    {`Appraisal fee: ${item.appraisalFee} CR // Opening fee: ${item.openingFee ?? 100} CR`}
+                  </Text>
+                ) : null}
+                {item.sealedState === 'APPRAISED' && item.openingFee === 0 ? (
+                  <Text style={[styles.flag, { color: TERMINAL_GREEN }]}>OPENING FEE WAIVED</Text>
+                ) : null}
+                {appraiseWarning ? (
+                  <Text style={[styles.warning, { color: WARNING_COLOR }]}>{appraiseWarning}</Text>
+                ) : null}
+                {sellSealedWarning ? (
+                  <Text style={[styles.warning, { color: WARNING_COLOR }]}>{sellSealedWarning}</Text>
+                ) : null}
+                {sealedWarning ? (
+                  <Text style={[styles.warning, { color: WARNING_COLOR }]}>{sealedWarning}</Text>
                 ) : null}
                 {item.contractWarning ? (
                   <Text style={[styles.warning, { color: WARNING_COLOR }]}>{item.contractWarning}</Text>
@@ -276,10 +321,29 @@ export default function CargoRoutingPanel({
                     ) : null}
                   </View>
                 ) : null}
+                {item.canAppraise ? (
+                  <HapticPressable
+                    disabled={(item.appraisalFee ?? 0) > cabalCredits}
+                    onPress={() => onAppraise?.(item.resourceId)}
+                    style={({ pressed }) => [
+                      styles.appraiseButton,
+                      {
+                        borderColor: TERMINAL_GREEN,
+                        opacity: (item.appraisalFee ?? 0) > cabalCredits ? 0.45 : 1,
+                        backgroundColor: pressed ? '#0d1a12' : '#102016',
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.actionChipText, { color: TERMINAL_GREEN }]}>
+                      {`APPRAISE (−${item.appraisalFee ?? 50} CR)`.toUpperCase()}
+                    </Text>
+                  </HapticPressable>
+                ) : null}
                 <View style={styles.actionRow}>
-                  {item.validActions.map((action) => {
-                    const selected = selectedAction === action;
-                    const disabled = action === 'OPEN_AT_HUB' && !item.openAtHubEnabled;
+                  {item.validActions.filter((action) => action !== 'OPEN_AT_HUB').map((action) => {
+                    const selected = selectedAction === action || (selectedAction === 'OPEN_AT_HUB' && action === 'OPEN_SEALED');
+                    const disabled = !item.openAtHubEnabled
+                      || ((item.openingFee ?? 0) > cabalCredits);
                     return (
                       <HapticPressable
                         key={`${item.resourceId}-${action}`}
@@ -391,6 +455,13 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     fontSize: 9,
     letterSpacing: 0.5,
+  },
+  appraiseButton: {
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    marginTop: 4,
+    alignSelf: 'flex-start',
   },
   quantityRow: {
     gap: 4,

@@ -170,7 +170,9 @@ After successful extraction, stable materials auto-stash. Special cargo requires
 
 **Special cargo:** UNSTABLE, INTEL, CONTRABAND, contract targets, operation targets (even when category is STABLE).
 
-**Routing actions:** Keep in Stash, Deliver to Sponsor, Accept Rival Offer (when generated), Sell to Black Market, Contribute to Operation, Open at Hub (Sealed Containment Casket v1 — basic reward table, no appraisal animation).
+**Routing actions:** Keep in Stash, Deliver to Sponsor, Accept Rival Offer (when generated), Sell to Black Market, Contribute to Operation, **Appraise** (sealed cargo, pre-decision), **Open / Crack** sealed casket (band-weighted reward table; opening fee waived if appraised).
+
+**Sealed cargo at routing:** Sealed Containment Caskets show state, value band (after appraisal), sell/open fees, and contract warnings. Appraisal deducts credits immediately and refreshes routable item metadata. Opening may spawn **secondary routable resources** (auto-routed with default decisions after confirm).
 
 **Partial routing (Phase 4):** Stackable items (e.g. Tarnished Dog Tags) support routing a subset; remainder auto-keeps in stash.
 
@@ -190,7 +192,7 @@ After successful extraction, stable materials auto-stash. Special cargo requires
 
 **Extraction flow:** `useDescentNavigator.finalizeSectorExtraction` excludes pending resources from `persistRunExtraction`, defers contract rewards and world tick until routing completes.
 
-**Key files:** `postRunCargoRoutingEngine.ts`, `postRunCargoRoutingRunState.ts`, `cargoRoutingIntelEngine.ts`, `sealedCasketOpenEngine.ts`, `runDebriefCargoRoutingEngine.ts`, `postRunCargoRoutingValidation.ts`, `postRunCargoRoutingAuditEngine.ts`, `postRunCargoRoutingFixtures.ts`, `contractExtractionKind.ts`, `CargoRoutingPanel.tsx`, `OperationDebriefScreen.tsx`, `VeilFrontDeployConfirmModal.tsx`, `SectorBriefingPanel.tsx`, `ContractBoardPanel.tsx`, `SafehouseBlackMarketTab.tsx`, `ExtractionReviewScreen.tsx`.
+**Key files:** `postRunCargoRoutingEngine.ts`, `postRunCargoRoutingRunState.ts`, `cargoRoutingIntelEngine.ts`, `sealedCasketAppraisalEngine.ts`, `sealedCasketOpenEngine.ts`, `sealedCargoEngine.ts`, `sealedCargoHubEngine.ts`, `runDebriefCargoRoutingEngine.ts`, `postRunCargoRoutingValidation.ts`, `postRunCargoRoutingAuditEngine.ts`, `postRunCargoRoutingFixtures.ts`, `contractExtractionKind.ts`, `CargoRoutingPanel.tsx`, `OperationDebriefScreen.tsx`, `VeilFrontDeployConfirmModal.tsx`, `SectorBriefingPanel.tsx`, `ContractBoardPanel.tsx`, `SafehouseBlackMarketTab.tsx`, `ExtractionReviewScreen.tsx`.
 
 **Veil Front surfaces:** Deploy confirmation Cargo Routing row, sector briefing CARGO ROUTING intel block, operation CONTRIBUTES chips for debrief contribution, contract POST-RUN DELIVERY hints, recommended sector tags for fence-value / post-run contribution runs.
 
@@ -203,7 +205,7 @@ After successful extraction, stable materials auto-stash. Special cargo requires
 5. ✅ Contraband routable when valid.
 6. ✅ Smuggler's Ledger behaves as INTEL / FENCE_VALUE (not crafting).
 7. ✅ Tarnished Dog Tags stackable INTEL / FENCE_VALUE with partial routing.
-8. ✅ Sealed Containment Casket CONTRABAND with Open at Hub v1 reward table.
+8. ✅ Sealed Containment Casket — appraisal, band-weighted open table, sell sealed, hub + routing surfaces.
 9. ✅ Contract cargo deliverable to sponsor for payout/reputation.
 10. ✅ Keeping/selling contract cargo prevents contract completion.
 11. ✅ Operation target cargo contributable for operation progress.
@@ -275,8 +277,9 @@ Post-run cargo routing for **eligible contract cargo** can generate **rival spon
 | Sell to Black Market | FENCED_TO_BLACK_MARKET | SOFT | −1 |
 | Keep in stash | KEPT_BY_PLAYER | FAILURE (SOFT if tracked) | 0 / −1 |
 | Contribute to operation | CONTRIBUTED_TO_OPERATION | SOFT if tracked | 0 / −1 |
+| Open / crack sealed | FAILED | FAILURE (SOFT if tracked) | 0 / −1 |
 
-**Eligible cargo:** UNSTABLE, INTEL, CONTRABAND, APEX_CARGO, CONTRACT_TARGET resources (not common stable mats). Tarnished Dog Tags fence but do not roll major rival bribes. `trackedContractCargo` flag on apex/contraband/sponsor-specific targets.
+**Eligible cargo:** UNSTABLE, INTEL, CONTRABAND, APEX_CARGO, CONTRACT_TARGET resources (not common stable mats). Tarnished Dog Tags fence but do not roll major rival bribes. `trackedContractCargo` flag on apex/contraband/sponsor-specific targets. Opening a contract casket prevents sealed delivery.
 
 **Bribe generation:** at routing item build — chance 25% / 40% (unstable+intel) / 70% (apex+contraband); max **one rival offer per item**; Black Market always available when `FENCE_VALUE`. Rival rewards ~135% credits, ~175% rep vs contract base, sponsor-flavored bonus materials.
 
@@ -306,6 +309,43 @@ Post-run cargo routing for **eligible contract cargo** can generate **rival spon
 12. ✅ Debrief explains final cargo destination and betrayal.
 13. ✅ Betrayal events recorded for future Betrayer Echo hooks.
 14.–20. ✅ No territory/PvP/lockout; existing runs and extraction/death rules intact.
+
+### Appraisal + Sealed Cargo v1
+
+**Sealed Containment Casket** is the primary appraisable contraband item. Players can inspect value **without consuming** the casket, then choose to open, sell sealed, deliver sealed (contract), or stash.
+
+**Value bands (appraisal roll):** LOW → STANDARD → HIGH → RARE → APEX. Bands affect sell-sealed payout (125–500 CR vs 150 unappraised) and **open reward tier weights** (6 tiers: Common / Uncommon / Rare Tech / Unstable / Apex / Dud).
+
+**Fees:**
+
+| Action | Cost | Notes |
+|--------|------|-------|
+| Appraise | 50 CR | Reveals band; does not consume casket |
+| Open / Crack | 100 CR | Waived if already appraised |
+| Sell sealed | Band-based CR | Forfeits hidden contents |
+
+**Hub (Black Market):** **APPRAISAL // SEALED CARGO** section lists per-stack caskets from `sealedCargoStacks` metadata with Appraise / Open / Sell Sealed actions.
+
+**Post-run routing:** Same actions on debrief Cargo Routing step; Appraise is a separate button (not a final routing chip). Opening at routing may deposit stable loot to stash and queue **special generated resources** for an automatic secondary routing pass.
+
+**Persistence:** `sealedCargoStacks` (per-stack SEALED/APPRAISED state + band), `careerSealedCargo` (appraised / opened / soldSealed / deliveredSealed counts).
+
+**Contract integration:** Opening contract caskets fails sealed delivery (`FAILED` outcome, "opened before delivery" debrief copy). Selling sealed contract cargo uses existing fence betrayal path.
+
+**Key files:** `types/sealedCargo.ts`, `sealedCasketAppraisalEngine.ts`, `sealedCasketOpenEngine.ts`, `sealedCargoEngine.ts`, `sealedCargoHubEngine.ts`, `sealedCargoValidationEngine.ts`, `sealedCargoDebugEngine.ts`, extended `postRunCargoRoutingEngine.ts`, `CargoRoutingPanel.tsx`, `OperationDebriefScreen.tsx`, `SafehouseBlackMarketTab.tsx`, `runDebriefCargoRoutingEngine.ts`.
+
+**Acceptance criteria:**
+
+1. ✅ Appraise reveals value band without consuming casket.
+2. ✅ Open consumes casket and rolls weighted tier table (band-aware).
+3. ✅ Sell sealed grants guaranteed credits (unappraised + band table).
+4. ✅ Hub Black Market appraisal section for stash caskets.
+5. ✅ Post-run routing appraisal button + sealed metadata on routable items.
+6. ✅ Opening fee waived after appraisal.
+7. ✅ Secondary routing pass for special resources opened from caskets.
+8. ✅ `sealedCargoStacks` + `careerSealedCargo` persisted on account.
+9. ✅ Contract open prevents sealed delivery with debrief explanation.
+10. ✅ Dev validate / sim / force band+tier tooling.
 
 ### Loadout
 
@@ -645,7 +685,7 @@ Category does **not** decide all behavior. Example: Encrypted Grid-Drive is INTE
 
 **Tarnished Dog Tags:** stackable INTEL / FENCE_VALUE — not a crafting ingredient.
 
-**Sealed Containment Casket:** CONTRABAND / UNIDENTIFIED_CONTAINER — not craftable while sealed; `canOpenAtHub` reserved for future appraisal.
+**Sealed Containment Casket:** CONTRABAND / UNIDENTIFIED_CONTAINER / APPRAISABLE — not craftable while sealed; hub + post-run **Appraise / Open / Sell Sealed** (see Appraisal + Sealed Cargo v1).
 
 Each resource also defines `validSectorIds` for contract generation validation.
 

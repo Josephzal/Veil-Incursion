@@ -18,6 +18,7 @@ import type {
 } from '../types/postRunCargoRouting';
 import type { ResourceItemId, ResourceQuantity } from '../types/resourceItem';
 import type { RunResourceLedger } from '../types/runResourceLedger';
+import { createEmptyRunResourceLedger } from '../types/runResourceLedger';
 import type { CabalEmployerId, OperationObjectiveKind } from '../types/worldState';
 import { sponsorDisplayName } from '../utils/contractUi';
 import {
@@ -45,6 +46,21 @@ import {
 } from './resourceRegistry';
 import { addToResourceStash } from './resourceStashEngine';
 import { rollSealedCasketOpenReward } from './sealedCasketOpenEngine';
+import {
+  getAppraisalBandLabel,
+  resolveOpeningFee,
+  resolveSealedSellValue,
+  rollAppraisalValueBand,
+} from './sealedCasketAppraisalEngine';
+import {
+  buildSealedCargoItemKey,
+  createSealedStackMeta,
+  formatSealedCargoWarning,
+  isAppraisableSealedResource,
+  SEALED_CASKET_CONFIG,
+  syncSealedStackMetaCount,
+} from './sealedCargoEngine';
+import type { AppraisalValueBand, SealedCargoState } from '../types/sealedCargo';
 import { mergeResourceQuantities } from './runResourceLedgerEngine';
 import { OPERATION_CONTRIBUTION_VALUES } from './worldStateHelpers';
 import { applyKeepsakeDeliveredQuantityBonus, resolveKeepsakeFenceValueMultiplier } from './expeditionKeepsakeCargoEngine';
@@ -154,7 +170,10 @@ function buildValidActions(
   if (canDeliverRival) validActions.push('DELIVER_RIVAL_SPONSOR');
   if (canFence) validActions.push('SELL_FENCE');
   if (canContribute) validActions.push('CONTRIBUTE_OPERATION');
-  if (canOpenAtHub) validActions.push('OPEN_AT_HUB');
+  if (canOpenAtHub) {
+    validActions.push('OPEN_SEALED');
+    validActions.push('OPEN_AT_HUB');
+  }
 
   return {
     canFence,
@@ -181,10 +200,10 @@ export function recommendCargoRoutingAction(
   }
   if (
     resourceId === 'sealed-containment-casket'
-    && validActions.includes('OPEN_AT_HUB')
+    && (validActions.includes('OPEN_SEALED') || validActions.includes('OPEN_AT_HUB'))
     && !isContractTargetResource(resourceId, ctx.contract)
   ) {
-    return 'OPEN_AT_HUB';
+    return 'OPEN_SEALED';
   }
   if (validActions.includes('SELL_FENCE')) {
     const sellValue = getResourceSellValue(resourceId);
@@ -247,7 +266,14 @@ function buildRoutableItem(
   source: RoutableCargoSource,
   ctx: CargoRoutingContext,
   bribeOfferSeed: string,
+  sealedAppraisalByItemKey: Record<string, { state: SealedCargoState; valueBand?: AppraisalValueBand }> = {},
 ): RoutableCargoItem {
+  const itemKey = isAppraisableSealedResource(resourceId)
+    ? buildSealedCargoItemKey(resourceId, source, 0)
+    : undefined;
+  const sealedMeta = itemKey ? sealedAppraisalByItemKey[itemKey] : undefined;
+  const sealedState = sealedMeta?.state ?? (isAppraisableSealedResource(resourceId) ? 'SEALED' : undefined);
+  const valueBand = sealedMeta?.valueBand;
   const bribeOffer = maybeGenerateBribeOffer({
     resourceId,
     quantity,
@@ -262,8 +288,9 @@ function buildRoutableItem(
 
   const betrayalPreviewByAction: RoutableCargoItem['betrayalPreviewByAction'] = {};
   actions.validActions.forEach((action) => {
+    const normalized = action === 'OPEN_AT_HUB' ? 'OPEN_SEALED' : action;
     betrayalPreviewByAction[action] = resolveActionBetrayalPreview({
-      action,
+      action: normalized,
       resourceId,
       contract: ctx.contract,
       bribeOffer,
@@ -277,6 +304,10 @@ function buildRoutableItem(
     contractWarning = preview?.warning
       ?? 'Contract will not complete if this item is not delivered to your sponsor.';
   }
+  if (resourceId === 'sealed-containment-casket' && isContractTarget) {
+    contractWarning = formatSealedCargoWarning(true, 'OPEN')
+      ?? contractWarning;
+  }
 
   return {
     resourceId,
@@ -289,7 +320,75 @@ function buildRoutableItem(
     trackedContractCargo,
     bribeOffer,
     betrayalPreviewByAction,
+    sealedItemKey: itemKey,
+    sealedState,
+    valueBand,
+    appraisalFee: isAppraisableSealedResource(resourceId) ? SEALED_CASKET_CONFIG.appraisalFee : undefined,
+    openingFee: isAppraisableSealedResource(resourceId)
+      ? resolveOpeningFee(sealedState === 'APPRAISED')
+      : undefined,
+    sealedSellValue: isAppraisableSealedResource(resourceId)
+      ? resolveSealedSellValue(sealedState === 'APPRAISED' ? 'APPRAISED' : 'SEALED', valueBand)
+      : undefined,
+    canAppraise: isAppraisableSealedResource(resourceId) && sealedState !== 'APPRAISED',
     ...actions,
+  };
+}
+
+export function enrichRoutableItemsWithSealedMeta(
+  items: RoutableCargoItem[],
+  sealedAppraisalByItemKey: Record<string, { state: SealedCargoState; valueBand?: AppraisalValueBand }>,
+  ctx: CargoRoutingContext,
+  bribeOfferSeed: string,
+): RoutableCargoItem[] {
+  return items.map((item) => buildRoutableItem(
+    item.resourceId,
+    item.quantity,
+    item.source,
+    ctx,
+    bribeOfferSeed,
+    sealedAppraisalByItemKey,
+  ));
+}
+
+export function appraiseSealedRoutingItem({
+  item,
+  cabalCredits,
+  sealedAppraisalByItemKey,
+}: {
+  item: RoutableCargoItem;
+  cabalCredits: number;
+  sealedAppraisalByItemKey: Record<string, { state: SealedCargoState; valueBand?: AppraisalValueBand }>;
+}): {
+  ok: boolean;
+  error?: string;
+  nextCredits: number;
+  nextSealedAppraisalByItemKey: Record<string, { state: SealedCargoState; valueBand?: AppraisalValueBand }>;
+  result?: import('../types/sealedCargo').CasketAppraisalResult;
+} {
+  if (!item.sealedItemKey || !item.canAppraise) {
+    return { ok: false, error: 'Item cannot be appraised.', nextCredits: cabalCredits, nextSealedAppraisalByItemKey: sealedAppraisalByItemKey };
+  }
+  const fee = item.appraisalFee ?? SEALED_CASKET_CONFIG.appraisalFee;
+  if (cabalCredits < fee) {
+    return { ok: false, error: `Appraisal requires ${fee} credits.`, nextCredits: cabalCredits, nextSealedAppraisalByItemKey: sealedAppraisalByItemKey };
+  }
+  const valueBand = rollAppraisalValueBand();
+  const nextKey = {
+    ...sealedAppraisalByItemKey,
+    [item.sealedItemKey]: { state: 'APPRAISED' as const, valueBand },
+  };
+  return {
+    ok: true,
+    nextCredits: cabalCredits - fee,
+    nextSealedAppraisalByItemKey: nextKey,
+    result: {
+      resourceId: item.resourceId,
+      quantity: item.quantity,
+      valueBand,
+      displayLabel: getAppraisalBandLabel(valueBand),
+      feePaid: fee,
+    },
   };
 }
 
@@ -297,6 +396,7 @@ export function splitPostRunCargo(
   ledger: RunResourceLedger,
   ctx: CargoRoutingContext,
   bribeOfferSeed = 'default',
+  sealedAppraisalByItemKey: Record<string, { state: SealedCargoState; valueBand?: AppraisalValueBand }> = {},
 ): PostRunCargoSplit {
   const available = mergeResourceQuantities(ledger.extracted, ledger.bankedAtSafehouse);
   const autoStash: ResourceQuantity = {};
@@ -313,6 +413,7 @@ export function splitPostRunCargo(
           resolveSource(resourceId, ledger),
           ctx,
           bribeOfferSeed,
+          sealedAppraisalByItemKey,
         ));
       } else {
         autoStash[resourceId] = qty;
@@ -350,8 +451,9 @@ export function validateCargoRoutingDecisions(
     if (!item.validActions.includes(decision.action)) {
       issues.push(`${item.resourceId} cannot be routed via ${decision.action}.`);
     }
-    if (decision.action === 'OPEN_AT_HUB' && !item.openAtHubEnabled) {
-      issues.push(`${item.resourceId} hub opening is not available in v1.`);
+    const openAction = decision.action === 'OPEN_AT_HUB' || decision.action === 'OPEN_SEALED';
+    if (openAction && !item.openAtHubEnabled) {
+      issues.push(`${item.resourceId} opening is not available until after extraction.`);
     }
     if (decision.quantity <= 0 || decision.quantity > item.quantity) {
       issues.push(`${item.resourceId} routing quantity must be between 1 and ${item.quantity}.`);
@@ -383,8 +485,9 @@ function actionLabel(action: CargoRoutingAction): string {
       return 'Sold to Black Market';
     case 'CONTRIBUTE_OPERATION':
       return 'Contributed to operation';
+    case 'OPEN_SEALED':
     case 'OPEN_AT_HUB':
-      return 'Opened at hub';
+      return 'Opened / cracked';
     default:
       return action;
   }
@@ -398,6 +501,7 @@ export function applyCargoRoutingDecisions({
   cabalCredits,
   operationContributionPerStack,
   keepsakeRuntime,
+  routingContext,
 }: {
   decisions: CargoRoutingDecision[];
   items: RoutableCargoItem[];
@@ -406,6 +510,7 @@ export function applyCargoRoutingDecisions({
   cabalCredits: number;
   operationContributionPerStack: number;
   keepsakeRuntime?: KeepsakeRuntime | null;
+  routingContext?: CargoRoutingContext | null;
 }): {
   result: CargoRoutingResult;
   stash: ResourceQuantity;
@@ -429,9 +534,14 @@ export function applyCargoRoutingDecisions({
   const casketOpenRewards: ResourceQuantity = {};
   const outcomeLines: CargoRoutingOutcomeLine[] = [];
   const rivalDeliveryRewards: CargoRoutingResult['rivalDeliveryRewards'] = [];
+  const casketAppraisalResults: CargoRoutingResult['casketAppraisalResults'] = [];
+  const casketOpenResults: CargoRoutingResult['casketOpenResults'] = [];
+  const generatedSpecialResources: ResourceQuantity = {};
   let creditsFromFence = 0;
   let creditsFromRivalDelivery = 0;
   let creditsFromCasketOpen = 0;
+  let appraisalFeesPaid = 0;
+  let openingFeesPaid = 0;
   let operationProgressFromCargo = 0;
 
   (Object.entries(autoStashed) as Array<[ResourceItemId, number | undefined]>).forEach(
@@ -443,6 +553,7 @@ export function applyCargoRoutingDecisions({
 
   expandedDecisions.forEach((decision) => {
     const displayName = getResourceDisplayName(decision.resourceId, true);
+    const routableItem = items.find((entry) => entry.resourceId === decision.resourceId);
     switch (decision.action) {
       case 'KEEP_STASH':
         nextStash = addToResourceStash(nextStash, decision.resourceId, decision.quantity);
@@ -501,24 +612,20 @@ export function applyCargoRoutingDecisions({
           keepsakeRuntime,
           decision.resourceId,
         );
-        const sale = creditFenceSale(
-          nextCredits,
-          decision.resourceId,
-          decision.quantity,
-          valueMultiplier,
-        );
-        if (!sale) {
-          throw new Error(`Fence sale failed for ${decision.resourceId}.`);
-        }
-        nextCredits = sale.cabalCredits;
-        creditsFromFence += sale.creditsEarned;
+        const unitSellValue = routableItem?.sealedSellValue ?? getResourceSellValue(decision.resourceId);
+        const totalSaleValue = Math.round(unitSellValue * decision.quantity * valueMultiplier);
+        nextCredits += totalSaleValue;
+        creditsFromFence += totalSaleValue;
         fenced[decision.resourceId] = (fenced[decision.resourceId] ?? 0) + decision.quantity;
+        const sellLabel = decision.resourceId === 'sealed-containment-casket'
+          ? `${decision.quantity}× ${displayName} — Sold sealed to Black Market (+${totalSaleValue} CR)`
+          : `${decision.quantity}× ${displayName} — ${actionLabel(decision.action)} (+${totalSaleValue} CR)`;
         outcomeLines.push({
           resourceId: decision.resourceId,
           quantity: decision.quantity,
           action: decision.action,
-          label: `${decision.quantity}× ${displayName} — ${actionLabel(decision.action)} (+${sale.creditsEarned} CR)`,
-          creditsGained: sale.creditsEarned,
+          label: sellLabel,
+          creditsGained: totalSaleValue,
         });
         break;
       }
@@ -535,30 +642,60 @@ export function applyCargoRoutingDecisions({
         });
         break;
       }
+      case 'OPEN_SEALED':
       case 'OPEN_AT_HUB': {
+        if (!routableItem?.openAtHubEnabled) {
+          throw new Error(`Opening failed for ${decision.resourceId}.`);
+        }
         opened[decision.resourceId] = (opened[decision.resourceId] ?? 0) + decision.quantity;
         const rewardLabels: string[] = [];
         let openCreditsThisDecision = 0;
         for (let index = 0; index < decision.quantity; index += 1) {
-          const reward = rollSealedCasketOpenReward();
+          const openingFee = routableItem.openingFee ?? resolveOpeningFee(routableItem.sealedState === 'APPRAISED');
+          if (nextCredits < openingFee) {
+            throw new Error(`Opening requires ${openingFee} credits.`);
+          }
+          nextCredits -= openingFee;
+          openingFeesPaid += openingFee;
+
+          const reward = rollSealedCasketOpenReward({ valueBand: routableItem.valueBand });
           nextCredits += reward.credits;
           creditsFromCasketOpen += reward.credits;
           openCreditsThisDecision += reward.credits;
           rewardLabels.push(reward.summaryLabel);
+          casketOpenResults.push({
+            resourceId: decision.resourceId,
+            quantity: 1,
+            tierId: reward.tierId,
+            tierLabel: reward.summaryLabel,
+            summaryLabel: reward.summaryLabel,
+            dudFlavor: reward.dudFlavor,
+            resources: reward.resources,
+            credits: reward.credits,
+            openingFeePaid: openingFee,
+            valueBand: routableItem.valueBand,
+          });
+
           (Object.entries(reward.resources) as Array<[ResourceItemId, number | undefined]>).forEach(
             ([resourceId, quantity]) => {
               if (!quantity || quantity <= 0) return;
-              nextStash = addToResourceStash(nextStash, resourceId, quantity);
-              casketOpenRewards[resourceId] = (casketOpenRewards[resourceId] ?? 0) + quantity;
+              const ctx = routingContext ?? buildCargoRoutingContext(null, null, undefined);
+              if (requiresPostRunRouting(resourceId, quantity, ctx)) {
+                generatedSpecialResources[resourceId] = (generatedSpecialResources[resourceId] ?? 0) + quantity;
+              } else {
+                nextStash = addToResourceStash(nextStash, resourceId, quantity);
+                casketOpenRewards[resourceId] = (casketOpenRewards[resourceId] ?? 0) + quantity;
+              }
             },
           );
         }
         const rewardSummary = rewardLabels.join(' / ');
+        const dudLine = casketOpenResults[casketOpenResults.length - 1]?.dudFlavor;
         outcomeLines.push({
           resourceId: decision.resourceId,
           quantity: decision.quantity,
-          action: decision.action,
-          label: `${decision.quantity}× ${displayName} — ${actionLabel(decision.action)} (${rewardSummary}; +${openCreditsThisDecision} CR)`,
+          action: 'OPEN_SEALED',
+          label: `${decision.quantity}× ${displayName} — Opened (${rewardSummary}; +${openCreditsThisDecision} CR${dudLine ? ` — ${dudLine}` : ''})`,
           creditsGained: openCreditsThisDecision,
           casketRewardLabel: rewardSummary,
         });
@@ -587,6 +724,11 @@ export function applyCargoRoutingDecisions({
       deliveredResourcesForContract: delivered,
       rivalDeliveryRewards,
       betrayalEvents: [],
+      casketAppraisalResults,
+      casketOpenResults,
+      appraisalFeesPaid,
+      openingFeesPaid,
+      generatedSpecialResources,
     },
     stash: nextStash,
     cabalCredits: nextCredits,
@@ -643,6 +785,7 @@ export function buildPostRunRoutingDebriefState({
     operationId,
     operationContributionPerStack,
     bribeOfferSeed,
+    sealedAppraisalByItemKey: {},
   };
 }
 
@@ -716,12 +859,14 @@ export function previewPostRunCargoRouting({
   routingState,
   ledger,
   keepsakeRuntime,
+  cabalCredits = 0,
 }: {
   decisions: CargoRoutingDecision[];
   items: RoutableCargoItem[];
   routingState: PostRunRoutingDebriefState;
   ledger?: RunResourceLedger;
   keepsakeRuntime?: KeepsakeRuntime | null;
+  cabalCredits?: number;
 }): PostRunCargoRoutingPreview {
   const issues = validateCargoRoutingDecisions(items, decisions);
   if (issues.length > 0) {
@@ -745,9 +890,10 @@ export function previewPostRunCargoRouting({
       items,
       autoStashed: {},
       stash: {},
-      cabalCredits: 0,
+      cabalCredits,
       operationContributionPerStack: routingState.operationContributionPerStack,
       keepsakeRuntime,
+      routingContext: routingState.routingContext,
     });
     const contract = resolveFinalContractResultAfterRouting(
       routingState,
@@ -798,8 +944,9 @@ export function formatCargoRoutingActionLabel(action: CargoRoutingAction): strin
       return 'Sell to Black Market';
     case 'CONTRIBUTE_OPERATION':
       return 'Contribute to Operation';
+    case 'OPEN_SEALED':
     case 'OPEN_AT_HUB':
-      return 'Open at Hub';
+      return 'Open / Crack Casket';
     default:
       return action;
   }
@@ -816,4 +963,71 @@ export function collectPendingRoutingResourceIds(
   items: RoutableCargoItem[],
 ): Set<ResourceItemId> {
   return new Set(items.map((item) => item.resourceId));
+}
+
+export function buildSecondaryRoutingPendingItems(
+  generated: ResourceQuantity,
+  ctx: CargoRoutingContext,
+  bribeOfferSeed: string,
+): RoutableCargoItem[] {
+  const ledger = createEmptyRunResourceLedger();
+  (Object.entries(generated) as Array<[ResourceItemId, number | undefined]>).forEach(
+    ([resourceId, quantity]) => {
+      if (!quantity || quantity <= 0) return;
+      ledger.extracted[resourceId] = quantity;
+    },
+  );
+  return splitPostRunCargo(ledger, ctx, bribeOfferSeed).pendingItems;
+}
+
+function mergeResourceQuantitiesInto(
+  target: ResourceQuantity,
+  source: ResourceQuantity,
+): ResourceQuantity {
+  const next = { ...target };
+  (Object.entries(source) as Array<[ResourceItemId, number | undefined]>).forEach(
+    ([resourceId, quantity]) => {
+      if (!quantity || quantity <= 0) return;
+      next[resourceId] = (next[resourceId] ?? 0) + quantity;
+    },
+  );
+  return next;
+}
+
+export function mergeCargoRoutingResults(
+  primary: CargoRoutingResult,
+  secondary: CargoRoutingResult,
+): CargoRoutingResult {
+  const deliveredToRival = { ...primary.deliveredToRival };
+  Object.entries(secondary.deliveredToRival).forEach(([sponsorId, bucket]) => {
+    const key = sponsorId as import('../types/worldState').CabalEmployerId;
+    deliveredToRival[key] = mergeResourceQuantitiesInto(deliveredToRival[key] ?? {}, bucket ?? {});
+  });
+
+  return {
+    autoStashed: mergeResourceQuantitiesInto(primary.autoStashed, secondary.autoStashed),
+    delivered: mergeResourceQuantitiesInto(primary.delivered, secondary.delivered),
+    deliveredToRival,
+    fenced: mergeResourceQuantitiesInto(primary.fenced, secondary.fenced),
+    contributed: mergeResourceQuantitiesInto(primary.contributed, secondary.contributed),
+    kept: mergeResourceQuantitiesInto(primary.kept, secondary.kept),
+    opened: mergeResourceQuantitiesInto(primary.opened, secondary.opened),
+    creditsFromFence: primary.creditsFromFence + secondary.creditsFromFence,
+    creditsFromRivalDelivery: primary.creditsFromRivalDelivery + secondary.creditsFromRivalDelivery,
+    creditsFromCasketOpen: primary.creditsFromCasketOpen + secondary.creditsFromCasketOpen,
+    casketOpenRewards: mergeResourceQuantitiesInto(primary.casketOpenRewards, secondary.casketOpenRewards),
+    operationProgressFromCargo: primary.operationProgressFromCargo + secondary.operationProgressFromCargo,
+    outcomeLines: [...primary.outcomeLines, ...secondary.outcomeLines],
+    deliveredResourcesForContract: mergeResourceQuantitiesInto(
+      primary.deliveredResourcesForContract,
+      secondary.deliveredResourcesForContract,
+    ),
+    rivalDeliveryRewards: [...primary.rivalDeliveryRewards, ...secondary.rivalDeliveryRewards],
+    betrayalEvents: [...primary.betrayalEvents, ...secondary.betrayalEvents],
+    casketAppraisalResults: [...primary.casketAppraisalResults, ...secondary.casketAppraisalResults],
+    casketOpenResults: [...primary.casketOpenResults, ...secondary.casketOpenResults],
+    appraisalFeesPaid: primary.appraisalFeesPaid + secondary.appraisalFeesPaid,
+    openingFeesPaid: primary.openingFeesPaid + secondary.openingFeesPaid,
+    generatedSpecialResources: secondary.generatedSpecialResources,
+  };
 }

@@ -166,6 +166,10 @@ export interface PlayerAccount {
   sponsorTrustStats: Partial<Record<FactionType, import('../types/betrayal').SponsorTrustStats>>;
   /** Recent betrayal events for future Betrayer Echo hooks. */
   betrayalHistory: import('../types/betrayal').BetrayalEvent[];
+  /** Per-stack appraisal metadata for sealed cargo in stash. */
+  sealedCargoStacks: import('../types/sealedCargo').SealedCargoStackMeta[];
+  /** Career sealed cargo action totals. */
+  careerSealedCargo: import('../types/sealedCargo').CareerSealedCargoStats;
   /** Pre-run Expedition Relic equipped for the next incursion (Trinkets v2). */
   equippedKeepsakeId: import('../types/expeditionKeepsake').KeepsakeId | null;
   /** Hub-unlocked Expedition Relics available for equip. */

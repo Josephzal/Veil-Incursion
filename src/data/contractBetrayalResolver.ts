@@ -170,6 +170,11 @@ function resolveDominantContractOutcome(
     case 'KEPT_BY_PLAYER':
       finalDestination = 'Personal stash';
       break;
+    case 'FAILED':
+      finalDestination = dominant.action === 'OPEN_SEALED' || dominant.action === 'OPEN_AT_HUB'
+        ? 'Opened / consumed'
+        : 'Undelivered';
+      break;
     default:
       finalDestination = 'Undelivered';
       break;
@@ -235,6 +240,10 @@ function buildProgressText(
       return `Contract failed. ${cargoLabel} retained in personal stash.`;
     case 'CONTRIBUTED_TO_OPERATION':
       return `Contract redirected. ${cargoLabel} contributed to sector operation.`;
+    case 'FAILED':
+      return targetDecisions.some((entry) => entry.action === 'OPEN_SEALED' || entry.action === 'OPEN_AT_HUB')
+        ? `Contract failed. ${cargoLabel} opened before delivery.`
+        : `Contract failed. ${cargoLabel} not delivered to sponsor.`;
     case 'PARTIAL':
       return `Contract partially failed. Not all ${cargoLabel} reached ${sponsorDisplayName(contract.sponsorId ?? '')}.`;
     default:
@@ -287,6 +296,10 @@ export function buildBetrayalEventsFromRouting({
         break;
       case 'CONTRIBUTE_OPERATION':
         receivingDestination = 'OPERATION';
+        break;
+      case 'OPEN_SEALED':
+      case 'OPEN_AT_HUB':
+        receivingDestination = 'SELF';
         break;
       default:
         receivingDestination = 'SELF';

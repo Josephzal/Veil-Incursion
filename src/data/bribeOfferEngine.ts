@@ -275,6 +275,9 @@ export function resolveActionBetrayalPreview({
           : 'Contract will not complete if cargo is contributed.',
         countsAsBetrayal: tracked,
       };
+    case 'OPEN_SEALED':
+    case 'OPEN_AT_HUB':
+      return resolveOpenSealedBetrayalPreview(resourceId, contract);
     case 'KEEP_STASH':
     default:
       return {
@@ -290,6 +293,25 @@ export function resolveActionBetrayalPreview({
         countsAsBetrayal: tracked,
       };
   }
+}
+
+function resolveOpenSealedBetrayalPreview(
+  resourceId: ResourceItemId,
+  contract: ActiveRunContract | null,
+): BetrayalActionPreview {
+  const tracked = isTrackedContractCargo(resourceId, contract);
+  return {
+    severity: tracked ? 'SOFT_BETRAYAL' : 'FAILURE',
+    outcomeKind: 'FAILED' as ContractOutcomeKind,
+    originalSponsorRepDelta: tracked ? -1 : 0,
+    rivalSponsorRepDelta: 0,
+    creditsGain: 0,
+    reputationGain: 0,
+    warning: resourceId === 'sealed-containment-casket'
+      ? 'Opening this will prevent sealed delivery.'
+      : 'Opening consumes contract cargo before delivery.',
+    countsAsBetrayal: tracked,
+  };
 }
 
 export function severityRank(severity: BetrayalSeverity): number {

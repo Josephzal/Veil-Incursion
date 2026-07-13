@@ -58,7 +58,8 @@ export type ResourceUsageTag =
   | 'MASTERWORK_MATERIAL'
   | 'MUTATION_MATERIAL'
   | 'VOLATILE_CARGO'
-  | 'OCCULT_CARGO';
+  | 'OCCULT_CARGO'
+  | 'APPRAISABLE';
 
 export interface ResourceItemDefinition {
   id: ResourceItemId;

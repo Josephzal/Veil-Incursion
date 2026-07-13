@@ -4,6 +4,7 @@ import type { RunResourceLedger } from '../types/runResourceLedger';
 import { buildDeathResourceSections, formatDebriefResourceLine } from './runDebriefResourceEngine';
 import type { CargoRoutingResult, PostRunRoutingDebriefState } from '../types/postRunCargoRouting';
 import { buildPostRunRoutingDebriefState, formatAutoStashedSummary } from './postRunCargoRoutingEngine';
+import { getAppraisalBandLabel } from './sealedCasketAppraisalEngine';
 import { resolveContractExtractionKind } from './contractExtractionKind';
 import {
   createDefaultCargoRoutingRunState,
@@ -83,17 +84,49 @@ export function buildDeathCargoRoutingSummary(
 }
 
 export function formatCasketOpenRewardsSummary(result: CargoRoutingResult): string {
+  const openLines = result.casketOpenResults.map((entry) => {
+    const band = entry.valueBand ? getAppraisalBandLabel(entry.valueBand) : null;
+    const bandPrefix = band ? `${band} — ` : '';
+    const dud = entry.dudFlavor ? ` (${entry.dudFlavor})` : '';
+    return `${bandPrefix}${entry.summaryLabel}${dud}`;
+  });
   const resourceLines = (Object.entries(result.casketOpenRewards) as Array<[string, number | undefined]>)
     .filter(([, quantity]) => (quantity ?? 0) > 0)
     .map(([resourceId, quantity]) => `${getResourceDisplayName(resourceId as ResourceItemId, true)} x${quantity ?? 0}`);
-  if (resourceLines.length === 0 && result.creditsFromCasketOpen <= 0) {
+  if (openLines.length === 0 && resourceLines.length === 0 && result.creditsFromCasketOpen <= 0) {
     return 'None';
   }
-  const parts = [...resourceLines];
+  const parts = openLines.length > 0 ? openLines : resourceLines;
   if (result.creditsFromCasketOpen > 0) {
     parts.push(`+${result.creditsFromCasketOpen} CR`);
   }
   return parts.join(', ');
+}
+
+export function formatSealedCargoRoutingDebriefLines(result: CargoRoutingResult): string[] {
+  const lines: string[] = [];
+  result.casketAppraisalResults.forEach((entry) => {
+    lines.push(`Appraised sealed cargo: ${getAppraisalBandLabel(entry.valueBand)} (−${entry.feePaid} CR)`);
+  });
+  result.casketOpenResults.forEach((entry) => {
+    const band = entry.valueBand ? getAppraisalBandLabel(entry.valueBand) : 'Unappraised';
+    const dud = entry.dudFlavor ? ` — ${entry.dudFlavor}` : '';
+    lines.push(`Opened casket (${band}): ${entry.summaryLabel}${dud}`);
+  });
+  const soldSealed = result.fenced['sealed-containment-casket'] ?? 0;
+  if (soldSealed > 0) {
+    const sellCredits = result.outcomeLines
+      .filter((line) => line.resourceId === 'sealed-containment-casket' && line.action === 'SELL_FENCE')
+      .reduce((sum, line) => sum + (line.creditsGained ?? 0), 0);
+    lines.push(`Sold ${soldSealed} sealed casket(s) for +${sellCredits} CR`);
+  }
+  if (result.appraisalFeesPaid > 0) {
+    lines.push(`Appraisal fees paid: ${result.appraisalFeesPaid} CR`);
+  }
+  if (result.openingFeesPaid > 0) {
+    lines.push(`Opening fees paid: ${result.openingFeesPaid} CR`);
+  }
+  return lines;
 }
 
 export function formatCargoRoutingOutcomeSummary(result: CargoRoutingResult): string[] {
@@ -230,6 +263,7 @@ export function formatSessionCargoRoutingDebriefLines(
   }
 
   if (result) {
+    lines.push(...formatSealedCargoRoutingDebriefLines(result));
     lines.push(...formatCargoRoutingOutcomeSummary(result));
   }
 
