@@ -1,6 +1,6 @@
 # Veil Incursion Current Systems Design
 
-Last updated: 2026-07-10 (run items v2 polish pass)
+Last updated: 2026-07-10 (run integration + progression audit v1)
 
 This document captures the current implemented design surface for Veil Incursion: player-facing hub systems, run progression, economy, cargo/items, enemies, combat mechanics, and known partial implementations. It is intended as a working reference for design iteration and balancing, not a final player-facing manual.
 
@@ -20,6 +20,7 @@ Primary data and implementation files:
 - Progression and boons: `src/data/boundRequisitions.ts`, `src/data/leyLineMutations.ts`, `src/data/regions.ts`
 - Expedition relics (Trinkets v2): `src/types/expeditionKeepsake.ts`, `src/data/expeditionKeepsakeRegistry.ts`, `src/data/keepsakeRunState.ts`, `src/data/expeditionKeepsakeEngine.ts`, `src/data/expeditionKeepsake*Engine.ts`, `src/components/hub/KeepsakeLoadoutPanel.tsx`, `src/data/runDebriefKeepsakeEngine.ts`, `src/data/expeditionKeepsakeValidation.ts`, `src/data/expeditionKeepsakeAcceptanceEngine.ts`, `src/data/expeditionKeepsakeAuditEngine.ts`
 - Run Items v2: `src/types/runItem.ts`, `src/data/runItemRegistry.ts`, `src/data/runItemRunState.ts`, `src/data/runItemCombatEngine.ts`, `src/data/runItemFieldEngine.ts`, `src/data/runItem*Engine.ts`, `src/components/hub/RunItemLoadoutPanel.tsx`, `src/data/runDebriefRunItemEngine.ts`, `src/data/runItemValidation.ts`, `src/data/runItemAcceptanceEngine.ts`, `src/data/runItemAuditEngine.ts`
+- Run integration audit: `src/data/runIntegration/*`, extended `OperationDebriefPayload`, `OperationDebriefScreen.tsx`
 
 ## High-Level Game Loop
 
@@ -361,6 +362,37 @@ The class selector is a compact operative identity strip with class cycling. Wea
 - ✅ Run chrome chip visible when live counters or pending slot offer active (even if slots empty).
 - ✅ Fabrication Matrix run-item rows show market price + hub staged count.
 - ✅ Legacy duplicate cargo market entries removed for items now sold exclusively as run items (`grave-dust-ampoule`, `grid-cracker-mag`, `eclipse-flare`, `dead-drop-token`, `spall-weave-vest`). Cargo-only `coagulation-stitch` remains distinct from run-item `standard-coagulant`.
+
+### Run Integration + Progression Audit v1
+
+Cohesion layer — no new gameplay systems. Makes the Contract Board → Veil Front → run → debrief → hub loop auditable, readable, and testable.
+
+**Integration engines (`src/data/runIntegration/`):**
+
+- **`runPacingConfig`** — config-driven nodes-per-district (10 / 12 / 15 presets for run-length testing).
+- **`runBalanceTelemetryEngine`** — per-run balance stats (nodes, combats, resources, echoes, contract outcome).
+- **`runLoopAuditEngine`** — full-loop checklist (pre-run, run start, during run, post-run, persistence).
+- **`runLoopValidationEngine`** — aggregates world, resource, contract, echo, routing, keepsake, run-item validators + content matrix.
+- **`runOutcomeDetailEngine`** — granular debrief outcome labels (extracted, emergency recall, safehouse, banked-then-died, runner lost).
+- **`runAnchorDebriefEngine`** — anchor activity debrief block.
+- **`runCraftingOpportunityEngine`** — craft-now / nearly-ready recipe surfacing on debrief.
+- **`runNextActionEngine`** — rule-based 1–2 next-step suggestions on debrief REWARDS.
+- **`contentMatrixEngine`** — dev content counts report (sectors, ops, anchors, resources, recipes, relics).
+- **`sponsorRepEngine`** — reputation rank + progress preview on Contract Board.
+
+**Debrief extensions:** `OperationDebriefPayload` adds `runOutcomeDetail`, `anchorSummary`, `balanceTelemetry`, `craftingOpportunities`. `OperationDebriefScreen` shows anchor activity, crafting opportunities, next steps, and dev run telemetry on REWARDS.
+
+**Dev tooling:** `DevTestHubPanel` — FULL LOOP AUDIT, VALIDATE ALL, CONTENT MATRIX, RUN TELEMETRY, DEPTH 10/12/15 presets. `WorldStateContext.devGetValidationReport()` returns full integration validation report. Boot logs integration warnings in `__DEV__`.
+
+**Run Integration v1 — acceptance criteria:**
+
+1. ✅ Full-loop audit report covers pre-run through persistence separation.
+2. ✅ Aggregated validation catches contracts, operations, resources, echoes, routing, keepsakes, run items.
+3. ✅ Debrief shows granular outcome, anchor, crafting opportunities, next steps.
+4. ✅ Config-driven district depth (10/12/15) without rebalance.
+5. ✅ Run balance telemetry for local development.
+6. ✅ Content matrix dev report.
+7. ✅ Sponsor reputation rank preview on Contract Board.
 
 ## Run And Progression Systems
 

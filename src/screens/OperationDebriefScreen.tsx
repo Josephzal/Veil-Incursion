@@ -41,6 +41,10 @@ import {
   formatProgressThisRunLine,
   filterDebriefCompletionEffectLines,
 } from '../utils/operationDebriefUi';
+import { formatRunOutcomeDetailLabel } from '../data/runIntegration/runOutcomeDetailEngine';
+import { buildNextActionSuggestions } from '../data/runIntegration/runNextActionEngine';
+import { formatCraftingOpportunityLines } from '../data/runIntegration/runCraftingOpportunityEngine';
+import { formatRunBalanceTelemetryReport } from '../data/runIntegration/runBalanceTelemetryEngine';
 
 const TERMINAL_ACCENT = '#00ff33';
 const FAILURE_ACCENT = '#ef4444';
@@ -76,7 +80,7 @@ function contractStatusColor(status: ContractResult['status']): string {
 
 export default function OperationDebriefScreen(): React.JSX.Element | null {
   const { theme } = useTerminal();
-  const { pendingDebrief, setPendingDebrief, clearPendingDebrief, tickAfterRunComplete, applyOperationContribution } = useWorldState();
+  const { pendingDebrief, setPendingDebrief, clearPendingDebrief, tickAfterRunComplete, applyOperationContribution, persisted, sectors } = useWorldState();
   const { appendHubLog, applyPostRunCargoRouting, grantContractRewards, account } = usePlayerAccount();
   const { goToHub } = useGameFlow();
   const immersivePadding = useImmersiveScreenPadding();
@@ -161,7 +165,20 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
     keepsakeSummary,
     keepsakeRuntime,
     runItemSummary,
+    runOutcomeDetail,
+    anchorSummary,
+    balanceTelemetry,
+    craftingOpportunities,
   } = pendingDebrief;
+
+  const nextActions = useMemo(
+    () => buildNextActionSuggestions(pendingDebrief, account, {
+      persisted,
+      sectors,
+      selectedSectorId: persisted.selectedSectorId,
+    }),
+    [pendingDebrief, account, persisted, sectors],
+  );
 
   const displayContractResult = resolvedContractResult ?? contractResult;
   const isFailure = runOutcome === 'FAILED';
@@ -451,7 +468,7 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
               <>
                 <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>RUN OUTCOME</Text>
                 <Text style={[styles.statAccent, { color: accentColor }]}>
-                  {runOutcome === 'EXTRACTED' ? 'EXTRACTION SECURED' : 'INCURSION FAILED'}
+                  {formatRunOutcomeDetailLabel(runOutcomeDetail).toUpperCase()}
                 </Text>
                 {runOutcome === 'EXTRACTED' ? (
                   <Text style={[styles.stat, { color: theme.mutedColor }]}>
@@ -517,6 +534,26 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
                     ) : null}
                   </>
                 ) : null}
+                {anchorSummary ? (
+                  <>
+                    <View style={styles.sectionGap} />
+                    <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>ANCHOR ACTIVITY</Text>
+                    <Text style={[styles.statAccent, { color: accentColor }]}>
+                      {anchorSummary.anchorType.toUpperCase()}
+                    </Text>
+                    <Text style={[styles.stat, { color: theme.mutedColor }]}>
+                      {anchorSummary.anchorTheme.toUpperCase()}
+                    </Text>
+                    <Text style={[styles.stat, { color: theme.textColor }]}>
+                      {`SIGNALS CLEARED: ${anchorSummary.signalsCleared}`}
+                    </Text>
+                    {anchorSummary.contributionNote ? (
+                      <Text style={[styles.stat, { color: theme.mutedColor }]}>
+                        {anchorSummary.contributionNote.toUpperCase()}
+                      </Text>
+                    ) : null}
+                  </>
+                ) : null}
                 {echoSummary && echoSummary.signalsDiscovered > 0 ? (
                   <>
                     <View style={styles.sectionGap} />
@@ -524,6 +561,11 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
                     <Text style={[styles.stat, { color: theme.textColor }]}>
                       {`ECHO SIGNALS: ${echoSummary.signalsDiscovered} discovered / ${echoSummary.signalsResolved} resolved`}
                     </Text>
+                    {echoSummary.hostileEchoesDefeated > 0 ? (
+                      <Text style={[styles.stat, { color: TERMINAL_ACCENT }]}>
+                        {`HOSTILE ECHOES DEFEATED: ${echoSummary.hostileEchoesDefeated}`}
+                      </Text>
+                    ) : null}
                   </>
                 ) : null}
                 {keepsakeSummary ? (
@@ -879,6 +921,39 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
                           </Text>
                         ))}
                       </View>
+                    ))}
+                  </>
+                ) : null}
+                {craftingOpportunities.newlyCraftable.length > 0 || craftingOpportunities.nearlyCraftable.length > 0 ? (
+                  <>
+                    <View style={styles.sectionGap} />
+                    <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>CRAFTING OPPORTUNITIES</Text>
+                    {formatCraftingOpportunityLines(craftingOpportunities).map((line) => (
+                      <Text key={line} style={[styles.stat, { color: theme.textColor }]}>
+                        {line.toUpperCase()}
+                      </Text>
+                    ))}
+                  </>
+                ) : null}
+                {nextActions.length > 0 ? (
+                  <>
+                    <View style={styles.sectionGap} />
+                    <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>NEXT STEPS</Text>
+                    {nextActions.map((line) => (
+                      <Text key={line} style={[styles.stat, { color: TERMINAL_ACCENT }]}>
+                        {line.toUpperCase()}
+                      </Text>
+                    ))}
+                  </>
+                ) : null}
+                {typeof __DEV__ !== 'undefined' && __DEV__ ? (
+                  <>
+                    <View style={styles.sectionGap} />
+                    <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>RUN TELEMETRY</Text>
+                    {formatRunBalanceTelemetryReport(balanceTelemetry).split('\n').slice(1).map((line) => (
+                      <Text key={line} style={[styles.stat, { color: theme.mutedColor, fontSize: 9 }]}>
+                        {line.toUpperCase()}
+                      </Text>
                     ))}
                   </>
                 ) : null}

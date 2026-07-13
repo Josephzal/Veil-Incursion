@@ -31,14 +31,12 @@ import {
   stripDevFieldsForPersistence,
 } from '../data/worldStateDebugEngine';
 import {
-  formatWorldStateValidationReport,
   logWorldStateValidationWarnings,
-  validateWorldState,
 } from '../data/worldStateValidation';
-import { formatEchoValidationReport } from '../data/echoDebugEngine';
-import { formatPostRunRoutingDebugValidation } from '../data/postRunCargoRoutingDebugEngine';
-import { auditReportPostRunCargoRouting } from '../data/postRunCargoRoutingAuditEngine';
-import { formatKeepsakeDebugValidation } from '../data/expeditionKeepsakeDebugEngine';
+import {
+  formatFullIntegrationValidationReport,
+  logRunIntegrationValidationWarnings,
+} from '../data/runIntegration/runLoopValidationEngine';
 import {
   LocalOperationProgressProvider,
   SimulatedGlobalOperationProgressProvider,
@@ -204,6 +202,7 @@ export function WorldStateProvider({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     if (!isHydrated) return;
     logWorldStateValidationWarnings(persisted, sectors);
+    logRunIntegrationValidationWarnings(persisted, sectors);
   }, [isHydrated, persisted, sectors]);
 
   const selectedSector = useMemo(
@@ -387,13 +386,7 @@ export function WorldStateProvider({ children }: { children: React.ReactNode }) 
   }, []);
 
   const devGetValidationReport = useCallback(() => {
-    const issues = validateWorldState(persisted, sectors);
-    const worldReport = formatWorldStateValidationReport(issues);
-    const echoReport = formatEchoValidationReport();
-    const routingReport = formatPostRunRoutingDebugValidation();
-    const auditReport = auditReportPostRunCargoRouting();
-    const keepsakeReport = formatKeepsakeDebugValidation();
-    return `${worldReport}\n\n${echoReport}\n\n${routingReport}\n\n${auditReport}\n\n${keepsakeReport}`;
+    return formatFullIntegrationValidationReport(persisted, sectors);
   }, [persisted, sectors]);
 
   const devGetDebugSnapshot = useCallback(() => {

@@ -45,7 +45,7 @@ import {
 } from './sanctuaryScheduleEngine';
 import { districtGateLabel } from './districtPacing';
 import type { SafeAnchorIndex } from '../types/sectorPacing';
-import { BOSS_GRAPH_DEPTH, DISTRICT_GATE_DEPTHS, SCANNER_MAX_VECTORS } from '../types/sectorPacing';
+import { getDistrictGateDepths, getMaxRunGraphDepth, SCANNER_MAX_VECTORS } from '../types/sectorPacing';
 
 const VECTOR_DESIGNATIONS = ['ALPHA', 'BETA', 'GAMMA', 'DELTA', 'EPSILON', 'ZETA'] as const;
 
@@ -264,9 +264,9 @@ export function generateSectorGraph(sectorTier = 1): SectorGraph {
   };
 
   let spineParentId = entryId;
-  for (let depth = 1; depth <= BOSS_GRAPH_DEPTH; depth += 1) {
-    const isBoss = (DISTRICT_GATE_DEPTHS as readonly number[]).includes(depth);
-    const spineId = depth === 45 ? 'sector-boss-nest' : isBoss ? `sector-gate-${depth}` : `sector-spine-${depth}`;
+  for (let depth = 1; depth <= getMaxRunGraphDepth(); depth += 1) {
+    const isBoss = getDistrictGateDepths().includes(depth as never);
+    const spineId = depth === getMaxRunGraphDepth() ? 'sector-boss-nest' : isBoss ? `sector-gate-${depth}` : `sector-spine-${depth}`;
     const spine = makeGraphNode(spineId, depth, spineParentId, sectorTier, { isAnomalyNest: isBoss });
     if (isBoss) {
       spine.type = 'BOSS_COMBAT';
@@ -306,7 +306,7 @@ export function generateSectorGraph(sectorTier = 1): SectorGraph {
     entryId,
     nodes,
     sectorTier,
-    maxGraphDepth: BOSS_GRAPH_DEPTH,
+    maxGraphDepth: getMaxRunGraphDepth(),
   };
 }
 

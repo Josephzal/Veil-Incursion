@@ -47,6 +47,18 @@ import {
   formatRunItemRecipeGapReport,
 } from '../../data/runItemDebugEngine';
 import { ALL_RUN_ITEM_IDS, type RunItemId } from '../../types/runItem';
+import {
+  buildFullRunLoopAudit,
+  formatRunLoopAuditReport,
+} from '../../data/runIntegration/runLoopAuditEngine';
+import { formatContentMatrixReport } from '../../data/runIntegration/contentMatrixEngine';
+import {
+  ALLOWED_NODES_PER_DISTRICT,
+  formatRunPacingDebugSummary,
+  setNodesPerDistrictForTesting,
+  type NodesPerDistrictPreset,
+} from '../../data/runIntegration/runPacingConfig';
+import { formatRunBalanceTelemetryReport, buildRunBalanceTelemetry } from '../../data/runIntegration/runBalanceTelemetryEngine';
 
 interface SandboxLaunchButtonProps {
   label: string;
@@ -126,6 +138,7 @@ export default function DevTestHubPanel(): React.JSX.Element {
   const {
     selectedSector,
     persisted,
+    sectors,
     runGenerationContext,
     setSelectedSectorId,
     setPendingDebrief,
@@ -736,6 +749,53 @@ export default function DevTestHubPanel(): React.JSX.Element {
           accentColor={theme.mutedColor}
           onPress={() => devClearAnchorDormant(selectedSector.id)}
         />
+      </View>
+      <Text style={[styles.debugMeta, { color: keyColor }]}>Run integration audit</Text>
+      <View style={styles.grid}>
+        <SandboxLaunchButton
+          label="[ FULL LOOP AUDIT ]"
+          accentColor={TERMINAL_ACCENT}
+          onPress={() => {
+            const report = buildFullRunLoopAudit({
+              account,
+              persisted,
+              sectors,
+              selectedContract: persisted.contractBoard.selectedContract,
+              selectedSectorId: selectedSector.id,
+              incursion: activeIncursion.isRunActive ? activeIncursion : null,
+              extractedSuccessfully: false,
+            });
+            setDebugReport(formatRunLoopAuditReport(report));
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ VALIDATE ALL ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(devGetValidationReport())}
+        />
+        <SandboxLaunchButton
+          label="[ CONTENT MATRIX ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(formatContentMatrixReport([selectedSector], persisted))}
+        />
+        <SandboxLaunchButton
+          label="[ RUN TELEMETRY ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(
+            formatRunBalanceTelemetryReport(buildRunBalanceTelemetry(activeIncursion)),
+          )}
+        />
+        {ALLOWED_NODES_PER_DISTRICT.map((preset) => (
+          <SandboxLaunchButton
+            key={preset}
+            label={`[ DEPTH ${preset} ]`}
+            accentColor={theme.mutedColor}
+            onPress={() => {
+              setNodesPerDistrictForTesting(preset as NodesPerDistrictPreset);
+              setDebugReport(formatRunPacingDebugSummary());
+            }}
+          />
+        ))}
       </View>
       <Text style={[styles.debugMeta, { color: keyColor }]}>Sector select</Text>
       <View style={styles.grid}>

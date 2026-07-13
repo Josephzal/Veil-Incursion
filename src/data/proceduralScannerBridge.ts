@@ -1,12 +1,12 @@
 import type { ActiveIncursionState, IncursionNode, RunNodeType } from '../types/game';
 import type { VeilBiome } from '../types/encounterSpawn';
 import {
-  PROCEDURAL_RUN_MAX_DEPTH,
+  getProceduralRunMaxDepth,
   type ProceduralNodeType,
   type ProceduralRunNode,
   type ProceduralRunTree,
 } from '../types/proceduralRunTree';
-import { LEVELS_PER_DISTRICT, MAX_RUN_GRAPH_DEPTH } from '../types/sectorPacing';
+import { getLevelsPerDistrict, getMaxRunGraphDepth } from '../types/sectorPacing';
 import { veilBiomeDisplayName, veilBiomeToLegacyMacroBiome } from './sectorBiomeBridge';
 import { assignPendingDepthTypes } from './nodeGenerator';
 import { assignEchoOverlaysForDepth, resolveDisplayContextModifiers } from './echoEncounterEngine';
@@ -95,7 +95,7 @@ export function proceduralNodeToIncursionNode(
 
 /** Cleared nodes within the active macro depth (0–14). */
 export function localProceduralNodesCleared(nodesCleared: number): number {
-  return nodesCleared % LEVELS_PER_DISTRICT;
+  return nodesCleared % getLevelsPerDistrict();
 }
 
 /** Player-facing layer within the active 15-node procedural tree (1–15). */
@@ -110,7 +110,7 @@ export function getAvailableProceduralNodeIds(inc: ActiveIncursionState): string
 
   const localCleared = localProceduralNodesCleared(inc.nodesCleared);
   const currentDepth = localProceduralDepth(inc.nodesCleared);
-  if (currentDepth > PROCEDURAL_RUN_MAX_DEPTH) return [];
+  if (currentDepth > getProceduralRunMaxDepth()) return [];
 
   if (localCleared === 0) {
     return tree.depthIndex[1] ?? [];
@@ -174,7 +174,7 @@ export function getSonarChildTypes(
 }
 
 export function isProceduralRunActive(inc: ActiveIncursionState): boolean {
-  return inc.proceduralRunTree != null && inc.nodesCleared < MAX_RUN_GRAPH_DEPTH;
+  return inc.proceduralRunTree != null && inc.nodesCleared < getMaxRunGraphDepth();
 }
 
 export function getProceduralNodeContext(

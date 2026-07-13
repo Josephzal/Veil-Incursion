@@ -47,4 +47,12 @@ export interface ProceduralRunTree {
   sanctuarySpawned?: boolean;
 }
 
+import { getNodesPerDistrict } from '../data/runIntegration/runPacingConfig';
+
+/** Procedural StS-style map max depth per district — mirrors run pacing config. */
+export function getProceduralRunMaxDepth(): number {
+  return getNodesPerDistrict();
+}
+
+/** @deprecated Use getProceduralRunMaxDepth() for config-driven depth. */
 export const PROCEDURAL_RUN_MAX_DEPTH = 15;

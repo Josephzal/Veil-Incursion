@@ -18,6 +18,10 @@ import {
 import { formatContractCargoDeliveryHints } from '../../data/cargoRoutingIntelEngine';
 import { isResourceContractObjective } from '../../data/contractResolver';
 import { readPressableHover, terminalHoverStyle } from '../../utils/terminalHoverStyle';
+import {
+  buildSponsorReputationPreview,
+  formatSponsorReputationLine,
+} from '../../data/runIntegration/sponsorRepEngine';
 
 const TERRAN_ACCENT = FACTION_DEFINITIONS.TERRAN_GRID.accentColor;
 
@@ -297,11 +301,15 @@ export default function ContractBoardPanel(): React.JSX.Element {
           <TerminalText variant="caption" style={{ color: theme.mutedColor, marginBottom: scaleSpacing(4) }}>
             SPONSOR REPUTATION
           </TerminalText>
-          {SPONSOR_ORDER.map((sponsorId) => (
-            <TerminalText key={sponsorId} variant="caption" style={{ color: theme.textColor }}>
-              {`${sponsorDisplayName(sponsorId).toUpperCase()}: ${account.sponsorReputation[sponsorId] ?? 0}`}
-            </TerminalText>
-          ))}
+          {SPONSOR_ORDER.map((sponsorId) => {
+            const rep = account.sponsorReputation[sponsorId] ?? 0;
+            const preview = buildSponsorReputationPreview(sponsorId, rep);
+            return (
+              <TerminalText key={sponsorId} variant="caption" style={{ color: theme.textColor }}>
+                {formatSponsorReputationLine(preview, sponsorDisplayName(sponsorId))}
+              </TerminalText>
+            );
+          })}
         </View>
       </ScrollView>
     </HubScreenShell>

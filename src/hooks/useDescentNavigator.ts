@@ -82,7 +82,7 @@ export function useDescentNavigator() {
     goToHub,
     startOperationDebrief,
   } = useGameFlow();
-  const { addCredits, addRiftIron, grantContractRewards, persistRunExtraction } = usePlayerAccount();
+  const { addCredits, addRiftIron, grantContractRewards, persistRunExtraction, account } = usePlayerAccount();
   const {
     applyOperationContribution,
     tickAfterRunComplete,
@@ -248,6 +248,7 @@ export function useDescentNavigator() {
           routingState,
           deferredWorldTick: routingState.requiresRouting,
           runResourceLedger: extractionResources.ledger,
+          account,
         });
 
         if (debrief) {
@@ -272,6 +273,7 @@ export function useDescentNavigator() {
     setPendingDebrief,
     startOperationDebrief,
     tickAfterRunComplete,
+    account,
   ]);
 
   const finalizeIncursionAdvance = useCallback(

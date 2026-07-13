@@ -4,18 +4,29 @@ export type SectorZoneId = 'OUTSKIRTS' | 'DEEP_TRANSIT' | 'BREACH_PERIMETER' | '
 
 export type SafeAnchorIndex = 1 | 2 | 3;
 
-/** Levels per district chapter (Act I–III each span 5 + 5 + 5 = 15). */
+/** Levels per district chapter — config-driven via runPacingConfig (default 15). */
+export { getNodesPerDistrict as getLevelsPerDistrict } from '../data/runIntegration/runPacingConfig';
+export {
+  getMaxRunGraphDepth,
+  getDistrictGateDepths,
+  getSafeAnchorGraphDepths,
+  getNodesPerDistrict,
+  setNodesPerDistrictForTesting,
+  resetNodesPerDistrictForTesting,
+} from '../data/runIntegration/runPacingConfig';
+
+import { getNodesPerDistrict, getMaxRunGraphDepth, getDistrictGateDepths, getSafeAnchorGraphDepths } from '../data/runIntegration/runPacingConfig';
+
+/** @deprecated Prefer getLevelsPerDistrict() — kept for legacy imports; reflects default at module load. */
 export const LEVELS_PER_DISTRICT = 15;
 
-export const MAX_RUN_GRAPH_DEPTH = LEVELS_PER_DISTRICT * 3;
+export const MAX_RUN_GRAPH_DEPTH = getMaxRunGraphDepth();
 
-/** Safe-anchor extraction conduits at ~⅓ marks of the 45-node run. */
-export const SAFE_ANCHOR_GRAPH_DEPTHS: readonly [8, 15, 22] = [8, 15, 22];
+export const SAFE_ANCHOR_GRAPH_DEPTHS = getSafeAnchorGraphDepths();
 
-export const BOSS_GRAPH_DEPTH = MAX_RUN_GRAPH_DEPTH;
+export const BOSS_GRAPH_DEPTH = getMaxRunGraphDepth();
 
-/** District gatekeeper bosses at local level 15 of each district. */
-export const DISTRICT_GATE_DEPTHS: readonly [15, 30, 45] = [15, 30, 45];
+export const DISTRICT_GATE_DEPTHS = getDistrictGateDepths();
 
 /** Max scanner vectors per hub — L7 open grid allows 4. */
 export const SCANNER_MAX_VECTORS = 4;

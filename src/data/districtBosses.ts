@@ -1,5 +1,5 @@
 import type { BossRuntimeProfile, DistrictBossVariant } from '../types/game';
-import { LEVELS_PER_DISTRICT } from '../types/sectorPacing';
+import { getLevelsPerDistrict } from '../types/sectorPacing';
 import { getDepthScale } from './descentScaling';
 import { isDistrictGateDepth, isPrimeBossDepth } from './districtPacing';
 
@@ -63,7 +63,7 @@ const DEFAULT_BOSS_PHASES = [
 ];
 
 export function createDistrictGateBossProfile(depth: number): BossRuntimeProfile {
-  const districtIndex = Math.max(1, Math.ceil(depth / LEVELS_PER_DISTRICT));
+  const districtIndex = Math.max(1, Math.ceil(depth / getLevelsPerDistrict()));
   const scale = getDepthScale(districtIndex);
   if (isPrimeBossDepth(depth) && GATE_BOSSES[45]) {
     const def = GATE_BOSSES[45];

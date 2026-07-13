@@ -1,4 +1,4 @@
-import { DISTRICT_GATE_DEPTHS, LEVELS_PER_DISTRICT, MAX_RUN_GRAPH_DEPTH } from '../types/sectorPacing';
+import { DISTRICT_GATE_DEPTHS, getLevelsPerDistrict, getMaxRunGraphDepth } from '../types/sectorPacing';
 import type { RunGenerationContext } from '../types/worldState';
 
 export type DistrictId = 1 | 2 | 3;
@@ -15,17 +15,19 @@ export function depthFromNodesCleared(nodesCleared: number): number {
 }
 
 export function getDistrictFromDepth(depth: number): DistrictId {
-  if (depth <= LEVELS_PER_DISTRICT) return 1;
-  if (depth <= LEVELS_PER_DISTRICT * 2) return 2;
+  const levels = getLevelsPerDistrict();
+  if (depth <= levels) return 1;
+  if (depth <= levels * 2) return 2;
   return 3;
 }
 
 /** Local level within the active district (1–15). */
 export function localLevelFromDepth(depth: number): number {
+  const levels = getLevelsPerDistrict();
   const district = getDistrictFromDepth(depth);
   if (district === 1) return depth;
-  if (district === 2) return depth - LEVELS_PER_DISTRICT;
-  return depth - LEVELS_PER_DISTRICT * 2;
+  if (district === 2) return depth - levels;
+  return depth - levels * 2;
 }
 
 export function localLevelFromNodesCleared(nodesCleared: number): number {
@@ -54,7 +56,7 @@ export function isDistrictGateDepth(depth: number): boolean {
 }
 
 export function isPrimeBossDepth(depth: number): boolean {
-  return depth === MAX_RUN_GRAPH_DEPTH;
+  return depth === getMaxRunGraphDepth();
 }
 
 export function districtGateLabel(depth: number): string {

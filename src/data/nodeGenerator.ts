@@ -1,7 +1,7 @@
 import type { FactionType } from '../types/game';
 import type { RunGenerationContext } from '../types/worldState';
 import {
-  PROCEDURAL_RUN_MAX_DEPTH,
+  getProceduralRunMaxDepth,
   type ProceduralNodeType,
   type ProceduralRunNode,
   type ProceduralRunTree,
@@ -497,7 +497,7 @@ export function generateRunTree(
     nodes,
     depthIndex: depthLayerIndex,
     bossNodeId: boss.id,
-    maxDepth: PROCEDURAL_RUN_MAX_DEPTH,
+    maxDepth: getProceduralRunMaxDepth(),
     macroDepthIndex,
     modifierRollState: createNodeModifierRollState(),
     rollSeed: numericSeed,

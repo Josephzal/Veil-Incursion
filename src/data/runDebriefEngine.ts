@@ -16,6 +16,23 @@ import { buildExtractCargoRoutingDebriefSummary } from './runDebriefCargoRouting
 import { buildKeepsakeDebriefSummary } from './runDebriefKeepsakeEngine';
 import { buildRunItemDebriefSummary } from './runDebriefRunItemEngine';
 import { resolveKeepsakeBankedResourceMultiplier } from './expeditionKeepsakeSafehouseEngine';
+import { buildAnchorDebriefSummary } from './runIntegration/runAnchorDebriefEngine';
+import type { AnchorDebriefSummary } from './runIntegration/runAnchorDebriefEngine';
+import {
+  buildRunBalanceTelemetry,
+  applyTelemetryContractOutcome,
+  type RunBalanceTelemetry,
+} from './runIntegration/runBalanceTelemetryEngine';
+import {
+  resolveRunOutcomeDetail,
+  type RunOutcomeDetail,
+} from './runIntegration/runOutcomeDetailEngine';
+import {
+  buildCraftingOpportunitySummary,
+  type CraftingOpportunitySummary,
+} from './runIntegration/runCraftingOpportunityEngine';
+import { sumLedgerCategoryTotals } from './runIntegration/runIntegrationHelpers';
+import type { PlayerAccount } from '../types/game';
 import type { KeepsakeDebriefSummary } from '../types/expeditionKeepsake';
 import type { RunItemDebriefSummary } from '../types/runItem';
 import type { PostRunRoutingDebriefState, CargoRoutingResult } from '../types/postRunCargoRouting';
@@ -103,6 +120,10 @@ export interface OperationDebriefPayload {
   keepsakeSummary: KeepsakeDebriefSummary | null;
   keepsakeRuntime: import('../types/expeditionKeepsake').KeepsakeRuntime | null;
   runItemSummary: RunItemDebriefSummary | null;
+  runOutcomeDetail: RunOutcomeDetail;
+  anchorSummary: AnchorDebriefSummary | null;
+  balanceTelemetry: RunBalanceTelemetry;
+  craftingOpportunities: CraftingOpportunitySummary;
 }
 
 export function computeRunOperationContribution(
@@ -290,6 +311,7 @@ export function buildOperationDebriefPayload(
     routingState?: PostRunRoutingDebriefState | null;
     deferredWorldTick?: boolean;
     runResourceLedger?: RunResourceLedger;
+    account?: PlayerAccount;
   },
 ): OperationDebriefPayload | null {
   const context = incursion.runGenerationContext;
@@ -335,6 +357,34 @@ export function buildOperationDebriefPayload(
     extractedSuccessfully,
   );
 
+  const bankedStacks = sumLedgerCategoryTotals(incursion.runResourceLedger.bankedAtSafehouse);
+  const lostStacks = sumLedgerCategoryTotals(incursion.runResourceLedger.lostOnDeath);
+  const runOutcomeDetail = resolveRunOutcomeDetail(incursion, {
+    extractedSuccessfully,
+    extractionKind,
+    bankedCargoStacks: bankedStacks,
+    lostCargoStacks: lostStacks,
+  });
+  const anchorSummary = buildAnchorDebriefSummary(incursion);
+  let balanceTelemetry = buildRunBalanceTelemetry(incursion, {
+    extractedSuccessfully,
+    operationProgressGained: progressDelta,
+    timeAliveMs: opts.deathStats?.timeAliveMs ?? null,
+  });
+  balanceTelemetry = applyTelemetryContractOutcome(balanceTelemetry, contractResult.status);
+
+  const extractedResourceIds = ALL_RESOURCE_ITEM_IDS.filter(
+    (id) => (incursion.runResourceLedger.extracted[id] ?? 0) > 0,
+  );
+  const craftingOpportunities = opts.account
+    ? buildCraftingOpportunitySummary(opts.account, extractedResourceIds)
+    : {
+      newlyCraftable: [],
+      nearlyCraftable: [],
+      highlightResources: extractedResourceIds,
+      note: null,
+    };
+
   return {
     runOutcome: extractedSuccessfully ? 'EXTRACTED' : 'FAILED',
     sectorName: context.sectorState.displayName,
@@ -369,5 +419,9 @@ export function buildOperationDebriefPayload(
     keepsakeSummary,
     keepsakeRuntime: incursion.keepsakeRuntime,
     runItemSummary,
+    runOutcomeDetail,
+    anchorSummary,
+    balanceTelemetry,
+    craftingOpportunities,
   };
 }

@@ -1,3 +1,4 @@
+import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useCallback, useRef } from 'react';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
@@ -22,6 +23,7 @@ export function useRunDeathFinalizer() {
     getLastKillingEnemyDesignation,
   } = useRun();
   const { setPendingDebrief, tickAfterRunComplete, sectors } = useWorldState();
+  const { account } = usePlayerAccount();
   const { startOperationDebrief, goToHub } = useGameFlow();
   const incursionRef = useRef(activeIncursion);
   incursionRef.current = activeIncursion;
@@ -74,6 +76,7 @@ export function useRunDeathFinalizer() {
         sectorLevel: localLevelFromDepth(depth),
         depthLayer: getDistrictFromDepth(depth),
       },
+      account,
     });
 
     endRun(reason);
@@ -95,6 +98,7 @@ export function useRunDeathFinalizer() {
     startOperationDebrief,
     tickAfterRunComplete,
     sectors,
+    account,
   ]);
 
   return { finalizeRunDeath };
