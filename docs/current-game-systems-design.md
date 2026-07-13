@@ -157,7 +157,7 @@ Persistent world state drives run generation. Each of the 5 sectors has exactly 
 
 Black Market is a hub screen with two internal tabs:
 
-- Forge: crafting bench for blueprints, augments, and consumables.
+- Forge: crafting bench for augments and consumables (weapon unlocks/upgrades live on Loadout → Weapon Chassis, not Forge).
 - Vendor: contraband cargo/consumable shop.
 
 Vendor stock includes Soul Core as an always-stocked item plus a rotating pool of combat and scanner tools.
@@ -264,10 +264,10 @@ After successful extraction, stable materials auto-stash. Special cargo requires
 
 Loadout is a hub screen with two internal tabs:
 
-- **Loadout:** operative class selector, weapon chassis, **Expedition Relic** socket (equip 1 of 20), and ability deck editor.
+- **Loadout:** operative class selector, **Weapon Chassis** (family select, unlock, tier upgrade), **Expedition Relic** socket (equip 1 of 20), ability deck editor, and Run Item slots.
 - **Cargo:** pre-run cargo grid and stash packing interface.
 
-The class selector is a compact operative identity strip with class cycling. Weapons and the expedition relic loadout are surfaced on the Loadout tab. Relics with deployment choices (Signal Compass attunement, Ashen Cartograph route doctrine, Mirror Writ mirrored category) require pre-run configuration before equipping.
+The class selector is a compact operative identity strip with class cycling. **Weapon Chassis** lists all three weapon families for the active class — unlock with stash resources, equip one per class, upgrade Tier I → II → III. Weapon is locked at descent (mid-run weapon swap disabled in v1). Expedition relic loadout and Run Items are on the same tab. Relics with deployment choices (Signal Compass attunement, Ashen Cartograph route doctrine, Mirror Writ mirrored category) require pre-run configuration before equipping.
 
 ### Expedition Relics (Trinkets v2)
 
@@ -372,17 +372,17 @@ Cohesion layer — no new gameplay systems. Makes the Contract Board → Veil Fr
 - **`runPacingConfig`** — config-driven nodes-per-district (10 / 12 / 15 presets for run-length testing).
 - **`runBalanceTelemetryEngine`** — per-run balance stats (nodes, combats, resources, echoes, contract outcome).
 - **`runLoopAuditEngine`** — full-loop checklist (pre-run, run start, during run, post-run, persistence).
-- **`runLoopValidationEngine`** — aggregates world, resource, contract, echo, routing, keepsake, run-item validators + content matrix.
+- **`runLoopValidationEngine`** — aggregates world, resource, contract, echo, routing, keepsake, run-item, **weapon** validators + content matrix.
 - **`runOutcomeDetailEngine`** — granular debrief outcome labels (extracted, emergency recall, safehouse, banked-then-died, runner lost).
 - **`runAnchorDebriefEngine`** — anchor activity debrief block.
-- **`runCraftingOpportunityEngine`** — craft-now / nearly-ready recipe surfacing on debrief.
+- **`runCraftingOpportunityEngine`** — craft-now / nearly-ready recipe surfacing on debrief (includes weapon unlock/upgrade lines via `runDebriefWeaponEngine`).
 - **`runNextActionEngine`** — rule-based 1–2 next-step suggestions on debrief REWARDS.
 - **`contentMatrixEngine`** — dev content counts report (sectors, ops, anchors, resources, recipes, relics).
 - **`sponsorRepEngine`** — reputation rank + progress preview on Contract Board.
 
 **Debrief extensions:** `OperationDebriefPayload` adds `runOutcomeDetail`, `anchorSummary`, `balanceTelemetry`, `craftingOpportunities`. `OperationDebriefScreen` shows anchor activity, crafting opportunities, next steps, and dev run telemetry on REWARDS.
 
-**Dev tooling:** `DevTestHubPanel` — FULL LOOP AUDIT, VALIDATE ALL, CONTENT MATRIX, RUN TELEMETRY, DEPTH 10/12/15 presets. `WorldStateContext.devGetValidationReport()` returns full integration validation report. Boot logs integration warnings in `__DEV__`.
+**Dev tooling:** `DevTestHubPanel` — FULL LOOP AUDIT, VALIDATE ALL, CONTENT MATRIX, RUN TELEMETRY, **VALIDATE WEAPONS / UNLOCK ALL / RESET WEAPONS**, DEPTH 10/12/15 presets. `WorldStateContext.devGetValidationReport()` returns full integration validation report. Boot logs integration warnings in `__DEV__`.
 
 **Run Integration v1 — acceptance criteria:**
 
@@ -394,6 +394,72 @@ Cohesion layer — no new gameplay systems. Makes the Contract Board → Veil Fr
 6. ✅ Content matrix dev report.
 7. ✅ Sponsor reputation rank preview on Contract Board.
 
+### Weapon Families + Vertical Upgrade Tracks v1
+
+Weapons define baseline combat style **before** boons/grafts mutate the run. Distinct lanes:
+
+| Lane | Role |
+|------|------|
+| **Weapons** | How I fight (baseline rhythm, stats, class resource) |
+| **Boons** | How this run's combat build evolves |
+| **Grafts** | How equipped abilities mutate |
+| **Trinkets / Expedition Relics** | How expedition/extraction strategy changes |
+
+**Model:**
+
+- **Weapon family** — horizontal playstyle option (e.g. Longsword vs Claymore vs Rift Edge).
+- **Weapon tier** — vertical upgrade within a family (Tier I → II → III). Tier III adds a small once-per-combat identity passive.
+- **Masterwork** — hooks only (`masterworkUnlocked`, `requiresAnomalousCore`); not implemented in v1.
+
+**Registry:** 9 families × 3 tiers in `weaponRegistry.ts`. Starters unlocked by default:
+
+| Class | Starter |
+|-------|---------|
+| Aegis | Runed Longsword |
+| Hex Shot | Silver-Core Sidearm |
+| Envoy | Null Conduit |
+
+**Roster:**
+
+| Class | Family | Role | Unlock (stash) |
+|-------|--------|------|----------------|
+| Aegis | Runed Longsword | Balanced starter | Default |
+| Aegis | Claymore-Blade | Heavy fracture | 3× Legion Blood-Iron, 5× Ley-Slag |
+| Aegis | Rift Edge | Fast crit / Reserve | 2× Ossified Ley-Knot, 8× Echo-Glass Shard |
+| Hex Shot | Silver-Core Sidearm | Balanced starter | Default |
+| Hex Shot | Pulse Rifle | Sustained fire / magazine | 3× Encrypted Grid-Drive, 10× Ley-Slag |
+| Hex Shot | Nullbreach Carbine | Heavy armor-pierce | 1× Grid-Drive, 2× Combustion Cylinder, 5× Ley-Slag |
+| Envoy | Null Conduit | Balanced starter | Default |
+| Envoy | Sanguine Prism | Sacrifice / risk | 3× Sanguine Ampoule, 2× Ossified Ley-Knot |
+| Envoy | Echo Lantern | Control / debuff | 12× Echo-Glass, 1× Grid-Drive, 1× Sanguine Ampoule |
+
+**Persistence (`PlayerAccount`):** `weaponUnlocks[]`, `weaponTiers` (per family), `equippedWeaponByClass`. Unlocks and tier upgrades are permanent. One equipped weapon per class. Legacy blueprint fields deprecated; saves reset to starter progression (pre-launch).
+
+**Run snapshot (`ActiveIncursionState`):** `activeWeaponFamilyId`, `activeWeaponTier`, `weaponRuntime` (once-per-combat passive counters). Snapshotted at descent — combat reads run state, not live account.
+
+**Progression UI:** `WeaponLoadoutPanel` on Loadout tab — inspect locked/unlocked families, equip, upgrade tier when affordable, preview next tier. Not in Forge fabrication matrix.
+
+**Combat hooks (v1, modest):** strike damage/stamina, fracture scaling, magazine size, ballistic/occult damage %, crit bonus, armor pierce, once-per-combat passives (first melee Reserve, first fracture stamina refund, first reload stamina, post-reload ballistic bonus, first occult Veil-Flux, etc.). Applied via `weaponCombatEngine.ts` in `TacticalCombatHub` — modifier-driven, not weapon-name checks in boon DB.
+
+**Debrief:** `runDebriefWeaponEngine` + extended `runCraftingOpportunityEngine` — equipped weapon/tier, newly unlockable families, upgrade-available / nearly-ready lines.
+
+**Validation + dev:** `weaponValidationEngine.ts` (registry, account, active run); boot + `VALIDATE ALL` integration report; Dev Test Hub — Validate Weapons, Unlock All, Reset, Grant Resources.
+
+**Key files:** `types/weapon.ts`, `weaponRegistry.ts`, `weaponProgressionEngine.ts`, `weaponCombatEngine.ts`, `weaponRunState.ts`, `weaponValidationEngine.ts`, `runDebriefWeaponEngine.ts`, `WeaponLoadoutPanel.tsx`, `PlayerAccountContext.tsx`, `RunContext.tsx` (descent snapshot), `TacticalCombatHub.tsx`, `CombatScreen.tsx`.
+
+**Weapon Families v1 — acceptance criteria:**
+
+1. ✅ Weapon registry with 9 families, 3 tiers each, starter per class.
+2. ✅ Family unlocks and tier upgrades via extracted stash resources (no Anomalous Core for normal tiers).
+3. ✅ Equip one weapon per class on Loadout; wrong-class blocked.
+4. ✅ Weapon snapshotted to run at descent; mid-run swap disabled.
+5. ✅ Combat applies stat mods + tier-III once-per-combat passives.
+6. ✅ Debrief surfaces unlock/upgrade opportunities.
+7. ✅ Masterwork hooks present but locked.
+8. ✅ Legacy 3-blueprint LOADOUT forge recipes removed.
+
+**Not in v1:** Masterwork weapons, mid-run weapon swap, weapon XP, inventory katana as combat stat source (deprecated).
+
 ## Run And Progression Systems
 
 ### Run State
@@ -404,6 +470,7 @@ Run state tracks:
 - Soul Anchor HP and max HP.
 - Stamina and max stamina.
 - Active class and class loadout.
+- **`activeWeaponFamilyId` / `activeWeaponTier` / `weaponRuntime`** — weapon locked at descent (family, tier, once-per-combat counters).
 - Active cargo and containment.
 - **`runBankedSnapshot`** — physical cargo secured at in-run safehouse (survives death).
 - **`runResourceLedger`** — collected, banked, extracted, lost, consumed resource counts.
@@ -475,7 +542,7 @@ Persistent account state includes:
 - Resource stash.
 - Banked cargo value.
 - Crafted augment unlocks.
-- Blueprint unlocks.
+- **Weapon family unlocks and tier upgrades** (`weaponUnlocks`, `weaponTiers`, `equippedWeaponByClass`).
 - Hub-crafted consumables.
 - Pre-run cargo draft.
 - Class ability unlocks and loadouts.
@@ -661,12 +728,6 @@ Rotating pool:
 
 ### Forge Recipes
 
-Weapon/blueprint recipes:
-
-- Pulse Rifle Frame -> Riftshot Pulse Rifle.
-- Claymore Strike -> Aegis Claymore.
-- Containment Rig -> Envoy Hex.
-
 Augment recipes:
 
 - Chalk-Line Ward.
@@ -684,13 +745,27 @@ Consumable recipes:
 - Veil-Ash Grenade.
 - Sonar-Ping.
 
-### Weapon Blueprints
+Weapon family unlocks and tier upgrades are **not** Forge recipes — they are handled on Loadout → Weapon Chassis via `weaponProgressionEngine` (stash deduction on unlock/upgrade).
 
-| Blueprint | Class | Effect |
-|---|---|---|
-| Anomaly-Treated Claymore | Aegis | On hit vs fractured hostiles, grant +10 shield for 1 turn |
-| Pulse Shot Rifle | Hex Shot | On fire, self 5% HP; spectral targets take 2x damage |
-| Diplomatic Hex Sigil | Envoy | Each operative turn, one random hostile gains Vulnerable (+15% damage taken) |
+### Weapon Families (v1)
+
+See **Weapon Families + Vertical Upgrade Tracks v1** above for the full roster, tier passives, persistence, and combat hooks.
+
+**Tier III identity passives (examples):**
+
+| Weapon | Tier III passive |
+|--------|------------------|
+| Runed Longsword | First melee hit each combat +5 Abyssal Reserve |
+| Claymore-Blade | First Fracture each combat +15 Stamina |
+| Rift Edge | Melee crits +5 Reserve |
+| Silver-Core Sidearm | First reload each combat +10 Stamina |
+| Pulse Rifle | After reload, next Ballistic attack +10% damage |
+| Nullbreach Carbine | First hit vs armored enemy strips 1 extra armor |
+| Null Conduit | First Occult ability each combat +5 Veil-Flux |
+| Sanguine Prism | Once per combat, HP sacrifice grants +10 Veil-Flux |
+| Echo Lantern | First debuff applied each combat +1 temporary ward |
+
+**Deprecated (removed):** Legacy 3-blueprint system (`aegis_claymore`, `riftshot_pulse_rifle`, `envoy_hex`) and LOADOUT forge schematics (Pulse Rifle Frame, Claymore Strike, Containment Rig).
 
 ### Trinkets (Legacy Combat)
 
@@ -729,6 +804,7 @@ Combat uses:
 - Enemy intent telegraphs.
 - Enemy turn queues and motion stages.
 - Cargo consumable deployment.
+- **Equipped weapon** — family + tier from run snapshot; stat mods and once-per-combat weapon passives via `weaponCombatEngine`.
 
 ### Defensive Layers
 
@@ -997,6 +1073,8 @@ Current world/narrative surface includes:
 - **Unstable cargo carried effects v1 (complete):** Three unstable resources with deduped carried modifiers, lazy procedural type/context rolls, cargo pressure UI, debrief Cargo Pressure block, volatile resonance tagging, occupancy resonance multiplier, emergency recall Veil-Ash warning log.
 - **Echo encounters v1 (complete — Phases 1–6):** Echo scanner overlays at layer unlock, per-depth/run caps, weighted encounter kinds, fallen-runner narrative, assist/cargo/extraction immediate resolution, hostile combat routing, class-based hostile templates with depth scaling, hostile echo reward rolls, debrief Echo section, dev forcing tools, echo pipeline validation (reward-resource existence + Echo Recovery contribution rules), `echoRunState` tracking, Veil Front echo intel surfaces, reward-stack extraction tracking, Smuggler's Ledger fallen-runner drop, extraction echo emergency-recall bleed bonus. Acceptance criteria (20) verified in the Echo Encounters v1 section below.
 - **Expedition relics v2 (complete — Phases A–F):** 20-relic pre-run loadout with deployment choices, in-run branch modals, scanner/cargo/economy/contract/safehouse/echo hooks, live HUD counters, trigger toasts, debrief parity, registry + acceptance + combat-stat audit on boot. Internal code uses `Keepsake*` naming; player-facing copy uses **Expedition Relic**.
+- **Run Integration + Progression Audit v1 (complete):** Full-loop audit, aggregated validation, debrief outcome detail, anchor/crafting/next-steps, pacing presets, balance telemetry, content matrix, sponsor rep preview.
+- **Weapon Families + Vertical Upgrade Tracks v1 (complete):** 9 weapon families × 3 tiers, Loadout Weapon Chassis unlock/equip/upgrade, run snapshot, combat stat hooks + tier-III passives, debrief opportunities, validation + dev tools. Legacy blueprint forge recipes removed.
 - **Run Items v2 (complete — Phases A–F + polish):** 24-item combat consumable + field tool roster in dedicated 2+2 slots, combat/field engines, hub loadout + fabrication filters, black market tap-to-buy + cargo drag split, live HUD + toasts + brought/remaining debrief, registry + acceptance + boot audit. Bound Requisitions remain separate.
 - **Post-run cargo routing v1 (complete — Phases 1–10):** Full post-extract cargo routing pipeline with Veil Front + hub intel surfaces, live debrief preview/validation, partial stackable routing, casket open-at-hub v1, deferred contract delivery, death cargo messaging, runtime + intel + fixture + sim validation, catalog audit engine, cleanup/ship pass, `cargoRoutingRunState` + `careerCargoRouting` tracking, debrief summary wiring, hub contract board + safehouse + extraction review + scanner + loadout + cargo pressure surfaces, hub log on routing confirm, dev audit/validate/inspect tooling, compact debrief parity. Acceptance criteria (63) in Post-Run Cargo Routing v1 section.
 - **Safehouse banking:** Physical in-run banking via `runBankedSnapshot` — banked cargo survives death and routes to hub stash. Unbanked cargo is lost on death (`runResourceLedger.lostOnDeath`). Extraction merges banked + carried cargo before deposit.
@@ -1016,6 +1094,6 @@ Current world/narrative surface includes:
 - Resource taxonomy now separates category from role (crafting intel vs economy intel vs fence value).
 - Enemy identity is strong, but intent documentation should become a player-facing codex or internal balancing table.
 - Cargo is doing several jobs at once: loot value, tactical consumables, scanner tools, extraction tension, and resonance risk. This should remain central to run identity.
-- Loadout is the home for class, ability deck, weapon display, **expedition relic** equip, and cargo prep.
-- Black Market now has a clean split: Forge for crafting, Vendor for contraband.
+- Loadout is the home for class, **weapon chassis** (family + tier), ability deck, **expedition relic** equip, Run Items, and cargo prep.
+- Black Market split: Forge for augments/consumables; Vendor for contraband. Weapon progression lives on Loadout, not Forge.
 

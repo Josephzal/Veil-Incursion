@@ -7,6 +7,8 @@ import { canAffordRecipe, getStashCount } from '../resourceStashEngine';
 import { getRunItemDefinition } from '../runItemRegistry';
 import type { RunItemId } from '../../types/runItem';
 import { isRecipeOutputOwned } from '../craftingRegistry';
+import { buildWeaponDebriefSummary } from '../runDebriefWeaponEngine';
+import type { WeaponDebriefSummary } from '../../types/weapon';
 
 export interface CraftingOpportunityLine {
   recipeId: string;
@@ -20,6 +22,7 @@ export interface CraftingOpportunitySummary {
   nearlyCraftable: CraftingOpportunityLine[];
   highlightResources: ResourceItemId[];
   note: string | null;
+  weaponSummary?: WeaponDebriefSummary | null;
 }
 
 function listAffordableRecipes(
@@ -65,11 +68,12 @@ function listNearlyCraftableRecipes(
 export function buildCraftingOpportunitySummary(
   account: PlayerAccount,
   extractedResourceIds?: readonly ResourceItemId[],
+  incursion?: import('../../types/game').ActiveIncursionState | null,
 ): CraftingOpportunitySummary {
   const stash = account.resourceStash;
   const isOwned = (recipe: CraftingRecipe) => isRecipeOutputOwned(
     recipe.outputId,
-    account.unlockedBlueprints,
+    [],
     account.craftedAugments,
   );
 
@@ -95,6 +99,27 @@ export function buildCraftingOpportunitySummary(
 
   const highlightResources = [...new Set(extractedResourceIds ?? [])].slice(0, 4);
 
+  const weaponSummary = buildWeaponDebriefSummary(account, incursion ?? null);
+  weaponSummary.lines
+    .filter((line) => line.kind !== 'EQUIPPED')
+    .forEach((line) => {
+      if (line.kind === 'NEWLY_UNLOCKABLE' || line.kind === 'UPGRADE_AVAILABLE') {
+        craftableNow.push({
+          recipeId: `weapon-${line.label}`,
+          label: line.label,
+          kind: 'CRAFTABLE_NOW',
+          detail: line.detail,
+        });
+      } else if (line.kind === 'NEARLY_READY') {
+        nearlyCraftable.push({
+          recipeId: `weapon-${line.label}`,
+          label: line.label,
+          kind: 'NEARLY_READY',
+          detail: line.detail,
+        });
+      }
+    });
+
   let note: string | null = null;
   if (craftableNow.length === 0 && nearlyCraftable.length === 0) {
     note = 'No new crafting opportunities detected — extract more resources or complete contracts.';
@@ -105,6 +130,7 @@ export function buildCraftingOpportunitySummary(
     nearlyCraftable,
     highlightResources,
     note,
+    weaponSummary,
   };
 }
 
@@ -118,6 +144,9 @@ export function formatCraftingOpportunityLines(summary: CraftingOpportunitySumma
   });
   if (summary.highlightResources.length > 0) {
     lines.push(`Extracted materials: ${summary.highlightResources.map((id) => id.replace(/-/g, ' ')).join(', ')}`);
+  }
+  if (summary.weaponSummary?.equippedDisplayName) {
+    lines.push(`Equipped weapon: ${summary.weaponSummary.equippedDisplayName} (Tier ${summary.weaponSummary.equippedTier ?? 1})`);
   }
   if (summary.note) lines.push(summary.note);
   return lines;

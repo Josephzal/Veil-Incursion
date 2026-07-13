@@ -106,10 +106,21 @@ import type { CargoItemId } from '../types/cargoGrid';
 import type { RunPhysicalBankSnapshot } from '../types/runResourceLedger';
 import { rollDecryptionLoot } from '../data/decryptionLootEngine';
 import {
-  blueprintForClass,
-  isBlueprintId,
-  type BlueprintId,
-} from '../types/equipmentBlueprint';
+  createDefaultWeaponProgression,
+  equipWeaponForClass,
+  getEquippedWeaponForClass,
+  getWeaponTier,
+  normalizeWeaponProgression,
+  resolveWeaponState,
+  unlockAllWeapons,
+  unlockWeaponFamily,
+  upgradeWeaponTier,
+} from '../data/weaponProgressionEngine';
+import {
+  resolveWeaponCombatStatsFromState,
+} from '../data/weaponCombatEngine';
+import type { WeaponFamilyId } from '../types/weapon';
+import { getWeaponFamily } from '../data/weaponRegistry';
 import {
   DECRYPTION_COST,
   type UnidentifiedTemplateId,
@@ -133,7 +144,7 @@ const NEUTRAL_FACTION_PERKS: FactionModifiers = {
 
 export function createDefaultPlayerAccount(): PlayerAccount {
   const inventory = createDefaultInventory();
-  const equipped = getEquippedWeapon(inventory.items);
+  const weaponProgression = createDefaultWeaponProgression();
   return {
     id: `operative-${Date.now()}`,
     username: 'OPERATIVE-7741',
@@ -157,7 +168,7 @@ export function createDefaultPlayerAccount(): PlayerAccount {
       weaponCoatingUnlocks: [],
     },
     equipment: {
-      weaponId: equipped?.id ?? 'dull-training-katana',
+      weaponId: null,
       armorId: null,
       trinketId: null,
     },
@@ -176,13 +187,14 @@ export function createDefaultPlayerAccount(): PlayerAccount {
       'legion-blood-iron': 2,
       'encrypted-grid-drive': 1,
     },
-    unlockedBlueprints: [],
+    weaponUnlocks: weaponProgression.weaponUnlocks,
+    weaponTiers: weaponProgression.weaponTiers,
+    equippedWeaponByClass: weaponProgression.equippedWeaponByClass,
     craftedAugments: [],
     hubCraftedConsumables: {},
     preRunCargo: createDefaultCargoRunState(),
     tacticalLoadout: createDefaultTacticalLoadout(),
     runItemLoadout: createDefaultRunItemsSlotState(),
-    equippedBlueprintId: null,
     unidentifiedStash: [],
     careerCargoRouting: createDefaultCareerCargoRoutingStats(),
     equippedKeepsakeId: null,
@@ -194,7 +206,6 @@ export function createDefaultPlayerAccount(): PlayerAccount {
 function mergeStoredAccount(parsed: Partial<PlayerAccount>): PlayerAccount {
   const defaults = createDefaultPlayerAccount();
   const inventory = mergeInventory(parsed.inventory);
-  const equipped = getEquippedWeapon(inventory.items);
   const classFields = normalizeClassAccountFields(parsed);
   return {
     ...defaults,
@@ -217,8 +228,7 @@ function mergeStoredAccount(parsed: Partial<PlayerAccount>): PlayerAccount {
     },
     equipment: {
       ...defaults.equipment,
-      ...parsed.equipment,
-      weaponId: equipped?.id ?? parsed.equipment?.weaponId ?? defaults.equipment.weaponId,
+      weaponId: null,
     },
     inventory,
     bankedCargo: {
@@ -231,7 +241,11 @@ function mergeStoredAccount(parsed: Partial<PlayerAccount>): PlayerAccount {
     },
     alignedFaction: parsed.alignedFaction ?? defaults.alignedFaction ?? 'TERRAN_GRID',
     sponsorReputation: { ...defaults.sponsorReputation, ...parsed.sponsorReputation },
-    unlockedBlueprints: parsed.unlockedBlueprints ?? defaults.unlockedBlueprints,
+    ...normalizeWeaponProgression({
+      weaponUnlocks: parsed.weaponUnlocks,
+      weaponTiers: parsed.weaponTiers,
+      equippedWeaponByClass: parsed.equippedWeaponByClass,
+    }),
     craftedAugments: parsed.craftedAugments ?? defaults.craftedAugments,
     hubCraftedConsumables: {
       ...defaults.hubCraftedConsumables,
@@ -248,7 +262,6 @@ function mergeStoredAccount(parsed: Partial<PlayerAccount>): PlayerAccount {
         runItemLoadout: migrated.runItemLoadout,
       };
     })(),
-    equippedBlueprintId: parsed.equippedBlueprintId ?? defaults.equippedBlueprintId,
     unidentifiedStash: parsed.unidentifiedStash ?? defaults.unidentifiedStash,
     careerCargoRouting: {
       ...defaults.careerCargoRouting,
@@ -298,7 +311,7 @@ interface PlayerAccountContextType {
   appendHubLog: (text: string) => void;
   clearHubLog: () => void;
   getEquippedWeaponItem: () => InventoryItem | null;
-  getWeaponCombatStats: () => ResolvedWeaponCombatStats;
+  getWeaponCombatStats: (classId?: ClassType) => ResolvedWeaponCombatStats;
   resetAccount: () => void;
   unlockRegionalWeaponCoating: (slotId: string) => void;
   setMetropolitanNode: (node: string, sectorId?: MacroSectorId) => void;
@@ -324,7 +337,12 @@ interface PlayerAccountContextType {
   depositResourceStash: (delta: ResourceQuantity) => void;
   addLockedContainer: (templateId: UnidentifiedTemplateId) => void;
   decryptUnidentifiedItem: (instanceId: string) => Promise<string[]>;
-  setEquippedBlueprint: (blueprintId: BlueprintId | null) => void;
+  equipWeaponFamily: (familyId: WeaponFamilyId) => { success: boolean; logLine: string };
+  unlockWeaponFamilyAccount: (familyId: WeaponFamilyId) => { success: boolean; logLine: string };
+  upgradeWeaponFamilyTier: (familyId: WeaponFamilyId) => { success: boolean; logLine: string };
+  unlockAllWeaponFamilies: () => void;
+  resetWeaponFamilies: () => void;
+  grantWeaponUnlockResources: () => void;
   setEquippedKeepsake: (keepsakeId: KeepsakeId | null) => void;
   setKeepsakeAttunement: (attunement: KeepsakeAttunement | null) => void;
   setKeepsakeRouteDoctrine: (routeDoctrine: KeepsakeRouteDoctrine | null) => void;
@@ -515,10 +533,18 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
     return getEquippedWeapon(account.inventory.items);
   }, [account.inventory.items]);
 
-  const getWeaponCombatStats = useCallback((): ResolvedWeaponCombatStats => {
-    const weapon = getEquippedWeapon(account.inventory.items);
-    return resolveWeaponCombatStats(weapon?.modifiers ?? {}, weapon?.name ?? 'Standard Blade');
-  }, [account.inventory.items]);
+  const getWeaponCombatStats = useCallback((classId?: ClassType): ResolvedWeaponCombatStats => {
+    const activeClass = classId ?? account.activeClass;
+    const progression = {
+      weaponUnlocks: account.weaponUnlocks,
+      weaponTiers: account.weaponTiers,
+      equippedWeaponByClass: account.equippedWeaponByClass,
+    };
+    const familyId = getEquippedWeaponForClass(progression, activeClass);
+    const tier = getWeaponTier(progression, familyId);
+    const weapon = resolveWeaponState(familyId, tier);
+    return resolveWeaponCombatStatsFromState(weapon);
+  }, [account.activeClass, account.equippedWeaponByClass, account.weaponTiers, account.weaponUnlocks]);
 
   const equipInventoryItem = useCallback(
     (itemId: string) => {
@@ -660,13 +686,10 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
         if (!prev.unlockedClasses.includes(classId) || prev.activeClass === classId) {
           return prev;
         }
-        const ownedBlueprint = blueprintForClass(classId);
-        const canEquipBlueprint = ownedBlueprint != null && prev.unlockedBlueprints.includes(ownedBlueprint);
         appendHubLog(`>> CLASS MODULE LOCKED — ${getClassDisplayName(classId).toUpperCase()} ACTIVE.`);
         return {
           ...prev,
           activeClass: classId,
-          equippedBlueprintId: canEquipBlueprint ? ownedBlueprint : null,
         };
       });
     },
@@ -678,13 +701,10 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       updateAccount((prev) => {
         const nextClass = cycleOperativeClass(prev.activeClass, prev.unlockedClasses, direction);
         if (nextClass === prev.activeClass) return prev;
-        const ownedBlueprint = blueprintForClass(nextClass);
-        const canEquipBlueprint = ownedBlueprint != null && prev.unlockedBlueprints.includes(ownedBlueprint);
         appendHubLog(`>> CLASS MODULE LOCKED — ${getClassDisplayName(nextClass).toUpperCase()} ACTIVE.`);
         return {
           ...prev,
           activeClass: nextClass,
-          equippedBlueprintId: canEquipBlueprint ? ownedBlueprint : null,
         };
       });
     },
@@ -776,7 +796,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
         recipe.kind !== 'CONSUMABLE'
         && isRecipeOutputOwned(
           recipe.outputId,
-          account.unlockedBlueprints,
+          [],
           account.craftedAugments,
         )
       ) {
@@ -792,18 +812,6 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
 
       updateAccount((prev) => {
         const base = { ...prev, resourceStash: nextStash };
-        if (recipe.kind === 'LOADOUT') {
-          const nextBlueprints = [...prev.unlockedBlueprints, recipe.outputId];
-          const shouldEquip = isBlueprintId(recipe.outputId)
-            && blueprintForClass(prev.activeClass) === recipe.outputId;
-          return {
-            ...base,
-            unlockedBlueprints: nextBlueprints,
-            equippedBlueprintId: shouldEquip
-              ? (recipe.outputId as BlueprintId)
-              : prev.equippedBlueprintId,
-          };
-        }
         if (recipe.kind === 'AUGMENT') {
           const augmentId = recipe.outputId as BoundRequisitionId;
           if (prev.craftedAugments.includes(augmentId)) return base;
@@ -821,12 +829,6 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
         };
       });
 
-      if (recipe.kind === 'LOADOUT') {
-        return {
-          success: true,
-          logLine: `>> FABRICATION COMPLETE — ${recipe.outputId.replace(/_/g, ' ').toUpperCase()} UNLOCKED.`,
-        };
-      }
       if (recipe.kind === 'AUGMENT') {
         return {
           success: true,
@@ -841,7 +843,6 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
     [
       account.craftedAugments,
       account.resourceStash,
-      account.unlockedBlueprints,
       updateAccount,
     ],
   );
@@ -856,12 +857,113 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
     [updateAccount],
   );
 
-  const setEquippedBlueprint = useCallback(
-    (blueprintId: BlueprintId | null) => {
-      updateAccount((prev) => ({ ...prev, equippedBlueprintId: blueprintId }));
+  const equipWeaponFamily = useCallback(
+    (familyId: WeaponFamilyId): { success: boolean; logLine: string } => {
+      const def = getWeaponFamily(familyId);
+      const nextState = equipWeaponForClass(
+        {
+          weaponUnlocks: account.weaponUnlocks,
+          weaponTiers: account.weaponTiers,
+          equippedWeaponByClass: account.equippedWeaponByClass,
+        },
+        def.classId,
+        familyId,
+      );
+      if (!nextState) {
+        return { success: false, logLine: '>> WEAPON LINK REJECTED — FAMILY LOCKED OR CLASS MISMATCH.' };
+      }
+      updateAccount((prev) => ({
+        ...prev,
+        equippedWeaponByClass: nextState.equippedWeaponByClass,
+      }));
+      const tier = getWeaponTier(nextState, familyId);
+      return {
+        success: true,
+        logLine: `>> WEAPON LINKED — ${resolveWeaponState(familyId, tier).displayName.toUpperCase()}.`,
+      };
     },
-    [updateAccount],
+    [account.equippedWeaponByClass, account.weaponTiers, account.weaponUnlocks, updateAccount],
   );
+
+  const unlockWeaponFamilyAccount = useCallback(
+    (familyId: WeaponFamilyId): { success: boolean; logLine: string } => {
+      const progression = {
+        weaponUnlocks: account.weaponUnlocks,
+        weaponTiers: account.weaponTiers,
+        equippedWeaponByClass: account.equippedWeaponByClass,
+      };
+      const result = unlockWeaponFamily(account.resourceStash, progression, familyId);
+      if (!result) {
+        return { success: false, logLine: '>> WEAPON UNLOCK REJECTED — INSUFFICIENT RESOURCES OR ALREADY OWNED.' };
+      }
+      updateAccount((prev) => ({
+        ...prev,
+        resourceStash: result.nextStash,
+        weaponUnlocks: result.nextState.weaponUnlocks,
+        weaponTiers: result.nextState.weaponTiers,
+      }));
+      return {
+        success: true,
+        logLine: `>> WEAPON BLUEPRINT UNLOCKED — ${resolveWeaponState(familyId, 1).displayName.toUpperCase()}.`,
+      };
+    },
+    [account.equippedWeaponByClass, account.resourceStash, account.weaponTiers, account.weaponUnlocks, updateAccount],
+  );
+
+  const upgradeWeaponFamilyTier = useCallback(
+    (familyId: WeaponFamilyId): { success: boolean; logLine: string } => {
+      const progression = {
+        weaponUnlocks: account.weaponUnlocks,
+        weaponTiers: account.weaponTiers,
+        equippedWeaponByClass: account.equippedWeaponByClass,
+      };
+      const result = upgradeWeaponTier(account.resourceStash, progression, familyId);
+      if (!result) {
+        return { success: false, logLine: '>> WEAPON UPGRADE REJECTED — INSUFFICIENT RESOURCES OR MAX TIER.' };
+      }
+      const tier = getWeaponTier(result.nextState, familyId);
+      updateAccount((prev) => ({
+        ...prev,
+        resourceStash: result.nextStash,
+        weaponTiers: result.nextState.weaponTiers,
+      }));
+      return {
+        success: true,
+        logLine: `>> WEAPON UPGRADED — ${resolveWeaponState(familyId, tier).displayName.toUpperCase()}.`,
+      };
+    },
+    [account.equippedWeaponByClass, account.resourceStash, account.weaponTiers, account.weaponUnlocks, updateAccount],
+  );
+
+  const unlockAllWeaponFamilies = useCallback(() => {
+    updateAccount((prev) => ({
+      ...prev,
+      ...unlockAllWeapons(),
+    }));
+  }, [updateAccount]);
+
+  const resetWeaponFamilies = useCallback(() => {
+    updateAccount((prev) => ({
+      ...prev,
+      ...createDefaultWeaponProgression(),
+    }));
+  }, [updateAccount]);
+
+  const grantWeaponUnlockResources = useCallback(() => {
+    updateAccount((prev) => ({
+      ...prev,
+      resourceStash: {
+        ...prev.resourceStash,
+        'ley-slag': 20,
+        'echo-glass-shard': 20,
+        'sanguine-ampoule': 10,
+        'legion-blood-iron': 10,
+        'encrypted-grid-drive': 5,
+        'combustion-cylinder': 5,
+        'ossified-ley-knot': 5,
+      },
+    }));
+  }, [updateAccount]);
 
   const setEquippedKeepsake = useCallback(
     (keepsakeId: KeepsakeId | null) => {
@@ -1382,7 +1484,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       const costRecipe = {
         id: 'decrypt',
         label: 'Decrypt',
-        kind: 'LOADOUT' as const,
+        kind: 'CONSUMABLE' as const,
         outputId: item.templateId,
         requirements: DECRYPTION_COST[item.templateId],
       };
@@ -1394,7 +1496,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
         return ['>> DECRYPTION REJECTED — STASH DEDUCTION FAILED.'];
       }
 
-      const outcome = rollDecryptionLoot(item.templateId, account.unlockedBlueprints, instanceId);
+      const outcome = rollDecryptionLoot(item.templateId, [], instanceId);
       const logLines = ['>> DECRYPTING...', outcome.logLine];
 
       updateAccount((prev) => {
@@ -1407,16 +1509,6 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
           outcome.bundle.items.forEach(({ id, quantity }) => {
             next.resourceStash[id] = (next.resourceStash[id] ?? 0) + quantity;
           });
-        } else if (outcome.kind === 'GEAR' || outcome.kind === 'MASTERWORK') {
-          if (!next.unlockedBlueprints.includes(outcome.blueprintId)) {
-            next = {
-              ...next,
-              unlockedBlueprints: [...next.unlockedBlueprints, outcome.blueprintId],
-            };
-          }
-          if (blueprintForClass(next.activeClass) === outcome.blueprintId) {
-            next = { ...next, equippedBlueprintId: outcome.blueprintId };
-          }
         } else if (outcome.kind === 'CREDITS') {
           next = { ...next, cabalCredits: next.cabalCredits + outcome.amount };
         }
@@ -1425,7 +1517,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
 
       return logLines;
     },
-    [account.resourceStash, account.unidentifiedStash, account.unlockedBlueprints, updateAccount],
+    [account.resourceStash, account.unidentifiedStash, updateAccount],
   );
 
   const value = useMemo(
@@ -1460,7 +1552,12 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       depositResourceStash,
       addLockedContainer,
       decryptUnidentifiedItem,
-      setEquippedBlueprint,
+      equipWeaponFamily,
+      unlockWeaponFamilyAccount,
+      upgradeWeaponFamilyTier,
+      unlockAllWeaponFamilies,
+      resetWeaponFamilies,
+      grantWeaponUnlockResources,
       setEquippedKeepsake,
       setKeepsakeAttunement,
       setKeepsakeRouteDoctrine,
@@ -1520,7 +1617,12 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       depositResourceStash,
       addLockedContainer,
       decryptUnidentifiedItem,
-      setEquippedBlueprint,
+      equipWeaponFamily,
+      unlockWeaponFamilyAccount,
+      upgradeWeaponFamilyTier,
+      unlockAllWeaponFamilies,
+      resetWeaponFamilies,
+      grantWeaponUnlockResources,
       setEquippedKeepsake,
       setKeepsakeAttunement,
       setKeepsakeRouteDoctrine,

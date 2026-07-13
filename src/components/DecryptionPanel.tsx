@@ -2,6 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import HapticPressable from './HapticPressable';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
+import { getEquippedWeaponForClass, getWeaponTier, resolveWeaponState } from '../data/weaponProgressionEngine';
 import {
   DECRYPTION_COST,
   UNIDENTIFIED_TEMPLATE_LABELS,
@@ -19,6 +20,22 @@ interface DecryptionPanelProps {
 export default function DecryptionPanel({ onStatus }: DecryptionPanelProps): React.JSX.Element {
   const { account, decryptUnidentifiedItem } = usePlayerAccount();
   const [busyId, setBusyId] = useState<string | null>(null);
+  const equippedWeapon = resolveWeaponState(
+    getEquippedWeaponForClass({
+      weaponUnlocks: account.weaponUnlocks,
+      weaponTiers: account.weaponTiers,
+      equippedWeaponByClass: account.equippedWeaponByClass,
+    }, account.activeClass),
+    getWeaponTier({
+      weaponUnlocks: account.weaponUnlocks,
+      weaponTiers: account.weaponTiers,
+      equippedWeaponByClass: account.equippedWeaponByClass,
+    }, getEquippedWeaponForClass({
+      weaponUnlocks: account.weaponUnlocks,
+      weaponTiers: account.weaponTiers,
+      equippedWeaponByClass: account.equippedWeaponByClass,
+    }, account.activeClass)),
+  );
 
   const locked = account.unidentifiedStash.filter((item) => item.state !== 'REVEALED');
 
@@ -70,17 +87,13 @@ export default function DecryptionPanel({ onStatus }: DecryptionPanelProps): Rea
           );
         })
       )}
-      {account.unlockedBlueprints.length > 0 ? (
+      {account.weaponUnlocks.length > 0 ? (
         <View style={[styles.unlockedBlock, { borderColor: BORDER }]}>
-          <Text style={styles.unlockedTitle}>UNLOCKED BLUEPRINTS</Text>
-          {account.unlockedBlueprints.map((id) => (
-            <Text key={id} style={styles.unlockedLine}>{`• ${id.replace(/_/g, ' ').toUpperCase()}`}</Text>
-          ))}
-          {account.equippedBlueprintId ? (
-            <Text style={styles.equippedLine}>
-              {`ACTIVE WEAPON LINK: ${account.equippedBlueprintId.replace(/_/g, ' ').toUpperCase()}`}
-            </Text>
-          ) : null}
+          <Text style={styles.unlockedTitle}>UNLOCKED WEAPONS</Text>
+          <Text style={styles.unlockedLine}>{`${account.weaponUnlocks.length} families unlocked`}</Text>
+          <Text style={styles.equippedLine}>
+            {`ACTIVE WEAPON LINK: ${equippedWeapon.displayName.toUpperCase()}`}
+          </Text>
         </View>
       ) : null}
     </View>

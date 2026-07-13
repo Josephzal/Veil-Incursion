@@ -134,8 +134,14 @@ export interface PlayerAccount {
   unlockedEnvoyAbilities: import('./operativeClass').EnvoyAbilityId[];
   /** Hub-side abstract resource counts for fabrication. */
   resourceStash: ResourceQuantity;
-  /** Crafted blueprint IDs unlocked at the metropolitan fabrication bench. */
-  unlockedBlueprints: string[];
+  /** @deprecated Reset on load — use weaponUnlocks. */
+  unlockedBlueprints?: string[];
+  /** Permanent weapon family unlocks. */
+  weaponUnlocks: import('./weapon').WeaponFamilyId[];
+  /** Highest tier achieved per weapon family (1–3). */
+  weaponTiers: Partial<Record<import('./weapon').WeaponFamilyId, import('./weapon').WeaponTierNumber>>;
+  /** Equipped weapon per operative class. */
+  equippedWeaponByClass: Partial<Record<ClassType, import('./weapon').WeaponFamilyId>>;
   /** Hub-forged passive augments available for pre-run loadout staging. */
   craftedAugments: import('./boundRequisition').BoundRequisitionId[];
   /** Hub-crafted tactical consumables awaiting run deployment. */
@@ -150,8 +156,8 @@ export interface PlayerAccount {
   ];
   /** Pre-run Run Item v2 slots — 2 combat + 2 field, separate from cargo grid. */
   runItemLoadout: import('./runItem').RunItemsSlotState;
-  /** Class weapon blueprint actively wired into combat hooks. */
-  equippedBlueprintId: import('./equipmentBlueprint').BlueprintId | null;
+  /** @deprecated Reset on load — use equippedWeaponByClass. */
+  equippedBlueprintId?: import('./equipmentBlueprint').BlueprintId | null;
   /** Safehouse decryption queue — gatekeeper cores/caskets land here as locked containers. */
   unidentifiedStash: import('./unidentifiedItem').UnidentifiedStashItem[];
   /** Career totals from post-run cargo routing decisions. */
@@ -530,6 +536,12 @@ export interface ActiveIncursionState {
   runItemsAtRunStart: import('../types/runItem').RunItemsSlotState;
   /** Run Item v2 per-run counters, triggers, and pending effects. */
   itemRuntime: import('../types/runItem').RunItemRuntime;
+  /** Weapon family locked at run start. */
+  activeWeaponFamilyId: import('./weapon').WeaponFamilyId;
+  /** Weapon tier locked at run start. */
+  activeWeaponTier: import('./weapon').WeaponTierNumber;
+  /** Once-per-combat weapon passive counters. */
+  weaponRuntime: import('./weapon').WeaponRuntimeState;
 }
 
 export function createDefaultEnvironmentalModifiers(): EnvironmentalModifiers {
@@ -672,5 +684,17 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     runItems: createDefaultRunItemsSlotState(),
     runItemsAtRunStart: createDefaultRunItemsSlotState(),
     itemRuntime: createDefaultRunItemRuntime(),
+    activeWeaponFamilyId: 'aegis-runed-longsword',
+    activeWeaponTier: 1,
+    weaponRuntime: {
+      firstMeleeHitUsed: false,
+      firstFractureUsed: false,
+      firstReloadUsed: false,
+      firstOccultAbilityUsed: false,
+      firstDebuffApplied: false,
+      sacrificeHpBonusUsed: false,
+      firstArmoredHitUsed: false,
+      postReloadBallisticBonus: false,
+    },
   };
 }

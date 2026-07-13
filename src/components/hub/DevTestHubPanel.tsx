@@ -59,6 +59,11 @@ import {
   type NodesPerDistrictPreset,
 } from '../../data/runIntegration/runPacingConfig';
 import { formatRunBalanceTelemetryReport, buildRunBalanceTelemetry } from '../../data/runIntegration/runBalanceTelemetryEngine';
+import {
+  formatWeaponValidationReport,
+  validateWeaponRegistry,
+  debugPrintEquippedWeapons,
+} from '../../data/weaponValidationEngine';
 
 interface SandboxLaunchButtonProps {
   label: string;
@@ -134,6 +139,12 @@ export default function DevTestHubPanel(): React.JSX.Element {
     setKeepsakeAttunement,
     setKeepsakeRouteDoctrine,
     setKeepsakeMirrorCategory,
+    unlockAllWeaponFamilies,
+    resetWeaponFamilies,
+    grantWeaponUnlockResources,
+    equipWeaponFamily,
+    upgradeWeaponFamilyTier,
+    appendHubLog,
   } = usePlayerAccount();
   const {
     selectedSector,
@@ -777,6 +788,36 @@ export default function DevTestHubPanel(): React.JSX.Element {
           label="[ CONTENT MATRIX ]"
           accentColor={theme.statusColor}
           onPress={() => setDebugReport(formatContentMatrixReport([selectedSector], persisted))}
+        />
+        <SandboxLaunchButton
+          label="[ VALIDATE WEAPONS ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(formatWeaponValidationReport(validateWeaponRegistry()))}
+        />
+        <SandboxLaunchButton
+          label="[ UNLOCK ALL WEAPONS ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            unlockAllWeaponFamilies();
+            appendHubLog('>> DEV — ALL WEAPON FAMILIES UNLOCKED AT TIER III.');
+            setDebugReport(debugPrintEquippedWeapons(account));
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ RESET WEAPONS ]"
+          accentColor={theme.mutedColor}
+          onPress={() => {
+            resetWeaponFamilies();
+            appendHubLog('>> DEV — WEAPON PROGRESSION RESET.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ GRANT WEAPON RESOURCES ]"
+          accentColor={theme.mutedColor}
+          onPress={() => {
+            grantWeaponUnlockResources();
+            appendHubLog('>> DEV — WEAPON CRAFT RESOURCES GRANTED.');
+          }}
         />
         <SandboxLaunchButton
           label="[ RUN TELEMETRY ]"

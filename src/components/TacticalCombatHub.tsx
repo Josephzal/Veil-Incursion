@@ -194,7 +194,25 @@ import {
   recoverFromFracture,
   stackDoomedTag,
 } from '../data/combatFractureEngine';
-import type { BlueprintId } from '../types/equipmentBlueprint';
+import type { WeaponFamilyId, WeaponTierNumber } from '../types/weapon';
+import {
+  applyWeaponBallisticDamageMultiplier,
+  applyWeaponOccultDamageMultiplier,
+  applyWeaponArmorPierceToTarget,
+  buildResolvedWeaponForRun,
+  consumeWeaponPostReloadBonus,
+  didWeaponPostReloadBonus,
+  resolveWeaponMagazineBonus,
+  runWeaponOnBallisticHitHooks,
+  runWeaponOnFractureHooks,
+  runWeaponOnMeleeHitHooks,
+  runWeaponOnReloadHooks,
+  scaleFractureGain,
+  stripExtraArmorFromTarget,
+  weaponCritChanceBonus,
+  weaponArmorPierceLayers,
+} from '../data/weaponCombatEngine';
+import { createDefaultWeaponRuntime } from '../data/weaponRunState';
 import { CombatLifecycleManager, applyHookWeaverTetherAction, applyLeySirenTetherAction } from '../data/combatLifecycleEngine';
 import {
   applyAshenBreathDebt,
@@ -231,9 +249,6 @@ import {
   getEnemyAccuracyPenalty,
   getEnemyDamageTakenMultiplier,
   patchEnemyTagsFromExtras,
-  runOnPlayerTurnStartHooks,
-  runOnFireHooks,
-  runOnHitHooks,
   tickCombatSessionExtras,
   applyFrontlineBlinded,
 } from '../data/combatHookRunner';
@@ -513,8 +528,9 @@ interface TacticalCombatHubProps {
   kineticBatteryActive?: boolean;
   /** Narrative bonus boons claimed for this combat encounter. */
   narrativeCombatBoons?: import('../types/narrativeBonusReward').PendingNarrativeCombatBoons;
-  /** Equipped class weapon blueprint — claymore / pulse rifle / hex hooks. */
-  equippedBlueprintId?: BlueprintId | null;
+  /** Active weapon family locked at run start. */
+  activeWeaponFamilyId?: WeaponFamilyId | null;
+  activeWeaponTier?: WeaponTierNumber;
   /** Faction passive crit bonus (e.g. Solaris +10%). */
   playerCritChanceBonus?: number;
   /** Arena camera shake + global crit hooks (CombatScreen). */
@@ -616,7 +632,8 @@ export default function TacticalCombatHub({
   playerKineticArmorBonus = 0,
   kineticBatteryActive = false,
   narrativeCombatBoons,
-  equippedBlueprintId = null,
+  activeWeaponFamilyId = null,
+  activeWeaponTier = 1,
   playerCritChanceBonus = 0,
   onPlayerCritImpact,
   godModeActive = false,
@@ -656,7 +673,21 @@ export default function TacticalCombatHub({
     () => aggregateEnvoyBoonModifiers(envoyBoons),
     [envoyBoons],
   );
-  const maxAmmo = DEFAULT_MAGAZINE_SIZE + hexShotBoonMods.maxAmmoBonus;
+  const resolvedWeapon = useMemo(
+    () => (activeWeaponFamilyId
+      ? buildResolvedWeaponForRun(activeWeaponFamilyId, activeWeaponTier)
+      : null),
+    [activeWeaponFamilyId, activeWeaponTier],
+  );
+  const weaponRuntimeRef = useRef(createDefaultWeaponRuntime());
+  const weaponMagazineBonus = resolvedWeapon
+    ? resolveWeaponMagazineBonus(resolvedWeapon.statModifiers)
+    : 0;
+  const weaponCritBonus = resolvedWeapon
+    ? weaponCritChanceBonus(resolvedWeapon.statModifiers)
+    : 0;
+  const effectiveCritBonus = playerCritChanceBonus + weaponCritBonus;
+  const maxAmmo = DEFAULT_MAGAZINE_SIZE + hexShotBoonMods.maxAmmoBonus + weaponMagazineBonus;
   const combatMaxSoulAnchor = operativeClass === 'HEX_SHOT'
     ? Math.floor(maxSoulAnchor * hexShotBoonMods.maxHpMultiplier)
     : maxSoulAnchor;
@@ -1649,26 +1680,25 @@ export default function TacticalCombatHub({
   };
 
   const applyPlayerTurnBlueprintHooks = () => {
-    if (!equippedBlueprintId) return;
-    const hooks = runOnPlayerTurnStartHooks(
-      equippedBlueprintId,
-      {
-        blueprintId: equippedBlueprintId,
-        player: {
-          hp: operativeHpRef.current,
-          maxHp: maxSoulAnchor,
-          shield: sessionExtrasRef.current.playerShield,
-          shieldTurnsRemaining: sessionExtrasRef.current.playerShieldTurnsRemaining,
-          debuffs: sessionExtrasRef.current.playerDebuffs,
-        },
-        squad: squadRef.current,
-      },
-      sessionExtrasRef.current,
-    );
-    hooks.logLines.forEach((line) => log(line));
-    if (hooks.enemyStatusApplied?.length) {
-      syncSquad(squadRef.current);
-    }
+    // Weapon v1 — no turn-start blueprint hooks.
+  };
+
+  const buildWeaponHookContext = () => ({
+    weapon: resolvedWeapon!,
+    runtime: weaponRuntimeRef.current,
+    blueprintId: null,
+    player: {
+      hp: operativeHpRef.current,
+      maxHp: maxSoulAnchor,
+      shield: sessionExtrasRef.current.playerShield,
+      shieldTurnsRemaining: sessionExtrasRef.current.playerShieldTurnsRemaining,
+      debuffs: [...sessionExtrasRef.current.playerDebuffs],
+    },
+    squad: squadRef.current,
+  });
+
+  const applyWeaponRuntimePatch = (patch: Partial<import('../types/weapon').WeaponRuntimeState>) => {
+    weaponRuntimeRef.current = { ...weaponRuntimeRef.current, ...patch };
   };
 
   const patchUnit = (unitId: string, patch: Partial<EnemyCombatProfile>) => {
@@ -1678,6 +1708,14 @@ export default function TacticalCombatHub({
     const next = getUnitById(nextSquad, unitId);
     if (next && !wasFractured && isEnemyFractured(next)) {
       Vibration.vibrate(40);
+      if (resolvedWeapon) {
+        const fractureHooks = runWeaponOnFractureHooks(buildWeaponHookContext());
+        fractureHooks.logLines.forEach((line) => log(line));
+        if (fractureHooks.runtimePatch) applyWeaponRuntimePatch(fractureHooks.runtimePatch);
+        if (fractureHooks.staminaDelta) {
+          applyStamina(staminaRef.current + fractureHooks.staminaDelta);
+        }
+      }
     }
     syncSquad(nextSquad);
   };
@@ -2719,6 +2757,12 @@ export default function TacticalCombatHub({
       }
     }
     let working = e;
+    if (source && resolvedWeapon && operativeClass === 'HEX_SHOT') {
+      const pierce = weaponArmorPierceLayers(resolvedWeapon.statModifiers);
+      if (pierce > 0) {
+        working = applyWeaponArmorPierceToTarget(working, pierce);
+      }
+    }
     let critical = false;
     let ignoreDefenses = options?.ignoreDefenses ?? false;
     let hexForceCrit = false;
@@ -2758,7 +2802,7 @@ export default function TacticalCombatHub({
         {
           abilityId: options?.abilityId,
           target: working,
-          factionCritBonus: playerCritChanceBonus + (
+          factionCritBonus: effectiveCritBonus + (
             operativeClass === 'HEX_SHOT'
             && hasHexShotBoon(hexShotBoons, 'DEAD_EYE')
             && currentAmmoRef.current >= maxAmmo
@@ -2846,14 +2890,17 @@ export default function TacticalCombatHub({
       mutationEncounterRef.current.masochistBuff = false;
     }
     const fractureGain = options?.fractureGain ?? 0;
+    const scaledFractureGain = fractureGain > 0 && resolvedWeapon && operativeClass === 'AEGIS'
+      ? scaleFractureGain(fractureGain, resolvedWeapon.statModifiers)
+      : fractureGain;
     const graftPlanForFracture = activeGraftPlanRef.current;
     if (
-      fractureGain > 0
+      scaledFractureGain > 0
       && (!graftPlanForFracture || graftPlanForFracture.effectiveTags.includes('FRACTURE'))
     ) {
-      if (willFractureBreak(working, fractureGain) && !fractureBreakUnitIdRef.current) {
+      if (willFractureBreak(working, scaledFractureGain) && !fractureBreakUnitIdRef.current) {
         fractureBreakUnitIdRef.current = e.unitId;
-        working = applyFractureDamage(working, fractureGain, { deferBreak: true });
+        working = applyFractureDamage(working, scaledFractureGain, { deferBreak: true });
         patchUnit(e.unitId, working);
         combatPausedRef.current = true;
         triggerHitstop(200);
@@ -2861,7 +2908,7 @@ export default function TacticalCombatHub({
         setFractureBreakUnitId(e.unitId);
         log(`>> FRACTURE BREAK — ${working.designation} stagger threshold breached.`);
       } else {
-        working = applyFractureDamage(working, fractureGain);
+        working = applyFractureDamage(working, scaledFractureGain);
         patchUnit(e.unitId, working);
       }
     }
@@ -2906,6 +2953,27 @@ export default function TacticalCombatHub({
         if (hexAdjust.ignoreDefenses) ignoreDefenses = true;
         if (hexAdjust.forceCrit) critical = true;
       }
+      if (resolvedWeapon) {
+        const postReload = didWeaponPostReloadBonus(weaponRuntimeRef.current);
+        dmg = applyWeaponBallisticDamageMultiplier(
+          dmg,
+          resolvedWeapon.statModifiers,
+          postReload,
+          resolvedWeapon.passiveBonusPct ?? 0,
+        );
+        if (postReload) {
+          weaponRuntimeRef.current = consumeWeaponPostReloadBonus(weaponRuntimeRef.current);
+        }
+        const ballisticHooks = runWeaponOnBallisticHitHooks(
+          { ...buildWeaponHookContext(), target: working },
+          working,
+        );
+        ballisticHooks.logLines.forEach((line) => log(line));
+        if (ballisticHooks.runtimePatch) applyWeaponRuntimePatch(ballisticHooks.runtimePatch);
+        if (ballisticHooks.enemyArmorStrip) {
+          working = stripExtraArmorFromTarget(working, ballisticHooks.enemyArmorStrip);
+        }
+      }
     }
     if (operativeClass === 'ENVOY' && dmg > 0) {
       let envoyMult = envoyBoonModsRef.current.damageMultiplier;
@@ -2919,6 +2987,9 @@ export default function TacticalCombatHub({
         envoyMult *= 1 + envoyBoonModsRef.current.spellDamageFluxBonusPct / 100;
       }
       dmg = Math.floor(dmg * envoyMult);
+      if (resolvedWeapon && (options?.channel === 'OCCULT' || operativeClass === 'ENVOY')) {
+        dmg = applyWeaponOccultDamageMultiplier(dmg, resolvedWeapon.statModifiers);
+      }
       const envoyAbilityIdCast = (options?.abilityId ?? lastPlayerAbilityRef.current) as EnvoyAbilityId | null;
       const envoyAdjust = envoyAbilityIdCast
         ? adjustEnvoyOutgoingDamage({
@@ -2990,31 +3061,6 @@ export default function TacticalCombatHub({
       const boosted = Math.floor(dmg * 1.4);
       log(`${tag} >> [KINETIC BATTERY] — ${dmg} → ${boosted}.`);
       dmg = boosted;
-    }
-    if (source && equippedBlueprintId) {
-      const fireResult = runOnFireHooks(equippedBlueprintId, {
-        blueprintId: equippedBlueprintId,
-        player: {
-          hp: operativeHpRef.current,
-          maxHp: maxSoulAnchor,
-          shield: sessionExtrasRef.current.playerShield,
-          shieldTurnsRemaining: sessionExtrasRef.current.playerShieldTurnsRemaining,
-          debuffs: [...sessionExtrasRef.current.playerDebuffs],
-        },
-        target: working,
-        squad: squadRef.current,
-        damage: { raw: dmg, channel: options?.channel, multiplier: 1 },
-        source,
-      });
-      fireResult.logLines.forEach((line) => log(line));
-      if (fireResult.playerHpDelta && fireResult.playerHpDelta < 0) {
-        const hpCost = Math.abs(fireResult.playerHpDelta);
-        setOperativeHp((p) => {
-          const n = Math.max(p - hpCost, 0);
-          operativeHpRef.current = n;
-          return n;
-        });
-      }
     }
     if (
       hasMutation(leyLineMutations, 'FINAL_STAND')
@@ -3294,22 +3340,20 @@ export default function TacticalCombatHub({
         classImpactFxRef.current[e.unitId] = { seq: prevImpact + 1, kind: impactKind };
       }
       Vibration.vibrate(18);
-      if (equippedBlueprintId) {
-        const hitResult = runOnHitHooks(equippedBlueprintId, {
-          blueprintId: equippedBlueprintId,
-          player: {
-            hp: operativeHpRef.current,
-            maxHp: maxSoulAnchor,
-            shield: sessionExtrasRef.current.playerShield,
-            shieldTurnsRemaining: sessionExtrasRef.current.playerShieldTurnsRemaining,
-            debuffs: [...sessionExtrasRef.current.playerDebuffs],
-          },
-          target: working,
-          squad: squadRef.current,
-          damage: { raw: dmg, channel: options?.channel, multiplier: 1 },
-          source,
-        }, sessionExtrasRef.current);
+      if (resolvedWeapon && source === 'STRIKE' && operativeClass === 'AEGIS') {
+        const hitResult = runWeaponOnMeleeHitHooks(
+          { ...buildWeaponHookContext(), target: working, source, damage: { raw: dmg, channel: options?.channel, multiplier: 1 } },
+          critical,
+        );
         hitResult.logLines.forEach((line) => log(line));
+        if (hitResult.runtimePatch) applyWeaponRuntimePatch(hitResult.runtimePatch);
+        if (hitResult.reserveDelta && hitResult.reserveDelta > 0) {
+          abyssalRef.current = Math.min(
+            mutationModsRef.current.abyssalCap,
+            abyssalRef.current + hitResult.reserveDelta,
+          );
+          setAbyssalReserve(abyssalRef.current);
+        }
       }
     }
 
@@ -5141,6 +5185,7 @@ export default function TacticalCombatHub({
       healingReceivedPenaltyPct: 0,
     };
     notifyRunItemCombatStart();
+    weaponRuntimeRef.current = createDefaultWeaponRuntime();
     sessionExtrasRef.current = createDefaultCombatSessionExtras();
     initPlayerMaxHpDebtTracking(sessionExtrasRef.current, combatMaxSoulAnchorRef.current);
     setPlayerMaxAnchorDebt(0);
@@ -6679,6 +6724,14 @@ export default function TacticalCombatHub({
         dispatchHexShot({ type: 'HEX_SYNC_RESOURCES', patch: { ap: playerApRef.current } });
       },
     });
+    if (resolvedWeapon) {
+      const reloadHooks = runWeaponOnReloadHooks(buildWeaponHookContext());
+      reloadHooks.logLines.forEach((line) => log(line));
+      if (reloadHooks.runtimePatch) applyWeaponRuntimePatch(reloadHooks.runtimePatch);
+      if (reloadHooks.staminaDelta) {
+        applyStamina(staminaRef.current + reloadHooks.staminaDelta);
+      }
+    }
     if (result === 'PERFECT') {
       triggerHitstop(80);
       triggerHaptic('impactHeavy');

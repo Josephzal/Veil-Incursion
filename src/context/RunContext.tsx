@@ -423,6 +423,8 @@ import {
   resetRunItemCombatCounters,
   resetRunItemTurnCounters,
 } from '../data/runItemRunState';
+import { snapshotWeaponForRun, createDefaultWeaponRuntime, hydrateWeaponIncursionFields } from '../data/weaponRunState';
+import { createDefaultWeaponProgression } from '../data/weaponProgressionEngine';
 import { resolveRunItemCombatUse, consumeGraveDustStaminaCrash } from '../data/runItemCombatEngine';
 import {
   getBrokerMarkedDiscountPrice,
@@ -496,6 +498,9 @@ export interface RunStartConfig {
   runModifiers?: import('../types/worldState').RunModifierSnapshot;
   equippedKeepsakeId?: KeepsakeId | null;
   keepsakeDeployment?: import('../types/expeditionKeepsake').KeepsakeDeployment | null;
+  /** Weapon family + tier locked at descent. */
+  activeWeaponFamilyId?: import('../types/weapon').WeaponFamilyId;
+  activeWeaponTier?: import('../types/weapon').WeaponTierNumber;
 }
 
 export interface BadgeTestCombatConfig {
@@ -1043,6 +1048,19 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       runItemsAtRunStart: cloneRunItemsSlots(
         config?.initialRunItems ?? createDefaultRunItemsSlotState(),
       ),
+      ...(() => {
+        const weaponSnapshot = config?.activeWeaponFamilyId
+          ? {
+            activeWeaponFamilyId: config.activeWeaponFamilyId,
+            activeWeaponTier: config.activeWeaponTier ?? 1,
+            weaponRuntime: createDefaultWeaponRuntime(),
+          }
+          : snapshotWeaponForRun(
+            config?.activeClass ?? 'AEGIS',
+            createDefaultWeaponProgression(),
+          );
+        return weaponSnapshot;
+      })(),
       sanctuarySchedule,
       strikeDamageBonusPct: 0,
       runModifiers: config?.runModifiers ?? {
@@ -5296,7 +5314,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     let placed = false;
     let needsChoice = false;
     setActiveIncursion((prev) => {
-      const hydrated = hydrateRunItemIncursionFields(prev);
+      const hydrated = hydrateWeaponIncursionFields(
+        hydrateRunItemIncursionFields(prev),
+        prev.activeClass ?? 'AEGIS',
+      );
       const auto = tryAutoPlaceRunItem(hydrated.runItems, itemId);
       if (auto.placed) {
         placed = true;
@@ -5357,7 +5378,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     let usedNow = false;
 
     setActiveIncursion((prev) => {
-      const hydrated = hydrateRunItemIncursionFields(prev);
+      const hydrated = hydrateWeaponIncursionFields(
+        hydrateRunItemIncursionFields(prev),
+        prev.activeClass ?? 'AEGIS',
+      );
       const currentOffer = hydrated.itemRuntime.pendingOffer;
       if (!currentOffer) return prev;
 
@@ -5399,7 +5423,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const clearRunItemSlot = useCallback((slotType: 'COMBAT' | 'FIELD', slotIndex: 0 | 1) => {
     setActiveIncursion((prev) => {
-      const hydrated = hydrateRunItemIncursionFields(prev);
+      const hydrated = hydrateWeaponIncursionFields(
+        hydrateRunItemIncursionFields(prev),
+        prev.activeClass ?? 'AEGIS',
+      );
       const cleared = clearRunItemAtSlot(hydrated.runItems, slotType, slotIndex);
       const next = { ...hydrated, runItems: cleared.slots };
       activeIncursionRef.current = next;
@@ -5582,7 +5609,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     let staminaLoss = 0;
     let message: string | null = null;
     setActiveIncursion((prev) => {
-      const hydrated = hydrateRunItemIncursionFields(prev);
+      const hydrated = hydrateWeaponIncursionFields(
+        hydrateRunItemIncursionFields(prev),
+        prev.activeClass ?? 'AEGIS',
+      );
       const crashed = consumeGraveDustStaminaCrash(hydrated.itemRuntime);
       staminaLoss = crashed.staminaLoss;
       message = crashed.message;
@@ -5599,7 +5629,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const notifyRunItemCombatStart = useCallback(() => {
     setActiveIncursion((prev) => {
-      const hydrated = hydrateRunItemIncursionFields(prev);
+      const hydrated = hydrateWeaponIncursionFields(
+        hydrateRunItemIncursionFields(prev),
+        prev.activeClass ?? 'AEGIS',
+      );
       const next = {
         ...hydrated,
         itemRuntime: resetRunItemCombatCounters(hydrated.itemRuntime),

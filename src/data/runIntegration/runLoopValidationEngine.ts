@@ -7,6 +7,7 @@ import { formatKeepsakeDebugValidation } from '../expeditionKeepsakeDebugEngine'
 import { formatRunItemDebugValidation } from '../runItemDebugEngine';
 import { formatRunItemAcceptanceReport, validateRunItemAcceptance } from '../runItemAcceptanceEngine';
 import { validateContractTemplates, formatContractValidationReport } from './contractValidationEngine';
+import { validateWeaponRegistry, formatWeaponValidationReport } from '../weaponValidationEngine';
 import { formatContentMatrixReport } from './contentMatrixEngine';
 import type { SectorState, WorldStatePersistedState } from '../../types/worldState';
 
@@ -41,6 +42,10 @@ export function validateAllIntegrationSystems(
     push('runItem', 'error', result.message);
   });
 
+  validateWeaponRegistry().forEach((issue) => {
+    push('weapon', issue.severity, issue.message);
+  });
+
   return issues;
 }
 
@@ -64,6 +69,7 @@ export function formatFullIntegrationValidationReport(
     formatKeepsakeDebugValidation(),
     formatRunItemDebugValidation(),
     formatRunItemAcceptanceReport(validateRunItemAcceptance()),
+    formatWeaponValidationReport(validateWeaponRegistry()),
     '',
     'INTEGRATION CROSS-CHECK',
     integrationLines.length > 0 ? integrationLines.join('\n') : 'No cross-check issues.',

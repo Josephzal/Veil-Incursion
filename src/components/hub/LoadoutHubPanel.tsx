@@ -15,7 +15,8 @@ import { getFactionAccent } from '../../data/factions';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useTerminal } from '../../context/TerminalContext';
 import { useHubLayout } from '../../context/HubLayoutContext';
-import { BLUEPRINT_DEFINITIONS, isBlueprintId } from '../../types/equipmentBlueprint';
+import WeaponLoadoutPanel from './WeaponLoadoutPanel';
+import { getEquippedWeaponForClass, getWeaponTier, resolveWeaponState } from '../../data/weaponProgressionEngine';
 import { formatBracketHeader } from '../../styles/hubTerminalUi';
 import { HIDDEN_SCROLLVIEW_PROPS, mergeHiddenScrollbarStyle } from '../../utils/hiddenScrollbarStyle';
 import { readPressableHover, terminalHoverStyle } from '../../utils/terminalHoverStyle';
@@ -72,19 +73,19 @@ export default function LoadoutHubPanel(): React.JSX.Element {
   const factionAccent = getFactionAccent(account.alignedFaction);
 
   const weaponDisplay = useMemo(() => {
-    const equipped = account.equippedBlueprintId;
-    if (equipped && isBlueprintId(equipped)) {
-      const blueprint = BLUEPRINT_DEFINITIONS[equipped];
-      return {
-        primary: blueprint.name.toUpperCase(),
-        secondary: blueprint.description,
-      };
-    }
-    return {
-      primary: classDef.weaponLine.replace(/^WEAPON:\s*/i, '').toUpperCase(),
-      secondary: 'Stock class chassis — decrypt or forge a masterwork blueprint at the Black Market.',
+    const progression = {
+      weaponUnlocks: account.weaponUnlocks,
+      weaponTiers: account.weaponTiers,
+      equippedWeaponByClass: account.equippedWeaponByClass,
     };
-  }, [account.equippedBlueprintId, classDef.weaponLine]);
+    const familyId = getEquippedWeaponForClass(progression, account.activeClass);
+    const tier = getWeaponTier(progression, familyId);
+    const weapon = resolveWeaponState(familyId, tier);
+    return {
+      primary: weapon.displayName.toUpperCase(),
+      secondary: weapon.effectSummary,
+    };
+  }, [account.activeClass, account.equippedWeaponByClass, account.weaponTiers, account.weaponUnlocks]);
 
   return (
     <HubScreenShell
@@ -169,6 +170,10 @@ export default function LoadoutHubPanel(): React.JSX.Element {
                     muted={muted}
                   />
                 </View>
+
+                <DossierCardShell padding={scaleSpacing(10)} accentColor={accent}>
+                  <WeaponLoadoutPanel accent={accent} muted={muted} />
+                </DossierCardShell>
 
                 <KeepsakeLoadoutPanel accent={accent} muted={muted} />
 

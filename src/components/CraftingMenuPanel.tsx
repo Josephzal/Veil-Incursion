@@ -331,7 +331,6 @@ export default function CraftingMenuPanel({
 
   const secondaryRecipes = useMemo(
     () => ({
-      LOADOUT: getRecipesByKind('LOADOUT'),
       CONSUMABLE: getRecipesByKind('CONSUMABLE').filter(
         (recipe) => !isRunItemCraftOutput(recipe.outputId),
       ),
@@ -346,7 +345,7 @@ export default function CraftingMenuPanel({
 
   const isOutputOwned = (recipe: CraftingRecipe) => isRecipeOutputOwned(
     recipe.outputId,
-    account.unlockedBlueprints,
+    [],
     account.craftedAugments,
   );
 
@@ -382,21 +381,6 @@ export default function CraftingMenuPanel({
           mutedColor={theme.mutedColor}
           isDesktop={isDesktop}
         />
-
-        {secondaryRecipes.LOADOUT.length > 0 ? (
-          <FabricationMatrix
-            recipes={secondaryRecipes.LOADOUT}
-            stash={account.resourceStash}
-            onFabricate={handleFabricate}
-            sectionLabel="LOADOUT SCHEMATICS"
-            isOwned={isOutputOwned}
-            accentColor={theme.statusColor}
-            borderColor={theme.borderColor}
-            textColor={theme.textColor}
-            mutedColor={theme.mutedColor}
-            isDesktop={isDesktop}
-          />
-        ) : null}
 
         {runItemRecipes.length > 0 ? (
           <>

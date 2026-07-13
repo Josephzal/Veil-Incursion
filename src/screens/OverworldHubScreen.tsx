@@ -10,6 +10,7 @@ import OperationalBriefingPanel from '../components/OperationalBriefingPanel';
 import ContractBoardPanel from '../components/hub/ContractBoardPanel';
 import BlackMarketHubPanel from '../components/hub/BlackMarketHubPanel';
 import LoadoutHubPanel from '../components/hub/LoadoutHubPanel';
+import { snapshotWeaponForRun } from '../data/weaponRunState';
 import DevTestHubPanel from '../components/hub/DevTestHubPanel';
 import TerminalHubLayout from '../components/layout/TerminalHubLayout';
 import TerminalSafeArea from '../components/TerminalSafeArea';
@@ -44,8 +45,15 @@ export default function OverworldHubScreen(): React.JSX.Element {
     transitionActions.startBreaching(breachColor, () => {
       const { cargo: initialCargo, runItems: initialRunItems } = commitDescentLoadout();
       const { runGenerationContext, runModifiers } = buildRunContextForDescent();
+      const weaponProgression = {
+        weaponUnlocks: account.weaponUnlocks,
+        weaponTiers: account.weaponTiers,
+        equippedWeaponByClass: account.equippedWeaponByClass,
+      };
+      const weaponSnapshot = snapshotWeaponForRun(account.activeClass, weaponProgression);
       appendHubLog('>> DESCENT LOADOUT LOCKED — CARGO MANIFEST COMMITTED TO RUN STATE.');
       appendHubLog('>> RUN ITEM SLOTS LOCKED — TACTICAL MANIFEST COMMITTED.');
+      appendHubLog(`>> WEAPON LINK LOCKED — ${weaponSnapshot.activeWeaponFamilyId.replace(/-/g, ' ').toUpperCase()} TIER ${weaponSnapshot.activeWeaponTier}.`);
       appendHubLog(`>> VEIL FRONT BREACH — ${runGenerationContext.sectorState.displayName.toUpperCase()} // ${runGenerationContext.activeOperation.title.toUpperCase()}`);
       startNewRun({
         factionPerks: account.factionPerks,
@@ -62,6 +70,8 @@ export default function OverworldHubScreen(): React.JSX.Element {
         startingVeilResidueBalance: account.veilResidueBalance,
         equippedKeepsakeId: account.equippedKeepsakeId,
         keepsakeDeployment: account.keepsakeDeployment,
+        activeWeaponFamilyId: weaponSnapshot.activeWeaponFamilyId,
+        activeWeaponTier: weaponSnapshot.activeWeaponTier,
       });
       startBoundRequisition();
       setLaunchingIncursion(false);

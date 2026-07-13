@@ -377,7 +377,7 @@ export function buildOperationDebriefPayload(
     (id) => (incursion.runResourceLedger.extracted[id] ?? 0) > 0,
   );
   const craftingOpportunities = opts.account
-    ? buildCraftingOpportunitySummary(opts.account, extractedResourceIds)
+    ? buildCraftingOpportunitySummary(opts.account, extractedResourceIds, incursion)
     : {
       newlyCraftable: [],
       nearlyCraftable: [],

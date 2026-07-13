@@ -1,10 +1,9 @@
 import type { BoundRequisitionId } from '../types/boundRequisition';
 import type { CargoItemId } from '../types/cargoGrid';
 import type { ResourceItemId } from '../types/resourceItem';
-import { isBlueprintId } from '../types/equipmentBlueprint';
 import { buildRunItemCraftingRecipes } from './runItemCraftingBridge';
 
-export type CraftingRecipeKind = 'LOADOUT' | 'AUGMENT' | 'CONSUMABLE';
+export type CraftingRecipeKind = 'AUGMENT' | 'CONSUMABLE';
 
 export interface CraftingRecipeRequirement {
   resourceId: ResourceItemId;
@@ -22,31 +21,6 @@ export interface CraftingRecipe {
 }
 
 export const CRAFTING_REGISTRY: CraftingRecipe[] = [
-  // Loadouts & weapon blueprints
-  {
-    id: 'craft_pulse_rifle',
-    kind: 'LOADOUT',
-    label: 'Pulse Rifle Frame',
-    outputId: 'riftshot_pulse_rifle',
-    description: 'Terran-grid pulse lattice — Riftshot class weapon blueprint.',
-    effectSummary: 'Unlocks the Riftshot Pulse Rifle combat loadout.',
-    requirements: [
-      { resourceId: 'encrypted-grid-drive', quantity: 3 },
-      { resourceId: 'ley-slag', quantity: 10 },
-    ],
-  },
-  {
-    id: 'craft_claymore',
-    kind: 'LOADOUT',
-    label: 'Claymore Strike',
-    outputId: 'aegis_claymore',
-    description: 'Legion heavy melee lattice — Aegis claymore blueprint.',
-    effectSummary: 'Unlocks the Aegis Claymore combat loadout.',
-    requirements: [
-      { resourceId: 'legion-blood-iron', quantity: 3 },
-      { resourceId: 'ley-slag', quantity: 5 },
-    ],
-  },
   {
     id: 'craft_chalk_line_ward',
     kind: 'AUGMENT',
@@ -57,18 +31,6 @@ export const CRAFTING_REGISTRY: CraftingRecipe[] = [
     requirements: [
       { resourceId: 'sanguine-ampoule', quantity: 2 },
       { resourceId: 'ley-slag', quantity: 1 },
-    ],
-  },
-  {
-    id: 'craft_containment_rig',
-    kind: 'LOADOUT',
-    label: 'Containment Rig',
-    outputId: 'envoy_hex',
-    description: 'Diplomatic hex sigil — Envoy class weapon blueprint.',
-    effectSummary: 'Unlocks the Envoy Hex combat loadout.',
-    requirements: [
-      { resourceId: 'anomalous-core', quantity: 1 },
-      { resourceId: 'legion-blood-iron', quantity: 1 },
     ],
   },
 
@@ -202,9 +164,8 @@ export function isConsumableOutputId(outputId: string): outputId is CargoItemId 
   return getCraftingRecipeByOutput(outputId)?.kind === 'CONSUMABLE';
 }
 
-export function isLoadoutOutputId(outputId: string): boolean {
-  const recipe = getCraftingRecipeByOutput(outputId);
-  return recipe?.kind === 'LOADOUT' || isBlueprintId(outputId);
+export function isLoadoutOutputId(_outputId: string): boolean {
+  return false;
 }
 
 function getCraftingRecipeByOutput(outputId: string): CraftingRecipe | undefined {
@@ -214,14 +175,11 @@ function getCraftingRecipeByOutput(outputId: string): CraftingRecipe | undefined
 
 export function isRecipeOutputOwned(
   outputId: string,
-  unlockedBlueprints: readonly string[],
+  _unlockedBlueprints: readonly string[],
   craftedAugments: readonly BoundRequisitionId[],
 ): boolean {
   const recipe = getCraftingRecipeByOutput(outputId);
   if (!recipe) return false;
-  if (recipe.kind === 'LOADOUT') {
-    return unlockedBlueprints.includes(outputId);
-  }
   if (recipe.kind === 'AUGMENT') {
     return craftedAugments.includes(outputId as BoundRequisitionId);
   }

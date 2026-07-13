@@ -69,6 +69,8 @@ import HostileIntelView from './combat/layouts/HostileIntelView';
 import TurnOrderSidebar from './combat/layouts/TurnOrderSidebar';
 import CombatDashboardCommandColumn from './combat/layouts/CombatDashboardCommandColumn';
 import type { CombatOperativeTelemetry } from '../components/combat/CombatOperativeHud';
+import { resolveWeaponState } from '../data/weaponProgressionEngine';
+import { resolveWeaponCombatStatsFromState } from '../data/weaponCombatEngine';
 import { shouldShowUnitInArenaGrid } from '../data/combatSquadEngine';
 
 export default function CombatScreen(): React.JSX.Element {
@@ -108,7 +110,20 @@ export default function CombatScreen(): React.JSX.Element {
   } = useRun();
   const { completeCurrentNode } = useNodeProgression();
   const { getWeaponCombatStats, account, addLockedContainer } = usePlayerAccount();
-  const baseWeaponStats = getWeaponCombatStats();
+  const operativeClass = activeIncursion.activeClass ?? account.activeClass;
+  const baseWeaponStats = useMemo(() => {
+    const familyId = activeIncursion.activeWeaponFamilyId;
+    const tier = activeIncursion.activeWeaponTier ?? 1;
+    if (familyId) {
+      return resolveWeaponCombatStatsFromState(resolveWeaponState(familyId, tier));
+    }
+    return getWeaponCombatStats(operativeClass);
+  }, [
+    activeIncursion.activeWeaponFamilyId,
+    activeIncursion.activeWeaponTier,
+    getWeaponCombatStats,
+    operativeClass,
+  ]);
   const strikeBonusPct = activeIncursion.strikeDamageBonusPct ?? 0;
   const weaponCombatStats = useMemo(() => {
     if (strikeBonusPct <= 0) return baseWeaponStats;
@@ -245,7 +260,6 @@ export default function CombatScreen(): React.JSX.Element {
         : []),
     [runState.pendingEnemies, runState.pendingEnemy],
   );
-  const operativeClass = activeIncursion.activeClass ?? account.activeClass;
 
   const combatAugmentIcons = useMemo(
     () => buildCombatAugmentIcons({
@@ -659,7 +673,8 @@ export default function CombatScreen(): React.JSX.Element {
                       playerKineticArmorBonus={runKineticArmor}
                       kineticBatteryActive={kineticBatteryActive}
                       narrativeCombatBoons={narrativeCombatBoons}
-                      equippedBlueprintId={account.equippedBlueprintId}
+                      activeWeaponFamilyId={activeIncursion.activeWeaponFamilyId}
+                      activeWeaponTier={activeIncursion.activeWeaponTier ?? 1}
                       playerCritChanceBonus={playerCritChanceBonus}
                       onPlayerCritImpact={handlePlayerCritImpact}
                       godModeActive={activeIncursion.godModeActive}

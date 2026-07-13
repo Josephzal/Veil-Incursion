@@ -84,8 +84,8 @@ export default function SafehouseHubPanel(): React.JSX.Element {
               muted={theme.mutedColor}
             />
             <StatusRow
-              label="BLUEPRINTS"
-              value={`${account.unlockedBlueprints.length}`}
+              label="WEAPONS"
+              value={`${account.weaponUnlocks.length}`}
               accent={accent}
               muted={theme.mutedColor}
             />
