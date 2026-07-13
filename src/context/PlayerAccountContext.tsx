@@ -78,6 +78,8 @@ import { depositAllCargoToHubAccount, depositPhysicalBankSnapshot, resolveExtrac
 import type { CargoRoutingDecision, PostRunRoutingDebriefState } from '../types/postRunCargoRouting';
 import { applyCargoRoutingDecisions } from '../data/postRunCargoRoutingEngine';
 import { createDefaultCareerCargoRoutingStats, incrementCareerCargoRoutingFromResult } from '../data/postRunCargoRoutingRunState';
+import { applyBetrayalConsequencesToAccount } from '../data/betrayalConsequencesEngine';
+import { buildBetrayalEventsFromRouting } from '../data/contractBetrayalResolver';
 import { DEFAULT_UNLOCKED_KEEPSAKE_IDS, isKeepsakeId } from '../data/expeditionKeepsakeRegistry';
 import { migrateTacticalRunItemsToLoadout } from '../data/runItemInventoryEngine';
 import { createDefaultRunItemsSlotState } from '../types/runItem';
@@ -197,6 +199,8 @@ export function createDefaultPlayerAccount(): PlayerAccount {
     runItemLoadout: createDefaultRunItemsSlotState(),
     unidentifiedStash: [],
     careerCargoRouting: createDefaultCareerCargoRoutingStats(),
+    sponsorTrustStats: {},
+    betrayalHistory: [],
     equippedKeepsakeId: null,
     unlockedKeepsakeIds: [...DEFAULT_UNLOCKED_KEEPSAKE_IDS],
     keepsakeDeployment: createDefaultKeepsakeDeployment(),
@@ -267,6 +271,11 @@ function mergeStoredAccount(parsed: Partial<PlayerAccount>): PlayerAccount {
       ...defaults.careerCargoRouting,
       ...parsed.careerCargoRouting,
     },
+    sponsorTrustStats: {
+      ...defaults.sponsorTrustStats,
+      ...parsed.sponsorTrustStats,
+    },
+    betrayalHistory: parsed.betrayalHistory ?? defaults.betrayalHistory,
     equippedKeepsakeId:
       parsed.equippedKeepsakeId && isKeepsakeId(parsed.equippedKeepsakeId)
         ? parsed.equippedKeepsakeId
@@ -385,6 +394,15 @@ interface PlayerAccountContextType {
     autoStashAlreadyDeposited?: boolean;
     keepsakeRuntime?: import('../types/expeditionKeepsake').KeepsakeRuntime | null;
   }) => import('../types/postRunCargoRouting').CargoRoutingResult;
+  applyBetrayalConsequences: (payload: {
+    contractResult: import('../types/contract').ContractResult;
+    routingResult: import('../types/postRunCargoRouting').CargoRoutingResult;
+    routingState: PostRunRoutingDebriefState;
+    decisions: CargoRoutingDecision[];
+    runId?: string;
+    playerClass?: import('../types/game').ClassType;
+    depthReached?: number;
+  }) => void;
   /** Routes safehouse-banked run cargo into hub stash (e.g. after death with banked payload). */
   persistRunBankedSnapshot: (bank: RunPhysicalBankSnapshot) => void;
   depositVeilResidueBalance: (amount: number) => number;
@@ -1388,10 +1406,6 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
           ...prev,
           resourceStash: applied.stash,
           cabalCredits: applied.cabalCredits,
-          careerCargoRouting: incrementCareerCargoRoutingFromResult(
-            prev.careerCargoRouting,
-            applied.result,
-          ),
         };
       });
       if (!result) {
@@ -1408,6 +1422,55 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
         }
       }
       return result.result;
+    },
+    [updateAccount],
+  );
+
+  const applyBetrayalConsequences = useCallback(
+    (payload: {
+      contractResult: import('../types/contract').ContractResult;
+      routingResult: import('../types/postRunCargoRouting').CargoRoutingResult;
+      routingState: PostRunRoutingDebriefState;
+      decisions: CargoRoutingDecision[];
+      runId?: string;
+      playerClass?: import('../types/game').ClassType;
+      depthReached?: number;
+    }) => {
+      updateAccount((prev) => {
+        const contract = payload.routingState.activeContract;
+        const betrayalEvents = contract
+          ? buildBetrayalEventsFromRouting({
+            items: payload.routingState.pendingItems,
+            decisions: payload.decisions,
+            routingResult: payload.routingResult,
+            contract,
+            context: {
+              runId: payload.runId,
+              playerClass: payload.playerClass ?? prev.activeClass,
+              depthReached: payload.depthReached ?? payload.routingState.contractProgress.highestDepthReached,
+            },
+          })
+          : [];
+
+        const contractBetrayed = payload.contractResult.betrayalSeverity === 'HARD_BETRAYAL'
+          || payload.contractResult.betrayalSeverity === 'SOFT_BETRAYAL';
+
+        const withConsequences = applyBetrayalConsequencesToAccount(
+          prev,
+          payload.contractResult,
+          payload.routingResult,
+          betrayalEvents,
+        );
+
+        return {
+          ...withConsequences,
+          careerCargoRouting: incrementCareerCargoRoutingFromResult(
+            withConsequences.careerCargoRouting,
+            payload.routingResult,
+            contractBetrayed,
+          ),
+        };
+      });
     },
     [updateAccount],
   );
@@ -1578,6 +1641,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       commitDescentLoadout,
       persistRunExtraction,
       applyPostRunCargoRouting,
+      applyBetrayalConsequences,
       persistRunBankedSnapshot,
       depositVeilResidueBalance,
       transferVeilResidueIntoRun,
@@ -1643,6 +1707,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       commitDescentLoadout,
       persistRunExtraction,
       applyPostRunCargoRouting,
+      applyBetrayalConsequences,
       persistRunBankedSnapshot,
       depositVeilResidueBalance,
       transferVeilResidueIntoRun,

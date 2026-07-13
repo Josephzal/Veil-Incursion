@@ -31,6 +31,7 @@ import {
   formatSessionCargoRoutingDebriefLines,
 } from '../data/runDebriefCargoRoutingEngine';
 import { formatActiveContractCargoDeliveryHints } from '../data/cargoRoutingIntelEngine';
+import { outcomeKindLabel } from '../data/bribeOfferEngine';
 import { formatCareerCargoRoutingSummary } from '../data/postRunCargoRoutingRunState';
 import { operationProgressPercent } from '../data/worldStateHelpers';
 import { formatExtractionKindLabel, sponsorDisplayName } from '../utils/contractUi';
@@ -52,7 +53,10 @@ const PENDING_ACCENT = '#f59e0b';
 
 type DebriefStep = 'SUMMARY' | 'CONTRACT' | 'OPERATION' | 'ROUTING' | 'REWARDS';
 
-function contractStatusLabel(status: ContractResult['status']): string {
+function contractStatusLabel(status: ContractResult['status'], outcomeKind?: ContractResult['outcomeKind']): string {
+  if (outcomeKind && outcomeKind !== 'COMPLETE' && outcomeKind !== 'FAILED') {
+    return outcomeKindLabel(outcomeKind).toUpperCase();
+  }
   switch (status) {
     case 'SUCCESS':
       return 'CONTRACT COMPLETE';
@@ -81,7 +85,7 @@ function contractStatusColor(status: ContractResult['status']): string {
 export default function OperationDebriefScreen(): React.JSX.Element | null {
   const { theme } = useTerminal();
   const { pendingDebrief, setPendingDebrief, clearPendingDebrief, tickAfterRunComplete, applyOperationContribution, persisted, sectors } = useWorldState();
-  const { appendHubLog, applyPostRunCargoRouting, grantContractRewards, account } = usePlayerAccount();
+  const { appendHubLog, applyPostRunCargoRouting, applyBetrayalConsequences, grantContractRewards, account } = usePlayerAccount();
   const { goToHub } = useGameFlow();
   const immersivePadding = useImmersiveScreenPadding();
 
@@ -228,9 +232,17 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
 
   const handleDecisionChange = (resourceId: CargoRoutingDecision['resourceId'], action: CargoRoutingAction) => {
     setRoutingError(null);
-    setDecisions((prev) => prev.map((entry) => (
-      entry.resourceId === resourceId ? { ...entry, action } : entry
-    )));
+    setDecisions((prev) => prev.map((entry) => {
+      if (entry.resourceId !== resourceId) return entry;
+      const item = routingState?.pendingItems.find((pending) => pending.resourceId === resourceId);
+      return {
+        ...entry,
+        action,
+        rivalSponsorId: action === 'DELIVER_RIVAL_SPONSOR'
+          ? item?.bribeOffer?.rivalSponsorId
+          : undefined,
+      };
+    }));
   };
 
   const handleQuantityChange = (resourceId: CargoRoutingDecision['resourceId'], quantity: number) => {
@@ -252,16 +264,28 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
       });
       const finalContract = resolveFinalContractResultAfterRouting(
         routingState,
-        result.deliveredResourcesForContract,
+        result,
+        decisions,
+        routingState.pendingItems,
         true,
         runResourceLedger,
         keepsakeRuntime,
       );
+      applyBetrayalConsequences({
+        contractResult: finalContract,
+        routingResult: result,
+        routingState,
+        decisions,
+        playerClass: account.activeClass,
+        depthReached: routingState.contractProgress.highestDepthReached,
+      });
       if (finalContract.status === 'SUCCESS') {
         grantContractRewards(finalContract);
         appendHubLog(
           `>> CONTRACT PAID — ${finalContract.title.toUpperCase()} // +${finalContract.creditsAwarded + finalContract.bonusCreditsAwarded} CR`,
         );
+      } else if (finalContract.betrayalSummary) {
+        appendHubLog(`>> CONTRACT BETRAYAL — ${finalContract.betrayalSummary.toUpperCase()}`);
       } else if (finalContract.status === 'PENDING_DELIVERY') {
         appendHubLog(
           `>> CONTRACT AWAITING DELIVERY — ${finalContract.title.toUpperCase()} // ${finalContract.progressText}`,
@@ -272,6 +296,9 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
       });
       if (result.creditsFromFence > 0) {
         appendHubLog(`>> CARGO ROUTING — FENCE PAYOUT +${result.creditsFromFence} CR`);
+      }
+      if (result.creditsFromRivalDelivery > 0) {
+        appendHubLog(`>> CARGO ROUTING — RIVAL PAYOUT +${result.creditsFromRivalDelivery} CR`);
       }
       if (result.creditsFromCasketOpen > 0) {
         appendHubLog(`>> CARGO ROUTING — CASKET PAYOUT +${result.creditsFromCasketOpen} CR`);
@@ -401,8 +428,22 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
               { color: contractStatusColor(displayContractResult.status) },
             ]}
           >
-            {contractStatusLabel(displayContractResult.status)}
+            {contractStatusLabel(displayContractResult.status, displayContractResult.outcomeKind)}
           </Text>
+          {displayContractResult.finalCargoDestination ? (
+            <Text style={[styles.stat, { color: theme.mutedColor }]}>
+              {`Final destination: ${displayContractResult.finalCargoDestination}`}
+            </Text>
+          ) : null}
+          {displayContractResult.betrayalSummary ? (
+            <>
+              <View style={styles.sectionGap} />
+              <Text style={[styles.sectionLabel, { color: FAILURE_ACCENT }]}>BETRAYAL SUMMARY</Text>
+              <Text style={[styles.stat, { color: FAILURE_ACCENT }]}>
+                {displayContractResult.betrayalSummary.toUpperCase()}
+              </Text>
+            </>
+          ) : null}
           {displayContractResult.status === 'SUCCESS' ? (
             <>
               <Text style={[styles.stat, { color: theme.statusColor }]}>
@@ -797,7 +838,9 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
                   previewContractProgress={routingPreview?.contractProgressText ?? null}
                   previewOperationProgress={routingPreview?.operationProgressFromCargo ?? 0}
                   previewFenceCredits={routingPreview?.creditsFromFence ?? 0}
+                  previewRivalCredits={routingPreview?.creditsFromRivalDelivery ?? 0}
                   previewCasketCredits={routingPreview?.creditsFromCasketOpen ?? 0}
+                  previewBetrayalSummary={routingPreview?.betrayalSummary ?? null}
                   onDecisionChange={handleDecisionChange}
                   onQuantityChange={handleQuantityChange}
                   textColor={theme.textColor}

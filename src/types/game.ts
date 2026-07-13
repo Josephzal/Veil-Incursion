@@ -162,6 +162,10 @@ export interface PlayerAccount {
   unidentifiedStash: import('./unidentifiedItem').UnidentifiedStashItem[];
   /** Career totals from post-run cargo routing decisions. */
   careerCargoRouting: import('../data/postRunCargoRoutingRunState').CareerCargoRoutingStats;
+  /** Per-sponsor trust telemetry from contracts and betrayal v1. */
+  sponsorTrustStats: Partial<Record<FactionType, import('../types/betrayal').SponsorTrustStats>>;
+  /** Recent betrayal events for future Betrayer Echo hooks. */
+  betrayalHistory: import('../types/betrayal').BetrayalEvent[];
   /** Pre-run Expedition Relic equipped for the next incursion (Trinkets v2). */
   equippedKeepsakeId: import('../types/expeditionKeepsake').KeepsakeId | null;
   /** Hub-unlocked Expedition Relics available for equip. */

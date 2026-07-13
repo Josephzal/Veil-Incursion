@@ -6,6 +6,7 @@ import type { CargoRoutingResult } from '../types/postRunCargoRouting';
 import type { ResourceItemId, ResourceQuantity } from '../types/resourceItem';
 import type { RunGenerationContext } from '../types/worldState';
 import type { RunPhysicalBankSnapshot, RunResourceLedger } from '../types/runResourceLedger';
+import { formatMidRunBribeFlavorMessage } from './bribeOfferEngine';
 import {
   buildCargoRoutingContext,
   isContractTargetResource,
@@ -29,10 +30,12 @@ export interface CargoRoutingRunState {
 
 export interface CareerCargoRoutingStats {
   deliveredToSponsor: number;
+  deliveredToRival: number;
   fencedAtDebrief: number;
   contributedToOperation: number;
   casketsOpened: number;
   keptInStash: number;
+  contractsBetrayed: number;
 }
 
 export function createDefaultCargoRoutingRunState(): CargoRoutingRunState {
@@ -48,10 +51,12 @@ export function createDefaultCargoRoutingRunState(): CargoRoutingRunState {
 export function createDefaultCareerCargoRoutingStats(): CareerCargoRoutingStats {
   return {
     deliveredToSponsor: 0,
+    deliveredToRival: 0,
     fencedAtDebrief: 0,
     contributedToOperation: 0,
     casketsOpened: 0,
     keptInStash: 0,
+    contractsBetrayed: 0,
   };
 }
 
@@ -246,10 +251,12 @@ export function countSpecialCargoInPreRunCargo(
 export function formatCareerCargoRoutingSummary(stats: CareerCargoRoutingStats): string {
   return [
     `Delivered to sponsor: ${stats.deliveredToSponsor}`,
+    `Delivered to rival: ${stats.deliveredToRival}`,
     `Fenced at debrief: ${stats.fencedAtDebrief}`,
     `Contributed to operation: ${stats.contributedToOperation}`,
     `Caskets opened: ${stats.casketsOpened}`,
     `Kept in stash: ${stats.keptInStash}`,
+    `Contracts betrayed: ${stats.contractsBetrayed}`,
   ].join(' // ');
 }
 
@@ -260,15 +267,38 @@ export function formatCareerCargoRoutingDebugSnapshot(stats: CareerCargoRoutingS
 export function incrementCareerCargoRoutingFromResult(
   stats: CareerCargoRoutingStats | undefined,
   result: CargoRoutingResult,
+  contractBetrayed = false,
 ): CareerCargoRoutingStats {
   const base = stats ?? createDefaultCareerCargoRoutingStats();
+  const rivalTotal = Object.values(result.deliveredToRival).reduce(
+    (sum, bucket) => sum + Object.values(bucket ?? {}).reduce((inner, qty) => inner + (qty ?? 0), 0),
+    0,
+  );
   return {
     deliveredToSponsor: base.deliveredToSponsor + sumResourceQuantityMap(result.delivered),
+    deliveredToRival: base.deliveredToRival + rivalTotal,
     fencedAtDebrief: base.fencedAtDebrief + sumResourceQuantityMap(result.fenced),
     contributedToOperation: base.contributedToOperation + sumResourceQuantityMap(result.contributed),
     casketsOpened: base.casketsOpened + sumResourceQuantityMap(result.opened),
     keptInStash: base.keptInStash + sumResourceQuantityMap(result.kept),
+    contractsBetrayed: base.contractsBetrayed + (contractBetrayed ? 1 : 0),
   };
+}
+
+export function collectMidRunBribeFlavorMessages(
+  resources: ResourceQuantity,
+  contract: ActiveRunContract | null,
+): string[] {
+  const messages: string[] = [];
+  (Object.entries(resources) as Array<[ResourceItemId, number | undefined]>).forEach(
+    ([resourceId, quantity]) => {
+      if (!quantity || quantity <= 0) return;
+      if (!isContractTargetResource(resourceId, contract)) return;
+      const line = formatMidRunBribeFlavorMessage(resourceId);
+      if (line) messages.push(line);
+    },
+  );
+  return [...new Set(messages)];
 }
 
 export function formatCargoRoutingRunStateSnapshot(

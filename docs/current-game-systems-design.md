@@ -170,7 +170,7 @@ After successful extraction, stable materials auto-stash. Special cargo requires
 
 **Special cargo:** UNSTABLE, INTEL, CONTRABAND, contract targets, operation targets (even when category is STABLE).
 
-**Routing actions:** Keep in Stash, Deliver to Sponsor, Sell to Black Market, Contribute to Operation, Open at Hub (Sealed Containment Casket v1 — basic reward table, no appraisal animation).
+**Routing actions:** Keep in Stash, Deliver to Sponsor, Accept Rival Offer (when generated), Sell to Black Market, Contribute to Operation, Open at Hub (Sealed Containment Casket v1 — basic reward table, no appraisal animation).
 
 **Partial routing (Phase 4):** Stackable items (e.g. Tarnished Dog Tags) support routing a subset; remainder auto-keeps in stash.
 
@@ -186,7 +186,7 @@ After successful extraction, stable materials auto-stash. Special cargo requires
 
 **Cleanup + ship pass (Phase 10):** `verifyPostRunCargoRoutingEngine()` central aggregator + `verifyLegacyRoutingCleanup()`; shared `contractExtractionKind.ts` + `postRunCargoRoutingFixtures.ts` dedupe extraction-kind and test-ledger helpers; removed dead exports (`buildPendingDeliveryContractResult`, `previewSplitForTestResources`); consolidated contract delivery hint formatters; compact death debrief REWARDS shows cargo resolution instead of auto-stash copy; `activeContract` on debrief payload enables POST-RUN DELIVERY hints without routing state; compact REWARDS shows unstable cargo lost lines.
 
-**Contract delivery:** Resource contracts enter `PENDING_DELIVERY` until sponsor delivery is confirmed in routing. Keeping or selling contract cargo prevents completion (no betrayal penalties in v1).
+**Contract delivery:** Resource contracts enter `PENDING_DELIVERY` until sponsor delivery is confirmed in routing. Keeping, fencing, or redirecting contract cargo prevents original sponsor completion; betrayal v1 applies reputation consequences (see Bribes + Betrayal v1).
 
 **Extraction flow:** `useDescentNavigator.finalizeSectorExtraction` excludes pending resources from `persistRunExtraction`, defers contract rewards and world tick until routing completes.
 
@@ -213,7 +213,7 @@ After successful extraction, stable materials auto-stash. Special cargo requires
 15. ✅ Debrief clearly shows where each valuable item went (outcome lines + projected preview).
 16. ✅ Death destroys unbanked cargo (no manual routing on death); clearer banked vs lost messaging.
 17. ✅ Banked safehouse cargo survives death (existing flow).
-18. ✅ No bribes or betrayal.
+18. ✅ Bribes + Betrayal v1 — rival offers, fencing betrayal, reputation hooks (see below).
 19. ✅ No full appraisal/unboxing animation system.
 20. ✅ Existing runs remain playable (compact debrief when no routing; ROUTING step skipped).
 21. ✅ Runtime integrity validation on `applyPostRunCargoRouting` in `__DEV__`.
@@ -259,6 +259,53 @@ After successful extraction, stable materials auto-stash. Special cargo requires
 61. ✅ Compact death debrief REWARDS shows banked/lost cargo resolution (not auto-stash copy).
 62. ✅ `activeContract` on debrief payload enables POST-RUN DELIVERY hints without routing state.
 63. ✅ Compact REWARDS shows unstable cargo lost lines on death runs.
+
+### Bribes + Betrayal v1
+
+Post-run cargo routing for **eligible contract cargo** can generate **rival sponsor bribe offers** and betrayal outcomes. Sponsors are employers, not faction owners — betrayal affects trust/reputation, not territory or lockout.
+
+**When betrayal applies:** active sponsor contract + recovered contract-relevant cargo + successful extract/bank + post-run routing step. No betrayal if the player dies before banking/extracting, has no contract, or cargo is ineligible.
+
+**Routing outcomes (contract cargo):**
+
+| Action | Contract result | Severity | Original sponsor rep |
+|--------|-----------------|---------|----------------------|
+| Deliver to sponsor | COMPLETE | NONE | via normal contract payout |
+| Accept rival offer | BETRAYED_TO_RIVAL | HARD | −2 |
+| Sell to Black Market | FENCED_TO_BLACK_MARKET | SOFT | −1 |
+| Keep in stash | KEPT_BY_PLAYER | FAILURE (SOFT if tracked) | 0 / −1 |
+| Contribute to operation | CONTRIBUTED_TO_OPERATION | SOFT if tracked | 0 / −1 |
+
+**Eligible cargo:** UNSTABLE, INTEL, CONTRABAND, APEX_CARGO, CONTRACT_TARGET resources (not common stable mats). Tarnished Dog Tags fence but do not roll major rival bribes. `trackedContractCargo` flag on apex/contraband/sponsor-specific targets.
+
+**Bribe generation:** at routing item build — chance 25% / 40% (unstable+intel) / 70% (apex+contraband); max **one rival offer per item**; Black Market always available when `FENCE_VALUE`. Rival rewards ~135% credits, ~175% rep vs contract base, sponsor-flavored bonus materials.
+
+**Persistence:** `sponsorTrustStats` (completed/failed/betrayed/bribes/cargo counters), `betrayalHistory` (Betrayer Echo hook: `canGenerateBetrayerEchoLater` on hard betrayal), extended `careerCargoRouting` (`deliveredToRival`, `contractsBetrayed`).
+
+**Debrief:** CONTRACT step shows outcome kind, final destination, and **Betrayal Summary** when applicable. Cargo Routing panel shows rival offer card, projected rep/credits, and per-action warnings.
+
+**Mid-run flavor (optional):** `collectMidRunBribeFlavorMessages` for intercepted buyer signals when contract cargo is picked up — decision remains at routing.
+
+**Key files:** `bribeOfferEngine.ts`, `contractBetrayalResolver.ts`, `betrayalConsequencesEngine.ts`, `betrayalValidationEngine.ts`, `betrayalDebugEngine.ts`, extended `postRunCargoRoutingEngine.ts`, `CargoRoutingPanel.tsx`, `OperationDebriefScreen.tsx`.
+
+**Explicitly not in v1:** faction territory, sponsor-owned sectors, PvP, Betrayer Echo spawning, permanent sponsor lockout, hard faction hostility.
+
+**Acceptance criteria:**
+
+1. ✅ Eligible contract cargo can generate alternate routing offers at debrief.
+2. ✅ Rival sponsor delivery action with payout + rival rep.
+3. ✅ Black Market fence of contract cargo fails original contract + grants credits.
+4. ✅ Keeping contract cargo fails contract without crash.
+5. ✅ Operation contribution works when operation accepts resource.
+6. ✅ Contract result states include betrayal/fence/keep/contribute outcomes.
+7. ✅ Cargo cannot duplicate across destinations (integrity validation).
+8. ✅ Honor delivery completes contract normally.
+9. ✅ Rival delivery betrays original contract and rewards rival.
+10. ✅ Fence betrays/fails contract and grants credits.
+11. ✅ Sponsor trust + reputation tracked on account.
+12. ✅ Debrief explains final cargo destination and betrayal.
+13. ✅ Betrayal events recorded for future Betrayer Echo hooks.
+14.–20. ✅ No territory/PvP/lockout; existing runs and extraction/death rules intact.
 
 ### Loadout
 

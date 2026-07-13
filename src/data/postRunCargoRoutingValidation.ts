@@ -477,6 +477,9 @@ export function validateCargoRoutingResultIntegrity(
   };
 
   addQty(destinationTotals, result.delivered);
+  Object.values(result.deliveredToRival).forEach((bucket) => {
+    addQty(destinationTotals, bucket ?? {});
+  });
   addQty(destinationTotals, result.fenced);
   addQty(destinationTotals, result.contributed);
   addQty(destinationTotals, result.kept);

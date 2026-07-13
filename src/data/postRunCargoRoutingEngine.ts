@@ -18,13 +18,20 @@ import type {
 } from '../types/postRunCargoRouting';
 import type { ResourceItemId, ResourceQuantity } from '../types/resourceItem';
 import type { RunResourceLedger } from '../types/runResourceLedger';
-import type { OperationObjectiveKind } from '../types/worldState';
+import type { CabalEmployerId, OperationObjectiveKind } from '../types/worldState';
+import { sponsorDisplayName } from '../utils/contractUi';
 import {
   isResourceContractObjective,
   resolveContractAfterRouting,
   resolveContractPendingDelivery,
   resolveContractResult,
 } from './contractResolver';
+import { resolveContractAfterBetrayalRouting } from './contractBetrayalResolver';
+import {
+  isTrackedContractCargo,
+  maybeGenerateBribeOffer,
+  resolveActionBetrayalPreview,
+} from './bribeOfferEngine';
 import { creditFenceSale } from './hubSafehouseEngine';
 import { resolveContributionRules } from './operationRulesEngine';
 import {
@@ -121,11 +128,13 @@ function resolveSource(
 function buildValidActions(
   resourceId: ResourceItemId,
   ctx: CargoRoutingContext,
+  bribeOffer: import('../types/betrayal').BribeOffer | null,
 ): Pick<
   RoutableCargoItem,
   | 'canFence'
   | 'canKeep'
   | 'canDeliver'
+  | 'canDeliverRival'
   | 'canContribute'
   | 'canOpenAtHub'
   | 'openAtHubEnabled'
@@ -135,12 +144,14 @@ function buildValidActions(
   const canFence = canResourceBeSoldToFence(resourceId);
   const canDeliver = isContractTargetResource(resourceId, ctx.contract)
     && Boolean(ctx.contract?.sponsorId);
+  const canDeliverRival = Boolean(bribeOffer);
   const canContribute = isOperationTargetResource(resourceId, ctx);
   const canOpenAtHub = def.canOpenAtHub;
   const openAtHubEnabled = resourceId === 'sealed-containment-casket' && def.canOpenAtHub;
 
   const validActions: CargoRoutingAction[] = ['KEEP_STASH'];
   if (canDeliver) validActions.push('DELIVER_SPONSOR');
+  if (canDeliverRival) validActions.push('DELIVER_RIVAL_SPONSOR');
   if (canFence) validActions.push('SELL_FENCE');
   if (canContribute) validActions.push('CONTRIBUTE_OPERATION');
   if (canOpenAtHub) validActions.push('OPEN_AT_HUB');
@@ -149,6 +160,7 @@ function buildValidActions(
     canFence,
     canKeep: true,
     canDeliver,
+    canDeliverRival,
     canContribute,
     canOpenAtHub,
     openAtHubEnabled,
@@ -234,15 +246,36 @@ function buildRoutableItem(
   quantity: number,
   source: RoutableCargoSource,
   ctx: CargoRoutingContext,
+  bribeOfferSeed: string,
 ): RoutableCargoItem {
-  const actions = buildValidActions(resourceId, ctx);
+  const bribeOffer = maybeGenerateBribeOffer({
+    resourceId,
+    quantity,
+    contract: ctx.contract,
+    seed: bribeOfferSeed,
+  });
+  const actions = buildValidActions(resourceId, ctx, bribeOffer);
   const recommendedAction = recommendCargoRoutingAction(resourceId, ctx, actions.validActions);
   const isContractTarget = isContractTargetResource(resourceId, ctx.contract);
   const isOperationTarget = isOperationTargetResource(resourceId, ctx);
+  const trackedContractCargo = isTrackedContractCargo(resourceId, ctx.contract);
+
+  const betrayalPreviewByAction: RoutableCargoItem['betrayalPreviewByAction'] = {};
+  actions.validActions.forEach((action) => {
+    betrayalPreviewByAction[action] = resolveActionBetrayalPreview({
+      action,
+      resourceId,
+      contract: ctx.contract,
+      bribeOffer,
+      routedQuantity: quantity,
+    });
+  });
 
   let contractWarning: string | null = null;
   if (isContractTarget && recommendedAction !== 'DELIVER_SPONSOR') {
-    contractWarning = 'Contract will not complete if this item is not delivered.';
+    const preview = betrayalPreviewByAction[recommendedAction];
+    contractWarning = preview?.warning
+      ?? 'Contract will not complete if this item is not delivered to your sponsor.';
   }
 
   return {
@@ -253,6 +286,9 @@ function buildRoutableItem(
     isOperationTarget,
     recommendedAction,
     contractWarning,
+    trackedContractCargo,
+    bribeOffer,
+    betrayalPreviewByAction,
     ...actions,
   };
 }
@@ -260,6 +296,7 @@ function buildRoutableItem(
 export function splitPostRunCargo(
   ledger: RunResourceLedger,
   ctx: CargoRoutingContext,
+  bribeOfferSeed = 'default',
 ): PostRunCargoSplit {
   const available = mergeResourceQuantities(ledger.extracted, ledger.bankedAtSafehouse);
   const autoStash: ResourceQuantity = {};
@@ -275,6 +312,7 @@ export function splitPostRunCargo(
           qty,
           resolveSource(resourceId, ledger),
           ctx,
+          bribeOfferSeed,
         ));
       } else {
         autoStash[resourceId] = qty;
@@ -293,6 +331,7 @@ export function buildDefaultRoutingDecisions(
     resourceId: item.resourceId,
     quantity: item.quantity,
     action: item.recommendedAction,
+    rivalSponsorId: item.bribeOffer?.rivalSponsorId,
   }));
 }
 
@@ -320,6 +359,13 @@ export function validateCargoRoutingDecisions(
     if (decision.quantity < item.quantity && decision.action === 'KEEP_STASH') {
       issues.push(`${item.resourceId} partial keep is invalid — route a subset to another action.`);
     }
+    if (decision.action === 'DELIVER_RIVAL_SPONSOR') {
+      if (!item.bribeOffer) {
+        issues.push(`${item.resourceId} rival delivery requires a generated bribe offer.`);
+      } else if (decision.rivalSponsorId && decision.rivalSponsorId !== item.bribeOffer.rivalSponsorId) {
+        issues.push(`${item.resourceId} rival sponsor mismatch.`);
+      }
+    }
   });
 
   return issues;
@@ -331,6 +377,8 @@ function actionLabel(action: CargoRoutingAction): string {
       return 'Kept in stash';
     case 'DELIVER_SPONSOR':
       return 'Delivered to sponsor';
+    case 'DELIVER_RIVAL_SPONSOR':
+      return 'Delivered to rival sponsor';
     case 'SELL_FENCE':
       return 'Sold to Black Market';
     case 'CONTRIBUTE_OPERATION':
@@ -373,13 +421,16 @@ export function applyCargoRoutingDecisions({
   let nextStash = { ...stash };
   let nextCredits = cabalCredits;
   const delivered: ResourceQuantity = {};
+  const deliveredToRival: CargoRoutingResult['deliveredToRival'] = {};
   const fenced: ResourceQuantity = {};
   const contributed: ResourceQuantity = {};
   const kept: ResourceQuantity = {};
   const opened: ResourceQuantity = {};
   const casketOpenRewards: ResourceQuantity = {};
   const outcomeLines: CargoRoutingOutcomeLine[] = [];
+  const rivalDeliveryRewards: CargoRoutingResult['rivalDeliveryRewards'] = [];
   let creditsFromFence = 0;
+  let creditsFromRivalDelivery = 0;
   let creditsFromCasketOpen = 0;
   let operationProgressFromCargo = 0;
 
@@ -412,6 +463,36 @@ export function applyCargoRoutingDecisions({
           label: `${decision.quantity}× ${displayName} — ${actionLabel(decision.action)}`,
         });
         break;
+      case 'DELIVER_RIVAL_SPONSOR': {
+        const item = items.find((entry) => entry.resourceId === decision.resourceId);
+        const offer = item?.bribeOffer;
+        if (!offer) {
+          throw new Error(`Rival delivery failed for ${decision.resourceId} — no bribe offer.`);
+        }
+        const sponsorId = offer.rivalSponsorId;
+        const rivalBucket = deliveredToRival[sponsorId] ?? {};
+        rivalBucket[decision.resourceId] = (rivalBucket[decision.resourceId] ?? 0) + decision.quantity;
+        deliveredToRival[sponsorId] = rivalBucket;
+        nextCredits += offer.credits;
+        creditsFromRivalDelivery += offer.credits;
+        offer.resourceBonusIds.forEach((resourceId) => {
+          nextStash = addToResourceStash(nextStash, resourceId, 1);
+        });
+        rivalDeliveryRewards.push({
+          sponsorId,
+          credits: offer.credits,
+          reputation: offer.reputationGain,
+          resourceBonusIds: offer.resourceBonusIds,
+        });
+        outcomeLines.push({
+          resourceId: decision.resourceId,
+          quantity: decision.quantity,
+          action: decision.action,
+          label: `${decision.quantity}× ${displayName} — Delivered to ${sponsorDisplayName(sponsorId)} (+${offer.credits} CR)`,
+          creditsGained: offer.credits,
+        });
+        break;
+      }
       case 'SELL_FENCE': {
         if (!isFenceableResourceId(decision.resourceId)) {
           throw new Error(`Fence sale failed for ${decision.resourceId}.`);
@@ -492,16 +573,20 @@ export function applyCargoRoutingDecisions({
     result: {
       autoStashed,
       delivered,
+      deliveredToRival,
       fenced,
       contributed,
       kept,
       opened,
       creditsFromFence,
+      creditsFromRivalDelivery,
       creditsFromCasketOpen,
       casketOpenRewards,
       operationProgressFromCargo,
       outcomeLines,
       deliveredResourcesForContract: delivered,
+      rivalDeliveryRewards,
+      betrayalEvents: [],
     },
     stash: nextStash,
     cabalCredits: nextCredits,
@@ -530,7 +615,10 @@ export function buildPostRunRoutingDebriefState({
     operationObjectiveKind,
     operationTargetResourceNames,
   );
-  const split = splitPostRunCargo(ledger, routingContext);
+  const bribeOfferSeed = contract?.contractId
+    ? `${contract.contractId}:${contract.sponsorId ?? 'none'}`
+    : 'independent';
+  const split = splitPostRunCargo(ledger, routingContext, bribeOfferSeed);
   const rules = operationObjectiveKind
     ? resolveContributionRules(operationObjectiveKind)
     : null;
@@ -554,41 +642,49 @@ export function buildPostRunRoutingDebriefState({
     extractionKind,
     operationId,
     operationContributionPerStack,
+    bribeOfferSeed,
   };
 }
 
 export function resolveFinalContractResultAfterRouting(
   routingState: PostRunRoutingDebriefState,
-  deliveredResources: ResourceQuantity,
+  routingResult: CargoRoutingResult | null,
+  decisions: CargoRoutingDecision[],
+  items: RoutableCargoItem[],
   extractedSuccessfully: boolean,
   ledger?: RunResourceLedger,
   keepsakeRuntime?: KeepsakeRuntime | null,
 ): ContractResult {
+  if (
+    routingState.initialContractPendingDelivery
+    || (routingResult && items.some((item) => item.isContractTarget))
+  ) {
+    return resolveContractAfterBetrayalRouting({
+      routingState,
+      routingResult,
+      decisions,
+      items,
+      extractedSuccessfully,
+      ledger,
+      keepsakeRuntime,
+    });
+  }
+
   const adjustedDelivered = applyKeepsakeDeliveredQuantityBonus(
-    deliveredResources,
+    routingResult?.deliveredResourcesForContract ?? {},
     keepsakeRuntime,
   );
-  if (!routingState.initialContractPendingDelivery) {
-    if (
-      routingState.activeContract?.objectiveKind
-      && isResourceContractObjective(routingState.activeContract.objectiveKind)
-      && ledger
-    ) {
-      return resolveContractResult({
-        contract: routingState.activeContract,
-        ledger,
-        progress: routingState.contractProgress,
-        extractedSuccessfully,
-        extractionKind: routingState.extractionKind,
-      });
-    }
-    return resolveContractAfterRouting({
+  if (
+    routingState.activeContract?.objectiveKind
+    && isResourceContractObjective(routingState.activeContract.objectiveKind)
+    && ledger
+  ) {
+    return resolveContractResult({
       contract: routingState.activeContract,
+      ledger,
       progress: routingState.contractProgress,
-      deliveredResources: adjustedDelivered,
       extractedSuccessfully,
       extractionKind: routingState.extractionKind,
-      skipResourceDelivery: true,
     });
   }
   return resolveContractAfterRouting({
@@ -597,6 +693,7 @@ export function resolveFinalContractResultAfterRouting(
     deliveredResources: adjustedDelivered,
     extractedSuccessfully,
     extractionKind: routingState.extractionKind,
+    skipResourceDelivery: true,
   });
 }
 
@@ -605,9 +702,12 @@ export interface PostRunCargoRoutingPreview {
   issues: string[];
   operationProgressFromCargo: number;
   creditsFromFence: number;
+  creditsFromRivalDelivery: number;
   creditsFromCasketOpen: number;
   contractStatus: ContractResult['status'] | null;
   contractProgressText: string | null;
+  contractOutcomeKind: ContractResult['outcomeKind'] | null;
+  betrayalSummary: string | null;
 }
 
 export function previewPostRunCargoRouting({
@@ -630,9 +730,12 @@ export function previewPostRunCargoRouting({
       issues,
       operationProgressFromCargo: 0,
       creditsFromFence: 0,
+      creditsFromRivalDelivery: 0,
       creditsFromCasketOpen: 0,
       contractStatus: null,
       contractProgressText: null,
+      contractOutcomeKind: null,
+      betrayalSummary: null,
     };
   }
 
@@ -648,7 +751,9 @@ export function previewPostRunCargoRouting({
     });
     const contract = resolveFinalContractResultAfterRouting(
       routingState,
-      applied.result.deliveredResourcesForContract,
+      applied.result,
+      decisions,
+      items,
       true,
       ledger,
       keepsakeRuntime,
@@ -658,9 +763,12 @@ export function previewPostRunCargoRouting({
       issues: [],
       operationProgressFromCargo: applied.result.operationProgressFromCargo,
       creditsFromFence: applied.result.creditsFromFence,
+      creditsFromRivalDelivery: applied.result.creditsFromRivalDelivery,
       creditsFromCasketOpen: applied.result.creditsFromCasketOpen,
       contractStatus: contract.status,
       contractProgressText: contract.progressText,
+      contractOutcomeKind: contract.outcomeKind ?? null,
+      betrayalSummary: contract.betrayalSummary ?? null,
     };
   } catch (error) {
     return {
@@ -668,9 +776,12 @@ export function previewPostRunCargoRouting({
       issues: [error instanceof Error ? error.message : 'Routing preview failed.'],
       operationProgressFromCargo: 0,
       creditsFromFence: 0,
+      creditsFromRivalDelivery: 0,
       creditsFromCasketOpen: 0,
       contractStatus: null,
       contractProgressText: null,
+      contractOutcomeKind: null,
+      betrayalSummary: null,
     };
   }
 }
@@ -681,6 +792,8 @@ export function formatCargoRoutingActionLabel(action: CargoRoutingAction): strin
       return 'Keep in Stash';
     case 'DELIVER_SPONSOR':
       return 'Deliver to Sponsor';
+    case 'DELIVER_RIVAL_SPONSOR':
+      return 'Accept Rival Offer';
     case 'SELL_FENCE':
       return 'Sell to Black Market';
     case 'CONTRIBUTE_OPERATION':

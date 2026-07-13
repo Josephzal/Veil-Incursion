@@ -14,6 +14,7 @@ import {
   hasResourceUsageTag,
   RESOURCE_REGISTRY,
 } from '../../data/resourceRegistry';
+import { sponsorDisplayName } from '../../utils/contractUi';
 
 const TERMINAL_GREEN = '#4ade80';
 const WARNING_COLOR = '#f59e0b';
@@ -27,7 +28,9 @@ interface CargoRoutingPanelProps {
   previewContractProgress?: string | null;
   previewOperationProgress?: number;
   previewFenceCredits?: number;
+  previewRivalCredits?: number;
   previewCasketCredits?: number;
+  previewBetrayalSummary?: string | null;
   onDecisionChange: (resourceId: CargoRoutingDecision['resourceId'], action: CargoRoutingAction) => void;
   onQuantityChange?: (resourceId: CargoRoutingDecision['resourceId'], quantity: number) => void;
   textColor: string;
@@ -40,6 +43,11 @@ function actionChipLabel(
   item: RoutableCargoItem,
   routedQuantity: number,
 ): string {
+  const preview = item.betrayalPreviewByAction[action];
+  if (action === 'DELIVER_RIVAL_SPONSOR' && item.bribeOffer) {
+    const sponsor = sponsorDisplayName(item.bribeOffer.rivalSponsorId);
+    return `Accept ${sponsor} Offer (+${item.bribeOffer.credits} CR, +${item.bribeOffer.reputationGain} REP)`;
+  }
   const base = formatCargoRoutingActionLabel(action);
   if (action === 'SELL_FENCE') {
     const payout = getResourceSellValue(item.resourceId) * routedQuantity;
@@ -47,6 +55,9 @@ function actionChipLabel(
   }
   if (action === 'CONTRIBUTE_OPERATION') {
     return `${base} (+progress)`;
+  }
+  if (preview?.originalSponsorRepDelta && preview.originalSponsorRepDelta < 0) {
+    return `${base} (${preview.originalSponsorRepDelta} REP)`;
   }
   return base;
 }
@@ -82,7 +93,9 @@ export default function CargoRoutingPanel({
   previewContractProgress,
   previewOperationProgress = 0,
   previewFenceCredits = 0,
+  previewRivalCredits = 0,
   previewCasketCredits = 0,
+  previewBetrayalSummary = null,
   onDecisionChange,
   onQuantityChange,
   textColor,
@@ -124,12 +137,17 @@ export default function CargoRoutingPanel({
         <Text style={[styles.autoStashText, { color: textColor }]}>{autoStashedSummary.toUpperCase()}</Text>
       </View>
 
-      {previewContractStatus || previewOperationProgress > 0 || previewFenceCredits > 0 || previewCasketCredits > 0 ? (
+      {previewContractStatus || previewOperationProgress > 0 || previewFenceCredits > 0 || previewRivalCredits > 0 || previewCasketCredits > 0 || previewBetrayalSummary ? (
         <View style={[styles.previewBox, { borderColor }]}>
           <Text style={[styles.sectionLabel, { color: mutedColor }]}>PROJECTED OUTCOME</Text>
           {previewContractStatus ? (
             <Text style={[styles.itemMeta, { color: textColor }]}>
               {`Contract: ${previewContractStatus}${previewContractProgress ? ` — ${previewContractProgress}` : ''}`}
+            </Text>
+          ) : null}
+          {previewBetrayalSummary ? (
+            <Text style={[styles.itemMeta, { color: WARNING_COLOR }]}>
+              {previewBetrayalSummary.toUpperCase()}
             </Text>
           ) : null}
           {previewOperationProgress > 0 ? (
@@ -140,6 +158,11 @@ export default function CargoRoutingPanel({
           {previewFenceCredits > 0 ? (
             <Text style={[styles.itemMeta, { color: TERMINAL_GREEN }]}>
               {`Fence payout: +${previewFenceCredits} CR`}
+            </Text>
+          ) : null}
+          {previewRivalCredits > 0 ? (
+            <Text style={[styles.itemMeta, { color: TERMINAL_GREEN }]}>
+              {`Rival payout: +${previewRivalCredits} CR`}
             </Text>
           ) : null}
           {previewCasketCredits > 0 ? (
@@ -184,6 +207,23 @@ export default function CargoRoutingPanel({
                 </Text>
                 {item.isContractTarget ? (
                   <Text style={[styles.flag, { color: TERMINAL_GREEN }]}>CONTRACT TARGET</Text>
+                ) : null}
+                {item.trackedContractCargo ? (
+                  <Text style={[styles.flag, { color: WARNING_COLOR }]}>TRACKED CONTRACT CARGO</Text>
+                ) : null}
+                {item.bribeOffer ? (
+                  <View style={[styles.offerBox, { borderColor: WARNING_COLOR }]}>
+                    <Text style={[styles.flag, { color: WARNING_COLOR }]}>RIVAL SPONSOR OFFER</Text>
+                    <Text style={[styles.itemMeta, { color: textColor }]}>
+                      {`${sponsorDisplayName(item.bribeOffer.rivalSponsorId).toUpperCase()} — +${item.bribeOffer.credits} CR // +${item.bribeOffer.reputationGain} REP`}
+                    </Text>
+                    <Text style={[styles.itemMeta, { color: mutedColor }]}>
+                      {item.bribeOffer.flavorLine.toUpperCase()}
+                    </Text>
+                    <Text style={[styles.warning, { color: WARNING_COLOR }]}>
+                      BETRAYAL — ORIGINAL CONTRACT WILL FAIL
+                    </Text>
+                  </View>
                 ) : null}
                 {item.isOperationTarget ? (
                   <Text style={[styles.flag, { color: TERMINAL_GREEN }]}>OPERATION TARGET</Text>
@@ -305,6 +345,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 10,
     gap: 4,
+  },
+  offerBox: {
+    borderWidth: 1,
+    padding: 8,
+    gap: 4,
+    marginTop: 4,
   },
   itemTitle: {
     fontFamily: 'monospace',

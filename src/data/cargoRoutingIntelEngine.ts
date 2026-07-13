@@ -57,7 +57,7 @@ function formatContractCargoDeliveryHintLines(contract: {
 
   return [
     `Deliver ${quantity}× ${targetName} to sponsor during post-run cargo routing for payout.`,
-    'Keeping or selling contract cargo prevents completion (no betrayal penalties in v1).',
+    'Keeping contract cargo prevents completion. Betraying your sponsor costs reputation but may pay more.',
   ];
 }
 

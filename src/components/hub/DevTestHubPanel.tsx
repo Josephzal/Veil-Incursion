@@ -16,6 +16,16 @@ import {
   buildMinimalDevIncursion,
   POST_RUN_ROUTING_TEST_LEDGER,
 } from '../../data/postRunCargoRoutingDebugEngine';
+import {
+  debugForceBribeOfferOnNextRouting,
+  debugPreviewBribeOffers,
+  debugPrintBetrayalAccountSnapshot,
+  debugSimulateBetrayalFence,
+  debugSimulateContributeContractCargo,
+  debugSimulateKeepContractCargo,
+  debugSimulateRivalDelivery,
+  debugValidateBetrayalOffers,
+} from '../../data/betrayalDebugEngine';
 import { SECTOR_WORLD_TEMPLATES } from '../../data/sectorWorldCatalog';
 import ExplorationHubPanel from '../ExplorationHubPanel';
 import HubScreenShell, { HubSectionHeader } from './HubScreenShell';
@@ -440,6 +450,49 @@ export default function DevTestHubPanel(): React.JSX.Element {
           label="[ SIM PARTIAL DOG TAGS ]"
           accentColor={theme.primaryColor}
           onPress={() => setDebugReport(devSimulatePostRunRoutingPartialDogTags())}
+        />
+        <SandboxLaunchButton
+          label="[ FORCE BRIBE OFFERS ]"
+          accentColor={WARNING_ACCENT}
+          onPress={() => {
+            debugForceBribeOfferOnNextRouting(true);
+            setDebugReport(`${debugPreviewBribeOffers(activeIncursion)}\n\nForce bribe enabled for next routing preview.`);
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ PREVIEW BRIBE OFFERS ]"
+          accentColor={WARNING_ACCENT}
+          onPress={() => setDebugReport(debugPreviewBribeOffers(activeIncursion))}
+        />
+        <SandboxLaunchButton
+          label="[ SIM RIVAL DELIVERY ]"
+          accentColor={WARNING_ACCENT}
+          onPress={() => setDebugReport(debugSimulateRivalDelivery(activeIncursion, 'anomalous-core'))}
+        />
+        <SandboxLaunchButton
+          label="[ SIM BETRAY FENCE ]"
+          accentColor={WARNING_ACCENT}
+          onPress={() => setDebugReport(debugSimulateBetrayalFence(activeIncursion, 'anomalous-core'))}
+        />
+        <SandboxLaunchButton
+          label="[ SIM KEEP CARGO ]"
+          accentColor={WARNING_ACCENT}
+          onPress={() => setDebugReport(debugSimulateKeepContractCargo(activeIncursion, 'anomalous-core'))}
+        />
+        <SandboxLaunchButton
+          label="[ SIM CONTRIBUTE CARGO ]"
+          accentColor={WARNING_ACCENT}
+          onPress={() => setDebugReport(debugSimulateContributeContractCargo(activeIncursion, 'anomalous-core'))}
+        />
+        <SandboxLaunchButton
+          label="[ VALIDATE BRIBES ]"
+          accentColor={WARNING_ACCENT}
+          onPress={() => setDebugReport(debugValidateBetrayalOffers(activeIncursion))}
+        />
+        <SandboxLaunchButton
+          label="[ BETRAYAL ACCOUNT LOG ]"
+          accentColor={WARNING_ACCENT}
+          onPress={() => setDebugReport(debugPrintBetrayalAccountSnapshot(account))}
         />
         <SandboxLaunchButton
           label="[ PREVIEW DEBRIEF ]"
@@ -885,6 +938,7 @@ export default function DevTestHubPanel(): React.JSX.Element {
 }
 
 const TERMINAL_ACCENT = '#00ff33';
+const WARNING_ACCENT = '#f59e0b';
 
 const styles = StyleSheet.create({
   grid: {

@@ -100,25 +100,30 @@ function simulateWithOverrides(
 
   const finalContract = resolveFinalContractResultAfterRouting(
     routingState,
-    applied.result.deliveredResourcesForContract,
+    applied.result,
+    decisions,
+    routingState.pendingItems,
     true,
     incursion.runResourceLedger,
   );
+
+  const lines = [
+    'POST-RUN ROUTING SIM RESULT',
+    `fence credits: +${applied.result.creditsFromFence}`,
+    `rival credits: +${applied.result.creditsFromRivalDelivery}`,
+    `operation progress: +${applied.result.operationProgressFromCargo}`,
+    `contract status: ${finalContract.status}`,
+    `contract outcome: ${finalContract.outcomeKind ?? 'n/a'}`,
+    `contract progress: ${finalContract.progressText}`,
+    finalContract.betrayalSummary ? `betrayal: ${finalContract.betrayalSummary}` : '',
+    ...applied.result.outcomeLines.map((line) => line.label),
+  ].filter(Boolean);
 
   const integrityIssues = validateCargoRoutingResultIntegrity(
     routingState.pendingItems,
     decisions,
     applied.result,
   );
-
-  const lines = [
-    'POST-RUN ROUTING SIM RESULT',
-    `fence credits: +${applied.result.creditsFromFence}`,
-    `operation progress: +${applied.result.operationProgressFromCargo}`,
-    `contract status: ${finalContract.status}`,
-    `contract progress: ${finalContract.progressText}`,
-    ...applied.result.outcomeLines.map((line) => line.label),
-  ];
 
   if (integrityIssues.length > 0) {
     lines.push('INTEGRITY ISSUES:');

@@ -1,3 +1,4 @@
+import type { BetrayalSeverity, ContractOutcomeKind } from './betrayal';
 import type { ResourceCategory, ResourceItemId } from './resourceItem';
 import type { CabalEmployerId, SectorId } from './worldState';
 
@@ -157,6 +158,14 @@ export interface ContractResult {
   mirroredObjectiveProgressText?: string;
   mirroredCreditsBonus?: number;
   mirroredReputationBonus?: number;
+  /** Detailed routing outcome when betrayal v1 applies. */
+  outcomeKind?: ContractOutcomeKind;
+  betrayalSeverity?: BetrayalSeverity;
+  finalCargoDestination?: string;
+  originalSponsorRepDelta?: number;
+  rivalSponsorId?: CabalEmployerId | null;
+  rivalSponsorRepDelta?: number;
+  betrayalSummary?: string | null;
 }
 
 export function createEmptyContractRunProgress(): ContractRunProgress {
