@@ -326,22 +326,33 @@ export function validateDefaultRoutingApplyIntegrity(): PostRunCargoRoutingValid
     if (split.pendingItems.length === 0) return;
 
     const decisions = buildDefaultRoutingDecisions(split.pendingItems);
-    const applied = applyCargoRoutingDecisions({
-      decisions,
-      items: split.pendingItems,
-      autoStashed: split.autoStash,
-      stash: {},
-      cabalCredits: 0,
-      operationContributionPerStack: OPERATION_CONTRIBUTION_VALUES.extractTargetResourceStack,
-    });
-
-    issues.push(
-      ...validateCargoRoutingResultIntegrity(
-        split.pendingItems,
+    try {
+      // Integrity sims must afford appraisal/open fees — this is not an affordability check.
+      const applied = applyCargoRoutingDecisions({
         decisions,
-        applied.result,
-      ),
-    );
+        items: split.pendingItems,
+        autoStashed: split.autoStash,
+        stash: {},
+        cabalCredits: 10_000,
+        operationContributionPerStack: OPERATION_CONTRIBUTION_VALUES.extractTargetResourceStack,
+      });
+
+      issues.push(
+        ...validateCargoRoutingResultIntegrity(
+          split.pendingItems,
+          decisions,
+          applied.result,
+        ),
+      );
+    } catch (error) {
+      issues.push({
+        severity: 'error',
+        resourceId,
+        message: `Default routing apply failed for ${resourceId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      });
+    }
   });
 
   return issues;
@@ -400,23 +411,32 @@ export function validateAllRoutingSimIntegrity(): PostRunCargoRoutingValidationI
       ...decision,
       action: overrides[decision.resourceId] ?? decision.action,
     }));
-    const applied = applyCargoRoutingDecisions({
-      decisions,
-      items: routingState.pendingItems,
-      autoStashed: routingState.autoStashed,
-      stash: {},
-      cabalCredits: 0,
-      operationContributionPerStack: routingState.operationContributionPerStack,
-    });
-    const integrityIssues = validateCargoRoutingResultIntegrity(
-      routingState.pendingItems,
-      decisions,
-      applied.result,
-    );
-    if (integrityIssues.length > 0) {
+    try {
+      const applied = applyCargoRoutingDecisions({
+        decisions,
+        items: routingState.pendingItems,
+        autoStashed: routingState.autoStashed,
+        stash: {},
+        cabalCredits: 10_000,
+        operationContributionPerStack: routingState.operationContributionPerStack,
+      });
+      const integrityIssues = validateCargoRoutingResultIntegrity(
+        routingState.pendingItems,
+        decisions,
+        applied.result,
+      );
+      if (integrityIssues.length > 0) {
+        issues.push({
+          severity: 'error',
+          message: `Routing sim scenario ${index + 1} failed integrity (${integrityIssues.length} issue(s)).`,
+        });
+      }
+    } catch (error) {
       issues.push({
         severity: 'error',
-        message: `Routing sim scenario ${index + 1} failed integrity (${integrityIssues.length} issue(s)).`,
+        message: `Routing sim scenario ${index + 1} threw: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
       });
     }
   });

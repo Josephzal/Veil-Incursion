@@ -397,15 +397,26 @@ function validateRunStructure(issues: BalanceValidationIssue[], runSims: boolean
 }
 
 function validateExtractionInvariants(issues: BalanceValidationIssue[]): void {
-  const routingIssues = validatePostRunCargoRoutingPipeline(null);
-  routingIssues.forEach((issue) => {
+  try {
+    const routingIssues = validatePostRunCargoRoutingPipeline(null);
+    routingIssues.forEach((issue) => {
+      push(issues, {
+        domain: 'extraction',
+        severity: issue.severity,
+        code: issue.resourceId ? `ROUTING_${issue.resourceId}` : 'ROUTING_PIPELINE',
+        message: issue.message,
+      });
+    });
+  } catch (error) {
     push(issues, {
       domain: 'extraction',
-      severity: issue.severity,
-      code: issue.resourceId ? `ROUTING_${issue.resourceId}` : 'ROUTING_PIPELINE',
-      message: issue.message,
+      severity: 'error',
+      code: 'ROUTING_PIPELINE_THROW',
+      message: `Post-run routing pipeline threw during validation: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
     });
-  });
+  }
 }
 
 function rateOutsideBand(rate: number, band: { min: number; max: number }, slack = 0.15): boolean {
