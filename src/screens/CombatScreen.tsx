@@ -45,7 +45,24 @@ import {
   primeBossKillCredits,
   standardKillCredits,
 } from '../data/combatCredits';
-import { isPrimeBossDepth } from '../data/districtPacing';
+import {
+  applyCompositionCreditScaling,
+  formatCompositionRewardPayoutLog,
+} from '../data/encounterCompositionRewardEngine';
+import {
+  bossFlavorCreditBonus,
+  bossFlavorRareLootBonusPct,
+  buildBossFlavorContextFromRun,
+  resolveBossFlavorRewardTier,
+} from '../data/encounterBossFlavorEngine';
+import { depthFromNodesCleared, getDistrictFromDepth, isDistrictGateDepth, isPrimeBossDepth } from '../data/districtPacing';
+import { rollGatekeeperLockedTemplate } from '../data/combatRewardEngine';
+import { resolveCargoHealReceivedMultiplier } from '../data/unstableCargoEffectsEngine';
+import { resolveStarvedHealMultiplier } from '../data/encounterModifierCombatEngine';
+import {
+  type PendingNarrativeCombatBoons,
+} from '../types/narrativeBonusReward';
+import { resolveEchoRecoveryContext } from '../data/echoRecoveryEngine';
 import {
   buildInitialSquadUiSnapshot,
   type CombatSquadUiSnapshot,
@@ -53,14 +70,6 @@ import {
 import { buildCombatAugmentIcons } from '../utils/combatAugmentIcons';
 import { encounterBudgetForDepth } from '../data/combatEncounterBudget';
 import type { CargoItemId } from '../types/cargoGrid';
-import { resolveCargoHealReceivedMultiplier } from '../data/unstableCargoEffectsEngine';
-import { resolveStarvedHealMultiplier } from '../data/encounterModifierCombatEngine';
-import {
-  type PendingNarrativeCombatBoons,
-} from '../types/narrativeBonusReward';
-import { depthFromNodesCleared, isDistrictGateDepth } from '../data/districtPacing';
-import { rollGatekeeperLockedTemplate } from '../data/combatRewardEngine';
-import { resolveEchoRecoveryContext } from '../data/echoRecoveryEngine';
 import { shouldGrantAdrenalinePrimerAp } from '../data/boundRequisitionEngine';
 import type { IncursionConsumableUseResult } from '../types/incursionInventory';
 import CombatOperativeVitalsOverlay from './combat/layouts/CombatOperativeVitalsOverlay';
@@ -109,6 +118,7 @@ export default function CombatScreen(): React.JSX.Element {
     setCombatLogActive,
     clearRunLog,
     recordDepthIdentityCombatVictory,
+    recordCompositionEncounterVictory,
   } = useRun();
   const { completeCurrentNode } = useNodeProgression();
   const { getWeaponCombatStats, account, addLockedContainer } = usePlayerAccount();
@@ -450,11 +460,42 @@ export default function CombatScreen(): React.JSX.Element {
       activeIncursion.bossProfile != null || runState.pendingEnemy?.isBoss === true;
     const nodeType = vectorNode?.type;
     const depth = activeIncursion.nodesCleared + 1;
-    const creditReward = isBossEncounter
+    const mods = vectorNode?.contextModifiers;
+    const compositionTier = mods?.compositionRewardTier ?? null;
+    const compositionTemplateId = mods?.compositionTemplateId ?? null;
+    const bossFlavorCtx = isBossEncounter
+      ? buildBossFlavorContextFromRun({
+          depth: getDistrictFromDepth(depth),
+          depthIdentity: activeIncursion.depthIdentity,
+          anchorType: activeIncursion.runGenerationContext?.activeAnchor?.type
+            ?? activeIncursion.runGenerationContext?.sectorState.activeAnchor?.type
+            ?? null,
+          operationKind: activeIncursion.runGenerationContext?.activeOperation.objectiveKind ?? null,
+        })
+      : null;
+    const rewardTier = isBossEncounter && bossFlavorCtx
+      ? resolveBossFlavorRewardTier(bossFlavorCtx)
+      : compositionTier;
+    recordCompositionEncounterVictory({
+      templateId: compositionTemplateId,
+      riskLabel: mods?.compositionRiskLabel ?? null,
+      rewardTier,
+      isElite: nodeType === 'ELITE_COMBAT',
+      highRisk: Boolean(mods?.highRisk),
+      anchorSignal: Boolean(mods?.anchorSignal),
+      echoSignal: Boolean(mods?.echoSignal),
+      highValue: Boolean(mods?.highValueResource),
+      twistedTemplateId: victoryTwisted ?? null,
+    });
+    let creditReward = isBossEncounter
       ? (isPrimeBossDepth(depth) ? primeBossKillCredits(depth) : districtBossKillCredits(depth))
       : nodeType === 'ELITE_COMBAT'
         ? eliteKillCredits(depth)
         : standardKillCredits(depth);
+    creditReward = applyCompositionCreditScaling(creditReward, rewardTier);
+    if (bossFlavorCtx) {
+      creditReward += bossFlavorCreditBonus(bossFlavorCtx);
+    }
     const creditReason = isBossEncounter
       ? (isPrimeBossDepth(depth) ? 'prime anomaly eradicated' : 'district gate boss eradicated')
       : nodeType === 'ELITE_COMBAT'
@@ -462,6 +503,10 @@ export default function CombatScreen(): React.JSX.Element {
         : 'hostile eradicated';
 
     awardRunCredits(creditReward, creditReason);
+    const payoutLog = formatCompositionRewardPayoutLog(rewardTier, creditReward);
+    if (payoutLog) {
+      appendRunLog(payoutLog);
+    }
     const isGatekeeper = isBossEncounter && isDistrictGateDepth(depth);
     if (isGatekeeper) {
       const lockedTemplate = rollGatekeeperLockedTemplate(
@@ -470,6 +515,7 @@ export default function CombatScreen(): React.JSX.Element {
       addLockedContainer(lockedTemplate);
       appendRunLog('>> GATEKEEPER SALVAGE — sealed container routed to Safehouse decryption vault.');
     }
+    const bossRareBonus = bossFlavorCtx ? bossFlavorRareLootBonusPct(bossFlavorCtx) : 0;
     const combatDropInstanceIds = grantCombatResourceDrops({
       depth,
       isElite: nodeType === 'ELITE_COMBAT',
@@ -477,7 +523,13 @@ export default function CombatScreen(): React.JSX.Element {
       rosterId: runState.pendingEnemy?.rosterId,
       seed: `combat:${depth}:${nodeType ?? 'std'}:${runState.pendingEnemy?.rosterId ?? 'unknown'}`,
       slainEnemies: runState.pendingEnemies ?? [],
-      rareLootBonusPct: activeIncursion.runModifiers?.rareLootBonusPct ?? 0,
+      rareLootBonusPct: (activeIncursion.runModifiers?.rareLootBonusPct ?? 0) + bossRareBonus,
+      rewardTier,
+      compositionTemplateId,
+      veilBiome: activeIncursion.runVeilBiome,
+      highValue: Boolean(mods?.highValueResource),
+      echoSignal: Boolean(mods?.echoSignal),
+      anchorSignal: Boolean(mods?.anchorSignal),
     });
     const echoCtx = resolveEchoRecoveryContext(vectorNode, activeIncursion.runGenerationContext);
     const echoDropInstanceIds = echoCtx && vectorNode?.contextModifiers?.echoEncounterKind === 'HOSTILE_ECHO'
@@ -530,6 +582,10 @@ export default function CombatScreen(): React.JSX.Element {
   }, [
     activeIncursion.bossProfile,
     activeIncursion.defendRiftActive,
+    activeIncursion.depthIdentity,
+    activeIncursion.runGenerationContext,
+    activeIncursion.runModifiers?.rareLootBonusPct,
+    activeIncursion.runVeilBiome,
     adrenalinePrimerActive,
     awardRunCredits,
     grantCombatResourceDrops,
@@ -558,6 +614,7 @@ export default function CombatScreen(): React.JSX.Element {
     clearNarrativeBoonStatusEffects,
     clearEncounterUltimateDisabled,
     recordDepthIdentityCombatVictory,
+    recordCompositionEncounterVictory,
     activeIncursion.pendingHarvestReturn,
     activeIncursion.runGenerationContext,
   ]);

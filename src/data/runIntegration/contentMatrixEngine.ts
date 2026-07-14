@@ -8,6 +8,7 @@ import { ALL_RESOURCE_ITEM_IDS, RESOURCES_BY_CATEGORY } from '../resourceRegistr
 import { ALL_RUN_ITEM_IDS } from '../../types/runItem';
 import type { SectorState, WorldStatePersistedState } from '../../types/worldState';
 import { getNodesPerDistrict, getMaxRunGraphDepth } from './runPacingConfig';
+import { formatCompositionContentReport } from '../encounterCompositionDebugEngine';
 
 export interface ContentMatrixSummary {
   sectors: number;
@@ -72,5 +73,7 @@ export function formatContentMatrixReport(
     `Contract Templates: ${m.contractTemplates}`,
     `Run pacing: ${m.nodesPerDistrict} nodes/district × 3 = ${m.maxRunDepth} max depth`,
     `Board contracts queued: ${persisted.contractBoard?.contracts?.length ?? 0}`,
+    '',
+    formatCompositionContentReport(),
   ].join('\n');
 }

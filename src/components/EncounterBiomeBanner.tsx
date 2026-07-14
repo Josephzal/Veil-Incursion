@@ -35,6 +35,24 @@ export default function EncounterBiomeBanner(): React.JSX.Element | null {
           {`DEPTH FLAVOR // ${sectorFlavor.toUpperCase()}`}
         </Text>
       ) : null}
+      {modifiers?.compositionRiskLabel ? (
+        <Text style={[styles.modLine, { color: theme.primaryColor }]}>
+          {`RISK // ${modifiers.compositionRiskLabel.replace(/_/g, ' ')}`}
+          {modifiers.compositionTemplateId
+            ? ` // ${modifiers.compositionTemplateId.replace(/_/g, ' ')}`
+            : ''}
+        </Text>
+      ) : null}
+      {modifiers?.compositionRolePreview && modifiers.compositionRolePreview.length > 0 ? (
+        <Text style={[styles.modLine, { color: theme.mutedColor }]}>
+          {`ROLES // ${modifiers.compositionRolePreview.join(' · ')}`}
+        </Text>
+      ) : null}
+      {modifiers?.compositionRewardPreview ? (
+        <Text style={[styles.modLine, { color: theme.mutedColor }]}>
+          {`REWARD // ${modifiers.compositionRewardPreview.toUpperCase()}`}
+        </Text>
+      ) : null}
       {twistLabel ? (
         <Text style={[styles.modLine, { color: theme.primaryColor }]}>
           {`TWIST // ${twistLabel.toUpperCase()}${twistSummary ? ` — ${twistSummary}` : ''}`}

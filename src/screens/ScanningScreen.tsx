@@ -93,6 +93,7 @@ export default function ScanningScreen(): React.JSX.Element {
     useRelaySpikeOnNode,
     useNullLensOnNode,
     tryDeferEngageForFieldTool,
+    hasPendingEncounterWarning,
   } = useRun();
   const { account } = usePlayerAccount();
   const { isScanningHub, finalizeSectorExtraction } = useDescentNavigator();
@@ -421,8 +422,18 @@ export default function ScanningScreen(): React.JSX.Element {
       return;
     }
     const nodeType = confirmScanPreview();
+    // Phase B — high-risk/modifier combat waits on EncounterWarningCardOverlay.
+    if (hasPendingEncounterWarning()) {
+      return;
+    }
     routeAfterEngage(nodeType);
-  }, [confirmScanPreview, routeAfterEngage, selectedNodeId, tryDeferEngageForFieldTool]);
+  }, [
+    confirmScanPreview,
+    hasPendingEncounterWarning,
+    routeAfterEngage,
+    selectedNodeId,
+    tryDeferEngageForFieldTool,
+  ]);
 
   const handleEmergencyRecall = useCallback(() => {
     if (initiateEmergencyRecall()) {

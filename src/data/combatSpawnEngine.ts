@@ -126,6 +126,7 @@ export interface EngagedEncounterSnapshot {
   encounterOrigin?: EncounterOrigin;
   spawnOverride?: EncounterSpawnOverride;
   echoTemplateId?: string;
+  composition?: import('../types/encounterComposition').EncounterCompositionPickMeta;
 }
 
 function encounterOptionsFromSpawn(options: SpawnSquadOptions): ResolveLevelEncounterOptions {
@@ -174,6 +175,7 @@ export function resolveEngagedEncounterSnapshot(options: SpawnSquadOptions): Eng
   return {
     encounterId: meta.encounterId ?? 'fallback-unknown',
     encounterOrigin: meta.encounterOrigin,
+    composition: meta.composition,
   };
 }
 

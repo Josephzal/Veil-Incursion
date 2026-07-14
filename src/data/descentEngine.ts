@@ -384,6 +384,28 @@ export function formatScannerNodeIntel(
   ];
   if (node.scannerLabelCorrupt && node.scannerLabelCertainty) {
     lines.push(`> SCAN CERTAINTY: ${node.scannerLabelCertainty}`);
+    const risk = node.contextModifiers?.compositionRiskLabel;
+    if (risk) {
+      lines.push(`> RISK CATEGORY: ${risk.replace(/_/g, ' ')}`);
+    } else if (node.scannerLabelCertainty !== 'RELIABLE') {
+      // Degraded/strange labels stay actionable — surface decision class when known.
+      const threatHint = node.type.includes('ELITE')
+        ? 'ELITE PRESSURE'
+        : node.type.includes('COMBAT')
+          ? 'COMBAT LIKELY'
+          : node.type.includes('EXTRACTION')
+            ? 'EXIT DECISION'
+            : node.type.includes('SANCTUARY')
+              ? 'SAFEHOUSE DECISION'
+              : 'VECTOR DECISION';
+      lines.push(`> RISK CATEGORY: ${threatHint}`);
+    }
+  }
+  if (node.contextModifiers?.compositionRiskLabel && !node.scannerLabelCorrupt) {
+    lines.push(`> RISK: ${node.contextModifiers.compositionRiskLabel.replace(/_/g, ' ')}`);
+  }
+  if (node.contextModifiers?.compositionRewardPreview) {
+    lines.push(`> REWARD PREVIEW: ${node.contextModifiers.compositionRewardPreview.toUpperCase()}`);
   }
 
   const signalLines = formatVeilFrontSignalIntel(node, runContext);

@@ -2,6 +2,10 @@ import type { ResourceItemId } from '../types/resourceItem';
 import type { EnemyCombatProfile } from '../types/run';
 import { collectEnemyResourceLoot } from './enemyResourceDrops';
 import { ENEMY_ROSTER, type EnemyRosterId } from './enemyRoster';
+import {
+  compositionExtraLootIds,
+  compositionRareLootBonusPct,
+} from './encounterCompositionRewardEngine';
 
 export { collectEnemyResourceLoot } from './enemyResourceDrops';
 
@@ -57,6 +61,14 @@ export interface CombatRewardContext {
   rareLootBonusPct?: number;
   /** Carried unstable cargo — occult-biased salvage roll chance (%). */
   occultRewardBonusPct?: number;
+  /** Phase C — composition reward tier scales salvage pressure. */
+  rewardTier?: import('../types/encounterComposition').EncounterRewardTier | null;
+  /** Phase C — template / biome biased extras. */
+  compositionTemplateId?: import('../types/encounterComposition').EncounterCompositionTemplateId | null;
+  veilBiome?: import('../types/encounterSpawn').VeilBiome | null;
+  highValue?: boolean;
+  echoSignal?: boolean;
+  anchorSignal?: boolean;
 }
 
 export function lootDepthTierFromDepth(depth: number): LootDepthTier {
@@ -142,6 +154,17 @@ export function rollCombatResourceDrops(ctx: CombatRewardContext): ResourceItemI
     : [];
   drops.push(...enemyLoot);
 
+  const compositionRarePct = compositionRareLootBonusPct(ctx.rewardTier);
+  const rareLootBonusPct = (ctx.rareLootBonusPct ?? 0) + compositionRarePct;
+  const compositionExtras = compositionExtraLootIds({
+    tier: ctx.rewardTier,
+    templateId: ctx.compositionTemplateId,
+    veilBiome: ctx.veilBiome,
+    highValue: ctx.highValue,
+    echoSignal: ctx.echoSignal,
+    anchorSignal: ctx.anchorSignal,
+  });
+
   if (ctx.isElite) {
     if (enemyLoot.length === 0) {
       drops.push(...pickEliteDrops(profile, tier, rng));
@@ -149,9 +172,16 @@ export function rollCombatResourceDrops(ctx: CombatRewardContext): ResourceItemI
       drops.push(pickFromPool(factionRarePool(profile, tier), rng));
     }
     drops.push(...(ctx.extraLoot ?? []));
-    const rareBonusPct = ctx.rareLootBonusPct ?? 0;
-    if (rareBonusPct > 0 && rng() * 100 < rareBonusPct) {
+    drops.push(...compositionExtras);
+    if (rareLootBonusPct > 0 && rng() * 100 < rareLootBonusPct) {
       drops.push(pickFromPool(factionRarePool(profile, tier), rng));
+    }
+    // HIGH_VALUE+ gets a second rare chance roll.
+    if (
+      (ctx.rewardTier === 'HIGH_VALUE' || ctx.rewardTier === 'RARE' || ctx.rewardTier === 'APEX_CHANCE')
+      && rng() * 100 < Math.min(35, rareLootBonusPct)
+    ) {
+      drops.push(pickFromPool(factionRarePool(profile, Math.max(tier, 2) as LootDepthTier), rng));
     }
     const occultBonusPct = ctx.occultRewardBonusPct ?? 0;
     if (occultBonusPct > 0 && rng() * 100 < occultBonusPct) {
@@ -165,10 +195,19 @@ export function rollCombatResourceDrops(ctx: CombatRewardContext): ResourceItemI
   }
 
   drops.push(...(ctx.extraLoot ?? []));
+  drops.push(...compositionExtras);
 
-  const rareBonusPct = ctx.rareLootBonusPct ?? 0;
-  if (rareBonusPct > 0 && rng() * 100 < rareBonusPct) {
+  if (rareLootBonusPct > 0 && rng() * 100 < rareLootBonusPct) {
     drops.push(pickFromPool(factionRarePool(profile, tier), rng));
+  }
+  if (
+    (ctx.rewardTier === 'RARE' || ctx.rewardTier === 'APEX_CHANCE')
+    && rng() < 0.35
+  ) {
+    const apexPool = tier >= 3
+      ? [...TIER_3_ADD, ...factionRarePool(profile, 3)]
+      : factionRarePool(profile, Math.max(tier, 2) as LootDepthTier);
+    drops.push(pickFromPool(apexPool, rng));
   }
   const occultBonusPct = ctx.occultRewardBonusPct ?? 0;
   if (occultBonusPct > 0 && rng() * 100 < occultBonusPct) {

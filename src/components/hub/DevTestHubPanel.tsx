@@ -49,6 +49,16 @@ import {
   debugValidateDepthIdentity,
 } from '../../data/depthIdentityDebugEngine';
 import {
+  debugForceCompositionTemplate,
+  debugPrintCompositionRoles,
+  debugPrintCompositionTemplates,
+  debugPreviewCompositionWarningCard,
+  debugSimulateCompositionMatrix,
+  debugSimulateCompositionSectorRun,
+  debugValidateEncounterComposition,
+  formatCompositionContentReport,
+} from '../../data/encounterCompositionDebugEngine';
+import {
   ALL_DEEP_VEIL_LAW_IDS,
   ALL_VEIL_DISTORTION_IDS,
 } from '../../data/depthIdentityCatalog';
@@ -803,6 +813,67 @@ export default function DevTestHubPanel(): React.JSX.Element {
           label="[ VALIDATE DEPTH IDENTITY ]"
           accentColor={theme.statusColor}
           onPress={() => setDebugReport(debugValidateDepthIdentity(activeIncursion))}
+        />
+        <SandboxLaunchButton
+          label="[ FORCE ARTILLERY KILLBOX ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(debugForceCompositionTemplate('ARTILLERY_KILLBOX'))}
+        />
+        <SandboxLaunchButton
+          label="[ FORCE ECHO CONTAMINATED ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(debugForceCompositionTemplate('ECHO_CONTAMINATED'))}
+        />
+        <SandboxLaunchButton
+          label="[ FORCE ELITE NEST ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(debugForceCompositionTemplate('ELITE_NEST'))}
+        />
+        <SandboxLaunchButton
+          label="[ CLEAR FORCED COMPOSITION ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(debugForceCompositionTemplate(null))}
+        />
+        <SandboxLaunchButton
+          label="[ PRINT COMPOSITION TEMPLATES ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(debugPrintCompositionTemplates())}
+        />
+        <SandboxLaunchButton
+          label="[ PRINT COMPOSITION ROLES ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(debugPrintCompositionRoles())}
+        />
+        <SandboxLaunchButton
+          label="[ PREVIEW WARNING CARD ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(debugPreviewCompositionWarningCard())}
+        />
+        <SandboxLaunchButton
+          label="[ SIM COMPOSITION MATRIX ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(debugSimulateCompositionMatrix({ encountersPerCell: 12 }))}
+        />
+        <SandboxLaunchButton
+          label="[ SIM COMPOSITION RUN ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(
+            debugSimulateCompositionSectorRun(
+              activeIncursion.runVeilBiome
+                ?? selectedSector.veilBiome
+                ?? 'NULL_ZONE',
+            ),
+          )}
+        />
+        <SandboxLaunchButton
+          label="[ COMPOSITION CONTENT REPORT ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(formatCompositionContentReport())}
+        />
+        <SandboxLaunchButton
+          label="[ VALIDATE COMPOSITION ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(debugValidateEncounterComposition())}
         />
         <SandboxLaunchButton
           label="[ PREVIEW DEBRIEF ]"

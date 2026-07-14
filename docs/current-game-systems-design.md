@@ -438,6 +438,70 @@ Phase G closes the identity pass with **sector×depth flavor**, **debrief Depth 
 
 **Key files:** `sectorDepthVisualCatalog.ts`, `depthIdentityPhaseGDebugEngine.ts`, `runDebriefDepthIdentityEngine.ts`, `EncounterBiomeBanner.tsx`, DevTest hub buttons.
 
+### Encounter Composition + Reward / Readability Polish v1 (Phase A)
+
+Phase A installs the **composition spine**: every enemy has a primary composition role, 10 role-slot templates exist, fairness validation blocks stacked disable/artillery/true-damage in normal fights, and procedural spawn **prefers template→role fill** with the existing synergy deck as fallback.
+
+**Roles:** BRUISER / DISRUPTOR / ASSASSIN / SUPPORT / ARTILLERY / SWARM / ANCHOR_LINKED / ECHO_SPECIAL / RIVAL_MERC / BOSS — separate from spatial `EncounterRole` (FRONTLINE/BACKLINE).
+
+**Templates:** Simple Patrol, Resource Guard, Anchor Patrol, Echo-Contaminated, Elite Nest, Artillery Killbox, Support Core, Swarm Pressure, Boss Foreshadowing, High-Risk Cargo Guard. Overlays (high-value / high-risk / anchor / echo / elite) bias template weights.
+
+**Spawn:** `pickProceduralSynergySquad` tries `tryPickCompositionSquad` first; on failure uses the deck pipeline. Hard-counter + threat budget still apply.
+
+**Boot:** `verifyEncounterCompositionPhaseA` via `verifyEncounterGenerator`.
+
+**Key files:** `enemyCompositionRoleCatalog.ts`, `encounterCompositionTemplateCatalog.ts`, `encounterCompositionFairnessEngine.ts`, `encounterCompositionPickEngine.ts`, `encounterCompositionValidationEngine.ts`.
+
+**Not in Phase A:** warning cards, reward tier application, boss flavor hooks, debrief highlights, sim matrix / DevTest polish (Phases B–D).
+
+### Encounter Composition + Reward / Readability Polish v1 (Phase B)
+
+Phase B makes composed fights **readable before breach**: risk labels, role/reward preview stamps, pre-combat warning cards, and actionable scanner uncertainty.
+
+**Risk labels:** LOW RISK / STANDARD / ELEVATED / HIGH RISK / ELITE / APEX WARNING — derived from depth, elite, overlays, template, modifiers, reward tier.
+
+**Stamps:** On combat engage, `stampCompositionReadability` writes composition template / risk / roles / reward preview onto `NodeContextModifiers`. Banner shows `RISK //`, `ROLES //`, `REWARD //`. Dock adds risk category when scanner certainty is degraded/strange.
+
+**Warning cards:** Shown for modifier / twist / elite / high-risk / anchor (D2+) / template-flagged fights via `EncounterWarningCardOverlay` ([Enter Combat] / [Back]). Scanning engage waits on the card instead of auto-routing to combat.
+
+**Scanner copy:** Strange labels always include a decision class (Combat Likely, Elite Pressure, Contaminated Exit, etc.) — never blank "???".
+
+**Key files:** `encounterCompositionReadabilityEngine.ts`, `EncounterWarningCardOverlay.tsx`, `IncursionShell.tsx`, `ScanningScreen.tsx`, scanner label catalog + `descentEngine` dock lines.
+
+**Not in Phase B:** reward tier loot application, boss flavor hooks, debrief highlights, sim matrix (Phases C–D).
+
+### Encounter Composition + Reward / Readability Polish v1 (Phase C)
+
+Phase C applies stamped reward tiers to combat payouts and adds light Gatekeeper / depth / anchor flavor — no boss rewrite.
+
+**Reward tier → payout:** On victory, `compositionRewardTier` scales credits (`applyCompositionCreditScaling`) and feeds `grantCombatResourceDrops` / `rollCombatResourceDrops` with rare-loot bonus %, template/biome extras (`compositionExtraLootIds`), and elevated rare rolls for HIGH_VALUE+. High-value / echo / anchor node overlays bias extras (Echo-Glass, Ley-Slag, sector tech pools).
+
+**Boss flavor hooks:** `prepareBossEncounter` logs depth-identity / law / anchor / operation lines via `encounterBossFlavorEngine` plus optional arena labels. Boss victory uses `resolveBossFlavorRewardTier`, soft credit bump (`bossFlavorCreditBonus`), and soft rare-loot bump — Gatekeeper kit unchanged.
+
+**Key files:** `encounterCompositionRewardEngine.ts`, `encounterBossFlavorEngine.ts`, `combatRewardEngine.ts` (`CombatRewardContext`), `CombatScreen.tsx` victory, `RunContext.tsx` `prepareBossEncounter`.
+
+**Acceptance unlocked:** 11–13 (high-risk better rewards; clear elite/anchor/echo/resource profiles; boss/depth/anchor flavor without rewrite).
+
+**Not in Phase C:** sim matrix, content report, DevTest audit tools, debrief encounter highlights (Phase D).
+
+### Encounter Composition + Reward / Readability Polish v1 (Phase D)
+
+Phase D closes the composition pass with **QA / audit tooling**, a **content matrix**, and **debrief Encounter Highlights**.
+
+**Sim matrix:** `debugSimulateCompositionMatrix` rolls biomes × depths × tier cells through `tryPickCompositionSquad`, reporting composition hit rate, template/reward/role distributions, unfair hits, and invalid loot refs. `debugSimulateCompositionSectorRun` walks a 15-node mock sector run.
+
+**Content report:** `formatCompositionContentReport` lists enemy-role coverage, template count, reward profiles, modifiers/twisted/variant/scanner counts, and validation error/warn totals — also appended to the integration CONTENT MATRIX button.
+
+**DevTest:** Force Artillery / Echo Contaminated / Elite Nest (+ clear), print templates/roles, preview warning card, sim matrix/run, content report, validate composition (Phase A+D).
+
+**Telemetry + debrief:** `compositionRunState` records seen/cleared templates, risk/reward tiers, overlay clears, and warning cards. Debrief shows optional **ENCOUNTER HIGHLIGHTS** (hardest clear, notable templates, elevated clears, signal clears, reward tiers, false extraction).
+
+**Validation:** `validateEncounterCompositionPhaseD` checks reward resource IDs and high-risk/baseline mismatches; `verifyEncounterComposition` (boot via `verifyEncounterGenerator`) runs Phase A + D error gates + light per-biome smoke.
+
+**Key files:** `encounterCompositionDebugEngine.ts`, `encounterCompositionTelemetryEngine.ts`, `encounterCompositionValidationEngine.ts`, `runDebriefEncounterCompositionEngine.ts`, `DevTestHubPanel.tsx`, `OperationDebriefScreen.tsx`, `contentMatrixEngine.ts`.
+
+**Acceptance unlocked:** 18–20 (debug sim / content report / debrief highlights) plus consolidated validation polish for the composition system.
+
 ### Appraisal + Sealed Cargo v1
 
 **Sealed Containment Casket** is the primary appraisable contraband item. Players can inspect value **without consuming** the casket, then choose to open, sell sealed, deliver sealed (contract), or stash.

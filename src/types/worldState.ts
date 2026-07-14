@@ -226,6 +226,13 @@ export interface NodeContextModifiers {
   scannerDisplayedNodeType?: import('./proceduralRunTree').ProceduralNodeType;
   scannerStrangeLabel?: string;
   scannerLabelCorrupt?: boolean;
+  /** Phase B — composition / readability telegraph (stamped at engage). */
+  compositionTemplateId?: import('./encounterComposition').EncounterCompositionTemplateId;
+  compositionRiskLabel?: import('./encounterComposition').EncounterRiskLabel;
+  compositionRewardTier?: import('./encounterComposition').EncounterRewardTier;
+  compositionRolePreview?: readonly import('./encounterComposition').CompositionEnemyRole[];
+  compositionRewardPreview?: string;
+  compositionWarningSummary?: string;
 }
 
 /** Tracks per-run caps while lazily rolling node context at engagement. */

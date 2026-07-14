@@ -4,6 +4,7 @@ import TerminalSafeArea from './TerminalSafeArea';
 import KeepsakeInRunChoiceOverlay from './KeepsakeInRunChoiceOverlay';
 import RunItemFieldChoiceOverlay from './RunItemFieldChoiceOverlay';
 import TwistedTemplateChoiceOverlay from './TwistedTemplateChoiceOverlay';
+import EncounterWarningCardOverlay from './EncounterWarningCardOverlay';
 
 interface IncursionShellProps {
   children: React.ReactNode;
@@ -18,6 +19,7 @@ export default function IncursionShell({ children }: IncursionShellProps): React
         <KeepsakeInRunChoiceOverlay />
         <RunItemFieldChoiceOverlay />
         <TwistedTemplateChoiceOverlay />
+        <EncounterWarningCardOverlay />
       </View>
     </TerminalSafeArea>
   );

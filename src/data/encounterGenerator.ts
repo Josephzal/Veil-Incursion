@@ -23,6 +23,8 @@ import { verifyEncounterSpawnValidation } from './encounterSpawnValidationEngine
 import { verifyDepthEnemyVariants } from './depthEnemyVariantValidationEngine';
 import { verifyScannerLabelCertainty } from './scannerLabelCertaintyValidationEngine';
 import { verifyPhaseGHardRules } from './depthIdentityPhaseGDebugEngine';
+import { verifyEncounterComposition } from './encounterCompositionValidationEngine';
+import type { EncounterCompositionPickMeta } from '../types/encounterComposition';
 import type { EchoEliteTemplate } from '../types/echoElite';
 import type { NodeContextModifiers } from '../types/worldState';
 import type { EncounterGridPos, EncounterUnitSpec, SynergySquadSpec } from './synergyEncounterTypes';
@@ -57,6 +59,8 @@ export interface GeneratedEncounter {
   /** Echo node override — not a rolled origin. */
   spawnOverride?: EncounterSpawnOverride;
   echoTemplateId?: string;
+  /** Phase A composition metadata when role-template fill succeeded. */
+  composition?: EncounterCompositionPickMeta;
 }
 
 const POS_TO_LAYOUT: Record<EncounterGridPos, keyof EncounterLayout> = {
@@ -237,6 +241,7 @@ export function generateNodeEncounter(
     };
   }
 
+  const mods = options.contextModifiers;
   const picked = pickProceduralSynergySquad({
     globalDepth,
     district,
@@ -247,6 +252,12 @@ export function generateNodeEncounter(
     nodeTier,
     lastEncounterId: segment.lastEncounterId,
     lastEncounterOrigin: segment.lastEncounterOrigin,
+    highValue: mods?.highValueResource === true,
+    highRisk: mods?.highRisk === true,
+    anchorSignal: mods?.anchorSignal === true,
+    echoSignal: mods?.echoSignal === true,
+    operationKind: mods?.operationTag ?? null,
+    foreshadowBias: localLevel >= 10,
   });
 
   if (!picked) {
@@ -259,7 +270,7 @@ export function generateNodeEncounter(
     };
   }
 
-  const { squad, encounterOrigin } = picked;
+  const { squad, encounterOrigin, composition } = picked;
   const { layout, isAlpha: squadAlpha } = squadToLayout(squad);
   const useRoster = rosterHasMixedAlpha(squad.roster) || squad.roster.some((u) => u.isAlpha);
 
@@ -270,6 +281,7 @@ export function generateNodeEncounter(
     encounterId: squad.id,
     poolTier: 'SYNERGY',
     encounterOrigin,
+    composition,
   };
 }
 
@@ -312,4 +324,5 @@ export function verifyEncounterGenerator(): void {
   verifyDepthEnemyVariants();
   verifyScannerLabelCertainty();
   verifyPhaseGHardRules();
+  verifyEncounterComposition();
 }

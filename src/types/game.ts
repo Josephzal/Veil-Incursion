@@ -496,6 +496,10 @@ export interface ActiveIncursionState {
   runGenerationContext: import('../types/worldState').RunGenerationContext | null;
   /** Depth 2 Distortion + Depth 3 Deep Veil Law identity for the active run. */
   depthIdentity: import('./depthIdentity').DepthIdentityState | null;
+  /** Phase B — pre-combat warning card pending confirm/back. */
+  pendingEncounterWarning: import('./encounterComposition').EncounterWarningCard | null;
+  /** Phase D — composition telemetry for Encounter Highlights. */
+  compositionRunState: import('./encounterComposition').CompositionRunState | null;
   /** Sponsor contract snapshot frozen at descent. */
   activeContract: import('../types/contract').ActiveRunContract | null;
   /** Contract-specific run facts consumed by the contract resolver at debrief. */
@@ -654,6 +658,8 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     },
     runGenerationContext: null,
     depthIdentity: null,
+    pendingEncounterWarning: null,
+    compositionRunState: null,
     activeContract: null,
     contractRunProgress: createEmptyContractRunProgress(),
     operationContributionTransmitted: 0,

@@ -194,6 +194,7 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
     runOutcomeDetail,
     anchorSummary,
     depthIdentitySummary,
+    encounterCompositionSummary,
     balanceTelemetry,
     craftingOpportunities,
   } = pendingDebrief;
@@ -716,6 +717,17 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
                         {depthIdentitySummary.sectorDepthFlavor.toUpperCase()}
                       </Text>
                     ) : null}
+                  </>
+                ) : null}
+                {encounterCompositionSummary && encounterCompositionSummary.lines.length > 0 ? (
+                  <>
+                    <View style={styles.sectionGap} />
+                    <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>ENCOUNTER HIGHLIGHTS</Text>
+                    {encounterCompositionSummary.lines.map((line) => (
+                      <Text key={line} style={[styles.statAccent, { color: accentColor }]}>
+                        {line.toUpperCase()}
+                      </Text>
+                    ))}
                   </>
                 ) : null}
                 {echoSummary && echoSummary.signalsDiscovered > 0 ? (

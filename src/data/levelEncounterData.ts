@@ -14,6 +14,7 @@ import { rosterToSpawnSlots } from './rosterSpawnSlots';
 import type { MacroBiomeFamily } from '../types/narrativeProcedural';
 import type { EncounterOrigin, EncounterSpawnOverride, VeilBiome } from '../types/encounterSpawn';
 import type { NodeContextModifiers } from '../types/worldState';
+import type { EncounterCompositionPickMeta } from '../types/encounterComposition';
 
 export type EncounterLayout = {
   frontLeft: EncounterEnemyKey | null;
@@ -33,6 +34,7 @@ export interface LevelEncounterEntry {
   encounterOrigin?: EncounterOrigin;
   spawnOverride?: EncounterSpawnOverride;
   echoTemplateId?: string;
+  composition?: EncounterCompositionPickMeta;
 }
 
 const SLOT_MAP: Record<keyof EncounterLayout, CombatGridSlotId> = {
@@ -95,6 +97,7 @@ export function resolveLevelEncounter(
     encounterOrigin: generated.encounterOrigin,
     spawnOverride: generated.spawnOverride,
     echoTemplateId: generated.echoTemplateId,
+    composition: generated.composition,
   };
 }
 
@@ -167,7 +170,10 @@ export function resolveEncounterMetaForDepth(
   segment?: RunSegmentState,
   seed?: string,
   options: ResolveLevelEncounterOptions = {},
-): Pick<LevelEncounterEntry, 'encounterOrigin' | 'encounterId' | 'spawnOverride' | 'echoTemplateId'> {
+): Pick<
+  LevelEncounterEntry,
+  'encounterOrigin' | 'encounterId' | 'spawnOverride' | 'echoTemplateId' | 'composition'
+> {
   return resolveLevelEncounter(depth, segment, seed, options);
 }
 

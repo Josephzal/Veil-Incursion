@@ -287,6 +287,20 @@ import { spawnDistrictBossSquad } from '../data/bossCombat';
 import { createDefaultIncursionInventory } from '../data/incursionInventory';
 import { encounterBudgetForDepth } from '../data/combatEncounterBudget';
 import { spawnCombatSquad, resolveEngagedEncounterSnapshot, squadFromSingleEnemy } from '../data/combatSpawnEngine';
+import {
+  buildEncounterWarningCard,
+  rolesFromCombatProfiles,
+  shouldShowEncounterWarningCard,
+  stampCompositionReadability,
+} from '../data/encounterCompositionReadabilityEngine';
+import {
+  buildBossFlavorContextFromRun,
+  formatBossDepthIdentityFlavorLines,
+} from '../data/encounterBossFlavorEngine';
+import {
+  recordCompositionCombatVictory,
+  recordCompositionEngagement,
+} from '../data/encounterCompositionTelemetryEngine';
 import { listingsForStock, rollBlackMarketStock, resolveBlackMarketListingPrice, blackMarketFencePrice } from '../data/blackMarket';
 import {
   buildDevSandboxCombatNode,
@@ -622,8 +636,25 @@ interface RunContextType {
     twistedTemplateId?: import('../types/depthIdentity').TwistedTemplateId | null;
     slainEnemies?: readonly import('../types/run').EnemyCombatProfile[];
   }) => void;
+  recordCompositionEncounterVictory: (payload: {
+    templateId?: import('../types/encounterComposition').EncounterCompositionTemplateId | null;
+    riskLabel?: import('../types/encounterComposition').EncounterRiskLabel | null;
+    rewardTier?: import('../types/encounterComposition').EncounterRewardTier | null;
+    isElite?: boolean;
+    highRisk?: boolean;
+    anchorSignal?: boolean;
+    echoSignal?: boolean;
+    highValue?: boolean;
+    twistedTemplateId?: string | null;
+  }) => void;
   /** Resolve Depth 2 twisted template modal choice. */
   commitTwistedTemplateChoice: (selectedValue: string) => boolean;
+  /** Phase B — confirm pre-combat warning card and proceed. */
+  confirmEncounterWarning: () => void;
+  /** Phase B — back out of optional high-risk combat warning. */
+  cancelEncounterWarning: () => void;
+  /** Sync peek — true when a threat brief is blocking combat navigation. */
+  hasPendingEncounterWarning: () => boolean;
   transferRunCargoToBankVault: (percent: number) => {
     success: boolean;
     logLine: string;
@@ -3342,6 +3373,28 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       appendRunLog(districtBossLogLine(gateDepth));
     }
     appendRunLog(`>> BOSS SIGNATURE: ${bossProfile.name} // ${bossProfile.maxHp} HP`);
+    const flavorCtx = buildBossFlavorContextFromRun({
+      depth: getDistrictFromDepth(gateDepth),
+      depthIdentity: inc.depthIdentity,
+      anchorType: anchorCtx?.anchor.type
+        ?? inc.runGenerationContext?.activeAnchor?.type
+        ?? inc.runGenerationContext?.sectorState.activeAnchor?.type
+        ?? null,
+      operationKind: inc.runGenerationContext?.activeOperation.objectiveKind ?? null,
+    });
+    formatBossDepthIdentityFlavorLines(flavorCtx).forEach((line) => appendRunLog(line));
+    const arenaLabel = flavorCtx.lawId === 'THE_MACHINE_IS_PRAYING'
+      ? 'ARENA // RITUAL MACHINERY'
+      : flavorCtx.anchorType === 'CHOIR_SPIRE'
+        ? 'ARENA // RESONANCE CHOIR PRESSURE'
+        : flavorCtx.anchorType === 'ASHEN_HEART'
+          ? 'ARENA // ASH-CHOKED BRUISER GROUND'
+          : flavorCtx.distortionId === 'MEMORY_CONTAMINATION'
+            ? 'ARENA // DEAD-RUNNER ECHO FILTER'
+            : null;
+    if (arenaLabel) {
+      appendRunLog(`>> ${arenaLabel}`);
+    }
   }, [appendRunLog, beginCombatRunLogSession]);
 
   const prepareStandardCombatEncounter = useCallback((engagedNode?: IncursionNode | null) => {
@@ -3496,6 +3549,99 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         appendRunLog('>> APEX ANOMALY — full threat budget absorbed; double action economy.');
       }
     });
+
+    const depthIndex = getDistrictFromDepth(depth);
+    const compositionSnapshot = resolveEngagedEncounterSnapshot({
+      nodeIndex: inc.nodesCleared,
+      isElite,
+      district,
+      runSegment: inc.runSegment,
+      encounterSeed: `engage:${inc.nodesCleared}:${encounterNode.id}`,
+      macroBiome: inc.currentMacroBiomeFamily,
+      veilBiome: inc.runVeilBiome,
+      contextModifiers: encounterNode.contextModifiers,
+    });
+    const roles = rolesFromCombatProfiles(pendingEnemies);
+    const stamped = stampCompositionReadability(encounterNode.contextModifiers, {
+      composition: compositionSnapshot.composition ?? null,
+      depth: depthIndex,
+      isElite,
+      enemyRoles: roles,
+    });
+    const riskLabel = stamped?.compositionRiskLabel ?? 'STANDARD';
+    const showWarning = shouldShowEncounterWarningCard({
+      templateId: stamped?.compositionTemplateId ?? compositionSnapshot.composition?.templateId,
+      isElite,
+      highRisk: stamped?.highRisk,
+      hasModifier: Boolean(stamped?.encounterModifier),
+      hasTwisted: Boolean(stamped?.twistedTemplate),
+      anchorSignal: stamped?.anchorSignal,
+      depth: depthIndex,
+      riskLabel,
+    });
+    const warningCard = showWarning
+      ? buildEncounterWarningCard({
+        composition: compositionSnapshot.composition ?? null,
+        depth: depthIndex,
+        veilBiome: inc.runVeilBiome,
+        mods: stamped,
+        isElite,
+        enemyRoles: roles,
+        sectorDisplayName: inc.runGenerationContext?.sectorState.displayName ?? null,
+        optionalBack: true,
+      })
+      : null;
+
+    if (stamped || warningCard) {
+      setActiveIncursion((prevState) => {
+        const path = [...prevState.encounterPath];
+        const pathIdx = prevState.nodesCleared;
+        if (path[pathIdx] && stamped) {
+          path[pathIdx] = {
+            ...path[pathIdx]!,
+            contextModifiers: stamped,
+          };
+        }
+        let nextTree = prevState.proceduralRunTree;
+        if (stamped && nextTree?.nodes[encounterNode.id]) {
+          const node = nextTree.nodes[encounterNode.id]!;
+          nextTree = {
+            ...nextTree,
+            nodes: {
+              ...nextTree.nodes,
+              [encounterNode.id]: {
+                ...node,
+                contextModifiers: stamped,
+              },
+            },
+          };
+        }
+        const next = {
+          ...prevState,
+          encounterPath: path,
+          proceduralRunTree: nextTree,
+          pendingEncounterWarning: warningCard,
+          compositionRunState: recordCompositionEngagement(prevState.compositionRunState, {
+            templateId: stamped?.compositionTemplateId
+              ?? compositionSnapshot.composition?.templateId
+              ?? null,
+            warningShown: Boolean(warningCard),
+          }),
+        };
+        activeIncursionRef.current = next;
+        return next;
+      });
+      if (warningCard) {
+        appendRunLog(
+          `>> THREAT BRIEF — ${warningCard.encounterName.toUpperCase()} // ${warningCard.riskLabel.replace(/_/g, ' ')}`,
+        );
+      } else if (stamped?.compositionRiskLabel) {
+        appendRunLog(
+          `>> RISK PROFILE — ${stamped.compositionRiskLabel.replace(/_/g, ' ')}`
+            + (stamped.compositionRewardPreview ? ` // ${stamped.compositionRewardPreview}` : ''),
+        );
+      }
+    }
 
   }, [appendRunLog, beginCombatRunLogSession]);
 
@@ -5170,6 +5316,27 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     });
   }, [recordEncounterModifierVictory]);
 
+  const recordCompositionEncounterVictory = useCallback((payload: {
+    templateId?: import('../types/encounterComposition').EncounterCompositionTemplateId | null;
+    riskLabel?: import('../types/encounterComposition').EncounterRiskLabel | null;
+    rewardTier?: import('../types/encounterComposition').EncounterRewardTier | null;
+    isElite?: boolean;
+    highRisk?: boolean;
+    anchorSignal?: boolean;
+    echoSignal?: boolean;
+    highValue?: boolean;
+    twistedTemplateId?: string | null;
+  }) => {
+    setActiveIncursion((prev) => {
+      const next = {
+        ...prev,
+        compositionRunState: recordCompositionCombatVictory(prev.compositionRunState, payload),
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+  }, []);
+
   const stageSafeAnchorReview = useCallback((anchorIndex: 1 | 2 | 3, nodeId?: string) => {
     stageExtractionReview('SAFE_ANCHOR', anchorIndex, nodeId ?? null);
     appendRunLog(`>> SAFE ANCHOR ${anchorIndex} — CLEAN EVAC REVIEW STAGED.`);
@@ -5380,6 +5547,45 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     continueFromExtractionReview,
     initiateEmergencyRecall,
   ]);
+
+  const confirmEncounterWarning = useCallback(() => {
+    setActiveIncursion((prev) => {
+      if (!prev.pendingEncounterWarning) return prev;
+      const next = { ...prev, pendingEncounterWarning: null };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    appendRunLog('>> THREAT BRIEF CONFIRMED — breaching.');
+  }, [appendRunLog]);
+
+  const cancelEncounterWarning = useCallback(() => {
+    setRunState((prev) => {
+      const next = {
+        ...prev,
+        pendingEnemy: null,
+        pendingEnemies: [],
+        pendingEncounter: null,
+        pendingAmbush: false,
+      };
+      runStateRef.current = next;
+      return next;
+    });
+    setActiveIncursion((prev) => {
+      const next = {
+        ...prev,
+        pendingEncounterWarning: null,
+        mapMode: 'SCANNING_HUB' as IncursionMapMode,
+        selectedVectorId: null,
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    appendRunLog('>> THREAT BRIEF ABORTED — vector lock cleared.');
+  }, [appendRunLog]);
+
+  const hasPendingEncounterWarning = useCallback(() => {
+    return activeIncursionRef.current.pendingEncounterWarning != null;
+  }, []);
 
   const completeDefendRiftVictory = useCallback(() => {
     const bonus = activeIncursionRef.current.depthIdentity?.falseExtractBonusCreditsPending ?? 0;
@@ -6671,7 +6877,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       acknowledgeDepthIdentityReveal,
       recordEncounterModifierVictory,
       recordDepthIdentityCombatVictory,
+      recordCompositionEncounterVictory,
       commitTwistedTemplateChoice,
+      confirmEncounterWarning,
+      cancelEncounterWarning,
+      hasPendingEncounterWarning,
       transferRunCargoToBankVault,
       vaultIncursionVeilResidueToAccount,
       restoreHealthFromBench,
@@ -6851,7 +7061,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       acknowledgeDepthIdentityReveal,
       recordEncounterModifierVictory,
       recordDepthIdentityCombatVictory,
+      recordCompositionEncounterVictory,
       commitTwistedTemplateChoice,
+      confirmEncounterWarning,
+      cancelEncounterWarning,
+      hasPendingEncounterWarning,
       transferRunCargoToBankVault,
       vaultIncursionVeilResidueToAccount,
       restoreHealthFromBench,

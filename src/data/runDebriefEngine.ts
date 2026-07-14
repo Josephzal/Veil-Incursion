@@ -23,6 +23,9 @@ import {
   type DepthIdentityDebriefSummary,
 } from './runDebriefDepthIdentityEngine';
 import {
+  buildEncounterCompositionDebriefSummary,
+} from './runDebriefEncounterCompositionEngine';
+import {
   buildRunBalanceTelemetry,
   applyTelemetryContractOutcome,
   type RunBalanceTelemetry,
@@ -127,6 +130,7 @@ export interface OperationDebriefPayload {
   runOutcomeDetail: RunOutcomeDetail;
   anchorSummary: AnchorDebriefSummary | null;
   depthIdentitySummary: DepthIdentityDebriefSummary | null;
+  encounterCompositionSummary: import('./runDebriefEncounterCompositionEngine').EncounterCompositionDebriefSummary | null;
   balanceTelemetry: RunBalanceTelemetry;
   craftingOpportunities: CraftingOpportunitySummary;
 }
@@ -372,6 +376,7 @@ export function buildOperationDebriefPayload(
   });
   const anchorSummary = buildAnchorDebriefSummary(incursion);
   const depthIdentitySummary = buildDepthIdentityDebriefSummary(incursion);
+  const encounterCompositionSummary = buildEncounterCompositionDebriefSummary(incursion);
   let balanceTelemetry = buildRunBalanceTelemetry(incursion, {
     extractedSuccessfully,
     operationProgressGained: progressDelta,
@@ -428,6 +433,7 @@ export function buildOperationDebriefPayload(
     runOutcomeDetail,
     anchorSummary,
     depthIdentitySummary,
+    encounterCompositionSummary,
     balanceTelemetry,
     craftingOpportunities,
   };

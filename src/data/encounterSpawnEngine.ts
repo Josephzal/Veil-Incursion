@@ -26,6 +26,9 @@ import { macroFamilyToSynergyBiome } from './synergySpawnEngine';
 import { veilBiomeToSynergyBiomes } from './sectorBiomeBridge';
 import { seededRandom } from './encounterGenerator';
 import type { SpawnGateContext } from './encounterSpawnGateEngine';
+import { tryPickCompositionSquad } from './encounterCompositionPickEngine';
+import type { EncounterCompositionPickMeta } from '../types/encounterComposition';
+import type { OperationObjectiveKind } from '../types/worldState';
 
 export interface ProceduralEncounterPickContext {
   globalDepth: number;
@@ -37,12 +40,20 @@ export interface ProceduralEncounterPickContext {
   nodeTier?: EncounterNodeTier;
   lastEncounterId?: string | null;
   lastEncounterOrigin?: EncounterOrigin | null;
+  /** Node overlays — bias composition template selection (Phase A). */
+  highValue?: boolean;
+  highRisk?: boolean;
+  anchorSignal?: boolean;
+  echoSignal?: boolean;
+  operationKind?: OperationObjectiveKind | null;
+  foreshadowBias?: boolean;
 }
 
 export interface ProceduralEncounterPickResult {
   squad: SynergySquadSpec;
   encounterOrigin: EncounterOrigin;
   threatBudget: number;
+  composition?: EncounterCompositionPickMeta;
 }
 
 function pickFromPool(
@@ -118,7 +129,8 @@ function tryPickSquad(
 }
 
 /**
- * Squad-deck pipeline (Phase 5–6): origin roll → threat budget → filter → hard-counter → pick.
+ * Composition Phase A (preferred) → squad-deck fallback (Phase 5–6).
+ * Origin → budget → role-template fill → fairness; on failure, deck pick.
  */
 export function pickProceduralSynergySquad(
   ctx: ProceduralEncounterPickContext,
@@ -145,6 +157,32 @@ export function pickProceduralSynergySquad(
   );
   const threatBudget = rollThreatBudget(ctx.district, ctx.squadTier, nodeIndexInDepth, rand);
   const synergyBiomes = resolveSynergyBiomes(ctx);
+
+  const composition = tryPickCompositionSquad({
+    depth: ctx.district,
+    nodeIndexInDepth,
+    squadTier: ctx.squadTier,
+    nodeTier,
+    veilBiome: ctx.veilBiome,
+    seed: ctx.seed,
+    encounterOrigin: origin,
+    threatBudget,
+    highValue: ctx.highValue,
+    highRisk: ctx.highRisk,
+    anchorSignal: ctx.anchorSignal,
+    echoSignal: ctx.echoSignal,
+    operationKind: ctx.operationKind,
+    foreshadowBias: ctx.foreshadowBias ?? nodeIndexInDepth >= 10,
+  }, rand);
+
+  if (composition) {
+    return {
+      squad: composition.squad,
+      encounterOrigin: origin,
+      threatBudget,
+      composition: composition.meta,
+    };
+  }
 
   let depthPool = filterSynergyDepthPool(ctx.district);
   depthPool = filterSquadsBySpawnGates(depthPool, spawnGateContext);
