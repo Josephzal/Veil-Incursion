@@ -87,7 +87,8 @@ export const WEAPON_REGISTRY: Record<WeaponFamilyId, WeaponFamilyDefinition> = {
     startingUnlocked: false,
     unlockRequirement: [
       { resourceId: 'legion-blood-iron', quantity: 3 },
-      { resourceId: 'ley-slag', quantity: 5 },
+      { resourceId: 'rail-capacitor', quantity: 2 },
+      { resourceId: 'ley-slag', quantity: 4 },
     ],
     uiSummary: 'Heavy melee — big fracture, higher stamina draw.',
     masterworkUnlocked: false,
@@ -118,7 +119,8 @@ export const WEAPON_REGISTRY: Record<WeaponFamilyId, WeaponFamilyDefinition> = {
     startingUnlocked: false,
     unlockRequirement: [
       { resourceId: 'ossified-ley-knot', quantity: 2 },
-      { resourceId: 'echo-glass-shard', quantity: 8 },
+      { resourceId: 'resonant-filament', quantity: 2 },
+      { resourceId: 'echo-glass-shard', quantity: 6 },
     ],
     uiSummary: 'Fast blade — Reserve and crit over fracture.',
     masterworkUnlocked: false,
@@ -177,7 +179,9 @@ export const WEAPON_REGISTRY: Record<WeaponFamilyId, WeaponFamilyDefinition> = {
     startingUnlocked: false,
     unlockRequirement: [
       { resourceId: 'encrypted-grid-drive', quantity: 3 },
-      { resourceId: 'ley-slag', quantity: 10 },
+      { resourceId: 'rail-capacitor', quantity: 2 },
+      { resourceId: 'containment-seal', quantity: 1 },
+      { resourceId: 'ley-slag', quantity: 6 },
     ],
     uiSummary: 'Extended magazine — sustained ballistic tempo.',
     masterworkUnlocked: false,
@@ -209,7 +213,8 @@ export const WEAPON_REGISTRY: Record<WeaponFamilyId, WeaponFamilyDefinition> = {
     unlockRequirement: [
       { resourceId: 'encrypted-grid-drive', quantity: 1 },
       { resourceId: 'combustion-cylinder', quantity: 2 },
-      { resourceId: 'ley-slag', quantity: 5 },
+      { resourceId: 'rail-capacitor', quantity: 1 },
+      { resourceId: 'breach-thread', quantity: 1 },
     ],
     uiSummary: 'Burst carbine — armor pierce, tight magazine.',
     masterworkUnlocked: false,
@@ -269,6 +274,7 @@ export const WEAPON_REGISTRY: Record<WeaponFamilyId, WeaponFamilyDefinition> = {
     startingUnlocked: false,
     unlockRequirement: [
       { resourceId: 'sanguine-ampoule', quantity: 3 },
+      { resourceId: 'mycelial-ichor', quantity: 1 },
       { resourceId: 'ossified-ley-knot', quantity: 2 },
     ],
     uiSummary: 'Sacrifice caster — extra resource from HP costs.',
@@ -299,7 +305,8 @@ export const WEAPON_REGISTRY: Record<WeaponFamilyId, WeaponFamilyDefinition> = {
     tags: ['OCCULT', 'ECHO', 'CONTROL', 'DEBUFF'],
     startingUnlocked: false,
     unlockRequirement: [
-      { resourceId: 'echo-glass-shard', quantity: 12 },
+      { resourceId: 'echo-glass-shard', quantity: 8 },
+      { resourceId: 'resonant-filament', quantity: 3 },
       { resourceId: 'encrypted-grid-drive', quantity: 1 },
       { resourceId: 'sanguine-ampoule', quantity: 1 },
     ],

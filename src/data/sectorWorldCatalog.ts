@@ -71,7 +71,7 @@ export const SECTOR_WORLD_TEMPLATES: SectorWorldTemplate[] = [
     biome: 'Industrial Ley Slag',
     hazardLevel: 3,
     rewardLevel: 3,
-    resourceFocus: ['Ley Slag', 'Echo Cores'],
+    resourceFocus: ['Ley Slag', 'Rail Capacitor'],
     echoActivity: 'ELEVATED',
     employerPresence: ['LEGION', 'TERRAN_GRID'],
     anchor: {
@@ -102,7 +102,7 @@ export const SECTOR_WORLD_TEMPLATES: SectorWorldTemplate[] = [
     biome: 'Submerged Null Caverns',
     hazardLevel: 4,
     rewardLevel: 3,
-    resourceFocus: ['Null Filament', 'Anomalous Core'],
+    resourceFocus: ['Mycelial Ichor', 'Anomalous Core'],
     echoActivity: 'CRITICAL',
     employerPresence: ['SOLARIS', 'LEGION'],
     anchor: {
@@ -133,7 +133,7 @@ export const SECTOR_WORLD_TEMPLATES: SectorWorldTemplate[] = [
     biome: 'Signal Deadlands',
     hazardLevel: 3,
     rewardLevel: 4,
-    resourceFocus: ['Encrypted Grid Drive', 'Echo Glass Shard'],
+    resourceFocus: ['Nullcrete Shard', 'Echo Glass Shard'],
     echoActivity: 'LOW',
     employerPresence: ['TERRAN_GRID', 'SOLARIS'],
     anchor: {
@@ -164,7 +164,7 @@ export const SECTOR_WORLD_TEMPLATES: SectorWorldTemplate[] = [
     biome: 'Transit Corruption Grid',
     hazardLevel: 2,
     rewardLevel: 3,
-    resourceFocus: ['Transit Scrap', 'Ley Slag'],
+    resourceFocus: ['Containment Seal', 'Breach Thread'],
     echoActivity: 'ELEVATED',
     employerPresence: ['TERRAN_GRID', 'SOLARIS', 'LEGION'],
     anchor: {
@@ -178,7 +178,7 @@ export const SECTOR_WORLD_TEMPLATES: SectorWorldTemplate[] = [
         title: 'Survey the Ley Veins',
         description: 'Map unstable transit veins and secure high-value salvage corridors.',
         objectiveKind: 'RESOURCE_SURVEY',
-        rewardEmphasis: { targetResources: ['Ley Slag', 'Transit Scrap'] },
+        rewardEmphasis: { targetResources: ['Containment Seal', 'Breach Thread'] },
       },
       {
         id: 'op-blackline-transit-lockdown',
@@ -195,7 +195,7 @@ export const SECTOR_WORLD_TEMPLATES: SectorWorldTemplate[] = [
     biome: 'Barren Backroads',
     hazardLevel: 5,
     rewardLevel: 4,
-    resourceFocus: ['Anomalous Core', 'Echo Cores'],
+    resourceFocus: ['Cinder Wire', 'Anomalous Core'],
     echoActivity: 'CRITICAL',
     employerPresence: ['LEGION', 'SOLARIS'],
     anchor: {

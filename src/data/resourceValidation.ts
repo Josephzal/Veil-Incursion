@@ -29,6 +29,22 @@ const CRAFTING_RELATED_TAGS = new Set([
   'EXPLOSIVE_MATERIAL',
   'OCCULT_MATERIAL',
   'CONSUMABLE_MATERIAL',
+  'SECTOR_MATERIAL',
+  'DEFENSIVE_MATERIAL',
+  'SURVIVAL_MATERIAL',
+  'EXTRACTION_MATERIAL',
+  'TECH_MATERIAL',
+  'INDUSTRIAL_MATERIAL',
+  'WEAPON_MATERIAL',
+  'CONTAINMENT_MATERIAL',
+  'APPRAISAL_MATERIAL',
+  'ECHO_MATERIAL',
+  'RESONANCE_MATERIAL',
+  'ANCHOR_MATERIAL',
+  'DEPTH_MATERIAL',
+  'BREACH_MATERIAL',
+  'SCANNER_MATERIAL',
+  'MASTERWORK_MATERIAL',
 ]);
 
 function pushIssue(
@@ -114,6 +130,68 @@ export function validateResourceRegistry(): ResourceValidationIssue[] {
         severity: 'error',
         resourceId,
         message: 'Contract target resource has no valid sector spawn info.',
+      });
+    }
+
+    if (!def.sourceHint?.trim()) {
+      pushIssue(issues, {
+        severity: 'error',
+        resourceId,
+        message: 'Resource missing sourceHint.',
+      });
+    }
+
+    if (!def.rarity) {
+      pushIssue(issues, {
+        severity: 'error',
+        resourceId,
+        message: 'Resource missing rarity.',
+      });
+    }
+
+    if (!def.intendedUses || def.intendedUses.length < 2) {
+      pushIssue(issues, {
+        severity: 'error',
+        resourceId,
+        message: 'Resource must declare at least 2 intendedUses.',
+      });
+    }
+
+    if (
+      def.category === 'CONTRABAND'
+      && def.usageTags.includes('UNIDENTIFIED_CONTAINER')
+      && def.canOpenInRun
+    ) {
+      pushIssue(issues, {
+        severity: 'error',
+        resourceId,
+        message: 'Sealed contraband container must not be openable in-run.',
+      });
+    }
+
+    if (
+      def.category === 'CONTRABAND'
+      && def.usageTags.includes('APPRAISABLE')
+      && !def.canOpenAtHub
+      && !def.canBeSoldToFence
+    ) {
+      pushIssue(issues, {
+        severity: 'warn',
+        resourceId,
+        message: 'Appraisable contraband has neither hub open nor fence sell path.',
+      });
+    }
+
+    const hasEconomyUse = def.canBeCraftingIngredient
+      || def.canBeSoldToFence
+      || def.canBeContractTarget
+      || def.canBeOperationTarget
+      || def.canOpenAtHub;
+    if (!hasEconomyUse) {
+      pushIssue(issues, {
+        severity: 'warn',
+        resourceId,
+        message: 'Resource has no craft/fence/contract/operation/open use.',
       });
     }
   });

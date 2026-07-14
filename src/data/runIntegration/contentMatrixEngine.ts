@@ -9,6 +9,7 @@ import { ALL_RUN_ITEM_IDS } from '../../types/runItem';
 import type { SectorState, WorldStatePersistedState } from '../../types/worldState';
 import { getNodesPerDistrict, getMaxRunGraphDepth } from './runPacingConfig';
 import { formatCompositionContentReport } from '../encounterCompositionDebugEngine';
+import { formatResourceEconomyReport } from '../resourceEconomyReportEngine';
 
 export interface ContentMatrixSummary {
   sectors: number;
@@ -75,5 +76,7 @@ export function formatContentMatrixReport(
     `Board contracts queued: ${persisted.contractBoard?.contracts?.length ?? 0}`,
     '',
     formatCompositionContentReport(),
+    '',
+    formatResourceEconomyReport(),
   ].join('\n');
 }

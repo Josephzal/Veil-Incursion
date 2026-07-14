@@ -10,9 +10,19 @@ export type AppraisalValueBand =
 export type SealedCargoState = 'SEALED' | 'APPRAISED' | 'OPENED';
 
 export const SEALED_CONTAINMENT_CASKET_ID = 'sealed-containment-casket' as const;
+export const BLACKSITE_SPECIMEN_JAR_ID = 'blacksite-specimen-jar' as const;
+
+export type SealedContainerResourceId =
+  | typeof SEALED_CONTAINMENT_CASKET_ID
+  | typeof BLACKSITE_SPECIMEN_JAR_ID;
+
+export const APPRAISABLE_SEALED_RESOURCE_IDS: readonly SealedContainerResourceId[] = [
+  SEALED_CONTAINMENT_CASKET_ID,
+  BLACKSITE_SPECIMEN_JAR_ID,
+];
 
 export interface SealedCargoAppraisalConfig {
-  resourceId: typeof SEALED_CONTAINMENT_CASKET_ID;
+  resourceId: SealedContainerResourceId;
   appraisalTableId: string;
   sealedSellValue: number;
   appraisalFee: number;
@@ -26,7 +36,7 @@ export interface SealedCargoAppraisalConfig {
 
 export interface SealedCargoStackMeta {
   stackId: string;
-  resourceId: typeof SEALED_CONTAINMENT_CASKET_ID;
+  resourceId: SealedContainerResourceId;
   state: SealedCargoState;
   valueBand?: AppraisalValueBand;
   appraisedAt?: number;
@@ -67,4 +77,8 @@ export function createDefaultCareerSealedCargoStats(): CareerSealedCargoStats {
     soldSealed: 0,
     deliveredSealed: 0,
   };
+}
+
+export function isSealedContainerResourceId(id: string): id is SealedContainerResourceId {
+  return (APPRAISABLE_SEALED_RESOURCE_IDS as readonly string[]).includes(id);
 }

@@ -4,12 +4,16 @@ import type { ResourceItemId } from './resourceItem';
 export type UnstableCargoEffectId =
   | 'anomalous-core'
   | 'veil-ash-canister'
-  | 'ossified-ley-knot';
+  | 'ossified-ley-knot'
+  | 'anchor-marrow'
+  | 'breach-thread';
 
 export const UNSTABLE_CARRIED_EFFECT_IDS: readonly UnstableCargoEffectId[] = [
   'anomalous-core',
   'veil-ash-canister',
   'ossified-ley-knot',
+  'anchor-marrow',
+  'breach-thread',
 ];
 
 export type CarriedEffectDisplayKind = 'upside' | 'downside';

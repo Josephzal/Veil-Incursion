@@ -45,20 +45,18 @@ import {
   RESOURCE_REGISTRY,
 } from './resourceRegistry';
 import { addToResourceStash } from './resourceStashEngine';
-import { rollSealedCasketOpenReward } from './sealedCasketOpenEngine';
+import { rollSealedContainerOpenReward } from './sealedContainerOpenEngine';
 import {
   getAppraisalBandLabel,
+  getSealedAppraisalFee,
   resolveOpeningFee,
   resolveSealedSellValue,
   rollAppraisalValueBand,
 } from './sealedCasketAppraisalEngine';
 import {
   buildSealedCargoItemKey,
-  createSealedStackMeta,
   formatSealedCargoWarning,
   isAppraisableSealedResource,
-  SEALED_CASKET_CONFIG,
-  syncSealedStackMetaCount,
 } from './sealedCargoEngine';
 import type { AppraisalValueBand, SealedCargoState } from '../types/sealedCargo';
 import { mergeResourceQuantities } from './runResourceLedgerEngine';
@@ -163,7 +161,7 @@ function buildValidActions(
   const canDeliverRival = Boolean(bribeOffer);
   const canContribute = isOperationTargetResource(resourceId, ctx);
   const canOpenAtHub = def.canOpenAtHub;
-  const openAtHubEnabled = resourceId === 'sealed-containment-casket' && def.canOpenAtHub;
+  const openAtHubEnabled = isAppraisableSealedResource(resourceId) && def.canOpenAtHub;
 
   const validActions: CargoRoutingAction[] = ['KEEP_STASH'];
   if (canDeliver) validActions.push('DELIVER_SPONSOR');
@@ -199,7 +197,7 @@ export function recommendCargoRoutingAction(
     return 'CONTRIBUTE_OPERATION';
   }
   if (
-    resourceId === 'sealed-containment-casket'
+    isAppraisableSealedResource(resourceId)
     && (validActions.includes('OPEN_SEALED') || validActions.includes('OPEN_AT_HUB'))
     && !isContractTargetResource(resourceId, ctx.contract)
   ) {
@@ -214,7 +212,7 @@ export function recommendCargoRoutingAction(
   if (RESOURCE_REGISTRY[resourceId].canBeCraftingIngredient && validActions.includes('KEEP_STASH')) {
     return 'KEEP_STASH';
   }
-  if (resourceId === 'sealed-containment-casket' && validActions.includes('KEEP_STASH')) {
+  if (isAppraisableSealedResource(resourceId) && validActions.includes('KEEP_STASH')) {
     return 'KEEP_STASH';
   }
   if (validActions.includes('SELL_FENCE')) {
@@ -304,7 +302,7 @@ function buildRoutableItem(
     contractWarning = preview?.warning
       ?? 'Contract will not complete if this item is not delivered to your sponsor.';
   }
-  if (resourceId === 'sealed-containment-casket' && isContractTarget) {
+  if (isAppraisableSealedResource(resourceId) && isContractTarget) {
     contractWarning = formatSealedCargoWarning(true, 'OPEN')
       ?? contractWarning;
   }
@@ -323,12 +321,12 @@ function buildRoutableItem(
     sealedItemKey: itemKey,
     sealedState,
     valueBand,
-    appraisalFee: isAppraisableSealedResource(resourceId) ? SEALED_CASKET_CONFIG.appraisalFee : undefined,
+    appraisalFee: isAppraisableSealedResource(resourceId) ? getSealedAppraisalFee(resourceId) : undefined,
     openingFee: isAppraisableSealedResource(resourceId)
-      ? resolveOpeningFee(sealedState === 'APPRAISED')
+      ? resolveOpeningFee(sealedState === 'APPRAISED', resourceId)
       : undefined,
     sealedSellValue: isAppraisableSealedResource(resourceId)
-      ? resolveSealedSellValue(sealedState === 'APPRAISED' ? 'APPRAISED' : 'SEALED', valueBand)
+      ? resolveSealedSellValue(sealedState === 'APPRAISED' ? 'APPRAISED' : 'SEALED', valueBand, resourceId)
       : undefined,
     canAppraise: isAppraisableSealedResource(resourceId) && sealedState !== 'APPRAISED',
     ...actions,
@@ -369,7 +367,7 @@ export function appraiseSealedRoutingItem({
   if (!item.sealedItemKey || !item.canAppraise) {
     return { ok: false, error: 'Item cannot be appraised.', nextCredits: cabalCredits, nextSealedAppraisalByItemKey: sealedAppraisalByItemKey };
   }
-  const fee = item.appraisalFee ?? SEALED_CASKET_CONFIG.appraisalFee;
+  const fee = item.appraisalFee ?? getSealedAppraisalFee(item.resourceId);
   if (cabalCredits < fee) {
     return { ok: false, error: `Appraisal requires ${fee} credits.`, nextCredits: cabalCredits, nextSealedAppraisalByItemKey: sealedAppraisalByItemKey };
   }
@@ -386,7 +384,7 @@ export function appraiseSealedRoutingItem({
       resourceId: item.resourceId,
       quantity: item.quantity,
       valueBand,
-      displayLabel: getAppraisalBandLabel(valueBand),
+      displayLabel: getAppraisalBandLabel(valueBand, item.resourceId),
       feePaid: fee,
     },
   };
@@ -617,7 +615,7 @@ export function applyCargoRoutingDecisions({
         nextCredits += totalSaleValue;
         creditsFromFence += totalSaleValue;
         fenced[decision.resourceId] = (fenced[decision.resourceId] ?? 0) + decision.quantity;
-        const sellLabel = decision.resourceId === 'sealed-containment-casket'
+        const sellLabel = isAppraisableSealedResource(decision.resourceId)
           ? `${decision.quantity}× ${displayName} — Sold sealed to Black Market (+${totalSaleValue} CR)`
           : `${decision.quantity}× ${displayName} — ${actionLabel(decision.action)} (+${totalSaleValue} CR)`;
         outcomeLines.push({
@@ -651,14 +649,17 @@ export function applyCargoRoutingDecisions({
         const rewardLabels: string[] = [];
         let openCreditsThisDecision = 0;
         for (let index = 0; index < decision.quantity; index += 1) {
-          const openingFee = routableItem.openingFee ?? resolveOpeningFee(routableItem.sealedState === 'APPRAISED');
+          const openingFee = routableItem.openingFee
+            ?? resolveOpeningFee(routableItem.sealedState === 'APPRAISED', decision.resourceId);
           if (nextCredits < openingFee) {
             throw new Error(`Opening requires ${openingFee} credits.`);
           }
           nextCredits -= openingFee;
           openingFeesPaid += openingFee;
 
-          const reward = rollSealedCasketOpenReward({ valueBand: routableItem.valueBand });
+          const reward = rollSealedContainerOpenReward(decision.resourceId, {
+            valueBand: routableItem.valueBand,
+          });
           nextCredits += reward.credits;
           creditsFromCasketOpen += reward.credits;
           openCreditsThisDecision += reward.credits;

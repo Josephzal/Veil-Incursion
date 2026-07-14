@@ -61,15 +61,15 @@ export function compositionCommonMaterialBonusCount(
 export function sectorTechBiasPool(veilBiome: VeilBiome | null | undefined): ResourceItemId[] {
   switch (veilBiome) {
     case 'SLAG_WORKS':
-      return ['combustion-cylinder', 'legion-blood-iron', 'encrypted-grid-drive'];
+      return ['rail-capacitor', 'legion-blood-iron', 'combustion-cylinder'];
     case 'BLACKLINE_TERMINUS':
-      return ['encrypted-grid-drive', 'combustion-cylinder'];
+      return ['containment-seal', 'encrypted-grid-drive', 'breach-thread'];
     case 'ASHEN_WASTE':
-      return ['legion-blood-iron', 'combustion-cylinder', 'veil-ash-canister'];
+      return ['cinder-wire', 'combustion-cylinder', 'veil-ash-canister'];
     case 'NULL_ZONE':
-      return ['encrypted-grid-drive', 'echo-glass-shard'];
+      return ['nullcrete-shard', 'echo-glass-shard', 'encrypted-grid-drive'];
     case 'ABYSSAL_SINK':
-      return ['echo-glass-shard', 'ossified-ley-knot', 'sanguine-ampoule'];
+      return ['mycelial-ichor', 'sanguine-ampoule', 'ossified-ley-knot'];
     default:
       return ['ley-slag', 'echo-glass-shard'];
   }
@@ -91,13 +91,19 @@ export function compositionExtraLootIds(args: {
   }
   if (args.templateId === 'ECHO_CONTAMINATED' || args.echoSignal) {
     extras.push('echo-glass-shard');
+    extras.push('resonant-filament');
   }
   if (args.templateId === 'RESOURCE_GUARD' || args.highValue) {
+    extras.push(biomePool[0] ?? 'ley-slag');
+  }
+  if (args.templateId === 'ANCHOR_PATROL' || args.anchorSignal) {
     extras.push('ley-slag');
   }
   if (args.templateId === 'HIGH_RISK_CARGO_GUARD' && (args.tier === 'RARE' || args.tier === 'APEX_CHANCE')) {
     if (args.tier === 'APEX_CHANCE') {
       extras.push('anomalous-core');
+    } else if (args.veilBiome === 'BLACKLINE_TERMINUS' || args.veilBiome === 'ABYSSAL_SINK') {
+      extras.push('blacksite-specimen-jar');
     } else {
       extras.push('smugglers-ledger');
     }
@@ -108,7 +114,7 @@ export function compositionExtraLootIds(args: {
 
   const commonBonus = compositionCommonMaterialBonusCount(args.tier, args.templateId);
   for (let i = 0; i < commonBonus; i += 1) {
-    extras.push(i % 2 === 0 ? 'ley-slag' : 'echo-glass-shard');
+    extras.push(i % 2 === 0 ? (biomePool[0] ?? 'ley-slag') : 'echo-glass-shard');
   }
 
   return extras;

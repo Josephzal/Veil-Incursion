@@ -16,30 +16,37 @@ export interface EnemyDropEntry {
 export const ENEMY_RESOURCE_DROPS: Partial<Record<EnemyRosterId, EnemyDropEntry>> = {
   // Foundation & scavenge
   'fracture-hound': { primary: 'ley-slag' },
-  'concrete-gargoyle': { primary: 'ley-slag' },
+  'concrete-gargoyle': { primary: 'nullcrete-shard', bonus: ['ley-slag'] },
+  'weeping-gargoyle': { primary: 'nullcrete-shard', bonus: ['echo-glass-shard'] },
   'spatial-glitch': { primary: 'echo-glass-shard' },
-  'resonance-caster': { primary: 'echo-glass-shard' },
+  'resonance-caster': { primary: 'resonant-filament', bonus: ['echo-glass-shard'] },
+  'choir-bound-resonance-caster': { primary: 'resonant-filament', bonus: ['echo-glass-shard'] },
   'echoing-brute': { primary: 'tarnished-dog-tags', bonus: ['legion-blood-iron'] },
   'thrall': { primary: 'tarnished-dog-tags' },
 
   // Biotic & occult
   'ley-siren': { primary: 'sanguine-ampoule' },
-  'ash-weeper': { primary: 'sanguine-ampoule' },
+  'ash-weeper': { primary: 'sanguine-ampoule', bonus: ['cinder-wire'] },
   'null-shade': { primary: 'ossified-ley-knot' },
   'hook-weaver': { primary: 'ossified-ley-knot' },
+  'rootbound-weeper': { primary: 'mycelial-ichor', bonus: ['sanguine-ampoule'] },
 
   // Tech & heavy
   'memory-leech': { primary: 'encrypted-grid-drive' },
-  'smog-caller': { primary: 'encrypted-grid-drive' },
+  'smog-caller': { primary: 'encrypted-grid-drive', bonus: ['containment-seal'] },
   'gutter-goliath': { primary: 'legion-blood-iron' },
-  'slag-blood': { primary: 'legion-blood-iron' },
-  'sapper': { primary: 'combustion-cylinder' },
-  'coil-spike-sniper': { primary: 'combustion-cylinder' },
+  'slag-blood': { primary: 'legion-blood-iron', bonus: ['rail-capacitor'] },
+  'sapper': { primary: 'cinder-wire', bonus: ['combustion-cylinder'] },
+  'coil-spike-sniper': { primary: 'combustion-cylinder', bonus: ['cinder-wire'] },
+  'splinter': { primary: 'cinder-wire', bonus: ['veil-ash-canister'] },
+  'churn': { primary: 'rail-capacitor', bonus: ['legion-blood-iron'] },
+  'grave-engine-churn': { primary: 'rail-capacitor', bonus: ['combustion-cylinder'] },
 
   // Hazard & barter
-  'miasma-tick-swarm': { primary: 'veil-ash-canister' },
+  'miasma-tick-swarm': { primary: 'mycelial-ichor', bonus: ['veil-ash-canister'] },
   'tar-spitter': { primary: 'veil-ash-canister' },
-  'golem': { primary: 'veil-ash-canister' },
+  'golem': { primary: 'rail-capacitor', bonus: ['veil-ash-canister'] },
+  'blood-rusted-golem': { primary: 'rail-capacitor', bonus: ['legion-blood-iron'] },
 
   // Apex
   'boss-hollowed-precinct': { primary: 'anomalous-core' },

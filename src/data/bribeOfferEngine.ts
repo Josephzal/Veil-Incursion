@@ -22,6 +22,7 @@ const SPONSOR_PREFERRED_RESOURCES: Record<CabalEmployerId, ResourceItemId[]> = {
   TERRAN_GRID: [
     'encrypted-grid-drive',
     'sealed-containment-casket',
+    'blacksite-specimen-jar',
     'smugglers-ledger',
     'tarnished-dog-tags',
     'anomalous-core',
@@ -29,6 +30,7 @@ const SPONSOR_PREFERRED_RESOURCES: Record<CabalEmployerId, ResourceItemId[]> = {
   LEGION: [
     'legion-blood-iron',
     'sealed-containment-casket',
+    'blacksite-specimen-jar',
     'anomalous-core',
     'tarnished-dog-tags',
   ],
@@ -36,6 +38,7 @@ const SPONSOR_PREFERRED_RESOURCES: Record<CabalEmployerId, ResourceItemId[]> = {
     'sanguine-ampoule',
     'ossified-ley-knot',
     'veil-ash-canister',
+    'blacksite-specimen-jar',
     'anomalous-core',
   ],
 };
@@ -307,7 +310,7 @@ function resolveOpenSealedBetrayalPreview(
     rivalSponsorRepDelta: 0,
     creditsGain: 0,
     reputationGain: 0,
-    warning: resourceId === 'sealed-containment-casket'
+    warning: resourceId === 'sealed-containment-casket' || resourceId === 'blacksite-specimen-jar'
       ? 'Opening this will prevent sealed delivery.'
       : 'Opening consumes contract cargo before delivery.',
     countsAsBetrayal: tracked,

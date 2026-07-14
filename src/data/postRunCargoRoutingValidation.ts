@@ -27,6 +27,7 @@ import {
 import type { CargoRoutingContext } from '../types/postRunCargoRouting';
 import { createEmptyRunResourceLedger } from '../types/runResourceLedger';
 import { SEALED_CASKET_REWARD_RESOURCE_IDS } from './sealedCasketOpenEngine';
+import { SPECIMEN_JAR_REWARD_RESOURCE_IDS } from './sealedSpecimenJarOpenEngine';
 import type { CareerCargoRoutingStats } from './postRunCargoRoutingRunState';
 import {
   formatActiveContractCargoDeliveryHints,
@@ -295,12 +296,12 @@ export function validateAllSpecialCargoRoutingFixtures(): PostRunCargoRoutingVal
 
 export function validateSealedCasketRewardTable(): PostRunCargoRoutingValidationIssue[] {
   const issues: PostRunCargoRoutingValidationIssue[] = [];
-  SEALED_CASKET_REWARD_RESOURCE_IDS.forEach((resourceId) => {
+  [...SEALED_CASKET_REWARD_RESOURCE_IDS, ...SPECIMEN_JAR_REWARD_RESOURCE_IDS].forEach((resourceId) => {
     if (!RESOURCE_REGISTRY[resourceId]) {
       issues.push({
         severity: 'error',
         resourceId,
-        message: 'Sealed casket reward references unknown resource.',
+        message: 'Sealed cargo reward references unknown resource.',
       });
     }
   });

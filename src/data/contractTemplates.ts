@@ -37,18 +37,28 @@ const STABLE_RESOURCES: ResourceItemId[] = [
   'sanguine-ampoule',
   'echo-glass-shard',
   'combustion-cylinder',
+  'nullcrete-shard',
+  'cinder-wire',
+  'mycelial-ichor',
+  'rail-capacitor',
 ];
 
 const SPONSOR_RESOURCE_BY_CABAL: Record<CabalEmployerId, ResourceItemId[]> = {
-  TERRAN_GRID: ['encrypted-grid-drive', 'ley-slag', 'echo-glass-shard'],
-  LEGION: ['legion-blood-iron', 'combustion-cylinder', 'ley-slag'],
-  SOLARIS: ['sanguine-ampoule', 'veil-ash-canister', 'ossified-ley-knot'],
+  TERRAN_GRID: ['encrypted-grid-drive', 'containment-seal', 'rail-capacitor', 'ley-slag', 'echo-glass-shard'],
+  LEGION: ['legion-blood-iron', 'rail-capacitor', 'combustion-cylinder', 'cinder-wire', 'ley-slag'],
+  SOLARIS: ['sanguine-ampoule', 'mycelial-ichor', 'resonant-filament', 'veil-ash-canister', 'ossified-ley-knot'],
 };
 
-const SCANNER_INTEL: ResourceItemId[] = ['encrypted-grid-drive'];
+const SCANNER_INTEL: ResourceItemId[] = ['encrypted-grid-drive', 'containment-seal'];
 const ECONOMY_INTEL: ResourceItemId[] = ['smugglers-ledger', 'tarnished-dog-tags'];
-const UNSTABLE_CARGO: ResourceItemId[] = ['veil-ash-canister', 'ossified-ley-knot', 'anomalous-core'];
-const CONTRABAND: ResourceItemId[] = ['sealed-containment-casket'];
+const UNSTABLE_CARGO: ResourceItemId[] = [
+  'veil-ash-canister',
+  'ossified-ley-knot',
+  'anchor-marrow',
+  'breach-thread',
+  'anomalous-core',
+];
+const CONTRABAND: ResourceItemId[] = ['sealed-containment-casket', 'blacksite-specimen-jar'];
 
 function pickOne<T>(items: readonly T[], rng: () => number): T {
   return items[Math.floor(rng() * items.length)]!;
@@ -162,8 +172,16 @@ export const CONTRACT_TEMPLATE_SPECS: ContractTemplateSpec[] = [
     weight: 2,
     sponsors: ['TERRAN_GRID', 'SOLARIS'],
     titlePrefix: 'Casket Recovery',
-    buildObjectiveText: () => 'Extract 1 Sealed Containment Casket.',
-    pickResources: () => ({ targetResourceId: 'sealed-containment-casket', targetQuantity: 1 }),
+    buildObjectiveText: (ctx) => {
+      const res = pickOne(CONTRABAND, ctx.rng);
+      return res === 'blacksite-specimen-jar'
+        ? 'Extract 1 Blacksite Specimen Jar.'
+        : 'Extract 1 Sealed Containment Casket.';
+    },
+    pickResources: (ctx) => ({
+      targetResourceId: pickOne(CONTRABAND, ctx.rng),
+      targetQuantity: 1,
+    }),
     difficultyBase: 4,
     rewardFor: (s, d) => rewardBase(s, 180 + d * 35, 4),
   },
@@ -244,6 +262,15 @@ export const RECOMMENDED_SECTORS_BY_RESOURCE: Partial<Record<ResourceItemId, Sec
   'sanguine-ampoule': ['THE_ASHEN_WASTES', 'THE_ABYSSAL_SINK'],
   'echo-glass-shard': ['THE_NULL_ZONE', 'THE_SLAG_WORKS'],
   'combustion-cylinder': ['THE_SLAG_WORKS', 'THE_BLACKLINE_TERMINUS'],
+  'nullcrete-shard': ['THE_NULL_ZONE'],
+  'mycelial-ichor': ['THE_ABYSSAL_SINK'],
+  'cinder-wire': ['THE_ASHEN_WASTES'],
+  'rail-capacitor': ['THE_SLAG_WORKS'],
+  'containment-seal': ['THE_BLACKLINE_TERMINUS'],
+  'resonant-filament': ['THE_NULL_ZONE', 'THE_ABYSSAL_SINK', 'THE_ASHEN_WASTES', 'THE_BLACKLINE_TERMINUS'],
+  'anchor-marrow': ['THE_SLAG_WORKS', 'THE_ABYSSAL_SINK', 'THE_ASHEN_WASTES', 'THE_NULL_ZONE', 'THE_BLACKLINE_TERMINUS'],
+  'breach-thread': ['THE_SLAG_WORKS', 'THE_ABYSSAL_SINK', 'THE_ASHEN_WASTES', 'THE_NULL_ZONE', 'THE_BLACKLINE_TERMINUS'],
+  'blacksite-specimen-jar': ['THE_BLACKLINE_TERMINUS', 'THE_ABYSSAL_SINK'],
 };
 
 export function buildContractTitle(spec: ContractTemplateSpec, ctx: ContractTemplateContext): string {

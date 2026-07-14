@@ -21,6 +21,7 @@ const FORBIDDEN_RECIPE_RESOURCES = [
   'smugglers-ledger',
   'tarnished-dog-tags',
   'sealed-containment-casket',
+  'blacksite-specimen-jar',
   'anomalous-core',
 ] as const;
 

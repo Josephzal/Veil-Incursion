@@ -88,7 +88,7 @@ export const CRAFTING_REGISTRY: CraftingRecipe[] = [
     ],
   },
 
-  // Tactical consumables (hub-crafted, staged for run loadout)
+  // Tactical consumables — keep starters simple; prefer run-item recipes when duplicated.
   {
     id: 'craft_standard_coagulant',
     kind: 'CONSUMABLE',
@@ -104,20 +104,17 @@ export const CRAFTING_REGISTRY: CraftingRecipe[] = [
     outputId: 'trauma-patch',
     effectSummary: 'Clears supported debuffs; restores HP based on debuffs cleared.',
     requirements: [
-      { resourceId: 'sanguine-ampoule', quantity: 3 },
-      { resourceId: 'ley-slag', quantity: 1 },
+      { resourceId: 'sanguine-ampoule', quantity: 2 },
+      { resourceId: 'mycelial-ichor', quantity: 1 },
     ],
   },
   {
     id: 'craft_kinetic_hollow_points',
     kind: 'CONSUMABLE',
-    label: 'Veil-Vial',
+    label: 'Kinetic Hollow-Points',
     outputId: 'kinetic-hollow-points',
     effectSummary: 'Next attack deals +15 damage.',
-    requirements: [
-      { resourceId: 'ley-slag', quantity: 3 },
-      { resourceId: 'combustion-cylinder', quantity: 1 },
-    ],
+    requirements: [{ resourceId: 'ley-slag', quantity: 3 }],
   },
   {
     id: 'craft_veil_ash_grenade',
@@ -135,8 +132,8 @@ export const CRAFTING_REGISTRY: CraftingRecipe[] = [
     kind: 'CONSUMABLE',
     label: 'Sonar-Ping',
     outputId: 'sonar-ping',
-    effectSummary: 'Guarantees a clean extraction node on next scan window.',
-    requirements: [{ resourceId: 'echo-glass-shard', quantity: 5 }],
+    effectSummary: 'Reveal one unknown visible node type + overlay.',
+    requirements: [{ resourceId: 'echo-glass-shard', quantity: 3 }],
   },
 ];
 

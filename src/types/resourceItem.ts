@@ -12,12 +12,25 @@ export type ResourceItemId =
   | 'ossified-ley-knot'
   | 'sealed-containment-casket'
   | 'tarnished-dog-tags'
-  | 'combustion-cylinder';
+  | 'combustion-cylinder'
+  /** Resource Expansion Phase A */
+  | 'nullcrete-shard'
+  | 'mycelial-ichor'
+  | 'cinder-wire'
+  | 'rail-capacitor'
+  | 'containment-seal'
+  | 'resonant-filament'
+  | 'anchor-marrow'
+  | 'breach-thread'
+  | 'blacksite-specimen-jar';
 
 export type ResourceItemType = 'RESOURCE';
 
 /** Broad resource class for contracts, debrief grouping, and cargo rules. */
 export type ResourceCategory = 'STABLE' | 'UNSTABLE' | 'INTEL' | 'CONTRABAND';
+
+/** Player-facing loot rarity band for UI / drop guidance. */
+export type ResourceRarity = 'COMMON' | 'UNCOMMON' | 'RARE' | 'APEX';
 
 /** Primary gameplay role — category alone does not decide behavior. */
 export type ResourcePrimaryRole =
@@ -59,7 +72,33 @@ export type ResourceUsageTag =
   | 'MUTATION_MATERIAL'
   | 'VOLATILE_CARGO'
   | 'OCCULT_CARGO'
-  | 'APPRAISABLE';
+  | 'APPRAISABLE'
+  /** Resource Expansion Phase A — sector / role identity tags */
+  | 'SECTOR_MATERIAL'
+  | 'DEFENSIVE_MATERIAL'
+  | 'ARMOR_MATERIAL'
+  | 'SURVIVAL_MATERIAL'
+  | 'BIOLOGICAL_MATERIAL'
+  | 'EXTRACTION_MATERIAL'
+  | 'SIGNAL_MATERIAL'
+  | 'TECH_MATERIAL'
+  | 'INDUSTRIAL_MATERIAL'
+  | 'WEAPON_MATERIAL'
+  | 'CONTAINMENT_MATERIAL'
+  | 'APPRAISAL_MATERIAL'
+  | 'RESONANCE_MATERIAL'
+  | 'CHOIR_RESOURCE'
+  | 'ANCHOR_MATERIAL'
+  | 'HIGH_VALUE_RESOURCE'
+  | 'DEPTH_MATERIAL'
+  | 'BREACH_MATERIAL'
+  | 'NULL_ZONE_RESOURCE'
+  | 'ABYSSAL_SINK_RESOURCE'
+  | 'ASHEN_WASTE_RESOURCE'
+  | 'SLAG_WORKS_RESOURCE'
+  | 'BLACKLINE_TERMINUS_RESOURCE'
+  | 'SEALED_CARGO'
+  | 'BLACKSITE_CARGO';
 
 export interface ResourceItemDefinition {
   id: ResourceItemId;
@@ -72,6 +111,12 @@ export interface ResourceItemDefinition {
   category: ResourceCategory;
   primaryRole: ResourcePrimaryRole;
   usageTags: readonly ResourceUsageTag[];
+  /** Drop / UI rarity band. */
+  rarity: ResourceRarity;
+  /** Short player-facing source guidance (crafting missing hints, UI). */
+  sourceHint: string;
+  /** At least two intended systems / recipe / economy uses (validation). */
+  intendedUses: readonly string[];
   gridWidth: number;
   gridHeight: number;
   maxStack: number;

@@ -69,8 +69,11 @@ import { buildDepthIdentityRollContext } from '../../data/veilDistortionEngine';
 import {
   debugForceAppraisalBand,
   debugForceOpenTier,
+  debugForceSpecimenJarTier,
   debugPreviewSealedStash,
+  debugResourceEconomyReport,
   debugSimulateOpenRolls,
+  debugSimulateSpecimenJarOpenRolls,
   debugValidateSealedCargo,
 } from '../../data/sealedCargoDebugEngine';
 import { SECTOR_WORLD_TEMPLATES } from '../../data/sectorWorldCatalog';
@@ -203,6 +206,8 @@ export default function DevTestHubPanel(): React.JSX.Element {
     upgradeWeaponFamilyTier,
     appendHubLog,
     grantSealedCasketInHub,
+    grantSpecimenJarInHub,
+    grantExpansionResourcesInHub,
   } = usePlayerAccount();
   const {
     selectedSector,
@@ -551,14 +556,35 @@ export default function DevTestHubPanel(): React.JSX.Element {
           }}
         />
         <SandboxLaunchButton
+          label="[ GRANT SPECIMEN JAR ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            grantSpecimenJarInHub(1);
+            setDebugReport(debugPreviewSealedStash(account));
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ GRANT EXPANSION MATS ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            grantExpansionResourcesInHub();
+            setDebugReport('Expansion materials + Specimen Jar granted to stash.');
+          }}
+        />
+        <SandboxLaunchButton
           label="[ PREVIEW SEALED STASH ]"
           accentColor={theme.statusColor}
           onPress={() => setDebugReport(debugPreviewSealedStash(account))}
         />
         <SandboxLaunchButton
-          label="[ SIM OPEN ROLLS ]"
+          label="[ SIM CASKET OPEN ROLLS ]"
           accentColor={theme.statusColor}
           onPress={() => setDebugReport(debugSimulateOpenRolls(20))}
+        />
+        <SandboxLaunchButton
+          label="[ SIM JAR OPEN ROLLS ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(debugSimulateSpecimenJarOpenRolls(20))}
         />
         <SandboxLaunchButton
           label="[ FORCE APEX BAND ]"
@@ -577,9 +603,22 @@ export default function DevTestHubPanel(): React.JSX.Element {
           }}
         />
         <SandboxLaunchButton
+          label="[ FORCE JAR BREACH TIER ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            debugForceSpecimenJarTier('SPECIMEN_BREACH');
+            setDebugReport('Forced next Specimen Jar open to SPECIMEN_BREACH.');
+          }}
+        />
+        <SandboxLaunchButton
           label="[ VALIDATE SEALED CARGO ]"
           accentColor={theme.statusColor}
           onPress={() => setDebugReport(debugValidateSealedCargo(account))}
+        />
+        <SandboxLaunchButton
+          label="[ RESOURCE ECONOMY REPORT ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(debugResourceEconomyReport())}
         />
         <SandboxLaunchButton
           label="[ FORCE MEMORY DISTORTION ]"

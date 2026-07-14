@@ -7,9 +7,14 @@ import {
   listFenceableStashEntries,
 } from '../../data/hubSafehouseEngine';
 import { formatCargoRoutingBlackMarketIntelLines } from '../../data/cargoRoutingIntelEngine';
-import { getAppraisalBandLabel } from '../../data/sealedCasketAppraisalEngine';
-import { listSealedStashEntries, SEALED_CASKET_CONFIG } from '../../data/sealedCargoEngine';
-import { getResourceDisplayName, getResourceCategory } from '../../data/resourceRegistry';
+import { getAppraisalBandLabel, resolveOpeningFee } from '../../data/sealedCasketAppraisalEngine';
+import {
+  getSealedCargoConfig,
+  isAppraisableSealedResource,
+  listSealedStashEntries,
+  SEALED_CASKET_CONFIG,
+} from '../../data/sealedCargoEngine';
+import { getResourceDisplayName, getResourceCategory, getResourceShortName } from '../../data/resourceRegistry';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useWorldState } from '../../context/WorldStateContext';
 import { useTerminal } from '../../context/TerminalContext';
@@ -211,6 +216,7 @@ function FenceRow({
 
 interface SealedAppraisalRowProps {
   stackId: string;
+  resourceId: import('../../types/resourceItem').ResourceItemId;
   state: 'SEALED' | 'APPRAISED';
   valueBand?: import('../../types/sealedCargo').AppraisalValueBand;
   sellValue: number;
@@ -225,6 +231,7 @@ interface SealedAppraisalRowProps {
 }
 
 function SealedAppraisalRow({
+  resourceId,
   state,
   valueBand,
   sellValue,
@@ -242,20 +249,21 @@ function SealedAppraisalRow({
     minHeight: scaleSize(36),
     paddingVertical: scaleSpacing(8),
   };
-  const canAppraise = state === 'SEALED' && cabalCredits >= SEALED_CASKET_CONFIG.appraisalFee;
-  const openingFee = state === 'APPRAISED' ? 0 : SEALED_CASKET_CONFIG.openingFee;
+  const config = getSealedCargoConfig(resourceId) ?? SEALED_CASKET_CONFIG;
+  const canAppraise = state === 'SEALED' && cabalCredits >= config.appraisalFee;
+  const openingFee = resolveOpeningFee(state === 'APPRAISED', resourceId);
   const canOpen = cabalCredits >= openingFee;
 
   return (
     <View style={[styles.fenceRow, { borderColor, backgroundColor: DOSSIER_ROW_BG }]}>
       <View style={styles.fenceInfo}>
         <TerminalText variant="body" style={{ color: textColor, fontWeight: '700' }}>
-          SEALED CONTAINMENT CASKET
+          {getResourceShortName(resourceId).toUpperCase()}
         </TerminalText>
         <TerminalText variant="caption" style={{ color: mutedColor }}>
           {state === 'APPRAISED' && valueBand
-            ? `${getAppraisalBandLabel(valueBand).toUpperCase()} // SELL ${sellValue} CR`
-            : `UNAPPRAISED // SELL ${sellValue} CR // APPRAISE ${SEALED_CASKET_CONFIG.appraisalFee} CR`}
+            ? `${getAppraisalBandLabel(valueBand, resourceId).toUpperCase()} // SELL ${sellValue} CR`
+            : `UNAPPRAISED // SELL ${sellValue} CR // APPRAISE ${config.appraisalFee} CR`}
         </TerminalText>
       </View>
       <View style={styles.fenceActions}>
@@ -318,7 +326,7 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
   const canBuy = selectedListing != null && account.cabalCredits >= selectedPrice;
 
   const fenceEntries = listFenceableStashEntries(account.resourceStash)
-    .filter((entry) => entry.resourceId !== 'sealed-containment-casket');
+    .filter((entry) => !isAppraisableSealedResource(entry.resourceId));
   const sealedEntries = listSealedStashEntries(account.resourceStash, account.sealedCargoStacks ?? []);
 
   const handleBuy = () => {
@@ -474,6 +482,7 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
               <SealedAppraisalRow
                 key={entry.stackId}
                 stackId={entry.stackId}
+                resourceId={entry.resourceId}
                 state={entry.state === 'APPRAISED' ? 'APPRAISED' : 'SEALED'}
                 valueBand={entry.valueBand}
                 sellValue={entry.sellValue}

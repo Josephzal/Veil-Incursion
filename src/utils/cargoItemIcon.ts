@@ -74,6 +74,15 @@ const RESOURCE_ITEM_IMAGES: Record<ResourceItemId, ImageSourcePropType> = {
   'sealed-containment-casket': SealedContainmentCasketImage,
   'tarnished-dog-tags': ResourceImage,
   'combustion-cylinder': ResourceImage,
+  'nullcrete-shard': ResourceImage,
+  'mycelial-ichor': SanguineAmpouleImage,
+  'cinder-wire': ResourceImage,
+  'rail-capacitor': EncryptedGridDriveImage,
+  'containment-seal': EncryptedGridDriveImage,
+  'resonant-filament': EchoGlassShardImage,
+  'anchor-marrow': OssifiedLeyKnotImage,
+  'breach-thread': AnomalousCoreImage,
+  'blacksite-specimen-jar': SealedContainmentCasketImage,
 };
 
 /** Per-item cargo art when available; otherwise shared resource placeholder. */

@@ -80,7 +80,7 @@ import { applyCargoRoutingDecisions, buildDefaultRoutingDecisions, buildSecondar
 import { createDefaultCareerCargoRoutingStats, incrementCareerCargoRoutingFromResult } from '../data/postRunCargoRoutingRunState';
 import { createDefaultCareerSealedCargoStats } from '../types/sealedCargo';
 import { appraiseSealedCargoInStash, incrementCareerSealedFromRouting, openSealedCargoInStash, sellSealedCargoInStash, syncSealedStacksAfterRouting } from '../data/sealedCargoHubEngine';
-import { debugGrantSealedCasket } from '../data/sealedCargoDebugEngine';
+import { debugGrantExpansionResources, debugGrantSealedCasket, debugGrantSpecimenJar } from '../data/sealedCargoDebugEngine';
 import { applyBetrayalConsequencesToAccount } from '../data/betrayalConsequencesEngine';
 import { buildBetrayalEventsFromRouting } from '../data/contractBetrayalResolver';
 import { DEFAULT_UNLOCKED_KEEPSAKE_IDS, isKeepsakeId } from '../data/expeditionKeepsakeRegistry';
@@ -431,6 +431,8 @@ interface PlayerAccountContextType {
   openSealedCargoInHub: (stackId: string) => { success: boolean; logLine: string };
   sellSealedCargoInHub: (stackId: string) => { success: boolean; logLine: string };
   grantSealedCasketInHub: (quantity?: number) => void;
+  grantSpecimenJarInHub: (quantity?: number) => void;
+  grantExpansionResourcesInHub: () => void;
 }
 
 const PlayerAccountContext = createContext<PlayerAccountContextType | undefined>(undefined);
@@ -994,6 +996,14 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
         'encrypted-grid-drive': 5,
         'combustion-cylinder': 5,
         'ossified-ley-knot': 5,
+        'rail-capacitor': 6,
+        'containment-seal': 4,
+        'resonant-filament': 8,
+        'mycelial-ichor': 4,
+        'breach-thread': 3,
+        'nullcrete-shard': 6,
+        'cinder-wire': 6,
+        'anchor-marrow': 3,
       },
     }));
   }, [updateAccount]);
@@ -1536,6 +1546,17 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
     [updateAccount],
   );
 
+  const grantSpecimenJarInHub = useCallback(
+    (quantity = 1) => {
+      updateAccount((prev) => debugGrantSpecimenJar(prev, quantity));
+    },
+    [updateAccount],
+  );
+
+  const grantExpansionResourcesInHub = useCallback(() => {
+    updateAccount((prev) => debugGrantExpansionResources(prev));
+  }, [updateAccount]);
+
   const applyBetrayalConsequences = useCallback(
     (payload: {
       contractResult: import('../types/contract').ContractResult;
@@ -1763,6 +1784,8 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       openSealedCargoInHub,
       sellSealedCargoInHub,
       grantSealedCasketInHub,
+      grantSpecimenJarInHub,
+      grantExpansionResourcesInHub,
     }),
     [
       account,
@@ -1833,6 +1856,8 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       openSealedCargoInHub,
       sellSealedCargoInHub,
       grantSealedCasketInHub,
+      grantSpecimenJarInHub,
+      grantExpansionResourcesInHub,
     ],
   );
 

@@ -1,4 +1,3 @@
-import type { ActiveRunContract } from '../types/contract';
 import type { PlayerAccount } from '../types/game';
 import type {
   AppraisalValueBand,
@@ -6,10 +5,14 @@ import type {
   CasketOpenResult,
   SealedCargoStackMeta,
   SealedCargoState,
+  SealedContainerResourceId,
 } from '../types/sealedCargo';
 import type { ResourceQuantity } from '../types/resourceItem';
 import type { CargoRoutingResult, RoutableCargoItem } from '../types/postRunCargoRouting';
-import { SEALED_CONTAINMENT_CASKET_ID } from '../types/sealedCargo';
+import {
+  APPRAISABLE_SEALED_RESOURCE_IDS,
+  SEALED_CONTAINMENT_CASKET_ID,
+} from '../types/sealedCargo';
 import {
   getAppraisalBandLabel,
   resolveOpeningFee,
@@ -18,11 +21,13 @@ import {
 } from './sealedCasketAppraisalEngine';
 import {
   createSealedStackMeta,
+  getSealedCargoConfig,
   SEALED_CASKET_CONFIG,
   syncSealedStackMetaCount,
 } from './sealedCargoEngine';
-import { rollSealedCasketOpenReward } from './sealedCasketOpenEngine';
+import { rollSealedContainerOpenReward } from './sealedContainerOpenEngine';
 import { addToResourceStash } from './resourceStashEngine';
+import { getResourceShortName } from './resourceRegistry';
 
 export interface SealedCargoHubActionResult {
   ok: boolean;
@@ -37,8 +42,12 @@ export interface SealedCargoHubActionResult {
 export function normalizeSealedCargoStacks(
   account: Pick<PlayerAccount, 'resourceStash' | 'sealedCargoStacks'>,
 ): SealedCargoStackMeta[] {
-  const qty = account.resourceStash[SEALED_CONTAINMENT_CASKET_ID] ?? 0;
-  return syncSealedStackMetaCount(account.sealedCargoStacks ?? [], qty);
+  let stacks = (account.sealedCargoStacks ?? []).filter((entry) => entry.state !== 'OPENED');
+  APPRAISABLE_SEALED_RESOURCE_IDS.forEach((resourceId) => {
+    const qty = account.resourceStash[resourceId] ?? 0;
+    stacks = syncSealedStackMetaCount(stacks, qty, resourceId);
+  });
+  return stacks;
 }
 
 export function appraiseSealedCargoInStash(
@@ -54,7 +63,8 @@ export function appraiseSealedCargoInStash(
   if (stack.state === 'APPRAISED') {
     return { ok: false, error: 'Already appraised.' };
   }
-  const fee = SEALED_CASKET_CONFIG.appraisalFee;
+  const config = getSealedCargoConfig(stack.resourceId) ?? SEALED_CASKET_CONFIG;
+  const fee = config.appraisalFee;
   if (account.cabalCredits < fee) {
     return { ok: false, error: `Appraisal requires ${fee} credits.` };
   }
@@ -70,10 +80,10 @@ export function appraiseSealedCargoInStash(
     ok: true,
     creditsDelta: -fee,
     appraisal: {
-      resourceId: SEALED_CONTAINMENT_CASKET_ID,
+      resourceId: stack.resourceId,
       quantity: 1,
       valueBand,
-      displayLabel: getAppraisalBandLabel(valueBand),
+      displayLabel: getAppraisalBandLabel(valueBand, stack.resourceId),
       feePaid: fee,
     },
     accountPatch: {
@@ -84,7 +94,7 @@ export function appraiseSealedCargoInStash(
         appraised: (account.careerSealedCargo?.appraised ?? 0) + 1,
       },
     },
-    logLine: `>> APPRAISED — ${getAppraisalBandLabel(valueBand).toUpperCase()} (−${fee} CR)`,
+    logLine: `>> APPRAISED — ${getResourceShortName(stack.resourceId).toUpperCase()} // ${getAppraisalBandLabel(valueBand, stack.resourceId).toUpperCase()} (−${fee} CR)`,
   };
 }
 
@@ -98,16 +108,16 @@ export function openSealedCargoInStash(
     return { ok: false, error: 'Sealed cargo stack not found.' };
   }
   const consumed = stacks[index]!;
-  const openingFee = resolveOpeningFee(consumed.state === 'APPRAISED');
+  const openingFee = resolveOpeningFee(consumed.state === 'APPRAISED', consumed.resourceId);
   if (account.cabalCredits < openingFee) {
     return { ok: false, error: `Opening requires ${openingFee} credits.` };
   }
 
-  const reward = rollSealedCasketOpenReward({ valueBand: consumed.valueBand });
+  const reward = rollSealedContainerOpenReward(consumed.resourceId, { valueBand: consumed.valueBand });
   let nextStash = { ...account.resourceStash };
-  nextStash[SEALED_CONTAINMENT_CASKET_ID] = Math.max(0, (nextStash[SEALED_CONTAINMENT_CASKET_ID] ?? 1) - 1);
-  if ((nextStash[SEALED_CONTAINMENT_CASKET_ID] ?? 0) <= 0) {
-    delete nextStash[SEALED_CONTAINMENT_CASKET_ID];
+  nextStash[consumed.resourceId] = Math.max(0, (nextStash[consumed.resourceId] ?? 1) - 1);
+  if ((nextStash[consumed.resourceId] ?? 0) <= 0) {
+    delete nextStash[consumed.resourceId];
   }
 
   (Object.entries(reward.resources) as Array<[import('../types/resourceItem').ResourceItemId, number | undefined]>).forEach(
@@ -118,14 +128,17 @@ export function openSealedCargoInStash(
   );
 
   const nextStacks = stacks.filter((entry) => entry.stackId !== stackId);
-  const normalizedStacks = syncSealedStackMetaCount(nextStacks, nextStash[SEALED_CONTAINMENT_CASKET_ID] ?? 0);
+  const normalizedStacks = normalizeSealedCargoStacks({
+    resourceStash: nextStash,
+    sealedCargoStacks: nextStacks,
+  });
   const netCredits = account.cabalCredits - openingFee + reward.credits;
 
   return {
     ok: true,
     creditsDelta: -openingFee + reward.credits,
     open: {
-      resourceId: SEALED_CONTAINMENT_CASKET_ID,
+      resourceId: consumed.resourceId,
       quantity: 1,
       tierId: reward.tierId,
       tierLabel: reward.summaryLabel,
@@ -145,7 +158,7 @@ export function openSealedCargoInStash(
         opened: (account.careerSealedCargo?.opened ?? 0) + 1,
       },
     },
-    logLine: `>> CASKET OPENED — ${reward.summaryLabel.toUpperCase()} (+${reward.credits} CR${reward.dudFlavor ? ` // ${reward.dudFlavor}` : ''})`,
+    logLine: `>> ${getResourceShortName(consumed.resourceId).toUpperCase()} OPENED — ${reward.summaryLabel.toUpperCase()} (+${reward.credits} CR${reward.dudFlavor ? ` // ${reward.dudFlavor}` : ''})`,
   };
 }
 
@@ -162,14 +175,18 @@ export function sellSealedCargoInStash(
   const sellValue = resolveSealedSellValue(
     stack.state === 'APPRAISED' ? 'APPRAISED' : 'SEALED',
     stack.valueBand as AppraisalValueBand | undefined,
+    stack.resourceId,
   );
   let nextStash = { ...account.resourceStash };
-  nextStash[SEALED_CONTAINMENT_CASKET_ID] = Math.max(0, (nextStash[SEALED_CONTAINMENT_CASKET_ID] ?? 1) - 1);
-  if ((nextStash[SEALED_CONTAINMENT_CASKET_ID] ?? 0) <= 0) {
-    delete nextStash[SEALED_CONTAINMENT_CASKET_ID];
+  nextStash[stack.resourceId] = Math.max(0, (nextStash[stack.resourceId] ?? 1) - 1);
+  if ((nextStash[stack.resourceId] ?? 0) <= 0) {
+    delete nextStash[stack.resourceId];
   }
   const nextStacks = stacks.filter((entry) => entry.stackId !== stackId);
-  const normalizedStacks = syncSealedStackMetaCount(nextStacks, nextStash[SEALED_CONTAINMENT_CASKET_ID] ?? 0);
+  const normalizedStacks = normalizeSealedCargoStacks({
+    resourceStash: nextStash,
+    sealedCargoStacks: nextStacks,
+  });
 
   return {
     ok: true,
@@ -183,17 +200,18 @@ export function sellSealedCargoInStash(
         soldSealed: (account.careerSealedCargo?.soldSealed ?? 0) + 1,
       },
     },
-    logLine: `>> SOLD SEALED — +${sellValue} CR (contents forfeited)`,
+    logLine: `>> SOLD SEALED ${getResourceShortName(stack.resourceId).toUpperCase()} — +${sellValue} CR (contents forfeited)`,
   };
 }
 
 export function appendSealedStacksForStashedCaskets(
   stacks: SealedCargoStackMeta[],
   quantityAdded: number,
+  resourceId: SealedContainerResourceId = SEALED_CONTAINMENT_CASKET_ID,
 ): SealedCargoStackMeta[] {
   let next = [...stacks];
   for (let index = 0; index < quantityAdded; index += 1) {
-    next.push(createSealedStackMeta());
+    next.push(createSealedStackMeta(resourceId));
   }
   return next;
 }
@@ -205,33 +223,33 @@ export function syncSealedStacksAfterRouting(
   result: CargoRoutingResult,
   sealedAppraisalByItemKey: Record<string, { state: SealedCargoState; valueBand?: AppraisalValueBand }>,
 ): SealedCargoStackMeta[] {
-  const nextQty = nextStash[SEALED_CONTAINMENT_CASKET_ID] ?? 0;
-  let stacks = syncSealedStackMetaCount(
-    (prev.sealedCargoStacks ?? []).filter((entry) => entry.state !== 'OPENED'),
-    nextQty,
-  );
+  let stacks = (prev.sealedCargoStacks ?? []).filter((entry) => entry.state !== 'OPENED');
+  APPRAISABLE_SEALED_RESOURCE_IDS.forEach((resourceId) => {
+    const nextQty = nextStash[resourceId] ?? 0;
+    stacks = syncSealedStackMetaCount(stacks, nextQty, resourceId);
 
-  const keptQty = result.kept[SEALED_CONTAINMENT_CASKET_ID] ?? 0;
-  if (keptQty <= 0) return stacks;
+    const keptQty = result.kept[resourceId] ?? 0;
+    if (keptQty <= 0) return;
 
-  items
-    .filter((item) => item.resourceId === SEALED_CONTAINMENT_CASKET_ID)
-    .forEach((item) => {
-      const key = item.sealedItemKey;
-      const meta = key ? sealedAppraisalByItemKey[key] : undefined;
-      if (!meta || meta.state !== 'APPRAISED') return;
-      let remaining = keptQty;
-      stacks = stacks.map((entry) => {
-        if (remaining <= 0 || entry.state !== 'SEALED') return entry;
-        remaining -= 1;
-        return {
-          ...entry,
-          state: 'APPRAISED' as const,
-          valueBand: meta.valueBand,
-          appraisedAt: Date.now(),
-        };
+    items
+      .filter((item) => item.resourceId === resourceId)
+      .forEach((item) => {
+        const key = item.sealedItemKey;
+        const meta = key ? sealedAppraisalByItemKey[key] : undefined;
+        if (!meta || meta.state !== 'APPRAISED') return;
+        let remaining = keptQty;
+        stacks = stacks.map((entry) => {
+          if (remaining <= 0 || entry.resourceId !== resourceId || entry.state !== 'SEALED') return entry;
+          remaining -= 1;
+          return {
+            ...entry,
+            state: 'APPRAISED' as const,
+            valueBand: meta.valueBand,
+            appraisedAt: Date.now(),
+          };
+        });
       });
-    });
+  });
 
   return stacks;
 }
@@ -241,9 +259,14 @@ export function incrementCareerSealedFromRouting(
   result: CargoRoutingResult,
   routingAppraisalCount: number,
 ): import('../types/sealedCargo').CareerSealedCargoStats {
-  const opened = result.opened[SEALED_CONTAINMENT_CASKET_ID] ?? 0;
-  const sold = result.fenced[SEALED_CONTAINMENT_CASKET_ID] ?? 0;
-  const delivered = result.delivered[SEALED_CONTAINMENT_CASKET_ID] ?? 0;
+  let opened = 0;
+  let sold = 0;
+  let delivered = 0;
+  APPRAISABLE_SEALED_RESOURCE_IDS.forEach((resourceId) => {
+    opened += result.opened[resourceId] ?? 0;
+    sold += result.fenced[resourceId] ?? 0;
+    delivered += result.delivered[resourceId] ?? 0;
+  });
   return {
     ...stats,
     appraised: stats.appraised + routingAppraisalCount,

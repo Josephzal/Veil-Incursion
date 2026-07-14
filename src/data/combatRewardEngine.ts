@@ -6,6 +6,11 @@ import {
   compositionExtraLootIds,
   compositionRareLootBonusPct,
 } from './encounterCompositionRewardEngine';
+import {
+  rollExpansionIdentityExtras,
+  sectorIdentityResourcePool,
+} from './resourceDropIdentityEngine';
+import { getDistrictFromDepth } from './districtPacing';
 
 export { collectEnemyResourceLoot } from './enemyResourceDrops';
 
@@ -19,6 +24,8 @@ const TIER_1_POOL: ResourceItemId[] = [
   'tarnished-dog-tags',
   'sanguine-ampoule',
   'veil-ash-canister',
+  'nullcrete-shard',
+  'cinder-wire',
 ];
 
 const TIER_2_ADD: ResourceItemId[] = [
@@ -27,23 +34,35 @@ const TIER_2_ADD: ResourceItemId[] = [
   'combustion-cylinder',
   'ossified-ley-knot',
   'smugglers-ledger',
+  'mycelial-ichor',
+  'rail-capacitor',
+  'containment-seal',
+  'resonant-filament',
 ];
 
 const TIER_3_ADD: ResourceItemId[] = [
   'anomalous-core',
   'sealed-containment-casket',
+  'anchor-marrow',
+  'breach-thread',
+  'blacksite-specimen-jar',
 ];
 
-const COMMON_STAPLES: ResourceItemId[] = ['ley-slag', 'echo-glass-shard'];
+const COMMON_STAPLES: ResourceItemId[] = [
+  'ley-slag',
+  'echo-glass-shard',
+  'nullcrete-shard',
+  'cinder-wire',
+];
 
 const GATEKEEPER_DROPS: ResourceItemId[] = ['anomalous-core', 'sealed-containment-casket'];
 
 const FACTION_BIAS: Record<CombatLootProfile, ResourceItemId[]> = {
-  STANDARD: ['ley-slag', 'echo-glass-shard'],
-  SOLARIS: ['sanguine-ampoule', 'ossified-ley-knot'],
-  TERRAN_GRID: ['encrypted-grid-drive'],
-  LEGION: ['legion-blood-iron'],
-  TOXIC: ['veil-ash-canister'],
+  STANDARD: ['ley-slag', 'echo-glass-shard', 'nullcrete-shard', 'cinder-wire'],
+  SOLARIS: ['sanguine-ampoule', 'ossified-ley-knot', 'mycelial-ichor', 'breach-thread'],
+  TERRAN_GRID: ['encrypted-grid-drive', 'containment-seal', 'rail-capacitor'],
+  LEGION: ['legion-blood-iron', 'rail-capacitor', 'combustion-cylinder'],
+  TOXIC: ['veil-ash-canister', 'mycelial-ichor'],
 };
 
 const TOXIC_ROSTER_IDS = new Set<EnemyRosterId>(['miasma-tick-swarm', 'ash-weeper']);
@@ -69,6 +88,11 @@ export interface CombatRewardContext {
   highValue?: boolean;
   echoSignal?: boolean;
   anchorSignal?: boolean;
+  /** District depth (1–3) for Breach / Anchor / Specimen gating. */
+  districtDepth?: 1 | 2 | 3;
+  highRisk?: boolean;
+  hasModifier?: boolean;
+  hasTwisted?: boolean;
 }
 
 export function lootDepthTierFromDepth(depth: number): LootDepthTier {
@@ -113,7 +137,12 @@ function pickBiasedFromPool(
   pool: ResourceItemId[],
   profile: CombatLootProfile,
   rng: () => number,
+  veilBiome?: import('../types/encounterSpawn').VeilBiome | null,
 ): ResourceItemId {
+  const sectorBias = sectorIdentityResourcePool(veilBiome).filter((id) => pool.includes(id));
+  if (sectorBias.length > 0 && rng() < 0.55) {
+    return pickFromPool(sectorBias, rng);
+  }
   const biasPool = FACTION_BIAS[profile].filter((id) => pool.includes(id));
   if (biasPool.length > 0 && rng() < 0.7) {
     return pickFromPool(biasPool, rng);
@@ -164,6 +193,21 @@ export function rollCombatResourceDrops(ctx: CombatRewardContext): ResourceItemI
     echoSignal: ctx.echoSignal,
     anchorSignal: ctx.anchorSignal,
   });
+  const districtDepth = ctx.districtDepth ?? getDistrictFromDepth(ctx.depth);
+  const identityExtras = rollExpansionIdentityExtras({
+    districtDepth,
+    veilBiome: ctx.veilBiome,
+    isElite: ctx.isElite,
+    highValue: ctx.highValue,
+    highRisk: ctx.highRisk,
+    echoSignal: ctx.echoSignal,
+    anchorSignal: ctx.anchorSignal,
+    hasModifier: ctx.hasModifier,
+    hasTwisted: ctx.hasTwisted,
+    templateId: ctx.compositionTemplateId,
+    rewardTier: ctx.rewardTier,
+    rng,
+  });
 
   if (ctx.isElite) {
     if (enemyLoot.length === 0) {
@@ -173,6 +217,7 @@ export function rollCombatResourceDrops(ctx: CombatRewardContext): ResourceItemI
     }
     drops.push(...(ctx.extraLoot ?? []));
     drops.push(...compositionExtras);
+    drops.push(...identityExtras);
     if (rareLootBonusPct > 0 && rng() * 100 < rareLootBonusPct) {
       drops.push(pickFromPool(factionRarePool(profile, tier), rng));
     }
@@ -191,11 +236,12 @@ export function rollCombatResourceDrops(ctx: CombatRewardContext): ResourceItemI
   }
 
   if (enemyLoot.length === 0) {
-    drops.push(pickBiasedFromPool(tierResourcePool(tier), profile, rng));
+    drops.push(pickBiasedFromPool(tierResourcePool(tier), profile, rng, ctx.veilBiome));
   }
 
   drops.push(...(ctx.extraLoot ?? []));
   drops.push(...compositionExtras);
+  drops.push(...identityExtras);
 
   if (rareLootBonusPct > 0 && rng() * 100 < rareLootBonusPct) {
     drops.push(pickFromPool(factionRarePool(profile, tier), rng));

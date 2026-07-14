@@ -69,6 +69,35 @@ export const UNSTABLE_CARRIED_EFFECTS: Record<
       healReceivedMultiplier: 0.9,
     },
   },
+  'anchor-marrow': {
+    resourceId: 'anchor-marrow',
+    itemName: 'Anchor Marrow',
+    warningText:
+      'UNSTABLE CARGO — Anchor Marrow is pinning the sector: Anchor Signal and High-Risk pressure rise.',
+    displayLines: [
+      { kind: 'upside', text: 'Anchor Signal chance' },
+      { kind: 'downside', text: 'High-Risk pressure' },
+    ],
+    modifiers: {
+      anchorSignalMultiplier: 1.05,
+      /** Maps to ~+5% high-risk via context bias (anomalyWeightDelta * 0.25). */
+      anomalyWeightDelta: 0.2,
+    },
+  },
+  'breach-thread': {
+    resourceId: 'breach-thread',
+    itemName: 'Breach Thread',
+    warningText:
+      'UNSTABLE CARGO — Breach Thread is fraying readability: High-Value signals rise; scanner labels murkier.',
+    displayLines: [
+      { kind: 'upside', text: 'High-Value signal chance' },
+      { kind: 'downside', text: 'Scanner uncertainty' },
+    ],
+    modifiers: {
+      rareLootBonusPct: 5,
+      anomalyWeightDelta: 0.15,
+    },
+  },
 };
 
 export function getUnstableCarriedEffect(

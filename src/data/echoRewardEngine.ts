@@ -31,6 +31,7 @@ const REWARD_PROFILES: Record<HostileEchoRewardProfileId, RewardProfile> = {
     guaranteed: ['echo-glass-shard'],
     bonusRolls: [
       { resourceId: 'ley-slag', chance: 0.4 },
+      { resourceId: 'resonant-filament', chance: 0.22 },
       { resourceId: 'tarnished-dog-tags', chance: 0.15 },
     ],
     creditRange: [10, 28],
@@ -41,6 +42,7 @@ const REWARD_PROFILES: Record<HostileEchoRewardProfileId, RewardProfile> = {
     guaranteed: ['echo-glass-shard'],
     bonusRolls: [
       { resourceId: 'tarnished-dog-tags', chance: 0.3 },
+      { resourceId: 'resonant-filament', chance: 0.2 },
       { resourceId: 'encrypted-grid-drive', chance: 0.12 },
     ],
     creditRange: [18, 42],
@@ -51,6 +53,7 @@ const REWARD_PROFILES: Record<HostileEchoRewardProfileId, RewardProfile> = {
     guaranteed: ['echo-glass-shard'],
     bonusRolls: [
       { resourceId: 'sanguine-ampoule', chance: 0.3 },
+      { resourceId: 'resonant-filament', chance: 0.18 },
       { resourceId: 'ossified-ley-knot', chance: 0.08 },
     ],
     creditRange: [8, 22],
@@ -66,6 +69,7 @@ const GENERIC_ECHO_PROFILE: RewardProfile = {
   bonusRolls: [
     { resourceId: 'tarnished-dog-tags', chance: 0.2 },
     { resourceId: 'ley-slag', chance: 0.25 },
+    { resourceId: 'resonant-filament', chance: 0.2 },
   ],
   creditRange: [12, 30],
   legendaryCreditBonus: 18,

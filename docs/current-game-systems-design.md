@@ -504,40 +504,41 @@ Phase D closes the composition pass with **QA / audit tooling**, a **content mat
 
 ### Appraisal + Sealed Cargo v1
 
-**Sealed Containment Casket** is the primary appraisable contraband item. Players can inspect value **without consuming** the casket, then choose to open, sell sealed, deliver sealed (contract), or stash.
+**Sealed Containment Casket** is the primary appraisable contraband item. **Blacksite Specimen Jar** is the lower-tier sibling — same Appraise / Open / Sell Sealed / Deliver Sealed pipeline, softer fees and sell bands, and its own open reward table.
 
-**Value bands (appraisal roll):** LOW → STANDARD → HIGH → RARE → APEX. Bands affect sell-sealed payout (125–500 CR vs 150 unappraised) and **open reward tier weights** (6 tiers: Common / Uncommon / Rare Tech / Unstable / Apex / Dud).
+Players can inspect value **without consuming** sealed cargo, then choose to open, sell sealed, deliver sealed (contract), or stash.
 
-**Fees:**
+**Value bands (appraisal roll):** LOW → STANDARD → HIGH → RARE → APEX. Bands affect sell-sealed payout and **open reward tier weights**.
 
-| Action | Cost | Notes |
-|--------|------|-------|
-| Appraise | 50 CR | Reveals band; does not consume casket |
-| Open / Crack | 100 CR | Waived if already appraised |
-| Sell sealed | Band-based CR | Forfeits hidden contents |
+| Container | Unappraised sell | Appraisal / Open fees | Sell band range |
+|-----------|------------------|-----------------------|-----------------|
+| Containment Casket | 150 CR | 50 / 100 (waived if appraised) | 125–500 CR |
+| Specimen Jar | 80 CR | 30 / 50 (waived if appraised) | 60–250 CR |
 
-**Hub (Black Market):** **APPRAISAL // SEALED CARGO** section lists per-stack caskets from `sealedCargoStacks` metadata with Appraise / Open / Sell Sealed actions.
+**Casket open tiers:** Common / Uncommon / Rare Tech / Unstable / Apex / Dud.
 
-**Post-run routing:** Same actions on debrief Cargo Routing step; Appraise is a separate button (not a final routing chip). Opening at routing may deposit stable loot to stash and queue **special generated resources** for an automatic secondary routing pass.
+**Specimen Jar open tiers:** Common / Biologic / Unstable / Seal / Breach / Dud — contents lean Mycelial, Sanguine, Veil-Ash, Ley-Knot, Containment Seal, rare Breach Thread (never guaranteed Anomalous Core).
 
-**Persistence:** `sealedCargoStacks` (per-stack SEALED/APPRAISED state + band), `careerSealedCargo` (appraised / opened / soldSealed / deliveredSealed counts).
+**Hub (Black Market):** **APPRAISAL // SEALED CARGO** lists per-stack caskets **and** jars from `sealedCargoStacks` metadata.
 
-**Contract integration:** Opening contract caskets fails sealed delivery (`FAILED` outcome, "opened before delivery" debrief copy). Selling sealed contract cargo uses existing fence betrayal path.
+**Post-run routing:** Same actions on debrief Cargo Routing; opening may deposit stable loot to stash and queue **special generated resources** for a secondary routing pass.
 
-**Key files:** `types/sealedCargo.ts`, `sealedCasketAppraisalEngine.ts`, `sealedCasketOpenEngine.ts`, `sealedCargoEngine.ts`, `sealedCargoHubEngine.ts`, `sealedCargoValidationEngine.ts`, `sealedCargoDebugEngine.ts`, extended `postRunCargoRoutingEngine.ts`, `CargoRoutingPanel.tsx`, `OperationDebriefScreen.tsx`, `SafehouseBlackMarketTab.tsx`, `runDebriefCargoRoutingEngine.ts`.
+**Persistence:** `sealedCargoStacks` (per-stack resourceId + SEALED/APPRAISED + band), `careerSealedCargo` counts cover both containers.
+
+**Key files:** `types/sealedCargo.ts`, `sealedCasketAppraisalEngine.ts`, `sealedCasketOpenEngine.ts`, `sealedSpecimenJarOpenEngine.ts`, `sealedContainerOpenEngine.ts`, `sealedCargoEngine.ts`, `sealedCargoHubEngine.ts`, `sealedCargoValidationEngine.ts`, `sealedCargoDebugEngine.ts`, extended `postRunCargoRoutingEngine.ts`, `CargoRoutingPanel.tsx`, `OperationDebriefScreen.tsx`, `SafehouseBlackMarketTab.tsx`, `runDebriefCargoRoutingEngine.ts`.
 
 **Acceptance criteria:**
 
-1. ✅ Appraise reveals value band without consuming casket.
-2. ✅ Open consumes casket and rolls weighted tier table (band-aware).
-3. ✅ Sell sealed grants guaranteed credits (unappraised + band table).
-4. ✅ Hub Black Market appraisal section for stash caskets.
+1. ✅ Appraise reveals value band without consuming sealed cargo.
+2. ✅ Open consumes stack and rolls weighted tier table (band-aware; casket or jar table).
+3. ✅ Sell sealed grants guaranteed credits (unappraised + band table per container).
+4. ✅ Hub Black Market appraisal section for stash sealed stacks.
 5. ✅ Post-run routing appraisal button + sealed metadata on routable items.
 6. ✅ Opening fee waived after appraisal.
-7. ✅ Secondary routing pass for special resources opened from caskets.
+7. ✅ Secondary routing pass for special resources opened from sealed cargo.
 8. ✅ `sealedCargoStacks` + `careerSealedCargo` persisted on account.
 9. ✅ Contract open prevents sealed delivery with debrief explanation.
-10. ✅ Dev validate / sim / force band+tier tooling.
+10. ✅ Dev validate / sim / force band+tier tooling (casket + jar).
 
 ### Loadout
 
@@ -856,7 +857,7 @@ Category does **not** decide all behavior. Example: Encrypted Grid-Drive is INTE
 - `requiresExtractionForValue` — payout only after extract or bank
 - `lostOnDeathIfUnbanked` — all resources true for v1
 
-#### Resource Registry (v1)
+#### Resource Registry (v1 + Expansion Phase A)
 
 | Resource | Category | Primary Role | Stack | Size | Short Name | Craft | Fence |
 |---|---|---|---:|---:|---|:---:|:---:|
@@ -872,6 +873,79 @@ Category does **not** decide all behavior. Example: Encrypted Grid-Drive is INTE
 | Sealed Containment Casket | CONTRABAND | UNIDENTIFIED_CONTAINER | 1 | 3×1 | Casket | — | ✓ |
 | Tarnished Dog Tags | INTEL | FENCE_VALUE | 10 | 1×1 | Dog Tags | — | ✓ |
 | Combustion Cylinder | STABLE | EXPLOSIVE_MATERIAL | 1 | 1×2 | Combustion Cylinder | ✓ | — |
+| Nullcrete Shard | STABLE | CRAFTING_MATERIAL | 5 | 1×1 | Nullcrete | ✓ | ✓ |
+| Mycelial Ichor | STABLE | CRAFTING_MATERIAL | 3 | 1×1 | Mycelial Ichor | ✓ | ✓ |
+| Cinder Wire | STABLE | CRAFTING_MATERIAL | 5 | 1×1 | Cinder Wire | ✓ | ✓ |
+| Rail Capacitor | STABLE | CRAFTING_MATERIAL | 1 | 1×2 | Rail Capacitor | ✓ | ✓ |
+| Containment Seal | INTEL | SCANNER_INTEL | 3 | 1×1 | Containment Seal | ✓ | ✓ |
+| Resonant Filament | STABLE | CRAFTING_MATERIAL | 5 | 1×1 | Resonant Filament | ✓ | ✓ |
+| Anchor Marrow | UNSTABLE | OCCULT_CARGO | 1 | 1×1 | Anchor Marrow | ✓ | ✓ |
+| Breach Thread | UNSTABLE | OCCULT_CARGO | 1 | 1×1 | Breach Thread | ✓ | ✓ |
+| Blacksite Specimen Jar | CONTRABAND | UNIDENTIFIED_CONTAINER | 1 | 1×2 | Specimen Jar | — | ✓ |
+
+### Resource Expansion + Recipe Refactor v1 (Phase A)
+
+Phase A expands the registry from **12 → 21** resources with category, rarity, source hints, intended uses (≥2), sector validity, and eligibility flags. Recipe cost refactors, drop tables, contracts, and Specimen Jar appraisal tables land in later phases.
+
+**Sector identity mats:** Nullcrete (Null Zone), Mycelial Ichor (Abyssal Sink), Cinder Wire (Ashen Waste), Rail Capacitor (Slag Works), Containment Seal (Blackline).
+
+**System mats:** Resonant Filament (Echo/Choir), Anchor Marrow + Breach Thread (unstable carried: Anchor/High-Risk; HV salvage + scanner murk), Blacksite Specimen Jar (appraisable sealed sibling to Casket — open table Phase D).
+
+**Metadata:** Every resource now has `rarity`, `sourceHint`, and `intendedUses`. Stash uses `Partial<ResourceQuantity>` so missing keys stay at 0.
+
+**Not in Phase A:** recipe cost rewrites, sector drop table rewires, contract pool expansion, Specimen Jar open/reward table.
+
+### Resource Expansion + Recipe Refactor v1 (Phase B)
+
+Phase B rewires crafting costs so new sector/system mats matter immediately — without changing starter simplicity.
+
+**Run items (`runItemRegistry.ts`):** Spall-Weave (Nullcrete), Trauma Patch (Mycelial), Grid-Cracker (Rail Capacitor), Eclipse Flare (Cinder Wire), Dead-Drop / Null-Lens (Containment Seal), Ash-Seal (Breach Thread + Seal), Foam (Nullcrete), Splitter (Rail Capacitor), Echo Tuning Fork (Resonant Filament), Anchor Needle (Anchor Marrow).
+
+**Starters kept simple:** Standard Coagulant `2× Ley-Slag`, Sonar-Ping `3× Echo-Glass`, Kinetic Hollow-Points `3× Ley-Slag`.
+
+**Weapons:** Claymore / Pulse / Nullbreach / Rift Edge / Sanguine Prism / Echo Lantern unlocks lightly use Rail Capacitor, Containment Seal, Resonant Filament, Mycelial Ichor, and Breach Thread — no Anomalous Core on normal unlocks.
+
+**Debrief:** Crafting opportunity list prefers run-item recipes when forge CONSUMABLE duplicates the same output.
+
+**Skipped (need effect hooks / Phase C–D):** Dirty Extract Beacon, Breach Compass, Anchor Spike, Void-Surge Catalyst craft table.
+
+**Not in Phase B:** drop/source tables, contracts/sponsors, Specimen Jar appraisal.
+
+### Resource Expansion + Recipe Refactor v1 (Phase C)
+
+Phase C gives new mats **drop and contract identity** — sector bias, depth gates, enemy salvage, echo filament, and sponsor targets — without opening Specimen Jar appraisal (Phase D).
+
+**Combat identity (`resourceDropIdentityEngine` + `combatRewardEngine`):** Sector primary mats bias common salvage. Echo fights can yield Resonant Filament. Anchor / Anchor Patrol (Depth 2+ or elite) can yield Anchor Marrow. Depth 2+ distortion / high-risk can yield Breach Thread. Blackline can bump Containment Seal. Depth 3 Blackline/Abyssal high-risk can yield Blacksite Specimen Jar (sparse, never guaranteed Core).
+
+**Composition extras:** Sector tech bias pools use Rail / Seal / Cinder / Nullcrete / Mycelial; Echo Contaminated always leans Filament; High-Risk Cargo Guard on Blackline/Abyssal can stamp Specimen Jar at RARE.
+
+**Enemy salvage:** Gargoyles → Nullcrete; Sapper/Splinter → Cinder Wire; Golem/Churn → Rail Capacitor; Miasma/Rootbound → Mycelial Ichor; Resonance Casters → Resonant Filament.
+
+**Hostile Echo:** All reward profiles bonus-roll Resonant Filament alongside Echo-Glass.
+
+**Contracts:** Stable + sponsor pools include expansion mats; unstable cargo can ask for Anchor Marrow / Breach Thread; Recover Contraband can target Casket or Specimen Jar. `RECOMMENDED_SECTORS_BY_RESOURCE` maps every expansion mat.
+
+**Sector focus copy:** Catalog `resourceFocus` strings updated to real mat names (Nullcrete, Mycelial, Cinder, Rail, Seal/Breach).
+
+**Not in Phase C:** Specimen Jar open/appraisal table, economy content report / debug grant sim polish (Phase D).
+
+### Resource Expansion + Recipe Refactor v1 (Phase D)
+
+Phase D closes the expansion pass: **Specimen Jar appraisal/open**, **economy reporting**, **debug grant/sim**, and **debrief discovery polish**.
+
+**Specimen Jar (`sealedSpecimenJarOpenEngine`):** Shares the sealed-cargo pipeline with the Containment Casket via generalized `SealedContainerResourceId` stacks. Soft fees (30 / 50 CR). Open table: Mycelial / Sanguine / Veil-Ash / Ley-Knot / Containment Seal / rare Breach Thread (+ dud). Hub Black Market + post-run routing Appraise / Open / Sell Sealed work for jars.
+
+**Economy report (`resourceEconomyReportEngine`):** Dev + CONTENT MATRIX report — total roster, category/rarity/sector counts, recipes-per-resource, expansion roster footprint, no-recipe / no-drop / no-economy orphans, bottleneck hints.
+
+**Debug (DevTest):** Grant Specimen Jar, grant expansion mats, sim jar open rolls, force jar Breach tier, Resource Economy Report; sealed validation covers both containers.
+
+**Debrief polish:** Crafting opportunities emit `DISCOVERED:` hints for expansion mats (display names + source hints), prefer expansion materials in extracted highlights, and sealed debrief lines name casket vs jar.
+
+**Validation:** Dual sealed configs, dual open tables, routing reward ID checks for jar contents.
+
+**Acceptance unlocked (resource expansion):** 16 (jar appraisable), 20–22 (validation / debug / economy report) on top of Phases A–C.
+
+**Not in Phase D:** Full unboxing animation system; Void-Surge / Breach Compass / Anchor Spike effect-craft tables (still skipped pending hooks).
 
 **Smuggler's Ledger:** INTEL / ECONOMY_INTEL / FENCE_VALUE — not a crafting ingredient. High fence payout (250 credits).
 

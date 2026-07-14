@@ -301,7 +301,7 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
     setSealedAppraisalByItemKey(appraisal.nextSealedAppraisalByItemKey);
     setRoutingAppraisalResults((prev) => [...prev, appraisal.result!]);
     setRoutingAppraisalCount((prev) => prev + 1);
-    appendHubLog(`>> APPRAISED — ${getAppraisalBandLabel(appraisal.result.valueBand).toUpperCase()} (−${appraisal.result.feePaid} CR)`);
+    appendHubLog(`>> APPRAISED — ${getAppraisalBandLabel(appraisal.result.valueBand, appraisal.result.resourceId).toUpperCase()} (−${appraisal.result.feePaid} CR)`);
   };
 
   const applyRouting = async (): Promise<boolean> => {

@@ -7,7 +7,7 @@ import {
   supportsPartialCargoRouting,
 } from '../../data/postRunCargoRoutingEngine';
 import { getAppraisalBandLabel } from '../../data/sealedCasketAppraisalEngine';
-import { formatSealedCargoWarning } from '../../data/sealedCargoEngine';
+import { formatSealedCargoWarning, isAppraisableSealedResource } from '../../data/sealedCargoEngine';
 import {
   getResourceCategory,
   getResourceDisplayName,
@@ -57,7 +57,7 @@ function actionChipLabel(
     const unitValue = item.sealedSellValue ?? getResourceSellValue(item.resourceId);
     const payout = unitValue * routedQuantity;
     if (payout > 0) {
-      return item.resourceId === 'sealed-containment-casket'
+      return isAppraisableSealedResource(item.resourceId)
         ? `Sell Sealed (+${payout} CR)`
         : `${base} (+${payout} CR)`;
     }
@@ -81,7 +81,7 @@ function sourceLabel(source: RoutableCargoItem['source']): string {
 }
 
 function sectionTitleForItem(item: RoutableCargoItem): string {
-  if (item.resourceId === 'sealed-containment-casket') return 'Sealed Cargo / Contraband';
+  if (isAppraisableSealedResource(item.resourceId)) return 'Sealed Cargo / Contraband';
   if (item.isContractTarget) return 'Contract Cargo';
   if (item.isOperationTarget) return 'Operation Target';
   const category = getResourceCategory(item.resourceId);
@@ -208,13 +208,13 @@ export default function CargoRoutingPanel({
             const routedQuantity = quantityFor(item);
             const partialRouting = supportsPartialCargoRouting(item);
             const sellValue = item.sealedSellValue ?? getResourceSellValue(item.resourceId);
-            const sealedWarning = item.resourceId === 'sealed-containment-casket'
+            const sealedWarning = isAppraisableSealedResource(item.resourceId)
               ? formatSealedCargoWarning(item.isContractTarget, 'OPEN')
               : null;
-            const appraiseWarning = item.resourceId === 'sealed-containment-casket' && item.canAppraise
+            const appraiseWarning = isAppraisableSealedResource(item.resourceId) && item.canAppraise
               ? formatSealedCargoWarning(item.isContractTarget, 'APPRAISE')
               : null;
-            const sellSealedWarning = item.resourceId === 'sealed-containment-casket'
+            const sellSealedWarning = isAppraisableSealedResource(item.resourceId)
               ? formatSealedCargoWarning(item.isContractTarget, 'SELL')
               : null;
             return (
@@ -257,7 +257,7 @@ export default function CargoRoutingPanel({
                 {sellValue > 0 && (hasResourceUsageTag(item.resourceId, 'FENCE_VALUE') || item.sealedSellValue) ? (
                   <Text style={[styles.itemMeta, { color: mutedColor }]}>
                     {item.sealedState === 'APPRAISED' && item.valueBand
-                      ? `Appraised: ${getAppraisalBandLabel(item.valueBand).toUpperCase()} // Sell sealed: ${sellValue} CR`
+                      ? `Appraised: ${getAppraisalBandLabel(item.valueBand, item.resourceId).toUpperCase()} // Sell sealed: ${sellValue} CR`
                       : `Fence value: ${sellValue} CR each`}
                   </Text>
                 ) : null}

@@ -530,6 +530,9 @@ export default function CombatScreen(): React.JSX.Element {
       highValue: Boolean(mods?.highValueResource),
       echoSignal: Boolean(mods?.echoSignal),
       anchorSignal: Boolean(mods?.anchorSignal),
+      highRisk: Boolean(mods?.highRisk),
+      hasModifier: Boolean(mods?.encounterModifier),
+      hasTwisted: Boolean(mods?.twistedTemplate),
     });
     const echoCtx = resolveEchoRecoveryContext(vectorNode, activeIncursion.runGenerationContext);
     const echoDropInstanceIds = echoCtx && vectorNode?.contextModifiers?.echoEncounterKind === 'HOSTILE_ECHO'
