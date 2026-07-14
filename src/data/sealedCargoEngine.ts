@@ -13,33 +13,15 @@ import {
 import type { ResourceItemId, ResourceQuantity } from '../types/resourceItem';
 import { hasResourceUsageTag } from './resourceRegistry';
 import { resolveSealedSellValue } from './sealedCasketAppraisalEngine';
+import {
+  ECONOMY_CASKET_CONFIG,
+  ECONOMY_SPECIMEN_JAR_CONFIG,
+} from './balance/economyBalanceConfig';
 
-export const SEALED_CASKET_CONFIG: SealedCargoAppraisalConfig = {
-  resourceId: SEALED_CONTAINMENT_CASKET_ID,
-  appraisalTableId: 'sealed-containment-casket-v1',
-  sealedSellValue: 150,
-  appraisalFee: 50,
-  openingFee: 100,
-  openingFeeWaivedIfAppraised: true,
-  canOpenInRun: false,
-  canOpenAtHub: true,
-  canDeliverSealed: true,
-  canSellSealed: true,
-};
+export const SEALED_CASKET_CONFIG: SealedCargoAppraisalConfig = ECONOMY_CASKET_CONFIG;
 
 /** Lower-tier sibling — cheaper fees, softer sell ceiling. */
-export const SEALED_SPECIMEN_JAR_CONFIG: SealedCargoAppraisalConfig = {
-  resourceId: BLACKSITE_SPECIMEN_JAR_ID,
-  appraisalTableId: 'blacksite-specimen-jar-v1',
-  sealedSellValue: 80,
-  appraisalFee: 30,
-  openingFee: 50,
-  openingFeeWaivedIfAppraised: true,
-  canOpenInRun: false,
-  canOpenAtHub: true,
-  canDeliverSealed: true,
-  canSellSealed: true,
-};
+export const SEALED_SPECIMEN_JAR_CONFIG: SealedCargoAppraisalConfig = ECONOMY_SPECIMEN_JAR_CONFIG;
 
 export const SEALED_CARGO_CONFIGS: Record<SealedContainerResourceId, SealedCargoAppraisalConfig> = {
   [SEALED_CONTAINMENT_CASKET_ID]: SEALED_CASKET_CONFIG,

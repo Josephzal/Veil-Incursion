@@ -652,7 +652,7 @@ Cohesion layer — no new gameplay systems. Makes the Contract Board → Veil Fr
 - **`runPacingConfig`** — config-driven nodes-per-district (10 / 12 / 15 presets for run-length testing).
 - **`runBalanceTelemetryEngine`** — per-run balance stats (nodes, combats, resources, echoes, contract outcome).
 - **`runLoopAuditEngine`** — full-loop checklist (pre-run, run start, during run, post-run, persistence).
-- **`runLoopValidationEngine`** — aggregates world, resource, contract, echo, routing, keepsake, run-item, **weapon** validators + content matrix.
+- **`runLoopValidationEngine`** — aggregates world, resource, contract, echo, routing, keepsake, run-item, **weapon**, and **balance** validators + content matrix.
 - **`runOutcomeDetailEngine`** — granular debrief outcome labels (extracted, emergency recall, safehouse, banked-then-died, runner lost).
 - **`runAnchorDebriefEngine`** — anchor activity debrief block.
 - **`runCraftingOpportunityEngine`** — craft-now / nearly-ready recipe surfacing on debrief (includes weapon unlock/upgrade lines via `runDebriefWeaponEngine`).
@@ -946,6 +946,86 @@ Phase D closes the expansion pass: **Specimen Jar appraisal/open**, **economy re
 **Acceptance unlocked (resource expansion):** 16 (jar appraisable), 20–22 (validation / debug / economy report) on top of Phases A–C.
 
 **Not in Phase D:** Full unboxing animation system; Void-Surge / Breach Compass / Anchor Spike effect-craft tables (still skipped pending hooks).
+
+### Full Run Balance + Tuning Framework v1 (Phase A)
+
+Phase A creates a **central balance config registry** so tuning no longer requires hunting scattered magic numbers. No new gameplay systems.
+
+**Registry (`src/data/balance/`):** Run / Combat / Reward / Economy / Contract / Operation / Scanner / Weapon / Trinket configs + `balanceTargets.ts` (early/late outcome bands, combat turn-length targets — **not enforced**).
+
+**Wired knobs:**
+- Combat depth HP/dmg + elite/alpha multipliers → `combatBalanceConfig` (consumed by `enemyCombatConfig`)
+- Kill credit ranges + depth/composition multipliers → `rewardBalanceConfig` (`combatCredits`, `encounterCompositionRewardEngine`)
+- Sealed casket/jar fees & appraised sell bands → `economyBalanceConfig`
+- Contract credit/rep tables + sponsor modifiers → `contractBalanceConfig` (`contractTemplates`)
+- Operation contribution values + caps → `operationBalanceConfig` (`worldStateHelpers` re-exports)
+- Depth-stage scanner/echo/op-target chances → `scannerBalanceConfig`
+- Node-pressure bands + depth-index helpers scale with configurable `nodesPerDepth` (10/12/15)
+
+**Dev:** `[ BALANCE CONFIG ]` in DevTest; summary also appended to CONTENT MATRIX.
+
+**Not in Phase A:** Expanded run telemetry / last-10 dashboard (Phase B), generation sims / crafting affordability (Phase C), balance validation warnings (Phase D).
+
+### Full Run Balance + Tuning Framework v1 (Phase B)
+
+Phase B expands **per-run telemetry** and adds a **career last-10 dashboard** so pacing and loadout trends are visible without new gameplay UI.
+
+**Per-run counters (`balanceRunStats` on `ActiveIncursionState`):** Combat samples (turns / damage taken / healing / damage dealt / victory, tagged STANDARD|ELITE|BOSS), sanctuary & market visit counts, death cause + district.
+
+**Combat instrumentation:** `TacticalCombatHub` accumulates encounter samples and returns them via `onCombatComplete`; `CombatScreen` records into `balanceRunStats`. Death path stamps cause/district before debrief build.
+
+**Expanded `RunBalanceTelemetry`:** Class / weapon / relic / sector / contract / op / biome; cargo fence value extracted / banked / lost; avg combat turns (overall + by kind); damage/heal totals; death cause; sanctuary/market visits.
+
+**Career ring buffer (`careerBalanceHistory` on `PlayerAccount`):** Last 10 completed runs; pushed on Operation Debrief mount; persisted with account.
+
+**Dashboard (`formatBalanceDashboard`):** Extract/death rates, D2/D3 reach, boss/contract rates, cargo-value averages, most-used class/weapon/relic, last-run snapshot vs early target bands.
+
+**Surface:** DevTest `[ BALANCE DASHBOARD ]` + `[ RUN TELEMETRY ]`; debrief DEV sections for telemetry + dashboard.
+
+**Not in Phase B:** Generation/reward/contract/op/crafting sims (Phase C), balance validation warnings (Phase D).
+
+### Full Run Balance + Tuning Framework v1 (Phase C)
+
+Phase C adds **offline balance simulations** that wrap existing generators — no combat auto-resolve, no new gameplay.
+
+**Engines (`src/data/balance/`):**
+- `balanceSimulationEngine.ts` — run-tree generation (1 + N), reward rolls by depth/kind, contract boards, operation runs-to-complete estimates, approximate run resource income, sealed open tier histograms, encounter/composition distribution wraps
+- `balanceCraftingAffordabilityEngine.ts` — recipe classification vs income model: COMMON_PREP / STANDARD_TOOL / RARE_TOOL / APEX_FUTURE; bottleneck resource callouts
+
+**DevTest:** `[ SIM BALANCE BUNDLE ]` plus `[ SIM TREES 100 ]`, `[ SIM REWARDS ]`, `[ SIM CONTRACTS ]`, `[ SIM OPS ]`, `[ SIM RUN LOOT ]`, `[ SIM CRAFT AFFORD ]`, `[ SIM SEALED EV ]`, `[ SIM ENCOUNTER DIST ]`.
+
+**Intent:** Catch obvious tuning problems (tree mix skew, one-shot ops, impossible recipes, empty reward tables) without playing full runs.
+
+**Not in Phase C:** Balance validation warning engine + ACCEPTANCE checklist polish (Phase D).
+
+### Full Run Balance + Tuning Framework v1 (Phase D)
+
+Phase D closes the balance framework with **validation warnings** and DevTest/loop integration. Warnings guide tuning — they do **not** hard-gate gameplay.
+
+**Engine (`balanceValidationEngine.ts`):**
+- Combat depth HP/dmg multipliers vs intent bands; elite mult sanity
+- Reward tables (elite/boss credit ordering, depth credit ladder, HIGH_VALUE > BASELINE)
+- Composition Phase D reuse (`HIGH_RISK_BASELINE`, missing reward resources)
+- Craft→fence sell exploits (consumable `baseValue` vs resource sell craft cost)
+- Contract recommended-sector spawnability + template weight/sponsor checks
+- Operation contribution missing/absurd; focused/ordinary runs-to-complete vs 3–6 target; relic cap consistency
+- Weapon tier / cumulative `strikeDamagePct` soft caps
+- Trinket Marked Shelf discount vs soft caps
+- Tree sanctuary/extraction presence (small sim sample)
+- Post-run routing/death-bank pipeline validators
+- Career last-N vs early outcome bands when sample ≥ 5
+
+**Surface:** DevTest `[ VALIDATE BALANCE ]`; folded into `formatFullIntegrationValidationReport` / VALIDATE ALL (cross-check).
+
+**Acceptance unlocked (balance framework v1):**
+1–8 Config registry + knobs (Phase A)
+9–10 Telemetry + last-10 dashboard (Phase B)
+11–13 Sims + crafting affordability (Phase C)
+14–15 Validation warnings + high-risk/reward gaps (Phase D)
+16–18 Reuse extraction/death/routing validators
+19–20 Config comments + design doc + DevTest workflow
+
+**Not in Phase D:** Autofix / forced rebalance; online multiplayer; new gameplay systems.
 
 **Smuggler's Ledger:** INTEL / ECONOMY_INTEL / FENCE_VALUE — not a crafting ingredient. High fence payout (250 credits).
 
@@ -1427,6 +1507,7 @@ Current world/narrative surface includes:
 - **Echo encounters v1 (complete — Phases 1–6):** Echo scanner overlays at layer unlock, per-depth/run caps, weighted encounter kinds, fallen-runner narrative, assist/cargo/extraction immediate resolution, hostile combat routing, class-based hostile templates with depth scaling, hostile echo reward rolls, debrief Echo section, dev forcing tools, echo pipeline validation (reward-resource existence + Echo Recovery contribution rules), `echoRunState` tracking, Veil Front echo intel surfaces, reward-stack extraction tracking, Smuggler's Ledger fallen-runner drop, extraction echo emergency-recall bleed bonus. Acceptance criteria (20) verified in the Echo Encounters v1 section below.
 - **Expedition relics v2 (complete — Phases A–F):** 20-relic pre-run loadout with deployment choices, in-run branch modals, scanner/cargo/economy/contract/safehouse/echo hooks, live HUD counters, trigger toasts, debrief parity, registry + acceptance + combat-stat audit on boot. Internal code uses `Keepsake*` naming; player-facing copy uses **Expedition Relic**.
 - **Run Integration + Progression Audit v1 (complete):** Full-loop audit, aggregated validation, debrief outcome detail, anchor/crafting/next-steps, pacing presets, balance telemetry, content matrix, sponsor rep preview.
+- **Full Run Balance + Tuning Framework v1 (Phase A):** Central `src/data/balance/` registry for combat/reward/economy/contract/operation/scanner knobs + target comments; DevTest BALANCE CONFIG dump.
 - **Weapon Families + Vertical Upgrade Tracks v1 (complete):** 9 weapon families × 3 tiers, Loadout Weapon Chassis unlock/equip/upgrade, run snapshot, combat stat hooks + tier-III passives, debrief opportunities, validation + dev tools. Legacy blueprint forge recipes removed.
 - **Run Items v2 (complete — Phases A–F + polish):** 24-item combat consumable + field tool roster in dedicated 2+2 slots, combat/field engines, hub loadout + fabrication filters, black market tap-to-buy + cargo drag split, live HUD + toasts + brought/remaining debrief, registry + acceptance + boot audit. Bound Requisitions remain separate.
 - **Post-run cargo routing v1 (complete — Phases 1–10):** Full post-extract cargo routing pipeline with Veil Front + hub intel surfaces, live debrief preview/validation, partial stackable routing, casket open-at-hub v1, deferred contract delivery, death cargo messaging, runtime + intel + fixture + sim validation, catalog audit engine, cleanup/ship pass, `cargoRoutingRunState` + `careerCargoRouting` tracking, debrief summary wiring, hub contract board + safehouse + extraction review + scanner + loadout + cargo pressure surfaces, hub log on routing confirm, dev audit/validate/inspect tooling, compact debrief parity. Acceptance criteria (63) in Post-Run Cargo Routing v1 section.

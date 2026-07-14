@@ -79,6 +79,12 @@ import type { CargoRoutingDecision, PostRunRoutingDebriefState } from '../types/
 import { applyCargoRoutingDecisions, buildDefaultRoutingDecisions, buildSecondaryRoutingPendingItems, mergeCargoRoutingResults } from '../data/postRunCargoRoutingEngine';
 import { createDefaultCareerCargoRoutingStats, incrementCareerCargoRoutingFromResult } from '../data/postRunCargoRoutingRunState';
 import { createDefaultCareerSealedCargoStats } from '../types/sealedCargo';
+import {
+  careerEntryFromTelemetry,
+  createDefaultCareerBalanceHistory,
+  pushCareerBalanceRun,
+} from '../data/balance/balanceDashboardEngine';
+import type { RunBalanceTelemetry } from '../data/runIntegration/runBalanceTelemetryEngine';
 import { appraiseSealedCargoInStash, incrementCareerSealedFromRouting, openSealedCargoInStash, sellSealedCargoInStash, syncSealedStacksAfterRouting } from '../data/sealedCargoHubEngine';
 import { debugGrantExpansionResources, debugGrantSealedCasket, debugGrantSpecimenJar } from '../data/sealedCargoDebugEngine';
 import { applyBetrayalConsequencesToAccount } from '../data/betrayalConsequencesEngine';
@@ -209,6 +215,7 @@ export function createDefaultPlayerAccount(): PlayerAccount {
     equippedKeepsakeId: null,
     unlockedKeepsakeIds: [...DEFAULT_UNLOCKED_KEEPSAKE_IDS],
     keepsakeDeployment: createDefaultKeepsakeDeployment(),
+    careerBalanceHistory: createDefaultCareerBalanceHistory(),
   };
 }
 
@@ -296,6 +303,12 @@ function mergeStoredAccount(parsed: Partial<PlayerAccount>): PlayerAccount {
     keepsakeDeployment: {
       ...defaults.keepsakeDeployment,
       ...parsed.keepsakeDeployment,
+    },
+    careerBalanceHistory: {
+      runs: [
+        ...(parsed.careerBalanceHistory?.runs
+          ?? defaults.careerBalanceHistory.runs),
+      ].slice(-10),
     },
     veilResidueBalance: parsed.veilResidueBalance ?? defaults.veilResidueBalance,
   };
@@ -405,6 +418,8 @@ interface PlayerAccountContextType {
     keepsakeRuntime?: import('../types/expeditionKeepsake').KeepsakeRuntime | null;
     routingAppraisalCount?: number;
   }) => import('../types/postRunCargoRouting').CargoRoutingResult;
+  /** Phase B — push completed-run balance telemetry into the last-10 career buffer. */
+  recordCareerBalanceTelemetry: (telemetry: RunBalanceTelemetry) => void;
   applyBetrayalConsequences: (payload: {
     contractResult: import('../types/contract').ContractResult;
     routingResult: import('../types/postRunCargoRouting').CargoRoutingResult;
@@ -1557,6 +1572,16 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
     updateAccount((prev) => debugGrantExpansionResources(prev));
   }, [updateAccount]);
 
+  const recordCareerBalanceTelemetry = useCallback((telemetry: RunBalanceTelemetry) => {
+    updateAccount((prev) => ({
+      ...prev,
+      careerBalanceHistory: pushCareerBalanceRun(
+        prev.careerBalanceHistory ?? createDefaultCareerBalanceHistory(),
+        careerEntryFromTelemetry(telemetry),
+      ),
+    }));
+  }, [updateAccount]);
+
   const applyBetrayalConsequences = useCallback(
     (payload: {
       contractResult: import('../types/contract').ContractResult;
@@ -1772,6 +1797,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       commitDescentLoadout,
       persistRunExtraction,
       applyPostRunCargoRouting,
+      recordCareerBalanceTelemetry,
       applyBetrayalConsequences,
       persistRunBankedSnapshot,
       depositVeilResidueBalance,
@@ -1844,6 +1870,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       commitDescentLoadout,
       persistRunExtraction,
       applyPostRunCargoRouting,
+      recordCareerBalanceTelemetry,
       applyBetrayalConsequences,
       persistRunBankedSnapshot,
       depositVeilResidueBalance,

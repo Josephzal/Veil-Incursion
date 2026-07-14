@@ -41,6 +41,7 @@ import type {
   SectorGraph,
 } from './sector';
 import { MAX_ATTUNEMENT, STARTING_ATTUNEMENT } from './sector';
+import { createDefaultBalanceRunStats } from '../data/balance/balanceRunStats';
 
 export type FactionType = 'TERRAN_GRID' | 'LEGION' | 'SOLARIS';
 export type ClassType = 'AEGIS' | 'HEX_SHOT' | 'ENVOY';
@@ -176,6 +177,8 @@ export interface PlayerAccount {
   unlockedKeepsakeIds: readonly import('../types/expeditionKeepsake').KeepsakeId[];
   /** Pre-run deployment choices for relics that expose configuration (attunement/doctrine/mirror category). */
   keepsakeDeployment: import('../types/expeditionKeepsake').KeepsakeDeployment;
+  /** Career last-N run balance summaries for the balance dashboard (Phase B). */
+  careerBalanceHistory: import('../data/balance/balanceDashboardEngine').CareerBalanceHistory;
 }
 
 export interface CombatNodeState {
@@ -561,6 +564,8 @@ export interface ActiveIncursionState {
   activeWeaponTier: import('./weapon').WeaponTierNumber;
   /** Once-per-combat weapon passive counters. */
   weaponRuntime: import('./weapon').WeaponRuntimeState;
+  /** Phase B — in-run combat/economy counters for balance telemetry. */
+  balanceRunStats: import('../data/balance/balanceRunStats').BalanceRunStats;
 }
 
 export function createDefaultEnvironmentalModifiers(): EnvironmentalModifiers {
@@ -718,5 +723,6 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
       firstArmoredHitUsed: false,
       postReloadBallisticBonus: false,
     },
+    balanceRunStats: createDefaultBalanceRunStats(),
   };
 }

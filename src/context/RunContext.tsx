@@ -301,6 +301,10 @@ import {
   recordCompositionCombatVictory,
   recordCompositionEngagement,
 } from '../data/encounterCompositionTelemetryEngine';
+import {
+  createDefaultBalanceRunStats,
+  recordBalanceCombatSample as appendBalanceCombatSample,
+} from '../data/balance/balanceRunStats';
 import { listingsForStock, rollBlackMarketStock, resolveBlackMarketListingPrice, blackMarketFencePrice } from '../data/blackMarket';
 import {
   buildDevSandboxCombatNode,
@@ -620,6 +624,8 @@ interface RunContextType {
   };
   abortNarrativeEncounter: () => void;
   activeIncursion: ActiveIncursionState;
+  /** Sync peek of the latest activeIncursion ref (survives mid-event setState). */
+  peekActiveIncursion: () => ActiveIncursionState;
   getCurrentEncounterNode: () => import('../types/game').IncursionNode | null;
   stageEncounterClear: (message: string) => {
     route: 'NEXT_NODE' | 'SAFEHOUSE' | 'HUB_VICTORY';
@@ -647,6 +653,10 @@ interface RunContextType {
     highValue?: boolean;
     twistedTemplateId?: string | null;
   }) => void;
+  /** Phase B — append a combat pacing sample to balanceRunStats. */
+  recordBalanceCombatSample: (sample: import('../data/balance/balanceRunStats').BalanceCombatEncounterSample) => void;
+  /** Phase B — stamp death cause/district onto balanceRunStats. */
+  stampBalanceDeathCause: (cause: string, district: 1 | 2 | 3) => void;
   /** Resolve Depth 2 twisted template modal choice. */
   commitTwistedTemplateChoice: (selectedValue: string) => boolean;
   /** Phase B — confirm pre-combat warning card and proceed. */
@@ -923,6 +933,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   runStateRef.current = runState;
   activeIncursionRef.current = activeIncursion;
+
+  const peekActiveIncursion = useCallback(() => activeIncursionRef.current, []);
 
   const setCombatLogActive = useCallback((active: boolean) => {
     combatLogActiveRef.current = active;
@@ -4682,7 +4694,15 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
       rollBlackMarketStockForNode();
       setActiveIncursion((prev) => {
-        const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
+        const stats = prev.balanceRunStats ?? createDefaultBalanceRunStats();
+        const next = {
+          ...prev,
+          mapMode: 'NODE_ENGAGED' as IncursionMapMode,
+          balanceRunStats: {
+            ...stats,
+            marketVisits: stats.marketVisits + 1,
+          },
+        };
         activeIncursionRef.current = next;
         return next;
       });
@@ -4704,7 +4724,20 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         rollBlackMarketStockForNode();
       }
       setActiveIncursion((prev) => {
-        const next = { ...prev, mapMode: 'NODE_ENGAGED' as IncursionMapMode };
+        const stats = prev.balanceRunStats ?? createDefaultBalanceRunStats();
+        const next = {
+          ...prev,
+          mapMode: 'NODE_ENGAGED' as IncursionMapMode,
+          balanceRunStats: {
+            ...stats,
+            sanctuaryVisits: engagedNode.type === 'SANCTUARY'
+              ? stats.sanctuaryVisits + 1
+              : stats.sanctuaryVisits,
+            marketVisits: engagedNode.type === 'BLACK_MARKET'
+              ? stats.marketVisits + 1
+              : stats.marketVisits,
+          },
+        };
         activeIncursionRef.current = next;
         return next;
       });
@@ -5335,6 +5368,34 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       activeIncursionRef.current = next;
       return next;
     });
+  }, []);
+
+  const recordBalanceCombatSample = useCallback((
+    sample: import('../data/balance/balanceRunStats').BalanceCombatEncounterSample,
+  ) => {
+    const prev = activeIncursionRef.current;
+    const stats = prev.balanceRunStats ?? createDefaultBalanceRunStats();
+    const next = {
+      ...prev,
+      balanceRunStats: appendBalanceCombatSample(stats, sample),
+    };
+    activeIncursionRef.current = next;
+    setActiveIncursion(next);
+  }, []);
+
+  const stampBalanceDeathCause = useCallback((cause: string, district: 1 | 2 | 3) => {
+    const prev = activeIncursionRef.current;
+    const stats = prev.balanceRunStats ?? createDefaultBalanceRunStats();
+    const next = {
+      ...prev,
+      balanceRunStats: {
+        ...stats,
+        deathCause: cause,
+        deathDistrict: district,
+      },
+    };
+    activeIncursionRef.current = next;
+    setActiveIncursion(next);
   }, []);
 
   const stageSafeAnchorReview = useCallback((anchorIndex: 1 | 2 | 3, nodeId?: string) => {
@@ -6798,6 +6859,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       resolveNarrativeChoice,
       abortNarrativeEncounter,
       activeIncursion,
+      peekActiveIncursion,
       getCurrentEncounterNode,
       getCurrentVectorCluster,
       syncProceduralScannerTypes,
@@ -6878,6 +6940,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       recordEncounterModifierVictory,
       recordDepthIdentityCombatVictory,
       recordCompositionEncounterVictory,
+      recordBalanceCombatSample,
+      stampBalanceDeathCause,
       commitTwistedTemplateChoice,
       confirmEncounterWarning,
       cancelEncounterWarning,
@@ -6983,6 +7047,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       resolveNarrativeChoice,
       abortNarrativeEncounter,
       activeIncursion,
+      peekActiveIncursion,
       getCurrentEncounterNode,
       getCurrentVectorCluster,
       syncProceduralScannerTypes,
@@ -7062,6 +7127,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       recordEncounterModifierVictory,
       recordDepthIdentityCombatVictory,
       recordCompositionEncounterVictory,
+      recordBalanceCombatSample,
+      stampBalanceDeathCause,
       commitTwistedTemplateChoice,
       confirmEncounterWarning,
       cancelEncounterWarning,

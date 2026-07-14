@@ -2,6 +2,10 @@ import type { DistrictId } from './districtPacing';
 import { getDistrictFromDepth } from './districtPacing';
 import type { EnemyRosterId } from './enemyRoster';
 import { resolveDefinitionStats } from './enemyDefinitions';
+import {
+  COMBAT_DEPTH_SCALING,
+  COMBAT_ELITE_MODIFIER,
+} from './balance/combatBalanceConfig';
 
 export type EncounterEnemyKey =
   | 'FRACTURE_HOUND'
@@ -228,13 +232,11 @@ export const ENEMY_BASE_STATS = {
   RIFT_SPIKE_SNIPER: { maxHp: 84, baseDamage: 20, armor: 0 },
 } as const;
 
-export const DEPTH_SCALING: Record<DistrictId, { hpMult: number; dmgMult: number }> = {
-  1: { hpMult: 1.0, dmgMult: 1.0 },
-  2: { hpMult: 1.65, dmgMult: 1.8 },
-  3: { hpMult: 2.4, dmgMult: 2.6 },
-};
+/** @deprecated Prefer COMBAT_DEPTH_SCALING from balance/combatBalanceConfig — re-export for callers. */
+export const DEPTH_SCALING = COMBAT_DEPTH_SCALING;
 
-export const ALPHA_MODIFIER = { hpMult: 1.3, dmgMult: 1.25, ftMult: 1.5 } as const;
+/** @deprecated Prefer COMBAT_ELITE_MODIFIER from balance/combatBalanceConfig. */
+export const ALPHA_MODIFIER = COMBAT_ELITE_MODIFIER;
 
 export const ENEMY_ARCHETYPE: Partial<Record<EnemyRosterId, EnemySpawnArchetype>> = {
   'fracture-hound': 'MELEE',

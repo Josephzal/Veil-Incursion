@@ -1,23 +1,14 @@
 import type { EncounterRewardTier, EncounterCompositionTemplateId } from '../types/encounterComposition';
 import type { ResourceItemId } from '../types/resourceItem';
 import type { VeilBiome } from '../types/encounterSpawn';
+import {
+  compositionCreditMultiplierFromConfig,
+  compositionRareLootBonusPctFromConfig,
+} from './balance/rewardBalanceConfig';
 
 /** Credit multiplier applied after depth scaling — small, not a rebalance. */
 export function compositionCreditMultiplier(tier: EncounterRewardTier | null | undefined): number {
-  switch (tier) {
-    case 'BASELINE':
-      return 1.0;
-    case 'IMPROVED':
-      return 1.12;
-    case 'HIGH_VALUE':
-      return 1.22;
-    case 'RARE':
-      return 1.35;
-    case 'APEX_CHANCE':
-      return 1.45;
-    default:
-      return 1.0;
-  }
+  return compositionCreditMultiplierFromConfig(tier);
 }
 
 export function applyCompositionCreditScaling(
@@ -30,18 +21,7 @@ export function applyCompositionCreditScaling(
 
 /** Extra salvage roll chance % baked into combat reward context. */
 export function compositionRareLootBonusPct(tier: EncounterRewardTier | null | undefined): number {
-  switch (tier) {
-    case 'IMPROVED':
-      return 8;
-    case 'HIGH_VALUE':
-      return 16;
-    case 'RARE':
-      return 28;
-    case 'APEX_CHANCE':
-      return 40;
-    default:
-      return 0;
-  }
+  return compositionRareLootBonusPctFromConfig(tier);
 }
 
 /** Bonus common staples for swarm-style tiers (tempo fights). */

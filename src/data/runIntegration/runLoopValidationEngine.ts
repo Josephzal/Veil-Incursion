@@ -9,6 +9,11 @@ import { formatRunItemAcceptanceReport, validateRunItemAcceptance } from '../run
 import { validateContractTemplates, formatContractValidationReport } from './contractValidationEngine';
 import { validateWeaponRegistry, formatWeaponValidationReport } from '../weaponValidationEngine';
 import { formatContentMatrixReport } from './contentMatrixEngine';
+import {
+  formatBalanceValidationReport,
+  validateBalance,
+} from '../balance/balanceValidationEngine';
+import type { CareerBalanceHistory } from '../balance/balanceDashboardEngine';
 import type { SectorState, WorldStatePersistedState } from '../../types/worldState';
 
 export interface IntegrationValidationIssue {
@@ -20,6 +25,7 @@ export interface IntegrationValidationIssue {
 export function validateAllIntegrationSystems(
   persisted: WorldStatePersistedState,
   sectors: SectorState[],
+  opts?: { careerBalanceHistory?: CareerBalanceHistory | null },
 ): IntegrationValidationIssue[] {
   const issues: IntegrationValidationIssue[] = [];
   const push = (domain: string, severity: 'warn' | 'error', message: string) => {
@@ -46,14 +52,23 @@ export function validateAllIntegrationSystems(
     push('weapon', issue.severity, issue.message);
   });
 
+  validateBalance({
+    careerBalanceHistory: opts?.careerBalanceHistory,
+    runSims: true,
+  }).forEach((issue) => {
+    if (issue.severity === 'info') return;
+    push(`balance:${issue.domain}`, issue.severity, `[${issue.code}] ${issue.message}`);
+  });
+
   return issues;
 }
 
 export function formatFullIntegrationValidationReport(
   persisted: WorldStatePersistedState,
   sectors: SectorState[],
+  opts?: { careerBalanceHistory?: CareerBalanceHistory | null },
 ): string {
-  const integrationIssues = validateAllIntegrationSystems(persisted, sectors);
+  const integrationIssues = validateAllIntegrationSystems(persisted, sectors, opts);
   const integrationLines = integrationIssues.map(
     (i) => `[${i.severity.toUpperCase()}] ${i.domain}: ${i.message}`,
   );
@@ -70,6 +85,10 @@ export function formatFullIntegrationValidationReport(
     formatRunItemDebugValidation(),
     formatRunItemAcceptanceReport(validateRunItemAcceptance()),
     formatWeaponValidationReport(validateWeaponRegistry()),
+    formatBalanceValidationReport({
+      careerBalanceHistory: opts?.careerBalanceHistory,
+      runSims: true,
+    }),
     '',
     'INTEGRATION CROSS-CHECK',
     integrationLines.length > 0 ? integrationLines.join('\n') : 'No cross-check issues.',

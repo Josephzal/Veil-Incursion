@@ -3,6 +3,7 @@ import { useCallback, useRef } from 'react';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import { useWorldState } from '../context/WorldStateContext';
+import { createDefaultBalanceRunStats } from '../data/balance/balanceRunStats';
 import { resolveContractExtractionKind } from '../data/contractExtractionKind';
 import { resolveContractResult } from '../data/contractResolver';
 import { buildOperationDebriefPayload } from '../data/runDebriefEngine';
@@ -17,7 +18,7 @@ import type { ActiveIncursionState } from '../types/game';
 
 export function useRunDeathFinalizer() {
   const {
-    activeIncursion,
+    peekActiveIncursion,
     endRun,
     getRunElapsedMs,
     getLastKillingEnemyDesignation,
@@ -25,19 +26,26 @@ export function useRunDeathFinalizer() {
   const { setPendingDebrief, tickAfterRunComplete, sectors } = useWorldState();
   const { account } = usePlayerAccount();
   const { startOperationDebrief, goToHub } = useGameFlow();
-  const incursionRef = useRef(activeIncursion);
-  incursionRef.current = activeIncursion;
 
   const finalizeRunDeath = useCallback((reason: string, causeOfDeath?: string) => {
-    const inc = incursionRef.current;
+    const inc = peekActiveIncursion();
     const deathResources = resolveRunDeathResourceState(
       inc.cargo,
       inc.runBankedSnapshot,
       inc.runResourceLedger,
     );
+    const depth = depthFromNodesCleared(inc.nodesCleared);
+    const deathDistrict = getDistrictFromDepth(depth);
+    const resolvedCause = causeOfDeath ?? getLastKillingEnemyDesignation() ?? reason;
+    const balanceStats = inc.balanceRunStats ?? createDefaultBalanceRunStats();
     const incWithLedger: ActiveIncursionState = {
       ...inc,
       runResourceLedger: deathResources.ledger,
+      balanceRunStats: {
+        ...balanceStats,
+        deathCause: resolvedCause,
+        deathDistrict,
+      },
     };
     const extractionKind = resolveContractExtractionKind(inc);
     const contractResult = resolveContractResult({
@@ -54,7 +62,6 @@ export function useRunDeathFinalizer() {
       ?? operation?.progressCurrent
       ?? 0;
     const progressRequired = operation?.progressRequired ?? 100;
-    const depth = depthFromNodesCleared(inc.nodesCleared);
 
     const debrief = buildOperationDebriefPayload(incWithLedger, {
       progressBefore: progressCurrent,
@@ -72,9 +79,9 @@ export function useRunDeathFinalizer() {
       midRunContributionTransmitted: inc.operationContributionTransmitted,
       deathStats: {
         timeAliveMs: getRunElapsedMs() ?? 0,
-        causeOfDeath: causeOfDeath ?? getLastKillingEnemyDesignation() ?? reason,
+        causeOfDeath: resolvedCause,
         sectorLevel: localLevelFromDepth(depth),
-        depthLayer: getDistrictFromDepth(depth),
+        depthLayer: deathDistrict,
       },
       account,
     });
@@ -90,15 +97,16 @@ export function useRunDeathFinalizer() {
     tickAfterRunComplete();
     goToHub();
   }, [
+    account,
     endRun,
     getLastKillingEnemyDesignation,
     getRunElapsedMs,
     goToHub,
+    peekActiveIncursion,
+    sectors,
     setPendingDebrief,
     startOperationDebrief,
     tickAfterRunComplete,
-    sectors,
-    account,
   ]);
 
   return { finalizeRunDeath };

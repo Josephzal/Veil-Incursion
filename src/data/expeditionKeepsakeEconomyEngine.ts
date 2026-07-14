@@ -29,7 +29,8 @@ import {
 
 const MATCHBOOK_MAX_MATCHES = 4;
 const MATCHBOOK_SKIP_CREDITS = [0, 15, 30, 50, 75];
-const MARKED_SHELF_DISCOUNT_PCT = 40;
+/** Marked Shelf black-market discount — Phase D validates against trinket soft caps. */
+export const MARKED_SHELF_DISCOUNT_PCT = 40;
 const NULL_LEDGER_DEBT_SURCHARGE_PCT = 25;
 const STAMPED_STABLE_CARGO_VALUE_BONUS_PCT = 10;
 const RUSTED_FLARE_SHIELD_HITS = 10;

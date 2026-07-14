@@ -120,6 +120,20 @@ import {
 } from '../../data/runIntegration/runPacingConfig';
 import { formatRunBalanceTelemetryReport, buildRunBalanceTelemetry } from '../../data/runIntegration/runBalanceTelemetryEngine';
 import {
+  formatBalanceConfigSummary,
+  formatBalanceDashboard,
+  formatBalanceSimulationBundle,
+  formatBalanceValidationReport,
+  formatContractGenerationReport,
+  formatCraftingAffordabilityReport,
+  formatEncounterDistributionReport,
+  formatOperationProgressReport,
+  formatRewardRollsReport,
+  formatRunResourceIncomeReport,
+  formatRunTreeGenerationReport,
+  formatSealedOpenBalanceReport,
+} from '../../data/balance';
+import {
   formatWeaponValidationReport,
   validateWeaponRegistry,
   debugPrintEquippedWeapons,
@@ -1298,6 +1312,75 @@ export default function DevTestHubPanel(): React.JSX.Element {
           onPress={() => setDebugReport(
             formatRunBalanceTelemetryReport(buildRunBalanceTelemetry(activeIncursion)),
           )}
+        />
+        <SandboxLaunchButton
+          label="[ BALANCE CONFIG ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(formatBalanceConfigSummary())}
+        />
+        <SandboxLaunchButton
+          label="[ BALANCE DASHBOARD ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(formatBalanceDashboard(account.careerBalanceHistory))}
+        />
+        <SandboxLaunchButton
+          label="[ VALIDATE BALANCE ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(formatBalanceValidationReport({
+            careerBalanceHistory: account.careerBalanceHistory,
+            runSims: true,
+          }))}
+        />
+        <SandboxLaunchButton
+          label="[ SIM BALANCE BUNDLE ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(formatBalanceSimulationBundle())}
+        />
+        <SandboxLaunchButton
+          label="[ SIM TREES 100 ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(formatRunTreeGenerationReport(100, 1))}
+        />
+        <SandboxLaunchButton
+          label="[ SIM REWARDS ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport([
+            formatRewardRollsReport(5, 'STANDARD', 80),
+            '',
+            formatRewardRollsReport(20, 'ELITE', 60),
+            '',
+            formatRewardRollsReport(15, 'BOSS', 40),
+          ].join('\n'))}
+        />
+        <SandboxLaunchButton
+          label="[ SIM CONTRACTS ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(formatContractGenerationReport(50))}
+        />
+        <SandboxLaunchButton
+          label="[ SIM OPS ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(formatOperationProgressReport())}
+        />
+        <SandboxLaunchButton
+          label="[ SIM RUN LOOT ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(formatRunResourceIncomeReport())}
+        />
+        <SandboxLaunchButton
+          label="[ SIM CRAFT AFFORD ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(formatCraftingAffordabilityReport())}
+        />
+        <SandboxLaunchButton
+          label="[ SIM SEALED EV ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(formatSealedOpenBalanceReport(50))}
+        />
+        <SandboxLaunchButton
+          label="[ SIM ENCOUNTER DIST ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(formatEncounterDistributionReport())}
         />
         {ALLOWED_NODES_PER_DISTRICT.map((preset) => (
           <SandboxLaunchButton

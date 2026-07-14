@@ -1,24 +1,28 @@
-/** Run credit economy — tuned for consumable conservation and depth scaling. */
+/** Run credit economy — values sourced from balance/rewardBalanceConfig. */
 
 import { getDistrictFromDepth } from './districtPacing';
+import {
+  REWARD_CREDIT_RANGES,
+  REWARD_DEPTH_CREDIT_MULTIPLIER,
+} from './balance/rewardBalanceConfig';
 
-export const RUN_CREDIT_STANDARD_KILL_MIN = 15;
-export const RUN_CREDIT_STANDARD_KILL_MAX = 25;
+export const RUN_CREDIT_STANDARD_KILL_MIN = REWARD_CREDIT_RANGES.standardKill.min;
+export const RUN_CREDIT_STANDARD_KILL_MAX = REWARD_CREDIT_RANGES.standardKill.max;
 
-export const RUN_CREDIT_ELITE_KILL_MIN = 65;
-export const RUN_CREDIT_ELITE_KILL_MAX = 80;
+export const RUN_CREDIT_ELITE_KILL_MIN = REWARD_CREDIT_RANGES.eliteKill.min;
+export const RUN_CREDIT_ELITE_KILL_MAX = REWARD_CREDIT_RANGES.eliteKill.max;
 
-export const RUN_CREDIT_DISTRICT_BOSS_MIN = 75;
-export const RUN_CREDIT_DISTRICT_BOSS_MAX = 100;
+export const RUN_CREDIT_DISTRICT_BOSS_MIN = REWARD_CREDIT_RANGES.districtBoss.min;
+export const RUN_CREDIT_DISTRICT_BOSS_MAX = REWARD_CREDIT_RANGES.districtBoss.max;
 
-export const RUN_CREDIT_PRIME_BOSS_MIN = 100;
-export const RUN_CREDIT_PRIME_BOSS_MAX = 120;
+export const RUN_CREDIT_PRIME_BOSS_MIN = REWARD_CREDIT_RANGES.primeBoss.min;
+export const RUN_CREDIT_PRIME_BOSS_MAX = REWARD_CREDIT_RANGES.primeBoss.max;
 
 /** Narrative node — successful attribute check / resolver payout. */
-export const RUN_CREDIT_NARRATIVE_SUCCESS = 35;
+export const RUN_CREDIT_NARRATIVE_SUCCESS = REWARD_CREDIT_RANGES.narrativeSuccess;
 
 /** Narrative node — failed gamble (no credits). */
-export const RUN_CREDIT_NARRATIVE_FAILURE = 0;
+export const RUN_CREDIT_NARRATIVE_FAILURE = REWARD_CREDIT_RANGES.narrativeFailure;
 
 /** Baseline resolver payout when JSON/catalog copy omits an explicit credit line. */
 export function defaultNarrativeResolverCredits(): number {
@@ -39,16 +43,8 @@ export function rollCreditReward(min: number, max: number): number {
 
 /** Flat multiplier by district depth layer (rounded down after apply). */
 export function depthCreditMultiplier(depth: number): number {
-  switch (getDistrictFromDepth(depth)) {
-    case 1:
-      return 1.0;
-    case 2:
-      return 1.5;
-    case 3:
-      return 2.0;
-    default:
-      return 1.0;
-  }
+  const district = getDistrictFromDepth(depth);
+  return REWARD_DEPTH_CREDIT_MULTIPLIER[district] ?? 1.0;
 }
 
 export function applyDepthCreditScaling(baseCredits: number, depth: number): number {

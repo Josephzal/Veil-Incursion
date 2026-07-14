@@ -119,6 +119,7 @@ export default function CombatScreen(): React.JSX.Element {
     clearRunLog,
     recordDepthIdentityCombatVictory,
     recordCompositionEncounterVictory,
+    recordBalanceCombatSample,
   } = useRun();
   const { completeCurrentNode } = useNodeProgression();
   const { getWeaponCombatStats, account, addLockedContainer } = usePlayerAccount();
@@ -423,7 +424,28 @@ export default function CombatScreen(): React.JSX.Element {
     victory: boolean;
     remainingHp: number;
     remainingStamina: number;
+    playerTurns?: number;
+    damageTaken?: number;
+    healingReceived?: number;
+    damageDealt?: number;
   }) => {
+    const vectorNode = getSelectedVectorNode();
+    const isBossEncounter =
+      activeIncursion.bossProfile != null || runState.pendingEnemy?.isBoss === true;
+    const combatKind = isBossEncounter
+      ? 'BOSS' as const
+      : vectorNode?.type === 'ELITE_COMBAT'
+        ? 'ELITE' as const
+        : 'STANDARD' as const;
+    recordBalanceCombatSample({
+      kind: combatKind,
+      playerTurns: result.playerTurns ?? 0,
+      damageTaken: result.damageTaken ?? 0,
+      healingReceived: result.healingReceived ?? 0,
+      damageDealt: result.damageDealt ?? 0,
+      victory: Boolean(result.victory && result.remainingHp > 0),
+    });
+
     if (runState.devSandboxPreset || runState.combatTestPreset) {
       exitToDevTestHub();
       return;
@@ -455,9 +477,6 @@ export default function CombatScreen(): React.JSX.Element {
       return;
     }
 
-    const vectorNode = getSelectedVectorNode();
-    const isBossEncounter =
-      activeIncursion.bossProfile != null || runState.pendingEnemy?.isBoss === true;
     const nodeType = vectorNode?.type;
     const depth = activeIncursion.nodesCleared + 1;
     const mods = vectorNode?.contextModifiers;
@@ -618,6 +637,7 @@ export default function CombatScreen(): React.JSX.Element {
     clearEncounterUltimateDisabled,
     recordDepthIdentityCombatVictory,
     recordCompositionEncounterVictory,
+    recordBalanceCombatSample,
     activeIncursion.pendingHarvestReturn,
     activeIncursion.runGenerationContext,
   ]);

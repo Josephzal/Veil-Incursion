@@ -5,6 +5,11 @@ import type {
 } from '../types/contract';
 import type { ResourceItemId } from '../types/resourceItem';
 import type { CabalEmployerId, SectorId } from '../types/worldState';
+import {
+  buildContractRewardPackage,
+  CONTRACT_EMERGENCY_RECALL_RARE_LOOT_PCT,
+  contractCreditsForKind,
+} from './balance/contractBalanceConfig';
 
 export interface ContractTemplateSpec {
   kind: ContractObjectiveKind;
@@ -65,16 +70,17 @@ function pickOne<T>(items: readonly T[], rng: () => number): T {
 }
 
 function rewardBase(sponsorId: CabalEmployerId, credits: number, reputation: number): ContractRewardPackage {
-  switch (sponsorId) {
-    case 'TERRAN_GRID':
-      return { credits, reputation, rareLootBonusPct: 0 };
-    case 'LEGION':
-      return { credits: Math.round(credits * 0.9), reputation, rareLootBonusPct: 5 };
-    case 'SOLARIS':
-      return { credits: Math.round(credits * 1.1), reputation: reputation + 1, rareLootBonusPct: 8 };
-    default:
-      return { credits, reputation };
-  }
+  return buildContractRewardPackage(sponsorId, credits, reputation);
+}
+
+function rewardForKind(
+  kind: string,
+  sponsorId: CabalEmployerId,
+  difficulty: number,
+  extra?: Partial<ContractRewardPackage>,
+): ContractRewardPackage {
+  const { credits, reputation } = contractCreditsForKind(kind, difficulty);
+  return { ...rewardBase(sponsorId, credits, reputation), ...extra };
 }
 
 export const CONTRACT_TEMPLATE_SPECS: ContractTemplateSpec[] = [
@@ -93,7 +99,7 @@ export const CONTRACT_TEMPLATE_SPECS: ContractTemplateSpec[] = [
       targetQuantity: 3 + Math.floor(ctx.rng() * 3),
     }),
     difficultyBase: 2,
-    rewardFor: (s, d) => rewardBase(s, 80 + d * 20, 2),
+    rewardFor: (s, d) => rewardForKind('EXTRACT_STABLE_RESOURCE', s, d),
   },
   {
     kind: 'EXTRACT_SPONSOR_RESOURCE',
@@ -110,7 +116,7 @@ export const CONTRACT_TEMPLATE_SPECS: ContractTemplateSpec[] = [
       targetQuantity: 1,
     }),
     difficultyBase: 3,
-    rewardFor: (s, d) => rewardBase(s, 120 + d * 25, 3),
+    rewardFor: (s, d) => rewardForKind('EXTRACT_SPONSOR_RESOURCE', s, d),
   },
   {
     kind: 'RECOVER_INTEL',
@@ -120,7 +126,7 @@ export const CONTRACT_TEMPLATE_SPECS: ContractTemplateSpec[] = [
     buildObjectiveText: () => 'Extract 1 Encrypted Grid-Drive.',
     pickResources: () => ({ targetResourceId: 'encrypted-grid-drive', targetQuantity: 1 }),
     difficultyBase: 3,
-    rewardFor: (s, d) => ({ ...rewardBase(s, 150 + d * 30, 4), resourceBonusIds: ['encrypted-grid-drive'] }),
+    rewardFor: (s, d) => rewardForKind('RECOVER_INTEL', s, d, { resourceBonusIds: ['encrypted-grid-drive'] }),
   },
   {
     kind: 'RECOVER_ECONOMY_INTEL',
@@ -134,7 +140,7 @@ export const CONTRACT_TEMPLATE_SPECS: ContractTemplateSpec[] = [
       ? { targetResourceId: 'smugglers-ledger', targetQuantity: 1 }
       : { targetResourceId: 'tarnished-dog-tags', targetQuantity: 3 }),
     difficultyBase: 2,
-    rewardFor: (s, d) => rewardBase(s, 140 + d * 25, 3),
+    rewardFor: (s, d) => rewardForKind('RECOVER_ECONOMY_INTEL', s, d),
   },
   {
     kind: 'EXTRACT_UNSTABLE_CARGO',
@@ -154,7 +160,7 @@ export const CONTRACT_TEMPLATE_SPECS: ContractTemplateSpec[] = [
     },
     requiredDepth: 2,
     difficultyBase: 4,
-    rewardFor: (s, d) => rewardBase(s, 160 + d * 30, 4),
+    rewardFor: (s, d) => rewardForKind('EXTRACT_UNSTABLE_CARGO', s, d),
   },
   {
     kind: 'RECOVER_APEX_CARGO',
@@ -165,7 +171,7 @@ export const CONTRACT_TEMPLATE_SPECS: ContractTemplateSpec[] = [
     pickResources: () => ({ targetResourceId: 'anomalous-core', targetQuantity: 1 }),
     requiredDepth: 3,
     difficultyBase: 5,
-    rewardFor: (s, d) => rewardBase(s, 250 + d * 40, 6),
+    rewardFor: (s, d) => rewardForKind('RECOVER_APEX_CARGO', s, d),
   },
   {
     kind: 'RECOVER_CONTRABAND',
@@ -183,7 +189,7 @@ export const CONTRACT_TEMPLATE_SPECS: ContractTemplateSpec[] = [
       targetQuantity: 1,
     }),
     difficultyBase: 4,
-    rewardFor: (s, d) => rewardBase(s, 180 + d * 35, 4),
+    rewardFor: (s, d) => rewardForKind('RECOVER_CONTRABAND', s, d),
   },
   {
     kind: 'DEFEAT_ELITE',
@@ -196,7 +202,7 @@ export const CONTRACT_TEMPLATE_SPECS: ContractTemplateSpec[] = [
     },
     requiredEliteKills: 2,
     difficultyBase: 3,
-    rewardFor: (s, d) => rewardBase(s, 100 + d * 20, 3),
+    rewardFor: (s, d) => rewardForKind('DEFEAT_ELITE', s, d),
   },
   {
     kind: 'COMPLETE_EMERGENCY_RECALL',
@@ -206,7 +212,9 @@ export const CONTRACT_TEMPLATE_SPECS: ContractTemplateSpec[] = [
     buildObjectiveText: () => 'Successfully complete an Emergency Recall extraction.',
     requiresEmergencyRecall: true,
     difficultyBase: 3,
-    rewardFor: (s, d) => ({ ...rewardBase(s, 110 + d * 25, 3), rareLootBonusPct: 8 }),
+    rewardFor: (s, d) => rewardForKind('COMPLETE_EMERGENCY_RECALL', s, d, {
+      rareLootBonusPct: CONTRACT_EMERGENCY_RECALL_RARE_LOOT_PCT,
+    }),
   },
   {
     kind: 'DEFEAT_DEPTH_BOSS',
@@ -216,7 +224,7 @@ export const CONTRACT_TEMPLATE_SPECS: ContractTemplateSpec[] = [
     buildObjectiveText: () => 'Defeat a depth boss before extracting.',
     requiredDepth: 1,
     difficultyBase: 4,
-    rewardFor: (s, d) => rewardBase(s, 140 + d * 30, 4),
+    rewardFor: (s, d) => rewardForKind('DEFEAT_DEPTH_BOSS', s, d),
   },
   {
     kind: 'REACH_DEPTH_AND_EXTRACT',
@@ -229,7 +237,7 @@ export const CONTRACT_TEMPLATE_SPECS: ContractTemplateSpec[] = [
     },
     requiredDepth: 2,
     difficultyBase: 3,
-    rewardFor: (s, d) => rewardBase(s, 90 + d * 20, 2),
+    rewardFor: (s, d) => rewardForKind('REACH_DEPTH_AND_EXTRACT', s, d),
   },
   {
     kind: 'CLEAR_OPERATION_TARGET',
@@ -239,7 +247,7 @@ export const CONTRACT_TEMPLATE_SPECS: ContractTemplateSpec[] = [
     buildObjectiveText: () => 'Clear 1 Operation Target or Anchor Signal node before extracting.',
     requiredOperationTargets: 1,
     difficultyBase: 3,
-    rewardFor: (s, d) => rewardBase(s, 120 + d * 25, 3),
+    rewardFor: (s, d) => rewardForKind('CLEAR_OPERATION_TARGET', s, d),
   },
 ];
 

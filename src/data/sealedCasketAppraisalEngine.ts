@@ -5,6 +5,10 @@ import {
 } from '../types/sealedCargo';
 import type { ResourceItemId } from '../types/resourceItem';
 import { getSealedCargoConfig, SEALED_CASKET_CONFIG, SEALED_SPECIMEN_JAR_CONFIG } from './sealedCargoEngine';
+import {
+  ECONOMY_CASKET_APPRAISED_SELL,
+  ECONOMY_JAR_APPRAISED_SELL,
+} from './balance/economyBalanceConfig';
 
 const CASKET_BAND_WEIGHTS: Array<{ band: AppraisalValueBand; weight: number }> = [
   { band: 'LOW_VALUE', weight: 25 },
@@ -30,22 +34,10 @@ export const JAR_APPRAISAL_BAND_LABELS: Record<AppraisalValueBand, string> = {
   APEX_VALUE: 'Apex blacksite sample',
 };
 
-export const APPRAISED_SELL_VALUES: Record<AppraisalValueBand, number> = {
-  LOW_VALUE: 125,
-  STANDARD_VALUE: 175,
-  HIGH_VALUE: 250,
-  RARE_VALUE: 375,
-  APEX_VALUE: 500,
-};
+export const APPRAISED_SELL_VALUES: Record<AppraisalValueBand, number> = ECONOMY_CASKET_APPRAISED_SELL;
 
 /** Softer payout curve for Specimen Jar (minor sibling). */
-export const JAR_APPRAISED_SELL_VALUES: Record<AppraisalValueBand, number> = {
-  LOW_VALUE: 60,
-  STANDARD_VALUE: 90,
-  HIGH_VALUE: 130,
-  RARE_VALUE: 180,
-  APEX_VALUE: 250,
-};
+export const JAR_APPRAISED_SELL_VALUES: Record<AppraisalValueBand, number> = ECONOMY_JAR_APPRAISED_SELL;
 
 let debugForcedBand: AppraisalValueBand | null = null;
 

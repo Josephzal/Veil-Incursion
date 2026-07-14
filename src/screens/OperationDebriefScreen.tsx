@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import HapticPressable from '../components/HapticPressable';
 import TerminalResultsLayout from '../components/layout/TerminalResultsLayout';
@@ -37,6 +37,8 @@ import {
 import { formatActiveContractCargoDeliveryHints } from '../data/cargoRoutingIntelEngine';
 import { outcomeKindLabel } from '../data/bribeOfferEngine';
 import { formatCareerCargoRoutingSummary } from '../data/postRunCargoRoutingRunState';
+import { formatBalanceDashboard } from '../data/balance/balanceDashboardEngine';
+import { formatRunBalanceTelemetryReport } from '../data/runIntegration/runBalanceTelemetryEngine';
 import { operationProgressPercent } from '../data/worldStateHelpers';
 import { formatExtractionKindLabel, sponsorDisplayName } from '../utils/contractUi';
 import { getResourceDisplayName } from '../data/resourceRegistry';
@@ -49,7 +51,6 @@ import {
 import { formatRunOutcomeDetailLabel } from '../data/runIntegration/runOutcomeDetailEngine';
 import { buildNextActionSuggestions } from '../data/runIntegration/runNextActionEngine';
 import { formatCraftingOpportunityLines } from '../data/runIntegration/runCraftingOpportunityEngine';
-import { formatRunBalanceTelemetryReport } from '../data/runIntegration/runBalanceTelemetryEngine';
 
 const TERMINAL_ACCENT = '#00ff33';
 const FAILURE_ACCENT = '#ef4444';
@@ -89,7 +90,7 @@ function contractStatusColor(status: ContractResult['status']): string {
 export default function OperationDebriefScreen(): React.JSX.Element | null {
   const { theme } = useTerminal();
   const { pendingDebrief, setPendingDebrief, clearPendingDebrief, tickAfterRunComplete, applyOperationContribution, persisted, sectors } = useWorldState();
-  const { appendHubLog, applyPostRunCargoRouting, applyBetrayalConsequences, grantContractRewards, account, addCredits } = usePlayerAccount();
+  const { appendHubLog, applyPostRunCargoRouting, applyBetrayalConsequences, grantContractRewards, account, addCredits, recordCareerBalanceTelemetry } = usePlayerAccount();
   const { goToHub } = useGameFlow();
   const immersivePadding = useImmersiveScreenPadding();
 
@@ -198,6 +199,15 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
     balanceTelemetry,
     craftingOpportunities,
   } = pendingDebrief;
+
+  const recordedBalanceRunRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!balanceTelemetry) return;
+    const key = `${balanceTelemetry.extractionType}:${balanceTelemetry.nodesCleared}:${balanceTelemetry.sectorId ?? ''}:${balanceTelemetry.timeAliveMs ?? 0}`;
+    if (recordedBalanceRunRef.current === key) return;
+    recordedBalanceRunRef.current = key;
+    recordCareerBalanceTelemetry(balanceTelemetry);
+  }, [balanceTelemetry, recordCareerBalanceTelemetry]);
 
   const nextActions = useMemo(
     () => buildNextActionSuggestions(pendingDebrief, account, {
@@ -1132,6 +1142,16 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
                     <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>RUN TELEMETRY</Text>
                     {formatRunBalanceTelemetryReport(balanceTelemetry).split('\n').slice(1).map((line) => (
                       <Text key={line} style={[styles.stat, { color: theme.mutedColor, fontSize: 9 }]}>
+                        {line.toUpperCase()}
+                      </Text>
+                    ))}
+                    <View style={styles.sectionGap} />
+                    <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>BALANCE DASHBOARD</Text>
+                    {formatBalanceDashboard(account.careerBalanceHistory).split('\n').slice(1).map((line) => (
+                      <Text
+                        key={`dash-${line}`}
+                        style={[styles.stat, { color: theme.mutedColor, fontSize: 9 }]}
+                      >
                         {line.toUpperCase()}
                       </Text>
                     ))}

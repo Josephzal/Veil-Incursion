@@ -5,60 +5,39 @@ import type {
   DepthStageModifiers,
   NodePressureBand,
 } from '../types/worldState';
+import { getLevelsPerDistrict } from '../types/sectorPacing';
+import {
+  SCANNER_ANCHOR_ASSAULT_CORE_CHANCE,
+  SCANNER_DEPTH_STAGE_MODIFIERS,
+  SCANNER_ECHO_CAPS,
+  SCANNER_ECHO_SIGNAL_CHANCE,
+  SCANNER_OPERATION_TARGET_CHANCE,
+} from './balance/scannerBalanceConfig';
+import {
+  OPERATION_BALANCE_CONTRIBUTION,
+  OPERATION_BALANCE_DEFAULT_AFTERMATH_RUNS,
+  OPERATION_BALANCE_DEFAULT_MAX_RUNS,
+  OPERATION_BALANCE_MAX_SAFEHOUSE_BANK_ACTIONS,
+  OPERATION_BALANCE_MAX_TARGET_RESOURCE_STACKS_PER_RUN,
+  OPERATION_BALANCE_PROGRESS_REQUIRED,
+} from './balance/operationBalanceConfig';
 
-export const DEPTH_STAGE_MODIFIERS: Record<DepthStage, DepthStageModifiers> = {
-  THRESHOLD: {
-    combatBias: 0.05,
-    eliteBias: -0.1,
-    anomalyBias: -0.1,
-    echoBias: -0.2,
-    anchorSignalChance: 0.05,
-    rareLootBias: 0,
-  },
-  BREACH: {
-    combatBias: 0,
-    eliteBias: 0.1,
-    anomalyBias: 0.15,
-    echoBias: 0.1,
-    anchorSignalChance: 0.2,
-    rareLootBias: 0.1,
-  },
-  DEEP_VEIL: {
-    combatBias: -0.05,
-    eliteBias: 0.2,
-    anomalyBias: 0.25,
-    echoBias: 0.25,
-    anchorSignalChance: 0.4,
-    rareLootBias: 0.3,
-  },
-};
+export const DEPTH_STAGE_MODIFIERS: Record<DepthStage, DepthStageModifiers> = SCANNER_DEPTH_STAGE_MODIFIERS;
 
-export const ANCHOR_ASSAULT_CORE_CHANCE: Record<DepthStage, number> = {
-  THRESHOLD: 0,
-  BREACH: 0,
-  DEEP_VEIL: 0.35,
-};
+export const ANCHOR_ASSAULT_CORE_CHANCE: Record<DepthStage, number> = SCANNER_ANCHOR_ASSAULT_CORE_CHANCE;
 
 /** Base chance a node receives an Operation Target overlay by macro depth. */
-export const OPERATION_TARGET_CHANCE: Record<DepthStage, number> = {
-  THRESHOLD: 0.08,
-  BREACH: 0.22,
-  DEEP_VEIL: 0.38,
-};
+export const OPERATION_TARGET_CHANCE: Record<DepthStage, number> = SCANNER_OPERATION_TARGET_CHANCE;
 
 export const ECHO_SIGNAL_CHANCE: Record<
   'LOW' | 'ELEVATED' | 'CRITICAL',
   Record<DepthStage, number>
-> = {
-  LOW: { THRESHOLD: 0, BREACH: 0.05, DEEP_VEIL: 0.1 },
-  ELEVATED: { THRESHOLD: 0.02, BREACH: 0.12, DEEP_VEIL: 0.22 },
-  CRITICAL: { THRESHOLD: 0.05, BREACH: 0.2, DEEP_VEIL: 0.35 },
-};
+> = SCANNER_ECHO_SIGNAL_CHANCE;
 
-export const MAX_ECHO_ENCOUNTERS_PER_RUN = 2;
-export const MAX_ECHO_ENCOUNTERS_ECHO_RECOVERY_RUN = 3;
-export const MAX_ECHO_SIGNALS_PER_DEPTH = 1;
-export const MAX_LEGENDARY_ECHO_ENCOUNTERS_PER_RUN = 1;
+export const MAX_ECHO_ENCOUNTERS_PER_RUN = SCANNER_ECHO_CAPS.maxEncountersPerRun;
+export const MAX_ECHO_ENCOUNTERS_ECHO_RECOVERY_RUN = SCANNER_ECHO_CAPS.maxEncountersEchoRecoveryRun;
+export const MAX_ECHO_SIGNALS_PER_DEPTH = SCANNER_ECHO_CAPS.maxSignalsPerDepth;
+export const MAX_LEGENDARY_ECHO_ENCOUNTERS_PER_RUN = SCANNER_ECHO_CAPS.maxLegendaryPerRun;
 
 export function resolveMaxEchoEncountersPerRun(
   isEchoRecoveryOperation: boolean,
@@ -68,29 +47,20 @@ export function resolveMaxEchoEncountersPerRun(
     : MAX_ECHO_ENCOUNTERS_PER_RUN;
 }
 
-export const DEFAULT_OPERATION_PROGRESS_REQUIRED = 100;
+export const DEFAULT_OPERATION_PROGRESS_REQUIRED = OPERATION_BALANCE_PROGRESS_REQUIRED;
 
-export const OPERATION_CONTRIBUTION_VALUES = {
-  successfulExtraction: 1,
-  emergencyRecallExtraction: 2,
-  bankAtSafehouse: 1,
-  defeatDepthBoss: 5,
-  defeatElite: 3,
-  defeatEcho: 3,
-  defeatAnchorElite: 4,
-  clearAnchorCore: 10,
-  clearOperationTarget: 2,
-  extractTargetResourceStack: 1,
-} as const;
+export const OPERATION_CONTRIBUTION_VALUES = OPERATION_BALANCE_CONTRIBUTION;
 
 /** Max target-resource stacks credited toward operation progress per run. */
-export const MAX_OPERATION_TARGET_RESOURCE_STACKS_PER_RUN = 5;
+export const MAX_OPERATION_TARGET_RESOURCE_STACKS_PER_RUN =
+  OPERATION_BALANCE_MAX_TARGET_RESOURCE_STACKS_PER_RUN;
 
 /** Max safehouse bank actions credited toward Extraction Surge per run. */
-export const MAX_SAFEHOUSE_BANK_CONTRIBUTION_ACTIONS = 2;
+export const MAX_SAFEHOUSE_BANK_CONTRIBUTION_ACTIONS =
+  OPERATION_BALANCE_MAX_SAFEHOUSE_BANK_ACTIONS;
 
-export const DEFAULT_OPERATION_MAX_RUNS = 5;
-export const DEFAULT_OPERATION_AFTERMATH_RUNS = 2;
+export const DEFAULT_OPERATION_MAX_RUNS = OPERATION_BALANCE_DEFAULT_MAX_RUNS;
+export const DEFAULT_OPERATION_AFTERMATH_RUNS = OPERATION_BALANCE_DEFAULT_AFTERMATH_RUNS;
 
 export function getDepthStage(depthIndex: 1 | 2 | 3): DepthStage {
   if (depthIndex === 1) return 'THRESHOLD';
@@ -105,8 +75,11 @@ export function getAnchorStage(depthStage: DepthStage): AnchorStage {
 }
 
 export function getNodePressureBand(nodeIndexWithinDepth: number): NodePressureBand {
-  if (nodeIndexWithinDepth <= 5) return 'LOW';
-  if (nodeIndexWithinDepth <= 10) return 'MEDIUM';
+  const levels = getLevelsPerDistrict();
+  const lowEnd = Math.max(1, Math.round((levels * 5) / 15));
+  const midEnd = Math.max(lowEnd + 1, Math.round((levels * 10) / 15));
+  if (nodeIndexWithinDepth <= lowEnd) return 'LOW';
+  if (nodeIndexWithinDepth <= midEnd) return 'MEDIUM';
   return 'HIGH';
 }
 
@@ -115,13 +88,15 @@ export function depthIndexFromDistrict(district: 1 | 2 | 3): 1 | 2 | 3 {
 }
 
 export function depthIndexFromNodesCleared(nodesCleared: number): 1 | 2 | 3 {
-  if (nodesCleared < 15) return 1;
-  if (nodesCleared < 30) return 2;
+  const levels = getLevelsPerDistrict();
+  if (nodesCleared < levels) return 1;
+  if (nodesCleared < levels * 2) return 2;
   return 3;
 }
 
 export function localNodeIndexWithinDepth(nodesCleared: number): number {
-  const clearedInDepth = nodesCleared % 15;
+  const levels = getLevelsPerDistrict();
+  const clearedInDepth = nodesCleared % levels;
   return clearedInDepth + 1;
 }
 

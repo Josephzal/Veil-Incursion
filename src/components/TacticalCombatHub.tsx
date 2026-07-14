@@ -512,7 +512,15 @@ interface TacticalCombatHubProps {
   onResolutionPanelChange?: (
     panel: { outcome: 'VICTORY' | 'DEFEAT'; onDismiss: () => void } | null,
   ) => void;
-  onCombatComplete?: (r: { victory: boolean; remainingHp: number; remainingStamina: number }) => void;
+  onCombatComplete?: (r: {
+    victory: boolean;
+    remainingHp: number;
+    remainingStamina: number;
+    playerTurns: number;
+    damageTaken: number;
+    healingReceived: number;
+    damageDealt: number;
+  }) => void;
   /** Live run credits for cargo deck HUD. */
   runCredits?: number;
   /** Records the hostile designation that dealt the killing blow. */
@@ -829,6 +837,12 @@ export default function TacticalCombatHub({
   const riftWardReadyRef = useRef(false);
 
   const operativeHpRef = useRef(initialOperativeHp);
+  const balanceEncounterRef = useRef({
+    playerTurns: 0,
+    damageTaken: 0,
+    healingReceived: 0,
+    damageDealt: 0,
+  });
   const currentAmmoRef = useRef(DEFAULT_MAGAZINE_SIZE);
   const hexShotStateRef = useRef(hexShotState);
   const veilFluxRef = useRef(VEIL_FLUX_START);
@@ -2083,6 +2097,8 @@ export default function TacticalCombatHub({
     if (effectiveAmount <= 0) return;
     setOperativeHp((p) => {
       const n = Math.min(p + effectiveAmount, getEffectiveMaxSoulAnchor());
+      const gained = Math.max(0, n - p);
+      if (gained > 0) balanceEncounterRef.current.healingReceived += gained;
       operativeHpRef.current = n;
       return n;
     });
@@ -2692,6 +2708,8 @@ export default function TacticalCombatHub({
         incoming = Math.max(0, p - 1);
       }
       const n = Math.max(p - incoming, 0);
+      const taken = Math.max(0, p - n);
+      if (taken > 0) balanceEncounterRef.current.damageTaken += taken;
       operativeHpRef.current = n;
       if (n <= 0 && options?.attacker?.designation) {
         onLethalEnemyStrike?.(options.attacker.designation);
@@ -3297,6 +3315,7 @@ export default function TacticalCombatHub({
       ? Math.max(bossRuntimeRef.current.currentHp - dmg, 0)
       : Math.max(working.currentHp - dmg, 0);
     const hp = poolHp;
+    if (dmg > 0) balanceEncounterRef.current.damageDealt += dmg;
 
     if (hp <= 0 && e.unitId && source && options?.channel) {
       const killGraft = operativeClass === 'AEGIS'
@@ -4544,6 +4563,7 @@ export default function TacticalCombatHub({
 
   const startPlayerTurn = (_e: EnemyCombatProfile) => {
     if (isCombatTerminal()) return;
+    balanceEncounterRef.current.playerTurns += 1;
     lifecycleFloatLabelsRef.current = {};
     sessionExtrasRef.current.reaverDamagedThisPlayerTurn = false;
     setOperativeHp((prev) => {
@@ -5239,6 +5259,12 @@ export default function TacticalCombatHub({
     const defaultTarget = nextDefaultTarget(initialSquad);
     if (defaultTarget) selectTarget(defaultTarget);
     operativeHpRef.current = initialOperativeHp; staminaRef.current = initialStamina;
+    balanceEncounterRef.current = {
+      playerTurns: 0,
+      damageTaken: 0,
+      healingReceived: 0,
+      damageDealt: 0,
+    };
     const entryAr = Math.max(
       startingAbyssalReservePercent,
       mutationModsRef.current.startingAbyssalPercent,
@@ -5359,6 +5385,8 @@ export default function TacticalCombatHub({
     setSelectedAbility(null);
     setResolutionOutcome(null);
     setIsPlayerTurn(true);
+    // Combat opens on the operative's first turn without calling startPlayerTurn.
+    balanceEncounterRef.current.playerTurns = 1;
     setCycleState('TEXT_COMBAT');
     setEnemyActionStage(null);
     preAppliedHpStrikeRef.current = 0;
@@ -7188,10 +7216,15 @@ export default function TacticalCombatHub({
     if (dismissedRef.current) return;
     dismissedRef.current = true;
     const hp = operativeHpRef.current;
+    const sample = balanceEncounterRef.current;
     onCombatComplete?.({
       victory: resolutionRef.current === 'VICTORY' && hp > 0,
       remainingHp: hp,
       remainingStamina: staminaRef.current,
+      playerTurns: sample.playerTurns,
+      damageTaken: sample.damageTaken,
+      healingReceived: sample.healingReceived,
+      damageDealt: sample.damageDealt,
     });
   }, [onCombatComplete]);
 

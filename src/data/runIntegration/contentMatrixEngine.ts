@@ -10,6 +10,7 @@ import type { SectorState, WorldStatePersistedState } from '../../types/worldSta
 import { getNodesPerDistrict, getMaxRunGraphDepth } from './runPacingConfig';
 import { formatCompositionContentReport } from '../encounterCompositionDebugEngine';
 import { formatResourceEconomyReport } from '../resourceEconomyReportEngine';
+import { formatBalanceConfigSummary } from '../balance';
 
 export interface ContentMatrixSummary {
   sectors: number;
@@ -78,5 +79,7 @@ export function formatContentMatrixReport(
     formatCompositionContentReport(),
     '',
     formatResourceEconomyReport(),
+    '',
+    formatBalanceConfigSummary(),
   ].join('\n');
 }
