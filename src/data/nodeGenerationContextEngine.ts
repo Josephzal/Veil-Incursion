@@ -17,6 +17,16 @@ import {
   getNodePressureBand,
 } from './worldStateHelpers';
 import { getAnchorDefinition } from './anchorRegistry';
+import {
+  applyEncounterModifierToContext,
+  rollEncounterModifierWithDebug,
+} from './encounterModifierEngine';
+import {
+  applyTwistedTemplateToContext,
+  rollTwistedTemplateWithDebug,
+} from './twistedTemplateEngine';
+import type { DepthIdentityState } from '../types/depthIdentity';
+import { normalizeDepthIdentityState } from './depthIdentityEngine';
 
 export interface RunTreeGenerationOptions {
   runGenerationContext?: RunGenerationContext | null;
@@ -216,12 +226,15 @@ export function rollNodeContextModifiers(
   rng: () => number,
   rollState: NodeModifierRollState,
   cargoBias?: import('../types/unstableCargoEffects').CarriedCargoContextRollBias,
+  depthIdentityBias?: import('../types/depthIdentity').DepthIdentityScanBias | null,
+  depthIdentity?: DepthIdentityState | null,
 ): NodeContextModifiers {
   const depthStage = getDepthStage(depthIndex);
   const pressureBand = getNodePressureBand(proceduralDepth);
   const pressureScale = pressureMultiplier(pressureBand);
   const stageMods = buildDepthGenerationContext(depthIndex, proceduralDepth).depthStageModifiers;
   const anchorStage = getAnchorStage(depthStage);
+  const identity = normalizeDepthIdentityState(depthIdentity);
 
   let modifiers: NodeContextModifiers = {
     depthStage,
@@ -242,18 +255,24 @@ export function rollNodeContextModifiers(
   if (cargoBias) {
     anchorRoll = Math.min(0.95, anchorRoll * cargoBias.anchorSignalChanceMultiplier);
   }
+  if (depthIdentityBias) {
+    anchorRoll = Math.min(0.95, anchorRoll * depthIdentityBias.anchorSignalMultiplier);
+  }
 
   if (runContext.activeAnchor?.isActive && rng() < anchorRoll) {
     modifiers.anchorSignal = true;
     modifiers.anchorStage = anchorStage;
   }
 
-  const operationTargetRoll = resolveOperationTargetRollChance(
+  let operationTargetRoll = resolveOperationTargetRollChance(
     depthStage,
     pressureScale,
     nodeType,
     runContext,
   );
+  if (depthIdentityBias) {
+    operationTargetRoll = Math.min(0.95, operationTargetRoll * depthIdentityBias.operationSignalMultiplier);
+  }
   if (rng() < operationTargetRoll) {
     modifiers.operationTag = runContext.activeOperation.objectiveKind;
   }
@@ -268,6 +287,13 @@ export function rollNodeContextModifiers(
       + (nodeType === 'ANOMALY' ? cargoBias.highRiskRollBonus * 0.5 : 0);
     modifiers.highRisk = modifiers.highRisk || rng() < Math.min(0.45, anomalyPressureRoll);
   }
+  if (depthIdentityBias && depthIdentityBias.highRiskMultiplier > 1) {
+    const identityRisk = (depthIdentityBias.highRiskMultiplier - 1) * 0.35 * pressureScale;
+    modifiers.highRisk = modifiers.highRisk || rng() < Math.min(0.4, identityRisk);
+  }
+  if (identity.pendingUnstablePressure) {
+    modifiers.highRisk = modifiers.highRisk || rng() < 0.55;
+  }
 
   if (nodeType === 'RESOURCE' && (pressureBand === 'HIGH' || stageMods.rareLootBias > 0.15)) {
     const highValueBase = 0.35 + stageMods.rareLootBias;
@@ -280,6 +306,9 @@ export function rollNodeContextModifiers(
         highValueChance *= 1 + cargoBias.occultRewardChanceBonus;
       }
     }
+    if (depthIdentityBias) {
+      highValueChance *= depthIdentityBias.highValueMultiplier;
+    }
     modifiers.highValueResource = rng() < Math.min(0.85, highValueChance);
   } else if (
     cargoBias
@@ -290,7 +319,31 @@ export function rollNodeContextModifiers(
     modifiers.highValueResource = rng() < Math.min(0.5, occultResourceRoll);
   }
 
-  return modifiers;
+  const rolledModifier = rollEncounterModifierWithDebug({
+    depthIndex,
+    nodeType,
+    distortion: identity.activeVeilDistortion,
+    law: identity.activeDeepVeilLaw,
+    highRisk: Boolean(modifiers.highRisk),
+    anchorSignal: Boolean(modifiers.anchorSignal),
+    operationTagged: Boolean(modifiers.operationTag),
+    pendingUnstablePressure: identity.pendingUnstablePressure,
+    rng,
+  });
+  modifiers = applyEncounterModifierToContext(modifiers, rolledModifier);
+
+  const rolledTwisted = rollTwistedTemplateWithDebug({
+    depthIndex,
+    nodeType,
+    distortion: identity.activeVeilDistortion,
+    law: identity.activeDeepVeilLaw,
+    highRisk: Boolean(modifiers.highRisk),
+    anchorSignal: Boolean(modifiers.anchorSignal),
+    operationTagged: Boolean(modifiers.operationTag),
+    alreadySeen: identity.twistedTemplatesSeen,
+    rng,
+  });
+  return applyTwistedTemplateToContext(modifiers, rolledTwisted);
 }
 
 export function applyGatekeeperAnchorCore(

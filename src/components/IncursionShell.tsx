@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import TerminalSafeArea from './TerminalSafeArea';
 import KeepsakeInRunChoiceOverlay from './KeepsakeInRunChoiceOverlay';
 import RunItemFieldChoiceOverlay from './RunItemFieldChoiceOverlay';
+import TwistedTemplateChoiceOverlay from './TwistedTemplateChoiceOverlay';
 
 interface IncursionShellProps {
   children: React.ReactNode;
@@ -16,6 +17,7 @@ export default function IncursionShell({ children }: IncursionShellProps): React
         {children}
         <KeepsakeInRunChoiceOverlay />
         <RunItemFieldChoiceOverlay />
+        <TwistedTemplateChoiceOverlay />
       </View>
     </TerminalSafeArea>
   );

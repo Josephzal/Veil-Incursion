@@ -8,6 +8,8 @@ import { formatCargoRoutingScannerTelemetry } from './cargoRoutingIntelEngine';
 import type { ActiveRunContract } from '../types/contract';
 import type { RunResourceLedger } from '../types/runResourceLedger';
 import { getNodePressureBand } from './worldStateHelpers';
+import { formatEncounterModifierScannerLabel } from './encounterModifierEngine';
+import { formatTwistedTemplateScannerLabel } from './twistedTemplateEngine';
 
 function anchorSignalKind(anchorStage?: NodeContextModifiers['anchorStage']): ScannerSignalKind {
   if (anchorStage === 'CORE') return 'ANCHOR_CORE';
@@ -79,6 +81,24 @@ export function resolveNodeScannerSignals(
       label: 'HIGH RISK',
       color: SCANNER_SIGNAL_COLORS.HIGH_RISK,
       intensity: Math.min(1, baseIntensity + 0.15),
+    });
+  }
+
+  if (ctx?.twistedTemplate) {
+    signals.push({
+      kind: 'HIGH_RISK',
+      label: formatTwistedTemplateScannerLabel(ctx.twistedTemplate),
+      color: SCANNER_SIGNAL_COLORS.HIGH_RISK,
+      intensity: Math.min(1, baseIntensity + 0.25),
+    });
+  }
+
+  if (ctx?.encounterModifier) {
+    signals.push({
+      kind: 'HIGH_RISK',
+      label: formatEncounterModifierScannerLabel(ctx.encounterModifier),
+      color: SCANNER_SIGNAL_COLORS.HIGH_RISK,
+      intensity: Math.min(1, baseIntensity + 0.2),
     });
   }
 

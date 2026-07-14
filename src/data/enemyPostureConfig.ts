@@ -14,23 +14,30 @@ export function canRosterUseFortify(rosterId?: string): boolean {
 /** Units that open with / prefer FORTIFY posture. */
 export const FORTIFY_POSTURE_ROSTER: readonly EnemyRosterId[] = [
   'concrete-gargoyle',
+  'weeping-gargoyle',
   'echoing-brute',
   'warden',
   'breacher',
   'amalgam',
+  'core-sick-amalgam',
   'spall',
   'golem',
+  'blood-rusted-golem',
+  'anchor-husk',
 ];
 
 /** Units that open with / prefer EVADE posture. */
 export const EVADE_POSTURE_ROSTER: readonly EnemyRosterId[] = [
   'fracture-hound',
   'scuttler',
+  'phase-scuttler',
   'null-shade',
+  'null-crown-shade',
   'cutter',
   'spotter',
   'fixer',
   'thrall',
+  'remembering-thrall',
   'wire-ghoul',
   'ley-siren',
   'hook-weaver',

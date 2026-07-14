@@ -1,5 +1,7 @@
 import { DISTRICT_GATE_DEPTHS, getLevelsPerDistrict, getMaxRunGraphDepth } from '../types/sectorPacing';
 import type { RunGenerationContext } from '../types/worldState';
+import type { DepthIdentityState } from '../types/depthIdentity';
+import { getDeepVeilLawDefinition, getVeilDistortionDefinition } from './depthIdentityCatalog';
 
 export type DistrictId = 1 | 2 | 3;
 
@@ -76,6 +78,13 @@ export interface DistrictIntelBrief {
   tacticHint: string;
   operationTitle?: string;
   activeAnchorName?: string;
+  /** Depth 2 Veil Distortion display name when active. */
+  veilDistortionName?: string;
+  veilDistortionSummary?: string;
+  /** Depth 3 Deep Veil Law display name when active. */
+  deepVeilLawName?: string;
+  deepVeilLawSummary?: string;
+  deepVeilLawIntensified?: boolean;
 }
 
 const UPCOMING_DISTRICT_INTEL: Record<DistrictId, Omit<DistrictIntelBrief, 'operationTitle' | 'activeAnchorName'>> = {
@@ -117,15 +126,46 @@ export function getUpcomingDistrictIntel(nextDistrict: DistrictId): DistrictInte
 export function buildDistrictIntelForRun(
   district: DistrictId,
   runContext?: RunGenerationContext | null,
+  depthIdentity?: DepthIdentityState | null,
 ): DistrictIntelBrief {
   const base = getUpcomingDistrictIntel(district);
+  let distortionName: string | undefined;
+  let distortionSummary: string | undefined;
+  let lawName: string | undefined;
+  let lawSummary: string | undefined;
+  let lawIntensified: boolean | undefined;
+
+  if (depthIdentity?.activeVeilDistortion && district >= 2) {
+    const def = getVeilDistortionDefinition(depthIdentity.activeVeilDistortion);
+    distortionName = def.displayName;
+    distortionSummary = def.effectSummary;
+  }
+  if (depthIdentity?.activeDeepVeilLaw && district >= 3) {
+    const def = getDeepVeilLawDefinition(depthIdentity.activeDeepVeilLaw);
+    lawName = def.displayName;
+    lawSummary = def.effectSummary;
+    lawIntensified = depthIdentity.intensifiedFromDistortion;
+  }
+
   if (!runContext) {
-    return base;
+    return {
+      ...base,
+      veilDistortionName: distortionName,
+      veilDistortionSummary: distortionSummary,
+      deepVeilLawName: lawName,
+      deepVeilLawSummary: lawSummary,
+      deepVeilLawIntensified: lawIntensified,
+    };
   }
 
   return {
     ...base,
     operationTitle: runContext.activeOperation.title,
     activeAnchorName: runContext.activeAnchor?.displayName,
+    veilDistortionName: distortionName,
+    veilDistortionSummary: distortionSummary,
+    deepVeilLawName: lawName,
+    deepVeilLawSummary: lawSummary,
+    deepVeilLawIntensified: lawIntensified,
   };
 }

@@ -28,6 +28,8 @@ import { ENEMY_ROSTER, spawnRosterUnit } from './enemyRoster';
 import type { SpawnEnemyOptions } from './enemies';
 import { loadAlphaDuelElite, loadEliteEncounter } from './eliteSpawnEngine';
 import { macroFamilyToSynergyBiome } from './synergySpawnEngine';
+import { maybeInjectAnchorHusk } from './depthEnemyVariantSpawnEngine';
+import { maybeInjectForcedDepthVariant } from './depthIdentityPhaseGDebugEngine';
 import { rosterToSpawnSlots } from './rosterSpawnSlots';
 import type { SpawnSlotAssignment } from './levelEncounterData';
 import { rollEncounterOrigin } from './originRollEngine';
@@ -266,7 +268,20 @@ export function spawnCombatSquad(options: SpawnSquadOptions): EnemyCombatProfile
       gridWidth,
     ),
   );
-  return applyDiagonalStaggerToProfiles(squad);
+  const withHusk = maybeInjectAnchorHusk(applyDiagonalStaggerToProfiles(squad), {
+    nodeIndex: options.nodeIndex,
+    district,
+    encounterSeed: options.encounterSeed,
+    contextModifiers: options.contextModifiers,
+    isElite: options.isElite,
+    resonancePercent: options.spawnOptions?.resonancePercent,
+  });
+  return maybeInjectForcedDepthVariant(withHusk, {
+    nodeIndex: options.nodeIndex,
+    district,
+    isElite: options.isElite,
+    resonancePercent: options.spawnOptions?.resonancePercent,
+  });
 }
 
 export function squadFromSingleEnemy(enemy: EnemyCombatProfile): EnemyCombatProfile[] {

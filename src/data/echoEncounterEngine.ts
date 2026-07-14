@@ -56,6 +56,7 @@ export function resolveEchoSignalRollChance(
   nodeType: ProceduralNodeType,
   depthIndex: 1 | 2 | 3,
   runContext: RunGenerationContext,
+  depthIdentityBias?: import('../types/depthIdentity').DepthIdentityScanBias | null,
 ): number {
   const depthStage = getDepthStage(depthIndex);
   const pressureBand = getNodePressureBand(proceduralDepth);
@@ -69,6 +70,10 @@ export function resolveEchoSignalRollChance(
     * pressureScale
     * scannerBias.echoSignalMultiplier
     * (anchorDef?.signalRollModifiers.echoSignalChance ?? 1);
+
+  if (depthIdentityBias) {
+    echoBase *= depthIdentityBias.echoSignalMultiplier;
+  }
 
   if (runContext.activeOperation.objectiveKind === 'ECHO_RECOVERY') {
     echoBase *= 1.85;
@@ -127,6 +132,7 @@ function mulberry32(seed: number): () => number {
 export interface EchoOverlayAssignmentParams {
   runGenerationContext?: RunGenerationContext | null;
   depthIndex?: 1 | 2 | 3;
+  depthIdentityBias?: import('../types/depthIdentity').DepthIdentityScanBias | null;
 }
 
 /** Roll echo scanner overlays for nodes at a procedural depth (layer unlock). */
@@ -160,7 +166,13 @@ export function assignEchoOverlaysForDepth(
     if (!canPlaceEchoOverlay(rollState, depth, isEchoRecoveryOp)) return;
 
     const rng = mulberry32(hashEchoOverlaySeed(tree.rollSeed!, depth, nodeId));
-    const chance = resolveEchoSignalRollChance(depth, node.type, depthIndex, runContext);
+    const chance = resolveEchoSignalRollChance(
+      depth,
+      node.type,
+      depthIndex,
+      runContext,
+      params.depthIdentityBias,
+    );
     if (rng() >= chance) return;
 
     recordEchoOverlayPlacement(rollState, depth);

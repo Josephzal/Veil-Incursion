@@ -373,13 +373,18 @@ export function formatScannerNodeIntel(
   runVeilBiome?: import('../types/encounterSpawn').VeilBiome | null,
 ): string[] {
   const vector = resolveVectorLabel(node, optionIndex);
-  const nodeType = node.type.replace(/_/g, ' ');
   const displayBiome = resolveDisplayedMacroBiome(node, macroFamily, runVeilBiome);
+  const nodeTypeLine = node.scannerStrangeLabel
+    ? node.scannerStrangeLabel.toUpperCase()
+    : (node.scannerDisplayedType ?? node.type).replace(/_/g, ' ').toUpperCase();
   const lines = [
     `> MACRO BIOME: ${getMacroBiomeDisplayLabel(displayBiome).toUpperCase()}`,
     `> VECTOR: ${vector}`,
-    `> NODE TYPE: ${nodeType.toUpperCase()}`,
+    `> NODE TYPE: ${nodeTypeLine}`,
   ];
+  if (node.scannerLabelCorrupt && node.scannerLabelCertainty) {
+    lines.push(`> SCAN CERTAINTY: ${node.scannerLabelCertainty}`);
+  }
 
   const signalLines = formatVeilFrontSignalIntel(node, runContext);
   if (signalLines.length > 0) {

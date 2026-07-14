@@ -55,7 +55,7 @@ function pick(
   pool: readonly EncounterEnemyKey[],
   slot: number,
   role?: EncounterRole,
-  exclude: readonly EncounterEnemyKey[] = ['AMALGAM'],
+  exclude: readonly EncounterEnemyKey[] = ['AMALGAM', 'CORE_SICK_AMALGAM'],
 ): EncounterEnemyKey {
   let working = pool.filter((key) => !exclude.includes(key));
   const rolePool = role
@@ -231,9 +231,9 @@ function eliteSynergy(pool: readonly EncounterEnemyKey[], depth: 1 | 2 | 3, slot
 
 function alphaThreat(pool: readonly EncounterEnemyKey[], depth: 1 | 2 | 3, slot: number): EncounterUnitSpec[] {
   const alphaKey = pick(pool, slot + depth, 'FRONTLINE');
-  if (alphaKey === 'AMALGAM') {
+  if (alphaKey === 'AMALGAM' || alphaKey === 'CORE_SICK_AMALGAM') {
     return [
-      { type: 'AMALGAM', pos: 'FRONT_CENTER', isAlpha: true },
+      { type: alphaKey, pos: 'FRONT_CENTER', isAlpha: true },
       { type: pick(pool, slot + 1, 'BACKLINE'), pos: 'BACK_RIGHT' },
     ];
   }
@@ -258,12 +258,19 @@ const TEMPLATE_DEFS: TemplateDef[] = [
 ];
 
 function normalizeAmalgamRoster(roster: EncounterUnitSpec[]): EncounterUnitSpec[] {
-  const hasAmalgam = roster.some((u) => u.type === 'AMALGAM');
-  if (!hasAmalgam) return roster;
+  const amalgamKey = roster.find((u) => u.type === 'AMALGAM' || u.type === 'CORE_SICK_AMALGAM')?.type;
+  if (!amalgamKey) return roster;
   const alpha = roster.find((u) => u.isAlpha)?.isAlpha;
+  const nonFrontSupport = roster.filter(
+    (u) => u.type !== 'AMALGAM'
+      && u.type !== 'CORE_SICK_AMALGAM'
+      && u.pos !== 'FRONT_LEFT'
+      && u.pos !== 'FRONT_RIGHT'
+      && u.pos !== 'FRONT_CENTER',
+  );
   return [
-    { type: 'AMALGAM', pos: 'FRONT_CENTER', isAlpha: alpha },
-    ...roster.filter((u) => u.type !== 'AMALGAM'),
+    { type: amalgamKey, pos: 'FRONT_CENTER', isAlpha: alpha },
+    ...nonFrontSupport,
   ];
 }
 
@@ -276,6 +283,8 @@ function veilPoolFor(biome: VeilBiome, depth: 1 | 2 | 3): EncounterEnemyKey[] {
     if (!def || def.origin !== 'VEIL') continue;
     if (!def.biomeTags.includes(biome)) continue;
     if (!enemyAllowedAtDepth(key, depth)) continue;
+    // Anchor Husk is inject-only — never draft into generic biome squads.
+    if (key === 'ANCHOR_HUSK') continue;
     if (seen.has(key)) continue;
     seen.add(key);
     pool.push(key);
@@ -409,10 +418,10 @@ export function verifyEncounterDecks(): void {
       }
     }
 
-    const hasAmalgam = squad.roster.some((u) => u.type === 'AMALGAM');
+    const hasAmalgam = squad.roster.some((u) => u.type === 'AMALGAM' || u.type === 'CORE_SICK_AMALGAM');
     if (hasAmalgam) {
       const frontOthers = squad.roster.filter(
-        (u) => u.type !== 'AMALGAM'
+        (u) => u.type !== 'AMALGAM' && u.type !== 'CORE_SICK_AMALGAM'
           && (u.pos === 'FRONT_LEFT' || u.pos === 'FRONT_RIGHT' || u.pos === 'FRONT_CENTER'),
       );
       if (frontOthers.length > 0) {

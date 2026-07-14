@@ -20,11 +20,15 @@ import { verifyEncounterCatalog } from './encounterCatalogAuditEngine';
 import { verifyEnemyDefinitions } from './encounterSpawnGateEngine';
 import { echoEncounterId, resolveEchoSpawnOverride, verifyEchoSpawnPipeline } from './encounterEchoOverride';
 import { verifyEncounterSpawnValidation } from './encounterSpawnValidationEngine';
+import { verifyDepthEnemyVariants } from './depthEnemyVariantValidationEngine';
+import { verifyScannerLabelCertainty } from './scannerLabelCertaintyValidationEngine';
+import { verifyPhaseGHardRules } from './depthIdentityPhaseGDebugEngine';
 import type { EchoEliteTemplate } from '../types/echoElite';
 import type { NodeContextModifiers } from '../types/worldState';
 import type { EncounterGridPos, EncounterUnitSpec, SynergySquadSpec } from './synergyEncounterTypes';
 import { rosterHasMixedAlpha } from './rosterSpawnSlots';
 import { veilBiomeToLegacyMacroBiome } from './sectorBiomeBridge';
+import { prefersAnchorNodeTier } from './depthEnemyVariantSpawnEngine';
 
 export type { EncounterOrigin } from '../types/encounterSpawn';
 export type { EncounterGridPos, EncounterUnitSpec, EncounterSquadSpec, SynergySquadSpec } from './synergyEncounterTypes';
@@ -162,7 +166,11 @@ export function generateNodeEncounter(
     ?? (veilBiome ? veilBiomeToLegacyMacroBiome(veilBiome) : null);
   const synergyBiome = macroFamilyToSynergyBiome(macroBiome);
   const squadTier = options.isElite ? 'ELITE' : 'NORMAL';
-  const nodeTier: EncounterNodeTier = options.isElite ? 'ELITE' : 'NORMAL';
+  const nodeTier: EncounterNodeTier = options.isElite
+    ? 'ELITE'
+    : prefersAnchorNodeTier(options.contextModifiers)
+      ? 'ANCHOR'
+      : 'NORMAL';
 
   if (isDistrictGateDepth(globalDepth)) {
     return {
@@ -301,4 +309,7 @@ export function verifyEncounterGenerator(): void {
   verifyEncounterSpawnPipeline();
   verifyEchoSpawnPipeline();
   verifyEncounterSpawnValidation();
+  verifyDepthEnemyVariants();
+  verifyScannerLabelCertainty();
+  verifyPhaseGHardRules();
 }

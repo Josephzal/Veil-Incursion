@@ -10,6 +10,12 @@ import { getLevelsPerDistrict, getMaxRunGraphDepth } from '../types/sectorPacing
 import { veilBiomeDisplayName, veilBiomeToLegacyMacroBiome } from './sectorBiomeBridge';
 import { assignPendingDepthTypes } from './nodeGenerator';
 import { assignEchoOverlaysForDepth, resolveDisplayContextModifiers } from './echoEncounterEngine';
+import {
+  assignScannerLabelOverlaysForDepth,
+  resolveDisplayedScannerNodeType,
+} from './scannerLabelCertaintyEngine';
+import { resolveActiveDepthIdentityScanBias } from './depthIdentityEngine';
+import type { DepthIdentityState } from '../types/depthIdentity';
 
 const VECTOR_LABELS = ['ALPHA', 'BETA', 'GAMMA', 'DELTA', 'EPSILON'] as const;
 
@@ -63,6 +69,7 @@ export function proceduralNodeToIncursionNode(
   encounterIndex: number,
   runVeilBiome?: VeilBiome | null,
   macroDepthIndex: 1 | 2 | 3 = 1,
+  options?: { fullyInterpreted?: boolean },
 ): IncursionNode {
   const runType = proceduralTypeToRunType(node.type);
   const labelSuffix = VECTOR_LABELS[encounterIndex % VECTOR_LABELS.length] ?? 'VECTOR';
@@ -73,6 +80,9 @@ export function proceduralNodeToIncursionNode(
   if (displayContext?.echoSignal) signalTags.push('ECHO');
   const signalSuffix = signalTags.length > 0 ? ` // ${signalTags.join('+')}` : '';
   const biomePrefix = vectorLabelPrefix(runVeilBiome);
+  const scannerDisplay = resolveDisplayedScannerNodeType(node, {
+    fullyInterpreted: options?.fullyInterpreted === true,
+  });
 
   return {
     id: node.id,
@@ -90,6 +100,10 @@ export function proceduralNodeToIncursionNode(
     isExtractionNode: node.type === 'EXTRACTION',
     offeredMacroBiome: runVeilBiome ? veilBiomeToLegacyMacroBiome(runVeilBiome) : undefined,
     contextModifiers: displayContext,
+    scannerDisplayedType: scannerDisplay.runType,
+    scannerLabelCertainty: scannerDisplay.certainty,
+    scannerStrangeLabel: scannerDisplay.strangeLabel,
+    scannerLabelCorrupt: scannerDisplay.corrupt,
   };
 }
 
@@ -133,14 +147,23 @@ export function prepareProceduralScannerIncursion(
 
   const depth = localProceduralDepth(inc.nodesCleared);
   const depthIndex = inc.currentDistrict as 1 | 2 | 3;
+  const depthIdentityBias = resolveActiveDepthIdentityScanBias(
+    inc.depthIdentity as DepthIdentityState | null | undefined,
+    depthIndex,
+  );
   const assignmentParams = {
     runGenerationContext: inc.runGenerationContext,
     depthIndex,
     cargo: inc.cargo,
+    depthIdentityBias,
   };
 
   let nextTree = assignPendingDepthTypes(tree, depth, assignmentParams);
   nextTree = assignEchoOverlaysForDepth(nextTree, depth, assignmentParams);
+  nextTree = assignScannerLabelOverlaysForDepth(nextTree, depth, {
+    depthIndex,
+    depthIdentityBias,
+  });
 
   if (nextTree === tree) return inc;
   return { ...inc, proceduralRunTree: nextTree };
@@ -150,6 +173,7 @@ export function buildProceduralScannerCluster(inc: ActiveIncursionState): Incurs
   const tree = inc.proceduralRunTree;
   if (!tree) return [];
 
+  const interpreted = new Set(inc.keepsakeFullyInterpretedNodeIds ?? []);
   const ids = getAvailableProceduralNodeIds(inc);
   return ids
     .map((id) => tree.nodes[id])
@@ -159,6 +183,7 @@ export function buildProceduralScannerCluster(inc: ActiveIncursionState): Incurs
       inc.nodesCleared + index,
       inc.runVeilBiome,
       inc.currentDistrict as 1 | 2 | 3,
+      { fullyInterpreted: interpreted.has(node.id) },
     ));
 }
 

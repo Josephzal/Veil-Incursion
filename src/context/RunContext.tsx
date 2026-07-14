@@ -150,6 +150,24 @@ import {
   localLevelFromDepth,
 } from '../data/districtPacing';
 import {
+  activateDepth2Identity,
+  activateDepth3Identity,
+  clearDepthIdentityPendingReveal,
+  createDefaultDepthIdentityState,
+  resolveActiveDepthIdentityScanBias,
+} from '../data/depthIdentityEngine';
+import { recordEncounterModifierCleared } from '../data/encounterModifierEngine';
+import { getEncounterModifierDefinition } from '../data/encounterModifierCatalog';
+import {
+  formatTwistedTemplateEngageLog,
+  maybeQueueFalseExtractionAtSafeAnchor,
+} from '../data/twistedTemplateEngine';
+import { resolveTwistedTemplateChoice } from '../data/twistedTemplateResolutionEngine';
+import {
+  recordCombatTwistedCleared,
+  recordDepthEnemyDefeats,
+} from '../data/depthIdentityTelemetryEngine';
+import {
   applyBenchHealthRestore,
   transferRunCargoToBank,
 } from '../data/cargoBankingEngine';
@@ -596,6 +614,16 @@ interface RunContextType {
     route: 'NEXT_NODE' | 'SAFEHOUSE' | 'HUB_VICTORY';
   };
   transitionToNextDistrict: () => void;
+  acknowledgeDepthIdentityReveal: () => void;
+  /** Record victory clearance of the node's encounter modifier (UNSTABLE raises next-node pressure). */
+  recordEncounterModifierVictory: (modifierId: import('../types/depthIdentity').EncounterModifierId) => void;
+  recordDepthIdentityCombatVictory: (payload: {
+    modifierId?: import('../types/depthIdentity').EncounterModifierId | null;
+    twistedTemplateId?: import('../types/depthIdentity').TwistedTemplateId | null;
+    slainEnemies?: readonly import('../types/run').EnemyCombatProfile[];
+  }) => void;
+  /** Resolve Depth 2 twisted template modal choice. */
+  commitTwistedTemplateChoice: (selectedValue: string) => boolean;
   transferRunCargoToBankVault: (percent: number) => {
     success: boolean;
     logLine: string;
@@ -4014,6 +4042,28 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
+    let nextDepthIdentity = inc.depthIdentity ?? createDefaultDepthIdentityState();
+    const depthIdentityLogs: string[] = [];
+    if (districtChanged && nextDistrict === 2) {
+      const activation = activateDepth2Identity(
+        nextDepthIdentity,
+        inc.runGenerationContext,
+        inc.runVeilBiome,
+        `depth2:${inc.nodesCleared}:${inc.runVeilBiome ?? 'sector'}`,
+      );
+      nextDepthIdentity = activation.depthIdentity;
+      depthIdentityLogs.push(...activation.logLines);
+    } else if (districtChanged && nextDistrict === 3) {
+      const activation = activateDepth3Identity(
+        nextDepthIdentity,
+        inc.runGenerationContext,
+        inc.runVeilBiome,
+        `depth3:${inc.nodesCleared}:${inc.runVeilBiome ?? 'sector'}`,
+      );
+      nextDepthIdentity = activation.depthIdentity;
+      depthIdentityLogs.push(...activation.logLines);
+    }
+
     const incAfterClear: ActiveIncursionState = {
       ...expandedInc,
       sectorGraph: nextSectorGraph,
@@ -4023,6 +4073,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       boundRequisition: chalkWardRuntime ?? expandedInc.boundRequisition,
       currentDepth: nextDepth,
       currentDistrict: nextDistrict,
+      depthIdentity: nextDepthIdentity,
       lastMacroBiomeFamily: inc.currentMacroBiomeFamily,
       currentMacroBiomeFamily: nextBiome,
       pendingDistrictBiomeOffers: null,
@@ -4124,6 +4175,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     } else if (wasBoss) {
       appendRunLog('>> DISTRICT GATE CLEARED — VECTOR STABILIZED.');
     }
+    depthIdentityLogs.forEach((line) => appendRunLog(line));
 
     if (anchorVictory?.kind && anchorCtx) {
       appendRunLog(anchorAssaultClearLogLine(anchorCtx, anchorVictory.kind));
@@ -4173,11 +4225,17 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         node.id,
         inc.runGenerationContext,
         inc.cargo,
+        resolveActiveDepthIdentityScanBias(
+          inc.depthIdentity,
+          inc.currentDistrict as 1 | 2 | 3,
+        ),
+        inc.depthIdentity,
       );
       if (rollResult.freshlyRolled && rollResult.node) {
         inc = {
           ...inc,
           proceduralRunTree: rollResult.tree,
+          depthIdentity: rollResult.depthIdentityPatch ?? inc.depthIdentity,
         };
         activeIncursionRef.current = inc;
         engagedNode = proceduralNodeToIncursionNode(
@@ -4217,6 +4275,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         encounterPath,
         selectedVectorId: engagedNode.id,
         proceduralRunTree: inc.proceduralRunTree,
+        depthIdentity: inc.depthIdentity ?? prev.depthIdentity,
         collapseActive: enteringCollapse || prev.collapseActive,
         unstableCargoEffectsSeen: mergeUnstableCargoEffectsSeen(
           prev.unstableCargoEffectsSeen,
@@ -4230,6 +4289,17 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     appendRunLog(
       `>> VECTOR ENGAGED — NODE ${inc.nodesCleared + 1} // ${engagedNode.label.split(' // ').slice(1).join(' // ') || engagedNode.label}`,
     );
+    if (engagedNode.contextModifiers?.encounterModifierLabel) {
+      appendRunLog(
+        `>> ENCOUNTER MODIFIER — ${engagedNode.contextModifiers.encounterModifierLabel.toUpperCase()}`
+          + (engagedNode.contextModifiers.encounterModifierSummary
+            ? ` // ${engagedNode.contextModifiers.encounterModifierSummary.toUpperCase()}`
+            : ''),
+      );
+    }
+    if (engagedNode.contextModifiers?.twistedTemplate) {
+      appendRunLog(formatTwistedTemplateEngageLog(engagedNode.contextModifiers.twistedTemplate));
+    }
 
     const leySiphonEngage = applyKeepsakeOnNodeEngagedForLeySiphon(
       activeIncursionRef.current.keepsakeRuntime,
@@ -4841,7 +4911,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
   const getSafehouseIntel = useCallback(() => {
     const inc = activeIncursionRef.current;
-    return buildDistrictIntelForRun(inc.currentDistrict, inc.runGenerationContext);
+    return buildDistrictIntelForRun(
+      inc.currentDistrict,
+      inc.runGenerationContext,
+      inc.depthIdentity,
+    );
   }, []);
 
   const transferRunCargoToBankVault = useCallback((percent: number) => {
@@ -5000,6 +5074,27 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     );
     ledgerInterest.logLines.forEach((line) => appendRunLog(line));
 
+    let nextDepthIdentity = inc.depthIdentity ?? createDefaultDepthIdentityState();
+    if (depthIndex === 2 && !nextDepthIdentity.activeVeilDistortion) {
+      const activation = activateDepth2Identity(
+        nextDepthIdentity,
+        inc.runGenerationContext,
+        inc.runVeilBiome,
+        `depth2-unseal:${inc.nodesCleared}:${inc.runVeilBiome ?? 'sector'}`,
+      );
+      nextDepthIdentity = activation.depthIdentity;
+      activation.logLines.forEach((line) => appendRunLog(line));
+    } else if (depthIndex === 3 && !nextDepthIdentity.activeDeepVeilLaw) {
+      const activation = activateDepth3Identity(
+        nextDepthIdentity,
+        inc.runGenerationContext,
+        inc.runVeilBiome,
+        `depth3-unseal:${inc.nodesCleared}:${inc.runVeilBiome ?? 'sector'}`,
+      );
+      nextDepthIdentity = activation.depthIdentity;
+      activation.logLines.forEach((line) => appendRunLog(line));
+    }
+
     const next: ActiveIncursionState = persistExpandedSectorGraph({
       ...inc,
       resonance: { percent: 0 },
@@ -5015,6 +5110,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       keepsakeStampedExtractionNodeId: null,
       pendingExtractionNodeId: null,
       keepsakeRuntime: ledgerInterest.runtime,
+      depthIdentity: nextDepthIdentity,
     });
 
     activeIncursionRef.current = next;
@@ -5025,9 +5121,86 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     appendRunLog(`>> PROCEDURAL VECTOR MAP REGENERATED — ${proceduralRunTree.maxDepth} LAYERS // D${depthIndex}.`);
   }, [appendRunLog]);
 
+  const acknowledgeDepthIdentityReveal = useCallback(() => {
+    setActiveIncursion((prev) => {
+      if (!prev.depthIdentity?.pendingReveal) return prev;
+      const next = {
+        ...prev,
+        depthIdentity: clearDepthIdentityPendingReveal(prev.depthIdentity),
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const recordEncounterModifierVictory = useCallback((
+    modifierId: import('../types/depthIdentity').EncounterModifierId,
+  ) => {
+    setActiveIncursion((prev) => {
+      const base = prev.depthIdentity ?? createDefaultDepthIdentityState();
+      const depthIdentity = recordEncounterModifierCleared(base, modifierId);
+      const next = { ...prev, depthIdentity };
+      activeIncursionRef.current = next;
+      return next;
+    });
+    const def = getEncounterModifierDefinition(modifierId);
+    appendRunLog(`>> ENCOUNTER MODIFIER CLEARED — ${def.displayName.toUpperCase()}.`);
+    if (modifierId === 'UNSTABLE') {
+      appendRunLog('>> UNSTABLE RESONANCE — next vector High-Risk pressure elevated.');
+    }
+  }, [appendRunLog]);
+
+  const recordDepthIdentityCombatVictory = useCallback((payload: {
+    modifierId?: import('../types/depthIdentity').EncounterModifierId | null;
+    twistedTemplateId?: import('../types/depthIdentity').TwistedTemplateId | null;
+    slainEnemies?: readonly import('../types/run').EnemyCombatProfile[];
+  }) => {
+    if (payload.modifierId) {
+      recordEncounterModifierVictory(payload.modifierId);
+    }
+    setActiveIncursion((prev) => {
+      let depthIdentity = prev.depthIdentity ?? createDefaultDepthIdentityState();
+      depthIdentity = recordCombatTwistedCleared(depthIdentity, payload.twistedTemplateId);
+      if (payload.slainEnemies && payload.slainEnemies.length > 0) {
+        depthIdentity = recordDepthEnemyDefeats(depthIdentity, payload.slainEnemies);
+      }
+      const next = { ...prev, depthIdentity };
+      activeIncursionRef.current = next;
+      return next;
+    });
+  }, [recordEncounterModifierVictory]);
+
   const stageSafeAnchorReview = useCallback((anchorIndex: 1 | 2 | 3, nodeId?: string) => {
     stageExtractionReview('SAFE_ANCHOR', anchorIndex, nodeId ?? null);
     appendRunLog(`>> SAFE ANCHOR ${anchorIndex} — CLEAN EVAC REVIEW STAGED.`);
+
+    setActiveIncursion((prev) => {
+      const base = prev.depthIdentity ?? createDefaultDepthIdentityState();
+      const seed = `false-extract:${prev.currentDistrict}:${nodeId ?? anchorIndex}:${prev.nodesCleared}`;
+      let hash = 2166136261;
+      for (let i = 0; i < seed.length; i += 1) {
+        hash ^= seed.charCodeAt(i);
+        hash = Math.imul(hash, 16777619);
+      }
+      const rng = () => {
+        hash += 0x6d2b79f5;
+        let t = hash;
+        t = Math.imul(t ^ (t >>> 15), 1 | t);
+        t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+      const depthIdentity = maybeQueueFalseExtractionAtSafeAnchor(
+        base,
+        prev.currentDistrict as 1 | 2 | 3,
+        nodeId ?? `safe-anchor-${anchorIndex}`,
+        base.activeVeilDistortion,
+        rng,
+      );
+      if (depthIdentity === base) return prev;
+      const next = { ...prev, depthIdentity };
+      activeIncursionRef.current = next;
+      return next;
+    });
   }, [appendRunLog, stageExtractionReview]);
 
   const confirmSafeAnchorExtraction = useCallback((anchorIndex: 1 | 2 | 3) => {
@@ -5121,13 +5294,106 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     return true;
   }, [appendRunLog, prepareDefendRiftEncounter]);
 
-  const completeDefendRiftVictory = useCallback(() => {
+  const commitTwistedTemplateChoice = useCallback((selectedValue: string): boolean => {
+    const inc = activeIncursionRef.current;
+    const identity = inc.depthIdentity;
+    if (!identity?.pendingTwistedChoice) return false;
+    const templateId = identity.pendingTwistedChoice.templateId;
+
+    const outcome = resolveTwistedTemplateChoice(
+      identity,
+      inc.cargo,
+      selectedValue,
+      inc.runCredits,
+    );
+    if (!outcome) return false;
+
+    if (outcome.spendCredits && outcome.spendCredits > 0) {
+      setActiveIncursion((prev) => {
+        const next = {
+          ...prev,
+          runCredits: Math.max(0, prev.runCredits - (outcome.spendCredits ?? 0)),
+        };
+        activeIncursionRef.current = next;
+        return next;
+      });
+    }
+
+    if (outcome.healPct && outcome.healPct > 0) {
+      setRunState((prev) => {
+        const restore = Math.floor(prev.maxSoulAnchor * outcome.healPct!);
+        const next = {
+          ...prev,
+          soulAnchorIntegrity: Math.min(prev.maxSoulAnchor, prev.soulAnchorIntegrity + restore),
+        };
+        runStateRef.current = next;
+        return next;
+      });
+    }
+
+    if (outcome.damageHp && outcome.damageHp > 0) {
+      setRunState((prev) => {
+        const next = {
+          ...prev,
+          soulAnchorIntegrity: Math.max(0, prev.soulAnchorIntegrity - outcome.damageHp!),
+        };
+        runStateRef.current = next;
+        return next;
+      });
+    }
+
     setActiveIncursion((prev) => {
       const next = {
         ...prev,
+        depthIdentity: outcome.depthIdentity,
+        cargo: outcome.cargo ?? prev.cargo,
+        operationContributionTransmitted:
+          prev.operationContributionTransmitted + (outcome.operationProgress ?? 0),
+      };
+      activeIncursionRef.current = next;
+      return next;
+    });
+
+    if (outcome.operationProgress && outcome.operationProgress > 0) {
+      const opId = inc.runGenerationContext?.activeOperation?.id;
+      if (opId && operationContributionApplierRef.current) {
+        void operationContributionApplierRef.current(opId, outcome.operationProgress);
+      }
+    }
+
+    outcome.logLines.forEach((line) => appendRunLog(line));
+
+    if (outcome.route === 'COMPLETE_NODE') {
+      advanceIncursionAfterEncounter(`>> TWISTED TEMPLATE RESOLVED — ${templateId}.`);
+    } else if (outcome.route === 'START_EMERGENCY_RECALL') {
+      initiateEmergencyRecall();
+    } else if (outcome.route === 'ABORT_EXTRACTION_REVIEW') {
+      continueFromExtractionReview();
+    } else if (outcome.route === 'PROCEED_SAFE_EXTRACT') {
+      appendRunLog('>> FALSE SIGNAL CLEANSED — safe extract review remains open.');
+    }
+
+    return true;
+  }, [
+    advanceIncursionAfterEncounter,
+    appendRunLog,
+    continueFromExtractionReview,
+    initiateEmergencyRecall,
+  ]);
+
+  const completeDefendRiftVictory = useCallback(() => {
+    const bonus = activeIncursionRef.current.depthIdentity?.falseExtractBonusCreditsPending ?? 0;
+    setActiveIncursion((prev) => {
+      const identity = prev.depthIdentity
+        ? { ...prev.depthIdentity, falseExtractBonusCreditsPending: 0 }
+        : prev.depthIdentity;
+      const next = {
+        ...prev,
+        depthIdentity: identity,
         defendRiftActive: false,
         extractionReviewKind: 'EMERGENCY_RECALL' as const,
         mapMode: 'SCANNING_HUB' as IncursionMapMode,
+        runCredits: prev.runCredits + (bonus > 0 ? bonus : 0),
       };
       activeIncursionRef.current = next;
       return next;
@@ -5139,6 +5405,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     });
     appendRunLog('>> EMERGENCY RECALL CLEARED — emergency evac review opening.');
     appendRunLog('>> WARNING — 20% cargo value bleed on emergency extraction.');
+    if (bonus > 0) {
+      appendRunLog(`>> FALSE EXTRACTION BONUS — +${bonus} CR secured.`);
+    }
   }, [appendRunLog]);
 
   const confirmMasterExtraction = useCallback(() => {
@@ -6399,6 +6668,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       adjustResonance,
       applyResonanceManifestScan,
       transitionToNextDistrict,
+      acknowledgeDepthIdentityReveal,
+      recordEncounterModifierVictory,
+      recordDepthIdentityCombatVictory,
+      commitTwistedTemplateChoice,
       transferRunCargoToBankVault,
       vaultIncursionVeilResidueToAccount,
       restoreHealthFromBench,
@@ -6575,6 +6848,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       adjustResonance,
       applyResonanceManifestScan,
       transitionToNextDistrict,
+      acknowledgeDepthIdentityReveal,
+      recordEncounterModifierVictory,
+      recordDepthIdentityCombatVictory,
+      commitTwistedTemplateChoice,
       transferRunCargoToBankVault,
       vaultIncursionVeilResidueToAccount,
       restoreHealthFromBench,

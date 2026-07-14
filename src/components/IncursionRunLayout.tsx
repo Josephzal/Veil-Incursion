@@ -5,6 +5,7 @@ import { resolveSpecialCargoStacksForIncursion } from '../data/postRunCargoRouti
 import CargoGridOverlay from './CargoGridOverlay';
 import RunGlobalChrome from './RunGlobalChrome';
 import KeepsakeTriggerToast from './KeepsakeTriggerToast';
+import DepthIdentityToast from './DepthIdentityToast';
 import RunItemTriggerToast from './RunItemTriggerToast';
 import RunStatusOverlay from './RunStatusOverlay';
 import RunItemsOverlay from './RunItemsOverlay';
@@ -207,6 +208,7 @@ export default function IncursionRunLayout({
         <View style={[styles.root, style]}>
           <View style={styles.content}>
             {children}
+            {showRunOverlays ? <DepthIdentityToast /> : null}
             {showRunOverlays ? <KeepsakeTriggerToast /> : null}
             {showRunOverlays ? <RunItemTriggerToast /> : null}
             {showRunOverlays && !hideRunChrome ? <RunGlobalChrome /> : null}

@@ -115,6 +115,26 @@ export default function SafehouseTelemetryPanel({
             {`OPERATION: ${intel.operationTitle.toUpperCase()}`}
           </Text>
         ) : null}
+        {intel.veilDistortionName ? (
+          <Text style={[styles.intelMeta, { fontSize: labelSize, color: activeCabal, marginTop: 4 * fontScale }]}>
+            {`BREACH DISTORTION: ${intel.veilDistortionName.toUpperCase()}`}
+          </Text>
+        ) : null}
+        {intel.veilDistortionSummary ? (
+          <Text style={[styles.intelMeta, { fontSize: labelSize, color: MUTED_SLATE, marginTop: 2 * fontScale }]}>
+            {intel.veilDistortionSummary.toUpperCase()}
+          </Text>
+        ) : null}
+        {intel.deepVeilLawName ? (
+          <Text style={[styles.intelMeta, { fontSize: labelSize, color: activeCabal, marginTop: 4 * fontScale }]}>
+            {`${intel.deepVeilLawIntensified ? 'DEEP VEIL LAW (INTENSIFIED)' : 'DEEP VEIL LAW'}: ${intel.deepVeilLawName.toUpperCase()}`}
+          </Text>
+        ) : null}
+        {intel.deepVeilLawSummary ? (
+          <Text style={[styles.intelMeta, { fontSize: labelSize, color: MUTED_SLATE, marginTop: 2 * fontScale }]}>
+            {intel.deepVeilLawSummary.toUpperCase()}
+          </Text>
+        ) : null}
         <Text style={[styles.intelWarn, { fontSize: labelSize, lineHeight: labelSize * 1.5, color: STARK_WHITE }]}>
           {formatIntelWarning(intel)}
         </Text>

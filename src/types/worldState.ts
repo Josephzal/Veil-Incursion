@@ -212,6 +212,20 @@ export interface NodeContextModifiers {
   keepsakeFalseBeacon?: boolean;
   /** Mirror Writ — mirrored side-objective node. */
   keepsakeMirrored?: boolean;
+  /** Depth identity encounter modifier — one per node max. */
+  encounterModifier?: import('./depthIdentity').EncounterModifierId;
+  /** Player-facing telegraph for the encounter modifier. */
+  encounterModifierLabel?: string;
+  encounterModifierSummary?: string;
+  /** Depth 2 twisted encounter template — one per node max. */
+  twistedTemplate?: import('./depthIdentity').TwistedTemplateId;
+  twistedTemplateLabel?: string;
+  twistedTemplateSummary?: string;
+  /** Phase F — scanner label certainty for this node. */
+  scannerLabelCertainty?: 'RELIABLE' | 'DEGRADED' | 'STRANGE';
+  scannerDisplayedNodeType?: import('./proceduralRunTree').ProceduralNodeType;
+  scannerStrangeLabel?: string;
+  scannerLabelCorrupt?: boolean;
 }
 
 /** Tracks per-run caps while lazily rolling node context at engagement. */

@@ -109,7 +109,9 @@ const spatialGlitchTurnStart: TurnStartHandler = (enemy, ctx) => {
 };
 
 const thrallSlumpTurnStart: TurnStartHandler = (enemy, ctx) => {
-  if (enemy.rosterId !== 'thrall' || !enemy.unitId) return { ...EMPTY_TURN, squad: ctx.squad };
+  if ((enemy.rosterId !== 'thrall' && enemy.rosterId !== 'remembering-thrall') || !enemy.unitId) {
+    return { ...EMPTY_TURN, squad: ctx.squad };
+  }
   if (!enemy.isSlumped) return { squad: ctx.squad, logLines: [] };
   const remaining = (enemy.slumpTurnsRemaining ?? 0) - 1;
   if (remaining > 0) {
@@ -141,7 +143,9 @@ const thrallSlumpTurnStart: TurnStartHandler = (enemy, ctx) => {
 };
 
 const golemVentTurnStart: TurnStartHandler = (enemy, ctx) => {
-  if (enemy.rosterId !== 'golem' || !enemy.unitId) return { ...EMPTY_TURN, squad: ctx.squad };
+  if ((enemy.rosterId !== 'golem' && enemy.rosterId !== 'blood-rusted-golem') || !enemy.unitId) {
+    return { ...EMPTY_TURN, squad: ctx.squad };
+  }
   const heat = enemy.heatCharge ?? 0;
   const threshold = enemy.golemHeatVentThreshold ?? 3;
   if (heat < threshold) return { squad: ctx.squad, logLines: [] };
@@ -154,7 +158,9 @@ const golemVentTurnStart: TurnStartHandler = (enemy, ctx) => {
 };
 
 const churnFleshAmmoTurnStart: TurnStartHandler = (enemy, ctx) => {
-  if (enemy.rosterId !== 'churn' || !enemy.unitId) return { ...EMPTY_TURN, squad: ctx.squad };
+  if ((enemy.rosterId !== 'churn' && enemy.rosterId !== 'grave-engine-churn') || !enemy.unitId) {
+    return { ...EMPTY_TURN, squad: ctx.squad };
+  }
   const shrapnelDmg = Math.floor(enemy.baseDamage * 1.5);
   if (enemy.churnSelfFiring) {
     return {
@@ -182,7 +188,12 @@ const churnFleshAmmoTurnStart: TurnStartHandler = (enemy, ctx) => {
 };
 
 const resonanceCasterTurnStart: TurnStartHandler = (enemy, ctx) => {
-  if (enemy.rosterId !== 'resonance-caster' || !enemy.unitId) return { ...EMPTY_TURN, squad: ctx.squad };
+  if (
+    (enemy.rosterId !== 'resonance-caster' && enemy.rosterId !== 'choir-bound-resonance-caster')
+    || !enemy.unitId
+  ) {
+    return { ...EMPTY_TURN, squad: ctx.squad };
+  }
   const stack = (enemy.resonanceStack ?? 0) + 1;
   const scalingPerTurn = getAlphaMechanic(enemy, 'damageScalingPerTurn', 0.5);
   const squad = patchUnitInSquad(ctx.squad, enemy.unitId, { resonanceStack: stack });
@@ -263,7 +274,12 @@ const echoingBruteHitTaken: HitTakenHandler = (enemy, attack, ctx) => {
 };
 
 const nullShadeHitTaken: HitTakenHandler = (enemy, attack, ctx) => {
-  if (enemy.rosterId !== 'null-shade' || !enemy.unitId) return { ...EMPTY_HIT, squad: ctx.squad };
+  if (
+    (enemy.rosterId !== 'null-shade' && enemy.rosterId !== 'null-crown-shade')
+    || !enemy.unitId
+  ) {
+    return { ...EMPTY_HIT, squad: ctx.squad };
+  }
   if (attack.channel !== 'OCCULT' && !enemy.occultImmune) return { squad: ctx.squad, logLines: [] };
   if (attack.channel !== 'OCCULT') return { squad: ctx.squad, logLines: [] };
   const immuneSeq = { ...ctx.extras.immunePopupSeq };
@@ -316,6 +332,16 @@ const spatialGlitchHitTaken: HitTakenHandler = (enemy, attack, ctx) => {
 };
 
 const scuttlerHitTaken: HitTakenHandler = (enemy, attack, ctx) => {
+  if (enemy.rosterId === 'phase-scuttler' && enemy.unitId && attack.projectedHpAfter > 0) {
+    const squad = patchUnitInSquad(ctx.squad, enemy.unitId, {
+      evadeActive: true,
+      evadeTurnsRemaining: Math.max(enemy.evadeTurnsRemaining ?? 0, 1),
+    });
+    return {
+      squad,
+      logLines: [`>> ${enemy.designation} PHASE SLIP — next strike suffers reduced accuracy.`],
+    };
+  }
   if (enemy.rosterId !== 'scuttler' || !enemy.unitId) return { ...EMPTY_HIT, squad: ctx.squad };
   if (attack.source !== 'STRIKE' && attack.source !== 'SLICE') return { squad: ctx.squad, logLines: [] };
   const evadeChance = enemy.evadeChance ?? getAlphaMechanic(enemy, 'evadeChance', 0.5);
@@ -344,7 +370,11 @@ const ironMaidenHitTaken: HitTakenHandler = (enemy, attack, ctx) => {
 };
 
 const golemHeatHitTaken: HitTakenHandler = (enemy, attack, ctx) => {
-  if (enemy.rosterId !== 'golem' || !enemy.unitId || attack.raw <= 0) {
+  if (
+    (enemy.rosterId !== 'golem' && enemy.rosterId !== 'blood-rusted-golem')
+    || !enemy.unitId
+    || attack.raw <= 0
+  ) {
     return { ...EMPTY_HIT, squad: ctx.squad };
   }
   const heat = (enemy.heatCharge ?? 0) + 1;
@@ -435,7 +465,9 @@ const leySirenDeath: DeathHandler = (enemy, _killingBlow, ctx) => {
 };
 
 const ashWeeperDeath: DeathHandler = (enemy, killingBlow, ctx) => {
-  if (enemy.rosterId !== 'ash-weeper' || !enemy.unitId) return { ...EMPTY_DEATH, squad: ctx.squad };
+  if ((enemy.rosterId !== 'ash-weeper' && enemy.rosterId !== 'rootbound-weeper') || !enemy.unitId) {
+    return { ...EMPTY_DEATH, squad: ctx.squad };
+  }
   const explosionType = getAlphaMechanic<string>(enemy, 'kineticDeathExplosionType', 'OCCULT');
   const explosionDamage = getAlphaMechanic(enemy, 'explosionDamage', 15);
   if (explosionType === 'TRUE_DAMAGE' && killingBlow.channel === 'KINETIC') {
@@ -459,7 +491,7 @@ const ashWeeperDeath: DeathHandler = (enemy, killingBlow, ctx) => {
 };
 
 const genericAshDeath: DeathHandler = (enemy, _killingBlow, ctx) => {
-  if (enemy.rosterId === 'ley-siren' || enemy.rosterId === 'ash-weeper') {
+  if (enemy.rosterId === 'ley-siren' || enemy.rosterId === 'ash-weeper' || enemy.rosterId === 'rootbound-weeper') {
     return { ...EMPTY_DEATH, squad: ctx.squad };
   }
   if (!enemy.unitId || !enemy.gridSlot) return { ...EMPTY_DEATH, squad: ctx.squad };
@@ -493,7 +525,9 @@ const spallDeath: DeathHandler = (enemy, _killingBlow, ctx) => {
 };
 
 const thrallDeath: DeathHandler = (enemy, killingBlow, ctx) => {
-  if (enemy.rosterId !== 'thrall' || !enemy.unitId) return { ...EMPTY_DEATH, squad: ctx.squad };
+  if ((enemy.rosterId !== 'thrall' && enemy.rosterId !== 'remembering-thrall') || !enemy.unitId) {
+    return { ...EMPTY_DEATH, squad: ctx.squad };
+  }
   const isHeavy = killingBlow.damage >= 25
     || killingBlow.source === 'EVISCERATE'
     || killingBlow.source === 'RUIN'
@@ -520,7 +554,11 @@ const thrallDeath: DeathHandler = (enemy, killingBlow, ctx) => {
 };
 
 const amalgamArmorRegenTurnStart: TurnStartHandler = (enemy, ctx) => {
-  if (enemy.rosterId !== 'amalgam' || !enemy.regeneratesArmor || !enemy.unitId) {
+  if (
+    (enemy.rosterId !== 'amalgam' && enemy.rosterId !== 'core-sick-amalgam')
+    || !enemy.regeneratesArmor
+    || !enemy.unitId
+  ) {
     return { squad: ctx.squad, logLines: [] };
   }
   const squad = patchUnitInSquad(ctx.squad, enemy.unitId, {

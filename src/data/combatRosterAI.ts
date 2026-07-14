@@ -85,6 +85,20 @@ const ROSTER_INTENTS: Partial<Record<string, EnemyIntent[]>> = {
   'wire-ghoul': ['STRIKE', 'EVADE'],
   'hollow-lung': ['STRIKE'],
   'grave-robber': ['SCAVENGE', 'STRIKE'],
+  'weeping-gargoyle': ['PAVEMENT_CRUSHER_CHARGE', 'PAVEMENT_CRUSHER', 'STRIKE'],
+  'phase-scuttler': ['STRIKE', 'EVADE'],
+  'remembering-thrall': ['STRIKE'],
+  'tar-choir': ['ARTILLERY_CHARGE', 'TAR_BIND', 'STRIKE'],
+  'static-caller': ['STRIKE', 'SIPHON_ABYSSAL'],
+  'blood-rusted-golem': ['STRIKE', 'FORTIFY'],
+  'rootbound-weeper': ['STRIKE', 'SIPHON_ABYSSAL', 'PREMATURE_IGNITION', 'SCAVENGE'],
+  'anchor-husk': ['STRIKE', 'FORTIFY'],
+  'core-sick-amalgam': ['STRIKE', 'FORTIFY'],
+  'void-lock-memory-leech': ['JAM_AUGMENT', 'STRIKE'],
+  'grave-engine-churn': ['STRIKE'],
+  'null-crown-shade': ['SINKING_INTO_GRID', 'VOID_AMBUSH', 'STRIKE', 'EVADE', 'VEIL_BARRIER', 'ASHEN_ROT'],
+  'choir-bound-resonance-caster': ['ARTILLERY_CHARGE', 'ARTILLERY_FIRE'],
+  'rift-spike-sniper': ['LASER_SIGHT', 'ARTILLERY_FIRE', 'STRIKE'],
 };
 
 function isHpBelowEnrageThreshold(profile: EnemyCombatProfile, rosterId: string): boolean {

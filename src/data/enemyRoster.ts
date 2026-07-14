@@ -1,6 +1,7 @@
 import { COMBAT_CHANCE } from '../types/combatChance';
 import type { CombatGridLane } from '../types/combatGrid';
 import type { EnemyClass, EnemyCombatProfile } from '../types/run';
+import type { FactionType } from '../types/game';
 import { resolveEnemyCombatStats, ENCOUNTER_KEY_TO_ROSTER } from './enemyCombatConfig';
 import { applyAlphaToEnemyProfile } from './enemyAlphaConfig';
 import { getNodeScale } from './enemyNodeScale';
@@ -55,6 +56,20 @@ export type EnemyRosterId =
   | 'wire-ghoul'
   | 'hollow-lung'
   | 'grave-robber'
+  | 'weeping-gargoyle'
+  | 'phase-scuttler'
+  | 'remembering-thrall'
+  | 'tar-choir'
+  | 'static-caller'
+  | 'blood-rusted-golem'
+  | 'rootbound-weeper'
+  | 'anchor-husk'
+  | 'core-sick-amalgam'
+  | 'void-lock-memory-leech'
+  | 'grave-engine-churn'
+  | 'null-crown-shade'
+  | 'choir-bound-resonance-caster'
+  | 'rift-spike-sniper'
   | 'boss-hollowed-precinct'
   | 'boss-choir-of-rust'
   | 'boss-primeval-rift-walker';
@@ -619,6 +634,218 @@ export const ENEMY_ROSTER: Record<EnemyRosterId, EnemyRosterEntry> = {
     evadeChance: 0,
     critChance: 0,
   },
+
+  'weeping-gargoyle': {
+    id: 'weeping-gargoyle',
+    designation: 'WEEPING GARGOYLE',
+    faction: 'TERRAN_GRID',
+    class: 'ABOMINATION',
+    role: 'FRONTLINE',
+    hp: 145,
+    damage: 15,
+    kineticArmor: 2,
+    occultWards: 0,
+    threatTier: 3,
+    isVeilEntity: true,
+    evadeChance: 0,
+    critChance: 0.05,
+  },
+  'phase-scuttler': {
+    id: 'phase-scuttler',
+    designation: 'PHASE SCUTTLER',
+    faction: 'LEGION',
+    class: 'GREMLIN',
+    role: 'FRONTLINE',
+    hp: 68,
+    damage: 9,
+    kineticArmor: 0,
+    occultWards: 0,
+    threatTier: 1,
+    isVeilEntity: true,
+    evadeChance: 0.28,
+    critChance: 0,
+  },
+  'remembering-thrall': {
+    id: 'remembering-thrall',
+    designation: 'REMEMBERING THRALL',
+    faction: 'LEGION',
+    class: 'ABOMINATION',
+    role: 'FRONTLINE',
+    hp: 88,
+    damage: 11,
+    kineticArmor: 3,
+    occultWards: 0,
+    threatTier: 2,
+    isVeilEntity: true,
+    evadeChance: 0,
+    critChance: 0.05,
+  },
+  'tar-choir': {
+    id: 'tar-choir',
+    designation: 'TAR CHOIR',
+    faction: 'SOLARIS',
+    class: 'APPARITION',
+    role: 'BACKLINE',
+    hp: 90,
+    damage: 12,
+    kineticArmor: 0,
+    occultWards: 0,
+    threatTier: 2,
+    isVeilEntity: true,
+    evadeChance: 0,
+    critChance: 0,
+  },
+  'static-caller': {
+    id: 'static-caller',
+    designation: 'STATIC CALLER',
+    faction: 'SOLARIS',
+    class: 'APPARITION',
+    role: 'BACKLINE',
+    hp: 102,
+    damage: 12,
+    kineticArmor: 0,
+    occultWards: 0,
+    threatTier: 2,
+    isVeilEntity: true,
+    evadeChance: 0,
+    critChance: 0,
+  },
+  'blood-rusted-golem': {
+    id: 'blood-rusted-golem',
+    designation: 'BLOOD-RUSTED GOLEM',
+    faction: 'TERRAN_GRID',
+    class: 'ABOMINATION',
+    role: 'FRONTLINE',
+    hp: 150,
+    damage: 15,
+    kineticArmor: 3,
+    occultWards: 0,
+    threatTier: 3,
+    isVeilEntity: true,
+    evadeChance: 0,
+    critChance: 0.05,
+  },
+  'rootbound-weeper': {
+    id: 'rootbound-weeper',
+    designation: 'ROOTBOUND WEEPER',
+    faction: 'SOLARIS',
+    class: 'APPARITION',
+    role: 'BACKLINE',
+    hp: 98,
+    damage: 12,
+    kineticArmor: 0,
+    occultWards: 0,
+    threatTier: 2,
+    isVeilEntity: true,
+    evadeChance: 0,
+    critChance: 0,
+  },
+  'anchor-husk': {
+    id: 'anchor-husk',
+    designation: 'ANCHOR HUSK',
+    faction: 'LEGION',
+    class: 'ABOMINATION',
+    role: 'FRONTLINE',
+    hp: 110,
+    damage: 14,
+    kineticArmor: 1,
+    occultWards: 1,
+    threatTier: 2,
+    isVeilEntity: true,
+    evadeChance: 0,
+    critChance: 0.05,
+  },
+  'core-sick-amalgam': {
+    id: 'core-sick-amalgam',
+    designation: 'CORE-SICK AMALGAM',
+    faction: 'LEGION',
+    class: 'ABOMINATION',
+    role: 'FRONTLINE',
+    hp: 175,
+    damage: 18,
+    kineticArmor: 3,
+    occultWards: 0,
+    threatTier: 3,
+    isVeilEntity: true,
+    evadeChance: 0,
+    critChance: 0.05,
+  },
+  'void-lock-memory-leech': {
+    id: 'void-lock-memory-leech',
+    designation: 'VOID-LOCK MEMORY LEECH',
+    faction: 'SOLARIS',
+    class: 'APPARITION',
+    role: 'BACKLINE',
+    hp: 90,
+    damage: 10,
+    kineticArmor: 0,
+    occultWards: 0,
+    threatTier: 2,
+    isVeilEntity: true,
+    evadeChance: 0,
+    critChance: 0,
+  },
+  'grave-engine-churn': {
+    id: 'grave-engine-churn',
+    designation: 'GRAVE-ENGINE CHURN',
+    faction: 'TERRAN_GRID',
+    class: 'ABOMINATION',
+    role: 'BACKLINE',
+    hp: 95,
+    damage: 22,
+    kineticArmor: 0,
+    occultWards: 0,
+    threatTier: 2,
+    isVeilEntity: true,
+    evadeChance: 0,
+    critChance: 0,
+  },
+  'null-crown-shade': {
+    id: 'null-crown-shade',
+    designation: 'NULL-CROWN SHADE',
+    faction: 'SOLARIS',
+    class: 'APPARITION',
+    role: 'BACKLINE',
+    hp: 95,
+    damage: 15,
+    kineticArmor: 1,
+    occultWards: 2,
+    threatTier: 3,
+    isVeilEntity: true,
+    evadeChance: 0.1,
+    critChance: 0,
+  },
+  'choir-bound-resonance-caster': {
+    id: 'choir-bound-resonance-caster',
+    designation: 'CHOIR-BOUND RESONANCE CASTER',
+    faction: 'SOLARIS',
+    class: 'APPARITION',
+    role: 'BACKLINE',
+    hp: 92,
+    damage: 15,
+    kineticArmor: 0,
+    occultWards: 1,
+    threatTier: 2,
+    isVeilEntity: true,
+    evadeChance: 0,
+    critChance: 0,
+  },
+  'rift-spike-sniper': {
+    id: 'rift-spike-sniper',
+    designation: 'RIFT-SPIKE SNIPER',
+    faction: 'TERRAN_GRID',
+    class: 'ABOMINATION',
+    role: 'BACKLINE',
+    hp: 84,
+    damage: 20,
+    kineticArmor: 0,
+    occultWards: 0,
+    threatTier: 2,
+    isVeilEntity: true,
+    evadeChance: 0,
+    critChance: 0.05,
+  },
+
   'boss-hollowed-precinct': {
     id: 'boss-hollowed-precinct',
     designation: 'HOLLOWED PRECINCT',
@@ -701,6 +928,20 @@ export const ALLOWED_GRUNT_ROSTER_IDS: readonly EnemyRosterId[] = [
   'wire-ghoul',
   'hollow-lung',
   'grave-robber',
+  'weeping-gargoyle',
+  'phase-scuttler',
+  'remembering-thrall',
+  'tar-choir',
+  'static-caller',
+  'blood-rusted-golem',
+  'rootbound-weeper',
+  'anchor-husk',
+  'core-sick-amalgam',
+  'void-lock-memory-leech',
+  'grave-engine-churn',
+  'null-crown-shade',
+  'choir-bound-resonance-caster',
+  'rift-spike-sniper',
 ];
 
 export const ALLOWED_BOSS_ROSTER_IDS: readonly EnemyRosterId[] = [
@@ -788,7 +1029,9 @@ export function spawnRosterUnit(
   const layered = initEnemyCombatLayers(base, {
     kineticArmor,
     occultWards,
-    fractureMax: entry.id === 'concrete-gargoyle' ? CONCRETE_GARGOYLE_FRACTURE_MAX : undefined,
+    fractureMax: (entry.id === 'concrete-gargoyle' || entry.id === 'weeping-gargoyle')
+      ? CONCRETE_GARGOYLE_FRACTURE_MAX
+      : undefined,
   });
   const withLifecycle = initRosterLifecycleDefaults(layered, entry.id);
   const withArchetype = {
@@ -805,12 +1048,93 @@ export function spawnRosterUnit(
       designation: `APEX ${entry.designation}`,
     };
   }
-  if (entry.id === 'amalgam') {
+  if (entry.id === 'amalgam' || entry.id === 'core-sick-amalgam') {
     profile = {
       ...profile,
       gridWidth: 2,
       occupiedSlots: ['FL_0', 'FL_1'],
       fractureImmune: true,
+      regeneratesArmor: entry.id === 'core-sick-amalgam' ? true : profile.regeneratesArmor,
+    };
+  }
+  if (entry.id === 'remembering-thrall') {
+    profile = {
+      ...profile,
+      alphaMechanics: {
+        ...(profile.alphaMechanics ?? {}),
+        reviveTurns: 1,
+        reviveHpPercent: 0.45,
+      },
+    };
+  }
+  if (entry.id === 'choir-bound-resonance-caster') {
+    profile = {
+      ...profile,
+      resonanceStack: 1,
+      alphaMechanics: {
+        ...(profile.alphaMechanics ?? {}),
+        damageScalingPerTurn: 0.75,
+      },
+    };
+  }
+  if (entry.id === 'void-lock-memory-leech') {
+    profile = {
+      ...profile,
+      alphaMechanics: {
+        ...(profile.alphaMechanics ?? {}),
+        disabledAugmentCount: 1,
+        disableDuration: 2,
+      },
+    };
+  }
+  if (entry.id === 'null-crown-shade') {
+    profile = {
+      ...profile,
+      occultImmune: true,
+      alphaMechanics: {
+        ...(profile.alphaMechanics ?? {}),
+        immuneToOccult: true,
+      },
+    };
+  }
+  if (entry.id === 'rift-spike-sniper') {
+    profile = {
+      ...profile,
+      alphaMechanics: {
+        ...(profile.alphaMechanics ?? {}),
+        lockOnTurns: 2,
+      },
+    };
+  }
+  if (entry.id === 'grave-engine-churn') {
+    profile = {
+      ...profile,
+      alphaMechanics: {
+        ...(profile.alphaMechanics ?? {}),
+        requiresAllyKillToFire: true,
+        consumesOnlyCorpses: false,
+      },
+    };
+  }
+  if (entry.id === 'blood-rusted-golem') {
+    profile = {
+      ...profile,
+      golemHeatVentThreshold: 2,
+      alphaMechanics: {
+        ...(profile.alphaMechanics ?? {}),
+        heatThreshold: 2,
+      },
+    };
+  }
+  if (entry.id === 'rootbound-weeper') {
+    profile = {
+      ...profile,
+      alphaMechanics: {
+        ...(profile.alphaMechanics ?? {}),
+        kineticDeathExplosionType: 'TRUE_DAMAGE',
+        explosionDamage: 18,
+        rootDuration: 1,
+      },
     };
   }
   if (options?.isAlpha) {

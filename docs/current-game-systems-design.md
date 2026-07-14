@@ -310,6 +310,134 @@ Post-run cargo routing for **eligible contract cargo** can generate **rival spon
 13. ✅ Betrayal events recorded for future Betrayer Echo hooks.
 14.–20. ✅ No territory/PvP/lockout; existing runs and extraction/death rules intact.
 
+### Enemy + Encounter Depth Identity v1 (Phase A)
+
+Depth stages already map to Threshold / Breach / Deep Veil. Phase A freezes **run identity** when each depth begins so later encounter/enemy work can read Distortion and Law state.
+
+**Depth 2 — Veil Distortion (exactly one):** Bleeding Architecture, Memory Contamination, Predatory Geometry, Unstable Matter, Ritual Pressure. Weighted by sector biome, active Anchor, Operation, echo activity, and resource focus.
+
+**Depth 3 — Deep Veil Law (exactly one):** The Veil Remembers, The Walls Are Hungry, The Roads Are Looping, The Machine Is Praying, The Sky Is Underground. ~55% chance to **intensify** the Depth 2 Distortion into its mapped Law; otherwise weighted by sector/anchor/operation.
+
+**Surfaces:** safehouse district intel, depth-entry toast (`DepthIdentityToast`), run log, debrief **DEPTH EFFECTS**.
+
+**Persistence:** `ActiveIncursionState.depthIdentity` (`activeVeilDistortion`, `activeDeepVeilLaw`, `intensifiedFromDistortion`, `pendingReveal`).
+
+**Scanner hooks (Phase A):** Distortion/Law scan biases multiply Anchor / Operation / High-Risk / High-Value rolls at node engagement via `resolveActiveDepthIdentityScanBias`.
+
+**Not in Phase A:** twisted encounter templates, encounter modifiers, enemy variants, full scanner label degradation UI, Depth 3 encounter templates.
+
+**Key files:** `types/depthIdentity.ts`, `depthIdentityCatalog.ts`, `veilDistortionEngine.ts`, `deepVeilLawEngine.ts`, `depthIdentityEngine.ts`, `depthIdentityDebugEngine.ts`, `runDebriefDepthIdentityEngine.ts`, `DepthIdentityToast.tsx`.
+
+**Phase A acceptance:** Distortion+Law generation, UI/debrief/debug, engagement scan bias, playable saves with null `depthIdentity`.
+
+### Enemy + Encounter Depth Identity v1 (Phase B)
+
+Phase B adds **encounter modifiers** — at most one per node — so Depth 2/3 combat and anomaly engagements feel rule-warped without new enemy templates yet.
+
+**Roll chances:** Depth 1 none (catalog has no D1-eligible mods); Depth 2 ~28% base on eligible combat/anomaly/resource nodes; Depth 3 ~48% base. Distortion/Law favoritism, High-Risk, Anchor/Operation tags, and pending UNSTABLE pressure nudge chance and weights. **CORE_SICK** is Depth 3 only.
+
+**Modifiers:** MIRRORED, BLEEDING, UNSTABLE, FOLDED, STARVED, RESONANT, CORE_SICK.
+
+**Combat hooks (v1):**
+- MIRRORED — first kill reflects minor occult pressure
+- BLEEDING — every 3rd hostile cycle taxes the operative
+- STARVED — heal received ×0.65 this encounter
+- FOLDED — one unit starts evade-phased (clears when struck)
+- CORE_SICK — one unit gains Anchor-sick HP bump
+- RESONANT — enemy outgoing damage +15%
+- UNSTABLE — on clear, next engagement elevates High-Risk
+
+**Surfaces:** scanner `MOD // …` signal, encounter banner telegraph, combat intro log, debrief DEPTH EFFECTS (seen/cleared), DevTest force/print/validate.
+
+**Key files:** `encounterModifierCatalog.ts`, `encounterModifierEngine.ts`, `encounterModifierCombatEngine.ts`, lazy roll via `lazyNodeContextEngine` / `nodeGenerationContextEngine`.
+
+**Not in Phase B:** twisted Depth 2 templates, Depth 3 encounter templates, enemy variants / spawn table rewrites.
+
+### Enemy + Encounter Depth Identity v1 (Phase C)
+
+Phase C overlays **five Depth 2 twisted encounter templates** onto existing node types (not new core types).
+
+| Template | Base node | Resolution |
+|----------|-----------|------------|
+| Corrupted Sanctuary | SANCTUARY | Rest / Purge / Listen / Leave modal |
+| False Extraction Signal | Safe-anchor extract | Attempt intercept / Stabilize / Ignore |
+| Resource Bloom | RESOURCE / ANOMALY | Careful / Overharvest / Burn / Leave |
+| Mirror Combat | COMBAT / ELITE | Auto-stamps MIRRORED modifier |
+| Anchor Vein | ANOMALY / RESOURCE / COMBAT / ELITE | Sever / Harvest / Stabilize / Ignore |
+
+**Rules:** Depth 2 primary (rare on D3), max 1 of each template per run, Distortion-favored weights, costs shown before confirm via `TwistedTemplateChoiceOverlay`.
+
+**Surfaces:** scanner `TWIST // …`, encounter banner, engagé log, debrief DEPTH EFFECTS, DevTest force/print/validate.
+
+**Key files:** `twistedTemplateCatalog.ts`, `twistedTemplateEngine.ts`, `twistedTemplateResolutionEngine.ts`, `TwistedTemplateChoiceOverlay.tsx`.
+
+**Not in Phase C:** Depth 3 templates, enemy variants, full scanner label degradation.
+
+### Enemy + Encounter Depth Identity v1 (Phase D)
+
+Phase D adds **six Depth 3 Deep Veil templates** into the same twisted-template pipeline (max 1 each per run; never replace the boss).
+
+| Template | Base node | Notes |
+|----------|-----------|--------|
+| Anchor Core Breach | Elite / Anomaly / Combat | Ops surge / skim / withdraw; high danger telegraph |
+| Veil Proper Cache | Resource / Anomaly | Greed cache — unstable/rare rolls, never guarantee Apex |
+| No-Exit Sanctuary | Sanctuary | Harsher Rest / Bargain / Cut Power / Leave |
+| Final Route Fracture | Safe-anchor extract | Force intercept / Hold clean / Abort (no soft-lock) |
+| Reality Tax | Anomaly | Pay HP / CR / stable / unstable, or refuse into High-Risk |
+| Apex Shadow | Elite / Combat | Auto CORE-SICK + High-Risk foreshadow (not a full boss) |
+
+**Key files:** extended `twistedTemplateCatalog.ts` / `twistedTemplateEngine.ts` / `twistedTemplateResolutionEngine.ts`.
+
+**Not in Phase D:** enemy variants, full scanner label degradation UI.
+
+### Enemy + Encounter Depth Identity v1 (Phase E)
+
+Phase E adds **Depth 2 enemy variants**, confirms **Depth 3 exclusives**, tunes **rival merc rarity**, and ships **Depth 3 elite tag variants** as explicit IDs (parent AI/sprites reused).
+
+**Depth 2 variants (8):** Weeping Gargoyle, Phase Scuttler, Remembering Thrall, Tar Choir, Static Caller, Blood-Rusted Golem, Rootbound Weeper, Anchor Husk (Anchor Signal / Operation Target inject only).
+
+**Depth 3 elite tags (6):** Core-Sick Amalgam, Void-Lock Memory Leech, Grave-Engine Churn, Null-Crown Shade, Choir-Bound Resonance Caster, Rift-Spike Sniper.
+
+**Spawn rules:** Variant `spawnGates.allowedDepths` exclude Depth 1; D3 exclusives (incl. Hollow Lung / Grave Robber + elite tags) stay off D1/D2. Rival merc weights ~32/18/8% NORMAL by depth. Anchor Husk prefers ANCHOR node tier + post-squad inject (~42%).
+
+**Combat hooks (soft):** parental lifecycle kits + light extras (weeping fracture pulse, phase slip, tar mark, static melee stamina tax, husk ally damage buff, remembering reform).
+
+**Surfaces:** combat intro VARIANT / DEEP TAG logs, DevTest print/validate, `verifyDepthEnemyVariants` in encounter generator verify.
+
+**Key files:** `depthEnemyVariantCatalog.ts`, `depthEnemyVariantCombatEngine.ts`, `depthEnemyVariantSpawnEngine.ts`, `depthEnemyVariantValidationEngine.ts`, roster/defs/pools updates.
+
+**Not in Phase E:** scanner label degradation (Phase F), full debrief flavor pass (Phase G).
+
+### Enemy + Encounter Depth Identity v1 (Phase F)
+
+Phase F makes scanner readouts depth-aware: label certainty bands, Distortion/Law overlay bias (including Echo), and an anti-stack rule against scanner lies + untelegraphed lethal.
+
+**Label certainty:** D1 ~2% degrade · D2 ~12% · D3 ~24%, plus Distortion/Law `scannerLabelDegradeChance` (cap 55%). Outcomes: RELIABLE / DEGRADED (nearby wrong type) / STRANGE (actionable weird phrase). Gatekeeper never lied. Null-Lens / fully interpreted nodes show truth.
+
+**Overlay bias:** Existing engagement multipliers for Anchor / Op / High-Risk / High-Value stay; Echo layer unlock now multiplies by Distortion/Law `echoSignalMultiplier`. Null-Lens rolls pass the same identity bias.
+
+**Anti-stack:** False Extraction / Final Route clear type corruption (they own the lie). Other lethal stamps (`FOLDED`, `CORE_SICK`, Apex Shadow, etc.) force a HIGH RISK telegraph when a corrupt label is present.
+
+**Surfaces:** `> SCAN CERTAINTY:` on dock readout, DevTest print/validate, `verifyScannerLabelCertainty`.
+
+**Key files:** `scannerLabelCertaintyCatalog.ts`, `scannerLabelCertaintyEngine.ts`, `scannerLabelCertaintyValidationEngine.ts`.
+
+**Not in Phase F:** full sector×depth flavor strings / debrief Depth Effects polish (Phase G).
+
+### Enemy + Encounter Depth Identity v1 (Phase G)
+
+Phase G closes the identity pass with **sector×depth flavor**, **debrief Depth Effects polish**, **Dev force/debug tools**, and **consolidated hard-rule validation**.
+
+**Sector × depth flavor:** `SECTOR_DEPTH_VISUAL_THEMES` for all 5 biomes × depths 1–3 (label + one-line flavor). Surfaces on encounter biome banner (`DEPTH FLAVOR //`) and Operation Debrief Depth Effects.
+
+**Debrief Depth Effects:** Distortion/Law copy, twisted outcomes, Depth 2 variant / Depth 3 exclusive kill tallies, depth-identity op progress, and the sector depth flavor line.
+
+**Dev tools:** force Depth 2/3 enemy variants into next combat spawn; print biome×depth pools and sector flavor; simulate Distortion/Law generation; list unseen twisted templates; `validatePhaseG` / `verifyPhaseGHardRules` (Gargoyle Null Zone only, flavor completeness, plus hard-counter / catalog / variant / scanner verifies).
+
+**Boot:** `verifyEncounterGenerator` calls `verifyPhaseGHardRules`.
+
+**Key files:** `sectorDepthVisualCatalog.ts`, `depthIdentityPhaseGDebugEngine.ts`, `runDebriefDepthIdentityEngine.ts`, `EncounterBiomeBanner.tsx`, DevTest hub buttons.
+
 ### Appraisal + Sealed Cargo v1
 
 **Sealed Containment Casket** is the primary appraisable contraband item. Players can inspect value **without consuming** the casket, then choose to open, sell sealed, deliver sealed (contract), or stash.

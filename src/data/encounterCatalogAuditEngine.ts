@@ -20,6 +20,8 @@ import { ALL_VEIL_BIOMES } from './sectorBiomeBridge';
 import type { SynergySquadSpec } from './synergyEncounterTypes';
 
 const LEGACY_ALIAS_KEYS: readonly EncounterEnemyKey[] = ['RIOT_VANGUARD'];
+/** Injected at combat spawn — not drafted into biome squad decks. */
+const INJECT_ONLY_ENEMY_KEYS: readonly EncounterEnemyKey[] = ['ANCHOR_HUSK'];
 
 function collectDeckUnitKeys(squads: readonly SynergySquadSpec[]): EncounterEnemyKey[] {
   return squads.flatMap((squad) => squad.roster.map((unit) => unit.type));
@@ -102,7 +104,7 @@ function assertDeckCoverage(): void {
   const usedKeys = new Set(collectDeckUnitKeys([...synergy, ...elite]));
 
   for (const key of allDefinedEnemyKeys()) {
-    if (LEGACY_ALIAS_KEYS.includes(key)) continue;
+    if (LEGACY_ALIAS_KEYS.includes(key) || INJECT_ONLY_ENEMY_KEYS.includes(key)) continue;
     const def = getEnemyDefinition(key)!;
     if (def.origin === 'RIVAL_MERC') {
       if (!usedKeys.has(key)) {

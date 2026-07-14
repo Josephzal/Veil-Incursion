@@ -54,6 +54,7 @@ import { buildCombatAugmentIcons } from '../utils/combatAugmentIcons';
 import { encounterBudgetForDepth } from '../data/combatEncounterBudget';
 import type { CargoItemId } from '../types/cargoGrid';
 import { resolveCargoHealReceivedMultiplier } from '../data/unstableCargoEffectsEngine';
+import { resolveStarvedHealMultiplier } from '../data/encounterModifierCombatEngine';
 import {
   type PendingNarrativeCombatBoons,
 } from '../types/narrativeBonusReward';
@@ -107,6 +108,7 @@ export default function CombatScreen(): React.JSX.Element {
     clearEncounterUltimateDisabled,
     setCombatLogActive,
     clearRunLog,
+    recordDepthIdentityCombatVictory,
   } = useRun();
   const { completeCurrentNode } = useNodeProgression();
   const { getWeaponCombatStats, account, addLockedContainer } = usePlayerAccount();
@@ -142,13 +144,14 @@ export default function CombatScreen(): React.JSX.Element {
   const runApBonus = activeIncursion.runModifiers?.firstTurnApBonus ?? 0;
   const runKineticArmor = activeIncursion.runModifiers?.kineticArmorBonus ?? 0;
   const kineticBatteryActive = activeIncursion.boundRequisition?.kineticBatteryActive ?? false;
-  const cargoHealReceivedMultiplier = useMemo(
-    () => resolveCargoHealReceivedMultiplier(
+  const encounterModifier = getSelectedVectorNode()?.contextModifiers?.encounterModifier ?? null;
+  const cargoHealReceivedMultiplier = useMemo(() => {
+    const cargoMult = resolveCargoHealReceivedMultiplier(
       activeIncursion.cargo,
       activeIncursion.keepsakeRuntime,
-    ),
-    [activeIncursion.cargo, activeIncursion.keepsakeRuntime],
-  );
+    );
+    return cargoMult * resolveStarvedHealMultiplier(encounterModifier);
+  }, [activeIncursion.cargo, activeIncursion.keepsakeRuntime, encounterModifier]);
   const firstTurnBonusAp = runApBonus;
   const [narrativeCombatBoons] = useState<PendingNarrativeCombatBoons>(
     peekPendingNarrativeCombatBoons,
@@ -428,6 +431,14 @@ export default function CombatScreen(): React.JSX.Element {
     clearEncounterUltimateDisabled();
     clearNarrativeBoonStatusEffects();
 
+    const victoryModifier = getSelectedVectorNode()?.contextModifiers?.encounterModifier;
+    const victoryTwisted = getSelectedVectorNode()?.contextModifiers?.twistedTemplate;
+    recordDepthIdentityCombatVictory({
+      modifierId: victoryModifier ?? null,
+      twistedTemplateId: victoryTwisted ?? null,
+      slainEnemies: runState.pendingEnemies ?? [],
+    });
+
     if (activeIncursion.defendRiftActive) {
       completeDefendRiftVictory();
       startExtractionReview();
@@ -545,6 +556,8 @@ export default function CombatScreen(): React.JSX.Element {
     startResourceHarvest,
     syncAfterCombat,
     clearNarrativeBoonStatusEffects,
+    clearEncounterUltimateDisabled,
+    recordDepthIdentityCombatVictory,
     activeIncursion.pendingHarvestReturn,
     activeIncursion.runGenerationContext,
   ]);
@@ -683,6 +696,7 @@ export default function CombatScreen(): React.JSX.Element {
                       envoyAbilityGrafts={activeIncursion.envoyAbilityGrafts}
                       encounterUltimateDisabled={activeIncursion.encounterUltimateDisabled}
                       cargoHealReceivedMultiplier={cargoHealReceivedMultiplier}
+                      encounterModifier={encounterModifier}
                       operativeClass={operativeClass}
                     />
                     </CombatDashboardCommandColumn>

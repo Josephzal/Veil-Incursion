@@ -16,6 +16,21 @@ import {
   buildCarriedCargoContextRollBias,
   formatLazyRollCargoPressureLog,
 } from './unstableCargoEffectsEngine';
+import type { DepthIdentityState } from '../types/depthIdentity';
+import { normalizeDepthIdentityState } from './depthIdentityEngine';
+import {
+  consumePendingUnstablePressure,
+  recordEncounterModifierSeen,
+} from './encounterModifierEngine';
+import {
+  queueTwistedPendingChoice,
+  recordTwistedTemplateSeen,
+} from './twistedTemplateEngine';
+import { getTwistedTemplateDefinition } from './twistedTemplateCatalog';
+import {
+  mergeScannerLabelIntoModifiers,
+  makeReliableScannerLabel,
+} from './scannerLabelCertaintyEngine';
 
 function mulberry32(seed: number): () => number {
   let t = seed >>> 0;
@@ -55,6 +70,7 @@ export interface LazyNodeContextRollResult {
   freshlyRolled: boolean;
   cargoPressureLog: string | null;
   echoEngageLogs: string[];
+  depthIdentityPatch?: DepthIdentityState | null;
 }
 
 /** Roll Veil Front context modifiers at vector engagement using current cargo. */
@@ -63,6 +79,8 @@ export function ensureNodeContextModifiersAtEngagement(
   nodeId: string,
   runContext: RunGenerationContext | null | undefined,
   cargo: CargoRunState,
+  depthIdentityBias?: import('../types/depthIdentity').DepthIdentityScanBias | null,
+  depthIdentity?: DepthIdentityState | null,
 ): LazyNodeContextRollResult {
   const node = tree.nodes[nodeId] ?? null;
   if (!node) {
@@ -81,6 +99,7 @@ export function ensureNodeContextModifiersAtEngagement(
   const rng = createNodeContextRng(tree.rollSeed!, nodeId);
   const cargoBias = buildCarriedCargoContextRollBias(cargo);
   const depthIndex = tree.macroDepthIndex ?? 1;
+  const identityBefore = normalizeDepthIdentityState(depthIdentity);
 
   let modifiers = rollNodeContextModifiers(
     node.depth,
@@ -90,6 +109,8 @@ export function ensureNodeContextModifiersAtEngagement(
     rng,
     rollState,
     cargoBias,
+    depthIdentityBias,
+    identityBefore,
   );
 
   modifiers = mergeEchoOverlayIntoModifiers(modifiers, node.echoOverlay);
@@ -136,10 +157,20 @@ export function ensureNodeContextModifiersAtEngagement(
     }
   }
 
+  modifiers = mergeScannerLabelIntoModifiers(
+    modifiers,
+    node.scannerLabelOverlay,
+    node.type,
+  );
+  const nextOverlay = modifiers.scannerLabelCorrupt
+    ? (node.scannerLabelOverlay ?? makeReliableScannerLabel(node.type))
+    : makeReliableScannerLabel(node.type);
+
   const updatedNode: ProceduralRunNode = {
     ...node,
     contextModifiers: modifiers,
     echoOverlay: undefined,
+    scannerLabelOverlay: nextOverlay,
   };
 
   const nextTree: ProceduralRunTree = {
@@ -151,11 +182,30 @@ export function ensureNodeContextModifiersAtEngagement(
     },
   };
 
+  let depthIdentityPatch: DepthIdentityState | null = null;
+  if (identityBefore.pendingUnstablePressure) {
+    depthIdentityPatch = consumePendingUnstablePressure(identityBefore);
+  }
+  if (modifiers.encounterModifier) {
+    depthIdentityPatch = recordEncounterModifierSeen(
+      depthIdentityPatch ?? identityBefore,
+      modifiers.encounterModifier,
+    );
+  }
+  if (modifiers.twistedTemplate) {
+    const base = depthIdentityPatch ?? identityBefore;
+    const def = getTwistedTemplateDefinition(modifiers.twistedTemplate);
+    depthIdentityPatch = def.requiresChoice
+      ? queueTwistedPendingChoice(base, modifiers.twistedTemplate, nodeId)
+      : recordTwistedTemplateSeen(base, modifiers.twistedTemplate);
+  }
+
   return {
     tree: nextTree,
     node: updatedNode,
     freshlyRolled: true,
     cargoPressureLog: formatLazyRollCargoPressureLog(modifiers, cargo),
     echoEngageLogs,
+    depthIdentityPatch,
   };
 }

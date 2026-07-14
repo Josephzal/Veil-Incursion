@@ -118,6 +118,20 @@ const ROSTER_PORTRAITS: Partial<Record<EnemyRosterId, ImageSourcePropType>> = {
   'wire-ghoul': WireGhoul,
   'hollow-lung': HollowLung,
   'grave-robber': GraveRobber,
+  'weeping-gargoyle': ConcreteGargoyle,
+  'phase-scuttler': Scuttler,
+  'remembering-thrall': Thrall,
+  'tar-choir': TarSpitter,
+  'static-caller': SmogCaller,
+  'blood-rusted-golem': Golem,
+  'rootbound-weeper': AshWeeper,
+  'anchor-husk': Thrall,
+  'core-sick-amalgam': Amalgam,
+  'void-lock-memory-leech': MemoryLeech,
+  'grave-engine-churn': Churn,
+  'null-crown-shade': NullShade,
+  'choir-bound-resonance-caster': ResonanceCaster,
+  'rift-spike-sniper': CoilSpikeSniper,
 };
 
 const ROSTER_ATTACK_PORTRAITS: Partial<Record<EnemyRosterId, ImageSourcePropType>> = {
@@ -158,6 +172,20 @@ const ROSTER_ATTACK_PORTRAITS: Partial<Record<EnemyRosterId, ImageSourcePropType
   'wire-ghoul': WireGhoulAttacking,
   'hollow-lung': HollowLungAttacking,
   'grave-robber': GraveRobberAttacking,
+  'weeping-gargoyle': GargoyleAttacking,
+  'phase-scuttler': ScuttlerAttacking,
+  'remembering-thrall': ThrallAttacking,
+  'tar-choir': TarSpitter,
+  'static-caller': SmogCallerAttacking,
+  'blood-rusted-golem': GolemAttacking,
+  'rootbound-weeper': AshWeeperAttacking,
+  'anchor-husk': ThrallAttacking,
+  'core-sick-amalgam': AmalgamAttacking,
+  'void-lock-memory-leech': MemoryLeechAttacking,
+  'grave-engine-churn': ChurnAttacking,
+  'null-crown-shade': NullShadeAttacking,
+  'choir-bound-resonance-caster': ResonanceCasterAttacking,
+  'rift-spike-sniper': CoilSpikeSniperAttacking,
 };
 
 export function resolveRosterPortrait(rosterId?: string | null): ImageSourcePropType {

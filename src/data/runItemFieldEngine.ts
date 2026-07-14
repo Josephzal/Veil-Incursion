@@ -12,6 +12,7 @@ import type {
 import type { UnstableCargoEffectId } from '../types/unstableCargoEffects';
 import { UNSTABLE_CARRIED_EFFECT_IDS } from '../types/unstableCargoEffects';
 import { ensureNodeContextModifiersAtEngagement } from './lazyNodeContextEngine';
+import { resolveActiveDepthIdentityScanBias } from './depthIdentityEngine';
 import { getAvailableProceduralNodeIds } from './proceduralScannerBridge';
 import { patchKeepsakeNodeModifiers } from './expeditionKeepsakeRouteEngine';
 import { countPhysicalCargoResource } from './unstableCargoEffectsEngine';
@@ -258,7 +259,7 @@ export function useNullLensFieldTool(
   incursion: Pick<
     ActiveIncursionState,
     'runItems' | 'itemRuntime' | 'proceduralRunTree' | 'runGenerationContext'
-    | 'cargo' | 'keepsakeFullyInterpretedNodeIds'
+    | 'cargo' | 'keepsakeFullyInterpretedNodeIds' | 'depthIdentity' | 'currentDistrict'
   >,
   nodeId: string,
 ): RunItemFieldUseOutcome {
@@ -283,11 +284,14 @@ export function useNullLensFieldTool(
     return { success: false, logLine: '[REJECTED] >> Null-Lens Filter consume failed.' };
   }
 
+  const depthIndex = (incursion.currentDistrict as 1 | 2 | 3) ?? 1;
   const rolled = ensureNodeContextModifiersAtEngagement(
     incursion.proceduralRunTree,
     nodeId,
     incursion.runGenerationContext,
     incursion.cargo,
+    resolveActiveDepthIdentityScanBias(incursion.depthIdentity, depthIndex),
+    incursion.depthIdentity,
   );
 
   const interpretedIds = incursion.keepsakeFullyInterpretedNodeIds.includes(nodeId)

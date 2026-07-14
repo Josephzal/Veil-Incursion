@@ -27,6 +27,36 @@ import {
   debugValidateBetrayalOffers,
 } from '../../data/betrayalDebugEngine';
 import {
+  debugForceDeepVeilLaw,
+  debugForceEncounterModifier,
+  debugForceTwistedTemplate,
+  debugForceVeilDistortion,
+  debugPreviewDepthIdentity,
+  debugPrintDistortionCatalog,
+  debugPrintEncounterModifierCatalog,
+  debugPrintLawCatalog,
+  debugPrintTwistedTemplateCatalog,
+  debugPrintDepthEnemyVariantCatalog,
+  debugValidateDepthEnemyVariants,
+  debugPrintScannerLabelCertaintyCatalog,
+  debugValidateScannerLabelCertainty,
+  debugForceDepthEnemyVariant,
+  debugPrintBiomeDepthPools,
+  debugPrintSectorDepthFlavor,
+  debugSimulateDepthIdentityGeneration,
+  debugListMissingTwistedTemplates,
+  debugValidatePhaseG,
+  debugValidateDepthIdentity,
+} from '../../data/depthIdentityDebugEngine';
+import {
+  ALL_DEEP_VEIL_LAW_IDS,
+  ALL_VEIL_DISTORTION_IDS,
+} from '../../data/depthIdentityCatalog';
+import { ALL_ENCOUNTER_MODIFIER_IDS } from '../../data/encounterModifierCatalog';
+import { ALL_TWISTED_TEMPLATE_IDS } from '../../data/twistedTemplateCatalog';
+import { ALL_DEPTH_ENEMY_VARIANT_KEYS } from '../../data/depthEnemyVariantCatalog';
+import { buildDepthIdentityRollContext } from '../../data/veilDistortionEngine';
+import {
   debugForceAppraisalBand,
   debugForceOpenTier,
   debugPreviewSealedStash,
@@ -540,6 +570,239 @@ export default function DevTestHubPanel(): React.JSX.Element {
           label="[ VALIDATE SEALED CARGO ]"
           accentColor={theme.statusColor}
           onPress={() => setDebugReport(debugValidateSealedCargo(account))}
+        />
+        <SandboxLaunchButton
+          label="[ FORCE MEMORY DISTORTION ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            debugForceVeilDistortion('MEMORY_CONTAMINATION');
+            setDebugReport('Next Depth 2 Distortion forced to MEMORY_CONTAMINATION.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ FORCE VEIL REMEMBERS LAW ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            debugForceDeepVeilLaw('THE_VEIL_REMEMBERS');
+            setDebugReport('Next Depth 3 Law forced to THE_VEIL_REMEMBERS.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ FORCE MIRRORED MODIFIER ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            debugForceEncounterModifier('MIRRORED');
+            setDebugReport('Next engagement encounter modifier forced to MIRRORED.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ FORCE STARVED MODIFIER ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            debugForceEncounterModifier('STARVED');
+            setDebugReport('Next engagement encounter modifier forced to STARVED.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ CLEAR FORCED MODIFIER ]"
+          accentColor={theme.mutedColor}
+          onPress={() => {
+            debugForceEncounterModifier(null);
+            setDebugReport('Cleared forced encounter modifier.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ FORCE CORRUPTED SANCTUARY ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            debugForceTwistedTemplate('CORRUPTED_SANCTUARY');
+            setDebugReport('Next eligible engagement forced to CORRUPTED_SANCTUARY.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ FORCE FALSE EXTRACTION ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            debugForceTwistedTemplate('FALSE_EXTRACTION_SIGNAL');
+            setDebugReport('Next safe-anchor / extraction chance forced to FALSE_EXTRACTION_SIGNAL.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ FORCE RESOURCE BLOOM ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            debugForceTwistedTemplate('RESOURCE_BLOOM');
+            setDebugReport('Next eligible engagement forced to RESOURCE_BLOOM.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ FORCE ANCHOR CORE BREACH ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            debugForceTwistedTemplate('ANCHOR_CORE_BREACH');
+            setDebugReport('Next eligible engagement forced to ANCHOR_CORE_BREACH.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ FORCE VEIL PROPER CACHE ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            debugForceTwistedTemplate('VEIL_PROPER_CACHE');
+            setDebugReport('Next eligible engagement forced to VEIL_PROPER_CACHE.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ FORCE FINAL ROUTE FRACTURE ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            debugForceTwistedTemplate('FINAL_ROUTE_FRACTURE');
+            setDebugReport('Next Depth 3 safe-anchor forced toward FINAL_ROUTE_FRACTURE.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ FORCE APEX SHADOW ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            debugForceTwistedTemplate('APEX_SHADOW');
+            setDebugReport('Next eligible combat forced to APEX_SHADOW.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ CLEAR FORCED TWIST ]"
+          accentColor={theme.mutedColor}
+          onPress={() => {
+            debugForceTwistedTemplate(null);
+            setDebugReport('Cleared forced twisted template.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ PREVIEW DEPTH IDENTITY ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(debugPreviewDepthIdentity(activeIncursion))}
+        />
+        <SandboxLaunchButton
+          label="[ PRINT DISTORTION CATALOG ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(
+            `${debugPrintDistortionCatalog()}\n\nIDs: ${ALL_VEIL_DISTORTION_IDS.join(', ')}`,
+          )}
+        />
+        <SandboxLaunchButton
+          label="[ PRINT LAW CATALOG ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(
+            `${debugPrintLawCatalog()}\n\nIDs: ${ALL_DEEP_VEIL_LAW_IDS.join(', ')}`,
+          )}
+        />
+        <SandboxLaunchButton
+          label="[ PRINT MODIFIER CATALOG ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(
+            `${debugPrintEncounterModifierCatalog()}\n\nIDs: ${ALL_ENCOUNTER_MODIFIER_IDS.join(', ')}`,
+          )}
+        />
+        <SandboxLaunchButton
+          label="[ PRINT TWISTED CATALOG ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(
+            `${debugPrintTwistedTemplateCatalog()}\n\nIDs: ${ALL_TWISTED_TEMPLATE_IDS.join(', ')}`,
+          )}
+        />
+        <SandboxLaunchButton
+          label="[ PRINT DEPTH ENEMY VARIANTS ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(
+            `${debugPrintDepthEnemyVariantCatalog()}\n\nIDs: ${ALL_DEPTH_ENEMY_VARIANT_KEYS.join(', ')}`,
+          )}
+        />
+        <SandboxLaunchButton
+          label="[ VALIDATE DEPTH ENEMY VARIANTS ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(debugValidateDepthEnemyVariants())}
+        />
+        <SandboxLaunchButton
+          label="[ PRINT SCANNER CERTAINTY ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(debugPrintScannerLabelCertaintyCatalog())}
+        />
+        <SandboxLaunchButton
+          label="[ VALIDATE SCANNER CERTAINTY ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(debugValidateScannerLabelCertainty())}
+        />
+        <SandboxLaunchButton
+          label="[ FORCE WEEPING GARGOYLE ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            debugForceDepthEnemyVariant('WEEPING_GARGOYLE');
+            setDebugReport('Next combat spawn forced to inject WEEPING_GARGOYLE (Depth 2+).');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ FORCE ANCHOR HUSK ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            debugForceDepthEnemyVariant('ANCHOR_HUSK');
+            setDebugReport('Next combat spawn forced to inject ANCHOR_HUSK (Depth 2+).');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ FORCE CORE SICK AMALGAM ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            debugForceDepthEnemyVariant('CORE_SICK_AMALGAM');
+            setDebugReport('Next combat spawn forced to inject CORE_SICK_AMALGAM (Depth 3).');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ CLEAR FORCED VARIANT ]"
+          accentColor={theme.mutedColor}
+          onPress={() => {
+            debugForceDepthEnemyVariant(null);
+            setDebugReport('Cleared forced depth enemy variant.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ PRINT BIOME DEPTH POOLS ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(debugPrintBiomeDepthPools())}
+        />
+        <SandboxLaunchButton
+          label="[ PRINT SECTOR DEPTH FLAVOR ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(debugPrintSectorDepthFlavor())}
+        />
+        <SandboxLaunchButton
+          label="[ SIMULATE DEPTH GEN ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            const seed = `dev-depth-gen:${Date.now()}`;
+            const ctx = buildDepthIdentityRollContext(
+              activeIncursion.runGenerationContext ?? runGenerationContext,
+              activeIncursion.runVeilBiome
+                ?? runGenerationContext?.sectorState.veilBiome
+                ?? null,
+              seed,
+            );
+            setDebugReport(debugSimulateDepthIdentityGeneration(ctx));
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ LIST UNSEEN TWISTED ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(
+            debugListMissingTwistedTemplates(activeIncursion.depthIdentity),
+          )}
+        />
+        <SandboxLaunchButton
+          label="[ VALIDATE PHASE G ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(debugValidatePhaseG())}
+        />
+        <SandboxLaunchButton
+          label="[ VALIDATE DEPTH IDENTITY ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(debugValidateDepthIdentity(activeIncursion))}
         />
         <SandboxLaunchButton
           label="[ PREVIEW DEBRIEF ]"

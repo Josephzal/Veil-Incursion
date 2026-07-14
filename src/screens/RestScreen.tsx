@@ -179,10 +179,17 @@ export default function RestScreen(): React.JSX.Element {
     : activeViewportWidth;
 
   const vectorNode = getSelectedVectorNode();
+  const corruptedSanctuaryPending =
+    activeIncursion.depthIdentity?.pendingTwistedChoice?.templateId === 'CORRUPTED_SANCTUARY'
+    || activeIncursion.depthIdentity?.pendingTwistedChoice?.templateId === 'NO_EXIT_SANCTUARY';
   const headerCopy = resolveRunEventNodeHeaderFromNode(
     vectorNode,
     'SANCTUARY',
-    'RE-TUNE CONDUIT',
+    corruptedSanctuaryPending
+      ? (activeIncursion.depthIdentity?.pendingTwistedChoice?.templateId === 'NO_EXIT_SANCTUARY'
+        ? 'NO-EXIT SANCTUARY'
+        : 'CORRUPTED RE-TUNE CONDUIT')
+      : 'RE-TUNE CONDUIT',
   );
 
   const telemetryPadding = scaleSpacing(graftTerminalOpen ? 10 : 16);
@@ -197,14 +204,14 @@ export default function RestScreen(): React.JSX.Element {
   const choiceSecondarySize = scaleFont(10);
 
   const handleSelectAttune = () => {
-    if (confirmed) return;
+    if (confirmed || corruptedSanctuaryPending) return;
     setSelectedChoice('ATTUNE');
     setGraftTerminalOpen(false);
     setGraftComplete(false);
   };
 
   const handleSelectGraft = () => {
-    if (confirmed || !graftAffordable) return;
+    if (confirmed || !graftAffordable || corruptedSanctuaryPending) return;
     setSelectedChoice('GRAFT');
     setGraftTerminalOpen(true);
     setGraftSelection({ graftId: null, abilityId: null, canInject: false });
@@ -343,7 +350,11 @@ export default function RestScreen(): React.JSX.Element {
               },
             ]}
           >
-            Stabilizing ley-energy hums through the anchor chapel. A brief respite from the void. Choose attunement or graft mutation.
+            {corruptedSanctuaryPending
+              ? (activeIncursion.depthIdentity?.pendingTwistedChoice?.templateId === 'NO_EXIT_SANCTUARY'
+                ? 'This Deep Veil chapel was not built for you. Resolve the twisted choice modal — standard attune/graft is offline.'
+                : 'This sanctuary is corrupted. Resolve the twisted choice modal — standard attune/graft is offline until the conduit answers or you leave.')
+              : 'Stabilizing ley-energy hums through the anchor chapel. A brief respite from the void. Choose attunement or graft mutation.'}
           </Text>
         ) : null}
         <View style={[styles.statsGrid, isDesktop ? styles.statsGridDesktop : null]}>
@@ -389,10 +400,10 @@ export default function RestScreen(): React.JSX.Element {
         <View style={[styles.choiceCol, { gap: choiceGap }]}>
           <SanctuaryChoiceBlock
             primaryLabel="[ ATTUNE ]"
-            secondaryLabel="Restore 30% of Maximum Health"
+            secondaryLabel={corruptedSanctuaryPending ? 'OFFLINE — twisted conduit' : 'Restore 30% of Maximum Health'}
             selected={selectedChoice === 'ATTUNE'}
-            dimmed={selectedChoice === 'GRAFT' || (confirmed && selectedChoice !== 'ATTUNE')}
-            locked={false}
+            dimmed={selectedChoice === 'GRAFT' || (confirmed && selectedChoice !== 'ATTUNE') || corruptedSanctuaryPending}
+            locked={corruptedSanctuaryPending}
             accentColor={TERMINAL_ACCENT}
             secondaryColor={HEAL_GREEN}
             primaryColor={theme.primaryColor}
@@ -401,19 +412,21 @@ export default function RestScreen(): React.JSX.Element {
             paddingVertical={choicePaddingVertical}
             paddingHorizontal={choicePaddingHorizontal}
             onPress={handleSelectAttune}
-            disabled={confirmed || selectedChoice === 'GRAFT'}
+            disabled={confirmed || selectedChoice === 'GRAFT' || corruptedSanctuaryPending}
           />
 
           <SanctuaryChoiceBlock
             primaryLabel={graftTerminalLabel}
             secondaryLabel={
-              !graftAffordable
-                ? `INSUFFICIENT RESIDUE — REQUIRES ${minimumGraftCost}+`
-                : 'Spend Veil Residue to mutate an equipped ability'
+              corruptedSanctuaryPending
+                ? 'OFFLINE — twisted conduit'
+                : !graftAffordable
+                  ? `INSUFFICIENT RESIDUE — REQUIRES ${minimumGraftCost}+`
+                  : 'Spend Veil Residue to mutate an equipped ability'
             }
             selected={selectedChoice === 'GRAFT'}
-            dimmed={selectedChoice === 'ATTUNE' || (confirmed && selectedChoice !== 'GRAFT')}
-            locked={!graftAffordable}
+            dimmed={selectedChoice === 'ATTUNE' || (confirmed && selectedChoice !== 'GRAFT') || corruptedSanctuaryPending}
+            locked={!graftAffordable || corruptedSanctuaryPending}
             accentColor={GRAFT_PURPLE}
             secondaryColor={GRAFT_PURPLE}
             primaryColor={theme.primaryColor}
@@ -422,7 +435,7 @@ export default function RestScreen(): React.JSX.Element {
             paddingVertical={choicePaddingVertical}
             paddingHorizontal={choicePaddingHorizontal}
             onPress={handleSelectGraft}
-            disabled={confirmed || selectedChoice === 'ATTUNE' || !graftAffordable}
+            disabled={confirmed || selectedChoice === 'ATTUNE' || !graftAffordable || corruptedSanctuaryPending}
           />
         </View>
       ) : (

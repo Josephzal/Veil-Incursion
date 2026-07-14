@@ -234,6 +234,28 @@ import {
   tryRivalEmergencySwap,
   rivalWardBreakPatch,
 } from '../data/encounterMechanicsEngine';
+import {
+  applyCoreSickModifierToSquad,
+  applyFoldedModifierToSquad,
+  createEncounterModifierCombatRuntime,
+  resolveBleedingCyclePulse,
+  resolveEncounterModifierIntroLog,
+  resolveMirroredKillPulse,
+  resolveResonantOutgoingDamageMultiplier,
+  type EncounterModifierCombatRuntime,
+} from '../data/encounterModifierCombatEngine';
+import {
+  createDepthVariantCombatRuntime,
+  formatDepthVariantCombatIntro,
+  resolveAnchorHuskAllyDamageMultiplier,
+  resolveStaticCallerMeleeStaminaMultiplier,
+  resolveTarChoirOutgoingDamageMultiplier,
+  resolveWeepingGargoyleFracturePulse,
+  consumeTarChoirMark,
+  markTarChoirOnHit,
+  type DepthVariantCombatRuntime,
+} from '../data/depthEnemyVariantCombatEngine';
+import type { EncounterModifierId } from '../types/depthIdentity';
 import { isRosterSpecificIntent, isNullShadeVoidAmbush, nullShadeVoidAmbushCleanupPatch, patchRosterAfterIntentExec, resolveRosterEnemyDamage, ROSTER_AI_WEIGHTS, syncRosterCombatState, VOID_AMBUSH_CRIT_CHANCE, VOID_AMBUSH_INTERRUPT_THRESHOLD } from '../data/combatRosterActions';
 import { getAlphaMechanic } from '../data/enemyAlphaConfig';
 import {
@@ -552,6 +574,8 @@ interface TacticalCombatHubProps {
   operativeClass?: ClassType;
   /** Unstable cargo heal penalty/bonus multiplier (1 = neutral). */
   cargoHealReceivedMultiplier?: number;
+  /** Depth-identity encounter modifier rolled onto the current node. */
+  encounterModifier?: EncounterModifierId | null;
   /** Rusted Flare — temporary shield hits at combat start. */
 }
 interface SliceLineConfig {
@@ -644,6 +668,7 @@ export default function TacticalCombatHub({
   onGraftLootDrop,
   operativeClass = 'AEGIS',
   cargoHealReceivedMultiplier = 1,
+  encounterModifier = null,
 }: TacticalCombatHubProps): React.JSX.Element {
   const {
     notifyRunItemPlayerTurnStart,
@@ -680,6 +705,8 @@ export default function TacticalCombatHub({
     [activeWeaponFamilyId, activeWeaponTier],
   );
   const weaponRuntimeRef = useRef(createDefaultWeaponRuntime());
+  const encounterModifierRuntimeRef = useRef<EncounterModifierCombatRuntime | null>(null);
+  const depthVariantRuntimeRef = useRef<DepthVariantCombatRuntime>(createDepthVariantCombatRuntime());
   const weaponMagazineBonus = resolvedWeapon
     ? resolveWeaponMagazineBonus(resolvedWeapon.statModifiers)
     : 0;
@@ -1708,6 +1735,15 @@ export default function TacticalCombatHub({
     const next = getUnitById(nextSquad, unitId);
     if (next && !wasFractured && isEnemyFractured(next)) {
       Vibration.vibrate(40);
+      const weeping = resolveWeepingGargoyleFracturePulse(depthVariantRuntimeRef.current, next);
+      depthVariantRuntimeRef.current = weeping.runtime;
+      if (weeping.damage > 0) {
+        if (weeping.logLine) log(weeping.logLine);
+        hurtPlayer(weeping.damage, true, weeping.logLine ?? undefined, {
+          rollEvade: false,
+          rollCrit: false,
+        });
+      }
       if (resolvedWeapon) {
         const fractureHooks = runWeaponOnFractureHooks(buildWeaponHookContext());
         fractureHooks.logLines.forEach((line) => log(line));
@@ -3329,6 +3365,15 @@ export default function TacticalCombatHub({
         applyStamina(Math.max(0, staminaRef.current - penalty));
         log(`>> HOOK WEAVER TETHER — ${penalty} stamina siphoned.`);
       }
+      if (
+        encounterModifierRuntimeRef.current?.modifierId === 'FOLDED'
+        && encounterModifierRuntimeRef.current.foldedUnitId === e.unitId
+        && working.evadeActive
+      ) {
+        working = { ...working, evadeActive: false, evadeTurnsRemaining: 0 };
+        patchUnit(e.unitId, { evadeActive: false, evadeTurnsRemaining: 0 });
+        log('>> FOLDED — phased silhouette forced into true position.');
+      }
       hitFlashSeqRef.current[e.unitId] = (hitFlashSeqRef.current[e.unitId] ?? 0) + 1;
       if (source && !options?.indirectDamage && !options?.echoHit) {
         const impactKind = operativeClass === 'AEGIS'
@@ -3562,6 +3607,17 @@ export default function TacticalCombatHub({
     }
 
     if (hp <= 0) {
+      if (encounterModifierRuntimeRef.current) {
+        const mirrored = resolveMirroredKillPulse(encounterModifierRuntimeRef.current);
+        encounterModifierRuntimeRef.current = mirrored.runtime;
+        if (mirrored.damage > 0) {
+          if (mirrored.logLine) log(mirrored.logLine);
+          hurtPlayer(mirrored.damage, true, mirrored.logLine ?? undefined, {
+            rollEvade: false,
+            rollCrit: false,
+          });
+        }
+      }
       const killAbility = (
         zeroProtocolActiveRef.current
           ? 'ZERO_PROTOCOL'
@@ -3827,11 +3883,11 @@ export default function TacticalCombatHub({
   const adjustedStaminaCost = (cost: number) => {
     const reduction = 0;
     let adjusted = cost;
-    if (reduction <= 0) {
-      adjusted = cost;
-    } else {
+    if (reduction > 0) {
       adjusted = Math.max(1, Math.floor(cost * (1 - reduction / 100)));
     }
+    const staticMult = resolveStaticCallerMeleeStaminaMultiplier(squadRef.current);
+    adjusted = Math.max(0, Math.floor(adjusted * staticMult));
     return adjusted + rivalHexedStaminaTax(sessionExtrasRef.current);
   };
 
@@ -3863,16 +3919,27 @@ export default function TacticalCombatHub({
   };
 
   const attackDmg = (e: EnemyCombatProfile) => {
+    const resonantMult = resolveResonantOutgoingDamageMultiplier(
+      encounterModifierRuntimeRef.current?.modifierId,
+    );
+    const huskMult = resolveAnchorHuskAllyDamageMultiplier(squadRef.current, e.unitId);
+    let tarMult = resolveTarChoirOutgoingDamageMultiplier(depthVariantRuntimeRef.current);
+    if (tarMult > 1 && e.isVeilEntity) {
+      depthVariantRuntimeRef.current = consumeTarChoirMark(depthVariantRuntimeRef.current);
+    } else {
+      tarMult = 1;
+    }
+    const combo = resonantMult * huskMult * tarMult;
     if (e.intent === 'WORLD_ENDER') {
-      return { dmg: Math.floor(e.baseDamage * 2.5), unblockable: true };
+      return { dmg: Math.floor(e.baseDamage * 2.5 * combo), unblockable: true };
     }
     if (isRosterSpecificIntent(e.intent) || e.rosterId === 'echoing-brute') {
       return {
-        dmg: resolveRosterEnemyDamage(e, e.intent),
+        dmg: Math.floor(resolveRosterEnemyDamage(e, e.intent) * combo),
         unblockable: false,
       };
     }
-    return { dmg: e.baseDamage, unblockable: false };
+    return { dmg: Math.floor(e.baseDamage * combo), unblockable: false };
   };
 
   const applyFractureHoundShieldDrain = (attacker: EnemyCombatProfile) => {
@@ -4304,7 +4371,7 @@ export default function TacticalCombatHub({
       }
       case 'ARTILLERY_FIRE': {
         const isSapper = e.rosterId === 'sapper';
-        const isSniper = e.rosterId === 'coil-spike-sniper';
+        const isSniper = e.rosterId === 'coil-spike-sniper' || e.rosterId === 'rift-spike-sniper';
         const isSpotter = e.rosterId === 'spotter';
         const dmg = isSpotter ? SPOTTER_ARTILLERY_TRUE_DAMAGE : resolveRosterEnemyDamage(e, 'ARTILLERY_FIRE');
         if (isSpotter && e.unitId) {
@@ -4344,6 +4411,11 @@ export default function TacticalCombatHub({
           turnsRemaining: rootDuration,
         });
         log(`>> ${e.designation} ROOTED — defend/evade disabled (${rootDuration} turn${rootDuration > 1 ? 's' : ''}).`);
+        if (e.rosterId === 'tar-choir') {
+          const marked = markTarChoirOnHit(depthVariantRuntimeRef.current, e.rosterId);
+          depthVariantRuntimeRef.current = marked.runtime;
+          if (marked.logLine) log(marked.logLine);
+        }
         break;
       }
       case 'STAMINA_TETHER': {
@@ -4390,6 +4462,15 @@ export default function TacticalCombatHub({
     if (allUnitsDefeated(squadRef.current)) {
       scheduleCombatVictoryResolution();
       return;
+    }
+    if (encounterModifierRuntimeRef.current) {
+      const bleedPulse = resolveBleedingCyclePulse(encounterModifierRuntimeRef.current);
+      encounterModifierRuntimeRef.current = bleedPulse.runtime;
+      if (bleedPulse.damage > 0) {
+        if (bleedPulse.logLine) log(bleedPulse.logLine);
+        hurtPlayer(bleedPulse.damage, true, bleedPulse.logLine ?? undefined, { rollEvade: false, rollCrit: false });
+        if (operativeHpRef.current <= 0) return;
+      }
     }
     if (mutationEncounterRef.current.veilTarTurnsRemaining > 0) {
       mutationEncounterRef.current.veilTarTurnsRemaining -= 1;
@@ -5130,6 +5211,27 @@ export default function TacticalCombatHub({
       }));
     }
 
+    encounterModifierRuntimeRef.current = createEncounterModifierCombatRuntime(encounterModifier);
+    depthVariantRuntimeRef.current = createDepthVariantCombatRuntime();
+    const encounterModStartLogs: string[] = [];
+    encounterModStartLogs.push(...formatDepthVariantCombatIntro(initialSquad));
+    if (encounterModifierRuntimeRef.current) {
+      const folded = applyFoldedModifierToSquad(
+        initialSquad,
+        encounterModifierRuntimeRef.current,
+      );
+      initialSquad = folded.squad;
+      encounterModifierRuntimeRef.current = folded.runtime;
+      if (folded.logLine) encounterModStartLogs.push(folded.logLine);
+      const coreSick = applyCoreSickModifierToSquad(
+        initialSquad,
+        encounterModifierRuntimeRef.current,
+      );
+      initialSquad = coreSick.squad;
+      encounterModifierRuntimeRef.current = coreSick.runtime;
+      if (coreSick.logLine) encounterModStartLogs.push(coreSick.logLine);
+    }
+
     threatBudgetRef.current = threatBudget
       ?? (initialSquad.length >= 3 ? THREAT_BUDGET_ELITE : THREAT_BUDGET_STANDARD);
     arenaLayoutModeRef.current = resolveArenaLayoutMode(initialSquad.length);
@@ -5262,6 +5364,12 @@ export default function TacticalCombatHub({
     preAppliedHpStrikeRef.current = 0;
     enemyStunPendingRef.current = false;
     log('>> COMBAT LINK ESTABLISHED');
+    if (encounterModifierRuntimeRef.current) {
+      const intro = resolveEncounterModifierIntroLog(encounterModifierRuntimeRef.current);
+      encounterModifierRuntimeRef.current = intro.runtime;
+      if (intro.logLine) log(intro.logLine);
+    }
+    encounterModStartLogs.forEach((line) => log(line));
     if (narrativeCombatBoons?.scouted) {
       log('>> SCOUTED BOON — hostile grid entered at −10% current HP.');
     }

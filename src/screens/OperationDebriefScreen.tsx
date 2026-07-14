@@ -193,6 +193,7 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
     runItemSummary,
     runOutcomeDetail,
     anchorSummary,
+    depthIdentitySummary,
     balanceTelemetry,
     craftingOpportunities,
   } = pendingDebrief;
@@ -642,6 +643,77 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
                     {anchorSummary.contributionNote ? (
                       <Text style={[styles.stat, { color: theme.mutedColor }]}>
                         {anchorSummary.contributionNote.toUpperCase()}
+                      </Text>
+                    ) : null}
+                  </>
+                ) : null}
+                {depthIdentitySummary && depthIdentitySummary.lines.length > 0 ? (
+                  <>
+                    <View style={styles.sectionGap} />
+                    <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>DEPTH EFFECTS</Text>
+                    {depthIdentitySummary.distortionName ? (
+                      <Text style={[styles.statAccent, { color: accentColor }]}>
+                        {`BREACH DISTORTION: ${depthIdentitySummary.distortionName.toUpperCase()}`}
+                      </Text>
+                    ) : null}
+                    {depthIdentitySummary.distortionSummary ? (
+                      <Text style={[styles.stat, { color: theme.mutedColor }]}>
+                        {depthIdentitySummary.distortionSummary.toUpperCase()}
+                      </Text>
+                    ) : null}
+                    {depthIdentitySummary.lawName ? (
+                      <Text style={[styles.statAccent, { color: accentColor }]}>
+                        {`${depthIdentitySummary.intensified ? 'DEEP VEIL LAW (INTENSIFIED)' : 'DEEP VEIL LAW'}: ${depthIdentitySummary.lawName.toUpperCase()}`}
+                      </Text>
+                    ) : null}
+                    {depthIdentitySummary.lawSummary ? (
+                      <Text style={[styles.stat, { color: theme.mutedColor }]}>
+                        {depthIdentitySummary.lawSummary.toUpperCase()}
+                      </Text>
+                    ) : null}
+                    {depthIdentitySummary.modifiersSeen.length > 0 ? (
+                      <Text style={[styles.stat, { color: theme.mutedColor }]}>
+                        {`MODIFIERS SEEN: ${depthIdentitySummary.modifiersSeen.join(', ').toUpperCase()}`}
+                      </Text>
+                    ) : null}
+                    {depthIdentitySummary.modifiersCleared.length > 0 ? (
+                      <Text style={[styles.statAccent, { color: accentColor }]}>
+                        {`MODIFIERS CLEARED: ${depthIdentitySummary.modifiersCleared.join(', ').toUpperCase()}`}
+                      </Text>
+                    ) : null}
+                    {depthIdentitySummary.twistedSeen.length > 0 ? (
+                      <Text style={[styles.stat, { color: theme.mutedColor }]}>
+                        {`TWISTED SEEN: ${depthIdentitySummary.twistedSeen.join(', ').toUpperCase()}`}
+                      </Text>
+                    ) : null}
+                    {depthIdentitySummary.twistedCleared.length > 0 ? (
+                      <Text style={[styles.statAccent, { color: accentColor }]}>
+                        {`TWISTED CLEARED: ${depthIdentitySummary.twistedCleared.join(', ').toUpperCase()}`}
+                      </Text>
+                    ) : null}
+                    {depthIdentitySummary.twistedOutcomes.map((outcome) => (
+                      <Text key={outcome} style={[styles.stat, { color: theme.mutedColor }]}>
+                        {`OUTCOME: ${outcome.toUpperCase()}`}
+                      </Text>
+                    ))}
+                    {depthIdentitySummary.depth2VariantsDefeated.length > 0 ? (
+                      <Text style={[styles.statAccent, { color: accentColor }]}>
+                        {`D2 VARIANTS DEFEATED: ${depthIdentitySummary.depth2VariantsDefeated.join(', ').toUpperCase()}`}
+                      </Text>
+                    ) : null}
+                    {depthIdentitySummary.depth3ExclusivesDefeated.length > 0 ? (
+                      <Text style={[styles.statAccent, { color: accentColor }]}>
+                        {`D3 EXCLUSIVES DEFEATED: ${depthIdentitySummary.depth3ExclusivesDefeated.join(', ').toUpperCase()}`}
+                      </Text>
+                    ) : null}
+                    {depthIdentitySummary.depthIdentityOpProgressGained > 0 ? (
+                      <Text style={[styles.stat, { color: theme.textColor }]}>
+                        {`DEPTH OP PROGRESS: +${depthIdentitySummary.depthIdentityOpProgressGained}`}
+                      </Text>
+                    ) : null}
+                    {depthIdentitySummary.sectorDepthFlavor ? (
+                      <Text style={[styles.stat, { color: theme.mutedColor }]}>
+                        {depthIdentitySummary.sectorDepthFlavor.toUpperCase()}
                       </Text>
                     ) : null}
                   </>

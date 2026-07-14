@@ -96,6 +96,14 @@ export const DEPTH_3_EXCLUSIVE_ENEMY_KEYS = [
   'COIL_SPIKE_SNIPER',
   'CHURN',
   'RESONANCE_CASTER',
+  'HOLLOW_LUNG',
+  'GRAVE_ROBBER',
+  'CORE_SICK_AMALGAM',
+  'VOID_LOCK_MEMORY_LEECH',
+  'GRAVE_ENGINE_CHURN',
+  'NULL_CROWN_SHADE',
+  'CHOIR_BOUND_RESONANCE_CASTER',
+  'RIFT_SPIKE_SNIPER',
 ] as const;
 
 export type Depth3ExclusiveEnemyKey = (typeof DEPTH_3_EXCLUSIVE_ENEMY_KEYS)[number];
@@ -114,16 +122,16 @@ export const ORIGIN_WEIGHTS: Record<
   Record<EncounterSquadTier, Record<EncounterOrigin, number>>
 > = {
   1: {
-    NORMAL: { RIVAL_MERC: 0.3, VEIL: 0.7 },
-    ELITE: { RIVAL_MERC: 0.35, VEIL: 0.65 },
+    NORMAL: { RIVAL_MERC: 0.32, VEIL: 0.68 },
+    ELITE: { RIVAL_MERC: 0.34, VEIL: 0.66 },
   },
   2: {
-    NORMAL: { RIVAL_MERC: 0.2, VEIL: 0.8 },
-    ELITE: { RIVAL_MERC: 0.2, VEIL: 0.8 },
+    NORMAL: { RIVAL_MERC: 0.18, VEIL: 0.82 },
+    ELITE: { RIVAL_MERC: 0.16, VEIL: 0.84 },
   },
   3: {
-    NORMAL: { RIVAL_MERC: 0.1, VEIL: 0.9 },
-    ELITE: { RIVAL_MERC: 0.05, VEIL: 0.95 },
+    NORMAL: { RIVAL_MERC: 0.08, VEIL: 0.92 },
+    ELITE: { RIVAL_MERC: 0.06, VEIL: 0.94 },
   },
 };
 

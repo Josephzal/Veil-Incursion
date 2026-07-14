@@ -340,6 +340,11 @@ export interface IncursionNode {
   offeredMacroBiome?: import('./narrativeProcedural').MacroBiomeFamily;
   /** Veil Front node context from procedural generation. */
   contextModifiers?: import('./worldState').NodeContextModifiers;
+  /** Phase F — display-only type/certainty (true routing type stays in `type`). */
+  scannerDisplayedType?: RunNodeType;
+  scannerLabelCertainty?: 'RELIABLE' | 'DEGRADED' | 'STRANGE';
+  scannerStrangeLabel?: string;
+  scannerLabelCorrupt?: boolean;
 }
 
 export interface BossPhaseConfiguration {
@@ -489,6 +494,8 @@ export interface ActiveIncursionState {
   runModifiers: import('../types/worldState').RunModifierSnapshot;
   /** Full meta-to-run context frozen at descent — depth resolved per node later. */
   runGenerationContext: import('../types/worldState').RunGenerationContext | null;
+  /** Depth 2 Distortion + Depth 3 Deep Veil Law identity for the active run. */
+  depthIdentity: import('./depthIdentity').DepthIdentityState | null;
   /** Sponsor contract snapshot frozen at descent. */
   activeContract: import('../types/contract').ActiveRunContract | null;
   /** Contract-specific run facts consumed by the contract resolver at debrief. */
@@ -646,6 +653,7 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
       firstTurnApBonus: 0,
     },
     runGenerationContext: null,
+    depthIdentity: null,
     activeContract: null,
     contractRunProgress: createEmptyContractRunProgress(),
     operationContributionTransmitted: 0,

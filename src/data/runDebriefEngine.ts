@@ -19,6 +19,10 @@ import { resolveKeepsakeBankedResourceMultiplier } from './expeditionKeepsakeSaf
 import { buildAnchorDebriefSummary } from './runIntegration/runAnchorDebriefEngine';
 import type { AnchorDebriefSummary } from './runIntegration/runAnchorDebriefEngine';
 import {
+  buildDepthIdentityDebriefSummary,
+  type DepthIdentityDebriefSummary,
+} from './runDebriefDepthIdentityEngine';
+import {
   buildRunBalanceTelemetry,
   applyTelemetryContractOutcome,
   type RunBalanceTelemetry,
@@ -122,6 +126,7 @@ export interface OperationDebriefPayload {
   runItemSummary: RunItemDebriefSummary | null;
   runOutcomeDetail: RunOutcomeDetail;
   anchorSummary: AnchorDebriefSummary | null;
+  depthIdentitySummary: DepthIdentityDebriefSummary | null;
   balanceTelemetry: RunBalanceTelemetry;
   craftingOpportunities: CraftingOpportunitySummary;
 }
@@ -366,6 +371,7 @@ export function buildOperationDebriefPayload(
     lostCargoStacks: lostStacks,
   });
   const anchorSummary = buildAnchorDebriefSummary(incursion);
+  const depthIdentitySummary = buildDepthIdentityDebriefSummary(incursion);
   let balanceTelemetry = buildRunBalanceTelemetry(incursion, {
     extractedSuccessfully,
     operationProgressGained: progressDelta,
@@ -421,6 +427,7 @@ export function buildOperationDebriefPayload(
     runItemSummary,
     runOutcomeDetail,
     anchorSummary,
+    depthIdentitySummary,
     balanceTelemetry,
     craftingOpportunities,
   };

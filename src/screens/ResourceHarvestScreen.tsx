@@ -131,6 +131,15 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
   useEffect(() => {
     if (harvestAppliedRef.current) return;
     if (activeIncursion.pendingHarvestReturn === 'RESOURCE_CACHE') return;
+    const pendingTwist = activeIncursion.depthIdentity?.pendingTwistedChoice?.templateId;
+    if (
+      pendingTwist === 'RESOURCE_BLOOM'
+      || pendingTwist === 'ANCHOR_VEIN'
+      || pendingTwist === 'VEIL_PROPER_CACHE'
+      || pendingTwist === 'ANCHOR_CORE_BREACH'
+    ) {
+      return;
+    }
     if (
       hasFieldRunItem(activeIncursion.runItems, 'ley-slag-splitter')
       && !activeIncursion.itemRuntime.leySlagSplitterArmed
@@ -142,6 +151,7 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
     result.logLines.forEach((line) => appendRunLog(line));
     setResidueSpawnGeneration((gen) => gen + 1);
   }, [
+    activeIncursion.depthIdentity?.pendingTwistedChoice?.templateId,
     activeIncursion.itemRuntime.leySlagSplitterArmed,
     activeIncursion.pendingHarvestReturn,
     activeIncursion.runItems,

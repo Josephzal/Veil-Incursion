@@ -250,6 +250,58 @@ export const ENEMY_DEFINITIONS: Record<EncounterEnemyKey, EnemyDefinition> = {
     3: { maxHp: 216, baseDamage: 29, fractureThreshold: 140 },
   }),
 
+
+  WEEPING_GARGOYLE: veil('WEEPING_GARGOYLE', ['NULL_ZONE'], 'FRONTLINE', 3, gates([2, 3], { minNodeIndexInDepth: 2 }), {
+    2: { maxHp: 230, baseDamage: 28, kineticArmor: 14, fractureThreshold: 155 },
+    3: { maxHp: 335, baseDamage: 40, kineticArmor: 14, fractureThreshold: 225 },
+  }),
+  PHASE_SCUTTLER: veil('PHASE_SCUTTLER', ['NULL_ZONE', 'ABYSSAL_SINK', 'BLACKLINE_TERMINUS'], 'FRONTLINE', 1, gates([2, 3]), {
+    2: { maxHp: 108, baseDamage: 15, fractureThreshold: 72 },
+    3: { maxHp: 156, baseDamage: 22, fractureThreshold: 105 },
+  }),
+  REMEMBERING_THRALL: veil('REMEMBERING_THRALL', ['ABYSSAL_SINK', 'BLACKLINE_TERMINUS', 'NULL_ZONE'], 'FRONTLINE', 2, gates([2, 3]), {
+    2: { maxHp: 148, baseDamage: 20, kineticArmor: 3, fractureThreshold: 98 },
+    3: { maxHp: 214, baseDamage: 29, kineticArmor: 3, fractureThreshold: 140 },
+  }),
+  TAR_CHOIR: veil('TAR_CHOIR', ['ASHEN_WASTE', 'SLAG_WORKS', 'ABYSSAL_SINK'], 'BACKLINE', 2, gates([2, 3]), {
+    2: { maxHp: 148, baseDamage: 23, fractureThreshold: 98 },
+    3: { maxHp: 214, baseDamage: 33, fractureThreshold: 140 },
+  }),
+  STATIC_CALLER: veil('STATIC_CALLER', ['NULL_ZONE', 'BLACKLINE_TERMINUS', 'SLAG_WORKS'], 'BACKLINE', 2, gates([2, 3]), {
+    2: { maxHp: 170, baseDamage: 22, fractureThreshold: 112 },
+    3: { maxHp: 246, baseDamage: 31, fractureThreshold: 162 },
+  }),
+  BLOOD_RUSTED_GOLEM: veil('BLOOD_RUSTED_GOLEM', ['SLAG_WORKS', 'ASHEN_WASTE'], 'FRONTLINE', 3, gates([2, 3], { minNodeIndexInDepth: 4 }), {
+    2: { maxHp: 250, baseDamage: 27, kineticArmor: 18, fractureThreshold: 165 },
+    3: { maxHp: 360, baseDamage: 38, kineticArmor: 18, fractureThreshold: 235 },
+  }),
+  ROOTBOUND_WEEPER: veil('ROOTBOUND_WEEPER', ['ABYSSAL_SINK', 'ASHEN_WASTE'], 'BACKLINE', 2, gates([2, 3]), {
+    2: { maxHp: 162, baseDamage: 22, fractureThreshold: 105 },
+    3: { maxHp: 234, baseDamage: 31, fractureThreshold: 150 },
+  }),
+  ANCHOR_HUSK: veil('ANCHOR_HUSK', WIDE, 'FRONTLINE', 2, gates([2, 3], { allowedNodeTiers: ['ANCHOR', 'ELITE', 'BOSS'] }), {
+    2: { maxHp: 168, baseDamage: 22, kineticArmor: 4, fractureThreshold: 110 },
+    3: { maxHp: 244, baseDamage: 32, kineticArmor: 4, fractureThreshold: 160 },
+  }),
+  CORE_SICK_AMALGAM: veil('CORE_SICK_AMALGAM', WIDE, 'FRONTLINE', 4, d3Gates(6), {
+    3: { maxHp: 420, baseDamage: 48, kineticArmor: 14, fractureThreshold: 240 },
+  }, ['MUST_DEFEND', 'TRUE_DAMAGE']),
+  VOID_LOCK_MEMORY_LEECH: veil('VOID_LOCK_MEMORY_LEECH', ['NULL_ZONE', 'BLACKLINE_TERMINUS', 'ABYSSAL_SINK'], 'DISRUPTOR', 2, d3Gates(4), {
+    3: { maxHp: 216, baseDamage: 28, fractureThreshold: 140 },
+  }, ['STAMINA_DRAIN', 'HARD_DENIAL']),
+  GRAVE_ENGINE_CHURN: veil('GRAVE_ENGINE_CHURN', [...IND, 'ABYSSAL_SINK'], 'BACKLINE', 2, d3Gates(5), {
+    3: { maxHp: 230, baseDamage: 56, fractureThreshold: 150 },
+  }, ['SCALING_TIMER']),
+  NULL_CROWN_SHADE: veil('NULL_CROWN_SHADE', ['NULL_ZONE', 'BLACKLINE_TERMINUS'], 'BACKLINE', 3, d3Gates(), {
+    3: { maxHp: 226, baseDamage: 38, kineticArmor: 5, occultArmor: 3, fractureThreshold: 148 },
+  }, ['UNREACHABLE_BACKLINE']),
+  CHOIR_BOUND_RESONANCE_CASTER: veil('CHOIR_BOUND_RESONANCE_CASTER', ['ASHEN_WASTE', 'SLAG_WORKS', 'BLACKLINE_TERMINUS'], 'BACKLINE', 2, d3Gates(3), {
+    3: { maxHp: 224, baseDamage: 38, fractureThreshold: 145 },
+  }, ['BACKLINE_TIMER', 'SCALING_TIMER']),
+  RIFT_SPIKE_SNIPER: veil('RIFT_SPIKE_SNIPER', WIDE, 'BACKLINE', 2, d3Gates(5), {
+    3: { maxHp: 204, baseDamage: 52, fractureThreshold: 132 },
+  }, ['UNREACHABLE_BACKLINE', 'TRUE_DAMAGE']),
+
   /** Legacy alias — maps to echoing-brute roster. */
   RIOT_VANGUARD: veil('RIOT_VANGUARD', BZ, 'FRONTLINE', 3, gates([1, 2, 3]), {
     1: { maxHp: 130, baseDamage: 18, kineticArmor: 10, fractureThreshold: 90 },

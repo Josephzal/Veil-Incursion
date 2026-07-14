@@ -29,6 +29,12 @@ export interface ProceduralRunNode {
   contextModifiers?: NodeContextModifiers;
   /** Echo overlay stamped at scanner layer unlock — merged at engagement. */
   echoOverlay?: import('./echoEncounter').ProceduralEchoOverlay;
+  /** Scanner label certainty overlay — rolled at layer unlock (Phase F). */
+  scannerLabelOverlay?: {
+    certainty: 'RELIABLE' | 'DEGRADED' | 'STRANGE';
+    displayedType: ProceduralNodeType;
+    strangeLabel?: string;
+  };
 }
 
 export interface ProceduralRunTree {
