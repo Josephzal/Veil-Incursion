@@ -162,7 +162,7 @@ export const CRISIS_THEME_DEFINITIONS: Record<CrisisTheme, CrisisThemeDefinition
     hazardBonus: (h) => (h <= 3 ? 6 : 0),
     rewardBonus: (r) => (r >= 3 ? 6 : 0),
     pressureTags: ['RIVAL', 'RESOURCE'],
-    resourceIds: ['tarnished-dog-tags', 'transit-scrap'],
+    resourceIds: ['tarnished-dog-tags', 'rail-capacitor'],
     scannerOverlays: { highValueResource: 1.2, highRisk: 1.1 },
     encounterModifiers: {},
     twistedTemplates: {},

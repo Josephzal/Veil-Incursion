@@ -850,6 +850,7 @@ export function getValidSectorsForResource(id: ResourceItemId): readonly SectorI
 }
 
 export function canResourceSpawnInSector(id: ResourceItemId, sectorId: SectorId): boolean {
+  if (!isResourceItemId(id)) return false;
   return RESOURCE_REGISTRY[id].validSectorIds.includes(sectorId);
 }
 
