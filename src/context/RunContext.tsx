@@ -288,6 +288,14 @@ import { createDefaultIncursionInventory } from '../data/incursionInventory';
 import { encounterBudgetForDepth } from '../data/combatEncounterBudget';
 import { spawnCombatSquad, resolveEngagedEncounterSnapshot, squadFromSingleEnemy } from '../data/combatSpawnEngine';
 import {
+  buildCompatibilityRunWorldBrief,
+  attachBriefToRunGenerationContext,
+} from '../data/runWorldBriefEngine';
+import {
+  resolveBriefRareLootBonusPct,
+  resolveBriefRivalMercWeightMultiplier,
+} from '../data/runWorldBriefBiasEngine';
+import {
   buildEncounterWarningCard,
   rolesFromCombatProfiles,
   shouldShowEncounterWarningCard,
@@ -531,6 +539,7 @@ export interface RunStartConfig {
   /** Persistent Veil Residue balance loaded into the run canister at descent. */
   startingVeilResidueBalance?: number;
   runGenerationContext?: import('../types/worldState').RunGenerationContext;
+  runWorldBrief?: import('../types/runWorldBrief').RunWorldBrief | null;
   runModifiers?: import('../types/worldState').RunModifierSnapshot;
   equippedKeepsakeId?: KeepsakeId | null;
   keepsakeDeployment?: import('../types/expeditionKeepsake').KeepsakeDeployment | null;
@@ -1046,6 +1055,29 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const starterCargo = keepsakeStart.runtime?.keepsakeId === 'bent_nail'
       ? attachKeepsakeBentNailOutsideHook(starterCargoBase)
       : starterCargoBase;
+    const runGenerationContext = config?.runGenerationContext ?? null;
+    let resolvedRunWorldBrief = config?.runWorldBrief ?? runGenerationContext?.runWorldBrief ?? null;
+    if (!resolvedRunWorldBrief && runGenerationContext) {
+      resolvedRunWorldBrief = buildCompatibilityRunWorldBrief(runGenerationContext);
+    }
+    const runGenerationContextWithBrief = attachBriefToRunGenerationContext(
+      runGenerationContext,
+      resolvedRunWorldBrief,
+    );
+    const briefRareLootPct = resolveBriefRareLootBonusPct(resolvedRunWorldBrief);
+    const baseRunModifiers = config?.runModifiers ?? {
+      maxHpBonusPct: 0,
+      kineticArmorBonus: 0,
+      rareLootBonusPct: 0,
+      blackMarketDiscountPct: 0,
+      firstTurnApBonus: 0,
+    };
+    const runModifiersWithBrief = briefRareLootPct > 0
+      ? {
+        ...baseRunModifiers,
+        rareLootBonusPct: baseRunModifiers.rareLootBonusPct + briefRareLootPct,
+      }
+      : baseRunModifiers;
     const incursion: ActiveIncursionState = {
       ...createDefaultActiveIncursionState(),
       isRunActive: true,
@@ -1134,14 +1166,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       })(),
       sanctuarySchedule,
       strikeDamageBonusPct: 0,
-      runModifiers: config?.runModifiers ?? {
-        maxHpBonusPct: 0,
-        kineticArmorBonus: 0,
-        rareLootBonusPct: 0,
-        blackMarketDiscountPct: 0,
-        firstTurnApBonus: 0,
-      },
-      runGenerationContext: config?.runGenerationContext ?? null,
+      runModifiers: runModifiersWithBrief,
+      runGenerationContext: runGenerationContextWithBrief,
+      runWorldBrief: resolvedRunWorldBrief,
       activeContract: activeContract ?? null,
       contractRunProgress: createInitialContractRunProgress(),
       runSegment: initialRunSegment,
@@ -1383,6 +1410,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
           runSegment: activeIncursionRef.current.runSegment,
           macroBiome: activeIncursionRef.current.currentMacroBiomeFamily,
           veilBiome: activeIncursionRef.current.runVeilBiome,
+          rivalMercWeightMultiplier: resolveBriefRivalMercWeightMultiplier(
+            activeIncursionRef.current.runWorldBrief,
+            getDistrictFromDepth(depthFromNodesCleared(nodeIndex)),
+          ),
         })
         : [];
     const pendingEnemy = pendingEnemies[0] ?? null;
@@ -3046,6 +3077,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       ...options,
       rareLootBonusPct,
       occultRewardBonusPct,
+      stressedResourceIds: inc.runWorldBrief?.resourceStress.highDemandResourceIds,
+      briefRewardBias: inc.runWorldBrief?.rewardBias ?? null,
     });
     if (drops.length === 0) return [];
     const stagedIds: string[] = [];
@@ -3475,6 +3508,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       macroBiome: inc.currentMacroBiomeFamily,
       veilBiome: inc.runVeilBiome,
       contextModifiers: encounterNode.contextModifiers,
+      rivalMercWeightMultiplier: resolveBriefRivalMercWeightMultiplier(inc.runWorldBrief, district),
       spawnOptions: {
         resonancePercent: inc.resonance.percent,
       },
@@ -3803,6 +3837,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       runSegment: inc.runSegment,
       macroBiome: inc.currentMacroBiomeFamily,
       veilBiome: inc.runVeilBiome,
+      rivalMercWeightMultiplier: resolveBriefRivalMercWeightMultiplier(inc.runWorldBrief, district),
     });
     const pendingEnemy = pendingEnemies[0] ?? null;
     if (dirtyThreat) {
@@ -3911,6 +3946,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       runSegment: inc.runSegment,
       macroBiome: inc.currentMacroBiomeFamily,
       veilBiome: inc.runVeilBiome,
+      rivalMercWeightMultiplier: resolveBriefRivalMercWeightMultiplier(inc.runWorldBrief, district),
       spawnOptions: { resonancePercent: inc.resonance.percent },
     });
     const pendingEnemy = pendingEnemies[0] ?? null;
@@ -4381,7 +4417,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       const rollResult = ensureNodeContextModifiersAtEngagement(
         inc.proceduralRunTree,
         node.id,
-        inc.runGenerationContext,
+        attachBriefToRunGenerationContext(inc.runGenerationContext, inc.runWorldBrief),
         inc.cargo,
         resolveActiveDepthIdentityScanBias(
           inc.depthIdentity,

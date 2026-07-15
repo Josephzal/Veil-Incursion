@@ -1,4 +1,5 @@
-import type { OperationObjectiveKind, SectorId, VeilAnchorType } from '../types/worldState';
+import type { OperationObjectiveKind, SectorId, VeilAnchorType, WorldStatePersistedState } from '../types/worldState';
+import { USE_PROCEDURAL_OPERATIONS_FROM_START } from '../types/operationProcedural';
 import type { SectorOperationTemplate } from './sectorWorldCatalog';
 import {
   getSectorWorldTemplate,
@@ -16,6 +17,15 @@ import {
   fillOperationTemplate,
   pickProceduralVariantIndex,
 } from './operationTemplates';
+import {
+  adaptStaticOperationTemplate,
+  buildOperationGenerationContext,
+  generateProceduralOperationV2,
+  getSectorOperationMemory,
+  recordOperationInMemory,
+  storeOperationInstance,
+} from './operationProceduralEngine';
+import { buildPreliminaryForSectorPersisted } from './runWorldBriefEngine';
 
 function seededRandom(seed: string): () => number {
   let h = 2166136261;
@@ -56,6 +66,7 @@ function weightedPickObjectiveKind(
   return pool[0]?.kind ?? 'EXTRACTION_SURGE';
 }
 
+/** @deprecated Use generateProceduralOperationV2 via resolveSectorOperationTemplate */
 export function generateProceduralOperation(
   sectorId: SectorId,
   opts: {
@@ -64,33 +75,19 @@ export function generateProceduralOperation(
     operationIndex: number;
     deployRunIndex: number;
   },
+  persisted?: WorldStatePersistedState,
 ): SectorOperationTemplate {
-  const sector = getSectorWorldTemplate(sectorId);
-  const rand = seededRandom(`op-gen:${sectorId}:${opts.deployRunIndex}:${opts.operationIndex}`);
-  const objectiveKind = weightedPickObjectiveKind(opts.anchorType, rand);
-  const template = OPERATION_TEMPLATE_CATALOG.find((t) => t.objectiveKind === objectiveKind)
-    ?? OPERATION_TEMPLATE_CATALOG[0];
-  const variantIndex = pickProceduralVariantIndex(rand, template);
-  const filled = fillOperationTemplate(
-    template,
-    opts.anchorDisplayName,
-    sector.displayName,
-    variantIndex,
+  const memory = persisted
+    ? getSectorOperationMemory(persisted, sectorId)
+    : undefined;
+  const ctx = buildOperationGenerationContext(
+    sectorId,
+    opts.operationIndex,
+    opts.deployRunIndex,
+    memory,
+    persisted,
   );
-  const anchorSuffix = opts.anchorType ? `-${opts.anchorType.toLowerCase()}` : '';
-  const id = `op-${sectorId.toLowerCase().replace(/_/g, '-')}-gen-${opts.operationIndex}-${opts.deployRunIndex}${anchorSuffix}`;
-
-  return {
-    id,
-    title: filled.title,
-    description: filled.description,
-    objectiveKind: template.objectiveKind,
-    rewardEmphasis: resolveProceduralRewardEmphasis(
-      template.objectiveKind,
-      sector.resourceFocus,
-      opts.anchorType,
-    ),
-  };
+  return generateProceduralOperationV2(ctx);
 }
 
 export function buildForcedOperationTemplate(
@@ -98,30 +95,24 @@ export function buildForcedOperationTemplate(
   objectiveKind: OperationObjectiveKind,
   operationIndex: number,
   deployRunIndex: number,
+  persisted?: WorldStatePersistedState,
 ): SectorOperationTemplate {
-  const sector = getSectorWorldTemplate(sectorId);
-  const anchor = sector.anchor;
-  const template = OPERATION_TEMPLATE_CATALOG.find((t) => t.objectiveKind === objectiveKind)
-    ?? OPERATION_TEMPLATE_CATALOG[0];
-  const filled = fillOperationTemplate(
-    template,
-    anchor?.displayName ?? 'Veil Anchor',
-    sector.displayName,
+  const memory = persisted
+    ? getSectorOperationMemory(persisted, sectorId)
+    : undefined;
+  const ctx = buildOperationGenerationContext(
+    sectorId,
+    operationIndex,
+    deployRunIndex,
+    memory,
   );
-  const anchorSuffix = anchor?.type ? `-${anchor.type.toLowerCase()}` : '';
-  const id = `op-dev-${sectorId.toLowerCase().replace(/_/g, '-')}-${objectiveKind.toLowerCase()}-${operationIndex}-${deployRunIndex}${anchorSuffix}`;
+  return generateProceduralOperationV2(ctx, { forceKind: objectiveKind });
+}
 
-  return {
-    id,
-    title: filled.title,
-    description: filled.description,
-    objectiveKind,
-    rewardEmphasis: resolveProceduralRewardEmphasis(
-      objectiveKind,
-      sector.resourceFocus,
-      anchor?.type ?? null,
-    ),
-  };
+export interface ResolveSectorOperationOptions {
+  seedRunIndex?: number;
+  persisted?: WorldStatePersistedState;
+  preliminary?: import('../types/runWorldBrief').PreliminaryRunWorldContext | null;
 }
 
 export function resolveSectorOperationTemplate(
@@ -129,27 +120,89 @@ export function resolveSectorOperationTemplate(
   operationIndex: number,
   deployRunIndex: number,
   overrides?: Partial<Record<SectorId, SectorOperationTemplate>>,
+  options?: ResolveSectorOperationOptions,
 ): SectorOperationTemplate {
   if (overrides?.[sectorId]) {
-    return overrides[sectorId];
+    return adaptStaticOperationTemplate(overrides[sectorId], sectorId);
   }
 
+  const persisted = options?.persisted;
+  const seedRunIndex = options?.seedRunIndex ?? deployRunIndex;
   const sector = getSectorWorldTemplate(sectorId);
-  const staticIndex = ((operationIndex % sector.operations.length) + sector.operations.length)
-    % sector.operations.length;
-  const staticOp = sector.operations[staticIndex];
+  const staticCount = sector.operations.length;
+  const useProceduralFromStart = USE_PROCEDURAL_OPERATIONS_FROM_START;
 
-  if (operationIndex < sector.operations.length) {
-    return staticOp;
+  if (!useProceduralFromStart && operationIndex < staticCount) {
+    const staticOp = sector.operations[operationIndex]!;
+    return adaptStaticOperationTemplate(staticOp, sectorId);
   }
 
-  const anchor = sector.anchor;
-  return generateProceduralOperation(sectorId, {
-    anchorType: anchor?.type ?? null,
-    anchorDisplayName: anchor?.displayName ?? 'Veil Anchor',
+  const cached = persisted?.operationInstances;
+  if (cached) {
+    const match = Object.values(cached).find(
+      (inst) => inst.operationIndex === operationIndex && inst.procedural,
+    );
+    if (match) {
+      return match as SectorOperationTemplate;
+    }
+  }
+
+  const memory = persisted
+    ? getSectorOperationMemory(persisted, sectorId)
+    : undefined;
+  const ctx = buildOperationGenerationContext(
+    sectorId,
+    operationIndex,
+    seedRunIndex,
+    memory,
+    persisted,
+    options?.preliminary,
+  );
+  return generateProceduralOperationV2(ctx);
+}
+
+export function resolveAndCacheSectorOperation(
+  sectorId: SectorId,
+  operationIndex: number,
+  deployRunIndex: number,
+  persisted: WorldStatePersistedState,
+  overrides?: Partial<Record<SectorId, SectorOperationTemplate>>,
+  options?: Pick<ResolveSectorOperationOptions, 'preliminary'>,
+): { template: SectorOperationTemplate; persisted: WorldStatePersistedState } {
+  const lifecycle = persisted.sectorOperationLifecycle[sectorId];
+  const seedRunIndex = lifecycle?.generatedAtRunIndex ?? deployRunIndex;
+  const preliminary = options?.preliminary
+    ?? (persisted ? buildPreliminaryForSectorPersisted(persisted, sectorId) : null);
+  const template = resolveSectorOperationTemplate(
+    sectorId,
     operationIndex,
     deployRunIndex,
-  });
+    overrides,
+    { seedRunIndex, persisted, preliminary },
+  );
+
+  let next = persisted;
+  if (template.procedural) {
+    const instances = storeOperationInstance(
+      persisted.operationInstances ?? {},
+      template,
+    );
+    const memory = recordOperationInMemory(
+      getSectorOperationMemory(persisted, sectorId),
+      template,
+      operationIndex,
+    );
+    next = {
+      ...persisted,
+      operationInstances: instances,
+      operationProceduralMemory: {
+        ...persisted.operationProceduralMemory,
+        [sectorId]: memory,
+      },
+    };
+  }
+
+  return { template, persisted: next };
 }
 
 export function anchorIdForGeneratedOperation(
@@ -159,3 +212,7 @@ export function anchorIdForGeneratedOperation(
   if (!anchorType) return undefined;
   return anchorIdForSector(sectorId, anchorType);
 }
+
+// Legacy v1 generator kept for tests — delegates to v2
+void weightedPickObjectiveKind;
+void seededRandom;

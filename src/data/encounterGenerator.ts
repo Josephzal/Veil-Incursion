@@ -138,6 +138,7 @@ export interface GenerateNodeEncounterOptions {
   veilBiome?: VeilBiome | null;
   isElite?: boolean;
   contextModifiers?: NodeContextModifiers | null;
+  rivalMercWeightMultiplier?: number;
 }
 
 function buildEchoGeneratedEncounter(template: EchoEliteTemplate): GeneratedEncounter {
@@ -208,6 +209,7 @@ export function generateNodeEncounter(
       'ELITE',
       `${seed}:alpha-origin:${globalDepth}`,
       segment.lastEncounterOrigin,
+      options.rivalMercWeightMultiplier ?? 1,
     );
     let squad = loadAlphaDuelElite(district, synergyBiome, rand, {
       lastEncounterId: segment.lastEncounterId,
@@ -258,6 +260,7 @@ export function generateNodeEncounter(
     echoSignal: mods?.echoSignal === true,
     operationKind: mods?.operationTag ?? null,
     foreshadowBias: localLevel >= 10,
+    rivalMercWeightMultiplier: options.rivalMercWeightMultiplier ?? 1,
   });
 
   if (!picked) {

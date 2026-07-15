@@ -14,6 +14,7 @@ import {
   getDeepVeilLawDefinition,
   getVeilDistortionDefinition,
 } from './depthIdentityCatalog';
+import { ANCHOR_TYPE_DEPTH3_BIAS } from './anchorTypeMetadata';
 import { buildDepthIdentityRollContext } from './veilDistortionEngine';
 
 function hashSeed(input: string): number {
@@ -40,6 +41,14 @@ function weightForLaw(id: DeepVeilLawId, ctx: DepthIdentityRollContext): number 
   }
   if (ctx.anchorType && def.favoredAnchors.includes(ctx.anchorType)) {
     weight += 14;
+  }
+  if (ctx.anchorLawBias?.[id]) {
+    weight += ctx.anchorLawBias[id]!;
+  } else if (ctx.anchorType && ANCHOR_TYPE_DEPTH3_BIAS[ctx.anchorType]?.[id]) {
+    weight += ANCHOR_TYPE_DEPTH3_BIAS[ctx.anchorType][id]!;
+  }
+  if (ctx.briefLawBias?.[id]) {
+    weight += ctx.briefLawBias[id]!;
   }
   if (ctx.operationKind && def.favoredOperations.includes(ctx.operationKind)) {
     weight += 10;

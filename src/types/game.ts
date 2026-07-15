@@ -497,6 +497,8 @@ export interface ActiveIncursionState {
   runModifiers: import('../types/worldState').RunModifierSnapshot;
   /** Full meta-to-run context frozen at descent — depth resolved per node later. */
   runGenerationContext: import('../types/worldState').RunGenerationContext | null;
+  /** Unified procedural sector crisis — frozen at descent. */
+  runWorldBrief: import('../types/runWorldBrief').RunWorldBrief | null;
   /** Depth 2 Distortion + Depth 3 Deep Veil Law identity for the active run. */
   depthIdentity: import('./depthIdentity').DepthIdentityState | null;
   /** Phase B — pre-combat warning card pending confirm/back. */
@@ -662,6 +664,7 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
       firstTurnApBonus: 0,
     },
     runGenerationContext: null,
+    runWorldBrief: null,
     depthIdentity: null,
     pendingEncounterWarning: null,
     compositionRunState: null,

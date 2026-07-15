@@ -160,6 +160,7 @@ import {
   isUnitAlive,
   nextDefaultTarget,
   primaryAliveUnit,
+  reconcileSquadGridSlots,
   updateUnit as patchSquadUnit,
 } from '../data/combatSquadEngine';
 import {
@@ -1710,7 +1711,8 @@ export default function TacticalCombatHub({
   };
 
   const syncSquad = (next: EnemyCombatProfile[]) => {
-    const tagged = next.map((unit) => patchEnemyTagsFromExtras(unit, sessionExtrasRef.current));
+    const reconciled = reconcileSquadGridSlots(next);
+    const tagged = reconciled.map((unit) => patchEnemyTagsFromExtras(unit, sessionExtrasRef.current));
     squadRef.current = tagged;
     setSquad(tagged);
     const focusId = focusedUnitIdRef.current ?? selectedTargetIdRef.current;

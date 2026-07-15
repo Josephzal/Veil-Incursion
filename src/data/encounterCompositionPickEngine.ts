@@ -28,7 +28,7 @@ import {
 } from './encounterCompositionTemplateCatalog';
 import { compositionPassesFairness } from './encounterCompositionFairnessEngine';
 import { enemyPassesSpawnGates, type SpawnGateContext } from './encounterSpawnGateEngine';
-import { getEnemyDefinition } from './enemyDefinitions';
+import { getEnemyDefinition, getEnemyOrigin } from './enemyDefinitions';
 import { passesHardCounterRules } from './encounterHardCounterEngine';
 import { squadFitsThreatBudget, squadThreatCost } from './encounterThreatBudget';
 import { DEPTH_2_VARIANT_KEYS } from './depthEnemyVariantCatalog';
@@ -104,9 +104,9 @@ function buildCandidatePool(ctx: CompositionPickContext): EncounterEnemyKey[] {
 
   let pool: EncounterEnemyKey[];
   if (ctx.encounterOrigin === 'RIVAL_MERC') {
-    pool = [...rivals, ...veilPool];
+    pool = [...rivals];
   } else {
-    pool = [...veilPool, ...rivals];
+    pool = [...veilPool];
   }
 
   if (ctx.anchorSignal || ctx.nodeTier === 'ANCHOR') {
@@ -293,6 +293,10 @@ export function fillCompositionTemplate(
   }
 
   if (picked.length === 0) return null;
+
+  const expectedOrigin = ctx.encounterOrigin;
+  const mixedOriginPick = picked.some((key) => getEnemyOrigin(key) !== expectedOrigin);
+  if (mixedOriginPick) return null;
 
   const fairnessOk = compositionPassesFairness(picked, {
     depth: ctx.depth,

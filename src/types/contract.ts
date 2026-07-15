@@ -1,4 +1,5 @@
 import type { BetrayalSeverity, ContractOutcomeKind } from './betrayal';
+import type { ContractBoundContext, ContractGenerationDebug } from './contractProcedural';
 import type { ResourceCategory, ResourceItemId } from './resourceItem';
 import type { CabalEmployerId, SectorId } from './worldState';
 
@@ -52,6 +53,11 @@ export interface GeneratedContract {
   bonusReward?: Partial<ContractRewardPackage>;
   difficulty: ContractDifficulty;
   refreshLabel: string;
+  /** Contracts v2 — contextual binding metadata. */
+  boundContext?: ContractBoundContext;
+  titleHash?: string;
+  recentMemoryKey?: string;
+  generationDebug?: ContractGenerationDebug;
 }
 
 export type SelectedContractState =
@@ -106,6 +112,7 @@ export interface ActiveRunContract {
   keepsakeSealedClause?: KeepsakeSealedClause | null;
   /** Mirror Writ — mirrored side objective for double-or-break payout. */
   keepsakeMirroredObjective?: KeepsakeMirroredObjective | null;
+  boundContext?: ContractBoundContext;
 }
 
 export interface KeepsakeMirroredObjective {
@@ -166,6 +173,9 @@ export interface ContractResult {
   rivalSponsorId?: CabalEmployerId | null;
   rivalSponsorRepDelta?: number;
   betrayalSummary?: string | null;
+  boundContextReason?: import('./contractProcedural').ContractSourceKind;
+  linkedOperationTitle?: string;
+  linkedAnchorDisplayName?: string;
 }
 
 export function createEmptyContractRunProgress(): ContractRunProgress {
@@ -247,5 +257,6 @@ export function freezeContractForRun(
     bonusReward: c.bonusReward,
     difficulty: c.difficulty,
     selectedAtRunIndex: selected.selectedAtRunIndex,
+    boundContext: c.boundContext,
   };
 }

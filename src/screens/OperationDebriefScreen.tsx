@@ -40,9 +40,10 @@ import { formatCareerCargoRoutingSummary } from '../data/postRunCargoRoutingRunS
 import { formatBalanceDashboard } from '../data/balance/balanceDashboardEngine';
 import { formatRunBalanceTelemetryReport } from '../data/runIntegration/runBalanceTelemetryEngine';
 import { operationProgressPercent } from '../data/worldStateHelpers';
-import { formatExtractionKindLabel, sponsorDisplayName } from '../utils/contractUi';
+import { formatContractSourceReasonLabel, formatExtractionKindLabel, sponsorDisplayName } from '../utils/contractUi';
 import { getResourceDisplayName } from '../data/resourceRegistry';
 import { formatTimeAliveMmSs } from '../types/runDeathSummary';
+import { formatRunWorldBriefDebriefLines } from '../data/runWorldBriefDebriefEngine';
 import {
   formatCommunityProgressLine,
   formatProgressThisRunLine,
@@ -89,7 +90,7 @@ function contractStatusColor(status: ContractResult['status']): string {
 
 export default function OperationDebriefScreen(): React.JSX.Element | null {
   const { theme } = useTerminal();
-  const { pendingDebrief, setPendingDebrief, clearPendingDebrief, tickAfterRunComplete, applyOperationContribution, persisted, sectors } = useWorldState();
+  const { pendingDebrief, setPendingDebrief, clearPendingDebrief, tickAfterRunComplete, applyOperationContribution, applyPostRunAftermath, persisted, sectors } = useWorldState();
   const { appendHubLog, applyPostRunCargoRouting, applyBetrayalConsequences, grantContractRewards, account, addCredits, recordCareerBalanceTelemetry } = usePlayerAccount();
   const { goToHub } = useGameFlow();
   const immersivePadding = useImmersiveScreenPadding();
@@ -198,7 +199,13 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
     encounterCompositionSummary,
     balanceTelemetry,
     craftingOpportunities,
+    operationBonusLines,
+    completionEffectSummary,
+    worldBriefSummary,
+    aftermathInput,
   } = pendingDebrief;
+
+  const aftermathPreviewLines = worldBriefSummary?.aftermathCreated ?? [];
 
   const recordedBalanceRunRef = useRef<string | null>(null);
   useEffect(() => {
@@ -438,6 +445,10 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
         appendHubLog(`>> NEW OPERATION ACTIVE: ${nextOperationTitle.toUpperCase()}`);
       }
     }
+    if (aftermathInput) {
+      const aftermathLines = applyPostRunAftermath(aftermathInput);
+      aftermathLines.forEach((line) => appendHubLog(`>> SECTOR AFTERMATH — ${line.toUpperCase()}`));
+    }
     if (isFailure || deferredWorldTick) {
       tickAfterRunComplete();
     }
@@ -470,6 +481,21 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
           {displayContractResult.sponsorId ? (
             <Text style={[styles.stat, { color: theme.mutedColor }]}>
               {sponsorDisplayName(displayContractResult.sponsorId).toUpperCase()}
+            </Text>
+          ) : null}
+          {displayContractResult.boundContextReason ? (
+            <Text style={[styles.stat, { color: theme.mutedColor }]}>
+              {`SOURCE: ${formatContractSourceReasonLabel(displayContractResult.boundContextReason)?.toUpperCase() ?? displayContractResult.boundContextReason}`}
+            </Text>
+          ) : null}
+          {displayContractResult.linkedOperationTitle ? (
+            <Text style={[styles.stat, { color: theme.mutedColor }]}>
+              {`LINKED OPERATION: ${displayContractResult.linkedOperationTitle.toUpperCase()}`}
+            </Text>
+          ) : null}
+          {displayContractResult.linkedAnchorDisplayName ? (
+            <Text style={[styles.stat, { color: theme.mutedColor }]}>
+              {`LINKED ANCHOR: ${displayContractResult.linkedAnchorDisplayName.toUpperCase()}`}
             </Text>
           ) : null}
           <Text style={[styles.stat, { color: theme.mutedColor }]}>
@@ -634,6 +660,33 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
                     {unstableCargoSummary.resolution.lost.length > 0 ? (
                       <Text style={[styles.stat, { color: FAILURE_ACCENT }]}>
                         {`LOST UNSTABLE CARGO: ${unstableCargoSummary.resolution.lost.length} STACK(S)`}
+                      </Text>
+                    ) : null}
+                  </>
+                ) : null}
+                {aftermathPreviewLines.length > 0 ? (
+                  <>
+                    <View style={styles.sectionGap} />
+                    <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>SECTOR AFTERMATH</Text>
+                    {aftermathPreviewLines.map((line) => (
+                      <Text key={line} style={[styles.stat, { color: theme.textColor }]}>
+                        {line.toUpperCase()}
+                      </Text>
+                    ))}
+                  </>
+                ) : null}
+                {worldBriefSummary ? (
+                  <>
+                    <View style={styles.sectionGap} />
+                    <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>SECTOR CRISIS</Text>
+                    {formatRunWorldBriefDebriefLines(worldBriefSummary).map((line) => (
+                      <Text key={line} style={[styles.stat, { color: theme.textColor }]}>
+                        {line.toUpperCase()}
+                      </Text>
+                    ))}
+                    {worldBriefSummary.flavorLine ? (
+                      <Text style={[styles.stat, { color: theme.mutedColor }]}>
+                        {worldBriefSummary.flavorLine.toUpperCase()}
                       </Text>
                     ) : null}
                   </>
@@ -943,6 +996,20 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
                     No qualifying run events credited toward this operation.
                   </Text>
                 )}
+                {operationBonusLines && operationBonusLines.length > 0 ? (
+                  <>
+                    <View style={styles.sectionGap} />
+                    <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>BONUS OBJECTIVES</Text>
+                    {operationBonusLines.map((line) => (
+                      <Text key={line} style={[styles.stat, { color: theme.textColor }]}>{line.toUpperCase()}</Text>
+                    ))}
+                  </>
+                ) : null}
+                {completionEffectSummary ? (
+                  <Text style={[styles.stat, { color: theme.mutedColor }]}>
+                    {`COMPLETION EFFECT: ${completionEffectSummary.toUpperCase()}`}
+                  </Text>
+                ) : null}
                 {cargoRoutingSummary && cargoRoutingSummary.deferredContributionLines.length > 0 ? (
                   <>
                     <View style={styles.sectionGap} />

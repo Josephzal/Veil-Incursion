@@ -10,6 +10,12 @@ import {
   type ContractTemplateContext,
 } from './contractTemplates';
 import {
+  buildContractBoardFromPersisted,
+  buildContractGenerationContext,
+  generateContractBoardV2,
+  type GenerateContractBoardOptions,
+} from './contractProceduralEngine';
+import {
   canResourceSpawnInSector,
   CONTRACT_TARGET_RESOURCE_IDS,
   getResourceCategory,
@@ -164,6 +170,7 @@ function instantiateTemplate(
       : undefined,
     difficulty,
     refreshLabel: 'Refreshes after run',
+    boundContext: { reason: 'WILDCARD' },
   };
 
   return validateGeneratedContract(contract) ? contract : null;
@@ -182,7 +189,8 @@ function weightedPickTemplate(
   return pool[pool.length - 1]!;
 }
 
-export function generateContractBoard(runIndex: number): GeneratedContract[] {
+/** Legacy board generation without world context. */
+export function generateLegacyContractBoard(runIndex: number): GeneratedContract[] {
   const rng = mulberry32(hashSeed(`board:${runIndex}`));
   const contracts: GeneratedContract[] = [];
   const usedKinds = new Set<string>();
@@ -234,12 +242,41 @@ export function generateContractBoard(runIndex: number): GeneratedContract[] {
         reward: { credits: 100, reputation: 2 },
         difficulty: 2,
         refreshLabel: 'Refreshes after run',
+        boundContext: { reason: 'WILDCARD' },
       });
     });
   }
 
   return contracts.slice(0, 6);
 }
+
+export function generateContractBoard(
+  runIndexOrOptions: number | GenerateContractBoardOptions,
+): GeneratedContract[] {
+  if (typeof runIndexOrOptions === 'number') {
+    const ctx = buildContractGenerationContext({
+      deployRunIndex: runIndexOrOptions,
+      sectorId: 'THE_SLAG_WORKS',
+    });
+    return generateContractBoardV2({
+      deployRunIndex: runIndexOrOptions,
+      sectorId: ctx.sectorId,
+      sectorResourceFocus: ctx.sectorResourceFocus,
+      hazardLevel: ctx.hazardLevel,
+      rewardLevel: ctx.rewardLevel,
+      echoActivity: ctx.echoActivity,
+    }).contracts;
+  }
+  return generateContractBoardV2(runIndexOrOptions).contracts;
+}
+
+export function generateContractBoardWithMemory(
+  opts: GenerateContractBoardOptions,
+): { contracts: GeneratedContract[]; memory: import('../types/contractProcedural').ContractProceduralMemory } {
+  return generateContractBoardV2(opts);
+}
+
+export { buildContractBoardFromPersisted, type GenerateContractBoardOptions };
 
 export function seedExampleContracts(runIndex: number): GeneratedContract[] {
   return generateContractBoard(runIndex);

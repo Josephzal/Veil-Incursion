@@ -13,6 +13,7 @@ import type { GeneratedContract } from '../../types/contract';
 import type { CabalEmployerId } from '../../types/worldState';
 import {
   formatContractRewardSummary,
+  formatContractContextTag,
   sponsorDisplayName,
 } from '../../utils/contractUi';
 import { formatContractCargoDeliveryHints } from '../../data/cargoRoutingIntelEngine';
@@ -22,6 +23,8 @@ import {
   buildSponsorReputationPreview,
   formatSponsorReputationLine,
 } from '../../data/runIntegration/sponsorRepEngine';
+import { getActiveAnchorInstance } from '../../data/anchorLifecycleEngine';
+import { buildPreliminaryRunWorldContext } from '../../data/runWorldBriefEngine';
 
 const TERRAN_ACCENT = FACTION_DEFINITIONS.TERRAN_GRID.accentColor;
 
@@ -63,6 +66,11 @@ function ContractJobCard({
       <TerminalText size={scaleFont(7.5)} style={{ color: theme.textColor, fontWeight: '800' }}>
         {contract.title.toUpperCase()}
       </TerminalText>
+      {formatContractContextTag(contract) ? (
+        <TerminalText size={scaleFont(5.5)} style={{ color: sponsorAccent, fontWeight: '700' }}>
+          {formatContractContextTag(contract)!.toUpperCase()}
+        </TerminalText>
+      ) : null}
       <TerminalText size={scaleFont(6.2)} style={{ color: theme.mutedColor }}>
         {contract.objectiveText}
       </TerminalText>
@@ -212,6 +220,7 @@ export default function ContractBoardPanel(): React.JSX.Element {
     selectContract,
     selectIndependentContract,
     abandonSelectedContract,
+    selectedSector,
   } = useWorldState();
   const { scaleSpacing } = useHubLayout();
 
@@ -229,6 +238,15 @@ export default function ContractBoardPanel(): React.JSX.Element {
     () => contracts.filter((contract) => contract.sponsorId === activeSponsorId),
     [contracts, activeSponsorId],
   );
+  const crisisPreview = useMemo(() => {
+    const anchor = getActiveAnchorInstance(persisted, selectedSector.id);
+    return buildPreliminaryRunWorldContext({
+      persisted,
+      sectorState: selectedSector,
+      operation: selectedSector.activeOperation,
+      anchor,
+    });
+  }, [persisted, selectedSector]);
   const isIndependent = selectedContract.kind === 'INDEPENDENT';
   const selectedId = selectedContract.kind === 'SPONSOR' ? selectedContract.contract.id : null;
 
@@ -240,7 +258,7 @@ export default function ContractBoardPanel(): React.JSX.Element {
   return (
     <HubScreenShell
       title="CONTRACT BOARD"
-      subtitle="SPONSOR POSTINGS // SELECT ONE CONTRACT OR BREACH INDEPENDENTLY"
+      subtitle="WEIGHTED BY ACTIVE OPERATION, SECTOR RESOURCES, AND SPONSOR PRIORITIES"
       headerRight={(
         <TerminalText variant="caption" style={{ color: theme.mutedColor }}>
           {`RUN INDEX ${persisted.deployRunIndex}`}
@@ -253,6 +271,29 @@ export default function ContractBoardPanel(): React.JSX.Element {
         contentContainerStyle={[styles.scrollContent, { gap: scaleSpacing(10), paddingBottom: scaleSpacing(24) }]}
         showsVerticalScrollIndicator={false}
       >
+        <View
+          style={[
+            styles.crisisBanner,
+            {
+              borderColor: `${theme.statusColor}44`,
+              padding: scaleSpacing(10),
+              gap: scaleSpacing(4),
+            },
+          ]}
+        >
+          <TerminalText size={12} style={{ color: theme.statusColor, fontWeight: '800' }}>
+            {`SECTOR CRISIS — ${crisisPreview.crisisDisplayName.toUpperCase()}`}
+          </TerminalText>
+          <TerminalText variant="caption" style={{ color: theme.mutedColor }}>
+            {crisisPreview.crisisSummary}
+          </TerminalText>
+          {crisisPreview.threatProfile.pressureTags.length > 0 ? (
+            <TerminalText variant="micro" style={{ color: theme.statusColor }}>
+              {`Board weighted for: ${crisisPreview.threatProfile.pressureTags.join(' · ')}`}
+            </TerminalText>
+          ) : null}
+        </View>
+
         <IndependentCard
           isSelected={isIndependent}
           onPress={selectIndependentContract}
@@ -326,6 +367,10 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 4,
+  },
+  crisisBanner: {
+    borderWidth: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
   },
   jobCard: {
     borderWidth: 1,

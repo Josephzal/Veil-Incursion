@@ -240,6 +240,29 @@ export default function DevTestHubPanel(): React.JSX.Element {
     devForceRoutingTestContract,
     devGetValidationReport,
     devGetDebugSnapshot,
+    devGenerateSectorOperation,
+    devGenerate20Operations,
+    devGetOperationProceduralReport,
+    devGetContractProceduralReport,
+    devSimulate20ContractBoards,
+    devGetAnchorProceduralReport,
+    devGenerateAnchorInstance,
+    devSimulateAnchorRotations,
+    devForceAnchorRotation,
+    devSuppressAnchor,
+    devPrintAnchorMemory,
+    devGetRunWorldBriefReport,
+    devGenerateRunWorldBrief,
+    devSimulateRunWorldBriefs,
+    devSimulateAllSectorBriefs,
+    devForceCrisisThemeBrief,
+    devRunProceduralDirectorReport,
+    devSimulateDirectedBriefs,
+    devSimulateAftermathCreation,
+    devSimulate10RunAftermathCycle,
+    devAftermathValidationReport,
+    devExpireAllAftermath,
+    devProceduralMemoryReport,
   } = useWorldState();
   const [hubOpen, setHubOpen] = useState(false);
   const [debugReport, setDebugReport] = useState<string | null>(null);
@@ -1236,6 +1259,121 @@ export default function DevTestHubPanel(): React.JSX.Element {
           label="[ FORCE COMPLETE ]"
           accentColor={TERMINAL_ACCENT}
           onPress={() => devForceOperationCompletion()}
+        />
+        <SandboxLaunchButton
+          label="[ GEN OP ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(devGenerateSectorOperation())}
+        />
+        <SandboxLaunchButton
+          label="[ GEN 20 OPS ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(devGenerate20Operations())}
+        />
+        <SandboxLaunchButton
+          label="[ OP PROCEDURAL REPORT ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(devGetOperationProceduralReport())}
+        />
+        <SandboxLaunchButton
+          label="[ CONTRACT PROC REPORT ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(devGetContractProceduralReport())}
+        />
+        <SandboxLaunchButton
+          label="[ GEN 20 CONTRACT BOARDS ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(devSimulate20ContractBoards())}
+        />
+        <SandboxLaunchButton
+          label="[ ANCHOR PROC REPORT ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(devGetAnchorProceduralReport())}
+        />
+        <SandboxLaunchButton
+          label="[ GEN ANCHOR ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(devGenerateAnchorInstance())}
+        />
+        <SandboxLaunchButton
+          label="[ SIM 10 ROTATIONS ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(devSimulateAnchorRotations())}
+        />
+        <SandboxLaunchButton
+          label="[ FORCE ROTATE ]"
+          accentColor={TERMINAL_ACCENT}
+          onPress={() => devForceAnchorRotation()}
+        />
+        <SandboxLaunchButton
+          label="[ SUPPRESS ANCHOR ]"
+          accentColor={TERMINAL_ACCENT}
+          onPress={() => devSuppressAnchor()}
+        />
+        <SandboxLaunchButton
+          label="[ ANCHOR MEMORY ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(devPrintAnchorMemory())}
+        />
+        <SandboxLaunchButton
+          label="[ BRIEF PROC REPORT ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(devGetRunWorldBriefReport())}
+        />
+        <SandboxLaunchButton
+          label="[ GEN BRIEF ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(devGenerateRunWorldBrief())}
+        />
+        <SandboxLaunchButton
+          label="[ SIM 20 BRIEFS ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(devSimulateRunWorldBriefs(20))}
+        />
+        <SandboxLaunchButton
+          label="[ FORCE ECHO OUTBREAK BRIEF ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(devForceCrisisThemeBrief('ECHO_OUTBREAK'))}
+        />
+        <SandboxLaunchButton
+          label="[ SIM ALL SECTOR BRIEFS ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(devSimulateAllSectorBriefs())}
+        />
+        <SandboxLaunchButton
+          label="[ DIRECTOR REPORT ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(devRunProceduralDirectorReport())}
+        />
+        <SandboxLaunchButton
+          label="[ SIM 100 DIRECTED BRIEFS ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(devSimulateDirectedBriefs(100))}
+        />
+        <SandboxLaunchButton
+          label="[ SIM AFTERMATH ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(devSimulateAftermathCreation())}
+        />
+        <SandboxLaunchButton
+          label="[ SIM 10-RUN AFTERMATH ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(devSimulate10RunAftermathCycle())}
+        />
+        <SandboxLaunchButton
+          label="[ VALIDATE AFTERMATH ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(devAftermathValidationReport())}
+        />
+        <SandboxLaunchButton
+          label="[ EXPIRE ALL AFTERMATH ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(devExpireAllAftermath())}
+        />
+        <SandboxLaunchButton
+          label="[ PROC MEMORY REPORT ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(devProceduralMemoryReport())}
         />
         <SandboxLaunchButton
           label="[ ANCHOR DORMANT ]"

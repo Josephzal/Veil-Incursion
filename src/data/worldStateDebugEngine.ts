@@ -2,7 +2,7 @@ import type { SectorOperationTemplate } from './sectorWorldCatalog';
 import { getSectorWorldTemplate, SECTOR_WORLD_TEMPLATES } from './sectorWorldCatalog';
 import {
   buildForcedOperationTemplate,
-  resolveSectorOperationTemplate,
+  resolveAndCacheSectorOperation,
 } from './operationGenerator';
 import { createSectorOperationLifecycle } from './operationLifecycleEngine';
 import { applyOperationCompletion } from './worldStateEngine';
@@ -14,6 +14,12 @@ import type {
 } from '../types/worldState';
 import { DEFAULT_OPERATION_PROGRESS_REQUIRED } from './worldStateHelpers';
 import { generateContractForObjectiveKind } from './contractGenerator';
+import {
+  ensureSectorAnchorState,
+  getActiveAnchorInstance,
+  getSectorAnchorState,
+  suppressAnchorForSector,
+} from './anchorLifecycleEngine';
 
 export function stripDevFieldsForPersistence(
   persisted: WorldStatePersistedState,
@@ -31,17 +37,21 @@ export function devRegenerateAllSectorOperations(
     activeOperationIndex: { ...persisted.activeOperationIndex },
     operationProgress: { ...persisted.operationProgress },
     sectorOperationLifecycle: { ...persisted.sectorOperationLifecycle },
+    operationInstances: { ...persisted.operationInstances },
+    operationProceduralMemory: { ...persisted.operationProceduralMemory },
   };
 
   SECTOR_WORLD_TEMPLATES.forEach((sector) => {
     const currentIndex = next.activeOperationIndex[sector.id] ?? 0;
     const nextIndex = currentIndex + 1;
-    const template = resolveSectorOperationTemplate(
+    const { template, persisted: withCache } = resolveAndCacheSectorOperation(
       sector.id,
       nextIndex,
       next.deployRunIndex,
+      next,
       next.sectorOperationOverrides,
     );
+    next = withCache;
     next.activeOperationIndex[sector.id] = nextIndex;
     next.operationProgress[template.id] = 0;
     next.sectorOperationLifecycle[sector.id] = createSectorOperationLifecycle(
@@ -74,13 +84,16 @@ export function devForceSectorOperation(
     objectiveKind,
     nextIndex,
     persisted.deployRunIndex,
+    persisted,
   );
+
+  const overrideSnapshot: SectorOperationTemplate = template;
 
   return {
     ...persisted,
     sectorOperationOverrides: {
       ...persisted.sectorOperationOverrides,
-      [sectorId]: template,
+      [sectorId]: overrideSnapshot,
     },
     activeOperationIndex: {
       ...persisted.activeOperationIndex,
@@ -106,36 +119,34 @@ export function devSetAnchorDormant(
   sectorId: SectorId,
   runs: number,
 ): WorldStatePersistedState {
-  const template = getSectorWorldTemplate(sectorId);
-  if (!template.anchor) return persisted;
-  const anchorId = `anchor-${sectorId.toLowerCase()}-${template.anchor.type.toLowerCase()}`;
-  return {
-    ...persisted,
-    dormantAnchorRuns: {
-      ...persisted.dormantAnchorRuns,
-      [anchorId]: runs,
-    },
-    operationLog: [
-      `>> DEV — ${template.anchor.displayName.toUpperCase()} DORMANT FOR ${runs} RUN(S).`,
-      ...persisted.operationLog,
-    ].slice(0, 24),
-  };
+  const { persisted: withState } = ensureSectorAnchorState(persisted, sectorId);
+  const instance = getActiveAnchorInstance(withState, sectorId);
+  if (!instance) return withState;
+  return suppressAnchorForSector(withState, sectorId, instance.id, runs, 'dev-dormant');
 }
 
 export function devClearAnchorDormant(
   persisted: WorldStatePersistedState,
   sectorId: SectorId,
 ): WorldStatePersistedState {
-  const template = getSectorWorldTemplate(sectorId);
-  if (!template.anchor) return persisted;
-  const anchorId = `anchor-${sectorId.toLowerCase()}-${template.anchor.type.toLowerCase()}`;
+  const state = getSectorAnchorState(persisted, sectorId);
+  if (!state) return persisted;
   const nextDormant = { ...persisted.dormantAnchorRuns };
-  delete nextDormant[anchorId];
+  state.dormantAnchors.forEach((d: { instanceId: string }) => {
+    delete nextDormant[d.instanceId];
+  });
   return {
     ...persisted,
     dormantAnchorRuns: nextDormant,
+    anchorStateBySector: {
+      ...persisted.anchorStateBySector,
+      [sectorId]: {
+        ...state,
+        dormantAnchors: [],
+      },
+    },
     operationLog: [
-      `>> DEV — ${template.anchor.displayName.toUpperCase()} REACTIVATED.`,
+      `>> DEV — ANCHOR DORMANCY CLEARED FOR ${getSectorWorldTemplate(sectorId).displayName.toUpperCase()}.`,
       ...persisted.operationLog,
     ].slice(0, 24),
   };
@@ -145,15 +156,17 @@ export function devForceOperationCompletion(
   persisted: WorldStatePersistedState,
   sector: SectorState,
 ): { next: WorldStatePersistedState; logLines: string[] } {
+  const progressRequired = sector.activeOperation.progressRequired
+    ?? DEFAULT_OPERATION_PROGRESS_REQUIRED;
   const operation = {
     ...sector.activeOperation,
-    progressCurrent: DEFAULT_OPERATION_PROGRESS_REQUIRED,
+    progressCurrent: progressRequired,
   };
   const withProgress: WorldStatePersistedState = {
     ...persisted,
     operationProgress: {
       ...persisted.operationProgress,
-      [operation.id]: DEFAULT_OPERATION_PROGRESS_REQUIRED,
+      [operation.id]: progressRequired,
     },
   };
   return applyOperationCompletion(withProgress, sector.id, operation);
@@ -166,14 +179,27 @@ export function formatWorldStateDebugSnapshot(
   const lines = [
     `Deploy run index: ${persisted.deployRunIndex}`,
     `Selected sector: ${persisted.selectedSectorId}`,
+    `Cached procedural instances: ${Object.keys(persisted.operationInstances ?? {}).length}`,
     '',
   ];
   sectors.forEach((sector) => {
     const op = sector.activeOperation;
     lines.push(`${sector.displayName} (${sector.id})`);
-    lines.push(`  Anchor: ${sector.activeAnchor?.displayName ?? 'DORMANT / NONE'}`);
-    lines.push(`  Operation: ${op.title} [${op.objectiveKind}]`);
+    lines.push(`  Anchor: ${sector.activeAnchor?.displayName ?? 'DORMANT / NONE'}${sector.activeAnchor?.modifier ? ` (${sector.activeAnchor.modifier})` : ''}`);
+    lines.push(`  Operation: ${op.title} [${op.objectiveKind}]${op.procedural ? ' (procedural)' : ''}`);
     lines.push(`  Progress: ${op.progressCurrent}/${op.progressRequired} (${op.lifecycleStatus})`);
+    if (op.targetResourceIds?.length) {
+      lines.push(`  Targets: ${op.targetResourceIds.join(', ')}`);
+    }
+    if (op.targetDepths?.length) {
+      lines.push(`  Depths: ${op.targetDepths.join(', ')}`);
+    }
+    if (op.bonusObjectives?.length) {
+      lines.push(`  Bonus objectives: ${op.bonusObjectives.length}`);
+    }
+    if (op.completionEffectSummary) {
+      lines.push(`  Completion: ${op.completionEffectSummary}`);
+    }
     lines.push(`  Runs: ${op.generatedAtRunIndex} → ${op.expiresAtRunIndex} (${op.runsRemaining} left)`);
     lines.push(`  Reward: ${op.rewardPreview}`);
     lines.push('');

@@ -44,7 +44,7 @@ export default function OverworldHubScreen(): React.JSX.Element {
     const breachColor = resolveBreachTransitionColor(breachFaction);
     transitionActions.startBreaching(breachColor, () => {
       const { cargo: initialCargo, runItems: initialRunItems } = commitDescentLoadout();
-      const { runGenerationContext, runModifiers } = buildRunContextForDescent();
+      const { runGenerationContext, runModifiers, runWorldBrief } = buildRunContextForDescent();
       const weaponProgression = {
         weaponUnlocks: account.weaponUnlocks,
         weaponTiers: account.weaponTiers,
@@ -66,6 +66,7 @@ export default function OverworldHubScreen(): React.JSX.Element {
         initialCargo,
         initialRunItems,
         runGenerationContext,
+        runWorldBrief,
         runModifiers,
         startingVeilResidueBalance: account.veilResidueBalance,
         equippedKeepsakeId: account.equippedKeepsakeId,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import HapticPressable from '../HapticPressable';
 import TerminalText from '../TerminalText';
@@ -6,7 +6,7 @@ import SelectedContractSummary from './SelectedContractSummary';
 import { ProgressBar } from './VeilFrontUiPrimitives';
 import { useVeilFrontLayout } from './useVeilFrontLayout';
 import { operationProgressPercent } from '../../data/worldStateHelpers';
-import { anchorIdForSector, getSectorWorldTemplate } from '../../data/sectorWorldCatalog';
+import { getRecentlySuppressedAnchor } from '../../data/anchorLifecycleEngine';
 import type { SelectedContractState } from '../../types/contract';
 import type { SectorState } from '../../types/worldState';
 import { TerminalTheme } from '../../types/theme';
@@ -14,16 +14,25 @@ import {
   describeAnchorInRunPressure,
   formatEchoBriefingIntel,
   formatCargoRoutingBriefingIntel,
+  formatOperationBonusObjectiveLines,
+  formatOperationCompletionSummaryLine,
   formatOperationContributesForObjective,
   formatOperationLifecycleStatus,
   formatOperationProgressLabel,
   formatOperationProgressLockMessage,
+  formatOperationTargetDepthLine,
+  formatOperationTargetResourceLine,
   isOperationProgressLocked,
   operationLifecycleAccentColor,
   operationTypeChip,
 } from '../../utils/veilFrontSectorUi';
 import { contractSectorWarning, type ContractSectorCompatibility } from '../../utils/contractUi';
 import { useWorldState } from '../../context/WorldStateContext';
+import { getActiveAnchorInstance } from '../../data/anchorLifecycleEngine';
+import { buildPreliminaryRunWorldContext } from '../../data/runWorldBriefEngine';
+import { buildProceduralExplainabilityText } from '../../data/proceduralDirectorExplainabilityEngine';
+import { getSectorAftermathModifiers } from '../../data/proceduralDirectorAftermathEngine';
+import { scoreRunPressure } from '../../data/proceduralDirectorPressureEngine';
 import { viewShadow } from '../../utils/adaptiveStyles';
 
 type BriefingTab = 'operation' | 'anchor' | 'contract';
@@ -142,6 +151,15 @@ function OperationTabContent({
   const progressLocked = isOperationProgressLocked(operation.lifecycleStatus);
   const progressLockMessage = formatOperationProgressLockMessage(operation.lifecycleStatus);
   const recentLog = operationLog.slice(0, 4);
+  const targetResourceLine = formatOperationTargetResourceLine(
+    operation.targetResourceIds,
+    operation.rewardEmphasis.targetResources,
+  );
+  const targetDepthLine = formatOperationTargetDepthLine(operation.targetDepths);
+  const bonusLines = formatOperationBonusObjectiveLines(operation.bonusObjectives);
+  const completionSummaryLine = formatOperationCompletionSummaryLine(
+    operation.completionEffectSummary,
+  );
 
   return (
     <View style={[styles.tabBody, { gap: scaleSpacing(9) }]}>
@@ -158,6 +176,16 @@ function OperationTabContent({
         {operation.title}
       </TerminalText>
       <TypeChip label={operationTypeChip(operation.objectiveKind)} accentColor={theme.statusColor} />
+      {targetResourceLine ? (
+        <TerminalText size={scaleFont(5.8)} style={{ color: theme.statusColor }} numberOfLines={2}>
+          {targetResourceLine}
+        </TerminalText>
+      ) : null}
+      {targetDepthLine ? (
+        <TerminalText size={scaleFont(5.8)} style={{ color: theme.mutedColor }} numberOfLines={1}>
+          {targetDepthLine}
+        </TerminalText>
+      ) : null}
       {showOptionalCopy ? (
         <TerminalText
           size={scaleFont(6.8)}
@@ -213,6 +241,23 @@ function OperationTabContent({
       <TerminalText size={scaleFont(5.8)} letterSpacing={0.4} style={{ color: theme.statusColor }} numberOfLines={2}>
         {`Reward preview: ${operation.rewardPreview}`}
       </TerminalText>
+      {completionSummaryLine ? (
+        <TerminalText size={scaleFont(5.5)} style={{ color: theme.mutedColor }} numberOfLines={3}>
+          {completionSummaryLine}
+        </TerminalText>
+      ) : null}
+      {bonusLines.length > 0 ? (
+        <View style={[styles.listBlock, { gap: scaleSpacing(4), borderTopColor: `${theme.statusColor}24`, paddingTop: scaleSpacing(7) }]}>
+          <TerminalText size={scaleFont(5.5)} letterSpacing={0.6} style={{ color: theme.mutedColor }}>
+            BONUS OBJECTIVES
+          </TerminalText>
+          {bonusLines.map((line) => (
+            <TerminalText key={line} size={scaleFont(5.8)} style={{ color: theme.textColor }} numberOfLines={2}>
+              {line}
+            </TerminalText>
+          ))}
+        </View>
+      ) : null}
       {contributes.length > 0 ? (
         <View style={[styles.listBlock, { gap: scaleSpacing(5), borderTopColor: `${theme.statusColor}24`, paddingTop: scaleSpacing(7) }]}>
           <TerminalText size={scaleFont(5.5)} letterSpacing={0.6} style={{ color: theme.mutedColor }}>
@@ -244,10 +289,7 @@ function OperationTabContent({
 function AnchorTabContent({ theme, sector }: { theme: TerminalTheme; sector: SectorState }) {
   const { scaleFont, scaleSize, scaleSpacing, isCompactHeight, showOptionalCopy } = useVeilFrontLayout();
   const { persisted } = useWorldState();
-  const sectorTemplate = getSectorWorldTemplate(sector.id);
-  const dormantAnchorRunsRemaining = sectorTemplate.anchor
-    ? persisted.dormantAnchorRuns[anchorIdForSector(sector.id, sectorTemplate.anchor.type)] ?? 0
-    : 0;
+  const suppressed = getRecentlySuppressedAnchor(persisted, sector.id);
   const pressureLines = sector.activeAnchor ? describeAnchorInRunPressure(sector.activeAnchor) : [];
 
   return (
@@ -281,11 +323,12 @@ function AnchorTabContent({ theme, sector }: { theme: TerminalTheme; sector: Sec
               </View>
             </View>
           ) : null}
+          {suppressed && suppressed.remainingRuns > 0 ? (
+            <TerminalText size={scaleFont(6.5)} style={[styles.wrapText, { color: theme.mutedColor, marginTop: scaleSpacing(4) }]}>
+              {`Aftermath: ${suppressed.displayName} suppressed for ${suppressed.remainingRuns} run(s).`}
+            </TerminalText>
+          ) : null}
         </>
-      ) : dormantAnchorRunsRemaining > 0 && sectorTemplate.anchor ? (
-        <TerminalText size={scaleFont(6.5)} style={[styles.wrapText, { color: theme.mutedColor }]}>
-          {`${sectorTemplate.anchor.displayName} dormant — ${dormantAnchorRunsRemaining} run(s) remaining.`}
-        </TerminalText>
       ) : (
         <TerminalText size={scaleFont(6.5)} style={[styles.wrapText, { color: theme.mutedColor }]}>
           No active anchor. Standard breach conditions apply.
@@ -315,6 +358,49 @@ export default function SectorBriefingPanel({
   const { persisted } = useWorldState();
   const [activeTab, setActiveTab] = useState<BriefingTab>('operation');
 
+  const crisisPreview = useMemo(() => {
+    const anchor = getActiveAnchorInstance(persisted, sector.id);
+    const prelim = buildPreliminaryRunWorldContext({
+      persisted,
+      sectorState: sector,
+      operation: sector.activeOperation,
+      anchor,
+    });
+    const aftermath = getSectorAftermathModifiers(persisted, sector.id);
+    const pressure = scoreRunPressure({
+      crisisTheme: prelim.crisisTheme,
+      crisisDisplayName: prelim.crisisDisplayName,
+      crisisSummary: prelim.crisisSummary,
+      threatProfile: prelim.threatProfile,
+      scannerBias: prelim.scannerBias,
+      encounterBias: prelim.encounterBias,
+      rewardBias: prelim.rewardBias,
+      resourceStress: prelim.resourceStress,
+      sectorId: sector.id,
+      sectorDisplayName: sector.displayName,
+    } as import('../../types/runWorldBrief').RunWorldBrief, {
+      persisted,
+      sectorState: sector,
+      contractBoard: persisted.contractBoard.contracts,
+      selectedContractId: null,
+      aftermathModifiers: aftermath,
+    });
+    const explain = buildProceduralExplainabilityText(
+      {
+        crisisTheme: prelim.crisisTheme,
+        crisisDisplayName: prelim.crisisDisplayName,
+        crisisSummary: prelim.crisisSummary,
+        threatProfile: prelim.threatProfile,
+        resourceStress: prelim.resourceStress,
+        anchorInstance: anchor,
+        sectorDisplayName: sector.displayName,
+      } as import('../../types/runWorldBrief').RunWorldBrief,
+      pressure,
+      aftermath,
+    );
+    return { prelim, explain, pressure };
+  }, [persisted, sector]);
+
   const canLaunch = !runDisabled && !launching;
   const deployLabel = launching
     ? '[ DEPLOYING... ]'
@@ -323,6 +409,38 @@ export default function SectorBriefingPanel({
 
   return (
     <View style={[styles.panel, { gap: sectionGap }]}>
+      <View style={[styles.crisisBanner, { borderColor: `${theme.statusColor}44`, padding: scaleSpacing(8), gap: scaleSpacing(4) }]}>
+        <TypeChip label={crisisPreview.explain.title.toUpperCase()} accentColor={theme.statusColor} />
+        <TerminalText size={scaleFont(6)} style={[styles.wrapText, { color: theme.mutedColor }]} numberOfLines={3}>
+          {crisisPreview.explain.cause}
+        </TerminalText>
+        {crisisPreview.explain.pressureChips.length > 0 ? (
+          <TerminalText size={scaleFont(5.5)} style={{ color: theme.statusColor }}>
+            {`Pressure: ${crisisPreview.explain.pressureChips.join(' · ')}${crisisPreview.pressure.label ? ` (${crisisPreview.pressure.label})` : ''}`}
+          </TerminalText>
+        ) : null}
+        {crisisPreview.explain.expectedSignals.length > 0 ? (
+          <TerminalText size={scaleFont(5.5)} style={[styles.wrapText, { color: theme.mutedColor }]} numberOfLines={2}>
+            {`Likely Signals: ${crisisPreview.explain.expectedSignals.slice(0, 4).join(', ')}`}
+          </TerminalText>
+        ) : null}
+        {crisisPreview.explain.expectedRewards.length > 0 ? (
+          <TerminalText size={scaleFont(5.5)} style={[styles.wrapText, { color: theme.mutedColor }]} numberOfLines={2}>
+            {`Likely Rewards: ${crisisPreview.explain.expectedRewards.slice(0, 4).join(', ')}`}
+          </TerminalText>
+        ) : null}
+        {crisisPreview.explain.activeAftermath?.map((line) => (
+          <TerminalText key={line} size={scaleFont(5.5)} style={{ color: theme.statusColor }}>
+            {`Aftermath: ${line}`}
+          </TerminalText>
+        ))}
+        {crisisPreview.explain.warning ? (
+          <TerminalText size={scaleFont(5.5)} style={{ color: theme.statusColor }}>
+            {crisisPreview.explain.warning}
+          </TerminalText>
+        ) : null}
+      </View>
+
       <BriefingTabs theme={theme} activeTab={activeTab} onSelectTab={setActiveTab} />
 
       <View style={[styles.tabContent, { padding: cardPadding, borderColor: `${theme.statusColor}33` }]}>
@@ -336,7 +454,16 @@ export default function SectorBriefingPanel({
         ) : activeTab === 'anchor' ? (
           <AnchorTabContent theme={theme} sector={sector} />
         ) : (
-          <SelectedContractSummary theme={theme} selectedContract={selectedContract} />
+          <>
+            <TerminalText
+              size={scaleFont(5.5)}
+              style={{ color: theme.mutedColor, marginBottom: scaleSpacing(4) }}
+              numberOfLines={2}
+            >
+              Contracts are weighted by active operation, sector resources, and sponsor priorities.
+            </TerminalText>
+            <SelectedContractSummary theme={theme} selectedContract={selectedContract} />
+          </>
         )}
       </View>
 
@@ -386,6 +513,11 @@ const styles = StyleSheet.create({
     minHeight: 0,
     minWidth: 0,
     overflow: 'hidden',
+  },
+  crisisBanner: {
+    flexShrink: 0,
+    borderWidth: 1,
+    backgroundColor: 'rgba(18, 28, 44, 0.72)',
   },
   tabRow: {
     flexDirection: 'row',

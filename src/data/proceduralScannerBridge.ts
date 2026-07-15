@@ -163,6 +163,9 @@ export function prepareProceduralScannerIncursion(
   nextTree = assignScannerLabelOverlaysForDepth(nextTree, depth, {
     depthIndex,
     depthIdentityBias,
+    briefScannerOverlay: inc.runWorldBrief?.scannerBias.overlayBias
+      ?? inc.runGenerationContext?.runWorldBrief?.scannerBias.overlayBias
+      ?? null,
   });
 
   if (nextTree === tree) return inc;

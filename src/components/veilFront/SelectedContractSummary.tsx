@@ -7,6 +7,7 @@ import type { SelectedContractState } from '../../types/contract';
 import { TerminalTheme } from '../../types/theme';
 import {
   formatContractRewardSummary,
+  formatContractContextTag,
   sponsorDisplayName,
 } from '../../utils/contractUi';
 import { describeEmployerPerks } from '../../utils/employerContractUi';
@@ -58,6 +59,11 @@ export default function SelectedContractSummary({
       <TerminalText size={scaleFont(8)} style={{ color: theme.textColor, fontWeight: '800', lineHeight: scaleSize(11) }}>
         {contract.title}
       </TerminalText>
+      {formatContractContextTag(contract) ? (
+        <TerminalText size={scaleFont(5.8)} style={{ color: sponsorAccent, fontWeight: '700' }}>
+          {formatContractContextTag(contract)}
+        </TerminalText>
+      ) : null}
       <TerminalText size={scaleFont(6.5)} style={{ color: theme.mutedColor, lineHeight: scaleSize(11) }}>
         {contract.objectiveText}
       </TerminalText>

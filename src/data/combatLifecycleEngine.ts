@@ -1,7 +1,12 @@
-import { laneForSlot } from '../types/combatGrid';
 import type { CombatGridSlotId } from '../types/combatGrid';
 import type { EnemyCombatProfile } from '../types/run';
-import { aliveUnits, getUnitById, updateUnit } from './combatSquadEngine';
+import {
+  aliveUnits,
+  getUnitById,
+  reconcileSquadGridSlots,
+  unitPlacedAtSlot,
+  updateUnit,
+} from './combatSquadEngine';
 import { isFragileArchetype } from './enemyCombatConfig';
 import { getAlphaMechanic } from './enemyAlphaConfig';
 import type {
@@ -36,15 +41,16 @@ export function swapUnitGridSlots(
   if (!a?.gridSlot || !b?.gridSlot) return squad;
   const slotA = a.gridSlot as CombatGridSlotId;
   const slotB = b.gridSlot as CombatGridSlotId;
-  return squad.map((unit) => {
+  const swapped = squad.map((unit) => {
     if (unit.unitId === unitIdA) {
-      return { ...unit, gridSlot: slotB, lane: laneForSlot(slotB) };
+      return unitPlacedAtSlot(unit, slotB);
     }
     if (unit.unitId === unitIdB) {
-      return { ...unit, gridSlot: slotA, lane: laneForSlot(slotA) };
+      return unitPlacedAtSlot(unit, slotA);
     }
     return unit;
   });
+  return reconcileSquadGridSlots(swapped);
 }
 
 function pickRandomLivingAlly(
@@ -418,12 +424,12 @@ const cutterHitTaken: HitTakenHandler = (enemy, attack, ctx) => {
   if (evadeBuff > 0) {
     squad = patchUnitInSquad(squad, enemy.unitId, {
       evadeActive: true,
-      evadeChance: evadeBuff,
+      evadeTurnsRemaining: Math.max(enemy.evadeTurnsRemaining ?? 0, 1),
     });
   }
   const logLines = [`>> ${enemy.designation} EMERGENCY SWAP — repositioned with ${ally.designation}.`];
   if (evadeBuff > 0) {
-    logLines.push(`>> PHANTOM EVASION — ${Math.round(evadeBuff * 100)}% dodge posture.`);
+    logLines.push(`>> PHANTOM EVASION — heightened dodge posture (${Math.round(evadeBuff * 100)}%).`);
   }
   return {
     squad,
@@ -603,13 +609,28 @@ const DEATH_HANDLERS: DeathHandler[] = [
   genericAshDeath,
 ];
 
+function isFullSquadReplacement(
+  base: EnemyCombatProfile[],
+  patch: EnemyCombatProfile[],
+): boolean {
+  if (patch.length === 0 || patch.length !== base.length) return false;
+  const baseIds = new Set(base.map((unit) => unit.unitId).filter((id): id is string => Boolean(id)));
+  if (baseIds.size !== base.length) return false;
+  return patch.every((unit) => unit.unitId != null && baseIds.has(unit.unitId));
+}
+
 function mergeSquads(base: EnemyCombatProfile[], patch: EnemyCombatProfile[]): EnemyCombatProfile[] {
   if (patch.length === 0) return base;
+  if (isFullSquadReplacement(base, patch)) {
+    return reconcileSquadGridSlots(patch);
+  }
   const byId = new Map(patch.filter((u) => u.unitId).map((u) => [u.unitId!, u]));
-  return base.map((unit) => {
-    if (!unit.unitId) return unit;
-    return byId.get(unit.unitId) ?? unit;
-  });
+  return reconcileSquadGridSlots(
+    base.map((unit) => {
+      if (!unit.unitId) return unit;
+      return byId.get(unit.unitId) ?? unit;
+    }),
+  );
 }
 
 function mergeExtras(

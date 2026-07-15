@@ -17,6 +17,9 @@ import {
   getNodePressureBand,
 } from './worldStateHelpers';
 import { getAnchorDefinition } from './anchorRegistry';
+import { MODIFIER_SCANNER_MULTIPLIERS } from './anchorTypeMetadata';
+import { applyBriefOverlayToRoll } from './runWorldBriefBiasEngine';
+import { getRunWorldBriefFromContext } from './runWorldBriefEngine';
 import {
   applyEncounterModifierToContext,
   rollEncounterModifierWithDebug,
@@ -258,6 +261,17 @@ export function rollNodeContextModifiers(
   if (depthIdentityBias) {
     anchorRoll = Math.min(0.95, anchorRoll * depthIdentityBias.anchorSignalMultiplier);
   }
+  const anchorModifier = runContext.activeAnchor?.modifier;
+  if (anchorModifier) {
+    const modMult = MODIFIER_SCANNER_MULTIPLIERS[anchorModifier];
+    if (modMult.anchorSignalMultiplier) {
+      anchorRoll = Math.min(0.95, anchorRoll * modMult.anchorSignalMultiplier);
+    }
+  }
+  const brief = getRunWorldBriefFromContext(runContext);
+  if (brief) {
+    anchorRoll = applyBriefOverlayToRoll(anchorRoll, 'anchorSignal', brief.scannerBias);
+  }
 
   if (runContext.activeAnchor?.isActive && rng() < anchorRoll) {
     modifiers.anchorSignal = true;
@@ -272,6 +286,9 @@ export function rollNodeContextModifiers(
   );
   if (depthIdentityBias) {
     operationTargetRoll = Math.min(0.95, operationTargetRoll * depthIdentityBias.operationSignalMultiplier);
+  }
+  if (brief) {
+    operationTargetRoll = applyBriefOverlayToRoll(operationTargetRoll, 'operationTarget', brief.scannerBias);
   }
   if (rng() < operationTargetRoll) {
     modifiers.operationTag = runContext.activeOperation.objectiveKind;
@@ -294,6 +311,10 @@ export function rollNodeContextModifiers(
   if (identity.pendingUnstablePressure) {
     modifiers.highRisk = modifiers.highRisk || rng() < 0.55;
   }
+  if (brief) {
+    const highRiskRoll = modifiers.highRisk ? 0.85 : 0.22;
+    modifiers.highRisk = modifiers.highRisk || rng() < applyBriefOverlayToRoll(highRiskRoll, 'highRisk', brief.scannerBias);
+  }
 
   if (nodeType === 'RESOURCE' && (pressureBand === 'HIGH' || stageMods.rareLootBias > 0.15)) {
     const highValueBase = 0.35 + stageMods.rareLootBias;
@@ -308,6 +329,15 @@ export function rollNodeContextModifiers(
     }
     if (depthIdentityBias) {
       highValueChance *= depthIdentityBias.highValueMultiplier;
+    }
+    if (anchorModifier) {
+      const modMult = MODIFIER_SCANNER_MULTIPLIERS[anchorModifier];
+      if (modMult.highValueResourceMultiplier) {
+        highValueChance = Math.min(0.85, highValueChance * modMult.highValueResourceMultiplier);
+      }
+    }
+    if (brief) {
+      highValueChance = applyBriefOverlayToRoll(highValueChance, 'highValueResource', brief.scannerBias);
     }
     modifiers.highValueResource = rng() < Math.min(0.85, highValueChance);
   } else if (
@@ -329,6 +359,7 @@ export function rollNodeContextModifiers(
     operationTagged: Boolean(modifiers.operationTag),
     pendingUnstablePressure: identity.pendingUnstablePressure,
     rng,
+    briefEncounterBias: brief?.encounterBias.favoredModifiers,
   });
   modifiers = applyEncounterModifierToContext(modifiers, rolledModifier);
 
@@ -342,6 +373,16 @@ export function rollNodeContextModifiers(
     operationTagged: Boolean(modifiers.operationTag),
     alreadySeen: identity.twistedTemplatesSeen,
     rng,
+    briefTwistedBias: (() => {
+      const bias = { ...brief?.encounterBias.twistedTemplateWeights };
+      if (nodeType === 'EXTRACTION' && brief?.scannerBias.overlayBias.extraction) {
+        const mult = brief.scannerBias.overlayBias.extraction;
+        if (mult > 1) {
+          bias.FALSE_EXTRACTION_SIGNAL = (bias.FALSE_EXTRACTION_SIGNAL ?? 1) * mult;
+        }
+      }
+      return bias;
+    })(),
   });
   return applyTwistedTemplateToContext(modifiers, rolledTwisted);
 }

@@ -1,3 +1,4 @@
+import type { RunRewardBias } from '../types/runWorldBrief';
 import type { ResourceItemId } from '../types/resourceItem';
 import type { VeilBiome } from '../types/encounterSpawn';
 import type { EncounterCompositionTemplateId, EncounterRewardTier } from '../types/encounterComposition';
@@ -51,6 +52,7 @@ export interface ExpansionIdentityDropContext {
   hasTwisted?: boolean;
   templateId?: EncounterCompositionTemplateId | null;
   rewardTier?: EncounterRewardTier | null;
+  briefRewardBias?: RunRewardBias | null;
   rng: () => number;
 }
 
@@ -62,12 +64,15 @@ export function rollExpansionIdentityExtras(ctx: ExpansionIdentityDropContext): 
   const extras: ResourceItemId[] = [];
   const sector = sectorIdentityResourcePool(ctx.veilBiome);
   const primary = sector[0];
+  const sectorMult = ctx.briefRewardBias?.sectorResourceMultiplier ?? 1;
+  const resonantMult = ctx.briefRewardBias?.resonantMaterialMultiplier ?? 1;
+  const marrowMult = ctx.briefRewardBias?.anchorMarrowMultiplier ?? 1;
 
   // Sector identity — common chance; stronger on elite / resource-guard templates.
   if (primary) {
-    let sectorChance = ctx.isElite ? 0.45 : 0.28;
+    let sectorChance = (ctx.isElite ? 0.45 : 0.28) * sectorMult;
     if (ctx.templateId === 'RESOURCE_GUARD' || ctx.highValue) sectorChance += 0.12;
-    if (ctx.rng() < sectorChance) {
+    if (ctx.rng() < Math.min(0.85, sectorChance)) {
       extras.push(primary);
     }
   }
@@ -78,8 +83,8 @@ export function rollExpansionIdentityExtras(ctx: ExpansionIdentityDropContext): 
     || ctx.templateId === 'ECHO_CONTAMINATED'
     || ctx.templateId === 'BOSS_FORESHADOWING'
   ) {
-    const filamentChance = ctx.districtDepth >= 2 ? 0.42 : 0.22;
-    if (ctx.rng() < filamentChance) {
+    const filamentChance = (ctx.districtDepth >= 2 ? 0.42 : 0.22) * resonantMult;
+    if (ctx.rng() < Math.min(0.9, filamentChance)) {
       extras.push('resonant-filament');
     }
   }
@@ -87,8 +92,8 @@ export function rollExpansionIdentityExtras(ctx: ExpansionIdentityDropContext): 
   // Anchor lane — Anchor Marrow (never Depth 1 standard soup).
   if (ctx.anchorSignal || ctx.templateId === 'ANCHOR_PATROL') {
     if (ctx.districtDepth >= 2 || ctx.isElite) {
-      const marrowChance = ctx.templateId === 'ANCHOR_PATROL' || ctx.isElite ? 0.55 : 0.28;
-      if (ctx.rng() < marrowChance) {
+      const marrowChance = (ctx.templateId === 'ANCHOR_PATROL' || ctx.isElite ? 0.55 : 0.28) * marrowMult;
+      if (ctx.rng() < Math.min(0.9, marrowChance)) {
         extras.push('anchor-marrow');
       }
     }

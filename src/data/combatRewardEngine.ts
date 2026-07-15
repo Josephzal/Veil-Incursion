@@ -6,6 +6,7 @@ import {
   compositionExtraLootIds,
   compositionRareLootBonusPct,
 } from './encounterCompositionRewardEngine';
+import { applyBriefResourceStressToPool } from './runWorldBriefBiasEngine';
 import {
   rollExpansionIdentityExtras,
   sectorIdentityResourcePool,
@@ -93,6 +94,9 @@ export interface CombatRewardContext {
   highRisk?: boolean;
   hasModifier?: boolean;
   hasTwisted?: boolean;
+  /** RunWorldBrief — prioritize crisis-stressed resources in salvage rolls. */
+  stressedResourceIds?: ResourceItemId[];
+  briefRewardBias?: import('../types/runWorldBrief').RunRewardBias | null;
 }
 
 export function lootDepthTierFromDepth(depth: number): LootDepthTier {
@@ -184,7 +188,11 @@ export function rollCombatResourceDrops(ctx: CombatRewardContext): ResourceItemI
   drops.push(...enemyLoot);
 
   const compositionRarePct = compositionRareLootBonusPct(ctx.rewardTier);
-  const rareLootBonusPct = (ctx.rareLootBonusPct ?? 0) + compositionRarePct;
+  let rareLootBonusPct = (ctx.rareLootBonusPct ?? 0) + compositionRarePct;
+  if (ctx.briefRewardBias?.rareLootMultiplier && ctx.briefRewardBias.rareLootMultiplier > 1) {
+    rareLootBonusPct += Math.min(12, Math.round((ctx.briefRewardBias.rareLootMultiplier - 1) * 80));
+  }
+  const stressedIds = ctx.stressedResourceIds?.length ? ctx.stressedResourceIds : undefined;
   const compositionExtras = compositionExtraLootIds({
     tier: ctx.rewardTier,
     templateId: ctx.compositionTemplateId,
@@ -206,6 +214,7 @@ export function rollCombatResourceDrops(ctx: CombatRewardContext): ResourceItemI
     hasTwisted: ctx.hasTwisted,
     templateId: ctx.compositionTemplateId,
     rewardTier: ctx.rewardTier,
+    briefRewardBias: ctx.briefRewardBias,
     rng,
   });
 
@@ -236,7 +245,11 @@ export function rollCombatResourceDrops(ctx: CombatRewardContext): ResourceItemI
   }
 
   if (enemyLoot.length === 0) {
-    drops.push(pickBiasedFromPool(tierResourcePool(tier), profile, rng, ctx.veilBiome));
+    const pool = applyBriefResourceStressToPool(
+      tierResourcePool(tier),
+      stressedIds ? { resourceStress: { primaryResourceIds: stressedIds, highDemandResourceIds: stressedIds } } : null,
+    );
+    drops.push(pickBiasedFromPool(pool, profile, rng, ctx.veilBiome));
   }
 
   drops.push(...(ctx.extraLoot ?? []));

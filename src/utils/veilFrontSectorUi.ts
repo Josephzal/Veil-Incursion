@@ -1,4 +1,7 @@
 import type { VeilBiome } from '../types/encounterSpawn';
+import type { ResourceItemId } from '../types/resourceItem';
+import type { OperationBonusObjective } from '../types/operationProcedural';
+import type { RunDepth } from '../types/narrativeProcedural';
 import type {
   EchoActivityLevel,
   OperationContributionRules,
@@ -7,7 +10,12 @@ import type {
   SectorState,
   VeilAnchorState,
 } from '../types/worldState';
+import {
+  formatTargetDepthLabel,
+  formatTargetResourceLabels,
+} from '../data/operationProceduralEngine';
 import { getAnchorPressureLines } from '../data/anchorRegistry';
+import { getResourceDefinition } from '../data/resourceRegistry';
 import { formatEchoOperationContributionHints, formatEchoSectorIntelLines } from '../data/echoIntelEngine';
 import {
   formatCargoRoutingOperationContributionHints,
@@ -132,10 +140,25 @@ export function anchorStatusLabel(sector: SectorState): { label: string; pips: n
 }
 
 export function describeAnchorInRunPressure(anchor: VeilAnchorState): string[] {
-  const registryLines = [...getAnchorPressureLines(anchor.type)];
-  if (registryLines.length > 0) return registryLines;
-
   const lines: string[] = [];
+  if (anchor.modifier) {
+    const modLabel = anchor.modifier.charAt(0) + anchor.modifier.slice(1).toLowerCase().replace(/_/g, ' ');
+    lines.push(`${modLabel} anchor signature`);
+  }
+  const registryLines = [...getAnchorPressureLines(anchor.type)];
+  lines.push(...registryLines.slice(0, 2));
+  if (anchor.resourceBias?.length) {
+    const names = anchor.resourceBias.slice(0, 3).map((id) => {
+      try {
+        return getResourceDefinition(id).shortName;
+      } catch {
+        return id;
+      }
+    });
+    lines.push(`Likely rewards: ${names.join(', ')}`);
+  }
+  if (lines.length > 0) return lines;
+
   const { realityRules: r, type } = anchor;
 
   if (type === 'CHOIR_SPIRE' || r.echoBias >= 0.15) {
@@ -330,4 +353,40 @@ export function formatOperationProgressLabel(
   progressPct: number,
 ): string {
   return `${progressCurrent}/${progressRequired} (${progressPct}%)`;
+}
+
+export function formatOperationTargetResourceLine(
+  targetResourceIds: ResourceItemId[] | undefined,
+  fallbackTargetNames: string[] | undefined,
+): string | null {
+  if (targetResourceIds?.length) {
+    return `Target resources: ${formatTargetResourceLabels(targetResourceIds).join(', ')}`;
+  }
+  if (fallbackTargetNames?.length) {
+    return `Target resources: ${fallbackTargetNames.join(', ')}`;
+  }
+  return null;
+}
+
+export function formatOperationTargetDepthLine(
+  targetDepths: RunDepth[] | undefined,
+): string | null {
+  if (!targetDepths?.length) return null;
+  return `Priority depths: ${formatTargetDepthLabel(targetDepths)}`;
+}
+
+export function formatOperationBonusObjectiveLines(
+  bonusObjectives: OperationBonusObjective[] | undefined,
+): string[] {
+  if (!bonusObjectives?.length) return [];
+  return bonusObjectives.map((bonus) =>
+    `${bonus.completed ? '✓' : '○'} ${bonus.description}`,
+  );
+}
+
+export function formatOperationCompletionSummaryLine(
+  completionEffectSummary: string | undefined,
+): string | null {
+  if (!completionEffectSummary?.trim()) return null;
+  return `On completion: ${completionEffectSummary}`;
 }

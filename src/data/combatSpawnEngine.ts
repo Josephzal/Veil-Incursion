@@ -82,6 +82,7 @@ function resolveEliteSlotAssignments(
       'ELITE',
       `${encounterSeed ?? 'elite'}:origin:${depth}`,
       runSegment?.lastEncounterOrigin,
+      encounterOptions.rivalMercWeightMultiplier ?? 1,
     );
 
   const loader = isAlphaDuel ? loadAlphaDuelElite : loadEliteEncounter;
@@ -119,6 +120,8 @@ export interface SpawnSquadOptions {
   veilBiome?: ResolveLevelEncounterOptions['veilBiome'];
   /** Node echo override — bypasses origin roll and procedural squad pick. */
   contextModifiers?: NodeContextModifiers | null;
+  /** RunWorldBrief — rival merc origin weight at Depth 1/2. */
+  rivalMercWeightMultiplier?: number;
 }
 
 export interface EngagedEncounterSnapshot {
@@ -135,6 +138,7 @@ function encounterOptionsFromSpawn(options: SpawnSquadOptions): ResolveLevelEnco
     veilBiome: options.veilBiome,
     isElite: options.isElite,
     contextModifiers: options.contextModifiers,
+    rivalMercWeightMultiplier: options.rivalMercWeightMultiplier,
   };
 }
 

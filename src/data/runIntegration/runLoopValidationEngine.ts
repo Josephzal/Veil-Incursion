@@ -1,4 +1,23 @@
 import { validateWorldState, formatWorldStateValidationReport } from '../worldStateValidation';
+import { validateActiveOperations, formatOperationValidationReport } from '../operationValidationEngine';
+import {
+  validateAllAnchorPools,
+  formatAnchorValidationReport,
+} from '../anchorProceduralValidationEngine';
+import {
+  validateContractBoard,
+  formatContractProceduralValidationReport,
+} from '../contractProceduralValidationEngine';
+import { buildContractGenerationContext } from '../contractProceduralEngine';
+import {
+  buildPreliminaryRunWorldContext,
+  buildRunWorldBrief,
+} from '../runWorldBriefEngine';
+import { getActiveAnchorInstance } from '../anchorLifecycleEngine';
+import {
+  validateRunWorldBrief,
+  formatRunWorldBriefValidationReport,
+} from '../runWorldBriefValidationEngine';
 import { validateResourceRegistry } from '../resourceValidation';
 import { formatEchoValidationReport } from '../echoDebugEngine';
 import { formatPostRunRoutingDebugValidation } from '../postRunCargoRoutingDebugEngine';
@@ -15,6 +34,49 @@ import {
 } from '../balance/balanceValidationEngine';
 import type { CareerBalanceHistory } from '../balance/balanceDashboardEngine';
 import type { SectorState, WorldStatePersistedState } from '../../types/worldState';
+
+function buildSelectedSectorContractContext(
+  persisted: WorldStatePersistedState,
+  sectors: SectorState[],
+) {
+  const sector = sectors.find((s) => s.id === persisted.selectedSectorId);
+  if (!sector) return null;
+  const anchor = getActiveAnchorInstance(persisted, sector.id);
+  const preliminary = buildPreliminaryRunWorldContext({
+    persisted,
+    sectorState: sector,
+    operation: sector.activeOperation,
+    anchor,
+  });
+  return {
+    sector,
+    ctx: buildContractGenerationContext({
+      deployRunIndex: persisted.deployRunIndex,
+      sectorId: sector.id,
+      activeOperation: sector.activeOperation,
+      activeAnchor: sector.activeAnchor,
+      sectorResourceFocus: sector.resourceFocus,
+      hazardLevel: sector.hazardLevel,
+      rewardLevel: sector.rewardLevel,
+      echoActivity: sector.echoActivity,
+      recentContractMemory: persisted.contractProceduralMemory,
+      crisisTheme: preliminary.crisisTheme,
+      resourceStress: preliminary.resourceStress,
+      threatProfile: preliminary.threatProfile,
+      contractBias: preliminary.contractBias,
+      sponsorInterest: preliminary.sponsorInterest,
+    }),
+    brief: buildRunWorldBrief({
+      persisted,
+      sectorState: sector,
+      contractBoard: persisted.contractBoard.contracts,
+      selectedContractId: persisted.contractBoard.selectedContract.kind === 'SPONSOR'
+        ? persisted.contractBoard.selectedContract.contract?.id ?? null
+        : null,
+      preliminary,
+    }),
+  };
+}
 
 export interface IntegrationValidationIssue {
   domain: string;
@@ -36,8 +98,35 @@ export function validateAllIntegrationSystems(
     push('world', issue.severity, issue.message);
   });
 
+  validateActiveOperations(persisted, sectors).forEach((issue) => {
+    push('operation', issue.severity, issue.message);
+  });
+
+  const selectedContract = buildSelectedSectorContractContext(persisted, sectors);
+  if (selectedContract) {
+    validateContractBoard(
+      persisted.contractBoard.contracts,
+      selectedContract.ctx,
+      selectedContract.sector.id,
+    ).forEach((issue) => {
+      push('contract', issue.severity, issue.message);
+    });
+
+    if (selectedContract.brief) {
+      validateRunWorldBrief(selectedContract.brief)
+        .filter((issue) => issue.level === 'error')
+        .forEach((issue) => {
+          push('runWorldBrief', 'error', `[${issue.code}] ${issue.message}`);
+        });
+    }
+  }
+
   validateResourceRegistry().forEach((issue) => {
     push('resource', issue.severity, issue.message);
+  });
+
+  validateAllAnchorPools().forEach((issue) => {
+    push('anchor', issue.level === 'error' ? 'error' : 'warn', `[${issue.code}] ${issue.message}`);
   });
 
   validateContractTemplates().forEach((issue) => {
@@ -73,10 +162,25 @@ export function formatFullIntegrationValidationReport(
     (i) => `[${i.severity.toUpperCase()}] ${i.domain}: ${i.message}`,
   );
 
+  const selectedContract = buildSelectedSectorContractContext(persisted, sectors);
+
   const sections = [
     formatWorldStateValidationReport(
       validateWorldState(persisted, sectors),
     ),
+    formatOperationValidationReport(
+      validateActiveOperations(persisted, sectors),
+    ),
+    formatAnchorValidationReport(validateAllAnchorPools()),
+    selectedContract
+      ? formatContractProceduralValidationReport(
+        validateContractBoard(
+          persisted.contractBoard.contracts,
+          selectedContract.ctx,
+          selectedContract.sector.id,
+        ),
+      )
+      : 'CONTRACT PROCEDURAL VALIDATION — no sector.',
     formatContractValidationReport(validateContractTemplates()),
     formatEchoValidationReport(),
     formatPostRunRoutingDebugValidation(),
@@ -89,6 +193,9 @@ export function formatFullIntegrationValidationReport(
       careerBalanceHistory: opts?.careerBalanceHistory,
       runSims: true,
     }),
+    selectedContract?.brief
+      ? formatRunWorldBriefValidationReport(validateRunWorldBrief(selectedContract.brief))
+      : 'RUN WORLD BRIEF VALIDATION — no sector brief.',
     '',
     'INTEGRATION CROSS-CHECK',
     integrationLines.length > 0 ? integrationLines.join('\n') : 'No cross-check issues.',

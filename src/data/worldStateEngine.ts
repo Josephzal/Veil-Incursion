@@ -15,7 +15,8 @@ import {
   freezeContractForRun,
   getSelectedContractSponsorId,
 } from '../types/contract';
-import { generateContractBoard } from './contractGenerator';
+import { generateContractBoard, buildContractBoardFromPersisted } from './contractGenerator';
+import { createEmptyContractMemory } from './contractProceduralEngine';
 import {
   DEFAULT_OPERATION_PROGRESS_REQUIRED,
 } from './worldStateHelpers';
@@ -31,16 +32,34 @@ import {
   operationRunsRemaining,
 } from './operationLifecycleEngine';
 import { resolveSectorOperationTemplate } from './operationGenerator';
+import type { SectorOperationTemplate } from './sectorWorldCatalog';
 import {
-  anchorIdForSector,
   getSectorWorldTemplate,
   SECTOR_WORLD_TEMPLATES,
 } from './sectorWorldCatalog';
 import { sectorIdToVeilBiome } from './sectorBiomeBridge';
+import { buildScannerSignalBiasFromAnchor } from './anchorRegistry';
 import {
-  buildScannerSignalBiasFromAnchor,
-  getAnchorRealityRules,
-} from './anchorRegistry';
+  ensureAllSectorAnchorStates,
+  ensureSectorAnchorState,
+  getActiveAnchorInstance,
+  getRecentlySuppressedAnchor,
+  proceduralInstanceToVeilAnchorState,
+  resolveLinkedAnchorId,
+  suppressAnchorForSector,
+  tickSectorAnchorDormancy,
+} from './anchorLifecycleEngine';
+import { resolveAnchorScannerBias } from './anchorProceduralEngine';
+import {
+  buildPreliminaryRunWorldContext,
+  buildRunWorldBrief,
+} from './runWorldBriefEngine';
+import { createEmptyProceduralWorldMemory } from '../types/runWorldBrief';
+import {
+  directRunWorldBrief,
+  getSectorAftermathModifiers,
+  tickSectorAftermathForSector,
+} from './proceduralDirectorEngine';
 
 export interface EmployerPackage {
   maxHpBonusPct: number;
@@ -80,7 +99,7 @@ export const EMPLOYER_PACKAGES: Record<CabalEmployerId, EmployerPackage> = {
 
 export function createDefaultWorldState(): WorldStatePersistedState {
   const deployRunIndex = 0;
-  return {
+  const base: WorldStatePersistedState = {
     selectedSectorId: 'THE_SLAG_WORKS',
     contractBoard: {
       ...createDefaultContractBoard(deployRunIndex),
@@ -93,8 +112,15 @@ export function createDefaultWorldState(): WorldStatePersistedState {
     dormantAnchorRuns: {},
     operationLog: [],
     sectorOperationLifecycle: {},
+    operationInstances: {},
+    operationProceduralMemory: {},
+    contractProceduralMemory: createEmptyContractMemory(),
+    proceduralWorldMemory: createEmptyProceduralWorldMemory(),
+    sectorAftermathModifiersBySector: {},
+    aftermathMeta: {},
     version: 2,
   };
+  return ensureAllSectorAnchorStates(base);
 }
 
 export function resolveSectorOperationIndex(
@@ -102,6 +128,21 @@ export function resolveSectorOperationIndex(
   persisted: WorldStatePersistedState,
 ): number {
   return persisted.activeOperationIndex[sectorId] ?? 0;
+}
+
+function resolveOperationTemplateForSector(
+  sectorId: SectorId,
+  persisted: WorldStatePersistedState,
+): SectorOperationTemplate {
+  const operationIndex = resolveSectorOperationIndex(sectorId, persisted);
+  const lifecycle = persisted.sectorOperationLifecycle[sectorId];
+  return resolveSectorOperationTemplate(
+    sectorId,
+    operationIndex,
+    persisted.deployRunIndex,
+    persisted.sectorOperationOverrides,
+    { seedRunIndex: lifecycle?.generatedAtRunIndex, persisted },
+  );
 }
 
 function resolveRewardLevelBoost(
@@ -124,18 +165,12 @@ export function buildVeilAnchorState(
   const template = getSectorWorldTemplate(sectorId);
   if (!template.anchor) return null;
 
-  const id = anchorIdForSector(sectorId, template.anchor.type);
-  if (isAnchorDormant(id, persisted)) return null;
+  const { persisted: withAnchors } = ensureSectorAnchorState(persisted, sectorId);
+  const instance = getActiveAnchorInstance(withAnchors, sectorId);
+  if (!instance) return null;
+  if (isAnchorDormant(instance.id, withAnchors)) return null;
 
-  return {
-    id,
-    sectorId,
-    type: template.anchor.type,
-    displayName: template.anchor.displayName,
-    description: template.anchor.description,
-    isActive: true,
-    realityRules: getAnchorRealityRules(template.anchor.type),
-  };
+  return proceduralInstanceToVeilAnchorState(instance, template.anchor.description);
 }
 
 export function buildOperationState(
@@ -144,17 +179,9 @@ export function buildOperationState(
   persisted: WorldStatePersistedState,
 ): OperationState {
   const template = getSectorWorldTemplate(sectorId);
-  const operationIndex = resolveSectorOperationIndex(sectorId, persisted);
-  const operationTemplate = resolveSectorOperationTemplate(
-    sectorId,
-    operationIndex,
-    persisted.deployRunIndex,
-    persisted.sectorOperationOverrides,
-  );
+  const operationTemplate = resolveOperationTemplateForSector(sectorId, persisted);
   const lifecycle = getSectorOperationLifecycle(persisted, sectorId, operationTemplate.id);
-  const anchor = template.anchor
-    ? anchorIdForSector(sectorId, template.anchor.type)
-    : undefined;
+  const anchor = resolveLinkedAnchorId(persisted, sectorId);
 
   return {
     id: operationTemplate.id,
@@ -164,14 +191,23 @@ export function buildOperationState(
     objectiveKind: operationTemplate.objectiveKind,
     linkedAnchorId: anchor,
     progressCurrent,
-    progressRequired: DEFAULT_OPERATION_PROGRESS_REQUIRED,
+    progressRequired: operationTemplate.progressRequired ?? DEFAULT_OPERATION_PROGRESS_REQUIRED,
     rewardEmphasis: operationTemplate.rewardEmphasis,
-    contributionRules: resolveContributionRules(operationTemplate.objectiveKind),
+    contributionRules: operationTemplate.contributionRules
+      ?? resolveContributionRules(operationTemplate.objectiveKind),
     lifecycleStatus: lifecycle.status,
     runsRemaining: operationRunsRemaining(lifecycle),
     generatedAtRunIndex: lifecycle.generatedAtRunIndex,
     expiresAtRunIndex: lifecycle.expiresAtRunIndex,
     rewardPreview: formatOperationRewardPreview(operationTemplate.rewardEmphasis),
+    procedural: operationTemplate.procedural,
+    targetResourceIds: operationTemplate.targetResourceIds,
+    targetDepths: operationTemplate.targetDepths,
+    targetEnemyRoles: operationTemplate.targetEnemyRoles,
+    targetNodeOverlays: operationTemplate.targetNodeOverlays,
+    bonusObjectives: operationTemplate.bonusObjectives,
+    completionEffectSummary: operationTemplate.completionEffectSummary,
+    operationTags: operationTemplate.operationTags,
   };
 }
 
@@ -181,12 +217,7 @@ export function buildSectorState(
   operationProgress: Record<string, number>,
 ): SectorState {
   const template = getSectorWorldTemplate(sectorId);
-  const operationTemplate = resolveSectorOperationTemplate(
-    sectorId,
-    resolveSectorOperationIndex(sectorId, persisted),
-    persisted.deployRunIndex,
-    persisted.sectorOperationOverrides,
-  );
+  const operationTemplate = resolveOperationTemplateForSector(sectorId, persisted);
   const progressCurrent = operationProgress[operationTemplate.id] ?? 0;
   const rewardBoost = resolveRewardLevelBoost(sectorId, persisted);
 
@@ -209,7 +240,8 @@ export function buildAllSectorStates(
   persisted: WorldStatePersistedState,
   operationProgress: Record<string, number>,
 ): SectorState[] {
-  return SECTOR_WORLD_TEMPLATES.map((t) => buildSectorState(t.id, persisted, operationProgress));
+  const withAnchors = ensureAllSectorAnchorStates(persisted);
+  return SECTOR_WORLD_TEMPLATES.map((t) => buildSectorState(t.id, withAnchors, operationProgress));
 }
 
 export function buildRunGenerationContext(
@@ -229,6 +261,33 @@ export function buildRunGenerationContext(
   );
   const anchor = sectorState.activeAnchor;
 
+  const memory = {
+    ...createEmptyProceduralWorldMemory(),
+    ...persisted.proceduralWorldMemory,
+  };
+
+  const rawBrief = buildRunWorldBrief({
+    persisted: { ...persisted, proceduralWorldMemory: memory },
+    sectorState,
+    contractBoard: persisted.contractBoard.contracts,
+    selectedContractId: persisted.contractBoard.selectedContract.kind === 'SPONSOR'
+      ? persisted.contractBoard.selectedContract.contract?.id ?? null
+      : null,
+  });
+
+  const aftermathModifiers = getSectorAftermathModifiers(persisted, sectorState.id);
+  const directed = directRunWorldBrief(rawBrief, {
+    persisted,
+    sectorState,
+    contractBoard: persisted.contractBoard.contracts,
+    selectedContractId: persisted.contractBoard.selectedContract.kind === 'SPONSOR'
+      ? persisted.contractBoard.selectedContract.contract?.id ?? null
+      : null,
+    memory,
+    aftermathModifiers,
+  });
+  const runWorldBrief = directed.brief;
+
   const rewardModifiers = {
     creditBonusPct: employerPackage?.creditBonusPct ?? 0,
     rareLootBonusPct: (employerPackage?.rareLootBonusPct ?? 0)
@@ -237,18 +296,35 @@ export function buildRunGenerationContext(
     maxHpBonusPct: employerPackage?.maxHpBonusPct ?? 0,
   };
 
-  const encounterBias = {
-    combatWeightDelta: anchor?.realityRules.combatBias ?? 0,
-    eliteWeightDelta: anchor?.realityRules.eliteBias ?? 0,
-    anomalyWeightDelta: anchor?.realityRules.anomalyBias ?? 0,
-    echoWeightDelta: anchor?.realityRules.echoBias ?? 0,
-  };
-
+  const procInstance = getActiveAnchorInstance(persisted, persisted.selectedSectorId);
   const scannerSignalBias = buildScannerSignalBiasFromAnchor(anchor?.type ?? null, {
     hazardLevel: sectorState.hazardLevel,
     echoActivity: sectorState.echoActivity,
     anchorActive: anchor?.isActive ?? false,
+    proceduralScannerBias: runWorldBrief.scannerBias
+      ? {
+        anchorSignalMultiplier: runWorldBrief.scannerBias.anchorSignalMultiplier,
+        echoSignalMultiplier: runWorldBrief.scannerBias.echoSignalMultiplier,
+        operationSignalMultiplier: runWorldBrief.scannerBias.operationSignalMultiplier,
+        highRiskMultiplier: runWorldBrief.scannerBias.highRiskMultiplier,
+        highValueResourceMultiplier: runWorldBrief.scannerBias.highValueResourceMultiplier,
+        extractionUncertainty: runWorldBrief.scannerBias.overlayBias.extractionUncertainty,
+        scannerLabelDegradeChance: runWorldBrief.scannerBias.overlayBias.scannerLabelDegrade,
+      }
+      : procInstance
+        ? resolveAnchorScannerBias(procInstance.type, procInstance.modifier)
+        : undefined,
   });
+
+  const encounterBias = {
+    combatWeightDelta: (anchor?.realityRules.combatBias ?? 0)
+      + (runWorldBrief.threatProfile.unstablePressure > 50 ? 0.03 : 0),
+    eliteWeightDelta: (anchor?.realityRules.eliteBias ?? 0)
+      + (runWorldBrief.encounterBias.eliteWeight > 1 ? 0.05 : 0),
+    anomalyWeightDelta: anchor?.realityRules.anomalyBias ?? 0,
+    echoWeightDelta: (anchor?.realityRules.echoBias ?? 0)
+      + (runWorldBrief.threatProfile.echoPressure > 50 ? 0.05 : 0),
+  };
 
   return {
     sectorState,
@@ -259,6 +335,7 @@ export function buildRunGenerationContext(
     rewardModifiers,
     encounterBias,
     scannerSignalBias,
+    runWorldBrief,
   };
 }
 
@@ -280,7 +357,16 @@ export function runGenerationContextToModifiers(
 export function resolveOperationCompletionEffect(
   sectorId: SectorId,
   operation: OperationState,
+  persisted?: WorldStatePersistedState,
 ): OperationCompletionEffect {
+  const cached = persisted?.operationInstances?.[operation.id]?.completionEffect;
+  if (cached) return cached;
+
+  if (persisted) {
+    const template = resolveOperationTemplateForSector(sectorId, persisted);
+    if (template.completionEffect) return template.completionEffect;
+  }
+
   return resolveCompletionEffect(
     operation.objectiveKind,
     sectorId,
@@ -293,11 +379,16 @@ export function applyOperationCompletion(
   sectorId: SectorId,
   operation: OperationState,
 ): { next: WorldStatePersistedState; logLines: string[] } {
-  const effect = resolveOperationCompletionEffect(sectorId, operation);
+  const operationTemplate = resolveOperationTemplateForSector(sectorId, persisted);
+  const effect = resolveOperationCompletionEffect(sectorId, operation, persisted);
   const template = getSectorWorldTemplate(sectorId);
   const logLines = [
     `>> OPERATION COMPLETE — ${operation.title.toUpperCase()}`,
   ];
+
+  if (operationTemplate.completionEffectSummary) {
+    logLines.push(`>> ${operationTemplate.completionEffectSummary.toUpperCase()}`);
+  }
 
   let next: WorldStatePersistedState = {
     ...persisted,
@@ -312,7 +403,13 @@ export function applyOperationCompletion(
   };
 
   if (effect.deactivateAnchorForRuns && operation.linkedAnchorId) {
-    next.dormantAnchorRuns[operation.linkedAnchorId] = effect.deactivateAnchorForRuns;
+    next = suppressAnchorForSector(
+      next,
+      sectorId,
+      operation.linkedAnchorId,
+      effect.deactivateAnchorForRuns,
+      'operation-completion',
+    );
   }
 
   const effectLines = describeCompletionEffectLines(
@@ -352,18 +449,24 @@ export function applyOperationCompletion(
 
 export function tickTemporarySectorModifiers(
   persisted: WorldStatePersistedState,
+  sectorId?: SectorId,
 ): WorldStatePersistedState {
-  const temporarySectorModifiers = persisted.temporarySectorModifiers
+  const withAnchorTick = tickSectorAnchorDormancy(persisted);
+  const tickTarget = sectorId ?? persisted.selectedSectorId;
+  const withAftermath = tickSectorAftermathForSector(withAnchorTick, tickTarget);
+  const temporarySectorModifiers = withAftermath.temporarySectorModifiers
     .map((mod) => ({ ...mod, runsRemaining: mod.runsRemaining - 1 }))
     .filter((mod) => mod.runsRemaining > 0);
 
-  const dormantAnchorRuns = Object.fromEntries(
-    Object.entries(persisted.dormantAnchorRuns)
-      .map(([id, runs]) => [id, runs - 1] as const)
-      .filter(([, runs]) => runs > 0),
-  );
+  return { ...withAftermath, temporarySectorModifiers };
+}
 
-  return { ...persisted, temporarySectorModifiers, dormantAnchorRuns };
+/** Recently suppressed anchor for debrief — first dormant entry with runs remaining. */
+export function getSectorSuppressedAnchorBrief(
+  persisted: WorldStatePersistedState,
+  sectorId: SectorId,
+) {
+  return getRecentlySuppressedAnchor(persisted, sectorId);
 }
 
 export function refreshContractBoardAfterRun(
@@ -371,11 +474,34 @@ export function refreshContractBoardAfterRun(
 ): WorldStatePersistedState {
   const deployRunIndex = persisted.deployRunIndex + 1;
   const runSponsorId = getSelectedContractSponsorId(persisted.contractBoard.selectedContract);
-  return {
+  const nextPersisted: WorldStatePersistedState = {
     ...persisted,
     deployRunIndex,
+  };
+  const sector = buildSectorState(
+    nextPersisted.selectedSectorId,
+    nextPersisted,
+    nextPersisted.operationProgress,
+  );
+  const anchor = getActiveAnchorInstance(nextPersisted, sector.id);
+  const preliminary = buildPreliminaryRunWorldContext({
+    persisted: nextPersisted,
+    sectorState: sector,
+    operation: sector.activeOperation,
+    anchor,
+  });
+  const { contracts, memory } = buildContractBoardFromPersisted(nextPersisted, sector, {
+    crisisTheme: preliminary.crisisTheme,
+    resourceStress: preliminary.resourceStress,
+    threatProfile: preliminary.threatProfile,
+    contractBias: preliminary.contractBias,
+    sponsorInterest: preliminary.sponsorInterest,
+  });
+  return {
+    ...nextPersisted,
+    contractProceduralMemory: memory,
     contractBoard: {
-      contracts: generateContractBoard(deployRunIndex),
+      contracts,
       selectedContract: createIndependentSelectedContract(),
       boardRefreshRunIndex: deployRunIndex,
       lastUsedSponsorId: runSponsorId ?? persisted.contractBoard.lastUsedSponsorId ?? null,

@@ -152,8 +152,18 @@ function candidateTypesForNode(
   });
 
   let layerWeights = resolveLayerTypeWeights(depth, params);
+  const unstableWeight = params?.runGenerationContext?.runWorldBrief?.encounterBias.unstableCargoWeight ?? 1;
+  if (unstableWeight > 1) {
+    const boost = unstableWeight - 1;
+    layerWeights = layerWeights.map((entry) => {
+      if (entry.type === 'ANOMALY' || entry.type === 'RESOURCE') {
+        return { ...entry, weight: Math.max(1, Math.round(entry.weight * (1 + boost * 0.25))) };
+      }
+      return entry;
+    });
+  }
   if (cargo) {
-    layerWeights = applyCarriedCargoTypeWeightBias(layerWeights, cargo);
+    layerWeights = applyCarriedCargoTypeWeightBias(layerWeights, cargo, unstableWeight);
   }
 
   return layerWeights.filter((entry) => {

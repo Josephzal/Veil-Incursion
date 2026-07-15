@@ -244,12 +244,14 @@ export function resolveCargoHealReceivedMultiplier(
 export function buildCarriedCargoContextRollBias(
   cargo: CargoRunState,
   keepsakeRuntime?: KeepsakeRuntime | null,
+  unstableCargoWeight = 1,
 ): CarriedCargoContextRollBias {
   const agg = buildActiveCarriedCargoSnapshot(cargo, keepsakeRuntime).aggregated;
+  const unstableBonus = unstableCargoWeight > 1 ? (unstableCargoWeight - 1) * 0.18 : 0;
   return {
     anchorSignalChanceMultiplier: agg.anchorSignalMultiplier,
     highValueResourceChanceMultiplier: 1 + agg.rareLootBonusPct / 100,
-    highRiskRollBonus: agg.anomalyWeightDelta * 0.25,
+    highRiskRollBonus: agg.anomalyWeightDelta * 0.25 + unstableBonus,
     occultRewardChanceBonus: agg.occultRewardBonusPct / 100,
   };
 }
@@ -274,17 +276,23 @@ export function buildCarriedCargoTypeWeightBias(
 export function applyCarriedCargoTypeWeightBias(
   weights: ReadonlyArray<{ type: import('../types/proceduralRunTree').ProceduralNodeType; weight: number }>,
   cargo: CargoRunState,
+  unstableCargoWeight = 1,
 ): { type: import('../types/proceduralRunTree').ProceduralNodeType; weight: number }[] {
   const bias = buildCarriedCargoTypeWeightBias(cargo);
-  if (bias.eliteWeightDelta === 0 && bias.anomalyWeightDelta === 0) {
+  const unstableBoost = unstableCargoWeight > 1 ? unstableCargoWeight - 1 : 0;
+  if (bias.eliteWeightDelta === 0 && bias.anomalyWeightDelta === 0 && unstableBoost === 0) {
     return weights.map((entry) => ({ ...entry }));
   }
   return weights.map((entry) => {
     if (entry.type === 'ELITE' && bias.eliteWeightDelta > 0) {
       return { ...entry, weight: Math.max(1, Math.round(entry.weight * (1 + bias.eliteWeightDelta))) };
     }
-    if (entry.type === 'ANOMALY' && bias.anomalyWeightDelta > 0) {
-      return { ...entry, weight: Math.max(1, Math.round(entry.weight * (1 + bias.anomalyWeightDelta))) };
+    if (entry.type === 'ANOMALY' && (bias.anomalyWeightDelta > 0 || unstableBoost > 0)) {
+      const mult = 1 + bias.anomalyWeightDelta + unstableBoost * 0.35;
+      return { ...entry, weight: Math.max(1, Math.round(entry.weight * mult)) };
+    }
+    if (entry.type === 'RESOURCE' && unstableBoost > 0) {
+      return { ...entry, weight: Math.max(1, Math.round(entry.weight * (1 + unstableBoost * 0.2))) };
     }
     return { ...entry };
   });

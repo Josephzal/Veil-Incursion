@@ -47,6 +47,7 @@ export interface ProceduralEncounterPickContext {
   echoSignal?: boolean;
   operationKind?: OperationObjectiveKind | null;
   foreshadowBias?: boolean;
+  rivalMercWeightMultiplier?: number;
 }
 
 export interface ProceduralEncounterPickResult {
@@ -150,6 +151,7 @@ export function pickProceduralSynergySquad(
     ctx.squadTier,
     ctx.seed,
     ctx.lastEncounterOrigin,
+    ctx.rivalMercWeightMultiplier ?? 1,
   );
 
   const rand = seededRandom(

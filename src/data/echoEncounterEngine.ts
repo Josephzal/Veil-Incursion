@@ -15,6 +15,7 @@ import {
   resolveMaxEchoEncountersPerRun,
 } from './worldStateHelpers';
 import { getAnchorDefinition } from './anchorRegistry';
+import { applyBriefOverlayToRoll } from './runWorldBriefBiasEngine';
 import { pickEchoTemplateForNode } from './echoRecoveryEngine';
 import { buildEchoEncounterKindWeights, pickEchoEncounterKind } from './echoEncounterKindEngine';
 import { seededRandom } from './encounterGenerator';
@@ -85,6 +86,11 @@ export function resolveEchoSignalRollChance(
     if (anchorType === 'LEY_NEXUS') echoBase *= 1.35;
   } else if (nodeType === 'EXTRACTION') {
     echoBase *= 0.35;
+  }
+
+  const brief = runContext.runWorldBrief;
+  if (brief) {
+    echoBase = applyBriefOverlayToRoll(echoBase, 'echoSignal', brief.scannerBias);
   }
 
   return Math.min(0.85, echoBase);

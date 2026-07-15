@@ -49,3 +49,20 @@ export function filterDebriefCompletionEffectLines(logLines: string[]): string[]
     && !/OPERATION COMPLETE —/i.test(line),
   );
 }
+
+export function formatOperationBonusDebriefLines(
+  bonusObjectives: import('../types/operationProcedural').OperationBonusObjective[] | undefined,
+): string[] {
+  if (!bonusObjectives?.length) return [];
+  return bonusObjectives.map((bonus) => {
+    const status = bonus.completed ? 'COMPLETE' : 'INCOMPLETE';
+    const rewardBits: string[] = [];
+    if (bonus.reward.operationProgress) {
+      rewardBits.push(`+${bonus.reward.operationProgress} progress`);
+    }
+    if (bonus.reward.credits) rewardBits.push(`+${bonus.reward.credits} CR`);
+    if (bonus.reward.reputation) rewardBits.push(`+${bonus.reward.reputation} REP`);
+    const rewardSuffix = rewardBits.length > 0 ? ` (${rewardBits.join(', ')})` : '';
+    return `${status}: ${bonus.description}${rewardSuffix}`;
+  });
+}

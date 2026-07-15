@@ -5,6 +5,19 @@ import type {
 } from './contract';
 import type { FactionType } from './game';
 import type { VeilBiome } from './encounterSpawn';
+import type {
+  OperationBonusObjective,
+  OperationEnemyRole,
+  OperationProceduralMemory,
+  OperationSignalOverlay,
+} from './operationProcedural';
+import type { RunDepth } from './narrativeProcedural';
+import type { ResourceItemId } from './resourceItem';
+import type {
+  AnchorInstanceModifier,
+  AnchorPressureTag,
+  SectorAnchorState,
+} from './anchorProcedural';
 
 /** Reuse existing sector IDs from the regional map catalog. */
 export type SectorId =
@@ -53,9 +66,17 @@ export interface VeilAnchorState {
   sectorId: SectorId;
   type: VeilAnchorType;
   displayName: string;
+  /** Unmodified alias — procedural anchors only. */
+  baseDisplayName?: string;
   description: string;
   isActive: boolean;
   realityRules: AnchorRealityRules;
+  /** Procedural anchor v2 fields */
+  modifier?: AnchorInstanceModifier | null;
+  resourceBias?: ResourceItemId[];
+  operationBias?: OperationObjectiveKind[];
+  pressureTags?: AnchorPressureTag[];
+  pressureLevel?: number;
 }
 
 export interface OperationContributionRules {
@@ -110,6 +131,15 @@ export interface OperationState {
   generatedAtRunIndex: number;
   expiresAtRunIndex: number;
   rewardPreview: string;
+  /** Operations v2 procedural fields */
+  procedural?: boolean;
+  targetResourceIds?: ResourceItemId[];
+  targetDepths?: RunDepth[];
+  targetEnemyRoles?: OperationEnemyRole[];
+  targetNodeOverlays?: OperationSignalOverlay[];
+  bonusObjectives?: OperationBonusObjective[];
+  completionEffectSummary?: string;
+  operationTags?: string[];
 }
 
 export interface DepthStageModifiers {
@@ -170,6 +200,8 @@ export interface RunGenerationContext {
   rewardModifiers: RewardModifiers;
   encounterBias: EncounterBias;
   scannerSignalBias: ScannerSignalBias;
+  /** Unified procedural crisis context — RunWorldBrief v1. */
+  runWorldBrief?: import('./runWorldBrief').RunWorldBrief | null;
 }
 
 /** Computed per macro depth / node during generation or combat. */
@@ -264,6 +296,9 @@ export interface SectorOperationTemplateSnapshot {
   description: string;
   objectiveKind: OperationObjectiveKind;
   rewardEmphasis: RewardEmphasis;
+  progressRequired?: number;
+  contributionRules?: OperationContributionRules;
+  completionEffect?: OperationCompletionEffect;
 }
 
 export interface WorldStatePersistedState {
@@ -281,6 +316,22 @@ export interface WorldStatePersistedState {
   sectorOperationLifecycle: Partial<Record<SectorId, SectorOperationLifecycle>>;
   /** Dev-only forced operation templates — stripped before AsyncStorage persistence. */
   sectorOperationOverrides?: Partial<Record<SectorId, SectorOperationTemplateSnapshot>>;
+  /** Cached procedural operation instances keyed by operation id. */
+  operationInstances?: Record<string, import('./operationProcedural').StoredOperationInstance>;
+  /** Per-sector deduplication memory for procedural generation. */
+  operationProceduralMemory?: Partial<Record<SectorId, OperationProceduralMemory>>;
+  /** Per-sector deduplication memory for procedural contract generation. */
+  contractProceduralMemory?: import('./contractProcedural').ContractProceduralMemory;
+  /** Procedural anchor instances per sector — Anchors v2. */
+  anchorStateBySector?: Partial<Record<SectorId, SectorAnchorState>>;
+  /** Procedural world memory — crisis themes, brief ids, resource stress. */
+  proceduralWorldMemory?: import('./runWorldBrief').ProceduralWorldMemory;
+  /** Phase 5 — lightweight sector aftermath modifiers (1–3 runs). */
+  sectorAftermathModifiersBySector?: Partial<
+    Record<SectorId, import('./proceduralAftermath').SectorAftermathModifier[]>
+  >;
+  /** Idempotency guard for post-run aftermath generation. */
+  aftermathMeta?: import('./proceduralAftermath').WorldStateAftermathMeta;
   version: 2;
 }
 

@@ -9,8 +9,19 @@ import {
 } from './runDebriefResourceEngine';
 import type { UnstableCargoDebriefSummary } from './runDebriefUnstableCargoEngine';
 import { buildUnstableCargoDebriefSummary } from './runDebriefUnstableCargoEngine';
+import { buildRunAftermathInputFromIncursion } from './proceduralAftermathDebriefAdapter';
+import type { RunAftermathInput } from '../types/proceduralAftermath';
+import {
+  buildAftermathDebriefLines,
+  formatAftermathDebriefStrings,
+  generateAftermathFromRun,
+} from './proceduralAftermathEngine';
 import type { EchoDebriefSummary } from './runDebriefEchoEngine';
 import { buildEchoDebriefSummary } from './runDebriefEchoEngine';
+import type { RunWorldBriefDebriefSummary } from './runWorldBriefDebriefEngine';
+import {
+  buildRunWorldBriefDebriefSummary,
+} from './runWorldBriefDebriefEngine';
 import type { ExtractCargoRoutingDebriefSummary } from './runDebriefCargoRoutingEngine';
 import { buildExtractCargoRoutingDebriefSummary } from './runDebriefCargoRoutingEngine';
 import { buildKeepsakeDebriefSummary } from './runDebriefKeepsakeEngine';
@@ -51,7 +62,7 @@ import {
   OPERATION_CONTRIBUTION_VALUES,
   operationProgressPercent,
 } from './worldStateHelpers';
-import { computeTotalContributionThisRun } from '../utils/operationDebriefUi';
+import { computeTotalContributionThisRun, formatOperationBonusDebriefLines } from '../utils/operationDebriefUi';
 import { resolveContractExtractionKind } from './contractExtractionKind';
 
 function normalizeResourceLabel(label: string): string {
@@ -71,10 +82,13 @@ function resolveTargetResourceIds(targetNames: string[] | undefined): ResourceIt
 function countExtractedTargetResourceStacks(
   ledger: ActiveIncursionState['runResourceLedger'],
   targetNames: string[] | undefined,
+  targetIds?: ResourceItemId[],
 ): number {
-  const targetIds = resolveTargetResourceIds(targetNames);
-  if (targetIds.length === 0) return 0;
-  return targetIds.reduce((sum, id) => sum + (ledger.extracted[id] ?? 0), 0);
+  const resolvedIds = targetIds?.length
+    ? targetIds
+    : resolveTargetResourceIds(targetNames);
+  if (resolvedIds.length === 0) return 0;
+  return resolvedIds.reduce((sum, id) => sum + (ledger.extracted[id] ?? 0), 0);
 }
 
 export type RunDebriefOutcome = 'EXTRACTED' | 'FAILED';
@@ -133,6 +147,12 @@ export interface OperationDebriefPayload {
   encounterCompositionSummary: import('./runDebriefEncounterCompositionEngine').EncounterCompositionDebriefSummary | null;
   balanceTelemetry: RunBalanceTelemetry;
   craftingOpportunities: CraftingOpportunitySummary;
+  /** Operations v2 — bonus objective status at debrief time. */
+  operationBonusLines?: string[];
+  completionEffectSummary?: string;
+  worldBriefSummary: RunWorldBriefDebriefSummary | null;
+  /** Procedural aftermath v1 — inputs captured at debrief build time. */
+  aftermathInput: RunAftermathInput | null;
 }
 
 export function computeRunOperationContribution(
@@ -273,6 +293,7 @@ export function computeRunOperationContribution(
   const targetResourceStacks = countExtractedTargetResourceStacks(
     incursion.runResourceLedger,
     operation.rewardEmphasis.targetResources,
+    operation.targetResourceIds,
   );
   if (
     targetResourceStacks > 0
@@ -393,8 +414,24 @@ export function buildOperationDebriefPayload(
       newlyCraftable: [],
       nearlyCraftable: [],
       highlightResources: extractedResourceIds,
+      discoveryHints: [],
       note: null,
     };
+
+  const brief = incursion.runWorldBrief ?? context.runWorldBrief ?? null;
+  const aftermathInput = buildRunAftermathInputFromIncursion(incursion, {
+    extractedSuccessfully,
+    extractionKind,
+    progressDelta,
+    completed: opts.completed,
+    contractCompleted: contractResult.status === 'SUCCESS',
+  });
+  const aftermathPreview = aftermathInput
+    ? formatAftermathDebriefStrings(
+      buildAftermathDebriefLines(generateAftermathFromRun(aftermathInput)),
+    )
+    : [];
+  const worldBriefSummary = buildRunWorldBriefDebriefSummary(incursion, brief, aftermathPreview);
 
   return {
     runOutcome: extractedSuccessfully ? 'EXTRACTED' : 'FAILED',
@@ -436,5 +473,9 @@ export function buildOperationDebriefPayload(
     encounterCompositionSummary,
     balanceTelemetry,
     craftingOpportunities,
+    operationBonusLines: formatOperationBonusDebriefLines(context.activeOperation.bonusObjectives),
+    completionEffectSummary: context.activeOperation.completionEffectSummary,
+    worldBriefSummary,
+    aftermathInput,
   };
 }

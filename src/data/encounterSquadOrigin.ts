@@ -21,8 +21,14 @@ export function squadMatchesEncounterOrigin(
   squad: SynergySquadSpec,
   origin: EncounterOrigin,
 ): boolean {
-  const tag = resolveSquadEncounterOriginTag(squad);
-  return tag === 'ANY' || tag === origin;
+  const origins = new Set(
+    squad.roster
+      .map((unit) => getEnemyOrigin(unit.type))
+      .filter((unitOrigin): unitOrigin is EncounterOrigin => unitOrigin != null),
+  );
+  if (origins.size === 0) return origin === 'VEIL';
+  if (origins.size > 1) return false;
+  return origins.has(origin);
 }
 
 export function filterSquadsByEncounterOrigin<T extends SynergySquadSpec>(

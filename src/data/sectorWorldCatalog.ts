@@ -1,6 +1,15 @@
 import type { MapPoint, SectorMapGeometry } from '../types/regional';
 import type {
+  OperationBonusObjective,
+  OperationEnemyRole,
+  OperationSignalOverlay,
+} from '../types/operationProcedural';
+import type { RunDepth } from '../types/narrativeProcedural';
+import type { ResourceItemId } from '../types/resourceItem';
+import type {
   CabalEmployerId,
+  OperationCompletionEffect,
+  OperationContributionRules,
   OperationObjectiveKind,
   SectorId,
   VeilAnchorType,
@@ -22,6 +31,25 @@ export interface SectorOperationTemplate {
   description: string;
   objectiveKind: OperationObjectiveKind;
   rewardEmphasis: import('../types/worldState').RewardEmphasis;
+  /** Operations v2 — procedural instance fields (optional on static starters). */
+  procedural?: boolean;
+  generationSeed?: string;
+  operationIndex?: number;
+  createdAtRunIndex?: number;
+  targetAnchorType?: VeilAnchorType | null;
+  targetAnchorDisplayName?: string | null;
+  targetResourceIds?: ResourceItemId[];
+  targetDepths?: RunDepth[];
+  targetEnemyRoles?: OperationEnemyRole[];
+  targetNodeOverlays?: OperationSignalOverlay[];
+  progressRequired?: number;
+  contributionRules?: OperationContributionRules;
+  bonusObjectives?: OperationBonusObjective[];
+  completionEffect?: OperationCompletionEffect;
+  completionEffectSummary?: string;
+  operationTags?: string[];
+  titleHash?: string;
+  recentMemoryKey?: string;
 }
 
 export interface SectorWorldTemplate {

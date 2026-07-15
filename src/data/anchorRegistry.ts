@@ -1,3 +1,4 @@
+import type { AnchorScannerBias } from '../types/anchorProcedural';
 import type {
   AnchorRealityRules,
   OperationObjectiveKind,
@@ -234,6 +235,7 @@ export function buildScannerSignalBiasFromAnchor(
     hazardLevel: number;
     echoActivity: 'LOW' | 'ELEVATED' | 'CRITICAL';
     anchorActive: boolean;
+    proceduralScannerBias?: AnchorScannerBias;
   },
 ): ScannerSignalBias {
   const def = anchorType ? ANCHOR_REGISTRY[anchorType] : null;
@@ -253,10 +255,16 @@ export function buildScannerSignalBiasFromAnchor(
     };
   }
 
+  const proc = opts.proceduralScannerBias;
+  const anchorMult = proc?.anchorSignalMultiplier ?? def.scannerSignalBias.anchorSignalMultiplier;
+  const echoMult = proc?.echoSignalMultiplier ?? def.scannerSignalBias.echoSignalMultiplier;
+  const opMult = proc?.operationSignalMultiplier ?? def.scannerSignalBias.operationSignalMultiplier;
+  const riskMult = proc?.highRiskMultiplier ?? def.scannerSignalBias.highRiskMultiplier;
+
   return {
-    anchorSignalMultiplier: def.scannerSignalBias.anchorSignalMultiplier * hazardScale,
-    echoSignalMultiplier: def.scannerSignalBias.echoSignalMultiplier * echoBase,
-    operationSignalMultiplier: def.scannerSignalBias.operationSignalMultiplier,
-    highRiskMultiplier: def.scannerSignalBias.highRiskMultiplier * (1 + opts.hazardLevel * 0.08),
+    anchorSignalMultiplier: anchorMult * hazardScale,
+    echoSignalMultiplier: echoMult * echoBase,
+    operationSignalMultiplier: opMult,
+    highRiskMultiplier: riskMult * (1 + opts.hazardLevel * 0.08),
   };
 }

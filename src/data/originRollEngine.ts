@@ -10,9 +10,10 @@ export function rollEncounterOrigin(
   tier: EncounterSquadTier,
   seed: string,
   lastOrigin?: EncounterOrigin | null,
+  rivalMercWeightMultiplier = 1,
 ): EncounterOrigin {
   const base = ORIGIN_WEIGHTS[depth][tier];
-  let rivalWeight = base.RIVAL_MERC;
+  let rivalWeight = base.RIVAL_MERC * Math.max(0, rivalMercWeightMultiplier);
   if (lastOrigin === 'RIVAL_MERC') {
     rivalWeight *= RIVAL_STREAK_DAMPING;
   }
@@ -25,9 +26,10 @@ export function originRollPreview(
   depth: 1 | 2 | 3,
   tier: EncounterSquadTier,
   lastOrigin?: EncounterOrigin | null,
+  rivalMercWeightMultiplier = 1,
 ): { rivalPct: number; veilPct: number } {
   const base = ORIGIN_WEIGHTS[depth][tier];
-  let rivalWeight = base.RIVAL_MERC;
+  let rivalWeight = base.RIVAL_MERC * Math.max(0, rivalMercWeightMultiplier);
   if (lastOrigin === 'RIVAL_MERC') {
     rivalWeight *= RIVAL_STREAK_DAMPING;
   }

@@ -165,4 +165,8 @@ export interface DepthIdentityRollContext {
   echoActivity: EchoActivityLevel | null;
   resourceFocus: readonly string[];
   seed: string;
+  anchorDistortionBias?: Partial<Record<VeilDistortionId, number>>;
+  anchorLawBias?: Partial<Record<DeepVeilLawId, number>>;
+  briefDistortionBias?: Partial<Record<VeilDistortionId, number>>;
+  briefLawBias?: Partial<Record<DeepVeilLawId, number>>;
 }

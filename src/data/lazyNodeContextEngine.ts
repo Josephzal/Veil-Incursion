@@ -97,7 +97,11 @@ export function ensureNodeContextModifiersAtEngagement(
     echoSignalsByDepth: { ...tree.modifierRollState!.echoSignalsByDepth },
   };
   const rng = createNodeContextRng(tree.rollSeed!, nodeId);
-  const cargoBias = buildCarriedCargoContextRollBias(cargo);
+  const cargoBias = buildCarriedCargoContextRollBias(
+    cargo,
+    undefined,
+    runContext?.runWorldBrief?.encounterBias.unstableCargoWeight ?? 1,
+  );
   const depthIndex = tree.macroDepthIndex ?? 1;
   const identityBefore = normalizeDepthIdentityState(depthIdentity);
 

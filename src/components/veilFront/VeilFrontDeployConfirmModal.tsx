@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Modal, ScrollView, StyleSheet, View } from 'react-native';
 import HapticPressable from '../HapticPressable';
 import OperativeIdentityDossier from '../hub/OperativeIdentityDossier';
@@ -18,6 +18,9 @@ import {
 } from '../../utils/contractUi';
 import { hazardLabel, formatCargoRoutingBriefingIntel, formatEchoBriefingIntel, formatOperationContributesForObjective, formatOperationLifecycleStatus, operationLifecycleAccentColor } from '../../utils/veilFrontSectorUi';
 import { describeEmployerPerks } from '../../utils/employerContractUi';
+import { useWorldState } from '../../context/WorldStateContext';
+import { getActiveAnchorInstance } from '../../data/anchorLifecycleEngine';
+import { buildPreliminaryRunWorldContext } from '../../data/runWorldBriefEngine';
 
 interface VeilFrontDeployConfirmModalProps {
   visible: boolean;
@@ -69,6 +72,16 @@ export default function VeilFrontDeployConfirmModal({
   onAbort,
 }: VeilFrontDeployConfirmModalProps): React.JSX.Element {
   const { scaleSpacing, scaleSize } = useHubLayout();
+  const { persisted } = useWorldState();
+  const crisisPreview = useMemo(() => {
+    const anchor = getActiveAnchorInstance(persisted, sector.id);
+    return buildPreliminaryRunWorldContext({
+      persisted,
+      sectorState: sector,
+      operation: sector.activeOperation,
+      anchor,
+    });
+  }, [persisted, sector]);
   const rewardFocus = sector.resourceFocus.slice(0, 2).join(' / ');
   const sectorWarning = contractSectorWarning(sectorCompatibility);
   const isSponsor = selectedContract.kind === 'SPONSOR';
@@ -137,6 +150,18 @@ export default function VeilFrontDeployConfirmModal({
             <View style={{ marginTop: scaleSpacing(16) }}>
               <SectionFrame title="Deployment Summary" accentColor={theme.statusColor}>
                 <SummaryRow label="Sector" value={sector.displayName} mutedColor={theme.mutedColor} textColor={theme.textColor} />
+                <SummaryRow
+                  label="Crisis"
+                  value={crisisPreview.crisisDisplayName}
+                  mutedColor={theme.mutedColor}
+                  textColor={theme.statusColor}
+                />
+                <SummaryRow
+                  label="Crisis Cause"
+                  value={sector.activeAnchor?.displayName ?? 'Sector instability'}
+                  mutedColor={theme.mutedColor}
+                  textColor={theme.textColor}
+                />
                 <SummaryRow
                   label="Contract"
                   value={isSponsor ? contract!.title : 'Independent Breach'}

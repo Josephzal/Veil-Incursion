@@ -7,7 +7,7 @@ import {
   DEFAULT_OPERATION_AFTERMATH_RUNS,
   DEFAULT_OPERATION_MAX_RUNS,
 } from './worldStateHelpers';
-import { resolveSectorOperationTemplate } from './operationGenerator';
+import { resolveAndCacheSectorOperation, resolveSectorOperationTemplate } from './operationGenerator';
 import { getSectorWorldTemplate, SECTOR_WORLD_TEMPLATES } from './sectorWorldCatalog';
 
 function resolveSectorOperationIndex(
@@ -97,10 +97,11 @@ function rotateSectorOperation(
 ): OperationRotationResult {
   const currentIndex = persisted.activeOperationIndex[sectorId] ?? 0;
   const nextIndex = currentIndex + 1;
-  const nextTemplate = resolveSectorOperationTemplate(
+  const { template: nextTemplate, persisted: withCache } = resolveAndCacheSectorOperation(
     sectorId,
     nextIndex,
     persisted.deployRunIndex,
+    persisted,
     persisted.sectorOperationOverrides,
   );
   const sectorName = getSectorWorldTemplate(sectorId).displayName;
@@ -119,21 +120,21 @@ function rotateSectorOperation(
     nextOperationTitle: nextTemplate.title,
     logLines,
     next: {
-      ...persisted,
-      sectorOperationOverrides: clearSectorOperationOverride(persisted, sectorId),
+      ...withCache,
+      sectorOperationOverrides: clearSectorOperationOverride(withCache, sectorId),
       activeOperationIndex: {
-        ...persisted.activeOperationIndex,
+        ...withCache.activeOperationIndex,
         [sectorId]: nextIndex,
       },
       operationProgress: {
-        ...persisted.operationProgress,
+        ...withCache.operationProgress,
         [nextTemplate.id]: 0,
       },
       sectorOperationLifecycle: {
-        ...persisted.sectorOperationLifecycle,
+        ...withCache.sectorOperationLifecycle,
         [sectorId]: nextLifecycle,
       },
-      operationLog: [...logLines, ...persisted.operationLog].slice(0, 24),
+      operationLog: [...logLines, ...withCache.operationLog].slice(0, 24),
     },
   };
 }
@@ -254,6 +255,7 @@ export function tickAllSectorOperationLifecycles(
       operationIndex,
       next.deployRunIndex,
       next.sectorOperationOverrides,
+      { seedRunIndex: next.sectorOperationLifecycle[sector.id]?.generatedAtRunIndex, persisted: next },
     );
     const result = tickSectorOperationLifecycleAfterRun(next, sector.id, template.id);
     next = result.next;

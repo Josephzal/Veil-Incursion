@@ -24,6 +24,7 @@ export interface EncounterModifierRollInput {
   pendingUnstablePressure?: boolean;
   rng: () => number;
   forcedId?: EncounterModifierId | null;
+  briefEncounterBias?: Partial<Record<EncounterModifierId, number>>;
 }
 
 function isEligible(
@@ -59,6 +60,9 @@ function weightForModifier(id: EncounterModifierId, input: EncounterModifierRoll
   }
   if (depthHardBlock(id, input.depthIndex)) {
     return 0;
+  }
+  if (input.briefEncounterBias?.[id]) {
+    return Math.max(0, weight * input.briefEncounterBias[id]!);
   }
   return Math.max(0, weight);
 }

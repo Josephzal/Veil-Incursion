@@ -20,6 +20,7 @@ import {
 } from '../data/worldStateEngine';
 import { tickAllSectorOperationLifecycles, normalizeSectorOperationLifecycle } from '../data/operationLifecycleEngine';
 import { generateContractBoard } from '../data/contractGenerator';
+import { createEmptyContractMemory } from '../data/contractProceduralEngine';
 import {
   devClearAnchorDormant,
   devForceOperationCompletion as devForceOperationCompletionState,
@@ -30,6 +31,55 @@ import {
   formatWorldStateDebugSnapshot,
   stripDevFieldsForPersistence,
 } from '../data/worldStateDebugEngine';
+import {
+  devGenerate20SectorOperations,
+  devGenerateSectorOperation,
+  formatOperationProceduralReport,
+} from '../data/operationProceduralDebugEngine';
+import {
+  devSimulate20ContractBoards,
+  formatContractProceduralReport,
+} from '../data/contractProceduralDebugEngine';
+import {
+  buildAllSectorsForAnchorReport,
+  devGenerateAnchorInstance,
+  devForceAnchorRotation,
+  devPrintSectorAnchorMemory,
+  devSimulateAllSectorAnchorRotations,
+  devSuppressCurrentAnchor,
+  formatAnchorProceduralReport,
+} from '../data/anchorProceduralDebugEngine';
+import {
+  devGenerateRunWorldBriefReport as buildDevRunWorldBriefReport,
+  devSimulateAllSectorBriefs,
+  devForceCrisisThemeBrief,
+  devSimulateRunWorldBriefs,
+  formatRunWorldBriefProceduralReport,
+} from '../data/runWorldBriefDebugEngine';
+import { ensureAllSectorAnchorStates } from '../data/anchorLifecycleEngine';
+import {
+  createEmptyProceduralWorldMemory,
+} from '../types/runWorldBrief';
+import { recordBriefInMemory } from '../data/runWorldBriefEngine';
+import { recordOperationKindInMemory } from '../data/proceduralDirectorRepeatEngine';
+import {
+  applyAftermathFromRun,
+  buildAftermathDebriefLines,
+  expireAllSectorAftermath,
+  formatAftermathDebriefStrings,
+} from '../data/proceduralDirectorAftermathEngine';
+import type { RunAftermathInput } from '../types/proceduralAftermath';
+import {
+  devExpireAllAftermathReport,
+  devProceduralMemoryReport,
+  devRunProceduralDirectorReport,
+  devSimulateDirectedBriefs,
+} from '../data/proceduralDirectorDebugEngine';
+import {
+  devAftermathValidationReport,
+  devSimulate10RunAftermathCycle,
+  devSimulateAftermathCreation,
+} from '../data/proceduralAftermathDebugEngine';
 import {
   logWorldStateValidationWarnings,
 } from '../data/worldStateValidation';
@@ -91,6 +141,7 @@ interface WorldStateContextType {
   buildRunContextForDescent: () => {
     runGenerationContext: RunGenerationContext;
     runModifiers: RunModifierSnapshot;
+    runWorldBrief: import('../types/runWorldBrief').RunWorldBrief | null;
   };
   applyOperationContribution: (
     operationId: string,
@@ -106,6 +157,30 @@ interface WorldStateContextType {
   devForceRoutingTestContract: (kind: 'RECOVER_ECONOMY_INTEL' | 'RECOVER_CONTRABAND') => void;
   devGetValidationReport: () => string;
   devGetDebugSnapshot: () => string;
+  devGenerateSectorOperation: () => string;
+  devGenerate20Operations: () => string;
+  devGetOperationProceduralReport: () => string;
+  devGetContractProceduralReport: () => string;
+  devSimulate20ContractBoards: () => string;
+  devGetAnchorProceduralReport: () => string;
+  devGenerateAnchorInstance: () => string;
+  devSimulateAnchorRotations: () => string;
+  devForceAnchorRotation: () => void;
+  devSuppressAnchor: () => void;
+  devPrintAnchorMemory: () => string;
+  devGetRunWorldBriefReport: () => string;
+  devGenerateRunWorldBrief: () => string;
+  devSimulateRunWorldBriefs: (count?: number) => string;
+  devSimulateAllSectorBriefs: () => string;
+  devForceCrisisThemeBrief: (theme: import('../types/runWorldBrief').CrisisTheme) => string;
+  devRunProceduralDirectorReport: () => string;
+  devSimulateDirectedBriefs: (count?: number) => string;
+  devSimulateAftermathCreation: () => string;
+  devSimulate10RunAftermathCycle: () => string;
+  devAftermathValidationReport: () => string;
+  devExpireAllAftermath: () => string;
+  devProceduralMemoryReport: () => string;
+  applyPostRunAftermath: (input: RunAftermathInput) => string[];
 }
 
 const WorldStateContext = createContext<WorldStateContextType | undefined>(undefined);
@@ -148,10 +223,55 @@ function mergePersistedState(parsed: Partial<WorldStatePersistedState> & { selec
     temporarySectorModifiers: parsed.temporarySectorModifiers ?? defaults.temporarySectorModifiers,
     dormantAnchorRuns: { ...defaults.dormantAnchorRuns, ...parsed.dormantAnchorRuns },
     sectorOperationLifecycle,
+    operationInstances: { ...defaults.operationInstances, ...parsed.operationInstances },
+    operationProceduralMemory: {
+      ...defaults.operationProceduralMemory,
+      ...parsed.operationProceduralMemory,
+    },
+    contractProceduralMemory: {
+      ...createEmptyContractMemory(),
+      ...defaults.contractProceduralMemory,
+      ...parsed.contractProceduralMemory,
+      recentContractKindsBySponsor: {
+        ...createEmptyContractMemory().recentContractKindsBySponsor,
+        ...defaults.contractProceduralMemory?.recentContractKindsBySponsor,
+        ...parsed.contractProceduralMemory?.recentContractKindsBySponsor,
+      },
+      recentContractTitleHashesBySponsor: {
+        ...createEmptyContractMemory().recentContractTitleHashesBySponsor,
+        ...defaults.contractProceduralMemory?.recentContractTitleHashesBySponsor,
+        ...parsed.contractProceduralMemory?.recentContractTitleHashesBySponsor,
+      },
+      recentContractResourceIdsBySponsor: {
+        ...createEmptyContractMemory().recentContractResourceIdsBySponsor,
+        ...defaults.contractProceduralMemory?.recentContractResourceIdsBySponsor,
+        ...parsed.contractProceduralMemory?.recentContractResourceIdsBySponsor,
+      },
+      recentBoardMemoryKeys: parsed.contractProceduralMemory?.recentBoardMemoryKeys
+        ?? defaults.contractProceduralMemory?.recentBoardMemoryKeys
+        ?? [],
+    },
     operationLog: parsed.operationLog ?? defaults.operationLog,
+    anchorStateBySector: {
+      ...defaults.anchorStateBySector,
+      ...parsed.anchorStateBySector,
+    },
+    proceduralWorldMemory: {
+      ...createEmptyProceduralWorldMemory(),
+      ...defaults.proceduralWorldMemory,
+      ...parsed.proceduralWorldMemory,
+    },
+    sectorAftermathModifiersBySector: {
+      ...defaults.sectorAftermathModifiersBySector,
+      ...parsed.sectorAftermathModifiersBySector,
+    },
+    aftermathMeta: {
+      ...defaults.aftermathMeta,
+      ...parsed.aftermathMeta,
+    },
     version: 2,
   };
-  return migrateWorldStateSectorKeys(merged);
+  return ensureAllSectorAnchorStates(migrateWorldStateSectorKeys(merged));
 }
 
 export function WorldStateProvider({ children }: { children: React.ReactNode }) {
@@ -263,9 +383,26 @@ export function WorldStateProvider({ children }: { children: React.ReactNode }) 
 
   const buildRunContextForDescent = useCallback(() => {
     const context = buildRunGenerationContext(persisted, operationProgress);
+    if (context.runWorldBrief) {
+      setPersisted((prev) => ({
+        ...prev,
+        proceduralWorldMemory: recordOperationKindInMemory(
+          recordBriefInMemory(
+            {
+              ...createEmptyProceduralWorldMemory(),
+              ...prev.proceduralWorldMemory,
+            },
+            context.runWorldBrief!,
+          ),
+          context.sectorState.id,
+          context.activeOperation.objectiveKind,
+        ),
+      }));
+    }
     return {
       runGenerationContext: context,
       runModifiers: runGenerationContextToModifiers(context),
+      runWorldBrief: context.runWorldBrief ?? null,
     };
   }, [persisted, operationProgress]);
 
@@ -330,7 +467,8 @@ export function WorldStateProvider({ children }: { children: React.ReactNode }) 
 
   const tickAfterRunComplete = useCallback(() => {
     setPersisted((prev) => {
-      const afterModifiers = tickTemporarySectorModifiers(prev);
+      const sectorId = prev.selectedSectorId;
+      const afterModifiers = tickTemporarySectorModifiers(prev, sectorId);
       const { next: afterLifecycle } = tickAllSectorOperationLifecycles(afterModifiers);
       return refreshContractBoardAfterRun(afterLifecycle);
     });
@@ -393,6 +531,122 @@ export function WorldStateProvider({ children }: { children: React.ReactNode }) 
     return formatWorldStateDebugSnapshot(persisted, sectors);
   }, [persisted, sectors]);
 
+  const devGenerateSectorOperationReport = useCallback(() => {
+    if (typeof __DEV__ === 'undefined' || !__DEV__) return '';
+    const result = devGenerateSectorOperation(persisted, selectedSector.id);
+    setPersisted(result.persisted);
+    setOperationProgress({});
+    localProgressRef.current.hydrate({});
+    return result.report;
+  }, [persisted, selectedSector.id]);
+
+  const devGenerate20OperationsReport = useCallback(() => {
+    if (typeof __DEV__ === 'undefined' || !__DEV__) return '';
+    return devGenerate20SectorOperations(persisted, selectedSector.id);
+  }, [persisted, selectedSector.id]);
+
+  const devGetOperationProceduralReport = useCallback(() => {
+    return formatOperationProceduralReport(persisted, sectors);
+  }, [persisted, sectors]);
+
+  const devGetContractProceduralReport = useCallback(() => {
+    return formatContractProceduralReport(persisted, sectors);
+  }, [persisted, sectors]);
+
+  const devSimulate20ContractBoardsReport = useCallback(() => {
+    return devSimulate20ContractBoards(persisted, selectedSector.id, selectedSector);
+  }, [persisted, selectedSector]);
+
+  const devGetAnchorProceduralReport = useCallback(() => {
+    const anchorSectors = buildAllSectorsForAnchorReport(persisted);
+    return formatAnchorProceduralReport(persisted, anchorSectors);
+  }, [persisted]);
+
+  const devGenerateAnchorInstanceCallback = useCallback(() => {
+    if (typeof __DEV__ === 'undefined' || !__DEV__) return '';
+    return devGenerateAnchorInstance(persisted, selectedSector.id);
+  }, [persisted, selectedSector.id]);
+
+  const devSimulateAnchorRotationsReport = useCallback(() => {
+    if (typeof __DEV__ === 'undefined' || !__DEV__) return '';
+    return devSimulateAllSectorAnchorRotations(persisted, 10);
+  }, [persisted]);
+
+  const devForceAnchorRotationAction = useCallback(() => {
+    if (typeof __DEV__ === 'undefined' || !__DEV__) return;
+    setPersisted((prev) => devForceAnchorRotation(prev, selectedSector.id));
+  }, [selectedSector.id]);
+
+  const devSuppressAnchorAction = useCallback(() => {
+    if (typeof __DEV__ === 'undefined' || !__DEV__) return;
+    setPersisted((prev) => devSuppressCurrentAnchor(prev, selectedSector.id, 3));
+  }, [selectedSector.id]);
+
+  const devPrintAnchorMemoryReport = useCallback(() => {
+    return devPrintSectorAnchorMemory(persisted, selectedSector.id);
+  }, [persisted, selectedSector.id]);
+
+  const devGetRunWorldBriefReport = useCallback(() => {
+    return formatRunWorldBriefProceduralReport(persisted, sectors);
+  }, [persisted, sectors]);
+
+  const devGenerateRunWorldBriefCallback = useCallback(() => {
+    return buildDevRunWorldBriefReport(persisted, selectedSector.id, operationProgress);
+  }, [persisted, selectedSector.id, operationProgress]);
+
+  const devSimulateRunWorldBriefsReport = useCallback((count = 20) => {
+    return devSimulateRunWorldBriefs(persisted, selectedSector.id, count);
+  }, [persisted, selectedSector.id]);
+
+  const devSimulateAllSectorBriefsReport = useCallback(() => {
+    return devSimulateAllSectorBriefs(persisted);
+  }, [persisted]);
+
+  const devForceCrisisThemeBriefReport = useCallback((theme: import('../types/runWorldBrief').CrisisTheme) => {
+    return devForceCrisisThemeBrief(persisted, selectedSector.id, theme, operationProgress);
+  }, [persisted, selectedSector.id, operationProgress]);
+
+  const devRunProceduralDirectorReportCallback = useCallback(() => {
+    return devRunProceduralDirectorReport(persisted, selectedSector.id, operationProgress);
+  }, [persisted, selectedSector.id, operationProgress]);
+
+  const devSimulateDirectedBriefsReport = useCallback((count = 100) => {
+    return devSimulateDirectedBriefs(persisted, selectedSector.id, count);
+  }, [persisted, selectedSector.id]);
+
+  const devSimulateAftermathCreationReport = useCallback(() => {
+    const result = devSimulateAftermathCreation(persisted, selectedSector.id);
+    setPersisted(result.persisted);
+    return result.report;
+  }, [persisted, selectedSector.id]);
+
+  const devSimulate10RunAftermathCycleReport = useCallback(() => {
+    return devSimulate10RunAftermathCycle(persisted, selectedSector.id);
+  }, [persisted, selectedSector.id]);
+
+  const devAftermathValidationReportCallback = useCallback(() => {
+    return devAftermathValidationReport(persisted);
+  }, [persisted]);
+
+  const devExpireAllAftermathCallback = useCallback(() => {
+    setPersisted((prev) => expireAllSectorAftermath(prev));
+    return devExpireAllAftermathReport(persisted);
+  }, [persisted]);
+
+  const devProceduralMemoryReportCallback = useCallback(() => {
+    return devProceduralMemoryReport(persisted, sectors);
+  }, [persisted, sectors]);
+
+  const applyPostRunAftermath = useCallback((input: RunAftermathInput): string[] => {
+    let lines: string[] = [];
+    setPersisted((prev) => {
+      const { persisted: next, result } = applyAftermathFromRun(prev, input);
+      lines = formatAftermathDebriefStrings(buildAftermathDebriefLines(result));
+      return next;
+    });
+    return lines;
+  }, []);
+
   const value = useMemo(
     () => ({
       persisted,
@@ -421,6 +675,30 @@ export function WorldStateProvider({ children }: { children: React.ReactNode }) 
       devForceRoutingTestContract,
       devGetValidationReport,
       devGetDebugSnapshot,
+      devGenerateSectorOperation: devGenerateSectorOperationReport,
+      devGenerate20Operations: devGenerate20OperationsReport,
+      devGetOperationProceduralReport,
+      devGetContractProceduralReport,
+      devSimulate20ContractBoards: devSimulate20ContractBoardsReport,
+      devGetAnchorProceduralReport,
+      devGenerateAnchorInstance: devGenerateAnchorInstanceCallback,
+      devSimulateAnchorRotations: devSimulateAnchorRotationsReport,
+      devForceAnchorRotation: devForceAnchorRotationAction,
+      devSuppressAnchor: devSuppressAnchorAction,
+      devPrintAnchorMemory: devPrintAnchorMemoryReport,
+      devGetRunWorldBriefReport,
+      devGenerateRunWorldBrief: devGenerateRunWorldBriefCallback,
+      devSimulateRunWorldBriefs: devSimulateRunWorldBriefsReport,
+      devSimulateAllSectorBriefs: devSimulateAllSectorBriefsReport,
+      devForceCrisisThemeBrief: devForceCrisisThemeBriefReport,
+      devRunProceduralDirectorReport: devRunProceduralDirectorReportCallback,
+      devSimulateDirectedBriefs: devSimulateDirectedBriefsReport,
+      devSimulateAftermathCreation: devSimulateAftermathCreationReport,
+      devSimulate10RunAftermathCycle: devSimulate10RunAftermathCycleReport,
+      devAftermathValidationReport: devAftermathValidationReportCallback,
+      devExpireAllAftermath: devExpireAllAftermathCallback,
+      devProceduralMemoryReport: devProceduralMemoryReportCallback,
+      applyPostRunAftermath,
     }),
     [
       persisted,
@@ -448,6 +726,30 @@ export function WorldStateProvider({ children }: { children: React.ReactNode }) 
       devForceRoutingTestContract,
       devGetValidationReport,
       devGetDebugSnapshot,
+      devGenerateSectorOperationReport,
+      devGenerate20OperationsReport,
+      devGetOperationProceduralReport,
+      devGetContractProceduralReport,
+      devSimulate20ContractBoardsReport,
+      devGetAnchorProceduralReport,
+      devGenerateAnchorInstanceCallback,
+      devSimulateAnchorRotationsReport,
+      devForceAnchorRotationAction,
+      devSuppressAnchorAction,
+      devPrintAnchorMemoryReport,
+      devGetRunWorldBriefReport,
+      devGenerateRunWorldBriefCallback,
+      devSimulateRunWorldBriefsReport,
+      devSimulateAllSectorBriefsReport,
+      devForceCrisisThemeBriefReport,
+      devRunProceduralDirectorReportCallback,
+      devSimulateDirectedBriefsReport,
+      devSimulateAftermathCreationReport,
+      devSimulate10RunAftermathCycleReport,
+      devAftermathValidationReportCallback,
+      devExpireAllAftermathCallback,
+      devProceduralMemoryReportCallback,
+      applyPostRunAftermath,
     ],
   );
 

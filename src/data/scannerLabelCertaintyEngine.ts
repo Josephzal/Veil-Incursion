@@ -1,5 +1,6 @@
 import type { ProceduralNodeType, ProceduralRunNode, ProceduralRunTree } from '../types/proceduralRunTree';
 import type { DepthIdentityScanBias } from '../types/depthIdentity';
+import type { RunScannerOverlayBias } from '../types/runWorldBrief';
 import type { NodeContextModifiers } from '../types/worldState';
 import type { RunNodeType } from '../types/game';
 import {
@@ -43,10 +44,17 @@ function proceduralTypeToRunType(type: ProceduralNodeType): RunNodeType {
 export function resolveScannerLabelDegradeChance(
   depthIndex: 1 | 2 | 3,
   bias?: DepthIdentityScanBias | null,
+  briefOverlay?: RunScannerOverlayBias | null,
+  nodeType?: ProceduralNodeType,
 ): number {
   const base = SCANNER_LABEL_BASE_DEGRADE_CHANCE[depthIndex];
   const identity = bias?.scannerLabelDegradeChance ?? 0;
-  return Math.min(SCANNER_LABEL_DEGRADE_CHANCE_CAP, base + identity);
+  let extra = briefOverlay?.scannerLabelDegrade ?? 0;
+  if (nodeType === 'EXTRACTION' && briefOverlay) {
+    extra += (briefOverlay.extractionUncertainty ?? 0)
+      + Math.max(0, (briefOverlay.extraction ?? 1) - 1) * 0.12;
+  }
+  return Math.min(SCANNER_LABEL_DEGRADE_CHANCE_CAP, base + identity + extra);
 }
 
 function hashLabelSeed(treeSeed: number, depth: number, nodeId: string): number {
@@ -76,12 +84,13 @@ export function rollScannerLabelOverlay(
   depthIndex: 1 | 2 | 3,
   rng: () => number,
   bias?: DepthIdentityScanBias | null,
+  briefOverlay?: RunScannerOverlayBias | null,
 ): ScannerLabelOverlay {
   if ((SCANNER_LABEL_IMMUNE_TYPES as readonly string[]).includes(trueType)) {
     return makeReliableScannerLabel(trueType);
   }
 
-  const chance = resolveScannerLabelDegradeChance(depthIndex, bias);
+  const chance = resolveScannerLabelDegradeChance(depthIndex, bias, briefOverlay, trueType);
   if (rng() >= chance) {
     return makeReliableScannerLabel(trueType);
   }
@@ -161,6 +170,7 @@ export function assignScannerLabelOverlaysForDepth(
   params: {
     depthIndex?: 1 | 2 | 3;
     depthIdentityBias?: DepthIdentityScanBias | null;
+    briefScannerOverlay?: RunScannerOverlayBias | null;
   },
 ): ProceduralRunTree {
   if (tree.rollSeed == null) return tree;
@@ -182,6 +192,7 @@ export function assignScannerLabelOverlaysForDepth(
       depthIndex,
       rng,
       params.depthIdentityBias,
+      params.briefScannerOverlay,
     );
     nodes[nodeId] = { ...node, scannerLabelOverlay: overlay };
     changed = true;

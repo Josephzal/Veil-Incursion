@@ -12,6 +12,7 @@ import {
   getVeilDistortionDefinition,
   VEIL_DISTORTION_DEFINITIONS,
 } from './depthIdentityCatalog';
+import { ANCHOR_TYPE_DEPTH2_BIAS, ANCHOR_TYPE_DEPTH3_BIAS } from './anchorTypeMetadata';
 
 function hashSeed(input: string): number {
   let hash = 0;
@@ -39,6 +40,14 @@ function weightForDistortion(id: VeilDistortionId, ctx: DepthIdentityRollContext
   if (ctx.anchorType && def.favoredAnchors.includes(ctx.anchorType)) {
     weight += 14;
   }
+  if (ctx.anchorDistortionBias?.[id]) {
+    weight += ctx.anchorDistortionBias[id]!;
+  } else if (ctx.anchorType && ANCHOR_TYPE_DEPTH2_BIAS[ctx.anchorType]?.[id]) {
+    weight += ANCHOR_TYPE_DEPTH2_BIAS[ctx.anchorType][id]!;
+  }
+  if (ctx.briefDistortionBias?.[id]) {
+    weight += ctx.briefDistortionBias[id]!;
+  }
   if (ctx.operationKind && def.favoredOperations.includes(ctx.operationKind)) {
     weight += 10;
   }
@@ -61,13 +70,19 @@ export function buildDepthIdentityRollContext(
   veilBiome: VeilBiome | null | undefined,
   seed: string,
 ): DepthIdentityRollContext {
+  const anchorType = runContext?.activeAnchor?.type ?? runContext?.sectorState.activeAnchor?.type ?? null;
+  const brief = runContext?.runWorldBrief;
   return {
     veilBiome: veilBiome ?? runContext?.sectorState.veilBiome ?? null,
-    anchorType: runContext?.activeAnchor?.type ?? runContext?.sectorState.activeAnchor?.type ?? null,
+    anchorType,
     operationKind: runContext?.activeOperation.objectiveKind ?? null,
     echoActivity: runContext?.sectorState.echoActivity ?? null,
     resourceFocus: runContext?.sectorState.resourceFocus ?? [],
     seed,
+    anchorDistortionBias: anchorType ? ANCHOR_TYPE_DEPTH2_BIAS[anchorType] : undefined,
+    anchorLawBias: anchorType ? ANCHOR_TYPE_DEPTH3_BIAS[anchorType] : undefined,
+    briefDistortionBias: brief?.depthBias.depth2DistortionWeights,
+    briefLawBias: brief?.depthBias.depth3LawWeights,
   };
 }
 

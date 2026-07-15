@@ -1,11 +1,14 @@
 import { getAnchorDefinition } from './anchorRegistry';
-import { resolveContributionRules } from './operationRulesEngine';
+import { getSectorAnchorState } from './anchorLifecycleEngine';
+import {
+  validateAllAnchorPools,
+  validateProceduralAnchorInstance,
+} from './anchorProceduralValidationEngine';
 import { getSectorWorldTemplate, SECTOR_WORLD_TEMPLATES } from './sectorWorldCatalog';
 import { ALL_RESOURCE_ITEM_IDS, RESOURCE_REGISTRY } from './resourceRegistry';
 import { DEFAULT_OPERATION_PROGRESS_REQUIRED } from './worldStateHelpers';
 import type {
   OperationContributionRules,
-  OperationObjectiveKind,
   SectorId,
   SectorState,
   WorldStatePersistedState,
@@ -43,8 +46,7 @@ function countContributionRules(rules: OperationContributionRules): number {
   return Object.values(rules).filter((value) => typeof value === 'number' && value > 0).length;
 }
 
-function operationHasCompletablePath(objectiveKind: OperationObjectiveKind): boolean {
-  const rules = resolveContributionRules(objectiveKind);
+function operationHasCompletablePath(rules: OperationContributionRules): boolean {
   const ruleCount = countContributionRules(rules);
   if (ruleCount === 0) return false;
   if (rules.defeatEcho && ruleCount <= 1) return false;
@@ -61,17 +63,31 @@ export function validateWorldState(
     const template = getSectorWorldTemplate(sector.id);
 
     if (!sector.activeAnchor && template.anchor) {
-      const anchorId = template.anchor
-        ? `anchor-${sector.id.toLowerCase()}-${template.anchor.type.toLowerCase()}`
-        : null;
-      const dormant = anchorId ? (persisted.dormantAnchorRuns[anchorId] ?? 0) > 0 : false;
-      if (!dormant) {
+      pushIssue(issues, {
+        severity: 'error',
+        sectorId: sector.id,
+        message: 'Sector has no active anchor despite anchor template.',
+      });
+    }
+
+    const anchorState = getSectorAnchorState(persisted, sector.id);
+    if (template.anchor && !anchorState?.activeAnchorInstance) {
+      pushIssue(issues, {
+        severity: 'warn',
+        sectorId: sector.id,
+        message: 'anchorStateBySector missing — migration may be pending.',
+      });
+    } else if (anchorState?.activeAnchorInstance) {
+      validateProceduralAnchorInstance(
+        anchorState.activeAnchorInstance,
+        anchorState.recentDisplayNameHashes,
+      ).forEach((issue) => {
         pushIssue(issues, {
-          severity: 'error',
+          severity: issue.level === 'error' ? 'error' : 'warn',
           sectorId: sector.id,
-          message: 'Sector has no active anchor despite anchor template.',
+          message: `[anchor] ${issue.code}: ${issue.message}`,
         });
-      }
+      });
     }
 
     if (!template.anchor) {
@@ -129,7 +145,10 @@ export function validateWorldState(
         operationId: operation.id,
         message: 'Operation has no progress goal.',
       });
-    } else if (operation.progressRequired !== DEFAULT_OPERATION_PROGRESS_REQUIRED) {
+    } else if (
+      !operation.procedural
+      && operation.progressRequired !== DEFAULT_OPERATION_PROGRESS_REQUIRED
+    ) {
       pushIssue(issues, {
         severity: 'warn',
         sectorId: sector.id,
@@ -157,7 +176,7 @@ export function validateWorldState(
       });
     }
 
-    if (!operationHasCompletablePath(operation.objectiveKind)) {
+    if (!operationHasCompletablePath(rules)) {
       pushIssue(issues, {
         severity: 'error',
         sectorId: sector.id,
@@ -218,6 +237,14 @@ export function validateWorldState(
       message: `Expected ${SECTOR_WORLD_TEMPLATES.length} sector states, got ${sectors.length}.`,
     });
   }
+
+  validateAllAnchorPools().forEach((issue) => {
+    pushIssue(issues, {
+      severity: issue.level === 'error' ? 'error' : 'warn',
+      sectorId: issue.sectorId,
+      message: `[anchor-pool] ${issue.code}: ${issue.message}`,
+    });
+  });
 
   return issues;
 }

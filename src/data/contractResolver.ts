@@ -338,6 +338,9 @@ function buildContractResult({
     mirroredObjectiveProgressText,
     mirroredCreditsBonus,
     mirroredReputationBonus,
+    boundContextReason: contract.boundContext?.reason,
+    linkedOperationTitle: contract.boundContext?.operationTitle,
+    linkedAnchorDisplayName: contract.boundContext?.anchorDisplayName,
   };
 }
 

@@ -77,6 +77,7 @@ export interface ResolveLevelEncounterOptions {
   veilBiome?: VeilBiome | null;
   isElite?: boolean;
   contextModifiers?: NodeContextModifiers | null;
+  rivalMercWeightMultiplier?: number;
 }
 
 export function resolveLevelEncounter(

@@ -26,6 +26,7 @@ export interface TwistedTemplateRollInput {
   alreadySeen: readonly TwistedTemplateId[];
   rng: () => number;
   forcedId?: TwistedTemplateId | null;
+  briefTwistedBias?: Partial<Record<TwistedTemplateId, number>>;
 }
 
 function isEligible(
@@ -59,6 +60,9 @@ function weightForTemplate(id: TwistedTemplateId, input: TwistedTemplateRollInpu
   }
   if (input.operationTagged && (id === 'ANCHOR_VEIN' || id === 'RESOURCE_BLOOM' || id === 'ANCHOR_CORE_BREACH')) {
     weight += 8;
+  }
+  if (input.briefTwistedBias?.[id]) {
+    weight = Math.max(0, weight * input.briefTwistedBias[id]!);
   }
   return Math.max(0, weight);
 }

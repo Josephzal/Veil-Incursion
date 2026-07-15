@@ -20,7 +20,7 @@ import {
   VEIL_BIOME_VISUALS,
 } from '../../utils/veilFrontSectorUi';
 import { useWorldState } from '../../context/WorldStateContext';
-import { anchorIdForSector, getSectorWorldTemplate } from '../../data/sectorWorldCatalog';
+import { getRecentlySuppressedAnchor } from '../../data/anchorLifecycleEngine';
 
 interface MapSectorOverlaysProps {
   theme: TerminalTheme;
@@ -105,14 +105,11 @@ export function MapSectorSummary({ theme, sector }: MapSectorOverlaysProps): Rea
 export function SectorIntel({ theme, sector }: MapSectorOverlaysProps): React.JSX.Element {
   const { scaleSpacing, isMapTopBandStacked } = useVeilFrontLayout();
   const { persisted } = useWorldState();
-  const sectorTemplate = getSectorWorldTemplate(sector.id);
-  const dormantAnchorRunsRemaining = sectorTemplate.anchor
-    ? persisted.dormantAnchorRuns[anchorIdForSector(sector.id, sectorTemplate.anchor.type)] ?? 0
-    : 0;
+  const suppressed = getRecentlySuppressedAnchor(persisted, sector.id);
   const anchor = sector.activeAnchor
     ? anchorStatusLabel(sector)
-    : dormantAnchorRunsRemaining > 0
-      ? { label: `Dormant (${dormantAnchorRunsRemaining})`, pips: 1 }
+    : suppressed && suppressed.remainingRuns > 0
+      ? { label: `Aftermath (${suppressed.remainingRuns})`, pips: 2 }
       : anchorStatusLabel(sector);
   const resourceLine = sector.resourceFocus.map(compactResourceDisplayName).join(' / ');
   const operationLabel = `${operationTypeChip(sector.activeOperation.objectiveKind)} · ${formatOperationLifecycleStatus(

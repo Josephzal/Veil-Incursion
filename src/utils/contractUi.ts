@@ -1,5 +1,7 @@
 import type { ContractExtractionKind, GeneratedContract, SelectedContractState } from '../types/contract';
+import type { ContractSourceKind } from '../types/contractProcedural';
 import type { SectorId } from '../types/worldState';
+import { SOURCE_REASON_LABELS } from '../data/contractTemplateVariants';
 import { canResourceSpawnInSector } from '../data/resourceRegistry';
 
 export type ContractSectorCompatibility = 'RECOMMENDED' | 'VALID' | 'UNAVAILABLE' | 'NONE';
@@ -85,4 +87,19 @@ export function sponsorDisplayName(sponsorId: string): string {
     default:
       return sponsorId.replace(/_/g, ' ');
   }
+}
+
+export function formatContractContextTag(contract: GeneratedContract): string | null {
+  const reason = contract.boundContext?.reason;
+  if (!reason) return null;
+  if (reason === 'OPERATION_ALIGNED') return 'Supports Active Operation';
+  if (reason === 'ANCHOR_ALIGNED' && contract.boundContext?.anchorDisplayName) {
+    return `Linked to ${contract.boundContext.anchorDisplayName}`;
+  }
+  return SOURCE_REASON_LABELS[reason] ?? null;
+}
+
+export function formatContractSourceReasonLabel(reason: ContractSourceKind | undefined): string | null {
+  if (!reason) return null;
+  return SOURCE_REASON_LABELS[reason] ?? reason.replace(/_/g, ' ');
 }

@@ -1,6 +1,6 @@
 # Veil Incursion Current Systems Design
 
-Last updated: 2026-07-10 (run integration + progression audit v1)
+Last updated: 2026-07-14 (procedural aftermath v1 polish)
 
 This document captures the current implemented design surface for Veil Incursion: player-facing hub systems, run progression, economy, cargo/items, enemies, combat mechanics, and known partial implementations. It is intended as a working reference for design iteration and balancing, not a final player-facing manual.
 
@@ -12,6 +12,7 @@ Primary data and implementation files:
 - Contracts: `src/types/contract.ts`, `src/data/contractTemplates.ts`, `src/data/contractGenerator.ts`, `src/data/contractResolver.ts`, `src/data/contractRunProgressEngine.ts`, `src/utils/contractUi.ts`
 - Debrief: `src/data/runDebriefEngine.ts`, `src/data/runDebriefResourceEngine.ts`, `src/screens/OperationDebriefScreen.tsx`, `src/hooks/useRunDeathFinalizer.ts`, `src/utils/operationDebriefUi.ts`
 - World state / operations: `src/data/worldStateEngine.ts`, `src/data/anchorRegistry.ts`, `src/data/operationGenerator.ts`, `src/data/operationRulesEngine.ts`, `src/data/operationLifecycleEngine.ts`, `src/context/WorldStateContext.tsx`
+- Run world brief + procedural director + sector aftermath: `src/types/runWorldBrief.ts`, `src/data/runWorldBriefEngine.ts`, `src/data/proceduralDirectorEngine.ts`, `src/data/proceduralAftermath.ts`, `src/data/proceduralAftermathEngine.ts`, `src/data/proceduralAftermathCatalog.ts`, `src/data/proceduralAftermathDebriefAdapter.ts`
 - Run flow: `src/context/RunContext.tsx`, `src/context/GameFlowContext.tsx`, `src/data/descentEngine.ts`, `src/data/sectorGraphEngine.ts`
 - Cargo/items/resources: `src/types/resourceItem.ts`, `src/types/runResourceLedger.ts`, `src/types/cargoGrid.ts`, `src/types/unstableCargoEffects.ts`, `src/data/resourceRegistry.ts`, `src/data/resourceValidation.ts`, `src/data/runResourceLedgerEngine.ts`, `src/data/extractionPersistenceEngine.ts`, `src/data/unstableCargoEffectsEngine.ts`, `src/data/lazyNodeContextEngine.ts`, `src/data/runDebriefUnstableCargoEngine.ts`, `src/data/blackMarket.ts`, `src/data/craftingRegistry.ts`, `src/data/consumableRegistry.ts`
 - Enemies: `src/data/enemyRoster.ts`, `src/data/enemyDefinitions.ts`, `src/data/enemyCombatConfig.ts`, `src/data/combatRosterAI.ts`, `src/data/enemyAlphaConfig.ts`
@@ -63,9 +64,9 @@ Primary data and implementation files:
 - Boss kill operation contribution requires **successful extraction** (`computeRunOperationContribution`).
 - Bonus objectives (clean extraction, early extract, depth boss, depth extract, anomaly clear) award extra credits/reputation when the primary contract succeeds.
 
-**Debrief sections (extraction):** Run Outcome, Extraction Method, Extraction Payout, Contract Result (+ bonus), Resource Resolution (grouped by category), Operation Contribution (`+N progress this run` headline, mid-run transmission, extract breakdown, total this run), Community Progress (before→after %).
+**Debrief sections (extraction):** Run Outcome, Extraction Method, Extraction Payout, Contract Result (+ bonus), Resource Resolution (grouped by category), Operation Contribution (`+N progress this run` headline, mid-run transmission, extract breakdown, total this run), Community Progress (before→after %), **Sector Crisis** (run world brief summary), **Sector Aftermath** (predicted post-run modifiers when rules match).
 
-**Debrief sections (death):** Run stats, grouped Resource Resolution (lost vs banked), failed Contract Result, Operation Contribution (informational; shows `No operation progress generated this run` when nothing credited, or mid-run transmission when applicable), Community Progress.
+**Debrief sections (death):** Run stats, grouped Resource Resolution (lost vs banked), failed Contract Result, Operation Contribution (informational; shows `No operation progress generated this run` when nothing credited, or mid-run transmission when applicable), Community Progress, Sector Crisis, Sector Aftermath (when applicable).
 
 **Mid-run operation contribution:** Clearing operation target or anchor signal nodes applies `clearOperationTarget` contribution immediately during the run (`RunWorldStateBridge` + `RunContext`). Tracked on incursion as `operationContributionTransmitted` and surfaced on debrief as **Mid-incursion transmission**.
 
@@ -149,9 +150,44 @@ Persistent world state drives run generation. Each of the 5 sectors has exactly 
 
 **Key files:** `anchorRegistry.ts`, `operationGenerator.ts`, `operationRulesEngine.ts`, `operationLifecycleEngine.ts`, `echoEncounterEngine.ts`, `echoValidation.ts`, `worldStateValidation.ts`, `worldStateDebugEngine.ts` (dev only).
 
-**Veil Front surfaces:** Active operation/anchor cards, sector intel (operation type + lifecycle), briefing tabs, deploy confirmation (reward preview + contribution hints + echo intel), operation intel log, ECHO RECOVERY contribution hints on active operation card.
+**Veil Front surfaces:** Active operation/anchor cards, sector intel (operation type + lifecycle), briefing tabs, deploy confirmation (reward preview + contribution hints + echo intel), operation intel log, ECHO RECOVERY contribution hints on active operation card, **crisis banner** (procedural director explainability: pressure chips, likely signals/rewards, active sector aftermath chips).
 
-**Debrief surfaces:** `+N progress this run` headline, mid-incursion transmission, per-type completion effect lines, community progress bar.
+**Debrief surfaces:** `+N progress this run` headline, mid-incursion transmission, per-type completion effect lines, community progress bar, sector crisis block, **sector aftermath block** (new/refreshed modifiers with intensity + duration).
+
+### Run World Brief + Procedural Director + Sector Aftermath (v1)
+
+At deploy, `buildRunGenerationContext()` builds a unified **Run World Brief** — a procedural snapshot of the sector's crisis theme, threat profile, resource stress, scanner/encounter/reward biases, and operation/contract lean. The **Procedural Director** validates that snapshot, scores run pressure, ensures crisis manifestations are wired, applies safety caps, and attaches explainability metadata to the brief.
+
+**Sector Aftermath** is a separate lightweight layer: short-lived (1–3 run) modifiers that persist on `WorldStatePersistedState.sectorAftermathModifiersBySector` and bias the *next* deploy's brief. Aftermath is generated once per run from debrief signals (not at deploy).
+
+**Aftermath types (10):**
+
+| Type | Typical trigger | Stack mode | Effect summary |
+|------|-----------------|------------|----------------|
+| `ANCHOR_PRESSURE_REDUCED` | Anchor suppressed / signals cleared / Anchor Assault complete | refresh | Lower anchor scanner pressure |
+| `ECHO_ACTIVITY_QUIETED` | Echo nodes resolved / Echo Recovery complete | refresh | Quieter echo overlays + resonant reward bump |
+| `RESOURCE_VEINS_EXPOSED` | Resource Survey complete / stress-aligned extracts | refresh | High-value resource scanner + sector resource rewards |
+| `ROUTES_STABILIZED` | False extraction stabilized / clean extraction | refresh | Clearer extraction overlays |
+| `DIRTY_WAKE` | Emergency recall / dirty extraction | intensify | Rival merc weight + rival pressure |
+| `UNSTABLE_SCENT` | Unstable cargo extracted / overharvest | intensify | Unstable cargo encounter weight |
+| `CONTAINMENT_LEAK` | Appraisable/sealed contraband extracted | refresh | Containment pressure + rare loot bias |
+| `RIVAL_ATTENTION` | Contraband extracted / contract paid | intensify | Rival merc weight + rare loot |
+| `ELITE_SUPPRESSION` | Boss/elite clears / Boss Suppression op | refresh | Lower elite weight |
+| `OPERATION_MOMENTUM` | Operation completed / large progress gain | refresh | Operation signal bias + rare loot |
+
+**Rules:** Max **3** active modifiers per sector. Duplicate `stackKey` either **refreshes** duration or **intensifies** (cap intensity 3). Merge evicts oldest when over cap. Modifiers tick down only for the **sector that just completed a run** (not all sectors). Idempotency via `aftermathMeta.lastAftermathRunId`.
+
+**Pipeline:**
+1. Run ends → `buildOperationDebriefPayload()` captures `aftermathInput` from incursion state.
+2. Debrief shows **Sector Aftermath** preview (rule matches before persistence).
+3. On debrief close → `applyPostRunAftermath(aftermathInput)` merges modifiers; hub log lines for created/refreshed/expired.
+4. Next deploy → director applies active aftermath to brief (`generationDebug.appliedAftermathIds`); Veil Front crisis banner shows active aftermath chips.
+
+**Key files:** `runWorldBriefEngine.ts`, `proceduralDirectorEngine.ts`, `proceduralAftermathEngine.ts`, `proceduralAftermathCatalog.ts`, `proceduralAftermathDebriefAdapter.ts`, `runWorldBriefDebriefEngine.ts`, `SectorBriefingPanel.tsx`, `OperationDebriefScreen.tsx`.
+
+**Dev tooling (Dev Test hub):** `[ DIRECTOR REPORT ]`, `[ SIM 100 DIRECTED BRIEFS ]`, `[ SIM AFTERMATH ]`, `[ SIM 10-RUN AFTERMATH ]`, `[ VALIDATE AFTERMATH ]`, `[ EXPIRE ALL AFTERMATH ]`, `[ PROC MEMORY REPORT ]`.
+
+**Not in scope (v1):** Faction territory, online sync, permanent world-state mutation beyond brief biases, player-snapshot echoes.
 
 ### Black Market
 
@@ -1511,6 +1547,7 @@ Current world/narrative surface includes:
 - **Weapon Families + Vertical Upgrade Tracks v1 (complete):** 9 weapon families × 3 tiers, Loadout Weapon Chassis unlock/equip/upgrade, run snapshot, combat stat hooks + tier-III passives, debrief opportunities, validation + dev tools. Legacy blueprint forge recipes removed.
 - **Run Items v2 (complete — Phases A–F + polish):** 24-item combat consumable + field tool roster in dedicated 2+2 slots, combat/field engines, hub loadout + fabrication filters, black market tap-to-buy + cargo drag split, live HUD + toasts + brought/remaining debrief, registry + acceptance + boot audit. Bound Requisitions remain separate.
 - **Post-run cargo routing v1 (complete — Phases 1–10):** Full post-extract cargo routing pipeline with Veil Front + hub intel surfaces, live debrief preview/validation, partial stackable routing, casket open-at-hub v1, deferred contract delivery, death cargo messaging, runtime + intel + fixture + sim validation, catalog audit engine, cleanup/ship pass, `cargoRoutingRunState` + `careerCargoRouting` tracking, debrief summary wiring, hub contract board + safehouse + extraction review + scanner + loadout + cargo pressure surfaces, hub log on routing confirm, dev audit/validate/inspect tooling, compact debrief parity. Acceptance criteria (63) in Post-Run Cargo Routing v1 section.
+- **Run World Brief + Procedural Director + Sector Aftermath v1 (complete):** Unified deploy brief with crisis theme/resource stress/threat profile; director validation, pressure scoring, manifestation checks, safety caps, explainability; 10-rule sector aftermath with stackKey merge, intensity, sector-local ticking, debrief preview + persistence, brief bias application, idempotency guard, validation + dev sim tools. See Run World Brief section above.
 - **Safehouse banking:** Physical in-run banking via `runBankedSnapshot` — banked cargo survives death and routes to hub stash. Unbanked cargo is lost on death (`runResourceLedger.lostOnDeath`). Extraction merges banked + carried cargo before deposit.
 - Target Fragment has a catalogued combat effect but is marked `unimplemented`.
 - Kinetic Hollow Points / Veil-Vial is described as next attack +15 damage but is marked `unimplemented`.

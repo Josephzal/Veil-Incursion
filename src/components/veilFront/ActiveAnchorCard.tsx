@@ -4,7 +4,7 @@ import TerminalText from '../TerminalText';
 import { IconBadge } from './VeilFrontUiPrimitives';
 import { useVeilFrontLayout } from './useVeilFrontLayout';
 import { useWorldState } from '../../context/WorldStateContext';
-import { anchorIdForSector, getSectorWorldTemplate } from '../../data/sectorWorldCatalog';
+import { getRecentlySuppressedAnchor } from '../../data/anchorLifecycleEngine';
 import type { SectorState } from '../../types/worldState';
 import { TerminalTheme } from '../../types/theme';
 import { describeAnchorInRunPressure } from '../../utils/veilFrontSectorUi';
@@ -20,10 +20,7 @@ export default function ActiveAnchorCard({
 }: ActiveAnchorCardProps): React.JSX.Element {
   const { scaleSpacing, scaleSize, scaleFont } = useVeilFrontLayout();
   const { persisted } = useWorldState();
-  const sectorTemplate = getSectorWorldTemplate(sector.id);
-  const dormantAnchorRunsRemaining = sectorTemplate.anchor
-    ? persisted.dormantAnchorRuns[anchorIdForSector(sector.id, sectorTemplate.anchor.type)] ?? 0
-    : 0;
+  const suppressed = getRecentlySuppressedAnchor(persisted, sector.id);
   const pressureLines = sector.activeAnchor
     ? describeAnchorInRunPressure(sector.activeAnchor)
     : [];
@@ -90,15 +87,14 @@ export default function ActiveAnchorCard({
                 ))}
               </>
             ) : null}
-          </>
-        ) : dormantAnchorRunsRemaining > 0 && sectorTemplate.anchor ? (
-          <>
-            <TerminalText size={scaleFont(9)} style={{ color: theme.statusColor, fontWeight: '700' }} numberOfLines={1}>
-              {`${sectorTemplate.anchor.displayName} — Dormant`}
-            </TerminalText>
-            <TerminalText size={scaleFont(7.5)} style={{ color: theme.mutedColor, lineHeight: scaleSize(12) }}>
-              {`Veil signature suppressed for ${dormantAnchorRunsRemaining} more run${dormantAnchorRunsRemaining === 1 ? '' : 's'}. Standard breach conditions apply.`}
-            </TerminalText>
+            {suppressed && suppressed.remainingRuns > 0 ? (
+              <TerminalText
+                size={scaleFont(6.5)}
+                style={{ color: theme.mutedColor, marginTop: scaleSpacing(4), lineHeight: scaleSize(11) }}
+              >
+                {`Aftermath: ${suppressed.displayName} suppressed for ${suppressed.remainingRuns} run(s).`}
+              </TerminalText>
+            ) : null}
           </>
         ) : (
           <>
