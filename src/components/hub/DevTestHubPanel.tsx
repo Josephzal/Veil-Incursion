@@ -439,12 +439,22 @@ export default function DevTestHubPanel(): React.JSX.Element {
           onPress={() => launchSandbox('narrative-scavenge', startNarrative)}
         />
         <SandboxLaunchButton
-          label="[ SCANNER SWEEP ]"
+          label="[ SHADOWLINE ASCENT ]"
+          accentColor={theme.primaryColor}
+          onPress={() => launchSandbox('narrative-shadowline', startNarrative)}
+        />
+        <SandboxLaunchButton
+          label="[ SCANNER SWEEP (DEPRECATED) ]"
           accentColor={theme.primaryColor}
           onPress={() => launchSandbox('narrative-conceal', startNarrative)}
         />
         <SandboxLaunchButton
-          label="[ RITUAL ECHO ]"
+          label="[ RITE OF CONCORDANCE ]"
+          accentColor={theme.primaryColor}
+          onPress={() => launchSandbox('narrative-rite', startNarrative)}
+        />
+        <SandboxLaunchButton
+          label="[ RITUAL ECHO (DEPRECATED) ]"
           accentColor={theme.primaryColor}
           onPress={() => launchSandbox('narrative-sigil', startNarrative)}
         />

@@ -7,17 +7,21 @@
  * - Mechanic_CipherRite = DEPRECATED narrative hacking (Cipher Rite UI). DevTest/legacy only —
  *   in-game hacking fiction now routes to Mechanic_LeyCircuitBreach.
  * - Mechanic_LeyCircuitBreach = player-facing Ley Circuit Breach (6×6 polarity routing puzzle).
- * - Mechanic_ConcealSlider = player-facing Scanner Sweep (1D blind-zone tracking + sweep pulses).
- * - Mechanic_SigilTrace = player-facing Ritual Echo (occult pattern + forbidden beats).
+ * - Mechanic_ConcealSlider = DEPRECATED Scanner Sweep (1D blind-zone tracking). DevTest/legacy only —
+ *   in-game stealth fiction now routes to Mechanic_ShadowlineAscent.
+ * - Mechanic_ShadowlineAscent = player-facing Shadowline Ascent (turn-based 3-lane stealth shaft).
+ * - Mechanic_SigilTrace = DEPRECATED Ritual Echo (occult pattern + forbidden beats). DevTest/legacy only —
+ *   in-game ritual/occult fiction now routes to Mechanic_RiteOfConcordance.
+ * - Mechanic_RiteOfConcordance = player-facing Rite of Concordance (three-thread ritual waveform cleanse).
  * - Mechanic_SignalAlignment = DEPRECATED Veil Lock (glyph-key lock routing). DevTest/legacy only —
  *   in-game lock/rift fiction now routes to Mechanic_SigilTumbler.
  * - Mechanic_SigilTumbler = player-facing Sigil Tumbler (resonance-angle + rhythm lockpick).
  *
  * Priority for generation:
- * 1. Stealth → Scanner Sweep
+ * 1. Stealth → Shadowline Ascent
  * 2. Tech / encrypted terminal / hack → Ley Circuit Breach
  * 3. Rift / ley / stabilize / extraction vector / lock → Sigil Tumbler
- * 4. Ritual / sigil sequence → Ritual Echo
+ * 4. Ritual / sigil sequence → Rite of Concordance
  * 5. Plain stash → none
  */
 
@@ -26,7 +30,9 @@ import type { Tag, TensionMechanic } from '../../types/narrativeAssembly';
 export const KNOWN_TENSION_MECHANICS: readonly TensionMechanic[] = [
   'Mechanic_ScavengeBar',
   'Mechanic_ConcealSlider',
+  'Mechanic_ShadowlineAscent',
   'Mechanic_SigilTrace',
+  'Mechanic_RiteOfConcordance',
   'Mechanic_CipherRite',
   'Mechanic_LeyCircuitBreach',
   'Mechanic_SignalAlignment',
@@ -35,12 +41,13 @@ export const KNOWN_TENSION_MECHANICS: readonly TensionMechanic[] = [
 
 /**
  * Mechanics allowed in new procedural generation. Excludes deprecated ScavengeBar,
- * Cipher Rite (hacking → Ley Circuit Breach) and Veil Lock / SignalAlignment
- * (lock/rift → Sigil Tumbler).
+ * Scanner Sweep / ConcealSlider (stealth → Shadowline Ascent), Ritual Echo / SigilTrace
+ * (ritual → Rite of Concordance), Cipher Rite (hacking → Ley Circuit Breach) and
+ * Veil Lock / SignalAlignment (lock/rift → Sigil Tumbler).
  */
 export const ACTIVE_GENERATION_TENSION_MECHANICS: readonly TensionMechanic[] = [
-  'Mechanic_ConcealSlider',
-  'Mechanic_SigilTrace',
+  'Mechanic_ShadowlineAscent',
+  'Mechanic_RiteOfConcordance',
   'Mechanic_LeyCircuitBreach',
   'Mechanic_SigilTumbler',
 ] as const;
@@ -51,7 +58,9 @@ export function isKnownTensionMechanic(
   return (
     value === 'Mechanic_ScavengeBar'
     || value === 'Mechanic_ConcealSlider'
+    || value === 'Mechanic_ShadowlineAscent'
     || value === 'Mechanic_SigilTrace'
+    || value === 'Mechanic_RiteOfConcordance'
     || value === 'Mechanic_CipherRite'
     || value === 'Mechanic_LeyCircuitBreach'
     || value === 'Mechanic_SignalAlignment'
@@ -128,6 +137,10 @@ export function remapDeprecatedScavengeBar(
   ctx: TensionRemapContext = {},
 ): TensionMechanic | null {
   if (mechanic == null) return null;
+  // Deprecated in-game Scanner Sweep → new Shadowline Ascent (ConcealSlider is DevTest-only now).
+  if (mechanic === 'Mechanic_ConcealSlider') return 'Mechanic_ShadowlineAscent';
+  // Deprecated in-game Ritual Echo → new Rite of Concordance (SigilTrace is DevTest-only now).
+  if (mechanic === 'Mechanic_SigilTrace') return 'Mechanic_RiteOfConcordance';
   // Deprecated in-game hacking → new Ley Circuit Breach (Cipher Rite is DevTest-only now).
   if (mechanic === 'Mechanic_CipherRite') return 'Mechanic_LeyCircuitBreach';
   // Deprecated in-game Veil Lock → new Sigil Tumbler (SignalAlignment is DevTest-only now).
@@ -138,7 +151,7 @@ export function remapDeprecatedScavengeBar(
   const tags = ctx.tags ?? [];
 
   if (tags.includes('militarized') || STEALTH_RE.test(text)) {
-    return 'Mechanic_ConcealSlider';
+    return 'Mechanic_ShadowlineAscent';
   }
   if (isHackContext(text, tags)) {
     return 'Mechanic_LeyCircuitBreach';
@@ -147,7 +160,7 @@ export function remapDeprecatedScavengeBar(
     return 'Mechanic_SigilTumbler';
   }
   if (isRitualEchoContext(text, tags)) {
-    return 'Mechanic_SigilTrace';
+    return 'Mechanic_RiteOfConcordance';
   }
   if (isPlainStashContext(text, tags)) {
     return null;
@@ -170,7 +183,7 @@ export function pickActiveGenerationTensionMechanic(
   const tags = ctx.tags ?? [];
 
   if (tags.includes('militarized') || STEALTH_RE.test(text)) {
-    return 'Mechanic_ConcealSlider';
+    return 'Mechanic_ShadowlineAscent';
   }
   if (isHackContext(text, tags)) {
     return 'Mechanic_LeyCircuitBreach';
@@ -179,7 +192,7 @@ export function pickActiveGenerationTensionMechanic(
     return 'Mechanic_SigilTumbler';
   }
   if (isRitualEchoContext(text, tags)) {
-    return 'Mechanic_SigilTrace';
+    return 'Mechanic_RiteOfConcordance';
   }
   if (isPlainStashContext(text, tags)) {
     return null;

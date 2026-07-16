@@ -28,7 +28,9 @@ export interface TensionMechanicHostProps extends TensionMechanicProps {
 export function formatTensionMechanicLabel(raw?: TensionMechanic | string): string {
   if (!raw) return 'TENSION PROTOCOL';
   if (raw === 'Mechanic_SigilTrace') return 'Ritual Echo';
+  if (raw === 'Mechanic_RiteOfConcordance') return 'Rite of Concordance';
   if (raw === 'Mechanic_ConcealSlider') return 'Scanner Sweep';
+  if (raw === 'Mechanic_ShadowlineAscent') return 'Shadowline Ascent';
   if (raw === 'Mechanic_CipherRite') return 'CIPHER RITE';
   if (raw === 'Mechanic_LeyCircuitBreach') return 'Ley Circuit Breach';
   if (raw === 'Mechanic_SignalAlignment') return 'Veil Lock';

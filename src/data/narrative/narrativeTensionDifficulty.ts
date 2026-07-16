@@ -35,20 +35,26 @@ export function tensionDifficultyFromNodesCleared(
  *
  * Ley Circuit Breach: encrypted, terminal, locked cache, intel vault, black-site, hack, grid security
  *   (6×6 polarity routing puzzle — the in-game hacking minigame)
- * Scanner Sweep: 1D blind-zone tracking on a signal lane; sweep pulses disrupt the mask window
- * Ritual Echo: sigil, ritual, occult pattern, echo pattern, glyph lock, blood-rite
+ * Shadowline Ascent (Mechanic_ShadowlineAscent): stealth, conceal, patrol, surveillance, militarized
+ *   (turn-based 3-lane × 9-step detection shaft — the in-game stealth minigame)
+ * Rite of Concordance (Mechanic_RiteOfConcordance): sigil, ritual, occult pattern, echo pattern, glyph lock, blood-rite
+ *   (three-thread ritual waveform cleanse — the in-game ritual minigame)
  * Sigil Tumbler (Mechanic_SigilTumbler): occult-tech lockpick — resonance angle + rhythm tumbler timing
  *   (rift / ley / stabilize / extraction vector / lock fiction — the in-game lockpick minigame)
+ * Ritual Echo (Mechanic_SigilTrace): DEPRECATED in-game — DevTest + legacy only (remapped to Rite of Concordance)
  * Cipher Rite: DEPRECATED in-game — DevTest force + legacy nodes only (remapped to Ley Circuit Breach)
  * Veil Lock (Mechanic_SignalAlignment): DEPRECATED in-game — DevTest + legacy only (remapped to Sigil Tumbler)
+ * Scanner Sweep (Mechanic_ConcealSlider): DEPRECATED in-game — DevTest + legacy only (remapped to Shadowline Ascent)
  * ScavengeBar: legacy / DevTest only — never normal generation
  * No mechanic: plain stash, dead runner, loose credits, simple resource pickup
  */
 export const NARRATIVE_TENSION_ROUTING_AUDIT = {
   LeyCircuitBreach: 'Mechanic_LeyCircuitBreach',
-  ScannerSweep: 'Mechanic_ConcealSlider',
-  RitualEcho: 'Mechanic_SigilTrace',
+  ShadowlineAscent: 'Mechanic_ShadowlineAscent',
+  RiteOfConcordance: 'Mechanic_RiteOfConcordance',
   SigilTumbler: 'Mechanic_SigilTumbler',
+  RitualEchoDeprecated: 'Mechanic_SigilTrace',
+  ScannerSweepDeprecated: 'Mechanic_ConcealSlider',
   CipherRiteDeprecated: 'Mechanic_CipherRite',
   SignalAlignmentDeprecated: 'Mechanic_SignalAlignment',
   ScavengeBarDeprecated: 'Mechanic_ScavengeBar',

@@ -4,7 +4,9 @@ export type DevSandboxPreset =
   | 'combat-hard'
   | 'narrative-scavenge'
   | 'narrative-conceal'
+  | 'narrative-shadowline'
   | 'narrative-sigil'
+  | 'narrative-rite'
   | 'narrative-cipher'
   | 'narrative-ley'
   | 'narrative-signal'
@@ -21,7 +23,9 @@ export type DevSandboxPreset =
 export const DEV_SANDBOX_NARRATIVE_PRESETS = [
   'narrative-scavenge',
   'narrative-conceal',
+  'narrative-shadowline',
   'narrative-sigil',
+  'narrative-rite',
   'narrative-cipher',
   'narrative-ley',
   'narrative-signal',

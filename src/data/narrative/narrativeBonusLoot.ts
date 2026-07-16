@@ -53,7 +53,11 @@ const LEY_POOL: BonusPoolEntry[] = [
 
 function poolForMechanic(mechanic: TensionMechanic): BonusPoolEntry[] | null {
   if (mechanic === 'Mechanic_ConcealSlider') return CONCEAL_POOL;
+  // Shadowline Ascent reuses the stealth/conceal-flavored reward pool (no separate economy).
+  if (mechanic === 'Mechanic_ShadowlineAscent') return CONCEAL_POOL;
   if (mechanic === 'Mechanic_SigilTrace') return SIGIL_POOL;
+  // Rite of Concordance reuses the ritual/occult-flavored reward pool (no separate economy).
+  if (mechanic === 'Mechanic_RiteOfConcordance') return SIGIL_POOL;
   if (mechanic === 'Mechanic_CipherRite') return CIPHER_POOL;
   if (mechanic === 'Mechanic_LeyCircuitBreach') return LEY_POOL;
   if (mechanic === 'Mechanic_SignalAlignment') return SIGNAL_POOL;

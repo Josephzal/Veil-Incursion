@@ -48,8 +48,18 @@ export type Tag =
  * Naming — do not confuse with combat systems:
  * - Mechanic_ScavengeBar — OLD narrative loot/scavenge tension (InstabilityProtocol UI).
  *   Still supported for legacy content + DevTest force. Deprecated for new normal generation.
- * - Mechanic_ConcealSlider — player-facing **Scanner Sweep** (1D blind-zone tracking + sweep pulses).
- * - Mechanic_SigilTrace — player-facing **Ritual Echo** (sequence memory + forbidden beats).
+ * - Mechanic_ConcealSlider — DEPRECATED in-game **Scanner Sweep** (1D blind-zone tracking +
+ *   sweep pulses). Kept for DevTest force + legacy nodes only; in-game stealth fiction now
+ *   routes to Mechanic_ShadowlineAscent.
+ * - Mechanic_ShadowlineAscent — player-facing **Shadowline Ascent** (turn-based 3-lane × 9-step
+ *   stealth shaft: climb the Runner Trace to the Exit Glyph, dodging Cross-Scans / Lane Watches /
+ *   Sigil Pulses, using Shadow Pockets and a one-use Dampener, before reaching 3 Exposure).
+ * - Mechanic_SigilTrace — DEPRECATED in-game **Ritual Echo** (sequence memory + forbidden beats).
+ *   Kept for DevTest force + legacy nodes only; in-game ritual/occult fiction now routes to
+ *   Mechanic_RiteOfConcordance.
+ * - Mechanic_RiteOfConcordance — player-facing **Rite of Concordance** (occult ritual-cleanse:
+ *   tune Phase/Frequency/Intensity on three ritual threads so each cleansing waveform overlays its
+ *   corruption trace to Concordance ≥ threshold, surviving Dissonance Bursts before Stability drains).
  * - Mechanic_CipherRite — DEPRECATED in-game narrative hacking (Cipher Rite UI).
  *   Kept for DevTest force + legacy nodes only; in-game hacking now routes to
  *   Mechanic_LeyCircuitBreach.
@@ -67,7 +77,9 @@ export type Tag =
 export type TensionMechanic =
   | 'Mechanic_ScavengeBar'
   | 'Mechanic_ConcealSlider'
+  | 'Mechanic_ShadowlineAscent'
   | 'Mechanic_SigilTrace'
+  | 'Mechanic_RiteOfConcordance'
   | 'Mechanic_CipherRite'
   | 'Mechanic_LeyCircuitBreach'
   | 'Mechanic_SignalAlignment'

@@ -6,6 +6,8 @@ import GridCipher from './GridCipher';
 import CipherRite from './CipherRite';
 import LeyCircuitBreach from './LeyCircuitBreach';
 import ScannerSweep from './ScannerSweep';
+import ShadowlineAscent from './ShadowlineAscent';
+import RiteOfConcordance from './RiteOfConcordance';
 import SignalAlignment from './SignalAlignment';
 import SigilTumbler from './SigilTumbler';
 import TensionMechanicModal from './TensionMechanicModal';
@@ -203,16 +205,24 @@ export default function TensionMechanicHost({
   } else {
     switch (rawId as typeof tensionMechanic) {
       case 'Mechanic_SigilTrace':
-        // Player-facing: Ritual Echo (forbidden beats).
+        // Deprecated in-game Ritual Echo — retained for DevTest force + legacy nodes.
         content = <GridCipher {...mechanicProps} />;
+        break;
+      case 'Mechanic_RiteOfConcordance':
+        // Player-facing: Rite of Concordance (three-thread ritual waveform cleanse) — the in-game ritual.
+        content = <RiteOfConcordance {...mechanicProps} />;
         break;
       case 'Mechanic_ScavengeBar':
         // Deprecated for new generation — still supported for legacy + DevTest force.
         content = <InstabilityProtocol {...mechanicProps} />;
         break;
       case 'Mechanic_ConcealSlider':
-        // Player-facing: Scanner Sweep (ID preserved for catalog compatibility).
+        // Deprecated in-game Scanner Sweep — retained for DevTest force + legacy nodes.
         content = <ScannerSweep {...mechanicProps} />;
+        break;
+      case 'Mechanic_ShadowlineAscent':
+        // Player-facing: Shadowline Ascent (turn-based 3-lane stealth shaft) — the in-game stealth.
+        content = <ShadowlineAscent {...mechanicProps} />;
         break;
       case 'Mechanic_CipherRite':
         // Deprecated in-game hacking — retained for DevTest force + legacy nodes.

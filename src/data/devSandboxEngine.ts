@@ -16,7 +16,9 @@ const TENSION_BY_PRESET: Record<
     DevSandboxPreset,
     | 'narrative-scavenge'
     | 'narrative-conceal'
+    | 'narrative-shadowline'
     | 'narrative-sigil'
+    | 'narrative-rite'
     | 'narrative-cipher'
     | 'narrative-ley'
     | 'narrative-signal'
@@ -26,7 +28,9 @@ const TENSION_BY_PRESET: Record<
 > = {
   'narrative-scavenge': 'Mechanic_ScavengeBar',
   'narrative-conceal': 'Mechanic_ConcealSlider',
+  'narrative-shadowline': 'Mechanic_ShadowlineAscent',
   'narrative-sigil': 'Mechanic_SigilTrace',
+  'narrative-rite': 'Mechanic_RiteOfConcordance',
   'narrative-cipher': 'Mechanic_CipherRite',
   'narrative-ley': 'Mechanic_LeyCircuitBreach',
   'narrative-signal': 'Mechanic_SignalAlignment',
@@ -62,9 +66,13 @@ export function buildDevSandboxNarrativeEncounter(
     Mechanic_LeyCircuitBreach:
       'Corrupted ritual circuit board. Rotate ley-conduits to route the signal from the Source Sigil to the Exit Seal — and force it to arrive in the required Grid/Veil polarity before the Trace burns through.',
     Mechanic_ConcealSlider:
-      'Watched cache under a hostile patrol sweep. Keep your signal inside the moving blind zone. Hostile sweeps compress the window. DAMP SIGNAL steadies your trace.',
+      'DEPRECATED in-game — DevTest only. Watched cache under a hostile patrol sweep. Keep your signal inside the moving blind zone.',
+    Mechanic_ShadowlineAscent:
+      'Hostile occult detection shaft. Climb the Runner Trace up three neon lanes to the Exit Glyph — slip past Cross-Scans, Lane Watches, and Sigil Pulses. Hide in Shadow Pockets, spend your one Dampener wisely, and reach the top before your Signature hits 3 Exposure.',
     Mechanic_SigilTrace:
-      'Occult sigil sequence with forbidden beats. Repeat the living pattern — skip the VOID pulses.',
+      'DEPRECATED in-game — DevTest only. Occult sigil sequence with forbidden beats. Repeat the living pattern — skip the VOID pulses.',
+    Mechanic_RiteOfConcordance:
+      'A corrupted ritual circle is active. Tune the Blood, Ash, and Void threads — shift chant timing (Phase), match the ritual cadence (Frequency), and match offering pressure (Intensity) — until each cleansing waveform overlays its corruption trace. Survive the Dissonance Bursts and purify all three threads before Stability collapses.',
     Mechanic_SignalAlignment:
       'DEPRECATED in-game — DevTest only. Hostile Veil lock: slot limited glyph keys into each ring to route signal into the core.',
     Mechanic_SigilTumbler:
