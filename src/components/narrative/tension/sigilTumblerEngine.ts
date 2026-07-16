@@ -1,33 +1,34 @@
 /**
  * Sigil Tumbler — pure engine for the occult-tech lockpick minigame
  * (Mechanic_SigilTumbler). The player drives a wardpick needle around a circular
- * resonance ring, holds tension to find a hidden Resonance Window, then sets
- * four glyph tumblers on a randomized four-beat rhythm before Stability drains.
+ * resonance ring, holds tension to find a hidden Resonance Window, then seats
+ * four glyph tumblers by releasing tension as each glyph crosses its sync line.
  *
- * Deterministic when seeded. No run-state mutation. Fixed standard difficulty —
- * randomization comes from the window angle, beat order, and starting phases,
- * never from difficulty scaling.
+ * Each glyph has its OWN hidden resonance angle and its OWN randomly-placed sync
+ * line, so the player must re-aim the wardpick and re-time the release for every
+ * glyph. Deterministic when seeded. No run-state mutation. Fixed standard
+ * difficulty — randomization comes from angles, sync positions, and speeds.
  */
 
 import { hashSeed } from '../../../data/narrative/narrativeAssemblyCore';
 
-export type SigilBeat = 'SLOW' | 'FAST';
 export type SigilZone = 'INSIDE' | 'NEAR' | 'OUTSIDE';
 
 export interface SigilTumbler {
-  beat: SigilBeat;
+  /** Hidden sweet-spot angle centre for THIS glyph (degrees, 0 = east, CCW+). */
+  windowCenterDeg: number;
   /** Full pulse period in seconds (glyph rises + falls once). */
   periodSec: number;
-  /** Starting phase 0..1 so tumblers don't all sync on spawn. */
-  startPhase: number;
+  /** Random sync-line position within the chamber (0 = bottom, 1 = top). */
+  syncPos: number;
 }
 
 export interface SigilTumblerPuzzle {
   puzzleId: string;
-  /** Hidden sweet-spot angle centre (degrees, 0 = east, CCW+). */
-  windowCenterDeg: number;
-  /** Where the wardpick starts — always well outside the window. */
+  /** Where the wardpick starts — always well away from the first glyph. */
   startAngleDeg: number;
+  /** Retained seed value used only for banner-line selection. */
+  windowCenterDeg: number;
   tumblers: SigilTumbler[];
 }
 
@@ -43,22 +44,16 @@ export const SIGIL_TUMBLER_CONFIG = {
   drainNearPerSec: 4,
   drainInsidePerSec: 1,
   maxBadAttempts: 4,
-  /** Total forgiving window (seconds) around the sync beat for a good set. */
-  setWindowSec: 0.3,
+  /** Position tolerance (0..1 of travel) for the glyph overlapping the sync line. */
+  syncPosTolerance: 0.14,
+  /** Range the random sync line can occupy within the chamber. */
+  syncPosMin: 0.3,
+  syncPosMax: 0.85,
   slowPeriodSec: 1.3,
   fastPeriodSec: 0.8,
-  /** Phase at which the glyph crosses the sync line (peak of the pulse). */
-  syncPhase: 0.5,
+  /** Minimum angular separation between consecutive glyph resonance angles. */
+  minAngleSeparationDeg: 60,
 } as const;
-
-const BEAT_PATTERNS: readonly SigilBeat[][] = [
-  ['SLOW', 'FAST', 'FAST', 'SLOW'],
-  ['FAST', 'SLOW', 'FAST', 'SLOW'],
-  ['SLOW', 'SLOW', 'FAST', 'FAST'],
-  ['FAST', 'FAST', 'SLOW', 'SLOW'],
-  ['SLOW', 'FAST', 'SLOW', 'FAST'],
-  ['FAST', 'SLOW', 'SLOW', 'FAST'],
-];
 
 export function normalizeDeg(d: number): number {
   return ((d % 360) + 360) % 360;
@@ -69,8 +64,8 @@ export function angularDistanceDeg(a: number, b: number): number {
   return diff > 180 ? 360 - diff : diff;
 }
 
-export function zoneForAngle(puzzle: SigilTumblerPuzzle, angleDeg: number): SigilZone {
-  const dist = angularDistanceDeg(angleDeg, puzzle.windowCenterDeg);
+export function zoneForAngle(centerDeg: number, angleDeg: number): SigilZone {
+  const dist = angularDistanceDeg(angleDeg, centerDeg);
   const half = SIGIL_TUMBLER_CONFIG.resonanceWindowDeg / 2;
   if (dist <= half) return 'INSIDE';
   if (dist <= half + SIGIL_TUMBLER_CONFIG.nearBandDeg) return 'NEAR';
@@ -89,23 +84,23 @@ export function drainPerSec(zone: SigilZone): number {
  * 0..1 proximity to the sweet-spot centre (1 = dead centre, 0 = ≥90° away).
  * Used only for UI hum/glow/jitter cues — the window itself stays hidden.
  */
-export function resonanceProximity(puzzle: SigilTumblerPuzzle, angleDeg: number): number {
-  const dist = angularDistanceDeg(angleDeg, puzzle.windowCenterDeg);
+export function resonanceProximity(centerDeg: number, angleDeg: number): number {
+  const dist = angularDistanceDeg(angleDeg, centerDeg);
   return Math.max(0, 1 - dist / 90);
 }
 
-/** Triangle pulse: 0 at phase 0/1 (bottom), 1 at the sync phase (top). */
+/**
+ * Triangle pulse: 0 at phase 0/1 (bottom of chamber), 1 at phase 0.5 (top).
+ * The glyph always starts at the bottom (phase 0) when tension begins.
+ */
 export function tumblerPos(phase: number): number {
   const p = ((phase % 1) + 1) % 1;
-  const sync = SIGIL_TUMBLER_CONFIG.syncPhase;
-  return p <= sync ? p / sync : (1 - p) / (1 - sync);
+  return p <= 0.5 ? p / 0.5 : (1 - p) / 0.5;
 }
 
-/** True when a set at this phase lands inside the ~0.3s sync window. */
-export function isTimingGood(phase: number, periodSec: number): boolean {
-  const p = ((phase % 1) + 1) % 1;
-  const distSec = Math.abs(p - SIGIL_TUMBLER_CONFIG.syncPhase) * periodSec;
-  return distSec <= SIGIL_TUMBLER_CONFIG.setWindowSec / 2;
+/** True when the glyph's rendered position overlaps its sync line. */
+export function isTimingGood(pos: number, syncPos: number): boolean {
+  return Math.abs(pos - syncPos) <= SIGIL_TUMBLER_CONFIG.syncPosTolerance;
 }
 
 function makeRng(seed: string): () => number {
@@ -118,25 +113,40 @@ function makeRng(seed: string): () => number {
 
 export function generateSigilTumbler(seed = 'sigil-tumbler:default'): SigilTumblerPuzzle {
   const rng = makeRng(seed);
-  const windowCenterDeg = Math.floor(rng() * 360);
-  // Start well outside the window (opposite side ± a little) so the player hunts.
-  const startAngleDeg = normalizeDeg(windowCenterDeg + 180 + (rng() * 80 - 40));
+  const {
+    tumblerCount,
+    minAngleSeparationDeg,
+    syncPosMin,
+    syncPosMax,
+    slowPeriodSec,
+    fastPeriodSec,
+  } = SIGIL_TUMBLER_CONFIG;
 
-  const pattern = BEAT_PATTERNS[Math.floor(rng() * BEAT_PATTERNS.length)]!;
-  const tumblers: SigilTumbler[] = pattern
-    .slice(0, SIGIL_TUMBLER_CONFIG.tumblerCount)
-    .map((beat) => ({
-      beat,
-      periodSec: beat === 'SLOW'
-        ? SIGIL_TUMBLER_CONFIG.slowPeriodSec
-        : SIGIL_TUMBLER_CONFIG.fastPeriodSec,
-      startPhase: rng(),
-    }));
+  const tumblers: SigilTumbler[] = [];
+  let prevAngle = Math.floor(rng() * 360);
+  const firstAngle = prevAngle;
+  const span = 360 - minAngleSeparationDeg * 2;
+  for (let i = 0; i < tumblerCount; i += 1) {
+    // Offset from the previous angle by at least minAngleSeparationDeg on either
+    // side so the player must always re-aim the wardpick between glyphs.
+    const angle = i === 0
+      ? firstAngle
+      : normalizeDeg(prevAngle + minAngleSeparationDeg + rng() * span);
+    prevAngle = angle;
+    tumblers.push({
+      windowCenterDeg: angle,
+      periodSec: rng() < 0.5 ? fastPeriodSec : slowPeriodSec,
+      syncPos: syncPosMin + rng() * (syncPosMax - syncPosMin),
+    });
+  }
+
+  // Start the wardpick well away from the first glyph's resonance angle.
+  const startAngleDeg = normalizeDeg(firstAngle + 180 + (rng() * 80 - 40));
 
   return {
     puzzleId: seed,
-    windowCenterDeg,
     startAngleDeg,
+    windowCenterDeg: firstAngle,
     tumblers,
   };
 }

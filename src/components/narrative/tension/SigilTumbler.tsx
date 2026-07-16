@@ -9,7 +9,7 @@ import {
   View,
   type GestureResponderEvent,
 } from 'react-native';
-import Svg, { Circle, G, Line } from 'react-native-svg';
+import Svg, { Circle, G, Line, Path } from 'react-native-svg';
 import {
   NARRATIVE_UNIFIED_PANEL_BG,
   NARRATIVE_UNIFIED_PANEL_BORDER,
@@ -34,12 +34,15 @@ import { logNarrativeMinigameCompleted } from '../../../data/narrative/narrative
 
 const CYAN = '#22d3ee';
 const CYAN_DIM = '#0e3b45';
+const CYAN_DEEP = '#0891b2';
 const VIOLET = '#a855f7';
 const VIOLET_DIM = '#3a1d5c';
+const VIOLET_ETCH = 'rgba(168, 85, 247, 0.10)';
+const SEATED = '#5eead4'; // cyan-teal ritual glow for seated glyphs
 const WHITE_HOT = '#f0f9ff';
 const RED_GLITCH = '#ef4444';
+const RED_BLACK = '#450a0a';
 const AMBER = '#fbbf24';
-const TERMINAL_GREEN = '#00ff33';
 const BODY_MUTED = '#94A3B8';
 const MUTED_WHITE = '#F8FAFC';
 const DISC_FILL = '#04060a';
@@ -63,12 +66,6 @@ function zoneColor(zone: SigilZone): string {
   if (zone === 'INSIDE') return CYAN;
   if (zone === 'NEAR') return AMBER;
   return RED_GLITCH;
-}
-
-function zoneLabel(zone: SigilZone): string {
-  if (zone === 'INSIDE') return 'RESONANT — SET THE GLYPHS';
-  if (zone === 'NEAR') return 'CLOSE — REFINE THE ANGLE';
-  return 'SEEKING — SWEEP FOR RESONANCE';
 }
 
 /**
@@ -96,6 +93,7 @@ export default function SigilTumbler({
   const [setCount, setSetCount] = useState(0);
   const [phasePos, setPhasePos] = useState(0);
   const [jitter, setJitter] = useState(0);
+  const [setWindowActive, setSetWindowActive] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [resolveState, setResolveState] = useState<'playing' | 'success' | 'failure'>('playing');
 
@@ -104,12 +102,13 @@ export default function SigilTumbler({
   const stabilityRef = useRef<number>(SIGIL_TUMBLER_CONFIG.stabilityMax);
   const badRef = useRef(0);
   const setCountRef = useRef(0);
-  const phaseRef = useRef(puzzle.tumblers[0]?.startPhase ?? 0);
+  const phaseRef = useRef(0);
   const resolvedRef = useRef(false);
   wardAngleRef.current = wardAngle;
 
   const glitch = useRef(new Animated.Value(0)).current;
   const irisOpen = useRef(new Animated.Value(0)).current;
+  const chamberPulse = useRef(new Animated.Value(0)).current;
 
   const dialSize = scaleSize(206);
   const center = dialSize / 2;
@@ -143,6 +142,25 @@ export default function SigilTumbler({
     else onFailure();
   }, [difficulty, irisOpen, narrativeEventId, onFailure, onSuccess]);
 
+  // Pulse the active chamber border while the set window is live.
+  useEffect(() => {
+    if (!setWindowActive) {
+      chamberPulse.setValue(0);
+      return undefined;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(chamberPulse, { toValue: 1, duration: 240, easing: Easing.inOut(Easing.quad), useNativeDriver: false }),
+        Animated.timing(chamberPulse, { toValue: 0, duration: 240, easing: Easing.inOut(Easing.quad), useNativeDriver: false }),
+      ]),
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+      chamberPulse.setValue(0);
+    };
+  }, [setWindowActive, chamberPulse]);
+
   const pulseGlitch = useCallback(() => {
     glitch.stopAnimation();
     glitch.setValue(0);
@@ -159,8 +177,10 @@ export default function SigilTumbler({
       if (resolvedRef.current) return;
       const dt = TICK_MS / 1000;
       const angle = wardAngleRef.current;
-      const zone = zoneForAngle(puzzle, angle);
-      const prox = resonanceProximity(puzzle, angle);
+      const active = puzzle.tumblers[setCountRef.current];
+      const activeCenter = active ? active.windowCenterDeg : puzzle.windowCenterDeg;
+      const zone = zoneForAngle(activeCenter, angle);
+      const prox = resonanceProximity(activeCenter, angle);
 
       // Wardpick jitter when off-resonance (visual instability).
       const wobble = (1 - prox) * (Math.random() * 2 - 1) * 9;
@@ -173,11 +193,16 @@ export default function SigilTumbler({
           finish(false);
           return;
         }
-        const active = puzzle.tumblers[setCountRef.current];
         if (active) {
           phaseRef.current = (phaseRef.current + dt / active.periodSec) % 1;
-          setPhasePos(tumblerPos(phaseRef.current));
+          const pos = tumblerPos(phaseRef.current);
+          setPhasePos(pos);
+          // Set window is "live" when the glyph overlaps its sync line AND the
+          // wardpick is resonant — this is the release-to-seat moment (visual only).
+          setSetWindowActive(zone === 'INSIDE' && isTimingGood(pos, active.syncPos));
         }
+      } else {
+        setSetWindowActive(false);
       }
     }, TICK_MS);
     return () => clearInterval(id);
@@ -205,35 +230,57 @@ export default function SigilTumbler({
     [applyAngleFromTouch, resolveState],
   );
 
-  const handleSet = useCallback((index: number) => {
+  // Press-in: begin holding tension. The active glyph starts oscillating toward
+  // the sync line from a fresh position so each attempt reads the same rhythm.
+  const startTension = useCallback(() => {
     if (resolvedRef.current || resolveState !== 'playing') return;
-    if (index !== setCountRef.current) return;
-    if (!tensionRef.current) {
-      setFeedback('HOLD TENSION TO SEAT THE GLYPH');
+    // Glyph always starts at the bottom of the chamber on each hold.
+    phaseRef.current = 0;
+    setPhasePos(tumblerPos(0));
+    tensionRef.current = true;
+    setTension(true);
+    setFeedback(null);
+  }, [resolveState]);
+
+  // Release-to-seat: letting go of tension IS the seat action. If resonant and
+  // on-beat, the glyph seats; otherwise it's a fault (unless we were merely
+  // hunting the angle, in which case releasing off-resonance is a safe abort).
+  const endTension = useCallback(() => {
+    const wasHeld = tensionRef.current;
+    tensionRef.current = false;
+    setTension(false);
+    setSetWindowActive(false);
+    if (!wasHeld || resolvedRef.current || resolveState !== 'playing') {
+      setPhasePos(tumblerPos(0));
       return;
     }
-    const active = puzzle.tumblers[index];
+    const active = puzzle.tumblers[setCountRef.current];
+    setPhasePos(tumblerPos(0));
     if (!active) return;
-    const zone = zoneForAngle(puzzle, wardAngleRef.current);
-    const good = zone === 'INSIDE' && isTimingGood(phaseRef.current, active.periodSec);
+    const zone = zoneForAngle(active.windowCenterDeg, wardAngleRef.current);
+
+    // Off-resonance release = safe abort. You were still hunting the angle, so
+    // no fault; the stability you already burned holding tension is the cost.
+    if (zone === 'OUTSIDE') {
+      setFeedback('REALIGN THE WARDPICK');
+      return;
+    }
+
+    const good = zone === 'INSIDE' && isTimingGood(tumblerPos(phaseRef.current), active.syncPos);
     if (good) {
       setCountRef.current += 1;
       setSetCount(setCountRef.current);
-      phaseRef.current = puzzle.tumblers[setCountRef.current]?.startPhase ?? 0;
-      setPhasePos(tumblerPos(phaseRef.current));
       if (setCountRef.current >= SIGIL_TUMBLER_CONFIG.tumblerCount) {
         finish(true);
       } else {
-        setFeedback('GLYPH SEATED');
+        setFeedback(`GLYPH ${setCountRef.current}/${SIGIL_TUMBLER_CONFIG.tumblerCount} SEATED // ADVANCING`);
       }
     } else {
       badRef.current += 1;
       stabilityRef.current = Math.max(0, stabilityRef.current - SIGIL_TUMBLER_CONFIG.badSetPenalty);
       setBadAttempts(badRef.current);
       setStability(stabilityRef.current);
-      setFeedback(
-        zone === 'INSIDE' ? 'MISTIMED — GLYPH REJECTED' : 'OFF-RESONANCE — GLYPH REJECTED',
-      );
+      setFeedback(zone === 'INSIDE' ? 'MISTIMED — GLYPH RESET' : 'ANGLE OFF — GLYPH RESET');
       pulseGlitch();
       if (badRef.current >= SIGIL_TUMBLER_CONFIG.maxBadAttempts || stabilityRef.current <= 0) {
         finish(false);
@@ -241,23 +288,37 @@ export default function SigilTumbler({
     }
   }, [finish, puzzle, pulseGlitch, resolveState]);
 
-  const startTension = useCallback(() => {
-    if (resolvedRef.current || resolveState !== 'playing') return;
-    tensionRef.current = true;
-    setTension(true);
-    setFeedback(null);
-  }, [resolveState]);
-
-  const endTension = useCallback(() => {
-    tensionRef.current = false;
-    setTension(false);
-  }, []);
-
-  const zone = zoneForAngle(puzzle, wardAngle);
-  const prox = resonanceProximity(puzzle, wardAngle);
+  const activeTumbler = puzzle.tumblers[setCount];
+  const activeCenterDeg = activeTumbler ? activeTumbler.windowCenterDeg : puzzle.windowCenterDeg;
+  const zone = zoneForAngle(activeCenterDeg, wardAngle);
+  const prox = resonanceProximity(activeCenterDeg, wardAngle);
   const ringColor = zoneColor(zone);
   const displayAngle = zone === 'INSIDE' ? wardAngle : wardAngle + jitter;
   const stabilityPct = Math.round((stability / SIGIL_TUMBLER_CONFIG.stabilityMax) * 100);
+
+  // State-based guidance line. This never signals *when to release* — the glyph
+  // overlapping its sync line (and the chamber pulse) is the only release cue.
+  // Transient feedback (seated/fault) wins for a beat.
+  const isFault = !!feedback && /RESET/.test(feedback);
+  const isSeatMsg = !!feedback && /SEATED/.test(feedback);
+  let instruction: string;
+  let instructionColor: string;
+  if (feedback) {
+    instruction = feedback;
+    instructionColor = isSeatMsg ? SEATED : isFault ? RED_GLITCH : AMBER;
+  } else if (!tension) {
+    instruction = zone === 'INSIDE' ? 'HOLD TENSION TO SYNC GLYPH' : 'FIND RESONANCE ANGLE';
+    instructionColor = zone === 'INSIDE' ? CYAN : AMBER;
+  } else if (zone === 'INSIDE') {
+    instruction = 'SYNCING GLYPH';
+    instructionColor = CYAN;
+  } else if (zone === 'NEAR') {
+    instruction = 'CLOSE — REFINE THE ANGLE';
+    instructionColor = AMBER;
+  } else {
+    instruction = 'OFF-RESONANCE — REALIGN';
+    instructionColor = RED_GLITCH;
+  }
 
   const penaltyLine = useMemo(() => {
     if (!defaultPenalty) return null;
@@ -330,15 +391,10 @@ export default function SigilTumbler({
           </View>
 
           <View style={[styles.statusLine, { marginTop: scaleSpacing(4) }]}>
-            <Text
-              style={[
-                styles.statusText,
-                { fontSize: scaleFont(9), color: feedback ? (feedback.includes('SEATED') ? TERMINAL_GREEN : RED_GLITCH) : ringColor },
-              ]}
-            >
-              {feedback ?? zoneLabel(zone)}
+            <Text style={[styles.statusText, { fontSize: scaleFont(9.5), color: instructionColor }]}>
+              {instruction}
             </Text>
-            <Text style={[styles.tumblerCount, { fontSize: scaleFont(9), color: MUTED_WHITE }]}>
+            <Text style={[styles.tumblerCount, { fontSize: scaleFont(9), color: setCount > 0 ? SEATED : MUTED_WHITE }]}>
               {`${setCount}/${SIGIL_TUMBLER_CONFIG.tumblerCount}`}
             </Text>
           </View>
@@ -358,6 +414,38 @@ export default function SigilTumbler({
 
               {/* black glass disc */}
               <Circle cx={center} cy={center} r={outerR} fill={DISC_FILL} stroke={CYAN_DIM} strokeWidth={1.5} />
+
+              {/* faint occult glyph etching behind the lock */}
+              <Circle cx={center} cy={center} r={outerR * 0.82} fill="none" stroke={VIOLET_ETCH} strokeWidth={1} strokeDasharray="3 7" />
+              <Path
+                d={(() => {
+                  const r = innerR * 1.34;
+                  const pts = [0, 90, 180, 270].map((d) => {
+                    const a = (d * Math.PI) / 180;
+                    return `${center + Math.cos(a) * r},${center - Math.sin(a) * r}`;
+                  });
+                  return `M ${pts[0]} L ${pts[1]} L ${pts[2]} L ${pts[3]} Z`;
+                })()}
+                fill="none"
+                stroke={VIOLET_ETCH}
+                strokeWidth={1}
+              />
+              {Array.from({ length: 12 }, (_, i) => {
+                const a = (i * 30 * Math.PI) / 180;
+                const r1 = innerR * 1.06;
+                const r2 = innerR * 1.16;
+                return (
+                  <Line
+                    key={`rune-${i}`}
+                    x1={center + Math.cos(a) * r1}
+                    y1={center - Math.sin(a) * r1}
+                    x2={center + Math.cos(a) * r2}
+                    y2={center - Math.sin(a) * r2}
+                    stroke={VIOLET_ETCH}
+                    strokeWidth={1}
+                  />
+                );
+              })}
 
               {/* resonance hum — whole ring brightens toward the sweet spot */}
               <Circle
@@ -434,43 +522,73 @@ export default function SigilTumbler({
             />
           </View>
 
-          {/* Tumbler chambers — tap the active glowing chamber on the beat. */}
+          {/* Glyph tumblers — display only. Release tension when the active
+              glyph crosses the sync line to seat it. */}
           <View style={[styles.tumblerRow, { marginTop: scaleSpacing(10), gap: scaleSpacing(8) }]}>
             {puzzle.tumblers.map((t, i) => {
               const status = i < setCount ? 'SET' : i === setCount ? 'ACTIVE' : 'PENDING';
-              const pos = status === 'SET' ? 1 : status === 'ACTIVE' ? phasePos : 0.12;
-              const chamberH = scaleSize(74);
-              const glyphColor = status === 'SET' ? TERMINAL_GREEN : status === 'ACTIVE' ? (zone === 'INSIDE' ? CYAN : VIOLET) : '#334155';
-              const borderCol = status === 'ACTIVE' ? (zone === 'INSIDE' ? CYAN : AMBER) : status === 'SET' ? TERMINAL_GREEN : '#1f2937';
+              const isActive = status === 'ACTIVE';
+              const chamberH = scaleSize(76);
+              const travel = chamberH - scaleSize(24);
+              // Glyph sits at bottom until active, rides the pulse while active,
+              // and rests on its (random) sync line once seated.
+              const pos = status === 'SET' ? t.syncPos : isActive ? phasePos : 0;
+              const glyphColor = status === 'SET' ? SEATED : isActive ? (zone === 'INSIDE' ? CYAN : VIOLET) : '#334155';
+              const staticBorder = status === 'SET' ? SEATED : isActive ? (zone === 'INSIDE' ? CYAN_DEEP : '#475569') : '#1f2937';
+              const pulsing = isActive && setWindowActive;
+              const borderColor = pulsing
+                ? chamberPulse.interpolate({ inputRange: [0, 1], outputRange: [CYAN, WHITE_HOT] })
+                : staticBorder;
+              // Sync line sits at this glyph's random release position, aligned to
+              // the glyph marker's centre.
+              const syncLineBottom = scaleSize(6) + t.syncPos * travel + scaleSize(5);
               return (
-                <HapticPressable
+                <Animated.View
                   key={`tumbler-${i}`}
-                  disabled={status !== 'ACTIVE' || resolveState !== 'playing'}
-                  onPress={() => handleSet(i)}
-                  style={[styles.chamber, { height: chamberH, borderColor: borderCol }]}
+                  style={[
+                    styles.chamber,
+                    {
+                      height: chamberH,
+                      borderColor,
+                      borderWidth: pulsing ? 2 : 1,
+                      backgroundColor: pulsing ? 'rgba(34,211,238,0.10)' : 'rgba(0,0,0,0.45)',
+                      shadowColor: CYAN,
+                      shadowOpacity: pulsing ? 0.9 : 0,
+                      shadowRadius: pulsing ? 10 : 0,
+                    },
+                  ]}
                 >
-                  {/* sync line near top */}
-                  <View style={[styles.syncLine, { top: scaleSize(8), backgroundColor: status === 'ACTIVE' && zone === 'INSIDE' ? CYAN : '#475569' }]} />
-                  {/* rising glyph */}
+                  {/* sync line — the random spot where this glyph must be released */}
+                  <View
+                    style={[
+                      styles.syncLine,
+                      { bottom: syncLineBottom, backgroundColor: pulsing ? WHITE_HOT : status === 'SET' ? SEATED : isActive && zone === 'INSIDE' ? CYAN : '#3f4c5a' },
+                    ]}
+                  />
+                  {/* rising glyph marker */}
                   <View
                     style={[
                       styles.glyphToken,
                       {
                         backgroundColor: glyphColor,
-                        bottom: scaleSize(6) + pos * (chamberH - scaleSize(24)),
+                        bottom: scaleSize(6) + pos * travel,
                         shadowColor: glyphColor,
+                        opacity: status === 'PENDING' ? 0.5 : 1,
                       },
                     ]}
                   />
-                  <Text style={[styles.beatTag, { fontSize: scaleFont(6.5), color: borderCol }]}>
-                    {t.beat === 'SLOW' ? '◇' : '◆◆'}
-                  </Text>
-                </HapticPressable>
+                  {/* seated ritual mark */}
+                  {status === 'SET' ? (
+                    <Text style={[styles.ritualMark, { fontSize: scaleFont(12), color: VIOLET }]}>✶</Text>
+                  ) : null}
+                </Animated.View>
               );
             })}
           </View>
 
-          {/* Tension hold */}
+          {/* Tension hold — the single control. Press to sync, release to seat.
+              The button intentionally does NOT signal when to release; the glyph
+              overlapping its sync line is the only timing cue. */}
           <HapticPressable
             onPressIn={startTension}
             onPressOut={endTension}
@@ -490,7 +608,7 @@ export default function SigilTumbler({
           </HapticPressable>
 
           <Text style={[styles.instruction, { fontSize: scaleFont(8), marginTop: scaleSpacing(8) }]}>
-            Drag the dial to aim the wardpick. Hold tension to feel the beat, then tap the glowing chamber as its glyph hits the sync line.
+            Drag the dial to aim the wardpick into resonance. Press and hold tension to make the active glyph rise — release the instant it crosses the sync line to seat it.
           </Text>
 
           {penaltyLine ? (
@@ -504,7 +622,7 @@ export default function SigilTumbler({
                 {
                   fontSize: scaleFont(10),
                   lineHeight: scaleFont(14),
-                  color: resolveState === 'success' ? TERMINAL_GREEN : RED_GLITCH,
+                  color: resolveState === 'success' ? SEATED : RED_GLITCH,
                   marginTop: scaleSpacing(6),
                 },
               ]}
@@ -551,7 +669,9 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     borderRadius: 999,
-    backgroundColor: RED_GLITCH,
+    backgroundColor: RED_BLACK,
+    borderWidth: 2,
+    borderColor: RED_GLITCH,
   },
   tumblerRow: { flexDirection: 'row', justifyContent: 'center' },
   chamber: {
@@ -575,7 +695,15 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 0 },
     elevation: 4,
   },
-  beatTag: { position: 'absolute', bottom: 2, alignSelf: 'center', fontFamily: 'monospace', letterSpacing: 1 },
+  ritualMark: {
+    position: 'absolute',
+    alignSelf: 'center',
+    top: '38%',
+    fontFamily: 'monospace',
+    textShadowColor: VIOLET,
+    textShadowRadius: 8,
+    textShadowOffset: { width: 0, height: 0 },
+  },
   tensionBtn: { borderWidth: 1.5, borderRadius: 4, paddingVertical: 12, alignItems: 'center' },
   tensionText: { fontFamily: 'monospace', fontWeight: '700', letterSpacing: 1 },
   instruction: { fontFamily: 'monospace', color: '#6b7280', letterSpacing: 0.3, textAlign: 'center' },
