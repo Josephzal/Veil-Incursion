@@ -1,17 +1,23 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { HEX_AMMO_META, type HexAmmoType } from '../../types/hexAmmo';
 
 interface CombatMagazineGaugeProps {
   currentAmmo: number;
   maxAmmo: number;
   overchargeMultiplier?: number;
-  /** Zero-Protocol gate open (overcharge + qualifying debuff). */
+  /** Zero-Protocol gate open (Protocol Charges full). */
   markReady?: boolean;
   labelColor?: string;
   liveColor?: string;
   spentColor?: string;
   variant?: 'compact' | 'inline' | 'stacked';
   labelFontScale?: number;
+  /** Loaded ammo type — drives the chip + pip color. */
+  ammoType?: HexAmmoType;
+  protocolCharges?: number;
+  maxProtocolCharges?: number;
+  nextShotOvercharged?: boolean;
 }
 
 export default function CombatMagazineGauge({
@@ -24,16 +30,43 @@ export default function CombatMagazineGauge({
   spentColor = 'rgba(148, 163, 184, 0.35)',
   variant = 'compact',
   labelFontScale = 1,
+  ammoType,
+  protocolCharges = 0,
+  maxProtocolCharges = 0,
+  nextShotOvercharged = false,
 }: CombatMagazineGaugeProps): React.JSX.Element {
   const slots = Math.max(1, maxAmmo);
   const isStacked = variant === 'stacked';
   const isInline = variant === 'compact' || variant === 'inline';
 
-  const overchargeLabel = overchargeMultiplier > 0
-    ? ` // +${Math.round(overchargeMultiplier * 100)}% OC`
-    : '';
-  const markLabel = markReady ? ' // MARK READY' : '';
-  const labelText = `MAGAZINE // ${currentAmmo}/${maxAmmo}${overchargeLabel}${markLabel}`;
+  const ammoMeta = ammoType ? HEX_AMMO_META[ammoType] : null;
+  const overchargeLabel = nextShotOvercharged || overchargeMultiplier > 0 ? ' // OC' : '';
+  const markLabel = markReady ? ' // ZERO READY' : '';
+  const labelText = `${ammoMeta ? `${ammoMeta.chip} ` : 'MAGAZINE // '}${currentAmmo}/${maxAmmo}${overchargeLabel}${markLabel}`;
+
+  const protocolRow = maxProtocolCharges > 0 ? (
+    <View style={styles.protocolRow}>
+      {Array.from({ length: maxProtocolCharges }).map((_, index) => {
+        const filled = index < protocolCharges;
+        return (
+          <View
+            key={index}
+            style={[
+              styles.protocolPip,
+              {
+                backgroundColor: filled ? (ammoMeta?.color ?? '#fbbf24') : 'transparent',
+                borderColor: filled ? (ammoMeta?.color ?? '#fbbf24') : 'rgba(148, 163, 184, 0.5)',
+              },
+            ]}
+          />
+        );
+      })}
+      <Text style={[styles.protocolLabel, markReady ? styles.protocolLabelReady : null]}>
+        {markReady ? 'ZERO PROTOCOL' : 'PROTOCOL'}
+      </Text>
+      {nextShotOvercharged ? <Text style={styles.overchargeTag}>⚡OC</Text> : null}
+    </View>
+  ) : null;
 
   const bulletRow = (
     <View style={[
@@ -71,7 +104,7 @@ export default function CombatMagazineGauge({
             fontSize: (isStacked ? 8 : 7) * labelFontScale,
             lineHeight: (isStacked ? 10 : 9) * labelFontScale,
           } : null,
-          { color: labelColor },
+          { color: ammoMeta?.color ?? labelColor },
         ]}
         numberOfLines={1}
         ellipsizeMode="tail"
@@ -79,6 +112,7 @@ export default function CombatMagazineGauge({
         {labelText}
       </Text>
       {bulletRow}
+      {protocolRow}
     </View>
   );
 }
@@ -140,5 +174,35 @@ const styles = StyleSheet.create({
     height: 7,
     borderRadius: 4,
     borderWidth: 1,
+  },
+  protocolRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginTop: 1,
+  },
+  protocolPip: {
+    width: 8,
+    height: 8,
+    borderWidth: 1,
+    transform: [{ rotate: '45deg' }],
+  },
+  protocolLabel: {
+    fontFamily: 'monospace',
+    fontSize: 6,
+    letterSpacing: 0.5,
+    color: 'rgba(148, 163, 184, 0.9)',
+    marginLeft: 2,
+  },
+  protocolLabelReady: {
+    color: '#fbbf24',
+    fontWeight: '700',
+  },
+  overchargeTag: {
+    fontFamily: 'monospace',
+    fontSize: 6,
+    fontWeight: '700',
+    color: '#38bdf8',
+    marginLeft: 2,
   },
 });

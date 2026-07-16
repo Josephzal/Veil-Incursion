@@ -71,6 +71,9 @@ export const HEX_SHOT_BOON_CATALOG: Record<HexShotBoonId, ClassBoonDefinition> =
   CURSED_SHRAPNEL: hex('CURSED_SHRAPNEL', 'TIER_4', 'Cursed Shrapnel', 'Ballistic AoE applies Void-Bleed to all hit.', 'BALLISTIC + AOE // Void-Bleed all hit', 'onDamageDeal', { tagAll: ['BALLISTIC', 'AOE'] }),
   OVERWATCH_MASTERY: hex('OVERWATCH_MASTERY', 'TIER_4', 'Overwatch Mastery', 'Panopticon interrupt costs 0 Ammo and deals double damage.', 'Panopticon interrupt // 0 ammo, 2× damage', 'onAbilityResolve'),
   GUNSMITHS_CURSE: hex('GUNSMITHS_CURSE', 'TIER_4', "The Gunsmith's Curse", 'All damage +30%, but Perfect Reload window is 50% smaller.', 'Passive // +30% dmg, tighter reload', 'passive'),
+  SILVER_DISCIPLINE: hex('SILVER_DISCIPLINE', 'TIER_2', 'Silver Discipline', 'First Silver-Core shot after a Perfect reload strips +1 Kinetic Armor and deals +15 Fracture.', 'Perfect reload → Silver-Core // +15 Fracture, +1 armor strip', 'passive'),
+  WRAITHGLASS_ETCHING: hex('WRAITHGLASS_ETCHING', 'TIER_2', 'Wraithglass Etching', 'Wraithglass shots vs Void-Marked targets deal +8 Occult.', 'WRAITHGLASS vs VOID_MARKED // +8 occult', 'passive'),
+  COLD_CHAMBER: hex('COLD_CHAMBER', 'TIER_2', 'Cold Chamber', 'First Stasis-Lock shot after a Perfect reload applies AP −2 instead of AP −1.', 'Perfect reload → Stasis-Lock // AP −2', 'passive'),
 };
 
 export const ALL_HEX_SHOT_BOON_IDS = Object.keys(HEX_SHOT_BOON_CATALOG) as HexShotBoonId[];

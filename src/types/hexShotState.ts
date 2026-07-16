@@ -2,6 +2,12 @@ import type { ClassCombatEncounterState } from './classCombatAbility';
 import type { EnemyCombatProfile } from './run';
 import { hasCombatTag } from '../data/combatFractureEngine';
 import { isUnitAlive } from '../data/combatSquadEngine';
+import {
+  DEFAULT_HEX_AMMO_TYPE,
+  HEX_MAGAZINE_CONFIG,
+  type HexAmmoType,
+  type ReloadQuality,
+} from './hexAmmo';
 
 /** Stamina ripped when reload timing is missed (void-feed jam). */
 export const HEX_RELOAD_JAM_STAMINA_PENALTY = 20;
@@ -19,6 +25,22 @@ export interface HexShotCombatState {
   maxAmmo: number;
   /** Damage bonus multiplier (0.0–0.50) from perfect reload timing. */
   overchargeMultiplier: number;
+  // --- Hex Magazine (ammo-type reload refactor v1) ---
+  /** Loaded ammo type — inherited by BALLISTIC abilities. */
+  currentAmmoType: HexAmmoType;
+  /** Protocol Charges (0..maxProtocolCharges) — Perfect reloads grant +1. */
+  protocolCharges: number;
+  maxProtocolCharges: number;
+  /** Ammo type loaded by the previous reload (for combo/telemetry). */
+  lastAmmoType?: HexAmmoType;
+  /** Ammo types from the last N Perfect reloads — feeds Zero Protocol riders. */
+  calibratedAmmoTypes: HexAmmoType[];
+  /** Perfect reload primes the next BALLISTIC shot. */
+  nextShotOvercharged: boolean;
+  /** Quality of the last resolved reload. */
+  lastReloadQuality?: ReloadQuality;
+  /** Failed reload lightly penalizes the next BALLISTIC shot (−10%). */
+  firstShotPenaltyPending: boolean;
   isUltimateAvailable: boolean;
   /** Flow-state reload after emptying the magazine (still costs 1 AP to open). */
   isAutoLoadMinigameActive: boolean;
@@ -40,10 +62,20 @@ export function createInitialHexShotCombatState(input: {
   ap: number;
   ammo: number;
   maxAmmo: number;
+  currentAmmoType?: HexAmmoType;
+  protocolCharges?: number;
 }): HexShotCombatState {
   return {
     ...input,
     overchargeMultiplier: 0,
+    currentAmmoType: input.currentAmmoType ?? DEFAULT_HEX_AMMO_TYPE,
+    protocolCharges: input.protocolCharges ?? 0,
+    maxProtocolCharges: HEX_MAGAZINE_CONFIG.maxProtocolCharges,
+    lastAmmoType: undefined,
+    calibratedAmmoTypes: [],
+    nextShotOvercharged: false,
+    lastReloadQuality: undefined,
+    firstShotPenaltyPending: false,
     isUltimateAvailable: false,
     isAutoLoadMinigameActive: false,
     isManualReloadMinigameActive: false,
@@ -51,6 +83,11 @@ export function createInitialHexShotCombatState(input: {
     pendingEjectDamage: 0,
     autoReloadPending: false,
   };
+}
+
+/** Zero Protocol readiness — Protocol Charges gate (no full-mag requirement). */
+export function evaluateZeroProtocolReady(state: Pick<HexShotCombatState, 'protocolCharges' | 'maxProtocolCharges'>): boolean {
+  return state.protocolCharges >= state.maxProtocolCharges;
 }
 
 /**

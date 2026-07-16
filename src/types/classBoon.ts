@@ -43,7 +43,10 @@ export type HexShotBoonId =
   | 'HOT_SWAP'
   | 'CURSED_SHRAPNEL'
   | 'OVERWATCH_MASTERY'
-  | 'GUNSMITHS_CURSE';
+  | 'GUNSMITHS_CURSE'
+  | 'SILVER_DISCIPLINE'
+  | 'WRAITHGLASS_ETCHING'
+  | 'COLD_CHAMBER';
 
 export type EnvoyBoonId =
   | 'VOID_TOUCHED'

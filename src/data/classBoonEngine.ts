@@ -20,6 +20,7 @@ import { HEX_SHOT_BOON_CATALOG, pickRandomHexShotBoons } from './hexShotBoons';
 import { LEY_LINE_MUTATION_CATALOG, pickRandomLeyLineMutations } from './leyLineMutations';
 import type { LeyLineMutationId } from '../types/leyLineMutation';
 import type { EnvoyAbilityId, HexShotAbilityId } from '../types/operativeClass';
+import type { HexAmmoType } from '../types/hexAmmo';
 
 export interface ClassBoonRule {
   id: OperativeClassBoonId;
@@ -71,15 +72,37 @@ export function hasEnvoyBoon(boons: readonly EnvoyBoonId[], id: EnvoyBoonId): bo
   return boons.includes(id);
 }
 
+/**
+ * Ammo-type refactor v1 — ammo identity is combat state. A BALLISTIC ability firing
+ * Wraithglass ammo counts as VOID_AMMO for boon/effect matching, so legacy VOID_AMMO
+ * boons apply to Wraithglass shots. Explicit VOID_AMMO ability tags still count.
+ */
+export function resolveHexEffectiveTags(
+  abilityId: string,
+  ammoType?: HexAmmoType,
+): readonly string[] {
+  const base = getHexShotAbilityTags(abilityId as HexShotAbilityId);
+  if (ammoType === 'WRAITHGLASS' && base.includes('BALLISTIC') && !base.includes('VOID_AMMO')) {
+    return [...base, 'VOID_AMMO'];
+  }
+  return base;
+}
+
+export function isUsingWraithglassAmmo(abilityId: string, ammoType?: HexAmmoType): boolean {
+  if (ammoType !== 'WRAITHGLASS') return false;
+  return getHexShotAbilityTags(abilityId as HexShotAbilityId).includes('BALLISTIC');
+}
+
 export function boonMatchesHexAction(
   boons: readonly HexShotBoonId[],
   boonId: HexShotBoonId,
   abilityId?: string | null,
+  ammoType?: HexAmmoType,
 ): boolean {
   const rule = HEX_SHOT_BOON_RULES[boonId];
   if (!rule || !hasHexShotBoon(boons, boonId)) return false;
   if (!abilityId) return rule.hook === 'passive' || rule.hook === 'onEncounterStart';
-  const tags = getHexShotAbilityTags(abilityId as HexShotAbilityId);
+  const tags = resolveHexEffectiveTags(abilityId, ammoType);
   return tagsMatch(tags, rule.tagAll, rule.tagAny);
 }
 

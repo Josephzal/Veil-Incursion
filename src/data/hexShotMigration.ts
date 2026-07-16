@@ -10,6 +10,25 @@ export function migrateHexShotAbilityId(id: string): HexShotAbilityId {
   return (LEGACY_HEX_SHOT_ABILITY_IDS[id] ?? id) as HexShotAbilityId;
 }
 
+/**
+ * Ammo-type refactor v1 — standalone ammo-identity abilities are superseded by the
+ * magazine ammo-type system. Existing saves that have them equipped are migrated to
+ * the closest shot-pattern / tactical replacement so they no longer compete with the
+ * ammo-type selection. The legacy ids remain valid in the catalog/executor so nothing
+ * crashes if they surface elsewhere.
+ */
+const DEPRECATED_HEX_SHOT_LOADOUT_REPLACEMENTS: Partial<Record<HexShotAbilityId, HexShotAbilityId>> = {
+  WRAITH_PIERCER_ROUND: 'SINGULARITY_SLUG',
+  BLOOD_TRACER_ROUND: 'REVENANTS_ECHO',
+  STASIS_LOCK_SLUG: 'PANOPTICON_PROTOCOL',
+  BLEEDING_PAYLOAD: 'RIFT_SNARE',
+};
+
+/** Replace a deprecated ammo-identity ability id with its v1 loadout replacement. */
+export function migrateDeprecatedHexShotLoadoutId(id: HexShotAbilityId): HexShotAbilityId {
+  return DEPRECATED_HEX_SHOT_LOADOUT_REPLACEMENTS[id] ?? id;
+}
+
 export function migrateHexShotAbilityList(ids: readonly string[]): HexShotAbilityId[] {
   return ids.map((id) => migrateHexShotAbilityId(id));
 }

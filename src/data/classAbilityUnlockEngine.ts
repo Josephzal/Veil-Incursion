@@ -14,7 +14,7 @@ import {
 } from './combatMasteryEngine';
 import { ENVOY_ABILITY_CATALOG } from './envoyAbilities';
 import { HEX_SHOT_ABILITY_CATALOG } from './hexShotAbilities';
-import { migrateHexShotAbilityId } from './hexShotMigration';
+import { migrateHexShotAbilityId, migrateDeprecatedHexShotLoadoutId } from './hexShotMigration';
 import { migrateEnvoyAbilityId } from './envoyMigration';
 import {
   canAffordAbilityUnlock,
@@ -43,11 +43,28 @@ export const ENVOY_INTRINSIC: readonly EnvoyAbilityId[] = [
   ...ENVOY_PROC_ULTIMATES,
 ];
 
+/**
+ * Ammo-type refactor v1 — standalone ammo-identity abilities are superseded by the
+ * ammo-type magazine system. Kept in the catalog so existing saves don't break, but
+ * hidden from new loadout selection.
+ */
+export const HEX_SHOT_DEPRECATED_ABILITIES: readonly HexShotAbilityId[] = [
+  'WRAITH_PIERCER_ROUND',
+  'BLOOD_TRACER_ROUND',
+  'STASIS_LOCK_SLUG',
+  'BLEEDING_PAYLOAD',
+];
+
+export function isHexShotDeprecatedAbility(id: HexShotAbilityId): boolean {
+  return HEX_SHOT_DEPRECATED_ABILITIES.includes(id);
+}
+
 export function getAssignableHexShotAbilities(): HexShotAbilityId[] {
   return (Object.keys(HEX_SHOT_ABILITY_CATALOG) as HexShotAbilityId[]).filter(
     (id) => !HEX_SHOT_INTRINSIC.includes(id)
       && id !== HEX_SHOT_ANCHOR
-      && !isHexShotProcUltimate(id),
+      && !isHexShotProcUltimate(id)
+      && !HEX_SHOT_DEPRECATED_ABILITIES.includes(id),
   );
 }
 
@@ -65,8 +82,10 @@ export function sanitizeHexShotCombatLoadout(loadout: readonly HexShotAbilityId[
     return [...DEFAULT_HEX_SHOT_LOADOUT];
   }
   const used = new Set<string>([migrated[0]]);
-  const flex = migrated.slice(1).map((id) => {
-    if (!isHexShotProcUltimate(id)) {
+  const flex = migrated.slice(1).map((raw) => {
+    // v1: swap deprecated ammo-identity abilities for their shot-pattern replacements.
+    const id = migrateDeprecatedHexShotLoadoutId(raw);
+    if (!isHexShotProcUltimate(id) && !used.has(id)) {
       used.add(id);
       return id;
     }

@@ -57,7 +57,7 @@ export const DEFAULT_HEX_SHOT_LOADOUT: HexShotLoadout = [
   'SILVER_CORE_SIDEARM',
   'ASH_JACKET_SALVO',
   'RIFT_SNARE',
-  'BLEEDING_PAYLOAD',
+  'SINGULARITY_SLUG',
 ];
 
 export const DEFAULT_ENVOY_LOADOUT: EnvoyLoadout = [

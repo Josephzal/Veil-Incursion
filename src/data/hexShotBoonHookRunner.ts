@@ -3,8 +3,9 @@ import type { HexShotBoonId } from '../types/classBoon';
 import type { ActiveReloadResult } from '../types/classCombatResources';
 import type { EnemyCombatProfile } from '../types/run';
 import type { HexShotAbilityId } from '../types/operativeClass';
-import { boonMatchesHexAction, hasHexShotBoon } from './classBoonEngine';
+import { boonMatchesHexAction, hasHexShotBoon, resolveHexEffectiveTags } from './classBoonEngine';
 import { getHexShotAbilityTags } from './hexShotAbilities';
+import type { HexAmmoType } from '../types/hexAmmo';
 import { adjacentAliveUnits, aliveUnits, getUnitById, isUnitAlive } from './combatSquadEngine';
 import { addCombatTag, hasCombatTag } from './combatFractureEngine';
 
@@ -19,6 +20,8 @@ export interface HexShotDamageAdjustInput {
   channel?: 'KINETIC' | 'OCCULT' | 'TRUE';
   encounter: ClassBoonEncounterState;
   log: (msg: string) => void;
+  /** Loaded ammo type — Wraithglass counts as VOID_AMMO (v1 refactor). */
+  ammoType?: HexAmmoType;
 }
 
 export interface HexShotDamageAdjustResult {
@@ -33,12 +36,13 @@ export function getHexShotCritOverrides(
   abilityId: HexShotAbilityId,
   target: EnemyCombatProfile,
   encounter: ClassBoonEncounterState,
+  ammoType?: HexAmmoType,
 ): { forceCrit: boolean; ignoreDefenses: boolean } {
-  const tags = getHexShotAbilityTags(abilityId);
+  const tags = resolveHexEffectiveTags(abilityId, ammoType);
   if (
     tags.includes('VOID_AMMO')
     && hasCombatTag(target, 'EXPOSED')
-    && boonMatchesHexAction(boons, 'OCCULT_ASSASSIN', abilityId)
+    && boonMatchesHexAction(boons, 'OCCULT_ASSASSIN', abilityId, ammoType)
   ) {
     return { forceCrit: true, ignoreDefenses: true };
   }
@@ -46,7 +50,7 @@ export function getHexShotCritOverrides(
     tags.includes('VOID_AMMO')
     && target.unitId
     && encounter.voidMarkedUnits[target.unitId]
-    && boonMatchesHexAction(boons, 'CURSED_BALLISTICS', abilityId)
+    && boonMatchesHexAction(boons, 'CURSED_BALLISTICS', abilityId, ammoType)
   ) {
     return { forceCrit: false, ignoreDefenses: true };
   }
@@ -54,7 +58,7 @@ export function getHexShotCritOverrides(
 }
 
 export function adjustHexShotOutgoingDamage(input: HexShotDamageAdjustInput): HexShotDamageAdjustResult {
-  const { boons, mods, abilityId, target, encounter, log } = input;
+  const { boons, mods, abilityId, target, encounter, log, ammoType } = input;
   let damage = input.damage;
   let channel = input.channel;
   let forceCrit = false;
@@ -65,7 +69,8 @@ export function adjustHexShotOutgoingDamage(input: HexShotDamageAdjustInput): He
   }
 
   const unitId = target.unitId;
-  const tags = getHexShotAbilityTags(abilityId);
+  const tags = resolveHexEffectiveTags(abilityId, ammoType);
+  const bm = (id: HexShotBoonId) => boonMatchesHexAction(boons, id, abilityId, ammoType);
 
   if (encounter.phantomTracerUnits[unitId] != null) {
     damage = Math.floor(damage * 1.1);
@@ -74,7 +79,7 @@ export function adjustHexShotOutgoingDamage(input: HexShotDamageAdjustInput): He
   if (
     tags.includes('VOID_AMMO')
     && target.gridSlot?.startsWith('BL')
-    && boonMatchesHexAction(boons, 'LEYLINE_PENETRATOR', abilityId)
+    && bm('LEYLINE_PENETRATOR')
   ) {
     damage = Math.floor(damage * (1 + mods.voidBacklineDamagePct / 100));
     log('[LEY-LINE PENETRATOR] >> Backline void strike amplified.');
@@ -83,7 +88,7 @@ export function adjustHexShotOutgoingDamage(input: HexShotDamageAdjustInput): He
   if (
     tags.includes('BALLISTIC')
     && encounter.breachAndClearPending
-    && boonMatchesHexAction(boons, 'BREACH_AND_CLEAR', abilityId)
+    && bm('BREACH_AND_CLEAR')
   ) {
     damage = Math.floor(damage * 1.4);
     encounter.breachAndClearPending = false;
@@ -93,7 +98,7 @@ export function adjustHexShotOutgoingDamage(input: HexShotDamageAdjustInput): He
   if (
     tags.includes('VOID_AMMO')
     && tags.includes('KINETIC')
-    && boonMatchesHexAction(boons, 'ABYSSAL_PRIMERS', abilityId)
+    && bm('ABYSSAL_PRIMERS')
     && channel === 'KINETIC'
   ) {
     channel = 'OCCULT';
@@ -103,7 +108,7 @@ export function adjustHexShotOutgoingDamage(input: HexShotDamageAdjustInput): He
   if (
     tags.includes('VOID_AMMO')
     && hasCombatTag(target, 'EXPOSED')
-    && boonMatchesHexAction(boons, 'OCCULT_ASSASSIN', abilityId)
+    && bm('OCCULT_ASSASSIN')
   ) {
     forceCrit = true;
     log('[OCCULT ASSASSIN] >> Exposed void mark — guaranteed critical.');
@@ -112,7 +117,7 @@ export function adjustHexShotOutgoingDamage(input: HexShotDamageAdjustInput): He
   if (
     tags.includes('VOID_AMMO')
     && encounter.voidMarkedUnits[unitId]
-    && boonMatchesHexAction(boons, 'CURSED_BALLISTICS', abilityId)
+    && bm('CURSED_BALLISTICS')
   ) {
     ignoreDefenses = true;
     log('[CURSED BALLISTICS] >> Void-marked target — defenses bypassed.');
@@ -134,30 +139,33 @@ export interface HexShotOnHitContext {
   splashDamage: (raw: number, targetId: string, tag: string) => void;
   healOperative: (amount: number) => void;
   maxHp: number;
+  /** Loaded ammo type — Wraithglass counts as VOID_AMMO (v1 refactor). */
+  ammoType?: HexAmmoType;
 }
 
 export function runHexShotOnHitBoons(ctx: HexShotOnHitContext): void {
-  const { boons, abilityId, target, damageDealt, critical, encounter } = ctx;
+  const { boons, abilityId, target, damageDealt, critical, encounter, ammoType } = ctx;
   if (!abilityId || damageDealt <= 0 || !target.unitId) return;
 
   const unitId = target.unitId;
-  const tags = getHexShotAbilityTags(abilityId);
+  const tags = resolveHexEffectiveTags(abilityId, ammoType);
+  const bm = (id: HexShotBoonId) => boonMatchesHexAction(boons, id, abilityId, ammoType);
 
   if (tags.includes('VOID_AMMO')) {
     encounter.voidMarkedUnits[unitId] = true;
-    if (boonMatchesHexAction(boons, 'PHANTOM_TRACER', abilityId)) {
+    if (bm('PHANTOM_TRACER')) {
       encounter.phantomTracerUnits[unitId] = 1;
       ctx.log('[PHANTOM TRACER] >> Target marked — +10% damage taken.');
     }
   }
 
-  if (boonMatchesHexAction(boons, 'CORRUPTED_CASINGS', abilityId) && tags.includes('VOID_AMMO')) {
+  if (bm('CORRUPTED_CASINGS') && tags.includes('VOID_AMMO')) {
     encounter.voidBleedTurns[unitId] = Math.max(encounter.voidBleedTurns[unitId] ?? 0, 2);
     ctx.log('[CORRUPTED CASINGS] >> Void-bleed seeded.');
   }
 
   if (
-    boonMatchesHexAction(boons, 'CURSED_SHRAPNEL', abilityId)
+    bm('CURSED_SHRAPNEL')
     && tags.includes('BALLISTIC')
     && tags.includes('AOE')
   ) {
@@ -168,19 +176,19 @@ export function runHexShotOnHitBoons(ctx: HexShotOnHitContext): void {
     ctx.log('[CURSED SHRAPNEL] >> Shrapnel cloud — void-bleed on all hit.');
   }
 
-  if (boonMatchesHexAction(boons, 'SUPPRESSIVE_FIRE', abilityId) && tags.includes('BALLISTIC')) {
+  if (bm('SUPPRESSIVE_FIRE') && tags.includes('BALLISTIC')) {
     encounter.suppressiveFireUnits[unitId] = true;
     const reduced = Math.max(1, Math.floor(target.baseDamage * 0.85));
     ctx.patchUnit(unitId, { baseDamage: reduced });
     ctx.log('[SUPPRESSIVE FIRE] >> Target suppressed — next strike −15% power.');
   }
 
-  if (boonMatchesHexAction(boons, 'EVENT_HORIZON_ROUNDS', abilityId) && tags.includes('VOID_AMMO')) {
+  if (bm('EVENT_HORIZON_ROUNDS') && tags.includes('VOID_AMMO')) {
     ctx.patchUnit(unitId, { evadeChance: 0, evadeActive: false });
     ctx.log('[EVENT HORIZON ROUNDS] >> Target evade stripped to zero.');
   }
 
-  if (boonMatchesHexAction(boons, 'GRID_SCRAMBLER', abilityId) && tags.includes('TRAP') && Math.random() < 0.5) {
+  if (bm('GRID_SCRAMBLER') && tags.includes('TRAP') && Math.random() < 0.5) {
     const concussed = addCombatTag(target, 'CONCUSSED');
     ctx.patchUnit(unitId, { combatTags: concussed.combatTags });
     ctx.log('[GRID SCRAMBLER] >> Trap detonation — target concussed.');
@@ -188,7 +196,7 @@ export function runHexShotOnHitBoons(ctx: HexShotOnHitContext): void {
 
   if (
     critical
-    && boonMatchesHexAction(boons, 'SHRAPNEL_BLOOM', abilityId)
+    && bm('SHRAPNEL_BLOOM')
     && tags.includes('BALLISTIC')
   ) {
     const splash = Math.max(1, Math.floor(damageDealt * 0.25));
@@ -201,7 +209,7 @@ export function runHexShotOnHitBoons(ctx: HexShotOnHitContext): void {
 
   if (
     critical
-    && boonMatchesHexAction(boons, 'SIPHON_CHOKE', abilityId)
+    && bm('SIPHON_CHOKE')
     && tags.includes('VOID_AMMO')
   ) {
     const heal = Math.max(1, Math.floor(ctx.maxHp * 0.05));
@@ -209,7 +217,7 @@ export function runHexShotOnHitBoons(ctx: HexShotOnHitContext): void {
     ctx.log(`[SIPHON CHOKE] >> Void crit siphon — +${heal} HP.`);
   }
 
-  if (boonMatchesHexAction(boons, 'ECHOING_GUNFIRE', abilityId) && tags.includes('VOID_AMMO') && Math.random() < 0.2) {
+  if (bm('ECHOING_GUNFIRE') && tags.includes('VOID_AMMO') && Math.random() < 0.2) {
     const pool = aliveUnits(ctx.squad).filter((u) => u.unitId !== unitId);
     const echo = pool[Math.floor(Math.random() * pool.length)];
     if (echo?.unitId) {

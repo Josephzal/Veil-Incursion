@@ -42,6 +42,11 @@ export interface CombatOperativeTelemetry {
   /** Aegis narrative / Demon's Lung overcharge flag. */
   overcharged?: boolean;
   zeroProtocolReady?: boolean;
+  /** Hex Shot ammo-type refactor v1. */
+  hexAmmoType?: import('../../types/hexAmmo').HexAmmoType;
+  hexProtocolCharges?: number;
+  hexMaxProtocolCharges?: number;
+  hexNextShotOvercharged?: boolean;
   veilFlux?: number;
   fluxMaxCap?: number;
   envoyVoidSiphoned?: boolean;
@@ -98,6 +103,10 @@ export default function CombatOperativeHud({
     envoyVoidSiphoned = false,
     envoySilenced = false,
     veilRotStacksTotal = 0,
+    hexAmmoType,
+    hexProtocolCharges = 0,
+    hexMaxProtocolCharges = 0,
+    hexNextShotOvercharged = false,
   } = telemetry;
 
   const effectiveMax = maxSoulAnchor;
@@ -134,6 +143,10 @@ export default function CombatOperativeHud({
           labelColor="#fbbf24"
           variant={resourceVariant}
           labelFontScale={labelScale}
+          ammoType={hexAmmoType}
+          protocolCharges={hexProtocolCharges}
+          maxProtocolCharges={hexMaxProtocolCharges}
+          nextShotOvercharged={hexNextShotOvercharged}
         />
       );
     }

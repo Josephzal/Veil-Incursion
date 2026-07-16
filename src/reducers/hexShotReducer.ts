@@ -1,20 +1,23 @@
 import {
-  evaluateHexShotUltimateAvailable,
+  evaluateZeroProtocolReady,
   HEX_RELOAD_AP_COST,
-  HEX_RELOAD_JAM_STAMINA_PENALTY,
-  overchargeFromAmmoAtReloadStart,
   type HexShotCombatState,
 } from '../types/hexShotState';
 import type { ClassCombatEncounterState } from '../types/classCombatAbility';
 import type { EnemyCombatProfile } from '../types/run';
-import type { ActiveReloadResult } from '../types/classCombatResources';
+import {
+  HEX_MAGAZINE_CONFIG,
+  pushCalibratedAmmo,
+  type HexAmmoType,
+  type ReloadQuality,
+} from '../types/hexAmmo';
 import { getHexShotAbilityTags } from '../data/hexShotAbilities';
 
 export type HexShotReducerAction =
   | { type: 'HEX_SYNC_RESOURCES'; patch: Partial<Pick<HexShotCombatState, 'hp' | 'maxHp' | 'stamina' | 'maxStamina' | 'ap' | 'ammo' | 'maxAmmo'>> }
   | { type: 'HEX_TURN_START'; ap: number; encounter: ClassCombatEncounterState; squad: readonly EnemyCombatProfile[] }
   | { type: 'HEX_BEGIN_RELOAD'; manual: boolean; deadMansSwitch?: boolean }
-  | { type: 'HEX_RESOLVE_RELOAD'; result: ActiveReloadResult; encounter: ClassCombatEncounterState; squad: readonly EnemyCombatProfile[]; deadMansSwitchBlocksOvercharge?: boolean }
+  | { type: 'HEX_RESOLVE_RELOAD'; quality: ReloadQuality; ammoType: HexAmmoType; encounter: ClassCombatEncounterState; squad: readonly EnemyCombatProfile[]; deadMansSwitchBlocksOvercharge?: boolean }
   | { type: 'HEX_CONSUME_BALLISTIC_OVERCHARGE' }
   | { type: 'HEX_AFTER_BALLISTIC_SPEND' }
   | { type: 'HEX_PHANTOM_FEED' }
@@ -22,18 +25,19 @@ export type HexShotReducerAction =
   | { type: 'HEX_EXECUTE_ZERO_PROTOCOL'; encounter: ClassCombatEncounterState; squad: readonly EnemyCombatProfile[] }
   | { type: 'HEX_DISMISS_RELOAD_PROMPT' };
 
+/**
+ * Zero Protocol availability is gated purely by Protocol Charges (v1 refactor) —
+ * no full-mag / debuff requirement. `encounter`/`squad` retained for signature
+ * stability with existing call sites.
+ */
 function withUltimate(
   state: HexShotCombatState,
-  encounter: ClassCombatEncounterState,
-  squad: readonly EnemyCombatProfile[],
+  _encounter: ClassCombatEncounterState,
+  _squad: readonly EnemyCombatProfile[],
 ): HexShotCombatState {
   return {
     ...state,
-    isUltimateAvailable: evaluateHexShotUltimateAvailable(
-      state.overchargeMultiplier,
-      squad,
-      encounter,
-    ),
+    isUltimateAvailable: evaluateZeroProtocolReady(state),
   };
 }
 
@@ -78,31 +82,54 @@ export function hexShotReducer(
     }
 
     case 'HEX_RESOLVE_RELOAD': {
+      // Refill magazine + set ammo type regardless of quality (reload is a pivot, not a punishment).
       const base: HexShotCombatState = {
         ...state,
         ammo: state.maxAmmo,
+        currentAmmoType: action.ammoType,
+        lastAmmoType: action.ammoType,
+        lastReloadQuality: action.quality,
         isAutoLoadMinigameActive: false,
         isManualReloadMinigameActive: false,
         autoReloadPending: false,
         pendingEjectDamage: 0,
       };
-      if (action.result === 'PERFECT' && !action.deadMansSwitchBlocksOvercharge) {
-        const overchargeMultiplier = overchargeFromAmmoAtReloadStart(
-          state.ammoAtReloadStart,
-          state.maxAmmo,
-        );
+      const perfect = action.quality === 'PERFECT' && !action.deadMansSwitchBlocksOvercharge;
+      if (perfect) {
         return withUltimate(
-          { ...base, overchargeMultiplier },
+          {
+            ...base,
+            protocolCharges: Math.min(state.maxProtocolCharges, state.protocolCharges + 1),
+            calibratedAmmoTypes: pushCalibratedAmmo(state.calibratedAmmoTypes, action.ammoType),
+            nextShotOvercharged: true,
+            overchargeMultiplier: HEX_MAGAZINE_CONFIG.overchargedDamagePct / 100,
+            firstShotPenaltyPending: false,
+          },
           action.encounter,
           action.squad,
         );
       }
-      const stamina = Math.max(0, state.stamina - HEX_RELOAD_JAM_STAMINA_PENALTY);
-      return withUltimate({ ...base, stamina, overchargeMultiplier: 0 }, action.encounter, action.squad);
+      // CLEAN (or Perfect blocked by Dead-Man's Switch): refill only, no Protocol.
+      // FAILED: refill + a light −10% first-shot penalty (no Protocol, no stamina rip).
+      return withUltimate(
+        {
+          ...base,
+          nextShotOvercharged: false,
+          overchargeMultiplier: 0,
+          firstShotPenaltyPending: action.quality === 'FAILED',
+        },
+        action.encounter,
+        action.squad,
+      );
     }
 
     case 'HEX_CONSUME_BALLISTIC_OVERCHARGE':
-      return { ...state, overchargeMultiplier: 0, isUltimateAvailable: false };
+      return {
+        ...state,
+        overchargeMultiplier: 0,
+        nextShotOvercharged: false,
+        firstShotPenaltyPending: false,
+      };
 
     case 'HEX_AFTER_BALLISTIC_SPEND':
       if (state.ammo !== 0) return state;
@@ -118,13 +145,13 @@ export function hexShotReducer(
       return withUltimate(state, action.encounter, action.squad);
 
     case 'HEX_EXECUTE_ZERO_PROTOCOL':
+      // Consume all Protocol + clear calibrated sequence. Does NOT dump the magazine.
       return withUltimate(
         {
           ...state,
-          ammo: 0,
-          overchargeMultiplier: 0,
+          protocolCharges: 0,
+          calibratedAmmoTypes: [],
           isUltimateAvailable: false,
-          autoReloadPending: true,
         },
         action.encounter,
         action.squad,
