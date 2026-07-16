@@ -331,6 +331,7 @@ import {
   buildDevSandboxNarrativeEncounter,
   resolveDevSandboxTensionMechanic,
 } from '../data/devSandboxEngine';
+import { formatTensionMechanicLabel } from '../components/narrative/tension/tensionMechanicTypes';
 import type { EchoEncounterKind } from '../types/echoEncounter';
 import {
   devQueueEchoForce,
@@ -3814,7 +3815,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         activeIncursionRef.current = next;
         return next;
       });
-      appendRunLog(`>> NARRATIVE PREVIEW — ${tensionMechanic.replace('Mechanic_', '').replace(/_/g, ' ')}.`);
+      appendRunLog(`>> NARRATIVE PREVIEW — ${formatTensionMechanicLabel(tensionMechanic)}.`);
       return;
     }
 

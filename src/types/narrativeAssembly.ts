@@ -42,10 +42,24 @@ export type Tag =
   | 'city'
   | 'forest';
 
+/**
+ * Narrative tension minigame IDs (out-of-combat).
+ *
+ * Naming — do not confuse with combat systems:
+ * - Mechanic_ScavengeBar — OLD narrative loot/scavenge tension (InstabilityProtocol UI).
+ *   Still supported for legacy content + DevTest force. Deprecated for new normal generation.
+ * - Mechanic_ConcealSlider — player-facing **Scanner Sweep** (1D blind-zone tracking + sweep pulses).
+ * - Mechanic_SigilTrace — player-facing **Ritual Echo** (sequence memory + forbidden beats).
+ * - Mechanic_CipherRite — narrative hacking / occult decryption (Cipher Rite UI).
+ * - Mechanic_SignalAlignment — player-facing **Veil Lock** (limited rotatable glyph-key lock routing).
+ * - Dead-Man's Switch — Hex Shot *combat graft* on Phase-Shift Reload. NOT a narrative mechanic.
+ */
 export type TensionMechanic =
   | 'Mechanic_ScavengeBar'
   | 'Mechanic_ConcealSlider'
-  | 'Mechanic_SigilTrace';
+  | 'Mechanic_SigilTrace'
+  | 'Mechanic_CipherRite'
+  | 'Mechanic_SignalAlignment';
 
 export type PenaltyType = 'HP' | 'Resonance';
 
@@ -76,7 +90,8 @@ export interface ComplicationSeed {
 
 export interface MechanicResolver {
   text: string;
-  tensionMechanic: TensionMechanic;
+  /** Omitted for plain stash / free secure paths (no tension minigame). */
+  tensionMechanic?: TensionMechanic;
   onSuccess: string;
   onFailure: string;
 }

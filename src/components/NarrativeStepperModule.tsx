@@ -90,7 +90,7 @@ export default function NarrativeStepperModule({
   const [pendingResolve, setPendingResolve] = useState<PendingLegacyResolve | null>(null);
 
   const tensionMechanic: TensionMechanic | undefined =
-    node.proceduralMeta?.tensionMechanic ?? 'Mechanic_SigilTrace';
+    node.proceduralMeta?.tensionMechanic;
   const tensionMechanicLabel = formatTensionMechanicLabel(tensionMechanic);
 
   const handleChoiceSelect = (choice: 'A' | 'B') => {
@@ -107,6 +107,11 @@ export default function NarrativeStepperModule({
   const handleScenarioContinue = () => {
     if (!selectedChoice) return;
     if (selectedChoice === 'A') {
+      // Undefined mechanic is intentional "no tension" — not a silent ScavengeBar fallback.
+      if (!tensionMechanic) {
+        showOutcome('A', 'SUCCESS');
+        return;
+      }
       setPhase('TENSION');
       return;
     }
@@ -219,6 +224,9 @@ export default function NarrativeStepperModule({
             tensionMechanic={tensionMechanic}
             onSuccess={handleTensionSuccess}
             onFailure={handleTensionFailure}
+            defaultPenalty={node.proceduralMeta?.defaultPenalty}
+            difficulty={node.proceduralMeta?.tensionDifficulty}
+            narrativeEventId={node.id}
             fallbackLabel={tensionMechanicLabel}
             borderColor={borderColor}
             mutedColor={mutedColor}

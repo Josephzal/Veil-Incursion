@@ -10,7 +10,7 @@
     {
       "id": "RES_02",
       "complicationId": "COMP_02",
-      "optionA": { "text": "Bind the tear manually.", "tensionMechanic": "Mechanic_SigilTrace", "onSuccess": "5 Veil Residue", "onFailure": "+15 Resonance" },
+      "optionA": { "text": "Align the signal bands and stabilize the tear.", "tensionMechanic": "Mechanic_SignalAlignment", "onSuccess": "The bands lock into a single clean vector. 5 Veil Residue.", "onFailure": "The rift rejects the alignment. +15 Resonance" },
       "optionB": { "text": "[Solaris] Absorb the ambient energy.", "requirementType": "Cabal", "requirementValue": "Solaris", "onSuccess": "-10 Resonance" },
       "optionC": { "text": "[Use: Null-Key] Mechanically lock the rift.", "requirementType": "Item", "requirementValue": "Null_Key", "onSuccess": "5 Veil Residue" },
       "optionD": { "text": "Force your way through the hazard.", "type": "BruteForce", "onSuccess": "Proceed (-20 HP)" }
@@ -18,14 +18,15 @@
     {
       "id": "RES_13",
       "complicationId": "COMP_03",
-      "optionA": { "text": "Work the dead-man switch in slow pulses.", "tensionMechanic": "Mechanic_ScavengeBar", "onSuccess": "Extract Munitions", "onFailure": "30 Kinetic Damage" },
+      "optionA": { "text": "Decrypt the munitions lock cipher.", "tensionMechanic": "Mechanic_CipherRite", "onSuccess": "The cipher collapses into a clean access pattern. Extract Munitions.", "onFailure": "The interface blooms with black static. The lock seals itself. 30 Kinetic Damage" },
       "optionB": { "text": "[Legion] Broadcast cache clearance codes.", "requirementType": "Cabal", "requirementValue": "Legion", "onSuccess": "Extract Munitions + 15 Credits" },
       "optionC": { "text": "[Use: Null-Key] Mechanically bypass the lock.", "requirementType": "Item", "requirementValue": "Null_Key", "onSuccess": "Extract Munitions" },
       "optionD": { "text": "Trip the switch and dive clear.", "type": "BruteForce", "onSuccess": "Minor Munitions (-30 HP)" }
     },
     {
+        "id": "RES_03",
         "complicationId": "COMP_04",
-        "optionA": { "text": "Carefully hack the kinetic nodes.", "tensionMechanic": "Mechanic_SigilTrace", "onSuccess": "Advanced Schematics", "onFailure": "20 Kinetic Damage" },
+        "optionA": { "text": "Decode the biometric firewall cipher.", "tensionMechanic": "Mechanic_CipherRite", "onSuccess": "The hostile cipher collapses into a clean access pattern. Advanced Schematics recovered.", "onFailure": "The final glyph fractures. The system refuses the breach. 20 Kinetic Damage" },
         "optionB": { "text": "[Terran Grid] Input administrative backdoor codes.", "requirementType": "Cabal", "requirementValue": "Terran_Grid", "onSuccess": "Advanced Schematics + 20 Credits" },
         "optionC": { "text": "[Use: Grid-Cracker Mag] Fry the terminal's logic board.", "requirementType": "Item", "requirementValue": "Grid_Cracker_Mag", "onSuccess": "Advanced Schematics" },
         "optionD": { "text": "Smash the hardware and salvage what you can.", "type": "BruteForce", "onSuccess": "Minor Scrap (-20 HP)" }
@@ -33,7 +34,7 @@
       {
         "id": "RES_04",
         "complicationId": "COMP_05",
-        "optionA": { "text": "Hold your breath and sprint for the manual shutoff.", "tensionMechanic": "Mechanic_ScavengeBar", "onSuccess": "Safe Passage", "onFailure": "35 Caustic Damage" },
+        "optionA": { "text": "Hold your breath and slip to the manual shutoff.", "tensionMechanic": "Mechanic_ConcealSlider", "onSuccess": "Safe Passage", "onFailure": "35 Caustic Damage" },
         "optionB": { "text": "[Legion] Filter the gas through your Blood-Iron respirator.", "requirementType": "Cabal", "requirementValue": "Legion", "onSuccess": "Safe Passage + 10 Credits" },
         "optionC": { "text": "[Use: Hazmat Shielding] Deploy the protective matrix.", "requirementType": "Item", "requirementValue": "Hazmat_Shielding", "onSuccess": "Safe Passage" },
         "optionD": { "text": "Fall back before your lungs blister.", "type": "Retreat", "onSuccess": "Return to Map" }
@@ -41,7 +42,7 @@
       {
         "id": "RES_05",
         "complicationId": "COMP_06",
-        "optionA": { "text": "Close your eyes and navigate by instinct.", "tensionMechanic": "Mechanic_ConcealSlider", "onSuccess": "Safe Passage", "onFailure": "+25 Resonance" },
+        "optionA": { "text": "Align the ley-line bands until the labyrinth locks open.", "tensionMechanic": "Mechanic_SignalAlignment", "onSuccess": "The ley-line hums in one continuous thread. Safe Passage.", "onFailure": "The ley-line snaps back into static. +25 Resonance" },
         "optionB": { "text": "[Solaris] Read the ash-trails and walk the true path.", "requirementType": "Cabal", "requirementValue": "Solaris", "onSuccess": "Safe Passage + -10 Resonance" },
         "optionC": { "text": "[Use: Grave-Dust Ampoule] Ground yourself in reality.", "requirementType": "Item", "requirementValue": "Grave_Dust_Ampoule", "onSuccess": "Safe Passage" },
         "optionD": { "text": "Force your way out of the distortion.", "type": "BruteForce", "onSuccess": "Escape (+25 Resonance)" }
@@ -81,7 +82,7 @@
       {
         "id": "RES_10",
         "complicationId": "COMP_11",
-        "optionA": { "text": "Sprint through the collapsing debris.", "tensionMechanic": "Mechanic_ScavengeBar", "onSuccess": "Safe Passage + Minor Scrap", "onFailure": "30 Kinetic Damage" },
+        "optionA": { "text": "Stabilize the distortion bands before the corridor collapses.", "tensionMechanic": "Mechanic_SignalAlignment", "onSuccess": "The rift stabilizes around the aligned signal. Safe Passage + Minor Scrap.", "onFailure": "The vector fractures before the scanner can lock. 30 Kinetic Damage" },
         "optionB": { "text": "[Terran Grid] Remotely stabilize the gravity pylons.", "requirementType": "Cabal", "requirementValue": "Terran_Grid", "onSuccess": "Safe Passage + 20 Credits" },
         "optionC": { "text": "[Use: Null-Key] Jam the distortion field.", "requirementType": "Item", "requirementValue": "Null_Key", "onSuccess": "Safe Passage" },
         "optionD": { "text": "Take the hit and dive for the exit.", "type": "BruteForce", "onSuccess": "Escape (-30 HP)" }
@@ -97,7 +98,7 @@
       {
         "id": "RES_12",
         "complicationId": "COMP_13",
-        "optionA": { "text": "Dash frantically from cover to cover.", "tensionMechanic": "Mechanic_ScavengeBar", "onSuccess": "Bypass Sentry", "onFailure": "25 Kinetic Damage" },
+        "optionA": { "text": "Move cover-to-cover past the sentry arc.", "tensionMechanic": "Mechanic_ConcealSlider", "onSuccess": "Bypass Sentry", "onFailure": "25 Kinetic Damage" },
         "optionB": { "text": "[Terran Grid] Broadcast friendly IFF beacon.", "requirementType": "Cabal", "requirementValue": "Terran_Grid", "onSuccess": "Bypass Sentry + Extract Munitions" },
         "optionC": { "text": "[Use: Grid-Cracker Mag] Short-circuit the targeting logic.", "requirementType": "Item", "requirementValue": "Grid_Cracker_Mag", "onSuccess": "Bypass Sentry" },
         "optionD": { "text": "Retreat into the blind spot and leave.", "type": "Retreat", "onSuccess": "Return to Map" }

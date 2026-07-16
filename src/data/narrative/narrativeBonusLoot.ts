@@ -32,16 +32,31 @@ function rollRange(seed: string, min: number, max: number): number {
   return min + (hashSeed(seed) % (max - min + 1));
 }
 
+const CIPHER_POOL: BonusPoolEntry[] = [
+  { kind: 'CREDITS', min: 18, max: 28 },
+  { kind: 'VEIL_RESIDUE', min: 2, max: 4 },
+  { kind: 'BOON', boonId: 'Scouted_Boon' },
+];
+
+const SIGNAL_POOL: BonusPoolEntry[] = [
+  { kind: 'VEIL_RESIDUE', min: 3, max: 5 },
+  { kind: 'CREDITS', min: 14, max: 22 },
+  { kind: 'BOON', boonId: 'Veil_Ward_Boon' },
+];
+
 function poolForMechanic(mechanic: TensionMechanic): BonusPoolEntry[] | null {
   if (mechanic === 'Mechanic_ConcealSlider') return CONCEAL_POOL;
   if (mechanic === 'Mechanic_SigilTrace') return SIGIL_POOL;
+  if (mechanic === 'Mechanic_CipherRite') return CIPHER_POOL;
+  if (mechanic === 'Mechanic_SignalAlignment') return SIGNAL_POOL;
   return null;
 }
 
 export function rollNarrativeBonusReward(
-  tensionMechanic: TensionMechanic,
+  tensionMechanic: TensionMechanic | null | undefined,
   seed: string,
 ): NarrativeBonusReward | undefined {
+  if (tensionMechanic == null) return undefined;
   const pool = poolForMechanic(tensionMechanic);
   if (!pool || pool.length === 0) return undefined;
 

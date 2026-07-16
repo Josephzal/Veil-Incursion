@@ -12,12 +12,21 @@ import type { ProceduralEligibilityContext } from './narrative/narrativeProcedur
 import { formatTensionMechanicLabel } from '../components/narrative/tension/tensionMechanicTypes';
 
 const TENSION_BY_PRESET: Record<
-  Extract<DevSandboxPreset, 'narrative-scavenge' | 'narrative-conceal' | 'narrative-sigil'>,
+  Extract<
+    DevSandboxPreset,
+    | 'narrative-scavenge'
+    | 'narrative-conceal'
+    | 'narrative-sigil'
+    | 'narrative-cipher'
+    | 'narrative-signal'
+  >,
   TensionMechanic
 > = {
   'narrative-scavenge': 'Mechanic_ScavengeBar',
   'narrative-conceal': 'Mechanic_ConcealSlider',
   'narrative-sigil': 'Mechanic_SigilTrace',
+  'narrative-cipher': 'Mechanic_CipherRite',
+  'narrative-signal': 'Mechanic_SignalAlignment',
 };
 
 export function resolveDevSandboxTensionMechanic(
@@ -43,11 +52,23 @@ export function buildDevSandboxNarrativeEncounter(
     eligibility,
   );
   const mechanicLabel = formatTensionMechanicLabel(tensionMechanic);
+  const scenarioByMechanic: Record<TensionMechanic, string> = {
+    Mechanic_CipherRite:
+      'Hostile VEIL-OS terminal. Scan the memory dump and select the true cipher fragment — wrong reads report glyph resonance before the lock reseals.',
+    Mechanic_ConcealSlider:
+      'Watched cache under a hostile patrol sweep. Keep your signal inside the moving blind zone. Hostile sweeps compress the window. DAMP SIGNAL steadies your trace.',
+    Mechanic_SigilTrace:
+      'Occult sigil sequence with forbidden beats. Repeat the living pattern — skip the VOID pulses.',
+    Mechanic_SignalAlignment:
+      'Hostile Veil lock. Slot limited glyph keys into each ring to route signal into the core. Some keys fit more than one ring, but each can only be used once.',
+    Mechanic_ScavengeBar:
+      'Legacy instability protocol compatibility check. Deprecated loot tension — DevTest only.',
+  };
   const node: NarrativeEventNode = {
     ...encounter.node,
     scenarioText: [
-      '>> DEV SANDBOX — PROCEDURAL NARRATIVE PREVIEW.',
-      'Field telemetry confirms an unstable extraction corridor ahead.',
+      '>> DEV SANDBOX — NARRATIVE TENSION PREVIEW.',
+      scenarioByMechanic[tensionMechanic] ?? 'Field telemetry confirms an unstable extraction corridor ahead.',
       `Option A routes through the ${mechanicLabel} tension protocol.`,
     ].join(' '),
     proceduralMeta: {
@@ -55,6 +76,8 @@ export function buildDevSandboxNarrativeEncounter(
       engineVersion: encounter.node.proceduralMeta?.engineVersion ?? 'assembly-v2',
       tensionMechanic,
       defaultPenalty: encounter.node.proceduralMeta?.defaultPenalty ?? { type: 'HP', amount: 12 },
+      tensionDepth: 2,
+      tensionDifficulty: 'MEDIUM',
     },
     choiceA: {
       ...encounter.node.choiceA,

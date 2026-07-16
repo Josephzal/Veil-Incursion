@@ -288,6 +288,10 @@ export interface NarrativeProceduralMeta {
   defaultPenalty?: import('./narrativeAssembly').NarrativePenalty;
   /** Rolled at encounter generation — revealed on successful A/B/C resolve. */
   bonusReward?: import('./narrativeBonusReward').NarrativeBonusReward;
+  /** Run depth (1–3) for tension difficulty scaling. */
+  tensionDepth?: 1 | 2 | 3;
+  /** Shared tension difficulty stamp (optional; derived from depth if omitted). */
+  tensionDifficulty?: 'LOW' | 'MEDIUM' | 'HIGH' | 'APEX';
 }
 
 export interface NarrativeEventNode {

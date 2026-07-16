@@ -10,7 +10,6 @@ import type {
   NarrativeReward,
   OptionBResolver,
   ResolverSet,
-  TensionMechanic,
 } from '../../types/narrativeAssembly';
 import {
   EXPANSION_RESOLVER_TEMPLATES,
@@ -18,6 +17,7 @@ import {
   type ExpansionResolverTemplate,
 } from './narrativeDnDExpansion';
 import { hashSeed, pickFromPool } from './narrativeAssemblyCore';
+import { pickActiveGenerationTensionMechanic } from './tensionMechanicRouting';
 
 const EXPANSION_CABAL_MAP: Record<string, Cabal> = {
   SOLARIS: 'Solaris',
@@ -62,14 +62,24 @@ export function creditsFromReward(reward?: NarrativeReward): number {
 }
 
 function buildMechanicOption(complication: ComplicationSeed, seed: string): MechanicResolver {
-  const mechanics: TensionMechanic[] = [
-    'Mechanic_ScavengeBar',
-    'Mechanic_ConcealSlider',
-    'Mechanic_SigilTrace',
-  ];
-  const tensionMechanic = mechanics[hashSeed(`${seed}:mechanic-a`) % mechanics.length] ?? 'Mechanic_ScavengeBar';
+  // Do not include Mechanic_ScavengeBar in new generation pools (deprecated).
+  // Tech / encrypted terminal / locked cache / black-site → Mechanic_CipherRite via routing.
+  const tensionMechanic = pickActiveGenerationTensionMechanic(
+    hashSeed(`${seed}:mechanic-a`),
+    {
+      flavorText: `${complication.id} ${complication.flavorText}`,
+      tags: complication.requiredTags,
+    },
+  );
   const costPreview = formatPenaltyPreview(complication.defaultPenalty);
   const rewardPreview = formatRewardPreview(complication.defaultReward);
+  if (tensionMechanic == null) {
+    return {
+      text: `Secure the cache. (${rewardPreview})`,
+      onSuccess: rewardPreview,
+      onFailure: costPreview,
+    };
+  }
   return {
     text: `Execute tension protocol. (${rewardPreview} // on fail: ${costPreview})`,
     tensionMechanic,

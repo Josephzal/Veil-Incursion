@@ -1,6 +1,6 @@
 # Veil Incursion Current Systems Design
 
-Last updated: 2026-07-15 (combat refactor phase 5 — combat director + juice)
+Last updated: 2026-07-15 (narrative minigame Phase 5 — routing / balance / QA polish)
 
 This document captures the current implemented design surface for Veil Incursion: player-facing hub systems, run progression, economy, cargo/items, enemies, combat mechanics, and known partial implementations. It is intended as a working reference for design iteration and balancing, not a final player-facing manual.
 
@@ -1602,6 +1602,46 @@ Current world/narrative surface includes:
 - Operation progress.
 - Sector map data and Veil Front overlays.
 
+### Narrative tension mechanics (naming)
+
+Do not confuse these systems:
+
+| Name | What it is |
+|------|------------|
+| **Dead-Man’s Switch** | Hex Shot **combat graft** on Phase-Shift Reload (`hexShotGrafts` / `hexShotReducer`). Not a narrative minigame. |
+| **Mechanic_ScavengeBar** | Old **narrative** loot/scavenge tension (InstabilityProtocol UI). Deprecated for new normal generation; still forceable in DevTest and supported for legacy. |
+| **Mechanic_ConcealSlider** | Player-facing **Scanner Sweep** — keep a signal cursor inside a moving **blind zone (mask window)** on a 1D lane; staying inside builds Signal Mask, outside raises Detection; hostile **sweep pulses** narrow/accelerate/shift the window; DAMP SIGNAL steadies movement (reduced mask + detection gain). Stealth / patrol / surveillance fiction. |
+| **Mechanic_SigilTrace** | Player-facing **Ritual Echo** — Simon-style sequence with **forbidden beats** (shown in playback, skipped on input). Occult / ritual / glyph fiction. |
+| **Mechanic_CipherRite** | Narrative **hacking / occult decryption** tension (Cipher Rite UI). Deduction puzzle: pick the correct cipher from candidates; wrong guesses only corrupt the interface and report glyph alignment. Universal — no class/Cabal advantages. |
+| **Mechanic_SignalAlignment** | Player-facing **Veil Lock** — slot limited, rotatable **glyph keys** into concentric rings (outer → inner) to route signal to the core; each key is consumed once, preview shows FITS/BLOCKED (not the full solution), pipe-style conduit lights up per completed ring. Rift stabilize / ley-line / extraction vector / scanner repair fiction. |
+
+#### v1 narrative minigame pool
+
+1. **Cipher Rite** (`Mechanic_CipherRite`) — deduction / hacking / encrypted systems  
+   Tags: encrypted, terminal, locked cache, intel vault, black-site, grid security, scanner lock  
+2. **Scanner Sweep** (`Mechanic_ConcealSlider`) — stealth / hostile scanner avoidance  
+   Tags: stealth, patrol, surveillance, watched cache, security sweep, Echo gaze  
+   Loop: track the moving blind zone on a 1D lane → stay inside to build Signal Mask → hold DAMP to steady vs sweep pulses (which narrow/accelerate/shift the window)  
+3. **Ritual Echo** (`Mechanic_SigilTrace`) — memory / occult pattern reading  
+   Tags: sigil, ritual, occult pattern, echo pattern, glyph lock, blood-rite  
+   Special: forbidden beats shown in playback, skipped on input  
+4. **Veil Lock** (`Mechanic_SignalAlignment`) — glyph-key lock routing / rift stabilization / scanner repair  
+   Tags: rift, leyline, stabilize, extraction vector, scanner repair, signal calibration, fracture seal  
+   Loop: select a glyph key → rotate → preview FITS/BLOCKED → insert into active ring (consumed) → complete rings outer→inner to route the core; limited keys + decoys force planning, RESET RING recovers a mistake 
+
+Deprecated:
+5. **Scavenge Bar / Instability Protocol** (`Mechanic_ScavengeBar`) — legacy / DevTest only; never assigned by normal procedural generation.
+
+**Plain loot rule:** abandoned stash, dead runner, loose credits, and simple resource pickups usually get **no** tension mechanic unless fiction adds a blocker (encrypted / watched / ritual-sealed / phase-shifted).
+
+**Difficulty:** shared `tensionDifficultyFromDepth` stamps LOW/MEDIUM/HIGH/APEX onto `proceduralMeta` at assembly time. Universal — no class/Cabal bias.
+
+**Telemetry (dev):** `narrative_minigame_started` / `narrative_minigame_completed` / `narrative_minigame_unknown_id` via `narrativeMinigameTelemetry.ts`.
+
+Combat class minigames (Active Reload, Zero Protocol, etc.) are a **separate** platform and must not be mixed with narrative tension. Dead-Man’s Switch is a Hex Shot combat graft, not Cipher Rite.
+
+Routing (`tensionMechanicRouting.ts`): stealth → Scanner Sweep; tech/terminal → Cipher Rite; rift/ley/stabilize → Signal Alignment; ritual/sigil → Ritual Echo; unmatched / plain stash → **no mechanic**. Unknown non-empty mechanic IDs fail loudly in `TensionMechanicHost` (no silent auto-success). All consequences route through `resolveNarrativeChoice` — minigames do not mutate run state directly.
+
 ## Known Partial Implementations / Design Debt
 
 - **Contract loop v1 (complete):** Resource model, physical banking, contract board, Veil Front integration, run event tracking, contract resolver, unified run debrief (extract + death via `OperationDebriefScreen`), procedural operation generation, operation lifecycle (ACTIVE / COMPLETED / expiration / AFTERMATH rotation), mid-run operation target contribution with debrief transmission line, sponsor perks on deploy/contract summary, operation intel log on Veil Front briefing, expanded operation contribution on extract, **debrief progress headline** (`+N progress this run`), **reward preview** on Veil Front cards/briefing/deploy modal, and **world state validation + dev debug tooling** (Phases A–F).
@@ -1619,6 +1659,14 @@ Current world/narrative surface includes:
 - **Combat Refactor Phase 3 (complete):** Class identity loops polished — Aegis Riposte Ready after Perfect Parry; Hex Shot ammo profiles + chamber bonus on reload; Envoy lightweight catalysts (NULL/ECHO/BLOOD/ASH) on Veil Rot spells; class loop telemetry; Class Identity / Class Combat Dev Test reports.
 - **Combat Refactor Phase 4 (complete):** EncounterObjective layer + v1 templates (Caller / Ritual / Survive / Hold Extraction / Echo / Anchor + soft Protect Cargo); Dirty Extraction wired to SURVIVE/HOLD; light combat timeline previews; objective telemetry + DevTest reports.
 - **Combat Refactor Phase 5 (complete):** Combat Director (pressure / density / fairness / safety / reward-risk); juice feedback hooks + hit-stop defaults; start-of-turn danger pulse; director + pressure + feedback reports; DevTest sims; prep-time soft caps without new combat mechanics.
+- **Narrative tension naming + routing cleanup (Phase 1 — Cipher Rite prep):** ScavengeBar deprecated from normal generation; ConcealSlider / SigilTrace / no-mechanic remapping; unknown tension IDs no longer silent-succeed; Dead-Man’s Switch combat graft unchanged.
+- **Narrative Cipher Rite (Phase 2 — complete):** `Mechanic_CipherRite` deduction hacking minigame (`cipherRiteEngine` + `CipherRite`); tech/terminal/locked-cache routing; DevTest force; wrong guesses corrupt UI only; no combat / Hex Shot changes.
+- **Narrative Scanner Sweep + Ritual Echo (Phase 3 — complete):** `Mechanic_ConcealSlider` → Scanner Sweep radar stealth; `Mechanic_SigilTrace` → Ritual Echo with forbidden beats; IDs preserved; DevTest labels updated; no combat changes.
+- **Narrative Signal Alignment (Phase 4 — complete):** `Mechanic_SignalAlignment` spatial ring puzzle; rift/ley/stabilize routing; DevTest force; v1 narrative minigame pool complete (Cipher / Sweep / Echo / Alignment); ScavengeBar remains deprecated.
+- **Narrative minigame Phase 5 (complete):** routing audit + plain-loot no-mechanic rule; shared depth difficulty; DevTest thematic scenarios for all 5 force options; outcome copy polish; lightweight minigame telemetry; unknown-ID safety retained; docs final v1 map.
+- **Narrative minigame Phase 6 (complete):** Scanner Sweep depth — shadow pockets, damp-required mask capture, stationary lock anti-camping; Signal Alignment depth — glyph gates, severed blockers, decoys, ALIGN-only validation (no live green bands); DevTest copy updated; Cipher Rite / Ritual Echo / combat untouched.
+- **Narrative minigame Phase 6 polish (complete):** All narrative tension minigames now pop in a centered modal over a darkened stage (`TensionMechanicModal`), mirroring the in-combat cargo/inventory overlay pattern (fixes Veil Lock controls being clipped/unreachable; its body is now scrollable). Scanner Sweep gained a traveling **detection beam** that spikes Detection when it crosses an exposed cursor (skilled tracking stays clean; sloppy play gets caught) for a stronger "avoid detection" feel. Cipher Rite reskinned into a **VEIL-OS memory-dump terminal** (hex-addressed junk with cipher fragments embedded as `[TOKEN]` glyph keys + inert `[dud]` clusters and a breach log) — Fallout-hacking-inspired likeness/resonance scoring, not a copy. Engine logic, IDs, routing, and telemetry unchanged.
+- **Narrative minigame Phase 6 rework (complete):** Scanner Sweep replaced with a **1D blind-zone tracking** minigame (keep cursor inside moving mask window; sweep pulses narrow/accelerate/shift it; DAMP steadies with reduced mask+detection gain) — removed the free radar pip / shadow pockets / stationary lock. Signal Alignment reworked into **Veil Lock** (player-facing title) — a limited rotatable **glyph-key** insertion puzzle (pipe-routing + Starfield-style lockpicking): keys consumed once, rings complete outer→inner, decoys at MEDIUM+, RESET RING budget, solution-first generation guarantees solvability. IDs (`Mechanic_ConcealSlider`, `Mechanic_SignalAlignment`), routing, and telemetry preserved; Cipher Rite / Ritual Echo / combat untouched.
 - **Safehouse banking:** Physical in-run banking via `runBankedSnapshot` — banked cargo survives death and routes to hub stash. Unbanked cargo is lost on death (`runResourceLedger.lostOnDeath`). Extraction merges banked + carried cargo before deposit.
 - Target Fragment has a catalogued combat effect but is marked `unimplemented`.
 - Kinetic Hollow Points / Veil-Vial is described as next attack +15 damage but is marked `unimplemented`.

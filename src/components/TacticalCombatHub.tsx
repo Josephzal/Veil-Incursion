@@ -1729,11 +1729,10 @@ export default function TacticalCombatHub({
     victoryFallbackTimerRef.current = setTimeout(() => {
       victoryFallbackTimerRef.current = null;
       if (resolutionRef.current != null || !allUnitsDefeated(squadRef.current)) return;
+      // Force-complete dissolve gates even if onComplete never fired (seq still > 0).
       for (const unit of squadRef.current) {
         if (isUnitAlive(unit)) continue;
         const id = unit.unitId ?? unit.designation;
-        if (dissolvedHiddenRef.current.has(id)) continue;
-        if ((dissolveSeqRef.current[id] ?? 0) > 0) continue;
         dissolvedHiddenRef.current.add(id);
       }
       publishSquadUi(squadRef.current);
@@ -1785,6 +1784,9 @@ export default function TacticalCombatHub({
       });
     }
     publishSquadUi(squadRef.current);
+    if (allUnitsDefeated(squadRef.current)) {
+      scheduleCombatVictoryResolution();
+    }
   };
 
   const consumeAdrenalinePrimerTurnBonus = (): number => {
@@ -4423,7 +4425,9 @@ export default function TacticalCombatHub({
 
     if (enemyActionQueueRef.current.length > 0) {
       scheduleNextEnemyAction(false);
-    } else if (!allUnitsDefeated(squadRef.current)) {
+    } else if (allUnitsDefeated(squadRef.current)) {
+      scheduleCombatVictoryResolution();
+    } else {
       endEnemyTurn(true);
     }
   };
@@ -5173,8 +5177,12 @@ export default function TacticalCombatHub({
     }
     if (!isUnitAlive(currentEnemy)) {
       setEnemyActionStage(null);
+      if (allUnitsDefeated(squadRef.current)) {
+        scheduleCombatVictoryResolution();
+        return;
+      }
       if (enemyActionQueueRef.current.length > 0) scheduleNextEnemyAction(countering);
-      else if (!allUnitsDefeated(squadRef.current)) endEnemyTurn(true);
+      else endEnemyTurn(true);
       return;
     }
     setEnemyActionStage(null);
@@ -5241,7 +5249,8 @@ export default function TacticalCombatHub({
         squad: squadRef.current,
       });
       if (enemyActionQueueRef.current.length > 0) scheduleNextEnemyAction(countering);
-      else if (!allUnitsDefeated(squadRef.current)) endEnemyTurn(true);
+      else if (allUnitsDefeated(squadRef.current)) scheduleCombatVictoryResolution();
+      else endEnemyTurn(true);
       return;
     }
     if (cycleRef.current === 'DEFEND_PARRY' || cycleRef.current === 'DEFEND_WARD') return;
@@ -5257,7 +5266,8 @@ export default function TacticalCombatHub({
       scheduleNextEnemyAction(countering);
       return;
     }
-    if (!allUnitsDefeated(squadRef.current)) endEnemyTurn();
+    if (allUnitsDefeated(squadRef.current)) scheduleCombatVictoryResolution();
+    else endEnemyTurn();
   };
 
   const runEnemyActionAnimation = (countering: boolean) => {
@@ -5381,6 +5391,11 @@ export default function TacticalCombatHub({
       if (!acting || !isUnitAlive(acting) || operativeHpRef.current <= 0) {
         enemyActionQueueRef.current.shift();
         setEnemyActionStage(null);
+        if (operativeHpRef.current <= 0) return;
+        if (allUnitsDefeated(squadRef.current)) {
+          scheduleCombatVictoryResolution();
+          return;
+        }
         if (enemyActionQueueRef.current.length > 0) scheduleNextEnemyAction(countering);
         else endEnemyTurn(true);
         return;
@@ -5506,7 +5521,8 @@ export default function TacticalCombatHub({
     }
     if (operativeHpRef.current <= 0) return;
     if (enemyActionQueueRef.current.length > 0) scheduleNextEnemyAction(false);
-    else if (!allUnitsDefeated(squadRef.current)) endEnemyTurn(true);
+    else if (allUnitsDefeated(squadRef.current)) scheduleCombatVictoryResolution();
+    else endEnemyTurn(true);
   };
 
   const openParryWindow = (e: EnemyCombatProfile, fromVoidWard: boolean): boolean => {
@@ -7458,8 +7474,12 @@ export default function TacticalCombatHub({
       pendingDissolveRef.current = null;
       if (pending) beginDissolveForUnit(pending.unitId, pending.profile, 0);
       if (operativeHpRef.current <= 0) return;
+      if (allUnitsDefeated(squadRef.current)) {
+        scheduleCombatVictoryResolution();
+        return;
+      }
       if (enemyActionQueueRef.current.length > 0) scheduleNextEnemyAction(false);
-      else if (!allUnitsDefeated(squadRef.current)) endEnemyTurn(true);
+      else endEnemyTurn(true);
       return;
     }
 

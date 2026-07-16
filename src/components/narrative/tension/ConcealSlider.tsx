@@ -1,2 +1,2 @@
-/** @deprecated Import ConcealmentMatrix — kept for tension mechanic registry compatibility. */
-export { default } from './ConcealmentMatrix';
+/** Mechanic_ConcealSlider player-facing UI: Scanner Sweep. */
+export { default } from './ScannerSweep';

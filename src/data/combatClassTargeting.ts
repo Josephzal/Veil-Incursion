@@ -13,6 +13,7 @@ import {
   type AbilityTargetMode,
 } from './combatTargeting';
 import type { EnemyCombatProfile } from '../types/run';
+import { isUnitAlive } from './combatSquadEngine';
 import { migrateHexShotAbilityId } from './hexShotMigration';
 import { migrateEnvoyAbilityId } from './envoyMigration';
 
@@ -83,7 +84,7 @@ export function canTargetWithClassAbility(
     return aegisCanTarget(squad, abilityId as AegisAbilityId, unitId);
   }
   const unit = squad.find((u) => u.unitId === unitId);
-  if (!unit || unit.currentHp <= 0) return false;
+  if (!unit || !isUnitAlive(unit)) return false;
   const mode = classAbilityTargetMode(classId, abilityId);
   if (mode === 'NONE' || mode === 'ALL') return false;
   if (classId === 'HEX_SHOT' && hexOccultBackline(abilityId as HexShotAbilityId)) {
@@ -92,7 +93,7 @@ export function canTargetWithClassAbility(
   if (unit.isUntargetable) return false;
   if (unit.gridSlot?.startsWith('BL')) {
     const guardSlot = unit.gridSlot === 'BL_0' ? 'FL_0' : 'FL_1';
-    const guard = squad.find((u) => u.gridSlot === guardSlot && u.currentHp > 0);
+    const guard = squad.find((u) => u.gridSlot === guardSlot && isUnitAlive(u));
     if (guard && abilityId !== 'WRAITH_PIERCER_ROUND') return false;
   }
   return true;
@@ -109,10 +110,10 @@ export function isUnitBlockedForClassAbility(
   }
   if (classId === 'HEX_SHOT' && abilityId === 'WRAITH_PIERCER_ROUND') return false;
   const unit = squad.find((u) => u.unitId === unitId);
-  if (!unit || unit.currentHp <= 0) return false;
+  if (!unit || !isUnitAlive(unit)) return false;
   if (!unit.gridSlot?.startsWith('BL')) return false;
   const guardSlot = unit.gridSlot === 'BL_0' ? 'FL_0' : 'FL_1';
-  return squad.some((u) => u.gridSlot === guardSlot && u.currentHp > 0);
+  return squad.some((u) => u.gridSlot === guardSlot && isUnitAlive(u));
 }
 
 export function isUnitHookValidForClass(
@@ -135,7 +136,7 @@ export function validTargetsForClassAbility(
     return aegisValidTargets(squad, abilityId as AegisAbilityId);
   }
   const mode = classAbilityTargetMode(classId, abilityId);
-  if (mode === 'ALL') return squad.filter((u) => u.currentHp > 0);
+  if (mode === 'ALL') return squad.filter(isUnitAlive);
   if (mode === 'NONE') return [];
   return squad.filter((u) => u.unitId && canTargetWithClassAbility(classId, squad, abilityId, u.unitId));
 }

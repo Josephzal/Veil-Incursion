@@ -17,7 +17,6 @@ import type {
   OptionBResolver,
   OptionDResolver,
   Tag,
-  TensionMechanic,
 } from '../../types/narrativeAssembly';
 import {
   cabalToFaction,
@@ -45,6 +44,11 @@ import {
   formatRewardPreview,
 } from './narrativeDynamicAssembly';
 import { hashSeed } from './narrativeAssemblyCore';
+import {
+  pickActiveGenerationTensionMechanic,
+  remapDeprecatedScavengeBar,
+} from './tensionMechanicRouting';
+import { tensionDifficultyFromDepth } from './narrativeTensionDifficulty';
 import { NARRATIVE_GENERIC_TERMINAL_TITLE } from '../../constants/narrativeLayout';
 
 export interface PickAssemblyEncounterParams {
@@ -191,19 +195,37 @@ function resolveMechanicForOptionA(
   assemblyId: string,
 ): MechanicResolver {
   const mechanicA = asMechanicResolver(resolverSet.optionA);
-  if (mechanicA) return mechanicA;
+  if (mechanicA) {
+    if (mechanicA.tensionMechanic == null) {
+      return mechanicA;
+    }
+    const remapped = remapDeprecatedScavengeBar(mechanicA.tensionMechanic, {
+      flavorText: `${mechanicA.text} ${complication.flavorText}`,
+      tags: complication.requiredTags,
+      resolverSetId: resolverSet.id,
+    });
+    if (remapped !== mechanicA.tensionMechanic) {
+      return remapped == null
+        ? { ...mechanicA, tensionMechanic: undefined }
+        : { ...mechanicA, tensionMechanic: remapped };
+    }
+    return mechanicA;
+  }
 
-  const mechanics: TensionMechanic[] = [
-    'Mechanic_ScavengeBar',
-    'Mechanic_ConcealSlider',
-    'Mechanic_SigilTrace',
-  ];
-  const tensionMechanic = mechanics[hashSeed(`${assemblyId}:mechanic-a`) % mechanics.length]
-    ?? 'Mechanic_ScavengeBar';
+  // Brute-force option A: synthesize a non-ScavengeBar tension for the protocol path
+  // (or omit mechanic for plain stash).
+  const tensionMechanic = pickActiveGenerationTensionMechanic(
+    hashSeed(`${assemblyId}:mechanic-a`),
+    {
+      flavorText: `${resolverSet.optionA.text} ${complication.flavorText}`,
+      tags: complication.requiredTags,
+      resolverSetId: resolverSet.id,
+    },
+  );
 
   return {
     text: resolverSet.optionA.text,
-    tensionMechanic,
+    ...(tensionMechanic != null ? { tensionMechanic } : {}),
     onSuccess: formatRewardPreview(complication.defaultReward),
     onFailure: formatPenaltyPreview(complication.defaultPenalty),
   };
@@ -216,6 +238,7 @@ function isV2Encounter(encounter: GeneratedEncounter): boolean {
 function buildNodeFromEncounter(
   encounter: GeneratedEncounter,
   eligibility: ProceduralEligibilityContext,
+  nodesCleared: number,
 ): NarrativeEventNode {
   const { context, complication, resolverSet } = encounter;
   const v2 = isV2Encounter(encounter);
@@ -229,6 +252,8 @@ function buildNodeFromEncounter(
 
   const engineVersion = v2 ? 'assembly-v2' : 'assembly-v1';
   const mechanicA = resolveMechanicForOptionA(resolverSet, complication, encounter.assemblyId);
+  const tensionDepth = runDepthFromNodesCleared(nodesCleared);
+  const tensionDifficulty = tensionDifficultyFromDepth(tensionDepth);
 
   return {
     id: encounter.assemblyId,
@@ -239,13 +264,19 @@ function buildNodeFromEncounter(
     proceduralMeta: {
       engineVersion,
       resolverSetId: resolverSet.id,
-      tensionMechanic: mechanicA.tensionMechanic,
+      ...(mechanicA.tensionMechanic != null
+        ? { tensionMechanic: mechanicA.tensionMechanic }
+        : {}),
       defaultPenalty: complication.defaultPenalty,
       bonusReward: encounter.bonusReward,
+      tensionDepth,
+      tensionDifficulty,
     },
     choiceA: buildChoiceOption(
       `[ A ] ${mechanicA.text}`,
-      mechanicA.tensionMechanic.replace('Mechanic_', '').toUpperCase(),
+      mechanicA.tensionMechanic
+        ? mechanicA.tensionMechanic.replace('Mechanic_', '').toUpperCase()
+        : 'SECURE',
       `>> MECHANIC SUCCESS — ${mechanicA.onSuccess}`,
       `>> MECHANIC FAILURE — ${mechanicA.onFailure}`,
       `${mechanicA.onSuccess}`,
@@ -323,7 +354,7 @@ export function pickAssemblyNarrativeEncounter(
   };
   const encounter = generateEncounter(biome, playerState);
   const assembly = buildAssemblyFromEncounter(encounter, params.macroFamily, params.nodesCleared);
-  const node = buildNodeFromEncounter(encounter, eligibility);
+  const node = buildNodeFromEncounter(encounter, eligibility, params.nodesCleared);
   return { assembly, node };
 }
 

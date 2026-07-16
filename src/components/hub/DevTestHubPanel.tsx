@@ -434,19 +434,29 @@ export default function DevTestHubPanel(): React.JSX.Element {
       <HubSectionHeader title="NARRATIVE // TENSION MINI-GAMES" color={theme.mutedColor} />
       <View style={styles.grid}>
         <SandboxLaunchButton
-          label="[ SCAVENGE BAR ]"
+          label="[ SCAVENGE BAR (DEPRECATED) ]"
           accentColor={theme.primaryColor}
           onPress={() => launchSandbox('narrative-scavenge', startNarrative)}
         />
         <SandboxLaunchButton
-          label="[ CONCEAL SLIDER ]"
+          label="[ SCANNER SWEEP ]"
           accentColor={theme.primaryColor}
           onPress={() => launchSandbox('narrative-conceal', startNarrative)}
         />
         <SandboxLaunchButton
-          label="[ GRID CIPHER ]"
+          label="[ RITUAL ECHO ]"
           accentColor={theme.primaryColor}
           onPress={() => launchSandbox('narrative-sigil', startNarrative)}
+        />
+        <SandboxLaunchButton
+          label="[ CIPHER RITE ]"
+          accentColor={theme.primaryColor}
+          onPress={() => launchSandbox('narrative-cipher', startNarrative)}
+        />
+        <SandboxLaunchButton
+          label="[ VEIL LOCK ]"
+          accentColor={theme.primaryColor}
+          onPress={() => launchSandbox('narrative-signal', startNarrative)}
         />
       </View>
 

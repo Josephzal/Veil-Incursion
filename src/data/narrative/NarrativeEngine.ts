@@ -14,6 +14,7 @@ import {
   filterComplicationsForContextSeed,
   filterComplicationsWithResolverSets,
   filterContextsForBiome,
+  hashSeed,
   isAssemblyPairUsed,
   pickFromPool,
 } from './narrativeAssemblyCore';
@@ -22,6 +23,10 @@ import {
   assembleDynamicResolverSet,
   pickDynamicResolverTemplates,
 } from './narrativeDynamicAssembly';
+import {
+  pickActiveGenerationTensionMechanic,
+  remapDeprecatedScavengeBar,
+} from './tensionMechanicRouting';
 
 export interface NarrativePlayerState {
   seed: string;
@@ -107,13 +112,22 @@ export function generateEncounter(
   const assemblyId = assemblyIdFor(context.id, complication.id, playerState.seed);
 
   const tensionMechanic = isOptionABruteForce(resolverSet.optionA)
-    ? 'Mechanic_ScavengeBar'
-    : resolverSet.optionA.tensionMechanic;
+    ? pickActiveGenerationTensionMechanic(hashSeed(`${assemblyId}:bonus-mech`), {
+      flavorText: `${resolverSet.optionA.text} ${complication.flavorText}`,
+      tags: complication.requiredTags,
+    })
+    : remapDeprecatedScavengeBar(resolverSet.optionA.tensionMechanic, {
+      flavorText: `${resolverSet.optionA.text} ${complication.flavorText}`,
+      tags: complication.requiredTags,
+      resolverSetId: resolverSet.id,
+    });
 
-  const bonusReward = rollNarrativeBonusReward(
-    tensionMechanic,
-    `${playerState.seed}:bonus:${assemblyId}`,
-  );
+  const bonusReward = tensionMechanic != null
+    ? rollNarrativeBonusReward(
+      tensionMechanic,
+      `${playerState.seed}:bonus:${assemblyId}`,
+    )
+    : undefined;
 
   return {
     assemblyId,

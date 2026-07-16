@@ -9,6 +9,7 @@ import type {
   Tag,
   TensionMechanic,
 } from '../../types/narrativeAssembly';
+import { pickActiveGenerationTensionMechanic } from './tensionMechanicRouting';
 
 export interface MigratedLegacyCatalog {
   contexts: ContextSeed[];
@@ -93,16 +94,24 @@ function inferDefaultPenalty(tags: readonly Tag[]): ComplicationSeed['defaultPen
   return { type: 'HP', amount: 20 };
 }
 
-function pickLegacyTensionMechanic(matrixId: string): TensionMechanic {
-  const lastChar = matrixId.charCodeAt(matrixId.length - 1) ?? 0;
-  return lastChar % 2 === 0 ? 'Mechanic_SigilTrace' : 'Mechanic_ScavengeBar';
+function pickLegacyTensionMechanic(
+  matrixId: string,
+  tags: readonly Tag[],
+  scenarioText: string,
+): TensionMechanic | undefined {
+  // Never assign Mechanic_ScavengeBar for migrated legacy generation.
+  // Tech/terminal matrix events → Mechanic_CipherRite via pickActiveGenerationTensionMechanic.
+  return pickActiveGenerationTensionMechanic(matrixId.charCodeAt(matrixId.length - 1) ?? 0, {
+    flavorText: scenarioText,
+    tags,
+  }) ?? undefined;
 }
 
 function buildResolverSet(
   matrixId: string,
   event: LegacyMatrixEventTemplate,
   complicationId: string,
-  tensionMechanic: TensionMechanic,
+  tensionMechanic: TensionMechanic | undefined,
 ): ResolverSet {
   const resolverSetId = `LEGACY_RES_${legacySeedPrefix(matrixId)}`;
   const isConditional = event.interactionMode === 'conditional';
@@ -112,7 +121,7 @@ function buildResolverSet(
     complicationId,
     optionA: {
       text: stripChoiceLabel(event.choiceA.label),
-      tensionMechanic,
+      ...(tensionMechanic != null ? { tensionMechanic } : {}),
       onSuccess: 'Legacy calibration cleared',
       onFailure: 'Apply default penalty',
     },
@@ -155,7 +164,7 @@ function migrateLegacyEvent(
   const complicationId = `LEGACY_COMP_${prefix}`;
   const tags = inferTags(matrixId, event.scenarioText);
   const requiredTags = tags.slice(0, Math.min(2, tags.length));
-  const tensionMechanic = pickLegacyTensionMechanic(matrixId);
+  const tensionMechanic = pickLegacyTensionMechanic(matrixId, tags, event.scenarioText);
 
   const context: ContextSeed = {
     id: contextId,

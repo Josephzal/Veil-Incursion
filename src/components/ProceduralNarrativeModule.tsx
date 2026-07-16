@@ -259,6 +259,11 @@ export default function ProceduralNarrativeModule({
     if (selectedOption.locked) return;
 
     if (selectedChoice === 'A') {
+      // Plain stash / no assigned mechanic — resolve success without a minigame.
+      if (!node.proceduralMeta?.tensionMechanic) {
+        finishWithResult('A', node.choiceA.successText, 'SUCCESS');
+        return;
+      }
       setPhase('TENSION');
       return;
     }
@@ -287,7 +292,11 @@ export default function ProceduralNarrativeModule({
 
   const confirmLabel = (() => {
     if (!selectedChoice) return '[ CONFIRM ]';
-    if (selectedChoice === 'A') return '[ ENGAGE TENSION PROTOCOL ]';
+    if (selectedChoice === 'A') {
+      return node.proceduralMeta?.tensionMechanic
+        ? '[ ENGAGE TENSION PROTOCOL ]'
+        : '[ CONFIRM SECURE ]';
+    }
     if (selectedChoice === 'D') {
       if (optionDVariant === 'Retreat') return '[ CONFIRM ABORT — RETURN TO MAP ]';
       return '[ CONFIRM BRUTE FORCE ]';
@@ -301,10 +310,12 @@ export default function ProceduralNarrativeModule({
     return (
       <View style={styles.tensionRoot}>
         <TensionMechanicHost
-          tensionMechanic={node.proceduralMeta?.tensionMechanic ?? 'Mechanic_ScavengeBar'}
+          tensionMechanic={node.proceduralMeta?.tensionMechanic}
           onSuccess={handleTensionSuccess}
           onFailure={handleTensionFailure}
           defaultPenalty={node.proceduralMeta?.defaultPenalty}
+          difficulty={node.proceduralMeta?.tensionDifficulty}
+          narrativeEventId={node.id}
           fallbackLabel={tensionMechanicLabel}
           borderColor={borderColor}
           mutedColor={mutedColor}

@@ -9,39 +9,51 @@ import { USE_NATIVE_DRIVER } from '../../../utils/platformMotion';
 import { useResponsiveLayout } from '../../../hooks/useResponsiveLayout';
 import HapticPressable from '../../HapticPressable';
 import type { TensionMechanicProps } from './tensionMechanicTypes';
+import {
+  generateRitualEchoSequence,
+  type RitualBeat,
+} from './ritualEchoEngine';
+import { logNarrativeMinigameCompleted } from '../../../data/narrative/narrativeMinigameTelemetry';
 
 const GRID_SIZE = 3;
 const NODE_COUNT = GRID_SIZE * GRID_SIZE;
 const GRID_GAP = 12;
 const CELL_DESKTOP = 80;
 const CELL_MOBILE = 64;
-
-const PREVIEW_STEP_MS = 400;
-const NODE_FLASH_MS = 320;
 const TAP_FLASH_MS = 180;
-const SEQUENCE_MIN = 4;
-const SEQUENCE_MAX = 6;
 
 const NODE_IDLE_BG = '#0F172A';
 const NODE_IDLE_BORDER = '#334155';
 const NODE_IDLE_LABEL = '#475569';
 const NODE_LIT = '#22d3ee';
 const NODE_TAPPED = '#065f46';
+const FORBIDDEN_BG = '#3f0a0a';
+const FORBIDDEN_BORDER = '#f87171';
+const FORBIDDEN_LABEL = '#fecaca';
 const FAIL_FLASH = '#ef4444';
 const BODY_MUTED = '#94A3B8';
 const COLLAPSE_RED = '#EF4444';
+const TERMINAL_GREEN = '#00ff33';
 
-type CipherPhase = 'preview' | 'input' | 'resolved';
+type RitualPhase = 'preview' | 'input' | 'resolved';
 
-function generateTargetSequence(): number[] {
-  const length = SEQUENCE_MIN + Math.floor(Math.random() * (SEQUENCE_MAX - SEQUENCE_MIN + 1));
-  return Array.from({ length }, () => Math.floor(Math.random() * NODE_COUNT));
-}
+const SUCCESS_LINES = [
+  'The echo accepts your rhythm.',
+  'The forbidden beats pass untouched. The rite stabilizes.',
+  'The pattern resolves into a clean signal.',
+] as const;
 
-function CipherNode({
+const FAILURE_LINES = [
+  'The ritual fractures on the wrong beat.',
+  'A forbidden pulse answers your touch.',
+  'The echo rejects the sequence.',
+] as const;
+
+function RitualNode({
   nodeId,
   lit,
   tapped,
+  forbiddenLit,
   disabled,
   onPress,
   cellSize,
@@ -50,6 +62,7 @@ function CipherNode({
   nodeId: number;
   lit: boolean;
   tapped: boolean;
+  forbiddenLit: boolean;
   disabled: boolean;
   onPress: (id: number) => void;
   cellSize: number;
@@ -58,7 +71,7 @@ function CipherNode({
   const scale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    if (!lit && !tapped) return;
+    if (!lit && !tapped && !forbiddenLit) return;
     scale.setValue(1);
     Animated.sequence([
       Animated.timing(scale, {
@@ -74,12 +87,15 @@ function CipherNode({
         useNativeDriver: USE_NATIVE_DRIVER,
       }),
     ]).start();
-  }, [lit, scale, tapped]);
+  }, [forbiddenLit, lit, scale, tapped]);
 
-  const isIdle = !lit && !tapped;
+  const isIdle = !lit && !tapped && !forbiddenLit;
   let backgroundColor = NODE_IDLE_BG;
   let borderColor = NODE_IDLE_BORDER;
-  if (tapped) {
+  if (forbiddenLit) {
+    backgroundColor = FORBIDDEN_BG;
+    borderColor = FORBIDDEN_BORDER;
+  } else if (tapped) {
     backgroundColor = NODE_TAPPED;
     borderColor = '#34d399';
   } else if (lit) {
@@ -110,47 +126,80 @@ function CipherNode({
             borderColor,
             borderWidth: isIdle ? 1 : 2,
             borderRadius: 2,
+            borderStyle: forbiddenLit ? 'dashed' : 'solid',
             transform: [{ scale }],
           },
         ]}
       >
-        <View style={[styles.nodeCore, lit || tapped ? styles.nodeCoreLit : null]} />
+        <View
+          style={[
+            styles.nodeCore,
+            lit || tapped ? styles.nodeCoreLit : null,
+            forbiddenLit ? styles.nodeCoreForbidden : null,
+          ]}
+        />
         <Text
           style={[
             styles.nodeId,
             {
               fontSize: labelSize,
-              color: isIdle ? NODE_IDLE_LABEL : '#ecfeff',
+              color: forbiddenLit
+                ? FORBIDDEN_LABEL
+                : isIdle
+                  ? NODE_IDLE_LABEL
+                  : '#ecfeff',
             },
           ]}
         >
-          {String(nodeId + 1).padStart(2, '0')}
+          {forbiddenLit ? 'VOID' : String(nodeId + 1).padStart(2, '0')}
         </Text>
+        {forbiddenLit ? (
+          <Text style={[styles.skipTag, { fontSize: Math.max(7, labelSize - 2) }]}>
+            SKIP
+          </Text>
+        ) : null}
       </Animated.View>
     </HapticPressable>
   );
 }
 
-/** Terran Grid sequential cipher keypad — structural shell matches sibling tension panels. */
+/**
+ * Ritual Echo — Simon-style occult pattern for Mechanic_SigilTrace.
+ * Forbidden beats appear in playback and must be skipped during input.
+ * Does not mutate run state.
+ */
 export default function GridCipher({
   onSuccess,
   onFailure,
   defaultPenalty,
+  difficulty = 'MEDIUM',
+  narrativeEventId,
 }: TensionMechanicProps): React.JSX.Element {
   const { isDesktop, fontScale, scaleSize, scaleSpacing, scaleFont } = useResponsiveLayout();
   const cellSize = scaleSize(isDesktop ? CELL_DESKTOP : CELL_MOBILE);
   const gridGap = scaleSpacing(GRID_GAP);
   const gridWidth = GRID_SIZE * cellSize + (GRID_SIZE - 1) * gridGap;
   const panelPad = scaleSpacing(NARRATIVE_UNIFIED_PANEL_PADDING);
+  const startedAtRef = useRef(Date.now());
 
-  const targetSequence = useMemo(() => generateTargetSequence(), []);
-  const [phase, setPhase] = useState<CipherPhase>('preview');
+  const sequence = useMemo(
+    () => generateRitualEchoSequence(
+      difficulty,
+      `ritual-echo:${difficulty}:${narrativeEventId ?? 'live'}`,
+    ),
+    [difficulty, narrativeEventId],
+  );
+  const playback = sequence.playback;
+  const expectedInput = sequence.expectedInput;
+
+  const [phase, setPhase] = useState<RitualPhase>('preview');
   const [playerInputIndex, setPlayerInputIndex] = useState(0);
   const [inputLocked, setInputLocked] = useState(true);
-  const [previewLitNode, setPreviewLitNode] = useState<number | null>(null);
+  const [previewBeat, setPreviewBeat] = useState<RitualBeat | null>(null);
   const [tapLitNode, setTapLitNode] = useState<number | null>(null);
   const [confirmedNodes, setConfirmedNodes] = useState<number[]>([]);
   const [failFlash, setFailFlash] = useState(false);
+  const [failReason, setFailReason] = useState<'wrong' | 'forbidden' | null>(null);
 
   const resolvedRef = useRef(false);
   const previewGenRef = useRef(0);
@@ -175,10 +224,17 @@ export default function GridCipher({
     previewGenRef.current += 1;
     setPhase('resolved');
     setInputLocked(true);
+    logNarrativeMinigameCompleted({
+      mechanicId: 'Mechanic_SigilTrace',
+      difficulty,
+      success: true,
+      timeElapsedMs: Date.now() - startedAtRef.current,
+      narrativeEventId,
+    });
     onSuccess();
-  }, [clearTimeouts, onSuccess]);
+  }, [clearTimeouts, difficulty, narrativeEventId, onSuccess]);
 
-  const resolveFailure = useCallback(() => {
+  const resolveFailure = useCallback((reason: 'wrong' | 'forbidden' = 'wrong') => {
     if (resolvedRef.current) return;
     resolvedRef.current = true;
     clearTimeouts();
@@ -186,6 +242,7 @@ export default function GridCipher({
     setPhase('resolved');
     setInputLocked(true);
     setFailFlash(true);
+    setFailReason(reason);
     Vibration.vibrate([0, 40, 60, 80]);
     failOverlay.setValue(0);
     Animated.sequence([
@@ -200,8 +257,15 @@ export default function GridCipher({
         useNativeDriver: USE_NATIVE_DRIVER,
       }),
     ]).start();
+    logNarrativeMinigameCompleted({
+      mechanicId: 'Mechanic_SigilTrace',
+      difficulty,
+      success: false,
+      timeElapsedMs: Date.now() - startedAtRef.current,
+      narrativeEventId,
+    });
     queueTimeout(() => onFailure(), 260);
-  }, [clearTimeouts, failOverlay, onFailure, queueTimeout]);
+  }, [clearTimeouts, difficulty, failOverlay, narrativeEventId, onFailure, queueTimeout]);
 
   const runPreview = useCallback(() => {
     clearTimeouts();
@@ -211,31 +275,32 @@ export default function GridCipher({
     setPhase('preview');
     setPlayerInputIndex(0);
     setConfirmedNodes([]);
-    setPreviewLitNode(null);
+    setPreviewBeat(null);
     setTapLitNode(null);
     setInputLocked(true);
+    setFailReason(null);
 
-    targetSequence.forEach((nodeId, stepIndex) => {
+    playback.forEach((beat, stepIndex) => {
       queueTimeout(() => {
         if (previewGenRef.current !== gen || resolvedRef.current) return;
-        setPreviewLitNode(nodeId);
-        Vibration.vibrate(8);
+        setPreviewBeat(beat);
+        Vibration.vibrate(beat.forbidden ? [0, 18, 30, 18] : 8);
 
         queueTimeout(() => {
           if (previewGenRef.current !== gen || resolvedRef.current) return;
-          setPreviewLitNode(null);
+          setPreviewBeat(null);
 
-          if (stepIndex === targetSequence.length - 1) {
+          if (stepIndex === playback.length - 1) {
             queueTimeout(() => {
               if (previewGenRef.current !== gen || resolvedRef.current) return;
               setPhase('input');
               setInputLocked(false);
-            }, PREVIEW_STEP_MS);
+            }, sequence.playbackStepMs);
           }
-        }, NODE_FLASH_MS);
-      }, stepIndex * PREVIEW_STEP_MS);
+        }, sequence.nodeFlashMs);
+      }, stepIndex * sequence.playbackStepMs);
     });
-  }, [clearTimeouts, queueTimeout, targetSequence]);
+  }, [clearTimeouts, playback, queueTimeout, sequence.nodeFlashMs, sequence.playbackStepMs]);
 
   useEffect(() => {
     runPreview();
@@ -248,9 +313,14 @@ export default function GridCipher({
   const handleNodePress = useCallback((nodeId: number) => {
     if (inputLocked || phase !== 'input' || resolvedRef.current) return;
 
-    const expected = targetSequence[playerInputIndex];
-    if (nodeId !== expected) {
-      resolveFailure();
+    // Any tap that matches a forbidden beat role is handled by expected sequence only.
+    // Pressing a node that is not the next expected input fails — including pressing
+    // a node that was shown as forbidden during playback when that node is not next.
+    const expected = expectedInput[playerInputIndex];
+    if (expected == null || nodeId !== expected) {
+      // If this node appeared as forbidden in playback and is not expected, treat as forbidden miss.
+      const wasForbiddenGlyph = playback.some((b) => b.forbidden && b.nodeId === nodeId);
+      resolveFailure(wasForbiddenGlyph ? 'forbidden' : 'wrong');
       return;
     }
 
@@ -261,17 +331,18 @@ export default function GridCipher({
 
     const nextIndex = playerInputIndex + 1;
     setPlayerInputIndex(nextIndex);
-    if (nextIndex >= targetSequence.length) {
+    if (nextIndex >= expectedInput.length) {
       queueTimeout(() => resolveSuccess(), TAP_FLASH_MS);
     }
   }, [
+    expectedInput,
     inputLocked,
     phase,
+    playback,
     playerInputIndex,
     queueTimeout,
     resolveFailure,
     resolveSuccess,
-    targetSequence,
   ]);
 
   const penaltyHint = defaultPenalty
@@ -293,18 +364,29 @@ export default function GridCipher({
     [fontScale, scaleFont],
   );
 
+  const forbiddenCount = playback.filter((b) => b.forbidden).length;
+
   const instructionText = (() => {
-    if (phase === 'preview') return 'Observe the cipher sequence — input locked.';
-    if (phase === 'input') {
-      return `Re-enter cipher — step ${playerInputIndex + 1} of ${targetSequence.length}.`;
+    if (phase === 'preview') {
+      return forbiddenCount > 0
+        ? `Observe the living pattern — skip VOID / FORBIDDEN beats (${forbiddenCount}).`
+        : 'Observe the living pattern — input locked.';
     }
-    return failFlash ? 'Cipher rejected — breach detected.' : 'Cipher accepted — access granted.';
+    if (phase === 'input') {
+      return `Repeat the echo — step ${playerInputIndex + 1} of ${expectedInput.length}. Skip forbidden beats.`;
+    }
+    if (failFlash) {
+      return failReason === 'forbidden'
+        ? FAILURE_LINES[1]!
+        : FAILURE_LINES[0]!;
+    }
+    return SUCCESS_LINES[0]!;
   })();
 
   const confirmedText = phase === 'input'
-    ? `${playerInputIndex}/${targetSequence.length} symbols confirmed`
+    ? `${playerInputIndex}/${expectedInput.length} beats confirmed`
     : phase === 'preview'
-      ? `0/${targetSequence.length} symbols confirmed`
+      ? `0/${expectedInput.length} beats confirmed`
       : ' ';
 
   return (
@@ -317,10 +399,23 @@ export default function GridCipher({
       <Text
         style={[
           styles.header,
-          { fontSize: scales.header, lineHeight: scales.headerLine },
+          { fontSize: scales.header, lineHeight: scales.headerLine, color: TERMINAL_GREEN },
         ]}
       >
-        GRID CIPHER // SEQUENTIAL BYPASS
+        RITUAL ECHO
+      </Text>
+
+      <Text
+        style={[
+          styles.subtitle,
+          {
+            fontSize: scaleFont(10),
+            lineHeight: scaleFont(14),
+            marginTop: scaleSpacing(4),
+          },
+        ]}
+      >
+        Repeat the living pattern. Skip the forbidden beats.
       </Text>
 
       <Text
@@ -329,8 +424,8 @@ export default function GridCipher({
           {
             fontSize: scales.cipherMeta,
             lineHeight: scales.cipherMetaLine,
-            marginBottom: scaleSpacing(32),
-            marginTop: scaleSpacing(12),
+            marginBottom: scaleSpacing(24),
+            marginTop: scaleSpacing(10),
           },
         ]}
       >
@@ -356,10 +451,16 @@ export default function GridCipher({
           ]}
         >
           {Array.from({ length: NODE_COUNT }, (_, nodeId) => (
-            <CipherNode
+            <RitualNode
               key={nodeId}
               nodeId={nodeId}
-              lit={previewLitNode === nodeId || tapLitNode === nodeId}
+              lit={
+                (previewBeat != null && !previewBeat.forbidden && previewBeat.nodeId === nodeId)
+                || tapLitNode === nodeId
+              }
+              forbiddenLit={
+                previewBeat != null && previewBeat.forbidden && previewBeat.nodeId === nodeId
+              }
               tapped={confirmedNodes.includes(nodeId)}
               disabled={inputLocked || phase !== 'input'}
               onPress={handleNodePress}
@@ -399,7 +500,7 @@ export default function GridCipher({
             {
               fontSize: scales.penalty,
               lineHeight: scales.penaltyLine,
-              marginTop: scaleSpacing(32),
+              marginTop: scaleSpacing(24),
             },
           ]}
         >
@@ -422,9 +523,13 @@ const styles = StyleSheet.create({
   },
   header: {
     fontFamily: 'monospace',
-    letterSpacing: 1,
-    color: BODY_MUTED,
+    letterSpacing: 1.5,
     fontWeight: '700',
+  },
+  subtitle: {
+    fontFamily: 'monospace',
+    color: BODY_MUTED,
+    letterSpacing: 0.3,
   },
   cipherMeta: {
     fontFamily: 'monospace',
@@ -445,7 +550,7 @@ const styles = StyleSheet.create({
   node: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
+    gap: 2,
   },
   nodeCore: {
     width: 10,
@@ -456,12 +561,27 @@ const styles = StyleSheet.create({
   nodeCoreLit: {
     backgroundColor: '#ecfeff',
   },
+  nodeCoreForbidden: {
+    backgroundColor: '#fca5a5',
+    borderRadius: 1,
+  },
   nodeId: {
     fontFamily: 'monospace',
     letterSpacing: 0.4,
+    fontWeight: '700',
+  },
+  skipTag: {
+    fontFamily: 'monospace',
+    color: FORBIDDEN_LABEL,
+    letterSpacing: 0.8,
+    fontWeight: '800',
   },
   failOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
   },
   penalty: {
     fontFamily: 'monospace',
