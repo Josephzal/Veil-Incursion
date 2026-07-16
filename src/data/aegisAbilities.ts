@@ -42,8 +42,8 @@ export const AEGIS_ABILITY_CATALOG: Record<AegisAbilityId, AegisAbilityDefinitio
     baseKineticDamage: 10,
     reserveGain: 15,
     brandsImprinted: 1,
-    description: '10 kinetic damage. +15% Abyssal Reserve. +1 Runic Brand. Concussed if fracture >50%.',
-    tags: ['KINETIC', 'MELEE', 'FRACTURE', 'DEBUFF'],
+    description: '10 kinetic damage. Strips 1 Kinetic Armor. +15% Abyssal Reserve. +1 Runic Brand. Concussed if fracture >50%. Counters: Guard, Heavy Attack (armor break). Riposte Ready: +30% vs Fractured + strip armor.',
+    tags: ['KINETIC', 'MELEE', 'FRACTURE', 'ARMOR_BREAK', 'DEBUFF', 'GUARD_BREAK'],
     unlockCost: {},
   },
   RUIN: {
@@ -52,8 +52,8 @@ export const AEGIS_ABILITY_CATALOG: Record<AegisAbilityId, AegisAbilityDefinitio
     apCost: 2,
     staminaCost: 0,
     brandsConsumed: 'ALL',
-    description: 'Consume all Brands — full 2×2 grid AoE (front + back). +30 fracture per Brand. 3 Brands + Concussed = fracture stun.',
-    tags: ['KINETIC', 'AOE', 'FRACTURE', 'CONTROL'],
+    description: 'Consume all Brands — full 2×2 grid AoE (front + back). +30 fracture per Brand. 3 Brands + Concussed = fracture stun. Counters: Guard.',
+    tags: ['KINETIC', 'AOE', 'FRACTURE', 'CONTROL', 'GUARD_BREAK'],
     unlockCost: { 'ley-slag': 15 },
   },
   WRAITH_PARRY: {
@@ -61,8 +61,8 @@ export const AEGIS_ABILITY_CATALOG: Record<AegisAbilityId, AegisAbilityDefinitio
     label: '[ VOID WARD ]',
     apCost: 1,
     staminaCost: 0,
-    description: 'Prime Void Ward Shroud — perfect kinetic parry reflects fracture, +25% Reserve, +1 Brand.',
-    tags: ['KINETIC', 'DEFENSIVE', 'MELEE', 'FRACTURE'],
+    description: 'Prime Void Ward Shroud — perfect kinetic parry reflects fracture, +25% Reserve, +1 Brand. Counters: Heavy Attack, Lock-On.',
+    tags: ['KINETIC', 'DEFENSIVE', 'MELEE', 'FRACTURE', 'PARRY', 'BLOCK'],
     unlockCost: { 'ley-slag': 10, 'sanguine-ampoule': 2 },
   },
   GRAVE_BIND: {
@@ -71,8 +71,8 @@ export const AEGIS_ABILITY_CATALOG: Record<AegisAbilityId, AegisAbilityDefinitio
     apCost: 1,
     staminaCost: 0,
     reserveCost: 10,
-    description: 'Pull backline target to melee. Exposed — defense halved.',
-    tags: ['OCCULT', 'RANGED', 'CONTROL', 'DEBUFF'],
+    description: 'Pull backline target to melee. Exposed — defense halved. Counters: Guard (pulls protected backline).',
+    tags: ['OCCULT', 'RANGED', 'CONTROL', 'DEBUFF', 'GUARD_BREAK', 'INTERRUPT'],
     unlockCost: { 'ley-slag': 12, 'echo-glass-shard': 3 },
   },
   SHADOW_STEP: {

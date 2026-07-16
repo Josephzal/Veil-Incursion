@@ -428,6 +428,18 @@ export default function CombatScreen(): React.JSX.Element {
     damageTaken?: number;
     healingReceived?: number;
     damageDealt?: number;
+    intentTelemetry?: import('../data/balance/combatIntentTelemetryEngine').CombatIntentTelemetry;
+    classLoopTelemetry?: import('../data/balance/classLoopTelemetryEngine').ClassLoopTelemetry;
+    objectiveTelemetry?: import('../data/balance/encounterObjectiveTelemetryEngine').EncounterObjectiveTelemetry;
+    directorTelemetry?: {
+      pressureTotal: number;
+      pressureLabel: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
+      rewardMultiplier: number;
+      adjustmentsApplied: number;
+      severity: 'OK' | 'WARNING' | 'ERROR';
+      debugSummary: string;
+    };
+    juiceTelemetry?: import('../data/combatJuiceFeedbackEngine').CombatJuiceTelemetry;
   }) => {
     const vectorNode = getSelectedVectorNode();
     const isBossEncounter =
@@ -444,6 +456,30 @@ export default function CombatScreen(): React.JSX.Element {
       healingReceived: result.healingReceived ?? 0,
       damageDealt: result.damageDealt ?? 0,
       victory: Boolean(result.victory && result.remainingHp > 0),
+      playerClassId: operativeClass,
+      depth: getDistrictFromDepth(depthFromNodesCleared(activeIncursion.nodesCleared)),
+      enemyCount: (runState.pendingEnemies?.length ?? (runState.pendingEnemy ? 1 : 0)),
+      endingPlayerHp: result.remainingHp,
+      defense: {
+        fractureAppliedCount: 0,
+        fractureTriggeredByArmorBreakCount: 0,
+        fractureTriggeredByWardBreakCount: 0,
+        kineticArmorDamageReduced: 0,
+        kineticArmorStacksRemoved: 0,
+        kineticArmorBreaks: 0,
+        occultWardDamageReduced: 0,
+        occultWardStacksRemoved: 0,
+        occultWardBreaks: 0,
+        hadKineticArmorEnemy: (runState.pendingEnemies ?? (runState.pendingEnemy ? [runState.pendingEnemy] : []))
+          .some((e) => (e.baseKineticArmor ?? e.kineticArmor ?? 0) > 0),
+        hadOccultWardEnemy: (runState.pendingEnemies ?? (runState.pendingEnemy ? [runState.pendingEnemy] : []))
+          .some((e) => (e.baseOccultWards ?? e.occultWards ?? 0) > 0),
+      },
+      intent: result.intentTelemetry,
+      classLoop: result.classLoopTelemetry,
+      objective: result.objectiveTelemetry,
+      director: result.directorTelemetry,
+      juice: result.juiceTelemetry,
     });
 
     if (runState.devSandboxPreset || runState.combatTestPreset) {
@@ -542,7 +578,9 @@ export default function CombatScreen(): React.JSX.Element {
       rosterId: runState.pendingEnemy?.rosterId,
       seed: `combat:${depth}:${nodeType ?? 'std'}:${runState.pendingEnemy?.rosterId ?? 'unknown'}`,
       slainEnemies: runState.pendingEnemies ?? [],
-      rareLootBonusPct: (activeIncursion.runModifiers?.rareLootBonusPct ?? 0) + bossRareBonus,
+      rareLootBonusPct: (activeIncursion.runModifiers?.rareLootBonusPct ?? 0)
+        + bossRareBonus
+        + (activeIncursion.environmentalModifiers?.directorRareLootBonusPct ?? 0),
       rewardTier,
       compositionTemplateId,
       veilBiome: activeIncursion.runVeilBiome,

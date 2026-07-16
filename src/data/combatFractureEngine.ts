@@ -1,9 +1,19 @@
 import type { CombatUnitTag } from '../types/aegisCombat';
 import type { EnemyCombatProfile } from '../types/run';
+import {
+  COMBAT_DEFENSE_BALANCE,
+  normalizeLegacyDefenseLayers,
+} from './balance/combatDefenseBalanceConfig';
 
 export const FRACTURE_MAX_DEFAULT = 100;
-export const FRACTURED_DAMAGE_BONUS_PCT = 50;
-export const FRACTURED_MAX_HP_PENALTY_PCT = 20;
+/** @deprecated Prefer COMBAT_DEFENSE_BALANCE.fracturedDamageBonusPercent */
+export const FRACTURED_DAMAGE_BONUS_PCT = Math.round(
+  COMBAT_DEFENSE_BALANCE.fracturedDamageBonusPercent * 100,
+);
+/** @deprecated Prefer COMBAT_DEFENSE_BALANCE.fracturedMaxHpPenaltyPercent */
+export const FRACTURED_MAX_HP_PENALTY_PCT = Math.round(
+  COMBAT_DEFENSE_BALANCE.fracturedMaxHpPenaltyPercent * 100,
+);
 
 export function hasCombatTag(enemy: EnemyCombatProfile, tag: CombatUnitTag): boolean {
   return enemy.combatTags?.includes(tag) ?? false;
@@ -62,17 +72,27 @@ export function willFractureBreak(enemy: EnemyCombatProfile, amount: number): bo
   return (enemy.fractureGauge ?? 0) + amount >= max;
 }
 
-/** Break state — stunned, armor stripped, +50% damage taken, −20% max HP immediate hit. */
-export function applyFracturedState(enemy: EnemyCombatProfile): EnemyCombatProfile {
-  const hpLoss = Math.max(1, Math.floor(enemy.maxHp * FRACTURED_MAX_HP_PENALTY_PCT / 100));
-  const currentHp = Math.max(1, enemy.currentHp - hpLoss);
+/**
+ * Fracture exploit state — vulnerability payoff.
+ * Phase 1: armor/ward break applies Fracture; gauge fill still Fractures without stripping defenses
+ * (defenses are the puzzle; Fracture is the payoff).
+ */
+export function applyFracturedState(
+  enemy: EnemyCombatProfile,
+  options?: { fromDefenseBreak?: boolean },
+): EnemyCombatProfile {
+  const penaltyPct = COMBAT_DEFENSE_BALANCE.fracturedMaxHpPenaltyPercent;
+  const hpLoss = options?.fromDefenseBreak
+    ? 0
+    : Math.max(1, Math.floor(enemy.maxHp * penaltyPct));
+  const currentHp = options?.fromDefenseBreak
+    ? enemy.currentHp
+    : Math.max(1, enemy.currentHp - hpLoss);
   return {
     ...enemy,
     currentHp,
     fractureGauge: 0,
     combatTags: [...new Set([...(enemy.combatTags ?? []), 'FRACTURED' as CombatUnitTag])],
-    kineticArmor: 0,
-    occultWards: 0,
     enemyActionPoints: 0,
     fracturedThisRound: true,
     evadeActive: false,
@@ -80,19 +100,15 @@ export function applyFracturedState(enemy: EnemyCombatProfile): EnemyCombatProfi
   };
 }
 
-/** Start of enemy active turn — recover from fracture break. */
+/** Start of enemy active turn — recover from fracture break. Defenses stay as-stripped. */
 export function recoverFromFracture(enemy: EnemyCombatProfile): EnemyCombatProfile {
   if (!enemy.fracturedThisRound && !hasCombatTag(enemy, 'FRACTURED')) {
     return enemy;
   }
-  const restoredKinetic = enemy.baseKineticArmor ?? enemy.kineticArmor ?? 0;
-  const restoredOccult = enemy.baseOccultWards ?? enemy.occultWards ?? 0;
   return {
     ...enemy,
     fractureGauge: 0,
     fracturedThisRound: false,
-    kineticArmor: restoredKinetic,
-    occultWards: restoredOccult,
     enemyActionPoints: enemy.enemyMaxActionPoints ?? 1,
     combatTags: (enemy.combatTags ?? []).filter((t) => t !== 'FRACTURED'),
   };
@@ -104,21 +120,50 @@ export function isEnemyFractured(enemy: EnemyCombatProfile): boolean {
 
 export function applyDamageWithFractureBonus(raw: number, enemy: EnemyCombatProfile): number {
   if (!isEnemyFractured(enemy)) return raw;
-  return Math.floor(raw * (1 + FRACTURED_DAMAGE_BONUS_PCT / 100));
+  return Math.floor(raw * (1 + COMBAT_DEFENSE_BALANCE.fracturedDamageBonusPercent));
 }
 
 export function initEnemyCombatLayers(
   enemy: EnemyCombatProfile,
-  options?: { kineticArmor?: number; occultWards?: number; fractureMax?: number },
+  options?: {
+    kineticArmor?: number;
+    occultWards?: number;
+    fractureMax?: number;
+    depth?: 1 | 2 | 3;
+    earlyNode?: boolean;
+  },
 ): EnemyCombatProfile {
-  const kinetic = options?.kineticArmor ?? defaultKineticArmor(enemy);
-  const occult = options?.occultWards ?? defaultOccultWards(enemy);
+  const depth = options?.depth ?? 1;
+  const early = options?.earlyNode ?? false;
+  let kinetic = normalizeLegacyDefenseLayers(options?.kineticArmor ?? defaultKineticArmor(enemy));
+  let occult = normalizeLegacyDefenseLayers(options?.occultWards ?? defaultOccultWards(enemy));
+  const maxKa = depth === 1 && early
+    ? COMBAT_DEFENSE_BALANCE.depth1EarlyMaxArmorStacks
+    : depth === 1
+      ? COMBAT_DEFENSE_BALANCE.depth1LateMaxArmorStacks
+      : depth === 2
+        ? COMBAT_DEFENSE_BALANCE.depth2MaxArmorStacks
+        : COMBAT_DEFENSE_BALANCE.depth3MaxArmorStacks;
+  const maxOw = depth === 1 && early
+    ? COMBAT_DEFENSE_BALANCE.depth1EarlyMaxWardStacks
+    : depth === 1
+      ? COMBAT_DEFENSE_BALANCE.depth1LateMaxWardStacks
+      : depth === 2
+        ? COMBAT_DEFENSE_BALANCE.depth2MaxWardStacks
+        : COMBAT_DEFENSE_BALANCE.depth3MaxWardStacks;
+  kinetic = Math.min(kinetic, maxKa);
+  occult = Math.min(occult, maxOw);
+  if (depth === 1 && early && kinetic > 0 && occult > 0) {
+    occult = 0;
+  }
   return {
     ...enemy,
     kineticArmor: kinetic,
     occultWards: occult,
     baseKineticArmor: kinetic,
     baseOccultWards: occult,
+    kineticArmorBrokenThisCombat: false,
+    occultWardsBrokenThisCombat: false,
     fractureGauge: 0,
     fractureMax: options?.fractureMax ?? FRACTURE_MAX_DEFAULT,
     combatTags: enemy.combatTags ?? [],

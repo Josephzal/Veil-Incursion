@@ -1,6 +1,6 @@
 # Veil Incursion Current Systems Design
 
-Last updated: 2026-07-14 (procedural aftermath v1 polish)
+Last updated: 2026-07-15 (combat refactor phase 5 — combat director + juice)
 
 This document captures the current implemented design surface for Veil Incursion: player-facing hub systems, run progression, economy, cargo/items, enemies, combat mechanics, and known partial implementations. It is intended as a working reference for design iteration and balancing, not a final player-facing manual.
 
@@ -16,7 +16,7 @@ Primary data and implementation files:
 - Run flow: `src/context/RunContext.tsx`, `src/context/GameFlowContext.tsx`, `src/data/descentEngine.ts`, `src/data/sectorGraphEngine.ts`
 - Cargo/items/resources: `src/types/resourceItem.ts`, `src/types/runResourceLedger.ts`, `src/types/cargoGrid.ts`, `src/types/unstableCargoEffects.ts`, `src/data/resourceRegistry.ts`, `src/data/resourceValidation.ts`, `src/data/runResourceLedgerEngine.ts`, `src/data/extractionPersistenceEngine.ts`, `src/data/unstableCargoEffectsEngine.ts`, `src/data/lazyNodeContextEngine.ts`, `src/data/runDebriefUnstableCargoEngine.ts`, `src/data/blackMarket.ts`, `src/data/craftingRegistry.ts`, `src/data/consumableRegistry.ts`
 - Enemies: `src/data/enemyRoster.ts`, `src/data/enemyDefinitions.ts`, `src/data/enemyCombatConfig.ts`, `src/data/combatRosterAI.ts`, `src/data/enemyAlphaConfig.ts`
-- Combat execution: `src/components/TacticalCombatHub.tsx`, `src/data/combatRosterActions.ts`, `src/data/combatFractureEngine.ts`
+- Combat execution: `src/components/TacticalCombatHub.tsx`, `src/data/combatRosterActions.ts`, `src/data/combatFractureEngine.ts`, `src/data/combatDefenseLayerEngine.ts`, `src/data/aegisAbilityResolver.ts`, `src/data/balance/combatDefenseBalanceConfig.ts`
 - Class abilities: `src/data/aegisAbilities.ts`, `src/data/hexShotAbilities.ts`, `src/data/envoyAbilities.ts`
 - Progression and boons: `src/data/boundRequisitions.ts`, `src/data/leyLineMutations.ts`, `src/data/regions.ts`
 - Expedition relics (Trinkets v2): `src/types/expeditionKeepsake.ts`, `src/data/expeditionKeepsakeRegistry.ts`, `src/data/keepsakeRunState.ts`, `src/data/expeditionKeepsakeEngine.ts`, `src/data/expeditionKeepsake*Engine.ts`, `src/components/hub/KeepsakeLoadoutPanel.tsx`, `src/data/runDebriefKeepsakeEngine.ts`, `src/data/expeditionKeepsakeValidation.ts`, `src/data/expeditionKeepsakeAcceptanceEngine.ts`, `src/data/expeditionKeepsakeAuditEngine.ts`
@@ -1267,9 +1267,9 @@ Combat uses:
 - Soul Anchor HP.
 - Abyssal Reserve.
 - Class-specific combat resources.
-- Kinetic armor layers.
-- Occult ward layers.
-- Fracture gauge.
+- Kinetic armor layers (Phase 1: stack + % mitigation).
+- Occult ward layers (Phase 1: stack + % mitigation).
+- Fracture gauge / Fractured exploit state.
 - Enemy intent telegraphs.
 - Enemy turn queues and motion stages.
 - Cargo consumable deployment.
@@ -1277,19 +1277,85 @@ Combat uses:
 
 ### Defensive Layers
 
-Key defensive/mitigation systems:
+**Combat Refactor Phase 1** inverted the armor/ward ↔ Fracture relationship:
 
-- Kinetic armor.
-- Occult wards.
-- Fracture and fractured states.
-- Evade posture.
-- Fortify posture.
-- Void Ward / parry for Aegis.
-- Shields and temporary player mitigation.
-- Veil Barrier charges on enemies.
-- Warden intercepts for specific targeting cases.
+| Layer | Behavior |
+|-------|----------|
+| **Kinetic Armor (KA)** | Low stacks (0–3). While stacks > 0, reduces **kinetic** damage by ~22–28%. Not full immunity. |
+| **Occult Wards (OW)** | Low stacks (0–3). While stacks > 0, reduces **occult** damage by ~22–28%. |
+| **ARMOR_BREAK / WARD_BREAK** | Strip stacks. First full strip applies **Fracture**. |
+| **ARMOR_PIERCE / WARD_PIERCE** | Ignore mitigation for the hit (may not strip). |
+| **Fracture** | Exploit state: +20% damage taken, 0 enemy AP for the break window. Gauge fill still Fractures; **does not strip** KA/OW (defenses are the puzzle; Fracture is the payoff). |
 
-### Enemy Intent Categories
+Legacy flat absorb (`layers × 3`) is retired. Authored high layer counts are **normalized** at spawn into 0–3 stacks. Depth 1 early nodes (≤3) cap at 1 layered enemy and never both KA+OW on one unit. Depth 1 HP/dmg also soft-scaled (`depth1HpSoftMult` / `depth1DamageSoftMult`).
+
+**Class starters:** Aegis `STRIKE` has `ARMOR_BREAK`; Hex `SILVER_CORE_SIDEARM` has `ARMOR_BREAK`, `WRAITH_PIERCER_ROUND` has `WARD_BREAK`; Envoy `VEIL_SPLINTER` has `WARD_BREAK`. Items: Grid-Cracker Mag / Eclipse Flare still strip and now trigger Fracture on break.
+
+**Telemetry:** `BalanceCombatEncounterSample` records class/depth/enemy count + defense flags. Dev Test: `[ COMBAT BALANCE REPORT ]`, `[ CLASS DEFENSE COUNTERS ]`. Constants: `src/data/balance/combatDefenseBalanceConfig.ts`.
+
+Also still in play:
+
+- Evade posture / Fortify posture
+- Void Ward / parry (Aegis)
+- **Riposte Ready** (Aegis Phase 3) — Perfect Parry / Fracture / armor break arms next Strike cash-out
+- Player shields / temporary mitigation
+- Veil Barrier charges / Warden intercepts
+- **Hex Shot ammo profiles** (Phase 3) — Breacher / Null / Flash / Hollow identities on existing shots; chamber bonus after tactical reload
+- **Envoy catalysts** (Phase 3) — NULL/ECHO/BLOOD/ASH primed by spells; lightweight sequence payoffs on Veil Rot loop
+
+### Class Combat Identity (Phase 3)
+
+| Class | Loop | Signature payoff |
+|-------|------|------------------|
+| Aegis | Read intent → Parry/Guard → Fracture → Riposte | Perfect Parry arms Riposte; Strike +30% vs Fractured |
+| Hex Shot | Load answer → break/interrupt → reload tempo | Chamber +15% after reload; profile tooltips |
+| Envoy | Prime catalyst → sequence → collapse wards | NULL→ECHO Silencing Echo; Catalytic/Cataclysm |
+
+Dev Test: `[ CLASS IDENTITY REPORT ]`, `[ CLASS COMBAT REPORT ]`.
+
+**Combat Refactor Phase 4** adds an `EncounterObjective` layer beside legacy `CombatObjective` (`ERADICATE` / `SURVIVE_TURNS`).
+
+| Template | Win mode | Notes |
+|----------|----------|-------|
+| **KILL_CALLER** | Kill marked Caller | Pressure replacement — board clear optional |
+| **INTERRUPT_RITUAL** | Cancel CHANNEL telegraph | Hooks Phase 2 counterplay |
+| **SURVIVE_TURNS** | Endure N enemy cycles | Generic hold |
+| **HOLD_EXTRACTION_WINDOW** | Endure N cycles | Dirty Extraction / Emergency Recall |
+| **CLEAR_ECHO** | Clear squad | Echo overlay framing + telemetry |
+| **BREAK_ANCHOR_LINK** | Clear squad | Anchor assault framing + telemetry |
+| **PROTECT_CARGO** (soft) | Value / telemetry | Stamped when unstable cargo present |
+| **STABILIZE_RESOURCE / PREVENT_DETONATION** (soft) | Value / telemetry | Light timeline previews |
+
+Dirty Extraction (`prepareDefendRiftEncounter`) stamps `HOLD_EXTRACTION_WINDOW` + legacy `SURVIVE_TURNS` (`DEFEND_RIFT_SURVIVAL_TURNS`), optional soft PROTECT_CARGO, and light timeline chips. Objectives **replace** pressure (incoming mitigation + alternate win) rather than stacking early Depth 1 eradicate fights.
+
+Engines: `encounterObjectiveCatalog.ts`, `encounterObjectiveEngine.ts`, `combatTimelineEngine.ts`. Telemetry on `BalanceCombatEncounterSample.objective`. Dev Test: `[ OBJECTIVE REPORT ]`, `[ OBJECTIVE VALIDATION ]`, `[ OBJECTIVE TEMPLATES ]`, `[ DEFEND RIFT PREVIEW ]`.
+
+### Combat Director + Juice (Phase 5)
+
+Phase 5 stabilizes Phases 1–4 without adding major mechanics:
+
+| System | Role |
+|--------|------|
+| **Combat Director** | Scores encounter pressure, caps mechanic density / hard-counter stacks, soft-caps unfair early Depth 1 fights, matches reward to risk |
+| **Pressure score** | LOW–CRITICAL from HP/dmg/KA/OW/intents/objectives/cargo/echo/anchor |
+| **Safety** | Strip dual KA+OW early, soft HP/dmg/stacks, lengthen tight Dirty Extraction timers, add incoming mitigation |
+| **Juice hooks** | `CombatJuiceFeedbackEvent` metadata (hit-stop / shake / VFX-SFX cue ids) — no assets |
+| **Danger pulse** | Start-of-player-turn HIGH/CRITICAL threat banner (Lock-On, Ritual, Extraction window, Anchor pulse) |
+
+Wired at `prepareStandardCombatEncounter` / `prepareDefendRiftEncounter`. Metadata on `EnvironmentalModifiers.combatDirector` (lazy-safe for old saves). Telemetry: `sample.director` + `sample.juice`. Dev Test: `[ COMBAT DIRECTOR REPORT ]`, `[ ENCOUNTER PRESSURE REPORT ]`, `[ COMBAT FEEDBACK REPORT ]`, `[ DIRECTOR VALIDATION ]`, `[ DIRECTOR MOCK SCORE ]`, `[ FORCE JUICE FEEDBACK ]`.
+
+**Combat Refactor Phase 2** layers Intent 2.0 metadata on the existing `EnemyIntent` string enum (does not replace it).
+
+| Phase 2 type | Existing intents (examples) | Notes |
+|---|---|---|
+| **LOCK_ON** | `TARGET_LOCK`, `LASER_SIGHT` | Telegraph ≥1 turn; counters: Blind, Interrupt, Parry, Decoy, Kill |
+| **CHANNEL** | `CHARGE`, `ARTILLERY_CHARGE`, `PAVEMENT_CRUSHER_CHARGE`, `SINKING_INTO_GRID` | Wind-up; counters: Interrupt, Silence, Ward Break, Kill |
+| **HEAVY_ATTACK** | `WORLD_ENDER`, `PAVEMENT_CRUSHER`, `ARTILLERY_FIRE`, `OVERDRIVE_DISCHARGE` | Often follows a channel; Parry where catalog allows |
+| **GUARD** | `FORTIFY`, `BINDING_WARD`, `VEIL_BARRIER` | Protects self/ally; counters: Guard Break, Armor Break, Fracture |
+| **DETONATE** | `PREMATURE_IGNITION` | Must be telegraphed |
+| **MARK / DEBUFF / BUFF** | `HEX_MARK`, `FIELD_REPAIR`, etc. | Support pressure |
+
+Catalog: `src/data/enemyIntentCatalog.ts`. Counterplay: `resolveIntentCounterplay` in `enemyIntentCounterplayEngine.ts`. HIGH/CRITICAL telegraphs grant a player turn; counters can cancel telegraphs and apply Fracture. Depth gates in `combatIntentBalanceConfig.ts`. Dev Test: `[ ENEMY INTENT REPORT ]`, `[ INTENT VALIDATION ]`.
 
 Shared/common intents:
 
@@ -1548,6 +1614,11 @@ Current world/narrative surface includes:
 - **Run Items v2 (complete — Phases A–F + polish):** 24-item combat consumable + field tool roster in dedicated 2+2 slots, combat/field engines, hub loadout + fabrication filters, black market tap-to-buy + cargo drag split, live HUD + toasts + brought/remaining debrief, registry + acceptance + boot audit. Bound Requisitions remain separate.
 - **Post-run cargo routing v1 (complete — Phases 1–10):** Full post-extract cargo routing pipeline with Veil Front + hub intel surfaces, live debrief preview/validation, partial stackable routing, casket open-at-hub v1, deferred contract delivery, death cargo messaging, runtime + intel + fixture + sim validation, catalog audit engine, cleanup/ship pass, `cargoRoutingRunState` + `careerCargoRouting` tracking, debrief summary wiring, hub contract board + safehouse + extraction review + scanner + loadout + cargo pressure surfaces, hub log on routing confirm, dev audit/validate/inspect tooling, compact debrief parity. Acceptance criteria (63) in Post-Run Cargo Routing v1 section.
 - **Run World Brief + Procedural Director + Sector Aftermath v1 (complete):** Unified deploy brief with crisis theme/resource stress/threat profile; director validation, pressure scoring, manifestation checks, safety caps, explainability; 10-rule sector aftermath with stackKey merge, intensity, sector-local ticking, debrief preview + persistence, brief bias application, idempotency guard, validation + dev sim tools. See Run World Brief section above.
+- **Combat Refactor Phase 1 (complete):** Kinetic Armor / Occult Wards as % mitigation stacks; break→Fracture payoff; Fracture no longer strips defenses; Depth 1 soft HP/dmg + stack caps; class starter break tags; combat balance report + class counter validation; legacy layer normalization at spawn.
+- **Combat Refactor Phase 2 (complete):** Enemy Intent 2.0 catalog layered on existing `EnemyIntent` enum; LOCK_ON / CHANNEL / GUARD / HEAVY_ATTACK metadata; `resolveIntentCounterplay`; Fracture payoff on HIGH counters; class counter tags (Parry / Interrupt / Ward Break); intent UI severity + turns remaining; intent telemetry + Enemy Intent Balance Report; depth telegraph validation.
+- **Combat Refactor Phase 3 (complete):** Class identity loops polished — Aegis Riposte Ready after Perfect Parry; Hex Shot ammo profiles + chamber bonus on reload; Envoy lightweight catalysts (NULL/ECHO/BLOOD/ASH) on Veil Rot spells; class loop telemetry; Class Identity / Class Combat Dev Test reports.
+- **Combat Refactor Phase 4 (complete):** EncounterObjective layer + v1 templates (Caller / Ritual / Survive / Hold Extraction / Echo / Anchor + soft Protect Cargo); Dirty Extraction wired to SURVIVE/HOLD; light combat timeline previews; objective telemetry + DevTest reports.
+- **Combat Refactor Phase 5 (complete):** Combat Director (pressure / density / fairness / safety / reward-risk); juice feedback hooks + hit-stop defaults; start-of-turn danger pulse; director + pressure + feedback reports; DevTest sims; prep-time soft caps without new combat mechanics.
 - **Safehouse banking:** Physical in-run banking via `runBankedSnapshot` — banked cargo survives death and routes to hub stash. Unbanked cargo is lost on death (`runResourceLedger.lostOnDeath`). Extraction merges banked + carried cargo before deposit.
 - Target Fragment has a catalogued combat effect but is marked `unimplemented`.
 - Kinetic Hollow Points / Veil-Vial is described as next attack +15 damage but is marked `unimplemented`.

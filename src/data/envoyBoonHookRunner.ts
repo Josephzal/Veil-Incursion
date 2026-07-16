@@ -7,6 +7,7 @@ import { boonMatchesEnvoyAction, hasEnvoyBoon } from './classBoonEngine';
 import { getEnvoyAbilityTags, getEnvoyAbilityDefinition } from './envoyAbilities';
 import { adjacentAliveUnits, aliveUnits, getUnitById, isUnitAlive } from './combatSquadEngine';
 import { addCombatTag, hasCombatTag } from './combatFractureEngine';
+import { stripKineticArmor, stripOccultWards } from './combatDefenseLayerEngine';
 import { addVeilRotStacks, getVeilRotStacks } from './envoyRotEngine';
 
 export function isEnemyCursed(
@@ -162,9 +163,17 @@ export function runEnvoyOnHitBoons(ctx: EnvoyOnHitContext): void {
       const next = (target.veilBarrierCharges ?? 0) - 1;
       patch.veilBarrierCharges = next > 0 ? next : undefined;
     } else if ((target.occultWards ?? 0) > 0) {
-      patch.occultWards = Math.max(0, (target.occultWards ?? 0) - 1);
+      const strip = stripOccultWards(target, 1);
+      ctx.patchUnit(target.unitId, strip.enemy);
+      strip.logLines.forEach((line) => ctx.log(line));
+      ctx.log('[SHATTER-CAST] >> Spell impact — Occult Ward shattered.');
+      return;
     } else if ((target.kineticArmor ?? 0) > 0) {
-      patch.kineticArmor = Math.max(0, (target.kineticArmor ?? 0) - 1);
+      const strip = stripKineticArmor(target, 1);
+      ctx.patchUnit(target.unitId, strip.enemy);
+      strip.logLines.forEach((line) => ctx.log(line));
+      ctx.log('[SHATTER-CAST] >> Spell impact — Kinetic Armor shattered.');
+      return;
     }
     if (Object.keys(patch).length > 0) {
       ctx.patchUnit(target.unitId, patch);
@@ -338,9 +347,15 @@ function applyEnvoyCurseResolveEffects(ctx: EnvoyAbilityResolveContext): void {
     }
 
     if (boonMatchesEnvoyAction(ctx.boons, 'VOID_MARKED', ctx.abilityId)) {
+      let purged = unit;
+      if ((purged.kineticArmor ?? 0) > 0) {
+        purged = stripKineticArmor(purged, purged.kineticArmor ?? 0).enemy;
+      }
+      if ((purged.occultWards ?? 0) > 0) {
+        purged = stripOccultWards(purged, purged.occultWards ?? 0).enemy;
+      }
       ctx.patchUnit(unit.unitId, {
-        kineticArmor: 0,
-        occultWards: 0,
+        ...purged,
         veilBarrierCharges: undefined,
         evadeActive: false,
       });

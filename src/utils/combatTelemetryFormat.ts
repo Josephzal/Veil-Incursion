@@ -3,6 +3,11 @@ import type { CombatUnitTag } from '../types/aegisCombat';
 import type { EnemyCombatProfile, EnemyIntent } from '../types/run';
 import { isUnitAlive } from '../data/combatSquadEngine';
 import { resolveEnemyThreatTier } from '../data/enemyRoster';
+import {
+  estimateTurnsRemaining,
+  getIntentSeverity,
+  getIntentType,
+} from '../data/enemyIntentCatalog';
 import { resolveActiveEnemyStatuses, type EnemyStatusEffectKey } from './enemyStatusEffects';
 
 export type { EnemyStatusEffectKey } from './enemyStatusEffects';
@@ -102,6 +107,7 @@ export interface AegisReserveLabelOptions {
   voidWardPrimed?: boolean;
   overcharged?: boolean;
   eviscerateReady?: boolean;
+  riposteReady?: boolean;
 }
 
 export function formatSoulAnchorLabel(
@@ -128,6 +134,7 @@ export function formatAegisReserveLabel(
   const capLabel = cap > 100 ? `${reserve}/${cap}` : `${reserve}%`;
   const tags: string[] = [];
   if (options.voidWardPrimed) tags.push('WARD');
+  if (options.riposteReady) tags.push('RIPOSTE');
   if (options.overcharged) tags.push('OVERCHARGED');
   if (options.eviscerateReady) tags.push('EVISCERATE');
   const suffix = tags.length > 0 ? ` • ${tags.join(' • ')}` : '';
@@ -255,6 +262,10 @@ export interface CombatGridUnitSnapshot {
   maxHp: number;
   intent: EnemyIntent;
   intentLabel?: string;
+  /** Phase 2 — Intent 2.0 metadata for intel UI. */
+  intentSeverity?: import('../types/enemyIntentMeta').EnemyIntentSeverity;
+  intentType?: import('../types/enemyIntentMeta').EnemyIntentType;
+  intentTurnsRemaining?: number;
   fractureGauge?: number;
   fractureMax?: number;
   kineticArmor?: number;
@@ -343,12 +354,19 @@ export type EnemyStatusUnitFields = Pick<
   | 'isFractured'
   | 'isEnraged'
   | 'veilRotStacks'
+  | 'kineticArmor'
+  | 'occultWards'
 >;
 
 /** Human-readable hostile status labels for the intel panel. */
 export function formatEnemyStatusLabels(unit: EnemyStatusUnitFields): string[] {
   const labels: string[] = [];
   const tags = new Set(unit.combatTags ?? []);
+
+  const ka = unit.kineticArmor ?? 0;
+  const ow = unit.occultWards ?? 0;
+  if (ka > 0) labels.push(ka === 1 ? 'KA' : `KA x${ka}`);
+  if (ow > 0) labels.push(ow === 1 ? 'OW' : `OW x${ow}`);
 
   if (unit.isEnraged) labels.push('ENRAGED');
   if (unit.evadeActive || (unit.evadeTurnsRemaining ?? 0) > 0) labels.push('EVADING');
@@ -403,6 +421,9 @@ export function buildInitialSquadUiSnapshot(
     maxHp: unit.maxHp,
     intent: unit.intent,
     intentLabel: formatIntentReadout(unit.intent),
+    intentSeverity: getIntentSeverity(unit.intent),
+    intentType: getIntentType(unit.intent),
+    intentTurnsRemaining: estimateTurnsRemaining(unit.intent, unit),
     fractureGauge: unit.fractureGauge ?? 0,
     fractureMax: unit.fractureMax ?? 100,
     kineticArmor: unit.kineticArmor ?? 0,

@@ -5,6 +5,7 @@ import {
   COMBAT_POPUP_BODY_FONT,
   COMBAT_POPUP_SCALE,
 } from '../../../constants/combatOverlayTypography';
+import { severityColor } from '../../../data/enemyIntentCatalog';
 
 const MONO = 'monospace';
 const PANEL_MAX_WIDTH = Math.round(340 * COMBAT_POPUP_SCALE);
@@ -28,6 +29,7 @@ export default function EnemyIntentDetailOverlay({
     fontSize: COMBAT_POPUP_BODY_FONT,
     lineHeight: COMBAT_POPUP_BODY_FONT + 4,
   };
+  const sevColor = detail?.severity ? severityColor(detail.severity) : borderColor;
 
   return (
     <Modal
@@ -43,7 +45,7 @@ export default function EnemyIntentDetailOverlay({
           style={[
             styles.card,
             {
-              borderColor,
+              borderColor: sevColor,
               maxWidth: PANEL_MAX_WIDTH,
               paddingHorizontal: PANEL_PADDING_H,
               paddingVertical: PANEL_PADDING_V,
@@ -54,7 +56,21 @@ export default function EnemyIntentDetailOverlay({
           {detail ? (
             <>
               <Text style={[styles.body, bodyStyle]}>HOSTILE INTENT // ANALYSIS</Text>
-              <Text style={[styles.body, bodyStyle, styles.titleTone]}>{detail.title}</Text>
+              <Text style={[styles.body, bodyStyle, styles.titleTone, { color: sevColor }]}>
+                {detail.title}
+              </Text>
+              {detail.severity || detail.intentType ? (
+                <Text style={[styles.body, bodyStyle, styles.metaTone]}>
+                  {[
+                    detail.intentType?.replace(/_/g, ' '),
+                    detail.severity,
+                    detail.turnsRemaining != null && detail.turnsRemaining > 0
+                      ? `T-${detail.turnsRemaining}`
+                      : null,
+                    detail.isTelegraph ? 'TELEGRAPH' : null,
+                  ].filter(Boolean).join(' // ')}
+                </Text>
+              ) : null}
               <Text style={[styles.body, bodyStyle]}>{detail.summary}</Text>
               <Text style={[styles.body, bodyStyle, styles.sectionTone]}>EFFECT</Text>
               <Text style={[styles.body, bodyStyle]}>{detail.effect}</Text>
@@ -101,6 +117,11 @@ const styles = StyleSheet.create({
   titleTone: {
     color: '#fca5a5',
     fontWeight: '800',
+  },
+  metaTone: {
+    color: '#fbbf24',
+    fontWeight: '700',
+    letterSpacing: 0.4,
   },
   sectionTone: {
     color: '#93c5fd',

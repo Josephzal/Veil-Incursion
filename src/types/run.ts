@@ -105,6 +105,10 @@ export interface EnemyCombatProfile {
   occultWards?: number;
   baseKineticArmor?: number;
   baseOccultWards?: number;
+  /** Phase 1 — first full KA strip this combat already paid Fracture. */
+  kineticArmorBrokenThisCombat?: boolean;
+  /** Phase 1 — first full OW strip this combat already paid Fracture. */
+  occultWardsBrokenThisCombat?: boolean;
   fractureGauge?: number;
   fractureMax?: number;
   combatTags?: CombatUnitTag[];

@@ -186,6 +186,7 @@ import { isEmergencyRecallAvailable, isFullBlindZone } from '../data/sectorZoneE
 import {
   EMERGENCY_EXTRACT_CARGO_BLEED_PCT,
   MASTER_EXTRACTION_PAYOUT_MULTIPLIER,
+  DEFEND_RIFT_SURVIVAL_TURNS,
 } from '../types/sectorPacing';
 import type { ExtractionReviewKind } from '../types/game';
 import {
@@ -212,6 +213,15 @@ import {
 import {
   buildEnvironmentalModifiersForNode,
 } from '../data/combatEnvironmentEngine';
+import {
+  applyEncounterObjectiveStampToEnvironment,
+  selectEncounterObjectiveStamp,
+} from '../data/encounterObjectiveEngine';
+import { hasActiveCarriedCargoEffects } from '../data/unstableCargoEffectsEngine';
+import {
+  buildCombatDirectorContextFromPrep,
+  directEncounterBeforeStart,
+} from '../data/combatDirectorEngine';
 import {
   addLootToContainment,
   applyDataBleedToCargo,
@@ -3548,13 +3558,86 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       };
     }
     keepsakeCombatLogs.forEach((line) => appendRunLog(line));
-    const pendingEnemy = pendingEnemies[0] ?? null;
     const pendingEncounter = buildEncounter(
       inc.currentEncounterIndex,
       sector,
       'COMBAT',
       encounterNode.label,
     );
+
+    const depthIndex = getDistrictFromDepth(depth);
+    const compositionSnapshot = resolveEngagedEncounterSnapshot({
+      nodeIndex: inc.nodesCleared,
+      isElite,
+      district,
+      runSegment: inc.runSegment,
+      encounterSeed: `engage:${inc.nodesCleared}:${encounterNode.id}`,
+      macroBiome: inc.currentMacroBiomeFamily,
+      veilBiome: inc.runVeilBiome,
+      contextModifiers: encounterNode.contextModifiers,
+    });
+    const objectiveStamp = selectEncounterObjectiveStamp({
+      depth: depthIndex,
+      isElite,
+      isEcho: isEchoEncounter,
+      isAnchor: Boolean(anchorCtx),
+      defendRift: false,
+      crisisTheme: inc.runWorldBrief?.crisisTheme ?? null,
+      compositionTemplateId: compositionSnapshot.composition?.templateId ?? null,
+      squad: pendingEnemies,
+      hasUnstableCargo: hasActiveCarriedCargoEffects(inc.cargo, keepsakeCombatRuntime),
+      nodesCleared: inc.nodesCleared,
+    });
+    envModifiers = applyEncounterObjectiveStampToEnvironment(envModifiers, objectiveStamp);
+
+    const directorResult = directEncounterBeforeStart(
+      buildCombatDirectorContextFromPrep({
+        depth: depthIndex,
+        nodesCleared: inc.nodesCleared,
+        playerClassId: inc.activeClass,
+        playerMaxHp: prev.maxSoulAnchor || 100,
+        playerCurrentHp: prev.soulAnchorIntegrity || prev.maxSoulAnchor || 100,
+        enemies: pendingEnemies,
+        isElite,
+        isBoss: false,
+        isEcho: isEchoEncounter,
+        isAnchor: Boolean(anchorCtx),
+        isHighRisk: Boolean(encounterNode.contextModifiers?.highRisk),
+        hasObjective: Boolean(objectiveStamp),
+        objectiveKind: objectiveStamp?.primaryTemplateId ?? null,
+        survivalTurnsRequired: envModifiers.survivalTurnsRequired,
+        hasUnstableCargo: hasActiveCarriedCargoEffects(inc.cargo, keepsakeCombatRuntime),
+        eliteModifier: envModifiers.eliteModifier ?? null,
+        crisisTheme: inc.runWorldBrief?.crisisTheme ?? null,
+      }),
+    );
+    pendingEnemies = directorResult.enemies;
+    const pendingEnemyDirected = pendingEnemies[0] ?? null;
+    envModifiers = {
+      ...envModifiers,
+      combatDirector: directorResult.meta,
+      directorIncomingMitigationPct: directorResult.incomingDamageMitigationPct ?? 0,
+      directorRewardMultiplier: directorResult.rewardRiskAdjustment.rewardMultiplier,
+      directorRareLootBonusPct: directorResult.rewardRiskAdjustment.rareLootBonusPct,
+      directorCreditsBonusPct: directorResult.rewardRiskAdjustment.creditsBonusPct,
+      survivalTurnsRequired:
+        directorResult.survivalTurnsRequired ?? envModifiers.survivalTurnsRequired,
+    };
+    if (directorResult.incomingDamageMitigationPct && directorResult.incomingDamageMitigationPct > 0) {
+      const stamp = envModifiers.encounterObjective;
+      if (stamp) {
+        envModifiers = {
+          ...envModifiers,
+          encounterObjective: {
+            ...stamp,
+            incomingDamageMitigationPct: Math.max(
+              stamp.incomingDamageMitigationPct ?? 0,
+              directorResult.incomingDamageMitigationPct,
+            ),
+          },
+        };
+      }
+    }
 
     setActiveIncursion((prevState) => ({
       ...prevState,
@@ -3569,7 +3652,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       const next = {
         ...prevState,
         currentSector: sector,
-        pendingEnemy,
+        pendingEnemy: pendingEnemyDirected,
         pendingEnemies,
         pendingEncounter,
       };
@@ -3586,6 +3669,20 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (echoCtx) {
       echoRecoveryEngageLogLines(echoCtx).forEach((line) => appendRunLog(line));
     }
+    if (objectiveStamp) {
+      appendRunLog(`>> OBJECTIVE STAMPED — ${objectiveStamp.primaryTemplateId} [${objectiveStamp.source}]`);
+    }
+    appendRunLog(
+      `>> COMBAT DIRECTOR — pressure ${directorResult.pressureScore.total} (${directorResult.pressureScore.label}) // ${directorResult.severity}`,
+    );
+    if (directorResult.appliedAdjustments.some((a) => a.applied)) {
+      appendRunLog(
+        `>> DIRECTOR SAFETY — ${directorResult.appliedAdjustments.filter((a) => a.applied).length} adjustment(s).`,
+      );
+    }
+    if (directorResult.rewardRiskAdjustment.debriefCallout) {
+      appendRunLog(`>> ${directorResult.rewardRiskAdjustment.debriefCallout}`);
+    }
     appendRunLog(
       `>> HOSTILE CLUSTER — ${pendingEnemies.length} signature(s) // threat budget ${spawnBudget.spawnBudget} pts.`,
     );
@@ -3596,17 +3693,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    const depthIndex = getDistrictFromDepth(depth);
-    const compositionSnapshot = resolveEngagedEncounterSnapshot({
-      nodeIndex: inc.nodesCleared,
-      isElite,
-      district,
-      runSegment: inc.runSegment,
-      encounterSeed: `engage:${inc.nodesCleared}:${encounterNode.id}`,
-      macroBiome: inc.currentMacroBiomeFamily,
-      veilBiome: inc.runVeilBiome,
-      contextModifiers: encounterNode.contextModifiers,
-    });
     const roles = rolesFromCombatProfiles(pendingEnemies);
     const stamped = stampCompositionReadability(encounterNode.contextModifiers, {
       composition: compositionSnapshot.composition ?? null,
@@ -3827,9 +3913,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const sector = prev.currentSector ?? INITIAL_SECTOR_POOL[0];
     const depth = depthFromNodesCleared(inc.nodesCleared);
     const district = getDistrictFromDepth(depth);
-    const envModifiers = buildEnvironmentalModifiersForNode(inc.resonance.percent);
+    let envModifiers = buildEnvironmentalModifiersForNode(inc.resonance.percent);
     const dirtyThreat = shouldApplyKeepsakeDirtyExtractionThreat(inc.keepsakeRuntime);
-    const pendingEnemies = spawnCombatSquad({
+    let pendingEnemies = spawnCombatSquad({
       nodeIndex: inc.nodesCleared,
       isElite: true,
       unitCount: dirtyThreat ? 2 : 1,
@@ -3839,7 +3925,6 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       veilBiome: inc.runVeilBiome,
       rivalMercWeightMultiplier: resolveBriefRivalMercWeightMultiplier(inc.runWorldBrief, district),
     });
-    const pendingEnemy = pendingEnemies[0] ?? null;
     if (dirtyThreat) {
       const nextRuntime = consumeKeepsakeDirtyExtractionThreat(inc.keepsakeRuntime);
       setActiveIncursion((prevState) => ({
@@ -3851,6 +3936,69 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         keepsakeRuntime: nextRuntime,
       };
       appendRunLog('>> OVEREXTENDED HEAT — dirty extraction intercept reinforced (+1 elite).');
+    }
+
+    const objectiveStamp = selectEncounterObjectiveStamp({
+      depth: district,
+      isElite: true,
+      isEcho: false,
+      isAnchor: false,
+      defendRift: true,
+      squad: pendingEnemies,
+      hasUnstableCargo: hasActiveCarriedCargoEffects(inc.cargo, inc.keepsakeRuntime),
+      nodesCleared: inc.nodesCleared,
+    });
+    envModifiers = applyEncounterObjectiveStampToEnvironment(envModifiers, objectiveStamp);
+    // Ensure legacy survive path is always stamped for Dirty Extraction.
+    envModifiers = {
+      ...envModifiers,
+      combatObjective: 'SURVIVE_TURNS',
+      survivalTurnsRequired:
+        objectiveStamp?.survivalTurnsRequired ?? DEFEND_RIFT_SURVIVAL_TURNS,
+    };
+
+    const directorResult = directEncounterBeforeStart(
+      buildCombatDirectorContextFromPrep({
+        depth: district,
+        nodesCleared: inc.nodesCleared,
+        playerClassId: inc.activeClass,
+        playerMaxHp: prev.maxSoulAnchor || 100,
+        playerCurrentHp: prev.soulAnchorIntegrity || prev.maxSoulAnchor || 100,
+        enemies: pendingEnemies,
+        isElite: true,
+        isDirtyExtraction: true,
+        hasObjective: true,
+        objectiveKind: objectiveStamp?.primaryTemplateId ?? 'OBJ_HOLD_EXTRACTION_WINDOW',
+        survivalTurnsRequired: envModifiers.survivalTurnsRequired,
+        hasUnstableCargo: hasActiveCarriedCargoEffects(inc.cargo, inc.keepsakeRuntime),
+        eliteModifier: envModifiers.eliteModifier ?? null,
+        crisisTheme: inc.runWorldBrief?.crisisTheme ?? null,
+      }),
+    );
+    pendingEnemies = directorResult.enemies;
+    const pendingEnemy = pendingEnemies[0] ?? null;
+    envModifiers = {
+      ...envModifiers,
+      combatDirector: directorResult.meta,
+      directorIncomingMitigationPct: directorResult.incomingDamageMitigationPct ?? 0,
+      directorRewardMultiplier: directorResult.rewardRiskAdjustment.rewardMultiplier,
+      directorRareLootBonusPct: directorResult.rewardRiskAdjustment.rareLootBonusPct,
+      directorCreditsBonusPct: directorResult.rewardRiskAdjustment.creditsBonusPct,
+      survivalTurnsRequired:
+        directorResult.survivalTurnsRequired ?? envModifiers.survivalTurnsRequired,
+    };
+    if (directorResult.incomingDamageMitigationPct && envModifiers.encounterObjective) {
+      const stamp = envModifiers.encounterObjective;
+      envModifiers = {
+        ...envModifiers,
+        encounterObjective: {
+          ...stamp,
+          incomingDamageMitigationPct: Math.max(
+            stamp.incomingDamageMitigationPct ?? 0,
+            directorResult.incomingDamageMitigationPct,
+          ),
+        },
+      };
     }
 
     setActiveIncursion((prevState) => ({
@@ -3884,6 +4032,20 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     });
 
     appendRunLog('>> EMERGENCY RECALL — ELITE HOSTILE INTERCEPT.');
+    appendRunLog(
+      `>> OBJECTIVE — HOLD EXTRACTION WINDOW (${envModifiers.survivalTurnsRequired ?? DEFEND_RIFT_SURVIVAL_TURNS} cycles).`,
+    );
+    if (objectiveStamp?.secondaryTemplateIds?.includes('OBJ_PROTECT_CARGO')) {
+      appendRunLog('>> SOFT OBJECTIVE — PROTECT CARGO (unstable hold).');
+    }
+    appendRunLog(
+      `>> COMBAT DIRECTOR — pressure ${directorResult.pressureScore.total} (${directorResult.pressureScore.label}) // ${directorResult.severity}`,
+    );
+    if (directorResult.appliedAdjustments.some((a) => a.applied)) {
+      appendRunLog(
+        `>> DIRECTOR SAFETY — ${directorResult.appliedAdjustments.filter((a) => a.applied).length} adjustment(s).`,
+      );
+    }
     if (pendingEnemy) {
       appendRunLog(`>> HOSTILE SIGNATURE: ${pendingEnemy.designation} [${pendingEnemy.class}] HP ${pendingEnemy.maxHp}.`);
     }

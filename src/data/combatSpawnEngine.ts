@@ -33,6 +33,7 @@ import { maybeInjectForcedDepthVariant } from './depthIdentityPhaseGDebugEngine'
 import { rosterToSpawnSlots } from './rosterSpawnSlots';
 import type { SpawnSlotAssignment } from './levelEncounterData';
 import { rollEncounterOrigin } from './originRollEngine';
+import { validateEncounterIntents, formatIntentValidationReport } from './balance/combatIntentValidationEngine';
 
 let unitSeq = 0;
 
@@ -282,12 +283,30 @@ export function spawnCombatSquad(options: SpawnSquadOptions): EnemyCombatProfile
     isElite: options.isElite,
     resonancePercent: options.spawnOptions?.resonancePercent,
   });
-  return maybeInjectForcedDepthVariant(withHusk, {
+  const finalSquad = maybeInjectForcedDepthVariant(withHusk, {
     nodeIndex: options.nodeIndex,
     district,
     isElite: options.isElite,
     resonancePercent: options.spawnOptions?.resonancePercent,
   });
+  validateSpawnedSquadIntents(finalSquad, {
+    depth: district,
+    nodeIndex: options.nodeIndex,
+  });
+  return finalSquad;
+}
+
+/** Soft intent fairness check — logs in __DEV__, does not alter spawn. */
+export function validateSpawnedSquadIntents(
+  squad: readonly EnemyCombatProfile[],
+  opts: { depth: 1 | 2 | 3; nodeIndex?: number },
+): void {
+  if (typeof __DEV__ === 'undefined' || !__DEV__) return;
+  const issues = validateEncounterIntents(squad, opts);
+  if (issues.length) {
+    // eslint-disable-next-line no-console
+    console.warn(formatIntentValidationReport(issues));
+  }
 }
 
 export function squadFromSingleEnemy(enemy: EnemyCombatProfile): EnemyCombatProfile[] {

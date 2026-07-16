@@ -13,11 +13,21 @@ export type AbilityTag =
   | 'DEBUFF'
   | 'FRACTURE'
   | 'ARMOR_PIERCE'
+  | 'ARMOR_BREAK'
+  | 'WARD_BREAK'
+  | 'WARD_PIERCE'
   | 'RESTORE'
   | 'BUFF'
   | 'SACRIFICE'
   | 'ULTIMATE'
-  | 'TRUE_DAMAGE';
+  | 'TRUE_DAMAGE'
+  /** Phase 2 — intent counterplay tags */
+  | 'INTERRUPT'
+  | 'PARRY'
+  | 'GUARD_BREAK'
+  | 'BLOCK'
+  | 'BLIND'
+  | 'SILENCE';
 
 /** Hub stash resources required to permanently unlock an ability. Empty = no cost. */
 export type AbilityUnlockCost = Partial<Record<ResourceItemId, number>>;

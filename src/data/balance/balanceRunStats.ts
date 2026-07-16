@@ -12,6 +12,31 @@ export interface BalanceCombatEncounterSample {
   healingReceived: number;
   damageDealt: number;
   victory: boolean;
+  /** Phase 1 combat refactor telemetry (optional for legacy samples). */
+  playerClassId?: string;
+  depth?: number;
+  enemyCount?: number;
+  startingPlayerHp?: number;
+  endingPlayerHp?: number;
+  playerHpLostPercent?: number;
+  defense?: import('./combatTelemetryEngine').CombatDefenseTelemetry;
+  /** Phase 2 — enemy intent telegraph / counterplay telemetry. */
+  intent?: import('./combatIntentTelemetryEngine').CombatIntentTelemetry;
+  /** Phase 3 — class loop fantasy telemetry. */
+  classLoop?: import('./classLoopTelemetryEngine').ClassLoopTelemetry;
+  /** Phase 4 — encounter objective telemetry. */
+  objective?: import('./encounterObjectiveTelemetryEngine').EncounterObjectiveTelemetry;
+  /** Phase 5 — combat director metadata snapshot. */
+  director?: {
+    pressureTotal: number;
+    pressureLabel: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
+    rewardMultiplier: number;
+    adjustmentsApplied: number;
+    severity: 'OK' | 'WARNING' | 'ERROR';
+    debugSummary: string;
+  };
+  /** Phase 5 — juice feedback telemetry. */
+  juice?: import('../combatJuiceFeedbackEngine').CombatJuiceTelemetry;
 }
 
 export interface BalanceRunStats {

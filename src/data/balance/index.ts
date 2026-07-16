@@ -4,6 +4,9 @@
 
 import { BALANCE_TARGET_EARLY, BALANCE_TARGET_LATE, COMBAT_PACING_TARGETS } from './balanceTargets';
 import { formatCombatBalanceConfigSummary } from './combatBalanceConfig';
+import { formatCombatDefenseBalanceSummary } from './combatDefenseBalanceConfig';
+import { formatCombatIntentBalanceSummary } from './combatIntentBalanceConfig';
+import { formatCombatDirectorBalanceSummary } from './combatDirectorBalanceConfig';
 import { formatContractBalanceConfigSummary } from './contractBalanceConfig';
 import { formatEconomyBalanceConfigSummary } from './economyBalanceConfig';
 import { formatOperationBalanceConfigSummary } from './operationBalanceConfig';
@@ -37,6 +40,12 @@ export function formatBalanceConfigSummary(): string {
     '',
     formatCombatBalanceConfigSummary(),
     '',
+    formatCombatDefenseBalanceSummary(),
+    '',
+    formatCombatIntentBalanceSummary(),
+    '',
+    formatCombatDirectorBalanceSummary(),
+    '',
     formatRewardBalanceConfigSummary(),
     '',
     formatEconomyBalanceConfigSummary(),
@@ -58,6 +67,22 @@ export function formatBalanceConfigSummary(): string {
 export * from './balanceTargets';
 export * from './runBalanceConfig';
 export * from './combatBalanceConfig';
+export * from './combatDefenseBalanceConfig';
+export * from './combatIntentBalanceConfig';
+export * from './combatTelemetryEngine';
+export * from './combatIntentTelemetryEngine';
+export * from './combatBalanceReportEngine';
+export * from './combatIntentReportEngine';
+export * from './combatDefenseValidationEngine';
+export * from './combatIntentValidationEngine';
+export * from './classLoopTelemetryEngine';
+export * from './classCombatIdentityEngine';
+export * from './encounterObjectiveTelemetryEngine';
+export * from './encounterObjectiveReportEngine';
+export * from './encounterObjectiveValidationEngine';
+export * from './combatDirectorBalanceConfig';
+export * from './combatDirectorReportEngine';
+export * from './combatDirectorValidationEngine';
 export * from './rewardBalanceConfig';
 export * from './economyBalanceConfig';
 export * from './contractBalanceConfig';

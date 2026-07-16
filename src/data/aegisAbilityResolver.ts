@@ -7,12 +7,11 @@ import {
   fractureRatio,
   hasCombatTag,
 } from './combatFractureEngine';
+import { mitigateByChannel } from './combatDefenseLayerEngine';
 
-const ARMOR_ABSORB_PER_LAYER = 3;
-
-export function absorbByArmor(raw: number, layers: number): number {
-  if (layers <= 0) return raw;
-  return Math.max(0, raw - layers * ARMOR_ABSORB_PER_LAYER);
+/** @deprecated Flat absorb retired — Phase 1 uses % mitigation via combatDefenseLayerEngine. */
+export function absorbByArmor(raw: number, _layers: number): number {
+  return raw;
 }
 
 export interface ResolvedHostileHit {
@@ -20,35 +19,30 @@ export interface ResolvedHostileHit {
   hpDamage: number;
   channel: DamageChannel;
   fractured: boolean;
+  damageReduced: number;
+  logLines: string[];
 }
 
-/** Apply HP damage through armor layers and fracture bonus. */
+/** Apply HP damage through armor/ward % mitigation and fracture bonus. */
 export function resolveHostileHpHit(
   enemy: EnemyCombatProfile,
   raw: number,
   channel: DamageChannel,
-  options?: { ignoreDefenses?: boolean },
+  options?: { ignoreDefenses?: boolean; pierce?: boolean; partialPierce?: boolean },
 ): ResolvedHostileHit {
-  let working = enemy;
-  let afterArmor = raw;
-
-  if (!options?.ignoreDefenses) {
-    const exposed = hasCombatTag(working, 'EXPOSED');
-    if (channel === 'KINETIC') {
-      const layers = working.kineticArmor ?? 0;
-      afterArmor = absorbByArmor(raw, exposed ? Math.floor(layers / 2) : layers);
-    } else if (channel === 'OCCULT') {
-      const layers = working.occultWards ?? 0;
-      afterArmor = absorbByArmor(raw, exposed ? Math.floor(layers / 2) : layers);
-    }
-  }
-
-  const hpDamage = applyDamageWithFractureBonus(afterArmor, working);
+  const mitigation = mitigateByChannel(enemy, raw, channel, {
+    ignoreDefenses: options?.ignoreDefenses,
+    pierce: options?.pierce,
+    partialPierce: options?.partialPierce,
+  });
+  const hpDamage = applyDamageWithFractureBonus(mitigation.damageAfter, mitigation.enemy);
   return {
-    enemy: working,
+    enemy: mitigation.enemy,
     hpDamage,
     channel,
-    fractured: hasCombatTag(working, 'FRACTURED') || working.fracturedThisRound === true,
+    fractured: hasCombatTag(mitigation.enemy, 'FRACTURED') || mitigation.enemy.fracturedThisRound === true,
+    damageReduced: mitigation.damageReduced,
+    logLines: mitigation.logLines,
   };
 }
 

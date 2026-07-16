@@ -7,6 +7,7 @@ import { applyAlphaToEnemyProfile } from './enemyAlphaConfig';
 import { getNodeScale } from './enemyNodeScale';
 import { rollEnemyIntent } from './enemyIntentRoll';
 import { initEnemyCombatLayers } from './combatFractureEngine';
+import { COMBAT_DEFENSE_BALANCE } from './balance/combatDefenseBalanceConfig';
 import { initRosterLifecycleDefaults } from './combatLifecycleEngine';
 import { CONCRETE_GARGOYLE_FRACTURE_MAX } from './combatRosterActions';
 import { canRosterUseFortify, defaultPostureIntentForRoster } from './enemyPostureConfig';
@@ -1031,7 +1032,9 @@ export function spawnRosterUnit(
     occultWards,
     fractureMax: (entry.id === 'concrete-gargoyle' || entry.id === 'weeping-gargoyle')
       ? CONCRETE_GARGOYLE_FRACTURE_MAX
-      : undefined,
+      : (resolvedStats?.fractureThreshold ?? undefined),
+    depth: (depth === 2 || depth === 3 ? depth : 1) as 1 | 2 | 3,
+    earlyNode: nodeIndex <= COMBAT_DEFENSE_BALANCE.depth1EarlyNodeIndexCap,
   });
   const withLifecycle = initRosterLifecycleDefaults(layered, entry.id);
   const withArchetype = {

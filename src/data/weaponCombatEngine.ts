@@ -14,6 +14,7 @@ import { resolveWeaponState } from './weaponProgressionEngine';
 import type { WeaponFamilyId, WeaponTierNumber } from '../types/weapon';
 import { getWeaponFamily } from './weaponRegistry';
 import { isEnemyFractured } from './combatFractureEngine';
+import { stripKineticArmor } from './combatDefenseLayerEngine';
 
 export function resolveWeaponCombatStatsFromState(
   weapon: ResolvedWeaponState,
@@ -291,20 +292,14 @@ export function applyWeaponArmorPierceToTarget(
   pierceLayers: number,
 ): EnemyCombatProfile {
   if (pierceLayers <= 0) return target;
-  return {
-    ...target,
-    kineticArmor: Math.max(0, (target.kineticArmor ?? 0) - pierceLayers),
-  };
+  return stripKineticArmor(target, pierceLayers).enemy;
 }
 
 export function stripExtraArmorFromTarget(
   target: EnemyCombatProfile,
   layers: number,
 ): EnemyCombatProfile {
-  return {
-    ...target,
-    kineticArmor: Math.max(0, (target.kineticArmor ?? 0) - layers),
-  };
+  return stripKineticArmor(target, layers).enemy;
 }
 
 export function didWeaponPostReloadBonus(runtime: WeaponRuntimeState): boolean {

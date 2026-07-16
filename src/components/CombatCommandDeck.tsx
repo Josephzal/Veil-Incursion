@@ -61,6 +61,8 @@ interface CombatCommandDeckProps {
   voidWardEnabled?: boolean;
   voidWardPrimed?: boolean;
   onVoidWardPrime?: () => void;
+  /** Phase 3 — Aegis Riposte Ready chip. */
+  riposteReady?: boolean;
   catalyticConsoleAvailable?: boolean;
   catalyticConsoleEnabled?: boolean;
   catalyticConsoleRotStacks?: number;
@@ -103,6 +105,7 @@ export default function CombatCommandDeck({
   voidWardEnabled = false,
   voidWardPrimed = false,
   onVoidWardPrime,
+  riposteReady = false,
   catalyticConsoleAvailable = false,
   catalyticConsoleEnabled = false,
   catalyticConsoleRotStacks = 0,
@@ -507,8 +510,14 @@ export default function CombatCommandDeck({
           dashboardTwinBtnStyle,
           !dashboardLayout ? styles.combatReloadBtn : null,
           {
-            borderColor: primed ? '#7dd3fc' : enabled ? '#38bdf8' : borderColor,
-            opacity: primed || enabled ? 1 : 0.4,
+            borderColor: riposteReady
+              ? '#fbbf24'
+              : primed
+                ? '#7dd3fc'
+                : enabled
+                  ? '#38bdf8'
+                  : borderColor,
+            opacity: primed || enabled || riposteReady ? 1 : 0.4,
             ...desktopBtnStyle,
           },
         ]}
@@ -518,13 +527,21 @@ export default function CombatCommandDeck({
             styles.combatReloadLabel,
             dashboardLayout ? styles.combatReloadLabelDashboard : null,
             desktopActionLabelStyle,
-            { color: primed ? '#bae6fd' : enabled ? '#38bdf8' : mutedColor },
+            {
+              color: riposteReady
+                ? '#fde68a'
+                : primed
+                  ? '#bae6fd'
+                  : enabled
+                    ? '#38bdf8'
+                    : mutedColor,
+            },
           ]}
           numberOfLines={1}
           adjustsFontSizeToFit
           minimumFontScale={0.65}
         >
-          {primed ? '[ WARD ]' : '[ PARRY ]'}
+          {riposteReady ? '[ RIPOSTE ]' : primed ? '[ WARD ]' : '[ PARRY ]'}
         </Text>
       </HapticPressable>
     );

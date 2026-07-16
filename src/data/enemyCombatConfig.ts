@@ -6,6 +6,7 @@ import {
   COMBAT_DEPTH_SCALING,
   COMBAT_ELITE_MODIFIER,
 } from './balance/combatBalanceConfig';
+import { COMBAT_DEFENSE_BALANCE } from './balance/combatDefenseBalanceConfig';
 
 export type EncounterEnemyKey =
   | 'FRACTURE_HOUND'
@@ -338,6 +339,7 @@ export interface ResolvedEnemyStats {
   baseDamage: number;
   kineticArmor: number;
   occultWards: number;
+  fractureThreshold?: number;
   archetype?: EnemySpawnArchetype;
 }
 
@@ -358,6 +360,12 @@ export function resolveEnemyCombatStats(
   const occultWards = definitionStats?.occultArmor
     ?? (rosterId === 'ley-siren' ? 2 : rosterId === 'null-shade' ? 0 : 0);
 
+  // Phase 1 balance rescue — soften Depth 1 raw stats before defense layers.
+  if (district === 1) {
+    maxHp = Math.floor(maxHp * COMBAT_DEFENSE_BALANCE.depth1HpSoftMult);
+    baseDamage = Math.max(1, Math.floor(baseDamage * COMBAT_DEFENSE_BALANCE.depth1DamageSoftMult));
+  }
+
   if (options?.isAlpha) {
     maxHp = Math.floor(maxHp * ALPHA_MODIFIER.hpMult);
     baseDamage = Math.floor(baseDamage * ALPHA_MODIFIER.dmgMult);
@@ -368,6 +376,7 @@ export function resolveEnemyCombatStats(
     baseDamage,
     kineticArmor,
     occultWards,
+    fractureThreshold: definitionStats?.fractureThreshold,
     archetype: ENEMY_ARCHETYPE[rosterId],
   };
 }

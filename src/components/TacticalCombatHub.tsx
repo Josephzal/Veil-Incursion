@@ -47,7 +47,75 @@ import { getAbilityDefinition } from '../data/aegisAbilities';
 import { buildGraftCastPlan, canAffordGraftResources, scaleGraftDamage } from '../data/veilGraftEngine';
 import { getVeilGraftDefinition } from '../data/veilGraftDatabase';
 import type { GraftCastPlan } from '../types/veilGraft';
-import { COMBAT_CONSUMABLE_AP_COST, absorbByArmor, resolveHostileHpHit } from '../data/aegisAbilityResolver';
+import { COMBAT_CONSUMABLE_AP_COST, resolveHostileHpHit } from '../data/aegisAbilityResolver';
+import { stripKineticArmor, stripOccultWards } from '../data/combatDefenseLayerEngine';
+import { COMBAT_DEFENSE_BALANCE } from '../data/balance/combatDefenseBalanceConfig';
+import { resolveAbilityDefenseTags } from '../data/combatAbilityDefenseTags';
+import {
+  estimateTurnsRemaining,
+  getIntentSeverity,
+  getIntentType,
+} from '../data/enemyIntentCatalog';
+import {
+  applyIntentCounterplayToEnemy,
+  enemyIsTelegraphing,
+  isIntentParryable,
+  resolveIntentCounterplay,
+} from '../data/enemyIntentCounterplayEngine';
+import {
+  createEmptyIntentTelemetry,
+  recordIntentCountered,
+  recordIntentGenerated,
+  recordIntentResolved,
+  type CombatIntentTelemetry,
+} from '../data/balance/combatIntentTelemetryEngine';
+import {
+  createEmptyClassLoopTelemetry,
+  type ClassLoopTelemetry,
+} from '../data/balance/classLoopTelemetryEngine';
+import {
+  createEmptyObjectiveTelemetry,
+  type EncounterObjectiveTelemetry,
+} from '../data/balance/encounterObjectiveTelemetryEngine';
+import {
+  buildEncounterObjectiveSession,
+  createEmptyEncounterObjectiveSession,
+  formatObjectiveBriefing,
+  formatObjectiveHudLine,
+  getIncomingDamageMitigationFromStamp,
+  progressObjectiveOnChannelInterrupt,
+  progressObjectiveOnEnemyTurnEnd,
+  progressObjectiveOnMarkedKill,
+  progressObjectiveOnSquadCleared,
+} from '../data/encounterObjectiveEngine';
+import type { EncounterObjectiveSession } from '../types/encounterObjective';
+import {
+  buildCombatJuiceEvent,
+  createEmptyJuiceTelemetry,
+  recordJuiceEvent,
+  type CombatJuiceTelemetry,
+} from '../data/combatJuiceFeedbackEngine';
+import type { CombatJuiceFeedbackEvent } from '../types/combatJuiceFeedback';
+import { resolveStartOfTurnDangerPulse } from '../data/combatDangerPulseEngine';
+import { formatHexAmmoCounterHint, getHexAmmoProfileForAbility } from '../data/hexShotAmmoProfiles';
+import {
+  applyEnvoyCatalystPayoffToTarget,
+  catalystForEnvoyAbility,
+  formatCatalystChip,
+  primeEnvoyCatalyst,
+  resolveEnvoyCatalystSequence,
+} from '../data/envoyCatalystEngine';
+import { formatIntentWarningBanner } from '../utils/enemyIntentDescriptions';
+
+/** Player-side kinetic armor bonus — soft % mitigation (not enemy stack model). */
+function mitigatePlayerKineticArmorBonus(raw: number, layers: number): number {
+  if (layers <= 0 || raw <= 0) return raw;
+  const reduction = Math.min(
+    0.35,
+    COMBAT_DEFENSE_BALANCE.defaultKineticArmorReductionPercent + (layers - 1) * 0.05,
+  );
+  return Math.max(0, Math.floor(raw * (1 - reduction)));
+}
 import { combatConsumableApCost } from '../data/cargoGridEngine';
 import type { CargoItemId } from '../types/cargoGrid';
 import type { CombatGridSlotId } from '../types/combatGrid';
@@ -521,6 +589,23 @@ interface TacticalCombatHubProps {
     damageTaken: number;
     healingReceived: number;
     damageDealt: number;
+    /** Phase 2 intent telegraph / counterplay sample. */
+    intentTelemetry?: CombatIntentTelemetry;
+    /** Phase 3 class loop sample. */
+    classLoopTelemetry?: ClassLoopTelemetry;
+    /** Phase 4 encounter objective sample. */
+    objectiveTelemetry?: EncounterObjectiveTelemetry;
+    /** Phase 5 combat director snapshot. */
+    directorTelemetry?: {
+      pressureTotal: number;
+      pressureLabel: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
+      rewardMultiplier: number;
+      adjustmentsApplied: number;
+      severity: 'OK' | 'WARNING' | 'ERROR';
+      debugSummary: string;
+    };
+    /** Phase 5 juice feedback sample. */
+    juiceTelemetry?: CombatJuiceTelemetry;
   }) => void;
   /** Live run credits for cargo deck HUD. */
   runCredits?: number;
@@ -604,16 +689,9 @@ const isAttackIntent = (i: EnemyIntent) =>
   || i === 'VOID_AMBUSH'
   || i === 'RESONANCE_OVERLOAD';
 
-/** Hostile intents that qualify for Void Ward parry (kinetic / melee strikes). */
-const PARRYABLE_KINETIC_MELEE_INTENTS: EnemyIntent[] = [
-  'STRIKE',
-  'PAVEMENT_CRUSHER',
-  'DOUBLE_STRIKE',
-  'OVERDRIVE_DISCHARGE',
-];
-
+/** Hostile intents that qualify for Void Ward parry — driven by Intent 2.0 catalog. */
 const isKineticMeleeEnemyStrike = (e: EnemyCombatProfile): boolean =>
-  PARRYABLE_KINETIC_MELEE_INTENTS.includes(resolveEffectiveEnemyIntent(e));
+  isIntentParryable(resolveEffectiveEnemyIntent(e));
 
 const ENEMY_INTENT_READ_MS = 1800;
 const ENEMY_TURN_GAP_MS = 500;
@@ -844,6 +922,13 @@ export default function TacticalCombatHub({
     healingReceived: 0,
     damageDealt: 0,
   });
+  const intentTelemetryRef = useRef<CombatIntentTelemetry>(createEmptyIntentTelemetry());
+  const classLoopTelemetryRef = useRef<ClassLoopTelemetry>(createEmptyClassLoopTelemetry());
+  const objectiveSessionRef = useRef<EncounterObjectiveSession>(createEmptyEncounterObjectiveSession());
+  const juiceTelemetryRef = useRef<CombatJuiceTelemetry>(createEmptyJuiceTelemetry());
+  const [objectiveHudLine, setObjectiveHudLine] = useState<string | null>(null);
+  const [timelineHudLine, setTimelineHudLine] = useState<string | null>(null);
+  const [riposteReadyUi, setRiposteReadyUi] = useState(false);
   const currentAmmoRef = useRef(DEFAULT_MAGAZINE_SIZE);
   const hexShotStateRef = useRef(hexShotState);
   const veilFluxRef = useRef(VEIL_FLUX_START);
@@ -1511,6 +1596,11 @@ export default function TacticalCombatHub({
           maxHp: u.maxHp,
           intent: displayIntent,
           intentLabel: sensoryJammed ? 'STATIC // JAMMED' : formatIntentReadout(u.intent),
+          intentSeverity: sensoryJammed ? 'MODERATE' : getIntentSeverity(u.intent),
+          intentType: sensoryJammed ? 'DEBUFF' : getIntentType(u.intent),
+          intentTurnsRemaining: sensoryJammed
+            ? 0
+            : estimateTurnsRemaining(u.intent, u),
           fractureGauge: u.fractureGauge ?? 0,
           fractureMax: u.fractureMax ?? 100,
           kineticArmor: u.kineticArmor ?? 0,
@@ -1832,6 +1922,22 @@ export default function TacticalCombatHub({
     setCombatFeedback({ nonce: feedbackNonceRef.current, event });
   }, []);
 
+  const emitJuice = useCallback((
+    type: CombatJuiceFeedbackEvent['type'],
+    opts?: Parameters<typeof buildCombatJuiceEvent>[1],
+  ) => {
+    const event = buildCombatJuiceEvent(type, opts);
+    recordJuiceEvent(juiceTelemetryRef.current, event);
+    if (event.text) {
+      // Optional: surface high-intensity juice as phase pulse without spamming.
+      if (event.intensity === 'HIGH' || event.intensity === 'CRITICAL') {
+        setPhaseAlert(event.text.startsWith('>>') ? event.text : `>> ${event.text}`);
+        setTimeout(() => setPhaseAlert(null), 1600);
+      }
+    }
+    return event;
+  }, []);
+
   const chargeAr = (amt: number, _targetFractured = false) => {
     const scaled = amt;
     if (scaled > 0) {
@@ -1916,13 +2022,22 @@ export default function TacticalCombatHub({
     setCounterPrepActive(false);
   };
 
-  const primeVoidWardShroud = () => {
-    voidWardPrimedRef.current = true;
-    setVoidWardPrimed(true);
-    counterRef.current = true;
-    setCounterPrepActive(true);
-    markPlayerDefendedRef.current();
-    log('[VOID WARD] >> Shroud primed — kinetic intercept armed for hostile phase.');
+  const armRiposteReady = (reason: string) => {
+    if (operativeClass !== 'AEGIS') return;
+    if (classCombatRef.current.riposteReady) return;
+    classCombatRef.current.riposteReady = true;
+    setRiposteReadyUi(true);
+    classLoopTelemetryRef.current.ripostesReady += 1;
+    log(`[RIPOSTE READY] >> ${reason}`);
+  };
+
+  const consumeRiposteReady = (): boolean => {
+    if (!classCombatRef.current.riposteReady) return false;
+    classCombatRef.current.riposteReady = false;
+    setRiposteReadyUi(false);
+    classLoopTelemetryRef.current.ripostesConsumed += 1;
+    emitJuice('RIPOSTE', { text: 'Riposte cash-out' });
+    return true;
   };
   const primeWardStrikeBonus = () => {
     wardStrikeBonusRef.current = true;
@@ -1933,6 +2048,15 @@ export default function TacticalCombatHub({
     wardStrikeBonusRef.current = false;
     setStrikeArPrimed(false);
     return primed;
+  };
+  const primeVoidWardShroud = () => {
+    voidWardPrimedRef.current = true;
+    setVoidWardPrimed(true);
+    counterRef.current = true;
+    setCounterPrepActive(true);
+    markPlayerDefendedRef.current();
+    classLoopTelemetryRef.current.parriesAttempted += 1;
+    log('[VOID WARD] >> Shroud primed — kinetic intercept armed for hostile phase.');
   };
   const scaleSlice = (d: number) => sliceDamagePenalty > 0 ? Math.floor(d * (1 - sliceDamagePenalty)) : d;
 
@@ -2058,19 +2182,83 @@ export default function TacticalCombatHub({
     setCycleState('RESOLUTION');
     if (victory) {
       resolutionRef.current = 'VICTORY';
-      if (env.combatObjective === 'SURVIVE_TURNS') {
+      const primary = objectiveSessionRef.current.primary;
+      if (primary?.kind === 'HOLD_EXTRACTION_WINDOW' || env.combatObjective === 'SURVIVE_TURNS') {
         log('[DEFEND THE RIFT] >> Evac conduit stabilized. Hostile interdiction repelled.');
+        emitJuice('DIRTY_EXTRACTION_SURVIVED', { text: 'Dirty Extraction survived' });
+      } else if (primary && primary.status === 'COMPLETE') {
+        log(`[OBJECTIVE] >> ${primary.label} secured.`);
+        emitJuice('OBJECTIVE_COMPLETED', { text: primary.label });
       } else {
         log('[EXORCISED] >> Hostile neutralized. Incursion sealed.');
       }
       setResolutionOutcome('VICTORY');
-      awardCurrencies(750, 25);
+      const creditBonusPct = env.directorCreditsBonusPct ?? 0;
+      const creditBase = 750;
+      const credits = creditBonusPct > 0
+        ? Math.floor(creditBase * (1 + creditBonusPct / 100))
+        : creditBase;
+      awardCurrencies(credits, 25);
     } else {
       resolutionRef.current = 'DEFEAT';
       setResolutionOutcome('DEFEAT');
       log('[CRITICAL] >> Operative soul anchor severed. Veil sync lost.');
       flash(P.defeat);
     }
+  };
+
+  const syncObjectiveHud = () => {
+    setObjectiveHudLine(formatObjectiveHudLine(objectiveSessionRef.current));
+    const activeTimeline = objectiveSessionRef.current.timeline.find((ev) => !ev.previewOnly)
+      ?? objectiveSessionRef.current.timeline[0];
+    setTimelineHudLine(
+      activeTimeline
+        ? `${activeTimeline.label} T-${activeTimeline.turnsRemaining}`
+        : null,
+    );
+  };
+
+  const applyObjectiveProgress = (
+    result: ReturnType<typeof progressObjectiveOnEnemyTurnEnd>,
+  ) => {
+    objectiveSessionRef.current = result.session;
+    result.logLines.forEach((line) => log(line));
+    if (result.phaseAlert) {
+      setPhaseAlert(result.phaseAlert);
+      setTimeout(() => setPhaseAlert(null), 2200);
+    }
+    syncObjectiveHud();
+    if (result.primaryCompleted) {
+      const primary = result.session.primary;
+      emitJuice('OBJECTIVE_COMPLETED', {
+        text: primary?.label ?? 'Objective secured',
+      });
+      if (primary?.replacesPressure) {
+        resolve(true);
+      }
+    }
+  };
+
+  const snapshotObjectiveTelemetry = (): EncounterObjectiveTelemetry => {
+    const session = objectiveSessionRef.current;
+    const primary = session.primary;
+    return {
+      ...createEmptyObjectiveTelemetry(),
+      objectivePresented: primary != null,
+      primaryKind: primary?.kind ?? null,
+      primaryTemplateId: primary?.templateId ?? null,
+      source: session.source,
+      softKinds: session.secondary.map((s) => s.kind),
+      completed: primary?.status === 'COMPLETE',
+      failed: primary?.status === 'FAILED',
+      enemyTurnsSurvived: session.enemyTurnsSurvived,
+      channelsInterrupted: session.channelsInterrupted,
+      markedKills: session.markedKills,
+      detonationsPrevented: session.detonationsPrevented,
+      cargoStressTicks: session.cargoStressTicks,
+      timelineEventsSeen: session.timeline.length,
+      replacedPressure: primary?.replacesPressure ?? false,
+    };
   };
 
   const resolveVictoryRef = useRef(() => resolve(true));
@@ -2111,20 +2299,49 @@ export default function TacticalCombatHub({
   }, [registerHealHandler, combatMaxSoulAnchor]);
 
   const interruptsWorldEnderChannel = (e: EnemyCombatProfile) =>
-    e.intent === 'CHARGE' || e.intent === 'WORLD_ENDER' || e.chargeTurns > 0;
+    e.intent === 'CHARGE' || e.intent === 'WORLD_ENDER' || e.chargeTurns > 0
+    || enemyIsTelegraphing(e);
+
+  const resolveOperativeAbilityTags = (abilityId: string | null | undefined): readonly string[] => {
+    if (!abilityId) return [];
+    if (operativeClass === 'AEGIS') {
+      try {
+        return getAbilityTags(abilityId as AegisAbilityId);
+      } catch {
+        return [];
+      }
+    }
+    if (operativeClass === 'HEX_SHOT') {
+      return getHexShotAbilityTags(abilityId as HexShotAbilityId);
+    }
+    if (operativeClass === 'ENVOY') {
+      return getEnvoyAbilityTags(abilityId as EnvoyAbilityId);
+    }
+    return [];
+  };
 
   const applyVeilShardFracture = () => {
     const targetId = selectedTargetIdRef.current ?? primaryAliveUnit(squadRef.current)?.unitId;
     const e = targetId ? getUnitById(squadRef.current, targetId) : enemyRef.current;
     if (!e?.unitId) return;
     if (interruptsWorldEnderChannel(e)) {
-      patchUnit(e.unitId, applyFracturedState({
-        ...e,
-        intent: 'STRIKE',
-        chargeTurns: 0,
-        evadeActive: false,
+      const counter = resolveIntentCounterplay({
+        intent: e.intent,
+        playerActionTags: ['INTERRUPT', 'FRACTURE'],
+        sourceCombatant: e,
+        incomingDamage: e.baseDamage,
+      });
+      recordIntentCountered(intentTelemetryRef.current, e.intent, counter.counterQuality, {
+        damagePrevented: counter.reducedDamageAmount,
+        appliedFracture: true,
+      });
+      patchUnit(e.unitId, applyIntentCounterplayToEnemy(e, {
+        ...counter,
+        cancelTelegraph: true,
+        appliedFracture: true,
       }));
       log('>> WORLD-ENDER CHANNEL SHATTERED — hostile fracture maxed.');
+      counter.logMessages.forEach((m) => log(`>> VEIL SHARD // ${m}`));
       return;
     }
     patchUnit(e.unitId, applyFracturedState(e));
@@ -2159,17 +2376,18 @@ export default function TacticalCombatHub({
       const targetId = selectedTargetIdRef.current ?? primaryAliveUnit(squadRef.current)?.unitId;
       const unit = targetId ? getUnitById(squadRef.current, targetId) : null;
       if (unit?.unitId) {
-        const beforeArmor = unit.kineticArmor ?? 0;
-        const stripped = Math.min(beforeArmor, result.shatterKineticArmor);
-        patchUnit(unit.unitId, {
-          kineticArmor: Math.max(0, beforeArmor - result.shatterKineticArmor),
+        const stripResult = stripKineticArmor(unit, result.shatterKineticArmor, {
+          applyExposed: Boolean(result.applyExposed),
         });
-        if (stripped === 0 && result.misfireStaminaLoss) {
+        patchUnit(unit.unitId, stripResult.enemy);
+        stripResult.logLines.forEach((line) => log(line));
+        if (stripResult.stacksRemoved === 0 && result.misfireStaminaLoss) {
           applyStamina(-result.misfireStaminaLoss);
           log(result.secondaryLogLine ?? '>> GRID-CRACKER MAG // No plating found. Recoil backlash.');
         } else if (
           result.applyExposed
-          && stripped >= (result.exposedRequiresArmorStripped ?? 1)
+          && stripResult.stacksRemoved >= (result.exposedRequiresArmorStripped ?? 1)
+          && !stripResult.enemy.combatTags?.includes('EXPOSED')
         ) {
           const refreshed = getUnitById(squadRef.current, unit.unitId);
           if (refreshed) patchUnit(unit.unitId, addCombatTag(refreshed, 'EXPOSED'));
@@ -2180,12 +2398,10 @@ export default function TacticalCombatHub({
       const targetId = selectedTargetIdRef.current ?? primaryAliveUnit(squadRef.current)?.unitId;
       const unit = targetId ? getUnitById(squadRef.current, targetId) : null;
       if (unit?.unitId) {
-        const beforeWards = unit.occultWards ?? 0;
-        const stripped = Math.min(beforeWards, result.stripOccultWards);
-        patchUnit(unit.unitId, {
-          occultWards: Math.max(0, beforeWards - result.stripOccultWards),
-        });
-        if (stripped > 0 && result.frontlineBlindTurns) {
+        const stripResult = stripOccultWards(unit, result.stripOccultWards);
+        patchUnit(unit.unitId, stripResult.enemy);
+        stripResult.logLines.forEach((line) => log(line));
+        if (stripResult.stacksRemoved > 0 && result.frontlineBlindTurns) {
           const blindResult = applyFrontlineBlinded(
             squadRef.current,
             sessionExtrasRef.current,
@@ -2267,14 +2483,27 @@ export default function TacticalCombatHub({
       const targetId = selectedTargetIdRef.current ?? primaryAliveUnit(squadRef.current)?.unitId;
       const unit = targetId ? getUnitById(squadRef.current, targetId) : null;
       if (unit?.unitId) {
-        const interruptible = unit.isCharging === true || unit.spotterLockedOn === true;
+        const interruptible = enemyIsTelegraphing(unit);
         if (result.interruptChargingTarget && interruptible) {
-          patchUnit(unit.unitId, applyFracturedState({
-            ...unit,
-            isCharging: false,
-            spotterLockedOn: false,
+          const counter = resolveIntentCounterplay({
+            intent: unit.intent,
+            playerActionTags: ['INTERRUPT', 'FRACTURE'],
+            sourceCombatant: unit,
+            incomingDamage: unit.baseDamage,
+          });
+          recordIntentCountered(intentTelemetryRef.current, unit.intent, counter.counterQuality, {
+            damagePrevented: counter.reducedDamageAmount,
+            appliedFracture: counter.appliedFracture,
+          });
+          patchUnit(unit.unitId, applyIntentCounterplayToEnemy(unit, {
+            ...counter,
+            cancelTelegraph: true,
+            appliedFracture: true,
           }));
-          log('>> BLACK-IRON WEDGE // Telegraph spike interrupted.');
+          counter.logMessages.forEach((m) => log(`>> BLACK-IRON WEDGE // ${m}`));
+          if (!counter.logMessages.length) {
+            log('>> BLACK-IRON WEDGE // Telegraph spike interrupted.');
+          }
         } else if (result.applyFracture) {
           patchUnit(unit.unitId, applyFracturedState(unit));
           if (result.interruptChargingTarget) {
@@ -2422,6 +2651,13 @@ export default function TacticalCombatHub({
     },
   ) => {
     if (godModeRef.current) return;
+    if (options?.attacker && raw > 0) {
+      const sev = getIntentSeverity(options.attacker.intent);
+      recordIntentResolved(intentTelemetryRef.current, options.attacker.intent, {
+        damageDealt: raw,
+        wasIgnoredHigh: sev === 'HIGH' || sev === 'CRITICAL',
+      });
+    }
     if (
       isGhostCamoBlockingAttacks(classCombatRef.current)
       && raw > 0
@@ -2504,6 +2740,12 @@ export default function TacticalCombatHub({
       return;
     }
     let dmg = raw;
+    const objectiveMitigation = getIncomingDamageMitigationFromStamp(env.encounterObjective);
+    const directorMitigation = env.directorIncomingMitigationPct ?? 0;
+    const totalMitigation = Math.min(35, objectiveMitigation + directorMitigation);
+    if (totalMitigation > 0 && dmg > 0) {
+      dmg = Math.max(1, Math.floor(dmg * (1 - totalMitigation / 100)));
+    }
     if (
       options?.attacker
       && hasStructuredDebuff(sessionExtrasRef.current, 'TARGET_LOCKED')
@@ -2535,7 +2777,7 @@ export default function TacticalCombatHub({
     }
     if (playerKineticArmorBonus > 0 && dmg > 0) {
       const beforeArmor = dmg;
-      dmg = absorbByArmor(dmg, playerKineticArmorBonus);
+      dmg = mitigatePlayerKineticArmorBonus(dmg, playerKineticArmorBonus);
       const absorbed = beforeArmor - dmg;
       if (absorbed > 0) {
         log(`[KINETIC ARMOR] >> ${absorbed} absorbed (${playerKineticArmorBonus} layer${playerKineticArmorBonus === 1 ? '' : 's'}).`);
@@ -2551,7 +2793,7 @@ export default function TacticalCombatHub({
       : 0;
     if (envoyBulwarkArmor > 0 && dmg > 0) {
       const beforeArmor = dmg;
-      dmg = absorbByArmor(dmg, envoyBulwarkArmor);
+      dmg = mitigatePlayerKineticArmorBonus(dmg, envoyBulwarkArmor);
       const absorbed = beforeArmor - dmg;
       if (absorbed > 0) {
         log(`[AETHERIC BULWARK] >> ${absorbed} absorbed (${envoyBulwarkArmor} flux-forged layer${envoyBulwarkArmor === 1 ? '' : 's'}).`);
@@ -2821,6 +3063,69 @@ export default function TacticalCombatHub({
     }
     let critical = false;
     let ignoreDefenses = options?.ignoreDefenses ?? false;
+    // Phase 1 — ability tags strip defense stacks (break → Fracture).
+    if (source && options?.abilityId && raw > 0) {
+      const abilityTags = resolveAbilityDefenseTags(
+        operativeClass,
+        options.abilityId,
+      );
+      if (abilityTags.armorBreak > 0) {
+        const beforeKa = working.kineticArmor ?? 0;
+        const strip = stripKineticArmor(working, abilityTags.armorBreak);
+        working = strip.enemy;
+        strip.logLines.forEach((line) => log(line));
+        const removed = Math.max(0, beforeKa - (working.kineticArmor ?? 0));
+        if (removed > 0) {
+          classLoopTelemetryRef.current.armorStacksRemoved += removed;
+          emitJuice(strip.broke ? 'ARMOR_BREAK' : 'ARMOR_HIT', {
+            targetCombatantIds: working.unitId ? [working.unitId] : undefined,
+            text: strip.broke ? 'Kinetic Armor broken' : 'Kinetic Armor hit',
+          });
+          if (strip.appliedFracture) {
+            emitJuice('FRACTURE_APPLIED', {
+              targetCombatantIds: working.unitId ? [working.unitId] : undefined,
+              text: 'Fracture applied',
+            });
+          }
+          if (operativeClass === 'AEGIS') armRiposteReady('Armor break');
+          if (operativeClass === 'HEX_SHOT') {
+            log('[HEX SHOT] >> Correct Round — Kinetic Armor cracked.');
+            emitJuice('HEX_CORRECT_ROUND', { text: 'Correct Round — Armor' });
+          }
+        }
+      }
+      if (abilityTags.wardBreak > 0) {
+        const beforeOw = working.occultWards ?? 0;
+        const strip = stripOccultWards(working, abilityTags.wardBreak);
+        working = strip.enemy;
+        strip.logLines.forEach((line) => log(line));
+        const removed = Math.max(0, beforeOw - (working.occultWards ?? 0));
+        if (removed > 0) {
+          classLoopTelemetryRef.current.wardStacksRemoved += removed;
+          classLoopTelemetryRef.current.wardsBroken += removed;
+          emitJuice(strip.broke ? 'WARD_BREAK' : 'WARD_HIT', {
+            targetCombatantIds: working.unitId ? [working.unitId] : undefined,
+            text: strip.broke ? 'Occult Ward broken' : 'Occult Ward hit',
+          });
+          if (strip.appliedFracture) {
+            emitJuice('FRACTURE_APPLIED', {
+              targetCombatantIds: working.unitId ? [working.unitId] : undefined,
+              text: 'Fracture applied',
+            });
+          }
+          if (operativeClass === 'ENVOY') {
+            log('[ENVOY] >> Ward Collapse — Occult Wards broken.');
+          }
+          if (operativeClass === 'HEX_SHOT') {
+            log('[HEX SHOT] >> Null Round — Occult Wards cracked.');
+            emitJuice('HEX_CORRECT_ROUND', { text: 'Correct Round — Ward' });
+          }
+        }
+      }
+      if (abilityTags.armorPierce || abilityTags.wardPierce) {
+        ignoreDefenses = true;
+      }
+    }
     let hexForceCrit = false;
     if (operativeClass === 'HEX_SHOT' && source && !options?.echoHit) {
       const hexAbilityId = (options?.abilityId ?? lastPlayerAbilityRef.current) as HexShotAbilityId | null;
@@ -2974,6 +3279,29 @@ export default function TacticalCombatHub({
     }
     let pendingEnvoyKineticSplash: number | undefined;
     if (operativeClass === 'HEX_SHOT' && dmg > 0) {
+      const hexAbilityIdForProfile = (options?.abilityId ?? lastPlayerAbilityRef.current) as HexShotAbilityId | null;
+      if (hexAbilityIdForProfile && source && !options?.echoHit) {
+        const profile = getHexAmmoProfileForAbility(hexAbilityIdForProfile);
+        if (profile) {
+          classLoopTelemetryRef.current.ammoProfileUses[profile.id] =
+            (classLoopTelemetryRef.current.ammoProfileUses[profile.id] ?? 0) + 1;
+        }
+      }
+      if (
+        classCombatRef.current.chamberBonusReady
+        && source
+        && !options?.echoHit
+        && hexAbilityIdForProfile
+        && abilityUsesBallisticTags(hexAbilityIdForProfile)
+      ) {
+        classCombatRef.current.chamberBonusReady = false;
+        classLoopTelemetryRef.current.chamberBonusConsumed += 1;
+        dmg = Math.floor(dmg * 1.15);
+        log('[CHAMBER] >> Chambered round — +15% ballistic damage.');
+      }
+      if (isEnemyFractured(working) && source && !options?.echoHit) {
+        classLoopTelemetryRef.current.fractureExploits += 1;
+      }
       dmg = Math.floor(dmg * hexShotBoonModsRef.current.damageMultiplier);
       const hexAbilityId = options?.abilityId ?? lastPlayerAbilityRef.current;
       if (
@@ -3162,6 +3490,7 @@ export default function TacticalCombatHub({
       const hit = resolveHostileHpHit(working, dmg, options.channel, { ignoreDefenses });
       working = hit.enemy;
       dmg = hit.hpDamage;
+      hit.logLines.forEach((line) => log(line));
     }
     if (!bypassAllMitigation && (env.enemyDamageReductionPct ?? 0) > 0) {
       dmg = Math.floor(dmg * (1 - (env.enemyDamageReductionPct ?? 0) / 100));
@@ -3517,6 +3846,51 @@ export default function TacticalCombatHub({
       }
     }
 
+    // Phase 2 — interrupt / break telegraphed intents when ability tags match.
+    if (source && dmg > 0 && !options?.echoHit && e.unitId && enemyIsTelegraphing(working)) {
+      const abilityIdForCounter = String(options?.abilityId ?? lastPlayerAbilityRef.current ?? '');
+      const actionTags = resolveOperativeAbilityTags(abilityIdForCounter);
+      const killed = hp <= 0;
+      const counter = resolveIntentCounterplay({
+        intent: working.intent,
+        playerActionTags: actionTags,
+        sourceCombatant: working,
+        classId: operativeClass,
+        abilityId: abilityIdForCounter || undefined,
+        killedSource: killed,
+        incomingDamage: working.baseDamage,
+      });
+      if (counter.countered && (counter.cancelTelegraph || counter.appliedFracture)) {
+        recordIntentCountered(intentTelemetryRef.current, working.intent, counter.counterQuality, {
+          damagePrevented: counter.reducedDamageAmount,
+          appliedFracture: counter.appliedFracture,
+        });
+        working = applyIntentCounterplayToEnemy(
+          { ...working, currentHp: hp },
+          counter,
+        );
+        patchUnit(e.unitId, working);
+        counter.logMessages.forEach((m) => log(`>> INTENT COUNTER // ${m}`));
+        if (counter.cancelTelegraph) {
+          applyObjectiveProgress(
+            progressObjectiveOnChannelInterrupt(
+              objectiveSessionRef.current,
+              getIntentType(working.intent),
+            ),
+          );
+          emitJuice('INTENT_COUNTERED', {
+            targetCombatantIds: working.unitId ? [working.unitId] : undefined,
+            text: 'Intent countered',
+          });
+        }
+      } else if (counter.countered) {
+        recordIntentCountered(intentTelemetryRef.current, working.intent, counter.counterQuality, {
+          damagePrevented: counter.reducedDamageAmount,
+          appliedFracture: false,
+        });
+      }
+    }
+
     if (source && env.bloodFrenzyActive && dmg > 0) {
       const heal = computeBloodFrenzyHeal(dmg, true);
       if (heal > 0) {
@@ -3561,7 +3935,15 @@ export default function TacticalCombatHub({
       setTimeout(() => setPhaseAlert(null), 2400);
     }
 
+    if (hp <= 0 && e.unitId) {
+      applyObjectiveProgress(
+        progressObjectiveOnMarkedKill(objectiveSessionRef.current, e.unitId),
+      );
+      if (resolutionRef.current != null) return true;
+    }
+
     if (allUnitsDefeated(squadRef.current)) {
+      applyObjectiveProgress(progressObjectiveOnSquadCleared(objectiveSessionRef.current));
       if (cycleRef.current === 'DEFEND_PARRY') {
         pendingVictoryRef.current = true;
         return true;
@@ -4500,10 +4882,15 @@ export default function TacticalCombatHub({
       survivedEnemyTurnsRef.current += 1;
       const required = env.survivalTurnsRequired ?? 3;
       log(`>> RIFT DEFENSE — hostile cycle ${survivedEnemyTurnsRef.current}/${required} endured.`);
+      applyObjectiveProgress(progressObjectiveOnEnemyTurnEnd(objectiveSessionRef.current));
       if (survivedEnemyTurnsRef.current >= required) {
         resolve(true);
         return;
       }
+      if (resolutionRef.current != null) return;
+    } else {
+      applyObjectiveProgress(progressObjectiveOnEnemyTurnEnd(objectiveSessionRef.current));
+      if (resolutionRef.current != null) return;
     }
     if (advanceIntent) {
       syncSquad(squadRef.current.map((unit) => {
@@ -4520,7 +4907,22 @@ export default function TacticalCombatHub({
           squadRef.current,
           { hasAshToken: hasAshOnBoard() },
         );
+      }).map((unit) => {
+        if (isUnitAlive(unit)) {
+          recordIntentGenerated(intentTelemetryRef.current, unit.intent, {
+            depth: combatDistrict,
+          });
+        }
+        return unit;
       }));
+      const warning = aliveUnits(squadRef.current)
+        .map((u) => formatIntentWarningBanner(u.intent, u))
+        .find((w) => w != null) ?? null;
+      if (warning) {
+        setPhaseAlert(`>> INTENT ALERT — ${warning}`);
+        log(`>> INTENT ALERT — ${warning}`);
+        setTimeout(() => setPhaseAlert(null), 2200);
+      }
     }
     if (advanceIntent && aliveUnits(squadRef.current).some((unit) => isEnemyFractured(unit))) {
       syncSquad(recoverFracturedUnits(squadRef.current));
@@ -4738,6 +5140,18 @@ export default function TacticalCombatHub({
     tickHexShotClassState(classCombatRef.current);
     setCycleState('TEXT_COMBAT');
     log('>> OPERATIVE TURN // Command deck online.');
+    const danger = resolveStartOfTurnDangerPulse(
+      squadRef.current,
+      objectiveSessionRef.current,
+    );
+    if (danger.message) {
+      setPhaseAlert(`>> ${danger.message}`);
+      log(`>> DANGER — ${danger.message}`);
+      if (danger.juiceEvent) {
+        recordJuiceEvent(juiceTelemetryRef.current, danger.juiceEvent);
+      }
+      setTimeout(() => setPhaseAlert(null), 2400);
+    }
   };
 
   const resolvePendingAttackDamage = (e: EnemyCombatProfile) => {
@@ -4785,7 +5199,24 @@ export default function TacticalCombatHub({
     ) {
       classCombatRef.current.panopticonActive = false;
       const overwatchMastery = isOverwatchMasteryActive(hexShotBoons);
-      patchUnit(enemyId, addCombatTag(currentEnemy, 'CONCUSSED'));
+      const counter = resolveIntentCounterplay({
+        intent: currentEnemy.intent,
+        playerActionTags: ['INTERRUPT', 'TRAP'],
+        sourceCombatant: currentEnemy,
+        classId: 'HEX_SHOT',
+        abilityId: 'PANOPTICON_PROTOCOL',
+        incomingDamage: currentEnemy.baseDamage,
+      });
+      recordIntentCountered(intentTelemetryRef.current, currentEnemy.intent, counter.counterQuality, {
+        damagePrevented: counter.reducedDamageAmount,
+        appliedFracture: counter.appliedFracture,
+      });
+      let interrupted = applyIntentCounterplayToEnemy(currentEnemy, {
+        ...counter,
+        cancelTelegraph: true,
+      });
+      interrupted = addCombatTag(interrupted, 'CONCUSSED');
+      patchUnit(enemyId, interrupted);
       const panopticonDmg = overwatchMastery ? 16 : 8;
       hurtEnemy(panopticonDmg, '[PANOPTICON]', 'STRIKE', {
         channel: 'KINETIC',
@@ -4794,6 +5225,16 @@ export default function TacticalCombatHub({
         rollCrit: false,
       });
       log('[PANOPTICON] >> Overwatch interrupt — hostile concussed, attack cancelled.');
+      log('[HEX SHOT] >> Correct Round — intent interrupted.');
+      classLoopTelemetryRef.current.panopticonInterrupts += 1;
+      classLoopTelemetryRef.current.channelsDisrupted += 1;
+      counter.logMessages.forEach((m) => log(`[PANOPTICON] >> ${m}`));
+      applyObjectiveProgress(
+        progressObjectiveOnChannelInterrupt(
+          objectiveSessionRef.current,
+          getIntentType(currentEnemy.intent),
+        ),
+      );
       dispatchHexShot({
         type: 'HEX_REEVALUATE_ULTIMATE',
         encounter: classCombatRef.current,
@@ -5341,6 +5782,22 @@ export default function TacticalCombatHub({
     setCatalyticConsoleVisible(false);
     combatPausedRef.current = false;
     classCombatRef.current = createDefaultClassCombatEncounterState();
+    setRiposteReadyUi(false);
+    classLoopTelemetryRef.current = createEmptyClassLoopTelemetry();
+    intentTelemetryRef.current = createEmptyIntentTelemetry();
+    juiceTelemetryRef.current = createEmptyJuiceTelemetry();
+    objectiveSessionRef.current = buildEncounterObjectiveSession(
+      env.encounterObjective ?? null,
+      initialSquad,
+    );
+    syncObjectiveHud();
+    if (env.encounterObjective || env.combatDirector) {
+      emitJuice('OBJECTIVE_STARTED', {
+        text: env.combatDirector
+          ? `Director ${env.combatDirector.pressureLabel} ${env.combatDirector.pressureTotal}`
+          : 'Objective online',
+      });
+    }
     if (narrativeCombatBoons?.veilWard) {
       sessionExtrasRef.current.playerShield = 15;
       sessionExtrasRef.current.narrativeVeilWardActive = true;
@@ -5429,6 +5886,7 @@ export default function TacticalCombatHub({
     if (env.combatObjective === 'SURVIVE_TURNS') {
       log(`>> DEFEND THE RIFT — survive ${env.survivalTurnsRequired ?? 3} hostile turn cycles.`);
     }
+    formatObjectiveBriefing(objectiveSessionRef.current).forEach((line) => log(line));
     if (env.eliteModifier) log(`>> ELITE MODIFIER ACTIVE — ${env.eliteModifier.replace(/_/g, ' ')}`);
     log(`>> HOSTILE GRID — ${initialSquad.length} unit(s) // threat budget ${threatBudgetRef.current}`);
     initialSquad.forEach((unit) => {
@@ -6022,6 +6480,8 @@ export default function TacticalCombatHub({
           if (enemyRef.current?.unitId === unitId && enemyActionStageRef.current === 'reading') {
             setEnemyActionStage(null);
             log('[MIND-SUNDER] >> Prepared attack cancelled.');
+            classLoopTelemetryRef.current.channelsDisrupted += 1;
+            log('[ENVOY] >> Ritual Collapsed — intent interrupted.');
           }
         },
       });
@@ -6029,6 +6489,49 @@ export default function TacticalCombatHub({
         playerApRef.current += execResult.refundAp;
         setPlayerActionPoints(playerApRef.current);
       } else {
+        // Phase 3 — prime Envoy catalyst + sequence payoff.
+        const cat = catalystForEnvoyAbility(abilityId);
+        if (cat) {
+          const { previous, current } = primeEnvoyCatalyst(classCombatRef.current, cat);
+          classLoopTelemetryRef.current.catalystsPrimed += 1;
+          if (cat === 'ASH' || abilityId === 'RIFT_WARD' || abilityId === 'PHASE_STEP') {
+            classLoopTelemetryRef.current.defensiveCatalystUses += 1;
+          }
+          const targetId = selectedTargetIdRef.current;
+          const target = targetId ? getUnitById(squadRef.current, targetId) : null;
+          const payoff = resolveEnvoyCatalystSequence(previous, current, target);
+          if (previous) classLoopTelemetryRef.current.catalystSequencesTriggered += 1;
+          payoff.logMessages.forEach((m) => log(`[CATALYST] >> ${m}`));
+          if (previous && payoff.logMessages.length > 0) {
+            emitJuice('ENVOY_CATALYST_RESONANCE', {
+              text: payoff.logMessages[0],
+            });
+          }
+          if (target?.unitId && (payoff.extraWardBreak || payoff.fractureTarget)) {
+            const patched = applyEnvoyCatalystPayoffToTarget(target, payoff);
+            patchUnit(target.unitId, patched);
+            if (payoff.extraWardBreak) {
+              classLoopTelemetryRef.current.wardsBroken += payoff.extraWardBreak;
+            }
+            if (payoff.fractureTarget) {
+              classLoopTelemetryRef.current.fracturesAppliedByClass += 1;
+            }
+          }
+          if (payoff.healAmount) {
+            setOperativeHp((p) => {
+              const n = Math.min(maxSoulAnchor, p + payoff.healAmount!);
+              operativeHpRef.current = n;
+              return n;
+            });
+          }
+          if (payoff.shieldAmount) {
+            sessionExtrasRef.current.playerShield =
+              (sessionExtrasRef.current.playerShield ?? 0) + payoff.shieldAmount;
+          }
+          if (target && isEnemyFractured(target)) {
+            classLoopTelemetryRef.current.fractureExploits += 1;
+          }
+        }
         let fluxDelta = execResult.fluxDelta ?? 0;
         fluxDelta = runEnvoyOnAbilityResolveBoons({
           boons: envoyBoons,
@@ -6251,17 +6754,37 @@ export default function TacticalCombatHub({
           if (eradicated) return;
           break;
         }
-        const kinetic = def.baseKineticDamage ?? 10;
-        const eradicated = hurtEnemy(kinetic, '[STRIKE]', 'STRIKE', {
+        const kineticBase = def.baseKineticDamage ?? 10;
+        const targetBefore = enemyRef.current;
+        const riposte = consumeRiposteReady();
+        let kinetic = kineticBase;
+        if (riposte) {
+          const fracturedBonus = targetBefore && isEnemyFractured(targetBefore) ? 1.3 : 1.15;
+          kinetic = Math.floor(kineticBase * fracturedBonus);
+          log(`[RIPOSTE] >> Cash-out — ${kinetic} kinetic${targetBefore && isEnemyFractured(targetBefore) ? ' (Fractured +30%)' : ' (+15%)'}.`);
+        }
+        const eradicated = hurtEnemy(kinetic, riposte ? '[RIPOSTE]' : '[STRIKE]', 'STRIKE', {
           channel: 'KINETIC',
-          fractureGain: 25,
+          fractureGain: riposte ? 40 : 25,
           abilityId: 'STRIKE',
         });
+        if (riposte && targetBefore?.unitId) {
+          const after = getUnitById(squadRef.current, targetBefore.unitId) ?? targetBefore;
+          if ((after.kineticArmor ?? 0) > 0) {
+            const strip = stripKineticArmor(after, 1);
+            patchUnit(targetBefore.unitId, strip.enemy);
+            strip.logLines.forEach((line) => log(line));
+            classLoopTelemetryRef.current.armorStacksRemoved += 1;
+          }
+        }
         const struck = enemyRef.current;
         chargeAr(def.reserveGain ?? 15, struck != null && isEnemyFractured(struck));
         imprintRunicBrand(def.brandsImprinted ?? 1);
         if (struck && fractureRatio(struck) > 0.5) {
           syncEnemy(addCombatTag(struck, 'CONCUSSED'));
+        }
+        if (!riposte && struck && isEnemyFractured(struck)) {
+          armRiposteReady('Fracture pressure');
         }
         applyLethalRetaliation(kinetic);
         if (eradicated) return;
@@ -6840,6 +7363,14 @@ export default function TacticalCombatHub({
       ? overchargeFromAmmoAtReloadStart(ammoAtStart, maxAmmo)
       : 0;
     log(activeReloadLogLine(result, overchargePct));
+    classLoopTelemetryRef.current.reloadsUsed += 1;
+    if (result === 'PERFECT') classLoopTelemetryRef.current.perfectReloads += 1;
+    // Phase 3 — soft reload: chamber bonus on perfect or tactical (manual) reload.
+    if (result === 'PERFECT' || wasManual) {
+      classCombatRef.current.chamberBonusReady = true;
+      classLoopTelemetryRef.current.chamberBonusGranted += 1;
+      log('[CHAMBER] >> Next ballistic shot gains +15% damage (reload tempo).');
+    }
     dispatchHexShot({
       type: 'HEX_RESOLVE_RELOAD',
       result,
@@ -6950,9 +7481,48 @@ export default function TacticalCombatHub({
       pendingDmgRef.current = 0;
       const e = enemyRef.current;
       if (e?.unitId && pendingWeight > 0) {
-        const fractured = applyFractureDamage(e, pendingWeight);
-        patchUnit(e.unitId, fractured);
+        const counter = resolveIntentCounterplay({
+          intent: e.intent,
+          playerActionTags: ['PARRY', 'FRACTURE', 'BLOCK'],
+          sourceCombatant: e,
+          perfectParry: true,
+          classId: 'AEGIS',
+          abilityId: 'WRAITH_PARRY',
+          incomingDamage: pendingWeight,
+        });
+        recordIntentCountered(intentTelemetryRef.current, e.intent, counter.counterQuality, {
+          damagePrevented: counter.reducedDamageAmount ?? pendingWeight,
+          appliedFracture: true,
+        });
+        const fractured = applyFractureDamage(
+          counter.appliedFracture || counter.cancelTelegraph
+            ? applyIntentCounterplayToEnemy(e, { ...counter, appliedFracture: false })
+            : e,
+          pendingWeight,
+        );
+        const withFracturePayoff = counter.appliedFracture && !isEnemyFractured(fractured)
+          ? applyFracturedState(fractured, { fromDefenseBreak: true })
+          : fractured;
+        patchUnit(e.unitId, withFracturePayoff);
         log(`[VOID WARD] >> Perfect lock — ${pendingWeight} fracture reflected.`);
+        log('[AEGIS] >> Perfect Parry — Lock canceled, Riposte Ready.');
+        armRiposteReady('Perfect Parry');
+        classLoopTelemetryRef.current.parriesSuccessful += 1;
+        classLoopTelemetryRef.current.perfectParries += 1;
+        classLoopTelemetryRef.current.damagePreventedByParry += pendingWeight;
+        classLoopTelemetryRef.current.fracturesAppliedByClass += 1;
+        emitJuice('PERFECT_PARRY', { text: 'Perfect Parry' });
+        emitJuice('FRACTURE_APPLIED', { text: 'Fracture from Perfect Parry' });
+        if (counter.cancelTelegraph) {
+          applyObjectiveProgress(
+            progressObjectiveOnChannelInterrupt(
+              objectiveSessionRef.current,
+              getIntentType(e.intent),
+            ),
+          );
+          emitJuice('INTENT_COUNTERED', { text: 'Lock canceled' });
+        }
+        counter.logMessages.forEach((m) => log(`[VOID WARD] >> ${m}`));
         const reflectPct = mutationModsRef.current.parryReflectPct;
         if (reflectPct > 0) {
           const hpReflect = Math.floor(pendingWeight * (reflectPct / 100));
@@ -7227,6 +7797,20 @@ export default function TacticalCombatHub({
       damageTaken: sample.damageTaken,
       healingReceived: sample.healingReceived,
       damageDealt: sample.damageDealt,
+      intentTelemetry: intentTelemetryRef.current,
+      classLoopTelemetry: classLoopTelemetryRef.current,
+      objectiveTelemetry: snapshotObjectiveTelemetry(),
+      directorTelemetry: env.combatDirector
+        ? {
+            pressureTotal: env.combatDirector.pressureTotal,
+            pressureLabel: env.combatDirector.pressureLabel,
+            rewardMultiplier: env.combatDirector.rewardMultiplier,
+            adjustmentsApplied: env.combatDirector.adjustmentsApplied,
+            severity: env.combatDirector.severity,
+            debugSummary: env.combatDirector.debugSummary,
+          }
+        : undefined,
+      juiceTelemetry: juiceTelemetryRef.current,
     });
   }, [onCombatComplete]);
 
@@ -7473,7 +8057,20 @@ export default function TacticalCombatHub({
       && shouldApplyPhantomFeed(abilityId as HexShotAbilityId, graftTags)
       ? 'INTRINSIC: Phantom Feed — +1 round cycled before resolve.'
       : '';
-    return [cost.description, tagLine, phantomFeed].filter(Boolean).join(' // ');
+    const ammoHint = operativeClass === 'HEX_SHOT'
+      ? formatHexAmmoCounterHint(abilityId as HexShotAbilityId)
+      : null;
+    const ammoLine = ammoHint ? `ROUND: ${ammoHint}` : '';
+    const riposteLine = operativeClass === 'AEGIS'
+      && abilityId === 'STRIKE'
+      && classCombatRef.current.riposteReady
+      ? 'RIPOSTE READY — cash-out vs Fractured (+30%) + strip armor.'
+      : '';
+    const catChip = operativeClass === 'ENVOY'
+      ? formatCatalystChip(classCombatRef.current)
+      : null;
+    const catLine = catChip ? `CATALYST: ${catChip}` : '';
+    return [cost.description, tagLine, ammoLine, riposteLine, catLine, phantomFeed].filter(Boolean).join(' // ');
   };
 
   const confirmSelectedAbility = () => {
@@ -7626,6 +8223,7 @@ export default function TacticalCombatHub({
         && playerActionPoints >= VOID_WARD_AP_COST
       }
       voidWardPrimed={voidWardPrimed}
+      riposteReady={riposteReadyUi}
       onVoidWardPrime={onVoidWardPrime}
       catalyticConsoleAvailable={operativeClass === 'ENVOY'}
       catalyticConsoleEnabled={
@@ -7675,6 +8273,16 @@ export default function TacticalCombatHub({
         <>
           {phaseAlert ? (
             <Text style={[styles.phaseAlert, { color: '#ef4444' }]}>{phaseAlert}</Text>
+          ) : null}
+          {objectiveHudLine ? (
+            <Text style={[styles.phaseAlert, { color: '#fde68a' }]}>
+              {`OBJ // ${objectiveHudLine}`}
+            </Text>
+          ) : null}
+          {timelineHudLine ? (
+            <Text style={[styles.exhaustedBanner, { color: '#7dd3fc' }]}>
+              {`TL // ${timelineHudLine}`}
+            </Text>
           ) : null}
           {isExhausted ? (
             <Text style={styles.exhaustedBanner}>

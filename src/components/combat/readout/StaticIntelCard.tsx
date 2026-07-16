@@ -12,6 +12,7 @@ import {
   type CombatGridUnitSnapshot,
 } from '../../../utils/combatTelemetryFormat';
 import { describeEnemyIntent } from '../../../utils/enemyIntentDescriptions';
+import { getIntentSeverity, severityColor } from '../../../data/enemyIntentCatalog';
 import CombatStatusIconRow from './CombatStatusIconRow';
 import CombatEnemySlotBars from '../CombatEnemySlotBars';
 import EnemyIntentDetailOverlay from './EnemyIntentDetailOverlay';
@@ -26,6 +27,8 @@ const INTENT_ATTACK_BG = 'rgba(127, 29, 29, 0.72)';
 const INTENT_ATTACK_BORDER = '#ef4444';
 const INTENT_BUFF_BG = 'rgba(30, 58, 138, 0.72)';
 const INTENT_BUFF_BORDER = '#3b82f6';
+const INTENT_HIGH_BG = 'rgba(154, 52, 18, 0.78)';
+const INTENT_CRITICAL_BG = 'rgba(127, 29, 29, 0.88)';
 
 interface StaticIntelCardProps {
   unit: CombatGridUnitSnapshot;
@@ -74,12 +77,37 @@ export default function StaticIntelCard({
   const tierLabel = unit.isAlpha ? 'ALPHA' : tier === 'STANDARD' ? 'STD' : tier;
   const intentText = unit.intentLabel ?? formatIntentReadout(unit.intent);
   const intentTone = classifyIntentBoxTone(unit.intent);
+  const severity = unit.intentSeverity ?? getIntentSeverity(unit.intent);
+  const turnsRemaining = unit.intentTurnsRemaining ?? 0;
   const trayKeys = unit.activeStatuses ?? [];
   const extraTags = useMemo(() => extraStatusTags(unit, trayKeys), [unit, trayKeys]);
   const intentDetail = useMemo(
-    () => describeEnemyIntent(unit.intent),
-    [unit.intent],
+    () => describeEnemyIntent(unit.intent, {
+      designation: unit.designation,
+      chargeTurns: unit.chargeTurns,
+    }),
+    [unit.intent, unit.designation, unit.chargeTurns],
   );
+  const intentBorder = severity === 'CRITICAL' || severity === 'HIGH'
+    ? severityColor(severity)
+    : intentTone === 'buff'
+      ? INTENT_BUFF_BORDER
+      : INTENT_ATTACK_BORDER;
+  const intentBoxStyle = severity === 'CRITICAL'
+    ? styles.intentBoxCritical
+    : severity === 'HIGH'
+      ? styles.intentBoxHigh
+      : intentTone === 'buff'
+        ? styles.intentBoxBuff
+        : styles.intentBoxAttack;
+  const intentValueColor = severity === 'HIGH' || severity === 'CRITICAL'
+    ? severityColor(severity)
+    : intentTone === 'buff'
+      ? '#93c5fd'
+      : '#fca5a5';
+  const intentDisplay = turnsRemaining > 0
+    ? `${intentText}  T-${turnsRemaining}`
+    : intentText;
 
   return (
     <View style={styles.card}>
@@ -155,7 +183,8 @@ export default function StaticIntelCard({
         onPress={() => setIntentDetailVisible(true)}
         style={[
           styles.intentBox,
-          intentTone === 'buff' ? styles.intentBoxBuff : styles.intentBoxAttack,
+          intentBoxStyle,
+          { borderColor: intentBorder },
         ]}
       >
         <Text
@@ -165,13 +194,15 @@ export default function StaticIntelCard({
           ]}
           numberOfLines={1}
         >
-          NEXT //
+          {severity === 'HIGH' || severity === 'CRITICAL'
+            ? `${severity} //`
+            : 'NEXT //'}
         </Text>
         <Text
           style={[
             styles.intentValue,
             {
-              color: intentTone === 'buff' ? '#93c5fd' : '#fca5a5',
+              color: intentValueColor,
               fontSize: isCombatDesktop ? scaleCombatFont(9) : 7,
               lineHeight: isCombatDesktop ? scaleCombatFont(12) : 9,
             },
@@ -180,7 +211,7 @@ export default function StaticIntelCard({
           adjustsFontSizeToFit
           minimumFontScale={0.72}
         >
-          {intentText}
+          {intentDisplay}
         </Text>
       </HapticPressable>
 
@@ -188,7 +219,7 @@ export default function StaticIntelCard({
         visible={intentDetailVisible}
         detail={intentDetailVisible ? intentDetail : null}
         onDismiss={() => setIntentDetailVisible(false)}
-        borderColor={intentTone === 'buff' ? INTENT_BUFF_BORDER : INTENT_ATTACK_BORDER}
+        borderColor={intentBorder}
       />
     </View>
   );
@@ -273,6 +304,14 @@ const styles = StyleSheet.create({
   intentBoxBuff: {
     backgroundColor: INTENT_BUFF_BG,
     borderColor: INTENT_BUFF_BORDER,
+  },
+  intentBoxHigh: {
+    backgroundColor: INTENT_HIGH_BG,
+    borderColor: '#f97316',
+  },
+  intentBoxCritical: {
+    backgroundColor: INTENT_CRITICAL_BG,
+    borderColor: '#ef4444',
   },
   intentLabel: {
     fontFamily: MONO,

@@ -13,6 +13,9 @@ export type HexShotAbilityTag =
   | 'AOE'
   | 'FRACTURE'
   | 'ARMOR_PIERCE'
+  | 'ARMOR_BREAK'
+  | 'WARD_BREAK'
+  | 'WARD_PIERCE'
   | 'EXECUTION'
   | 'TRAP'
   | 'DEBUFF'
@@ -21,7 +24,13 @@ export type HexShotAbilityTag =
   | 'CONTROL'
   | 'RESTORE'
   | 'RELOAD'
-  | 'OCCULT';
+  | 'OCCULT'
+  /** Phase 2 — intent counterplay tags */
+  | 'INTERRUPT'
+  | 'BLIND'
+  | 'GUARD_BREAK'
+  | 'BLOCK'
+  | 'SILENCE';
 
 export type EnvoyAbilityTag =
   | 'SPELL'
@@ -37,7 +46,17 @@ export type EnvoyAbilityTag =
   | 'BUFF'
   | 'RESTORE'
   | 'DEBUFF'
-  | 'CONTROL';
+  | 'CONTROL'
+  | 'FRACTURE'
+  | 'WARD_BREAK'
+  | 'ARMOR_PIERCE'
+  /** Phase 2 — intent counterplay tags */
+  | 'INTERRUPT'
+  | 'SILENCE'
+  | 'BLOCK'
+  | 'GUARD_BREAK'
+  | 'BLIND'
+  | 'DECOY';
 
 export type OperativeAbilityId = AegisAbilityId | HexShotAbilityId | EnvoyAbilityId;
 
@@ -65,6 +84,14 @@ export interface ClassCombatEncounterState {
   runicBrands: number;
   /** Envoy — Cataclysm sigil ready when total Veil Rot stacks ≥ gate. */
   cataclysmReady: boolean;
+  /** Phase 3 — Aegis Riposte Ready after perfect parry / Fracture apply. */
+  riposteReady: boolean;
+  /** Phase 3 — Hex Shot chamber bonus after tactical reload. */
+  chamberBonusReady: boolean;
+  /** Phase 3 — Envoy catalyst state (lightweight). */
+  currentCatalyst: 'NULL' | 'ECHO' | 'BLOOD' | 'ASH' | null;
+  previousCatalyst: 'NULL' | 'ECHO' | 'BLOOD' | 'ASH' | null;
+  catalystPrimedThisTurn: boolean;
 }
 
 export function createDefaultClassCombatEncounterState(): ClassCombatEncounterState {
@@ -84,6 +111,11 @@ export function createDefaultClassCombatEncounterState(): ClassCombatEncounterSt
     successfulParryCount: 0,
     runicBrands: 0,
     cataclysmReady: false,
+    riposteReady: false,
+    chamberBonusReady: false,
+    currentCatalyst: null,
+    previousCatalyst: null,
+    catalystPrimedThisTurn: false,
   };
 }
 

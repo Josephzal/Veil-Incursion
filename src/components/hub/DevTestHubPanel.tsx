@@ -124,6 +124,22 @@ import {
   formatBalanceDashboard,
   formatBalanceSimulationBundle,
   formatBalanceValidationReport,
+  formatCombatBalanceReport,
+  formatClassCounterValidationReport,
+  formatCombatDefenseBalanceSummary,
+  formatEnemyIntentBalanceReport,
+  formatClassIntentCounterValidationReport,
+  formatFullIntentValidationReport,
+  formatCombatIntentBalanceSummary,
+  formatClassCombatIdentityReport,
+  formatClassCombatReport,
+  formatEncounterObjectiveBalanceReport,
+  formatEncounterObjectiveValidationReport,
+  formatCombatDirectorReport,
+  formatEncounterPressureReport,
+  formatCombatFeedbackReport,
+  formatCombatDirectorValidationReport,
+  formatCombatDirectorBalanceSummary,
   formatContractGenerationReport,
   formatCraftingAffordabilityReport,
   formatEncounterDistributionReport,
@@ -132,12 +148,25 @@ import {
   formatRunResourceIncomeReport,
   formatRunTreeGenerationReport,
   formatSealedOpenBalanceReport,
+  createDefaultBalanceRunStats,
 } from '../../data/balance';
 import {
   formatWeaponValidationReport,
   validateWeaponRegistry,
   debugPrintEquippedWeapons,
 } from '../../data/weaponValidationEngine';
+import {
+  debugListEncounterObjectiveTemplates,
+  debugPreviewDefendRiftObjective,
+  debugSimulateObjectiveSelection,
+} from '../../data/encounterObjectiveDebugEngine';
+import {
+  debugForceJuiceFeedback,
+  debugPrintCombatDirectorBalance,
+  debugScoreMockEncounter,
+  debugSimulateDirtyExtractionPressure,
+  debugSimulatePressureDistribution,
+} from '../../data/combatDirectorDebugEngine';
 
 interface SandboxLaunchButtonProps {
   label: string;
@@ -1455,6 +1484,153 @@ export default function DevTestHubPanel(): React.JSX.Element {
           label="[ BALANCE CONFIG ]"
           accentColor={theme.mutedColor}
           onPress={() => setDebugReport(formatBalanceConfigSummary())}
+        />
+        <SandboxLaunchButton
+          label="[ COMBAT BALANCE REPORT ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(
+            formatCombatBalanceReport(
+              activeIncursion.balanceRunStats ?? createDefaultBalanceRunStats(),
+            ),
+          )}
+        />
+        <SandboxLaunchButton
+          label="[ CLASS DEFENSE COUNTERS ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport([
+            formatClassCounterValidationReport(),
+            '',
+            formatCombatDefenseBalanceSummary(),
+          ].join('\n'))}
+        />
+        <SandboxLaunchButton
+          label="[ ENEMY INTENT REPORT ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(
+            formatEnemyIntentBalanceReport(
+              activeIncursion.balanceRunStats ?? createDefaultBalanceRunStats(),
+            ),
+          )}
+        />
+        <SandboxLaunchButton
+          label="[ INTENT VALIDATION ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport([
+            formatFullIntentValidationReport(),
+            '',
+            formatClassIntentCounterValidationReport(),
+            '',
+            formatCombatIntentBalanceSummary(),
+          ].join('\n'))}
+        />
+        <SandboxLaunchButton
+          label="[ CLASS IDENTITY REPORT ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(
+            formatClassCombatIdentityReport(
+              activeIncursion.balanceRunStats ?? createDefaultBalanceRunStats(),
+            ),
+          )}
+        />
+        <SandboxLaunchButton
+          label="[ CLASS COMBAT REPORT ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(
+            formatClassCombatReport(
+              activeIncursion.balanceRunStats ?? createDefaultBalanceRunStats(),
+            ),
+          )}
+        />
+        <SandboxLaunchButton
+          label="[ OBJECTIVE REPORT ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(
+            formatEncounterObjectiveBalanceReport(
+              activeIncursion.balanceRunStats ?? createDefaultBalanceRunStats(),
+            ),
+          )}
+        />
+        <SandboxLaunchButton
+          label="[ OBJECTIVE VALIDATION ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(formatEncounterObjectiveValidationReport())}
+        />
+        <SandboxLaunchButton
+          label="[ OBJECTIVE TEMPLATES ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(debugListEncounterObjectiveTemplates())}
+        />
+        <SandboxLaunchButton
+          label="[ DEFEND RIFT PREVIEW ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport([
+            debugPreviewDefendRiftObjective(),
+            '',
+            debugSimulateObjectiveSelection({ depth: 2, isEcho: true }),
+            debugSimulateObjectiveSelection({ depth: 2, isAnchor: true }),
+            debugSimulateObjectiveSelection({ depth: 2, hasCaller: true, isElite: true }),
+            debugSimulateObjectiveSelection({
+              depth: 2,
+              crisisTheme: 'CONTAINMENT_FAILURE',
+              isElite: true,
+            }),
+          ].join('\n'))}
+        />
+        <SandboxLaunchButton
+          label="[ COMBAT DIRECTOR REPORT ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(
+            formatCombatDirectorReport(
+              activeIncursion.balanceRunStats ?? createDefaultBalanceRunStats(),
+            ),
+          )}
+        />
+        <SandboxLaunchButton
+          label="[ ENCOUNTER PRESSURE REPORT ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(
+            formatEncounterPressureReport(
+              activeIncursion.balanceRunStats ?? createDefaultBalanceRunStats(),
+            ),
+          )}
+        />
+        <SandboxLaunchButton
+          label="[ COMBAT FEEDBACK REPORT ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(
+            formatCombatFeedbackReport(
+              activeIncursion.balanceRunStats ?? createDefaultBalanceRunStats(),
+            ),
+          )}
+        />
+        <SandboxLaunchButton
+          label="[ DIRECTOR VALIDATION ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport([
+            formatCombatDirectorValidationReport(),
+            '',
+            formatCombatDirectorBalanceSummary(),
+          ].join('\n'))}
+        />
+        <SandboxLaunchButton
+          label="[ DIRECTOR MOCK SCORE ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport([
+            debugPrintCombatDirectorBalance(),
+            '',
+            debugScoreMockEncounter({ depth: 1, early: true, dualDefense: true }),
+            '',
+            debugScoreMockEncounter({ depth: 2, elite: true }),
+            '',
+            debugSimulateDirtyExtractionPressure(),
+            '',
+            debugSimulatePressureDistribution(48),
+          ].join('\n'))}
+        />
+        <SandboxLaunchButton
+          label="[ FORCE JUICE FEEDBACK ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(debugForceJuiceFeedback())}
         />
         <SandboxLaunchButton
           label="[ BALANCE DASHBOARD ]"

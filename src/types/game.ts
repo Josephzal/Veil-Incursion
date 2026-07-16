@@ -317,6 +317,16 @@ export interface EnvironmentalModifiers {
   enemyDamageReductionPct?: number;
   lethalRetaliationDamage?: number;
   eliteModifier?: EliteCombatModifierId;
+  /** Combat Refactor Phase 4 — encounter objective stamp (prep-time). */
+  encounterObjective?: import('./encounterObjective').EncounterObjectiveStamp;
+  /** Combat Refactor Phase 5 — director metadata (lazy-safe). */
+  combatDirector?: import('./combatDirector').CombatDirectorMeta;
+  /** Phase 5 — extra incoming mitigation from director safety (stacks with objective). */
+  directorIncomingMitigationPct?: number;
+  /** Phase 5 — reward multipliers from pressure matching. */
+  directorRewardMultiplier?: number;
+  directorRareLootBonusPct?: number;
+  directorCreditsBonusPct?: number;
 }
 
 export interface IncursionNode {
