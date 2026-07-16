@@ -33,17 +33,23 @@ export function tensionDifficultyFromNodesCleared(
 /**
  * Routing audit map (v1) — fiction → mechanic.
  *
- * Cipher Rite: encrypted, terminal, locked cache, intel vault, black-site, grid security
+ * Ley Circuit Breach: encrypted, terminal, locked cache, intel vault, black-site, hack, grid security
+ *   (6×6 polarity routing puzzle — the in-game hacking minigame)
  * Scanner Sweep: 1D blind-zone tracking on a signal lane; sweep pulses disrupt the mask window
  * Ritual Echo: sigil, ritual, occult pattern, echo pattern, glyph lock, blood-rite
- * Veil Lock (Mechanic_SignalAlignment): limited rotatable glyph keys slotted into rings outer→core
+ * Sigil Tumbler (Mechanic_SigilTumbler): occult-tech lockpick — resonance angle + rhythm tumbler timing
+ *   (rift / ley / stabilize / extraction vector / lock fiction — the in-game lockpick minigame)
+ * Cipher Rite: DEPRECATED in-game — DevTest force + legacy nodes only (remapped to Ley Circuit Breach)
+ * Veil Lock (Mechanic_SignalAlignment): DEPRECATED in-game — DevTest + legacy only (remapped to Sigil Tumbler)
  * ScavengeBar: legacy / DevTest only — never normal generation
  * No mechanic: plain stash, dead runner, loose credits, simple resource pickup
  */
 export const NARRATIVE_TENSION_ROUTING_AUDIT = {
-  CipherRite: 'Mechanic_CipherRite',
+  LeyCircuitBreach: 'Mechanic_LeyCircuitBreach',
   ScannerSweep: 'Mechanic_ConcealSlider',
   RitualEcho: 'Mechanic_SigilTrace',
-  SignalAlignment: 'Mechanic_SignalAlignment',
+  SigilTumbler: 'Mechanic_SigilTumbler',
+  CipherRiteDeprecated: 'Mechanic_CipherRite',
+  SignalAlignmentDeprecated: 'Mechanic_SignalAlignment',
   ScavengeBarDeprecated: 'Mechanic_ScavengeBar',
 } as const;

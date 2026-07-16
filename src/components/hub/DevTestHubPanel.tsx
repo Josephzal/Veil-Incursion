@@ -449,12 +449,22 @@ export default function DevTestHubPanel(): React.JSX.Element {
           onPress={() => launchSandbox('narrative-sigil', startNarrative)}
         />
         <SandboxLaunchButton
-          label="[ CIPHER RITE ]"
+          label="[ LEY CIRCUIT BREACH ]"
+          accentColor={theme.primaryColor}
+          onPress={() => launchSandbox('narrative-ley', startNarrative)}
+        />
+        <SandboxLaunchButton
+          label="[ CIPHER RITE (DEPRECATED) ]"
           accentColor={theme.primaryColor}
           onPress={() => launchSandbox('narrative-cipher', startNarrative)}
         />
         <SandboxLaunchButton
-          label="[ VEIL LOCK ]"
+          label="[ SIGIL TUMBLER ]"
+          accentColor={theme.primaryColor}
+          onPress={() => launchSandbox('narrative-tumbler', startNarrative)}
+        />
+        <SandboxLaunchButton
+          label="[ VEIL LOCK (DEPRECATED) ]"
           accentColor={theme.primaryColor}
           onPress={() => launchSandbox('narrative-signal', startNarrative)}
         />

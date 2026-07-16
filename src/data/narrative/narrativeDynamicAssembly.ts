@@ -63,7 +63,7 @@ export function creditsFromReward(reward?: NarrativeReward): number {
 
 function buildMechanicOption(complication: ComplicationSeed, seed: string): MechanicResolver {
   // Do not include Mechanic_ScavengeBar in new generation pools (deprecated).
-  // Tech / encrypted terminal / locked cache / black-site → Mechanic_CipherRite via routing.
+  // Tech / encrypted terminal / locked cache / black-site / hack → Mechanic_LeyCircuitBreach via routing.
   const tensionMechanic = pickActiveGenerationTensionMechanic(
     hashSeed(`${seed}:mechanic-a`),
     {

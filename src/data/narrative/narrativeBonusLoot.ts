@@ -44,11 +44,21 @@ const SIGNAL_POOL: BonusPoolEntry[] = [
   { kind: 'BOON', boonId: 'Veil_Ward_Boon' },
 ];
 
+// Ley Circuit Breach reuses the hacking-flavored reward pool (no separate economy).
+const LEY_POOL: BonusPoolEntry[] = [
+  { kind: 'CREDITS', min: 18, max: 30 },
+  { kind: 'VEIL_RESIDUE', min: 2, max: 4 },
+  { kind: 'BOON', boonId: 'Scouted_Boon' },
+];
+
 function poolForMechanic(mechanic: TensionMechanic): BonusPoolEntry[] | null {
   if (mechanic === 'Mechanic_ConcealSlider') return CONCEAL_POOL;
   if (mechanic === 'Mechanic_SigilTrace') return SIGIL_POOL;
   if (mechanic === 'Mechanic_CipherRite') return CIPHER_POOL;
+  if (mechanic === 'Mechanic_LeyCircuitBreach') return LEY_POOL;
   if (mechanic === 'Mechanic_SignalAlignment') return SIGNAL_POOL;
+  // Sigil Tumbler reuses the lock/ley-flavored reward pool (no separate economy).
+  if (mechanic === 'Mechanic_SigilTumbler') return SIGNAL_POOL;
   return null;
 }
 

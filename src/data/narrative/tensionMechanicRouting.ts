@@ -3,16 +3,20 @@
  *
  * Naming (do not confuse these):
  * - Dead-Man's Switch = Hex Shot *combat graft* on Phase-Shift Reload — not a narrative minigame.
- * - Mechanic_ScavengeBar = old narrative loot/scavenge tension (InstabilityProtocol UI).
- * - Mechanic_CipherRite = narrative hacking / occult decryption (Cipher Rite UI).
+ * - Mechanic_ScavengeBar = old narrative loot/scavenge tension (InstabilityProtocol UI). DevTest/legacy only.
+ * - Mechanic_CipherRite = DEPRECATED narrative hacking (Cipher Rite UI). DevTest/legacy only —
+ *   in-game hacking fiction now routes to Mechanic_LeyCircuitBreach.
+ * - Mechanic_LeyCircuitBreach = player-facing Ley Circuit Breach (6×6 polarity routing puzzle).
  * - Mechanic_ConcealSlider = player-facing Scanner Sweep (1D blind-zone tracking + sweep pulses).
  * - Mechanic_SigilTrace = player-facing Ritual Echo (occult pattern + forbidden beats).
- * - Mechanic_SignalAlignment = player-facing Veil Lock (limited rotatable glyph-key lock routing).
+ * - Mechanic_SignalAlignment = DEPRECATED Veil Lock (glyph-key lock routing). DevTest/legacy only —
+ *   in-game lock/rift fiction now routes to Mechanic_SigilTumbler.
+ * - Mechanic_SigilTumbler = player-facing Sigil Tumbler (resonance-angle + rhythm lockpick).
  *
  * Priority for generation:
  * 1. Stealth → Scanner Sweep
- * 2. Tech / encrypted terminal → Cipher Rite
- * 3. Rift / ley / stabilize / extraction vector → Signal Alignment
+ * 2. Tech / encrypted terminal / hack → Ley Circuit Breach
+ * 3. Rift / ley / stabilize / extraction vector / lock → Sigil Tumbler
  * 4. Ritual / sigil sequence → Ritual Echo
  * 5. Plain stash → none
  */
@@ -24,15 +28,21 @@ export const KNOWN_TENSION_MECHANICS: readonly TensionMechanic[] = [
   'Mechanic_ConcealSlider',
   'Mechanic_SigilTrace',
   'Mechanic_CipherRite',
+  'Mechanic_LeyCircuitBreach',
   'Mechanic_SignalAlignment',
+  'Mechanic_SigilTumbler',
 ] as const;
 
-/** Mechanics allowed in new procedural generation (excludes deprecated ScavengeBar). */
+/**
+ * Mechanics allowed in new procedural generation. Excludes deprecated ScavengeBar,
+ * Cipher Rite (hacking → Ley Circuit Breach) and Veil Lock / SignalAlignment
+ * (lock/rift → Sigil Tumbler).
+ */
 export const ACTIVE_GENERATION_TENSION_MECHANICS: readonly TensionMechanic[] = [
   'Mechanic_ConcealSlider',
   'Mechanic_SigilTrace',
-  'Mechanic_CipherRite',
-  'Mechanic_SignalAlignment',
+  'Mechanic_LeyCircuitBreach',
+  'Mechanic_SigilTumbler',
 ] as const;
 
 export function isKnownTensionMechanic(
@@ -43,7 +53,9 @@ export function isKnownTensionMechanic(
     || value === 'Mechanic_ConcealSlider'
     || value === 'Mechanic_SigilTrace'
     || value === 'Mechanic_CipherRite'
+    || value === 'Mechanic_LeyCircuitBreach'
     || value === 'Mechanic_SignalAlignment'
+    || value === 'Mechanic_SigilTumbler'
   );
 }
 
@@ -84,7 +96,7 @@ function isPlainStashContext(text: string, tags: readonly Tag[]): boolean {
   return PLAIN_STASH_RE.test(text);
 }
 
-function isCipherRiteContext(text: string, tags: readonly Tag[]): boolean {
+function isHackContext(text: string, tags: readonly Tag[]): boolean {
   if (TECH_CIPHER_RE.test(text)) return true;
   if (tags.includes('tech') && !STEALTH_RE.test(text) && !SIGNAL_ALIGN_RE.test(text) && !OCCULT_RE.test(text)) {
     return true;
@@ -116,6 +128,10 @@ export function remapDeprecatedScavengeBar(
   ctx: TensionRemapContext = {},
 ): TensionMechanic | null {
   if (mechanic == null) return null;
+  // Deprecated in-game hacking → new Ley Circuit Breach (Cipher Rite is DevTest-only now).
+  if (mechanic === 'Mechanic_CipherRite') return 'Mechanic_LeyCircuitBreach';
+  // Deprecated in-game Veil Lock → new Sigil Tumbler (SignalAlignment is DevTest-only now).
+  if (mechanic === 'Mechanic_SignalAlignment') return 'Mechanic_SigilTumbler';
   if (mechanic !== 'Mechanic_ScavengeBar') return mechanic;
 
   const text = ctx.flavorText ?? '';
@@ -124,11 +140,11 @@ export function remapDeprecatedScavengeBar(
   if (tags.includes('militarized') || STEALTH_RE.test(text)) {
     return 'Mechanic_ConcealSlider';
   }
-  if (isCipherRiteContext(text, tags)) {
-    return 'Mechanic_CipherRite';
+  if (isHackContext(text, tags)) {
+    return 'Mechanic_LeyCircuitBreach';
   }
   if (isSignalAlignmentContext(text, tags)) {
-    return 'Mechanic_SignalAlignment';
+    return 'Mechanic_SigilTumbler';
   }
   if (isRitualEchoContext(text, tags)) {
     return 'Mechanic_SigilTrace';
@@ -156,11 +172,11 @@ export function pickActiveGenerationTensionMechanic(
   if (tags.includes('militarized') || STEALTH_RE.test(text)) {
     return 'Mechanic_ConcealSlider';
   }
-  if (isCipherRiteContext(text, tags)) {
-    return 'Mechanic_CipherRite';
+  if (isHackContext(text, tags)) {
+    return 'Mechanic_LeyCircuitBreach';
   }
   if (isSignalAlignmentContext(text, tags)) {
-    return 'Mechanic_SignalAlignment';
+    return 'Mechanic_SigilTumbler';
   }
   if (isRitualEchoContext(text, tags)) {
     return 'Mechanic_SigilTrace';

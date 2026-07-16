@@ -44,9 +44,11 @@ export function logNarrativeMinigameUnknownId(
 export function isV1NarrativeMechanic(id: TensionMechanic | string | null | undefined): boolean {
   return (
     id === 'Mechanic_CipherRite'
+    || id === 'Mechanic_LeyCircuitBreach'
     || id === 'Mechanic_ConcealSlider'
     || id === 'Mechanic_SigilTrace'
     || id === 'Mechanic_SignalAlignment'
+    || id === 'Mechanic_SigilTumbler'
     || id === 'Mechanic_ScavengeBar'
   );
 }

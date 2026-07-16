@@ -50,8 +50,18 @@ export type Tag =
  *   Still supported for legacy content + DevTest force. Deprecated for new normal generation.
  * - Mechanic_ConcealSlider — player-facing **Scanner Sweep** (1D blind-zone tracking + sweep pulses).
  * - Mechanic_SigilTrace — player-facing **Ritual Echo** (sequence memory + forbidden beats).
- * - Mechanic_CipherRite — narrative hacking / occult decryption (Cipher Rite UI).
- * - Mechanic_SignalAlignment — player-facing **Veil Lock** (limited rotatable glyph-key lock routing).
+ * - Mechanic_CipherRite — DEPRECATED in-game narrative hacking (Cipher Rite UI).
+ *   Kept for DevTest force + legacy nodes only; in-game hacking now routes to
+ *   Mechanic_LeyCircuitBreach.
+ * - Mechanic_LeyCircuitBreach — player-facing **Ley Circuit Breach** (6×6 polarity
+ *   routing puzzle: rotate conduits to route the signal to the Exit Seal in the
+ *   required Grid/Veil polarity before the Trace meter fills).
+ * - Mechanic_SignalAlignment — DEPRECATED in-game **Veil Lock** (limited rotatable
+ *   glyph-key lock routing). Kept for DevTest force + legacy nodes only; in-game
+ *   lock fiction now routes to Mechanic_SigilTumbler.
+ * - Mechanic_SigilTumbler — player-facing **Sigil Tumbler** (occult-tech lockpick:
+ *   find the hidden resonance angle, hold tension, and set four glyph tumblers on
+ *   a randomized four-beat rhythm before Stability drains).
  * - Dead-Man's Switch — Hex Shot *combat graft* on Phase-Shift Reload. NOT a narrative mechanic.
  */
 export type TensionMechanic =
@@ -59,7 +69,9 @@ export type TensionMechanic =
   | 'Mechanic_ConcealSlider'
   | 'Mechanic_SigilTrace'
   | 'Mechanic_CipherRite'
-  | 'Mechanic_SignalAlignment';
+  | 'Mechanic_LeyCircuitBreach'
+  | 'Mechanic_SignalAlignment'
+  | 'Mechanic_SigilTumbler';
 
 export type PenaltyType = 'HP' | 'Resonance';
 

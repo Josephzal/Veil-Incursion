@@ -30,7 +30,9 @@ export function formatTensionMechanicLabel(raw?: TensionMechanic | string): stri
   if (raw === 'Mechanic_SigilTrace') return 'Ritual Echo';
   if (raw === 'Mechanic_ConcealSlider') return 'Scanner Sweep';
   if (raw === 'Mechanic_CipherRite') return 'CIPHER RITE';
+  if (raw === 'Mechanic_LeyCircuitBreach') return 'Ley Circuit Breach';
   if (raw === 'Mechanic_SignalAlignment') return 'Veil Lock';
+  if (raw === 'Mechanic_SigilTumbler') return 'Sigil Tumbler';
   // Deprecated narrative loot bar — not the Hex Shot Dead-Man's Switch combat graft.
   if (raw === 'Mechanic_ScavengeBar') {
     return 'Scavenge Bar / Instability Protocol (Deprecated)';

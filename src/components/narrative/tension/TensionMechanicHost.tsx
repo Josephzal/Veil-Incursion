@@ -4,8 +4,10 @@ import HapticPressable from '../../HapticPressable';
 import InstabilityProtocol from './InstabilityProtocol';
 import GridCipher from './GridCipher';
 import CipherRite from './CipherRite';
+import LeyCircuitBreach from './LeyCircuitBreach';
 import ScannerSweep from './ScannerSweep';
 import SignalAlignment from './SignalAlignment';
+import SigilTumbler from './SigilTumbler';
 import TensionMechanicModal from './TensionMechanicModal';
 import {
   formatTensionMechanicLabel,
@@ -213,11 +215,20 @@ export default function TensionMechanicHost({
         content = <ScannerSweep {...mechanicProps} />;
         break;
       case 'Mechanic_CipherRite':
+        // Deprecated in-game hacking — retained for DevTest force + legacy nodes.
         content = <CipherRite {...mechanicProps} />;
         break;
+      case 'Mechanic_LeyCircuitBreach':
+        // Player-facing: Ley Circuit Breach (6×6 polarity routing) — the in-game hack.
+        content = <LeyCircuitBreach {...mechanicProps} />;
+        break;
       case 'Mechanic_SignalAlignment':
-        // Player-facing: Veil Lock.
+        // Deprecated in-game Veil Lock — retained for DevTest force + legacy nodes.
         content = <SignalAlignment {...mechanicProps} />;
+        break;
+      case 'Mechanic_SigilTumbler':
+        // Player-facing: Sigil Tumbler (resonance-angle + rhythm lockpick) — the in-game lock.
+        content = <SigilTumbler {...mechanicProps} />;
         break;
       default:
         accentColor = FAIL_ACCENT;

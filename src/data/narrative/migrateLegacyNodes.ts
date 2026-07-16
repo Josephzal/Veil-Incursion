@@ -100,7 +100,7 @@ function pickLegacyTensionMechanic(
   scenarioText: string,
 ): TensionMechanic | undefined {
   // Never assign Mechanic_ScavengeBar for migrated legacy generation.
-  // Tech/terminal matrix events → Mechanic_CipherRite via pickActiveGenerationTensionMechanic.
+  // Tech/terminal matrix events → Mechanic_LeyCircuitBreach via pickActiveGenerationTensionMechanic.
   return pickActiveGenerationTensionMechanic(matrixId.charCodeAt(matrixId.length - 1) ?? 0, {
     flavorText: scenarioText,
     tags,

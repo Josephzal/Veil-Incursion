@@ -6,7 +6,9 @@ export type DevSandboxPreset =
   | 'narrative-conceal'
   | 'narrative-sigil'
   | 'narrative-cipher'
+  | 'narrative-ley'
   | 'narrative-signal'
+  | 'narrative-tumbler'
   | 'standard-combat'
   | 'elite-combat'
   | 'sanctuary'
@@ -21,7 +23,9 @@ export const DEV_SANDBOX_NARRATIVE_PRESETS = [
   'narrative-conceal',
   'narrative-sigil',
   'narrative-cipher',
+  'narrative-ley',
   'narrative-signal',
+  'narrative-tumbler',
 ] as const satisfies readonly DevSandboxPreset[];
 
 export function isDevSandboxPreset(value: DevSandboxPreset | null | undefined): value is DevSandboxPreset {

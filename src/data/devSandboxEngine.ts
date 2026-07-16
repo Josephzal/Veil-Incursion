@@ -18,7 +18,9 @@ const TENSION_BY_PRESET: Record<
     | 'narrative-conceal'
     | 'narrative-sigil'
     | 'narrative-cipher'
+    | 'narrative-ley'
     | 'narrative-signal'
+    | 'narrative-tumbler'
   >,
   TensionMechanic
 > = {
@@ -26,7 +28,9 @@ const TENSION_BY_PRESET: Record<
   'narrative-conceal': 'Mechanic_ConcealSlider',
   'narrative-sigil': 'Mechanic_SigilTrace',
   'narrative-cipher': 'Mechanic_CipherRite',
+  'narrative-ley': 'Mechanic_LeyCircuitBreach',
   'narrative-signal': 'Mechanic_SignalAlignment',
+  'narrative-tumbler': 'Mechanic_SigilTumbler',
 };
 
 export function resolveDevSandboxTensionMechanic(
@@ -54,13 +58,17 @@ export function buildDevSandboxNarrativeEncounter(
   const mechanicLabel = formatTensionMechanicLabel(tensionMechanic);
   const scenarioByMechanic: Record<TensionMechanic, string> = {
     Mechanic_CipherRite:
-      'Hostile VEIL-OS terminal. Scan the memory dump and select the true cipher fragment — wrong reads report glyph resonance before the lock reseals.',
+      'DEPRECATED in-game — DevTest only. Hostile VEIL-OS terminal: scan the memory dump and select the true cipher fragment before the lock reseals.',
+    Mechanic_LeyCircuitBreach:
+      'Corrupted ritual circuit board. Rotate ley-conduits to route the signal from the Source Sigil to the Exit Seal — and force it to arrive in the required Grid/Veil polarity before the Trace burns through.',
     Mechanic_ConcealSlider:
       'Watched cache under a hostile patrol sweep. Keep your signal inside the moving blind zone. Hostile sweeps compress the window. DAMP SIGNAL steadies your trace.',
     Mechanic_SigilTrace:
       'Occult sigil sequence with forbidden beats. Repeat the living pattern — skip the VOID pulses.',
     Mechanic_SignalAlignment:
-      'Hostile Veil lock. Slot limited glyph keys into each ring to route signal into the core. Some keys fit more than one ring, but each can only be used once.',
+      'DEPRECATED in-game — DevTest only. Hostile Veil lock: slot limited glyph keys into each ring to route signal into the core.',
+    Mechanic_SigilTumbler:
+      'Sealed occult-tech ward. Steer the wardpick to the hidden resonance angle, hold tension, and set all four glyph tumblers on the beat before Stability drains.',
     Mechanic_ScavengeBar:
       'Legacy instability protocol compatibility check. Deprecated loot tension — DevTest only.',
   };
