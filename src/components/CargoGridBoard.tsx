@@ -72,6 +72,10 @@ import {
   pulseCargoItemSelect,
   pulseCargoItemUse,
 } from '../utils/hubButtonHaptics';
+import {
+  scatterRectsInBounds,
+  type ScatterPose,
+} from '../utils/harvestScatter';
 
 export {
   CARGO_CELL_GAP,
@@ -330,6 +334,7 @@ function ContainmentSlot({
   spriteSize,
   isDragging,
   source,
+  scatterPose,
   onContainmentItemCenterMeasured,
   onHoverCell,
   onDragStart,
@@ -345,6 +350,7 @@ function ContainmentSlot({
   spriteSize: { width: number; height: number };
   isDragging: boolean;
   source: CargoDragSource;
+  scatterPose?: ScatterPose | null;
   onContainmentItemCenterMeasured?: (instanceId: string, center: { x: number; y: number }) => void;
   onHoverCell: (
     cell: { row: number; col: number } | null,
@@ -382,13 +388,23 @@ function ContainmentSlot({
 
   useEffect(() => {
     reportCenter();
-  }, [reportCenter]);
+  }, [reportCenter, scatterPose?.left, scatterPose?.top]);
 
   return (
     <View
       ref={slotRef}
       onLayout={reportCenter}
-      style={[styles.externalSlot, { width: spriteSize.width, height: spriteSize.height }]}
+      style={[
+        styles.externalSlot,
+        { width: spriteSize.width, height: spriteSize.height },
+        scatterPose
+          ? {
+              position: 'absolute',
+              left: scatterPose.left,
+              top: scatterPose.top,
+            }
+          : null,
+      ]}
     >
       <DraggableCargoSprite
         dragSource={source}
@@ -505,8 +521,12 @@ export default function CargoGridBoard({
   const playerActionPoints = playerActionPointsProp ?? combatTurn?.playerActionPoints ?? 0;
   const boardRef = useRef<View>(null);
   const externalBayRef = useRef<View>(null);
+  const containmentLootAreaRef = useRef<View>(null);
   const dropZoneRef = useRef<View>(null);
   const gridRef = useRef<View>(null);
+  const scatterPosesRef = useRef<Map<string, ScatterPose>>(new Map());
+  const [lootAreaSize, setLootAreaSize] = useState({ width: 0, height: 0 });
+  const [scatterPoses, setScatterPoses] = useState<Map<string, ScatterPose>>(() => new Map());
   const gridMetricsRef = useRef<GridMetrics | null>(null);
   const boardMetricsRef = useRef<GridMetrics | null>(null);
   const pendingDropRef = useRef<{ row: number; col: number } | null>(null);
@@ -596,16 +616,27 @@ export default function CargoGridBoard({
 
   const reportHarvestFloor = useCallback(() => {
     if (!onHarvestFloorMeasured) return;
-    const measureRef = harvestTriPaneLayout ? dropZoneRef : externalBayRef;
+    const measureRef = harvestTriPaneLayout ? containmentLootAreaRef : externalBayRef;
     measureRef.current?.measureInWindow((x, y, width, height) => {
+      if (width <= 0 || height <= 0) return;
       onHarvestFloorMeasured({ x, y, width, height });
     });
   }, [harvestTriPaneLayout, onHarvestFloorMeasured]);
 
   const handleDropZoneLayout = useCallback(() => {
     captureMetrics();
+    if (!harvestTriPaneLayout) {
+      reportHarvestFloor();
+    }
+  }, [captureMetrics, harvestTriPaneLayout, reportHarvestFloor]);
+
+  const handleContainmentLootAreaLayout = useCallback((event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout;
+    setLootAreaSize((prev) => (
+      prev.width === width && prev.height === height ? prev : { width, height }
+    ));
     reportHarvestFloor();
-  }, [captureMetrics, reportHarvestFloor]);
+  }, [reportHarvestFloor]);
 
   const handleGridLayout = useCallback((_event: LayoutChangeEvent) => {
     captureMetrics();
@@ -616,6 +647,42 @@ export default function CargoGridBoard({
     captureMetrics();
     reportHarvestFloor();
   }, [captureMetrics, displayCargo.containment.length, displayCargo.grid.placed.length, reportHarvestFloor]);
+
+  useLayoutEffect(() => {
+    if (!harvestTriPaneLayout || lootAreaSize.width <= 0 || lootAreaSize.height <= 0) {
+      return;
+    }
+
+    const items = displayCargo.containment.map((item) => ({
+      id: item.instanceId,
+      size: spriteSizeForCargoItem(item.itemId, cellSize),
+    }));
+    const pad = 6;
+    const existing = new Map(scatterPosesRef.current);
+    for (const [id, pose] of existing) {
+      const match = items.find((item) => item.id === id);
+      if (!match) {
+        existing.delete(id);
+        continue;
+      }
+      const fits =
+        pose.left >= 0
+        && pose.top >= 0
+        && pose.left + match.size.width <= lootAreaSize.width
+        && pose.top + match.size.height <= lootAreaSize.height;
+      if (!fits) {
+        existing.delete(id);
+      }
+    }
+
+    const next = scatterRectsInBounds(lootAreaSize, items, {
+      existing,
+      padding: pad,
+      maxAttempts: 56,
+    });
+    scatterPosesRef.current = next;
+    setScatterPoses(next);
+  }, [cellSize, displayCargo.containment, harvestTriPaneLayout, lootAreaSize]);
 
   const resolveCellFromAbsolute = useCallback((absoluteX: number, absoluteY: number) => {
     const metrics = gridMetricsRef.current;
@@ -1061,29 +1128,62 @@ export default function CargoGridBoard({
   ) : null;
 
   const externalBayNode = externalSlotCount > 0 ? (
-    <View
-      ref={harvestTriPaneLayout ? undefined : externalBayRef}
-      onLayout={harvestTriPaneLayout ? undefined : reportHarvestFloor}
-      style={[
-        styles.externalBay,
-        stableExternalBay ? styles.externalBayStable : null,
-        harvestTriPaneLayout ? styles.externalBayTriPane : null,
-        stableExternalBay && !harvestTriPaneLayout ? { height: harvestExternalBayHeight(cellSize) } : null,
-        { marginTop: harvestTriPaneLayout ? 0 : externalBayMarginTop },
-      ]}
-    >
+    harvestTriPaneLayout ? (
+      <View style={styles.externalBayScatter}>
+        {displayCargo.containment.map((item) => {
+          const spriteSize = spriteSizeForCargoItem(item.itemId, cellSize);
+          const source: CargoDragSource = {
+            instanceId: item.instanceId,
+            itemId: item.itemId,
+            source: 'containment',
+          };
+          const isDragging = activeDrag?.instanceId === item.instanceId;
+          const pose = scatterPoses.get(item.instanceId) ?? null;
+          if (!pose) return null;
+          return (
+            <ContainmentSlot
+              key={item.instanceId}
+              item={item}
+              spriteSize={spriteSize}
+              isDragging={isDragging}
+              source={source}
+              scatterPose={pose}
+              onContainmentItemCenterMeasured={onContainmentItemCenterMeasured}
+              onHoverCell={handleHoverCell}
+              onDragStart={handleDragStart}
+              onDragMove={handleDragMove}
+              onDragEnd={clearDrag}
+              onDropAttempt={handleDropAttempt}
+              combatMode={combatMode}
+              combatConsumablesEnabled={combatConsumablesEnabled}
+              selectedCombatItemId={selectedCombatItemId}
+              selectCombatItem={selectCombatItem}
+            />
+          );
+        })}
+      </View>
+    ) : (
       <View
+        ref={externalBayRef}
+        onLayout={reportHarvestFloor}
         style={[
-          styles.externalRow,
-          stableExternalBay ? {
-            width: externalSlotCount * cellSize + (externalSlotCount - 1) * 20,
-            alignSelf: 'center',
-            justifyContent: 'flex-start',
-          } : null,
-          harvestTriPaneLayout ? styles.externalRowTriPane : null,
+          styles.externalBay,
+          stableExternalBay ? styles.externalBayStable : null,
+          stableExternalBay ? { height: harvestExternalBayHeight(cellSize) } : null,
+          { marginTop: externalBayMarginTop },
         ]}
       >
-        {Array.from({ length: externalSlotCount }, (_, slotIndex) => {
+        <View
+          style={[
+            styles.externalRow,
+            stableExternalBay ? {
+              width: externalSlotCount * cellSize + (externalSlotCount - 1) * 20,
+              alignSelf: 'center',
+              justifyContent: 'flex-start',
+            } : null,
+          ]}
+        >
+          {Array.from({ length: externalSlotCount }, (_, slotIndex) => {
             const item = containmentBySlot
               ? (containmentBySlot.get(slotIndex) ?? null)
               : (displayCargo.containment[slotIndex] ?? null);
@@ -1122,8 +1222,9 @@ export default function CargoGridBoard({
               />
             );
           })}
+        </View>
       </View>
-    </View>
+    )
   ) : null;
 
   const dragGhostOverlay = activeDrag && dragOverlay && overlaySprite ? (
@@ -1317,7 +1418,11 @@ export default function CargoGridBoard({
             >
               UNPACKED ANOMALY FRAGMENTS // DRAG TO CARGO DECK
             </Text>
-            <View style={styles.containmentLootArea}>
+            <View
+              ref={containmentLootAreaRef}
+              onLayout={handleContainmentLootAreaLayout}
+              style={styles.containmentLootArea}
+            >
               {externalBayNode}
             </View>
             {centerPaneFooter ? (
@@ -1528,10 +1633,9 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
+    position: 'relative',
     zIndex: 1,
-    overflow: 'visible',
+    overflow: 'hidden',
   },
   centerPaneFooter: {
     width: '100%',
@@ -1675,6 +1779,14 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     width: '100%',
+  },
+  externalBayScatter: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    overflow: 'hidden',
   },
   externalRow: {
     flexDirection: 'row',

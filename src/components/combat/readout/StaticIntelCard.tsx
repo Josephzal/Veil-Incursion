@@ -4,7 +4,6 @@ import HapticPressable from '../../HapticPressable';
 import { resolveEnemyThreatTier } from '../../../data/enemyRoster';
 import type { EnemyIntent } from '../../../types/run';
 import {
-  formatEnemyStatusLabels,
   formatHostileId,
   formatIntentReadout,
   isEnemyBuffIntent,
@@ -16,9 +15,7 @@ import { getIntentSeverity, severityColor } from '../../../data/enemyIntentCatal
 import CombatStatusIconRow from './CombatStatusIconRow';
 import CombatEnemySlotBars from '../CombatEnemySlotBars';
 import EnemyIntentDetailOverlay from './EnemyIntentDetailOverlay';
-import type { EnemyStatusEffectKey } from '../../../utils/enemyStatusEffects';
-import { ENEMY_STATUS_EFFECTS } from '../../../utils/enemyStatusEffects';
-import { DOSSIER_ROW_BG } from '../../../constants/dossierSurface';
+import { resolveIntelStatusChips } from '../../../utils/enemyStatusEffects';
 import { useCombatDesktopLayout } from '../../../hooks/useCombatDesktopLayout';
 
 const MONO = 'monospace';
@@ -51,17 +48,6 @@ function classifyIntentBoxTone(intent: EnemyIntent): IntentBoxTone {
   return 'attack';
 }
 
-function extraStatusTags(
-  unit: CombatGridUnitSnapshot,
-  trayKeys: readonly EnemyStatusEffectKey[],
-): string[] {
-  const trayLabels = new Set(trayKeys.map((key) => ENEMY_STATUS_EFFECTS[key].label.toUpperCase()));
-  return formatEnemyStatusLabels(unit).filter((tag) => {
-    const normalized = tag.replace(/\s+x\d+$/, '');
-    return !trayLabels.has(normalized);
-  });
-}
-
 /** Fixed-height hostile stat block — no scroll, high-density flex layout. */
 export default function StaticIntelCard({
   unit,
@@ -80,7 +66,29 @@ export default function StaticIntelCard({
   const severity = unit.intentSeverity ?? getIntentSeverity(unit.intent);
   const turnsRemaining = unit.intentTurnsRemaining ?? 0;
   const trayKeys = unit.activeStatuses ?? [];
-  const extraTags = useMemo(() => extraStatusTags(unit, trayKeys), [unit, trayKeys]);
+  const statusChips = useMemo(() => resolveIntelStatusChips({
+    combatTags: unit.combatTags,
+    evadeActive: unit.evadeActive,
+    evadeTurnsRemaining: unit.evadeTurnsRemaining,
+    intent: unit.intent,
+    fortifyTurnsRemaining: unit.fortifyTurnsRemaining,
+    doomedStacks: unit.doomedStacks,
+    isEnraged: unit.isEnraged,
+    chargeTurns: unit.chargeTurns,
+    isFractured: unit.isFractured,
+    veilRotStacks: unit.veilRotStacks,
+    kineticArmor: unit.kineticArmor,
+    occultWards: unit.occultWards,
+  }), [unit]);
+  // Prefer live-derived chips; fall back to tray keys if needed for snapshot parity.
+  const chips = statusChips.length > 0
+    ? statusChips
+    : trayKeys.map((key) => ({
+      id: key,
+      abbr: key.slice(0, 2).toUpperCase(),
+      label: key,
+      description: key,
+    }));
   const intentDetail = useMemo(
     () => describeEnemyIntent(unit.intent, {
       designation: unit.designation,
@@ -145,36 +153,9 @@ export default function StaticIntelCard({
           trackHeight={isCombatDesktop ? scaleCombatSize(14) : undefined}
         />
 
-        {(trayKeys.length > 0 || extraTags.length > 0) ? (
+        {chips.length > 0 ? (
           <View style={styles.statusRow}>
-            <CombatStatusIconRow
-              statusKeys={trayKeys}
-              iconSize={isCombatDesktop ? scaleCombatSize(38) : undefined}
-            />
-            {extraTags.map((tag) => (
-              <View
-                key={tag}
-                style={[
-                  styles.extraTagChip,
-                  isCombatDesktop ? {
-                    paddingHorizontal: scaleCombatSize(6),
-                    paddingVertical: scaleCombatSize(2),
-                    minHeight: scaleCombatSize(38),
-                    justifyContent: 'center',
-                  } : null,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.extraTagLabel,
-                    isCombatDesktop ? { fontSize: scaleCombatFont(7) } : null,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {tag}
-                </Text>
-              </View>
-            ))}
+            <CombatStatusIconRow chips={chips} />
           </View>
         ) : null}
       </View>
@@ -273,20 +254,6 @@ const styles = StyleSheet.create({
     gap: 3,
     flexShrink: 0,
     overflow: 'visible',
-  },
-  extraTagChip: {
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.45)',
-    backgroundColor: DOSSIER_ROW_BG,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-  },
-  extraTagLabel: {
-    fontFamily: MONO,
-    fontSize: 5,
-    fontWeight: '700',
-    color: '#ddd6fe',
-    letterSpacing: 0.2,
   },
   intentBox: {
     flexShrink: 0,

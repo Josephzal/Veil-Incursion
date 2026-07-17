@@ -12,6 +12,7 @@ import {
 } from 'react-native-reanimated';
 import { useTerminal } from '../context/TerminalContext';
 import { advanceEnemyIntent } from '../data/enemies';
+import { markEnemyRecentlyDamaged } from '../data/enemyAiMemory';
 import { resolveEffectiveEnemyIntent, isEvadePostureActive } from '../data/enemyIntentUtils';
 import { resolveActiveEnemyStatuses } from '../utils/enemyStatusEffects';
 import type { PlayerAIState } from '../data/AIDecisionEngine';
@@ -3728,7 +3729,13 @@ export default function TacticalCombatHub({
       ? Math.max(bossRuntimeRef.current.currentHp - dmg, 0)
       : Math.max(working.currentHp - dmg, 0);
     const hp = poolHp;
-    if (dmg > 0) balanceEncounterRef.current.damageDealt += dmg;
+    if (dmg > 0) {
+      balanceEncounterRef.current.damageDealt += dmg;
+      working = {
+        ...working,
+        aiMemory: markEnemyRecentlyDamaged(working.aiMemory),
+      };
+    }
 
     if (hp <= 0 && e.unitId && source && options?.channel) {
       const killGraft = operativeClass === 'AEGIS'
@@ -4978,6 +4985,8 @@ export default function TacticalCombatHub({
       if (resolutionRef.current != null) return;
     }
     if (advanceIntent) {
+      const combatRound = Math.max(1, balanceEncounterRef.current.playerTurns);
+      const livingCount = aliveUnits(squadRef.current).length;
       syncSquad(squadRef.current.map((unit) => {
         if (!isUnitAlive(unit)) return unit;
         if (unit.isBoss && bossRuntimeRef.current) {
@@ -4990,7 +4999,11 @@ export default function TacticalCombatHub({
           combatDistrict,
           buildPlayerAIState(),
           squadRef.current,
-          { hasAshToken: hasAshOnBoard() },
+          {
+            hasAshToken: hasAshOnBoard(),
+            combatRound,
+            isLastEnemyAlive: livingCount <= 1,
+          },
         );
       }).map((unit) => {
         if (isUnitAlive(unit)) {

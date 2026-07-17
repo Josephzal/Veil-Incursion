@@ -1,9 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
 import AegisLoadoutEditor from '../AegisLoadoutEditor';
 import ClassLoadoutEditor from '../ClassLoadoutEditor';
 import { SELECT_ACCENT } from '../../constants/dossierSurface';
-import { useHubLayout } from '../../context/HubLayoutContext';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useTerminal } from '../../context/TerminalContext';
 import { isAbilityUnlocked } from '../../data/aegisAbilityUnlockEngine';
@@ -32,7 +30,6 @@ import {
 
 export default function SafehouseAbilitiesTab(): React.JSX.Element {
   const { theme } = useTerminal();
-  const { scaleSpacing } = useHubLayout();
   const {
     account,
     setAegisLoadout,
@@ -209,7 +206,7 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
   }, [account.unlockedEnvoyAbilities, appendHubLog, envoyDraft, setEnvoyLoadout]);
 
   return (
-    <View style={[styles.editorHost, { paddingBottom: scaleSpacing(24) }]}>
+    <>
         {account.activeClass === 'AEGIS' ? (
           <AegisLoadoutEditor
             draft={aegisDraft}
@@ -290,13 +287,6 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
             hideCommit
           />
         ) : null}
-    </View>
+    </>
   );
 }
-
-const styles = StyleSheet.create({
-  editorHost: {
-    gap: 10,
-    paddingVertical: 4,
-  },
-});

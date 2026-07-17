@@ -17,7 +17,7 @@ import { formatWeaponCostLine } from '../../data/weaponResourceEngine';
 import { formatWeaponStatLines } from '../../data/weaponCombatEngine';
 import type { WeaponFamilyId } from '../../types/weapon';
 import { readPressableHover, terminalHoverStyle } from '../../utils/terminalHoverStyle';
-import { LoadoutSectionHeader } from './loadoutTabUi';
+import { LOADOUT_SECTION_GAP, LoadoutSectionBlock } from './loadoutTabUi';
 
 interface WeaponLoadoutPanelProps {
   accent: string;
@@ -80,7 +80,6 @@ export default function WeaponLoadoutPanel({
         padding={10}
         accentColor={isEquipped ? accent : muted}
         showAccentStripe={isEquipped}
-        style={styles.card}
       >
         <View style={styles.cardHeader}>
           <TerminalText variant="micro" letterSpacing={0.8} style={{ color: muted }}>
@@ -178,27 +177,31 @@ export default function WeaponLoadoutPanel({
 
   return (
     <View style={styles.root}>
-      <LoadoutSectionHeader label="Currently Equipped" />
-      {equippedDef ? (
-        renderCard(equippedDef)
-      ) : (
-        <TerminalText variant="caption" style={{ color: muted }}>
-          No weapon equipped for this class.
-        </TerminalText>
-      )}
+      <LoadoutSectionBlock label="Currently Equipped">
+        {equippedDef ? (
+          renderCard(equippedDef)
+        ) : (
+          <TerminalText variant="caption" style={{ color: muted }}>
+            No weapon equipped for this class.
+          </TerminalText>
+        )}
+      </LoadoutSectionBlock>
 
-      <LoadoutSectionHeader label="Available Chassis" style={{ marginTop: 6 }} />
-      {availableDefs.map((def) => renderCard(def))}
+      <LoadoutSectionBlock label="Available Chassis">
+        <View style={styles.cardList}>
+          {availableDefs.map((def) => renderCard(def))}
+        </View>
+      </LoadoutSectionBlock>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: {
-    gap: 8,
+    gap: LOADOUT_SECTION_GAP,
   },
-  card: {
-    marginBottom: 8,
+  cardList: {
+    gap: 12,
   },
   cardHeader: {
     marginBottom: 4,

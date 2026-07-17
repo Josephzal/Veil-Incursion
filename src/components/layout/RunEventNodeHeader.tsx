@@ -1,13 +1,9 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import TacticalButton from '../TacticalButton';
-import CargoPressurePanel from '../CargoPressurePanel';
 import { useCargoOverlay } from '../../context/CargoOverlayContext';
 import { useRunStatusOverlay } from '../../context/RunStatusOverlayContext';
-import { useRun } from '../../context/RunContext';
 import { useTerminal } from '../../context/TerminalContext';
-import { hasActiveCarriedCargoEffects } from '../../data/unstableCargoEffectsEngine';
-import { resolveSpecialCargoStacksForIncursion } from '../../data/postRunCargoRoutingRunState';
 
 const STARK_WHITE = '#F8FAFC';
 const MUTED_SLATE = '#94A3B8';
@@ -65,13 +61,6 @@ export default function RunEventNodeHeader({
   fontScale,
   showRunChrome = false,
 }: RunEventNodeHeaderProps): React.JSX.Element {
-  const { theme } = useTerminal();
-  const { activeIncursion } = useRun();
-  const showCargoPressure = showRunChrome && (
-    hasActiveCarriedCargoEffects(activeIncursion.cargo)
-    || resolveSpecialCargoStacksForIncursion(activeIncursion) > 0
-  );
-  const specialCargoStacks = resolveSpecialCargoStacksForIncursion(activeIncursion);
   const titleSize = 16 * fontScale;
   const subtitleSize = 9 * fontScale;
   const headerPadBottom = 14 * fontScale;
@@ -123,15 +112,6 @@ export default function RunEventNodeHeader({
           </View>
         ) : null}
       </View>
-      {showCargoPressure ? (
-        <CargoPressurePanel
-          cargo={activeIncursion.cargo}
-          specialCargoStacks={specialCargoStacks}
-          accentColor="#f59e0b"
-          mutedColor={theme.mutedColor}
-          compact
-        />
-      ) : null}
     </View>
   );
 }

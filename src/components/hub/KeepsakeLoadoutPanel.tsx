@@ -22,7 +22,7 @@ import {
 } from '../../data/expeditionKeepsakeDeploymentEngine';
 import type { KeepsakeId } from '../../types/expeditionKeepsake';
 import { readPressableHover, terminalHoverStyle } from '../../utils/terminalHoverStyle';
-import { LoadoutSectionHeader } from './loadoutTabUi';
+import { LOADOUT_SECTION_GAP, LoadoutSectionBlock } from './loadoutTabUi';
 
 interface KeepsakeLoadoutPanelProps {
   accent: string;
@@ -136,21 +136,28 @@ export default function KeepsakeLoadoutPanel({
     : null;
 
   return (
-    <View style={[styles.root, { gap: scaleSpacing(8) }]}>
-      <LoadoutSectionHeader label="Currently Equipped" />
+    <View style={styles.root}>
+      <LoadoutSectionBlock label="Currently Equipped">
       {equipped ? (
-        <DossierCardShell padding={scaleSpacing(10)} accentColor={accent} showAccentStripe>
-          <TerminalText variant="micro" letterSpacing={0.8} style={{ color: muted }}>
-            RELIC
-          </TerminalText>
-          <TerminalText variant="body" letterSpacing={0.35} style={[styles.inspectName, { color: accent }]}>
-            {equipped.name.toUpperCase()}
-          </TerminalText>
-          <TerminalText variant="caption" style={{ color: muted, fontStyle: 'italic', marginTop: 4 }}>
+        <DossierCardShell padding={10} accentColor={accent} showAccentStripe>
+          <View style={styles.cardHeader}>
+            <TerminalText variant="micro" letterSpacing={0.8} style={{ color: muted }}>
+              RELIC
+            </TerminalText>
+            <View style={styles.cardTitleRow}>
+              <TerminalText variant="body" letterSpacing={0.35} style={[styles.inspectName, { color: accent, flex: 1 }]}>
+                {equipped.name.toUpperCase()}
+              </TerminalText>
+              <TerminalText variant="caption" style={{ color: accent }}>
+                EQUIPPED
+              </TerminalText>
+            </View>
+          </View>
+          <TerminalText variant="caption" style={{ color: muted, fontStyle: 'italic', marginBottom: 6 }}>
             {`"${equipped.flavorText}"`}
           </TerminalText>
 
-          <View style={{ marginTop: scaleSpacing(8), gap: scaleSpacing(4) }}>
+          <View style={{ gap: scaleSpacing(4) }}>
             <TerminalText variant="caption" style={{ color: muted }}>
               {`ROLE — ${formatKeepsakeRoleLine(equipped)}`}
             </TerminalText>
@@ -228,8 +235,9 @@ export default function KeepsakeLoadoutPanel({
           No relic equipped. Choose one below to arm it for descent.
         </TerminalText>
       )}
+      </LoadoutSectionBlock>
 
-      <LoadoutSectionHeader label="Available Relics" style={{ marginTop: scaleSpacing(2) }} />
+      <LoadoutSectionBlock label="Available Relics">
       <View style={[styles.list, { gap: scaleSpacing(6) }]}>
         {keepsakes.map((keepsake) => {
           const selected = account.equippedKeepsakeId === keepsake.id;
@@ -269,6 +277,7 @@ export default function KeepsakeLoadoutPanel({
           );
         })}
       </View>
+      </LoadoutSectionBlock>
 
       {modalRelic?.deploymentChoice ? (
         <KeepsakeDeploymentChoiceModal
@@ -291,6 +300,16 @@ export default function KeepsakeLoadoutPanel({
 const styles = StyleSheet.create({
   root: {
     width: '100%',
+    gap: LOADOUT_SECTION_GAP,
+  },
+  cardHeader: {
+    marginBottom: 4,
+    gap: 2,
+  },
+  cardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   inspectName: {
     fontWeight: '800',

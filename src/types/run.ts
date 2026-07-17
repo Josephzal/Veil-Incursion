@@ -204,6 +204,8 @@ export interface EnemyCombatProfile {
   bloodRushActive?: boolean;
   /** Rival Reaver — bonus stamina/fracture after double defend. */
   guardBreakPrimed?: boolean;
+  /** Lightweight intent AI memory — urgency scoring + anti-loop. */
+  aiMemory?: import('../data/enemyAiMemory').EnemyAiMemory;
 }
 
 export interface Trinket {

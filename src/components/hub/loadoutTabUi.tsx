@@ -7,6 +7,10 @@ import { SELECT_ACCENT } from '../../constants/dossierSurface';
 export const LOADOUT_SECTION_HEADER_COLOR = '#9aa6b2';
 /** One-line subtitle color — desaturated blue-gray. */
 export const LOADOUT_SUBTITLE_COLOR = '#7f8c9b';
+/** Fixed gap between a section label and the card/container below it. */
+export const LOADOUT_LABEL_TO_CARD_GAP = 10;
+/** Fixed gap between major sections (Equipped → Available, Slots → Pool, etc.). */
+export const LOADOUT_SECTION_GAP = 16;
 
 /**
  * Standard loadout tab header: amber bracketed title + a single muted subtitle.
@@ -48,6 +52,27 @@ export function LoadoutSectionHeader({
   );
 }
 
+/**
+ * Section label + body with a locked label-to-card gap.
+ * Use this for every first container under CURRENTLY EQUIPPED / ACTIVE SLOTS / etc.
+ */
+export function LoadoutSectionBlock({
+  label,
+  children,
+  style,
+}: {
+  label: string;
+  children: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
+}): React.JSX.Element {
+  return (
+    <View style={[styles.sectionBlock, style]}>
+      <LoadoutSectionHeader label={label} />
+      {children}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   header: {
     gap: 3,
@@ -63,5 +88,8 @@ const styles = StyleSheet.create({
   sectionHeader: {
     color: LOADOUT_SECTION_HEADER_COLOR,
     fontWeight: '700',
+  },
+  sectionBlock: {
+    gap: LOADOUT_LABEL_TO_CARD_GAP,
   },
 });

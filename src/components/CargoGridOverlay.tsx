@@ -92,7 +92,7 @@ export default function CargoGridOverlay({
 
   const cellSize = useMemo(() => {
     if (combatMode) {
-      return resolveCombatOverlayCellSize(screenHeight, safeBottom);
+      return resolveCombatOverlayCellSize(screenHeight, safeBottom, screenWidth);
     }
     return resolveCargoOverlayCellSize(screenHeight, screenWidth, safeBottom, {
       hasContainment: cargo.containment.length > 0,

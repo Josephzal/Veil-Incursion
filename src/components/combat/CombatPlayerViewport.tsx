@@ -24,7 +24,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { FACTION_STRIKE_TINT } from '../../constants/combatFactionStrike';
-import type { FactionType } from '../../types/game';
+import type { ClassType, FactionType } from '../../types/game';
 import type { EnemyDeckStrikeVariant } from '../../utils/combatTelemetryFormat';
 import {
   FRONTLINE_MELEE_RETURN_IDLE_MS,
@@ -37,15 +37,12 @@ import {
   RANGED_ATTACK_SPRITE_OUT_MS,
 } from './combatEnemyBarLayout';
 import CombatPlayerAttackSprite, { type CombatPlayerAttackSpriteHandle } from './CombatPlayerAttackSprite';
-import { playerCombatAttackArtLayerStyle } from '../../utils/combatPlayerPortrait';
 
 const SHAKE_AMPLITUDE = 10;
-const DEFAULT_LUNGE = { x: 48, y: 0 };
+const DEFAULT_LUNGE = { x: 96, y: -6 };
+/** Shrink while lunging — attack pose should read smaller than idle as they close distance. */
+const AEGIS_LUNGE_SCALE = 0.84;
 const GLOW_PULSE_MS = 900;
-const PRIMED_GLOW = '#ff00ff';
-/** Peak aura opacity — matches enemy player-selected glow read. */
-const STRIKE_AURA_PEAK = 0.42;
-const STRIKE_AURA_SCALE = 1.08;
 
 const DAMAGE_FLASH_COLORS: Record<EnemyDeckStrikeVariant, string> = {
   hp: '#FF453A',
@@ -76,8 +73,7 @@ interface CombatPlayerViewportProps {
   imageSource: ImageSourcePropType;
   attackImageSource?: ImageSourcePropType;
   operativeClass?: ClassType;
-  attackArtScale?: number;
-  /** Crossfade attack art only — no lunge, scale, or strike aura. */
+  /** Crossfade attack art only — no lunge or scale. */
   stationaryAttack?: boolean;
   style?: StyleProp<ViewStyle>;
   wardPrimed?: boolean;
@@ -90,7 +86,6 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
       imageSource,
       attackImageSource,
       operativeClass = 'AEGIS',
-      attackArtScale = 1,
       stationaryAttack = false,
       style,
       wardPrimed = false,
@@ -109,7 +104,6 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
     const glowOpacity = useSharedValue(0);
     const attackSpriteRef = useRef<CombatPlayerAttackSpriteHandle>(null);
     const resolvedAttackSource = attackImageSource ?? imageSource;
-    const attackArtLayerStyle = playerCombatAttackArtLayerStyle(attackArtScale);
 
     const primed = wardPrimed || abilityPrimed;
 
@@ -195,7 +189,20 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
         FRONTLINE_MELEE_SPRITE_HOLD_MS,
         FRONTLINE_MELEE_SPRITE_OUT_MS,
       );
-      attackScale.value = 1;
+      cancelAnimation(attackScale);
+      cancelAnimation(lungeX);
+      cancelAnimation(lungeY);
+      attackScale.value = withSequence(
+        withTiming(AEGIS_LUNGE_SCALE, {
+          duration: FRONTLINE_MELEE_SNAP_MS,
+          easing: Easing.out(Easing.cubic),
+        }),
+        withDelay(FRONTLINE_MELEE_SPRITE_HOLD_MS, withTiming(AEGIS_LUNGE_SCALE, { duration: 0 })),
+        withTiming(1, {
+          duration: FRONTLINE_MELEE_RETURN_IDLE_MS,
+          easing: Easing.inOut(Easing.cubic),
+        }),
+      );
       lungeX.value = withSequence(
         withTiming(delta.x, { duration: FRONTLINE_MELEE_SNAP_MS, easing: Easing.out(Easing.cubic) }),
         withDelay(FRONTLINE_MELEE_SPRITE_HOLD_MS, withTiming(delta.x, { duration: 0 })),
@@ -210,7 +217,17 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
 
     const runRangedAttack = (faction?: FactionType) => {
       if (stationaryAttack) {
-        runSpriteCrossfade(false);
+        // Stationary classes still get the footprint-aligned strike aura on attack art.
+        void attackSpriteRef.current?.executeRangedAttackAnimation();
+        runStrikeAura(
+          faction,
+          RANGED_ATTACK_SPRITE_IN_MS,
+          RANGED_ATTACK_SPRITE_HOLD_MS,
+          RANGED_ATTACK_SPRITE_OUT_MS,
+        );
+        lungeX.value = 0;
+        lungeY.value = 0;
+        attackScale.value = 1;
         return;
       }
       void attackSpriteRef.current?.executeRangedAttackAnimation();
@@ -264,14 +281,8 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
         { translateY: lungeY.value },
         { scale: attackScale.value },
       ],
-    }));
-
-    const primedGlowStyle = useAnimatedStyle(() => ({
-      opacity: glowOpacity.value * 0.38,
-    }));
-
-    const strikeAuraStyle = useAnimatedStyle(() => ({
-      opacity: strikeAuraOpacity.value * STRIKE_AURA_PEAK,
+      // Keep feet planted while shrinking into the lunge.
+      transformOrigin: 'bottom center',
     }));
 
     const damageFlashStyle = useAnimatedStyle(() => ({
@@ -281,37 +292,15 @@ const CombatPlayerViewport = forwardRef<CombatPlayerViewportRef, CombatPlayerVie
     return (
       <View style={[styles.root, style]}>
         <Animated.View style={[styles.spriteFrame, frameAnimatedStyle]}>
-          <Animated.View style={[styles.glowDuplicate, primedGlowStyle]} pointerEvents="none">
-            <View style={styles.glowArtBox} pointerEvents="none">
-              <Image
-                source={imageSource}
-                resizeMode="contain"
-                style={[styles.spriteLayer, styles.auraImage, { tintColor: PRIMED_GLOW }]}
-              />
-            </View>
-          </Animated.View>
-          <Animated.View style={[styles.strikeAuraDuplicate, strikeAuraStyle]} pointerEvents="none">
-            <View style={styles.glowArtBox} pointerEvents="none">
-              <Image
-                source={resolvedAttackSource}
-                resizeMode="contain"
-                style={[
-                  styles.spriteLayer,
-                  attackArtLayerStyle,
-                  styles.auraImage,
-                  { tintColor: strikeTint },
-                ]}
-              />
-            </View>
-          </Animated.View>
           <View style={styles.spriteStack} pointerEvents="none">
             <CombatPlayerAttackSprite
               ref={attackSpriteRef}
               idleSource={imageSource}
               attackSource={resolvedAttackSource}
               operativeClass={operativeClass}
-              attackArtScale={attackArtScale}
-              lockAttackFootprint={stationaryAttack}
+              strikeAuraOpacity={strikeAuraOpacity}
+              strikeTint={strikeTint}
+              primedGlowOpacity={glowOpacity}
             />
             <Animated.View style={[styles.damageFlashWrap, damageFlashStyle]} pointerEvents="none">
               <View style={styles.flashArtBox} pointerEvents="none">
@@ -342,7 +331,7 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
   },
   spriteFrame: {
-    width: '92%',
+    width: '100%',
     height: '100%',
     minHeight: 120,
     position: 'relative',
@@ -352,20 +341,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   spriteStack: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'flex-end',
     backgroundColor: 'transparent',
     zIndex: 2,
     overflow: 'visible',
-  },
-  glowArtBox: {
-    width: '100%',
-    height: '100%',
-    minHeight: 120,
-    overflow: 'visible',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
   },
   flashArtBox: {
     width: '100%',
@@ -381,25 +362,8 @@ const styles = StyleSheet.create({
     minHeight: 120,
     backgroundColor: 'transparent',
   },
-  auraImage: {
-    transform: [{ scale: STRIKE_AURA_SCALE }],
-  },
-  glowDuplicate: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    backgroundColor: 'transparent',
-    zIndex: 0,
-  },
-  strikeAuraDuplicate: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    backgroundColor: 'transparent',
-    zIndex: 1,
-  },
   damageFlashWrap: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'flex-end',
     zIndex: 3,

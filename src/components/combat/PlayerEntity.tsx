@@ -3,7 +3,6 @@ import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import type { ClassType } from '../../types/game';
 import CombatPlayerViewport, { type CombatPlayerViewportRef } from './CombatPlayerViewport';
 import {
-  resolvePlayerCombatAttackArtScale,
   resolvePlayerCombatAttackPortrait,
   resolvePlayerCombatIdlePortrait,
 } from '../../utils/combatPlayerPortrait';
@@ -26,17 +25,21 @@ export default function PlayerEntity({
   style,
 }: PlayerEntityProps): React.JSX.Element {
   return (
-    <View style={[styles.spriteContainer, style]}>
+    <View style={[
+      styles.spriteContainer,
+      operativeClass === 'AEGIS' ? styles.spriteContainerMeleeWide : null,
+      style,
+    ]}>
       <CombatPlayerViewport
         ref={playerViewportRef}
         imageSource={resolvePlayerCombatIdlePortrait(operativeClass)}
         attackImageSource={resolvePlayerCombatAttackPortrait(operativeClass)}
         operativeClass={operativeClass}
-        attackArtScale={resolvePlayerCombatAttackArtScale(operativeClass)}
-        stationaryAttack
+        // Aegis lunges into the enemy line; Envoy / Hex Shot stay planted for ranged strikes.
+        stationaryAttack={operativeClass !== 'AEGIS'}
         wardPrimed={wardPrimed}
         abilityPrimed={abilityPrimed}
-        style={styles.sprite}
+        style={[styles.sprite, operativeClass === 'AEGIS' ? styles.spriteMeleeWide : null]}
       />
     </View>
   );
@@ -52,10 +55,19 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     overflow: 'visible',
   },
+  spriteContainerMeleeWide: {
+    width: OPERATIVE_ARENA_SPRITE_WIDTH * 1.45,
+  },
   sprite: {
     width: OPERATIVE_ARENA_SPRITE_WIDTH,
     flex: 1,
     minHeight: 190,
     alignSelf: 'flex-start',
+    overflow: 'visible',
+  },
+  /** Extra horizontal room so Aegis attack pose / aura are not clipped mid-lunge. */
+  spriteMeleeWide: {
+    width: '100%',
+    maxWidth: OPERATIVE_ARENA_SPRITE_WIDTH * 1.45,
   },
 });

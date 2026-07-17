@@ -321,12 +321,14 @@ export function playerAttackLungeDelta(
     const staggeredLeft = arenaWidth * (1 - Number.parseFloat(STAGGERED_ARENA_WIDTH) / 100);
     const gridWidth = arenaWidth - staggeredLeft;
     const slotCenterX = staggeredLeft + gridWidth * anchor.x;
-    const operativeAnchorX = arenaWidth * 0.14;
+    // Operative sits bottom-left; bias toward enemy column so the lunge closes distance.
+    const operativeAnchorX = arenaWidth * 0.12;
     const rawGap = slotCenterX - operativeAnchorX;
-    const x = Math.round(Math.min(120, Math.max(32, rawGap * 0.55)));
+    const x = Math.round(Math.min(210, Math.max(72, rawGap * 0.72)));
     const playerFootY = arenaHeight * 0.94;
     const slotTorsoY = arenaHeight * anchor.y;
-    const y = Math.round(Math.min(0, Math.max(-28, (slotTorsoY - playerFootY) * 0.35)));
+    // Keep vertical travel subtle — forward close should dominate over a hop up.
+    const y = Math.round(Math.min(0, Math.max(-10, (slotTorsoY - playerFootY) * 0.12)));
     return { x, y };
   }
 
@@ -335,13 +337,13 @@ export function playerAttackLungeDelta(
   const slotCenterX = enemyColumnLeft + enemyColumnWidth * anchor.x;
 
   const playerColumnWidth = arenaWidth * 0.5;
-  const playerAnchorX = playerColumnWidth * 0.58;
+  const playerAnchorX = playerColumnWidth * 0.52;
   const rawGap = slotCenterX - playerAnchorX;
-  const x = Math.round(Math.min(88, Math.max(28, rawGap * 0.42)));
+  const x = Math.round(Math.min(180, Math.max(64, rawGap * 0.62)));
 
   const playerFootY = arenaHeight * 0.98;
   const slotTorsoY = arenaHeight * (laneForSlot(effectiveSlot) === 'BACKLINE' ? anchor.y + 0.08 : anchor.y + 0.06);
-  const y = Math.round(Math.min(0, Math.max(-32, (slotTorsoY - playerFootY) * 0.3)));
+  const y = Math.round(Math.min(0, Math.max(-12, (slotTorsoY - playerFootY) * 0.14)));
 
   return { x, y };
 }

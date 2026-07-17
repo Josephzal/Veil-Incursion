@@ -75,11 +75,11 @@ const ROSTER_INTENTS: Partial<Record<string, EnemyIntent[]>> = {
   'breacher': ['STRIKE', 'FORTIFY'],
   'cutter': ['STRIKE', 'EVADE'],
   'warden': ['STRIKE', 'FORTIFY'],
-  'fixer': ['FIELD_REPAIR', 'EVADE'],
+  'fixer': ['FIELD_REPAIR', 'STRIKE', 'EVADE'],
   'spotter': ['TARGET_LOCK', 'ARTILLERY_FIRE'],
   'burner': ['STRIKE'],
   'rival-hexer': ['HEX_MARK', 'STRIKE', 'EVADE'],
-  'rival-veilbinder': ['BINDING_WARD', 'FIELD_REPAIR', 'EVADE'],
+  'rival-veilbinder': ['BINDING_WARD', 'FIELD_REPAIR', 'EVADE', 'STRIKE'],
   'rival-reaver': ['STRIKE', 'FORTIFY'],
   'amalgam': ['STRIKE', 'FORTIFY'],
   'wire-ghoul': ['STRIKE', 'EVADE'],
@@ -256,7 +256,11 @@ export function decideRosterIntent(
   district: DistrictId = 1,
   playerState?: PlayerAIState,
   squad?: EnemyCombatProfile[],
-  options?: { hasAshToken?: boolean },
+  options?: {
+    hasAshToken?: boolean;
+    combatRound?: number;
+    isLastEnemyAlive?: boolean;
+  },
 ): EnemyIntent | null {
   const synced = syncRosterCombatState(profile);
   const rosterId = synced.rosterId;
@@ -274,8 +278,7 @@ export function decideRosterIntent(
     if (squad && synced.unitId && squadNeedsFixerRepair(squad, synced.unitId)) {
       return 'FIELD_REPAIR';
     }
-    if (isRedundantBuffIntent('EVADE', synced)) return 'STRIKE';
-    return 'EVADE';
+    // Fall through to weighted pool — do not default-loop Evade.
   }
 
   if (rosterId === 'grave-robber' && squad) {
@@ -294,10 +297,23 @@ export function decideRosterIntent(
   if (!pool) return null;
 
   const cooledPool = filterNullShadeCooldown(pool, synced);
+  const alive = squad ? aliveUnits(squad) : [synced];
+  const squadHasDefenderPosture = alive.some((unit) => (
+    unit.unitId !== synced.unitId
+    && (
+      (unit.fortifyTurnsRemaining ?? 0) > 0
+      || (unit.evadeTurnsRemaining ?? 0) > 0
+      || (unit.veilBarrierCharges ?? 0) > 0
+      || (unit.rivalWardCharges ?? 0) > 0
+    )
+  ));
 
   const ctx = {
     enemy: enemyAIStateFromProfile(synced, district),
     player: playerState ?? defaultPlayerAIState(),
+    combatRound: options?.combatRound ?? 1,
+    isLastEnemyAlive: options?.isLastEnemyAlive ?? alive.length <= 1,
+    squadHasDefenderPosture,
   };
   const valid = filterValidIntents(cooledPool, ctx);
   const withoutRedundantBuffs = cooledPool.filter((intent) => !isRedundantBuffIntent(intent, synced));

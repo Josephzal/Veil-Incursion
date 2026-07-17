@@ -7,9 +7,7 @@ import {
   View,
 } from 'react-native';
 import HapticPressable from './HapticPressable';
-import HubCargoIconBox from './safehouse/HubCargoIconBox';
 import TerminalText from './TerminalText';
-import TacticalButton from './TacticalButton';
 import {
   getRecipesByKind,
   isRecipeOutputOwned,
@@ -28,22 +26,26 @@ import { canAffordRecipe, getStashCount } from '../data/resourceStashEngine';
 import { ALL_RESOURCE_ITEM_IDS, RESOURCE_REGISTRY } from '../data/resourceRegistry';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useTerminal } from '../context/TerminalContext';
-import { useHubTypography } from '../hooks/useHubTypography';
 import { useHubLayout } from '../context/HubLayoutContext';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
-import { DOSSIER_ROW_BG, dossierOpaqueCtaStyle, SELECT_ACCENT, DANGER_RED } from '../constants/dossierSurface';
-import DossierCardShell from './hub/DossierCardShell';
-import { LoadoutSectionHeader } from './hub/loadoutTabUi';
+import { DOSSIER_ROW_BG, SELECT_ACCENT, DANGER_RED } from '../constants/dossierSurface';
+import {
+  MarketActionButton,
+  MarketContentGrid,
+  MarketPanel,
+  MarketRow,
+  MARKET_CONTENT_BOTTOM_PAD,
+  MARKET_ROW_MIN_HEIGHT,
+} from './hub/marketUi';
+import { LOADOUT_SECTION_HEADER_COLOR, LOADOUT_SUBTITLE_COLOR } from './hub/loadoutTabUi';
 import {
   HIDDEN_SCROLLBAR_VIEW_STYLE,
   HIDDEN_SCROLLVIEW_PROPS,
 } from '../utils/hiddenScrollbarStyle';
-import type { ResourceItemId } from '../types/resourceItem';
 import type { ResourceQuantity } from '../types/resourceItem';
 
 const STARK_WHITE = '#F8FAFC';
-const MUTED_SLATE = '#94A3B8';
-const ACCENT_CYAN = '#06B6D4';
+const MUTED_SLATE = LOADOUT_SUBTITLE_COLOR;
 const PHOSPHOR_GREEN = SELECT_ACCENT;
 const RUST_RED = DANGER_RED;
 
@@ -52,77 +54,18 @@ interface CraftingMenuPanelProps {
   embedded?: boolean;
 }
 
-interface ResourceLedgerRowProps {
-  resourceId: ResourceItemId;
-  quantity: number;
-  borderColor: string;
-  textColor: string;
-  mutedColor: string;
-  iconSize: number;
-  isDesktop: boolean;
-}
-
-function ResourceLedgerRow({
-  resourceId,
-  quantity,
-  borderColor,
-  textColor,
-  mutedColor,
-  iconSize,
-  isDesktop,
-}: ResourceLedgerRowProps): React.JSX.Element {
-  const def = RESOURCE_REGISTRY[resourceId];
-  const itemTypeLabel = def.itemType.replace(/_/g, ' ');
-
-  return (
-    <View
-      style={[
-        styles.fabricationRow,
-        isDesktop && styles.fabricationRowDesktop,
-        { borderColor, backgroundColor: DOSSIER_ROW_BG },
-      ]}
-    >
-      <View style={styles.fabricationInfo}>
-        <TerminalText variant="body" style={{ color: textColor, fontWeight: '700' }} numberOfLines={1}>
-          {def.name.toUpperCase()}
-        </TerminalText>
-        <TerminalText variant="caption" style={{ color: mutedColor }} numberOfLines={1}>
-          {`${quantity}× // ${itemTypeLabel}`}
-        </TerminalText>
-        <View style={styles.requirementLine}>
-          <Text style={[styles.requirementText, { color: PHOSPHOR_GREEN }]}>
-            {`${quantity} IN STASH`}
-          </Text>
-        </View>
-      </View>
-      <View style={styles.fabricationActions}>
-        <HubCargoIconBox
-          itemId={resourceId}
-          borderColor={mutedColor}
-          iconSize={iconSize}
-        />
-      </View>
-    </View>
-  );
-}
-
 interface ResourceLedgerProps {
   stash: ResourceQuantity;
   borderColor: string;
-  iconSize: number;
-  titleColor: string;
   textColor: string;
   mutedColor: string;
-  isDesktop: boolean;
 }
 
 function ResourceLedger({
   stash,
   borderColor,
-  iconSize,
   textColor,
   mutedColor,
-  isDesktop,
 }: ResourceLedgerProps): React.JSX.Element {
   const ownedResources = useMemo(
     () => ALL_RESOURCE_ITEM_IDS.filter((resourceId) => getStashCount(stash, resourceId) > 0),
@@ -130,38 +73,41 @@ function ResourceLedger({
   );
 
   return (
-    <>
-      <ScrollView
-        style={[
-          styles.ledgerScroll,
-          Platform.OS === 'web' && styles.ledgerScrollWeb,
-          HIDDEN_SCROLLBAR_VIEW_STYLE,
-        ]}
-        contentContainerStyle={styles.fabricationSection}
-        {...HIDDEN_SCROLLVIEW_PROPS}
-        nestedScrollEnabled
-        keyboardShouldPersistTaps="handled"
-      >
-        {ownedResources.length === 0 ? (
-          <TerminalText variant="caption" style={{ color: mutedColor, paddingVertical: 12, textAlign: 'center' }}>
-            // NO RESOURCES IN STASH
-          </TerminalText>
-        ) : (
-          ownedResources.map((resourceId) => (
-            <ResourceLedgerRow
+    <ScrollView
+      style={[
+        styles.ledgerScroll,
+        Platform.OS === 'web' && styles.ledgerScrollWeb,
+        HIDDEN_SCROLLBAR_VIEW_STYLE,
+      ]}
+      contentContainerStyle={styles.listContent}
+      {...HIDDEN_SCROLLVIEW_PROPS}
+      nestedScrollEnabled
+      keyboardShouldPersistTaps="handled"
+    >
+      {ownedResources.length === 0 ? (
+        <TerminalText variant="caption" style={{ color: mutedColor, paddingVertical: 12, textAlign: 'center' }}>
+          // NO RESOURCES IN STASH
+        </TerminalText>
+      ) : (
+        ownedResources.map((resourceId) => {
+          const def = RESOURCE_REGISTRY[resourceId];
+          const quantity = getStashCount(stash, resourceId);
+          const itemTypeLabel = def.itemType.replace(/_/g, ' ');
+          return (
+            <MarketRow
               key={resourceId}
-              resourceId={resourceId}
-              quantity={getStashCount(stash, resourceId)}
+              title={def.name.toUpperCase()}
+              subtitle={`${quantity}× // ${itemTypeLabel}`}
+              valueLine={`${quantity} IN STASH`}
               borderColor={borderColor}
               textColor={textColor}
               mutedColor={mutedColor}
-              iconSize={iconSize}
-              isDesktop={isDesktop}
+              imageItemId={resourceId}
             />
-          ))
-        )}
-      </ScrollView>
-    </>
+          );
+        })
+      )}
+    </ScrollView>
   );
 }
 
@@ -174,7 +120,6 @@ interface FabricationRowProps {
   borderColor: string;
   textColor: string;
   mutedColor: string;
-  isDesktop: boolean;
   footerMeta?: string;
 }
 
@@ -187,7 +132,6 @@ function FabricationRow({
   borderColor,
   textColor,
   mutedColor,
-  isDesktop,
   footerMeta,
 }: FabricationRowProps): React.JSX.Element {
   const affordable = canAffordRecipe(stash, recipe);
@@ -198,8 +142,10 @@ function FabricationRow({
     <View
       style={[
         styles.fabricationRow,
-        isDesktop && styles.fabricationRowDesktop,
-        { borderColor, backgroundColor: DOSSIER_ROW_BG },
+        {
+          borderColor,
+          backgroundColor: DOSSIER_ROW_BG,
+        },
       ]}
     >
       <View style={styles.fabricationInfo}>
@@ -236,18 +182,13 @@ function FabricationRow({
         ) : null}
       </View>
       <View style={styles.fabricationActions}>
-        <TacticalButton
+        <MarketActionButton
           label={alreadyOwned ? '[ FORGED ]' : '[ FABRICATE ]'}
-          active={canFabricate}
-          onPress={() => onFabricate(recipe.id)}
           accentColor={accentColor}
           mutedColor={mutedColor}
-          variant="inline"
           disabled={!canFabricate}
-          style={[
-            dossierOpaqueCtaStyle(accentColor),
-            !canFabricate ? { opacity: alreadyOwned ? 0.45 : 0.25 } : null,
-          ]}
+          variant={canFabricate ? 'primary' : 'disabled'}
+          onPress={() => onFabricate(recipe.id)}
         />
       </View>
     </View>
@@ -264,7 +205,6 @@ interface FabricationMatrixProps {
   borderColor: string;
   textColor: string;
   mutedColor: string;
-  isDesktop: boolean;
 }
 
 function FabricationMatrix({
@@ -277,13 +217,16 @@ function FabricationMatrix({
   borderColor,
   textColor,
   mutedColor,
-  isDesktop,
 }: FabricationMatrixProps): React.JSX.Element {
   return (
     <View style={styles.fabricationSection}>
       {sectionLabel ? (
-        <TerminalText variant="caption" letterSpacing={0.8} style={{ color: mutedColor, fontWeight: '700' }}>
-          {sectionLabel}
+        <TerminalText
+          variant="caption"
+          letterSpacing={1}
+          style={styles.subsectionLabel}
+        >
+          {sectionLabel.toUpperCase()}
         </TerminalText>
       ) : null}
       {recipes.map((recipe) => (
@@ -297,7 +240,6 @@ function FabricationMatrix({
           borderColor={borderColor}
           textColor={textColor}
           mutedColor={mutedColor}
-          isDesktop={isDesktop}
         />
       ))}
     </View>
@@ -312,7 +254,6 @@ export default function CraftingMenuPanel({
   const { account, craftRecipe, appendHubLog } = usePlayerAccount();
   const { isDesktop, fontScale } = useResponsiveLayout();
   const { scaleSpacing } = useHubLayout();
-  const { iconSize } = useHubTypography();
   const panelPadding = scaleSpacing(10);
   const [runItemFilter, setRunItemFilter] = useState<RunItemCraftFilter>('ALL');
 
@@ -341,104 +282,6 @@ export default function CraftingMenuPanel({
     account.craftedAugments,
   );
 
-  const matrixContent = (
-    <DossierCardShell
-      fillHeight
-      padding={panelPadding}
-      contentStyle={styles.matrixPanel}
-    >
-      <ScrollView
-        style={[styles.matrixScroll, HIDDEN_SCROLLBAR_VIEW_STYLE]}
-        contentContainerStyle={styles.fabricationList}
-        {...HIDDEN_SCROLLVIEW_PROPS}
-        nestedScrollEnabled
-        keyboardShouldPersistTaps="handled"
-      >
-        <FabricationMatrix
-          recipes={PERMANENT_AUGMENTS}
-          stash={account.resourceStash}
-          onFabricate={handleFabricate}
-          isOwned={isOutputOwned}
-          accentColor={SELECT_ACCENT}
-          borderColor={theme.borderColor}
-          textColor={theme.textColor}
-          mutedColor={theme.mutedColor}
-          isDesktop={isDesktop}
-        />
-
-        {runItemRecipes.length > 0 ? (
-          <>
-            <View style={styles.filterRow}>
-              {(['ALL', 'COMBAT', 'FIELD'] as const).map((filter) => (
-                <HapticPressable
-                  key={filter}
-                  onPress={() => setRunItemFilter(filter)}
-                  style={[
-                    styles.filterChip,
-                    {
-                      borderColor: theme.borderColor,
-                      backgroundColor: runItemFilter === filter ? DOSSIER_ROW_BG : 'transparent',
-                    },
-                  ]}
-                >
-                  <TerminalText
-                    variant="caption"
-                    style={{
-                      color: runItemFilter === filter ? theme.statusColor : theme.mutedColor,
-                      fontWeight: '700',
-                    }}
-                  >
-                    {filter === 'ALL' ? 'ALL RUN ITEMS' : filter}
-                  </TerminalText>
-                </HapticPressable>
-              ))}
-            </View>
-            <View style={styles.fabricationSection}>
-              <TerminalText variant="caption" letterSpacing={0.8} style={{ color: theme.mutedColor, fontWeight: '700' }}>
-                RUN ITEM SCHEMATICS
-              </TerminalText>
-              {runItemRecipes.map((recipe) => {
-                const itemId = recipe.outputId as RunItemId;
-                const def = getRunItemDefinition(itemId);
-                const staged = account.hubCraftedConsumables[itemId] ?? 0;
-                return (
-                  <FabricationRow
-                    key={recipe.id}
-                    recipe={recipe}
-                    stash={account.resourceStash}
-                    alreadyOwned={false}
-                    onFabricate={handleFabricate}
-                    accentColor={SELECT_ACCENT}
-                    borderColor={theme.borderColor}
-                    textColor={theme.textColor}
-                    mutedColor={theme.mutedColor}
-                    isDesktop={isDesktop}
-                    footerMeta={`MARKET ${def.marketPrice} CR // ${staged} STAGED AT HUB`}
-                  />
-                );
-              })}
-            </View>
-          </>
-        ) : null}
-
-        {secondaryRecipes.CONSUMABLE.length > 0 ? (
-          <FabricationMatrix
-            recipes={secondaryRecipes.CONSUMABLE}
-            stash={account.resourceStash}
-            onFabricate={handleFabricate}
-            sectionLabel="TACTICAL CONSUMABLES"
-            isOwned={() => false}
-            accentColor={SELECT_ACCENT}
-            borderColor={theme.borderColor}
-            textColor={theme.textColor}
-            mutedColor={theme.mutedColor}
-            isDesktop={isDesktop}
-          />
-        ) : null}
-      </ScrollView>
-    </DossierCardShell>
-  );
-
   return (
     <View style={[styles.root, embedded ? styles.rootEmbedded : null]}>
       {!embedded ? (
@@ -449,9 +292,9 @@ export default function CraftingMenuPanel({
           {onClose ? (
             <HapticPressable
               onPress={onClose}
-              style={[styles.closeBtn, { borderColor: ACCENT_CYAN }]}
+              style={[styles.closeBtn, { borderColor: SELECT_ACCENT }]}
             >
-              <Text style={[styles.closeBtnText, { color: ACCENT_CYAN, fontSize: 8 * fontScale }]}>
+              <Text style={[styles.closeBtnText, { color: SELECT_ACCENT, fontSize: 8 * fontScale }]}>
                 [ CLOSE ]
               </Text>
             </HapticPressable>
@@ -459,38 +302,112 @@ export default function CraftingMenuPanel({
         </View>
       ) : null}
 
-      <View
-        style={[
-          styles.dashboard,
-          { flexDirection: isDesktop ? 'row' : 'column', gap: scaleSpacing(10) },
-        ]}
-      >
-        <View
-          style={[
-            styles.ledgerColumn,
-            isDesktop ? styles.ledgerColumnDesktop : styles.ledgerColumnMobile,
-            { gap: scaleSpacing(6) },
-          ]}
-        >
-          <LoadoutSectionHeader label="Resource Ledger" />
-          <DossierCardShell fillHeight padding={panelPadding} contentStyle={styles.ledgerContent}>
+      <MarketContentGrid
+        stacked={!isDesktop}
+        left={(
+          <MarketPanel label="Resource Ledger" padding={panelPadding}>
             <ResourceLedger
               stash={account.resourceStash}
               borderColor={theme.borderColor}
-              iconSize={iconSize}
-              titleColor={theme.statusColor}
               textColor={theme.textColor}
               mutedColor={theme.mutedColor}
-              isDesktop={isDesktop}
             />
-          </DossierCardShell>
-        </View>
+          </MarketPanel>
+        )}
+        right={(
+          <MarketPanel label="Fabrication Matrix" padding={panelPadding}>
+            <ScrollView
+              style={[styles.matrixScroll, HIDDEN_SCROLLBAR_VIEW_STYLE]}
+              contentContainerStyle={styles.fabricationList}
+              {...HIDDEN_SCROLLVIEW_PROPS}
+              nestedScrollEnabled
+              keyboardShouldPersistTaps="handled"
+            >
+              <FabricationMatrix
+                recipes={PERMANENT_AUGMENTS}
+                stash={account.resourceStash}
+                onFabricate={handleFabricate}
+                isOwned={isOutputOwned}
+                accentColor={SELECT_ACCENT}
+                borderColor={theme.borderColor}
+                textColor={theme.textColor}
+                mutedColor={theme.mutedColor}
+              />
 
-        <View style={[styles.matrixColumn, isDesktop ? styles.matrixColumnDesktop : null, { gap: scaleSpacing(6) }]}>
-          <LoadoutSectionHeader label="Fabrication Matrix" />
-          {matrixContent}
-        </View>
-      </View>
+              {runItemRecipes.length > 0 ? (
+                <View style={styles.runItemBlock}>
+                  <View style={styles.filterRow}>
+                    {(['ALL', 'COMBAT', 'FIELD'] as const).map((filter) => (
+                      <HapticPressable
+                        key={filter}
+                        onPress={() => setRunItemFilter(filter)}
+                        style={[
+                          styles.filterChip,
+                          {
+                            borderColor: runItemFilter === filter ? SELECT_ACCENT : theme.borderColor,
+                            backgroundColor: runItemFilter === filter
+                              ? `${SELECT_ACCENT}18`
+                              : 'transparent',
+                          },
+                        ]}
+                      >
+                        <TerminalText
+                          variant="caption"
+                          style={{
+                            color: runItemFilter === filter ? SELECT_ACCENT : theme.mutedColor,
+                            fontWeight: '700',
+                          }}
+                        >
+                          {filter === 'ALL' ? 'ALL RUN ITEMS' : filter}
+                        </TerminalText>
+                      </HapticPressable>
+                    ))}
+                  </View>
+                  <View style={styles.schematicDivider} />
+                  <View style={styles.fabricationSection}>
+                    <TerminalText variant="caption" letterSpacing={1} style={styles.subsectionLabel}>
+                      RUN ITEM SCHEMATICS
+                    </TerminalText>
+                    {runItemRecipes.map((recipe) => {
+                      const itemId = recipe.outputId as RunItemId;
+                      const def = getRunItemDefinition(itemId);
+                      const staged = account.hubCraftedConsumables[itemId] ?? 0;
+                      return (
+                        <FabricationRow
+                          key={recipe.id}
+                          recipe={recipe}
+                          stash={account.resourceStash}
+                          alreadyOwned={false}
+                          onFabricate={handleFabricate}
+                          accentColor={SELECT_ACCENT}
+                          borderColor={theme.borderColor}
+                          textColor={theme.textColor}
+                          mutedColor={theme.mutedColor}
+                          footerMeta={`MARKET ${def.marketPrice} CR // ${staged} STAGED AT HUB`}
+                        />
+                      );
+                    })}
+                  </View>
+                </View>
+              ) : null}
+
+              {secondaryRecipes.CONSUMABLE.length > 0 ? (
+                <FabricationMatrix
+                  recipes={secondaryRecipes.CONSUMABLE}
+                  stash={account.resourceStash}
+                  onFabricate={handleFabricate}
+                  sectionLabel="TACTICAL CONSUMABLES"
+                  isOwned={() => false}
+                  accentColor={SELECT_ACCENT}
+                  borderColor={theme.borderColor}
+                  textColor={theme.textColor}
+                  mutedColor={theme.mutedColor}
+                />
+              ) : null}
+            </ScrollView>
+          </MarketPanel>
+        )}
+      />
     </View>
   );
 }
@@ -503,6 +420,7 @@ const styles = StyleSheet.create({
   },
   rootEmbedded: {
     minHeight: 0,
+    backgroundColor: 'transparent',
   },
   header: {
     flexDirection: 'row',
@@ -529,62 +447,40 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.6,
   },
-  dashboard: {
-    flex: 1,
-    minHeight: 0,
-    width: '100%',
-  },
-  ledgerColumn: {
-    minHeight: 0,
-    minWidth: 0,
-  },
-  ledgerColumnMobile: {
-    maxHeight: 300,
-    flexShrink: 0,
-  },
-  ledgerColumnDesktop: {
-    flex: 0.35,
-  },
-  ledgerContent: {
-    flex: 1,
-    minHeight: 0,
-    gap: 8,
-  },
-  panelTitle: {
-    fontWeight: '700',
-    flexShrink: 0,
-  },
-  matrixColumn: {
-    flex: 1,
-    minHeight: 0,
-  },
-  matrixColumnDesktop: {
-    flex: 0.65,
-  },
   ledgerScroll: {
     flex: 1,
     minHeight: 0,
   },
   ledgerScrollWeb: Platform.select({
-    web: { height: 0, overflow: 'auto' as const },
+    web: { height: 0 },
     default: {},
   }),
-  matrixPanel: {
-    flex: 1,
-    minHeight: 0,
+  listContent: {
     gap: 8,
+    paddingBottom: MARKET_CONTENT_BOTTOM_PAD,
   },
   matrixScroll: {
     flex: 1,
     minHeight: 0,
   },
   fabricationList: {
-    gap: 16,
-    paddingBottom: 8,
+    gap: 18,
+    paddingBottom: MARKET_CONTENT_BOTTOM_PAD,
   },
   fabricationSection: {
-    gap: 6,
-    paddingBottom: 8,
+    gap: 8,
+  },
+  runItemBlock: {
+    gap: 10,
+  },
+  schematicDivider: {
+    height: 1,
+    backgroundColor: 'rgba(148, 163, 184, 0.28)',
+  },
+  subsectionLabel: {
+    color: LOADOUT_SECTION_HEADER_COLOR,
+    fontWeight: '700',
+    marginBottom: 2,
   },
   filterRow: {
     flexDirection: 'row',
@@ -602,17 +498,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     width: '100%',
     overflow: 'hidden',
-  },
-  fabricationRowDesktop: {
-    minHeight: 56,
+    minHeight: MARKET_ROW_MIN_HEIGHT + 8,
   },
   fabricationInfo: {
     flex: 1,
-    gap: 4,
+    gap: 5,
     minWidth: 0,
     justifyContent: 'center',
     paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingVertical: 12,
   },
   requirementLine: {
     flexDirection: 'row',

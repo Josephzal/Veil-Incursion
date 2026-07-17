@@ -2,13 +2,19 @@
 export const PARRY_RING_SCALE_START = 2.5;
 /** Outer ring scale when it meets the static ring. */
 export const PARRY_RING_SCALE_END = 1.0;
-/** Timing band when outer ring meets static (~±8% scale). */
-export const PARRY_TIMING_TOLERANCE = 0.08;
+/** Timing band when outer ring meets static (~±12% scale — forgiving detonation window). */
+export const PARRY_TIMING_TOLERANCE = 0.12;
 /** Center tap radius as fraction of static ring radius. */
-export const PARRY_CENTER_HIT_RATIO = 0.34;
+export const PARRY_CENTER_HIT_RATIO = 0.42;
 /** Minimum center hit radius in px (small screens). */
-export const PARRY_CENTER_HIT_MIN_PX = 32;
+export const PARRY_CENTER_HIT_MIN_PX = 40;
 export const PARRY_RING_SIZE_RATIO = 0.38;
+/** Visual / hit-band stroke width for the static sweet-spot ring. */
+export const PARRY_STATIC_RING_STROKE = 7;
+/** Outer dashed ring stroke — slightly thicker for readability. */
+export const PARRY_OUTER_RING_STROKE = 2.5;
+/** Soft glow stroke behind the static ring. */
+export const PARRY_SWEET_RING_STROKE = 5;
 /** Success halo burst — keep parry overlay up this long before kill resolution. */
 export const PARRY_HALO_DURATION_MS = 580;
 
@@ -62,12 +68,13 @@ export function isTapInsideStaticRing(
   layout: ParryArenaLayout,
 ): boolean {
   const dist = Math.hypot(tapX - layout.cx, tapY - layout.cy);
-  return dist <= layout.baseR * 1.08;
+  return dist <= layout.baseR * 1.15;
 }
 
 /**
  * Single pass/fail for counter stance — ring timing and tap zone must agree so
  * counter damage and parry success cannot diverge.
+ * Tap zone is the area inside the static ring (forgiving detonation window).
  */
 export function isParryAttemptSuccessful(
   scale: number,
@@ -79,6 +86,6 @@ export function isParryAttemptSuccessful(
 ): boolean {
   if (!layout) return false;
   const timingHit = isParryRingsMeet(scale, windowBonus, blindPenalty);
-  const centerHit = isTapOnParryCenter(tapX, tapY, layout);
-  return timingHit && centerHit;
+  const zoneHit = isTapInsideStaticRing(tapX, tapY, layout);
+  return timingHit && zoneHit;
 }

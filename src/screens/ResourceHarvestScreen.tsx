@@ -198,6 +198,16 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
       newParticles.push(...spawnResidueSwarm(tier, depth, floor, {
         instanceId,
         totalValue: 1,
+        existingCenters: [
+          ...lootPoolRef.current.map((particle) => ({
+            x: particle.startX,
+            y: particle.startY,
+          })),
+          ...newParticles.map((particle) => ({
+            x: particle.startX,
+            y: particle.startY,
+          })),
+        ],
       }));
 
       swarmedInstanceIdsRef.current.add(instanceId);

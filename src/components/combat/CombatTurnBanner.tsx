@@ -48,7 +48,7 @@ export default function CombatTurnBanner({
       break;
     case 'PARRY_WINDOW':
       label = 'COUNTER WINDOW OPEN';
-      sublabel = 'TAP CENTER WHEN RINGS ALIGN';
+      sublabel = 'TAP INSIDE RING WHEN RINGS ALIGN';
       accent = PARRY_GREEN;
       border = PARRY_GREEN;
       break;

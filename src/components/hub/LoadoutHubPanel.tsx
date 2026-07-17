@@ -168,30 +168,14 @@ export default function LoadoutHubPanel(): React.JSX.Element {
   const renderCategoryBody = (): React.JSX.Element => {
     switch (activeCategory) {
       case 'RELIC':
-        return (
-          <DossierCardShell padding={scaleSpacing(10)} accentColor={categoryAccent}>
-            <KeepsakeLoadoutPanel accent={categoryAccent} muted={muted} />
-          </DossierCardShell>
-        );
+        return <KeepsakeLoadoutPanel accent={categoryAccent} muted={muted} />;
       case 'DECK':
-        return (
-          <DossierCardShell padding={scaleSpacing(10)} accentColor={categoryAccent}>
-            <SafehouseAbilitiesTab />
-          </DossierCardShell>
-        );
+        return <SafehouseAbilitiesTab />;
       case 'FIELD_KIT':
-        return (
-          <DossierCardShell padding={scaleSpacing(10)} accentColor={categoryAccent}>
-            <RunItemLoadoutPanel accent={categoryAccent} muted={muted} />
-          </DossierCardShell>
-        );
+        return <RunItemLoadoutPanel accent={categoryAccent} muted={muted} />;
       case 'CHASSIS':
       default:
-        return (
-          <DossierCardShell padding={scaleSpacing(10)} accentColor={categoryAccent}>
-            <WeaponLoadoutPanel accent={categoryAccent} muted={muted} />
-          </DossierCardShell>
-        );
+        return <WeaponLoadoutPanel accent={categoryAccent} muted={muted} />;
     }
   };
 

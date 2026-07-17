@@ -12,6 +12,8 @@ export const CARGO_OVERLAY_COMBAT_DETAIL_HEIGHT = 168;
 export const CARGO_OVERLAY_SCANNER_BUTTON_HEIGHT = 32;
 export const CARGO_OVERLAY_BOARD_GAP = 12;
 export const CARGO_OVERLAY_MIN_CELL_SIZE = 36;
+/** Combat cargo modal may exceed the standard grid cell size. */
+export const COMBAT_OVERLAY_MAX_CELL_SIZE = Math.round(CARGO_CELL_SIZE * COMBAT_POPUP_SCALE);
 
 /** Horizontal split inside the combat cargo modal content area. */
 export const COMBAT_OVERLAY_GRID_SHARE = 0.65;
@@ -42,6 +44,7 @@ export function resolveCombatOverlayPanelWidthFromCellSize(cellSize: number): nu
 export function resolveCombatOverlayCellSize(
   screenHeight: number,
   bottomInset: number,
+  screenWidth?: number,
 ): number {
   const footerInset = resolveImmersiveFooterInset(bottomInset);
   const availableHeight =
@@ -55,9 +58,21 @@ export function resolveCombatOverlayCellSize(
     (availableHeight - (CARGO_GRID_ROWS - 1) * CARGO_CELL_GAP) / CARGO_GRID_ROWS,
   );
 
+  let maxByWidth = COMBAT_OVERLAY_MAX_CELL_SIZE;
+  if (screenWidth != null && screenWidth > 0) {
+    // Combat modal is grid + detail split; keep the full panel inside the viewport.
+    const maxContentWidth = screenWidth - 12 - COMBAT_OVERLAY_PANEL_PADDING * 2;
+    const maxFrameWidth = Math.floor(
+      (maxContentWidth - COMBAT_OVERLAY_SPLIT_GAP) * COMBAT_OVERLAY_GRID_SHARE,
+    );
+    maxByWidth = Math.floor(
+      (maxFrameWidth - (CARGO_GRID_COLS - 1) * CARGO_CELL_GAP) / CARGO_GRID_COLS,
+    );
+  }
+
   return Math.min(
-    CARGO_CELL_SIZE,
-    Math.max(CARGO_OVERLAY_MIN_CELL_SIZE, Math.floor(heightCell * COMBAT_POPUP_SCALE)),
+    COMBAT_OVERLAY_MAX_CELL_SIZE,
+    Math.max(CARGO_OVERLAY_MIN_CELL_SIZE, Math.min(heightCell, maxByWidth)),
   );
 }
 

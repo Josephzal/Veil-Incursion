@@ -3294,17 +3294,13 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   }, [appendRunLog]);
 
   const finalizeHarvestScreen = useCallback(() => {
-    const inc = activeIncursionRef.current;
-    const stagingIds = new Set(inc.harvestStagingInstanceIds);
-    const hadLooseResidue = inc.cargo.containment.some((item) => isVeilResidueCargoItem(item.itemId));
-    const hadUnpackedStaging = inc.cargo.containment.some((item) => stagingIds.has(item.instanceId));
-    const hadResidueOnGrid = inc.cargo.grid.placed.some((item) => isVeilResidueCargoItem(item.itemId));
-    const nextCargo = finalizeHarvestCargoState(inc.cargo, stagingIds);
-
+    let purgedUnclaimed = false;
     setActiveIncursion((prev) => {
+      purgedUnclaimed = prev.cargo.containment.length > 0
+        || prev.cargo.grid.placed.some((item) => isVeilResidueCargoItem(item.itemId));
       const next = {
         ...prev,
-        cargo: nextCargo,
+        cargo: finalizeHarvestCargoState(prev.cargo),
         harvestStagingInstanceIds: [],
         // Discard any un-staged pre-roll so leftovers can never be re-offered
         // in a later encounter — only successfully packed cargo carries over.
@@ -3313,8 +3309,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       activeIncursionRef.current = next;
       return next;
     });
-
-    if (hadLooseResidue || hadUnpackedStaging || hadResidueOnGrid) {
+    if (purgedUnclaimed) {
       appendRunLog('>> UNCLAIMED HARVEST LOOT PURGED — unstaged resources dissipated.');
     }
   }, [appendRunLog]);

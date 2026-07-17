@@ -2,9 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, Modal, StyleSheet, Text, View } from 'react-native';
 import HapticPressable from '../../HapticPressable';
 import {
-  ENEMY_STATUS_EFFECTS,
-  type EnemyStatusEffectDef,
-  type EnemyStatusEffectKey,
+  INTEL_STATUS_CHIP_SIZE,
+  type IntelStatusChip,
 } from '../../../utils/enemyStatusEffects';
 import {
   COMBAT_POPUP_BODY_FONT,
@@ -15,25 +14,25 @@ const MONO = 'monospace';
 const VIOLET = '#a78bfa';
 const TOOLTIP_BG = 'rgba(12, 8, 22, 0.96)';
 const TOOLTIP_BORDER = '#8b5cf6';
-const DEFAULT_ICON_SIZE = 18;
-const TOOLTIP_DISMISS_MS = 3000;
+const TOOLTIP_DISMISS_MS = 4000;
 
 interface CombatStatusIconRowProps {
-  statusKeys: readonly EnemyStatusEffectKey[];
+  chips: readonly IntelStatusChip[];
+  /** @deprecated All chips use INTEL_STATUS_CHIP_SIZE for consistency. */
   iconSize?: number;
 }
 
-/** Icon-only status row with press tooltips for the intel stat block. */
+/** Uniform small-square status chips with press tooltips for tactical intel. */
 export default function CombatStatusIconRow({
-  statusKeys,
-  iconSize = DEFAULT_ICON_SIZE,
+  chips,
 }: CombatStatusIconRowProps): React.JSX.Element | null {
-  const [tooltipContent, setTooltipContent] = useState<EnemyStatusEffectDef | null>(null);
+  const [selected, setSelected] = useState<IntelStatusChip | null>(null);
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const tooltipMinWidth = Math.round(160 * COMBAT_POPUP_SCALE);
-  const tooltipMaxWidth = Math.round(280 * COMBAT_POPUP_SCALE);
-  const tooltipPaddingH = Math.round(10 * COMBAT_POPUP_SCALE);
-  const tooltipPaddingV = Math.round(8 * COMBAT_POPUP_SCALE);
+  const chipSize = INTEL_STATUS_CHIP_SIZE;
+  const tooltipMinWidth = Math.round(180 * COMBAT_POPUP_SCALE);
+  const tooltipMaxWidth = Math.round(300 * COMBAT_POPUP_SCALE);
+  const tooltipPaddingH = Math.round(12 * COMBAT_POPUP_SCALE);
+  const tooltipPaddingV = Math.round(10 * COMBAT_POPUP_SCALE);
 
   const clearDismissTimer = useCallback(() => {
     if (dismissTimerRef.current != null) {
@@ -44,32 +43,32 @@ export default function CombatStatusIconRow({
 
   const dismissTooltip = useCallback(() => {
     clearDismissTimer();
-    setTooltipContent(null);
+    setSelected(null);
   }, [clearDismissTimer]);
 
-  const showTooltip = useCallback((def: EnemyStatusEffectDef) => {
+  const showTooltip = useCallback((chip: IntelStatusChip) => {
     clearDismissTimer();
-    setTooltipContent(def);
+    setSelected(chip);
     dismissTimerRef.current = setTimeout(() => {
       dismissTimerRef.current = null;
-      setTooltipContent(null);
+      setSelected(null);
     }, TOOLTIP_DISMISS_MS);
   }, [clearDismissTimer]);
 
   useEffect(() => () => clearDismissTimer(), [clearDismissTimer]);
 
   useEffect(() => {
-    if (tooltipContent && !statusKeys.includes(tooltipContent.key)) {
+    if (selected && !chips.some((chip) => chip.id === selected.id)) {
       dismissTooltip();
     }
-  }, [dismissTooltip, statusKeys, tooltipContent]);
+  }, [chips, dismissTooltip, selected]);
 
-  if (statusKeys.length === 0) return null;
+  if (chips.length === 0) return null;
 
   return (
-    <View style={[styles.root, { minHeight: iconSize }]}>
+    <View style={[styles.root, { minHeight: chipSize }]}>
       <Modal
-        visible={tooltipContent != null}
+        visible={selected != null}
         transparent
         animationType="fade"
         statusBarTranslucent
@@ -82,7 +81,7 @@ export default function CombatStatusIconRow({
             accessibilityRole="button"
             accessibilityLabel="Dismiss status tooltip"
           />
-          {tooltipContent ? (
+          {selected ? (
             <View
               style={[
                 styles.tooltip,
@@ -95,34 +94,40 @@ export default function CombatStatusIconRow({
               ]}
               pointerEvents="none"
             >
-              <Text style={styles.tooltipText}>{`[ ${tooltipContent.label} ]`}</Text>
-              <Text style={styles.tooltipText}>{tooltipContent.description}</Text>
+              <Text style={styles.tooltipTitle}>{`[ ${selected.label.toUpperCase()} ]`}</Text>
+              <Text style={styles.tooltipBody}>{selected.description}</Text>
+              <Text style={styles.tooltipHint}>TAP TO DISMISS</Text>
             </View>
           ) : null}
         </View>
       </Modal>
 
       <View style={styles.iconRow}>
-        {statusKeys.map((key) => {
-          const def = ENEMY_STATUS_EFFECTS[key];
-          const selected = tooltipContent?.key === key;
+        {chips.map((chip) => {
+          const isSelected = selected?.id === chip.id;
           return (
             <HapticPressable
-              key={key}
-              onPress={() => showTooltip(def)}
+              key={chip.id}
+              onPress={() => showTooltip(chip)}
               style={[
                 styles.iconButton,
-                { width: iconSize, height: iconSize },
-                selected ? styles.iconButtonSelected : null,
+                { width: chipSize, height: chipSize },
+                isSelected ? styles.iconButtonSelected : null,
               ]}
               accessibilityRole="button"
-              accessibilityLabel={def.label}
+              accessibilityLabel={`${chip.label}: ${chip.description}`}
             >
-              <Image
-                source={def.icon}
-                style={{ width: iconSize - 2, height: iconSize - 2 }}
-                resizeMode="contain"
-              />
+              {chip.icon ? (
+                <Image
+                  source={chip.icon}
+                  style={{ width: chipSize - 4, height: chipSize - 4 }}
+                  resizeMode="contain"
+                />
+              ) : (
+                <Text style={styles.abbr} numberOfLines={1}>
+                  {chip.abbr}
+                </Text>
+              )}
             </HapticPressable>
           );
         })}
@@ -151,6 +156,7 @@ const styles = StyleSheet.create({
   iconRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 4,
     zIndex: 22,
   },
@@ -165,19 +171,42 @@ const styles = StyleSheet.create({
     borderColor: '#ddd6fe',
     backgroundColor: '#4c1d95',
   },
+  abbr: {
+    fontFamily: MONO,
+    fontSize: 7,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+    color: '#ddd6fe',
+  },
   tooltip: {
     backgroundColor: TOOLTIP_BG,
     borderWidth: 1,
     borderColor: TOOLTIP_BORDER,
     zIndex: 2,
-    gap: 4,
+    gap: 6,
   },
-  tooltipText: {
+  tooltipTitle: {
+    fontFamily: MONO,
+    fontSize: COMBAT_POPUP_BODY_FONT + 1,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    lineHeight: COMBAT_POPUP_BODY_FONT + 5,
+    color: VIOLET,
+  },
+  tooltipBody: {
     fontFamily: MONO,
     fontSize: COMBAT_POPUP_BODY_FONT,
-    fontWeight: '700',
+    fontWeight: '600',
     letterSpacing: 0.35,
-    lineHeight: COMBAT_POPUP_BODY_FONT + 4,
-    color: VIOLET,
+    lineHeight: COMBAT_POPUP_BODY_FONT + 5,
+    color: '#c4b5fd',
+  },
+  tooltipHint: {
+    fontFamily: MONO,
+    fontSize: COMBAT_POPUP_BODY_FONT - 1,
+    fontWeight: '600',
+    letterSpacing: 0.4,
+    color: 'rgba(196, 181, 253, 0.55)',
+    marginTop: 2,
   },
 });

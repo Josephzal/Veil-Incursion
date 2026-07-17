@@ -51,6 +51,8 @@ export default function CombatLandscapeArena({
 }: CombatLandscapeArenaProps): React.JSX.Element {
   const { isCombatDesktop, scaleCombatSize } = useCombatDesktopLayout();
   const operativeScale = operativeScaleForClass(operativeClass, isCombatDesktop);
+  const meleeWide = operativeClass === 'AEGIS';
+  const spriteSlotWidth = OPERATIVE_ARENA_SPRITE_WIDTH * (meleeWide ? 1.45 : 1);
   const operativeLeft = isCombatDesktop ? '10%' : 0;
   const { ui } = useCombatEnemyChrome();
   const eviscerateTargetPortrait = useMemo(() => {
@@ -73,9 +75,10 @@ export default function CombatLandscapeArena({
       <View
         style={[
           styles.operativeZone,
+          { width: spriteSlotWidth + 24 },
           isCombatDesktop ? {
             left: operativeLeft,
-            width: OPERATIVE_ARENA_SPRITE_WIDTH * operativeScale + scaleCombatSize(28),
+            width: spriteSlotWidth * operativeScale + scaleCombatSize(28),
             paddingLeft: scaleCombatSize(OPERATIVE_ARENA_LEFT_INSET),
             paddingTop: scaleCombatSize(OPERATIVE_ARENA_TOP_INSET),
           } : null,
@@ -86,6 +89,7 @@ export default function CombatLandscapeArena({
         <View
           style={[
             styles.operativeSpriteSlot,
+            { width: spriteSlotWidth },
             operativeScale !== 1 ? {
               transform: [{ scale: operativeScale }],
               ...(Platform.OS === 'web' ? { transformOrigin: 'bottom center' } : null),

@@ -38,7 +38,11 @@ export function decideRosterIntent(
   district: DistrictId = 1,
   playerState?: PlayerAIState,
   squad?: EnemyCombatProfile[],
-  options?: { hasAshToken?: boolean },
+  options?: {
+    hasAshToken?: boolean;
+    combatRound?: number;
+    isLastEnemyAlive?: boolean;
+  },
 ): EnemyIntent | null {
   return decideRosterIntentFromAI(profile, district, playerState, squad, options);
 }

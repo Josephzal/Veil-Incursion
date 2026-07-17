@@ -1,15 +1,16 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import TerminalText from '../TerminalText';
-import RunItemSlotsPanel from '../run/RunItemSlotsPanel';
+import RunItemSlotChip from '../run/RunItemSlotChip';
 import HapticPressable from '../HapticPressable';
+import DossierCardShell from './DossierCardShell';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
-import { useTerminal } from '../../context/TerminalContext';
 import { listHubStagedConsumables, isRunItemHubConsumable } from '../../data/hubSafehouseEngine';
 import type { CargoItemId } from '../../types/cargoGrid';
 import { getRunItemDefinitionByAnyId } from '../../data/runItemRegistry';
 import { normalizeHubRunItemId } from '../../data/runItemInventoryEngine';
-import { LoadoutSectionHeader } from './loadoutTabUi';
+import { formatRunItemSlotLabel } from '../../data/runItemUseEngine';
+import { LOADOUT_SECTION_GAP, LoadoutSectionBlock } from './loadoutTabUi';
 
 interface RunItemLoadoutPanelProps {
   accent: string;
@@ -55,60 +56,104 @@ export default function RunItemLoadoutPanel({
 
   return (
     <View style={styles.root}>
-      <LoadoutSectionHeader label="Active Slots" style={{ marginBottom: 6 }} />
-      <RunItemSlotsPanel
-        slots={account.runItemLoadout}
-        accentColor={accent}
-        mutedColor={muted}
-        title=""
-        onSelectCombatSlot={setSelectedCombatSlot}
-        onSelectFieldSlot={setSelectedFieldSlot}
-        onClearCombatSlot={(slotIndex) => clearRunItemLoadoutSlot('COMBAT', slotIndex)}
-        onClearFieldSlot={(slotIndex) => clearRunItemLoadoutSlot('FIELD', slotIndex)}
-        selectedCombatSlot={selectedCombatSlot}
-        selectedFieldSlot={selectedFieldSlot}
-      />
+      <LoadoutSectionBlock label="Combat Consumables">
+        <DossierCardShell padding={10} contentStyle={styles.slotShell}>
+          <View style={styles.row}>
+            {account.runItemLoadout.combatSlots.map((itemId, index) => {
+              const slotIndex = index as 0 | 1;
+              return (
+                <View key={`combat-${index}`} style={styles.cell}>
+                  <RunItemSlotChip
+                    itemId={itemId}
+                    label={formatRunItemSlotLabel('COMBAT', index)}
+                    accentColor={accent}
+                    mutedColor={muted}
+                    selected={selectedCombatSlot === slotIndex}
+                    onPress={() => setSelectedCombatSlot(slotIndex)}
+                    onClear={itemId ? () => clearRunItemLoadoutSlot('COMBAT', slotIndex) : undefined}
+                  />
+                </View>
+              );
+            })}
+          </View>
+        </DossierCardShell>
+      </LoadoutSectionBlock>
 
-      <LoadoutSectionHeader label="Staged Items" style={{ marginTop: 12, marginBottom: 6 }} />
-      <View style={styles.stashList}>
-        {stagedRunItems.length === 0 ? (
-          <TerminalText variant="caption" style={{ color: muted }}>
-            Craft consumables at the Fabrication Matrix to stage run items here.
-          </TerminalText>
-        ) : (
-          stagedRunItems.map((entry) => {
-            const def = getRunItemDefinitionByAnyId(entry.itemId);
-            const normalized = normalizeHubRunItemId(entry.itemId);
-            return (
-              <HapticPressable
-                key={entry.itemId}
-                onPress={() => handleEquip(entry.itemId)}
-                style={({ pressed }) => [
-                  styles.stashRow,
-                  {
-                    borderColor: muted,
-                    opacity: pressed ? 0.82 : 1,
-                  },
-                ]}
-              >
-                <TerminalText variant="body" style={{ color: '#d8e2dc', fontWeight: '700' }}>
-                  {`${entry.name.toUpperCase()} ×${entry.quantity}`}
-                </TerminalText>
-                <TerminalText variant="caption" style={{ color: muted, marginTop: 2 }}>
-                  {def?.effectSummary ?? normalized ?? entry.itemId}
-                </TerminalText>
-              </HapticPressable>
-            );
-          })
-        )}
-      </View>
+      <LoadoutSectionBlock label="Field Tools">
+        <DossierCardShell padding={10} contentStyle={styles.slotShell}>
+          <View style={styles.row}>
+            {account.runItemLoadout.fieldSlots.map((itemId, index) => {
+              const slotIndex = index as 0 | 1;
+              return (
+                <View key={`field-${index}`} style={styles.cell}>
+                  <RunItemSlotChip
+                    itemId={itemId}
+                    label={formatRunItemSlotLabel('FIELD', index)}
+                    accentColor={accent}
+                    mutedColor={muted}
+                    selected={selectedFieldSlot === slotIndex}
+                    onPress={() => setSelectedFieldSlot(slotIndex)}
+                    onClear={itemId ? () => clearRunItemLoadoutSlot('FIELD', slotIndex) : undefined}
+                  />
+                </View>
+              );
+            })}
+          </View>
+        </DossierCardShell>
+      </LoadoutSectionBlock>
+
+      <LoadoutSectionBlock label="Staged Items">
+        <View style={styles.stashList}>
+          {stagedRunItems.length === 0 ? (
+            <TerminalText variant="caption" style={{ color: muted }}>
+              Craft consumables at the Fabrication Matrix to stage run items here.
+            </TerminalText>
+          ) : (
+            stagedRunItems.map((entry) => {
+              const def = getRunItemDefinitionByAnyId(entry.itemId);
+              const normalized = normalizeHubRunItemId(entry.itemId);
+              return (
+                <HapticPressable
+                  key={entry.itemId}
+                  onPress={() => handleEquip(entry.itemId)}
+                  style={({ pressed }) => [
+                    styles.stashRow,
+                    {
+                      borderColor: muted,
+                      opacity: pressed ? 0.82 : 1,
+                    },
+                  ]}
+                >
+                  <TerminalText variant="body" style={{ color: '#d8e2dc', fontWeight: '700' }}>
+                    {`${entry.name.toUpperCase()} ×${entry.quantity}`}
+                  </TerminalText>
+                  <TerminalText variant="caption" style={{ color: muted, marginTop: 2 }}>
+                    {def?.effectSummary ?? normalized ?? entry.itemId}
+                  </TerminalText>
+                </HapticPressable>
+              );
+            })
+          )}
+        </View>
+      </LoadoutSectionBlock>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: {
-    gap: 4,
+    gap: LOADOUT_SECTION_GAP,
+  },
+  slotShell: {
+    gap: 0,
+  },
+  row: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  cell: {
+    flex: 1,
+    minWidth: 0,
   },
   stashList: {
     gap: 8,

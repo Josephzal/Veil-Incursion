@@ -4,6 +4,7 @@ import Animated, {
   cancelAnimation,
   Easing,
   runOnJS,
+  type SharedValue,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -22,11 +23,13 @@ import type { ClassType } from '../../types/game';
 import {
   computeFootprintAttackLayout,
   computeFootprintIdleLayout,
-  playerCombatAttackArtLayerStyle,
   type FootprintBox,
 } from '../../utils/combatPlayerPortrait';
 
 const LINEAR = Easing.linear;
+const STRIKE_AURA_PEAK = 0.42;
+const STRIKE_AURA_SCALE = 1.08;
+const PRIMED_GLOW = '#ff00ff';
 
 export type CombatPlayerAttackSpriteHandle = {
   executeAttackAnimation: () => Promise<void>;
@@ -37,9 +40,11 @@ interface CombatPlayerAttackSpriteProps {
   idleSource: ImageSourcePropType;
   attackSource: ImageSourcePropType;
   operativeClass?: ClassType;
-  attackArtScale?: number;
-  /** Keep attack art locked to the idle footprint — no size/position offset. */
-  lockAttackFootprint?: boolean;
+  /** Faction strike aura — shares attack footprint so it sits on the attack pose. */
+  strikeAuraOpacity: SharedValue<number>;
+  strikeTint: string;
+  /** Magenta primed glow — shares idle footprint. */
+  primedGlowOpacity: SharedValue<number>;
 }
 
 /** Idle/attack crossfade with a locked art box so portrait swaps never resize the frame. */
@@ -48,8 +53,9 @@ const CombatPlayerAttackSprite = forwardRef<CombatPlayerAttackSpriteHandle, Comb
     idleSource,
     attackSource,
     operativeClass = 'AEGIS',
-    attackArtScale = 1,
-    lockAttackFootprint = false,
+    strikeAuraOpacity,
+    strikeTint,
+    primedGlowOpacity,
   }, ref) {
     const idleOpacity = useSharedValue(1);
     const attackOpacity = useSharedValue(0);
@@ -130,20 +136,41 @@ const CombatPlayerAttackSprite = forwardRef<CombatPlayerAttackSpriteHandle, Comb
       opacity: attackOpacity.value,
     }));
 
+    const primedGlowStyle = useAnimatedStyle(() => ({
+      opacity: primedGlowOpacity.value * 0.38,
+    }));
+
+    // Keep aura registered to the attack pose footprint (same box as attack art).
+    const strikeAuraStyle = useAnimatedStyle(() => ({
+      opacity: strikeAuraOpacity.value * STRIKE_AURA_PEAK,
+    }));
+
     const hasDistinctAttackArt = idleSource !== attackSource;
-    const idleLayerStyle = lockAttackFootprint
-      ? computeFootprintIdleLayout(footprintBox, operativeClass)
-      : styles.spriteLayer;
-    const attackLayerStyle = lockAttackFootprint
-      ? computeFootprintAttackLayout(footprintBox, operativeClass)
-      : [styles.spriteLayer, playerCombatAttackArtLayerStyle(attackArtScale)];
+    const idleLayerStyle = computeFootprintIdleLayout(footprintBox, operativeClass);
+    const attackLayerStyle = computeFootprintAttackLayout(footprintBox, operativeClass);
 
     return (
       <View
-        style={[styles.artBox, lockAttackFootprint && styles.artBoxFootprintLock]}
-        onLayout={lockAttackFootprint ? onArtBoxLayout : undefined}
+        style={styles.artBox}
+        onLayout={onArtBoxLayout}
         pointerEvents="none"
       >
+        <Animated.View style={[idleLayerStyle, primedGlowStyle]} pointerEvents="none">
+          <Animated.Image
+            source={idleSource}
+            resizeMode="contain"
+            style={[styles.fill, styles.auraScale, { tintColor: PRIMED_GLOW }]}
+          />
+        </Animated.View>
+        {hasDistinctAttackArt ? (
+          <Animated.View style={[attackLayerStyle, strikeAuraStyle]} pointerEvents="none">
+            <Animated.Image
+              source={attackSource}
+              resizeMode="contain"
+              style={[styles.fill, styles.auraScale, { tintColor: strikeTint }]}
+            />
+          </Animated.View>
+        ) : null}
         <Animated.Image
           source={idleSource}
           resizeMode="contain"
@@ -169,23 +196,16 @@ const styles = StyleSheet.create({
     height: '100%',
     minHeight: 120,
     position: 'relative',
-    overflow: 'hidden',
+    overflow: 'visible',
     alignItems: 'center',
     justifyContent: 'flex-end',
     backgroundColor: 'transparent',
   },
-  artBoxFootprintLock: {
-    overflow: 'visible',
-  },
-  spriteLayer: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
+  fill: {
     width: '100%',
     height: '100%',
-    minHeight: 120,
-    backgroundColor: 'transparent',
+  },
+  auraScale: {
+    transform: [{ scale: STRIKE_AURA_SCALE }],
   },
 });

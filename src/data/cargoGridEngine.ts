@@ -410,18 +410,14 @@ export function stripVeilResidueFromCargo(cargo: CargoRunState): CargoRunState {
   };
 }
 
-/** Removes unclaimed harvest loot. Packed non-residue grid items are kept. */
+/** Purges everything still in the harvest bay. Only packed grid cargo survives. */
 export function finalizeHarvestCargoState(
   cargo: CargoRunState,
-  stagingInstanceIds: ReadonlySet<string>,
+  _stagingInstanceIds?: ReadonlySet<string>,
 ): CargoRunState {
   return {
     ...cargo,
-    containment: cargo.containment.filter((item) => {
-      if (isVeilResidueCargoItem(item.itemId)) return false;
-      if (!stagingInstanceIds.has(item.instanceId)) return true;
-      return false;
-    }),
+    containment: [],
     grid: {
       placed: cargo.grid.placed.filter((item) => !isVeilResidueCargoItem(item.itemId)),
     },

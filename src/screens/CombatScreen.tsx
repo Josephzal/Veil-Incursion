@@ -698,16 +698,6 @@ export default function CombatScreen(): React.JSX.Element {
                 primaryColor={theme.primaryColor}
               />
 
-              <TurnOrderSidebar
-                turnOrder={squadUi?.turnOrder}
-                gridUnits={gridUnits}
-                operativeClass={operativeClass}
-                primaryColor={theme.primaryColor}
-                mutedColor={theme.mutedColor}
-                selectedUnitId={selectedEnemyUnit?.unitId}
-                onHostilePress={handleTurnOrderHostilePress}
-              />
-
               <CombatJuiceHost style={styles.body}>
                 <View style={styles.arenaPanel}>
                   <CombatArenaBackground
@@ -716,6 +706,16 @@ export default function CombatScreen(): React.JSX.Element {
                   />
 
                   <View style={styles.arenaForeground} pointerEvents="box-none">
+                    <TurnOrderSidebar
+                      turnOrder={squadUi?.turnOrder}
+                      gridUnits={gridUnits}
+                      operativeClass={operativeClass}
+                      primaryColor={theme.primaryColor}
+                      mutedColor={theme.mutedColor}
+                      selectedUnitId={selectedEnemyUnit?.unitId}
+                      onHostilePress={handleTurnOrderHostilePress}
+                    />
+
                     <ParticleOverlay biomeId={combatBiomeId} />
 
                     <CombatLandscapeArena

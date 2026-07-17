@@ -6,7 +6,10 @@ import HapticPressable from '../HapticPressable';
 import {
   computeParryArenaLayout,
   getParryCenterHitRadius,
+  PARRY_OUTER_RING_STROKE,
   PARRY_RING_SIZE_RATIO,
+  PARRY_STATIC_RING_STROKE,
+  PARRY_SWEET_RING_STROKE,
   type ParryArenaLayout,
 } from '../../utils/parryCollision';
 
@@ -111,8 +114,8 @@ export default function ParryMatrixOverlay({
                   r={baseR}
                   fill="none"
                   stroke={PARRY_SWEET}
-                  strokeWidth={2}
-                  opacity={0.2}
+                  strokeWidth={PARRY_SWEET_RING_STROKE}
+                  opacity={0.22}
                 />
                 <Circle
                   cx={cx}
@@ -120,7 +123,7 @@ export default function ParryMatrixOverlay({
                   r={baseR}
                   fill="none"
                   stroke={PARRY_RING_BRIGHT}
-                  strokeWidth={4}
+                  strokeWidth={PARRY_STATIC_RING_STROKE}
                 />
                 <Circle
                   cx={cx}
@@ -143,7 +146,10 @@ export default function ParryMatrixOverlay({
                 pointerEvents="none"
                 style={[
                   styles.outerRing,
-                  { borderColor: PARRY_RING_BRIGHT },
+                  {
+                    borderColor: PARRY_RING_BRIGHT,
+                    borderWidth: PARRY_OUTER_RING_STROKE,
+                  },
                   outerRingStyle,
                 ]}
               />
@@ -154,7 +160,7 @@ export default function ParryMatrixOverlay({
       ) : null}
 
       <Text style={styles.hint} pointerEvents="none">
-        TAP CENTER WHEN RINGS COLLIDE
+        TAP INSIDE RING WHEN RINGS COLLIDE
       </Text>
     </View>
   );

@@ -55,6 +55,27 @@ function attackArtScaleForBox(idle: PortraitMeta, attack: PortraitMeta, box: Foo
   return (idle.contentH * idleScale) / (attack.contentH * attackScale);
 }
 
+/**
+ * Extra shrink after height-matching — attack pose should read slightly smaller than idle.
+ * Aegis attack canvas is much wider; without this it still feels oversized.
+ */
+const ATTACK_RELATIVE_TO_IDLE: Record<ClassType, number> = {
+  AEGIS: 0.86,
+  HEX_SHOT: 0.94,
+  ENVOY: 0.94,
+};
+
+/**
+ * Where the character body sits in the attack canvas (0 = left edge, 0.5 = center).
+ * Aegis attack art extends right with the blade — keep the body under the idle pose
+ * so the lunge reads forward instead of canceling into a centered wide frame.
+ */
+const ATTACK_BODY_ANCHOR_X: Record<ClassType, number> = {
+  AEGIS: 0.30,
+  HEX_SHOT: 0.50,
+  ENVOY: 0.50,
+};
+
 /** Width-limited estimate for legacy aura sizing outside the footprint lock path. */
 function attackArtScaleEstimate(idle: PortraitMeta, attack: PortraitMeta): number {
   return (idle.contentH / idle.canvasW) / (attack.contentH / attack.canvasW);
@@ -108,8 +129,8 @@ export function computeFootprintIdleLayout(box: FootprintBox, classId: ClassType
 }
 
 /**
- * Pixel-locked attack layout — matches idle character height and foot line.
- * No transform scale; size boost is baked into width/height.
+ * Pixel-locked attack layout — slightly smaller than idle character height,
+ * body-anchored so wide melee canvases still read as lunging forward.
  */
 export function computeFootprintAttackLayout(box: FootprintBox, classId: ClassType): ImageStyle {
   if (box.width <= 0 || box.height <= 0) {
@@ -125,14 +146,17 @@ export function computeFootprintAttackLayout(box: FootprintBox, classId: ClassTy
   }
 
   const { idle, attack } = PORTRAIT_META[classId];
-  const boost = attackArtScaleForBox(idle, attack, box);
+  const boost = attackArtScaleForBox(idle, attack, box) * ATTACK_RELATIVE_TO_IDLE[classId];
   const display = canvasDisplaySize(attack, box, boost);
   const footDeltaPx = (attack.feetFromBottom - idle.feetFromBottom) * (display.width / attack.canvasW);
+  const idleCenterX = box.width / 2;
+  const bodyAnchorX = ATTACK_BODY_ANCHOR_X[classId];
+  const left = idleCenterX - display.width * bodyAnchorX;
 
   return {
     position: 'absolute',
     bottom: 0,
-    left: (box.width - display.width) / 2,
+    left,
     width: display.width,
     height: display.height,
     backgroundColor: 'transparent',
@@ -151,7 +175,7 @@ export function resolvePlayerCombatAttackPortrait(classId: ClassType = 'AEGIS'):
 
 export function resolvePlayerCombatAttackArtScale(classId: ClassType = 'AEGIS'): number {
   const { idle, attack } = PORTRAIT_META[classId];
-  return attackArtScaleEstimate(idle, attack);
+  return attackArtScaleEstimate(idle, attack) * ATTACK_RELATIVE_TO_IDLE[classId];
 }
 
 export function playerCombatAttackArtLayerStyle(scale: number): ImageStyle {

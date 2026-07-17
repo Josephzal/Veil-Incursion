@@ -173,20 +173,22 @@ export function shouldShowEncounterWarningCard(args: {
   depth: 1 | 2 | 3;
   riskLabel: EncounterRiskLabel;
 }): boolean {
+  // Elite combat enters immediately — no "Elite Contact" threat-brief popup.
+  if (args.isElite || args.riskLabel === 'ELITE') return false;
+
   if (args.templateId) {
     const template = getEncounterCompositionTemplate(args.templateId);
     if (template.requiresWarningCard) return true;
   }
   if (args.hasModifier || args.hasTwisted) return true;
-  if (args.highRisk || args.isElite) return true;
+  if (args.highRisk) return true;
   if (args.anchorSignal && args.depth >= 2) return true;
   if (
     args.riskLabel === 'HIGH_RISK'
-    || args.riskLabel === 'ELITE'
     || args.riskLabel === 'APEX_WARNING'
     || args.riskLabel === 'ELEVATED'
   ) {
-    if (args.depth === 1 && !args.hasModifier && !args.isElite && !args.highRisk) {
+    if (args.depth === 1 && !args.hasModifier && !args.highRisk) {
       return false;
     }
     return true;

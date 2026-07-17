@@ -7,6 +7,8 @@ import {
 } from './AIDecisionEngine';
 import { decideRosterIntent, syncRosterCombatState } from './combatRosterActions';
 import { canRosterUseFortify } from './enemyPostureConfig';
+import { tickEnemyAiMemoryAfterIntent } from './enemyAiMemory';
+import { aliveUnits } from './combatSquadEngine';
 import { ENEMY_ROSTER, spawnRosterUnit } from './enemyRoster';
 import { isRedundantBuffIntent } from './enemyIntentUtils';
 import { getNodeScale } from './enemyNodeScale';
@@ -231,7 +233,11 @@ export function advanceEnemyIntent(
   district: DistrictId = 1,
   playerState?: PlayerAIState,
   squad?: EnemyCombatProfile[],
-  options?: { hasAshToken?: boolean },
+  options?: {
+    hasAshToken?: boolean;
+    combatRound?: number;
+    isLastEnemyAlive?: boolean;
+  },
 ): EnemyCombatProfile {
   if (profile.testPreset === 'easy') {
     return {
@@ -250,24 +256,44 @@ export function advanceEnemyIntent(
       chargeTurns: 0,
       intent: nextIntent,
       evadeActive: false,
+      aiMemory: tickEnemyAiMemoryAfterIntent(profile.aiMemory, nextIntent),
     };
   }
 
   const synced = syncRosterCombatState(profile);
+  const combatRound = options?.combatRound ?? 1;
+  const isLastEnemyAlive = options?.isLastEnemyAlive
+    ?? (squad ? aliveUnits(squad).length <= 1 : true);
 
   let chargeTurns = synced.chargeTurns;
   if (synced.intent === 'CHARGE') chargeTurns += 1;
   else if (synced.intent !== 'WORLD_ENDER') chargeTurns = 0;
 
+  const decisionOptions = {
+    hasAshToken: options?.hasAshToken,
+    combatRound,
+    isLastEnemyAlive,
+  };
+
   let nextIntent = synced.rosterId
-    ? (decideRosterIntent({ ...synced, chargeTurns }, district, playerState, squad, options) ?? decideEnemyIntent({
-        enemy: enemyAIStateFromProfile({ ...synced, chargeTurns }, district),
-        player: playerState ?? defaultPlayerAIState(),
-      }))
+    ? (decideRosterIntent(
+      { ...synced, chargeTurns },
+      district,
+      playerState,
+      squad,
+      decisionOptions,
+    ) ?? decideEnemyIntent({
+      enemy: enemyAIStateFromProfile({ ...synced, chargeTurns }, district),
+      player: playerState ?? defaultPlayerAIState(),
+      combatRound,
+      isLastEnemyAlive,
+    }))
     : decideEnemyIntent({
-        enemy: enemyAIStateFromProfile({ ...synced, chargeTurns }, district),
-        player: playerState ?? defaultPlayerAIState(),
-      });
+      enemy: enemyAIStateFromProfile({ ...synced, chargeTurns }, district),
+      player: playerState ?? defaultPlayerAIState(),
+      combatRound,
+      isLastEnemyAlive,
+    });
 
   if (isRedundantBuffIntent(nextIntent, synced)) {
     nextIntent = 'STRIKE';
@@ -292,6 +318,7 @@ export function advanceEnemyIntent(
     intent: nextIntent,
     evadeActive: telegraphLocked ? false : synced.evadeActive,
     isCharging: nextCharging,
+    aiMemory: tickEnemyAiMemoryAfterIntent(synced.aiMemory, nextIntent),
     rosterAbilityCooldown: synced.rosterId === 'null-shade' && (synced.rosterAbilityCooldown ?? 0) > 0
       ? (synced.rosterAbilityCooldown ?? 0) - 1
       : synced.rosterAbilityCooldown,

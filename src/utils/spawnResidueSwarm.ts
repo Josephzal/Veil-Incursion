@@ -1,5 +1,6 @@
 import type { ActiveIncursionState } from '../types/game';
 import type { HarvestFloorBounds, ResidueEnemyTier, ResidueParticleData } from '../types/residueParticle';
+import { scatterPointsInFloor } from './harvestScatter';
 
 let particleSeq = 0;
 
@@ -10,10 +11,6 @@ function nextParticleId(): string {
 
 function randomInt(min: number, max: number): number {
   return min + Math.floor(Math.random() * (max - min + 1));
-}
-
-function randomInRange(min: number, max: number): number {
-  return min + Math.random() * (max - min);
 }
 
 /** Base particle counts per drop — doubled for denser swarms; values still sum to totalValue. */
@@ -50,7 +47,7 @@ export function resolveResidueEnemyTier(inc: ActiveIncursionState): ResidueEnemy
 
 /**
  * Generates a swarm of ghostly residue particles for one loot drop.
- * Particles scatter randomly across the harvest floor (may overlap resources).
+ * Particles scatter randomly inside the measured harvest floor (inset so they stay visible).
  */
 export function spawnResidueSwarm(
   enemyType: ResidueEnemyTier,
@@ -59,20 +56,28 @@ export function spawnResidueSwarm(
   options?: {
     instanceId?: string;
     totalValue?: number;
+    /** Prior particle centers (overlay space) for soft anti-stacking. */
+    existingCenters?: ReadonlyArray<{ x: number; y: number }>;
   },
 ): ResidueParticleData[] {
   const count = particleCountForTier(enemyType);
   const totalValue = options?.totalValue ?? 1;
   const values = splitResidueValue(totalValue, count);
   const instanceId = options?.instanceId ?? nextParticleId();
+  const sizes = values.map(() => randomInt(8, 12));
+  const maxRadius = Math.max(...sizes, 10) / 2;
+  const points = scatterPointsInFloor(floor, count, {
+    radius: maxRadius + 4,
+    existingCenters: options?.existingCenters,
+  });
 
-  return values.map((value) => ({
+  return values.map((value, index) => ({
     id: nextParticleId(),
     instanceId,
-    startX: randomInRange(floor.xMin, floor.xMax),
-    startY: randomInRange(floor.yMin, floor.yMax),
+    startX: points[index]?.x ?? (floor.xMin + floor.xMax) / 2,
+    startY: points[index]?.y ?? (floor.yMin + floor.yMax) / 2,
     value,
-    size: randomInt(8, 12),
+    size: sizes[index] ?? 10,
     vacuumDelayMs: Math.random() * 300,
   }));
 }

@@ -15,7 +15,10 @@ import {
 import {
   computeParryArenaLayout,
   getParryCenterHitRadius,
+  PARRY_OUTER_RING_STROKE,
   PARRY_RING_SIZE_RATIO,
+  PARRY_STATIC_RING_STROKE,
+  PARRY_SWEET_RING_STROKE,
   type ParryArenaLayout,
 } from '../../utils/parryCollision';
 
@@ -23,9 +26,6 @@ const MONO = 'monospace';
 const PARRY_RING = '#e8d998';
 const PARRY_RING_BRIGHT = '#f5ecc8';
 const PARRY_SWEET = '#fff8dc';
-const INNER_STROKE = 4;
-const OUTER_STROKE = 1.5;
-const SWEET_STROKE = 2;
 const CENTER_DOT_RADIUS = 5;
 /** Centered parry arena as a share of the shorter screen axis. */
 const PARRY_ARENA_SCREEN_RATIO = 0.58;
@@ -110,9 +110,9 @@ export default function ParryMatrixOverlay({
                   cy={cy}
                   r={baseR}
                   color={PARRY_SWEET}
-                  opacity={0.2}
+                  opacity={0.22}
                   style="stroke"
-                  strokeWidth={SWEET_STROKE}
+                  strokeWidth={PARRY_SWEET_RING_STROKE}
                 />
                 <Circle
                   cx={cx}
@@ -120,7 +120,7 @@ export default function ParryMatrixOverlay({
                   r={baseR}
                   color={PARRY_RING_BRIGHT}
                   style="stroke"
-                  strokeWidth={INNER_STROKE}
+                  strokeWidth={PARRY_STATIC_RING_STROKE}
                 />
                 <Circle
                   cx={cx}
@@ -129,7 +129,7 @@ export default function ParryMatrixOverlay({
                   color={PARRY_RING_BRIGHT}
                   opacity={0.9}
                   style="stroke"
-                  strokeWidth={OUTER_STROKE}
+                  strokeWidth={PARRY_OUTER_RING_STROKE}
                 >
                   <DashPathEffect intervals={[8, 6]} />
                 </Circle>
@@ -151,7 +151,7 @@ export default function ParryMatrixOverlay({
       ) : null}
 
       <Text style={styles.hint} pointerEvents="none">
-        TAP CENTER WHEN RINGS COLLIDE
+        TAP INSIDE RING WHEN RINGS COLLIDE
       </Text>
     </View>
   );

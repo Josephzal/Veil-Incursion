@@ -4,7 +4,7 @@ import HapticPressable from './HapticPressable';
 import { Grid, GridCell } from './layout/Grid';
 import TacticalTagRow, { parseTagsLine } from './hub/TacticalTagRow';
 import DossierCardShell from './hub/DossierCardShell';
-import TerminalText from './TerminalText';
+import { LoadoutSectionBlock, LOADOUT_SECTION_GAP } from './hub/loadoutTabUi';
 import { CARD_BLACK, DOSSIER_ROW_BG } from '../constants/dossierSurface';
 import { useHubLayout } from '../context/HubLayoutContext';
 import { ABILITY_CARD_MIN_HEIGHT } from '../constants/layoutTokens';
@@ -110,10 +110,9 @@ export default function ClassLoadoutEditor<T extends string>({
   hideCommit = false,
 }: ClassLoadoutEditorProps<T>): React.JSX.Element {
   const textColor = theme.textColor ?? '#d8e2dc';
-  const { isDesktop, scaleSpacing } = useHubLayout();
+  const { isDesktop } = useHubLayout();
   const { bodySize, captionSize } = useSafehouseTypography();
   const cardStyle = isDesktop ? styles.cardDesktop : null;
-  const panelPadding = scaleSpacing(10);
 
   const handleAbilityPress = (abilityId: T) => {
     const unlocked = isUnlocked(abilityId);
@@ -129,17 +128,12 @@ export default function ClassLoadoutEditor<T extends string>({
       {title ? <Text style={[styles.title, { color: theme.mutedColor }]}>{title}</Text> : null}
       {hint ? <Text style={[styles.hint, { color: theme.mutedColor }]}>{hint}</Text> : null}
 
-      <DossierCardShell
-        padding={panelPadding}
-        style={styles.sectionShell}
-        contentStyle={styles.sectionContent}
-      >
-        <TerminalText variant="panelTitle" letterSpacing={0.8} style={[styles.sectionTitle, { color: theme.mutedColor }]}>
-          ACTIVE SLOTS
-        </TerminalText>
-        <TerminalText variant="caption" style={{ color: theme.mutedColor }}>
-          TAP SLOT TO SELECT
-        </TerminalText>
+      <LoadoutSectionBlock label="Active Slots">
+        <DossierCardShell
+          padding={10}
+          style={styles.sectionShell}
+          contentStyle={styles.sectionContent}
+        >
         <Grid columns={2}>
           <GridCell>
             <View
@@ -229,19 +223,15 @@ export default function ClassLoadoutEditor<T extends string>({
           );
         })}
         </Grid>
-      </DossierCardShell>
+        </DossierCardShell>
+      </LoadoutSectionBlock>
 
-      <DossierCardShell
-        padding={panelPadding}
-        style={styles.sectionShell}
-        contentStyle={styles.sectionContent}
-      >
-        <TerminalText variant="panelTitle" letterSpacing={0.8} style={[styles.sectionTitle, { color: theme.mutedColor }]}>
-          ABILITY POOL
-        </TerminalText>
-        <TerminalText variant="caption" style={{ color: theme.mutedColor }}>
-          TAP TO ASSIGN OR UNLOCK
-        </TerminalText>
+      <LoadoutSectionBlock label="Ability Pool">
+        <DossierCardShell
+          padding={10}
+          style={styles.sectionShell}
+          contentStyle={styles.sectionContent}
+        >
         <Grid columns={2}>
         {assignableIds.map((abilityId) => {
           const def = catalog[abilityId];
@@ -305,6 +295,7 @@ export default function ClassLoadoutEditor<T extends string>({
         })}
         </Grid>
       </DossierCardShell>
+      </LoadoutSectionBlock>
 
       {statusMessage ? (
         <Text style={[styles.status, { color: theme.mutedColor }]}>{statusMessage}</Text>
@@ -328,16 +319,12 @@ export default function ClassLoadoutEditor<T extends string>({
 }
 
 const styles = StyleSheet.create({
-  root: { gap: 10 },
+  root: { gap: LOADOUT_SECTION_GAP },
   sectionShell: {
     width: '100%',
   },
   sectionContent: {
     gap: 8,
-  },
-  sectionTitle: {
-    fontWeight: '700',
-    flexShrink: 0,
   },
   title: {
     fontFamily: MONO,

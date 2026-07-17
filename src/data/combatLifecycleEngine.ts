@@ -476,20 +476,17 @@ const ashWeeperDeath: DeathHandler = (enemy, killingBlow, ctx) => {
   }
   const explosionType = getAlphaMechanic<string>(enemy, 'kineticDeathExplosionType', 'OCCULT');
   const explosionDamage = getAlphaMechanic(enemy, 'explosionDamage', 15);
-  if (explosionType === 'TRUE_DAMAGE' && killingBlow.channel === 'KINETIC') {
-    return {
-      squad: ctx.squad,
-      logLines: [`>> ${enemy.designation} CINDER DETONATION — ${explosionDamage} unblockable damage.`],
-      playerHpDelta: -explosionDamage,
-      ashTokenSlot: enemy.gridSlot,
-    };
-  }
   if (killingBlow.channel !== 'KINETIC') {
     return { squad: ctx.squad, logLines: [], ashTokenSlot: enemy.gridSlot };
   }
+  const isTrueDamage = explosionType === 'TRUE_DAMAGE';
   return {
     squad: ctx.squad,
-    logLines: [`>> ${enemy.designation} ASH DETONATION — parry window to contain occult backlash.`],
+    logLines: [
+      isTrueDamage
+        ? `>> ${enemy.designation} CINDER DETONATION — parry window to contain ${explosionDamage} true damage.`
+        : `>> ${enemy.designation} ASH DETONATION — parry window to contain occult backlash.`,
+    ],
     delayDissolve: true,
     triggerRetributionParry: { unitId: enemy.unitId, occultDamage: explosionDamage },
     ashTokenSlot: enemy.gridSlot,
@@ -511,21 +508,21 @@ const genericAshDeath: DeathHandler = (enemy, _killingBlow, ctx) => {
 const spallDeath: DeathHandler = (enemy, _killingBlow, ctx) => {
   if (enemy.rosterId !== 'spall') return { ...EMPTY_DEATH, squad: ctx.squad };
   const explosionDamage = getAlphaMechanic(enemy, 'explosionDamage', 12);
-  const piercesDefend = getAlphaMechanic(enemy, 'piercesDefend', false);
-  if (!piercesDefend && ctx.extras.playerDefendedThisTurn) {
+  if (!enemy.unitId) {
     return {
       squad: ctx.squad,
-      logLines: [`>> ${enemy.designation} shrapnel contained — defend active.`],
+      logLines: [`>> ${enemy.designation} VOLATILE SHATTER — ${explosionDamage} shrapnel damage.`],
+      playerHpDelta: -explosionDamage,
+      ashTokenSlot: enemy.gridSlot,
     };
   }
   return {
     squad: ctx.squad,
     logLines: [
-      piercesDefend
-        ? `>> ${enemy.designation} VOLATILE SHATTER — ${explosionDamage} shrapnel pierces defend.`
-        : `>> ${enemy.designation} VOLATILE SHATTER — ${explosionDamage} shrapnel damage.`,
+      `>> ${enemy.designation} VOLATILE SHATTER — parry window to contain ${explosionDamage} shrapnel.`,
     ],
-    playerHpDelta: -explosionDamage,
+    delayDissolve: true,
+    triggerRetributionParry: { unitId: enemy.unitId, occultDamage: explosionDamage },
     ashTokenSlot: enemy.gridSlot,
   };
 };

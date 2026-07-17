@@ -11,6 +11,7 @@ import { COMBAT_DEFENSE_BALANCE } from './balance/combatDefenseBalanceConfig';
 import { initRosterLifecycleDefaults } from './combatLifecycleEngine';
 import { CONCRETE_GARGOYLE_FRACTURE_MAX } from './combatRosterActions';
 import { canRosterUseFortify, defaultPostureIntentForRoster } from './enemyPostureConfig';
+import { createEmptyEnemyAiMemory, tickEnemyAiMemoryAfterIntent } from './enemyAiMemory';
 import type { DistrictId } from './districtPacing';
 import { depthFromNodesCleared, localLevelFromDepth } from './districtPacing';
 import type { ThreatTier } from './combatEncounterBudget';
@@ -1018,6 +1019,7 @@ export function spawnRosterUnit(
     ...originFlags,
     evadeChance: Math.min(entry.evadeChance, COMBAT_CHANCE.ENEMY_MAX_EVADE_CHANCE),
     critChance: entry.critChance,
+    aiMemory: tickEnemyAiMemoryAfterIntent(createEmptyEnemyAiMemory(), intent),
   };
   const localLevel = localLevelFromDepth(depth);
   const resonancePct = options?.resonancePercent ?? 0;

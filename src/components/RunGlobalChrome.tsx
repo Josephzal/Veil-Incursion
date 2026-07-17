@@ -1,14 +1,11 @@
 import React, { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import RunFeedChromeButtons from './run/RunFeedChromeButtons';
-import CargoPressurePanel from './CargoPressurePanel';
 import TerminalText from './TerminalText';
 import { useTerminal } from '../context/TerminalContext';
 import { useCargoOverlay } from '../context/CargoOverlayContext';
 import { useRunStatusOverlay } from '../context/RunStatusOverlayContext';
 import { useRun } from '../context/RunContext';
-import { hasActiveCarriedCargoEffects } from '../data/unstableCargoEffectsEngine';
-import { resolveSpecialCargoStacksForIncursion } from '../data/postRunCargoRoutingRunState';
 import { getEquippedKeepsakeShortLabel } from '../data/expeditionKeepsakeEngine';
 import { buildKeepsakeLiveCounters } from '../data/expeditionKeepsakeRunUiEngine';
 import { buildRunItemLiveCounters, shouldShowRunItemChromeChip } from '../data/runItemRunUiEngine';
@@ -22,7 +19,6 @@ export default function RunGlobalChrome(): React.JSX.Element | null {
   const status = useRunStatusOverlay();
   const showStatus = status?.statusEnabled ?? false;
   const showCargo = cargo?.cargoEnabled ?? false;
-  const specialCargoStacks = resolveSpecialCargoStacksForIncursion(activeIncursion);
   const keepsakeLabel = getEquippedKeepsakeShortLabel(activeIncursion.keepsakeRuntime);
   const keepsakeCounters = useMemo(
     () => buildKeepsakeLiveCounters(activeIncursion.keepsakeRuntime),
@@ -37,13 +33,15 @@ export default function RunGlobalChrome(): React.JSX.Element | null {
     () => buildRunItemLiveCounters(activeIncursion.itemRuntime, activeIncursion.runItems),
     [activeIncursion.itemRuntime, activeIncursion.runItems],
   );
-  const showCargoPressure = hasActiveCarriedCargoEffects(activeIncursion.cargo)
-    || specialCargoStacks > 0;
 
-  if (!showStatus && !showCargo && !showCargoPressure && !keepsakeLabel && !showRunItemsChip) return null;
+  if (!showStatus && !showCargo && !keepsakeLabel && !showRunItemsChip) return null;
 
   return (
     <View style={styles.host} pointerEvents="box-none">
+      <RunFeedChromeButtons
+        accent={theme.statusColor}
+        mutedColor={theme.mutedColor}
+      />
       {keepsakeLabel ? (
         <View style={[styles.keepsakeChip, { borderColor: `${theme.statusColor}66` }]}>
           <Text style={[styles.keepsakeText, { color: theme.statusColor }]}>
@@ -96,21 +94,6 @@ export default function RunGlobalChrome(): React.JSX.Element | null {
           ) : null}
         </View>
       ) : null}
-      {showCargoPressure ? (
-        <View style={styles.pressureHost}>
-          <CargoPressurePanel
-            cargo={activeIncursion.cargo}
-            specialCargoStacks={specialCargoStacks}
-            accentColor="#f59e0b"
-            mutedColor={theme.mutedColor}
-            compact
-          />
-        </View>
-      ) : null}
-      <RunFeedChromeButtons
-        accent={theme.statusColor}
-        mutedColor={theme.mutedColor}
-      />
     </View>
   );
 }
@@ -124,9 +107,6 @@ const styles = StyleSheet.create({
     elevation: 30,
     alignItems: 'flex-end',
     gap: 6,
-    maxWidth: 220,
-  },
-  pressureHost: {
     maxWidth: 220,
   },
   keepsakeChip: {

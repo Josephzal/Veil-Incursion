@@ -2,6 +2,20 @@ import type { DistrictId } from './districtPacing';
 import { canRosterUseFortify } from './enemyPostureConfig';
 import { isEvadePostureActive } from './enemyIntentUtils';
 import type { EnemyClass, EnemyCombatProfile, EnemyIntent } from '../types/run';
+import {
+  applyArchetypeOpenerWeights,
+  applyDefensiveUrgency,
+  applyIntentMemory,
+  type AiScoringContext,
+} from './enemyAiScoring';
+import {
+  ensureEnemyAiMemory,
+  type EnemyAiMemory,
+  type EnemyAiTacticalRole,
+} from './enemyAiMemory';
+import { ENEMY_COMPOSITION_ROLES } from './enemyCompositionRoleCatalog';
+import { ENCOUNTER_KEY_TO_ROSTER } from './enemyCombatConfig';
+import type { EncounterEnemyKey } from './enemyCombatConfig';
 
 /** Operative snapshot for hostile intent selection. */
 export interface PlayerAIState {
@@ -32,12 +46,22 @@ export interface EnemyAIState {
   queuedAction?: string | null;
   isUntargetable?: boolean;
   rosterAbilityCooldown?: number;
+  aiMemory?: EnemyAiMemory;
+  tacticalRole?: EnemyAiTacticalRole;
+  isMarkedOrExposed?: boolean;
+  isChargingOrPreparing?: boolean;
+  isEliteOrAlpha?: boolean;
+  isBoss?: boolean;
 }
 
 export interface AIDecisionContext {
   enemy: EnemyAIState;
   player: PlayerAIState;
   rng?: () => number;
+  /** Player turns completed this combat (1 = first player turn / spawn telegraph). */
+  combatRound?: number;
+  isLastEnemyAlive?: boolean;
+  squadHasDefenderPosture?: boolean;
 }
 
 export interface WeightedIntent {
@@ -54,7 +78,6 @@ export const SIPHON_ELIGIBLE_ROSTER_IDS = new Set([
   'spatial-glitch',
 ]);
 const STAMINA_DRAIN_INTENTS: EnemyIntent[] = ['STRIP_STAMINA'];
-const DEFENSIVE_INTENTS: EnemyIntent[] = ['EVADE', 'FORTIFY'];
 const AGGRESSIVE_INTENTS: EnemyIntent[] = [
   'STRIKE',
   'WORLD_ENDER',
@@ -63,10 +86,8 @@ const AGGRESSIVE_INTENTS: EnemyIntent[] = [
 ];
 const HEAL_INTENTS: EnemyIntent[] = []; // reserved — no hostile heal intents in roster yet
 
-const LOW_HP_THRESHOLD = 0.3;
 const LETHAL_WEIGHT = 100;
 const DEFAULT_WEIGHT = 1;
-const DEFENSIVE_CRISIS_WEIGHT = 6;
 
 type IntentFilterRule = (pool: EnemyIntent[], ctx: AIDecisionContext) => EnemyIntent[];
 type IntentWeightRule = (weights: WeightedIntent[], ctx: AIDecisionContext) => WeightedIntent[];
@@ -79,6 +100,21 @@ const ARTILLERY_ROSTER_IDS = new Set([
   'splinter',
   'spotter',
 ]);
+
+const ROSTER_TO_ENCOUNTER_KEY: Partial<Record<string, EncounterEnemyKey>> = (() => {
+  const map: Partial<Record<string, EncounterEnemyKey>> = {};
+  for (const [key, rosterId] of Object.entries(ENCOUNTER_KEY_TO_ROSTER) as [EncounterEnemyKey, string][]) {
+    map[rosterId] = key;
+  }
+  return map;
+})();
+
+export function resolveEnemyTacticalRole(rosterId?: string): EnemyAiTacticalRole {
+  if (!rosterId) return 'UNKNOWN';
+  const key = ROSTER_TO_ENCOUNTER_KEY[rosterId];
+  if (!key) return 'UNKNOWN';
+  return ENEMY_COMPOSITION_ROLES[key]?.primaryRole ?? 'UNKNOWN';
+}
 
 function pruneArtilleryFortify(pool: EnemyIntent[], ctx: AIDecisionContext): EnemyIntent[] {
   const rosterId = ctx.enemy.rosterId;
@@ -100,13 +136,43 @@ export const INTENT_FILTER_RULES: IntentFilterRule[] = [
   pruneArtilleryFortify,
   pruneBlockedRosterFortify,
   pruneHealAtFullHp,
-  // Example future rule: pruneMeleeWhenPlayerRetaliating,
 ];
+
+function toScoringContext(ctx: AIDecisionContext): AiScoringContext {
+  return {
+    enemy: {
+      hp: ctx.enemy.hp,
+      maxHp: ctx.enemy.maxHp,
+      aiMemory: ctx.enemy.aiMemory,
+      tacticalRole: ctx.enemy.tacticalRole,
+      isMarkedOrExposed: ctx.enemy.isMarkedOrExposed,
+      isChargingOrPreparing: ctx.enemy.isChargingOrPreparing,
+      isEliteOrAlpha: ctx.enemy.isEliteOrAlpha,
+      isBoss: ctx.enemy.isBoss,
+    },
+    player: {
+      hp: ctx.player.hp,
+      maxHp: ctx.player.maxHp,
+      actionPoints: ctx.player.actionPoints,
+    },
+    combatRound: ctx.combatRound,
+    isLastEnemyAlive: ctx.isLastEnemyAlive,
+    squadHasDefenderPosture: ctx.squadHasDefenderPosture,
+  };
+}
+
+function wrapScoringRule(
+  rule: (weights: WeightedIntent[], scoring: AiScoringContext) => WeightedIntent[],
+): IntentWeightRule {
+  return (weights, ctx) => rule(weights, toScoringContext(ctx));
+}
 
 /** Adjust weights for tactical priorities. Add new weight rules here. */
 export const INTENT_WEIGHT_RULES: IntentWeightRule[] = [
   applyLethalityFinish,
-  applySelfPreservation,
+  wrapScoringRule(applyDefensiveUrgency),
+  wrapScoringRule(applyIntentMemory),
+  wrapScoringRule(applyArchetypeOpenerWeights),
 ];
 
 function roll(rng?: () => number): number {
@@ -119,6 +185,14 @@ export function buildEnemyActiveBuffs(profile: EnemyCombatProfile): string[] {
   if ((profile.fortifyTurnsRemaining ?? 0) > 0) buffs.push('Fortify');
   if ((profile.chargeTurns ?? 0) > 0 || profile.intent === 'CHARGE') buffs.push('Charging');
   return buffs;
+}
+
+function isMarkedOrExposedUnit(profile: EnemyCombatProfile): boolean {
+  const tags = profile.combatTags ?? [];
+  return tags.includes('EXPOSED')
+    || tags.includes('VULNERABLE')
+    || tags.includes('DOOMED')
+    || (profile.doomedStacks ?? 0) > 0;
 }
 
 export function enemyAIStateFromProfile(
@@ -139,6 +213,17 @@ export function enemyAIStateFromProfile(
     queuedAction: profile.queuedAction ?? null,
     isUntargetable: profile.isUntargetable,
     rosterAbilityCooldown: profile.rosterAbilityCooldown ?? 0,
+    aiMemory: ensureEnemyAiMemory(profile.aiMemory),
+    tacticalRole: resolveEnemyTacticalRole(profile.rosterId),
+    isMarkedOrExposed: isMarkedOrExposedUnit(profile),
+    isChargingOrPreparing: Boolean(
+      profile.isCharging
+      || (profile.chargeTurns ?? 0) > 0
+      || (profile.laserLockTurnsRemaining ?? 0) > 0
+      || profile.queuedAction,
+    ),
+    isEliteOrAlpha: Boolean(profile.isAlpha || profile.isApex),
+    isBoss: Boolean(profile.isBoss),
   };
 }
 
@@ -244,18 +329,6 @@ function applyLethalityFinish(weights: WeightedIntent[], ctx: AIDecisionContext)
     intent: entry.intent,
     weight: killPool.has(entry.intent) ? LETHAL_WEIGHT : 0,
   }));
-}
-
-function applySelfPreservation(weights: WeightedIntent[], ctx: AIDecisionContext): WeightedIntent[] {
-  const hpRatio = ctx.enemy.maxHp > 0 ? ctx.enemy.hp / ctx.enemy.maxHp : 1;
-  if (hpRatio >= LOW_HP_THRESHOLD) return weights;
-
-  return weights.map((entry) => {
-    if (DEFENSIVE_INTENTS.includes(entry.intent) || HEAL_INTENTS.includes(entry.intent)) {
-      return { intent: entry.intent, weight: entry.weight * DEFENSIVE_CRISIS_WEIGHT };
-    }
-    return entry;
-  });
 }
 
 export function filterValidIntents(pool: EnemyIntent[], ctx: AIDecisionContext): EnemyIntent[] {
