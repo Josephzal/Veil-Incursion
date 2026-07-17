@@ -9,7 +9,7 @@ import { listHubStagedConsumables, isRunItemHubConsumable } from '../../data/hub
 import type { CargoItemId } from '../../types/cargoGrid';
 import { getRunItemDefinitionByAnyId } from '../../data/runItemRegistry';
 import { normalizeHubRunItemId } from '../../data/runItemInventoryEngine';
-import { LoadoutTabHeader, LoadoutSectionHeader } from './loadoutTabUi';
+import { LoadoutSectionHeader } from './loadoutTabUi';
 
 interface RunItemLoadoutPanelProps {
   accent: string;
@@ -55,11 +55,6 @@ export default function RunItemLoadoutPanel({
 
   return (
     <View style={styles.root}>
-      <LoadoutTabHeader
-        title="Field Kit"
-        subtitle="One-use combat consumables and field tools prepared for descent."
-      />
-
       <LoadoutSectionHeader label="Active Slots" style={{ marginBottom: 6 }} />
       <RunItemSlotsPanel
         slots={account.runItemLoadout}

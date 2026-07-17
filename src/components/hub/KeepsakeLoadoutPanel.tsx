@@ -22,7 +22,7 @@ import {
 } from '../../data/expeditionKeepsakeDeploymentEngine';
 import type { KeepsakeId } from '../../types/expeditionKeepsake';
 import { readPressableHover, terminalHoverStyle } from '../../utils/terminalHoverStyle';
-import { LoadoutTabHeader, LoadoutSectionHeader } from './loadoutTabUi';
+import { LoadoutSectionHeader } from './loadoutTabUi';
 
 interface KeepsakeLoadoutPanelProps {
   accent: string;
@@ -137,11 +137,6 @@ export default function KeepsakeLoadoutPanel({
 
   return (
     <View style={[styles.root, { gap: scaleSpacing(8) }]}>
-      <LoadoutTabHeader
-        title="Expedition Relic"
-        subtitle="Relics alter scanner behavior, route planning, cargo risk, or extraction pressure."
-      />
-
       <LoadoutSectionHeader label="Currently Equipped" />
       {equipped ? (
         <DossierCardShell padding={scaleSpacing(10)} accentColor={accent} showAccentStripe>

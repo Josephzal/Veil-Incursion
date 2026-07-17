@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import AegisLoadoutEditor from '../AegisLoadoutEditor';
 import ClassLoadoutEditor from '../ClassLoadoutEditor';
-import { LoadoutTabHeader } from '../hub/loadoutTabUi';
 import { SELECT_ACCENT } from '../../constants/dossierSurface';
 import { useHubLayout } from '../../context/HubLayoutContext';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
@@ -211,10 +210,6 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
 
   return (
     <View style={[styles.editorHost, { paddingBottom: scaleSpacing(24) }]}>
-        <LoadoutTabHeader
-          title="Ability Deck"
-          subtitle="Four active combat slots. Slot 1 is your class anchor."
-        />
         {account.activeClass === 'AEGIS' ? (
           <AegisLoadoutEditor
             draft={aegisDraft}

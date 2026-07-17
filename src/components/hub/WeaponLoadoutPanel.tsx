@@ -17,7 +17,7 @@ import { formatWeaponCostLine } from '../../data/weaponResourceEngine';
 import { formatWeaponStatLines } from '../../data/weaponCombatEngine';
 import type { WeaponFamilyId } from '../../types/weapon';
 import { readPressableHover, terminalHoverStyle } from '../../utils/terminalHoverStyle';
-import { LoadoutTabHeader, LoadoutSectionHeader } from './loadoutTabUi';
+import { LoadoutSectionHeader } from './loadoutTabUi';
 
 interface WeaponLoadoutPanelProps {
   accent: string;
@@ -178,11 +178,6 @@ export default function WeaponLoadoutPanel({
 
   return (
     <View style={styles.root}>
-      <LoadoutTabHeader
-        title="Weapon Chassis"
-        subtitle="One weapon per class — locked for the run at descent."
-      />
-
       <LoadoutSectionHeader label="Currently Equipped" />
       {equippedDef ? (
         renderCard(equippedDef)

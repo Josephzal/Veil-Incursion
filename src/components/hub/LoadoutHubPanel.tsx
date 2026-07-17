@@ -21,7 +21,7 @@ import { getRunItemDefinitionByAnyId } from '../../data/runItemRegistry';
 import { resolveClassAbilityCost } from '../../data/classAbilityResolver';
 import { HUB_DATA_DIVIDER } from '../../styles/hubTerminalUi';
 import { SELECT_ACCENT } from '../../constants/dossierSurface';
-import { LoadoutSectionHeader } from './loadoutTabUi';
+import { LoadoutSectionHeader, LoadoutTabHeader } from './loadoutTabUi';
 import { HIDDEN_SCROLLVIEW_PROPS, mergeHiddenScrollbarStyle } from '../../utils/hiddenScrollbarStyle';
 import { readPressableHover, terminalHoverStyle } from '../../utils/terminalHoverStyle';
 
@@ -40,6 +40,25 @@ const CATEGORIES: CategoryMeta[] = [
   { key: 'FIELD_KIT', label: 'FIELD KIT', accent: '#38bdf8' },
   { key: 'CARGO', label: 'CARGO', accent: '#94a3b8' },
 ];
+
+const CATEGORY_HEADERS: Record<Exclude<LoadoutCategory, 'CARGO'>, { title: string; subtitle: string }> = {
+  CHASSIS: {
+    title: 'Weapon Chassis',
+    subtitle: 'One weapon per class — locked for the run at descent.',
+  },
+  RELIC: {
+    title: 'Expedition Relic',
+    subtitle: 'Relics alter scanner behavior, route planning, cargo risk, or extraction pressure.',
+  },
+  DECK: {
+    title: 'Ability Deck',
+    subtitle: 'Four active combat slots. Slot 1 is your class anchor.',
+  },
+  FIELD_KIT: {
+    title: 'Field Kit',
+    subtitle: 'One-use combat consumables and field tools prepared for descent.',
+  },
+};
 
 function withAlpha(hex: string, alphaHex: string): string {
   return `${hex}${alphaHex}`;
@@ -173,10 +192,8 @@ export default function LoadoutHubPanel(): React.JSX.Element {
     }
   };
 
-  const descentKit = (
-    <View style={[styles.kitColumn, { gap: scaleSpacing(10), width: isDesktop ? 280 : undefined }]}>
-      <LoadoutSectionHeader label="Descent Kit" />
-
+  const descentKitSlots = (
+    <View style={[styles.kitColumn, { gap: scaleSpacing(10) }]}>
       <KitSlot
         label="WEAPON"
         value={weaponDisplay}
@@ -291,9 +308,41 @@ export default function LoadoutHubPanel(): React.JSX.Element {
           <TerminalGlitchTransition transitionKey={activeCategory} style={styles.bodyFill}>
             {activeCategory === 'CARGO' ? (
               <SafehouseLoadoutTab />
+            ) : isDesktop ? (
+              <View style={[styles.prepRow, { gap: scaleSpacing(10) }]}>
+                <View style={[styles.headerRow, { gap: scaleSpacing(24) }]}>
+                  <View style={styles.kitCell}>
+                    <LoadoutSectionHeader label="Descent Kit" />
+                  </View>
+                  <View style={styles.centerCell}>
+                    <LoadoutTabHeader
+                      title={CATEGORY_HEADERS[activeCategory as Exclude<LoadoutCategory, 'CARGO'>].title}
+                      subtitle={CATEGORY_HEADERS[activeCategory as Exclude<LoadoutCategory, 'CARGO'>].subtitle}
+                    />
+                  </View>
+                </View>
+                <View style={[styles.contentRow, { gap: scaleSpacing(24) }]}>
+                  <View style={styles.kitCell}>{descentKitSlots}</View>
+                  <View style={styles.centerColumn}>
+                    <ScrollView
+                      {...HIDDEN_SCROLLVIEW_PROPS}
+                      style={mergeHiddenScrollbarStyle(styles.scroll)}
+                      contentContainerStyle={[styles.scrollContent, { paddingBottom: scaleSpacing(12) }]}
+                      keyboardShouldPersistTaps="handled"
+                    >
+                      {renderCategoryBody()}
+                    </ScrollView>
+                  </View>
+                </View>
+              </View>
             ) : (
-              <View style={[styles.prepRow, isDesktop && styles.prepRowDesktop, { gap: scaleSpacing(isDesktop ? 24 : 12) }]}>
-                {descentKit}
+              <View style={[styles.prepRow, { gap: scaleSpacing(12) }]}>
+                <LoadoutSectionHeader label="Descent Kit" />
+                {descentKitSlots}
+                <LoadoutTabHeader
+                  title={CATEGORY_HEADERS[activeCategory as Exclude<LoadoutCategory, 'CARGO'>].title}
+                  subtitle={CATEGORY_HEADERS[activeCategory as Exclude<LoadoutCategory, 'CARGO'>].subtitle}
+                />
                 <View style={styles.centerColumn}>
                   <ScrollView
                     {...HIDDEN_SCROLLVIEW_PROPS}
@@ -357,12 +406,28 @@ const styles = StyleSheet.create({
     minHeight: 0,
     flexDirection: 'column',
   },
-  prepRowDesktop: {
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    flexShrink: 0,
+  },
+  contentRow: {
+    flex: 1,
+    minHeight: 0,
     flexDirection: 'row',
     alignItems: 'stretch',
   },
+  kitCell: {
+    width: 280,
+    flexShrink: 0,
+  },
+  centerCell: {
+    flex: 1,
+    minWidth: 0,
+  },
   kitColumn: {
     flexShrink: 0,
+    width: '100%',
   },
   kitSlot: {
     borderWidth: 1,
