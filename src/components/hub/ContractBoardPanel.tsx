@@ -42,6 +42,8 @@ import { SPONSOR_IDENTITY } from '../../utils/sponsorIdentity';
 const SPONSOR_ORDER: CabalEmployerId[] = ['TERRAN_GRID', 'LEGION', 'SOLARIS'];
 const DEFAULT_SPONSOR_FILTER: CabalEmployerId = 'TERRAN_GRID';
 const INDEPENDENT_ACCENT = '#64748b';
+/** Classic CRT phosphor green — used only for the seal terminal log. */
+const SEAL_TERMINAL_GREEN = '#39FF14';
 
 function resolveSponsorFilter(lastUsedSponsorId: CabalEmployerId | null | undefined): CabalEmployerId {
   return lastUsedSponsorId ?? DEFAULT_SPONSOR_FILTER;
@@ -140,6 +142,82 @@ function StatRow({
   );
 }
 
+/**
+ * Old-terminal seal readout: types the seal label character-by-character
+ * with a blinking block cursor, like someone logged the bounty on a CRT.
+ */
+function SealTerminalLog({
+  label,
+  accent,
+  scaleFont,
+  scaleSpacing,
+}: {
+  label: string;
+  accent: string;
+  scaleFont: (n: number) => number;
+  scaleSpacing: (n: number) => number;
+}): React.JSX.Element {
+  const fullLine = `>> ${label.toUpperCase()}`;
+  const [typed, setTyped] = useState('');
+  const cursorOpacity = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    setTyped('');
+    let index = 0;
+    const interval = setInterval(() => {
+      index += 1;
+      setTyped(fullLine.slice(0, index));
+      if (index >= fullLine.length) {
+        clearInterval(interval);
+      }
+    }, 38);
+    return () => clearInterval(interval);
+  }, [fullLine]);
+
+  useEffect(() => {
+    const blink = Animated.loop(
+      Animated.sequence([
+        Animated.timing(cursorOpacity, { toValue: 0, duration: 420, useNativeDriver: true }),
+        Animated.timing(cursorOpacity, { toValue: 1, duration: 420, useNativeDriver: true }),
+      ]),
+    );
+    blink.start();
+    return () => blink.stop();
+  }, [cursorOpacity]);
+
+  return (
+    <View
+      pointerEvents="none"
+      style={[
+        styles.sealTerminal,
+        {
+          paddingHorizontal: scaleSpacing(8),
+          paddingVertical: scaleSpacing(4),
+          gap: scaleSpacing(2),
+        },
+      ]}
+    >
+      <TerminalText
+        size={scaleFont(4.4)}
+        letterSpacing={0.8}
+        style={{ color: withAlpha(accent, '88'), fontWeight: '700' }}
+      >
+        {'// SEAL LOG'}
+      </TerminalText>
+      <View style={styles.sealTerminalRow}>
+        <TerminalText
+          size={scaleFont(5.8)}
+          letterSpacing={1.1}
+          style={{ color: accent, fontWeight: '800', fontFamily: 'monospace' }}
+        >
+          {typed}
+        </TerminalText>
+        <Animated.View style={[styles.sealCursor, { backgroundColor: accent, opacity: cursorOpacity }]} />
+      </View>
+    </View>
+  );
+}
+
 function ContractDossierCard({
   contract,
   isSelected,
@@ -164,21 +242,6 @@ function ContractDossierCard({
     ? formatSectorShort(contract.recommendedSectorIds[0])
     : null;
 
-  const stampAnim = useRef(new Animated.Value(isSelected ? 1 : 0)).current;
-  useEffect(() => {
-    if (isSelected) {
-      stampAnim.setValue(0);
-      Animated.spring(stampAnim, {
-        toValue: 1,
-        friction: 5,
-        tension: 150,
-        useNativeDriver: true,
-      }).start();
-    } else {
-      stampAnim.setValue(0);
-    }
-  }, [isSelected, stampAnim]);
-
   const rewardValue = (() => {
     const parts = [`${contract.reward.credits} CR`, `+${contract.reward.reputation} REP`];
     if (contract.reward.rareLootBonusPct) parts.push(`+${contract.reward.rareLootBonusPct}% RARE`);
@@ -200,33 +263,23 @@ function ContractDossierCard({
       ]}
     >
       {isSelected ? (
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.seal,
-            {
-              borderColor: accent,
-              opacity: stampAnim,
-              transform: [
-                { rotate: '-11deg' },
-                { scale: stampAnim.interpolate({ inputRange: [0, 1], outputRange: [1.9, 1] }) },
-              ],
-            },
-          ]}
-        >
-          <TerminalText size={scaleFont(5.6)} letterSpacing={1} style={{ color: accent, fontWeight: '800' }}>
-            {identity.sealLabel}
-          </TerminalText>
-        </Animated.View>
+        <SealTerminalLog
+          label={identity.sealLabel}
+          accent={SEAL_TERMINAL_GREEN}
+          scaleFont={scaleFont}
+          scaleSpacing={scaleSpacing}
+        />
       ) : null}
 
       <View style={styles.dossierHeader}>
         <TerminalText size={scaleFont(6)} letterSpacing={0.6} style={{ color: accent, fontWeight: '800' }}>
           {`${identity.emblem}  ${sponsorDisplayName(contract.sponsorId).toUpperCase()}`}
         </TerminalText>
-        <TerminalText size={scaleFont(5.2)} letterSpacing={0.5} style={{ color: theme.mutedColor, fontWeight: '700' }}>
-          {isSelected ? identity.sealLabel : 'REFRESHES AFTER RUN'}
-        </TerminalText>
+        {!isSelected ? (
+          <TerminalText size={scaleFont(5.2)} letterSpacing={0.5} style={{ color: theme.mutedColor, fontWeight: '700' }}>
+            REFRESHES AFTER RUN
+          </TerminalText>
+        ) : null}
       </View>
 
       <TerminalText size={scaleFont(5.4)} style={{ color: theme.mutedColor }}>
@@ -915,15 +968,24 @@ const styles = StyleSheet.create({
   actionAccepted: {
     flexGrow: 1,
   },
-  seal: {
+  sealTerminal: {
     position: 'absolute',
-    top: 14,
+    top: 10,
     right: 10,
-    borderWidth: 2,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 3,
     zIndex: 5,
+    backgroundColor: 'rgba(0, 0, 0, 0.88)',
+    borderWidth: 1,
+    borderColor: 'rgba(57, 255, 20, 0.45)',
+    minWidth: 132,
+  },
+  sealTerminalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  sealCursor: {
+    width: 7,
+    height: 12,
+    marginLeft: 2,
   },
   independentCard: {
     borderWidth: 1,

@@ -49,7 +49,7 @@ export function contractSectorWarning(
     case 'UNAVAILABLE':
       return 'This sector cannot complete the selected contract. You may still deploy, but the contract will fail unless abandoned.';
     case 'VALID':
-      return 'Valid but not ideal for the selected contract.';
+      return 'Valid // not ideal for contract.';
     default:
       return null;
   }
