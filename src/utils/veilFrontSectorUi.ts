@@ -327,11 +327,19 @@ export function sectorAbbreviation(displayName: string): string {
   return displayName.replace(/^The\s+/i, '').toUpperCase();
 }
 
-export function threatMeterColor(level: number): string {
-  if (level <= 1) return '#22d3ee';
-  if (level <= 2) return '#fbbf24';
+/**
+ * Shared 4-tier severity ramp used for both Threat and Yield:
+ * Low = white, Medium = yellow, High = orange, top tier = red.
+ */
+export function sectorTierColor(level: number): string {
+  if (level <= 1) return '#f8fafc';
+  if (level <= 2) return '#facc15';
   if (level <= 3) return '#f97316';
   return '#ef4444';
+}
+
+export function threatMeterColor(level: number): string {
+  return sectorTierColor(level);
 }
 
 export function echoMeterColor(level: EchoActivityLevel): string {

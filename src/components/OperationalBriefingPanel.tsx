@@ -6,7 +6,6 @@ import HackingTerminalOverlay from './shadowWar/HackingTerminalOverlay';
 import SectorMapPanel from './veilFront/SectorMapPanel';
 import SectorBriefingPanel from './veilFront/SectorBriefingPanel';
 import VeilFrontDeployConfirmModal from './veilFront/VeilFrontDeployConfirmModal';
-import VeilFrontHeaderSummary from './veilFront/VeilFrontHeader';
 import { useVeilFrontLayout } from './veilFront/useVeilFrontLayout';
 import { getDossierFactionAccent } from '../data/factions';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
@@ -49,7 +48,6 @@ export default function OperationalBriefingPanel({
     panelGap,
     contentWidth,
     scaleSpacing,
-    showHeaderSummary,
     actionPanelWidth,
     cardPadding,
   } = useVeilFrontLayout();
@@ -138,24 +136,20 @@ export default function OperationalBriefingPanel({
                 sectors={sectors}
                 activeSectorId={persisted.selectedSectorId}
                 onSectorPress={handleSectorPress}
-                selectedContract={selectedContract}
               />
             </View>
             <HackingTerminalOverlay viewportHeight={mapViewportHeight} />
           </View>
         </DossierCardShell>
 
-        <DossierCardShell
-          fillHeight
-          padding={cardPadding}
-          accentColor={dossierAccent}
+        <View
           style={[
             styles.briefingPanel,
+            { padding: cardPadding },
             isTwoColumnShell
               ? { width: actionPanelWidth, maxWidth: actionPanelWidth, flexShrink: 0 }
               : { flex: 1, minHeight: 0 },
           ]}
-          contentStyle={styles.briefingContent}
         >
           <SectorBriefingPanel
             theme={theme}
@@ -166,7 +160,7 @@ export default function OperationalBriefingPanel({
             runDisabled={runDisabled}
             launching={launching}
           />
-        </DossierCardShell>
+        </View>
       </View>
 
       <VeilFrontDeployConfirmModal
@@ -188,13 +182,6 @@ export default function OperationalBriefingPanel({
     <HubScreenShell
       title="OPERATIONAL BRIEFING"
       subtitle="VEIL FRONT // SECTOR BRIEFING // DEPLOY"
-      headerRight={showHeaderSummary ? (
-        <VeilFrontHeaderSummary
-          theme={theme}
-          sector={activeSector}
-          selectedContract={selectedContract}
-        />
-      ) : null}
     >
       {body}
     </HubScreenShell>
@@ -243,10 +230,6 @@ const styles = StyleSheet.create({
   briefingPanel: {
     minHeight: 0,
     minWidth: 0,
-  },
-  briefingContent: {
-    flex: 1,
-    minHeight: 0,
     overflow: 'hidden',
   },
 });

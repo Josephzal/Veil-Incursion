@@ -3040,6 +3040,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         pendingHarvestReturn: 'POST_COMBAT' as const,
         mapMode: 'NODE_ENGAGED' as IncursionMapMode,
         harvestStagingInstanceIds: [...new Set(initialStagingIds)],
+        // Post-combat drops are staged directly; never reuse a stale pre-roll.
+        pendingProceduralResourcePool: [],
       };
       activeIncursionRef.current = next;
       return next;
@@ -3053,7 +3055,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         pendingHarvestReturn: 'COMPLETE_NODE' as const,
         mapMode: 'NODE_ENGAGED' as IncursionMapMode,
         harvestStagingInstanceIds: [],
-        ...(resourcePool?.length ? { pendingProceduralResourcePool: resourcePool } : {}),
+        // Always overwrite with this encounter's pool (empty if none) so a
+        // previous node's leftover pre-roll can never be re-offered here.
+        pendingProceduralResourcePool: resourcePool ? [...resourcePool] : [],
       };
       activeIncursionRef.current = next;
       return next;
@@ -3067,6 +3071,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         pendingHarvestReturn: 'RESOURCE_CACHE' as const,
         mapMode: 'NODE_ENGAGED' as IncursionMapMode,
         harvestStagingInstanceIds: [],
+        // Cache packs stage their own bundle; drop any stale pre-roll.
+        pendingProceduralResourcePool: [],
       };
       activeIncursionRef.current = next;
       return next;
@@ -3300,6 +3306,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         ...prev,
         cargo: nextCargo,
         harvestStagingInstanceIds: [],
+        // Discard any un-staged pre-roll so leftovers can never be re-offered
+        // in a later encounter — only successfully packed cargo carries over.
+        pendingProceduralResourcePool: [],
       };
       activeIncursionRef.current = next;
       return next;

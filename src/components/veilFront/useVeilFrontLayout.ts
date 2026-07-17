@@ -33,7 +33,7 @@ export function useVeilFrontLayout() {
     const deployButtonHeight = scaleSize(isCompactHeight ? 44 : 48);
     const descriptionLines = isUltraCompactHeight ? 1 : 2;
     const showOptionalCopy = !isUltraCompactHeight;
-    const showHeaderSummary = isTwoColumnShell && !isCompactHeight;
+    const showHeaderSummary = isTwoColumnShell;
 
     return {
       ...hub,

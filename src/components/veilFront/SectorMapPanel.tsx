@@ -2,103 +2,66 @@ import React, { useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import TerminalText from '../TerminalText';
 import VeilFrontMap from './VeilFrontMap';
-import { MapSectorSummary, SectorIntel } from './MapSectorOverlays';
 import { useVeilFrontLayout } from './useVeilFrontLayout';
-import type { SelectedContractState } from '../../types/contract';
 import type { SectorId, SectorState } from '../../types/worldState';
 import { TerminalTheme } from '../../types/theme';
-import { getContractSectorCompatibility, getSelectedContractForCompatibility } from '../../utils/contractUi';
+import { hazardLabel, rewardLabel, sectorTierColor } from '../../utils/veilFrontSectorUi';
 
 interface SectorMapPanelProps {
   theme: TerminalTheme;
   sectors: SectorState[];
   activeSectorId: SectorId;
   onSectorPress: (id: SectorId) => void;
-  selectedContract: SelectedContractState;
 }
 
-function MapLegend({ theme, showContractLegend }: { theme: TerminalTheme; showContractLegend: boolean }): React.JSX.Element {
-  const { scaleSpacing, isCompactHeight } = useVeilFrontLayout();
-  const items = [
-    { color: '#a855f7', label: 'Anchor' },
-    { color: '#818cf8', label: 'Echo' },
-    { color: '#fbbf24', label: 'Reward' },
-    { color: theme.statusColor, label: 'Selected' },
-  ];
-  if (showContractLegend) {
-    items.push(
-      { color: '#34d399', label: 'Ideal' },
-      { color: '#fbbf24', label: 'Valid' },
-      { color: '#f87171', label: 'Blocked' },
-    );
-  }
-
+function StatLine({ label, value, valueColor, mutedColor }: { label: string; value: string; valueColor: string; mutedColor: string }) {
+  const { scaleFont, scaleSpacing } = useVeilFrontLayout();
   return (
-    <View style={[styles.legend, { gap: scaleSpacing(isCompactHeight ? 6 : 8) }]}>
-      {items.map((item) => (
-        <View key={item.label} style={[styles.legendItem, { gap: scaleSpacing(3) }]}>
-          <View style={[styles.legendDot, { backgroundColor: item.color }]} />
-          <TerminalText variant="micro" style={{ color: theme.mutedColor }}>
-            {item.label.toUpperCase()}
-          </TerminalText>
-        </View>
-      ))}
+    <View style={[styles.statLine, { gap: scaleSpacing(8) }]}>
+      <TerminalText size={scaleFont(5.6)} letterSpacing={0.9} style={[styles.statLabel, { color: mutedColor }]}>
+        {label}
+      </TerminalText>
+      <TerminalText size={scaleFont(7.2)} letterSpacing={0.4} style={{ color: valueColor, fontWeight: '800' }}>
+        {value}
+      </TerminalText>
     </View>
   );
 }
 
-/** Map panel — top band summary/intel, map canvas, legend. Sectors unchanged. */
+/**
+ * Clean tactical scan board — connected sector borders, grid and names only.
+ * Threat/Reward/Echo/Anchor sit directly on the map (upper right, no container).
+ */
 export default function SectorMapPanel({
   theme,
   sectors,
   activeSectorId,
   onSectorPress,
-  selectedContract,
 }: SectorMapPanelProps): React.JSX.Element {
-  const { sectionPadding, scaleSpacing, isCompactHeight, isMapTopBandStacked } = useVeilFrontLayout();
+  const { sectionPadding } = useVeilFrontLayout();
   const activeSector = useMemo(
     () => sectors.find((s) => s.id === activeSectorId) ?? sectors[0],
     [sectors, activeSectorId],
   );
 
-  const contractForMap = useMemo(
-    () => getSelectedContractForCompatibility(selectedContract),
-    [selectedContract],
-  );
-
-  const sectorCompatibilityById = useMemo(() => {
-    if (!contractForMap) return {} as Partial<Record<SectorId, ReturnType<typeof getContractSectorCompatibility>>>;
-    return sectors.reduce<Partial<Record<SectorId, ReturnType<typeof getContractSectorCompatibility>>>>((acc, sector) => {
-      acc[sector.id] = getContractSectorCompatibility(contractForMap, sector.id);
-      return acc;
-    }, {});
-  }, [contractForMap, sectors]);
+  const anchorActive = activeSector.activeAnchor != null;
 
   return (
-    <View style={[styles.panel, { padding: sectionPadding, gap: scaleSpacing(isCompactHeight ? 10 : 14) }]}>
-      <View
-        style={[
-          styles.mapTopBand,
-          isMapTopBandStacked ? styles.mapTopBandStacked : styles.mapTopBandRow,
-          { gap: scaleSpacing(isCompactHeight ? 10 : 16) },
-        ]}
-      >
-        <MapSectorSummary theme={theme} sector={activeSector} />
-        {!isMapTopBandStacked ? <View style={styles.mapTopSpacer} /> : null}
-        <SectorIntel theme={theme} sector={activeSector} />
-      </View>
-
+    <View style={[styles.panel, { padding: sectionPadding }]}>
       <View style={styles.mapStage}>
         <VeilFrontMap
           theme={theme}
           sectors={sectors}
           activeSectorId={activeSectorId}
           onSectorPress={onSectorPress}
-          sectorCompatibilityById={sectorCompatibilityById}
         />
       </View>
 
-      <MapLegend theme={theme} showContractLegend={contractForMap != null} />
+      <View style={[styles.statsOverlay, { top: sectionPadding, left: sectionPadding }]} pointerEvents="none">
+        <StatLine label="THREAT" value={hazardLabel(activeSector.hazardLevel).toUpperCase()} valueColor={sectorTierColor(activeSector.hazardLevel)} mutedColor={theme.mutedColor} />
+        <StatLine label="YIELD" value={rewardLabel(activeSector.rewardLevel).toUpperCase()} valueColor={sectorTierColor(activeSector.rewardLevel)} mutedColor={theme.mutedColor} />
+        <StatLine label="ANCHOR" value={anchorActive ? 'ACTIVE' : 'NONE'} valueColor={anchorActive ? '#c084fc' : theme.mutedColor} mutedColor={theme.mutedColor} />
+      </View>
     </View>
   );
 }
@@ -110,41 +73,22 @@ const styles = StyleSheet.create({
     minWidth: 0,
     overflow: 'hidden',
   },
-  mapTopBand: {
-    flexShrink: 0,
-    minWidth: 0,
-  },
-  mapTopBandRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  mapTopBandStacked: {
-    flexDirection: 'column',
-    alignItems: 'stretch',
-  },
-  mapTopSpacer: {
-    flex: 1,
-    minWidth: 8,
-  },
   mapStage: {
     flex: 1,
     minHeight: 0,
     minWidth: 0,
     overflow: 'hidden',
   },
-  legend: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    flexShrink: 0,
+  statsOverlay: {
+    position: 'absolute',
+    alignItems: 'flex-start',
   },
-  legendItem: {
+  statLine: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'baseline',
+    justifyContent: 'flex-start',
   },
-  legendDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
+  statLabel: {
+    minWidth: 54,
   },
 });

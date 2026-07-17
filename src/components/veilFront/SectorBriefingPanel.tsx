@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import HapticPressable from '../HapticPressable';
 import TerminalText from '../TerminalText';
 import SelectedContractSummary from './SelectedContractSummary';
@@ -15,18 +15,18 @@ import {
   formatEchoBriefingIntel,
   formatCargoRoutingBriefingIntel,
   formatOperationBonusObjectiveLines,
-  formatOperationCompletionSummaryLine,
   formatOperationContributesForObjective,
   formatOperationLifecycleStatus,
-  formatOperationProgressLabel,
-  formatOperationProgressLockMessage,
-  formatOperationTargetDepthLine,
-  formatOperationTargetResourceLine,
-  isOperationProgressLocked,
   operationLifecycleAccentColor,
   operationTypeChip,
+  VEIL_BIOME_VISUALS,
 } from '../../utils/veilFrontSectorUi';
-import { contractSectorWarning, type ContractSectorCompatibility } from '../../utils/contractUi';
+import {
+  contractSectorWarning,
+  formatContractRewardSummary,
+  sponsorDisplayName,
+  type ContractSectorCompatibility,
+} from '../../utils/contractUi';
 import { useWorldState } from '../../context/WorldStateContext';
 import { getActiveAnchorInstance } from '../../data/anchorLifecycleEngine';
 import { buildPreliminaryRunWorldContext } from '../../data/runWorldBriefEngine';
@@ -34,8 +34,6 @@ import { buildProceduralExplainabilityText } from '../../data/proceduralDirector
 import { getSectorAftermathModifiers } from '../../data/proceduralDirectorAftermathEngine';
 import { scoreRunPressure } from '../../data/proceduralDirectorPressureEngine';
 import { viewShadow } from '../../utils/adaptiveStyles';
-
-type BriefingTab = 'operation' | 'anchor' | 'contract';
 
 interface SectorBriefingPanelProps {
   theme: TerminalTheme;
@@ -47,298 +45,60 @@ interface SectorBriefingPanelProps {
   launching: boolean;
 }
 
-function TypeChip({ label, accentColor }: { label: string; accentColor: string }) {
+/* ------------------------------------------------------------------ *
+ * Compact primitives — spacing / dividers / chips, not boxed cards.   *
+ * ------------------------------------------------------------------ */
+function BlockLabel({ label, color }: { label: string; color: string }) {
+  const { scaleFont } = useVeilFrontLayout();
+  return (
+    <TerminalText size={scaleFont(5.6)} letterSpacing={1.1} style={{ color, fontWeight: '700' }}>
+      {label}
+    </TerminalText>
+  );
+}
+
+function Divider() {
+  const { scaleSpacing } = useVeilFrontLayout();
+  return <View style={[styles.divider, { marginVertical: scaleSpacing(9) }]} />;
+}
+
+function Chip({ label, color }: { label: string; color: string }) {
   const { scaleFont, scaleSpacing } = useVeilFrontLayout();
   return (
-    <View style={[styles.typeChip, { borderColor: `${accentColor}55`, paddingHorizontal: scaleSpacing(6), paddingVertical: scaleSpacing(3), alignSelf: 'flex-start' }]}>
-      <TerminalText size={scaleFont(6)} style={{ color: accentColor }}>
+    <View style={[styles.chip, { borderColor: `${color}55`, paddingHorizontal: scaleSpacing(6), paddingVertical: scaleSpacing(2.5) }]}>
+      <TerminalText size={scaleFont(5.6)} letterSpacing={0.4} style={{ color, fontWeight: '700' }}>
         {label}
       </TerminalText>
     </View>
   );
 }
 
-function ContributionRow({ label, color }: { label: string; color: string }) {
+function DetailList({
+  label,
+  lines,
+  color,
+  mutedColor,
+}: {
+  label: string;
+  lines: string[];
+  color: string;
+  mutedColor: string;
+}) {
   const { scaleFont, scaleSpacing } = useVeilFrontLayout();
+  if (lines.length === 0) return null;
   return (
-    <View style={[styles.contributionRow, { gap: scaleSpacing(5) }]}>
-      <TerminalText size={scaleFont(6)} style={{ color }}>{'•'}</TerminalText>
-      <TerminalText size={scaleFont(6.5)} style={[styles.contributionText, { color }]} selectable={false}>
-        {label}
-      </TerminalText>
+    <View style={{ gap: scaleSpacing(3), marginTop: scaleSpacing(6) }}>
+      <BlockLabel label={label} color={mutedColor} />
+      {lines.map((line) => (
+        <TerminalText key={line} size={scaleFont(5.8)} style={{ color, lineHeight: scaleFont(9) }} numberOfLines={3}>
+          {line}
+        </TerminalText>
+      ))}
     </View>
   );
 }
 
-function BriefingTabs({
-  theme,
-  activeTab,
-  onSelectTab,
-}: {
-  theme: TerminalTheme;
-  activeTab: BriefingTab;
-  onSelectTab: (tab: BriefingTab) => void;
-}) {
-  const { scaleSpacing, scaleFont } = useVeilFrontLayout();
-  const tabs: { id: BriefingTab; label: string }[] = [
-    { id: 'operation', label: 'OPERATION' },
-    { id: 'anchor', label: 'ANCHOR' },
-    { id: 'contract', label: 'CONTRACT' },
-  ];
-
-  return (
-    <View style={[styles.tabRow, { borderColor: `${theme.statusColor}20`, padding: scaleSpacing(3) }]}>
-      {tabs.map((tab) => {
-        const isActive = activeTab === tab.id;
-        return (
-          <HapticPressable
-            key={tab.id}
-            onPress={() => onSelectTab(tab.id)}
-            style={({ pressed }) => [
-              styles.tab,
-              {
-                borderColor: isActive ? `${theme.statusColor}88` : 'transparent',
-                backgroundColor: isActive ? `${theme.statusColor}18` : 'transparent',
-                minHeight: scaleSpacing(32),
-                paddingHorizontal: scaleSpacing(6),
-                opacity: pressed ? 0.88 : 1,
-              },
-            ]}
-          >
-            <TerminalText
-              size={scaleFont(6.2)}
-              letterSpacing={0.35}
-              style={{ color: isActive ? theme.statusColor : theme.mutedColor, fontWeight: isActive ? '800' : '600' }}
-            >
-              {tab.label}
-            </TerminalText>
-          </HapticPressable>
-        );
-      })}
-    </View>
-  );
-}
-
-function OperationTabContent({
-  theme,
-  sector,
-  operationLog,
-  selectedContract,
-}: {
-  theme: TerminalTheme;
-  sector: SectorState;
-  operationLog: string[];
-  selectedContract: SelectedContractState;
-}) {
-  const { scaleFont, scaleSize, scaleSpacing, descriptionLines, showOptionalCopy } = useVeilFrontLayout();
-  const operation = sector.activeOperation;
-  const operationPct = operationProgressPercent(
-    operation.progressCurrent,
-    operation.progressRequired,
-  );
-  const contributes = formatOperationContributesForObjective(
-    operation.objectiveKind,
-    operation.contributionRules,
-    operation.rewardEmphasis.targetResources,
-  );
-  const echoIntel = formatEchoBriefingIntel(sector);
-  const cargoIntel = formatCargoRoutingBriefingIntel(sector, selectedContract);
-  const lifecycleLabel = formatOperationLifecycleStatus(
-    operation.lifecycleStatus,
-    operation.runsRemaining,
-  );
-  const lifecycleColor = operationLifecycleAccentColor(operation.lifecycleStatus, theme.statusColor);
-  const progressLocked = isOperationProgressLocked(operation.lifecycleStatus);
-  const progressLockMessage = formatOperationProgressLockMessage(operation.lifecycleStatus);
-  const recentLog = operationLog.slice(0, 4);
-  const targetResourceLine = formatOperationTargetResourceLine(
-    operation.targetResourceIds,
-    operation.rewardEmphasis.targetResources,
-  );
-  const targetDepthLine = formatOperationTargetDepthLine(operation.targetDepths);
-  const bonusLines = formatOperationBonusObjectiveLines(operation.bonusObjectives);
-  const completionSummaryLine = formatOperationCompletionSummaryLine(
-    operation.completionEffectSummary,
-  );
-
-  return (
-    <View style={[styles.tabBody, { gap: scaleSpacing(9) }]}>
-      <TerminalText size={scaleFont(6)} letterSpacing={0.7} style={{ color: theme.statusColor, fontWeight: '700' }}>
-        ACTIVE OPERATION
-      </TerminalText>
-      <TerminalText size={scaleFont(5.8)} style={{ color: lifecycleColor, fontWeight: '700' }}>
-        {lifecycleLabel}
-      </TerminalText>
-      <TerminalText size={scaleFont(5.5)} style={{ color: theme.mutedColor }}>
-        {`Run window: ${operation.generatedAtRunIndex} → ${operation.expiresAtRunIndex}`}
-      </TerminalText>
-      <TerminalText size={scaleFont(8.2)} style={[styles.wrapText, { color: theme.textColor, fontWeight: '800', lineHeight: scaleSize(11) }]}>
-        {operation.title}
-      </TerminalText>
-      <TypeChip label={operationTypeChip(operation.objectiveKind)} accentColor={theme.statusColor} />
-      {targetResourceLine ? (
-        <TerminalText size={scaleFont(5.8)} style={{ color: theme.statusColor }} numberOfLines={2}>
-          {targetResourceLine}
-        </TerminalText>
-      ) : null}
-      {targetDepthLine ? (
-        <TerminalText size={scaleFont(5.8)} style={{ color: theme.mutedColor }} numberOfLines={1}>
-          {targetDepthLine}
-        </TerminalText>
-      ) : null}
-      {showOptionalCopy ? (
-        <TerminalText
-          size={scaleFont(6.8)}
-          style={[styles.wrapText, { color: theme.mutedColor, lineHeight: scaleSize(11) }]}
-          numberOfLines={descriptionLines}
-        >
-          {operation.description}
-        </TerminalText>
-      ) : null}
-      {echoIntel.length > 0 ? (
-        <View style={[styles.listBlock, { gap: scaleSpacing(4), borderTopColor: `${theme.statusColor}24`, paddingTop: scaleSpacing(7) }]}>
-          <TerminalText size={scaleFont(5.5)} letterSpacing={0.6} style={{ color: theme.mutedColor }}>
-            ECHO INTEL
-          </TerminalText>
-          {echoIntel.map((line) => (
-            <TerminalText key={line} size={scaleFont(5.8)} style={{ color: theme.statusColor }} numberOfLines={3}>
-              {line}
-            </TerminalText>
-          ))}
-        </View>
-      ) : null}
-      {cargoIntel.length > 0 ? (
-        <View style={[styles.listBlock, { gap: scaleSpacing(4), borderTopColor: `${theme.statusColor}24`, paddingTop: scaleSpacing(7) }]}>
-          <TerminalText size={scaleFont(5.5)} letterSpacing={0.6} style={{ color: theme.mutedColor }}>
-            CARGO ROUTING
-          </TerminalText>
-          {cargoIntel.map((line) => (
-            <TerminalText key={line} size={scaleFont(5.8)} style={{ color: '#fbbf24' }} numberOfLines={3}>
-              {line}
-            </TerminalText>
-          ))}
-        </View>
-      ) : null}
-      <View style={{ gap: scaleSpacing(4) }}>
-        <TerminalText size={scaleFont(6)} style={{ color: theme.mutedColor }}>
-          {`Progress: ${formatOperationProgressLabel(
-            operation.progressCurrent,
-            operation.progressRequired,
-            operationPct,
-          )}`}
-        </TerminalText>
-        <ProgressBar
-          percent={operationPct}
-          accentColor={progressLocked ? theme.mutedColor : theme.statusColor}
-          height={scaleSize(5)}
-        />
-        {progressLockMessage ? (
-          <TerminalText size={scaleFont(5.5)} style={{ color: lifecycleColor }}>
-            {progressLockMessage}
-          </TerminalText>
-        ) : null}
-      </View>
-      <TerminalText size={scaleFont(5.8)} letterSpacing={0.4} style={{ color: theme.statusColor }} numberOfLines={2}>
-        {`Reward preview: ${operation.rewardPreview}`}
-      </TerminalText>
-      {completionSummaryLine ? (
-        <TerminalText size={scaleFont(5.5)} style={{ color: theme.mutedColor }} numberOfLines={3}>
-          {completionSummaryLine}
-        </TerminalText>
-      ) : null}
-      {bonusLines.length > 0 ? (
-        <View style={[styles.listBlock, { gap: scaleSpacing(4), borderTopColor: `${theme.statusColor}24`, paddingTop: scaleSpacing(7) }]}>
-          <TerminalText size={scaleFont(5.5)} letterSpacing={0.6} style={{ color: theme.mutedColor }}>
-            BONUS OBJECTIVES
-          </TerminalText>
-          {bonusLines.map((line) => (
-            <TerminalText key={line} size={scaleFont(5.8)} style={{ color: theme.textColor }} numberOfLines={2}>
-              {line}
-            </TerminalText>
-          ))}
-        </View>
-      ) : null}
-      {contributes.length > 0 ? (
-        <View style={[styles.listBlock, { gap: scaleSpacing(5), borderTopColor: `${theme.statusColor}24`, paddingTop: scaleSpacing(7) }]}>
-          <TerminalText size={scaleFont(5.5)} letterSpacing={0.6} style={{ color: theme.mutedColor }}>
-            CONTRIBUTES
-          </TerminalText>
-          <View style={styles.contributionList}>
-            {contributes.map((line) => (
-              <ContributionRow key={line} label={line} color={theme.textColor} />
-            ))}
-          </View>
-        </View>
-      ) : null}
-      {recentLog.length > 0 ? (
-        <View style={[styles.listBlock, { gap: scaleSpacing(4), borderTopColor: `${theme.statusColor}24`, paddingTop: scaleSpacing(7) }]}>
-          <TerminalText size={scaleFont(5.5)} letterSpacing={0.6} style={{ color: theme.mutedColor }}>
-            OPERATION INTEL
-          </TerminalText>
-          {recentLog.map((line) => (
-            <TerminalText key={line} size={scaleFont(5.8)} style={{ color: theme.mutedColor }} numberOfLines={2}>
-              {line.replace(/^>>\s*/, '')}
-            </TerminalText>
-          ))}
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
-function AnchorTabContent({ theme, sector }: { theme: TerminalTheme; sector: SectorState }) {
-  const { scaleFont, scaleSize, scaleSpacing, isCompactHeight, showOptionalCopy } = useVeilFrontLayout();
-  const { persisted } = useWorldState();
-  const suppressed = getRecentlySuppressedAnchor(persisted, sector.id);
-  const pressureLines = sector.activeAnchor ? describeAnchorInRunPressure(sector.activeAnchor) : [];
-
-  return (
-    <View style={[styles.tabBody, { gap: scaleSpacing(9) }]}>
-      <TerminalText size={scaleFont(6)} letterSpacing={0.7} style={{ color: '#a855f7', fontWeight: '700' }}>
-        ACTIVE ANCHOR
-      </TerminalText>
-      {sector.activeAnchor ? (
-        <>
-          <TerminalText size={scaleFont(8.2)} style={[styles.wrapText, { color: theme.textColor, fontWeight: '800', lineHeight: scaleSize(11) }]}>
-            {sector.activeAnchor.displayName}
-          </TerminalText>
-          {showOptionalCopy ? (
-            <TerminalText
-              size={scaleFont(6.8)}
-              style={[styles.wrapText, { color: theme.mutedColor, lineHeight: scaleSize(11.5) }]}
-              numberOfLines={isCompactHeight ? 2 : 3}
-            >
-              {sector.activeAnchor.description}
-            </TerminalText>
-          ) : null}
-          {pressureLines.length > 0 ? (
-            <View style={[styles.listBlock, { gap: scaleSpacing(5), borderTopColor: 'rgba(168, 85, 247, 0.2)', paddingTop: scaleSpacing(7) }]}>
-              <TerminalText size={scaleFont(5.5)} letterSpacing={0.6} style={{ color: theme.mutedColor }}>
-                PRESSURE
-              </TerminalText>
-              <View style={styles.contributionList}>
-                {pressureLines.map((line) => (
-                  <ContributionRow key={line} label={line} color={theme.textColor} />
-                ))}
-              </View>
-            </View>
-          ) : null}
-          {suppressed && suppressed.remainingRuns > 0 ? (
-            <TerminalText size={scaleFont(6.5)} style={[styles.wrapText, { color: theme.mutedColor, marginTop: scaleSpacing(4) }]}>
-              {`Aftermath: ${suppressed.displayName} suppressed for ${suppressed.remainingRuns} run(s).`}
-            </TerminalText>
-          ) : null}
-        </>
-      ) : (
-        <TerminalText size={scaleFont(6.5)} style={[styles.wrapText, { color: theme.mutedColor }]}>
-          No active anchor. Standard breach conditions apply.
-        </TerminalText>
-      )}
-    </View>
-  );
-}
-
-/** Right panel — tabs + tab content + deploy only. Summary lives on map top band. */
+/** Right panel — compact Deployment Dossier: stacked summary + deploy. */
 export default function SectorBriefingPanel({
   theme,
   sector,
@@ -348,15 +108,19 @@ export default function SectorBriefingPanel({
   runDisabled,
   launching,
 }: SectorBriefingPanelProps): React.JSX.Element {
-  const {
-    sectionGap,
-    cardPadding,
-    scaleFont,
-    scaleSpacing,
-    deployButtonHeight,
-  } = useVeilFrontLayout();
+  const { sectionGap, scaleFont, scaleSpacing, deployButtonHeight } = useVeilFrontLayout();
   const { persisted } = useWorldState();
-  const [activeTab, setActiveTab] = useState<BriefingTab>('operation');
+  const [intelOpen, setIntelOpen] = useState(false);
+
+  const biomeVisual = VEIL_BIOME_VISUALS[sector.veilBiome];
+  const op = sector.activeOperation;
+  const opPct = operationProgressPercent(op.progressCurrent, op.progressRequired);
+  const lifecycleLabel = formatOperationLifecycleStatus(op.lifecycleStatus, op.runsRemaining).split(' — ')[0];
+  const lifecycleColor = operationLifecycleAccentColor(op.lifecycleStatus, theme.statusColor);
+  const anchorActive = sector.activeAnchor != null;
+  const anchorName = sector.activeAnchor?.displayName ?? 'None';
+  const anchorPressure = sector.activeAnchor ? describeAnchorInRunPressure(sector.activeAnchor) : [];
+  const suppressed = getRecentlySuppressedAnchor(persisted, sector.id);
 
   const crisisPreview = useMemo(() => {
     const anchor = getActiveAnchorInstance(persisted, sector.id);
@@ -401,76 +165,170 @@ export default function SectorBriefingPanel({
     return { prelim, explain, pressure };
   }, [persisted, sector]);
 
+  const runSignals = crisisPreview.explain.expectedSignals.slice(0, 4);
+
+  // Contract summary (compact).
+  const isSponsor = selectedContract.kind === 'SPONSOR';
+  const contract = isSponsor ? selectedContract.contract : null;
+  const recommendedState: { label: string; color: string } | null = !isSponsor
+    ? null
+    : sectorCompatibility === 'RECOMMENDED'
+      ? { label: 'YES', color: '#34d399' }
+      : sectorCompatibility === 'UNAVAILABLE'
+        ? { label: 'NO', color: '#f87171' }
+        : { label: 'VALID', color: '#fbbf24' };
+
   const canLaunch = !runDisabled && !launching;
-  const deployLabel = launching
-    ? '[ DEPLOYING... ]'
-    : '[ INITIATE BREACH ]';
+  const deployLabel = launching ? '[ DEPLOYING... ]' : '[ INITIATE BREACH ]';
   const sectorWarning = contractSectorWarning(sectorCompatibility);
+
+  // Intel drawer content.
+  const echoIntel = formatEchoBriefingIntel(sector);
+  const cargoIntel = formatCargoRoutingBriefingIntel(sector, selectedContract);
+  const contributes = formatOperationContributesForObjective(
+    op.objectiveKind,
+    op.contributionRules,
+    op.rewardEmphasis.targetResources,
+  );
+  const bonusLines = formatOperationBonusObjectiveLines(op.bonusObjectives);
 
   return (
     <View style={[styles.panel, { gap: sectionGap }]}>
-      <View style={[styles.crisisBanner, { borderColor: `${theme.statusColor}44`, padding: scaleSpacing(8), gap: scaleSpacing(4) }]}>
-        <TypeChip label={crisisPreview.explain.title.toUpperCase()} accentColor={theme.statusColor} />
-        <TerminalText size={scaleFont(6)} style={[styles.wrapText, { color: theme.mutedColor }]} numberOfLines={3}>
-          {crisisPreview.explain.cause}
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={{ paddingBottom: scaleSpacing(4) }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* --- SECTOR DOSSIER --- */}
+        <TerminalText size={scaleFont(12)} letterSpacing={0.5} style={{ color: theme.textColor, fontWeight: '800' }}>
+          {sector.displayName}
         </TerminalText>
-        {crisisPreview.explain.pressureChips.length > 0 ? (
-          <TerminalText size={scaleFont(5.5)} style={{ color: theme.statusColor }}>
-            {`Pressure: ${crisisPreview.explain.pressureChips.join(' · ')}${crisisPreview.pressure.label ? ` (${crisisPreview.pressure.label})` : ''}`}
-          </TerminalText>
-        ) : null}
-        {crisisPreview.explain.expectedSignals.length > 0 ? (
-          <TerminalText size={scaleFont(5.5)} style={[styles.wrapText, { color: theme.mutedColor }]} numberOfLines={2}>
-            {`Likely Signals: ${crisisPreview.explain.expectedSignals.slice(0, 4).join(', ')}`}
-          </TerminalText>
-        ) : null}
-        {crisisPreview.explain.expectedRewards.length > 0 ? (
-          <TerminalText size={scaleFont(5.5)} style={[styles.wrapText, { color: theme.mutedColor }]} numberOfLines={2}>
-            {`Likely Rewards: ${crisisPreview.explain.expectedRewards.slice(0, 4).join(', ')}`}
-          </TerminalText>
-        ) : null}
-        {crisisPreview.explain.activeAftermath?.map((line) => (
-          <TerminalText key={line} size={scaleFont(5.5)} style={{ color: theme.statusColor }}>
-            {`Aftermath: ${line}`}
-          </TerminalText>
-        ))}
-        {crisisPreview.explain.warning ? (
-          <TerminalText size={scaleFont(5.5)} style={{ color: theme.statusColor }}>
-            {crisisPreview.explain.warning}
-          </TerminalText>
-        ) : null}
-      </View>
+        <TerminalText size={scaleFont(6)} letterSpacing={1} style={{ color: biomeVisual.glow, marginTop: scaleSpacing(2) }}>
+          {biomeVisual.label}
+        </TerminalText>
 
-      <BriefingTabs theme={theme} activeTab={activeTab} onSelectTab={setActiveTab} />
+        <Divider />
 
-      <View style={[styles.tabContent, { padding: cardPadding, borderColor: `${theme.statusColor}33` }]}>
-        {activeTab === 'operation' ? (
-          <OperationTabContent
-            theme={theme}
-            sector={sector}
-            operationLog={persisted.operationLog}
-            selectedContract={selectedContract}
-          />
-        ) : activeTab === 'anchor' ? (
-          <AnchorTabContent theme={theme} sector={sector} />
+        {/* --- ACTIVE OPERATION --- */}
+        <BlockLabel label="ACTIVE OPERATION" color={theme.statusColor} />
+        <TerminalText size={scaleFont(8.5)} style={{ color: theme.textColor, fontWeight: '800', lineHeight: scaleFont(12), marginTop: scaleSpacing(4) }}>
+          {op.title}
+        </TerminalText>
+        <View style={[styles.chipRow, { marginTop: scaleSpacing(6), gap: scaleSpacing(5) }]}>
+          <Chip label={operationTypeChip(op.objectiveKind)} color={theme.statusColor} />
+          <Chip label={lifecycleLabel} color={lifecycleColor} />
+          {anchorActive ? <Chip label={anchorName} color="#c084fc" /> : null}
+        </View>
+        <TerminalText size={scaleFont(6)} style={{ color: theme.mutedColor, marginTop: scaleSpacing(7) }}>
+          {`Progress: ${op.progressCurrent} / ${op.progressRequired} (${opPct}%)`}
+        </TerminalText>
+        <View style={{ marginTop: scaleSpacing(3) }}>
+          <ProgressBar percent={opPct} accentColor={lifecycleColor} height={scaleFont(5)} />
+        </View>
+
+        {runSignals.length > 0 ? (
+          <View style={{ marginTop: scaleSpacing(8), gap: scaleSpacing(4) }}>
+            <BlockLabel label="RUN SIGNALS" color={theme.mutedColor} />
+            <View style={[styles.chipRow, { gap: scaleSpacing(5) }]}>
+              {runSignals.map((sig) => (
+                <Chip key={sig} label={sig} color="#7dd3fc" />
+              ))}
+            </View>
+          </View>
+        ) : null}
+
+        {anchorActive && anchorPressure.length > 0 ? (
+          <TerminalText size={scaleFont(5.8)} style={{ color: theme.mutedColor, marginTop: scaleSpacing(7), lineHeight: scaleFont(9) }} numberOfLines={2}>
+            {`Anchor // ${anchorName}: ${anchorPressure[0]}`}
+          </TerminalText>
+        ) : null}
+
+        <Divider />
+
+        {/* --- SELECTED CONTRACT --- */}
+        <BlockLabel label="SELECTED CONTRACT" color={theme.statusColor} />
+        {contract ? (
+          <>
+            <TerminalText size={scaleFont(5.8)} letterSpacing={0.6} style={{ color: theme.mutedColor, marginTop: scaleSpacing(4) }}>
+              {sponsorDisplayName(contract.sponsorId).toUpperCase()}
+            </TerminalText>
+            <TerminalText size={scaleFont(8)} style={{ color: theme.textColor, fontWeight: '800', lineHeight: scaleFont(11), marginTop: scaleSpacing(2) }}>
+              {contract.title}
+            </TerminalText>
+            <TerminalText size={scaleFont(6)} style={{ color: theme.mutedColor, marginTop: scaleSpacing(4), lineHeight: scaleFont(9) }} numberOfLines={2}>
+              {contract.objectiveText}
+            </TerminalText>
+            <View style={[styles.chipRow, { marginTop: scaleSpacing(6), gap: scaleSpacing(6), alignItems: 'center' }]}>
+              {recommendedState ? (
+                <View style={styles.recRow}>
+                  <TerminalText size={scaleFont(5.6)} letterSpacing={0.5} style={{ color: theme.mutedColor }}>
+                    RECOMMENDED HERE:
+                  </TerminalText>
+                  <TerminalText size={scaleFont(6.4)} style={{ color: recommendedState.color, fontWeight: '800', marginLeft: scaleSpacing(4) }}>
+                    {recommendedState.label}
+                  </TerminalText>
+                </View>
+              ) : null}
+            </View>
+            <TerminalText size={scaleFont(6)} style={{ color: theme.statusColor, marginTop: scaleSpacing(5) }}>
+              {formatContractRewardSummary(contract)}
+            </TerminalText>
+          </>
         ) : (
           <>
-            <TerminalText
-              size={scaleFont(5.5)}
-              style={{ color: theme.mutedColor, marginBottom: scaleSpacing(4) }}
-              numberOfLines={2}
-            >
-              Contracts are weighted by active operation, sector resources, and sponsor priorities.
+            <TerminalText size={scaleFont(8)} style={{ color: theme.textColor, fontWeight: '800', marginTop: scaleSpacing(4) }}>
+              Independent Breach
             </TerminalText>
-            <SelectedContractSummary theme={theme} selectedContract={selectedContract} />
+            <TerminalText size={scaleFont(5.8)} style={{ color: theme.mutedColor, marginTop: scaleSpacing(4), lineHeight: scaleFont(9) }} numberOfLines={2}>
+              No sponsor objective. Take contract work on the Contract Board.
+            </TerminalText>
           </>
         )}
-      </View>
+
+        {/* --- INTEL DRAWER --- */}
+        <HapticPressable
+          onPress={() => setIntelOpen((v) => !v)}
+          style={({ pressed }) => [styles.intelToggle, { marginTop: scaleSpacing(10), opacity: pressed ? 0.7 : 1 }]}
+        >
+          <TerminalText size={scaleFont(6)} letterSpacing={0.8} style={{ color: theme.statusColor, fontWeight: '700' }}>
+            {intelOpen ? '[ − INTEL ]' : '[ + INTEL ]'}
+          </TerminalText>
+        </HapticPressable>
+
+        {intelOpen ? (
+          <View style={{ marginTop: scaleSpacing(6) }}>
+            {crisisPreview.explain.cause ? (
+              <DetailList label={crisisPreview.explain.title.toUpperCase()} lines={[crisisPreview.explain.cause]} color={theme.mutedColor} mutedColor={theme.mutedColor} />
+            ) : null}
+            {op.description ? (
+              <DetailList label="OPERATION" lines={[op.description]} color={theme.mutedColor} mutedColor={theme.mutedColor} />
+            ) : null}
+            <DetailList label="CONTRIBUTES" lines={contributes} color={theme.textColor} mutedColor={theme.mutedColor} />
+            <DetailList label="ECHO INTEL" lines={echoIntel} color={theme.statusColor} mutedColor={theme.mutedColor} />
+            <DetailList label="CARGO ROUTING" lines={cargoIntel} color="#fbbf24" mutedColor={theme.mutedColor} />
+            <DetailList label="BONUS OBJECTIVES" lines={bonusLines} color={theme.textColor} mutedColor={theme.mutedColor} />
+            {sector.activeAnchor ? (
+              <DetailList
+                label="ANCHOR PRESSURE"
+                lines={[sector.activeAnchor.description, ...anchorPressure]}
+                color={theme.mutedColor}
+                mutedColor={theme.mutedColor}
+              />
+            ) : null}
+            {suppressed && suppressed.remainingRuns > 0 ? (
+              <DetailList label="AFTERMATH" lines={[`${suppressed.displayName} suppressed for ${suppressed.remainingRuns} run(s).`]} color={theme.mutedColor} mutedColor={theme.mutedColor} />
+            ) : null}
+            <View style={{ marginTop: scaleSpacing(8) }}>
+              <SelectedContractSummary theme={theme} selectedContract={selectedContract} />
+            </View>
+          </View>
+        ) : null}
+      </ScrollView>
 
       {sectorWarning ? (
         <TerminalText
           size={scaleFont(5.5)}
-          style={{ color: sectorCompatibility === 'UNAVAILABLE' ? '#f87171' : theme.mutedColor, lineHeight: scaleSpacing(8) }}
+          style={{ color: sectorCompatibility === 'UNAVAILABLE' ? '#f87171' : theme.mutedColor, lineHeight: scaleFont(8) }}
         >
           {sectorWarning}
         </TerminalText>
@@ -496,7 +354,7 @@ export default function SectorBriefingPanel({
         ]}
       >
         <TerminalText
-          size={scaleFont(7)}
+          size={scaleFont(7.5)}
           letterSpacing={0.6}
           style={{ color: canLaunch ? theme.statusColor : theme.mutedColor, fontWeight: '800' }}
         >
@@ -514,68 +372,28 @@ const styles = StyleSheet.create({
     minWidth: 0,
     overflow: 'hidden',
   },
-  crisisBanner: {
-    flexShrink: 0,
-    borderWidth: 1,
-    backgroundColor: 'rgba(18, 28, 44, 0.72)',
-  },
-  tabRow: {
-    flexDirection: 'row',
-    flexShrink: 0,
-    borderWidth: 1,
-    backgroundColor: 'rgba(8, 13, 22, 0.5)',
-  },
-  tab: {
-    flex: 1,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 0,
-    ...Platform.select({
-      web: { cursor: 'pointer' as const },
-      default: {},
-    }),
-  },
-  tabContent: {
+  scroll: {
     flex: 1,
     minHeight: 0,
-    borderWidth: 1,
-    backgroundColor: 'rgba(18, 28, 44, 0.72)',
-    overflow: 'hidden',
   },
-  tabBody: {
-    flex: 1,
-    minHeight: 0,
-    overflow: 'hidden',
-  },
-  wrapText: {
-    flexShrink: 1,
-  },
-  typeChip: {
-    borderWidth: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.5)',
-  },
-  contributionList: {
-    gap: 3,
-  },
-  listBlock: {
+  divider: {
     borderTopWidth: 1,
+    borderTopColor: 'rgba(100, 116, 139, 0.22)',
   },
-  contributionRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  contributionText: {
-    flex: 1,
-    flexShrink: 1,
-  },
-  perkList: {
+  chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
   },
-  perkChip: {
+  chip: {
     borderWidth: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.5)',
+    backgroundColor: 'rgba(15, 23, 42, 0.4)',
+  },
+  recRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  intelToggle: {
+    alignSelf: 'flex-start',
   },
   deployButton: {
     width: '100%',

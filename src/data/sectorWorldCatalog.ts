@@ -69,12 +69,18 @@ export interface SectorWorldTemplate {
   operations: SectorOperationTemplate[];
 }
 
+// Single connected landmass — irregular, angular continent silhouette with
+// peninsulas and bays. Sectors share exact edges (planar tessellation).
+// Outer (cw): a(28,152) a2(58,104) b(74,50) b2(138,74) c(214,38) d(300,60)
+//   d2(352,34) e(452,78) e2(472,132) f(452,182) g(436,252) g2(356,262)
+//   h(288,294) i(150,286) i2(90,256) j(50,214) j2(34,184)
+// Internal seams: m(200,128) n(330,146) o(168,200) p(298,210)
 const RAW_MAP: Array<{ id: SectorId; label: string; path: string }> = [
-  { id: 'THE_SLAG_WORKS', label: 'The Slag Works', path: 'M 40 60 L 120 40 L 150 110 L 90 150 L 30 120 Z' },
-  { id: 'THE_ABYSSAL_SINK', label: 'Abyssal Sink', path: 'M 30 190 L 110 170 L 140 260 L 60 280 L 20 230 Z' },
-  { id: 'THE_NULL_ZONE', label: 'Null Zone', path: 'M 190 110 L 290 90 L 320 170 L 250 210 L 170 180 Z' },
-  { id: 'THE_BLACKLINE_TERMINUS', label: 'The Blackline Terminus', path: 'M 330 40 L 430 55 L 450 130 L 370 150 L 310 95 Z' },
-  { id: 'THE_ASHEN_WASTES', label: 'Ashen Wastes', path: 'M 300 190 L 420 175 L 460 260 L 360 290 L 280 240 Z' },
+  { id: 'THE_SLAG_WORKS', label: 'The Slag Works', path: 'M 28 152 L 58 104 L 74 50 L 138 74 L 214 38 L 200 128 L 168 200 Z' },
+  { id: 'THE_BLACKLINE_TERMINUS', label: 'The Blackline Terminus', path: 'M 214 38 L 300 60 L 352 34 L 452 78 L 472 132 L 452 182 L 330 146 L 200 128 Z' },
+  { id: 'THE_NULL_ZONE', label: 'Null Zone', path: 'M 200 128 L 330 146 L 298 210 L 168 200 Z' },
+  { id: 'THE_ABYSSAL_SINK', label: 'Abyssal Sink', path: 'M 28 152 L 168 200 L 298 210 L 288 294 L 150 286 L 90 256 L 50 214 L 34 184 Z' },
+  { id: 'THE_ASHEN_WASTES', label: 'Ashen Wastes', path: 'M 330 146 L 452 182 L 436 252 L 356 262 L 288 294 L 298 210 Z' },
 ];
 
 export const SECTOR_MAP_DEFINITIONS: SectorMapDefinition[] = RAW_MAP.map((entry) => {
