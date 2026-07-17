@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, ScrollView, StyleSheet, View } from 'react-native';
+import Svg, { Defs, Line, Pattern, Rect } from 'react-native-svg';
 import HapticPressable from '../HapticPressable';
 import HubScreenShell from './HubScreenShell';
 import TerminalText from '../TerminalText';
@@ -12,217 +13,549 @@ import { HUB_DATA_DIVIDER } from '../../styles/hubTerminalUi';
 import type { GeneratedContract } from '../../types/contract';
 import type { CabalEmployerId } from '../../types/worldState';
 import {
-  formatContractRewardSummary,
   formatContractContextTag,
+  formatContractJobType,
+  formatContractRiskTier,
   sponsorDisplayName,
 } from '../../utils/contractUi';
+import { describeEmployerPerks, employerSponsorLabel } from '../../utils/employerContractUi';
 import { formatContractCargoDeliveryHints } from '../../data/cargoRoutingIntelEngine';
 import { isResourceContractObjective } from '../../data/contractResolver';
 import { readPressableHover, terminalHoverStyle } from '../../utils/terminalHoverStyle';
-import {
-  buildSponsorReputationPreview,
-  formatSponsorReputationLine,
-} from '../../data/runIntegration/sponsorRepEngine';
+import { buildSponsorReputationPreview } from '../../data/runIntegration/sponsorRepEngine';
 import { getActiveAnchorInstance } from '../../data/anchorLifecycleEngine';
 import { buildPreliminaryRunWorldContext } from '../../data/runWorldBriefEngine';
-
-const TERRAN_ACCENT = FACTION_DEFINITIONS.TERRAN_GRID.accentColor;
-
-function difficultyLabel(difficulty: number): string {
-  return '★'.repeat(difficulty).padEnd(5, '·');
-}
-
-function ContractJobCard({
-  contract,
-  isSelected,
-  onPress,
-}: {
-  contract: GeneratedContract;
-  isSelected: boolean;
-  onPress: () => void;
-}) {
-  const { theme } = useTerminal();
-  const { scaleSpacing, scaleFont } = useHubLayout();
-  const cardPadding = scaleSpacing(16);
-  const sponsorAccent = FACTION_DEFINITIONS[contract.sponsorId].accentColor;
-
-  return (
-    <HapticPressable
-      onPress={onPress}
-      style={(state) => [
-        styles.jobCard,
-        {
-          borderColor: isSelected ? sponsorAccent : HUB_DATA_DIVIDER,
-          backgroundColor: isSelected ? `${sponsorAccent}14` : 'rgba(15, 23, 42, 0.35)',
-          padding: cardPadding,
-          gap: scaleSpacing(5),
-        },
-        terminalHoverStyle(readPressableHover(state), state.pressed),
-      ]}
-    >
-      <TerminalText size={scaleFont(6)} style={{ color: sponsorAccent, fontWeight: '700' }}>
-        {sponsorDisplayName(contract.sponsorId).toUpperCase()}
-      </TerminalText>
-      <TerminalText size={scaleFont(7.5)} style={{ color: theme.textColor, fontWeight: '800' }}>
-        {contract.title.toUpperCase()}
-      </TerminalText>
-      {formatContractContextTag(contract) ? (
-        <TerminalText size={scaleFont(5.5)} style={{ color: sponsorAccent, fontWeight: '700' }}>
-          {formatContractContextTag(contract)!.toUpperCase()}
-        </TerminalText>
-      ) : null}
-      <TerminalText size={scaleFont(6.2)} style={{ color: theme.mutedColor }}>
-        {contract.objectiveText}
-      </TerminalText>
-      <TerminalText size={scaleFont(5.8)} style={{ color: theme.textColor }}>
-        {`SECTORS: ${contract.recommendedSectorIds.map((id) => id.replace('THE_', '').replace(/_/g, ' ')).join(' · ')}`}
-      </TerminalText>
-      {contract.requiredDepth ? (
-        <TerminalText size={scaleFont(5.8)} style={{ color: theme.mutedColor }}>
-          {`MIN DEPTH: ${contract.requiredDepth}`}
-        </TerminalText>
-      ) : null}
-      <TerminalText size={scaleFont(5.8)} style={{ color: TERRAN_ACCENT }}>
-        {formatContractRewardSummary(contract)}
-      </TerminalText>
-      {contract.bonusObjective ? (
-        <TerminalText size={scaleFont(5.5)} style={{ color: theme.mutedColor }}>
-          {`BONUS: ${contract.bonusObjective.text}`}
-        </TerminalText>
-      ) : null}
-      {isResourceContractObjective(contract.objectiveKind) ? (
-        <>
-          <TerminalText size={scaleFont(5.8)} style={{ color: theme.mutedColor, marginTop: scaleSpacing(4) }}>
-            POST-RUN DELIVERY
-          </TerminalText>
-          {formatContractCargoDeliveryHints(contract).map((line) => (
-            <TerminalText key={line} size={scaleFont(5.5)} style={{ color: theme.mutedColor }}>
-              {line}
-            </TerminalText>
-          ))}
-        </>
-      ) : null}
-      <View style={styles.jobFooter}>
-        <TerminalText size={scaleFont(5.5)} style={{ color: theme.mutedColor }}>
-          {difficultyLabel(contract.difficulty)}
-        </TerminalText>
-        <TerminalText size={scaleFont(5.5)} style={{ color: theme.mutedColor }}>
-          {contract.refreshLabel.toUpperCase()}
-        </TerminalText>
-      </View>
-      {isSelected ? (
-        <TerminalText size={scaleFont(6)} style={{ color: sponsorAccent, fontWeight: '700' }}>
-          [ SELECTED CONTRACT ]
-        </TerminalText>
-      ) : null}
-    </HapticPressable>
-  );
-}
-
-function IndependentCard({
-  isSelected,
-  onPress,
-}: {
-  isSelected: boolean;
-  onPress: () => void;
-}) {
-  const { theme } = useTerminal();
-  const { scaleSpacing, scaleFont } = useHubLayout();
-  const cardPadding = scaleSpacing(16);
-
-  return (
-    <HapticPressable
-      onPress={onPress}
-      style={(state) => [
-        styles.jobCard,
-        {
-          borderColor: isSelected ? TERRAN_ACCENT : HUB_DATA_DIVIDER,
-          backgroundColor: isSelected ? `${TERRAN_ACCENT}14` : 'rgba(15, 23, 42, 0.35)',
-          padding: cardPadding,
-          gap: scaleSpacing(5),
-        },
-        terminalHoverStyle(readPressableHover(state), state.pressed),
-      ]}
-    >
-      <TerminalText size={scaleFont(7.5)} style={{ color: theme.textColor, fontWeight: '800' }}>
-        INDEPENDENT BREACH
-      </TerminalText>
-      <TerminalText size={scaleFont(6.2)} style={{ color: theme.mutedColor }}>
-        No sponsor contract. Base sector rewards only. Operations still progress normally.
-      </TerminalText>
-      {isSelected ? (
-        <TerminalText size={scaleFont(6)} style={{ color: TERRAN_ACCENT, fontWeight: '700' }}>
-          [ SELECTED ]
-        </TerminalText>
-      ) : null}
-    </HapticPressable>
-  );
-}
+import { SPONSOR_IDENTITY } from '../../utils/sponsorIdentity';
 
 const SPONSOR_ORDER: CabalEmployerId[] = ['TERRAN_GRID', 'LEGION', 'SOLARIS'];
-
 const DEFAULT_SPONSOR_FILTER: CabalEmployerId = 'TERRAN_GRID';
+const INDEPENDENT_ACCENT = '#64748b';
 
 function resolveSponsorFilter(lastUsedSponsorId: CabalEmployerId | null | undefined): CabalEmployerId {
   return lastUsedSponsorId ?? DEFAULT_SPONSOR_FILTER;
 }
 
-function SponsorFilterRow({
-  activeSponsorId,
-  onSelectSponsor,
+function formatSectorShort(id: string): string {
+  return id.replace('THE_', '').replace(/_/g, ' ');
+}
+
+function sponsorStandingLabel(rank: number): string {
+  if (rank <= 0) return 'Neutral';
+  if (rank <= 2) return 'Recognized';
+  if (rank <= 4) return 'Trusted';
+  return 'Favored';
+}
+
+function withAlpha(hex: string, alphaHex: string): string {
+  return `${hex}${alphaHex}`;
+}
+
+/** Faint scanline + grid backdrop so the empty black gets vibe without hurting readability. */
+function BoardBackdrop(): React.JSX.Element {
+  return (
+    <View pointerEvents="none" style={styles.backdrop}>
+      <Svg width="100%" height="100%">
+        <Defs>
+          <Pattern id="cbGrid" width={44} height={44} patternUnits="userSpaceOnUse">
+            <Line x1={0} y1={0} x2={44} y2={0} stroke="rgba(100,116,139,0.06)" strokeWidth={0.5} />
+            <Line x1={0} y1={0} x2={0} y2={44} stroke="rgba(100,116,139,0.06)" strokeWidth={0.5} />
+          </Pattern>
+          <Pattern id="cbScan" width={3} height={4} patternUnits="userSpaceOnUse">
+            <Rect x={0} y={0} width={3} height={1} fill="rgba(148,163,184,0.05)" />
+          </Pattern>
+        </Defs>
+        <Rect x="0" y="0" width="100%" height="100%" fill="url(#cbGrid)" />
+        <Rect x="0" y="0" width="100%" height="100%" fill="url(#cbScan)" />
+      </Svg>
+    </View>
+  );
+}
+
+function Chip({
+  label,
+  color,
+  filled,
+  size,
 }: {
-  activeSponsorId: CabalEmployerId;
-  onSelectSponsor: (sponsorId: CabalEmployerId) => void;
-}) {
+  label: string;
+  color: string;
+  filled?: boolean;
+  size: number;
+}): React.JSX.Element {
+  return (
+    <View
+      style={[
+        styles.chip,
+        {
+          borderColor: withAlpha(color, '66'),
+          backgroundColor: filled ? withAlpha(color, '22') : 'transparent',
+        },
+      ]}
+    >
+      <TerminalText size={size} letterSpacing={0.4} style={{ color, fontWeight: '700' }}>
+        {label}
+      </TerminalText>
+    </View>
+  );
+}
+
+function StatRow({
+  label,
+  value,
+  valueColor,
+  labelColor,
+  size,
+}: {
+  label: string;
+  value: string;
+  valueColor: string;
+  labelColor: string;
+  size: number;
+}): React.JSX.Element {
+  return (
+    <View style={styles.statRow}>
+      <TerminalText size={size} letterSpacing={0.5} style={{ color: labelColor, fontWeight: '700', width: 78 }}>
+        {label}
+      </TerminalText>
+      <TerminalText size={size} style={{ color: valueColor, flex: 1 }}>
+        {value}
+      </TerminalText>
+    </View>
+  );
+}
+
+function ContractDossierCard({
+  contract,
+  isSelected,
+  onAccept,
+  onAbandon,
+}: {
+  contract: GeneratedContract;
+  isSelected: boolean;
+  onAccept: () => void;
+  onAbandon: () => void;
+}): React.JSX.Element {
+  const { theme } = useTerminal();
+  const { scaleSpacing, scaleFont } = useHubLayout();
+  const [expanded, setExpanded] = useState(false);
+  const accent = FACTION_DEFINITIONS[contract.sponsorId].accentColor;
+  const identity = SPONSOR_IDENTITY[contract.sponsorId];
+  const risk = formatContractRiskTier(contract.difficulty);
+  const jobType = formatContractJobType(contract.objectiveKind);
+  const isResource = isResourceContractObjective(contract.objectiveKind);
+  const contextTag = formatContractContextTag(contract);
+  const primarySector = contract.recommendedSectorIds[0]
+    ? formatSectorShort(contract.recommendedSectorIds[0])
+    : null;
+
+  const stampAnim = useRef(new Animated.Value(isSelected ? 1 : 0)).current;
+  useEffect(() => {
+    if (isSelected) {
+      stampAnim.setValue(0);
+      Animated.spring(stampAnim, {
+        toValue: 1,
+        friction: 5,
+        tension: 150,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      stampAnim.setValue(0);
+    }
+  }, [isSelected, stampAnim]);
+
+  const rewardValue = (() => {
+    const parts = [`${contract.reward.credits} CR`, `+${contract.reward.reputation} REP`];
+    if (contract.reward.rareLootBonusPct) parts.push(`+${contract.reward.rareLootBonusPct}% RARE`);
+    return parts.join('   ');
+  })();
+
+  return (
+    <View
+      style={[
+        styles.dossierCard,
+        {
+          borderColor: isSelected ? accent : HUB_DATA_DIVIDER,
+          borderLeftColor: accent,
+          borderWidth: isSelected ? 1.5 : 1,
+          backgroundColor: isSelected ? withAlpha(accent, '1f') : 'rgba(15, 23, 42, 0.4)',
+          padding: scaleSpacing(14),
+          gap: scaleSpacing(7),
+        },
+      ]}
+    >
+      {isSelected ? (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.seal,
+            {
+              borderColor: accent,
+              opacity: stampAnim,
+              transform: [
+                { rotate: '-11deg' },
+                { scale: stampAnim.interpolate({ inputRange: [0, 1], outputRange: [1.9, 1] }) },
+              ],
+            },
+          ]}
+        >
+          <TerminalText size={scaleFont(5.6)} letterSpacing={1} style={{ color: accent, fontWeight: '800' }}>
+            {identity.sealLabel}
+          </TerminalText>
+        </Animated.View>
+      ) : null}
+
+      <View style={styles.dossierHeader}>
+        <TerminalText size={scaleFont(6)} letterSpacing={0.6} style={{ color: accent, fontWeight: '800' }}>
+          {`${identity.emblem}  ${sponsorDisplayName(contract.sponsorId).toUpperCase()}`}
+        </TerminalText>
+        <TerminalText size={scaleFont(5.2)} letterSpacing={0.5} style={{ color: theme.mutedColor, fontWeight: '700' }}>
+          {isSelected ? identity.sealLabel : 'REFRESHES AFTER RUN'}
+        </TerminalText>
+      </View>
+
+      <TerminalText size={scaleFont(5.4)} style={{ color: theme.mutedColor }}>
+        {`${employerSponsorLabel(contract.sponsorId)}${primarySector ? ` / ${primarySector}` : ''}`}
+      </TerminalText>
+
+      <TerminalText size={scaleFont(8)} style={{ color: theme.textColor, fontWeight: '800' }}>
+        {contract.title.toUpperCase()}
+      </TerminalText>
+
+      <TerminalText size={scaleFont(6)} numberOfLines={2} style={{ color: theme.mutedColor }}>
+        {contract.objectiveText}
+      </TerminalText>
+
+      <View style={styles.chipRow}>
+        <Chip label={jobType} color={accent} filled size={scaleFont(5)} />
+        <Chip label={risk.label} color={risk.color} size={scaleFont(5)} />
+        {primarySector ? <Chip label={primarySector.toUpperCase()} color={theme.mutedColor} size={scaleFont(5)} /> : null}
+        {isResource ? (
+          <Chip label="POST-RUN DELIVERY" color={theme.mutedColor} size={scaleFont(5)} />
+        ) : null}
+        {contract.reward.reputation > 0 ? <Chip label="BETRAYABLE" color="#f97316" size={scaleFont(5)} /> : null}
+      </View>
+
+      <View style={[styles.statBlock, { borderTopColor: withAlpha(accent, '2a') }]}>
+        <StatRow
+          label="REWARD"
+          value={rewardValue}
+          valueColor={theme.textColor}
+          labelColor={theme.mutedColor}
+          size={scaleFont(5.6)}
+        />
+        {primarySector ? (
+          <StatRow
+            label="ROUTE"
+            value={contract.recommendedSectorIds.map((id) => formatSectorShort(id)).join(' · ')}
+            valueColor={theme.textColor}
+            labelColor={theme.mutedColor}
+            size={scaleFont(5.6)}
+          />
+        ) : null}
+        {contract.requiredDepth ? (
+          <StatRow
+            label="MIN DEPTH"
+            value={`Depth ${contract.requiredDepth}`}
+            valueColor={theme.textColor}
+            labelColor={theme.mutedColor}
+            size={scaleFont(5.6)}
+          />
+        ) : null}
+        <StatRow
+          label="DELIVERY"
+          value={isResource ? 'Post-run sponsor handoff required' : 'Resolved in-run'}
+          valueColor={theme.textColor}
+          labelColor={theme.mutedColor}
+          size={scaleFont(5.6)}
+        />
+        {contextTag ? (
+          <StatRow
+            label="CONTEXT"
+            value={contextTag}
+            valueColor={accent}
+            labelColor={theme.mutedColor}
+            size={scaleFont(5.6)}
+          />
+        ) : null}
+      </View>
+
+      {expanded ? (
+        <View style={[styles.detailBlock, { borderTopColor: withAlpha(accent, '2a') }]}>
+          {contract.bonusObjective ? (
+            <TerminalText size={scaleFont(5.4)} style={{ color: theme.mutedColor }}>
+              {`BONUS: ${contract.bonusObjective.text}`}
+            </TerminalText>
+          ) : null}
+          {isResource
+            ? formatContractCargoDeliveryHints(contract).map((line) => (
+                <TerminalText key={line} size={scaleFont(5.4)} style={{ color: theme.mutedColor }}>
+                  {line}
+                </TerminalText>
+              ))
+            : null}
+          <TerminalText size={scaleFont(5.4)} style={{ color: theme.mutedColor }}>
+            {`SPONSOR TERMS: ${describeEmployerPerks(contract.sponsorId).join(' · ')}`}
+          </TerminalText>
+          <TerminalText size={scaleFont(5.4)} style={{ color: '#f97316' }}>
+            Betrayal: keep/sell the cargo elsewhere, but forfeit sponsor reputation.
+          </TerminalText>
+        </View>
+      ) : null}
+
+      {isSelected ? (
+        <TerminalText size={scaleFont(5.4)} style={{ color: accent }}>
+          {identity.sealSubline}
+        </TerminalText>
+      ) : null}
+
+      <View style={styles.actionRow}>
+        {isSelected ? (
+          <>
+            <View style={[styles.actionButton, styles.actionAccepted, { borderColor: accent, backgroundColor: withAlpha(accent, '26') }]}>
+              <TerminalText size={scaleFont(5.8)} letterSpacing={0.6} style={{ color: accent, fontWeight: '800' }}>
+                [ CONTRACT ACCEPTED ]
+              </TerminalText>
+            </View>
+            <HapticPressable
+              onPress={onAbandon}
+              style={(state) => [
+                styles.actionButton,
+                { borderColor: theme.mutedColor },
+                terminalHoverStyle(readPressableHover(state), state.pressed),
+              ]}
+            >
+              <TerminalText size={scaleFont(5.8)} letterSpacing={0.6} style={{ color: theme.mutedColor, fontWeight: '700' }}>
+                [ ABANDON ]
+              </TerminalText>
+            </HapticPressable>
+          </>
+        ) : (
+          <>
+            <HapticPressable
+              onPress={onAccept}
+              style={(state) => [
+                styles.actionButton,
+                styles.actionPrimary,
+                { borderColor: accent, backgroundColor: withAlpha(accent, '1c') },
+                terminalHoverStyle(readPressableHover(state), state.pressed),
+              ]}
+            >
+              <TerminalText size={scaleFont(5.8)} letterSpacing={0.6} style={{ color: accent, fontWeight: '800' }}>
+                [ ACCEPT CONTRACT ]
+              </TerminalText>
+            </HapticPressable>
+            <HapticPressable
+              onPress={() => setExpanded((prev) => !prev)}
+              style={(state) => [
+                styles.actionButton,
+                { borderColor: theme.mutedColor },
+                terminalHoverStyle(readPressableHover(state), state.pressed),
+              ]}
+            >
+              <TerminalText size={scaleFont(5.8)} letterSpacing={0.6} style={{ color: theme.mutedColor, fontWeight: '700' }}>
+                {expanded ? '[ HIDE ]' : '[ DETAILS ]'}
+              </TerminalText>
+            </HapticPressable>
+          </>
+        )}
+      </View>
+    </View>
+  );
+}
+
+function IndependentBreachCard({
+  isSelected,
+  onPress,
+}: {
+  isSelected: boolean;
+  onPress: () => void;
+}): React.JSX.Element {
   const { theme } = useTerminal();
   const { scaleSpacing, scaleFont } = useHubLayout();
 
   return (
-    <View style={[styles.sponsorRow, { gap: scaleSpacing(6) }]}>
-      {SPONSOR_ORDER.map((sponsorId) => {
-        const isActive = activeSponsorId === sponsorId;
-        const accent = FACTION_DEFINITIONS[sponsorId].accentColor;
-        return (
+    <View
+      style={[
+        styles.independentCard,
+        {
+          borderColor: isSelected ? INDEPENDENT_ACCENT : withAlpha(INDEPENDENT_ACCENT, '55'),
+          backgroundColor: isSelected ? withAlpha(INDEPENDENT_ACCENT, '1c') : 'rgba(10, 14, 22, 0.5)',
+          padding: scaleSpacing(14),
+          gap: scaleSpacing(7),
+        },
+      ]}
+    >
+      <View style={styles.dossierHeader}>
+        <TerminalText size={scaleFont(6)} letterSpacing={0.8} style={{ color: INDEPENDENT_ACCENT, fontWeight: '800' }}>
+          ⌁ BLACK CHANNEL
+        </TerminalText>
+        <TerminalText size={scaleFont(5.2)} letterSpacing={0.5} style={{ color: theme.mutedColor, fontWeight: '700' }}>
+          UNVERIFIED ROUTE
+        </TerminalText>
+      </View>
+
+      <TerminalText size={scaleFont(8)} style={{ color: theme.textColor, fontWeight: '800' }}>
+        INDEPENDENT BREACH
+      </TerminalText>
+      <TerminalText size={scaleFont(6)} style={{ color: theme.mutedColor }}>
+        No sponsor. No leash. No guaranteed payout.
+      </TerminalText>
+
+      <View style={styles.chipRow}>
+        <Chip label="NO REP" color={INDEPENDENT_ACCENT} size={scaleFont(5)} />
+        <Chip label="KEEP YOUR CARGO" color={INDEPENDENT_ACCENT} size={scaleFont(5)} />
+        <Chip label="OPS PROGRESS" color={INDEPENDENT_ACCENT} size={scaleFont(5)} />
+      </View>
+
+      <View style={{ gap: scaleSpacing(2) }}>
+        <TerminalText size={scaleFont(5.4)} style={{ color: theme.mutedColor }}>
+          • You keep everything you extract — no delivery obligations.
+        </TerminalText>
+        <TerminalText size={scaleFont(5.4)} style={{ color: theme.mutedColor }}>
+          • Operations still progress normally.
+        </TerminalText>
+        <TerminalText size={scaleFont(5.4)} style={{ color: theme.mutedColor }}>
+          • No sponsor reputation, no safety net.
+        </TerminalText>
+      </View>
+
+      <View style={styles.actionRow}>
+        {isSelected ? (
+          <View style={[styles.actionButton, styles.actionPrimary, { borderColor: INDEPENDENT_ACCENT, backgroundColor: withAlpha(INDEPENDENT_ACCENT, '26') }]}>
+            <TerminalText size={scaleFont(5.8)} letterSpacing={0.6} style={{ color: INDEPENDENT_ACCENT, fontWeight: '800' }}>
+              [ UNSPONSORED — ACTIVE ]
+            </TerminalText>
+          </View>
+        ) : (
           <HapticPressable
-            key={sponsorId}
-            onPress={() => onSelectSponsor(sponsorId)}
+            onPress={onPress}
             style={(state) => [
-              styles.sponsorButton,
-              {
-                borderColor: isActive ? accent : HUB_DATA_DIVIDER,
-                backgroundColor: isActive ? `${accent}18` : 'rgba(15, 23, 42, 0.35)',
-                paddingVertical: scaleSpacing(8),
-                paddingHorizontal: scaleSpacing(6),
-              },
+              styles.actionButton,
+              styles.actionPrimary,
+              { borderColor: INDEPENDENT_ACCENT, backgroundColor: withAlpha(INDEPENDENT_ACCENT, '14') },
               terminalHoverStyle(readPressableHover(state), state.pressed),
             ]}
           >
-            <TerminalText
-              size={scaleFont(6.2)}
-              letterSpacing={0.4}
-              style={{ color: isActive ? accent : theme.mutedColor, fontWeight: isActive ? '800' : '600' }}
-            >
-              {sponsorDisplayName(sponsorId).toUpperCase()}
+            <TerminalText size={scaleFont(5.8)} letterSpacing={0.6} style={{ color: INDEPENDENT_ACCENT, fontWeight: '800' }}>
+              [ RUN UNSPONSORED ]
             </TerminalText>
           </HapticPressable>
-        );
-      })}
+        )}
+      </View>
+    </View>
+  );
+}
+
+function SponsorIdentityCard({
+  sponsorId,
+  isActive,
+  jobCount,
+  onPress,
+}: {
+  sponsorId: CabalEmployerId;
+  isActive: boolean;
+  jobCount: number;
+  onPress: () => void;
+}): React.JSX.Element {
+  const { theme } = useTerminal();
+  const { account } = usePlayerAccount();
+  const { scaleSpacing, scaleFont } = useHubLayout();
+  const accent = FACTION_DEFINITIONS[sponsorId].accentColor;
+  const identity = SPONSOR_IDENTITY[sponsorId];
+  const rep = account.sponsorReputation[sponsorId] ?? 0;
+  const preview = buildSponsorReputationPreview(sponsorId, rep);
+
+  return (
+    <HapticPressable
+      onPress={onPress}
+      style={(state) => [
+        styles.sponsorCard,
+        {
+          borderColor: isActive ? accent : withAlpha(accent, '3a'),
+          backgroundColor: isActive ? withAlpha(accent, '1c') : 'rgba(12, 18, 28, 0.45)',
+          padding: scaleSpacing(10),
+          gap: scaleSpacing(4),
+        },
+        terminalHoverStyle(readPressableHover(state), state.pressed),
+      ]}
+    >
+      <View style={styles.sponsorCardHeader}>
+        <TerminalText size={scaleFont(9)} style={{ color: accent }}>
+          {identity.emblem}
+        </TerminalText>
+        <TerminalText size={scaleFont(4.6)} letterSpacing={0.4} style={{ color: isActive ? accent : theme.mutedColor, fontWeight: '700' }}>
+          {`${jobCount} ${jobCount === 1 ? 'JOB' : 'JOBS'}`}
+        </TerminalText>
+      </View>
+      <TerminalText size={scaleFont(6.6)} letterSpacing={0.6} style={{ color: isActive ? accent : theme.textColor, fontWeight: '800' }}>
+        {sponsorDisplayName(sponsorId).toUpperCase()}
+      </TerminalText>
+      <TerminalText size={scaleFont(5)} numberOfLines={2} style={{ color: theme.mutedColor }}>
+        {identity.descriptor}
+      </TerminalText>
+      <TerminalText size={scaleFont(4.8)} letterSpacing={0.5} style={{ color: theme.mutedColor, fontWeight: '700' }}>
+        {`REP ${preview.reputation}   RANK ${preview.rank}   NEXT ${preview.progressToNext}`}
+      </TerminalText>
+    </HapticPressable>
+  );
+}
+
+function SponsorLedger(): React.JSX.Element {
+  const { theme } = useTerminal();
+  const { account } = usePlayerAccount();
+  const { scaleSpacing, scaleFont } = useHubLayout();
+  const [open, setOpen] = useState(false);
+
+  return (
+    <View style={[styles.ledger, { borderColor: HUB_DATA_DIVIDER, padding: scaleSpacing(12), gap: scaleSpacing(6) }]}>
+      <HapticPressable
+        onPress={() => setOpen((prev) => !prev)}
+        style={(state) => [styles.ledgerHeader, terminalHoverStyle(readPressableHover(state), state.pressed)]}
+      >
+        <TerminalText size={scaleFont(5.8)} letterSpacing={0.8} style={{ color: theme.mutedColor, fontWeight: '800' }}>
+          SPONSOR LEDGER
+        </TerminalText>
+        <TerminalText size={scaleFont(5.8)} style={{ color: theme.mutedColor, fontWeight: '800' }}>
+          {open ? '−' : '+'}
+        </TerminalText>
+      </HapticPressable>
+      {open
+        ? SPONSOR_ORDER.map((sponsorId) => {
+            const rep = account.sponsorReputation[sponsorId] ?? 0;
+            const preview = buildSponsorReputationPreview(sponsorId, rep);
+            const accent = FACTION_DEFINITIONS[sponsorId].accentColor;
+            return (
+              <View key={sponsorId} style={styles.ledgerRow}>
+                <TerminalText size={scaleFont(5.4)} style={{ color: accent, fontWeight: '700', flex: 1.3 }}>
+                  {sponsorDisplayName(sponsorId)}
+                </TerminalText>
+                <TerminalText size={scaleFont(5.4)} style={{ color: theme.textColor, flex: 1 }}>
+                  {`Rank ${preview.rank}`}
+                </TerminalText>
+                <TerminalText size={scaleFont(5.4)} style={{ color: theme.textColor, flex: 1 }}>
+                  {`${preview.progressInRank}/5 Rep`}
+                </TerminalText>
+                <TerminalText size={scaleFont(5.4)} style={{ color: theme.mutedColor, flex: 1.1, textAlign: 'right' }}>
+                  {sponsorStandingLabel(preview.rank)}
+                </TerminalText>
+              </View>
+            );
+          })
+        : null}
     </View>
   );
 }
 
 export default function ContractBoardPanel(): React.JSX.Element {
   const { theme } = useTerminal();
-  const { account } = usePlayerAccount();
   const {
     persisted,
     isHydrated,
     selectContract,
     selectIndependentContract,
-    abandonSelectedContract,
     selectedSector,
   } = useWorldState();
-  const { scaleSpacing } = useHubLayout();
+  const { scaleSpacing, scaleFont, isDesktop, screenWidth } = useHubLayout();
 
   const { contracts, selectedContract, lastUsedSponsorId } = persisted.contractBoard;
   const [activeSponsorId, setActiveSponsorId] = useState<CabalEmployerId>(
@@ -238,6 +571,14 @@ export default function ContractBoardPanel(): React.JSX.Element {
     () => contracts.filter((contract) => contract.sponsorId === activeSponsorId),
     [contracts, activeSponsorId],
   );
+  const jobCountBySponsor = useMemo(() => {
+    const counts: Record<CabalEmployerId, number> = { TERRAN_GRID: 0, LEGION: 0, SOLARIS: 0 };
+    contracts.forEach((contract) => {
+      counts[contract.sponsorId] += 1;
+    });
+    return counts;
+  }, [contracts]);
+
   const crisisPreview = useMemo(() => {
     const anchor = getActiveAnchorInstance(persisted, selectedSector.id);
     return buildPreliminaryRunWorldContext({
@@ -247,112 +588,113 @@ export default function ContractBoardPanel(): React.JSX.Element {
       anchor,
     });
   }, [persisted, selectedSector]);
+
   const isIndependent = selectedContract.kind === 'INDEPENDENT';
   const selectedId = selectedContract.kind === 'SPONSOR' ? selectedContract.contract.id : null;
+  const twoColumn = isDesktop && screenWidth >= 1180;
 
   const handleSelectContract = (contract: GeneratedContract) => {
     setActiveSponsorId(contract.sponsorId);
     selectContract(contract);
   };
 
+  const conditionChips = useMemo(() => {
+    const chips: string[] = [formatSectorShort(selectedSector.id).toUpperCase()];
+    crisisPreview.threatProfile.pressureTags.slice(0, 3).forEach((tag) => {
+      const upper = tag.toUpperCase();
+      if (!chips.includes(upper)) chips.push(upper);
+    });
+    return chips.slice(0, 5);
+  }, [crisisPreview, selectedSector]);
+
+  const contractFeed = (
+    <View style={{ gap: scaleSpacing(9), flex: 1, minWidth: 0 }}>
+      <TerminalText size={scaleFont(5.6)} letterSpacing={0.8} style={{ color: theme.mutedColor, fontWeight: '800' }}>
+        {`${sponsorDisplayName(activeSponsorId).toUpperCase()} // CONTRACT FEED`}
+      </TerminalText>
+      {visibleContracts.length > 0 ? (
+        visibleContracts.map((contract) => (
+          <ContractDossierCard
+            key={contract.id}
+            contract={contract}
+            isSelected={selectedId === contract.id}
+            onAccept={() => handleSelectContract(contract)}
+            onAbandon={selectIndependentContract}
+          />
+        ))
+      ) : (
+        <TerminalText size={scaleFont(6)} style={{ color: theme.mutedColor }}>
+          {`No ${sponsorDisplayName(activeSponsorId)} postings this refresh.`}
+        </TerminalText>
+      )}
+    </View>
+  );
+
+  const sideRail = (
+    <View style={[styles.rail, { gap: scaleSpacing(10), width: twoColumn ? 320 : undefined }]}>
+      <IndependentBreachCard isSelected={isIndependent} onPress={selectIndependentContract} />
+      <SponsorLedger />
+    </View>
+  );
+
   return (
     <HubScreenShell
       title="CONTRACT BOARD"
-      subtitle="WEIGHTED BY ACTIVE OPERATION, SECTOR RESOURCES, AND SPONSOR PRIORITIES"
+      subtitle="Broker feed weighted by crisis conditions, sector resources, and sponsor demand."
       headerRight={(
         <TerminalText variant="caption" style={{ color: theme.mutedColor }}>
-          {`RUN INDEX ${persisted.deployRunIndex}`}
+          {`BROKER FEED // CYCLE ${String(persisted.deployRunIndex).padStart(2, '0')}`}
         </TerminalText>
       )}
       contentStyle={styles.shellBody}
     >
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { gap: scaleSpacing(10), paddingBottom: scaleSpacing(24) }]}
-        showsVerticalScrollIndicator={false}
-      >
-        <View
-          style={[
-            styles.crisisBanner,
-            {
-              borderColor: `${theme.statusColor}44`,
-              padding: scaleSpacing(10),
-              gap: scaleSpacing(4),
-            },
-          ]}
+      <View style={styles.root}>
+        <BoardBackdrop />
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={[styles.scrollContent, { gap: scaleSpacing(12), paddingBottom: scaleSpacing(24) }]}
+          showsVerticalScrollIndicator={false}
         >
-          <TerminalText size={12} style={{ color: theme.statusColor, fontWeight: '800' }}>
-            {`SECTOR CRISIS — ${crisisPreview.crisisDisplayName.toUpperCase()}`}
-          </TerminalText>
-          <TerminalText variant="caption" style={{ color: theme.mutedColor }}>
-            {crisisPreview.crisisSummary}
-          </TerminalText>
-          {crisisPreview.threatProfile.pressureTags.length > 0 ? (
-            <TerminalText variant="micro" style={{ color: theme.statusColor }}>
-              {`Board weighted for: ${crisisPreview.threatProfile.pressureTags.join(' · ')}`}
-            </TerminalText>
-          ) : null}
-        </View>
-
-        <IndependentCard
-          isSelected={isIndependent}
-          onPress={selectIndependentContract}
-        />
-
-        <SponsorFilterRow
-          activeSponsorId={activeSponsorId}
-          onSelectSponsor={setActiveSponsorId}
-        />
-
-        <View style={{ gap: scaleSpacing(8) }}>
-          {visibleContracts.length > 0 ? (
-            visibleContracts.map((contract) => (
-              <ContractJobCard
-                key={contract.id}
-                contract={contract}
-                isSelected={selectedId === contract.id}
-                onPress={() => handleSelectContract(contract)}
-              />
-            ))
-          ) : (
-            <TerminalText size={11} style={{ color: theme.mutedColor }}>
-              {`No ${sponsorDisplayName(activeSponsorId)} postings this refresh.`}
-            </TerminalText>
-          )}
-        </View>
-
-        {!isIndependent && selectedContract.kind === 'SPONSOR' ? (
-          <HapticPressable
-            onPress={abandonSelectedContract}
-            style={({ pressed }) => [
-              styles.abandonButton,
-              {
-                borderColor: theme.mutedColor,
-                opacity: pressed ? 0.85 : 1,
-              },
+          <View
+            style={[
+              styles.conditionStrip,
+              { borderLeftColor: theme.statusColor, padding: scaleSpacing(12), gap: scaleSpacing(4) },
             ]}
           >
-            <TerminalText variant="caption" style={{ color: theme.mutedColor, fontWeight: '700' }}>
-              [ ABANDON SELECTED CONTRACT ]
+            <TerminalText size={scaleFont(5.4)} letterSpacing={0.8} style={{ color: theme.statusColor, fontWeight: '800' }}>
+              {`${formatSectorShort(selectedSector.id).toUpperCase()} // CRISIS ACTIVE`}
             </TerminalText>
-          </HapticPressable>
-        ) : null}
+            <TerminalText size={scaleFont(8.5)} letterSpacing={0.4} style={{ color: theme.textColor, fontWeight: '800' }}>
+              {crisisPreview.crisisDisplayName.toUpperCase()}
+            </TerminalText>
+            <TerminalText size={scaleFont(5.8)} numberOfLines={2} style={{ color: theme.mutedColor }}>
+              {crisisPreview.crisisSummary}
+            </TerminalText>
+            <View style={styles.chipRow}>
+              {conditionChips.map((chip) => (
+                <Chip key={chip} label={chip} color={theme.statusColor} size={scaleFont(5)} />
+              ))}
+            </View>
+          </View>
 
-        <View style={[styles.reputationStrip, { borderColor: theme.borderColor }]}>
-          <TerminalText variant="caption" style={{ color: theme.mutedColor, marginBottom: scaleSpacing(4) }}>
-            SPONSOR REPUTATION
-          </TerminalText>
-          {SPONSOR_ORDER.map((sponsorId) => {
-            const rep = account.sponsorReputation[sponsorId] ?? 0;
-            const preview = buildSponsorReputationPreview(sponsorId, rep);
-            return (
-              <TerminalText key={sponsorId} variant="caption" style={{ color: theme.textColor }}>
-                {formatSponsorReputationLine(preview, sponsorDisplayName(sponsorId))}
-              </TerminalText>
-            );
-          })}
-        </View>
-      </ScrollView>
+          <View style={styles.sponsorRow}>
+            {SPONSOR_ORDER.map((sponsorId) => (
+              <SponsorIdentityCard
+                key={sponsorId}
+                sponsorId={sponsorId}
+                isActive={activeSponsorId === sponsorId}
+                jobCount={jobCountBySponsor[sponsorId]}
+                onPress={() => setActiveSponsorId(sponsorId)}
+              />
+            ))}
+          </View>
+
+          <View style={[styles.mainArea, twoColumn ? styles.mainAreaRow : styles.mainAreaColumn, { gap: scaleSpacing(12) }]}>
+            {contractFeed}
+            {sideRail}
+          </View>
+        </ScrollView>
+      </View>
     </HubScreenShell>
   );
 }
@@ -362,44 +704,138 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
   },
+  root: {
+    flex: 1,
+    minHeight: 0,
+    position: 'relative',
+  },
+  backdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
   scroll: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: 4,
   },
-  crisisBanner: {
-    borderWidth: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
-  },
-  jobCard: {
-    borderWidth: 1,
+  conditionStrip: {
     borderLeftWidth: 3,
+    backgroundColor: 'rgba(12, 18, 28, 0.5)',
   },
-  jobFooter: {
+  sponsorRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  sponsorCard: {
+    flex: 1,
+    minWidth: 0,
+    borderWidth: 1,
+  },
+  sponsorCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  abandonButton: {
+  mainArea: {
+    flex: 1,
+  },
+  mainAreaRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  mainAreaColumn: {
+    flexDirection: 'column',
+  },
+  rail: {
+    minWidth: 0,
+  },
+  dossierCard: {
     borderWidth: 1,
-    paddingVertical: 10,
+    borderLeftWidth: 3,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  dossierHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
-  reputationStrip: {
-    borderWidth: 1,
-    padding: 12,
-    gap: 4,
-    backgroundColor: 'rgba(8, 13, 22, 0.5)',
-  },
-  sponsorRow: {
+  chipRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
   },
-  sponsorButton: {
-    flex: 1,
+  chip: {
     borderWidth: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 2,
+  },
+  statBlock: {
+    borderTopWidth: 1,
+    paddingTop: 6,
+    gap: 3,
+  },
+  statRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+  },
+  detailBlock: {
+    borderTopWidth: 1,
+    paddingTop: 6,
+    gap: 3,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 2,
+  },
+  actionButton: {
+    borderWidth: 1,
+    paddingVertical: 9,
+    paddingHorizontal: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 0,
+  },
+  actionPrimary: {
+    flexGrow: 1,
+  },
+  actionAccepted: {
+    flexGrow: 1,
+  },
+  seal: {
+    position: 'absolute',
+    top: 14,
+    right: 10,
+    borderWidth: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 3,
+    zIndex: 5,
+  },
+  independentCard: {
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderLeftWidth: 3,
+  },
+  ledger: {
+    borderWidth: 1,
+    backgroundColor: 'rgba(8, 13, 22, 0.5)',
+  },
+  ledgerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  ledgerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
 });

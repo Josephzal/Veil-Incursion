@@ -1,4 +1,4 @@
-import type { ContractExtractionKind, GeneratedContract, SelectedContractState } from '../types/contract';
+import type { ContractExtractionKind, ContractObjectiveKind, GeneratedContract, SelectedContractState } from '../types/contract';
 import type { ContractSourceKind } from '../types/contractProcedural';
 import type { SectorId } from '../types/worldState';
 import { SOURCE_REASON_LABELS } from '../data/contractTemplateVariants';
@@ -102,4 +102,42 @@ export function formatContractContextTag(contract: GeneratedContract): string | 
 export function formatContractSourceReasonLabel(reason: ContractSourceKind | undefined): string | null {
   if (!reason) return null;
   return SOURCE_REASON_LABELS[reason] ?? reason.replace(/_/g, ' ');
+}
+
+/** Short in-world job-type label for a contract chip. */
+export function formatContractJobType(kind: ContractObjectiveKind): string {
+  switch (kind) {
+    case 'EXTRACT_STABLE_RESOURCE':
+    case 'EXTRACT_SPONSOR_RESOURCE':
+      return 'RESOURCE';
+    case 'RECOVER_INTEL':
+    case 'RECOVER_ECONOMY_INTEL':
+      return 'INTEL';
+    case 'EXTRACT_UNSTABLE_CARGO':
+      return 'UNSTABLE';
+    case 'RECOVER_APEX_CARGO':
+      return 'APEX CARGO';
+    case 'RECOVER_CONTRABAND':
+      return 'CONTRABAND';
+    case 'DEFEAT_ELITE':
+      return 'COMBAT';
+    case 'DEFEAT_DEPTH_BOSS':
+      return 'BOSS';
+    case 'COMPLETE_EMERGENCY_RECALL':
+      return 'EXTRACTION';
+    case 'REACH_DEPTH_AND_EXTRACT':
+      return 'DEPTH';
+    case 'CLEAR_OPERATION_TARGET':
+      return 'ANCHOR';
+    default:
+      return 'CONTRACT';
+  }
+}
+
+/** Difficulty (1-5) mapped to a risk tier chip: white → yellow → orange → red. */
+export function formatContractRiskTier(difficulty: number): { label: string; color: string } {
+  if (difficulty <= 2) return { label: 'LOW RISK', color: '#94a3b8' };
+  if (difficulty <= 3) return { label: 'MED RISK', color: '#facc15' };
+  if (difficulty <= 4) return { label: 'HIGH RISK', color: '#f97316' };
+  return { label: 'EXTREME', color: '#ef4444' };
 }

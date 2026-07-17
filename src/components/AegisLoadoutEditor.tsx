@@ -76,6 +76,8 @@ interface AegisLoadoutEditorProps {
   hint?: string;
   commitLabel?: string;
   statusMessage?: string | null;
+  /** When true, hides the manual commit button (loadout auto-saves). */
+  hideCommit?: boolean;
 }
 
 export default function AegisLoadoutEditor({
@@ -92,6 +94,7 @@ export default function AegisLoadoutEditor({
   hint = 'Select a slot, then tap an ability. Costs show AP // Reserve // Brand economy.',
   commitLabel = '[ COMMIT LOADOUT ]',
   statusMessage = null,
+  hideCommit = false,
 }: AegisLoadoutEditorProps): React.JSX.Element {
   const textColor = theme.textColor ?? '#d8e2dc';
   const { isDesktop, scaleSpacing } = useHubLayout();
@@ -261,17 +264,19 @@ export default function AegisLoadoutEditor({
         <Text style={[styles.status, { color: theme.mutedColor }]}>{statusMessage}</Text>
       ) : null}
 
-      <HapticPressable
-        onPress={onCommit}
-        style={({ pressed }) => [
-          getInteractiveButtonStyle(theme.accentColor, { pressed, size: 'md' }),
-          styles.commitBtn,
-        ]}
-      >
-        <Text style={[getInteractiveButtonTextStyle('md'), { color: theme.accentColor }]}>
-          {commitLabel}
-        </Text>
-      </HapticPressable>
+      {hideCommit ? null : (
+        <HapticPressable
+          onPress={onCommit}
+          style={({ pressed }) => [
+            getInteractiveButtonStyle(theme.accentColor, { pressed, size: 'md' }),
+            styles.commitBtn,
+          ]}
+        >
+          <Text style={[getInteractiveButtonTextStyle('md'), { color: theme.accentColor }]}>
+            {commitLabel}
+          </Text>
+        </HapticPressable>
+      )}
     </View>
   );
 }

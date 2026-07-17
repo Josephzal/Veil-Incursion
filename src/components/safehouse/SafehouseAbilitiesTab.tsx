@@ -62,6 +62,34 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
     setEnvoyDraft([...account.envoyLoadout]);
   }, [account.envoyLoadout]);
 
+  // Auto-save: persist a valid draft immediately so the player never manages a save state.
+  useEffect(() => {
+    if (account.activeClass !== 'AEGIS') return;
+    if (validateLoadoutCommit(aegisDraft, account.unlockedAegisAbilities)) return;
+    const committed: AegisLoadout = [aegisDraft[0], aegisDraft[1], aegisDraft[2], aegisDraft[3]];
+    if (committed.some((id, index) => id !== account.aegisLoadout[index])) {
+      setAegisLoadout(committed);
+    }
+  }, [aegisDraft, account.activeClass, account.aegisLoadout, account.unlockedAegisAbilities, setAegisLoadout]);
+
+  useEffect(() => {
+    if (account.activeClass !== 'HEX_SHOT') return;
+    if (validateHexShotLoadoutCommit(hexDraft, account.unlockedHexShotAbilities)) return;
+    const committed: HexShotLoadout = [hexDraft[0], hexDraft[1], hexDraft[2], hexDraft[3]];
+    if (committed.some((id, index) => id !== account.hexShotLoadout[index])) {
+      setHexShotLoadout(committed);
+    }
+  }, [hexDraft, account.activeClass, account.hexShotLoadout, account.unlockedHexShotAbilities, setHexShotLoadout]);
+
+  useEffect(() => {
+    if (account.activeClass !== 'ENVOY') return;
+    if (validateEnvoyLoadoutCommit(envoyDraft, account.unlockedEnvoyAbilities)) return;
+    const committed: EnvoyLoadout = [envoyDraft[0], envoyDraft[1], envoyDraft[2], envoyDraft[3]];
+    if (committed.some((id, index) => id !== account.envoyLoadout[index])) {
+      setEnvoyLoadout(committed);
+    }
+  }, [envoyDraft, account.activeClass, account.envoyLoadout, account.unlockedEnvoyAbilities, setEnvoyLoadout]);
+
   const hexCatalog = useMemo(
     () => Object.fromEntries(
       getAssignableHexShotAbilities().map((id) => [
@@ -196,9 +224,10 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
             unlockedAbilities={account.unlockedAegisAbilities}
             resourceStash={account.resourceStash}
             theme={editorTheme}
-            hint="Tap a locked ability to spend resources and unlock it. Costs show AP // Reserve // Brand economy."
+            hint="Tap a locked ability to spend resources and unlock it. Changes auto-save for your next descent."
             commitLabel="[ SAVE LOADOUT FOR NEXT RUN ]"
             statusMessage={loadoutStatus}
+            hideCommit
           />
         ) : null}
 
@@ -224,9 +253,10 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
             resourceStash={account.resourceStash}
             theme={editorTheme}
             title="HEX-SHOT COMBAT LOADOUT // 4 ACTIVE SLOTS"
-            hint="Slot 1 is Silver-Core Sidearm. Phase-Shift Reload and Phantom Feed are intrinsic; Zero-Protocol procs when overcharge and a live debuffed hostile align — not a deck slot."
+            hint="Slot 1 is Silver-Core Sidearm. Phase-Shift Reload and Phantom Feed are intrinsic; Zero-Protocol procs when overcharge and a live debuffed hostile align — not a deck slot. Changes auto-save."
             commitLabel="[ SAVE LOADOUT FOR NEXT RUN ]"
             statusMessage={loadoutStatus}
+            hideCommit
           />
         ) : null}
 
@@ -251,10 +281,11 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
             resourceStash={account.resourceStash}
             theme={editorTheme}
             title="ENVOY COMBAT LOADOUT // 4 ACTIVE SLOTS"
-            hint="Slot 1 is Veil-Splinter. Rift-Ward is automatic; Catalytic Console detonates Veil Rot; Cataclysm Sigil procs at 6+ stacks."
+            hint="Slot 1 is Veil-Splinter. Rift-Ward is automatic; Catalytic Console detonates Veil Rot; Cataclysm Sigil procs at 6+ stacks. Changes auto-save."
             anchorCostLine={formatClassAbilityCostLine('ENVOY', ENVOY_ANCHOR)}
             commitLabel="[ SAVE LOADOUT FOR NEXT RUN ]"
             statusMessage={loadoutStatus}
+            hideCommit
           />
         ) : null}
     </View>

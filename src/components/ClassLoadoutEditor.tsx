@@ -84,6 +84,8 @@ interface ClassLoadoutEditorProps<T extends string> {
   commitLabel?: string;
   statusMessage?: string | null;
   anchorCostLine?: string;
+  /** When true, hides the manual commit button (loadout auto-saves). */
+  hideCommit?: boolean;
 }
 
 export default function ClassLoadoutEditor<T extends string>({
@@ -105,6 +107,7 @@ export default function ClassLoadoutEditor<T extends string>({
   commitLabel = '[ COMMIT LOADOUT ]',
   statusMessage = null,
   anchorCostLine,
+  hideCommit = false,
 }: ClassLoadoutEditorProps<T>): React.JSX.Element {
   const textColor = theme.textColor ?? '#d8e2dc';
   const { isDesktop, scaleSpacing } = useHubLayout();
@@ -307,17 +310,19 @@ export default function ClassLoadoutEditor<T extends string>({
         <Text style={[styles.status, { color: theme.mutedColor }]}>{statusMessage}</Text>
       ) : null}
 
-      <HapticPressable
-        onPress={onCommit}
-        style={({ pressed }) => [
-          getInteractiveButtonStyle(theme.accentColor, { pressed, size: 'md' }),
-          styles.commitBtn,
-        ]}
-      >
-        <Text style={[getInteractiveButtonTextStyle('md'), { color: theme.accentColor }]}>
-          {commitLabel}
-        </Text>
-      </HapticPressable>
+      {hideCommit ? null : (
+        <HapticPressable
+          onPress={onCommit}
+          style={({ pressed }) => [
+            getInteractiveButtonStyle(theme.accentColor, { pressed, size: 'md' }),
+            styles.commitBtn,
+          ]}
+        >
+          <Text style={[getInteractiveButtonTextStyle('md'), { color: theme.accentColor }]}>
+            {commitLabel}
+          </Text>
+        </HapticPressable>
+      )}
     </View>
   );
 }

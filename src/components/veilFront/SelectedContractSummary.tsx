@@ -13,6 +13,7 @@ import {
 import { describeEmployerPerks } from '../../utils/employerContractUi';
 import { formatContractCargoDeliveryHints } from '../../data/cargoRoutingIntelEngine';
 import { isResourceContractObjective } from '../../data/contractResolver';
+import { SPONSOR_IDENTITY } from '../../utils/sponsorIdentity';
 
 interface SelectedContractSummaryProps {
   theme: TerminalTheme;
@@ -43,6 +44,7 @@ export default function SelectedContractSummary({
 
   const contract = selectedContract.contract;
   const sponsorAccent = FACTION_DEFINITIONS[contract.sponsorId].accentColor;
+  const identity = SPONSOR_IDENTITY[contract.sponsorId];
   const perks = describeEmployerPerks(contract.sponsorId);
   const cargoDeliveryHints = isResourceContractObjective(contract.objectiveKind)
     ? formatContractCargoDeliveryHints(contract)
@@ -50,11 +52,18 @@ export default function SelectedContractSummary({
 
   return (
     <View style={[styles.body, { gap: scaleSpacing(8) }]}>
-      <TerminalText size={scaleFont(6)} letterSpacing={0.7} style={{ color: sponsorAccent, fontWeight: '700' }}>
-        SELECTED CONTRACT
-      </TerminalText>
+      <View style={styles.sealRow}>
+        <TerminalText size={scaleFont(6)} letterSpacing={0.7} style={{ color: sponsorAccent, fontWeight: '700' }}>
+          SELECTED CONTRACT
+        </TerminalText>
+        <View style={[styles.seal, { borderColor: sponsorAccent }]}>
+          <TerminalText size={scaleFont(5.2)} letterSpacing={0.8} style={{ color: sponsorAccent, fontWeight: '800' }}>
+            {identity.sealLabel}
+          </TerminalText>
+        </View>
+      </View>
       <TerminalText size={scaleFont(6.5)} style={{ color: theme.mutedColor }}>
-        {sponsorDisplayName(contract.sponsorId).toUpperCase()}
+        {`${identity.emblem}  ${sponsorDisplayName(contract.sponsorId).toUpperCase()}`}
       </TerminalText>
       <TerminalText size={scaleFont(8)} style={{ color: theme.textColor, fontWeight: '800', lineHeight: scaleSize(11) }}>
         {contract.title}
@@ -72,6 +81,9 @@ export default function SelectedContractSummary({
       </TerminalText>
       <TerminalText size={scaleFont(6)} style={{ color: theme.statusColor }}>
         {formatContractRewardSummary(contract)}
+      </TerminalText>
+      <TerminalText size={scaleFont(5.6)} style={{ color: sponsorAccent, fontWeight: '700' }}>
+        {identity.sealSubline}
       </TerminalText>
       {perks.length > 0 ? (
         <View style={{ gap: scaleSpacing(4) }}>
@@ -113,5 +125,18 @@ const styles = StyleSheet.create({
   body: {
     flex: 1,
     minHeight: 0,
+  },
+  sealRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  seal: {
+    borderWidth: 1.5,
+    borderRadius: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    transform: [{ rotate: '-6deg' }],
   },
 });
