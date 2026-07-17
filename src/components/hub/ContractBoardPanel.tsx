@@ -3,12 +3,14 @@ import { Animated, ScrollView, StyleSheet, View } from 'react-native';
 import Svg, { Defs, Line, Pattern, Rect } from 'react-native-svg';
 import HapticPressable from '../HapticPressable';
 import HubScreenShell from './HubScreenShell';
+import HubCommandBar from './HubCommandBar';
 import TerminalText from '../TerminalText';
 import { FACTION_DEFINITIONS } from '../../data/factions';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useTerminal } from '../../context/TerminalContext';
 import { useWorldState } from '../../context/WorldStateContext';
 import { useHubLayout } from '../../context/HubLayoutContext';
+import { useTerminalNavOptional } from '../../context/TerminalNavContext';
 import { HUB_DATA_DIVIDER } from '../../styles/hubTerminalUi';
 import {
   BONE_WHITE,
@@ -676,6 +678,11 @@ export default function ContractBoardPanel(): React.JSX.Element {
 
   const routeLabel = isIndependent ? 'CURRENT ROUTE' : 'CURRENT CONTRACT';
 
+  const nav = useTerminalNavOptional();
+  const commandStatus = selectedContract.kind === 'SPONSOR'
+    ? `CONTRACT ACCEPTED: ${selectedContract.contract.title.toUpperCase()}`
+    : 'UNSPONSORED ROUTE ACTIVE';
+
   const contractFeed = (
     <View style={[styles.feedColumn, twoColumn && styles.feedColumnWide, { gap: scaleSpacing(16) }]}>
       <LoadoutSectionHeader label={`${sponsorDisplayName(activeSponsorId).toUpperCase()} // CONTRACT FEED`} />
@@ -716,6 +723,15 @@ export default function ContractBoardPanel(): React.JSX.Element {
         </TerminalText>
       )}
       contentStyle={styles.shellBody}
+      footer={(
+        <HubCommandBar
+          statusLabel={commandStatus}
+          statusColor={isIndependent ? INDEPENDENT_ACCENT : SELECT_ACCENT}
+          dotColor={isIndependent ? INDEPENDENT_ACCENT : SELECT_ACCENT}
+          actionLabel="[ RETURN TO VEIL FRONT ]"
+          onAction={nav ? () => nav.setTerminalView('MAP') : undefined}
+        />
+      )}
     >
       <View style={styles.root}>
         <BoardBackdrop />

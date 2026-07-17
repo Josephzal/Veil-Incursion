@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import HubScreenShell from './HubScreenShell';
+import HubCommandBar from './HubCommandBar';
 import DossierCardShell from './DossierCardShell';
 import OperativeIdentityDossier from './OperativeIdentityDossier';
 import HapticPressable from '../HapticPressable';
@@ -15,6 +16,7 @@ import { CLASS_DEFINITIONS } from '../../data/classes';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useTerminal } from '../../context/TerminalContext';
 import { useHubLayout } from '../../context/HubLayoutContext';
+import { useTerminalNavOptional } from '../../context/TerminalNavContext';
 import { getEquippedWeaponForClass, getWeaponTier, resolveWeaponState } from '../../data/weaponProgressionEngine';
 import { getKeepsakeDefinition } from '../../data/expeditionKeepsakeRegistry';
 import { getRunItemDefinitionByAnyId } from '../../data/runItemRegistry';
@@ -118,6 +120,7 @@ export default function LoadoutHubPanel(): React.JSX.Element {
   const { theme, profile } = useTerminal();
   const { account } = usePlayerAccount();
   const { isDesktop, scaleSpacing, scaleFont } = useHubLayout();
+  const nav = useTerminalNavOptional();
   const [activeCategory, setActiveCategory] = useState<LoadoutCategory>('CHASSIS');
 
   const classDef = CLASS_DEFINITIONS[account.activeClass];
@@ -258,6 +261,13 @@ export default function LoadoutHubPanel(): React.JSX.Element {
       subtitle={`${classDef.displayName.toUpperCase()} // DESCENT PREP BAY`}
       scrollable={false}
       contentStyle={styles.shellBody}
+      footer={(
+        <HubCommandBar
+          statusLabel="LOADOUT SAVED"
+          actionLabel="[ READY FOR DESCENT ]"
+          onAction={nav ? () => nav.setTerminalView('MAP') : undefined}
+        />
+      )}
     >
       <View style={styles.stage}>
         <DossierCardShell

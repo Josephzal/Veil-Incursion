@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { LayoutChangeEvent, StyleSheet, View } from 'react-native';
 import DossierCardShell from './hub/DossierCardShell';
 import HubScreenShell from './hub/HubScreenShell';
+import HubCommandBar from './hub/HubCommandBar';
 import HackingTerminalOverlay from './shadowWar/HackingTerminalOverlay';
 import SectorMapPanel from './veilFront/SectorMapPanel';
 import SectorBriefingPanel from './veilFront/SectorBriefingPanel';
@@ -12,6 +13,7 @@ import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useWorldState } from '../context/WorldStateContext';
 import { HUB_BORDER_INSET } from '../constants/hubCta';
+import { SELECT_ACCENT, DANGER_RED } from '../constants/dossierSurface';
 import type { SectorId } from '../types/worldState';
 import { TerminalTheme } from '../types/theme';
 import {
@@ -156,9 +158,6 @@ export default function OperationalBriefingPanel({
             sector={activeSector}
             selectedContract={selectedContract}
             sectorCompatibility={sectorCompatibility}
-            onRequestDeploy={handleRequestDeploy}
-            runDisabled={runDisabled}
-            launching={launching}
           />
         </View>
       </View>
@@ -178,10 +177,25 @@ export default function OperationalBriefingPanel({
     </View>
   );
 
+  const breachDisabled = runDisabled || launching;
+  const sectorWarning = contractSectorWarning(sectorCompatibility);
+  const commandStatus = sectorWarning
+    ? `SECTOR SELECTED: ${activeSector.displayName.toUpperCase()} // ${sectorWarning.toUpperCase()}`
+    : `SECTOR SELECTED: ${activeSector.displayName.toUpperCase()}`;
+
   return (
     <HubScreenShell
       title="OPERATIONAL BRIEFING"
       subtitle="VEIL FRONT // SECTOR BRIEFING // DEPLOY"
+      footer={(
+        <HubCommandBar
+          statusLabel={commandStatus}
+          statusColor={sectorCompatibility === 'UNAVAILABLE' ? DANGER_RED : SELECT_ACCENT}
+          actionLabel={launching ? '[ DEPLOYING... ]' : '[ INITIATE BREACH ]'}
+          onAction={handleRequestDeploy}
+          actionDisabled={breachDisabled}
+        />
+      )}
     >
       {body}
     </HubScreenShell>

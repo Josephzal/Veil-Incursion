@@ -3,13 +3,14 @@ import { StyleSheet, View } from 'react-native';
 import CraftingMenuPanel from '../CraftingMenuPanel';
 import HapticPressable from '../HapticPressable';
 import HubScreenShell from './HubScreenShell';
+import HubCommandBar from './HubCommandBar';
 import TerminalGlitchTransition from '../ui/TerminalGlitchTransition';
 import TerminalText from '../TerminalText';
 import SafehouseBlackMarketTab from '../safehouse/SafehouseBlackMarketTab';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useTerminal } from '../../context/TerminalContext';
-import { getFactionAccent } from '../../data/factions';
 import { useHubLayout } from '../../context/HubLayoutContext';
+import { SELECT_ACCENT } from '../../constants/dossierSurface';
 import { readPressableHover, terminalHoverStyle } from '../../utils/terminalHoverStyle';
 
 export type BlackMarketTab = 'FORGE' | 'VENDOR';
@@ -26,7 +27,6 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
   const [activeTab, setActiveTab] = useState<BlackMarketTab>('FORGE');
 
   const accent = theme.statusColor;
-  const factionAccent = getFactionAccent(account.alignedFaction);
 
   const headerHud = (
     <>
@@ -45,6 +45,11 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
       subtitle={`OPERATIVE ${account.username.toUpperCase()} // FABRICATION & PROCUREMENT`}
       headerRight={headerHud}
       contentStyle={styles.shellBody}
+      footer={(
+        <HubCommandBar
+          statusLabel={`${account.cabalCredits} CR AVAILABLE // MARKET FEED STABLE`}
+        />
+      )}
     >
       <View style={styles.stage}>
         <View style={styles.masterContent}>
@@ -68,8 +73,8 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
                       styles.hardwareTab,
                       isDesktop && styles.hardwareTabDesktop,
                       {
-                        borderColor: active ? factionAccent : theme.borderColor,
-                        backgroundColor: active ? `${factionAccent}14` : 'rgba(0, 0, 0, 0.35)',
+                        borderColor: active ? SELECT_ACCENT : theme.borderColor,
+                        backgroundColor: active ? `${SELECT_ACCENT}18` : 'rgba(0, 0, 0, 0.35)',
                       },
                       terminalHoverStyle(readPressableHover(state), state.pressed),
                     ]}
@@ -77,7 +82,7 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
                     <TerminalText
                       variant="body"
                       letterSpacing={1}
-                      style={{ color: active ? factionAccent : theme.mutedColor, fontWeight: '700' }}
+                      style={{ color: active ? SELECT_ACCENT : theme.mutedColor, fontWeight: '700' }}
                     >
                       {item.label}
                     </TerminalText>

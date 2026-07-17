@@ -4,6 +4,8 @@ import HapticPressable from '../HapticPressable';
 import TerminalText from '../TerminalText';
 import SelectedContractSummary from './SelectedContractSummary';
 import { ProgressBar } from './VeilFrontUiPrimitives';
+import { LoadoutSectionHeader } from '../hub/loadoutTabUi';
+import { CARD_BLACK } from '../../constants/dossierSurface';
 import { useVeilFrontLayout } from './useVeilFrontLayout';
 import { operationProgressPercent } from '../../data/worldStateHelpers';
 import { getRecentlySuppressedAnchor } from '../../data/anchorLifecycleEngine';
@@ -22,7 +24,6 @@ import {
   VEIL_BIOME_VISUALS,
 } from '../../utils/veilFrontSectorUi';
 import {
-  contractSectorWarning,
   formatContractRewardSummary,
   sponsorDisplayName,
   type ContractSectorCompatibility,
@@ -33,16 +34,12 @@ import { buildPreliminaryRunWorldContext } from '../../data/runWorldBriefEngine'
 import { buildProceduralExplainabilityText } from '../../data/proceduralDirectorExplainabilityEngine';
 import { getSectorAftermathModifiers } from '../../data/proceduralDirectorAftermathEngine';
 import { scoreRunPressure } from '../../data/proceduralDirectorPressureEngine';
-import { viewShadow } from '../../utils/adaptiveStyles';
 
 interface SectorBriefingPanelProps {
   theme: TerminalTheme;
   sector: SectorState;
   selectedContract: SelectedContractState;
   sectorCompatibility: ContractSectorCompatibility;
-  onRequestDeploy: () => void;
-  runDisabled: boolean;
-  launching: boolean;
 }
 
 /* ------------------------------------------------------------------ *
@@ -57,11 +54,6 @@ function BlockLabel({ label, color }: { label: string; color: string }) {
   );
 }
 
-function Divider() {
-  const { scaleSpacing } = useVeilFrontLayout();
-  return <View style={[styles.divider, { marginVertical: scaleSpacing(9) }]} />;
-}
-
 function Chip({ label, color }: { label: string; color: string }) {
   const { scaleFont, scaleSpacing } = useVeilFrontLayout();
   return (
@@ -69,6 +61,16 @@ function Chip({ label, color }: { label: string; color: string }) {
       <TerminalText size={scaleFont(5.6)} letterSpacing={0.4} style={{ color, fontWeight: '700' }}>
         {label}
       </TerminalText>
+    </View>
+  );
+}
+
+/** Subtle briefing card — section headers sit outside, content sits inside. */
+function SectionCard({ children }: { children: React.ReactNode }) {
+  const { scaleSpacing } = useVeilFrontLayout();
+  return (
+    <View style={[styles.sectionCard, { padding: scaleSpacing(9), gap: scaleSpacing(3) }]}>
+      {children}
     </View>
   );
 }
@@ -104,11 +106,8 @@ export default function SectorBriefingPanel({
   sector,
   selectedContract,
   sectorCompatibility,
-  onRequestDeploy,
-  runDisabled,
-  launching,
 }: SectorBriefingPanelProps): React.JSX.Element {
-  const { sectionGap, scaleFont, scaleSpacing, deployButtonHeight } = useVeilFrontLayout();
+  const { sectionGap, scaleFont, scaleSpacing } = useVeilFrontLayout();
   const { persisted } = useWorldState();
   const [intelOpen, setIntelOpen] = useState(false);
 
@@ -178,10 +177,6 @@ export default function SectorBriefingPanel({
         ? { label: 'NO', color: '#f87171' }
         : { label: 'VALID', color: '#fbbf24' };
 
-  const canLaunch = !runDisabled && !launching;
-  const deployLabel = launching ? '[ DEPLOYING... ]' : '[ INITIATE BREACH ]';
-  const sectorWarning = contractSectorWarning(sectorCompatibility);
-
   // Intel drawer content.
   const echoIntel = formatEchoBriefingIntel(sector);
   const cargoIntel = formatCargoRoutingBriefingIntel(sector, selectedContract);
@@ -196,99 +191,110 @@ export default function SectorBriefingPanel({
     <View style={[styles.panel, { gap: sectionGap }]}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={{ paddingBottom: scaleSpacing(4) }}
+        contentContainerStyle={{ paddingBottom: scaleSpacing(4), gap: scaleSpacing(9) }}
         showsVerticalScrollIndicator={false}
       >
-        {/* --- SECTOR DOSSIER --- */}
-        <TerminalText size={scaleFont(12)} letterSpacing={0.5} style={{ color: theme.textColor, fontWeight: '800' }}>
-          {sector.displayName}
-        </TerminalText>
-        <TerminalText size={scaleFont(6)} letterSpacing={1} style={{ color: biomeVisual.glow, marginTop: scaleSpacing(2) }}>
-          {biomeVisual.label}
-        </TerminalText>
-
-        <Divider />
+        {/* --- SECTOR BRIEFING --- */}
+        <View>
+          <LoadoutSectionHeader label="Sector Briefing" style={{ marginBottom: scaleSpacing(4) }} />
+          <SectionCard>
+            <TerminalText size={scaleFont(12)} letterSpacing={0.5} style={{ color: theme.textColor, fontWeight: '800' }}>
+              {sector.displayName}
+            </TerminalText>
+            <TerminalText size={scaleFont(6)} letterSpacing={1} style={{ color: biomeVisual.glow, marginTop: scaleSpacing(2) }}>
+              {biomeVisual.label}
+            </TerminalText>
+          </SectionCard>
+        </View>
 
         {/* --- ACTIVE OPERATION --- */}
-        <BlockLabel label="ACTIVE OPERATION" color={theme.statusColor} />
-        <TerminalText size={scaleFont(8.5)} style={{ color: theme.textColor, fontWeight: '800', lineHeight: scaleFont(12), marginTop: scaleSpacing(4) }}>
-          {op.title}
-        </TerminalText>
-        <View style={[styles.chipRow, { marginTop: scaleSpacing(6), gap: scaleSpacing(5) }]}>
-          <Chip label={operationTypeChip(op.objectiveKind)} color={theme.statusColor} />
-          <Chip label={lifecycleLabel} color={lifecycleColor} />
-          {anchorActive ? <Chip label={anchorName} color="#c084fc" /> : null}
-        </View>
-        <TerminalText size={scaleFont(6)} style={{ color: theme.mutedColor, marginTop: scaleSpacing(7) }}>
-          {`Progress: ${op.progressCurrent} / ${op.progressRequired} (${opPct}%)`}
-        </TerminalText>
-        <View style={{ marginTop: scaleSpacing(3) }}>
-          <ProgressBar percent={opPct} accentColor={lifecycleColor} height={scaleFont(5)} />
+        <View>
+          <LoadoutSectionHeader label="Active Operation" style={{ marginBottom: scaleSpacing(4) }} />
+          <SectionCard>
+            <TerminalText size={scaleFont(8.5)} style={{ color: theme.textColor, fontWeight: '800', lineHeight: scaleFont(12) }}>
+              {op.title}
+            </TerminalText>
+            <View style={[styles.chipRow, { marginTop: scaleSpacing(6), gap: scaleSpacing(5) }]}>
+              <Chip label={operationTypeChip(op.objectiveKind)} color={theme.statusColor} />
+              <Chip label={lifecycleLabel} color={lifecycleColor} />
+              {anchorActive ? <Chip label={anchorName} color="#c084fc" /> : null}
+            </View>
+            <TerminalText size={scaleFont(6)} style={{ color: theme.mutedColor, marginTop: scaleSpacing(7) }}>
+              {`Progress: ${op.progressCurrent} / ${op.progressRequired} (${opPct}%)`}
+            </TerminalText>
+            <View style={{ marginTop: scaleSpacing(3) }}>
+              <ProgressBar percent={opPct} accentColor={lifecycleColor} height={scaleFont(5)} />
+            </View>
+            {anchorActive && anchorPressure.length > 0 ? (
+              <TerminalText size={scaleFont(5.8)} style={{ color: theme.mutedColor, marginTop: scaleSpacing(7), lineHeight: scaleFont(9) }} numberOfLines={2}>
+                {`Anchor // ${anchorName}: ${anchorPressure[0]}`}
+              </TerminalText>
+            ) : null}
+          </SectionCard>
         </View>
 
+        {/* --- RUN SIGNALS --- */}
         {runSignals.length > 0 ? (
-          <View style={{ marginTop: scaleSpacing(8), gap: scaleSpacing(4) }}>
-            <BlockLabel label="RUN SIGNALS" color={theme.mutedColor} />
-            <View style={[styles.chipRow, { gap: scaleSpacing(5) }]}>
-              {runSignals.map((sig) => (
-                <Chip key={sig} label={sig} color="#7dd3fc" />
-              ))}
-            </View>
+          <View>
+            <LoadoutSectionHeader label="Run Signals" style={{ marginBottom: scaleSpacing(4) }} />
+            <SectionCard>
+              <View style={[styles.chipRow, { gap: scaleSpacing(5) }]}>
+                {runSignals.map((sig) => (
+                  <Chip key={sig} label={sig} color="#7dd3fc" />
+                ))}
+              </View>
+            </SectionCard>
           </View>
         ) : null}
 
-        {anchorActive && anchorPressure.length > 0 ? (
-          <TerminalText size={scaleFont(5.8)} style={{ color: theme.mutedColor, marginTop: scaleSpacing(7), lineHeight: scaleFont(9) }} numberOfLines={2}>
-            {`Anchor // ${anchorName}: ${anchorPressure[0]}`}
-          </TerminalText>
-        ) : null}
-
-        <Divider />
-
         {/* --- SELECTED CONTRACT --- */}
-        <BlockLabel label="SELECTED CONTRACT" color={theme.statusColor} />
-        {contract ? (
-          <>
-            <TerminalText size={scaleFont(5.8)} letterSpacing={0.6} style={{ color: theme.mutedColor, marginTop: scaleSpacing(4) }}>
-              {sponsorDisplayName(contract.sponsorId).toUpperCase()}
-            </TerminalText>
-            <TerminalText size={scaleFont(8)} style={{ color: theme.textColor, fontWeight: '800', lineHeight: scaleFont(11), marginTop: scaleSpacing(2) }}>
-              {contract.title}
-            </TerminalText>
-            <TerminalText size={scaleFont(6)} style={{ color: theme.mutedColor, marginTop: scaleSpacing(4), lineHeight: scaleFont(9) }} numberOfLines={2}>
-              {contract.objectiveText}
-            </TerminalText>
-            <View style={[styles.chipRow, { marginTop: scaleSpacing(6), gap: scaleSpacing(6), alignItems: 'center' }]}>
-              {recommendedState ? (
-                <View style={styles.recRow}>
-                  <TerminalText size={scaleFont(5.6)} letterSpacing={0.5} style={{ color: theme.mutedColor }}>
-                    RECOMMENDED HERE:
-                  </TerminalText>
-                  <TerminalText size={scaleFont(6.4)} style={{ color: recommendedState.color, fontWeight: '800', marginLeft: scaleSpacing(4) }}>
-                    {recommendedState.label}
-                  </TerminalText>
+        <View>
+          <LoadoutSectionHeader label="Selected Contract" style={{ marginBottom: scaleSpacing(4) }} />
+          <SectionCard>
+            {contract ? (
+              <>
+                <TerminalText size={scaleFont(5.8)} letterSpacing={0.6} style={{ color: theme.mutedColor }}>
+                  {sponsorDisplayName(contract.sponsorId).toUpperCase()}
+                </TerminalText>
+                <TerminalText size={scaleFont(8)} style={{ color: theme.textColor, fontWeight: '800', lineHeight: scaleFont(11), marginTop: scaleSpacing(2) }}>
+                  {contract.title}
+                </TerminalText>
+                <TerminalText size={scaleFont(6)} style={{ color: theme.mutedColor, marginTop: scaleSpacing(4), lineHeight: scaleFont(9) }} numberOfLines={2}>
+                  {contract.objectiveText}
+                </TerminalText>
+                <View style={[styles.chipRow, { marginTop: scaleSpacing(6), gap: scaleSpacing(6), alignItems: 'center' }]}>
+                  {recommendedState ? (
+                    <View style={styles.recRow}>
+                      <TerminalText size={scaleFont(5.6)} letterSpacing={0.5} style={{ color: theme.mutedColor }}>
+                        RECOMMENDED HERE:
+                      </TerminalText>
+                      <TerminalText size={scaleFont(6.4)} style={{ color: recommendedState.color, fontWeight: '800', marginLeft: scaleSpacing(4) }}>
+                        {recommendedState.label}
+                      </TerminalText>
+                    </View>
+                  ) : null}
                 </View>
-              ) : null}
-            </View>
-            <TerminalText size={scaleFont(6)} style={{ color: theme.statusColor, marginTop: scaleSpacing(5) }}>
-              {formatContractRewardSummary(contract)}
-            </TerminalText>
-          </>
-        ) : (
-          <>
-            <TerminalText size={scaleFont(8)} style={{ color: theme.textColor, fontWeight: '800', marginTop: scaleSpacing(4) }}>
-              Independent Breach
-            </TerminalText>
-            <TerminalText size={scaleFont(5.8)} style={{ color: theme.mutedColor, marginTop: scaleSpacing(4), lineHeight: scaleFont(9) }} numberOfLines={2}>
-              No sponsor objective. Take contract work on the Contract Board.
-            </TerminalText>
-          </>
-        )}
+                <TerminalText size={scaleFont(6)} style={{ color: theme.statusColor, marginTop: scaleSpacing(5) }}>
+                  {formatContractRewardSummary(contract)}
+                </TerminalText>
+              </>
+            ) : (
+              <>
+                <TerminalText size={scaleFont(8)} style={{ color: theme.textColor, fontWeight: '800' }}>
+                  Independent Breach
+                </TerminalText>
+                <TerminalText size={scaleFont(5.8)} style={{ color: theme.mutedColor, marginTop: scaleSpacing(4), lineHeight: scaleFont(9) }} numberOfLines={2}>
+                  No sponsor objective. Take contract work on the Contract Board.
+                </TerminalText>
+              </>
+            )}
+          </SectionCard>
+        </View>
 
         {/* --- INTEL DRAWER --- */}
         <HapticPressable
           onPress={() => setIntelOpen((v) => !v)}
-          style={({ pressed }) => [styles.intelToggle, { marginTop: scaleSpacing(10), opacity: pressed ? 0.7 : 1 }]}
+          style={({ pressed }) => [styles.intelToggle, { opacity: pressed ? 0.7 : 1 }]}
         >
           <TerminalText size={scaleFont(6)} letterSpacing={0.8} style={{ color: theme.statusColor, fontWeight: '700' }}>
             {intelOpen ? '[ − INTEL ]' : '[ + INTEL ]'}
@@ -324,43 +330,6 @@ export default function SectorBriefingPanel({
           </View>
         ) : null}
       </ScrollView>
-
-      {sectorWarning ? (
-        <TerminalText
-          size={scaleFont(5.5)}
-          style={{ color: sectorCompatibility === 'UNAVAILABLE' ? '#f87171' : theme.mutedColor, lineHeight: scaleFont(8) }}
-        >
-          {sectorWarning}
-        </TerminalText>
-      ) : null}
-
-      <HapticPressable
-        onPress={onRequestDeploy}
-        disabled={!canLaunch}
-        style={({ pressed }) => [
-          styles.deployButton,
-          {
-            borderColor: theme.statusColor,
-            backgroundColor: `${theme.statusColor}28`,
-            height: deployButtonHeight,
-            opacity: !canLaunch ? 0.45 : pressed ? 0.88 : 1,
-            ...viewShadow({
-              color: theme.statusColor,
-              opacity: !canLaunch ? 0.2 : 0.75,
-              radius: 10,
-              offset: { width: 0, height: 0 },
-            }),
-          },
-        ]}
-      >
-        <TerminalText
-          size={scaleFont(7.5)}
-          letterSpacing={0.6}
-          style={{ color: canLaunch ? theme.statusColor : theme.mutedColor, fontWeight: '800' }}
-        >
-          {deployLabel}
-        </TerminalText>
-      </HapticPressable>
     </View>
   );
 }
@@ -376,9 +345,10 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
   },
-  divider: {
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(100, 116, 139, 0.22)',
+  sectionCard: {
+    borderWidth: 1,
+    borderColor: 'rgba(100, 116, 139, 0.22)',
+    backgroundColor: CARD_BLACK,
   },
   chipRow: {
     flexDirection: 'row',
@@ -394,12 +364,5 @@ const styles = StyleSheet.create({
   },
   intelToggle: {
     alignSelf: 'flex-start',
-  },
-  deployButton: {
-    width: '100%',
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
   },
 });

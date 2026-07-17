@@ -18,14 +18,14 @@ import { getResourceDisplayName, getResourceCategory, getResourceShortName } fro
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useWorldState } from '../../context/WorldStateContext';
 import { useTerminal } from '../../context/TerminalContext';
-import { getFactionAccent } from '../../data/factions';
 import type { CargoItemId } from '../../types/cargoGrid';
 import type { ResourceItemId } from '../../types/resourceItem';
 import TerminalText from '../TerminalText';
 import TacticalButton from '../TacticalButton';
 import DossierCardShell from '../hub/DossierCardShell';
+import { LoadoutSectionHeader } from '../hub/loadoutTabUi';
 import HubCargoIconBox from './HubCargoIconBox';
-import { DOSSIER_ROW_BG, dossierOpaqueCtaStyle } from '../../constants/dossierSurface';
+import { DOSSIER_ROW_BG, dossierOpaqueCtaStyle, SELECT_ACCENT } from '../../constants/dossierSurface';
 import { hubCtaButtonStyle } from '../../constants/hubCta';
 import { useHubLayout } from '../../context/HubLayoutContext';
 import { useHubTypography } from '../../hooks/useHubTypography';
@@ -35,7 +35,7 @@ import {
   HIDDEN_SCROLLVIEW_PROPS,
 } from '../../utils/hiddenScrollbarStyle';
 
-const TERMINAL_GREEN = '#4ade80';
+const TERMINAL_GREEN = SELECT_ACCENT;
 
 interface MarketListingRowProps {
   listing: (typeof BLACK_MARKET_CARGO_LISTINGS)[number];
@@ -309,7 +309,7 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
   const [selectedListingId, setSelectedListingId] = useState<CargoItemId | null>(null);
 
   const accent = theme.statusColor;
-  const economyColor = getFactionAccent(account.alignedFaction);
+  const economyColor = SELECT_ACCENT;
   const {
     isDesktop,
     scaleSpacing,
@@ -345,19 +345,20 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
   return (
     <View style={styles.root}>
       <View style={[styles.splitRow, isDesktop && styles.splitDesktop, { gap: scaleSpacing(10) }]}>
-        <DossierCardShell
-          fillHeight
-          padding={panelPadding}
+        <View
           style={[
             styles.buyColumn,
             Platform.OS === 'web' && styles.buyColumnWeb,
             isDesktop ? { width: marketBuyLaneWidth, flexShrink: 0 } : { flex: 1 },
+            { gap: scaleSpacing(6) },
           ]}
-          contentStyle={[styles.panelColumn, Platform.OS === 'web' ? styles.panelFill : null]}
         >
-          <TerminalText variant="panelTitle" letterSpacing={0.8} style={[styles.panelTitle, { color: accent }]}>
-            VENDOR // CONTRABAND
-          </TerminalText>
+          <LoadoutSectionHeader label="Vendor // Contraband" />
+          <DossierCardShell
+            fillHeight
+            padding={panelPadding}
+            contentStyle={[styles.panelColumn, Platform.OS === 'web' ? styles.panelFill : null]}
+          >
           <TerminalText variant="caption" style={[styles.panelSub, { color: theme.mutedColor }]}>
             High-end field gear — purchases stage in hub consumable vault.
           </TerminalText>
@@ -408,22 +409,24 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
               !canBuy ? { opacity: 0.45 } : null,
             ]}
           />
-        </DossierCardShell>
+          </DossierCardShell>
+        </View>
 
-        <DossierCardShell
-          fillHeight
-          padding={panelPadding}
+        <View
           style={[
             styles.fenceColumn,
             isDesktop && styles.fenceColumnDesktop,
             Platform.OS === 'web' && styles.fenceColumnWeb,
             isDesktop ? { minWidth: deploymentLaneWidth } : { flex: 1 },
+            { gap: scaleSpacing(6) },
           ]}
-          contentStyle={[styles.panelColumn, Platform.OS === 'web' ? styles.panelFill : null]}
         >
-          <TerminalText variant="panelTitle" letterSpacing={0.8} style={[styles.panelTitle, { color: accent }]}>
-            FENCE // LIQUIDATE
-          </TerminalText>
+          <LoadoutSectionHeader label="Fence // Liquidate" />
+          <DossierCardShell
+            fillHeight
+            padding={panelPadding}
+            contentStyle={[styles.panelColumn, Platform.OS === 'web' ? styles.panelFill : null]}
+          >
           <TerminalText variant="caption" style={[styles.panelSub, { color: theme.mutedColor }]}>
             {formatCargoRoutingBlackMarketIntelLines()[0]}
           </TerminalText>
@@ -463,7 +466,8 @@ export default function SafehouseBlackMarketTab(): React.JSX.Element {
               ))
             )}
           </ScrollView>
-        </DossierCardShell>
+          </DossierCardShell>
+        </View>
       </View>
 
       {sealedEntries.length > 0 ? (

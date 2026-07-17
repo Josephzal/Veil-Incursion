@@ -17,6 +17,8 @@ interface HubScreenShellProps {
   children: React.ReactNode;
   scrollable?: boolean;
   contentStyle?: StyleProp<ViewStyle>;
+  /** Optional shared bottom command bar pinned below the body. */
+  footer?: React.ReactNode;
 }
 
 /** Shared hub viewport — screen title + faction glass data slate. */
@@ -27,6 +29,7 @@ export default function HubScreenShell({
   children,
   scrollable = false,
   contentStyle,
+  footer,
 }: HubScreenShellProps): React.JSX.Element {
   const { theme } = useTerminal();
   const { account } = usePlayerAccount();
@@ -80,6 +83,7 @@ export default function HubScreenShell({
             {headerRight ? <View style={[styles.headerRight, { gap: scaleSpacing(2) }]}>{headerRight}</View> : null}
           </View>
           {body}
+          {footer ? <View style={[styles.footerBar, { marginTop: scaleSpacing(6) }]}>{footer}</View> : null}
         </View>
       </View>
     </View>
@@ -165,6 +169,9 @@ const styles = StyleSheet.create({
   },
   sectionHeader: {
     fontWeight: '800',
+    flexShrink: 0,
+  },
+  footerBar: {
     flexShrink: 0,
   },
 });

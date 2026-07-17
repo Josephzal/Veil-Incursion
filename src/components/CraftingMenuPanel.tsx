@@ -31,8 +31,9 @@ import { useTerminal } from '../context/TerminalContext';
 import { useHubTypography } from '../hooks/useHubTypography';
 import { useHubLayout } from '../context/HubLayoutContext';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
-import { DOSSIER_ROW_BG, dossierOpaqueCtaStyle } from '../constants/dossierSurface';
+import { DOSSIER_ROW_BG, dossierOpaqueCtaStyle, SELECT_ACCENT, DANGER_RED } from '../constants/dossierSurface';
 import DossierCardShell from './hub/DossierCardShell';
+import { LoadoutSectionHeader } from './hub/loadoutTabUi';
 import {
   HIDDEN_SCROLLBAR_VIEW_STYLE,
   HIDDEN_SCROLLVIEW_PROPS,
@@ -43,8 +44,8 @@ import type { ResourceQuantity } from '../types/resourceItem';
 const STARK_WHITE = '#F8FAFC';
 const MUTED_SLATE = '#94A3B8';
 const ACCENT_CYAN = '#06B6D4';
-const PHOSPHOR_GREEN = '#4ADE80';
-const RUST_RED = '#EF4444';
+const PHOSPHOR_GREEN = SELECT_ACCENT;
+const RUST_RED = DANGER_RED;
 
 interface CraftingMenuPanelProps {
   onClose?: () => void;
@@ -119,12 +120,10 @@ function ResourceLedger({
   stash,
   borderColor,
   iconSize,
-  titleColor,
   textColor,
   mutedColor,
   isDesktop,
 }: ResourceLedgerProps): React.JSX.Element {
-  const { scaleSpacing } = useHubLayout();
   const ownedResources = useMemo(
     () => ALL_RESOURCE_ITEM_IDS.filter((resourceId) => getStashCount(stash, resourceId) > 0),
     [stash],
@@ -132,13 +131,6 @@ function ResourceLedger({
 
   return (
     <>
-      <TerminalText
-        variant="panelTitle"
-        letterSpacing={0.8}
-        style={[styles.panelTitle, { color: titleColor, marginBottom: scaleSpacing(4) }]}
-      >
-        RESOURCE LEDGER
-      </TerminalText>
       <ScrollView
         style={[
           styles.ledgerScroll,
@@ -355,14 +347,6 @@ export default function CraftingMenuPanel({
       padding={panelPadding}
       contentStyle={styles.matrixPanel}
     >
-      <TerminalText
-        variant="panelTitle"
-        letterSpacing={0.8}
-        style={[styles.panelTitle, { color: theme.statusColor, marginBottom: scaleSpacing(4) }]}
-      >
-        FABRICATION MATRIX
-      </TerminalText>
-
       <ScrollView
         style={[styles.matrixScroll, HIDDEN_SCROLLBAR_VIEW_STYLE]}
         contentContainerStyle={styles.fabricationList}
@@ -375,7 +359,7 @@ export default function CraftingMenuPanel({
           stash={account.resourceStash}
           onFabricate={handleFabricate}
           isOwned={isOutputOwned}
-          accentColor={theme.statusColor}
+          accentColor={SELECT_ACCENT}
           borderColor={theme.borderColor}
           textColor={theme.textColor}
           mutedColor={theme.mutedColor}
@@ -424,7 +408,7 @@ export default function CraftingMenuPanel({
                     stash={account.resourceStash}
                     alreadyOwned={false}
                     onFabricate={handleFabricate}
-                    accentColor={theme.statusColor}
+                    accentColor={SELECT_ACCENT}
                     borderColor={theme.borderColor}
                     textColor={theme.textColor}
                     mutedColor={theme.mutedColor}
@@ -444,7 +428,7 @@ export default function CraftingMenuPanel({
             onFabricate={handleFabricate}
             sectionLabel="TACTICAL CONSUMABLES"
             isOwned={() => false}
-            accentColor={theme.statusColor}
+            accentColor={SELECT_ACCENT}
             borderColor={theme.borderColor}
             textColor={theme.textColor}
             mutedColor={theme.mutedColor}
@@ -481,27 +465,29 @@ export default function CraftingMenuPanel({
           { flexDirection: isDesktop ? 'row' : 'column', gap: scaleSpacing(10) },
         ]}
       >
-        <DossierCardShell
-          fillHeight
-          padding={panelPadding}
+        <View
           style={[
             styles.ledgerColumn,
             isDesktop ? styles.ledgerColumnDesktop : styles.ledgerColumnMobile,
+            { gap: scaleSpacing(6) },
           ]}
-          contentStyle={styles.ledgerContent}
         >
-          <ResourceLedger
-            stash={account.resourceStash}
-            borderColor={theme.borderColor}
-            iconSize={iconSize}
-            titleColor={theme.statusColor}
-            textColor={theme.textColor}
-            mutedColor={theme.mutedColor}
-            isDesktop={isDesktop}
-          />
-        </DossierCardShell>
+          <LoadoutSectionHeader label="Resource Ledger" />
+          <DossierCardShell fillHeight padding={panelPadding} contentStyle={styles.ledgerContent}>
+            <ResourceLedger
+              stash={account.resourceStash}
+              borderColor={theme.borderColor}
+              iconSize={iconSize}
+              titleColor={theme.statusColor}
+              textColor={theme.textColor}
+              mutedColor={theme.mutedColor}
+              isDesktop={isDesktop}
+            />
+          </DossierCardShell>
+        </View>
 
-        <View style={[styles.matrixColumn, isDesktop ? styles.matrixColumnDesktop : null]}>
+        <View style={[styles.matrixColumn, isDesktop ? styles.matrixColumnDesktop : null, { gap: scaleSpacing(6) }]}>
+          <LoadoutSectionHeader label="Fabrication Matrix" />
           {matrixContent}
         </View>
       </View>
