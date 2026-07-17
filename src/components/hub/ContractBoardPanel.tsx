@@ -10,7 +10,17 @@ import { useTerminal } from '../../context/TerminalContext';
 import { useWorldState } from '../../context/WorldStateContext';
 import { useHubLayout } from '../../context/HubLayoutContext';
 import { HUB_DATA_DIVIDER } from '../../styles/hubTerminalUi';
-import type { GeneratedContract } from '../../types/contract';
+import {
+  BONE_WHITE,
+  CARD_BLACK,
+  CARD_BLACK_HOVER,
+  DANGER_RED,
+  DOSSIER_BORDER,
+  DOSSIER_ROW_BG,
+  SELECT_ACCENT,
+} from '../../constants/dossierSurface';
+import { LoadoutSectionHeader } from './loadoutTabUi';
+import type { GeneratedContract, SelectedContractState } from '../../types/contract';
 import type { CabalEmployerId } from '../../types/worldState';
 import {
   formatContractContextTag,
@@ -71,28 +81,32 @@ function BoardBackdrop(): React.JSX.Element {
   );
 }
 
+const CHIP_TEXT = '#9aa6b2';
+
+/** Charcoal chip on a black dossier. `color` sets the text (and border when `strong`). */
 function Chip({
   label,
   color,
-  filled,
+  strong,
   size,
 }: {
   label: string;
-  color: string;
-  filled?: boolean;
+  color?: string;
+  strong?: boolean;
   size: number;
 }): React.JSX.Element {
+  const textColor = color ?? CHIP_TEXT;
   return (
     <View
       style={[
         styles.chip,
         {
-          borderColor: withAlpha(color, '66'),
-          backgroundColor: filled ? withAlpha(color, '22') : 'transparent',
+          borderColor: strong ? withAlpha(textColor, '99') : HUB_DATA_DIVIDER,
+          backgroundColor: DOSSIER_ROW_BG,
         },
       ]}
     >
-      <TerminalText size={size} letterSpacing={0.4} style={{ color, fontWeight: '700' }}>
+      <TerminalText size={size} letterSpacing={0.4} style={{ color: textColor, fontWeight: '700' }}>
         {label}
       </TerminalText>
     </View>
@@ -174,12 +188,12 @@ function ContractDossierCard({
       style={[
         styles.dossierCard,
         {
-          borderColor: isSelected ? accent : HUB_DATA_DIVIDER,
-          borderLeftColor: accent,
+          borderColor: isSelected ? SELECT_ACCENT : DOSSIER_BORDER,
+          borderLeftColor: isSelected ? SELECT_ACCENT : accent,
           borderWidth: isSelected ? 1.5 : 1,
-          backgroundColor: isSelected ? withAlpha(accent, '1f') : 'rgba(15, 23, 42, 0.4)',
-          padding: scaleSpacing(14),
-          gap: scaleSpacing(7),
+          backgroundColor: isSelected ? CARD_BLACK_HOVER : CARD_BLACK,
+          padding: scaleSpacing(12),
+          gap: scaleSpacing(5),
         },
       ]}
     >
@@ -226,20 +240,18 @@ function ContractDossierCard({
       </TerminalText>
 
       <View style={styles.chipRow}>
-        <Chip label={jobType} color={accent} filled size={scaleFont(5)} />
-        <Chip label={risk.label} color={risk.color} size={scaleFont(5)} />
-        {primarySector ? <Chip label={primarySector.toUpperCase()} color={theme.mutedColor} size={scaleFont(5)} /> : null}
-        {isResource ? (
-          <Chip label="POST-RUN DELIVERY" color={theme.mutedColor} size={scaleFont(5)} />
-        ) : null}
-        {contract.reward.reputation > 0 ? <Chip label="BETRAYABLE" color="#f97316" size={scaleFont(5)} /> : null}
+        <Chip label={jobType} size={scaleFont(5)} />
+        <Chip label={risk.label} color={risk.color} strong size={scaleFont(5)} />
+        {primarySector ? <Chip label={primarySector.toUpperCase()} size={scaleFont(5)} /> : null}
+        {isResource ? <Chip label="POST-RUN DELIVERY" size={scaleFont(5)} /> : null}
+        {contract.reward.reputation > 0 ? <Chip label="BETRAYABLE" color={DANGER_RED} strong size={scaleFont(5)} /> : null}
       </View>
 
-      <View style={[styles.statBlock, { borderTopColor: withAlpha(accent, '2a') }]}>
+      <View style={[styles.statBlock, { borderTopColor: HUB_DATA_DIVIDER }]}>
         <StatRow
           label="REWARD"
           value={rewardValue}
-          valueColor={theme.textColor}
+          valueColor={BONE_WHITE}
           labelColor={theme.mutedColor}
           size={scaleFont(5.6)}
         />
@@ -272,7 +284,7 @@ function ContractDossierCard({
           <StatRow
             label="CONTEXT"
             value={contextTag}
-            valueColor={accent}
+            valueColor={theme.textColor}
             labelColor={theme.mutedColor}
             size={scaleFont(5.6)}
           />
@@ -280,7 +292,7 @@ function ContractDossierCard({
       </View>
 
       {expanded ? (
-        <View style={[styles.detailBlock, { borderTopColor: withAlpha(accent, '2a') }]}>
+        <View style={[styles.detailBlock, { borderTopColor: HUB_DATA_DIVIDER }]}>
           {contract.bonusObjective ? (
             <TerminalText size={scaleFont(5.4)} style={{ color: theme.mutedColor }}>
               {`BONUS: ${contract.bonusObjective.text}`}
@@ -296,7 +308,7 @@ function ContractDossierCard({
           <TerminalText size={scaleFont(5.4)} style={{ color: theme.mutedColor }}>
             {`SPONSOR TERMS: ${describeEmployerPerks(contract.sponsorId).join(' · ')}`}
           </TerminalText>
-          <TerminalText size={scaleFont(5.4)} style={{ color: '#f97316' }}>
+          <TerminalText size={scaleFont(5.4)} style={{ color: DANGER_RED }}>
             Betrayal: keep/sell the cargo elsewhere, but forfeit sponsor reputation.
           </TerminalText>
         </View>
@@ -311,8 +323,8 @@ function ContractDossierCard({
       <View style={styles.actionRow}>
         {isSelected ? (
           <>
-            <View style={[styles.actionButton, styles.actionAccepted, { borderColor: accent, backgroundColor: withAlpha(accent, '26') }]}>
-              <TerminalText size={scaleFont(5.8)} letterSpacing={0.6} style={{ color: accent, fontWeight: '800' }}>
+            <View style={[styles.actionButton, styles.actionAccepted, { borderColor: SELECT_ACCENT, backgroundColor: withAlpha(SELECT_ACCENT, '1f') }]}>
+              <TerminalText size={scaleFont(5.8)} letterSpacing={0.6} style={{ color: SELECT_ACCENT, fontWeight: '800' }}>
                 [ CONTRACT ACCEPTED ]
               </TerminalText>
             </View>
@@ -320,7 +332,7 @@ function ContractDossierCard({
               onPress={onAbandon}
               style={(state) => [
                 styles.actionButton,
-                { borderColor: theme.mutedColor },
+                { borderColor: DOSSIER_BORDER, backgroundColor: DOSSIER_ROW_BG },
                 terminalHoverStyle(readPressableHover(state), state.pressed),
               ]}
             >
@@ -336,11 +348,11 @@ function ContractDossierCard({
               style={(state) => [
                 styles.actionButton,
                 styles.actionPrimary,
-                { borderColor: accent, backgroundColor: withAlpha(accent, '1c') },
+                { borderColor: SELECT_ACCENT, backgroundColor: withAlpha(SELECT_ACCENT, '14') },
                 terminalHoverStyle(readPressableHover(state), state.pressed),
               ]}
             >
-              <TerminalText size={scaleFont(5.8)} letterSpacing={0.6} style={{ color: accent, fontWeight: '800' }}>
+              <TerminalText size={scaleFont(5.8)} letterSpacing={0.6} style={{ color: SELECT_ACCENT, fontWeight: '800' }}>
                 [ ACCEPT CONTRACT ]
               </TerminalText>
             </HapticPressable>
@@ -348,7 +360,7 @@ function ContractDossierCard({
               onPress={() => setExpanded((prev) => !prev)}
               style={(state) => [
                 styles.actionButton,
-                { borderColor: theme.mutedColor },
+                { borderColor: DOSSIER_BORDER, backgroundColor: DOSSIER_ROW_BG },
                 terminalHoverStyle(readPressableHover(state), state.pressed),
               ]}
             >
@@ -378,10 +390,11 @@ function IndependentBreachCard({
       style={[
         styles.independentCard,
         {
-          borderColor: isSelected ? INDEPENDENT_ACCENT : withAlpha(INDEPENDENT_ACCENT, '55'),
-          backgroundColor: isSelected ? withAlpha(INDEPENDENT_ACCENT, '1c') : 'rgba(10, 14, 22, 0.5)',
-          padding: scaleSpacing(14),
-          gap: scaleSpacing(7),
+          borderColor: isSelected ? SELECT_ACCENT : DOSSIER_BORDER,
+          borderLeftColor: isSelected ? SELECT_ACCENT : INDEPENDENT_ACCENT,
+          backgroundColor: isSelected ? CARD_BLACK_HOVER : CARD_BLACK,
+          padding: scaleSpacing(12),
+          gap: scaleSpacing(5),
         },
       ]}
     >
@@ -402,9 +415,9 @@ function IndependentBreachCard({
       </TerminalText>
 
       <View style={styles.chipRow}>
-        <Chip label="NO REP" color={INDEPENDENT_ACCENT} size={scaleFont(5)} />
-        <Chip label="KEEP YOUR CARGO" color={INDEPENDENT_ACCENT} size={scaleFont(5)} />
-        <Chip label="OPS PROGRESS" color={INDEPENDENT_ACCENT} size={scaleFont(5)} />
+        <Chip label="NO REP" size={scaleFont(5)} />
+        <Chip label="KEEP YOUR CARGO" size={scaleFont(5)} />
+        <Chip label="OPS PROGRESS" size={scaleFont(5)} />
       </View>
 
       <View style={{ gap: scaleSpacing(2) }}>
@@ -421,8 +434,8 @@ function IndependentBreachCard({
 
       <View style={styles.actionRow}>
         {isSelected ? (
-          <View style={[styles.actionButton, styles.actionPrimary, { borderColor: INDEPENDENT_ACCENT, backgroundColor: withAlpha(INDEPENDENT_ACCENT, '26') }]}>
-            <TerminalText size={scaleFont(5.8)} letterSpacing={0.6} style={{ color: INDEPENDENT_ACCENT, fontWeight: '800' }}>
+          <View style={[styles.actionButton, styles.actionPrimary, { borderColor: SELECT_ACCENT, backgroundColor: withAlpha(SELECT_ACCENT, '1f') }]}>
+            <TerminalText size={scaleFont(5.8)} letterSpacing={0.6} style={{ color: SELECT_ACCENT, fontWeight: '800' }}>
               [ UNSPONSORED — ACTIVE ]
             </TerminalText>
           </View>
@@ -432,11 +445,11 @@ function IndependentBreachCard({
             style={(state) => [
               styles.actionButton,
               styles.actionPrimary,
-              { borderColor: INDEPENDENT_ACCENT, backgroundColor: withAlpha(INDEPENDENT_ACCENT, '14') },
+              { borderColor: SELECT_ACCENT, backgroundColor: withAlpha(SELECT_ACCENT, '14') },
               terminalHoverStyle(readPressableHover(state), state.pressed),
             ]}
           >
-            <TerminalText size={scaleFont(5.8)} letterSpacing={0.6} style={{ color: INDEPENDENT_ACCENT, fontWeight: '800' }}>
+            <TerminalText size={scaleFont(5.8)} letterSpacing={0.6} style={{ color: SELECT_ACCENT, fontWeight: '800' }}>
               [ RUN UNSPONSORED ]
             </TerminalText>
           </HapticPressable>
@@ -471,23 +484,24 @@ function SponsorIdentityCard({
       style={(state) => [
         styles.sponsorCard,
         {
-          borderColor: isActive ? accent : withAlpha(accent, '3a'),
-          backgroundColor: isActive ? withAlpha(accent, '1c') : 'rgba(12, 18, 28, 0.45)',
-          padding: scaleSpacing(10),
-          gap: scaleSpacing(4),
+          borderColor: isActive ? SELECT_ACCENT : DOSSIER_BORDER,
+          borderLeftColor: isActive ? SELECT_ACCENT : accent,
+          backgroundColor: isActive ? CARD_BLACK_HOVER : CARD_BLACK,
+          padding: scaleSpacing(8),
+          gap: scaleSpacing(3),
         },
         terminalHoverStyle(readPressableHover(state), state.pressed),
       ]}
     >
       <View style={styles.sponsorCardHeader}>
-        <TerminalText size={scaleFont(9)} style={{ color: accent }}>
+        <TerminalText size={scaleFont(8)} style={{ color: accent }}>
           {identity.emblem}
         </TerminalText>
-        <TerminalText size={scaleFont(4.6)} letterSpacing={0.4} style={{ color: isActive ? accent : theme.mutedColor, fontWeight: '700' }}>
+        <TerminalText size={scaleFont(4.6)} letterSpacing={0.4} style={{ color: isActive ? SELECT_ACCENT : theme.mutedColor, fontWeight: '700' }}>
           {`${jobCount} ${jobCount === 1 ? 'JOB' : 'JOBS'}`}
         </TerminalText>
       </View>
-      <TerminalText size={scaleFont(6.6)} letterSpacing={0.6} style={{ color: isActive ? accent : theme.textColor, fontWeight: '800' }}>
+      <TerminalText size={scaleFont(6.6)} letterSpacing={0.6} style={{ color: isActive ? SELECT_ACCENT : theme.textColor, fontWeight: '800' }}>
         {sponsorDisplayName(sponsorId).toUpperCase()}
       </TerminalText>
       <TerminalText size={scaleFont(5)} numberOfLines={2} style={{ color: theme.mutedColor }}>
@@ -497,6 +511,59 @@ function SponsorIdentityCard({
         {`REP ${preview.reputation}   RANK ${preview.rank}   NEXT ${preview.progressToNext}`}
       </TerminalText>
     </HapticPressable>
+  );
+}
+
+function CurrentRouteCard({
+  selectedContract,
+}: {
+  selectedContract: SelectedContractState;
+}): React.JSX.Element {
+  const { theme } = useTerminal();
+  const { scaleSpacing, scaleFont } = useHubLayout();
+
+  if (selectedContract.kind === 'INDEPENDENT') {
+    return (
+      <View style={[styles.routeCard, { padding: scaleSpacing(12), gap: scaleSpacing(4) }]}>
+        <TerminalText size={scaleFont(7.5)} style={{ color: theme.textColor, fontWeight: '800' }}>
+          Independent Breach
+        </TerminalText>
+        <View style={[styles.statBlock, { borderTopColor: HUB_DATA_DIVIDER }]}>
+          <StatRow label="SPONSOR" value="None" valueColor={theme.textColor} labelColor={theme.mutedColor} size={scaleFont(5.6)} />
+          <StatRow label="OBLIGATION" value="None" valueColor={theme.textColor} labelColor={theme.mutedColor} size={scaleFont(5.6)} />
+          <StatRow label="CARGO" value="Keep everything you extract" valueColor={theme.textColor} labelColor={theme.mutedColor} size={scaleFont(5.6)} />
+          <StatRow label="OPS" value="Progress enabled" valueColor={theme.textColor} labelColor={theme.mutedColor} size={scaleFont(5.6)} />
+        </View>
+      </View>
+    );
+  }
+
+  const contract = selectedContract.contract;
+  const accent = FACTION_DEFINITIONS[contract.sponsorId].accentColor;
+  const identity = SPONSOR_IDENTITY[contract.sponsorId];
+  const isResource = isResourceContractObjective(contract.objectiveKind);
+  const rewardValue = `${contract.reward.credits} CR   +${contract.reward.reputation} REP`;
+
+  return (
+    <View style={[styles.routeCard, { padding: scaleSpacing(12), gap: scaleSpacing(4) }]}>
+      <TerminalText size={scaleFont(5.4)} letterSpacing={0.5} style={{ color: accent, fontWeight: '700' }}>
+        {`${identity.emblem}  ${sponsorDisplayName(contract.sponsorId).toUpperCase()}`}
+      </TerminalText>
+      <TerminalText size={scaleFont(7.5)} style={{ color: theme.textColor, fontWeight: '800' }}>
+        {contract.title}
+      </TerminalText>
+      <View style={[styles.statBlock, { borderTopColor: HUB_DATA_DIVIDER }]}>
+        <StatRow label="REWARD" value={rewardValue} valueColor={BONE_WHITE} labelColor={theme.mutedColor} size={scaleFont(5.6)} />
+        <StatRow
+          label="DELIVERY"
+          value={isResource ? 'Post-run handoff required' : 'Resolved in-run'}
+          valueColor={theme.textColor}
+          labelColor={theme.mutedColor}
+          size={scaleFont(5.6)}
+        />
+        <StatRow label="RISK" value="Betrayable" valueColor={DANGER_RED} labelColor={theme.mutedColor} size={scaleFont(5.6)} />
+      </View>
+    </View>
   );
 }
 
@@ -607,11 +674,11 @@ export default function ContractBoardPanel(): React.JSX.Element {
     return chips.slice(0, 5);
   }, [crisisPreview, selectedSector]);
 
+  const routeLabel = isIndependent ? 'CURRENT ROUTE' : 'CURRENT CONTRACT';
+
   const contractFeed = (
-    <View style={{ gap: scaleSpacing(9), flex: 1, minWidth: 0 }}>
-      <TerminalText size={scaleFont(5.6)} letterSpacing={0.8} style={{ color: theme.mutedColor, fontWeight: '800' }}>
-        {`${sponsorDisplayName(activeSponsorId).toUpperCase()} // CONTRACT FEED`}
-      </TerminalText>
+    <View style={[styles.feedColumn, twoColumn && styles.feedColumnWide, { gap: scaleSpacing(16) }]}>
+      <LoadoutSectionHeader label={`${sponsorDisplayName(activeSponsorId).toUpperCase()} // CONTRACT FEED`} />
       {visibleContracts.length > 0 ? (
         visibleContracts.map((contract) => (
           <ContractDossierCard
@@ -631,7 +698,9 @@ export default function ContractBoardPanel(): React.JSX.Element {
   );
 
   const sideRail = (
-    <View style={[styles.rail, { gap: scaleSpacing(10), width: twoColumn ? 320 : undefined }]}>
+    <View style={[styles.rail, { gap: scaleSpacing(16) }]}>
+      <LoadoutSectionHeader label={routeLabel} />
+      <CurrentRouteCard selectedContract={selectedContract} />
       <IndependentBreachCard isSelected={isIndependent} onPress={selectIndependentContract} />
       <SponsorLedger />
     </View>
@@ -652,16 +721,16 @@ export default function ContractBoardPanel(): React.JSX.Element {
         <BoardBackdrop />
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={[styles.scrollContent, { gap: scaleSpacing(12), paddingBottom: scaleSpacing(24) }]}
+          contentContainerStyle={[styles.scrollContent, { gap: scaleSpacing(10), paddingBottom: scaleSpacing(24) }]}
           showsVerticalScrollIndicator={false}
         >
           <View
             style={[
               styles.conditionStrip,
-              { borderLeftColor: theme.statusColor, padding: scaleSpacing(12), gap: scaleSpacing(4) },
+              { borderLeftColor: SELECT_ACCENT, padding: scaleSpacing(10), gap: scaleSpacing(3) },
             ]}
           >
-            <TerminalText size={scaleFont(5.4)} letterSpacing={0.8} style={{ color: theme.statusColor, fontWeight: '800' }}>
+            <TerminalText size={scaleFont(5.4)} letterSpacing={0.8} style={{ color: SELECT_ACCENT, fontWeight: '800' }}>
               {`${formatSectorShort(selectedSector.id).toUpperCase()} // CRISIS ACTIVE`}
             </TerminalText>
             <TerminalText size={scaleFont(8.5)} letterSpacing={0.4} style={{ color: theme.textColor, fontWeight: '800' }}>
@@ -672,7 +741,7 @@ export default function ContractBoardPanel(): React.JSX.Element {
             </TerminalText>
             <View style={styles.chipRow}>
               {conditionChips.map((chip) => (
-                <Chip key={chip} label={chip} color={theme.statusColor} size={scaleFont(5)} />
+                <Chip key={chip} label={chip} size={scaleFont(5)} />
               ))}
             </View>
           </View>
@@ -689,9 +758,9 @@ export default function ContractBoardPanel(): React.JSX.Element {
             ))}
           </View>
 
-          <View style={[styles.mainArea, twoColumn ? styles.mainAreaRow : styles.mainAreaColumn, { gap: scaleSpacing(12) }]}>
+          <View style={[styles.mainArea, twoColumn ? styles.mainAreaRow : styles.mainAreaColumn, { gap: scaleSpacing(twoColumn ? 24 : 16) }]}>
             {contractFeed}
-            {sideRail}
+            {twoColumn ? <View style={styles.railColumn}>{sideRail}</View> : sideRail}
           </View>
         </ScrollView>
       </View>
@@ -724,7 +793,7 @@ const styles = StyleSheet.create({
   },
   conditionStrip: {
     borderLeftWidth: 3,
-    backgroundColor: 'rgba(12, 18, 28, 0.5)',
+    backgroundColor: CARD_BLACK,
   },
   sponsorRow: {
     flexDirection: 'row',
@@ -734,6 +803,14 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     borderWidth: 1,
+    borderLeftWidth: 3,
+  },
+  routeCard: {
+    borderWidth: 1,
+    borderLeftWidth: 3,
+    borderColor: DOSSIER_BORDER,
+    borderLeftColor: SELECT_ACCENT,
+    backgroundColor: CARD_BLACK,
   },
   sponsorCardHeader: {
     flexDirection: 'row',
@@ -750,8 +827,21 @@ const styles = StyleSheet.create({
   mainAreaColumn: {
     flexDirection: 'column',
   },
+  feedColumn: {
+    minWidth: 0,
+    width: '100%',
+  },
+  feedColumnWide: {
+    flex: 8,
+    width: 'auto',
+  },
+  railColumn: {
+    flex: 3,
+    minWidth: 0,
+  },
   rail: {
     minWidth: 0,
+    width: '100%',
   },
   dossierCard: {
     borderWidth: 1,
@@ -826,7 +916,8 @@ const styles = StyleSheet.create({
   },
   ledger: {
     borderWidth: 1,
-    backgroundColor: 'rgba(8, 13, 22, 0.5)',
+    borderColor: DOSSIER_BORDER,
+    backgroundColor: CARD_BLACK,
   },
   ledgerHeader: {
     flexDirection: 'row',

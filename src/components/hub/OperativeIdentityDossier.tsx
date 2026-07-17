@@ -174,17 +174,7 @@ export default function OperativeIdentityDossier({
             {`RANK ${account.operativeRank}`}
           </TerminalText>
         </>
-      ) : (
-        <TerminalText
-          size={metaSize}
-          lineHeight={metaLineHeight}
-          letterSpacing={0.3}
-          style={[styles.metaLine, { color: theme.statusColor }]}
-          numberOfLines={1}
-        >
-          {classDef.weaponLine}
-        </TerminalText>
-      )}
+      ) : null}
     </View>
   );
 

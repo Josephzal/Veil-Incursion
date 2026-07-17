@@ -6,6 +6,7 @@ import DossierCardShell from './DossierCardShell';
 import KeepsakeDeploymentChoiceModal from './KeepsakeDeploymentChoiceModal';
 import { HubSectionHeader } from './HubScreenShell';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
+import { useTerminal } from '../../context/TerminalContext';
 import { useWorldState } from '../../context/WorldStateContext';
 import { useHubLayout } from '../../context/HubLayoutContext';
 import {
@@ -20,8 +21,8 @@ import {
   formatKeepsakeRoleLine,
 } from '../../data/expeditionKeepsakeDeploymentEngine';
 import type { KeepsakeId } from '../../types/expeditionKeepsake';
-import { formatBracketHeader } from '../../styles/hubTerminalUi';
 import { readPressableHover, terminalHoverStyle } from '../../utils/terminalHoverStyle';
+import { LoadoutTabHeader, LoadoutSectionHeader } from './loadoutTabUi';
 
 interface KeepsakeLoadoutPanelProps {
   accent: string;
@@ -39,6 +40,7 @@ export default function KeepsakeLoadoutPanel({
     setKeepsakeRouteDoctrine,
     setKeepsakeMirrorCategory,
   } = usePlayerAccount();
+  const { theme } = useTerminal();
   const { selectedSector, persisted } = useWorldState();
   const { scaleSpacing } = useHubLayout();
   const selectedContract = persisted.contractBoard.selectedContract;
@@ -48,7 +50,6 @@ export default function KeepsakeLoadoutPanel({
     [account.unlockedKeepsakeIds],
   );
 
-  const [inspectId, setInspectId] = useState<KeepsakeId | null>(account.equippedKeepsakeId);
   const [deploymentModalVisible, setDeploymentModalVisible] = useState(false);
   const [pendingEquipId, setPendingEquipId] = useState<KeepsakeId | null>(null);
   const [modalKeepsakeId, setModalKeepsakeId] = useState<KeepsakeId | null>(null);
@@ -58,13 +59,12 @@ export default function KeepsakeLoadoutPanel({
     ? EXPEDITION_KEEPSAKE_REGISTRY[account.equippedKeepsakeId]
     : null;
 
-  const inspected = inspectId ? EXPEDITION_KEEPSAKE_REGISTRY[inspectId] : null;
   const modalRelic = modalKeepsakeId ? EXPEDITION_KEEPSAKE_REGISTRY[modalKeepsakeId] : null;
 
-  const inspectWarnings = useMemo(() => {
-    if (!inspected) return [];
-    return resolveKeepsakeDeploymentWarnings(inspected.id, selectedSector, selectedContract);
-  }, [inspected, selectedContract, selectedSector]);
+  const equippedWarnings = useMemo(() => {
+    if (!equipped) return [];
+    return resolveKeepsakeDeploymentWarnings(equipped.id, selectedSector, selectedContract);
+  }, [equipped, selectedContract, selectedSector]);
 
   const modalWarnings = useMemo(() => {
     if (!modalRelic) return [];
@@ -112,7 +112,6 @@ export default function KeepsakeLoadoutPanel({
     }
 
     setEquippedKeepsake(id);
-    setInspectId(id);
   };
 
   const handleDeploymentConfirm = () => {
@@ -120,7 +119,6 @@ export default function KeepsakeLoadoutPanel({
     commitDeploymentSelection(modalDraftValue);
     if (pendingEquipId) {
       setEquippedKeepsake(pendingEquipId);
-      setInspectId(pendingEquipId);
     }
     setDeploymentModalVisible(false);
     setPendingEquipId(null);
@@ -139,57 +137,53 @@ export default function KeepsakeLoadoutPanel({
 
   return (
     <View style={[styles.root, { gap: scaleSpacing(8) }]}>
-      <TerminalText variant="section" letterSpacing={1.1} style={{ color: accent }}>
-        {formatBracketHeader('EXPEDITION RELIC')}
-      </TerminalText>
+      <LoadoutTabHeader
+        title="Expedition Relic"
+        subtitle="Relics alter scanner behavior, route planning, cargo risk, or extraction pressure."
+      />
 
+      <LoadoutSectionHeader label="Currently Equipped" />
       {equipped ? (
-        <DossierCardShell padding={scaleSpacing(8)} accentColor={accent}>
-          <HubSectionHeader title="ARMED FOR DESCENT" color={accent} size={8} />
-          <TerminalText variant="body" style={{ color: accent, fontWeight: '700' }}>
+        <DossierCardShell padding={scaleSpacing(10)} accentColor={accent} showAccentStripe>
+          <TerminalText variant="micro" letterSpacing={0.8} style={{ color: muted }}>
+            RELIC
+          </TerminalText>
+          <TerminalText variant="body" letterSpacing={0.35} style={[styles.inspectName, { color: accent }]}>
             {equipped.name.toUpperCase()}
           </TerminalText>
-          {deploymentSummary ? (
-            <TerminalText variant="caption" style={{ color: muted, marginTop: 2 }}>
-              {`Deployment: ${deploymentSummary}`}
-            </TerminalText>
-          ) : equipped.deploymentChoice ? (
-            <TerminalText variant="caption" style={{ color: '#f97316', marginTop: 2 }}>
-              Deployment configuration required before descent.
-            </TerminalText>
-          ) : null}
-        </DossierCardShell>
-      ) : null}
-
-      {inspected ? (
-        <DossierCardShell padding={scaleSpacing(10)} accentColor={accent}>
-          <HubSectionHeader title="RELIC DOSSIER" color={accent} size={8} />
-          <TerminalText variant="body" letterSpacing={0.35} style={[styles.inspectName, { color: accent }]}>
-            {inspected.name.toUpperCase()}
-          </TerminalText>
           <TerminalText variant="caption" style={{ color: muted, fontStyle: 'italic', marginTop: 4 }}>
-            {`"${inspected.flavorText}"`}
+            {`"${equipped.flavorText}"`}
           </TerminalText>
 
           <View style={{ marginTop: scaleSpacing(8), gap: scaleSpacing(4) }}>
             <TerminalText variant="caption" style={{ color: muted }}>
-              {`ROLE — ${formatKeepsakeRoleLine(inspected)}`}
+              {`ROLE — ${formatKeepsakeRoleLine(equipped)}`}
             </TerminalText>
             <TerminalText variant="caption" style={{ color: muted }}>
-              {inspected.effectSummary}
+              {equipped.effectSummary}
             </TerminalText>
             <TerminalText variant="caption" style={{ color: accent }}>
-              {`RUN STYLE — ${inspected.runStyle}`}
+              {`RUN STYLE — ${equipped.runStyle}`}
             </TerminalText>
             <TerminalText variant="caption" style={{ color: muted }}>
-              {`RISK — ${inspected.riskSummary}`}
+              {`RISK — ${equipped.riskSummary}`}
             </TerminalText>
           </View>
 
-          {inspectWarnings.length > 0 ? (
+          {deploymentSummary ? (
+            <TerminalText variant="caption" style={{ color: accent, marginTop: scaleSpacing(6) }}>
+              {`DEPLOYMENT — ${deploymentSummary}`}
+            </TerminalText>
+          ) : equipped.deploymentChoice ? (
+            <TerminalText variant="caption" style={{ color: '#f97316', marginTop: scaleSpacing(6) }}>
+              Deployment configuration required before descent.
+            </TerminalText>
+          ) : null}
+
+          {equippedWarnings.length > 0 ? (
             <View style={[styles.warningBlock, { marginTop: scaleSpacing(8), padding: scaleSpacing(6) }]}>
               <HubSectionHeader title="DEPLOYMENT WARNINGS" color="#f97316" size={8} />
-              {inspectWarnings.map((warning) => (
+              {equippedWarnings.map((warning) => (
                 <TerminalText
                   key={warning.message}
                   variant="caption"
@@ -201,50 +195,29 @@ export default function KeepsakeLoadoutPanel({
             </View>
           ) : null}
 
-          {inspected.deploymentChoice ? (
-            <View style={{ marginTop: scaleSpacing(8) }}>
-              <HubSectionHeader title="PRE-RUN CONFIGURATION" color={accent} size={8} />
-              <TerminalText variant="caption" style={{ color: muted, marginBottom: scaleSpacing(4) }}>
-                {inspected.deploymentChoice.prompt}
-              </TerminalText>
-              {formatKeepsakeDeploymentOptionLabel(inspected.id, account.keepsakeDeployment) ? (
-                <TerminalText variant="caption" style={{ color: accent }}>
-                  {`Selected: ${formatKeepsakeDeploymentOptionLabel(inspected.id, account.keepsakeDeployment)}`}
-                </TerminalText>
-              ) : (
-                <TerminalText variant="caption" style={{ color: '#f97316' }}>
-                  Not configured — required before equipping.
-                </TerminalText>
-              )}
-            </View>
-          ) : null}
-
           <View style={[styles.inspectActions, { marginTop: scaleSpacing(10), gap: scaleSpacing(6) }]}>
             <HapticPressable
-              onPress={() => handleEquip(inspected.id)}
+              onPress={() => handleEquip(equipped.id)}
               style={(state) => [
                 styles.actionBtn,
                 {
-                  borderColor: account.equippedKeepsakeId === inspected.id ? muted : accent,
-                  backgroundColor: account.equippedKeepsakeId === inspected.id ? 'rgba(0,0,0,0.25)' : `${accent}18`,
+                  borderColor: accent,
+                  backgroundColor: 'rgba(0,0,0,0.25)',
                   paddingVertical: scaleSpacing(8),
                 },
                 terminalHoverStyle(readPressableHover(state), state.pressed),
               ]}
             >
               <TerminalText variant="caption" style={{ color: accent, fontWeight: '800' }}>
-                {account.equippedKeepsakeId === inspected.id ? '[ UNEQUIP ]' : '[ EQUIP RELIC ]'}
+                [ UNEQUIP ]
               </TerminalText>
             </HapticPressable>
-            {inspected.deploymentChoice ? (
+            {equipped.deploymentChoice ? (
               <HapticPressable
-                onPress={() => openDeploymentModal(inspected.id, false)}
+                onPress={() => openDeploymentModal(equipped.id, false)}
                 style={(state) => [
                   styles.actionBtn,
-                  {
-                    borderColor: muted,
-                    paddingVertical: scaleSpacing(8),
-                  },
+                  { borderColor: muted, paddingVertical: scaleSpacing(8) },
                   terminalHoverStyle(readPressableHover(state), state.pressed),
                 ]}
               >
@@ -256,33 +229,33 @@ export default function KeepsakeLoadoutPanel({
           </View>
         </DossierCardShell>
       ) : (
-        <DossierCardShell padding={scaleSpacing(10)} accentColor={accent}>
-          <TerminalText variant="body" style={{ color: muted }}>
-            Select a relic below to inspect its dossier before descent.
-          </TerminalText>
-        </DossierCardShell>
+        <TerminalText variant="caption" style={{ color: muted }}>
+          No relic equipped. Choose one below to arm it for descent.
+        </TerminalText>
       )}
 
+      <LoadoutSectionHeader label="Available Relics" style={{ marginTop: scaleSpacing(2) }} />
       <View style={[styles.list, { gap: scaleSpacing(6) }]}>
         {keepsakes.map((keepsake) => {
           const selected = account.equippedKeepsakeId === keepsake.id;
-          const inspecting = inspectId === keepsake.id;
           return (
             <HapticPressable
               key={keepsake.id}
-              onPress={() => setInspectId(keepsake.id)}
+              onPress={() => handleEquip(keepsake.id)}
               style={(state) => [
                 styles.row,
                 {
-                  borderColor: inspecting ? accent : selected ? `${accent}88` : muted,
-                  backgroundColor: inspecting ? `${accent}18` : selected ? `${accent}10` : 'rgba(0,0,0,0.25)',
+                  borderColor: selected ? accent : muted,
+                  backgroundColor: selected ? `${accent}14` : 'rgba(0,0,0,0.25)',
+                  borderLeftWidth: selected ? 3 : 1,
+                  borderLeftColor: selected ? accent : muted,
                   padding: scaleSpacing(8),
                 },
                 terminalHoverStyle(readPressableHover(state), state.pressed),
               ]}
             >
               <View style={styles.rowHeader}>
-                <TerminalText variant="body" style={{ color: accent, fontWeight: '700', flex: 1 }}>
+                <TerminalText variant="body" style={{ color: selected ? accent : theme.textColor, fontWeight: '700', flex: 1 }}>
                   {keepsake.name.toUpperCase()}
                 </TerminalText>
                 {selected ? (

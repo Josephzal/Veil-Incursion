@@ -5,7 +5,7 @@ import { Grid, GridCell } from './layout/Grid';
 import TacticalTagRow, { parseTagsLine } from './hub/TacticalTagRow';
 import DossierCardShell from './hub/DossierCardShell';
 import TerminalText from './TerminalText';
-import { DOSSIER_CTA_BG, DOSSIER_ROW_BG } from '../constants/dossierSurface';
+import { CARD_BLACK, DOSSIER_ROW_BG } from '../constants/dossierSurface';
 import { useHubLayout } from '../context/HubLayoutContext';
 import { ABILITY_CARD_MIN_HEIGHT } from '../constants/layoutTokens';
 import type { AbilityUnlockCost } from '../types/aegisCombat';
@@ -27,7 +27,7 @@ const MONO = 'monospace';
 
 function loadoutSlotSurface(selected: boolean, accentColor: string, borderColor: string): ViewStyle {
   return {
-    backgroundColor: DOSSIER_CTA_BG,
+    backgroundColor: CARD_BLACK,
     borderColor: selected ? accentColor : borderColor,
     borderWidth: selected ? 2 : 1,
     ...(selected
@@ -126,16 +126,16 @@ export default function ClassLoadoutEditor<T extends string>({
 
   return (
     <View style={styles.root}>
-      <Text style={[styles.title, { color: theme.mutedColor }]}>{title}</Text>
-      <Text style={[styles.hint, { color: theme.mutedColor }]}>{hint}</Text>
+      {title ? <Text style={[styles.title, { color: theme.mutedColor }]}>{title}</Text> : null}
+      {hint ? <Text style={[styles.hint, { color: theme.mutedColor }]}>{hint}</Text> : null}
 
       <DossierCardShell
         padding={panelPadding}
         style={styles.sectionShell}
         contentStyle={styles.sectionContent}
       >
-        <TerminalText variant="panelTitle" letterSpacing={0.8} style={[styles.sectionTitle, { color: theme.accentColor }]}>
-          ACTIVE LOADOUT
+        <TerminalText variant="panelTitle" letterSpacing={0.8} style={[styles.sectionTitle, { color: theme.mutedColor }]}>
+          ACTIVE SLOTS
         </TerminalText>
         <TerminalText variant="caption" style={{ color: theme.mutedColor }}>
           TAP SLOT TO SELECT
@@ -236,7 +236,7 @@ export default function ClassLoadoutEditor<T extends string>({
         style={styles.sectionShell}
         contentStyle={styles.sectionContent}
       >
-        <TerminalText variant="panelTitle" letterSpacing={0.8} style={[styles.sectionTitle, { color: theme.accentColor }]}>
+        <TerminalText variant="panelTitle" letterSpacing={0.8} style={[styles.sectionTitle, { color: theme.mutedColor }]}>
           ABILITY POOL
         </TerminalText>
         <TerminalText variant="caption" style={{ color: theme.mutedColor }}>

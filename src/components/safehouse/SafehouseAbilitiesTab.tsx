@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import AegisLoadoutEditor from '../AegisLoadoutEditor';
 import ClassLoadoutEditor from '../ClassLoadoutEditor';
+import { LoadoutTabHeader } from '../hub/loadoutTabUi';
+import { SELECT_ACCENT } from '../../constants/dossierSurface';
 import { useHubLayout } from '../../context/HubLayoutContext';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useTerminal } from '../../context/TerminalContext';
@@ -123,7 +125,7 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
   );
 
   const editorTheme = {
-    accentColor: theme.statusColor,
+    accentColor: SELECT_ACCENT,
     borderColor: theme.borderColor,
     mutedColor: theme.mutedColor,
     textColor: theme.textColor,
@@ -209,6 +211,10 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
 
   return (
     <View style={[styles.editorHost, { paddingBottom: scaleSpacing(24) }]}>
+        <LoadoutTabHeader
+          title="Ability Deck"
+          subtitle="Four active combat slots. Slot 1 is your class anchor."
+        />
         {account.activeClass === 'AEGIS' ? (
           <AegisLoadoutEditor
             draft={aegisDraft}
@@ -224,7 +230,8 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
             unlockedAbilities={account.unlockedAegisAbilities}
             resourceStash={account.resourceStash}
             theme={editorTheme}
-            hint="Tap a locked ability to spend resources and unlock it. Changes auto-save for your next descent."
+            title=""
+            hint=""
             commitLabel="[ SAVE LOADOUT FOR NEXT RUN ]"
             statusMessage={loadoutStatus}
             hideCommit
@@ -252,8 +259,8 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
             isUnlocked={(id) => isHexShotAbilityUnlocked(account.unlockedHexShotAbilities, id)}
             resourceStash={account.resourceStash}
             theme={editorTheme}
-            title="HEX-SHOT COMBAT LOADOUT // 4 ACTIVE SLOTS"
-            hint="Slot 1 is Silver-Core Sidearm. Phase-Shift Reload and Phantom Feed are intrinsic; Zero-Protocol procs when overcharge and a live debuffed hostile align — not a deck slot. Changes auto-save."
+            title=""
+            hint=""
             commitLabel="[ SAVE LOADOUT FOR NEXT RUN ]"
             statusMessage={loadoutStatus}
             hideCommit
@@ -280,8 +287,8 @@ export default function SafehouseAbilitiesTab(): React.JSX.Element {
             isUnlocked={(id) => isEnvoyAbilityUnlocked(account.unlockedEnvoyAbilities, id)}
             resourceStash={account.resourceStash}
             theme={editorTheme}
-            title="ENVOY COMBAT LOADOUT // 4 ACTIVE SLOTS"
-            hint="Slot 1 is Veil-Splinter. Rift-Ward is automatic; Catalytic Console detonates Veil Rot; Cataclysm Sigil procs at 6+ stacks. Changes auto-save."
+            title=""
+            hint=""
             anchorCostLine={formatClassAbilityCostLine('ENVOY', ENVOY_ANCHOR)}
             commitLabel="[ SAVE LOADOUT FOR NEXT RUN ]"
             statusMessage={loadoutStatus}

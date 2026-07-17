@@ -9,6 +9,7 @@ import { listHubStagedConsumables, isRunItemHubConsumable } from '../../data/hub
 import type { CargoItemId } from '../../types/cargoGrid';
 import { getRunItemDefinitionByAnyId } from '../../data/runItemRegistry';
 import { normalizeHubRunItemId } from '../../data/runItemInventoryEngine';
+import { LoadoutTabHeader, LoadoutSectionHeader } from './loadoutTabUi';
 
 interface RunItemLoadoutPanelProps {
   accent: string;
@@ -54,18 +55,17 @@ export default function RunItemLoadoutPanel({
 
   return (
     <View style={styles.root}>
-      <TerminalText variant="section" letterSpacing={1} style={{ color: accent, marginBottom: 4 }}>
-        [ RUN ITEM LOADOUT ]
-      </TerminalText>
-      <TerminalText variant="caption" style={{ color: muted, marginBottom: 8 }}>
-        One-use combat consumables and field tools — separate from the cargo grid. Select a slot, then tap a staged item.
-      </TerminalText>
+      <LoadoutTabHeader
+        title="Field Kit"
+        subtitle="One-use combat consumables and field tools prepared for descent."
+      />
 
+      <LoadoutSectionHeader label="Active Slots" style={{ marginBottom: 6 }} />
       <RunItemSlotsPanel
         slots={account.runItemLoadout}
         accentColor={accent}
         mutedColor={muted}
-        title="DESCENT SLOTS"
+        title=""
         onSelectCombatSlot={setSelectedCombatSlot}
         onSelectFieldSlot={setSelectedFieldSlot}
         onClearCombatSlot={(slotIndex) => clearRunItemLoadoutSlot('COMBAT', slotIndex)}
@@ -74,9 +74,7 @@ export default function RunItemLoadoutPanel({
         selectedFieldSlot={selectedFieldSlot}
       />
 
-      <TerminalText variant="caption" style={{ color: muted, marginTop: 12, marginBottom: 6 }}>
-        STAGED RUN ITEMS
-      </TerminalText>
+      <LoadoutSectionHeader label="Staged Items" style={{ marginTop: 12, marginBottom: 6 }} />
       <View style={styles.stashList}>
         {stagedRunItems.length === 0 ? (
           <TerminalText variant="caption" style={{ color: muted }}>
@@ -93,12 +91,12 @@ export default function RunItemLoadoutPanel({
                 style={({ pressed }) => [
                   styles.stashRow,
                   {
-                    borderColor: accent,
+                    borderColor: muted,
                     opacity: pressed ? 0.82 : 1,
                   },
                 ]}
               >
-                <TerminalText variant="body" style={{ color: accent, fontWeight: '700' }}>
+                <TerminalText variant="body" style={{ color: '#d8e2dc', fontWeight: '700' }}>
                   {`${entry.name.toUpperCase()} ×${entry.quantity}`}
                 </TerminalText>
                 <TerminalText variant="caption" style={{ color: muted, marginTop: 2 }}>

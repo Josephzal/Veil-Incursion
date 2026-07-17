@@ -10,7 +10,6 @@ import {
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 import Svg, {
-  Circle,
   Defs,
   G,
   Line,
@@ -50,10 +49,6 @@ interface VeilFrontMapProps {
 }
 
 function VeilFrontBlueprintGrid({ width, height }: { width: number; height: number }): React.JSX.Element {
-  const cx = width / 2;
-  const cy = height / 2;
-  const maxRadius = Math.max(width, height) * 0.55;
-
   return (
     <>
       <Defs>
@@ -63,9 +58,6 @@ function VeilFrontBlueprintGrid({ width, height }: { width: number; height: numb
         </Pattern>
       </Defs>
       <Rect x={0} y={0} width={width} height={height} fill="url(#veilFrontGrid)" />
-      {[0.25, 0.5, 0.75, 1].map((ratio) => (
-        <Circle key={ratio} cx={cx} cy={cy} r={maxRadius * ratio} fill="none" stroke="rgba(100, 116, 139, 0.045)" strokeWidth={0.8} />
-      ))}
     </>
   );
 }
@@ -173,11 +165,14 @@ export default function VeilFrontMap({
   return (
     <GestureHandlerRootView style={styles.gestureRoot}>
       <View style={styles.mapMeasure} onLayout={handleHostLayout}>
+        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+          <Svg width={hostSize.width} height={hostSize.height}>
+            <VeilFrontBlueprintGrid width={hostSize.width} height={hostSize.height} />
+          </Svg>
+        </View>
         <GestureDetector gesture={tapGesture}>
           <View style={[styles.mapFrame, { width: canvasWidth, height: canvasHeight }]}>
             <Svg width={canvasWidth} height={canvasHeight}>
-              <VeilFrontBlueprintGrid width={canvasWidth} height={canvasHeight} />
-
               {mapDefinitions.map((sector) => {
                 const sectorState = sectorById.get(sector.id);
                 const veilBiome = sectorState?.veilBiome ?? 'NULL_ZONE';

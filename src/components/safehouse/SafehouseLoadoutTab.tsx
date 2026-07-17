@@ -3,6 +3,7 @@ import { Image, LayoutChangeEvent, Platform, StyleSheet, View } from 'react-nati
 import TerminalText from '../TerminalText';
 import CargoPackingPanel from '../CargoPackingPanel';
 import DossierCardShell from '../hub/DossierCardShell';
+import { LoadoutTabHeader, LoadoutSectionHeader } from '../hub/loadoutTabUi';
 import SafehouseStashPanel from './SafehouseStashPanel';
 import { DOSSIER_FOREGROUND } from '../../constants/dossierSurface';
 import type { CargoDragSource } from '../CargoGridBoard';
@@ -200,6 +201,10 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
 
   return (
     <View ref={rootRef} style={styles.root}>
+      <LoadoutTabHeader
+        title="Cargo Hold"
+        subtitle="Recovered resources are stored here during the run. Unstable cargo may alter descent conditions."
+      />
       <View style={[styles.split, isDesktop && styles.splitDesktop, { gap: scaleSpacing(10) }]}>
         <DossierCardShell
           fillHeight
@@ -246,9 +251,8 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
           ]}
           contentStyle={styles.deploymentContent}
         >
-          <TerminalText variant="panelTitle" letterSpacing={0.8} style={[styles.deploymentTitle, { color: accent, marginBottom: scaleSpacing(4) }]}>
-            TACTICAL CARGO
-          </TerminalText>
+          <LoadoutSectionHeader label="Current Cargo Grid" style={[styles.deploymentTitle, { marginBottom: scaleSpacing(4) }]} />
+
           {specialPreRunStacks > 0 ? (
             <TerminalText variant="caption" style={{ color: accent, marginBottom: scaleSpacing(4) }}>
               {`${specialPreRunStacks} special stack(s) staged — post-run routing on extract.`}

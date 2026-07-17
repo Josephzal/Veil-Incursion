@@ -137,7 +137,7 @@ export function formatContractJobType(kind: ContractObjectiveKind): string {
 /** Difficulty (1-5) mapped to a risk tier chip: white → yellow → orange → red. */
 export function formatContractRiskTier(difficulty: number): { label: string; color: string } {
   if (difficulty <= 2) return { label: 'LOW RISK', color: '#94a3b8' };
-  if (difficulty <= 3) return { label: 'MED RISK', color: '#facc15' };
-  if (difficulty <= 4) return { label: 'HIGH RISK', color: '#f97316' };
+  if (difficulty <= 3) return { label: 'MED RISK', color: '#cbd5e1' };
+  if (difficulty <= 4) return { label: 'HIGH RISK', color: '#f87171' };
   return { label: 'EXTREME', color: '#ef4444' };
 }

@@ -34,9 +34,11 @@ export default function RunItemSlotsPanel({
 }: RunItemSlotsPanelProps): React.JSX.Element {
   return (
     <View style={styles.root}>
-      <TerminalText variant="section" style={[styles.title, { color: accentColor }]}>
-        {title}
-      </TerminalText>
+      {title ? (
+        <TerminalText variant="section" style={[styles.title, { color: accentColor }]}>
+          {title}
+        </TerminalText>
+      ) : null}
       <TerminalText variant="caption" style={{ color: mutedColor, marginBottom: 6 }}>
         COMBAT CONSUMABLES
       </TerminalText>

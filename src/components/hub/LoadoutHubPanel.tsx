@@ -15,14 +15,13 @@ import { CLASS_DEFINITIONS } from '../../data/classes';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useTerminal } from '../../context/TerminalContext';
 import { useHubLayout } from '../../context/HubLayoutContext';
-import { useTerminalNavOptional } from '../../context/TerminalNavContext';
-import { useWorldState } from '../../context/WorldStateContext';
 import { getEquippedWeaponForClass, getWeaponTier, resolveWeaponState } from '../../data/weaponProgressionEngine';
 import { getKeepsakeDefinition } from '../../data/expeditionKeepsakeRegistry';
 import { getRunItemDefinitionByAnyId } from '../../data/runItemRegistry';
 import { resolveClassAbilityCost } from '../../data/classAbilityResolver';
-import { sponsorDisplayName } from '../../utils/contractUi';
 import { HUB_DATA_DIVIDER } from '../../styles/hubTerminalUi';
+import { SELECT_ACCENT } from '../../constants/dossierSurface';
+import { LoadoutSectionHeader } from './loadoutTabUi';
 import { HIDDEN_SCROLLVIEW_PROPS, mergeHiddenScrollbarStyle } from '../../utils/hiddenScrollbarStyle';
 import { readPressableHover, terminalHoverStyle } from '../../utils/terminalHoverStyle';
 
@@ -31,16 +30,15 @@ type LoadoutCategory = 'CHASSIS' | 'RELIC' | 'DECK' | 'FIELD_KIT' | 'CARGO';
 interface CategoryMeta {
   key: LoadoutCategory;
   label: string;
-  glyph: string;
   accent: string;
 }
 
 const CATEGORIES: CategoryMeta[] = [
-  { key: 'CHASSIS', label: 'CHASSIS', glyph: '⚔', accent: '#f59e0b' },
-  { key: 'RELIC', label: 'RELIC', glyph: '◈', accent: '#a78bfa' },
-  { key: 'DECK', label: 'DECK', glyph: '▤', accent: '#4ade80' },
-  { key: 'FIELD_KIT', label: 'FIELD KIT', glyph: '▣', accent: '#38bdf8' },
-  { key: 'CARGO', label: 'CARGO', glyph: '▦', accent: '#94a3b8' },
+  { key: 'CHASSIS', label: 'CHASSIS', accent: '#f59e0b' },
+  { key: 'RELIC', label: 'RELIC', accent: '#a78bfa' },
+  { key: 'DECK', label: 'DECK', accent: '#4ade80' },
+  { key: 'FIELD_KIT', label: 'FIELD KIT', accent: '#38bdf8' },
+  { key: 'CARGO', label: 'CARGO', accent: '#94a3b8' },
 ];
 
 function withAlpha(hex: string, alphaHex: string): string {
@@ -101,14 +99,13 @@ export default function LoadoutHubPanel(): React.JSX.Element {
   const { theme, profile } = useTerminal();
   const { account } = usePlayerAccount();
   const { isDesktop, scaleSpacing, scaleFont } = useHubLayout();
-  const nav = useTerminalNavOptional();
-  const { persisted } = useWorldState();
   const [activeCategory, setActiveCategory] = useState<LoadoutCategory>('CHASSIS');
 
   const classDef = CLASS_DEFINITIONS[account.activeClass];
   const accent = theme.statusColor;
   const muted = theme.mutedColor;
-  const categoryAccent = CATEGORIES.find((c) => c.key === activeCategory)?.accent ?? accent;
+  // Amber is the universal selection/active color across hub screens.
+  const categoryAccent = SELECT_ACCENT;
 
   const weaponDisplay = useMemo(() => {
     const progression = {
@@ -146,30 +143,14 @@ export default function LoadoutHubPanel(): React.JSX.Element {
     return { combat, field, emptyCount };
   }, [account.runItemLoadout]);
 
-  const selectedContract = persisted.contractBoard.selectedContract;
-  const contractLabel = selectedContract.kind === 'SPONSOR'
-    ? `${sponsorDisplayName(selectedContract.contract.sponsorId)} // ${selectedContract.contract.title}`
-    : 'Independent Breach';
-
-  const readiness = useMemo(() => {
-    const items: Array<{ label: string; ok: boolean }> = [
-      { label: 'Weapon', ok: true },
-      { label: 'Relic', ok: account.equippedKeepsakeId != null },
-      { label: 'Deck', ok: abilityLoadout.length === 4 },
-      { label: 'Field Kit', ok: fieldKit.emptyCount === 0 },
-      { label: 'Contract', ok: true },
-    ];
-    return items;
-  }, [account.equippedKeepsakeId, abilityLoadout.length, fieldKit.emptyCount]);
-
-  const handleReadyForDescent = () => {
-    nav?.setTerminalView('MAP');
-  };
-
   const renderCategoryBody = (): React.JSX.Element => {
     switch (activeCategory) {
       case 'RELIC':
-        return <KeepsakeLoadoutPanel accent={categoryAccent} muted={muted} />;
+        return (
+          <DossierCardShell padding={scaleSpacing(10)} accentColor={categoryAccent}>
+            <KeepsakeLoadoutPanel accent={categoryAccent} muted={muted} />
+          </DossierCardShell>
+        );
       case 'DECK':
         return (
           <DossierCardShell padding={scaleSpacing(10)} accentColor={categoryAccent}>
@@ -193,14 +174,13 @@ export default function LoadoutHubPanel(): React.JSX.Element {
   };
 
   const descentKit = (
-    <View style={[styles.kitColumn, { gap: scaleSpacing(6), width: isDesktop ? 236 : undefined }]}>
-      <TerminalText size={scaleFont(5.4)} letterSpacing={0.9} style={{ color: muted, fontWeight: '800' }}>
-        DESCENT KIT
-      </TerminalText>
+    <View style={[styles.kitColumn, { gap: scaleSpacing(10), width: isDesktop ? 280 : undefined }]}>
+      <LoadoutSectionHeader label="Descent Kit" />
+
       <KitSlot
         label="WEAPON"
         value={weaponDisplay}
-        accent={CATEGORIES[0].accent}
+        accent={SELECT_ACCENT}
         active={activeCategory === 'CHASSIS'}
         muted={muted}
         textColor={theme.textColor}
@@ -211,7 +191,7 @@ export default function LoadoutHubPanel(): React.JSX.Element {
       <KitSlot
         label="RELIC"
         value={relicName}
-        accent={CATEGORIES[1].accent}
+        accent={SELECT_ACCENT}
         active={activeCategory === 'RELIC'}
         muted={muted}
         textColor={theme.textColor}
@@ -221,7 +201,7 @@ export default function LoadoutHubPanel(): React.JSX.Element {
       />
       <KitSlot
         label="ABILITY DECK"
-        accent={CATEGORIES[2].accent}
+        accent={SELECT_ACCENT}
         active={activeCategory === 'DECK'}
         muted={muted}
         textColor={theme.textColor}
@@ -237,7 +217,7 @@ export default function LoadoutHubPanel(): React.JSX.Element {
       </KitSlot>
       <KitSlot
         label="FIELD KIT"
-        accent={CATEGORIES[3].accent}
+        accent={SELECT_ACCENT}
         active={activeCategory === 'FIELD_KIT'}
         muted={muted}
         textColor={theme.textColor}
@@ -252,17 +232,6 @@ export default function LoadoutHubPanel(): React.JSX.Element {
           {`Field: ${fieldKit.field.join(' / ')}`}
         </TerminalText>
       </KitSlot>
-      <KitSlot
-        label="CARGO"
-        value="Containment grid"
-        accent={CATEGORIES[4].accent}
-        active={activeCategory === 'CARGO'}
-        muted={muted}
-        textColor={theme.textColor}
-        onPress={() => setActiveCategory('CARGO')}
-        scaleFont={scaleFont}
-        scaleSpacing={scaleSpacing}
-      />
     </View>
   );
 
@@ -287,16 +256,6 @@ export default function LoadoutHubPanel(): React.JSX.Element {
             mini
             hideManifest
           />
-          <View style={[styles.identityMeta, { borderTopColor: HUB_DATA_DIVIDER, marginTop: scaleSpacing(6), paddingTop: scaleSpacing(6), gap: scaleSpacing(2) }]}>
-            <TerminalText size={scaleFont(5.4)} numberOfLines={1} style={{ color: muted }}>
-              {`WEAPON  `}
-              <TerminalText size={scaleFont(5.4)} style={{ color: theme.textColor, fontWeight: '700' }}>{weaponDisplay}</TerminalText>
-            </TerminalText>
-            <TerminalText size={scaleFont(5.4)} numberOfLines={1} style={{ color: muted }}>
-              {`CONTRACT  `}
-              <TerminalText size={scaleFont(5.4)} style={{ color: theme.textColor, fontWeight: '700' }}>{contractLabel}</TerminalText>
-            </TerminalText>
-          </View>
         </DossierCardShell>
 
         <View style={[styles.categoryNav, { marginTop: scaleSpacing(8), marginBottom: scaleSpacing(8), gap: scaleSpacing(6) }]}>
@@ -310,8 +269,8 @@ export default function LoadoutHubPanel(): React.JSX.Element {
                   styles.categoryTab,
                   isDesktop && styles.categoryTabDesktop,
                   {
-                    borderColor: active ? item.accent : theme.borderColor,
-                    backgroundColor: active ? withAlpha(item.accent, '18') : 'rgba(0, 0, 0, 0.35)',
+                    borderColor: active ? SELECT_ACCENT : theme.borderColor,
+                    backgroundColor: active ? withAlpha(SELECT_ACCENT, '18') : 'rgba(0, 0, 0, 0.35)',
                   },
                   terminalHoverStyle(readPressableHover(state), state.pressed),
                 ]}
@@ -319,9 +278,9 @@ export default function LoadoutHubPanel(): React.JSX.Element {
                 <TerminalText
                   variant="body"
                   letterSpacing={0.8}
-                  style={{ color: active ? item.accent : theme.mutedColor, fontWeight: '700' }}
+                  style={{ color: active ? SELECT_ACCENT : theme.mutedColor, fontWeight: '700' }}
                 >
-                  {`${item.glyph} ${item.label}`}
+                  {item.label}
                 </TerminalText>
               </HapticPressable>
             );
@@ -333,7 +292,7 @@ export default function LoadoutHubPanel(): React.JSX.Element {
             {activeCategory === 'CARGO' ? (
               <SafehouseLoadoutTab />
             ) : (
-              <View style={[styles.prepRow, isDesktop && styles.prepRowDesktop, { gap: scaleSpacing(10) }]}>
+              <View style={[styles.prepRow, isDesktop && styles.prepRowDesktop, { gap: scaleSpacing(isDesktop ? 24 : 12) }]}>
                 {descentKit}
                 <View style={styles.centerColumn}>
                   <ScrollView
@@ -348,38 +307,6 @@ export default function LoadoutHubPanel(): React.JSX.Element {
               </View>
             )}
           </TerminalGlitchTransition>
-        </View>
-
-        <View style={[styles.actionBar, { borderTopColor: HUB_DATA_DIVIDER, paddingTop: scaleSpacing(8), marginTop: scaleSpacing(6), gap: scaleSpacing(8) }]}>
-          <View style={styles.readinessRow}>
-            <TerminalText size={scaleFont(5)} letterSpacing={0.6} style={{ color: '#4ade80', fontWeight: '800' }}>
-              ● LOADOUT SAVED
-            </TerminalText>
-            {readiness.map((item) => (
-              <TerminalText
-                key={item.label}
-                size={scaleFont(5)}
-                style={{ color: item.ok ? theme.mutedColor : '#f59e0b', fontWeight: '700' }}
-              >
-                {`${item.ok ? '✓' : '!'} ${item.label}`}
-              </TerminalText>
-            ))}
-          </View>
-          <HapticPressable
-            onPress={handleReadyForDescent}
-            style={(state) => [
-              styles.descentButton,
-              {
-                borderColor: accent,
-                backgroundColor: withAlpha(accent, '1c'),
-              },
-              terminalHoverStyle(readPressableHover(state), state.pressed),
-            ]}
-          >
-            <TerminalText variant="body" letterSpacing={1} style={{ color: accent, fontWeight: '800' }}>
-              [ READY FOR DESCENT ]
-            </TerminalText>
-          </HapticPressable>
         </View>
       </View>
     </HubScreenShell>
@@ -397,9 +324,6 @@ const styles = StyleSheet.create({
   },
   identityStrip: {
     flexShrink: 0,
-  },
-  identityMeta: {
-    borderTopWidth: 1,
   },
   categoryNav: {
     flexDirection: 'row',
@@ -455,29 +379,5 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-  },
-  actionBar: {
-    flexShrink: 0,
-    borderTopWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-  },
-  readinessRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
-    minWidth: 0,
-  },
-  descentButton: {
-    borderWidth: 1,
-    borderLeftWidth: 3,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });
