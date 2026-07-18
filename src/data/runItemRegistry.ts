@@ -14,7 +14,7 @@ export const RUN_ITEM_REGISTRY: Record<RunItemId, RunItemDefinition> = {
     description: 'Field-grade tissue sealant — restores a chunk of Soul Anchor under fire.',
     flavorText: 'Legion-issue clotting gel in a single-use ampoule.',
     effectSummary: 'Restore 25% HP; below 30% HP also gain 1 temporary shield.',
-    recipe: [{ resourceId: 'ley-slag', quantity: 2 }],
+    recipe: [{ resourceId: 'ley-slag', quantity: 1 }],
     marketPrice: 45,
     canCraft: true,
     canBuy: true,
@@ -91,7 +91,7 @@ export const RUN_ITEM_REGISTRY: Record<RunItemId, RunItemDefinition> = {
     recipe: [
       { resourceId: 'nullcrete-shard', quantity: 1 },
       { resourceId: 'combustion-cylinder', quantity: 1 },
-      { resourceId: 'ley-slag', quantity: 1 },
+      { resourceId: 'cinder-wire', quantity: 1 },
     ],
     marketPrice: 75,
     canCraft: true,
@@ -193,7 +193,7 @@ export const RUN_ITEM_REGISTRY: Record<RunItemId, RunItemDefinition> = {
     effectSummary: 'Place delayed AoE charge; early hits cause reduced immediate detonation.',
     recipe: [
       { resourceId: 'combustion-cylinder', quantity: 1 },
-      { resourceId: 'ley-slag', quantity: 1 },
+      { resourceId: 'cinder-wire', quantity: 1 },
     ],
     marketPrice: 65,
     canCraft: true,
@@ -295,7 +295,7 @@ export const RUN_ITEM_REGISTRY: Record<RunItemId, RunItemDefinition> = {
     effectSummary: 'Interrupt charging/channeling enemy or apply minor Fracture if not interruptible.',
     recipe: [
       { resourceId: 'legion-blood-iron', quantity: 1 },
-      { resourceId: 'ley-slag', quantity: 2 },
+      { resourceId: 'combustion-cylinder', quantity: 1 },
     ],
     marketPrice: 100,
     canCraft: true,
@@ -320,7 +320,7 @@ export const RUN_ITEM_REGISTRY: Record<RunItemId, RunItemDefinition> = {
     effectSummary: 'Apply Razorwire for 1 round: enemies cannot move/swap/evade/intercept; fallback Rooted on up to 2 enemies.',
     recipe: [
       { resourceId: 'legion-blood-iron', quantity: 1 },
-      { resourceId: 'ley-slag', quantity: 2 },
+      { resourceId: 'cinder-wire', quantity: 2 },
       { resourceId: 'echo-glass-shard', quantity: 1 },
     ],
     marketPrice: 95,
@@ -371,7 +371,6 @@ export const RUN_ITEM_REGISTRY: Record<RunItemId, RunItemDefinition> = {
     effectSummary: 'Reroll current Black Market inventory; one item becomes Broker-Marked (−35% price, corrupts a future node).',
     recipe: [
       { resourceId: 'encrypted-grid-drive', quantity: 1 },
-      { resourceId: 'ley-slag', quantity: 2 },
       { resourceId: 'echo-glass-shard', quantity: 2 },
     ],
     marketPrice: 90,
@@ -556,7 +555,8 @@ export const RUN_ITEM_REGISTRY: Record<RunItemId, RunItemDefinition> = {
     effectSummary: 'Current resource harvest gains +2 stable resource rolls; applies post-harvest risk hook.',
     recipe: [
       { resourceId: 'rail-capacitor', quantity: 1 },
-      { resourceId: 'ley-slag', quantity: 3 },
+      { resourceId: 'cinder-wire', quantity: 2 },
+      { resourceId: 'nullcrete-shard', quantity: 1 },
     ],
     marketPrice: 110,
     canCraft: true,
@@ -608,7 +608,7 @@ export const RUN_ITEM_REGISTRY: Record<RunItemId, RunItemDefinition> = {
     recipe: [
       { resourceId: 'anchor-marrow', quantity: 1 },
       { resourceId: 'echo-glass-shard', quantity: 2 },
-      { resourceId: 'ley-slag', quantity: 1 },
+      { resourceId: 'resonant-filament', quantity: 1 },
     ],
     marketPrice: 115,
     canCraft: true,

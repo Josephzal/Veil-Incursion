@@ -17,6 +17,7 @@ import { patchKeepsakeStats, incrementKeepsakeCounter } from './keepsakeRunState
 import { resolveBlackMarketListingPrice } from './blackMarket';
 import { localProceduralDepth } from './proceduralScannerBridge';
 import { getResourceCategory } from './resourceRegistry';
+import { canBankCargoItemId } from './cargoOwnershipEngine';
 import {
   bankSingleCargoInstance,
   recordResourcesBanked,
@@ -433,13 +434,17 @@ function bankSmallestCargoItem(
   const candidates = [
     ...cargo.containment.map((item) => ({
       instanceId: item.instanceId,
+      itemId: item.itemId,
       value: containmentItemValue(item),
     })),
     ...cargo.grid.placed.map((item) => ({
       instanceId: item.instanceId,
+      itemId: item.itemId,
       value: item.currentValue,
     })),
-  ].sort((a, b) => a.value - b.value);
+  ]
+    .filter((entry) => canBankCargoItemId(entry.itemId))
+    .sort((a, b) => a.value - b.value);
   const smallest = candidates[0];
   if (!smallest) return null;
   const result = bankSingleCargoInstance(cargo, bank, smallest.instanceId);

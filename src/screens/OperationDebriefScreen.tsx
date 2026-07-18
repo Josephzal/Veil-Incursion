@@ -10,6 +10,10 @@ import { useTerminal } from '../context/TerminalContext';
 import TerminalSafeArea from '../components/TerminalSafeArea';
 import { useImmersiveScreenPadding } from '../hooks/useImmersiveScreenPadding';
 import { formatDebriefResourceLine } from '../data/runDebriefResourceEngine';
+import { buildDebriefSourceHintLines } from '../data/resourceSourceHintEngine';
+import { getAccountProgressionProfile } from '../data/progressionDebugEngine';
+import { ensureEconomyRunTelemetry } from '../data/economyRunTelemetryEngine';
+import { createEmptyRunResourceLedger } from '../types/runResourceLedger';
 import { formatUnstableCargoDebriefLine } from '../data/runDebriefUnstableCargoEngine';
 import {
   formatEchoDebriefContributionLine,
@@ -56,7 +60,6 @@ import {
   buildDebriefProgressionTheater,
   type DebriefTheaterCard,
 } from '../data/debriefProgressionTheaterEngine';
-import { getAccountProgressionProfile } from '../data/progressionDebugEngine';
 import { maxPinnedGoalSlots } from '../data/pinnedGoalEngine';
 import { SELECT_ACCENT } from '../constants/dossierSurface';
 
@@ -224,8 +227,14 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
     const key = `${balanceTelemetry.extractionType}:${balanceTelemetry.nodesCleared}:${balanceTelemetry.sectorId ?? ''}:${balanceTelemetry.timeAliveMs ?? 0}`;
     if (recordedBalanceRunRef.current === key) return;
     recordedBalanceRunRef.current = key;
-    recordCareerBalanceTelemetry(balanceTelemetry);
-  }, [balanceTelemetry, recordCareerBalanceTelemetry]);
+    recordCareerBalanceTelemetry(balanceTelemetry, {
+      run: {
+        ...ensureEconomyRunTelemetry(pendingDebrief.economyRunTelemetry),
+        recipesNewlyCraftable: pendingDebrief.craftingOpportunities?.newlyCraftable?.length ?? 0,
+      },
+      ledger: pendingDebrief.runResourceLedger ?? createEmptyRunResourceLedger(),
+    });
+  }, [balanceTelemetry, recordCareerBalanceTelemetry, pendingDebrief]);
 
   const progressionTheater = useMemo(() => {
     if (!pendingDebrief) {
@@ -307,6 +316,16 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
       ? buildDeathCargoRoutingSummary(runResourceLedger, cargoRoutingRunState)
       : null
   ), [isFailure, runResourceLedger, cargoRoutingRunState]);
+
+  const sourceHintLines = useMemo(() => {
+    const profile = getAccountProgressionProfile(account);
+    return buildDebriefSourceHintLines({
+      profile,
+      extracted: runResourceLedger?.extracted,
+      stash: account.resourceStash,
+      discovery: account.resourceDiscovery,
+    });
+  }, [account, runResourceLedger?.extracted]);
 
   const routingValidationIssues = useMemo(() => (
     routingState?.requiresRouting
@@ -1366,6 +1385,17 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
                           </Text>
                         ))}
                       </View>
+                    ))}
+                  </>
+                ) : null}
+                {sourceHintLines.length > 0 ? (
+                  <>
+                    <View style={styles.sectionGap} />
+                    <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>SOURCE INTEL</Text>
+                    {sourceHintLines.map((line) => (
+                      <Text key={line} style={[styles.stat, { color: theme.mutedColor }]}>
+                        {line}
+                      </Text>
                     ))}
                   </>
                 ) : null}

@@ -1,4 +1,5 @@
 import type { SectorId } from './worldState';
+import type { UnstableCargoEffectId } from './unstableCargoEffects';
 
 export type ResourceItemId =
   | 'ley-slag'
@@ -49,6 +50,17 @@ export type ResourcePrimaryRole =
   | 'OCCULT_CARGO'
   | 'EXPLOSIVE_MATERIAL'
   | 'UNIDENTIFIED_CONTAINER';
+
+/** Depth band where a resource is expected to appear (1 = shallow, 3 = deep). */
+export type ResourceDepthIndex = 1 | 2 | 3;
+
+/** Phase 2B — spawn / identity depth metadata (drop tables use this in 2E+). */
+export interface ResourceDepthRules {
+  minDepth: ResourceDepthIndex;
+  maxDepth: ResourceDepthIndex;
+  /** Depths with elevated identity weight. Empty = uniform within [min, max]. */
+  preferredDepths: readonly ResourceDepthIndex[];
+}
 
 /** Fine-grained usage tags for contract generation and system eligibility. */
 export type ResourceUsageTag =
@@ -110,27 +122,51 @@ export type ResourceUsageTag =
 
 export interface ResourceItemDefinition {
   id: ResourceItemId;
-  /** Full display name for detail views. */
+  /** Full display name for detail views. Alias: displayName. */
   name: string;
   /** Compact label for chips, cards, and cramped UI. */
   shortName: string;
   /** Player-facing description for tooltips and contract copy. */
-  description?: string;
+  description: string;
   category: ResourceCategory;
   primaryRole: ResourcePrimaryRole;
+  /** Fine-grained tags (Phase 2B `tags`). */
   usageTags: readonly ResourceUsageTag[];
   /** Drop / UI rarity band. */
   rarity: ResourceRarity;
+  /**
+   * Sectors where this resource is a farming identity target.
+   * Must be a non-empty subset of validSectorIds.
+   */
+  primarySectors: readonly SectorId[];
+  /** Secondary / crossover drop contexts (events, residues, blacksite, etc.). */
+  secondarySources: readonly string[];
+  /** Depth identity band — drop engines consume this in Phase 2E+. */
+  depthRules: ResourceDepthRules;
   /** Short player-facing source guidance (crafting missing hints, UI). */
   sourceHint: string;
   /** At least two intended systems / recipe / economy uses (validation). */
   intendedUses: readonly string[];
   gridWidth: number;
   gridHeight: number;
+  /**
+   * Max units in one in-run cargo stack (one grid footprint).
+   * Extraction tension lives here — not in stash.
+   */
+  cargoStackCap: number;
+  /**
+   * Max units tracked as one logical stash stack at the hub.
+   * Stash is quantity-map storage; this is soft policy / UI guidance.
+   */
+  stashStackCap: number;
+  /**
+   * @deprecated Alias of cargoStackCap — kept for routing / legacy callers.
+   * Prefer cargoStackCap for new code.
+   */
   maxStack: number;
   /** In-run cargo extraction / market friction value. */
   baseCapitalValue: number;
-  /** Hub fence sell price in Cabal Credits. 0 when not fence-eligible. */
+  /** Hub fence sell price in Cabal Credits. 0 when not fence-eligible. Alias: baseSellValue. */
   sellValue: number;
   /** Legacy influence yield metadata (deprecated donation system). */
   ipValue: number;
@@ -139,10 +175,18 @@ export interface ResourceItemDefinition {
   canBeSoldToFence: boolean;
   canBeContractTarget: boolean;
   canBeOperationTarget: boolean;
+  /**
+   * Mid-run safehouse banking. Apex cargo is usually false — must extract.
+   * Banked cargo survives death; carried cargo does not.
+   */
   canBeBankedAtSafehouse: boolean;
   requiresExtractionForValue: boolean;
   lostOnDeathIfUnbanked: boolean;
   canStack: boolean;
+  /** True when this resource applies an unstable carried effect while physically held. */
+  hasCarriedEffect: boolean;
+  /** Carried-effect id when hasCarriedEffect; otherwise null. */
+  carriedEffectId: UnstableCargoEffectId | null;
   /** Future hook — unboxing/appraisal at hub. */
   canOpenAtHub: boolean;
   canOpenInRun: boolean;

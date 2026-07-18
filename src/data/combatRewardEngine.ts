@@ -1,17 +1,26 @@
 import type { ResourceItemId } from '../types/resourceItem';
 import type { EnemyCombatProfile } from '../types/run';
+import type { BreachGradeId } from '../types/progression';
 import { collectEnemyResourceLoot } from './enemyResourceDrops';
 import { ENEMY_ROSTER, type EnemyRosterId } from './enemyRoster';
 import {
   compositionExtraLootIds,
   compositionRareLootBonusPct,
 } from './encounterCompositionRewardEngine';
-import { applyBriefResourceStressToPool } from './runWorldBriefBiasEngine';
 import {
-  rollExpansionIdentityExtras,
   sectorIdentityResourcePool,
 } from './resourceDropIdentityEngine';
 import { getDistrictFromDepth } from './districtPacing';
+import {
+  filterResourcesForDepth,
+  pickWeightedForDepth,
+} from './depthResourceRulesEngine';
+import type { ResourceDepthIndex } from '../types/resourceItem';
+import {
+  resolveCombatRewardNodeKind,
+  rollNodeRewardPackets,
+  sectorIdFromVeilBiome,
+} from './resourceRewardPacketEngine';
 
 export { collectEnemyResourceLoot } from './enemyResourceDrops';
 
@@ -56,8 +65,6 @@ const COMMON_STAPLES: ResourceItemId[] = [
   'cinder-wire',
 ];
 
-const GATEKEEPER_DROPS: ResourceItemId[] = ['anomalous-core', 'sealed-containment-casket'];
-
 const FACTION_BIAS: Record<CombatLootProfile, ResourceItemId[]> = {
   STANDARD: ['ley-slag', 'echo-glass-shard', 'nullcrete-shard', 'cinder-wire'],
   SOLARIS: ['sanguine-ampoule', 'ossified-ley-knot', 'mycelial-ichor', 'breach-thread'],
@@ -97,6 +104,12 @@ export interface CombatRewardContext {
   /** RunWorldBrief — prioritize crisis-stressed resources in salvage rolls. */
   stressedResourceIds?: ResourceItemId[];
   briefRewardBias?: import('../types/runWorldBrief').RunRewardBias | null;
+  /** Phase 2F — Breach Grade packet quality (not pile multipliers). */
+  breachGrade?: BreachGradeId | null;
+  contractTargetIds?: readonly ResourceItemId[];
+  operationTargetIds?: readonly ResourceItemId[];
+  /** Force packet node kind (RESOURCE_ANOMALY / BOSS / etc.). */
+  rewardNodeKind?: import('../types/resourceRewardPacket').RewardNodeKind | null;
 }
 
 export function lootDepthTierFromDepth(depth: number): LootDepthTier {
@@ -109,6 +122,15 @@ export function tierResourcePool(tier: LootDepthTier): ResourceItemId[] {
   if (tier === 1) return [...TIER_1_POOL];
   if (tier === 2) return [...TIER_1_POOL, ...TIER_2_ADD];
   return [...TIER_1_POOL, ...TIER_2_ADD, ...TIER_3_ADD];
+}
+
+/** Phase 2E — tier pool filtered by district depth rules + category policy. */
+export function depthAwareTierResourcePool(
+  tier: LootDepthTier,
+  districtDepth: ResourceDepthIndex,
+  opts?: { isElite?: boolean; highRisk?: boolean },
+): ResourceItemId[] {
+  return filterResourcesForDepth(tierResourcePool(tier), districtDepth, opts);
 }
 
 export function resolveCombatLootProfile(rosterId?: string | null): CombatLootProfile {
@@ -137,54 +159,44 @@ function pickFromPool(pool: ResourceItemId[], rng: () => number): ResourceItemId
   return pool[Math.floor(rng() * pool.length)];
 }
 
-function pickBiasedFromPool(
-  pool: ResourceItemId[],
+function factionRarePool(
   profile: CombatLootProfile,
-  rng: () => number,
-  veilBiome?: import('../types/encounterSpawn').VeilBiome | null,
-): ResourceItemId {
-  const sectorBias = sectorIdentityResourcePool(veilBiome).filter((id) => pool.includes(id));
-  if (sectorBias.length > 0 && rng() < 0.55) {
-    return pickFromPool(sectorBias, rng);
-  }
-  const biasPool = FACTION_BIAS[profile].filter((id) => pool.includes(id));
-  if (biasPool.length > 0 && rng() < 0.7) {
-    return pickFromPool(biasPool, rng);
-  }
-  return pickFromPool(pool, rng);
-}
-
-function factionRarePool(profile: CombatLootProfile, tier: LootDepthTier): ResourceItemId[] {
-  const pool = tierResourcePool(tier);
+  tier: LootDepthTier,
+  districtDepth: ResourceDepthIndex,
+  opts?: { isElite?: boolean; highRisk?: boolean },
+): ResourceItemId[] {
+  const pool = depthAwareTierResourcePool(tier, districtDepth, opts);
   const biased = FACTION_BIAS[profile].filter((id) => pool.includes(id));
   if (biased.length > 0) return biased;
   const rare = pool.filter((id) => !COMMON_STAPLES.includes(id));
   return rare.length > 0 ? rare : pool;
 }
 
-function pickEliteDrops(
-  profile: CombatLootProfile,
-  tier: LootDepthTier,
-  rng: () => number,
-): ResourceItemId[] {
-  const rare = factionRarePool(profile, tier);
-  return [pickFromPool(rare, rng), pickFromPool(rare, rng)];
-}
-
+/**
+ * Phase 2F — combat salvage = enemy tables + reward packets (+ light composition/occult).
+ * Gatekeeper bosses still receive BOSS packets; locked containers remain separate.
+ */
 export function rollCombatResourceDrops(ctx: CombatRewardContext): ResourceItemId[] {
   const seed = ctx.seed ?? `combat-loot:${ctx.depth}:${ctx.rosterId ?? 'unknown'}`;
   const rng = createSeededRng(seed);
   const tier = lootDepthTierFromDepth(ctx.depth);
   const profile = resolveCombatLootProfile(ctx.rosterId);
   const drops: ResourceItemId[] = [];
+  const districtDepth = (ctx.districtDepth ?? getDistrictFromDepth(ctx.depth)) as ResourceDepthIndex;
+  const depthOpts = {
+    isElite: ctx.isElite || ctx.isGatekeeper,
+    highRisk: Boolean(
+      ctx.highRisk
+      || ctx.rewardTier === 'APEX_CHANCE'
+      || ctx.rewardTier === 'RARE'
+      || ctx.isGatekeeper,
+    ),
+  };
 
-  if (ctx.isGatekeeper) {
-    return [];
-  }
-
-  const enemyLoot = ctx.slainEnemies?.length
+  const rawEnemyLoot = ctx.slainEnemies?.length
     ? collectEnemyResourceLoot(ctx.slainEnemies, seed)
     : [];
+  const enemyLoot = filterResourcesForDepth(rawEnemyLoot, districtDepth, depthOpts);
   drops.push(...enemyLoot);
 
   const compositionRarePct = compositionRareLootBonusPct(ctx.rewardTier);
@@ -192,85 +204,70 @@ export function rollCombatResourceDrops(ctx: CombatRewardContext): ResourceItemI
   if (ctx.briefRewardBias?.rareLootMultiplier && ctx.briefRewardBias.rareLootMultiplier > 1) {
     rareLootBonusPct += Math.min(12, Math.round((ctx.briefRewardBias.rareLootMultiplier - 1) * 80));
   }
-  const stressedIds = ctx.stressedResourceIds?.length ? ctx.stressedResourceIds : undefined;
-  const compositionExtras = compositionExtraLootIds({
-    tier: ctx.rewardTier,
-    templateId: ctx.compositionTemplateId,
-    veilBiome: ctx.veilBiome,
-    highValue: ctx.highValue,
+
+  const nodeKind = ctx.rewardNodeKind ?? resolveCombatRewardNodeKind({
+    isElite: ctx.isElite,
+    isBoss: ctx.isGatekeeper,
+    isGatekeeper: ctx.isGatekeeper,
     echoSignal: ctx.echoSignal,
     anchorSignal: ctx.anchorSignal,
   });
-  const districtDepth = ctx.districtDepth ?? getDistrictFromDepth(ctx.depth);
-  const identityExtras = rollExpansionIdentityExtras({
+
+  const packetResult = rollNodeRewardPackets({
+    nodeKind,
+    depth: ctx.depth,
     districtDepth,
     veilBiome: ctx.veilBiome,
-    isElite: ctx.isElite,
+    sectorId: sectorIdFromVeilBiome(ctx.veilBiome),
+    breachGrade: ctx.breachGrade ?? 'I',
+    isElite: ctx.isElite || ctx.isGatekeeper,
+    highRisk: depthOpts.highRisk,
     highValue: ctx.highValue,
-    highRisk: ctx.highRisk,
     echoSignal: ctx.echoSignal,
     anchorSignal: ctx.anchorSignal,
-    hasModifier: ctx.hasModifier,
-    hasTwisted: ctx.hasTwisted,
-    templateId: ctx.compositionTemplateId,
-    rewardTier: ctx.rewardTier,
+    contractTargetIds: ctx.contractTargetIds,
+    operationTargetIds: ctx.operationTargetIds,
+    stressedResourceIds: ctx.stressedResourceIds,
     briefRewardBias: ctx.briefRewardBias,
+    rareLootBonusPct,
     rng,
   });
+  drops.push(...packetResult.resourceIds);
 
-  if (ctx.isElite) {
-    if (enemyLoot.length === 0) {
-      drops.push(...pickEliteDrops(profile, tier, rng));
-    } else {
-      drops.push(pickFromPool(factionRarePool(profile, tier), rng));
-    }
-    drops.push(...(ctx.extraLoot ?? []));
-    drops.push(...compositionExtras);
-    drops.push(...identityExtras);
-    if (rareLootBonusPct > 0 && rng() * 100 < rareLootBonusPct) {
-      drops.push(pickFromPool(factionRarePool(profile, tier), rng));
-    }
-    // HIGH_VALUE+ gets a second rare chance roll.
-    if (
-      (ctx.rewardTier === 'HIGH_VALUE' || ctx.rewardTier === 'RARE' || ctx.rewardTier === 'APEX_CHANCE')
-      && rng() * 100 < Math.min(35, rareLootBonusPct)
-    ) {
-      drops.push(pickFromPool(factionRarePool(profile, Math.max(tier, 2) as LootDepthTier), rng));
-    }
-    const occultBonusPct = ctx.occultRewardBonusPct ?? 0;
-    if (occultBonusPct > 0 && rng() * 100 < occultBonusPct) {
-      drops.push(pickFromPool(factionRarePool('SOLARIS', tier), rng));
-    }
-    return drops;
-  }
-
-  if (enemyLoot.length === 0) {
-    const pool = applyBriefResourceStressToPool(
-      tierResourcePool(tier),
-      stressedIds ? { resourceStress: { primaryResourceIds: stressedIds, highDemandResourceIds: stressedIds } } : null,
-    );
-    drops.push(pickBiasedFromPool(pool, profile, rng, ctx.veilBiome));
-  }
-
-  drops.push(...(ctx.extraLoot ?? []));
+  // Light composition identity extras (templates) — still depth-gated.
+  const compositionExtras = filterResourcesForDepth(
+    compositionExtraLootIds({
+      tier: ctx.rewardTier,
+      templateId: ctx.compositionTemplateId,
+      veilBiome: ctx.veilBiome,
+      highValue: ctx.highValue,
+      echoSignal: false,
+      anchorSignal: false,
+    }),
+    districtDepth,
+    depthOpts,
+  );
   drops.push(...compositionExtras);
-  drops.push(...identityExtras);
+  drops.push(...filterResourcesForDepth(ctx.extraLoot ?? [], districtDepth, depthOpts));
 
-  if (rareLootBonusPct > 0 && rng() * 100 < rareLootBonusPct) {
-    drops.push(pickFromPool(factionRarePool(profile, tier), rng));
-  }
-  if (
-    (ctx.rewardTier === 'RARE' || ctx.rewardTier === 'APEX_CHANCE')
-    && rng() < 0.35
-  ) {
-    const apexPool = tier >= 3
-      ? [...TIER_3_ADD, ...factionRarePool(profile, 3)]
-      : factionRarePool(profile, Math.max(tier, 2) as LootDepthTier);
-    drops.push(pickFromPool(apexPool, rng));
-  }
   const occultBonusPct = ctx.occultRewardBonusPct ?? 0;
   if (occultBonusPct > 0 && rng() * 100 < occultBonusPct) {
-    drops.push(pickFromPool(factionRarePool('SOLARIS', tier), rng));
+    const occult = factionRarePool('SOLARIS', tier, districtDepth, depthOpts);
+    if (occult.length > 0) {
+      drops.push(pickWeightedForDepth(occult, districtDepth, rng) ?? pickFromPool(occult, rng));
+    }
+  }
+
+  // Faction staple bias when packets somehow empty and no enemy loot.
+  if (drops.length === 0) {
+    const fallback = filterResourcesForDepth(
+      sectorIdentityResourcePool(ctx.veilBiome),
+      districtDepth,
+      depthOpts,
+    );
+    if (fallback.length > 0) {
+      drops.push(pickWeightedForDepth(fallback, districtDepth, rng) ?? pickFromPool(fallback, rng));
+    }
   }
 
   return drops;

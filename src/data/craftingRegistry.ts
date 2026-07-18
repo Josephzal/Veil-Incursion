@@ -62,7 +62,8 @@ export const CRAFTING_REGISTRY: CraftingRecipe[] = [
     effectSummary: '+2 permanent Cargo Grid slots; scans add +5% Resonance.',
     requirements: [
       { resourceId: 'veil-ash-canister', quantity: 2 },
-      { resourceId: 'ley-slag', quantity: 5 },
+      { resourceId: 'nullcrete-shard', quantity: 3 },
+      { resourceId: 'ley-slag', quantity: 2 },
     ],
   },
   {
@@ -88,53 +89,8 @@ export const CRAFTING_REGISTRY: CraftingRecipe[] = [
     ],
   },
 
-  // Tactical consumables — keep starters simple; prefer run-item recipes when duplicated.
-  {
-    id: 'craft_standard_coagulant',
-    kind: 'CONSUMABLE',
-    label: 'Standard Coagulant',
-    outputId: 'standard-coagulant',
-    effectSummary: 'Heals 25% HP in combat; clutch shield below 30% HP.',
-    requirements: [{ resourceId: 'ley-slag', quantity: 2 }],
-  },
-  {
-    id: 'craft_trauma_patch',
-    kind: 'CONSUMABLE',
-    label: 'Trauma Patch',
-    outputId: 'trauma-patch',
-    effectSummary: 'Clears supported debuffs; restores HP based on debuffs cleared.',
-    requirements: [
-      { resourceId: 'sanguine-ampoule', quantity: 2 },
-      { resourceId: 'mycelial-ichor', quantity: 1 },
-    ],
-  },
-  {
-    id: 'craft_kinetic_hollow_points',
-    kind: 'CONSUMABLE',
-    label: 'Kinetic Hollow-Points',
-    outputId: 'kinetic-hollow-points',
-    effectSummary: 'Next attack deals +15 damage.',
-    requirements: [{ resourceId: 'ley-slag', quantity: 3 }],
-  },
-  {
-    id: 'craft_veil_ash_grenade',
-    kind: 'CONSUMABLE',
-    label: 'Veil-Ash Grenade',
-    outputId: 'veil-ash-grenade',
-    effectSummary: 'AoE blind to the entire enemy frontline.',
-    requirements: [
-      { resourceId: 'veil-ash-canister', quantity: 1 },
-      { resourceId: 'combustion-cylinder', quantity: 1 },
-    ],
-  },
-  {
-    id: 'craft_sonar_ping',
-    kind: 'CONSUMABLE',
-    label: 'Sonar-Ping',
-    outputId: 'sonar-ping',
-    effectSummary: 'Reveal one unknown visible node type + overlay.',
-    requirements: [{ resourceId: 'echo-glass-shard', quantity: 3 }],
-  },
+  // Consumable / run-item recipes live in runItemRegistry (via buildRunItemCraftingRecipes).
+  // Do not duplicate them here — double-counting skews economy tuning + bottleneck shares.
 ];
 
 function getRunItemCraftRecipes(): CraftingRecipe[] {

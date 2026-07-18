@@ -16,6 +16,11 @@ import {
 } from '../../utils/veilFrontSectorUi';
 import type { SectorState } from '../../types/worldState';
 import { TerminalTheme } from '../../types/theme';
+import { usePlayerAccount } from '../../context/PlayerAccountContext';
+import { getAccountProgressionProfile } from '../../data/progressionDebugEngine';
+import { formatSectorFarmingPreviewLines } from '../../data/resourceSourceHintEngine';
+import { getResourceDisplayName } from '../../data/resourceRegistry';
+import { sectorPrimaryResourcePool } from '../../data/sectorResourceTableEngine';
 
 interface MapStatusSummaryProps {
   theme: TerminalTheme;
@@ -85,7 +90,13 @@ export default function MapStatusSummary({
   fullWidth = false,
 }: MapStatusSummaryProps): React.JSX.Element {
   const { scaleSpacing, statusOverlayWidth } = useVeilFrontLayout();
+  const { account } = usePlayerAccount();
+  const profile = getAccountProgressionProfile(account);
   const anchor = anchorStatusLabel(sector);
+  const farmingLines = formatSectorFarmingPreviewLines(sector.id, profile);
+  const primaryChips = sectorPrimaryResourcePool(sector.id)
+    .slice(0, 4)
+    .map((id) => getResourceDisplayName(id, true));
 
   return (
     <View
@@ -139,13 +150,22 @@ export default function MapStatusSummary({
           letterSpacing={0.7}
           style={{ color: theme.mutedColor, marginBottom: scaleSpacing(2) }}
         >
-          RESOURCES
+          FARMING IDENTITY
         </TerminalText>
         <View style={[styles.resourceChips, { gap: scaleSpacing(4) }]}>
-          {sector.resourceFocus.map((resource) => (
+          {(primaryChips.length > 0 ? primaryChips : sector.resourceFocus).map((resource) => (
             <InfoChip key={resource} label={resource} accentColor="#fbbf24" />
           ))}
         </View>
+        {farmingLines.map((line) => (
+          <TerminalText
+            key={line}
+            size={5.4}
+            style={{ color: theme.mutedColor, marginTop: scaleSpacing(2), lineHeight: 8 }}
+          >
+            {line}
+          </TerminalText>
+        ))}
       </View>
     </View>
   );

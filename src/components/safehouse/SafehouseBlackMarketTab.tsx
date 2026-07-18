@@ -12,7 +12,8 @@ import {
   listSealedStashEntries,
   SEALED_CASKET_CONFIG,
 } from '../../data/sealedCargoEngine';
-import { getResourceDisplayName, getResourceCategory, getResourceShortName } from '../../data/resourceRegistry';
+import { getResourceDisplayName, getResourceShortName } from '../../data/resourceRegistry';
+import { formatFenceLaneLabel } from '../../data/economyValueLaneEngine';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useWorldState } from '../../context/WorldStateContext';
 import { useTerminal } from '../../context/TerminalContext';
@@ -64,7 +65,7 @@ function FenceRow({
   return (
     <MarketRow
       title={getResourceDisplayName(resourceId, true).toUpperCase()}
-      subtitle={`${getResourceCategory(resourceId)} // ${quantity}× AVAILABLE`}
+      subtitle={`${formatFenceLaneLabel(resourceId)} // ${quantity}× AVAILABLE`}
       valueLine={`${sellValue} CR / UNIT`}
       borderColor={borderColor}
       textColor={textColor}

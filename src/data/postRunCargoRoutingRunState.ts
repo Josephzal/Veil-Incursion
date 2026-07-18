@@ -19,6 +19,12 @@ import {
   recordNewResourcesFromCargoDelta,
 } from './runResourceLedgerEngine';
 import { createEmptyRunPhysicalBankSnapshot } from '../types/runResourceLedger';
+import {
+  cargoHasUnstableOrContraband,
+  ensureEconomyRunTelemetry,
+  noteUnstableCargoPresent,
+  recordEconomyGenerated,
+} from './economyRunTelemetryEngine';
 
 export interface CargoRoutingRunState {
   specialCargoStacksAcquired: number;
@@ -154,24 +160,25 @@ export function resolveCargoRoutingContextFromIncursion(
 export function applyCargoCollectedLedgerDelta(
   incursion: Pick<
     ActiveIncursionState,
-    'runResourceLedger' | 'cargoRoutingRunState' | 'activeContract' | 'runGenerationContext'
+    | 'runResourceLedger'
+    | 'cargoRoutingRunState'
+    | 'activeContract'
+    | 'runGenerationContext'
+    | 'economyRunTelemetry'
   >,
   beforeCargo: CargoRunState,
   afterCargo: CargoRunState,
-): Pick<ActiveIncursionState, 'runResourceLedger' | 'cargoRoutingRunState'> {
+): Pick<ActiveIncursionState, 'runResourceLedger' | 'cargoRoutingRunState' | 'economyRunTelemetry'> {
   const ledger = recordNewResourcesFromCargoDelta(
     incursion.runResourceLedger,
     beforeCargo,
     afterCargo,
   );
-  const routingContext = resolveCargoRoutingContextFromIncursion(incursion);
-  if (!routingContext) {
-    return { runResourceLedger: ledger, cargoRoutingRunState: incursion.cargoRoutingRunState };
-  }
 
   const beforeCounts = countResourcesInCargo(beforeCargo);
   const afterCounts = countResourcesInCargo(afterCargo);
   const delta: ResourceQuantity = {};
+  let generated = 0;
   const allIds = new Set([
     ...Object.keys(beforeCounts),
     ...Object.keys(afterCounts),
@@ -179,8 +186,28 @@ export function applyCargoCollectedLedgerDelta(
 
   allIds.forEach((resourceId) => {
     const diff = (afterCounts[resourceId] ?? 0) - (beforeCounts[resourceId] ?? 0);
-    if (diff > 0) delta[resourceId] = diff;
+    if (diff > 0) {
+      delta[resourceId] = diff;
+      generated += diff;
+    }
   });
+
+  let economy = ensureEconomyRunTelemetry(incursion.economyRunTelemetry);
+  if (generated > 0) {
+    economy = recordEconomyGenerated(economy, generated);
+  }
+  if (cargoHasUnstableOrContraband(afterCargo)) {
+    economy = noteUnstableCargoPresent(economy);
+  }
+
+  const routingContext = resolveCargoRoutingContextFromIncursion(incursion);
+  if (!routingContext) {
+    return {
+      runResourceLedger: ledger,
+      cargoRoutingRunState: incursion.cargoRoutingRunState,
+      economyRunTelemetry: economy,
+    };
+  }
 
   return {
     runResourceLedger: ledger,
@@ -190,6 +217,7 @@ export function applyCargoCollectedLedgerDelta(
       incursion.activeContract,
       routingContext,
     ),
+    economyRunTelemetry: economy,
   };
 }
 

@@ -10,6 +10,12 @@ import {
   resolveCargoRoutingContextFromIncursion,
 } from '../../data/postRunCargoRoutingRunState';
 import { formatCargoRoutingSafehouseIntelLines } from '../../data/cargoRoutingIntelEngine';
+import {
+  CARGO_OWNERSHIP_RULES_COPY,
+  listNonBankableResourcesInCargo,
+} from '../../data/cargoOwnershipEngine';
+import { countResourcesInCargo } from '../../data/runResourceLedgerEngine';
+import { getResourceDisplayName } from '../../data/resourceRegistry';
 import { useTerminal } from '../../context/TerminalContext';
 
 function ManifestRow({
@@ -36,6 +42,9 @@ export default function SafehouseInventoryTab(): React.JSX.Element {
   const { account } = usePlayerAccount();
   const { activeIncursion } = useRun();
   const bankSummary = summarizeBankSnapshot(activeIncursion.runBankedSnapshot);
+  const carriedUnits = Object.values(countResourcesInCargo(activeIncursion.cargo))
+    .reduce((sum, qty) => sum + (qty ?? 0), 0);
+  const nonBankable = listNonBankableResourcesInCargo(activeIncursion.cargo);
   const routingContext = resolveCargoRoutingContextFromIncursion(activeIncursion);
   const specialCargoInRun = routingContext
     ? countSpecialCargoHeldInRun(
@@ -85,11 +94,25 @@ export default function SafehouseInventoryTab(): React.JSX.Element {
         <ManifestRow label="FREQUENCY_TOKENS" value={String(currencies.frequency_tokens)} mutedColor={theme.mutedColor} textColor={theme.textColor} />
         <ManifestRow label="CABAL_CREDITS" value={String(account.cabalCredits)} mutedColor={theme.mutedColor} textColor={theme.textColor} />
         <ManifestRow
+          label="CARRIED (RUN)"
+          value={`${carriedUnits} UNIT(S)`}
+          mutedColor={theme.mutedColor}
+          textColor={theme.textColor}
+        />
+        <ManifestRow
           label="SAFEHOUSE BANK (RUN)"
           value={`${bankSummary.resourceCount} RES // ${bankSummary.consumableCount} ITEM`}
           mutedColor={theme.mutedColor}
           textColor={theme.textColor}
         />
+        {nonBankable.length > 0 ? (
+          <ManifestRow
+            label="MUST EXTRACT"
+            value={nonBankable.map((id) => getResourceDisplayName(id, true).toUpperCase()).join(' / ')}
+            mutedColor={theme.mutedColor}
+            textColor="#ef4444"
+          />
+        ) : null}
         {specialCargoInRun > 0 ? (
           <ManifestRow
             label="SPECIAL CARGO (RUN)"
@@ -98,6 +121,24 @@ export default function SafehouseInventoryTab(): React.JSX.Element {
             textColor={theme.statusColor}
           />
         ) : null}
+      </View>
+
+      <View style={hubTerminalUi.dataSection}>
+        <Text style={[hubTerminalUi.sectionHeader, { color: theme.mutedColor }]}>
+          {formatBracketHeader('CARGO OWNERSHIP')}
+        </Text>
+        <Text style={[styles.headerSub, { color: theme.mutedColor }]}>
+          {`CARRIED — ${CARGO_OWNERSHIP_RULES_COPY.CARRIED}`}
+        </Text>
+        <Text style={[styles.headerSub, { color: theme.mutedColor }]}>
+          {`BANKED — ${CARGO_OWNERSHIP_RULES_COPY.BANKED}`}
+        </Text>
+        <Text style={[styles.headerSub, { color: theme.mutedColor }]}>
+          {`EXTRACTED — ${CARGO_OWNERSHIP_RULES_COPY.EXTRACTED}`}
+        </Text>
+        <Text style={[styles.headerSub, { color: theme.mutedColor }]}>
+          {`LOST — ${CARGO_OWNERSHIP_RULES_COPY.LOST}`}
+        </Text>
       </View>
 
       <View style={hubTerminalUi.dataSection}>

@@ -9,11 +9,20 @@ import {
   DATA_BLEED_VALUE_DRAIN_PCT,
   createDefaultCargoRunState,
 } from '../types/cargoGrid';
+import {
+  blendUnitValues,
+  cargoItemQuantity,
+  getCargoStackCap,
+  stackMarketValue,
+  stackRoomRemaining,
+  unitCargoValue,
+} from './cargoStackEngine';
 
 let instanceCounter = 0;
 
+/** Per-unit containment value (DATA_BLEED erodes this). */
 export function containmentItemValue(item: ContainmentItem): number {
-  return item.currentValue ?? CARGO_ITEM_CATALOG[item.itemId].baseValue;
+  return unitCargoValue(item);
 }
 
 export function createCargoInstanceId(prefix = 'cargo'): string {
@@ -184,15 +193,27 @@ export function placeCargoFromContainment(
 ): CargoRunState | null {
   const pending = cargo.containment.find((item) => item.instanceId === containmentInstanceId);
   if (!pending) return null;
+
+  const mergeTarget = findMergeablePlacedAtCell(
+    cargo,
+    pending.itemId,
+    originRow,
+    originCol,
+    undefined,
+  );
+  if (mergeTarget) {
+    return mergeCargoInstances(cargo, pending.instanceId, mergeTarget.instanceId);
+  }
+
   if (!canPlaceCargoItem(cargo, pending.itemId, originRow, originCol)) return null;
 
-  const def = CARGO_ITEM_CATALOG[pending.itemId];
   const placed: PlacedCargoItem = {
     instanceId: pending.instanceId,
     itemId: pending.itemId,
     originRow,
     originCol,
     currentValue: containmentItemValue(pending),
+    quantity: cargoItemQuantity(pending),
   };
 
   return {
@@ -270,21 +291,103 @@ export function listStagedBlackMarketPlacements(cargo: CargoRunState): PlacedCar
   return cargo.grid.placed.filter((item) => item.blackMarketStaged === true);
 }
 
+export interface AddLootToContainmentResult {
+  cargo: CargoRunState;
+  mergedQuantity: number;
+  newStackCount: number;
+  stagedInstanceIds: string[];
+}
+
+/**
+ * Phase 2A — add loot units into cargo stacks.
+ * Fills incomplete grid stacks first, then containment stacks, then creates new containment stacks.
+ */
+export function addLootToContainmentDetailed(
+  cargo: CargoRunState,
+  itemId: CargoItemId,
+  count = 1,
+  stagedInstanceIds?: string[],
+): AddLootToContainmentResult {
+  let remaining = Math.max(0, count);
+  if (remaining <= 0) {
+    return { cargo, mergedQuantity: 0, newStackCount: 0, stagedInstanceIds: [] };
+  }
+
+  const unitValue = CARGO_ITEM_CATALOG[itemId].baseValue;
+  const cap = getCargoStackCap(itemId);
+  let mergedQuantity = 0;
+  let working = cargo;
+  const staged: string[] = [];
+
+  const fillPlaced = (items: PlacedCargoItem[]): PlacedCargoItem[] => items.map((item) => {
+    if (remaining <= 0 || item.itemId !== itemId) return item;
+    const qty = cargoItemQuantity(item);
+    const room = stackRoomRemaining(itemId, qty);
+    if (room <= 0) return item;
+    const take = Math.min(room, remaining);
+    remaining -= take;
+    mergedQuantity += take;
+    return {
+      ...item,
+      quantity: qty + take,
+      currentValue: blendUnitValues(qty, unitCargoValue(item), take, unitValue),
+    };
+  });
+
+  const fillContainment = (items: ContainmentItem[]): ContainmentItem[] => items.map((item) => {
+    if (remaining <= 0 || item.itemId !== itemId) return item;
+    const qty = cargoItemQuantity(item);
+    const room = stackRoomRemaining(itemId, qty);
+    if (room <= 0) return item;
+    const take = Math.min(room, remaining);
+    remaining -= take;
+    mergedQuantity += take;
+    return {
+      ...item,
+      quantity: qty + take,
+      currentValue: blendUnitValues(qty, unitCargoValue(item), take, unitValue),
+    };
+  });
+
+  working = {
+    ...working,
+    grid: { placed: fillPlaced(working.grid.placed) },
+    containment: fillContainment(working.containment),
+  };
+
+  const additions: ContainmentItem[] = [];
+  while (remaining > 0) {
+    const take = Math.min(cap, remaining);
+    remaining -= take;
+    const instanceId = createCargoInstanceId(itemId);
+    staged.push(instanceId);
+    additions.push({
+      instanceId,
+      itemId,
+      currentValue: unitValue,
+      quantity: take,
+    });
+  }
+
+  stagedInstanceIds?.push(...staged);
+  return {
+    cargo: {
+      ...working,
+      containment: [...working.containment, ...additions],
+    },
+    mergedQuantity,
+    newStackCount: additions.length,
+    stagedInstanceIds: staged,
+  };
+}
+
 export function addLootToContainment(
   cargo: CargoRunState,
   itemId: CargoItemId,
   count = 1,
   stagedInstanceIds?: string[],
 ): CargoRunState {
-  const additions = Array.from({ length: count }, () => ({
-    instanceId: createCargoInstanceId(itemId),
-    itemId,
-  }));
-  stagedInstanceIds?.push(...additions.map((entry) => entry.instanceId));
-  return {
-    ...cargo,
-    containment: [...cargo.containment, ...additions],
-  };
+  return addLootToContainmentDetailed(cargo, itemId, count, stagedInstanceIds).cargo;
 }
 
 export function calculateGridOccupancy(cargo: CargoRunState): number {
@@ -301,9 +404,9 @@ export function getCargoResonanceMultiplier(cargo: CargoRunState): number {
 }
 
 export function calculateCargoMarketValue(cargo: CargoRunState): number {
-  const placedValue = cargo.grid.placed.reduce((sum, item) => sum + item.currentValue, 0);
+  const placedValue = cargo.grid.placed.reduce((sum, item) => sum + stackMarketValue(item), 0);
   const containmentValue = cargo.containment.reduce(
-    (sum, item) => sum + containmentItemValue(item),
+    (sum, item) => sum + stackMarketValue(item),
     0,
   );
   return placedValue + containmentValue;
@@ -318,15 +421,15 @@ export function applyDataBleedToCargo(cargo: CargoRunState): { cargo: CargoRunSt
   const factor = 1 - DATA_BLEED_VALUE_DRAIN_PCT / 100;
   const nextPlaced = cargo.grid.placed.map((item) => ({
     ...item,
-    currentValue: Math.max(1, Math.floor(item.currentValue * factor)),
+    currentValue: Math.max(1, Math.floor(unitCargoValue(item) * factor)),
   }));
   const nextContainment = cargo.containment.map((item) => ({
     ...item,
-    currentValue: Math.max(1, Math.floor(containmentItemValue(item) * factor)),
+    currentValue: Math.max(1, Math.floor(unitCargoValue(item) * factor)),
   }));
 
-  const after = nextPlaced.reduce((sum, item) => sum + item.currentValue, 0)
-    + nextContainment.reduce((sum, item) => sum + containmentItemValue(item), 0);
+  const after = nextPlaced.reduce((sum, item) => sum + stackMarketValue(item), 0)
+    + nextContainment.reduce((sum, item) => sum + stackMarketValue(item), 0);
 
   return {
     cargo: {
@@ -335,6 +438,168 @@ export function applyDataBleedToCargo(cargo: CargoRunState): { cargo: CargoRunSt
       containment: nextContainment,
     },
     drainedValue: Math.max(0, before - after),
+  };
+}
+
+/** Find a same-type incomplete stack whose footprint covers (row, col). */
+export function findMergeablePlacedAtCell(
+  cargo: CargoRunState,
+  itemId: CargoItemId,
+  row: number,
+  col: number,
+  excludeInstanceId?: string,
+): PlacedCargoItem | null {
+  const cap = getCargoStackCap(itemId);
+  if (cap <= 1) return null;
+  const key = `${row},${col}`;
+  for (const item of cargo.grid.placed) {
+    if (item.instanceId === excludeInstanceId) continue;
+    if (item.itemId !== itemId) continue;
+    if (stackRoomRemaining(itemId, cargoItemQuantity(item)) <= 0) continue;
+    if (cellsForItem(item.itemId, item.originRow, item.originCol).includes(key)) {
+      return item;
+    }
+  }
+  return null;
+}
+
+/** Any placed item whose footprint covers (row, col). */
+export function findPlacedItemAtCell(
+  cargo: CargoRunState,
+  row: number,
+  col: number,
+  excludeInstanceId?: string,
+): PlacedCargoItem | null {
+  const key = `${row},${col}`;
+  for (const item of cargo.grid.placed) {
+    if (item.instanceId === excludeInstanceId) continue;
+    if (cellsForItem(item.itemId, item.originRow, item.originCol).includes(key)) {
+      return item;
+    }
+  }
+  return null;
+}
+
+function findCargoInstance(
+  cargo: CargoRunState,
+  instanceId: string,
+): { location: 'grid' | 'containment'; item: PlacedCargoItem | ContainmentItem } | null {
+  const placed = cargo.grid.placed.find((entry) => entry.instanceId === instanceId);
+  if (placed) return { location: 'grid', item: placed };
+  const pending = cargo.containment.find((entry) => entry.instanceId === instanceId);
+  if (pending) return { location: 'containment', item: pending };
+  return null;
+}
+
+/** Merge source instance into target instance (same itemId). Leftover stays on source if over cap. */
+export function mergeCargoInstances(
+  cargo: CargoRunState,
+  sourceInstanceId: string,
+  targetInstanceId: string,
+): CargoRunState | null {
+  if (sourceInstanceId === targetInstanceId) return null;
+  const sourceRef = findCargoInstance(cargo, sourceInstanceId);
+  const targetRef = findCargoInstance(cargo, targetInstanceId);
+  if (!sourceRef || !targetRef) return null;
+  if (sourceRef.item.itemId !== targetRef.item.itemId) return null;
+
+  const itemId = sourceRef.item.itemId;
+  const sourceQty = cargoItemQuantity(sourceRef.item);
+  const targetQty = cargoItemQuantity(targetRef.item);
+  const room = stackRoomRemaining(itemId, targetQty);
+  if (room <= 0) return null;
+
+  const take = Math.min(room, sourceQty);
+  const leftover = sourceQty - take;
+  const blended = blendUnitValues(
+    targetQty,
+    unitCargoValue(targetRef.item),
+    take,
+    unitCargoValue(sourceRef.item),
+  );
+
+  let nextPlaced = cargo.grid.placed.map((item) => {
+    if (item.instanceId === targetInstanceId) {
+      return { ...item, quantity: targetQty + take, currentValue: blended };
+    }
+    if (item.instanceId === sourceInstanceId) {
+      if (leftover <= 0) return null;
+      return { ...item, quantity: leftover };
+    }
+    return item;
+  }).filter((item): item is PlacedCargoItem => item != null);
+
+  let nextContainment = cargo.containment.map((item) => {
+    if (item.instanceId === targetInstanceId) {
+      return { ...item, quantity: targetQty + take, currentValue: blended };
+    }
+    if (item.instanceId === sourceInstanceId) {
+      if (leftover <= 0) return null;
+      return { ...item, quantity: leftover };
+    }
+    return item;
+  }).filter((item): item is ContainmentItem => item != null);
+
+  if (leftover <= 0) {
+    nextPlaced = nextPlaced.filter((item) => item.instanceId !== sourceInstanceId);
+    nextContainment = nextContainment.filter((item) => item.instanceId !== sourceInstanceId);
+  }
+
+  return {
+    ...cargo,
+    grid: { placed: nextPlaced },
+    containment: nextContainment,
+  };
+}
+
+/** Jettison overlapping placed items and place source at cell (replace pickup UX). */
+export function replaceCargoAtCell(
+  cargo: CargoRunState,
+  sourceInstanceId: string,
+  originRow: number,
+  originCol: number,
+): CargoRunState | null {
+  const sourceRef = findCargoInstance(cargo, sourceInstanceId);
+  if (!sourceRef) return null;
+
+  const footprint = cellsForItem(sourceRef.item.itemId, originRow, originCol);
+  let working: CargoRunState = {
+    ...cargo,
+    grid: {
+      placed: cargo.grid.placed.filter((item) => {
+        if (item.instanceId === sourceInstanceId) return true;
+        const keys = cellsForItem(item.itemId, item.originRow, item.originCol);
+        return !keys.some((key) => footprint.includes(key));
+      }),
+    },
+  };
+
+  // Temporarily remove source so canPlace checks clean cells.
+  working = {
+    ...working,
+    grid: {
+      placed: working.grid.placed.filter((item) => item.instanceId !== sourceInstanceId),
+    },
+    containment: working.containment.filter((item) => item.instanceId !== sourceInstanceId),
+  };
+
+  if (!canPlaceCargoItem(working, sourceRef.item.itemId, originRow, originCol)) return null;
+
+  const placed: PlacedCargoItem = {
+    instanceId: sourceInstanceId,
+    itemId: sourceRef.item.itemId,
+    originRow,
+    originCol,
+    currentValue: unitCargoValue(sourceRef.item),
+    quantity: cargoItemQuantity(sourceRef.item),
+    blackMarketStaged: sourceRef.location === 'grid'
+      ? (sourceRef.item as PlacedCargoItem).blackMarketStaged
+      : undefined,
+  };
+
+  return {
+    ...working,
+    grid: { placed: [...working.grid.placed, placed] },
   };
 }
 
@@ -347,6 +612,18 @@ export function movePlacedCargoItem(
   const item = cargo.grid.placed.find((entry) => entry.instanceId === instanceId);
   if (!item) return null;
   if (item.originRow === originRow && item.originCol === originCol) return cargo;
+
+  const mergeTarget = findMergeablePlacedAtCell(
+    cargo,
+    item.itemId,
+    originRow,
+    originCol,
+    instanceId,
+  );
+  if (mergeTarget) {
+    return mergeCargoInstances(cargo, instanceId, mergeTarget.instanceId);
+  }
+
   if (!canPlaceCargoItemExcluding(cargo, item.itemId, originRow, originCol, instanceId)) return null;
 
   return {
@@ -372,6 +649,26 @@ export function relocateCargoItem(
   return movePlacedCargoItem(cargo, instanceId, originRow, originCol);
 }
 
+/** True when drop cell can accept a merge even if free placement is blocked. */
+export function canMergeCargoAtCell(
+  cargo: CargoRunState,
+  itemId: CargoItemId,
+  row: number,
+  col: number,
+  excludeInstanceId?: string,
+): boolean {
+  return findMergeablePlacedAtCell(cargo, itemId, row, col, excludeInstanceId) != null;
+}
+
+export function hasOpenCargoFootprint(cargo: CargoRunState, itemId: CargoItemId): boolean {
+  for (let row = 0; row < CARGO_GRID_ROWS; row += 1) {
+    for (let col = 0; col < CARGO_GRID_COLS; col += 1) {
+      if (canPlaceCargoItem(cargo, itemId, row, col)) return true;
+    }
+  }
+  return false;
+}
+
 export function removePlacedCargoItem(cargo: CargoRunState, instanceId: string): CargoRunState {
   return {
     ...cargo,
@@ -395,8 +692,12 @@ export function isVeilResidueCargoItem(itemId: CargoItemId): boolean {
 }
 
 export function countVeilResidueInCargo(cargo: CargoRunState): number {
-  const inContainment = cargo.containment.filter((item) => isVeilResidueCargoItem(item.itemId)).length;
-  const inGrid = cargo.grid.placed.filter((item) => isVeilResidueCargoItem(item.itemId)).length;
+  const inContainment = cargo.containment
+    .filter((item) => isVeilResidueCargoItem(item.itemId))
+    .reduce((sum, item) => sum + cargoItemQuantity(item), 0);
+  const inGrid = cargo.grid.placed
+    .filter((item) => isVeilResidueCargoItem(item.itemId))
+    .reduce((sum, item) => sum + cargoItemQuantity(item), 0);
   return inContainment + inGrid;
 }
 
@@ -434,14 +735,14 @@ export function applyEmergencyExtractBleed(
   const factor = 1 - bleedPct / 100;
   const nextPlaced = cargo.grid.placed.map((item) => ({
     ...item,
-    currentValue: Math.max(1, Math.floor(item.currentValue * factor)),
+    currentValue: Math.max(1, Math.floor(unitCargoValue(item) * factor)),
   }));
   const nextContainment = cargo.containment.map((item) => ({
     ...item,
-    currentValue: Math.max(1, Math.floor(containmentItemValue(item) * factor)),
+    currentValue: Math.max(1, Math.floor(unitCargoValue(item) * factor)),
   }));
-  const after = nextPlaced.reduce((sum, item) => sum + item.currentValue, 0)
-    + nextContainment.reduce((sum, item) => sum + containmentItemValue(item), 0);
+  const after = nextPlaced.reduce((sum, item) => sum + stackMarketValue(item), 0)
+    + nextContainment.reduce((sum, item) => sum + stackMarketValue(item), 0);
 
   return {
     cargo: {
@@ -458,8 +759,12 @@ export function hasCargoItem(cargo: CargoRunState, itemId: CargoItemId): boolean
 }
 
 export function countCargoItemInstances(cargo: CargoRunState, itemId: CargoItemId): number {
-  const inGrid = cargo.grid.placed.filter((item) => item.itemId === itemId).length;
-  const inContainment = cargo.containment.filter((item) => item.itemId === itemId).length;
+  const inGrid = cargo.grid.placed
+    .filter((item) => item.itemId === itemId)
+    .reduce((sum, item) => sum + cargoItemQuantity(item), 0);
+  const inContainment = cargo.containment
+    .filter((item) => item.itemId === itemId)
+    .reduce((sum, item) => sum + cargoItemQuantity(item), 0);
   return inGrid + inContainment;
 }
 
@@ -514,6 +819,16 @@ export function combatConsumableDescription(itemId: CargoItemId): string {
 export function consumeCargoItem(cargo: CargoRunState, itemId: CargoItemId): CargoRunState | null {
   const containmentIdx = cargo.containment.findIndex((item) => item.itemId === itemId);
   if (containmentIdx >= 0) {
+    const target = cargo.containment[containmentIdx]!;
+    const qty = cargoItemQuantity(target);
+    if (qty > 1) {
+      return {
+        ...cargo,
+        containment: cargo.containment.map((item, index) => (
+          index === containmentIdx ? { ...item, quantity: qty - 1 } : item
+        )),
+      };
+    }
     return {
       ...cargo,
       containment: cargo.containment.filter((_, index) => index !== containmentIdx),
@@ -521,6 +836,19 @@ export function consumeCargoItem(cargo: CargoRunState, itemId: CargoItemId): Car
   }
   const placed = cargo.grid.placed.find((item) => item.itemId === itemId);
   if (!placed) return null;
+  const qty = cargoItemQuantity(placed);
+  if (qty > 1) {
+    return {
+      ...cargo,
+      grid: {
+        placed: cargo.grid.placed.map((item) => (
+          item.instanceId === placed.instanceId
+            ? { ...item, quantity: qty - 1 }
+            : item
+        )),
+      },
+    };
+  }
   return removePlacedCargoItem(cargo, placed.instanceId);
 }
 

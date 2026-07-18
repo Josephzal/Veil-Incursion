@@ -46,7 +46,7 @@ export default function RunIncursionCargoPanel({
   onDragPositionChange,
 }: RunIncursionCargoPanelProps): React.JSX.Element {
   const { theme } = useTerminal();
-  const { activeIncursion, relocateCargoItem } = useRun();
+  const { activeIncursion, relocateCargoItem, replaceCargoItem } = useRun();
   const [cargoAreaSize, setCargoAreaSize] = useState({ width: 0, height: 0 });
 
   const cellSize = useMemo(
@@ -75,6 +75,7 @@ export default function RunIncursionCargoPanel({
         theme={theme}
         accentColor={accentColor}
         onRelocateItem={relocateCargoItem}
+        onReplaceItem={replaceCargoItem}
         hideContinueButton
         hidePackHeader
         embedded

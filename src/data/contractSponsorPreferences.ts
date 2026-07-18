@@ -82,12 +82,44 @@ export const SPONSOR_RESOURCE_BY_CABAL: Record<CabalEmployerId, ResourceItemId[]
   SOLARIS: ['sanguine-ampoule', 'mycelial-ichor', 'resonant-filament', 'veil-ash-canister', 'ossified-ley-knot'],
 };
 
+/** Phase 2D — contract sector bias mirrors farming PRIMARY (+ key rare) tables. */
 export const SECTOR_RESOURCE_IDS: Partial<Record<string, ResourceItemId[]>> = {
-  THE_SLAG_WORKS: ['ley-slag', 'rail-capacitor', 'legion-blood-iron', 'combustion-cylinder', 'cinder-wire'],
-  THE_ABYSSAL_SINK: ['mycelial-ichor', 'sanguine-ampoule', 'ossified-ley-knot', 'anomalous-core', 'blacksite-specimen-jar'],
-  THE_NULL_ZONE: ['nullcrete-shard', 'echo-glass-shard', 'encrypted-grid-drive', 'resonant-filament'],
-  THE_BLACKLINE_TERMINUS: ['containment-seal', 'breach-thread', 'sealed-containment-casket', 'blacksite-specimen-jar'],
-  THE_ASHEN_WASTES: ['cinder-wire', 'veil-ash-canister', 'anomalous-core', 'combustion-cylinder'],
+  THE_NULL_ZONE: [
+    'nullcrete-shard',
+    'echo-glass-shard',
+    'ley-slag',
+    'encrypted-grid-drive',
+    'containment-seal',
+  ],
+  THE_ABYSSAL_SINK: [
+    'mycelial-ichor',
+    'sanguine-ampoule',
+    'echo-glass-shard',
+    'ossified-ley-knot',
+    'blacksite-specimen-jar',
+  ],
+  THE_ASHEN_WASTES: [
+    'cinder-wire',
+    'combustion-cylinder',
+    'veil-ash-canister',
+    'echo-glass-shard',
+    'breach-thread',
+  ],
+  THE_SLAG_WORKS: [
+    'rail-capacitor',
+    'legion-blood-iron',
+    'combustion-cylinder',
+    'ley-slag',
+    'anchor-marrow',
+  ],
+  THE_BLACKLINE_TERMINUS: [
+    'containment-seal',
+    'encrypted-grid-drive',
+    'blacksite-specimen-jar',
+    'sealed-containment-casket',
+    'breach-thread',
+    'anomalous-core',
+  ],
 };
 
 export function sponsorDisplayLabel(sponsorId: CabalEmployerId): string {

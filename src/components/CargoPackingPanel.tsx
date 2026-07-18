@@ -39,6 +39,7 @@ interface CargoPackingPanelProps {
   theme: TerminalTheme;
   accentColor?: string;
   onRelocateItem: (instanceId: string, row: number, col: number) => boolean;
+  onReplaceItem?: (instanceId: string, row: number, col: number) => boolean;
   onDiscardItem?: (instanceId: string) => boolean;
   runCredits?: number;
   showCreditsHud?: boolean;
@@ -88,6 +89,7 @@ export default function CargoPackingPanel({
   theme,
   accentColor,
   onRelocateItem,
+  onReplaceItem,
   onDiscardItem,
   runCredits,
   showCreditsHud = false,
@@ -231,6 +233,7 @@ export default function CargoPackingPanel({
       theme={theme}
       accentColor={accentColor}
       onRelocateItem={onRelocateItem}
+      onReplaceItem={onReplaceItem}
       onDiscardItem={onDiscardItem}
       runCredits={runCredits}
       showCreditsHud={showCreditsHud}

@@ -2,7 +2,7 @@ import type { GeneratedContract } from '../types/contract';
 import type { ContractGenerationContext } from '../types/contractProcedural';
 import { hasUnresolvedPlaceholders } from './contractTemplateVariants';
 import { validateProceduralContract } from './contractProceduralEngine';
-import { canResourceSpawnInSector } from './resourceRegistry';
+import { canResourceSpawnInSector, RESOURCE_REGISTRY } from './resourceRegistry';
 import type { SectorId } from '../types/worldState';
 
 export interface ContractProceduralValidationIssue {
@@ -50,6 +50,13 @@ export function validateContractBoard(
         severity: 'warn',
         contractId: contract.id,
         message: `Target resource not spawnable in selected sector ${sectorId}.`,
+      });
+    }
+    if (resourceIds.some((id) => !RESOURCE_REGISTRY[id]?.canBeContractTarget)) {
+      issues.push({
+        severity: 'error',
+        contractId: contract.id,
+        message: 'Target resource is not canBeContractTarget.',
       });
     }
   });

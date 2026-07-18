@@ -42,6 +42,7 @@ import type {
 } from './sector';
 import { MAX_ATTUNEMENT, STARTING_ATTUNEMENT } from './sector';
 import { createDefaultBalanceRunStats } from '../data/balance/balanceRunStats';
+import { createDefaultEconomyRunTelemetry } from './economyRunTelemetry';
 
 export type FactionType = 'TERRAN_GRID' | 'LEGION' | 'SOLARIS';
 export type ClassType = 'AEGIS' | 'HEX_SHOT' | 'ENVOY';
@@ -179,6 +180,13 @@ export interface PlayerAccount {
   keepsakeDeployment: import('../types/expeditionKeepsake').KeepsakeDeployment;
   /** Career last-N run balance summaries for the balance dashboard (Phase B). */
   careerBalanceHistory: import('../data/balance/balanceDashboardEngine').CareerBalanceHistory;
+  /**
+   * Economy Spine Phase 2I — light resource discovery / codex state.
+   * Seeded from stash on migrate; updated when resources are first banked.
+   */
+  resourceDiscovery: import('./resourceDiscovery').ResourceDiscoveryState;
+  /** Phase 2K — career craft/fence/contract economy event totals. */
+  careerEconomyTelemetry: import('./economyRunTelemetry').CareerEconomyTelemetry;
   /**
    * Progression Spine — Runner Clearance (1B live XP), sector access, breach grades,
    * class/cabal tracks, unlock registry grants, pinned goals, event log.
@@ -589,6 +597,8 @@ export interface ActiveIncursionState {
   weaponRuntime: import('./weapon').WeaponRuntimeState;
   /** Phase B — in-run combat/economy counters for balance telemetry. */
   balanceRunStats: import('../data/balance/balanceRunStats').BalanceRunStats;
+  /** Phase 2K — live economy event telemetry for this run. */
+  economyRunTelemetry: import('./economyRunTelemetry').EconomyRunTelemetry;
 }
 
 export function createDefaultEnvironmentalModifiers(): EnvironmentalModifiers {
@@ -750,5 +760,6 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
       postReloadBallisticBonus: false,
     },
     balanceRunStats: createDefaultBalanceRunStats(),
+    economyRunTelemetry: createDefaultEconomyRunTelemetry(),
   };
 }

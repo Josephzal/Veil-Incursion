@@ -1,6 +1,6 @@
 # Veil Incursion Current Systems Design
 
-Last updated: 2026-07-17 (Progression Spine Phase 1A–1J + polish)
+Last updated: 2026-07-17 (Economy Spine Phase 2A–2M + polish)
 
 This document captures the current implemented design surface for Veil Incursion: player-facing hub systems, run progression, economy, cargo/items, enemies, combat mechanics, and known partial implementations. It is intended as a working reference for design iteration and balancing, not a final player-facing manual.
 
@@ -20,6 +20,20 @@ Primary data and implementation files:
 - Class abilities: `src/data/aegisAbilities.ts`, `src/data/hexShotAbilities.ts`, `src/data/envoyAbilities.ts`
 - Progression and boons: `src/data/boundRequisitions.ts`, `src/data/leyLineMutations.ts`, `src/data/regions.ts`
 - Progression Spine (career): `src/types/progression.ts`, `src/data/progressionProfileEngine.ts`, `src/data/unlockRegistry.ts`, `src/data/runnerClearanceEngine.ts`, `src/data/sectorAccessMandateEngine.ts`, `src/data/breachGradeEngine.ts`, `src/data/pinnedGoalEngine.ts`, `src/data/classRankEngine.ts`, `src/data/cabalRepEngine.ts`, `src/data/recipeVisibilityEngine.ts`, `src/data/debriefProgressionTheaterEngine.ts`, `src/data/failureRecoveryEngine.ts`, `src/data/progressionEconomySimulationEngine.ts`
+- Economy Spine Phase 2A (cargo stacks): `src/data/cargoStackEngine.ts`, `src/data/cargoStackDebugEngine.ts`, `cargoStackCap` / `stashStackCap` on `ResourceItemDefinition`, quantity on `PlacedCargoItem` / `ContainmentItem`
+- Economy Spine Phase 2B (registry + ownership): `src/data/resourceSourceIdentity.ts`, `src/data/cargoOwnershipEngine.ts`, `primarySectors` / `secondarySources` / `depthRules` / carried-effect flags, apex mid-run bank block
+- Economy Spine Phase 2C (roster freeze): `src/data/economyRosterV1.ts` — 21 economy + 4 route intel, exact-match validation
+- Economy Spine Phase 2D (sector resource tables): `src/data/sectorResourceTableEngine.ts` — farming identity per sector; drop bias + validation
+- Economy Spine Phase 2E (depth resource rules): `src/data/depthResourceRulesEngine.ts` — Threshold / Breach / Deep Veil eligibility + combat/identity gates
+- Economy Spine Phase 2F (reward packets): `src/data/resourceRewardPacketEngine.ts` — typed node packets, Breach Grade quality, extracted yield targets
+- Economy Spine Phase 2G (source hints): `src/data/resourceSourceHintEngine.ts` — Exact / Partial / Unknown / contract-directed farming intel
+- Economy Spine Phase 2H (economy report): `src/data/economySpineDebugEngine.ts` + `economySpineSimulationEngine.ts` — full report, bottlenecks, drop/run sims
+- Economy Spine Phase 2I (discovery): `src/data/resourceDiscoveryEngine.ts` — earned resource identity / light codex state
+- Economy Spine Phase 2J (integration): `src/data/economyIntegrationEngine.ts` + `economyValueLaneEngine.ts` — contract/op/fence/appraisal sync + value lanes
+- Economy Spine Phase 2K (live telemetry): `src/data/economyRunTelemetryEngine.ts` — live economy events + career aggregates + debug report
+- Economy Spine Phase 2L (save migration): `src/data/economySaveMigrationEngine.ts` — legacy resource id remap, stash/contract sanitize, craft/weapon preserve
+- Economy Spine Phase 2M (tuning): `src/data/economyTuningEngine.ts` — tuning questions + balance-rule audit, D1 sector packets, recipe diversification
+- Economy Spine polish: `src/data/economySpineAuditEngine.ts` — verify/acceptance aggregator; fence lane labels; forge discovery fog; debrief first-find; REPLACE stack qty
 - Expedition relics (Trinkets v2): `src/types/expeditionKeepsake.ts`, `src/data/expeditionKeepsakeRegistry.ts`, `src/data/keepsakeRunState.ts`, `src/data/expeditionKeepsakeEngine.ts`, `src/data/expeditionKeepsake*Engine.ts`, `src/components/hub/KeepsakeLoadoutPanel.tsx`, `src/data/runDebriefKeepsakeEngine.ts`, `src/data/expeditionKeepsakeValidation.ts`, `src/data/expeditionKeepsakeAcceptanceEngine.ts`, `src/data/expeditionKeepsakeAuditEngine.ts`
 - Run Items v2: `src/types/runItem.ts`, `src/data/runItemRegistry.ts`, `src/data/runItemRunState.ts`, `src/data/runItemCombatEngine.ts`, `src/data/runItemFieldEngine.ts`, `src/data/runItem*Engine.ts`, `src/components/hub/RunItemLoadoutPanel.tsx`, `src/data/runDebriefRunItemEngine.ts`, `src/data/runItemValidation.ts`, `src/data/runItemAcceptanceEngine.ts`, `src/data/runItemAuditEngine.ts`
 - Run integration audit: `src/data/runIntegration/*`, extended `OperationDebriefPayload`, `OperationDebriefScreen.tsx`
@@ -878,6 +892,480 @@ Sim biases are documented in-tool (grade mix favors lower grades; limited intel 
 - Grades I–III selectable when clearance unlocks them; IV/V not required for core path.
 - Losing route intel is tense but recovers via pity; player can always leave debrief.
 - DevTest can answer “how many runs to unlock X?” and “any soft-lock / broken recipe?”
+
+## Economy Spine (Phase 2A — Cargo stacks)
+
+Phase 2 answers: **what do I extract, how much can I carry, where does it come from, how much progress per run?** Phase 2A establishes carry tension before drop tables / sinks.
+
+### Rules
+
+- **Cargo stack** = max units in one in-run grid footprint (`cargoStackCap`). This is where extraction tension lives.
+- **Stash stack** = hub ownership guidance (`stashStackCap`, soft / effectively unlimited at 9999 for v1).
+- **Stable** resources stack (caps 3–5 typical). **Unstable** and **contraband** never stack (cap 1). **Route intel** is protected progression cargo (cap 1, no fence, strong discard warning).
+- One stack = one footprint. Quantity badges show `N/cap` (or `xN` when cap is 1 but qty > 1).
+- Loot grants merge into incomplete stacks (grid first, then containment), then create new containment stacks.
+- Drop onto a matching incomplete stack merges. Drop onto a blocked cell offers **Replace** (jettison occupant) / Cancel. Harvest continue with unpacked non-residue cargo offers **Leave Behind** / Keep Packing.
+
+### Phase 2A per-resource cargo table (v1)
+
+| Resource | Grid | Cargo stack |
+|----------|------|-------------|
+| Ley-Slag / Echo-Glass / Nullcrete / Cinder Wire / Resonant Filament | 1×1 | 5 |
+| Sanguine / Mycelial / Combustion / Blood-Iron | 1×1 | 3 |
+| Rail Capacitor | 1×2 | 1 |
+| Grid-Drive | 1×1 | 2 |
+| Containment Seal | 1×1 | 3 |
+| Dog Tags | 1×1 | 5 |
+| Smuggler's Ledger | 1×1 | 1 |
+| Veil-Ash / Ley-Knot / Anchor Marrow / Breach Thread | 1×1 | 1 |
+| Anomalous Core | 2×2 | 1 |
+| Specimen Jar | 1×2 | 1 |
+| Sealed Casket | 3×1 | 1 |
+| Route intel (×4) | 1×1 / 1×2 | 1 |
+
+### Key files
+
+`cargoStackEngine.ts`, `cargoStackDebugEngine.ts`, `cargoGridEngine.ts` (merge/replace/count/consume), `resourceRegistry.ts` (`cargoStackCap` / `stashStackCap`), `CargoLootPickupOverlay.tsx`, `CargoGridBoard.tsx` badges + replace UX, DevTest **ECONOMY SPINE // PHASE 2A**.
+
+### Acceptance snapshot
+
+- Stable stacks in cargo; unstable/contraband do not.
+- Grid size respected; UI shows quantity + stack cap.
+- Route intel / rare-apex discard warnings; route intel not fenceable.
+- Pickup merge / overflow / replace / leave-behind UX present.
+
+## Economy Spine (Phase 2B — Registry + ownership)
+
+Normalize every resource before drop-table balancing. Ownership states answer “did I actually get it?”
+
+### Registry fields (required)
+
+Each resource now carries Phase 2B identity metadata:
+
+| Field | Role |
+|-------|------|
+| `primarySectors` | Farming identity targets (subset of `validSectorIds`) |
+| `secondarySources` | Crossover / event / residue contexts |
+| `depthRules` | `{ minDepth, maxDepth, preferredDepths }` for 2E+ drop engines |
+| `hasCarriedEffect` / `carriedEffectId` | Links unstable roster to carried-effect table |
+| `cargoStackCap` / `stashStackCap` | From 2A |
+| craft / fence / contract / operation / bank flags | Economy eligibility |
+
+Validation gate: category, description, sourceHint, rarity, grid, stack rule, primarySectors, secondarySources, depthRules, ≥2 intendedUses, and at least one economy/route-intel use. Orphans fail as errors. Source identity lives in `resourceSourceIdentity.ts`.
+
+### 2B.1 — Cargo ownership conversion
+
+| State | Meaning |
+|-------|---------|
+| **CARRIED** | Physical run cargo — lost on death if unbanked |
+| **BANKED** | Mid-run safehouse snapshot — survives death |
+| **EXTRACTED** | Hub stash after successful extract (carried + banked merge) |
+| **LOST** | Carried cargo dropped on death |
+
+Rules:
+
+- Safe / successful dirty extract: carried + banked → stash.
+- Death: banked → stash; carried → lost.
+- **Apex cargo** (Anomalous Core, Sealed Containment Casket / `APEX_CARGO`) **cannot mid-run bank** — must extract or risk loss.
+- Safehouse Inventory shows CARRIED / BANKED counts, MUST EXTRACT apex list, and ownership copy.
+
+### Key files
+
+`resourceSourceIdentity.ts`, `cargoOwnershipEngine.ts`, `cargoOwnershipDebugEngine.ts`, `resourceValidation.ts`, `resourceRegistry.ts` (`def()` merges identity + apex bank lock), Safehouse Inventory tab, DevTest **ECONOMY SPINE // PHASE 2B**.
+
+### Acceptance snapshot
+
+- Every roster resource has complete Phase 2B metadata + source identity.
+- Validation rejects orphans / missing identity / apex-bankable apex cargo.
+- Banking skips apex; player-facing ownership rules are visible in-hub.
+
+## Economy Spine (Phase 2C — Final roster freeze)
+
+Lock the v1 material set. Phase 2 makes **this** roster work — it does not add more resources.
+
+### Frozen counts
+
+| Bucket | Count | Notes |
+|--------|------:|-------|
+| Stable | 10 | Ley-Slag → Resonant Filament |
+| Unstable | 5 | Core, Veil-Ash, Ley-Knot, Anchor Marrow, Breach Thread |
+| Economy intel | 4 | Grid-Drive, Ledger, Dog Tags, Containment Seal |
+| Contraband | 2 | Sealed Casket, Specimen Jar |
+| **Economy total** | **21** | Drop / craft / fence / contract surface |
+| Route intel | 4 | Progression Spine sector-access cargo (not economy materials) |
+| **Full freeze** | **25** | Registry must match exactly |
+
+Catalog: `economyRosterV1.ts` (`ECONOMY_V1_RESOURCE_IDS`, `ROUTE_INTEL_V1_IDS`, `PHASE_2C_FULL_ROSTER_IDS`). `ECONOMY_V1_ROSTER_FROZEN = true`.
+
+### Validation
+
+`validateResourceRegistry()` fails if the live registry has extras, missing freeze ids, wrong category buckets, economy ids tagged as route intel, or route intel not `INTEL` / `ROUTE_INTEL`.
+
+### Rule
+
+Do not expand past this set until an explicit later Phase 2 roster-expansion decision. Next economy work is sector/depth tables (2D/2E) on these ids.
+
+### Key files
+
+`economyRosterV1.ts`, `economyRosterDebugEngine.ts`, `resourceValidation.ts` (freeze gate), DevTest **ECONOMY SPINE // PHASE 2C**.
+
+## Economy Spine (Phase 2D — Sector resource tables)
+
+Turn the map into an economy decision: “I need Rail Capacitor → Slag Works,” not a flat loot table.
+
+### Per-sector farming identity
+
+| Sector | Role | PRIMARY | Rare / crossover / apex |
+|--------|------|---------|-------------------------|
+| Null Zone | Urban defense, scanner, concrete/warding | Nullcrete, Echo-Glass, Ley-Slag | Grid-Drive (rare), Containment Seal (crossover) |
+| Abyssal Sink | Survival, healing, cleanse, attrition | Mycelial Ichor, Sanguine Ampoule, Echo-Glass | Ossified Ley-Knot (rare), Specimen Jar (crossover) |
+| Ashen Wastes | Extraction, signal, flares, road salvage | Cinder Wire, Combustion Cylinder, Veil-Ash, Echo-Glass | Breach Thread (rare) |
+| Slag Works | Industrial power, weapons, armor crack | Rail Capacitor, Blood-Iron, Combustion Cylinder, Ley-Slag | Anchor Marrow (rare) |
+| Blackline Terminus | Containment, appraisal, sealed cargo | Containment Seal, Grid-Drive, Specimen Jar, Sealed Casket, Breach Thread | Anomalous Core (apex) |
+
+Bands: `PRIMARY` / `SUPPORT` / `RARE` / `CROSSOVER` / `APEX` in `SECTOR_RESOURCE_TABLES`. Flex SUPPORT (Ledger, Dog Tags, Resonant Filament) may appear on multiple sectors without being farming pillars.
+
+### Wiring
+
+- Combat / expansion drop identity uses `sectorIdentityResourcePoolFromTables` + table rare/apex pools (`resourceDropIdentityEngine.ts`).
+- Contract sector bias (`SECTOR_RESOURCE_IDS`) mirrors PRIMARY + key rare rows.
+- Validation: every sector has role/whyRun/≥3 PRIMARY; PRIMARY ⊆ `primarySectors`; every economy id listed somewhere; non-economy ids forbidden.
+
+Depth packets (Threshold / Breach / Deep) are **not** Phase 2D — that is Phase 2E.
+
+### Key files
+
+`sectorResourceTableEngine.ts`, `sectorResourceTableDebugEngine.ts`, `resourceDropIdentityEngine.ts`, `resourceValidation.ts`, `contractSponsorPreferences.ts`, DevTest **ECONOMY SPINE // PHASE 2D**.
+
+### Acceptance snapshot
+
+- Each sector has a clear farming fantasy and why-run list.
+- Map reads as resource destinations, not interchangeable loot.
+- Registry PRIMARY alignment holds; DevTest sector tables report PASSes.
+
+## Economy Spine (Phase 2E — Depth resource rules)
+
+Depth modifies the resource economy. Not every resource is available from the start.
+
+| Depth | Band | Purpose | Drops |
+|------:|------|---------|-------|
+| 1 | Threshold | Teach the sector; readable rewards | Common + sector stable; low intel; no unstable / contraband / apex |
+| 2 | Breach | Dangerous value; extract tension | More sector + rare; intel; unstable; Breach Thread rare; Anchor Marrow on Anchor; contraband high-risk only |
+| 3 | Deep Veil | Pressure kinds, not “more Ley-Slag” | Rare more common; meaningful unstable; contraband possible; Breach Thread up; Anomalous Core high-risk / apex only |
+
+### Wiring
+
+- `depthResourceRulesEngine.ts` — `DEPTH_ECONOMY_POLICIES`, `isResourceEligibleAtDepth`, `filterResourcesForDepth`, roll pressure hints.
+- Per-resource `depthRules` (from `resourceSourceIdentity`) still set min/max/preferred; Grid-Drive allows rare Threshold peek.
+- Combat salvage (`depthAwareTierResourcePool`) + identity extras filter through eligibility.
+- Validation: apex minDepth 3; unstable/contraband minDepth ≥ 2; D1 default pool clean; Null Zone Threshold example eligible.
+
+Reward packets / yield targets are **not** Phase 2E — that is Phase 2F.
+
+### Key files
+
+`depthResourceRulesEngine.ts`, `depthResourceRulesDebugEngine.ts`, `resourceDropIdentityEngine.ts`, `combatRewardEngine.ts`, `resourceSourceIdentity.ts`, `resourceValidation.ts`, DevTest **ECONOMY SPINE // PHASE 2E**.
+
+### Acceptance snapshot
+
+- Threshold stays readable; Breach opens risk; Deep Veil changes cargo kinds.
+- Apex / contraband cannot leak into normal Depth 1 salvage.
+- DevTest depth rules report PASSes.
+
+## Economy Spine (Phase 2F — Reward packets + yield model)
+
+Do not hand-place individual resources everywhere. Nodes emit **typed reward packets**; depth (2E) and sector tables (2D) gate what each packet can roll.
+
+### Packet types
+
+`STABLE` · `SECTOR` / `SECTOR_STABLE` · `INTEL` · `RARE` · `UNSTABLE` · `CONTRABAND` · `CONTRACT` · `OPERATION` · `ECHO` · `ANCHOR` · `APEX`
+
+Example: `{ packetType: 'SECTOR_STABLE', rolls: 2, rarityBias: 'COMMON', sectorBias: 'THE_SLAG_WORKS', allowUnstable: false, allowContraband: false, minDepth: 1 }`.
+
+### Node recipes (summary)
+
+| Node | Depth 1 | Depth 2 | Depth 3 |
+|------|---------|---------|---------|
+| Normal combat | 0–1 stable; tiny rare peek | 1 stable + sector chance; small rare | 1–2 stable + sector; rare chance |
+| Elite | 1 stable + rare chance | stable + sector/rare; unstable peek | 2 rolls + unstable chance |
+| Resource anomaly | 2–3 sector/stable | 3–4 + rare/unstable | 4–5 + rare/unstable/contraband |
+| Anchor Signal | sector + Anchor Marrow chance | + operation peek | same, stronger marrow |
+| Echo Signal | Echo-Glass / Filament / Dog Tags | + intel peek | stronger intel |
+| Boss | guaranteed sector + rare/intel | + unstable | + contraband / apex chance |
+
+### Breach Grade quality (not pile ×N)
+
+Grades add **bonus packet chances** (sector / rare / intel / unstable / contraband). Do not multiply every resource by 2.
+
+### Extracted yield targets
+
+Tune around **extracted** cargo, not raw drops (cargo space, stacks, death, banking, unstable pressure cut what gets home). Bands: early D1, full D1 boss, D2 partial, D3 extract, full deep clear — see `EXTRACTED_YIELD_TARGETS`.
+
+### Wiring
+
+- `resourceRewardPacketEngine.ts` — assemble + roll packets
+- `combatRewardEngine.rollCombatResourceDrops` — enemy loot + packets (+ light composition/occult)
+- `proceduralResourceEngine` — `RESOURCE_ANOMALY` packets
+- Run grant path injects Breach Grade, contract/operation targets
+
+Unstable pressure / sinks are Phase 2G+.
+
+### Key files
+
+`resourceRewardPacket.ts`, `resourceRewardPacketEngine.ts`, `resourceRewardPacketDebugEngine.ts`, `combatRewardEngine.ts`, `proceduralResourceEngine.ts`, `resourceValidation.ts`, DevTest **ECONOMY SPINE // PHASE 2F**.
+
+### Acceptance snapshot
+
+- Combat / harvest / boss use packets, not ad-hoc pools alone.
+- Higher grades add better packet kinds/chances, not flat pile multipliers.
+- Yield targets documented; DevTest packet report PASSes.
+
+## Economy Spine (Phase 2G — Resource source hints)
+
+If the player needs Rail Capacitor and the game never says where to get it, the economy is frustrating. Source hints appear in four places:
+
+1. **Recipe missing-resource lines** (Forge fabrication rows)
+2. **Resource ledger / home stash** subtitles
+3. **Veil Front** sector farming preview (+ pinned-goal material directives)
+4. **Debrief** SOURCE INTEL block
+
+### Hint tiers
+
+| Tier | When | Example |
+|------|------|---------|
+| Exact | Primary sector unlocked | “Commonly found in Slag Works… Best source: …” |
+| Partial | Sector locked but known (mandate/intel) | “Industrial power component. Likely source: locked sector (Slag Works).” |
+| Unknown | No sector knowledge | “Unknown source. Recover more sector intel…” |
+| Contract-directed | Pinned RECIPE_UNLOCK missing mats | “Pinned Goal… Missing… Recommended breach: Slag Works // Grade II+” |
+
+Built from `primarySectors`, sector tables (2D), `secondarySources`, and pinned goals (Phase 1E).
+
+### Key files
+
+`resourceSourceHintEngine.ts`, `resourceSourceHintDebugEngine.ts`, `CraftingMenuPanel.tsx`, `SafehouseStashPanel.tsx`, `SectorBriefingPanel.tsx`, `MapStatusSummary.tsx`, `OperationDebriefScreen.tsx`, DevTest **ECONOMY SPINE // PHASE 2G**.
+
+### Acceptance snapshot
+
+- Rail Capacitor → Exact Slag Works when Slag unlocked.
+- Locked-but-known sectors yield Partial, not silence.
+- DevTest source hints report PASSes.
+
+## Economy Spine (Phase 2H — Economy report + debug simulation)
+
+Dev-facing economy tooling so tuning is not vibes-based.
+
+### Debug tools
+
+Grant ALL / STABLE / UNSTABLE / INTEL · Clear stash · Unlock all sectors · Set Breach Grade I–III · Simulate sector/depth/grade drops · Simulate 100 resource nodes/sector · Simulate 100 economy runs · Validate registry suite · Print source table · Bottleneck report · Full economy report
+
+### Report surfaces
+
+Totals by category / rarity / sector / min-depth · recipes/contracts/ops per resource · no sink / no source · overused / underused · sim averages (extracted, abandoned, lost, value/slot) · bottleneck WARNINGs (e.g. high recipe use vs low extraction)
+
+### Key files
+
+`economySpineSimulationEngine.ts`, `economySpineDebugEngine.ts`, `resourceEconomyReportEngine.ts`, PlayerAccount debug grants, DevTest **ECONOMY SPINE // PHASE 2H**.
+
+### Acceptance snapshot
+
+- Full report + bottleneck + sims runnable from DevTest.
+- Grant/clear/unlock tools mutate hub stash / progression.
+- Tuning can cite average extraction rates, not gut feel.
+
+## Economy Spine (Phase 2I — Resource discovery state)
+
+Source hints (2G) tell you where to farm. Discovery state makes ledger identity feel earned.
+
+### State per resource
+
+`discovered` · `firstExtractedAtSector` · `bestKnownSource` · `knownUses`
+
+### Presentation
+
+| State | Title | Detail |
+|-------|-------|--------|
+| Before | UNKNOWN INDUSTRIAL COMPONENT (category fog) | Likely source / used-in band |
+| After | RAIL CAPACITOR | Best source + known uses + first extract sector |
+
+### Wiring
+
+- Seeded from stash on save migrate / default account
+- Marked when post-run routing banks new resources (and debug grants)
+- Forge ledger + Safehouse stash use discovery cards
+- Debrief SOURCE INTEL includes `DISCOVERED:` lines
+
+### Key files
+
+`resourceDiscovery.ts`, `resourceDiscoveryEngine.ts`, `resourceDiscoveryDebugEngine.ts`, PlayerAccount.`resourceDiscovery`, DevTest **ECONOMY SPINE // PHASE 2I**.
+
+### Acceptance snapshot
+
+- Fogged title → true name after first bank.
+- Ledger shows best source + uses once discovered.
+- DevTest discovery report PASSes.
+
+## Economy Spine (Phase 2J — Contract / market / appraisal integration)
+
+Light integration pass — no market rebuild. Makes sure the economy spine talks to contracts, operations, fence, and sealed appraisal without impossible targets.
+
+### Guarantees
+
+- Procedural contract overrides (jar/casket/core/intel/unstable) are **spawn-filtered** to the selected sector (or slot fails / retries).
+- Contract picks require `canBeContractTarget`; board validation errors if not.
+- Sector contract bias prefers **PRIMARY+RARE** farming tables (2D), with legacy `SECTOR_RESOURCE_IDS` checked for drift.
+- Operations already filter `canBeOperationTarget` + spawn; integration report audits flags.
+- Contraband / sealed stay **sell / deliver / appraise** — never craft inputs.
+- Appraisal jar + casket pipeline remains the sealed sink (fees + band sell tables).
+
+### Value lanes (fence)
+
+| Category | Fence mult | Intent |
+|----------|------------|--------|
+| STABLE | ×0.85 | Craft sink preferred |
+| INTEL | ×1.15 | Fence + contract |
+| UNSTABLE | ×1.0 | Moderate sell; carry risk |
+| CONTRABAND | ×1.30 | High fence / appraisal / deliver |
+
+Applied in hub fence + post-run `SELL_FENCE` via `resolveFenceUnitValue`.
+
+### Key files
+
+`economyValueLaneEngine.ts`, `economyIntegrationEngine.ts`, `contractProceduralEngine.ts`, `hubSafehouseEngine.ts`, `postRunCargoRoutingEngine.ts`, DevTest **ECONOMY SPINE // PHASE 2J**.
+
+### Acceptance snapshot
+
+- Integration report PASSes (no impossible contract/op targets; no contraband craft).
+- Fence matrix shows lane-adjusted unit values.
+- Black Market fence rows show category + lane payout (`formatFenceLaneLabel`).
+
+## Economy Spine (Phase 2K — Live economy telemetry)
+
+Offline sims (2H) answer “what should a run yield?” Live telemetry answers “what actually happened?”
+
+### Per-run (`ActiveIncursionState.economyRunTelemetry`)
+
+Generated · left behind · cargo swaps · jettisons · occupancy samples · nodes with unstable/contraband · unstable carry duration · newly craftable recipes
+
+Ledger still owns: collected / banked / extracted / lost / consumed.
+
+### Career (`PlayerAccount.careerEconomyTelemetry`)
+
+Craft spend · fence units/credits · contracts completed · newly craftable · runs sampled · last-run summary
+
+### Hooks
+
+Loot delta → generated · harvest leave-behind · cargo replace/jettison · node clear occupancy/unstable · hub craft · hub + debrief fence · debrief finalize into career
+
+### Key files
+
+`economyRunTelemetry.ts`, `economyRunTelemetryEngine.ts`, `postRunCargoRoutingRunState.applyCargoCollectedLedgerDelta`, RunContext cargo/node hooks, DevTest **ECONOMY SPINE // PHASE 2K**.
+
+### Acceptance snapshot
+
+- Live telemetry report shows run + career event counters.
+- Leave-behind / swaps / craft / fence increment tracked fields.
+- 2H sim still available beside live report (no second sim stack).
+
+## Economy Spine (Phase 2L — Save migration)
+
+Old saves must load without wiping craft/weapons or inventing bad economy state.
+
+### On account hydrate (`mergeStoredAccount`)
+
+- Remap legacy / snake_case stash keys via `LEGACY_RESOURCE_ID_ALIASES`
+- Drop unknown stash / sealed resource refs (fail closed)
+- Missing roster resources soft-init to 0
+- Seed discovery + career telemetry defaults when absent
+- Crafted augments / weapon unlocks preserved (never wiped by migrate)
+
+### On world hydrate (`mergePersistedState`)
+
+- Remap contract target resource ids
+- Drop contracts with unknown / non-contract-target resources
+- Clear selected SPONSOR contract if it was removed
+- Regenerate board only if empty after sanitize
+
+### Key files
+
+`economySaveMigrationEngine.ts`, `PlayerAccountContext.mergeStoredAccount`, `WorldStateContext.mergePersistedState`, DevTest **ECONOMY SPINE // PHASE 2L**.
+
+### Acceptance snapshot
+
+- Fixture PASSes: `ley_slag` remaps; orphan stash key dropped; bad contract removed.
+- Dry-run on live account shows remaps/drops without craft/weapon loss.
+- No AsyncStorage key rebuild — migrate in-place on load.
+
+## Economy Spine (Phase 2M — Tuning pass)
+
+Close Phase 2 by answering the design questions and enforcing hard balance rails — not vibes.
+
+### Tuning questions
+
+1. Basic survival craft after one run?
+2. Target a missing resource without guessing?
+3. Cargo stacking helpful without erasing tension?
+4. Unstable cargo forces real decisions?
+5. Depth 2 economically worth the risk?
+6. Depth 3 dangerous but rewarding?
+7. Every sector has a reason to run?
+8. Null Zone still relevant at higher Breach Grades?
+
+### Hard balance rules
+
+- Do not make every recipe need Ley-Slag / every tech recipe need Grid-Drive / every power recipe need Ley-Knot
+- Do not gate Depth 2 reachability on Breach Thread
+- Do not make Blackline mandatory for all advanced craft
+- Do not let cargo tools erase extraction risk
+- Keep basic healing cheap; commons must have sinks
+- No sealed/contraband craft inputs; do not overuse Anomalous Core
+
+### Applied 2M knobs
+
+- D1 NORMAL_COMBAT gains a SECTOR packet + higher STABLE fire (Threshold teaches farming identity)
+- Weapon / run-item / forge sinks diversified off Ley-Slag toward nullcrete / cinder / combustion / mycelial / rail
+- Ashen Breach Thread + Null Zone Containment Seal promoted to PRIMARY
+- Depth 2/3 extracted yield bands nudged up (intel / unstable)
+
+### Key files
+
+`economyTuningEngine.ts`, `economyBalanceConfig.ECONOMY_TUNING_THRESHOLDS`, `resourceRewardPacketEngine`, `weaponRegistry` / `runItemRegistry` / `craftingRegistry`, `sectorResourceTableEngine`, DevTest **ECONOMY SPINE // PHASE 2M**.
+
+### Acceptance snapshot
+
+- Tuning report has zero FAIL checks.
+- Ley-Slag recipe share under hard cap; Standard Coagulant stays ≤1 Ley-Slag.
+- Sector tuning brief shows every sector PRIMARY identity + D2 rates.
+
+## Economy Spine (Polish pass — Phase 2 closeout)
+
+Ship cleanup after 2A–2M. No new economy systems.
+
+### Verify / acceptance
+
+`economySpineAuditEngine.ts` aggregates roster / ownership / sector / depth / packets / hints / discovery / integration / migration / tuning. DevTest **ECONOMY SPINE // POLISH** — `[ VERIFY ALL 2A–2M ]` + `[ ACCEPTANCE ]`. Boot `__DEV__` warn on verify errors.
+
+### Player surfaces
+
+| Surface | Polish |
+|---------|--------|
+| Black Market fence | Lane label = category ×mult · intent (craft sink / fence+contract / risk carry / appraise) |
+| Forge fabrication costs | Undiscovered mats use fogged discovery titles |
+| Debrief SOURCE INTEL | `DISCOVERED:` only for first-find extracts (not every already-known bank) |
+| Cargo REPLACE overlay | Stack quantity badge when replacing |
+
+### Cleanup
+
+- Removed duplicate consumable recipes from `CRAFTING_REGISTRY` (run-item bridge is sole source — stops double-counting in tuning/bottlenecks)
+- Bottleneck “Blackline-only” check uses any sector-table band + identity primaries (not PRIMARY band alone)
+
+### Soft WARNs retained
+
+Grid-Drive still clusters in tech-tagged sinks; Ley-Knot in power-tagged sinks — intentional mid/late gates, not FAIL.
+
+### Acceptance snapshot
+
+- Verify ALL → 0 errors.
+- Acceptance report PASSes with tuning 0 FAIL + migration fixture PASS.
 
 ## Run And Progression Systems
 
@@ -1759,6 +2247,20 @@ Routing (`tensionMechanicRouting.ts`): stealth/patrol/militarized → Shadowline
 ## Known Partial Implementations / Design Debt
 
 - **Progression Spine Phase 1 (complete — 1A–1J):** Runner Clearance, sector access mandates + route intel, Breach Grades I–III (IV/V catalog), pinned goals, class/cabal **reward hooks only**, recipe Known/Rumored/Unknown, debrief progression theater with always-exit, failure-recovery pity (boost@2 / guarantee@3), economy sim + pacing/recipe/soft-lock audits. Open follow-ups: wire class/cabal hooks to real content; Grade IV/V playable; deeper sector mastery reward trees; keep sim/oracle calibrated as XP curves change.
+- **Economy Spine Phase 2A (complete):** `cargoStackCap` / `stashStackCap` registry fields; in-run cargo instance `quantity` with merge into incomplete stacks; unstable/contraband/route-intel forced to stack 1; quantity badges; discard rare/route-intel warnings; pickup replace + harvest leave-behind overlays; DevTest stack rules + merge smoke.
+- **Economy Spine Phase 2B (complete):** Registry normalization (`primarySectors` / `secondarySources` / `depthRules` / carried-effect flags via `resourceSourceIdentity`); orphan validation gate; 2B.1 ownership states (carried/banked/extracted/lost); apex mid-run bank block; Safehouse ownership copy; DevTest registry + banking smoke.
+- **Economy Spine Phase 2C (complete):** Frozen v1 roster — 21 economy + 4 route intel (`economyRosterV1.ts`); exact-match validation; DevTest roster freeze report.
+- **Economy Spine Phase 2D (complete):** Per-sector farming tables (`sectorResourceTableEngine.ts`); drop identity + contract bias wired; PRIMARY ↔ `primarySectors` validation; DevTest sector tables report.
+- **Economy Spine Phase 2E (complete):** Threshold / Breach / Deep Veil depth policies (`depthResourceRulesEngine.ts`); combat + identity drop gates; registry depthRules alignment; DevTest depth rules report.
+- **Economy Spine Phase 2F (complete):** Typed reward packets + node recipes (`resourceRewardPacketEngine.ts`); Breach Grade quality bonuses (not pile ×N); extracted yield targets; combat/harvest/boss wired; DevTest packet report.
+- **Economy Spine Phase 2G (complete):** Resource source hints — Exact / Partial / Unknown / contract-directed (`resourceSourceHintEngine.ts`); wired to Forge ledger/recipes, stash, Veil Front farming preview, debrief SOURCE INTEL; DevTest hints report.
+- **Economy Spine Phase 2H (complete):** Economy report + debug simulation (`economySpineDebugEngine` / `economySpineSimulationEngine`); grant/clear/unlock tools; sector-depth sims; 100-node + 100-run sims; bottleneck WARNINGs; DevTest Phase 2H panel.
+- **Economy Spine Phase 2I (complete):** Resource discovery state / light codex (`resourceDiscoveryEngine`); fogged → true name; best source + known uses; stash seed + routing marks; ledger/debrief/DevTest.
+- **Economy Spine Phase 2J (complete):** Contract/op/market/appraisal integration — spawn-safe contract overrides, value lanes, fence matrix, sector-bias sync, integration report.
+- **Economy Spine Phase 2K (complete):** Live economy event telemetry (`economyRunTelemetryEngine`) — generated/left-behind/swaps/occupancy/unstable carry + career craft/fence; DevTest Phase 2K.
+- **Economy Spine Phase 2L (complete):** Save migration (`economySaveMigrationEngine`) — legacy stash/contract id remap, unknown refs fail closed, craft/weapons preserved; wired on account + world hydrate; DevTest Phase 2L.
+- **Economy Spine Phase 2M (complete):** Tuning pass (`economyTuningEngine`) — design questions + hard balance rails; D1 sector packets; Ley-Slag sink diversification; Ashen/Null PRIMARY promotions; D2/D3 yield nudges; DevTest Phase 2M.
+- **Economy Spine polish (complete):** `economySpineAuditEngine` verify/acceptance; fence lane labels; forge discovery fog; debrief first-find DISCOVERED; REPLACE stack qty; forge consumable dedupe; Blackline bottleneck false-positive fix. Phase 2 closed.
 - **Contract loop v1 (complete):** Resource model, physical banking, contract board, Veil Front integration, run event tracking, contract resolver, unified run debrief (extract + death via `OperationDebriefScreen`), procedural operation generation, operation lifecycle (ACTIVE / COMPLETED / expiration / AFTERMATH rotation), mid-run operation target contribution with debrief transmission line, sponsor perks on deploy/contract summary, operation intel log on Veil Front briefing, expanded operation contribution on extract, **debrief progress headline** (`+N progress this run`), **reward preview** on Veil Front cards/briefing/deploy modal, and **world state validation + dev debug tooling** (Phases A–F).
 - **Unstable cargo carried effects v1 (complete):** Three unstable resources with deduped carried modifiers, lazy procedural type/context rolls, cargo pressure UI, debrief Cargo Pressure block, volatile resonance tagging, occupancy resonance multiplier, emergency recall Veil-Ash warning log.
 - **Echo encounters v1 (complete — Phases 1–6):** Echo scanner overlays at layer unlock, per-depth/run caps, weighted encounter kinds, fallen-runner narrative, assist/cargo/extraction immediate resolution, hostile combat routing, class-based hostile templates with depth scaling, hostile echo reward rolls, debrief Echo section, dev forcing tools, echo pipeline validation (reward-resource existence + Echo Recovery contribution rules), `echoRunState` tracking, Veil Front echo intel surfaces, reward-stack extraction tracking, Smuggler's Ledger fallen-runner drop, extraction echo emergency-recall bleed bonus. Acceptance criteria (20) verified in the Echo Encounters v1 section below.

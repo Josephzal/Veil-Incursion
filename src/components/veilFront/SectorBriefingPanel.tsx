@@ -51,6 +51,10 @@ import {
   maxPinnedGoalSlots,
 } from '../../data/pinnedGoalEngine';
 import type { BreachGradeId } from '../../types/progression';
+import {
+  formatSectorFarmingPreviewLines,
+  listPinnedGoalMissingResourceHints,
+} from '../../data/resourceSourceHintEngine';
 
 interface SectorBriefingPanelProps {
   theme: TerminalTheme;
@@ -164,6 +168,14 @@ export default function SectorBriefingPanel({
   const availableGoals = useMemo(
     () => listAvailableGoalsToPin(progressionProfile).slice(0, 6),
     [progressionProfile],
+  );
+  const farmingPreview = useMemo(
+    () => formatSectorFarmingPreviewLines(sector.id, progressionProfile),
+    [sector.id, progressionProfile],
+  );
+  const goalResourceHints = useMemo(
+    () => listPinnedGoalMissingResourceHints(progressionProfile, account.resourceStash),
+    [progressionProfile, account.resourceStash],
   );
 
   useEffect(() => {
@@ -311,6 +323,42 @@ export default function SectorBriefingPanel({
                   [ ACCEPT ACCESS MANDATE ]
                 </TerminalText>
               </HapticPressable>
+            ) : null}
+          </SectionCard>
+        </View>
+
+        {/* --- FARMING IDENTITY (Phase 2G) --- */}
+        <View>
+          <LoadoutSectionHeader label="Farming Identity" style={{ marginBottom: scaleSpacing(4) }} />
+          <SectionCard>
+            {farmingPreview.map((line) => (
+              <TerminalText
+                key={line}
+                size={scaleFont(5.8)}
+                style={{ color: theme.mutedColor, lineHeight: scaleFont(9), marginTop: scaleSpacing(2) }}
+              >
+                {line}
+              </TerminalText>
+            ))}
+            {goalResourceHints.length > 0 ? (
+              <View style={{ marginTop: scaleSpacing(8), gap: scaleSpacing(4) }}>
+                <TerminalText size={scaleFont(5.6)} letterSpacing={0.8} style={{ color: theme.statusColor, fontWeight: '800' }}>
+                  PINNED GOAL MATERIALS
+                </TerminalText>
+                {goalResourceHints.slice(0, 4).map((hint) => (
+                  <View key={hint.resourceId}>
+                    {hint.lines.map((line) => (
+                      <TerminalText
+                        key={`${hint.resourceId}-${line}`}
+                        size={scaleFont(5.5)}
+                        style={{ color: theme.mutedColor, lineHeight: scaleFont(8.5) }}
+                      >
+                        {line}
+                      </TerminalText>
+                    ))}
+                  </View>
+                ))}
+              </View>
             ) : null}
           </SectionCard>
         </View>

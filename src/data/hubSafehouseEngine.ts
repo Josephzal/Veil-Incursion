@@ -12,10 +12,10 @@ import type { ResourceItemId, ResourceQuantity } from '../types/resourceItem';
 import type { FenceableResourceId } from '../types/resourceItem';
 import {
   getFenceableResourceIds,
-  getResourceSellValue,
   isFenceableResourceId,
   isResourceItemId,
 } from './resourceRegistry';
+import { resolveFenceUnitValue } from './economyValueLaneEngine';
 import { getStashCount } from './resourceStashEngine';
 import { CARGO_ITEM_CATALOG } from '../types/cargoGrid';
 import type { RunItemId, RunItemsSlotState } from '../types/runItem';
@@ -90,7 +90,7 @@ export function creditFenceSale(
 ): { cabalCredits: number; creditsEarned: number } | null {
   if (!isFenceableResourceId(resourceId)) return null;
   if (quantity <= 0) return null;
-  const unitValue = getResourceSellValue(resourceId);
+  const unitValue = resolveFenceUnitValue(resourceId);
   const creditsEarned = Math.round(unitValue * quantity * valueMultiplier);
   return {
     cabalCredits: cabalCredits + creditsEarned,
@@ -132,7 +132,7 @@ export function listFenceableStashEntries(
     return [{
       resourceId,
       quantity,
-      sellValue: getResourceSellValue(resourceId),
+      sellValue: resolveFenceUnitValue(resourceId),
     }];
   });
 }

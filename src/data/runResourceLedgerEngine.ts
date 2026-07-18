@@ -28,7 +28,8 @@ export function mergeResourceQuantities(
 export function countAllCargoItems(cargo: CargoRunState): Map<CargoItemId, number> {
   const counts = new Map<CargoItemId, number>();
   [...cargo.grid.placed, ...cargo.containment].forEach((item) => {
-    counts.set(item.itemId, (counts.get(item.itemId) ?? 0) + 1);
+    const qty = Math.max(1, item.quantity ?? 1);
+    counts.set(item.itemId, (counts.get(item.itemId) ?? 0) + qty);
   });
   return counts;
 }
@@ -197,6 +198,8 @@ export function bankSingleCargoInstance(
   const item = placed ?? contained;
   if (!item) return null;
 
+  const quantity = Math.max(1, item.quantity ?? 1);
+
   let nextCargo = cargo;
   if (placed) {
     nextCargo = removePlacedCargoItem(nextCargo, instanceId);
@@ -212,10 +215,10 @@ export function bankSingleCargoInstance(
   const nextConsumables = { ...bank.consumables };
 
   if (isResourceItemId(item.itemId)) {
-    nextResources = addToResourceStash(nextResources, item.itemId, 1);
-    bankedResources[item.itemId] = 1;
+    nextResources = addToResourceStash(nextResources, item.itemId, quantity);
+    bankedResources[item.itemId] = quantity;
   } else {
-    nextConsumables[item.itemId] = (nextConsumables[item.itemId] ?? 0) + 1;
+    nextConsumables[item.itemId] = (nextConsumables[item.itemId] ?? 0) + quantity;
   }
 
   return {

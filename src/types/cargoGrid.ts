@@ -99,7 +99,10 @@ export interface PlacedCargoItem {
   itemId: CargoItemId;
   originRow: number;
   originCol: number;
+  /** Per-unit market value (DATA_BLEED erodes this). Total = currentValue × quantity. */
   currentValue: number;
+  /** Stack size — defaults to 1 when unset (legacy saves / consumables). */
+  quantity?: number;
   /** Black market visit — staged on grid, not charged until bind. */
   blackMarketStaged?: boolean;
 }
@@ -107,8 +110,10 @@ export interface PlacedCargoItem {
 export interface ContainmentItem {
   instanceId: string;
   itemId: CargoItemId;
-  /** Eroded by DATA_BLEED; defaults to catalog baseValue when unset. */
+  /** Eroded by DATA_BLEED; defaults to catalog baseValue when unset. Per-unit. */
   currentValue?: number;
+  /** Stack size — defaults to 1 when unset (legacy saves / consumables). */
+  quantity?: number;
 }
 
 export interface CargoGridState {

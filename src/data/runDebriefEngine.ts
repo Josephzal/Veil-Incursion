@@ -49,6 +49,11 @@ import {
   buildCraftingOpportunitySummary,
   type CraftingOpportunitySummary,
 } from './runIntegration/runCraftingOpportunityEngine';
+import {
+  ensureEconomyRunTelemetry,
+  finalizeUnstableCarryDuration,
+  recordEconomyNewlyCraftable,
+} from './economyRunTelemetryEngine';
 import { sumLedgerCategoryTotals } from './runIntegration/runIntegrationHelpers';
 import type { PlayerAccount } from '../types/game';
 import type { KeepsakeDebriefSummary } from '../types/expeditionKeepsake';
@@ -147,6 +152,8 @@ export interface OperationDebriefPayload {
   encounterCompositionSummary: import('./runDebriefEncounterCompositionEngine').EncounterCompositionDebriefSummary | null;
   balanceTelemetry: RunBalanceTelemetry;
   craftingOpportunities: CraftingOpportunitySummary;
+  /** Phase 2K — live economy event telemetry snapshot. */
+  economyRunTelemetry: import('../types/economyRunTelemetry').EconomyRunTelemetry;
   /** Operations v2 — bonus objective status at debrief time. */
   operationBonusLines?: string[];
   completionEffectSummary?: string;
@@ -420,6 +427,14 @@ export function buildOperationDebriefPayload(
       note: null,
     };
 
+  let economyRunTelemetry = finalizeUnstableCarryDuration(
+    ensureEconomyRunTelemetry(incursion.economyRunTelemetry),
+  );
+  economyRunTelemetry = recordEconomyNewlyCraftable(
+    economyRunTelemetry,
+    craftingOpportunities.newlyCraftable.length,
+  );
+
   const brief = incursion.runWorldBrief ?? context.runWorldBrief ?? null;
   const aftermathInput = buildRunAftermathInputFromIncursion(incursion, {
     extractedSuccessfully,
@@ -475,6 +490,7 @@ export function buildOperationDebriefPayload(
     encounterCompositionSummary,
     balanceTelemetry,
     craftingOpportunities,
+    economyRunTelemetry,
     operationBonusLines: formatOperationBonusDebriefLines(context.activeOperation.bonusObjectives),
     completionEffectSummary: context.activeOperation.completionEffectSummary,
     worldBriefSummary,

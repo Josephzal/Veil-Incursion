@@ -76,6 +76,53 @@ import {
   debugSimulateSpecimenJarOpenRolls,
   debugValidateSealedCargo,
 } from '../../data/sealedCargoDebugEngine';
+import {
+  formatCargoStackMergeSmokeTest,
+  formatCargoStackRulesReport,
+} from '../../data/cargoStackDebugEngine';
+import {
+  formatCargoOwnershipRulesReport,
+  formatResourceRegistryNormalizationReport,
+} from '../../data/cargoOwnershipDebugEngine';
+import { formatEconomyRosterV1FreezeReport } from '../../data/economyRosterDebugEngine';
+import { formatSectorResourceTablesReport } from '../../data/sectorResourceTableDebugEngine';
+import { formatDepthResourceRulesReport } from '../../data/depthResourceRulesDebugEngine';
+import { formatRewardPacketsReport } from '../../data/resourceRewardPacketDebugEngine';
+import { formatResourceSourceHintsReport } from '../../data/resourceSourceHintDebugEngine';
+import { formatResourceDiscoveryReport } from '../../data/resourceDiscoveryDebugEngine';
+import {
+  formatEconomyIntegrationReport,
+  formatFenceEligibilityMatrix,
+} from '../../data/economyIntegrationEngine';
+import {
+  formatEconomyLiveTelemetryReport,
+  ensureEconomyRunTelemetry,
+} from '../../data/economyRunTelemetryEngine';
+import {
+  formatEconomySaveMigrationDryRun,
+  formatEconomySaveMigrationFixtureReport,
+} from '../../data/economySaveMigrationEngine';
+import {
+  formatEconomyTuningFixtureReport,
+  formatEconomyTuningReport,
+  formatEconomySectorTuningBrief,
+} from '../../data/economyTuningEngine';
+import {
+  formatEconomySpineAcceptanceReport,
+  formatEconomySpineVerifyReport,
+} from '../../data/economySpineAuditEngine';
+import {
+  formatEconomyBottleneckReport,
+  formatEconomySourceTable,
+  formatEconomySpinePhase2HReport,
+  formatEconomyValidationSuite,
+  formatEconomyRunSimReport,
+  formatResourceNodeSimReport,
+  formatSectorDepthDropSimReport,
+  simulateEconomyRuns,
+  simulateResourceNodesPerSector,
+  simulateSectorDepthDrops,
+} from '../../data/economySpineDebugEngine';
 import { SECTOR_WORLD_TEMPLATES } from '../../data/sectorWorldCatalog';
 import {
   buildDebriefProgressionTheater,
@@ -255,6 +302,11 @@ export default function DevTestHubPanel(): React.JSX.Element {
     grantSealedCasketInHub,
     grantSpecimenJarInHub,
     grantExpansionResourcesInHub,
+    debugGrantEconomyResourcesInHub,
+    debugClearEconomyStashInHub,
+    debugUnlockAllEconomySectorsInHub,
+    debugDiscoverAllResourcesInHub,
+    debugClearResourceDiscoveryInHub,
     logProgressionProfile,
     logProgressionUnlockCatalog,
     debugGrantProgressionUnlockId,
@@ -1776,6 +1828,299 @@ export default function DevTestHubPanel(): React.JSX.Element {
           label="[ PER-RUN XP / REP PREVIEW ]"
           accentColor={theme.mutedColor}
           onPress={() => setDebugReport(logProgressionPerRunPreview())}
+        />
+      </View>
+
+      <HubSectionHeader title="ECONOMY SPINE // POLISH" color={theme.mutedColor} />
+      <View style={styles.grid}>
+        <SandboxLaunchButton
+          label="[ VERIFY ALL 2A–2M ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(formatEconomySpineVerifyReport())}
+        />
+        <SandboxLaunchButton
+          label="[ ACCEPTANCE ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(formatEconomySpineAcceptanceReport())}
+        />
+        <SandboxLaunchButton
+          label="[ TUNING PASS ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(formatEconomyTuningReport())}
+        />
+      </View>
+
+      <HubSectionHeader title="ECONOMY SPINE // PHASE 2A" color={theme.mutedColor} />
+      <View style={styles.grid}>
+        <SandboxLaunchButton
+          label="[ CARGO STACK RULES ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(formatCargoStackRulesReport())}
+        />
+        <SandboxLaunchButton
+          label="[ STACK MERGE SMOKE ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(formatCargoStackMergeSmokeTest('ley-slag'))}
+        />
+        <SandboxLaunchButton
+          label="[ ECHO-GLASS MERGE SMOKE ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(formatCargoStackMergeSmokeTest('echo-glass-shard'))}
+        />
+      </View>
+
+      <HubSectionHeader title="ECONOMY SPINE // PHASE 2B" color={theme.mutedColor} />
+      <View style={styles.grid}>
+        <SandboxLaunchButton
+          label="[ REGISTRY NORMALIZATION ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(formatResourceRegistryNormalizationReport())}
+        />
+        <SandboxLaunchButton
+          label="[ OWNERSHIP / BANKING RULES ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(formatCargoOwnershipRulesReport())}
+        />
+      </View>
+
+      <HubSectionHeader title="ECONOMY SPINE // PHASE 2C" color={theme.mutedColor} />
+      <View style={styles.grid}>
+        <SandboxLaunchButton
+          label="[ ROSTER FREEZE REPORT ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(formatEconomyRosterV1FreezeReport())}
+        />
+      </View>
+
+      <HubSectionHeader title="ECONOMY SPINE // PHASE 2D" color={theme.mutedColor} />
+      <View style={styles.grid}>
+        <SandboxLaunchButton
+          label="[ SECTOR RESOURCE TABLES ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(formatSectorResourceTablesReport())}
+        />
+      </View>
+
+      <HubSectionHeader title="ECONOMY SPINE // PHASE 2E" color={theme.mutedColor} />
+      <View style={styles.grid}>
+        <SandboxLaunchButton
+          label="[ DEPTH RESOURCE RULES ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(formatDepthResourceRulesReport())}
+        />
+      </View>
+
+      <HubSectionHeader title="ECONOMY SPINE // PHASE 2F" color={theme.mutedColor} />
+      <View style={styles.grid}>
+        <SandboxLaunchButton
+          label="[ REWARD PACKETS / YIELD ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(formatRewardPacketsReport())}
+        />
+      </View>
+
+      <HubSectionHeader title="ECONOMY SPINE // PHASE 2G" color={theme.mutedColor} />
+      <View style={styles.grid}>
+        <SandboxLaunchButton
+          label="[ RESOURCE SOURCE HINTS ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(formatResourceSourceHintsReport())}
+        />
+      </View>
+
+      <HubSectionHeader title="ECONOMY SPINE // PHASE 2H" color={theme.mutedColor} />
+      <View style={styles.grid}>
+        <SandboxLaunchButton
+          label="[ FULL ECONOMY REPORT ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(formatEconomySpinePhase2HReport({ runs: 40 }))}
+        />
+        <SandboxLaunchButton
+          label="[ BOTTLENECK REPORT ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(formatEconomyBottleneckReport())}
+        />
+        <SandboxLaunchButton
+          label="[ SOURCE TABLE ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(formatEconomySourceTable())}
+        />
+        <SandboxLaunchButton
+          label="[ VALIDATE ECONOMY ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(formatEconomyValidationSuite())}
+        />
+        <SandboxLaunchButton
+          label="[ GRANT ALL RESOURCES ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(debugGrantEconomyResourcesInHub('ALL'))}
+        />
+        <SandboxLaunchButton
+          label="[ GRANT STABLE ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(debugGrantEconomyResourcesInHub('STABLE'))}
+        />
+        <SandboxLaunchButton
+          label="[ GRANT UNSTABLE ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(debugGrantEconomyResourcesInHub('UNSTABLE'))}
+        />
+        <SandboxLaunchButton
+          label="[ GRANT INTEL ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(debugGrantEconomyResourcesInHub('INTEL'))}
+        />
+        <SandboxLaunchButton
+          label="[ CLEAR STASH ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(debugClearEconomyStashInHub())}
+        />
+        <SandboxLaunchButton
+          label="[ UNLOCK ALL SECTORS ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(debugUnlockAllEconomySectorsInHub())}
+        />
+        <SandboxLaunchButton
+          label="[ SET GRADE I ]"
+          accentColor={theme.mutedColor}
+          onPress={() => {
+            setSelectedBreachGrade('I');
+            setDebugReport('>> DEBUG ECONOMY — selected Breach Grade I.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ SET GRADE II ]"
+          accentColor={theme.mutedColor}
+          onPress={() => {
+            setSelectedBreachGrade('II');
+            setDebugReport('>> DEBUG ECONOMY — selected Breach Grade II.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ SET GRADE III ]"
+          accentColor={theme.mutedColor}
+          onPress={() => {
+            setSelectedBreachGrade('III');
+            setDebugReport('>> DEBUG ECONOMY — selected Breach Grade III.');
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ SIM SLAG D2 DROPS ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(formatSectorDepthDropSimReport(simulateSectorDepthDrops({
+            sectorId: 'THE_SLAG_WORKS',
+            districtDepth: 2,
+            breachGrade: persisted.selectedBreachGrade ?? 'II',
+            isElite: true,
+            iterations: 100,
+          })))}
+        />
+        <SandboxLaunchButton
+          label="[ SIM 100 RES NODES ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(formatResourceNodeSimReport(simulateResourceNodesPerSector({
+            iterationsPerSector: 100,
+            breachGrade: persisted.selectedBreachGrade ?? 'II',
+          })))}
+        />
+        <SandboxLaunchButton
+          label="[ SIM 100 ECONOMY RUNS ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(formatEconomyRunSimReport(simulateEconomyRuns({
+            runs: 100,
+            breachGrade: persisted.selectedBreachGrade ?? 'II',
+            sectorId: persisted.selectedSectorId ?? 'THE_NULL_ZONE',
+          })))}
+        />
+      </View>
+
+      <HubSectionHeader title="ECONOMY SPINE // PHASE 2I" color={theme.mutedColor} />
+      <View style={styles.grid}>
+        <SandboxLaunchButton
+          label="[ RESOURCE DISCOVERY ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(formatResourceDiscoveryReport(
+            account.resourceDiscovery,
+            account.resourceStash,
+          ))}
+        />
+        <SandboxLaunchButton
+          label="[ DISCOVER ALL ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(debugDiscoverAllResourcesInHub())}
+        />
+        <SandboxLaunchButton
+          label="[ CLEAR DISCOVERY ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(debugClearResourceDiscoveryInHub())}
+        />
+      </View>
+
+      <HubSectionHeader title="ECONOMY SPINE // PHASE 2J" color={theme.mutedColor} />
+      <View style={styles.grid}>
+        <SandboxLaunchButton
+          label="[ INTEGRATION REPORT ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(formatEconomyIntegrationReport())}
+        />
+        <SandboxLaunchButton
+          label="[ FENCE MATRIX ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(formatFenceEligibilityMatrix())}
+        />
+      </View>
+
+      <HubSectionHeader title="ECONOMY SPINE // PHASE 2K" color={theme.mutedColor} />
+      <View style={styles.grid}>
+        <SandboxLaunchButton
+          label="[ LIVE ECONOMY TELEMETRY ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(formatEconomyLiveTelemetryReport({
+            career: account.careerEconomyTelemetry,
+            run: ensureEconomyRunTelemetry(undefined),
+            includeSim: true,
+          }))}
+        />
+        <SandboxLaunchButton
+          label="[ CAREER ECONOMY EVENTS ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(formatEconomyLiveTelemetryReport({
+            career: account.careerEconomyTelemetry,
+            includeSim: false,
+          }))}
+        />
+      </View>
+
+      <HubSectionHeader title="ECONOMY SPINE // PHASE 2L" color={theme.mutedColor} />
+      <View style={styles.grid}>
+        <SandboxLaunchButton
+          label="[ SAVE MIGRATION DRY-RUN ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(formatEconomySaveMigrationDryRun(account))}
+        />
+        <SandboxLaunchButton
+          label="[ MIGRATION FIXTURE ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(formatEconomySaveMigrationFixtureReport())}
+        />
+      </View>
+
+      <HubSectionHeader title="ECONOMY SPINE // PHASE 2M" color={theme.mutedColor} />
+      <View style={styles.grid}>
+        <SandboxLaunchButton
+          label="[ TUNING PASS REPORT ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(formatEconomyTuningReport())}
+        />
+        <SandboxLaunchButton
+          label="[ SECTOR TUNING ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(formatEconomySectorTuningBrief())}
+        />
+        <SandboxLaunchButton
+          label="[ TUNING FIXTURE ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(formatEconomyTuningFixtureReport())}
         />
       </View>
 

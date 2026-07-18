@@ -6,6 +6,8 @@ import type {
   ResourceUsageTag,
 } from '../types/resourceItem';
 import type { SectorId } from '../types/worldState';
+import { isUnstableCargoEffectId } from '../types/unstableCargoEffects';
+import { RESOURCE_SOURCE_IDENTITY } from './resourceSourceIdentity';
 
 const ALL_SECTORS: readonly SectorId[] = [
   'THE_SLAG_WORKS',
@@ -15,12 +17,79 @@ const ALL_SECTORS: readonly SectorId[] = [
   'THE_ASHEN_WASTES',
 ] as const;
 
-function def(
-  entry: Omit<ResourceItemDefinition, 'canStack'> & { maxStack: number },
-): ResourceItemDefinition {
+type ResourceDefInput = Omit<
+  ResourceItemDefinition,
+  | 'canStack'
+  | 'maxStack'
+  | 'cargoStackCap'
+  | 'stashStackCap'
+  | 'primarySectors'
+  | 'secondarySources'
+  | 'depthRules'
+  | 'hasCarriedEffect'
+  | 'carriedEffectId'
+  | 'description'
+> & {
+  cargoStackCap: number;
+  stashStackCap?: number;
+  description?: string;
+  /** Optional overrides — defaults come from RESOURCE_SOURCE_IDENTITY. */
+  primarySectors?: readonly SectorId[];
+  secondarySources?: readonly string[];
+  depthRules?: ResourceItemDefinition['depthRules'];
+  hasCarriedEffect?: boolean;
+  carriedEffectId?: ResourceItemDefinition['carriedEffectId'];
+};
+
+function def(entry: ResourceDefInput): ResourceItemDefinition {
+  let cargoStackCap = Math.max(1, entry.cargoStackCap);
+  // Phase 2A — unstable / contraband never stack; route intel is protected progression cargo.
+  if (entry.category === 'UNSTABLE' || entry.category === 'CONTRABAND') {
+    cargoStackCap = 1;
+  }
+  if (entry.primaryRole === 'ROUTE_INTEL') {
+    cargoStackCap = 1;
+  }
+  const stashStackCap = Math.max(1, entry.stashStackCap ?? 9999);
+
+  const identity = RESOURCE_SOURCE_IDENTITY[entry.id];
+  const primarySectors = entry.primarySectors ?? identity.primarySectors;
+  const secondarySources = entry.secondarySources ?? identity.secondarySources;
+  const depthRules = entry.depthRules ?? identity.depthRules;
+
+  const hasCarriedEffect = entry.hasCarriedEffect ?? isUnstableCargoEffectId(entry.id);
+  let carriedEffectId: ResourceItemDefinition['carriedEffectId'] = entry.carriedEffectId ?? null;
+  if (hasCarriedEffect && !carriedEffectId && isUnstableCargoEffectId(entry.id)) {
+    carriedEffectId = entry.id;
+  }
+  if (!hasCarriedEffect) {
+    carriedEffectId = null;
+  }
+
+  // Phase 2B.1 — apex cargo usually cannot mid-run bank (must extract).
+  // Route-intel APEX rarity stays bankable — progression cargo is protected differently.
+  let canBeBankedAtSafehouse = entry.canBeBankedAtSafehouse;
+  if (
+    entry.primaryRole === 'APEX_CARGO'
+    || entry.id === 'anomalous-core'
+    || entry.id === 'sealed-containment-casket'
+  ) {
+    canBeBankedAtSafehouse = false;
+  }
+
   return {
     ...entry,
-    canStack: entry.maxStack > 1,
+    description: entry.description?.trim() || entry.sourceHint,
+    primarySectors,
+    secondarySources,
+    depthRules,
+    cargoStackCap,
+    stashStackCap,
+    maxStack: cargoStackCap,
+    canStack: cargoStackCap > 1,
+    canBeBankedAtSafehouse,
+    hasCarriedEffect,
+    carriedEffectId,
   };
 }
 
@@ -56,7 +125,7 @@ export const RESOURCE_REGISTRY: Record<ResourceItemId, ResourceItemDefinition> =
     intendedUses: ['Basic consumable crafting', 'Weapon unlocks', 'Safe starter recipes'],
     gridWidth: 1,
     gridHeight: 1,
-    maxStack: 5,
+    cargoStackCap: 5,
     baseCapitalValue: 28,
     sellValue: 5,
     ipValue: 1,
@@ -85,7 +154,7 @@ export const RESOURCE_REGISTRY: Record<ResourceItemId, ResourceItemDefinition> =
     intendedUses: ['Healing consumables', 'Occult weapon / mutation crafting'],
     gridWidth: 1,
     gridHeight: 1,
-    maxStack: 3,
+    cargoStackCap: 3,
     baseCapitalValue: 42,
     sellValue: 20,
     ipValue: 5,
@@ -121,8 +190,8 @@ export const RESOURCE_REGISTRY: Record<ResourceItemId, ResourceItemDefinition> =
     sourceHint: 'Blacksite and Null Zone tech vaults; rare scanner / industrial salvage.',
     intendedUses: ['Scanner tool crafting', 'Weapon unlocks', 'Sponsor turn-in contracts'],
     gridWidth: 1,
-    gridHeight: 2,
-    maxStack: 1,
+    gridHeight: 1,
+    cargoStackCap: 2,
     baseCapitalValue: 125,
     sellValue: 30,
     ipValue: 25,
@@ -149,9 +218,9 @@ export const RESOURCE_REGISTRY: Record<ResourceItemId, ResourceItemDefinition> =
     rarity: 'RARE',
     sourceHint: 'Legion industrial caches in Slag Works, Blackline, and Ashen Wastes.',
     intendedUses: ['Weapon unlocks', 'Combat ammo / armor-crack crafting'],
-    gridWidth: 2,
+    gridWidth: 1,
     gridHeight: 1,
-    maxStack: 1,
+    cargoStackCap: 3,
     baseCapitalValue: 118,
     sellValue: 30,
     ipValue: 25,
@@ -180,7 +249,7 @@ export const RESOURCE_REGISTRY: Record<ResourceItemId, ResourceItemDefinition> =
     intendedUses: ['Apex contracts and operations', 'Future masterwork crafting'],
     gridWidth: 2,
     gridHeight: 2,
-    maxStack: 1,
+    cargoStackCap: 1,
     baseCapitalValue: 280,
     sellValue: 500,
     ipValue: 500,
@@ -209,7 +278,7 @@ export const RESOURCE_REGISTRY: Record<ResourceItemId, ResourceItemDefinition> =
     intendedUses: ['Scanner tools', 'Echo Recovery crafting', 'Signal / flare recipes'],
     gridWidth: 1,
     gridHeight: 1,
-    maxStack: 10,
+    cargoStackCap: 5,
     baseCapitalValue: 18,
     sellValue: 2,
     ipValue: 2,
@@ -223,7 +292,7 @@ export const RESOURCE_REGISTRY: Record<ResourceItemId, ResourceItemDefinition> =
     lostOnDeathIfUnbanked: true,
     canOpenAtHub: false,
     canOpenInRun: false,
-    validSectorIds: ['THE_NULL_ZONE', 'THE_SLAG_WORKS', 'THE_ABYSSAL_SINK'],
+    validSectorIds: ['THE_NULL_ZONE', 'THE_SLAG_WORKS', 'THE_ABYSSAL_SINK', 'THE_ASHEN_WASTES'],
   }),
   'veil-ash-canister': def({
     id: 'veil-ash-canister',
@@ -244,8 +313,8 @@ export const RESOURCE_REGISTRY: Record<ResourceItemId, ResourceItemDefinition> =
     sourceHint: 'Ashen Wastes scorched caches; volatile Depth 2+ salvage.',
     intendedUses: ['Explosive consumables', 'Unstable cargo seals', 'Operation contribution'],
     gridWidth: 1,
-    gridHeight: 2,
-    maxStack: 1,
+    gridHeight: 1,
+    cargoStackCap: 1,
     baseCapitalValue: 58,
     sellValue: 20,
     ipValue: 20,
@@ -279,9 +348,9 @@ export const RESOURCE_REGISTRY: Record<ResourceItemId, ResourceItemDefinition> =
     rarity: 'RARE',
     sourceHint: 'Fallen-runner and black-market intel drops — fence or sponsor, never forge.',
     intendedUses: ['Black Market fence payout', 'Sponsor / intel contracts'],
-    gridWidth: 2,
+    gridWidth: 1,
     gridHeight: 1,
-    maxStack: 1,
+    cargoStackCap: 1,
     baseCapitalValue: 98,
     sellValue: 250,
     ipValue: 100,
@@ -316,7 +385,7 @@ export const RESOURCE_REGISTRY: Record<ResourceItemId, ResourceItemDefinition> =
     intendedUses: ['Occult / mutation crafting', 'High-tier class resource items', 'Operations'],
     gridWidth: 1,
     gridHeight: 1,
-    maxStack: 1,
+    cargoStackCap: 1,
     baseCapitalValue: 88,
     sellValue: 45,
     ipValue: 0,
@@ -353,7 +422,7 @@ export const RESOURCE_REGISTRY: Record<ResourceItemId, ResourceItemDefinition> =
     intendedUses: ['Appraisal / open at hub', 'Sell sealed / contract delivery'],
     gridWidth: 3,
     gridHeight: 1,
-    maxStack: 1,
+    cargoStackCap: 1,
     baseCapitalValue: 340,
     sellValue: 150,
     ipValue: 0,
@@ -382,7 +451,7 @@ export const RESOURCE_REGISTRY: Record<ResourceItemId, ResourceItemDefinition> =
     intendedUses: ['Fence payouts', 'Intel / recovery contracts'],
     gridWidth: 1,
     gridHeight: 1,
-    maxStack: 10,
+    cargoStackCap: 5,
     baseCapitalValue: 22,
     sellValue: 15,
     ipValue: 0,
@@ -411,8 +480,8 @@ export const RESOURCE_REGISTRY: Record<ResourceItemId, ResourceItemDefinition> =
     sourceHint: 'Industrial and scorched caches (Slag Works, Ashen Wastes, Blackline).',
     intendedUses: ['Explosive / defensive crafting', 'Industrial tool recipes'],
     gridWidth: 1,
-    gridHeight: 2,
-    maxStack: 1,
+    gridHeight: 1,
+    cargoStackCap: 3,
     baseCapitalValue: 95,
     sellValue: 25,
     ipValue: 25,
@@ -452,7 +521,7 @@ export const RESOURCE_REGISTRY: Record<ResourceItemId, ResourceItemDefinition> =
     intendedUses: ['Defensive armor crafting (Spall-Weave / Foam)', 'Null Zone contracts & Resource Surveys'],
     gridWidth: 1,
     gridHeight: 1,
-    maxStack: 5,
+    cargoStackCap: 5,
     baseCapitalValue: 32,
     sellValue: 8,
     ipValue: 2,
@@ -488,7 +557,7 @@ export const RESOURCE_REGISTRY: Record<ResourceItemId, ResourceItemDefinition> =
     intendedUses: ['Healing and cleanse recipes', 'Abyssal survival contracts / surveys'],
     gridWidth: 1,
     gridHeight: 1,
-    maxStack: 3,
+    cargoStackCap: 3,
     baseCapitalValue: 48,
     sellValue: 18,
     ipValue: 5,
@@ -525,7 +594,7 @@ export const RESOURCE_REGISTRY: Record<ResourceItemId, ResourceItemDefinition> =
     intendedUses: ['Flare / extraction / signal tools', 'Extraction Surge contracts & surveys'],
     gridWidth: 1,
     gridHeight: 1,
-    maxStack: 5,
+    cargoStackCap: 5,
     baseCapitalValue: 30,
     sellValue: 7,
     ipValue: 2,
@@ -563,7 +632,7 @@ export const RESOURCE_REGISTRY: Record<ResourceItemId, ResourceItemDefinition> =
     intendedUses: ['Weapon unlocks / heavy tools', 'Industrial contracts and surveys'],
     gridWidth: 1,
     gridHeight: 2,
-    maxStack: 1,
+    cargoStackCap: 1,
     baseCapitalValue: 110,
     sellValue: 35,
     ipValue: 20,
@@ -602,7 +671,7 @@ export const RESOURCE_REGISTRY: Record<ResourceItemId, ResourceItemDefinition> =
     intendedUses: ['Appraisal / scanner / sealed-cargo tools', 'Blackline contracts and surveys'],
     gridWidth: 1,
     gridHeight: 1,
-    maxStack: 3,
+    cargoStackCap: 3,
     baseCapitalValue: 72,
     sellValue: 40,
     ipValue: 15,
@@ -616,7 +685,7 @@ export const RESOURCE_REGISTRY: Record<ResourceItemId, ResourceItemDefinition> =
     lostOnDeathIfUnbanked: true,
     canOpenAtHub: false,
     canOpenInRun: false,
-    validSectorIds: ['THE_BLACKLINE_TERMINUS'],
+    validSectorIds: ['THE_BLACKLINE_TERMINUS', 'THE_NULL_ZONE'],
   }),
   'resonant-filament': def({
     id: 'resonant-filament',
@@ -638,7 +707,7 @@ export const RESOURCE_REGISTRY: Record<ResourceItemId, ResourceItemDefinition> =
     intendedUses: ['Echo tool crafting (Tuning Fork / Lantern)', 'Echo Recovery operation targets'],
     gridWidth: 1,
     gridHeight: 1,
-    maxStack: 5,
+    cargoStackCap: 5,
     baseCapitalValue: 55,
     sellValue: 22,
     ipValue: 8,
@@ -652,7 +721,14 @@ export const RESOURCE_REGISTRY: Record<ResourceItemId, ResourceItemDefinition> =
     lostOnDeathIfUnbanked: true,
     canOpenAtHub: false,
     canOpenInRun: false,
-    validSectorIds: ['THE_NULL_ZONE', 'THE_ABYSSAL_SINK', 'THE_ASHEN_WASTES', 'THE_BLACKLINE_TERMINUS'],
+    // Phase 2D — SUPPORT on every sector table (echo contamination lane).
+    validSectorIds: [
+      'THE_NULL_ZONE',
+      'THE_ABYSSAL_SINK',
+      'THE_ASHEN_WASTES',
+      'THE_SLAG_WORKS',
+      'THE_BLACKLINE_TERMINUS',
+    ],
   }),
   'anchor-marrow': def({
     id: 'anchor-marrow',
@@ -675,7 +751,7 @@ export const RESOURCE_REGISTRY: Record<ResourceItemId, ResourceItemDefinition> =
     intendedUses: ['Anchor Needle / Spike crafting', 'Anchor Assault operation contribution'],
     gridWidth: 1,
     gridHeight: 1,
-    maxStack: 1,
+    cargoStackCap: 1,
     baseCapitalValue: 160,
     sellValue: 90,
     ipValue: 40,
@@ -713,7 +789,7 @@ export const RESOURCE_REGISTRY: Record<ResourceItemId, ResourceItemDefinition> =
     intendedUses: ['Breach Compass / Ash-Seal / depth tools', 'Depth 2+ contracts and high-value ops'],
     gridWidth: 1,
     gridHeight: 1,
-    maxStack: 1,
+    cargoStackCap: 1,
     baseCapitalValue: 150,
     sellValue: 85,
     ipValue: 35,
@@ -752,7 +828,7 @@ export const RESOURCE_REGISTRY: Record<ResourceItemId, ResourceItemDefinition> =
     intendedUses: ['Appraise / open at hub', 'Sell sealed or deliver as contraband contract'],
     gridWidth: 1,
     gridHeight: 2,
-    maxStack: 1,
+    cargoStackCap: 1,
     baseCapitalValue: 180,
     sellValue: 80,
     ipValue: 0,
@@ -782,7 +858,7 @@ export const RESOURCE_REGISTRY: Record<ResourceItemId, ResourceItemDefinition> =
     intendedUses: ['Unlock Abyssal Sink', 'Sector access mandate cargo'],
     gridWidth: 1,
     gridHeight: 1,
-    maxStack: 1,
+    cargoStackCap: 1,
     baseCapitalValue: 200,
     sellValue: 0,
     ipValue: 0,
@@ -812,7 +888,7 @@ export const RESOURCE_REGISTRY: Record<ResourceItemId, ResourceItemDefinition> =
     intendedUses: ['Unlock Ashen Wastes', 'Sector access mandate cargo'],
     gridWidth: 1,
     gridHeight: 1,
-    maxStack: 1,
+    cargoStackCap: 1,
     baseCapitalValue: 220,
     sellValue: 0,
     ipValue: 0,
@@ -842,7 +918,7 @@ export const RESOURCE_REGISTRY: Record<ResourceItemId, ResourceItemDefinition> =
     intendedUses: ['Unlock Slag Works', 'Sector access mandate cargo'],
     gridWidth: 1,
     gridHeight: 2,
-    maxStack: 1,
+    cargoStackCap: 1,
     baseCapitalValue: 280,
     sellValue: 0,
     ipValue: 0,
@@ -872,7 +948,7 @@ export const RESOURCE_REGISTRY: Record<ResourceItemId, ResourceItemDefinition> =
     intendedUses: ['Unlock Blackline Terminus', 'Sector access mandate cargo'],
     gridWidth: 2,
     gridHeight: 1,
-    maxStack: 1,
+    cargoStackCap: 1,
     baseCapitalValue: 340,
     sellValue: 0,
     ipValue: 0,
@@ -899,12 +975,62 @@ export const RESOURCES_BY_CATEGORY: Record<ResourceCategory, ResourceItemId[]> =
   CONTRABAND: ALL_RESOURCE_ITEM_IDS.filter((id) => RESOURCE_REGISTRY[id].category === 'CONTRABAND'),
 };
 
+export {
+  ECONOMY_V1_CONTRABAND_IDS,
+  ECONOMY_V1_COUNTS,
+  ECONOMY_V1_INTEL_IDS,
+  ECONOMY_V1_RESOURCE_IDS,
+  ECONOMY_V1_ROSTER_FROZEN,
+  ECONOMY_V1_STABLE_IDS,
+  ECONOMY_V1_UNSTABLE_IDS,
+  PHASE_2C_FULL_ROSTER_IDS,
+  ROUTE_INTEL_V1_IDS,
+  formatEconomyRosterV1Summary,
+  isEconomyV1ResourceId,
+  isPhase2CRosterResourceId,
+  isRouteIntelV1ResourceId,
+} from './economyRosterV1';
+
 export const CONTRACT_TARGET_RESOURCE_IDS = ALL_RESOURCE_ITEM_IDS.filter(
   (id) => RESOURCE_REGISTRY[id].canBeContractTarget,
 );
 
 export function getResourceDefinition(id: ResourceItemId): ResourceItemDefinition {
   return RESOURCE_REGISTRY[id];
+}
+
+export function getCargoStackCapForResource(id: ResourceItemId): number {
+  return RESOURCE_REGISTRY[id].cargoStackCap;
+}
+
+export function getStashStackCapForResource(id: ResourceItemId): number {
+  return RESOURCE_REGISTRY[id].stashStackCap;
+}
+
+/** Phase 2B displayName alias. */
+export function getResourceDisplayNameAlias(id: ResourceItemId): string {
+  return RESOURCE_REGISTRY[id].name;
+}
+
+/** Phase 2B baseSellValue alias. */
+export function getResourceBaseSellValue(id: ResourceItemId): number {
+  return RESOURCE_REGISTRY[id].sellValue;
+}
+
+export function canResourceBeBankedAtSafehouse(id: ResourceItemId): boolean {
+  return RESOURCE_REGISTRY[id].canBeBankedAtSafehouse;
+}
+
+export function getResourcePrimarySectors(id: ResourceItemId): readonly SectorId[] {
+  return RESOURCE_REGISTRY[id].primarySectors;
+}
+
+export function getResourceDepthRules(id: ResourceItemId): import('../types/resourceItem').ResourceDepthRules {
+  return RESOURCE_REGISTRY[id].depthRules;
+}
+
+export function resourceHasCarriedEffect(id: ResourceItemId): boolean {
+  return RESOURCE_REGISTRY[id].hasCarriedEffect;
 }
 
 export function isResourceItemId(id: string): id is ResourceItemId {

@@ -54,6 +54,10 @@ import {
 import { resourceIdFromFocusLabel } from './operationProceduralEngine';
 import { getSectorWorldTemplate } from './sectorWorldCatalog';
 import {
+  sectorPrimaryResourcePool,
+  sectorResourcesByBand,
+} from './sectorResourceTableEngine';
+import {
   canResourceSpawnInSector,
   getResourceCategory,
   getResourceDefinition,
@@ -273,12 +277,16 @@ function weightedPickSource(
 }
 
 function sectorResourceIds(sectorId: SectorId, ctx: ContractGenerationContext): ResourceItemId[] {
+  const fromTable = [
+    ...sectorPrimaryResourcePool(sectorId),
+    ...sectorResourcesByBand(sectorId, 'RARE'),
+  ];
   const fromCatalog = SECTOR_RESOURCE_IDS[sectorId] ?? [];
   const fromFocus = ctx.sectorResourceFocus
     .map((label) => resourceIdFromFocusLabel(label, sectorId))
     .filter((id): id is ResourceItemId => id != null);
   const fromOp = ctx.activeOperation?.targetResourceIds ?? [];
-  return [...new Set([...fromOp, ...fromFocus, ...fromCatalog])];
+  return [...new Set([...fromOp, ...fromFocus, ...fromTable, ...fromCatalog])];
 }
 
 function pickResourceForContext(
@@ -308,11 +316,19 @@ function pickResourceForContext(
     pool = [...ctx.resourceStress.highDemandResourceIds, ...pool];
   }
   const valid = pool.filter(
-    (id) => canResourceSpawnInSector(id, ctx.sectorId) && !exclude.includes(id),
+    (id) => (
+      RESOURCE_REGISTRY[id]?.canBeContractTarget
+      && canResourceSpawnInSector(id, ctx.sectorId)
+      && !exclude.includes(id)
+    ),
   );
   if (valid.length === 0) {
     const fallback = sectorResourceIds(ctx.sectorId, ctx).filter(
-      (id) => canResourceSpawnInSector(id, ctx.sectorId) && !exclude.includes(id),
+      (id) => (
+        RESOURCE_REGISTRY[id]?.canBeContractTarget
+        && canResourceSpawnInSector(id, ctx.sectorId)
+        && !exclude.includes(id)
+      ),
     );
     return fallback.length > 0 ? pickOne(fallback, rand) : null;
   }
@@ -542,31 +558,37 @@ export function generateContractForSlot(
     targetResourceId = picked;
     targetQuantity = kind === 'EXTRACT_STABLE_RESOURCE' ? 2 + Math.floor(rand() * 3) : 1;
     if (kind === 'RECOVER_ECONOMY_INTEL') {
-      if (rand() < 0.5) {
-        targetResourceId = 'smugglers-ledger';
-        targetQuantity = 1;
-      } else {
-        targetResourceId = 'tarnished-dog-tags';
-        targetQuantity = 3;
-      }
+      const intelPool = (['smugglers-ledger', 'tarnished-dog-tags'] as ResourceItemId[])
+        .filter((id) => canResourceSpawnInSector(id, ctx.sectorId));
+      if (intelPool.length === 0) return null;
+      targetResourceId = pickOne(intelPool, rand);
+      targetQuantity = targetResourceId === 'tarnished-dog-tags' ? 3 : 1;
     }
     if (kind === 'RECOVER_INTEL') {
+      if (!canResourceSpawnInSector('encrypted-grid-drive', ctx.sectorId)) return null;
       targetResourceId = 'encrypted-grid-drive';
       targetQuantity = 1;
     }
     if (kind === 'RECOVER_APEX_CARGO') {
+      if (!canResourceSpawnInSector('anomalous-core', ctx.sectorId)) return null;
       targetResourceId = 'anomalous-core';
       targetQuantity = 1;
     }
     if (kind === 'RECOVER_CONTRABAND') {
-      targetResourceId = rand() < 0.5 ? 'sealed-containment-casket' : 'blacksite-specimen-jar';
+      const pool = (['sealed-containment-casket', 'blacksite-specimen-jar'] as ResourceItemId[])
+        .filter((id) => canResourceSpawnInSector(id, ctx.sectorId));
+      if (pool.length === 0) return null;
+      targetResourceId = pickOne(pool, rand);
       targetQuantity = 1;
     }
     if (kind === 'EXTRACT_UNSTABLE_CARGO') {
-      const pool = ['veil-ash-canister', 'ossified-ley-knot', 'anchor-marrow', 'breach-thread'] as ResourceItemId[];
-      const a = pickOne(pool.filter((id) => canResourceSpawnInSector(id, ctx.sectorId)), rand);
-      const b = pickOne(pool.filter((id) => id !== a && canResourceSpawnInSector(id, ctx.sectorId)), rand);
-      targetResourceOptions = [a, b];
+      const pool = (['veil-ash-canister', 'ossified-ley-knot', 'anchor-marrow', 'breach-thread'] as ResourceItemId[])
+        .filter((id) => canResourceSpawnInSector(id, ctx.sectorId));
+      if (pool.length < 1) return null;
+      const a = pickOne(pool, rand);
+      const rest = pool.filter((id) => id !== a);
+      const b = rest.length > 0 ? pickOne(rest, rand) : a;
+      targetResourceOptions = rest.length > 0 ? [a, b] : [a];
       targetResourceId = undefined;
       targetQuantity = 1;
     }
@@ -637,10 +659,14 @@ export function validateProceduralContract(contract: GeneratedContract, ctx: Con
   const resourceIds = contract.targetResourceOptions?.length ? contract.targetResourceOptions
     : contract.targetResourceId ? [contract.targetResourceId] : [];
   if (resourceIds.length > 0) {
-    const spawnable = resourceIds.some((id) => canResourceSpawnInSector(id, ctx.sectorId));
-    if (!spawnable && !contract.validSectorIds.some((s) => resourceIds.some((id) => canResourceSpawnInSector(id, s)))) {
-      return false;
-    }
+    if (resourceIds.some((id) => !RESOURCE_REGISTRY[id]?.canBeContractTarget)) return false;
+    const spawnableHere = resourceIds.some((id) => canResourceSpawnInSector(id, ctx.sectorId));
+    const spawnableSomewhere = contract.validSectorIds.some((s) => (
+      resourceIds.some((id) => canResourceSpawnInSector(id, s))
+    ));
+    // Phase 2J: selected-sector targets must be spawnable here (no off-sector hard overrides).
+    if (!spawnableHere && !spawnableSomewhere) return false;
+    if (!spawnableHere) return false;
   }
   return true;
 }

@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { resolveImmersiveFooterInset } from '../constants/immersiveLayout';
 import ResourceHarvestBg from '../../assets/images/location images/resource_harvest.png';
 import CargoPackingPanel from '../components/CargoPackingPanel';
+import CargoLootPickupOverlay from '../components/CargoLootPickupOverlay';
 import ResidueParticle from '../components/harvest/ResidueParticle';
 import HapticPressable from '../components/HapticPressable';
 import TerminalText from '../components/TerminalText';
@@ -21,6 +22,12 @@ import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { isVeilResidueCargoItem } from '../data/cargoGridEngine';
+import {
+  cargoItemQuantity,
+  isProgressionProtectedCargo,
+  isRareOrApexCargo,
+} from '../data/cargoStackEngine';
+import { CARGO_ITEM_CATALOG } from '../types/cargoGrid';
 import { useNodeProgression } from '../hooks/useNodeProgression';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import type { HarvestFloorBounds, ResidueParticleData } from '../types/residueParticle';
@@ -46,7 +53,9 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
     activeIncursion,
     applyHarvestChoice,
     relocateCargoItem,
+    replaceCargoItem,
     discardCargoInstance,
+    recordEconomyLeaveBehind,
     appendRunLog,
     prepareHarvestAmbushEncounter,
     absorbVeilResidueParticle,
@@ -292,7 +301,31 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
     ),
   }), [activeIncursion.cargo, swarmedInstanceIds]);
 
-  const handlePackingContinue = () => {
+  const [pendingLeaveBehind, setPendingLeaveBehind] = useState(false);
+
+  const unpackedNonResidue = useMemo(
+    () => activeIncursion.cargo.containment.filter((item) => !isVeilResidueCargoItem(item.itemId)),
+    [activeIncursion.cargo.containment],
+  );
+
+  const leaveBehindSummary = useMemo(() => {
+    if (unpackedNonResidue.length === 0) return { name: '', qty: '', progression: false, rare: false };
+    const first = unpackedNonResidue[0]!;
+    const totalUnits = unpackedNonResidue.reduce((sum, item) => sum + cargoItemQuantity(item), 0);
+    const progression = unpackedNonResidue.some((item) => isProgressionProtectedCargo(item.itemId));
+    const rare = unpackedNonResidue.some((item) => isRareOrApexCargo(item.itemId));
+    const name = unpackedNonResidue.length === 1
+      ? CARGO_ITEM_CATALOG[first.itemId].name
+      : `${unpackedNonResidue.length} stacks`;
+    return {
+      name,
+      qty: `${totalUnits} units`,
+      progression,
+      rare,
+    };
+  }, [unpackedNonResidue]);
+
+  const commitPackingContinue = useCallback(() => {
     handleVacuumStop();
     if (!harvestAppliedRef.current) {
       harvestAppliedRef.current = true;
@@ -324,6 +357,24 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
       return;
     }
     completeCurrentNode('Resource harvest complete.');
+  }, [
+    activeIncursion.pendingHarvestReturn,
+    appendRunLog,
+    applyHarvestChoice,
+    completeCurrentNode,
+    finalizeHarvestScreen,
+    handleVacuumStop,
+    prepareHarvestAmbushEncounter,
+    runState.pendingAmbush,
+    startCombat,
+  ]);
+
+  const handlePackingContinue = () => {
+    if (unpackedNonResidue.length > 0) {
+      setPendingLeaveBehind(true);
+      return;
+    }
+    commitPackingContinue();
   };
 
   return (
@@ -375,6 +426,7 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
                 theme={theme}
                 accentColor={activeCabal}
                 onRelocateItem={relocateCargoItem}
+                onReplaceItem={replaceCargoItem}
                 onDiscardItem={discardCargoInstance}
                 showCreditsHud={false}
                 onContinue={handlePackingContinue}
@@ -400,6 +452,24 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
           </View>
         </RunEventImmersiveBackdrop>
       </IncursionRunLayout>
+
+      <CargoLootPickupOverlay
+        visible={pendingLeaveBehind}
+        mode="LEAVE_BEHIND"
+        itemName={leaveBehindSummary.name}
+        quantityLabel={leaveBehindSummary.qty}
+        theme={theme}
+        accentColor={activeCabal}
+        progressionWarning={leaveBehindSummary.progression}
+        rareWarning={leaveBehindSummary.rare}
+        onLeaveBehind={() => {
+          const left = unpackedNonResidue.reduce((sum, item) => sum + cargoItemQuantity(item), 0);
+          recordEconomyLeaveBehind(left > 0 ? left : 1);
+          setPendingLeaveBehind(false);
+          commitPackingContinue();
+        }}
+        onCancel={() => setPendingLeaveBehind(false)}
+      />
     </IncursionShell>
   );
 }

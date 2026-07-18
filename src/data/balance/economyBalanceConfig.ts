@@ -64,12 +64,44 @@ export const ECONOMY_SPONSOR_PAYOUT_NOTES = {
   SOLARIS: 'Higher credits + reputational spice',
 } as const;
 
+/** Phase 2M — hard/soft tuning thresholds (audit + design rails). */
+export const ECONOMY_TUNING_THRESHOLDS = {
+  /** Share of craft/unlock/upgrade sinks that may include Ley-Slag. */
+  maxLeySlagRecipeShare: 0.35,
+  /** Share of tech-tagged sinks that may include Encrypted Grid-Drive. */
+  maxGridDriveTechShare: 0.65,
+  /** Share of power-tagged sinks that may include Ossified Ley-Knot. */
+  maxLeyKnotPowerShare: 0.55,
+  /** Max Ley-Slag units for Standard Coagulant. */
+  maxBasicHealLeySlag: 1,
+  /** Soft cap on Anomalous Core craft/unlock sinks (masterwork reserved). */
+  maxAnomalousCoreSinks: 2,
+  /** D1 NORMAL_COMBAT SECTOR packet fire chance (sector identity at Threshold). */
+  d1SectorPacketFireChance: 0.55,
+  /** D1 NORMAL_COMBAT STABLE packet fire chance. */
+  d1StablePacketFireChance: 0.85,
+} as const;
+
+export function formatEconomyTuningConfigBrief(): string {
+  const t = ECONOMY_TUNING_THRESHOLDS;
+  return [
+    'TUNING THRESHOLDS (2M)',
+    `  max Ley-Slag recipe share: ${Math.round(t.maxLeySlagRecipeShare * 100)}%`,
+    `  max Grid-Drive tech share: ${Math.round(t.maxGridDriveTechShare * 100)}%`,
+    `  max Ley-Knot power share: ${Math.round(t.maxLeyKnotPowerShare * 100)}%`,
+    `  basic heal Ley-Slag ≤ ${t.maxBasicHealLeySlag}`,
+    `  D1 combat: STABLE@${Math.round(t.d1StablePacketFireChance * 100)}% + SECTOR@${Math.round(t.d1SectorPacketFireChance * 100)}%`,
+  ].join('\n');
+}
+
 export function formatEconomyBalanceConfigSummary(): string {
   return [
     'ECONOMY BALANCE CONFIG',
     `  crafting cost ×: ${ECONOMY_CRAFTING_COST_MULTIPLIER}`,
     `  fence sell ×: ${ECONOMY_BLACK_MARKET_SELL_MULTIPLIER}`,
+    '  value lanes: STABLE×0.85 INTEL×1.15 UNSTABLE×1.0 CONTRABAND×1.30',
     `  casket: sell ${ECONOMY_CASKET_CONFIG.sealedSellValue} / appraise ${ECONOMY_CASKET_CONFIG.appraisalFee} / open ${ECONOMY_CASKET_CONFIG.openingFee}`,
     `  jar: sell ${ECONOMY_SPECIMEN_JAR_CONFIG.sealedSellValue} / appraise ${ECONOMY_SPECIMEN_JAR_CONFIG.appraisalFee} / open ${ECONOMY_SPECIMEN_JAR_CONFIG.openingFee}`,
+    formatEconomyTuningConfigBrief(),
   ].join('\n');
 }

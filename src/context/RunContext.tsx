@@ -237,6 +237,7 @@ import {
   listStagedBlackMarketPlacements,
   finalizeHarvestCargoState,
   relocateCargoItem as relocateCargoItemState,
+  replaceCargoAtCell as replaceCargoAtCellState,
   resetCargoInstanceCounter,
   scaledLootCount,
   hasCargoItem,
@@ -244,15 +245,18 @@ import {
   createStarterCargoRunState,
   applyIncursionStarterCargo,
   removePlacedCargoItem,
+  addLootToContainmentDetailed,
 } from '../data/cargoGridEngine';
 import { resolveExtractionVeilResidueDeposit } from '../data/extractionPersistenceEngine';
 import {
-  bankAllPhysicalRunCargo,
   recordResourcesBanked,
   recordSafehouseBankAction,
   resolveRunDeathResourceState,
-  summarizeBankSnapshot,
 } from '../data/runResourceLedgerEngine';
+import {
+  bankEligiblePhysicalRunCargo,
+  formatSafehouseBankLog,
+} from '../data/cargoOwnershipEngine';
 import {
   createInitialContractRunProgress,
   recordContractDepthBossDefeated,
@@ -451,6 +455,17 @@ import {
   recordCargoRoutingResourcesBanked,
   resolveCargoRoutingContextFromIncursion,
 } from '../data/postRunCargoRoutingRunState';
+import {
+  cargoHasUnstableOrContraband,
+  ensureEconomyRunTelemetry,
+  finalizeUnstableCarryDuration,
+  noteUnstableCargoPresent,
+  recordEconomyCargoJettison,
+  recordEconomyCargoSwap,
+  recordEconomyLeftBehind,
+  recordEconomyNodeWithUnstable,
+  sampleEconomyCargoOccupancy,
+} from '../data/economyRunTelemetryEngine';
 import type { ResourceItemId } from '../types/resourceItem';
 import type { DevSandboxPreset } from '../types/devSandbox';
 import {
@@ -708,7 +723,10 @@ interface RunContextType {
   calculateSectorExtractionPayout: () => number;
   placeCargoItem: (instanceId: string, row: number, col: number) => boolean;
   relocateCargoItem: (instanceId: string, row: number, col: number) => boolean;
+  replaceCargoItem: (instanceId: string, row: number, col: number) => boolean;
   discardCargoInstance: (instanceId: string) => boolean;
+  /** Phase 2K — record leave-behind packing decision. */
+  recordEconomyLeaveBehind: (count?: number) => void;
   applyHarvestChoice: (tier: HarvestYieldTier) => { logLines: string[]; ambushTriggered: boolean };
   useFocusingAmpouleFromCargo: () => boolean;
   useSonarPingOnNode: (nodeId: string) => boolean;
@@ -2786,6 +2804,30 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     return true;
   }, [appendRunLog]);
 
+  const replaceCargoItem = useCallback((instanceId: string, row: number, col: number) => {
+    let placed = false;
+    let nextCargo: ReturnType<typeof replaceCargoAtCellState> = null;
+
+    setActiveIncursion((prev) => {
+      nextCargo = replaceCargoAtCellState(prev.cargo, instanceId, row, col);
+      if (!nextCargo) return prev;
+      placed = true;
+      let economy = recordEconomyCargoSwap(ensureEconomyRunTelemetry(prev.economyRunTelemetry));
+      economy = sampleEconomyCargoOccupancy(economy, nextCargo);
+      if (cargoHasUnstableOrContraband(nextCargo)) {
+        economy = noteUnstableCargoPresent(economy);
+      }
+      const next = { ...prev, cargo: nextCargo, economyRunTelemetry: economy };
+      activeIncursionRef.current = next;
+      return next;
+    });
+
+    if (!placed || !nextCargo) return false;
+    const occupancy = Math.round(calculateGridOccupancy(nextCargo) * 100);
+    appendRunLog(`>> CARGO REPLACE — occupant jettisoned // grid occupancy ${occupancy}%.`);
+    return true;
+  }, [appendRunLog]);
+
   const discardCargoInstance = useCallback((instanceId: string) => {
     const inc = activeIncursionRef.current;
     if (isRunItemFoamProtected(inc.itemRuntime, instanceId)) {
@@ -2822,10 +2864,13 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
             containment: prev.cargo.containment.filter((item) => item.instanceId !== instanceId),
           }
         : removePlacedCargoItem(prev.cargo, instanceId);
+      let economy = recordEconomyCargoJettison(ensureEconomyRunTelemetry(prev.economyRunTelemetry));
+      economy = sampleEconomyCargoOccupancy(economy, nextCargo);
       const next = {
         ...prev,
         cargo: nextCargo,
         harvestStagingInstanceIds: prev.harvestStagingInstanceIds.filter((id) => id !== instanceId),
+        economyRunTelemetry: economy,
       };
       activeIncursionRef.current = next;
       return next;
@@ -2836,6 +2881,18 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     }
     return removed;
   }, [appendRunLog]);
+
+  const recordEconomyLeaveBehind = useCallback((count = 1) => {
+    setActiveIncursion((prev) => {
+      const economy = recordEconomyLeftBehind(
+        ensureEconomyRunTelemetry(prev.economyRunTelemetry),
+        count,
+      );
+      const next = { ...prev, economyRunTelemetry: economy };
+      activeIncursionRef.current = next;
+      return next;
+    });
+  }, []);
 
   const placeCargoItem = relocateCargoItem;
 
@@ -3102,12 +3159,22 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       inc.cargo,
       inc.keepsakeRuntime,
     );
+    const contract = inc.activeContract;
+    const contractTargetIds = contract?.targetResourceId
+      ? [contract.targetResourceId, ...(contract.targetResourceOptions ?? [])]
+      : contract?.targetResourceOptions ?? undefined;
+    const operationTargetIds = inc.runGenerationContext?.activeOperation?.targetResourceIds;
     const drops = [...rollCombatResourceDrops({
       ...options,
       rareLootBonusPct,
       occultRewardBonusPct,
-      stressedResourceIds: inc.runWorldBrief?.resourceStress.highDemandResourceIds,
-      briefRewardBias: inc.runWorldBrief?.rewardBias ?? null,
+      stressedResourceIds: options.stressedResourceIds
+        ?? inc.runWorldBrief?.resourceStress.highDemandResourceIds,
+      briefRewardBias: options.briefRewardBias ?? inc.runWorldBrief?.rewardBias ?? null,
+      breachGrade: options.breachGrade ?? inc.breachGrade ?? inc.runGenerationContext?.breachGrade ?? 'I',
+      contractTargetIds: options.contractTargetIds ?? contractTargetIds,
+      operationTargetIds: options.operationTargetIds ?? operationTargetIds,
+      veilBiome: options.veilBiome ?? inc.runVeilBiome,
     })];
 
     const runSectorId = inc.runGenerationContext?.sectorState.id
@@ -3187,11 +3254,13 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     const stagedIds: string[] = [];
     let pickupLogs: string[] = [];
     let keepsakeLogs: string[] = [];
+    let mergeLog: string | null = null;
     setActiveIncursion((prev) => {
       const beforeCargo = prev.cargo;
-      let nextCargo = beforeCargo;
-      for (let i = 0; i < quantity; i += 1) {
-        nextCargo = addLootToContainment(nextCargo, resourceId, 1, stagedIds);
+      const loot = addLootToContainmentDetailed(beforeCargo, resourceId, quantity, stagedIds);
+      let nextCargo = loot.cargo;
+      if (loot.mergedQuantity > 0) {
+        mergeLog = `>> CARGO STACK MERGE — ${loot.mergedQuantity}× ${resourceId.toUpperCase()} merged into existing stacks.`;
       }
       const keepsakePickup = mergeKeepsakeCargoPickup(prev, nextCargo, stagedIds);
       keepsakeLogs = keepsakePickup.logLines;
@@ -3222,6 +3291,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     });
     pickupLogs.forEach((line) => appendRunLog(line));
     keepsakeLogs.forEach((line) => appendRunLog(line));
+    if (mergeLog) appendRunLog(mergeLog);
     appendRunLog(`>> COMBAT SALVAGE — ${quantity}× ${resourceId.toUpperCase()} routed to cargo.`);
   }, [appendRunLog, mergeKeepsakeCargoPickup]);
 
@@ -4466,6 +4536,13 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       depthIdentityLogs.push(...activation.logLines);
     }
 
+    let economyTelemetry = ensureEconomyRunTelemetry(expandedInc.economyRunTelemetry);
+    economyTelemetry = sampleEconomyCargoOccupancy(economyTelemetry, cargoAfterKeepsake);
+    if (cargoHasUnstableOrContraband(cargoAfterKeepsake)) {
+      economyTelemetry = noteUnstableCargoPresent(economyTelemetry);
+      economyTelemetry = recordEconomyNodeWithUnstable(economyTelemetry);
+    }
+
     const incAfterClear: ActiveIncursionState = {
       ...expandedInc,
       sectorGraph: nextSectorGraph,
@@ -4521,6 +4598,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       lastLevelOfferedCombat,
       runCredits: inc.runCredits + phaseDCredits + runItemCreditsDelta,
       itemRuntime,
+      economyRunTelemetry: economyTelemetry,
       ...phaseDPatch,
       ...gravePolaroidPatch,
     };
@@ -5385,13 +5463,17 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       };
     }
 
-    const bankResult = bankAllPhysicalRunCargo(inc.cargo, inc.runBankedSnapshot);
+    const bankResult = bankEligiblePhysicalRunCargo(inc.cargo, inc.runBankedSnapshot);
     if (Object.keys(bankResult.bankedResources).length === 0
       && Object.keys(bankResult.bankedConsumables).length === 0) {
-      return { success: false, logLine: '>> CARGO BANK FAILED — NO PHYSICAL PAYLOAD TO SECURE.' };
+      return {
+        success: false,
+        logLine: bankResult.blockedUnitCount > 0
+          ? formatSafehouseBankLog(bankResult)
+          : '>> CARGO BANK FAILED — NO PHYSICAL PAYLOAD TO SECURE.',
+      };
     }
 
-    const { resourceCount, consumableCount } = summarizeBankSnapshot(bankResult.bank);
     setActiveIncursion((prev) => {
       const routingContext = resolveCargoRoutingContextFromIncursion(prev);
       const next = {
@@ -5420,7 +5502,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
     return {
       success: true,
-      logLine: `>> CARGO BANKED AT SAFEHOUSE — ${resourceCount} RESOURCE(S), ${consumableCount} ITEM(S) SECURED. SURVIVES DEATH IF NOT RE-LOOTED.`,
+      logLine: formatSafehouseBankLog(bankResult),
       transferredValue: 0,
     };
   }, []);
@@ -7159,7 +7241,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       calculateSectorExtractionPayout,
       placeCargoItem,
       relocateCargoItem,
+      replaceCargoItem,
       discardCargoInstance,
+      recordEconomyLeaveBehind,
       applyHarvestChoice,
       useFocusingAmpouleFromCargo,
       useSonarPingOnNode,
@@ -7347,6 +7431,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       calculateSectorExtractionPayout,
       placeCargoItem,
       relocateCargoItem,
+      replaceCargoItem,
+      discardCargoInstance,
+      recordEconomyLeaveBehind,
       applyHarvestChoice,
       useFocusingAmpouleFromCargo,
       useSonarPingOnNode,

@@ -6,8 +6,15 @@ import {
   View,
 } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
-import type { ResourceItemId } from '../../types/resourceItem';
 import { ALL_RESOURCE_ITEM_IDS, getResourceDisplayName, getResourceCategory } from '../../data/resourceRegistry';
+import { usePlayerAccount } from '../../context/PlayerAccountContext';
+import { getAccountProgressionProfile } from '../../data/progressionDebugEngine';
+import {
+  formatSourceHintTierLabel,
+  resolveResourceSourceHint,
+} from '../../data/resourceSourceHintEngine';
+import { buildResourceDiscoveryCard } from '../../data/resourceDiscoveryEngine';
+import type { ResourceItemId } from '../../types/resourceItem';
 import { listHubStagedConsumables } from '../../data/hubSafehouseEngine';
 import { DOSSIER_FOREGROUND, DOSSIER_ROW_BG } from '../../constants/dossierSurface';
 import { useTerminal } from '../../context/TerminalContext';
@@ -51,6 +58,8 @@ function StashRow({
   mutedColor,
   textColor,
   isDesktop,
+  displayName,
+  sourceHint,
   onDragStart,
   onDragMove,
   onDragEnd,
@@ -60,6 +69,8 @@ function StashRow({
   mutedColor: string;
   textColor: string;
   isDesktop: boolean;
+  displayName?: string;
+  sourceHint?: string | null;
   onDragStart: (itemId: CargoItemId) => void;
   onDragMove: (itemId: CargoItemId, absoluteX: number, absoluteY: number) => void;
   onDragEnd: (itemId: CargoItemId, absoluteX: number, absoluteY: number) => void;
@@ -73,10 +84,10 @@ function StashRow({
             style={{ color: textColor, fontWeight: '700' }}
             numberOfLines={1}
           >
-            {entry.name.toUpperCase()}
+            {(displayName ?? entry.name).toUpperCase()}
           </TerminalText>
-          <TerminalText variant="caption" style={{ color: mutedColor }}>
-            {`${entry.quantity}× // ${entry.kind === 'resource' ? getResourceCategory(entry.itemId as ResourceItemId) : 'CONSUMABLE'}`}
+          <TerminalText variant="caption" style={{ color: mutedColor }} numberOfLines={2}>
+            {`${entry.quantity}× // ${entry.kind === 'resource' ? getResourceCategory(entry.itemId as ResourceItemId) : 'CONSUMABLE'}${sourceHint ? ` // ${sourceHint}` : ''}`}
           </TerminalText>
         </View>
       </View>
@@ -103,11 +114,16 @@ export default function SafehouseStashPanel({
   onDragEnd,
 }: SafehouseStashPanelProps): React.JSX.Element {
   const { theme } = useTerminal();
+  const { account } = usePlayerAccount();
   const { isDesktop } = useHubLayout();
   const { bodySize } = useHubTypography();
   const [search, setSearch] = useState('');
   const accent = theme.statusColor;
   const panelRef = useRef<View>(null);
+  const progressionProfile = useMemo(
+    () => getAccountProgressionProfile(account),
+    [account],
+  );
 
   const reportPanelMetrics = () => {
     panelRef.current?.measureInWindow((pageX, pageY, width, height) => {
@@ -204,19 +220,42 @@ export default function SafehouseStashPanel({
             {search.trim() ? '// NO MATCHING ITEMS' : '// STASH EMPTY'}
           </TerminalText>
         ) : (
-          entries.map((entry) => (
-            <StashRow
-              key={entry.key}
-              entry={entry}
-              borderColor={theme.borderColor}
-              mutedColor={theme.mutedColor}
-              textColor={theme.textColor}
-              isDesktop={isDesktop}
-              onDragStart={onDragStart}
-              onDragMove={onDragMove}
-              onDragEnd={onDragEnd}
-            />
-          ))
+          entries.map((entry) => {
+            const discoveryCard = entry.kind === 'resource'
+              ? buildResourceDiscoveryCard(
+                entry.itemId as ResourceItemId,
+                account.resourceDiscovery,
+              )
+              : null;
+            const sourceHint = entry.kind === 'resource'
+              ? (() => {
+                if (discoveryCard?.discovered) {
+                  return discoveryCard.compact;
+                }
+                const hint = resolveResourceSourceHint(entry.itemId as ResourceItemId, {
+                  profile: progressionProfile,
+                  resourceStash: resourceStash as Partial<Record<ResourceItemId, number>>,
+                  preferContractDirected: false,
+                });
+                return `${formatSourceHintTierLabel(hint.tier)}: ${hint.compact}`;
+              })()
+              : null;
+            return (
+              <StashRow
+                key={entry.key}
+                entry={entry}
+                displayName={discoveryCard?.title}
+                borderColor={theme.borderColor}
+                mutedColor={theme.mutedColor}
+                textColor={theme.textColor}
+                isDesktop={isDesktop}
+                sourceHint={sourceHint}
+                onDragStart={onDragStart}
+                onDragMove={onDragMove}
+                onDragEnd={onDragEnd}
+              />
+            );
+          })
         )}
       </ScrollView>
     </View>
@@ -253,7 +292,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     height: 0,
-    overflow: 'auto',
+    overflow: 'scroll',
   },
   listContent: { gap: 6, paddingBottom: 8, paddingRight: 2 },
   row: {

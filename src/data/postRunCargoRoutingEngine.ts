@@ -41,10 +41,10 @@ import {
   canResourceBeSoldToFence,
   getResourceCategory,
   getResourceDisplayName,
-  getResourceSellValue,
   isFenceableResourceId,
   RESOURCE_REGISTRY,
 } from './resourceRegistry';
+import { resolveFenceUnitValue } from './economyValueLaneEngine';
 import { addToResourceStash } from './resourceStashEngine';
 import { rollSealedContainerOpenReward } from './sealedContainerOpenEngine';
 import {
@@ -209,7 +209,7 @@ export function recommendCargoRoutingAction(
     return 'OPEN_SEALED';
   }
   if (validActions.includes('SELL_FENCE')) {
-    const sellValue = getResourceSellValue(resourceId);
+    const sellValue = resolveFenceUnitValue(resourceId);
     if (sellValue >= 100 || resourceId === 'smugglers-ledger' || resourceId === 'tarnished-dog-tags') {
       return 'SELL_FENCE';
     }
@@ -229,7 +229,7 @@ export function recommendCargoRoutingAction(
 export function supportsPartialCargoRouting(item: RoutableCargoItem): boolean {
   if (item.quantity <= 1) return false;
   const def = RESOURCE_REGISTRY[item.resourceId];
-  if (def.maxStack <= 1) return false;
+  if (def.cargoStackCap <= 1) return false;
   return item.canFence || item.canDeliver || item.canContribute;
 }
 
@@ -625,7 +625,7 @@ export function applyCargoRoutingDecisions({
           keepsakeRuntime,
           decision.resourceId,
         );
-        const unitSellValue = routableItem?.sealedSellValue ?? getResourceSellValue(decision.resourceId);
+        const unitSellValue = routableItem?.sealedSellValue ?? resolveFenceUnitValue(decision.resourceId);
         const totalSaleValue = Math.round(unitSellValue * decision.quantity * valueMultiplier);
         nextCredits += totalSaleValue;
         creditsFromFence += totalSaleValue;

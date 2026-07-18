@@ -21,6 +21,7 @@ import {
 import { tickAllSectorOperationLifecycles, normalizeSectorOperationLifecycle } from '../data/operationLifecycleEngine';
 import { generateContractBoard } from '../data/contractGenerator';
 import { createEmptyContractMemory } from '../data/contractProceduralEngine';
+import { sanitizePersistedContractBoard } from '../data/economySaveMigrationEngine';
 import {
   devClearAnchorDormant,
   devForceOperationCompletion as devForceOperationCompletionState,
@@ -197,10 +198,12 @@ function mergePersistedState(parsed: Partial<WorldStatePersistedState> & { selec
     boardRefreshRunIndex: deployRunIndex,
     lastUsedSponsorId: null,
   };
-  const contractBoard = {
+  const preSanitizeBoard = {
     ...baseBoard,
     lastUsedSponsorId: baseBoard.lastUsedSponsorId ?? parsed.selectedEmployerCabal ?? null,
   };
+  const { board: sanitizedBoard } = sanitizePersistedContractBoard(preSanitizeBoard);
+  const contractBoard = { ...sanitizedBoard };
   if (!contractBoard.contracts || contractBoard.contracts.length === 0) {
     contractBoard.contracts = generateContractBoard(deployRunIndex);
   }

@@ -87,6 +87,30 @@ import {
 import type { RunBalanceTelemetry } from '../data/runIntegration/runBalanceTelemetryEngine';
 import { appraiseSealedCargoInStash, incrementCareerSealedFromRouting, openSealedCargoInStash, sellSealedCargoInStash, syncSealedStacksAfterRouting } from '../data/sealedCargoHubEngine';
 import { debugGrantExpansionResources, debugGrantSealedCasket, debugGrantSpecimenJar } from '../data/sealedCargoDebugEngine';
+import {
+  debugClearResourceStash,
+  debugGrantEconomyResources,
+  debugUnlockAllSectors,
+  type EconomyGrantMode,
+} from '../data/economySpineDebugEngine';
+import {
+  createEmptyResourceDiscoveryState,
+  markDiscoveriesFromStashDelta,
+  seedDiscoveryFromStash,
+} from '../data/resourceDiscoveryEngine';
+import {
+  debugClearResourceDiscovery,
+  debugDiscoverAllEconomyResources,
+} from '../data/resourceDiscoveryDebugEngine';
+import { createDefaultCareerEconomyTelemetry } from '../types/economyRunTelemetry';
+import {
+  applyCareerCraftSpend,
+  applyCareerFenceSale,
+  applyCareerContractCompleted,
+  finalizeCareerEconomyFromRun,
+  finalizeUnstableCarryDuration,
+} from '../data/economyRunTelemetryEngine';
+import { migratePlayerAccountEconomy } from '../data/economySaveMigrationEngine';
 import { applyBetrayalConsequencesToAccount } from '../data/betrayalConsequencesEngine';
 import { buildBetrayalEventsFromRouting } from '../data/contractBetrayalResolver';
 import { DEFAULT_UNLOCKED_KEEPSAKE_IDS, isKeepsakeId } from '../data/expeditionKeepsakeRegistry';
@@ -225,6 +249,13 @@ const NEUTRAL_FACTION_PERKS: FactionModifiers = {
 export function createDefaultPlayerAccount(): PlayerAccount {
   const inventory = createDefaultInventory();
   const weaponProgression = createDefaultWeaponProgression();
+  const resourceStash = {
+    'ley-slag': 6,
+    'echo-glass-shard': 10,
+    'sanguine-ampoule': 2,
+    'legion-blood-iron': 2,
+    'encrypted-grid-drive': 1,
+  };
   return {
     id: `operative-${Date.now()}`,
     username: 'OPERATIVE-7741',
@@ -260,13 +291,7 @@ export function createDefaultPlayerAccount(): PlayerAccount {
     unlockedHexShotAbilities: [...DEFAULT_HEX_SHOT_UNLOCKED],
     envoyLoadout: [...DEFAULT_ENVOY_LOADOUT] as EnvoyLoadout,
     unlockedEnvoyAbilities: [...DEFAULT_ENVOY_UNLOCKED],
-    resourceStash: {
-      'ley-slag': 6,
-      'echo-glass-shard': 10,
-      'sanguine-ampoule': 2,
-      'legion-blood-iron': 2,
-      'encrypted-grid-drive': 1,
-    },
+    resourceStash,
     weaponUnlocks: weaponProgression.weaponUnlocks,
     weaponTiers: weaponProgression.weaponTiers,
     equippedWeaponByClass: weaponProgression.equippedWeaponByClass,
@@ -285,6 +310,8 @@ export function createDefaultPlayerAccount(): PlayerAccount {
     unlockedKeepsakeIds: [...DEFAULT_UNLOCKED_KEEPSAKE_IDS],
     keepsakeDeployment: createDefaultKeepsakeDeployment(),
     careerBalanceHistory: createDefaultCareerBalanceHistory(),
+    resourceDiscovery: seedDiscoveryFromStash(resourceStash),
+    careerEconomyTelemetry: createDefaultCareerEconomyTelemetry(),
     progressionProfile: createDefaultProgressionProfile(),
   };
 }
@@ -293,6 +320,14 @@ function mergeStoredAccount(parsed: Partial<PlayerAccount>): PlayerAccount {
   const defaults = createDefaultPlayerAccount();
   const inventory = mergeInventory(parsed.inventory);
   const classFields = normalizeClassAccountFields(parsed);
+  const economy = migratePlayerAccountEconomy({
+    resourceStash: parsed.resourceStash,
+    resourceDiscovery: parsed.resourceDiscovery,
+    careerEconomyTelemetry: parsed.careerEconomyTelemetry,
+    sealedCargoStacks: parsed.sealedCargoStacks,
+    craftedAugments: parsed.craftedAugments,
+    weaponUnlocks: parsed.weaponUnlocks,
+  });
   return {
     ...defaults,
     ...parsed,
@@ -321,10 +356,7 @@ function mergeStoredAccount(parsed: Partial<PlayerAccount>): PlayerAccount {
       ...createDefaultBankedCargo(),
       ...parsed.bankedCargo,
     },
-    resourceStash: {
-      ...createEmptyResourceStash(),
-      ...parsed.resourceStash,
-    },
+    resourceStash: economy.resourceStash,
     alignedFaction: parsed.alignedFaction ?? defaults.alignedFaction ?? 'TERRAN_GRID',
     sponsorReputation: { ...defaults.sponsorReputation, ...parsed.sponsorReputation },
     ...normalizeWeaponProgression({
@@ -358,7 +390,7 @@ function mergeStoredAccount(parsed: Partial<PlayerAccount>): PlayerAccount {
       ...parsed.sponsorTrustStats,
     },
     betrayalHistory: parsed.betrayalHistory ?? defaults.betrayalHistory,
-    sealedCargoStacks: parsed.sealedCargoStacks ?? defaults.sealedCargoStacks,
+    sealedCargoStacks: economy.sealedCargoStacks,
     careerSealedCargo: {
       ...defaults.careerSealedCargo,
       ...parsed.careerSealedCargo,
@@ -381,6 +413,8 @@ function mergeStoredAccount(parsed: Partial<PlayerAccount>): PlayerAccount {
       ].slice(-10),
     },
     veilResidueBalance: parsed.veilResidueBalance ?? defaults.veilResidueBalance,
+    resourceDiscovery: economy.resourceDiscovery,
+    careerEconomyTelemetry: economy.careerEconomyTelemetry,
     progressionProfile: normalizeProgressionProfile(parsed.progressionProfile),
   };
 }
@@ -490,7 +524,13 @@ interface PlayerAccountContextType {
     routingAppraisalCount?: number;
   }) => import('../types/postRunCargoRouting').CargoRoutingResult;
   /** Phase B — push completed-run balance telemetry into the last-10 career buffer. */
-  recordCareerBalanceTelemetry: (telemetry: RunBalanceTelemetry) => void;
+  recordCareerBalanceTelemetry: (
+    telemetry: RunBalanceTelemetry,
+    economy?: {
+      run: import('../types/economyRunTelemetry').EconomyRunTelemetry;
+      ledger: import('../types/runResourceLedger').RunResourceLedger;
+    },
+  ) => void;
   applyBetrayalConsequences: (payload: {
     contractResult: import('../types/contract').ContractResult;
     routingResult: import('../types/postRunCargoRouting').CargoRoutingResult;
@@ -519,6 +559,16 @@ interface PlayerAccountContextType {
   grantSealedCasketInHub: (quantity?: number) => void;
   grantSpecimenJarInHub: (quantity?: number) => void;
   grantExpansionResourcesInHub: () => void;
+  /** Phase 2H — grant economy stash buckets. */
+  debugGrantEconomyResourcesInHub: (mode: EconomyGrantMode, quantity?: number) => string;
+  /** Phase 2H — clear hub resource stash. */
+  debugClearEconomyStashInHub: () => string;
+  /** Phase 2H — unlock every sector in progression. */
+  debugUnlockAllEconomySectorsInHub: () => string;
+  /** Phase 2I — mark all economy resources discovered. */
+  debugDiscoverAllResourcesInHub: () => string;
+  /** Phase 2I — clear resource discovery state. */
+  debugClearResourceDiscoveryInHub: () => string;
   /** Phase 1A — print progression profile to hub log. */
   logProgressionProfile: () => string;
   /** Phase 1A — print unlock registry status vs current profile. */
@@ -1041,13 +1091,19 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
         return { success: false, logLine: '>> FABRICATION REJECTED — STASH DEDUCTION FAILED.' };
       }
 
+      const spentUnits = recipe.requirements.reduce((sum, req) => sum + req.quantity, 0);
+
       updateAccount((prev) => {
         const discovered = discoverRecipeSchematic(
           getAccountProgressionProfile(prev),
           recipe.id,
         );
         const withProfile = withProgressionProfile(prev, discovered.profile);
-        const base = { ...withProfile, resourceStash: nextStash };
+        const base = {
+          ...withProfile,
+          resourceStash: nextStash,
+          careerEconomyTelemetry: applyCareerCraftSpend(prev.careerEconomyTelemetry, spentUnits),
+        };
         if (recipe.kind === 'AUGMENT') {
           const augmentId = recipe.outputId as BoundRequisitionId;
           if (prev.craftedAugments.includes(augmentId)) return base;
@@ -1526,6 +1582,11 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
           ...prev,
           resourceStash: result.stash,
           cabalCredits: result.cabalCredits,
+          careerEconomyTelemetry: applyCareerFenceSale(
+            prev.careerEconomyTelemetry,
+            quantity,
+            result.creditsEarned,
+          ),
         };
       });
       return creditsEarned > 0
@@ -1665,6 +1726,18 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
           payload.routingState.sealedAppraisalByItemKey,
         );
 
+        const discoveryUpdate = markDiscoveriesFromStashDelta(
+          prev.resourceDiscovery,
+          prev.resourceStash,
+          mergedStash,
+        );
+
+        const fencedUnits = Object.values(mergedResult.fenced ?? {}).reduce(
+          (sum, n) => sum + (n ?? 0),
+          0,
+        );
+        const fenceCredits = mergedResult.creditsFromFence ?? 0;
+
         finalResult = mergedResult;
 
         return {
@@ -1672,6 +1745,10 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
           resourceStash: mergedStash,
           cabalCredits: mergedCredits,
           sealedCargoStacks: sealedStacks,
+          resourceDiscovery: discoveryUpdate.state,
+          careerEconomyTelemetry: fencedUnits > 0
+            ? applyCareerFenceSale(prev.careerEconomyTelemetry, fencedUnits, fenceCredits)
+            : prev.careerEconomyTelemetry,
           careerSealedCargo: incrementCareerSealedFromRouting(
             prev.careerSealedCargo ?? createDefaultCareerSealedCargoStats(),
             mergedResult,
@@ -1756,6 +1833,65 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
   const grantExpansionResourcesInHub = useCallback(() => {
     updateAccount((prev) => debugGrantExpansionResources(prev));
   }, [updateAccount]);
+
+  const debugGrantEconomyResourcesInHub = useCallback((mode: EconomyGrantMode, quantity = 8) => {
+    let logLine = '';
+    updateAccount((prev) => {
+      const result = debugGrantEconomyResources(prev, mode, quantity);
+      const discoveryUpdate = markDiscoveriesFromStashDelta(
+        prev.resourceDiscovery,
+        prev.resourceStash,
+        result.account.resourceStash,
+      );
+      logLine = result.logLine;
+      return {
+        ...result.account,
+        resourceDiscovery: discoveryUpdate.state,
+      };
+    });
+    appendHubLog(logLine);
+    return logLine;
+  }, [appendHubLog, updateAccount]);
+
+  const debugClearEconomyStashInHub = useCallback(() => {
+    let logLine = '';
+    updateAccount((prev) => {
+      const result = debugClearResourceStash(prev);
+      logLine = result.logLine;
+      return result.account;
+    });
+    appendHubLog(logLine);
+    return logLine;
+  }, [appendHubLog, updateAccount]);
+
+  const debugUnlockAllEconomySectorsInHub = useCallback(() => {
+    let logLine = '';
+    updateAccount((prev) => {
+      const result = debugUnlockAllSectors(prev);
+      logLine = result.logLine;
+      return result.account;
+    });
+    appendHubLog(logLine);
+    return logLine;
+  }, [appendHubLog, updateAccount]);
+
+  const debugDiscoverAllResourcesInHub = useCallback(() => {
+    const state = debugDiscoverAllEconomyResources();
+    updateAccount((prev) => ({ ...prev, resourceDiscovery: state }));
+    const logLine = `>> DEBUG DISCOVERY — marked all economy resources discovered.`;
+    appendHubLog(logLine);
+    return logLine;
+  }, [appendHubLog, updateAccount]);
+
+  const debugClearResourceDiscoveryInHub = useCallback(() => {
+    updateAccount((prev) => ({
+      ...prev,
+      resourceDiscovery: debugClearResourceDiscovery(),
+    }));
+    const logLine = '>> DEBUG DISCOVERY — cleared resource discovery state.';
+    appendHubLog(logLine);
+    return logLine;
+  }, [appendHubLog, updateAccount]);
 
   const logProgressionProfile = useCallback((): string => {
     const report = formatProgressionProfileReport(getAccountProgressionProfile(account));
@@ -2249,14 +2385,40 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
     });
   }, [account.activeClass, account.alignedFaction]);
 
-  const recordCareerBalanceTelemetry = useCallback((telemetry: RunBalanceTelemetry) => {
-    updateAccount((prev) => ({
-      ...prev,
-      careerBalanceHistory: pushCareerBalanceRun(
-        prev.careerBalanceHistory ?? createDefaultCareerBalanceHistory(),
-        careerEntryFromTelemetry(telemetry),
-      ),
-    }));
+  const recordCareerBalanceTelemetry = useCallback((
+    telemetry: RunBalanceTelemetry,
+    economy?: {
+      run: import('../types/economyRunTelemetry').EconomyRunTelemetry;
+      ledger: import('../types/runResourceLedger').RunResourceLedger;
+    },
+  ) => {
+    updateAccount((prev) => {
+      let next = {
+        ...prev,
+        careerBalanceHistory: pushCareerBalanceRun(
+          prev.careerBalanceHistory ?? createDefaultCareerBalanceHistory(),
+          careerEntryFromTelemetry(telemetry),
+        ),
+      };
+      if (economy) {
+        const finalizedRun = finalizeUnstableCarryDuration(economy.run);
+        next = {
+          ...next,
+          careerEconomyTelemetry: finalizeCareerEconomyFromRun(
+            prev.careerEconomyTelemetry,
+            finalizedRun,
+            economy.ledger,
+            { contractCompleted: telemetry.contractCompleted },
+          ),
+        };
+      } else if (telemetry.contractCompleted) {
+        next = {
+          ...next,
+          careerEconomyTelemetry: applyCareerContractCompleted(prev.careerEconomyTelemetry),
+        };
+      }
+      return next;
+    });
   }, [updateAccount]);
 
   const applyBetrayalConsequences = useCallback(
@@ -2489,6 +2651,11 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       grantSealedCasketInHub,
       grantSpecimenJarInHub,
       grantExpansionResourcesInHub,
+      debugGrantEconomyResourcesInHub,
+      debugClearEconomyStashInHub,
+      debugUnlockAllEconomySectorsInHub,
+      debugDiscoverAllResourcesInHub,
+      debugClearResourceDiscoveryInHub,
       logProgressionProfile,
       logProgressionUnlockCatalog,
       debugGrantProgressionUnlockId,
@@ -2595,6 +2762,11 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       grantSealedCasketInHub,
       grantSpecimenJarInHub,
       grantExpansionResourcesInHub,
+      debugGrantEconomyResourcesInHub,
+      debugClearEconomyStashInHub,
+      debugUnlockAllEconomySectorsInHub,
+      debugDiscoverAllResourcesInHub,
+      debugClearResourceDiscoveryInHub,
       logProgressionProfile,
       logProgressionUnlockCatalog,
       debugGrantProgressionUnlockId,

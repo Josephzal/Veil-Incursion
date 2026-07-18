@@ -105,7 +105,7 @@ export const SECTOR_WORLD_TEMPLATES: SectorWorldTemplate[] = [
     biome: 'Industrial Ley Slag',
     hazardLevel: 3,
     rewardLevel: 3,
-    resourceFocus: ['Ley Slag', 'Rail Capacitor'],
+    resourceFocus: ['Rail Capacitor', 'Blood-Iron', 'Ley-Slag'],
     echoActivity: 'ELEVATED',
     employerPresence: ['LEGION', 'TERRAN_GRID'],
     anchor: {
@@ -136,7 +136,7 @@ export const SECTOR_WORLD_TEMPLATES: SectorWorldTemplate[] = [
     biome: 'Submerged Null Caverns',
     hazardLevel: 4,
     rewardLevel: 3,
-    resourceFocus: ['Mycelial Ichor', 'Anomalous Core'],
+    resourceFocus: ['Mycelial Ichor', 'Sanguine Ampoule', 'Echo-Glass'],
     echoActivity: 'CRITICAL',
     employerPresence: ['SOLARIS', 'LEGION'],
     anchor: {
@@ -167,7 +167,7 @@ export const SECTOR_WORLD_TEMPLATES: SectorWorldTemplate[] = [
     biome: 'Signal Deadlands',
     hazardLevel: 3,
     rewardLevel: 4,
-    resourceFocus: ['Nullcrete Shard', 'Echo Glass Shard'],
+    resourceFocus: ['Nullcrete', 'Echo-Glass', 'Ley-Slag'],
     echoActivity: 'LOW',
     employerPresence: ['TERRAN_GRID', 'SOLARIS'],
     anchor: {
@@ -198,7 +198,7 @@ export const SECTOR_WORLD_TEMPLATES: SectorWorldTemplate[] = [
     biome: 'Transit Corruption Grid',
     hazardLevel: 2,
     rewardLevel: 3,
-    resourceFocus: ['Containment Seal', 'Breach Thread'],
+    resourceFocus: ['Containment Seal', 'Grid-Drive', 'Breach Thread'],
     echoActivity: 'ELEVATED',
     employerPresence: ['TERRAN_GRID', 'SOLARIS', 'LEGION'],
     anchor: {
@@ -229,7 +229,7 @@ export const SECTOR_WORLD_TEMPLATES: SectorWorldTemplate[] = [
     biome: 'Barren Backroads',
     hazardLevel: 5,
     rewardLevel: 4,
-    resourceFocus: ['Cinder Wire', 'Anomalous Core'],
+    resourceFocus: ['Cinder Wire', 'Veil-Ash', 'Echo-Glass'],
     echoActivity: 'CRITICAL',
     employerPresence: ['LEGION', 'SOLARIS'],
     anchor: {

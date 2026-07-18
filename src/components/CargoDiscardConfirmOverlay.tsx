@@ -10,6 +10,10 @@ interface CargoDiscardConfirmOverlayProps {
   accentColor?: string;
   /** Stronger warning for sector-access route intel. */
   routeIntelWarning?: boolean;
+  /** Warning for rare / apex cargo jettison. */
+  rareWarning?: boolean;
+  /** Optional stack quantity label (e.g. "x3"). */
+  quantityLabel?: string;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -20,23 +24,29 @@ export default function CargoDiscardConfirmOverlay({
   theme,
   accentColor = '#00ff33',
   routeIntelWarning = false,
+  rareWarning = false,
+  quantityLabel,
   onConfirm,
   onCancel,
 }: CargoDiscardConfirmOverlayProps): React.JSX.Element {
+  const danger = routeIntelWarning || rareWarning;
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <View style={styles.backdrop}>
-        <View style={[styles.panel, { borderColor: routeIntelWarning ? '#ef4444' : accentColor, backgroundColor: '#050608' }]}>
-          <Text style={[styles.header, { color: routeIntelWarning ? '#ef4444' : accentColor }]}>
-            {routeIntelWarning ? 'JETTISON ROUTE INTEL' : 'JETTISON CARGO'}
+        <View style={[styles.panel, { borderColor: danger ? '#ef4444' : accentColor, backgroundColor: '#050608' }]}>
+          <Text style={[styles.header, { color: danger ? '#ef4444' : accentColor }]}>
+            {routeIntelWarning ? 'JETTISON ROUTE INTEL' : rareWarning ? 'JETTISON RARE CARGO' : 'JETTISON CARGO'}
           </Text>
           <Text style={[styles.body, { color: theme.primaryColor }]}>
             {itemName.toUpperCase()}
+            {quantityLabel ? `  ${quantityLabel}` : ''}
           </Text>
           <Text style={[styles.hint, { color: theme.mutedColor }]}>
             {routeIntelWarning
               ? 'WARNING — Sector access route intel. Cannot be fenced. Discarding delays the next sector unlock and counts toward pity recovery. Drop permanently?'
-              : 'Drop this item permanently from your inventory?'}
+              : rareWarning
+                ? 'WARNING — Rare or apex cargo. Cannot casually recover after jettison. Drop permanently?'
+                : 'Drop this stack permanently from your inventory?'}
           </Text>
 
           <View style={styles.actions}>

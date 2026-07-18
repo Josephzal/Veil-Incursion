@@ -16,11 +16,14 @@ const COMBAT_DETAIL_TITLE_HEIGHT = 18;
 const COMBAT_DETAIL_BODY_HEIGHT = 39;
 const COMBAT_DETAIL_META_HEIGHT = 14;
 import {
+  canMergeCargoAtCell,
   canPlaceCargoItemExcluding,
   combatConsumableApCost,
   combatConsumableDescription,
+  findPlacedItemAtCell,
   isCombatDeployableCargoItem,
   relocateCargoItem as relocateCargoInState,
+  replaceCargoAtCell as replaceCargoInState,
 } from '../data/cargoGridEngine';
 import { useCombatTurnOptional } from '../context/CombatTurnContext';
 import type { CargoItemId, CargoRunState, PlacedCargoItem } from '../types/cargoGrid';
@@ -62,7 +65,14 @@ import type { TerminalTheme } from '../types/theme';
 import { countCargoItemInstances } from '../data/cargoGridEngine';
 import { resolveCargoItemIcon } from '../utils/cargoItemIcon';
 import CargoDiscardConfirmOverlay from './CargoDiscardConfirmOverlay';
+import CargoLootPickupOverlay from './CargoLootPickupOverlay';
 import { isRouteIntelResourceId } from '../data/sectorAccessMandateEngine';
+import {
+  cargoItemQuantity,
+  getCargoStackCap,
+  isProgressionProtectedCargo,
+  isRareOrApexCargo,
+} from '../data/cargoStackEngine';
 import CargoCreditsHud from './CargoCreditsHud';
 import {
   getInteractiveButtonStyle,
@@ -104,6 +114,8 @@ interface CargoGridBoardProps {
   theme: TerminalTheme;
   accentColor?: string;
   onRelocateItem: (instanceId: string, row: number, col: number) => boolean;
+  /** Phase 2A.1 — jettison occupant and place source at cell. */
+  onReplaceItem?: (instanceId: string, row: number, col: number) => boolean;
   onContinue?: () => void;
   continueLabel?: string;
   onUseAmpoule?: () => boolean;
@@ -207,6 +219,13 @@ function cellOriginTop(row: number, cellSize: number = CARGO_CELL_SIZE): number 
   return row * (cellSize + CARGO_CELL_GAP);
 }
 
+function formatStackBadge(itemId: CargoItemId, quantity: number): string | null {
+  const cap = getCargoStackCap(itemId);
+  if (cap <= 1 && quantity <= 1) return null;
+  if (cap <= 1) return `x${quantity}`;
+  return `${quantity}/${cap}`;
+}
+
 function DraggableCargoSprite({
   dragSource,
   isDragging,
@@ -221,6 +240,8 @@ function DraggableCargoSprite({
   originRow,
   originCol,
   cellSize = CARGO_CELL_SIZE,
+  stackBadge = null,
+  accentColor = '#00ff33',
 }: {
   dragSource: CargoDragSource;
   isDragging: boolean;
@@ -247,8 +268,16 @@ function DraggableCargoSprite({
   originRow?: number;
   originCol?: number;
   cellSize?: number;
+  stackBadge?: string | null;
+  accentColor?: string;
 }): React.JSX.Element {
   const spriteSize = spriteSizeForCargoItem(dragSource.itemId, cellSize);
+
+  const badge = stackBadge ? (
+    <View style={styles.stackBadge} pointerEvents="none">
+      <Text style={[styles.stackBadgeText, { color: accentColor }]}>{stackBadge}</Text>
+    </View>
+  ) : null;
 
   if (combatSelectMode && onCombatSelect) {
     return (
@@ -267,6 +296,7 @@ function DraggableCargoSprite({
           resizeMode="contain"
           style={[styles.lootSprite, spriteSize, combatSelected ? styles.combatItemSelected : null]}
         />
+        {badge}
       </HapticPressable>
     );
   }
@@ -325,6 +355,7 @@ function DraggableCargoSprite({
             style={[styles.lootSprite, spriteSize]}
           />
         )}
+        {!isDragging ? badge : null}
       </View>
     </GestureDetector>
   );
@@ -346,6 +377,7 @@ function ContainmentSlot({
   combatConsumablesEnabled,
   selectedCombatItemId,
   selectCombatItem,
+  accentColor = '#00ff33',
 }: {
   item: import('../types/cargoGrid').ContainmentItem;
   spriteSize: { width: number; height: number };
@@ -374,8 +406,10 @@ function ContainmentSlot({
   combatConsumablesEnabled: boolean;
   selectedCombatItemId: CargoItemId | null;
   selectCombatItem: (itemId: CargoItemId) => void;
+  accentColor?: string;
 }): React.JSX.Element {
   const slotRef = useRef<View>(null);
+  const stackBadge = formatStackBadge(item.itemId, cargoItemQuantity(item));
 
   const reportCenter = useCallback(() => {
     if (!onContainmentItemCenterMeasured) return;
@@ -410,6 +444,8 @@ function ContainmentSlot({
       <DraggableCargoSprite
         dragSource={source}
         isDragging={isDragging}
+        stackBadge={stackBadge}
+        accentColor={accentColor}
         onHoverCell={onHoverCell}
         onDragStart={onDragStart}
         onDragMove={onDragMove}
@@ -432,6 +468,7 @@ export default function CargoGridBoard({
   theme,
   accentColor = '#00ff33',
   onRelocateItem,
+  onReplaceItem,
   onContinue,
   continueLabel = '[ CONTINUE ]',
   onUseAmpoule,
@@ -557,6 +594,14 @@ export default function CargoGridBoard({
   const [dragOverlay, setDragOverlay] = useState<{ x: number; y: number } | null>(null);
   const [selectedCombatItemId, setSelectedCombatItemId] = useState<CargoItemId | null>(null);
   const [pendingDiscard, setPendingDiscard] = useState<CargoDragSource | null>(null);
+  const [pendingReplace, setPendingReplace] = useState<{
+    source: CargoDragSource;
+    row: number;
+    col: number;
+    occupantId: CargoItemId;
+    occupantName: string;
+    canMerge: boolean;
+  } | null>(null);
   const externalSlotCountRef = useRef(0);
 
   const dragGhostScale = useSharedValue(1);
@@ -705,18 +750,16 @@ export default function CargoGridBoard({
     excludeInstanceId?: string,
   ): { row: number; col: number } | null => {
     const currentCargo = cargoRef.current;
+    const accepts = (row: number, col: number) => (
+      canPlaceCargoItemExcluding(currentCargo, itemId, row, col, excludeInstanceId)
+      || canMergeCargoAtCell(currentCargo, itemId, row, col, excludeInstanceId)
+    );
     const locked = dropTargetRef.current;
 
     if (
       locked
       && locked.itemId === itemId
-      && canPlaceCargoItemExcluding(
-        currentCargo,
-        itemId,
-        locked.row,
-        locked.col,
-        locked.excludeInstanceId ?? excludeInstanceId,
-      )
+      && accepts(locked.row, locked.col)
     ) {
       return { row: locked.row, col: locked.col };
     }
@@ -728,7 +771,10 @@ export default function CargoGridBoard({
     if (
       hover
       && hoverItem === itemId
-      && canPlaceCargoItemExcluding(currentCargo, itemId, hover.row, hover.col, hoverExclude ?? excludeInstanceId)
+      && (
+        canPlaceCargoItemExcluding(currentCargo, itemId, hover.row, hover.col, hoverExclude ?? excludeInstanceId)
+        || canMergeCargoAtCell(currentCargo, itemId, hover.row, hover.col, hoverExclude ?? excludeInstanceId)
+      )
     ) {
       return hover;
     }
@@ -736,7 +782,7 @@ export default function CargoGridBoard({
     const pending = pendingDropRef.current;
     if (
       pending
-      && canPlaceCargoItemExcluding(currentCargo, itemId, pending.row, pending.col, excludeInstanceId)
+      && accepts(pending.row, pending.col)
     ) {
       return pending;
     }
@@ -744,7 +790,7 @@ export default function CargoGridBoard({
     const fromFinger = resolveCellFromAbsolute(absoluteX, absoluteY);
     if (
       fromFinger
-      && canPlaceCargoItemExcluding(currentCargo, itemId, fromFinger.row, fromFinger.col, excludeInstanceId)
+      && accepts(fromFinger.row, fromFinger.col)
     ) {
       return fromFinger;
     }
@@ -765,7 +811,10 @@ export default function CargoGridBoard({
     if (
       cell
       && itemId
-      && canPlaceCargoItemExcluding(cargoRef.current, itemId, cell.row, cell.col, excludeInstanceId)
+      && (
+        canPlaceCargoItemExcluding(cargoRef.current, itemId, cell.row, cell.col, excludeInstanceId)
+        || canMergeCargoAtCell(cargoRef.current, itemId, cell.row, cell.col, excludeInstanceId)
+      )
     ) {
       pendingDropRef.current = { row: cell.row, col: cell.col };
       dropTargetRef.current = {
@@ -861,6 +910,42 @@ export default function CargoGridBoard({
     const cell = resolveValidDropCell(absoluteX, absoluteY, source.itemId, excludeId);
 
     if (!cell) {
+      const finger = resolveCellFromAbsolute(absoluteX, absoluteY);
+      if (finger && onReplaceItem) {
+        const occupant = findPlacedItemAtCell(
+          cargoRef.current,
+          finger.row,
+          finger.col,
+          excludeId,
+        );
+        if (occupant && occupant.itemId !== source.itemId) {
+          clearDrag();
+          setPendingReplace({
+            source,
+            row: finger.row,
+            col: finger.col,
+            occupantId: occupant.itemId,
+            occupantName: CARGO_ITEM_CATALOG[occupant.itemId].name,
+            canMerge: false,
+          });
+          onResult(false);
+          return;
+        }
+        if (occupant && occupant.itemId === source.itemId) {
+          // Full stack — no room to merge; offer replace of that stack.
+          clearDrag();
+          setPendingReplace({
+            source,
+            row: finger.row,
+            col: finger.col,
+            occupantId: occupant.itemId,
+            occupantName: CARGO_ITEM_CATALOG[occupant.itemId].name,
+            canMerge: false,
+          });
+          onResult(false);
+          return;
+        }
+      }
       clearDrag();
       if (onDiscardItem) {
         setPendingDiscard(source);
@@ -894,7 +979,16 @@ export default function CargoGridBoard({
       cargoRef.current = snapshot;
     }
     onResult(placed);
-  }, [captureMetrics, clearDrag, onDiscardItem, onHubExternalDrop, onRelocateItem, resolveValidDropCell]);
+  }, [
+    captureMetrics,
+    clearDrag,
+    onDiscardItem,
+    onHubExternalDrop,
+    onRelocateItem,
+    onReplaceItem,
+    resolveCellFromAbsolute,
+    resolveValidDropCell,
+  ]);
 
   const selectedApCost = selectedCombatItemId ? combatConsumableApCost(selectedCombatItemId) : 2;
   const canAffordConsumableAp = playerActionPoints >= selectedApCost;
@@ -982,6 +1076,7 @@ export default function CargoGridBoard({
           const source: CargoDragSource = { instanceId: item.instanceId, itemId: item.itemId, source: 'grid' };
           const spriteSize = spriteSizeForCargoItem(item.itemId, cellSize);
           const isDragging = activeDrag?.instanceId === item.instanceId;
+          const stackBadge = formatStackBadge(item.itemId, cargoItemQuantity(item));
 
           return (
             <View
@@ -1003,6 +1098,8 @@ export default function CargoGridBoard({
                 originRow={item.originRow}
                 originCol={item.originCol}
                 cellSize={cellSize}
+                stackBadge={stackBadge}
+                accentColor={accentColor}
                 onHoverCell={handleHoverCell}
                 onDragStart={handleDragStart}
                 onDragMove={handleDragMove}
@@ -1159,6 +1256,7 @@ export default function CargoGridBoard({
               combatConsumablesEnabled={combatConsumablesEnabled}
               selectedCombatItemId={selectedCombatItemId}
               selectCombatItem={selectCombatItem}
+              accentColor={accentColor}
             />
           );
         })}
@@ -1220,6 +1318,7 @@ export default function CargoGridBoard({
                 combatConsumablesEnabled={combatConsumablesEnabled}
                 selectedCombatItemId={selectedCombatItemId}
                 selectCombatItem={selectCombatItem}
+                accentColor={accentColor}
               />
             );
           })}
@@ -1345,10 +1444,22 @@ export default function CargoGridBoard({
       <CargoDiscardConfirmOverlay
         visible={pendingDiscard != null}
         itemName={pendingDiscard ? CARGO_ITEM_CATALOG[pendingDiscard.itemId].name : ''}
+        quantityLabel={(() => {
+          if (!pendingDiscard) return undefined;
+          const entry = [...displayCargo.grid.placed, ...displayCargo.containment]
+            .find((item) => item.instanceId === pendingDiscard.instanceId);
+          if (!entry) return undefined;
+          return formatStackBadge(entry.itemId, cargoItemQuantity(entry)) ?? undefined;
+        })()}
         theme={theme}
         accentColor={accentColor}
         routeIntelWarning={Boolean(
           pendingDiscard && isRouteIntelResourceId(pendingDiscard.itemId),
+        )}
+        rareWarning={Boolean(
+          pendingDiscard
+          && !isRouteIntelResourceId(pendingDiscard.itemId)
+          && isRareOrApexCargo(pendingDiscard.itemId),
         )}
         onConfirm={() => {
           if (!pendingDiscard || !onDiscardItem) return;
@@ -1356,6 +1467,63 @@ export default function CargoGridBoard({
           setPendingDiscard(null);
         }}
         onCancel={() => setPendingDiscard(null)}
+      />
+
+      <CargoLootPickupOverlay
+        visible={pendingReplace != null}
+        mode="REPLACE"
+        itemName={pendingReplace ? CARGO_ITEM_CATALOG[pendingReplace.source.itemId].name : ''}
+        quantityLabel={(() => {
+          if (!pendingReplace) return undefined;
+          const entry = [...displayCargo.grid.placed, ...displayCargo.containment]
+            .find((item) => item.instanceId === pendingReplace.source.instanceId);
+          if (!entry) return undefined;
+          return formatStackBadge(entry.itemId, cargoItemQuantity(entry)) ?? undefined;
+        })()}
+        occupantName={pendingReplace?.occupantName}
+        theme={theme}
+        accentColor={accentColor}
+        progressionWarning={Boolean(
+          pendingReplace && (
+            isProgressionProtectedCargo(pendingReplace.occupantId)
+            || isProgressionProtectedCargo(pendingReplace.source.itemId)
+          ),
+        )}
+        rareWarning={Boolean(
+          pendingReplace && (
+            isRareOrApexCargo(pendingReplace.occupantId)
+            || isRareOrApexCargo(pendingReplace.source.itemId)
+          ),
+        )}
+        onReplace={() => {
+          if (!pendingReplace || !onReplaceItem) {
+            setPendingReplace(null);
+            return;
+          }
+          const snapshot = cargoRef.current;
+          const optimistic = replaceCargoInState(
+            snapshot,
+            pendingReplace.source.instanceId,
+            pendingReplace.row,
+            pendingReplace.col,
+          );
+          if (optimistic) {
+            setDisplayCargo(optimistic);
+            cargoRef.current = optimistic;
+          }
+          const ok = onReplaceItem(
+            pendingReplace.source.instanceId,
+            pendingReplace.row,
+            pendingReplace.col,
+          );
+          if (!ok && optimistic) {
+            setDisplayCargo(snapshot);
+            cargoRef.current = snapshot;
+          }
+          setPendingReplace(null);
+        }}
+        onLeaveBehind={() => setPendingReplace(null)}
+        onCancel={() => setPendingReplace(null)}
       />
     </>
   );
@@ -1823,6 +1991,22 @@ const styles = StyleSheet.create({
   },
   lootSprite: {
     backgroundColor: 'transparent',
+  },
+  stackBadge: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.82)',
+    paddingHorizontal: 3,
+    paddingVertical: 1,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  stackBadgeText: {
+    fontFamily: 'monospace',
+    fontSize: 7,
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
   combatDetailPanel: {
     borderWidth: 1,

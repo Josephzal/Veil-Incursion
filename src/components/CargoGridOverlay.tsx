@@ -35,6 +35,7 @@ interface CargoGridOverlayProps {
   /** Closes without exit haptic — e.g. after a successful item use. */
   onDismissSilently?: () => void;
   onRelocateItem: (instanceId: string, row: number, col: number) => boolean;
+  onReplaceItem?: (instanceId: string, row: number, col: number) => boolean;
   onUseAmpoule?: () => boolean;
   scannerMode?: boolean;
   combatMode?: boolean;
@@ -60,6 +61,7 @@ export default function CargoGridOverlay({
   onClose,
   onDismissSilently,
   onRelocateItem,
+  onReplaceItem,
   onUseAmpoule,
   scannerMode = false,
   combatMode = false,
@@ -175,6 +177,7 @@ export default function CargoGridOverlay({
               theme={theme}
               accentColor={accentColor}
               onRelocateItem={onRelocateItem}
+              onReplaceItem={onReplaceItem}
               onDiscardItem={onDiscardItem}
               runCredits={runCredits}
               playerActionPoints={playerActionPoints}

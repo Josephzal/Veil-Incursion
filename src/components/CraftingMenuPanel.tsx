@@ -50,6 +50,13 @@ import {
 import type { ResourceQuantity } from '../types/resourceItem';
 import type { ProgressionProfile } from '../types/progression';
 import type { PlayerAccount } from '../types/game';
+import {
+  formatMissingResourceHint,
+  formatSourceHintTierLabel,
+  resolveResourceSourceHint,
+} from '../data/resourceSourceHintEngine';
+import { buildResourceDiscoveryCard } from '../data/resourceDiscoveryEngine';
+import type { ResourceDiscoveryState } from '../types/resourceDiscovery';
 
 const STARK_WHITE = '#F8FAFC';
 const MUTED_SLATE = LOADOUT_SUBTITLE_COLOR;
@@ -63,6 +70,7 @@ interface CraftingMenuPanelProps {
 
 interface ResourceLedgerProps {
   stash: ResourceQuantity;
+  discovery: ResourceDiscoveryState;
   borderColor: string;
   textColor: string;
   mutedColor: string;
@@ -70,10 +78,12 @@ interface ResourceLedgerProps {
 
 function ResourceLedger({
   stash,
+  discovery,
   borderColor,
   textColor,
   mutedColor,
-}: ResourceLedgerProps): React.JSX.Element {
+  profile,
+}: ResourceLedgerProps & { profile: ProgressionProfile }): React.JSX.Element {
   const ownedResources = useMemo(
     () => ALL_RESOURCE_ITEM_IDS.filter((resourceId) => getStashCount(stash, resourceId) > 0),
     [stash],
@@ -100,12 +110,21 @@ function ResourceLedger({
           const def = RESOURCE_REGISTRY[resourceId];
           const quantity = getStashCount(stash, resourceId);
           const itemTypeLabel = def.itemType.replace(/_/g, ' ');
+          const card = buildResourceDiscoveryCard(resourceId, discovery);
+          const hint = resolveResourceSourceHint(resourceId, {
+            profile,
+            resourceStash: stash,
+            preferContractDirected: false,
+          });
+          const subtitle = card.discovered
+            ? `${quantity}× // ${itemTypeLabel} // ${card.compact}`
+            : `${quantity}× // ${formatSourceHintTierLabel(hint.tier)}: ${hint.compact}`;
           return (
             <MarketRow
               key={resourceId}
-              title={def.name.toUpperCase()}
-              subtitle={`${quantity}× // ${itemTypeLabel}`}
-              valueLine={`${quantity} IN STASH`}
+              title={card.title.toUpperCase()}
+              subtitle={subtitle}
+              valueLine={card.discovered ? `${quantity} IN STASH` : 'SIGNAL CONTACT'}
               borderColor={borderColor}
               textColor={textColor}
               mutedColor={mutedColor}
@@ -131,6 +150,8 @@ interface FabricationRowProps {
   visibility?: RecipeVisibility;
   rumoredPurpose?: string;
   sourceHint?: string;
+  profile?: ProgressionProfile;
+  discovery?: ResourceDiscoveryState;
 }
 
 function FabricationRow({
@@ -146,6 +167,8 @@ function FabricationRow({
   visibility = 'KNOWN',
   rumoredPurpose,
   sourceHint,
+  profile,
+  discovery,
 }: FabricationRowProps): React.JSX.Element {
   const isRumored = visibility === 'RUMORED';
   const affordable = !isRumored && canAffordRecipe(stash, recipe);
@@ -153,6 +176,15 @@ function FabricationRow({
   const description = isRumored
     ? (rumoredPurpose ?? 'Rumored schematic — costs sealed.')
     : (recipe.effectSummary ?? recipe.description ?? '');
+  const missingHints = !isRumored && profile
+    ? recipe.requirements
+      .filter((req) => getStashCount(stash, req.resourceId) < req.quantity)
+      .map((req) => formatMissingResourceHint(req.resourceId, {
+        profile,
+        resourceStash: stash,
+        preferContractDirected: true,
+      }))
+    : [];
 
   return (
     <View
@@ -193,7 +225,10 @@ function FabricationRow({
             {recipe.requirements.map((req, index) => {
               const ownedCount = getStashCount(stash, req.resourceId);
               const satisfied = ownedCount >= req.quantity;
-              const name = RESOURCE_REGISTRY[req.resourceId].name.toUpperCase();
+              const card = discovery
+                ? buildResourceDiscoveryCard(req.resourceId, discovery)
+                : null;
+              const name = (card?.title ?? RESOURCE_REGISTRY[req.resourceId].name).toUpperCase();
               return (
                 <Text
                   key={`${recipe.id}-${req.resourceId}`}
@@ -208,6 +243,18 @@ function FabricationRow({
             })}
           </View>
         )}
+        {missingHints.length > 0 ? (
+          <View style={styles.requirementLine}>
+            {missingHints.map((line) => (
+              <Text
+                key={line}
+                style={[styles.requirementText, { color: MUTED_SLATE }]}
+              >
+                {`SRC: ${line}`}
+              </Text>
+            ))}
+          </View>
+        ) : null}
         {footerMeta ? (
           <Text style={[styles.requirementText, { color: MUTED_SLATE }]}>
             {footerMeta}
@@ -301,6 +348,8 @@ function FabricationMatrix({
           visibility={status.visibility}
           rumoredPurpose={status.meta.rumoredPurpose}
           sourceHint={status.meta.sourceHint}
+          profile={profile}
+          discovery={account.resourceDiscovery}
           footerMeta={
             status.visibility === 'KNOWN'
               ? getFooterMeta?.(status.recipe)
@@ -378,9 +427,11 @@ export default function CraftingMenuPanel({
           <MarketPanel label="Resource Ledger" padding={panelPadding}>
             <ResourceLedger
               stash={account.resourceStash}
+              discovery={account.resourceDiscovery}
               borderColor={theme.borderColor}
               textColor={theme.textColor}
               mutedColor={theme.mutedColor}
+              profile={progressionProfile}
             />
           </MarketPanel>
         )}

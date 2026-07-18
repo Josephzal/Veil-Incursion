@@ -154,9 +154,11 @@ export const CONTRACT_TEMPLATE_SPECS: ContractTemplateSpec[] = [
     },
     pickResources: (ctx) => {
       const pool = UNSTABLE_CARGO.filter((id) => id !== 'anomalous-core');
+      if (pool.length === 0) return { targetResourceOptions: ['veil-ash-canister'], targetQuantity: 1 };
       const a = pickOne(pool, ctx.rng);
-      const b = pickOne(pool.filter((id) => id !== a), ctx.rng);
-      return { targetResourceOptions: [a, b], targetQuantity: 1 };
+      const rest = pool.filter((id) => id !== a);
+      const b = rest.length > 0 ? pickOne(rest, ctx.rng) : a;
+      return { targetResourceOptions: rest.length > 0 ? [a, b] : [a], targetQuantity: 1 };
     },
     requiredDepth: 2,
     difficultyBase: 4,

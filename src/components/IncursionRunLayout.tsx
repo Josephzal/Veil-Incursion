@@ -54,6 +54,7 @@ export default function IncursionRunLayout({
     useIncursionConsumable,
     applyIncursionConsumableHeal,
     relocateCargoItem,
+    replaceCargoItem,
     discardCargoInstance,
     useFocusingAmpouleFromCargo,
     useResonanceBribeFromCargo,
@@ -223,6 +224,7 @@ export default function IncursionRunLayout({
               onClose={closeCargo}
               onDismissSilently={dismissCargoSilently}
               onRelocateItem={relocateCargoItem}
+              onReplaceItem={replaceCargoItem}
               onDiscardItem={discardCargoInstance}
               runCredits={activeIncursion.runCredits}
               playerActionPoints={combatTurn?.playerActionPoints}

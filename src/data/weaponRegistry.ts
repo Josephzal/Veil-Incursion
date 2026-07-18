@@ -65,11 +65,11 @@ export const WEAPON_REGISTRY: Record<WeaponFamilyId, WeaponFamilyDefinition> = {
     masterworkEffectSummary: 'Future masterwork — requires Anomalous Core.',
     tiers: [
       tier(1, 'Runed Longsword I', {}, 'Baseline melee damage, fracture, and Reserve generation.', [
-        { resourceId: 'ley-slag', quantity: 5 },
+        { resourceId: 'nullcrete-shard', quantity: 4 },
         { resourceId: 'echo-glass-shard', quantity: 3 },
       ]),
       tier(2, 'Runed Longsword II', { strikeDamagePct: 10, fractureFromMeleePct: 10 }, '+10% melee damage and fracture.', [
-        { resourceId: 'ley-slag', quantity: 8 },
+        { resourceId: 'nullcrete-shard', quantity: 6 },
         { resourceId: 'legion-blood-iron', quantity: 1 },
       ]),
       tier(3, 'Runed Longsword III', { strikeDamagePct: 18, fractureFromMeleePct: 15 }, 'First melee hit each combat generates +5 Abyssal Reserve.', EMPTY_COST, 'FIRST_MELEE_RESERVE_BONUS', 5),
@@ -88,7 +88,7 @@ export const WEAPON_REGISTRY: Record<WeaponFamilyId, WeaponFamilyDefinition> = {
     unlockRequirement: [
       { resourceId: 'legion-blood-iron', quantity: 3 },
       { resourceId: 'rail-capacitor', quantity: 2 },
-      { resourceId: 'ley-slag', quantity: 4 },
+      { resourceId: 'combustion-cylinder', quantity: 2 },
     ],
     uiSummary: 'Heavy melee — big fracture, higher stamina draw.',
     masterworkUnlocked: false,
@@ -97,11 +97,11 @@ export const WEAPON_REGISTRY: Record<WeaponFamilyId, WeaponFamilyDefinition> = {
     masterworkEffectSummary: 'Future masterwork — requires Anomalous Core.',
     tiers: [
       tier(1, 'Claymore-Blade I', { strikeDamagePct: 15, fractureFromMeleePct: 20, strikeStaminaCostPct: 10 }, '+15% damage, +20% fracture, +10% stamina cost.', [
-        { resourceId: 'ley-slag', quantity: 5 },
+        { resourceId: 'combustion-cylinder', quantity: 2 },
         { resourceId: 'legion-blood-iron', quantity: 1 },
       ]),
       tier(2, 'Claymore-Blade II', { strikeDamagePct: 22, fractureFromMeleePct: 28, strikeStaminaCostPct: 10 }, 'Improved damage and fracture.', [
-        { resourceId: 'ley-slag', quantity: 8 },
+        { resourceId: 'rail-capacitor', quantity: 2 },
         { resourceId: 'legion-blood-iron', quantity: 2 },
       ]),
       tier(3, 'Claymore-Blade III', { strikeDamagePct: 25, fractureFromMeleePct: 32, strikeStaminaCostPct: 10 }, 'First Fracture each combat restores 15 Stamina.', EMPTY_COST, 'FIRST_FRACTURE_STAMINA_REFUND', 15),
@@ -157,11 +157,11 @@ export const WEAPON_REGISTRY: Record<WeaponFamilyId, WeaponFamilyDefinition> = {
     masterworkEffectSummary: 'Future masterwork — requires Anomalous Core.',
     tiers: [
       tier(1, 'Silver-Core Sidearm I', {}, 'Baseline sidearm stats.', [
-        { resourceId: 'ley-slag', quantity: 5 },
+        { resourceId: 'nullcrete-shard', quantity: 4 },
         { resourceId: 'echo-glass-shard', quantity: 3 },
       ]),
       tier(2, 'Silver-Core Sidearm II', { ballisticDamagePct: 10, strikeStaminaCostPct: -5 }, '+10% ballistic damage; smoother reload stamina.', [
-        { resourceId: 'ley-slag', quantity: 8 },
+        { resourceId: 'rail-capacitor', quantity: 2 },
         { resourceId: 'encrypted-grid-drive', quantity: 1 },
       ]),
       tier(3, 'Silver-Core Sidearm III', { ballisticDamagePct: 15, strikeStaminaCostPct: -8 }, 'First reload each combat restores 10 Stamina.', EMPTY_COST, 'FIRST_RELOAD_STAMINA', 10),
@@ -181,7 +181,7 @@ export const WEAPON_REGISTRY: Record<WeaponFamilyId, WeaponFamilyDefinition> = {
       { resourceId: 'encrypted-grid-drive', quantity: 3 },
       { resourceId: 'rail-capacitor', quantity: 2 },
       { resourceId: 'containment-seal', quantity: 1 },
-      { resourceId: 'ley-slag', quantity: 6 },
+      { resourceId: 'nullcrete-shard', quantity: 4 },
     ],
     uiSummary: 'Extended magazine — sustained ballistic tempo.',
     masterworkUnlocked: false,
@@ -190,11 +190,11 @@ export const WEAPON_REGISTRY: Record<WeaponFamilyId, WeaponFamilyDefinition> = {
     masterworkEffectSummary: 'Future masterwork — requires Anomalous Core.',
     tiers: [
       tier(1, 'Pulse Rifle I', { magazineSizeBonus: 2, ballisticDamagePct: -5 }, '+2 magazine; slight per-shot damage trade.', [
-        { resourceId: 'ley-slag', quantity: 5 },
+        { resourceId: 'rail-capacitor', quantity: 2 },
         { resourceId: 'encrypted-grid-drive', quantity: 1 },
       ]),
       tier(2, 'Pulse Rifle II', { magazineSizeBonus: 3, ballisticDamagePct: -3 }, 'Improved magazine and reload efficiency.', [
-        { resourceId: 'ley-slag', quantity: 10 },
+        { resourceId: 'rail-capacitor', quantity: 3 },
         { resourceId: 'encrypted-grid-drive', quantity: 2 },
       ]),
       tier(3, 'Pulse Rifle III', { magazineSizeBonus: 3, ballisticDamagePct: 0 }, 'After reloading, next Ballistic attack deals +10% damage.', EMPTY_COST, 'POST_RELOAD_BALLISTIC_DAMAGE', 10),
@@ -223,11 +223,11 @@ export const WEAPON_REGISTRY: Record<WeaponFamilyId, WeaponFamilyDefinition> = {
     masterworkEffectSummary: 'Future masterwork — requires Anomalous Core.',
     tiers: [
       tier(1, 'Nullbreach Carbine I', { magazineSizeBonus: -2, ballisticDamagePct: 20, armorPierceLayers: 1, strikeStaminaCostPct: 10 }, 'Lower magazine; higher damage; pierces 1 armor layer.', [
-        { resourceId: 'ley-slag', quantity: 5 },
+        { resourceId: 'cinder-wire', quantity: 3 },
         { resourceId: 'combustion-cylinder', quantity: 1 },
       ]),
       tier(2, 'Nullbreach Carbine II', { magazineSizeBonus: -2, ballisticDamagePct: 28, armorPierceLayers: 1, strikeStaminaCostPct: 8 }, 'Improved damage and armor interaction.', [
-        { resourceId: 'ley-slag', quantity: 8 },
+        { resourceId: 'rail-capacitor', quantity: 2 },
         { resourceId: 'combustion-cylinder', quantity: 2 },
         { resourceId: 'encrypted-grid-drive', quantity: 1 },
       ]),
@@ -252,11 +252,11 @@ export const WEAPON_REGISTRY: Record<WeaponFamilyId, WeaponFamilyDefinition> = {
     masterworkEffectSummary: 'Future masterwork — requires Anomalous Core.',
     tiers: [
       tier(1, 'Null Conduit I', {}, 'Baseline occult damage and Veil-Flux generation.', [
-        { resourceId: 'ley-slag', quantity: 5 },
+        { resourceId: 'nullcrete-shard', quantity: 4 },
         { resourceId: 'echo-glass-shard', quantity: 3 },
       ]),
       tier(2, 'Null Conduit II', { occultDamagePct: 10, veilFluxGainPct: 8 }, '+10% occult damage; +8% Veil-Flux generation.', [
-        { resourceId: 'ley-slag', quantity: 8 },
+        { resourceId: 'mycelial-ichor', quantity: 2 },
         { resourceId: 'sanguine-ampoule', quantity: 1 },
       ]),
       tier(3, 'Null Conduit III', { occultDamagePct: 18, veilFluxGainPct: 12 }, 'First Occult ability each combat generates +5 Veil-Flux.', EMPTY_COST, 'FIRST_OCCULT_RESOURCE_BONUS', 5),
