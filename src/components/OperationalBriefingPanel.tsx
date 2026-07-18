@@ -17,10 +17,22 @@ import { SELECT_ACCENT, DANGER_RED } from '../constants/dossierSurface';
 import type { SectorId } from '../types/worldState';
 import { TerminalTheme } from '../types/theme';
 import {
+  contractBreachGradeWarning,
   contractSectorWarning,
   getContractSectorCompatibility,
   getSelectedContractForCompatibility,
 } from '../utils/contractUi';
+import {
+  buildSectorMandateBriefing,
+  canSectorBeBreached,
+} from '../data/sectorAccessMandateEngine';
+import { ALL_SECTOR_IDS } from '../data/sectorBiomeBridge';
+import { getAccountProgressionProfile } from '../data/progressionDebugEngine';
+import {
+  contractMeetsBreachGrade,
+  formatBreachGradeLabel,
+  resolveSelectedBreachGrade,
+} from '../data/breachGradeEngine';
 
 interface OperationalBriefingPanelProps {
   theme: TerminalTheme;
@@ -57,11 +69,48 @@ export default function OperationalBriefingPanel({
   const [deployModalVisible, setDeployModalVisible] = useState(false);
 
   const dossierAccent = getDossierFactionAccent(account.alignedFaction);
+  const progressionProfile = useMemo(
+    () => getAccountProgressionProfile(account),
+    [account],
+  );
+  const unlockedSectorIds = useMemo(
+    () => ALL_SECTOR_IDS.filter((id) => canSectorBeBreached(progressionProfile, id)),
+    [progressionProfile],
+  );
+  const sectorLockLabels = useMemo(() => {
+    const labels: Partial<Record<SectorId, string>> = {};
+    ALL_SECTOR_IDS.forEach((id) => {
+      if (canSectorBeBreached(progressionProfile, id)) return;
+      const briefing = buildSectorMandateBriefing(progressionProfile, id);
+      if (briefing.mandateState === 'ACTIVE') {
+        labels[id] = 'HUNTING';
+      } else if (briefing.mandateState === 'AVAILABLE') {
+        labels[id] = 'MANDATE';
+      } else {
+        labels[id] = 'LOCKED';
+      }
+    });
+    return labels;
+  }, [progressionProfile]);
   const selectedContract = persisted.contractBoard.selectedContract;
   const activeSector = useMemo(
     () => sectors.find((s) => s.id === persisted.selectedSectorId) ?? sectors[0],
     [sectors, persisted.selectedSectorId],
   );
+  const mandateBriefing = useMemo(
+    () => buildSectorMandateBriefing(progressionProfile, activeSector.id),
+    [progressionProfile, activeSector.id],
+  );
+  const sectorUnlocked = mandateBriefing.canBreach;
+  const selectedBreachGrade = useMemo(
+    () => resolveSelectedBreachGrade(progressionProfile, persisted.selectedBreachGrade),
+    [persisted.selectedBreachGrade, progressionProfile],
+  );
+  const contractMinGrade = selectedContract.kind === 'SPONSOR'
+    ? selectedContract.contract.minBreachGrade
+    : undefined;
+  const gradeMeetsContract = contractMeetsBreachGrade(selectedBreachGrade, contractMinGrade);
+  const gradeWarning = contractBreachGradeWarning(selectedBreachGrade, contractMinGrade);
 
   const sectorCompatibility = useMemo(
     () => getContractSectorCompatibility(
@@ -73,8 +122,16 @@ export default function OperationalBriefingPanel({
 
   const handleSectorPress = useCallback((sectorId: SectorId) => {
     setSelectedSectorId(sectorId);
-    onAppendLog(`>> VEIL FRONT — SECTOR SELECTED: ${sectorId.replace(/_/g, ' ')}`);
-  }, [onAppendLog, setSelectedSectorId]);
+    const briefing = buildSectorMandateBriefing(
+      getAccountProgressionProfile(account),
+      sectorId,
+    );
+    onAppendLog(
+      briefing.canBreach
+        ? `>> VEIL FRONT — SECTOR SELECTED: ${sectorId.replace(/_/g, ' ')}`
+        : `>> VEIL FRONT — ${briefing.headline}`,
+    );
+  }, [account, onAppendLog, setSelectedSectorId]);
 
   const handleMapLayout = useCallback((event: LayoutChangeEvent) => {
     const { height } = event.nativeEvent.layout;
@@ -82,9 +139,9 @@ export default function OperationalBriefingPanel({
   }, []);
 
   const handleRequestDeploy = useCallback(() => {
-    if (runDisabled || launching) return;
+    if (runDisabled || launching || !sectorUnlocked || !gradeMeetsContract) return;
     setDeployModalVisible(true);
-  }, [launching, runDisabled]);
+  }, [gradeMeetsContract, launching, runDisabled, sectorUnlocked]);
 
   const handleAbortDeploy = useCallback(() => {
     if (launching) return;
@@ -92,6 +149,16 @@ export default function OperationalBriefingPanel({
   }, [launching]);
 
   const handleContinueDeploy = useCallback(() => {
+    if (!sectorUnlocked) {
+      onAppendLog(`>> BREACH DENIED — ${mandateBriefing.headline}`);
+      setDeployModalVisible(false);
+      return;
+    }
+    if (!gradeMeetsContract) {
+      onAppendLog(`>> BREACH DENIED — ${gradeWarning ?? 'BREACH GRADE TOO LOW FOR CONTRACT'}`);
+      setDeployModalVisible(false);
+      return;
+    }
     const contractLine = selectedContract.kind === 'SPONSOR'
       ? ` // CONTRACT: ${selectedContract.contract.title.toUpperCase()}`
       : ' // INDEPENDENT BREACH';
@@ -99,10 +166,23 @@ export default function OperationalBriefingPanel({
     if (warning) {
       onAppendLog(`>> WARNING — ${warning.toUpperCase()}`);
     }
-    onAppendLog(`>> BREACH VECTOR LOCKED — ${activeSector.displayName.toUpperCase()}${contractLine}`);
+    onAppendLog(
+      `>> BREACH VECTOR LOCKED — ${activeSector.displayName.toUpperCase()} // ${formatBreachGradeLabel(selectedBreachGrade, true).toUpperCase()}${contractLine}`,
+    );
     setDeployModalVisible(false);
     onBeginIncursion();
-  }, [activeSector.displayName, onAppendLog, onBeginIncursion, sectorCompatibility, selectedContract]);
+  }, [
+    activeSector.displayName,
+    gradeMeetsContract,
+    gradeWarning,
+    mandateBriefing.headline,
+    onAppendLog,
+    onBeginIncursion,
+    sectorCompatibility,
+    sectorUnlocked,
+    selectedBreachGrade,
+    selectedContract,
+  ]);
 
   const body = (
     <View style={styles.stage}>
@@ -138,6 +218,8 @@ export default function OperationalBriefingPanel({
                 sectors={sectors}
                 activeSectorId={persisted.selectedSectorId}
                 onSectorPress={handleSectorPress}
+                unlockedSectorIds={unlockedSectorIds}
+                sectorLockLabels={sectorLockLabels}
               />
             </View>
             <HackingTerminalOverlay viewportHeight={mapViewportHeight} />
@@ -170,6 +252,7 @@ export default function OperationalBriefingPanel({
         sector={activeSector}
         selectedContract={selectedContract}
         sectorCompatibility={sectorCompatibility}
+        selectedBreachGrade={selectedBreachGrade}
         launching={launching}
         onContinue={handleContinueDeploy}
         onAbort={handleAbortDeploy}
@@ -177,11 +260,14 @@ export default function OperationalBriefingPanel({
     </View>
   );
 
-  const breachDisabled = runDisabled || launching;
-  const sectorWarning = contractSectorWarning(sectorCompatibility);
+  const breachDisabled = runDisabled || launching || !sectorUnlocked || !gradeMeetsContract;
+  const sectorWarning = !sectorUnlocked
+    ? mandateBriefing.headline
+    : gradeWarning
+      ?? contractSectorWarning(sectorCompatibility);
   const commandStatus = sectorWarning
     ? `SECTOR SELECTED: ${activeSector.displayName.toUpperCase()} // ${sectorWarning.toUpperCase()}`
-    : `SECTOR SELECTED: ${activeSector.displayName.toUpperCase()}`;
+    : `SECTOR SELECTED: ${activeSector.displayName.toUpperCase()} // ${formatBreachGradeLabel(selectedBreachGrade, true).toUpperCase()}`;
 
   return (
     <HubScreenShell
@@ -190,8 +276,20 @@ export default function OperationalBriefingPanel({
       footer={(
         <HubCommandBar
           statusLabel={commandStatus}
-          statusColor={sectorCompatibility === 'UNAVAILABLE' ? DANGER_RED : SELECT_ACCENT}
-          actionLabel={launching ? '[ DEPLOYING... ]' : '[ INITIATE BREACH ]'}
+          statusColor={
+            !sectorUnlocked || !gradeMeetsContract || sectorCompatibility === 'UNAVAILABLE'
+              ? DANGER_RED
+              : SELECT_ACCENT
+          }
+          actionLabel={
+            launching
+              ? '[ DEPLOYING... ]'
+              : !sectorUnlocked
+                ? '[ SECTOR LOCKED ]'
+                : !gradeMeetsContract
+                  ? '[ GRADE TOO LOW ]'
+                  : '[ INITIATE BREACH ]'
+          }
           onAction={handleRequestDeploy}
           actionDisabled={breachDisabled}
         />

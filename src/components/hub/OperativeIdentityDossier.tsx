@@ -150,7 +150,7 @@ export default function OperativeIdentityDossier({
         numberOfLines={1}
       >
         {mini
-          ? `${classDef.displayName.toUpperCase()} // RANK ${account.operativeRank}`
+          ? `${classDef.displayName.toUpperCase()} // CLR ${account.progressionProfile.runner.clearanceRank}`
           : `${classDef.displayName.toUpperCase()} // ID ${cred.id}`}
       </TerminalText>
       {!mini ? (
@@ -171,7 +171,7 @@ export default function OperativeIdentityDossier({
             style={[styles.metaLine, { color: SLATE_MUTED }]}
             numberOfLines={1}
           >
-            {`RANK ${account.operativeRank}`}
+            {`CLEARANCE ${account.progressionProfile.runner.clearanceRank} // ${account.progressionProfile.runner.clearanceXp} XP`}
           </TerminalText>
         </>
       ) : null}

@@ -317,6 +317,7 @@ export default function CombatScreen(): React.JSX.Element {
     depth: combatDepth,
     isElite: nodeType === 'ELITE_COMBAT',
     isAmbush: runState.pendingAmbush,
+    breachGrade: activeIncursion.breachGrade ?? 'I',
   }).phaseBudget;
   const portraitSource = resolveCombatEnemyPortrait({
     isBoss: isBossEncounter,

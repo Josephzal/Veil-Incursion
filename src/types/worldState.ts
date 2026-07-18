@@ -202,6 +202,8 @@ export interface RunGenerationContext {
   scannerSignalBias: ScannerSignalBias;
   /** Unified procedural crisis context — RunWorldBrief v1. */
   runWorldBrief?: import('./runWorldBrief').RunWorldBrief | null;
+  /** Selected Breach Grade frozen at descent (Phase 1D). */
+  breachGrade: import('./progression').BreachGradeId;
 }
 
 /** Computed per macro depth / node during generation or combat. */
@@ -303,6 +305,8 @@ export interface SectorOperationTemplateSnapshot {
 
 export interface WorldStatePersistedState {
   selectedSectorId: SectorId;
+  /** Hub-selected Breach Grade for the next deploy (Phase 1D). */
+  selectedBreachGrade: import('./progression').BreachGradeId;
   contractBoard: ContractBoardState;
   /** Monotonic counter — used for contract refresh and selection timestamps. */
   deployRunIndex: number;
@@ -342,4 +346,6 @@ export interface RunModifierSnapshot {
   rareLootBonusPct: number;
   blackMarketDiscountPct: number;
   firstTurnApBonus: number;
+  /** Extraction / combat credit bonus from employer + Breach Grade. */
+  creditBonusPct: number;
 }

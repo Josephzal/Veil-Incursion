@@ -1,6 +1,6 @@
 # Veil Incursion Current Systems Design
 
-Last updated: 2026-07-16 (Rite of Concordance — new in-game ritual-cleanse minigame; Ritual Echo deprecated)
+Last updated: 2026-07-17 (Progression Spine Phase 1A–1J + polish)
 
 This document captures the current implemented design surface for Veil Incursion: player-facing hub systems, run progression, economy, cargo/items, enemies, combat mechanics, and known partial implementations. It is intended as a working reference for design iteration and balancing, not a final player-facing manual.
 
@@ -19,6 +19,7 @@ Primary data and implementation files:
 - Combat execution: `src/components/TacticalCombatHub.tsx`, `src/data/combatRosterActions.ts`, `src/data/combatFractureEngine.ts`, `src/data/combatDefenseLayerEngine.ts`, `src/data/aegisAbilityResolver.ts`, `src/data/balance/combatDefenseBalanceConfig.ts`
 - Class abilities: `src/data/aegisAbilities.ts`, `src/data/hexShotAbilities.ts`, `src/data/envoyAbilities.ts`
 - Progression and boons: `src/data/boundRequisitions.ts`, `src/data/leyLineMutations.ts`, `src/data/regions.ts`
+- Progression Spine (career): `src/types/progression.ts`, `src/data/progressionProfileEngine.ts`, `src/data/unlockRegistry.ts`, `src/data/runnerClearanceEngine.ts`, `src/data/sectorAccessMandateEngine.ts`, `src/data/breachGradeEngine.ts`, `src/data/pinnedGoalEngine.ts`, `src/data/classRankEngine.ts`, `src/data/cabalRepEngine.ts`, `src/data/recipeVisibilityEngine.ts`, `src/data/debriefProgressionTheaterEngine.ts`, `src/data/failureRecoveryEngine.ts`, `src/data/progressionEconomySimulationEngine.ts`
 - Expedition relics (Trinkets v2): `src/types/expeditionKeepsake.ts`, `src/data/expeditionKeepsakeRegistry.ts`, `src/data/keepsakeRunState.ts`, `src/data/expeditionKeepsakeEngine.ts`, `src/data/expeditionKeepsake*Engine.ts`, `src/components/hub/KeepsakeLoadoutPanel.tsx`, `src/data/runDebriefKeepsakeEngine.ts`, `src/data/expeditionKeepsakeValidation.ts`, `src/data/expeditionKeepsakeAcceptanceEngine.ts`, `src/data/expeditionKeepsakeAuditEngine.ts`
 - Run Items v2: `src/types/runItem.ts`, `src/data/runItemRegistry.ts`, `src/data/runItemRunState.ts`, `src/data/runItemCombatEngine.ts`, `src/data/runItemFieldEngine.ts`, `src/data/runItem*Engine.ts`, `src/components/hub/RunItemLoadoutPanel.tsx`, `src/data/runDebriefRunItemEngine.ts`, `src/data/runItemValidation.ts`, `src/data/runItemAcceptanceEngine.ts`, `src/data/runItemAuditEngine.ts`
 - Run integration audit: `src/data/runIntegration/*`, extended `OperationDebriefPayload`, `OperationDebriefScreen.tsx`
@@ -28,7 +29,7 @@ Primary data and implementation files:
 1. Player starts in the hub (no faction lock-in at game start).
 2. Player configures prep through:
    - **Contract Board:** select sponsor contract or Independent Breach (`selectedContract` in world state).
-   - **Veil Front:** sector briefing, selected contract summary, sector compatibility markers, and breach deployment.
+   - **Veil Front:** sector briefing (access mandates / grades / pinned goals), selected contract summary, sector compatibility markers, and breach deployment.
    - **Black Market:** Forge and Vendor.
    - **Loadout:** class/weapon/expedition relic/ability deck and cargo packing.
 3. Player initiates a breach from Veil Front.
@@ -36,7 +37,7 @@ Primary data and implementation files:
 5. The run proceeds through procedural depths/nodes.
 6. Nodes can include combat, elite combat, boss combat, narrative events, sanctuary, black market, resource harvest, extraction vectors, and boon nodes.
 7. Combat and events award resources, credits, legacy combat trinkets, boons, cargo, or progression. Run events update `contractRunProgress` (depth, elites, boss, emergency recall, operation targets, anomalies). **Expedition relic** hooks fire on scanner, cargo, economy, contract, safehouse, echo/anchor, and extraction lifecycle events (no direct combat stat bonuses).
-8. **Extraction** resolves through **Run Debrief** (`OperationDebriefScreen`): run outcome, extraction method, contract result (+ bonus objectives), grouped resource resolution, operation contribution, and community progress. Contract rewards and sponsor reputation grant on successful extraction only.
+8. **Extraction** resolves through **Run Debrief** (`OperationDebriefScreen`): run outcome, extraction method, contract result (+ bonus objectives), grouped resource resolution, operation contribution, community progress, and **progression theater** (clearance/sector/grade/class/cabal/craft/pins). Contract rewards and sponsor reputation grant on successful extraction only.
 9. **Death** resolves through the same **Run Debrief** screen (failed outcome): run stats, grouped resource resolution (lost vs banked), failed contract result, informational operation contribution (not applied without extraction). Banked safehouse cargo persists to hub stash.
 10. After any run, contract board refreshes to Independent Breach with a new job board.
 
@@ -89,15 +90,18 @@ Safehouse was removed from the main hub navigation. In-run safehouse remains ava
 
 Veil Front is the main deployment screen. It contains:
 
-- Sector map and active sector briefing.
+- Sector map and active sector briefing (locked sectors show **LOCKED / MANDATE / HUNTING** map labels from Progression Spine access state).
+- **Breach Grade** selector (playable I–III) and **Pinned Goals** strip on the sector briefing.
 - Operation tab: lifecycle status, run window, **reward preview**, contribution rules, progress (`current/required` + %), and recent **operation intel** log lines.
 - Anchor tab; compact **selected contract** summary with sponsor perks (`SelectedContractSummary`).
 - Sector threat/reward/echo/anchor/resource readouts.
 - Sector compatibility markers for the selected contract (`getContractSectorCompatibility`).
-- Deployment confirmation modal (operation lifecycle, **operation reward preview**, sponsor perks when applicable).
-- Initiate Breach call to action.
+- Deployment confirmation modal (operation lifecycle, **operation reward preview**, sponsor perks when applicable, selected breach grade).
+- Initiate Breach call to action (blocked when sector locked or contract min grade exceeds selected grade).
 
 The main deploy/start-run button is consolidated here. Veil Front does **not** show the full contract board.
+
+See **Progression Spine (Phase 1)** for Runner Clearance, sector access mandates, grades, and pinned goals.
 
 ### Procedural Operations & Anchor Behavior
 
@@ -776,6 +780,105 @@ Weapons define baseline combat style **before** boons/grafts mutate the run. Dis
 
 **Not in v1:** Masterwork weapons, mid-run weapon swap, weapon XP, inventory katana as combat stat source (deprecated).
 
+## Progression Spine (Phase 1)
+
+Career-long progression distinct from in-run systems. Persisted on `PlayerAccount.progressionProfile` (`ProgressionProfile`). Main fantasy: **option expansion** (sectors, grades, recipes, contracts) rather than raw combat power inflation.
+
+### Pillars
+
+| Pillar | Role |
+|--------|------|
+| **Runner Clearance** | Global career track — gates mandate availability, breach grades, forge bands, pin slots |
+| **Sector Access** | Which biomes can be breached — unlocked by extracting route intel, not XP thresholds |
+| **Breach Grade** | Selectable run danger/reward intensity (I–III playable; IV/V catalog only) |
+| **Pinned Goals** | 2 slots (3 with clearance flag) — Veil Front recommendations + debrief pin |
+| **Debrief Theater** | Structured “what changed / what’s next” on REWARDS; always-exit preserved |
+
+Class Rank and Cabal Reputation are **side rails**: XP/tiers and reward **hooks** only in Phase 1 (no full new weapons/boons/grafts from those tables yet).
+
+### 1A — Data foundation
+
+- `ProgressionProfile`, unlock catalog (`unlockRegistry.ts`), requirement evaluator, reward grant service, event log.
+- Sector / class / cabal / runner sub-state; flags; pinned goals; granted unlocks.
+
+### 1B — Runner Clearance
+
+- XP from extracts (grade-scaled); small XP on failure.
+- Notable gates: Clearance 2 → sector access mandates; 3 → Breach Grade II + pin slot flag; 4 → advanced forge visibility; 5 → Breach Grade III; 6 → late-sector mandate eligibility.
+- Engine: `runnerClearanceEngine.ts`.
+
+### 1C — Sector access mandates
+
+Unlock order (player-facing names): **Null Zone** (start) → **Abyssal Sink** → **Ashen Wastes** → **Slag Works** → **Blackline Terminus**.
+
+| Target | Route intel | Typical sources |
+|--------|-------------|-----------------|
+| Abyssal Sink | Overgrowth Coordinate | Null Zone Depth 1+ elite/boss |
+| Ashen Wastes | False-Road Signal | Null / Abyssal Depth 2+ |
+| Slag Works | Transit Cipher | Ashen / Null Depth 2+ |
+| Blackline Terminus | Blackline Credentials | Slag / Ashen Depth 3 |
+
+Mandate states: `LOCKED` → `AVAILABLE` → `ACTIVE` → `COMPLETED`. Route intel is `INTEL` / `ROUTE_INTEL`: lost on death if unextracted, cannot fence, discard requires strong confirmation. Locked sectors stay visible on Veil Front.
+
+### 1D — Breach Grades
+
+- Selectable on Veil Front; frozen onto the active incursion at deploy.
+- Scales enemy stats, elite chance, rewards, clearance/class/cabal XP multipliers (rules + numbers, not sponge HP only).
+- Playable: **I–III**. IV/V exist in catalog for later.
+- Contracts may require a minimum grade (`minBreachGrade`).
+
+### 1E — Pinned goals
+
+- Catalog kinds: sector access, breach grade, runner clearance, sector mastery, class rank, cabal rep, recipe unlock.
+- Pin/unpin on Veil Front; progress cards + pin-from-debrief on REWARDS; auto-clear completed on hub return.
+
+### 1F — Class rank & Cabal reputation
+
+- Class XP from runs; Cabal rep from successful sponsored contracts (tier capped by breach grade).
+- Reward tables grant **hook flags / ids only** — content wiring is post–Phase 1.
+
+### 1G — Recipe visibility
+
+- **Known** — full costs, craftable. **Rumored** — purpose + source, costs `???`, sealed. **Unknown** — hidden.
+- Stash discovery + clearance/flag gates for advanced forge bands. Engine: `recipeVisibilityEngine.ts`.
+
+### 1H — Debrief progression theater
+
+- REWARDS step sections: run result, cargo, pinned progress, sector access, clearance/grade, class, cabal, mastery, craftable, unlocks, next recommended goals (`PIN_GOAL`).
+- Celebrate predicted unlocks; pin slots refresh live after pin.
+- **Always-exit:** only incomplete cargo ROUTING may disable the footer — progression never traps the player.
+
+### 1I — Failure recovery / anti-frustration
+
+When route intel is found then lost on death:
+
+1. Mandate stays **ACTIVE**; intel can spawn again.
+2. After **2** losses → **BOOSTED** elite/boss spawn chance.
+3. After **3** losses → **GUARANTEED** on next combat at eligible depth (includes non-elite so soft-lock is impossible).
+
+Fence blocked; discard confirms with sector-access warning. Engine: `failureRecoveryEngine.ts` + mandate spawn rolls.
+
+### 1J — Economy simulation & audits
+
+Offline tools in DevTest **PHASE 1J** (`progressionEconomySimulationEngine.ts`):
+
+- Simulate N abstracted runs (extract/fail, pity, XP, unlocks, sample loot) — does **not** mutate the save.
+- Pacing scorecard vs v1 bands (e.g. Abyssal 2–4, Ashen 4–8, Slag 8–14, Blackline 14–24 runs).
+- Recipe/resource dependency audit; soft-lock audit; per-run XP/rep preview.
+
+Sim biases are documented in-tool (grade mix favors lower grades; limited intel rolls per run). Use as a tuning aid, not a combat oracle.
+
+### Key files
+
+`types/progression.ts`, `progressionProfileEngine.ts`, `unlockRegistry.ts`, `runnerClearanceEngine.ts`, `sectorAccessMandateEngine.ts`, `breachGradeEngine.ts`, `pinnedGoalEngine.ts`, `classRankEngine.ts`, `cabalRepEngine.ts`, `recipeVisibilityEngine.ts`, `debriefProgressionTheaterEngine.ts`, `failureRecoveryEngine.ts`, `progressionEconomySimulationEngine.ts`, Veil Front briefing/map, `OperationDebriefScreen.tsx`, DevTest PHASE 1C–1J.
+
+### Acceptance snapshot
+
+- Null Zone always breachable; other sectors unlock only via extracted route intel.
+- Grades I–III selectable when clearance unlocks them; IV/V not required for core path.
+- Losing route intel is tense but recovers via pity; player can always leave debrief.
+- DevTest can answer “how many runs to unlock X?” and “any soft-lock / broken recipe?”
+
 ## Run And Progression Systems
 
 ### Run State
@@ -863,6 +966,7 @@ Persistent account state includes:
 - Pre-run cargo draft.
 - Class ability unlocks and loadouts.
 - Unidentified/decryption stash.
+- **`progressionProfile`** — Runner Clearance, sector unlocks/mandates/mastery, breach grades, pinned goals, class rank XP, cabal rep tiers, recipe discovery flags, progression event log (see Progression Spine).
 
 ### Resources
 
@@ -1654,6 +1758,7 @@ Routing (`tensionMechanicRouting.ts`): stealth/patrol/militarized → Shadowline
 
 ## Known Partial Implementations / Design Debt
 
+- **Progression Spine Phase 1 (complete — 1A–1J):** Runner Clearance, sector access mandates + route intel, Breach Grades I–III (IV/V catalog), pinned goals, class/cabal **reward hooks only**, recipe Known/Rumored/Unknown, debrief progression theater with always-exit, failure-recovery pity (boost@2 / guarantee@3), economy sim + pacing/recipe/soft-lock audits. Open follow-ups: wire class/cabal hooks to real content; Grade IV/V playable; deeper sector mastery reward trees; keep sim/oracle calibrated as XP curves change.
 - **Contract loop v1 (complete):** Resource model, physical banking, contract board, Veil Front integration, run event tracking, contract resolver, unified run debrief (extract + death via `OperationDebriefScreen`), procedural operation generation, operation lifecycle (ACTIVE / COMPLETED / expiration / AFTERMATH rotation), mid-run operation target contribution with debrief transmission line, sponsor perks on deploy/contract summary, operation intel log on Veil Front briefing, expanded operation contribution on extract, **debrief progress headline** (`+N progress this run`), **reward preview** on Veil Front cards/briefing/deploy modal, and **world state validation + dev debug tooling** (Phases A–F).
 - **Unstable cargo carried effects v1 (complete):** Three unstable resources with deduped carried modifiers, lazy procedural type/context rolls, cargo pressure UI, debrief Cargo Pressure block, volatile resonance tagging, occupancy resonance multiplier, emergency recall Veil-Ash warning log.
 - **Echo encounters v1 (complete — Phases 1–6):** Echo scanner overlays at layer unlock, per-depth/run caps, weighted encounter kinds, fallen-runner narrative, assist/cargo/extraction immediate resolution, hostile combat routing, class-based hostile templates with depth scaling, hostile echo reward rolls, debrief Echo section, dev forcing tools, echo pipeline validation (reward-resource existence + Echo Recovery contribution rules), `echoRunState` tracking, Veil Front echo intel surfaces, reward-stack extraction tracking, Smuggler's Ledger fallen-runner drop, extraction echo emergency-recall bleed bonus. Acceptance criteria (20) verified in the Echo Encounters v1 section below.
@@ -1695,9 +1800,10 @@ Routing (`tensionMechanicRouting.ts`): stealth/patrol/militarized → Shadowline
 ## Design Implications
 
 - The game already has enough systemic surface to support a strong tactical roguelite loop: prep, risk routing, cargo management, tactical combat, resource extraction, and sponsor contracts.
-- Resource taxonomy now separates category from role (crafting intel vs economy intel vs fence value).
+- **Progression Spine** makes Veil Front a long-term machine: where to breach, at what grade, what intel to extract, what to pin next — without forcing Null Zone power creep.
+- Resource taxonomy now separates category from role (crafting intel vs economy intel vs fence value); route intel is a protected INTEL subtype.
 - Enemy identity is strong, but intent documentation should become a player-facing codex or internal balancing table.
-- Cargo is doing several jobs at once: loot value, tactical consumables, scanner tools, extraction tension, and resonance risk. This should remain central to run identity.
+- Cargo is doing several jobs at once: loot value, tactical consumables, scanner tools, extraction tension, resonance risk, and **sector unlock cargo**. This should remain central to run identity.
 - Loadout is the home for class, **weapon chassis** (family + tier), ability deck, **expedition relic** equip, Run Items, and cargo prep.
-- Black Market split: Forge for augments/consumables; Vendor for contraband. Weapon progression lives on Loadout, not Forge.
+- Black Market split: Forge for augments/consumables; Vendor for contraband. Weapon progression lives on Loadout, not Forge. Recipe visibility stages forge overload.
 

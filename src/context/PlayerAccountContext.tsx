@@ -111,6 +111,13 @@ import type { FenceableResourceId, ResourceItemId } from '../types/resourceItem'
 import { MacroSectorId, RegionalPresenceState } from '../types/regional';
 import { createEmptyResourceStash, canAffordRecipe, deductRecipeFromStash } from '../data/resourceStashEngine';
 import { getCraftingRecipe, isRecipeOutputOwned } from '../data/craftingRegistry';
+import {
+  buildRecipeVisibilityStatus,
+  discoverRecipeSchematic,
+  formatRecipeVisibilityReport,
+  isRecipeFabricable,
+  syncRecipeDiscoveriesFromStash,
+} from '../data/recipeVisibilityEngine';
 import type { ResourceQuantity } from '../types/resourceItem';
 import type { BoundRequisitionId } from '../types/boundRequisition';
 import type { CargoItemId } from '../types/cargoGrid';
@@ -141,6 +148,68 @@ import {
   DEFAULT_HOME_MACRO_SECTOR,
   DEFAULT_HOME_METROPOLITAN_NODE,
 } from '../constants/homeSector';
+import { createDefaultProgressionProfile, normalizeProgressionProfile } from '../data/progressionProfileEngine';
+import {
+  debugGrantProgressionUnlock,
+  debugGrantRunnerClearanceXp,
+  debugResetProgressionProfile,
+  debugSetRunnerClearance,
+  debugUnlockBreachGrade,
+  debugUnlockSector,
+  formatProgressionProfileReport,
+  formatProgressionUnlockCatalogReport,
+  getAccountProgressionProfile,
+  withProgressionProfile,
+} from '../data/progressionDebugEngine';
+import {
+  applyRunnerClearanceFromDebrief,
+} from '../data/runnerClearanceEngine';
+import {
+  activateSectorAccessMandate,
+  resolveSectorAccessFromRun,
+  refreshSectorMandateAvailability,
+  formatFailureRecoveryReport,
+  debugSetRouteIntelFailCount,
+} from '../data/sectorAccessMandateEngine';
+import { FAILURE_RECOVERY_TUNING } from '../data/failureRecoveryEngine';
+import {
+  formatProgressionAuditReport,
+  formatProgressionEconomySimulationReport,
+  formatProgressionPacingScorecard,
+  formatProgressionPacingTargetsReport,
+  formatProgressionPerRunPreview,
+  simulateProgressionCareer,
+} from '../data/progressionEconomySimulationEngine';
+import {
+  formatBreachGradeLabel,
+  recordSectorHighestGradeCleared,
+} from '../data/breachGradeEngine';
+import {
+  evaluateAllPinnedGoals,
+  listAvailableGoalsToPin,
+  pinProgressionGoal,
+  syncPinnedGoalsAfterRun,
+  unpinProgressionGoal,
+  type PinnedGoalStatus,
+} from '../data/pinnedGoalEngine';
+import {
+  applyClassRankFromDebrief,
+  applyClassRankXp,
+  formatClassRankHookCatalog,
+  type ClassRankApplyResult,
+} from '../data/classRankEngine';
+import {
+  applyCabalRepFromDebrief,
+  applyCabalRepXp,
+  formatCabalTierHookCatalog,
+  maxCabalTierForBreachGrade,
+  type CabalRepApplyResult,
+} from '../data/cabalRepEngine';
+import type { BreachGradeId } from '../types/progression';
+import type { SectorId } from '../types/worldState';
+import { grantProgressionUnlock } from '../data/rewardGrantService';
+import type { ContractExtractionKind } from '../types/contract';
+import { veilBiomeDisplayName, sectorIdToVeilBiome } from '../data/sectorBiomeBridge';
 
 const STORAGE_KEY = '@veil_incursion/player_account_v2';
 
@@ -216,6 +285,7 @@ export function createDefaultPlayerAccount(): PlayerAccount {
     unlockedKeepsakeIds: [...DEFAULT_UNLOCKED_KEEPSAKE_IDS],
     keepsakeDeployment: createDefaultKeepsakeDeployment(),
     careerBalanceHistory: createDefaultCareerBalanceHistory(),
+    progressionProfile: createDefaultProgressionProfile(),
   };
 }
 
@@ -311,6 +381,7 @@ function mergeStoredAccount(parsed: Partial<PlayerAccount>): PlayerAccount {
       ].slice(-10),
     },
     veilResidueBalance: parsed.veilResidueBalance ?? defaults.veilResidueBalance,
+    progressionProfile: normalizeProgressionProfile(parsed.progressionProfile),
   };
 }
 
@@ -448,6 +519,102 @@ interface PlayerAccountContextType {
   grantSealedCasketInHub: (quantity?: number) => void;
   grantSpecimenJarInHub: (quantity?: number) => void;
   grantExpansionResourcesInHub: () => void;
+  /** Phase 1A — print progression profile to hub log. */
+  logProgressionProfile: () => string;
+  /** Phase 1A — print unlock registry status vs current profile. */
+  logProgressionUnlockCatalog: () => string;
+  /** Phase 1A — force-grant a catalog unlock (debug). */
+  debugGrantProgressionUnlockId: (unlockId: string) => void;
+  /** Phase 1A — set runner clearance rank (debug). */
+  debugSetRunnerClearanceRank: (rank: number) => void;
+  /** Phase 1A — unlock a sector (debug). */
+  debugUnlockProgressionSector: (sectorId: SectorId) => void;
+  /** Phase 1A — unlock a breach grade (debug). */
+  debugUnlockProgressionBreachGrade: (grade: BreachGradeId) => void;
+  /** Phase 1A — reset progression profile only (debug). */
+  debugResetProgression: () => void;
+  /** Phase 1A — attempt to grant unlock with requirement checks. */
+  tryGrantProgressionUnlock: (unlockId: string) => { success: boolean; logLine: string };
+  /** Phase 1B — award Runner Clearance XP from a finished run. */
+  applyRunnerClearanceFromRun: (input: {
+    runOutcome: 'EXTRACTED' | 'FAILED';
+    extractionKind?: ContractExtractionKind;
+    depthReached: number;
+    contractSucceeded?: boolean;
+    breachGrade?: import('../types/progression').BreachGradeId;
+  }) => { xpGained: number; ranksGained: number; newRank: number; logLines: string[] };
+  /** Phase 1B — debug grant clearance XP. */
+  debugGrantRunnerClearanceXpAmount: (xpAmount: number) => string;
+  /** Phase 1C — accept a sector access mandate (AVAILABLE → ACTIVE). */
+  activateSectorAccessMandate: (sectorId: SectorId) => { ok: boolean; logLine: string };
+  /** Phase 1C — resolve sector unlocks / fail tracking from a finished run. */
+  applySectorAccessFromRun: (input: {
+    extractedSuccessfully: boolean;
+    extracted: import('../types/resourceItem').ResourceQuantity;
+    lostOnDeath: import('../types/resourceItem').ResourceQuantity;
+    runSectorId?: SectorId | null;
+  }) => { unlockedSectorIds: SectorId[]; unlockLines: string[]; logLines: string[] };
+  /** Phase 1D — record highest Breach Grade cleared for a sector after extract. */
+  applyBreachGradeClearFromRun: (input: {
+    extractedSuccessfully: boolean;
+    sectorId?: SectorId | null;
+    breachGrade?: import('../types/progression').BreachGradeId;
+  }) => { updated: boolean; logLine: string | null };
+  /** Phase 1E — pin a progression goal (1–3 slots). */
+  pinProgressionGoalId: (goalDefId: string) => { ok: boolean; logLine: string };
+  /** Phase 1E — unpin a progression goal. */
+  unpinProgressionGoalId: (goalDefId: string) => { ok: boolean; logLine: string };
+  /** Phase 1E — evaluate + auto-clear completed pinned goals after a run. */
+  syncPinnedGoalsFromRun: () => {
+    statuses: PinnedGoalStatus[];
+    completed: PinnedGoalStatus[];
+    logLines: string[];
+  };
+  /** Phase 1E — list pin-able goals not yet complete. */
+  listPinableProgressionGoals: () => ReturnType<typeof listAvailableGoalsToPin>;
+  /** Phase 1E — current pinned goal statuses. */
+  getPinnedGoalStatuses: () => PinnedGoalStatus[];
+  /** Phase 1E — debug grant recipe unlock for recipe goals. */
+  debugGrantRecipeGoalUnlock: (recipeId: string) => string;
+  /** Phase 1G — sync Known discoveries from current stash contents. */
+  syncRecipeVisibilityFromStash: () => { newlyKnown: string[]; logLines: string[] };
+  /** Phase 1G — force-discover a schematic as Known. */
+  discoverRecipeSchematicId: (recipeId: string) => { discovered: boolean; logLine: string };
+  /** Phase 1G — print Known / Rumored / Unknown report. */
+  logRecipeVisibilityReport: () => string;
+  /** Phase 1F — award class XP / rank hooks from a finished run. */
+  applyClassRankFromRun: (input: {
+    classId?: ClassType;
+    runOutcome: 'EXTRACTED' | 'FAILED';
+    depthReached: number;
+    contractSucceeded?: boolean;
+    breachGrade?: BreachGradeId;
+  }) => ClassRankApplyResult;
+  /** Phase 1F — award cabal rep / tier hooks from a sponsored contract. */
+  applyCabalRepFromRun: (input: {
+    contractSucceeded: boolean;
+    reputationAwarded: number;
+    sponsorId: FactionType;
+    breachGrade?: BreachGradeId;
+  }) => CabalRepApplyResult;
+  /** Phase 1F — debug grant class XP. */
+  debugGrantClassRankXpAmount: (classId: ClassType, xpAmount: number) => string;
+  /** Phase 1F — debug grant cabal rep XP. */
+  debugGrantCabalRepXpAmount: (cabalId: FactionType, xpAmount: number, breachGrade?: BreachGradeId) => string;
+  /** Phase 1F — print class/cabal hook catalogs. */
+  logClassCabalHookCatalog: () => string;
+  /** Phase 1I — print route-intel pity / failure recovery report. */
+  logFailureRecoveryReport: () => string;
+  /** Phase 1I — set route-intel fail count (activates mandate if needed). */
+  debugSetRouteIntelFailCountForSector: (sectorId: SectorId, failCount: number) => string;
+  /** Phase 1J — simulate N abstracted progression runs (does not mutate account). */
+  simulateProgressionEconomyRuns: (runCount?: number, seed?: string) => string;
+  /** Phase 1J — print pacing targets + scorecard from a fresh sim. */
+  logProgressionPacingScorecard: (runCount?: number) => string;
+  /** Phase 1J — recipe/resource + soft-lock audit for current profile. */
+  logProgressionEconomyAudit: () => string;
+  /** Phase 1J — single-run XP/rep preview. */
+  logProgressionPerRunPreview: () => string;
 }
 
 const PlayerAccountContext = createContext<PlayerAccountContextType | undefined>(undefined);
@@ -842,6 +1009,20 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       if (!recipe) {
         return { success: false, logLine: '>> FABRICATION REJECTED — UNKNOWN SCHEMATIC.' };
       }
+      const profile = getAccountProgressionProfile(account);
+      if (!isRecipeFabricable(profile, account, recipeId)) {
+        const status = buildRecipeVisibilityStatus(profile, account, recipe);
+        if (status.visibility === 'RUMORED') {
+          return {
+            success: false,
+            logLine: `>> FABRICATION REJECTED — ${recipe.label.toUpperCase()} IS RUMORED (COSTS SEALED).`,
+          };
+        }
+        return {
+          success: false,
+          logLine: '>> FABRICATION REJECTED — SCHEMATIC UNKNOWN.',
+        };
+      }
       if (
         recipe.kind !== 'CONSUMABLE'
         && isRecipeOutputOwned(
@@ -861,7 +1042,12 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       }
 
       updateAccount((prev) => {
-        const base = { ...prev, resourceStash: nextStash };
+        const discovered = discoverRecipeSchematic(
+          getAccountProgressionProfile(prev),
+          recipe.id,
+        );
+        const withProfile = withProgressionProfile(prev, discovered.profile);
+        const base = { ...withProfile, resourceStash: nextStash };
         if (recipe.kind === 'AUGMENT') {
           const augmentId = recipe.outputId as BoundRequisitionId;
           if (prev.craftedAugments.includes(augmentId)) return base;
@@ -891,8 +1077,7 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       };
     },
     [
-      account.craftedAugments,
-      account.resourceStash,
+      account,
       updateAccount,
     ],
   );
@@ -1572,6 +1757,498 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
     updateAccount((prev) => debugGrantExpansionResources(prev));
   }, [updateAccount]);
 
+  const logProgressionProfile = useCallback((): string => {
+    const report = formatProgressionProfileReport(getAccountProgressionProfile(account));
+    report.split('\n').forEach((line) => {
+      if (line.trim()) appendHubLog(line);
+    });
+    return report;
+  }, [account, appendHubLog]);
+
+  const logProgressionUnlockCatalog = useCallback((): string => {
+    const report = formatProgressionUnlockCatalogReport(getAccountProgressionProfile(account));
+    report.split('\n').forEach((line) => {
+      if (line.trim()) appendHubLog(line);
+    });
+    return report;
+  }, [account, appendHubLog]);
+
+  const debugGrantProgressionUnlockId = useCallback((unlockId: string) => {
+    let logLine = '';
+    updateAccount((prev) => {
+      const result = debugGrantProgressionUnlock(prev, unlockId);
+      logLine = result.logLine;
+      return result.account;
+    });
+    appendHubLog(logLine);
+  }, [appendHubLog, updateAccount]);
+
+  const debugSetRunnerClearanceRank = useCallback((rank: number) => {
+    let logLine = '';
+    updateAccount((prev) => {
+      const result = debugSetRunnerClearance(prev, rank);
+      logLine = result.logLine;
+      return result.account;
+    });
+    appendHubLog(logLine);
+  }, [appendHubLog, updateAccount]);
+
+  const debugUnlockProgressionSector = useCallback((sectorId: SectorId) => {
+    let logLine = '';
+    updateAccount((prev) => {
+      const result = debugUnlockSector(prev, sectorId);
+      logLine = result.logLine;
+      return result.account;
+    });
+    appendHubLog(logLine);
+  }, [appendHubLog, updateAccount]);
+
+  const debugUnlockProgressionBreachGrade = useCallback((grade: BreachGradeId) => {
+    let logLine = '';
+    updateAccount((prev) => {
+      const result = debugUnlockBreachGrade(prev, grade);
+      logLine = result.logLine;
+      return result.account;
+    });
+    appendHubLog(logLine);
+  }, [appendHubLog, updateAccount]);
+
+  const debugResetProgression = useCallback(() => {
+    let logLine = '';
+    updateAccount((prev) => {
+      const result = debugResetProgressionProfile(prev);
+      logLine = result.logLine;
+      return result.account;
+    });
+    appendHubLog(logLine);
+  }, [appendHubLog, updateAccount]);
+
+  const tryGrantProgressionUnlock = useCallback((unlockId: string): { success: boolean; logLine: string } => {
+    let logLine = '';
+    let success = false;
+    updateAccount((prev) => {
+      const profile = getAccountProgressionProfile(prev);
+      const result = grantProgressionUnlock(profile, unlockId);
+      success = result.applied.length > 0;
+      logLine = success
+        ? `>> PROGRESSION — granted ${unlockId}.`
+        : `>> PROGRESSION — could not grant ${unlockId} (${result.skipped[0]?.reason ?? 'blocked'}).`;
+      return withProgressionProfile(prev, result.profile);
+    });
+    appendHubLog(logLine);
+    return { success, logLine };
+  }, [appendHubLog, updateAccount]);
+
+  const applyRunnerClearanceFromRun = useCallback((input: {
+    runOutcome: 'EXTRACTED' | 'FAILED';
+    extractionKind?: ContractExtractionKind;
+    depthReached: number;
+    contractSucceeded?: boolean;
+    breachGrade?: import('../types/progression').BreachGradeId;
+  }): { xpGained: number; ranksGained: number; newRank: number; logLines: string[] } => {
+    let summary = {
+      xpGained: 0,
+      ranksGained: 0,
+      newRank: 1,
+      logLines: [] as string[],
+    };
+    updateAccount((prev) => {
+      const profile = getAccountProgressionProfile(prev);
+      const result = applyRunnerClearanceFromDebrief(profile, input);
+      summary = {
+        xpGained: result.xpGained,
+        ranksGained: result.ranksGained,
+        newRank: result.newRank,
+        logLines: result.logLines,
+      };
+      return withProgressionProfile(prev, result.profile);
+    });
+    summary.logLines.forEach((line) => appendHubLog(line));
+    return summary;
+  }, [appendHubLog, updateAccount]);
+
+  const debugGrantRunnerClearanceXpAmount = useCallback((xpAmount: number): string => {
+    let report = '';
+    let logLine = '';
+    updateAccount((prev) => {
+      const result = debugGrantRunnerClearanceXp(prev, xpAmount);
+      logLine = result.logLine;
+      report = result.report;
+      return result.account;
+    });
+    appendHubLog(logLine);
+    return report;
+  }, [appendHubLog, updateAccount]);
+
+  const activateSectorAccessMandateFn = useCallback((sectorId: SectorId): { ok: boolean; logLine: string } => {
+    let ok = false;
+    let logLine = '';
+    updateAccount((prev) => {
+      const profile = getAccountProgressionProfile(prev);
+      const result = activateSectorAccessMandate(profile, sectorId);
+      ok = result.ok;
+      logLine = result.logLine;
+      return withProgressionProfile(prev, result.profile);
+    });
+    appendHubLog(logLine);
+    return { ok, logLine };
+  }, [appendHubLog, updateAccount]);
+
+  const applySectorAccessFromRun = useCallback((input: {
+    extractedSuccessfully: boolean;
+    extracted: ResourceQuantity;
+    lostOnDeath: ResourceQuantity;
+    runSectorId?: SectorId | null;
+  }): { unlockedSectorIds: SectorId[]; unlockLines: string[]; logLines: string[] } => {
+    let summary = {
+      unlockedSectorIds: [] as SectorId[],
+      unlockLines: [] as string[],
+      logLines: [] as string[],
+    };
+    updateAccount((prev) => {
+      const profile = getAccountProgressionProfile(prev);
+      const result = resolveSectorAccessFromRun(profile, input);
+      summary = {
+        unlockedSectorIds: result.unlockedSectorIds,
+        unlockLines: result.unlockLines,
+        logLines: result.logLines,
+      };
+      return withProgressionProfile(prev, refreshSectorMandateAvailability(result.profile));
+    });
+    summary.logLines.forEach((line) => appendHubLog(line));
+    return summary;
+  }, [appendHubLog, updateAccount]);
+
+  const applyBreachGradeClearFromRun = useCallback((input: {
+    extractedSuccessfully: boolean;
+    sectorId?: SectorId | null;
+    breachGrade?: BreachGradeId;
+  }): { updated: boolean; logLine: string | null } => {
+    if (!input.extractedSuccessfully || !input.sectorId || !input.breachGrade) {
+      return { updated: false, logLine: null };
+    }
+    let updated = false;
+    let logLine: string | null = null;
+    updateAccount((prev) => {
+      const profile = getAccountProgressionProfile(prev);
+      const result = recordSectorHighestGradeCleared(
+        profile,
+        input.sectorId!,
+        input.breachGrade!,
+      );
+      updated = result.updated;
+      if (result.updated) {
+        const name = veilBiomeDisplayName(sectorIdToVeilBiome(input.sectorId!));
+        const nextHigh = result.profile.sectors[input.sectorId!]?.highestGradeCleared ?? null;
+        logLine = nextHigh && nextHigh !== result.previous
+          ? `>> BREACH GRADE — ${name.toUpperCase()} CLEARED ${formatBreachGradeLabel(nextHigh, true).toUpperCase()}`
+          : `>> SECTOR MASTERY — ${name.toUpperCase()} +XP // ${formatBreachGradeLabel(input.breachGrade!, true).toUpperCase()} EXTRACT`;
+      }
+      return withProgressionProfile(prev, result.profile);
+    });
+    if (logLine) appendHubLog(logLine);
+    return { updated, logLine };
+  }, [appendHubLog, updateAccount]);
+
+  const pinProgressionGoalId = useCallback((goalDefId: string): { ok: boolean; logLine: string } => {
+    let ok = false;
+    let logLine = '';
+    updateAccount((prev) => {
+      const profile = getAccountProgressionProfile(prev);
+      const result = pinProgressionGoal(profile, goalDefId);
+      ok = result.ok;
+      logLine = result.logLine;
+      return withProgressionProfile(prev, result.profile);
+    });
+    appendHubLog(logLine);
+    return { ok, logLine };
+  }, [appendHubLog, updateAccount]);
+
+  const unpinProgressionGoalId = useCallback((goalDefId: string): { ok: boolean; logLine: string } => {
+    let ok = false;
+    let logLine = '';
+    updateAccount((prev) => {
+      const profile = getAccountProgressionProfile(prev);
+      const result = unpinProgressionGoal(profile, goalDefId);
+      ok = result.ok;
+      logLine = result.logLine;
+      return withProgressionProfile(prev, result.profile);
+    });
+    appendHubLog(logLine);
+    return { ok, logLine };
+  }, [appendHubLog, updateAccount]);
+
+  const syncPinnedGoalsFromRun = useCallback((): {
+    statuses: PinnedGoalStatus[];
+    completed: PinnedGoalStatus[];
+    logLines: string[];
+  } => {
+    let summary = {
+      statuses: [] as PinnedGoalStatus[],
+      completed: [] as PinnedGoalStatus[],
+      logLines: [] as string[],
+    };
+    updateAccount((prev) => {
+      const profile = getAccountProgressionProfile(prev);
+      const result = syncPinnedGoalsAfterRun(profile);
+      summary = {
+        statuses: result.statuses,
+        completed: result.completed,
+        logLines: result.logLines,
+      };
+      return withProgressionProfile(prev, result.profile);
+    });
+    summary.logLines.forEach((line) => appendHubLog(line));
+    return summary;
+  }, [appendHubLog, updateAccount]);
+
+  const listPinableProgressionGoals = useCallback(() => {
+    return listAvailableGoalsToPin(getAccountProgressionProfile(account));
+  }, [account]);
+
+  const getPinnedGoalStatuses = useCallback(() => {
+    return evaluateAllPinnedGoals(getAccountProgressionProfile(account));
+  }, [account]);
+
+  const debugGrantRecipeGoalUnlock = useCallback((recipeId: string): string => {
+    let report = '';
+    updateAccount((prev) => {
+      const result = discoverRecipeSchematic(getAccountProgressionProfile(prev), recipeId);
+      report = result.discovered
+        ? `Discovered Known schematic: ${result.label}`
+        : `Already Known / missing: ${result.label}`;
+      return withProgressionProfile(prev, result.profile);
+    });
+    appendHubLog(`>> DEBUG — RECIPE KNOWN ${recipeId}`);
+    return report;
+  }, [appendHubLog, updateAccount]);
+
+  const syncRecipeVisibilityFromStash = useCallback((): {
+    newlyKnown: string[];
+    logLines: string[];
+  } => {
+    let newlyKnown: string[] = [];
+    updateAccount((prev) => {
+      const result = syncRecipeDiscoveriesFromStash(
+        getAccountProgressionProfile(prev),
+        prev,
+      );
+      newlyKnown = result.newlyKnown;
+      return withProgressionProfile(prev, result.profile);
+    });
+    const logLines = newlyKnown.map(
+      (label) => `>> SCHEMATIC KNOWN — ${label.toUpperCase()}`,
+    );
+    logLines.forEach((line) => appendHubLog(line));
+    return { newlyKnown, logLines };
+  }, [appendHubLog, updateAccount]);
+
+  const discoverRecipeSchematicId = useCallback((recipeId: string): {
+    discovered: boolean;
+    logLine: string;
+  } => {
+    let discovered = false;
+    let label = recipeId;
+    updateAccount((prev) => {
+      const result = discoverRecipeSchematic(getAccountProgressionProfile(prev), recipeId);
+      discovered = result.discovered;
+      label = result.label;
+      return withProgressionProfile(prev, result.profile);
+    });
+    const logLine = discovered
+      ? `>> SCHEMATIC KNOWN — ${label.toUpperCase()}`
+      : `>> SCHEMATIC — ${label.toUpperCase()} ALREADY KNOWN OR MISSING`;
+    appendHubLog(logLine);
+    return { discovered, logLine };
+  }, [appendHubLog, updateAccount]);
+
+  const logRecipeVisibilityReport = useCallback((): string => {
+    return formatRecipeVisibilityReport(
+      getAccountProgressionProfile(account),
+      account,
+    );
+  }, [account]);
+
+  const applyClassRankFromRun = useCallback((input: {
+    classId?: ClassType;
+    runOutcome: 'EXTRACTED' | 'FAILED';
+    depthReached: number;
+    contractSucceeded?: boolean;
+    breachGrade?: BreachGradeId;
+  }): ClassRankApplyResult => {
+    let summary: ClassRankApplyResult = {
+      profile: getAccountProgressionProfile(account),
+      classId: input.classId ?? account.activeClass,
+      xpGained: 0,
+      ranksGained: 0,
+      previousRank: 1,
+      newRank: 1,
+      previousXp: 0,
+      newXp: 0,
+      hooksGranted: [],
+      logLines: [],
+    };
+    updateAccount((prev) => {
+      const classId = input.classId ?? prev.activeClass;
+      const profile = getAccountProgressionProfile(prev);
+      const result = applyClassRankFromDebrief(profile, classId, {
+        runOutcome: input.runOutcome,
+        depthReached: input.depthReached,
+        contractSucceeded: input.contractSucceeded,
+        breachGrade: input.breachGrade,
+      });
+      summary = result;
+      return withProgressionProfile(prev, result.profile);
+    });
+    summary.logLines.forEach((line) => appendHubLog(line));
+    return summary;
+  }, [account, appendHubLog, updateAccount]);
+
+  const applyCabalRepFromRun = useCallback((input: {
+    contractSucceeded: boolean;
+    reputationAwarded: number;
+    sponsorId: FactionType;
+    breachGrade?: BreachGradeId;
+  }): CabalRepApplyResult => {
+    let summary: CabalRepApplyResult = {
+      profile: getAccountProgressionProfile(account),
+      cabalId: input.sponsorId,
+      repGained: 0,
+      tiersGained: 0,
+      previousTier: 0,
+      newTier: 0,
+      previousXp: 0,
+      newXp: 0,
+      cappedByGrade: false,
+      maxTierAllowed: maxCabalTierForBreachGrade(input.breachGrade),
+      hooksGranted: [],
+      logLines: [],
+      legacyRepDelta: 0,
+    };
+    updateAccount((prev) => {
+      const profile = getAccountProgressionProfile(prev);
+      const result = applyCabalRepFromDebrief(profile, input);
+      summary = result;
+      return withProgressionProfile(prev, result.profile);
+    });
+    summary.logLines.forEach((line) => appendHubLog(line));
+    return summary;
+  }, [account, appendHubLog, updateAccount]);
+
+  const debugGrantClassRankXpAmount = useCallback((classId: ClassType, xpAmount: number): string => {
+    let report = '';
+    updateAccount((prev) => {
+      const profile = getAccountProgressionProfile(prev);
+      const forced = applyClassRankXp(profile, classId, xpAmount);
+      report = [
+        `${classId} +${forced.xpGained} XP → Rank ${forced.newRank}`,
+        ...forced.logLines,
+        `Hooks: ${forced.hooksGranted.join(', ') || 'none'}`,
+      ].join('\n');
+      return withProgressionProfile(prev, forced.profile);
+    });
+    appendHubLog(`>> DEBUG — CLASS XP ${classId} +${xpAmount}`);
+    return report;
+  }, [appendHubLog, updateAccount]);
+
+  const debugGrantCabalRepXpAmount = useCallback((
+    cabalId: FactionType,
+    xpAmount: number,
+    breachGrade: BreachGradeId = 'I',
+  ): string => {
+    let report = '';
+    updateAccount((prev) => {
+      const profile = getAccountProgressionProfile(prev);
+      const forced = applyCabalRepXp(profile, cabalId, xpAmount, breachGrade);
+      report = [
+        `${cabalId} +${forced.repGained} XP → Tier ${forced.newTier} (cap ${forced.maxTierAllowed})`,
+        ...forced.logLines,
+        `Hooks: ${forced.hooksGranted.join(', ') || 'none'}`,
+      ].join('\n');
+      const nextAccount = withProgressionProfile(prev, forced.profile);
+      return {
+        ...nextAccount,
+        sponsorReputation: {
+          ...nextAccount.sponsorReputation,
+          [cabalId]: (nextAccount.sponsorReputation[cabalId] ?? 0) + forced.legacyRepDelta,
+        },
+      };
+    });
+    appendHubLog(`>> DEBUG — CABAL REP ${cabalId} +${xpAmount} @ GRADE ${breachGrade}`);
+    return report;
+  }, [appendHubLog, updateAccount]);
+
+  const logClassCabalHookCatalog = useCallback((): string => {
+    return [
+      '=== CLASS RANK HOOKS (PHASE 1F) ===',
+      formatClassRankHookCatalog('AEGIS'),
+      '',
+      '=== CABAL TIER HOOKS (PHASE 1F) ===',
+      formatCabalTierHookCatalog('TERRAN_GRID'),
+    ].join('\n');
+  }, []);
+
+  const logFailureRecoveryReport = useCallback((): string => {
+    return formatFailureRecoveryReport(getAccountProgressionProfile(account));
+  }, [account]);
+
+  const debugSetRouteIntelFailCountForSector = useCallback((
+    sectorId: SectorId,
+    failCount: number,
+  ): string => {
+    let report = '';
+    updateAccount((prev) => {
+      const profile = getAccountProgressionProfile(prev);
+      const next = debugSetRouteIntelFailCount(profile, sectorId, failCount);
+      report = formatFailureRecoveryReport(next);
+      return withProgressionProfile(prev, next);
+    });
+    const line = `>> DEBUG — ROUTE INTEL FAILS ${sectorId} = ${failCount} (boost@${FAILURE_RECOVERY_TUNING.boostFailCount} / guarantee@${FAILURE_RECOVERY_TUNING.guaranteeFailCount})`;
+    appendHubLog(line);
+    return `${line}\n\n${report}`;
+  }, [appendHubLog, updateAccount]);
+
+  const simulateProgressionEconomyRuns = useCallback((runCount = 100, seed?: string): string => {
+    const result = simulateProgressionCareer({
+      runCount,
+      seed: seed ?? `devtest:${Date.now()}`,
+      classId: account.activeClass,
+      sponsorId: account.alignedFaction ?? 'TERRAN_GRID',
+    });
+    return [
+      formatProgressionEconomySimulationReport(result),
+      '',
+      formatProgressionPacingScorecard(result),
+    ].join('\n');
+  }, [account.activeClass, account.alignedFaction]);
+
+  const logProgressionPacingScorecard = useCallback((runCount = 100): string => {
+    const result = simulateProgressionCareer({
+      runCount,
+      seed: `pacing:${Date.now()}`,
+      classId: account.activeClass,
+      sponsorId: account.alignedFaction ?? 'TERRAN_GRID',
+    });
+    return [
+      formatProgressionPacingTargetsReport(),
+      '',
+      formatProgressionPacingScorecard(result),
+    ].join('\n');
+  }, [account.activeClass, account.alignedFaction]);
+
+  const logProgressionEconomyAudit = useCallback((): string => {
+    return formatProgressionAuditReport(getAccountProgressionProfile(account));
+  }, [account]);
+
+  const logProgressionPerRunPreviewFn = useCallback((): string => {
+    return formatProgressionPerRunPreview({
+      depth: 2,
+      breachGrade: 'II',
+      classId: account.activeClass,
+      sponsorId: account.alignedFaction ?? 'TERRAN_GRID',
+    });
+  }, [account.activeClass, account.alignedFaction]);
+
   const recordCareerBalanceTelemetry = useCallback((telemetry: RunBalanceTelemetry) => {
     updateAccount((prev) => ({
       ...prev,
@@ -1812,6 +2489,39 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       grantSealedCasketInHub,
       grantSpecimenJarInHub,
       grantExpansionResourcesInHub,
+      logProgressionProfile,
+      logProgressionUnlockCatalog,
+      debugGrantProgressionUnlockId,
+      debugSetRunnerClearanceRank,
+      debugUnlockProgressionSector,
+      debugUnlockProgressionBreachGrade,
+      debugResetProgression,
+      tryGrantProgressionUnlock,
+      applyRunnerClearanceFromRun,
+      debugGrantRunnerClearanceXpAmount,
+      activateSectorAccessMandate: activateSectorAccessMandateFn,
+      applySectorAccessFromRun,
+      applyBreachGradeClearFromRun,
+      pinProgressionGoalId,
+      unpinProgressionGoalId,
+      syncPinnedGoalsFromRun,
+      listPinableProgressionGoals,
+      getPinnedGoalStatuses,
+      debugGrantRecipeGoalUnlock,
+      syncRecipeVisibilityFromStash,
+      discoverRecipeSchematicId,
+      logRecipeVisibilityReport,
+      applyClassRankFromRun,
+      applyCabalRepFromRun,
+      debugGrantClassRankXpAmount,
+      debugGrantCabalRepXpAmount,
+      logClassCabalHookCatalog,
+      logFailureRecoveryReport,
+      debugSetRouteIntelFailCountForSector,
+      simulateProgressionEconomyRuns,
+      logProgressionPacingScorecard,
+      logProgressionEconomyAudit,
+      logProgressionPerRunPreview: logProgressionPerRunPreviewFn,
     }),
     [
       account,
@@ -1885,6 +2595,39 @@ export function PlayerAccountProvider({ children }: { children: React.ReactNode 
       grantSealedCasketInHub,
       grantSpecimenJarInHub,
       grantExpansionResourcesInHub,
+      logProgressionProfile,
+      logProgressionUnlockCatalog,
+      debugGrantProgressionUnlockId,
+      debugSetRunnerClearanceRank,
+      debugUnlockProgressionSector,
+      debugUnlockProgressionBreachGrade,
+      debugResetProgression,
+      tryGrantProgressionUnlock,
+      applyRunnerClearanceFromRun,
+      debugGrantRunnerClearanceXpAmount,
+      activateSectorAccessMandateFn,
+      applySectorAccessFromRun,
+      applyBreachGradeClearFromRun,
+      pinProgressionGoalId,
+      unpinProgressionGoalId,
+      syncPinnedGoalsFromRun,
+      listPinableProgressionGoals,
+      getPinnedGoalStatuses,
+      debugGrantRecipeGoalUnlock,
+      syncRecipeVisibilityFromStash,
+      discoverRecipeSchematicId,
+      logRecipeVisibilityReport,
+      applyClassRankFromRun,
+      applyCabalRepFromRun,
+      debugGrantClassRankXpAmount,
+      debugGrantCabalRepXpAmount,
+      logClassCabalHookCatalog,
+      logFailureRecoveryReport,
+      debugSetRouteIntelFailCountForSector,
+      simulateProgressionEconomyRuns,
+      logProgressionPacingScorecard,
+      logProgressionEconomyAudit,
+      logProgressionPerRunPreviewFn,
     ],
   );
 

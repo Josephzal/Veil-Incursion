@@ -12,6 +12,8 @@ interface SectorMapPanelProps {
   sectors: SectorState[];
   activeSectorId: SectorId;
   onSectorPress: (id: SectorId) => void;
+  unlockedSectorIds?: ReadonlySet<SectorId> | readonly SectorId[];
+  sectorLockLabels?: Partial<Record<SectorId, string>>;
 }
 
 function StatLine({ label, value, valueColor, mutedColor }: { label: string; value: string; valueColor: string; mutedColor: string }) {
@@ -37,6 +39,8 @@ export default function SectorMapPanel({
   sectors,
   activeSectorId,
   onSectorPress,
+  unlockedSectorIds,
+  sectorLockLabels,
 }: SectorMapPanelProps): React.JSX.Element {
   const { sectionPadding } = useVeilFrontLayout();
   const activeSector = useMemo(
@@ -54,6 +58,8 @@ export default function SectorMapPanel({
           sectors={sectors}
           activeSectorId={activeSectorId}
           onSectorPress={onSectorPress}
+          unlockedSectorIds={unlockedSectorIds}
+          sectorLockLabels={sectorLockLabels}
         />
       </View>
 

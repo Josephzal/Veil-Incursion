@@ -83,6 +83,10 @@ const RESOURCE_ITEM_IMAGES: Record<ResourceItemId, ImageSourcePropType> = {
   'anchor-marrow': OssifiedLeyKnotImage,
   'breach-thread': AnomalousCoreImage,
   'blacksite-specimen-jar': SealedContainmentCasketImage,
+  'overgrowth-coordinate': EncryptedGridDriveImage,
+  'false-road-signal': EncryptedGridDriveImage,
+  'transit-cipher': EncryptedGridDriveImage,
+  'blackline-credentials': EncryptedGridDriveImage,
 };
 
 /** Per-item cargo art when available; otherwise shared resource placeholder. */

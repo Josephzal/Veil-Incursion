@@ -15,6 +15,7 @@ export function resolveRunModifiersFromContext(
       rareLootBonusPct: 0,
       blackMarketDiscountPct: 0,
       firstTurnApBonus: 0,
+      creditBonusPct: 0,
     };
   }
   return runGenerationContextToModifiers(context);

@@ -2215,7 +2215,8 @@ export default function TacticalCombatHub({
         log('[EXORCISED] >> Hostile neutralized. Incursion sealed.');
       }
       setResolutionOutcome('VICTORY');
-      const creditBonusPct = env.directorCreditsBonusPct ?? 0;
+      const creditBonusPct = (env.directorCreditsBonusPct ?? 0)
+        + (activeIncursionRefLocal.current.runModifiers?.creditBonusPct ?? 0);
       const creditBase = 750;
       const credits = creditBonusPct > 0
         ? Math.floor(creditBase * (1 + creditBonusPct / 100))

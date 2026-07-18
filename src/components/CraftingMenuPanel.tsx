@@ -24,6 +24,11 @@ import { getRunItemDefinition } from '../data/runItemRegistry';
 import type { RunItemId } from '../types/runItem';
 import { canAffordRecipe, getStashCount } from '../data/resourceStashEngine';
 import { ALL_RESOURCE_ITEM_IDS, RESOURCE_REGISTRY } from '../data/resourceRegistry';
+import {
+  buildRecipeVisibilityStatus,
+  type RecipeVisibility,
+} from '../data/recipeVisibilityEngine';
+import { getAccountProgressionProfile } from '../data/progressionDebugEngine';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useHubLayout } from '../context/HubLayoutContext';
@@ -43,6 +48,8 @@ import {
   HIDDEN_SCROLLVIEW_PROPS,
 } from '../utils/hiddenScrollbarStyle';
 import type { ResourceQuantity } from '../types/resourceItem';
+import type { ProgressionProfile } from '../types/progression';
+import type { PlayerAccount } from '../types/game';
 
 const STARK_WHITE = '#F8FAFC';
 const MUTED_SLATE = LOADOUT_SUBTITLE_COLOR;
@@ -121,6 +128,9 @@ interface FabricationRowProps {
   textColor: string;
   mutedColor: string;
   footerMeta?: string;
+  visibility?: RecipeVisibility;
+  rumoredPurpose?: string;
+  sourceHint?: string;
 }
 
 function FabricationRow({
@@ -133,18 +143,25 @@ function FabricationRow({
   textColor,
   mutedColor,
   footerMeta,
+  visibility = 'KNOWN',
+  rumoredPurpose,
+  sourceHint,
 }: FabricationRowProps): React.JSX.Element {
-  const affordable = canAffordRecipe(stash, recipe);
-  const canFabricate = affordable && !alreadyOwned;
-  const description = recipe.effectSummary ?? recipe.description ?? '';
+  const isRumored = visibility === 'RUMORED';
+  const affordable = !isRumored && canAffordRecipe(stash, recipe);
+  const canFabricate = !isRumored && affordable && !alreadyOwned;
+  const description = isRumored
+    ? (rumoredPurpose ?? 'Rumored schematic — costs sealed.')
+    : (recipe.effectSummary ?? recipe.description ?? '');
 
   return (
     <View
       style={[
         styles.fabricationRow,
         {
-          borderColor,
+          borderColor: isRumored ? `${mutedColor}88` : borderColor,
           backgroundColor: DOSSIER_ROW_BG,
+          opacity: isRumored ? 0.92 : 1,
         },
       ]}
     >
@@ -152,29 +169,45 @@ function FabricationRow({
         <TerminalText variant="body" style={{ color: textColor, fontWeight: '700' }} numberOfLines={1}>
           {recipe.label.toUpperCase()}
         </TerminalText>
+        {isRumored ? (
+          <TerminalText variant="caption" style={{ color: accentColor, fontWeight: '700' }} numberOfLines={1}>
+            RUMORED SCHEMATIC
+          </TerminalText>
+        ) : null}
         {description ? (
           <TerminalText variant="caption" style={{ color: mutedColor }} numberOfLines={2}>
             {description}
           </TerminalText>
         ) : null}
-        <View style={styles.requirementLine}>
-          {recipe.requirements.map((req, index) => {
-            const ownedCount = getStashCount(stash, req.resourceId);
-            const satisfied = ownedCount >= req.quantity;
-            const name = RESOURCE_REGISTRY[req.resourceId].name.toUpperCase();
-            return (
-              <Text
-                key={`${recipe.id}-${req.resourceId}`}
-                style={[
-                  styles.requirementText,
-                  { color: satisfied ? PHOSPHOR_GREEN : RUST_RED },
-                ]}
-              >
-                {`${index > 0 ? ' • ' : ''}${name} ${ownedCount}/${req.quantity}`}
-              </Text>
-            );
-          })}
-        </View>
+        {isRumored ? (
+          <View style={styles.requirementLine}>
+            <Text style={[styles.requirementText, { color: MUTED_SLATE }]}>
+              {sourceHint ? `SOURCE: ${sourceHint.toUpperCase()}` : 'SOURCE: ???'}
+            </Text>
+            <Text style={[styles.requirementText, { color: RUST_RED }]}>
+              {' • COSTS: ???'}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.requirementLine}>
+            {recipe.requirements.map((req, index) => {
+              const ownedCount = getStashCount(stash, req.resourceId);
+              const satisfied = ownedCount >= req.quantity;
+              const name = RESOURCE_REGISTRY[req.resourceId].name.toUpperCase();
+              return (
+                <Text
+                  key={`${recipe.id}-${req.resourceId}`}
+                  style={[
+                    styles.requirementText,
+                    { color: satisfied ? PHOSPHOR_GREEN : RUST_RED },
+                  ]}
+                >
+                  {`${index > 0 ? ' • ' : ''}${name} ${ownedCount}/${req.quantity}`}
+                </Text>
+              );
+            })}
+          </View>
+        )}
         {footerMeta ? (
           <Text style={[styles.requirementText, { color: MUTED_SLATE }]}>
             {footerMeta}
@@ -183,7 +216,13 @@ function FabricationRow({
       </View>
       <View style={styles.fabricationActions}>
         <MarketActionButton
-          label={alreadyOwned ? '[ FORGED ]' : '[ FABRICATE ]'}
+          label={
+            alreadyOwned
+              ? '[ FORGED ]'
+              : isRumored
+                ? '[ SEALED ]'
+                : '[ FABRICATE ]'
+          }
           accentColor={accentColor}
           mutedColor={mutedColor}
           disabled={!canFabricate}
@@ -205,6 +244,12 @@ interface FabricationMatrixProps {
   borderColor: string;
   textColor: string;
   mutedColor: string;
+  profile: ProgressionProfile;
+  account: PlayerAccount;
+  /** When true, only KNOWN recipes. When false, KNOWN+RUMORED (UNKNOWN filtered). */
+  includeRumored?: boolean;
+  /** Optional per-recipe footer (e.g. run-item market price). */
+  getFooterMeta?: (recipe: CraftingRecipe) => string | undefined;
 }
 
 function FabricationMatrix({
@@ -217,7 +262,20 @@ function FabricationMatrix({
   borderColor,
   textColor,
   mutedColor,
+  profile,
+  account,
+  includeRumored = true,
+  getFooterMeta,
 }: FabricationMatrixProps): React.JSX.Element {
+  const visible = recipes
+    .map((recipe) => buildRecipeVisibilityStatus(profile, account, recipe))
+    .filter((status) => (
+      status.visibility === 'KNOWN'
+      || (includeRumored && status.visibility === 'RUMORED')
+    ));
+
+  if (visible.length === 0) return <View />;
+
   return (
     <View style={styles.fabricationSection}>
       {sectionLabel ? (
@@ -229,17 +287,25 @@ function FabricationMatrix({
           {sectionLabel.toUpperCase()}
         </TerminalText>
       ) : null}
-      {recipes.map((recipe) => (
+      {visible.map((status) => (
         <FabricationRow
-          key={recipe.id}
-          recipe={recipe}
+          key={status.recipe.id}
+          recipe={status.recipe}
           stash={stash}
-          alreadyOwned={isOwned(recipe)}
+          alreadyOwned={isOwned(status.recipe)}
           onFabricate={onFabricate}
           accentColor={accentColor}
           borderColor={borderColor}
           textColor={textColor}
           mutedColor={mutedColor}
+          visibility={status.visibility}
+          rumoredPurpose={status.meta.rumoredPurpose}
+          sourceHint={status.meta.sourceHint}
+          footerMeta={
+            status.visibility === 'KNOWN'
+              ? getFooterMeta?.(status.recipe)
+              : undefined
+          }
         />
       ))}
     </View>
@@ -256,6 +322,10 @@ export default function CraftingMenuPanel({
   const { scaleSpacing } = useHubLayout();
   const panelPadding = scaleSpacing(10);
   const [runItemFilter, setRunItemFilter] = useState<RunItemCraftFilter>('ALL');
+  const progressionProfile = useMemo(
+    () => getAccountProgressionProfile(account),
+    [account],
+  );
 
   const runItemRecipes = useMemo(
     () => filterRunItemCraftingRecipes(buildRunItemCraftingRecipes(), runItemFilter),
@@ -332,6 +402,9 @@ export default function CraftingMenuPanel({
                 borderColor={theme.borderColor}
                 textColor={theme.textColor}
                 mutedColor={theme.mutedColor}
+                profile={progressionProfile}
+                account={account}
+                sectionLabel="Permanent Augments"
               />
 
               {runItemRecipes.length > 0 ? (
@@ -364,30 +437,25 @@ export default function CraftingMenuPanel({
                     ))}
                   </View>
                   <View style={styles.schematicDivider} />
-                  <View style={styles.fabricationSection}>
-                    <TerminalText variant="caption" letterSpacing={1} style={styles.subsectionLabel}>
-                      RUN ITEM SCHEMATICS
-                    </TerminalText>
-                    {runItemRecipes.map((recipe) => {
+                  <FabricationMatrix
+                    recipes={runItemRecipes}
+                    stash={account.resourceStash}
+                    onFabricate={handleFabricate}
+                    isOwned={() => false}
+                    accentColor={SELECT_ACCENT}
+                    borderColor={theme.borderColor}
+                    textColor={theme.textColor}
+                    mutedColor={theme.mutedColor}
+                    profile={progressionProfile}
+                    account={account}
+                    sectionLabel="Run Item Schematics"
+                    getFooterMeta={(recipe) => {
                       const itemId = recipe.outputId as RunItemId;
                       const def = getRunItemDefinition(itemId);
                       const staged = account.hubCraftedConsumables[itemId] ?? 0;
-                      return (
-                        <FabricationRow
-                          key={recipe.id}
-                          recipe={recipe}
-                          stash={account.resourceStash}
-                          alreadyOwned={false}
-                          onFabricate={handleFabricate}
-                          accentColor={SELECT_ACCENT}
-                          borderColor={theme.borderColor}
-                          textColor={theme.textColor}
-                          mutedColor={theme.mutedColor}
-                          footerMeta={`MARKET ${def.marketPrice} CR // ${staged} STAGED AT HUB`}
-                        />
-                      );
-                    })}
-                  </View>
+                      return `MARKET ${def.marketPrice} CR // ${staged} STAGED AT HUB`;
+                    }}
+                  />
                 </View>
               ) : null}
 
@@ -396,12 +464,14 @@ export default function CraftingMenuPanel({
                   recipes={secondaryRecipes.CONSUMABLE}
                   stash={account.resourceStash}
                   onFabricate={handleFabricate}
-                  sectionLabel="TACTICAL CONSUMABLES"
+                  sectionLabel="Tactical Consumables"
                   isOwned={() => false}
                   accentColor={SELECT_ACCENT}
                   borderColor={theme.borderColor}
                   textColor={theme.textColor}
                   mutedColor={theme.mutedColor}
+                  profile={progressionProfile}
+                  account={account}
                 />
               ) : null}
             </ScrollView>

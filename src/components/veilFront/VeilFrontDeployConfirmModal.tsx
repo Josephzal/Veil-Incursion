@@ -11,6 +11,7 @@ import type { SectorState } from '../../types/worldState';
 import type { SelectedContractState } from '../../types/contract';
 import { TerminalTheme } from '../../types/theme';
 import {
+  contractBreachGradeWarning,
   contractSectorWarning,
   formatContractRewardSummary,
   sponsorDisplayName,
@@ -21,6 +22,8 @@ import { describeEmployerPerks } from '../../utils/employerContractUi';
 import { useWorldState } from '../../context/WorldStateContext';
 import { getActiveAnchorInstance } from '../../data/anchorLifecycleEngine';
 import { buildPreliminaryRunWorldContext } from '../../data/runWorldBriefEngine';
+import { formatBreachGradeLabel, getBreachGradeTuning } from '../../data/breachGradeEngine';
+import type { BreachGradeId } from '../../types/progression';
 
 interface VeilFrontDeployConfirmModalProps {
   visible: boolean;
@@ -30,6 +33,7 @@ interface VeilFrontDeployConfirmModalProps {
   sector: SectorState;
   selectedContract: SelectedContractState;
   sectorCompatibility: ContractSectorCompatibility;
+  selectedBreachGrade: BreachGradeId;
   launching: boolean;
   onContinue: () => void;
   onAbort: () => void;
@@ -67,6 +71,7 @@ export default function VeilFrontDeployConfirmModal({
   sector,
   selectedContract,
   sectorCompatibility,
+  selectedBreachGrade,
   launching,
   onContinue,
   onAbort,
@@ -84,8 +89,13 @@ export default function VeilFrontDeployConfirmModal({
   }, [persisted, sector]);
   const rewardFocus = sector.resourceFocus.slice(0, 2).join(' / ');
   const sectorWarning = contractSectorWarning(sectorCompatibility);
+  const gradeTuning = getBreachGradeTuning(selectedBreachGrade);
   const isSponsor = selectedContract.kind === 'SPONSOR';
   const contract = isSponsor ? selectedContract.contract : null;
+  const gradeWarning = contractBreachGradeWarning(
+    selectedBreachGrade,
+    contract?.minBreachGrade,
+  );
   const operationLifecycle = formatOperationLifecycleStatus(
     sector.activeOperation.lifecycleStatus,
     sector.activeOperation.runsRemaining,
@@ -146,10 +156,32 @@ export default function VeilFrontDeployConfirmModal({
                 </TerminalText>
               </View>
             ) : null}
+            {gradeWarning ? (
+              <View
+                style={[
+                  styles.warningBanner,
+                  {
+                    borderColor: '#f87171',
+                    marginTop: scaleSpacing(8),
+                    padding: scaleSpacing(8),
+                  },
+                ]}
+              >
+                <TerminalText variant="micro" style={{ color: '#f87171' }}>
+                  {gradeWarning.toUpperCase()}
+                </TerminalText>
+              </View>
+            ) : null}
 
             <View style={{ marginTop: scaleSpacing(16) }}>
               <SectionFrame title="Deployment Summary" accentColor={theme.statusColor}>
                 <SummaryRow label="Sector" value={sector.displayName} mutedColor={theme.mutedColor} textColor={theme.textColor} />
+                <SummaryRow
+                  label="Breach Grade"
+                  value={`${formatBreachGradeLabel(selectedBreachGrade)} — ${gradeTuning.summary}`}
+                  mutedColor={theme.mutedColor}
+                  textColor={theme.statusColor}
+                />
                 <SummaryRow
                   label="Crisis"
                   value={crisisPreview.crisisDisplayName}
@@ -178,6 +210,14 @@ export default function VeilFrontDeployConfirmModal({
                   <>
                     <SummaryRow label="Objective" value={contract!.objectiveText} mutedColor={theme.mutedColor} textColor={theme.textColor} />
                     <SummaryRow label="Reward" value={formatContractRewardSummary(contract!)} mutedColor={theme.mutedColor} textColor={theme.statusColor} />
+                    {contract!.minBreachGrade ? (
+                      <SummaryRow
+                        label="Min Grade"
+                        value={formatBreachGradeLabel(contract!.minBreachGrade, true)}
+                        mutedColor={theme.mutedColor}
+                        textColor={theme.textColor}
+                      />
+                    ) : null}
                     {sponsorPerks.length > 0 ? (
                       <SummaryRow label="Perks" value={sponsorPerks.join(' · ')} mutedColor={theme.mutedColor} textColor={theme.textColor} />
                     ) : null}

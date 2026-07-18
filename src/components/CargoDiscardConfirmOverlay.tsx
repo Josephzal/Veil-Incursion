@@ -8,6 +8,8 @@ interface CargoDiscardConfirmOverlayProps {
   itemName: string;
   theme: TerminalTheme;
   accentColor?: string;
+  /** Stronger warning for sector-access route intel. */
+  routeIntelWarning?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -17,19 +19,24 @@ export default function CargoDiscardConfirmOverlay({
   itemName,
   theme,
   accentColor = '#00ff33',
+  routeIntelWarning = false,
   onConfirm,
   onCancel,
 }: CargoDiscardConfirmOverlayProps): React.JSX.Element {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <View style={styles.backdrop}>
-        <View style={[styles.panel, { borderColor: accentColor, backgroundColor: '#050608' }]}>
-          <Text style={[styles.header, { color: accentColor }]}>JETTISON CARGO</Text>
+        <View style={[styles.panel, { borderColor: routeIntelWarning ? '#ef4444' : accentColor, backgroundColor: '#050608' }]}>
+          <Text style={[styles.header, { color: routeIntelWarning ? '#ef4444' : accentColor }]}>
+            {routeIntelWarning ? 'JETTISON ROUTE INTEL' : 'JETTISON CARGO'}
+          </Text>
           <Text style={[styles.body, { color: theme.primaryColor }]}>
             {itemName.toUpperCase()}
           </Text>
           <Text style={[styles.hint, { color: theme.mutedColor }]}>
-            Drop this item permanently from your inventory?
+            {routeIntelWarning
+              ? 'WARNING — Sector access route intel. Cannot be fenced. Discarding delays the next sector unlock and counts toward pity recovery. Drop permanently?'
+              : 'Drop this item permanently from your inventory?'}
           </Text>
 
           <View style={styles.actions}>

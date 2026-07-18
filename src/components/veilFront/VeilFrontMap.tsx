@@ -46,6 +46,10 @@ interface VeilFrontMapProps {
   sectors: SectorState[];
   activeSectorId: SectorId;
   onSectorPress: (id: SectorId) => void;
+  /** Progression unlock map — locked sectors render darkened. */
+  unlockedSectorIds?: ReadonlySet<SectorId> | readonly SectorId[];
+  /** Optional lock sub-labels (LOCKED / MANDATE / HUNTING). */
+  sectorLockLabels?: Partial<Record<SectorId, string>>;
 }
 
 function VeilFrontBlueprintGrid({ width, height }: { width: number; height: number }): React.JSX.Element {
@@ -67,6 +71,8 @@ export default function VeilFrontMap({
   sectors,
   activeSectorId,
   onSectorPress,
+  unlockedSectorIds,
+  sectorLockLabels,
 }: VeilFrontMapProps): React.JSX.Element {
   const { isDesktop } = useHubLayout();
   const mapDefinitions = SECTOR_MAP_DEFINITIONS;
@@ -74,6 +80,16 @@ export default function VeilFrontMap({
     () => new Map(sectors.map((sector) => [sector.id, sector])),
     [sectors],
   );
+  const unlockedSet = useMemo(() => {
+    if (!unlockedSectorIds) return null;
+    return unlockedSectorIds instanceof Set
+      ? unlockedSectorIds
+      : new Set(unlockedSectorIds);
+  }, [unlockedSectorIds]);
+  const isSectorUnlocked = useCallback((id: SectorId) => {
+    if (!unlockedSet) return true;
+    return unlockedSet.has(id);
+  }, [unlockedSet]);
   const [hostSize, setHostSize] = useState({ width: 320, height: 240 });
 
   const pulse = useRef(new Animated.Value(0)).current;
@@ -178,12 +194,21 @@ export default function VeilFrontMap({
                 const veilBiome = sectorState?.veilBiome ?? 'NULL_ZONE';
                 const biomeVisual = VEIL_BIOME_VISUALS[veilBiome];
                 const isActive = sector.id === activeSectorId;
+                const unlocked = isSectorUnlocked(sector.id);
 
                 const canvasPoly = sector.mapGeometry.polygon.map((pt) => viewBoxPointToCanvas(pt, drawMetrics));
                 const pathD = canvasPoly.length ? `M ${canvasPoly.map((p) => `${p.x} ${p.y}`).join(' L ')} Z` : '';
 
-                const fill = isActive ? hexToRgba(biomeVisual.fill, 0.4) : 'transparent';
-                const stroke = isActive ? biomeVisual.glow : 'rgba(148, 163, 184, 0.5)';
+                const fill = !unlocked
+                  ? 'rgba(15, 23, 42, 0.72)'
+                  : isActive
+                    ? hexToRgba(biomeVisual.fill, 0.4)
+                    : 'transparent';
+                const stroke = !unlocked
+                  ? 'rgba(71, 85, 105, 0.55)'
+                  : isActive
+                    ? biomeVisual.glow
+                    : 'rgba(148, 163, 184, 0.5)';
 
                 return isActive ? null : (
                   <Path
@@ -203,14 +228,19 @@ export default function VeilFrontMap({
                 const sectorState = sectorById.get(sector.id);
                 const veilBiome = sectorState?.veilBiome ?? 'NULL_ZONE';
                 const biomeVisual = VEIL_BIOME_VISUALS[veilBiome];
+                const unlocked = isSectorUnlocked(sector.id);
                 const canvasPoly = sector.mapGeometry.polygon.map((pt) => viewBoxPointToCanvas(pt, drawMetrics));
                 const pathD = canvasPoly.length ? `M ${canvasPoly.map((p) => `${p.x} ${p.y}`).join(' L ')} Z` : '';
+                const activeFill = unlocked
+                  ? hexToRgba(biomeVisual.fill, 0.4)
+                  : 'rgba(15, 23, 42, 0.85)';
+                const activeStroke = unlocked ? biomeVisual.glow : 'rgba(148, 163, 184, 0.7)';
                 return (
                   <React.Fragment key={`active-${sector.id}`}>
                     <AnimatedG opacity={glowOpacity}>
-                      <Path d={pathD} fill="none" stroke={biomeVisual.glow} strokeWidth={activeStrokeWidth + 5} strokeLinejoin="round" />
+                      <Path d={pathD} fill="none" stroke={activeStroke} strokeWidth={activeStrokeWidth + 5} strokeLinejoin="round" />
                     </AnimatedG>
-                    <Path d={pathD} fill={hexToRgba(biomeVisual.fill, 0.4)} stroke={biomeVisual.glow} strokeWidth={activeStrokeWidth} strokeLinejoin="round" />
+                    <Path d={pathD} fill={activeFill} stroke={activeStroke} strokeWidth={activeStrokeWidth} strokeLinejoin="round" />
                   </React.Fragment>
                 );
               })}
@@ -219,6 +249,7 @@ export default function VeilFrontMap({
               {mapDefinitions.map((sector) => {
                 const sectorState = sectorById.get(sector.id);
                 const isActive = sector.id === activeSectorId;
+                const unlocked = isSectorUnlocked(sector.id);
                 const nodeAnchor = viewBoxPointToCanvas(
                   sector.mapGeometry.labelAnchor ?? polygonCentroid(sector.mapGeometry.polygon),
                   drawMetrics,
@@ -228,6 +259,11 @@ export default function VeilFrontMap({
                   ? [sectorAbbreviation(displayName)]
                   : splitSectorLabelLines(sectorAbbreviation(displayName));
                 const labelStartY = nodeAnchor.y - ((labelLines.length - 1) * labelLineHeight) / 2 + labelFontSize * 0.35;
+                const fill = !unlocked
+                  ? 'rgba(100, 116, 139, 0.85)'
+                  : isActive
+                    ? '#f8fafc'
+                    : 'rgba(226, 232, 240, 0.6)';
 
                 return (
                   <React.Fragment key={`label-${sector.id}`}>
@@ -236,7 +272,7 @@ export default function VeilFrontMap({
                         key={`${sector.id}-label-${lineIndex}`}
                         x={nodeAnchor.x}
                         y={labelStartY + lineIndex * labelLineHeight}
-                        fill={isActive ? '#f8fafc' : 'rgba(226, 232, 240, 0.6)'}
+                        fill={fill}
                         fontSize={isActive ? labelFontSize * 1.08 : labelFontSize}
                         fontFamily="monospace"
                         fontWeight={isActive ? '800' : '500'}
@@ -246,6 +282,20 @@ export default function VeilFrontMap({
                         {line}
                       </SvgText>
                     ))}
+                    {!unlocked ? (
+                      <SvgText
+                        x={nodeAnchor.x}
+                        y={labelStartY + labelLines.length * labelLineHeight}
+                        fill="rgba(148, 163, 184, 0.75)"
+                        fontSize={Math.max(4, labelFontSize * 0.72)}
+                        fontFamily="monospace"
+                        fontWeight="700"
+                        letterSpacing={0.6}
+                        textAnchor="middle"
+                      >
+                        {sectorLockLabels?.[sector.id] ?? 'LOCKED'}
+                      </SvgText>
+                    ) : null}
                   </React.Fragment>
                 );
               })}

@@ -52,6 +52,8 @@ export interface GeneratedContract {
   reward: ContractRewardPackage;
   bonusReward?: Partial<ContractRewardPackage>;
   difficulty: ContractDifficulty;
+  /** Minimum Breach Grade required to deploy this contract (Phase 1D). */
+  minBreachGrade?: import('./progression').BreachGradeId;
   refreshLabel: string;
   /** Contracts v2 — contextual binding metadata. */
   boundContext?: ContractBoundContext;
@@ -107,6 +109,8 @@ export interface ActiveRunContract {
   reward: ContractRewardPackage | null;
   bonusReward?: Partial<ContractRewardPackage>;
   difficulty: ContractDifficulty;
+  /** Minimum Breach Grade required (copied from board contract). */
+  minBreachGrade?: import('./progression').BreachGradeId;
   selectedAtRunIndex: number;
   /** Contract Seal — optional sealed clause appended at run start. */
   keepsakeSealedClause?: KeepsakeSealedClause | null;
@@ -256,6 +260,7 @@ export function freezeContractForRun(
     reward: c.reward,
     bonusReward: c.bonusReward,
     difficulty: c.difficulty,
+    minBreachGrade: c.minBreachGrade,
     selectedAtRunIndex: selected.selectedAtRunIndex,
     boundContext: c.boundContext,
   };

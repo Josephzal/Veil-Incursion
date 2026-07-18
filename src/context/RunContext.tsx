@@ -270,6 +270,16 @@ import {
   rollCombatResourceDrops,
   type CombatRewardContext,
 } from '../data/combatRewardEngine';
+import {
+  getAccountProgressionProfile,
+} from '../data/progressionDebugEngine';
+import {
+  rollRouteIntelCombatDrops,
+  isRouteIntelResource,
+} from '../data/sectorAccessMandateEngine';
+import { getResourceDisplayName } from '../data/resourceRegistry';
+import { veilBiomeToSectorId } from '../data/sectorBiomeBridge';
+import { applyBreachGradeEnemyScaling } from '../data/breachGradeEngine';
 import { applyResourceBundleToCargo } from '../data/resourceCargoBridge';
 import { getResourceCacheBundle } from '../data/resourceCacheBundles';
 import {
@@ -925,7 +935,7 @@ function createInitialRunState(): RunState {
 }
 
 export function RunProvider({ children }: { children: React.ReactNode }) {
-  const { transferVeilResidueIntoRun, restoreVeilResidueBaseline, persistRunBankedSnapshot } = usePlayerAccount();
+  const { transferVeilResidueIntoRun, restoreVeilResidueBaseline, persistRunBankedSnapshot, account } = usePlayerAccount();
   const [runState, setRunState] = useState<RunState>(createInitialRunState);
   const runStateRef = useRef<RunState>(runState);
   const [runLog, setRunLog] = useState<string[]>([]);
@@ -1082,6 +1092,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       rareLootBonusPct: 0,
       blackMarketDiscountPct: 0,
       firstTurnApBonus: 0,
+      creditBonusPct: 0,
     };
     const runModifiersWithBrief = briefRareLootPct > 0
       ? {
@@ -1124,6 +1135,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       envoyBoons: [],
       alignedFaction: config?.alignedFaction ?? null,
       runVeilBiome,
+      breachGrade: config?.runGenerationContext?.breachGrade ?? 'I',
       currentMacroBiomeFamily: lockedMacroBiome,
       lastMacroBiomeFamily: null,
       pendingDistrictBiomeOffers: null,
@@ -3090,22 +3102,46 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       inc.cargo,
       inc.keepsakeRuntime,
     );
-    const drops = rollCombatResourceDrops({
+    const drops = [...rollCombatResourceDrops({
       ...options,
       rareLootBonusPct,
       occultRewardBonusPct,
       stressedResourceIds: inc.runWorldBrief?.resourceStress.highDemandResourceIds,
       briefRewardBias: inc.runWorldBrief?.rewardBias ?? null,
-    });
+    })];
+
+    const runSectorId = inc.runGenerationContext?.sectorState.id
+      ?? (inc.runVeilBiome ? veilBiomeToSectorId(inc.runVeilBiome) : null);
+    if (runSectorId) {
+      const districtDepth = options.districtDepth
+        ?? getDistrictFromDepth(options.depth);
+      const routeIntel = rollRouteIntelCombatDrops({
+        profile: getAccountProgressionProfile(account),
+        runSectorId,
+        depth: districtDepth,
+        isElite: options.isElite && !options.isGatekeeper,
+        isBoss: options.isGatekeeper,
+        cargo: inc.cargo,
+        seed: `route-intel:${options.seed ?? options.depth}`,
+      });
+      routeIntel.forEach((id) => {
+        if (!drops.includes(id)) drops.push(id);
+      });
+    }
+
     if (drops.length === 0) return [];
     const stagedIds: string[] = [];
     let pickupLogs: string[] = [];
     let keepsakeLogs: string[] = [];
+    const routeIntelNames: string[] = [];
     setActiveIncursion((prev) => {
       const beforeCargo = prev.cargo;
       let nextCargo = beforeCargo;
       drops.forEach((resourceId) => {
         nextCargo = addLootToContainment(nextCargo, resourceId, 1, stagedIds);
+        if (isRouteIntelResource(resourceId)) {
+          routeIntelNames.push(getResourceDisplayName(resourceId));
+        }
       });
       const keepsakePickup = mergeKeepsakeCargoPickup(prev, nextCargo, stagedIds);
       keepsakeLogs = keepsakePickup.logLines;
@@ -3137,8 +3173,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     pickupLogs.forEach((line) => appendRunLog(line));
     keepsakeLogs.forEach((line) => appendRunLog(line));
     appendRunLog(formatCombatResourceDropLog(drops));
+    routeIntelNames.forEach((name) => {
+      appendRunLog(`>> ROUTE INTEL SECURED — ${name.toUpperCase()} // EXTRACT TO UNLOCK SECTOR`);
+    });
     return stagedIds;
-  }, [appendRunLog, mergeKeepsakeCargoPickup]);
+  }, [account, appendRunLog, mergeKeepsakeCargoPickup]);
 
   const grantCombatSalvage = useCallback((
     resourceId: import('../types/resourceItem').ResourceItemId,
@@ -3512,6 +3551,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       depth,
       isElite,
       isAmbush: prev.pendingAmbush,
+      breachGrade: inc.breachGrade ?? 'I',
     });
     let pendingEnemies = spawnCombatSquad({
       nodeIndex: inc.nodesCleared,
@@ -3528,6 +3568,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         resonancePercent: inc.resonance.percent,
       },
     });
+    pendingEnemies = applyBreachGradeEnemyScaling(pendingEnemies, inc.breachGrade);
     if (anchorCtx && isElite && !echoCtx) {
       pendingEnemies = applyAnchorAssaultSpawnScaling(pendingEnemies, anchorCtx);
     }

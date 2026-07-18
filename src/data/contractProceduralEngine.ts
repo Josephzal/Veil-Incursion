@@ -16,6 +16,7 @@ import {
 } from '../types/contractProcedural';
 import type { RunDepth } from '../types/narrativeProcedural';
 import type { ResourceItemId } from '../types/resourceItem';
+import { minBreachGradeForContractDifficulty } from './breachGradeEngine';
 import type {
   CabalEmployerId,
   EchoActivityLevel,
@@ -619,6 +620,7 @@ export function generateContractForSlot(
     bonusReward: bonusObjective ? { credits: Math.round(reward.credits * 0.25), reputation: 1 }
       : kind === 'RECOVER_ECONOMY_INTEL' ? { credits: 40, reputation: 1 } : undefined,
     difficulty,
+    minBreachGrade: minBreachGradeForContractDifficulty(difficulty),
     refreshLabel: 'Refreshes after run',
     boundContext: buildBoundContext(ctx, source, resourceIds, depth),
     titleHash,

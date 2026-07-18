@@ -54,7 +54,7 @@ export default function OverworldHubScreen(): React.JSX.Element {
       appendHubLog('>> DESCENT LOADOUT LOCKED — CARGO MANIFEST COMMITTED TO RUN STATE.');
       appendHubLog('>> RUN ITEM SLOTS LOCKED — TACTICAL MANIFEST COMMITTED.');
       appendHubLog(`>> WEAPON LINK LOCKED — ${weaponSnapshot.activeWeaponFamilyId.replace(/-/g, ' ').toUpperCase()} TIER ${weaponSnapshot.activeWeaponTier}.`);
-      appendHubLog(`>> VEIL FRONT BREACH — ${runGenerationContext.sectorState.displayName.toUpperCase()} // ${runGenerationContext.activeOperation.title.toUpperCase()}`);
+      appendHubLog(`>> VEIL FRONT BREACH — ${runGenerationContext.sectorState.displayName.toUpperCase()} // ${runGenerationContext.activeOperation.title.toUpperCase()} // GRADE ${runGenerationContext.breachGrade}`);
       startNewRun({
         factionPerks: account.factionPerks,
         unlockedBiomes: account.unlockedBiomes,

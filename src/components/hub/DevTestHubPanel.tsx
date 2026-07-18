@@ -77,6 +77,10 @@ import {
   debugValidateSealedCargo,
 } from '../../data/sealedCargoDebugEngine';
 import { SECTOR_WORLD_TEMPLATES } from '../../data/sectorWorldCatalog';
+import {
+  buildDebriefProgressionTheater,
+  formatDebriefProgressionTheaterReport,
+} from '../../data/debriefProgressionTheaterEngine';
 import ExplorationHubPanel from '../ExplorationHubPanel';
 import HubScreenShell, { HubSectionHeader } from './HubScreenShell';
 import { hubKeyColor } from '../../constants/hubAtmosphere';
@@ -251,6 +255,34 @@ export default function DevTestHubPanel(): React.JSX.Element {
     grantSealedCasketInHub,
     grantSpecimenJarInHub,
     grantExpansionResourcesInHub,
+    logProgressionProfile,
+    logProgressionUnlockCatalog,
+    debugGrantProgressionUnlockId,
+    debugSetRunnerClearanceRank,
+    debugUnlockProgressionSector,
+    debugUnlockProgressionBreachGrade,
+    debugResetProgression,
+    tryGrantProgressionUnlock,
+    debugGrantRunnerClearanceXpAmount,
+    activateSectorAccessMandate,
+    pinProgressionGoalId,
+    unpinProgressionGoalId,
+    syncPinnedGoalsFromRun,
+    listPinableProgressionGoals,
+    getPinnedGoalStatuses,
+    debugGrantRecipeGoalUnlock,
+    syncRecipeVisibilityFromStash,
+    discoverRecipeSchematicId,
+    logRecipeVisibilityReport,
+    debugGrantClassRankXpAmount,
+    debugGrantCabalRepXpAmount,
+    logClassCabalHookCatalog,
+    logFailureRecoveryReport,
+    debugSetRouteIntelFailCountForSector,
+    simulateProgressionEconomyRuns,
+    logProgressionPacingScorecard,
+    logProgressionEconomyAudit,
+    logProgressionPerRunPreview,
   } = usePlayerAccount();
   const {
     selectedSector,
@@ -258,7 +290,9 @@ export default function DevTestHubPanel(): React.JSX.Element {
     sectors,
     runGenerationContext,
     setSelectedSectorId,
+    setSelectedBreachGrade,
     setPendingDebrief,
+    pendingDebrief,
     tickAfterRunComplete,
     devRegenerateAllOperations,
     devForceSectorOperation,
@@ -1281,6 +1315,467 @@ export default function DevTestHubPanel(): React.JSX.Element {
           label="[ VALIDATE ECHO ]"
           accentColor={theme.primaryColor}
           onPress={() => setDebugReport(devValidateEchoPipeline())}
+        />
+      </View>
+
+      <HubSectionHeader title="PROGRESSION SPINE // PHASE 1C" color={theme.mutedColor} />
+      <View style={styles.grid}>
+        <SandboxLaunchButton
+          label="[ PRINT PROGRESSION PROFILE ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(logProgressionProfile())}
+        />
+        <SandboxLaunchButton
+          label="[ PRINT UNLOCK CATALOG ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(logProgressionUnlockCatalog())}
+        />
+        <SandboxLaunchButton
+          label="[ GRANT CLEARANCE XP +180 ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            setDebugReport(debugGrantRunnerClearanceXpAmount(180));
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ SET CLEARANCE 2 ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            debugSetRunnerClearanceRank(2);
+            setDebugReport(logProgressionProfile());
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ ACTIVATE ABYSSAL MANDATE ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            activateSectorAccessMandate('THE_ABYSSAL_SINK');
+            setDebugReport(logProgressionProfile());
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ ACTIVATE ASHEN MANDATE ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            activateSectorAccessMandate('THE_ASHEN_WASTES');
+            setDebugReport(logProgressionProfile());
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ SET CLEARANCE 3 ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            debugSetRunnerClearanceRank(3);
+            setDebugReport(logProgressionProfile());
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ SET CLEARANCE 5 ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            debugSetRunnerClearanceRank(5);
+            setDebugReport(logProgressionProfile());
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ SET CLEARANCE 6 ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            debugSetRunnerClearanceRank(6);
+            setDebugReport(logProgressionProfile());
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ TRY GRANT GRADE II (REQ) ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            const result = tryGrantProgressionUnlock('breach_grade.II');
+            setDebugReport(`${result.logLine}\n\n${logProgressionUnlockCatalog()}`);
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ GRANT ABYSSAL SINK (FORCE) ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            debugGrantProgressionUnlockId('sector.abyssal_sink');
+            setDebugReport(logProgressionProfile());
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ GRANT GRADE II (FORCE) ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            debugUnlockProgressionBreachGrade('II');
+            setDebugReport(logProgressionProfile());
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ UNLOCK ASHEN WASTE ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            debugUnlockProgressionSector('THE_ASHEN_WASTES');
+            setDebugReport(logProgressionProfile());
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ RESET PROGRESSION ONLY ]"
+          accentColor={theme.mutedColor}
+          onPress={() => {
+            debugResetProgression();
+            setDebugReport(logProgressionProfile());
+          }}
+        />
+      </View>
+
+      <HubSectionHeader title="PROGRESSION SPINE // PHASE 1D" color={theme.mutedColor} />
+      <View style={styles.grid}>
+        <SandboxLaunchButton
+          label="[ SELECT GRADE I ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            setSelectedBreachGrade('I');
+            setDebugReport(`Selected Breach Grade I\n\n${logProgressionProfile()}`);
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ SELECT GRADE II ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            setSelectedBreachGrade('II');
+            setDebugReport(`Selected Breach Grade II\n\n${logProgressionProfile()}`);
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ SELECT GRADE III ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            setSelectedBreachGrade('III');
+            setDebugReport(`Selected Breach Grade III\n\n${logProgressionProfile()}`);
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ UNLOCK + SELECT II ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            debugUnlockProgressionBreachGrade('II');
+            setSelectedBreachGrade('II');
+            setDebugReport(`Unlocked + selected Grade II\n\n${logProgressionProfile()}`);
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ UNLOCK + SELECT III ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            debugUnlockProgressionBreachGrade('III');
+            setSelectedBreachGrade('III');
+            setDebugReport(`Unlocked + selected Grade III\n\n${logProgressionProfile()}`);
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ PRINT SELECTED GRADE ]"
+          accentColor={theme.mutedColor}
+          onPress={() => {
+            setDebugReport(
+              `World selectedBreachGrade: ${persisted.selectedBreachGrade}\nRun context grade: ${runGenerationContext.breachGrade}\n\n${logProgressionProfile()}`,
+            );
+          }}
+        />
+      </View>
+
+      <HubSectionHeader title="PROGRESSION SPINE // PHASE 1E" color={theme.mutedColor} />
+      <View style={styles.grid}>
+        <SandboxLaunchButton
+          label="[ PIN ABYSSAL ACCESS ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            pinProgressionGoalId('SECTOR_ACCESS:THE_ABYSSAL_SINK');
+            setDebugReport(logProgressionProfile());
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ PIN GRADE II ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            pinProgressionGoalId('BREACH_GRADE:II');
+            setDebugReport(logProgressionProfile());
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ PIN CLEARANCE 3 ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            pinProgressionGoalId('RUNNER_CLEARANCE:3');
+            setDebugReport(logProgressionProfile());
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ PIN NULL MASTERY ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            pinProgressionGoalId('SECTOR_MASTERY:THE_NULL_ZONE');
+            setDebugReport(logProgressionProfile());
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ LIST PINABLE GOALS ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            const goals = listPinableProgressionGoals();
+            setDebugReport(
+              `Pinable (${goals.length}):\n${goals.map((g) => `- ${g.id} // ${g.label}`).join('\n')}\n\n${logProgressionProfile()}`,
+            );
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ PRINT PINNED STATUS ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            const statuses = getPinnedGoalStatuses();
+            setDebugReport(
+              statuses.length === 0
+                ? 'No pinned goals.\n\n' + logProgressionProfile()
+                : statuses.map((s) => (
+                  `${s.definition.label}\n  ${s.progressLabel} (${s.progressPercent}%)\n  missing: ${s.missingRequirements.join(' | ') || '—'}\n  → ${s.recommendedSectorId ?? '—'} / ${s.recommendedGrade ?? '—'} / ${s.recommendedSponsorId ?? '—'}`
+                )).join('\n\n') + '\n\n' + logProgressionProfile(),
+            );
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ SYNC PINNED (CLEAR DONE) ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            const result = syncPinnedGoalsFromRun();
+            setDebugReport(
+              `Completed: ${result.completed.map((c) => c.definition.label).join(', ') || 'none'}\n${result.logLines.join('\n')}\n\n${logProgressionProfile()}`,
+            );
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ GRANT TRAUMA RECIPE ]"
+          accentColor={theme.mutedColor}
+          onPress={() => {
+            setDebugReport(debugGrantRecipeGoalUnlock('trauma-patch'));
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ UNPIN ALL ]"
+          accentColor={theme.mutedColor}
+          onPress={() => {
+            getPinnedGoalStatuses().forEach((s) => unpinProgressionGoalId(s.pinned.id));
+            setDebugReport(logProgressionProfile());
+          }}
+        />
+      </View>
+
+      <HubSectionHeader title="PROGRESSION SPINE // PHASE 1F" color={theme.mutedColor} />
+      <View style={styles.grid}>
+        <SandboxLaunchButton
+          label="[ CLASS XP +120 ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            setDebugReport(debugGrantClassRankXpAmount(account.activeClass, 120));
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ CLASS XP +400 (RANK UP) ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            setDebugReport(debugGrantClassRankXpAmount(account.activeClass, 400));
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ CABAL REP +100 @ G-I ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            setDebugReport(debugGrantCabalRepXpAmount('TERRAN_GRID', 100, 'I'));
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ CABAL REP +200 @ G-III ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            setDebugReport(debugGrantCabalRepXpAmount('TERRAN_GRID', 200, 'III'));
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ PRINT CLASS/CABAL HOOKS ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(logClassCabalHookCatalog())}
+        />
+      </View>
+
+      <HubSectionHeader title="PROGRESSION SPINE // PHASE 1G" color={theme.mutedColor} />
+      <View style={styles.grid}>
+        <SandboxLaunchButton
+          label="[ PRINT RECIPE VISIBILITY ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(logRecipeVisibilityReport())}
+        />
+        <SandboxLaunchButton
+          label="[ SYNC STASH → KNOWN ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            const result = syncRecipeVisibilityFromStash();
+            setDebugReport(
+              `Newly known: ${result.newlyKnown.join(', ') || 'none'}\n\n${logRecipeVisibilityReport()}`,
+            );
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ DISCOVER TRAUMA PATCH ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            discoverRecipeSchematicId('trauma-patch');
+            setDebugReport(logRecipeVisibilityReport());
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ DISCOVER BLOOD PRICE ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            discoverRecipeSchematicId('craft_blood_price');
+            setDebugReport(logRecipeVisibilityReport());
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ SET CLR 4 (ADV FORGE) ]"
+          accentColor={theme.mutedColor}
+          onPress={() => {
+            debugSetRunnerClearanceRank(4);
+            setDebugReport(logRecipeVisibilityReport());
+          }}
+        />
+      </View>
+
+      <HubSectionHeader title="PROGRESSION SPINE // PHASE 1H" color={theme.mutedColor} />
+      <View style={styles.grid}>
+        <SandboxLaunchButton
+          label="[ PRINT THEATER (PENDING DEBRIEF) ]"
+          accentColor={theme.statusColor}
+          onPress={() => {
+            if (!pendingDebrief) {
+              setDebugReport(
+                'No pending debrief.\nFinish a run or launch a sandbox debrief, then print theater.',
+              );
+              return;
+            }
+            const theater = buildDebriefProgressionTheater({
+              account,
+              debrief: pendingDebrief,
+              world: {
+                persisted,
+                sectors,
+                selectedSectorId: persisted.selectedSectorId,
+              },
+              contractSucceeded: pendingDebrief.contractResult.status === 'SUCCESS',
+              sponsorId: pendingDebrief.contractResult.sponsorId ?? null,
+              reputationAwarded:
+                pendingDebrief.contractResult.reputationAwarded
+                + pendingDebrief.contractResult.bonusReputationAwarded,
+            });
+            setDebugReport(formatDebriefProgressionTheaterReport(theater));
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ PIN FIRST SUGGESTED GOAL ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            if (!pendingDebrief) {
+              setDebugReport('No pending debrief — cannot build pin suggestions.');
+              return;
+            }
+            const theater = buildDebriefProgressionTheater({
+              account,
+              debrief: pendingDebrief,
+              world: {
+                persisted,
+                sectors,
+                selectedSectorId: persisted.selectedSectorId,
+              },
+            });
+            const goal = theater.pinSuggestions[0];
+            if (!goal) {
+              setDebugReport(
+                `${formatDebriefProgressionTheaterReport(theater)}\n\nNo pin suggestions available.`,
+              );
+              return;
+            }
+            const result = pinProgressionGoalId(goal.id);
+            setDebugReport(
+              `${result.logLine}\n\n${formatDebriefProgressionTheaterReport(
+                buildDebriefProgressionTheater({
+                  account,
+                  debrief: pendingDebrief,
+                  world: {
+                    persisted,
+                    sectors,
+                    selectedSectorId: persisted.selectedSectorId,
+                  },
+                }),
+              )}`,
+            );
+          }}
+        />
+      </View>
+
+      <HubSectionHeader title="PROGRESSION SPINE // PHASE 1I" color={theme.mutedColor} />
+      <View style={styles.grid}>
+        <SandboxLaunchButton
+          label="[ PRINT FAILURE RECOVERY ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(logFailureRecoveryReport())}
+        />
+        <SandboxLaunchButton
+          label="[ SET ABYSSAL FAILS = 2 (BOOST) ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            activateSectorAccessMandate('THE_ABYSSAL_SINK');
+            setDebugReport(debugSetRouteIntelFailCountForSector('THE_ABYSSAL_SINK', 2));
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ SET ABYSSAL FAILS = 3 (GUARANTEE) ]"
+          accentColor={theme.primaryColor}
+          onPress={() => {
+            activateSectorAccessMandate('THE_ABYSSAL_SINK');
+            setDebugReport(debugSetRouteIntelFailCountForSector('THE_ABYSSAL_SINK', 3));
+          }}
+        />
+        <SandboxLaunchButton
+          label="[ RESET ABYSSAL FAILS = 0 ]"
+          accentColor={theme.mutedColor}
+          onPress={() => {
+            setDebugReport(debugSetRouteIntelFailCountForSector('THE_ABYSSAL_SINK', 0));
+          }}
+        />
+      </View>
+
+      <HubSectionHeader title="PROGRESSION SPINE // PHASE 1J" color={theme.mutedColor} />
+      <View style={styles.grid}>
+        <SandboxLaunchButton
+          label="[ SIMULATE 100 RUNS ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(simulateProgressionEconomyRuns(100))}
+        />
+        <SandboxLaunchButton
+          label="[ SIMULATE 40 RUNS ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(simulateProgressionEconomyRuns(40))}
+        />
+        <SandboxLaunchButton
+          label="[ PACING SCORECARD ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(logProgressionPacingScorecard(100))}
+        />
+        <SandboxLaunchButton
+          label="[ RECIPE / SOFT-LOCK AUDIT ]"
+          accentColor={theme.primaryColor}
+          onPress={() => setDebugReport(logProgressionEconomyAudit())}
+        />
+        <SandboxLaunchButton
+          label="[ PER-RUN XP / REP PREVIEW ]"
+          accentColor={theme.mutedColor}
+          onPress={() => setDebugReport(logProgressionPerRunPreview())}
         />
       </View>
 

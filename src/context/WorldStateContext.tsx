@@ -93,6 +93,8 @@ import {
 } from '../data/operationProgressProvider';
 import { DEFAULT_OPERATION_PROGRESS_REQUIRED } from '../data/worldStateHelpers';
 import { migrateWorldStateSectorKeys, normalizeSectorId } from '../data/sectorBiomeBridge';
+import { normalizeBreachGradeId } from '../data/breachGradeEngine';
+import type { BreachGradeId } from '../types/progression';
 import type {
   GeneratedContract,
   SelectedContractState,
@@ -135,6 +137,7 @@ interface WorldStateContextType {
   setPendingDebrief: (payload: OperationDebriefPayload | null) => void;
   clearPendingDebrief: () => void;
   setSelectedSectorId: (sectorId: SectorId) => void;
+  setSelectedBreachGrade: (grade: BreachGradeId) => void;
   selectContract: (contract: GeneratedContract) => void;
   selectIndependentContract: () => void;
   abandonSelectedContract: () => void;
@@ -216,6 +219,10 @@ function mergePersistedState(parsed: Partial<WorldStatePersistedState> & { selec
     ...defaults,
     ...parsed,
     selectedSectorId: normalizeSectorId(parsed.selectedSectorId ?? defaults.selectedSectorId),
+    selectedBreachGrade: normalizeBreachGradeId(
+      (parsed as { selectedBreachGrade?: unknown }).selectedBreachGrade
+        ?? defaults.selectedBreachGrade,
+    ),
     contractBoard,
     deployRunIndex,
     operationProgress: { ...defaults.operationProgress, ...parsed.operationProgress },
@@ -349,6 +356,13 @@ export function WorldStateProvider({ children }: { children: React.ReactNode }) 
     setPersisted((prev) => ({
       ...prev,
       selectedSectorId: sectorId,
+    }));
+  }, []);
+
+  const setSelectedBreachGrade = useCallback((grade: BreachGradeId) => {
+    setPersisted((prev) => ({
+      ...prev,
+      selectedBreachGrade: normalizeBreachGradeId(grade),
     }));
   }, []);
 
@@ -660,6 +674,7 @@ export function WorldStateProvider({ children }: { children: React.ReactNode }) 
       setPendingDebrief,
       clearPendingDebrief,
       setSelectedSectorId,
+      setSelectedBreachGrade,
       selectContract,
       selectIndependentContract,
       abandonSelectedContract,
@@ -710,6 +725,7 @@ export function WorldStateProvider({ children }: { children: React.ReactNode }) 
       hubBlackMarketDiscountPct,
       pendingDebrief,
       setSelectedSectorId,
+      setSelectedBreachGrade,
       selectContract,
       selectIndependentContract,
       abandonSelectedContract,

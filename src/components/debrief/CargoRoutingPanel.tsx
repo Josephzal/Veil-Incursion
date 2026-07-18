@@ -281,6 +281,11 @@ export default function CargoRoutingPanel({
                 {item.contractWarning ? (
                   <Text style={[styles.warning, { color: WARNING_COLOR }]}>{item.contractWarning}</Text>
                 ) : null}
+                {hasResourceUsageTag(item.resourceId, 'ROUTE_INTEL') || hasResourceUsageTag(item.resourceId, 'SECTOR_ACCESS_INTEL') ? (
+                  <Text style={[styles.warning, { color: WARNING_COLOR }]}>
+                    SECTOR ACCESS INTEL — KEEP IN STASH // CANNOT FENCE // DISCARD REQUIRES CONFIRMATION
+                  </Text>
+                ) : null}
                 <Text style={[styles.recommended, { color: TERMINAL_GREEN }]}>
                   {`Recommended: ${formatCargoRoutingActionLabel(item.recommendedAction)}`}
                 </Text>

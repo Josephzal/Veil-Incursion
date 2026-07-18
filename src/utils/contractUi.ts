@@ -1,8 +1,10 @@
 import type { ContractExtractionKind, ContractObjectiveKind, GeneratedContract, SelectedContractState } from '../types/contract';
 import type { ContractSourceKind } from '../types/contractProcedural';
+import type { BreachGradeId } from '../types/progression';
 import type { SectorId } from '../types/worldState';
 import { SOURCE_REASON_LABELS } from '../data/contractTemplateVariants';
 import { canResourceSpawnInSector } from '../data/resourceRegistry';
+import { contractMeetsBreachGrade, formatBreachGradeLabel } from '../data/breachGradeEngine';
 
 export type ContractSectorCompatibility = 'RECOMMENDED' | 'VALID' | 'UNAVAILABLE' | 'NONE';
 
@@ -53,6 +55,16 @@ export function contractSectorWarning(
     default:
       return null;
   }
+}
+
+/** Hard-gate deploy when selected Breach Grade is below the contract minimum. */
+export function contractBreachGradeWarning(
+  selectedGrade: BreachGradeId,
+  minGrade: BreachGradeId | null | undefined,
+): string | null {
+  if (!minGrade) return null;
+  if (contractMeetsBreachGrade(selectedGrade, minGrade)) return null;
+  return `Contract requires ${formatBreachGradeLabel(minGrade, true)}+. Raise grade or abandon contract.`;
 }
 
 export function formatContractRewardSummary(contract: GeneratedContract): string {

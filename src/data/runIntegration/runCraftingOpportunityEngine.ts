@@ -10,6 +10,11 @@ import type { RunItemId } from '../../types/runItem';
 import { isRecipeOutputOwned } from '../craftingRegistry';
 import { buildWeaponDebriefSummary } from '../runDebriefWeaponEngine';
 import type { WeaponDebriefSummary } from '../../types/weapon';
+import { getAccountProgressionProfile } from '../progressionDebugEngine';
+import {
+  listForgeVisibleRecipes,
+  resolveRecipeVisibility,
+} from '../recipeVisibilityEngine';
 
 export interface CraftingOpportunityLine {
   recipeId: string;
@@ -73,6 +78,7 @@ export function buildCraftingOpportunitySummary(
   incursion?: import('../../types/game').ActiveIncursionState | null,
 ): CraftingOpportunitySummary {
   const stash = account.resourceStash;
+  const profile = getAccountProgressionProfile(account);
   const isOwned = (recipe: CraftingRecipe) => isRecipeOutputOwned(
     recipe.outputId,
     [],
@@ -85,7 +91,9 @@ export function buildCraftingOpportunitySummary(
   const forgeOnly = CRAFTING_REGISTRY.filter(
     (r) => r.kind === 'AUGMENT' || (r.kind === 'CONSUMABLE' && !runItemOutputIds.has(r.outputId)),
   );
-  const allRecipes = [...forgeOnly, ...runItemRecipes];
+  const allRecipes = [...forgeOnly, ...runItemRecipes].filter((recipe) => (
+    resolveRecipeVisibility(profile, account, recipe) === 'KNOWN'
+  ));
 
   const craftableNow = listAffordableRecipes(stash, allRecipes, isOwned).slice(0, 4).map((recipe) => {
     const isRunItem = runItemRecipes.some((r) => r.id === recipe.id);
@@ -116,6 +124,13 @@ export function buildCraftingOpportunitySummary(
     const hint = getResourceSourceHint(id);
     return `DISCOVERED: ${name} — ${hint}`;
   });
+
+  listForgeVisibleRecipes(profile, account)
+    .filter((s) => s.visibility === 'RUMORED')
+    .slice(0, 3)
+    .forEach((s) => {
+      discoveryHints.push(`RUMORED: ${s.recipe.label} — ${s.meta.rumoredPurpose}`);
+    });
 
   const weaponSummary = buildWeaponDebriefSummary(account, incursion ?? null);
   weaponSummary.lines

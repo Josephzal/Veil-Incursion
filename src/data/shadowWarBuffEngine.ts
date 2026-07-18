@@ -12,6 +12,7 @@ export function shadowWarBuffsToRunModifiers(buffs: readonly ShadowWarBuffId[]):
     rareLootBonusPct: buffs.includes('RARE_LOOT_PLUS_10') ? 10 : 0,
     blackMarketDiscountPct: buffs.includes('BLACK_MARKET_DISCOUNT_15') ? 15 : 0,
     firstTurnApBonus: buffs.includes('FIRST_TURN_AP_PLUS_1') ? 1 : 0,
+    creditBonusPct: 0,
   };
 }
 

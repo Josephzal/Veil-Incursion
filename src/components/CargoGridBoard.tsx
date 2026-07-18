@@ -62,6 +62,7 @@ import type { TerminalTheme } from '../types/theme';
 import { countCargoItemInstances } from '../data/cargoGridEngine';
 import { resolveCargoItemIcon } from '../utils/cargoItemIcon';
 import CargoDiscardConfirmOverlay from './CargoDiscardConfirmOverlay';
+import { isRouteIntelResourceId } from '../data/sectorAccessMandateEngine';
 import CargoCreditsHud from './CargoCreditsHud';
 import {
   getInteractiveButtonStyle,
@@ -1346,6 +1347,9 @@ export default function CargoGridBoard({
         itemName={pendingDiscard ? CARGO_ITEM_CATALOG[pendingDiscard.itemId].name : ''}
         theme={theme}
         accentColor={accentColor}
+        routeIntelWarning={Boolean(
+          pendingDiscard && isRouteIntelResourceId(pendingDiscard.itemId),
+        )}
         onConfirm={() => {
           if (!pendingDiscard || !onDiscardItem) return;
           onDiscardItem(pendingDiscard.instanceId);

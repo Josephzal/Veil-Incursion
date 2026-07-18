@@ -38,6 +38,8 @@ import {
   SECTOR_WORLD_TEMPLATES,
 } from './sectorWorldCatalog';
 import { sectorIdToVeilBiome } from './sectorBiomeBridge';
+import { getBreachGradeTuning, normalizeBreachGradeId } from './breachGradeEngine';
+import type { BreachGradeId } from '../types/progression';
 import { buildScannerSignalBiasFromAnchor } from './anchorRegistry';
 import {
   ensureAllSectorAnchorStates,
@@ -100,7 +102,8 @@ export const EMPLOYER_PACKAGES: Record<CabalEmployerId, EmployerPackage> = {
 export function createDefaultWorldState(): WorldStatePersistedState {
   const deployRunIndex = 0;
   const base: WorldStatePersistedState = {
-    selectedSectorId: 'THE_SLAG_WORKS',
+    selectedSectorId: 'THE_NULL_ZONE',
+    selectedBreachGrade: 'I',
     contractBoard: {
       ...createDefaultContractBoard(deployRunIndex),
       contracts: generateContractBoard(deployRunIndex),
@@ -247,6 +250,7 @@ export function buildAllSectorStates(
 export function buildRunGenerationContext(
   persisted: WorldStatePersistedState,
   operationProgress: Record<string, number>,
+  options?: { breachGrade?: BreachGradeId },
 ): RunGenerationContext {
   const sectorState = buildSectorState(
     persisted.selectedSectorId,
@@ -260,6 +264,10 @@ export function buildRunGenerationContext(
     persisted.deployRunIndex,
   );
   const anchor = sectorState.activeAnchor;
+  const breachGrade = normalizeBreachGradeId(
+    options?.breachGrade ?? persisted.selectedBreachGrade ?? 'I',
+  );
+  const gradeTuning = getBreachGradeTuning(breachGrade);
 
   const memory = {
     ...createEmptyProceduralWorldMemory(),
@@ -289,9 +297,10 @@ export function buildRunGenerationContext(
   const runWorldBrief = directed.brief;
 
   const rewardModifiers = {
-    creditBonusPct: employerPackage?.creditBonusPct ?? 0,
+    creditBonusPct: (employerPackage?.creditBonusPct ?? 0) + gradeTuning.creditBonusPct,
     rareLootBonusPct: (employerPackage?.rareLootBonusPct ?? 0)
-      + Math.round(sectorState.rewardLevel * 2),
+      + Math.round(sectorState.rewardLevel * 2)
+      + gradeTuning.rareLootBonusPct,
     blackMarketDiscountPct: employerPackage?.blackMarketDiscountPct ?? 0,
     maxHpBonusPct: employerPackage?.maxHpBonusPct ?? 0,
   };
@@ -318,9 +327,11 @@ export function buildRunGenerationContext(
 
   const encounterBias = {
     combatWeightDelta: (anchor?.realityRules.combatBias ?? 0)
-      + (runWorldBrief.threatProfile.unstablePressure > 50 ? 0.03 : 0),
+      + (runWorldBrief.threatProfile.unstablePressure > 50 ? 0.03 : 0)
+      + gradeTuning.combatWeightDelta,
     eliteWeightDelta: (anchor?.realityRules.eliteBias ?? 0)
-      + (runWorldBrief.encounterBias.eliteWeight > 1 ? 0.05 : 0),
+      + (runWorldBrief.encounterBias.eliteWeight > 1 ? 0.05 : 0)
+      + gradeTuning.eliteWeightDelta,
     anomalyWeightDelta: anchor?.realityRules.anomalyBias ?? 0,
     echoWeightDelta: (anchor?.realityRules.echoBias ?? 0)
       + (runWorldBrief.threatProfile.echoPressure > 50 ? 0.05 : 0),
@@ -336,6 +347,7 @@ export function buildRunGenerationContext(
     encounterBias,
     scannerSignalBias,
     runWorldBrief,
+    breachGrade,
   };
 }
 
@@ -351,6 +363,7 @@ export function runGenerationContextToModifiers(
     rareLootBonusPct: context.rewardModifiers.rareLootBonusPct,
     blackMarketDiscountPct: context.rewardModifiers.blackMarketDiscountPct,
     firstTurnApBonus: pkg?.firstTurnApBonus ?? 0,
+    creditBonusPct: context.rewardModifiers.creditBonusPct,
   };
 }
 

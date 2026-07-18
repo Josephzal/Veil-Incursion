@@ -179,6 +179,11 @@ export interface PlayerAccount {
   keepsakeDeployment: import('../types/expeditionKeepsake').KeepsakeDeployment;
   /** Career last-N run balance summaries for the balance dashboard (Phase B). */
   careerBalanceHistory: import('../data/balance/balanceDashboardEngine').CareerBalanceHistory;
+  /**
+   * Progression Spine — Runner Clearance (1B live XP), sector access, breach grades,
+   * class/cabal tracks, unlock registry grants, pinned goals, event log.
+   */
+  progressionProfile: import('./progression').ProgressionProfile;
 }
 
 export interface CombatNodeState {
@@ -439,6 +444,8 @@ export interface ActiveIncursionState {
   alignedFaction: FactionType | null;
   /** Veil Front sector biome — locked for entire run (Phase 2+ spawn authority). */
   runVeilBiome: import('./encounterSpawn').VeilBiome | null;
+  /** Breach Grade locked at descent (Phase 1D). */
+  breachGrade: import('./progression').BreachGradeId;
   /** Active macro biome — locked for the current district after first combat engage. */
   currentMacroBiomeFamily: import('./narrativeProcedural').MacroBiomeFamily | null;
   /** Previous district's locked biome (telemetry only). */
@@ -631,6 +638,7 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
     envoyBoons: [],
     alignedFaction: null,
     runVeilBiome: null,
+    breachGrade: 'I',
     currentMacroBiomeFamily: null,
     lastMacroBiomeFamily: null,
     pendingDistrictBiomeOffers: null,
@@ -676,6 +684,7 @@ export function createDefaultActiveIncursionState(): ActiveIncursionState {
       rareLootBonusPct: 0,
       blackMarketDiscountPct: 0,
       firstTurnApBonus: 0,
+      creditBonusPct: 0,
     },
     runGenerationContext: null,
     runWorldBrief: null,

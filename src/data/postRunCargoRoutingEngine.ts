@@ -35,6 +35,7 @@ import {
 } from './bribeOfferEngine';
 import { creditFenceSale } from './hubSafehouseEngine';
 import { resolveContributionRules } from './operationRulesEngine';
+import { isRouteIntelResource } from './sectorAccessMandateEngine';
 import {
   ALL_RESOURCE_ITEM_IDS,
   canResourceBeSoldToFence,
@@ -166,7 +167,8 @@ function buildValidActions(
   const validActions: CargoRoutingAction[] = ['KEEP_STASH'];
   if (canDeliver) validActions.push('DELIVER_SPONSOR');
   if (canDeliverRival) validActions.push('DELIVER_RIVAL_SPONSOR');
-  if (canFence) validActions.push('SELL_FENCE');
+  // Phase 1I — route intel must never be fenceable (anti-frustration).
+  if (canFence && !isRouteIntelResource(resourceId)) validActions.push('SELL_FENCE');
   if (canContribute) validActions.push('CONTRIBUTE_OPERATION');
   if (canOpenAtHub) {
     validActions.push('OPEN_SEALED');
@@ -190,6 +192,9 @@ export function recommendCargoRoutingAction(
   ctx: CargoRoutingContext,
   validActions: CargoRoutingAction[],
 ): CargoRoutingAction {
+  if (isRouteIntelResource(resourceId) && validActions.includes('KEEP_STASH')) {
+    return 'KEEP_STASH';
+  }
   if (validActions.includes('DELIVER_SPONSOR') && isContractTargetResource(resourceId, ctx.contract)) {
     return 'DELIVER_SPONSOR';
   }
@@ -448,6 +453,16 @@ export function validateCargoRoutingDecisions(
     }
     if (!item.validActions.includes(decision.action)) {
       issues.push(`${item.resourceId} cannot be routed via ${decision.action}.`);
+    }
+    if (isRouteIntelResource(decision.resourceId) && decision.action === 'SELL_FENCE') {
+      issues.push(
+        `${getResourceDisplayName(decision.resourceId)} is sector access route intel — cannot fence.`,
+      );
+    }
+    if (isRouteIntelResource(decision.resourceId) && decision.action !== 'KEEP_STASH') {
+      issues.push(
+        `${getResourceDisplayName(decision.resourceId)} is sector access route intel — keep in stash.`,
+      );
     }
     const openAction = decision.action === 'OPEN_AT_HUB' || decision.action === 'OPEN_SEALED';
     if (openAction && !item.openAtHubEnabled) {

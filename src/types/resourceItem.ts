@@ -22,7 +22,12 @@ export type ResourceItemId =
   | 'resonant-filament'
   | 'anchor-marrow'
   | 'breach-thread'
-  | 'blacksite-specimen-jar';
+  | 'blacksite-specimen-jar'
+  /** Progression Spine Phase 1C — sector access route intel */
+  | 'overgrowth-coordinate'
+  | 'false-road-signal'
+  | 'transit-cipher'
+  | 'blackline-credentials';
 
 export type ResourceItemType = 'RESOURCE';
 
@@ -37,6 +42,7 @@ export type ResourcePrimaryRole =
   | 'CRAFTING_MATERIAL'
   | 'SCANNER_INTEL'
   | 'ECONOMY_INTEL'
+  | 'ROUTE_INTEL'
   | 'FENCE_VALUE'
   | 'APEX_CARGO'
   | 'VOLATILE_CARGO'
@@ -98,7 +104,9 @@ export type ResourceUsageTag =
   | 'SLAG_WORKS_RESOURCE'
   | 'BLACKLINE_TERMINUS_RESOURCE'
   | 'SEALED_CARGO'
-  | 'BLACKSITE_CARGO';
+  | 'BLACKSITE_CARGO'
+  | 'ROUTE_INTEL'
+  | 'SECTOR_ACCESS_INTEL';
 
 export interface ResourceItemDefinition {
   id: ResourceItemId;

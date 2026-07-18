@@ -153,6 +153,8 @@ export interface OperationDebriefPayload {
   worldBriefSummary: RunWorldBriefDebriefSummary | null;
   /** Procedural aftermath v1 — inputs captured at debrief build time. */
   aftermathInput: RunAftermathInput | null;
+  /** Breach Grade frozen for this run (Phase 1D). */
+  breachGrade: import('../types/progression').BreachGradeId;
 }
 
 export function computeRunOperationContribution(
@@ -477,5 +479,8 @@ export function buildOperationDebriefPayload(
     completionEffectSummary: context.activeOperation.completionEffectSummary,
     worldBriefSummary,
     aftermathInput,
+    breachGrade: incursion.breachGrade
+      ?? context.breachGrade
+      ?? 'I',
   };
 }

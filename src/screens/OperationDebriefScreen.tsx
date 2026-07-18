@@ -38,6 +38,8 @@ import { formatActiveContractCargoDeliveryHints } from '../data/cargoRoutingInte
 import { outcomeKindLabel } from '../data/bribeOfferEngine';
 import { formatCareerCargoRoutingSummary } from '../data/postRunCargoRoutingRunState';
 import { formatBalanceDashboard } from '../data/balance/balanceDashboardEngine';
+import { normalizeBreachGradeId } from '../data/breachGradeEngine';
+import type { SectorId } from '../types/worldState';
 import { formatRunBalanceTelemetryReport } from '../data/runIntegration/runBalanceTelemetryEngine';
 import { operationProgressPercent } from '../data/worldStateHelpers';
 import { formatContractSourceReasonLabel, formatExtractionKindLabel, sponsorDisplayName } from '../utils/contractUi';
@@ -50,8 +52,13 @@ import {
   filterDebriefCompletionEffectLines,
 } from '../utils/operationDebriefUi';
 import { formatRunOutcomeDetailLabel } from '../data/runIntegration/runOutcomeDetailEngine';
-import { buildNextActionSuggestions } from '../data/runIntegration/runNextActionEngine';
-import { formatCraftingOpportunityLines } from '../data/runIntegration/runCraftingOpportunityEngine';
+import {
+  buildDebriefProgressionTheater,
+  type DebriefTheaterCard,
+} from '../data/debriefProgressionTheaterEngine';
+import { getAccountProgressionProfile } from '../data/progressionDebugEngine';
+import { maxPinnedGoalSlots } from '../data/pinnedGoalEngine';
+import { SELECT_ACCENT } from '../constants/dossierSurface';
 
 const TERMINAL_ACCENT = '#00ff33';
 const FAILURE_ACCENT = '#ef4444';
@@ -91,7 +98,7 @@ function contractStatusColor(status: ContractResult['status']): string {
 export default function OperationDebriefScreen(): React.JSX.Element | null {
   const { theme } = useTerminal();
   const { pendingDebrief, setPendingDebrief, clearPendingDebrief, tickAfterRunComplete, applyOperationContribution, applyPostRunAftermath, persisted, sectors } = useWorldState();
-  const { appendHubLog, applyPostRunCargoRouting, applyBetrayalConsequences, grantContractRewards, account, addCredits, recordCareerBalanceTelemetry } = usePlayerAccount();
+  const { appendHubLog, applyPostRunCargoRouting, applyBetrayalConsequences, grantContractRewards, account, addCredits, recordCareerBalanceTelemetry, applyRunnerClearanceFromRun, applySectorAccessFromRun, applyBreachGradeClearFromRun, syncPinnedGoalsFromRun, applyClassRankFromRun, applyCabalRepFromRun, syncRecipeVisibilityFromStash, pinProgressionGoalId } = usePlayerAccount();
   const { goToHub } = useGameFlow();
   const immersivePadding = useImmersiveScreenPadding();
 
@@ -198,16 +205,20 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
     depthIdentitySummary,
     encounterCompositionSummary,
     balanceTelemetry,
-    craftingOpportunities,
     operationBonusLines,
     completionEffectSummary,
     worldBriefSummary,
     aftermathInput,
   } = pendingDebrief;
+  const breachGrade = normalizeBreachGradeId(pendingDebrief.breachGrade);
 
   const aftermathPreviewLines = worldBriefSummary?.aftermathCreated ?? [];
 
   const recordedBalanceRunRef = useRef<string | null>(null);
+  const clearanceXpAppliedRef = useRef(false);
+  useEffect(() => {
+    clearanceXpAppliedRef.current = false;
+  }, [pendingDebrief]);
   useEffect(() => {
     if (!balanceTelemetry) return;
     const key = `${balanceTelemetry.extractionType}:${balanceTelemetry.nodesCleared}:${balanceTelemetry.sectorId ?? ''}:${balanceTelemetry.timeAliveMs ?? 0}`;
@@ -216,14 +227,62 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
     recordCareerBalanceTelemetry(balanceTelemetry);
   }, [balanceTelemetry, recordCareerBalanceTelemetry]);
 
-  const nextActions = useMemo(
-    () => buildNextActionSuggestions(pendingDebrief, account, {
-      persisted,
-      sectors,
-      selectedSectorId: persisted.selectedSectorId,
-    }),
-    [pendingDebrief, account, persisted, sectors],
-  );
+  const progressionTheater = useMemo(() => {
+    if (!pendingDebrief) {
+      return null;
+    }
+    const display = resolvedContractResult ?? pendingDebrief.contractResult;
+    return buildDebriefProgressionTheater({
+      account,
+      debrief: pendingDebrief,
+      world: {
+        persisted,
+        sectors,
+        selectedSectorId: persisted.selectedSectorId,
+      },
+      contractSucceeded: display.status === 'SUCCESS',
+      sponsorId: display.sponsorId ?? null,
+      reputationAwarded:
+        display.status === 'SUCCESS'
+          ? display.reputationAwarded + display.bonusReputationAwarded
+          : 0,
+    });
+  }, [account, pendingDebrief, persisted, resolvedContractResult, sectors]);
+
+  const theaterCardColor = (card: DebriefTheaterCard): string => {
+    switch (card.kind) {
+      case 'CELEBRATE':
+        return TERMINAL_ACCENT;
+      case 'PIN_GOAL':
+        return SELECT_ACCENT;
+      case 'HINT':
+        return theme.mutedColor;
+      default:
+        return theme.textColor;
+    }
+  };
+
+  const [pinnedThisDebrief, setPinnedThisDebrief] = useState<string[]>([]);
+  useEffect(() => {
+    setPinnedThisDebrief([]);
+  }, [pendingDebrief]);
+
+  const handlePinGoalFromDebrief = (goalDefId: string) => {
+    const result = pinProgressionGoalId(goalDefId);
+    appendHubLog(result.logLine);
+    if (result.ok) {
+      setPinnedThisDebrief((prev) => (prev.includes(goalDefId) ? prev : [...prev, goalDefId]));
+    }
+  };
+
+  const livePinSlots = useMemo(() => {
+    const profile = getAccountProgressionProfile(account);
+    return {
+      used: profile.pinnedGoals.length,
+      max: maxPinnedGoalSlots(profile),
+      pinnedIds: new Set(profile.pinnedGoals.map((g) => g.id)),
+    };
+  }, [account]);
 
   const displayContractResult = resolvedContractResult ?? contractResult;
   const isFailure = runOutcome === 'FAILED';
@@ -452,6 +511,69 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
     if (isFailure || deferredWorldTick) {
       tickAfterRunComplete();
     }
+
+    const depthReached = Math.max(
+      1,
+      pendingDebrief.balanceTelemetry?.maxDepthReached
+        ?? pendingDebrief.routingState?.contractProgress.highestDepthReached
+        ?? 1,
+    );
+    if (!clearanceXpAppliedRef.current) {
+      clearanceXpAppliedRef.current = true;
+      const clearanceResult = applyRunnerClearanceFromRun({
+        runOutcome,
+        extractionKind,
+        depthReached,
+        contractSucceeded: displayContractResult.status === 'SUCCESS',
+        breachGrade,
+      });
+      if (clearanceResult.ranksGained > 0) {
+        appendHubLog(
+          `>> RUNNER CLEARANCE — NOW RANK ${clearanceResult.newRank}`,
+        );
+      }
+
+      applySectorAccessFromRun({
+        extractedSuccessfully: runOutcome === 'EXTRACTED',
+        extracted: runResourceLedger?.extracted ?? {},
+        lostOnDeath: runResourceLedger?.lostOnDeath ?? {},
+        runSectorId: (balanceTelemetry?.sectorId as SectorId | null | undefined) ?? null,
+      });
+
+      applyBreachGradeClearFromRun({
+        extractedSuccessfully: runOutcome === 'EXTRACTED',
+        sectorId: (balanceTelemetry?.sectorId as SectorId | null | undefined) ?? null,
+        breachGrade,
+      });
+
+      applyClassRankFromRun({
+        runOutcome,
+        depthReached,
+        contractSucceeded: displayContractResult.status === 'SUCCESS',
+        breachGrade,
+      });
+
+      if (
+        displayContractResult.status === 'SUCCESS'
+        && displayContractResult.sponsorId
+      ) {
+        applyCabalRepFromRun({
+          contractSucceeded: true,
+          reputationAwarded:
+            displayContractResult.reputationAwarded + displayContractResult.bonusReputationAwarded,
+          sponsorId: displayContractResult.sponsorId,
+          breachGrade,
+        });
+      }
+
+      syncRecipeVisibilityFromStash();
+      syncPinnedGoalsFromRun();
+
+      progressionTheater?.celebrationTitles.forEach((title) => {
+        appendHubLog(`>> PROGRESSION — ${title.toUpperCase()}`);
+      });
+    }
+
     clearPendingDebrief();
     goToHub();
   };
@@ -462,6 +584,8 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
     : isFinalStep
       ? '[ RETURN TO OPERATIONAL BRIEFING ]'
       : `[ CONTINUE — ${stepLabel} ]`;
+  // Phase 1H always-exit: REWARDS (and all non-ROUTING steps) never block Return.
+  // Only incomplete cargo routing may disable the footer.
   const footerDisabled = currentStep === 'ROUTING' && routingState?.requiresRouting && !canConfirmRouting;
 
   const contractForDeliveryHints = routingState?.activeContract ?? activeContract;
@@ -1070,6 +1194,70 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
             {currentStep === 'REWARDS' ? (
               <>
                 <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>FINAL REWARDS</Text>
+                <Text style={[styles.stat, { color: theme.mutedColor, fontSize: 9 }]}>
+                  PROGRESSION NEVER BLOCKS EXIT — RETURN ANYTIME
+                </Text>
+                {progressionTheater ? (
+                  <>
+                    <View style={styles.sectionGap} />
+                    <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>
+                      {`PROGRESSION THEATER // PINS ${livePinSlots.used}/${livePinSlots.max}`}
+                    </Text>
+                    {progressionTheater.sections.map((section) => (
+                      <View key={section.id} style={{ marginTop: 8 }}>
+                        <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>
+                          {section.label.toUpperCase()}
+                        </Text>
+                        {section.cards.map((card) => {
+                          if (
+                            card.kind === 'PIN_GOAL'
+                            && card.goalDefId
+                            && (livePinSlots.pinnedIds.has(card.goalDefId)
+                              || pinnedThisDebrief.includes(card.goalDefId))
+                          ) {
+                            return null;
+                          }
+                          const slotsFull = livePinSlots.used >= livePinSlots.max;
+                          return (
+                            <View key={card.id} style={{ marginBottom: 8 }}>
+                              <Text style={[styles.statAccent, { color: theaterCardColor(card) }]}>
+                                {`${card.kind === 'CELEBRATE' ? '★ ' : ''}${card.title.toUpperCase()}`}
+                              </Text>
+                              {card.lines.map((line, lineIndex) => (
+                                <Text
+                                  key={`${card.id}-line-${lineIndex}`}
+                                  style={[styles.stat, { color: theme.mutedColor }]}
+                                >
+                                  {line.toUpperCase()}
+                                </Text>
+                              ))}
+                              {card.kind === 'PIN_GOAL' && card.goalDefId ? (
+                                <HapticPressable
+                                  disabled={slotsFull}
+                                  onPress={() => handlePinGoalFromDebrief(card.goalDefId!)}
+                                  style={({ pressed }) => [
+                                    styles.pinButton,
+                                    {
+                                      borderColor: SELECT_ACCENT,
+                                      opacity: slotsFull ? 0.45 : pressed ? 0.7 : 1,
+                                    },
+                                  ]}
+                                >
+                                  <Text style={[styles.pinButtonLabel, { color: SELECT_ACCENT }]}>
+                                    {slotsFull
+                                      ? '[ SLOTS FULL — UNPIN IN VEIL FRONT ]'
+                                      : '[ PIN THIS GOAL ]'}
+                                  </Text>
+                                </HapticPressable>
+                              ) : null}
+                            </View>
+                          );
+                        })}
+                      </View>
+                    ))}
+                  </>
+                ) : null}
+                <View style={styles.sectionGap} />
                 {routingState ? (
                   <Text style={[styles.stat, { color: theme.textColor }]}>
                     {`AUTO-STASHED: ${formatAutoStashedSummary(routingState.autoStashed).toUpperCase()}`}
@@ -1178,28 +1366,6 @@ export default function OperationDebriefScreen(): React.JSX.Element | null {
                           </Text>
                         ))}
                       </View>
-                    ))}
-                  </>
-                ) : null}
-                {craftingOpportunities.newlyCraftable.length > 0 || craftingOpportunities.nearlyCraftable.length > 0 ? (
-                  <>
-                    <View style={styles.sectionGap} />
-                    <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>CRAFTING OPPORTUNITIES</Text>
-                    {formatCraftingOpportunityLines(craftingOpportunities).map((line) => (
-                      <Text key={line} style={[styles.stat, { color: theme.textColor }]}>
-                        {line.toUpperCase()}
-                      </Text>
-                    ))}
-                  </>
-                ) : null}
-                {nextActions.length > 0 ? (
-                  <>
-                    <View style={styles.sectionGap} />
-                    <Text style={[styles.sectionLabel, { color: theme.mutedColor }]}>NEXT STEPS</Text>
-                    {nextActions.map((line) => (
-                      <Text key={line} style={[styles.stat, { color: TERMINAL_ACCENT }]}>
-                        {line.toUpperCase()}
-                      </Text>
                     ))}
                   </>
                 ) : null}
@@ -1314,6 +1480,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     marginTop: 4,
+  },
+  pinButton: {
+    borderWidth: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    marginTop: 6,
+    alignSelf: 'flex-start',
+  },
+  pinButtonLabel: {
+    fontFamily: 'monospace',
+    fontSize: 9,
+    letterSpacing: 1,
+    fontWeight: '700',
   },
   button: {
     borderWidth: 2,
