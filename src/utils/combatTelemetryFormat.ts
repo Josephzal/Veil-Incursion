@@ -231,7 +231,7 @@ export function resolveEnemyTurnPhase(
   return 'ranged_attack';
 }
 
-export type StatusFloatTone = 'fortify' | 'evade' | 'charge' | 'neutral';
+export type StatusFloatTone = 'fortify' | 'evade' | 'charge' | 'neutral' | 'armor' | 'ward';
 
 const BUFF_FLOAT_LABELS: Partial<Record<EnemyIntent, string>> = {
   FORTIFY: 'Fortify',

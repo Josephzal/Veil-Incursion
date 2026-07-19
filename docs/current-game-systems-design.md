@@ -1,6 +1,6 @@
 # Veil Incursion Current Systems Design
 
-Last updated: 2026-07-17 (Economy Spine Phase 2A–2M + polish)
+Last updated: 2026-07-19 (Combat Telegraph Language Phase 1–2 + polish)
 
 This document captures the current implemented design surface for Veil Incursion: player-facing hub systems, run progression, economy, cargo/items, enemies, combat mechanics, and known partial implementations. It is intended as a working reference for design iteration and balancing, not a final player-facing manual.
 
@@ -1849,6 +1849,49 @@ Post-combat boon variants:
 
 ## Combat Systems
 
+### Combat Telegraph Language (Phase 1)
+
+Arena portraits are the primary combat-truth surface for enemy intent. Side intel / run log remain secondary confirmation.
+
+| Piece | Role |
+|-------|------|
+| **`resolveArenaIntentGlyph`** | Maps Intent 2.0 catalog type → compact glyph family (ATTACK / HEAVY / LOCK_ON / CHANNEL / GUARD / …) |
+| **`CombatArenaIntentGlyph`** | Badge above each arena hostile: ASCII symbol + short label + optional countdown |
+| **Countdown** | Telegraph wind-ups show `T-N`; Charge / Heavy / Detonate show `CH-N` |
+| **Severity accent** | Crimson volume for HIGH/CRITICAL; steel/cool for calmer intents (no yellow-dominant danger) |
+| **Sensory jam** | When readout is jammed (`STATIC // JAMMED`), arena shows `? JAM` instead of true intent |
+
+Source: `src/data/combatArenaTelegraphEngine.ts`. Mounted from `CombatEnemyUnit` (arena variant only). Does not replace Intent 2.0 catalog or side intel — it surfaces the same data on the portrait stack.
+
+### Combat Telegraph Language (Phase 2)
+
+Persistent defenses are materials with opposite silhouettes — never generic shield chips.
+
+| Piece | Role |
+|-------|------|
+| **`resolveArenaDefenseState`** | KA / OW / Fractured profiles (`combatArenaDefenseTelegraphEngine`) |
+| **Plate pips** | Angular steel chunks under HP (`KA` lane) when `kineticArmor > 0` |
+| **Diamond glyphs** | Rotated ritual diamonds under HP (`OW` lane) when `occultWards > 0` |
+| **Body silhouette** | KA = angular brackets (+ band when alone); OW = dashed violet glyph ring (inset when dual); Fractured = crack ticks |
+| **Hit flash** | Material-specific: steel pulse on KA, violet flare on OW |
+| **Break float** | Full strip → arena `ARMOR BROKEN` / `WARD SHATTERED` (auto-clears after readout) |
+| **Chip copy** | Intel KA/OW descriptions teach **% mitigation**, not flat absorb |
+
+### Combat Telegraph Language (Polish pass)
+
+Tighten Phase 1–2 readability without shipping target previews / counters yet.
+
+| Polish | Change |
+|--------|--------|
+| **ASCII glyphs** | Terminal-safe symbols (no emoji) for consistent cross-platform render |
+| **Countdown grammar** | Compact `CH-N` / `T-N` so dense 2×2 slots don’t clip |
+| **Layout** | Intent badge owns the headroom; alpha nameplate yields while glyph is up |
+| **Dual defense** | When KA+OW both present, OW ring insets so steel brackets stay readable |
+| **Break lane** | Shared `pushDefenseBreakFloat` + timed clear so floats don’t stick forever |
+| **Audit** | `combatTelegraphAuditEngine` + DevTest `[ COMBAT TELEGRAPH AUDIT ]` |
+
+**Later phases (not shipped):** target preview corridors, animation state stubs, counter-hint chips.
+
 ### Core Combat Model
 
 Combat uses:
@@ -2276,6 +2319,9 @@ Routing (`tensionMechanicRouting.ts`): stealth/patrol/militarized → Shadowline
 - **Combat Refactor Phase 3 (complete):** Class identity loops polished — Aegis Riposte Ready after Perfect Parry; Hex Shot ammo profiles + chamber bonus on reload; Envoy lightweight catalysts (NULL/ECHO/BLOOD/ASH) on Veil Rot spells; class loop telemetry; Class Identity / Class Combat Dev Test reports.
 - **Combat Refactor Phase 4 (complete):** EncounterObjective layer + v1 templates (Caller / Ritual / Survive / Hold Extraction / Echo / Anchor + soft Protect Cargo); Dirty Extraction wired to SURVIVE/HOLD; light combat timeline previews; objective telemetry + DevTest reports.
 - **Combat Refactor Phase 5 (complete):** Combat Director (pressure / density / fairness / safety / reward-risk); juice feedback hooks + hit-stop defaults; start-of-turn danger pulse; director + pressure + feedback reports; DevTest sims; prep-time soft caps without new combat mechanics.
+- **Combat Telegraph Language Phase 1 (complete):** Arena intent glyphs from Intent 2.0 (`combatArenaTelegraphEngine` + `CombatArenaIntentGlyph`); T-N / CH-N countdown on portraits; sensory-jam fallback; design surface docs.
+- **Combat Telegraph Language Phase 2 (complete):** KA steel plates vs OW violet glyph rings (`combatArenaDefenseTelegraphEngine`); arena pips + silhouettes; % mitigation chip copy; ARMOR BROKEN / WARD SHATTERED floats.
+- **Combat Telegraph Language polish (complete):** ASCII glyphs; dual-defense inset; material hit flashes; break-float clear; layout collision fix; `combatTelegraphAuditEngine` + DevTest `[ COMBAT TELEGRAPH AUDIT ]`. Later: target previews, animation states, counter hints.
 - **Narrative tension naming + routing cleanup (Phase 1 — Cipher Rite prep):** ScavengeBar deprecated from normal generation; ConcealSlider / SigilTrace / no-mechanic remapping; unknown tension IDs no longer silent-succeed; Dead-Man’s Switch combat graft unchanged.
 - **Narrative Cipher Rite (Phase 2 — complete):** `Mechanic_CipherRite` deduction hacking minigame (`cipherRiteEngine` + `CipherRite`); tech/terminal/locked-cache routing; DevTest force; wrong guesses corrupt UI only; no combat / Hex Shot changes.
 - **Narrative Scanner Sweep + Ritual Echo (Phase 3 — complete):** `Mechanic_ConcealSlider` → Scanner Sweep radar stealth; `Mechanic_SigilTrace` → Ritual Echo with forbidden beats; IDs preserved; DevTest labels updated; no combat changes.

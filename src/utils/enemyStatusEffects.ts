@@ -5,6 +5,10 @@ import EnragedIcon from '../../assets/images/enemy status images/enraged.png';
 import ConcussedIcon from '../../assets/images/enemy status images/concussed.png';
 import DoomedIcon from '../../assets/images/enemy status images/doomed.png';
 import type { EnemyIntent } from '../types/run';
+import {
+  formatKineticArmorChipDescription,
+  formatOccultWardChipDescription,
+} from '../data/combatArenaDefenseTelegraphEngine';
 
 export type EnemyStatusEffectKey = 'fortified' | 'evading' | 'enraged' | 'concussed' | 'doomed';
 
@@ -134,7 +138,7 @@ export function resolveIntelStatusChips(unit: EnemyActiveStatusSource): IntelSta
       id: `ka-${ka}`,
       abbr: ka > 1 ? `K${ka}` : 'KA',
       label: 'Kinetic Armor',
-      description: `Absorbs ${ka} stack${ka === 1 ? '' : 's'} of kinetic (physical) damage before HP is touched.`,
+      description: formatKineticArmorChipDescription(ka),
     });
   }
 
@@ -144,7 +148,7 @@ export function resolveIntelStatusChips(unit: EnemyActiveStatusSource): IntelSta
       id: `ow-${ow}`,
       abbr: ow > 1 ? `O${ow}` : 'OW',
       label: 'Occult Wards',
-      description: `Absorbs ${ow} stack${ow === 1 ? '' : 's'} of occult damage before HP is touched.`,
+      description: formatOccultWardChipDescription(ow),
     });
   }
 

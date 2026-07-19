@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import {
   GAUGE_HOSTILE_HP,
   GAUGE_TRACK_BORDER,
   type CombatGridUnitSnapshot,
 } from '../../utils/combatTelemetryFormat';
+import { resolveArenaDefenseState } from '../../data/combatArenaDefenseTelegraphEngine';
 import { CombatHorizontalGauge } from './CombatHorizontalGauge';
+import CombatArenaDefensePips from './CombatArenaDefensePips';
 
 const GAUGE_FRACTURE = '#fbbf24';
 const MONO = 'monospace';
@@ -16,11 +18,18 @@ const CATALYST_BG = 'rgba(34, 197, 94, 0.88)';
 interface CombatEnemyOverheadBarsProps {
   unit: Pick<
     CombatGridUnitSnapshot,
-    'currentHp' | 'maxHp' | 'fractureGauge' | 'fractureMax' | 'veilRotStacks'
+    | 'currentHp'
+    | 'maxHp'
+    | 'fractureGauge'
+    | 'fractureMax'
+    | 'veilRotStacks'
+    | 'kineticArmor'
+    | 'occultWards'
+    | 'isFractured'
   >;
 }
 
-/** HP + fracture gauges anchored under hostile sprites in the arena. */
+/** HP + fracture gauges + Phase 2 defense pips under hostile sprites in the arena. */
 export default function CombatEnemyOverheadBars({
   unit,
 }: CombatEnemyOverheadBarsProps): React.JSX.Element {
@@ -28,6 +37,15 @@ export default function CombatEnemyOverheadBars({
   const fractureMax = unit.fractureMax ?? 100;
   const fractureRatio = fractureMax > 0 ? (unit.fractureGauge ?? 0) / fractureMax : 0;
   const rotStacks = unit.veilRotStacks ?? 0;
+  const defense = useMemo(
+    () =>
+      resolveArenaDefenseState({
+        kineticArmor: unit.kineticArmor,
+        occultWards: unit.occultWards,
+        isFractured: unit.isFractured,
+      }),
+    [unit.kineticArmor, unit.occultWards, unit.isFractured],
+  );
 
   return (
     <View style={styles.root}>
@@ -46,6 +64,7 @@ export default function CombatEnemyOverheadBars({
         overhead
         borderless
       />
+      <CombatArenaDefensePips defense={defense} />
       <CombatHorizontalGauge
         fillColor={GAUGE_FRACTURE}
         ratio={fractureRatio}

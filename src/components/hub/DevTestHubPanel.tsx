@@ -201,6 +201,7 @@ import {
   formatSealedOpenBalanceReport,
   createDefaultBalanceRunStats,
 } from '../../data/balance';
+import { formatCombatTelegraphAuditReport } from '../../data/combatTelegraphAuditEngine';
 import {
   formatWeaponValidationReport,
   validateWeaponRegistry,
@@ -2392,6 +2393,11 @@ export default function DevTestHubPanel(): React.JSX.Element {
             '',
             formatCombatIntentBalanceSummary(),
           ].join('\n'))}
+        />
+        <SandboxLaunchButton
+          label="[ COMBAT TELEGRAPH AUDIT ]"
+          accentColor={theme.statusColor}
+          onPress={() => setDebugReport(formatCombatTelegraphAuditReport())}
         />
         <SandboxLaunchButton
           label="[ CLASS IDENTITY REPORT ]"

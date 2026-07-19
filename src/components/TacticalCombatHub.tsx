@@ -50,6 +50,7 @@ import { getVeilGraftDefinition } from '../data/veilGraftDatabase';
 import type { GraftCastPlan } from '../types/veilGraft';
 import { COMBAT_CONSUMABLE_AP_COST, resolveHostileHpHit } from '../data/aegisAbilityResolver';
 import { stripKineticArmor, stripOccultWards } from '../data/combatDefenseLayerEngine';
+import { DEFENSE_TELEGRAPH_PROFILES } from '../data/combatArenaDefenseTelegraphEngine';
 import { COMBAT_DEFENSE_BALANCE } from '../data/balance/combatDefenseBalanceConfig';
 import { resolveAbilityDefenseTags } from '../data/combatAbilityDefenseTags';
 import {
@@ -979,6 +980,7 @@ export default function TacticalCombatHub({
   const evadeImpactSeqRef = useRef<Record<string, number>>({});
   const statusFloatSeqRef = useRef<Record<string, number>>({});
   const lifecycleFloatLabelsRef = useRef<Record<string, string>>({});
+  const lifecycleFloatTonesRef = useRef<Record<string, import('../utils/combatTelemetryFormat').StatusFloatTone>>({});
   const skipTurnUnitIdsRef = useRef<Set<string>>(new Set());
   const [centerSkipFloatSeq, setCenterSkipFloatSeq] = useState(0);
   const backlineDashSeqRef = useRef<Record<string, number>>({});
@@ -1667,11 +1669,12 @@ export default function TacticalCombatHub({
               : isActiveActor && motionKind === 'buff' && enemyActionStageRef.current === 'executing'
                 ? getEnemyBuffFloatLabel(u.intent)
                 : undefined),
-          statusFloatTone: lifecycleFloatLabelsRef.current[unitId]
-            ? 'fortify'
-            : isSkipActor
-              ? 'neutral'
-              : getStatusFloatTone(u.intent),
+          statusFloatTone: lifecycleFloatTonesRef.current[unitId]
+            ?? (lifecycleFloatLabelsRef.current[unitId]
+              ? 'fortify'
+              : isSkipActor
+                ? 'neutral'
+                : getStatusFloatTone(u.intent)),
           isBacklineDashing: backlineDashActiveRef.current[unitId] === true,
           backlineMeleeDashSeq: backlineDashSeqRef.current[unitId] ?? 0,
           isBlocked: blocked,
@@ -1958,6 +1961,22 @@ export default function TacticalCombatHub({
       }
     }
     return event;
+  }, []);
+
+  /** Arena break float — clears after readout so the status lane can reuse. */
+  const pushDefenseBreakFloat = useCallback((unitId: string, kind: 'armor' | 'ward') => {
+    const profile = kind === 'armor'
+      ? DEFENSE_TELEGRAPH_PROFILES.KINETIC_ARMOR
+      : DEFENSE_TELEGRAPH_PROFILES.OCCULT_WARD;
+    statusFloatSeqRef.current[unitId] = (statusFloatSeqRef.current[unitId] ?? 0) + 1;
+    lifecycleFloatLabelsRef.current[unitId] = profile.breakLabel;
+    lifecycleFloatTonesRef.current[unitId] = kind;
+    setTimeout(() => {
+      if (lifecycleFloatLabelsRef.current[unitId] === profile.breakLabel) {
+        delete lifecycleFloatLabelsRef.current[unitId];
+        delete lifecycleFloatTonesRef.current[unitId];
+      }
+    }, 1400);
   }, []);
 
   const chargeAr = (amt: number, _targetFractured = false) => {
@@ -2404,6 +2423,9 @@ export default function TacticalCombatHub({
         });
         patchUnit(unit.unitId, stripResult.enemy);
         stripResult.logLines.forEach((line) => log(line));
+        if (stripResult.broke) {
+          pushDefenseBreakFloat(unit.unitId, 'armor');
+        }
         if (stripResult.stacksRemoved === 0 && result.misfireStaminaLoss) {
           applyStamina(-result.misfireStaminaLoss);
           log(result.secondaryLogLine ?? '>> GRID-CRACKER MAG // No plating found. Recoil backlash.');
@@ -2424,6 +2446,9 @@ export default function TacticalCombatHub({
         const stripResult = stripOccultWards(unit, result.stripOccultWards);
         patchUnit(unit.unitId, stripResult.enemy);
         stripResult.logLines.forEach((line) => log(line));
+        if (stripResult.broke) {
+          pushDefenseBreakFloat(unit.unitId, 'ward');
+        }
         if (stripResult.stacksRemoved > 0 && result.frontlineBlindTurns) {
           const blindResult = applyFrontlineBlinded(
             squadRef.current,
@@ -3104,6 +3129,9 @@ export default function TacticalCombatHub({
             targetCombatantIds: working.unitId ? [working.unitId] : undefined,
             text: strip.broke ? 'Kinetic Armor broken' : 'Kinetic Armor hit',
           });
+          if (strip.broke && working.unitId) {
+            pushDefenseBreakFloat(working.unitId, 'armor');
+          }
           if (strip.appliedFracture) {
             emitJuice('FRACTURE_APPLIED', {
               targetCombatantIds: working.unitId ? [working.unitId] : undefined,
@@ -3130,6 +3158,9 @@ export default function TacticalCombatHub({
             targetCombatantIds: working.unitId ? [working.unitId] : undefined,
             text: strip.broke ? 'Occult Ward broken' : 'Occult Ward hit',
           });
+          if (strip.broke && working.unitId) {
+            pushDefenseBreakFloat(working.unitId, 'ward');
+          }
           if (strip.appliedFracture) {
             emitJuice('FRACTURE_APPLIED', {
               targetCombatantIds: working.unitId ? [working.unitId] : undefined,
@@ -5068,6 +5099,7 @@ export default function TacticalCombatHub({
     if (isCombatTerminal()) return;
     balanceEncounterRef.current.playerTurns += 1;
     lifecycleFloatLabelsRef.current = {};
+    lifecycleFloatTonesRef.current = {};
     sessionExtrasRef.current.reaverDamagedThisPlayerTurn = false;
     setOperativeHp((prev) => {
       const next = clampPlayerHpToEffectiveMax(
@@ -6892,6 +6924,9 @@ export default function TacticalCombatHub({
             patchUnit(targetBefore.unitId, strip.enemy);
             strip.logLines.forEach((line) => log(line));
             classLoopTelemetryRef.current.armorStacksRemoved += 1;
+            if (strip.broke) {
+              pushDefenseBreakFloat(targetBefore.unitId, 'armor');
+            }
           }
         }
         const struck = enemyRef.current;

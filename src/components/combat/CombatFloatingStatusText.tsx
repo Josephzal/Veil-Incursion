@@ -11,6 +11,8 @@ const TONE_COLORS: Record<StatusFloatTone, string> = {
   evade: '#9ca3af',
   charge: '#a8917c',
   neutral: '#8b949e',
+  armor: '#c8d0dc',
+  ward: '#a78bfa',
 };
 
 interface CombatFloatingStatusTextProps {

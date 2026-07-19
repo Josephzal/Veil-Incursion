@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import HapticPressable from '../HapticPressable';
 import type { ImageSourcePropType } from 'react-native';
@@ -17,6 +17,10 @@ import CombatSilhouetteShatterEffect from './CombatSilhouetteShatterEffect';
 import CombatEnemyOverheadBars from './CombatEnemyOverheadBars';
 import EnemyEntity from './EnemyEntity';
 import EliteSkullBadge from './EliteSkullBadge';
+import CombatArenaIntentGlyph from './CombatArenaIntentGlyph';
+import CombatArenaDefenseSilhouette from './CombatArenaDefenseSilhouette';
+import { resolveArenaIntentGlyph } from '../../data/combatArenaTelegraphEngine';
+import { resolveArenaDefenseState } from '../../data/combatArenaDefenseTelegraphEngine';
 
 const MONO = 'monospace';
 const ALPHA_CRIMSON = '#ff4444';
@@ -73,6 +77,24 @@ export default function CombatEnemyUnit({
   if (unit.dissolveHidden) return null;
 
   const breachTarget = unit.isFractureBreachTarget === true;
+  const arenaGlyph = isArena
+    ? resolveArenaIntentGlyph({
+        intent: unit.intent,
+        turnsRemaining: unit.intentTurnsRemaining ?? 0,
+        jammed: unit.intentLabel === 'STATIC // JAMMED',
+      })
+    : null;
+  const arenaDefense = useMemo(
+    () =>
+      isArena
+        ? resolveArenaDefenseState({
+            kineticArmor: unit.kineticArmor,
+            occultWards: unit.occultWards,
+            isFractured: unit.isFractured,
+          })
+        : null,
+    [isArena, unit.kineticArmor, unit.occultWards, unit.isFractured],
+  );
 
   const unitBody = (
     <View
@@ -97,10 +119,24 @@ export default function CombatEnemyUnit({
       ) : null}
       {isAlpha ? <EliteSkullBadge style={styles.eliteBadge} /> : null}
 
-      {isAlpha ? (
+      {/* Nameplate yields to intent glyph — designation remains on header / intel. */}
+      {isAlpha && !arenaGlyph ? (
         <Text style={styles.alphaNameplate} numberOfLines={1} ellipsizeMode="tail">
           {unit.designation.toUpperCase()}
         </Text>
+      ) : null}
+
+      {arenaGlyph ? (
+        <View
+          style={[
+            styles.intentGlyphAnchor,
+            isAlpha && styles.intentGlyphAnchorAlpha,
+            breachTarget && styles.intentGlyphAnchorBreach,
+          ]}
+          pointerEvents="none"
+        >
+          <CombatArenaIntentGlyph glyph={arenaGlyph} compact />
+        </View>
       ) : null}
 
       <EnemyEntity
@@ -136,16 +172,24 @@ export default function CombatEnemyUnit({
                     portraitSource={unit.portraitSource}
                   >
                     <CombatSilhouetteShatterEffect trigger={fractured} portraitSource={unit.portraitSource}>
-                      <CombatEnemyPortraitSkia
-                        source={unit.portraitSource}
-                        attackSource={unit.attackPortraitSource}
-                        turnPhase={unit.turnPhase ?? null}
-                        backlineDashSeq={unit.backlineMeleeDashSeq ?? 0}
-                        isBacklineDashing={unit.isBacklineDashing === true}
-                        glow={portraitGlow}
-                        intentShimmer={unit.intentShimmer ?? null}
-                        isEnraged={unit.isEnraged === true}
-                      />
+                      <View style={styles.portraitDefenseStack}>
+                        <CombatEnemyPortraitSkia
+                          source={unit.portraitSource}
+                          attackSource={unit.attackPortraitSource}
+                          turnPhase={unit.turnPhase ?? null}
+                          backlineDashSeq={unit.backlineMeleeDashSeq ?? 0}
+                          isBacklineDashing={unit.isBacklineDashing === true}
+                          glow={portraitGlow}
+                          intentShimmer={unit.intentShimmer ?? null}
+                          isEnraged={unit.isEnraged === true}
+                        />
+                        {arenaDefense ? (
+                          <CombatArenaDefenseSilhouette
+                            defense={arenaDefense}
+                            hitFlashSeq={unit.hitFlashSeq}
+                          />
+                        ) : null}
+                      </View>
                     </CombatSilhouetteShatterEffect>
                   </CombatEnemyHitEffect>
                 </CombatEnemyClassImpact>
@@ -240,6 +284,20 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     color: '#67e8f9',
   },
+  intentGlyphAnchor: {
+    position: 'absolute',
+    top: -26,
+    left: 0,
+    right: 0,
+    zIndex: 24,
+    alignItems: 'center',
+  },
+  intentGlyphAnchorAlpha: {
+    top: -30,
+  },
+  intentGlyphAnchorBreach: {
+    top: -44,
+  },
   eliteBadge: {
     position: 'absolute',
     top: 0,
@@ -285,6 +343,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
     zIndex: 1,
+  },
+  portraitDefenseStack: {
+    width: '100%',
+    height: '100%',
+    position: 'relative',
   },
   statusAnchor: {
     position: 'absolute',
