@@ -64,7 +64,7 @@ function grantMany(
 ): CargoRunState {
   let next = cargo;
   for (const id of ids) {
-    next = addLootToContainment(next, id, 1);
+    next = addLootToContainment(next, id, 1, undefined, { asSeparatePhysicalUnits: true });
   }
   return next;
 }

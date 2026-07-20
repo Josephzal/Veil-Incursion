@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Image, LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
+import { Image, LayoutChangeEvent, Platform, StyleSheet, Text, View } from 'react-native';
 import HapticPressable from './HapticPressable';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -9,6 +9,10 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
+import CargoItemInspectPanel, {
+  type CargoItemInspectAnchor,
+} from './cargo/CargoItemInspectPanel';
+import { resolveCargoItemInspectInfo } from '../utils/cargoItemInspect';
 
 const REJECT_SNAP_MS = 140;
 const COMBAT_DETAIL_PANEL_HEIGHT = 160;
@@ -72,6 +76,7 @@ import {
   getCargoStackCap,
   isProgressionProtectedCargo,
   isRareOrApexCargo,
+  unitCargoValue,
 } from '../data/cargoStackEngine';
 import CargoCreditsHud from './CargoCreditsHud';
 import {
@@ -226,6 +231,14 @@ function formatStackBadge(itemId: CargoItemId, quantity: number): string | null 
   return `${quantity}/${cap}`;
 }
 
+type CargoInspectHoverPayload = {
+  instanceId: string;
+  itemId: CargoItemId;
+  quantity: number;
+  unitValue: number;
+  anchor: CargoItemInspectAnchor;
+};
+
 function DraggableCargoSprite({
   dragSource,
   isDragging,
@@ -242,6 +255,10 @@ function DraggableCargoSprite({
   cellSize = CARGO_CELL_SIZE,
   stackBadge = null,
   accentColor = '#00ff33',
+  inspectQuantity = 1,
+  inspectUnitValue,
+  onInspectHover,
+  onInspectLeave,
 }: {
   dragSource: CargoDragSource;
   isDragging: boolean;
@@ -270,8 +287,49 @@ function DraggableCargoSprite({
   cellSize?: number;
   stackBadge?: string | null;
   accentColor?: string;
+  inspectQuantity?: number;
+  inspectUnitValue?: number;
+  onInspectHover?: (payload: CargoInspectHoverPayload) => void;
+  onInspectLeave?: (instanceId: string) => void;
 }): React.JSX.Element {
   const spriteSize = spriteSizeForCargoItem(dragSource.itemId, cellSize);
+  const hostRef = useRef<View>(null);
+
+  const reportInspectHover = useCallback(() => {
+    if (!onInspectHover || isDragging) return;
+    hostRef.current?.measureInWindow((x, y, width, height) => {
+      onInspectHover({
+        instanceId: dragSource.instanceId,
+        itemId: dragSource.itemId,
+        quantity: inspectQuantity,
+        unitValue: inspectUnitValue ?? CARGO_ITEM_CATALOG[dragSource.itemId].baseValue,
+        anchor: { x, y, width, height },
+      });
+    });
+  }, [
+    dragSource.instanceId,
+    dragSource.itemId,
+    inspectQuantity,
+    inspectUnitValue,
+    isDragging,
+    onInspectHover,
+  ]);
+
+  const clearInspectHover = useCallback(() => {
+    onInspectLeave?.(dragSource.instanceId);
+  }, [dragSource.instanceId, onInspectLeave]);
+
+  const hoverHandlers = (
+    Platform.OS === 'web'
+      ? {
+          onMouseEnter: reportInspectHover,
+          onMouseLeave: clearInspectHover,
+        }
+      : {
+          onHoverIn: reportInspectHover,
+          onHoverOut: clearInspectHover,
+        }
+  ) as Record<string, () => void>;
 
   const badge = stackBadge ? (
     <View style={styles.stackBadge} pointerEvents="none">
@@ -283,6 +341,7 @@ function DraggableCargoSprite({
     return (
       <HapticPressable
         onPress={onCombatSelect}
+        {...hoverHandlers}
         style={({ pressed }) => [
           spriteSize,
           styles.spriteWrap,
@@ -328,6 +387,7 @@ function DraggableCargoSprite({
   const pan = Gesture.Pan()
     .minDistance(4)
     .onBegin((event) => {
+      runOnJS(clearInspectHover)();
       runOnJS(onDragStart)(dragSource);
       runOnJS(onDragMove)(event.absoluteX, event.absoluteY);
     })
@@ -345,7 +405,11 @@ function DraggableCargoSprite({
 
   return (
     <GestureDetector gesture={pan}>
-      <View style={[spriteSize, styles.spriteWrap]}>
+      <View
+        ref={hostRef}
+        style={[spriteSize, styles.spriteWrap]}
+        {...hoverHandlers}
+      >
         {isDragging ? (
           <View style={styles.dragPlaceholder} pointerEvents="none" />
         ) : (
@@ -378,6 +442,8 @@ function ContainmentSlot({
   selectedCombatItemId,
   selectCombatItem,
   accentColor = '#00ff33',
+  onInspectHover,
+  onInspectLeave,
 }: {
   item: import('../types/cargoGrid').ContainmentItem;
   spriteSize: { width: number; height: number };
@@ -407,9 +473,10 @@ function ContainmentSlot({
   selectedCombatItemId: CargoItemId | null;
   selectCombatItem: (itemId: CargoItemId) => void;
   accentColor?: string;
+  onInspectHover?: (payload: CargoInspectHoverPayload) => void;
+  onInspectLeave?: (instanceId: string) => void;
 }): React.JSX.Element {
   const slotRef = useRef<View>(null);
-  const stackBadge = formatStackBadge(item.itemId, cargoItemQuantity(item));
 
   const reportCenter = useCallback(() => {
     if (!onContainmentItemCenterMeasured) return;
@@ -444,8 +511,12 @@ function ContainmentSlot({
       <DraggableCargoSprite
         dragSource={source}
         isDragging={isDragging}
-        stackBadge={stackBadge}
+        stackBadge={null}
         accentColor={accentColor}
+        inspectQuantity={cargoItemQuantity(item)}
+        inspectUnitValue={unitCargoValue(item)}
+        onInspectHover={onInspectHover}
+        onInspectLeave={onInspectLeave}
         onHoverCell={onHoverCell}
         onDragStart={onDragStart}
         onDragMove={onDragMove}
@@ -602,6 +673,8 @@ export default function CargoGridBoard({
     occupantName: string;
     canMerge: boolean;
   } | null>(null);
+  const [inspectHover, setInspectHover] = useState<CargoInspectHoverPayload | null>(null);
+  const [boardOrigin, setBoardOrigin] = useState({ x: 0, y: 0 });
   const externalSlotCountRef = useRef(0);
 
   const dragGhostScale = useSharedValue(1);
@@ -638,15 +711,24 @@ export default function CargoGridBoard({
     if (!hover) {
       return { cells: new Set<string>(), valid: false };
     }
+    const excludeId = externalHover ? undefined : hoverExcludeId;
     const cells = new Set(cellsForPreview(hover.itemId, hover.row, hover.col));
-    const valid = canPlaceCargoItemExcluding(
+    const canPlace = canPlaceCargoItemExcluding(
       displayCargo,
       hover.itemId,
       hover.row,
       hover.col,
-      externalHover ? undefined : hoverExcludeId,
+      excludeId,
     );
-    return { cells, valid };
+    /** Same-item merge with remaining stack room is a valid drop — not a red reject. */
+    const canMerge = canMergeCargoAtCell(
+      displayCargo,
+      hover.itemId,
+      hover.row,
+      hover.col,
+      excludeId,
+    );
+    return { cells, valid: canPlace || canMerge };
   }, [displayCargo, externalHover, hoverCell, hoverExcludeId, hoverItemId]);
 
   const captureMetrics = useCallback(() => {
@@ -657,8 +739,20 @@ export default function CargoGridBoard({
     });
     boardRef.current?.measureInWindow((pageX, pageY, width, height) => {
       boardMetricsRef.current = { pageX, pageY, width, height };
+      setBoardOrigin((prev) => (
+        prev.x === pageX && prev.y === pageY ? prev : { x: pageX, y: pageY }
+      ));
     });
   }, [cellSize, onGridMetricsMeasured]);
+
+  const handleInspectHover = useCallback((payload: CargoInspectHoverPayload) => {
+    if (activeDragRef.current) return;
+    setInspectHover(payload);
+  }, []);
+
+  const handleInspectLeave = useCallback((instanceId: string) => {
+    setInspectHover((prev) => (prev?.instanceId === instanceId ? null : prev));
+  }, []);
 
   const reportHarvestFloor = useCallback(() => {
     if (!onHarvestFloorMeasured) return;
@@ -831,6 +925,7 @@ export default function CargoGridBoard({
     pendingDropRef.current = null;
     dropTargetRef.current = null;
     activeDragRef.current = source;
+    setInspectHover(null);
     captureMetrics();
     requestAnimationFrame(() => captureMetrics());
     dragGhostScale.value = withSpring(1.08);
@@ -856,6 +951,7 @@ export default function CargoGridBoard({
     setHoverCell(null);
     setHoverItemId(null);
     setHoverExcludeId(undefined);
+    setInspectHover(null);
     onDragPositionChange?.(null);
   }, [dragGhostScale, onDragPositionChange]);
 
@@ -1100,6 +1196,10 @@ export default function CargoGridBoard({
                 cellSize={cellSize}
                 stackBadge={stackBadge}
                 accentColor={accentColor}
+                inspectQuantity={cargoItemQuantity(item)}
+                inspectUnitValue={unitCargoValue(item)}
+                onInspectHover={handleInspectHover}
+                onInspectLeave={handleInspectLeave}
                 onHoverCell={handleHoverCell}
                 onDragStart={handleDragStart}
                 onDragMove={handleDragMove}
@@ -1257,6 +1357,8 @@ export default function CargoGridBoard({
               selectedCombatItemId={selectedCombatItemId}
               selectCombatItem={selectCombatItem}
               accentColor={accentColor}
+              onInspectHover={handleInspectHover}
+              onInspectLeave={handleInspectLeave}
             />
           );
         })}
@@ -1319,12 +1421,29 @@ export default function CargoGridBoard({
                 selectedCombatItemId={selectedCombatItemId}
                 selectCombatItem={selectCombatItem}
                 accentColor={accentColor}
+                onInspectHover={handleInspectHover}
+                onInspectLeave={handleInspectLeave}
               />
             );
           })}
         </View>
       </View>
     )
+  ) : null;
+
+  const inspectOverlay = inspectHover && !activeDrag ? (
+    <View style={styles.inspectOverlayLayer} pointerEvents="none">
+      <CargoItemInspectPanel
+        info={resolveCargoItemInspectInfo(
+          inspectHover.itemId,
+          inspectHover.quantity,
+          inspectHover.unitValue,
+        )}
+        anchor={inspectHover.anchor}
+        originOffset={boardOrigin}
+        accentColor={accentColor}
+      />
+    </View>
   ) : null;
 
   const dragGhostOverlay = activeDrag && dragOverlay && overlaySprite ? (
@@ -1648,6 +1767,7 @@ export default function CargoGridBoard({
           </View>
 
           {dragGhostOverlay}
+          {inspectOverlay}
         </View>
 
         {postBoardControls}
@@ -1691,6 +1811,7 @@ export default function CargoGridBoard({
         {externalBayNode}
 
         {dragGhostOverlay}
+        {inspectOverlay}
       </View>
 
       {postBoardControls}
@@ -1890,7 +2011,7 @@ const styles = StyleSheet.create({
     overflow: 'visible',
   },
   cellsLayer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: CARGO_CELL_GAP,
@@ -1902,7 +2023,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   placedLayer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     overflow: 'visible',
     zIndex: 2,
   },
@@ -1915,8 +2036,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   dragOverlayLayer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 50,
+    overflow: 'visible',
+  },
+  inspectOverlayLayer: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 60,
     overflow: 'visible',
   },
   dragPlaceholder: {

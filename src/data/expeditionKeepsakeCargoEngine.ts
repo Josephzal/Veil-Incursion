@@ -316,8 +316,9 @@ export function applyKeepsakeLeySiphonOverdraw(
   const bonusResource = pickDeadDropBonus(nodeId);
   const byproduct = pickLeySiphonByproduct(nodeId);
   const staged: string[] = [];
-  let nextCargo = addLootToContainment(cargo, bonusResource, 1, staged);
-  nextCargo = addLootToContainment(nextCargo, byproduct, 1, staged);
+  const fieldSpawn = { asSeparatePhysicalUnits: true } as const;
+  let nextCargo = addLootToContainment(cargo, bonusResource, 1, staged, fieldSpawn);
+  nextCargo = addLootToContainment(nextCargo, byproduct, 1, staged, fieldSpawn);
   stagedInstanceIds.push(...staged);
 
   let nextRuntime = applyKeepsakeLeyContamination(
@@ -356,7 +357,9 @@ export function applyKeepsakeDeadDropHarvestBonus(
 
   const bonusResource = pickDeadDropBonus(node.id);
   const staged: string[] = [];
-  const nextCargo = addLootToContainment(cargo, bonusResource, 1, staged);
+  const nextCargo = addLootToContainment(cargo, bonusResource, 1, staged, {
+    asSeparatePhysicalUnits: true,
+  });
   stagedInstanceIds.push(...staged);
 
   const nextRuntime = patchKeepsakeStats(

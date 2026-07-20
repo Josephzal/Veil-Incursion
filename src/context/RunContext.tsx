@@ -2915,9 +2915,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     let nextCargo = inc.cargo;
     const stagedIds: string[] = [];
     const logLines: string[] = [];
+    const harvestSpawn = { asSeparatePhysicalUnits: true } as const;
     lootIds.forEach((itemId) => {
       const count = scaledLootCount(option.yieldPct, itemId === 'veil-residue-bulk' ? 1 : 1);
-      nextCargo = addLootToContainment(nextCargo, itemId, count, stagedIds);
+      nextCargo = addLootToContainment(nextCargo, itemId, count, stagedIds, harvestSpawn);
     });
 
     let itemRuntime = inc.itemRuntime;
@@ -2936,7 +2937,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       logLines.push('>> RELAY CACHE ROUTE — bonus salvage roll delivered.');
     }
     bonusResourceRolls.forEach((resourceId) => {
-      nextCargo = addLootToContainment(nextCargo, resourceId, 1, stagedIds);
+      nextCargo = addLootToContainment(nextCargo, resourceId, 1, stagedIds, harvestSpawn);
     });
 
     const ambushTriggered = AMBUSH_ENCOUNTERS_ENABLED && Math.random() * 100 < option.ambushRiskPct;
@@ -3205,7 +3206,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       const beforeCargo = prev.cargo;
       let nextCargo = beforeCargo;
       drops.forEach((resourceId) => {
-        nextCargo = addLootToContainment(nextCargo, resourceId, 1, stagedIds);
+        nextCargo = addLootToContainment(nextCargo, resourceId, 1, stagedIds, {
+          asSeparatePhysicalUnits: true,
+        });
         if (isRouteIntelResource(resourceId)) {
           routeIntelNames.push(getResourceDisplayName(resourceId));
         }
@@ -3257,7 +3260,13 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     let mergeLog: string | null = null;
     setActiveIncursion((prev) => {
       const beforeCargo = prev.cargo;
-      const loot = addLootToContainmentDetailed(beforeCargo, resourceId, quantity, stagedIds);
+      const loot = addLootToContainmentDetailed(
+        beforeCargo,
+        resourceId,
+        quantity,
+        stagedIds,
+        { asSeparatePhysicalUnits: true },
+      );
       let nextCargo = loot.cargo;
       if (loot.mergedQuantity > 0) {
         mergeLog = `>> CARGO STACK MERGE — ${loot.mergedQuantity}× ${resourceId.toUpperCase()} merged into existing stacks.`;
@@ -3337,9 +3346,9 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       const beforeCargo = prev.cargo;
       let nextCargo = beforeCargo;
       adjustedResources.forEach(({ resourceId, quantity }) => {
-        for (let i = 0; i < quantity; i += 1) {
-          nextCargo = addLootToContainment(nextCargo, resourceId, 1, stagedIds);
-        }
+        nextCargo = addLootToContainment(nextCargo, resourceId, quantity, stagedIds, {
+          asSeparatePhysicalUnits: true,
+        });
       });
       const keepsakePickup = mergeKeepsakeCargoPickup(prev, nextCargo, stagedIds);
       keepsakeLogs = keepsakePickup.logLines;

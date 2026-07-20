@@ -133,7 +133,9 @@ export function applyVeilResidueBonus(
   amount: number,
   stagedInstanceIds?: string[],
 ): CargoRunState {
-  return addLootToContainment(cargo, 'veil-residue-bulk', amount, stagedInstanceIds);
+  return addLootToContainment(cargo, 'veil-residue-bulk', amount, stagedInstanceIds, {
+    asSeparatePhysicalUnits: true,
+  });
 }
 
 export function hasPendingNarrativeCombatBoons(pending: PendingNarrativeCombatBoons): boolean {

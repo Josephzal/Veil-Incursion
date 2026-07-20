@@ -298,15 +298,26 @@ export interface AddLootToContainmentResult {
   stagedInstanceIds: string[];
 }
 
+export interface AddLootToContainmentOptions {
+  /**
+   * Harvest / field spawn — each unit is its own physical containment instance (qty 1).
+   * Does not auto-merge into existing grid or containment stacks.
+   * Stacking still happens when the player places items into cargo.
+   */
+  asSeparatePhysicalUnits?: boolean;
+}
+
 /**
  * Phase 2A — add loot units into cargo stacks.
- * Fills incomplete grid stacks first, then containment stacks, then creates new containment stacks.
+ * Default: fills incomplete grid stacks first, then containment stacks, then creates new stacks.
+ * With `asSeparatePhysicalUnits`: creates one containment instance per unit (no auto-merge).
  */
 export function addLootToContainmentDetailed(
   cargo: CargoRunState,
   itemId: CargoItemId,
   count = 1,
   stagedInstanceIds?: string[],
+  options?: AddLootToContainmentOptions,
 ): AddLootToContainmentResult {
   let remaining = Math.max(0, count);
   if (remaining <= 0) {
@@ -314,58 +325,62 @@ export function addLootToContainmentDetailed(
   }
 
   const unitValue = CARGO_ITEM_CATALOG[itemId].baseValue;
-  const cap = getCargoStackCap(itemId);
   let mergedQuantity = 0;
   let working = cargo;
   const staged: string[] = [];
+  const separateUnits = options?.asSeparatePhysicalUnits === true;
 
-  const fillPlaced = (items: PlacedCargoItem[]): PlacedCargoItem[] => items.map((item) => {
-    if (remaining <= 0 || item.itemId !== itemId) return item;
-    const qty = cargoItemQuantity(item);
-    const room = stackRoomRemaining(itemId, qty);
-    if (room <= 0) return item;
-    const take = Math.min(room, remaining);
-    remaining -= take;
-    mergedQuantity += take;
-    return {
-      ...item,
-      quantity: qty + take,
-      currentValue: blendUnitValues(qty, unitCargoValue(item), take, unitValue),
+  if (!separateUnits) {
+    const fillPlaced = (items: PlacedCargoItem[]): PlacedCargoItem[] => items.map((item) => {
+      if (remaining <= 0 || item.itemId !== itemId) return item;
+      const qty = cargoItemQuantity(item);
+      const room = stackRoomRemaining(itemId, qty);
+      if (room <= 0) return item;
+      const take = Math.min(room, remaining);
+      remaining -= take;
+      mergedQuantity += take;
+      return {
+        ...item,
+        quantity: qty + take,
+        currentValue: blendUnitValues(qty, unitCargoValue(item), take, unitValue),
+      };
+    });
+
+    const fillContainment = (items: ContainmentItem[]): ContainmentItem[] => items.map((item) => {
+      if (remaining <= 0 || item.itemId !== itemId) return item;
+      const qty = cargoItemQuantity(item);
+      const room = stackRoomRemaining(itemId, qty);
+      if (room <= 0) return item;
+      const take = Math.min(room, remaining);
+      remaining -= take;
+      mergedQuantity += take;
+      return {
+        ...item,
+        quantity: qty + take,
+        currentValue: blendUnitValues(qty, unitCargoValue(item), take, unitValue),
+      };
+    });
+
+    working = {
+      ...working,
+      grid: { placed: fillPlaced(working.grid.placed) },
+      containment: fillContainment(working.containment),
     };
-  });
+  }
 
-  const fillContainment = (items: ContainmentItem[]): ContainmentItem[] => items.map((item) => {
-    if (remaining <= 0 || item.itemId !== itemId) return item;
-    const qty = cargoItemQuantity(item);
-    const room = stackRoomRemaining(itemId, qty);
-    if (room <= 0) return item;
-    const take = Math.min(room, remaining);
-    remaining -= take;
-    mergedQuantity += take;
-    return {
-      ...item,
-      quantity: qty + take,
-      currentValue: blendUnitValues(qty, unitCargoValue(item), take, unitValue),
-    };
-  });
-
-  working = {
-    ...working,
-    grid: { placed: fillPlaced(working.grid.placed) },
-    containment: fillContainment(working.containment),
-  };
-
+  // New containment instances are always physical units (qty 1).
+  // Multi-unit stacks form only by merging into existing stacks (when allowed)
+  // or when the player places items into the cargo grid.
   const additions: ContainmentItem[] = [];
   while (remaining > 0) {
-    const take = Math.min(cap, remaining);
-    remaining -= take;
+    remaining -= 1;
     const instanceId = createCargoInstanceId(itemId);
     staged.push(instanceId);
     additions.push({
       instanceId,
       itemId,
       currentValue: unitValue,
-      quantity: take,
+      quantity: 1,
     });
   }
 
@@ -386,8 +401,9 @@ export function addLootToContainment(
   itemId: CargoItemId,
   count = 1,
   stagedInstanceIds?: string[],
+  options?: AddLootToContainmentOptions,
 ): CargoRunState {
-  return addLootToContainmentDetailed(cargo, itemId, count, stagedInstanceIds).cargo;
+  return addLootToContainmentDetailed(cargo, itemId, count, stagedInstanceIds, options).cargo;
 }
 
 export function calculateGridOccupancy(cargo: CargoRunState): number {
