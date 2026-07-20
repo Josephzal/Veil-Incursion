@@ -1,6 +1,6 @@
 # Veil Incursion Current Systems Design
 
-Last updated: 2026-07-19 (Combat Telegraph Language Phase 1–2 + polish)
+Last updated: 2026-07-19 (Occult Tactical Terminal combat UI polish)
 
 This document captures the current implemented design surface for Veil Incursion: player-facing hub systems, run progression, economy, cargo/items, enemies, combat mechanics, and known partial implementations. It is intended as a working reference for design iteration and balancing, not a final player-facing manual.
 
@@ -1877,6 +1877,23 @@ Persistent defenses are materials with opposite silhouettes — never generic sh
 | **Break float** | Full strip → arena `ARMOR BROKEN` / `WARD SHATTERED` (auto-clears after readout) |
 | **Chip copy** | Intel KA/OW descriptions teach **% mitigation**, not flat absorb |
 
+### Occult Tactical Terminal (Combat UI polish)
+
+Style-only combat screen language — no combat logic / AI / damage changes. Target composition matches the concept combat mockup.
+
+| Piece | Role |
+|-------|------|
+| **`occultTacticalTerminalTheme`** | Shared palette + layout tokens (black glass, muted green/cyan, soul red, flux violet) |
+| **Mission readout** | Top-left depth / sector / objective (thin, low-opacity) |
+| **Turn order** | Top-center **diamond** timeline with portraits (`TurnOrderTopBar`) |
+| **Right rail** | Compact combat log (top) + multi-enemy intel list (below) |
+| **Bottom console** | Operative status (HP / Guard·Flux / PASSIVE) + horizontal ability cards + End Turn column |
+| **Ability cards** | AP diamond cost, name, glyph field, short description; selected = green rim |
+| **Targeting** | Violet occult reticle + corner brackets on selected enemy |
+| **Atmosphere** | Low-opacity vignette / scan bands / frame corners |
+
+Shared UI: `CombatPanel`, `ResourceRail`, `TargetingBrackets`, `CombatHudAtmosphereOverlay`.
+
 ### Combat Telegraph Language (Polish pass)
 
 Tighten Phase 1–2 readability without shipping target previews / counters yet.
@@ -2322,6 +2339,7 @@ Routing (`tensionMechanicRouting.ts`): stealth/patrol/militarized → Shadowline
 - **Combat Telegraph Language Phase 1 (complete):** Arena intent glyphs from Intent 2.0 (`combatArenaTelegraphEngine` + `CombatArenaIntentGlyph`); T-N / CH-N countdown on portraits; sensory-jam fallback; design surface docs.
 - **Combat Telegraph Language Phase 2 (complete):** KA steel plates vs OW violet glyph rings (`combatArenaDefenseTelegraphEngine`); arena pips + silhouettes; % mitigation chip copy; ARMOR BROKEN / WARD SHATTERED floats.
 - **Combat Telegraph Language polish (complete):** ASCII glyphs; dual-defense inset; material hit flashes; break-float clear; layout collision fix; `combatTelegraphAuditEngine` + DevTest `[ COMBAT TELEGRAPH AUDIT ]`. Later: target previews, animation states, counter hints.
+- **Occult Tactical Terminal combat UI polish (complete):** Shared OTT tokens; cinematic staging; horizontal turn order; mission readout; bottom operative console + command tiles; right-rail log/intel; muted terminal colors; selected-target brackets; HUD atmosphere overlay. Style-only — combat logic unchanged.
 - **Narrative tension naming + routing cleanup (Phase 1 — Cipher Rite prep):** ScavengeBar deprecated from normal generation; ConcealSlider / SigilTrace / no-mechanic remapping; unknown tension IDs no longer silent-succeed; Dead-Man’s Switch combat graft unchanged.
 - **Narrative Cipher Rite (Phase 2 — complete):** `Mechanic_CipherRite` deduction hacking minigame (`cipherRiteEngine` + `CipherRite`); tech/terminal/locked-cache routing; DevTest force; wrong guesses corrupt UI only; no combat / Hex Shot changes.
 - **Narrative Scanner Sweep + Ritual Echo (Phase 3 — complete):** `Mechanic_ConcealSlider` → Scanner Sweep radar stealth; `Mechanic_SigilTrace` → Ritual Echo with forbidden beats; IDs preserved; DevTest labels updated; no combat changes.

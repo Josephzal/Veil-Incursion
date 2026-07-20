@@ -32,7 +32,7 @@ function scaleHitboxPercent(base: number, layoutUnitScale: number): number {
   return clampHitboxPercent(base * scaleFactor);
 }
 
-/** Horizontally centers the tap target — matches EnemyEntity hpBarContainer (57.5% wide, centered). */
+/** Horizontally centers the tap target under the sprite torso. */
 function centerHitboxStyle(widthPct: number, heightPct: number): ViewStyle {
   return {
     width: `${widthPct}%`,
@@ -79,8 +79,8 @@ export type ArenaLayoutMode = 'solo' | 'group';
 /** Arena grid presentation — flex rows (legacy) or absolute staggered 2.5D. */
 export type ArenaGridVariant = 'flex' | 'staggered';
 
-export const STAGGERED_ARENA_WIDTH = '42%' as const;
-export const STAGGERED_SLOT_WIDTH_PCT = 38;
+export const STAGGERED_ARENA_WIDTH = '48%' as const;
+export const STAGGERED_SLOT_WIDTH_PCT = 34;
 
 export interface StaggeredSlotStyle {
   bottom: `${number}%`;
@@ -90,22 +90,27 @@ export interface StaggeredSlotStyle {
   scale: number;
 }
 
+/**
+ * Concept arc — hostiles occupy mid/right with open center field.
+ * Frontline lower/larger; backline higher/smaller and inset.
+ */
+/** Bottoms clear the console dock; right inset keeps labels clear of Enemy Intel. */
 export const STAGGERED_GROUP_SLOTS: Record<CombatGridSlotId, StaggeredSlotStyle> = {
-  FL_0: { bottom: '20%', left: '5%', zIndex: 4, scale: 1.3 },
-  FL_1: { bottom: '24%', right: '18%', zIndex: 3, scale: 1.2 },
-  BL_0: { bottom: '42%', left: '28%', zIndex: 2, scale: 0.85 },
-  BL_1: { bottom: '52%', right: '16%', zIndex: 1, scale: 0.75 },
+  FL_0: { bottom: '36%', left: '2%', zIndex: 4, scale: 1.08 },
+  FL_1: { bottom: '32%', right: '18%', zIndex: 5, scale: 1.14 },
+  BL_0: { bottom: '56%', left: '22%', zIndex: 2, scale: 0.86 },
+  BL_1: { bottom: '60%', right: '28%', zIndex: 1, scale: 0.78 },
 };
 
 export const STAGGERED_SOLO_SLOT: StaggeredSlotStyle = {
-  bottom: '24%',
-  left: '26%',
+  bottom: '40%',
+  left: '28%',
   zIndex: 4,
-  scale: 1.05,
+  scale: 1.12,
 };
 
-/** Shift all enemy slots toward the bottom of the arena (fraction of arena height). */
-export const ENEMY_ARENA_VERTICAL_SHIFT_RATIO = 0.05;
+/** Slight lift so feet clear the console without crowding turn-order chrome. */
+export const ENEMY_ARENA_VERTICAL_SHIFT_RATIO = -0.02;
 
 function shiftSlotBottom(bottom: `${number}%`): `${number}%` {
   const shifted = Math.max(
@@ -296,10 +301,10 @@ export function backlineMeleeDashDelta(
   const slotFootY = arenaHeight * anchor.footY;
 
   const playerFootY = gridVariant === 'staggered'
-    ? arenaHeight * 0.94
+    ? arenaHeight * 0.96
     : arenaHeight * (1 - Number.parseFloat(ARENA_SPRITE_BOTTOM) / 100);
   const x = gridVariant === 'staggered'
-    ? -(slotCenterX - arenaWidth * 0.14)
+    ? -(slotCenterX - arenaWidth * 0.15)
     : -(slotCenterX + arenaWidth * 0.42);
   const y = Math.max(16, playerFootY - slotFootY);
 
@@ -322,10 +327,10 @@ export function playerAttackLungeDelta(
     const gridWidth = arenaWidth - staggeredLeft;
     const slotCenterX = staggeredLeft + gridWidth * anchor.x;
     // Operative sits bottom-left; bias toward enemy column so the lunge closes distance.
-    const operativeAnchorX = arenaWidth * 0.12;
+    const operativeAnchorX = arenaWidth * 0.15;
     const rawGap = slotCenterX - operativeAnchorX;
     const x = Math.round(Math.min(210, Math.max(72, rawGap * 0.72)));
-    const playerFootY = arenaHeight * 0.94;
+    const playerFootY = arenaHeight * 0.96;
     const slotTorsoY = arenaHeight * anchor.y;
     // Keep vertical travel subtle — forward close should dominate over a hop up.
     const y = Math.round(Math.min(0, Math.max(-10, (slotTorsoY - playerFootY) * 0.12)));

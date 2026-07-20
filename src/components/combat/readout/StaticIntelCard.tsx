@@ -18,14 +18,16 @@ import EnemyIntentDetailOverlay from './EnemyIntentDetailOverlay';
 import { resolveIntelStatusChips } from '../../../utils/enemyStatusEffects';
 import { useCombatDesktopLayout } from '../../../hooks/useCombatDesktopLayout';
 
-const MONO = 'monospace';
-const HOSTILE_ACCENT = '#ef4444';
-const INTENT_ATTACK_BG = 'rgba(127, 29, 29, 0.72)';
-const INTENT_ATTACK_BORDER = '#ef4444';
-const INTENT_BUFF_BG = 'rgba(30, 58, 138, 0.72)';
-const INTENT_BUFF_BORDER = '#3b82f6';
-const INTENT_HIGH_BG = 'rgba(154, 52, 18, 0.78)';
-const INTENT_CRITICAL_BG = 'rgba(127, 29, 29, 0.88)';
+import { OTT } from '../../../constants/occultTacticalTerminalTheme';
+
+const MONO = OTT.mono;
+const HOSTILE_ACCENT = OTT.soulRed;
+const INTENT_ATTACK_BG = 'rgba(158, 40, 48, 0.28)';
+const INTENT_ATTACK_BORDER = 'rgba(255, 77, 87, 0.55)';
+const INTENT_BUFF_BG = 'rgba(98, 220, 229, 0.1)';
+const INTENT_BUFF_BORDER = OTT.cyanDim;
+const INTENT_HIGH_BG = 'rgba(158, 40, 48, 0.38)';
+const INTENT_CRITICAL_BG = 'rgba(158, 40, 48, 0.48)';
 
 interface StaticIntelCardProps {
   unit: CombatGridUnitSnapshot;
@@ -212,12 +214,13 @@ const styles = StyleSheet.create({
     minHeight: 0,
     maxHeight: '100%',
     width: '100%',
-    paddingHorizontal: 6,
+    paddingHorizontal: 2,
     paddingTop: 0,
-    paddingBottom: 5,
+    paddingBottom: 2,
     overflow: 'hidden',
     justifyContent: 'space-between',
     gap: 4,
+    backgroundColor: 'transparent',
   },
   intelBody: {
     flex: 1,
@@ -257,12 +260,13 @@ const styles = StyleSheet.create({
   },
   intentBox: {
     flexShrink: 0,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 6,
     paddingVertical: 4,
     gap: 1,
-    minHeight: 28,
+    minHeight: 26,
     justifyContent: 'center',
+    borderRadius: 2,
   },
   intentBoxAttack: {
     backgroundColor: INTENT_ATTACK_BG,

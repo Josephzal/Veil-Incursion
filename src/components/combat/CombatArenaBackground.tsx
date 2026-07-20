@@ -52,7 +52,7 @@ function resolveImageAssetSize(source: ImageSourcePropType): AssetSize {
   return DEFAULT_ASSET_SIZE;
 }
 
-/** Cover-fit arena backdrop — fills the panel edge-to-edge, bottom-anchored, uniform scale. */
+/** Cover-fit arena backdrop — fills the panel edge-to-edge, centered, uniform scale. */
 export default function CombatArenaBackground({
   source,
   scrimColor = null,
@@ -74,8 +74,9 @@ export default function CombatArenaBackground({
     const scale = Math.max(containerW / assetW, containerH / assetH);
     const width = assetW * scale;
     const height = assetH * scale;
+    // Cover-fit, centered — fills the panel edge-to-edge with no top/bottom gaps.
     const left = (containerW - width) / 2;
-    const top = containerH - height + 100;
+    const top = (containerH - height) / 2;
 
     return { width, height, left, top };
   }, [assetSize, container]);

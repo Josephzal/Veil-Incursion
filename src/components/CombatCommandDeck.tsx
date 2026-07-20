@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Platform, StyleSheet, Text, View } from 'react-native';
 import { USE_NATIVE_DRIVER } from '../utils/platformMotion';
 import { textGlow, viewShadow } from '../utils/adaptiveStyles';
@@ -6,10 +6,12 @@ import HapticPressable from './HapticPressable';
 import type { AegisAbilityId } from '../types/aegisCombat';
 import { PLAYER_ACTION_POINTS_PER_TURN } from '../types/aegisCombat';
 import CombatApPipRow from './combat/CombatApPipRow';
+import RunFeedChromeButtons from './run/RunFeedChromeButtons';
 import { useCombatDesktopLayout } from '../hooks/useCombatDesktopLayout';
 import { DOSSIER_CTA_BG, DOSSIER_ROW_BG } from '../constants/dossierSurface';
+import { OTT, OTT_LAYOUT } from '../constants/occultTacticalTerminalTheme';
 
-const MONO = 'monospace';
+const MONO = OTT.mono;
 const TILE_HEIGHT = 40;
 const TILE_HEIGHT_DASHBOARD = 25;
 const TILE_MARGIN_BOTTOM = 8;
@@ -21,11 +23,11 @@ const AP_ROW_HEIGHT = 22;
 const GRID_BODY_HEIGHT = TILE_HEIGHT * 2 + TILE_MARGIN_BOTTOM * 2 + GRID_GAP;
 const INITIATIVE_FLOAT_MS = 800;
 const INITIATIVE_SURGE_MS = 300;
-const INITIATIVE_GLOW = '#a78bfa';
-const INITIATIVE_GLOW_PALE = '#bae6fd';
-const END_TURN_ENABLED = '#f87171';
-const END_TURN_BORDER = '#dc2626';
-const END_TURN_BORDER_MUTED = 'rgba(220, 38, 38, 0.45)';
+const INITIATIVE_GLOW = OTT.fluxViolet;
+const INITIATIVE_GLOW_PALE = OTT.cyanSelect;
+const END_TURN_ENABLED = OTT.soulRed;
+const END_TURN_BORDER = OTT.dangerRedDark;
+const END_TURN_BORDER_MUTED = 'rgba(158, 40, 48, 0.45)';
 
 export const COMMAND_DECK_MIN_HEIGHT = AP_ROW_HEIGHT + GRID_GAP + GRID_BODY_HEIGHT + 10;
 export const COMMAND_DECK_MIN_HEIGHT_WITH_ULTIMATE = COMMAND_DECK_MIN_HEIGHT;
@@ -45,6 +47,8 @@ interface CombatCommandDeckProps {
   getActionDisableReason?: (ability: string) => string | null;
   canEndTurn: boolean;
   getAbilityLabel: (ability: string) => string;
+  /** Concept card category line (MELEE / DEFENSE / …). */
+  getAbilityCategory?: (ability: string) => string;
   initiativeQueued?: boolean;
   initiativeProcSeq?: number;
   onInitiativeProcComplete?: () => void;
@@ -89,6 +93,7 @@ export default function CombatCommandDeck({
   getActionDisableReason,
   canEndTurn,
   getAbilityLabel,
+  getAbilityCategory,
   initiativeQueued = false,
   initiativeProcSeq = 0,
   onInitiativeProcComplete,
@@ -127,7 +132,8 @@ export default function CombatCommandDeck({
   const floatOpacity = useRef(new Animated.Value(0)).current;
   const floatTranslateY = useRef(new Animated.Value(8)).current;
   const floatScale = useRef(new Animated.Value(0.86)).current;
-  const [floatVisible, setFloatVisible] = React.useState(false);
+  const [floatVisible, setFloatVisible] = useState(false);
+  const [hoveredAbility, setHoveredAbility] = useState<string | null>(null);
 
   useEffect(() => {
     if (!initiativeQueued) {
@@ -325,35 +331,142 @@ export default function CombatCommandDeck({
   const renderTile = (ability: string) => {
     const enabled = isActionEnabled(ability);
     const accent = getActionAccent?.(ability);
-    const tileBorderColor = enabled && accent ? accent : borderColor;
+    const costImpact = getStagedCostImpact(ability);
     const isSelected = selectedAbility === ability;
+    const tileBorderColor = isSelected
+      ? (dashboardLayout ? OTT.cyanSelect : OTT.terminalGreen)
+      : enabled && accent
+        ? accent
+        : OTT.borderSubtle;
+    // Pull a rough AP digit from cost strings like "1 AP" when present.
+    const apMatch = costImpact.match(/(\d+)\s*AP/i);
+    const apCost = apMatch?.[1] ?? '1';
+
+    if (dashboardLayout) {
+      const category = getAbilityCategory?.(ability) ?? 'ACTION';
+      const slotIndex = String(Math.max(1, loadout.indexOf(ability) + 1)).padStart(2, '0');
+      const abilityName = labelFor(ability).toUpperCase().replace(/^\[\s*/, '').replace(/\s*\]$/, '');
+      const description = getStagedAbilityDescription(ability);
+      const parts = (description || '').split(' // ').map((part) => part.trim()).filter(Boolean);
+      /** Detail panel shows effect copy only — hide ammo/protocol/tag counter lines. */
+      const effectLines = parts
+        .filter((part) => {
+          const upper = part.toUpperCase();
+          return !upper.startsWith('TAGS:')
+            && !upper.startsWith('CATALYST:')
+            && !upper.startsWith('ROUND:')
+            && !upper.startsWith('PROTOCOL:')
+            && !upper.startsWith('AMMO:')
+            && !upper.startsWith('INTRINSIC:');
+        })
+        .slice(0, 3);
+      const spectrallyLit = hoveredAbility === ability;
+      const hoverAccent = isSelected
+        ? OTT.cyanSelect
+        : spectrallyLit
+          ? OTT.terminalGreen
+          : tileBorderColor;
+      const hoverFill = isSelected
+        ? 'rgba(98, 220, 229, 0.12)'
+        : spectrallyLit
+          ? 'rgba(69, 247, 160, 0.14)'
+          : 'rgba(8, 12, 14, 0.42)';
+      return (
+        <HapticPressable
+          key={ability}
+          onPress={() => canSelectActions && onSelectAbility(ability)}
+          disabled={!canSelectActions}
+          onHoverIn={() => setHoveredAbility(ability)}
+          onHoverOut={() => setHoveredAbility((current) => (current === ability ? null : current))}
+          style={[
+            styles.conceptCard,
+            {
+              borderColor: hoverAccent,
+              backgroundColor: hoverFill,
+              shadowColor: isSelected || spectrallyLit ? hoverAccent : 'transparent',
+              shadowOpacity: isSelected || spectrallyLit ? 0.5 : 0,
+              shadowRadius: isSelected || spectrallyLit ? 10 : 0,
+              opacity: enabled ? 1 : 0.4,
+            },
+          ]}
+        >
+          <View style={styles.conceptCardPress}>
+            <View style={styles.conceptCardTop}>
+              <Text style={[
+                styles.conceptSlot,
+                { color: isSelected ? OTT.cyanSelect : OTT.textMuted },
+              ]}>
+                {`${slotIndex} //`}
+              </Text>
+              <View style={styles.apDiamondHost}>
+                <View style={[
+                  styles.apDiamond,
+                  { borderColor: isSelected ? OTT.cyanSelect : OTT.borderSubtle },
+                ]}>
+                  <Text style={[
+                    styles.apDiamondText,
+                    { color: isSelected ? OTT.cyanSelect : OTT.textPrimary },
+                  ]}>
+                    {apCost}
+                  </Text>
+                </View>
+              </View>
+            </View>
+            <Text
+              style={[styles.conceptCardName, { color: enabled ? OTT.textPrimary : OTT.textMuted }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.55}
+            >
+              {abilityName}
+            </Text>
+            <Text style={styles.conceptCardCategory} numberOfLines={1}>
+              {category}
+            </Text>
+            {isSelected ? (
+              <>
+                <Text style={styles.conceptCardDesc} numberOfLines={3}>
+                  {effectLines.join('\n') || costImpact || '—'}
+                </Text>
+                <Text style={[styles.conceptArmed, { color: OTT.terminalGreen }]}>ARMED</Text>
+              </>
+            ) : (
+              <View style={styles.conceptCardSpacer} />
+            )}
+          </View>
+        </HapticPressable>
+      );
+    }
 
     return (
       <View
         key={ability}
         style={[
           styles.tileSlot,
-          dashboardLayout && desktopDeck ? styles.tileSlotDashboardFill : null,
           {
-            borderColor: isSelected ? primaryColor : tileBorderColor,
-            borderWidth: desktopDeck ? 2 : 1,
-            backgroundColor: isSelected ? DOSSIER_CTA_BG : DOSSIER_ROW_BG,
+            borderColor: tileBorderColor,
+            borderWidth: isSelected ? 1.5 : StyleSheet.hairlineWidth,
+            backgroundColor: isSelected ? 'rgba(98, 220, 229, 0.1)' : OTT.deepPanel,
+            shadowColor: isSelected ? OTT.cyanSelect : 'transparent',
+            shadowOpacity: isSelected ? 0.35 : 0,
+            shadowRadius: isSelected ? 6 : 0,
             ...(tileHeight != null ? { height: tileHeight } : null),
-            minHeight: desktopDeck ? scaleCombatSize(44) : undefined,
           },
         ]}
       >
         <HapticPressable
           onPress={() => canSelectActions && onSelectAbility(ability)}
           disabled={!canSelectActions}
-          style={[styles.deckTile, { opacity: enabled ? 1 : 0.4 }]}
+          style={[styles.deckTile, { opacity: enabled ? 1 : 0.38 }]}
         >
+          <Text style={[styles.tileSlotIndex, { color: isSelected ? OTT.cyanSelect : OTT.textMuted }]}>
+            {`${String(Math.max(1, loadout.indexOf(ability) + 1)).padStart(2, '0')} //`}
+          </Text>
           <Text
             style={[
               styles.tileLabel,
-              dashboardLayout && styles.tileLabelDashboard,
               desktopLabelStyle,
-              { color: enabled && accent ? accent : mutedColor },
+              { color: enabled ? (accent || OTT.textPrimary) : OTT.textMuted },
             ]}
             numberOfLines={1}
             adjustsFontSizeToFit
@@ -361,6 +474,11 @@ export default function CombatCommandDeck({
           >
             {labelFor(ability)}
           </Text>
+          {costImpact ? (
+            <Text style={styles.tileMeta} numberOfLines={1}>
+              {costImpact}
+            </Text>
+          ) : null}
         </HapticPressable>
       </View>
     );
@@ -374,15 +492,22 @@ export default function CombatCommandDeck({
     lineHeight: scaleCombatFont(12),
   } : null;
 
+  const endTurnBorder = dashboardLayout
+    ? (canEndTurn ? OTT.cyanSelect : OTT.borderMuted)
+    : (canEndTurn ? END_TURN_BORDER : END_TURN_BORDER_MUTED);
+  const endTurnText = dashboardLayout
+    ? (canEndTurn ? OTT.cyanSelect : OTT.textMuted)
+    : (canEndTurn ? END_TURN_ENABLED : mutedColor);
+
   const renderEndTurnButton = () => (
     initiativeQueued ? (
       <Animated.View
         style={[
-          dashboardLayout ? styles.dashboardTwinActionBtn : styles.endTurnBtn,
+          dashboardLayout ? styles.endTurnBtnDashboard : styles.endTurnBtn,
           {
-            borderColor: queuedBorderColor,
+            borderColor: dashboardLayout ? OTT.cyanSelect : queuedBorderColor,
             opacity: canEndTurn ? 1 : 0.4,
-            ...desktopBtnStyle,
+            ...(dashboardLayout ? null : desktopBtnStyle),
           },
         ]}
       >
@@ -394,7 +519,7 @@ export default function CombatCommandDeck({
           <Text style={[
             styles.endTurnLabel,
             dashboardLayout && styles.endTurnLabelDashboard,
-            desktopActionLabelStyle,
+            dashboardLayout ? null : desktopActionLabelStyle,
             { color: INITIATIVE_GLOW_PALE },
           ]}>
             END TURN
@@ -406,20 +531,22 @@ export default function CombatCommandDeck({
         onPress={onEndTurn}
         disabled={!canEndTurn}
         style={[
-          dashboardLayout ? styles.dashboardTwinActionBtn : styles.endTurnBtn,
+          dashboardLayout ? styles.endTurnBtnDashboard : styles.endTurnBtn,
           {
-            borderColor: canEndTurn ? END_TURN_BORDER : END_TURN_BORDER_MUTED,
-            backgroundColor: canEndTurn ? '#1a1212' : DOSSIER_ROW_BG,
+            borderColor: endTurnBorder,
+            backgroundColor: dashboardLayout
+              ? 'rgba(98, 220, 229, 0.06)'
+              : (canEndTurn ? '#1a1212' : DOSSIER_ROW_BG),
             opacity: canEndTurn ? 1 : 0.4,
-            ...desktopBtnStyle,
+            ...(dashboardLayout ? null : desktopBtnStyle),
           },
         ]}
       >
         <Text style={[
           styles.endTurnLabel,
           dashboardLayout && styles.endTurnLabelDashboard,
-          desktopActionLabelStyle,
-          { color: canEndTurn ? END_TURN_ENABLED : mutedColor },
+          dashboardLayout ? null : desktopActionLabelStyle,
+          { color: endTurnText },
         ]}
           numberOfLines={1}
           adjustsFontSizeToFit
@@ -433,13 +560,35 @@ export default function CombatCommandDeck({
 
   const renderCombatReloadButton = () => {
     if (!combatReloadAvailable) return null;
+    if (dashboardLayout) {
+      return (
+        <HapticPressable
+          onPress={onCombatReload}
+          disabled={!combatReloadEnabled}
+          style={[
+            styles.catalystTile,
+            {
+              borderColor: combatReloadEnabled ? OTT.warningAmber : OTT.borderSubtle,
+              opacity: combatReloadEnabled ? 1 : 0.42,
+            },
+          ]}
+        >
+          <Text style={[styles.catalystTitle, { color: combatReloadEnabled ? OTT.warningAmber : OTT.textSecondary }]}>
+            RELOAD
+          </Text>
+          <Text style={styles.catalystSub}>CLASS ACTION</Text>
+          <Text style={[styles.catalystStatus, { color: combatReloadEnabled ? OTT.warningAmber : OTT.textMuted }]}>
+            {combatReloadEnabled ? 'READY' : 'LOCKED'}
+          </Text>
+        </HapticPressable>
+      );
+    }
     return (
       <HapticPressable
         onPress={onCombatReload}
         disabled={!combatReloadEnabled}
         style={[
-          dashboardTwinBtnStyle,
-          !dashboardLayout ? styles.combatReloadBtn : null,
+          styles.combatReloadBtn,
           {
             borderColor: combatReloadEnabled ? '#fbbf24' : borderColor,
             opacity: combatReloadEnabled ? 1 : 0.4,
@@ -450,7 +599,6 @@ export default function CombatCommandDeck({
         <Text
           style={[
             styles.combatReloadLabel,
-            dashboardLayout ? styles.combatReloadLabelDashboard : null,
             desktopActionLabelStyle,
             { color: combatReloadEnabled ? '#fbbf24' : mutedColor },
           ]}
@@ -466,14 +614,39 @@ export default function CombatCommandDeck({
 
   const renderCatalyticConsoleButton = () => {
     if (!catalyticConsoleAvailable) return null;
-    const accent = catalyticConsoleRotStacks > 0 ? '#4ade80' : borderColor;
+    const ready = catalyticConsoleEnabled && catalyticConsoleRotStacks > 0;
+    const accent = ready ? OTT.terminalGreen : OTT.borderSubtle;
+    const statusLabel = ready ? 'READY' : catalyticConsoleRotStacks > 0 ? 'LOCKED' : 'CHARGING';
+    if (dashboardLayout) {
+      return (
+        <HapticPressable
+          onPress={onCatalyticConsole}
+          disabled={!catalyticConsoleEnabled}
+          style={[
+            styles.catalystTile,
+            {
+              borderColor: accent,
+              opacity: catalyticConsoleEnabled ? 1 : 0.42,
+            },
+          ]}
+        >
+          <Text style={[styles.catalystTitle, { color: ready ? OTT.terminalGreen : OTT.textSecondary }]}>
+            CATALYST
+          </Text>
+          <Text style={styles.catalystSub}>CLASS ACTION</Text>
+          <Text style={[styles.catalystStatus, { color: ready ? OTT.terminalGreenMuted : OTT.textMuted }]}>
+            {statusLabel}
+          </Text>
+        </HapticPressable>
+      );
+    }
     return (
       <HapticPressable
         onPress={onCatalyticConsole}
         disabled={!catalyticConsoleEnabled}
         style={[
           dashboardTwinBtnStyle,
-          !dashboardLayout ? styles.combatReloadBtn : null,
+          styles.combatReloadBtn,
           {
             borderColor: catalyticConsoleEnabled ? accent : borderColor,
             opacity: catalyticConsoleEnabled ? 1 : 0.4,
@@ -484,7 +657,6 @@ export default function CombatCommandDeck({
         <Text
           style={[
             styles.combatReloadLabel,
-            dashboardLayout ? styles.combatReloadLabelDashboard : null,
             desktopActionLabelStyle,
             { color: catalyticConsoleEnabled ? accent : mutedColor },
           ]}
@@ -492,7 +664,7 @@ export default function CombatCommandDeck({
           adjustsFontSizeToFit
           minimumFontScale={0.65}
         >
-            CATALYST
+          CATALYST
         </Text>
       </HapticPressable>
     );
@@ -502,13 +674,41 @@ export default function CombatCommandDeck({
     if (!voidWardAvailable) return null;
     const primed = voidWardPrimed;
     const enabled = voidWardEnabled && !primed;
+    const accent = riposteReady
+      ? OTT.warningAmber
+      : primed || enabled
+        ? OTT.cyanSelect
+        : OTT.borderSubtle;
+    const statusLabel = riposteReady ? 'RIPOSTE' : primed ? 'PRIMED' : enabled ? 'READY' : 'LOCKED';
+    if (dashboardLayout) {
+      return (
+        <HapticPressable
+          onPress={onVoidWardPrime}
+          disabled={!enabled}
+          style={[
+            styles.catalystTile,
+            {
+              borderColor: accent,
+              opacity: primed || enabled || riposteReady ? 1 : 0.42,
+            },
+          ]}
+        >
+          <Text style={[styles.catalystTitle, { color: accent === OTT.borderSubtle ? OTT.textSecondary : accent }]}>
+            {riposteReady ? 'RIPOSTE' : 'PARRY'}
+          </Text>
+          <Text style={styles.catalystSub}>CLASS ACTION</Text>
+          <Text style={[styles.catalystStatus, { color: accent === OTT.borderSubtle ? OTT.textMuted : accent }]}>
+            {statusLabel}
+          </Text>
+        </HapticPressable>
+      );
+    }
     return (
       <HapticPressable
         onPress={onVoidWardPrime}
         disabled={!enabled}
         style={[
-          dashboardTwinBtnStyle,
-          !dashboardLayout ? styles.combatReloadBtn : null,
+          styles.combatReloadBtn,
           {
             borderColor: riposteReady
               ? '#fbbf24'
@@ -525,7 +725,6 @@ export default function CombatCommandDeck({
         <Text
           style={[
             styles.combatReloadLabel,
-            dashboardLayout ? styles.combatReloadLabelDashboard : null,
             desktopActionLabelStyle,
             {
               color: riposteReady
@@ -713,16 +912,268 @@ export default function CombatCommandDeck({
     </View>
   );
 
-  const renderAbilityGrid = () => (
-    <View style={[styles.deckBody, dashboardLayout && styles.abilitiesSection]}>
-      <View style={[styles.abilityGrid, dashboardLayout && styles.abilityGridDashboard]}>
-        <View style={[styles.abilityRow, dashboardLayout && styles.abilityRowDashboard]}>
-          {renderTile(loadout[0])}
-          {renderTile(loadout[1])}
+  const renderClassActionDeckCard = () => {
+    if (!dashboardLayout) return null;
+
+    if (combatReloadAvailable) {
+      const ready = combatReloadEnabled;
+      const accent = ready ? OTT.warningAmber : OTT.borderSubtle;
+      return (
+        <HapticPressable
+          key="class-action-reload"
+          onPress={onCombatReload}
+          disabled={!ready}
+          onHoverIn={() => setHoveredAbility('__CLASS_RELOAD__')}
+          onHoverOut={() => setHoveredAbility((current) => (current === '__CLASS_RELOAD__' ? null : current))}
+          style={[
+            styles.conceptCard,
+            {
+              borderColor: hoveredAbility === '__CLASS_RELOAD__' || ready ? accent : OTT.borderSubtle,
+              backgroundColor: hoveredAbility === '__CLASS_RELOAD__'
+                ? 'rgba(224, 180, 90, 0.14)'
+                : 'rgba(8, 12, 14, 0.42)',
+              opacity: ready ? 1 : 0.42,
+            },
+          ]}
+        >
+          <View style={styles.conceptCardPress}>
+            <View style={styles.conceptCardTop}>
+              <Text style={[styles.conceptSlot, { color: OTT.textMuted }]}>05 //</Text>
+              <Text style={[styles.conceptClassBadge, { color: accent }]}>CA</Text>
+            </View>
+            <Text
+              style={[styles.conceptCardName, { color: ready ? OTT.warningAmber : OTT.textMuted }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.55}
+            >
+              RELOAD
+            </Text>
+            <Text style={styles.conceptCardCategory} numberOfLines={1}>CLASS ACTION</Text>
+            <Text style={styles.conceptCardDesc} numberOfLines={3}>
+              {ready ? 'Chamber tactical reload.' : 'Reload locked.'}
+            </Text>
+            <Text style={[styles.conceptArmed, { color: accent }]}>
+              {ready ? 'READY' : 'LOCKED'}
+            </Text>
+          </View>
+        </HapticPressable>
+      );
+    }
+
+    if (catalyticConsoleAvailable) {
+      const ready = catalyticConsoleEnabled && catalyticConsoleRotStacks > 0;
+      const accent = ready ? OTT.terminalGreen : OTT.borderSubtle;
+      const statusLabel = ready ? 'READY' : catalyticConsoleRotStacks > 0 ? 'LOCKED' : 'CHARGING';
+      return (
+        <HapticPressable
+          key="class-action-catalyst"
+          onPress={onCatalyticConsole}
+          disabled={!catalyticConsoleEnabled}
+          onHoverIn={() => setHoveredAbility('__CLASS_CATALYST__')}
+          onHoverOut={() => setHoveredAbility((current) => (current === '__CLASS_CATALYST__' ? null : current))}
+          style={[
+            styles.conceptCard,
+            {
+              borderColor: hoveredAbility === '__CLASS_CATALYST__' || ready ? accent : OTT.borderSubtle,
+              backgroundColor: hoveredAbility === '__CLASS_CATALYST__'
+                ? 'rgba(69, 247, 160, 0.14)'
+                : 'rgba(8, 12, 14, 0.42)',
+              opacity: catalyticConsoleEnabled ? 1 : 0.42,
+            },
+          ]}
+        >
+          <View style={styles.conceptCardPress}>
+            <View style={styles.conceptCardTop}>
+              <Text style={[styles.conceptSlot, { color: OTT.textMuted }]}>05 //</Text>
+              <Text style={[styles.conceptClassBadge, { color: ready ? OTT.terminalGreen : OTT.textMuted }]}>CA</Text>
+            </View>
+            <Text
+              style={[styles.conceptCardName, { color: ready ? OTT.terminalGreen : OTT.textMuted }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.55}
+            >
+              CATALYST
+            </Text>
+            <Text style={styles.conceptCardCategory} numberOfLines={1}>CLASS ACTION</Text>
+            <Text style={styles.conceptCardDesc} numberOfLines={3}>
+              {`Discharge Veil Rot payload. ${catalyticConsoleRotStacks} stacks.`}
+            </Text>
+            <Text style={[styles.conceptArmed, { color: ready ? OTT.terminalGreen : OTT.textMuted }]}>
+              {statusLabel}
+            </Text>
+          </View>
+        </HapticPressable>
+      );
+    }
+
+    if (voidWardAvailable) {
+      const primed = voidWardPrimed;
+      const enabled = voidWardEnabled && !primed;
+      const accent = riposteReady
+        ? OTT.warningAmber
+        : primed || enabled
+          ? OTT.cyanSelect
+          : OTT.borderSubtle;
+      const title = riposteReady ? 'RIPOSTE' : 'PARRY';
+      const statusLabel = riposteReady ? 'RIPOSTE' : primed ? 'PRIMED' : enabled ? 'READY' : 'LOCKED';
+      return (
+        <HapticPressable
+          key="class-action-parry"
+          onPress={onVoidWardPrime}
+          disabled={!enabled}
+          onHoverIn={() => setHoveredAbility('__CLASS_PARRY__')}
+          onHoverOut={() => setHoveredAbility((current) => (current === '__CLASS_PARRY__' ? null : current))}
+          style={[
+            styles.conceptCard,
+            {
+              borderColor: hoveredAbility === '__CLASS_PARRY__' || accent !== OTT.borderSubtle
+                ? accent
+                : OTT.borderSubtle,
+              backgroundColor: hoveredAbility === '__CLASS_PARRY__'
+                ? 'rgba(98, 220, 229, 0.14)'
+                : 'rgba(8, 12, 14, 0.42)',
+              opacity: primed || enabled || riposteReady ? 1 : 0.42,
+            },
+          ]}
+        >
+          <View style={styles.conceptCardPress}>
+            <View style={styles.conceptCardTop}>
+              <Text style={[styles.conceptSlot, { color: OTT.textMuted }]}>05 //</Text>
+              <Text style={[styles.conceptClassBadge, { color: accent === OTT.borderSubtle ? OTT.textMuted : accent }]}>CA</Text>
+            </View>
+            <Text
+              style={[
+                styles.conceptCardName,
+                { color: accent === OTT.borderSubtle ? OTT.textMuted : accent },
+              ]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.55}
+            >
+              {title}
+            </Text>
+            <Text style={styles.conceptCardCategory} numberOfLines={1}>CLASS ACTION</Text>
+            <Text style={styles.conceptCardDesc} numberOfLines={3}>
+              {riposteReady
+                ? 'Counter window open.'
+                : primed
+                  ? 'Ward primed.'
+                  : enabled
+                    ? 'Prime defensive ward.'
+                    : 'Parry locked.'}
+            </Text>
+            <Text style={[styles.conceptArmed, { color: accent === OTT.borderSubtle ? OTT.textMuted : accent }]}>
+              {statusLabel}
+            </Text>
+          </View>
+        </HapticPressable>
+      );
+    }
+
+    return null;
+  };
+
+  const renderAbilityGrid = () => {
+    if (dashboardLayout) {
+      return (
+        <View style={styles.conceptCardRow}>
+          {loadout.slice(0, 4).map((ability) => renderTile(ability))}
+          {renderClassActionDeckCard()}
         </View>
-        <View style={[styles.abilityRow, dashboardLayout && styles.abilityRowDashboard]}>
-          {renderTile(loadout[2])}
-          {renderTile(loadout[3])}
+      );
+    }
+    return (
+      <View style={styles.deckBody}>
+        <View style={styles.abilityGrid}>
+          <View style={styles.abilityRow}>
+            {renderTile(loadout[0])}
+            {renderTile(loadout[1])}
+          </View>
+          <View style={styles.abilityRow}>
+            {renderTile(loadout[2])}
+            {renderTile(loadout[3])}
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  const renderCommitSideButtons = () => {
+    const hasArmedAbility = selectedAbility != null;
+    return (
+      <>
+        <View style={styles.conceptActionSlot}>
+          <HapticPressable
+            onPress={onConfirm}
+            disabled={!canExecute}
+            style={[
+              styles.sideCommitBtn,
+              styles.sideExecuteBtn,
+              { opacity: canExecute ? 1 : 0.38 },
+            ]}
+          >
+            <Text style={[
+              styles.sideExecuteLabel,
+              !canExecute && styles.sideCommitLabelMuted,
+            ]}>
+              EXECUTE
+            </Text>
+          </HapticPressable>
+        </View>
+        <View style={styles.conceptActionSlot}>
+          <HapticPressable
+            onPress={onAbort}
+            disabled={!hasArmedAbility}
+            style={[
+              styles.sideCommitBtn,
+              styles.sideAbortBtn,
+              { opacity: hasArmedAbility ? 1 : 0.38 },
+            ]}
+          >
+            <Text style={[
+              styles.sideAbortLabel,
+              !hasArmedAbility && styles.sideCommitLabelMuted,
+            ]}>
+              ABORT
+            </Text>
+          </HapticPressable>
+        </View>
+      </>
+    );
+  };
+
+  const renderConceptDashboard = () => (
+    <View style={styles.conceptDeck}>
+      <View style={styles.conceptMain}>
+        <View style={styles.conceptApBand}>
+          <CombatApPipRow
+            current={shownAp}
+            max={maxActionPoints}
+            accent={OTT.cyanSelect}
+            mutedColor={OTT.cyanSelect}
+            queued={initiativeQueued}
+            conceptBand
+            centered
+          />
+        </View>
+        {renderAbilityGrid()}
+      </View>
+      <View style={styles.conceptTurnCol}>
+        <View style={styles.conceptTurnActions}>
+          {renderCommitSideButtons()}
+          <View style={styles.conceptActionSlot}>
+            {renderEndTurnButton()}
+          </View>
+        </View>
+        <View style={styles.conceptChromeSpacer} />
+        <View style={styles.conceptChrome}>
+          <RunFeedChromeButtons
+            accent={OTT.terminalGreen}
+            mutedColor={OTT.textMuted}
+            terminal
+          />
         </View>
       </View>
     </View>
@@ -767,14 +1218,10 @@ export default function CombatCommandDeck({
         />
 
         <View style={[deckShellStyle, dashboardLayout && styles.commandDeckDashboard]}>
-          {selectedAbility ? (
+          {dashboardLayout ? (
+            renderConceptDashboard()
+          ) : selectedAbility ? (
             renderStagedPanel()
-          ) : dashboardLayout ? (
-            <>
-              {renderDashboardTopBand(true)}
-              {renderSecondaryActions()}
-              {renderAbilityGrid()}
-            </>
           ) : (
             <>
               <View style={styles.apRow}>
@@ -839,7 +1286,7 @@ const styles = StyleSheet.create({
     minHeight: 0,
   },
   surgeRing: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     borderWidth: 2,
     borderRadius: 2,
     backgroundColor: 'rgba(167, 139, 250, 0.08)',
@@ -942,7 +1389,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: DOSSIER_ROW_BG,
+    backgroundColor: 'transparent',
   },
   bloodForTimeBtn: {
     borderWidth: 1,
@@ -1002,16 +1449,279 @@ const styles = StyleSheet.create({
     backgroundColor: DOSSIER_ROW_BG,
   },
   endTurnBtnDashboard: {
+    width: '100%',
+    height: 40,
+    maxHeight: 40,
+    paddingHorizontal: 8,
+    paddingVertical: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: OTT.cyanSelect,
+    backgroundColor: 'rgba(98, 220, 229, 0.06)',
+    overflow: 'hidden',
+  },
+  conceptDeck: {
+    flex: 1,
+    minHeight: 0,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 8,
+  },
+  conceptMain: {
     flex: 1,
     minWidth: 0,
-    minHeight: DASHBOARD_END_TURN_HEIGHT,
-    paddingHorizontal: 4,
-    paddingVertical: 3,
+    minHeight: 0,
+    gap: 6,
+    alignItems: 'center',
+  },
+  conceptApBand: {
+    flexShrink: 0,
+    alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 24,
+    width: '100%',
+  },
+  conceptHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    flexShrink: 0,
+  },
+  conceptClassActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flexShrink: 1,
+  },
+  conceptCardRow: {
+    flexGrow: 0,
+    flexShrink: 1,
+    minHeight: 0,
+    width: '100%',
+    maxWidth: 920,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    justifyContent: 'center',
+    gap: 10,
+    alignSelf: 'center',
+  },
+  conceptCard: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
+    maxWidth: 168,
+    minWidth: 110,
+    height: 178,
+    borderWidth: 1.25,
+    borderRadius: 2,
+    overflow: 'hidden',
+    shadowOffset: { width: 0, height: 0 },
+  },
+  conceptCardPress: {
+    flex: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    gap: 3,
+  },
+  conceptCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+  },
+  conceptSlot: {
+    fontFamily: MONO,
+    fontSize: 7,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+  },
+  apDiamondHost: {
+    width: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    overflow: 'visible',
+  },
+  apDiamond: {
+    width: 13,
+    height: 13,
+    borderWidth: 1.25,
+    backgroundColor: 'transparent',
+    transform: [{ rotate: '45deg' }],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  apDiamondText: {
+    fontFamily: MONO,
+    fontSize: 8,
+    fontWeight: '800',
+    transform: [{ rotate: '-45deg' }],
+  },
+  conceptCardName: {
+    fontFamily: MONO,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+    width: '100%',
+  },
+  conceptCardCategory: {
+    fontFamily: MONO,
+    fontSize: 7,
+    fontWeight: '700',
+    letterSpacing: 0.7,
+    color: OTT.textSecondary,
+  },
+  conceptCardDesc: {
+    fontFamily: MONO,
+    fontSize: 8,
+    lineHeight: 11,
+    color: OTT.textPrimary,
+    marginTop: 2,
+    flexGrow: 1,
+    flexShrink: 1,
+    minHeight: 0,
+  },
+  conceptCardSpacer: {
+    flexGrow: 1,
+    minHeight: 8,
+  },
+  conceptCardTags: {
+    fontFamily: MONO,
+    fontSize: 6,
+    letterSpacing: 0.4,
+    color: OTT.textMuted,
+    marginTop: 2,
+  },
+  conceptArmed: {
+    fontFamily: MONO,
+    fontSize: 6,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    color: OTT.terminalGreen,
+    marginTop: 2,
+  },
+  conceptClassBadge: {
+    fontFamily: MONO,
+    fontSize: 8,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  sideCommitBtn: {
+    width: '100%',
+    height: 40,
+    maxHeight: 40,
+    borderWidth: 1.5,
+    borderRadius: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 0,
+    overflow: 'hidden',
+  },
+  sideExecuteBtn: {
+    borderColor: OTT.terminalGreen,
+    backgroundColor: 'rgba(69, 247, 160, 0.08)',
+  },
+  sideExecuteLabel: {
+    fontFamily: MONO,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    color: OTT.terminalGreen,
+  },
+  sideAbortBtn: {
+    borderColor: OTT.borderSubtle,
+    backgroundColor: 'rgba(8, 12, 14, 0.55)',
+  },
+  sideAbortLabel: {
+    fontFamily: MONO,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    color: OTT.textSecondary,
+  },
+  sideCommitLabelMuted: {
+    color: OTT.textMuted,
+  },
+  conceptTurnCol: {
+    width: OTT_LAYOUT.consoleSideWidth,
+    flexShrink: 0,
+    alignSelf: 'stretch',
+    justifyContent: 'flex-end',
+    gap: 0,
+    paddingTop: 28,
+    paddingBottom: 2,
+    overflow: 'hidden',
+  },
+  conceptTurnActions: {
+    flexGrow: 0,
+    flexShrink: 0,
+    gap: 6,
+    justifyContent: 'flex-end',
+  },
+  conceptActionSlot: {
+    flexGrow: 0,
+    flexShrink: 0,
+    height: 40,
+    width: '100%',
+    overflow: 'hidden',
+  },
+  conceptChromeSpacer: {
+    height: 14,
+    flexGrow: 0,
+    flexShrink: 0,
+  },
+  conceptChrome: {
+    flexGrow: 0,
+    flexShrink: 0,
+    width: '100%',
+    minHeight: 28,
+    alignItems: 'stretch',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
+  catalystTile: {
+    width: '100%',
+    flex: 1,
+    minHeight: 72,
+    borderWidth: 1.5,
+    borderRadius: 2,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    gap: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(98, 220, 229, 0.05)',
+  },
+  catalystTitle: {
+    fontFamily: MONO,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.1,
+    textAlign: 'center',
+  },
+  catalystSub: {
+    fontFamily: MONO,
+    fontSize: 6,
+    letterSpacing: 0.8,
+    color: OTT.textMuted,
+    textAlign: 'center',
+  },
+  catalystStatus: {
+    fontFamily: MONO,
+    fontSize: 7,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textAlign: 'center',
   },
   endTurnPressable: {
     width: '100%',
+    flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   endTurnLabel: {
     fontFamily: MONO,
@@ -1020,8 +1730,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
   endTurnLabelDashboard: {
-    fontSize: 5.5,
-    letterSpacing: 0.25,
+    fontSize: 10,
+    letterSpacing: 1.1,
+    fontWeight: '800',
+    textAlign: 'center',
   },
   deckBody: {
     position: 'relative',
@@ -1052,26 +1764,49 @@ const styles = StyleSheet.create({
     flex: 1,
     flexBasis: 0,
     minWidth: 0,
-    borderWidth: 1,
-    backgroundColor: DOSSIER_ROW_BG,
+    borderWidth: StyleSheet.hairlineWidth,
+    backgroundColor: OTT.deepPanel,
+    borderRadius: 2,
   },
   deckTile: {
     flex: 1,
     height: '100%',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    gap: 1,
+  },
+  tileSlotIndex: {
+    fontFamily: MONO,
+    fontSize: 5,
+    fontWeight: '700',
+    letterSpacing: 0.8,
   },
   tileLabel: {
     fontFamily: MONO,
     fontSize: 7,
-    fontWeight: 'bold',
-    letterSpacing: 0.3,
-    textAlign: 'center',
+    fontWeight: '800',
+    letterSpacing: 0.4,
+    textAlign: 'left',
   },
   tileLabelDashboard: {
     fontSize: 6,
-    letterSpacing: 0.25,
+    letterSpacing: 0.3,
+  },
+  tileMeta: {
+    fontFamily: MONO,
+    fontSize: 5,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+    color: OTT.textSecondary,
+  },
+  tileArmed: {
+    fontFamily: MONO,
+    fontSize: 5,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    color: OTT.cyanSelect,
   },
   stagedPanel: {
     width: '100%',
@@ -1089,6 +1824,9 @@ const styles = StyleSheet.create({
   },
   stagedActionRowDashboard: {
     flexShrink: 0,
+    width: '100%',
+    maxWidth: 860,
+    alignSelf: 'center',
   },
   stagedMeta: {
     width: '100%',

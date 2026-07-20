@@ -1,86 +1,78 @@
 import React from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
 import type { CombatTurnOrderSnapshot, CombatTurnOrderEntry } from '../../utils/combatTurnOrder';
-
-const MONO = 'monospace';
-const HOSTILE_ACCENT = '#ef4444';
+import { OTT } from '../../constants/occultTacticalTerminalTheme';
 
 interface CombatTurnOrderTimelineProps {
   turnOrder: CombatTurnOrderSnapshot | null | undefined;
   primaryColor: string;
   mutedColor: string;
+  /** Optional portraits keyed by turn-order entry id. */
+  portraitsById?: Record<string, ImageSourcePropType>;
 }
 
 function chipColors(
   entry: CombatTurnOrderEntry,
-  primaryColor: string,
-  mutedColor: string,
-): { border: string; background: string; text: string; opacity: number } {
+): { border: string; glow: string; opacity: number; label: string } {
   if (entry.state === 'defeated') {
     return {
-      border: 'rgba(100, 116, 139, 0.35)',
-      background: 'rgba(15, 23, 42, 0.5)',
-      text: mutedColor,
-      opacity: 0.45,
+      border: OTT.borderMuted,
+      glow: 'transparent',
+      opacity: 0.35,
+      label: OTT.textMuted,
     };
   }
-
   if (entry.kind === 'operative') {
-    if (entry.state === 'active') {
-      return {
-        border: primaryColor,
-        background: 'rgba(139, 92, 246, 0.18)',
-        text: primaryColor,
-        opacity: 1,
-      };
-    }
+    const active = entry.state === 'active';
     return {
-      border: 'rgba(139, 92, 246, 0.35)',
-      background: 'rgba(15, 23, 42, 0.7)',
-      text: mutedColor,
-      opacity: 0.7,
+      border: active ? OTT.terminalGreen : OTT.cyanDim,
+      glow: active ? OTT.terminalGreen : 'transparent',
+      opacity: 1,
+      label: active ? OTT.terminalGreen : OTT.textSecondary,
     };
   }
-
   if (entry.state === 'active') {
     return {
-      border: HOSTILE_ACCENT,
-      background: 'rgba(239, 68, 68, 0.16)',
-      text: HOSTILE_ACCENT,
+      border: OTT.soulRed,
+      glow: OTT.soulRed,
       opacity: 1,
+      label: OTT.soulRed,
     };
   }
-
-  if (entry.state === 'queued') {
-    return {
-      border: 'rgba(239, 68, 68, 0.45)',
-      background: 'rgba(15, 23, 42, 0.82)',
-      text: '#fca5a5',
-      opacity: 0.9,
-    };
-  }
-
   return {
-    border: 'rgba(148, 163, 184, 0.3)',
-    background: 'rgba(15, 23, 42, 0.65)',
-    text: mutedColor,
-    opacity: 0.65,
+    border: OTT.borderSubtle,
+    glow: 'transparent',
+    opacity: entry.state === 'queued' ? 0.8 : 0.55,
+    label: OTT.textSecondary,
   };
 }
 
-/** Horizontal turn-order strip for the dashboard hostile column. */
+function shortLabel(entry: CombatTurnOrderEntry): string {
+  if (entry.kind === 'operative') return 'YOU';
+  const raw = entry.label.replace(/^HOSTILE[_\s]*/i, '').trim();
+  return raw.length > 9 ? `${raw.slice(0, 8)}…` : raw.toUpperCase();
+}
+
+/** Compact diamond turn-order timeline — no oversized empty frame. */
 export default function CombatTurnOrderTimeline({
   turnOrder,
-  primaryColor,
   mutedColor,
+  portraitsById,
 }: CombatTurnOrderTimelineProps): React.JSX.Element {
   const entries = turnOrder?.entries ?? [];
+  const phase = turnOrder?.phase;
+  const roundLabel =
+    phase === 'PLAYER_COMMAND'
+      ? 'ROUND // YOUR TURN'
+      : phase === 'ENEMY_WINDUP' || phase === 'ENEMY_ACTION' || phase === 'PARRY_WINDOW'
+        ? 'ROUND // HOSTILE'
+        : 'TURN ORDER';
 
   return (
     <View style={styles.host}>
-      <Text style={[styles.header, { color: mutedColor }]}>TURN ORDER // INITIATIVE</Text>
+      <Text style={styles.header}>{roundLabel}</Text>
       {entries.length === 0 ? (
-        <Text style={[styles.empty, { color: mutedColor }]}>Awaiting combat telemetry…</Text>
+        <Text style={[styles.empty, { color: mutedColor }]}>AWAITING…</Text>
       ) : (
         <ScrollView
           horizontal
@@ -88,31 +80,36 @@ export default function CombatTurnOrderTimeline({
           contentContainerStyle={styles.scrollContent}
         >
           {entries.map((entry, index) => {
-            const palette = chipColors(entry, primaryColor, mutedColor);
+            const palette = chipColors(entry);
+            const portrait = portraitsById?.[entry.id];
+            const active = entry.state === 'active';
             return (
               <React.Fragment key={`${entry.id}-${index}`}>
-                {index > 0 ? (
-                  <Text style={[styles.arrow, { color: mutedColor }]}>›</Text>
-                ) : null}
-                <View
-                  style={[
-                    styles.chip,
-                    {
-                      borderColor: palette.border,
-                      backgroundColor: palette.background,
-                      opacity: palette.opacity,
-                    },
-                    entry.state === 'active' && styles.chipActive,
-                  ]}
-                >
-                  <Text style={[styles.chipLabel, { color: palette.text }]} numberOfLines={1}>
-                    {entry.label}
+                {index > 0 ? <View style={styles.connector} /> : null}
+                <View style={[styles.chipCol, { opacity: palette.opacity }]}>
+                  <View
+                    style={[
+                      styles.diamondFrame,
+                      {
+                        borderColor: palette.border,
+                        shadowColor: palette.glow,
+                      },
+                      active && styles.diamondActive,
+                    ]}
+                  >
+                    <View style={styles.diamondInner}>
+                      {portrait ? (
+                        <Image source={portrait} style={styles.portrait} resizeMode="cover" />
+                      ) : (
+                        <Text style={[styles.initial, { color: palette.label }]}>
+                          {shortLabel(entry).slice(0, 2)}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                  <Text style={[styles.chipLabel, { color: palette.label }]} numberOfLines={1}>
+                    {shortLabel(entry)}
                   </Text>
-                  {entry.intentLabel && entry.kind === 'hostile' ? (
-                    <Text style={[styles.intent, { color: mutedColor }]} numberOfLines={1}>
-                      {entry.intentLabel}
-                    </Text>
-                  ) : null}
                 </View>
               </React.Fragment>
             );
@@ -123,64 +120,90 @@ export default function CombatTurnOrderTimeline({
   );
 }
 
+const DIAMOND = 24;
+
 const styles = StyleSheet.create({
   host: {
-    width: '100%',
-    gap: 4,
-    paddingBottom: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(51, 51, 51, 0.9)',
+    alignSelf: 'center',
+    gap: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 2,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: OTT.borderMuted,
+    backgroundColor: 'rgba(8, 12, 14, 0.55)',
   },
   header: {
-    fontFamily: MONO,
-    fontSize: 6,
+    fontFamily: OTT.mono,
+    fontSize: 7,
     fontWeight: '700',
-    letterSpacing: 0.6,
+    letterSpacing: 1.4,
+    color: OTT.terminalGreenMuted,
+    textAlign: 'center',
   },
   empty: {
-    fontFamily: MONO,
+    fontFamily: OTT.mono,
     fontSize: 6,
-    opacity: 0.75,
-    paddingVertical: 2,
+    textAlign: 'center',
   },
   scrollContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 2,
+    justifyContent: 'center',
+    paddingVertical: 1,
+  },
+  connector: {
+    width: 14,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: OTT.borderSubtle,
+    marginHorizontal: 1,
+    marginBottom: 10,
+  },
+  chipCol: {
+    alignItems: 'center',
     gap: 2,
+    width: 44,
   },
-  arrow: {
-    fontFamily: MONO,
-    fontSize: 10,
-    opacity: 0.55,
-    paddingHorizontal: 1,
-  },
-  chip: {
-    borderWidth: 1,
-    borderRadius: 3,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    minWidth: 44,
-    maxWidth: 88,
-    gap: 1,
-  },
-  chipActive: {
-    shadowColor: '#ef4444',
-    shadowOpacity: 0.35,
-    shadowRadius: 6,
+  diamondFrame: {
+    width: DIAMOND,
+    height: DIAMOND,
+    borderWidth: 1.25,
+    borderRadius: 2,
+    transform: [{ rotate: '45deg' }],
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(5, 7, 8, 0.88)',
+    overflow: 'hidden',
+    shadowOpacity: 0,
+    shadowRadius: 0,
     shadowOffset: { width: 0, height: 0 },
+  },
+  diamondActive: {
+    shadowOpacity: 0.45,
+    shadowRadius: 6,
     elevation: 2,
   },
-  chipLabel: {
-    fontFamily: MONO,
-    fontSize: 7,
-    fontWeight: '700',
-    letterSpacing: 0.4,
+  diamondInner: {
+    width: DIAMOND - 5,
+    height: DIAMOND - 5,
+    transform: [{ rotate: '-45deg' }],
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
   },
-  intent: {
-    fontFamily: MONO,
-    fontSize: 5,
-    letterSpacing: 0.25,
-    opacity: 0.85,
+  portrait: {
+    width: '100%',
+    height: '100%',
+  },
+  initial: {
+    fontFamily: OTT.mono,
+    fontSize: 7,
+    fontWeight: '800',
+  },
+  chipLabel: {
+    fontFamily: OTT.mono,
+    fontSize: 6,
+    fontWeight: '800',
+    letterSpacing: 0.4,
   },
 });

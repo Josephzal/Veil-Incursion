@@ -51,6 +51,7 @@ import type { GraftCastPlan } from '../types/veilGraft';
 import { COMBAT_CONSUMABLE_AP_COST, resolveHostileHpHit } from '../data/aegisAbilityResolver';
 import { stripKineticArmor, stripOccultWards } from '../data/combatDefenseLayerEngine';
 import { DEFENSE_TELEGRAPH_PROFILES } from '../data/combatArenaDefenseTelegraphEngine';
+import { resolveAbilityUiCategory } from '../data/combatAbilityDefenseTags';
 import { COMBAT_DEFENSE_BALANCE } from '../data/balance/combatDefenseBalanceConfig';
 import { resolveAbilityDefenseTags } from '../data/combatAbilityDefenseTags';
 import {
@@ -8413,6 +8414,7 @@ export default function TacticalCombatHub({
       canSelectActions={isPlayerTurn && cycleState === 'TEXT_COMBAT' && !shadowstepProcActive}
       getActionDisableReason={getOperativeAbilityDisableReason}
       getAbilityLabel={(abilityId) => formatAbilityLabel(operativeClass, abilityId)}
+      getAbilityCategory={(abilityId) => resolveAbilityUiCategory(operativeClass, abilityId)}
       canEndTurn={isPlayerTurn && cycleState === 'TEXT_COMBAT' && !shadowstepProcActive}
       getStagedCostImpact={getStagedCostImpact}
       getStagedAbilityDescription={getStagedAbilityDescription}

@@ -11,14 +11,17 @@ import CombatOperativeAugmentRow from './CombatOperativeAugmentRow';
 import PlayerEntity from './PlayerEntity';
 import type { CombatAugmentIcon } from '../../utils/combatAugmentIcons';
 import { OPERATIVE_ARENA_SPRITE_WIDTH, OPERATIVE_ARENA_LEFT_INSET, OPERATIVE_ARENA_TOP_INSET } from '../../constants/combatLayout';
+import { OTT_STAGE } from '../../constants/occultTacticalTerminalTheme';
 import { useCombatDesktopLayout } from '../../hooks/useCombatDesktopLayout';
 import type { ClassType } from '../../types/game';
 import type { CombatPlayerViewportRef } from './CombatPlayerViewport';
+import CombatGroundContact from './ui/CombatGroundContact';
 
 function operativeScaleForClass(operativeClass: ClassType, isCombatDesktop: boolean): number {
-  if (!isCombatDesktop) return 1;
-  if (operativeClass === 'AEGIS') return 1.4;
-  return 1.15;
+  if (!isCombatDesktop) return 0.92;
+  if (operativeClass === 'AEGIS') return 1.1;
+  if (operativeClass === 'ENVOY') return 1.4;
+  return 1.6;
 }
 
 interface CombatLandscapeArenaProps {
@@ -53,7 +56,7 @@ export default function CombatLandscapeArena({
   const operativeScale = operativeScaleForClass(operativeClass, isCombatDesktop);
   const meleeWide = operativeClass === 'AEGIS';
   const spriteSlotWidth = OPERATIVE_ARENA_SPRITE_WIDTH * (meleeWide ? 1.45 : 1);
-  const operativeLeft = isCombatDesktop ? '10%' : 0;
+  const operativeLeft = isCombatDesktop ? OTT_STAGE.playerLeftPercent : '6%';
   const { ui } = useCombatEnemyChrome();
   const eviscerateTargetPortrait = useMemo(() => {
     if (!ui.eviscerateTargetUnitId) return null;
@@ -81,7 +84,7 @@ export default function CombatLandscapeArena({
             width: spriteSlotWidth * operativeScale + scaleCombatSize(28),
             paddingLeft: scaleCombatSize(OPERATIVE_ARENA_LEFT_INSET),
             paddingTop: scaleCombatSize(OPERATIVE_ARENA_TOP_INSET),
-          } : null,
+          } : { left: operativeLeft },
         ]}
         pointerEvents="box-none"
       >
@@ -96,6 +99,7 @@ export default function CombatLandscapeArena({
             } : null,
           ]}
         >
+          <CombatGroundContact active />
           <PlayerEntity
             playerViewportRef={playerViewportRef}
             operativeClass={operativeClass}
@@ -137,9 +141,9 @@ const styles = StyleSheet.create({
   },
   operativeZone: {
     position: 'absolute',
-    bottom: 0,
     left: 0,
     top: 0,
+    bottom: 0,
     width: OPERATIVE_ARENA_SPRITE_WIDTH + 24,
     zIndex: 12,
     flexDirection: 'column',
@@ -147,16 +151,18 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     paddingLeft: OPERATIVE_ARENA_LEFT_INSET,
     paddingTop: OPERATIVE_ARENA_TOP_INSET,
+    paddingBottom: 0,
   },
   operativeSpriteSlot: {
     width: OPERATIVE_ARENA_SPRITE_WIDTH,
     flexShrink: 0,
     flex: 1,
     minHeight: 100,
-    maxHeight: '82%',
+    maxHeight: '92%',
     justifyContent: 'flex-end',
     alignItems: 'flex-start',
     overflow: 'visible',
+    position: 'relative',
   },
   enemyGridHost: {
     ...StyleSheet.absoluteFill,

@@ -27,7 +27,7 @@ export function resolveAbilityDefenseTags(
   };
 }
 
-function readAbilityTags(classId: ClassType, abilityId: string): readonly string[] {
+export function readAbilityTags(classId: ClassType, abilityId: string): readonly string[] {
   if (classId === 'AEGIS') {
     try {
       return getAbilityDefinition(abilityId as AegisAbilityId)?.tags ?? [];
@@ -42,4 +42,18 @@ function readAbilityTags(classId: ClassType, abilityId: string): readonly string
     return ENVOY_ABILITY_CATALOG[abilityId as EnvoyAbilityId]?.tags ?? [];
   }
   return [];
+}
+
+/** UI-only category chip for concept ability cards. */
+export function resolveAbilityUiCategory(classId: ClassType, abilityId: string): string {
+  const tags = readAbilityTags(classId, abilityId);
+  if (tags.includes('DEFENSIVE') || tags.includes('DEFENSE')) return 'DEFENSE';
+  if (tags.includes('MELEE')) return 'MELEE';
+  if (tags.includes('RANGED')) return 'RANGED';
+  if (tags.includes('UTILITY') || tags.includes('MOBILITY') || tags.includes('SUPPORT')) {
+    return 'UTILITY';
+  }
+  if (tags.includes('OCCULT')) return 'OCCULT';
+  if (tags.includes('ULTIMATE')) return 'ULTIMATE';
+  return 'ACTION';
 }

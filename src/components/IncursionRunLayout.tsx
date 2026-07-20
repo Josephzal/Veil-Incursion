@@ -212,7 +212,9 @@ export default function IncursionRunLayout({
             {showRunOverlays ? <DepthIdentityToast /> : null}
             {showRunOverlays ? <KeepsakeTriggerToast /> : null}
             {showRunOverlays ? <RunItemTriggerToast /> : null}
-            {showRunOverlays && !hideRunChrome ? <RunGlobalChrome /> : null}
+            {showRunOverlays && !hideRunChrome ? (
+              <RunGlobalChrome terminal={combatMode} />
+            ) : null}
           </View>
 
           {showRunOverlays ? (

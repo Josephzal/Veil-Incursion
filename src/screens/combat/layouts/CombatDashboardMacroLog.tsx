@@ -18,12 +18,13 @@ export default function CombatDashboardMacroLog(): React.JSX.Element {
         visible
         fillRemaining
         docked={false}
-        showCargo={cargo?.cargoEnabled ?? false}
+        showCargo={false}
         cargoDisabled={cargoDisabled}
         onCargoPress={cargo?.openCargo}
-        showStatus={status?.statusEnabled ?? false}
+        showStatus={false}
         onStatusPress={status?.openStatus}
         hideTopBorder
+        hideHeader
       />
     </View>
   );

@@ -1,14 +1,20 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import MacroLogCargoButton, { TERMINAL_ACCENT } from './MacroLogCargoButton';
+import MacroLogCargoButton from './MacroLogCargoButton';
 import MacroLogStatusButton from './MacroLogStatusButton';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useCombatDesktopLayout } from '../hooks/useCombatDesktopLayout';
 import { combatPopupFont } from '../constants/combatOverlayTypography';
+import {
+  OTT,
+  ottLogColor,
+  polishCombatFeedLines,
+  resolveOttLogTone,
+} from '../constants/occultTacticalTerminalTheme';
 
-const LOG_SURFACE = '#0a0b0f';
+const LOG_SURFACE = OTT.bgBlack;
 const MACRO_LOG_HORIZONTAL_PADDING = 12;
 
 /** Fixed macro log height when not using fillRemaining (legacy docked mode). Combat dashboard uses fillRemaining. */
@@ -28,6 +34,8 @@ interface PersistentTerminalLogProps {
   onStatusPress?: () => void;
   /** Omit the top border (dashboard macro log column). */
   hideTopBorder?: boolean;
+  /** Hide RUN TERMINAL header (parent rail already labels the panel). */
+  hideHeader?: boolean;
 }
 
 function resolveBottomInset(insetsBottom: number): number {
@@ -62,6 +70,7 @@ export default function PersistentTerminalLog({
   showStatus = false,
   onStatusPress,
   hideTopBorder = false,
+  hideHeader = false,
 }: PersistentTerminalLogProps): React.JSX.Element | null {
   const { runLog } = useRun();
   const { theme } = useTerminal();
@@ -71,13 +80,19 @@ export default function PersistentTerminalLog({
   const [scrollHeight, setScrollHeight] = useState(0);
   const [contentHeight, setContentHeight] = useState(0);
 
-  const contentPinsToBottom = fillRemaining && contentHeight > 0 && contentHeight <= scrollHeight;
+  const railModeEarly = hideHeader && fillRemaining;
+  /** Combat rail feed reads top-down; only legacy docked logs pin short content to the bottom. */
+  const contentPinsToBottom =
+    fillRemaining
+    && !railModeEarly
+    && contentHeight > 0
+    && contentHeight <= scrollHeight;
 
   useEffect(() => {
     if (runLog.length > 0) {
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
     }
-  }, [runLog]);
+  }, [runLog.length]);
 
   if (!visible) return null;
   if (!fillRemaining && !showCargo && !showStatus && runLog.length === 0) return null;
@@ -88,9 +103,19 @@ export default function PersistentTerminalLog({
     : SCROLL_CONTENT_PADDING_BOTTOM;
 
   const dashboardMode = hideTopBorder && fillRemaining;
-  const logFontSize = dashboardMode && isCombatDesktop ? scaleCombatFont(10) : 9;
-  const logLineHeight = dashboardMode && isCombatDesktop ? scaleCombatFont(15) : 13;
+  const railMode = railModeEarly;
+  const logFontSize = railMode
+    ? 8
+    : dashboardMode && isCombatDesktop
+      ? scaleCombatFont(10)
+      : 9;
+  const logLineHeight = railMode
+    ? 12
+    : dashboardMode && isCombatDesktop
+      ? scaleCombatFont(15)
+      : 13;
   const chromeButtonFontSize = dashboardMode && isCombatDesktop ? combatPopupFont(7) : undefined;
+  const feedLines = railMode ? polishCombatFeedLines(runLog, 8) : runLog;
 
   const logBlock = (
     <View
@@ -100,28 +125,30 @@ export default function PersistentTerminalLog({
         hideTopBorder ? styles.containerDashboard : null,
         {
           borderColor: theme.borderColor,
-          backgroundColor: LOG_SURFACE,
+          backgroundColor: railMode ? 'transparent' : LOG_SURFACE,
           ...(fillRemaining ? {} : { height: MACRO_LOG_BLOCK_HEIGHT }),
         },
       ]}
     >
-      <View style={[styles.headerRow, hideTopBorder ? styles.headerRowDashboard : null]}>
-        <Text style={[
-          styles.header,
-          {
-            color: theme.mutedColor,
-            ...(dashboardMode && isCombatDesktop ? { fontSize: scaleCombatFont(9) } : null),
-          },
-        ]}>RUN TERMINAL</Text>
-        <View style={styles.headerActions}>
-          {showStatus && onStatusPress ? (
-            <MacroLogStatusButton onPress={onStatusPress} fontSize={chromeButtonFontSize} />
-          ) : null}
-          {showCargo && onCargoPress ? (
-            <MacroLogCargoButton disabled={cargoDisabled} onPress={onCargoPress} fontSize={chromeButtonFontSize} />
-          ) : null}
+      {hideHeader ? null : (
+        <View style={[styles.headerRow, hideTopBorder ? styles.headerRowDashboard : null]}>
+          <Text style={[
+            styles.header,
+            {
+              color: OTT.terminalGreenMuted,
+              ...(dashboardMode && isCombatDesktop ? { fontSize: scaleCombatFont(9) } : null),
+            },
+          ]}>RUN TERMINAL</Text>
+          <View style={styles.headerActions}>
+            {showStatus && onStatusPress ? (
+              <MacroLogStatusButton onPress={onStatusPress} fontSize={chromeButtonFontSize} />
+            ) : null}
+            {showCargo && onCargoPress ? (
+              <MacroLogCargoButton disabled={cargoDisabled} onPress={onCargoPress} fontSize={chromeButtonFontSize} />
+            ) : null}
+          </View>
         </View>
-      </View>
+      )}
       <ScrollView
         ref={scrollRef}
         style={styles.scroll}
@@ -137,15 +164,20 @@ export default function PersistentTerminalLog({
         showsVerticalScrollIndicator={false}
         onContentSizeChange={(_width, height) => setContentHeight(height)}
       >
-        {runLog.map((line, idx) => (
-          <LogLine
-            key={`${idx}-${line.slice(0, 12)}`}
-            line={line}
-            color={TERMINAL_ACCENT}
-            fontSize={logFontSize}
-            lineHeight={logLineHeight}
-          />
-        ))}
+        {feedLines.map((line, idx) => {
+          const age = feedLines.length - 1 - idx;
+          const fade = age <= 0 ? 1 : age === 1 ? 0.82 : age === 2 ? 0.68 : age === 3 ? 0.55 : 0.42;
+          return (
+            <View key={`${idx}-${line.slice(0, 16)}`} style={{ opacity: fade }}>
+              <LogLine
+                line={line}
+                color={ottLogColor(resolveOttLogTone(line))}
+                fontSize={logFontSize}
+                lineHeight={logLineHeight}
+              />
+            </View>
+          );
+        })}
       </ScrollView>
     </View>
   );
@@ -250,7 +282,7 @@ const styles = StyleSheet.create({
   },
   line: {
     fontFamily: 'monospace',
-    marginBottom: 2,
+    marginBottom: 3,
     flexShrink: 1,
     flexWrap: 'wrap',
     width: '100%',

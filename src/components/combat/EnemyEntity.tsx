@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
+import CombatGroundContact from './ui/CombatGroundContact';
 
 interface EnemyEntityProps {
   /** Animated sprite subtree — breathing/motion applies here only. */
@@ -8,7 +9,7 @@ interface EnemyEntityProps {
   showVitals?: boolean;
 }
 
-/** Static hostile shell — sprite animates independently of HP/fracture bars. */
+/** Static hostile shell — sprite animates independently of concept nameplate. */
 export default function EnemyEntity({
   sprite,
   vitals,
@@ -16,12 +17,15 @@ export default function EnemyEntity({
 }: EnemyEntityProps): React.JSX.Element {
   return (
     <View style={styles.staticContainer}>
-      <View style={styles.spriteSlot}>{sprite}</View>
       {showVitals && vitals ? (
-        <View style={styles.hpBarContainer} pointerEvents="none">
+        <View style={styles.nameplateContainer} pointerEvents="none">
           {vitals}
         </View>
       ) : null}
+      <View style={styles.spriteSlot}>
+        <CombatGroundContact hostile />
+        <View style={styles.spriteLift}>{sprite}</View>
+      </View>
     </View>
   );
 }
@@ -41,12 +45,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
     overflow: 'visible',
+    position: 'relative',
   },
-  hpBarContainer: {
+  spriteLift: {
+    width: '100%',
+    height: '100%',
+    // Slight local contrast lift so hostiles separate from the background.
+    opacity: 0.96,
+  },
+  /** Concept: designation + thin HP rail float above the sprite head. */
+  nameplateContainer: {
     position: 'absolute',
-    bottom: -20,
-    width: '57.5%',
+    top: -58,
+    width: '96%',
     alignSelf: 'center',
-    zIndex: 14,
+    zIndex: 16,
   },
 });

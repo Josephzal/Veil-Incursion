@@ -1,5 +1,6 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
+import { OTT } from '../../constants/occultTacticalTerminalTheme';
 
 interface CombatApPipRowProps {
   current: number;
@@ -13,9 +14,11 @@ interface CombatApPipRowProps {
   /** Overrides label/counter size — matches ability tile typography when set. */
   labelFontSize?: number;
   hexSize?: number;
+  /** Concept deck band — large cyan pips with soft glow above ability cards. */
+  conceptBand?: boolean;
 }
 
-/** Glowing hex AP pip row for the command deck header. */
+/** Glowing diamond AP pip row for the command deck header. */
 export default function CombatApPipRow({
   current,
   max,
@@ -27,48 +30,79 @@ export default function CombatApPipRow({
   fontScale = 1,
   labelFontSize,
   hexSize,
+  conceptBand = false,
 }: CombatApPipRowProps): React.JSX.Element {
-  const resolvedLabelSize = labelFontSize ?? 7 * fontScale;
-  const resolvedHexSize = hexSize ?? HEX_SIZE * fontScale;
+  const bandAccent = conceptBand ? OTT.cyanSelect : accent;
+  const resolvedLabelSize = labelFontSize ?? (conceptBand ? 11 : 7 * fontScale);
+  const resolvedHexSize = hexSize ?? (conceptBand ? 14 : HEX_SIZE * fontScale);
 
   return (
     <View style={[
       styles.host,
       compact && styles.hostCompact,
       centered && styles.hostCentered,
+      conceptBand && styles.hostConceptBand,
     ]}>
-      <Text style={[styles.label, { color: mutedColor, fontSize: resolvedLabelSize }]}>AP</Text>
-      <View style={styles.pipRow}>
+      <Text style={[
+        styles.label,
+        {
+          color: conceptBand ? OTT.cyanSelect : mutedColor,
+          fontSize: resolvedLabelSize,
+        },
+        conceptBand && styles.labelConcept,
+      ]}>
+        {conceptBand ? `${current} AP` : 'AP'}
+      </Text>
+      <View style={[styles.pipRow, conceptBand && styles.pipRowConcept]}>
         {Array.from({ length: max }, (_, index) => {
           const filled = index < current;
           const fillColor = filled
-            ? (queued ? 'rgba(186, 230, 253, 0.95)' : accent)
-            : '#0f172a';
-          const borderColor = filled ? accent : 'rgba(148, 163, 184, 0.45)';
+            ? (queued ? 'rgba(186, 230, 253, 0.95)' : bandAccent)
+            : 'transparent';
+          const borderColor = filled
+            ? bandAccent
+            : conceptBand
+              ? 'rgba(98, 220, 229, 0.55)'
+              : 'rgba(148, 163, 184, 0.45)';
 
           return (
             <View
               key={`ap-pip-${index}`}
-              style={[styles.hexShell, { width: resolvedHexSize, height: resolvedHexSize }, filled && { shadowColor: accent }]}
+              style={[
+                styles.pipCell,
+                { width: resolvedHexSize, height: resolvedHexSize },
+              ]}
             >
               <View
                 style={[
                   styles.hexCore,
                   {
-                    width: resolvedHexSize * 0.9,
-                    height: resolvedHexSize * 0.9,
+                    width: resolvedHexSize * 0.86,
+                    height: resolvedHexSize * 0.86,
                     borderColor,
                     backgroundColor: fillColor,
                   },
+                  filled && {
+                    shadowColor: bandAccent,
+                    shadowOpacity: conceptBand ? 0.9 : 0.75,
+                    shadowRadius: conceptBand ? 7 : 5,
+                    shadowOffset: { width: 0, height: 0 },
+                    elevation: conceptBand ? 3 : 2,
+                  },
+                  filled && conceptBand && Platform.OS === 'web'
+                    ? { boxShadow: `0 0 8px ${bandAccent}` } as object
+                    : null,
                 ]}
               />
             </View>
           );
         })}
       </View>
-      <Text style={[styles.counter, { color: mutedColor, fontSize: resolvedLabelSize }]}>
-        {`${current}/${max}`}
-      </Text>
+      {conceptBand ? null : (
+        <Text style={[styles.counter, { color: mutedColor, fontSize: resolvedLabelSize }]}>
+          {`${current}/${max}`}
+        </Text>
+      )}
     </View>
   );
 }
@@ -85,31 +119,46 @@ const styles = StyleSheet.create({
   },
   hostCompact: {
     flex: 0,
-    alignSelf: 'flex-end',
+    alignSelf: 'stretch',
   },
   hostCentered: {
     flex: 0,
     alignSelf: 'center',
+  },
+  hostConceptBand: {
+    flex: 0,
+    alignSelf: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 2,
   },
   label: {
     fontFamily: 'monospace',
     fontWeight: '700',
     letterSpacing: 0.6,
   },
+  labelConcept: {
+    fontWeight: '800',
+    letterSpacing: 1.2,
+  },
   pipRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
   },
-  hexShell: {
+  pipRowConcept: {
+    gap: 6,
+  },
+  /** Transparent cell — avoids square shadow/bg around the rotated diamond. */
+  pipCell: {
     alignItems: 'center',
     justifyContent: 'center',
-    shadowOpacity: 0.8,
-    shadowRadius: 6,
-    elevation: 2,
+    backgroundColor: 'transparent',
+    overflow: 'visible',
   },
   hexCore: {
-    borderWidth: 1,
+    borderWidth: 1.25,
+    backgroundColor: 'transparent',
     transform: [{ rotate: '45deg' }],
   },
   counter: {

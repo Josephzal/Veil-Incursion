@@ -11,8 +11,15 @@ import { buildKeepsakeLiveCounters } from '../data/expeditionKeepsakeRunUiEngine
 import { buildRunItemLiveCounters, shouldShowRunItemChromeChip } from '../data/runItemRunUiEngine';
 import { countOccupiedRunItemSlots } from '../data/runItemRunState';
 
-/** Floating cargo / status controls for non-combat run screens. */
-export default function RunGlobalChrome(): React.JSX.Element | null {
+interface RunGlobalChromeProps {
+  /** Thin Occult Tactical Terminal tabs (combat). */
+  terminal?: boolean;
+}
+
+/** Floating cargo / status controls for run screens (and combat terminal chrome). */
+export default function RunGlobalChrome({
+  terminal = false,
+}: RunGlobalChromeProps): React.JSX.Element | null {
   const { theme } = useTerminal();
   const { activeIncursion } = useRun();
   const cargo = useCargoOverlay();
@@ -37,10 +44,11 @@ export default function RunGlobalChrome(): React.JSX.Element | null {
   if (!showStatus && !showCargo && !keepsakeLabel && !showRunItemsChip) return null;
 
   return (
-    <View style={styles.host} pointerEvents="box-none">
+    <View style={[styles.host, terminal && styles.hostTerminal]} pointerEvents="box-none">
       <RunFeedChromeButtons
         accent={theme.statusColor}
         mutedColor={theme.mutedColor}
+        terminal={terminal}
       />
       {keepsakeLabel ? (
         <View style={[styles.keepsakeChip, { borderColor: `${theme.statusColor}66` }]}>
@@ -108,6 +116,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     gap: 6,
     maxWidth: 220,
+  },
+  hostTerminal: {
+    top: 10,
+    right: 10,
+    maxWidth: 260,
   },
   keepsakeChip: {
     borderWidth: 1,

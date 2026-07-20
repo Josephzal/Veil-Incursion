@@ -415,8 +415,8 @@ const styles = StyleSheet.create({
   staggeredArena: {
     position: 'absolute',
     top: 0,
-    right: 60,
-    width: '42%',
+    right: 210,
+    width: '48%',
     height: '100%',
     overflow: 'visible',
   },

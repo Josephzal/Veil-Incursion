@@ -10,22 +10,16 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import type { ArenaIntentGlyph } from '../../data/combatArenaTelegraphEngine';
-
-const MONO = 'monospace';
+import { OTT } from '../../constants/occultTacticalTerminalTheme';
 
 interface CombatArenaIntentGlyphProps {
   glyph: ArenaIntentGlyph;
-  /** Compact mode for dense multi-enemy layouts. */
   compact?: boolean;
 }
 
-/**
- * Phase 1 (+ polish) — arena intent badge above hostile portraits.
- * Symbol + optional CH-N / T-N countdown. Side intel remains secondary.
- */
+/** Concept-style diamond intent tag above hostiles. */
 export default function CombatArenaIntentGlyph({
   glyph,
-  compact = false,
 }: CombatArenaIntentGlyphProps): React.JSX.Element {
   const pulse = useSharedValue(1);
 
@@ -34,17 +28,8 @@ export default function CombatArenaIntentGlyph({
     if (glyph.arenaPriority === 1) {
       pulse.value = withRepeat(
         withSequence(
-          withTiming(1.06, { duration: 380, easing: Easing.inOut(Easing.quad) }),
-          withTiming(0.96, { duration: 380, easing: Easing.inOut(Easing.quad) }),
-        ),
-        -1,
-        false,
-      );
-    } else if (glyph.arenaPriority === 2 && glyph.countdownLabel) {
-      pulse.value = withRepeat(
-        withSequence(
-          withTiming(1.03, { duration: 640, easing: Easing.inOut(Easing.quad) }),
-          withTiming(0.98, { duration: 640, easing: Easing.inOut(Easing.quad) }),
+          withTiming(1.08, { duration: 400, easing: Easing.inOut(Easing.quad) }),
+          withTiming(0.95, { duration: 400, easing: Easing.inOut(Easing.quad) }),
         ),
         -1,
         false,
@@ -53,56 +38,29 @@ export default function CombatArenaIntentGlyph({
       pulse.value = 1;
     }
     return () => cancelAnimation(pulse);
-  }, [glyph.arenaPriority, glyph.countdownLabel, pulse]);
+  }, [glyph.arenaPriority, pulse]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: pulse.value }],
   }));
 
-  const borderColor = glyph.accentColor;
-  const bg =
-    glyph.arenaPriority === 1
-      ? 'rgba(69, 10, 10, 0.94)'
-      : glyph.arenaPriority === 2
-        ? 'rgba(15, 23, 42, 0.94)'
-        : 'rgba(2, 6, 23, 0.9)';
+  const accent =
+    glyph.kind === 'CHANNEL' || glyph.kind === 'SUPPORT' || glyph.kind === 'SUMMON'
+      ? OTT.fluxViolet
+      : glyph.kind === 'GUARD'
+        ? OTT.cyanSelect
+        : glyph.accentColor;
 
   return (
     <Animated.View
-      style={[
-        styles.root,
-        compact ? styles.rootCompact : null,
-        glyph.arenaPriority === 1 ? styles.rootUrgent : null,
-        {
-          borderColor,
-          backgroundColor: bg,
-          shadowColor: borderColor,
-        },
-        animatedStyle,
-      ]}
+      style={[styles.root, { borderColor: accent }, animatedStyle]}
       pointerEvents="none"
       accessibilityLabel={`Intent ${glyph.label}${glyph.countdownLabel ? ` ${glyph.countdownLabel}` : ''}`}
     >
-      <Text style={[styles.symbol, { color: borderColor }, compact && styles.symbolCompact]}>
-        {glyph.symbol}
+      <Text style={[styles.symbol, { color: accent }]}>{glyph.symbol}</Text>
+      <Text style={[styles.label, { color: accent }]} numberOfLines={1}>
+        {glyph.countdownLabel ?? glyph.label}
       </Text>
-      <View style={styles.textCol}>
-        <Text style={[styles.label, { color: borderColor }, compact && styles.labelCompact]} numberOfLines={1}>
-          {glyph.label}
-        </Text>
-        {glyph.countdownLabel ? (
-          <Text
-            style={[
-              styles.countdown,
-              glyph.arenaPriority === 1 && styles.countdownUrgent,
-              compact && styles.countdownCompact,
-            ]}
-            numberOfLines={1}
-          >
-            {glyph.countdownLabel}
-          </Text>
-        ) : null}
-      </View>
     </Animated.View>
   );
 }
@@ -111,63 +69,23 @@ const styles = StyleSheet.create({
   root: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 5,
-    paddingVertical: 3,
-    borderWidth: 1.5,
-    borderRadius: 2,
-    maxWidth: 92,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.45,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  rootCompact: {
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-    maxWidth: 78,
     gap: 3,
-  },
-  rootUrgent: {
-    shadowOpacity: 0.7,
-    shadowRadius: 7,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderRadius: 2,
+    backgroundColor: 'rgba(5, 7, 8, 0.82)',
+    maxWidth: 72,
   },
   symbol: {
-    fontFamily: MONO,
-    fontSize: 11,
-    lineHeight: 13,
+    fontFamily: OTT.mono,
+    fontSize: 9,
     fontWeight: '800',
-  },
-  symbolCompact: {
-    fontSize: 10,
-    lineHeight: 12,
-  },
-  textCol: {
-    flexShrink: 1,
-    minWidth: 0,
   },
   label: {
-    fontFamily: MONO,
-    fontSize: 8,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  labelCompact: {
-    fontSize: 7,
-    letterSpacing: 0.35,
-  },
-  countdown: {
-    fontFamily: MONO,
+    fontFamily: OTT.mono,
     fontSize: 7,
     fontWeight: '800',
-    letterSpacing: 0.35,
-    color: '#fecaca',
-    marginTop: 1,
-  },
-  countdownUrgent: {
-    color: '#fee2e2',
-  },
-  countdownCompact: {
-    fontSize: 6,
+    letterSpacing: 0.4,
   },
 });

@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import type { ClassType } from '../../types/game';
 import { RUNIC_BRAND_CAP } from '../../types/aegisCombat';
 import CombatTelemetryGaugeRow from './CombatHorizontalGauge';
@@ -20,6 +20,8 @@ import {
 } from '../../utils/combatTelemetryFormat';
 import CombatRunicBrandGauge from './CombatRunicBrandGauge';
 import { useCombatDesktopLayout } from '../../hooks/useCombatDesktopLayout';
+import ResourceRail from './ui/ResourceRail';
+import { OTT } from '../../constants/occultTacticalTerminalTheme';
 
 export interface CombatOperativeTelemetry {
   operativeClass: ClassType;
@@ -64,16 +66,19 @@ interface CombatOperativeHudProps {
   dashboardCompact?: boolean;
   /** Semi-transparent panel for the arena upper-left vitals overlay. */
   arenaOverlay?: boolean;
+  /** Bottom-console operative status (Occult Tactical Terminal). */
+  consolePanel?: boolean;
 }
 
 export default function CombatOperativeHud({
   telemetry,
-  labelColor = '#FF453A',
-  primaryColor = '#00ff33',
+  labelColor = OTT.soulRed,
+  primaryColor = OTT.terminalGreenMuted,
   wide = false,
   deckAligned = false,
   dashboardCompact = false,
   arenaOverlay = false,
+  consolePanel = false,
 }: CombatOperativeHudProps): React.JSX.Element {
   const { isCombatDesktop, fontScale, scaleCombatSize } = useCombatDesktopLayout();
   const desktopArena = arenaOverlay && isCombatDesktop;
@@ -115,10 +120,10 @@ export default function CombatOperativeHud({
   const staminaRatio = maxStamina > 0 ? stamina / maxStamina : 0;
   const fluxRatio = fluxMaxCap > 0 ? Math.min(1, veilFlux / fluxMaxCap) : 0;
 
-  const compact = deckAligned || wide || dashboardCompact;
+  const compact = deckAligned || wide || dashboardCompact || consolePanel;
   const rowVariant = desktopArena
     ? 'stacked' as const
-    : dashboardCompact
+    : dashboardCompact || consolePanel
       ? 'compact' as const
       : compact
         ? 'compact' as const
@@ -131,6 +136,78 @@ export default function CombatOperativeHud({
     trackHeight: gaugeHeight,
     gaugeWidth: '100%' as const,
   };
+
+  if (consolePanel) {
+    const className =
+      operativeClass === 'HEX_SHOT' ? 'HEX SHOT' : operativeClass === 'ENVOY' ? 'ENVOY' : 'AEGIS';
+    const secondaryLabel = operativeClass === 'ENVOY'
+      ? 'FLUX'
+      : operativeClass === 'HEX_SHOT'
+        ? 'STM'
+        : 'GUARD';
+    const secondaryValue = operativeClass === 'ENVOY'
+      ? `${Math.round(veilFlux)}/${fluxMaxCap}`
+      : operativeClass === 'HEX_SHOT'
+        ? `${stamina}/${maxStamina}`
+        : `${Math.round(abyssalReserve)}/${abyssalCap}`;
+    const secondaryRatio = operativeClass === 'ENVOY'
+      ? fluxRatio
+      : operativeClass === 'HEX_SHOT'
+        ? staminaRatio
+        : abyssalRatio;
+    const secondaryColor = operativeClass === 'ENVOY'
+      ? OTT.fluxViolet
+      : operativeClass === 'HEX_SHOT'
+        ? OTT.terminalGreenMuted
+        : '#9BB0B8';
+    const passiveLine = operativeClass === 'AEGIS'
+      ? 'Gain Guard after successful Guard.'
+      : operativeClass === 'HEX_SHOT'
+        ? 'Chamber bonus after tactical reload.'
+        : 'Veil Rot escalates occult pressure.';
+    return (
+      <View style={styles.rootConsole} pointerEvents="none">
+        <Text style={styles.consoleClass}>{className}</Text>
+        <Text style={styles.consoleSubtitle}>VEIL RUNNER</Text>
+        <ResourceRail
+          label="HP"
+          valueLabel={`${operativeHp}/${effectiveMax} HP`}
+          ratio={soulAnchorRatio}
+          fillColor={OTT.soulRed}
+        />
+        <ResourceRail
+          label={secondaryLabel}
+          valueLabel={`${secondaryValue} ${secondaryLabel}`}
+          ratio={secondaryRatio}
+          fillColor={secondaryColor}
+        />
+        {operativeClass === 'AEGIS' ? (
+          <CombatRunicBrandGauge currentBrands={runicBrands} maxBrands={runicBrandCap} variant="compact" />
+        ) : null}
+        {operativeClass === 'HEX_SHOT' ? (
+          <CombatMagazineGauge
+            currentAmmo={currentAmmo}
+            maxAmmo={maxAmmo}
+            overchargeMultiplier={overchargeMultiplier}
+            markReady={zeroProtocolReady}
+            labelColor={OTT.warningAmber}
+            variant="compact"
+            ammoType={hexAmmoType}
+            protocolCharges={hexProtocolCharges}
+            maxProtocolCharges={hexMaxProtocolCharges}
+            nextShotOvercharged={hexNextShotOvercharged}
+          />
+        ) : null}
+        {operativeClass === 'ENVOY' ? (
+          <CombatVeilRotGauge totalStacks={veilRotStacksTotal} variant="compact" />
+        ) : null}
+        <View style={styles.passiveBlock}>
+          <Text style={styles.passiveHeader}>PASSIVE</Text>
+          <Text style={styles.passiveBody} numberOfLines={2}>{passiveLine}</Text>
+        </View>
+      </View>
+    );
+  }
 
   const renderClassResource = () => {
     if (operativeClass === 'HEX_SHOT') {
@@ -234,13 +311,57 @@ export default function CombatOperativeHud({
 }
 
 const styles = StyleSheet.create({
+  rootConsole: {
+    flex: 1,
+    minHeight: 0,
+    width: '100%',
+    gap: 5,
+    paddingHorizontal: 2,
+    paddingTop: 0,
+    justifyContent: 'center',
+  },
+  consoleClass: {
+    fontFamily: OTT.mono,
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 1.4,
+    color: OTT.textPrimary,
+  },
+  consoleSubtitle: {
+    fontFamily: OTT.mono,
+    fontSize: 8,
+    fontWeight: '600',
+    letterSpacing: 1,
+    color: OTT.textSecondary,
+    marginBottom: 2,
+  },
+  passiveBlock: {
+    marginTop: 4,
+    paddingTop: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: OTT.borderMuted,
+    gap: 2,
+  },
+  passiveHeader: {
+    fontFamily: OTT.mono,
+    fontSize: 7,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    color: OTT.terminalGreenMuted,
+  },
+  passiveBody: {
+    fontFamily: OTT.mono,
+    fontSize: 7,
+    lineHeight: 9,
+    color: OTT.textSecondary,
+  },
   root: {
     gap: 2,
     paddingHorizontal: 6,
     paddingVertical: 6,
     backgroundColor: 'rgba(0, 0, 0, 0.82)',
     borderWidth: 1,
-    borderColor: 'rgba(0, 255, 51, 0.25)',
+    borderColor: OTT.borderSubtle,
   },
   rootWide: {
     gap: 4,

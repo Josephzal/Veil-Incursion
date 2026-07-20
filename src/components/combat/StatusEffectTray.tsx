@@ -18,10 +18,13 @@ const TOOLTIP_DISMISS_MS = 3000;
 
 interface StatusEffectTrayProps {
   activeStatuses: readonly EnemyStatusEffectKey[];
+  /** When set, parent handles detail UI instead of the built-in tooltip modal. */
+  onStatusPress?: (def: EnemyStatusEffectDef) => void;
 }
 
 export default function StatusEffectTray({
   activeStatuses,
+  onStatusPress,
 }: StatusEffectTrayProps): React.JSX.Element | null {
   const [tooltipContent, setTooltipContent] = React.useState<EnemyStatusEffectDef | null>(null);
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -59,37 +62,39 @@ export default function StatusEffectTray({
 
   return (
     <View style={styles.root} pointerEvents="box-none">
-      <Modal
-        visible={tooltipContent != null}
-        transparent
-        animationType="fade"
-        statusBarTranslucent
-        onRequestClose={dismissTooltip}
-      >
-        <View style={styles.backdrop}>
-          <HapticPressable
-            style={styles.backdropTap}
-            onPress={dismissTooltip}
-            accessibilityRole="button"
-            accessibilityLabel="Dismiss status tooltip"
-          />
-          {tooltipContent ? (
-            <View style={styles.tooltip} pointerEvents="none">
-              <Text style={styles.tooltipHeader}>{`[ ${tooltipContent.label} ]`}</Text>
-              <Text style={styles.tooltipBody}>{tooltipContent.description}</Text>
-            </View>
-          ) : null}
-        </View>
-      </Modal>
+      {onStatusPress ? null : (
+        <Modal
+          visible={tooltipContent != null}
+          transparent
+          animationType="fade"
+          statusBarTranslucent
+          onRequestClose={dismissTooltip}
+        >
+          <View style={styles.backdrop}>
+            <HapticPressable
+              style={styles.backdropTap}
+              onPress={dismissTooltip}
+              accessibilityRole="button"
+              accessibilityLabel="Dismiss status tooltip"
+            />
+            {tooltipContent ? (
+              <View style={styles.tooltip} pointerEvents="none">
+                <Text style={styles.tooltipHeader}>{`[ ${tooltipContent.label} ]`}</Text>
+                <Text style={styles.tooltipBody}>{tooltipContent.description}</Text>
+              </View>
+            ) : null}
+          </View>
+        </Modal>
+      )}
 
       <View style={styles.trayRow}>
         {activeStatuses.map((key) => {
           const def = ENEMY_STATUS_EFFECTS[key];
-          const selected = tooltipContent?.key === key;
+          const selected = !onStatusPress && tooltipContent?.key === key;
           return (
             <HapticPressable
               key={key}
-              onPress={() => showTooltip(def)}
+              onPress={() => (onStatusPress ? onStatusPress(def) : showTooltip(def))}
               style={[styles.iconButton, selected ? styles.iconButtonSelected : null]}
               accessibilityRole="button"
               accessibilityLabel={`${def.label} status`}

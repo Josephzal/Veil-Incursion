@@ -1,23 +1,16 @@
 import React, { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import {
-  GAUGE_HOSTILE_HP,
-  GAUGE_TRACK_BORDER,
-  type CombatGridUnitSnapshot,
-} from '../../utils/combatTelemetryFormat';
+import type { CombatGridUnitSnapshot } from '../../utils/combatTelemetryFormat';
 import { resolveArenaDefenseState } from '../../data/combatArenaDefenseTelegraphEngine';
-import { CombatHorizontalGauge } from './CombatHorizontalGauge';
+import type { ArenaIntentGlyph } from '../../data/combatArenaTelegraphEngine';
 import CombatArenaDefensePips from './CombatArenaDefensePips';
-
-const GAUGE_FRACTURE = '#fbbf24';
-const MONO = 'monospace';
-const CATALYST_LIVE = '#4ade80';
-const CATALYST_BORDER = '#22c55e';
-const CATALYST_BG = 'rgba(34, 197, 94, 0.88)';
+import CombatArenaIntentGlyph from './CombatArenaIntentGlyph';
+import { OTT } from '../../constants/occultTacticalTerminalTheme';
 
 interface CombatEnemyOverheadBarsProps {
   unit: Pick<
     CombatGridUnitSnapshot,
+    | 'designation'
     | 'currentHp'
     | 'maxHp'
     | 'fractureGauge'
@@ -26,12 +19,18 @@ interface CombatEnemyOverheadBarsProps {
     | 'kineticArmor'
     | 'occultWards'
     | 'isFractured'
+    | 'isAlpha'
   >;
+  intentGlyph?: ArenaIntentGlyph | null;
 }
 
-/** HP + fracture gauges + Phase 2 defense pips under hostile sprites in the arena. */
+/**
+ * Concept nameplate — designation + HP readout above a thin red rail,
+ * with intent glyph stacked above the vitals.
+ */
 export default function CombatEnemyOverheadBars({
   unit,
+  intentGlyph = null,
 }: CombatEnemyOverheadBarsProps): React.JSX.Element {
   const hpRatio = unit.maxHp > 0 ? unit.currentHp / unit.maxHp : 1;
   const fractureMax = unit.fractureMax ?? 100;
@@ -46,33 +45,46 @@ export default function CombatEnemyOverheadBars({
       }),
     [unit.kineticArmor, unit.occultWards, unit.isFractured],
   );
+  const nameColor = unit.isAlpha ? '#ff8a8a' : OTT.textPrimary;
 
   return (
     <View style={styles.root}>
-      {rotStacks > 0 ? (
-        <View style={styles.rotBadge}>
-          <Text style={styles.rotBadgeLabel} numberOfLines={1}>
-            {`${rotStacks}`}
-          </Text>
+      {intentGlyph ? (
+        <View style={styles.intentRow} pointerEvents="none">
+          <CombatArenaIntentGlyph glyph={intentGlyph} compact />
         </View>
       ) : null}
-      <CombatHorizontalGauge
-        fillColor={GAUGE_HOSTILE_HP}
-        ratio={hpRatio}
-        trackBorderColor={GAUGE_TRACK_BORDER}
-        width="100%"
-        overhead
-        borderless
-      />
-      <CombatArenaDefensePips defense={defense} />
-      <CombatHorizontalGauge
-        fillColor={GAUGE_FRACTURE}
-        ratio={fractureRatio}
-        trackBorderColor={GAUGE_TRACK_BORDER}
-        width="100%"
-        overhead
-        borderless
-      />
+      <View style={styles.plate}>
+        <View style={styles.nameRow}>
+          <Text style={[styles.name, { color: nameColor }]} numberOfLines={1}>
+            {unit.designation.toUpperCase()}
+          </Text>
+          <Text style={styles.hpNum} numberOfLines={1}>
+            {`${unit.currentHp}/${unit.maxHp}`}
+          </Text>
+        </View>
+        <View style={styles.hpTrack}>
+          <View style={[styles.hpFill, { width: `${Math.max(0, Math.min(1, hpRatio)) * 100}%` }]} />
+        </View>
+        {fractureRatio > 0.02 ? (
+          <View style={styles.fractureTrack}>
+            <View
+              style={[
+                styles.fractureFill,
+                { width: `${Math.max(0, Math.min(1, fractureRatio)) * 100}%` },
+              ]}
+            />
+          </View>
+        ) : null}
+        <View style={styles.metaRow}>
+          <CombatArenaDefensePips defense={defense} />
+          {rotStacks > 0 ? (
+            <Text style={styles.rotBadge} numberOfLines={1}>
+              {`ROT ${rotStacks}`}
+            </Text>
+          ) : null}
+        </View>
+      </View>
     </View>
   );
 }
@@ -80,24 +92,72 @@ export default function CombatEnemyOverheadBars({
 const styles = StyleSheet.create({
   root: {
     width: '100%',
+    gap: 3,
+    alignItems: 'stretch',
+  },
+  intentRow: {
+    alignItems: 'center',
+  },
+  plate: {
+    backgroundColor: 'rgba(5, 8, 10, 0.62)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: OTT.borderMuted,
+    paddingHorizontal: 5,
+    paddingVertical: 3,
     gap: 2,
-    alignItems: 'flex-start',
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: 4,
+  },
+  name: {
+    flex: 1,
+    fontFamily: OTT.mono,
+    fontSize: 8,
+    fontWeight: '800',
+    letterSpacing: 0.55,
+  },
+  hpNum: {
+    fontFamily: OTT.mono,
+    fontSize: 8,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    color: OTT.soulRed,
+  },
+  hpTrack: {
+    height: 3,
+    width: '100%',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    overflow: 'hidden',
+  },
+  hpFill: {
+    height: '100%',
+    backgroundColor: OTT.soulRed,
+  },
+  fractureTrack: {
+    height: 1,
+    width: '100%',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    overflow: 'hidden',
+  },
+  fractureFill: {
+    height: '100%',
+    backgroundColor: OTT.warningAmber,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 4,
+    minHeight: 8,
   },
   rotBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 2,
-    backgroundColor: CATALYST_BG,
-    borderWidth: 1,
-    borderColor: CATALYST_BORDER,
-    marginBottom: 1,
-  },
-  rotBadgeLabel: {
-    fontFamily: MONO,
+    fontFamily: OTT.mono,
     fontSize: 6,
     fontWeight: '700',
     letterSpacing: 0.35,
-    color: CATALYST_LIVE,
+    color: OTT.terminalGreenMuted,
   },
 });

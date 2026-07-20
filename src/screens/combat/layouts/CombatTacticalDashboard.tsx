@@ -1,100 +1,90 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import CombatDashboardTexturedBackdrop from '../../../components/combat/CombatDashboardTexturedBackdrop';
-import {
-  TACTICAL_DASHBOARD_PANEL_BORDER_COLOR,
-  TACTICAL_DASHBOARD_PANEL_CONTENT_PADDING_TOP,
-  TACTICAL_DASHBOARD_PANEL_PADDING,
-} from '../../../constants/combatLayout';
+import CombatConsoleDockFade from '../../../components/combat/ui/CombatConsoleDockFade';
+import { OTT_LAYOUT } from '../../../constants/occultTacticalTerminalTheme';
 
 interface CombatTacticalDashboardProps {
+  operativeStatus: React.ReactNode;
   commandDeck: React.ReactNode;
-  macroLog: React.ReactNode;
-  hostileIntel: React.ReactNode;
 }
 
-function DashboardPanelContent({ children }: { children: React.ReactNode }): React.JSX.Element {
-  return <View style={styles.panelContent}>{children}</View>;
-}
-
-function TexturedDashboardPanel({ children }: { children: React.ReactNode }): React.JSX.Element {
-  return (
-    <View style={styles.texturedPanel}>
-      <CombatDashboardTexturedBackdrop />
-      <DashboardPanelContent>{children}</DashboardPanelContent>
-    </View>
-  );
-}
-
-/** Fixed bottom 30% — strict 3-column command / log / intel layout. */
+/**
+ * Unified bottom combat console — equal side rails | centered command deck.
+ * No top rule; dock fade only.
+ */
 export default function CombatTacticalDashboard({
+  operativeStatus,
   commandDeck,
-  macroLog,
-  hostileIntel,
 }: CombatTacticalDashboardProps): React.JSX.Element {
   return (
-    <View style={styles.dashboard}>
-      <View style={[styles.panel, styles.panelLeft]}>
-        <TexturedDashboardPanel>{commandDeck}</TexturedDashboardPanel>
-      </View>
-      <View style={[styles.panel, styles.panelCenter]}>
-        <DashboardPanelContent>{macroLog}</DashboardPanelContent>
-      </View>
-      <View style={[styles.panel, styles.panelRight]}>
-        <TexturedDashboardPanel>{hostileIntel}</TexturedDashboardPanel>
+    <View style={styles.dashboard} pointerEvents="box-none">
+      <CombatConsoleDockFade />
+      <View style={styles.row} pointerEvents="box-none">
+        <View style={styles.sidePanel} pointerEvents="box-none">
+          <View style={styles.sideContent} pointerEvents="box-none">
+            {operativeStatus}
+          </View>
+        </View>
+        <View style={styles.deckPanel} pointerEvents="box-none">
+          <View style={styles.deckContent}>{commandDeck}</View>
+        </View>
       </View>
     </View>
   );
 }
+
+const SIDE = OTT_LAYOUT.consoleSideWidth;
 
 const styles = StyleSheet.create({
   dashboard: {
-    height: '30%',
-    flexShrink: 0,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: OTT_LAYOUT.consoleHeightPercent,
+    zIndex: 28,
+    overflow: 'hidden',
+    backgroundColor: 'transparent',
+  },
+  row: {
+    flex: 1,
     flexDirection: 'row',
-    overflow: 'hidden',
-    backgroundColor: 'rgba(10, 10, 15, 0.95)',
-    borderTopWidth: 2,
-    borderTopColor: '#333',
-  },
-  panel: {
-    flex: 1,
-    minWidth: 0,
+    alignItems: 'stretch',
     minHeight: 0,
-    paddingHorizontal: TACTICAL_DASHBOARD_PANEL_PADDING,
-    paddingBottom: TACTICAL_DASHBOARD_PANEL_PADDING,
-    paddingTop: 0,
-    borderRightWidth: 1,
-    borderRightColor: '#222',
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  texturedPanel: {
-    flex: 1,
-    minHeight: 0,
-    width: '100%',
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  panelContent: {
-    flex: 1,
-    minHeight: 0,
-    width: '100%',
-    borderTopWidth: 1,
-    borderTopColor: TACTICAL_DASHBOARD_PANEL_BORDER_COLOR,
-    paddingTop: TACTICAL_DASHBOARD_PANEL_CONTENT_PADDING_TOP,
     position: 'relative',
     zIndex: 1,
   },
-  panelLeft: {
-    flexDirection: 'column',
-    justifyContent: 'flex-start',
+  sidePanel: {
+    width: SIDE,
+    flexGrow: 0,
+    flexShrink: 0,
+    minHeight: 0,
+    backgroundColor: 'transparent',
   },
-  panelCenter: {
-    flexDirection: 'column',
+  sideContent: {
+    flex: 1,
+    minHeight: 0,
+    width: '100%',
+    /** Align with ability row beneath the centered AP band. */
+    paddingTop: 28,
+    paddingBottom: 8,
+    paddingHorizontal: 8,
+    justifyContent: 'center',
   },
-  panelRight: {
-    borderRightWidth: 0,
-    flexDirection: 'column',
+  deckPanel: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 0,
+    backgroundColor: 'transparent',
+  },
+  deckContent: {
+    flex: 1,
+    minHeight: 0,
+    width: '100%',
+    paddingTop: 4,
+    paddingBottom: 12,
+    paddingRight: 8,
+    paddingLeft: 4,
+    overflow: 'hidden',
   },
 });

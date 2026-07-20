@@ -72,13 +72,19 @@ import { encounterBudgetForDepth } from '../data/combatEncounterBudget';
 import type { CargoItemId } from '../types/cargoGrid';
 import { shouldGrantAdrenalinePrimerAp } from '../data/boundRequisitionEngine';
 import type { IncursionConsumableUseResult } from '../types/incursionInventory';
-import CombatOperativeVitalsOverlay from './combat/layouts/CombatOperativeVitalsOverlay';
 import CombatTacticalDashboard from './combat/layouts/CombatTacticalDashboard';
 import CombatDashboardMacroLog from './combat/layouts/CombatDashboardMacroLog';
 import HostileIntelView from './combat/layouts/HostileIntelView';
-import TurnOrderSidebar from './combat/layouts/TurnOrderSidebar';
+import TurnOrderTopBar from './combat/layouts/TurnOrderTopBar';
+import CombatMissionReadout from './combat/layouts/CombatMissionReadout';
+import CombatRightRail from './combat/layouts/CombatRightRail';
 import CombatDashboardCommandColumn from './combat/layouts/CombatDashboardCommandColumn';
-import type { CombatOperativeTelemetry } from '../components/combat/CombatOperativeHud';
+import CombatHudAtmosphereOverlay from '../components/combat/ui/CombatHudAtmosphereOverlay';
+import CombatTopDockFade from '../components/combat/ui/CombatTopDockFade';
+import CombatOperativeHud, {
+  type CombatOperativeTelemetry,
+} from '../components/combat/CombatOperativeHud';
+import { OTT } from '../constants/occultTacticalTerminalTheme';
 import { resolveWeaponState } from '../data/weaponProgressionEngine';
 import { resolveWeaponCombatStatsFromState } from '../data/weaponCombatEngine';
 import { shouldShowUnitInArenaGrid } from '../data/combatSquadEngine';
@@ -683,6 +689,17 @@ export default function CombatScreen(): React.JSX.Element {
     activeIncursion.runGenerationContext,
   ]);
 
+  const missionDepth = depthFromNodesCleared(activeIncursion.nodesCleared);
+  const missionDepthLabel = `DEPTH ${missionDepth} // LEVEL ${activeIncursion.nodesCleared + 1}`;
+  const missionSectorLabel =
+    activeIncursion.runGenerationContext?.sectorState?.activeAnchor?.type
+      ?? activeIncursion.currentDistrict
+      ?? 'UNKNOWN SECTOR';
+  const missionObjective =
+    activeIncursion.runGenerationContext?.activeOperation?.title
+      ?? activeIncursion.runGenerationContext?.activeOperation?.objectiveKind
+      ?? (activeIncursion.defendRiftActive ? 'Hold the Rift' : null);
+
   return (
     <IncursionShell>
       <CombatTurnProvider>
@@ -692,15 +709,11 @@ export default function CombatScreen(): React.JSX.Element {
         <IncursionRunLayout
           onConsumableUsed={handleConsumableUsed}
           onDeployCargoItem={handleDeployCargoItem}
+          hideRunChrome
           style={styles.combatRoot}
         >
           <View style={styles.landscapeRoot}>
             <View style={styles.landscapeColumn}>
-              <CombatOperativeVitalsOverlay
-                telemetry={operativeTelemetry}
-                primaryColor={theme.primaryColor}
-              />
-
               <CombatJuiceHost style={styles.body}>
                 <View style={styles.arenaPanel}>
                   <CombatArenaBackground
@@ -709,14 +722,35 @@ export default function CombatScreen(): React.JSX.Element {
                   />
 
                   <View style={styles.arenaForeground} pointerEvents="box-none">
-                    <TurnOrderSidebar
+                    <CombatHudAtmosphereOverlay />
+                    <CombatTopDockFade />
+
+                    <CombatMissionReadout
+                      depthLabel={missionDepthLabel}
+                      sectorLabel={String(missionSectorLabel).replace(/_/g, ' ')}
+                      objectiveLabel={missionObjective ? String(missionObjective).replace(/_/g, ' ') : null}
+                    />
+
+                    <TurnOrderTopBar
                       turnOrder={squadUi?.turnOrder}
                       gridUnits={gridUnits}
                       operativeClass={operativeClass}
-                      primaryColor={theme.primaryColor}
-                      mutedColor={theme.mutedColor}
+                      primaryColor={OTT.cyanSelect}
+                      mutedColor={OTT.textMuted}
                       selectedUnitId={selectedEnemyUnit?.unitId}
                       onHostilePress={handleTurnOrderHostilePress}
+                    />
+
+                    <CombatRightRail
+                      combatLog={<CombatDashboardMacroLog />}
+                      hostileIntel={(
+                        <HostileIntelView
+                          enemy={selectedEnemyUnit}
+                          enemies={gridUnits}
+                          mutedColor={OTT.textSecondary}
+                          onSelectEnemy={handleTurnOrderHostilePress}
+                        />
+                      )}
                     />
 
                     <ParticleOverlay biomeId={combatBiomeId} />
@@ -738,8 +772,8 @@ export default function CombatScreen(): React.JSX.Element {
                     {showVictoryBanner ? (
                       <CombatResolutionBanner
                         outcome="VICTORY"
-                        primaryColor="#00ff33"
-                        defeatColor="#ef4444"
+                        primaryColor={OTT.terminalGreenMuted}
+                        defeatColor={OTT.soulRed}
                         onDismiss={handleResolutionDismiss}
                       />
                     ) : null}
@@ -747,6 +781,15 @@ export default function CombatScreen(): React.JSX.Element {
                 </View>
 
                 <CombatTacticalDashboard
+                  operativeStatus={(
+                    operativeTelemetry ? (
+                      <CombatOperativeHud
+                        telemetry={operativeTelemetry}
+                        primaryColor={OTT.terminalGreenMuted}
+                        consolePanel
+                      />
+                    ) : null
+                  )}
                   commandDeck={(
                     <CombatDashboardCommandColumn>
                       <TacticalCombatHub
@@ -822,13 +865,6 @@ export default function CombatScreen(): React.JSX.Element {
                     />
                     </CombatDashboardCommandColumn>
                   )}
-                  macroLog={<CombatDashboardMacroLog />}
-                  hostileIntel={(
-                    <HostileIntelView
-                      enemy={selectedEnemyUnit}
-                      mutedColor={theme.mutedColor}
-                    />
-                  )}
                 />
                 <CombatMinigameOverlayHost />
               </CombatJuiceHost>
@@ -848,12 +884,12 @@ export default function CombatScreen(): React.JSX.Element {
 const styles = StyleSheet.create({
   combatRoot: {
     flex: 1,
-    backgroundColor: '#0a0a0c',
+    backgroundColor: OTT.bgBlack,
   },
   landscapeRoot: {
     flex: 1,
     width: '100%',
-    backgroundColor: '#0a0a0c',
+    backgroundColor: OTT.bgBlack,
   },
   landscapeColumn: {
     flex: 1,
@@ -869,14 +905,12 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   arenaPanel: {
-    flex: 1,
-    minHeight: 0,
-    width: '100%',
+    ...StyleSheet.absoluteFill,
+    zIndex: 1,
     overflow: 'hidden',
-    position: 'relative',
   },
   arenaForeground: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 1,
   },
 });

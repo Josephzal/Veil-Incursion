@@ -2,7 +2,10 @@ import React from 'react';
 import { StyleSheet, Text } from 'react-native';
 import HapticPressable from './HapticPressable';
 
-export const TERMINAL_ACCENT = '#00ff33';
+import { OTT } from '../constants/occultTacticalTerminalTheme';
+
+/** Restrained terminal accent — not full neon Matrix green. */
+export const TERMINAL_ACCENT = OTT.terminalGreenMuted;
 
 interface MacroLogCargoButtonProps {
   disabled?: boolean;

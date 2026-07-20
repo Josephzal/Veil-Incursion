@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import HapticPressable from '../HapticPressable';
 import type { ImageSourcePropType } from 'react-native';
@@ -17,10 +17,7 @@ import CombatSilhouetteShatterEffect from './CombatSilhouetteShatterEffect';
 import CombatEnemyOverheadBars from './CombatEnemyOverheadBars';
 import EnemyEntity from './EnemyEntity';
 import EliteSkullBadge from './EliteSkullBadge';
-import CombatArenaIntentGlyph from './CombatArenaIntentGlyph';
-import CombatArenaDefenseSilhouette from './CombatArenaDefenseSilhouette';
 import { resolveArenaIntentGlyph } from '../../data/combatArenaTelegraphEngine';
-import { resolveArenaDefenseState } from '../../data/combatArenaDefenseTelegraphEngine';
 
 const MONO = 'monospace';
 const ALPHA_CRIMSON = '#ff4444';
@@ -84,17 +81,6 @@ export default function CombatEnemyUnit({
         jammed: unit.intentLabel === 'STATIC // JAMMED',
       })
     : null;
-  const arenaDefense = useMemo(
-    () =>
-      isArena
-        ? resolveArenaDefenseState({
-            kineticArmor: unit.kineticArmor,
-            occultWards: unit.occultWards,
-            isFractured: unit.isFractured,
-          })
-        : null,
-    [isArena, unit.kineticArmor, unit.occultWards, unit.isFractured],
-  );
 
   const unitBody = (
     <View
@@ -119,29 +105,9 @@ export default function CombatEnemyUnit({
       ) : null}
       {isAlpha ? <EliteSkullBadge style={styles.eliteBadge} /> : null}
 
-      {/* Nameplate yields to intent glyph — designation remains on header / intel. */}
-      {isAlpha && !arenaGlyph ? (
-        <Text style={styles.alphaNameplate} numberOfLines={1} ellipsizeMode="tail">
-          {unit.designation.toUpperCase()}
-        </Text>
-      ) : null}
-
-      {arenaGlyph ? (
-        <View
-          style={[
-            styles.intentGlyphAnchor,
-            isAlpha && styles.intentGlyphAnchorAlpha,
-            breachTarget && styles.intentGlyphAnchorBreach,
-          ]}
-          pointerEvents="none"
-        >
-          <CombatArenaIntentGlyph glyph={arenaGlyph} compact />
-        </View>
-      ) : null}
-
       <EnemyEntity
         showVitals={isArena}
-        vitals={<CombatEnemyOverheadBars unit={unit} />}
+        vitals={<CombatEnemyOverheadBars unit={unit} intentGlyph={arenaGlyph} />}
         sprite={(
           <CombatEnemyAnchorMotion
             turnPhase={unit.turnPhase ?? null}
@@ -183,12 +149,6 @@ export default function CombatEnemyUnit({
                           intentShimmer={unit.intentShimmer ?? null}
                           isEnraged={unit.isEnraged === true}
                         />
-                        {arenaDefense ? (
-                          <CombatArenaDefenseSilhouette
-                            defense={arenaDefense}
-                            hitFlashSeq={unit.hitFlashSeq}
-                          />
-                        ) : null}
                       </View>
                     </CombatSilhouetteShatterEffect>
                   </CombatEnemyHitEffect>
@@ -273,7 +233,7 @@ const styles = StyleSheet.create({
   },
   breachCallout: {
     position: 'absolute',
-    top: -16,
+    top: -58,
     left: 0,
     right: 0,
     zIndex: 22,
@@ -284,38 +244,11 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     color: '#67e8f9',
   },
-  intentGlyphAnchor: {
-    position: 'absolute',
-    top: -26,
-    left: 0,
-    right: 0,
-    zIndex: 24,
-    alignItems: 'center',
-  },
-  intentGlyphAnchorAlpha: {
-    top: -30,
-  },
-  intentGlyphAnchorBreach: {
-    top: -44,
-  },
   eliteBadge: {
     position: 'absolute',
     top: 0,
     left: 0,
     zIndex: 20,
-  },
-  alphaNameplate: {
-    position: 'absolute',
-    top: -14,
-    left: 0,
-    right: 0,
-    zIndex: 18,
-    textAlign: 'center',
-    fontFamily: MONO,
-    fontSize: 7,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    color: ALPHA_CRIMSON,
   },
   imageShell: {
     width: '100%',
