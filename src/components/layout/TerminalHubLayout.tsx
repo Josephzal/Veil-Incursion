@@ -41,11 +41,12 @@ export default function TerminalHubLayout({
   const { scaleSpacing } = layout;
   const contentTopInset = resolveHubContentTopInset(safeTop, panelPadding);
   const contentBottomInset = resolveImmersiveFooterInset(safeBottom);
+  const theaterBleed = activeView === 'MAP';
   const mainRailStyle = {
     paddingTop: contentTopInset,
-    paddingRight: Math.max(scaleSpacing(6), safeRight),
+    paddingRight: theaterBleed ? Math.max(scaleSpacing(2), safeRight) : Math.max(scaleSpacing(6), safeRight),
     paddingBottom: contentBottomInset,
-    paddingLeft: scaleSpacing(2),
+    paddingLeft: theaterBleed ? 0 : scaleSpacing(2),
   };
 
   return (
@@ -63,13 +64,13 @@ export default function TerminalHubLayout({
           contentTopInset={contentTopInset}
           contentBottomInset={contentBottomInset}
         />
-        <View style={[styles.mainGap, { width: scaleSpacing(HUB_NAV_MAIN_GAP) }]} />
+        <View style={[styles.mainGap, { width: scaleSpacing(theaterBleed ? 4 : HUB_NAV_MAIN_GAP) }]} />
         <View style={[styles.mainRail, mainRailStyle, mainStyle]}>
           <View style={styles.terminalOverlayHost} pointerEvents="none">
             <TerminalOverlay />
           </View>
           <HubLayoutProvider value={layout}>
-            <HubViewport>
+            <HubViewport fullBleed={activeView === 'MAP'}>
               <TerminalGlitchTransition transitionKey={activeView} style={styles.glitchViewport}>
                 {children}
               </TerminalGlitchTransition>

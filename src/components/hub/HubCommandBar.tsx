@@ -1,15 +1,19 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View, type ViewStyle } from 'react-native';
 import HapticPressable from '../HapticPressable';
 import TerminalText from '../TerminalText';
 import { useHubLayout } from '../../context/HubLayoutContext';
-import { SELECT_ACCENT, CARD_BLACK } from '../../constants/dossierSurface';
+import { SELECT_ACCENT } from '../../constants/dossierSurface';
 import { HUB_DATA_DIVIDER } from '../../styles/hubTerminalUi';
 import { readPressableHover, terminalHoverStyle } from '../../utils/terminalHoverStyle';
 
 interface HubCommandBarProps {
   /** Left-aligned status message, e.g. "LOADOUT SAVED". */
   statusLabel: string;
+  /** Optional compact warning title above the detail line. */
+  statusTitle?: string;
+  /** Optional wrapped detail under statusTitle (max ~2 lines). */
+  statusDetail?: string;
   /** Status text + dot color. Defaults to spectral green. */
   statusColor?: string;
   /** Dot color override (defaults to statusColor). */
@@ -20,6 +24,8 @@ interface HubCommandBarProps {
   actionDisabled?: boolean;
   /** Action accent — defaults to spectral green. */
   actionAccent?: string;
+  /** Wider / taller primary CTA (Operational Theater breach). */
+  prominentAction?: boolean;
 }
 
 /**
@@ -29,15 +35,19 @@ interface HubCommandBarProps {
  */
 export default function HubCommandBar({
   statusLabel,
+  statusTitle,
+  statusDetail,
   statusColor = SELECT_ACCENT,
   dotColor,
   actionLabel,
   onAction,
   actionDisabled = false,
   actionAccent = SELECT_ACCENT,
+  prominentAction = false,
 }: HubCommandBarProps): React.JSX.Element {
   const { scaleFont, scaleSpacing } = useHubLayout();
   const resolvedDot = dotColor ?? statusColor;
+  const useCompactWarning = Boolean(statusTitle && statusDetail);
 
   return (
     <View
@@ -45,43 +55,85 @@ export default function HubCommandBar({
         styles.bar,
         {
           paddingHorizontal: scaleSpacing(12),
-          paddingVertical: scaleSpacing(9),
+          paddingVertical: scaleSpacing(prominentAction ? 10 : 9),
           gap: scaleSpacing(10),
         },
       ]}
     >
-      <View style={[styles.statusGroup, { gap: scaleSpacing(7) }]}>
-        <View style={[styles.dot, { backgroundColor: resolvedDot }]} />
-        <TerminalText
-          size={scaleFont(5.6)}
-          letterSpacing={1}
-          numberOfLines={1}
-          style={{ color: statusColor, fontWeight: '700' }}
-        >
-          {statusLabel}
-        </TerminalText>
+      <View
+        style={[
+          styles.statusGroup,
+          {
+            gap: scaleSpacing(7),
+            maxWidth: prominentAction ? '46%' : '70%',
+            alignItems: useCompactWarning ? 'flex-start' : 'center',
+          },
+        ]}
+      >
+        <View style={[styles.dot, { backgroundColor: resolvedDot, marginTop: useCompactWarning ? 4 : 0 }]} />
+        {useCompactWarning ? (
+          <View style={{ flexShrink: 1, minWidth: 0, gap: scaleSpacing(2) }}>
+            <TerminalText
+              size={scaleFont(5.4)}
+              letterSpacing={1}
+              numberOfLines={1}
+              style={{ color: statusColor, fontWeight: '800' }}
+            >
+              {statusTitle}
+            </TerminalText>
+            <TerminalText
+              size={scaleFont(5.2)}
+              letterSpacing={0.2}
+              numberOfLines={2}
+              style={{ color: 'rgba(170, 178, 185, 0.82)', fontWeight: '600', lineHeight: scaleFont(7.4) }}
+            >
+              {statusDetail}
+            </TerminalText>
+          </View>
+        ) : (
+          <TerminalText
+            size={scaleFont(5.6)}
+            letterSpacing={1}
+            numberOfLines={1}
+            style={{ color: statusColor, fontWeight: '700', flexShrink: 1 }}
+          >
+            {statusLabel}
+          </TerminalText>
+        )}
       </View>
 
       {actionLabel ? (
         <HapticPressable
           onPress={onAction}
           disabled={actionDisabled || !onAction}
-          style={(state) => [
-            styles.action,
-            {
-              paddingHorizontal: scaleSpacing(16),
-              paddingVertical: scaleSpacing(9),
-              borderColor: actionDisabled ? HUB_DATA_DIVIDER : actionAccent,
-              backgroundColor: actionDisabled ? 'rgba(0, 0, 0, 0.4)' : `${actionAccent}1f`,
-              opacity: actionDisabled ? 0.45 : 1,
-            },
-            terminalHoverStyle(readPressableHover(state), state.pressed),
-          ]}
+          style={(state) => {
+            const actionStyle: ViewStyle = {
+              paddingHorizontal: scaleSpacing(prominentAction ? 28 : 16),
+              paddingVertical: scaleSpacing(prominentAction ? 12 : 9),
+              minWidth: prominentAction ? scaleSpacing(220) : undefined,
+              borderColor: actionDisabled ? 'rgba(148, 163, 184, 0.28)' : actionAccent,
+              backgroundColor: actionDisabled ? 'rgba(8, 12, 16, 0.55)' : 'transparent',
+              opacity: 1,
+            };
+            if (Platform.OS === 'web') {
+              Object.assign(actionStyle, {
+                cursor: actionDisabled ? 'not-allowed' : 'pointer',
+              });
+            }
+            return [
+              styles.action,
+              actionStyle,
+              actionDisabled ? null : terminalHoverStyle(readPressableHover(state), state.pressed),
+            ];
+          }}
         >
           <TerminalText
-            size={scaleFont(5.8)}
-            letterSpacing={1}
-            style={{ color: actionDisabled ? HUB_DATA_DIVIDER : actionAccent, fontWeight: '800' }}
+            size={scaleFont(prominentAction ? 6.6 : 5.8)}
+            letterSpacing={1.2}
+            style={{
+              color: actionDisabled ? 'rgba(210, 218, 222, 0.48)' : actionAccent,
+              fontWeight: '800',
+            }}
           >
             {actionLabel}
           </TerminalText>
@@ -96,13 +148,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderTopWidth: 1,
-    borderTopColor: HUB_DATA_DIVIDER,
-    backgroundColor: CARD_BLACK,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
   },
   statusGroup: {
     flexDirection: 'row',
-    alignItems: 'center',
     flexShrink: 1,
     minWidth: 0,
   },
@@ -110,6 +161,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
+    flexShrink: 0,
   },
   action: {
     borderWidth: 1,

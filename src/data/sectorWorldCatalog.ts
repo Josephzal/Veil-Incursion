@@ -14,10 +14,14 @@ import type {
   SectorId,
   VeilAnchorType,
 } from '../types/worldState';
-import { parseLowPolyPath, polygonCentroid } from '../utils/sectorInfluenceVisual';
+import { parseLowPolyPath } from '../utils/sectorInfluenceVisual';
 import { getAnchorRealityRules } from './anchorRegistry';
+import { VEIL_FRONT_MAP_SECTORS, VEIL_FRONT_MAP_VIEWBOX } from './veilFrontMapGeometry';
 
-export const SECTOR_MAP_VIEWBOX = { width: 480, height: 320 };
+export const SECTOR_MAP_VIEWBOX = {
+  width: VEIL_FRONT_MAP_VIEWBOX.width,
+  height: VEIL_FRONT_MAP_VIEWBOX.height,
+};
 
 export interface SectorMapDefinition {
   id: SectorId;
@@ -69,31 +73,17 @@ export interface SectorWorldTemplate {
   operations: SectorOperationTemplate[];
 }
 
-// Single connected landmass — irregular, angular continent silhouette with
-// peninsulas and bays. Sectors share exact edges (planar tessellation).
-// Outer (cw): a(28,152) a2(58,104) b(74,50) b2(138,74) c(214,38) d(300,60)
-//   d2(352,34) e(452,78) e2(472,132) f(452,182) g(436,252) g2(356,262)
-//   h(288,294) i(150,286) i2(90,256) j(50,214) j2(34,184)
-// Internal seams: m(200,128) n(330,146) o(168,200) p(298,210)
-const RAW_MAP: Array<{ id: SectorId; label: string; path: string }> = [
-  { id: 'THE_SLAG_WORKS', label: 'The Slag Works', path: 'M 28 152 L 58 104 L 74 50 L 138 74 L 214 38 L 200 128 L 168 200 Z' },
-  { id: 'THE_BLACKLINE_TERMINUS', label: 'The Blackline Terminus', path: 'M 214 38 L 300 60 L 352 34 L 452 78 L 472 132 L 452 182 L 330 146 L 200 128 Z' },
-  { id: 'THE_NULL_ZONE', label: 'Null Zone', path: 'M 200 128 L 330 146 L 298 210 L 168 200 Z' },
-  { id: 'THE_ABYSSAL_SINK', label: 'Abyssal Sink', path: 'M 28 152 L 168 200 L 298 210 L 288 294 L 150 286 L 90 256 L 50 214 L 34 184 Z' },
-  { id: 'THE_ASHEN_WASTES', label: 'Ashen Wastes', path: 'M 330 146 L 452 182 L 436 252 L 356 262 L 288 294 L 298 210 Z' },
-];
-
-export const SECTOR_MAP_DEFINITIONS: SectorMapDefinition[] = RAW_MAP.map((entry) => {
+/** Sector hit/clip polygons — exact Figma paths against veil-front-map-base.png (1672×941). */
+export const SECTOR_MAP_DEFINITIONS: SectorMapDefinition[] = VEIL_FRONT_MAP_SECTORS.map((entry) => {
   const polygon = parseLowPolyPath(entry.path);
-  const centroid = polygonCentroid(polygon);
   return {
     id: entry.id,
-    label: entry.label,
+    label: entry.name,
     mapGeometry: {
       path: entry.path,
       polygon,
-      labelAnchor: centroid,
-      nodeAnchor: { x: centroid.x, y: centroid.y - 12 },
+      labelAnchor: entry.label,
+      nodeAnchor: { x: entry.label.x, y: entry.label.y - 12 },
     },
   };
 });

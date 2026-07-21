@@ -106,27 +106,77 @@ export function resolveSectorInfluence(
   return sector.influence;
 }
 
+/**
+ * Parse an SVG path `d` into polygon vertices for hit-testing.
+ * Supports compact Figma exports: M/L/H/V/Z with attached numbers (e.g. `M449 421.5L460.5`).
+ */
 export function parseLowPolyPath(d: string): MapPoint[] {
   const points: MapPoint[] = [];
-  const tokens = d.trim().split(/\s+/);
+  const tokens = d.match(/[MmLlHhVvZz]|-?\d*\.?\d+(?:e[-+]?\d+)?/g);
+  if (!tokens || tokens.length === 0) return points;
+
   let i = 0;
+  let x = 0;
+  let y = 0;
+  let cmd = '';
+
+  const readNum = (): number => {
+    const value = parseFloat(tokens[i] ?? '');
+    i += 1;
+    return value;
+  };
+
   while (i < tokens.length) {
-    const cmd = tokens[i];
+    const token = tokens[i]!;
+    if (/^[MmLlHhVvZz]$/.test(token)) {
+      cmd = token;
+      i += 1;
+    } else if (!cmd) {
+      i += 1;
+      continue;
+    }
+
     if (cmd === 'M' || cmd === 'L') {
-      const x = parseFloat(tokens[i + 1]);
-      const y = parseFloat(tokens[i + 2]);
-      if (!Number.isNaN(x) && !Number.isNaN(y)) {
-        points.push({ x, y });
-      }
-      i += 3;
+      x = readNum();
+      y = readNum();
+      points.push({ x, y });
+      if (cmd === 'M') cmd = 'L';
+      continue;
+    }
+    if (cmd === 'm' || cmd === 'l') {
+      x += readNum();
+      y += readNum();
+      points.push({ x, y });
+      if (cmd === 'm') cmd = 'l';
+      continue;
+    }
+    if (cmd === 'H') {
+      x = readNum();
+      points.push({ x, y });
+      continue;
+    }
+    if (cmd === 'h') {
+      x += readNum();
+      points.push({ x, y });
+      continue;
+    }
+    if (cmd === 'V') {
+      y = readNum();
+      points.push({ x, y });
+      continue;
+    }
+    if (cmd === 'v') {
+      y += readNum();
+      points.push({ x, y });
       continue;
     }
     if (cmd === 'Z' || cmd === 'z') {
-      i += 1;
+      cmd = '';
       continue;
     }
     i += 1;
   }
+
   return points;
 }
 

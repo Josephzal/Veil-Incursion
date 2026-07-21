@@ -1,19 +1,17 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { LayoutChangeEvent, StyleSheet, View } from 'react-native';
-import DossierCardShell from './hub/DossierCardShell';
 import HubScreenShell from './hub/HubScreenShell';
 import HubCommandBar from './hub/HubCommandBar';
+import TerminalText from './TerminalText';
 import HackingTerminalOverlay from './shadowWar/HackingTerminalOverlay';
 import SectorMapPanel from './veilFront/SectorMapPanel';
 import SectorBriefingPanel from './veilFront/SectorBriefingPanel';
 import VeilFrontDeployConfirmModal from './veilFront/VeilFrontDeployConfirmModal';
 import { useVeilFrontLayout } from './veilFront/useVeilFrontLayout';
-import { getDossierFactionAccent } from '../data/factions';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useWorldState } from '../context/WorldStateContext';
-import { HUB_BORDER_INSET } from '../constants/hubCta';
-import { SELECT_ACCENT, DANGER_RED } from '../constants/dossierSurface';
+import { DANGER_RED, SELECT_ACCENT } from '../constants/dossierSurface';
 import type { SectorId } from '../types/worldState';
 import { TerminalTheme } from '../types/theme';
 import {
@@ -58,17 +56,34 @@ export default function OperationalBriefingPanel({
   } = useWorldState();
   const {
     isTwoColumnShell,
-    isDesktop,
     panelGap,
-    contentWidth,
     scaleSpacing,
     actionPanelWidth,
-    cardPadding,
   } = useVeilFrontLayout();
   const [mapViewportHeight, setMapViewportHeight] = useState(0);
   const [deployModalVisible, setDeployModalVisible] = useState(false);
+  const [breachWindowMs, setBreachWindowMs] = useState(() => {
+    const cycle = 3 * 60 * 60 * 1000;
+    return cycle - (Date.now() % cycle);
+  });
 
-  const dossierAccent = getDossierFactionAccent(account.alignedFaction);
+  useEffect(() => {
+    const id = setInterval(() => {
+      const cycle = 3 * 60 * 60 * 1000;
+      setBreachWindowMs(cycle - (Date.now() % cycle));
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const breachWindowLabel = useMemo(() => {
+    const totalSec = Math.max(0, Math.floor(breachWindowMs / 1000));
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${pad(h)}:${pad(m)}:${pad(s)}`;
+  }, [breachWindowMs]);
+
   const progressionProfile = useMemo(
     () => getAccountProgressionProfile(account),
     [account],
@@ -77,6 +92,13 @@ export default function OperationalBriefingPanel({
     () => ALL_SECTOR_IDS.filter((id) => canSectorBeBreached(progressionProfile, id)),
     [progressionProfile],
   );
+
+  // Keep selection on an unlocked sector if a locked one is persisted.
+  useEffect(() => {
+    if (unlockedSectorIds.includes(persisted.selectedSectorId)) return;
+    const fallback = unlockedSectorIds[0];
+    if (fallback) setSelectedSectorId(fallback);
+  }, [persisted.selectedSectorId, setSelectedSectorId, unlockedSectorIds]);
   const sectorLockLabels = useMemo(() => {
     const labels: Partial<Record<SectorId, string>> = {};
     ALL_SECTOR_IDS.forEach((id) => {
@@ -121,17 +143,10 @@ export default function OperationalBriefingPanel({
   );
 
   const handleSectorPress = useCallback((sectorId: SectorId) => {
+    if (!unlockedSectorIds.includes(sectorId)) return;
     setSelectedSectorId(sectorId);
-    const briefing = buildSectorMandateBriefing(
-      getAccountProgressionProfile(account),
-      sectorId,
-    );
-    onAppendLog(
-      briefing.canBreach
-        ? `>> VEIL FRONT — SECTOR SELECTED: ${sectorId.replace(/_/g, ' ')}`
-        : `>> VEIL FRONT — ${briefing.headline}`,
-    );
-  }, [account, onAppendLog, setSelectedSectorId]);
+    onAppendLog(`>> VEIL FRONT — SECTOR SELECTED: ${sectorId.replace(/_/g, ' ')}`);
+  }, [onAppendLog, setSelectedSectorId, unlockedSectorIds]);
 
   const handleMapLayout = useCallback((event: LayoutChangeEvent) => {
     const { height } = event.nativeEvent.layout;
@@ -190,27 +205,16 @@ export default function OperationalBriefingPanel({
         style={[
           styles.contentGrid,
           isTwoColumnShell ? styles.contentGridDesktop : styles.contentGridStacked,
-          isDesktop
-            ? {
-                gap: panelGap,
-                flex: 1,
-                alignSelf: 'stretch',
-                paddingHorizontal: HUB_BORDER_INSET,
-                paddingBottom: scaleSpacing(6),
-                maxWidth: contentWidth,
-                width: contentWidth,
-              }
-            : { gap: panelGap, flex: 1 },
+          {
+            gap: panelGap,
+            flex: 1,
+            alignSelf: 'stretch',
+            width: '100%',
+            paddingBottom: scaleSpacing(4),
+          },
         ]}
       >
-        <DossierCardShell
-          fillHeight
-          padding={cardPadding}
-          accentColor={dossierAccent}
-          showAccentStripe
-          style={styles.mapPanel}
-          contentStyle={styles.mapPanelContent}
-        >
+        <View style={[styles.mapPanel, styles.mapPanelContent]}>
           <View style={styles.mapRegion} onLayout={handleMapLayout}>
             <View style={styles.mapLayer}>
               <SectorMapPanel
@@ -224,14 +228,17 @@ export default function OperationalBriefingPanel({
             </View>
             <HackingTerminalOverlay viewportHeight={mapViewportHeight} />
           </View>
-        </DossierCardShell>
+        </View>
 
         <View
           style={[
             styles.briefingPanel,
-            { padding: cardPadding },
+            {
+              borderLeftWidth: isTwoColumnShell ? StyleSheet.hairlineWidth : 0,
+              borderLeftColor: 'rgba(255, 255, 255, 0.12)',
+            },
             isTwoColumnShell
-              ? { width: actionPanelWidth, maxWidth: actionPanelWidth, flexShrink: 0 }
+              ? { width: actionPanelWidth, maxWidth: actionPanelWidth, flexShrink: 0, alignSelf: 'stretch' }
               : { flex: 1, minHeight: 0 },
           ]}
         >
@@ -261,31 +268,62 @@ export default function OperationalBriefingPanel({
   );
 
   const breachDisabled = runDisabled || launching || !sectorUnlocked || !gradeMeetsContract;
-  const sectorWarning = !sectorUnlocked
-    ? mandateBriefing.headline
-    : gradeWarning
-      ?? contractSectorWarning(sectorCompatibility);
-  const commandStatus = sectorWarning
-    ? `SECTOR SELECTED: ${activeSector.displayName.toUpperCase()} // ${sectorWarning.toUpperCase()}`
-    : `SECTOR SELECTED: ${activeSector.displayName.toUpperCase()} // ${formatBreachGradeLabel(selectedBreachGrade, true).toUpperCase()}`;
+  const gradeLabel = formatBreachGradeLabel(selectedBreachGrade, true).toUpperCase();
+  const sectorLabel = activeSector.displayName.toUpperCase();
+  const contractConflict = sectorCompatibility === 'UNAVAILABLE';
+  const theaterAccent = SELECT_ACCENT;
+  const statusTone =
+    !sectorUnlocked || !gradeMeetsContract || contractConflict
+      ? DANGER_RED
+      : theaterAccent;
+
+  let commandStatus = `SECTOR LOCKED / ${sectorLabel} / ${gradeLabel}`;
+  let statusTitle: string | undefined;
+  let statusDetail: string | undefined;
+  if (!sectorUnlocked) {
+    statusTitle = 'ACCESS LOCKED';
+    statusDetail =
+      mandateBriefing.mandate?.summary
+      ?? 'Route unknown. Clearance and mandate requirements apply.';
+  } else if (!gradeMeetsContract && gradeWarning) {
+    statusTitle = 'GRADE CONFLICT';
+    statusDetail = gradeWarning;
+  } else if (contractConflict) {
+    statusTitle = 'CONTRACT CONFLICT';
+    statusDetail = 'This sector cannot complete the selected contract. Deployment is still available.';
+  }
 
   return (
     <HubScreenShell
-      title="OPERATIONAL BRIEFING"
-      subtitle="VEIL FRONT // SECTOR BRIEFING // DEPLOY"
+      title="OPERATIONAL THEATER"
+      subtitle="VEIL FRONT / SECTOR NETWORK"
+      bracketTitle={false}
+      subtitleFirst
+      theaterChrome
+      titleColor="#E8F0EC"
+      headerRight={(
+        <View style={styles.breachWindow}>
+          <TerminalText size={5.2} letterSpacing={1} style={{ color: theaterAccent, fontWeight: '800' }}>
+            BREACH WINDOW OPEN
+          </TerminalText>
+          <TerminalText size={7.2} letterSpacing={1.2} style={{ color: '#E8F0EC', fontWeight: '800', marginTop: 2 }}>
+            {breachWindowLabel}
+          </TerminalText>
+        </View>
+      )}
       footer={(
         <HubCommandBar
           statusLabel={commandStatus}
-          statusColor={
-            !sectorUnlocked || !gradeMeetsContract || sectorCompatibility === 'UNAVAILABLE'
-              ? DANGER_RED
-              : SELECT_ACCENT
-          }
+          statusTitle={statusTitle}
+          statusDetail={statusDetail}
+          statusColor={statusTone}
+          actionAccent={theaterAccent}
+          prominentAction
           actionLabel={
             launching
               ? '[ DEPLOYING... ]'
               : !sectorUnlocked
-                ? '[ SECTOR LOCKED ]'
+                ? '[ ACCESS DENIED ]'
                 : !gradeMeetsContract
                   ? '[ GRADE TOO LOW ]'
                   : '[ INITIATE BREACH ]'
@@ -343,5 +381,9 @@ const styles = StyleSheet.create({
     minHeight: 0,
     minWidth: 0,
     overflow: 'hidden',
+    alignSelf: 'stretch',
+  },
+  breachWindow: {
+    alignItems: 'flex-end',
   },
 });

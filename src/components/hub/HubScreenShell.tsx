@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Platform, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import TerminalText from '../TerminalText';
 import {
   resolveFactionSlateBackground,
@@ -13,6 +13,14 @@ import { formatBracketHeader } from '../../styles/hubTerminalUi';
 interface HubScreenShellProps {
   title: string;
   subtitle?: string;
+  /** When false, title is rendered without `[ … ]` brackets. Default true. */
+  bracketTitle?: boolean;
+  /** Render subtitle above the title (Operational Theater breadcrumb). */
+  subtitleFirst?: boolean;
+  /** Override screen title color (defaults to theme status). */
+  titleColor?: string;
+  /** Thin dark theater chrome instead of faction-tinted slate. */
+  theaterChrome?: boolean;
   headerRight?: React.ReactNode;
   children: React.ReactNode;
   scrollable?: boolean;
@@ -25,6 +33,10 @@ interface HubScreenShellProps {
 export default function HubScreenShell({
   title,
   subtitle,
+  bracketTitle = true,
+  subtitleFirst = false,
+  titleColor,
+  theaterChrome = false,
   headerRight,
   children,
   scrollable = false,
@@ -34,9 +46,17 @@ export default function HubScreenShell({
   const { theme } = useTerminal();
   const { account } = usePlayerAccount();
   const { scaleSpacing } = useHubLayout();
-  const slateBg = resolveFactionSlateBackground(account.alignedFaction);
-  const slateInnerBorder = resolveFactionSlateInnerBorder(account.alignedFaction);
-  const headerColor = theme.statusColor;
+  const slateBg = theaterChrome
+    ? 'rgba(0, 0, 0, 0.55)'
+    : resolveFactionSlateBackground(account.alignedFaction);
+  const slateInnerBorder = theaterChrome
+    ? 'rgba(255, 255, 255, 0.12)'
+    : resolveFactionSlateInnerBorder(account.alignedFaction);
+  const headerColor = titleColor ?? theme.statusColor;
+  const resolvedTitle = bracketTitle ? formatBracketHeader(title) : title.toUpperCase();
+  const breadcrumbColor = theaterChrome
+    ? 'rgba(148, 163, 184, 0.75)'
+    : hubKeyColorFromTheme(theme.mutedColor);
 
   const body = scrollable ? (
     <ScrollView
@@ -51,34 +71,63 @@ export default function HubScreenShell({
     <View style={[styles.slateBody, contentStyle]}>{children}</View>
   );
 
+  const titleNode = (
+    <TerminalText variant="screenTitle" letterSpacing={1.4} style={[styles.screenTitle, { color: headerColor }]}>
+      {resolvedTitle}
+    </TerminalText>
+  );
+  const subtitleNode = subtitle ? (
+    <TerminalText
+      variant="caption"
+      letterSpacing={0.8}
+      style={[
+        styles.screenSubtitle,
+        {
+          color: breadcrumbColor,
+          marginTop: subtitleFirst ? 0 : scaleSpacing(2),
+          marginBottom: subtitleFirst ? scaleSpacing(3) : 0,
+        },
+      ]}
+    >
+      {subtitle}
+    </TerminalText>
+  ) : null;
+
   return (
-    <View style={styles.root}>
+    <View
+      style={[
+        styles.root,
+        theaterChrome && Platform.OS === 'web'
+          ? ({ height: '100dvh', maxHeight: '100dvh' } as object)
+          : null,
+      ]}
+    >
       <View style={[styles.slateOuter, { backgroundColor: slateBg }]}>
         <View
           style={[
             styles.slateInner,
+            theaterChrome ? styles.slateInnerTheater : null,
             {
               borderColor: slateInnerBorder,
-              paddingHorizontal: scaleSpacing(10),
-              paddingVertical: scaleSpacing(8),
-              gap: scaleSpacing(6),
+              paddingHorizontal: scaleSpacing(theaterChrome ? 6 : 10),
+              paddingVertical: scaleSpacing(theaterChrome ? 6 : 8),
+              gap: scaleSpacing(theaterChrome ? 4 : 6),
             },
           ]}
         >
           <View style={[styles.headerRow, { gap: scaleSpacing(8), marginBottom: scaleSpacing(4) }]}>
             <View style={styles.headerText}>
-              <TerminalText variant="screenTitle" letterSpacing={1.2} style={[styles.screenTitle, { color: headerColor }]}>
-                {formatBracketHeader(title)}
-              </TerminalText>
-              {subtitle ? (
-                <TerminalText
-                  variant="caption"
-                  letterSpacing={0.5}
-                  style={[styles.screenSubtitle, { color: hubKeyColorFromTheme(theme.mutedColor), marginTop: scaleSpacing(2) }]}
-                >
-                  {subtitle}
-                </TerminalText>
-              ) : null}
+              {subtitleFirst ? (
+                <>
+                  {subtitleNode}
+                  {titleNode}
+                </>
+              ) : (
+                <>
+                  {titleNode}
+                  {subtitleNode}
+                </>
+              )}
             </View>
             {headerRight ? <View style={[styles.headerRight, { gap: scaleSpacing(2) }]}>{headerRight}</View> : null}
           </View>
@@ -123,6 +172,7 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     minHeight: 0,
+    overflow: 'hidden',
   },
   headerRow: {
     flexDirection: 'row',
@@ -149,11 +199,18 @@ const styles = StyleSheet.create({
   slateOuter: {
     flex: 1,
     minHeight: 0,
+    overflow: 'hidden',
   },
   slateInner: {
     flex: 1,
     minHeight: 0,
     borderWidth: 1,
+  },
+  slateInnerTheater: {
+    // header / body / footer rows — body gets remaining height
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
   },
   slateBody: {
     flex: 1,
