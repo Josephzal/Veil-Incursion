@@ -49,12 +49,23 @@ export function contractSectorWarning(
 ): string | null {
   switch (compatibility) {
     case 'UNAVAILABLE':
-      return 'This sector cannot complete the selected contract. You may still deploy, but the contract will fail unless abandoned.';
+      // Source of truth: extract objectives resolve FAILED when required targets
+      // cannot spawn in-sector (see contractResolver.evaluateContractOutcome).
+      return 'This sector cannot complete the selected contract. Deployment is allowed; extracting here will fail the contract unless abandoned.';
     case 'VALID':
       return 'Valid // not ideal for contract.';
     default:
       return null;
   }
+}
+
+/** Concise consequence for incompatible-sector deployment authorization. */
+export function formatIncompatibleContractDeployConsequence(
+  contract: GeneratedContract,
+  sectorDisplayName: string,
+): string {
+  const sector = sectorDisplayName.replace(/^The\s+/i, '');
+  return `Deploying to ${sector} will fail ${contract.title}.`;
 }
 
 /** Hard-gate deploy when selected Breach Grade is below the contract minimum. */

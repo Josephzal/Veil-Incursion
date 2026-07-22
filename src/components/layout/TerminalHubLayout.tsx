@@ -41,8 +41,11 @@ export default function TerminalHubLayout({
   const { scaleSpacing } = layout;
   const contentTopInset = resolveHubContentTopInset(safeTop, panelPadding);
   const contentBottomInset = resolveImmersiveFooterInset(safeBottom);
-  const theaterBleed = activeView === 'MAP';
-  // Veil Front bleeds under the top bar with no chrome inset so CRT/map fill the stage.
+  // Theater workstations fill edge-to-edge under the top bar (no HubViewport max-width).
+  const theaterBleed = activeView === 'MAP'
+    || activeView === 'CONTRACTS'
+    || activeView === 'BLACK_MARKET'
+    || activeView === 'LOADOUT';
   const mainPadStyle = theaterBleed
     ? {
         paddingTop: 0,
@@ -71,7 +74,7 @@ export default function TerminalHubLayout({
             <View style={styles.terminalOverlayHost} pointerEvents="none">
               <TerminalOverlay />
             </View>
-            <HubViewport fullBleed={activeView === 'MAP'}>
+            <HubViewport fullBleed={theaterBleed}>
               <TerminalGlitchTransition transitionKey={activeView} style={styles.glitchViewport}>
                 {children}
               </TerminalGlitchTransition>

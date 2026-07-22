@@ -34,7 +34,14 @@ type WindowRect = { pageX: number; pageY: number; width: number; height: number 
 
 const STASH_DROP_PADDING = 16;
 
-export default function SafehouseLoadoutTab(): React.JSX.Element {
+interface SafehouseLoadoutTabProps {
+  /** Terminal loadout bay — suppress duplicate headers and heavy card chrome. */
+  terminalPresentation?: boolean;
+}
+
+export default function SafehouseLoadoutTab({
+  terminalPresentation = false,
+}: SafehouseLoadoutTabProps): React.JSX.Element {
   const { theme } = useTerminal();
   const {
     account,
@@ -199,19 +206,30 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
     setCargoAreaSize({ width, height });
   }, []);
 
+  const shellPadding = terminalPresentation ? scaleSpacing(8) : scaleSpacing(10);
+
   return (
     <View ref={rootRef} style={styles.root}>
-      <LoadoutTabHeader
-        title="Cargo Hold"
-        subtitle="Recovered resources are stored here during the run. Unstable cargo may alter descent conditions."
-      />
-      <View style={[styles.split, isDesktop && styles.splitDesktop, { gap: scaleSpacing(10) }]}>
+      {!terminalPresentation ? (
+        <LoadoutTabHeader
+          title="Cargo Hold"
+          subtitle="Recovered resources are stored here during the run. Unstable cargo may alter descent conditions."
+        />
+      ) : null}
+      <View style={[
+        styles.split,
+        isDesktop && styles.splitDesktop,
+        { gap: terminalPresentation ? 1 : scaleSpacing(10) },
+      ]}>
         <DossierCardShell
           fillHeight
-          padding={scaleSpacing(10)}
+          padding={shellPadding}
+          accentColor={terminalPresentation ? 'transparent' : undefined}
+          showAccentStripe={!terminalPresentation}
           style={[
             styles.stashColumn,
             Platform.OS === 'web' && styles.stashColumnWeb,
+            terminalPresentation && styles.terminalPane,
             {
               flex: isDesktop ? 1 : undefined,
               width: isDesktop ? stashLaneWidth : undefined,
@@ -239,11 +257,14 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
 
         <DossierCardShell
           fillHeight
-          padding={scaleSpacing(10)}
+          padding={shellPadding}
+          accentColor={terminalPresentation ? 'transparent' : undefined}
+          showAccentStripe={!terminalPresentation}
           style={[
             styles.deploymentPanel,
             isDesktop && styles.deploymentPanelDesktop,
             Platform.OS === 'web' && styles.deploymentPanelWeb,
+            terminalPresentation && styles.terminalPane,
             {
               flex: 1,
               minWidth: isDesktop ? deploymentLaneWidth : 0,
@@ -251,16 +272,24 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
           ]}
           contentStyle={styles.deploymentContent}
         >
-          <LoadoutSectionHeader label="Current Cargo Grid" style={[styles.deploymentTitle, { marginBottom: scaleSpacing(4) }]} />
+          {!terminalPresentation ? (
+            <LoadoutSectionHeader label="Current Cargo Grid" style={[styles.deploymentTitle, { marginBottom: scaleSpacing(4) }]} />
+          ) : (
+            <TerminalText size={7.5} letterSpacing={1} style={{ color: theme.mutedColor, fontWeight: '700', marginBottom: scaleSpacing(6) }}>
+              CARGO BAY
+            </TerminalText>
+          )}
 
           {specialPreRunStacks > 0 ? (
             <TerminalText variant="caption" style={{ color: accent, marginBottom: scaleSpacing(4) }}>
               {`${specialPreRunStacks} special stack(s) staged — post-run routing on extract.`}
             </TerminalText>
           ) : null}
-          <TerminalText variant="caption" style={{ color: theme.mutedColor, marginBottom: scaleSpacing(6) }}>
-            {formatCargoRoutingPostExtractReminder()}
-          </TerminalText>
+          {!terminalPresentation ? (
+            <TerminalText variant="caption" style={{ color: theme.mutedColor, marginBottom: scaleSpacing(6) }}>
+              {formatCargoRoutingPostExtractReminder()}
+            </TerminalText>
+          ) : null}
           {contractDeliveryHints.map((line) => (
             <TerminalText key={line} variant="caption" style={{ color: theme.mutedColor, marginBottom: scaleSpacing(4) }}>
               {line}
@@ -271,6 +300,7 @@ export default function SafehouseLoadoutTab(): React.JSX.Element {
             style={[
               styles.containmentField,
               isDesktop && styles.containmentFieldDesktop,
+              terminalPresentation && styles.containmentFieldTerminal,
             ]}
           >
             <View
@@ -392,5 +422,14 @@ const styles = StyleSheet.create({
   dragGhostIcon: {
     position: 'absolute',
     opacity: 0.92,
+  },
+  terminalPane: {
+    borderWidth: 0,
+    backgroundColor: '#030707',
+    borderRadius: 0,
+  },
+  containmentFieldTerminal: {
+    backgroundColor: '#020606',
+    padding: 4,
   },
 });

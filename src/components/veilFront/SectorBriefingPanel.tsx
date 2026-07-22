@@ -30,6 +30,7 @@ import {
   formatCompactContractPayout,
   formatCompactContractValidSectors,
   formatDeploymentContractStatus,
+  formatIncompatibleContractDeployConsequence,
   sponsorDisplayName,
   type ContractSectorCompatibility,
 } from '../../utils/contractUi';
@@ -189,9 +190,11 @@ function ActiveOperationSummary({
 function DeploymentContractSummary({
   selectedContract,
   sectorCompatibility,
+  sectorDisplayName,
 }: {
   selectedContract: SelectedContractState;
   sectorCompatibility: ContractSectorCompatibility;
+  sectorDisplayName: string;
 }): React.JSX.Element {
   if (selectedContract.kind !== 'SPONSOR') {
     return (
@@ -213,10 +216,6 @@ function DeploymentContractSummary({
   const status = formatDeploymentContractStatus(sectorCompatibility);
   const incompatible = status === 'INCOMPATIBLE';
   const compatible = status === 'COMPATIBLE';
-  const objective = incompatible
-    ? formatCompactContractValidSectors(contract)
-    : formatCompactContractObjective(contract);
-
   return (
     <View
       style={[
@@ -251,8 +250,15 @@ function DeploymentContractSummary({
         {`${sponsorDisplayName(contract.sponsorId).toUpperCase()} · ${contract.title.toUpperCase()}`}
       </TerminalText>
       <TerminalText size={TYPE.body} numberOfLines={2} style={styles.deploymentObjective}>
-        {objective}
+        {incompatible
+          ? formatIncompatibleContractDeployConsequence(contract, sectorDisplayName)
+          : formatCompactContractObjective(contract)}
       </TerminalText>
+      {incompatible ? (
+        <TerminalText size={TYPE.body} numberOfLines={2} style={styles.deploymentObjective}>
+          {formatCompactContractValidSectors(contract)}
+        </TerminalText>
+      ) : null}
       <TerminalText size={TYPE.body} style={styles.deploymentPayout}>
         {formatCompactContractPayout(contract)}
       </TerminalText>
@@ -506,6 +512,7 @@ export default function SectorBriefingPanel({
         <DeploymentContractSummary
           selectedContract={selectedContract}
           sectorCompatibility={sectorCompatibility}
+          sectorDisplayName={sector.displayName}
         />
       </ScrollView>
 
@@ -549,8 +556,8 @@ export default function SectorBriefingPanel({
             {gradeWarning}
           </TerminalText>
         ) : contractIncompatible ? (
-          <TerminalText size={TYPE.label} style={styles.quietConsequence}>
-            DEPLOYMENT ALLOWED · CONTRACT PROGRESS DISABLED
+          <TerminalText size={TYPE.label} style={styles.quietConsequenceWarn}>
+            THIS DEPLOYMENT WILL FAIL THE CURRENT CONTRACT
           </TerminalText>
         ) : null}
 

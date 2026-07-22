@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { LayoutChangeEvent, StyleSheet, View } from 'react-native';
 import TerminalText from './TerminalText';
-import HackingTerminalOverlay from './shadowWar/HackingTerminalOverlay';
+import VeilTerminalEffects from './atmosphere/VeilTerminalEffects';
 import SectorMapPanel from './veilFront/SectorMapPanel';
 import SectorBriefingPanel from './veilFront/SectorBriefingPanel';
 import VeilFrontDeployConfirmModal from './veilFront/VeilFrontDeployConfirmModal';
@@ -193,7 +193,7 @@ export default function OperationalBriefingPanel({
                 sectorLockLabels={sectorLockLabels}
               />
             </View>
-            <HackingTerminalOverlay viewportHeight={mapViewportHeight} />
+            <VeilTerminalEffects viewportHeight={mapViewportHeight} intensity="subtle" />
             <View style={[styles.mapTitle, { top: edgePad, left: edgePad }]} pointerEvents="none">
               <TerminalText
                 size={7.5}

@@ -1,29 +1,54 @@
-import React, { useMemo } from 'react';
-import { Modal, ScrollView, StyleSheet, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Image,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+  type View as ViewType,
+} from 'react-native';
 import HapticPressable from '../HapticPressable';
-import OperativeIdentityDossier from '../hub/OperativeIdentityDossier';
 import TerminalText from '../TerminalText';
-import { SectionFrame } from './VeilFrontUiPrimitives';
-import { useHubLayout } from '../../context/HubLayoutContext';
+import { usePlayerAccount } from '../../context/PlayerAccountContext';
+import { useWorldState } from '../../context/WorldStateContext';
+import { CLASS_DEFINITIONS } from '../../data/classes';
+import { formatAbilityLabel, getActiveClassSnapshot } from '../../data/classLoadoutEngine';
+import { getActiveAnchorInstance } from '../../data/anchorLifecycleEngine';
+import { buildPreliminaryRunWorldContext } from '../../data/runWorldBriefEngine';
+import { formatBreachGradeLabel, getBreachGradeTuning } from '../../data/breachGradeEngine';
+import { resolvePlayerBadgePortrait } from '../../utils/combatPlayerPortrait';
+import { describeEmployerPerks } from '../../utils/employerContractUi';
+import { hazardLabel } from '../../utils/veilFrontSectorUi';
+import {
+  formatCompactContractObjective,
+  formatCompactContractPayout,
+  formatCompactContractValidSectors,
+  formatDeploymentContractStatus,
+  formatIncompatibleContractDeployConsequence,
+  sponsorDisplayName,
+  type ContractSectorCompatibility,
+} from '../../utils/contractUi';
 import type { PlayerAccount } from '../../types/game';
 import type { OperativeProfile } from '../../types/profile';
 import type { SectorState } from '../../types/worldState';
 import type { SelectedContractState } from '../../types/contract';
-import { TerminalTheme } from '../../types/theme';
-import {
-  contractBreachGradeWarning,
-  contractSectorWarning,
-  formatContractRewardSummary,
-  sponsorDisplayName,
-  type ContractSectorCompatibility,
-} from '../../utils/contractUi';
-import { hazardLabel, formatCargoRoutingBriefingIntel, formatEchoBriefingIntel, formatOperationContributesForObjective, formatOperationLifecycleStatus, operationLifecycleAccentColor } from '../../utils/veilFrontSectorUi';
-import { describeEmployerPerks } from '../../utils/employerContractUi';
-import { useWorldState } from '../../context/WorldStateContext';
-import { getActiveAnchorInstance } from '../../data/anchorLifecycleEngine';
-import { buildPreliminaryRunWorldContext } from '../../data/runWorldBriefEngine';
-import { formatBreachGradeLabel, getBreachGradeTuning } from '../../data/breachGradeEngine';
 import type { BreachGradeId } from '../../types/progression';
+import type { TerminalTheme } from '../../types/theme';
+import { useVeilFrontLayout } from './useVeilFrontLayout';
+
+const RAIL = {
+  bg: '#040809',
+  textPrimary: '#d5dfdc',
+  textSecondary: '#91a39f',
+  textMuted: '#627572',
+  terminal: '#69c8ad',
+  terminalBright: '#8ee0c6',
+  incompat: '#d88984',
+  line: 'rgba(137, 170, 163, 0.14)',
+  lineStrong: 'rgba(137, 190, 179, 0.32)',
+} as const;
 
 interface VeilFrontDeployConfirmModalProps {
   visible: boolean;
@@ -39,33 +64,59 @@ interface VeilFrontDeployConfirmModalProps {
   onAbort: () => void;
 }
 
-function SummaryRow({
+function formatBreachGradeEffectLine(grade: BreachGradeId): string | null {
+  const tuning = getBreachGradeTuning(grade);
+  const parts: string[] = [];
+  if (tuning.creditBonusPct > 0) parts.push(`+${tuning.creditBonusPct}% Credits`);
+  if (tuning.rareLootBonusPct > 0) parts.push(`+${tuning.rareLootBonusPct}% Rare Loot`);
+  if (tuning.eliteWeightDelta > 0) parts.push('Denser elites');
+  return parts.length > 0 ? parts.join(' · ') : null;
+}
+
+function formatWeaponLine(weaponLine: string): string {
+  return weaponLine.replace(/^WEAPON:\s*/i, '').trim().toUpperCase();
+}
+
+function ConditionItem({
   label,
   value,
-  mutedColor,
-  textColor,
+  detail,
 }: {
   label: string;
   value: string;
-  mutedColor: string;
-  textColor: string;
-}) {
-  const { scaleSpacing } = useHubLayout();
+  detail?: string | null;
+}): React.JSX.Element {
   return (
-    <View style={[styles.summaryRow, { marginBottom: scaleSpacing(6) }]}>
-      <TerminalText variant="micro" style={{ color: mutedColor, minWidth: 88 }}>
-        {label.toUpperCase()}
+    <View style={styles.conditionItem}>
+      <TerminalText size={7} letterSpacing={0.9} style={styles.conditionLabel}>
+        {label}
       </TerminalText>
-      <TerminalText variant="micro" style={{ color: textColor, flex: 1, textAlign: 'right' }} numberOfLines={2}>
+      <TerminalText size={8.5} style={styles.conditionValue}>
         {value}
       </TerminalText>
+      {detail ? (
+        <TerminalText size={7.5} style={styles.conditionDetail}>
+          {detail}
+        </TerminalText>
+      ) : null}
     </View>
   );
 }
 
+function getFocusableElements(root: HTMLElement): HTMLElement[] {
+  const nodes = root.querySelectorAll<HTMLElement>(
+    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+  );
+  return Array.from(nodes).filter((el) => {
+    if (el.hasAttribute('disabled') || el.getAttribute('aria-disabled') === 'true') return false;
+    const style = window.getComputedStyle(el);
+    return style.display !== 'none' && style.visibility !== 'hidden';
+  });
+}
+
 export default function VeilFrontDeployConfirmModal({
   visible,
-  theme,
+  theme: _theme,
   profile,
   account,
   sector,
@@ -76,8 +127,31 @@ export default function VeilFrontDeployConfirmModal({
   onContinue,
   onAbort,
 }: VeilFrontDeployConfirmModalProps): React.JSX.Element {
-  const { scaleSpacing, scaleSize } = useHubLayout();
+  const { scaleSpacing, isCompactHeight } = useVeilFrontLayout();
+  const { cycleActiveClass } = usePlayerAccount();
   const { persisted } = useWorldState();
+  const dialogRef = useRef<ViewType | null>(null);
+  const returnBtnRef = useRef<ViewType | null>(null);
+  const previousFocusRef = useRef<Element | null>(null);
+  const [returnFocused, setReturnFocused] = useState(false);
+
+  const classDef = CLASS_DEFINITIONS[account.activeClass];
+  const portraitSource = useMemo(
+    () => resolvePlayerBadgePortrait(account.activeClass),
+    [account.activeClass],
+  );
+  const canCycleClass = account.unlockedClasses.length > 1;
+  const loadoutLine = useMemo(() => {
+    const snapshot = getActiveClassSnapshot(account);
+    return snapshot.loadout
+      .map((abilityId) => (
+        formatAbilityLabel(account.activeClass, abilityId)
+          .replace(/^\[\s*/, '')
+          .replace(/\s*\]$/, '')
+      ))
+      .join(' · ');
+  }, [account]);
+
   const crisisPreview = useMemo(() => {
     const anchor = getActiveAnchorInstance(persisted, sector.id);
     return buildPreliminaryRunWorldContext({
@@ -87,218 +161,363 @@ export default function VeilFrontDeployConfirmModal({
       anchor,
     });
   }, [persisted, sector]);
-  const rewardFocus = sector.resourceFocus.slice(0, 2).join(' / ');
-  const sectorWarning = contractSectorWarning(sectorCompatibility);
-  const gradeTuning = getBreachGradeTuning(selectedBreachGrade);
+
   const isSponsor = selectedContract.kind === 'SPONSOR';
   const contract = isSponsor ? selectedContract.contract : null;
-  const gradeWarning = contractBreachGradeWarning(
-    selectedBreachGrade,
-    contract?.minBreachGrade,
-  );
-  const operationLifecycle = formatOperationLifecycleStatus(
-    sector.activeOperation.lifecycleStatus,
-    sector.activeOperation.runsRemaining,
-  );
-  const operationLifecycleColor = operationLifecycleAccentColor(
-    sector.activeOperation.lifecycleStatus,
-    theme.statusColor,
-  );
-  const operationContributes = formatOperationContributesForObjective(
-    sector.activeOperation.objectiveKind,
-    sector.activeOperation.contributionRules,
-    sector.activeOperation.rewardEmphasis.targetResources,
-  )
-    .slice(0, 4)
-    .join(' · ');
-  const echoBriefing = formatEchoBriefingIntel(sector)[0] ?? null;
-  const cargoBriefing = formatCargoRoutingBriefingIntel(sector, selectedContract)[0] ?? null;
-  const sponsorPerks = isSponsor ? describeEmployerPerks(contract!.sponsorId) : [];
+  const status = formatDeploymentContractStatus(sectorCompatibility);
+  const incompatible = status === 'INCOMPATIBLE';
+  const compatible = status === 'COMPATIBLE';
+  const gradeEffect = formatBreachGradeEffectLine(selectedBreachGrade);
+  const deployEffects = isSponsor ? describeEmployerPerks(contract!.sponsorId) : [];
+  const deployEffectsLine = deployEffects.length > 0 && deployEffects[0] !== 'Standard sponsor terms'
+    ? deployEffects.join(' · ')
+    : null;
+  const anomalyName = crisisPreview.crisisDisplayName?.trim()
+    || sector.activeAnchor?.displayName
+    || null;
+  const runnerName = (profile.operative_profile.credentials.username || 'RUNNER').toUpperCase();
+  const clearance = account.progressionProfile.runner.clearanceRank;
+
+  const primaryLabel = launching ? '[ DEPLOYING... ]' : '[ CONFIRM ]';
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return undefined;
+    const styleId = 'deployment-modal-focus-styles';
+    if (document.getElementById(styleId)) return undefined;
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+[data-deployment-modal] button:focus-visible,
+[data-deployment-modal] [role="button"]:focus-visible,
+[data-deployment-modal] a:focus-visible {
+  outline: 2px solid ${RAIL.terminalBright} !important;
+  outline-offset: 2px !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-deployment-modal] {
+    transition: none !important;
+  }
+}`;
+    document.head.appendChild(style);
+    return undefined;
+  }, []);
+
+  useEffect(() => {
+    if (!visible || Platform.OS !== 'web') {
+      if (!visible && Platform.OS === 'web' && previousFocusRef.current instanceof HTMLElement) {
+        previousFocusRef.current.focus();
+      }
+      if (!visible) previousFocusRef.current = null;
+      return undefined;
+    }
+
+    previousFocusRef.current = document.activeElement;
+
+    const focusReturn = () => {
+      const node = returnBtnRef.current as unknown as HTMLElement | null;
+      if (!node?.focus) return;
+      try {
+        node.focus({ focusVisible: true } as FocusOptions);
+      } catch {
+        node.focus();
+      }
+    };
+    const id = requestAnimationFrame(focusReturn);
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        if (!launching) onAbort();
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+      const root = dialogRef.current as unknown as HTMLElement | null;
+      if (!root) return;
+      const focusable = getFocusableElements(root);
+      if (focusable.length === 0) {
+        event.preventDefault();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (event.shiftKey) {
+        if (!active || active === first || !root.contains(active)) {
+          event.preventDefault();
+          last.focus();
+        }
+      } else if (!active || active === last || !root.contains(active)) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      cancelAnimationFrame(id);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [visible, launching, onAbort]);
+
+  const compact = isCompactHeight;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onAbort}>
-      <View style={styles.backdrop}>
+      <View style={[styles.backdrop, compact && styles.backdropCompact]}>
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={() => {
+            if (!launching) onAbort();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss deployment confirmation"
+        />
         <View
-          style={[
-            styles.panel,
-            {
-              borderColor: theme.statusColor,
-              backgroundColor: '#050608',
-              padding: scaleSpacing(16),
-              maxHeight: '92%',
-            },
-          ]}
+          ref={dialogRef}
+          style={[styles.modal, compact && styles.modalCompact]}
+          // Keep clicks inside the dialog from hitting the dismiss layer.
+          onStartShouldSetResponder={() => true}
+          {...(Platform.OS === 'web'
+            ? ({
+                role: 'dialog',
+                'aria-modal': true,
+                'aria-labelledby': 'deployment-confirmation-title',
+                'data-deployment-modal': 'true',
+              } as object)
+            : {
+                accessibilityViewIsModal: true,
+                accessibilityLabel: 'Confirm Breach',
+              })}
         >
-          <TerminalText
-            variant="section"
-            letterSpacing={1}
-            style={{ color: theme.statusColor, textAlign: 'center', marginBottom: scaleSpacing(12) }}
+          <View style={[styles.header, compact && styles.headerCompact]}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <TerminalText size={7.5} letterSpacing={1} style={styles.eyebrow}>
+                DEPLOYMENT AUTHORIZATION
+              </TerminalText>
+              <TerminalText
+                nativeID="deployment-confirmation-title"
+                size={13.5}
+                letterSpacing={0.7}
+                style={styles.title}
+                {...(Platform.OS === 'web' ? ({ id: 'deployment-confirmation-title' } as object) : {})}
+              >
+                CONFIRM BREACH
+              </TerminalText>
+            </View>
+            <View style={styles.target}>
+              <TerminalText size={8.5} letterSpacing={0.7} style={styles.targetSector} numberOfLines={1}>
+                {sector.displayName.replace(/^The\s+/i, '').toUpperCase()}
+              </TerminalText>
+              <TerminalText size={7.5} letterSpacing={0.8} style={styles.targetGrade}>
+                {`BREACH GRADE ${formatBreachGradeLabel(selectedBreachGrade, true).replace(/^Grade\s+/i, '')}`}
+              </TerminalText>
+            </View>
+          </View>
+
+          <ScrollView
+            style={styles.body}
+            contentContainerStyle={[
+              styles.bodyContent,
+              { padding: scaleSpacing(compact ? 15 : 20) },
+            ]}
+            showsVerticalScrollIndicator
+            keyboardShouldPersistTaps="handled"
+            {...(Platform.OS === 'web'
+              ? ({
+                  // Keep noninteractive body out of the tab order (avoids blue body outline).
+                  tabIndex: -1,
+                } as object)
+              : null)}
           >
-            [ DEPLOYMENT CONFIRMATION ]
-          </TerminalText>
-
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: scaleSpacing(8) }}>
-            <OperativeIdentityDossier theme={theme} profile={profile} account={account} compact />
-
-            {sectorWarning ? (
-              <View
-                style={[
-                  styles.warningBanner,
-                  {
-                    borderColor: sectorCompatibility === 'UNAVAILABLE' ? '#f87171' : theme.mutedColor,
-                    marginTop: scaleSpacing(12),
-                    padding: scaleSpacing(8),
-                  },
-                ]}
-              >
-                <TerminalText variant="micro" style={{ color: sectorCompatibility === 'UNAVAILABLE' ? '#f87171' : theme.mutedColor }}>
-                  {sectorWarning.toUpperCase()}
+            {!isSponsor ? (
+              <View style={styles.contractBlock}>
+                <TerminalText size={7.5} letterSpacing={1} style={styles.sectionLabel}>
+                  CURRENT CONTRACT
+                </TerminalText>
+                <TerminalText size={8.5} letterSpacing={0.4} style={styles.contractIdentity}>
+                  NO CONTRACT SELECTED
+                </TerminalText>
+                <TerminalText size={8} style={styles.contractDetail}>
+                  Deployment will not advance Cabal reputation
                 </TerminalText>
               </View>
-            ) : null}
-            {gradeWarning ? (
+            ) : (
               <View
                 style={[
-                  styles.warningBanner,
-                  {
-                    borderColor: '#f87171',
-                    marginTop: scaleSpacing(8),
-                    padding: scaleSpacing(8),
-                  },
+                  styles.contractBlock,
+                  compatible && styles.contractCompatible,
+                  incompatible && styles.contractIncompatible,
                 ]}
               >
-                <TerminalText variant="micro" style={{ color: '#f87171' }}>
-                  {gradeWarning.toUpperCase()}
+                <View style={styles.contractTopline}>
+                  <TerminalText size={7.5} letterSpacing={1} style={styles.sectionLabel}>
+                    CURRENT CONTRACT
+                  </TerminalText>
+                  <TerminalText
+                    size={7}
+                    letterSpacing={0.8}
+                    style={[
+                      styles.contractStatus,
+                      compatible && styles.contractStatusCompatible,
+                      incompatible && styles.contractStatusIncompatible,
+                    ]}
+                  >
+                    {status}
+                  </TerminalText>
+                </View>
+                <TerminalText
+                  size={8.5}
+                  letterSpacing={0.4}
+                  numberOfLines={2}
+                  style={styles.contractIdentity}
+                >
+                  {`${sponsorDisplayName(contract!.sponsorId).toUpperCase()} · ${contract!.title.toUpperCase()}`}
+                </TerminalText>
+                <TerminalText size={8} numberOfLines={2} style={styles.contractDetail}>
+                  {incompatible
+                    ? formatIncompatibleContractDeployConsequence(contract!, sector.displayName)
+                    : formatCompactContractObjective(contract!)}
+                </TerminalText>
+                {incompatible ? (
+                  <TerminalText size={8} numberOfLines={2} style={styles.contractDetail}>
+                    {formatCompactContractValidSectors(contract!)}
+                  </TerminalText>
+                ) : null}
+                <TerminalText size={8} style={styles.contractPayout}>
+                  {formatCompactContractPayout(contract!)}
                 </TerminalText>
               </View>
-            ) : null}
+            )}
 
-            <View style={{ marginTop: scaleSpacing(16) }}>
-              <SectionFrame title="Deployment Summary" accentColor={theme.statusColor}>
-                <SummaryRow label="Sector" value={sector.displayName} mutedColor={theme.mutedColor} textColor={theme.textColor} />
-                <SummaryRow
-                  label="Breach Grade"
-                  value={`${formatBreachGradeLabel(selectedBreachGrade)} — ${gradeTuning.summary}`}
-                  mutedColor={theme.mutedColor}
-                  textColor={theme.statusColor}
+            <View style={[styles.runner, compact && styles.runnerCompact]}>
+              <Image
+                source={portraitSource}
+                style={styles.portrait}
+                resizeMode="contain"
+                accessible
+                accessibilityLabel={`${runnerName} portrait`}
+              />
+              <View style={styles.runnerIdentity}>
+                <TerminalText size={10.5} style={styles.runnerName} numberOfLines={1}>
+                  {runnerName}
+                </TerminalText>
+                <TerminalText size={8} letterSpacing={0.5} style={styles.runnerMeta} numberOfLines={1}>
+                  {`${classDef.displayName.toUpperCase()} · CLEARANCE ${clearance}`}
+                </TerminalText>
+                <TerminalText size={8} style={styles.runnerWeapon} numberOfLines={1}>
+                  {formatWeaponLine(classDef.weaponLine)}
+                </TerminalText>
+              </View>
+              {canCycleClass ? (
+                <View style={styles.runnerControls}>
+                  <HapticPressable
+                    onPress={() => cycleActiveClass(-1)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Previous runner"
+                    style={({ pressed }) => [styles.runnerControl, pressed && { opacity: 0.75 }]}
+                  >
+                    <TerminalText size={9} style={{ color: RAIL.textSecondary, fontWeight: '800' }}>
+                      {'<'}
+                    </TerminalText>
+                  </HapticPressable>
+                  <HapticPressable
+                    onPress={() => cycleActiveClass(1)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Next runner"
+                    style={({ pressed }) => [styles.runnerControl, pressed && { opacity: 0.75 }]}
+                  >
+                    <TerminalText size={9} style={{ color: RAIL.textSecondary, fontWeight: '800' }}>
+                      {'>'}
+                    </TerminalText>
+                  </HapticPressable>
+                </View>
+              ) : null}
+            </View>
+
+            <View style={styles.loadout}>
+              <TerminalText size={7.5} letterSpacing={1} style={styles.sectionLabel}>
+                LOADOUT
+              </TerminalText>
+              <TerminalText size={8} style={styles.loadoutAbilities}>
+                {loadoutLine.toUpperCase()}
+              </TerminalText>
+            </View>
+
+            <View style={[styles.conditions, compact && styles.conditionsCompact]}>
+              <TerminalText size={7.5} letterSpacing={1} style={styles.sectionLabel}>
+                DEPLOYMENT CONDITIONS
+              </TerminalText>
+              <View style={styles.conditionsGrid}>
+                <ConditionItem
+                  label="THREAT"
+                  value={hazardLabel(sector.hazardLevel).toUpperCase()}
                 />
-                <SummaryRow
-                  label="Crisis"
-                  value={crisisPreview.crisisDisplayName}
-                  mutedColor={theme.mutedColor}
-                  textColor={theme.statusColor}
-                />
-                <SummaryRow
-                  label="Crisis Cause"
-                  value={sector.activeAnchor?.displayName ?? 'Sector instability'}
-                  mutedColor={theme.mutedColor}
-                  textColor={theme.textColor}
-                />
-                <SummaryRow
-                  label="Contract"
-                  value={isSponsor ? contract!.title : 'Independent Breach'}
-                  mutedColor={theme.mutedColor}
-                  textColor={theme.textColor}
-                />
-                <SummaryRow
-                  label="Sponsor"
-                  value={isSponsor ? sponsorDisplayName(contract!.sponsorId) : 'No Sponsor'}
-                  mutedColor={theme.mutedColor}
-                  textColor={theme.textColor}
-                />
-                {isSponsor ? (
-                  <>
-                    <SummaryRow label="Objective" value={contract!.objectiveText} mutedColor={theme.mutedColor} textColor={theme.textColor} />
-                    <SummaryRow label="Reward" value={formatContractRewardSummary(contract!)} mutedColor={theme.mutedColor} textColor={theme.statusColor} />
-                    {contract!.minBreachGrade ? (
-                      <SummaryRow
-                        label="Min Grade"
-                        value={formatBreachGradeLabel(contract!.minBreachGrade, true)}
-                        mutedColor={theme.mutedColor}
-                        textColor={theme.textColor}
-                      />
-                    ) : null}
-                    {sponsorPerks.length > 0 ? (
-                      <SummaryRow label="Perks" value={sponsorPerks.join(' · ')} mutedColor={theme.mutedColor} textColor={theme.textColor} />
-                    ) : null}
-                  </>
-                ) : null}
-                <SummaryRow label="Operation" value={sector.activeOperation.title} mutedColor={theme.mutedColor} textColor={theme.textColor} />
-                <SummaryRow label="Op Status" value={operationLifecycle} mutedColor={theme.mutedColor} textColor={operationLifecycleColor} />
-                <SummaryRow
-                  label="Op Reward"
-                  value={sector.activeOperation.rewardPreview}
-                  mutedColor={theme.mutedColor}
-                  textColor={theme.statusColor}
-                />
-                {operationContributes.length > 0 ? (
-                  <SummaryRow
-                    label="Op Credit"
-                    value={operationContributes}
-                    mutedColor={theme.mutedColor}
-                    textColor={theme.textColor}
+                {anomalyName ? (
+                  <ConditionItem
+                    label="SECTOR ANOMALY"
+                    value={anomalyName.toUpperCase()}
                   />
                 ) : null}
-                {echoBriefing ? (
-                  <SummaryRow
-                    label="Echo Intel"
-                    value={echoBriefing}
-                    mutedColor={theme.mutedColor}
-                    textColor={theme.statusColor}
+                {deployEffectsLine ? (
+                  <ConditionItem
+                    label="DEPLOYMENT EFFECTS"
+                    value={deployEffectsLine}
                   />
                 ) : null}
-                {cargoBriefing ? (
-                  <SummaryRow
-                    label="Cargo Routing"
-                    value={cargoBriefing}
-                    mutedColor={theme.mutedColor}
-                    textColor={theme.statusColor}
+                <ConditionItem
+                  label="OPERATION"
+                  value={`Contributes to ${sector.activeOperation.title}`}
+                />
+                {gradeEffect ? (
+                  <ConditionItem
+                    label="BREACH MODIFIERS"
+                    value={gradeEffect}
                   />
                 ) : null}
-                <SummaryRow label="Threat" value={hazardLabel(sector.hazardLevel)} mutedColor={theme.mutedColor} textColor={theme.textColor} />
-                <SummaryRow label="Reward Focus" value={rewardFocus} mutedColor={theme.mutedColor} textColor={theme.textColor} />
-                {sector.activeAnchor ? (
-                  <SummaryRow label="Anchor" value={sector.activeAnchor.displayName} mutedColor={theme.mutedColor} textColor={theme.textColor} />
-                ) : null}
-              </SectionFrame>
+              </View>
             </View>
           </ScrollView>
 
-          <View style={[styles.actions, { marginTop: scaleSpacing(14), gap: scaleSpacing(10) }]}>
-            <HapticPressable
-              onPress={onAbort}
-              disabled={launching}
-              style={({ pressed }) => [
-                styles.actionBtn,
-                {
-                  borderColor: theme.borderColor,
-                  minHeight: scaleSize(44),
-                  opacity: launching ? 0.45 : pressed ? 0.75 : 1,
-                },
-              ]}
-            >
-              <TerminalText size={10} letterSpacing={1.2} style={{ color: theme.mutedColor, fontWeight: '800' }}>
-                [ ABORT ]
-              </TerminalText>
-            </HapticPressable>
-            <HapticPressable
-              onPress={onContinue}
-              disabled={launching}
-              style={({ pressed }) => [
-                styles.actionBtn,
-                styles.continueBtn,
-                {
-                  borderColor: theme.statusColor,
-                  backgroundColor: `${theme.statusColor}22`,
-                  minHeight: scaleSize(44),
-                  opacity: launching ? 0.45 : pressed ? 0.82 : 1,
-                },
-              ]}
-            >
-              <TerminalText size={10} letterSpacing={1.2} style={{ color: theme.statusColor, fontWeight: '800' }}>
-                {launching ? '[ DEPLOYING... ]' : '[ CONTINUE ]'}
-              </TerminalText>
-            </HapticPressable>
+          <View style={[styles.footer, compact && styles.footerCompact]}>
+            <View style={styles.footerActions}>
+              <HapticPressable
+                ref={returnBtnRef}
+                onPress={onAbort}
+                disabled={launching}
+                accessibilityRole="button"
+                accessibilityLabel="Abort"
+                onFocus={() => setReturnFocused(true)}
+                onBlur={() => setReturnFocused(false)}
+                style={({ pressed }) => ([
+                  styles.button,
+                  styles.buttonSecondary,
+                  returnFocused && styles.buttonFocused,
+                  launching && { opacity: 0.45 },
+                  pressed && !launching ? { opacity: 0.85 } : null,
+                ])}
+              >
+                <TerminalText size={8} letterSpacing={1} style={styles.buttonSecondaryText}>
+                  [ ABORT ]
+                </TerminalText>
+              </HapticPressable>
+              <HapticPressable
+                onPress={onContinue}
+                disabled={launching}
+                accessibilityRole="button"
+                accessibilityLabel="Confirm"
+                style={({ pressed }) => ([
+                  styles.button,
+                  styles.buttonPrimary,
+                  launching && { opacity: 0.45 },
+                  pressed && !launching ? { opacity: 0.9 } : null,
+                ])}
+              >
+                <TerminalText size={8} letterSpacing={1} style={styles.buttonPrimaryText}>
+                  {primaryLabel}
+                </TerminalText>
+              </HapticPressable>
+            </View>
           </View>
         </View>
       </View>
@@ -309,35 +528,322 @@ export default function VeilFrontDeployConfirmModal({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.88)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 24,
+    paddingVertical: 40,
+    backgroundColor: 'rgba(0, 3, 3, 0.78)',
+    position: 'relative',
+    ...Platform.select({
+      web: {
+        backdropFilter: 'blur(1.5px) brightness(0.52)',
+      } as object,
+      default: {},
+    }),
   },
-  panel: {
+  backdropCompact: {
+    paddingVertical: 24,
+  },
+  modal: {
     width: '100%',
-    maxWidth: 620,
-    borderWidth: 2,
-  },
-  warningBanner: {
+    maxWidth: 820,
+    maxHeight: '100%',
+    zIndex: 1,
+    ...Platform.select({
+      web: {
+        maxHeight: 'calc(100dvh - 80px)',
+        width: 'min(820px, calc(100vw - 48px))',
+      } as object,
+      default: { maxHeight: '92%' },
+    }),
+    overflow: 'hidden',
+    backgroundColor: RAIL.bg,
     borderWidth: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    borderColor: RAIL.lineStrong,
+    ...Platform.select({
+      web: {
+        display: 'grid',
+        gridTemplateRows: 'auto minmax(0, 1fr) auto',
+        backgroundImage:
+          'linear-gradient(180deg, rgba(13, 25, 23, 0.3), rgba(4, 8, 9, 0) 160px), #040809',
+        boxShadow:
+          '0 24px 80px rgba(0, 0, 0, 0.65), inset 0 1px rgba(255, 255, 255, 0.02)',
+        outlineStyle: 'none',
+      } as object,
+      default: {},
+    }),
   },
-  summaryRow: {
+  modalCompact: {
+    ...Platform.select({
+      web: { maxHeight: 'calc(100dvh - 48px)' } as object,
+      default: {},
+    }),
+  },
+  header: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'flex-end',
     justifyContent: 'space-between',
-    gap: 8,
+    gap: 24,
+    paddingHorizontal: 26,
+    paddingTop: 22,
+    paddingBottom: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: RAIL.line,
+    flexShrink: 0,
   },
-  actions: {
+  headerCompact: {
+    paddingTop: 17,
+    paddingBottom: 14,
+  },
+  eyebrow: {
+    color: RAIL.textMuted,
+    fontWeight: '700',
+  },
+  title: {
+    marginTop: 6,
+    color: RAIL.textPrimary,
+    fontWeight: '700',
+  },
+  target: {
+    alignItems: 'flex-end',
+    flexShrink: 0,
+  },
+  targetSector: {
+    color: RAIL.terminalBright,
+    fontWeight: '700',
+  },
+  targetGrade: {
+    marginTop: 4,
+    color: RAIL.textMuted,
+    fontWeight: '700',
+  },
+  body: {
+    flexGrow: 1,
+    flexShrink: 1,
+    minHeight: 0,
+  },
+  bodyContent: {
+    paddingBottom: 8,
+  },
+  sectionLabel: {
+    color: RAIL.textMuted,
+    fontWeight: '700',
+  },
+  contractBlock: {
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    backgroundColor: 'rgba(105, 200, 173, 0.04)',
+    borderLeftWidth: 2,
+    borderLeftColor: 'rgba(105, 200, 173, 0.48)',
+  },
+  contractCompatible: {
+    borderLeftColor: 'rgba(105, 200, 173, 0.48)',
+  },
+  contractIncompatible: {
+    backgroundColor: 'rgba(201, 98, 98, 0.05)',
+    borderLeftColor: 'rgba(201, 98, 98, 0.7)',
+  },
+  contractTopline: {
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 16,
   },
-  actionBtn: {
+  contractStatus: {
+    color: RAIL.textMuted,
+    fontWeight: '800',
+  },
+  contractStatusCompatible: {
+    color: RAIL.terminal,
+  },
+  contractStatusIncompatible: {
+    color: RAIL.incompat,
+  },
+  contractIdentity: {
+    marginTop: 7,
+    color: RAIL.textPrimary,
+    fontWeight: '700',
+  },
+  contractDetail: {
+    marginTop: 4,
+    color: RAIL.textSecondary,
+    lineHeight: 18,
+  },
+  contractPayout: {
+    marginTop: 5,
+    color: '#afbfba',
+    fontVariant: ['tabular-nums'],
+  },
+  runner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginTop: 18,
+    paddingBottom: 14,
+  },
+  runnerCompact: {
+    marginTop: 14,
+    paddingBottom: 12,
+  },
+  portrait: {
+    width: 76,
+    height: 76,
+    backgroundColor: 'rgba(108, 137, 132, 0.055)',
+    borderWidth: 1,
+    borderColor: 'rgba(137, 170, 163, 0.2)',
+  },
+  runnerIdentity: {
     flex: 1,
-    borderWidth: 2,
+    minWidth: 0,
+  },
+  runnerName: {
+    color: RAIL.textPrimary,
+    fontWeight: '800',
+  },
+  runnerMeta: {
+    marginTop: 4,
+    color: RAIL.textSecondary,
+    fontWeight: '700',
+  },
+  runnerWeapon: {
+    marginTop: 4,
+    color: RAIL.textSecondary,
+  },
+  runnerControls: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  runnerControl: {
+    width: 38,
+    height: 38,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0a0b0f',
+    backgroundColor: 'rgba(105, 200, 173, 0.025)',
+    borderWidth: 1,
+    borderColor: 'rgba(137, 170, 163, 0.18)',
+    ...Platform.select({
+      web: { cursor: 'pointer', outlineStyle: 'none' } as object,
+      default: {},
+    }),
   },
-  continueBtn: {},
+  loadout: {
+    paddingBottom: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: RAIL.line,
+  },
+  loadoutAbilities: {
+    marginTop: 6,
+    color: RAIL.textSecondary,
+    lineHeight: 19,
+  },
+  conditions: {
+    marginTop: 18,
+  },
+  conditionsCompact: {
+    marginTop: 14,
+  },
+  conditionsGrid: {
+    marginTop: 10,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 14,
+    ...Platform.select({
+      web: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+        columnGap: 28,
+        rowGap: 14,
+      } as object,
+      default: {},
+    }),
+  },
+  conditionItem: {
+    ...Platform.select({
+      default: { width: '47%', minWidth: 160 },
+      web: { width: 'auto', minWidth: 0 } as object,
+    }),
+  },
+  conditionLabel: {
+    color: RAIL.textMuted,
+    fontWeight: '700',
+  },
+  conditionValue: {
+    marginTop: 4,
+    color: RAIL.textPrimary,
+    lineHeight: 19,
+  },
+  conditionDetail: {
+    marginTop: 2,
+    color: RAIL.textMuted,
+    lineHeight: 16,
+  },
+  footer: {
+    flexShrink: 0,
+    paddingHorizontal: 26,
+    paddingTop: 16,
+    paddingBottom: 22,
+    backgroundColor: 'rgba(3, 7, 8, 0.96)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(137, 190, 179, 0.22)',
+  },
+  footerCompact: {
+    paddingTop: 13,
+    paddingBottom: 15,
+  },
+  footerActions: {
+    flexDirection: 'row',
+    gap: 11,
+    ...Platform.select({
+      web: {
+        display: 'grid',
+        gridTemplateColumns: 'minmax(190px, 0.75fr) minmax(280px, 1.25fr)',
+      } as object,
+      default: {},
+    }),
+  },
+  button: {
+    flex: 1,
+    minHeight: 54,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+        outlineStyle: 'none',
+      } as object,
+      default: {},
+    }),
+  },
+  buttonSecondary: {
+    backgroundColor: 'rgba(112, 139, 133, 0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(137, 170, 163, 0.25)',
+  },
+  buttonFocused: {
+    borderColor: RAIL.terminalBright,
+    ...Platform.select({
+      web: {
+        outlineStyle: 'solid',
+        outlineWidth: 2,
+        outlineColor: RAIL.terminalBright,
+        outlineOffset: 2,
+      } as object,
+      default: {},
+    }),
+  },
+  buttonPrimary: {
+    backgroundColor: RAIL.terminal,
+    borderWidth: 1,
+    borderColor: RAIL.terminalBright,
+  },
+  buttonSecondaryText: {
+    color: RAIL.textPrimary,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  buttonPrimaryText: {
+    color: '#06110e',
+    fontWeight: '800',
+    textAlign: 'center',
+  },
 });
