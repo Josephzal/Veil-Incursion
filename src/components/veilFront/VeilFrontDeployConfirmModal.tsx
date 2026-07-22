@@ -796,7 +796,7 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         display: 'grid',
-        gridTemplateColumns: 'minmax(190px, 0.75fr) minmax(280px, 1.25fr)',
+        gridTemplateColumns: '1fr 1fr',
       } as object,
       default: {},
     }),

@@ -109,10 +109,12 @@ export default function ForgeWorkspace({
           accessibilityRole="button"
           accessibilityState={{ selected }}
           accessibilityLabel={`Inspect ${entry.recipe.label}`}
-          style={({ pressed }) => ([
+          style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ([
             styles.signalSelect,
             compact && styles.signalSelectCompact,
             narrow && styles.signalSelectNarrow,
+            selected && styles.signalSelectSelected,
+            ((hovered || pressed) && !selected) ? styles.signalSelectHover : null,
             pressed && { opacity: 0.92 },
           ])}
         >
@@ -444,6 +446,12 @@ const styles = StyleSheet.create({
       web: { cursor: 'pointer', outlineStyle: 'none' } as object,
       default: {},
     }),
+  },
+  signalSelectHover: {
+    backgroundColor: 'rgba(105, 200, 173, 0.035)',
+  },
+  signalSelectSelected: {
+    backgroundColor: 'rgba(105, 200, 173, 0.06)',
   },
   signalSelectCompact: {
     minHeight: 96,
