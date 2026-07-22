@@ -167,7 +167,6 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
   const [fabPhase, setFabPhase] = useState<FabricationFeedbackPhase>('idle');
   const [fabRecord, setFabRecord] = useState<FabricationFeedbackRecord | null>(null);
   const [fabReceipt, setFabReceipt] = useState<FabricationReceiptRecord | null>(null);
-  const [channelNodePulse, setChannelNodePulse] = useState(false);
   const vendorInitialized = useRef(false);
   const fabTimers = useRef<Array<ReturnType<typeof setTimeout>>>([]);
   const fabLocked = fabPhase !== 'idle' && fabPhase !== 'complete';
@@ -343,7 +342,6 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
     setFabPhase('idle');
     setFabRecord(null);
     setFabReceipt(null);
-    setChannelNodePulse(false);
     workspaceDim.setValue(0);
   }, [workspaceDim]);
 
@@ -391,7 +389,6 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
     setFabReceipt(null);
     setFabPhase('idle');
     setFabRecord(null);
-    setChannelNodePulse(false);
     if (!reduceMotion) {
       Animated.timing(workspaceDim, {
         toValue: 0,
@@ -476,14 +473,12 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
 
     if (reduceMotion) {
       setFabPhase('complete');
-      setChannelNodePulse(true);
       fabricationAudioHooks.play('fabrication_complete');
       setFabReceipt(buildReceipt());
       return;
     }
 
     setFabPhase('accepted');
-    setChannelNodePulse(true);
     Animated.timing(workspaceDim, {
       toValue: 1,
       duration: 160,
@@ -514,7 +509,6 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
         duration: 220,
         useNativeDriver: true,
       }).start();
-      setChannelNodePulse(false);
     });
   };
 
@@ -1378,22 +1372,13 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
                   pressed && { opacity: 0.9 },
                 ])}
               >
-                <View style={styles.modeTop}>
-                  <TerminalText
-                    size={9}
-                    letterSpacing={1.05}
-                    style={{ color: selected ? '#eef4f1' : '#7f928c', fontWeight: '800' }}
-                  >
-                    {mode.label}
-                  </TerminalText>
-                  <View
-                    style={[
-                      styles.modeNode,
-                      selected && styles.modeNodeActive,
-                      selected && mode.key === 'FORGE' && channelNodePulse && styles.modeNodePulse,
-                    ]}
-                  />
-                </View>
+                <TerminalText
+                  size={9}
+                  letterSpacing={1.05}
+                  style={{ color: selected ? '#eef4f1' : '#7f928c', fontWeight: '800' }}
+                >
+                  {mode.label}
+                </TerminalText>
                 <TerminalText size={6.5} letterSpacing={0.8} style={{ marginTop: 4, color: META }}>
                   {mode.detail}
                 </TerminalText>
@@ -1606,29 +1591,6 @@ const styles = StyleSheet.create({
       default: {
         backgroundColor: 'rgba(105, 200, 173, 0.06)',
       },
-    }),
-  },
-  modeTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  modeNode: {
-    width: 5,
-    height: 5,
-    backgroundColor: 'rgba(127, 166, 157, 0.22)',
-  },
-  modeNodeActive: {
-    backgroundColor: TERMINAL,
-  },
-  modeNodePulse: {
-    backgroundColor: TERMINAL_BRIGHT,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 0 10px rgba(142, 223, 198, 0.55)',
-      } as object,
-      default: {},
     }),
   },
   modeCode: {
