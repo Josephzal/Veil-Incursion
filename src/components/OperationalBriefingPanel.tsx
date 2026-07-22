@@ -1,7 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { LayoutChangeEvent, StyleSheet, View } from 'react-native';
-import HubScreenShell from './hub/HubScreenShell';
-import HubCommandBar from './hub/HubCommandBar';
 import TerminalText from './TerminalText';
 import HackingTerminalOverlay from './shadowWar/HackingTerminalOverlay';
 import SectorMapPanel from './veilFront/SectorMapPanel';
@@ -11,7 +9,6 @@ import { useVeilFrontLayout } from './veilFront/useVeilFrontLayout';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useWorldState } from '../context/WorldStateContext';
-import { DANGER_RED, SELECT_ACCENT } from '../constants/dossierSurface';
 import type { SectorId } from '../types/worldState';
 import { TerminalTheme } from '../types/theme';
 import {
@@ -31,6 +28,9 @@ import {
   formatBreachGradeLabel,
   resolveSelectedBreachGrade,
 } from '../data/breachGradeEngine';
+
+/** Matches prior shell bottom inset so dossier top/bottom edge padding stay equal. */
+const DOSSIER_EDGE_PAD = 12;
 
 interface OperationalBriefingPanelProps {
   theme: TerminalTheme;
@@ -56,33 +56,11 @@ export default function OperationalBriefingPanel({
   } = useWorldState();
   const {
     isTwoColumnShell,
-    panelGap,
-    scaleSpacing,
     actionPanelWidth,
+    scaleSpacing,
   } = useVeilFrontLayout();
   const [mapViewportHeight, setMapViewportHeight] = useState(0);
   const [deployModalVisible, setDeployModalVisible] = useState(false);
-  const [breachWindowMs, setBreachWindowMs] = useState(() => {
-    const cycle = 3 * 60 * 60 * 1000;
-    return cycle - (Date.now() % cycle);
-  });
-
-  useEffect(() => {
-    const id = setInterval(() => {
-      const cycle = 3 * 60 * 60 * 1000;
-      setBreachWindowMs(cycle - (Date.now() % cycle));
-    }, 1000);
-    return () => clearInterval(id);
-  }, []);
-
-  const breachWindowLabel = useMemo(() => {
-    const totalSec = Math.max(0, Math.floor(breachWindowMs / 1000));
-    const h = Math.floor(totalSec / 3600);
-    const m = Math.floor((totalSec % 3600) / 60);
-    const s = totalSec % 60;
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${pad(h)}:${pad(m)}:${pad(s)}`;
-  }, [breachWindowMs]);
 
   const progressionProfile = useMemo(
     () => getAccountProgressionProfile(account),
@@ -93,12 +71,6 @@ export default function OperationalBriefingPanel({
     [progressionProfile],
   );
 
-  // Keep selection on an unlocked sector if a locked one is persisted.
-  useEffect(() => {
-    if (unlockedSectorIds.includes(persisted.selectedSectorId)) return;
-    const fallback = unlockedSectorIds[0];
-    if (fallback) setSelectedSectorId(fallback);
-  }, [persisted.selectedSectorId, setSelectedSectorId, unlockedSectorIds]);
   const sectorLockLabels = useMemo(() => {
     const labels: Partial<Record<SectorId, string>> = {};
     ALL_SECTOR_IDS.forEach((id) => {
@@ -143,10 +115,9 @@ export default function OperationalBriefingPanel({
   );
 
   const handleSectorPress = useCallback((sectorId: SectorId) => {
-    if (!unlockedSectorIds.includes(sectorId)) return;
     setSelectedSectorId(sectorId);
     onAppendLog(`>> VEIL FRONT — SECTOR SELECTED: ${sectorId.replace(/_/g, ' ')}`);
-  }, [onAppendLog, setSelectedSectorId, unlockedSectorIds]);
+  }, [onAppendLog, setSelectedSectorId]);
 
   const handleMapLayout = useCallback((event: LayoutChangeEvent) => {
     const { height } = event.nativeEvent.layout;
@@ -199,19 +170,15 @@ export default function OperationalBriefingPanel({
     selectedContract,
   ]);
 
-  const body = (
+  const breachDisabled = runDisabled || launching || !sectorUnlocked || !gradeMeetsContract;
+  const edgePad = scaleSpacing(DOSSIER_EDGE_PAD);
+
+  return (
     <View style={styles.stage}>
       <View
         style={[
           styles.contentGrid,
           isTwoColumnShell ? styles.contentGridDesktop : styles.contentGridStacked,
-          {
-            gap: panelGap,
-            flex: 1,
-            alignSelf: 'stretch',
-            width: '100%',
-            paddingBottom: scaleSpacing(4),
-          },
         ]}
       >
         <View style={[styles.mapPanel, styles.mapPanelContent]}>
@@ -227,27 +194,61 @@ export default function OperationalBriefingPanel({
               />
             </View>
             <HackingTerminalOverlay viewportHeight={mapViewportHeight} />
+            <View style={[styles.mapTitle, { top: edgePad, left: edgePad }]} pointerEvents="none">
+              <TerminalText
+                size={7.5}
+                letterSpacing={0.8}
+                style={styles.mapSubtitle}
+              >
+                VEIL FRONT / SECTOR NETWORK
+              </TerminalText>
+              <TerminalText
+                size={13.5}
+                letterSpacing={0.8}
+                style={styles.mapHeading}
+              >
+                SELECT INCURSION ZONE
+              </TerminalText>
+            </View>
           </View>
         </View>
 
         <View
           style={[
-            styles.briefingPanel,
-            {
-              borderLeftWidth: isTwoColumnShell ? StyleSheet.hairlineWidth : 0,
-              borderLeftColor: 'rgba(255, 255, 255, 0.12)',
-            },
+            styles.briefingColumn,
             isTwoColumnShell
-              ? { width: actionPanelWidth, maxWidth: actionPanelWidth, flexShrink: 0, alignSelf: 'stretch' }
+              ? {
+                  width: actionPanelWidth + edgePad,
+                  maxWidth: actionPanelWidth + edgePad,
+                  flexShrink: 0,
+                }
               : { flex: 1, minHeight: 0 },
+            {
+              paddingTop: edgePad,
+              paddingBottom: edgePad,
+              paddingRight: edgePad,
+            },
           ]}
         >
-          <SectorBriefingPanel
-            theme={theme}
-            sector={activeSector}
-            selectedContract={selectedContract}
-            sectorCompatibility={sectorCompatibility}
-          />
+          <View
+            style={[
+              styles.briefingPanel,
+              isTwoColumnShell ? { width: actionPanelWidth, maxWidth: actionPanelWidth } : null,
+            ]}
+          >
+            <SectorBriefingPanel
+              theme={theme}
+              sector={activeSector}
+              selectedContract={selectedContract}
+              sectorCompatibility={sectorCompatibility}
+              sectorUnlocked={sectorUnlocked}
+              breachDisabled={breachDisabled}
+              launching={launching}
+              gradeMeetsContract={gradeMeetsContract}
+              gradeWarning={gradeWarning}
+              onRequestDeploy={handleRequestDeploy}
+            />
+          </View>
         </View>
       </View>
 
@@ -266,76 +267,6 @@ export default function OperationalBriefingPanel({
       />
     </View>
   );
-
-  const breachDisabled = runDisabled || launching || !sectorUnlocked || !gradeMeetsContract;
-  const gradeLabel = formatBreachGradeLabel(selectedBreachGrade, true).toUpperCase();
-  const sectorLabel = activeSector.displayName.toUpperCase();
-  const contractConflict = sectorCompatibility === 'UNAVAILABLE';
-  const theaterAccent = SELECT_ACCENT;
-  const statusTone =
-    !sectorUnlocked || !gradeMeetsContract || contractConflict
-      ? DANGER_RED
-      : theaterAccent;
-
-  let commandStatus = `SECTOR LOCKED / ${sectorLabel} / ${gradeLabel}`;
-  let statusTitle: string | undefined;
-  let statusDetail: string | undefined;
-  if (!sectorUnlocked) {
-    statusTitle = 'ACCESS LOCKED';
-    statusDetail =
-      mandateBriefing.mandate?.summary
-      ?? 'Route unknown. Clearance and mandate requirements apply.';
-  } else if (!gradeMeetsContract && gradeWarning) {
-    statusTitle = 'GRADE CONFLICT';
-    statusDetail = gradeWarning;
-  } else if (contractConflict) {
-    statusTitle = 'CONTRACT CONFLICT';
-    statusDetail = 'This sector cannot complete the selected contract. Deployment is still available.';
-  }
-
-  return (
-    <HubScreenShell
-      title="OPERATIONAL THEATER"
-      subtitle="VEIL FRONT / SECTOR NETWORK"
-      bracketTitle={false}
-      subtitleFirst
-      theaterChrome
-      titleColor="#E8F0EC"
-      headerRight={(
-        <View style={styles.breachWindow}>
-          <TerminalText size={5.2} letterSpacing={1} style={{ color: theaterAccent, fontWeight: '800' }}>
-            BREACH WINDOW OPEN
-          </TerminalText>
-          <TerminalText size={7.2} letterSpacing={1.2} style={{ color: '#E8F0EC', fontWeight: '800', marginTop: 2 }}>
-            {breachWindowLabel}
-          </TerminalText>
-        </View>
-      )}
-      footer={(
-        <HubCommandBar
-          statusLabel={commandStatus}
-          statusTitle={statusTitle}
-          statusDetail={statusDetail}
-          statusColor={statusTone}
-          actionAccent={theaterAccent}
-          prominentAction
-          actionLabel={
-            launching
-              ? '[ DEPLOYING... ]'
-              : !sectorUnlocked
-                ? '[ ACCESS DENIED ]'
-                : !gradeMeetsContract
-                  ? '[ GRADE TOO LOW ]'
-                  : '[ INITIATE BREACH ]'
-          }
-          onAction={handleRequestDeploy}
-          actionDisabled={breachDisabled}
-        />
-      )}
-    >
-      {body}
-    </HubScreenShell>
-  );
 }
 
 const styles = StyleSheet.create({
@@ -343,6 +274,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     overflow: 'hidden',
+    backgroundColor: '#010304',
   },
   contentGrid: {
     flex: 1,
@@ -372,18 +304,36 @@ const styles = StyleSheet.create({
     minHeight: 0,
     position: 'relative',
     overflow: 'hidden',
+    backgroundColor: '#000000',
   },
   mapLayer: {
     ...StyleSheet.absoluteFill,
     zIndex: 1,
   },
+  mapTitle: {
+    position: 'absolute',
+    zIndex: 3,
+    maxWidth: '70%',
+  },
+  mapSubtitle: {
+    color: 'rgba(148, 163, 184, 0.75)',
+    fontWeight: '700',
+  },
+  mapHeading: {
+    marginTop: 4,
+    color: '#E8F0EC',
+    fontWeight: '800',
+  },
+  briefingColumn: {
+    minHeight: 0,
+    minWidth: 0,
+    alignSelf: 'stretch',
+  },
   briefingPanel: {
+    flex: 1,
     minHeight: 0,
     minWidth: 0,
     overflow: 'hidden',
     alignSelf: 'stretch',
-  },
-  breachWindow: {
-    alignItems: 'flex-end',
   },
 });

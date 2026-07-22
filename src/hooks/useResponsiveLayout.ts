@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import { HUB_NAV_MAIN_GAP } from '../constants/landscapeLayout';
 import {
   BREAKPOINT_DESKTOP,
   BREAKPOINT_TABLET,
@@ -81,7 +80,7 @@ export function useResponsiveLayout(): ResponsiveLayoutMetrics {
 
     const gap = scaleSpacing(GRID_GAP);
     const shellPadding = scaleSpacing(HUB_SHELL_PADDING_HORIZONTAL);
-    const navGap = scaleSpacing(HUB_NAV_MAIN_GAP);
+    // Left nav rail removed — primary navigation lives in the top bar.
     const mainPadLeft = scaleSpacing(2);
     const mainPadRight = Math.max(scaleSpacing(6), landscape.safeRight);
 
@@ -89,8 +88,8 @@ export function useResponsiveLayout(): ResponsiveLayoutMetrics {
       windowWidth: screenWidth,
       isDesktop,
       maxViewportWidth: MAX_VIEWPORT_WIDTH,
-      navRailWidth: landscape.hubNavRailWidth,
-      navMainGap: navGap,
+      navRailWidth: 0,
+      navMainGap: 0,
       mainRailPaddingLeft: mainPadLeft,
       mainRailPaddingRight: mainPadRight,
       shellPaddingHorizontal: shellPadding,
@@ -175,5 +174,5 @@ export function useResponsiveLayout(): ResponsiveLayoutMetrics {
       scaleFont: (baseSize: number) => scaleSize(baseSize),
       fontScale: scale.scale,
     };
-  }, [landscape.hubNavRailWidth, landscape.safeRight, scale]);
+  }, [landscape.safeRight, scale]);
 }

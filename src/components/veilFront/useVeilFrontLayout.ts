@@ -18,10 +18,10 @@ export function useVeilFrontLayout() {
     const isCompactHeight = screenHeight <= VEIL_FRONT_HEIGHT_COMPACT;
     const isUltraCompactHeight = screenHeight <= VEIL_FRONT_HEIGHT_ULTRA;
 
-    const actionPanelWidth = Math.min(
-      420,
-      Math.max(360, Math.floor(contentWidth * 0.32)),
-    );
+    // Mission rail after sidebar removal: clamp(420px, 26vw, 470px); tighten under 1500px.
+    const actionPanelWidth = screenWidth <= 1500
+      ? Math.min(410, Math.max(390, Math.floor(contentWidth * 0.28)))
+      : Math.min(470, Math.max(420, Math.floor(contentWidth * 0.26)));
     const statusOverlayWidth = Math.min(320, Math.max(240, Math.floor(screenWidth * 0.24)));
     /** @deprecated use actionPanelWidth */
     const briefingPanelWidth = actionPanelWidth;

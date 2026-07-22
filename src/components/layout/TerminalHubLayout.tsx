@@ -1,12 +1,12 @@
 import React from 'react';
 import { ImageBackground, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { HUB_ATMOSPHERE_BACKGROUND, HUB_ATMOSPHERE_SCRIM } from '../../constants/hubAtmosphere';
-import { HUB_NAV_MAIN_GAP, LANDSCAPE_PANEL_PADDING } from '../../constants/landscapeLayout';
+import { LANDSCAPE_PANEL_PADDING } from '../../constants/landscapeLayout';
 import { resolveImmersiveFooterInset, resolveImmersiveTopInset } from '../../constants/immersiveLayout';
 import { useLandscapeMetrics } from '../../hooks/useLandscapeMetrics';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 import { HubLayoutProvider } from '../../context/HubLayoutContext';
-import TerminalNavRail from '../TerminalNavRail';
+import VeilTopbar from '../hub/VeilTopbar';
 import TerminalOverlay from '../TerminalOverlay';
 import HubViewport from './HubViewport';
 import TerminalGlitchTransition from '../ui/TerminalGlitchTransition';
@@ -20,7 +20,7 @@ interface TerminalHubLayoutProps {
   mainStyle?: StyleProp<ViewStyle>;
 }
 
-/** Shared top inset so nav buttons align with the CabalPanel slate border. */
+/** Shared top inset so content aligns under immersive safe area. */
 export function resolveHubContentTopInset(
   safeTop: number,
   panelPadding: number = LANDSCAPE_PANEL_PADDING,
@@ -28,7 +28,7 @@ export function resolveHubContentTopInset(
   return panelPadding + resolveImmersiveTopInset(safeTop);
 }
 
-/** Overworld hub shell — atmospheric backdrop, left nav rail, main viewport. */
+/** Overworld hub shell — atmospheric backdrop, top navigation, main viewport. */
 export default function TerminalHubLayout({
   activeView,
   onSelectView,
@@ -37,47 +37,48 @@ export default function TerminalHubLayout({
   mainStyle,
 }: TerminalHubLayoutProps): React.JSX.Element {
   const layout = useResponsiveLayout();
-  const { hubNavRailWidth, safeTop, safeBottom, safeRight, panelPadding } = useLandscapeMetrics();
+  const { safeTop, safeBottom, safeRight, panelPadding } = useLandscapeMetrics();
   const { scaleSpacing } = layout;
   const contentTopInset = resolveHubContentTopInset(safeTop, panelPadding);
   const contentBottomInset = resolveImmersiveFooterInset(safeBottom);
   const theaterBleed = activeView === 'MAP';
-  const mainRailStyle = {
-    paddingTop: contentTopInset,
-    paddingRight: theaterBleed ? Math.max(scaleSpacing(2), safeRight) : Math.max(scaleSpacing(6), safeRight),
-    paddingBottom: contentBottomInset,
-    paddingLeft: theaterBleed ? 0 : scaleSpacing(2),
-  };
+  // Veil Front bleeds under the top bar with no chrome inset so CRT/map fill the stage.
+  const mainPadStyle = theaterBleed
+    ? {
+        paddingTop: 0,
+        paddingRight: 0,
+        paddingBottom: 0,
+        paddingLeft: 0,
+      }
+    : {
+        paddingTop: Math.max(0, contentTopInset - 68),
+        paddingRight: Math.max(scaleSpacing(6), safeRight),
+        paddingBottom: contentBottomInset,
+        paddingLeft: scaleSpacing(2),
+      };
 
   return (
     <ImageBackground
       source={HUB_ATMOSPHERE_BACKGROUND}
-      style={[styles.root, styles.rootRail, style]}
+      style={[styles.root, style]}
       resizeMode="cover"
     >
       <View style={[styles.scrim, styles.scrimPointerLock]} />
-      <View style={styles.content}>
-        <TerminalNavRail
-          activeView={activeView}
-          onSelectView={onSelectView}
-          width={hubNavRailWidth}
-          contentTopInset={contentTopInset}
-          contentBottomInset={contentBottomInset}
-        />
-        <View style={[styles.mainGap, { width: scaleSpacing(theaterBleed ? 4 : HUB_NAV_MAIN_GAP) }]} />
-        <View style={[styles.mainRail, mainRailStyle, mainStyle]}>
-          <View style={styles.terminalOverlayHost} pointerEvents="none">
-            <TerminalOverlay />
-          </View>
-          <HubLayoutProvider value={layout}>
+      <HubLayoutProvider value={layout}>
+        <View style={styles.shell}>
+          <VeilTopbar activeView={activeView} onSelectView={onSelectView} />
+          <View style={[styles.main, mainPadStyle, mainStyle]}>
+            <View style={styles.terminalOverlayHost} pointerEvents="none">
+              <TerminalOverlay />
+            </View>
             <HubViewport fullBleed={activeView === 'MAP'}>
               <TerminalGlitchTransition transitionKey={activeView} style={styles.glitchViewport}>
                 {children}
               </TerminalGlitchTransition>
             </HubViewport>
-          </HubLayoutProvider>
+          </View>
         </View>
-      </View>
+      </HubLayoutProvider>
     </ImageBackground>
   );
 }
@@ -87,9 +88,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     zIndex: 1,
-  },
-  rootRail: {
-    flexDirection: 'row',
+    backgroundColor: '#010304',
   },
   scrim: {
     ...StyleSheet.absoluteFill,
@@ -98,16 +97,15 @@ const styles = StyleSheet.create({
   scrimPointerLock: {
     pointerEvents: 'none',
   },
-  content: {
+  shell: {
     flex: 1,
     minHeight: 0,
-    flexDirection: 'row',
+    minWidth: 0,
     zIndex: 1,
+    flexDirection: 'column',
+    overflow: 'hidden',
   },
-  mainGap: {
-    flexShrink: 0,
-  },
-  mainRail: {
+  main: {
     flex: 1,
     minWidth: 0,
     minHeight: 0,

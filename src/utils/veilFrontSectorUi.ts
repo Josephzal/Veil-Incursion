@@ -78,6 +78,15 @@ export const SECTOR_FLAVOR_LINES: Record<SectorId, string> = {
   THE_ASHEN_WASTES: 'Barren backroads calcified by recursive ash.',
 };
 
+/** Short UI summary for the dossier rail (~2 lines). */
+export const SECTOR_DOSSIER_SUMMARIES: Record<SectorId, string> = {
+  THE_SLAG_WORKS: 'Industrial badlands fused with ley slag. Heavy salvage, elevated Echo activity.',
+  THE_ABYSSAL_SINK: 'Flooded lowlands and null-field sinkholes. Signal dies before memory does.',
+  THE_NULL_ZONE: 'Fractured basin at the continent core. Dense loot, unstable geometry.',
+  THE_BLACKLINE_TERMINUS: 'Northern ridge compounds humming with Veil engines and transit ghosts.',
+  THE_ASHEN_WASTES: 'Barren plateau and fractured peninsula. Recursive ash, sparse cover.',
+};
+
 /** UI-only short labels for compact map intel chips. */
 const RESOURCE_FOCUS_SHORT_NAMES: Record<string, string> = {
   'Encrypted Grid Drive': 'Encrypted Drive',
@@ -105,6 +114,68 @@ export function rewardLabel(level: number): 'Low' | 'Medium' | 'High' | 'Excepti
   if (level <= 2) return 'Medium';
   if (level <= 3) return 'High';
   return 'Exceptional';
+}
+
+/** Presentation-only consequence copy for dossier condition rows. */
+export function hazardConsequence(level: number): string {
+  if (level <= 1) return 'Light hostile contact expected';
+  if (level <= 2) return 'Standard hostile pressure';
+  if (level <= 3) return 'Increased hostile presence';
+  return 'Severe hostile saturation';
+}
+
+/** Presentation-only consequence copy for dossier condition rows. */
+export function rewardConsequence(level: number): string {
+  if (level <= 1) return 'Sparse cargo signals';
+  if (level <= 2) return 'Moderate salvage density';
+  if (level <= 3) return 'High-value cargo signals detected';
+  return 'Exceptional recovery density';
+}
+
+/** Presentation-only consequence copy for dossier condition rows. */
+export function anchorConsequence(active: boolean): string {
+  return active ? 'Sector anomaly empowered' : 'No active sector anomaly';
+}
+
+/** Counted unit label for active-operation progress (presentation). */
+export function operationObjectiveUnit(kind: OperationObjectiveKind): string {
+  switch (kind) {
+    case 'EXTRACTION_SURGE':
+      return 'cargo loads';
+    case 'ECHO_RECOVERY':
+      return 'echo signatures';
+    case 'ANCHOR_ASSAULT':
+      return 'anomaly gates';
+    case 'RESOURCE_SURVEY':
+      return 'survey caches';
+    case 'BOSS_SUPPRESSION':
+      return 'region primes';
+    default:
+      return 'objectives';
+  }
+}
+
+/** Objective line such as "Extract 100 cargo loads". */
+export function formatOperationObjectiveProgressLine(
+  kind: OperationObjectiveKind,
+  progressRequired: number,
+): string {
+  const n = Math.max(0, progressRequired);
+  const unit = operationObjectiveUnit(kind);
+  switch (kind) {
+    case 'EXTRACTION_SURGE':
+      return `Extract ${n} ${unit}`;
+    case 'ECHO_RECOVERY':
+      return `Recover ${n} ${unit}`;
+    case 'ANCHOR_ASSAULT':
+      return `Seal ${n} ${unit}`;
+    case 'RESOURCE_SURVEY':
+      return `Recover ${n} ${unit}`;
+    case 'BOSS_SUPPRESSION':
+      return `Suppress ${n} ${unit}`;
+    default:
+      return `Complete ${n} ${unit}`;
+  }
 }
 
 export function hazardPipCount(level: number): number {

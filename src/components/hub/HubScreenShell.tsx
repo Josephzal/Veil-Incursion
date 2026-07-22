@@ -15,12 +15,14 @@ interface HubScreenShellProps {
   subtitle?: string;
   /** When false, title is rendered without `[ … ]` brackets. Default true. */
   bracketTitle?: boolean;
-  /** Render subtitle above the title (Operational Theater breadcrumb). */
+  /** Render subtitle above the title. */
   subtitleFirst?: boolean;
   /** Override screen title color (defaults to theme status). */
   titleColor?: string;
   /** Thin dark theater chrome instead of faction-tinted slate. */
   theaterChrome?: boolean;
+  /** Compact local stage header (~58–64px) for Veil Front. */
+  compactTheaterHeader?: boolean;
   headerRight?: React.ReactNode;
   children: React.ReactNode;
   scrollable?: boolean;
@@ -37,6 +39,7 @@ export default function HubScreenShell({
   subtitleFirst = false,
   titleColor,
   theaterChrome = false,
+  compactTheaterHeader = false,
   headerRight,
   children,
   scrollable = false,
@@ -57,6 +60,7 @@ export default function HubScreenShell({
   const breadcrumbColor = theaterChrome
     ? 'rgba(148, 163, 184, 0.75)'
     : hubKeyColorFromTheme(theme.mutedColor);
+  const compactHeader = theaterChrome && compactTheaterHeader;
 
   const body = scrollable ? (
     <ScrollView
@@ -72,20 +76,26 @@ export default function HubScreenShell({
   );
 
   const titleNode = (
-    <TerminalText variant="screenTitle" letterSpacing={1.4} style={[styles.screenTitle, { color: headerColor }]}>
+    <TerminalText
+      size={compactHeader ? 13.5 : undefined}
+      variant={compactHeader ? undefined : 'screenTitle'}
+      letterSpacing={compactHeader ? 0.8 : 1.4}
+      style={[styles.screenTitle, { color: headerColor }]}
+    >
       {resolvedTitle}
     </TerminalText>
   );
   const subtitleNode = subtitle ? (
     <TerminalText
-      variant="caption"
-      letterSpacing={0.8}
+      size={compactHeader ? 7.5 : undefined}
+      variant={compactHeader ? undefined : 'caption'}
+      letterSpacing={compactHeader ? 0.8 : 0.8}
       style={[
         styles.screenSubtitle,
         {
           color: breadcrumbColor,
           marginTop: subtitleFirst ? 0 : scaleSpacing(2),
-          marginBottom: subtitleFirst ? scaleSpacing(3) : 0,
+          marginBottom: subtitleFirst ? scaleSpacing(compactHeader ? 2 : 3) : 0,
         },
       ]}
     >
@@ -98,7 +108,7 @@ export default function HubScreenShell({
       style={[
         styles.root,
         theaterChrome && Platform.OS === 'web'
-          ? ({ height: '100dvh', maxHeight: '100dvh' } as object)
+          ? ({ height: '100%', maxHeight: '100%' } as object)
           : null,
       ]}
     >
@@ -109,13 +119,23 @@ export default function HubScreenShell({
             theaterChrome ? styles.slateInnerTheater : null,
             {
               borderColor: slateInnerBorder,
-              paddingHorizontal: scaleSpacing(theaterChrome ? 6 : 10),
-              paddingVertical: scaleSpacing(theaterChrome ? 6 : 8),
-              gap: scaleSpacing(theaterChrome ? 4 : 6),
+              borderWidth: theaterChrome ? 0 : 1,
+              paddingHorizontal: scaleSpacing(theaterChrome ? (compactHeader ? 4 : 6) : 10),
+              paddingVertical: scaleSpacing(theaterChrome ? (compactHeader ? 4 : 6) : 8),
+              gap: scaleSpacing(theaterChrome ? (compactHeader ? 2 : 4) : 6),
             },
           ]}
         >
-          <View style={[styles.headerRow, { gap: scaleSpacing(8), marginBottom: scaleSpacing(4) }]}>
+          <View
+            style={[
+              styles.headerRow,
+              compactHeader ? styles.headerRowCompact : null,
+              {
+                gap: scaleSpacing(8),
+                marginBottom: scaleSpacing(compactHeader ? 2 : 4),
+              },
+            ]}
+          >
             <View style={styles.headerText}>
               {subtitleFirst ? (
                 <>
@@ -179,6 +199,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     flexShrink: 0,
+  },
+  headerRowCompact: {
+    minHeight: 58,
+    maxHeight: 64,
+    alignItems: 'center',
   },
   headerText: {
     flex: 1,

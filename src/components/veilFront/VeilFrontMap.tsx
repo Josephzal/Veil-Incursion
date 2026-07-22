@@ -120,10 +120,9 @@ export default function VeilFrontMap({
   }, []);
 
   const handleSectorSelect = useCallback((id: SectorId) => {
-    if (!isUnlocked(id)) return;
     Vibration.vibrate(SECTOR_SELECT_HAPTIC_MS);
     onSectorPress(id);
-  }, [isUnlocked, onSectorPress]);
+  }, [onSectorPress]);
 
   const handleMapPress = useCallback(
     (localX: number, localY: number) => {
@@ -131,10 +130,9 @@ export default function VeilFrontMap({
       const hit = hitTestSectorAtPoint(viewBoxPoint, macroLikeSectors);
       if (!hit) return;
       const sectorId = hit.id as unknown as SectorId;
-      if (!isUnlocked(sectorId)) return;
       handleSectorSelect(sectorId);
     },
-    [drawMetrics, handleSectorSelect, isUnlocked, macroLikeSectors],
+    [drawMetrics, handleSectorSelect, macroLikeSectors],
   );
 
   const tapGesture = Gesture.Tap()
@@ -145,7 +143,6 @@ export default function VeilFrontMap({
     });
 
   const activeDef = getVeilFrontMapSector(activeSectorId);
-  const activeUnlocked = isUnlocked(activeDef.id);
   const hoverDef = hoveredSectorId
     ? VEIL_FRONT_MAP_SECTORS.find((s) => s.id === hoveredSectorId) ?? null
     : null;
@@ -165,10 +162,10 @@ export default function VeilFrontMap({
             x={sector.label.x}
             y={sector.label.y}
             fill={nameFill}
-            fontSize={14}
+            fontSize={activeSectorId === sector.id ? 16 : 15}
             fontFamily="monospace"
             fontWeight="700"
-            letterSpacing={1.1}
+            letterSpacing={0.9}
             textAnchor="middle"
           >
             {sector.name}
@@ -184,10 +181,10 @@ export default function VeilFrontMap({
           x={sector.label.x}
           y={sector.label.y}
           fill={nameFill}
-          fontSize={14}
+          fontSize={activeSectorId === sector.id ? 16 : 15}
           fontFamily="monospace"
           fontWeight="700"
-          letterSpacing={1.1}
+          letterSpacing={0.9}
           textAnchor="middle"
         >
           {sector.name}
@@ -195,8 +192,8 @@ export default function VeilFrontMap({
         <SvgText
           x={sector.statusLabel.x}
           y={sector.statusLabel.y}
-          fill="rgba(170, 180, 185, 0.5)"
-          fontSize={11}
+          fill="rgba(170, 180, 185, 0.55)"
+          fontSize={12}
           fontFamily="monospace"
           fontWeight="700"
           letterSpacing={1}
@@ -255,10 +252,9 @@ export default function VeilFrontMap({
                 </SvgText>
               )}
 
-              {/* Hover: quiet clipped brightness (unlocked only) */}
+              {/* Hover: quiet clipped brightness */}
               {!SHOW_SECTOR_DEBUG
               && hoverDef
-              && isUnlocked(hoverDef.id)
               && hoverDef.id !== activeSectorId
               && mapHref != null ? (
                 <G clipPath={`url(#${clipIdFor(hoverDef)})`} pointerEvents="none">
@@ -277,8 +273,8 @@ export default function VeilFrontMap({
                 </G>
               ) : null}
 
-              {/* Selected: clipped artwork + sector-colored tint (unlocked only) */}
-              {!SHOW_SECTOR_DEBUG && activeDef && activeUnlocked && mapHref != null ? (
+              {/* Selected: clipped artwork + sector-colored tint */}
+              {!SHOW_SECTOR_DEBUG && activeDef && mapHref != null ? (
                 <G clipPath={`url(#${clipIdFor(activeDef)})`} pointerEvents="none">
                   <SvgImage
                     href={mapHref as string | number}
@@ -348,7 +344,6 @@ export default function VeilFrontMap({
               {/* Hover boundary */}
               {!SHOW_SECTOR_DEBUG
               && hoverDef
-              && isUnlocked(hoverDef.id)
               && hoverDef.id !== activeSectorId ? (
                 <Path
                   d={hoverDef.path}
@@ -363,7 +358,7 @@ export default function VeilFrontMap({
               ) : null}
 
               {/* Focus ring */}
-              {!SHOW_SECTOR_DEBUG && focusDef && isUnlocked(focusDef.id) ? (
+              {!SHOW_SECTOR_DEBUG && focusDef ? (
                 <Path
                   d={focusDef.path}
                   fill="none"
@@ -376,8 +371,8 @@ export default function VeilFrontMap({
                 />
               ) : null}
 
-              {/* Selected boundary — unlocked sectors only */}
-              {!SHOW_SECTOR_DEBUG && activeDef && activeUnlocked ? (
+              {/* Selected boundary */}
+              {!SHOW_SECTOR_DEBUG && activeDef ? (
                 <G pointerEvents="none">
                   <Path
                     d={activeDef.path}
@@ -400,19 +395,20 @@ export default function VeilFrontMap({
                 </G>
               ) : null}
 
-              {/* Invisible hitboxes — nearly transparent fill for full-area clicks */}
+              {/* Invisible hitboxes — locked sectors remain selectable for inspection */}
               {!SHOW_SECTOR_DEBUG ? (
                 <G id="sector-hitboxes">
                   {VEIL_FRONT_MAP_SECTORS.map((sector) => {
                     const unlocked = isUnlocked(sector.id);
-                    if (!unlocked) return null;
                     const hitProps = {
                       d: sector.path,
                       fill: 'rgba(0,0,0,0.001)',
                       stroke: 'none',
                       onPress: () => handleSectorSelect(sector.id),
                       accessibilityRole: 'button' as const,
-                      accessibilityLabel: `Select ${sector.name}`,
+                      accessibilityLabel: unlocked
+                        ? `Select ${sector.name}`
+                        : `Inspect locked sector ${sector.name}`,
                       accessibilityState: { selected: activeSectorId === sector.id },
                       ...(Platform.OS === 'web'
                         ? {

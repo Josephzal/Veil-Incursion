@@ -1,61 +1,48 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Image, Platform, ScrollView, StyleSheet, View, type ImageSourcePropType } from 'react-native';
+import React, { useEffect, useMemo } from 'react';
+import {
+  Image,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  View,
+  type ImageSourcePropType,
+  type ImageStyle,
+} from 'react-native';
 import HapticPressable from '../HapticPressable';
 import TerminalText from '../TerminalText';
-import SelectedContractSummary from './SelectedContractSummary';
 import { ProgressBar } from './VeilFrontUiPrimitives';
-import { SELECT_ACCENT } from '../../constants/dossierSurface';
-import { OTT } from '../../constants/occultTacticalTerminalTheme';
 import { useVeilFrontLayout } from './useVeilFrontLayout';
 import { operationProgressPercent } from '../../data/worldStateHelpers';
-import { getRecentlySuppressedAnchor } from '../../data/anchorLifecycleEngine';
 import type { SelectedContractState } from '../../types/contract';
 import type { SectorState } from '../../types/worldState';
 import type { VeilBiome } from '../../types/encounterSpawn';
 import { TerminalTheme } from '../../types/theme';
 import {
-  describeAnchorInRunPressure,
-  formatEchoBriefingIntel,
-  formatCargoRoutingBriefingIntel,
-  formatOperationBonusObjectiveLines,
-  formatOperationContributesForObjective,
+  formatOperationObjectiveProgressLine,
   hazardLabel,
   rewardLabel,
+  SECTOR_DOSSIER_SUMMARIES,
   SECTOR_FLAVOR_LINES,
   VEIL_BIOME_VISUALS,
 } from '../../utils/veilFrontSectorUi';
 import {
-  formatContractRewardSummary,
+  formatCompactContractObjective,
+  formatCompactContractPayout,
+  formatCompactContractValidSectors,
+  formatDeploymentContractStatus,
   sponsorDisplayName,
   type ContractSectorCompatibility,
 } from '../../utils/contractUi';
 import { useWorldState } from '../../context/WorldStateContext';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
-import { getActiveAnchorInstance } from '../../data/anchorLifecycleEngine';
-import { buildPreliminaryRunWorldContext } from '../../data/runWorldBriefEngine';
-import { buildProceduralExplainabilityText } from '../../data/proceduralDirectorExplainabilityEngine';
-import { getSectorAftermathModifiers } from '../../data/proceduralDirectorAftermathEngine';
-import { scoreRunPressure } from '../../data/proceduralDirectorPressureEngine';
 import { clearanceXpProgress } from '../../data/runnerClearanceEngine';
 import { getAccountProgressionProfile } from '../../data/progressionDebugEngine';
 import { buildSectorMandateBriefing } from '../../data/sectorAccessMandateEngine';
 import {
-  getBreachGradeTuning,
-  listSelectableBreachGrades,
   PLAYABLE_BREACH_GRADES,
   resolveSelectedBreachGrade,
 } from '../../data/breachGradeEngine';
-import {
-  evaluateAllPinnedGoals,
-  formatPinnedGoalBriefingLines,
-  listAvailableGoalsToPin,
-  maxPinnedGoalSlots,
-} from '../../data/pinnedGoalEngine';
 import type { BreachGradeId } from '../../types/progression';
-import {
-  formatSectorFarmingPreviewLines,
-  listPinnedGoalMissingResourceHints,
-} from '../../data/resourceSourceHintEngine';
 import { sectorPrimaryResourcePool } from '../../data/sectorResourceTableEngine';
 import { getResourceDefinition } from '../../data/resourceRegistry';
 import { isBreachGradeUnlockedInProfile } from '../../data/progressionProfileEngine';
@@ -66,10 +53,31 @@ import Backroads from '../../../assets/images/environment images/backroads.png';
 import Underground from '../../../assets/images/environment images/underground.png';
 import Blacksite from '../../../assets/images/environment images/blacksite.png';
 
-const ACCENT = SELECT_ACCENT;
-const YIELD_CYAN = OTT.cyanSelect;
-const THREAT_RED = OTT.soulRed;
-const ANCHOR_VIOLET = OTT.fluxViolet;
+const RAIL = {
+  bg: '#030708',
+  textPrimary: '#d5dfdc',
+  textSecondary: '#91a39f',
+  textMuted: '#627572',
+  terminal: '#69c8ad',
+  terminalBright: '#8ee0c6',
+  danger: '#c96262',
+  incompat: '#d58b86',
+  anchor: '#8b78a7',
+  line: 'rgba(137, 170, 163, 0.14)',
+  lineStrong: 'rgba(137, 190, 179, 0.25)',
+  lineSoft: 'rgba(137, 170, 163, 0.075)',
+} as const;
+
+/** Base sizes chosen so desktop scaleFont(~1.35–1.65) lands near the readability targets. */
+const TYPE = {
+  label: 7.5,
+  body: 8.5,
+  bodyEm: 9,
+  meta: 7.5,
+  title: 18,
+  cta: 8,
+  micro: 6.8,
+} as const;
 
 const SECTOR_THUMB: Record<VeilBiome, ImageSourcePropType> = {
   NULL_ZONE: CityStreets,
@@ -79,67 +87,253 @@ const SECTOR_THUMB: Record<VeilBiome, ImageSourcePropType> = {
   BLACKLINE_TERMINUS: Blacksite,
 };
 
+const SECTOR_THUMB_POSITION: Record<VeilBiome, string> = {
+  NULL_ZONE: 'center 42%',
+  SLAG_WORKS: 'center 48%',
+  ASHEN_WASTE: 'center 55%',
+  ABYSSAL_SINK: 'center 40%',
+  BLACKLINE_TERMINUS: 'center 35%',
+};
+
+const CLEARANCE_ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'] as const;
+
 interface SectorBriefingPanelProps {
   theme: TerminalTheme;
   sector: SectorState;
   selectedContract: SelectedContractState;
   sectorCompatibility: ContractSectorCompatibility;
+  sectorUnlocked: boolean;
+  breachDisabled: boolean;
+  launching: boolean;
+  gradeMeetsContract: boolean;
+  gradeWarning: string | null;
+  onRequestDeploy: () => void;
 }
 
-function threatColor(level: number): string {
-  if (level <= 1) return '#f8fafc';
-  if (level <= 2) return OTT.warningAmber;
-  return THREAT_RED;
-}
-
-function DetailList({
+function SectorConditionRow({
   label,
-  lines,
-  color,
-  mutedColor,
+  value,
+  tone,
+  compact,
 }: {
   label: string;
-  lines: string[];
-  color: string;
-  mutedColor: string;
-}) {
-  const { scaleFont, scaleSpacing } = useVeilFrontLayout();
-  if (lines.length === 0) return null;
+  value: string;
+  tone: 'danger' | 'reward' | 'anchor' | 'neutral';
+  compact: boolean;
+}): React.JSX.Element {
+  const valueColor =
+    tone === 'danger' ? RAIL.danger
+      : tone === 'reward' ? RAIL.terminal
+        : tone === 'anchor' ? RAIL.anchor
+          : RAIL.textPrimary;
+
   return (
-    <View style={{ gap: scaleSpacing(3), marginTop: scaleSpacing(6) }}>
-      <TerminalText size={scaleFont(5.6)} letterSpacing={1.1} style={{ color: mutedColor, fontWeight: '700' }}>
+    <View style={[styles.conditionRow, compact && styles.conditionRowCompact]}>
+      <TerminalText size={TYPE.label} letterSpacing={0.9} style={styles.conditionLabel}>
         {label}
       </TerminalText>
-      {lines.map((line) => (
-        <TerminalText
-          key={line}
-          size={scaleFont(5.5)}
-          style={{ color, lineHeight: scaleFont(8.5) }}
-        >
-          {line}
-        </TerminalText>
-      ))}
+      <TerminalText size={TYPE.label} letterSpacing={0.7} style={[styles.conditionValue, { color: valueColor }]}>
+        {value}
+      </TerminalText>
     </View>
   );
 }
 
-/** Right panel — Selected Sector theater dossier matching concept layout. */
+function ActiveOperationSummary({
+  title,
+  objectiveLine,
+  percent,
+  compact,
+}: {
+  title: string;
+  objectiveLine: string;
+  percent: number;
+  compact: boolean;
+}): React.JSX.Element {
+  const clamped = Math.max(0, Math.min(100, percent));
+  return (
+    <View style={[styles.activeOperation, compact && styles.activeOperationCompact]}>
+      <View style={styles.activeOperationTopline}>
+        <TerminalText size={TYPE.label} letterSpacing={1} style={styles.sectionLabel}>
+          ACTIVE OPERATION
+        </TerminalText>
+        <TerminalText size={TYPE.body} letterSpacing={0.6} style={styles.activeOperationPct}>
+          {`${clamped}%`}
+        </TerminalText>
+      </View>
+      <TerminalText size={TYPE.bodyEm} letterSpacing={0.7} style={styles.activeOperationTitle}>
+        {title}
+      </TerminalText>
+      <TerminalText size={TYPE.body} style={styles.activeOperationObjective}>
+        {objectiveLine}
+      </TerminalText>
+      <View
+        accessible
+        accessibilityRole="progressbar"
+        accessibilityLabel="Active operation progress"
+        accessibilityValue={{ min: 0, max: 100, now: clamped }}
+        accessibilityHint="Shows progress toward the sector operation objective"
+        style={styles.activeOperationTrack}
+      >
+        <ProgressBar
+          percent={clamped}
+          accentColor={RAIL.terminal}
+          trackColor="rgba(133, 165, 158, 0.12)"
+          height={3}
+        />
+      </View>
+    </View>
+  );
+}
+
+function DeploymentContractSummary({
+  selectedContract,
+  sectorCompatibility,
+}: {
+  selectedContract: SelectedContractState;
+  sectorCompatibility: ContractSectorCompatibility;
+}): React.JSX.Element {
+  if (selectedContract.kind !== 'SPONSOR') {
+    return (
+      <View style={styles.deploymentContract}>
+        <TerminalText size={TYPE.label} letterSpacing={1} style={styles.sectionLabel}>
+          CURRENT CONTRACT
+        </TerminalText>
+        <TerminalText size={TYPE.bodyEm} letterSpacing={0.4} style={styles.deploymentIdentity}>
+          NO CONTRACT SELECTED
+        </TerminalText>
+        <TerminalText size={TYPE.body} style={styles.deploymentObjective}>
+          Choose a mandate on the Contract Board
+        </TerminalText>
+      </View>
+    );
+  }
+
+  const contract = selectedContract.contract;
+  const status = formatDeploymentContractStatus(sectorCompatibility);
+  const incompatible = status === 'INCOMPATIBLE';
+  const compatible = status === 'COMPATIBLE';
+  const objective = incompatible
+    ? formatCompactContractValidSectors(contract)
+    : formatCompactContractObjective(contract);
+
+  return (
+    <View
+      style={[
+        styles.deploymentContract,
+        compatible && styles.deploymentContractCompatible,
+        incompatible && styles.deploymentContractIncompatible,
+      ]}
+    >
+      <View style={styles.deploymentTopline}>
+        <TerminalText size={TYPE.label} letterSpacing={1} style={styles.sectionLabel}>
+          CURRENT CONTRACT
+        </TerminalText>
+        <TerminalText
+          size={TYPE.micro}
+          letterSpacing={0.8}
+          accessibilityLabel={status === 'NEUTRAL' ? 'No compatibility status' : status}
+          style={[
+            styles.deploymentStatus,
+            compatible && styles.deploymentStatusCompatible,
+            incompatible && styles.deploymentStatusIncompatible,
+          ]}
+        >
+          {status === 'NEUTRAL' ? '' : status}
+        </TerminalText>
+      </View>
+      <TerminalText
+        size={TYPE.bodyEm}
+        letterSpacing={0.4}
+        numberOfLines={2}
+        style={styles.deploymentIdentity}
+      >
+        {`${sponsorDisplayName(contract.sponsorId).toUpperCase()} · ${contract.title.toUpperCase()}`}
+      </TerminalText>
+      <TerminalText size={TYPE.body} numberOfLines={2} style={styles.deploymentObjective}>
+        {objective}
+      </TerminalText>
+      <TerminalText size={TYPE.body} style={styles.deploymentPayout}>
+        {formatCompactContractPayout(contract)}
+      </TerminalText>
+    </View>
+  );
+}
+
+function BreachGradeSelector({
+  selectedGrade,
+  onSelect,
+  progressionProfile,
+}: {
+  selectedGrade: BreachGradeId;
+  onSelect: (grade: BreachGradeId) => void;
+  progressionProfile: ReturnType<typeof getAccountProgressionProfile>;
+}): React.JSX.Element {
+  return (
+    <View>
+      <TerminalText size={TYPE.label} letterSpacing={1} style={[styles.sectionLabel, { marginBottom: 8 }]}>
+        BREACH GRADE
+      </TerminalText>
+      <View style={styles.breachGradeOptions}>
+        {PLAYABLE_BREACH_GRADES.map((grade) => {
+          const unlocked = isBreachGradeUnlockedInProfile(progressionProfile, grade);
+          const selected = unlocked && grade === selectedGrade;
+          return (
+            <HapticPressable
+              key={grade}
+              onPress={() => onSelect(grade)}
+              disabled={!unlocked}
+              accessibilityRole="button"
+              accessibilityState={{ selected, disabled: !unlocked }}
+              {...(Platform.OS === 'web'
+                ? ({ 'aria-pressed': selected } as object)
+                : {})}
+              style={({ pressed }) => ([
+                styles.breachGradeOption,
+                selected && styles.breachGradeOptionSelected,
+                !unlocked && styles.breachGradeOptionDisabled,
+                pressed && unlocked ? { opacity: 0.85 } : null,
+              ])}
+            >
+              <TerminalText
+                size={TYPE.cta}
+                letterSpacing={1}
+                style={{
+                  color: selected
+                    ? RAIL.terminalBright
+                    : unlocked
+                      ? RAIL.textMuted
+                      : 'rgba(213, 223, 220, 0.35)',
+                  fontWeight: '800',
+                  textAlign: 'center',
+                }}
+              >
+                {grade}
+              </TerminalText>
+            </HapticPressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+/** Right-side Sector Dossier mission rail. */
 export default function SectorBriefingPanel({
-  theme,
+  theme: _theme,
   sector,
   selectedContract,
   sectorCompatibility,
+  sectorUnlocked,
+  breachDisabled,
+  launching,
+  gradeMeetsContract,
+  gradeWarning,
+  onRequestDeploy,
 }: SectorBriefingPanelProps): React.JSX.Element {
-  const { scaleFont, scaleSpacing } = useVeilFrontLayout();
+  const { isCompactHeight, isUltraCompactHeight } = useVeilFrontLayout();
   const { persisted, setSelectedBreachGrade } = useWorldState();
-  const {
-    account,
-    activateSectorAccessMandate,
-    pinProgressionGoalId,
-    unpinProgressionGoalId,
-  } = usePlayerAccount();
-  const [intelOpen, setIntelOpen] = useState(false);
-  const [goalsOpen, setGoalsOpen] = useState(false);
+  const { account, activateSectorAccessMandate } = usePlayerAccount();
 
   const progressionProfile = useMemo(
     () => getAccountProgressionProfile(account),
@@ -153,33 +347,11 @@ export default function SectorBriefingPanel({
     () => buildSectorMandateBriefing(progressionProfile, sector.id),
     [progressionProfile, sector.id],
   );
-  const selectableGrades = useMemo(
-    () => listSelectableBreachGrades(progressionProfile),
-    [progressionProfile],
-  );
   const selectedBreachGrade = useMemo(
     () => resolveSelectedBreachGrade(progressionProfile, persisted.selectedBreachGrade),
     [persisted.selectedBreachGrade, progressionProfile],
   );
-  const gradeTuning = getBreachGradeTuning(selectedBreachGrade);
-  const pinnedStatuses = useMemo(
-    () => evaluateAllPinnedGoals(progressionProfile),
-    [progressionProfile],
-  );
-  const pinSlots = maxPinnedGoalSlots(progressionProfile);
-  const availableGoals = useMemo(
-    () => listAvailableGoalsToPin(progressionProfile).slice(0, 6),
-    [progressionProfile],
-  );
-  const farmingPreview = useMemo(
-    () => formatSectorFarmingPreviewLines(sector.id, progressionProfile),
-    [sector.id, progressionProfile],
-  );
-  const goalResourceHints = useMemo(
-    () => listPinnedGoalMissingResourceHints(progressionProfile, account.resourceStash),
-    [progressionProfile, account.resourceStash],
-  );
-  const fieldProfile = useMemo(
+  const recoverables = useMemo(
     () => sectorPrimaryResourcePool(sector.id)
       .slice(0, 3)
       .map((id) => getResourceDefinition(id).shortName.toUpperCase()),
@@ -193,7 +365,7 @@ export default function SectorBriefingPanel({
   }, [persisted.selectedBreachGrade, selectedBreachGrade, setSelectedBreachGrade]);
 
   const handleSelectGrade = (grade: BreachGradeId) => {
-    if (!selectableGrades.includes(grade)) return;
+    if (!isBreachGradeUnlockedInProfile(progressionProfile, grade)) return;
     setSelectedBreachGrade(grade);
   };
 
@@ -201,508 +373,500 @@ export default function SectorBriefingPanel({
   const op = sector.activeOperation;
   const opPct = operationProgressPercent(op.progressCurrent, op.progressRequired);
   const anchorActive = sector.activeAnchor != null;
-  const anchorPressure = sector.activeAnchor ? describeAnchorInRunPressure(sector.activeAnchor) : [];
-  const suppressed = getRecentlySuppressedAnchor(persisted, sector.id);
-  const flavor = SECTOR_FLAVOR_LINES[sector.id]
+  const summary = SECTOR_DOSSIER_SUMMARIES[sector.id]
+    ?? SECTOR_FLAVOR_LINES[sector.id]
     ?? 'Breach vectors available. Local geometry remains unstable.';
+  const objectiveLine = formatOperationObjectiveProgressLine(op.objectiveKind, op.progressRequired);
 
-  const crisisPreview = useMemo(() => {
-    const anchor = getActiveAnchorInstance(persisted, sector.id);
-    const prelim = buildPreliminaryRunWorldContext({
-      persisted,
-      sectorState: sector,
-      operation: sector.activeOperation,
-      anchor,
-    });
-    const aftermath = getSectorAftermathModifiers(persisted, sector.id);
-    const pressure = scoreRunPressure({
-      crisisTheme: prelim.crisisTheme,
-      crisisDisplayName: prelim.crisisDisplayName,
-      crisisSummary: prelim.crisisSummary,
-      threatProfile: prelim.threatProfile,
-      scannerBias: prelim.scannerBias,
-      encounterBias: prelim.encounterBias,
-      rewardBias: prelim.rewardBias,
-      resourceStress: prelim.resourceStress,
-      sectorId: sector.id,
-      sectorDisplayName: sector.displayName,
-    } as import('../../types/runWorldBrief').RunWorldBrief, {
-      persisted,
-      sectorState: sector,
-      contractBoard: persisted.contractBoard.contracts,
-      selectedContractId: null,
-      aftermathModifiers: aftermath,
-    });
-    const explain = buildProceduralExplainabilityText(
-      {
-        crisisTheme: prelim.crisisTheme,
-        crisisDisplayName: prelim.crisisDisplayName,
-        crisisSummary: prelim.crisisSummary,
-        threatProfile: prelim.threatProfile,
-        resourceStress: prelim.resourceStress,
-        anchorInstance: anchor,
-        sectorDisplayName: sector.displayName,
-      } as import('../../types/runWorldBrief').RunWorldBrief,
-      pressure,
-      aftermath,
-    );
-    return { prelim, explain, pressure };
-  }, [persisted, sector]);
+  const clearanceRoman = CLEARANCE_ROMAN[
+    Math.max(0, Math.min(9, clearance.rank - 1))
+  ] ?? String(clearance.rank);
 
-  const isSponsor = selectedContract.kind === 'SPONSOR';
-  const contract = isSponsor ? selectedContract.contract : null;
-  const echoIntel = formatEchoBriefingIntel(sector);
-  const cargoIntel = formatCargoRoutingBriefingIntel(sector, selectedContract);
-  const contributes = formatOperationContributesForObjective(
-    op.objectiveKind,
-    op.contributionRules,
-    op.rewardEmphasis.targetResources,
-  );
-  const bonusLines = formatOperationBonusObjectiveLines(op.bonusObjectives);
+  const actionLabel = launching
+    ? '[ DEPLOYING... ]'
+    : !sectorUnlocked
+      ? '[ ACCESS DENIED ]'
+      : !gradeMeetsContract
+        ? '[ GRADE TOO LOW ]'
+        : '[ INITIATE BREACH ]';
 
-  const clearanceRoman = (
-    (['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'] as const)[
-      Math.max(0, Math.min(9, clearance.rank - 1))
-    ] ?? String(clearance.rank)
-  );
+  const lockHeadline = mandateBriefing.mandateState === 'ACTIVE'
+    ? 'LOCKED — MANDATE ACTIVE'
+    : mandateBriefing.mandateState === 'AVAILABLE'
+      ? 'LOCKED — MANDATE AVAILABLE'
+      : 'ACCESS LOCKED';
+
+  const heroHeight = isUltraCompactHeight ? 72 : isCompactHeight ? 82 : 100;
+  const padX = isCompactHeight ? 22 : 28;
+  const contractIncompatible = sectorCompatibility === 'UNAVAILABLE' && sectorUnlocked;
 
   return (
-    <View style={styles.panel}>
-      <View style={styles.dossier}>
-        <ScrollView
-          style={[
-            styles.scroll,
-            Platform.OS === 'web'
-              ? ({ scrollbarWidth: 'thin', overscrollBehavior: 'contain' } as object)
-              : null,
-          ]}
-          contentContainerStyle={{
-            padding: scaleSpacing(22),
-            paddingBottom: scaleSpacing(36),
-            gap: scaleSpacing(14),
-          }}
-          showsVerticalScrollIndicator
-        >
-        <View style={{ gap: scaleSpacing(5) }}>
-          <TerminalText size={scaleFont(11)} letterSpacing={1} style={{ color: '#F2F4F0', fontWeight: '800' }}>
-            {sector.displayName.toUpperCase()}
-          </TerminalText>
-          <TerminalText size={scaleFont(5.5)} letterSpacing={1} style={{ color: theme.mutedColor }}>
-            {`${biomeVisual.label.toUpperCase()} / CLEARANCE ${clearanceRoman}`}
-          </TerminalText>
+    <View style={styles.dossier}>
+      <View style={[
+        styles.header,
+        {
+          paddingHorizontal: padX,
+          paddingTop: isCompactHeight ? 16 : 20,
+          paddingBottom: isCompactHeight ? 12 : 16,
+        },
+      ]}
+      >
+        <TerminalText size={isCompactHeight ? 16.5 : TYPE.title} letterSpacing={0.7} style={styles.title}>
+          {sector.displayName.replace(/^The\s+/i, '').toUpperCase()}
+        </TerminalText>
+        <TerminalText size={TYPE.meta} letterSpacing={0.9} style={styles.meta}>
+          {`${biomeVisual.label.toUpperCase()} · CLEARANCE ${clearanceRoman}`}
+        </TerminalText>
+      </View>
 
+      <ScrollView
+        style={styles.body}
+        contentContainerStyle={[
+          styles.bodyContent,
+          {
+            paddingHorizontal: padX,
+            paddingTop: isCompactHeight ? 12 : 16,
+            paddingBottom: isCompactHeight ? 12 : 16,
+          },
+        ]}
+        showsVerticalScrollIndicator
+        {...(Platform.OS === 'web'
+          ? ({
+              scrollbarWidth: 'thin',
+              scrollbarColor: 'rgba(105, 200, 173, 0.24) transparent',
+              overscrollBehavior: 'contain',
+            } as object)
+          : null)}
+      >
+        <View style={[styles.hero, { height: heroHeight }]}>
           <Image
             source={SECTOR_THUMB[sector.veilBiome]}
-            style={[styles.thumb, { height: scaleSpacing(72), marginTop: scaleSpacing(6) }]}
+            style={[
+              styles.heroImage,
+              Platform.OS === 'web'
+                ? ({
+                    objectPosition: SECTOR_THUMB_POSITION[sector.veilBiome],
+                    filter: 'saturate(0.82) contrast(1.08) brightness(0.76)',
+                  } as ImageStyle)
+                : null,
+            ]}
             resizeMode="cover"
           />
-
-          <TerminalText
-            size={scaleFont(5.6)}
-            style={{ color: theme.mutedColor, lineHeight: scaleFont(8.5), marginTop: scaleSpacing(4) }}
-          >
-            {flavor}
-          </TerminalText>
-
-          <View style={[styles.sectionDivider, { marginTop: scaleSpacing(8) }]} />
-
-          <View style={{ gap: scaleSpacing(6) }}>
-            <View style={styles.metricRow}>
-              <TerminalText size={scaleFont(5.6)} letterSpacing={1} style={{ color: theme.mutedColor, fontWeight: '700' }}>
-                THREAT
-              </TerminalText>
-              <TerminalText
-                size={scaleFont(6.2)}
-                letterSpacing={0.6}
-                style={{ color: threatColor(sector.hazardLevel), fontWeight: '800' }}
-              >
-                {hazardLabel(sector.hazardLevel).toUpperCase()}
-              </TerminalText>
-            </View>
-            <View style={styles.metricRow}>
-              <TerminalText size={scaleFont(5.6)} letterSpacing={1} style={{ color: theme.mutedColor, fontWeight: '700' }}>
-                YIELD
-              </TerminalText>
-              <TerminalText size={scaleFont(6.2)} letterSpacing={0.6} style={{ color: YIELD_CYAN, fontWeight: '800' }}>
-                {rewardLabel(sector.rewardLevel).toUpperCase()}
-              </TerminalText>
-            </View>
-            <View style={styles.metricRow}>
-              <TerminalText size={scaleFont(5.6)} letterSpacing={1} style={{ color: theme.mutedColor, fontWeight: '700' }}>
-                ANCHOR SIGNAL
-              </TerminalText>
-              <TerminalText
-                size={scaleFont(6.2)}
-                letterSpacing={0.6}
-                style={{ color: anchorActive ? ANCHOR_VIOLET : theme.mutedColor, fontWeight: '800' }}
-              >
-                {anchorActive ? 'ACTIVE' : 'NONE'}
-              </TerminalText>
-            </View>
-          </View>
-
-          {!mandateBriefing.canBreach ? (
-            <View style={{ marginTop: scaleSpacing(6), gap: scaleSpacing(10) }}>
-              <View style={{ gap: scaleSpacing(3) }}>
-                <TerminalText size={scaleFont(5.2)} letterSpacing={1.2} style={{ color: theme.mutedColor, fontWeight: '700' }}>
-                  ACCESS
-                </TerminalText>
-                <TerminalText size={scaleFont(5.8)} style={{ color: THREAT_RED, fontWeight: '700' }}>
-                  {mandateBriefing.mandateState === 'ACTIVE'
-                    ? 'LOCKED — MANDATE ACTIVE'
-                    : mandateBriefing.mandateState === 'AVAILABLE'
-                      ? 'LOCKED — MANDATE AVAILABLE'
-                      : 'LOCKED — ROUTE UNKNOWN'}
-                </TerminalText>
-              </View>
-
-              {mandateBriefing.mandate ? (
-                <View style={{ gap: scaleSpacing(3) }}>
-                  <TerminalText size={scaleFont(5.2)} letterSpacing={1.2} style={{ color: theme.mutedColor, fontWeight: '700' }}>
-                    REQUIREMENT
-                  </TerminalText>
-                  <TerminalText
-                    size={scaleFont(5.4)}
-                    style={{ color: 'rgba(170, 178, 185, 0.88)', lineHeight: scaleFont(8.5) }}
-                  >
-                    {mandateBriefing.mandate.summary}
-                  </TerminalText>
-                </View>
-              ) : null}
-
-              {mandateBriefing.mandate ? (
-                <View style={{ gap: scaleSpacing(3) }}>
-                  <TerminalText size={scaleFont(5.2)} letterSpacing={1.2} style={{ color: theme.mutedColor, fontWeight: '700' }}>
-                    CLEARANCE
-                  </TerminalText>
-                  <TerminalText
-                    size={scaleFont(5.4)}
-                    style={{ color: 'rgba(170, 178, 185, 0.88)', lineHeight: scaleFont(8.5) }}
-                  >
-                    {`Runner Clearance ${
-                      (['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'] as const)[
-                        Math.max(0, Math.min(9, mandateBriefing.mandate.minClearance - 1))
-                      ] ?? String(mandateBriefing.mandate.minClearance)
-                    } required${
-                      mandateBriefing.mandate.requiresMandateFlag ? ' + Sector Access Mandates.' : '.'
-                    }`}
-                  </TerminalText>
-                </View>
-              ) : (
-                <TerminalText
-                  size={scaleFont(5.4)}
-                  style={{ color: 'rgba(170, 178, 185, 0.88)', lineHeight: scaleFont(8.5) }}
-                >
-                  No access mandate defined for this sector.
-                </TerminalText>
-              )}
-
-              {mandateBriefing.canAcceptMandate ? (
-                <HapticPressable
-                  onPress={() => activateSectorAccessMandate(sector.id)}
-                  style={({ pressed }) => ({
-                    marginTop: scaleSpacing(2),
-                    borderWidth: 1,
-                    borderColor: ACCENT,
-                    paddingVertical: scaleSpacing(6),
-                    paddingHorizontal: scaleSpacing(8),
-                    opacity: pressed ? 0.75 : 1,
-                    alignItems: 'center',
-                  })}
-                >
-                  <TerminalText size={scaleFont(6)} letterSpacing={0.6} style={{ color: ACCENT, fontWeight: '800' }}>
-                    [ ACCEPT ACCESS MANDATE ]
-                  </TerminalText>
-                </HapticPressable>
-              ) : null}
-            </View>
-          ) : null}
+          <View style={styles.heroOverlay} pointerEvents="none" />
         </View>
 
-        {mandateBriefing.canBreach ? (
-          <>
-            <View style={styles.sectionDivider} />
+        <TerminalText size={TYPE.body} numberOfLines={2} style={styles.description}>
+          {summary}
+        </TerminalText>
 
-            {/* --- OPERATION --- */}
-            <View style={{ gap: scaleSpacing(5) }}>
-              <TerminalText size={scaleFont(5.4)} letterSpacing={1.2} style={{ color: theme.mutedColor, fontWeight: '700' }}>
-                {`OPERATION: ${op.title.toUpperCase()}`}
-              </TerminalText>
-              <TerminalText size={scaleFont(5.6)} letterSpacing={0.6} style={{ color: '#D6DDD8' }}>
-                {`${op.progressCurrent} / ${op.progressRequired} OBJECTIVES`}
-              </TerminalText>
-              <ProgressBar percent={opPct} accentColor={ACCENT} height={scaleFont(3.5)} />
-            </View>
+        <View style={[styles.section, isCompactHeight && styles.sectionCompact]}>
+          <TerminalText size={TYPE.label} letterSpacing={1} style={styles.sectionLabel}>
+            CONDITIONS
+          </TerminalText>
+          <View style={styles.conditions}>
+            <SectorConditionRow
+              label="THREAT"
+              value={hazardLabel(sector.hazardLevel).toUpperCase()}
+              tone={sector.hazardLevel >= 3 ? 'danger' : 'neutral'}
+              compact={isCompactHeight}
+            />
+            <SectorConditionRow
+              label="YIELD"
+              value={rewardLabel(sector.rewardLevel).toUpperCase()}
+              tone="reward"
+              compact={isCompactHeight}
+            />
+            <SectorConditionRow
+              label="ANCHOR"
+              value={anchorActive ? 'ACTIVE' : 'NONE'}
+              tone={anchorActive ? 'anchor' : 'neutral'}
+              compact={isCompactHeight}
+            />
+          </View>
+        </View>
 
-            {/* --- FIELD PROFILE --- */}
-            {fieldProfile.length > 0 ? (
-              <>
-                <View style={styles.sectionDivider} />
-                <View style={{ gap: scaleSpacing(5) }}>
-                  <TerminalText size={scaleFont(5.4)} letterSpacing={1.2} style={{ color: theme.mutedColor, fontWeight: '700' }}>
-                    FIELD PROFILE
-                  </TerminalText>
-                  <View style={[styles.chipRow, { gap: scaleSpacing(5) }]}>
-                    {fieldProfile.map((label) => (
-                      <View
-                        key={label}
-                        style={[
-                          styles.fieldChip,
-                          {
-                            borderColor: 'rgba(88, 223, 168, 0.35)',
-                            paddingHorizontal: scaleSpacing(7),
-                            paddingVertical: scaleSpacing(4),
-                          },
-                        ]}
-                      >
-                        <TerminalText size={scaleFont(5.2)} letterSpacing={0.5} style={{ color: ACCENT, fontWeight: '700' }}>
-                          {label}
-                        </TerminalText>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              </>
-            ) : null}
+        <ActiveOperationSummary
+          title={op.title.toUpperCase()}
+          objectiveLine={objectiveLine}
+          percent={opPct}
+          compact={isCompactHeight}
+        />
 
-            <View style={styles.sectionDivider} />
-
-            {/* --- BREACH GRADE --- */}
-            <View style={{ gap: scaleSpacing(6) }}>
-              <TerminalText size={scaleFont(5.4)} letterSpacing={1.2} style={{ color: theme.mutedColor, fontWeight: '700' }}>
-                BREACH GRADE
-              </TerminalText>
-              <View style={[styles.gradeRow, { gap: scaleSpacing(5) }]}>
-                {PLAYABLE_BREACH_GRADES.map((grade) => {
-                  const unlocked = isBreachGradeUnlockedInProfile(progressionProfile, grade);
-                  const selected = unlocked && grade === selectedBreachGrade;
-                  const primaryColor = selected
-                    ? ACCENT
-                    : unlocked
-                      ? '#E8EEEA'
-                      : 'rgba(148, 163, 184, 0.7)';
-                  return (
-                    <HapticPressable
-                      key={grade}
-                      onPress={() => handleSelectGrade(grade)}
-                      disabled={!unlocked}
-                      style={({ pressed }) => ([
-                        styles.gradeTile,
-                        {
-                          borderColor: selected ? ACCENT : 'rgba(148, 163, 184, 0.28)',
-                          backgroundColor: selected ? 'rgba(88, 223, 168, 0.1)' : 'rgba(0, 0, 0, 0.28)',
-                          paddingVertical: scaleSpacing(8),
-                          paddingHorizontal: scaleSpacing(4),
-                          opacity: !unlocked ? 0.72 : pressed ? 0.8 : 1,
-                        },
-                      ])}
-                    >
-                      <TerminalText
-                        size={scaleFont(7.2)}
-                        letterSpacing={0.6}
-                        numberOfLines={1}
-                        style={{ color: primaryColor, fontWeight: '800', textAlign: 'center' }}
-                      >
-                        {grade}
-                      </TerminalText>
-                    </HapticPressable>
-                  );
-                })}
-              </View>
-              <TerminalText size={scaleFont(5.4)} style={{ color: theme.mutedColor, lineHeight: scaleFont(8.5) }}>
-                {gradeTuning.summary}
-              </TerminalText>
-            </View>
-          </>
+        {recoverables.length > 0 ? (
+          <View style={[styles.section, isCompactHeight && styles.sectionCompact]}>
+            <TerminalText size={TYPE.label} letterSpacing={1} style={styles.sectionLabel}>
+              LIKELY RECOVERABLES
+            </TerminalText>
+            <TerminalText size={TYPE.body} letterSpacing={0.5} style={styles.recoverableItem}>
+              {recoverables.join(' · ')}
+            </TerminalText>
+          </View>
         ) : null}
 
-        <View style={styles.sectionDivider} />
+        <DeploymentContractSummary
+          selectedContract={selectedContract}
+          sectorCompatibility={sectorCompatibility}
+        />
+      </ScrollView>
 
-        {/* --- SECONDARY: goals / intel --- */}
-        <View style={{ gap: scaleSpacing(6) }}>
-          <HapticPressable
-            onPress={() => setGoalsOpen((v) => !v)}
-            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-          >
-            <TerminalText size={scaleFont(5.4)} letterSpacing={0.8} style={{ color: theme.mutedColor, fontWeight: '700' }}>
-              {goalsOpen
-                ? `[ − PINNED GOALS (${pinnedStatuses.length}/${pinSlots}) ]`
-                : `[ + PINNED GOALS (${pinnedStatuses.length}/${pinSlots}) ]`}
+      <View
+        style={[
+          styles.decision,
+          {
+            paddingHorizontal: padX,
+            paddingTop: isCompactHeight ? 12 : 14,
+            paddingBottom: isCompactHeight ? 14 : 18,
+          },
+        ]}
+      >
+        {!sectorUnlocked ? (
+          <View style={styles.lockNotice}>
+            <TerminalText size={TYPE.label} letterSpacing={0.7} style={styles.lockNoticeTitle}>
+              {lockHeadline}
             </TerminalText>
-          </HapticPressable>
-          {goalsOpen ? (
-            <View style={{ gap: scaleSpacing(6) }}>
-              {farmingPreview.map((line) => (
-                <TerminalText key={line} size={scaleFont(5.4)} style={{ color: theme.mutedColor, lineHeight: scaleFont(8.5) }}>
-                  {line}
+            <TerminalText size={TYPE.body} style={styles.lockNoticeDetail}>
+              {mandateBriefing.mandate?.summary
+                ?? 'Route unknown. Clearance and mandate requirements apply.'}
+            </TerminalText>
+            {mandateBriefing.canAcceptMandate ? (
+              <HapticPressable
+                onPress={() => activateSectorAccessMandate(sector.id)}
+                accessibilityRole="button"
+                style={({ pressed }) => ({
+                  marginTop: 8,
+                  alignSelf: 'flex-start',
+                  opacity: pressed ? 0.75 : 1,
+                })}
+              >
+                <TerminalText size={TYPE.body} letterSpacing={0.5} style={{ color: RAIL.terminal, fontWeight: '800' }}>
+                  [ ACCEPT ACCESS MANDATE ]
                 </TerminalText>
-              ))}
-              {pinnedStatuses.length === 0 ? (
-                <TerminalText size={scaleFont(5.4)} style={{ color: theme.mutedColor }}>
-                  No goals pinned.
-                </TerminalText>
-              ) : (
-                pinnedStatuses.map((status) => {
-                  const lines = formatPinnedGoalBriefingLines(status);
-                  return (
-                    <View key={status.pinned.id} style={{ gap: scaleSpacing(2) }}>
-                      <TerminalText size={scaleFont(6)} style={{ color: theme.textColor, fontWeight: '800' }}>
-                        {lines[0]}
-                      </TerminalText>
-                      {lines.slice(1).map((line) => (
-                        <TerminalText key={line} size={scaleFont(5.2)} style={{ color: theme.mutedColor }}>
-                          {line}
-                        </TerminalText>
-                      ))}
-                      <HapticPressable onPress={() => unpinProgressionGoalId(status.pinned.id)}>
-                        <TerminalText size={scaleFont(5.2)} style={{ color: ACCENT, fontWeight: '700' }}>
-                          [ UNPIN ]
-                        </TerminalText>
-                      </HapticPressable>
-                    </View>
-                  );
-                })
-              )}
-              {availableGoals.slice(0, 3).map((goal) => (
-                <View key={goal.id} style={{ gap: scaleSpacing(2) }}>
-                  <TerminalText size={scaleFont(5.6)} style={{ color: theme.textColor, fontWeight: '700' }}>
-                    {goal.label}
-                  </TerminalText>
-                  <HapticPressable
-                    onPress={() => pinProgressionGoalId(goal.id)}
-                    disabled={pinnedStatuses.length >= pinSlots}
-                  >
-                    <TerminalText size={scaleFont(5.2)} style={{ color: ACCENT, fontWeight: '800' }}>
-                      [ PIN ]
-                    </TerminalText>
-                  </HapticPressable>
-                </View>
-              ))}
-              {goalResourceHints.slice(0, 2).map((hint) => (
-                <TerminalText key={hint.resourceId} size={scaleFont(5.2)} style={{ color: theme.mutedColor }}>
-                  {hint.compact}
-                </TerminalText>
-              ))}
-            </View>
-          ) : null}
+              </HapticPressable>
+            ) : null}
+          </View>
+        ) : !gradeMeetsContract && gradeWarning ? (
+          <TerminalText size={TYPE.label} style={styles.quietConsequenceWarn}>
+            {gradeWarning}
+          </TerminalText>
+        ) : contractIncompatible ? (
+          <TerminalText size={TYPE.label} style={styles.quietConsequence}>
+            DEPLOYMENT ALLOWED · CONTRACT PROGRESS DISABLED
+          </TerminalText>
+        ) : null}
 
-          <HapticPressable
-            onPress={() => setIntelOpen((v) => !v)}
-            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+        <BreachGradeSelector
+          selectedGrade={selectedBreachGrade}
+          onSelect={handleSelectGrade}
+          progressionProfile={progressionProfile}
+        />
+
+        <HapticPressable
+          onPress={onRequestDeploy}
+          disabled={breachDisabled}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: breachDisabled }}
+          style={({ pressed }) => ([
+            styles.initiateBreach,
+            isCompactHeight && styles.initiateBreachCompact,
+            breachDisabled && styles.initiateBreachDisabled,
+            pressed && !breachDisabled ? { transform: [{ translateY: 1 }] } : null,
+          ])}
+        >
+          <TerminalText
+            size={TYPE.cta}
+            letterSpacing={1.2}
+            style={{
+              color: breachDisabled ? 'rgba(213, 223, 220, 0.38)' : '#06110e',
+              fontWeight: '800',
+              textAlign: 'center',
+            }}
           >
-            <TerminalText size={scaleFont(5.4)} letterSpacing={0.8} style={{ color: theme.mutedColor, fontWeight: '700' }}>
-              {intelOpen ? '[ − INTEL / CONTRACT ]' : '[ + INTEL / CONTRACT ]'}
-            </TerminalText>
-          </HapticPressable>
-          {intelOpen ? (
-            <View>
-              {contract ? (
-                <>
-                  <TerminalText size={scaleFont(5.4)} style={{ color: theme.mutedColor }}>
-                    {sponsorDisplayName(contract.sponsorId).toUpperCase()}
-                  </TerminalText>
-                  <TerminalText size={scaleFont(7)} style={{ color: theme.textColor, fontWeight: '800', marginTop: scaleSpacing(2) }}>
-                    {contract.title}
-                  </TerminalText>
-                  <TerminalText size={scaleFont(5.4)} style={{ color: ACCENT, marginTop: scaleSpacing(4) }}>
-                    {formatContractRewardSummary(contract)}
-                  </TerminalText>
-                </>
-              ) : (
-                <TerminalText size={scaleFont(6)} style={{ color: theme.textColor, fontWeight: '800' }}>
-                  Independent Breach
-                </TerminalText>
-              )}
-              {crisisPreview.explain.cause ? (
-                <DetailList label={crisisPreview.explain.title.toUpperCase()} lines={[crisisPreview.explain.cause]} color={theme.mutedColor} mutedColor={theme.mutedColor} />
-              ) : null}
-              <DetailList label="CONTRIBUTES" lines={contributes} color={theme.textColor} mutedColor={theme.mutedColor} />
-              <DetailList label="ECHO INTEL" lines={echoIntel} color={ACCENT} mutedColor={theme.mutedColor} />
-              <DetailList label="CARGO ROUTING" lines={cargoIntel} color="#fbbf24" mutedColor={theme.mutedColor} />
-              <DetailList label="BONUS OBJECTIVES" lines={bonusLines} color={theme.textColor} mutedColor={theme.mutedColor} />
-              {sector.activeAnchor ? (
-                <DetailList
-                  label="ANCHOR PRESSURE"
-                  lines={[sector.activeAnchor.description, ...anchorPressure]}
-                  color={theme.mutedColor}
-                  mutedColor={theme.mutedColor}
-                />
-              ) : null}
-              {suppressed && suppressed.remainingRuns > 0 ? (
-                <DetailList
-                  label="AFTERMATH"
-                  lines={[`${suppressed.displayName} suppressed for ${suppressed.remainingRuns} run(s).`]}
-                  color={theme.mutedColor}
-                  mutedColor={theme.mutedColor}
-                />
-              ) : null}
-              <View style={{ marginTop: scaleSpacing(8) }}>
-                <SelectedContractSummary theme={theme} selectedContract={selectedContract} />
-              </View>
-              {sectorCompatibility ? null : null}
-            </View>
-          ) : null}
-        </View>
-        </ScrollView>
+            {actionLabel}
+          </TerminalText>
+        </HapticPressable>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  panel: {
-    flex: 1,
-    minHeight: 0,
-    minWidth: 0,
-    overflow: 'hidden',
-  },
-  scroll: {
-    flex: 1,
-    minHeight: 0,
-  },
   dossier: {
     flex: 1,
     minHeight: 0,
-    borderWidth: 1,
-    borderColor: 'rgba(70, 85, 95, 0.55)',
-    backgroundColor: 'rgba(6, 12, 14, 0.72)',
+    minWidth: 0,
     overflow: 'hidden',
+    backgroundColor: RAIL.bg,
+    borderLeftWidth: 1,
+    borderLeftColor: RAIL.lineStrong,
+    ...Platform.select({
+      web: {
+        backgroundImage: `linear-gradient(180deg, rgba(14, 27, 25, 0.2) 0%, rgba(3, 7, 8, 0) 26%), ${RAIL.bg}`,
+        boxShadow: '-18px 0 42px rgba(0, 0, 0, 0.22), inset 1px 0 rgba(255, 255, 255, 0.015)',
+      } as object,
+      default: {},
+    }),
   },
-  sectionDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  header: {
+    flexShrink: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: RAIL.line,
   },
-  thumb: {
+  title: {
+    color: RAIL.textPrimary,
+    fontWeight: '600',
+    lineHeight: 32,
+  },
+  meta: {
+    marginTop: 4,
+    color: RAIL.terminal,
+    fontWeight: '700',
+  },
+  body: {
+    flex: 1,
+    minHeight: 0,
+  },
+  bodyContent: {
+    flexGrow: 1,
+  },
+  hero: {
+    position: 'relative',
     width: '100%',
+    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
-    backgroundColor: '#0a0a0c',
+    borderColor: RAIL.line,
+    backgroundColor: '#050a0a',
   },
-  metricRow: {
+  heroImage: {
+    width: '100%',
+    height: '100%',
+  },
+  heroOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(2, 6, 6, 0.28)',
+  },
+  description: {
+    marginTop: 12,
+    maxWidth: 360,
+    color: RAIL.textSecondary,
+    lineHeight: 21,
+  },
+  section: {
+    marginTop: 16,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: RAIL.line,
+  },
+  sectionCompact: {
+    marginTop: 12,
+    paddingTop: 10,
+  },
+  sectionLabel: {
+    color: RAIL.textMuted,
+    fontWeight: '700',
+  },
+  conditions: {
+    marginTop: 8,
+  },
+  conditionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 8,
+    minHeight: 30,
+    gap: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: RAIL.lineSoft,
+    paddingVertical: 5,
   },
-  chipRow: {
+  conditionRowCompact: {
+    minHeight: 26,
+  },
+  conditionLabel: {
+    color: RAIL.textMuted,
+    fontWeight: '700',
+  },
+  conditionValue: {
+    fontWeight: '800',
+    textAlign: 'right',
+  },
+  activeOperation: {
+    marginTop: 16,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+    paddingLeft: 16,
+    backgroundColor: 'rgba(105, 200, 173, 0.05)',
+    borderLeftWidth: 2,
+    borderLeftColor: 'rgba(105, 200, 173, 0.58)',
+  },
+  activeOperationCompact: {
+    marginTop: 12,
+    paddingVertical: 10,
+  },
+  activeOperationTopline: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
   },
-  gradeRow: {
+  activeOperationPct: {
+    color: RAIL.terminal,
+    fontWeight: '700',
+  },
+  activeOperationTitle: {
+    marginTop: 7,
+    color: RAIL.textPrimary,
+    fontWeight: '700',
+  },
+  activeOperationObjective: {
+    marginTop: 3,
+    color: RAIL.textSecondary,
+    lineHeight: 18,
+  },
+  activeOperationTrack: {
+    marginTop: 10,
+  },
+  recoverableItem: {
+    marginTop: 8,
+    color: RAIL.textSecondary,
+    fontWeight: '600',
+  },
+  deploymentContract: {
+    marginTop: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    backgroundColor: 'rgba(126, 151, 160, 0.04)',
+    borderLeftWidth: 2,
+    borderLeftColor: 'rgba(126, 151, 160, 0.32)',
+  },
+  deploymentContractCompatible: {
+    borderLeftColor: 'rgba(105, 200, 173, 0.5)',
+  },
+  deploymentContractIncompatible: {
+    backgroundColor: 'rgba(201, 98, 98, 0.04)',
+    borderLeftColor: 'rgba(201, 98, 98, 0.58)',
+  },
+  deploymentTopline: {
     flexDirection: 'row',
-    flexWrap: 'nowrap',
-    alignItems: 'stretch',
-    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
   },
-  gradeTile: {
+  deploymentStatus: {
+    color: '#8fa39f',
+    fontWeight: '800',
+  },
+  deploymentStatusCompatible: {
+    color: RAIL.terminal,
+  },
+  deploymentStatusIncompatible: {
+    color: RAIL.incompat,
+  },
+  deploymentIdentity: {
+    marginTop: 8,
+    color: RAIL.textPrimary,
+    fontWeight: '700',
+    lineHeight: 19,
+  },
+  deploymentObjective: {
+    marginTop: 4,
+    color: RAIL.textSecondary,
+    lineHeight: 18,
+  },
+  deploymentPayout: {
+    marginTop: 6,
+    color: '#aebdb9',
+    fontVariant: ['tabular-nums'],
+  },
+  decision: {
+    flexShrink: 0,
+    borderTopWidth: 1,
+    borderTopColor: RAIL.lineStrong,
+    backgroundColor: 'rgba(3, 7, 8, 0.96)',
+  },
+  quietConsequence: {
+    marginBottom: 12,
+    color: RAIL.textMuted,
+    fontWeight: '700',
+  },
+  quietConsequenceWarn: {
+    marginBottom: 12,
+    color: RAIL.incompat,
+    fontWeight: '700',
+  },
+  lockNotice: {
+    marginBottom: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(201, 98, 98, 0.055)',
+    borderLeftWidth: 2,
+    borderLeftColor: 'rgba(201, 98, 98, 0.6)',
+  },
+  lockNoticeTitle: {
+    color: '#d59a95',
+    fontWeight: '800',
+  },
+  lockNoticeDetail: {
+    marginTop: 4,
+    color: RAIL.textMuted,
+    lineHeight: 18,
+  },
+  breachGradeOptions: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  breachGradeOption: {
     flex: 1,
-    minWidth: 0,
-    borderWidth: 1,
+    minHeight: 40,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  fieldChip: {
+    backgroundColor: 'rgba(110, 145, 137, 0.035)',
     borderWidth: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    borderColor: RAIL.line,
+    ...Platform.select({
+      web: { cursor: 'pointer', outlineStyle: 'none' } as object,
+      default: {},
+    }),
+  },
+  breachGradeOptionSelected: {
+    backgroundColor: 'rgba(105, 200, 173, 0.09)',
+    borderColor: 'rgba(105, 200, 173, 0.62)',
+  },
+  breachGradeOptionDisabled: {
+    opacity: 0.35,
+    ...Platform.select({
+      web: { cursor: 'not-allowed' } as object,
+      default: {},
+    }),
+  },
+  initiateBreach: {
+    width: '100%',
+    minHeight: 58,
+    marginTop: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: RAIL.terminal,
+    borderWidth: 1,
+    borderColor: RAIL.terminalBright,
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+        boxShadow: '0 0 20px rgba(105, 200, 173, 0.11), inset 0 1px rgba(255, 255, 255, 0.18)',
+        outlineStyle: 'none',
+      } as object,
+      default: {},
+    }),
+  },
+  initiateBreachCompact: {
+    minHeight: 52,
+  },
+  initiateBreachDisabled: {
+    backgroundColor: 'rgba(116, 139, 134, 0.08)',
+    borderColor: 'rgba(116, 139, 134, 0.18)',
+    ...Platform.select({
+      web: {
+        cursor: 'not-allowed',
+        boxShadow: 'none',
+      } as object,
+      default: {},
+    }),
   },
 });

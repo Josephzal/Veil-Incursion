@@ -75,6 +75,56 @@ export function formatContractRewardSummary(contract: GeneratedContract): string
   return parts.join(' // ');
 }
 
+/** Compact payout line for the Veil Front dossier (no rare-loot footnotes). */
+export function formatCompactContractPayout(contract: GeneratedContract): string {
+  return `${contract.reward.credits} CR · ${contract.reward.reputation} REP`;
+}
+
+function sectorIdDisplayLabel(sectorId: SectorId): string {
+  return sectorId
+    .replace(/^THE_/, '')
+    .replace(/_/g, ' ')
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Concise one-line objective for dossier deployment context. */
+export function formatCompactContractObjective(contract: GeneratedContract): string {
+  const raw = contract.objectiveText?.trim() ?? '';
+  if (raw.length > 0 && raw.length <= 78) return raw;
+
+  if (contract.targetResourceId && contract.targetQuantity > 0) {
+    const resourceName = contract.targetResourceId
+      .replace(/-/g, ' ')
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+    return `Recover and deliver ${contract.targetQuantity}× ${resourceName}`;
+  }
+
+  if (raw.length > 78) {
+    const cut = raw.slice(0, 75).replace(/\s+\S*$/, '');
+    return cut.length > 40 ? `${cut}…` : `${raw.slice(0, 75)}…`;
+  }
+
+  return contract.title;
+}
+
+/** Valid-sector eligibility line for incompatible dossier summary. */
+export function formatCompactContractValidSectors(contract: GeneratedContract): string {
+  const ids = contract.validSectorIds.length > 0
+    ? contract.validSectorIds
+    : contract.recommendedSectorIds;
+  if (ids.length === 0) return 'No valid sectors listed for this mandate';
+  return `Valid sectors: ${ids.map(sectorIdDisplayLabel).join(' · ')}`;
+}
+
+export function formatDeploymentContractStatus(
+  compatibility: ContractSectorCompatibility,
+): 'COMPATIBLE' | 'INCOMPATIBLE' | 'NEUTRAL' {
+  if (compatibility === 'UNAVAILABLE') return 'INCOMPATIBLE';
+  if (compatibility === 'RECOMMENDED' || compatibility === 'VALID') return 'COMPATIBLE';
+  return 'NEUTRAL';
+}
+
 export function formatExtractionKindLabel(kind: ContractExtractionKind): string {
   switch (kind) {
     case 'SAFE_ANCHOR':
