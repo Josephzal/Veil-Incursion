@@ -41,3 +41,8 @@ export function pulseStatusOpen(): void {
 export function pulseStatusDismiss(): void {
   Vibration.vibrate(CARGO_CLOSE_HAPTIC_MS);
 }
+
+/** Compact sealed-metal strike for Forge fabrication completion. */
+export function pulseFabricationSeal(): void {
+  Vibration.vibrate([0, 18, 30, 22]);
+}

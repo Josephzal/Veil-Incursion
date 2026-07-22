@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Image,
+  Animated,
   Platform,
   ScrollView,
   StyleSheet,
@@ -25,30 +25,62 @@ import {
 import { ALL_RESOURCE_ITEM_IDS, RESOURCE_REGISTRY } from '../../../data/resourceRegistry';
 import { getStashCount } from '../../../data/resourceStashEngine';
 import { buildResourceDiscoveryCard } from '../../../data/resourceDiscoveryEngine';
-import { resolveCargoItemIcon } from '../../../utils/cargoItemIcon';
+import type { ResourceItemId } from '../../../types/resourceItem';
 import {
   buildForgeSchematicPresentation,
   listVisibleForgePresentations,
   type ForgeSchematicPresentation,
 } from './forgePresentation';
+import {
+  resolveSchematicGlyphFamily,
+  SchematicGlyphMark,
+} from './SchematicGlyph';
 
 const TERMINAL = '#69c8ad';
 const TERMINAL_BRIGHT = '#8ee0c6';
 const MISSING = '#d88984';
 const OCCULT = '#9988b3';
+const META = '#7a8f99';
 
 interface ForgeWorkspaceProps {
   selectedRecipeId: string | null;
   onSelectRecipe: (recipeId: string) => void;
   compact?: boolean;
   narrow?: boolean;
+  /** Resource IDs to pulse once during fabrication material convergence. */
+  pulseResourceIds?: readonly string[];
 }
 
 function stateColor(status: ForgeSchematicPresentation['status']): string {
   if (status === 'fabricable') return TERMINAL_BRIGHT;
   if (status === 'missing') return MISSING;
   if (status === 'rumored' || status === 'sealed') return OCCULT;
-  return '#879b95';
+  return META;
+}
+
+function materialSubtitle(resourceId: ResourceItemId, discovered: boolean): string {
+  if (!discovered) return 'Unidentified reagent';
+  const def = RESOURCE_REGISTRY[resourceId];
+  const raw = def.description?.split(/[.—]/)[0]?.trim();
+  if (raw && raw.length > 4 && raw.length <= 42) return raw;
+  if (raw) return `${raw.slice(0, 40).trim()}…`;
+  const role = def.primaryRole.replace(/_/g, ' ').toLowerCase();
+  return role.charAt(0).toUpperCase() + role.slice(1);
+}
+
+function markerTone(resourceId: string): string {
+  let hash = 0;
+  for (let i = 0; i < resourceId.length; i += 1) {
+    hash = (hash + resourceId.charCodeAt(i) * (i + 3)) % 360;
+  }
+  return `hsla(${120 + (hash % 40)}, 18%, 42%, 0.85)`;
+}
+
+function kindLabel(entry: ForgeSchematicPresentation): string {
+  if (entry.visibility === 'RUMORED') return 'RUMORED SCHEMATIC';
+  if (entry.recipe.kind === 'AUGMENT') return 'PERMANENT AUGMENT';
+  if (isRunItemCraftOutput(entry.recipe.outputId)) return 'RUN ITEM SCHEMATIC';
+  return 'TACTICAL CONSUMABLE';
 }
 
 export default function ForgeWorkspace({
@@ -56,10 +88,12 @@ export default function ForgeWorkspace({
   onSelectRecipe,
   compact = false,
   narrow = false,
+  pulseResourceIds = [],
 }: ForgeWorkspaceProps): React.JSX.Element {
   const { account } = usePlayerAccount();
   const { scaleSpacing } = useHubLayout();
   const [runItemFilter, setRunItemFilter] = useState<RunItemCraftFilter>('ALL');
+  const materialPulse = useRef(new Animated.Value(1)).current;
 
   const profile = useMemo(() => getAccountProgressionProfile(account), [account]);
 
@@ -96,12 +130,43 @@ export default function ForgeWorkspace({
     [augmentRows, runItemRows, consumableRows],
   );
 
+  const selectedEntry = useMemo(
+    () => (selectedRecipeId
+      ? allRows.find((row) => row.recipe.id === selectedRecipeId) ?? null
+      : null),
+    [allRows, selectedRecipeId],
+  );
+
+  const requiredIds = useMemo(() => {
+    if (!selectedEntry || selectedEntry.visibility === 'RUMORED') return null;
+    return new Set(selectedEntry.requirements.map((req) => req.resourceId));
+  }, [selectedEntry]);
+
+  useEffect(() => {
+    if (!selectedRecipeId || !requiredIds?.size) {
+      materialPulse.setValue(1);
+      return;
+    }
+    materialPulse.setValue(0.55);
+    Animated.timing(materialPulse, {
+      toValue: 1,
+      duration: 220,
+      useNativeDriver: true,
+    }).start();
+  }, [materialPulse, requiredIds, selectedRecipeId]);
+
   const renderSchematic = (entry: ForgeSchematicPresentation) => {
     const selected = selectedRecipeId === entry.recipe.id;
+    const sealed = entry.status === 'rumored' || entry.status === 'sealed';
+    const family = isRunItemCraftOutput(entry.recipe.outputId) && entry.recipe.kind !== 'AUGMENT'
+      ? 'run' as const
+      : resolveSchematicGlyphFamily(entry.recipe.id, entry.recipe.kind, sealed);
+
     return (
       <View
         key={entry.recipe.id}
         style={[styles.signal, selected && styles.signalSelected]}
+        {...(Platform.OS === 'web' ? ({ 'data-selected': selected ? 'true' : 'false' } as object) : null)}
       >
         {selected ? <View style={styles.signalAccent} /> : null}
         <HapticPressable
@@ -118,27 +183,40 @@ export default function ForgeWorkspace({
             pressed && { opacity: 0.92 },
           ])}
         >
+          <View style={styles.glyphSlot}>
+            <SchematicGlyphMark family={family} size={compact ? 26 : 30} sealed={sealed} />
+          </View>
           <View style={styles.signalMain}>
-            <TerminalText size={7} letterSpacing={0.9} style={styles.signalStatus}>
-              {entry.visibility === 'RUMORED' ? 'RUMORED SCHEMATIC' : 'PERMANENT AUGMENT'}
-            </TerminalText>
-            <TerminalText size={10.5} letterSpacing={0.3} style={styles.signalTitle} numberOfLines={2}>
+            <TerminalText
+              size={11.5}
+              letterSpacing={0.15}
+              style={[
+                styles.signalTitle,
+                sealed && { color: '#c9c2d6' },
+              ]}
+              numberOfLines={1}
+            >
               {entry.recipe.label.toUpperCase()}
             </TerminalText>
-            <TerminalText size={8} style={styles.signalEffect} numberOfLines={2}>
+            <TerminalText size={8} style={styles.signalEffect} numberOfLines={1}>
               {entry.effectLine}
             </TerminalText>
-            <TerminalText size={7} letterSpacing={0.4} style={styles.signalReqs} numberOfLines={2}>
+            <TerminalText size={7} letterSpacing={0.2} style={styles.signalReqs} numberOfLines={1}>
               {entry.requirementsLine}
             </TerminalText>
           </View>
-          <TerminalText
-            size={7}
-            letterSpacing={0.8}
-            style={[styles.signalState, { color: stateColor(entry.status) }]}
-          >
-            {entry.stateLabel}
-          </TerminalText>
+          <View style={styles.signalStamp}>
+            <TerminalText size={6.5} letterSpacing={0.7} style={styles.signalKind} numberOfLines={1}>
+              {kindLabel(entry)}
+            </TerminalText>
+            <TerminalText
+              size={7}
+              letterSpacing={0.7}
+              style={[styles.signalState, { color: stateColor(entry.status) }]}
+            >
+              {entry.stateLabel}
+            </TerminalText>
+          </View>
         </HapticPressable>
       </View>
     );
@@ -148,11 +226,11 @@ export default function ForgeWorkspace({
     <View style={[styles.catalog, narrow && styles.catalogNarrow]}>
       <View style={[styles.materials, narrow && styles.materialsNarrow]}>
         <View style={styles.catalogHeader}>
-          <TerminalText size={7} letterSpacing={1} style={styles.catalogHeaderText}>
+          <TerminalText size={7} letterSpacing={1.05} style={styles.catalogHeaderText}>
             MATERIAL HOLDINGS
           </TerminalText>
-          <TerminalText size={7} letterSpacing={1} style={styles.catalogHeaderText}>
-            {`${ownedResources.length} ${ownedResources.length === 1 ? 'TYPE' : 'TYPES'}`}
+          <TerminalText size={7} letterSpacing={0.9} style={styles.catalogHeaderMeta}>
+            {`${String(ownedResources.length).padStart(2, '0')} TYPES`}
           </TerminalText>
         </View>
         <ScrollView
@@ -171,35 +249,69 @@ export default function ForgeWorkspace({
               No resources in stash.
             </TerminalText>
           ) : (
-            ownedResources.map((resourceId) => {
+            ownedResources.map((resourceId, index) => {
               const quantity = getStashCount(account.resourceStash, resourceId);
               const card = buildResourceDiscoveryCard(resourceId, account.resourceDiscovery);
               const def = RESOURCE_REGISTRY[resourceId];
-              const image = resolveCargoItemIcon(resourceId);
+              const isRequired = requiredIds?.has(resourceId) ?? false;
+              const dimmed = requiredIds != null && !isRequired;
+              const req = selectedEntry?.requirements.find((row) => row.resourceId === resourceId);
+              const missing = isRequired && req != null && !req.ready;
+              const ready = isRequired && req?.ready === true;
+              const converging = pulseResourceIds.includes(resourceId);
+
               return (
-                <View key={resourceId} style={styles.materialRow}>
-                  {image ? (
-                    <Image source={image} style={styles.materialImage} resizeMode="contain" />
-                  ) : (
-                    <View style={styles.materialImage} />
-                  )}
+                <Animated.View
+                  key={resourceId}
+                  style={[
+                    styles.materialRow,
+                    dimmed && styles.materialDimmed,
+                    ready && styles.materialRequired,
+                    missing && styles.materialMissing,
+                    converging && styles.materialConverging,
+                    isRequired && {
+                      opacity: materialPulse.interpolate({
+                        inputRange: [0.55, 1],
+                        outputRange: [0.72 + Math.min(index, 4) * 0.02, 1],
+                      }),
+                    },
+                  ]}
+                >
+                  <View style={[styles.materialMarker, { backgroundColor: markerTone(resourceId) }]} />
+                  {missing ? <View style={styles.materialNotch} /> : null}
                   <View style={styles.materialIdentity}>
-                    <TerminalText size={7.5} style={styles.materialName} numberOfLines={1}>
-                      {(card.discovered ? card.title : def.shortName).toUpperCase()}
-                    </TerminalText>
-                    <TerminalText size={6.5} letterSpacing={0.4} style={styles.materialMeta} numberOfLines={1}>
-                      {def.itemType.replace(/_/g, ' ').toUpperCase()}
-                    </TerminalText>
+                    <View style={styles.materialTop}>
+                      <TerminalText
+                        size={8}
+                        letterSpacing={0.2}
+                        style={[styles.materialName, ready && { color: '#e8f2ee' }]}
+                        numberOfLines={1}
+                      >
+                        {(card.discovered ? card.title : def.shortName).toUpperCase()}
+                      </TerminalText>
+                      <TerminalText size={9.5} style={styles.materialQtyValue}>
+                        {quantity}
+                      </TerminalText>
+                    </View>
+                    <View style={styles.materialBottom}>
+                      <TerminalText size={7} style={styles.materialMeta} numberOfLines={1}>
+                        {materialSubtitle(resourceId, card.discovered)}
+                      </TerminalText>
+                      {isRequired ? (
+                        <TerminalText
+                          size={6.5}
+                          letterSpacing={0.8}
+                          style={{
+                            color: missing ? MISSING : TERMINAL,
+                            fontWeight: '700',
+                          }}
+                        >
+                          {missing ? 'SHORT' : 'REQUIRED'}
+                        </TerminalText>
+                      ) : null}
+                    </View>
                   </View>
-                  <View style={styles.materialQty}>
-                    <TerminalText size={8.5} style={styles.materialQtyValue}>
-                      {quantity}
-                    </TerminalText>
-                    <TerminalText size={6} letterSpacing={0.7} style={styles.materialQtyLabel}>
-                      HELD
-                    </TerminalText>
-                  </View>
-                </View>
+                </Animated.View>
               );
             })
           )}
@@ -208,10 +320,10 @@ export default function ForgeWorkspace({
 
       <View style={styles.feed}>
         <View style={styles.catalogHeader}>
-          <TerminalText size={7} letterSpacing={1} style={styles.catalogHeaderText}>
-            AUGMENT SCHEMATICS
+          <TerminalText size={7} letterSpacing={1.05} style={styles.catalogHeaderText}>
+            SCHEMATIC FEED
           </TerminalText>
-          <TerminalText size={7} letterSpacing={1} style={styles.catalogHeaderText}>
+          <TerminalText size={7} letterSpacing={0.9} style={styles.catalogHeaderMeta}>
             {`${allRows.length} ${allRows.length === 1 ? 'RECORD' : 'RECORDS'}`}
           </TerminalText>
         </View>
@@ -228,7 +340,7 @@ export default function ForgeWorkspace({
         >
           {augmentRows.length > 0 ? (
             <>
-              <TerminalText size={7} letterSpacing={1} style={styles.sectionLabel}>
+              <TerminalText size={7} letterSpacing={1.05} style={styles.sectionLabel}>
                 PERMANENT AUGMENTS
               </TerminalText>
               {augmentRows.map(renderSchematic)}
@@ -260,7 +372,7 @@ export default function ForgeWorkspace({
                   </HapticPressable>
                 ))}
               </View>
-              <TerminalText size={7} letterSpacing={1} style={styles.sectionLabel}>
+              <TerminalText size={7} letterSpacing={1.05} style={styles.sectionLabel}>
                 RUN ITEM SCHEMATICS
               </TerminalText>
               {runItemRows.map(renderSchematic)}
@@ -269,7 +381,7 @@ export default function ForgeWorkspace({
 
           {consumableRows.length > 0 ? (
             <>
-              <TerminalText size={7} letterSpacing={1} style={styles.sectionLabel}>
+              <TerminalText size={7} letterSpacing={1.05} style={styles.sectionLabel}>
                 TACTICAL CONSUMABLES
               </TerminalText>
               {consumableRows.map(renderSchematic)}
@@ -314,90 +426,135 @@ const styles = StyleSheet.create({
   },
   catalogNarrow: {},
   materials: {
-    width: 260,
-    maxWidth: 285,
-    minWidth: 230,
-    borderRightWidth: 1,
-    borderRightColor: 'rgba(137, 170, 163, 0.14)',
-    backgroundColor: 'rgba(4, 10, 9, 0.36)',
+    width: 268,
+    maxWidth: 292,
+    minWidth: 236,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: 'rgba(137, 170, 163, 0.16)',
+    backgroundColor: '#030808',
     overflow: 'hidden',
   },
   materialsNarrow: {
-    width: 230,
-    maxWidth: 230,
+    width: 236,
+    maxWidth: 236,
   },
   feed: {
     flex: 1,
     minWidth: 0,
     minHeight: 0,
     overflow: 'hidden',
+    backgroundColor: '#020606',
+    position: 'relative',
   },
   catalogHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: 46,
-    paddingHorizontal: 18,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(137, 170, 163, 0.11)',
+    minHeight: 36,
+    paddingHorizontal: 16,
     flexShrink: 0,
+    zIndex: 1,
   },
   catalogHeaderText: {
-    color: '#83948f',
+    color: '#7f928c',
     fontWeight: '700',
+  },
+  catalogHeaderMeta: {
+    color: META,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
   },
   scroll: {
     flex: 1,
     minHeight: 0,
+    zIndex: 1,
   },
   emptyCopy: {
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingVertical: 20,
     color: '#91a39f',
   },
   materialRow: {
+    position: 'relative',
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 11,
-    minHeight: 64,
-    paddingHorizontal: 14,
+    alignItems: 'stretch',
+    minHeight: 48,
+    paddingLeft: 12,
+    paddingRight: 14,
     paddingVertical: 8,
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(137, 170, 163, 0.1)',
   },
-  materialImage: {
-    width: 38,
-    height: 38,
+  materialDimmed: {
+    opacity: 0.34,
+  },
+  materialRequired: {
+    backgroundColor: 'rgba(100, 211, 175, 0.045)',
+  },
+  materialConverging: {
+    backgroundColor: 'rgba(105, 200, 173, 0.1)',
+    ...Platform.select({
+      web: {
+        transition: 'background-color 160ms ease-out',
+      } as object,
+      default: {},
+    }),
+  },
+  materialMissing: {
+    backgroundColor: 'rgba(216, 137, 132, 0.04)',
+  },
+  materialMarker: {
+    width: 2,
+    marginRight: 10,
+    marginVertical: 4,
+    borderRadius: 1,
+  },
+  materialNotch: {
+    position: 'absolute',
+    left: 0,
+    top: 10,
+    bottom: 10,
+    width: 2,
+    backgroundColor: MISSING,
   },
   materialIdentity: {
     flex: 1,
     minWidth: 0,
+    justifyContent: 'center',
+    gap: 3,
+  },
+  materialTop: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  materialBottom: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
   },
   materialName: {
-    color: '#d5dfdc',
+    flex: 1,
+    minWidth: 0,
+    color: '#d8e2de',
     fontWeight: '700',
   },
   materialMeta: {
-    marginTop: 3,
-    color: '#7f928c',
-  },
-  materialQty: {
-    alignItems: 'flex-end',
+    flex: 1,
+    minWidth: 0,
+    color: META,
   },
   materialQtyValue: {
-    color: TERMINAL_BRIGHT,
+    color: '#f2f7f5',
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
   },
-  materialQtyLabel: {
-    marginTop: 2,
-    color: '#7f928c',
-    fontWeight: '700',
-  },
   sectionLabel: {
     marginTop: 14,
-    marginBottom: 4,
-    paddingHorizontal: 20,
+    marginBottom: 2,
+    paddingHorizontal: 18,
     color: '#7f928c',
     fontWeight: '700',
   },
@@ -405,12 +562,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
     paddingTop: 12,
   },
   filterChip: {
-    borderWidth: 1,
-    borderColor: 'rgba(137, 170, 163, 0.2)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(137, 170, 163, 0.22)',
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
@@ -420,73 +577,114 @@ const styles = StyleSheet.create({
   },
   signal: {
     position: 'relative',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(137, 170, 163, 0.11)',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(137, 170, 163, 0.1)',
   },
   signalSelected: {
-    backgroundColor: 'rgba(105, 200, 173, 0.05)',
+    backgroundColor: 'transparent',
   },
   signalAccent: {
     position: 'absolute',
-    top: 13,
-    bottom: 13,
+    top: 10,
+    bottom: 10,
     left: 0,
     width: 2,
-    backgroundColor: TERMINAL,
-    zIndex: 1,
+    backgroundColor: '#75d4b3',
+    zIndex: 2,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 0 12px rgba(117, 212, 179, 0.25)',
+      } as object,
+      default: {},
+    }),
   },
   signalSelect: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 24,
-    minHeight: 108,
-    paddingVertical: 15,
-    paddingHorizontal: 20,
+    gap: 14,
+    minHeight: 78,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
     ...Platform.select({
       web: { cursor: 'pointer', outlineStyle: 'none' } as object,
       default: {},
     }),
   },
   signalSelectHover: {
-    backgroundColor: 'rgba(105, 200, 173, 0.035)',
+    ...Platform.select({
+      web: {
+        backgroundImage: [
+          'linear-gradient(#a7b0ac, #a7b0ac)',
+          'linear-gradient(90deg, rgba(167, 176, 172, 0.1), rgba(167, 176, 172, 0.018) 72%)',
+        ].join(', '),
+        backgroundSize: '2px calc(100% - 20px), auto',
+        backgroundPosition: 'left center, 0 0',
+        backgroundRepeat: 'no-repeat, no-repeat',
+      } as object,
+      default: {
+        backgroundColor: 'rgba(167, 176, 172, 0.08)',
+        borderLeftWidth: 2,
+        borderLeftColor: '#a7b0ac',
+      },
+    }),
   },
   signalSelectSelected: {
-    backgroundColor: 'rgba(105, 200, 173, 0.06)',
+    ...Platform.select({
+      web: {
+        backgroundImage:
+          'linear-gradient(90deg, rgba(100, 211, 175, 0.09), rgba(100, 211, 175, 0.015) 72%)',
+      } as object,
+      default: {
+        backgroundColor: 'rgba(100, 211, 175, 0.07)',
+      },
+    }),
   },
   signalSelectCompact: {
-    minHeight: 96,
-    paddingVertical: 12,
+    minHeight: 70,
+    paddingVertical: 10,
   },
   signalSelectNarrow: {
-    gap: 18,
+    gap: 12,
+  },
+  glyphSlot: {
+    width: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    opacity: 0.88,
+    flexShrink: 0,
   },
   signalMain: {
     flex: 1,
     minWidth: 0,
   },
-  signalStatus: {
-    color: '#879b95',
-    fontWeight: '700',
-  },
   signalTitle: {
-    marginTop: 5,
-    color: '#e0e7e4',
+    color: '#f1f6f3',
     fontWeight: '700',
   },
   signalEffect: {
-    marginTop: 5,
-    color: '#a1b0ac',
-    lineHeight: 18,
+    marginTop: 4,
+    color: '#a7b6b1',
+    letterSpacing: 0,
+    lineHeight: 16,
   },
   signalReqs: {
-    marginTop: 8,
-    color: '#82948f',
+    marginTop: 5,
+    color: '#6f8480',
+    fontWeight: '600',
+  },
+  signalStamp: {
+    width: 128,
+    alignItems: 'flex-end',
+    flexShrink: 0,
+    gap: 5,
+  },
+  signalKind: {
+    color: META,
     fontWeight: '700',
+    textAlign: 'right',
   },
   signalState: {
-    width: 150,
-    textAlign: 'right',
     fontWeight: '700',
-    flexShrink: 0,
+    textAlign: 'right',
   },
 });

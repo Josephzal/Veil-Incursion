@@ -1,20 +1,32 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
-  Image,
   Platform,
   ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
+import Svg, { Circle, Defs, Line, Pattern, Rect } from 'react-native-svg';
 import HapticPressable from '../HapticPressable';
 import TerminalText from '../TerminalText';
 import VeilTerminalEffects from '../atmosphere/VeilTerminalEffects';
 import ForgeWorkspace, { resolveForgeSelection } from './blackMarket/ForgeWorkspace';
 import VendorWorkspace, {
   type VendorSelection,
-  type VendorSubchannel,
 } from './blackMarket/VendorWorkspace';
+import SchematicGlyph, {
+  resolveSchematicGlyphFamily,
+  schematicClassificationCode,
+} from './blackMarket/SchematicGlyph';
+import SignalRail from './blackMarket/SignalRail';
+import BlackMarketMediaStage, {
+  type MediaStageFeedbackPhase,
+} from './blackMarket/BlackMarketMediaStage';
+import FabricationReceipt, {
+  type FabricationReceiptRecord,
+} from './blackMarket/FabricationReceipt';
+import HoldToFabricateButton from './blackMarket/HoldToFabricateButton';
+import type { SchematicGlyphFamily } from './blackMarket/SchematicGlyph';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useWorldState } from '../../context/WorldStateContext';
 import { useHubLayout } from '../../context/HubLayoutContext';
@@ -28,10 +40,35 @@ import {
 } from '../../data/sealedCargoEngine';
 import { getAppraisalBandLabel, resolveOpeningFee } from '../../data/sealedCasketAppraisalEngine';
 import { getResourceDisplayName, getResourceShortName } from '../../data/resourceRegistry';
+import { isRunItemCraftOutput } from '../../data/runItemCraftingBridge';
 import { CARGO_ITEM_CATALOG } from '../../types/cargoGrid';
-import { resolveCargoItemIcon } from '../../utils/cargoItemIcon';
-import { formatVendorExchangeCondition } from './blackMarket/vendorPresentation';
+import {
+  formatCreditBalance,
+  resolveBlackMarketArtwork,
+} from '../../utils/blackMarketArtwork';
+import { fabricationAudioHooks } from '../../utils/fabricationFeedbackAudio';
+import { pulseFabricationSeal } from '../../utils/hubButtonHaptics';
+import {
+  formatVendorExchangeCondition,
+  resolveInitialVendorSelection,
+  resolveVendorSelectionAfterHoldingRemoved,
+} from './blackMarket/vendorPresentation';
 import type { ForgeSchematicPresentation } from './blackMarket/forgePresentation';
+
+type FabricationFeedbackPhase = MediaStageFeedbackPhase;
+
+interface FabricationFeedbackRecord {
+  recipeId: string;
+  label: string;
+  kind: 'AUGMENT' | 'CONSUMABLE';
+  outputId: string;
+  classCode: string;
+  family: SchematicGlyphFamily;
+  occult: boolean;
+  outcome: string;
+  category: string;
+  consumedResourceIds: string[];
+}
 
 export type BlackMarketTab = 'FORGE' | 'VENDOR';
 
@@ -39,10 +76,12 @@ const TERMINAL = '#69c8ad';
 const TERMINAL_BRIGHT = '#8ee0c6';
 const MISSING = '#d88984';
 const OCCULT = '#9988b3';
+const META = '#7a8f99';
+const TEXT_PRIMARY = '#c8d4cf';
 
-const MODE_ITEMS: Array<{ key: BlackMarketTab; label: string; detail: string }> = [
-  { key: 'FORGE', label: 'FORGE', detail: 'Permanent Augments' },
-  { key: 'VENDOR', label: 'VENDOR', detail: 'Contraband Exchange' },
+const MODE_ITEMS: Array<{ key: BlackMarketTab; label: string; detail: string; code: string }> = [
+  { key: 'FORGE', label: 'FORGE', detail: 'FABRICATION CHANNEL', code: 'FAB-01' },
+  { key: 'VENDOR', label: 'VENDOR', detail: 'EXCHANGE CHANNEL', code: 'VND-01' },
 ];
 
 function usePrefersReducedMotion(): boolean {
@@ -71,10 +110,36 @@ function DossierSection({
 }): React.JSX.Element {
   return (
     <View style={[styles.dossierSection, last && styles.dossierSectionLast]}>
-      <TerminalText size={7} letterSpacing={1} style={styles.dossierLabel}>
+      <TerminalText size={7} letterSpacing={1.05} style={styles.dossierLabel}>
         {label}
       </TerminalText>
       {children}
+    </View>
+  );
+}
+
+function MarketAtmosphere(): React.JSX.Element {
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
+        <Defs>
+          <Pattern id="bmCircuit" x="0" y="0" width="28" height="28" patternUnits="userSpaceOnUse">
+            <Line x1="0" y1="14" x2="28" y2="14" stroke="rgba(137,170,163,0.04)" strokeWidth="0.6" />
+            <Line x1="14" y1="0" x2="14" y2="28" stroke="rgba(137,170,163,0.03)" strokeWidth="0.6" />
+            <Circle cx="14" cy="14" r="1.2" fill="rgba(137,170,163,0.05)" />
+          </Pattern>
+        </Defs>
+        <Rect width="100%" height="100%" fill="url(#bmCircuit)" opacity={0.22} />
+      </Svg>
+      <View style={styles.atmVignette} />
+      <View style={styles.atmSigil}>
+        <Svg width="100%" height="100%" viewBox="0 0 200 200">
+          <Circle cx="100" cy="100" r="78" stroke="rgba(137,170,163,0.05)" strokeWidth="1" fill="none" />
+          <Circle cx="100" cy="100" r="48" stroke="rgba(137,170,163,0.04)" strokeWidth="1" fill="none" />
+          <Line x1="100" y1="20" x2="100" y2="180" stroke="rgba(137,170,163,0.035)" strokeWidth="1" />
+          <Line x1="20" y1="100" x2="180" y2="100" stroke="rgba(137,170,163,0.035)" strokeWidth="1" />
+        </Svg>
+      </View>
     </View>
   );
 }
@@ -95,15 +160,23 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
   const reduceMotion = usePrefersReducedMotion();
 
   const [activeMode, setActiveMode] = useState<BlackMarketTab>('FORGE');
-  const [vendorChannel, setVendorChannel] = useState<VendorSubchannel>('BUY');
   const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null);
   const [vendorSelection, setVendorSelection] = useState<VendorSelection>(null);
   const [sellQty, setSellQty] = useState(1);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [fabPhase, setFabPhase] = useState<FabricationFeedbackPhase>('idle');
+  const [fabRecord, setFabRecord] = useState<FabricationFeedbackRecord | null>(null);
+  const [fabReceipt, setFabReceipt] = useState<FabricationReceiptRecord | null>(null);
+  const [channelNodePulse, setChannelNodePulse] = useState(false);
+  const vendorInitialized = useRef(false);
+  const fabTimers = useRef<Array<ReturnType<typeof setTimeout>>>([]);
+  const fabLocked = fabPhase !== 'idle' && fabPhase !== 'complete';
 
   const catalogSweep = useRef(new Animated.Value(0)).current;
   const dossierLock = useRef(new Animated.Value(1)).current;
   const txnPulse = useRef(new Animated.Value(0)).current;
+  const dossierScan = useRef(new Animated.Value(0)).current;
+  const workspaceDim = useRef(new Animated.Value(0)).current;
 
   const narrow = screenWidth <= 1500;
   const compact = screenHeight <= 800;
@@ -116,9 +189,15 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
     [account, selectedRecipeId],
   );
 
-  const fenceEntries = listFenceableStashEntries(account.resourceStash)
-    .filter((entry) => !isAppraisableSealedResource(entry.resourceId));
-  const sealedEntries = listSealedStashEntries(account.resourceStash, account.sealedCargoStacks ?? []);
+  const fenceEntries = useMemo(
+    () => listFenceableStashEntries(account.resourceStash)
+      .filter((entry) => !isAppraisableSealedResource(entry.resourceId)),
+    [account.resourceStash],
+  );
+  const sealedEntries = useMemo(
+    () => listSealedStashEntries(account.resourceStash, account.sealedCargoStacks ?? []),
+    [account.resourceStash, account.sealedCargoStacks],
+  );
 
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return undefined;
@@ -132,29 +211,101 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
 [data-black-market] [role="tab"]:focus-visible {
   outline: 2px solid ${TERMINAL_BRIGHT} !important;
   outline-offset: 2px !important;
-}`;
+}
+@keyframes bm-fab-packet {
+  0% { opacity: 0; transform: translate(0, 0); }
+  20% { opacity: 0.85; }
+  100% { opacity: 0; transform: translate(180px, -40px); }
+}
+[data-black-market] [data-fab-packet] {
+  animation: bm-fab-packet 420ms ease-out infinite;
+}
+[data-black-market] [data-fab-packet="b"] { animation-delay: 80ms; }
+[data-black-market] [data-fab-packet="c"] { animation-delay: 160ms; }
+`;
     document.head.appendChild(style);
     return undefined;
   }, []);
 
-  // Clamp sell quantity when holdings change.
   useEffect(() => {
-    if (vendorSelection?.kind !== 'SELL_RESOURCE') return;
-    const entry = fenceEntries.find((e) => e.resourceId === vendorSelection.resourceId);
-    if (!entry) {
-      setVendorSelection(null);
-      setSellQty(1);
+    if (reduceMotion) {
+      dossierScan.setValue(0);
+      return undefined;
+    }
+    const loop = Animated.loop(
+      Animated.timing(dossierScan, {
+        toValue: 1,
+        duration: 5600,
+        useNativeDriver: true,
+      }),
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+      dossierScan.setValue(0);
+    };
+  }, [dossierScan, reduceMotion]);
+
+  // Initialize Vendor selection when entering the channel.
+  useEffect(() => {
+    if (activeMode !== 'VENDOR') {
+      vendorInitialized.current = false;
       return;
     }
-    setSellQty((prev) => Math.min(Math.max(1, prev), entry.quantity));
-  }, [fenceEntries, vendorSelection]);
+    if (vendorInitialized.current) return;
+    vendorInitialized.current = true;
+    setVendorSelection(resolveInitialVendorSelection(account, hubBlackMarketDiscountPct));
+    setSellQty(1);
+  }, [activeMode, account, hubBlackMarketDiscountPct]);
+
+  // Clamp sell quantity / recover selection when holdings change.
+  useEffect(() => {
+    if (activeMode !== 'VENDOR') return;
+    if (!vendorSelection || vendorSelection.source !== 'holding') return;
+
+    if (vendorSelection.kind === 'RESOURCE') {
+      const entry = fenceEntries.find((e) => e.resourceId === vendorSelection.resourceId);
+      if (!entry) {
+        setVendorSelection(
+          resolveVendorSelectionAfterHoldingRemoved(
+            account,
+            hubBlackMarketDiscountPct,
+            vendorSelection,
+          ),
+        );
+        setSellQty(1);
+        return;
+      }
+      setSellQty((prev) => Math.min(Math.max(1, prev), entry.quantity));
+      return;
+    }
+
+    const sealed = sealedEntries.find((e) => e.stackId === vendorSelection.stackId);
+    if (!sealed) {
+      setVendorSelection(
+        resolveVendorSelectionAfterHoldingRemoved(
+          account,
+          hubBlackMarketDiscountPct,
+          vendorSelection,
+        ),
+      );
+      setSellQty(1);
+    }
+  }, [
+    activeMode,
+    account,
+    fenceEntries,
+    hubBlackMarketDiscountPct,
+    sealedEntries,
+    vendorSelection,
+  ]);
 
   const playSweep = () => {
     if (reduceMotion) return;
     catalogSweep.setValue(0);
     Animated.timing(catalogSweep, {
       toValue: 1,
-      duration: 180,
+      duration: 150,
       useNativeDriver: true,
     }).start(() => catalogSweep.setValue(0));
   };
@@ -164,10 +315,10 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
       dossierLock.setValue(1);
       return;
     }
-    dossierLock.setValue(0.9);
+    dossierLock.setValue(0.88);
     Animated.timing(dossierLock, {
       toValue: 1,
-      duration: 150,
+      duration: 140,
       useNativeDriver: true,
     }).start();
   };
@@ -182,6 +333,30 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
     }).start(() => txnPulse.setValue(0));
   };
 
+  const clearFabTimers = () => {
+    fabTimers.current.forEach((id) => clearTimeout(id));
+    fabTimers.current = [];
+  };
+
+  const resetFabricationFeedback = React.useCallback(() => {
+    clearFabTimers();
+    setFabPhase('idle');
+    setFabRecord(null);
+    setFabReceipt(null);
+    setChannelNodePulse(false);
+    workspaceDim.setValue(0);
+  }, [workspaceDim]);
+
+  useEffect(() => () => {
+    clearFabTimers();
+  }, []);
+
+  useEffect(() => {
+    if (activeMode !== 'FORGE') {
+      resetFabricationFeedback();
+    }
+  }, [activeMode, resetFabricationFeedback]);
+
   const showFeedback = (line: string) => {
     setFeedback(line);
     playTxnPulse();
@@ -191,20 +366,16 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
   const handleModeChange = (mode: BlackMarketTab) => {
     if (mode === activeMode) return;
     setActiveMode(mode);
-    playSweep();
-    playDossierLock();
-  };
-
-  const handleVendorChannel = (channel: VendorSubchannel) => {
-    if (channel === vendorChannel) return;
-    setVendorChannel(channel);
-    setVendorSelection(null);
-    setSellQty(1);
+    if (mode === 'VENDOR') {
+      vendorInitialized.current = false;
+      resetFabricationFeedback();
+    }
     playSweep();
     playDossierLock();
   };
 
   const handleSelectRecipe = (recipeId: string) => {
+    if (fabLocked) return;
     setSelectedRecipeId(recipeId);
     playDossierLock();
   };
@@ -212,21 +383,136 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
   const handleVendorSelect = (next: VendorSelection) => {
     setVendorSelection(next);
     setSellQty(1);
+    setFeedback(null);
     playDossierLock();
   };
 
+  const dismissFabReceipt = React.useCallback(() => {
+    setFabReceipt(null);
+    setFabPhase('idle');
+    setFabRecord(null);
+    setChannelNodePulse(false);
+    if (!reduceMotion) {
+      Animated.timing(workspaceDim, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      workspaceDim.setValue(0);
+    }
+  }, [reduceMotion, workspaceDim]);
+
   const handleFabricate = () => {
-    if (!forgeSelection?.canFabricate) return;
-    const result = craftRecipe(forgeSelection.recipe.id);
-    showFeedback(
-      result.success
-        ? `FABRICATION COMPLETE — ${forgeSelection.recipe.label.toUpperCase()} INSTALLED`
-        : result.logLine,
-    );
+    if (!forgeSelection?.canFabricate || fabLocked) return;
+    const entry = forgeSelection;
+    const result = craftRecipe(entry.recipe.id);
+    if (!result.success) {
+      showFeedback(result.logLine);
+      return;
+    }
+
+    const sealed = entry.status === 'rumored' || entry.status === 'sealed';
+    const family = isRunItemCraftOutput(entry.recipe.outputId) && entry.recipe.kind !== 'AUGMENT'
+      ? 'run' as const
+      : resolveSchematicGlyphFamily(entry.recipe.id, entry.recipe.kind, sealed);
+    const classCode = schematicClassificationCode(entry.recipe.id);
+    const category = entry.recipe.kind === 'AUGMENT'
+      ? 'PERMANENT AUGMENT'
+      : isRunItemCraftOutput(entry.recipe.outputId)
+        ? 'RUN ITEM PROTOCOL'
+        : 'FABRICATION RECORD';
+    const outcome = entry.recipe.kind === 'AUGMENT'
+      ? 'AUGMENT REGISTERED'
+      : 'ADDED TO INVENTORY';
+    const artwork = resolveBlackMarketArtwork({
+      recordType: entry.recipe.kind === 'AUGMENT' ? 'AUGMENT' : 'CARGO',
+      recordId: entry.recipe.outputId,
+    });
+    const snapshot: FabricationFeedbackRecord = {
+      recipeId: entry.recipe.id,
+      label: entry.recipe.label,
+      kind: entry.recipe.kind,
+      outputId: entry.recipe.outputId,
+      classCode,
+      family,
+      occult: sealed,
+      outcome,
+      category,
+      consumedResourceIds: entry.requirements
+        .filter((req) => !req.concealed)
+        .map((req) => req.resourceId),
+    };
+
+    clearFabTimers();
+    setFabRecord(snapshot);
+    setFabReceipt(null);
+    setFeedback(null);
+    appendHubLog(result.logLine);
+    fabricationAudioHooks.play('fabrication_accept');
+
+    const schedule = (ms: number, fn: () => void) => {
+      fabTimers.current.push(setTimeout(fn, ms));
+    };
+
+    if (reduceMotion) {
+      setFabPhase('complete');
+      setChannelNodePulse(true);
+      fabricationAudioHooks.play('fabrication_complete');
+      setFabReceipt({
+        label: snapshot.label,
+        outcome: snapshot.outcome,
+        classCode: snapshot.classCode,
+        artwork: artwork?.source ?? null,
+        glyphFamily: snapshot.family,
+      });
+      return;
+    }
+
+    setFabPhase('accepted');
+    setChannelNodePulse(true);
+    Animated.timing(workspaceDim, {
+      toValue: 1,
+      duration: 160,
+      useNativeDriver: true,
+    }).start();
+
+    schedule(180, () => {
+      setFabPhase('converging');
+      fabricationAudioHooks.play('fabrication_converge');
+    });
+    schedule(520, () => {
+      setFabPhase('assembling');
+    });
+    schedule(950, () => {
+      setFabPhase('sealing');
+      fabricationAudioHooks.play('fabrication_seal');
+      pulseFabricationSeal();
+    });
+    schedule(1080, () => {
+      setFabPhase('complete');
+      fabricationAudioHooks.play('fabrication_complete');
+      setFabReceipt({
+        label: snapshot.label,
+        outcome: snapshot.outcome,
+        classCode: snapshot.classCode,
+        artwork: artwork?.source ?? null,
+        glyphFamily: snapshot.family,
+      });
+      playTxnPulse();
+    });
+    schedule(1400, () => {
+      Animated.timing(workspaceDim, {
+        toValue: 0,
+        duration: 220,
+        useNativeDriver: true,
+      }).start();
+      setChannelNodePulse(false);
+    });
   };
 
   const handleBuy = () => {
-    if (vendorSelection?.kind !== 'BUY') return;
+    if (vendorSelection?.source !== 'offer') return;
     const listing = BLACK_MARKET_CARGO_LISTINGS.find((e) => e.id === vendorSelection.listingId);
     if (!listing) return;
     const price = hubContrabandPrice(listing.price, hubBlackMarketDiscountPct);
@@ -237,10 +523,11 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
         ? `TRANSACTION CLEARED — ${listing.name.toUpperCase()} ACQUIRED · −${price} CR`
         : result.logLine,
     );
+    // Offers remain listed; keep the purchased offer selected.
   };
 
   const handleSellResource = () => {
-    if (vendorSelection?.kind !== 'SELL_RESOURCE') return;
+    if (vendorSelection?.source !== 'holding' || vendorSelection.kind !== 'RESOURCE') return;
     const entry = fenceEntries.find((e) => e.resourceId === vendorSelection.resourceId);
     if (!entry) return;
     const qty = Math.min(sellQty, entry.quantity);
@@ -250,51 +537,136 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
       `EXCHANGE COMPLETE — ${qty} ${getResourceShortName(entry.resourceId).toUpperCase()} TRANSFERRED · +${proceeds} CR`,
     );
     if (entry.quantity - qty <= 0) {
-      setVendorSelection(null);
+      // Stash updates asynchronously — holdings effect advances selection when the unit is gone.
       setSellQty(1);
     }
-    // Always log engine line for fidelity.
     if (result.logLine && !result.logLine.includes('EXCHANGE COMPLETE')) {
       appendHubLog(result.logLine);
     }
   };
 
   const renderForgeDossier = (entry: ForgeSchematicPresentation) => {
-    const media = resolveCargoItemIcon(entry.recipe.outputId as never);
+    const displayEntry = fabRecord && fabPhase !== 'idle'
+      ? {
+          label: fabRecord.label,
+          category: fabRecord.category,
+          classCode: fabRecord.classCode,
+          family: fabRecord.family,
+          occult: fabRecord.occult,
+          outputId: fabRecord.outputId,
+          kind: fabRecord.kind,
+        }
+      : null;
+    const artwork = resolveBlackMarketArtwork({
+      recordType: (displayEntry?.kind ?? entry.recipe.kind) === 'AUGMENT' ? 'AUGMENT' : 'CARGO',
+      recordId: displayEntry?.outputId ?? entry.recipe.outputId,
+    });
+    const sealed = displayEntry?.occult
+      ?? (entry.status === 'rumored' || entry.status === 'sealed');
+    const family = displayEntry?.family
+      ?? (isRunItemCraftOutput(entry.recipe.outputId) && entry.recipe.kind !== 'AUGMENT'
+        ? 'run' as const
+        : resolveSchematicGlyphFamily(entry.recipe.id, entry.recipe.kind, sealed));
+    const classCode = displayEntry?.classCode ?? schematicClassificationCode(entry.recipe.id);
+    const category = displayEntry?.category ?? (
+      entry.recipe.kind === 'AUGMENT'
+        ? 'PERMANENT AUGMENT'
+        : isRunItemCraftOutput(entry.recipe.outputId)
+          ? 'RUN ITEM PROTOCOL'
+          : 'FABRICATION RECORD'
+    );
+    const protocol = sealed
+      ? `SEALED PROTOCOL // ${classCode}`
+      : `RECON PROTOCOL // ${classCode}`;
+    const statusLabel = fabPhase === 'accepted' || fabPhase === 'converging'
+      ? 'SCHEMATIC ACCEPTED'
+      : fabPhase === 'assembling' || fabPhase === 'sealing'
+        ? 'BINDING RECORD…'
+        : fabPhase === 'complete' && fabRecord
+          ? 'FABRICATION COMPLETE'
+          : entry.stateLabel;
+    const convergingIds = fabPhase === 'converging' || fabPhase === 'assembling'
+      ? (fabRecord?.consumedResourceIds ?? [])
+      : [];
+
     return (
       <>
         <View style={styles.dossierHeader}>
           <View style={styles.dossierAccent} />
-          <TerminalText size={7} letterSpacing={1.1} style={styles.dossierEyebrow}>
-            FORGE DOSSIER
+          <BlackMarketMediaStage
+            source={artwork?.source}
+            classification={classCode}
+            compact={compact}
+            showUnavailable={false}
+            feedbackPhase={fabPhase}
+            reducedMotion={reduceMotion}
+            occult={sealed}
+          >
+            {!artwork ? (
+              <View style={[styles.dossierVizInner, sealed && styles.dossierVizSealed]}>
+                <SchematicGlyph
+                  family={family}
+                  size={compact ? 118 : 138}
+                  sealed={sealed}
+                  animate={!reduceMotion && fabPhase === 'idle'}
+                />
+                {sealed ? <View pointerEvents="none" style={styles.dossierUvWash} /> : null}
+                {!reduceMotion && fabPhase === 'idle' ? (
+                  <Animated.View
+                    pointerEvents="none"
+                    style={[
+                      styles.dossierScanline,
+                      {
+                        opacity: dossierScan.interpolate({
+                          inputRange: [0, 0.5, 1],
+                          outputRange: [0.08, 0.28, 0.08],
+                        }),
+                        transform: [{
+                          translateY: dossierScan.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0, compact ? 100 : 120],
+                          }),
+                        }],
+                      },
+                    ]}
+                  />
+                ) : null}
+              </View>
+            ) : null}
+          </BlackMarketMediaStage>
+
+          <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>
+            {category}
           </TerminalText>
-          <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierCategory}>
-            {entry.recipe.kind === 'AUGMENT' ? 'PERMANENT AUGMENT' : 'FABRICATION RECORD'}
+          <TerminalText size={7.5} letterSpacing={0.85} style={[styles.dossierCategory, sealed && { color: OCCULT }]}>
+            {protocol}
           </TerminalText>
-          <TerminalText size={15.5} letterSpacing={0.35} style={styles.dossierTitle}>
-            {entry.recipe.label.toUpperCase()}
+          <TerminalText size={20} letterSpacing={0.2} style={styles.dossierTitle}>
+            {(displayEntry?.label ?? entry.recipe.label).toUpperCase()}
+          </TerminalText>
+          <TerminalText size={8.5} style={styles.dossierLead}>
+            {entry.effectLine}
           </TerminalText>
           <TerminalText
             size={7}
             letterSpacing={0.9}
             style={[
               styles.dossierStatus,
-              entry.status === 'fabricable' && { color: TERMINAL_BRIGHT },
-              entry.status === 'missing' && { color: MISSING },
-              (entry.status === 'rumored' || entry.status === 'sealed') && { color: OCCULT },
+              (fabPhase !== 'idle' || entry.status === 'fabricable') && { color: TERMINAL_BRIGHT },
+              fabPhase === 'idle' && entry.status === 'missing' && { color: MISSING },
+              fabPhase === 'idle' && sealed && { color: OCCULT },
             ]}
           >
-            {entry.stateLabel}
+            {statusLabel}
           </TerminalText>
+          {fabPhase === 'complete' && fabRecord ? (
+            <TerminalText size={7} letterSpacing={0.8} style={styles.fabOutcome}>
+              {fabRecord.outcome}
+            </TerminalText>
+          ) : null}
         </View>
 
         <ScrollView style={styles.dossierBody} contentContainerStyle={{ paddingBottom: 8 }}>
-          {media && entry.visibility === 'KNOWN' ? (
-            <View style={styles.dossierMedia}>
-              <Image source={media} style={styles.dossierMediaImage} resizeMode="contain" />
-            </View>
-          ) : null}
-
           <DossierSection label="EFFECT">
             <TerminalText size={8.5} style={styles.dossierValue}>
               {entry.effectLine}
@@ -331,23 +703,30 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
                     style={[
                       styles.requirementRow,
                       !req.ready && styles.requirementMissing,
+                      convergingIds.includes(req.resourceId) && styles.requirementConverging,
                     ]}
                   >
+                    <View
+                      style={[
+                        styles.requirementMarker,
+                        { backgroundColor: req.ready ? TERMINAL : MISSING },
+                      ]}
+                    />
                     <View style={{ flex: 1, minWidth: 0 }}>
-                      <TerminalText size={7.5} style={styles.requirementName} numberOfLines={1}>
+                      <TerminalText size={8} style={styles.requirementName} numberOfLines={1}>
                         {req.displayName}
                       </TerminalText>
                       <TerminalText size={7.5} style={styles.requirementCount}>
                         {req.concealed
                           ? 'Recover additional sector intelligence.'
-                          : `${req.held} HELD / ${req.required} REQUIRED`}
+                          : `${req.held} / ${req.required}`}
                       </TerminalText>
                     </View>
                     <TerminalText
                       size={6.5}
                       letterSpacing={0.8}
                       style={{
-                        color: req.ready ? TERMINAL : MISSING,
+                        color: req.concealed ? OCCULT : req.ready ? TERMINAL : MISSING,
                         fontWeight: '700',
                       }}
                     >
@@ -364,7 +743,7 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
                 </DossierSection>
               ) : null}
               {entry.alreadyOwned ? (
-                <DossierSection label="OWNERSHIP" last>
+                <DossierSection label="STATUS" last>
                   <TerminalText size={8.5} style={styles.dossierValue}>
                     Already fabricated and installed.
                   </TerminalText>
@@ -380,7 +759,26 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
               {feedback}
             </TerminalText>
           ) : null}
-          {entry.alreadyOwned ? (
+          {fabPhase !== 'idle' && fabRecord ? (
+            <>
+              <TerminalText size={7} letterSpacing={0.9} style={[styles.footerHint, { color: TERMINAL }]}>
+                {fabPhase === 'complete' ? 'FABRICATION COMPLETE' : fabPhase === 'sealing' || fabPhase === 'assembling'
+                  ? 'BINDING IN PROGRESS'
+                  : 'SCHEMATIC ACCEPTED'}
+              </TerminalText>
+              <View style={[styles.actionButton, fabPhase === 'complete' ? styles.actionDisabled : styles.actionPrimary]}>
+                <TerminalText
+                  size={8}
+                  letterSpacing={1}
+                  style={fabPhase === 'complete' ? styles.actionDisabledText : styles.actionPrimaryText}
+                >
+                  {fabPhase === 'complete'
+                    ? `[ ${fabRecord.outcome} ]`
+                    : '[ FABRICATION IN PROGRESS ]'}
+                </TerminalText>
+              </View>
+            </>
+          ) : entry.alreadyOwned ? (
             <View style={[styles.actionButton, styles.actionDisabled]}>
               <TerminalText size={8} letterSpacing={1} style={styles.actionDisabledText}>
                 [ ALREADY FABRICATED ]
@@ -402,22 +800,12 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
           ) : entry.canFabricate ? (
             <>
               <TerminalText size={7} letterSpacing={0.9} style={[styles.footerHint, { color: TERMINAL }]}>
-                MATERIALS VERIFIED
+                MATERIALS VERIFIED · HOLD 1S TO BIND
               </TerminalText>
-              <HapticPressable
-                onPress={handleFabricate}
-                accessibilityRole="button"
-                accessibilityLabel="Fabricate augment"
-                style={({ pressed }) => ([
-                  styles.actionButton,
-                  styles.actionPrimary,
-                  pressed && { opacity: 0.9 },
-                ])}
-              >
-                <TerminalText size={8} letterSpacing={1} style={styles.actionPrimaryText}>
-                  [ FABRICATE AUGMENT ]
-                </TerminalText>
-              </HapticPressable>
+              <HoldToFabricateButton
+                onComplete={handleFabricate}
+                disabled={fabLocked}
+              />
             </>
           ) : (
             <>
@@ -447,28 +835,42 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
 
   const renderVendorDossier = () => {
     if (!vendorSelection) {
-      return renderEmptyDossier('PROCUREMENT DOSSIER', 'Select an augment or item from the market feed.');
+      return renderEmptyDossier(
+        'EXCHANGE DOSSIER',
+        'No procurement or liquidation records are currently available.',
+        '[ AWAITING RECORD ]',
+      );
     }
 
-    if (vendorSelection.kind === 'BUY') {
+    if (vendorSelection.source === 'offer') {
       const listing = BLACK_MARKET_CARGO_LISTINGS.find((e) => e.id === vendorSelection.listingId);
       if (!listing) return renderEmptyDossier('PROCUREMENT DOSSIER', 'Offer no longer available.');
       const price = hubContrabandPrice(listing.price, hubBlackMarketDiscountPct);
       const affordable = account.cabalCredits >= price;
       const catalog = CARGO_ITEM_CATALOG[listing.id];
-      const image = resolveCargoItemIcon(listing.id);
+      const artwork = resolveBlackMarketArtwork({ recordType: 'CARGO', recordId: listing.id });
+      const classCode = schematicClassificationCode(listing.id);
       return (
         <>
           <View style={styles.dossierHeader}>
             <View style={styles.dossierAccent} />
-            <TerminalText size={7} letterSpacing={1.1} style={styles.dossierEyebrow}>
-              VENDOR DOSSIER
+            <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>
+              PROCUREMENT DOSSIER
             </TerminalText>
-            <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierCategory}>
-              CONTRABAND OFFER
+            <TerminalText size={7.5} letterSpacing={0.85} style={styles.dossierCategory}>
+              {`RECOVERED FIELD ASSET // ${classCode}`}
             </TerminalText>
-            <TerminalText size={15.5} letterSpacing={0.35} style={styles.dossierTitle}>
+            <BlackMarketMediaStage
+              source={artwork?.source}
+              classification={classCode}
+              compact={compact}
+              showUnavailable={!artwork}
+            />
+            <TerminalText size={18} letterSpacing={0.2} style={styles.dossierTitle}>
               {listing.name.toUpperCase()}
+            </TerminalText>
+            <TerminalText size={7.5} letterSpacing={0.7} style={styles.dossierLead}>
+              Contraband cargo
             </TerminalText>
             <TerminalText
               size={7}
@@ -479,11 +881,6 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
             </TerminalText>
           </View>
           <ScrollView style={styles.dossierBody}>
-            {image ? (
-              <View style={styles.dossierMedia}>
-                <Image source={image} style={styles.dossierMediaImage} resizeMode="contain" />
-              </View>
-            ) : null}
             <DossierSection label="EFFECT">
               <TerminalText size={8.5} style={styles.dossierValue}>
                 {listing.description || listing.effect}
@@ -494,17 +891,22 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
                 Contraband cargo
               </TerminalText>
             </DossierSection>
+            <DossierSection label="QUANTITY">
+              <TerminalText size={8.5} style={styles.dossierValue}>
+                1
+              </TerminalText>
+            </DossierSection>
             <DossierSection label="CARGO FOOTPRINT">
               <TerminalText size={8.5} style={styles.dossierValue}>
                 {catalog ? `${catalog.width}×${catalog.height}` : '1×1'}
               </TerminalText>
             </DossierSection>
-            <DossierSection label="PURCHASE PRICE" last>
+            <DossierSection label="UNIT PRICE" last>
               <TerminalText size={13} style={styles.pricePrimary}>
                 {`${price} CR`}
               </TerminalText>
               <TerminalText size={7.5} style={styles.dossierSecondary}>
-                {`${account.cabalCredits} CR AVAILABLE`}
+                {`${formatCreditBalance(account.cabalCredits)} CR AVAILABLE`}
               </TerminalText>
             </DossierSection>
           </ScrollView>
@@ -571,47 +973,62 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
       );
     }
 
-    if (vendorSelection.kind === 'SELL_RESOURCE') {
+    if (vendorSelection.source === 'holding' && vendorSelection.kind === 'RESOURCE') {
       const entry = fenceEntries.find((e) => e.resourceId === vendorSelection.resourceId);
-      if (!entry) return renderEmptyDossier('PROCUREMENT DOSSIER', 'Holding no longer available.');
+      if (!entry) return renderEmptyDossier('LIQUIDATION DOSSIER', 'Holding no longer available.');
       const exchange = formatVendorExchangeCondition(entry.resourceId);
-      const image = resolveCargoItemIcon(entry.resourceId);
+      const artwork = resolveBlackMarketArtwork({
+        recordType: 'RESOURCE',
+        recordId: entry.resourceId,
+      });
+      const classCode = schematicClassificationCode(entry.resourceId);
       const qty = Math.min(sellQty, entry.quantity);
       const proceeds = entry.sellValue * qty;
       return (
         <>
           <View style={styles.dossierHeader}>
-            <View style={styles.dossierAccent} />
-            <TerminalText size={7} letterSpacing={1.1} style={styles.dossierEyebrow}>
-              VENDOR DOSSIER
+            <View style={[styles.dossierAccent, styles.dossierAccentHolding]} />
+            <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>
+              LIQUIDATION DOSSIER
             </TerminalText>
-            <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierCategory}>
-              {exchange.categoryLabel}
+            <TerminalText size={7.5} letterSpacing={0.85} style={styles.dossierCategory}>
+              {`RECOVERED HOLDING // ${classCode}`}
             </TerminalText>
-            <TerminalText size={15.5} letterSpacing={0.35} style={styles.dossierTitle}>
+            <BlackMarketMediaStage
+              source={artwork?.source}
+              classification={classCode}
+              compact={compact}
+              showUnavailable={!artwork}
+            />
+            <TerminalText size={18} letterSpacing={0.2} style={styles.dossierTitle}>
               {getResourceDisplayName(entry.resourceId, true).toUpperCase()}
+            </TerminalText>
+            <TerminalText size={7.5} letterSpacing={0.7} style={styles.dossierLead}>
+              {exchange.categoryLabel}
             </TerminalText>
             <TerminalText size={7} letterSpacing={0.9} style={styles.dossierStatus}>
               {`${entry.quantity} HELD`}
             </TerminalText>
           </View>
           <ScrollView style={styles.dossierBody}>
-            {image ? (
-              <View style={styles.dossierMedia}>
-                <Image source={image} style={styles.dossierMediaImage} resizeMode="contain" />
-              </View>
-            ) : null}
+            <DossierSection label="CATEGORY">
+              <TerminalText size={8.5} style={styles.dossierValue}>
+                {exchange.categoryLabel}
+              </TerminalText>
+            </DossierSection>
             <DossierSection label="UNIT VALUE">
               <TerminalText size={13} style={styles.pricePrimary}>
                 {`${entry.sellValue} CR`}
               </TerminalText>
-              <TerminalText size={7.5} style={styles.dossierSecondary}>
+            </DossierSection>
+            <DossierSection label="MARKET RATE">
+              <TerminalText size={8.5} style={styles.dossierValue}>
                 {exchange.rateLabel}
               </TerminalText>
             </DossierSection>
-            <DossierSection label="HOLDINGS" last>
+            <DossierSection label="HELD" last>
               <TerminalText size={8.5} style={styles.dossierValue}>
-                {`${entry.quantity} available for exchange`}
+                {`${entry.quantity}`}
               </TerminalText>
             </DossierSection>
           </ScrollView>
@@ -690,26 +1107,43 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
       );
     }
 
-    // Sealed cargo
+    // Sealed cargo holding
+    if (vendorSelection.source !== 'holding' || vendorSelection.kind !== 'SEALED') {
+      return renderEmptyDossier(
+        'EXCHANGE DOSSIER',
+        'No procurement or liquidation records are currently available.',
+        '[ AWAITING RECORD ]',
+      );
+    }
     const sealed = sealedEntries.find((e) => e.stackId === vendorSelection.stackId);
-    if (!sealed) return renderEmptyDossier('PROCUREMENT DOSSIER', 'Sealed cargo no longer available.');
+    if (!sealed) return renderEmptyDossier('LIQUIDATION DOSSIER', 'Sealed cargo no longer available.');
     const config = getSealedCargoConfig(sealed.resourceId) ?? SEALED_CASKET_CONFIG;
     const openingFee = resolveOpeningFee(sealed.state === 'APPRAISED', sealed.resourceId);
     const canAppraise = sealed.state === 'SEALED' && account.cabalCredits >= config.appraisalFee;
     const canOpen = account.cabalCredits >= openingFee;
-    const image = resolveCargoItemIcon(sealed.resourceId);
+    const artwork = resolveBlackMarketArtwork({
+      recordType: 'SEALED',
+      recordId: sealed.resourceId,
+    });
+    const classCode = schematicClassificationCode(sealed.resourceId);
 
     return (
       <>
         <View style={styles.dossierHeader}>
-          <View style={styles.dossierAccent} />
-          <TerminalText size={7} letterSpacing={1.1} style={styles.dossierEyebrow}>
-            VENDOR DOSSIER
+          <View style={[styles.dossierAccent, styles.dossierAccentHolding]} />
+          <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>
+            LIQUIDATION DOSSIER
           </TerminalText>
-          <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierCategory}>
-            SEALED CARGO
+          <TerminalText size={7.5} letterSpacing={0.85} style={styles.dossierCategory}>
+            {`SEALED CARGO // ${classCode}`}
           </TerminalText>
-          <TerminalText size={15.5} letterSpacing={0.35} style={styles.dossierTitle}>
+          <BlackMarketMediaStage
+            source={artwork?.source}
+            classification={classCode}
+            compact={compact}
+            showUnavailable={!artwork}
+          />
+          <TerminalText size={18} letterSpacing={0.2} style={styles.dossierTitle}>
             {getResourceShortName(sealed.resourceId).toUpperCase()}
           </TerminalText>
           <TerminalText size={7} letterSpacing={0.9} style={[styles.dossierStatus, { color: OCCULT }]}>
@@ -717,11 +1151,6 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
           </TerminalText>
         </View>
         <ScrollView style={styles.dossierBody}>
-          {image ? (
-            <View style={styles.dossierMedia}>
-              <Image source={image} style={styles.dossierMediaImage} resizeMode="contain" />
-            </View>
-          ) : null}
           <DossierSection label="STATUS">
             <TerminalText size={8.5} style={styles.dossierValue}>
               {sealed.state === 'APPRAISED' && sealed.valueBand
@@ -780,7 +1209,7 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
           <HapticPressable
             onPress={() => {
               showFeedback(sellSealedCargoInHub(sealed.stackId).logLine);
-              setVendorSelection(null);
+              // Holdings effect advances selection once the stack leaves the stash.
             }}
             style={({ pressed }) => ([
               styles.actionButton,
@@ -797,29 +1226,35 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
     );
   };
 
-  const renderEmptyDossier = (eyebrow: string, body: string) => (
+  const renderEmptyDossier = (
+    eyebrow: string,
+    body: string,
+    actionLabel = '[ SELECT A RECORD ]',
+  ) => (
     <>
-      <View style={styles.dossierHeader}>
+      <View style={[styles.dossierHeader, styles.dossierHeaderEmpty]}>
         <View style={styles.dossierAccent} />
-        <TerminalText size={7} letterSpacing={1.1} style={styles.dossierEyebrow}>
+        <BlackMarketMediaStage compact={compact}>
+          <SchematicGlyph family="generic" size={compact ? 100 : 118} animate={!reduceMotion} />
+        </BlackMarketMediaStage>
+        <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>
           {eyebrow}
         </TerminalText>
-        <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierCategory}>
+        <TerminalText size={7.5} letterSpacing={0.85} style={styles.dossierCategory}>
           NO RECORD SELECTED
         </TerminalText>
-        <TerminalText size={15.5} letterSpacing={0.35} style={styles.dossierTitle}>
+        <TerminalText size={18} letterSpacing={0.2} style={styles.dossierTitle}>
           AWAITING SIGNAL
         </TerminalText>
-      </View>
-      <View style={styles.dossierBody}>
-        <TerminalText size={8.5} style={styles.dossierValue}>
+        <TerminalText size={8.5} style={styles.dossierLead}>
           {body}
         </TerminalText>
       </View>
+      <View style={styles.dossierBody} />
       <View style={styles.dossierFooter}>
         <View style={[styles.actionButton, styles.actionDisabled]}>
           <TerminalText size={8} letterSpacing={1} style={styles.actionDisabledText}>
-            [ SELECT A RECORD ]
+            {actionLabel}
           </TerminalText>
         </View>
       </View>
@@ -838,33 +1273,85 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
       style={styles.board}
       {...(Platform.OS === 'web' ? ({ 'data-black-market': 'true' } as object) : null)}
     >
-      <VeilTerminalEffects intensity="subtle" />
+      <MarketAtmosphere />
+      <VeilTerminalEffects intensity="subtle" scanlineOpacity={0.045} />
 
       <View style={styles.workspace}>
+        {!reduceMotion && fabPhase !== 'idle' ? (
+          <Animated.View
+            pointerEvents="none"
+            accessible={false}
+            {...(Platform.OS === 'web' ? ({ 'aria-hidden': true } as object) : null)}
+            style={[
+              styles.workspaceDim,
+              {
+                opacity: workspaceDim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 0.22],
+                }),
+              },
+            ]}
+          />
+        ) : null}
+        {!reduceMotion && (fabPhase === 'converging' || fabPhase === 'assembling') ? (
+          <View
+            pointerEvents="none"
+            accessible={false}
+            {...(Platform.OS === 'web' ? ({ 'aria-hidden': true } as object) : null)}
+            style={styles.convergePackets}
+          >
+            <View
+              style={[styles.packet, styles.packetA]}
+              {...(Platform.OS === 'web' ? ({ 'data-fab-packet': 'a' } as object) : null)}
+            />
+            <View
+              style={[styles.packet, styles.packetB]}
+              {...(Platform.OS === 'web' ? ({ 'data-fab-packet': 'b' } as object) : null)}
+            />
+            <View
+              style={[styles.packet, styles.packetC]}
+              {...(Platform.OS === 'web' ? ({ 'data-fab-packet': 'c' } as object) : null)}
+            />
+          </View>
+        ) : null}
         <View style={[styles.localHeader, compact && styles.localHeaderCompact]}>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <TerminalText size={7.5} letterSpacing={1} style={styles.breadcrumb}>
-              BLACK MARKET / CONTRABAND LANE
+            <TerminalText size={7} letterSpacing={1.05} style={styles.headerEyebrow}>
+              RESTRICTED EXCHANGE // BM-01
             </TerminalText>
-            <TerminalText size={13.5} letterSpacing={0.7} style={styles.localTitle}>
-              FABRICATION & PROCUREMENT
+            <TerminalText size={18} letterSpacing={0.3} style={styles.localTitle}>
+              BLACK MARKET
+            </TerminalText>
+            <TerminalText size={7.5} letterSpacing={1.05} style={styles.breadcrumb}>
+              {activeMode === 'FORGE'
+                ? 'UNLICENSED FABRICATION CHANNEL'
+                : 'UNLICENSED PROCUREMENT CHANNEL'}
             </TerminalText>
           </View>
-          <View style={styles.balance}>
-            <TerminalText size={7} letterSpacing={1} style={styles.balanceLabel}>
-              AVAILABLE FUNDS
+          <View style={styles.creditBalance}>
+            <TerminalText size={6.5} letterSpacing={1} style={styles.creditLabel}>
+              CREDIT BALANCE
             </TerminalText>
-            <TerminalText size={10.5} letterSpacing={0.6} style={styles.balanceCredits}>
-              {`${account.cabalCredits} CR`}
-            </TerminalText>
-            <TerminalText size={7} letterSpacing={0.6} style={styles.balanceMeta}>
-              {`${account.veilResidueBalance} VEIL RESIDUE · MARKET FEED STABLE`}
-            </TerminalText>
+            <View style={styles.creditValueRow}>
+              <TerminalText size={13} letterSpacing={0.25} style={styles.balanceCredits}>
+                {formatCreditBalance(account.cabalCredits)}
+              </TerminalText>
+              <TerminalText size={9} letterSpacing={0.7} style={styles.creditSuffix}>
+                {' CR'}
+              </TerminalText>
+            </View>
           </View>
         </View>
 
+        <SignalRail
+          label={activeMode === 'FORGE' ? 'FORGE CHANNEL' : 'VENDOR CHANNEL'}
+          code={activeMode === 'FORGE' ? 'FAB-01' : 'VND-01'}
+          active
+          compact={compact}
+        />
+
         <View
-          style={styles.modes}
+          style={[styles.modes, compact && styles.modesCompact]}
           accessibilityRole="tablist"
           {...(Platform.OS === 'web' ? ({ 'aria-label': 'Black Market mode' } as object) : {})}
         >
@@ -879,19 +1366,32 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
                 {...(Platform.OS === 'web' ? ({ 'aria-selected': selected } as object) : {})}
                 style={({ pressed }) => ([
                   styles.mode,
+                  compact && styles.modeCompact,
                   selected && styles.modeSelected,
                   pressed && { opacity: 0.9 },
                 ])}
               >
-                <TerminalText
-                  size={8}
-                  letterSpacing={0.9}
-                  style={{ color: selected ? TERMINAL_BRIGHT : '#879b95', fontWeight: '800' }}
-                >
-                  {mode.label}
-                </TerminalText>
-                <TerminalText size={7} style={{ marginTop: 3, color: '#7f928c' }}>
+                <View style={styles.modeTop}>
+                  <TerminalText
+                    size={9}
+                    letterSpacing={1.05}
+                    style={{ color: selected ? '#eef4f1' : '#7f928c', fontWeight: '800' }}
+                  >
+                    {mode.label}
+                  </TerminalText>
+                  <View
+                    style={[
+                      styles.modeNode,
+                      selected && styles.modeNodeActive,
+                      selected && mode.key === 'FORGE' && channelNodePulse && styles.modeNodePulse,
+                    ]}
+                  />
+                </View>
+                <TerminalText size={6.5} letterSpacing={0.8} style={{ marginTop: 4, color: META }}>
                   {mode.detail}
+                </TerminalText>
+                <TerminalText size={6} letterSpacing={0.7} style={styles.modeCode}>
+                  {mode.code}
                 </TerminalText>
                 {selected ? <View style={styles.modeUnderline} /> : null}
               </HapticPressable>
@@ -910,13 +1410,16 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
               onSelectRecipe={handleSelectRecipe}
               compact={compact}
               narrow={narrow}
+              pulseResourceIds={
+                fabPhase === 'converging' || fabPhase === 'assembling'
+                  ? (fabRecord?.consumedResourceIds ?? [])
+                  : []
+              }
             />
           ) : (
             <VendorWorkspace
               account={account}
               marketDiscount={hubBlackMarketDiscountPct}
-              subchannel={vendorChannel}
-              onChangeSubchannel={handleVendorChannel}
               selection={vendorSelection}
               onSelect={handleVendorSelect}
               compact={compact}
@@ -929,6 +1432,7 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
       <Animated.View
         style={[
           styles.dossier,
+          activeMode === 'VENDOR' && styles.dossierVendor,
           { width: dossierWidth, maxWidth: dossierWidth, opacity: dossierLock },
         ]}
       >
@@ -938,6 +1442,10 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
             : renderEmptyDossier('FORGE DOSSIER', 'Select an augment from the schematic feed.'))
           : renderVendorDossier()}
       </Animated.View>
+
+      {activeMode === 'FORGE' ? (
+        <FabricationReceipt record={fabReceipt} onDismiss={dismissFabReceipt} />
+      ) : null}
     </View>
   );
 }
@@ -952,90 +1460,207 @@ const styles = StyleSheet.create({
     backgroundColor: '#010304',
     position: 'relative',
   },
+  atmVignette: {
+    ...StyleSheet.absoluteFill,
+    ...Platform.select({
+      web: {
+        backgroundImage:
+          'linear-gradient(90deg, rgba(0,0,0,0.55), transparent 18%, transparent 82%, rgba(0,0,0,0.55)), linear-gradient(180deg, rgba(0,0,0,0.35), transparent 22%, transparent 78%, rgba(0,0,0,0.5))',
+      } as object,
+      default: {},
+    }),
+  },
+  atmSigil: {
+    position: 'absolute',
+    right: '2%',
+    top: '18%',
+    width: '34%',
+    aspectRatio: 1,
+    opacity: 0.55,
+  },
   workspace: {
     flex: 1,
     minWidth: 0,
     minHeight: 0,
     overflow: 'hidden',
-    borderRightWidth: 1,
-    borderRightColor: 'rgba(137, 190, 179, 0.18)',
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: 'rgba(137, 190, 179, 0.16)',
+    zIndex: 1,
+    position: 'relative',
   },
   localHeader: {
+    position: 'relative',
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     justifyContent: 'space-between',
-    gap: 28,
+    gap: 24,
     minHeight: 72,
-    paddingHorizontal: 20,
-    paddingTop: 13,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(137, 170, 163, 0.13)',
+    paddingHorizontal: 22,
+    paddingTop: 12,
+    paddingBottom: 10,
     flexShrink: 0,
+    ...Platform.select({
+      web: {
+        backgroundImage:
+          'linear-gradient(180deg, rgba(4, 12, 11, 0.92), rgba(2, 6, 6, 0))',
+      } as object,
+      default: {
+        backgroundColor: 'rgba(3, 8, 8, 0.72)',
+      },
+    }),
   },
   localHeaderCompact: {
-    minHeight: 60,
-    paddingTop: 10,
-    paddingBottom: 9,
+    minHeight: 58,
+    paddingTop: 8,
+    paddingBottom: 8,
+  },
+  headerEyebrow: {
+    color: META,
+    fontWeight: '700',
+    marginBottom: 4,
   },
   breadcrumb: {
-    color: '#84958f',
+    marginTop: 5,
+    color: META,
     fontWeight: '700',
   },
   localTitle: {
-    marginTop: 4,
-    color: '#e0e7e4',
+    color: '#eef4f1',
     fontWeight: '700',
   },
-  balance: {
+  creditBalance: {
     alignItems: 'flex-end',
+    flexShrink: 0,
   },
-  balanceLabel: {
-    color: '#84958f',
+  creditLabel: {
+    color: TERMINAL,
     fontWeight: '700',
+  },
+  creditValueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginTop: 3,
   },
   balanceCredits: {
-    marginTop: 3,
-    color: TERMINAL_BRIGHT,
+    color: '#f2f7f5',
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
   },
-  balanceMeta: {
-    marginTop: 3,
-    color: '#91a39f',
-    fontVariant: ['tabular-nums'],
+  creditSuffix: {
+    color: TERMINAL,
+    fontWeight: '700',
   },
   modes: {
     flexDirection: 'row',
+    alignItems: 'stretch',
     minHeight: 58,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(137, 170, 163, 0.16)',
+    paddingHorizontal: 14,
+    paddingBottom: 2,
     flexShrink: 0,
+    gap: 8,
+  },
+  modesCompact: {
+    minHeight: 50,
   },
   mode: {
     position: 'relative',
-    minWidth: 180,
-    maxWidth: 250,
+    minWidth: 190,
+    maxWidth: 240,
     justifyContent: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 9,
-    borderRightWidth: 1,
-    borderRightColor: 'rgba(137, 170, 163, 0.12)',
+    paddingHorizontal: 18,
+    paddingTop: 11,
+    paddingBottom: 12,
+    backgroundColor: 'rgba(5, 12, 11, 0.4)',
     ...Platform.select({
-      web: { cursor: 'pointer', outlineStyle: 'none' } as object,
+      web: {
+        cursor: 'pointer',
+        outlineStyle: 'none',
+        clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%)',
+      } as object,
       default: {},
     }),
   },
-  modeSelected: {
-    backgroundColor: 'rgba(105, 200, 173, 0.04)',
+  modeCompact: {
+    minWidth: 160,
+    paddingTop: 8,
+    paddingBottom: 9,
   },
+  modeSelected: {
+    ...Platform.select({
+      web: {
+        backgroundImage:
+          'linear-gradient(135deg, rgba(105, 200, 173, 0.08), rgba(105, 200, 173, 0.015))',
+      } as object,
+      default: {
+        backgroundColor: 'rgba(105, 200, 173, 0.06)',
+      },
+    }),
+  },
+  modeTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  modeNode: {
+    width: 5,
+    height: 5,
+    backgroundColor: 'rgba(127, 166, 157, 0.22)',
+  },
+  modeNodeActive: {
+    backgroundColor: TERMINAL,
+  },
+  modeNodePulse: {
+    backgroundColor: TERMINAL_BRIGHT,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 0 10px rgba(142, 223, 198, 0.55)',
+      } as object,
+      default: {},
+    }),
+  },
+  modeCode: {
+    marginTop: 3,
+    color: '#5f746f',
+    fontWeight: '700',
+  },
+  workspaceDim: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    zIndex: 2,
+  },
+  convergePackets: {
+    position: 'absolute',
+    left: '28%',
+    top: '48%',
+    width: 220,
+    height: 80,
+    zIndex: 3,
+  },
+  packet: {
+    position: 'absolute',
+    width: 5,
+    height: 5,
+    backgroundColor: 'rgba(105, 200, 173, 0.75)',
+  },
+  packetA: { left: 0, top: 20 },
+  packetB: { left: 18, top: 40 },
+  packetC: { left: 8, top: 58 },
   modeUnderline: {
     position: 'absolute',
-    left: 0,
-    right: 0,
+    left: 16,
+    right: 15,
     bottom: 0,
     height: 2,
-    backgroundColor: TERMINAL,
+    ...Platform.select({
+      web: {
+        backgroundImage:
+          'linear-gradient(90deg, #69c8ad 0 68%, transparent 68% 73%, rgba(105, 200, 173, 0.35) 73% 100%)',
+      } as object,
+      default: {
+        backgroundColor: TERMINAL,
+      },
+    }),
   },
   modeSpacer: {
     flex: 1,
@@ -1059,106 +1684,170 @@ const styles = StyleSheet.create({
     minWidth: 0,
     minHeight: 0,
     overflow: 'hidden',
-    backgroundColor: '#030707',
     flexShrink: 0,
+    zIndex: 1,
+    ...Platform.select({
+      web: {
+        backgroundImage: 'linear-gradient(180deg, #07110f 0%, #030707 48%, #020606 100%)',
+      } as object,
+      default: {
+        backgroundColor: '#040a09',
+      },
+    }),
   },
   dossierHeader: {
     position: 'relative',
-    paddingTop: 24,
-    paddingBottom: 21,
-    paddingLeft: 32,
-    paddingRight: 28,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(137, 170, 163, 0.14)',
+    paddingTop: 18,
+    paddingBottom: 16,
+    paddingLeft: 28,
+    paddingRight: 24,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(137, 170, 163, 0.12)',
     flexShrink: 0,
+  },
+  dossierHeaderEmpty: {
+    paddingBottom: 12,
   },
   dossierAccent: {
     position: 'absolute',
-    top: 24,
-    bottom: 21,
+    top: 18,
+    bottom: 16,
     left: 0,
     width: 2,
     backgroundColor: TERMINAL,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 0 14px rgba(117, 212, 179, 0.28)',
+      } as object,
+      default: {},
+    }),
+  },
+  dossierAccentHolding: {
+    backgroundColor: '#8aa4b0',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 0 14px rgba(138, 164, 176, 0.22)',
+      } as object,
+      default: {},
+    }),
+  },
+  dossierVendor: {},
+  dossierVizInner: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 120,
+    width: '100%',
+  },
+  dossierVizSealed: {
+    ...Platform.select({
+      web: {
+        backgroundImage:
+          'radial-gradient(circle at 50% 45%, rgba(153, 136, 179, 0.1), transparent 68%)',
+      } as object,
+      default: {
+        backgroundColor: 'rgba(153, 136, 179, 0.05)',
+      },
+    }),
+  },
+  dossierUvWash: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(153, 136, 179, 0.05)',
+  },
+  dossierScanline: {
+    position: 'absolute',
+    left: '10%',
+    right: '10%',
+    height: 1,
+    backgroundColor: 'rgba(117, 212, 179, 0.35)',
   },
   dossierEyebrow: {
-    color: '#84958f',
+    color: META,
     fontWeight: '700',
   },
   dossierCategory: {
-    marginTop: 8,
+    marginTop: 7,
     color: TERMINAL,
     fontWeight: '700',
   },
   dossierTitle: {
-    marginTop: 9,
-    color: '#e2e9e6',
+    marginTop: 8,
+    color: '#f3f8f5',
     fontWeight: '700',
+  },
+  dossierLead: {
+    marginTop: 10,
+    color: TEXT_PRIMARY,
+    lineHeight: 20,
+    letterSpacing: 0,
   },
   dossierStatus: {
     marginTop: 10,
-    color: '#91a39f',
+    color: META,
+    fontWeight: '700',
+  },
+  fabOutcome: {
+    marginTop: 6,
+    color: TERMINAL,
     fontWeight: '700',
   },
   dossierBody: {
     flex: 1,
     minHeight: 0,
-    paddingTop: 22,
-    paddingBottom: 26,
-    paddingLeft: 32,
-    paddingRight: 28,
-  },
-  dossierMedia: {
-    minHeight: 150,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(137, 170, 163, 0.11)',
-  },
-  dossierMediaImage: {
-    width: 128,
-    height: 128,
+    paddingTop: 18,
+    paddingBottom: 22,
+    paddingLeft: 28,
+    paddingRight: 24,
   },
   dossierSection: {
-    paddingBottom: 18,
-    marginBottom: 18,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(137, 170, 163, 0.11)',
+    paddingBottom: 16,
+    marginBottom: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(137, 170, 163, 0.1)',
   },
   dossierSectionLast: {
     borderBottomWidth: 0,
     marginBottom: 0,
   },
   dossierLabel: {
-    color: '#7f928c',
+    color: META,
     fontWeight: '700',
   },
   dossierValue: {
     marginTop: 6,
-    color: '#d2dcd8',
+    color: TEXT_PRIMARY,
     lineHeight: 20,
+    letterSpacing: 0,
   },
   dossierSecondary: {
     marginTop: 4,
-    color: '#90a19c',
+    color: '#8a9b96',
     lineHeight: 18,
   },
   requirementRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 18,
-    paddingVertical: 11,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(137, 170, 163, 0.1)',
+    gap: 12,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(137, 170, 163, 0.09)',
   },
   requirementMissing: {},
+  requirementConverging: {
+    backgroundColor: 'rgba(105, 200, 173, 0.08)',
+  },
+  requirementMarker: {
+    width: 2,
+    alignSelf: 'stretch',
+    marginVertical: 2,
+  },
   requirementName: {
-    color: '#d5dfdc',
+    color: '#e4ece8',
     fontWeight: '700',
   },
   requirementCount: {
     marginTop: 3,
-    color: '#91a39f',
+    color: META,
     fontVariant: ['tabular-nums'],
   },
   pricePrimary: {
