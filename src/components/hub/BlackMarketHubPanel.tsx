@@ -424,7 +424,12 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
         : 'FABRICATION RECORD';
     const outcome = entry.recipe.kind === 'AUGMENT'
       ? 'AUGMENT REGISTERED'
-      : 'ADDED TO INVENTORY';
+      : 'ADDED TO HUB STAGING';
+    const classification = entry.recipe.kind === 'AUGMENT'
+      ? undefined
+      : isRunItemCraftOutput(entry.recipe.outputId)
+        ? 'RUN ITEM'
+        : 'TACTICAL CONSUMABLE';
     const artwork = resolveBlackMarketArtwork({
       recordType: entry.recipe.kind === 'AUGMENT' ? 'AUGMENT' : 'CARGO',
       recordId: entry.recipe.outputId,
@@ -443,6 +448,20 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
         .filter((req) => !req.concealed)
         .map((req) => req.resourceId),
     };
+    const buildReceipt = (): FabricationReceiptRecord => ({
+      receiptId: `fab-${entry.recipe.id}-${Date.now()}`,
+      fabricatedRecordId: entry.recipe.id,
+      itemId: entry.recipe.outputId,
+      label: snapshot.label,
+      outcome: snapshot.outcome,
+      classCode: snapshot.classCode,
+      category: snapshot.category,
+      classification,
+      quantity: entry.recipe.kind === 'AUGMENT' ? undefined : 1,
+      artwork: artwork?.source ?? null,
+      glyphFamily: snapshot.family,
+      occult: sealed,
+    });
 
     clearFabTimers();
     setFabRecord(snapshot);
@@ -459,13 +478,7 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
       setFabPhase('complete');
       setChannelNodePulse(true);
       fabricationAudioHooks.play('fabrication_complete');
-      setFabReceipt({
-        label: snapshot.label,
-        outcome: snapshot.outcome,
-        classCode: snapshot.classCode,
-        artwork: artwork?.source ?? null,
-        glyphFamily: snapshot.family,
-      });
+      setFabReceipt(buildReceipt());
       return;
     }
 
@@ -492,13 +505,7 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
     schedule(1080, () => {
       setFabPhase('complete');
       fabricationAudioHooks.play('fabrication_complete');
-      setFabReceipt({
-        label: snapshot.label,
-        outcome: snapshot.outcome,
-        classCode: snapshot.classCode,
-        artwork: artwork?.source ?? null,
-        glyphFamily: snapshot.family,
-      });
+      setFabReceipt(buildReceipt());
       playTxnPulse();
     });
     schedule(1400, () => {
@@ -1443,8 +1450,13 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
           : renderVendorDossier()}
       </Animated.View>
 
-      {activeMode === 'FORGE' ? (
-        <FabricationReceipt record={fabReceipt} onDismiss={dismissFabReceipt} />
+      {activeMode === 'FORGE' && fabReceipt ? (
+        <FabricationReceipt
+          key={fabReceipt.receiptId}
+          record={fabReceipt}
+          onDismiss={dismissFabReceipt}
+          reducedMotion={reduceMotion}
+        />
       ) : null}
     </View>
   );
