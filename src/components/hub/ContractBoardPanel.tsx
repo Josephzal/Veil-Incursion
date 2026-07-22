@@ -10,7 +10,17 @@ import {
 import HapticPressable from '../HapticPressable';
 import TerminalText from '../TerminalText';
 import VeilTerminalEffects from '../atmosphere/VeilTerminalEffects';
+import SignalRail from './blackMarket/SignalRail';
+import {
+  ContractLoggedLine,
+  CONTRACT_LOGGED_MESSAGE,
+  DOSSIER_STATUS_SLOT_HEIGHT,
+  matchesAcceptTarget,
+  useContractAcceptTypewriter,
+  type ContractAcceptStampState,
+} from './ContractAcceptedStamp';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
+import { pulseHubButton } from '../../utils/hubButtonHaptics';
 import { useWorldState } from '../../context/WorldStateContext';
 import { useHubLayout } from '../../context/HubLayoutContext';
 import type { GeneratedContract } from '../../types/contract';
@@ -32,14 +42,24 @@ import { SPONSOR_IDENTITY } from '../../utils/sponsorIdentity';
 const SPONSOR_ORDER: CabalEmployerId[] = ['TERRAN_GRID', 'LEGION', 'SOLARIS'];
 const DEFAULT_SPONSOR_FILTER: CabalEmployerId = 'TERRAN_GRID';
 const INDEPENDENT_ACCENT = '#7a8b96';
+/** Shared with Black Market occult-terminal chrome. */
 const TERMINAL = '#69c8ad';
-const TERMINAL_BRIGHT = '#8edfc6';
+const TERMINAL_BRIGHT = '#8ee0c6';
+const META = '#7a8f99';
+const TEXT_PRIMARY = '#c8d4cf';
+const SELECTION_RAIL = '#75d4b3';
+
+const CHANNEL_RAIL: Record<CabalEmployerId, { label: string; code: string }> = {
+  TERRAN_GRID: { label: 'TERRAN CHANNEL', code: 'TG-01' },
+  LEGION: { label: 'LEGION CHANNEL', code: 'LG-01' },
+  SOLARIS: { label: 'SOLARIS CHANNEL', code: 'SL-01' },
+};
 
 /** Restrained channel accents — presentation only; does not alter faction data. */
 const CABAL_CHANNEL: Record<CabalEmployerId, { color: string; rgb: string }> = {
   TERRAN_GRID: { color: '#69c8ad', rgb: '105, 200, 173' },
-  LEGION: { color: '#9b8fd4', rgb: '155, 143, 212' },
-  SOLARIS: { color: '#c88989', rgb: '200, 137, 137' },
+  LEGION: { color: '#9988b3', rgb: '153, 136, 179' },
+  SOLARIS: { color: '#c86e72', rgb: '200, 110, 114' },
 };
 
 type InspectedSelection =
@@ -93,7 +113,7 @@ function DossierSection({
 }): React.JSX.Element {
   return (
     <View style={[styles.dossierSection, last && styles.dossierSectionLast]}>
-      <TerminalText size={7} letterSpacing={1} style={styles.dossierLabel}>
+      <TerminalText size={7} letterSpacing={1.05} style={styles.dossierLabel}>
         {label}
       </TerminalText>
       {children}
@@ -126,7 +146,6 @@ function ContractSignalRow({
     .map(formatSectorShort)
     .join(' · ');
   const fulfillment = isResource ? 'POST-RUN DELIVERY' : 'RESOLVED IN-RUN';
-  const betrayal = contract.reward.reputation > 0 ? 'BETRAYABLE' : null;
 
   return (
     <View
@@ -178,7 +197,7 @@ function ContractSignalRow({
                 </TerminalText>
               ) : null}
               <TerminalText size={7.5} letterSpacing={0.5} style={styles.signalMetaLine} numberOfLines={1}>
-                {[fulfillment, betrayal].filter(Boolean).join(' · ')}
+                {fulfillment}
               </TerminalText>
             </View>
           ) : null}
@@ -194,11 +213,6 @@ function ContractSignalRow({
             <TerminalText size={7.5} letterSpacing={0.55} style={styles.signalMetaMuted} numberOfLines={1}>
               {fulfillment}
             </TerminalText>
-            {betrayal ? (
-              <TerminalText size={7.5} letterSpacing={0.55} style={styles.signalMetaMuted} numberOfLines={1}>
-                {betrayal}
-              </TerminalText>
-            ) : null}
           </View>
         ) : null}
 
@@ -353,8 +367,11 @@ export default function ContractBoardPanel(): React.JSX.Element {
     () => resolveSponsorFilter(lastUsedSponsorId),
   );
   const [inspected, setInspected] = useState<InspectedSelection>({ kind: 'NONE' });
+  const [acceptStamp, setAcceptStamp] = useState<ContractAcceptStampState | null>(null);
   const feedSweep = useRef(new Animated.Value(0)).current;
   const dossierLock = useRef(new Animated.Value(1)).current;
+
+  const acceptTypewriter = useContractAcceptTypewriter(acceptStamp, reduceMotion);
 
   useEffect(() => {
     if (!isHydrated) return;
@@ -372,11 +389,8 @@ export default function ContractBoardPanel(): React.JSX.Element {
     }
     // RN-web drops custom data-* on View; scope via board root id + aria roles.
     style.textContent = `
-#contract-board-root [role="tab"]:focus,
 #contract-board-root [role="tab"]:focus-visible,
-#contract-board-root [role="button"]:focus,
 #contract-board-root [role="button"]:focus-visible,
-#contract-board-root button:focus,
 #contract-board-root button:focus-visible {
   outline: 2px solid ${TERMINAL_BRIGHT} !important;
   outline-offset: 2px !important;
@@ -501,13 +515,23 @@ export default function ContractBoardPanel(): React.JSX.Element {
     playDossierLock();
   };
 
+  const playAcceptStamp = (target: ContractAcceptStampState['target']) => {
+    pulseHubButton();
+    setAcceptStamp({
+      stampId: `accept-${Date.now()}`,
+      target,
+    });
+  };
+
   const handleAcceptInspected = () => {
     if (inspected.kind === 'INDEPENDENT') {
       selectIndependentContract();
+      playAcceptStamp({ kind: 'INDEPENDENT' });
       return;
     }
     if (inspectedContract) {
       selectContract(inspectedContract);
+      playAcceptStamp({ kind: 'SPONSOR', contractId: inspectedContract.id });
     }
   };
 
@@ -537,7 +561,6 @@ export default function ContractBoardPanel(): React.JSX.Element {
 
   const specialConditions = inspectedContract
     ? [
-      inspectedContract.reward.reputation > 0 ? 'Betrayable' : null,
       inspectedContract.bonusObjective
         ? `Bonus: ${inspectedContract.bonusObjective.text}`
         : null,
@@ -552,54 +575,45 @@ export default function ContractBoardPanel(): React.JSX.Element {
       style={[styles.board, narrowLayout && styles.boardNarrow]}
       {...(Platform.OS === 'web' ? ({ id: 'contract-board-root', nativeID: 'contract-board-root' } as object) : null)}
     >
-      <VeilTerminalEffects intensity="subtle" scanlineOpacity={0.04} />
+      <VeilTerminalEffects intensity="subtle" scanlineOpacity={0.045} />
 
       <View style={styles.contractBrowser}>
         <View style={[styles.contractBoardHeader, compactHeight && styles.contractBoardHeaderCompact]}>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <TerminalText size={7.5} letterSpacing={1.1} style={styles.contractBoardHeaderEyebrow}>
-              CONTRACT BOARD / BROKER NETWORK
+            <TerminalText size={7} letterSpacing={1.05} style={styles.contractBoardHeaderEyebrow}>
+              BROKER NETWORK // CB-01
             </TerminalText>
-            <TerminalText size={15} letterSpacing={0.55} style={styles.contractBoardHeaderTitle}>
+            <TerminalText size={18} letterSpacing={0.3} style={styles.contractBoardHeaderTitle}>
+              CONTRACT BOARD
+            </TerminalText>
+            <TerminalText size={7.5} letterSpacing={1.05} style={styles.contractBoardHeaderBreadcrumb}>
               AVAILABLE MANDATES
             </TerminalText>
           </View>
           <View style={styles.contractBoardHeaderCounts}>
-            <TerminalText size={7.5} letterSpacing={1} style={styles.contractBoardHeaderCount}>
-              {`${listedCount} LISTED`}
+            <TerminalText size={6.5} letterSpacing={1} style={styles.contractBoardHeaderCountLabel}>
+              BOARD STATUS
             </TerminalText>
-            <TerminalText size={7.5} letterSpacing={1} style={styles.contractBoardHeaderCount}>
-              {`${activeCount} ACTIVE`}
-            </TerminalText>
+            <View style={styles.contractBoardHeaderCountRow}>
+              <TerminalText size={13} letterSpacing={0.25} style={styles.contractBoardHeaderCountValue}>
+                {listedCount}
+              </TerminalText>
+              <TerminalText size={8} letterSpacing={0.7} style={styles.contractBoardHeaderCountMeta}>
+                {` LISTED · ${activeCount} ACTIVE`}
+              </TerminalText>
+            </View>
           </View>
         </View>
 
-        <View style={[styles.brokerBulletin, compactHeight && styles.brokerBulletinCompact]}>
-          <View style={styles.brokerBulletinAccent} />
-          <View style={styles.brokerBulletinMain}>
-            <TerminalText size={7} letterSpacing={0.9} style={styles.brokerEyebrow}>
-              {`BROKER PRIORITY · ${formatSectorShort(selectedSector.id).toUpperCase()}`}
-            </TerminalText>
-            <TerminalText size={10} letterSpacing={0.4} style={styles.brokerTitle} numberOfLines={1}>
-              {crisisPreview.crisisDisplayName.toUpperCase()}
-            </TerminalText>
-            <TerminalText size={7.5} style={styles.brokerDescription} numberOfLines={2}>
-              {crisisPreview.crisisSummary}
-            </TerminalText>
-          </View>
-          {crisisTags.length > 0 ? (
-            <View style={styles.brokerTags}>
-              {crisisTags.map((tag) => (
-                <TerminalText key={tag} size={7} letterSpacing={0.9} style={styles.brokerTag}>
-                  {tag}
-                </TerminalText>
-              ))}
-            </View>
-          ) : null}
-        </View>
+        <SignalRail
+          label={CHANNEL_RAIL[activeSponsorId].label}
+          code={CHANNEL_RAIL[activeSponsorId].code}
+          active
+          compact={compactHeight}
+        />
 
         <View
-          style={styles.sponsorChannels}
+          style={[styles.sponsorChannels, compactHeight && styles.sponsorChannelsCompact]}
           accessibilityRole="tablist"
           {...(Platform.OS === 'web' ? ({ 'aria-label': 'Contract issuers' } as object) : {})}
         >
@@ -621,33 +635,64 @@ export default function ContractBoardPanel(): React.JSX.Element {
                   : {})}
                 style={({ pressed }) => ([
                   styles.sponsorChannel,
+                  compactHeight && styles.sponsorChannelCompact,
                   selected && styles.sponsorChannelSelected,
-                  pressed && { opacity: 0.92 },
+                  pressed && { opacity: 0.9 },
                 ])}
               >
-                <View style={styles.sponsorChannelTop}>
-                  <TerminalText size={10} style={{ color: accent.color }}>
-                    {SPONSOR_IDENTITY[sponsorId].emblem}
-                  </TerminalText>
-                  <TerminalText
-                    size={9}
-                    letterSpacing={0.55}
-                    style={styles.sponsorChannelName}
-                    numberOfLines={1}
-                  >
-                    {sponsorDisplayName(sponsorId).toUpperCase()}
-                  </TerminalText>
-                  <TerminalText size={7} letterSpacing={0.7} style={styles.sponsorChannelCount}>
-                    {`${count} AVAILABLE`}
-                  </TerminalText>
-                </View>
-                <TerminalText size={7} letterSpacing={0.55} style={styles.sponsorChannelRep} numberOfLines={1}>
-                  {`RANK ${preview.rank} · ${preview.progressInRank} / 5 REP`}
+                <TerminalText
+                  size={9}
+                  letterSpacing={1.05}
+                  style={{
+                    color: selected ? '#eef4f1' : '#7f928c',
+                    fontWeight: '800',
+                  }}
+                  numberOfLines={1}
+                >
+                  {sponsorDisplayName(sponsorId).toUpperCase()}
                 </TerminalText>
-                {selected ? <View style={styles.sponsorChannelUnderline} /> : null}
+                <TerminalText size={6.5} letterSpacing={0.8} style={styles.sponsorChannelRep} numberOfLines={1}>
+                  {`${count} AVAILABLE · RANK ${preview.rank}`}
+                </TerminalText>
+                <TerminalText size={6} letterSpacing={0.7} style={[styles.sponsorChannelCode, { color: selected ? accent.color : '#5f746f' }]}>
+                  {CHANNEL_RAIL[sponsorId].code}
+                </TerminalText>
+                {selected ? (
+                  <View
+                    style={[
+                      styles.sponsorChannelUnderline,
+                      Platform.OS !== 'web' ? { backgroundColor: accent.color } : null,
+                    ]}
+                  />
+                ) : null}
               </HapticPressable>
             );
           })}
+          <View style={styles.sponsorChannelSpacer} />
+        </View>
+
+        <View style={[styles.brokerBulletin, compactHeight && styles.brokerBulletinCompact]}>
+          <View style={styles.brokerBulletinAccent} />
+          <View style={styles.brokerBulletinMain}>
+            <TerminalText size={7} letterSpacing={0.9} style={styles.brokerEyebrow}>
+              {`BROKER PRIORITY · ${formatSectorShort(selectedSector.id).toUpperCase()}`}
+            </TerminalText>
+            <TerminalText size={10} letterSpacing={0.35} style={styles.brokerTitle} numberOfLines={1}>
+              {crisisPreview.crisisDisplayName.toUpperCase()}
+            </TerminalText>
+            <TerminalText size={7.5} style={styles.brokerDescription} numberOfLines={compactHeight ? 1 : 2}>
+              {crisisPreview.crisisSummary}
+            </TerminalText>
+          </View>
+          {crisisTags.length > 0 ? (
+            <View style={styles.brokerTags}>
+              {crisisTags.map((tag) => (
+                <TerminalText key={tag} size={6.5} letterSpacing={0.9} style={styles.brokerTag}>
+                  {tag}
+                </TerminalText>
+              ))}
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.contractFeed}>
@@ -726,58 +771,111 @@ export default function ContractBoardPanel(): React.JSX.Element {
       >
         <View style={[styles.dossierHeader, compactHeight && styles.dossierHeaderCompact]}>
           <View style={[styles.dossierHeaderAccent, { backgroundColor: dossierAccent }]} />
-          <TerminalText size={7.5} letterSpacing={1.1} style={styles.dossierEyebrow}>
+          <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>
             CONTRACT DOSSIER
           </TerminalText>
           {inspected.kind === 'NONE' ? (
             <>
-              <TerminalText size={8} letterSpacing={0.8} style={[styles.dossierIssuer, { color: dossierAccent }]}>
+              <TerminalText size={7.5} letterSpacing={0.85} style={[styles.dossierIssuer, { color: TERMINAL }]}>
                 NO TRANSMISSION SELECTED
               </TerminalText>
-              <TerminalText size={16.5} letterSpacing={0.35} style={styles.dossierTitle}>
+              <TerminalText size={18} letterSpacing={0.2} style={styles.dossierTitle}>
                 AWAITING SIGNAL
               </TerminalText>
             </>
           ) : inspected.kind === 'INDEPENDENT' ? (
             <>
-              <TerminalText size={8} letterSpacing={0.8} style={[styles.dossierIssuer, { color: dossierAccent }]}>
+              <TerminalText size={7.5} letterSpacing={0.85} style={[styles.dossierIssuer, { color: dossierAccent }]}>
                 BLACK CHANNEL · UNVERIFIED
               </TerminalText>
-              <TerminalText size={16.5} letterSpacing={0.35} style={styles.dossierTitle}>
+              <TerminalText size={18} letterSpacing={0.2} style={styles.dossierTitle}>
                 INDEPENDENT BREACH
               </TerminalText>
-              <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierStatus}>
-                {isIndependentActive ? 'ACTIVE · UNSPONSORED' : 'AVAILABLE · UNSPONSORED'}
-              </TerminalText>
+              <View style={styles.dossierStatusSlot}>
+                {isIndependentActive || matchesAcceptTarget(acceptStamp, { kind: 'INDEPENDENT' }) ? (
+                  <ContractLoggedLine
+                    typed={
+                      matchesAcceptTarget(acceptStamp, { kind: 'INDEPENDENT' })
+                        ? acceptTypewriter.typed || CONTRACT_LOGGED_MESSAGE
+                        : CONTRACT_LOGGED_MESSAGE
+                    }
+                    cursorOn={
+                      matchesAcceptTarget(acceptStamp, { kind: 'INDEPENDENT' })
+                      && acceptTypewriter.cursorOn
+                    }
+                    live={
+                      matchesAcceptTarget(acceptStamp, { kind: 'INDEPENDENT' })
+                      && acceptTypewriter.typing
+                    }
+                  />
+                ) : (
+                  <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierStatus}>
+                    AVAILABLE · UNSPONSORED
+                  </TerminalText>
+                )}
+              </View>
             </>
           ) : inspectedContract ? (
             <>
-              <TerminalText size={8} letterSpacing={0.8} style={[styles.dossierIssuer, { color: dossierAccent }]}>
+              <TerminalText size={7.5} letterSpacing={0.85} style={[styles.dossierIssuer, { color: dossierAccent }]}>
                 {`${sponsorDisplayName(inspectedContract.sponsorId).toUpperCase()} · ${formatContractJobType(inspectedContract.objectiveKind)}`}
               </TerminalText>
-              <TerminalText size={16.5} letterSpacing={0.35} style={styles.dossierTitle}>
+              <TerminalText size={18} letterSpacing={0.2} style={styles.dossierTitle}>
                 {inspectedContract.title.toUpperCase()}
               </TerminalText>
-              <TerminalText
-                size={7.5}
-                letterSpacing={0.9}
-                style={[
-                  styles.dossierStatus,
-                  inspectedRisk?.extreme ? { color: inspectedRisk.color } : null,
-                ]}
-              >
-                {[
-                  inspectedIsActiveSponsor ? 'ACTIVE' : 'AVAILABLE',
-                  inspectedRisk ? `${inspectedRisk.label} RISK` : null,
-                ].filter(Boolean).join(' · ')}
-              </TerminalText>
+              <View style={styles.dossierStatusSlot}>
+                {inspectedIsActiveSponsor
+                || matchesAcceptTarget(acceptStamp, {
+                  kind: 'SPONSOR',
+                  contractId: inspectedContract.id,
+                }) ? (
+                  <ContractLoggedLine
+                    typed={
+                      matchesAcceptTarget(acceptStamp, {
+                        kind: 'SPONSOR',
+                        contractId: inspectedContract.id,
+                      })
+                        ? acceptTypewriter.typed || CONTRACT_LOGGED_MESSAGE
+                        : CONTRACT_LOGGED_MESSAGE
+                    }
+                    cursorOn={
+                      matchesAcceptTarget(acceptStamp, {
+                        kind: 'SPONSOR',
+                        contractId: inspectedContract.id,
+                      })
+                      && acceptTypewriter.cursorOn
+                    }
+                    live={
+                      matchesAcceptTarget(acceptStamp, {
+                        kind: 'SPONSOR',
+                        contractId: inspectedContract.id,
+                      })
+                      && acceptTypewriter.typing
+                    }
+                  />
+                ) : (
+                  <TerminalText
+                    size={7.5}
+                    letterSpacing={0.9}
+                    style={[
+                      styles.dossierStatus,
+                      inspectedRisk?.extreme ? { color: inspectedRisk.color } : null,
+                    ]}
+                  >
+                    {[
+                      'AVAILABLE',
+                      inspectedRisk ? `${inspectedRisk.label} RISK` : null,
+                    ].filter(Boolean).join(' · ')}
+                  </TerminalText>
+                )}
+              </View>
             </>
           ) : (
             <>
-              <TerminalText size={8} letterSpacing={0.8} style={[styles.dossierIssuer, { color: dossierAccent }]}>
+              <TerminalText size={7.5} letterSpacing={0.85} style={[styles.dossierIssuer, { color: dossierAccent }]}>
                 SIGNAL LOST
               </TerminalText>
-              <TerminalText size={16.5} letterSpacing={0.35} style={styles.dossierTitle}>
+              <TerminalText size={18} letterSpacing={0.2} style={styles.dossierTitle}>
                 TRANSMISSION UNAVAILABLE
               </TerminalText>
             </>
@@ -901,79 +999,60 @@ export default function ContractBoardPanel(): React.JSX.Element {
               </TerminalText>
             </View>
           ) : inspectedIsActiveSponsor ? (
-            <>
-              <TerminalText size={7.5} letterSpacing={1} style={styles.footerStatusLabel}>
-                ACTIVE MANDATE
+            <HapticPressable
+              onPress={handleAbandon}
+              accessibilityRole="button"
+              accessibilityLabel="Abandon contract"
+              style={({ pressed }) => ([
+                styles.actionButton,
+                styles.actionDestructive,
+                pressed && { opacity: 0.88 },
+              ])}
+            >
+              <TerminalText size={8} letterSpacing={1} style={styles.actionDestructiveText}>
+                [ ABANDON CONTRACT ]
               </TerminalText>
-              <HapticPressable
-                onPress={handleAbandon}
-                accessibilityRole="button"
-                accessibilityLabel="Abandon contract"
-                style={({ pressed }) => ([
-                  styles.actionButton,
-                  styles.actionDestructive,
-                  pressed && { opacity: 0.88 },
-                ])}
-              >
-                <TerminalText size={8} letterSpacing={1} style={styles.actionDestructiveText}>
-                  [ ABANDON CONTRACT ]
-                </TerminalText>
-              </HapticPressable>
-            </>
+            </HapticPressable>
           ) : inspectedIsActiveIndependent ? (
-            <>
-              <TerminalText size={7.5} letterSpacing={1} style={styles.footerStatusLabelMuted}>
-                ACTIVE ROUTE
+            <View style={[styles.actionButton, styles.actionDisabled]}>
+              <TerminalText size={8} letterSpacing={1} style={styles.actionDisabledText}>
+                [ ROUTE ENGAGED ]
               </TerminalText>
-              <View style={[styles.actionButton, styles.actionDisabled]}>
-                <TerminalText size={8} letterSpacing={1} style={styles.actionDisabledText}>
-                  [ ROUTE ENGAGED ]
-                </TerminalText>
-              </View>
-            </>
+            </View>
           ) : inspected.kind === 'INDEPENDENT' ? (
-            <>
-              <TerminalText size={7.5} letterSpacing={1} style={styles.footerStatusLabel}>
-                READY FOR ACCEPTANCE
+            <HapticPressable
+              onPress={handleAcceptInspected}
+              accessibilityRole="button"
+              accessibilityLabel="Run unsponsored"
+              style={({ pressed }) => ([
+                styles.actionButton,
+                styles.actionPrimary,
+                pressed && { opacity: 0.9 },
+              ])}
+            >
+              <TerminalText size={8} letterSpacing={1} style={styles.actionPrimaryText}>
+                [ RUN UNSPONSORED ]
               </TerminalText>
-              <HapticPressable
-                onPress={handleAcceptInspected}
-                accessibilityRole="button"
-                accessibilityLabel="Run unsponsored"
-                style={({ pressed }) => ([
-                  styles.actionButton,
-                  styles.actionPrimary,
-                  pressed && { opacity: 0.9 },
-                ])}
-              >
-                <TerminalText size={8} letterSpacing={1} style={styles.actionPrimaryText}>
-                  [ RUN UNSPONSORED ]
-                </TerminalText>
-              </HapticPressable>
-            </>
+            </HapticPressable>
           ) : (
-            <>
-              <TerminalText size={7.5} letterSpacing={1} style={styles.footerStatusLabel}>
-                {hasOtherActiveSponsor ? 'REPLACES ACTIVE MANDATE' : 'READY FOR ACCEPTANCE'}
+            <HapticPressable
+              onPress={handleAcceptInspected}
+              accessibilityRole="button"
+              accessibilityLabel={hasOtherActiveSponsor ? 'Replace current contract' : 'Accept contract'}
+              style={({ pressed }) => ([
+                styles.actionButton,
+                styles.actionPrimary,
+                pressed && { opacity: 0.9 },
+              ])}
+            >
+              <TerminalText size={8} letterSpacing={1} style={styles.actionPrimaryText}>
+                {hasOtherActiveSponsor ? '[ REPLACE CURRENT CONTRACT ]' : '[ ACCEPT CONTRACT ]'}
               </TerminalText>
-              <HapticPressable
-                onPress={handleAcceptInspected}
-                accessibilityRole="button"
-                accessibilityLabel={hasOtherActiveSponsor ? 'Replace current contract' : 'Accept contract'}
-                style={({ pressed }) => ([
-                  styles.actionButton,
-                  styles.actionPrimary,
-                  pressed && { opacity: 0.9 },
-                ])}
-              >
-                <TerminalText size={8} letterSpacing={1} style={styles.actionPrimaryText}>
-                  {hasOtherActiveSponsor ? '[ REPLACE CURRENT CONTRACT ]' : '[ ACCEPT CONTRACT ]'}
-                </TerminalText>
-              </HapticPressable>
-            </>
+            </HapticPressable>
           )}
         </View>
       </Animated.View>
+
     </View>
   );
 }
@@ -985,13 +1064,13 @@ const styles = StyleSheet.create({
     minHeight: 0,
     flexDirection: 'row',
     overflow: 'hidden',
-    backgroundColor: '#020606',
+    backgroundColor: '#010304',
     position: 'relative',
     margin: 0,
     ...Platform.select({
       web: {
         display: 'grid',
-        gridTemplateColumns: 'minmax(0, 1fr) clamp(440px, 27vw, 560px)',
+        gridTemplateColumns: 'minmax(0, 1fr) clamp(420px, 26vw, 470px)',
         width: '100%',
         height: '100%',
       } as object,
@@ -1012,50 +1091,77 @@ const styles = StyleSheet.create({
     minHeight: 0,
     overflow: 'hidden',
     backgroundColor: '#020606',
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: 'rgba(137, 190, 179, 0.16)',
     ...Platform.select({
       web: {
         display: 'grid',
-        gridTemplateRows: 'auto auto auto minmax(0, 1fr)',
+        gridTemplateRows: 'auto auto auto auto minmax(0, 1fr)',
       } as object,
       default: {},
     }),
   },
   contractBoardHeader: {
+    position: 'relative',
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     justifyContent: 'space-between',
     gap: 24,
-    minHeight: 76,
-    paddingHorizontal: 28,
-    paddingTop: 13,
-    paddingBottom: 12,
-    backgroundColor: 'rgba(3, 9, 8, 0.92)',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(137, 170, 163, 0.14)',
+    minHeight: 72,
+    paddingHorizontal: 22,
+    paddingTop: 12,
+    paddingBottom: 10,
     flexShrink: 0,
+    ...Platform.select({
+      web: {
+        backgroundImage:
+          'linear-gradient(180deg, rgba(4, 12, 11, 0.92), rgba(2, 6, 6, 0))',
+      } as object,
+      default: {
+        backgroundColor: 'rgba(3, 8, 8, 0.72)',
+      },
+    }),
   },
   contractBoardHeaderCompact: {
-    minHeight: 62,
-    paddingTop: 10,
-    paddingBottom: 9,
-    paddingHorizontal: 22,
+    minHeight: 58,
+    paddingTop: 8,
+    paddingBottom: 8,
+    paddingHorizontal: 14,
   },
   contractBoardHeaderEyebrow: {
-    color: '#84958f',
+    color: META,
     fontWeight: '700',
+    marginBottom: 4,
   },
   contractBoardHeaderTitle: {
+    color: '#eef4f1',
+    fontWeight: '700',
+  },
+  contractBoardHeaderBreadcrumb: {
     marginTop: 5,
-    color: '#e0e7e4',
+    color: META,
     fontWeight: '700',
   },
   contractBoardHeaderCounts: {
     alignItems: 'flex-end',
-    gap: 4,
     flexShrink: 0,
   },
-  contractBoardHeaderCount: {
-    color: '#879b95',
+  contractBoardHeaderCountLabel: {
+    color: TERMINAL,
+    fontWeight: '700',
+  },
+  contractBoardHeaderCountRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginTop: 3,
+  },
+  contractBoardHeaderCountValue: {
+    color: '#f2f7f5',
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  contractBoardHeaderCountMeta: {
+    color: TERMINAL,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
   },
@@ -1063,44 +1169,52 @@ const styles = StyleSheet.create({
     position: 'relative',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 24,
-    minHeight: 82,
-    maxHeight: 88,
-    paddingTop: 12,
-    paddingBottom: 12,
-    paddingLeft: 28,
-    paddingRight: 28,
+    gap: 20,
+    minHeight: 64,
+    maxHeight: 72,
+    paddingTop: 10,
+    paddingBottom: 10,
+    paddingLeft: 22,
+    paddingRight: 22,
     overflow: 'hidden',
-    backgroundColor: 'rgba(8, 18, 16, 0.72)',
-    borderBottomWidth: 1,
+    backgroundColor: 'rgba(5, 12, 11, 0.55)',
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(137, 170, 163, 0.12)',
     flexShrink: 0,
   },
   brokerBulletinCompact: {
-    minHeight: 70,
-    maxHeight: 76,
-    paddingTop: 9,
-    paddingBottom: 9,
+    minHeight: 52,
+    maxHeight: 56,
+    paddingTop: 7,
+    paddingBottom: 7,
+    paddingLeft: 14,
+    paddingRight: 14,
   },
   brokerBulletinAccent: {
     position: 'absolute',
-    top: 14,
-    bottom: 14,
+    top: 12,
+    bottom: 12,
     left: 0,
     width: 2,
-    backgroundColor: 'rgba(105, 200, 173, 0.55)',
+    backgroundColor: SELECTION_RAIL,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 0 10px rgba(117, 212, 179, 0.25)',
+      } as object,
+      default: {},
+    }),
   },
   brokerBulletinMain: {
     flex: 1,
     minWidth: 0,
   },
   brokerEyebrow: {
-    color: '#7f928c',
+    color: META,
     fontWeight: '700',
   },
   brokerTitle: {
     marginTop: 3,
-    color: '#d5dfdc',
+    color: '#e8f0ed',
     fontWeight: '700',
   },
   brokerDescription: {
@@ -1114,71 +1228,85 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   brokerTag: {
-    color: '#879b95',
+    color: META,
     fontWeight: '700',
   },
   sponsorChannels: {
     flexDirection: 'row',
-    minHeight: 66,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(137, 170, 163, 0.15)',
+    alignItems: 'stretch',
+    minHeight: 58,
+    paddingHorizontal: 14,
+    paddingBottom: 2,
     flexShrink: 0,
-    ...Platform.select({
-      web: {
-        display: 'grid',
-        gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-      } as object,
-      default: {},
-    }),
-  },
-  sponsorChannel: {
-    flex: 1,
-    minWidth: 0,
-    position: 'relative',
-    paddingTop: 11,
-    paddingBottom: 11,
-    paddingHorizontal: 20,
-    backgroundColor: 'rgba(3, 8, 7, 0.72)',
-    borderRightWidth: 1,
-    borderRightColor: 'rgba(137, 170, 163, 0.11)',
-    ...Platform.select({
-      web: { cursor: 'pointer' } as object,
-      default: {},
-    }),
-  },
-  sponsorChannelSelected: {
-    backgroundColor: 'rgba(105, 200, 173, 0.055)',
-  },
-  sponsorChannelTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 8,
   },
-  sponsorChannelName: {
-    flex: 1,
-    minWidth: 0,
-    color: '#d5dfdc',
-    fontWeight: '700',
+  sponsorChannelsCompact: {
+    minHeight: 50,
   },
-  sponsorChannelCount: {
-    color: '#91a39f',
-    fontWeight: '700',
-    fontVariant: ['tabular-nums'],
-    flexShrink: 0,
+  sponsorChannel: {
+    position: 'relative',
+    minWidth: 160,
+    maxWidth: 220,
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 11,
+    paddingBottom: 12,
+    backgroundColor: 'rgba(5, 12, 11, 0.4)',
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+        outlineStyle: 'none',
+        clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%)',
+      } as object,
+      default: {
+        flex: 1,
+      },
+    }),
+  },
+  sponsorChannelCompact: {
+    minWidth: 140,
+    paddingTop: 8,
+    paddingBottom: 9,
+  },
+  sponsorChannelSelected: {
+    ...Platform.select({
+      web: {
+        backgroundImage:
+          'linear-gradient(135deg, rgba(105, 200, 173, 0.08), rgba(105, 200, 173, 0.015))',
+      } as object,
+      default: {
+        backgroundColor: 'rgba(105, 200, 173, 0.06)',
+      },
+    }),
   },
   sponsorChannelRep: {
-    marginTop: 6,
-    color: '#7f928c',
+    marginTop: 4,
+    color: META,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
+  },
+  sponsorChannelCode: {
+    marginTop: 3,
+    fontWeight: '700',
   },
   sponsorChannelUnderline: {
     position: 'absolute',
-    left: 0,
-    right: 0,
+    left: 16,
+    right: 15,
     bottom: 0,
     height: 2,
-    backgroundColor: TERMINAL,
+    ...Platform.select({
+      web: {
+        backgroundImage:
+          'linear-gradient(90deg, #69c8ad 0 68%, transparent 68% 73%, rgba(105, 200, 173, 0.35) 73% 100%)',
+      } as object,
+      default: {
+        backgroundColor: TERMINAL,
+      },
+    }),
+  },
+  sponsorChannelSpacer: {
+    flex: 1,
   },
   contractFeed: {
     flex: 1,
@@ -1198,15 +1326,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: 46,
-    paddingHorizontal: 24,
-    backgroundColor: '#020606',
-    borderBottomWidth: 1,
+    minHeight: 40,
+    paddingHorizontal: 22,
+    backgroundColor: 'rgba(3, 8, 8, 0.55)',
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(137, 170, 163, 0.12)',
     flexShrink: 0,
   },
   contractFeedHeaderText: {
-    color: '#83948f',
+    color: META,
     fontWeight: '700',
   },
   contractFeedScrollWrap: {
@@ -1230,25 +1358,25 @@ const styles = StyleSheet.create({
     paddingVertical: 28,
   },
   emptyFeedTitle: {
-    color: '#c5d0cc',
+    color: '#e8f0ed',
     fontWeight: '700',
   },
   emptyFeedBody: {
     marginTop: 8,
-    color: '#91a39f',
+    color: TEXT_PRIMARY,
     lineHeight: 19,
   },
   independentSection: {
     marginTop: 4,
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(122, 139, 150, 0.18)',
-    backgroundColor: 'rgba(10, 14, 18, 0.55)',
+    backgroundColor: 'rgba(6, 10, 12, 0.55)',
   },
   independentSectionHeader: {
-    minHeight: 40,
+    minHeight: 36,
     justifyContent: 'center',
-    paddingHorizontal: 24,
-    borderBottomWidth: 1,
+    paddingHorizontal: 22,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(122, 139, 150, 0.12)',
   },
   independentSectionTitle: {
@@ -1257,7 +1385,7 @@ const styles = StyleSheet.create({
   },
   signal: {
     position: 'relative',
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(137, 170, 163, 0.1)',
   },
   signalIndependent: {
@@ -1265,27 +1393,34 @@ const styles = StyleSheet.create({
   },
   signalAccent: {
     position: 'absolute',
-    top: 13,
-    bottom: 13,
+    top: 12,
+    bottom: 12,
     left: 0,
     width: 2,
     zIndex: 1,
-    backgroundColor: TERMINAL,
+    backgroundColor: SELECTION_RAIL,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 0 10px rgba(117, 212, 179, 0.25)',
+      } as object,
+      default: {},
+    }),
   },
   signalSelect: {
     width: '100%',
-    minHeight: 116,
-    paddingTop: 16,
-    paddingBottom: 16,
-    paddingLeft: 28,
-    paddingRight: 24,
-    gap: 22,
+    minHeight: 108,
+    paddingTop: 14,
+    paddingBottom: 14,
+    paddingLeft: 22,
+    paddingRight: 20,
+    gap: 18,
     ...Platform.select({
       web: {
         display: 'grid',
-        gridTemplateColumns: 'minmax(350px, 1fr) minmax(220px, 0.55fr) 100px 120px',
+        gridTemplateColumns: 'minmax(320px, 1fr) minmax(200px, 0.55fr) 96px 112px',
         alignItems: 'center',
         cursor: 'pointer',
+        outlineStyle: 'none',
       } as object,
       default: {
         flexDirection: 'row',
@@ -1302,18 +1437,42 @@ const styles = StyleSheet.create({
     }),
   },
   signalSelectCompact: {
-    minHeight: 100,
-    paddingTop: 12,
-    paddingBottom: 12,
+    minHeight: 92,
+    paddingTop: 11,
+    paddingBottom: 11,
   },
   signalSelectHover: {
-    backgroundColor: 'rgba(105, 200, 173, 0.035)',
+    ...Platform.select({
+      web: {
+        backgroundImage:
+          'linear-gradient(90deg, rgba(128, 153, 149, 0.08), rgba(128, 153, 149, 0.02))',
+      } as object,
+      default: {
+        backgroundColor: 'rgba(128, 153, 149, 0.05)',
+      },
+    }),
   },
   signalSelectSelected: {
-    backgroundColor: 'rgba(105, 200, 173, 0.06)',
+    ...Platform.select({
+      web: {
+        backgroundImage:
+          'linear-gradient(90deg, rgba(105, 200, 173, 0.1), rgba(105, 200, 173, 0.02))',
+      } as object,
+      default: {
+        backgroundColor: 'rgba(105, 200, 173, 0.06)',
+      },
+    }),
   },
   signalSelectSelectedIndependent: {
-    backgroundColor: 'rgba(122, 139, 150, 0.07)',
+    ...Platform.select({
+      web: {
+        backgroundImage:
+          'linear-gradient(90deg, rgba(122, 139, 150, 0.12), rgba(122, 139, 150, 0.02))',
+      } as object,
+      default: {
+        backgroundColor: 'rgba(122, 139, 150, 0.07)',
+      },
+    }),
   },
   signalMain: {
     minWidth: 0,
@@ -1324,21 +1483,21 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   signalIssuer: {
-    color: '#879b95',
+    color: META,
     fontWeight: '700',
   },
   signalStatusActive: {
-    color: TERMINAL,
+    color: TERMINAL_BRIGHT,
     fontWeight: '700',
   },
   signalTitle: {
     marginTop: 5,
-    color: '#e0e7e4',
+    color: '#f1f6f3',
     fontWeight: '700',
   },
   signalObjective: {
     marginTop: 5,
-    color: '#a1b0ac',
+    color: TEXT_PRIMARY,
     lineHeight: 18,
   },
   signalMetaCollapsed: {
@@ -1354,7 +1513,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   signalMetaMuted: {
-    color: '#7f928c',
+    color: META,
     fontWeight: '700',
   },
   signalRiskCol: {
@@ -1365,7 +1524,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   signalColLabel: {
-    color: '#6f827c',
+    color: '#5f746f',
     fontWeight: '700',
   },
   signalRiskValue: {
@@ -1377,7 +1536,7 @@ const styles = StyleSheet.create({
   },
   signalCredits: {
     marginTop: 4,
-    color: '#dce5e2',
+    color: '#e2e9e6',
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
   },
@@ -1390,45 +1549,45 @@ const styles = StyleSheet.create({
     minWidth: 0,
     minHeight: 0,
     overflow: 'hidden',
-    backgroundColor: '#030707',
-    borderLeftWidth: 1,
-    borderLeftColor: 'rgba(137, 170, 163, 0.17)',
+    backgroundColor: '#040a09',
     flexShrink: 0,
     ...Platform.select({
       web: {
         display: 'grid',
         gridTemplateRows: 'auto minmax(0, 1fr) auto',
         backgroundImage:
-          'linear-gradient(180deg, rgba(8, 19, 17, 0.52), rgba(3, 7, 7, 0) 260px), #030707',
+          'linear-gradient(180deg, #07110f 0%, #020606 42%)',
       } as object,
       default: {
-        width: 440,
+        width: 420,
+        borderLeftWidth: StyleSheet.hairlineWidth,
+        borderLeftColor: 'rgba(137, 190, 179, 0.16)',
       },
     }),
   },
   dossierHeader: {
     position: 'relative',
-    paddingTop: 22,
-    paddingBottom: 20,
-    paddingLeft: 34,
-    paddingRight: 30,
-    borderBottomWidth: 1,
+    paddingTop: 20,
+    paddingBottom: 18,
+    paddingLeft: 28,
+    paddingRight: 24,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(137, 170, 163, 0.14)',
     flexShrink: 0,
   },
   dossierHeaderCompact: {
-    paddingTop: 16,
-    paddingBottom: 14,
+    paddingTop: 14,
+    paddingBottom: 12,
   },
   dossierHeaderAccent: {
     position: 'absolute',
-    top: 22,
-    bottom: 20,
+    top: 18,
+    bottom: 18,
     left: 0,
     width: 2,
   },
   dossierEyebrow: {
-    color: '#84958f',
+    color: META,
     fontWeight: '700',
   },
   dossierIssuer: {
@@ -1436,13 +1595,19 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   dossierTitle: {
-    marginTop: 12,
-    color: '#e2e9e6',
+    marginTop: 10,
+    color: '#f3f8f5',
     fontWeight: '700',
   },
+  dossierStatusSlot: {
+    marginTop: 10,
+    height: DOSSIER_STATUS_SLOT_HEIGHT,
+    minHeight: DOSSIER_STATUS_SLOT_HEIGHT,
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
   dossierStatus: {
-    marginTop: 12,
-    color: '#879b95',
+    color: META,
     fontWeight: '700',
   },
   dossierBody: {
@@ -1450,19 +1615,19 @@ const styles = StyleSheet.create({
     minHeight: 0,
   },
   dossierBodyContent: {
-    paddingTop: 22,
-    paddingBottom: 28,
-    paddingLeft: 34,
-    paddingRight: 30,
+    paddingTop: 20,
+    paddingBottom: 24,
+    paddingLeft: 28,
+    paddingRight: 24,
   },
   dossierBodyContentCompact: {
-    paddingTop: 16,
-    paddingBottom: 18,
+    paddingTop: 14,
+    paddingBottom: 16,
   },
   dossierSection: {
-    paddingBottom: 20,
-    marginBottom: 20,
-    borderBottomWidth: 1,
+    paddingBottom: 18,
+    marginBottom: 18,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(137, 170, 163, 0.1)',
   },
   dossierSectionLast: {
@@ -1471,17 +1636,17 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
   },
   dossierLabel: {
-    color: '#7f928c',
+    color: META,
     fontWeight: '700',
   },
   dossierValue: {
     marginTop: 7,
-    color: '#d2dcd8',
+    color: TEXT_PRIMARY,
     lineHeight: 20,
   },
   dossierValueTight: {
     marginTop: 5,
-    color: '#d2dcd8',
+    color: TEXT_PRIMARY,
     lineHeight: 19,
   },
   dossierSecondary: {
@@ -1491,12 +1656,12 @@ const styles = StyleSheet.create({
   },
   paramLabel: {
     marginTop: 8,
-    color: '#6f827c',
+    color: '#5f746f',
     fontWeight: '700',
   },
   paramLabelSpaced: {
     marginTop: 14,
-    color: '#6f827c',
+    color: '#5f746f',
     fontWeight: '700',
   },
   payoutPrimary: {
@@ -1511,38 +1676,26 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   dossierFooter: {
-    paddingTop: 16,
-    paddingBottom: 22,
-    paddingLeft: 34,
-    paddingRight: 30,
-    backgroundColor: 'rgba(3, 7, 8, 0.98)',
+    paddingTop: 14,
+    paddingBottom: 18,
+    paddingLeft: 28,
+    paddingRight: 24,
+    backgroundColor: 'rgba(2, 6, 6, 0.98)',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(137, 190, 179, 0.18)',
+    borderTopColor: 'rgba(137, 190, 179, 0.2)',
     flexShrink: 0,
   },
   dossierFooterCompact: {
-    paddingTop: 12,
-    paddingBottom: 14,
-  },
-  footerStatusLabel: {
-    marginBottom: 10,
-    color: TERMINAL,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  footerStatusLabelMuted: {
-    marginBottom: 10,
-    color: '#879b95',
-    fontWeight: '700',
-    textAlign: 'center',
+    paddingTop: 10,
+    paddingBottom: 12,
   },
   actionButton: {
     width: '100%',
-    minHeight: 52,
+    minHeight: 56,
     alignItems: 'center',
     justifyContent: 'center',
     ...Platform.select({
-      web: { cursor: 'pointer' } as object,
+      web: { cursor: 'pointer', outlineStyle: 'none' } as object,
       default: {},
     }),
   },
@@ -1556,21 +1709,21 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   actionDestructive: {
-    backgroundColor: 'rgba(201, 98, 98, 0.03)',
+    backgroundColor: 'rgba(200, 110, 114, 0.04)',
     borderWidth: 1,
-    borderColor: 'rgba(201, 98, 98, 0.4)',
+    borderColor: 'rgba(200, 110, 114, 0.42)',
   },
   actionDestructiveText: {
     color: '#d89490',
     fontWeight: '800',
   },
   actionDisabled: {
-    backgroundColor: 'rgba(112, 139, 133, 0.04)',
+    backgroundColor: 'rgba(105, 200, 173, 0.025)',
     borderWidth: 1,
-    borderColor: 'rgba(137, 170, 163, 0.2)',
+    borderColor: 'rgba(105, 200, 173, 0.18)',
   },
   actionDisabledText: {
-    color: '#7f928c',
+    color: 'rgba(188, 204, 198, 0.34)',
     fontWeight: '800',
   },
 });
