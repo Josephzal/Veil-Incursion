@@ -1,0 +1,282 @@
+[
+  {
+    "label": "terran",
+    "browserDisplay": "flex",
+    "browserRows": "none",
+    "browserAlignContent": "flex-start",
+    "browserKids": [],
+    "gapBrokerToContracts": 12,
+    "broker": {
+      "top": 352,
+      "bottom": 423,
+      "height": 71,
+      "text": "BROKER PRIORITY · NULL ZONEUNSTABLE CARGO SURGEPowerful but "
+    },
+    "contractsHeader": {
+      "top": 434,
+      "bottom": 468,
+      "height": 34,
+      "text": "TERRAN GRID // AVAILABLE CONTRACTS2 AVAILABLE"
+    },
+    "black": {
+      "top": 636,
+      "bottom": 670,
+      "height": 34,
+      "text": "BLACK CHANNEL // INDEPENDENT ROUTESUNVERIFIED"
+    },
+    "end": {
+      "top": 769,
+      "bottom": 782,
+      "height": 13,
+      "text": "END OF AVAILABLE RECORDS // 03 DISPLAYED"
+    },
+    "objective": {
+      "top": 246,
+      "bottom": 260,
+      "height": 14,
+      "text": "OBJECTIVE"
+    },
+    "terms": {
+      "top": 329,
+      "bottom": 343,
+      "height": 14,
+      "text": "CONTRACT TERMS"
+    },
+    "ops": {
+      "top": 445,
+      "bottom": 459,
+      "height": 14,
+      "text": "OPERATIONAL PARAMETERS"
+    },
+    "dossierHeaderHint": {
+      "top": 88,
+      "bottom": 102,
+      "height": 14,
+      "text": "CONTRACT DOSSIER"
+    }
+  },
+  {
+    "label": "legion",
+    "browserDisplay": "flex",
+    "browserRows": "none",
+    "browserAlignContent": "flex-start",
+    "browserKids": [],
+    "gapBrokerToContracts": 12,
+    "broker": {
+      "top": 352,
+      "bottom": 423,
+      "height": 71,
+      "text": "BROKER PRIORITY · NULL ZONEUNSTABLE CARGO SURGEPowerful but "
+    },
+    "contractsHeader": {
+      "top": 434,
+      "bottom": 468,
+      "height": 34,
+      "text": "LEGION // AVAILABLE CONTRACTS2 AVAILABLE"
+    },
+    "black": {
+      "top": 636,
+      "bottom": 670,
+      "height": 34,
+      "text": "BLACK CHANNEL // INDEPENDENT ROUTESUNVERIFIED"
+    },
+    "end": {
+      "top": 769,
+      "bottom": 782,
+      "height": 13,
+      "text": "END OF AVAILABLE RECORDS // 03 DISPLAYED"
+    },
+    "objective": {
+      "top": 246,
+      "bottom": 260,
+      "height": 14,
+      "text": "OBJECTIVE"
+    },
+    "terms": {
+      "top": 325,
+      "bottom": 339,
+      "height": 14,
+      "text": "CONTRACT TERMS"
+    },
+    "ops": {
+      "top": 441,
+      "bottom": 455,
+      "height": 14,
+      "text": "OPERATIONAL PARAMETERS"
+    },
+    "dossierHeaderHint": {
+      "top": 88,
+      "bottom": 102,
+      "height": 14,
+      "text": "CONTRACT DOSSIER"
+    }
+  },
+  {
+    "label": "solaris",
+    "browserDisplay": "flex",
+    "browserRows": "none",
+    "browserAlignContent": "flex-start",
+    "browserKids": [],
+    "gapBrokerToContracts": 12,
+    "broker": {
+      "top": 352,
+      "bottom": 423,
+      "height": 71,
+      "text": "BROKER PRIORITY · NULL ZONEUNSTABLE CARGO SURGEPowerful but "
+    },
+    "contractsHeader": {
+      "top": 434,
+      "bottom": 468,
+      "height": 34,
+      "text": "SOLARIS // AVAILABLE CONTRACTS2 AVAILABLE"
+    },
+    "black": {
+      "top": 636,
+      "bottom": 670,
+      "height": 34,
+      "text": "BLACK CHANNEL // INDEPENDENT ROUTESUNVERIFIED"
+    },
+    "end": {
+      "top": 769,
+      "bottom": 782,
+      "height": 13,
+      "text": "END OF AVAILABLE RECORDS // 03 DISPLAYED"
+    },
+    "objective": {
+      "top": 276,
+      "bottom": 290,
+      "height": 14,
+      "text": "OBJECTIVE"
+    },
+    "terms": {
+      "top": 355,
+      "bottom": 369,
+      "height": 14,
+      "text": "CONTRACT TERMS"
+    },
+    "ops": {
+      "top": 471,
+      "bottom": 485,
+      "height": 14,
+      "text": "OPERATIONAL PARAMETERS"
+    },
+    "dossierHeaderHint": {
+      "top": 88,
+      "bottom": 102,
+      "height": 14,
+      "text": "CONTRACT DOSSIER"
+    }
+  },
+  {
+    "label": "black",
+    "browserDisplay": "flex",
+    "browserRows": "none",
+    "browserAlignContent": "flex-start",
+    "browserKids": [],
+    "gapBrokerToContracts": 12,
+    "broker": {
+      "top": 352,
+      "bottom": 423,
+      "height": 71,
+      "text": "BROKER PRIORITY · NULL ZONEUNSTABLE CARGO SURGEPowerful but "
+    },
+    "contractsHeader": {
+      "top": 434,
+      "bottom": 468,
+      "height": 34,
+      "text": "SOLARIS // AVAILABLE CONTRACTS2 AVAILABLE"
+    },
+    "black": {
+      "top": 636,
+      "bottom": 670,
+      "height": 34,
+      "text": "BLACK CHANNEL // INDEPENDENT ROUTESUNVERIFIED"
+    },
+    "end": {
+      "top": 769,
+      "bottom": 782,
+      "height": 13,
+      "text": "END OF AVAILABLE RECORDS // 03 DISPLAYED"
+    },
+    "objective": {
+      "top": 276,
+      "bottom": 290,
+      "height": 14,
+      "text": "OBJECTIVE"
+    },
+    "terms": {
+      "top": 355,
+      "bottom": 369,
+      "height": 14,
+      "text": "CONTRACT TERMS"
+    },
+    "ops": {
+      "top": 471,
+      "bottom": 485,
+      "height": 14,
+      "text": "OPERATIONAL PARAMETERS"
+    },
+    "dossierHeaderHint": {
+      "top": 88,
+      "bottom": 102,
+      "height": 14,
+      "text": "CONTRACT DOSSIER"
+    }
+  },
+  {
+    "label": "terran-1440",
+    "browserDisplay": "flex",
+    "browserRows": "none",
+    "browserAlignContent": "flex-start",
+    "browserKids": [],
+    "gapBrokerToContracts": 16,
+    "broker": {
+      "top": 336,
+      "bottom": 398,
+      "height": 63,
+      "text": "BROKER PRIORITY · NULL ZONEUNSTABLE CARGO SURGEPowerful but "
+    },
+    "contractsHeader": {
+      "top": 414,
+      "bottom": 448,
+      "height": 34,
+      "text": "SOLARIS // AVAILABLE CONTRACTS2 AVAILABLE"
+    },
+    "black": {
+      "top": 616,
+      "bottom": 650,
+      "height": 34,
+      "text": "BLACK CHANNEL // INDEPENDENT ROUTESUNVERIFIED"
+    },
+    "end": {
+      "top": 749,
+      "bottom": 759,
+      "height": 10,
+      "text": "END OF AVAILABLE RECORDS // 03 DISPLAYED"
+    },
+    "objective": {
+      "top": 268,
+      "bottom": 281,
+      "height": 13,
+      "text": "OBJECTIVE"
+    },
+    "terms": {
+      "top": 346,
+      "bottom": 359,
+      "height": 13,
+      "text": "CONTRACT TERMS"
+    },
+    "ops": {
+      "top": 461,
+      "bottom": 474,
+      "height": 13,
+      "text": "OPERATIONAL PARAMETERS"
+    },
+    "dossierHeaderHint": {
+      "top": 88,
+      "bottom": 101,
+      "height": 13,
+      "text": "CONTRACT DOSSIER"
+    }
+  }
+]

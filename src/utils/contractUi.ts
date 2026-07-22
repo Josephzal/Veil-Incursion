@@ -1,10 +1,31 @@
-import type { ContractExtractionKind, ContractObjectiveKind, GeneratedContract, SelectedContractState } from '../types/contract';
+import type {
+  ContractBonusObjective,
+  ContractExtractionKind,
+  ContractObjectiveKind,
+  GeneratedContract,
+  SelectedContractState,
+} from '../types/contract';
 import type { ContractSourceKind } from '../types/contractProcedural';
 import type { BreachGradeId } from '../types/progression';
 import type { SectorId } from '../types/worldState';
 import { SOURCE_REASON_LABELS } from '../data/contractTemplateVariants';
-import { canResourceSpawnInSector } from '../data/resourceRegistry';
+import { ALL_SECTOR_IDS } from '../data/sectorBiomeBridge';
+import { canResourceSpawnInSector, getResourceDisplayName } from '../data/resourceRegistry';
 import { contractMeetsBreachGrade, formatBreachGradeLabel } from '../data/breachGradeEngine';
+
+const RESOURCE_OBJECTIVE_KINDS = new Set<ContractObjectiveKind>([
+  'EXTRACT_STABLE_RESOURCE',
+  'EXTRACT_SPONSOR_RESOURCE',
+  'RECOVER_INTEL',
+  'RECOVER_ECONOMY_INTEL',
+  'EXTRACT_UNSTABLE_CARGO',
+  'RECOVER_APEX_CARGO',
+  'RECOVER_CONTRABAND',
+]);
+
+function isDeliveryObjective(kind: ContractObjectiveKind): boolean {
+  return RESOURCE_OBJECTIVE_KINDS.has(kind);
+}
 
 export type ContractSectorCompatibility = 'RECOMMENDED' | 'VALID' | 'UNAVAILABLE' | 'NONE';
 
@@ -121,11 +142,245 @@ export function formatCompactContractObjective(contract: GeneratedContract): str
 
 /** Valid-sector eligibility line for incompatible dossier summary. */
 export function formatCompactContractValidSectors(contract: GeneratedContract): string {
-  const ids = contract.validSectorIds.length > 0
+  const detail = formatContractSectorEligibilityDetailed(contract);
+  return detail === 'Any sector' ? 'Valid sectors: Any sector' : `Valid sectors: ${detail}`;
+}
+
+function contractEligibleSectorIds(contract: GeneratedContract): readonly SectorId[] {
+  return contract.validSectorIds.length > 0
     ? contract.validSectorIds
     : contract.recommendedSectorIds;
-  if (ids.length === 0) return 'No valid sectors listed for this mandate';
-  return `Valid sectors: ${ids.map(sectorIdDisplayLabel).join(' · ')}`;
+}
+
+function isAnySectorEligible(contract: GeneratedContract): boolean {
+  const ids = contractEligibleSectorIds(contract);
+  if (ids.length === 0) return true;
+  if (ids.length >= ALL_SECTOR_IDS.length) return true;
+  const set = new Set(ids);
+  return ALL_SECTOR_IDS.every((id) => set.has(id));
+}
+
+/** Compact feed eligibility: ANY SECTOR or N VALID SECTORS. */
+export function formatContractSectorEligibilityCompact(contract: GeneratedContract): string {
+  if (isAnySectorEligible(contract)) return 'ANY SECTOR';
+  const count = contractEligibleSectorIds(contract).length;
+  return `${count} VALID SECTOR${count === 1 ? '' : 'S'}`;
+}
+
+/** Dossier eligibility: "Any sector" or named list. */
+export function formatContractSectorEligibilityDetailed(contract: GeneratedContract): string {
+  if (isAnySectorEligible(contract)) return 'Any sector';
+  const ids = contractEligibleSectorIds(contract);
+  if (ids.length === 0) return 'Any sector';
+  return ids.map(sectorIdDisplayLabel).join(' · ');
+}
+
+export function formatContractFulfillmentCompact(contract: GeneratedContract): string {
+  return isDeliveryObjective(contract.objectiveKind) ? 'POST-RUN DELIVERY' : 'IN-RUN';
+}
+
+export function formatContractFulfillmentDetailed(contract: GeneratedContract): string {
+  return isDeliveryObjective(contract.objectiveKind)
+    ? 'Post-run sponsor handoff'
+    : 'Completed during the run';
+}
+
+export function formatContractDepthCompact(contract: GeneratedContract): string | null {
+  if (!contract.requiredDepth) return null;
+  return `DEPTH ${contract.requiredDepth}+`;
+}
+
+/** Plain ledger depth value for the dossier. */
+export function formatContractDepthLedger(contract: GeneratedContract): string | null {
+  if (!contract.requiredDepth) return null;
+  return `Depth ${contract.requiredDepth}`;
+}
+
+/** Cargo / target resource line for the operational ledger, when applicable. */
+export function formatContractCargoLedger(contract: GeneratedContract): string | null {
+  const resourceId = contract.targetResourceId ?? contract.targetResourceOptions?.[0];
+  if (!resourceId) return null;
+  return getResourceDisplayName(resourceId);
+}
+
+export type SpecialConditionField = {
+  label: string;
+  value: string;
+};
+
+function formatBonusObjectiveLabel(kind: ContractBonusObjective['kind']): string {
+  switch (kind) {
+    case 'SAFE_EXTRACTION':
+      return 'REQUIREMENT';
+    case 'EARLY_EXTRACTION':
+      return 'EXTRACTION BONUS';
+    case 'ELITE_KILL':
+      return 'TRIGGER';
+    case 'DEPTH_EXTRACT':
+      return 'TRIGGER';
+    case 'ANOMALY_CLEAR':
+      return 'TRIGGER';
+    default:
+      return 'CONDITION';
+  }
+}
+
+/**
+ * Unconditional active-contract provisions (employer package perks).
+ */
+export function resolveContractProvisions(
+  runBenefits: readonly string[],
+): string[] {
+  return runBenefits
+    .filter((line) => line !== 'Standard sponsor terms')
+    .slice(0, 3);
+}
+
+/**
+ * Conditional special-condition fields from structured bonus objectives only.
+ * Unconditional perks belong in resolveContractProvisions.
+ */
+export function resolveSpecialConditionFields(
+  contract: GeneratedContract,
+): { fields: SpecialConditionField[]; fallbackText: string | null } {
+  const fields: SpecialConditionField[] = [];
+
+  if (contract.bonusObjective) {
+    fields.push({
+      label: formatBonusObjectiveLabel(contract.bonusObjective.kind),
+      value: contract.bonusObjective.text,
+    });
+  }
+
+  return { fields, fallbackText: null };
+}
+
+/** @deprecated Prefer resolveContractProvisions + resolveSpecialConditionFields. */
+export function resolveContractClauseSections(
+  contract: GeneratedContract,
+  runBenefits: readonly string[],
+): {
+  provisions: string[];
+  specialConditions: SpecialConditionField[];
+} {
+  return {
+    provisions: resolveContractProvisions(runBenefits),
+    specialConditions: resolveSpecialConditionFields(contract).fields,
+  };
+}
+
+/** Category line for feed/dossier headers: RESOURCE, DEPTH 1+, EXTRACTION, etc. */
+export function formatContractCategoryLabel(contract: GeneratedContract): string {
+  if (contract.requiredDepth) return `DEPTH ${contract.requiredDepth}+`;
+  const job = formatContractJobType(contract.objectiveKind);
+  return job === 'DEPTH' ? 'DEPTH CONTRACT' : job;
+}
+
+export function formatContractIssuerCategory(contract: GeneratedContract): string {
+  return `${sponsorDisplayName(contract.sponsorId).toUpperCase()} // ${formatContractCategoryLabel(contract)}`;
+}
+
+/** Compact mechanical requirement fragment for feed rows (not narrative). */
+export function formatContractRowRequirement(contract: GeneratedContract): string | null {
+  switch (contract.objectiveKind) {
+    case 'EXTRACT_STABLE_RESOURCE':
+    case 'EXTRACT_SPONSOR_RESOURCE':
+    case 'EXTRACT_UNSTABLE_CARGO':
+    case 'RECOVER_APEX_CARGO':
+    case 'RECOVER_CONTRABAND':
+    case 'RECOVER_INTEL':
+    case 'RECOVER_ECONOMY_INTEL': {
+      const qty = Math.max(1, contract.targetQuantity || 1);
+      const resourceId = contract.targetResourceId ?? contract.targetResourceOptions?.[0];
+      if (!resourceId) return `RECOVER ${qty}`;
+      return `RECOVER ${qty}× ${getResourceDisplayName(resourceId).toUpperCase()}`;
+    }
+    case 'DEFEAT_ELITE': {
+      const n = Math.max(1, contract.requiredEliteKills ?? 1);
+      return `DEFEAT ${n} ELITE${n > 1 ? 'S' : ''}`;
+    }
+    case 'DEFEAT_DEPTH_BOSS':
+      return 'DEFEAT DEPTH BOSS';
+    case 'COMPLETE_EMERGENCY_RECALL':
+      return 'EMERGENCY RECALL';
+    case 'REACH_DEPTH_AND_EXTRACT':
+      return contract.requiredDepth
+        ? `REACH DEPTH ${contract.requiredDepth}+`
+        : 'REACH DEPTH';
+    case 'CLEAR_OPERATION_TARGET': {
+      const n = Math.max(1, contract.requiredOperationTargets ?? 1);
+      return `CLEAR ${n} TARGET${n > 1 ? 'S' : ''}`;
+    }
+    default:
+      return null;
+  }
+}
+
+/** Single compact metadata line for contract feed comparison. */
+export function formatContractRowMetaLine(contract: GeneratedContract): string {
+  const parts = [
+    formatContractRowRequirement(contract),
+    formatContractSectorEligibilityCompact(contract),
+    formatContractDepthCompact(contract),
+    formatContractFulfillmentCompact(contract),
+  ].filter(Boolean) as string[];
+  // Avoid repeating depth if requirement already encodes it.
+  const deduped = parts.filter((part, index) => {
+    if (index === 0) return true;
+    const req = parts[0] ?? '';
+    if (part.startsWith('DEPTH ') && req.includes('DEPTH')) return false;
+    return true;
+  });
+  return deduped.join(' · ');
+}
+
+/**
+ * Plain-language mechanical completion requirement for the dossier Objective.
+ * Uses structured contract fields; falls back to objectiveText only when needed.
+ */
+export function formatMechanicalObjective(contract: GeneratedContract): string {
+  const depthSuffix = contract.requiredDepth
+    ? ` at Depth ${contract.requiredDepth} or deeper`
+    : '';
+
+  switch (contract.objectiveKind) {
+    case 'EXTRACT_STABLE_RESOURCE':
+    case 'EXTRACT_SPONSOR_RESOURCE':
+    case 'EXTRACT_UNSTABLE_CARGO':
+    case 'RECOVER_APEX_CARGO':
+    case 'RECOVER_CONTRABAND':
+    case 'RECOVER_INTEL':
+    case 'RECOVER_ECONOMY_INTEL': {
+      const qty = Math.max(1, contract.targetQuantity || 1);
+      const resourceId = contract.targetResourceId ?? contract.targetResourceOptions?.[0];
+      const name = resourceId ? getResourceDisplayName(resourceId) : 'the required cargo';
+      const deliver = isDeliveryObjective(contract.objectiveKind)
+        ? ' and deliver it to the sponsor after the run'
+        : '';
+      return `Recover ${qty}× ${name}${depthSuffix}${deliver}.`;
+    }
+    case 'DEFEAT_ELITE': {
+      const n = Math.max(1, contract.requiredEliteKills ?? 1);
+      return `Defeat ${n} elite encounter${n > 1 ? 's' : ''}${depthSuffix}.`;
+    }
+    case 'DEFEAT_DEPTH_BOSS':
+      return `Defeat the depth boss${depthSuffix || ' at the required depth'}.`;
+    case 'COMPLETE_EMERGENCY_RECALL':
+      return 'Complete an emergency recall extraction to fulfill this mandate.';
+    case 'REACH_DEPTH_AND_EXTRACT':
+      return contract.requiredDepth
+        ? `Reach Depth ${contract.requiredDepth} or deeper and extract successfully.`
+        : 'Reach the required depth and extract successfully.';
+    case 'CLEAR_OPERATION_TARGET': {
+      const n = Math.max(1, contract.requiredOperationTargets ?? 1);
+      return `Clear ${n} operation target${n > 1 ? 's' : ''}${depthSuffix}.`;
+    }
+    default:
+      break;
+  }
+
+  const raw = contract.objectiveText?.trim();
+  return raw && raw.length > 0 ? raw : contract.title;
 }
 
 export function formatDeploymentContractStatus(

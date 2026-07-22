@@ -1,5 +1,5 @@
-import React from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Platform, StyleSheet, View } from 'react-native';
 import HapticPressable from '../HapticPressable';
 import TerminalText from '../TerminalText';
 import { resolveTerminalNavItems } from '../../constants/terminalNav';
@@ -22,6 +22,83 @@ const NAV_IDLE = '#8d9c99';
 const NAV_HOVER = '#d0d9d6';
 const NAV_ACTIVE = '#86d8be';
 const TIMER = '#d8e2df';
+
+function usePrefersReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.matchMedia) {
+      return undefined;
+    }
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const sync = () => setReduced(media.matches);
+    sync();
+    media.addEventListener?.('change', sync);
+    return () => media.removeEventListener?.('change', sync);
+  }, []);
+  return reduced;
+}
+
+/** Soft mint pulse on the LINK: SECURE status dot. */
+function SecureLinkDot(): React.JSX.Element {
+  const reduceMotion = usePrefersReducedMotion();
+  const pulse = useRef(new Animated.Value(reduceMotion ? 1 : 0.55)).current;
+
+  useEffect(() => {
+    if (reduceMotion) {
+      pulse.setValue(1);
+      return undefined;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 1400,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0.45,
+          duration: 1400,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse, reduceMotion]);
+
+  return (
+    <View style={styles.connectionDotHost}>
+      <Animated.View
+        style={[
+          styles.connectionDotGlow,
+          {
+            opacity: pulse.interpolate({
+              inputRange: [0.45, 1],
+              outputRange: [0.28, 0.72],
+            }),
+            transform: [{
+              scale: pulse.interpolate({
+                inputRange: [0.45, 1],
+                outputRange: [1, 1.55],
+              }),
+            }],
+          },
+        ]}
+      />
+      <Animated.View
+        style={[
+          styles.connectionDot,
+          {
+            opacity: pulse.interpolate({
+              inputRange: [0.45, 1],
+              outputRange: [0.75, 1],
+            }),
+          },
+        ]}
+      />
+    </View>
+  );
+}
 
 /**
  * Global hub top bar — brand identity, centered terminal tabs, breach-window status.
@@ -57,7 +134,7 @@ export default function VeilTopbar({
             <TerminalText size={6.7} letterSpacing={1} style={styles.connectionText}>
               LINK: SECURE
             </TerminalText>
-            <View style={styles.connectionDot} />
+            <SecureLinkDot />
           </View>
         ) : null}
       </View>
@@ -198,13 +275,32 @@ const styles = StyleSheet.create({
     color: MUTED,
     fontWeight: '700',
   },
+  connectionDotHost: {
+    width: 10,
+    height: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  connectionDotGlow: {
+    position: 'absolute',
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: 'rgba(105, 200, 173, 0.35)',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 0 10px rgba(105, 200, 173, 0.55), 0 0 18px rgba(105, 200, 173, 0.28)',
+      } as object,
+      default: {},
+    }),
+  },
   connectionDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
     backgroundColor: TERMINAL,
     ...Platform.select({
-      web: { boxShadow: '0 0 7px rgba(105, 200, 173, 0.38)' } as object,
+      web: { boxShadow: '0 0 6px rgba(105, 200, 173, 0.55)' } as object,
       default: {},
     }),
   },

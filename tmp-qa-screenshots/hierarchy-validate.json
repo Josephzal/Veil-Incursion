@@ -1,0 +1,47 @@
+{
+  "broker": {
+    "h": 70,
+    "top": 361,
+    "bottom": 431,
+    "cursor": "default",
+    "role": null,
+    "tabindex": null,
+    "tag": "DIV",
+    "bg": "rgba(0, 0, 0, 0)",
+    "clipPath": "none"
+  },
+  "brokerInteractiveDescendants": 0,
+  "brokerHasPointerCursor": false,
+  "cabalHeader": {
+    "h": 28,
+    "top": 459,
+    "bottom": 487,
+    "cursor": "default",
+    "role": null,
+    "tabindex": null,
+    "tag": "DIV",
+    "bg": "rgba(0, 0, 0, 0)",
+    "clipPath": "none"
+  },
+  "blackHeader": {
+    "h": 28,
+    "top": 703,
+    "bottom": 731,
+    "cursor": "default",
+    "role": null,
+    "tabindex": null,
+    "tag": "DIV",
+    "bg": "rgba(0, 0, 0, 0)",
+    "clipPath": "none"
+  },
+  "contractRowHeight": 90,
+  "ruleWidth": null,
+  "gaps": {
+    "brokerToCabalHeader": 28,
+    "cabalHeaderToFirstContract": 11,
+    "lastCabalToBlack": null,
+    "blackHeaderToIndependent": 11
+  },
+  "independentEyebrow": "INDEPENDENT ROUTES",
+  "oldBlackEyebrowPresent": false
+}

@@ -140,6 +140,75 @@ export function cabalRepXpProgress(
   return { current, required, percent, tier };
 }
 
+export interface CabalReputationProgress {
+  cabalId: FactionType;
+  /** Current cabal tier (shown as RANK in board UI). */
+  rank: number;
+  rankLabel: string;
+  /** Reputation XP earned toward the next rank (within-rank, not lifetime). */
+  current: number;
+  /** Reputation XP required to reach the next rank from this rank's floor. */
+  required: number;
+  remaining: number;
+  /** Clamped 0–100 visual fill. */
+  percent: number;
+  isMaxRank: boolean;
+  nextRank: number | null;
+  nextRankLabel: string | null;
+  accessibilityLabel: string;
+}
+
+/** Display label for a cabal tier/rank. Tier 0 = uninitiated. */
+export function cabalRankLabel(rank: number): string {
+  if (rank <= 0) return 'UNINITIATED';
+  const row = CABAL_TIER_REWARD_TABLE.find((entry) => entry.tier === rank);
+  return row ? row.label.toUpperCase() : `RANK ${rank}`;
+}
+
+/**
+ * Canonical selected-Cabal reputation progress for hub UI.
+ * Uses ProgressionProfile cabal repXp / repTier and xpRequiredForCabalTier thresholds.
+ * Does not alter stored reputation values.
+ */
+export function getCabalReputationProgress(
+  profile: ProgressionProfile,
+  cabalId: FactionType,
+): CabalReputationProgress {
+  const base = cabalRepXpProgress(profile, cabalId);
+  const rank = base.tier;
+  const isMaxRank = rank >= CABAL_REP_TIER_MAX;
+  const current = Math.max(0, Math.floor(base.current));
+  const required = isMaxRank
+    ? Math.max(1, Math.floor(base.required))
+    : Math.max(1, Math.floor(xpRequiredForCabalTier(rank)));
+  const remaining = isMaxRank ? 0 : Math.max(0, required - current);
+  const percent = isMaxRank
+    ? 100
+    : Math.min(100, Math.max(0, (current / required) * 100));
+  const nextRank = isMaxRank ? null : rank + 1;
+  const rankLabel = cabalRankLabel(rank);
+  const nextRankLabel = nextRank == null ? null : cabalRankLabel(nextRank);
+  const displayName = sponsorDisplayName(cabalId);
+
+  const accessibilityLabel = isMaxRank
+    ? `${displayName} reputation: Rank ${rank}, maximum rank achieved.`
+    : `${displayName} reputation: Rank ${rank}, ${current} of ${required} reputation, ${remaining} reputation required for Rank ${nextRank}.`;
+
+  return {
+    cabalId,
+    rank,
+    rankLabel,
+    current,
+    required,
+    remaining,
+    percent,
+    isMaxRank,
+    nextRank,
+    nextRankLabel,
+    accessibilityLabel,
+  };
+}
+
 export function computeCabalRepXpGain(input: CabalRepXpInput): number {
   if (!input.contractSucceeded) return 0;
   const base = Math.max(20, Math.floor(input.reputationAwarded || 0) + 20);

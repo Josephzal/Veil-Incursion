@@ -90,6 +90,9 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     minHeight: 0,
+    minWidth: 0,
+    maxWidth: '100%',
+    overflow: 'hidden',
     zIndex: 1,
     backgroundColor: '#010304',
   },
@@ -104,6 +107,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     minWidth: 0,
+    maxWidth: '100%',
     zIndex: 1,
     flexDirection: 'column',
     overflow: 'hidden',
@@ -112,6 +116,8 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     minHeight: 0,
+    maxWidth: '100%',
+    overflow: 'hidden',
     position: 'relative',
   },
   terminalOverlayHost: {
