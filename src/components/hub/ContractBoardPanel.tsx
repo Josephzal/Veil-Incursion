@@ -24,7 +24,6 @@ import {
   CabalMark,
   ContainmentFragment,
   LiveStatus,
-  OccultInterference,
 } from './veilChrome';
 import {
   CabalDossierMark,
@@ -73,6 +72,12 @@ const DEFAULT_SPONSOR_FILTER: CabalEmployerId = 'TERRAN_GRID';
 const META = '#8A9690';
 const TEXT_PRIMARY = '#C4CBC6';
 const TEXT_SECONDARY = '#8A9690';
+/** Supernatural selection rail / dossier accent — not used for text. */
+const OCCULT_SELECT = '#B37EEB';
+/** Selected contract wash — matches Black Market forge selection. */
+const SELECT_MINT_WASH_WEB =
+  'linear-gradient(90deg, rgba(100, 211, 175, 0.09), rgba(100, 211, 175, 0.015) 72%)';
+const SELECT_MINT_WASH_NATIVE = 'rgba(100, 211, 175, 0.07)';
 /** Fixed dossier title band (2 lines @ 23lh) so status / body anchors stay stable. */
 const DOSSIER_TITLE_LINE_HEIGHT = 23;
 const DOSSIER_TITLE_LINES = 2;
@@ -87,14 +92,6 @@ type InspectedSelection =
 
 function resolveSponsorFilter(lastUsedSponsorId: CabalEmployerId | null | undefined): CabalEmployerId {
   return lastUsedSponsorId ?? DEFAULT_SPONSOR_FILTER;
-}
-
-function formatSectorShort(id: string): string {
-  return id
-    .replace(/^THE_/, '')
-    .replace(/_/g, ' ')
-    .toLowerCase()
-    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function riskPresentation(difficulty: number): { label: string; color: string; extreme: boolean } {
@@ -159,14 +156,15 @@ function ContractSignalRow({
   active,
   onSelect,
   compact,
-  reduceMotion,
+  lead,
 }: {
   contract: GeneratedContract;
   selected: boolean;
   active: boolean;
   onSelect: () => void;
   compact: boolean;
-  reduceMotion: boolean;
+  /** First row under a group header — draws the top separator. */
+  lead?: boolean;
 }): React.JSX.Element {
   const risk = riskPresentation(contract.difficulty);
   const tone = resolveCabalTone(contract.sponsorId);
@@ -174,7 +172,7 @@ function ContractSignalRow({
 
   return (
     <View
-      style={[styles.signal, selected && styles.signalSelectedShell]}
+      style={[styles.signal, lead && styles.signalLead]}
       {...(Platform.OS === 'web'
         ? ({
             'data-selected': selected ? 'true' : 'false',
@@ -188,12 +186,9 @@ function ContractSignalRow({
         {...(Platform.OS === 'web' ? ({ 'aria-hidden': true } as object) : null)}
         style={[
           styles.signalIdentityMark,
-          selected && { backgroundColor: tone.accent },
+          selected && styles.signalIdentityMarkOccult,
         ]}
       />
-      {selected ? (
-        <OccultInterference active reduceMotion={reduceMotion} color={`rgba(${tone.rgb}, 1)`} />
-      ) : null}
       <HapticPressable
         onPress={onSelect}
         accessibilityRole="button"
@@ -205,11 +200,8 @@ function ContractSignalRow({
           selected && [
             styles.signalSelectSelected,
             Platform.OS === 'web'
-              ? ({
-                  backgroundImage:
-                    `linear-gradient(90deg, rgba(${tone.rgb}, 0.1), rgba(${tone.rgb}, 0.03) 55%, rgba(4, 5, 5, 0))`,
-                } as object)
-              : { backgroundColor: tone.accentSoft },
+              ? ({ backgroundImage: SELECT_MINT_WASH_WEB } as object)
+              : { backgroundColor: SELECT_MINT_WASH_NATIVE },
           ],
           ((hovered || pressed) && !selected) ? styles.signalSelectHover : null,
           focused && !selected ? styles.signalSelectFocused : null,
@@ -276,18 +268,16 @@ function IndependentSignalRow({
   active,
   onSelect,
   compact,
-  reduceMotion,
 }: {
   selected: boolean;
   active: boolean;
   onSelect: () => void;
   compact: boolean;
-  reduceMotion: boolean;
 }): React.JSX.Element {
   const tone = VEIL_BLACK_CHANNEL_TONE;
   return (
     <View
-      style={[styles.signal, styles.signalIndependent, selected && styles.signalSelectedShell]}
+      style={[styles.signal, styles.signalLead, styles.signalIndependent]}
       {...(Platform.OS === 'web'
         ? ({
             'data-selected': selected ? 'true' : 'false',
@@ -302,12 +292,9 @@ function IndependentSignalRow({
         style={[
           styles.signalIdentityMark,
           styles.signalIdentityMarkCorrupt,
-          selected && { backgroundColor: tone.accent },
+          selected && styles.signalIdentityMarkOccult,
         ]}
       />
-      {selected ? (
-        <OccultInterference active reduceMotion={reduceMotion} color={`rgba(${tone.rgb}, 1)`} />
-      ) : null}
       <HapticPressable
         onPress={onSelect}
         accessibilityRole="button"
@@ -319,11 +306,8 @@ function IndependentSignalRow({
           selected && [
             styles.signalSelectSelectedIndependent,
             Platform.OS === 'web'
-              ? ({
-                  backgroundImage:
-                    `linear-gradient(90deg, rgba(${tone.rgb}, 0.1), rgba(${tone.rgb}, 0.03) 55%, rgba(4, 5, 5, 0))`,
-                } as object)
-              : { backgroundColor: tone.accentSoft },
+              ? ({ backgroundImage: SELECT_MINT_WASH_WEB } as object)
+              : { backgroundColor: SELECT_MINT_WASH_NATIVE },
           ],
           ((hovered || pressed) && !selected) ? styles.signalSelectHover : null,
           focused && !selected ? styles.signalSelectFocused : null,
@@ -585,9 +569,6 @@ export default function ContractBoardPanel(): React.JSX.Element {
     inspectedContract && activeContractId === inspectedContract.id,
   );
   const inspectedIsActiveIndependent = inspected.kind === 'INDEPENDENT' && isIndependentActive;
-  const hasOtherActiveSponsor = Boolean(
-    activeSponsorContract && inspectedContract && activeSponsorContract.id !== inspectedContract.id,
-  );
 
   const feedSweepStyle = {
     opacity: feedSweep.interpolate({ inputRange: [0, 0.35, 1], outputRange: [0, 0.55, 0] }),
@@ -719,17 +700,9 @@ export default function ContractBoardPanel(): React.JSX.Element {
                   {...(Platform.OS === 'web' ? ({ 'aria-hidden': true } as object) : null)}
                   style={[
                     styles.sponsorChannelEdge,
-                    { backgroundColor: selected ? tone.accent : VEIL.lineFaint },
+                    selected ? styles.sponsorChannelEdgeOccult : { backgroundColor: VEIL.lineFaint },
                   ]}
                 />
-                {selected ? (
-                  <View
-                    pointerEvents="none"
-                    accessible={false}
-                    {...(Platform.OS === 'web' ? ({ 'aria-hidden': true } as object) : null)}
-                    style={[styles.sponsorSelectStamp, { borderColor: tone.accent }]}
-                  />
-                ) : null}
                 {sponsorId === 'SOLARIS' ? (
                   <View
                     pointerEvents="none"
@@ -780,7 +753,6 @@ export default function ContractBoardPanel(): React.JSX.Element {
           </View>
           <View style={styles.feedSummaryBroker}>
             <BrokerPriorityBulletin
-              sectorLabel={formatSectorShort(selectedSector.id).toUpperCase()}
               headline={crisisPreview.crisisDisplayName.toUpperCase()}
               description={crisisPreview.crisisSummary}
               classification={crisisTags[0] ?? null}
@@ -828,7 +800,7 @@ export default function ContractBoardPanel(): React.JSX.Element {
                   </TerminalText>
                 </View>
               ) : (
-                visibleContracts.map((contract) => (
+                visibleContracts.map((contract, index) => (
                   <ContractSignalRow
                     key={contract.id}
                     contract={contract}
@@ -836,7 +808,7 @@ export default function ContractBoardPanel(): React.JSX.Element {
                     active={activeContractId === contract.id}
                     onSelect={() => handleInspectContract(contract)}
                     compact={compactHeight}
-                    reduceMotion={reduceMotion}
+                    lead={index === 0}
                   />
                 ))
               )}
@@ -844,8 +816,7 @@ export default function ContractBoardPanel(): React.JSX.Element {
               <View style={styles.independentSection}>
                 <ContractGroupHeader
                   primaryLabel="BLACK CHANNEL"
-                  secondaryLabel="INDEPENDENT ROUTES"
-                  meta="1 ROUTE // UNVERIFIED"
+                  secondaryLabel="ROUTE"
                   tone={VEIL_BLACK_CHANNEL_TONE}
                   variant="blackChannel"
                 />
@@ -854,7 +825,6 @@ export default function ContractBoardPanel(): React.JSX.Element {
                   active={isIndependentActive}
                   onSelect={handleInspectIndependent}
                   compact={compactHeight}
-                  reduceMotion={reduceMotion}
                 />
               </View>
 
@@ -889,7 +859,7 @@ export default function ContractBoardPanel(): React.JSX.Element {
           reduceMotion={reduceMotion}
         />
         <View style={[styles.dossierHeader, compactHeight && styles.dossierHeaderCompact]}>
-          <View style={[styles.dossierHeaderAccent, { backgroundColor: dossierAccent }]} />
+          <View style={styles.dossierHeaderAccent} />
           <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>
             CONTRACT DOSSIER
           </TerminalText>
@@ -1185,7 +1155,7 @@ export default function ContractBoardPanel(): React.JSX.Element {
             <HapticPressable
               onPress={handleAcceptInspected}
               accessibilityRole="button"
-              accessibilityLabel={hasOtherActiveSponsor ? 'Replace' : 'Accept'}
+              accessibilityLabel="Accept"
               style={({ pressed }) => ([
                 styles.actionButton,
                 styles.actionPrimary,
@@ -1193,7 +1163,7 @@ export default function ContractBoardPanel(): React.JSX.Element {
               ])}
             >
               <TerminalText size={8} letterSpacing={1} style={styles.actionPrimaryText}>
-                {hasOtherActiveSponsor ? '[ REPLACE ]' : '[ ACCEPT ]'}
+                [ ACCEPT ]
               </TerminalText>
             </HapticPressable>
           )}
@@ -1270,20 +1240,18 @@ const styles = StyleSheet.create({
     flexGrow: 0,
     flexShrink: 0,
     flexDirection: 'row',
-    alignItems: 'stretch',
+    alignItems: 'flex-start',
     gap: 18,
     marginHorizontal: 14,
     marginBottom: 0,
     paddingTop: 6,
     paddingBottom: 2,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: VEIL.lineFaint,
     minHeight: 0,
   },
   feedSummaryRep: {
     flex: 0.95,
     minWidth: 0,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     paddingRight: 8,
     borderRightWidth: StyleSheet.hairlineWidth,
     borderRightColor: VEIL.lineFaint,
@@ -1291,7 +1259,7 @@ const styles = StyleSheet.create({
   feedSummaryBroker: {
     flex: 1.35,
     minWidth: 0,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     paddingLeft: 4,
   },
   contractBoardHeader: {
@@ -1390,14 +1358,14 @@ const styles = StyleSheet.create({
     bottom: 10,
     width: 2,
   },
-  sponsorSelectStamp: {
-    position: 'absolute',
-    top: 6,
-    left: 6,
-    width: 9,
-    height: 9,
-    borderTopWidth: 1,
-    borderLeftWidth: 1,
+  sponsorChannelEdgeOccult: {
+    backgroundColor: OCCULT_SELECT,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 0 10px rgba(214, 90, 168, 0.28)',
+      } as object,
+      default: {},
+    }),
   },
   sponsorSolarisArc: {
     position: 'absolute',
@@ -1521,8 +1489,9 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
-  signalSelectedShell: {
-    backgroundColor: VEIL.surface3,
+  signalLead: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: VEIL.lineFaint,
   },
   signalIndependent: {
     backgroundColor: 'transparent',
@@ -1537,9 +1506,18 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     ...Platform.select({
       web: {
-        transitionProperty: 'background-color',
+        transitionProperty: 'background-color, box-shadow',
         transitionDuration: '120ms',
         transitionTimingFunction: 'ease-out',
+      } as object,
+      default: {},
+    }),
+  },
+  signalIdentityMarkOccult: {
+    backgroundColor: OCCULT_SELECT,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 0 10px rgba(214, 90, 168, 0.28)',
       } as object,
       default: {},
     }),
@@ -1717,6 +1695,13 @@ const styles = StyleSheet.create({
     height: 42,
     left: 0,
     width: 2,
+    backgroundColor: OCCULT_SELECT,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 0 10px rgba(214, 90, 168, 0.28)',
+      } as object,
+      default: {},
+    }),
   },
   dossierEyebrow: {
     color: VEIL.textDim,

@@ -23,6 +23,10 @@ const NAV_IDLE = VEIL.textMuted;
 const NAV_HOVER = VEIL.textSoft;
 const NAV_ACTIVE = VEIL.mintBright;
 const TIMER = VEIL.text;
+/** Supernatural accent for active nav underline + LINK: SECURE pip. */
+const OCCULT_SELECT = '#B37EEB';
+const OCCULT_RGB = '179, 126, 235';
+const OCCULT_PINK_RGB = '214, 90, 168';
 
 function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false);
@@ -39,7 +43,7 @@ function usePrefersReducedMotion(): boolean {
   return reduced;
 }
 
-/** Soft mint pulse on the LINK: SECURE status dot. */
+/** Soft occult pulse on the LINK: SECURE status dot. */
 function SecureLinkDot(): React.JSX.Element {
   const reduceMotion = usePrefersReducedMotion();
   const pulse = useRef(new Animated.Value(reduceMotion ? 1 : 0.55)).current;
@@ -287,10 +291,11 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: 'rgba(105, 200, 173, 0.35)',
+    backgroundColor: `rgba(${OCCULT_RGB}, 0.38)`,
     ...Platform.select({
       web: {
-        boxShadow: '0 0 10px rgba(105, 200, 173, 0.55), 0 0 18px rgba(105, 200, 173, 0.28)',
+        boxShadow:
+          `0 0 10px rgba(${OCCULT_RGB}, 0.55), 0 0 18px rgba(${OCCULT_PINK_RGB}, 0.28)`,
       } as object,
       default: {},
     }),
@@ -299,9 +304,11 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: TERMINAL,
+    backgroundColor: OCCULT_SELECT,
     ...Platform.select({
-      web: { boxShadow: '0 0 6px rgba(105, 200, 173, 0.55)' } as object,
+      web: {
+        boxShadow: `0 0 6px rgba(${OCCULT_PINK_RGB}, 0.55)`,
+      } as object,
       default: {},
     }),
   },
@@ -347,7 +354,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   navIndicatorActive: {
-    backgroundColor: TERMINAL,
+    backgroundColor: OCCULT_SELECT,
+    ...Platform.select({
+      web: {
+        boxShadow: `0 0 8px rgba(${OCCULT_PINK_RGB}, 0.35)`,
+      } as object,
+      default: {},
+    }),
   },
   navBadge: {
     minWidth: 19,

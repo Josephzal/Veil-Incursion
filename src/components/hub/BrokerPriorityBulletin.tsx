@@ -4,20 +4,18 @@ import TerminalText from '../TerminalText';
 import { VEIL } from '../../theme/veilTerminalTokens';
 
 interface BrokerPriorityBulletinProps {
-  sectorLabel: string;
   headline: string;
   description: string;
-  /** Small classification metadata (e.g. UNSTABLE RESOURCE), same line as the eyebrow. */
+  /** Small classification metadata (e.g. UNSTABLE RESOURCE). */
   classification?: string | null;
   compact?: boolean;
 }
 
 /**
  * Non-interactive intelligence bulletin for the Contract Board feed.
- * Must never share the selectable contract-row shell.
+ * Typography mirrors CabalReputationSummary so the two columns align.
  */
 export default function BrokerPriorityBulletin({
-  sectorLabel,
   headline,
   description,
   classification = null,
@@ -33,36 +31,27 @@ export default function BrokerPriorityBulletin({
       pointerEvents="box-none"
       {...(Platform.OS === 'web'
         ? ({
-            // Semantic aside; never interactive.
             role: 'complementary',
             'aria-label': `Broker priority. ${headline}. ${description}`,
           } as object)
         : null)}
     >
-      <View style={styles.body}>
-        <View
-          pointerEvents="none"
-          accessible={false}
-          {...(Platform.OS === 'web' ? ({ 'aria-hidden': true } as object) : null)}
-          style={styles.accent}
-        />
-        <View style={styles.metaRow}>
-          <TerminalText size={6.5} letterSpacing={1} style={styles.meta} numberOfLines={1}>
-            {`BROKER PRIORITY // ${sectorLabel}`}
+      <View style={styles.metaRow}>
+        <TerminalText size={6.5} letterSpacing={1} style={styles.sectionLabel} numberOfLines={1}>
+          BROKER PRIORITY
+        </TerminalText>
+        {classification ? (
+          <TerminalText size={6} letterSpacing={0.95} style={styles.classification} numberOfLines={1}>
+            {classification}
           </TerminalText>
-          {classification ? (
-            <TerminalText size={6} letterSpacing={0.95} style={styles.classification} numberOfLines={1}>
-              {classification}
-            </TerminalText>
-          ) : null}
-        </View>
-        <TerminalText size={14} letterSpacing={0.2} style={styles.headline} numberOfLines={1}>
-          {headline}
-        </TerminalText>
-        <TerminalText size={7.5} letterSpacing={0.1} style={styles.description} numberOfLines={1}>
-          {description}
-        </TerminalText>
+        ) : null}
       </View>
+      <TerminalText size={10} letterSpacing={0.4} style={styles.headline}>
+        {headline}
+      </TerminalText>
+      <TerminalText size={7.5} letterSpacing={0.1} style={styles.description}>
+        {description}
+      </TerminalText>
     </View>
   );
 }
@@ -74,9 +63,12 @@ const styles = StyleSheet.create({
     marginHorizontal: 0,
     marginTop: 0,
     marginBottom: 0,
-    minHeight: 64,
-    maxHeight: 72,
+    minWidth: 0,
     width: '100%',
+    paddingTop: 6,
+    paddingBottom: 8,
+    paddingHorizontal: 4,
+    backgroundColor: 'transparent',
     ...Platform.select({
       web: {
         cursor: 'default',
@@ -86,39 +78,20 @@ const styles = StyleSheet.create({
     }),
   },
   hostCompact: {
-    minHeight: 58,
-    maxHeight: 64,
-  },
-  body: {
-    position: 'relative',
-    flex: 1,
-    justifyContent: 'center',
-    paddingTop: 8,
-    paddingBottom: 8,
-    paddingLeft: 14,
-    paddingRight: 2,
-    // Flat bulletin — no filled surface / card shell.
-    backgroundColor: 'transparent',
-  },
-  accent: {
-    position: 'absolute',
-    left: 0,
-    top: 12,
-    height: 28,
-    width: 2,
-    backgroundColor: VEIL.occult,
-    opacity: 0.7,
+    paddingTop: 6,
+    paddingBottom: 6,
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     minWidth: 0,
+    marginBottom: 5,
   },
-  meta: {
-    flex: 1,
+  sectionLabel: {
+    flexShrink: 1,
     minWidth: 0,
-    color: VEIL.occultPale,
+    color: '#8A9690',
     fontWeight: '700',
   },
   classification: {
@@ -127,12 +100,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   headline: {
-    marginTop: 4,
-    color: VEIL.bone,
+    color: VEIL.text,
     fontWeight: '700',
+    marginBottom: 4,
   },
   description: {
-    marginTop: 3,
     color: '#9AA39D',
     fontWeight: '600',
   },
