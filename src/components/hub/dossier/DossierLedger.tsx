@@ -66,7 +66,7 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   sectionLabel: {
-    color: 'rgba(185, 181, 167, 0.82)',
+    color: 'rgba(198, 194, 180, 0.92)',
     fontWeight: '700',
     marginBottom: 8,
   },
@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
     borderBottomColor: VEIL.lineFaint,
   },
   label: {
-    color: '#8A9690',
+    color: '#9CA7A0',
     fontWeight: '700',
     paddingTop: 1,
   },

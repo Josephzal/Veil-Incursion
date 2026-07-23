@@ -51,7 +51,7 @@ const styles = StyleSheet.create({
     opacity: 0.55,
   },
   sectionLabel: {
-    color: 'rgba(185, 181, 167, 0.78)',
+    color: 'rgba(198, 194, 180, 0.92)',
     fontWeight: '700',
   },
   value: {

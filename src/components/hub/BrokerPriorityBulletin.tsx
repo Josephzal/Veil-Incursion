@@ -91,7 +91,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     flexShrink: 1,
     minWidth: 0,
-    color: '#8A9690',
+    color: '#9CA7A0',
     fontWeight: '700',
   },
   classification: {
@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   description: {
-    color: '#9AA39D',
+    color: '#B0BAB4',
     fontWeight: '600',
   },
 });

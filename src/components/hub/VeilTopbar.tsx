@@ -9,6 +9,7 @@ import { useResponsiveScale } from '../../hooks/useResponsiveScale';
 import { readPressableHover } from '../../utils/terminalHoverStyle';
 import type { TerminalView } from '../../types/terminalNav';
 import { VEIL } from '../../theme/veilTerminalTokens';
+import { OCCULT_NEON, OccultNeonRail } from './veilChrome';
 
 interface VeilTopbarProps {
   activeView: TerminalView;
@@ -16,17 +17,11 @@ interface VeilTopbarProps {
 }
 
 const TERMINAL = VEIL.mint;
-const TERMINAL_BRIGHT = VEIL.mintBright;
 const BRAND = VEIL.text;
 const MUTED = VEIL.textMuted;
 const NAV_IDLE = VEIL.textMuted;
-const NAV_HOVER = VEIL.textSoft;
 const NAV_ACTIVE = VEIL.mintBright;
 const TIMER = VEIL.text;
-/** Supernatural accent for active nav underline + LINK: SECURE pip. */
-const OCCULT_SELECT = '#B37EEB';
-const OCCULT_RGB = '179, 126, 235';
-const OCCULT_PINK_RGB = '214, 90, 168';
 
 function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false);
@@ -43,7 +38,7 @@ function usePrefersReducedMotion(): boolean {
   return reduced;
 }
 
-/** Soft occult pulse on the LINK: SECURE status dot. */
+/** Soft occult neon pulse on the LINK: SECURE status dot. */
 function SecureLinkDot(): React.JSX.Element {
   const reduceMotion = usePrefersReducedMotion();
   const pulse = useRef(new Animated.Value(reduceMotion ? 1 : 0.55)).current;
@@ -57,12 +52,12 @@ function SecureLinkDot(): React.JSX.Element {
       Animated.sequence([
         Animated.timing(pulse, {
           toValue: 1,
-          duration: 1400,
+          duration: 2400,
           useNativeDriver: true,
         }),
         Animated.timing(pulse, {
           toValue: 0.45,
-          duration: 1400,
+          duration: 2400,
           useNativeDriver: true,
         }),
       ]),
@@ -75,16 +70,17 @@ function SecureLinkDot(): React.JSX.Element {
     <View style={styles.connectionDotHost}>
       <Animated.View
         style={[
-          styles.connectionDotGlow,
+          styles.connectionDotBloom,
           {
             opacity: pulse.interpolate({
               inputRange: [0.45, 1],
-              outputRange: [0.28, 0.72],
+              outputRange: [0.35, 0.85],
             }),
             transform: [{
               scale: pulse.interpolate({
                 inputRange: [0.45, 1],
-                outputRange: [1, 1.55],
+                // Half the previous peak expansion (was 1 → 1.65).
+                outputRange: [1, 1.325],
               }),
             }],
           },
@@ -92,11 +88,11 @@ function SecureLinkDot(): React.JSX.Element {
       />
       <Animated.View
         style={[
-          styles.connectionDot,
+          styles.connectionDotCore,
           {
             opacity: pulse.interpolate({
               inputRange: [0.45, 1],
-              outputRange: [0.75, 1],
+              outputRange: [0.8, 1],
             }),
           },
         ]}
@@ -192,7 +188,11 @@ export default function VeilTopbar({
                   </View>
                 ) : null}
               </View>
-              <View style={[styles.navIndicator, isActive && styles.navIndicatorActive]} />
+              {isActive ? (
+                <OccultNeonRail orientation="horizontal" style={styles.navIndicatorNeon} />
+              ) : (
+                <View style={styles.navIndicator} />
+              )}
             </HapticPressable>
           );
         })}
@@ -281,35 +281,44 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   connectionDotHost: {
-    width: 10,
-    height: 10,
+    width: 12,
+    height: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'visible',
   },
-  connectionDotGlow: {
+  connectionDotBloom: {
     position: 'absolute',
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: `rgba(${OCCULT_RGB}, 0.38)`,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: 'rgba(184, 74, 144, 0.28)',
     ...Platform.select({
       web: {
-        boxShadow:
-          `0 0 10px rgba(${OCCULT_RGB}, 0.55), 0 0 18px rgba(${OCCULT_PINK_RGB}, 0.28)`,
+        backgroundImage:
+          `radial-gradient(circle, rgba(208, 163, 234, 0.42) 0%, rgba(184, 74, 144, 0.28) 40%, rgba(166, 111, 208, 0) 72%)`,
+        boxShadow: OCCULT_NEON.glowWeb,
+        filter: 'blur(0.5px)',
       } as object,
       default: {},
     }),
   },
-  connectionDot: {
+  connectionDotCore: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: OCCULT_SELECT,
     ...Platform.select({
       web: {
-        boxShadow: `0 0 6px rgba(${OCCULT_PINK_RGB}, 0.55)`,
+        backgroundImage: `radial-gradient(circle at 35% 30%, ${OCCULT_NEON.core}, ${OCCULT_NEON.mid} 55%, ${OCCULT_NEON.hot} 100%)`,
+        boxShadow: OCCULT_NEON.glowWeb,
       } as object,
-      default: {},
+      default: {
+        backgroundColor: OCCULT_NEON.mid,
+        shadowColor: OCCULT_NEON.hot,
+        shadowOpacity: 0.48,
+        shadowRadius: 5,
+        shadowOffset: { width: 0, height: 0 },
+      },
     }),
   },
   nav: {
@@ -330,6 +339,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: '100%',
     backgroundColor: 'transparent',
+    overflow: 'visible',
     ...Platform.select({
       web: { cursor: 'pointer', outlineStyle: 'none' } as object,
       default: {},
@@ -353,14 +363,9 @@ const styles = StyleSheet.create({
     height: 2,
     backgroundColor: 'transparent',
   },
-  navIndicatorActive: {
-    backgroundColor: OCCULT_SELECT,
-    ...Platform.select({
-      web: {
-        boxShadow: `0 0 8px rgba(${OCCULT_PINK_RGB}, 0.35)`,
-      } as object,
-      default: {},
-    }),
+  navIndicatorNeon: {
+    right: 14,
+    left: 14,
   },
   navBadge: {
     minWidth: 19,

@@ -98,7 +98,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   sectionLabel: {
-    color: '#8A9690',
+    color: '#9CA7A0',
     fontWeight: '700',
     marginBottom: 5,
   },
@@ -108,13 +108,13 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   progressNums: {
-    color: '#B0BAB4',
+    color: '#BCC6C0',
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
     marginBottom: 3,
   },
   remaining: {
-    color: '#8A9690',
+    color: '#9CA7A0',
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
     marginBottom: 8,

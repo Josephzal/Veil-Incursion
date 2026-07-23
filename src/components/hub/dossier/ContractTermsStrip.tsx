@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   sectionLabel: {
-    color: 'rgba(185, 181, 167, 0.82)',
+    color: 'rgba(198, 194, 180, 0.92)',
     fontWeight: '700',
     marginBottom: 8,
   },
@@ -81,7 +81,8 @@ const styles = StyleSheet.create({
     maxHeight: 88,
     paddingVertical: 14,
     paddingHorizontal: 14,
-    backgroundColor: VEIL.surface2,
+    // Match unselected Contract Board card surface (cooler than VEIL.surface2).
+    backgroundColor: 'rgba(8, 13, 13, 0.78)',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderTopColor: VEIL.line,
@@ -121,7 +122,7 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   label: {
-    color: '#8A9690',
+    color: '#9CA7A0',
     fontWeight: '700',
     marginBottom: 6,
   },

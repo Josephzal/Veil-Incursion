@@ -5,9 +5,9 @@ import TerminalText from '../TerminalText';
 export const CONTRACT_LOGGED_MESSAGE = 'CONTRACT LOGGED';
 export const CONTRACT_AVAILABLE_MESSAGE = 'AVAILABLE';
 const CHAR_MS = 48;
-/** Muted terminal mint — secondary to dossier title. */
-const TERMINAL = '#5FAE9A';
-const TERMINAL_SOFT = '#7BC4B0';
+/** Terminal phosphor green — greener than mint, secondary to dossier title. */
+const TERMINAL = '#4FA87A';
+const TERMINAL_SOFT = '#6EBF92';
 
 /** Fixed dossier status slot — available/logged share the same footprint. */
 export const DOSSIER_STATUS_SLOT_HEIGHT = 30;
@@ -250,10 +250,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: 'rgba(3, 5, 4, 0.92)',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(95, 174, 154, 0.16)',
+    borderColor: 'rgba(79, 168, 122, 0.18)',
     ...Platform.select({
       web: {
-        boxShadow: 'inset 0 1px 0 rgba(95, 174, 154, 0.06), inset 0 -10px 18px rgba(0, 0, 0, 0.45)',
+        boxShadow: 'inset 0 1px 0 rgba(79, 168, 122, 0.07), inset 0 -10px 18px rgba(0, 0, 0, 0.45)',
       } as object,
       default: {},
     }),
@@ -264,10 +264,10 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         backgroundImage:
-          'repeating-linear-gradient(0deg, rgba(124, 196, 176, 0.08) 0px, rgba(124, 196, 176, 0.08) 1px, transparent 1px, transparent 3px)',
+          'repeating-linear-gradient(0deg, rgba(110, 191, 146, 0.08) 0px, rgba(110, 191, 146, 0.08) 1px, transparent 1px, transparent 3px)',
       } as object,
       default: {
-        backgroundColor: 'rgba(124, 196, 176, 0.03)',
+        backgroundColor: 'rgba(110, 191, 146, 0.03)',
       },
     }),
   },

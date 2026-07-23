@@ -6,4 +6,5 @@ export { default as ContainmentFragment } from './ContainmentFragment';
 export { default as LiveStatus } from './LiveStatus';
 export { default as LedgerDivider } from './LedgerDivider';
 export { default as OccultInterference } from './OccultInterference';
+export { default as OccultNeonRail, OCCULT_NEON } from './OccultNeonAccent';
 export { default as DossierCabalSeal } from './DossierCabalSeal';
