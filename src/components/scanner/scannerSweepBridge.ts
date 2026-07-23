@@ -39,7 +39,7 @@ export interface ScannerSweepBridgeSample {
 }
 
 /** Visual phosphor wake duration used only to derive wake angular width. */
-export const SWEEP_WAKE_MS = 575;
+export const SWEEP_WAKE_MS = 1380;
 
 /** Wake width in degrees from existing sweep period (not a second clock). */
 export const SWEEP_WAKE_DEG = (SWEEP_WAKE_MS / SCAN_SWEEP_MS) * 360;

@@ -276,6 +276,16 @@ function sweepWedgePath(
   return `M ${cx} ${cy} L ${x0} ${y0} A ${radius} ${radius} 0 ${largeArc} 1 ${x1} ${y1} Z`;
 }
 
+/**
+ * Classic radar phosphor decay: t=0 at trail end (invisible) → t=1 at lead (peak).
+ * Power ease keeps a long soft tail without banded steps.
+ */
+function radarWakeAlpha(t: number, peak: number, power: number): number {
+  if (t <= 0) return 0;
+  if (t >= 1) return peak;
+  return peak * t ** power;
+}
+
 /** Angular wake segments — soft fill only; leading edge drawn separately. */
 function buildSweepGradientSegments(
   cx: number,
@@ -283,9 +293,8 @@ function buildSweepGradientSegments(
   radius: number,
   trailDeg: number,
   color: string,
-  positions: readonly number[],
-  alphas: readonly number[],
-  segments = 48,
+  fade: { peak: number; power: number } | { positions: readonly number[]; alphas: readonly number[] },
+  segments = 96,
 ): Array<{ d: string; fill: string }> {
   const result: Array<{ d: string; fill: string }> = [];
   // Match lead stroke radius so the wake meets the scan line tip and hub.
@@ -293,8 +302,11 @@ function buildSweepGradientSegments(
   for (let i = 0; i < segments; i += 1) {
     const t0 = i / segments;
     const t1 = (i + 1) / segments;
-    const alpha = lerpGradientStops(positions, alphas, (t0 + t1) / 2);
-    if (alpha < 0.003) continue;
+    const mid = (t0 + t1) / 2;
+    const alpha = 'peak' in fade
+      ? radarWakeAlpha(mid, fade.peak, fade.power)
+      : lerpGradientStops(fade.positions, fade.alphas, mid);
+    if (alpha < 0.002) continue;
 
     const deg0 = 360 - trailDeg + t0 * trailDeg;
     const deg1 = 360 - trailDeg + t1 * trailDeg;
@@ -307,14 +319,15 @@ function buildSweepGradientSegments(
 }
 
 /**
- * Soft feathered wake (~24°) — lead edge is a separate crisp stroke.
+ * Soft feathered wake (~58°) — lead edge is a separate crisp stroke.
  * Wedge paths always apex at the scanner center (no inner cutout).
  */
 /** Soft radar wake — lead stroke remains the crisp beam. */
-const ACTIVE_SWEEP_POSITIONS = [0, 0.18, 0.45, 0.75, 1] as const;
-const ACTIVE_SWEEP_ALPHAS = [0, 0.03, 0.07, 0.13, 0.06] as const;
-const DISCHARGE_SWEEP_POSITIONS = [0, 0.2, 0.45, 0.7, 1] as const;
-const DISCHARGE_SWEEP_ALPHAS = [0, 0.02, 0.05, 0.025, 0] as const;
+const ACTIVE_SWEEP_FADE = { peak: 0.14, power: 2.25 } as const;
+const DISCHARGE_SWEEP_FADE = {
+  positions: [0, 0.25, 0.5, 0.75, 1] as const,
+  alphas: [0, 0.015, 0.04, 0.03, 0] as const,
+};
 const CALIBRATION_STROKE = '#5A6E68';
 
 function VectorScannerWebComponent({
@@ -393,8 +406,7 @@ function VectorScannerWebComponent({
       sweepRadius,
       sweepTrailDeg,
       phosphorSweepColor,
-      phosphorDischargeDisc ? DISCHARGE_SWEEP_POSITIONS : ACTIVE_SWEEP_POSITIONS,
-      phosphorDischargeDisc ? DISCHARGE_SWEEP_ALPHAS : ACTIVE_SWEEP_ALPHAS,
+      phosphorDischargeDisc ? DISCHARGE_SWEEP_FADE : ACTIVE_SWEEP_FADE,
     ),
     [phosphorDischargeDisc, phosphorSweepColor, radarCenter, sweepRadius, sweepTrailDeg],
   );
@@ -418,9 +430,9 @@ function VectorScannerWebComponent({
               fy={String(radarCenter)}
               gradientUnits="userSpaceOnUse"
             >
-              <Stop offset="0%" stopColor="#030808" stopOpacity={0.68} />
-              <Stop offset="55%" stopColor="#020606" stopOpacity={0.74} />
-              <Stop offset="100%" stopColor="#010505" stopOpacity={0.82} />
+              <Stop offset="0%" stopColor="#040A0C" stopOpacity={0.36} />
+              <Stop offset="55%" stopColor="#03080A" stopOpacity={0.42} />
+              <Stop offset="100%" stopColor="#020608" stopOpacity={0.5} />
             </RadialGradient>
             <Filter id="signal-pip-glow" x="-80%" y="-80%" width="260%" height="260%">
               <FeGaussianBlur stdDeviation="3.6" />
@@ -569,17 +581,6 @@ function VectorScannerWebComponent({
           {showSweep ? (
             <G clipPath={`url(#${clipId})`} opacity={fogOpacity} pointerEvents="none">
               <G transform={`rotate(${sweepRotationDeg}, ${radarCenter}, ${radarCenter})`}>
-                {/* Solid lead fan — guarantees the after-effect reaches the hub. */}
-                <Path
-                  d={sweepWedgePath(
-                    radarCenter,
-                    radarCenter,
-                    sweepRadius,
-                    360 - Math.min(SWEEP_TRAIL_ACTIVE_DEG, 10),
-                    360,
-                  )}
-                  fill={accentWithAlpha(phosphorSweepColor, phosphorDischargeDisc ? 0.04 : 0.08)}
-                />
                 {sweepSegments.map((segment, index) => (
                   <Path key={`sweep-seg-${index}`} d={segment.d} fill={segment.fill} />
                 ))}

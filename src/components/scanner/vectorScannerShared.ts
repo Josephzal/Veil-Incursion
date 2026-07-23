@@ -24,8 +24,8 @@ export const BLOOM_SETTLE_MS = 140;
 export const DOT_HIT_SIZE = 44;
 export const DOT_VISUAL_SIZE = 12;
 export const BOSS_DOT_SIZE = 16;
-/** Phosphor sweep sector (~24°) — timing unchanged (SCAN_SWEEP_MS). */
-export const SWEEP_TRAIL_ACTIVE_DEG = 24;
+/** Phosphor sweep sector (~58°) — timing unchanged (SCAN_SWEEP_MS). */
+export const SWEEP_TRAIL_ACTIVE_DEG = 58;
 export const STROKE_THIN = 1;
 export const STRUCTURAL_LINE_ALPHA = 0.48;
 export const CEASE_DECEL_MS = 400;
@@ -64,9 +64,10 @@ export const SCANNER_TEXT_PRIMARY = '#DCE4E0';
 export const SCANNER_TEXT_SECONDARY = '#7F8C87';
 export const SCANNER_PAGE_BG = '#050707';
 export const SCANNER_HEADER_BG = '#050808';
-export const SCANNER_FIELD_SURROUND = '#070B0B';
-export const SCANNER_APERTURE_CENTER = '#030808';
-export const SCANNER_APERTURE_EDGE = '#010505';
+/** Field surround — slightly lighter than the circular scanner well. */
+export const SCANNER_FIELD_SURROUND = '#070B0C';
+export const SCANNER_APERTURE_CENTER = '#040A0C';
+export const SCANNER_APERTURE_EDGE = '#020608';
 export const SCANNER_DOSSIER_SURFACE = '#070C0B';
 export const SCANNER_INSTRUMENT_SURFACE = '#070B0B';
 /** Quiet mint-gray border. */

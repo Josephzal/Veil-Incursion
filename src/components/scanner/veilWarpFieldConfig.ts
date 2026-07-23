@@ -11,24 +11,24 @@ export const VEIL_WARP_CONFIG = {
   motionSpeed: 1,
   /** UV warp amplitude scale. */
   warpStrength: 1,
-  /** Contour band visibility — softened under aperture well. */
-  contourIntensity: 0.85,
-  /** Violet/purple contribution. */
-  violetIntensity: 0.82,
-  /** Pink/magenta contribution. */
-  pinkIntensity: 0.75,
-  /** Mint/teal contour contribution. */
-  mintIntensity: 0.8,
-  /** Edge vignette strength. */
-  vignetteStrength: 1.15,
+  /** Contour band visibility — brighter readable strands. */
+  contourIntensity: 1.05,
+  /** Violet-family contribution on shared contours. */
+  violetIntensity: 1.0,
+  /** Kept for uniform compatibility; filled pink basins removed. */
+  pinkIntensity: 0.2,
+  /** Mint/teal contribution on shared contours. */
+  mintIntensity: 1.0,
+  /** Edge vignette strength — lighter so lines stay visible. */
+  vignetteStrength: 0.95,
   /** Deterministic time for reduced-motion static frame. */
   reducedMotionTime: 7,
   /** Leading sweep wedge response (degrees) — presentation only. */
   sweepLeadDeg: 24,
-  /** Contour brighten under sweep (0–1). */
-  sweepContourBoost: 0.72,
-  /** Violet→mint shift under sweep (0–1). */
-  sweepMintShift: 0.48,
+  /** Contour brighten under sweep (0–1) — amplifies existing hue. */
+  sweepContourBoost: 0.55,
+  /** Restrained mint edge registration under sweep (not a full repaint). */
+  sweepMintShift: 0.12,
   /** Leading-edge refraction in UV units (very subtle). */
   sweepRefraction: 0.0055,
   /** Phosphor wake peak brightness (0–1). */
@@ -48,12 +48,12 @@ export const VEIL_WARP_CONFIG = {
 } as const;
 
 export const VEIL_WARP_COLORS = {
-  voidBg: '#060A0E',
-  scannerBase: '#070D0E',
-  quietViolet: '#81738F',
-  interferencePurple: '#72577F',
-  mutedPink: '#A45F82',
-  magenta: '#B15F8C',
+  voidBg: '#05090B',
+  scannerBase: '#070B0C',
+  deepViolet: '#442A70',
+  fieldViolet: '#5C3A94',
+  mutedPurple: '#764EB0',
+  darkTeal: '#3E948A',
   mint: '#64C9B1',
-  deepTeal: '#315E59',
+  mutedGreen: '#8EB276',
 } as const;

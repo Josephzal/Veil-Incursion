@@ -747,8 +747,8 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         backgroundImage:
-          `radial-gradient(ellipse at 42% 48%, rgba(100, 201, 177, 0.028) 0%, transparent 52%),`
-          + `linear-gradient(180deg, #080C0C 0%, ${SCANNER_FIELD_SURROUND} 55%, #040707 100%)`,
+          `radial-gradient(ellipse at 42% 48%, rgba(100, 201, 177, 0.015) 0%, transparent 52%),`
+          + `linear-gradient(180deg, #090E0E 0%, ${SCANNER_FIELD_SURROUND} 55%, #060A0A 100%)`,
       } as object,
       default: {},
     }),

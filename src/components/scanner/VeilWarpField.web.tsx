@@ -112,6 +112,38 @@ float sampleVeilField(vec2 q, float t) {
   return field;
 }
 
+/** Low-frequency fbm for chromatic regions (field space, not screen halves). */
+float chromaFbm(vec2 p) {
+  float n = 0.0;
+  n += vnoise(p) * 0.55;
+  n += vnoise(p * 2.05 + 11.7) * 0.3;
+  n += vnoise(p * 4.1 - 3.3) * 0.15;
+  return n;
+}
+
+/**
+ * Map chroma ∈ [0,1] → violet / teal / mint / sparse muted green.
+ * Smooth stages — avoids muddy gray mid-blends.
+ */
+vec3 mapChromaToPalette(float c) {
+  // Deep indigo / royal violet (blue-heavy) ↔ teal / mint — not lavender or magenta.
+  vec3 abyssViolet = hexToRgb(36.0, 22.0, 58.0);
+  vec3 deepViolet = hexToRgb(68.0, 42.0, 112.0);
+  vec3 fieldViolet = hexToRgb(92.0, 58.0, 148.0);
+  vec3 indigoLift = hexToRgb(118.0, 78.0, 176.0);
+  vec3 darkTeal = hexToRgb(62.0, 148.0, 138.0);
+  vec3 mint = hexToRgb(100.0, 201.0, 177.0);
+  vec3 mutedGreen = hexToRgb(142.0, 178.0, 118.0);
+
+  vec3 col = mix(abyssViolet, deepViolet, smoothstep(0.0, 0.22, c));
+  col = mix(col, fieldViolet, smoothstep(0.16, 0.36, c));
+  col = mix(col, indigoLift, smoothstep(0.28, 0.42, c) * 0.55);
+  col = mix(col, darkTeal, smoothstep(0.38, 0.56, c));
+  col = mix(col, mint, smoothstep(0.5, 0.74, c));
+  col = mix(col, mutedGreen, smoothstep(0.8, 0.96, c) * 0.65);
+  return col;
+}
+
 void main() {
   vec2 uv = vUv;
   float aspect = uResolution.x / max(uResolution.y, 1.0);
@@ -164,12 +196,10 @@ void main() {
   float selWell = selGate * smoothstep(0.15, 0.0, selDist);
   float selCore = selGate * smoothstep(0.05, 0.0, selDist);
 
-  // Origin in the same atmospheric domain as p (bias included) so relative flow anchors.
   vec2 selOrigin = (uSelectedContact - 0.5) * vec2(aspect, 1.0) + vec2(-0.08, 0.05);
   vec2 originFlow = sampleVeilFlow(selOrigin, t, warpScale);
   vec2 relativeFlow = baseFlow - originFlow;
 
-  // Screen-aligned ripple space, distorted by relative flow (origin stays locked).
   vec2 rippleSpace = selDelta + relativeFlow * uSelectionFlowInfluence;
   float distortedDist = length(rippleSpace);
   vec2 radialDir = rippleSpace / max(distortedDist, 0.0001);
@@ -183,13 +213,11 @@ void main() {
   float rippleLife = (1.0 - smoothstep(expandDur * 0.78, fadeEnd, selAge))
     * smoothstep(0.0, 0.035, expandT);
 
-  // Local speed / width variation from the existing noise field.
   float speedJitter = 0.92 + 0.16 * vnoise(rippleSpace * 3.4 + t * 0.08);
   float frontR = uSelectionRippleMaxR * expandEase * speedJitter;
   float bandHalf = 0.0036 + 0.0014 * (1.0 - expandEase);
   float signedFront = distortedDist - frontR;
   float frontEnvelope = exp(-(signedFront * signedFront) / max(2.0 * bandHalf * bandHalf, 1e-6));
-  // Mild rebound / stretch immediately behind the primary front.
   float wakeSigned = signedFront + bandHalf * 2.4;
   float wakeEnvelope = exp(-(wakeSigned * wakeSigned) / max(2.0 * (bandHalf * 1.8) * (bandHalf * 1.8), 1e-6)) * 0.45;
   float rangeFalloff = 1.0 - expandEase * 0.62;
@@ -212,117 +240,153 @@ void main() {
     initialFlash = 0.0;
   }
 
-  // Domain displacement: ripple bends the same coordinates used to sample the Veil.
   vec2 rippleDisp = radialDir * (rippleFront * uSelectionRadialStrength)
     + tangentialDir * (rippleFront * uSelectionTangentialStrength
       * (vnoise(rippleSpace * 5.0 + t * 0.12) - 0.5) * 2.0);
-  // Behind the front: mild outward stretch (band separation).
   rippleDisp += radialDir * (wakeEnvelope * rippleLife * selGate * 0.006 * rangeFalloff);
-  // Persistent selection well — small inward bend, no continuous waves / outlines.
   vec2 wellDisp = -radialDir * (selWell * 0.004);
-  // Stabilize immediately under the pip.
   float stabilize = clamp(selCore * (0.55 + 0.45 * initialFlash), 0.0, 1.0);
 
   vec2 coupledQ = qBase + rippleDisp + wellDisp;
   coupledQ = mix(coupledQ, qBase * (1.0 - stabilize * 0.35) + selOrigin * (stabilize * 0.35), stabilize * 0.55);
 
-  // Re-evaluate primary field on displaced coordinates (the coupling).
+  // Shared contour network — geometry from coupled field coordinates.
   float field = sampleVeilField(coupledQ, t);
   float fieldBase = sampleVeilField(qBase, t);
   float fieldDelta = abs(field - fieldBase);
-
   vec2 q = coupledQ;
 
-  float contourRaw = abs(fract(field * 1.65) - 0.5);
-  // Sharpen slightly at the deforming front; soften in the wake.
-  float contourSoft = mix(0.12, 0.085, clamp(rippleFront * 1.4, 0.0, 1.0));
-  float contourHard = mix(0.04, 0.028, clamp(rippleFront, 0.0, 1.0));
-  float contours = smoothstep(contourSoft, contourHard, contourRaw);
-  contours *= mix(0.35, 1.0, smoothstep(-0.4, 0.8, field));
-  float traces = smoothstep(0.08, 0.0, abs(sin(field * 9.0 + q.x * 2.0))) * 0.35;
-  traces *= smoothstep(0.2, 0.7, vnoise(q * 2.0));
+  // Irregular iso-spacing (~12–18 discernible paths; not a dense topo map).
+  float density = 2.55 + vnoise(q * 0.85 + 4.2) * 0.55;
+  float phase = field * density + vnoise(q * 1.15) * 0.22;
+  float band = abs(fract(phase) - 0.5);
+  float fw = max(fwidth(phase), 1e-4);
 
-  float seam = abs(q.y + q.x * 0.55 + sin(q.x * 2.2 + t * 0.2) * 0.08 - 0.05);
-  float seamMask = smoothstep(0.07, 0.0, seam) * 0.55;
+  // Contour prominence — only a minority of strands are strongly lit.
+  float bandId = floor(phase);
+  float prominence = vnoise(vec2(bandId * 0.41 + 1.7, bandId * 0.17 - 0.3));
+  float primaryW = mix(0.95, 1.35, smoothstep(0.55, 0.85, prominence));
+  float secondaryW = mix(0.55, 0.8, smoothstep(0.25, 0.55, prominence));
+  float residualW = 0.5;
 
-  vec3 voidCol = hexToRgb(6.0, 10.0, 14.0);
-  vec3 baseCol = hexToRgb(7.0, 13.0, 14.0);
-  vec3 violet = hexToRgb(129.0, 115.0, 143.0);
-  vec3 purple = hexToRgb(114.0, 87.0, 127.0);
-  vec3 pink = hexToRgb(164.0, 95.0, 130.0);
-  vec3 magenta = hexToRgb(177.0, 95.0, 140.0);
+  float primaryCore = 1.0 - smoothstep(0.0, fw * primaryW, band);
+  float primaryBloom = 1.0 - smoothstep(0.0, fw * (primaryW + 2.6), band);
+  float secondaryCore = 1.0 - smoothstep(0.0, fw * secondaryW, band);
+  float residualCore = 1.0 - smoothstep(0.0, fw * residualW, band);
+
+  float primaryMask = smoothstep(0.4, 0.68, prominence);
+  float secondaryMask = (1.0 - primaryMask) * smoothstep(0.18, 0.48, prominence);
+  float residualMask = (1.0 - primaryMask - secondaryMask) * smoothstep(0.06, 0.26, prominence);
+  // Incomplete / broken traces.
+  float breakMask = smoothstep(0.2, 0.55, vnoise(q * 2.4 + bandId));
+  secondaryMask *= mix(0.35, 1.0, breakMask);
+  residualMask *= mix(0.15, 0.85, vnoise(q * 3.1 - bandId));
+
+  // Ripple front briefly sharpens local strands.
+  float sharpen = clamp(rippleFront * 1.2, 0.0, 1.0);
+  primaryCore = mix(primaryCore, primaryCore * 1.15, sharpen);
+  float primary = primaryCore * primaryMask;
+  float secondary = secondaryCore * secondaryMask;
+  float residual = residualCore * residualMask * 0.85;
+  float contours = clamp(primary + secondary * 0.7 + residual * 0.4, 0.0, 1.0);
+  float bloom = primaryBloom * primaryMask * (0.22 + sharpen * 0.1);
+
+  // --- Chromatic field on the SAME coupled coordinates (not screen sides) ---
+  // Two offset low-freq lobes + light flow carry — violet/mint mingle across the aperture.
+  float slowT = t * 0.028;
+  vec2 chromaUvA = q * 1.7 + baseFlow * 0.22 + vec2(slowT * 0.85, -slowT * 0.65);
+  vec2 chromaUvB = vec2(-q.y, q.x) * 1.45 + vec2(-0.62, 0.41) + vec2(-slowT * 0.55, slowT * 0.7);
+  float broadA = chromaFbm(chromaUvA + vec2(0.27, -0.14));
+  float broadB = chromaFbm(chromaUvB + vec2(-0.19, 0.33));
+  float broadChroma = mix(broadA, broadB, 0.48);
+  float localVariation = vnoise(q * 3.1 + field * 0.16 + vec2(-slowT * 0.35, slowT * 0.5));
+  // Contour-index nudge so adjacent strands can differ and hues travel along a path.
+  float strandNudge = (vnoise(vec2(bandId * 0.63, phase * 0.09 + slowT)) - 0.5) * 0.22;
+  // Bias chroma slightly toward green so violet/mint both read clearly.
+  float chroma = clamp(broadChroma * 0.68 + localVariation * 0.32 + strandNudge + 0.06, 0.0, 1.0);
+  vec3 contourColor = mapChromaToPalette(chroma);
+  // Lift line luminance so strands stay readable over the dark well.
+  float lum = dot(contourColor, vec3(0.3, 0.55, 0.15));
+  contourColor *= mix(1.22, 1.05, smoothstep(0.2, 0.55, lum));
+
+  // Inky dark grey / blue-green surround; scanner well sits slightly darker.
+  // Fine-tune: lower RGB = darker; lower wash coeffs = less lift from violet/mint.
+  vec3 surroundVoid = hexToRgb(3.0, 6.0, 8.0);
+  vec3 surroundCool = hexToRgb(7.0, 12.0, 15.0);
+  vec3 surroundTeal = hexToRgb(5.0, 13.0, 12.0);
+  vec3 wellVoid = hexToRgb(3.0, 6.0, 8.0);
+  vec3 wellCool = hexToRgb(7.0, 12.0, 14.0);
+  vec3 wellTeal = hexToRgb(6.0, 14.0, 13.0);
   vec3 mint = hexToRgb(100.0, 201.0, 177.0);
-  vec3 teal = hexToRgb(49.0, 94.0, 89.0);
+  vec3 violet = hexToRgb(92.0, 58.0, 148.0);
 
-  vec3 col = mix(voidCol, baseCol, 0.65);
+  float bgNoise = chromaFbm(q * 0.55 + vec2(slowT * 0.35, -slowT * 0.25));
+  vec3 surroundBg = mix(surroundVoid, surroundCool, 0.5 + bgNoise * 0.22);
+  surroundBg = mix(surroundBg, surroundTeal, 0.22 + (1.0 - chroma) * 0.1);
+  surroundBg += violet * (0.01 + bgNoise * 0.008);
+  surroundBg += mint * (0.008 + (1.0 - bgNoise) * 0.006);
+  vec3 wellBg = mix(wellVoid, wellCool, 0.45 + bgNoise * 0.18);
+  wellBg = mix(wellBg, wellTeal, 0.2);
+  wellBg += violet * (0.007 + bgNoise * 0.005);
+  wellBg += mint * (0.006 + (1.0 - bgNoise) * 0.004);
+  vec3 bg = mix(surroundBg, wellBg, inScope);
 
-  float pinkBasin = smoothstep(1.1, 0.1, length(q - vec2(-0.55, 0.15)));
-  pinkBasin *= (0.55 + 0.45 * sin(field * 2.0 + t * 0.15));
-  col = mix(col, purple * 0.55, pinkBasin * 0.42 * uVioletIntensity * uIntensity);
-  col = mix(col, pink * 0.5, pinkBasin * 0.22 * uPinkIntensity * uIntensity);
-  col += magenta * (pinkBasin * 0.04 * uPinkIntensity * uIntensity);
+  vec3 col = bg;
+  float amp = uContourIntensity * uIntensity;
+  // Contours remain readable in the well; quieter outside the rim.
+  float contourGate = mix(0.4, 1.0, inScope);
+  col += contourColor * (primary * 0.95 * amp * contourGate);
+  col += contourColor * (secondary * 0.48 * amp * contourGate);
+  col += contourColor * (residual * 0.22 * amp * contourGate);
+  col += contourColor * (bloom * 0.32 * amp * contourGate);
 
-  float mintLane = smoothstep(0.55, 0.0, abs(q.y - q.x * 0.2 + 0.08));
-  mintLane *= 0.35 + contours * 0.65;
-  col = mix(col, teal * 0.45, mintLane * 0.28 * uMintIntensity * uIntensity);
-  col += mint * (contours * mintLane * 0.07 * uMintIntensity * uIntensity);
+  // Quiet atmospheric haze carrying both hues.
+  float haze = vnoise(q * 1.2 + slowT * 0.5);
+  col += contourColor * (haze * 0.04 * amp * max(contours, 0.15) * contourGate);
 
-  float cAmp = contours * uContourIntensity * uIntensity;
-  col += violet * (cAmp * 0.08 * uVioletIntensity);
-  col += pink * (cAmp * 0.05 * uPinkIntensity * (0.4 + pinkBasin));
-  col += mint * (cAmp * 0.045 * uMintIntensity * (0.3 + mintLane));
-  col += teal * (traces * 0.06 * uMintIntensity * uIntensity);
-  col += purple * (seamMask * 0.1 * uVioletIntensity * uIntensity);
-
-  float haze = vnoise(q * 1.4 + t * 0.03);
-  col = mix(col, violet * 0.25, haze * 0.08 * uVioletIntensity * uIntensity);
-
-  // Illumination driven by actual field displacement (not a painted ring).
   float deformResponse = clamp(fieldDelta * 3.2, 0.0, 1.0);
   float frontLight = rippleFront * mix(0.35, 1.0, deformResponse);
   float fringeLight = outerFringe * mix(0.25, 0.85, deformResponse);
   float lockLight = initialFlash * 0.55 + selWell * 0.35 * deformResponse;
 
-  // Soft-compress sweep + lock illumination so overlap does not blow out.
   float interrogate = max(leadEdge, wakeT * 0.9);
   float combined = interrogate + frontLight * 0.85 + lockLight * 0.4;
-  float compressed = combined / (1.0 + combined * 0.65);
+  float compressed = combined / (1.0 + combined * 0.7);
   float sweepShare = interrogate / max(combined, 0.001);
   float rippleShare = (frontLight * 0.85) / max(combined, 0.001);
 
+  // Sweep brightens existing contour hue — restrained mint edge only.
   if (interrogate > 0.001) {
     float sweepAmt = compressed * sweepShare;
-    col += vec3(0.05, 0.06, 0.065) * (contours * sweepAmt * uSweepContourBoost);
-    col += vec3(0.03, 0.035, 0.04) * (traces * sweepAmt * 0.45);
-    float mintPull = sweepAmt * uSweepMintShift;
-    col = mix(col, mix(col, mint * 0.62, 0.5), mintPull * (0.4 + pinkBasin * 0.45));
-    col += mint * (contours * leadEdge * 0.08 * uMintIntensity);
-    col += mint * (wakeT * uSweepWakeStrength * 0.1);
-    col += teal * (wakeT * uSweepWakeStrength * 0.055);
+    col += contourColor * (contours * sweepAmt * uSweepContourBoost * 0.55);
+    col += contourColor * (bloom * sweepAmt * 0.2);
+    col += mint * (contours * leadEdge * uSweepMintShift * 0.35 * uMintIntensity);
+    col += mint * (wakeT * uSweepWakeStrength * 0.035);
   }
 
+  // Ripple amplifies embedded color; does not repaint the field mint.
   if (selGate > 0.001) {
     float ripAmt = compressed * rippleShare;
-    // Color follows deformed contours only — no standalone painted ring.
-    col += mint * (frontLight * deformResponse * (0.04 + contours * 0.08) * uMintIntensity);
-    col += teal * (frontLight * deformResponse * traces * 0.03 * uMintIntensity);
-    col += violet * (fringeLight * deformResponse * 0.05 * uVioletIntensity);
-    col += mint * (initialFlash * 0.045 * uMintIntensity);
-    // Persistent well — subordinate to the selected pip.
-    col += mint * (contours * selWell * 0.04 * uMintIntensity);
-    col += teal * (selCore * 0.02 * uMintIntensity);
-    col = mix(col, mix(col, mint * 0.42, 0.18), selCore * 0.1);
-    col += vec3(0.01, 0.014, 0.016) * (traces * selCore * 0.2);
-    col += mint * (ripAmt * deformResponse * contours * 0.025);
+    col += contourColor * (frontLight * deformResponse * (0.12 + contours * 0.35));
+    col += contourColor * (bloom * frontLight * 0.15);
+    col += violet * (fringeLight * deformResponse * 0.04 * uVioletIntensity);
+    col += mint * (frontLight * deformResponse * contours * 0.025 * uMintIntensity);
+    col += contourColor * (initialFlash * 0.08);
+    col += contourColor * (contours * selWell * 0.06);
+    col += contourColor * (selCore * 0.04);
+    col += mint * (ripAmt * deformResponse * contours * 0.015);
   }
+
+  // Soft interior falloff — scanner circle stays slightly darker than the surround.
+  col *= mix(1.0, 0.94, inScope);
 
   vec2 vigUv = uv * (1.0 - uv);
   float vig = vigUv.x * vigUv.y * 18.0;
   vig = pow(clamp(vig, 0.0, 1.0), 0.55);
-  float vignette = mix(1.0, vig, 0.55 * uVignetteStrength);
+  float vignette = mix(1.0, vig, 0.35 * uVignetteStrength * inScope);
   col *= vignette;
-  col = mix(voidCol, col, 0.92);
-  col = min(col, vec3(0.45));
+  col = mix(bg, col, 0.96);
+  col = min(col, vec3(0.52));
 
   fragColor = vec4(col, 1.0);
 }
