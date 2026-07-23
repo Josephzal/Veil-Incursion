@@ -62,10 +62,11 @@ import {
 } from '../data/debriefProgressionTheaterEngine';
 import { maxPinnedGoalSlots } from '../data/pinnedGoalEngine';
 import { SELECT_ACCENT } from '../constants/dossierSurface';
+import { VEIL } from '../theme/veilTerminalTokens';
 
-const TERMINAL_ACCENT = '#00ff33';
-const FAILURE_ACCENT = '#ef4444';
-const PENDING_ACCENT = '#f59e0b';
+const TERMINAL_ACCENT = VEIL.mint;
+const FAILURE_ACCENT = VEIL.blood;
+const PENDING_ACCENT = VEIL.occultPale;
 
 type DebriefStep = 'SUMMARY' | 'CONTRACT' | 'OPERATION' | 'ROUTING' | 'REWARDS';
 
@@ -94,7 +95,7 @@ function contractStatusColor(status: ContractResult['status']): string {
     case 'FAILED':
       return FAILURE_ACCENT;
     default:
-      return '#94a3b8';
+      return VEIL.textMuted;
   }
 }
 

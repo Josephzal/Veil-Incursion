@@ -17,14 +17,15 @@ import type { AbilityGraftMap, VeilGraftId } from '../types/veilGraft';
 import type { EnvoyLoadout, HexShotAbilityId, HexShotLoadout } from '../types/operativeClass';
 import type { AegisLoadout } from '../types/aegisCombat';
 import { readPressableHover, terminalHoverStyle } from '../utils/terminalHoverStyle';
+import { VEIL } from '../theme/veilTerminalTokens';
 
-const TERMINAL_ACCENT = '#00ff33';
-const GRAFT_SELECT_ACCENT = '#06B6D4';
-const MUTED_TEXT = '#94A3B8';
-const PANEL_BORDER = '#334155';
-const CARD_BG = '#0F172A';
-const CARD_BORDER = '#1e293b';
-const PANEL_BG = 'rgba(0, 0, 0, 0.8)';
+const TERMINAL_ACCENT = VEIL.mint;
+const GRAFT_SELECT_ACCENT = VEIL.occult;
+const MUTED_TEXT = VEIL.textMuted;
+const PANEL_BORDER = VEIL.line;
+const CARD_BG = VEIL.surface2;
+const CARD_BORDER = VEIL.lineFaint;
+const PANEL_BG = 'rgba(4, 5, 5, 0.88)';
 
 type ClassLoadout = AegisLoadout | HexShotLoadout | EnvoyLoadout;
 type ClassGraftMap = AbilityGraftMap | HexShotAbilityGraftMap | EnvoyAbilityGraftMap;

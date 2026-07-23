@@ -18,6 +18,7 @@ import {
   dossierOpaqueCtaStyle,
   SELECT_ACCENT,
 } from '../../constants/dossierSurface';
+import { VEIL } from '../../theme/veilTerminalTokens';
 import { useTerminal } from '../../context/TerminalContext';
 import { resolveCargoItemIcon } from '../../utils/cargoItemIcon';
 import type { CargoItemId } from '../../types/cargoGrid';
@@ -53,7 +54,7 @@ export const MARKET_DISABLED_OPACITY = 0.32;
 export const MARKET_SECTION_HEADER_COLOR = LOADOUT_SECTION_HEADER_COLOR;
 /** @deprecated Prefer LOADOUT_SUBTITLE_COLOR — kept for existing imports. */
 export const MARKET_MUTED_LINE = LOADOUT_SUBTITLE_COLOR;
-export const MARKET_IMAGE_CELL_BG = '#0a0b0f';
+export const MARKET_IMAGE_CELL_BG = VEIL.surface1;
 
 function withAlpha(hex: string, alphaHex: string): string {
   return `${hex}${alphaHex}`;

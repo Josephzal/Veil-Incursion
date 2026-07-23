@@ -2,7 +2,6 @@ import React, { useId } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Defs, Pattern, Rect } from 'react-native-svg';
 import { DOSSIER_BG, DOSSIER_BORDER } from '../../constants/dossierSurface';
-import { viewShadow } from '../../utils/adaptiveStyles';
 
 export { DOSSIER_BG, DOSSIER_BORDER };
 
@@ -50,7 +49,6 @@ export default function DossierCardShell({
   fillHeight = false,
 }: DossierCardShellProps): React.JSX.Element {
   const scanlinePatternId = useId().replace(/:/g, '');
-  const glowColor = accentColor ?? '#64748b';
 
   return (
     <View
@@ -58,13 +56,8 @@ export default function DossierCardShell({
         fillHeight ? styles.fillOuter : styles.outer,
         style,
         {
-          borderColor: DOSSIER_BORDER,
-          ...viewShadow({
-            color: glowColor,
-            opacity: 0.18,
-            radius: 20,
-            offset: { width: 0, height: 0 },
-          }),
+          borderColor: accentColor ?? DOSSIER_BORDER,
+          backgroundColor: DOSSIER_BG,
         },
       ]}
     >

@@ -14,6 +14,7 @@ import {
   type RitualBeat,
 } from './ritualEchoEngine';
 import { logNarrativeMinigameCompleted } from '../../../data/narrative/narrativeMinigameTelemetry';
+import { VEIL } from '../../../theme/veilTerminalTokens';
 
 const GRID_SIZE = 3;
 const NODE_COUNT = GRID_SIZE * GRID_SIZE;
@@ -22,18 +23,18 @@ const CELL_DESKTOP = 80;
 const CELL_MOBILE = 64;
 const TAP_FLASH_MS = 180;
 
-const NODE_IDLE_BG = '#0F172A';
-const NODE_IDLE_BORDER = '#334155';
-const NODE_IDLE_LABEL = '#475569';
-const NODE_LIT = '#22d3ee';
-const NODE_TAPPED = '#065f46';
-const FORBIDDEN_BG = '#3f0a0a';
-const FORBIDDEN_BORDER = '#f87171';
+const NODE_IDLE_BG: string = VEIL.surface2;
+const NODE_IDLE_BORDER: string = VEIL.line;
+const NODE_IDLE_LABEL = VEIL.textDim;
+const NODE_LIT: string = VEIL.occultPale;
+const NODE_TAPPED: string = VEIL.surface3;
+const FORBIDDEN_BG = 'rgba(163, 92, 102, 0.22)';
+const FORBIDDEN_BORDER: string = VEIL.blood;
 const FORBIDDEN_LABEL = '#fecaca';
-const FAIL_FLASH = '#ef4444';
-const BODY_MUTED = '#94A3B8';
-const COLLAPSE_RED = '#EF4444';
-const TERMINAL_GREEN = '#00ff33';
+const FAIL_FLASH = VEIL.blood;
+const BODY_MUTED = VEIL.textMuted;
+const COLLAPSE_RED = VEIL.blood;
+const TERMINAL_GREEN: string = VEIL.mint;
 
 type RitualPhase = 'preview' | 'input' | 'resolved';
 
@@ -97,10 +98,10 @@ function RitualNode({
     borderColor = FORBIDDEN_BORDER;
   } else if (tapped) {
     backgroundColor = NODE_TAPPED;
-    borderColor = '#34d399';
+    borderColor = VEIL.mint;
   } else if (lit) {
     backgroundColor = NODE_LIT;
-    borderColor = '#67e8f9';
+    borderColor = VEIL.occultPale;
   }
 
   return (

@@ -9,6 +9,7 @@ import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useTerminal } from '../../context/TerminalContext';
 import { useHubLayout } from '../../context/HubLayoutContext';
 import { formatBracketHeader } from '../../styles/hubTerminalUi';
+import { VEIL } from '../../theme/veilTerminalTokens';
 
 interface HubScreenShellProps {
   title: string;
@@ -50,15 +51,15 @@ export default function HubScreenShell({
   const { account } = usePlayerAccount();
   const { scaleSpacing } = useHubLayout();
   const slateBg = theaterChrome
-    ? 'rgba(0, 0, 0, 0.55)'
+    ? VEIL.bgSoft
     : resolveFactionSlateBackground(account.alignedFaction);
   const slateInnerBorder = theaterChrome
-    ? 'rgba(255, 255, 255, 0.12)'
+    ? VEIL.lineFaint
     : resolveFactionSlateInnerBorder(account.alignedFaction);
-  const headerColor = titleColor ?? theme.statusColor;
+  const headerColor = titleColor ?? (theaterChrome ? VEIL.bone : theme.statusColor);
   const resolvedTitle = bracketTitle ? formatBracketHeader(title) : title.toUpperCase();
   const breadcrumbColor = theaterChrome
-    ? 'rgba(148, 163, 184, 0.75)'
+    ? VEIL.textMuted
     : hubKeyColorFromTheme(theme.mutedColor);
   const compactHeader = theaterChrome && compactTheaterHeader;
 

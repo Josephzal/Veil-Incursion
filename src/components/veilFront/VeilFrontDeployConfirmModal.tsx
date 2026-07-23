@@ -38,16 +38,18 @@ import type { BreachGradeId } from '../../types/progression';
 import type { TerminalTheme } from '../../types/theme';
 import { useVeilFrontLayout } from './useVeilFrontLayout';
 
+import { VEIL } from '../../theme/veilTerminalTokens';
+
 const RAIL = {
-  bg: '#040809',
-  textPrimary: '#d5dfdc',
-  textSecondary: '#91a39f',
-  textMuted: '#627572',
-  terminal: '#69c8ad',
-  terminalBright: '#8ee0c6',
-  incompat: '#d88984',
-  line: 'rgba(137, 170, 163, 0.14)',
-  lineStrong: 'rgba(137, 190, 179, 0.32)',
+  bg: VEIL.bg,
+  textPrimary: VEIL.text,
+  textSecondary: VEIL.textSoft,
+  textMuted: VEIL.textMuted,
+  terminal: VEIL.mint,
+  terminalBright: VEIL.mintBright,
+  incompat: VEIL.blood,
+  line: VEIL.lineFaint,
+  lineStrong: VEIL.line,
 } as const;
 
 interface VeilFrontDeployConfirmModalProps {

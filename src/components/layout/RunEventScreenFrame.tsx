@@ -17,6 +17,7 @@ import {
   resolveImmersiveHorizontalInset,
 } from '../../constants/immersiveLayout';
 import { HIDDEN_SCROLLBAR_VIEW_STYLE, HIDDEN_SCROLLVIEW_PROPS } from '../../utils/hiddenScrollbarStyle';
+import { VEIL } from '../../theme/veilTerminalTokens';
 
 interface RunEventScreenHeaderProps {
   eyebrow?: string;
@@ -34,10 +35,10 @@ export function RunEventScreenHeader({
   eyebrow,
   title,
   subtitle,
-  borderColor = '#334155',
-  eyebrowColor = '#94a3b8',
-  titleColor = '#00ff33',
-  subtitleColor = '#94a3b8',
+  borderColor = VEIL.line,
+  eyebrowColor = VEIL.textMuted,
+  titleColor = VEIL.bone,
+  subtitleColor = VEIL.textSoft,
   align = 'center',
   children,
 }: RunEventScreenHeaderProps): React.JSX.Element {

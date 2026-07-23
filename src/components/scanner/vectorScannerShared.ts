@@ -24,10 +24,10 @@ export const BLOOM_SETTLE_MS = 140;
 export const DOT_HIT_SIZE = 44;
 export const DOT_VISUAL_SIZE = 12;
 export const BOSS_DOT_SIZE = 16;
-export const SWEEP_TRAIL_ACTIVE_DEG = 120;
+/** Phosphor sweep sector (~24°) — timing unchanged (SCAN_SWEEP_MS). */
+export const SWEEP_TRAIL_ACTIVE_DEG = 24;
 export const STROKE_THIN = 1;
-export const STRUCTURAL_LINE_ALPHA = 0.38;
-export const RADAR_CANVAS_BACKDROP = '#000000';
+export const STRUCTURAL_LINE_ALPHA = 0.48;
 export const CEASE_DECEL_MS = 400;
 export const CEASE_FOG_MS = 900;
 export const SIPHON_EXTRACT_MS = 280;
@@ -38,9 +38,41 @@ export const SELECTION_GLOW_FADE_MS = 800;
 export const SELECTION_GLOW_INNER_SCALE = 1.9;
 export const SELECTION_GLOW_OUTER_SCALE = 2.75;
 export const SIPHON_HAPTIC_MS = 12;
-export const HOSTILE_PATROL_COLOR = '#ff453a';
+/** Combat / danger contact core — restrained coral. */
+export const HOSTILE_PATROL_COLOR = '#C87682';
 export const SWEEP_GRADIENT_LEAD_DEG = 360;
 export const SWEEP_GRADIENT_TRAIL_START_DEG = 360 - SWEEP_TRAIL_ACTIVE_DEG;
+/** Unselected core radius (~13.4px diameter). */
+export const CONTACT_CORE_RADIUS = 6.7;
+/** Selected core radius (~18px diameter). */
+export const CONTACT_CORE_RADIUS_SELECTED = 9;
+/** Unselected soft glow radius (~44px diameter). */
+export const CONTACT_GLOW_RADIUS = 22;
+/** Selected soft glow radius (~68px diameter). */
+export const CONTACT_GLOW_RADIUS_SELECTED = 34;
+/** Bottom telemetry rail height reserved so the circular aperture is not clipped. */
+export const SCANNER_TELEMETRY_RAIL_HEIGHT = 56;
+/** Extra inset so the outer rim clears the rail / bezel edge. */
+export const SCANNER_APERTURE_SAFE_INSET = 14;
+/** Live phosphor mint — sweep / selection / ready action. */
+export const SCANNER_PHOSPHOR = '#64C9B1';
+/** Veil interference / unknown signals. */
+export const SCANNER_VEIL_VIOLET = '#81738F';
+/** Keyboard/controller focus — pale cool neutral, distinct from mint selection. */
+export const SCANNER_FOCUS_NEUTRAL = '#C5D0CD';
+export const SCANNER_TEXT_PRIMARY = '#DCE4E0';
+export const SCANNER_TEXT_SECONDARY = '#7F8C87';
+export const SCANNER_PAGE_BG = '#050707';
+export const SCANNER_HEADER_BG = '#050808';
+export const SCANNER_FIELD_SURROUND = '#070B0B';
+export const SCANNER_APERTURE_CENTER = '#030808';
+export const SCANNER_APERTURE_EDGE = '#010505';
+export const SCANNER_DOSSIER_SURFACE = '#070C0B';
+export const SCANNER_INSTRUMENT_SURFACE = '#070B0B';
+/** Quiet mint-gray border. */
+export const SCANNER_BORDER_QUIET = 'rgba(108, 156, 143, 0.18)';
+/** @deprecated Prefer SCANNER_FIELD_SURROUND. */
+export const RADAR_CANVAS_BACKDROP = SCANNER_FIELD_SURROUND;
 
 export interface VectorScannerProps {
   cabal: ScannerCabal;

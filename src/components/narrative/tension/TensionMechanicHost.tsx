@@ -20,12 +20,13 @@ import {
   logNarrativeMinigameStarted,
   logNarrativeMinigameUnknownId,
 } from '../../../data/narrative/narrativeMinigameTelemetry';
+import { VEIL } from '../../../theme/veilTerminalTokens';
 
-const TERMINAL_ACCENT = '#00ff33';
-const WARN_ACCENT = '#fbbf24';
-const FAIL_ACCENT = '#ef4444';
-const TENSION_MUTED = '#6b7280';
-const TENSION_PANEL = '#141418';
+const TERMINAL_ACCENT: string = VEIL.mint;
+const WARN_ACCENT: string = VEIL.occultPale;
+const FAIL_ACCENT: string = VEIL.blood;
+const TENSION_MUTED = VEIL.textDim;
+const TENSION_PANEL = VEIL.surface3;
 
 const isDevBuild = typeof __DEV__ !== 'undefined' && __DEV__;
 
@@ -35,8 +36,8 @@ const isDevBuild = typeof __DEV__ !== 'undefined' && __DEV__;
  */
 function NoTensionMechanicPanel({
   onContinue,
-  borderColor = '#334155',
-  mutedColor = '#94a3b8',
+  borderColor = VEIL.line,
+  mutedColor = VEIL.textMuted,
   primaryColor = '#f8fafc',
 }: {
   onContinue: () => void;
@@ -83,7 +84,7 @@ function UnknownTensionMechanicPanel({
   onFailure,
   onForceSuccess,
   borderColor = '#7f1d1d',
-  mutedColor = '#94a3b8',
+  mutedColor = VEIL.textMuted,
   primaryColor = '#f8fafc',
 }: {
   mechanicId: string;
@@ -193,7 +194,7 @@ export default function TensionMechanicHost({
   let accentColor = TERMINAL_ACCENT;
 
   if (!rawId) {
-    accentColor = mutedColor ?? '#94a3b8';
+    accentColor = mutedColor ?? VEIL.textMuted;
     content = (
       <NoTensionMechanicPanel
         onContinue={onSuccess}

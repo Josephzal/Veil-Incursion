@@ -1,53 +1,58 @@
 import type { ViewStyle } from 'react-native';
+import { VEIL } from '../theme/veilTerminalTokens';
 
-/** Dossier card chrome — matches deployment ID badge. */
-export const DOSSIER_BG = 'rgba(9, 9, 11, 0.9)';
-export const DOSSIER_BORDER = '#334155';
+/**
+ * Dossier / hub surface chrome — aliases Contract Board VEIL tokens.
+ * Prefer importing VEIL directly for new work; these keep existing call sites stable.
+ */
+
+/** Dossier card chrome — matches Contract Board raised surface. */
+export const DOSSIER_BG = VEIL.surfaceRaised;
+export const DOSSIER_BORDER = VEIL.line;
 
 /** Opaque surface for foreground UI — blocks scanline texture bleed-through. */
-export const DOSSIER_FOREGROUND = '#09090b';
+export const DOSSIER_FOREGROUND = VEIL.surface2;
 
 /** Unfilled meter track — visible against dossier background. */
-export const DOSSIER_METER_TRACK = '#27272a';
+export const DOSSIER_METER_TRACK = VEIL.surface1;
 
 /** CTA fill on dossier surfaces — lighter than background so buttons read clearly. */
-export const DOSSIER_CTA_BG = '#1e293b';
+export const DOSSIER_CTA_BG = VEIL.surface3;
 
 /** Item row bars on dossier panels — distinct from textured shell background. */
-export const DOSSIER_ROW_BG = '#1a1c1e';
+export const DOSSIER_ROW_BG = VEIL.surface3;
 
 /** Near-black dossier card fill — use instead of blue slate tints. */
-export const CARD_BLACK = 'rgba(9, 9, 11, 0.92)';
+export const CARD_BLACK = VEIL.bgSoft;
 
 /** Slightly brighter charcoal for card hover/press. */
-export const CARD_BLACK_HOVER = '#161619';
+export const CARD_BLACK_HOVER = VEIL.surface3;
 
 /**
- * Universal selection / active / actionable color across hub screens.
- * Spectral green — corrupted-terminal / ghost-scanner accent for the Veil.
+ * Live / active / focus accent — mint reserved for system activity (Contract Board rule).
  */
-export const SELECT_ACCENT = '#58DFA8';
+export const SELECT_ACCENT = VEIL.mint;
 
-/** Dim spectral green — inactive accents / subtle strokes. */
-export const SELECT_ACCENT_DIM = '#2F8F70';
+/** Dim mint — inactive accents / subtle strokes. */
+export const SELECT_ACCENT_DIM = '#3A8F7C';
 
-/** Spectral green glow (rgba) — pulses / shadows. */
-export const SELECT_ACCENT_GLOW = 'rgba(88, 223, 168, 0.25)';
+/** Mint glow (rgba) — pulses / shadows. */
+export const SELECT_ACCENT_GLOW = 'rgba(98, 205, 181, 0.22)';
 
 /** Muted red — locked / danger / betrayal / missing requirement. */
-export const DANGER_RED = '#f87171';
+export const DANGER_RED = VEIL.blood;
 
-/** Bone white — neutral highlight (rewards, headlines). */
-export const BONE_WHITE = '#f5f3ee';
+/** Bone — neutral highlight (rewards, headlines). */
+export const BONE_WHITE = VEIL.bone;
 
 /**
- * @deprecated Selection color is now spectral green. Kept as an alias so older
+ * @deprecated Selection color is now mint. Kept as an alias so older
  * imports keep working; prefer SELECT_ACCENT.
  */
 export const SELECT_AMBER = SELECT_ACCENT;
 
-/** Hover border — pale steel. */
-export const HOVER_STEEL = '#94a3b8';
+/** Hover border — pale steel mapped to VEIL soft text. */
+export const HOVER_STEEL = VEIL.textSoft;
 
 export function dossierForegroundSurface(): ViewStyle {
   return { backgroundColor: DOSSIER_FOREGROUND };

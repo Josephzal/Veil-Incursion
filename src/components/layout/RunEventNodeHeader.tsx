@@ -4,10 +4,11 @@ import TacticalButton from '../TacticalButton';
 import { useCargoOverlay } from '../../context/CargoOverlayContext';
 import { useRunStatusOverlay } from '../../context/RunStatusOverlayContext';
 import { useTerminal } from '../../context/TerminalContext';
+import { VEIL } from '../../theme/veilTerminalTokens';
 
-const STARK_WHITE = '#F8FAFC';
-const MUTED_SLATE = '#94A3B8';
-const HEADER_BORDER = '#334155';
+const STARK_WHITE = VEIL.text;
+const MUTED_SLATE = VEIL.textMuted;
+const HEADER_BORDER = VEIL.line;
 
 export interface RunEventNodeHeaderProps {
   title: string;

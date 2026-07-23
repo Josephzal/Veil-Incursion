@@ -10,13 +10,14 @@ import {
 } from '../../../constants/narrativeLayout';
 import { useResponsiveLayout } from '../../../hooks/useResponsiveLayout';
 import type { TensionMechanicProps, TensionMechanicSuccessResult } from './tensionMechanicTypes';
+import { VEIL } from '../../../theme/veilTerminalTokens';
 
 const SLATE_BORDER = '#475569';
 const MUTED_WHITE = '#F8FAFC';
-const BODY_MUTED = '#94A3B8';
+const BODY_MUTED = VEIL.textMuted;
 const SIPHON_LABEL = '#FFFFFF';
-const LOCKED_LABEL = '#94A3B8';
-const TERMINAL_GREEN = '#00ff33';
+const LOCKED_LABEL = VEIL.textMuted;
+const TERMINAL_GREEN = VEIL.mint;
 const RESIDUE_VALUE = '#FFFFFF';
 const COLLAPSE_RED = '#EF4444';
 const GAUGE_SAFE = '#64748B';

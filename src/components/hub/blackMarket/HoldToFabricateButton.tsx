@@ -8,10 +8,11 @@ import {
 import HapticPressable from '../../HapticPressable';
 import TerminalText from '../../TerminalText';
 import { pulseHubButton } from '../../../utils/hubButtonHaptics';
+import { VEIL } from '../../../theme/veilTerminalTokens';
 
 const HOLD_MS = 1000;
-const TERMINAL = '#69c8ad';
-const TERMINAL_BRIGHT = '#8ee0c6';
+const TERMINAL = VEIL.mint;
+const TERMINAL_BRIGHT = VEIL.mintBright;
 
 interface HoldToFabricateButtonProps {
   onComplete: () => void;

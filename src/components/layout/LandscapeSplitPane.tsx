@@ -11,6 +11,8 @@ interface LandscapeSplitPaneProps {
   primaryRatio?: number;
   /** When false, always stack vertically even on wide screens. */
   allowHorizontalSplit?: boolean;
+  /** Override default pane gap (scaled LANDSCAPE_PANEL_GAP). */
+  gap?: number;
   style?: StyleProp<ViewStyle>;
   primaryStyle?: StyleProp<ViewStyle>;
   secondaryStyle?: StyleProp<ViewStyle>;
@@ -24,6 +26,7 @@ export default function LandscapeSplitPane({
   secondary,
   primaryRatio = LANDSCAPE_PRIMARY_SPLIT_RATIO,
   allowHorizontalSplit = true,
+  gap,
   style,
   primaryStyle,
   secondaryStyle,
@@ -32,7 +35,7 @@ export default function LandscapeSplitPane({
   const { scaleSpacing } = useResponsiveScale();
   const horizontal = allowHorizontalSplit && useHorizontalSplit;
   const secondaryFlex = Math.max(0.2, 1 - primaryRatio);
-  const paneGap = scaleSpacing(LANDSCAPE_PANEL_GAP);
+  const paneGap = gap ?? scaleSpacing(LANDSCAPE_PANEL_GAP);
 
   if (horizontal) {
     return (

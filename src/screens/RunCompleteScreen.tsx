@@ -8,8 +8,9 @@ import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import TerminalSafeArea from '../components/TerminalSafeArea';
 import { useImmersiveScreenPadding } from '../hooks/useImmersiveScreenPadding';
+import { VEIL } from '../theme/veilTerminalTokens';
 
-const TERMINAL_ACCENT = '#00ff33';
+const TERMINAL_ACCENT = VEIL.mint;
 
 export default function RunCompleteScreen(): React.JSX.Element {
   const { theme } = useTerminal();
@@ -59,7 +60,7 @@ export default function RunCompleteScreen(): React.JSX.Element {
             onPress={handleReturn}
             style={({ pressed }) => [
               styles.button,
-              { borderColor: TERMINAL_ACCENT, backgroundColor: pressed ? '#0d1a12' : '#0e1624' },
+              { borderColor: TERMINAL_ACCENT, backgroundColor: pressed ? VEIL.surface3 : VEIL.surface2 },
             ]}
           >
             <Text style={styles.buttonLabel}>[ RETURN TO TERMINAL ]</Text>

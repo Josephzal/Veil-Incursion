@@ -8,6 +8,7 @@ import {
   DashPathEffect,
   Group,
   Line,
+  Path,
   Rect,
   Skia,
   SweepGradient,
@@ -23,6 +24,7 @@ import {
 import { mergeScannerThemes } from './scanner/zoneScannerThemes';
 import ScannerCornerBrackets from './scanner/ScannerCornerBrackets';
 import {
+  arcSpanPath,
   buildDegreeTicks,
   buildNonEuclideanGrid,
   type ScopeArc,
@@ -288,8 +290,8 @@ function VectorScannerComponent({
     () => [
       'transparent',
       accentWithAlpha(sweepLeadColor, 0),
-      accentWithAlpha(sweepLeadColor, 0.1),
-      accentWithAlpha(sweepLeadColor, 0.45),
+      accentWithAlpha(sweepLeadColor, 0.04),
+      accentWithAlpha(sweepLeadColor, 0.22),
     ],
     [sweepLeadColor],
   );
@@ -729,24 +731,42 @@ function VectorScannerComponent({
           <Rect x={0} y={0} width={scannerSize} height={scannerSize} color={RADAR_CANVAS_BACKDROP} />
 
           <Group clip={radarClipPath}>
-            {scopeGeometry.arcs.map((arc: ScopeArc, index: number) => (
-              <Group
-                key={`scope-arc-${index}`}
-                origin={vec(radarCenter, radarCenter)}
-                transform={[{ rotate: ((arc.rotationDeg ?? 0) * Math.PI) / 180 }]}
-              >
-                <Oval
-                  x={arc.cx - arc.rx}
-                  y={arc.cy - arc.ry}
-                  width={arc.rx * 2}
-                  height={arc.ry * 2}
-                  color={structuralStroke}
-                  style="stroke"
-                  strokeWidth={STROKE_THIN}
-                  opacity={arc.opacity}
-                />
-              </Group>
-            ))}
+            {scopeGeometry.arcs.map((arc: ScopeArc, index: number) => {
+              const r = (arc.rx + arc.ry) * 0.5;
+              if (arc.spanDeg != null) {
+                const d = arcSpanPath(arc.cx, arc.cy, r, arc.rotationDeg ?? 0, arc.spanDeg);
+                const path = Skia.Path.MakeFromSVGString(d);
+                if (!path) return null;
+                return (
+                  <Path
+                    key={`scope-arc-${index}`}
+                    path={path}
+                    color={structuralStroke}
+                    style="stroke"
+                    strokeWidth={arc.strokeWidth ?? STROKE_THIN}
+                    opacity={arc.opacity}
+                  />
+                );
+              }
+              return (
+                <Group
+                  key={`scope-arc-${index}`}
+                  origin={vec(radarCenter, radarCenter)}
+                  transform={[{ rotate: ((arc.rotationDeg ?? 0) * Math.PI) / 180 }]}
+                >
+                  <Oval
+                    x={arc.cx - arc.rx}
+                    y={arc.cy - arc.ry}
+                    width={arc.rx * 2}
+                    height={arc.ry * 2}
+                    color={structuralStroke}
+                    style="stroke"
+                    strokeWidth={arc.strokeWidth ?? STROKE_THIN}
+                    opacity={arc.opacity}
+                  />
+                </Group>
+              );
+            })}
 
             {scopeGeometry.lines.map((line: ScopeLine, index: number) => (
               <Line
@@ -1097,7 +1117,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     borderWidth: 1.5,
   },
-  childOverlay: { ...StyleSheet.absoluteFillObject },
+  childOverlay: { ...StyleSheet.absoluteFill },
   telemetryOverlay: {
     position: 'absolute',
     top: 6,

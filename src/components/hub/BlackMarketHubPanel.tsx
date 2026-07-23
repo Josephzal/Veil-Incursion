@@ -27,6 +27,7 @@ import FabricationReceipt, {
 } from './blackMarket/FabricationReceipt';
 import HoldToFabricateButton from './blackMarket/HoldToFabricateButton';
 import type { SchematicGlyphFamily } from './blackMarket/SchematicGlyph';
+import { VEIL } from '../../theme/veilTerminalTokens';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useWorldState } from '../../context/WorldStateContext';
 import { useHubLayout } from '../../context/HubLayoutContext';
@@ -72,12 +73,12 @@ interface FabricationFeedbackRecord {
 
 export type BlackMarketTab = 'FORGE' | 'VENDOR';
 
-const TERMINAL = '#69c8ad';
-const TERMINAL_BRIGHT = '#8ee0c6';
-const MISSING = '#d88984';
-const OCCULT = '#9988b3';
-const META = '#7a8f99';
-const TEXT_PRIMARY = '#c8d4cf';
+const TERMINAL = VEIL.mint;
+const TERMINAL_BRIGHT = VEIL.mintBright;
+const MISSING = VEIL.blood;
+const OCCULT = VEIL.occult;
+const META = VEIL.textMuted;
+const TEXT_PRIMARY = VEIL.text;
 
 const MODE_ITEMS: Array<{ key: BlackMarketTab; label: string; detail: string; code: string }> = [
   { key: 'FORGE', label: 'FORGE', detail: 'FABRICATION CHANNEL', code: 'FAB-01' },
@@ -1629,7 +1630,7 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         backgroundImage:
-          'linear-gradient(90deg, #69c8ad 0 68%, transparent 68% 73%, rgba(105, 200, 173, 0.35) 73% 100%)',
+          'linear-gradient(90deg, #62CDB5 0 68%, transparent 68% 73%, rgba(98, 205, 181, 0.35) 73% 100%)',
       } as object,
       default: {
         backgroundColor: TERMINAL,

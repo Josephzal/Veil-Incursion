@@ -35,12 +35,13 @@ import {
   resolveSchematicGlyphFamily,
   SchematicGlyphMark,
 } from './SchematicGlyph';
+import { VEIL } from '../../../theme/veilTerminalTokens';
 
-const TERMINAL = '#69c8ad';
-const TERMINAL_BRIGHT = '#8ee0c6';
-const MISSING = '#d88984';
-const OCCULT = '#9988b3';
-const META = '#7a8f99';
+const TERMINAL = VEIL.mint;
+const TERMINAL_BRIGHT = VEIL.mintBright;
+const MISSING = VEIL.blood;
+const OCCULT = VEIL.occult;
+const META = VEIL.textMuted;
 
 interface ForgeWorkspaceProps {
   selectedRecipeId: string | null;

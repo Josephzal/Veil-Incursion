@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, Text } from 'react-native';
 import DossierCardShell from '../hub/DossierCardShell';
 import { NARRATIVE_BODY_LINE_HEIGHT, NARRATIVE_UNIFIED_PANEL_PADDING } from '../../constants/narrativeLayout';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
+import { VEIL } from '../../theme/veilTerminalTokens';
 
 interface NarrativeFlavorPanelProps {
   flavorText: string;
@@ -18,7 +19,7 @@ const MUTED_WHITE = '#F8FAFC';
 export default function NarrativeFlavorPanel({
   flavorText,
   primaryColor = MUTED_WHITE,
-  mutedColor = '#94a3b8',
+  mutedColor = VEIL.textMuted,
 }: NarrativeFlavorPanelProps): React.JSX.Element {
   const { scaleFont, scaleSpacing, fontScale } = useResponsiveLayout();
   const panelPadding = scaleSpacing(NARRATIVE_UNIFIED_PANEL_PADDING);

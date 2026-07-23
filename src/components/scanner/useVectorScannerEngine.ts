@@ -36,6 +36,7 @@ import {
   type NodeBearing,
   type VectorScannerProps,
 } from './vectorScannerShared';
+import { publishScannerSweepAngle } from './scannerSweepBridge';
 
 export function useVectorScannerEngine({
   cabal,
@@ -72,6 +73,8 @@ export function useVectorScannerEngine({
   const [isCeased, setIsCeased] = useState(false);
   const [siphonedNodeIds, setSiphonedNodeIds] = useState<string[]>([]);
   const [siphonPulseKeys, setSiphonPulseKeys] = useState<Record<string, number>>({});
+  /** Presentation-only — fires when a contact is first illuminated by the sweep. */
+  const [discoveryPulseKeys, setDiscoveryPulseKeys] = useState<Record<string, number>>({});
   const [renderTick, setRenderTick] = useState(0);
   const [fogOpacity, setFogOpacity] = useState(1);
   const [phosphorDischargeDisc, setPhosphorDischargeDisc] = useState(false);
@@ -191,6 +194,12 @@ export function useVectorScannerEngine({
 
       setRevealedIds((prev) => {
         if (prev.has(nodeId)) return prev;
+        queueMicrotask(() => {
+          setDiscoveryPulseKeys((keys) => ({
+            ...keys,
+            [nodeId]: (keys[nodeId] ?? 0) + 1,
+          }));
+        });
         const next = new Set(prev);
         next.add(nodeId);
         return next;
@@ -375,6 +384,7 @@ export function useVectorScannerEngine({
       lastFrameTsRef.current = null;
       ceaseStartRef.current = null;
       dischargePhaseRef.current = 'none';
+      publishScannerSweepAngle(sweepAngleRef.current, false);
       if (!sweepFinished) {
         setSweepDeg(0);
         sweepAngleRef.current = 0;
@@ -392,6 +402,7 @@ export function useVectorScannerEngine({
       isCeasedRef.current = false;
       setSiphonedNodeIds([]);
       setSiphonPulseKeys({});
+      setDiscoveryPulseKeys({});
       sweepCompleteFiredRef.current = false;
       ceaseStartRef.current = null;
       dischargePhaseRef.current = 'none';
@@ -428,6 +439,7 @@ export function useVectorScannerEngine({
           sweepAngleRef.current += baseSweepSpeedDegPerMs * deltaMs * speedScale;
           const beamDeg = sweepAngleRef.current % 360;
           setSweepDeg(beamDeg);
+          publishScannerSweepAngle(beamDeg, true);
           evaluateSweepCollision(beamDeg);
           updateBlipDecays(timestamp);
 
@@ -441,10 +453,13 @@ export function useVectorScannerEngine({
           const fogEased = easeOutCubic(fogT);
 
           setFogOpacity(1 - fogEased);
-          setSweepDeg(sweepAngleRef.current % 360);
+          const beamDeg = sweepAngleRef.current % 360;
+          setSweepDeg(beamDeg);
+          publishScannerSweepAngle(beamDeg, false);
 
           if (fogT >= 1) {
             dischargePhaseRef.current = 'done';
+            publishScannerSweepAngle(beamDeg, false);
             finalizeCeaseScan();
             return;
           }
@@ -459,6 +474,8 @@ export function useVectorScannerEngine({
       sweepAngleRef.current += baseSweepSpeedDegPerMs * deltaMs;
       const beamDeg = sweepAngleRef.current % 360;
       setSweepDeg(beamDeg);
+      // Presentation bridge only — does not alter timing or collision.
+      publishScannerSweepAngle(beamDeg, true);
       evaluateSweepCollision(beamDeg);
       updateBlipDecays(timestamp);
 
@@ -562,6 +579,7 @@ export function useVectorScannerEngine({
     phosphorDischargeDisc,
     siphonedNodeIds,
     siphonPulseKeys,
+    discoveryPulseKeys,
     uniformSelectable,
     selectionAccent,
     selectionGlowInnerOpacity,

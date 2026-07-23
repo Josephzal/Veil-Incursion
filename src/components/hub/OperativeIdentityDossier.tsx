@@ -11,6 +11,7 @@ import { OperativeProfile } from '../../types/profile';
 import { TerminalTheme } from '../../types/theme';
 import { resolvePlayerBadgePortrait } from '../../utils/combatPlayerPortrait';
 import { useHubLayout } from '../../context/HubLayoutContext';
+import { VEIL } from '../../theme/veilTerminalTokens';
 
 interface OperativeIdentityDossierProps {
   theme: TerminalTheme;
@@ -27,9 +28,9 @@ interface OperativeIdentityDossierProps {
 const EMBLEM_SIZE = 112;
 const COMPACT_EMBLEM_SIZE = 52;
 const MINI_EMBLEM_SIZE = 40;
-const SLATE_MUTED = '#94a3b8';
-const SLATE_BORDER = '#475569';
-const DIVIDER_COLOR = '#334155';
+const SLATE_MUTED = VEIL.textMuted;
+const SLATE_BORDER = VEIL.lineStrong;
+const DIVIDER_COLOR = VEIL.line;
 
 /** Landscape operative ID badge — emblem lane + credentials / loadout. */
 export default function OperativeIdentityDossier({
@@ -285,7 +286,7 @@ const styles = StyleSheet.create({
   operativeName: {
     fontFamily: 'monospace',
     fontWeight: '800',
-    color: '#f8fafc',
+    color: VEIL.text,
     letterSpacing: 0.5,
   },
   metaLine: {

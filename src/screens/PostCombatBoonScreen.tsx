@@ -20,8 +20,9 @@ import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { HUB_BORDER_INSET, hubCtaButtonStyle } from '../constants/hubCta';
 import type { ClassType } from '../types/game';
 import { MAX_LEY_MUTATIONS } from '../types/overworldFeatures';
+import { VEIL } from '../theme/veilTerminalTokens';
 
-const TERMINAL_ACCENT = '#00ff33';
+const TERMINAL_ACCENT = VEIL.mint;
 
 const HEADER_TITLE: Record<ClassType, string> = {
   AEGIS: 'LEY-LINE MUTATION',

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, G, Line, Path, Rect } from 'react-native-svg';
+import { VEIL } from '../../../theme/veilTerminalTokens';
 
 const AnimatedLine = Animated.createAnimatedComponent(Line);
 const AnimatedG = Animated.createAnimatedComponent(G);
@@ -32,8 +33,8 @@ const VEIL_EDGE = '#ef4444';
 const DIM_CONDUIT = '#22402f';
 const BLOCK_FILL = '#0a0f14';
 const BLOCK_EDGE = '#5b1a1a';
-const TERMINAL_GREEN = '#00ff33';
-const BODY_MUTED = '#94A3B8';
+const TERMINAL_GREEN = VEIL.mint;
+const BODY_MUTED = VEIL.textMuted;
 const MUTED_WHITE = '#F8FAFC';
 const WARN_AMBER = '#FBBF24';
 const COLLAPSE_RED = '#EF4444';

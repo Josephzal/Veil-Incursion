@@ -8,20 +8,21 @@ import { useBreachWindowCountdown } from '../../hooks/useBreachWindowCountdown';
 import { useResponsiveScale } from '../../hooks/useResponsiveScale';
 import { readPressableHover } from '../../utils/terminalHoverStyle';
 import type { TerminalView } from '../../types/terminalNav';
+import { VEIL } from '../../theme/veilTerminalTokens';
 
 interface VeilTopbarProps {
   activeView: TerminalView;
   onSelectView: (view: TerminalView) => void;
 }
 
-const TERMINAL = '#69c8ad';
-const TERMINAL_BRIGHT = '#8ee0c6';
-const BRAND = '#d9e2df';
-const MUTED = '#8fa39f';
-const NAV_IDLE = '#8d9c99';
-const NAV_HOVER = '#d0d9d6';
-const NAV_ACTIVE = '#86d8be';
-const TIMER = '#d8e2df';
+const TERMINAL = VEIL.mint;
+const TERMINAL_BRIGHT = VEIL.mintBright;
+const BRAND = VEIL.text;
+const MUTED = VEIL.textMuted;
+const NAV_IDLE = VEIL.textMuted;
+const NAV_HOVER = VEIL.textSoft;
+const NAV_ACTIVE = VEIL.mintBright;
+const TIMER = VEIL.text;
 
 function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false);

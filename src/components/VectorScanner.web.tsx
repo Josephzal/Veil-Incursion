@@ -1,15 +1,35 @@
-import React, { memo, useEffect, useMemo, useRef } from 'react';
+import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { USE_NATIVE_DRIVER } from '../utils/platformMotion';
-import Svg, { Circle, ClipPath, Defs, Ellipse, G, Line, Path, Rect } from 'react-native-svg';
+import Svg, {
+  Circle,
+  ClipPath,
+  Defs,
+  Ellipse,
+  FeGaussianBlur,
+  Filter,
+  G,
+  Line,
+  Path,
+  RadialGradient,
+  Rect,
+  Stop,
+} from 'react-native-svg';
+import DiscoveryRipple from './scanner/DiscoveryRipple';
 import ScannerCornerBrackets from './scanner/ScannerCornerBrackets';
+import { arcSpanPath } from './scanner/scannerScopeGeometry';
+import { publishSelectedContact } from './scanner/scannerSweepBridge';
 import { useVectorScannerEngine } from './scanner/useVectorScannerEngine';
 import { primaryScannerSignalAccent } from '../data/scannerSignalEngine';
 import {
+  CONTACT_CORE_RADIUS,
+  CONTACT_CORE_RADIUS_SELECTED,
+  CONTACT_GLOW_RADIUS,
+  CONTACT_GLOW_RADIUS_SELECTED,
   DOT_HIT_SIZE,
   HOSTILE_PATROL_COLOR,
-  RADAR_CANVAS_BACKDROP,
   SCANNER_CEASE_SLOT_HEIGHT,
+  SCANNER_PHOSPHOR,
   SIPHON_EXTRACT_MS,
   SIPHON_RING_PEAK_SCALE,
   STROKE_THIN,
@@ -22,6 +42,8 @@ import {
 
 export * from './scanner/vectorScannerShared';
 
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
 interface RadarTargetProps {
   visualSize: number;
   left: number;
@@ -30,6 +52,101 @@ interface RadarTargetProps {
   pulseKey: number;
   onPress: () => void;
   ringColor: string;
+  onHighlightChange?: (active: boolean) => void;
+}
+
+function usePrefersReducedMotion(): boolean {
+  const [reduced, setReduced] = React.useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return undefined;
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const sync = () => setReduced(media.matches);
+    sync();
+    media.addEventListener?.('change', sync);
+    return () => media.removeEventListener?.('change', sync);
+  }, []);
+  return reduced;
+}
+
+/**
+ * Selected contact — soft bright glow breath (intensity only; core size stays fixed).
+ * Animated driver only — no React per-frame state. Static under reduced motion.
+ */
+function SelectedPipGlow({
+  x,
+  y,
+  bloomR,
+  coreR,
+  color,
+  coreOpacity,
+}: {
+  x: number;
+  y: number;
+  bloomR: number;
+  coreR: number;
+  color: string;
+  coreOpacity: number;
+}): React.JSX.Element {
+  const pulse = useRef(new Animated.Value(0)).current;
+  const reduceMotion = usePrefersReducedMotion();
+
+  useEffect(() => {
+    if (reduceMotion) return undefined;
+    pulse.setValue(0);
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 1200,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: false,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0,
+          duration: 1200,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: false,
+        }),
+      ]),
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [pulse, reduceMotion]);
+
+  if (reduceMotion) {
+    return (
+      <G pointerEvents="none">
+        <Circle
+          cx={x}
+          cy={y}
+          r={bloomR}
+          fill={color}
+          opacity={0.48}
+          filter="url(#signal-pip-glow)"
+        />
+        <Circle cx={x} cy={y} r={coreR} fill={color} opacity={coreOpacity} />
+      </G>
+    );
+  }
+
+  const glowOpacity = pulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.36, 0.62],
+  });
+
+  return (
+    <G pointerEvents="none">
+      <AnimatedCircle
+        cx={x}
+        cy={y}
+        r={bloomR}
+        fill={color}
+        opacity={glowOpacity}
+        filter="url(#signal-pip-glow)"
+      />
+      <Circle cx={x} cy={y} r={coreR} fill={color} opacity={coreOpacity} />
+    </G>
+  );
 }
 
 function RadarTarget({
@@ -40,12 +157,27 @@ function RadarTarget({
   pulseKey,
   onPress,
   ringColor,
-}: RadarTargetProps): React.JSX.Element {
+  onHighlightChange,
+  accessibilityLabel,
+}: RadarTargetProps & { accessibilityLabel?: string }): React.JSX.Element {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
+  const reduceMotion = usePrefersReducedMotion();
+  const highlightRef = useRef(false);
+
+  const setHighlight = (active: boolean) => {
+    if (highlightRef.current === active) return;
+    highlightRef.current = active;
+    onHighlightChange?.(active);
+  };
 
   useEffect(() => {
     if (pulseKey === 0) return;
+    if (reduceMotion) {
+      scaleAnim.setValue(1);
+      opacityAnim.setValue(0);
+      return;
+    }
     scaleAnim.setValue(1);
     opacityAnim.setValue(0.85);
     Animated.parallel([
@@ -62,14 +194,30 @@ function RadarTarget({
         useNativeDriver: USE_NATIVE_DRIVER,
       }),
     ]).start();
-  }, [pulseKey, scaleAnim, opacityAnim]);
+  }, [pulseKey, scaleAnim, opacityAnim, reduceMotion]);
+
+  useEffect(() => () => setHighlight(false), []);
 
   return (
     <TouchableOpacity
       activeOpacity={0.85}
       disabled={disabled}
       onPress={onPress}
-      style={[styles.nodeHitbox, { left, top, width: DOT_HIT_SIZE, height: DOT_HIT_SIZE }]}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? 'Scan contact'}
+      accessibilityState={{ disabled }}
+      onFocus={() => setHighlight(true)}
+      onBlur={() => setHighlight(false)}
+      {...({
+        onMouseEnter: () => setHighlight(true),
+        onMouseLeave: () => setHighlight(false),
+      } as object)}
+      style={[
+        styles.nodeHitbox,
+        { left, top, width: DOT_HIT_SIZE, height: DOT_HIT_SIZE },
+        // Suppress browser-default outline; acquisition brackets carry focus/hover.
+        { outlineStyle: 'none', outlineWidth: 0 } as object,
+      ]}
     >
       <Animated.View
         pointerEvents="none"
@@ -107,7 +255,28 @@ function lerpGradientStops(
   return 0;
 }
 
-/** Angular wedge segments approximating native SweepGradient (transparent trail → bright leading edge). */
+/** Pie-wedge path from scanner center to outer arc — apex must reach the hub. */
+function sweepWedgePath(
+  cx: number,
+  cy: number,
+  radius: number,
+  startDeg: number,
+  endDeg: number,
+): string {
+  const rad0 = (startDeg * Math.PI) / 180;
+  const rad1 = (endDeg * Math.PI) / 180;
+  const x0 = cx + radius * Math.cos(rad0);
+  const y0 = cy + radius * Math.sin(rad0);
+  const x1 = cx + radius * Math.cos(rad1);
+  const y1 = cy + radius * Math.sin(rad1);
+  let span = endDeg - startDeg;
+  while (span < 0) span += 360;
+  while (span >= 360) span -= 360;
+  const largeArc = span > 180 ? 1 : 0;
+  return `M ${cx} ${cy} L ${x0} ${y0} A ${radius} ${radius} 0 ${largeArc} 1 ${x1} ${y1} Z`;
+}
+
+/** Angular wake segments — soft fill only; leading edge drawn separately. */
 function buildSweepGradientSegments(
   cx: number,
   cy: number,
@@ -119,32 +288,34 @@ function buildSweepGradientSegments(
   segments = 48,
 ): Array<{ d: string; fill: string }> {
   const result: Array<{ d: string; fill: string }> = [];
+  // Match lead stroke radius so the wake meets the scan line tip and hub.
+  const fillR = radius;
   for (let i = 0; i < segments; i += 1) {
     const t0 = i / segments;
     const t1 = (i + 1) / segments;
     const alpha = lerpGradientStops(positions, alphas, (t0 + t1) / 2);
-    if (alpha < 0.004) continue;
+    if (alpha < 0.003) continue;
 
     const deg0 = 360 - trailDeg + t0 * trailDeg;
     const deg1 = 360 - trailDeg + t1 * trailDeg;
-    const rad0 = (deg0 * Math.PI) / 180;
-    const rad1 = (deg1 * Math.PI) / 180;
-    const x0 = cx + radius * Math.cos(rad0);
-    const y0 = cy + radius * Math.sin(rad0);
-    const x1 = cx + radius * Math.cos(rad1);
-    const y1 = cy + radius * Math.sin(rad1);
-    const span = deg1 - deg0;
-    const largeArc = span > 180 ? 1 : 0;
-    const d = `M ${cx} ${cy} L ${x0} ${y0} A ${radius} ${radius} 0 ${largeArc} 1 ${x1} ${y1} Z`;
-    result.push({ d, fill: accentWithAlpha(color, alpha) });
+    result.push({
+      d: sweepWedgePath(cx, cy, fillR, deg0, deg1),
+      fill: accentWithAlpha(color, alpha),
+    });
   }
   return result;
 }
 
-const ACTIVE_SWEEP_POSITIONS = [0, 0.38, 0.68, 1] as const;
-const ACTIVE_SWEEP_ALPHAS = [0, 0, 0.1, 0.45] as const;
+/**
+ * Soft feathered wake (~24°) — lead edge is a separate crisp stroke.
+ * Wedge paths always apex at the scanner center (no inner cutout).
+ */
+/** Soft radar wake — lead stroke remains the crisp beam. */
+const ACTIVE_SWEEP_POSITIONS = [0, 0.18, 0.45, 0.75, 1] as const;
+const ACTIVE_SWEEP_ALPHAS = [0, 0.03, 0.07, 0.13, 0.06] as const;
 const DISCHARGE_SWEEP_POSITIONS = [0, 0.2, 0.45, 0.7, 1] as const;
-const DISCHARGE_SWEEP_ALPHAS = [0, 0.04, 0.1, 0.08, 0] as const;
+const DISCHARGE_SWEEP_ALPHAS = [0, 0.02, 0.05, 0.025, 0] as const;
+const CALIBRATION_STROKE = '#5A6E68';
 
 function VectorScannerWebComponent({
   scannerSize,
@@ -168,19 +339,18 @@ function VectorScannerWebComponent({
     theme,
     radarCenter,
     sweepRadius,
-    structuralStroke,
     scopeGeometry,
     sweepRotationRad,
     fogOpacity,
     phosphorDischargeDisc,
     siphonedNodeIds,
     siphonPulseKeys,
+    discoveryPulseKeys,
     uniformSelectable,
     selectionAccent,
     scanInteractive,
     nodeBearings,
     sweepLeadColor,
-    useDashedOuter,
     showSweep,
     showCeaseControl,
     canCeaseScan,
@@ -188,24 +358,45 @@ function VectorScannerWebComponent({
     handleTargetPress,
     isTargetEnabled,
     getBlipOpacity,
-    getBlipScale,
     handleCeaseScan,
   } = engine;
+
+  const [highlightedNodeId, setHighlightedNodeId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!continuousScan || !selectedNodeId) {
+      publishSelectedContact({ canvasX: 0, canvasY: 0, has: false });
+      return;
+    }
+    const selected = nodeBearings.find((n) => n.id === selectedNodeId);
+    if (!selected || getBlipOpacity(selected.id) <= 0.01) {
+      publishSelectedContact({ canvasX: 0, canvasY: 0, has: false });
+      return;
+    }
+    publishSelectedContact({
+      canvasX: selected.canvasX,
+      canvasY: selected.canvasY,
+      has: true,
+      strength: 1,
+    });
+  }, [continuousScan, selectedNodeId, nodeBearings, getBlipOpacity, scannerSize]);
 
   const shellHeight = getScannerShellHeight(scannerSize, !continuousScan);
   const clipId = `radar-clip-${scannerSize}`;
   const sweepTrailDeg = phosphorDischargeDisc ? 360 : SWEEP_TRAIL_ACTIVE_DEG;
+  // Visual phosphor only — discovery timing still uses engine sweep angle.
+  const phosphorSweepColor = continuousScan ? SCANNER_PHOSPHOR : sweepLeadColor;
   const sweepSegments = useMemo(
     () => buildSweepGradientSegments(
       radarCenter,
       radarCenter,
       sweepRadius,
       sweepTrailDeg,
-      sweepLeadColor,
+      phosphorSweepColor,
       phosphorDischargeDisc ? DISCHARGE_SWEEP_POSITIONS : ACTIVE_SWEEP_POSITIONS,
       phosphorDischargeDisc ? DISCHARGE_SWEEP_ALPHAS : ACTIVE_SWEEP_ALPHAS,
     ),
-    [phosphorDischargeDisc, radarCenter, sweepLeadColor, sweepRadius, sweepTrailDeg],
+    [phosphorDischargeDisc, phosphorSweepColor, radarCenter, sweepRadius, sweepTrailDeg],
   );
   const sweepRotationDeg = (sweepRotationRad * 180) / Math.PI;
 
@@ -217,34 +408,99 @@ function VectorScannerWebComponent({
             <ClipPath id={clipId}>
               <Circle cx={radarCenter} cy={radarCenter} r={sweepRadius} />
             </ClipPath>
+            <RadialGradient
+              id={`aperture-well-${scannerSize}`}
+              cx={String(radarCenter)}
+              cy={String(radarCenter)}
+              rx={String(sweepRadius)}
+              ry={String(sweepRadius)}
+              fx={String(radarCenter)}
+              fy={String(radarCenter)}
+              gradientUnits="userSpaceOnUse"
+            >
+              <Stop offset="0%" stopColor="#030808" stopOpacity={0.68} />
+              <Stop offset="55%" stopColor="#020606" stopOpacity={0.74} />
+              <Stop offset="100%" stopColor="#010505" stopOpacity={0.82} />
+            </RadialGradient>
+            <Filter id="signal-pip-glow" x="-80%" y="-80%" width="260%" height="260%">
+              <FeGaussianBlur stdDeviation="3.6" />
+            </Filter>
           </Defs>
 
-          <Rect
-            x={0}
-            y={0}
-            width={scannerSize}
-            height={scannerSize}
-            fill={RADAR_CANVAS_BACKDROP}
+          <Rect x={0} y={0} width={scannerSize} height={scannerSize} fill="transparent" />
+
+          {/* Deep instrument well — Veil remains faintly visible underneath. */}
+          <G clipPath={`url(#${clipId})`} pointerEvents="none" {...({ 'aria-hidden': true } as object)}>
+            <Circle
+              cx={radarCenter}
+              cy={radarCenter}
+              r={sweepRadius}
+              fill={`url(#aperture-well-${scannerSize})`}
+            />
+          </G>
+
+          {/* Outer radar rim — quiet so glowing returns stay primary */}
+          <Circle
+            cx={radarCenter}
+            cy={radarCenter}
+            r={sweepRadius * 0.995}
+            stroke={accentWithAlpha(SCANNER_PHOSPHOR, 0.26)}
+            strokeWidth={1.15}
+            fill="none"
+            pointerEvents="none"
           />
 
-          <G clipPath={`url(#${clipId})`}>
-            {scopeGeometry.arcs.map((arc, index) => (
-              <G
-                key={`scope-arc-${index}`}
-                transform={`rotate(${arc.rotationDeg ?? 0}, ${radarCenter}, ${radarCenter})`}
-              >
-                <Ellipse
-                  cx={arc.cx}
-                  cy={arc.cy}
-                  rx={arc.rx}
-                  ry={arc.ry}
-                  stroke={structuralStroke}
-                  strokeWidth={STROKE_THIN}
-                  opacity={arc.opacity}
-                  fill="none"
-                />
-              </G>
-            ))}
+          <G
+            clipPath={`url(#${clipId})`}
+            pointerEvents="none"
+            {...({ 'aria-hidden': true } as object)}
+          >
+            {scopeGeometry.arcs.map((arc, index) => {
+              const r = (arc.rx + arc.ry) * 0.5;
+              if (arc.spanDeg != null) {
+                return (
+                  <Path
+                    key={`scope-arc-${index}`}
+                    d={arcSpanPath(arc.cx, arc.cy, r, arc.rotationDeg ?? 0, arc.spanDeg)}
+                    stroke={accentWithAlpha(CALIBRATION_STROKE, 0.72)}
+                    strokeWidth={arc.strokeWidth ?? STROKE_THIN}
+                    opacity={arc.opacity * 0.78}
+                    fill="none"
+                  />
+                );
+              }
+              if (arc.openGapDeg != null && Math.abs(arc.rx - arc.ry) < 0.5) {
+                const span = 360 - arc.openGapDeg;
+                const start = (arc.rotationDeg ?? 0) + arc.openGapDeg / 2;
+                return (
+                  <Path
+                    key={`scope-arc-${index}`}
+                    d={arcSpanPath(arc.cx, arc.cy, r, start, span)}
+                    stroke={accentWithAlpha(CALIBRATION_STROKE, 0.72)}
+                    strokeWidth={arc.strokeWidth ?? STROKE_THIN}
+                    opacity={arc.opacity * 0.78}
+                    fill="none"
+                  />
+                );
+              }
+              return (
+                <G
+                  key={`scope-arc-${index}`}
+                  transform={`rotate(${arc.rotationDeg ?? 0}, ${radarCenter}, ${radarCenter})`}
+                >
+                  <Ellipse
+                    cx={arc.cx}
+                    cy={arc.cy}
+                    rx={arc.rx}
+                    ry={arc.ry}
+                    stroke={accentWithAlpha(CALIBRATION_STROKE, 0.68)}
+                    strokeWidth={arc.strokeWidth ?? STROKE_THIN}
+                    opacity={arc.opacity * 0.78}
+                    fill="none"
+                  />
+                </G>
+              );
+            })}
 
             {scopeGeometry.lines.map((line, index) => (
               <Line
@@ -253,9 +509,9 @@ function VectorScannerWebComponent({
                 y1={line.p1.y}
                 x2={line.p2.x}
                 y2={line.p2.y}
-                stroke={structuralStroke}
+                stroke={accentWithAlpha(CALIBRATION_STROKE, 0.75)}
                 strokeWidth={line.strokeWidth ?? STROKE_THIN}
-                opacity={line.opacity}
+                opacity={line.opacity * 0.72}
               />
             ))}
 
@@ -266,28 +522,64 @@ function VectorScannerWebComponent({
                 y1={tick.p1.y}
                 x2={tick.p2.x}
                 y2={tick.p2.y}
-                stroke={accentWithAlpha(theme.primary, 0.55)}
+                stroke={accentWithAlpha(SCANNER_PHOSPHOR, 0.26)}
                 strokeWidth={tick.strokeWidth ?? STROKE_THIN}
-                opacity={tick.opacity}
+                opacity={tick.opacity * 0.75}
               />
             ))}
           </G>
 
-          <Circle
-            cx={radarCenter}
-            cy={radarCenter}
-            r={sweepRadius}
-            stroke={structuralStroke}
-            strokeWidth={STROKE_THIN}
-            fill="none"
-            strokeDasharray={useDashedOuter ? '6 5' : undefined}
-          />
+          {/* Small center emitter */}
+          <G opacity={0.7} pointerEvents="none" {...({ 'aria-hidden': true } as object)}>
+            <Line
+              x1={radarCenter - 4}
+              y1={radarCenter}
+              x2={radarCenter - 1.5}
+              y2={radarCenter}
+              stroke={SCANNER_PHOSPHOR}
+              strokeWidth={1}
+            />
+            <Line
+              x1={radarCenter + 1.5}
+              y1={radarCenter}
+              x2={radarCenter + 4}
+              y2={radarCenter}
+              stroke={SCANNER_PHOSPHOR}
+              strokeWidth={1}
+            />
+            <Line
+              x1={radarCenter}
+              y1={radarCenter - 4}
+              x2={radarCenter}
+              y2={radarCenter - 1.5}
+              stroke={SCANNER_PHOSPHOR}
+              strokeWidth={1}
+            />
+            <Line
+              x1={radarCenter}
+              y1={radarCenter + 1.5}
+              x2={radarCenter}
+              y2={radarCenter + 4}
+              stroke={SCANNER_PHOSPHOR}
+              strokeWidth={1}
+            />
+            <Circle cx={radarCenter} cy={radarCenter} r={1.2} fill={accentWithAlpha(SCANNER_PHOSPHOR, 0.8)} />
+          </G>
 
           {showSweep ? (
-            <G clipPath={`url(#${clipId})`} opacity={fogOpacity}>
-              <G
-                transform={`rotate(${sweepRotationDeg}, ${radarCenter}, ${radarCenter})`}
-              >
+            <G clipPath={`url(#${clipId})`} opacity={fogOpacity} pointerEvents="none">
+              <G transform={`rotate(${sweepRotationDeg}, ${radarCenter}, ${radarCenter})`}>
+                {/* Solid lead fan — guarantees the after-effect reaches the hub. */}
+                <Path
+                  d={sweepWedgePath(
+                    radarCenter,
+                    radarCenter,
+                    sweepRadius,
+                    360 - Math.min(SWEEP_TRAIL_ACTIVE_DEG, 10),
+                    360,
+                  )}
+                  fill={accentWithAlpha(phosphorSweepColor, phosphorDischargeDisc ? 0.04 : 0.08)}
+                />
                 {sweepSegments.map((segment, index) => (
                   <Path key={`sweep-seg-${index}`} d={segment.d} fill={segment.fill} />
                 ))}
@@ -296,8 +588,8 @@ function VectorScannerWebComponent({
                   y1={radarCenter}
                   x2={radarCenter + sweepRadius}
                   y2={radarCenter}
-                  stroke={sweepLeadColor}
-                  strokeWidth={2}
+                  stroke={accentWithAlpha(SCANNER_PHOSPHOR, 0.95)}
+                  strokeWidth={1.5}
                 />
               </G>
             </G>
@@ -322,16 +614,17 @@ function VectorScannerWebComponent({
 
           {nodeBearings.map((node) => {
             const opacity = getBlipOpacity(node.id);
-            const scale = getBlipScale(node.id);
             if (opacity <= 0.01 && !uniformSelectable) return null;
 
             const isSelected = continuousScan && selectedNodeId === node.id;
+            const isHighlighted = !isSelected && highlightedNodeId === node.id;
             const isSiphoned = siphonedNodeIds.includes(node.id)
               || blipStatesRef.current[node.id]?.siphoned === true;
+            const typeColored = typeColoredNodeIds?.has(node.id) ?? false;
             const fillColor = resolveBlipAccent(node.node, {
               selected: isSelected,
               siphoned: isSiphoned,
-              typeColored: typeColoredNodeIds?.has(node.id) ?? false,
+              typeColored,
               isHostilePatrol: node.isHostilePatrol,
               uniformSelectable,
               selectionAccent,
@@ -340,69 +633,58 @@ function VectorScannerWebComponent({
             const signalAccent = isSiphoned
               ? primaryScannerSignalAccent(node.node.veilSignals)
               : null;
+            const showCombat = node.isHostilePatrol
+              || (typeColored && Boolean(node.node.nodeType?.includes('COMBAT')));
+            const typed = typeColored || (isSelected && isSiphoned && Boolean(signalAccent));
+            // One unified hue for core + glow (no tiered colors).
+            const pipColor = showCombat
+              ? HOSTILE_PATROL_COLOR
+              : typed
+                ? (signalAccent ?? fillColor)
+                : (fillColor === theme.blipAccent ? SCANNER_PHOSPHOR : fillColor);
+            const x = node.canvasX;
+            const y = node.canvasY;
+            const coreR = isSelected ? CONTACT_CORE_RADIUS_SELECTED : CONTACT_CORE_RADIUS;
+            const glowR = isSelected ? CONTACT_GLOW_RADIUS_SELECTED : CONTACT_GLOW_RADIUS;
+            const discoveryKey = discoveryPulseKeys[node.id] ?? 0;
+            const lum = isSelected ? 1 : isHighlighted ? 0.82 : 0.58;
+            const coreOpacity = isSelected ? 1 : isHighlighted ? 0.96 : 0.9;
+            const bloomR = isSelected ? glowR * 0.72 : glowR * 0.62;
 
             return (
-              <G key={node.id}>
-                {node.isHostilePatrol ? (
-                  <Circle
-                    cx={node.canvasX}
-                    cy={node.canvasY}
-                    r={node.visualRadius * scale * 2.1}
-                    fill={accentWithAlpha(HOSTILE_PATROL_COLOR, 0.22)}
-                  />
+              <G key={node.id} opacity={opacity} pointerEvents="none">
+                {discoveryKey > 0 ? (
+                  <DiscoveryRipple x={x} y={y} pulseKey={discoveryKey} color={pipColor} />
                 ) : null}
-                {signalAccent ? (
-                  <Circle
-                    cx={node.canvasX}
-                    cy={node.canvasY}
-                    r={node.visualRadius * scale * 2.4}
-                    fill={accentWithAlpha(signalAccent, 0.24)}
+                {isSelected ? (
+                  <SelectedPipGlow
+                    x={x}
+                    y={y}
+                    bloomR={bloomR}
+                    coreR={coreR}
+                    color={pipColor}
+                    coreOpacity={coreOpacity}
                   />
-                ) : null}
-                <Circle
-                  cx={node.canvasX}
-                  cy={node.canvasY}
-                  r={node.visualRadius * scale}
-                  fill={fillColor}
-                  opacity={opacity}
-                />
+                ) : (
+                  <>
+                    <Circle
+                      cx={x}
+                      cy={y}
+                      r={bloomR}
+                      fill={pipColor}
+                      opacity={0.38 * lum}
+                      filter="url(#signal-pip-glow)"
+                    />
+                    <Circle
+                      cx={x}
+                      cy={y}
+                      r={coreR}
+                      fill={pipColor}
+                      opacity={coreOpacity}
+                    />
+                  </>
+                )}
               </G>
-            );
-          })}
-
-          {nodeBearings.map((node) => {
-            const opacity = getBlipOpacity(node.id);
-            if (opacity <= 0.01 && !uniformSelectable) return null;
-            const scale = getBlipScale(node.id);
-            const isSelected = continuousScan && selectedNodeId === node.id;
-            const isSiphoned = siphonedNodeIds.includes(node.id)
-              || blipStatesRef.current[node.id]?.siphoned === true;
-            const ringColor = resolveBlipAccent(node.node, {
-              selected: isSelected,
-              siphoned: isSiphoned,
-              typeColored: typeColoredNodeIds?.has(node.id) ?? false,
-              isHostilePatrol: node.isHostilePatrol,
-              uniformSelectable,
-              selectionAccent,
-              defaultAccent: uniformSelectable || isSelected ? selectionAccent : theme.text,
-            });
-            const ringOpacity = node.isHostilePatrol
-              ? 0.95
-              : uniformSelectable || isSelected
-                ? 0.85
-                : opacity * 0.9;
-
-            return (
-              <Circle
-                key={`${node.id}-ring`}
-                cx={node.canvasX}
-                cy={node.canvasY}
-                r={node.visualRadius * scale + (uniformSelectable || isSelected ? 2.5 : 1.5)}
-                stroke={ringColor}
-                strokeWidth={node.isHostilePatrol ? 2 : isSelected ? 3 : uniformSelectable ? 2 : 1}
-                fill="none"
-                opacity={ringOpacity}
-              />
             );
           })}
         </Svg>
@@ -432,13 +714,29 @@ function VectorScannerWebComponent({
                 pulseKey={uniformSelectable ? 0 : (siphonPulseKeys[bearing.id] ?? 0)}
                 onPress={() => handleTargetPress(bearing.id)}
                 ringColor={targetRingColor}
+                onHighlightChange={(active) => {
+                  setHighlightedNodeId((prev) => {
+                    if (active) return bearing.id;
+                    return prev === bearing.id ? null : prev;
+                  });
+                }}
+                accessibilityLabel={
+                  isSelected
+                    ? `Selected scan contact ${bearing.id}`
+                    : isSiphoned
+                      ? `Discovered scan contact ${bearing.id}`
+                      : `Scan contact ${bearing.id}`
+                }
               />
             );
           })}
 
         {children ? <View style={styles.childOverlay}>{children}</View> : null}
 
-        <ScannerCornerBrackets color={accentWithAlpha(theme.primary, 0.75)} />
+        {/* Corner brackets reserved for legacy finite-scan modes — not the instrument shell. */}
+        {!continuousScan ? (
+          <ScannerCornerBrackets color={accentWithAlpha(SCANNER_PHOSPHOR, 0.45)} />
+        ) : null}
       </View>
 
       <View
@@ -492,7 +790,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     borderWidth: 1.5,
   },
-  childOverlay: { ...StyleSheet.absoluteFillObject },
+  childOverlay: { ...StyleSheet.absoluteFill },
   ceaseButton: {
     marginTop: 8,
     paddingVertical: 8,

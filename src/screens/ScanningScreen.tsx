@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
+import { LayoutChangeEvent, Platform, StyleSheet, Text, View } from 'react-native';
 import TerminalText from '../components/TerminalText';
 import HapticPressable from '../components/HapticPressable';
 import {
@@ -9,8 +9,6 @@ import {
 import { INITIAL_SECTOR_POOL } from '../data/regions';
 import IncursionShell from '../components/IncursionShell';
 import IncursionRunLayout from '../components/IncursionRunLayout';
-import LandscapeSplitPane from '../components/layout/LandscapeSplitPane';
-import RunEventNodeHeader from '../components/layout/RunEventNodeHeader';
 import InlineScannerEngagement from '../components/overworld/InlineScannerEngagement';
 import VectorScanner from '../components/VectorScanner';
 import LeyLineBoonSwapOverlay from '../components/LeyLineBoonSwapOverlay';
@@ -33,11 +31,10 @@ import KeepsakeStampedExtractionHint from '../components/scanner/KeepsakeStamped
 import ScannerSonarPrompt from '../components/scanner/ScannerSonarPrompt';
 import ScannerSignalOverlays from '../components/scanner/ScannerSignalOverlays';
 import ScannerVeilFrontLegend from '../components/scanner/ScannerVeilFrontLegend';
-import DossierCardShell from '../components/hub/DossierCardShell';
+import ScanScreenHeader from '../components/scanner/ScanScreenHeader';
+import ScanInstrument from '../components/scanner/ScanInstrument';
 import { DOSSIER_ROW_BG } from '../constants/dossierSurface';
-import { resolveFactionSlateBackgroundSolid } from '../constants/hubAtmosphere';
 import { formatRiftManifestLog } from '../utils/overworldBlindScout';
-import { resolveRunEventNodeHeaderFromNode } from '../utils/resolveRunEventNodeHeader';
 import { hasFieldRunItem } from '../data/runItemFieldEngine';
 import { getKeepsakeCartographGhostType } from '../data/expeditionKeepsakeScannerEngine';
 import {
@@ -48,9 +45,21 @@ import {
   getSectorZone,
   isEmergencyRecallAvailable,
 } from '../data/sectorZoneEngine';
+import {
+  SCANNER_APERTURE_SAFE_INSET,
+  SCANNER_FIELD_SURROUND,
+  SCANNER_PAGE_BG,
+  SCANNER_TELEMETRY_RAIL_HEIGHT,
+} from '../components/scanner/vectorScannerShared';
+import { OccultInterference } from '../components/hub/veilChrome';
+import VeilWarpField from '../components/scanner/VeilWarpField';
+import {
+  SCANNER_INSTRUMENT_BIAS_X,
+  publishScannerSweepGeometry,
+} from '../components/scanner/scannerSweepBridge';
 
 const TERMINAL_ACCENT = '#00ff33';
-const SCANNER_BEZEL_PADDING = 6;
+const SCANNER_BEZEL_PADDING = 4;
 
 /** Preserve spawn layout when the scanner viewport resizes. */
 function scaleRadarDots(dots: RadarDot[], fromSize: number, toSize: number): RadarDot[] {
@@ -67,8 +76,8 @@ function scaleRadarDots(dots: RadarDot[], fromSize: number, toSize: number): Rad
 
 export default function ScanningScreen(): React.JSX.Element {
   const { theme } = useTerminal();
-  const { useHorizontalSplit, panelPadding } = useLandscapeMetrics();
-  const { scannerPrimaryRatio, isDesktop } = useResponsiveScale();
+  const { panelPadding } = useLandscapeMetrics();
+  const { isDesktop } = useResponsiveScale();
   const { fontScale } = useResponsiveLayout();
   const {
     runState,
@@ -108,7 +117,6 @@ export default function ScanningScreen(): React.JSX.Element {
   } = useGameFlow();
 
   const cabal: ScannerCabal = account.alignedFaction ?? 'TERRAN_GRID';
-  const scannerBackground = resolveFactionSlateBackgroundSolid(account.alignedFaction);
   const accent =
     account.alignedFaction != null
       ? getFactionDefinition(account.alignedFaction).accentColor
@@ -117,9 +125,14 @@ export default function ScanningScreen(): React.JSX.Element {
   const [scannerViewportSize, setScannerViewportSize] = useState({ width: 0, height: 0 });
   const scannerSize = useMemo(() => {
     const innerWidth = scannerViewportSize.width - SCANNER_BEZEL_PADDING * 2;
-    const innerHeight = scannerViewportSize.height - SCANNER_BEZEL_PADDING * 2;
+    const innerHeight = scannerViewportSize.height
+      - SCANNER_BEZEL_PADDING * 2
+      - SCANNER_TELEMETRY_RAIL_HEIGHT;
     if (innerWidth <= 0 || innerHeight <= 0) return 0;
-    return Math.floor(Math.min(innerWidth, innerHeight));
+    return Math.max(
+      0,
+      Math.floor(Math.min(innerWidth, innerHeight) - SCANNER_APERTURE_SAFE_INSET),
+    );
   }, [scannerViewportSize]);
 
   const [vectorDots, setVectorDots] = useState<RadarDot[]>([]);
@@ -166,15 +179,19 @@ export default function ScanningScreen(): React.JSX.Element {
 
   const selectedNode = getPreviewNode();
   const hasSelection = selectedNode != null;
-  const scannerHeader = useMemo(() => {
-    if (selectedNode) {
-      return resolveRunEventNodeHeaderFromNode(selectedNode, 'DEPTH SCANNER');
-    }
-    return {
-      title: 'DEPTH SCANNER',
-      subtitle: `SECTOR T${activeIncursion.sectorTier} // NODE ${activeIncursion.nodesCleared + 1} — SWEEP VECTOR FIELD`,
-    };
-  }, [activeIncursion.nodesCleared, activeIncursion.sectorTier, selectedNode]);
+  const sectorDisplayName = useMemo(() => {
+    const sector = runState.currentSector ?? INITIAL_SECTOR_POOL[0];
+    return (sector?.name ?? `SECTOR T${activeIncursion.sectorTier}`).toUpperCase();
+  }, [activeIncursion.sectorTier, runState.currentSector]);
+  const selectedBearingDeg = useMemo(() => {
+    if (!selectedNodeId || scannerSize <= 0) return null;
+    const dot = vectorDots.find((entry) => entry.id === selectedNodeId);
+    if (!dot) return null;
+    const cx = scannerSize / 2;
+    const cy = scannerSize / 2;
+    const rad = Math.atan2(dot.y - cy, dot.x - cx);
+    return ((rad * 180) / Math.PI + 360) % 360;
+  }, [scannerSize, selectedNodeId, vectorDots]);
   const emergencyRecallAvailable = isEmergencyRecallAvailable(nodeIndex);
   const zoneId = getSectorZone(nodeIndex, activeIncursion.collapseActive);
   const zoneTint = useMemo(() => getZoneScannerTint(zoneId), [zoneId]);
@@ -321,6 +338,26 @@ export default function ScanningScreen(): React.JSX.Element {
     ));
   }, []);
 
+  // Atmosphere UV geometry for sweep coupling — presentation only; no React frame loop.
+  useEffect(() => {
+    if (scannerViewportSize.width <= 0 || scannerViewportSize.height <= 0 || scannerSize <= 0) {
+      return;
+    }
+    // Atmosphere host is clipped above the telemetry rail — geometry uses that same box.
+    const fieldHeight = Math.max(
+      0,
+      scannerViewportSize.height - SCANNER_TELEMETRY_RAIL_HEIGHT,
+    );
+    publishScannerSweepGeometry({
+      fieldWidth: scannerViewportSize.width,
+      fieldHeight,
+      scannerSize,
+      bezelPadding: SCANNER_BEZEL_PADDING,
+      biasX: SCANNER_INSTRUMENT_BIAS_X,
+      bottomReserve: 0,
+    });
+  }, [scannerSize, scannerViewportSize.height, scannerViewportSize.width]);
+
   const markNodeTypeColored = useCallback((nodeId: string) => {
     setTypeColoredNodeIds((prev) => {
       if (prev.has(nodeId)) return prev;
@@ -441,12 +478,12 @@ export default function ScanningScreen(): React.JSX.Element {
     }
   }, [initiateEmergencyRecall, startCombat]);
 
-  const dockPlaceholder = useMemo(() => {
-    if (siphonedNodeIds.length === 0) {
-      return 'SWEEP THE FIELD — TAP AN ILLUMINATED PING TO LOCK';
-    }
-    return 'TAP A LOCKED PING TO REVIEW // SELECTED NODE SHOWS BELOW';
-  }, [siphonedNodeIds.length]);
+  const dockScannerState = useMemo(() => {
+    if (!hasSelection) return undefined;
+    if (canEngage) return 'BREACH LINK AVAILABLE';
+    if (siphonedNodeIds.length === 0) return 'SELECT AN ILLUMINATED PING';
+    return 'TAP A LOCKED PING TO REVIEW';
+  }, [canEngage, hasSelection, siphonedNodeIds.length]);
 
   const showSonarPrompt = Boolean(
     selectedNodeId
@@ -467,23 +504,32 @@ export default function ScanningScreen(): React.JSX.Element {
 
   const scannerPane = (
     <View style={styles.scannerViewport} onLayout={handleScannerViewportLayout}>
-      <View style={[styles.scannerBezel, { borderColor: `${accent}55` }]}>
+      <View style={styles.scannerBezel}>
+        <View pointerEvents="none" style={styles.scannerAtmosphere}>
+          <VeilWarpField />
+          {/* Web: VeilWarpField replaces OccultInterference. Native: keep quiet interference. */}
+          {Platform.OS !== 'web' ? (
+            <OccultInterference active color="rgba(140, 115, 159, 1)" />
+          ) : null}
+        </View>
         {scannerSize > 0 && scannerDotsReady && vectorDots.length > 0 ? (
           <>
-            <VectorScanner
-              key={`scanner-${scanSessionKey}`}
-              cabal={cabal}
-              zoneTint={zoneTint}
-              scannerSize={scannerSize}
-              active
-              continuousScan
-              activeNodes={vectorDots}
-              contactsLocked={false}
-              selectedNodeId={selectedNodeId}
-              typeColoredNodeIds={typeColoredNodeIds}
-              onSelectNode={handleScannerNodeSelect}
-              onSiphonedNodesChange={handleSiphonedNodesChange}
-            />
+            <View style={styles.scannerInstrument}>
+              <VectorScanner
+                key={`scanner-${scanSessionKey}`}
+                cabal={cabal}
+                zoneTint={zoneTint}
+                scannerSize={scannerSize}
+                active
+                continuousScan
+                activeNodes={vectorDots}
+                contactsLocked={false}
+                selectedNodeId={selectedNodeId}
+                typeColoredNodeIds={typeColoredNodeIds}
+                onSelectNode={handleScannerNodeSelect}
+                onSiphonedNodesChange={handleSiphonedNodesChange}
+              />
+            </View>
             <ScannerVeilFrontLegend
               runContext={activeIncursion.runGenerationContext}
               ledger={activeIncursion.runResourceLedger}
@@ -538,74 +584,67 @@ export default function ScanningScreen(): React.JSX.Element {
   );
 
   const nodeDockPane = (
-    <DossierCardShell
-      fillHeight
-      padding={0}
-      accentColor={accent}
-      style={[
-        styles.nodeDock,
-        useHorizontalSplit ? styles.nodeDockHorizontal : styles.nodeDockVertical,
-        isDesktop && styles.nodeDockHorizontalDesktop,
-      ]}
-      contentStyle={styles.nodeDockContent}
-    >
-      <View style={styles.nodeDockBody}>
-        <InlineScannerEngagement
-          layout="dock"
-          spectralLines={showNodeDock ? intelLines : []}
-          idleMessage={showNodeDock ? undefined : dockPlaceholder}
-          signalDecrypted={allNodesLocked}
-          canEngage={canEngage}
-          accent={accent}
-          mutedColor={theme.mutedColor}
-          engageLabel="[ BREACH ]"
-          onEngage={handleEngage}
-          sonarPrompt={showSonarPrompt || showRelaySpikePrompt || showNullLensPrompt ? (
-            <View style={{ gap: 6 }}>
-              {showSonarPrompt ? (
-                <ScannerSonarPrompt
-                  visible
-                  onUse={() => {
-                    if (selectedNodeId) useSonarPingOnNode(selectedNodeId);
-                  }}
-                />
-              ) : null}
-              {showNullLensPrompt ? (
-                <HapticPressable
-                  onPress={() => {
-                    if (selectedNodeId) useNullLensOnNode(selectedNodeId);
-                  }}
-                  style={({ pressed }) => [
-                    { borderWidth: 1, borderColor: accent, padding: 8, opacity: pressed ? 0.8 : 1 },
-                  ]}
-                >
-                  <TerminalText size={9} letterSpacing={0.8} style={{ color: accent, fontWeight: '700' }}>
-                    [ NULL-LENS ] — FULL INTERPRET NODE
-                  </TerminalText>
-                </HapticPressable>
-              ) : null}
-              {showRelaySpikePrompt ? (
-                <HapticPressable
-                  onPress={() => {
-                    if (!selectedNodeId) return;
-                    const tree = activeIncursion.proceduralRunTree;
-                    const isBoss = tree?.bossNodeId === selectedNodeId
-                      || tree?.nodes[selectedNodeId]?.type === 'GATEKEEPER';
-                    useRelaySpikeOnNode(selectedNodeId, Boolean(isBoss));
-                  }}
-                  style={({ pressed }) => [
-                    { borderWidth: 1, borderColor: accent, padding: 8, opacity: pressed ? 0.8 : 1 },
-                  ]}
-                >
-                  <TerminalText size={9} letterSpacing={0.8} style={{ color: accent, fontWeight: '700' }}>
-                    [ RELAY SPIKE ] — PLANT ON NODE
-                  </TerminalText>
-                </HapticPressable>
-              ) : null}
-            </View>
-          ) : null}
-        />
-      </View>
+    <View style={styles.nodeDockBody}>
+      <InlineScannerEngagement
+        layout="dock"
+        spectralLines={showNodeDock ? intelLines : []}
+        idleMessage={dockScannerState}
+        signalDecrypted={allNodesLocked}
+        contactTyped={Boolean(selectedNodeId && typeColoredNodeIds.has(selectedNodeId))}
+        sectorLabel={sectorDisplayName}
+        selectedBearingDeg={selectedBearingDeg}
+        fingerprintSeed={selectedNodeId ?? undefined}
+        fingerprintAccent={accent}
+        canEngage={canEngage}
+        accent={accent}
+        mutedColor={theme.mutedColor}
+        engageLabel="[ BREACH ]"
+        onEngage={handleEngage}
+        sonarPrompt={showSonarPrompt || showRelaySpikePrompt || showNullLensPrompt ? (
+          <View style={{ gap: 6, paddingHorizontal: 26 }}>
+            {showSonarPrompt ? (
+              <ScannerSonarPrompt
+                visible
+                onUse={() => {
+                  if (selectedNodeId) useSonarPingOnNode(selectedNodeId);
+                }}
+              />
+            ) : null}
+            {showNullLensPrompt ? (
+              <HapticPressable
+                onPress={() => {
+                  if (selectedNodeId) useNullLensOnNode(selectedNodeId);
+                }}
+                style={({ pressed }) => [
+                  { borderWidth: 1, borderColor: accent, padding: 8, opacity: pressed ? 0.8 : 1 },
+                ]}
+              >
+                <TerminalText size={9} letterSpacing={0.8} style={{ color: accent, fontWeight: '700' }}>
+                  [ NULL-LENS ] — FULL INTERPRET NODE
+                </TerminalText>
+              </HapticPressable>
+            ) : null}
+            {showRelaySpikePrompt ? (
+              <HapticPressable
+                onPress={() => {
+                  if (!selectedNodeId) return;
+                  const tree = activeIncursion.proceduralRunTree;
+                  const isBoss = tree?.bossNodeId === selectedNodeId
+                    || tree?.nodes[selectedNodeId]?.type === 'GATEKEEPER';
+                  useRelaySpikeOnNode(selectedNodeId, Boolean(isBoss));
+                }}
+                style={({ pressed }) => [
+                  { borderWidth: 1, borderColor: accent, padding: 8, opacity: pressed ? 0.8 : 1 },
+                ]}
+              >
+                <TerminalText size={9} letterSpacing={0.8} style={{ color: accent, fontWeight: '700' }}>
+                  [ RELAY SPIKE ] — PLANT ON NODE
+                </TerminalText>
+              </HapticPressable>
+            ) : null}
+          </View>
+        ) : null}
+      />
       {emergencyRecallAvailable ? (
         <HapticPressable
           onPress={handleEmergencyRecall}
@@ -619,7 +658,7 @@ export default function ScanningScreen(): React.JSX.Element {
           </TerminalText>
         </HapticPressable>
       ) : null}
-    </DossierCardShell>
+    </View>
   );
 
   if (!isScanningHub) {
@@ -633,23 +672,19 @@ export default function ScanningScreen(): React.JSX.Element {
   return (
     <IncursionShell>
       <IncursionRunLayout
-        style={{ backgroundColor: scannerBackground }}
+        style={{ backgroundColor: SCANNER_PAGE_BG }}
         hideRunChrome
       >
-        <View style={[styles.body, { padding: panelPadding }]}>
-          <RunEventNodeHeader
-            title={scannerHeader.title}
-            subtitle={scannerHeader.subtitle}
+        <View style={[styles.body, { padding: Math.max(panelPadding, isDesktop ? 22 : panelPadding) }]}>
+          <ScanScreenHeader
+            title="FIELD SCANNER"
+            subtitle={sectorDisplayName}
             fontScale={fontScale}
-            showRunChrome
           />
-          <LandscapeSplitPane
-            style={styles.splitBody}
-            primary={scannerPane}
-            secondary={nodeDockPane}
-            primaryRatio={scannerPrimaryRatio}
-            primaryStyle={styles.scannerPane}
-            secondaryStyle={styles.nodeDockPaneHost}
+          <ScanInstrument
+            style={styles.instrument}
+            scanner={scannerPane}
+            dossier={nodeDockPane}
           />
         </View>
       </IncursionRunLayout>
@@ -687,16 +722,12 @@ const styles = StyleSheet.create({
   body: {
     flex: 1,
     minHeight: 0,
+    paddingBottom: 20,
   },
-  splitBody: {
+  instrument: {
     flex: 1,
     minHeight: 0,
-  },
-  scannerPane: {
-    minHeight: 0,
-  },
-  nodeDockPaneHost: {
-    minHeight: 0,
+    marginTop: 2,
   },
   fallback: { fontFamily: 'monospace', fontSize: 10, textAlign: 'center', padding: 24 },
   scannerViewport: {
@@ -706,34 +737,43 @@ const styles = StyleSheet.create({
   scannerBezel: {
     flex: 1,
     width: '100%',
-    borderWidth: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.92)',
+    borderWidth: 0,
+    backgroundColor: SCANNER_FIELD_SURROUND,
     padding: SCANNER_BEZEL_PADDING,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
     overflow: 'hidden',
+    ...Platform.select({
+      web: {
+        backgroundImage:
+          `radial-gradient(ellipse at 42% 48%, rgba(100, 201, 177, 0.028) 0%, transparent 52%),`
+          + `linear-gradient(180deg, #080C0C 0%, ${SCANNER_FIELD_SURROUND} 55%, #040707 100%)`,
+      } as object,
+      default: {},
+    }),
   },
-  nodeDock: {
-    flex: 1,
-    minHeight: 0,
+  /** Atmosphere shares the instrument box — not drawn under the telemetry rail. */
+  scannerAtmosphere: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: SCANNER_TELEMETRY_RAIL_HEIGHT,
+    overflow: 'hidden',
+    zIndex: 0,
   },
-  nodeDockContent: {
-    flex: 1,
-    minHeight: 0,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    gap: 8,
-  },
-  nodeDockVertical: {
-    flexShrink: 0,
-    minHeight: 120,
-  },
-  nodeDockHorizontal: {
-    minWidth: 240,
-  },
-  nodeDockHorizontalDesktop: {
-    minWidth: 0,
+  /** Instrument box ends above the telemetry rail so the circular aperture is never clipped. */
+  scannerInstrument: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: SCANNER_TELEMETRY_RAIL_HEIGHT,
+    alignItems: 'center',
+    justifyContent: 'center',
+    transform: [{ translateX: SCANNER_INSTRUMENT_BIAS_X }],
+    zIndex: 1,
   },
   nodeDockBody: {
     flex: 1,
@@ -744,6 +784,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     alignItems: 'center',
     backgroundColor: DOSSIER_ROW_BG,
+    marginHorizontal: 22,
+    marginBottom: 10,
   },
   recallBtnText: {
     fontFamily: 'monospace',

@@ -10,10 +10,11 @@ import {
 } from '../../constants/narrativeLayout';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 import TacticalButton from '../TacticalButton';
+import { VEIL } from '../../theme/veilTerminalTokens';
 
 const MUTED_WHITE = '#F8FAFC';
-const BODY_MUTED = '#94A3B8';
-const TERMINAL_GREEN = '#00ff33';
+const BODY_MUTED = VEIL.textMuted;
+const TERMINAL_GREEN = VEIL.mint;
 const FAILURE_RED = '#EF4444';
 const REWARD_GREEN = '#86EFAC';
 const PENALTY_ORANGE = '#FB923C';

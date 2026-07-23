@@ -29,6 +29,7 @@ import {
   type RiteWaveParams,
 } from './riteOfConcordanceEngine';
 import { logNarrativeMinigameCompleted } from '../../../data/narrative/narrativeMinigameTelemetry';
+import { VEIL } from '../../../theme/veilTerminalTokens';
 
 const CYAN = '#22d3ee';
 const CYAN_SOFT = '#67e8f9';
@@ -40,7 +41,7 @@ const CORRUPT_SOFT = 'rgba(224, 68, 122, 0.55)';
 const RED = '#ef4444';
 const RED_BLACK = '#450a0a';
 const AMBER = '#fbbf24';
-const BODY_MUTED = '#94A3B8';
+const BODY_MUTED = VEIL.textMuted;
 const MUTED_WHITE = '#F8FAFC';
 const DISC_FILL = '#04060a';
 
@@ -582,7 +583,7 @@ const styles = StyleSheet.create({
   stepBtn: {
     width: 54,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: VEIL.line,
     borderRadius: 4,
     paddingVertical: 8,
     alignItems: 'center',

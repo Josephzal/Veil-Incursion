@@ -1,11 +1,13 @@
-/** Shared presentation tokens for the Loadout descent-prep terminal. */
-export const TERMINAL = '#69c8ad';
-export const TERMINAL_BRIGHT = '#8edfc6';
-export const MISSING = '#d88984';
-export const OCCULT = '#9988b3';
-export const MUTED = '#84958f';
-export const TEXT_PRIMARY = '#e0e7e4';
-export const TEXT_SECONDARY = '#a1b0ac';
+import { VEIL } from '../../../theme/veilTerminalTokens';
+
+/** Shared presentation tokens for the Loadout descent-prep terminal — VEIL-aligned. */
+export const TERMINAL = VEIL.mint;
+export const TERMINAL_BRIGHT = VEIL.mintBright;
+export const MISSING = VEIL.blood;
+export const OCCULT = VEIL.occult;
+export const MUTED = VEIL.textMuted;
+export const TEXT_PRIMARY = VEIL.text;
+export const TEXT_SECONDARY = VEIL.textSoft;
 
 export type LoadoutCategory = 'CHASSIS' | 'RELIC' | 'DECK' | 'FIELD_KIT' | 'CARGO';
 

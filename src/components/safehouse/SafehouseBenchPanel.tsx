@@ -8,11 +8,13 @@ import { viewShadow } from '../../utils/adaptiveStyles';
 import { HIDDEN_SCROLLBAR_VIEW_STYLE, HIDDEN_SCROLLVIEW_PROPS } from '../../utils/hiddenScrollbarStyle';
 import { pulseCargoItemPickup } from '../../utils/hubButtonHaptics';
 
-const STARK_WHITE = '#F8FAFC';
-const MUTED_SLATE = '#94A3B8';
-const CARD_BORDER = '#334155';
-const CARD_BG = 'rgba(9, 9, 11, 0.8)';
-const SLOT_BG = 'rgba(15, 23, 42, 0.85)';
+import { VEIL } from '../../theme/veilTerminalTokens';
+
+const STARK_WHITE = VEIL.text;
+const MUTED_SLATE = VEIL.textMuted;
+const CARD_BORDER = VEIL.line;
+const CARD_BG = VEIL.surfaceRaised;
+const SLOT_BG = VEIL.surface2;
 
 export interface BenchSlotView {
   slotIndex: number;

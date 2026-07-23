@@ -47,6 +47,7 @@ import type { BreachGradeId } from '../../types/progression';
 import { sectorPrimaryResourcePool } from '../../data/sectorResourceTableEngine';
 import { getResourceDefinition } from '../../data/resourceRegistry';
 import { isBreachGradeUnlockedInProfile } from '../../data/progressionProfileEngine';
+import { VEIL } from '../../theme/veilTerminalTokens';
 
 import CityStreets from '../../../assets/images/environment images/citystreets.png';
 import CityBuilding from '../../../assets/images/environment images/city_building.png';
@@ -54,19 +55,20 @@ import Backroads from '../../../assets/images/environment images/backroads.png';
 import Underground from '../../../assets/images/environment images/underground.png';
 import Blacksite from '../../../assets/images/environment images/blacksite.png';
 
+/** Deployment dossier rail — Contract Board VEIL surfaces (map untouched). */
 const RAIL = {
-  bg: '#030708',
-  textPrimary: '#d5dfdc',
-  textSecondary: '#91a39f',
-  textMuted: '#627572',
-  terminal: '#69c8ad',
-  terminalBright: '#8ee0c6',
-  danger: '#c96262',
-  incompat: '#d58b86',
-  anchor: '#8b78a7',
-  line: 'rgba(137, 170, 163, 0.14)',
-  lineStrong: 'rgba(137, 190, 179, 0.25)',
-  lineSoft: 'rgba(137, 170, 163, 0.075)',
+  bg: VEIL.bgSoft,
+  textPrimary: VEIL.text,
+  textSecondary: VEIL.textSoft,
+  textMuted: VEIL.textMuted,
+  terminal: VEIL.mint,
+  terminalBright: VEIL.mintBright,
+  danger: VEIL.blood,
+  incompat: VEIL.riskHigh,
+  anchor: VEIL.occult,
+  line: VEIL.lineFaint,
+  lineStrong: VEIL.line,
+  lineSoft: 'rgba(27, 33, 31, 0.55)',
 } as const;
 
 /** Base sizes chosen so desktop scaleFont(~1.35–1.65) lands near the readability targets. */

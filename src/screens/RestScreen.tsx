@@ -18,13 +18,14 @@ import DossierCardShell from '../components/hub/DossierCardShell';
 import { DOSSIER_CTA_BG, DOSSIER_ROW_BG, dossierOpaqueCtaStyle } from '../constants/dossierSurface';
 import { readPressableHover, terminalHoverStyle } from '../utils/terminalHoverStyle';
 import { resolveRunEventNodeHeaderFromNode } from '../utils/resolveRunEventNodeHeader';
+import { VEIL } from '../theme/veilTerminalTokens';
 
-const TERMINAL_ACCENT = '#00ff33';
-const MUTED_STAT = '#94A3B8';
-const HEAL_GREEN = '#4ade80';
-const GRAFT_PURPLE = '#c084fc';
-const CANCEL_ACCENT = '#64748B';
-const CHOICE_BORDER = '#334155';
+const TERMINAL_ACCENT = VEIL.mint;
+const MUTED_STAT = VEIL.textMuted;
+const HEAL_GREEN = VEIL.mintBright;
+const GRAFT_PURPLE = VEIL.occultPale;
+const CANCEL_ACCENT = VEIL.textMuted;
+const CHOICE_BORDER = VEIL.line;
 
 const FLAT_CTA_OVERRIDE: ViewStyle = Platform.select({
   web: { boxShadow: 'none' },
@@ -33,7 +34,7 @@ const FLAT_CTA_OVERRIDE: ViewStyle = Platform.select({
 
 type SanctuaryChoice = 'ATTUNE' | 'GRAFT' | null;
 
-const GRAFT_INJECT_ACCENT = '#06B6D4';
+const GRAFT_INJECT_ACCENT = VEIL.occult;
 const CONTENT_MAX_WIDTH = 540;
 const GRAFT_CONTENT_MAX_WIDTH = 720;
 

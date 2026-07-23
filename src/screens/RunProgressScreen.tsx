@@ -1,3 +1,4 @@
+import { VEIL } from '../theme/veilTerminalTokens';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import HapticPressable from '../components/HapticPressable';
@@ -21,7 +22,7 @@ export default function RunProgressScreen(): React.JSX.Element {
   const accent =
     account.alignedFaction != null
       ? getFactionDefinition(account.alignedFaction).accentColor
-      : '#00ff33';
+      : VEIL.mint;
 
   const staminaPct = Math.round((runState.currentStamina / runState.maxStamina) * 100);
   const soulPct = Math.round((runState.soulAnchorIntegrity / runState.maxSoulAnchor) * 100);

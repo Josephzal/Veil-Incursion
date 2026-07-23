@@ -8,6 +8,7 @@ import {
 } from '../../constants/landscapeLayout';
 import { useLandscapeMetrics } from '../../hooks/useLandscapeMetrics';
 import LandscapeSplitPane from './LandscapeSplitPane';
+import { VEIL } from '../../theme/veilTerminalTokens';
 
 interface TerminalResultsLayoutProps {
   /** Title block — headline, subtitle, body copy. */
@@ -30,7 +31,7 @@ export default function TerminalResultsLayout({
   summary,
   footer,
   style,
-  accentBorderColor = '#334155',
+  accentBorderColor = VEIL.line,
 }: TerminalResultsLayoutProps): React.JSX.Element {
   const { useHorizontalSplit, breakpoint } = useLandscapeMetrics();
   const cardMaxWidth = breakpoint === 'wide'

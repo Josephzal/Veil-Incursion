@@ -24,11 +24,12 @@ import {
   type CipherRitePuzzle,
 } from './cipherRiteEngine';
 import { logNarrativeMinigameCompleted } from '../../../data/narrative/narrativeMinigameTelemetry';
+import { VEIL } from '../../../theme/veilTerminalTokens';
 
-const TERMINAL_GREEN = '#00ff33';
+const TERMINAL_GREEN = VEIL.mint;
 const DIM_GREEN = '#1f7a33';
 const ADDR_GREEN = '#0f5a22';
-const BODY_MUTED = '#94A3B8';
+const BODY_MUTED = VEIL.textMuted;
 const WARN_AMBER = '#FBBF24';
 const COLLAPSE_RED = '#EF4444';
 const PANEL_INNER = '#03060a';

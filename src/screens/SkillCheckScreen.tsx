@@ -12,8 +12,9 @@ import { useGameFlow } from '../context/GameFlowContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useNodeProgression } from '../hooks/useNodeProgression';
 import { useRunDeathFinalizer } from '../hooks/useRunDeathFinalizer';
+import { VEIL } from '../theme/veilTerminalTokens';
 
-const TERMINAL_ACCENT = '#00ff33';
+const TERMINAL_ACCENT = VEIL.mint;
 
 type CalibrationPhase = 'READY' | 'PINBALL' | 'LOCKED';
 type RollTier = 'CRITICAL_SUCCESS' | 'SUCCESS' | 'FAILURE' | 'CRITICAL_DESYNC';

@@ -1,37 +1,59 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { VEIL } from '../../theme/veilTerminalTokens';
 
 interface ScannerCornerBracketsProps {
-  color: string;
+  color?: string;
 }
 
+/** Minimal corner registration marks — instrument frame, not glyph clutter. */
 export default function ScannerCornerBrackets({
-  color,
+  color = VEIL.lineStrong,
 }: ScannerCornerBracketsProps): React.JSX.Element {
   return (
-    <View style={styles.root}>
-      <Text style={[styles.bracket, styles.tl, { color }]}>{'┌'}</Text>
-      <Text style={[styles.bracket, styles.tr, { color }]}>{'┐'}</Text>
-      <Text style={[styles.bracket, styles.bl, { color }]}>{'└'}</Text>
-      <Text style={[styles.bracket, styles.br, { color }]}>{'┘'}</Text>
+    <View pointerEvents="none" style={styles.root}>
+      <View style={[styles.corner, styles.tl, { borderColor: color }]} />
+      <View style={[styles.corner, styles.tr, { borderColor: color }]} />
+      <View style={[styles.corner, styles.bl, { borderColor: color }]} />
+      <View style={[styles.corner, styles.br, { borderColor: color }]} />
     </View>
   );
 }
 
+const ARM = 14;
+
 const styles = StyleSheet.create({
   root: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     pointerEvents: 'none',
   },
-  bracket: {
+  corner: {
     position: 'absolute',
-    fontFamily: 'monospace',
-    fontSize: 14,
-    fontWeight: '700',
-    opacity: 0.72,
+    width: ARM,
+    height: ARM,
   },
-  tl: { top: 4, left: 6 },
-  tr: { top: 4, right: 6 },
-  bl: { bottom: 4, left: 6 },
-  br: { bottom: 4, right: 6 },
+  tl: {
+    top: 8,
+    left: 8,
+    borderTopWidth: 1,
+    borderLeftWidth: 1,
+  },
+  tr: {
+    top: 8,
+    right: 8,
+    borderTopWidth: 1,
+    borderRightWidth: 1,
+  },
+  bl: {
+    bottom: 8,
+    left: 8,
+    borderBottomWidth: 1,
+    borderLeftWidth: 1,
+  },
+  br: {
+    bottom: 8,
+    right: 8,
+    borderBottomWidth: 1,
+    borderRightWidth: 1,
+  },
 });

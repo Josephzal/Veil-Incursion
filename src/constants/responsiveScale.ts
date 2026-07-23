@@ -7,9 +7,13 @@ export const DESKTOP_REFERENCE_WIDTH = 1920;
 export const DESKTOP_SCALE_MIN = 1.35;
 export const DESKTOP_SCALE_MAX = 1.65;
 
-/** Scanner: primary = radar viewport, secondary = node dock. */
-export const DESKTOP_SCANNER_PRIMARY_RATIO = 0.58;
-export const DESKTOP_SCANNER_SECONDARY_RATIO = 0.42;
+/** Scanner: primary = radar viewport, secondary = signal dossier blade. */
+/** Primary flex when using ratio split; dossier prefers fixed clamp width. */
+export const DESKTOP_SCANNER_PRIMARY_RATIO = 0.78;
+export const DESKTOP_SCANNER_SECONDARY_RATIO = 0.22;
+/** Desktop dossier blade width — clamp(390px, 22vw, 440px) applied in ScanInstrument. */
+export const DESKTOP_SCANNER_DOSSIER_MIN = 390;
+export const DESKTOP_SCANNER_DOSSIER_MAX = 440;
 
 /** Identity badge: primary = profile card, secondary = telemetry column. */
 export const DESKTOP_BADGE_PRIMARY_RATIO = 0.55;

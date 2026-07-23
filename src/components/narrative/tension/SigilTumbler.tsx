@@ -31,6 +31,7 @@ import {
   type SigilZone,
 } from './sigilTumblerEngine';
 import { logNarrativeMinigameCompleted } from '../../../data/narrative/narrativeMinigameTelemetry';
+import { VEIL } from '../../../theme/veilTerminalTokens';
 
 const CYAN = '#22d3ee';
 const CYAN_DIM = '#0e3b45';
@@ -43,7 +44,7 @@ const WHITE_HOT = '#f0f9ff';
 const RED_GLITCH = '#ef4444';
 const RED_BLACK = '#450a0a';
 const AMBER = '#fbbf24';
-const BODY_MUTED = '#94A3B8';
+const BODY_MUTED = VEIL.textMuted;
 const MUTED_WHITE = '#F8FAFC';
 const DISC_FILL = '#04060a';
 
@@ -533,7 +534,7 @@ export default function SigilTumbler({
               // Glyph sits at bottom until active, rides the pulse while active,
               // and rests on its (random) sync line once seated.
               const pos = status === 'SET' ? t.syncPos : isActive ? phasePos : 0;
-              const glyphColor = status === 'SET' ? SEATED : isActive ? (zone === 'INSIDE' ? CYAN : VIOLET) : '#334155';
+              const glyphColor = status === 'SET' ? SEATED : isActive ? (zone === 'INSIDE' ? CYAN : VIOLET) : VEIL.line;
               const staticBorder = status === 'SET' ? SEATED : isActive ? (zone === 'INSIDE' ? CYAN_DEEP : '#475569') : '#1f2937';
               const pulsing = isActive && setWindowActive;
               const borderColor = pulsing
@@ -597,7 +598,7 @@ export default function SigilTumbler({
               styles.tensionBtn,
               {
                 marginTop: scaleSpacing(10),
-                borderColor: tension ? ringColor : '#334155',
+                borderColor: tension ? ringColor : VEIL.line,
                 backgroundColor: tension ? 'rgba(34, 211, 238, 0.12)' : 'rgba(0,0,0,0.4)',
               },
             ]}

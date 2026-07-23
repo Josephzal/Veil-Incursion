@@ -4,6 +4,7 @@ import HapticPressable from '../HapticPressable';
 import TerminalText from '../TerminalText';
 import { useHubLayout } from '../../context/HubLayoutContext';
 import { SELECT_ACCENT } from '../../constants/dossierSurface';
+import { VEIL } from '../../theme/veilTerminalTokens';
 import { HUB_DATA_DIVIDER } from '../../styles/hubTerminalUi';
 import { readPressableHover, terminalHoverStyle } from '../../utils/terminalHoverStyle';
 
@@ -24,7 +25,7 @@ interface HubCommandBarProps {
   actionDisabled?: boolean;
   /** Action accent — defaults to spectral green. */
   actionAccent?: string;
-  /** Wider / taller primary CTA (Operational Theater breach). */
+  /** Wider / taller primary CTA. */
   prominentAction?: boolean;
 }
 
@@ -111,7 +112,7 @@ export default function HubCommandBar({
               paddingHorizontal: scaleSpacing(prominentAction ? 28 : 16),
               paddingVertical: scaleSpacing(prominentAction ? 12 : 9),
               minWidth: prominentAction ? scaleSpacing(220) : undefined,
-              borderColor: actionDisabled ? 'rgba(148, 163, 184, 0.28)' : actionAccent,
+              borderColor: actionDisabled ? 'rgba(119, 130, 125, 0.28)' : actionAccent,
               backgroundColor: actionDisabled ? 'rgba(8, 12, 16, 0.55)' : 'transparent',
               opacity: 1,
             };
@@ -149,8 +150,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255, 255, 255, 0.12)',
-    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    borderTopColor: VEIL.lineFaint,
+    backgroundColor: VEIL.bgSoft,
   },
   statusGroup: {
     flexDirection: 'row',

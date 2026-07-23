@@ -30,15 +30,16 @@ import {
   type VeilLockRing,
 } from './signalAlignmentEngine';
 import { logNarrativeMinigameCompleted } from '../../../data/narrative/narrativeMinigameTelemetry';
+import { VEIL } from '../../../theme/veilTerminalTokens';
 
-const TERMINAL_GREEN = '#00ff33';
-const BODY_MUTED = '#94A3B8';
+const TERMINAL_GREEN = VEIL.mint;
+const BODY_MUTED = VEIL.textMuted;
 const MUTED_WHITE = '#F8FAFC';
 const WARN_AMBER = '#FBBF24';
 const COLLAPSE_RED = '#EF4444';
 const RING_STROKE = 'rgba(148, 163, 184, 0.35)';
 const REQUIRED_STROKE = 'rgba(103, 232, 249, 0.9)';
-const FILLED_FILL = '#00ff33';
+const FILLED_FILL = VEIL.mint;
 const WALL_FILL = 'rgba(148, 163, 184, 0.25)';
 const CORE_IDLE = '#0B0F14';
 
@@ -430,7 +431,7 @@ export default function SignalAlignment({
             style={({ pressed }) => [
               styles.primaryBtn,
               {
-                borderColor: fit?.fits ? TERMINAL_GREEN : '#334155',
+                borderColor: fit?.fits ? TERMINAL_GREEN : VEIL.line,
                 backgroundColor: fit?.fits ? 'rgba(0, 255, 51, 0.1)' : 'rgba(15, 23, 42, 0.7)',
                 opacity: !selectedKeyId || resolveState !== 'playing' ? 0.4 : pressed ? 0.8 : 1,
               },
@@ -577,7 +578,7 @@ function GlyphKeyChip({
           width: chip,
           height: chip + scaleSize(12),
           borderColor: glyphKey.used
-            ? '#334155'
+            ? VEIL.line
             : selected
               ? TERMINAL_GREEN
               : glyphKey.decoy
@@ -658,7 +659,7 @@ const styles = StyleSheet.create({
   rotateRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   rotateBtn: {
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: VEIL.line,
     paddingHorizontal: 16,
     paddingVertical: 8,
     minWidth: 48,
@@ -673,7 +674,7 @@ const styles = StyleSheet.create({
   actionRow: { flexDirection: 'row', alignItems: 'center' },
   secondaryBtn: {
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: VEIL.line,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },

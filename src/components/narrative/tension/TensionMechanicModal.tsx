@@ -1,9 +1,10 @@
 import React from 'react';
 import { Modal, StyleSheet, Text, View } from 'react-native';
 import { useResponsiveLayout } from '../../../hooks/useResponsiveLayout';
+import { VEIL } from '../../../theme/veilTerminalTokens';
 
 const FRAME_BG = '#050608';
-const TERMINAL_ACCENT = '#00ff33';
+const TERMINAL_ACCENT = VEIL.mint;
 
 /**
  * Shared popup frame for narrative tension minigames. Mirrors the in-combat

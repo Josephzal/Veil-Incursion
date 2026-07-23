@@ -9,6 +9,7 @@ import type {
   KeepsakeDeploymentChoiceSpec,
   KeepsakeDeploymentOption,
 } from '../../types/expeditionKeepsake';
+import { VEIL } from '../../theme/veilTerminalTokens';
 
 interface KeepsakeDeploymentChoiceModalProps {
   visible: boolean;
@@ -107,14 +108,14 @@ export default function KeepsakeDeploymentChoiceModal({
               style={[
                 styles.warningBanner,
                 {
-                  borderColor: '#f97316',
+                  borderColor: VEIL.occult,
                   marginTop: scaleSpacing(10),
                   padding: scaleSpacing(8),
                 },
               ]}
             >
               {warnings.map((warning) => (
-                <TerminalText key={warning} variant="caption" style={{ color: '#f97316', marginBottom: 2 }}>
+                <TerminalText key={warning} variant="caption" style={{ color: VEIL.occultPale, marginBottom: 2 }}>
                   {warning}
                 </TerminalText>
               ))}
@@ -190,12 +191,13 @@ const styles = StyleSheet.create({
   panel: {
     width: '100%',
     maxWidth: 560,
-    borderWidth: 2,
-    backgroundColor: '#050608',
+    borderWidth: 1,
+    backgroundColor: VEIL.surfaceRaised,
+    borderColor: VEIL.line,
   },
   warningBanner: {
     borderWidth: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    backgroundColor: 'rgba(140, 115, 159, 0.08)',
   },
   optionRow: {
     borderWidth: 1,
@@ -205,9 +207,9 @@ const styles = StyleSheet.create({
   },
   actionBtn: {
     flex: 1,
-    borderWidth: 2,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0a0b0f',
+    backgroundColor: VEIL.surface2,
   },
 });

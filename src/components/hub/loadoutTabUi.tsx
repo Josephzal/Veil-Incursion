@@ -1,12 +1,12 @@
 import React from 'react';
 import { StyleSheet, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import TerminalText from '../TerminalText';
-import { SELECT_ACCENT } from '../../constants/dossierSurface';
+import { VEIL } from '../../theme/veilTerminalTokens';
 
 /** Small pale-gray section header — brackets are reserved for the main tab title. */
-export const LOADOUT_SECTION_HEADER_COLOR = '#9aa6b2';
-/** One-line subtitle color — desaturated blue-gray. */
-export const LOADOUT_SUBTITLE_COLOR = '#7f8c9b';
+export const LOADOUT_SECTION_HEADER_COLOR = VEIL.textSoft;
+/** One-line subtitle color — quieter secondary. */
+export const LOADOUT_SUBTITLE_COLOR = VEIL.textMuted;
 /** Fixed gap between a section label and the card/container below it. */
 export const LOADOUT_LABEL_TO_CARD_GAP = 10;
 /** Fixed gap between major sections (Equipped → Available, Slots → Pool, etc.). */
@@ -79,7 +79,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   title: {
-    color: SELECT_ACCENT,
+    color: VEIL.bone,
     fontWeight: '800',
   },
   subtitle: {

@@ -18,8 +18,9 @@ import { useTerminal } from '../context/TerminalContext';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { HUB_BORDER_INSET, hubCtaButtonStyle } from '../constants/hubCta';
 import type { BoundRequisitionId } from '../types/boundRequisition';
+import { VEIL } from '../theme/veilTerminalTokens';
 
-const TERMINAL_ACCENT = '#00ff33';
+const TERMINAL_ACCENT = VEIL.mint;
 
 export default function BoundRequisitionScreen(): React.JSX.Element {
   const { theme } = useTerminal();

@@ -1,18 +1,16 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { textGlow } from '../../utils/adaptiveStyles';
-import TerminalText from '../TerminalText';
-import TacticalButton from '../TacticalButton';
-import { hubCtaButtonStyle } from '../../constants/hubCta';
-import { DOSSIER_ROW_BG, dossierOpaqueCtaStyle } from '../../constants/dossierSurface';
-import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
-import { readPressableHover, terminalHoverStyle } from '../../utils/terminalHoverStyle';
+import React, { useMemo } from 'react';
+import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import ScannerBreachButton from '../scanner/ScannerBreachButton';
-
-const STATE_VIOLET = '#ddd6fe';
-const STATE_VIOLET_GLOW = '#c4b5fd';
-const TERMINAL_GREEN = '#00ff33';
-const SOLARIS_CRIMSON = '#dc2626';
+import SignalMetadataLedger, { type LedgerRow } from '../scanner/SignalMetadataLedger';
+import SignalClassification from '../scanner/SignalClassification';
+import BreachAction from '../scanner/BreachAction';
+import TerminalText from '../TerminalText';
+import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
+import { VEIL } from '../../theme/veilTerminalTokens';
+import {
+  SCANNER_TEXT_PRIMARY,
+  SCANNER_TEXT_SECONDARY,
+} from '../scanner/vectorScannerShared';
 
 export interface InlineScannerEngagementProps {
   headline?: string;
@@ -22,6 +20,16 @@ export interface InlineScannerEngagementProps {
   idleMessage?: string;
   /** All radar pings locked — crossfade caption to SIGNAL DECRYPTED. */
   signalDecrypted?: boolean;
+  /** Selected contact has known type coloring (existing gameplay state). */
+  contactTyped?: boolean;
+  /** Optional sector / region for metadata ledger. */
+  sectorLabel?: string;
+  /** @deprecated Fingerprint graphic removed — prop retained for call-site compat. */
+  selectedBearingDeg?: number | null;
+  /** @deprecated Fingerprint graphic removed — prop retained for call-site compat. */
+  fingerprintSeed?: string;
+  /** @deprecated Fingerprint graphic removed — prop retained for call-site compat. */
+  fingerprintAccent?: string;
   canEngage: boolean;
   accent: string;
   mutedColor: string;
@@ -43,374 +51,104 @@ function parseTelemetryLine(line: string): { label: string; value: string } {
   };
 }
 
-function resolveReadoutValueColor(label: string, value: string): string {
-  if (label !== 'NODE TYPE') return STATE_VIOLET;
-  const upper = value.toUpperCase();
-  if (upper.includes('COMBAT') || upper.includes('ELITE') || upper.includes('BOSS')) {
-    return SOLARIS_CRIMSON;
-  }
-  if (upper.includes('MARKET')) {
-    return TERMINAL_GREEN;
-  }
-  return STATE_VIOLET;
-}
-
-function TelemetryReadoutCard({
-  line,
-  fontScale,
-  gap,
-  isDesktop,
-  mutedColor,
-}: {
-  line: string;
-  fontScale: number;
-  gap: number;
-  isDesktop: boolean;
-  mutedColor: string;
-}): React.JSX.Element {
-  const { label, value } = parseTelemetryLine(line);
-  const valueColor = resolveReadoutValueColor(label, value);
-
-  if (isDesktop) {
-    return (
-      <View
-        style={[
-          styles.readoutCard,
-          {
-            padding: 16,
-            marginBottom: gap,
-          },
-        ]}
-      >
-        <Text
-          style={[
-            styles.readoutLabel,
-            {
-              color: mutedColor,
-              opacity: 1,
-              fontSize: 6 * fontScale,
-              lineHeight: 9 * fontScale,
-              letterSpacing: 1.2 * fontScale,
-            },
-          ]}
-          numberOfLines={1}
-        >
-          {label}
-        </Text>
-        {value ? (
-          <Text
-            style={[
-              styles.readoutValue,
-              {
-                color: valueColor,
-                fontSize: 9 * fontScale * 1.2,
-                lineHeight: 12 * fontScale * 1.2,
-              },
-              valueColor === STATE_VIOLET
-                ? textGlow({ color: STATE_VIOLET_GLOW, radius: 6, offset: { width: 0, height: 0 } })
-                : null,
-            ]}
-            numberOfLines={2}
-          >
-            {value.toUpperCase()}
-          </Text>
-        ) : null}
-      </View>
-    );
+function buildDossierFromLines(
+  spectralLines: string[],
+  statusLines: string[],
+  sectorLabel: string | undefined,
+  signalDecrypted: boolean,
+  idleMessage: string | undefined,
+  contactTyped: boolean,
+): {
+  vectorId: string | null;
+  vectorTitle: string | null;
+  classification: string | null;
+  ledgerRows: LedgerRow[];
+  idle: boolean;
+  resolved: boolean;
+} {
+  const telemetryLines = [...spectralLines, ...statusLines];
+  if (telemetryLines.length === 0) {
+    return {
+      vectorId: null,
+      vectorTitle: null,
+      classification: null,
+      ledgerRows: [
+        { label: 'SIGNAL STATE', value: 'SEARCHING' },
+        { label: 'SCANNER STATE', value: 'SELECT AN ILLUMINATED PING' },
+      ],
+      idle: true,
+      resolved: false,
+    };
   }
 
-  return (
-    <View style={styles.telemetryRow}>
-      <Text style={[styles.telemetryBracket, { color: 'rgba(148, 163, 184, 0.55)' }]}>{'⟨'}</Text>
-      <View style={styles.telemetryCopy}>
-        <Text style={[styles.telemetryLabel, { color: mutedColor }]} numberOfLines={1}>
-          {label}
-        </Text>
-        {value ? (
-          <Text style={[styles.telemetryValue, { color: valueColor }]} numberOfLines={2}>
-            {value}
-          </Text>
-        ) : null}
-      </View>
-      <Text style={[styles.telemetryBracket, { color: 'rgba(148, 163, 184, 0.55)' }]}>{'⟩'}</Text>
-    </View>
-  );
-}
+  let vectorId: string | null = null;
+  let vectorTitle: string | null = null;
+  let classification: string | null = null;
+  const ledgerRows: LedgerRow[] = [];
 
-function TelemetryIdlePrompt({
-  message,
-  fontScale,
-  gap,
-  mutedColor,
-}: {
-  message: string;
-  fontScale: number;
-  gap: number;
-  mutedColor: string;
-}): React.JSX.Element {
-  return (
-    <View
-      style={[
-        styles.readoutCard,
-        styles.idleReadout,
-        { padding: 16, marginBottom: gap },
-      ]}
-    >
-      <Text
-        style={[
-          styles.readoutLabel,
-          {
-            color: mutedColor,
-            opacity: 1,
-            fontSize: 6 * fontScale,
-            lineHeight: 9 * fontScale,
-            letterSpacing: 1.2 * fontScale,
-          },
-        ]}
-        numberOfLines={1}
-      >
-        SCANNER STATE
-      </Text>
-      <Text
-        style={[
-          styles.idlePromptValue,
-          {
-            color: mutedColor,
-            fontSize: 8 * fontScale * 1.2,
-            lineHeight: 12 * fontScale * 1.2,
-          },
-        ]}
-      >
-        {message.toUpperCase()}
-      </Text>
-    </View>
-  );
-}
-
-const WAVE_BASE_HEIGHTS = [12, 22, 16, 28, 18, 24, 14, 20, 26, 12];
-const DECRYPT_CROSSFADE_MS = 900;
-const DECRYPT_GLOW_MS = 1400;
-
-function SignalWaveform({
-  fontScale,
-  decrypted,
-  accentColor,
-}: {
-  fontScale: number;
-  decrypted: boolean;
-  accentColor: string;
-}): React.JSX.Element {
-  const [dotCount, setDotCount] = useState(0);
-  const barAnims = useRef(WAVE_BASE_HEIGHTS.map(() => new Animated.Value(0.35))).current;
-  const decryptBlend = useRef(new Animated.Value(decrypted ? 1 : 0)).current;
-  const glowPulse = useRef(new Animated.Value(0)).current;
-  const barLoopsRef = useRef<Animated.CompositeAnimation[]>([]);
-
-  useEffect(() => {
-    if (decrypted) return undefined;
-    setDotCount(0);
-    const dotTimer = setInterval(() => {
-      setDotCount((prev) => (prev >= 3 ? 0 : prev + 1));
-    }, 450);
-    return () => clearInterval(dotTimer);
-  }, [decrypted]);
-
-  useEffect(() => {
-    Animated.timing(decryptBlend, {
-      toValue: decrypted ? 1 : 0,
-      duration: DECRYPT_CROSSFADE_MS,
-      easing: Easing.inOut(Easing.cubic),
-      useNativeDriver: false,
-    }).start();
-  }, [decrypted, decryptBlend]);
-
-  useEffect(() => {
-    if (!decrypted) {
-      glowPulse.setValue(0);
-      return undefined;
+  telemetryLines.forEach((line) => {
+    const { label, value } = parseTelemetryLine(line);
+    const upper = label.toUpperCase();
+    if (upper === 'VECTOR' || upper.startsWith('VECTOR ')) {
+      vectorId = value || label;
+      vectorTitle = value || label;
+      return;
     }
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(glowPulse, {
-          toValue: 1,
-          duration: DECRYPT_GLOW_MS,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: false,
-        }),
-        Animated.timing(glowPulse, {
-          toValue: 0,
-          duration: DECRYPT_GLOW_MS,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: false,
-        }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [decrypted, glowPulse]);
-
-  useEffect(() => {
-    barLoopsRef.current.forEach((loop) => loop.stop());
-    barLoopsRef.current = [];
-
-    if (decrypted) return undefined;
-
-    const loops = barAnims.map((anim, index) => Animated.loop(
-      Animated.sequence([
-        Animated.timing(anim, {
-          toValue: 1,
-          duration: 520 + index * 45,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: false,
-        }),
-        Animated.timing(anim, {
-          toValue: 0.35,
-          duration: 520 + index * 45,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: false,
-        }),
-      ]),
-    ));
-
-    loops.forEach((loop) => loop.start());
-    barLoopsRef.current = loops;
-    return () => loops.forEach((loop) => loop.stop());
-  }, [barAnims, decrypted]);
-
-  const decryptingCaptionOpacity = decryptBlend.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, 0],
-  });
-  const decryptedCaptionOpacity = decryptBlend;
-  const waveformShellOpacity = decryptBlend.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, 0],
-  });
-  const waveformShellHeight = decryptBlend.interpolate({
-    inputRange: [0, 1],
-    outputRange: [32, 0],
-  });
-  const waveformShellMargin = decryptBlend.interpolate({
-    inputRange: [0, 1],
-    outputRange: [10, 0],
-  });
-  const glowRadius = glowPulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [4, 14],
+    if (upper === 'NODE TYPE' || upper === 'NODE CLASSIFICATION') {
+      classification = value;
+      return;
+    }
+    if (!value) return;
+    if (upper.includes('VECTOR')) return;
+    ledgerRows.push({ label: upper, value: value.toUpperCase() });
   });
 
-  const captionSize = 7 * fontScale;
-  const dotsSlotWidth = captionSize * 0.55 * 3;
+  if (sectorLabel) {
+    const hasSector = ledgerRows.some((row) => row.label.includes('SECTOR'));
+    if (!hasSector) {
+      ledgerRows.splice(Math.min(1, ledgerRows.length), 0, {
+        label: 'SECTOR',
+        value: sectorLabel.toUpperCase(),
+      });
+    }
+  }
 
-  return (
-    <View style={styles.signalAnchor}>
-      <Animated.View
-        style={[
-          styles.waveformShell,
-          {
-            opacity: waveformShellOpacity,
-            height: waveformShellHeight,
-            marginBottom: waveformShellMargin,
-            overflow: 'hidden',
-          },
-        ]}
-      >
-        <View style={styles.waveformRow}>
-          {WAVE_BASE_HEIGHTS.map((baseHeight, index) => (
-            <Animated.View
-              key={`wave-${index}`}
-              style={[
-                styles.waveformBar,
-                {
-                  height: barAnims[index].interpolate({
-                    inputRange: [0.35, 1],
-                    outputRange: [baseHeight * 0.35, baseHeight],
-                  }),
-                  opacity: barAnims[index].interpolate({
-                    inputRange: [0.35, 1],
-                    outputRange: [0.18, 0.55],
-                  }),
-                },
-              ]}
-            />
-          ))}
-        </View>
-      </Animated.View>
+  // Typed/decrypted comes from existing gameplay flags — not string parsing.
+  const resolved = contactTyped || signalDecrypted;
+  ledgerRows.push({
+    label: 'SIGNAL STATE',
+    value: resolved ? 'DECRYPTED' : 'VECTOR LOCKED',
+  });
 
-      <View style={[styles.signalCaptionHost, { minHeight: captionSize * 1.6 }]}>
-        <Animated.View
-          style={[
-            styles.signalCaptionLayer,
-            { opacity: decryptingCaptionOpacity },
-          ]}
-          pointerEvents="none"
-        >
-          <View style={styles.signalCaptionRow}>
-            <TerminalText
-              size={captionSize}
-              letterSpacing={1.4}
-              style={styles.signalCaption}
-            >
-              DECRYPTING SIGNAL
-            </TerminalText>
-            <View style={[styles.signalDotsSlot, { width: dotsSlotWidth }]}>
-              {[0, 1, 2].map((index) => (
-                <TerminalText
-                  key={`dot-${index}`}
-                  size={captionSize}
-                  letterSpacing={0}
-                  style={[
-                    styles.signalDot,
-                    { opacity: index < dotCount ? 1 : 0 },
-                  ]}
-                >
-                  .
-                </TerminalText>
-              ))}
-            </View>
-          </View>
-        </Animated.View>
+  if (idleMessage) {
+    ledgerRows.push({
+      label: 'SCANNER STATE',
+      value: idleMessage.toUpperCase(),
+    });
+  }
 
-        <Animated.View
-          style={[
-            styles.signalCaptionLayer,
-            {
-              opacity: decryptedCaptionOpacity,
-              shadowColor: accentColor,
-              shadowOpacity: glowPulse.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0.35, 0.95],
-              }),
-              shadowRadius: glowRadius,
-              shadowOffset: { width: 0, height: 0 },
-            },
-          ]}
-          pointerEvents="none"
-        >
-          <TerminalText
-            size={captionSize}
-            letterSpacing={1.4}
-            style={[
-              styles.signalDecryptedCaption,
-              { color: accentColor },
-              textGlow({ color: accentColor, radius: 8, offset: { width: 0, height: 0 } }),
-            ]}
-          >
-            SIGNAL DECRYPTED
-          </TerminalText>
-        </Animated.View>
-      </View>
-    </View>
-  );
+  return {
+    vectorId,
+    vectorTitle,
+    classification,
+    ledgerRows,
+    idle: false,
+    resolved,
+  };
 }
 
-/** Node readout + breach action — card (legacy) or structured data-feed dock. */
+/** Node readout + breach action — card (legacy) or Signal Dossier dock. */
 export default function InlineScannerEngagement({
   headline,
   spectralLines,
   statusLines = [],
   idleMessage,
   signalDecrypted = false,
+  contactTyped = false,
+  sectorLabel,
+  selectedBearingDeg: _selectedBearingDeg = null,
+  fingerprintSeed: _fingerprintSeed,
+  fingerprintAccent: _fingerprintAccent,
   canEngage,
   accent,
   mutedColor,
@@ -419,140 +157,105 @@ export default function InlineScannerEngagement({
   engageLabel = '[ ENGAGE ]',
   sonarPrompt,
 }: InlineScannerEngagementProps): React.JSX.Element {
-  const { isDesktop, fontScale, gap, scaleFont, scaleSize, scaleSpacing } = useResponsiveLayout();
+  const { fontScale } = useResponsiveLayout();
+
+  const dossier = useMemo(
+    () => buildDossierFromLines(
+      spectralLines,
+      statusLines,
+      sectorLabel,
+      signalDecrypted,
+      idleMessage,
+      contactTyped,
+    ),
+    [contactTyped, idleMessage, sectorLabel, signalDecrypted, spectralLines, statusLines],
+  );
 
   if (layout === 'dock') {
-    const telemetryLines = [...spectralLines, ...statusLines];
-    const showIdle = idleMessage != null && telemetryLines.length === 0;
-    const panelPadding = isDesktop ? scaleSpacing(24) : 10;
-
-    const telemetryContent = (
-      <>
-        {headline ? (
-          <Text
-            style={[
-              styles.feedHeadline,
-              {
-                color: mutedColor,
-                fontSize: isDesktop ? scaleFont(6) : undefined,
-                marginBottom: isDesktop ? gap : undefined,
-              },
-            ]}
-            numberOfLines={1}
-          >
-            {headline}
-          </Text>
-        ) : null}
-        {showIdle ? (
-          <TelemetryIdlePrompt
-            message={idleMessage}
-            fontScale={fontScale}
-            gap={gap}
-            mutedColor={mutedColor}
-          />
-        ) : (
-          telemetryLines.map((line) => (
-            <TelemetryReadoutCard
-              key={line}
-              line={line}
-              fontScale={fontScale}
-              gap={gap}
-              isDesktop={isDesktop}
-              mutedColor={mutedColor}
-            />
-          ))
-        )}
-      </>
-    );
-
-    const telemetryBlock = isDesktop ? (
-      <ScrollView
-        style={styles.feedTelemetryScroll}
-        contentContainerStyle={styles.readoutStack}
-        showsVerticalScrollIndicator={false}
-        nestedScrollEnabled
-      >
-        {telemetryContent}
-      </ScrollView>
-    ) : (
-      <ScrollView
-        style={styles.feedScroll}
-        contentContainerStyle={styles.feedScrollContent}
-        showsVerticalScrollIndicator={false}
-        nestedScrollEnabled
-      >
-        {telemetryContent}
-      </ScrollView>
-    );
-
-    const breachControl = (
-      <TacticalButton
-        label={engageLabel}
-        active={canEngage}
-        onPress={onEngage}
-        accentColor={accent}
-        mutedColor={mutedColor}
-        variant="cta"
-        style={(state) => [
-          styles.breachButton,
-          hubCtaButtonStyle(accent, scaleSize, scaleSpacing, !canEngage),
-          dossierOpaqueCtaStyle(accent),
-          isDesktop && canEngage
-            ? terminalHoverStyle(readPressableHover(state), state.pressed)
-            : null,
-        ]}
-      />
-    );
+    const readinessLine = canEngage
+      ? 'LINK READY // SIGNAL DECRYPTED'
+      : signalDecrypted
+        ? 'SIGNAL DECRYPTED // SELECT CONTACT TO BREACH'
+        : 'SWEEP ACTIVE // AWAITING VECTOR LOCK';
+    const titleSize = Math.min(34, Math.max(28, 18 * fontScale));
+    const eyebrow = dossier.idle
+      ? 'SIGNAL DOSSIER // VECTOR UNKNOWN'
+      : 'SIGNAL DOSSIER // LOCKED VECTOR';
+    // Prefer vector id for the hero title — classification stays in SignalClassification.
+    const titlePrimary = dossier.idle
+      ? 'NO VECTOR'
+      : dossier.resolved
+        ? (dossier.vectorTitle ?? dossier.classification ?? 'SIGNAL')
+            .replace(/^VECTOR\s+/i, '')
+            .toUpperCase()
+        : 'UNRESOLVED';
+    const titleSecondary = dossier.idle
+      ? 'LOCK'
+      : dossier.resolved
+        ? null
+        : 'SIGNAL';
 
     return (
-      <View
-        style={[
-          styles.dockRoot,
-          {
-            padding: panelPadding,
-            gap: isDesktop ? gap : 10,
-          },
-        ]}
-      >
-        <View style={styles.feedTop}>
-          <View
-            style={[
-              styles.feedHeader,
-              isDesktop && styles.feedHeaderDesktop,
-            ]}
+      <View style={styles.dockRoot}>
+        <View style={styles.dossierHeader}>
+          <View style={styles.headerRow}>
+            <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow} numberOfLines={1}>
+              {eyebrow}
+            </TerminalText>
+          </View>
+          <TerminalText
+            size={titleSize}
+            letterSpacing={0.35}
+            style={dossier.idle || !dossier.resolved ? styles.dossierTitleIdle : styles.dossierTitle}
+            numberOfLines={1}
           >
-            <Text
-              style={[
-                styles.feedEyebrow,
-                isDesktop && styles.feedEyebrowDesktop,
-                {
-                  color: mutedColor,
-                  fontSize: isDesktop ? 8 * fontScale : 6,
-                  lineHeight: isDesktop ? 12 * fontScale : 9,
-                  paddingBottom: isDesktop ? 8 : 0,
-                },
-              ]}
+            {titlePrimary}
+          </TerminalText>
+          {titleSecondary ? (
+            <TerminalText
+              size={titleSize}
+              letterSpacing={0.35}
+              style={dossier.idle ? styles.dossierTitleIdle : styles.dossierTitle}
               numberOfLines={1}
             >
-              DATA FEED // VECTOR TELEMETRY
-            </Text>
-          </View>
-          {telemetryBlock}
+              {titleSecondary}
+            </TerminalText>
+          ) : null}
         </View>
 
-        {isDesktop ? (
-          <View style={styles.signalDock}>
-            <SignalWaveform
-              fontScale={fontScale}
-              decrypted={signalDecrypted}
-              accentColor={accent}
-            />
-          </View>
-        ) : null}
+        <ScrollView
+          style={styles.dossierScroll}
+          contentContainerStyle={styles.dossierScrollContent}
+          showsVerticalScrollIndicator={false}
+          nestedScrollEnabled
+        >
+          {headline ? (
+            <TerminalText size={6.5} letterSpacing={0.7} style={styles.feedHeadline} numberOfLines={1}>
+              {headline}
+            </TerminalText>
+          ) : null}
+
+          {dossier.resolved && dossier.classification ? (
+            <SignalClassification value={dossier.classification} />
+          ) : null}
+
+          <SignalMetadataLedger rows={dossier.ledgerRows} />
+
+          {/* Intentional negative space — dossier is information, not a second instrument. */}
+          <View style={styles.negativeSpace} />
+        </ScrollView>
 
         {sonarPrompt}
 
-        {breachControl}
+        <View style={styles.footer}>
+          <BreachAction
+            enabled={canEngage}
+            label={engageLabel === '[ ENGAGE ]' ? '[ BREACH ]' : engageLabel}
+            readinessLine={readinessLine}
+            mutedColor={mutedColor}
+            onPress={onEngage}
+          />
+        </View>
       </View>
     );
   }
@@ -594,8 +297,8 @@ const styles = StyleSheet.create({
   panel: { width: 200 },
   readoutShell: {
     borderWidth: 1,
-    borderColor: 'rgba(0, 255, 51, 0.35)',
-    backgroundColor: 'rgba(0, 0, 0, 0.94)',
+    borderColor: 'rgba(98, 205, 181, 0.28)',
+    backgroundColor: VEIL.bgSoft,
     paddingHorizontal: 10,
     paddingVertical: 8,
     gap: 5,
@@ -623,174 +326,71 @@ const styles = StyleSheet.create({
   dockRoot: {
     flex: 1,
     minHeight: 0,
-    justifyContent: 'space-between',
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: 'transparent',
   },
-  feedTop: {
-    flex: 1,
-    minHeight: 0,
-    width: '100%',
+  dossierHeader: {
+    position: 'relative',
+    zIndex: 1,
+    paddingTop: 24,
+    paddingBottom: 10,
+    paddingHorizontal: 26,
+    flexShrink: 0,
+    ...Platform.select({
+      web: {
+        backgroundImage: 'linear-gradient(180deg, rgba(197, 208, 205, 0.035) 0%, transparent 100%)',
+      } as object,
+      default: {},
+    }),
   },
-  feedTelemetryScroll: {
-    flex: 1,
-    minHeight: 0,
-  },
-  feedHeader: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    gap: 8,
-    flexShrink: 0,
-    marginBottom: 8,
+    justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 10,
   },
-  feedHeaderDesktop: {
-    alignItems: 'flex-end',
-  },
-  feedEyebrow: {
-    flex: 1,
-    fontFamily: 'monospace',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
+  dossierEyebrow: {
+    color: SCANNER_TEXT_SECONDARY,
     fontWeight: '700',
+    flexShrink: 1,
+    minWidth: 0,
   },
-  feedEyebrowDesktop: {
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.2)',
-    width: '100%',
+  dossierTitle: {
+    color: SCANNER_TEXT_PRIMARY,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  dossierTitleIdle: {
+    color: VEIL.textMuted,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  dossierScroll: {
+    flex: 1,
+    minHeight: 0,
+    zIndex: 1,
+  },
+  dossierScrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 26,
+    paddingTop: 2,
+    paddingBottom: 8,
   },
   feedHeadline: {
-    fontFamily: 'monospace',
-    letterSpacing: 0.5,
+    color: VEIL.textMuted,
+    marginBottom: 8,
   },
-  feedScroll: {
-    flex: 1,
-    minHeight: 0,
-  },
-  feedScrollContent: {
-    gap: 6,
-    paddingBottom: 4,
-  },
-  readoutStack: {
+  negativeSpace: {
+    flexGrow: 1,
+    minHeight: 48,
     width: '100%',
   },
-  readoutCard: {
-    backgroundColor: DOSSIER_ROW_BG,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    gap: 8,
-  },
-  readoutLabel: {
-    fontFamily: 'monospace',
-    textTransform: 'uppercase',
-    opacity: 0.5,
-    fontWeight: '600',
-  },
-  readoutValue: {
-    fontFamily: 'monospace',
-    fontWeight: '800',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-  },
-  idleReadout: {
-    marginTop: 4,
-  },
-  idlePromptValue: {
-    fontFamily: 'monospace',
-    fontWeight: '700',
-    letterSpacing: 0.55,
-  },
-  signalDock: {
+  footer: {
+    zIndex: 1,
+    paddingHorizontal: 26,
+    paddingBottom: 18,
     flexShrink: 0,
-    width: '100%',
-    justifyContent: 'flex-end',
-    paddingBottom: 4,
-  },
-  signalAnchor: {
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    width: '100%',
-  },
-  waveformShell: {
-    width: '100%',
-    alignItems: 'center',
-  },
-  waveformRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 4,
-    height: 32,
-  },
-  waveformBar: {
-    width: 3,
-    backgroundColor: 'rgba(167, 139, 250, 0.55)',
-    borderRadius: 1,
-  },
-  signalCaption: {
-    color: 'rgba(148, 163, 184, 0.35)',
-    fontWeight: '600',
-  },
-  signalDecryptedCaption: {
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-  signalCaptionHost: {
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  signalCaptionLayer: {
-    ...StyleSheet.absoluteFill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  signalCaptionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  signalDotsSlot: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-  },
-  signalDot: {
-    color: 'rgba(148, 163, 184, 0.35)',
-    fontWeight: '600',
-    textAlign: 'left',
-  },
-  breachButton: {
-    width: '100%',
-    alignSelf: 'stretch',
-    flexShrink: 0,
-  },
-  telemetryRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 4,
-  },
-  telemetryBracket: {
-    fontFamily: 'monospace',
-    fontSize: 8,
-    lineHeight: 12,
-    opacity: 0.55,
-    marginTop: 1,
-  },
-  telemetryCopy: {
-    flex: 1,
-    minWidth: 0,
-    gap: 1,
-  },
-  telemetryLabel: {
-    fontFamily: 'monospace',
-    fontSize: 6,
-    letterSpacing: 0.7,
-    textTransform: 'uppercase',
-  },
-  telemetryValue: {
-    fontFamily: 'monospace',
-    fontSize: 9,
-    lineHeight: 12,
-    letterSpacing: 0.5,
-    fontWeight: '700',
-    ...textGlow({ color: STATE_VIOLET_GLOW, radius: 6, offset: { width: 0, height: 0 } }),
   },
 });

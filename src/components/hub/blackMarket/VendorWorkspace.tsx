@@ -21,15 +21,16 @@ import {
   formatVendorExchangeCondition,
   type VendorSelection,
 } from './vendorPresentation';
+import { VEIL } from '../../../theme/veilTerminalTokens';
 
 export type { VendorSelection };
 
-const TERMINAL_BRIGHT = '#8ee0c6';
-const TERMINAL = '#69c8ad';
-const META = '#7a8f99';
-const MISSING = '#d88984';
-const HOLDING_SIGNAL = '#8aa4b0';
-const HOLDING_SIGNAL_BRIGHT = '#b7c9d1';
+const TERMINAL_BRIGHT = VEIL.mintBright;
+const TERMINAL = VEIL.mint;
+const META = VEIL.textMuted;
+const MISSING = VEIL.blood;
+const HOLDING_SIGNAL = VEIL.textSoft;
+const HOLDING_SIGNAL_BRIGHT = VEIL.bone;
 
 interface VendorWorkspaceProps {
   account: PlayerAccount;

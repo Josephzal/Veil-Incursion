@@ -5,6 +5,7 @@ import {
   formatCarriedEffectDisplayPrefix,
 } from '../data/unstableCargoEffectsEngine';
 import type { CargoRunState } from '../types/cargoGrid';
+import { VEIL } from '../theme/veilTerminalTokens';
 
 interface CargoPressurePanelProps {
   cargo: CargoRunState;
@@ -19,7 +20,7 @@ interface CargoPressurePanelProps {
 export default function CargoPressurePanel({
   cargo,
   accentColor = '#f59e0b',
-  mutedColor = '#94a3b8',
+  mutedColor = VEIL.textMuted,
   compact = false,
   specialCargoStacks = 0,
 }: CargoPressurePanelProps): React.JSX.Element | null {
