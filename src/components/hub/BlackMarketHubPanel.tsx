@@ -6,11 +6,14 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import Svg, { Circle, Defs, Line, Pattern, Rect } from 'react-native-svg';
 import HapticPressable from '../HapticPressable';
 import TerminalText from '../TerminalText';
-import VeilTerminalEffects from '../atmosphere/VeilTerminalEffects';
-import ForgeWorkspace, { resolveForgeSelection } from './blackMarket/ForgeWorkspace';
+import HubPrimaryCta from './HubPrimaryCta';
+import HubPageHeader from './HubPageHeader';
+import ForgeWorkspace, {
+  resolveForgeSelection,
+  resolveInitialForgeRecipeId,
+} from './blackMarket/ForgeWorkspace';
 import VendorWorkspace, {
   type VendorSelection,
 } from './blackMarket/VendorWorkspace';
@@ -18,7 +21,6 @@ import SchematicGlyph, {
   resolveSchematicGlyphFamily,
   schematicClassificationCode,
 } from './blackMarket/SchematicGlyph';
-import SignalRail from './blackMarket/SignalRail';
 import BlackMarketMediaStage, {
   type MediaStageFeedbackPhase,
 } from './blackMarket/BlackMarketMediaStage';
@@ -27,7 +29,7 @@ import FabricationReceipt, {
 } from './blackMarket/FabricationReceipt';
 import HoldToFabricateButton from './blackMarket/HoldToFabricateButton';
 import type { SchematicGlyphFamily } from './blackMarket/SchematicGlyph';
-import { VEIL } from '../../theme/veilTerminalTokens';
+import { VEIL, VEIL_MINT_TONE } from '../../theme/veilTerminalTokens';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useWorldState } from '../../context/WorldStateContext';
 import { useHubLayout } from '../../context/HubLayoutContext';
@@ -51,10 +53,28 @@ import { fabricationAudioHooks } from '../../utils/fabricationFeedbackAudio';
 import { pulseFabricationSeal } from '../../utils/hubButtonHaptics';
 import {
   formatVendorExchangeCondition,
+  isVendorSelectionValid,
   resolveInitialVendorSelection,
   resolveVendorSelectionAfterHoldingRemoved,
 } from './blackMarket/vendorPresentation';
 import type { ForgeSchematicPresentation } from './blackMarket/forgePresentation';
+import { OccultNeonRail, RegistrationBrackets } from './veilChrome';
+import {
+  HUB_CARD_BORDER,
+  HUB_CARD_BORDER_SELECTED,
+  HUB_DOSSIER_EDGE_PAD,
+  HUB_DOSSIER_FOOTER_BG,
+  HUB_DOSSIER_FOOTER_RULE,
+  HUB_DOSSIER_LABEL,
+  HUB_META,
+  HUB_SELECT_SURFACE,
+  hubDossierColumnStyle,
+  hubDossierShellStyle,
+  hubPrimaryActionHoverStyle,
+  hubPrimaryActionStyle,
+  hubPrimaryActionTextHoverStyle,
+  hubPrimaryActionTextStyle,
+} from '../../theme/hubPanelSurfaces';
 
 type FabricationFeedbackPhase = MediaStageFeedbackPhase;
 
@@ -76,8 +96,7 @@ export type BlackMarketTab = 'FORGE' | 'VENDOR';
 const TERMINAL = VEIL.mint;
 const TERMINAL_BRIGHT = VEIL.mintBright;
 const MISSING = VEIL.blood;
-const OCCULT = VEIL.occult;
-const META = VEIL.textMuted;
+const META = HUB_META;
 const TEXT_PRIMARY = VEIL.text;
 
 const MODE_ITEMS: Array<{ key: BlackMarketTab; label: string; detail: string; code: string }> = [
@@ -119,32 +138,6 @@ function DossierSection({
   );
 }
 
-function MarketAtmosphere(): React.JSX.Element {
-  return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
-        <Defs>
-          <Pattern id="bmCircuit" x="0" y="0" width="28" height="28" patternUnits="userSpaceOnUse">
-            <Line x1="0" y1="14" x2="28" y2="14" stroke="rgba(137,170,163,0.04)" strokeWidth="0.6" />
-            <Line x1="14" y1="0" x2="14" y2="28" stroke="rgba(137,170,163,0.03)" strokeWidth="0.6" />
-            <Circle cx="14" cy="14" r="1.2" fill="rgba(137,170,163,0.05)" />
-          </Pattern>
-        </Defs>
-        <Rect width="100%" height="100%" fill="url(#bmCircuit)" opacity={0.22} />
-      </Svg>
-      <View style={styles.atmVignette} />
-      <View style={styles.atmSigil}>
-        <Svg width="100%" height="100%" viewBox="0 0 200 200">
-          <Circle cx="100" cy="100" r="78" stroke="rgba(137,170,163,0.05)" strokeWidth="1" fill="none" />
-          <Circle cx="100" cy="100" r="48" stroke="rgba(137,170,163,0.04)" strokeWidth="1" fill="none" />
-          <Line x1="100" y1="20" x2="100" y2="180" stroke="rgba(137,170,163,0.035)" strokeWidth="1" />
-          <Line x1="20" y1="100" x2="180" y2="100" stroke="rgba(137,170,163,0.035)" strokeWidth="1" />
-        </Svg>
-      </View>
-    </View>
-  );
-}
-
 export default function BlackMarketHubPanel(): React.JSX.Element {
   const {
     account,
@@ -168,7 +161,6 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
   const [fabPhase, setFabPhase] = useState<FabricationFeedbackPhase>('idle');
   const [fabRecord, setFabRecord] = useState<FabricationFeedbackRecord | null>(null);
   const [fabReceipt, setFabReceipt] = useState<FabricationReceiptRecord | null>(null);
-  const vendorInitialized = useRef(false);
   const fabTimers = useRef<Array<ReturnType<typeof setTimeout>>>([]);
   const fabLocked = fabPhase !== 'idle' && fabPhase !== 'complete';
 
@@ -180,9 +172,10 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
 
   const narrow = screenWidth <= 1500;
   const compact = screenHeight <= 800;
+  // ~25–27% of stage for dossier; materials/feed share the remainder.
   const dossierWidth = narrow
-    ? 410
-    : Math.min(470, Math.max(420, Math.floor(screenWidth * 0.26)));
+    ? Math.min(430, Math.max(360, Math.floor(screenWidth * 0.27)))
+    : Math.min(560, Math.max(440, Math.floor(screenWidth * 0.26)));
 
   const forgeSelection = useMemo(
     () => resolveForgeSelection(account, selectedRecipeId),
@@ -246,17 +239,21 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
     };
   }, [dossierScan, reduceMotion]);
 
-  // Initialize Vendor selection when entering the channel.
+  // Default / restore Forge selection without overwriting a still-valid choice.
   useEffect(() => {
-    if (activeMode !== 'VENDOR') {
-      vendorInitialized.current = false;
-      return;
-    }
-    if (vendorInitialized.current) return;
-    vendorInitialized.current = true;
+    if (activeMode !== 'FORGE') return;
+    if (selectedRecipeId && resolveForgeSelection(account, selectedRecipeId)) return;
+    const next = resolveInitialForgeRecipeId(account);
+    if (next) setSelectedRecipeId(next);
+  }, [activeMode, account, selectedRecipeId]);
+
+  // Default / restore Vendor selection without overwriting a still-valid choice.
+  useEffect(() => {
+    if (activeMode !== 'VENDOR') return;
+    if (isVendorSelectionValid(account, vendorSelection)) return;
     setVendorSelection(resolveInitialVendorSelection(account, hubBlackMarketDiscountPct));
     setSellQty(1);
-  }, [activeMode, account, hubBlackMarketDiscountPct]);
+  }, [activeMode, account, hubBlackMarketDiscountPct, vendorSelection]);
 
   // Clamp sell quantity / recover selection when holdings change.
   useEffect(() => {
@@ -366,7 +363,6 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
     if (mode === activeMode) return;
     setActiveMode(mode);
     if (mode === 'VENDOR') {
-      vendorInitialized.current = false;
       resetFabricationFeedback();
     }
     playSweep();
@@ -594,7 +590,7 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
     return (
       <>
         <View style={styles.dossierHeader}>
-          <View style={styles.dossierAccent} />
+          <OccultNeonRail style={styles.dossierAccent} />
           <BlackMarketMediaStage
             source={artwork?.source}
             classification={classCode}
@@ -640,13 +636,13 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
           <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>
             {category}
           </TerminalText>
-          <TerminalText size={7.5} letterSpacing={0.85} style={[styles.dossierCategory, sealed && { color: OCCULT }]}>
+          <TerminalText size={7.5} letterSpacing={0.85} style={styles.dossierCategory}>
             {protocol}
           </TerminalText>
-          <TerminalText size={20} letterSpacing={0.2} style={styles.dossierTitle}>
+          <TerminalText size={19} letterSpacing={0.1} style={styles.dossierTitle}>
             {(displayEntry?.label ?? entry.recipe.label).toUpperCase()}
           </TerminalText>
-          <TerminalText size={8.5} style={styles.dossierLead}>
+          <TerminalText size={8.5} lineHeight={14} style={styles.dossierLead}>
             {entry.effectLine}
           </TerminalText>
           <TerminalText
@@ -656,7 +652,8 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
               styles.dossierStatus,
               (fabPhase !== 'idle' || entry.status === 'fabricable') && { color: TERMINAL_BRIGHT },
               fabPhase === 'idle' && entry.status === 'missing' && { color: MISSING },
-              fabPhase === 'idle' && sealed && { color: OCCULT },
+              fabPhase === 'idle' && entry.status === 'sealed' && { color: MISSING },
+              fabPhase === 'idle' && entry.status === 'rumored' && { color: META },
             ]}
           >
             {statusLabel}
@@ -728,7 +725,7 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
                       size={6.5}
                       letterSpacing={0.8}
                       style={{
-                        color: req.concealed ? OCCULT : req.ready ? TERMINAL : MISSING,
+                        color: req.concealed ? META : req.ready ? TERMINAL : MISSING,
                         fontWeight: '700',
                       }}
                     >
@@ -756,6 +753,7 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
         </ScrollView>
 
         <View style={styles.dossierFooter}>
+          <View style={styles.dossierFooterRule} />
           {feedback ? (
             <TerminalText size={7} style={styles.feedbackLine} numberOfLines={2}>
               {feedback}
@@ -788,7 +786,11 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
             </View>
           ) : entry.visibility === 'RUMORED' ? (
             <>
-              <TerminalText size={7} letterSpacing={0.9} style={[styles.footerHint, { color: OCCULT }]}>
+              <TerminalText
+                size={7}
+                letterSpacing={0.9}
+                style={[styles.footerHint, { color: entry.meta.rumoredMinClearance ? MISSING : META }]}
+              >
                 {entry.meta.rumoredMinClearance
                   ? `CLEARANCE ${entry.meta.rumoredMinClearance} REQUIRED`
                   : 'UNVERIFIED SCHEMATIC'}
@@ -855,8 +857,8 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
       return (
         <>
           <View style={styles.dossierHeader}>
-            <View style={styles.dossierAccent} />
-            <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>
+          <OccultNeonRail style={styles.dossierAccent} />
+          <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>
               PROCUREMENT DOSSIER
             </TerminalText>
             <TerminalText size={7.5} letterSpacing={0.85} style={styles.dossierCategory}>
@@ -913,6 +915,7 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
             </DossierSection>
           </ScrollView>
           <View style={styles.dossierFooter}>
+            <View style={styles.dossierFooterRule} />
             {feedback ? (
               <TerminalText size={7} style={styles.feedbackLine} numberOfLines={2}>
                 {feedback}
@@ -942,25 +945,13 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
                 </View>
               </View>
             )}
-            <HapticPressable
+            <HubPrimaryCta
               onPress={handleBuy}
               disabled={!affordable}
-              accessibilityRole="button"
               accessibilityLabel={affordable ? `Buy for ${price} credits` : 'Purchase blocked'}
-              style={({ pressed }) => ([
-                styles.actionButton,
-                affordable ? styles.actionPrimary : styles.actionDisabled,
-                pressed && affordable && { opacity: 0.9 },
-              ])}
-            >
-              <TerminalText
-                size={8}
-                letterSpacing={1}
-                style={affordable ? styles.actionPrimaryText : styles.actionDisabledText}
-              >
-                {affordable ? `[ BUY FOR ${price} CR ]` : '[ PURCHASE BLOCKED ]'}
-              </TerminalText>
-            </HapticPressable>
+              label={affordable ? `[ BUY FOR ${price} CR ]` : '[ PURCHASE BLOCKED ]'}
+              minHeight={52}
+            />
             <Animated.View
               pointerEvents="none"
               style={[
@@ -989,7 +980,7 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
       return (
         <>
           <View style={styles.dossierHeader}>
-            <View style={[styles.dossierAccent, styles.dossierAccentHolding]} />
+            <OccultNeonRail style={styles.dossierAccent} />
             <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>
               LIQUIDATION DOSSIER
             </TerminalText>
@@ -1002,7 +993,7 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
               compact={compact}
               showUnavailable={!artwork}
             />
-            <TerminalText size={18} letterSpacing={0.2} style={styles.dossierTitle}>
+            <TerminalText size={19} letterSpacing={0.1} style={styles.dossierTitle}>
               {getResourceDisplayName(entry.resourceId, true).toUpperCase()}
             </TerminalText>
             <TerminalText size={7.5} letterSpacing={0.7} style={styles.dossierLead}>
@@ -1035,6 +1026,7 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
             </DossierSection>
           </ScrollView>
           <View style={styles.dossierFooter}>
+            <View style={styles.dossierFooterRule} />
             {feedback ? (
               <TerminalText size={7} style={styles.feedbackLine} numberOfLines={2}>
                 {feedback}
@@ -1081,20 +1073,12 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
                 </TerminalText>
               </View>
             </View>
-            <HapticPressable
+            <HubPrimaryCta
               onPress={handleSellResource}
-              accessibilityRole="button"
               accessibilityLabel={`Sell ${qty} for ${proceeds} credits`}
-              style={({ pressed }) => ([
-                styles.actionButton,
-                styles.actionPrimary,
-                pressed && { opacity: 0.9 },
-              ])}
-            >
-              <TerminalText size={8} letterSpacing={1} style={styles.actionPrimaryText}>
-                {`[ SELL ${qty} FOR ${proceeds} CR ]`}
-              </TerminalText>
-            </HapticPressable>
+              label={`[ SELL ${qty} FOR ${proceeds} CR ]`}
+              minHeight={52}
+            />
             <Animated.View
               pointerEvents="none"
               style={[
@@ -1132,7 +1116,7 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
     return (
       <>
         <View style={styles.dossierHeader}>
-          <View style={[styles.dossierAccent, styles.dossierAccentHolding]} />
+          <OccultNeonRail style={styles.dossierAccent} />
           <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>
             LIQUIDATION DOSSIER
           </TerminalText>
@@ -1145,10 +1129,10 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
             compact={compact}
             showUnavailable={!artwork}
           />
-          <TerminalText size={18} letterSpacing={0.2} style={styles.dossierTitle}>
+          <TerminalText size={19} letterSpacing={0.1} style={styles.dossierTitle}>
             {getResourceShortName(sealed.resourceId).toUpperCase()}
           </TerminalText>
-          <TerminalText size={7} letterSpacing={0.9} style={[styles.dossierStatus, { color: OCCULT }]}>
+          <TerminalText size={7} letterSpacing={0.9} style={styles.dossierStatus}>
             {sealed.state === 'APPRAISED' ? 'APPRAISED' : 'SEALED'}
           </TerminalText>
         </View>
@@ -1170,59 +1154,31 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
           </DossierSection>
         </ScrollView>
         <View style={styles.dossierFooter}>
+          <View style={styles.dossierFooterRule} />
           {sealed.state === 'SEALED' ? (
-            <HapticPressable
+            <HubPrimaryCta
               onPress={() => showFeedback(appraiseSealedCargoInHub(sealed.stackId).logLine)}
               disabled={!canAppraise}
-              style={({ pressed }) => ([
-                styles.actionButton,
-                canAppraise ? styles.actionPrimary : styles.actionDisabled,
-                { marginBottom: 8 },
-                pressed && canAppraise && { opacity: 0.9 },
-              ])}
-            >
-              <TerminalText
-                size={8}
-                letterSpacing={1}
-                style={canAppraise ? styles.actionPrimaryText : styles.actionDisabledText}
-              >
-                {`[ APPRAISE −${config.appraisalFee} CR ]`}
-              </TerminalText>
-            </HapticPressable>
+              label={`[ APPRAISE −${config.appraisalFee} CR ]`}
+              minHeight={52}
+              style={{ marginBottom: 8 }}
+            />
           ) : null}
-          <HapticPressable
+          <HubPrimaryCta
             onPress={() => showFeedback(openSealedCargoInHub(sealed.stackId).logLine)}
             disabled={!canOpen}
-            style={({ pressed }) => ([
-              styles.actionButton,
-              canOpen ? styles.actionPrimary : styles.actionDisabled,
-              { marginBottom: 8 },
-              pressed && canOpen && { opacity: 0.9 },
-            ])}
-          >
-            <TerminalText
-              size={8}
-              letterSpacing={1}
-              style={canOpen ? styles.actionPrimaryText : styles.actionDisabledText}
-            >
-              {openingFee > 0 ? `[ OPEN −${openingFee} CR ]` : '[ OPEN ]'}
-            </TerminalText>
-          </HapticPressable>
-          <HapticPressable
+            label={openingFee > 0 ? `[ OPEN −${openingFee} CR ]` : '[ OPEN ]'}
+            minHeight={52}
+            style={{ marginBottom: 8 }}
+          />
+          <HubPrimaryCta
             onPress={() => {
               showFeedback(sellSealedCargoInHub(sealed.stackId).logLine);
               // Holdings effect advances selection once the stack leaves the stash.
             }}
-            style={({ pressed }) => ([
-              styles.actionButton,
-              styles.actionPrimary,
-              pressed && { opacity: 0.9 },
-            ])}
-          >
-            <TerminalText size={8} letterSpacing={1} style={styles.actionPrimaryText}>
-              {`[ SELL FOR ${sealed.sellValue} CR ]`}
-            </TerminalText>
-          </HapticPressable>
+            label={`[ SELL FOR ${sealed.sellValue} CR ]`}
+            minHeight={52}
+          />
         </View>
       </>
     );
@@ -1235,25 +1191,28 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
   ) => (
     <>
       <View style={[styles.dossierHeader, styles.dossierHeaderEmpty]}>
-        <View style={styles.dossierAccent} />
-        <BlackMarketMediaStage compact={compact}>
-          <SchematicGlyph family="generic" size={compact ? 100 : 118} animate={!reduceMotion} />
-        </BlackMarketMediaStage>
+        <OccultNeonRail style={styles.dossierAccent} />
         <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>
           {eyebrow}
         </TerminalText>
         <TerminalText size={7.5} letterSpacing={0.85} style={styles.dossierCategory}>
           NO RECORD SELECTED
         </TerminalText>
-        <TerminalText size={18} letterSpacing={0.2} style={styles.dossierTitle}>
+        <View style={styles.emptyMedia}>
+          <BlackMarketMediaStage compact={compact}>
+            <SchematicGlyph family="generic" size={compact ? 84 : 96} animate={!reduceMotion} />
+          </BlackMarketMediaStage>
+        </View>
+        <TerminalText size={19} letterSpacing={0.1} style={styles.dossierTitle}>
           AWAITING SIGNAL
         </TerminalText>
-        <TerminalText size={8.5} style={styles.dossierLead}>
+        <TerminalText size={8.5} lineHeight={14} style={styles.dossierLead}>
           {body}
         </TerminalText>
       </View>
       <View style={styles.dossierBody} />
       <View style={styles.dossierFooter}>
+        <View style={styles.dossierFooterRule} />
         <View style={[styles.actionButton, styles.actionDisabled]}>
           <TerminalText size={8} letterSpacing={1} style={styles.actionDisabledText}>
             {actionLabel}
@@ -1275,9 +1234,6 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
       style={styles.board}
       {...(Platform.OS === 'web' ? ({ 'data-black-market': 'true' } as object) : null)}
     >
-      <MarketAtmosphere />
-      <VeilTerminalEffects intensity="subtle" scanlineOpacity={0.045} />
-
       <View style={styles.workspace}>
         {!reduceMotion && fabPhase !== 'idle' ? (
           <Animated.View
@@ -1316,39 +1272,14 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
             />
           </View>
         ) : null}
-        <View style={[styles.localHeader, compact && styles.localHeaderCompact]}>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <TerminalText size={7} letterSpacing={1.05} style={styles.headerEyebrow}>
-              RESTRICTED EXCHANGE // BM-01
-            </TerminalText>
-            <TerminalText size={18} letterSpacing={0.3} style={styles.localTitle}>
-              BLACK MARKET
-            </TerminalText>
-            <TerminalText size={7.5} letterSpacing={1.05} style={styles.breadcrumb}>
-              {activeMode === 'FORGE'
-                ? 'UNLICENSED FABRICATION CHANNEL'
-                : 'UNLICENSED PROCUREMENT CHANNEL'}
-            </TerminalText>
-          </View>
-          <View style={styles.creditBalance}>
-            <TerminalText size={6.5} letterSpacing={1} style={styles.creditLabel}>
-              CREDIT BALANCE
-            </TerminalText>
-            <View style={styles.creditValueRow}>
-              <TerminalText size={13} letterSpacing={0.25} style={styles.balanceCredits}>
-                {formatCreditBalance(account.cabalCredits)}
-              </TerminalText>
-              <TerminalText size={9} letterSpacing={0.7} style={styles.creditSuffix}>
-                {' CR'}
-              </TerminalText>
-            </View>
-          </View>
-        </View>
-
-        <SignalRail
-          label={activeMode === 'FORGE' ? 'FORGE CHANNEL' : 'VENDOR CHANNEL'}
-          code={activeMode === 'FORGE' ? 'FAB-01' : 'VND-01'}
-          active
+        <HubPageHeader
+          eyebrow="RESTRICTED EXCHANGE // BM-01"
+          title="BLACK MARKET"
+          subtitle={
+            activeMode === 'FORGE'
+              ? 'UNLICENSED FABRICATION CHANNEL'
+              : 'UNLICENSED PROCUREMENT CHANNEL'
+          }
           compact={compact}
         />
 
@@ -1366,17 +1297,27 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
                 accessibilityRole="tab"
                 accessibilityState={{ selected }}
                 {...(Platform.OS === 'web' ? ({ 'aria-selected': selected } as object) : {})}
-                style={({ pressed }) => ([
+                style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ([
                   styles.mode,
                   compact && styles.modeCompact,
                   selected && styles.modeSelected,
-                  pressed && { opacity: 0.9 },
+                  ((hovered || pressed) && !selected) ? styles.modeHover : null,
+                  pressed && { opacity: 0.92 },
                 ])}
               >
+                {selected ? (
+                  <OccultNeonRail style={styles.modeNeon} />
+                ) : (
+                  <View
+                    pointerEvents="none"
+                    accessible={false}
+                    style={styles.modeEdge}
+                  />
+                )}
                 <TerminalText
                   size={9}
-                  letterSpacing={1.05}
-                  style={{ color: selected ? '#eef4f1' : '#7f928c', fontWeight: '800' }}
+                  letterSpacing={1}
+                  style={{ color: selected ? VEIL.text : META, fontWeight: '800' }}
                 >
                   {mode.label}
                 </TerminalText>
@@ -1386,11 +1327,19 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
                 <TerminalText size={6} letterSpacing={0.7} style={styles.modeCode}>
                   {mode.code}
                 </TerminalText>
-                {selected ? <View style={styles.modeUnderline} /> : null}
               </HapticPressable>
             );
           })}
           <View style={styles.modeSpacer} />
+          <View style={styles.creditBalance}>
+            <RegistrationBrackets tone={VEIL_MINT_TONE} active corners="all" />
+            <TerminalText size={6.5} letterSpacing={1} style={styles.creditLabel}>
+              CREDIT BALANCE
+            </TerminalText>
+            <TerminalText size={13} letterSpacing={0.25} style={styles.balanceCredits}>
+              {`${formatCreditBalance(account.cabalCredits)} CR`}
+            </TerminalText>
+          </View>
         </View>
 
         <View style={styles.modeContent}>
@@ -1422,19 +1371,17 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
         </View>
       </View>
 
-      <Animated.View
-        style={[
-          styles.dossier,
-          activeMode === 'VENDOR' && styles.dossierVendor,
-          { width: dossierWidth, maxWidth: dossierWidth, opacity: dossierLock },
-        ]}
-      >
-        {activeMode === 'FORGE'
-          ? (forgeSelection
-            ? renderForgeDossier(forgeSelection)
-            : renderEmptyDossier('FORGE DOSSIER', 'Select an augment from the schematic feed.'))
-          : renderVendorDossier()}
-      </Animated.View>
+      <View style={[styles.dossierColumn, { width: dossierWidth + HUB_DOSSIER_EDGE_PAD, flexGrow: 0, flexBasis: dossierWidth + HUB_DOSSIER_EDGE_PAD }]}>
+        <View style={[styles.dossier, activeMode === 'VENDOR' && styles.dossierVendor]}>
+          <Animated.View style={[styles.dossierFill, { opacity: dossierLock }]}>
+            {activeMode === 'FORGE'
+              ? (forgeSelection
+                ? renderForgeDossier(forgeSelection)
+                : renderEmptyDossier('FORGE DOSSIER', 'Select an augment from the schematic feed.'))
+              : renderVendorDossier()}
+          </Animated.View>
+        </View>
+      </View>
 
       {activeMode === 'FORGE' && fabReceipt ? (
         <FabricationReceipt
@@ -1454,149 +1401,111 @@ const styles = StyleSheet.create({
     minWidth: 0,
     minHeight: 0,
     flexDirection: 'row',
+    alignItems: 'stretch',
     overflow: 'hidden',
-    backgroundColor: '#010304',
+    backgroundColor: '#000000',
     position: 'relative',
-  },
-  atmVignette: {
-    ...StyleSheet.absoluteFill,
     ...Platform.select({
       web: {
-        backgroundImage:
-          'linear-gradient(90deg, rgba(0,0,0,0.55), transparent 18%, transparent 82%, rgba(0,0,0,0.55)), linear-gradient(180deg, rgba(0,0,0,0.35), transparent 22%, transparent 78%, rgba(0,0,0,0.5))',
+        width: '100%',
+        height: '100%',
       } as object,
       default: {},
     }),
-  },
-  atmSigil: {
-    position: 'absolute',
-    right: '2%',
-    top: '18%',
-    width: '34%',
-    aspectRatio: 1,
-    opacity: 0.55,
   },
   workspace: {
     flex: 1,
     minWidth: 0,
     minHeight: 0,
     overflow: 'hidden',
-    borderRightWidth: StyleSheet.hairlineWidth,
-    borderRightColor: 'rgba(137, 190, 179, 0.16)',
     zIndex: 1,
     position: 'relative',
   },
-  localHeader: {
-    position: 'relative',
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    gap: 24,
-    minHeight: 72,
-    paddingHorizontal: 22,
-    paddingTop: 12,
-    paddingBottom: 10,
+  dossierColumn: {
+    ...hubDossierColumnStyle(),
     flexShrink: 0,
-    ...Platform.select({
-      web: {
-        backgroundImage:
-          'linear-gradient(180deg, rgba(4, 12, 11, 0.92), rgba(2, 6, 6, 0))',
-      } as object,
-      default: {
-        backgroundColor: 'rgba(3, 8, 8, 0.72)',
-      },
-    }),
-  },
-  localHeaderCompact: {
-    minHeight: 58,
-    paddingTop: 8,
-    paddingBottom: 8,
-  },
-  headerEyebrow: {
-    color: META,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  breadcrumb: {
-    marginTop: 5,
-    color: META,
-    fontWeight: '700',
-  },
-  localTitle: {
-    color: '#eef4f1',
-    fontWeight: '700',
   },
   creditBalance: {
+    position: 'relative',
     alignItems: 'flex-end',
+    justifyContent: 'flex-end',
+    alignSelf: 'stretch',
     flexShrink: 0,
+    paddingTop: 14,
+    paddingBottom: 12,
+    paddingHorizontal: 18,
+    minWidth: 168,
   },
   creditLabel: {
-    color: TERMINAL,
+    color: META,
     fontWeight: '700',
-  },
-  creditValueRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    marginTop: 3,
+    marginBottom: 6,
   },
   balanceCredits: {
-    color: '#f2f7f5',
+    color: VEIL.text,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
-  },
-  creditSuffix: {
-    color: TERMINAL,
-    fontWeight: '700',
   },
   modes: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    minHeight: 58,
+    minHeight: 60,
     paddingHorizontal: 14,
-    paddingBottom: 2,
+    paddingBottom: 6,
     flexShrink: 0,
-    gap: 8,
+    gap: 10,
   },
   modesCompact: {
-    minHeight: 50,
+    minHeight: 52,
   },
   mode: {
     position: 'relative',
-    minWidth: 190,
-    maxWidth: 240,
+    minWidth: 176,
+    maxWidth: 220,
     justifyContent: 'center',
-    paddingHorizontal: 18,
+    paddingHorizontal: 12,
     paddingTop: 11,
-    paddingBottom: 12,
-    backgroundColor: 'rgba(5, 12, 11, 0.4)',
+    paddingBottom: 11,
+    backgroundColor: VEIL.surface1,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: VEIL.lineFaint,
+    overflow: 'hidden',
     ...Platform.select({
       web: {
         cursor: 'pointer',
         outlineStyle: 'none',
-        clipPath: 'polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%)',
       } as object,
       default: {},
     }),
   },
   modeCompact: {
-    minWidth: 160,
+    minWidth: 150,
     paddingTop: 8,
-    paddingBottom: 9,
+    paddingBottom: 8,
   },
   modeSelected: {
-    ...Platform.select({
-      web: {
-        backgroundImage:
-          'linear-gradient(135deg, rgba(105, 200, 173, 0.08), rgba(105, 200, 173, 0.015))',
-      } as object,
-      default: {
-        backgroundColor: 'rgba(105, 200, 173, 0.06)',
-      },
-    }),
+    backgroundColor: HUB_SELECT_SURFACE,
+    borderColor: HUB_CARD_BORDER_SELECTED,
+  },
+  modeHover: {
+    backgroundColor: VEIL.surface2,
+  },
+  modeEdge: {
+    position: 'absolute',
+    left: 0,
+    top: 10,
+    bottom: 10,
+    width: 2,
+    backgroundColor: VEIL.lineFaint,
+  },
+  modeNeon: {
+    top: 10,
+    bottom: 10,
   },
   modeCode: {
     marginTop: 3,
-    color: '#5f746f',
+    marginLeft: 0,
+    color: META,
     fontWeight: '700',
   },
   workspaceDim: {
@@ -1621,22 +1530,6 @@ const styles = StyleSheet.create({
   packetA: { left: 0, top: 20 },
   packetB: { left: 18, top: 40 },
   packetC: { left: 8, top: 58 },
-  modeUnderline: {
-    position: 'absolute',
-    left: 16,
-    right: 15,
-    bottom: 0,
-    height: 2,
-    ...Platform.select({
-      web: {
-        backgroundImage:
-          'linear-gradient(90deg, #62CDB5 0 68%, transparent 68% 73%, rgba(98, 205, 181, 0.35) 73% 100%)',
-      } as object,
-      default: {
-        backgroundColor: TERMINAL,
-      },
-    }),
-  },
   modeSpacer: {
     flex: 1,
   },
@@ -1656,55 +1549,44 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(142, 223, 198, 0.35)',
   },
   dossier: {
-    minWidth: 0,
+    ...hubDossierShellStyle(),
+  },
+  dossierFill: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
     minHeight: 0,
-    overflow: 'hidden',
-    flexShrink: 0,
-    zIndex: 1,
+    minWidth: 0,
     ...Platform.select({
       web: {
-        backgroundImage: 'linear-gradient(180deg, #07110f 0%, #030707 48%, #020606 100%)',
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
       } as object,
       default: {
-        backgroundColor: '#040a09',
+        flex: 1,
       },
     }),
   },
   dossierHeader: {
     position: 'relative',
-    paddingTop: 18,
+    paddingTop: 22,
     paddingBottom: 16,
     paddingLeft: 28,
     paddingRight: 24,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(137, 170, 163, 0.12)',
     flexShrink: 0,
+    overflow: 'visible',
   },
   dossierHeaderEmpty: {
-    paddingBottom: 12,
+    paddingBottom: 8,
   },
   dossierAccent: {
-    position: 'absolute',
     top: 18,
-    bottom: 16,
-    left: 0,
-    width: 2,
-    backgroundColor: TERMINAL,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 0 14px rgba(117, 212, 179, 0.28)',
-      } as object,
-      default: {},
-    }),
+    bottom: 1,
   },
-  dossierAccentHolding: {
-    backgroundColor: '#8aa4b0',
-    ...Platform.select({
-      web: {
-        boxShadow: '0 0 14px rgba(138, 164, 176, 0.22)',
-      } as object,
-      default: {},
-    }),
+  emptyMedia: {
+    marginTop: 6,
+    marginBottom: 2,
   },
   dossierVendor: {},
   dossierVizInner: {
@@ -1742,18 +1624,17 @@ const styles = StyleSheet.create({
   },
   dossierCategory: {
     marginTop: 7,
-    color: TERMINAL,
+    color: HUB_DOSSIER_LABEL,
     fontWeight: '700',
   },
   dossierTitle: {
     marginTop: 8,
-    color: '#f3f8f5',
+    color: '#F2F4F1',
     fontWeight: '700',
   },
   dossierLead: {
-    marginTop: 10,
+    marginTop: 8,
     color: TEXT_PRIMARY,
-    lineHeight: 20,
     letterSpacing: 0,
   },
   dossierStatus: {
@@ -1767,7 +1648,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   dossierBody: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
     minHeight: 0,
     paddingTop: 18,
     paddingBottom: 22,
@@ -1785,7 +1668,7 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   dossierLabel: {
-    color: META,
+    color: HUB_DOSSIER_LABEL,
     fontWeight: '700',
   },
   dossierValue: {
@@ -1796,7 +1679,7 @@ const styles = StyleSheet.create({
   },
   dossierSecondary: {
     marginTop: 4,
-    color: '#8a9b96',
+    color: META,
     lineHeight: 18,
   },
   requirementRow: {
@@ -1833,15 +1716,21 @@ const styles = StyleSheet.create({
   },
   dossierFooter: {
     position: 'relative',
-    paddingTop: 16,
-    paddingBottom: 22,
-    paddingLeft: 32,
-    paddingRight: 28,
-    backgroundColor: 'rgba(3, 7, 8, 0.98)',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(137, 190, 179, 0.2)',
+    paddingTop: 14,
+    paddingBottom: 16,
+    paddingLeft: 24,
+    paddingRight: 22,
+    backgroundColor: HUB_DOSSIER_FOOTER_BG,
     flexShrink: 0,
     overflow: 'hidden',
+  },
+  dossierFooterRule: {
+    position: 'absolute',
+    top: 0,
+    left: 16,
+    right: 16,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: HUB_DOSSIER_FOOTER_RULE,
   },
   footerHint: {
     marginBottom: 10,
@@ -1897,7 +1786,8 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     width: '100%',
-    minHeight: 56,
+    minHeight: 52,
+    height: 52,
     alignItems: 'center',
     justifyContent: 'center',
     ...Platform.select({
@@ -1906,21 +1796,24 @@ const styles = StyleSheet.create({
     }),
   },
   actionPrimary: {
-    backgroundColor: TERMINAL,
-    borderWidth: 1,
-    borderColor: TERMINAL_BRIGHT,
+    ...hubPrimaryActionStyle(),
+  },
+  actionPrimaryHover: {
+    ...hubPrimaryActionHoverStyle(),
   },
   actionPrimaryText: {
-    color: '#06110e',
-    fontWeight: '800',
+    ...hubPrimaryActionTextStyle(),
+  },
+  actionPrimaryTextHover: {
+    ...hubPrimaryActionTextHoverStyle(),
   },
   actionDisabled: {
-    backgroundColor: 'rgba(105, 200, 173, 0.025)',
+    backgroundColor: 'rgba(185, 181, 167, 0.03)',
     borderWidth: 1,
-    borderColor: 'rgba(105, 200, 173, 0.18)',
+    borderColor: 'rgba(185, 181, 167, 0.16)',
   },
   actionDisabledText: {
-    color: 'rgba(188, 204, 198, 0.34)',
+    color: 'rgba(222, 227, 223, 0.32)',
     fontWeight: '800',
   },
   txnPulse: {

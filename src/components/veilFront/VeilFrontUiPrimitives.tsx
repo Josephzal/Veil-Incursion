@@ -291,7 +291,7 @@ const styles = StyleSheet.create({
   },
   progressTrack: {
     width: '100%',
-    borderRadius: 2,
+    borderRadius: 0,
     overflow: 'hidden',
   },
   progressFill: {

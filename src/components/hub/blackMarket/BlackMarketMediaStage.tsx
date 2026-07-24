@@ -296,25 +296,25 @@ export default function BlackMarketMediaStage({
 const styles = StyleSheet.create({
   stage: {
     position: 'relative',
-    minHeight: 170,
+    minHeight: 180,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
     overflow: 'hidden',
   },
   stageCompact: {
-    minHeight: 132,
-    marginBottom: 12,
+    minHeight: 150,
+    marginBottom: 10,
   },
   glow: {
     ...StyleSheet.absoluteFill,
     ...Platform.select({
       web: {
         backgroundImage:
-          'radial-gradient(circle at 50% 48%, rgba(86, 171, 146, 0.09), rgba(3, 8, 7, 0) 62%)',
+          'radial-gradient(circle at 50% 48%, rgba(86, 171, 146, 0.05), rgba(3, 8, 7, 0) 62%)',
       } as object,
       default: {
-        backgroundColor: 'rgba(86, 171, 146, 0.04)',
+        backgroundColor: 'rgba(86, 171, 146, 0.03)',
       },
     }),
   },
@@ -322,33 +322,27 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         backgroundImage:
-          'radial-gradient(circle at 50% 48%, rgba(142, 223, 198, 0.18), rgba(3, 8, 7, 0) 64%)',
+          'radial-gradient(circle at 50% 48%, rgba(142, 223, 198, 0.1), rgba(3, 8, 7, 0) 64%)',
       } as object,
       default: {
-        backgroundColor: 'rgba(142, 223, 198, 0.08)',
+        backgroundColor: 'rgba(142, 223, 198, 0.05)',
       },
     }),
   },
   glowOccult: {
-    ...Platform.select({
-      web: {
-        backgroundImage:
-          'radial-gradient(circle at 50% 48%, rgba(153, 136, 179, 0.12), rgba(3, 8, 7, 0) 64%)',
-      } as object,
-      default: {},
-    }),
+    // Keep media frame neutral — no purple wash on sealed records.
   },
   bracket: {
     position: 'absolute',
-    width: 12,
-    height: 12,
-    borderColor: 'rgba(137, 170, 163, 0.35)',
+    width: 10,
+    height: 10,
+    borderColor: 'rgba(105, 190, 165, 0.28)',
     zIndex: 2,
   },
-  bracketTL: { top: 8, left: 8, borderTopWidth: 1, borderLeftWidth: 1 },
-  bracketTR: { top: 8, right: 8, borderTopWidth: 1, borderRightWidth: 1 },
-  bracketBL: { bottom: 8, left: 8, borderBottomWidth: 1, borderLeftWidth: 1 },
-  bracketBR: { bottom: 8, right: 8, borderBottomWidth: 1, borderRightWidth: 1 },
+  bracketTL: { top: 6, left: 6, borderTopWidth: 1, borderLeftWidth: 1 },
+  bracketTR: { top: 6, right: 6, borderTopWidth: 1, borderRightWidth: 1 },
+  bracketBL: { bottom: 6, left: 6, borderBottomWidth: 1, borderLeftWidth: 1 },
+  bracketBR: { bottom: 6, right: 6, borderBottomWidth: 1, borderRightWidth: 1 },
   calLayer: {
     ...StyleSheet.absoluteFill,
     opacity: 0.9,
@@ -367,20 +361,20 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   image: {
-    width: 168,
-    height: 132,
-    maxWidth: '58%',
+    width: 156,
+    height: 124,
+    maxWidth: '56%',
     zIndex: 1,
     ...Platform.select({
       web: {
-        filter: 'drop-shadow(0 12px 22px rgba(0,0,0,0.6)) drop-shadow(0 0 11px rgba(105,200,173,0.08))',
+        filter: 'drop-shadow(0 8px 16px rgba(0,0,0,0.45))',
       } as object,
       default: {},
     }),
   },
   imageCompact: {
-    width: 132,
-    height: 108,
+    width: 124,
+    height: 100,
   },
   imageAssemblingBase: {
     opacity: 0.35,

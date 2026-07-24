@@ -126,6 +126,12 @@ export default function VeilTopbar({
       ]}
       accessibilityRole="header"
     >
+      <View
+        pointerEvents="none"
+        accessible={false}
+        {...(Platform.OS === 'web' ? ({ 'aria-hidden': true } as object) : null)}
+        style={styles.topbarTexture}
+      />
       <View style={styles.identity}>
         <TerminalText size={8.5} letterSpacing={1.4} style={styles.brand}>
           VEIL NETWORK
@@ -228,6 +234,8 @@ export default function VeilTopbar({
 const styles = StyleSheet.create({
   topbar: {
     zIndex: 20,
+    position: 'relative',
+    overflow: 'hidden',
     flexDirection: 'row',
     alignItems: 'stretch',
     justifyContent: 'space-between',
@@ -236,16 +244,32 @@ const styles = StyleSheet.create({
     height: 68,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(137, 190, 179, 0.18)',
-    backgroundColor: 'rgba(2, 5, 5, 0.98)',
+    borderBottomColor: 'rgba(72, 120, 104, 0.18)',
+    // Near-black with a dark green wash so the bar reads apart from pure black stages.
+    backgroundColor: 'rgba(2, 6, 5, 0.98)',
     ...Platform.select({
       web: {
-        backgroundImage: 'linear-gradient(180deg, rgba(9, 17, 16, 0.72), rgba(2, 5, 5, 0.98))',
+        backgroundImage:
+          'linear-gradient(180deg, rgb(4, 10, 9), rgb(4, 10, 9))',
         display: 'grid',
         gridTemplateColumns: 'minmax(190px, 1fr) auto minmax(190px, 1fr)',
         alignItems: 'center',
       } as object,
       default: {},
+    }),
+  },
+  topbarTexture: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 0,
+    ...Platform.select({
+      web: {
+        backgroundImage:
+          'repeating-linear-gradient(0deg, rgba(72, 120, 104, 0.04) 0px, rgba(72, 120, 104, 0.04) 1px, transparent 1px, transparent 3px)',
+        opacity: 0.45,
+      } as object,
+      default: {
+        backgroundColor: 'rgba(72, 120, 104, 0.025)',
+      },
     }),
   },
   topbarNarrow: {
@@ -258,6 +282,7 @@ const styles = StyleSheet.create({
     }),
   },
   identity: {
+    zIndex: 1,
     justifyContent: 'center',
     minWidth: 0,
     ...Platform.select({
@@ -322,6 +347,7 @@ const styles = StyleSheet.create({
     }),
   },
   nav: {
+    zIndex: 1,
     flexDirection: 'row',
     alignItems: 'stretch',
     justifyContent: 'center',
@@ -383,6 +409,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   status: {
+    zIndex: 1,
     justifyContent: 'center',
     alignItems: 'flex-end',
     minWidth: 0,

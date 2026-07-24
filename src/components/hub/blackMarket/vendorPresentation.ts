@@ -47,6 +47,26 @@ export function formatVendorExchangeCondition(resourceId: ResourceItemId): {
   };
 }
 
+/** True when the vendor selection still points at a live offer or holding. */
+export function isVendorSelectionValid(
+  account: PlayerAccount,
+  selection: VendorSelection,
+): boolean {
+  if (!selection) return false;
+  if (selection.source === 'offer') {
+    return BLACK_MARKET_CARGO_LISTINGS.some((listing) => listing.id === selection.listingId);
+  }
+  if (selection.kind === 'RESOURCE') {
+    return listFenceableStashEntries(account.resourceStash)
+      .filter((entry) => !isAppraisableSealedResource(entry.resourceId))
+      .some((entry) => entry.resourceId === selection.resourceId);
+  }
+  return listSealedStashEntries(
+    account.resourceStash,
+    account.sealedCargoStacks ?? [],
+  ).some((entry) => entry.stackId === selection.stackId);
+}
+
 /** Stable initial Vendor selection — first purchasable offer, else first offer, else first holding. */
 export function resolveInitialVendorSelection(
   account: PlayerAccount,

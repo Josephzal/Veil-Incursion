@@ -9,10 +9,13 @@ import HapticPressable from '../../HapticPressable';
 import TerminalText from '../../TerminalText';
 import { pulseHubButton } from '../../../utils/hubButtonHaptics';
 import { VEIL } from '../../../theme/veilTerminalTokens';
+import {
+  HUB_CTA_INVERSE_TEXT,
+  hubPrimaryActionStyle,
+  hubPrimaryActionTextStyle,
+} from '../../../theme/hubPanelSurfaces';
 
 const HOLD_MS = 1000;
-const TERMINAL = VEIL.mint;
-const TERMINAL_BRIGHT = VEIL.mintBright;
 
 interface HoldToFabricateButtonProps {
   onComplete: () => void;
@@ -21,7 +24,7 @@ interface HoldToFabricateButtonProps {
   holdingLabel?: string;
 }
 
-/** Hold for 1s to confirm fabrication — fill bar shows progress. */
+/** Hold for 1s to confirm fabrication — outline CTA with progress fill overlay. */
 export default function HoldToFabricateButton({
   onComplete,
   disabled = false,
@@ -124,44 +127,41 @@ const styles = StyleSheet.create({
   button: {
     position: 'relative',
     width: '100%',
-    minHeight: 56,
+    minHeight: 52,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    backgroundColor: 'rgba(105, 200, 173, 0.08)',
-    borderWidth: 1,
-    borderColor: TERMINAL_BRIGHT,
+    ...hubPrimaryActionStyle(),
     ...Platform.select({
       web: { cursor: 'pointer', outlineStyle: 'none', userSelect: 'none' } as object,
       default: {},
     }),
   },
   buttonDisabled: {
-    borderColor: 'rgba(105, 200, 173, 0.18)',
-    backgroundColor: 'rgba(105, 200, 173, 0.025)',
+    backgroundColor: 'rgba(185, 181, 167, 0.03)',
+    borderColor: 'rgba(185, 181, 167, 0.16)',
   },
   buttonPressed: {
-    borderColor: TERMINAL,
+    borderColor: VEIL.mintBright,
   },
   fill: {
     position: 'absolute',
     left: 0,
     top: 0,
     bottom: 0,
-    backgroundColor: TERMINAL,
+    backgroundColor: VEIL.mint,
   },
   labelWrap: {
     zIndex: 1,
     paddingHorizontal: 12,
   },
   label: {
-    color: '#c8e6da',
-    fontWeight: '800',
+    ...hubPrimaryActionTextStyle(),
   },
   labelHolding: {
-    color: '#06110e',
+    color: HUB_CTA_INVERSE_TEXT,
   },
   labelDisabled: {
-    color: 'rgba(188, 204, 198, 0.34)',
+    color: 'rgba(222, 227, 223, 0.32)',
   },
 });

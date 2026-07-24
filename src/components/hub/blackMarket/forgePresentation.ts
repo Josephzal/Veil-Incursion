@@ -102,7 +102,7 @@ export function buildForgeSchematicPresentation(
     stateLabel = 'FABRICABLE';
   } else {
     rowStatus = 'missing';
-    stateLabel = 'MATERIALS INCOMPLETE';
+    stateLabel = '????';
   }
 
   const effectLine = rumored

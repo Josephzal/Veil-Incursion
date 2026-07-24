@@ -28,6 +28,15 @@ import {
   validateHexShotLoadoutCommit,
 } from '../../../utils/classLoadoutUtils';
 import { MUTED, TERMINAL, TEXT_PRIMARY, TEXT_SECONDARY } from './loadoutTerminalUi';
+import { OccultNeonRail } from '../veilChrome';
+import {
+  HUB_CARD_BORDER,
+  HUB_CARD_BORDER_HOVER,
+  HUB_CARD_BORDER_SELECTED,
+  HUB_CARD_SURFACE,
+  HUB_CARD_SURFACE_HOVER,
+  HUB_SELECT_SURFACE,
+} from '../../../theme/hubPanelSurfaces';
 
 export type DeckSelection =
   | { kind: 'SLOT'; index: 0 | 1 | 2 | 3 }
@@ -380,7 +389,7 @@ export default function DeckWorkspace({
               pressed && { opacity: 0.92 },
             ])}
           >
-            {slot.selected ? <View style={styles.slotAccent} /> : null}
+            {slot.selected ? <OccultNeonRail style={styles.slotAccent} /> : null}
             <View style={styles.slotTopline}>
               <TerminalText size={7} letterSpacing={0.9} style={styles.slotMeta}>
                 {`SLOT ${slot.index + 1}`}
@@ -435,7 +444,7 @@ export default function DeckWorkspace({
                 ? ({ 'data-selected': selected ? 'true' : 'false' } as object)
                 : null)}
             >
-              {selected ? <View style={styles.signalAccent} /> : null}
+              {selected ? <OccultNeonRail style={styles.signalAccent} /> : null}
               <HapticPressable
                 onPress={() => onSelect({ kind: 'POOL', abilityId: entry.id })}
                 accessibilityRole="button"
@@ -481,30 +490,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 1,
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    backgroundColor: 'rgba(137, 170, 163, 0.1)',
+    paddingHorizontal: 0,
+    paddingVertical: 10,
+    backgroundColor: HUB_CARD_SURFACE,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(137, 170, 163, 0.12)',
+    borderBottomColor: HUB_CARD_BORDER,
   },
   activeDeckCompact: { paddingVertical: 10 },
   deckSlot: {
     width: '49.6%',
-    minHeight: 94,
+    minHeight: 90,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: '#030707',
+    paddingLeft: 18,
+    backgroundColor: HUB_CARD_SURFACE,
+    borderWidth: 1,
+    borderColor: HUB_CARD_BORDER,
     position: 'relative',
+    overflow: 'hidden',
     ...Platform.select({ web: { cursor: 'pointer' } as object, default: {} }),
   },
-  deckSlotSelected: { backgroundColor: 'rgba(105, 200, 173, 0.05)' },
+  deckSlotSelected: {
+    backgroundColor: HUB_SELECT_SURFACE,
+    borderColor: HUB_CARD_BORDER_SELECTED,
+  },
   slotAccent: {
-    position: 'absolute',
-    top: 12,
-    bottom: 12,
-    left: 0,
-    width: 2,
-    backgroundColor: TERMINAL,
+    top: 14,
+    bottom: 14,
   },
   slotTopline: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
   slotMeta: { color: MUTED, fontWeight: '700' },
@@ -515,38 +527,42 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    minHeight: 42,
-    paddingHorizontal: 24,
+    minHeight: 36,
+    paddingHorizontal: 0,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(137, 170, 163, 0.12)',
+    borderBottomColor: HUB_CARD_BORDER,
   },
   feedHeaderText: { color: MUTED, fontWeight: '700' },
   feed: { flex: 1, minHeight: 0 },
-  feedContent: { paddingBottom: 16 },
+  feedContent: { paddingHorizontal: 0, paddingTop: 8, paddingBottom: 16 },
   signal: {
     position: 'relative',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(137, 170, 163, 0.1)',
+    marginBottom: 10,
+    overflow: 'hidden',
   },
   signalAccent: {
-    position: 'absolute',
-    top: 12,
-    bottom: 12,
-    left: 0,
-    width: 2,
-    backgroundColor: TERMINAL,
-    zIndex: 1,
+    top: 14,
+    bottom: 14,
   },
   signalSelect: {
-    minHeight: 92,
-    paddingTop: 13,
-    paddingBottom: 13,
-    paddingLeft: 28,
-    paddingRight: 24,
-    ...Platform.select({ web: { cursor: 'pointer' } as object, default: {} }),
+    minHeight: 90,
+    paddingTop: 14,
+    paddingBottom: 14,
+    paddingLeft: 18,
+    paddingRight: 18,
+    backgroundColor: HUB_CARD_SURFACE,
+    borderWidth: 1,
+    borderColor: HUB_CARD_BORDER,
+    ...Platform.select({ web: { cursor: 'pointer', outlineStyle: 'none' } as object, default: {} }),
   },
-  signalSelectHover: { backgroundColor: 'rgba(105, 200, 173, 0.035)' },
-  signalSelectSelected: { backgroundColor: 'rgba(105, 200, 173, 0.06)' },
+  signalSelectHover: {
+    backgroundColor: HUB_CARD_SURFACE_HOVER,
+    borderColor: HUB_CARD_BORDER_HOVER,
+  },
+  signalSelectSelected: {
+    backgroundColor: HUB_SELECT_SURFACE,
+    borderColor: HUB_CARD_BORDER_SELECTED,
+  },
   signalMain: { minWidth: 0 },
   signalTopline: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   signalMeta: { color: MUTED, fontWeight: '700' },

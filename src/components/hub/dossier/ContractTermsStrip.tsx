@@ -2,6 +2,7 @@ import React from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import TerminalText from '../../TerminalText';
 import { VEIL } from '../../../theme/veilTerminalTokens';
+import { HUB_CARD_SURFACE, HUB_DOSSIER_LABEL, HUB_META } from '../../../theme/hubPanelSurfaces';
 
 export interface ContractTermsStripProps {
   riskLabel: string;
@@ -72,7 +73,7 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   sectionLabel: {
-    color: 'rgba(198, 194, 180, 0.92)',
+    color: HUB_DOSSIER_LABEL,
     fontWeight: '700',
     marginBottom: 8,
   },
@@ -81,8 +82,7 @@ const styles = StyleSheet.create({
     maxHeight: 88,
     paddingVertical: 14,
     paddingHorizontal: 14,
-    // Match unselected Contract Board card surface (cooler than VEIL.surface2).
-    backgroundColor: 'rgba(8, 13, 13, 0.78)',
+    backgroundColor: HUB_CARD_SURFACE,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderTopColor: VEIL.line,
@@ -122,7 +122,7 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   label: {
-    color: '#9CA7A0',
+    color: HUB_META,
     fontWeight: '700',
     marginBottom: 6,
   },

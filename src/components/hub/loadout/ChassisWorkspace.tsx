@@ -17,6 +17,15 @@ import { getResourceDisplayName } from '../../../data/resourceRegistry';
 import { getStashCount } from '../../../data/resourceStashEngine';
 import type { WeaponFamilyId } from '../../../types/weapon';
 import { MISSING, MUTED, TERMINAL, TEXT_PRIMARY, TEXT_SECONDARY } from './loadoutTerminalUi';
+import { OccultNeonRail } from '../veilChrome';
+import {
+  HUB_CARD_BORDER,
+  HUB_CARD_BORDER_HOVER,
+  HUB_CARD_BORDER_SELECTED,
+  HUB_CARD_SURFACE,
+  HUB_CARD_SURFACE_HOVER,
+  HUB_SELECT_SURFACE,
+} from '../../../theme/hubPanelSurfaces';
 
 export type ChassisStatus =
   | 'EQUIPPED'
@@ -146,7 +155,7 @@ export default function ChassisWorkspace({
               ? ({ 'data-selected': selected ? 'true' : 'false' } as object)
               : null)}
           >
-            {selected ? <View style={styles.signalAccent} /> : null}
+            {selected ? <OccultNeonRail style={styles.signalAccent} /> : null}
             <HapticPressable
               onPress={() => onSelect(row.familyId)}
               accessibilityRole="button"
@@ -160,18 +169,18 @@ export default function ChassisWorkspace({
               ])}
             >
               <View style={styles.signalMain}>
-                <View style={styles.signalTopline}>
-                  <TerminalText size={7} letterSpacing={0.9} style={styles.signalMeta}>
-                    WEAPON CHASSIS
-                  </TerminalText>
-                  <TerminalText size={7} letterSpacing={0.9} style={{ color: row.statusColor, fontWeight: '700' }}>
-                    {row.status}
-                  </TerminalText>
-                </View>
-                <TerminalText size={11} letterSpacing={0.35} style={styles.signalTitle} numberOfLines={1}>
+                <TerminalText size={7} letterSpacing={0.9} style={styles.signalMeta}>
+                  WEAPON CHASSIS
+                </TerminalText>
+                <TerminalText
+                  size={11}
+                  letterSpacing={0.35}
+                  style={[styles.signalTitle, selected && styles.signalTitleSelected]}
+                  numberOfLines={1}
+                >
                   {row.name.toUpperCase()}
                 </TerminalText>
-                <TerminalText size={8.5} style={styles.signalBody} numberOfLines={1}>
+                <TerminalText size={8.5} style={styles.signalBody} numberOfLines={2}>
                   {row.description}
                 </TerminalText>
                 {row.nextSummary ? (
@@ -180,8 +189,13 @@ export default function ChassisWorkspace({
                   </TerminalText>
                 ) : null}
               </View>
-              <View style={styles.signalAside}>
-                <TerminalText size={7} letterSpacing={0.9} style={styles.signalMeta}>
+              <View style={styles.signalStatusCol}>
+                <TerminalText size={7} letterSpacing={0.9} style={{ color: row.statusColor, fontWeight: '700' }}>
+                  {row.status}
+                </TerminalText>
+              </View>
+              <View style={styles.signalClassCol}>
+                <TerminalText size={8} letterSpacing={0.7} style={styles.signalTier}>
                   {`TIER ${['I', 'II', 'III'][row.tier - 1] ?? row.tier}`}
                 </TerminalText>
                 <TerminalText size={7.5} letterSpacing={0.5} style={styles.signalRole} numberOfLines={2}>
@@ -240,53 +254,78 @@ export function resolveChassisDossier(account: ReturnType<typeof usePlayerAccoun
 
 const styles = StyleSheet.create({
   feed: { flex: 1, minHeight: 0 },
-  feedContent: { paddingBottom: 16 },
+  feedContent: { paddingHorizontal: 0, paddingTop: 4, paddingBottom: 16 },
   signal: {
     position: 'relative',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(137, 170, 163, 0.1)',
+    marginBottom: 10,
+    overflow: 'hidden',
   },
   signalAccent: {
-    position: 'absolute',
-    top: 12,
-    bottom: 12,
-    left: 0,
-    width: 2,
-    backgroundColor: TERMINAL,
-    zIndex: 1,
+    top: 14,
+    bottom: 14,
   },
   signalSelect: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 24,
-    minHeight: 94,
+    position: 'relative',
+    zIndex: 1,
+    width: '100%',
+    minHeight: 90,
     paddingTop: 14,
     paddingBottom: 14,
-    paddingLeft: 28,
-    paddingRight: 24,
-    ...Platform.select({ web: { cursor: 'pointer' } as object, default: {} }),
+    paddingLeft: 18,
+    paddingRight: 18,
+    gap: 24,
+    backgroundColor: HUB_CARD_SURFACE,
+    borderWidth: 1,
+    borderColor: HUB_CARD_BORDER,
+    ...Platform.select({
+      web: {
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0, 1fr) 140px 180px',
+        alignItems: 'center',
+        cursor: 'pointer',
+        outlineStyle: 'none',
+        transitionProperty: 'background-color, border-color',
+        transitionDuration: '120ms',
+        transitionTimingFunction: 'ease-out',
+      } as object,
+      default: {
+        flexDirection: 'row',
+        alignItems: 'center',
+      },
+    }),
   },
   signalSelectCompact: {
     minHeight: 82,
-    paddingTop: 11,
-    paddingBottom: 11,
+    paddingTop: 12,
+    paddingBottom: 12,
   },
   signalSelectHover: {
-    backgroundColor: 'rgba(105, 200, 173, 0.035)',
+    backgroundColor: HUB_CARD_SURFACE_HOVER,
+    borderColor: HUB_CARD_BORDER_HOVER,
   },
   signalSelectSelected: {
-    backgroundColor: 'rgba(105, 200, 173, 0.06)',
+    backgroundColor: HUB_SELECT_SURFACE,
+    borderColor: HUB_CARD_BORDER_SELECTED,
   },
-  signalMain: { flex: 1, minWidth: 0 },
-  signalTopline: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
+  signalMain: { minWidth: 0, overflow: 'hidden' },
   signalMeta: { color: MUTED, fontWeight: '700' },
   signalTitle: { marginTop: 5, color: TEXT_PRIMARY, fontWeight: '700' },
+  signalTitleSelected: { color: '#F0F2EF' },
   signalBody: { marginTop: 5, color: TEXT_SECONDARY, lineHeight: 18 },
   signalNext: { marginTop: 6, color: MUTED, fontWeight: '700' },
-  signalAside: { width: 150, alignItems: 'flex-end', flexShrink: 0 },
-  signalRole: { marginTop: 6, color: MUTED, textAlign: 'right', fontWeight: '700' },
+  signalStatusCol: {
+    minWidth: 0,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    flexShrink: 0,
+  },
+  signalClassCol: {
+    minWidth: 0,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    flexShrink: 0,
+    gap: 4,
+  },
+  signalTier: { color: TEXT_PRIMARY, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  signalRole: { color: MUTED, fontWeight: '700', lineHeight: 14 },
 });

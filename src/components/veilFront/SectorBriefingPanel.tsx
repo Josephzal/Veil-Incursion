@@ -48,6 +48,25 @@ import { sectorPrimaryResourcePool } from '../../data/sectorResourceTableEngine'
 import { getResourceDefinition } from '../../data/resourceRegistry';
 import { isBreachGradeUnlockedInProfile } from '../../data/progressionProfileEngine';
 import { VEIL } from '../../theme/veilTerminalTokens';
+import {
+  HUB_CARD_BORDER,
+  HUB_CARD_BORDER_SELECTED,
+  HUB_CARD_SURFACE,
+  HUB_CTA_INVERSE_TEXT,
+  HUB_DOSSIER_FOOTER_BG,
+  HUB_DOSSIER_FOOTER_RULE,
+  HUB_DOSSIER_LABEL,
+  HUB_DOSSIER_SURFACE,
+  HUB_DOSSIER_TITLE,
+  hubDossierShellStyle,
+  HUB_META,
+  HUB_SELECT_SURFACE,
+  HUB_TEXT_PRIMARY,
+  HUB_TEXT_SECONDARY,
+  hubPrimaryActionHoverStyle,
+  hubPrimaryActionStyle,
+} from '../../theme/hubPanelSurfaces';
+import { OccultNeonRail } from '../hub/veilChrome';
 
 import CityStreets from '../../../assets/images/environment images/citystreets.png';
 import CityBuilding from '../../../assets/images/environment images/city_building.png';
@@ -55,29 +74,31 @@ import Backroads from '../../../assets/images/environment images/backroads.png';
 import Underground from '../../../assets/images/environment images/underground.png';
 import Blacksite from '../../../assets/images/environment images/blacksite.png';
 
-/** Deployment dossier rail — Contract Board VEIL surfaces (map untouched). */
+/** Deployment dossier rail — Contract Board hub surfaces (map untouched). */
 const RAIL = {
-  bg: VEIL.bgSoft,
-  textPrimary: VEIL.text,
-  textSecondary: VEIL.textSoft,
-  textMuted: VEIL.textMuted,
+  bg: HUB_DOSSIER_SURFACE,
+  textPrimary: HUB_TEXT_PRIMARY,
+  textSecondary: HUB_TEXT_SECONDARY,
+  textMuted: HUB_META,
   terminal: VEIL.mint,
   terminalBright: VEIL.mintBright,
   danger: VEIL.blood,
   incompat: VEIL.riskHigh,
-  anchor: VEIL.occult,
+  /** Active states use mint — violet reserved for the dossier edge rail. */
+  anchor: VEIL.mint,
   line: VEIL.lineFaint,
-  lineStrong: VEIL.line,
+  lineStrong: HUB_CARD_BORDER,
   lineSoft: 'rgba(27, 33, 31, 0.55)',
+  label: HUB_DOSSIER_LABEL,
 } as const;
 
 /** Base sizes chosen so desktop scaleFont(~1.35–1.65) lands near the readability targets. */
 const TYPE = {
-  label: 7.5,
+  label: 7,
   body: 8.5,
   bodyEm: 9,
   meta: 7.5,
-  title: 18,
+  title: 19,
   cta: 8,
   micro: 6.8,
 } as const;
@@ -157,9 +178,12 @@ function ActiveOperationSummary({
   return (
     <View style={[styles.activeOperation, compact && styles.activeOperationCompact]}>
       <View style={styles.activeOperationTopline}>
-        <TerminalText size={TYPE.label} letterSpacing={1} style={styles.sectionLabel}>
-          ACTIVE OPERATION
-        </TerminalText>
+        <View style={styles.sectionLabelRow}>
+          <View style={styles.sectionBoneRule} />
+          <TerminalText size={TYPE.label} letterSpacing={1.05} style={styles.sectionLabel}>
+            ACTIVE OPERATION
+          </TerminalText>
+        </View>
         <TerminalText size={TYPE.body} letterSpacing={0.6} style={styles.activeOperationPct}>
           {`${clamped}%`}
         </TerminalText>
@@ -182,7 +206,7 @@ function ActiveOperationSummary({
           percent={clamped}
           accentColor={RAIL.terminal}
           trackColor="rgba(133, 165, 158, 0.12)"
-          height={3}
+          height={2}
         />
       </View>
     </View>
@@ -279,7 +303,7 @@ function BreachGradeSelector({
 }): React.JSX.Element {
   return (
     <View>
-      <TerminalText size={TYPE.label} letterSpacing={1} style={[styles.sectionLabel, { marginBottom: 8 }]}>
+      <TerminalText size={TYPE.label} letterSpacing={1.05} style={[styles.sectionLabel, { marginBottom: 10 }]}>
         BREACH GRADE
       </TerminalText>
       <View style={styles.breachGradeOptions}>
@@ -311,7 +335,7 @@ function BreachGradeSelector({
                     ? RAIL.terminalBright
                     : unlocked
                       ? RAIL.textMuted
-                      : 'rgba(213, 223, 220, 0.35)',
+                      : 'rgba(198, 206, 202, 0.52)',
                   fontWeight: '800',
                   textAlign: 'center',
                 }}
@@ -404,7 +428,7 @@ export default function SectorBriefingPanel({
       ? 'LOCKED — MANDATE AVAILABLE'
       : 'ACCESS LOCKED';
 
-  const heroHeight = isUltraCompactHeight ? 72 : isCompactHeight ? 82 : 100;
+  const heroHeight = isUltraCompactHeight ? 72 : isCompactHeight ? 82 : 96;
   const padX = isCompactHeight ? 22 : 28;
   const contractIncompatible = sectorCompatibility === 'UNAVAILABLE' && sectorUnlocked;
 
@@ -414,15 +438,16 @@ export default function SectorBriefingPanel({
         styles.header,
         {
           paddingHorizontal: padX,
-          paddingTop: isCompactHeight ? 16 : 20,
+          paddingTop: isCompactHeight ? 16 : 22,
           paddingBottom: isCompactHeight ? 12 : 16,
         },
       ]}
       >
-        <TerminalText size={isCompactHeight ? 16.5 : TYPE.title} letterSpacing={0.7} style={styles.title}>
+        <OccultNeonRail style={styles.dossierAccent} />
+        <TerminalText size={isCompactHeight ? 16.5 : TYPE.title} letterSpacing={0.1} style={styles.title}>
           {sector.displayName.replace(/^The\s+/i, '').toUpperCase()}
         </TerminalText>
-        <TerminalText size={TYPE.meta} letterSpacing={0.9} style={styles.meta}>
+        <TerminalText size={TYPE.meta} letterSpacing={0.85} style={styles.meta}>
           {`${biomeVisual.label.toUpperCase()} · CLEARANCE ${clearanceRoman}`}
         </TerminalText>
       </View>
@@ -433,8 +458,8 @@ export default function SectorBriefingPanel({
           styles.bodyContent,
           {
             paddingHorizontal: padX,
-            paddingTop: isCompactHeight ? 12 : 16,
-            paddingBottom: isCompactHeight ? 12 : 16,
+            paddingTop: isCompactHeight ? 8 : 10,
+            paddingBottom: isCompactHeight ? 14 : 18,
           },
         ]}
         showsVerticalScrollIndicator
@@ -454,7 +479,7 @@ export default function SectorBriefingPanel({
               Platform.OS === 'web'
                 ? ({
                     objectPosition: SECTOR_THUMB_POSITION[sector.veilBiome],
-                    filter: 'saturate(0.82) contrast(1.08) brightness(0.76)',
+                    filter: 'saturate(0.88) contrast(1.14) brightness(0.92)',
                   } as ImageStyle)
                 : null,
             ]}
@@ -463,14 +488,17 @@ export default function SectorBriefingPanel({
           <View style={styles.heroOverlay} pointerEvents="none" />
         </View>
 
-        <TerminalText size={TYPE.body} numberOfLines={2} style={styles.description}>
+        <TerminalText size={TYPE.body} lineHeight={14} numberOfLines={3} style={styles.description}>
           {summary}
         </TerminalText>
 
         <View style={[styles.section, isCompactHeight && styles.sectionCompact]}>
-          <TerminalText size={TYPE.label} letterSpacing={1} style={styles.sectionLabel}>
-            CONDITIONS
-          </TerminalText>
+          <View style={styles.sectionLabelRow}>
+            <View style={styles.sectionBoneRule} />
+            <TerminalText size={TYPE.label} letterSpacing={1.05} style={styles.sectionLabel}>
+              CONDITIONS
+            </TerminalText>
+          </View>
           <View style={styles.conditions}>
             <SectorConditionRow
               label="THREAT"
@@ -502,9 +530,12 @@ export default function SectorBriefingPanel({
 
         {recoverables.length > 0 ? (
           <View style={[styles.section, isCompactHeight && styles.sectionCompact]}>
-            <TerminalText size={TYPE.label} letterSpacing={1} style={styles.sectionLabel}>
-              LIKELY RECOVERABLES
-            </TerminalText>
+            <View style={styles.sectionLabelRow}>
+              <View style={styles.sectionBoneRule} />
+              <TerminalText size={TYPE.label} letterSpacing={1.05} style={styles.sectionLabel}>
+                LIKELY RECOVERABLES
+              </TerminalText>
+            </View>
             <TerminalText size={TYPE.body} letterSpacing={0.5} style={styles.recoverableItem}>
               {recoverables.join(' · ')}
             </TerminalText>
@@ -523,11 +554,12 @@ export default function SectorBriefingPanel({
           styles.decision,
           {
             paddingHorizontal: padX,
-            paddingTop: isCompactHeight ? 12 : 14,
-            paddingBottom: isCompactHeight ? 14 : 18,
+            paddingTop: isCompactHeight ? 10 : 12,
+            paddingBottom: isCompactHeight ? 12 : 14,
           },
         ]}
       >
+        <View style={styles.decisionRule} />
         {!sectorUnlocked ? (
           <View style={styles.lockNotice}>
             <TerminalText size={TYPE.label} letterSpacing={0.7} style={styles.lockNoticeTitle}>
@@ -574,24 +606,30 @@ export default function SectorBriefingPanel({
           disabled={breachDisabled}
           accessibilityRole="button"
           accessibilityState={{ disabled: breachDisabled }}
-          style={({ pressed }) => ([
+          style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ([
             styles.initiateBreach,
             isCompactHeight && styles.initiateBreachCompact,
             breachDisabled && styles.initiateBreachDisabled,
-            pressed && !breachDisabled ? { transform: [{ translateY: 1 }] } : null,
+            !breachDisabled && (hovered || pressed) ? styles.initiateBreachHover : null,
           ])}
         >
-          <TerminalText
-            size={TYPE.cta}
-            letterSpacing={1.2}
-            style={{
-              color: breachDisabled ? 'rgba(213, 223, 220, 0.38)' : '#06110e',
-              fontWeight: '800',
-              textAlign: 'center',
-            }}
-          >
-            {actionLabel}
-          </TerminalText>
+          {({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => (
+            <TerminalText
+              size={TYPE.cta}
+              letterSpacing={1.2}
+              style={{
+                color: breachDisabled
+                  ? 'rgba(213, 223, 220, 0.38)'
+                  : (hovered || pressed)
+                    ? HUB_CTA_INVERSE_TEXT
+                    : RAIL.terminalBright,
+                fontWeight: '800',
+                textAlign: 'center',
+              }}
+            >
+              {actionLabel}
+            </TerminalText>
+          )}
         </HapticPressable>
       </View>
     </View>
@@ -600,50 +638,44 @@ export default function SectorBriefingPanel({
 
 const styles = StyleSheet.create({
   dossier: {
-    flex: 1,
-    minHeight: 0,
-    minWidth: 0,
-    overflow: 'hidden',
-    backgroundColor: RAIL.bg,
-    borderLeftWidth: 1,
-    borderLeftColor: RAIL.lineStrong,
-    ...Platform.select({
-      web: {
-        backgroundImage: `linear-gradient(180deg, rgba(14, 27, 25, 0.2) 0%, rgba(3, 7, 8, 0) 26%), ${RAIL.bg}`,
-        boxShadow: '-18px 0 42px rgba(0, 0, 0, 0.22), inset 1px 0 rgba(255, 255, 255, 0.015)',
-      } as object,
-      default: {},
-    }),
+    ...hubDossierShellStyle(),
   },
   header: {
+    position: 'relative',
     flexShrink: 0,
-    borderBottomWidth: 1,
-    borderBottomColor: RAIL.line,
+    zIndex: 1,
+    overflow: 'visible',
+  },
+  dossierAccent: {
+    top: 18,
+    bottom: 1,
   },
   title: {
-    color: RAIL.textPrimary,
-    fontWeight: '600',
-    lineHeight: 32,
+    color: HUB_DOSSIER_TITLE,
+    fontWeight: '700',
+    lineHeight: 23,
   },
   meta: {
-    marginTop: 4,
-    color: RAIL.terminal,
+    marginTop: 6,
+    color: HUB_META,
     fontWeight: '700',
   },
   body: {
     flex: 1,
     minHeight: 0,
+    zIndex: 1,
   },
   bodyContent: {
-    flexGrow: 1,
+    flexGrow: 0,
+    justifyContent: 'flex-start',
   },
   hero: {
     position: 'relative',
     width: '100%',
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: RAIL.line,
-    backgroundColor: '#050a0a',
+    borderColor: HUB_CARD_BORDER,
+    backgroundColor: HUB_CARD_SURFACE,
   },
   heroImage: {
     width: '100%',
@@ -651,46 +683,58 @@ const styles = StyleSheet.create({
   },
   heroOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(2, 6, 6, 0.28)',
+    backgroundColor: 'rgba(2, 6, 6, 0.12)',
   },
   description: {
     marginTop: 12,
+    marginBottom: 2,
     maxWidth: 360,
-    color: RAIL.textSecondary,
-    lineHeight: 21,
+    color: HUB_TEXT_PRIMARY,
   },
   section: {
-    marginTop: 16,
+    marginTop: 20,
     paddingTop: 14,
-    borderTopWidth: 1,
-    borderTopColor: RAIL.line,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: VEIL.line,
   },
   sectionCompact: {
-    marginTop: 12,
-    paddingTop: 10,
+    marginTop: 16,
+    paddingTop: 12,
+  },
+  sectionLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 2,
+  },
+  sectionBoneRule: {
+    width: 2,
+    height: 12,
+    backgroundColor: VEIL.bone,
+    opacity: 0.55,
   },
   sectionLabel: {
-    color: RAIL.textMuted,
+    color: HUB_DOSSIER_LABEL,
     fontWeight: '700',
   },
   conditions: {
-    marginTop: 8,
+    marginTop: 10,
   },
   conditionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: 30,
+    minHeight: 28,
     gap: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: RAIL.lineSoft,
-    paddingVertical: 5,
+    paddingVertical: 4,
   },
   conditionRowCompact: {
-    minHeight: 26,
+    minHeight: 24,
   },
   conditionLabel: {
-    color: RAIL.textMuted,
+    color: HUB_META,
     fontWeight: '700',
   },
   conditionValue: {
@@ -698,16 +742,15 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   activeOperation: {
-    marginTop: 16,
-    paddingVertical: 13,
+    marginTop: 20,
+    paddingVertical: 12,
     paddingHorizontal: 14,
-    paddingLeft: 16,
-    backgroundColor: 'rgba(105, 200, 173, 0.05)',
-    borderLeftWidth: 2,
-    borderLeftColor: 'rgba(105, 200, 173, 0.58)',
+    backgroundColor: HUB_CARD_SURFACE,
+    borderWidth: 1,
+    borderColor: HUB_CARD_BORDER,
   },
   activeOperationCompact: {
-    marginTop: 12,
+    marginTop: 16,
     paddingVertical: 10,
   },
   activeOperationTopline: {
@@ -721,37 +764,39 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   activeOperationTitle: {
-    marginTop: 7,
-    color: RAIL.textPrimary,
+    marginTop: 8,
+    color: VEIL.text,
     fontWeight: '700',
   },
   activeOperationObjective: {
-    marginTop: 3,
-    color: RAIL.textSecondary,
-    lineHeight: 18,
+    marginTop: 4,
+    color: HUB_TEXT_PRIMARY,
+    lineHeight: 14,
   },
   activeOperationTrack: {
     marginTop: 10,
   },
   recoverableItem: {
-    marginTop: 8,
-    color: RAIL.textSecondary,
+    marginTop: 10,
+    color: HUB_TEXT_PRIMARY,
     fontWeight: '600',
+    lineHeight: 14,
   },
   deploymentContract: {
-    marginTop: 16,
+    marginTop: 20,
     paddingVertical: 12,
     paddingHorizontal: 14,
-    backgroundColor: 'rgba(126, 151, 160, 0.04)',
-    borderLeftWidth: 2,
-    borderLeftColor: 'rgba(126, 151, 160, 0.32)',
+    backgroundColor: HUB_CARD_SURFACE,
+    borderWidth: 1,
+    borderColor: HUB_CARD_BORDER,
   },
   deploymentContractCompatible: {
-    borderLeftColor: 'rgba(105, 200, 173, 0.5)',
+    backgroundColor: HUB_SELECT_SURFACE,
+    borderColor: HUB_CARD_BORDER_SELECTED,
   },
   deploymentContractIncompatible: {
-    backgroundColor: 'rgba(201, 98, 98, 0.04)',
-    borderLeftColor: 'rgba(201, 98, 98, 0.58)',
+    backgroundColor: 'rgba(163, 92, 102, 0.06)',
+    borderColor: 'rgba(163, 92, 102, 0.4)',
   },
   deploymentTopline: {
     flexDirection: 'row',
@@ -760,7 +805,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   deploymentStatus: {
-    color: '#8fa39f',
+    color: HUB_META,
     fontWeight: '800',
   },
   deploymentStatusCompatible: {
@@ -771,52 +816,60 @@ const styles = StyleSheet.create({
   },
   deploymentIdentity: {
     marginTop: 8,
-    color: RAIL.textPrimary,
+    color: VEIL.text,
     fontWeight: '700',
-    lineHeight: 19,
+    lineHeight: 14,
   },
   deploymentObjective: {
     marginTop: 4,
-    color: RAIL.textSecondary,
-    lineHeight: 18,
+    color: HUB_TEXT_PRIMARY,
+    lineHeight: 14,
   },
   deploymentPayout: {
     marginTop: 6,
-    color: '#aebdb9',
+    color: HUB_META,
     fontVariant: ['tabular-nums'],
   },
   decision: {
+    position: 'relative',
     flexShrink: 0,
-    borderTopWidth: 1,
-    borderTopColor: RAIL.lineStrong,
-    backgroundColor: 'rgba(3, 7, 8, 0.96)',
+    zIndex: 2,
+    backgroundColor: HUB_DOSSIER_FOOTER_BG,
+  },
+  decisionRule: {
+    position: 'absolute',
+    top: 0,
+    left: 16,
+    right: 16,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: HUB_DOSSIER_FOOTER_RULE,
   },
   quietConsequence: {
-    marginBottom: 12,
+    marginBottom: 10,
     color: RAIL.textMuted,
     fontWeight: '700',
   },
   quietConsequenceWarn: {
-    marginBottom: 12,
+    marginBottom: 10,
     color: RAIL.incompat,
     fontWeight: '700',
   },
   lockNotice: {
-    marginBottom: 12,
+    marginBottom: 10,
     paddingVertical: 10,
     paddingHorizontal: 12,
-    backgroundColor: 'rgba(201, 98, 98, 0.055)',
+    backgroundColor: 'rgba(163, 92, 102, 0.055)',
     borderLeftWidth: 2,
-    borderLeftColor: 'rgba(201, 98, 98, 0.6)',
+    borderLeftColor: 'rgba(163, 92, 102, 0.6)',
   },
   lockNoticeTitle: {
-    color: '#d59a95',
+    color: '#B8898F',
     fontWeight: '800',
   },
   lockNoticeDetail: {
     marginTop: 4,
     color: RAIL.textMuted,
-    lineHeight: 18,
+    lineHeight: 14,
   },
   breachGradeOptions: {
     flexDirection: 'row',
@@ -824,23 +877,25 @@ const styles = StyleSheet.create({
   },
   breachGradeOption: {
     flex: 1,
-    minHeight: 40,
+    minHeight: 38,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(110, 145, 137, 0.035)',
+    backgroundColor: VEIL.surface3,
     borderWidth: 1,
-    borderColor: RAIL.line,
+    borderColor: HUB_CARD_BORDER,
     ...Platform.select({
       web: { cursor: 'pointer', outlineStyle: 'none' } as object,
       default: {},
     }),
   },
   breachGradeOptionSelected: {
-    backgroundColor: 'rgba(105, 200, 173, 0.09)',
-    borderColor: 'rgba(105, 200, 173, 0.62)',
+    backgroundColor: HUB_SELECT_SURFACE,
+    borderColor: HUB_CARD_BORDER_SELECTED,
   },
   breachGradeOptionDisabled: {
-    opacity: 0.35,
+    opacity: 0.55,
+    backgroundColor: 'rgba(185, 181, 167, 0.03)',
+    borderColor: 'rgba(185, 181, 167, 0.16)',
     ...Platform.select({
       web: { cursor: 'not-allowed' } as object,
       default: {},
@@ -848,32 +903,33 @@ const styles = StyleSheet.create({
   },
   initiateBreach: {
     width: '100%',
-    minHeight: 58,
+    minHeight: 52,
+    height: 52,
     marginTop: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: RAIL.terminal,
-    borderWidth: 1,
-    borderColor: RAIL.terminalBright,
+    ...hubPrimaryActionStyle(),
     ...Platform.select({
       web: {
         cursor: 'pointer',
-        boxShadow: '0 0 20px rgba(105, 200, 173, 0.11), inset 0 1px rgba(255, 255, 255, 0.18)',
         outlineStyle: 'none',
       } as object,
       default: {},
     }),
   },
+  initiateBreachHover: {
+    ...hubPrimaryActionHoverStyle(),
+  },
   initiateBreachCompact: {
-    minHeight: 52,
+    minHeight: 50,
+    height: 50,
   },
   initiateBreachDisabled: {
-    backgroundColor: 'rgba(116, 139, 134, 0.08)',
-    borderColor: 'rgba(116, 139, 134, 0.18)',
+    backgroundColor: 'rgba(185, 181, 167, 0.03)',
+    borderColor: 'rgba(185, 181, 167, 0.16)',
     ...Platform.select({
       web: {
         cursor: 'not-allowed',
-        boxShadow: 'none',
       } as object,
       default: {},
     }),

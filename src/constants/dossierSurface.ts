@@ -1,14 +1,22 @@
 import type { ViewStyle } from 'react-native';
 import { VEIL } from '../theme/veilTerminalTokens';
+import {
+  HUB_CARD_SURFACE,
+  HUB_CARD_SURFACE_HOVER,
+  HUB_DOSSIER_BORDER,
+  HUB_DOSSIER_SURFACE,
+  HUB_SELECT_SURFACE,
+  hubPrimaryActionStyle,
+} from '../theme/hubPanelSurfaces';
 
 /**
- * Dossier / hub surface chrome — aliases Contract Board VEIL tokens.
- * Prefer importing VEIL directly for new work; these keep existing call sites stable.
+ * Dossier / hub surface chrome — Contract Board–aligned translucent surfaces.
+ * Prefer `hubPanelSurfaces` for new work; these aliases keep older call sites stable.
  */
 
-/** Dossier card chrome — matches Contract Board raised surface. */
-export const DOSSIER_BG = VEIL.surfaceRaised;
-export const DOSSIER_BORDER = VEIL.line;
+/** Dossier card chrome — matches Contract Board dossier panel. */
+export const DOSSIER_BG = HUB_DOSSIER_SURFACE;
+export const DOSSIER_BORDER = HUB_DOSSIER_BORDER;
 
 /** Opaque surface for foreground UI — blocks scanline texture bleed-through. */
 export const DOSSIER_FOREGROUND = VEIL.surface2;
@@ -16,17 +24,17 @@ export const DOSSIER_FOREGROUND = VEIL.surface2;
 /** Unfilled meter track — visible against dossier background. */
 export const DOSSIER_METER_TRACK = VEIL.surface1;
 
-/** CTA fill on dossier surfaces — lighter than background so buttons read clearly. */
+/** CTA fill on dossier surfaces — outline rest state (board primary). */
 export const DOSSIER_CTA_BG = VEIL.surface3;
 
-/** Item row bars on dossier panels — distinct from textured shell background. */
-export const DOSSIER_ROW_BG = VEIL.surface3;
+/** Item row bars on dossier panels — selected cool mint fill. */
+export const DOSSIER_ROW_BG = HUB_SELECT_SURFACE;
 
-/** Near-black dossier card fill — use instead of blue slate tints. */
-export const CARD_BLACK = VEIL.bgSoft;
+/** Near-black dossier card fill — board card surface. */
+export const CARD_BLACK = HUB_CARD_SURFACE;
 
 /** Slightly brighter charcoal for card hover/press. */
-export const CARD_BLACK_HOVER = VEIL.surface3;
+export const CARD_BLACK_HOVER = HUB_CARD_SURFACE_HOVER;
 
 /**
  * Live / active / focus accent — mint reserved for system activity (Contract Board rule).
@@ -58,11 +66,10 @@ export function dossierForegroundSurface(): ViewStyle {
   return { backgroundColor: DOSSIER_FOREGROUND };
 }
 
-/** CTA on dossier surfaces — solid fill, accent border (no semi-transparent tint). */
+/** CTA on dossier surfaces — board outline primary (no semi-transparent tint). */
 export function dossierOpaqueCtaStyle(accentColor: string): ViewStyle {
   return {
-    backgroundColor: DOSSIER_CTA_BG,
+    ...hubPrimaryActionStyle(),
     borderColor: accentColor,
-    borderWidth: 1,
   };
 }

@@ -36,6 +36,7 @@ import {
 } from '../../utils/sectorInfluenceVisual';
 
 import VeilFrontMapBase from '../../../assets/images/environment images/veil-front-map-base.png';
+import { VEIL } from '../../theme/veilTerminalTokens';
 
 const VB_W = VEIL_FRONT_MAP_VIEWBOX.width;
 const VB_H = VEIL_FRONT_MAP_VIEWBOX.height;
@@ -154,26 +155,13 @@ export default function VeilFrontMap({
 
   const renderSectorLabel = (sector: VeilFrontMapSectorDef) => {
     const unlocked = isUnlocked(sector.id);
-    const nameFill = unlocked ? 'rgba(220, 225, 220, 0.78)' : 'rgba(210, 215, 210, 0.7)';
-    if (unlocked) {
-      return (
-        <G key={`label-${sector.id}`}>
-          <SvgText
-            x={sector.label.x}
-            y={sector.label.y}
-            fill={nameFill}
-            fontSize={activeSectorId === sector.id ? 16 : 15}
-            fontFamily="monospace"
-            fontWeight="700"
-            letterSpacing={0.9}
-            textAnchor="middle"
-          >
-            {sector.name}
-          </SvgText>
-        </G>
-      );
-    }
-
+    const selected = activeSectorId === sector.id;
+    const fontSize = selected ? 16 : 15;
+    const nameFill = selected
+      ? VEIL.text
+      : unlocked
+        ? 'rgba(222, 227, 223, 0.9)'
+        : 'rgba(214, 220, 216, 0.82)';
     const statusText = sectorLockLabels?.[sector.id] ?? 'LOCKED';
     return (
       <G key={`label-${sector.id}`}>
@@ -181,7 +169,7 @@ export default function VeilFrontMap({
           x={sector.label.x}
           y={sector.label.y}
           fill={nameFill}
-          fontSize={activeSectorId === sector.id ? 16 : 15}
+          fontSize={fontSize}
           fontFamily="monospace"
           fontWeight="700"
           letterSpacing={0.9}
@@ -189,18 +177,20 @@ export default function VeilFrontMap({
         >
           {sector.name}
         </SvgText>
-        <SvgText
-          x={sector.statusLabel.x}
-          y={sector.statusLabel.y}
-          fill="rgba(170, 180, 185, 0.55)"
-          fontSize={12}
-          fontFamily="monospace"
-          fontWeight="700"
-          letterSpacing={1}
-          textAnchor="middle"
-        >
-          {statusText}
-        </SvgText>
+        {!unlocked ? (
+          <SvgText
+            x={sector.statusLabel.x}
+            y={sector.statusLabel.y}
+            fill="rgba(170, 180, 185, 0.64)"
+            fontSize={12}
+            fontFamily="monospace"
+            fontWeight="700"
+            letterSpacing={1}
+            textAnchor="middle"
+          >
+            {statusText}
+          </SvgText>
+        ) : null}
       </G>
     );
   };

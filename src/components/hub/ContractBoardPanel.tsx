@@ -10,7 +10,6 @@ import {
 } from 'react-native';
 import HapticPressable from '../HapticPressable';
 import TerminalText from '../TerminalText';
-import VeilTerminalEffects from '../atmosphere/VeilTerminalEffects';
 import {
   ContractLoggedLine,
   CONTRACT_LOGGED_MESSAGE,
@@ -22,7 +21,6 @@ import {
 } from './ContractAcceptedStamp';
 import {
   CabalMark,
-  ContainmentFragment,
   LiveStatus,
   OccultNeonRail,
   RegistrationBrackets,
@@ -36,6 +34,7 @@ import {
 } from './dossier';
 import BrokerPriorityBulletin from './BrokerPriorityBulletin';
 import ContractGroupHeader from './ContractGroupHeader';
+import HubPageHeader from './HubPageHeader';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { pulseHubButton } from '../../utils/hubButtonHaptics';
 import { useWorldState } from '../../context/WorldStateContext';
@@ -67,23 +66,36 @@ import {
   VEIL_CHANNEL_CODES,
   VEIL_MINT_TONE,
 } from '../../theme/veilTerminalTokens';
+import {
+  HUB_CARD_BORDER,
+  HUB_CARD_BORDER_HOVER,
+  HUB_CARD_BORDER_SELECTED,
+  HUB_CARD_SURFACE,
+  HUB_CARD_SURFACE_HOVER,
+  HUB_CTA_INVERSE_TEXT,
+  HUB_DOSSIER_EDGE_PAD,
+  HUB_DOSSIER_FOOTER_BG,
+  HUB_DOSSIER_FOOTER_RULE,
+  HUB_DOSSIER_LABEL,
+  HUB_META,
+  HUB_SELECT_SURFACE,
+  HUB_TEXT_PRIMARY,
+  HUB_TEXT_SECONDARY,
+  hubDossierColumnStyle,
+  hubDossierShellStyle,
+} from '../../theme/hubPanelSurfaces';
 
 const SPONSOR_ORDER: CabalEmployerId[] = ['TERRAN_GRID', 'LEGION', 'SOLARIS'];
 const DEFAULT_SPONSOR_FILTER: CabalEmployerId = 'TERRAN_GRID';
-/** Secondary functional text — lifted slightly for readability on dark cards. */
-const META = '#9CA7A0';
-const TEXT_PRIMARY = '#C4CBC6';
-const TEXT_SECONDARY = '#9CA7A0';
-/** Restrained terminal card / dossier surfaces. */
-const CARD_SURFACE = 'rgba(8, 13, 13, 0.78)';
-const CARD_BORDER = 'rgba(105, 190, 165, 0.16)';
-const CARD_BORDER_HOVER = 'rgba(105, 190, 165, 0.28)';
-const CARD_BORDER_SELECTED = 'rgba(105, 190, 165, 0.42)';
-const CARD_SURFACE_HOVER = 'rgba(12, 18, 18, 0.88)';
-/** Shared selected fill for contracts + cabal channels (cool mint, not brown). */
-const SELECT_SURFACE = 'rgba(12, 28, 24, 0.88)';
-const DOSSIER_SURFACE = 'rgba(8, 15, 18, 0.88)';
-const DOSSIER_BORDER = 'rgba(105, 190, 165, 0.24)';
+const META = HUB_META;
+const TEXT_PRIMARY = HUB_TEXT_PRIMARY;
+const TEXT_SECONDARY = HUB_TEXT_SECONDARY;
+const CARD_SURFACE = HUB_CARD_SURFACE;
+const CARD_BORDER = HUB_CARD_BORDER;
+const CARD_BORDER_HOVER = HUB_CARD_BORDER_HOVER;
+const CARD_BORDER_SELECTED = HUB_CARD_BORDER_SELECTED;
+const CARD_SURFACE_HOVER = HUB_CARD_SURFACE_HOVER;
+const SELECT_SURFACE = HUB_SELECT_SURFACE;
 /** Fixed dossier title band (2 lines @ 23lh) so status / body anchors stay stable. */
 const DOSSIER_TITLE_LINE_HEIGHT = 23;
 const DOSSIER_TITLE_LINES = 2;
@@ -607,32 +619,13 @@ export default function ContractBoardPanel(): React.JSX.Element {
       style={[styles.board, narrowLayout && styles.boardNarrow]}
       {...(Platform.OS === 'web' ? ({ id: 'contract-board-root', nativeID: 'contract-board-root' } as object) : null)}
     >
-      <VeilTerminalEffects intensity="subtle" scanlineOpacity={0.03} />
-      <View
-        pointerEvents="none"
-        accessible={false}
-        {...(Platform.OS === 'web' ? ({ 'aria-hidden': true } as object) : null)}
-        style={styles.boardWash}
-      />
-
       <View style={styles.contractBrowser}>
-        <View style={[styles.contractBoardHeader, compactHeight && styles.contractBoardHeaderCompact]}>
-          <ContainmentFragment variant="ring" align="right" size={96} opacity={0.028} color={VEIL.bone} />
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <View style={styles.headerEyebrowRow}>
-              <View style={styles.headerBoneMark} />
-              <TerminalText size={6.5} letterSpacing={1.05} style={styles.contractBoardHeaderEyebrow}>
-                BROKER NETWORK // CB-01
-              </TerminalText>
-            </View>
-            <TerminalText size={22} letterSpacing={0.15} style={styles.contractBoardHeaderTitle}>
-              CONTRACT BOARD
-            </TerminalText>
-            <TerminalText size={7} letterSpacing={1} style={styles.contractBoardHeaderBreadcrumb}>
-              AVAILABLE MANDATES
-            </TerminalText>
-          </View>
-        </View>
+        <HubPageHeader
+          eyebrow="BROKER NETWORK // CB-01"
+          title="CONTRACT BOARD"
+          subtitle="AVAILABLE MANDATES"
+          compact={compactHeight}
+        />
 
         <View
           style={[styles.sponsorChannels, compactHeight && styles.sponsorChannelsCompact]}
@@ -813,9 +806,11 @@ export default function ContractBoardPanel(): React.JSX.Element {
         </View>
       </View>
 
+      <View style={styles.dossierColumn}>
+      <View style={styles.contractDossier}>
       <Animated.View
         style={[
-          styles.contractDossier,
+          styles.dossierFill,
           { opacity: dossierLock },
         ]}
       >
@@ -1156,6 +1151,8 @@ export default function ContractBoardPanel(): React.JSX.Element {
           )}
         </View>
       </Animated.View>
+      </View>
+      </View>
 
     </View>
   );
@@ -1168,16 +1165,13 @@ const styles = StyleSheet.create({
     minHeight: 0,
     maxWidth: '100%',
     flexDirection: 'row',
+    alignItems: 'stretch',
     overflow: 'hidden',
-    backgroundColor: VEIL.bg,
+    backgroundColor: '#000000',
     position: 'relative',
     margin: 0,
     ...Platform.select({
       web: {
-        display: 'grid',
-        // ~68/32 at wide desktop; dossier floors at 360px for usable wrapping.
-        gridTemplateColumns: 'minmax(0, 2.1fr) minmax(360px, 1fr)',
-        columnGap: 14,
         width: '100%',
         maxWidth: '100%',
         height: '100%',
@@ -1185,32 +1179,26 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
-  boardWash: {
-    ...StyleSheet.absoluteFill,
-    zIndex: 0,
+  boardNarrow: {},
+  dossierColumn: {
+    ...hubDossierColumnStyle(),
+    flexGrow: 1,
+    flexShrink: 0,
+    flexBasis: 0,
+    minWidth: 360,
     ...Platform.select({
-      web: {
-        backgroundImage:
-          'radial-gradient(ellipse at 30% 12%, rgba(185, 181, 167, 0.02), transparent 40%), radial-gradient(ellipse at 78% 72%, rgba(140, 115, 159, 0.015), transparent 46%)',
-      } as object,
-      default: {},
-    }),
-  },
-  boardNarrow: {
-    ...Platform.select({
-      web: {
-        gridTemplateColumns: 'minmax(0, 2fr) minmax(340px, 1fr)',
-        columnGap: 12,
-      } as object,
-      default: {},
+      web: {},
+      default: { width: 420 + HUB_DOSSIER_EDGE_PAD, minWidth: 420 + HUB_DOSSIER_EDGE_PAD },
     }),
   },
   contractBrowser: {
-    flex: 1,
+    flexGrow: 2.1,
+    flexShrink: 1,
+    flexBasis: 0,
     minWidth: 0,
     minHeight: 0,
     overflow: 'hidden',
-    backgroundColor: VEIL.bgSoft,
+    backgroundColor: '#000000',
     zIndex: 1,
     // Top-pack: header → tabs → reputation+broker → feed (only feed grows).
     ...Platform.select({
@@ -1234,16 +1222,16 @@ const styles = StyleSheet.create({
     gap: 18,
     marginHorizontal: 14,
     marginBottom: 0,
-    paddingTop: 8,
-    paddingBottom: 8,
-    paddingHorizontal: 8,
+    paddingTop: 14,
+    paddingBottom: 14,
+    paddingHorizontal: 16,
     minHeight: 0,
   },
   feedSummaryRep: {
     flex: 0.95,
     minWidth: 0,
     justifyContent: 'flex-start',
-    paddingRight: 8,
+    paddingRight: 12,
     borderRightWidth: StyleSheet.hairlineWidth,
     borderRightColor: VEIL.lineFaint,
   },
@@ -1251,52 +1239,7 @@ const styles = StyleSheet.create({
     flex: 1.35,
     minWidth: 0,
     justifyContent: 'flex-start',
-    paddingLeft: 4,
-  },
-  contractBoardHeader: {
-    position: 'relative',
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    gap: 24,
-    minHeight: 92,
-    paddingHorizontal: 22,
-    paddingTop: 16,
-    paddingBottom: 14,
-    flexShrink: 0,
-    overflow: 'hidden',
-  },
-  contractBoardHeaderCompact: {
-    minHeight: 74,
-    paddingTop: 10,
-    paddingBottom: 8,
-    paddingHorizontal: 14,
-  },
-  headerEyebrowRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
-  },
-  headerBoneMark: {
-    width: 8,
-    height: 8,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: VEIL.bone,
-    opacity: 0.45,
-  },
-  contractBoardHeaderEyebrow: {
-    color: VEIL.textDim,
-    fontWeight: '700',
-  },
-  contractBoardHeaderTitle: {
-    color: VEIL.text,
-    fontWeight: '700',
-  },
-  contractBoardHeaderBreadcrumb: {
-    marginTop: 5,
-    color: VEIL.textDim,
-    fontWeight: '700',
+    paddingLeft: 8,
   },
   sponsorChannels: {
     flexDirection: 'row',
@@ -1383,7 +1326,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
     minHeight: 0,
     overflow: 'hidden',
-    backgroundColor: VEIL.bgSoft,
+    backgroundColor: '#000000',
     // 16–20px after reputation + broker summary row.
     marginTop: 20,
     marginRight: 6,
@@ -1612,25 +1555,28 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   contractDossier: {
-    position: 'relative',
-    minWidth: 0,
-    minHeight: 0,
-    maxWidth: '100%',
-    overflow: 'hidden',
-    backgroundColor: DOSSIER_SURFACE,
-    borderWidth: 1,
-    borderColor: DOSSIER_BORDER,
-    flexShrink: 1,
-    zIndex: 2,
+    ...hubDossierShellStyle(),
     ...Platform.select({
-      web: {
-        display: 'grid',
-        gridTemplateRows: 'auto minmax(0, 1fr) auto',
-        clipPath: 'polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%)',
-      } as object,
+      web: {},
       default: {
         width: 420,
-        marginLeft: 12,
+      },
+    }),
+  },
+  dossierFill: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
+    minHeight: 0,
+    minWidth: 0,
+    ...Platform.select({
+      web: {
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+      } as object,
+      default: {
+        flex: 1,
       },
     }),
   },
@@ -1687,7 +1633,9 @@ const styles = StyleSheet.create({
   dossierBody: {
     position: 'relative',
     zIndex: 1,
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
     minHeight: 0,
   },
   dossierBodyContent: {
@@ -1731,7 +1679,7 @@ const styles = StyleSheet.create({
     opacity: 0.55,
   },
   dossierLabel: {
-    color: 'rgba(198, 194, 180, 0.92)',
+    color: HUB_DOSSIER_LABEL,
     fontWeight: '700',
   },
   dossierObjectiveSlot: {
@@ -1752,7 +1700,7 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     paddingLeft: 24,
     paddingRight: 22,
-    backgroundColor: 'rgba(6, 12, 14, 0.92)',
+    backgroundColor: HUB_DOSSIER_FOOTER_BG,
     flexShrink: 0,
   },
   dossierFooterCompact: {
@@ -1765,7 +1713,7 @@ const styles = StyleSheet.create({
     left: 16,
     right: 16,
     height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(105, 190, 165, 0.18)',
+    backgroundColor: HUB_DOSSIER_FOOTER_RULE,
   },
   actionButton: {
     width: '100%',
@@ -1800,7 +1748,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   actionPrimaryTextHover: {
-    color: '#06110e',
+    color: HUB_CTA_INVERSE_TEXT,
   },
   actionDestructive: {
     minHeight: 48,

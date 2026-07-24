@@ -1,7 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { LayoutChangeEvent, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import TerminalText from './TerminalText';
-import VeilTerminalEffects from './atmosphere/VeilTerminalEffects';
 import SectorMapPanel from './veilFront/SectorMapPanel';
 import SectorBriefingPanel from './veilFront/SectorBriefingPanel';
 import VeilFrontDeployConfirmModal from './veilFront/VeilFrontDeployConfirmModal';
@@ -28,9 +27,17 @@ import {
   formatBreachGradeLabel,
   resolveSelectedBreachGrade,
 } from '../data/breachGradeEngine';
+import {
+  HUB_DOSSIER_EDGE_PAD,
+  HUB_PAGE_HEADER_PADDING_H,
+  HUB_PAGE_HEADER_PADDING_TOP,
+  hubDossierColumnStyle,
+  hubPageEyebrowStyle,
+  hubPageTitleStyle,
+} from '../theme/hubPanelSurfaces';
 
 /** Matches prior shell bottom inset so dossier top/bottom edge padding stay equal. */
-const DOSSIER_EDGE_PAD = 12;
+const DOSSIER_EDGE_PAD = HUB_DOSSIER_EDGE_PAD;
 
 interface OperationalBriefingPanelProps {
   theme: TerminalTheme;
@@ -57,9 +64,7 @@ export default function OperationalBriefingPanel({
   const {
     isTwoColumnShell,
     actionPanelWidth,
-    scaleSpacing,
   } = useVeilFrontLayout();
-  const [mapViewportHeight, setMapViewportHeight] = useState(0);
   const [deployModalVisible, setDeployModalVisible] = useState(false);
 
   const progressionProfile = useMemo(
@@ -119,11 +124,6 @@ export default function OperationalBriefingPanel({
     onAppendLog(`>> VEIL FRONT — SECTOR SELECTED: ${sectorId.replace(/_/g, ' ')}`);
   }, [onAppendLog, setSelectedSectorId]);
 
-  const handleMapLayout = useCallback((event: LayoutChangeEvent) => {
-    const { height } = event.nativeEvent.layout;
-    setMapViewportHeight((prev) => (prev === height ? prev : height));
-  }, []);
-
   const handleRequestDeploy = useCallback(() => {
     if (runDisabled || launching || !sectorUnlocked || !gradeMeetsContract) return;
     setDeployModalVisible(true);
@@ -171,7 +171,6 @@ export default function OperationalBriefingPanel({
   ]);
 
   const breachDisabled = runDisabled || launching || !sectorUnlocked || !gradeMeetsContract;
-  const edgePad = scaleSpacing(DOSSIER_EDGE_PAD);
 
   return (
     <View style={styles.stage}>
@@ -182,7 +181,7 @@ export default function OperationalBriefingPanel({
         ]}
       >
         <View style={[styles.mapPanel, styles.mapPanelContent]}>
-          <View style={styles.mapRegion} onLayout={handleMapLayout}>
+          <View style={styles.mapRegion}>
             <View style={styles.mapLayer}>
               <SectorMapPanel
                 theme={theme}
@@ -193,18 +192,23 @@ export default function OperationalBriefingPanel({
                 sectorLockLabels={sectorLockLabels}
               />
             </View>
-            <VeilTerminalEffects viewportHeight={mapViewportHeight} intensity="subtle" />
-            <View style={[styles.mapTitle, { top: edgePad, left: edgePad }]} pointerEvents="none">
+            <View
+              style={[
+                styles.mapTitle,
+                { top: HUB_PAGE_HEADER_PADDING_TOP, left: HUB_PAGE_HEADER_PADDING_H },
+              ]}
+              pointerEvents="none"
+            >
               <TerminalText
-                size={7.5}
-                letterSpacing={0.8}
+                size={6.5}
+                letterSpacing={1.05}
                 style={styles.mapSubtitle}
               >
                 VEIL FRONT / SECTOR NETWORK
               </TerminalText>
               <TerminalText
-                size={13.5}
-                letterSpacing={0.8}
+                size={22}
+                letterSpacing={0.15}
                 style={styles.mapHeading}
               >
                 SELECT INCURSION ZONE
@@ -218,15 +222,15 @@ export default function OperationalBriefingPanel({
             styles.briefingColumn,
             isTwoColumnShell
               ? {
-                  width: actionPanelWidth + edgePad,
-                  maxWidth: actionPanelWidth + edgePad,
+                  width: actionPanelWidth + DOSSIER_EDGE_PAD,
+                  maxWidth: actionPanelWidth + DOSSIER_EDGE_PAD,
                   flexShrink: 0,
                 }
               : { flex: 1, minHeight: 0 },
             {
-              paddingTop: edgePad,
-              paddingBottom: edgePad,
-              paddingRight: edgePad,
+              paddingTop: DOSSIER_EDGE_PAD,
+              paddingBottom: DOSSIER_EDGE_PAD,
+              paddingRight: DOSSIER_EDGE_PAD,
             },
           ]}
         >
@@ -274,7 +278,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     overflow: 'hidden',
-    backgroundColor: '#010304',
+    backgroundColor: '#000000',
   },
   contentGrid: {
     flex: 1,
@@ -316,24 +320,25 @@ const styles = StyleSheet.create({
     maxWidth: '70%',
   },
   mapSubtitle: {
-    color: 'rgba(148, 163, 184, 0.75)',
-    fontWeight: '700',
+    ...hubPageEyebrowStyle(),
   },
   mapHeading: {
+    // Match HubPageHeader eyebrowRow → title gap (marginBottom: 4).
     marginTop: 4,
-    color: '#E8F0EC',
-    fontWeight: '800',
+    ...hubPageTitleStyle(),
   },
   briefingColumn: {
-    minHeight: 0,
-    minWidth: 0,
-    alignSelf: 'stretch',
+    ...hubDossierColumnStyle(),
   },
   briefingPanel: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 0,
+    flexBasis: 0,
+    height: '100%',
     minHeight: 0,
     minWidth: 0,
     overflow: 'hidden',
     alignSelf: 'stretch',
+    width: '100%',
   },
 });

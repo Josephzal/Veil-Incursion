@@ -17,6 +17,15 @@ import {
 import type { KeepsakeId } from '../../../types/expeditionKeepsake';
 import { useWorldState } from '../../../context/WorldStateContext';
 import { MUTED, TERMINAL, TEXT_PRIMARY, TEXT_SECONDARY } from './loadoutTerminalUi';
+import { OccultNeonRail } from '../veilChrome';
+import {
+  HUB_CARD_BORDER,
+  HUB_CARD_BORDER_HOVER,
+  HUB_CARD_BORDER_SELECTED,
+  HUB_CARD_SURFACE,
+  HUB_CARD_SURFACE_HOVER,
+  HUB_SELECT_SURFACE,
+} from '../../../theme/hubPanelSurfaces';
 
 interface RelicWorkspaceProps {
   selectedId: KeepsakeId | null;
@@ -78,7 +87,7 @@ export default function RelicWorkspace({
               ? ({ 'data-selected': selected ? 'true' : 'false' } as object)
               : null)}
           >
-            {selected ? <View style={styles.signalAccent} /> : null}
+            {selected ? <OccultNeonRail style={styles.signalAccent} /> : null}
             <HapticPressable
               onPress={() => onSelect(relic.id)}
               accessibilityRole="button"
@@ -92,26 +101,33 @@ export default function RelicWorkspace({
               ])}
             >
               <View style={styles.signalMain}>
-                <View style={styles.signalTopline}>
-                  <TerminalText size={7} letterSpacing={0.9} style={styles.signalMeta}>
-                    EXPEDITION RELIC
-                  </TerminalText>
-                  <TerminalText
-                    size={7}
-                    letterSpacing={0.9}
-                    style={{ color: equipped ? TERMINAL : MUTED, fontWeight: '700' }}
-                  >
-                    {equipped ? 'EQUIPPED' : 'AVAILABLE'}
-                  </TerminalText>
-                </View>
-                <TerminalText size={11} letterSpacing={0.35} style={styles.signalTitle} numberOfLines={1}>
+                <TerminalText size={7} letterSpacing={0.9} style={styles.signalMeta}>
+                  EXPEDITION RELIC
+                </TerminalText>
+                <TerminalText
+                  size={11}
+                  letterSpacing={0.35}
+                  style={[styles.signalTitle, selected && styles.signalTitleSelected]}
+                  numberOfLines={1}
+                >
                   {relic.name.toUpperCase()}
                 </TerminalText>
-                <TerminalText size={7.5} letterSpacing={0.45} style={styles.signalTags} numberOfLines={1}>
-                  {formatKeepsakeRoleLine(relic).toUpperCase()}
-                </TerminalText>
-                <TerminalText size={8.5} style={styles.signalBody} numberOfLines={1}>
+                <TerminalText size={8.5} style={styles.signalBody} numberOfLines={2}>
                   {relic.runStyle}
+                </TerminalText>
+              </View>
+              <View style={styles.signalStatusCol}>
+                <TerminalText
+                  size={7}
+                  letterSpacing={0.9}
+                  style={{ color: equipped ? TERMINAL : MUTED, fontWeight: '700' }}
+                >
+                  {equipped ? 'EQUIPPED' : 'AVAILABLE'}
+                </TerminalText>
+              </View>
+              <View style={styles.signalClassCol}>
+                <TerminalText size={7.5} letterSpacing={0.45} style={styles.signalTags} numberOfLines={2}>
+                  {formatKeepsakeRoleLine(relic).toUpperCase()}
                 </TerminalText>
               </View>
             </HapticPressable>
@@ -150,39 +166,71 @@ export function resolveRelicDossier(
 
 const styles = StyleSheet.create({
   feed: { flex: 1, minHeight: 0 },
-  feedContent: { paddingBottom: 16 },
-  empty: { paddingHorizontal: 28, paddingVertical: 28 },
+  feedContent: { paddingHorizontal: 0, paddingTop: 4, paddingBottom: 16 },
+  empty: { paddingHorizontal: 0, paddingVertical: 28 },
   emptyTitle: { color: TEXT_PRIMARY, fontWeight: '700' },
   emptyBody: { marginTop: 8, color: TEXT_SECONDARY, lineHeight: 19 },
   signal: {
     position: 'relative',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(137, 170, 163, 0.1)',
+    marginBottom: 10,
+    overflow: 'hidden',
   },
   signalAccent: {
-    position: 'absolute',
-    top: 12,
-    bottom: 12,
-    left: 0,
-    width: 2,
-    backgroundColor: TERMINAL,
-    zIndex: 1,
+    top: 14,
+    bottom: 14,
   },
   signalSelect: {
-    minHeight: 94,
+    minHeight: 90,
     paddingTop: 14,
     paddingBottom: 14,
-    paddingLeft: 28,
-    paddingRight: 24,
-    ...Platform.select({ web: { cursor: 'pointer' } as object, default: {} }),
+    paddingLeft: 18,
+    paddingRight: 18,
+    gap: 24,
+    backgroundColor: HUB_CARD_SURFACE,
+    borderWidth: 1,
+    borderColor: HUB_CARD_BORDER,
+    ...Platform.select({
+      web: {
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0, 1fr) 140px 180px',
+        alignItems: 'center',
+        cursor: 'pointer',
+        outlineStyle: 'none',
+        transitionProperty: 'background-color, border-color',
+        transitionDuration: '120ms',
+        transitionTimingFunction: 'ease-out',
+      } as object,
+      default: {
+        flexDirection: 'row',
+        alignItems: 'center',
+      },
+    }),
   },
-  signalSelectCompact: { minHeight: 82, paddingTop: 11, paddingBottom: 11 },
-  signalSelectHover: { backgroundColor: 'rgba(105, 200, 173, 0.035)' },
-  signalSelectSelected: { backgroundColor: 'rgba(105, 200, 173, 0.06)' },
-  signalMain: { minWidth: 0 },
-  signalTopline: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
+  signalSelectCompact: { minHeight: 82, paddingTop: 12, paddingBottom: 12 },
+  signalSelectHover: {
+    backgroundColor: HUB_CARD_SURFACE_HOVER,
+    borderColor: HUB_CARD_BORDER_HOVER,
+  },
+  signalSelectSelected: {
+    backgroundColor: HUB_SELECT_SURFACE,
+    borderColor: HUB_CARD_BORDER_SELECTED,
+  },
+  signalMain: { minWidth: 0, overflow: 'hidden' },
   signalMeta: { color: MUTED, fontWeight: '700' },
   signalTitle: { marginTop: 5, color: TEXT_PRIMARY, fontWeight: '700' },
-  signalTags: { marginTop: 5, color: MUTED, fontWeight: '700' },
+  signalTitleSelected: { color: '#F0F2EF' },
+  signalTags: { color: MUTED, fontWeight: '700', lineHeight: 14 },
   signalBody: { marginTop: 5, color: TEXT_SECONDARY, lineHeight: 18 },
+  signalStatusCol: {
+    minWidth: 0,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    flexShrink: 0,
+  },
+  signalClassCol: {
+    minWidth: 0,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    flexShrink: 0,
+  },
 });

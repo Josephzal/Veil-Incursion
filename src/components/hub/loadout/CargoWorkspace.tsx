@@ -6,6 +6,7 @@ import { usePlayerAccount } from '../../../context/PlayerAccountContext';
 import { calculateGridOccupancy } from '../../../data/cargoGridEngine';
 import { CARGO_GRID_CELL_COUNT } from '../../../types/cargoGrid';
 import { MUTED, TERMINAL, TEXT_SECONDARY } from './loadoutTerminalUi';
+import { HUB_CARD_BORDER } from '../../../theme/hubPanelSurfaces';
 
 export function resolveCargoOccupancy(account: ReturnType<typeof usePlayerAccount>['account']) {
   const ratio = calculateGridOccupancy(account.preRunCargo);
@@ -52,11 +53,11 @@ const styles = StyleSheet.create({
   root: { flex: 1, minHeight: 0 },
   context: {
     minHeight: 64,
-    paddingHorizontal: 26,
+    paddingHorizontal: 0,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(137, 170, 163, 0.12)',
-    backgroundColor: 'rgba(3, 8, 7, 0.72)',
+    borderBottomColor: HUB_CARD_BORDER,
+    backgroundColor: '#000000',
   },
   contextCompact: { minHeight: 54, paddingVertical: 9 },
   contextLabel: { color: MUTED, fontWeight: '700' },

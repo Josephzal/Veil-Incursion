@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Animated,
   Image,
+  type LayoutChangeEvent,
   Platform,
   ScrollView,
   StyleSheet,
@@ -10,7 +11,8 @@ import {
 } from 'react-native';
 import HapticPressable from '../HapticPressable';
 import TerminalText from '../TerminalText';
-import VeilTerminalEffects from '../atmosphere/VeilTerminalEffects';
+import HubPrimaryCta from './HubPrimaryCta';
+import HubPageHeader from './HubPageHeader';
 import KeepsakeDeploymentChoiceModal from './KeepsakeDeploymentChoiceModal';
 import ChassisWorkspace, { resolveChassisDossier } from './loadout/ChassisWorkspace';
 import RelicWorkspace, { resolveRelicDossier } from './loadout/RelicWorkspace';
@@ -27,6 +29,27 @@ import {
   TEXT_SECONDARY,
   type LoadoutCategory,
 } from './loadout/loadoutTerminalUi';
+import { OccultNeonRail, RegistrationBrackets } from './veilChrome';
+import {
+  HUB_CARD_BORDER,
+  HUB_CARD_BORDER_HOVER,
+  HUB_CARD_BORDER_SELECTED,
+  HUB_CARD_SURFACE,
+  HUB_CARD_SURFACE_HOVER,
+  HUB_DOSSIER_EDGE_PAD,
+  HUB_DOSSIER_FOOTER_BG,
+  HUB_DOSSIER_FOOTER_RULE,
+  HUB_DOSSIER_LABEL,
+  HUB_DOSSIER_TITLE,
+  HUB_SELECT_SURFACE,
+  hubDossierColumnStyle,
+  hubDossierShellStyle,
+  hubPrimaryActionHoverStyle,
+  hubPrimaryActionStyle,
+  hubPrimaryActionTextHoverStyle,
+  hubPrimaryActionTextStyle,
+} from '../../theme/hubPanelSurfaces';
+import { VEIL, VEIL_MINT_TONE } from '../../theme/veilTerminalTokens';
 import { CLASS_DEFINITIONS } from '../../data/classes';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useTerminal } from '../../context/TerminalContext';
@@ -75,9 +98,12 @@ function DossierSection({
 }): React.JSX.Element {
   return (
     <View style={[styles.dossierSection, last && styles.dossierSectionLast]}>
-      <TerminalText size={7} letterSpacing={1} style={styles.dossierLabel}>
-        {label}
-      </TerminalText>
+      <View style={styles.dossierLabelRow}>
+        <View style={styles.dossierBoneRule} />
+        <TerminalText size={7} letterSpacing={1.05} style={styles.dossierLabel}>
+          {label}
+        </TerminalText>
+      </View>
       {children}
     </View>
   );
@@ -114,10 +140,19 @@ export default function LoadoutHubPanel(): React.JSX.Element {
   const [pendingEquipId, setPendingEquipId] = useState<KeepsakeId | null>(null);
   const [modalKeepsakeId, setModalKeepsakeId] = useState<KeepsakeId | null>(null);
   const [modalDraftValue, setModalDraftValue] = useState<string | null>(null);
+  const [dossierFooterHeight, setDossierFooterHeight] = useState(96);
 
   const dossierLock = useRef(new Animated.Value(1)).current;
-  const narrow = screenWidth < 1550;
+  const narrow = screenWidth < 1500;
   const compact = screenHeight <= 800;
+  const dossierBodyPaddingBottom = dossierFooterHeight + (compact ? 24 : 28);
+
+  const handleDossierFooterLayout = (event: LayoutChangeEvent) => {
+    const next = Math.round(event.nativeEvent.layout.height);
+    if (next > 0 && next !== dossierFooterHeight) {
+      setDossierFooterHeight(next);
+    }
+  };
   const classDef = CLASS_DEFINITIONS[account.activeClass];
   const canCycleClass = account.unlockedClasses.length > 1;
   const portraitSource = useMemo(
@@ -353,11 +388,16 @@ export default function LoadoutHubPanel(): React.JSX.Element {
           ((hovered || pressed) && !selected) ? styles.manifestEntryHover : null,
         ])}
       >
-        {selected ? <View style={styles.manifestAccent} /> : null}
+        {selected ? <OccultNeonRail style={styles.manifestAccent} /> : null}
         <TerminalText size={7.5} letterSpacing={1} style={styles.manifestLabel}>
           {copy.manifestLabel}
         </TerminalText>
-        <TerminalText size={9.5} letterSpacing={0.3} style={styles.manifestPrimary} numberOfLines={1}>
+        <TerminalText
+          size={9.5}
+          letterSpacing={0.3}
+          style={[styles.manifestPrimary, selected && styles.manifestPrimarySelected]}
+          numberOfLines={1}
+        >
           {primary.toUpperCase()}
         </TerminalText>
         <TerminalText size={7.5} letterSpacing={0.55} style={styles.manifestSecondary} numberOfLines={1}>
@@ -383,17 +423,17 @@ export default function LoadoutHubPanel(): React.JSX.Element {
       return (
         <>
           <View style={styles.dossierHeader}>
-            <View style={styles.dossierHeaderAccent} />
-            <TerminalText size={7.5} letterSpacing={1.1} style={styles.dossierEyebrow}>EQUIPMENT DOSSIER</TerminalText>
+            <OccultNeonRail style={styles.dossierHeaderAccent} />
+            <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>EQUIPMENT DOSSIER</TerminalText>
             <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierCategory}>WEAPON CHASSIS</TerminalText>
-            <TerminalText size={16.5} letterSpacing={0.3} style={styles.dossierTitle}>
+            <TerminalText size={19} letterSpacing={0.1} style={styles.dossierTitle}>
               {tierState.displayName.toUpperCase()}
             </TerminalText>
             <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierStatus}>
               {`${status} · TIER ${['I', 'II', 'III'][tier - 1] ?? tier}`}
             </TerminalText>
           </View>
-          <ScrollView style={styles.dossierBody} contentContainerStyle={styles.dossierBodyContent}>
+          <ScrollView style={styles.dossierBody} contentContainerStyle={[styles.dossierBodyContent, { paddingBottom: dossierBodyPaddingBottom }]}>
             <DossierSection label="IDENTITY">
               <TerminalText size={8.5} style={styles.dossierValue}>{chassisDossier.def.description}</TerminalText>
               <TerminalText size={8} style={styles.dossierSecondary}>{chassisDossier.def.role}</TerminalText>
@@ -413,14 +453,15 @@ export default function LoadoutHubPanel(): React.JSX.Element {
               <DossierSection label={!unlocked ? 'UNLOCK REQUIREMENTS' : 'UPGRADE REQUIREMENTS'} last>
                 {costLines.map((line) => (
                   <View key={line.label} style={styles.reqRow}>
-                    <TerminalText size={8} style={styles.dossierSecondary}>{line.label.toUpperCase()}</TerminalText>
+                    <TerminalText size={8} style={[styles.dossierSecondary, styles.reqLabel]} numberOfLines={2}>
+                      {line.label.toUpperCase()}
+                    </TerminalText>
                     <TerminalText
                       size={8}
-                      style={{
-                        color: line.owned >= line.need ? TEXT_PRIMARY : MISSING,
-                        fontWeight: '700',
-                        fontVariant: ['tabular-nums'],
-                      }}
+                      style={[
+                        styles.reqCount,
+                        { color: line.owned >= line.need ? TEXT_PRIMARY : MISSING },
+                      ]}
                     >
                       {`${line.owned} / ${line.need}`}
                     </TerminalText>
@@ -438,38 +479,28 @@ export default function LoadoutHubPanel(): React.JSX.Element {
               </DossierSection>
             )}
           </ScrollView>
-          <View style={styles.dossierFooter}>
+          <View onLayout={handleDossierFooterLayout} style={styles.dossierFooter}>
+            <View style={styles.dossierFooterRule} />
             {!unlocked ? (
-              <HapticPressable
+              <HubPrimaryCta
                 disabled={!canUnlock}
                 onPress={() => appendHubLog(unlockWeaponFamilyAccount(chassisDossier.def.id).logLine)}
-                accessibilityRole="button"
                 accessibilityLabel="Unlock blueprint"
-                style={({ pressed }) => ([
-                  styles.actionButton,
-                  canUnlock ? styles.actionPrimary : styles.actionDisabled,
-                  pressed && canUnlock && { opacity: 0.9 },
-                ])}
-              >
-                <TerminalText size={8} letterSpacing={1} style={canUnlock ? styles.actionPrimaryText : styles.actionDisabledText}>
-                  {canUnlock ? '[ UNLOCK BLUEPRINT ]' : '[ UNLOCK BLOCKED ]'}
-                </TerminalText>
-              </HapticPressable>
+                label={canUnlock ? '[ UNLOCK BLUEPRINT ]' : '[ UNLOCK BLOCKED ]'}
+                minHeight={50}
+              />
             ) : (
-              <View style={{ gap: 8 }}>
+              <View style={[styles.dossierFooterActions, narrow && styles.dossierFooterActionsStack]}>
                 {!equipped ? (
-                  <HapticPressable
+                  <HubPrimaryCta
                     onPress={() => appendHubLog(equipWeaponFamily(chassisDossier.def.id).logLine)}
-                    accessibilityRole="button"
                     accessibilityLabel="Equip chassis"
-                    style={({ pressed }) => ([styles.actionButton, styles.actionPrimary, pressed && { opacity: 0.9 }])}
-                  >
-                    <TerminalText size={8} letterSpacing={1} style={styles.actionPrimaryText}>
-                      [ EQUIP CHASSIS ]
-                    </TerminalText>
-                  </HapticPressable>
+                    label="[ EQUIP CHASSIS ]"
+                    minHeight={50}
+                    style={styles.dossierFooterAction}
+                  />
                 ) : (
-                  <View style={[styles.actionButton, styles.actionDisabled]}>
+                  <View style={[styles.actionButton, styles.actionDisabled, styles.dossierFooterAction]}>
                     <TerminalText size={8} letterSpacing={1} style={styles.actionDisabledText}>
                       [ EQUIPPED ]
                     </TerminalText>
@@ -483,6 +514,7 @@ export default function LoadoutHubPanel(): React.JSX.Element {
                     accessibilityLabel="Upgrade tier"
                     style={({ pressed }) => ([
                       styles.actionButton,
+                      styles.dossierFooterAction,
                       canUpgrade ? styles.actionSecondary : styles.actionDisabled,
                       pressed && canUpgrade && { opacity: 0.9 },
                     ])}
@@ -507,17 +539,17 @@ export default function LoadoutHubPanel(): React.JSX.Element {
       return (
         <>
           <View style={styles.dossierHeader}>
-            <View style={styles.dossierHeaderAccent} />
-            <TerminalText size={7.5} letterSpacing={1.1} style={styles.dossierEyebrow}>EQUIPMENT DOSSIER</TerminalText>
+            <OccultNeonRail style={styles.dossierHeaderAccent} />
+            <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>EQUIPMENT DOSSIER</TerminalText>
             <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierCategory}>EXPEDITION RELIC</TerminalText>
-            <TerminalText size={16.5} letterSpacing={0.3} style={styles.dossierTitle}>
+            <TerminalText size={19} letterSpacing={0.1} style={styles.dossierTitle}>
               {def.name.toUpperCase()}
             </TerminalText>
             <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierStatus}>
               {equipped ? 'EQUIPPED' : 'AVAILABLE'}
             </TerminalText>
           </View>
-          <ScrollView style={styles.dossierBody} contentContainerStyle={styles.dossierBodyContent}>
+          <ScrollView style={styles.dossierBody} contentContainerStyle={[styles.dossierBodyContent, { paddingBottom: dossierBodyPaddingBottom }]}>
             <DossierSection label="RUN STYLE">
               <TerminalText size={8.5} style={styles.dossierValue}>{def.runStyle}</TerminalText>
             </DossierSection>
@@ -552,29 +584,38 @@ export default function LoadoutHubPanel(): React.JSX.Element {
               </DossierSection>
             ) : null}
           </ScrollView>
-          <View style={styles.dossierFooter}>
-            <HapticPressable
-              onPress={handleRelicEquip}
-              accessibilityRole="button"
-              accessibilityLabel={equipped ? 'Unequip relic' : 'Equip relic'}
-              style={({ pressed }) => ([styles.actionButton, styles.actionPrimary, pressed && { opacity: 0.9 }])}
-            >
-              <TerminalText size={8} letterSpacing={1} style={styles.actionPrimaryText}>
-                {equipped ? '[ UNEQUIP RELIC ]' : '[ EQUIP RELIC ]'}
-              </TerminalText>
-            </HapticPressable>
-            {equipped && def.deploymentChoice ? (
-              <HapticPressable
-                onPress={() => openDeploymentModal(def.id, false)}
-                accessibilityRole="button"
-                accessibilityLabel="Configure deployment"
-                style={({ pressed }) => ([styles.actionButton, styles.actionSecondary, { marginTop: 8 }, pressed && { opacity: 0.9 }])}
-              >
-                <TerminalText size={8} letterSpacing={1} style={styles.actionSecondaryText}>
-                  [ CONFIGURE DEPLOYMENT ]
-                </TerminalText>
-              </HapticPressable>
-            ) : null}
+          <View onLayout={handleDossierFooterLayout} style={styles.dossierFooter}>
+            <View style={styles.dossierFooterRule} />
+            <View style={[
+              styles.dossierFooterActions,
+              (!equipped || !def.deploymentChoice) && styles.dossierFooterActionsSingle,
+              narrow && equipped && def.deploymentChoice ? styles.dossierFooterActionsStack : null,
+            ]}>
+              <HubPrimaryCta
+                onPress={handleRelicEquip}
+                accessibilityLabel={equipped ? 'Unequip relic' : 'Equip relic'}
+                label={equipped ? '[ UNEQUIP RELIC ]' : '[ EQUIP RELIC ]'}
+                minHeight={50}
+                style={styles.dossierFooterAction}
+              />
+              {equipped && def.deploymentChoice ? (
+                <HapticPressable
+                  onPress={() => openDeploymentModal(def.id, false)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Configure deployment"
+                  style={({ pressed }) => ([
+                    styles.actionButton,
+                    styles.actionSecondary,
+                    styles.dossierFooterAction,
+                    pressed && { opacity: 0.9 },
+                  ])}
+                >
+                  <TerminalText size={8} letterSpacing={1} style={styles.actionSecondaryText}>
+                    [ CONFIGURE DEPLOYMENT ]
+                  </TerminalText>
+                </HapticPressable>
+              ) : null}
+            </View>
           </View>
         </>
       );
@@ -585,17 +626,17 @@ export default function LoadoutHubPanel(): React.JSX.Element {
       return (
         <>
           <View style={styles.dossierHeader}>
-            <View style={styles.dossierHeaderAccent} />
-            <TerminalText size={7.5} letterSpacing={1.1} style={styles.dossierEyebrow}>EQUIPMENT DOSSIER</TerminalText>
+            <OccultNeonRail style={styles.dossierHeaderAccent} />
+            <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>EQUIPMENT DOSSIER</TerminalText>
             <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierCategory}>ABILITY RECORD</TerminalText>
-            <TerminalText size={16.5} letterSpacing={0.3} style={styles.dossierTitle}>
+            <TerminalText size={19} letterSpacing={0.1} style={styles.dossierTitle}>
               {deckInspect.title.toUpperCase()}
             </TerminalText>
             <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierStatus}>
               {deckInspect.status}
             </TerminalText>
           </View>
-          <ScrollView style={styles.dossierBody} contentContainerStyle={styles.dossierBodyContent}>
+          <ScrollView style={styles.dossierBody} contentContainerStyle={[styles.dossierBodyContent, { paddingBottom: dossierBodyPaddingBottom }]}>
             <DossierSection label="CLASS">
               <TerminalText size={8.5} style={styles.dossierValue}>{deckInspect.typeLine}</TerminalText>
             </DossierSection>
@@ -614,40 +655,55 @@ export default function LoadoutHubPanel(): React.JSX.Element {
               <TerminalText size={8.5} style={styles.dossierValue}>{deckInspect.slotLine}</TerminalText>
             </DossierSection>
           </ScrollView>
-          <View style={styles.dossierFooter}>
-            {deckInspect.actions.map((action) => (
-              <HapticPressable
-                key={action.label}
-                disabled={action.disabled || !action.onPress}
-                onPress={action.onPress}
-                accessibilityRole="button"
-                accessibilityLabel={action.label}
-                style={({ pressed }) => ([
-                  styles.actionButton,
-                  action.disabled || !action.onPress
-                    ? styles.actionDisabled
-                    : action.tone === 'danger'
-                      ? styles.actionDestructive
-                      : styles.actionPrimary,
-                  { marginBottom: 8 },
-                  pressed && !action.disabled && { opacity: 0.9 },
-                ])}
-              >
-                <TerminalText
-                  size={8}
-                  letterSpacing={1}
-                  style={
-                    action.disabled || !action.onPress
-                      ? styles.actionDisabledText
-                      : action.tone === 'danger'
-                        ? styles.actionDestructiveText
-                        : styles.actionPrimaryText
-                  }
-                >
-                  {action.label}
-                </TerminalText>
-              </HapticPressable>
-            ))}
+          <View onLayout={handleDossierFooterLayout} style={styles.dossierFooter}>
+            <View style={styles.dossierFooterRule} />
+            <View style={[
+              styles.dossierFooterActions,
+              deckInspect.actions.length < 2 && styles.dossierFooterActionsSingle,
+              narrow && deckInspect.actions.length > 1 ? styles.dossierFooterActionsStack : null,
+            ]}>
+              {deckInspect.actions.map((action) => (
+                action.tone === 'danger' ? (
+                  <HapticPressable
+                    key={action.label}
+                    disabled={action.disabled || !action.onPress}
+                    onPress={action.onPress}
+                    accessibilityRole="button"
+                    accessibilityLabel={action.label}
+                    style={({ pressed }) => ([
+                      styles.actionButton,
+                      styles.dossierFooterAction,
+                      action.disabled || !action.onPress
+                        ? styles.actionDisabled
+                        : styles.actionDestructive,
+                      pressed && !action.disabled && { opacity: 0.9 },
+                    ])}
+                  >
+                    <TerminalText
+                      size={8}
+                      letterSpacing={1}
+                      style={
+                        action.disabled || !action.onPress
+                          ? styles.actionDisabledText
+                          : styles.actionDestructiveText
+                      }
+                    >
+                      {action.label}
+                    </TerminalText>
+                  </HapticPressable>
+                ) : (
+                  <HubPrimaryCta
+                    key={action.label}
+                    disabled={action.disabled || !action.onPress}
+                    onPress={action.onPress}
+                    accessibilityLabel={action.label}
+                    label={action.label}
+                    minHeight={50}
+                    style={styles.dossierFooterAction}
+                  />
+                )
+              ))}
+            </View>
           </View>
         </>
       );
@@ -664,17 +720,17 @@ export default function LoadoutHubPanel(): React.JSX.Element {
         return (
           <>
             <View style={styles.dossierHeader}>
-              <View style={styles.dossierHeaderAccent} />
-              <TerminalText size={7.5} letterSpacing={1.1} style={styles.dossierEyebrow}>EQUIPMENT DOSSIER</TerminalText>
+              <OccultNeonRail style={styles.dossierHeaderAccent} />
+              <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>EQUIPMENT DOSSIER</TerminalText>
               <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierCategory}>FIELD KIT SLOT</TerminalText>
-              <TerminalText size={16.5} letterSpacing={0.3} style={styles.dossierTitle}>
+              <TerminalText size={19} letterSpacing={0.1} style={styles.dossierTitle}>
                 {def ? def.shortName.toUpperCase() : label}
               </TerminalText>
               <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierStatus}>
                 {def ? 'OCCUPIED' : 'EMPTY'}
               </TerminalText>
             </View>
-            <ScrollView style={styles.dossierBody} contentContainerStyle={styles.dossierBodyContent}>
+            <ScrollView style={styles.dossierBody} contentContainerStyle={[styles.dossierBodyContent, { paddingBottom: dossierBodyPaddingBottom }]}>
               <DossierSection label="SLOT">
                 <TerminalText size={8.5} style={styles.dossierValue}>{label}</TerminalText>
               </DossierSection>
@@ -695,7 +751,8 @@ export default function LoadoutHubPanel(): React.JSX.Element {
                 </DossierSection>
               )}
             </ScrollView>
-            <View style={styles.dossierFooter}>
+            <View onLayout={handleDossierFooterLayout} style={styles.dossierFooter}>
+              <View style={styles.dossierFooterRule} />
               {def ? (
                 <HapticPressable
                   onPress={() => {
@@ -732,17 +789,17 @@ export default function LoadoutHubPanel(): React.JSX.Element {
       return (
         <>
           <View style={styles.dossierHeader}>
-            <View style={styles.dossierHeaderAccent} />
-            <TerminalText size={7.5} letterSpacing={1.1} style={styles.dossierEyebrow}>EQUIPMENT DOSSIER</TerminalText>
+            <OccultNeonRail style={styles.dossierHeaderAccent} />
+            <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>EQUIPMENT DOSSIER</TerminalText>
             <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierCategory}>STAGED CONSUMABLE</TerminalText>
-            <TerminalText size={16.5} letterSpacing={0.3} style={styles.dossierTitle}>
+            <TerminalText size={19} letterSpacing={0.1} style={styles.dossierTitle}>
               {(def?.shortName ?? fieldSelection.itemId).toUpperCase()}
             </TerminalText>
             <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierStatus}>
               {slotType}
             </TerminalText>
           </View>
-          <ScrollView style={styles.dossierBody} contentContainerStyle={styles.dossierBodyContent}>
+          <ScrollView style={styles.dossierBody} contentContainerStyle={[styles.dossierBodyContent, { paddingBottom: dossierBodyPaddingBottom }]}>
             <DossierSection label="EFFECT">
               <TerminalText size={8.5} style={styles.dossierValue}>{def?.effectSummary ?? '—'}</TerminalText>
             </DossierSection>
@@ -750,22 +807,21 @@ export default function LoadoutHubPanel(): React.JSX.Element {
               <TerminalText size={8.5} style={styles.dossierValue}>{slotType}</TerminalText>
             </DossierSection>
           </ScrollView>
-          <View style={styles.dossierFooter}>
-            <HapticPressable
+          <View onLayout={handleDossierFooterLayout} style={styles.dossierFooter}>
+          <View style={styles.dossierFooterRule} />
+            <HubPrimaryCta
               onPress={() => {
                 const result = equipRunItemLoadoutSlot(slotType, slotIndex, fieldSelection.itemId);
                 appendHubLog(result.logLine);
               }}
-              accessibilityRole="button"
               accessibilityLabel="Equip to kit slot"
-              style={({ pressed }) => ([styles.actionButton, styles.actionPrimary, pressed && { opacity: 0.9 }])}
-            >
-              <TerminalText size={8} letterSpacing={1} style={styles.actionPrimaryText}>
-                {replacing
+              label={
+                replacing
                   ? `[ REPLACE ${formatRunItemSlotLabel(slotType, slotIndex).toUpperCase()} ]`
-                  : `[ EQUIP TO ${formatRunItemSlotLabel(slotType, slotIndex).toUpperCase()} ]`}
-              </TerminalText>
-            </HapticPressable>
+                  : `[ EQUIP TO ${formatRunItemSlotLabel(slotType, slotIndex).toUpperCase()} ]`
+              }
+              minHeight={50}
+            />
           </View>
         </>
       );
@@ -775,17 +831,17 @@ export default function LoadoutHubPanel(): React.JSX.Element {
     return (
       <>
         <View style={styles.dossierHeader}>
-          <View style={styles.dossierHeaderAccent} />
-          <TerminalText size={7.5} letterSpacing={1.1} style={styles.dossierEyebrow}>EQUIPMENT DOSSIER</TerminalText>
+          <OccultNeonRail style={styles.dossierHeaderAccent} />
+          <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>EQUIPMENT DOSSIER</TerminalText>
           <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierCategory}>CARGO BAY</TerminalText>
-          <TerminalText size={16.5} letterSpacing={0.3} style={styles.dossierTitle}>
+          <TerminalText size={19} letterSpacing={0.1} style={styles.dossierTitle}>
             PRE-DESCENT HOLD
           </TerminalText>
           <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierStatus}>
             {`${cargoOccupancy.occupied} / ${cargoOccupancy.capacity} CELLS`}
           </TerminalText>
         </View>
-        <ScrollView style={styles.dossierBody} contentContainerStyle={styles.dossierBodyContent}>
+        <ScrollView style={styles.dossierBody} contentContainerStyle={[styles.dossierBodyContent, { paddingBottom: dossierBodyPaddingBottom }]}>
           <DossierSection label="CAPACITY">
             <TerminalText size={8.5} style={styles.dossierValue}>
               {`${cargoOccupancy.placedCount} stack(s) · ${cargoOccupancy.containmentCount} containment`}
@@ -800,7 +856,8 @@ export default function LoadoutHubPanel(): React.JSX.Element {
             </TerminalText>
           </DossierSection>
         </ScrollView>
-        <View style={styles.dossierFooter}>
+        <View onLayout={handleDossierFooterLayout} style={styles.dossierFooter}>
+          <View style={styles.dossierFooterRule} />
           <View style={[styles.actionButton, styles.actionDisabled]}>
             <TerminalText size={8} letterSpacing={1} style={styles.actionDisabledText}>
               [ USE CARGO BAY CONTROLS ]
@@ -814,17 +871,18 @@ export default function LoadoutHubPanel(): React.JSX.Element {
   const emptyDossier = (message: string): React.JSX.Element => (
     <>
       <View style={styles.dossierHeader}>
-        <View style={styles.dossierHeaderAccent} />
-        <TerminalText size={7.5} letterSpacing={1.1} style={styles.dossierEyebrow}>EQUIPMENT DOSSIER</TerminalText>
+        <OccultNeonRail style={styles.dossierHeaderAccent} />
+        <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>EQUIPMENT DOSSIER</TerminalText>
         <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierCategory}>NO RECORD SELECTED</TerminalText>
-        <TerminalText size={16.5} letterSpacing={0.3} style={styles.dossierTitle}>
+        <TerminalText size={19} letterSpacing={0.1} style={styles.dossierTitle}>
           AWAITING SIGNAL
         </TerminalText>
       </View>
-      <ScrollView style={styles.dossierBody} contentContainerStyle={styles.dossierBodyContent}>
+      <ScrollView style={styles.dossierBody} contentContainerStyle={[styles.dossierBodyContent, { paddingBottom: dossierBodyPaddingBottom }]}>
         <TerminalText size={8.5} style={styles.dossierValue}>{message}</TerminalText>
       </ScrollView>
-      <View style={styles.dossierFooter}>
+      <View onLayout={handleDossierFooterLayout} style={styles.dossierFooter}>
+          <View style={styles.dossierFooterRule} />
         <View style={[styles.actionButton, styles.actionDisabled]}>
           <TerminalText size={8} letterSpacing={1} style={styles.actionDisabledText}>
             [ SELECT A RECORD ]
@@ -839,123 +897,140 @@ export default function LoadoutHubPanel(): React.JSX.Element {
       style={[styles.page, narrow && styles.pageNarrow]}
       {...(Platform.OS === 'web' ? ({ id: 'loadout-root', nativeID: 'loadout-root' } as object) : null)}
     >
-      <VeilTerminalEffects intensity="subtle" scanlineOpacity={0.04} />
+      <View style={styles.loadoutBrowser}>
+        <HubPageHeader
+          eyebrow="LOADOUT // DESCENT PREP BAY"
+          title="OPERATIVE LOADOUT"
+          compact={compact}
+        />
 
-      <View style={[styles.header, compact && styles.headerCompact]}>
-        <View style={styles.headerTitleBlock}>
-          <TerminalText size={7.5} letterSpacing={1.1} style={styles.headerEyebrow}>
-            LOADOUT // DESCENT PREP BAY
-          </TerminalText>
-          <TerminalText size={15} letterSpacing={0.55} style={styles.headerTitle}>
-            OPERATIVE LOADOUT
-          </TerminalText>
-        </View>
-
-        <View style={styles.operativeSelector}>
-          {canCycleClass ? (
-            <HapticPressable
-              onPress={() => cycleActiveClass(-1)}
-              accessibilityRole="button"
-              accessibilityLabel="Previous operative class"
-              style={({ pressed }) => ([styles.operativeArrow, pressed && { opacity: 0.7 }])}
-            >
-              <TerminalText size={10} style={{ color: TERMINAL }}>{'<'}</TerminalText>
-            </HapticPressable>
-          ) : <View style={styles.operativeArrow} />}
-          <Image source={portraitSource} style={styles.operativePortrait} resizeMode="contain" />
-          <View style={styles.operativeCreds}>
-            <TerminalText size={11} letterSpacing={0.35} style={styles.operativeName} numberOfLines={1}>
-              {cred.username.toUpperCase()}
-            </TerminalText>
-            <TerminalText size={7.5} letterSpacing={0.55} style={styles.operativeMeta} numberOfLines={1}>
-              {`${classDef.displayName.toUpperCase()} · CLEARANCE ${account.progressionProfile.runner.clearanceRank}`}
-            </TerminalText>
+        <View
+          style={[styles.operativeStrip, compact && styles.operativeStripCompact]}
+          {...(Platform.OS === 'web' ? ({ 'data-operative-selector': 'true' } as object) : null)}
+        >
+          <RegistrationBrackets tone={VEIL_MINT_TONE} active corners="all" />
+          <View style={styles.operativeIdentity}>
+            {canCycleClass ? (
+              <HapticPressable
+                onPress={() => cycleActiveClass(-1)}
+                accessibilityRole="button"
+                accessibilityLabel="Previous operative class"
+                style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ([
+                  styles.operativeArrow,
+                  (hovered || pressed) ? styles.operativeArrowHover : null,
+                ])}
+              >
+                <TerminalText size={10} style={{ color: TERMINAL }}>{'<'}</TerminalText>
+              </HapticPressable>
+            ) : (
+              <View style={styles.operativeArrow}>
+                <TerminalText size={10} style={{ color: MUTED }}>{'<'}</TerminalText>
+              </View>
+            )}
+            <Image source={portraitSource} style={styles.operativePortrait} resizeMode="contain" />
+            <View style={styles.operativeCreds}>
+              <TerminalText size={11} letterSpacing={0.35} style={styles.operativeName} numberOfLines={1}>
+                {cred.username.toUpperCase()}
+              </TerminalText>
+              <TerminalText size={7.5} letterSpacing={0.55} style={styles.operativeMeta} numberOfLines={1}>
+                {`${classDef.displayName.toUpperCase()} · CLEARANCE ${account.progressionProfile.runner.clearanceRank}`}
+              </TerminalText>
+            </View>
+            {canCycleClass ? (
+              <HapticPressable
+                onPress={() => cycleActiveClass(1)}
+                accessibilityRole="button"
+                accessibilityLabel="Next operative class"
+                style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ([
+                  styles.operativeArrow,
+                  (hovered || pressed) ? styles.operativeArrowHover : null,
+                ])}
+              >
+                <TerminalText size={10} style={{ color: TERMINAL }}>{'>'}</TerminalText>
+              </HapticPressable>
+            ) : (
+              <View style={styles.operativeArrow}>
+                <TerminalText size={10} style={{ color: MUTED }}>{'>'}</TerminalText>
+              </View>
+            )}
           </View>
-          {canCycleClass ? (
-            <HapticPressable
-              onPress={() => cycleActiveClass(1)}
-              accessibilityRole="button"
-              accessibilityLabel="Next operative class"
-              style={({ pressed }) => ([styles.operativeArrow, pressed && { opacity: 0.7 }])}
-            >
-              <TerminalText size={10} style={{ color: TERMINAL }}>{'>'}</TerminalText>
-            </HapticPressable>
-          ) : <View style={styles.operativeArrow} />}
+
+          <View style={styles.operativeActions}>
+            <TerminalText size={6.5} letterSpacing={1} style={styles.savedLabel}>
+              ● LOADOUT SAVED
+            </TerminalText>
+            <HubPrimaryCta
+              onPress={handleReady}
+              accessibilityLabel="Ready for descent"
+              label="[ READY FOR DESCENT ]"
+              minHeight={50}
+              style={styles.readyCta}
+            />
+          </View>
         </View>
 
-        <View style={styles.headerActions}>
-          <TerminalText size={7.5} letterSpacing={1} style={styles.savedLabel}>
-            ● LOADOUT SAVED
-          </TerminalText>
-          <HapticPressable
-            onPress={handleReady}
-            accessibilityRole="button"
-            accessibilityLabel="Ready for descent"
-            style={({ pressed }) => ([styles.readyAction, pressed && { opacity: 0.9 }])}
-          >
-            <TerminalText size={8} letterSpacing={1} style={styles.readyActionText}>
-              [ READY FOR DESCENT ]
-            </TerminalText>
-          </HapticPressable>
+        <View style={[styles.workspace, narrow && styles.workspaceNarrow]}>
+          <View style={styles.manifest}>
+            <View style={styles.manifestHeader}>
+              <TerminalText size={7.5} letterSpacing={1} style={styles.manifestHeaderText}>
+                DESCENT MANIFEST
+              </TerminalText>
+              <TerminalText size={7.5} letterSpacing={1} style={styles.manifestHeaderText}>
+                {completionSummary}
+              </TerminalText>
+            </View>
+            <View
+              style={styles.manifestList}
+              accessibilityRole="tablist"
+              {...(Platform.OS === 'web' ? ({ 'aria-orientation': 'vertical' } as object) : {})}
+            >
+              {CATEGORIES.map(renderManifestEntry)}
+            </View>
+          </View>
+
+          <View style={styles.catalog}>
+            <View style={[styles.catalogHeader, compact && styles.catalogHeaderCompact]}>
+              <TerminalText size={7.5} letterSpacing={1} style={styles.catalogEyebrow}>
+                {catalogCopy.eyebrow}
+              </TerminalText>
+              <TerminalText size={11} letterSpacing={1.05} style={styles.catalogTitle}>
+                {catalogCopy.title}
+              </TerminalText>
+              <TerminalText size={8.5} style={styles.catalogDescription}>
+                {catalogCopy.description}
+              </TerminalText>
+            </View>
+            <View style={styles.catalogBody}>
+              {activeCategory === 'CHASSIS' ? (
+                <ChassisWorkspace selectedId={chassisId} onSelect={handleSelectChassis} compact={compact} />
+              ) : null}
+              {activeCategory === 'RELIC' ? (
+                <RelicWorkspace selectedId={relicId} onSelect={handleSelectRelic} compact={compact} />
+              ) : null}
+              {activeCategory === 'DECK' ? (
+                <DeckWorkspace
+                  selection={deckSelection}
+                  onSelect={handleSelectDeck}
+                  onInspectChange={setDeckInspect}
+                  compact={compact}
+                />
+              ) : null}
+              {activeCategory === 'FIELD_KIT' ? (
+                <FieldKitWorkspace selection={fieldSelection} onSelect={handleSelectField} compact={compact} />
+              ) : null}
+              {activeCategory === 'CARGO' ? <CargoWorkspace compact={compact} /> : null}
+            </View>
+          </View>
         </View>
       </View>
 
-      <View style={[styles.workspace, narrow && styles.workspaceNarrow]}>
-        <View style={styles.manifest}>
-          <View style={styles.manifestHeader}>
-            <TerminalText size={7.5} letterSpacing={1} style={styles.manifestHeaderText}>
-              DESCENT MANIFEST
-            </TerminalText>
-            <TerminalText size={7.5} letterSpacing={1} style={styles.manifestHeaderText}>
-              {completionSummary}
-            </TerminalText>
-          </View>
-          <View
-            style={styles.manifestList}
-            accessibilityRole="tablist"
-            {...(Platform.OS === 'web' ? ({ 'aria-orientation': 'vertical' } as object) : {})}
-          >
-            {CATEGORIES.map(renderManifestEntry)}
-          </View>
+      <View style={styles.dossierColumn}>
+        {/* Outer shell owns height; Animated.View only fades content so layout cannot collapse. */}
+        <View style={styles.dossier}>
+          <Animated.View style={[styles.dossierFill, { opacity: dossierLock }]}>
+            {renderDossier()}
+          </Animated.View>
         </View>
-
-        <View style={styles.catalog}>
-          <View style={[styles.catalogHeader, compact && styles.catalogHeaderCompact]}>
-            <TerminalText size={7.5} letterSpacing={1} style={styles.catalogEyebrow}>
-              {catalogCopy.eyebrow}
-            </TerminalText>
-            <TerminalText size={13.5} letterSpacing={0.45} style={styles.catalogTitle}>
-              {catalogCopy.title}
-            </TerminalText>
-            <TerminalText size={8.5} style={styles.catalogDescription}>
-              {catalogCopy.description}
-            </TerminalText>
-          </View>
-          <View style={styles.catalogBody}>
-            {activeCategory === 'CHASSIS' ? (
-              <ChassisWorkspace selectedId={chassisId} onSelect={handleSelectChassis} compact={compact} />
-            ) : null}
-            {activeCategory === 'RELIC' ? (
-              <RelicWorkspace selectedId={relicId} onSelect={handleSelectRelic} compact={compact} />
-            ) : null}
-            {activeCategory === 'DECK' ? (
-              <DeckWorkspace
-                selection={deckSelection}
-                onSelect={handleSelectDeck}
-                onInspectChange={setDeckInspect}
-                compact={compact}
-              />
-            ) : null}
-            {activeCategory === 'FIELD_KIT' ? (
-              <FieldKitWorkspace selection={fieldSelection} onSelect={handleSelectField} compact={compact} />
-            ) : null}
-            {activeCategory === 'CARGO' ? <CargoWorkspace compact={compact} /> : null}
-          </View>
-        </View>
-
-        <Animated.View style={[styles.dossier, { opacity: dossierLock }]}>
-          {renderDossier()}
-        </Animated.View>
       </View>
 
       {modalRelic?.deploymentChoice ? (
@@ -982,16 +1057,20 @@ export default function LoadoutHubPanel(): React.JSX.Element {
 
 const styles = StyleSheet.create({
   page: {
+    // Flex row (same as Black Market) so the dossier column always gets a
+    // definite stretched height — CSS grid + height:100% was collapsing it.
     flex: 1,
     minWidth: 0,
     minHeight: 0,
+    maxWidth: '100%',
+    flexDirection: 'row',
+    alignItems: 'stretch',
     overflow: 'hidden',
-    backgroundColor: '#020606',
+    backgroundColor: '#000000',
     position: 'relative',
+    margin: 0,
     ...Platform.select({
       web: {
-        display: 'grid',
-        gridTemplateRows: 'auto minmax(0, 1fr)',
         width: '100%',
         height: '100%',
       } as object,
@@ -999,87 +1078,107 @@ const styles = StyleSheet.create({
     }),
   },
   pageNarrow: {},
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 28,
-    minHeight: 86,
-    paddingHorizontal: 28,
-    paddingVertical: 12,
-    backgroundColor: 'rgba(3, 9, 8, 0.92)',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(137, 170, 163, 0.16)',
-    flexShrink: 0,
+  loadoutBrowser: {
+    flexGrow: 2.1,
+    flexShrink: 1,
+    flexBasis: 0,
+    minWidth: 0,
+    minHeight: 0,
+    overflow: 'hidden',
+    backgroundColor: '#000000',
+    zIndex: 1,
     ...Platform.select({
       web: {
         display: 'grid',
-        gridTemplateColumns: 'minmax(230px, 0.8fr) minmax(380px, 1.25fr) auto',
+        gridTemplateRows: 'auto auto minmax(0, 1fr)',
+        alignContent: 'start',
       } as object,
-      default: {},
+      default: {
+        flexDirection: 'column',
+        alignItems: 'stretch',
+      },
     }),
   },
-  headerCompact: {
-    minHeight: 72,
-    paddingVertical: 9,
-    gap: 18,
-  },
-  headerTitleBlock: { minWidth: 0 },
-  headerEyebrow: { color: MUTED, fontWeight: '700' },
-  headerTitle: { marginTop: 5, color: TEXT_PRIMARY, fontWeight: '700' },
-  operativeSelector: {
+  operativeStrip: {
+    position: 'relative',
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 58,
+    justifyContent: 'space-between',
+    gap: 18,
+    minHeight: 74,
+    marginHorizontal: 14,
+    marginBottom: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    backgroundColor: HUB_CARD_SURFACE,
+    borderWidth: 1,
+    borderColor: HUB_CARD_BORDER,
+    overflow: 'hidden',
+    flexShrink: 0,
+  },
+  operativeStripCompact: {
+    minHeight: 68,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+  },
+  operativeIdentity: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
     minWidth: 0,
-    backgroundColor: 'rgba(2, 6, 7, 0.62)',
-    borderLeftWidth: 2,
-    borderLeftColor: 'rgba(190, 208, 202, 0.72)',
-    paddingRight: 10,
+    maxWidth: '58%',
   },
   operativeArrow: {
-    width: 38,
-    height: 58,
+    width: 42,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
+    ...Platform.select({ web: { cursor: 'pointer', outlineStyle: 'none' } as object, default: {} }),
+  },
+  operativeArrowHover: {
+    backgroundColor: 'rgba(105, 200, 173, 0.04)',
   },
   operativePortrait: {
-    width: 46,
-    height: 46,
+    width: 40,
+    height: 40,
+    flexShrink: 0,
   },
   operativeCreds: {
-    flex: 1,
     minWidth: 0,
-    marginLeft: 10,
+    marginLeft: 12,
+    marginRight: 4,
+    justifyContent: 'center',
+    flexShrink: 1,
   },
   operativeName: { color: TEXT_PRIMARY, fontWeight: '700' },
   operativeMeta: { marginTop: 4, color: MUTED, fontWeight: '700' },
-  headerActions: {
-    alignItems: 'flex-end',
-    gap: 8,
-    flexShrink: 0,
-  },
-  savedLabel: { color: TERMINAL, fontWeight: '700' },
-  readyAction: {
-    minHeight: 44,
-    paddingHorizontal: 16,
+  operativeActions: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: TERMINAL,
-    borderWidth: 1,
-    borderColor: TERMINAL_BRIGHT,
-    ...Platform.select({ web: { cursor: 'pointer' } as object, default: {} }),
+    gap: 14,
+    flexShrink: 0,
+    marginLeft: 'auto',
   },
-  readyActionText: { color: '#06110e', fontWeight: '800' },
+  savedLabel: { color: MUTED, fontWeight: '700' },
+  readyCta: {
+    width: 'auto',
+    minWidth: 196,
+    paddingHorizontal: 16,
+  },
   workspace: {
     flex: 1,
     minWidth: 0,
     minHeight: 0,
     flexDirection: 'row',
     overflow: 'hidden',
+    paddingHorizontal: 14,
+    gap: 24,
     ...Platform.select({
       web: {
         display: 'grid',
-        gridTemplateColumns: '284px minmax(0, 1fr) clamp(420px, 25vw, 500px)',
+        gridTemplateColumns: 'minmax(290px, 310px) minmax(0, 1fr)',
+        columnGap: 24,
       } as object,
       default: {},
     }),
@@ -1087,68 +1186,96 @@ const styles = StyleSheet.create({
   workspaceNarrow: {
     ...Platform.select({
       web: {
-        gridTemplateColumns: '230px minmax(0, 1fr) 390px',
+        gridTemplateColumns: 'minmax(250px, 270px) minmax(0, 1fr)',
+        columnGap: 18,
       } as object,
       default: {},
+    }),
+  },
+  dossierColumn: {
+    ...hubDossierColumnStyle(),
+    flexGrow: 1,
+    flexShrink: 0,
+    flexBasis: 0,
+    minWidth: 360,
+    ...Platform.select({
+      web: {},
+      default: { width: 420 + HUB_DOSSIER_EDGE_PAD, minWidth: 420 + HUB_DOSSIER_EDGE_PAD },
     }),
   },
   manifest: {
     minWidth: 0,
     minHeight: 0,
     overflow: 'hidden',
-    backgroundColor: '#030707',
-    borderRightWidth: 1,
-    borderRightColor: 'rgba(137, 170, 163, 0.15)',
+    backgroundColor: '#000000',
     ...Platform.select({
       web: {
         display: 'grid',
         gridTemplateRows: 'auto minmax(0, 1fr)',
       } as object,
-      default: { width: 284 },
+      default: { width: 300 },
     }),
   },
   manifestHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: 48,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(137, 170, 163, 0.13)',
+    minHeight: 34,
+    paddingBottom: 8,
+    flexShrink: 0,
   },
   manifestHeaderText: { color: MUTED, fontWeight: '700' },
-  manifestList: { flex: 1, minHeight: 0 },
+  manifestList: {
+    flex: 1,
+    minHeight: 0,
+    paddingTop: 2,
+    paddingBottom: 12,
+  },
   manifestEntry: {
     position: 'relative',
-    minHeight: 82,
-    paddingTop: 15,
+    height: 90,
+    minHeight: 90,
+    maxHeight: 90,
+    marginBottom: 10,
+    paddingTop: 14,
     paddingBottom: 14,
-    paddingLeft: 22,
-    paddingRight: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(137, 170, 163, 0.09)',
-    ...Platform.select({ web: { cursor: 'pointer' } as object, default: {} }),
+    paddingLeft: 18,
+    paddingRight: 18,
+    backgroundColor: HUB_CARD_SURFACE,
+    borderWidth: 1,
+    borderColor: HUB_CARD_BORDER,
+    overflow: 'hidden',
+    ...Platform.select({ web: { cursor: 'pointer', outlineStyle: 'none' } as object, default: {} }),
   },
-  manifestEntryCompact: { minHeight: 70, paddingTop: 11, paddingBottom: 10 },
-  manifestEntryHover: { backgroundColor: 'rgba(105, 200, 173, 0.035)' },
-  manifestEntrySelected: { backgroundColor: 'rgba(105, 200, 173, 0.06)' },
+  manifestEntryCompact: {
+    height: 82,
+    minHeight: 82,
+    maxHeight: 82,
+    paddingTop: 12,
+    paddingBottom: 12,
+  },
+  manifestEntryHover: {
+    backgroundColor: HUB_CARD_SURFACE_HOVER,
+    borderColor: HUB_CARD_BORDER_HOVER,
+  },
+  manifestEntrySelected: {
+    backgroundColor: HUB_SELECT_SURFACE,
+    borderColor: HUB_CARD_BORDER_SELECTED,
+  },
   manifestAccent: {
-    position: 'absolute',
-    top: 12,
-    bottom: 12,
-    left: 0,
-    width: 2,
-    backgroundColor: TERMINAL,
+    top: 14,
+    bottom: 14,
   },
   manifestLabel: { color: MUTED, fontWeight: '700' },
   manifestPrimary: { marginTop: 6, color: TEXT_PRIMARY, fontWeight: '700' },
+  manifestPrimarySelected: { color: '#F0F2EF' },
   manifestSecondary: { marginTop: 5, color: TEXT_SECONDARY, fontWeight: '700' },
   catalog: {
     flex: 1,
     minWidth: 0,
     minHeight: 0,
     overflow: 'hidden',
-    backgroundColor: '#020606',
+    backgroundColor: '#000000',
     ...Platform.select({
       web: {
         display: 'grid',
@@ -1158,125 +1285,196 @@ const styles = StyleSheet.create({
     }),
   },
   catalogHeader: {
-    minHeight: 76,
-    paddingTop: 17,
-    paddingBottom: 15,
-    paddingHorizontal: 26,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(137, 170, 163, 0.13)',
+    paddingTop: 0,
+    paddingBottom: 8,
     flexShrink: 0,
   },
   catalogHeaderCompact: {
-    minHeight: 64,
-    paddingTop: 12,
-    paddingBottom: 11,
+    paddingBottom: 6,
   },
-  catalogEyebrow: { color: TERMINAL, fontWeight: '700' },
-  catalogTitle: { marginTop: 6, color: TEXT_PRIMARY, fontWeight: '700' },
-  catalogDescription: { marginTop: 6, color: TEXT_SECONDARY, lineHeight: 18 },
+  catalogEyebrow: { color: MUTED, fontWeight: '700' },
+  catalogTitle: {
+    marginTop: 5,
+    color: 'rgba(185, 181, 167, 0.88)',
+    fontWeight: '700',
+  },
+  catalogDescription: { marginTop: 5, color: TEXT_SECONDARY, lineHeight: 17 },
   catalogBody: { flex: 1, minHeight: 0 },
   dossier: {
-    minWidth: 0,
+    ...hubDossierShellStyle(),
+    ...Platform.select({
+      web: {},
+      default: { width: 420 },
+    }),
+  },
+  dossierFill: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
     minHeight: 0,
-    overflow: 'hidden',
-    backgroundColor: '#030707',
-    borderLeftWidth: 1,
-    borderLeftColor: 'rgba(137, 170, 163, 0.16)',
+    minWidth: 0,
     ...Platform.select({
       web: {
-        display: 'grid',
-        gridTemplateRows: 'auto minmax(0, 1fr) auto',
-        backgroundImage:
-          'linear-gradient(180deg, rgba(8, 20, 17, 0.56), rgba(3, 7, 7, 0) 260px), #030707',
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
       } as object,
-      default: { width: 420 },
+      default: {
+        flex: 1,
+      },
     }),
   },
   dossierHeader: {
     position: 'relative',
-    paddingTop: 23,
-    paddingBottom: 20,
-    paddingLeft: 32,
-    paddingRight: 28,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(137, 170, 163, 0.14)',
+    zIndex: 1,
+    paddingTop: 22,
+    paddingBottom: 16,
+    paddingLeft: 28,
+    paddingRight: 24,
     flexShrink: 0,
+    overflow: 'visible',
   },
   dossierHeaderAccent: {
-    position: 'absolute',
-    top: 23,
-    bottom: 20,
-    left: 0,
-    width: 2,
-    backgroundColor: TERMINAL,
+    top: 18,
+    bottom: 1,
   },
-  dossierEyebrow: { color: MUTED, fontWeight: '700' },
-  dossierCategory: { marginTop: 8, color: TERMINAL, fontWeight: '700' },
-  dossierTitle: { marginTop: 9, color: TEXT_PRIMARY, fontWeight: '700' },
-  dossierStatus: { marginTop: 10, color: TEXT_SECONDARY, fontWeight: '700' },
-  dossierBody: { flex: 1, minHeight: 0 },
+  dossierEyebrow: {
+    color: VEIL.textDim,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  dossierCategory: { marginTop: 2, color: MUTED, fontWeight: '700', minHeight: 16 },
+  dossierTitle: { marginTop: 8, color: HUB_DOSSIER_TITLE, fontWeight: '700' },
+  dossierStatus: {
+    marginTop: 14,
+    color: TEXT_SECONDARY,
+    fontWeight: '700',
+    maxWidth: '72%',
+  },
+  dossierBody: {
+    position: 'relative',
+    zIndex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
+    minHeight: 0,
+  },
   dossierBodyContent: {
-    paddingTop: 22,
-    paddingBottom: 28,
-    paddingLeft: 32,
-    paddingRight: 28,
+    flexGrow: 1,
+    justifyContent: 'flex-start',
+    paddingTop: 10,
+    paddingBottom: 120,
+    paddingLeft: 28,
+    paddingRight: 24,
   },
   dossierSection: {
-    paddingBottom: 18,
-    marginBottom: 18,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(137, 170, 163, 0.1)',
+    flexGrow: 0,
+    flexShrink: 0,
+    paddingBottom: 14,
+    marginBottom: 2,
   },
-  dossierSectionLast: { borderBottomWidth: 0, marginBottom: 0, paddingBottom: 0 },
-  dossierLabel: { color: MUTED, fontWeight: '700' },
-  dossierValue: { marginTop: 7, color: '#d2dcd8', lineHeight: 20 },
-  dossierValueTight: { marginTop: 5, color: '#d2dcd8', lineHeight: 19 },
+  dossierSectionLast: { marginBottom: 0, paddingBottom: 0 },
+  dossierLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 2,
+  },
+  dossierBoneRule: {
+    width: 2,
+    height: 12,
+    backgroundColor: VEIL.bone,
+    opacity: 0.55,
+  },
+  dossierLabel: { color: HUB_DOSSIER_LABEL, fontWeight: '700' },
+  dossierValue: { marginTop: 7, color: VEIL.text, lineHeight: 20 },
+  dossierValueTight: { marginTop: 5, color: VEIL.text, lineHeight: 19 },
   dossierSecondary: { marginTop: 5, color: TEXT_SECONDARY, lineHeight: 18 },
   reqRow: {
     marginTop: 8,
     flexDirection: 'row',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: 16,
+  },
+  reqLabel: {
+    flex: 1,
+    minWidth: 0,
+    marginTop: 0,
+  },
+  reqCount: {
+    flexShrink: 0,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
   },
   dossierFooter: {
-    paddingTop: 16,
-    paddingBottom: 22,
-    paddingLeft: 32,
-    paddingRight: 28,
-    backgroundColor: 'rgba(3, 7, 8, 0.98)',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(137, 190, 179, 0.19)',
+    position: 'relative',
+    zIndex: 2,
+    paddingTop: 14,
+    paddingBottom: 16,
+    paddingLeft: 24,
+    paddingRight: 22,
+    backgroundColor: HUB_DOSSIER_FOOTER_BG,
     flexShrink: 0,
+  },
+  dossierFooterRule: {
+    position: 'absolute',
+    top: 0,
+    left: 16,
+    right: 16,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: HUB_DOSSIER_FOOTER_RULE,
+  },
+  dossierFooterActions: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 12,
+  },
+  dossierFooterActionsSingle: {
+    flexDirection: 'column',
+  },
+  dossierFooterActionsStack: {
+    flexDirection: 'column',
+  },
+  dossierFooterAction: {
+    flex: 1,
+    minWidth: 0,
   },
   actionButton: {
     width: '100%',
-    minHeight: 54,
+    minHeight: 50,
+    height: 50,
     alignItems: 'center',
     justifyContent: 'center',
-    ...Platform.select({ web: { cursor: 'pointer' } as object, default: {} }),
+    ...Platform.select({ web: { cursor: 'pointer', outlineStyle: 'none' } as object, default: {} }),
   },
   actionPrimary: {
-    backgroundColor: TERMINAL,
-    borderWidth: 1,
-    borderColor: TERMINAL_BRIGHT,
+    ...hubPrimaryActionStyle(),
   },
-  actionPrimaryText: { color: '#06110e', fontWeight: '800' },
+  actionPrimaryHover: {
+    ...hubPrimaryActionHoverStyle(),
+  },
+  actionPrimaryText: { ...hubPrimaryActionTextStyle() },
+  actionPrimaryTextHover: { ...hubPrimaryActionTextHoverStyle() },
   actionSecondary: {
-    backgroundColor: 'rgba(105, 200, 173, 0.06)',
+    backgroundColor: HUB_CARD_SURFACE,
     borderWidth: 1,
-    borderColor: 'rgba(105, 200, 173, 0.35)',
+    borderColor: HUB_CARD_BORDER_SELECTED,
   },
   actionSecondaryText: { color: TERMINAL_BRIGHT, fontWeight: '800' },
   actionDestructive: {
-    backgroundColor: 'rgba(201, 98, 98, 0.03)',
+    backgroundColor: 'rgba(163, 92, 102, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(201, 98, 98, 0.4)',
+    borderColor: 'rgba(163, 92, 102, 0.42)',
   },
-  actionDestructiveText: { color: '#d89490', fontWeight: '800' },
+  actionDestructiveText: { color: '#B8898F', fontWeight: '800' },
   actionDisabled: {
-    backgroundColor: 'rgba(112, 139, 133, 0.04)',
+    backgroundColor: 'rgba(185, 181, 167, 0.03)',
     borderWidth: 1,
-    borderColor: 'rgba(137, 170, 163, 0.2)',
+    borderColor: 'rgba(185, 181, 167, 0.16)',
   },
-  actionDisabledText: { color: '#7f928c', fontWeight: '800' },
+  actionDisabledText: {
+    color: 'rgba(222, 227, 223, 0.32)',
+    fontWeight: '800',
+  },
 });

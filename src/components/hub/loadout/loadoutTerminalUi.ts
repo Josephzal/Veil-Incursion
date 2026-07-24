@@ -1,13 +1,18 @@
 import { VEIL } from '../../../theme/veilTerminalTokens';
+import {
+  HUB_META,
+  HUB_TEXT_PRIMARY,
+  HUB_TEXT_SECONDARY,
+} from '../../../theme/hubPanelSurfaces';
 
-/** Shared presentation tokens for the Loadout descent-prep terminal — VEIL-aligned. */
+/** Shared presentation tokens for the Loadout descent-prep terminal — Contract Board–aligned. */
 export const TERMINAL = VEIL.mint;
 export const TERMINAL_BRIGHT = VEIL.mintBright;
 export const MISSING = VEIL.blood;
 export const OCCULT = VEIL.occult;
-export const MUTED = VEIL.textMuted;
-export const TEXT_PRIMARY = VEIL.text;
-export const TEXT_SECONDARY = VEIL.textSoft;
+export const MUTED = HUB_META;
+export const TEXT_PRIMARY = HUB_TEXT_PRIMARY;
+export const TEXT_SECONDARY = HUB_TEXT_SECONDARY;
 
 export type LoadoutCategory = 'CHASSIS' | 'RELIC' | 'DECK' | 'FIELD_KIT' | 'CARGO';
 

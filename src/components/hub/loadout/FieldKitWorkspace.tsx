@@ -7,7 +7,16 @@ import { listHubStagedConsumables, isRunItemHubConsumable } from '../../../data/
 import { getRunItemDefinitionByAnyId } from '../../../data/runItemRegistry';
 import { formatRunItemSlotLabel } from '../../../data/runItemUseEngine';
 import type { CargoItemId } from '../../../types/cargoGrid';
-import { MUTED, TERMINAL, TEXT_PRIMARY, TEXT_SECONDARY } from './loadoutTerminalUi';
+import { MUTED, TEXT_PRIMARY, TEXT_SECONDARY } from './loadoutTerminalUi';
+import { OccultNeonRail } from '../veilChrome';
+import {
+  HUB_CARD_BORDER,
+  HUB_CARD_BORDER_HOVER,
+  HUB_CARD_BORDER_SELECTED,
+  HUB_CARD_SURFACE,
+  HUB_CARD_SURFACE_HOVER,
+  HUB_SELECT_SURFACE,
+} from '../../../theme/hubPanelSurfaces';
 
 export type FieldKitSelection =
   | { kind: 'SLOT'; slotType: 'COMBAT' | 'FIELD'; slotIndex: 0 | 1 }
@@ -82,7 +91,7 @@ export default function FieldKitWorkspace({
                 pressed && { opacity: 0.92 },
               ])}
             >
-              {selected ? <View style={styles.slotAccent} /> : null}
+              {selected ? <OccultNeonRail style={styles.slotAccent} /> : null}
               <TerminalText size={7} letterSpacing={0.9} style={styles.slotLabel}>
                 {formatRunItemSlotLabel(slot.slotType, slot.slotIndex).toUpperCase()}
               </TerminalText>
@@ -140,7 +149,7 @@ export default function FieldKitWorkspace({
                   ? ({ 'data-selected': selected ? 'true' : 'false' } as object)
                   : null)}
               >
-                {selected ? <View style={styles.signalAccent} /> : null}
+                {selected ? <OccultNeonRail style={styles.signalAccent} /> : null}
                 <HapticPressable
                   onPress={() => onSelect({ kind: 'ITEM', itemId: entry.itemId })}
                   accessibilityRole="button"
@@ -195,30 +204,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 1,
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    backgroundColor: 'rgba(137, 170, 163, 0.1)',
+    paddingHorizontal: 0,
+    paddingVertical: 10,
+    backgroundColor: HUB_CARD_SURFACE,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(137, 170, 163, 0.12)',
+    borderBottomColor: HUB_CARD_BORDER,
   },
   slotGridCompact: { paddingVertical: 10 },
   slot: {
     width: '49.6%',
-    minHeight: 88,
+    minHeight: 90,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: '#030707',
+    paddingLeft: 18,
+    backgroundColor: HUB_CARD_SURFACE,
+    borderWidth: 1,
+    borderColor: HUB_CARD_BORDER,
     position: 'relative',
+    overflow: 'hidden',
     ...Platform.select({ web: { cursor: 'pointer' } as object, default: {} }),
   },
-  slotSelected: { backgroundColor: 'rgba(105, 200, 173, 0.05)' },
+  slotSelected: {
+    backgroundColor: HUB_SELECT_SURFACE,
+    borderColor: HUB_CARD_BORDER_SELECTED,
+  },
   slotAccent: {
-    position: 'absolute',
-    top: 12,
-    bottom: 12,
-    left: 0,
-    width: 2,
-    backgroundColor: TERMINAL,
+    top: 14,
+    bottom: 14,
   },
   slotLabel: { color: MUTED, fontWeight: '700' },
   slotTitle: { marginTop: 6, color: TEXT_PRIMARY, fontWeight: '700' },
@@ -227,41 +239,45 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    minHeight: 42,
-    paddingHorizontal: 24,
+    minHeight: 36,
+    paddingHorizontal: 0,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(137, 170, 163, 0.12)',
+    borderBottomColor: HUB_CARD_BORDER,
   },
   feedHeaderText: { color: MUTED, fontWeight: '700' },
   feed: { flex: 1, minHeight: 0 },
-  feedContent: { paddingBottom: 16 },
-  empty: { paddingHorizontal: 28, paddingTop: 22, paddingBottom: 12 },
+  feedContent: { paddingHorizontal: 0, paddingTop: 8, paddingBottom: 16 },
+  empty: { paddingHorizontal: 0, paddingTop: 22, paddingBottom: 12 },
   emptyTitle: { color: TEXT_PRIMARY, fontWeight: '700' },
   emptyBody: { marginTop: 8, color: TEXT_SECONDARY, lineHeight: 19, maxWidth: 420 },
   signal: {
     position: 'relative',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(137, 170, 163, 0.1)',
+    marginBottom: 10,
+    overflow: 'hidden',
   },
   signalAccent: {
-    position: 'absolute',
-    top: 12,
-    bottom: 12,
-    left: 0,
-    width: 2,
-    backgroundColor: TERMINAL,
-    zIndex: 1,
+    top: 14,
+    bottom: 14,
   },
   signalSelect: {
-    minHeight: 88,
-    paddingTop: 13,
-    paddingBottom: 13,
-    paddingLeft: 28,
-    paddingRight: 24,
-    ...Platform.select({ web: { cursor: 'pointer' } as object, default: {} }),
+    minHeight: 90,
+    paddingTop: 14,
+    paddingBottom: 14,
+    paddingLeft: 18,
+    paddingRight: 18,
+    backgroundColor: HUB_CARD_SURFACE,
+    borderWidth: 1,
+    borderColor: HUB_CARD_BORDER,
+    ...Platform.select({ web: { cursor: 'pointer', outlineStyle: 'none' } as object, default: {} }),
   },
-  signalSelectHover: { backgroundColor: 'rgba(105, 200, 173, 0.035)' },
-  signalSelectSelected: { backgroundColor: 'rgba(105, 200, 173, 0.06)' },
+  signalSelectHover: {
+    backgroundColor: HUB_CARD_SURFACE_HOVER,
+    borderColor: HUB_CARD_BORDER_HOVER,
+  },
+  signalSelectSelected: {
+    backgroundColor: HUB_SELECT_SURFACE,
+    borderColor: HUB_CARD_BORDER_SELECTED,
+  },
   signalMain: { minWidth: 0 },
   signalTopline: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   signalMeta: { color: MUTED, fontWeight: '700' },
