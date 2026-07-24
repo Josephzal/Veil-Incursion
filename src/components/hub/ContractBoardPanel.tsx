@@ -1337,7 +1337,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#000000',
     // 16–20px after reputation + broker summary row.
     marginTop: 20,
-    marginRight: 6,
     paddingTop: 4,
     paddingBottom: 4,
     ...Platform.select({
@@ -1354,21 +1353,44 @@ const styles = StyleSheet.create({
   cabalGroupHeaderWrap: {
     flexGrow: 0,
     flexShrink: 0,
+    // Match sponsor channel / card horizontal inset.
+    paddingHorizontal: HUB_BROWSER_CONTENT_PADDING_H,
     // 8–12px between group divider and first selectable contract.
     marginBottom: 12,
   },
   contractFeedScrollWrap: {
     flex: 1,
     minHeight: 0,
+    minWidth: 0,
     position: 'relative',
   },
   contractFeedScroll: {
     flex: 1,
+    minWidth: 0,
+    width: '100%',
+    ...Platform.select({
+      web: {
+        // Overlay scrollbar so card right edge matches sponsor channel rail.
+        overflowY: 'overlay',
+        scrollbarGutter: 'auto',
+      } as object,
+      default: {},
+    }),
   },
   contractFeedScrollContent: {
-    flexGrow: 0,
+    flexGrow: 1,
+    alignItems: 'stretch',
+    alignSelf: 'stretch',
     justifyContent: 'flex-start',
+    width: '100%',
+    maxWidth: '100%',
     paddingHorizontal: HUB_BROWSER_CONTENT_PADDING_H,
+    ...Platform.select({
+      web: {
+        boxSizing: 'border-box',
+      } as object,
+      default: {},
+    }),
   },
   feedSweep: {
     position: 'absolute',
@@ -1392,6 +1414,8 @@ const styles = StyleSheet.create({
     lineHeight: 19,
   },
   independentSection: {
+    width: '100%',
+    alignSelf: 'stretch',
     // 16–20px above Black Channel group header.
     marginTop: 20,
     // 8–12px between Black Channel divider and its first record.
@@ -1418,10 +1442,14 @@ const styles = StyleSheet.create({
   },
   signal: {
     position: 'relative',
+    width: '100%',
+    alignSelf: 'stretch',
     marginBottom: 10,
     overflow: 'hidden',
   },
   signalIndependent: {
+    width: '100%',
+    alignSelf: 'stretch',
     marginBottom: 10,
   },
   signalIdentityMark: {

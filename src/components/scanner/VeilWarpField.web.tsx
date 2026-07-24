@@ -394,9 +394,9 @@ void main() {
 
   // Inky dark grey / blue-green surround; scanner well sits slightly darker.
   // Fine-tune: lower RGB = darker; lower wash coeffs = less lift from violet/mint.
-  vec3 surroundVoid = hexToRgb(3.0, 6.0, 8.0);
-  vec3 surroundCool = hexToRgb(7.0, 12.0, 15.0);
-  vec3 surroundTeal = hexToRgb(5.0, 13.0, 12.0);
+  vec3 surroundVoid = hexToRgb(2.0, 4.0, 6.0);
+  vec3 surroundCool = hexToRgb(5.0, 9.0, 12.0);
+  vec3 surroundTeal = hexToRgb(4.0, 10.0, 11.0);
   vec3 wellVoid = hexToRgb(3.0, 6.0, 8.0);
   vec3 wellCool = hexToRgb(7.0, 12.0, 14.0);
   vec3 wellTeal = hexToRgb(6.0, 14.0, 13.0);

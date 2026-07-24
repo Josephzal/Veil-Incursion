@@ -84,7 +84,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
     minHeight: 28,
-    paddingHorizontal: 18,
+    // Horizontal inset comes from the feed host so cards + header share one edge.
+    paddingHorizontal: 0,
   },
   titleRow: {
     flexDirection: 'row',

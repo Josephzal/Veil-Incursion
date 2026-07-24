@@ -359,7 +359,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    minHeight: 82,
+    // Fixed height so fabricable / clearance / rumored rows share one footprint
+    // (effect line is always reserved for 2 lines).
+    height: 88,
+    minHeight: 88,
+    maxHeight: 88,
     paddingVertical: 11,
     paddingLeft: 14,
     paddingRight: 12,
@@ -383,7 +387,9 @@ const styles = StyleSheet.create({
     borderColor: HUB_CARD_BORDER_SELECTED,
   },
   signalSelectCompact: {
-    minHeight: 74,
+    height: 80,
+    minHeight: 80,
+    maxHeight: 80,
     paddingVertical: 9,
   },
   glyphSlot: {
@@ -396,6 +402,7 @@ const styles = StyleSheet.create({
   signalMain: {
     flex: 1,
     minWidth: 0,
+    justifyContent: 'center',
   },
   signalTitle: {
     color: VEIL.text,

@@ -29,7 +29,7 @@ import FabricationReceipt, {
 } from './blackMarket/FabricationReceipt';
 import HoldToFabricateButton from './blackMarket/HoldToFabricateButton';
 import type { SchematicGlyphFamily } from './blackMarket/SchematicGlyph';
-import { VEIL, VEIL_MINT_TONE } from '../../theme/veilTerminalTokens';
+import { VEIL } from '../../theme/veilTerminalTokens';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useWorldState } from '../../context/WorldStateContext';
 import { useHubLayout } from '../../context/HubLayoutContext';
@@ -58,7 +58,7 @@ import {
   resolveVendorSelectionAfterHoldingRemoved,
 } from './blackMarket/vendorPresentation';
 import type { ForgeSchematicPresentation } from './blackMarket/forgePresentation';
-import { OccultNeonRail, RegistrationBrackets } from './veilChrome';
+import { OccultNeonRail } from './veilChrome';
 import {
   HUB_CARD_BORDER,
   HUB_CARD_BORDER_SELECTED,
@@ -1285,6 +1285,16 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
           eyebrow="RESTRICTED EXCHANGE // BM-01"
           title="BLACK MARKET"
           compact={compact}
+          trailing={(
+            <View style={styles.creditBalance}>
+              <TerminalText size={6.5} letterSpacing={1} style={styles.creditLabel}>
+                CREDIT BALANCE
+              </TerminalText>
+              <TerminalText size={13} letterSpacing={0.25} style={styles.balanceCredits}>
+                {`${formatCreditBalance(account.cabalCredits)} CR`}
+              </TerminalText>
+            </View>
+          )}
         />
 
         <View
@@ -1303,6 +1313,7 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
                 {...(Platform.OS === 'web' ? ({ 'aria-selected': selected } as object) : {})}
                 style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ([
                   styles.mode,
+                  narrow && styles.modeNarrow,
                   compact && styles.modeCompact,
                   selected && styles.modeSelected,
                   ((hovered || pressed) && !selected) ? styles.modeHover : null,
@@ -1341,16 +1352,6 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
               </HapticPressable>
             );
           })}
-          <View style={styles.modeSpacer} />
-          <View style={[styles.creditBalance, compact && styles.creditBalanceCompact]}>
-            <RegistrationBrackets tone={VEIL_MINT_TONE} active corners="all" />
-            <TerminalText size={6.5} letterSpacing={1} style={styles.creditLabel}>
-              CREDIT BALANCE
-            </TerminalText>
-            <TerminalText size={13} letterSpacing={0.25} style={styles.balanceCredits}>
-              {`${formatCreditBalance(account.cabalCredits)} CR`}
-            </TerminalText>
-          </View>
         </View>
 
         <View style={styles.modeContent}>
@@ -1437,28 +1438,16 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   creditBalance: {
-    position: 'relative',
     alignItems: 'flex-end',
-    justifyContent: 'center',
-    alignSelf: 'center',
+    justifyContent: 'flex-end',
     flexShrink: 0,
-    // Pin to channel-button height so CREDIT BALANCE cannot stretch the modes
-    // row and push Forge section labels lower than Loadout.
-    height: HUB_CHANNEL_BUTTON_HEIGHT,
-    minHeight: HUB_CHANNEL_BUTTON_HEIGHT,
-    maxHeight: HUB_CHANNEL_BUTTON_HEIGHT,
-    paddingHorizontal: 18,
-    minWidth: 168,
-  },
-  creditBalanceCompact: {
-    height: HUB_CHANNEL_BUTTON_COMPACT_HEIGHT,
-    minHeight: HUB_CHANNEL_BUTTON_COMPACT_HEIGHT,
-    maxHeight: HUB_CHANNEL_BUTTON_COMPACT_HEIGHT,
+    minWidth: 140,
+    paddingBottom: 2,
   },
   creditLabel: {
     color: META,
     fontWeight: '700',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   balanceCredits: {
     color: VEIL.text,
@@ -1479,8 +1468,11 @@ const styles = StyleSheet.create({
   },
   mode: {
     position: 'relative',
-    minWidth: 176,
-    maxWidth: 220,
+    // Match Loadout Descent Manifest slot width (1/5 of the channel rail).
+    width: 168,
+    minWidth: 168,
+    flexGrow: 0,
+    flexShrink: 0,
     height: HUB_CHANNEL_BUTTON_HEIGHT,
     minHeight: HUB_CHANNEL_BUTTON_HEIGHT,
     maxHeight: HUB_CHANNEL_BUTTON_HEIGHT,
@@ -1496,12 +1488,21 @@ const styles = StyleSheet.create({
       web: {
         cursor: 'pointer',
         outlineStyle: 'none',
+        // Same math as Loadout `repeat(5, 1fr)` + 10px gaps.
+        width: 'calc((100% - 40px) / 5)',
+        minWidth: 'calc((100% - 40px) / 5)',
+        maxWidth: 'calc((100% - 40px) / 5)',
       } as object,
       default: {},
     }),
   },
+  modeNarrow: {
+    // Match Loadout `manifestSlotNarrow` when the rail scrolls / compresses.
+    width: 168,
+    minWidth: 168,
+    maxWidth: 168,
+  },
   modeCompact: {
-    minWidth: 150,
     height: HUB_CHANNEL_BUTTON_COMPACT_HEIGHT,
     minHeight: HUB_CHANNEL_BUTTON_COMPACT_HEIGHT,
     maxHeight: HUB_CHANNEL_BUTTON_COMPACT_HEIGHT,
@@ -1559,9 +1560,6 @@ const styles = StyleSheet.create({
   packetA: { left: 0, top: 20 },
   packetB: { left: 18, top: 40 },
   packetC: { left: 8, top: 58 },
-  modeSpacer: {
-    flex: 1,
-  },
   modeContent: {
     flex: 1,
     minWidth: 0,
