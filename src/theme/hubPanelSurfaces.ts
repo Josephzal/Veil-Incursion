@@ -19,6 +19,17 @@ export const HUB_PAGE_HEADER_PADDING_TOP = 16;
 export const HUB_PAGE_HEADER_PADDING_BOTTOM = 14;
 export const HUB_PAGE_HEADER_COMPACT_PADDING_H = 14;
 export const HUB_PAGE_HEADER_COMPACT_PADDING_V = 10;
+
+/**
+ * Shared height for hub channel / mode / manifest slot buttons:
+ * Contract Board sponsors, Black Market Forge/Vendor, Loadout Descent Manifest.
+ * Width may differ per screen; height must match.
+ */
+export const HUB_CHANNEL_BUTTON_HEIGHT = 60;
+export const HUB_CHANNEL_BUTTON_COMPACT_HEIGHT = 52;
+export const HUB_CHANNEL_BUTTON_PADDING_V = 11;
+export const HUB_CHANNEL_BUTTON_COMPACT_PADDING_V = 8;
+export const HUB_CHANNEL_RAIL_INSET = 10;
 export const HUB_PAGE_TITLE = VEIL.text;
 export const HUB_PAGE_EYEBROW = VEIL.textDim;
 export const HUB_DOSSIER_TITLE = '#F2F4F1';
