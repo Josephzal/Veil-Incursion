@@ -1,14 +1,31 @@
-import { DOSSIER_BORDER, DOSSIER_FOREGROUND } from './dossierSurface';
+import {
+  SCANNER_BORDER_QUIET,
+  SCANNER_DOSSIER_SURFACE,
+  SCANNER_FIELD_SURROUND,
+  SCANNER_INSTRUMENT_SURFACE,
+  SCANNER_PHOSPHOR,
+  SCANNER_TEXT_PRIMARY,
+  SCANNER_TEXT_SECONDARY,
+  SCANNER_VEIL_VIOLET,
+} from '../components/scanner/vectorScannerShared';
 
-export const HARVEST_MUTED_SLATE = '#94A3B8';
-export const HARVEST_PANEL_BORDER = '#1e293b';
-export const HARVEST_PANEL_BG = 'rgba(15, 23, 42, 0.85)';
+/** Align harvest chrome with Field Scanner / Veil operational surfaces. */
+export const HARVEST_MUTED_SLATE = SCANNER_TEXT_SECONDARY;
+export const HARVEST_TEXT_PRIMARY = SCANNER_TEXT_PRIMARY;
+export const HARVEST_PHOSPHOR = SCANNER_PHOSPHOR;
+export const HARVEST_VEIL_VIOLET = SCANNER_VEIL_VIOLET;
+export const HARVEST_DANGER = 'rgba(180, 86, 108, 0.92)';
 
-export const HARVEST_CONTAINMENT_BG = 'rgba(0, 0, 0, 0.2)';
-export const HARVEST_CONTAINMENT_BORDER = 'rgba(51, 65, 85, 0.3)';
+export const HARVEST_PANEL_BORDER = SCANNER_BORDER_QUIET;
+export const HARVEST_PANEL_BG = SCANNER_INSTRUMENT_SURFACE;
+export const HARVEST_CARGO_SURFACE = SCANNER_DOSSIER_SURFACE;
 
-export const HARVEST_GRID_CELL_BORDER = DOSSIER_BORDER;
-export const HARVEST_GRID_CELL_EMPTY_BG = DOSSIER_FOREGROUND;
+export const HARVEST_CONTAINMENT_BG = 'rgba(4, 10, 9, 0.72)';
+export const HARVEST_CONTAINMENT_BORDER = SCANNER_BORDER_QUIET;
+export const HARVEST_FIELD_SURROUND = SCANNER_FIELD_SURROUND;
+
+export const HARVEST_GRID_CELL_BORDER = 'rgba(108, 156, 143, 0.16)';
+export const HARVEST_GRID_CELL_EMPTY_BG = 'rgba(4, 8, 8, 0.88)';
 
 export function resolveHarvestGridCellBackground(options: {
   occupied: boolean;
@@ -19,11 +36,11 @@ export function resolveHarvestGridCellBackground(options: {
   const { occupied, isPreview, canDrop, accentColor } = options;
 
   if (isPreview) {
-    return canDrop ? `${accentColor}33` : 'rgba(239, 68, 68, 0.22)';
+    return canDrop ? 'rgba(100, 201, 177, 0.22)' : 'rgba(180, 86, 108, 0.22)';
   }
 
   if (occupied) {
-    return `${accentColor}24`;
+    return `${accentColor}1F`;
   }
 
   return HARVEST_GRID_CELL_EMPTY_BG;

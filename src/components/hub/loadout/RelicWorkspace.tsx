@@ -158,7 +158,8 @@ export function resolveRelicDossier(
 
 const styles = StyleSheet.create({
   feed: { flex: 1, minHeight: 0 },
-  feedContent: { paddingHorizontal: 0, paddingTop: 4, paddingBottom: 16 },
+  // Top spacing owned by Loadout catalogHeader (matches Black Market section rhythm).
+  feedContent: { paddingHorizontal: 0, paddingTop: 0, paddingBottom: 16 },
   empty: { paddingHorizontal: 0, paddingTop: 8, paddingBottom: 12 },
   emptyTitle: { color: TEXT_PRIMARY, fontWeight: '700' },
   emptyBody: { marginTop: 6, color: TEXT_SECONDARY, lineHeight: 19, maxWidth: 480 },

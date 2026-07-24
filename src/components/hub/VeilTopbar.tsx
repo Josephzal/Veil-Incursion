@@ -202,21 +202,6 @@ export default function VeilTopbar({
             </HapticPressable>
           );
         })}
-
-        <View
-          style={[styles.navItem, { paddingHorizontal: navPadH, opacity: 0.45 }]}
-          accessibilityState={{ disabled: true }}
-        >
-          <View style={styles.navItemInner}>
-            <TerminalText
-              size={screenWidth <= 1250 ? 7.5 : 8}
-              letterSpacing={screenWidth <= 1250 ? 0.7 : 0.9}
-              style={{ color: NAV_IDLE, fontWeight: '700' }}
-            >
-              ARCHIVE
-            </TerminalText>
-          </View>
-        </View>
       </View>
 
       <View style={styles.status}>
@@ -250,7 +235,7 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         backgroundImage:
-          'linear-gradient(180deg, rgb(0, 0, 0), rgb(0,0,0))',
+          'linear-gradient(180deg, rgb(12, 12, 12), rgb(12,12,12))',
         display: 'grid',
         gridTemplateColumns: 'minmax(190px, 1fr) auto minmax(190px, 1fr)',
         alignItems: 'center',

@@ -1,10 +1,32 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { VEIL_WARP_COLORS, VEIL_WARP_CONFIG } from './veilWarpFieldConfig';
+import {
+  VEIL_WARP_COLORS,
+  VEIL_WARP_CONFIG,
+  VEIL_WARP_MODE_BASE,
+  type VeilWarpFieldMode,
+} from './veilWarpFieldConfig';
 import {
   SWEEP_WAKE_DEG,
   scannerSweepBridge,
 } from './scannerSweepBridge';
+import { veilTransitBridge } from './veilTransitBridge';
+
+export interface VeilWarpFieldProps {
+  /** ambientScanner (default) · incursionIngress · successfulExtraction */
+  mode?: VeilWarpFieldMode;
+  /** When true, drive intensity from veilTransitBridge (full-screen transit). */
+  transitDriven?: boolean;
+  /** Web host style overrides (full-screen transit stacking). */
+  style?: {
+    position?: 'absolute' | 'relative' | 'fixed';
+    inset?: number | string;
+    width?: number | string;
+    height?: number | string;
+    zIndex?: number;
+    [key: string]: unknown;
+  };
+}
 
 const VERT_SRC = `#version 300 es
 in vec2 aPosition;
@@ -49,6 +71,18 @@ uniform float uSelectionInitialSec;
 uniform float uSelectionFlowInfluence;
 uniform float uSelectionRadialStrength;
 uniform float uSelectionTangentialStrength;
+uniform float uTransitActive;
+uniform float uTransitMode;
+uniform float uTransitProgress;
+uniform vec2 uTransitFocal;
+uniform float uTransitAperture;
+uniform float uTransitCover;
+uniform float uTransitAttraction;
+uniform float uTransitDensityScale;
+uniform float uTransitChromatic;
+uniform float uTransitPulse;
+uniform float uTransitPulseStart;
+uniform float uTransitFullBleed;
 
 in vec2 vUv;
 out vec4 fragColor;
@@ -147,11 +181,16 @@ vec3 mapChromaToPalette(float c) {
 void main() {
   vec2 uv = vUv;
   float aspect = uResolution.x / max(uResolution.y, 1.0);
+  float transitOn = step(0.5, uTransitActive);
 
   // Sweep uses y-down screen space to match SVG scanner angles.
   vec2 sweepDelta = vec2((uv.x - uScannerCenter.x) * aspect, -(uv.y - uScannerCenter.y));
   float sweepDist = length(sweepDelta);
-  float inScope = 1.0 - smoothstep(uScannerRadius * 0.94, uScannerRadius * 1.04, sweepDist);
+  float inScope = mix(
+    1.0 - smoothstep(uScannerRadius * 0.94, uScannerRadius * 1.04, sweepDist),
+    1.0,
+    max(uTransitFullBleed, transitOn)
+  );
   float sampleDeg = degrees(atan(sweepDelta.y, sweepDelta.x));
   if (sampleDeg < 0.0) sampleDeg += 360.0;
 
@@ -187,16 +226,36 @@ void main() {
 
   // --- Base flow (accepted Veil character) ---
   vec2 baseFlow = sampleVeilFlow(p, t, warpScale);
+
+  // Transit focal attraction — pull / push existing currents (same flow field).
+  vec2 transitFocalDelta = vec2((uv.x - uTransitFocal.x) * aspect, uv.y - uTransitFocal.y);
+  float transitFocalDist = length(transitFocalDelta) + 0.001;
+  vec2 transitFocalDir = transitFocalDelta / transitFocalDist;
+  // Asymmetry so the portal rim is never a clean circle.
+  float apertureWarp = 1.0 + (vnoise(transitFocalDir * 3.1 + t * 0.4) - 0.5) * 0.28
+    + (vnoise(transitFocalDir.yx * 5.2 - t * 0.25) - 0.5) * 0.12;
+  float warpedFocalDist = transitFocalDist * apertureWarp;
+  vec2 transitPull = -transitFocalDir * (uTransitAttraction * 0.028 * transitOn)
+    * smoothstep(1.6, 0.05, warpedFocalDist);
+  // Extraction adds edge-sourced filaments racing inward.
+  float edgeBand = smoothstep(0.35, 0.95, max(abs(p.x) / max(aspect, 0.001), abs(p.y)));
+  vec2 edgeIn = -normalize(p + 0.0001) * (edgeBand * uTransitAttraction * 0.012 * transitOn)
+    * step(1.5, uTransitMode);
+  baseFlow += transitPull + edgeIn;
+
   vec2 qBase = p + baseFlow;
 
-  // --- Selected lock in scanner UV (same transform as visible pips) ---
-  vec2 selDelta = vec2((uv.x - uSelectedContact.x) * aspect, uv.y - uSelectedContact.y);
+  // --- Selected lock / transit pulse in UV ---
+  vec2 pulseContact = mix(uSelectedContact, uTransitFocal, transitOn);
+  float pulseHas = mix(uHasSelectedContact, step(0.01, uTransitPulse), transitOn);
+  float pulseStrength = mix(uSelectionStrength, uTransitPulse, transitOn);
+  vec2 selDelta = vec2((uv.x - pulseContact.x) * aspect, uv.y - pulseContact.y);
   float selDist = length(selDelta);
-  float selGate = uHasSelectedContact * uSelectionStrength * inScope;
+  float selGate = pulseHas * pulseStrength * inScope;
   float selWell = selGate * smoothstep(0.15, 0.0, selDist);
   float selCore = selGate * smoothstep(0.05, 0.0, selDist);
 
-  vec2 selOrigin = (uSelectedContact - 0.5) * vec2(aspect, 1.0) + vec2(-0.08, 0.05);
+  vec2 selOrigin = (pulseContact - 0.5) * vec2(aspect, 1.0) + vec2(-0.08, 0.05);
   vec2 originFlow = sampleVeilFlow(selOrigin, t, warpScale);
   vec2 relativeFlow = baseFlow - originFlow;
 
@@ -205,8 +264,8 @@ void main() {
   vec2 radialDir = rippleSpace / max(distortedDist, 0.0001);
   vec2 tangentialDir = vec2(-radialDir.y, radialDir.x);
 
-  float selAge = max(0.0, uTime - uSelectionStartTime);
-  float expandDur = max(uSelectionRippleExpand, 0.05);
+  float selAge = max(0.0, uTime - mix(uSelectionStartTime, uTransitPulseStart, transitOn));
+  float expandDur = max(mix(uSelectionRippleExpand, 0.22, transitOn), 0.05);
   float expandT = clamp(selAge / expandDur, 0.0, 1.0);
   float expandEase = 1.0 - pow(1.0 - expandT, 2.2);
   float fadeEnd = expandDur + 0.25;
@@ -257,7 +316,7 @@ void main() {
   vec2 q = coupledQ;
 
   // Irregular iso-spacing (~12–18 discernible paths; not a dense topo map).
-  float density = 2.55 + vnoise(q * 0.85 + 4.2) * 0.55;
+  float density = (2.55 + vnoise(q * 0.85 + 4.2) * 0.55) * mix(1.0, uTransitDensityScale, transitOn);
   float phase = field * density + vnoise(q * 1.15) * 0.22;
   float band = abs(fract(phase) - 0.5);
   float fw = max(fwidth(phase), 1e-4);
@@ -302,12 +361,36 @@ void main() {
   float localVariation = vnoise(q * 3.1 + field * 0.16 + vec2(-slowT * 0.35, slowT * 0.5));
   // Contour-index nudge so adjacent strands can differ and hues travel along a path.
   float strandNudge = (vnoise(vec2(bandId * 0.63, phase * 0.09 + slowT)) - 0.5) * 0.22;
-  // Bias chroma slightly toward green so violet/mint both read clearly.
-  float chroma = clamp(broadChroma * 0.68 + localVariation * 0.32 + strandNudge + 0.06, 0.0, 1.0);
+  // Ambient bias toward green; transit bias toward pink/violet occult range.
+  float chromaBias = mix(0.06, -0.12, transitOn);
+  float chroma = clamp(broadChroma * 0.68 + localVariation * 0.32 + strandNudge + chromaBias, 0.0, 1.0);
   vec3 contourColor = mapChromaToPalette(chroma);
   // Lift line luminance so strands stay readable over the dark well.
   float lum = dot(contourColor, vec3(0.3, 0.55, 0.15));
   contourColor *= mix(1.22, 1.05, smoothstep(0.2, 0.55, lum));
+
+  // Transit: varied occult pinks (soft / dusty / mauve / magenta) — not one neon shade.
+  vec3 softPink = hexToRgb(214.0, 110.0, 168.0);
+  vec3 dustyRose = hexToRgb(164.0, 78.0, 122.0);
+  vec3 mauve = hexToRgb(132.0, 82.0, 148.0);
+  vec3 deepMagenta = hexToRgb(176.0, 58.0, 128.0);
+  vec3 paleRose = hexToRgb(220.0, 148.0, 186.0);
+  if (transitOn > 0.5) {
+    float pinkGate = 1.0 - smoothstep(0.48, 0.78, chroma);
+    float shadeA = vnoise(q * 2.35 + vec2(bandId * 0.31, slowT));
+    float shadeB = vnoise(q * 5.2 - vec2(t * 0.07, bandId * 0.19));
+    float shadeC = vnoise(vec2(phase * 0.4, field * 0.55) + slowT);
+    vec3 pinkA = mix(dustyRose, softPink, shadeA);
+    vec3 pinkB = mix(mauve, deepMagenta, shadeB);
+    vec3 pinkContour = mix(pinkA, pinkB, localVariation);
+    pinkContour = mix(pinkContour, paleRose, shadeC * shadeA * 0.4);
+    // Strand-to-strand drift so neighboring filaments don't match.
+    pinkContour = mix(pinkContour, mauve, strandNudge * 0.55 + 0.2);
+    contourColor = mix(contourColor, pinkContour, pinkGate * 0.78);
+    // Keep mint strands mint — they mingle with the pinks, not get replaced.
+    float mintGate = smoothstep(0.52, 0.82, chroma);
+    contourColor = mix(contourColor, mapChromaToPalette(chroma), mintGate * 0.55);
+  }
 
   // Inky dark grey / blue-green surround; scanner well sits slightly darker.
   // Fine-tune: lower RGB = darker; lower wash coeffs = less lift from violet/mint.
@@ -318,7 +401,11 @@ void main() {
   vec3 wellCool = hexToRgb(7.0, 12.0, 14.0);
   vec3 wellTeal = hexToRgb(6.0, 14.0, 13.0);
   vec3 mint = hexToRgb(100.0, 201.0, 177.0);
-  vec3 violet = hexToRgb(92.0, 58.0, 148.0);
+  vec3 violet = mix(
+    hexToRgb(92.0, 58.0, 148.0),
+    softPink,
+    transitOn * 0.65
+  );
 
   float bgNoise = chromaFbm(q * 0.55 + vec2(slowT * 0.35, -slowT * 0.25));
   vec3 surroundBg = mix(surroundVoid, surroundCool, 0.5 + bgNoise * 0.22);
@@ -388,6 +475,40 @@ void main() {
   col = mix(bg, col, 0.96);
   col = min(col, vec3(0.52));
 
+  // --- Transit aperture: rough asymmetrical dark mass + varied pink / mint rim ---
+  if (transitOn > 0.5) {
+    float apR = max(uTransitAperture, 0.001);
+    float rim = abs(warpedFocalDist - apR);
+    float rimBand = exp(-(rim * rim) / max(0.0012 * apR * apR + 0.0004, 1e-6));
+    float innerGlow = exp(-(rim * rim) / max(0.004 * apR * apR + 0.001, 1e-6));
+    float inside = 1.0 - smoothstep(apR * 0.82, apR * 1.08, warpedFocalDist);
+    // Ingress expands darkness from focus; extraction compresses scene into focus.
+    float voidMass = inside * (0.62 + 0.38 * smoothstep(0.15, 0.9, uTransitCover));
+    vec3 abyss = hexToRgb(1.0, 1.0, 2.0);
+    col = mix(col, abyss, voidMass * 0.94);
+    // Occult rim — soft pink / magenta / mauve variation, less neon.
+    float rimShade = vnoise(transitFocalDir * 4.0 + t * 0.2);
+    vec3 rimPink = mix(dustyRose, softPink, rimShade);
+    rimPink = mix(rimPink, deepMagenta, 1.0 - rimShade);
+    col += rimPink * (rimBand * (0.28 + uTransitChromatic * 0.26) * uVioletIntensity);
+    col += mauve * (innerGlow * 0.14 * uVioletIntensity);
+    col += mint * (rimBand * (0.14 + uTransitChromatic * 0.16) * uMintIntensity);
+    // Restrained chromatic separation (pink/mint), no white flash.
+    float stretch = uTransitChromatic * smoothstep(0.05, 0.55, warpedFocalDist) * (1.0 - inside * 0.5);
+    vec2 chromaOff = transitFocalDir * (0.0045 * stretch);
+    float mintBleed = vnoise(q * 2.2 + t * 0.3) * stretch;
+    float pinkBleed = vnoise(q * 2.2 - t * 0.25 + 3.1) * stretch;
+    col.g += mintBleed * 0.04;
+    col.r += pinkBleed * 0.04;
+    col.b += pinkBleed * 0.035;
+    col += mint * (abs(chromaOff.x) * 1.8);
+    col += softPink * (abs(chromaOff.y) * 2.0);
+    // Near-black cover — short compression beat handled by timeline cover curve.
+    vec3 coverBlack = hexToRgb(0.0, 0.0, 1.0);
+    col = mix(col, coverBlack, clamp(uTransitCover, 0.0, 1.0));
+    col = min(col, vec3(0.78));
+  }
+
   fragColor = vec4(col, 1.0);
 }
 `;
@@ -440,13 +561,21 @@ function prefersReducedMotion(): boolean {
 }
 
 /**
- * Web-only WebGL2 Veil atmosphere — decorative underlay for the scanner field.
- * Independent RAF; no React per-frame state. Sweep angle is read from scannerSweepBridge.
+ * Web-only WebGL2 Veil atmosphere — scanner underlay or full-screen transit field.
+ * Independent RAF; no React per-frame state. Sweep / transit read from bridges.
  */
-export default function VeilWarpField(): React.JSX.Element {
+export default function VeilWarpField({
+  mode = 'ambientScanner',
+  transitDriven = false,
+  style,
+}: VeilWarpFieldProps): React.JSX.Element {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [failed, setFailed] = useState(false);
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
+  const transitDrivenRef = useRef(transitDriven);
+  transitDrivenRef.current = transitDriven;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -526,6 +655,18 @@ export default function VeilWarpField(): React.JSX.Element {
       uSelectionFlowInfluence: gl.getUniformLocation(program, 'uSelectionFlowInfluence'),
       uSelectionRadialStrength: gl.getUniformLocation(program, 'uSelectionRadialStrength'),
       uSelectionTangentialStrength: gl.getUniformLocation(program, 'uSelectionTangentialStrength'),
+      uTransitActive: gl.getUniformLocation(program, 'uTransitActive'),
+      uTransitMode: gl.getUniformLocation(program, 'uTransitMode'),
+      uTransitProgress: gl.getUniformLocation(program, 'uTransitProgress'),
+      uTransitFocal: gl.getUniformLocation(program, 'uTransitFocal'),
+      uTransitAperture: gl.getUniformLocation(program, 'uTransitAperture'),
+      uTransitCover: gl.getUniformLocation(program, 'uTransitCover'),
+      uTransitAttraction: gl.getUniformLocation(program, 'uTransitAttraction'),
+      uTransitDensityScale: gl.getUniformLocation(program, 'uTransitDensityScale'),
+      uTransitChromatic: gl.getUniformLocation(program, 'uTransitChromatic'),
+      uTransitPulse: gl.getUniformLocation(program, 'uTransitPulse'),
+      uTransitPulseStart: gl.getUniformLocation(program, 'uTransitPulseStart'),
+      uTransitFullBleed: gl.getUniformLocation(program, 'uTransitFullBleed'),
     };
 
     let rafId: number | null = null;
@@ -541,20 +682,23 @@ export default function VeilWarpField(): React.JSX.Element {
     /** Shader-clock timestamp of the current lock ripple — restarted on selectionEpoch. */
     let selectionStartTimeSec = -10;
     let lastSelectionEpoch = -1;
+    let transitPulseStartSec = -10;
+    let lastTransitPulseEpoch = -1;
 
     const cfg = VEIL_WARP_CONFIG;
 
     const applyStaticUniforms = () => {
       if (!gl) return;
+      const modeBase = VEIL_WARP_MODE_BASE[modeRef.current];
       gl.useProgram(program);
-      gl.uniform1f(uniforms.uMotionScale, cfg.motionSpeed);
+      gl.uniform1f(uniforms.uMotionScale, modeBase.motionSpeed);
       gl.uniform1f(uniforms.uIntensity, 1);
-      gl.uniform1f(uniforms.uWarpStrength, cfg.warpStrength);
-      gl.uniform1f(uniforms.uContourIntensity, cfg.contourIntensity);
-      gl.uniform1f(uniforms.uVioletIntensity, cfg.violetIntensity);
+      gl.uniform1f(uniforms.uWarpStrength, modeBase.warpStrength);
+      gl.uniform1f(uniforms.uContourIntensity, modeBase.contourIntensity);
+      gl.uniform1f(uniforms.uVioletIntensity, modeBase.violetIntensity);
       gl.uniform1f(uniforms.uPinkIntensity, cfg.pinkIntensity);
-      gl.uniform1f(uniforms.uMintIntensity, cfg.mintIntensity);
-      gl.uniform1f(uniforms.uVignetteStrength, cfg.vignetteStrength);
+      gl.uniform1f(uniforms.uMintIntensity, modeBase.mintIntensity);
+      gl.uniform1f(uniforms.uVignetteStrength, modeBase.vignetteStrength);
       gl.uniform1f(uniforms.uWakeDeg, SWEEP_WAKE_DEG);
       gl.uniform1f(uniforms.uSweepLeadDeg, cfg.sweepLeadDeg);
       gl.uniform1f(uniforms.uSweepContourBoost, cfg.sweepContourBoost);
@@ -567,6 +711,7 @@ export default function VeilWarpField(): React.JSX.Element {
       gl.uniform1f(uniforms.uSelectionFlowInfluence, cfg.selectionRippleFlowInfluence);
       gl.uniform1f(uniforms.uSelectionRadialStrength, cfg.selectionRippleRadialStrength);
       gl.uniform1f(uniforms.uSelectionTangentialStrength, cfg.selectionRippleTangentialStrength);
+      gl.uniform1f(uniforms.uTransitFullBleed, modeBase.fullBleed ? 1 : 0);
     };
 
     const resizeIfNeeded = () => {
@@ -603,15 +748,57 @@ export default function VeilWarpField(): React.JSX.Element {
           selectionStartTimeSec = timeSec;
         }
       }
+      const transit = veilTransitBridge;
+      const driven = transitDrivenRef.current && transit.active > 0.5;
+      if (driven && transit.pulseEpoch !== lastTransitPulseEpoch) {
+        lastTransitPulseEpoch = transit.pulseEpoch;
+        transitPulseStartSec = timeSec;
+      }
       gl.uniform1f(uniforms.uSweepAngle, sample.angleDeg);
       gl.uniform2f(uniforms.uScannerCenter, sample.centerU, sample.centerV);
       gl.uniform1f(uniforms.uScannerRadius, sample.radius);
-      gl.uniform1f(uniforms.uSweepActive, sample.active);
-      gl.uniform1f(uniforms.uReducedMotion, reduced ? 1 : 0);
+      // Transit overlay owns the field — suppress scanner sweep coupling.
+      gl.uniform1f(uniforms.uSweepActive, driven ? 0 : sample.active);
+      gl.uniform1f(uniforms.uReducedMotion, (reduced || transit.reducedMotion > 0.5) ? 1 : 0);
       gl.uniform2f(uniforms.uSelectedContact, sample.selectedU, sample.selectedV);
-      gl.uniform1f(uniforms.uHasSelectedContact, sample.hasSelectedContact);
-      gl.uniform1f(uniforms.uSelectionStrength, sample.selectionStrength);
+      gl.uniform1f(uniforms.uHasSelectedContact, driven ? 0 : sample.hasSelectedContact);
+      gl.uniform1f(uniforms.uSelectionStrength, driven ? 0 : sample.selectionStrength);
       gl.uniform1f(uniforms.uSelectionStartTime, selectionStartTimeSec);
+
+      gl.uniform1f(uniforms.uTransitActive, driven ? 1 : 0);
+      gl.uniform1f(uniforms.uTransitMode, transit.mode);
+      gl.uniform1f(uniforms.uTransitProgress, transit.progress);
+      gl.uniform2f(uniforms.uTransitFocal, transit.focalU, transit.focalV);
+      gl.uniform1f(uniforms.uTransitAperture, transit.aperture);
+      gl.uniform1f(uniforms.uTransitCover, transit.cover);
+      gl.uniform1f(uniforms.uTransitAttraction, transit.attraction);
+      gl.uniform1f(uniforms.uTransitDensityScale, transit.densityScale);
+      gl.uniform1f(uniforms.uTransitChromatic, transit.chromatic);
+      gl.uniform1f(uniforms.uTransitPulse, transit.pulse);
+      gl.uniform1f(uniforms.uTransitPulseStart, transitPulseStartSec);
+      gl.uniform1f(
+        uniforms.uTransitFullBleed,
+        VEIL_WARP_MODE_BASE[modeRef.current].fullBleed || driven ? 1 : 0,
+      );
+    };
+
+    const applyDynamicModeUniforms = () => {
+      if (!gl) return;
+      const modeBase = VEIL_WARP_MODE_BASE[modeRef.current];
+      const transit = veilTransitBridge;
+      const driven = transitDrivenRef.current && transit.active > 0.5;
+      const motion = driven ? modeBase.motionSpeed * transit.motionBoost : modeBase.motionSpeed;
+      const warp = driven ? modeBase.warpStrength * transit.warpBoost : modeBase.warpStrength;
+      const contour = driven
+        ? modeBase.contourIntensity * transit.intensityBoost
+        : modeBase.contourIntensity;
+      gl.uniform1f(uniforms.uMotionScale, motion);
+      gl.uniform1f(uniforms.uWarpStrength, warp);
+      gl.uniform1f(uniforms.uContourIntensity, contour);
+      gl.uniform1f(uniforms.uIntensity, driven ? transit.intensityBoost : 1);
+      gl.uniform1f(uniforms.uVioletIntensity, modeBase.violetIntensity);
+      gl.uniform1f(uniforms.uMintIntensity, modeBase.mintIntensity);
+      gl.uniform1f(uniforms.uVignetteStrength, modeBase.vignetteStrength);
     };
 
     const draw = (timeSec: number) => {
@@ -621,6 +808,7 @@ export default function VeilWarpField(): React.JSX.Element {
       gl.useProgram(program);
       gl.bindVertexArray(vao);
       gl.uniform1f(uniforms.uTime, timeSec);
+      applyDynamicModeUniforms();
       applySweepUniforms(timeSec);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
     };
@@ -754,7 +942,7 @@ export default function VeilWarpField(): React.JSX.Element {
     <div
       ref={hostRef}
       aria-hidden
-      style={hostStyle}
+      style={{ ...hostStyle, ...style }}
     >
       <canvas
         ref={canvasRef}

@@ -14,7 +14,8 @@ export const HUB_TEXT_SECONDARY = HUB_META;
 /** Page header hierarchy — mirrors ContractBoardPanel header metrics. */
 export const HUB_PAGE_HEADER_MIN_HEIGHT = 92;
 export const HUB_PAGE_HEADER_COMPACT_MIN_HEIGHT = 74;
-export const HUB_PAGE_HEADER_PADDING_H = 22;
+/** Shared left content edge for hub page headers. */
+export const HUB_PAGE_HEADER_PADDING_H = 24;
 export const HUB_PAGE_HEADER_PADDING_TOP = 16;
 export const HUB_PAGE_HEADER_PADDING_BOTTOM = 14;
 export const HUB_PAGE_HEADER_COMPACT_PADDING_H = 14;
@@ -30,6 +31,31 @@ export const HUB_CHANNEL_BUTTON_COMPACT_HEIGHT = 52;
 export const HUB_CHANNEL_BUTTON_PADDING_V = 11;
 export const HUB_CHANNEL_BUTTON_COMPACT_PADDING_V = 8;
 export const HUB_CHANNEL_RAIL_INSET = 10;
+/**
+ * Shared left/right inset for channel rails + browser feed content
+ * (Contract Board sponsors/feed, Black Market modes/sections, Loadout manifest/catalog).
+ */
+export const HUB_BROWSER_CONTENT_PADDING_H = 14;
+/**
+ * Shared channel-rail → section-label → items rhythm (Black Market Forge is source of truth):
+ *   modes/manifest paddingBottom (6)
+ *   + feed/scroll paddingTop (4)
+ *   + sectionLabel marginTop (10) / marginBottom (8)
+ */
+export const HUB_BROWSER_FEED_PAD_TOP = 4;
+export const HUB_BROWSER_SECTION_LABEL_MARGIN_TOP = 10;
+export const HUB_BROWSER_SECTION_LABEL_MARGIN_BOTTOM = 8;
+
+/** Section label above browser catalogs (PERMANENT AUGMENTS / WEAPON CHASSIS / …). */
+export function hubBrowserSectionLabelStyle(): TextStyle {
+  return {
+    marginTop: HUB_BROWSER_SECTION_LABEL_MARGIN_TOP,
+    marginBottom: HUB_BROWSER_SECTION_LABEL_MARGIN_BOTTOM,
+    paddingHorizontal: HUB_BROWSER_CONTENT_PADDING_H,
+    color: 'rgba(185, 181, 167, 0.88)',
+    fontWeight: '700',
+  };
+}
 export const HUB_PAGE_TITLE = VEIL.text;
 export const HUB_PAGE_EYEBROW = VEIL.textDim;
 export const HUB_DOSSIER_TITLE = '#F2F4F1';
@@ -52,11 +78,64 @@ export const HUB_DOSSIER_FOOTER_RULE = 'rgba(105, 190, 165, 0.18)';
 /** Inset around floating hub dossiers — matches Veil Front sector briefing. */
 export const HUB_DOSSIER_EDGE_PAD = 12;
 
+/**
+ * Right-rail inspector widths — two official variants.
+ * Compact: Veil Front (map needs room). Standard: Contract / Market / Loadout.
+ * CSS analogue: clamp(min, vw, max).
+ */
+export type HubInspectorVariant = 'compact' | 'standard';
+export const HUB_INSPECTOR_COMPACT_MIN = 440;
+export const HUB_INSPECTOR_COMPACT_MAX = 520;
+export const HUB_INSPECTOR_COMPACT_VW = 0.25;
+export const HUB_INSPECTOR_STANDARD_MIN = 500;
+export const HUB_INSPECTOR_STANDARD_MAX = 640;
+export const HUB_INSPECTOR_STANDARD_VW = 0.31;
+
+/**
+ * Fixed purple focus marker for right-hand inspectors.
+ * List-card rails may still track card height; inspectors must not.
+ */
+export const HUB_INSPECTOR_FOCUS_BAR_TOP = 18;
+export const HUB_INSPECTOR_FOCUS_BAR_HEIGHT = 96;
+
 /** Section labels (OBJECTIVE, CONTRACT TERMS, etc.). */
 export const HUB_DOSSIER_LABEL = 'rgba(198, 194, 180, 0.92)';
 
 /** Primary CTA inverse text on mint fill. */
 export const HUB_CTA_INVERSE_TEXT = '#06110e';
+
+/** Resolve inspector panel content width (excludes edge pad). */
+export function hubInspectorPanelWidth(
+  viewportWidth: number,
+  variant: HubInspectorVariant = 'standard',
+): number {
+  if (variant === 'compact') {
+    return Math.round(Math.min(
+      HUB_INSPECTOR_COMPACT_MAX,
+      Math.max(HUB_INSPECTOR_COMPACT_MIN, viewportWidth * HUB_INSPECTOR_COMPACT_VW),
+    ));
+  }
+  return Math.round(Math.min(
+    HUB_INSPECTOR_STANDARD_MAX,
+    Math.max(HUB_INSPECTOR_STANDARD_MIN, viewportWidth * HUB_INSPECTOR_STANDARD_VW),
+  ));
+}
+
+/** Column host width including the floating-panel edge pad. */
+export function hubInspectorColumnWidth(
+  viewportWidth: number,
+  variant: HubInspectorVariant = 'standard',
+): number {
+  return hubInspectorPanelWidth(viewportWidth, variant) + HUB_DOSSIER_EDGE_PAD;
+}
+
+/** Fixed-length violet focus rail for inspector headers. */
+export function hubInspectorFocusBarStyle(): ViewStyle {
+  return {
+    top: HUB_INSPECTOR_FOCUS_BAR_TOP,
+    height: HUB_INSPECTOR_FOCUS_BAR_HEIGHT,
+  };
+}
 
 export function hubCardSurfaceStyle(opts?: {
   selected?: boolean;

@@ -14,7 +14,6 @@ import { snapshotWeaponForRun } from '../data/weaponRunState';
 import DevTestHubPanel from '../components/hub/DevTestHubPanel';
 import TerminalHubLayout from '../components/layout/TerminalHubLayout';
 import TerminalSafeArea from '../components/TerminalSafeArea';
-import { resolveBreachTransitionColor } from '../constants/breachTransitionColors';
 import { transitionActions } from '../stores/transitionStore';
 
 export default function OverworldHubScreen(): React.JSX.Element {
@@ -41,42 +40,49 @@ export default function OverworldHubScreen(): React.JSX.Element {
   const handleInitiateDeepDive = useCallback(() => {
     if (launchingIncursion) return;
     setLaunchingIncursion(true);
-    const breachColor = resolveBreachTransitionColor(breachFaction);
-    transitionActions.startBreaching(breachColor, () => {
-      const { cargo: initialCargo, runItems: initialRunItems } = commitDescentLoadout();
-      const { runGenerationContext, runModifiers, runWorldBrief } = buildRunContextForDescent();
-      const weaponProgression = {
-        weaponUnlocks: account.weaponUnlocks,
-        weaponTiers: account.weaponTiers,
-        equippedWeaponByClass: account.equippedWeaponByClass,
-      };
-      const weaponSnapshot = snapshotWeaponForRun(account.activeClass, weaponProgression);
-      appendHubLog('>> DESCENT LOADOUT LOCKED — CARGO MANIFEST COMMITTED TO RUN STATE.');
-      appendHubLog('>> RUN ITEM SLOTS LOCKED — TACTICAL MANIFEST COMMITTED.');
-      appendHubLog(`>> WEAPON LINK LOCKED — ${weaponSnapshot.activeWeaponFamilyId.replace(/-/g, ' ').toUpperCase()} TIER ${weaponSnapshot.activeWeaponTier}.`);
-      appendHubLog(`>> VEIL FRONT BREACH — ${runGenerationContext.sectorState.displayName.toUpperCase()} // ${runGenerationContext.activeOperation.title.toUpperCase()} // GRADE ${runGenerationContext.breachGrade}`);
-      startNewRun({
-        factionPerks: account.factionPerks,
-        unlockedBiomes: account.unlockedBiomes,
-        aegisLoadout: account.aegisLoadout,
-        hexShotLoadout: account.hexShotLoadout,
-        envoyLoadout: account.envoyLoadout,
-        activeClass: account.activeClass,
-        alignedFaction: breachFaction,
-        initialCargo,
-        initialRunItems,
-        runGenerationContext,
-        runWorldBrief,
-        runModifiers,
-        startingVeilResidueBalance: account.veilResidueBalance,
-        equippedKeepsakeId: account.equippedKeepsakeId,
-        keepsakeDeployment: account.keepsakeDeployment,
-        activeWeaponFamilyId: weaponSnapshot.activeWeaponFamilyId,
-        activeWeaponTier: weaponSnapshot.activeWeaponTier,
-      });
+
+    // Prepare destination before the 1s Veil transit begins — swap stays instantaneous under cover.
+    const { cargo: initialCargo, runItems: initialRunItems } = commitDescentLoadout();
+    const { runGenerationContext, runModifiers, runWorldBrief } = buildRunContextForDescent();
+    const weaponProgression = {
+      weaponUnlocks: account.weaponUnlocks,
+      weaponTiers: account.weaponTiers,
+      equippedWeaponByClass: account.equippedWeaponByClass,
+    };
+    const weaponSnapshot = snapshotWeaponForRun(account.activeClass, weaponProgression);
+    appendHubLog('>> DESCENT LOADOUT LOCKED — CARGO MANIFEST COMMITTED TO RUN STATE.');
+    appendHubLog('>> RUN ITEM SLOTS LOCKED — TACTICAL MANIFEST COMMITTED.');
+    appendHubLog(`>> WEAPON LINK LOCKED — ${weaponSnapshot.activeWeaponFamilyId.replace(/-/g, ' ').toUpperCase()} TIER ${weaponSnapshot.activeWeaponTier}.`);
+    appendHubLog(`>> VEIL FRONT BREACH — ${runGenerationContext.sectorState.displayName.toUpperCase()} // ${runGenerationContext.activeOperation.title.toUpperCase()} // GRADE ${runGenerationContext.breachGrade}`);
+
+    const runPayload = {
+      factionPerks: account.factionPerks,
+      unlockedBiomes: account.unlockedBiomes,
+      aegisLoadout: account.aegisLoadout,
+      hexShotLoadout: account.hexShotLoadout,
+      envoyLoadout: account.envoyLoadout,
+      activeClass: account.activeClass,
+      alignedFaction: breachFaction,
+      initialCargo,
+      initialRunItems,
+      runGenerationContext,
+      runWorldBrief,
+      runModifiers,
+      startingVeilResidueBalance: account.veilResidueBalance,
+      equippedKeepsakeId: account.equippedKeepsakeId,
+      keepsakeDeployment: account.keepsakeDeployment,
+      activeWeaponFamilyId: weaponSnapshot.activeWeaponFamilyId,
+      activeWeaponTier: weaponSnapshot.activeWeaponTier,
+    };
+
+    const started = transitionActions.startBreaching({ x: 0.5, y: 0.5 }, () => {
+      startNewRun(runPayload);
       startBoundRequisition();
       setLaunchingIncursion(false);
     });
+    if (!started) {
+      setLaunchingIncursion(false);
+    }
   }, [
     account,
     appendHubLog,

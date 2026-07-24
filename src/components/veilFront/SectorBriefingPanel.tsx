@@ -59,6 +59,7 @@ import {
   HUB_DOSSIER_SURFACE,
   HUB_DOSSIER_TITLE,
   hubDossierShellStyle,
+  hubInspectorFocusBarStyle,
   HUB_META,
   HUB_SELECT_SURFACE,
   HUB_TEXT_PRIMARY,
@@ -444,6 +445,9 @@ export default function SectorBriefingPanel({
       ]}
       >
         <OccultNeonRail style={styles.dossierAccent} />
+        <TerminalText size={7} letterSpacing={1.05} style={styles.eyebrow}>
+          SECTOR DOSSIER
+        </TerminalText>
         <TerminalText size={isCompactHeight ? 16.5 : TYPE.title} letterSpacing={0.1} style={styles.title}>
           {sector.displayName.replace(/^The\s+/i, '').toUpperCase()}
         </TerminalText>
@@ -647,8 +651,12 @@ const styles = StyleSheet.create({
     overflow: 'visible',
   },
   dossierAccent: {
-    top: 18,
-    bottom: 1,
+    ...hubInspectorFocusBarStyle(),
+  },
+  eyebrow: {
+    color: VEIL.textDim,
+    fontWeight: '700',
+    marginBottom: 8,
   },
   title: {
     color: HUB_DOSSIER_TITLE,

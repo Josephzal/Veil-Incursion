@@ -135,29 +135,6 @@ export default function TerminalNavRail({
             </HapticPressable>
           );
         })}
-
-        {/* Visual archive row — matches concept rail, not wired as a hub view. */}
-        <View
-          style={[
-            styles.navCell,
-            {
-              paddingVertical: scaleSpacing(11),
-              paddingHorizontal: scaleSpacing(10),
-              opacity: 0.55,
-            },
-          ]}
-        >
-          <TerminalText size={6.8} letterSpacing={1.3} style={{ color: '#D6DDD8', fontWeight: '800' }}>
-            ARCHIVE
-          </TerminalText>
-          <TerminalText
-            size={4.8}
-            letterSpacing={1}
-            style={{ color: theme.mutedColor, fontWeight: '600', marginTop: scaleSpacing(3) }}
-          >
-            RECORDS
-          </TerminalText>
-        </View>
       </View>
 
       <View style={[styles.footer, { gap: scaleSpacing(2), paddingTop: scaleSpacing(12) }]}>

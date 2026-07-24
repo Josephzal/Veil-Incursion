@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import HapticPressable from '../HapticPressable';
 import TerminalText from '../TerminalText';
+import HubPageHeader from './HubPageHeader';
 import HubPrimaryCta from './HubPrimaryCta';
 import KeepsakeDeploymentChoiceModal from './KeepsakeDeploymentChoiceModal';
 import ChassisWorkspace, { resolveChassisDossier } from './loadout/ChassisWorkspace';
@@ -31,10 +32,8 @@ import {
 import { OccultNeonRail } from './veilChrome';
 import {
   HUB_CARD_BORDER,
-  HUB_CARD_BORDER_HOVER,
   HUB_CARD_BORDER_SELECTED,
   HUB_CARD_SURFACE,
-  HUB_CARD_SURFACE_HOVER,
   HUB_CHANNEL_BUTTON_COMPACT_HEIGHT,
   HUB_CHANNEL_BUTTON_COMPACT_PADDING_V,
   HUB_CHANNEL_BUTTON_HEIGHT,
@@ -45,18 +44,14 @@ import {
   HUB_DOSSIER_FOOTER_RULE,
   HUB_DOSSIER_LABEL,
   HUB_DOSSIER_TITLE,
-  HUB_PAGE_HEADER_COMPACT_MIN_HEIGHT,
-  HUB_PAGE_HEADER_COMPACT_PADDING_H,
-  HUB_PAGE_HEADER_COMPACT_PADDING_V,
-  HUB_PAGE_HEADER_MIN_HEIGHT,
-  HUB_PAGE_HEADER_PADDING_BOTTOM,
-  HUB_PAGE_HEADER_PADDING_H,
-  HUB_PAGE_HEADER_PADDING_TOP,
+  HUB_BROWSER_CONTENT_PADDING_H,
+  HUB_BROWSER_FEED_PAD_TOP,
   HUB_SELECT_SURFACE,
+  hubBrowserSectionLabelStyle,
   hubDossierColumnStyle,
   hubDossierShellStyle,
-  hubPageEyebrowStyle,
-  hubPageTitleStyle,
+  hubInspectorColumnWidth,
+  hubInspectorFocusBarStyle,
   hubPrimaryActionHoverStyle,
   hubPrimaryActionStyle,
   hubPrimaryActionTextHoverStyle,
@@ -66,7 +61,6 @@ import { VEIL } from '../../theme/veilTerminalTokens';
 import { CLASS_DEFINITIONS } from '../../data/classes';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useTerminal } from '../../context/TerminalContext';
-import { useTerminalNavOptional } from '../../context/TerminalNavContext';
 import { useWorldState } from '../../context/WorldStateContext';
 import { getEquippedWeaponForClass, getWeaponTier, resolveWeaponState } from '../../data/weaponProgressionEngine';
 import { getKeepsakeDefinition } from '../../data/expeditionKeepsakeRegistry';
@@ -77,7 +71,6 @@ import {
 } from '../../data/expeditionKeepsakeDeploymentEngine';
 import { getRunItemDefinitionByAnyId } from '../../data/runItemRegistry';
 import { formatRunItemSlotLabel } from '../../data/runItemUseEngine';
-import { resolveClassAbilityCost } from '../../data/classAbilityResolver';
 import { formatCargoRoutingPostExtractReminder } from '../../data/cargoRoutingIntelEngine';
 import { resolvePlayerBadgePortrait } from '../../utils/combatPlayerPortrait';
 import type { WeaponFamilyId } from '../../types/weapon';
@@ -139,8 +132,8 @@ export default function LoadoutHubPanel(): React.JSX.Element {
     clearRunItemLoadoutSlot,
   } = usePlayerAccount();
   const { selectedSector, persisted } = useWorldState();
-  const nav = useTerminalNavOptional();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const inspectorColumnWidth = hubInspectorColumnWidth(screenWidth, 'standard');
   const reduceMotion = usePrefersReducedMotion();
 
   const [activeCategory, setActiveCategory] = useState<LoadoutCategory>('CHASSIS');
@@ -259,24 +252,9 @@ export default function LoadoutHubPanel(): React.JSX.Element {
     return account.envoyLoadout;
   }, [account.activeClass, account.aegisLoadout, account.hexShotLoadout, account.envoyLoadout]);
 
-  const abilityNames = useMemo(
-    () => abilityLoadout.map((id) => resolveClassAbilityCost(account.activeClass, id).label),
-    [abilityLoadout, account.activeClass],
-  );
-
   const fieldFilled = [...account.runItemLoadout.combatSlots, ...account.runItemLoadout.fieldSlots]
     .filter((id) => id != null).length;
   const cargoOccupancy = useMemo(() => resolveCargoOccupancy(account), [account]);
-
-  const completionSummary = useMemo(() => {
-    let complete = 0;
-    if (weaponDisplay) complete += 1;
-    if (account.equippedKeepsakeId) complete += 1;
-    if (abilityLoadout.every(Boolean)) complete += 1;
-    if (fieldFilled > 0) complete += 1;
-    if (cargoOccupancy.placedCount > 0 || cargoOccupancy.containmentCount > 0) complete += 1;
-    return `${complete} / 5 SET`;
-  }, [abilityLoadout, account.equippedKeepsakeId, cargoOccupancy, fieldFilled, weaponDisplay]);
 
   const chassisDossier = useMemo(
     () => resolveChassisDossier(account, chassisId),
@@ -355,35 +333,22 @@ export default function LoadoutHubPanel(): React.JSX.Element {
     )?.warnings.map((entry) => entry.message) ?? [];
   }, [account, modalRelic, persisted.contractBoard.selectedContract, selectedSector]);
 
-  const handleReady = () => {
-    nav?.setTerminalView('MAP');
-  };
-
   const catalogCopy = CATEGORY_COPY[activeCategory];
 
   const renderManifestEntry = (category: LoadoutCategory) => {
     const selected = activeCategory === category;
     const copy = CATEGORY_COPY[category];
     let primary = '';
-    let secondary = '';
     if (category === 'CHASSIS') {
       primary = weaponDisplay;
-      secondary = 'TIER · EQUIPPED';
-      const equippedId = getEquippedWeaponForClass(progression, account.activeClass);
-      const tier = getWeaponTier(progression, equippedId);
-      secondary = `TIER ${['I', 'II', 'III'][tier - 1] ?? tier} · EQUIPPED`;
     } else if (category === 'RELIC') {
       primary = relicName;
-      secondary = account.equippedKeepsakeId ? 'EQUIPPED' : 'NONE';
     } else if (category === 'DECK') {
       primary = `${abilityLoadout.filter(Boolean).length} / 4 ACTIVE`;
-      secondary = `ANCHOR: ${abilityNames[0] ?? '—'}`;
     } else if (category === 'FIELD_KIT') {
       primary = `${fieldFilled} / 4 SLOTS FILLED`;
-      secondary = fieldFilled === 0 ? 'NO ITEMS STAGED' : 'KIT READY';
     } else {
       primary = `${cargoOccupancy.occupied} / ${cargoOccupancy.capacity}`;
-      secondary = cargoOccupancy.placedCount === 0 ? 'NO CARGO STAGED' : 'CARGO STAGED';
     }
 
     return (
@@ -403,19 +368,30 @@ export default function LoadoutHubPanel(): React.JSX.Element {
         ])}
       >
         {selected ? <OccultNeonRail style={styles.manifestAccent} /> : null}
-        <TerminalText size={6.5} letterSpacing={1} style={styles.manifestLabel} numberOfLines={1}>
-          {copy.manifestLabel}
-        </TerminalText>
+        <View style={styles.manifestTop}>
+          <TerminalText
+            size={9}
+            letterSpacing={1}
+            style={[styles.manifestLabel, selected && styles.manifestLabelSelected]}
+            numberOfLines={1}
+          >
+            {copy.manifestLabel}
+          </TerminalText>
+          <TerminalText
+            size={6}
+            letterSpacing={0.7}
+            style={[styles.manifestCode, selected && styles.manifestCodeSelected]}
+          >
+            {copy.channelCode}
+          </TerminalText>
+        </View>
         <TerminalText
-          size={8.5}
-          letterSpacing={0.25}
+          size={6.5}
+          letterSpacing={0.8}
           style={[styles.manifestPrimary, selected && styles.manifestPrimarySelected]}
           numberOfLines={1}
         >
           {primary.toUpperCase()}
-        </TerminalText>
-        <TerminalText size={6.5} letterSpacing={0.55} style={styles.manifestSecondary} numberOfLines={1}>
-          {secondary.toUpperCase()}
         </TerminalText>
       </HapticPressable>
     );
@@ -438,7 +414,7 @@ export default function LoadoutHubPanel(): React.JSX.Element {
         <>
           <View style={styles.dossierHeader}>
             <OccultNeonRail style={styles.dossierHeaderAccent} />
-            <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>EQUIPMENT DOSSIER</TerminalText>
+            <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>EQUIPMENT INSPECTOR</TerminalText>
             <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierCategory}>WEAPON CHASSIS</TerminalText>
             <TerminalText size={19} letterSpacing={0.1} style={styles.dossierTitle}>
               {tierState.displayName.toUpperCase()}
@@ -457,12 +433,36 @@ export default function LoadoutHubPanel(): React.JSX.Element {
                 <TerminalText key={line} size={8.5} style={styles.dossierValueTight}>{line}</TerminalText>
               ))}
             </DossierSection>
-            {nextTier ? (
-              <DossierSection label="NEXT TIER">
-                <TerminalText size={8.5} style={styles.dossierValue}>{nextTier.displayName}</TerminalText>
-                <TerminalText size={8.5} style={styles.dossierValueTight}>{nextTier.effectSummary}</TerminalText>
-              </DossierSection>
-            ) : null}
+            <DossierSection label="TIER COMPARISON" last={costLines.length === 0}>
+              <TerminalText size={8} letterSpacing={0.6} style={styles.dossierSecondary}>
+                {`CURRENT · TIER ${['I', 'II', 'III'][tier - 1] ?? tier}`}
+              </TerminalText>
+              <TerminalText size={8.5} style={styles.dossierValueTight}>
+                {tierState.displayName}
+              </TerminalText>
+              {tierState.effectSummary ? (
+                <TerminalText size={8.5} style={styles.dossierValueTight}>
+                  {tierState.effectSummary}
+                </TerminalText>
+              ) : null}
+              {nextTier ? (
+                <>
+                  <TerminalText size={8} letterSpacing={0.6} style={[styles.dossierSecondary, { marginTop: 10 }]}>
+                    {`NEXT · TIER ${['I', 'II', 'III'][tier] ?? (tier + 1)}`}
+                  </TerminalText>
+                  <TerminalText size={8.5} style={styles.dossierValueTight}>
+                    {nextTier.displayName}
+                  </TerminalText>
+                  <TerminalText size={8.5} style={styles.dossierValueTight}>
+                    {nextTier.effectSummary}
+                  </TerminalText>
+                </>
+              ) : (
+                <TerminalText size={8.5} style={[styles.dossierValueTight, { marginTop: 10 }]}>
+                  Max tier reached for this chassis.
+                </TerminalText>
+              )}
+            </DossierSection>
             {costLines.length > 0 ? (
               <DossierSection label={!unlocked ? 'UNLOCK REQUIREMENTS' : 'UPGRADE REQUIREMENTS'} last>
                 {costLines.map((line) => (
@@ -487,11 +487,7 @@ export default function LoadoutHubPanel(): React.JSX.Element {
                   </TerminalText>
                 ) : null}
               </DossierSection>
-            ) : (
-              <DossierSection label="PROGRESSION" last>
-                <TerminalText size={8.5} style={styles.dossierValue}>Max tier reached for this chassis.</TerminalText>
-              </DossierSection>
-            )}
+            ) : null}
           </ScrollView>
           <View onLayout={handleDossierFooterLayout} style={styles.dossierFooter}>
             <View style={styles.dossierFooterRule} />
@@ -554,29 +550,21 @@ export default function LoadoutHubPanel(): React.JSX.Element {
         <>
           <View style={styles.dossierHeader}>
             <OccultNeonRail style={styles.dossierHeaderAccent} />
-            <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>EQUIPMENT DOSSIER</TerminalText>
+            <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>EQUIPMENT INSPECTOR</TerminalText>
             <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierCategory}>EXPEDITION RELIC</TerminalText>
             <TerminalText size={19} letterSpacing={0.1} style={styles.dossierTitle}>
               {def.name.toUpperCase()}
             </TerminalText>
-            <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierStatus}>
-              {equipped ? 'EQUIPPED' : 'AVAILABLE'}
+            <TerminalText size={7.5} letterSpacing={0.4} style={[styles.dossierStatus, { fontStyle: 'italic' }]}>
+              {`"${def.flavorText}"`}
             </TerminalText>
           </View>
           <ScrollView style={styles.dossierBody} contentContainerStyle={[styles.dossierBodyContent, { paddingBottom: dossierBodyPaddingBottom }]}>
-            <DossierSection label="RUN STYLE">
-              <TerminalText size={8.5} style={styles.dossierValue}>{def.runStyle}</TerminalText>
-            </DossierSection>
             <DossierSection label="EFFECT">
               <TerminalText size={8.5} style={styles.dossierValue}>{def.effectSummary}</TerminalText>
             </DossierSection>
-            <DossierSection label="RISK">
+            <DossierSection label="RISK" last={!deploymentSummary && warnings.length === 0}>
               <TerminalText size={8.5} style={styles.dossierValue}>{def.riskSummary}</TerminalText>
-            </DossierSection>
-            <DossierSection label="FLAVOR" last={!deploymentSummary && warnings.length === 0}>
-              <TerminalText size={8.5} style={[styles.dossierValue, { fontStyle: 'italic' }]}>
-                {`"${def.flavorText}"`}
-              </TerminalText>
             </DossierSection>
             {deploymentSummary ? (
               <DossierSection label="DEPLOYMENT" last={warnings.length === 0}>
@@ -641,7 +629,7 @@ export default function LoadoutHubPanel(): React.JSX.Element {
         <>
           <View style={styles.dossierHeader}>
             <OccultNeonRail style={styles.dossierHeaderAccent} />
-            <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>EQUIPMENT DOSSIER</TerminalText>
+            <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>EQUIPMENT INSPECTOR</TerminalText>
             <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierCategory}>ABILITY RECORD</TerminalText>
             <TerminalText size={19} letterSpacing={0.1} style={styles.dossierTitle}>
               {deckInspect.title.toUpperCase()}
@@ -735,7 +723,7 @@ export default function LoadoutHubPanel(): React.JSX.Element {
           <>
             <View style={styles.dossierHeader}>
               <OccultNeonRail style={styles.dossierHeaderAccent} />
-              <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>EQUIPMENT DOSSIER</TerminalText>
+              <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>EQUIPMENT INSPECTOR</TerminalText>
               <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierCategory}>FIELD KIT SLOT</TerminalText>
               <TerminalText size={19} letterSpacing={0.1} style={styles.dossierTitle}>
                 {def ? def.shortName.toUpperCase() : label}
@@ -804,7 +792,7 @@ export default function LoadoutHubPanel(): React.JSX.Element {
         <>
           <View style={styles.dossierHeader}>
             <OccultNeonRail style={styles.dossierHeaderAccent} />
-            <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>EQUIPMENT DOSSIER</TerminalText>
+            <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>EQUIPMENT INSPECTOR</TerminalText>
             <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierCategory}>STAGED CONSUMABLE</TerminalText>
             <TerminalText size={19} letterSpacing={0.1} style={styles.dossierTitle}>
               {(def?.shortName ?? fieldSelection.itemId).toUpperCase()}
@@ -846,7 +834,7 @@ export default function LoadoutHubPanel(): React.JSX.Element {
       <>
         <View style={styles.dossierHeader}>
           <OccultNeonRail style={styles.dossierHeaderAccent} />
-          <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>EQUIPMENT DOSSIER</TerminalText>
+          <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>EQUIPMENT INSPECTOR</TerminalText>
           <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierCategory}>CARGO BAY</TerminalText>
           <TerminalText size={19} letterSpacing={0.1} style={styles.dossierTitle}>
             PRE-DESCENT HOLD
@@ -886,7 +874,7 @@ export default function LoadoutHubPanel(): React.JSX.Element {
     <>
       <View style={styles.dossierHeader}>
         <OccultNeonRail style={styles.dossierHeaderAccent} />
-        <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>EQUIPMENT DOSSIER</TerminalText>
+        <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>EQUIPMENT INSPECTOR</TerminalText>
         <TerminalText size={7.5} letterSpacing={0.9} style={styles.dossierCategory}>NO RECORD SELECTED</TerminalText>
         <TerminalText size={19} letterSpacing={0.1} style={styles.dossierTitle}>
           AWAITING SIGNAL
@@ -906,123 +894,100 @@ export default function LoadoutHubPanel(): React.JSX.Element {
     </>
   );
 
+  const operativePager = (
+    <View
+      style={styles.operativePager}
+      {...(Platform.OS === 'web' ? ({ 'data-operative-selector': 'true' } as object) : null)}
+    >
+      {canCycleClass ? (
+        <HapticPressable
+          onPress={() => cycleActiveClass(-1)}
+          accessibilityRole="button"
+          accessibilityLabel="Previous operative class"
+          style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ([
+            styles.operativeArrow,
+            (hovered || pressed) ? styles.operativeArrowHover : null,
+          ])}
+        >
+          <TerminalText size={10} style={{ color: TERMINAL }}>{'<'}</TerminalText>
+        </HapticPressable>
+      ) : (
+        <View style={styles.operativeArrow}>
+          <TerminalText size={10} style={{ color: MUTED }}>{'<'}</TerminalText>
+        </View>
+      )}
+      <Image source={portraitSource} style={styles.operativePortrait} resizeMode="contain" />
+      <View style={styles.operativeCreds}>
+        <TerminalText size={11} letterSpacing={0.35} style={styles.operativeName} numberOfLines={1}>
+          {cred.username.toUpperCase()}
+        </TerminalText>
+        <TerminalText size={7.5} letterSpacing={0.55} style={styles.operativeMeta} numberOfLines={1}>
+          {`${classDef.displayName.toUpperCase()} · L${account.progressionProfile.runner.clearanceRank}`}
+        </TerminalText>
+      </View>
+      {canCycleClass ? (
+        <HapticPressable
+          onPress={() => cycleActiveClass(1)}
+          accessibilityRole="button"
+          accessibilityLabel="Next operative class"
+          style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ([
+            styles.operativeArrow,
+            (hovered || pressed) ? styles.operativeArrowHover : null,
+          ])}
+        >
+          <TerminalText size={10} style={{ color: TERMINAL }}>{'>'}</TerminalText>
+        </HapticPressable>
+      ) : (
+        <View style={styles.operativeArrow}>
+          <TerminalText size={10} style={{ color: MUTED }}>{'>'}</TerminalText>
+        </View>
+      )}
+    </View>
+  );
+
+  const manifestRail = narrow ? (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={styles.manifestScroll}
+      contentContainerStyle={styles.manifestRowScroll}
+      accessibilityRole="tablist"
+      {...(Platform.OS === 'web' ? ({ 'aria-orientation': 'horizontal' } as object) : {})}
+    >
+      {CATEGORIES.map(renderManifestEntry)}
+    </ScrollView>
+  ) : (
+    <View
+      style={styles.manifestRow}
+      accessibilityRole="tablist"
+      {...(Platform.OS === 'web' ? ({ 'aria-orientation': 'horizontal' } as object) : {})}
+    >
+      {CATEGORIES.map(renderManifestEntry)}
+    </View>
+  );
+
   return (
     <View
       style={[styles.page, narrow && styles.pageNarrow]}
       {...(Platform.OS === 'web' ? ({ id: 'loadout-root', nativeID: 'loadout-root' } as object) : null)}
     >
       <View style={styles.loadoutBrowser}>
-        <View style={[styles.pageHeader, compact && styles.pageHeaderCompact]}>
-          <View style={styles.headerTitleBlock}>
-            <View style={styles.headerEyebrowRow}>
-              <View style={styles.headerBoneMark} />
-              <TerminalText size={6.5} letterSpacing={1.05} style={styles.headerEyebrow}>
-                LOADOUT // DESCENT PREP BAY
-              </TerminalText>
-            </View>
-            <TerminalText size={22} letterSpacing={0.15} style={styles.headerTitle}>
-              OPERATIVE LOADOUT
-            </TerminalText>
-          </View>
+        <HubPageHeader
+          eyebrow="LOADOUT // DESCENT PREP BAY"
+          title="OPERATIVE LOADOUT"
+          compact={compact}
+          trailing={operativePager}
+        />
 
-          <View
-            style={styles.operativePager}
-            {...(Platform.OS === 'web' ? ({ 'data-operative-selector': 'true' } as object) : null)}
-          >
-            {canCycleClass ? (
-              <HapticPressable
-                onPress={() => cycleActiveClass(-1)}
-                accessibilityRole="button"
-                accessibilityLabel="Previous operative class"
-                style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ([
-                  styles.operativeArrow,
-                  (hovered || pressed) ? styles.operativeArrowHover : null,
-                ])}
-              >
-                <TerminalText size={10} style={{ color: TERMINAL }}>{'<'}</TerminalText>
-              </HapticPressable>
-            ) : (
-              <View style={styles.operativeArrow}>
-                <TerminalText size={10} style={{ color: MUTED }}>{'<'}</TerminalText>
-              </View>
-            )}
-            <Image source={portraitSource} style={styles.operativePortrait} resizeMode="contain" />
-            <View style={styles.operativeCreds}>
-              <TerminalText size={11} letterSpacing={0.35} style={styles.operativeName} numberOfLines={1}>
-                {cred.username.toUpperCase()}
-              </TerminalText>
-              <TerminalText size={7.5} letterSpacing={0.55} style={styles.operativeMeta} numberOfLines={1}>
-                {`${classDef.displayName.toUpperCase()} · L${account.progressionProfile.runner.clearanceRank}`}
-              </TerminalText>
-            </View>
-            {canCycleClass ? (
-              <HapticPressable
-                onPress={() => cycleActiveClass(1)}
-                accessibilityRole="button"
-                accessibilityLabel="Next operative class"
-                style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ([
-                  styles.operativeArrow,
-                  (hovered || pressed) ? styles.operativeArrowHover : null,
-                ])}
-              >
-                <TerminalText size={10} style={{ color: TERMINAL }}>{'>'}</TerminalText>
-              </HapticPressable>
-            ) : (
-              <View style={styles.operativeArrow}>
-                <TerminalText size={10} style={{ color: MUTED }}>{'>'}</TerminalText>
-              </View>
-            )}
-          </View>
-
-          <View style={styles.headerActions}>
-            <HubPrimaryCta
-              onPress={handleReady}
-              accessibilityLabel="Ready for descent"
-              label="[ READY FOR DESCENT ]"
-              minHeight={50}
-              style={styles.readyCta}
-            />
-          </View>
-        </View>
-
-        <View style={styles.manifestRail}>
-          <View style={styles.manifestHeader}>
-            <TerminalText size={7.5} letterSpacing={1} style={styles.manifestHeaderText}>
-              DESCENT MANIFEST
-            </TerminalText>
-            <TerminalText size={7.5} letterSpacing={1} style={styles.manifestHeaderText}>
-              {completionSummary}
-            </TerminalText>
-          </View>
-          {narrow ? (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.manifestScroll}
-              contentContainerStyle={styles.manifestRowScroll}
-              accessibilityRole="tablist"
-              {...(Platform.OS === 'web' ? ({ 'aria-orientation': 'horizontal' } as object) : {})}
-            >
-              {CATEGORIES.map(renderManifestEntry)}
-            </ScrollView>
-          ) : (
-            <View
-              style={styles.manifestRow}
-              accessibilityRole="tablist"
-              {...(Platform.OS === 'web' ? ({ 'aria-orientation': 'horizontal' } as object) : {})}
-            >
-              {CATEGORIES.map(renderManifestEntry)}
-            </View>
-          )}
+        <View style={[styles.manifestRail, compact && styles.manifestRailCompact]}>
+          {manifestRail}
         </View>
 
         <View style={styles.catalog}>
-          <View style={[styles.catalogHeader, compact && styles.catalogHeaderCompact]}>
+          {/* Same stack as Black Market Forge: feed padTop → sectionLabel margins → items. */}
+          <View style={styles.catalogFeedPad}>
             <TerminalText size={11} letterSpacing={1.05} style={styles.catalogTitle}>
               {catalogCopy.title}
-            </TerminalText>
-            <TerminalText size={8.5} style={styles.catalogDescription}>
-              {catalogCopy.description}
             </TerminalText>
           </View>
           <View style={styles.catalogBody}>
@@ -1048,7 +1013,7 @@ export default function LoadoutHubPanel(): React.JSX.Element {
         </View>
       </View>
 
-      <View style={styles.dossierColumn}>
+      <View style={[styles.dossierColumn, { width: inspectorColumnWidth, flexBasis: inspectorColumnWidth, maxWidth: inspectorColumnWidth }]}>
         {/* Outer shell owns height; Animated.View only fades content so layout cannot collapse. */}
         <View style={styles.dossier}>
           <Animated.View style={[styles.dossierFill, { opacity: dossierLock }]}>
@@ -1081,8 +1046,8 @@ export default function LoadoutHubPanel(): React.JSX.Element {
 
 const styles = StyleSheet.create({
   page: {
-    // Flex row (same as Black Market) so the dossier column always gets a
-    // definite stretched height — CSS grid + height:100% was collapsing it.
+    // Flex row (same as Contract Board / Black Market) so the dossier column
+    // always gets a definite stretched height.
     flex: 1,
     minWidth: 0,
     minHeight: 0,
@@ -1111,6 +1076,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#000000',
     zIndex: 1,
+    // Top-pack: header → manifest → catalog (only catalog grows).
     ...Platform.select({
       web: {
         display: 'grid',
@@ -1123,54 +1089,12 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  pageHeader: {
-    flexDirection: 'row',
-    // Top-align so the title block starts at HUB_PAGE_HEADER_PADDING_TOP —
-    // matching HubPageHeader / Veil Front. Centering against the Ready CTA
-    // was pushing the eyebrow slightly lower than other hub screens.
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 20,
-    minHeight: HUB_PAGE_HEADER_MIN_HEIGHT,
-    paddingHorizontal: HUB_PAGE_HEADER_PADDING_H,
-    paddingTop: HUB_PAGE_HEADER_PADDING_TOP,
-    paddingBottom: HUB_PAGE_HEADER_PADDING_BOTTOM,
-    flexShrink: 0,
-  },
-  pageHeaderCompact: {
-    minHeight: HUB_PAGE_HEADER_COMPACT_MIN_HEIGHT,
-    paddingTop: HUB_PAGE_HEADER_COMPACT_PADDING_V,
-    paddingBottom: HUB_PAGE_HEADER_COMPACT_PADDING_V,
-    paddingHorizontal: HUB_PAGE_HEADER_COMPACT_PADDING_H,
-    gap: 14,
-  },
-  headerTitleBlock: {
-    flexShrink: 1,
-    minWidth: 0,
-    maxWidth: '34%',
-  },
-  headerEyebrowRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
-  },
-  headerBoneMark: {
-    width: 8,
-    height: 8,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: VEIL.bone,
-    opacity: 0.45,
-  },
-  headerEyebrow: { ...hubPageEyebrowStyle() },
-  headerTitle: { ...hubPageTitleStyle() },
   operativePager: {
     // Fixed footprint so cycling classes (ENVOY / HEX SHOT / AEGIS SLAYER)
-    // cannot shift the Ready CTA or page title.
+    // cannot shift the page title.
     width: 320,
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'center',
     flexShrink: 0,
     flexGrow: 0,
   },
@@ -1200,47 +1124,31 @@ const styles = StyleSheet.create({
   },
   operativeName: { color: TEXT_PRIMARY, fontWeight: '700' },
   operativeMeta: { marginTop: 4, color: MUTED, fontWeight: '700' },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'center',
-    gap: 14,
-    flexShrink: 0,
-  },
-  readyCta: {
-    width: 'auto',
-    minWidth: 220,
-    maxWidth: 260,
-    paddingHorizontal: 16,
-  },
   dossierColumn: {
     ...hubDossierColumnStyle(),
-    flexGrow: 1,
+    flexGrow: 0,
     flexShrink: 0,
-    flexBasis: 0,
-    minWidth: 360,
-    ...Platform.select({
-      web: {},
-      default: { width: 420 + HUB_DOSSIER_EDGE_PAD, minWidth: 420 + HUB_DOSSIER_EDGE_PAD },
-    }),
   },
   manifestRail: {
-    flexShrink: 0,
-    paddingHorizontal: HUB_PAGE_HEADER_PADDING_H,
-    paddingBottom: 4,
-  },
-  manifestHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 28,
-    marginBottom: 8,
+    alignItems: 'stretch',
+    minHeight: HUB_CHANNEL_BUTTON_HEIGHT,
+    // Match Contract Board / Black Market channel row inset + bottom pad.
+    paddingHorizontal: HUB_BROWSER_CONTENT_PADDING_H,
+    paddingBottom: 6,
+    flexGrow: 0,
+    flexShrink: 0,
+    gap: 10,
   },
-  manifestHeaderText: { color: MUTED, fontWeight: '700' },
+  manifestRailCompact: {
+    minHeight: HUB_CHANNEL_BUTTON_COMPACT_HEIGHT,
+  },
   manifestScroll: {
     flexGrow: 0,
+    flex: 1,
   },
   manifestRow: {
+    flex: 1,
     flexDirection: 'row',
     gap: 10,
     ...Platform.select({
@@ -1265,11 +1173,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingTop: HUB_CHANNEL_BUTTON_PADDING_V,
     paddingBottom: HUB_CHANNEL_BUTTON_PADDING_V,
-    paddingLeft: 14,
+    paddingLeft: 12,
     paddingRight: 12,
-    backgroundColor: HUB_CARD_SURFACE,
-    borderWidth: 1,
-    borderColor: HUB_CARD_BORDER,
+    backgroundColor: VEIL.surface1,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: VEIL.lineFaint,
     overflow: 'hidden',
     ...Platform.select({
       web: { cursor: 'pointer', outlineStyle: 'none', minWidth: 0 } as object,
@@ -1290,8 +1198,7 @@ const styles = StyleSheet.create({
     paddingBottom: HUB_CHANNEL_BUTTON_COMPACT_PADDING_V,
   },
   manifestSlotHover: {
-    backgroundColor: HUB_CARD_SURFACE_HOVER,
-    borderColor: HUB_CARD_BORDER_HOVER,
+    backgroundColor: VEIL.surface2,
   },
   manifestSlotSelected: {
     backgroundColor: HUB_SELECT_SURFACE,
@@ -1301,17 +1208,30 @@ const styles = StyleSheet.create({
     top: HUB_CHANNEL_RAIL_INSET,
     bottom: HUB_CHANNEL_RAIL_INSET,
   },
-  manifestLabel: { color: MUTED, fontWeight: '700' },
-  manifestPrimary: { marginTop: 3, color: TEXT_PRIMARY, fontWeight: '700' },
-  manifestPrimarySelected: { color: '#F0F2EF' },
-  manifestSecondary: { marginTop: 3, color: TEXT_SECONDARY, fontWeight: '700' },
+  manifestTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  manifestLabel: {
+    flex: 1,
+    minWidth: 0,
+    color: TEXT_SECONDARY,
+    fontWeight: '800',
+  },
+  manifestLabelSelected: { color: VEIL.text },
+  manifestCode: { color: TEXT_SECONDARY, fontWeight: '700', flexShrink: 0 },
+  manifestCodeSelected: { color: TERMINAL },
+  manifestPrimary: { marginTop: 6, color: TEXT_SECONDARY, fontWeight: '700' },
+  manifestPrimarySelected: { color: TEXT_PRIMARY },
   catalog: {
     flex: 1,
     minWidth: 0,
     minHeight: 0,
     overflow: 'hidden',
     backgroundColor: '#000000',
-    paddingHorizontal: HUB_PAGE_HEADER_PADDING_H,
+    // No horizontal pad here — section label + item feeds own the 14px edge,
+    // same as Black Market ForgeWorkspace.
     ...Platform.select({
       web: {
         display: 'grid',
@@ -1320,21 +1240,19 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
-  catalogHeader: {
-    paddingTop: 24,
-    paddingBottom: 16,
+  catalogFeedPad: {
+    // Forge ScrollView contentContainerStyle.paddingTop
+    paddingTop: HUB_BROWSER_FEED_PAD_TOP,
     flexShrink: 0,
   },
-  catalogHeaderCompact: {
-    paddingTop: 18,
-    paddingBottom: 12,
-  },
   catalogTitle: {
-    color: 'rgba(185, 181, 167, 0.88)',
-    fontWeight: '700',
+    ...hubBrowserSectionLabelStyle(),
   },
-  catalogDescription: { marginTop: 10, color: TEXT_SECONDARY, lineHeight: 17 },
-  catalogBody: { flex: 1, minHeight: 0 },
+  catalogBody: {
+    flex: 1,
+    minHeight: 0,
+    paddingHorizontal: HUB_BROWSER_CONTENT_PADDING_H,
+  },
   dossier: {
     ...hubDossierShellStyle(),
     ...Platform.select({
@@ -1370,8 +1288,7 @@ const styles = StyleSheet.create({
     overflow: 'visible',
   },
   dossierHeaderAccent: {
-    top: 18,
-    bottom: 1,
+    ...hubInspectorFocusBarStyle(),
   },
   dossierEyebrow: {
     color: VEIL.textDim,

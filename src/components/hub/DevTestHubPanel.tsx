@@ -493,7 +493,7 @@ export default function DevTestHubPanel(): React.JSX.Element {
 
   if (hubOpen) {
     return (
-      <HubScreenShell title="DEV TEST // EXPLORATION HUB" scrollable>
+      <HubScreenShell title="DEBUG // EXPLORATION HUB" scrollable>
         <HapticPressable
           onPress={() => setHubOpen(false)}
           style={({ pressed }) => [
@@ -502,7 +502,7 @@ export default function DevTestHubPanel(): React.JSX.Element {
           ]}
         >
           <Text style={[getInteractiveButtonTextStyle('sm'), { color: theme.statusColor }]}>
-            [ RETURN TO TEST MENU ]
+            [ RETURN TO DEBUG MENU ]
           </Text>
         </HapticPressable>
         <View style={styles.hubPanel}>
@@ -514,7 +514,7 @@ export default function DevTestHubPanel(): React.JSX.Element {
 
   return (
     <HubScreenShell
-      title="DEV TEST // SANDBOX"
+      title="DEBUG // SANDBOX"
       subtitle="Isolated node previews — continue returns here."
       scrollable
     >

@@ -6,6 +6,7 @@ import ResourceHarvestBg from '../../assets/images/location images/resource_harv
 import CargoPackingPanel from '../components/CargoPackingPanel';
 import CargoLootPickupOverlay from '../components/CargoLootPickupOverlay';
 import ResidueParticle from '../components/harvest/ResidueParticle';
+import HarvestScreenHeader from '../components/harvest/HarvestScreenHeader';
 import HapticPressable from '../components/HapticPressable';
 import TerminalText from '../components/TerminalText';
 import { hasFieldRunItem } from '../data/runItemFieldEngine';
@@ -16,12 +17,13 @@ import IncursionShell from '../components/IncursionShell';
 import IncursionRunLayout from '../components/IncursionRunLayout';
 import RunEventImmersiveBackdrop from '../components/layout/RunEventImmersiveBackdrop';
 import { MAX_RUN_CANISTER_RESIDUE } from '../constants/veilResidue';
+import { SCANNER_PAGE_BG } from '../components/scanner/vectorScannerShared';
 import { getFactionAccent } from '../data/factions';
 import { resolveVeilResidueCanisterFillPercent } from '../data/veilResidueRunEngine';
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
-import { isVeilResidueCargoItem } from '../data/cargoGridEngine';
+import { calculateGridOccupancy, isVeilResidueCargoItem } from '../data/cargoGridEngine';
 import {
   cargoItemQuantity,
   isProgressionProtectedCargo,
@@ -107,9 +109,17 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
     [activeIncursion.pendingHarvestReturn],
   );
 
+  const sectorLabel = (
+    activeIncursion.runGenerationContext?.sectorState.displayName
+    ?? 'UNKNOWN SECTOR'
+  ).toUpperCase();
+  const depthLabel = `DEPTH ${String(activeIncursion.currentDepth ?? 1).padStart(2, '0')}`;
+  const cargoOccupancyPct = Math.round(calculateGridOccupancy(activeIncursion.cargo) * 100);
+  const cargoLabel = `CARGO ${String(cargoOccupancyPct).padStart(2, '0')}%`;
+
   const insets = useSafeAreaInsets();
-  const masterPadding = 24 * fontScale;
-  const layoutGap = 16 * fontScale;
+  const masterPadding = Math.max(16 * fontScale, 18);
+  const layoutGap = 10 * fontScale;
   const verticalPadding = Math.max(masterPadding, resolveImmersiveFooterInset(insets.bottom));
 
   const residueInstanceIds = useMemo(
@@ -379,12 +389,12 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
 
   return (
     <IncursionShell>
-      <IncursionRunLayout hideRunChrome style={{ backgroundColor: theme.backgroundColor }}>
+      <IncursionRunLayout hideRunChrome style={{ backgroundColor: SCANNER_PAGE_BG }}>
         <RunEventImmersiveBackdrop
           backgroundImage={ResourceHarvestBg}
-          scrimOpacity={0.75}
+          scrimOpacity={0.82}
           contentPadding={masterPadding}
-          contentStyle={[styles.harvestBody, { paddingTop: verticalPadding }]}
+          contentStyle={[styles.harvestBody, { paddingTop: verticalPadding, paddingBottom: verticalPadding }]}
           overlay={(
             <View ref={overlayRef} style={styles.particleOverlay} pointerEvents="none">
               {lootPool.map((particle) => (
@@ -400,6 +410,12 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
           )}
         >
           <View style={[styles.masterContainment, { gap: layoutGap }]}>
+            <HarvestScreenHeader
+              statusLine={`CONTAINMENT STABLE // ${sectorLabel}`}
+              depthLabel={depthLabel}
+              cargoLabel={cargoLabel}
+              fontScale={fontScale}
+            />
             {showSplitterPrompt ? (
               <HapticPressable
                 onPress={() => {
@@ -436,6 +452,11 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
                 resolveContainmentSlotIndex={resolveContainmentSlotIndex}
                 harvestTriPane
                 harvestPercentage={harvestPercentage}
+                residueCollected={activeIncursion.sessionVeilResidueCollected}
+                residueCapacity={MAX_RUN_CANISTER_RESIDUE}
+                residueLooseCount={lootPool.length}
+                isVacuuming={isVacuuming}
+                packHeaderLabel="CARGO MANIFEST"
                 gridSidecar={(
                   <VeilVacuumCanisterStack
                     ref={canisterRef}
@@ -485,7 +506,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     minHeight: 0,
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     alignItems: 'stretch',
   },
   splitterBtn: {

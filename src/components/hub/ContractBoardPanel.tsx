@@ -77,6 +77,7 @@ import {
   HUB_CHANNEL_BUTTON_HEIGHT,
   HUB_CHANNEL_BUTTON_PADDING_V,
   HUB_CHANNEL_RAIL_INSET,
+  HUB_BROWSER_CONTENT_PADDING_H,
   HUB_CTA_INVERSE_TEXT,
   HUB_DOSSIER_EDGE_PAD,
   HUB_DOSSIER_FOOTER_BG,
@@ -88,6 +89,8 @@ import {
   HUB_TEXT_SECONDARY,
   hubDossierColumnStyle,
   hubDossierShellStyle,
+  hubInspectorColumnWidth,
+  hubInspectorFocusBarStyle,
 } from '../../theme/hubPanelSurfaces';
 
 const SPONSOR_ORDER: CabalEmployerId[] = ['TERRAN_GRID', 'LEGION', 'SOLARIS'];
@@ -367,6 +370,7 @@ export default function ContractBoardPanel(): React.JSX.Element {
   const dossierObjectiveSlotMinHeight =
     scaleFont(DOSSIER_OBJECTIVE_LINE_HEIGHT) * DOSSIER_OBJECTIVE_MIN_LINES;
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const inspectorColumnWidth = hubInspectorColumnWidth(screenWidth, 'standard');
   const reduceMotion = usePrefersReducedMotion();
 
   const { contracts, selectedContract, lastUsedSponsorId } = persisted.contractBoard;
@@ -628,7 +632,6 @@ export default function ContractBoardPanel(): React.JSX.Element {
         <HubPageHeader
           eyebrow="BROKER NETWORK // CB-01"
           title="CONTRACT BOARD"
-          subtitle="AVAILABLE MANDATES"
           compact={compactHeight}
         />
 
@@ -811,7 +814,7 @@ export default function ContractBoardPanel(): React.JSX.Element {
         </View>
       </View>
 
-      <View style={styles.dossierColumn}>
+      <View style={[styles.dossierColumn, { width: inspectorColumnWidth, flexBasis: inspectorColumnWidth, maxWidth: inspectorColumnWidth }]}>
       <View style={styles.contractDossier}>
       <Animated.View
         style={[
@@ -1187,14 +1190,8 @@ const styles = StyleSheet.create({
   boardNarrow: {},
   dossierColumn: {
     ...hubDossierColumnStyle(),
-    flexGrow: 1,
+    flexGrow: 0,
     flexShrink: 0,
-    flexBasis: 0,
-    minWidth: 360,
-    ...Platform.select({
-      web: {},
-      default: { width: 420 + HUB_DOSSIER_EDGE_PAD, minWidth: 420 + HUB_DOSSIER_EDGE_PAD },
-    }),
   },
   contractBrowser: {
     flexGrow: 2.1,
@@ -1225,7 +1222,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 18,
-    marginHorizontal: 14,
+    marginHorizontal: HUB_BROWSER_CONTENT_PADDING_H,
     marginBottom: 0,
     paddingTop: 14,
     paddingBottom: 14,
@@ -1250,7 +1247,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'stretch',
     minHeight: HUB_CHANNEL_BUTTON_HEIGHT,
-    paddingHorizontal: 14,
+    paddingHorizontal: HUB_BROWSER_CONTENT_PADDING_H,
     paddingBottom: 6,
     flexGrow: 0,
     flexShrink: 0,
@@ -1371,7 +1368,7 @@ const styles = StyleSheet.create({
   contractFeedScrollContent: {
     flexGrow: 0,
     justifyContent: 'flex-start',
-    paddingHorizontal: 14,
+    paddingHorizontal: HUB_BROWSER_CONTENT_PADDING_H,
   },
   feedSweep: {
     position: 'absolute',
@@ -1606,10 +1603,7 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   dossierHeaderAccent: {
-    // Anchor to header edges (same pattern as contract / cabal neon rails)
-    // so the accent tracks content when the layout scales or resizes.
-    top: 18,
-    bottom: 1,
+    ...hubInspectorFocusBarStyle(),
   },
   dossierEyebrow: {
     color: VEIL.textDim,

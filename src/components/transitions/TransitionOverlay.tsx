@@ -1,131 +1,65 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
-import Animated, {
-  Easing,
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withDelay,
-  withTiming,
-} from 'react-native-reanimated';
 import {
   transitionActions,
   useTransitionStore,
-  type TransitionState,
 } from '../../stores/transitionStore';
-
-const BREACH_FLOOD_MS = 200;
-const BREACH_TEAR_MS = 400;
-const EXTRACT_IMPLODE_MS = 400;
-const EXTRACT_DECOMPRESS_MS = 800;
+import VeilTransitOverlay from './VeilTransitOverlay';
+import { resetVeilTransitBridge } from '../scanner/veilTransitBridge';
 
 interface TransitionOverlayProps {
   children: React.ReactNode;
 }
 
-function finishTransitionCycle(): void {
-  transitionActions.setIdle();
-}
-
+/**
+ * App-wide scene transit host.
+ * Destination screens mount under the overlay; swap fires only while covered.
+ */
 export default function TransitionOverlay({ children }: TransitionOverlayProps): React.JSX.Element {
   const transitionState = useTransitionStore((state) => state.transitionState);
-  const breachColor = useTransitionStore((state) => state.breachColor);
-  const extractFlashColor = useTransitionStore((state) => state.extractFlashColor);
+  const transitKind = useTransitionStore((state) => state.transitKind);
+  const focalPoint = useTransitionStore((state) => state.focalPoint);
+  const generation = useTransitionStore((state) => state.generation);
 
-  const prevStateRef = useRef<TransitionState>('IDLE');
+  const active = transitionState === 'BREACHING' || transitionState === 'EXTRACTING';
 
-  const layoutScale = useSharedValue(1);
-  const layoutOpacity = useSharedValue(1);
-  const breachOverlayOpacity = useSharedValue(0);
-  const breachTearScaleY = useSharedValue(1);
-  const evacFlashOpacity = useSharedValue(0);
+  const handleSwap = useCallback(() => {
+    transitionActions.consumeTransitNavigate();
+  }, []);
 
-  useEffect(() => {
-    const prevState = prevStateRef.current;
-    prevStateRef.current = transitionState;
+  const handleComplete = useCallback(() => {
+    resetVeilTransitBridge();
+    transitionActions.setIdle();
+  }, []);
 
-    if (transitionState === 'BREACHING' && prevState !== 'BREACHING') {
-      breachOverlayOpacity.value = 0;
-      breachTearScaleY.value = 1;
+  // Stable callbacks — overlay effect keys off generation, not identity churn.
+  const swapRef = useRef(handleSwap);
+  swapRef.current = handleSwap;
+  const completeRef = useRef(handleComplete);
+  completeRef.current = handleComplete;
 
-      breachOverlayOpacity.value = withTiming(1, { duration: BREACH_FLOOD_MS }, (floodDone) => {
-        if (floodDone) {
-          runOnJS(transitionActions.consumeBreachNavigate)();
-        }
-      });
+  const onSwapScene = useCallback(() => {
+    swapRef.current();
+  }, []);
 
-      breachTearScaleY.value = withDelay(
-        BREACH_FLOOD_MS,
-        withTiming(0, { duration: BREACH_TEAR_MS, easing: Easing.in(Easing.exp) }, (tearDone) => {
-          if (tearDone) {
-            breachOverlayOpacity.value = 0;
-            breachTearScaleY.value = 1;
-            runOnJS(finishTransitionCycle)();
-          }
-        }),
-      );
-    }
-
-    if (transitionState === 'EXTRACTING' && prevState !== 'EXTRACTING') {
-      layoutScale.value = 1;
-      layoutOpacity.value = 1;
-      evacFlashOpacity.value = 0;
-
-      layoutScale.value = withTiming(0.8, { duration: EXTRACT_IMPLODE_MS });
-      layoutOpacity.value = withTiming(0, { duration: EXTRACT_IMPLODE_MS });
-      evacFlashOpacity.value = withTiming(1, { duration: EXTRACT_IMPLODE_MS }, (implodeDone) => {
-        if (!implodeDone) return;
-        runOnJS(transitionActions.consumeExtractNavigate)();
-        evacFlashOpacity.value = withTiming(0, { duration: EXTRACT_DECOMPRESS_MS });
-        layoutScale.value = withTiming(1, { duration: EXTRACT_DECOMPRESS_MS });
-        layoutOpacity.value = withTiming(1, { duration: EXTRACT_DECOMPRESS_MS }, (decompressDone) => {
-          if (decompressDone) {
-            runOnJS(finishTransitionCycle)();
-          }
-        });
-      });
-    }
-  }, [
-    breachOverlayOpacity,
-    breachTearScaleY,
-    evacFlashOpacity,
-    layoutOpacity,
-    layoutScale,
-    transitionState,
-  ]);
-
-  const layoutStyle = useAnimatedStyle(() => ({
-    flex: 1,
-    transform: [{ scale: layoutScale.value }],
-    opacity: layoutOpacity.value,
-  }));
-
-  const breachOverlayStyle = useAnimatedStyle(() => ({
-    opacity: breachOverlayOpacity.value,
-    transform: [{ scaleY: breachTearScaleY.value }],
-  }));
-
-  const evacOverlayStyle = useAnimatedStyle(() => ({
-    opacity: evacFlashOpacity.value,
-  }));
+  const onComplete = useCallback(() => {
+    completeRef.current();
+  }, []);
 
   return (
     <View style={styles.root} pointerEvents="box-none">
-      <Animated.View style={layoutStyle} pointerEvents="box-none">
+      <View style={styles.content} pointerEvents={active ? 'none' : 'box-none'}>
         {children}
-      </Animated.View>
+      </View>
 
-      {transitionState === 'BREACHING' ? (
-        <Animated.View
-          pointerEvents="none"
-          style={[styles.overlay, styles.breachOverlay, { backgroundColor: breachColor }, breachOverlayStyle]}
-        />
-      ) : null}
-
-      {transitionState === 'EXTRACTING' ? (
-        <Animated.View
-          pointerEvents="none"
-          style={[styles.overlay, { backgroundColor: extractFlashColor }, evacOverlayStyle]}
+      {active && transitKind ? (
+        <VeilTransitOverlay
+          key={generation}
+          kind={transitKind}
+          focalPoint={focalPoint}
+          generation={generation}
+          onSwapScene={onSwapScene}
+          onComplete={onComplete}
         />
       ) : null}
     </View>
@@ -136,15 +70,7 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
-  overlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 10000,
-  },
-  breachOverlay: {
-    transformOrigin: 'top',
+  content: {
+    flex: 1,
   },
 });

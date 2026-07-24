@@ -18,36 +18,41 @@ export type LoadoutCategory = 'CHASSIS' | 'RELIC' | 'DECK' | 'FIELD_KIT' | 'CARG
 
 export const CATEGORY_COPY: Record<
   LoadoutCategory,
-  { eyebrow: string; title: string; description: string; manifestLabel: string }
+  { eyebrow: string; title: string; description: string; manifestLabel: string; channelCode: string }
 > = {
   CHASSIS: {
     eyebrow: 'WEAPON CHASSIS',
     title: 'WEAPON CHASSIS',
     description: 'Select one class weapon link for the next descent.',
     manifestLabel: 'WEAPON CHASSIS',
+    channelCode: 'CH-01',
   },
   RELIC: {
     eyebrow: 'EXPEDITION RELIC',
     title: 'EXPEDITION RELIC',
     description: 'Choose one relic that changes route planning, cargo pressure, or extraction.',
     manifestLabel: 'RELIC',
+    channelCode: 'RL-01',
   },
   DECK: {
     eyebrow: 'ABILITY DECK',
     title: 'ABILITY DECK',
     description: 'Four active combat slots. Slot 1 is the class anchor.',
     manifestLabel: 'ABILITY DECK',
+    channelCode: 'DK-01',
   },
   FIELD_KIT: {
     eyebrow: 'FIELD KIT',
     title: 'FIELD KIT',
     description: 'One-use combat consumables and field tools prepared for descent.',
     manifestLabel: 'FIELD KIT',
+    channelCode: 'FK-01',
   },
   CARGO: {
     eyebrow: 'CARGO MANIFEST',
     title: 'CARGO MANIFEST',
     description: 'Review staged cargo and available capacity before descent.',
     manifestLabel: 'CARGO',
+    channelCode: 'CG-01',
   },
 };

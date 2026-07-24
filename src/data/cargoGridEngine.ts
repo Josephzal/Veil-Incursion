@@ -826,7 +826,7 @@ export function combatConsumableDescription(itemId: CargoItemId): string {
     case 'veil_ash_grenade':
       return 'Blinds frontline hostiles for 2 turns (−30% accuracy).';
     case 'god_mode':
-      return 'Overclocks operative systems — 1000 STRIKE damage, max health, stamina, and Abyssal Reserve. Free deploy.';
+      return 'Overclocks operative systems — every attack deals 1000 true damage (armor bypass, guaranteed hit), resources locked at max. Free deploy.';
     default:
       return 'Field deployment protocols pending operative clearance.';
   }

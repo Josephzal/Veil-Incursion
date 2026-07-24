@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useHubLayout } from '../../context/HubLayoutContext';
+import { hubInspectorPanelWidth } from '../../theme/hubPanelSurfaces';
 
 export const VEIL_FRONT_BREAKPOINT_WIDE = 1180;
 export const VEIL_FRONT_BREAKPOINT_MAP_TOP = 1100;
@@ -18,10 +19,8 @@ export function useVeilFrontLayout() {
     const isCompactHeight = screenHeight <= VEIL_FRONT_HEIGHT_COMPACT;
     const isUltraCompactHeight = screenHeight <= VEIL_FRONT_HEIGHT_ULTRA;
 
-    // Mission rail after sidebar removal: clamp(420px, 26vw, 470px); tighten under 1500px.
-    const actionPanelWidth = screenWidth <= 1500
-      ? Math.min(410, Math.max(390, Math.floor(contentWidth * 0.28)))
-      : Math.min(470, Math.max(420, Math.floor(contentWidth * 0.26)));
+    // Compact inspector — clamp(440px, 25vw, 520px). Leave the map the rest.
+    const actionPanelWidth = hubInspectorPanelWidth(contentWidth || screenWidth, 'compact');
     const statusOverlayWidth = Math.min(320, Math.max(240, Math.floor(screenWidth * 0.24)));
     /** @deprecated use actionPanelWidth */
     const briefingPanelWidth = actionPanelWidth;

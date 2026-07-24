@@ -2,6 +2,13 @@
  * Centralized Phase-1 VeilWarpField tuning.
  * Presentation only — not gameplay settings.
  */
+
+/** Field presentation modes — ambient scanner vs full-screen transit. */
+export type VeilWarpFieldMode =
+  | 'ambientScanner'
+  | 'incursionIngress'
+  | 'successfulExtraction';
+
 export const VEIL_WARP_CONFIG = {
   /** Internal canvas resolution relative to CSS size. */
   renderScale: 0.6,
@@ -46,6 +53,49 @@ export const VEIL_WARP_CONFIG = {
   /** Tangential irregularity at the front. */
   selectionRippleTangentialStrength: 0.0085,
 } as const;
+
+/**
+ * Baseline multipliers for transit modes (timeline bridge further animates these).
+ * Ambient keeps identity with VEIL_WARP_CONFIG.
+ */
+export const VEIL_WARP_MODE_BASE: Record<VeilWarpFieldMode, {
+  motionSpeed: number;
+  warpStrength: number;
+  contourIntensity: number;
+  violetIntensity: number;
+  mintIntensity: number;
+  vignetteStrength: number;
+  /** Full-viewport field (ignores scanner circular well). */
+  fullBleed: boolean;
+}> = {
+  ambientScanner: {
+    motionSpeed: VEIL_WARP_CONFIG.motionSpeed,
+    warpStrength: VEIL_WARP_CONFIG.warpStrength,
+    contourIntensity: VEIL_WARP_CONFIG.contourIntensity,
+    violetIntensity: VEIL_WARP_CONFIG.violetIntensity,
+    mintIntensity: VEIL_WARP_CONFIG.mintIntensity,
+    vignetteStrength: VEIL_WARP_CONFIG.vignetteStrength,
+    fullBleed: false,
+  },
+  incursionIngress: {
+    motionSpeed: 4,
+    warpStrength: 1.85,
+    contourIntensity: 1.8,
+    violetIntensity: 1.45,
+    mintIntensity: 1.15,
+    vignetteStrength: 0.55,
+    fullBleed: true,
+  },
+  successfulExtraction: {
+    motionSpeed: 4.5,
+    warpStrength: 2.05,
+    contourIntensity: 1.9,
+    violetIntensity: 1.5,
+    mintIntensity: 1.2,
+    vignetteStrength: 0.5,
+    fullBleed: true,
+  },
+};
 
 export const VEIL_WARP_COLORS = {
   voidBg: '#05090B',

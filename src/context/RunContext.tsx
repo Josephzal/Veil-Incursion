@@ -6436,7 +6436,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         break;
       case 'god_mode':
         result.enableGodMode = true;
-        logLine = '>> GOD MODE — Operative overclocked. 1000 DMG STRIKE, resources locked at maximum.';
+        logLine = '>> GOD MODE — Operative overclocked. Every attack: 1000 true damage, armor bypass, guaranteed hit.';
         break;
       default:
         return null;

@@ -17,18 +17,18 @@ export const TERMINAL_NAV_ITEMS: TerminalNavItem[] = [
 
 const DEV_NAV_ITEM: TerminalNavItem = {
   key: 'TEST',
-  label: 'TEST',
-  shortLabel: 'TEST',
+  label: 'DEBUG',
+  shortLabel: 'DEBUG',
   subtitle: 'SANDBOX',
 };
 
 /**
- * Hidden by default — TEST / SANDBOX must not appear in production navigation.
- * Flip to true locally only when the sandbox route is needed.
+ * Debug / sandbox hub tab (formerly ARCHIVE placeholder).
+ * Still gated to __DEV__ so production builds omit it.
  */
-const SHOW_DEV_TEST_NAV = false;
+const SHOW_DEV_TEST_NAV = true;
 
-/** Hub nav items. Dev sandbox tab is gated behind SHOW_DEV_TEST_NAV. */
+/** Hub nav items. Debug sandbox tab is gated behind SHOW_DEV_TEST_NAV + __DEV__. */
 export function resolveTerminalNavItems(): TerminalNavItem[] {
   if (
     SHOW_DEV_TEST_NAV

@@ -33,6 +33,9 @@ import {
 import { VEIL } from '../../../theme/veilTerminalTokens';
 import { OccultNeonRail } from '../veilChrome';
 import {
+  HUB_BROWSER_CONTENT_PADDING_H,
+  HUB_BROWSER_FEED_PAD_TOP,
+  hubBrowserSectionLabelStyle,
   HUB_CARD_BORDER,
   HUB_CARD_BORDER_HOVER,
   HUB_CARD_BORDER_SELECTED,
@@ -174,7 +177,7 @@ export default function ForgeWorkspace({
       <View style={styles.feed}>
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={{ paddingTop: 4, paddingBottom: scaleSpacing(12) }}
+          contentContainerStyle={{ paddingTop: HUB_BROWSER_FEED_PAD_TOP, paddingBottom: scaleSpacing(12) }}
           showsVerticalScrollIndicator
           {...(Platform.OS === 'web'
             ? ({
@@ -309,17 +312,13 @@ const styles = StyleSheet.create({
     color: '#91a39f',
   },
   sectionLabel: {
-    marginTop: 10,
-    marginBottom: 8,
-    paddingHorizontal: 14,
-    color: 'rgba(185, 181, 167, 0.88)',
-    fontWeight: '700',
+    ...hubBrowserSectionLabelStyle(),
   },
   filterRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    paddingHorizontal: 14,
+    paddingHorizontal: HUB_BROWSER_CONTENT_PADDING_H,
     paddingBottom: 10,
   },
   filterChip: {

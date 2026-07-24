@@ -1,10 +1,10 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import TerminalText from './TerminalText';
 import SectorMapPanel from './veilFront/SectorMapPanel';
 import SectorBriefingPanel from './veilFront/SectorBriefingPanel';
 import VeilFrontDeployConfirmModal from './veilFront/VeilFrontDeployConfirmModal';
 import { useVeilFrontLayout } from './veilFront/useVeilFrontLayout';
+import HubPageHeader from './hub/HubPageHeader';
 import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useWorldState } from '../context/WorldStateContext';
@@ -29,11 +29,7 @@ import {
 } from '../data/breachGradeEngine';
 import {
   HUB_DOSSIER_EDGE_PAD,
-  HUB_PAGE_HEADER_PADDING_H,
-  HUB_PAGE_HEADER_PADDING_TOP,
   hubDossierColumnStyle,
-  hubPageEyebrowStyle,
-  hubPageTitleStyle,
 } from '../theme/hubPanelSurfaces';
 
 /** Matches prior shell bottom inset so dossier top/bottom edge padding stay equal. */
@@ -192,27 +188,12 @@ export default function OperationalBriefingPanel({
                 sectorLockLabels={sectorLockLabels}
               />
             </View>
-            <View
-              style={[
-                styles.mapTitle,
-                { top: HUB_PAGE_HEADER_PADDING_TOP, left: HUB_PAGE_HEADER_PADDING_H },
-              ]}
-              pointerEvents="none"
-            >
-              <TerminalText
-                size={6.5}
-                letterSpacing={1.05}
-                style={styles.mapSubtitle}
-              >
-                VEIL FRONT / SECTOR NETWORK
-              </TerminalText>
-              <TerminalText
-                size={22}
-                letterSpacing={0.15}
-                style={styles.mapHeading}
-              >
-                SELECT INCURSION ZONE
-              </TerminalText>
+            <View style={styles.mapTitle} pointerEvents="none">
+              <HubPageHeader
+                eyebrow="VEIL FRONT / SECTOR NETWORK"
+                title="SELECT INCURSION ZONE"
+                showBoneMark={false}
+              />
             </View>
           </View>
         </View>
@@ -316,16 +297,12 @@ const styles = StyleSheet.create({
   },
   mapTitle: {
     position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
     zIndex: 3,
-    maxWidth: '70%',
-  },
-  mapSubtitle: {
-    ...hubPageEyebrowStyle(),
-  },
-  mapHeading: {
-    // Match HubPageHeader eyebrowRow → title gap (marginBottom: 4).
-    marginTop: 4,
-    ...hubPageTitleStyle(),
+    // HubPageHeader supplies the same minHeight / padding / flex-end rhythm
+    // as Contract Board, Black Market, and Loadout.
   },
   briefingColumn: {
     ...hubDossierColumnStyle(),

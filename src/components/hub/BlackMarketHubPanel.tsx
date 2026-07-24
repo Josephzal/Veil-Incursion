@@ -67,6 +67,7 @@ import {
   HUB_CHANNEL_BUTTON_HEIGHT,
   HUB_CHANNEL_BUTTON_PADDING_V,
   HUB_CHANNEL_RAIL_INSET,
+  HUB_BROWSER_CONTENT_PADDING_H,
   HUB_DOSSIER_EDGE_PAD,
   HUB_DOSSIER_FOOTER_BG,
   HUB_DOSSIER_FOOTER_RULE,
@@ -75,6 +76,8 @@ import {
   HUB_SELECT_SURFACE,
   hubDossierColumnStyle,
   hubDossierShellStyle,
+  hubInspectorColumnWidth,
+  hubInspectorFocusBarStyle,
   hubPrimaryActionHoverStyle,
   hubPrimaryActionStyle,
   hubPrimaryActionTextHoverStyle,
@@ -177,10 +180,8 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
 
   const narrow = screenWidth <= 1500;
   const compact = screenHeight <= 800;
-  // ~25–27% of stage for dossier; materials/feed share the remainder.
-  const dossierWidth = narrow
-    ? Math.min(430, Math.max(360, Math.floor(screenWidth * 0.27)))
-    : Math.min(560, Math.max(440, Math.floor(screenWidth * 0.26)));
+  // Standard inspector width — shared with Contract Board / Loadout.
+  const inspectorColumnWidth = hubInspectorColumnWidth(screenWidth, 'standard');
 
   const forgeSelection = useMemo(
     () => resolveForgeSelection(account, selectedRecipeId),
@@ -596,6 +597,9 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
       <>
         <View style={styles.dossierHeader}>
           <OccultNeonRail style={styles.dossierAccent} />
+          <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>
+            SCHEMATIC CONSOLE
+          </TerminalText>
           <BlackMarketMediaStage
             source={artwork?.source}
             classification={classCode}
@@ -845,7 +849,7 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
   const renderVendorDossier = () => {
     if (!vendorSelection) {
       return renderEmptyDossier(
-        'EXCHANGE DOSSIER',
+        'EXCHANGE CONSOLE',
         'No procurement or liquidation records are currently available.',
         '[ AWAITING RECORD ]',
       );
@@ -853,7 +857,7 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
 
     if (vendorSelection.source === 'offer') {
       const listing = BLACK_MARKET_CARGO_LISTINGS.find((e) => e.id === vendorSelection.listingId);
-      if (!listing) return renderEmptyDossier('PROCUREMENT DOSSIER', 'Offer no longer available.');
+      if (!listing) return renderEmptyDossier('PROCUREMENT CONSOLE', 'Offer no longer available.');
       const price = hubContrabandPrice(listing.price, hubBlackMarketDiscountPct);
       const affordable = account.cabalCredits >= price;
       const catalog = CARGO_ITEM_CATALOG[listing.id];
@@ -864,7 +868,7 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
           <View style={styles.dossierHeader}>
           <OccultNeonRail style={styles.dossierAccent} />
           <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>
-              PROCUREMENT DOSSIER
+              PROCUREMENT CONSOLE
             </TerminalText>
             <TerminalText size={7.5} letterSpacing={0.85} style={styles.dossierCategory}>
               {`RECOVERED FIELD ASSET // ${classCode}`}
@@ -973,7 +977,7 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
 
     if (vendorSelection.source === 'holding' && vendorSelection.kind === 'RESOURCE') {
       const entry = fenceEntries.find((e) => e.resourceId === vendorSelection.resourceId);
-      if (!entry) return renderEmptyDossier('LIQUIDATION DOSSIER', 'Holding no longer available.');
+      if (!entry) return renderEmptyDossier('LIQUIDATION CONSOLE', 'Holding no longer available.');
       const exchange = formatVendorExchangeCondition(entry.resourceId);
       const artwork = resolveBlackMarketArtwork({
         recordType: 'RESOURCE',
@@ -987,7 +991,7 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
           <View style={styles.dossierHeader}>
             <OccultNeonRail style={styles.dossierAccent} />
             <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>
-              LIQUIDATION DOSSIER
+              LIQUIDATION CONSOLE
             </TerminalText>
             <TerminalText size={7.5} letterSpacing={0.85} style={styles.dossierCategory}>
               {`RECOVERED HOLDING // ${classCode}`}
@@ -1101,13 +1105,13 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
     // Sealed cargo holding
     if (vendorSelection.source !== 'holding' || vendorSelection.kind !== 'SEALED') {
       return renderEmptyDossier(
-        'EXCHANGE DOSSIER',
+        'EXCHANGE CONSOLE',
         'No procurement or liquidation records are currently available.',
         '[ AWAITING RECORD ]',
       );
     }
     const sealed = sealedEntries.find((e) => e.stackId === vendorSelection.stackId);
-    if (!sealed) return renderEmptyDossier('LIQUIDATION DOSSIER', 'Sealed cargo no longer available.');
+    if (!sealed) return renderEmptyDossier('LIQUIDATION CONSOLE', 'Sealed cargo no longer available.');
     const config = getSealedCargoConfig(sealed.resourceId) ?? SEALED_CASKET_CONFIG;
     const openingFee = resolveOpeningFee(sealed.state === 'APPRAISED', sealed.resourceId);
     const canAppraise = sealed.state === 'SEALED' && account.cabalCredits >= config.appraisalFee;
@@ -1123,7 +1127,7 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
         <View style={styles.dossierHeader}>
           <OccultNeonRail style={styles.dossierAccent} />
           <TerminalText size={7} letterSpacing={1.05} style={styles.dossierEyebrow}>
-            LIQUIDATION DOSSIER
+            LIQUIDATION CONSOLE
           </TerminalText>
           <TerminalText size={7.5} letterSpacing={0.85} style={styles.dossierCategory}>
             {`SEALED CARGO // ${classCode}`}
@@ -1280,11 +1284,6 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
         <HubPageHeader
           eyebrow="RESTRICTED EXCHANGE // BM-01"
           title="BLACK MARKET"
-          subtitle={
-            activeMode === 'FORGE'
-              ? 'UNLICENSED FABRICATION CHANNEL'
-              : 'UNLICENSED PROCUREMENT CHANNEL'
-          }
           compact={compact}
         />
 
@@ -1319,24 +1318,31 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
                     style={styles.modeEdge}
                   />
                 )}
-                <TerminalText
-                  size={9}
-                  letterSpacing={1}
-                  style={{ color: selected ? VEIL.text : META, fontWeight: '800' }}
-                >
-                  {mode.label}
-                </TerminalText>
-                <TerminalText size={6.5} letterSpacing={0.8} style={{ marginTop: 4, color: META }}>
+                <View style={styles.modeTop}>
+                  <TerminalText
+                    size={9}
+                    letterSpacing={1}
+                    style={{ color: selected ? VEIL.text : META, fontWeight: '800', flex: 1 }}
+                    numberOfLines={1}
+                  >
+                    {mode.label}
+                  </TerminalText>
+                  <TerminalText
+                    size={6}
+                    letterSpacing={0.7}
+                    style={{ color: selected ? TERMINAL : META, fontWeight: '700' }}
+                  >
+                    {mode.code}
+                  </TerminalText>
+                </View>
+                <TerminalText size={6.5} letterSpacing={0.8} style={styles.modeDetail} numberOfLines={1}>
                   {mode.detail}
-                </TerminalText>
-                <TerminalText size={6} letterSpacing={0.7} style={styles.modeCode}>
-                  {mode.code}
                 </TerminalText>
               </HapticPressable>
             );
           })}
           <View style={styles.modeSpacer} />
-          <View style={styles.creditBalance}>
+          <View style={[styles.creditBalance, compact && styles.creditBalanceCompact]}>
             <RegistrationBrackets tone={VEIL_MINT_TONE} active corners="all" />
             <TerminalText size={6.5} letterSpacing={1} style={styles.creditLabel}>
               CREDIT BALANCE
@@ -1376,13 +1382,13 @@ export default function BlackMarketHubPanel(): React.JSX.Element {
         </View>
       </View>
 
-      <View style={[styles.dossierColumn, { width: dossierWidth + HUB_DOSSIER_EDGE_PAD, flexGrow: 0, flexBasis: dossierWidth + HUB_DOSSIER_EDGE_PAD }]}>
+      <View style={[styles.dossierColumn, { width: inspectorColumnWidth, flexGrow: 0, flexBasis: inspectorColumnWidth, maxWidth: inspectorColumnWidth }]}>
         <View style={[styles.dossier, activeMode === 'VENDOR' && styles.dossierVendor]}>
           <Animated.View style={[styles.dossierFill, { opacity: dossierLock }]}>
             {activeMode === 'FORGE'
               ? (forgeSelection
                 ? renderForgeDossier(forgeSelection)
-                : renderEmptyDossier('FORGE DOSSIER', 'Select an augment from the schematic feed.'))
+                : renderEmptyDossier('SCHEMATIC CONSOLE', 'Select an augment from the schematic feed.'))
               : renderVendorDossier()}
           </Animated.View>
         </View>
@@ -1433,13 +1439,21 @@ const styles = StyleSheet.create({
   creditBalance: {
     position: 'relative',
     alignItems: 'flex-end',
-    justifyContent: 'flex-end',
-    alignSelf: 'stretch',
+    justifyContent: 'center',
+    alignSelf: 'center',
     flexShrink: 0,
-    paddingTop: 14,
-    paddingBottom: 12,
+    // Pin to channel-button height so CREDIT BALANCE cannot stretch the modes
+    // row and push Forge section labels lower than Loadout.
+    height: HUB_CHANNEL_BUTTON_HEIGHT,
+    minHeight: HUB_CHANNEL_BUTTON_HEIGHT,
+    maxHeight: HUB_CHANNEL_BUTTON_HEIGHT,
     paddingHorizontal: 18,
     minWidth: 168,
+  },
+  creditBalanceCompact: {
+    height: HUB_CHANNEL_BUTTON_COMPACT_HEIGHT,
+    minHeight: HUB_CHANNEL_BUTTON_COMPACT_HEIGHT,
+    maxHeight: HUB_CHANNEL_BUTTON_COMPACT_HEIGHT,
   },
   creditLabel: {
     color: META,
@@ -1453,9 +1467,9 @@ const styles = StyleSheet.create({
   },
   modes: {
     flexDirection: 'row',
-    alignItems: 'stretch',
+    alignItems: 'center',
     minHeight: HUB_CHANNEL_BUTTON_HEIGHT,
-    paddingHorizontal: 14,
+    paddingHorizontal: HUB_BROWSER_CONTENT_PADDING_H,
     paddingBottom: 6,
     flexShrink: 0,
     gap: 10,
@@ -1513,9 +1527,13 @@ const styles = StyleSheet.create({
     top: HUB_CHANNEL_RAIL_INSET,
     bottom: HUB_CHANNEL_RAIL_INSET,
   },
-  modeCode: {
-    marginTop: 3,
-    marginLeft: 0,
+  modeTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  modeDetail: {
+    marginTop: 6,
     color: META,
     fontWeight: '700',
   },
@@ -1592,8 +1610,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   dossierAccent: {
-    top: 18,
-    bottom: 1,
+    ...hubInspectorFocusBarStyle(),
   },
   emptyMedia: {
     marginTop: 6,
@@ -1632,6 +1649,7 @@ const styles = StyleSheet.create({
   dossierEyebrow: {
     color: META,
     fontWeight: '700',
+    marginBottom: 8,
   },
   dossierCategory: {
     marginTop: 7,

@@ -161,10 +161,10 @@ export default function VeilFrontMap({
       ? VEIL.text
       : unlocked
         ? 'rgba(222, 227, 223, 0.9)'
-        : 'rgba(214, 220, 216, 0.82)';
+        : 'rgba(120, 128, 132, 0.72)';
     const statusText = sectorLockLabels?.[sector.id] ?? 'LOCKED';
     return (
-      <G key={`label-${sector.id}`}>
+      <G key={`label-${sector.id}`} opacity={unlocked ? 1 : 0.78}>
         <SvgText
           x={sector.label.x}
           y={sector.label.y}
@@ -181,7 +181,7 @@ export default function VeilFrontMap({
           <SvgText
             x={sector.statusLabel.x}
             y={sector.statusLabel.y}
-            fill="rgba(170, 180, 185, 0.64)"
+            fill="rgba(140, 148, 152, 0.7)"
             fontSize={12}
             fontFamily="monospace"
             fontWeight="700"
@@ -242,10 +242,40 @@ export default function VeilFrontMap({
                 </SvgText>
               )}
 
-              {/* Hover: quiet clipped brightness */}
+              {/* Locked sectors: dark grey dim over map artwork */}
+              {!SHOW_SECTOR_DEBUG
+              && unlockedSet != null
+              && VEIL_FRONT_MAP_SECTORS.map((sector) => {
+                if (isUnlocked(sector.id)) return null;
+                return (
+                  <G
+                    key={`lock-dim-${sector.id}`}
+                    clipPath={`url(#${clipIdFor(sector)})`}
+                    pointerEvents="none"
+                  >
+                    <Rect
+                      x={0}
+                      y={0}
+                      width={VB_W}
+                      height={VB_H}
+                      fill="rgba(12, 14, 16, 0.62)"
+                    />
+                    <Rect
+                      x={0}
+                      y={0}
+                      width={VB_W}
+                      height={VB_H}
+                      fill="rgba(48, 54, 58, 0.28)"
+                    />
+                  </G>
+                );
+              })}
+
+              {/* Hover: quiet clipped brightness (unlocked only) */}
               {!SHOW_SECTOR_DEBUG
               && hoverDef
               && hoverDef.id !== activeSectorId
+              && isUnlocked(hoverDef.id)
               && mapHref != null ? (
                 <G clipPath={`url(#${clipIdFor(hoverDef)})`} pointerEvents="none">
                   <SvgImage
@@ -263,7 +293,7 @@ export default function VeilFrontMap({
                 </G>
               ) : null}
 
-              {/* Selected: clipped artwork + sector-colored tint */}
+              {/* Selected: clipped artwork lift + soft inner glow fill */}
               {!SHOW_SECTOR_DEBUG && activeDef && mapHref != null ? (
                 <G clipPath={`url(#${clipIdFor(activeDef)})`} pointerEvents="none">
                   <SvgImage
@@ -276,7 +306,7 @@ export default function VeilFrontMap({
                     {...(Platform.OS === 'web'
                       ? {
                           style: {
-                            filter: 'brightness(1.18) contrast(1.08) saturate(1.12)',
+                            filter: 'brightness(1.22) contrast(1.1) saturate(1.16)',
                           } as object,
                         }
                       : null)}
@@ -287,7 +317,7 @@ export default function VeilFrontMap({
                     width={VB_W}
                     height={VB_H}
                     fill={activeDef.accent}
-                    opacity={0.035}
+                    opacity={0.1}
                   />
                 </G>
               ) : null}
@@ -361,15 +391,33 @@ export default function VeilFrontMap({
                 />
               ) : null}
 
-              {/* Selected boundary */}
+              {/* Selected glow — layered outer bloom + crisp edge */}
               {!SHOW_SECTOR_DEBUG && activeDef ? (
                 <G pointerEvents="none">
                   <Path
                     d={activeDef.path}
+                    fill={activeDef.accent}
+                    fillOpacity={0.06}
+                    stroke="none"
+                  />
+                  <Path
+                    d={activeDef.path}
                     fill="none"
                     stroke={activeDef.accent}
-                    strokeWidth={3}
+                    strokeWidth={14}
                     strokeOpacity={0.08}
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                    {...(Platform.OS === 'web'
+                      ? { style: { filter: `drop-shadow(0 0 10px ${activeDef.accent})` } as object }
+                      : null)}
+                  />
+                  <Path
+                    d={activeDef.path}
+                    fill="none"
+                    stroke={activeDef.accent}
+                    strokeWidth={7}
+                    strokeOpacity={0.18}
                     strokeLinejoin="round"
                     strokeLinecap="round"
                   />
@@ -377,6 +425,15 @@ export default function VeilFrontMap({
                     d={activeDef.path}
                     fill="none"
                     stroke={activeDef.accent}
+                    strokeWidth={2.5}
+                    strokeOpacity={0.55}
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                  />
+                  <Path
+                    d={activeDef.path}
+                    fill="none"
+                    stroke={VEIL.text}
                     strokeWidth={1}
                     strokeOpacity={0.72}
                     strokeLinejoin="round"

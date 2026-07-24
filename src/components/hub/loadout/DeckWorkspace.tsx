@@ -549,7 +549,8 @@ const styles = StyleSheet.create({
   },
   feedHeaderText: { color: MUTED, fontWeight: '700' },
   feed: { flex: 1, minHeight: 0 },
-  feedContent: { paddingHorizontal: 0, paddingTop: 8, paddingBottom: 16 },
+  // Top spacing owned by Loadout catalogHeader (matches Black Market section rhythm).
+  feedContent: { paddingHorizontal: 0, paddingTop: 0, paddingBottom: 16 },
   signal: {
     position: 'relative',
     marginBottom: 10,

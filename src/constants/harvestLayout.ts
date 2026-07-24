@@ -9,14 +9,23 @@ import { CARGO_GRID_COLS, CARGO_GRID_ROWS } from '../types/cargoGrid';
 export const HARVEST_HORIZONTAL_PADDING = 8;
 export const GRID_CANISTER_GAP = 6;
 export const HARVEST_EXTERNAL_ROW_GAP = 20;
-/** Tri-pane harvest column ratios — extractor left, containment center, cargo right. */
-export const HARVEST_LEFT_PANE_RATIO = 0.25;
+/**
+ * Two-zone harvest layout — dominant containment workspace + cargo console.
+ * (Legacy left-pane ratio retained as alias for any residual callers.)
+ */
+export const HARVEST_LEFT_PANE_RATIO = 0.75;
 export const HARVEST_RIGHT_PANE_RATIO = 0.25;
-export const HARVEST_TRI_PANE_GAP = 8;
-/** Web desktop flex weights — extractor left, containment center, cargo right. */
-export const HARVEST_DESKTOP_LEFT_FLEX = 0.25;
-export const HARVEST_DESKTOP_CENTER_FLEX = 0.5;
-export const HARVEST_DESKTOP_RIGHT_FLEX = 0.25;
+export const HARVEST_TRI_PANE_GAP = 10;
+/** Web desktop flex weights — containment workspace + cargo console. */
+export const HARVEST_DESKTOP_LEFT_FLEX = 0;
+export const HARVEST_DESKTOP_CENTER_FLEX = 3;
+export const HARVEST_DESKTOP_RIGHT_FLEX = 1;
+/** Docked extractor module footprint inside the containment viewport. */
+export const HARVEST_EXTRACTOR_MODULE_WIDTH = 260;
+export const HARVEST_EXTRACTOR_MODULE_HEIGHT = 300;
+/** Bottom telemetry strip inside the containment workspace. */
+export const HARVEST_STATUS_STRIP_HEIGHT = 68;
+export const HARVEST_CONTINUE_BUTTON_MIN_HEIGHT = 56;
 export const HARVEST_CARGO_BACKING_PADDING = 12;
 /** Padding below the containment slot row inside the external bay. */
 export const HARVEST_EXTERNAL_BAY_EXTRA = 28;
@@ -28,7 +37,7 @@ export const HARVEST_MIN_CELL_SIZE = 34;
 export const HARVEST_EXTERNAL_BAY_MARGIN_TOP = 10;
 /** Gap between containment row and pinned footer CTA. */
 export const HARVEST_CONTENT_BUFFER = 6;
-export const HARVEST_CONTINUE_BUTTON_HEIGHT = 36;
+export const HARVEST_CONTINUE_BUTTON_HEIGHT = HARVEST_CONTINUE_BUTTON_MIN_HEIGHT;
 
 export function harvestExternalBayHeight(cellSize: number): number {
   return cellSize + HARVEST_EXTERNAL_BAY_EXTRA;

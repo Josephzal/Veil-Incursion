@@ -24,6 +24,7 @@ import {
 import { VEIL } from '../../../theme/veilTerminalTokens';
 import { OccultNeonRail } from '../veilChrome';
 import {
+  HUB_BROWSER_CONTENT_PADDING_H,
   HUB_CARD_BORDER,
   HUB_CARD_BORDER_HOVER,
   HUB_CARD_BORDER_SELECTED,
@@ -412,7 +413,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#000000',
   },
   feedHeader: {
-    paddingHorizontal: 14,
+    paddingHorizontal: HUB_BROWSER_CONTENT_PADDING_H,
     paddingTop: 10,
     paddingBottom: 6,
     flexShrink: 0,

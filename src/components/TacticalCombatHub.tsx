@@ -3072,20 +3072,38 @@ export default function TacticalCombatHub({
     ) {
       log(`${tag} >> WARDEN INTERCEPT — backline strike redirected.`);
     }
+    const godModeAttack = Boolean(
+      godModeRef.current
+      && isPlayerTurnRef.current
+      && source
+      && source !== 'COUNTER'
+      && !options?.echoHit
+      && !options?.indirectDamage,
+    );
+    if (godModeAttack) {
+      raw = GOD_MODE_STRIKE_DAMAGE;
+      options = {
+        ...options,
+        channel: 'TRUE',
+        ignoreDefenses: true,
+        rollCrit: false,
+      };
+    }
     const shroudMissChance = env.eliteModifier === 'PHASE_SHROUD' ? 0.25 : 0.2;
-    if (env.isEnemyPhaseShrouded && Math.random() < shroudMissChance) {
+    if (!godModeAttack && env.isEnemyPhaseShrouded && Math.random() < shroudMissChance) {
       log(`${tag} >> PHASE SHROUD — ATTACK WHIFFED (${Math.round(shroudMissChance * 100)}% miss).`);
       return false;
     }
     if (
-      e.isUntargetable
+      !godModeAttack
+      && e.isUntargetable
       && options?.channel !== 'OCCULT'
       && options?.channel !== 'TRUE'
     ) {
       log(`${tag} >> PHASED — ${e.designation} cannot be targeted by physical channel.`);
       return false;
     }
-    if ((e.veilBarrierCharges ?? 0) > 0 && raw > 0) {
+    if (!godModeAttack && (e.veilBarrierCharges ?? 0) > 0 && raw > 0) {
       const nextCharges = (e.veilBarrierCharges ?? 0) - 1;
       patchUnit(e.unitId, {
         veilBarrierCharges: nextCharges > 0 ? nextCharges : undefined,
@@ -3094,7 +3112,7 @@ export default function TacticalCombatHub({
       publishSquadUi(squadRef.current);
       return false;
     }
-    if ((e.rivalWardCharges ?? 0) > 0 && raw > 0) {
+    if (!godModeAttack && (e.rivalWardCharges ?? 0) > 0 && raw > 0) {
       const ward = tryAbsorbRivalBindingWard(e, raw, source);
       if (ward.absorbed) {
         if (ward.logLine) log(`${tag} ${ward.logLine}`);
@@ -3209,7 +3227,7 @@ export default function TacticalCombatHub({
     const narrativeOvercharged = Boolean(
       source && sessionExtrasRef.current.overchargedActive,
     );
-    const bypassAllMitigation = narrativeOvercharged;
+    const bypassAllMitigation = narrativeOvercharged || godModeAttack;
     // --- Hex Shot ammo-type effect (v1) ---
     let hexAmmoResult: HexAmmoEffectResult | null = null;
     let hexAmmoFirstShotPenalty = false;
@@ -3579,6 +3597,14 @@ export default function TacticalCombatHub({
         log(`${tag} >> Kinetic scaling ${dmg} → ${scaled}.`);
       }
       dmg = scaled;
+    }
+    if (godModeAttack) {
+      // 1000 floor + lethal vs current HP (incl. shared boss pools).
+      const lethalFloor = working.sharedBossPool && bossRuntimeRef.current
+        ? bossRuntimeRef.current.currentHp
+        : working.currentHp;
+      dmg = Math.max(GOD_MODE_STRIKE_DAMAGE, lethalFloor);
+      options = { ...options, channel: 'TRUE', ignoreDefenses: true };
     }
     if (options?.channel === 'TRUE' || bypassAllMitigation) {
       dmg = applyDamageWithFractureBonus(dmg, working);
@@ -4014,6 +4040,9 @@ export default function TacticalCombatHub({
       }
     }
 
+    if (godModeAttack && dmg > 0) {
+      applyGodModeResources();
+    }
     if (source && env.bloodFrenzyActive && dmg > 0) {
       const heal = computeBloodFrenzyHeal(dmg, true);
       if (heal > 0) {
@@ -6081,7 +6110,7 @@ export default function TacticalCombatHub({
     if (godModeActive) {
       godModeRef.current = true;
       applyGodModeResources();
-      log('>> GOD MODE ACTIVE — operative resources locked at maximum.');
+      log('>> GOD MODE ACTIVE — 1000 true damage on every attack; resources locked at maximum.');
     }
   };
   useEffect(() => { initCombat(); }, []);
@@ -6886,24 +6915,6 @@ export default function TacticalCombatHub({
 
     switch (abilityId) {
       case 'STRIKE': {
-        if (godModeRef.current) {
-          const kinetic = GOD_MODE_STRIKE_DAMAGE;
-          const eradicated = hurtEnemy(kinetic, '[STRIKE]', 'STRIKE', {
-            channel: 'KINETIC',
-            fractureGain: 25,
-            abilityId: 'STRIKE',
-          });
-          const struck = enemyRef.current;
-          chargeAr(def.reserveGain ?? 15, struck != null && isEnemyFractured(struck));
-          imprintRunicBrand(def.brandsImprinted ?? 1);
-          if (struck && fractureRatio(struck) > 0.5) {
-            syncEnemy(addCombatTag(struck, 'CONCUSSED'));
-          }
-          applyLethalRetaliation(kinetic);
-          applyGodModeResources();
-          if (eradicated) return;
-          break;
-        }
         const kineticBase = def.baseKineticDamage ?? 10;
         const targetBefore = enemyRef.current;
         const riposte = consumeRiposteReady();

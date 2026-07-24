@@ -125,140 +125,141 @@ export function useDescentNavigator() {
   }, [commitNodeEncounter, startBlackMarket, startNarrative, startCombat, startRest, startResourceHarvest, startPostCombatBoon]);
 
   const finalizeSectorExtraction = useCallback(() => {
-    transitionActions.startExtracting(() => {
-      void (async () => {
-        const inc = incursionRef.current;
-        const extractionResources = resolveRunExtractionResourceState(
-          inc.cargo,
-          inc.runBankedSnapshot,
-          inc.runResourceLedger,
-        );
-        const extractionKind = resolveContractExtractionKind(inc);
-        const operation = inc.runGenerationContext?.activeOperation;
-        const routingState = buildPostRunRoutingDebriefState({
-          ledger: extractionResources.ledger,
+    // Prepare debrief / hub destination before the fixed 1s Veil transit so swap stays covered.
+    void (async () => {
+      const inc = incursionRef.current;
+      const extractionResources = resolveRunExtractionResourceState(
+        inc.cargo,
+        inc.runBankedSnapshot,
+        inc.runResourceLedger,
+      );
+      const extractionKind = resolveContractExtractionKind(inc);
+      const operation = inc.runGenerationContext?.activeOperation;
+      const routingState = buildPostRunRoutingDebriefState({
+        ledger: extractionResources.ledger,
+        contract: inc.activeContract,
+        operationObjectiveKind: operation?.objectiveKind ?? null,
+        operationTargetResourceNames: operation?.rewardEmphasis.targetResources,
+        operationId: operation?.id ?? null,
+        contractProgress: inc.contractRunProgress,
+        extractionKind,
+      });
+      const pendingStackCount = routingState.pendingItems.reduce(
+        (sum, item) => sum + item.quantity,
+        0,
+      );
+      const cargoRoutingRunState = recordPendingRoutingAtExtract(
+        inc.cargoRoutingRunState,
+        pendingStackCount,
+      );
+      const incWithLedger = {
+        ...inc,
+        runResourceLedger: extractionResources.ledger,
+        cargoRoutingRunState,
+      };
+
+      const contractResult = routingState.requiresRouting
+        ? resolveContractPendingDelivery({
           contract: inc.activeContract,
-          operationObjectiveKind: operation?.objectiveKind ?? null,
-          operationTargetResourceNames: operation?.rewardEmphasis.targetResources,
-          operationId: operation?.id ?? null,
-          contractProgress: inc.contractRunProgress,
+          ledger: extractionResources.ledger,
+          progress: inc.contractRunProgress,
+          extractionKind,
+        })
+        : resolveContractResult({
+          contract: inc.activeContract,
+          ledger: extractionResources.ledger,
+          progress: inc.contractRunProgress,
+          extractedSuccessfully: true,
           extractionKind,
         });
-        const pendingStackCount = routingState.pendingItems.reduce(
-          (sum, item) => sum + item.quantity,
-          0,
+      const resourceSections = buildExtractedResourceSections(extractionResources.ledger);
+
+      const { totalDeposit: residueVaulted } = resolveExtractionVeilResidueDeposit(
+        extractionResources.mergedCargo,
+        inc.sessionVeilResidueCollected,
+      );
+      persistRunExtraction({
+        cargo: extractionResources.mergedCargo,
+        aegisLoadout: inc.aegisLoadout,
+        hexShotLoadout: inc.hexShotLoadout,
+        envoyLoadout: inc.envoyLoadout,
+        sessionVeilResidueCollected: inc.sessionVeilResidueCollected,
+        excludeResourceIds: routingState.requiresRouting
+          ? collectPendingRoutingResourceIds(routingState.pendingItems)
+          : undefined,
+      });
+      const credits = calculateSectorExtractionPayout();
+      const riftIron = Math.max(5, Math.floor(credits / 40));
+      addCredits(credits);
+      addRiftIron(riftIron);
+
+      if (contractResult.status === 'SUCCESS') {
+        grantContractRewards(contractResult);
+        appendRunLog(
+          `>> CONTRACT COMPLETE — ${contractResult.title.toUpperCase()} // +${contractResult.creditsAwarded + contractResult.bonusCreditsAwarded} CR // +${contractResult.reputationAwarded + contractResult.bonusReputationAwarded} REP`,
         );
-        const cargoRoutingRunState = recordPendingRoutingAtExtract(
-          inc.cargoRoutingRunState,
-          pendingStackCount,
-        );
-        const incWithLedger = {
-          ...inc,
-          runResourceLedger: extractionResources.ledger,
-          cargoRoutingRunState,
-        };
-
-        const contractResult = routingState.requiresRouting
-          ? resolveContractPendingDelivery({
-            contract: inc.activeContract,
-            ledger: extractionResources.ledger,
-            progress: inc.contractRunProgress,
-            extractionKind,
-          })
-          : resolveContractResult({
-            contract: inc.activeContract,
-            ledger: extractionResources.ledger,
-            progress: inc.contractRunProgress,
-            extractedSuccessfully: true,
-            extractionKind,
-          });
-        const resourceSections = buildExtractedResourceSections(extractionResources.ledger);
-
-        const { totalDeposit: residueVaulted } = resolveExtractionVeilResidueDeposit(
-          extractionResources.mergedCargo,
-          inc.sessionVeilResidueCollected,
-        );
-        persistRunExtraction({
-          cargo: extractionResources.mergedCargo,
-          aegisLoadout: inc.aegisLoadout,
-          hexShotLoadout: inc.hexShotLoadout,
-          envoyLoadout: inc.envoyLoadout,
-          sessionVeilResidueCollected: inc.sessionVeilResidueCollected,
-          excludeResourceIds: routingState.requiresRouting
-            ? collectPendingRoutingResourceIds(routingState.pendingItems)
-            : undefined,
-        });
-        const credits = calculateSectorExtractionPayout();
-        const riftIron = Math.max(5, Math.floor(credits / 40));
-        addCredits(credits);
-        addRiftIron(riftIron);
-
-        if (contractResult.status === 'SUCCESS') {
-          grantContractRewards(contractResult);
-          appendRunLog(
-            `>> CONTRACT COMPLETE — ${contractResult.title.toUpperCase()} // +${contractResult.creditsAwarded + contractResult.bonusCreditsAwarded} CR // +${contractResult.reputationAwarded + contractResult.bonusReputationAwarded} REP`,
-          );
-          if (contractResult.bonusObjectiveMet && contractResult.bonusObjectiveText) {
-            appendRunLog(`>> BONUS OBJECTIVE — ${contractResult.bonusObjectiveText.toUpperCase()}`);
-          }
-        } else if (contractResult.status === 'PENDING_DELIVERY') {
-          appendRunLog(`>> CONTRACT PENDING — ${contractResult.title.toUpperCase()} // ${contractResult.progressText}`);
-        } else if (contractResult.status === 'FAILED') {
-          appendRunLog(`>> CONTRACT FAILED — ${contractResult.title.toUpperCase()} // ${contractResult.progressText}`);
+        if (contractResult.bonusObjectiveMet && contractResult.bonusObjectiveText) {
+          appendRunLog(`>> BONUS OBJECTIVE — ${contractResult.bonusObjectiveText.toUpperCase()}`);
         }
+      } else if (contractResult.status === 'PENDING_DELIVERY') {
+        appendRunLog(`>> CONTRACT PENDING — ${contractResult.title.toUpperCase()} // ${contractResult.progressText}`);
+      } else if (contractResult.status === 'FAILED') {
+        appendRunLog(`>> CONTRACT FAILED — ${contractResult.title.toUpperCase()} // ${contractResult.progressText}`);
+      }
 
-        const residueLine = residueVaulted > 0
-          ? ` +${residueVaulted} VEIL RESIDUE VAULTED`
-          : '';
-        const lootLine = routingState.requiresRouting
-          ? 'SPECIAL CARGO AWAITING ROUTING'
-          : 'LOOT ROUTED TO HOME STASH';
-        appendRunLog(`>> SECTOR EXTRACTION COMPLETE — +${credits} CREDITS, ${lootLine}, +${riftIron} RIFT IRON${residueLine}.`);
+      const residueLine = residueVaulted > 0
+        ? ` +${residueVaulted} VEIL RESIDUE VAULTED`
+        : '';
+      const lootLine = routingState.requiresRouting
+        ? 'SPECIAL CARGO AWAITING ROUTING'
+        : 'LOOT ROUTED TO HOME STASH';
+      appendRunLog(`>> SECTOR EXTRACTION COMPLETE — +${credits} CREDITS, ${lootLine}, +${riftIron} RIFT IRON${residueLine}.`);
 
-        const contribution = computeRunOperationContribution(incWithLedger, {
-          extractedSuccessfully: true,
-          deferTargetResourceCredit: routingState.requiresRouting,
-        });
-        let contributionResult: Awaited<ReturnType<typeof applyOperationContribution>> | null = null;
-        if (contribution.operationId && contribution.total > 0) {
-          contributionResult = await applyOperationContribution(contribution.operationId, contribution.total);
-          contributionResult.logLines.forEach((line) => appendRunLog(line));
-        }
+      const contribution = computeRunOperationContribution(incWithLedger, {
+        extractedSuccessfully: true,
+        deferTargetResourceCredit: routingState.requiresRouting,
+      });
+      let contributionResult: Awaited<ReturnType<typeof applyOperationContribution>> | null = null;
+      if (contribution.operationId && contribution.total > 0) {
+        contributionResult = await applyOperationContribution(contribution.operationId, contribution.total);
+        contributionResult.logLines.forEach((line) => appendRunLog(line));
+      }
 
-        if (!routingState.requiresRouting) {
-          tickAfterRunComplete();
-        }
+      if (!routingState.requiresRouting) {
+        tickAfterRunComplete();
+      }
+
+      const debrief = buildOperationDebriefPayload(incWithLedger, {
+        progressBefore: contributionResult?.progressBefore ?? inc.runGenerationContext?.activeOperation.progressCurrent ?? 0,
+        progressAfter: contributionResult?.progressAfter ?? inc.runGenerationContext?.activeOperation.progressCurrent ?? 0,
+        progressRequired: contributionResult?.progressRequired ?? inc.runGenerationContext?.activeOperation.progressRequired ?? 100,
+        completed: contributionResult?.completed ?? false,
+        completionLogLines: contributionResult?.logLines ?? [],
+        credits,
+        riftIron,
+        residueVaulted,
+        nextOperationTitle: contributionResult?.nextOperationTitle,
+        extractedSuccessfully: true,
+        contractResult,
+        extractionKind,
+        resourceSections,
+        midRunContributionTransmitted: inc.operationContributionTransmitted,
+        routingState,
+        deferredWorldTick: routingState.requiresRouting,
+        runResourceLedger: extractionResources.ledger,
+        account,
+      });
+
+      transitionActions.startExtracting(() => {
         endRun('SECTOR EXTRACTION SECURED');
-
-        const debrief = buildOperationDebriefPayload(incWithLedger, {
-          progressBefore: contributionResult?.progressBefore ?? inc.runGenerationContext?.activeOperation.progressCurrent ?? 0,
-          progressAfter: contributionResult?.progressAfter ?? inc.runGenerationContext?.activeOperation.progressCurrent ?? 0,
-          progressRequired: contributionResult?.progressRequired ?? inc.runGenerationContext?.activeOperation.progressRequired ?? 100,
-          completed: contributionResult?.completed ?? false,
-          completionLogLines: contributionResult?.logLines ?? [],
-          credits,
-          riftIron,
-          residueVaulted,
-          nextOperationTitle: contributionResult?.nextOperationTitle,
-          extractedSuccessfully: true,
-          contractResult,
-          extractionKind,
-          resourceSections,
-          midRunContributionTransmitted: inc.operationContributionTransmitted,
-          routingState,
-          deferredWorldTick: routingState.requiresRouting,
-          runResourceLedger: extractionResources.ledger,
-          account,
-        });
-
         if (debrief) {
           setPendingDebrief(debrief);
           startOperationDebrief();
         } else {
           goToHub();
         }
-      })();
-    });
+      }, { x: 0.5, y: 0.5 });
+    })();
     return { route: 'EXTRACT_SUCCESS' as const };
   }, [
     addCredits,
