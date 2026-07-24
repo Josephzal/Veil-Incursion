@@ -169,7 +169,7 @@ export default function VeilTopbar({
                 styles.navItem,
                 { paddingHorizontal: navPadH },
                 isActive && styles.navItemActive,
-                !isActive && (readPressableHover(state) || state.pressed)
+                (readPressableHover(state) || state.pressed)
                   ? styles.navItemHover
                   : null,
               ])}
@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         backgroundImage:
-          'linear-gradient(180deg, rgb(4, 10, 9), rgb(4, 10, 9))',
+          'linear-gradient(180deg, rgb(0, 0, 0), rgb(0,0,0))',
         display: 'grid',
         gridTemplateColumns: 'minmax(190px, 1fr) auto minmax(190px, 1fr)',
         alignItems: 'center',
@@ -376,7 +376,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   navItemHover: {
-    backgroundColor: 'rgba(105, 200, 173, 0.025)',
+    backgroundColor: 'rgba(105, 200, 173, 0.12)',
   },
   navItemActive: {
     backgroundColor: 'rgba(105, 200, 173, 0.05)',

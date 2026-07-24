@@ -88,7 +88,7 @@ export const ENCOUNTER_COMPOSITION_TEMPLATES: Record<
     maxEnemiesByDepth: { 2: 3, 3: 3 },
     defaultRewardTier: 'HIGH_VALUE',
     warningSummary: 'Anchor Patrol: clearing this fight weakens sector Anchor pressure.',
-    requiresWarningCard: true,
+    requiresWarningCard: false,
     weight: 12,
   },
   ECHO_CONTAMINATED: {

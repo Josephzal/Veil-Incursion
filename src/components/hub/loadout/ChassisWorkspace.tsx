@@ -169,9 +169,6 @@ export default function ChassisWorkspace({
               ])}
             >
               <View style={styles.signalMain}>
-                <TerminalText size={7} letterSpacing={0.9} style={styles.signalMeta}>
-                  WEAPON CHASSIS
-                </TerminalText>
                 <TerminalText
                   size={11}
                   letterSpacing={0.35}
@@ -189,17 +186,17 @@ export default function ChassisWorkspace({
                   </TerminalText>
                 ) : null}
               </View>
-              <View style={styles.signalStatusCol}>
-                <TerminalText size={7} letterSpacing={0.9} style={{ color: row.statusColor, fontWeight: '700' }}>
-                  {row.status}
-                </TerminalText>
-              </View>
               <View style={styles.signalClassCol}>
                 <TerminalText size={8} letterSpacing={0.7} style={styles.signalTier}>
                   {`TIER ${['I', 'II', 'III'][row.tier - 1] ?? row.tier}`}
                 </TerminalText>
                 <TerminalText size={7.5} letterSpacing={0.5} style={styles.signalRole} numberOfLines={2}>
                   {row.role.toUpperCase()}
+                </TerminalText>
+              </View>
+              <View style={styles.signalStatusCol}>
+                <TerminalText size={7} letterSpacing={0.9} style={{ color: row.statusColor, fontWeight: '700' }}>
+                  {row.status}
                 </TerminalText>
               </View>
             </HapticPressable>
@@ -268,20 +265,20 @@ const styles = StyleSheet.create({
     position: 'relative',
     zIndex: 1,
     width: '100%',
-    minHeight: 90,
-    paddingTop: 14,
-    paddingBottom: 14,
+    minHeight: 112,
+    paddingTop: 16,
+    paddingBottom: 16,
     paddingLeft: 18,
     paddingRight: 18,
-    gap: 24,
+    gap: 28,
     backgroundColor: HUB_CARD_SURFACE,
     borderWidth: 1,
     borderColor: HUB_CARD_BORDER,
     ...Platform.select({
       web: {
         display: 'grid',
-        gridTemplateColumns: 'minmax(0, 1fr) 140px 180px',
-        alignItems: 'center',
+        gridTemplateColumns: 'minmax(0, 1fr) minmax(210px, 260px) minmax(140px, 170px)',
+        alignItems: 'start',
         cursor: 'pointer',
         outlineStyle: 'none',
         transitionProperty: 'background-color, border-color',
@@ -290,14 +287,14 @@ const styles = StyleSheet.create({
       } as object,
       default: {
         flexDirection: 'row',
-        alignItems: 'center',
+        alignItems: 'flex-start',
       },
     }),
   },
   signalSelectCompact: {
-    minHeight: 82,
-    paddingTop: 12,
-    paddingBottom: 12,
+    minHeight: 108,
+    paddingTop: 14,
+    paddingBottom: 14,
   },
   signalSelectHover: {
     backgroundColor: HUB_CARD_SURFACE_HOVER,
@@ -307,24 +304,29 @@ const styles = StyleSheet.create({
     backgroundColor: HUB_SELECT_SURFACE,
     borderColor: HUB_CARD_BORDER_SELECTED,
   },
-  signalMain: { minWidth: 0, overflow: 'hidden' },
-  signalMeta: { color: MUTED, fontWeight: '700' },
-  signalTitle: { marginTop: 5, color: TEXT_PRIMARY, fontWeight: '700' },
+  signalMain: {
+    minWidth: 0,
+    overflow: 'hidden',
+    maxWidth: 560,
+  },
+  signalTitle: { color: TEXT_PRIMARY, fontWeight: '700' },
   signalTitleSelected: { color: '#F0F2EF' },
   signalBody: { marginTop: 5, color: TEXT_SECONDARY, lineHeight: 18 },
   signalNext: { marginTop: 6, color: MUTED, fontWeight: '700' },
-  signalStatusCol: {
-    minWidth: 0,
-    justifyContent: 'center',
-    alignItems: 'flex-start',
-    flexShrink: 0,
-  },
   signalClassCol: {
     minWidth: 0,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     alignItems: 'flex-start',
     flexShrink: 0,
     gap: 4,
+    paddingTop: 2,
+  },
+  signalStatusCol: {
+    minWidth: 0,
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+    flexShrink: 0,
+    paddingTop: 2,
   },
   signalTier: { color: TEXT_PRIMARY, fontWeight: '700', fontVariant: ['tabular-nums'] },
   signalRole: { color: MUTED, fontWeight: '700', lineHeight: 14 },

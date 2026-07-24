@@ -76,64 +76,56 @@ export default function RelicWorkspace({
           } as object)
         : null)}
     >
-      {relics.map((relic) => {
-        const selected = selectedId === relic.id;
-        const equipped = account.equippedKeepsakeId === relic.id;
-        return (
-          <View
-            key={relic.id}
-            style={styles.signal}
-            {...(Platform.OS === 'web'
-              ? ({ 'data-selected': selected ? 'true' : 'false' } as object)
-              : null)}
-          >
-            {selected ? <OccultNeonRail style={styles.signalAccent} /> : null}
-            <HapticPressable
-              onPress={() => onSelect(relic.id)}
-              accessibilityRole="button"
-              accessibilityState={{ selected }}
-              accessibilityLabel={`Inspect ${relic.name}`}
-              style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ([
-                styles.signalSelect,
-                compact && styles.signalSelectCompact,
-                selected && styles.signalSelectSelected,
-                ((hovered || pressed) && !selected) ? styles.signalSelectHover : null,
-              ])}
+      <View style={styles.signalGrid}>
+        {relics.map((relic) => {
+          const selected = selectedId === relic.id;
+          const equipped = account.equippedKeepsakeId === relic.id;
+          return (
+            <View
+              key={relic.id}
+              style={styles.signal}
+              {...(Platform.OS === 'web'
+                ? ({ 'data-selected': selected ? 'true' : 'false' } as object)
+                : null)}
             >
-              <View style={styles.signalMain}>
-                <TerminalText size={7} letterSpacing={0.9} style={styles.signalMeta}>
-                  EXPEDITION RELIC
-                </TerminalText>
-                <TerminalText
-                  size={11}
-                  letterSpacing={0.35}
-                  style={[styles.signalTitle, selected && styles.signalTitleSelected]}
-                  numberOfLines={1}
-                >
-                  {relic.name.toUpperCase()}
-                </TerminalText>
-                <TerminalText size={8.5} style={styles.signalBody} numberOfLines={2}>
-                  {relic.runStyle}
-                </TerminalText>
-              </View>
-              <View style={styles.signalStatusCol}>
+              {selected ? <OccultNeonRail style={styles.signalAccent} /> : null}
+              <HapticPressable
+                onPress={() => onSelect(relic.id)}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                accessibilityLabel={`Inspect ${relic.name}`}
+                style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ([
+                  styles.signalSelect,
+                  compact && styles.signalSelectCompact,
+                  selected && styles.signalSelectSelected,
+                  ((hovered || pressed) && !selected) ? styles.signalSelectHover : null,
+                ])}
+              >
+                <View style={styles.signalMain}>
+                  <TerminalText
+                    size={11}
+                    letterSpacing={0.35}
+                    style={[styles.signalTitle, selected && styles.signalTitleSelected]}
+                    numberOfLines={1}
+                  >
+                    {relic.name.toUpperCase()}
+                  </TerminalText>
+                  <TerminalText size={7.5} letterSpacing={0.45} style={styles.signalTags} numberOfLines={1}>
+                    {formatKeepsakeRoleLine(relic).toUpperCase()}
+                  </TerminalText>
+                </View>
                 <TerminalText
                   size={7}
                   letterSpacing={0.9}
-                  style={{ color: equipped ? TERMINAL : MUTED, fontWeight: '700' }}
+                  style={[styles.signalStatus, { color: equipped ? TERMINAL : MUTED }]}
                 >
                   {equipped ? 'EQUIPPED' : 'AVAILABLE'}
                 </TerminalText>
-              </View>
-              <View style={styles.signalClassCol}>
-                <TerminalText size={7.5} letterSpacing={0.45} style={styles.signalTags} numberOfLines={2}>
-                  {formatKeepsakeRoleLine(relic).toUpperCase()}
-                </TerminalText>
-              </View>
-            </HapticPressable>
-          </View>
-        );
-      })}
+              </HapticPressable>
+            </View>
+          );
+        })}
+      </View>
     </ScrollView>
   );
 }
@@ -167,32 +159,50 @@ export function resolveRelicDossier(
 const styles = StyleSheet.create({
   feed: { flex: 1, minHeight: 0 },
   feedContent: { paddingHorizontal: 0, paddingTop: 4, paddingBottom: 16 },
-  empty: { paddingHorizontal: 0, paddingVertical: 28 },
+  empty: { paddingHorizontal: 0, paddingTop: 8, paddingBottom: 12 },
   emptyTitle: { color: TEXT_PRIMARY, fontWeight: '700' },
-  emptyBody: { marginTop: 8, color: TEXT_SECONDARY, lineHeight: 19 },
+  emptyBody: { marginTop: 6, color: TEXT_SECONDARY, lineHeight: 19, maxWidth: 480 },
+  signalGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    ...Platform.select({
+      web: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+        columnGap: 10,
+        rowGap: 10,
+      } as object,
+      default: {
+        gap: 10,
+      },
+    }),
+  },
   signal: {
     position: 'relative',
-    marginBottom: 10,
     overflow: 'hidden',
+    ...Platform.select({
+      web: { minWidth: 0 } as object,
+      default: { width: '48%', flexGrow: 1 },
+    }),
   },
   signalAccent: {
     top: 14,
     bottom: 14,
   },
   signalSelect: {
-    minHeight: 90,
+    minHeight: 82,
     paddingTop: 14,
     paddingBottom: 14,
-    paddingLeft: 18,
-    paddingRight: 18,
-    gap: 24,
+    paddingLeft: 16,
+    paddingRight: 14,
+    gap: 12,
     backgroundColor: HUB_CARD_SURFACE,
     borderWidth: 1,
     borderColor: HUB_CARD_BORDER,
     ...Platform.select({
       web: {
         display: 'grid',
-        gridTemplateColumns: 'minmax(0, 1fr) 140px 180px',
+        gridTemplateColumns: 'minmax(0, 1fr) auto',
         alignItems: 'center',
         cursor: 'pointer',
         outlineStyle: 'none',
@@ -206,7 +216,7 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  signalSelectCompact: { minHeight: 82, paddingTop: 12, paddingBottom: 12 },
+  signalSelectCompact: { minHeight: 74, paddingTop: 12, paddingBottom: 12 },
   signalSelectHover: {
     backgroundColor: HUB_CARD_SURFACE_HOVER,
     borderColor: HUB_CARD_BORDER_HOVER,
@@ -215,22 +225,12 @@ const styles = StyleSheet.create({
     backgroundColor: HUB_SELECT_SURFACE,
     borderColor: HUB_CARD_BORDER_SELECTED,
   },
-  signalMain: { minWidth: 0, overflow: 'hidden' },
-  signalMeta: { color: MUTED, fontWeight: '700' },
-  signalTitle: { marginTop: 5, color: TEXT_PRIMARY, fontWeight: '700' },
+  signalMain: {
+    minWidth: 0,
+    overflow: 'hidden',
+  },
+  signalTitle: { color: TEXT_PRIMARY, fontWeight: '700' },
   signalTitleSelected: { color: '#F0F2EF' },
-  signalTags: { color: MUTED, fontWeight: '700', lineHeight: 14 },
-  signalBody: { marginTop: 5, color: TEXT_SECONDARY, lineHeight: 18 },
-  signalStatusCol: {
-    minWidth: 0,
-    justifyContent: 'center',
-    alignItems: 'flex-start',
-    flexShrink: 0,
-  },
-  signalClassCol: {
-    minWidth: 0,
-    justifyContent: 'center',
-    alignItems: 'flex-start',
-    flexShrink: 0,
-  },
+  signalTags: { marginTop: 5, color: MUTED, fontWeight: '700' },
+  signalStatus: { fontWeight: '700', flexShrink: 0 },
 });

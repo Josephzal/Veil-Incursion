@@ -176,6 +176,11 @@ export function shouldShowEncounterWarningCard(args: {
   // Elite combat enters immediately — no "Elite Contact" threat-brief popup.
   if (args.isElite || args.riskLabel === 'ELITE') return false;
 
+  // Patrol contacts enter immediately — no "Simple/Anchor Patrol" threat-brief popup.
+  if (args.templateId === 'SIMPLE_PATROL' || args.templateId === 'ANCHOR_PATROL') {
+    return false;
+  }
+
   if (args.templateId) {
     const template = getEncounterCompositionTemplate(args.templateId);
     if (template.requiresWarningCard) return true;

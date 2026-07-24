@@ -12,7 +12,6 @@ import {
 import HapticPressable from '../HapticPressable';
 import TerminalText from '../TerminalText';
 import HubPrimaryCta from './HubPrimaryCta';
-import HubPageHeader from './HubPageHeader';
 import KeepsakeDeploymentChoiceModal from './KeepsakeDeploymentChoiceModal';
 import ChassisWorkspace, { resolveChassisDossier } from './loadout/ChassisWorkspace';
 import RelicWorkspace, { resolveRelicDossier } from './loadout/RelicWorkspace';
@@ -29,7 +28,7 @@ import {
   TEXT_SECONDARY,
   type LoadoutCategory,
 } from './loadout/loadoutTerminalUi';
-import { OccultNeonRail, RegistrationBrackets } from './veilChrome';
+import { OccultNeonRail } from './veilChrome';
 import {
   HUB_CARD_BORDER,
   HUB_CARD_BORDER_HOVER,
@@ -41,15 +40,24 @@ import {
   HUB_DOSSIER_FOOTER_RULE,
   HUB_DOSSIER_LABEL,
   HUB_DOSSIER_TITLE,
+  HUB_PAGE_HEADER_COMPACT_MIN_HEIGHT,
+  HUB_PAGE_HEADER_COMPACT_PADDING_H,
+  HUB_PAGE_HEADER_COMPACT_PADDING_V,
+  HUB_PAGE_HEADER_MIN_HEIGHT,
+  HUB_PAGE_HEADER_PADDING_BOTTOM,
+  HUB_PAGE_HEADER_PADDING_H,
+  HUB_PAGE_HEADER_PADDING_TOP,
   HUB_SELECT_SURFACE,
   hubDossierColumnStyle,
   hubDossierShellStyle,
+  hubPageEyebrowStyle,
+  hubPageTitleStyle,
   hubPrimaryActionHoverStyle,
   hubPrimaryActionStyle,
   hubPrimaryActionTextHoverStyle,
   hubPrimaryActionTextStyle,
 } from '../../theme/hubPanelSurfaces';
-import { VEIL, VEIL_MINT_TONE } from '../../theme/veilTerminalTokens';
+import { VEIL } from '../../theme/veilTerminalTokens';
 import { CLASS_DEFINITIONS } from '../../data/classes';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useTerminal } from '../../context/TerminalContext';
@@ -382,25 +390,26 @@ export default function LoadoutHubPanel(): React.JSX.Element {
         accessibilityLabel={`${copy.manifestLabel} category`}
         {...(Platform.OS === 'web' ? ({ 'aria-selected': selected } as object) : {})}
         style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ([
-          styles.manifestEntry,
-          compact && styles.manifestEntryCompact,
-          selected && styles.manifestEntrySelected,
-          ((hovered || pressed) && !selected) ? styles.manifestEntryHover : null,
+          styles.manifestSlot,
+          narrow && styles.manifestSlotNarrow,
+          compact && styles.manifestSlotCompact,
+          selected && styles.manifestSlotSelected,
+          ((hovered || pressed) && !selected) ? styles.manifestSlotHover : null,
         ])}
       >
         {selected ? <OccultNeonRail style={styles.manifestAccent} /> : null}
-        <TerminalText size={7.5} letterSpacing={1} style={styles.manifestLabel}>
+        <TerminalText size={6.5} letterSpacing={1} style={styles.manifestLabel} numberOfLines={1}>
           {copy.manifestLabel}
         </TerminalText>
         <TerminalText
-          size={9.5}
-          letterSpacing={0.3}
+          size={8.5}
+          letterSpacing={0.25}
           style={[styles.manifestPrimary, selected && styles.manifestPrimarySelected]}
           numberOfLines={1}
         >
           {primary.toUpperCase()}
         </TerminalText>
-        <TerminalText size={7.5} letterSpacing={0.55} style={styles.manifestSecondary} numberOfLines={1}>
+        <TerminalText size={6.5} letterSpacing={0.55} style={styles.manifestSecondary} numberOfLines={1}>
           {secondary.toUpperCase()}
         </TerminalText>
       </HapticPressable>
@@ -898,18 +907,23 @@ export default function LoadoutHubPanel(): React.JSX.Element {
       {...(Platform.OS === 'web' ? ({ id: 'loadout-root', nativeID: 'loadout-root' } as object) : null)}
     >
       <View style={styles.loadoutBrowser}>
-        <HubPageHeader
-          eyebrow="LOADOUT // DESCENT PREP BAY"
-          title="OPERATIVE LOADOUT"
-          compact={compact}
-        />
+        <View style={[styles.pageHeader, compact && styles.pageHeaderCompact]}>
+          <View style={styles.headerTitleBlock}>
+            <View style={styles.headerEyebrowRow}>
+              <View style={styles.headerBoneMark} />
+              <TerminalText size={6.5} letterSpacing={1.05} style={styles.headerEyebrow}>
+                LOADOUT // DESCENT PREP BAY
+              </TerminalText>
+            </View>
+            <TerminalText size={22} letterSpacing={0.15} style={styles.headerTitle}>
+              OPERATIVE LOADOUT
+            </TerminalText>
+          </View>
 
-        <View
-          style={[styles.operativeStrip, compact && styles.operativeStripCompact]}
-          {...(Platform.OS === 'web' ? ({ 'data-operative-selector': 'true' } as object) : null)}
-        >
-          <RegistrationBrackets tone={VEIL_MINT_TONE} active corners="all" />
-          <View style={styles.operativeIdentity}>
+          <View
+            style={styles.operativePager}
+            {...(Platform.OS === 'web' ? ({ 'data-operative-selector': 'true' } as object) : null)}
+          >
             {canCycleClass ? (
               <HapticPressable
                 onPress={() => cycleActiveClass(-1)}
@@ -933,7 +947,7 @@ export default function LoadoutHubPanel(): React.JSX.Element {
                 {cred.username.toUpperCase()}
               </TerminalText>
               <TerminalText size={7.5} letterSpacing={0.55} style={styles.operativeMeta} numberOfLines={1}>
-                {`${classDef.displayName.toUpperCase()} · CLEARANCE ${account.progressionProfile.runner.clearanceRank}`}
+                {`${classDef.displayName.toUpperCase()} · L${account.progressionProfile.runner.clearanceRank}`}
               </TerminalText>
             </View>
             {canCycleClass ? (
@@ -955,10 +969,7 @@ export default function LoadoutHubPanel(): React.JSX.Element {
             )}
           </View>
 
-          <View style={styles.operativeActions}>
-            <TerminalText size={6.5} letterSpacing={1} style={styles.savedLabel}>
-              ● LOADOUT SAVED
-            </TerminalText>
+          <View style={styles.headerActions}>
             <HubPrimaryCta
               onPress={handleReady}
               accessibilityLabel="Ready for descent"
@@ -969,57 +980,65 @@ export default function LoadoutHubPanel(): React.JSX.Element {
           </View>
         </View>
 
-        <View style={[styles.workspace, narrow && styles.workspaceNarrow]}>
-          <View style={styles.manifest}>
-            <View style={styles.manifestHeader}>
-              <TerminalText size={7.5} letterSpacing={1} style={styles.manifestHeaderText}>
-                DESCENT MANIFEST
-              </TerminalText>
-              <TerminalText size={7.5} letterSpacing={1} style={styles.manifestHeaderText}>
-                {completionSummary}
-              </TerminalText>
-            </View>
-            <View
-              style={styles.manifestList}
+        <View style={styles.manifestRail}>
+          <View style={styles.manifestHeader}>
+            <TerminalText size={7.5} letterSpacing={1} style={styles.manifestHeaderText}>
+              DESCENT MANIFEST
+            </TerminalText>
+            <TerminalText size={7.5} letterSpacing={1} style={styles.manifestHeaderText}>
+              {completionSummary}
+            </TerminalText>
+          </View>
+          {narrow ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.manifestScroll}
+              contentContainerStyle={styles.manifestRowScroll}
               accessibilityRole="tablist"
-              {...(Platform.OS === 'web' ? ({ 'aria-orientation': 'vertical' } as object) : {})}
+              {...(Platform.OS === 'web' ? ({ 'aria-orientation': 'horizontal' } as object) : {})}
+            >
+              {CATEGORIES.map(renderManifestEntry)}
+            </ScrollView>
+          ) : (
+            <View
+              style={styles.manifestRow}
+              accessibilityRole="tablist"
+              {...(Platform.OS === 'web' ? ({ 'aria-orientation': 'horizontal' } as object) : {})}
             >
               {CATEGORIES.map(renderManifestEntry)}
             </View>
-          </View>
+          )}
+        </View>
 
-          <View style={styles.catalog}>
-            <View style={[styles.catalogHeader, compact && styles.catalogHeaderCompact]}>
-              <TerminalText size={7.5} letterSpacing={1} style={styles.catalogEyebrow}>
-                {catalogCopy.eyebrow}
-              </TerminalText>
-              <TerminalText size={11} letterSpacing={1.05} style={styles.catalogTitle}>
-                {catalogCopy.title}
-              </TerminalText>
-              <TerminalText size={8.5} style={styles.catalogDescription}>
-                {catalogCopy.description}
-              </TerminalText>
-            </View>
-            <View style={styles.catalogBody}>
-              {activeCategory === 'CHASSIS' ? (
-                <ChassisWorkspace selectedId={chassisId} onSelect={handleSelectChassis} compact={compact} />
-              ) : null}
-              {activeCategory === 'RELIC' ? (
-                <RelicWorkspace selectedId={relicId} onSelect={handleSelectRelic} compact={compact} />
-              ) : null}
-              {activeCategory === 'DECK' ? (
-                <DeckWorkspace
-                  selection={deckSelection}
-                  onSelect={handleSelectDeck}
-                  onInspectChange={setDeckInspect}
-                  compact={compact}
-                />
-              ) : null}
-              {activeCategory === 'FIELD_KIT' ? (
-                <FieldKitWorkspace selection={fieldSelection} onSelect={handleSelectField} compact={compact} />
-              ) : null}
-              {activeCategory === 'CARGO' ? <CargoWorkspace compact={compact} /> : null}
-            </View>
+        <View style={styles.catalog}>
+          <View style={[styles.catalogHeader, compact && styles.catalogHeaderCompact]}>
+            <TerminalText size={11} letterSpacing={1.05} style={styles.catalogTitle}>
+              {catalogCopy.title}
+            </TerminalText>
+            <TerminalText size={8.5} style={styles.catalogDescription}>
+              {catalogCopy.description}
+            </TerminalText>
+          </View>
+          <View style={styles.catalogBody}>
+            {activeCategory === 'CHASSIS' ? (
+              <ChassisWorkspace selectedId={chassisId} onSelect={handleSelectChassis} compact={compact} />
+            ) : null}
+            {activeCategory === 'RELIC' ? (
+              <RelicWorkspace selectedId={relicId} onSelect={handleSelectRelic} compact={compact} />
+            ) : null}
+            {activeCategory === 'DECK' ? (
+              <DeckWorkspace
+                selection={deckSelection}
+                onSelect={handleSelectDeck}
+                onInspectChange={setDeckInspect}
+                compact={compact}
+              />
+            ) : null}
+            {activeCategory === 'FIELD_KIT' ? (
+              <FieldKitWorkspace selection={fieldSelection} onSelect={handleSelectField} compact={compact} />
+            ) : null}
+            {activeCategory === 'CARGO' ? <CargoWorkspace compact={compact} /> : null}
           </View>
         </View>
       </View>
@@ -1099,34 +1118,56 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  operativeStrip: {
-    position: 'relative',
+  pageHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    // Top-align so the title block starts at HUB_PAGE_HEADER_PADDING_TOP —
+    // matching HubPageHeader / Veil Front. Centering against the Ready CTA
+    // was pushing the eyebrow slightly lower than other hub screens.
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    gap: 18,
-    minHeight: 74,
-    marginHorizontal: 14,
-    marginBottom: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    backgroundColor: HUB_CARD_SURFACE,
-    borderWidth: 1,
-    borderColor: HUB_CARD_BORDER,
-    overflow: 'hidden',
+    gap: 20,
+    minHeight: HUB_PAGE_HEADER_MIN_HEIGHT,
+    paddingHorizontal: HUB_PAGE_HEADER_PADDING_H,
+    paddingTop: HUB_PAGE_HEADER_PADDING_TOP,
+    paddingBottom: HUB_PAGE_HEADER_PADDING_BOTTOM,
     flexShrink: 0,
   },
-  operativeStripCompact: {
-    minHeight: 68,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
+  pageHeaderCompact: {
+    minHeight: HUB_PAGE_HEADER_COMPACT_MIN_HEIGHT,
+    paddingTop: HUB_PAGE_HEADER_COMPACT_PADDING_V,
+    paddingBottom: HUB_PAGE_HEADER_COMPACT_PADDING_V,
+    paddingHorizontal: HUB_PAGE_HEADER_COMPACT_PADDING_H,
+    gap: 14,
   },
-  operativeIdentity: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  headerTitleBlock: {
     flexShrink: 1,
     minWidth: 0,
-    maxWidth: '58%',
+    maxWidth: '34%',
+  },
+  headerEyebrowRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  headerBoneMark: {
+    width: 8,
+    height: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: VEIL.bone,
+    opacity: 0.45,
+  },
+  headerEyebrow: { ...hubPageEyebrowStyle() },
+  headerTitle: { ...hubPageTitleStyle() },
+  operativePager: {
+    // Fixed footprint so cycling classes (ENVOY / HEX SHOT / AEGIS SLAYER)
+    // cannot shift the Ready CTA or page title.
+    width: 320,
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    flexShrink: 0,
+    flexGrow: 0,
   },
   operativeArrow: {
     width: 42,
@@ -1145,52 +1186,27 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   operativeCreds: {
-    minWidth: 0,
-    marginLeft: 12,
+    width: 182,
+    marginLeft: 10,
     marginRight: 4,
     justifyContent: 'center',
-    flexShrink: 1,
+    flexShrink: 0,
+    overflow: 'hidden',
   },
   operativeName: { color: TEXT_PRIMARY, fontWeight: '700' },
   operativeMeta: { marginTop: 4, color: MUTED, fontWeight: '700' },
-  operativeActions: {
+  headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'center',
     gap: 14,
     flexShrink: 0,
-    marginLeft: 'auto',
   },
-  savedLabel: { color: MUTED, fontWeight: '700' },
   readyCta: {
     width: 'auto',
-    minWidth: 196,
+    minWidth: 220,
+    maxWidth: 260,
     paddingHorizontal: 16,
-  },
-  workspace: {
-    flex: 1,
-    minWidth: 0,
-    minHeight: 0,
-    flexDirection: 'row',
-    overflow: 'hidden',
-    paddingHorizontal: 14,
-    gap: 24,
-    ...Platform.select({
-      web: {
-        display: 'grid',
-        gridTemplateColumns: 'minmax(290px, 310px) minmax(0, 1fr)',
-        columnGap: 24,
-      } as object,
-      default: {},
-    }),
-  },
-  workspaceNarrow: {
-    ...Platform.select({
-      web: {
-        gridTemplateColumns: 'minmax(250px, 270px) minmax(0, 1fr)',
-        columnGap: 18,
-      } as object,
-      default: {},
-    }),
   },
   dossierColumn: {
     ...hubDossierColumnStyle(),
@@ -1203,68 +1219,77 @@ const styles = StyleSheet.create({
       default: { width: 420 + HUB_DOSSIER_EDGE_PAD, minWidth: 420 + HUB_DOSSIER_EDGE_PAD },
     }),
   },
-  manifest: {
-    minWidth: 0,
-    minHeight: 0,
-    overflow: 'hidden',
-    backgroundColor: '#000000',
-    ...Platform.select({
-      web: {
-        display: 'grid',
-        gridTemplateRows: 'auto minmax(0, 1fr)',
-      } as object,
-      default: { width: 300 },
-    }),
+  manifestRail: {
+    flexShrink: 0,
+    paddingHorizontal: HUB_PAGE_HEADER_PADDING_H,
+    paddingBottom: 4,
   },
   manifestHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: 34,
-    paddingBottom: 8,
-    flexShrink: 0,
+    minHeight: 28,
+    marginBottom: 8,
   },
   manifestHeaderText: { color: MUTED, fontWeight: '700' },
-  manifestList: {
-    flex: 1,
-    minHeight: 0,
-    paddingTop: 2,
-    paddingBottom: 12,
+  manifestScroll: {
+    flexGrow: 0,
   },
-  manifestEntry: {
+  manifestRow: {
+    flexDirection: 'row',
+    gap: 10,
+    ...Platform.select({
+      web: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+        columnGap: 10,
+      } as object,
+      default: {},
+    }),
+  },
+  manifestRowScroll: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingRight: 4,
+  },
+  manifestSlot: {
     position: 'relative',
-    height: 90,
-    minHeight: 90,
-    maxHeight: 90,
-    marginBottom: 10,
-    paddingTop: 14,
-    paddingBottom: 14,
-    paddingLeft: 18,
-    paddingRight: 18,
+    minHeight: 100,
+    paddingTop: 12,
+    paddingBottom: 12,
+    paddingLeft: 14,
+    paddingRight: 12,
     backgroundColor: HUB_CARD_SURFACE,
     borderWidth: 1,
     borderColor: HUB_CARD_BORDER,
     overflow: 'hidden',
-    ...Platform.select({ web: { cursor: 'pointer', outlineStyle: 'none' } as object, default: {} }),
+    ...Platform.select({
+      web: { cursor: 'pointer', outlineStyle: 'none', minWidth: 0 } as object,
+      default: { flex: 1 },
+    }),
   },
-  manifestEntryCompact: {
-    height: 82,
-    minHeight: 82,
-    maxHeight: 82,
-    paddingTop: 12,
-    paddingBottom: 12,
+  manifestSlotNarrow: {
+    width: 168,
+    minWidth: 168,
+    flexGrow: 0,
+    flexShrink: 0,
   },
-  manifestEntryHover: {
+  manifestSlotCompact: {
+    minHeight: 92,
+    paddingTop: 10,
+    paddingBottom: 10,
+  },
+  manifestSlotHover: {
     backgroundColor: HUB_CARD_SURFACE_HOVER,
     borderColor: HUB_CARD_BORDER_HOVER,
   },
-  manifestEntrySelected: {
+  manifestSlotSelected: {
     backgroundColor: HUB_SELECT_SURFACE,
     borderColor: HUB_CARD_BORDER_SELECTED,
   },
   manifestAccent: {
-    top: 14,
-    bottom: 14,
+    top: 12,
+    bottom: 12,
   },
   manifestLabel: { color: MUTED, fontWeight: '700' },
   manifestPrimary: { marginTop: 6, color: TEXT_PRIMARY, fontWeight: '700' },
@@ -1276,6 +1301,7 @@ const styles = StyleSheet.create({
     minHeight: 0,
     overflow: 'hidden',
     backgroundColor: '#000000',
+    paddingHorizontal: HUB_PAGE_HEADER_PADDING_H,
     ...Platform.select({
       web: {
         display: 'grid',
@@ -1285,20 +1311,19 @@ const styles = StyleSheet.create({
     }),
   },
   catalogHeader: {
-    paddingTop: 0,
-    paddingBottom: 8,
+    paddingTop: 24,
+    paddingBottom: 16,
     flexShrink: 0,
   },
   catalogHeaderCompact: {
-    paddingBottom: 6,
+    paddingTop: 18,
+    paddingBottom: 12,
   },
-  catalogEyebrow: { color: MUTED, fontWeight: '700' },
   catalogTitle: {
-    marginTop: 5,
     color: 'rgba(185, 181, 167, 0.88)',
     fontWeight: '700',
   },
-  catalogDescription: { marginTop: 5, color: TEXT_SECONDARY, lineHeight: 17 },
+  catalogDescription: { marginTop: 10, color: TEXT_SECONDARY, lineHeight: 17 },
   catalogBody: { flex: 1, minHeight: 0 },
   dossier: {
     ...hubDossierShellStyle(),
