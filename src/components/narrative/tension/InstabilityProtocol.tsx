@@ -1,8 +1,6 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { Platform, ScrollView, StyleSheet, Text, View, type ViewStyle } from 'react-native';
-import { readPressableHover, terminalHoverStyle } from '../../../utils/terminalHoverStyle';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import TacticalButton from '../../TacticalButton';
-import { hubCtaButtonStyle, resolveHubCtaFill } from '../../../constants/hubCta';
 import {
   NARRATIVE_UNIFIED_PANEL_BG,
   NARRATIVE_UNIFIED_PANEL_BORDER,
@@ -15,7 +13,6 @@ import { VEIL } from '../../../theme/veilTerminalTokens';
 const SLATE_BORDER = '#475569';
 const MUTED_WHITE = '#F8FAFC';
 const BODY_MUTED = VEIL.textMuted;
-const SIPHON_LABEL = '#FFFFFF';
 const LOCKED_LABEL = VEIL.textMuted;
 const TERMINAL_GREEN = VEIL.mint;
 const RESIDUE_VALUE = '#FFFFFF';
@@ -23,11 +20,6 @@ const COLLAPSE_RED = '#EF4444';
 const GAUGE_SAFE = '#64748B';
 const GAUGE_WARN = '#E11D48';
 const GAUGE_CRITICAL = '#EF4444';
-
-const FLAT_CTA_OVERRIDE: ViewStyle = Platform.select({
-  web: { boxShadow: 'none' },
-  default: { shadowOpacity: 0, shadowRadius: 0, elevation: 0 },
-}) ?? { shadowOpacity: 0, shadowRadius: 0, elevation: 0 };
 
 const BASE_LOOT_CREDITS = 10;
 const EXTRACT_MIN_INSTABILITY = 41;
@@ -172,48 +164,6 @@ export default function InstabilityProtocol({
   const feedbackLine = lastGain != null
     ? `Last siphon: +${lastGain}% instability${lastCreditGain != null ? ` // +${lastCreditGain} residue` : ''}`
     : ' ';
-
-  const siphonButtonStyle = useCallback(
-    (state: { pressed: boolean; hovered?: boolean }) => [
-      hubCtaButtonStyle(SLATE_BORDER, scaleSize, scaleSpacing, resolvedRefState),
-      FLAT_CTA_OVERRIDE,
-      {
-        justifyContent: 'center' as const,
-        alignItems: 'center' as const,
-        borderColor: SLATE_BORDER,
-        borderWidth: 2,
-        backgroundColor: resolveHubCtaFill(SLATE_BORDER),
-        opacity: resolvedRefState ? 0.4 : 1,
-      },
-      terminalHoverStyle(readPressableHover(state), state.pressed),
-    ],
-    [resolvedRefState, scaleSize, scaleSpacing],
-  );
-
-  const extractButtonStyle = useCallback(
-    (state: { pressed: boolean; hovered?: boolean }) => [
-      hubCtaButtonStyle(canExtract ? TERMINAL_GREEN : SLATE_BORDER, scaleSize, scaleSpacing, extractLocked),
-      FLAT_CTA_OVERRIDE,
-      {
-        justifyContent: 'center' as const,
-        alignItems: 'center' as const,
-        borderWidth: 2,
-        ...(canExtract && !resolvedRefState
-          ? {
-              borderColor: TERMINAL_GREEN,
-              backgroundColor: resolveHubCtaFill(TERMINAL_GREEN),
-              opacity: 1,
-            }
-          : {
-              borderColor: 'rgba(71, 85, 105, 0.3)',
-              backgroundColor: 'rgba(71, 85, 105, 0.09)',
-              opacity: 1,
-            }),
-      },
-      terminalHoverStyle(readPressableHover(state), state.pressed),
-    ],
-    [canExtract, extractLocked, resolvedRefState, scaleSize, scaleSpacing],
-  );
 
   return (
     <View
@@ -387,10 +337,9 @@ export default function InstabilityProtocol({
             active
             disabled={resolvedRefState}
             onPress={handleSiphon}
-            accentColor={SIPHON_LABEL}
+            accentColor={TERMINAL_GREEN}
             mutedColor={BODY_MUTED}
             variant="cta"
-            style={siphonButtonStyle}
           />
 
           <TacticalButton
@@ -401,7 +350,6 @@ export default function InstabilityProtocol({
             accentColor={canExtract && !resolvedRefState ? TERMINAL_GREEN : LOCKED_LABEL}
             mutedColor={BODY_MUTED}
             variant="cta"
-            style={extractButtonStyle}
           />
         </View>
 

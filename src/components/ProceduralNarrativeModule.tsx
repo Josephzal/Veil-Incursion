@@ -17,13 +17,14 @@ import {
   NARRATIVE_TERMINAL_BODY_MIN_HEIGHT,
   NARRATIVE_UNIFIED_PANEL_PADDING,
 } from '../constants/narrativeLayout';
-import { DOSSIER_CTA_BG, DOSSIER_ROW_BG, dossierOpaqueCtaStyle } from '../constants/dossierSurface';
+import { DOSSIER_CTA_BG, DOSSIER_ROW_BG } from '../constants/dossierSurface';
 import DossierCardShell from './hub/DossierCardShell';
-import { hubCtaButtonStyle } from '../constants/hubCta';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { useRun } from '../context/RunContext';
+import { VEIL } from '../theme/veilTerminalTokens';
 
-const TERMINAL_ACCENT = '#00ff33';
+const TERMINAL_ACCENT = VEIL.mint;
+const DANGER_ACCENT = VEIL.blood;
 const LOCK_ICON_COLOR = '#ff453a';
 
 type ModulePhase = 'SCENARIO' | 'TENSION' | 'OUTCOME';
@@ -227,12 +228,8 @@ export default function ProceduralNarrativeModule({
   const canConfirm = selectedChoice != null && selectedOption?.locked !== true;
 
   const confirmButtonStyle = useMemo(
-    () => [
-      styles.confirmButton,
-      hubCtaButtonStyle(TERMINAL_ACCENT, scaleSize, scaleSpacing, !canConfirm),
-      dossierOpaqueCtaStyle(TERMINAL_ACCENT),
-    ],
-    [canConfirm, scaleSize, scaleSpacing],
+    () => [styles.confirmButton],
+    [],
   );
 
   const showOutcome = (
@@ -305,6 +302,9 @@ export default function ProceduralNarrativeModule({
     if (selectedChoice === 'C') return '[ CONFIRM ITEM BYPASS ]';
     return '[ CONFIRM CHOICE ]';
   })();
+  const confirmAccent = selectedChoice === 'D' && optionDVariant === 'Retreat'
+    ? DANGER_ACCENT
+    : TERMINAL_ACCENT;
 
   if (phase === 'TENSION') {
     return (
@@ -418,7 +418,7 @@ export default function ProceduralNarrativeModule({
             active={canConfirm}
             disabled={!canConfirm}
             onPress={handleConfirm}
-            accentColor={TERMINAL_ACCENT}
+            accentColor={confirmAccent}
             mutedColor={mutedColor}
             variant="cta"
             style={confirmButtonStyle}

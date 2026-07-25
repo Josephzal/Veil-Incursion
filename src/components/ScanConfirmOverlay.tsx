@@ -1,6 +1,6 @@
 import React from 'react';
 import { Modal, StyleSheet, Text, View } from 'react-native';
-import HapticPressable from './HapticPressable';
+import HubPrimaryCta from './hub/HubPrimaryCta';
 import {
   getEncounterDisplayLabel,
   getMacroBiomeDisplayLabel,
@@ -77,33 +77,23 @@ export default function ScanConfirmOverlay({
           )}
 
           <View style={styles.actions}>
-            <HapticPressable
+            <HubPrimaryCta
+              label="[ ABORT ]"
               onPress={onAbort}
-              style={({ pressed }) => [
-                styles.btn,
-                styles.abortBtn,
-                { borderColor: theme.borderColor, opacity: pressed ? 0.75 : 1 },
-              ]}
-            >
-              <Text style={[styles.btnText, { color: theme.mutedColor }]}>[ ABORT ]</Text>
-            </HapticPressable>
-            <HapticPressable
+              variant="danger"
+              accessibilityLabel="Abort"
+              minHeight={48}
+              style={styles.btn}
+            />
+            <HubPrimaryCta
+              label="[ ENGAGE ]"
               onPress={onEngage}
               disabled={!canEngage}
-              style={({ pressed }) => [
-                styles.btn,
-                styles.engageBtn,
-                {
-                  borderColor: canEngage ? accentColor : theme.borderColor,
-                  opacity: !canEngage ? 0.4 : pressed ? 0.75 : 1,
-                  backgroundColor: canEngage ? '#0d1a12' : '#0a0b0f',
-                },
-              ]}
-            >
-              <Text style={[styles.btnText, { color: canEngage ? accentColor : theme.mutedColor }]}>
-                [ ENGAGE ]
-              </Text>
-            </HapticPressable>
+              variant="glow"
+              accessibilityLabel="Engage"
+              minHeight={48}
+              style={styles.btn}
+            />
           </View>
         </View>
       </View>
@@ -181,18 +171,5 @@ const styles = StyleSheet.create({
   },
   btn: {
     flex: 1,
-    borderWidth: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  abortBtn: {
-    backgroundColor: '#0a0b0f',
-  },
-  engageBtn: {},
-  btnText: {
-    fontFamily: 'monospace',
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1,
   },
 });

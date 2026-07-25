@@ -2,12 +2,10 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Image,
   LayoutChangeEvent,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
   View,
-  type ViewStyle,
 } from 'react-native';
 import TacticalButton from '../components/TacticalButton';
 import TerminalOverlay from '../components/TerminalOverlay';
@@ -27,8 +25,7 @@ import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useNodeProgression } from '../hooks/useNodeProgression';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
-import { DOSSIER_CTA_BG, dossierOpaqueCtaStyle } from '../constants/dossierSurface';
-import { hubCtaButtonStyle } from '../constants/hubCta';
+import { DOSSIER_CTA_BG } from '../constants/dossierSurface';
 import IncursionShell from '../components/IncursionShell';
 import IncursionRunLayout from '../components/IncursionRunLayout';
 import RunEventImmersiveBackdrop from '../components/layout/RunEventImmersiveBackdrop';
@@ -49,16 +46,12 @@ import {
 } from '../utils/cargoGridLayout';
 import { resolveRunEventNodeHeaderFromNode } from '../utils/resolveRunEventNodeHeader';
 import { HIDDEN_SCROLLBAR_VIEW_STYLE, HIDDEN_SCROLLVIEW_PROPS } from '../utils/hiddenScrollbarStyle';
+import { VEIL } from '../theme/veilTerminalTokens';
 
 const MUTED_SLATE = '#94A3B8';
-const PHOSPHOR_GREEN = '#4ADE80';
-const LEAVE_ACCENT = '#CBD5E1';
+const PHOSPHOR_GREEN = VEIL.mint;
+const LEAVE_ACCENT = VEIL.mint;
 const MANIFEST_ACTIVE_BG = DOSSIER_CTA_BG;
-
-const FLAT_CTA_OVERRIDE: ViewStyle = Platform.select({
-  web: { boxShadow: 'none' },
-  default: { shadowOpacity: 0, shadowRadius: 0, elevation: 0 },
-}) ?? { shadowOpacity: 0, shadowRadius: 0, elevation: 0 };
 
 const SPLIT_MAX_WIDTH = 1200;
 const DROP_PADDING = 12;
@@ -334,27 +327,13 @@ export default function BlackMarketScreen(): React.JSX.Element {
   };
 
   const bindButtonStyle = useCallback(
-    (state: { pressed: boolean; hovered?: boolean }) => [
-      hubCtaButtonStyle(PHOSPHOR_GREEN, scaleSize, scaleSpacing, !canBind),
-      FLAT_CTA_OVERRIDE,
-      dossierOpaqueCtaStyle(PHOSPHOR_GREEN),
-      {
-        opacity: canBind ? (state.pressed ? 0.85 : 1) : 0.35,
-      },
-    ],
-    [canBind, scaleSize, scaleSpacing],
+    () => [{ alignSelf: 'stretch' as const }],
+    [],
   );
 
   const leaveButtonStyle = useCallback(
-    (state: { pressed: boolean; hovered?: boolean }) => [
-      hubCtaButtonStyle(LEAVE_ACCENT, scaleSize, scaleSpacing, leaving),
-      FLAT_CTA_OVERRIDE,
-      dossierOpaqueCtaStyle(LEAVE_ACCENT),
-      {
-        opacity: leaving ? 0.5 : state.pressed ? 0.88 : 1,
-      },
-    ],
-    [leaving, scaleSize, scaleSpacing],
+    () => [{ alignSelf: 'stretch' as const }],
+    [],
   );
 
   return (

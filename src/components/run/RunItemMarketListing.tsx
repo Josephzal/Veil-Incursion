@@ -1,13 +1,14 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import type { BlackMarketCargoListing } from '../../data/blackMarket';
-import { DOSSIER_ROW_BG, dossierOpaqueCtaStyle } from '../../constants/dossierSurface';
+import { DOSSIER_ROW_BG } from '../../constants/dossierSurface';
 import HubCargoIconBox from '../safehouse/HubCargoIconBox';
-import TacticalButton from '../TacticalButton';
+import HubPrimaryCta from '../hub/HubPrimaryCta';
 import type { CargoItemId } from '../../types/cargoGrid';
+import { VEIL } from '../../theme/veilTerminalTokens';
 
 const STARK_WHITE = '#F8FAFC';
-const PHOSPHOR_GREEN = '#4ADE80';
+const PHOSPHOR_GREEN = VEIL.mint;
 const MUTED_SLATE = '#94A3B8';
 
 interface RunItemMarketListingProps {
@@ -117,18 +118,15 @@ export default function RunItemMarketListing({
           borderColor={MUTED_SLATE}
           iconSize={iconSize}
         />
-        <TacticalButton
+        <HubPrimaryCta
           label={buying ? '[ BUYING ]' : '[ BUY ]'}
-          active={canBuy && !buying}
           onPress={() => onBuy(listing.id)}
-          accentColor={PHOSPHOR_GREEN}
-          mutedColor={MUTED_SLATE}
-          variant="inline"
           disabled={!canBuy || buying}
-          style={[
-            dossierOpaqueCtaStyle(PHOSPHOR_GREEN),
-            !canBuy || buying ? { opacity: 0.35 } : null,
-          ]}
+          variant="glow"
+          accessibilityLabel={buying ? 'Buying' : 'Buy'}
+          minHeight={36}
+          size={8}
+          style={styles.buyBtn}
         />
       </View>
     </View>
@@ -155,6 +153,10 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 8,
     paddingVertical: 8,
+    minWidth: 96,
+  },
+  buyBtn: {
+    minWidth: 88,
   },
   name: {
     fontFamily: 'monospace',

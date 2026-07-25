@@ -17,7 +17,7 @@ import {
   NARRATIVE_DIVIDER_COLOR,
   NARRATIVE_UNIFIED_PANEL_PADDING,
 } from '../constants/narrativeLayout';
-import { DOSSIER_CTA_BG, DOSSIER_ROW_BG, dossierOpaqueCtaStyle } from '../constants/dossierSurface';
+import { DOSSIER_CTA_BG, DOSSIER_ROW_BG } from '../constants/dossierSurface';
 import DossierCardShell from './hub/DossierCardShell';
 import type { TensionMechanic } from '../types/narrativeAssembly';
 
@@ -212,7 +212,7 @@ export default function NarrativeStepperModule({
               borderColor={borderColor}
               mutedColor={mutedColor}
               size="sm"
-              style={{ ...styles.continueBtn, ...dossierOpaqueCtaStyle(TERMINAL_ACCENT) }}
+              style={styles.continueBtn}
             />
           </View>
         </View>

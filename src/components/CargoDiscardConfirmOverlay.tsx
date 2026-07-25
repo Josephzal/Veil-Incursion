@@ -1,6 +1,6 @@
 import React from 'react';
 import { Modal, StyleSheet, Text, View } from 'react-native';
-import HapticPressable from './HapticPressable';
+import HubPrimaryCta from './hub/HubPrimaryCta';
 import type { TerminalTheme } from '../types/theme';
 
 export type CargoDiscardConfirmMode = 'jettison' | 'field-drop';
@@ -10,13 +10,9 @@ interface CargoDiscardConfirmOverlayProps {
   itemName: string;
   theme: TerminalTheme;
   accentColor?: string;
-  /** Stronger warning for sector-access route intel. */
   routeIntelWarning?: boolean;
-  /** Warning for rare / apex cargo jettison. */
   rareWarning?: boolean;
-  /** Optional stack quantity label (e.g. "x3"). */
   quantityLabel?: string;
-  /** jettison = permanent remove; field-drop = return to containment floor. */
   mode?: CargoDiscardConfirmMode;
   onConfirm: () => void;
   onCancel: () => void;
@@ -70,26 +66,22 @@ export default function CargoDiscardConfirmOverlay({
           </Text>
 
           <View style={styles.actions}>
-            <HapticPressable
+            <HubPrimaryCta
+              label="[ NO ]"
               onPress={onCancel}
-              style={({ pressed }) => [
-                styles.btn,
-                { borderColor: theme.borderColor, opacity: pressed ? 0.75 : 1 },
-              ]}
-            >
-              <Text style={[styles.btnText, { color: theme.mutedColor }]}>[ NO ]</Text>
-            </HapticPressable>
-            <HapticPressable
+              variant="danger"
+              accessibilityLabel="Cancel"
+              minHeight={48}
+              style={styles.btn}
+            />
+            <HubPrimaryCta
+              label={fieldDrop ? '[ DROP ]' : '[ YES ]'}
               onPress={onConfirm}
-              style={({ pressed }) => [
-                styles.btn,
-                { borderColor: fieldDrop ? accentColor : '#ef4444', opacity: pressed ? 0.75 : 1 },
-              ]}
-            >
-              <Text style={[styles.btnText, { color: fieldDrop ? accentColor : '#ef4444' }]}>
-                {fieldDrop ? '[ DROP ]' : '[ YES ]'}
-              </Text>
-            </HapticPressable>
+              variant={fieldDrop ? 'glow' : 'danger'}
+              accessibilityLabel={fieldDrop ? 'Drop into field' : 'Confirm jettison'}
+              minHeight={48}
+              style={styles.btn}
+            />
           </View>
         </View>
       </View>
@@ -142,15 +134,5 @@ const styles = StyleSheet.create({
   },
   btn: {
     flex: 1,
-    borderWidth: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    backgroundColor: '#0a0b0f',
-  },
-  btnText: {
-    fontFamily: 'monospace',
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1,
   },
 });

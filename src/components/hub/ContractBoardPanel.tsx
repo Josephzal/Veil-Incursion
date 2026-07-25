@@ -1080,26 +1080,15 @@ export default function ContractBoardPanel(): React.JSX.Element {
               </TerminalText>
             </View>
           ) : inspectedIsActiveSponsor ? (
-            <HapticPressable
+            <HubPrimaryCta
+              label="[ ABANDON ]"
               onPress={handleAbandon}
-              accessibilityRole="button"
+              variant="danger"
               accessibilityLabel="Abandon"
-              style={({
-                pressed,
-                hovered,
-                focused,
-              }: { pressed: boolean; hovered?: boolean; focused?: boolean }) => ([
-                styles.actionButton,
-                styles.actionDestructive,
-                (hovered || pressed) && styles.actionDestructiveHover,
-                focused && styles.actionFocusVisible,
-                pressed && { opacity: 0.9 },
-              ])}
-            >
-              <TerminalText size={7.5} letterSpacing={0.95} style={styles.actionDestructiveText}>
-                [ ABANDON ]
-              </TerminalText>
-            </HapticPressable>
+              minHeight={50}
+              size={7.5}
+              letterSpacing={0.95}
+            />
           ) : inspectedIsActiveIndependent ? (
             <View style={[styles.actionButton, styles.actionDisabled]}>
               <TerminalText size={8} letterSpacing={1} style={styles.actionDisabledText}>

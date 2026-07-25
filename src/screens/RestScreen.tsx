@@ -15,7 +15,7 @@ import IncursionRunLayout from '../components/IncursionRunLayout';
 import RunEventImmersiveBackdrop from '../components/layout/RunEventImmersiveBackdrop';
 import RunEventNodeHeader from '../components/layout/RunEventNodeHeader';
 import DossierCardShell from '../components/hub/DossierCardShell';
-import { DOSSIER_CTA_BG, DOSSIER_ROW_BG, dossierOpaqueCtaStyle } from '../constants/dossierSurface';
+import { DOSSIER_CTA_BG, DOSSIER_ROW_BG } from '../constants/dossierSurface';
 import { readPressableHover, terminalHoverStyle } from '../utils/terminalHoverStyle';
 import { resolveRunEventNodeHeaderFromNode } from '../utils/resolveRunEventNodeHeader';
 import { VEIL } from '../theme/veilTerminalTokens';
@@ -24,13 +24,8 @@ const TERMINAL_ACCENT = VEIL.mint;
 const MUTED_STAT = VEIL.textMuted;
 const HEAL_GREEN = VEIL.mintBright;
 const GRAFT_PURPLE = VEIL.occultPale;
-const CANCEL_ACCENT = VEIL.textMuted;
+const CANCEL_ACCENT = VEIL.blood;
 const CHOICE_BORDER = VEIL.line;
-
-const FLAT_CTA_OVERRIDE: ViewStyle = Platform.select({
-  web: { boxShadow: 'none' },
-  default: { shadowOpacity: 0, shadowRadius: 0, elevation: 0 },
-}) ?? { shadowOpacity: 0, shadowRadius: 0, elevation: 0 };
 
 type SanctuaryChoice = 'ATTUNE' | 'GRAFT' | null;
 
@@ -285,49 +280,28 @@ export default function RestScreen(): React.JSX.Element {
   };
 
   const continueButtonStyle = useCallback(
-    (state: { pressed: boolean; hovered?: boolean }) => [
+    () => [
       styles.continueBtn,
       {
         width: showInjectButton ? undefined : '100%' as const,
         flex: showInjectButton ? 1 : undefined,
         alignSelf: 'stretch' as const,
-        borderColor: actionAccent,
-        borderWidth: 2,
         minHeight: choicePaddingVertical * 2 + scaleFont(14),
-        paddingVertical: choicePaddingVertical,
-        paddingHorizontal: choicePaddingHorizontal,
-        opacity: actionEnabled ? (state.pressed ? 0.85 : 1) : 0.2,
       },
-      FLAT_CTA_OVERRIDE,
-      dossierOpaqueCtaStyle(actionAccent),
     ],
-    [
-      actionAccent,
-      actionEnabled,
-      choicePaddingHorizontal,
-      choicePaddingVertical,
-      scaleFont,
-      showInjectButton,
-    ],
+    [choicePaddingVertical, scaleFont, showInjectButton],
   );
 
   const cancelButtonStyle = useCallback(
-    (state: { pressed: boolean; hovered?: boolean }) => [
+    () => [
       styles.continueBtn,
       {
         flex: 1,
         alignSelf: 'stretch' as const,
-        borderColor: CANCEL_ACCENT,
-        borderWidth: 2,
         minHeight: choicePaddingVertical * 2 + scaleFont(14),
-        paddingVertical: choicePaddingVertical,
-        paddingHorizontal: choicePaddingHorizontal,
-        opacity: state.pressed ? 0.85 : 1,
       },
-      FLAT_CTA_OVERRIDE,
-      dossierOpaqueCtaStyle(CANCEL_ACCENT),
     ],
-    [choicePaddingHorizontal, choicePaddingVertical, scaleFont],
+    [choicePaddingVertical, scaleFont],
   );
 
   const leftPanelContent = (

@@ -2,6 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { Modal, ScrollView, StyleSheet, View } from 'react-native';
 import HapticPressable from './HapticPressable';
 import TerminalText from './TerminalText';
+import HubPrimaryCta from './hub/HubPrimaryCta';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 
@@ -78,22 +79,17 @@ export default function TwistedTemplateChoiceOverlay(): React.JSX.Element | null
             })}
           </ScrollView>
 
-          <HapticPressable
+          <HubPrimaryCta
+            label="[ CONFIRM ]"
             onPress={handleConfirm}
             disabled={selectedValue == null}
-            style={({ pressed }) => [
-              styles.confirmBtn,
-              {
-                borderColor: accentColor,
-                backgroundColor: `${accentColor}22`,
-                opacity: selectedValue == null ? 0.45 : pressed ? 0.82 : 1,
-              },
-            ]}
-          >
-            <TerminalText size={10} letterSpacing={1.2} style={{ color: accentColor, fontWeight: '800' }}>
-              [ CONFIRM ]
-            </TerminalText>
-          </HapticPressable>
+            variant="glow"
+            accessibilityLabel="Confirm"
+            minHeight={48}
+            size={10}
+            letterSpacing={1.2}
+            style={styles.confirmBtn}
+          />
         </View>
       </View>
     </Modal>

@@ -1,8 +1,6 @@
-import React, { useCallback, useMemo } from 'react';
-import { Platform, ScrollView, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import React, { useMemo } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { NarrativeOutcomeSummary } from '../../data/narrative/narrativeOutcomeSummary';
-import { readPressableHover, terminalHoverStyle } from '../../utils/terminalHoverStyle';
-import { hubCtaButtonStyle, resolveHubCtaFill } from '../../constants/hubCta';
 import {
   NARRATIVE_UNIFIED_PANEL_BG,
   NARRATIVE_UNIFIED_PANEL_BORDER,
@@ -20,11 +18,6 @@ const REWARD_GREEN = '#86EFAC';
 const PENALTY_ORANGE = '#FB923C';
 const AMBUSH_PINK = '#F472B6';
 const BONUS_BLUE = '#7DD3FC';
-
-const FLAT_CTA_OVERRIDE: ViewStyle = Platform.select({
-  web: { boxShadow: 'none' },
-  default: { shadowOpacity: 0, shadowRadius: 0, elevation: 0 },
-}) ?? { shadowOpacity: 0, shadowRadius: 0, elevation: 0 };
 
 interface NarrativeOutcomePanelProps {
   summary: NarrativeOutcomeSummary;
@@ -44,7 +37,7 @@ export default function NarrativeOutcomePanel({
   mutedColor = BODY_MUTED,
   primaryColor = MUTED_WHITE,
 }: NarrativeOutcomePanelProps): React.JSX.Element {
-  const { fontScale, scaleSize, scaleSpacing } = useResponsiveLayout();
+  const { fontScale, scaleSpacing } = useResponsiveLayout();
   const isSuccess = summary.status === 'SUCCESS';
   const statusAccent = isSuccess ? TERMINAL_GREEN : FAILURE_RED;
 
@@ -65,23 +58,6 @@ export default function NarrativeOutcomePanel({
       sectionGap: scaleSpacing(16),
     }),
     [fontScale, scaleSpacing],
-  );
-
-  const continueButtonStyle = useCallback(
-    (state: { pressed: boolean; hovered?: boolean }) => [
-      hubCtaButtonStyle(TERMINAL_GREEN, scaleSize, scaleSpacing, false),
-      FLAT_CTA_OVERRIDE,
-      {
-        justifyContent: 'center' as const,
-        alignItems: 'center' as const,
-        borderColor: TERMINAL_GREEN,
-        borderWidth: 2,
-        backgroundColor: resolveHubCtaFill(TERMINAL_GREEN),
-        opacity: 1,
-      },
-      terminalHoverStyle(readPressableHover(state), state.pressed),
-    ],
-    [scaleSize, scaleSpacing],
   );
 
   return (
@@ -246,7 +222,6 @@ export default function NarrativeOutcomePanel({
           accentColor={TERMINAL_GREEN}
           mutedColor={BODY_MUTED}
           variant="cta"
-          style={continueButtonStyle}
         />
       </View>
     </View>

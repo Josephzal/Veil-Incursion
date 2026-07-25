@@ -10,12 +10,12 @@ import {
 import HapticPressable from '../HapticPressable';
 import TerminalText from '../TerminalText';
 import TacticalButton from '../TacticalButton';
+import HubPrimaryCta from './HubPrimaryCta';
 import DossierCardShell from './DossierCardShell';
 import {
   DOSSIER_BORDER,
   DOSSIER_CTA_BG,
   DOSSIER_ROW_BG,
-  dossierOpaqueCtaStyle,
   SELECT_ACCENT,
 } from '../../constants/dossierSurface';
 import { VEIL } from '../../theme/veilTerminalTokens';
@@ -328,7 +328,7 @@ interface MarketActionButtonProps {
 export function MarketActionButton({
   label,
   onPress,
-  accentColor = SELECT_ACCENT,
+  accentColor = VEIL.mint,
   mutedColor = MARKET_MUTED_LINE,
   disabled = false,
   variant = 'primary',
@@ -339,6 +339,21 @@ export function MarketActionButton({
   const isDisabled = disabled || variant === 'disabled';
   const height = isStepper ? MARKET_STEPPER_BTN_HEIGHT : MARKET_PRIMARY_BTN_HEIGHT;
 
+  if (!isStepper) {
+    return (
+      <HubPrimaryCta
+        label={label}
+        onPress={onPress}
+        disabled={isDisabled}
+        variant="glow"
+        accentColor={accentColor}
+        accessibilityLabel={label}
+        minHeight={height}
+        style={[fullWidth ? styles.fullWidthBtn : null, style]}
+      />
+    );
+  }
+
   return (
     <TacticalButton
       label={label}
@@ -346,24 +361,19 @@ export function MarketActionButton({
       onPress={onPress}
       accentColor={accentColor}
       mutedColor={mutedColor}
-      variant={fullWidth ? 'cta' : 'inline'}
+      variant="inline"
       disabled={isDisabled}
-      suppressGlow
-      labelSize={isStepper ? 10 : undefined}
-      labelLineHeight={isStepper ? 14 : undefined}
+      labelSize={10}
+      labelLineHeight={14}
       style={[
-        dossierOpaqueCtaStyle(accentColor),
         {
           minHeight: height,
           height,
           paddingVertical: 0,
-          paddingHorizontal: isStepper ? 10 : 14,
+          paddingHorizontal: 10,
           justifyContent: 'center',
-          backgroundColor: DOSSIER_CTA_BG,
-          borderWidth: 1,
           opacity: isDisabled ? MARKET_DISABLED_OPACITY : 1,
         },
-        fullWidth ? styles.fullWidthBtn : null,
         style,
       ]}
     />

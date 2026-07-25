@@ -17,7 +17,7 @@ import { useTerminal } from '../context/TerminalContext';
 import { useDescentNavigator } from '../hooks/useDescentNavigator';
 import { useRunDeathFinalizer } from '../hooks/useRunDeathFinalizer';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
-import { HUB_BORDER_INSET, hubCtaButtonStyle } from '../constants/hubCta';
+import { HUB_BORDER_INSET } from '../constants/hubCta';
 import type { ClassType } from '../types/game';
 import { MAX_LEY_MUTATIONS } from '../types/overworldFeatures';
 import { VEIL } from '../theme/veilTerminalTokens';
@@ -81,9 +81,8 @@ export default function PostCombatBoonScreen(): React.JSX.Element {
     () => [
       styles.continueBtn,
       { marginTop: scaleSpacing(48) },
-      hubCtaButtonStyle(TERMINAL_ACCENT, scaleSize, scaleSpacing, !canContinue),
     ],
-    [canContinue, scaleSize, scaleSpacing],
+    [scaleSpacing],
   );
 
   const headerSubtitle = useMemo(() => {

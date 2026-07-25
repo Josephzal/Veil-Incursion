@@ -9,11 +9,9 @@ import HapticPressable from '../../HapticPressable';
 import TerminalText from '../../TerminalText';
 import { pulseHubButton } from '../../../utils/hubButtonHaptics';
 import { VEIL } from '../../../theme/veilTerminalTokens';
-import {
-  HUB_CTA_INVERSE_TEXT,
-  hubPrimaryActionStyle,
-  hubPrimaryActionTextStyle,
-} from '../../../theme/hubPanelSurfaces';
+import { HUB_CTA_INVERSE_TEXT } from '../../../theme/hubPanelSurfaces';
+import { viewShadow } from '../../../utils/adaptiveStyles';
+import { readPressableHover } from '../../../utils/terminalHoverStyle';
 
 const HOLD_MS = 1000;
 
@@ -24,7 +22,17 @@ interface HoldToFabricateButtonProps {
   holdingLabel?: string;
 }
 
-/** Hold for 1s to confirm fabrication — outline CTA with progress fill overlay. */
+function withAlpha(color: string, alphaHex: string): string {
+  if (color.startsWith('#') && color.length === 7) {
+    return `${color}${alphaHex}`;
+  }
+  return color;
+}
+
+/**
+ * Hold for 1s to confirm fabrication.
+ * Rest/hover matches Accept Contract glow; hold fills solid mint.
+ */
 export default function HoldToFabricateButton({
   onComplete,
   disabled = false,
@@ -96,29 +104,61 @@ export default function HoldToFabricateButton({
       accessibilityRole="button"
       accessibilityLabel="Hold for one second to fabricate"
       accessibilityHint="Press and hold to complete fabrication"
-      style={({ pressed }) => ([
-        styles.button,
-        disabled && styles.buttonDisabled,
-        pressed && !disabled && styles.buttonPressed,
-      ])}
+      style={(state) => {
+        const hovered = readPressableHover(state);
+        const awake = !disabled && (holding || hovered || state.pressed);
+        return [
+          styles.button,
+          {
+            backgroundColor: awake
+              ? withAlpha(VEIL.mint, '33')
+              : withAlpha(VEIL.mint, disabled ? '10' : '18'),
+            borderColor: awake
+              ? VEIL.mint
+              : withAlpha(VEIL.mint, disabled ? '55' : '88'),
+            ...viewShadow({
+              color: VEIL.mint,
+              opacity: disabled ? 0.42 : awake ? 0.95 : 0.72,
+              radius: disabled ? 10 : awake ? 16 : 12,
+              offset: { width: 0, height: 0 },
+            }),
+            opacity: disabled ? 0.72 : 1,
+          },
+          disabled && styles.buttonDisabled,
+        ];
+      }}
     >
-      <Animated.View
-        pointerEvents="none"
-        style={[styles.fill, { width: fillWidth }]}
-      />
-      <View style={styles.labelWrap} pointerEvents="none">
-        <TerminalText
-          size={8}
-          letterSpacing={1}
-          style={[
-            styles.label,
-            holding && styles.labelHolding,
-            disabled && styles.labelDisabled,
-          ]}
-        >
-          {holding ? holdingLabel : label}
-        </TerminalText>
-      </View>
+      {({ hovered, pressed }: { hovered?: boolean; pressed: boolean }) => {
+        const awake = !disabled && (holding || hovered || pressed);
+        return (
+          <>
+            <Animated.View
+              pointerEvents="none"
+              style={[styles.fill, { width: fillWidth }]}
+            />
+            <View style={styles.labelWrap} pointerEvents="none">
+              <TerminalText
+                size={8}
+                letterSpacing={1}
+                style={[
+                  styles.label,
+                  {
+                    color: disabled
+                      ? withAlpha(VEIL.mint, '66')
+                      : holding
+                        ? HUB_CTA_INVERSE_TEXT
+                        : awake
+                          ? VEIL.mint
+                          : withAlpha(VEIL.mint, '99'),
+                  },
+                ]}
+              >
+                {holding ? holdingLabel : label}
+              </TerminalText>
+            </View>
+          </>
+        );
+      }}
     </HapticPressable>
   );
 }
@@ -131,18 +171,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    ...hubPrimaryActionStyle(),
+    borderWidth: 2,
     ...Platform.select({
-      web: { cursor: 'pointer', outlineStyle: 'none', userSelect: 'none' } as object,
+      web: {
+        cursor: 'pointer',
+        outlineStyle: 'none',
+        userSelect: 'none',
+        transitionProperty: 'background-color, border-color, box-shadow',
+        transitionDuration: '140ms',
+      } as object,
       default: {},
     }),
   },
   buttonDisabled: {
     backgroundColor: 'rgba(185, 181, 167, 0.03)',
     borderColor: 'rgba(185, 181, 167, 0.16)',
-  },
-  buttonPressed: {
-    borderColor: VEIL.mintBright,
   },
   fill: {
     position: 'absolute',
@@ -156,12 +199,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   label: {
-    ...hubPrimaryActionTextStyle(),
-  },
-  labelHolding: {
-    color: HUB_CTA_INVERSE_TEXT,
-  },
-  labelDisabled: {
-    color: 'rgba(222, 227, 223, 0.32)',
+    fontWeight: '800',
+    textTransform: 'uppercase',
   },
 });

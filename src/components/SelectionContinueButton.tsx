@@ -1,13 +1,7 @@
 import React from 'react';
-import { StyleSheet, Text, type ViewStyle } from 'react-native';
-import HapticPressable from './HapticPressable';
-import {
-  getInteractiveButtonStyle,
-  getInteractiveButtonTextStyle,
-  type HubInteractiveButtonSize,
-} from '../styles/hubTerminalUi';
-
-const TERMINAL_ACCENT = '#00ff33';
+import { StyleSheet, type ViewStyle } from 'react-native';
+import HubPrimaryCta from './hub/HubPrimaryCta';
+import type { HubInteractiveButtonSize } from '../styles/hubTerminalUi';
 
 interface SelectionContinueButtonProps {
   enabled: boolean;
@@ -24,40 +18,18 @@ export default function SelectionContinueButton({
   enabled,
   onPress,
   label = '[ CONTINUE ]',
-  borderColor: _borderColor,
-  mutedColor,
-  accentColor = TERMINAL_ACCENT,
-  size = 'md',
   style,
 }: SelectionContinueButtonProps): React.JSX.Element {
-  const handlePress = () => {
-    if (!enabled) return;
-    onPress();
-  };
-
   return (
-    <HapticPressable
-      onPress={handlePress}
+    <HubPrimaryCta
+      label={label}
+      onPress={onPress}
       disabled={!enabled}
-      style={({ pressed }) => [
-        getInteractiveButtonStyle(accentColor, { disabled: !enabled, pressed, size }),
-        styles.btn,
-        style,
-        !enabled ? { opacity: 0.45 } : pressed ? { opacity: 0.85 } : null,
-      ]}
-      accessibilityRole="button"
-      accessibilityState={{ disabled: !enabled }}
+      variant="glow"
       accessibilityLabel={label}
-    >
-      <Text
-        style={[
-          getInteractiveButtonTextStyle(size),
-          { color: enabled ? accentColor : mutedColor },
-        ]}
-      >
-        {label}
-      </Text>
-    </HapticPressable>
+      minHeight={48}
+      style={[styles.btn, style]}
+    />
   );
 }
 

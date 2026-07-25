@@ -1,6 +1,6 @@
 import React from 'react';
 import { Modal, StyleSheet, Text, View } from 'react-native';
-import HapticPressable from './HapticPressable';
+import HubPrimaryCta from './hub/HubPrimaryCta';
 import type { TerminalTheme } from '../types/theme';
 
 interface ExtractConfirmOverlayProps {
@@ -28,26 +28,22 @@ export default function ExtractConfirmOverlay({
           </Text>
 
           <View style={styles.actions}>
-            <HapticPressable
+            <HubPrimaryCta
+              label="[ NO ]"
               onPress={onCancel}
-              style={({ pressed }) => [
-                styles.btn,
-                styles.cancelBtn,
-                { borderColor: theme.borderColor, opacity: pressed ? 0.75 : 1 },
-              ]}
-            >
-              <Text style={[styles.btnText, { color: theme.mutedColor }]}>[ NO ]</Text>
-            </HapticPressable>
-            <HapticPressable
+              variant="danger"
+              accessibilityLabel="Cancel extract"
+              minHeight={48}
+              style={styles.btn}
+            />
+            <HubPrimaryCta
+              label="[ YES ]"
               onPress={onConfirm}
-              style={({ pressed }) => [
-                styles.btn,
-                styles.confirmBtn,
-                { borderColor: accentColor, opacity: pressed ? 0.75 : 1 },
-              ]}
-            >
-              <Text style={[styles.btnText, { color: accentColor }]}>[ YES ]</Text>
-            </HapticPressable>
+              variant="glow"
+              accessibilityLabel="Confirm extract"
+              minHeight={48}
+              style={styles.btn}
+            />
           </View>
         </View>
       </View>
@@ -92,17 +88,5 @@ const styles = StyleSheet.create({
   },
   btn: {
     flex: 1,
-    borderWidth: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    backgroundColor: '#0a0b0f',
-  },
-  cancelBtn: {},
-  confirmBtn: {},
-  btnText: {
-    fontFamily: 'monospace',
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1,
   },
 });

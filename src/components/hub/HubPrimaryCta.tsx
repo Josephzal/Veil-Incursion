@@ -7,19 +7,21 @@ import { VEIL } from '../../theme/veilTerminalTokens';
 import { viewShadow } from '../../utils/adaptiveStyles';
 import { readPressableHover } from '../../utils/terminalHoverStyle';
 
+export type HubPrimaryCtaVariant = 'glow' | 'danger' | 'classic';
+
 interface HubPrimaryCtaProps {
   label: string;
   onPress?: () => void;
   disabled?: boolean;
   accessibilityLabel?: string;
-  /** Accent for the glow variant — Bound Requisition mint by default. */
-  accentColor?: string;
   /**
-   * `glow` — muted rest + cyber glow (Bound Requisition).
-   * `classic` — outline mint at rest, solid mint fill + inverse label on hover
-   *   (original hub CTA / forge hold fill).
+   * `glow` — Accept Contract: muted rest tint + mint cyber glow (default).
+   * `danger` — same treatment in blood red (Abort / Abandon / Cancel).
+   * `classic` — mint outline at rest, solid mint fill + inverse label on hover.
    */
-  variant?: 'glow' | 'classic';
+  variant?: HubPrimaryCtaVariant;
+  /** Accent override for the glow variant only. */
+  accentColor?: string;
   size?: number;
   letterSpacing?: number;
   style?: StyleProp<ViewStyle>;
@@ -36,23 +38,29 @@ function withAlpha(color: string, alphaHex: string): string {
   return color;
 }
 
+const DANGER = VEIL.blood;
+const DANGER_BRIGHT = '#D48A93';
+
 /**
- * Shared hub accept/confirm CTA.
- * Default `glow` matches Bound Requisition; `classic` is the original mint outline/fill.
+ * Shared hub / encounter primary CTA.
+ * Default matches Accept Contract (mint glow).
  */
 export default function HubPrimaryCta({
   label,
   onPress,
   disabled = false,
   accessibilityLabel,
-  accentColor = VEIL.mint,
   variant = 'glow',
+  accentColor = VEIL.mint,
   size = 8,
   letterSpacing = 1,
   style,
   minHeight = 50,
 }: HubPrimaryCtaProps): React.JSX.Element {
   const inactive = disabled || !onPress;
+  const isDanger = variant === 'danger';
+  const glowAccent = isDanger ? DANGER : accentColor;
+  const glowBright = isDanger ? DANGER_BRIGHT : accentColor;
 
   if (variant === 'classic') {
     return (
@@ -113,21 +121,23 @@ export default function HubPrimaryCta({
           {
             minHeight,
             backgroundColor: awake
-              ? withAlpha(accentColor, '33')
-              : withAlpha(accentColor, inactive ? '10' : '18'),
+              ? withAlpha(glowAccent, '33')
+              : withAlpha(glowAccent, inactive ? '10' : '18'),
             borderColor: awake
-              ? accentColor
-              : withAlpha(accentColor, inactive ? '55' : '88'),
+              ? glowBright
+              : withAlpha(glowAccent, inactive ? '55' : '88'),
             borderWidth: 2,
             ...viewShadow({
-              color: accentColor,
+              color: glowAccent,
               opacity: inactive ? 0.42 : awake ? 0.95 : 0.72,
               radius: inactive ? 10 : awake ? 16 : 12,
               offset: { width: 0, height: 0 },
             }),
             opacity: inactive ? 0.72 : pressed ? 0.9 : 1,
           },
-          focused && !inactive ? styles.focus : null,
+          focused && !inactive
+            ? (isDanger ? styles.focusDanger : styles.focus)
+            : null,
           Platform.OS === 'web'
             ? ({ cursor: inactive ? 'not-allowed' : 'pointer' } as object)
             : null,
@@ -145,10 +155,10 @@ export default function HubPrimaryCta({
               styles.label,
               {
                 color: inactive
-                  ? withAlpha(accentColor, '66')
+                  ? withAlpha(glowAccent, '66')
                   : awake
-                    ? accentColor
-                    : withAlpha(accentColor, '99'),
+                    ? glowBright
+                    : withAlpha(glowAccent, '99'),
               },
             ]}
           >
@@ -162,7 +172,6 @@ export default function HubPrimaryCta({
 
 const styles = StyleSheet.create({
   button: {
-    width: '100%',
     alignSelf: 'stretch',
     alignItems: 'center',
     justifyContent: 'center',
@@ -178,7 +187,6 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
-  /** Original hub CTA — surface fill, mint outline, mintBright label. */
   classicRest: {
     backgroundColor: VEIL.surface3,
     borderWidth: 1,
@@ -210,6 +218,12 @@ const styles = StyleSheet.create({
     outlineStyle: 'solid',
     outlineWidth: 1,
     outlineColor: VEIL.mintBright,
+    outlineOffset: 2,
+  } as ViewStyle,
+  focusDanger: {
+    outlineStyle: 'solid',
+    outlineWidth: 1,
+    outlineColor: DANGER_BRIGHT,
     outlineOffset: 2,
   } as ViewStyle,
 });

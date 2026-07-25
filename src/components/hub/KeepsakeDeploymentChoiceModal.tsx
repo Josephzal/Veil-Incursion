@@ -142,26 +142,19 @@ export default function KeepsakeDeploymentChoiceModal({
           </ScrollView>
 
           <View style={[styles.actions, { marginTop: scaleSpacing(14), gap: scaleSpacing(10) }]}>
-            <HapticPressable
+            <HubPrimaryCta
+              label="[ CANCEL ]"
               onPress={onDismiss}
-              style={({ pressed }) => [
-                styles.actionBtn,
-                {
-                  borderColor: mutedColor,
-                  minHeight: scaleSize(44),
-                  opacity: pressed ? 0.75 : 1,
-                },
-              ]}
-            >
-              <TerminalText size={10} letterSpacing={1.2} style={{ color: mutedColor, fontWeight: '800' }}>
-                [ CANCEL ]
-              </TerminalText>
-            </HapticPressable>
+              variant="danger"
+              accessibilityLabel="Cancel"
+              minHeight={scaleSize(44)}
+              style={styles.actionBtn}
+            />
             <HubPrimaryCta
               label="[ CONFIRM ]"
               onPress={onConfirm}
               disabled={!canConfirm}
-              accentColor={accentColor}
+              variant="glow"
               accessibilityLabel="Confirm"
               minHeight={scaleSize(48)}
               style={styles.actionBtn}

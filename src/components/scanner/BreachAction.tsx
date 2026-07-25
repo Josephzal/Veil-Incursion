@@ -1,11 +1,10 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, Easing, Platform, StyleSheet, View } from 'react-native';
-import HapticPressable from '../HapticPressable';
+import { Animated, Easing, StyleSheet, View } from 'react-native';
+import HubPrimaryCta from '../hub/HubPrimaryCta';
 import TerminalText from '../TerminalText';
 import { pulseHubButton } from '../../utils/hubButtonHaptics';
 import { VEIL } from '../../theme/veilTerminalTokens';
 import { SCANNER_PHOSPHOR } from './vectorScannerShared';
-import { readPressableHover, terminalHoverStyle } from '../../utils/terminalHoverStyle';
 import { USE_NATIVE_DRIVER } from '../../utils/platformMotion';
 
 interface BreachActionProps {
@@ -31,8 +30,7 @@ function usePrefersReducedMotion(): boolean {
 }
 
 /**
- * Anchored Breach control — readiness line + full-width action.
- * Enabled/disabled rules and press behavior come from the parent.
+ * Anchored Breach control — readiness line + Accept-style glow CTA.
  */
 export default function BreachAction({
   enabled,
@@ -69,33 +67,20 @@ export default function BreachAction({
         {readinessLine}
       </TerminalText>
       <View style={styles.buttonShell}>
-        <HapticPressable
+        <HubPrimaryCta
+          label={label}
           onPress={() => {
             if (!enabled) return;
             pulseHubButton();
             onPress();
           }}
           disabled={!enabled}
-          accessibilityRole="button"
+          variant="glow"
           accessibilityLabel="Breach selected signal"
-          accessibilityState={{ disabled: !enabled }}
-          style={(state) => [
-            styles.button,
-            enabled ? styles.buttonReady : styles.buttonIdle,
-            enabled ? terminalHoverStyle(readPressableHover(state), state.pressed) : null,
-            Platform.OS === 'web'
-              ? ({ cursor: enabled ? 'pointer' : 'not-allowed' } as object)
-              : null,
-          ]}
-        >
-          <TerminalText
-            size={11}
-            letterSpacing={1.2}
-            style={[styles.label, { color: enabled ? SCANNER_PHOSPHOR : VEIL.textDim }]}
-          >
-            {label}
-          </TerminalText>
-        </HapticPressable>
+          minHeight={60}
+          size={11}
+          letterSpacing={1.2}
+        />
         {enabled ? (
           <Animated.View
             pointerEvents="none"
@@ -130,37 +115,9 @@ const styles = StyleSheet.create({
     position: 'relative',
     width: '100%',
   },
-  button: {
-    width: '100%',
-    alignSelf: 'stretch',
-    height: 60,
-    minHeight: 58,
-    maxHeight: 64,
-    borderWidth: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#0A1011',
-  },
-  buttonReady: {
-    borderColor: SCANNER_PHOSPHOR,
-    ...Platform.select({
-      web: {
-        boxShadow: 'inset 0 1px 0 rgba(100, 201, 177, 0.1)',
-      } as object,
-      default: {},
-    }),
-  },
-  buttonIdle: {
-    borderColor: VEIL.line,
-    opacity: 0.62,
-  },
   edgeFlash: {
     ...StyleSheet.absoluteFill,
     borderWidth: 1,
     borderColor: SCANNER_PHOSPHOR,
-  },
-  label: {
-    fontWeight: '800',
-    textTransform: 'uppercase',
   },
 });

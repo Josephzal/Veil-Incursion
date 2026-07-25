@@ -9,6 +9,7 @@ import {
   HUB_NAV_INACTIVE_BORDER,
   HUB_NAV_INACTIVE_TOP_HIGHLIGHT,
 } from '../constants/hubAtmosphere';
+import { readPressableHover } from '../utils/terminalHoverStyle';
 
 export interface TacticalButtonProps {
   label: string;
@@ -24,6 +25,13 @@ export interface TacticalButtonProps {
   labelLineHeight?: number;
   /** Skip accent glow shadow when active (compact inline controls). */
   suppressGlow?: boolean;
+}
+
+function withAlpha(color: string, alphaHex: string): string {
+  if (color.startsWith('#') && color.length === 7) {
+    return `${color}${alphaHex}`;
+  }
+  return color;
 }
 
 /** Scaled terminal nav / action button — desktop web typography only. */
@@ -61,60 +69,111 @@ export default function TacticalButton({
     <HapticPressable
       onPress={onPress}
       disabled={disabled}
-      style={(state) => [
-        isRail ? styles.railCell : isCta ? styles.ctaCell : styles.inlineCell,
-        active || isCta ? styles.cellActive : styles.cellInactive,
-        {
-          minHeight: metrics.minHeight,
-          paddingVertical: metrics.paddingVertical,
-          paddingHorizontal: metrics.paddingHorizontal,
-          ...(metrics.minWidth != null ? { minWidth: metrics.minWidth } : null),
-        },
-        active || isCta
-          ? suppressGlow && !isCta
-            ? {
-                borderColor: accentColor,
-                ...Platform.select({
-                  web: { boxShadow: 'none' },
-                  default: { shadowOpacity: 0, shadowRadius: 0, elevation: 0 },
-                }),
-              }
-            : {
-                borderColor: accentColor,
-                backgroundColor: `${accentColor}24`,
-                ...viewShadow({
-                  color: accentColor,
-                  opacity: 0.85,
-                  radius: 12,
-                  offset: { width: 0, height: 0 },
-                }),
-              }
-          : null,
-        typeof style === 'function' ? style(state) : style,
-        !disabled && state.pressed
-          ? suppressGlow
-            ? {
-                opacity: 0.72,
-                backgroundColor: `${accentColor}28`,
-              }
-            : { opacity: 0.85 }
-          : null,
-      ]}
+      style={(state) => {
+        const hovered = readPressableHover(state);
+        const awake = !disabled && (hovered || state.pressed);
+
+        if (isCta) {
+          return [
+            styles.ctaCell,
+            {
+              minHeight: metrics.minHeight,
+              paddingVertical: metrics.paddingVertical,
+              paddingHorizontal: metrics.paddingHorizontal,
+              backgroundColor: awake
+                ? withAlpha(accentColor, '33')
+                : withAlpha(accentColor, disabled ? '10' : '18'),
+              borderColor: awake
+                ? accentColor
+                : withAlpha(accentColor, disabled ? '55' : '88'),
+              borderWidth: 2,
+              ...viewShadow({
+                color: accentColor,
+                opacity: disabled ? 0.42 : awake ? 0.95 : 0.72,
+                radius: disabled ? 10 : awake ? 16 : 12,
+                offset: { width: 0, height: 0 },
+              }),
+              opacity: disabled ? 0.72 : state.pressed ? 0.9 : 1,
+            },
+            typeof style === 'function' ? style(state) : style,
+            Platform.OS === 'web'
+              ? ({ cursor: disabled ? 'not-allowed' : 'pointer' } as object)
+              : null,
+          ];
+        }
+
+        return [
+          isRail ? styles.railCell : styles.inlineCell,
+          active ? styles.cellActive : styles.cellInactive,
+          {
+            minHeight: metrics.minHeight,
+            paddingVertical: metrics.paddingVertical,
+            paddingHorizontal: metrics.paddingHorizontal,
+            ...(metrics.minWidth != null ? { minWidth: metrics.minWidth } : null),
+          },
+          active
+            ? suppressGlow
+              ? {
+                  borderColor: accentColor,
+                  ...Platform.select({
+                    web: { boxShadow: 'none' },
+                    default: { shadowOpacity: 0, shadowRadius: 0, elevation: 0 },
+                  }),
+                }
+              : {
+                  borderColor: accentColor,
+                  backgroundColor: `${accentColor}24`,
+                  ...viewShadow({
+                    color: accentColor,
+                    opacity: 0.85,
+                    radius: 12,
+                    offset: { width: 0, height: 0 },
+                  }),
+                }
+            : null,
+          typeof style === 'function' ? style(state) : style,
+          !disabled && state.pressed
+            ? suppressGlow
+              ? {
+                  opacity: 0.72,
+                  backgroundColor: `${accentColor}28`,
+                }
+              : { opacity: 0.85 }
+            : null,
+        ];
+      }}
     >
-      <TerminalText
-        size={labelSize ?? metrics.fontSize}
-        lineHeight={labelLineHeight ?? metrics.lineHeight}
-        letterSpacing={metrics.letterSpacing}
-        style={[
-          styles.label,
-          { color: active || isCta ? accentColor : `${mutedColor}bb` },
-        ]}
-        numberOfLines={isRail ? 3 : 1}
-        adjustsFontSizeToFit={isRail}
-        minimumFontScale={0.75}
-      >
-        {label}
-      </TerminalText>
+      {({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => {
+        const awake = !disabled && (hovered || pressed);
+        const ctaLabelColor = disabled
+          ? withAlpha(accentColor, '66')
+          : awake
+            ? accentColor
+            : withAlpha(accentColor, '99');
+
+        return (
+          <TerminalText
+            size={labelSize ?? metrics.fontSize}
+            lineHeight={labelLineHeight ?? metrics.lineHeight}
+            letterSpacing={metrics.letterSpacing}
+            style={[
+              styles.label,
+              {
+                color: isCta
+                  ? ctaLabelColor
+                  : active
+                    ? accentColor
+                    : `${mutedColor}bb`,
+              },
+            ]}
+            numberOfLines={isRail ? 3 : 1}
+            adjustsFontSizeToFit={isRail}
+            minimumFontScale={0.75}
+          >
+            {label}
+          </TerminalText>
+        );
+      }}
     </HapticPressable>
   );
 }
@@ -134,11 +193,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   ctaCell: {
-    borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'stretch',
     width: '100%',
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none',
+        transitionProperty: 'background-color, border-color, opacity, box-shadow',
+        transitionDuration: '140ms',
+        transitionTimingFunction: 'ease-out',
+      } as object,
+      default: {},
+    }),
   },
   cellInactive: {
     backgroundColor: HUB_NAV_INACTIVE_BG,

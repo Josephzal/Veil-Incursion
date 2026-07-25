@@ -1,6 +1,6 @@
 import React from 'react';
 import { Modal, StyleSheet, Text, View } from 'react-native';
-import HapticPressable from './HapticPressable';
+import HubPrimaryCta from './hub/HubPrimaryCta';
 import type { TerminalTheme } from '../types/theme';
 
 export type CargoLootPickupMode = 'REPLACE' | 'LEAVE_BEHIND';
@@ -8,11 +8,8 @@ export type CargoLootPickupMode = 'REPLACE' | 'LEAVE_BEHIND';
 interface CargoLootPickupOverlayProps {
   visible: boolean;
   mode: CargoLootPickupMode;
-  /** Incoming / leaving item label. */
   itemName: string;
-  /** Optional quantity summary, e.g. "3/5". */
   quantityLabel?: string;
-  /** When replacing, name of the cargo being jettisoned. */
   occupantName?: string;
   theme: TerminalTheme;
   accentColor?: string;
@@ -71,52 +68,50 @@ export default function CargoLootPickupOverlay({
           </Text>
 
           <View style={styles.actions}>
-            <HapticPressable
+            <HubPrimaryCta
+              label={mode === 'LEAVE_BEHIND' ? '[ KEEP PACKING ]' : '[ CANCEL ]'}
               onPress={onCancel}
-              style={({ pressed }) => [
-                styles.btn,
-                { borderColor: theme.borderColor, opacity: pressed ? 0.75 : 1 },
-              ]}
-            >
-              <Text style={[styles.btnText, { color: theme.mutedColor }]}>
-                {mode === 'LEAVE_BEHIND' ? '[ KEEP PACKING ]' : '[ CANCEL ]'}
-              </Text>
-            </HapticPressable>
+              variant={mode === 'LEAVE_BEHIND' ? 'glow' : 'danger'}
+              accessibilityLabel={mode === 'LEAVE_BEHIND' ? 'Keep packing' : 'Cancel'}
+              minHeight={40}
+              size={7.5}
+              style={styles.btn}
+            />
 
             {showMerge && onMerge ? (
-              <HapticPressable
+              <HubPrimaryCta
+                label="[ MERGE ]"
                 onPress={onMerge}
-                style={({ pressed }) => [
-                  styles.btn,
-                  { borderColor: accentColor, opacity: pressed ? 0.75 : 1 },
-                ]}
-              >
-                <Text style={[styles.btnText, { color: accentColor }]}>[ MERGE ]</Text>
-              </HapticPressable>
+                variant="glow"
+                accessibilityLabel="Merge"
+                minHeight={40}
+                size={7.5}
+                style={styles.btn}
+              />
             ) : null}
 
             {mode === 'REPLACE' && onReplace ? (
-              <HapticPressable
+              <HubPrimaryCta
+                label="[ REPLACE ]"
                 onPress={onReplace}
-                style={({ pressed }) => [
-                  styles.btn,
-                  { borderColor: '#ef4444', opacity: pressed ? 0.75 : 1 },
-                ]}
-              >
-                <Text style={[styles.btnText, { color: '#ef4444' }]}>[ REPLACE ]</Text>
-              </HapticPressable>
+                variant="danger"
+                accessibilityLabel="Replace"
+                minHeight={40}
+                size={7.5}
+                style={styles.btn}
+              />
             ) : null}
 
             {mode === 'LEAVE_BEHIND' ? (
-              <HapticPressable
+              <HubPrimaryCta
+                label="[ LEAVE BEHIND ]"
                 onPress={onLeaveBehind}
-                style={({ pressed }) => [
-                  styles.btn,
-                  { borderColor: '#ef4444', opacity: pressed ? 0.75 : 1 },
-                ]}
-              >
-                <Text style={[styles.btnText, { color: '#ef4444' }]}>[ LEAVE BEHIND ]</Text>
-              </HapticPressable>
+                variant="danger"
+                accessibilityLabel="Leave behind"
+                minHeight={40}
+                size={7.5}
+                style={styles.btn}
+              />
             ) : null}
           </View>
         </View>
@@ -171,16 +166,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   btn: {
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
     minWidth: 100,
-    alignItems: 'center',
-  },
-  btnText: {
-    fontFamily: 'monospace',
-    fontSize: 8,
-    fontWeight: '700',
-    letterSpacing: 0.6,
+    flexGrow: 1,
   },
 });

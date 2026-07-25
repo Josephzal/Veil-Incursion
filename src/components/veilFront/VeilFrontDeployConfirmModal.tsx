@@ -136,7 +136,6 @@ export default function VeilFrontDeployConfirmModal({
   const dialogRef = useRef<ViewType | null>(null);
   const returnBtnRef = useRef<ViewType | null>(null);
   const previousFocusRef = useRef<Element | null>(null);
-  const [returnFocused, setReturnFocused] = useState(false);
 
   const classDef = CLASS_DEFINITIONS[account.activeClass];
   const portraitSource = useMemo(
@@ -484,30 +483,21 @@ export default function VeilFrontDeployConfirmModal({
 
           <View style={[styles.footer, compact && styles.footerCompact]}>
             <View style={styles.footerActions}>
-              <HapticPressable
-                ref={returnBtnRef}
-                onPress={onAbort}
-                disabled={launching}
-                accessibilityRole="button"
-                accessibilityLabel="Abort"
-                onFocus={() => setReturnFocused(true)}
-                onBlur={() => setReturnFocused(false)}
-                style={({ pressed }) => ([
-                  styles.button,
-                  styles.buttonSecondary,
-                  returnFocused && styles.buttonFocused,
-                  launching && { opacity: 0.45 },
-                  pressed && !launching ? { opacity: 0.85 } : null,
-                ])}
-              >
-                <TerminalText size={8} letterSpacing={1} style={styles.buttonSecondaryText}>
-                  [ ABORT ]
-                </TerminalText>
-              </HapticPressable>
+              <View ref={returnBtnRef} style={styles.button} collapsable={false}>
+                <HubPrimaryCta
+                  label="[ ABORT ]"
+                  onPress={onAbort}
+                  disabled={launching}
+                  variant="danger"
+                  accessibilityLabel="Abort"
+                  minHeight={54}
+                />
+              </View>
               <HubPrimaryCta
                 label={primaryLabel}
                 onPress={onContinue}
                 disabled={launching}
+                variant="glow"
                 accessibilityLabel="Confirm"
                 minHeight={54}
                 style={styles.button}

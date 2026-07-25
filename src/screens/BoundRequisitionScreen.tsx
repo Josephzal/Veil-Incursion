@@ -16,7 +16,7 @@ import { usePlayerAccount } from '../context/PlayerAccountContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
-import { HUB_BORDER_INSET, hubCtaButtonStyle } from '../constants/hubCta';
+import { HUB_BORDER_INSET } from '../constants/hubCta';
 import type { BoundRequisitionId } from '../types/boundRequisition';
 import { VEIL } from '../theme/veilTerminalTokens';
 
@@ -59,9 +59,8 @@ export default function BoundRequisitionScreen(): React.JSX.Element {
     () => [
       styles.continueBtn,
       { marginTop: scaleSpacing(48) },
-      hubCtaButtonStyle(TERMINAL_ACCENT, scaleSize, scaleSpacing, !canContinue),
     ],
-    [canContinue, scaleSize, scaleSpacing],
+    [scaleSpacing],
   );
 
   const headerSubtitle = useMemo(() => {

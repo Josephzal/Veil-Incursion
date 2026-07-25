@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import HapticPressable from '../../HapticPressable';
+import HubPrimaryCta from '../../hub/HubPrimaryCta';
 import InstabilityProtocol from './InstabilityProtocol';
 import GridCipher from './GridCipher';
 import CipherRite from './CipherRite';
@@ -58,17 +58,14 @@ function NoTensionMechanicPanel({
           This encounter has no assigned tension minigame. Continue to resolve the choice.
         </Text>
       </View>
-      <HapticPressable
+      <HubPrimaryCta
+        label="[ CONTINUE — NO PROTOCOL ]"
         onPress={onContinue}
-        style={({ pressed }) => [
-          styles.fallbackCompleteBtn,
-          { borderColor: TERMINAL_ACCENT, opacity: pressed ? 0.75 : 1 },
-        ]}
-      >
-        <Text style={[styles.fallbackCompleteBtnText, { color: TERMINAL_ACCENT }]}>
-          [ CONTINUE — NO PROTOCOL ]
-        </Text>
-      </HapticPressable>
+        variant="glow"
+        accessibilityLabel="Continue — no protocol"
+        minHeight={48}
+        style={styles.fallbackCompleteBtn}
+      />
     </View>
   );
 }
@@ -119,29 +116,23 @@ function UnknownTensionMechanicPanel({
           </Text>
         ) : null}
       </View>
-      <HapticPressable
+      <HubPrimaryCta
+        label="[ ABORT PROTOCOL — FAILURE ]"
         onPress={onFailure}
-        style={({ pressed }) => [
-          styles.fallbackCompleteBtn,
-          { borderColor: FAIL_ACCENT, opacity: pressed ? 0.75 : 1 },
-        ]}
-      >
-        <Text style={[styles.fallbackCompleteBtnText, { color: FAIL_ACCENT }]}>
-          [ ABORT PROTOCOL — FAILURE ]
-        </Text>
-      </HapticPressable>
+        variant="danger"
+        accessibilityLabel="Abort protocol — failure"
+        minHeight={48}
+        style={styles.fallbackCompleteBtn}
+      />
       {isDevBuild && onForceSuccess ? (
-        <HapticPressable
+        <HubPrimaryCta
+          label="[ DEV ONLY — FORCE SUCCESS ]"
           onPress={onForceSuccess}
-          style={({ pressed }) => [
-            styles.fallbackCompleteBtn,
-            { borderColor: mutedColor, opacity: pressed ? 0.75 : 1 },
-          ]}
-        >
-          <Text style={[styles.fallbackCompleteBtnText, { color: mutedColor }]}>
-            [ DEV ONLY — FORCE SUCCESS ]
-          </Text>
-        </HapticPressable>
+          variant="glow"
+          accessibilityLabel="Dev only — force success"
+          minHeight={48}
+          style={styles.fallbackCompleteBtn}
+        />
       ) : null}
     </View>
   );
