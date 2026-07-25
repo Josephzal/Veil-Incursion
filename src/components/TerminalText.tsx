@@ -46,10 +46,19 @@ export default function TerminalText({
     const baseLetterSpacing = letterSpacing
       ?? (typeof flat.letterSpacing === 'number' ? flat.letterSpacing : undefined);
 
+    // Preserve CSS clamp()/string sizes from style (web harvest polish, etc.).
+    const styleHasCssFontSize = typeof flat.fontSize === 'string';
+    const styleHasCssLineHeight = typeof flat.lineHeight === 'string';
+    const styleHasCssLetterSpacing = typeof flat.letterSpacing === 'string';
+
     return {
-      ...(baseSize != null ? { fontSize: scaleFont(baseSize) } : null),
-      ...(baseLineHeight != null ? { lineHeight: scaleFont(baseLineHeight) } : null),
-      ...(baseLetterSpacing != null ? { letterSpacing: scaleSpacing(baseLetterSpacing) } : null),
+      ...(baseSize != null && !styleHasCssFontSize ? { fontSize: scaleFont(baseSize) } : null),
+      ...(baseLineHeight != null && !styleHasCssLineHeight
+        ? { lineHeight: scaleFont(baseLineHeight) }
+        : null),
+      ...(baseLetterSpacing != null && !styleHasCssLetterSpacing
+        ? { letterSpacing: scaleSpacing(baseLetterSpacing) }
+        : null),
     };
   }, [letterSpacing, lineHeight, scaleFont, scaleSpacing, size, style, tier, variant]);
 

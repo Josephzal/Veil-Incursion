@@ -13,7 +13,7 @@ import {
 import { veilTransitBridge } from './veilTransitBridge';
 
 export interface VeilWarpFieldProps {
-  /** ambientScanner (default) · incursionIngress · successfulExtraction */
+  /** ambientScanner (default) · transit modes · containmentAmbient */
   mode?: VeilWarpFieldMode;
   /** When true, drive intensity from veilTransitBridge (full-screen transit). */
   transitDriven?: boolean;

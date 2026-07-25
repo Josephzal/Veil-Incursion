@@ -3,7 +3,11 @@ import { ADJACENT_SLOTS, ALL_GRID_SLOTS, FRONTLINE_SLOTS, laneForSlot } from '..
 import type { EnemyCombatProfile } from '../types/run';
 
 export function isUnitAlive(unit: EnemyCombatProfile): boolean {
-  if (unit.isSlumped && (unit.slumpTurnsRemaining ?? 0) > 0) return true;
+  // Slumped thralls count as alive only while a revive timer remains.
+  // Expired / blocked slumps must not soft-lock combat at 0 HP.
+  if (unit.isSlumped) {
+    return (unit.slumpTurnsRemaining ?? 0) > 0;
+  }
   return unit.currentHp > 0;
 }
 

@@ -88,12 +88,13 @@ export function resolveHubLoadoutCellSize(
   areaHeight: number,
   targetCellSize = HUB_CARGO_DEFAULT_TARGET,
   maxCellSize = targetCellSize,
+  cellGap = CARGO_CELL_GAP,
 ): number {
   if (areaWidth <= 0 || areaHeight <= 0) {
     return targetCellSize;
   }
-  const maxByWidth = Math.floor((areaWidth - (CARGO_GRID_COLS - 1) * CARGO_CELL_GAP) / CARGO_GRID_COLS);
-  const maxByHeight = Math.floor((areaHeight - (CARGO_GRID_ROWS - 1) * CARGO_CELL_GAP) / CARGO_GRID_ROWS);
+  const maxByWidth = Math.floor((areaWidth - (CARGO_GRID_COLS - 1) * cellGap) / CARGO_GRID_COLS);
+  const maxByHeight = Math.floor((areaHeight - (CARGO_GRID_ROWS - 1) * cellGap) / CARGO_GRID_ROWS);
   const fitted = Math.min(maxByWidth, maxByHeight);
 
   if (fitted <= 0) {

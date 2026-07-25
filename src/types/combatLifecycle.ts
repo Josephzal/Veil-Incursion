@@ -43,6 +43,8 @@ export interface TurnStartLifecycleResult {
   statusFloatUnitId?: string;
   playerHpDelta?: number;
   playerStaminaDelta?: number;
+  /** Units that reached true death during turn-start (must dissolve / check victory). */
+  forceDissolveUnitIds?: string[];
 }
 
 export interface HitTakenLifecycleResult {

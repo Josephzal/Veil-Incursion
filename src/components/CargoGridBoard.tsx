@@ -1,5 +1,13 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Image, LayoutChangeEvent, Platform, StyleSheet, Text, View } from 'react-native';
+import {
+  Image,
+  LayoutChangeEvent,
+  Platform,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import HapticPressable from './HapticPressable';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -34,22 +42,33 @@ import type { CargoItemId, CargoRunState, PlacedCargoItem } from '../types/cargo
 import { CARGO_GRID_COLS, CARGO_GRID_ROWS, CARGO_ITEM_CATALOG } from '../types/cargoGrid';
 import { resolveCargoGridCellBackground } from '../constants/cargoGridVisual';
 import {
+  HARVEST_CARGO_BORDER,
   HARVEST_CARGO_SURFACE,
   HARVEST_CONTAINMENT_BG,
   HARVEST_CONTAINMENT_BORDER,
-  HARVEST_GRID_CELL_BORDER,
+  HARVEST_CONTAINMENT_SCRIM_BOTTOM,
+  HARVEST_CONTAINMENT_SCRIM_TOP,
   HARVEST_MUTED_SLATE,
+  HARVEST_PHOSPHOR,
+  HARVEST_STATUS_STRIP_BG,
+  HARVEST_TEXT_PRIMARY,
+  HARVEST_VEIL_VIOLET,
   resolveHarvestGridCellBackground,
+  resolveHarvestGridCellBorder,
 } from '../constants/harvestScreenVisual';
 import CargoGridBackdrop from './cargo/CargoGridBackdrop';
+import ContainmentFieldAtmosphere from './harvest/ContainmentFieldAtmosphere';
 import TerminalText from './TerminalText';
-import {
-  HUB_CARGO_INCURSION_CELL_MAX,
-  HUB_CARGO_INCURSION_CELL_TARGET,
-  resolveHubLoadoutCellSize,
-} from '../utils/cargoGridLayout';
+import { resolveHubLoadoutCellSize } from '../utils/cargoGridLayout';
 import {
   HARVEST_CARGO_BACKING_PADDING,
+  HARVEST_CARGO_CONSOLE_MAX_PCT,
+  HARVEST_CARGO_CONSOLE_WIDTH_CSS,
+  HARVEST_CARGO_CONSOLE_WIDTH_NATIVE,
+  HARVEST_CELL_GAP,
+  HARVEST_CELL_SIZE_MAX,
+  HARVEST_CELL_SIZE_MIN,
+  HARVEST_CELL_SIZE_VH,
   HARVEST_DESKTOP_CENTER_FLEX,
   HARVEST_DESKTOP_RIGHT_FLEX,
   HARVEST_EXTERNAL_BAY_MARGIN_TOP,
@@ -177,6 +196,9 @@ interface CargoGridBoardProps {
   workspaceStatusStrip?: React.ReactNode;
   /** Contextual readout below the cargo grid. */
   cargoReadout?: React.ReactNode;
+  /** Harvest: selected stored cargo instance for rail readout. */
+  selectedHarvestInstanceId?: string | null;
+  onHarvestCargoSelect?: (instanceId: string | null) => void;
   leftPaneWidth?: number;
   rightPaneWidth?: number;
   /** @deprecated Use rightPaneHeader */
@@ -201,40 +223,52 @@ function cellsForItem(itemId: CargoItemId, originRow: number, originCol: number)
 export function spriteSizeForCargoItem(
   itemId: CargoItemId,
   cellSize: number = CARGO_CELL_SIZE,
+  cellGap: number = CARGO_CELL_GAP,
 ): { width: number; height: number } {
   const def = CARGO_ITEM_CATALOG[itemId];
   return {
-    width: def.width * cellSize + (def.width - 1) * CARGO_CELL_GAP,
-    height: def.height * cellSize + (def.height - 1) * CARGO_CELL_GAP,
+    width: def.width * cellSize + (def.width - 1) * cellGap,
+    height: def.height * cellSize + (def.height - 1) * cellGap,
   };
 }
 
-export function cargoGridFrameDimensions(cellSize: number = CARGO_CELL_SIZE): {
+export function cargoGridFrameDimensions(
+  cellSize: number = CARGO_CELL_SIZE,
+  cellGap: number = CARGO_CELL_GAP,
+): {
   frameWidth: number;
   frameHeight: number;
   stride: number;
 } {
-  const stride = cellSize + CARGO_CELL_GAP;
+  const stride = cellSize + cellGap;
   return {
-    frameWidth: CARGO_GRID_COLS * cellSize + (CARGO_GRID_COLS - 1) * CARGO_CELL_GAP,
-    frameHeight: CARGO_GRID_ROWS * cellSize + (CARGO_GRID_ROWS - 1) * CARGO_CELL_GAP,
+    frameWidth: CARGO_GRID_COLS * cellSize + (CARGO_GRID_COLS - 1) * cellGap,
+    frameHeight: CARGO_GRID_ROWS * cellSize + (CARGO_GRID_ROWS - 1) * cellGap,
     stride,
   };
 }
 
-function cellOriginLeft(col: number, cellSize: number = CARGO_CELL_SIZE): number {
-  return col * (cellSize + CARGO_CELL_GAP);
+function cellOriginLeft(
+  col: number,
+  cellSize: number = CARGO_CELL_SIZE,
+  cellGap: number = CARGO_CELL_GAP,
+): number {
+  return col * (cellSize + cellGap);
 }
 
-function cellOriginTop(row: number, cellSize: number = CARGO_CELL_SIZE): number {
-  return row * (cellSize + CARGO_CELL_GAP);
+function cellOriginTop(
+  row: number,
+  cellSize: number = CARGO_CELL_SIZE,
+  cellGap: number = CARGO_CELL_GAP,
+): number {
+  return row * (cellSize + cellGap);
 }
 
 function formatStackBadge(itemId: CargoItemId, quantity: number): string | null {
   const cap = getCargoStackCap(itemId);
   if (cap <= 1 && quantity <= 1) return null;
-  if (cap <= 1) return `x${quantity}`;
-  return `${quantity}/${cap}`;
+  if (cap <= 1) return `×${quantity}`;
+  return `${quantity} / ${cap}`;
 }
 
 type CargoInspectHoverPayload = {
@@ -259,12 +293,15 @@ function DraggableCargoSprite({
   originRow,
   originCol,
   cellSize = CARGO_CELL_SIZE,
+  cellGap = CARGO_CELL_GAP,
   stackBadge = null,
   accentColor = '#00ff33',
   inspectQuantity = 1,
   inspectUnitValue,
   onInspectHover,
   onInspectLeave,
+  harvestSelected = false,
+  harvestBadge = false,
 }: {
   dragSource: CargoDragSource;
   isDragging: boolean;
@@ -291,14 +328,17 @@ function DraggableCargoSprite({
   originRow?: number;
   originCol?: number;
   cellSize?: number;
+  cellGap?: number;
   stackBadge?: string | null;
   accentColor?: string;
   inspectQuantity?: number;
   inspectUnitValue?: number;
   onInspectHover?: (payload: CargoInspectHoverPayload) => void;
   onInspectLeave?: (instanceId: string) => void;
+  harvestSelected?: boolean;
+  harvestBadge?: boolean;
 }): React.JSX.Element {
-  const spriteSize = spriteSizeForCargoItem(dragSource.itemId, cellSize);
+  const spriteSize = spriteSizeForCargoItem(dragSource.itemId, cellSize, cellGap);
   const hostRef = useRef<View>(null);
 
   const reportInspectHover = useCallback(() => {
@@ -338,8 +378,19 @@ function DraggableCargoSprite({
   ) as Record<string, () => void>;
 
   const badge = stackBadge ? (
-    <View style={styles.stackBadge} pointerEvents="none">
-      <Text style={[styles.stackBadgeText, { color: accentColor }]}>{stackBadge}</Text>
+    <View
+      style={[styles.stackBadge, harvestBadge ? styles.stackBadgeHarvest : null]}
+      pointerEvents="none"
+    >
+      <Text
+        style={[
+          styles.stackBadgeText,
+          harvestBadge ? styles.stackBadgeTextHarvest : null,
+          !harvestBadge ? { color: accentColor } : null,
+        ]}
+      >
+        {stackBadge}
+      </Text>
     </View>
   ) : null;
 
@@ -413,22 +464,42 @@ function DraggableCargoSprite({
     <GestureDetector gesture={pan}>
       <View
         ref={hostRef}
-        style={[spriteSize, styles.spriteWrap]}
+        style={[
+          spriteSize,
+          styles.spriteWrap,
+          harvestSelected ? styles.harvestSelectedSpriteWrap : null,
+        ]}
         {...hoverHandlers}
       >
+        {harvestSelected ? (
+          <View pointerEvents="none" style={styles.harvestSelectCorner} />
+        ) : null}
         {isDragging ? (
           <View style={styles.dragPlaceholder} pointerEvents="none" />
         ) : (
           <Image
             source={resolveCargoItemIcon(dragSource.itemId)}
             resizeMode="contain"
-            style={[styles.lootSprite, spriteSize]}
+            style={[
+              styles.lootSprite,
+              spriteSize,
+              harvestSelected ? styles.lootSpriteSelected : null,
+              harvestBadge ? styles.lootSpriteHarvestNorm : null,
+            ]}
           />
         )}
         {!isDragging ? badge : null}
       </View>
     </GestureDetector>
   );
+}
+
+function harvestPoseRotation(instanceId: string): number {
+  let hash = 0;
+  for (let i = 0; i < instanceId.length; i += 1) {
+    hash = (hash * 31 + instanceId.charCodeAt(i)) | 0;
+  }
+  return (hash % 15) - 7;
 }
 
 function ContainmentSlot({
@@ -450,6 +521,7 @@ function ContainmentSlot({
   accentColor = '#00ff33',
   onInspectHover,
   onInspectLeave,
+  groundPresence = false,
 }: {
   item: import('../types/cargoGrid').ContainmentItem;
   spriteSize: { width: number; height: number };
@@ -481,8 +553,18 @@ function ContainmentSlot({
   accentColor?: string;
   onInspectHover?: (payload: CargoInspectHoverPayload) => void;
   onInspectLeave?: (instanceId: string) => void;
+  /** Harvest ground layer — artwork + contact shadow only until hover/drag. */
+  groundPresence?: boolean;
 }): React.JSX.Element {
   const slotRef = useRef<View>(null);
+  const [hovered, setHovered] = useState(false);
+  const rotation = useMemo(() => harvestPoseRotation(item.instanceId), [item.instanceId]);
+  const inspect = useMemo(
+    () => resolveCargoItemInspectInfo(item.itemId, cargoItemQuantity(item), unitCargoValue(item)),
+    [item.itemId, item],
+  );
+  const def = CARGO_ITEM_CATALOG[item.itemId];
+  const hitPad = groundPresence ? 14 : 0;
 
   const reportCenter = useCallback(() => {
     if (!onContainmentItemCenterMeasured) return;
@@ -498,44 +580,123 @@ function ContainmentSlot({
     reportCenter();
   }, [reportCenter, scatterPose?.left, scatterPose?.top]);
 
+  const hoverHandlers = groundPresence
+    ? (Platform.OS === 'web'
+      ? {
+          onMouseEnter: () => setHovered(true),
+          onMouseLeave: () => setHovered(false),
+        }
+      : {
+          onHoverIn: () => setHovered(true),
+          onHoverOut: () => setHovered(false),
+        }) as Record<string, () => void>
+    : {};
+
+  const showFocusChrome = groundPresence && (hovered || isDragging);
+  const classLabel = (inspect.categoryLabel ?? inspect.rarityLabel ?? 'SALVAGE').toUpperCase();
+
   return (
     <View
       ref={slotRef}
       onLayout={reportCenter}
       style={[
         styles.externalSlot,
-        { width: spriteSize.width, height: spriteSize.height },
+        groundPresence ? styles.externalSlotGround : null,
+        {
+          width: spriteSize.width + hitPad * 2,
+          height: spriteSize.height + hitPad * 2,
+          padding: hitPad,
+        },
         scatterPose
           ? {
               position: 'absolute',
-              left: scatterPose.left,
-              top: scatterPose.top,
+              left: Math.max(0, scatterPose.left - hitPad),
+              top: Math.max(0, scatterPose.top - hitPad),
             }
           : null,
       ]}
+      {...hoverHandlers}
     >
-      <DraggableCargoSprite
-        dragSource={source}
-        isDragging={isDragging}
-        stackBadge={null}
-        accentColor={accentColor}
-        inspectQuantity={cargoItemQuantity(item)}
-        inspectUnitValue={unitCargoValue(item)}
-        onInspectHover={onInspectHover}
-        onInspectLeave={onInspectLeave}
-        onHoverCell={onHoverCell}
-        onDragStart={onDragStart}
-        onDragMove={onDragMove}
-        onDragEnd={onDragEnd}
-        onDropAttempt={onDropAttempt}
-        combatSelectMode={combatMode && combatConsumablesEnabled && isCombatDeployableCargoItem(item.itemId)}
-        combatSelected={selectedCombatItemId === item.itemId}
-        onCombatSelect={
-          combatMode && combatConsumablesEnabled && isCombatDeployableCargoItem(item.itemId)
-            ? () => selectCombatItem(item.itemId)
-            : undefined
-        }
-      />
+      {groundPresence ? (
+        <View
+          pointerEvents="none"
+          style={[
+            styles.contactShadow,
+            {
+              width: spriteSize.width * 0.72,
+              height: Math.max(8, spriteSize.height * 0.14),
+              bottom: hitPad + 2,
+              opacity: isDragging ? 0.55 : 0.38,
+              transform: [{ scaleX: isDragging ? 1.08 : 1 }],
+            },
+          ]}
+        />
+      ) : null}
+
+      {showFocusChrome ? (
+        <View
+          pointerEvents="none"
+          style={[
+            styles.groundFocusChrome,
+            {
+              top: Math.max(0, hitPad - 2),
+              left: Math.max(0, hitPad - 2),
+              right: Math.max(0, hitPad - 2),
+              bottom: Math.max(0, hitPad - 2),
+            },
+          ]}
+        >
+          <View style={[styles.groundTick, styles.groundTickTL]} />
+          <View style={[styles.groundTick, styles.groundTickTR]} />
+          <View style={[styles.groundTick, styles.groundTickBL]} />
+          <View style={[styles.groundTick, styles.groundTickBR]} />
+        </View>
+      ) : null}
+
+      {showFocusChrome && !isDragging ? (
+        <View pointerEvents="none" style={[styles.groundLabel, { top: Math.max(0, hitPad - 28) }]}>
+          <TerminalText size={7} letterSpacing={0.85} style={styles.groundLabelTitle} numberOfLines={1}>
+            {inspect.shortName.toUpperCase()}
+          </TerminalText>
+          <TerminalText size={6} letterSpacing={0.7} style={styles.groundLabelMeta} numberOfLines={1}>
+            {`${classLabel} // ${def.width}×${def.height}`}
+          </TerminalText>
+        </View>
+      ) : null}
+
+      <View
+        style={groundPresence
+          ? {
+              transform: [
+                { rotate: `${rotation}deg` },
+                { translateY: isDragging ? -6 : 0 },
+              ],
+            }
+          : null}
+      >
+        <DraggableCargoSprite
+          dragSource={source}
+          isDragging={isDragging}
+          stackBadge={null}
+          accentColor={accentColor}
+          inspectQuantity={cargoItemQuantity(item)}
+          inspectUnitValue={unitCargoValue(item)}
+          onInspectHover={groundPresence ? undefined : onInspectHover}
+          onInspectLeave={groundPresence ? undefined : onInspectLeave}
+          onHoverCell={onHoverCell}
+          onDragStart={onDragStart}
+          onDragMove={onDragMove}
+          onDragEnd={onDragEnd}
+          onDropAttempt={onDropAttempt}
+          combatSelectMode={combatMode && combatConsumablesEnabled && isCombatDeployableCargoItem(item.itemId)}
+          combatSelected={selectedCombatItemId === item.itemId}
+          onCombatSelect={
+            combatMode && combatConsumablesEnabled && isCombatDeployableCargoItem(item.itemId)
+              ? () => selectCombatItem(item.itemId)
+              : undefined
+          }
+        />
+      </View>
     </View>
   );
 }
@@ -585,6 +746,8 @@ export default function CargoGridBoard({
   centerPaneFooter,
   workspaceStatusStrip,
   cargoReadout,
+  selectedHarvestInstanceId = null,
+  onHarvestCargoSelect,
   leftPaneHeader,
   rightPaneSlot,
   leftPaneWidth,
@@ -592,25 +755,40 @@ export default function CargoGridBoard({
   cargoBackdrop = false,
 }: CargoGridBoardProps): React.JSX.Element {
   const [harvestDeckSize, setHarvestDeckSize] = useState({ width: 0, height: 0 });
+  const [clearSweepToken, setClearSweepToken] = useState(0);
+  const [lastClearCenter, setLastClearCenter] = useState<{ x: number; y: number } | null>(null);
+  const [placementFlashKeys, setPlacementFlashKeys] = useState<Set<string>>(new Set());
+  const priorRecoverableRef = useRef<number | null>(null);
+  const { height: windowHeight } = useWindowDimensions();
+  const cellGap = harvestTriPaneLayout ? HARVEST_CELL_GAP : CARGO_CELL_GAP;
   const cellSize = useMemo(() => {
     if (
       harvestTriPaneLayout
       && harvestDeckSize.width > 0
       && harvestDeckSize.height > 0
     ) {
+      const vhTarget = Math.round(windowHeight * HARVEST_CELL_SIZE_VH);
+      const target = Math.min(HARVEST_CELL_SIZE_MAX, Math.max(HARVEST_CELL_SIZE_MIN, vhTarget));
       return resolveHubLoadoutCellSize(
         harvestDeckSize.width,
         harvestDeckSize.height,
-        HUB_CARGO_INCURSION_CELL_TARGET,
-        HUB_CARGO_INCURSION_CELL_MAX,
+        target,
+        HARVEST_CELL_SIZE_MAX,
+        HARVEST_CELL_GAP,
       );
     }
     return cellSizeProp ?? CARGO_CELL_SIZE;
-  }, [cellSizeProp, harvestDeckSize.height, harvestDeckSize.width, harvestTriPaneLayout]);
+  }, [
+    cellSizeProp,
+    harvestDeckSize.height,
+    harvestDeckSize.width,
+    harvestTriPaneLayout,
+    windowHeight,
+  ]);
   const { isDesktop, scaleSpacing } = useResponsiveScale();
   const { fontScale } = useResponsiveLayout();
   const harvestPaneGap = scaleSpacing(HARVEST_TRI_PANE_GAP);
-  const harvestPanelPadding = scaleSpacing(24);
+  const harvestPanelPadding = scaleSpacing(30);
   const harvestMatPadding = scaleSpacing(HARVEST_CARGO_BACKING_PADDING);
   const resolvedRightPaneHeader = rightPaneHeader ?? leftPaneHeader;
   const resolvedLeftPaneSlot = leftPaneSlot ?? rightPaneSlot;
@@ -622,8 +800,8 @@ export default function CargoGridBoard({
       ? 10
       : 28;
   const { frameWidth, frameHeight, stride } = useMemo(
-    () => cargoGridFrameDimensions(cellSize),
-    [cellSize],
+    () => cargoGridFrameDimensions(cellSize, cellGap),
+    [cellGap, cellSize],
   );
   const combatSplitWidths = useMemo(
     () => (overlayCombatSplit ? resolveCombatOverlaySplitWidths(frameWidth) : null),
@@ -740,7 +918,7 @@ export default function CargoGridBoard({
 
   const captureMetrics = useCallback(() => {
     gridRef.current?.measureInWindow((pageX, pageY, width, height) => {
-      const metrics = { pageX, pageY, width, height, cellSize, cellGap: CARGO_CELL_GAP };
+      const metrics = { pageX, pageY, width, height, cellSize, cellGap };
       gridMetricsRef.current = metrics;
       onGridMetricsMeasured?.(metrics);
     });
@@ -750,7 +928,7 @@ export default function CargoGridBoard({
         prev.x === pageX && prev.y === pageY ? prev : { x: pageX, y: pageY }
       ));
     });
-  }, [cellSize, onGridMetricsMeasured]);
+  }, [cellGap, cellSize, onGridMetricsMeasured]);
 
   const handleInspectHover = useCallback((payload: CargoInspectHoverPayload) => {
     if (activeDragRef.current) return;
@@ -760,6 +938,10 @@ export default function CargoGridBoard({
   const handleInspectLeave = useCallback((instanceId: string) => {
     setInspectHover((prev) => (prev?.instanceId === instanceId ? null : prev));
   }, []);
+
+  useEffect(() => {
+    priorRecoverableRef.current = displayCargo.containment.length;
+  }, [displayCargo.containment.length]);
 
   const reportHarvestFloor = useCallback(() => {
     if (!onHarvestFloorMeasured) return;
@@ -802,7 +984,7 @@ export default function CargoGridBoard({
 
     const harvestSpriteScale = 1.2;
     const items = displayCargo.containment.map((item) => {
-      const base = spriteSizeForCargoItem(item.itemId, cellSize);
+      const base = spriteSizeForCargoItem(item.itemId, cellSize, cellGap);
       return {
         id: item.instanceId,
         size: {
@@ -836,12 +1018,12 @@ export default function CargoGridBoard({
     });
     scatterPosesRef.current = next;
     setScatterPoses(next);
-  }, [cellSize, displayCargo.containment, harvestTriPaneLayout, lootAreaSize]);
+  }, [cellGap, cellSize, displayCargo.containment, harvestTriPaneLayout, lootAreaSize]);
 
   const resolveCellFromAbsolute = useCallback((absoluteX: number, absoluteY: number) => {
     const metrics = gridMetricsRef.current;
     if (!metrics) return null;
-    const stride = cellSize + CARGO_CELL_GAP;
+    const stride = cellSize + cellGap;
     const localX = absoluteX - metrics.pageX;
     const localY = absoluteY - metrics.pageY;
     if (localX < 0 || localY < 0 || localX >= metrics.width || localY >= metrics.height) return null;
@@ -849,7 +1031,7 @@ export default function CargoGridBoard({
     const row = Math.floor(localY / stride);
     if (row < 0 || col < 0 || row >= CARGO_GRID_ROWS || col >= CARGO_GRID_COLS) return null;
     return { row, col };
-  }, [cellSize]);
+  }, [cellGap, cellSize]);
 
   const resolveValidDropCell = useCallback((
     absoluteX: number,
@@ -1005,6 +1187,10 @@ export default function CargoGridBoard({
     captureMetrics();
 
     if (!dragged) {
+      if (harvestTriPaneLayout && source.source === 'grid') {
+        onHarvestCargoSelect?.(source.instanceId);
+        pulseCargoItemSelect();
+      }
       clearDrag();
       onResult(false);
       return;
@@ -1087,12 +1273,43 @@ export default function CargoGridBoard({
     if (!placed) {
       setDisplayCargo(snapshot);
       cargoRef.current = snapshot;
+      onResult(false);
+      return;
     }
-    onResult(placed);
+
+    if (harvestTriPaneLayout) {
+      const flashKeys = new Set(
+        cellsForItem(source.itemId, cell.row, cell.col),
+      );
+      setPlacementFlashKeys(flashKeys);
+      setTimeout(() => setPlacementFlashKeys(new Set()), 280);
+      onHarvestCargoSelect?.(source.instanceId);
+
+      const remaining = optimisticNext.containment.length;
+      const prior = priorRecoverableRef.current;
+      if (prior != null && prior > 0 && remaining === 0) {
+        const lastPose = scatterPosesRef.current.get(source.instanceId);
+        if (lastPose) {
+          const sz = spriteSizeForCargoItem(source.itemId, cellSize, cellGap);
+          setLastClearCenter({
+            x: lastPose.left + sz.width * 0.6,
+            y: lastPose.top + sz.height * 0.6,
+          });
+        }
+        setClearSweepToken((token) => token + 1);
+      }
+      priorRecoverableRef.current = remaining;
+    }
+
+    onResult(true);
   }, [
     captureMetrics,
+    cellGap,
+    cellSize,
     clearDrag,
+    harvestTriPaneLayout,
     onDiscardItem,
+    onHarvestCargoSelect,
     onHubExternalDrop,
     onRelocateItem,
     onReplaceItem,
@@ -1126,13 +1343,22 @@ export default function CargoGridBoard({
         { width: frameWidth, height: frameHeight },
       ]}
     >
-      <View style={[styles.cellsLayer, { gap: CARGO_CELL_GAP }]}>
+      <View style={[styles.cellsLayer, { gap: cellGap }]}>
         {Array.from({ length: CARGO_GRID_ROWS }, (_, row) =>
           Array.from({ length: CARGO_GRID_COLS }, (_, col) => {
             const key = `${row},${col}`;
             const occupied = occupiedCells.has(key);
             const isPreview = previewCells.cells.has(key);
             const canDrop = isPreview && previewCells.valid;
+            const selectedHarvestCell = Boolean(
+              harvestTriPaneLayout
+              && selectedHarvestInstanceId
+              && displayCargo.grid.placed.some((item) => {
+                if (item.instanceId !== selectedHarvestInstanceId) return false;
+                return cellsForItem(item.itemId, item.originRow, item.originCol).includes(key);
+              }),
+            );
+            const placementFlash = harvestTriPaneLayout && placementFlashKeys.has(key);
 
             return (
               <HapticPressable
@@ -1144,33 +1370,38 @@ export default function CargoGridBoard({
                   {
                     width: cellSize,
                     height: cellSize,
-                    borderColor: isPreview
-                      ? (canDrop ? accentColor : '#ef4444')
-                      : harvestTriPaneLayout && cargoBackdrop
-                        ? theme.borderColor
-                        : harvestTriPaneLayout
-                          ? HARVEST_GRID_CELL_BORDER
-                          : theme.borderColor,
-                    backgroundColor: harvestTriPaneLayout && cargoBackdrop
-                      ? resolveCargoGridCellBackground({
+                    borderColor: harvestTriPaneLayout
+                      ? (placementFlash
+                        ? HARVEST_PHOSPHOR
+                        : resolveHarvestGridCellBorder({
+                          occupied,
+                          isPreview,
+                          canDrop,
+                          selected: selectedHarvestCell,
+                        }))
+                      : isPreview
+                        ? (canDrop ? accentColor : '#ef4444')
+                        : theme.borderColor,
+                    backgroundColor: harvestTriPaneLayout
+                      ? resolveHarvestGridCellBackground({
                         occupied,
                         isPreview,
                         canDrop,
-                        cargoBackdrop: true,
+                        selected: selectedHarvestCell,
                       })
-                      : harvestTriPaneLayout
-                        ? resolveHarvestGridCellBackground({
-                          occupied,
-                          isPreview,
-                          canDrop,
-                          accentColor,
-                        })
-                        : resolveCargoGridCellBackground({
-                          occupied,
-                          isPreview,
-                          canDrop,
-                          cargoBackdrop,
-                        }),
+                      : resolveCargoGridCellBackground({
+                        occupied,
+                        isPreview,
+                        canDrop,
+                        cargoBackdrop,
+                      }),
+                    ...(Platform.OS === 'web' && (placementFlash || (isPreview && canDrop))
+                      ? ({
+                        boxShadow: placementFlash
+                          ? `inset 0 0 0 1px ${HARVEST_PHOSPHOR}`
+                          : `inset 0 0 0 1px rgba(100, 201, 177, 0.45)`,
+                      } as object)
+                      : null),
                   },
                 ]}
               />
@@ -1184,9 +1415,11 @@ export default function CargoGridBoard({
           const deployable = isCombatDeployableCargoItem(item.itemId);
           const selectMode = combatMode && combatConsumablesEnabled && deployable;
           const source: CargoDragSource = { instanceId: item.instanceId, itemId: item.itemId, source: 'grid' };
-          const spriteSize = spriteSizeForCargoItem(item.itemId, cellSize);
+          const spriteSize = spriteSizeForCargoItem(item.itemId, cellSize, cellGap);
           const isDragging = activeDrag?.instanceId === item.instanceId;
           const stackBadge = formatStackBadge(item.itemId, cargoItemQuantity(item));
+          const harvestSelected = harvestTriPaneLayout
+            && selectedHarvestInstanceId === item.instanceId;
 
           return (
             <View
@@ -1194,8 +1427,8 @@ export default function CargoGridBoard({
               style={[
                 styles.placedItemAnchor,
                 {
-                  left: cellOriginLeft(item.originCol, cellSize),
-                  top: cellOriginTop(item.originRow, cellSize),
+                  left: cellOriginLeft(item.originCol, cellSize, cellGap),
+                  top: cellOriginTop(item.originRow, cellSize, cellGap),
                   width: spriteSize.width,
                   height: spriteSize.height,
                 },
@@ -1208,8 +1441,11 @@ export default function CargoGridBoard({
                 originRow={item.originRow}
                 originCol={item.originCol}
                 cellSize={cellSize}
+                cellGap={cellGap}
                 stackBadge={stackBadge}
                 accentColor={accentColor}
+                harvestSelected={harvestSelected}
+                harvestBadge={harvestTriPaneLayout}
                 inspectQuantity={cargoItemQuantity(item)}
                 inspectUnitValue={unitCargoValue(item)}
                 onInspectHover={handleInspectHover}
@@ -1231,7 +1467,7 @@ export default function CargoGridBoard({
   );
 
   const overlaySprite = activeDrag && dragOverlay
-    ? spriteSizeForCargoItem(activeDrag.itemId, cellSize)
+    ? spriteSizeForCargoItem(activeDrag.itemId, cellSize, cellGap)
     : null;
 
   const layoutWidth = overlayCombatSplit ? combatLayoutWidth : frameWidth;
@@ -1343,7 +1579,7 @@ export default function CargoGridBoard({
     harvestTriPaneLayout ? (
       <View style={styles.externalBayScatter}>
         {displayCargo.containment.map((item) => {
-          const baseSize = spriteSizeForCargoItem(item.itemId, cellSize);
+          const baseSize = spriteSizeForCargoItem(item.itemId, cellSize, cellGap);
           const spriteSize = {
             width: Math.round(baseSize.width * 1.2),
             height: Math.round(baseSize.height * 1.2),
@@ -1364,6 +1600,7 @@ export default function CargoGridBoard({
               isDragging={isDragging}
               source={source}
               scatterPose={pose}
+              groundPresence
               onContainmentItemCenterMeasured={onContainmentItemCenterMeasured}
               onHoverCell={handleHoverCell}
               onDragStart={handleDragStart}
@@ -1414,7 +1651,7 @@ export default function CargoGridBoard({
                 />
               );
             }
-            const spriteSize = spriteSizeForCargoItem(item.itemId, cellSize);
+            const spriteSize = spriteSizeForCargoItem(item.itemId, cellSize, cellGap);
             const source: CargoDragSource = {
               instanceId: item.instanceId,
               itemId: item.itemId,
@@ -1667,6 +1904,13 @@ export default function CargoGridBoard({
 
   if (harvestTriPaneLayout) {
     const recoverableCount = displayCargo.containment.length;
+    const fieldCleared = recoverableCount === 0;
+    const signalLabel = fieldCleared
+      ? 'SIGNALS EXHAUSTED'
+      : recoverableCount === 1
+        ? '1 RECOVERABLE SIGNAL'
+        : `${recoverableCount} RECOVERABLE SIGNALS`;
+
     return (
       <View style={[styles.root, styles.rootHarvestTriPane, { width: '100%' }]}>
         {showCreditsHud ? (
@@ -1686,22 +1930,36 @@ export default function CargoGridBoard({
               isDesktop ? { flex: HARVEST_DESKTOP_CENTER_FLEX } : null,
             ]}
           >
+            <View pointerEvents="none" style={styles.workspaceCornerTL} />
+            <View pointerEvents="none" style={styles.workspaceCornerTR} />
+            <View pointerEvents="none" style={styles.workspaceCornerBL} />
+            <View pointerEvents="none" style={styles.workspaceCornerBR} />
+
             <View style={styles.workspaceChrome}>
+              <View style={styles.workspaceTitleRow}>
+                <View style={styles.workspaceStatusDot} />
+                <TerminalText
+                  size={10.5 * fontScale}
+                  letterSpacing={0.9}
+                  style={styles.workspaceEyebrow}
+                  numberOfLines={1}
+                >
+                  {`CONTAINMENT FIELD // ${signalLabel}`}
+                </TerminalText>
+              </View>
+              <View style={styles.workspaceRule} />
               <TerminalText
-                size={9 * fontScale}
-                letterSpacing={1.05}
-                style={styles.workspaceEyebrow}
+                size={8 * fontScale}
+                letterSpacing={0.6}
+                style={[
+                  styles.workspaceInstruction,
+                  fieldCleared ? styles.workspaceInstructionCleared : null,
+                ]}
                 numberOfLines={1}
               >
-                {`CONTAINMENT FIELD // ${String(recoverableCount).padStart(2, '0')} RECOVERABLE SIGNALS`}
-              </TerminalText>
-              <TerminalText
-                size={7 * fontScale}
-                letterSpacing={0.7}
-                style={styles.workspaceInstruction}
-                numberOfLines={1}
-              >
-                DRAG MATERIAL TO RUN STORAGE
+                {fieldCleared
+                  ? 'RECOVERY COMPLETE // NO VIABLE SIGNALS REMAIN'
+                  : 'DRAG MATERIAL TO RUN STORAGE'}
               </TerminalText>
             </View>
 
@@ -1710,6 +1968,13 @@ export default function CargoGridBoard({
               onLayout={handleContainmentLootAreaLayout}
               style={styles.containmentLootArea}
             >
+              <ContainmentFieldAtmosphere
+                fieldCleared={fieldCleared}
+                clearSweepToken={clearSweepToken}
+                lastClearCenter={lastClearCenter}
+                areaWidth={lootAreaSize.width}
+                areaHeight={lootAreaSize.height}
+              />
               {externalBayNode}
               {resolvedLeftPaneSlot ? (
                 <View style={styles.extractorDock} pointerEvents="box-none">
@@ -1743,7 +2008,6 @@ export default function CargoGridBoard({
               <View
                 style={[
                   styles.harvestGridBackdropHost,
-                  cargoBackdrop ? styles.harvestGridBackdropHostTextured : null,
                   {
                     width: frameWidth + harvestMatPadding * 2,
                     height: frameHeight + harvestMatPadding * 2,
@@ -1751,7 +2015,6 @@ export default function CargoGridBoard({
                   },
                 ]}
               >
-                {cargoBackdrop ? <CargoGridBackdrop /> : null}
                 <View style={[styles.boardShell, { width: frameWidth }]}>
                   <View style={styles.gridDock}>{gridBlock}</View>
                 </View>
@@ -1869,39 +2132,126 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     minHeight: 0,
-    backgroundColor: HARVEST_CONTAINMENT_BG,
-    borderWidth: 1,
-    borderColor: HARVEST_CONTAINMENT_BORDER,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
     overflow: 'hidden',
     position: 'relative',
     ...Platform.select({
       web: {
         display: 'grid',
         gridTemplateRows: 'auto minmax(0, 1fr) auto',
+        backgroundImage: `linear-gradient(180deg, ${HARVEST_CONTAINMENT_SCRIM_TOP} 0%, ${HARVEST_CONTAINMENT_BG} 28%, ${HARVEST_CONTAINMENT_SCRIM_BOTTOM} 100%)`,
       } as object,
       default: {
         flexDirection: 'column',
+        backgroundColor: HARVEST_CONTAINMENT_BG,
       },
     }),
   },
+  workspaceCornerTL: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    width: 18,
+    height: 18,
+    borderTopWidth: 1,
+    borderLeftWidth: 1,
+    borderColor: HARVEST_CONTAINMENT_BORDER,
+    zIndex: 5,
+  },
+  workspaceCornerTR: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 18,
+    height: 18,
+    borderTopWidth: 1,
+    borderRightWidth: 1,
+    borderColor: HARVEST_CONTAINMENT_BORDER,
+    zIndex: 5,
+  },
+  workspaceCornerBL: {
+    position: 'absolute',
+    bottom: HARVEST_STATUS_STRIP_HEIGHT + 8,
+    left: 8,
+    width: 18,
+    height: 18,
+    borderBottomWidth: 1,
+    borderLeftWidth: 1,
+    borderColor: HARVEST_CONTAINMENT_BORDER,
+    zIndex: 5,
+  },
+  workspaceCornerBR: {
+    position: 'absolute',
+    bottom: HARVEST_STATUS_STRIP_HEIGHT + 8,
+    right: 8,
+    width: 18,
+    height: 18,
+    borderBottomWidth: 1,
+    borderRightWidth: 1,
+    borderColor: HARVEST_CONTAINMENT_BORDER,
+    zIndex: 5,
+  },
   workspaceChrome: {
-    paddingTop: 14,
+    paddingTop: 12,
     paddingHorizontal: 16,
     paddingBottom: 8,
-    gap: 4,
+    gap: 0,
     flexShrink: 0,
     zIndex: 2,
+    backgroundColor: 'transparent',
+    maxWidth: 600,
+  },
+  workspaceTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  workspaceStatusDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: HARVEST_PHOSPHOR,
+    opacity: 0.8,
   },
   workspaceEyebrow: {
     color: HARVEST_MUTED_SLATE,
-    fontWeight: '800',
+    fontWeight: '600',
     textAlign: 'left',
+    flexShrink: 1,
+    ...Platform.select({
+      web: {
+        fontSize: 'clamp(19px, 1.2vw, 22px)',
+        lineHeight: 1.2,
+      } as object,
+      default: {},
+    }),
+  },
+  workspaceRule: {
+    width: 72,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(108, 156, 143, 0.28)',
+    marginTop: 6,
+    marginBottom: 6,
+    marginLeft: 12,
   },
   workspaceInstruction: {
     color: HARVEST_MUTED_SLATE,
-    fontWeight: '600',
+    fontWeight: '500',
     textAlign: 'left',
-    opacity: 0.85,
+    opacity: 0.82,
+    marginLeft: 12,
+    ...Platform.select({
+      web: {
+        fontSize: 'clamp(14px, 0.9vw, 16px)',
+        lineHeight: 1.35,
+      } as object,
+      default: {},
+    }),
+  },
+  workspaceInstructionCleared: {
+    color: HARVEST_PHOSPHOR,
+    opacity: 0.78,
   },
   containmentLootArea: {
     flex: 1,
@@ -1910,13 +2260,14 @@ const styles = StyleSheet.create({
     position: 'relative',
     zIndex: 1,
     overflow: 'hidden',
+    backgroundColor: 'transparent',
   },
   extractorDock: {
     position: 'absolute',
-    left: 12,
+    left: 16,
     bottom: 10,
     zIndex: 4,
-    maxWidth: '42%',
+    maxWidth: '58%',
   },
   workspaceStatusStrip: {
     height: HARVEST_STATUS_STRIP_HEIGHT,
@@ -1924,10 +2275,17 @@ const styles = StyleSheet.create({
     maxHeight: HARVEST_STATUS_STRIP_HEIGHT,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: HARVEST_CONTAINMENT_BORDER,
-    backgroundColor: 'rgba(5, 10, 10, 0.88)',
+    backgroundColor: HARVEST_STATUS_STRIP_BG,
     flexShrink: 0,
     zIndex: 3,
     justifyContent: 'center',
+    ...Platform.select({
+      web: {
+        backdropFilter: 'blur(4px)',
+        WebkitBackdropFilter: 'blur(4px)',
+      } as object,
+      default: {},
+    }),
   },
   harvestCargoConsole: {
     flexShrink: 0,
@@ -1935,18 +2293,20 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     backgroundColor: HARVEST_CARGO_SURFACE,
     borderWidth: 1,
-    borderColor: HARVEST_CONTAINMENT_BORDER,
-    gap: 12,
+    borderColor: HARVEST_CARGO_BORDER,
+    gap: 18,
+    overflow: 'hidden',
     ...Platform.select({
       web: {
-        display: 'flex',
-        flexDirection: 'column',
-        width: 'clamp(360px, 25vw, 480px)',
-        maxWidth: 480,
+        display: 'grid',
+        gridTemplateRows: 'auto minmax(0, auto) minmax(72px, 1fr) auto',
+        width: HARVEST_CARGO_CONSOLE_WIDTH_CSS,
+        maxWidth: 540,
       } as object,
       default: {
-        width: 400,
-        maxWidth: '38%',
+        width: HARVEST_CARGO_CONSOLE_WIDTH_NATIVE,
+        maxWidth: HARVEST_CARGO_CONSOLE_MAX_PCT,
+        flexDirection: 'column',
       },
     }),
   },
@@ -1956,35 +2316,36 @@ const styles = StyleSheet.create({
   },
   harvestCargoMatSlot: {
     width: '100%',
-    alignItems: 'flex-start',
-    justifyContent: 'flex-start',
-    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 1,
+    minHeight: 0,
   },
   harvestGridBackdropHost: {
     position: 'relative',
-    overflow: 'hidden',
+    overflow: 'visible',
     alignItems: 'center',
     justifyContent: 'center',
-    alignSelf: 'stretch',
+    alignSelf: 'center',
     flexShrink: 0,
-  },
-  harvestGridBackdropHostTextured: {
-    backgroundColor: 'rgba(5, 8, 8, 0.55)',
+    backgroundColor: 'transparent',
   },
   cargoReadoutSlot: {
     flex: 1,
-    minHeight: 72,
+    minHeight: 64,
+    maxHeight: 160,
     width: '100%',
     justifyContent: 'flex-start',
-    gap: 6,
+    gap: 4,
+    overflow: 'hidden',
   },
   cargoConsoleFooter: {
     width: '100%',
     flexShrink: 0,
-    marginTop: 'auto',
-    paddingTop: 8,
+    marginTop: 0,
+    paddingTop: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: HARVEST_CONTAINMENT_BORDER,
+    borderTopColor: HARVEST_CARGO_BORDER,
   },
   dropZoneLabel: {
     fontFamily: 'monospace',
@@ -2096,6 +2457,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     overflow: 'hidden',
+    zIndex: 2,
   },
   externalRow: {
     flexDirection: 'row',
@@ -2118,6 +2480,74 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  externalSlotGround: {
+    backgroundColor: 'transparent',
+    overflow: 'visible',
+  },
+  contactShadow: {
+    position: 'absolute',
+    alignSelf: 'center',
+    borderRadius: 999,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    zIndex: 0,
+  },
+  groundFocusChrome: {
+    position: 'absolute',
+    zIndex: 2,
+  },
+  groundTick: {
+    position: 'absolute',
+    width: 7,
+    height: 7,
+    borderColor: 'rgba(196, 203, 198, 0.72)',
+  },
+  groundTickTL: {
+    top: 0,
+    left: 0,
+    borderTopWidth: 1,
+    borderLeftWidth: 1,
+  },
+  groundTickTR: {
+    top: 0,
+    right: 0,
+    borderTopWidth: 1,
+    borderRightWidth: 1,
+  },
+  groundTickBL: {
+    bottom: 0,
+    left: 0,
+    borderBottomWidth: 1,
+    borderLeftWidth: 1,
+  },
+  groundTickBR: {
+    bottom: 0,
+    right: 0,
+    borderBottomWidth: 1,
+    borderRightWidth: 1,
+  },
+  groundLabel: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    gap: 1,
+    zIndex: 5,
+    ...Platform.select({
+      web: {
+        transitionProperty: 'opacity',
+        transitionDuration: '120ms',
+      } as object,
+      default: {},
+    }),
+  },
+  groundLabelTitle: {
+    color: HARVEST_TEXT_PRIMARY,
+    fontWeight: '700',
+  },
+  groundLabelMeta: {
+    color: HARVEST_MUTED_SLATE,
+    fontWeight: '600',
+  },
   spriteWrap: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -2139,11 +2569,53 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
   },
+  stackBadgeHarvest: {
+    right: 4,
+    bottom: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    backgroundColor: 'rgba(4, 8, 8, 0.88)',
+    borderColor: 'rgba(108, 156, 143, 0.28)',
+  },
   stackBadgeText: {
     fontFamily: 'monospace',
     fontSize: 7,
     fontWeight: '800',
     letterSpacing: 0.3,
+  },
+  stackBadgeTextHarvest: {
+    color: HARVEST_MUTED_SLATE,
+    fontSize: 8,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+  },
+  harvestSelectedSpriteWrap: {
+    borderWidth: 1,
+    borderColor: HARVEST_VEIL_VIOLET,
+  },
+  harvestSelectCorner: {
+    position: 'absolute',
+    top: 3,
+    left: 3,
+    width: 8,
+    height: 8,
+    borderTopWidth: 1.5,
+    borderLeftWidth: 1.5,
+    borderColor: HARVEST_VEIL_VIOLET,
+    zIndex: 3,
+  },
+  lootSpriteSelected: {
+    opacity: 1,
+    ...Platform.select({
+      web: {
+        filter: 'contrast(1.12) saturate(1.08)',
+      } as object,
+      default: {},
+    }),
+  },
+  lootSpriteHarvestNorm: {
+    maxWidth: '92%',
+    maxHeight: '92%',
   },
   combatDetailPanel: {
     borderWidth: 1,

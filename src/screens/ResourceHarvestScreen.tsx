@@ -17,7 +17,6 @@ import IncursionShell from '../components/IncursionShell';
 import IncursionRunLayout from '../components/IncursionRunLayout';
 import RunEventImmersiveBackdrop from '../components/layout/RunEventImmersiveBackdrop';
 import { MAX_RUN_CANISTER_RESIDUE } from '../constants/veilResidue';
-import { SCANNER_PAGE_BG } from '../components/scanner/vectorScannerShared';
 import { getFactionAccent } from '../data/factions';
 import { resolveVeilResidueCanisterFillPercent } from '../data/veilResidueRunEngine';
 import { useGameFlow } from '../context/GameFlowContext';
@@ -389,10 +388,10 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
 
   return (
     <IncursionShell>
-      <IncursionRunLayout hideRunChrome style={{ backgroundColor: SCANNER_PAGE_BG }}>
+      <IncursionRunLayout hideRunChrome style={{ backgroundColor: 'transparent' }}>
         <RunEventImmersiveBackdrop
           backgroundImage={ResourceHarvestBg}
-          scrimOpacity={0.82}
+          scrimOpacity={0.15}
           contentPadding={masterPadding}
           contentStyle={[styles.harvestBody, { paddingTop: verticalPadding, paddingBottom: verticalPadding }]}
           overlay={(

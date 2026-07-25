@@ -128,9 +128,19 @@ const thrallSlumpTurnStart: TurnStartHandler = (enemy, ctx) => {
     };
   }
   if (ctx.extras.fleshWarpUnitIds[enemy.unitId]) {
+    // Seal denies revival — clear slump so the unit is truly dead (not forever-alive at 0 HP).
+    const squad = patchUnitInSquad(ctx.squad, enemy.unitId, {
+      isSlumped: false,
+      slumpTurnsRemaining: 0,
+      currentHp: 0,
+    });
     return {
-      squad: ctx.squad,
-      logLines: [`>> ${enemy.designation} REVIVAL BLOCKED — flesh-warp seal.`],
+      squad,
+      logLines: [
+        `>> ${enemy.designation} REVIVAL BLOCKED — flesh-warp seal.`,
+        `>> ${enemy.designation} TRUE DEATH.`,
+      ],
+      forceDissolveUnitIds: [enemy.unitId],
     };
   }
   const reviveHpPercent = getAlphaMechanic(enemy, 'reviveHpPercent', 0.5);
@@ -182,7 +192,11 @@ const churnFleshAmmoTurnStart: TurnStartHandler = (enemy, ctx) => {
     (u) => u.unitId !== enemy.unitId && isFragileArchetype(u.rosterId),
   );
   if (!fragile?.unitId) return { squad: ctx.squad, logLines: [] };
-  let squad = patchUnitInSquad(ctx.squad, fragile.unitId, { currentHp: 0 });
+  const squad = patchUnitInSquad(ctx.squad, fragile.unitId, {
+    currentHp: 0,
+    isSlumped: false,
+    slumpTurnsRemaining: 0,
+  });
   return {
     squad,
     logLines: [
@@ -190,6 +204,7 @@ const churnFleshAmmoTurnStart: TurnStartHandler = (enemy, ctx) => {
       `>> SHRAPNEL BLAST — ${Math.floor(enemy.baseDamage * 1.5)} damage.`,
     ],
     playerHpDelta: -Math.floor(enemy.baseDamage * 1.5),
+    forceDissolveUnitIds: [fragile.unitId],
   };
 };
 
@@ -535,10 +550,20 @@ const thrallDeath: DeathHandler = (enemy, killingBlow, ctx) => {
     || killingBlow.source === 'EVISCERATE'
     || killingBlow.source === 'RUIN'
     || killingBlow.source === 'GRAVE_BIND';
-  if (isHeavy) {
+  // Flesh-warp already denies revival — never enter a soft-lock slump.
+  if (ctx.extras.fleshWarpUnitIds[enemy.unitId] || isHeavy) {
+    const squad = patchUnitInSquad(ctx.squad, enemy.unitId, {
+      isSlumped: false,
+      slumpTurnsRemaining: 0,
+      currentHp: 0,
+    });
     return {
-      squad: ctx.squad,
-      logLines: [`>> ${enemy.designation} TRUE DEATH — heavy blow confirmed.`],
+      squad,
+      logLines: [
+        ctx.extras.fleshWarpUnitIds[enemy.unitId]
+          ? `>> ${enemy.designation} TRUE DEATH — flesh-warp seal denies slump.`
+          : `>> ${enemy.designation} TRUE DEATH — heavy blow confirmed.`,
+      ],
       ashTokenSlot: enemy.gridSlot,
     };
   }
@@ -659,6 +684,7 @@ export const CombatLifecycleManager = {
     let statusFloatLabel: string | undefined;
     let statusFloatUnitId: string | undefined;
     let playerHpDelta: number | undefined;
+    const forceDissolveUnitIds: string[] = [];
 
     for (const handler of TURN_START_HANDLERS) {
       const result = handler(enemy, { ...ctx, squad, extras });
@@ -672,6 +698,9 @@ export const CombatLifecycleManager = {
       if (result.playerHpDelta != null) {
         playerHpDelta = (playerHpDelta ?? 0) + result.playerHpDelta;
       }
+      if (result.forceDissolveUnitIds?.length) {
+        forceDissolveUnitIds.push(...result.forceDissolveUnitIds);
+      }
     }
 
     return {
@@ -681,6 +710,9 @@ export const CombatLifecycleManager = {
       statusFloatLabel,
       statusFloatUnitId,
       playerHpDelta,
+      forceDissolveUnitIds: forceDissolveUnitIds.length > 0
+        ? [...new Set(forceDissolveUnitIds)]
+        : undefined,
     };
   },
 

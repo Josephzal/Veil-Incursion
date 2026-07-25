@@ -1,17 +1,19 @@
-import React, { useMemo } from 'react';
-import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Easing, Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import HapticPressable from './HapticPressable';
 import HarvestExtractorPanel from './harvest/HarvestExtractorPanel';
 import TerminalText from './TerminalText';
 import CargoGridBackdrop from './cargo/CargoGridBackdrop';
 import {
   HARVEST_BOARD_COLUMN_GAP,
+  HARVEST_CELL_GAP,
   HARVEST_CONTENT_BUFFER,
   HARVEST_CONTINUE_BUTTON_HEIGHT,
   resolveHarvestCellSize,
   resolveHarvestRightPaneWidth,
   resolveHarvestTriPaneCellSize,
 } from '../constants/harvestLayout';
+import { CARGO_CELL_GAP } from '../constants/cargoGridLayout';
 import {
   HARVEST_MUTED_SLATE,
   HARVEST_PHOSPHOR,
@@ -38,6 +40,7 @@ import {
 import { readPressableHover, terminalHoverStyle } from '../utils/terminalHoverStyle';
 import { pulseHubButton } from '../utils/hubButtonHaptics';
 import { SCANNER_PHOSPHOR } from './scanner/vectorScannerShared';
+import { resolveHarvestCargoReadout } from '../utils/harvestCargoReadout';
 
 interface CargoPackingPanelProps {
   cargo: CargoRunState;
@@ -143,7 +146,11 @@ export default function CargoPackingPanel({
     if (harvestLayout) return resolveHarvestCellSize(screenHeight, safeBottom, safeTop);
     return CARGO_CELL_SIZE;
   }, [compactCellSize, harvestLayout, harvestTriPane, safeBottom, safeTop, screenHeight, screenWidth]);
-  const frame = useMemo(() => cargoGridFrameDimensions(cellSize), [cellSize]);
+  const activeCellGap = harvestTriPane ? HARVEST_CELL_GAP : CARGO_CELL_GAP;
+  const frame = useMemo(
+    () => cargoGridFrameDimensions(cellSize, activeCellGap),
+    [activeCellGap, cellSize],
+  );
   const useHubMatShell = cargoBackdrop && !harvestTriPane && hubCargoMatInset != null;
   const hubMatShell = useMemo(() => {
     if (hubCargoMatInset == null) return null;
@@ -165,44 +172,114 @@ export default function CargoPackingPanel({
   const accent = accentColor ?? SCANNER_PHOSPHOR;
   const slotsUsed = cargo.grid.placed.length;
   const unstowedCount = cargo.containment.length;
-  const continueReady = true;
-  const readinessLine = unstowedCount > 0
-    ? `RECOVERY COMPLETE // ${unstowedCount} MATERIAL${unstowedCount === 1 ? '' : 'S'} REMAIN`
-    : 'RECOVERY COMPLETE // FIELD CLEARED';
+  const fieldCleared = unstowedCount === 0;
+  const [selectedCargoInstanceId, setSelectedCargoInstanceId] = useState<string | null>(null);
+  const continueScanX = useRef(new Animated.Value(-1)).current;
+  const continueScanOpacity = useRef(new Animated.Value(0)).current;
+  const priorClearedRef = useRef(fieldCleared);
+
+  useEffect(() => {
+    if (!cargo.grid.placed.some((item) => item.instanceId === selectedCargoInstanceId)) {
+      setSelectedCargoInstanceId(null);
+    }
+  }, [cargo.grid.placed, selectedCargoInstanceId]);
+
+  useEffect(() => {
+    if (fieldCleared && !priorClearedRef.current) {
+      continueScanX.setValue(-0.2);
+      continueScanOpacity.setValue(0.7);
+      Animated.parallel([
+        Animated.timing(continueScanX, {
+          toValue: 1.2,
+          duration: 520,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.sequence([
+          Animated.timing(continueScanOpacity, {
+            toValue: 0.85,
+            duration: 120,
+            useNativeDriver: true,
+          }),
+          Animated.timing(continueScanOpacity, {
+            toValue: 0,
+            duration: 320,
+            useNativeDriver: true,
+          }),
+        ]),
+      ]).start();
+    }
+    priorClearedRef.current = fieldCleared;
+  }, [continueScanOpacity, continueScanX, fieldCleared]);
+
+  const selectedPlaced = useMemo(
+    () => cargo.grid.placed.find((item) => item.instanceId === selectedCargoInstanceId) ?? null,
+    [cargo.grid.placed, selectedCargoInstanceId],
+  );
+  const selectedReadout = useMemo(
+    () => (selectedPlaced ? resolveHarvestCargoReadout(selectedPlaced) : null),
+    [selectedPlaced],
+  );
 
   const harvestCargoHeader = !hidePackHeader ? (
     <View style={styles.harvestDeckHeader}>
-      <TerminalText size={6.5 * fontScale} letterSpacing={1.05} style={styles.harvestDeckEyebrow}>
+      <TerminalText size={7 * fontScale} letterSpacing={1} style={styles.harvestDeckEyebrow}>
         RUN STORAGE // 12 SLOT DECK
       </TerminalText>
-      <TerminalText size={12 * fontScale} letterSpacing={0.7} style={styles.harvestDeckTitle}>
+      <TerminalText size={16 * fontScale} letterSpacing={0.55} style={styles.harvestDeckTitle}>
         {packHeaderLabel}
       </TerminalText>
-      <TerminalText size={7 * fontScale} letterSpacing={0.7} style={styles.harvestDeckStats}>
-        {`OCCUPANCY ${String(occupancyPct).padStart(2, '0')}% · ${slotsUsed}/12 SLOTS · VALUE ${cargoValue} CR`}
-      </TerminalText>
+      <View style={styles.metricsRow}>
+        <View style={styles.metricCell}>
+          <TerminalText size={7 * fontScale} letterSpacing={0.95} style={styles.metricLabel}>
+            OCCUPANCY
+          </TerminalText>
+          <TerminalText size={11.5 * fontScale} letterSpacing={0.4} style={styles.metricValue}>
+            {`${occupancyPct}%`}
+          </TerminalText>
+        </View>
+        <View style={styles.metricDivider} />
+        <View style={[styles.metricCell, styles.metricCellCenter]}>
+          <TerminalText size={7 * fontScale} letterSpacing={0.95} style={styles.metricLabel}>
+            SLOTS
+          </TerminalText>
+          <TerminalText size={11.5 * fontScale} letterSpacing={0.4} style={styles.metricValue}>
+            {`${slotsUsed} / 12`}
+          </TerminalText>
+        </View>
+        <View style={styles.metricDivider} />
+        <View style={[styles.metricCell, styles.metricCellEnd]}>
+          <TerminalText size={7 * fontScale} letterSpacing={0.95} style={styles.metricLabel}>
+            VALUE
+          </TerminalText>
+          <TerminalText size={11.5 * fontScale} letterSpacing={0.4} style={[styles.metricValue, styles.metricValueEnd]}>
+            {`${cargoValue} CR`}
+          </TerminalText>
+        </View>
+      </View>
+      <View style={styles.metricsRule} />
     </View>
   ) : null;
 
   const workspaceStatusStrip = harvestTriPane ? (
     <View style={styles.statusStripRow}>
       <View style={styles.statusField}>
-        <TerminalText size={6 * fontScale} letterSpacing={1} style={styles.statusLabel}>UNSTOWED</TerminalText>
-        <TerminalText size={8 * fontScale} letterSpacing={0.6} style={styles.statusValue}>
+        <TerminalText size={6.5 * fontScale} letterSpacing={0.95} style={styles.statusLabel}>UNSTOWED</TerminalText>
+        <TerminalText size={8 * fontScale} letterSpacing={0.5} style={styles.statusValue}>
           {`${unstowedCount} MATERIAL${unstowedCount === 1 ? '' : 'S'}`}
         </TerminalText>
       </View>
       <View style={styles.statusDivider} />
       <View style={styles.statusField}>
-        <TerminalText size={6 * fontScale} letterSpacing={1} style={styles.statusLabel}>RESIDUE</TerminalText>
-        <TerminalText size={8 * fontScale} letterSpacing={0.6} style={styles.statusValue}>
+        <TerminalText size={6.5 * fontScale} letterSpacing={0.95} style={styles.statusLabel}>RESIDUE</TerminalText>
+        <TerminalText size={8 * fontScale} letterSpacing={0.5} style={styles.statusValue}>
           {`${String(residueLooseCount).padStart(2, '0')} SIGNALS`}
         </TerminalText>
       </View>
       <View style={styles.statusDivider} />
       <View style={styles.statusField}>
-        <TerminalText size={6 * fontScale} letterSpacing={1} style={styles.statusLabel}>FIELD STATE</TerminalText>
-        <TerminalText size={8 * fontScale} letterSpacing={0.6} style={[styles.statusValue, { color: HARVEST_PHOSPHOR }]}>
+        <TerminalText size={6.5 * fontScale} letterSpacing={0.95} style={styles.statusLabel}>FIELD STATE</TerminalText>
+        <TerminalText size={8 * fontScale} letterSpacing={0.5} style={[styles.statusValue, styles.statusValueStable]}>
           STABLE
         </TerminalText>
       </View>
@@ -210,13 +287,63 @@ export default function CargoPackingPanel({
   ) : null;
 
   const cargoReadout = harvestTriPane ? (
-    <View style={styles.readoutBlock}>
-      <TerminalText size={7 * fontScale} letterSpacing={1.05} style={styles.readoutEyebrow}>
-        AWAITING MATERIAL
-      </TerminalText>
-      <TerminalText size={8 * fontScale} style={styles.readoutBody}>
-        Drag a recoverable fragment into an available slot.
-      </TerminalText>
+    <View
+      key={selectedReadout
+        ? selectedCargoInstanceId ?? 'selected'
+        : fieldCleared
+          ? (slotsUsed > 0 ? 'secured' : 'empty')
+          : 'awaiting'}
+      style={[
+        styles.readoutBlock,
+        Platform.OS === 'web' ? styles.readoutBlockWeb : null,
+      ]}
+    >
+      {selectedReadout ? (
+        <>
+          <TerminalText size={9 * fontScale} letterSpacing={0.8} style={styles.readoutSelectedTitle} numberOfLines={2}>
+            {selectedReadout.title}
+          </TerminalText>
+          <View style={styles.readoutRows}>
+            {selectedReadout.rows.map((row) => (
+              <View key={row.label} style={styles.readoutRow}>
+                <TerminalText size={7 * fontScale} letterSpacing={0.8} style={styles.readoutRowLabel}>
+                  {row.label}
+                </TerminalText>
+                <TerminalText size={7.5 * fontScale} style={styles.readoutRowValue} numberOfLines={2}>
+                  {row.value}
+                </TerminalText>
+              </View>
+            ))}
+          </View>
+        </>
+      ) : fieldCleared && slotsUsed > 0 ? (
+        <>
+          <TerminalText size={8.5 * fontScale} letterSpacing={0.95} style={styles.readoutEyebrow}>
+            MANIFEST SECURED
+          </TerminalText>
+          <TerminalText size={7.5 * fontScale} style={styles.readoutBody}>
+            {`${slotsUsed} SLOT${slotsUsed === 1 ? '' : 'S'} OCCUPIED // ${cargoValue} CR`}
+          </TerminalText>
+        </>
+      ) : fieldCleared ? (
+        <>
+          <TerminalText size={8.5 * fontScale} letterSpacing={0.95} style={styles.readoutEyebrow}>
+            NO CARGO RECOVERED
+          </TerminalText>
+          <TerminalText size={7.5 * fontScale} style={styles.readoutBody}>
+            RUN STORAGE EMPTY
+          </TerminalText>
+        </>
+      ) : (
+        <>
+          <TerminalText size={8.5 * fontScale} letterSpacing={0.95} style={styles.readoutEyebrow}>
+            AWAITING MATERIAL
+          </TerminalText>
+          <TerminalText size={7.5 * fontScale} style={styles.readoutBody}>
+            Drag a recoverable fragment into an available slot.
+          </TerminalText>
+        </>
+      )}
     </View>
   ) : null;
 
@@ -244,6 +371,7 @@ export default function CargoPackingPanel({
       padding={extractorPadding}
       fontScale={fontScale}
       active={isVacuuming}
+      residueAvailable={residueLooseCount > 0}
       style={styles.extractorPanelFill}
     >
       {gridSidecar}
@@ -252,31 +380,77 @@ export default function CargoPackingPanel({
 
   const cargoConsoleFooter = harvestTriPane && onContinue && !hideContinueButton ? (
     <View style={styles.continueBlock}>
-      <TerminalText
-        size={7 * fontScale}
-        letterSpacing={1.05}
-        style={[styles.readiness, { color: continueReady ? HARVEST_PHOSPHOR : HARVEST_MUTED_SLATE }]}
-        numberOfLines={1}
-      >
-        {readinessLine}
-      </TerminalText>
-      <HapticPressable
-        onPress={() => {
-          pulseHubButton();
-          onContinue();
-        }}
-        accessibilityRole="button"
-        accessibilityLabel={continueLabel}
-        style={(state) => [
-          styles.continueBtn,
-          terminalHoverStyle(readPressableHover(state), state.pressed),
-          Platform.OS === 'web' ? ({ cursor: 'pointer' } as object) : null,
-        ]}
-      >
-        <TerminalText size={11} letterSpacing={1.2} style={styles.continueBtnText}>
-          {continueLabel}
+      {fieldCleared ? (
+        <TerminalText
+          size={7.5 * fontScale}
+          letterSpacing={0.95}
+          style={[styles.readiness, styles.readinessReady]}
+          numberOfLines={1}
+          ellipsizeMode="clip"
+        >
+          FIELD CLEAR // DESCENT READY
         </TerminalText>
-      </HapticPressable>
+      ) : (
+        <View style={styles.readinessStack}>
+          <TerminalText
+            size={7.5 * fontScale}
+            letterSpacing={0.95}
+            style={[styles.readiness, styles.readinessPending]}
+            numberOfLines={1}
+            ellipsizeMode="clip"
+          >
+            {unstowedCount === 1
+              ? '1 MATERIAL REMAINS'
+              : `${unstowedCount} MATERIALS REMAIN`}
+          </TerminalText>
+          <TerminalText
+            size={6.5 * fontScale}
+            letterSpacing={0.7}
+            style={styles.readinessSecondary}
+            numberOfLines={1}
+            ellipsizeMode="clip"
+          >
+            {unstowedCount === 1
+              ? 'STOW MATERIAL OR CONTINUE WITHOUT IT'
+              : 'STOW MATERIAL OR CONTINUE WITHOUT THEM'}
+          </TerminalText>
+        </View>
+      )}
+      <View style={styles.continueBtnShell}>
+        <HapticPressable
+          onPress={() => {
+            pulseHubButton();
+            onContinue();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={continueLabel}
+          style={(state) => [
+            styles.continueBtn,
+            fieldCleared ? styles.continueBtnReady : null,
+            terminalHoverStyle(readPressableHover(state), state.pressed),
+            Platform.OS === 'web' ? ({ cursor: 'pointer' } as object) : null,
+          ]}
+        >
+          <TerminalText size={8.5} letterSpacing={1.1} style={styles.continueBtnText}>
+            {continueLabel}
+          </TerminalText>
+        </HapticPressable>
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.continueScan,
+            {
+              opacity: continueScanOpacity,
+              transform: [{
+                translateX: continueScanX.interpolate({
+                  inputRange: [-0.2, 1.2],
+                  outputRange: [-40, 420],
+                }),
+              }],
+            },
+          ]}
+        />
+      </View>
     </View>
   ) : undefined;
 
@@ -314,6 +488,8 @@ export default function CargoPackingPanel({
       workspaceStatusStrip={workspaceStatusStrip}
       cargoReadout={cargoReadout}
       rightPaneWidth={rightPaneWidth}
+      selectedHarvestInstanceId={harvestTriPane ? selectedCargoInstanceId : null}
+      onHarvestCargoSelect={harvestTriPane ? setSelectedCargoInstanceId : undefined}
     />
   );
 
@@ -408,19 +584,46 @@ const styles = StyleSheet.create({
   },
   continueBlock: {
     width: '100%',
-    gap: 10,
+    gap: 8,
+    flexShrink: 0,
+  },
+  readinessStack: {
+    gap: 2,
   },
   readiness: {
     fontWeight: '700',
     textTransform: 'uppercase',
+    ...Platform.select({
+      web: {
+        fontSize: 'clamp(14px, 0.9vw, 16px)',
+      } as object,
+      default: {},
+    }),
+  },
+  readinessReady: {
+    color: HARVEST_PHOSPHOR,
+  },
+  readinessPending: {
+    color: HARVEST_MUTED_SLATE,
+  },
+  readinessSecondary: {
+    color: HARVEST_MUTED_SLATE,
+    fontWeight: '600',
+    opacity: 0.78,
+    textTransform: 'uppercase',
+  },
+  continueBtnShell: {
+    width: '100%',
+    position: 'relative',
+    overflow: 'hidden',
   },
   continueBtn: {
     width: '100%',
     height: HARVEST_CONTINUE_BUTTON_HEIGHT,
     minHeight: HARVEST_CONTINUE_BUTTON_HEIGHT,
-    maxHeight: 64,
+    maxHeight: 60,
     borderWidth: 1,
-    borderColor: SCANNER_PHOSPHOR,
+    borderColor: 'rgba(100, 201, 177, 0.55)',
     backgroundColor: '#0A1011',
     justifyContent: 'center',
     alignItems: 'center',
@@ -431,10 +634,27 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
+  continueBtnReady: {
+    borderColor: 'rgba(100, 201, 177, 0.72)',
+  },
+  continueScan: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: 36,
+    backgroundColor: 'rgba(100, 201, 177, 0.18)',
+    zIndex: 2,
+  },
   continueBtnText: {
     color: SCANNER_PHOSPHOR,
-    fontWeight: '800',
+    fontWeight: '700',
     textTransform: 'uppercase',
+    ...Platform.select({
+      web: {
+        fontSize: 'clamp(15px, 0.95vw, 17px)',
+      } as object,
+      default: {},
+    }),
   },
   rootEmbedded: {
     flex: 1,
@@ -508,21 +728,85 @@ const styles = StyleSheet.create({
   harvestDeckHeader: {
     width: '100%',
     alignSelf: 'stretch',
-    gap: 4,
+    gap: 0,
     flexShrink: 0,
   },
   harvestDeckEyebrow: {
     color: HARVEST_MUTED_SLATE,
-    fontWeight: '700',
+    fontWeight: '600',
+    marginBottom: 12,
+    ...Platform.select({
+      web: {
+        fontSize: 'clamp(12px, 0.75vw, 13px)',
+      } as object,
+      default: {},
+    }),
   },
   harvestDeckTitle: {
     color: HARVEST_TEXT_PRIMARY,
-    fontWeight: '800',
-  },
-  harvestDeckStats: {
-    color: HARVEST_MUTED_SLATE,
     fontWeight: '700',
-    marginTop: 2,
+    marginBottom: 22,
+    ...Platform.select({
+      web: {
+        fontSize: 'clamp(28px, 1.7vw, 32px)',
+        lineHeight: 1,
+      } as object,
+      default: {},
+    }),
+  },
+  metricsRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    width: '100%',
+    marginBottom: 8,
+  },
+  metricCell: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4,
+  },
+  metricCellCenter: {
+    alignItems: 'center',
+  },
+  metricCellEnd: {
+    alignItems: 'flex-end',
+  },
+  metricLabel: {
+    color: HARVEST_MUTED_SLATE,
+    fontWeight: '600',
+    ...Platform.select({
+      web: {
+        fontSize: 'clamp(12px, 0.75vw, 13px)',
+      } as object,
+      default: {},
+    }),
+  },
+  metricValue: {
+    color: HARVEST_TEXT_PRIMARY,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+    ...Platform.select({
+      web: {
+        fontSize: 'clamp(21px, 1.25vw, 24px)',
+      } as object,
+      default: {},
+    }),
+  },
+  metricValueEnd: {
+    textAlign: 'right',
+  },
+  metricDivider: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: 'stretch',
+    marginHorizontal: 12,
+    marginVertical: 2,
+    backgroundColor: 'rgba(108, 156, 143, 0.22)',
+  },
+  metricsRule: {
+    width: '100%',
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(108, 156, 143, 0.16)',
+    marginBottom: 0,
   },
   statusStripRow: {
     flex: 1,
@@ -530,38 +814,116 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     gap: 0,
+    backgroundColor: 'transparent',
   },
   statusField: {
     flex: 1,
     gap: 3,
     minWidth: 0,
+    justifyContent: 'center',
   },
   statusLabel: {
     color: HARVEST_MUTED_SLATE,
-    fontWeight: '700',
+    fontWeight: '600',
+    ...Platform.select({
+      web: {
+        fontSize: 'clamp(11px, 0.7vw, 12px)',
+      } as object,
+      default: {},
+    }),
   },
   statusValue: {
     color: HARVEST_TEXT_PRIMARY,
-    fontWeight: '700',
+    fontWeight: '600',
+    ...Platform.select({
+      web: {
+        fontSize: 'clamp(15px, 0.95vw, 17px)',
+      } as object,
+      default: {},
+    }),
+  },
+  statusValueStable: {
+    color: HARVEST_PHOSPHOR,
   },
   statusDivider: {
     width: StyleSheet.hairlineWidth,
     alignSelf: 'stretch',
     marginVertical: 12,
     marginHorizontal: 12,
-    backgroundColor: 'rgba(108, 156, 143, 0.22)',
+    backgroundColor: 'rgba(91, 224, 195, 0.14)',
   },
   readoutBlock: {
-    gap: 6,
+    gap: 4,
     paddingTop: 4,
+    minHeight: 0,
+    flexShrink: 1,
+  },
+  readoutBlockWeb: {
+    ...Platform.select({
+      web: {
+        transitionProperty: 'opacity',
+        transitionDuration: '140ms',
+        transitionTimingFunction: 'ease-out',
+      } as object,
+      default: {},
+    }),
   },
   readoutEyebrow: {
     color: HARVEST_MUTED_SLATE,
+    fontWeight: '600',
+    ...Platform.select({
+      web: {
+        fontSize: 'clamp(17px, 1.05vw, 19px)',
+      } as object,
+      default: {},
+    }),
+  },
+  readoutSelectedTitle: {
+    color: HARVEST_TEXT_PRIMARY,
     fontWeight: '700',
+    ...Platform.select({
+      web: {
+        fontSize: 'clamp(17px, 1.05vw, 19px)',
+      } as object,
+      default: {},
+    }),
   },
   readoutBody: {
     color: HARVEST_MUTED_SLATE,
-    lineHeight: 16,
+    lineHeight: 18,
+    opacity: 0.88,
+    fontWeight: '500',
+    ...Platform.select({
+      web: {
+        fontSize: 'clamp(14px, 0.9vw, 16px)',
+        lineHeight: 1.35,
+      } as object,
+      default: {},
+    }),
+  },
+  readoutRows: {
+    gap: 4,
+    marginTop: 2,
+  },
+  readoutRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingTop: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(108, 156, 143, 0.14)',
+  },
+  readoutRowLabel: {
+    color: HARVEST_MUTED_SLATE,
+    fontWeight: '600',
+    minWidth: 72,
+  },
+  readoutRowValue: {
+    color: HARVEST_TEXT_PRIMARY,
+    fontWeight: '600',
+    flex: 1,
+    textAlign: 'right',
     opacity: 0.9,
   },
   headerContainer: {

@@ -7,7 +7,9 @@
 export type VeilWarpFieldMode =
   | 'ambientScanner'
   | 'incursionIngress'
-  | 'successfulExtraction';
+  | 'successfulExtraction'
+  /** Subdued harvest containment underlay (~5–10% scanner intensity). */
+  | 'containmentAmbient';
 
 export const VEIL_WARP_CONFIG = {
   /** Internal canvas resolution relative to CSS size. */
@@ -93,6 +95,15 @@ export const VEIL_WARP_MODE_BASE: Record<VeilWarpFieldMode, {
     violetIntensity: 1.5,
     mintIntensity: 1.2,
     vignetteStrength: 0.5,
+    fullBleed: true,
+  },
+  containmentAmbient: {
+    motionSpeed: 0.28,
+    warpStrength: 0.32,
+    contourIntensity: 0.22,
+    violetIntensity: 0.18,
+    mintIntensity: 0.42,
+    vignetteStrength: 1.35,
     fullBleed: true,
   },
 };

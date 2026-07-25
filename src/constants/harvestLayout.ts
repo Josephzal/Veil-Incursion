@@ -21,12 +21,26 @@ export const HARVEST_DESKTOP_LEFT_FLEX = 0;
 export const HARVEST_DESKTOP_CENTER_FLEX = 3;
 export const HARVEST_DESKTOP_RIGHT_FLEX = 1;
 /** Docked extractor module footprint inside the containment viewport. */
-export const HARVEST_EXTRACTOR_MODULE_WIDTH = 260;
-export const HARVEST_EXTRACTOR_MODULE_HEIGHT = 300;
+export const HARVEST_EXTRACTOR_MODULE_WIDTH_CSS = 'clamp(400px, 23vw, 475px)';
+export const HARVEST_EXTRACTOR_MODULE_WIDTH = 420;
+export const HARVEST_EXTRACTOR_MODULE_HEIGHT = 165;
+/** Artwork column inside the horizontal extractor dock. */
+export const HARVEST_EXTRACTOR_ART_WIDTH = 120;
 /** Bottom telemetry strip inside the containment workspace. */
-export const HARVEST_STATUS_STRIP_HEIGHT = 68;
+export const HARVEST_STATUS_STRIP_HEIGHT = 66;
+/** Harvest cargo console web width — wider than legacy 25vw clamp. */
+export const HARVEST_CARGO_CONSOLE_WIDTH_CSS = 'clamp(460px, 26vw, 540px)';
+export const HARVEST_CARGO_CONSOLE_WIDTH_NATIVE = 480;
+export const HARVEST_CARGO_CONSOLE_MAX_PCT = '40%';
+/** Viewport-aware cell target: clamp(78px, 8.5vh, 98px). */
+export const HARVEST_CELL_SIZE_MIN = 78;
+export const HARVEST_CELL_SIZE_MAX = 98;
+export const HARVEST_CELL_SIZE_VH = 0.085;
+/** Quiet cargo matrix gap — slightly airier than the shared 2px cargo default. */
+export const HARVEST_CELL_GAP = 4;
 export const HARVEST_CONTINUE_BUTTON_MIN_HEIGHT = 56;
-export const HARVEST_CARGO_BACKING_PADDING = 12;
+/** Tight inset around cargo matrix — no heavy textured frame. */
+export const HARVEST_CARGO_BACKING_PADDING = 4;
 /** Padding below the containment slot row inside the external bay. */
 export const HARVEST_EXTERNAL_BAY_EXTRA = 28;
 /** Fixed vertical footprint for the harvest containment row (margin + slot height). */

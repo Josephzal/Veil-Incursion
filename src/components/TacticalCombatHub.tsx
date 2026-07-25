@@ -3829,8 +3829,9 @@ export default function TacticalCombatHub({
       working = getUnitById(squadRef.current, e.unitId) ?? working;
 
       if (deathLifecycle.enterSlump) {
+        // Slump is not eradication — unit remains "alive" on a revive timer.
         patchUnit(e.unitId, working);
-        return true;
+        return false;
       }
 
       if (deathLifecycle.ashTokenSlot) {
@@ -3908,11 +3909,17 @@ export default function TacticalCombatHub({
       syncSquad(squadRef.current.map((u) =>
         u.sharedBossPool ? { ...u, currentHp: hp } : u,
       ));
-      if (hp <= 0 && e.unitId) beginDissolveForUnit(e.unitId, working, hp);
+      if (hp <= 0 && e.unitId) {
+        const latest = getUnitById(squadRef.current, e.unitId) ?? { ...working, currentHp: hp };
+        // Never dissolve a valid thrall slump; dissolve only when truly dead.
+        if (!isUnitAlive(latest)) beginDissolveForUnit(e.unitId, latest, latest.currentHp);
+      }
     } else {
       patchUnit(e.unitId, syncRosterCombatState({ ...working, currentHp: hp }));
-      if (hp <= 0 && e.unitId) beginDissolveForUnit(e.unitId, working, hp);
-      else if (e.unitId && source && dmg > 0 && working.isRivalMerc) {
+      if (hp <= 0 && e.unitId) {
+        const latest = getUnitById(squadRef.current, e.unitId) ?? { ...working, currentHp: hp };
+        if (!isUnitAlive(latest)) beginDissolveForUnit(e.unitId, latest, latest.currentHp);
+      } else if (e.unitId && source && dmg > 0 && working.isRivalMerc) {
         const swap = tryRivalEmergencySwap(squadRef.current, e.unitId);
         if (swap.logLine) {
           log(swap.logLine);
@@ -5445,8 +5452,12 @@ export default function TacticalCombatHub({
     }
     const unitId = enemyActionQueueRef.current[0];
     const unit = unitId ? getUnitById(squadRef.current, unitId) : enemyRef.current;
-    if (!unit) {
+    if (!unit || !isUnitAlive(unit)) {
       enemyActionQueueRef.current.shift();
+      if (allUnitsDefeated(squadRef.current)) {
+        scheduleCombatVictoryResolution();
+        return;
+      }
       if (enemyActionQueueRef.current.length > 0) runEnemyActionAnimation(countering);
       else endEnemyTurn(true);
       return;
@@ -5487,6 +5498,16 @@ export default function TacticalCombatHub({
     applyLifecyclePlayerDelta(turnStart.playerHpDelta);
     applyLifecycleStaminaDelta(turnStart.playerStaminaDelta);
     if (turnStart.squad.length > 0) syncSquad(turnStart.squad);
+    if (turnStart.forceDissolveUnitIds?.length) {
+      for (const deadId of turnStart.forceDissolveUnitIds) {
+        const deadUnit = getUnitById(squadRef.current, deadId);
+        if (!deadUnit || isUnitAlive(deadUnit)) continue;
+        beginDissolveForUnit(deadId, deadUnit, deadUnit.currentHp);
+      }
+      if (allUnitsDefeated(squadRef.current)) {
+        scheduleCombatVictoryResolution();
+      }
+    }
     if (turnStart.statusFloatLabel && turnStart.statusFloatUnitId) {
       statusFloatSeqRef.current[turnStart.statusFloatUnitId] =
         (statusFloatSeqRef.current[turnStart.statusFloatUnitId] ?? 0) + 1;
@@ -5748,6 +5769,15 @@ export default function TacticalCombatHub({
 
   const passToEnemy = (countering = false) => {
     if (isCombatTerminal()) return;
+    // Safety: 0-HP / dissolved squads must end combat even if a prior kill path skipped victory.
+    if (allUnitsDefeated(squadRef.current)) {
+      for (const unit of squadRef.current) {
+        if (isUnitAlive(unit) || !unit.unitId) continue;
+        beginDissolveForUnit(unit.unitId, unit, unit.currentHp);
+      }
+      scheduleCombatVictoryResolution();
+      return;
+    }
     recordPlayerDefendStreak(
       sessionExtrasRef.current,
       sessionExtrasRef.current.playerDefendedThisTurn,

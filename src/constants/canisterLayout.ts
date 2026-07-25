@@ -45,8 +45,8 @@ export const CANISTER_GRID_HEIGHT_RATIO = 0.78;
 /** Harvest screen: canister shell + vacuum bar rendered at 60% of grid-derived size (40% reduction). */
 export const HARVEST_CANISTER_SIZE_SCALE = 0.6;
 
-/** Tri-pane harvest extractor block — larger anchored machinery. */
-export const HARVEST_EXTRACTOR_CANISTER_SCALE = 1.05;
+/** Tri-pane harvest extractor block — fits the instrument dock art column. */
+export const HARVEST_EXTRACTOR_CANISTER_SCALE = 0.62;
 
 export interface CanisterLayoutDimensions {
   glassHeight: number;

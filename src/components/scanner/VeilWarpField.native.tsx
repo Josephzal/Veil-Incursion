@@ -17,13 +17,19 @@ export default function VeilWarpField({
   transitDriven = false,
   style,
 }: VeilWarpFieldProps): React.JSX.Element {
-  const transit = transitDriven || mode !== 'ambientScanner';
+  const containment = mode === 'containmentAmbient';
+  const transit = transitDriven || (mode !== 'ambientScanner' && !containment);
   return (
     <View
       pointerEvents="none"
       accessible={false}
       importantForAccessibility="no-hide-descendants"
-      style={[styles.fill, transit ? styles.transit : null, style]}
+      style={[
+        styles.fill,
+        transit ? styles.transit : null,
+        containment ? styles.containment : null,
+        style,
+      ]}
     />
   );
 }
@@ -35,5 +41,9 @@ const styles = StyleSheet.create({
   },
   transit: {
     backgroundColor: VEIL_WARP_COLORS.voidBg,
+  },
+  containment: {
+    backgroundColor: '#040807',
+    opacity: 0.85,
   },
 });
