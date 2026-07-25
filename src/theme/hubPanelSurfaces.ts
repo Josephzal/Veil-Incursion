@@ -233,7 +233,10 @@ export function hubDossierShellStyle(): ViewStyle {
   };
 }
 
-/** Rest outline CTA — mint border / mintBright label. */
+/**
+ * Classic hub CTA chrome — mint outline at rest, solid mint fill on hover.
+ * Used by forge hold-to-fabricate and HubPrimaryCta `variant="classic"`.
+ */
 export function hubPrimaryActionStyle(): ViewStyle {
   return {
     backgroundColor: VEIL.surface3,

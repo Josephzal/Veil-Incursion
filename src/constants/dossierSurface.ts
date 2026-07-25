@@ -66,10 +66,11 @@ export function dossierForegroundSurface(): ViewStyle {
   return { backgroundColor: DOSSIER_FOREGROUND };
 }
 
-/** CTA on dossier surfaces — board outline primary (no semi-transparent tint). */
+/** CTA on dossier surfaces — muted rest tint + 2px accent border (glow via HubPrimaryCta). */
 export function dossierOpaqueCtaStyle(accentColor: string): ViewStyle {
   return {
-    ...hubPrimaryActionStyle(),
-    borderColor: accentColor,
+    backgroundColor: `${accentColor}18`,
+    borderWidth: 2,
+    borderColor: `${accentColor}88`,
   };
 }

@@ -302,11 +302,11 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: 'rgba(184, 74, 144, 0.28)',
+    backgroundColor: 'rgba(150, 58, 118, 0.26)',
     ...Platform.select({
       web: {
         backgroundImage:
-          `radial-gradient(circle, rgba(208, 163, 234, 0.42) 0%, rgba(184, 74, 144, 0.28) 40%, rgba(166, 111, 208, 0) 72%)`,
+          `radial-gradient(circle, rgba(184, 141, 212, 0.38) 0%, rgba(150, 58, 118, 0.26) 40%, rgba(138, 85, 176, 0) 72%)`,
         boxShadow: OCCULT_NEON.glowWeb,
         filter: 'blur(0.5px)',
       } as object,

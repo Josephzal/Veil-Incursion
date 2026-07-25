@@ -35,6 +35,7 @@ import {
 import BrokerPriorityBulletin from './BrokerPriorityBulletin';
 import ContractGroupHeader from './ContractGroupHeader';
 import HubPageHeader from './HubPageHeader';
+import HubPrimaryCta from './HubPrimaryCta';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { pulseHubButton } from '../../utils/hubButtonHaptics';
 import { useWorldState } from '../../context/WorldStateContext';
@@ -78,7 +79,6 @@ import {
   HUB_CHANNEL_BUTTON_PADDING_V,
   HUB_CHANNEL_RAIL_INSET,
   HUB_BROWSER_CONTENT_PADDING_H,
-  HUB_CTA_INVERSE_TEXT,
   HUB_DOSSIER_EDGE_PAD,
   HUB_DOSSIER_FOOTER_BG,
   HUB_DOSSIER_FOOTER_RULE,
@@ -1106,56 +1106,13 @@ export default function ContractBoardPanel(): React.JSX.Element {
                 [ ROUTE ENGAGED ]
               </TerminalText>
             </View>
-          ) : inspected.kind === 'INDEPENDENT' ? (
-            <HapticPressable
-              onPress={handleAcceptInspected}
-              accessibilityRole="button"
-              accessibilityLabel="Accept"
-              style={({ pressed, hovered, focused }: { pressed: boolean; hovered?: boolean; focused?: boolean }) => ([
-                styles.actionButton,
-                styles.actionPrimary,
-                (hovered || pressed) && styles.actionPrimaryHover,
-                focused && styles.actionFocusVisible,
-              ])}
-            >
-              {({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => (
-                <TerminalText
-                  size={8}
-                  letterSpacing={1}
-                  style={[
-                    styles.actionPrimaryText,
-                    (hovered || pressed) && styles.actionPrimaryTextHover,
-                  ]}
-                >
-                  [ ACCEPT ]
-                </TerminalText>
-              )}
-            </HapticPressable>
           ) : (
-            <HapticPressable
+            <HubPrimaryCta
+              label="[ ACCEPT ]"
               onPress={handleAcceptInspected}
-              accessibilityRole="button"
               accessibilityLabel="Accept"
-              style={({ pressed, hovered, focused }: { pressed: boolean; hovered?: boolean; focused?: boolean }) => ([
-                styles.actionButton,
-                styles.actionPrimary,
-                (hovered || pressed) && styles.actionPrimaryHover,
-                focused && styles.actionFocusVisible,
-              ])}
-            >
-              {({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => (
-                <TerminalText
-                  size={8}
-                  letterSpacing={1}
-                  style={[
-                    styles.actionPrimaryText,
-                    (hovered || pressed) && styles.actionPrimaryTextHover,
-                  ]}
-                >
-                  [ ACCEPT ]
-                </TerminalText>
-              )}
-            </HapticPressable>
+              minHeight={50}
+            />
           )}
         </View>
       </Animated.View>
@@ -1758,30 +1715,6 @@ const styles = StyleSheet.create({
       web: { cursor: 'pointer', outlineStyle: 'none' } as object,
       default: {},
     }),
-  },
-  actionPrimary: {
-    backgroundColor: VEIL.surface3,
-    borderWidth: 1,
-    borderColor: VEIL.mint,
-    ...Platform.select({
-      web: {
-        transitionProperty: 'background-color, border-color',
-        transitionDuration: '120ms',
-        transitionTimingFunction: 'ease-out',
-      } as object,
-      default: {},
-    }),
-  },
-  actionPrimaryHover: {
-    backgroundColor: VEIL.mint,
-    borderColor: VEIL.mintBright,
-  },
-  actionPrimaryText: {
-    color: VEIL.mintBright,
-    fontWeight: '800',
-  },
-  actionPrimaryTextHover: {
-    color: HUB_CTA_INVERSE_TEXT,
   },
   actionDestructive: {
     minHeight: 48,

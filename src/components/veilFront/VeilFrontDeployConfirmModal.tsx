@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import HapticPressable from '../HapticPressable';
 import TerminalText from '../TerminalText';
+import HubPrimaryCta from '../hub/HubPrimaryCta';
 import { usePlayerAccount } from '../../context/PlayerAccountContext';
 import { useWorldState } from '../../context/WorldStateContext';
 import { CLASS_DEFINITIONS } from '../../data/classes';
@@ -503,22 +504,14 @@ export default function VeilFrontDeployConfirmModal({
                   [ ABORT ]
                 </TerminalText>
               </HapticPressable>
-              <HapticPressable
+              <HubPrimaryCta
+                label={primaryLabel}
                 onPress={onContinue}
                 disabled={launching}
-                accessibilityRole="button"
                 accessibilityLabel="Confirm"
-                style={({ pressed }) => ([
-                  styles.button,
-                  styles.buttonPrimary,
-                  launching && { opacity: 0.45 },
-                  pressed && !launching ? { opacity: 0.9 } : null,
-                ])}
-              >
-                <TerminalText size={8} letterSpacing={1} style={styles.buttonPrimaryText}>
-                  {primaryLabel}
-                </TerminalText>
-              </HapticPressable>
+                minHeight={54}
+                style={styles.button}
+              />
             </View>
           </View>
         </View>
@@ -833,18 +826,8 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
-  buttonPrimary: {
-    backgroundColor: RAIL.terminal,
-    borderWidth: 1,
-    borderColor: RAIL.terminalBright,
-  },
   buttonSecondaryText: {
     color: RAIL.textPrimary,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-  buttonPrimaryText: {
-    color: '#06110e',
     fontWeight: '800',
     textAlign: 'center',
   },

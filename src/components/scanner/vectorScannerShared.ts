@@ -56,8 +56,8 @@ export const SCANNER_TELEMETRY_RAIL_HEIGHT = 56;
 export const SCANNER_APERTURE_SAFE_INSET = 14;
 /** Live phosphor mint — sweep / selection / ready action. */
 export const SCANNER_PHOSPHOR = '#64C9B1';
-/** Veil interference / unknown signals. */
-export const SCANNER_VEIL_VIOLET = '#81738F';
+/** Veil interference / selected-vector accent — deepen with VEIL.occult family. */
+export const SCANNER_VEIL_VIOLET = '#655872';
 /** Keyboard/controller focus — pale cool neutral, distinct from mint selection. */
 export const SCANNER_FOCUS_NEUTRAL = '#C5D0CD';
 export const SCANNER_TEXT_PRIMARY = '#DCE4E0';

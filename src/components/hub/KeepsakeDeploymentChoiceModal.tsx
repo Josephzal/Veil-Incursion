@@ -2,6 +2,7 @@ import React from 'react';
 import { Modal, ScrollView, StyleSheet, View } from 'react-native';
 import HapticPressable from '../HapticPressable';
 import TerminalText from '../TerminalText';
+import HubPrimaryCta from './HubPrimaryCta';
 import { HubSectionHeader } from './HubScreenShell';
 import { useHubLayout } from '../../context/HubLayoutContext';
 import type {
@@ -156,23 +157,15 @@ export default function KeepsakeDeploymentChoiceModal({
                 [ CANCEL ]
               </TerminalText>
             </HapticPressable>
-            <HapticPressable
+            <HubPrimaryCta
+              label="[ CONFIRM ]"
               onPress={onConfirm}
               disabled={!canConfirm}
-              style={({ pressed }) => [
-                styles.actionBtn,
-                {
-                  borderColor: accentColor,
-                  backgroundColor: `${accentColor}22`,
-                  minHeight: scaleSize(44),
-                  opacity: !canConfirm ? 0.45 : pressed ? 0.82 : 1,
-                },
-              ]}
-            >
-              <TerminalText size={10} letterSpacing={1.2} style={{ color: accentColor, fontWeight: '800' }}>
-                [ CONFIRM ]
-              </TerminalText>
-            </HapticPressable>
+              accentColor={accentColor}
+              accessibilityLabel="Confirm"
+              minHeight={scaleSize(48)}
+              style={styles.actionBtn}
+            />
           </View>
         </View>
       </View>

@@ -24,9 +24,10 @@ export const VEIL = {
   mint: '#62CDB5',
   mintBright: '#BFF5E6',
   focus: '#BFF5E6',
-  occult: '#8C739F',
-  occultPale: '#B3A2C0',
-  occultUnstable: '#8C739F',
+  /** Occult / purple accent — deepen here to shift hub + dossier violet globally. */
+  occult: '#6F5A80',
+  occultPale: '#9586A6',
+  occultUnstable: '#6F5A80',
   blood: '#A35C66',
   riskExtreme: '#A35C66',
   riskHigh: '#9F5963',
@@ -77,7 +78,7 @@ export const VEIL_CABAL_TONES: Record<CabalEmployerId, VeilTone> = {
 export const VEIL_BLACK_CHANNEL_TONE = tone('BLACK_CHANNEL', '#9F5963', '159, 89, 99', 'fracture');
 export const VEIL_MINT_TONE = tone('MINT', VEIL.mint, '98, 205, 181', 'bar');
 export const VEIL_NEUTRAL_TONE = tone('NEUTRAL', VEIL.textMuted, '119, 130, 125', 'bar');
-export const VEIL_OCCULT_TONE = tone('OCCULT', VEIL.occult, '140, 115, 159', 'arc');
+export const VEIL_OCCULT_TONE = tone('OCCULT', VEIL.occult, '111, 90, 128', 'arc');
 export const VEIL_DANGER_TONE = tone('DANGER', VEIL.blood, '163, 92, 102', 'fracture');
 
 export function resolveCabalTone(sponsorId: CabalEmployerId): VeilTone {

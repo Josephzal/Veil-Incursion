@@ -1,25 +1,25 @@
 import React from 'react';
 import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
-/** Occult neon palette — slightly deeper violet/pink; restrained bloom. */
+/** Occult neon palette — deeper violet/pink; restrained bloom. */
 export const OCCULT_NEON = {
-  core: '#D0A3EA',
-  mid: '#A66FD0',
-  hot: '#B84A90',
+  core: '#B88DD4',
+  mid: '#8A55B0',
+  hot: '#963A76',
   glowWeb: [
-    '0 0 2px rgba(208, 163, 234, 0.7)',
-    '0 0 8px rgba(184, 74, 144, 0.48)',
-    '0 0 14px rgba(166, 111, 208, 0.28)',
+    '0 0 2px rgba(184, 141, 212, 0.62)',
+    '0 0 8px rgba(150, 58, 118, 0.42)',
+    '0 0 14px rgba(138, 85, 176, 0.24)',
   ].join(', '),
   glowWebRail: [
-    '0 0 2px rgba(208, 163, 234, 0.7)',
-    '0 0 8px rgba(184, 74, 144, 0.48)',
-    '2px 0 14px rgba(166, 111, 208, 0.28)',
+    '0 0 2px rgba(184, 141, 212, 0.62)',
+    '0 0 8px rgba(150, 58, 118, 0.42)',
+    '2px 0 14px rgba(138, 85, 176, 0.24)',
   ].join(', '),
   glowWebBar: [
-    '0 0 2px rgba(208, 163, 234, 0.7)',
-    '0 0 8px rgba(184, 74, 144, 0.48)',
-    '0 -2px 14px rgba(166, 111, 208, 0.28)',
+    '0 0 2px rgba(184, 141, 212, 0.62)',
+    '0 0 8px rgba(150, 58, 118, 0.42)',
+    '0 -2px 14px rgba(138, 85, 176, 0.24)',
   ].join(', '),
 } as const;
 
@@ -82,11 +82,11 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         backgroundImage:
-          'linear-gradient(90deg, rgba(184, 74, 144, 0.26), rgba(166, 111, 208, 0.1) 45%, rgba(166, 111, 208, 0) 100%)',
+          'linear-gradient(90deg, rgba(150, 58, 118, 0.24), rgba(138, 85, 176, 0.1) 45%, rgba(138, 85, 176, 0) 100%)',
         filter: 'blur(0.9px)',
       } as object,
       default: {
-        backgroundColor: 'rgba(184, 74, 144, 0.16)',
+        backgroundColor: 'rgba(150, 58, 118, 0.14)',
       },
     }),
   },
@@ -98,11 +98,11 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         backgroundImage:
-          'linear-gradient(0deg, rgba(184, 74, 144, 0.26), rgba(166, 111, 208, 0.1) 45%, rgba(166, 111, 208, 0) 100%)',
+          'linear-gradient(0deg, rgba(150, 58, 118, 0.24), rgba(138, 85, 176, 0.1) 45%, rgba(138, 85, 176, 0) 100%)',
         filter: 'blur(0.9px)',
       } as object,
       default: {
-        backgroundColor: 'rgba(184, 74, 144, 0.16)',
+        backgroundColor: 'rgba(150, 58, 118, 0.14)',
       },
     }),
   },

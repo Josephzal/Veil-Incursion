@@ -52,7 +52,6 @@ import {
   HUB_CARD_BORDER,
   HUB_CARD_BORDER_SELECTED,
   HUB_CARD_SURFACE,
-  HUB_CTA_INVERSE_TEXT,
   HUB_DOSSIER_FOOTER_BG,
   HUB_DOSSIER_FOOTER_RULE,
   HUB_DOSSIER_LABEL,
@@ -64,10 +63,9 @@ import {
   HUB_SELECT_SURFACE,
   HUB_TEXT_PRIMARY,
   HUB_TEXT_SECONDARY,
-  hubPrimaryActionHoverStyle,
-  hubPrimaryActionStyle,
 } from '../../theme/hubPanelSurfaces';
 import { OccultNeonRail } from '../hub/veilChrome';
+import HubPrimaryCta from '../hub/HubPrimaryCta';
 
 import CityStreets from '../../../assets/images/environment images/citystreets.png';
 import CityBuilding from '../../../assets/images/environment images/city_building.png';
@@ -605,36 +603,14 @@ export default function SectorBriefingPanel({
           progressionProfile={progressionProfile}
         />
 
-        <HapticPressable
+        <HubPrimaryCta
+          label={actionLabel}
           onPress={onRequestDeploy}
           disabled={breachDisabled}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: breachDisabled }}
-          style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ([
-            styles.initiateBreach,
-            isCompactHeight && styles.initiateBreachCompact,
-            breachDisabled && styles.initiateBreachDisabled,
-            !breachDisabled && (hovered || pressed) ? styles.initiateBreachHover : null,
-          ])}
-        >
-          {({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => (
-            <TerminalText
-              size={TYPE.cta}
-              letterSpacing={1.2}
-              style={{
-                color: breachDisabled
-                  ? 'rgba(213, 223, 220, 0.38)'
-                  : (hovered || pressed)
-                    ? HUB_CTA_INVERSE_TEXT
-                    : RAIL.terminalBright,
-                fontWeight: '800',
-                textAlign: 'center',
-              }}
-            >
-              {actionLabel}
-            </TerminalText>
-          )}
-        </HapticPressable>
+          accessibilityLabel={actionLabel}
+          minHeight={isCompactHeight ? 50 : 52}
+          style={styles.initiateBreach}
+        />
       </View>
     </View>
   );
@@ -910,36 +886,6 @@ const styles = StyleSheet.create({
     }),
   },
   initiateBreach: {
-    width: '100%',
-    minHeight: 52,
-    height: 52,
     marginTop: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...hubPrimaryActionStyle(),
-    ...Platform.select({
-      web: {
-        cursor: 'pointer',
-        outlineStyle: 'none',
-      } as object,
-      default: {},
-    }),
-  },
-  initiateBreachHover: {
-    ...hubPrimaryActionHoverStyle(),
-  },
-  initiateBreachCompact: {
-    minHeight: 50,
-    height: 50,
-  },
-  initiateBreachDisabled: {
-    backgroundColor: 'rgba(185, 181, 167, 0.03)',
-    borderColor: 'rgba(185, 181, 167, 0.16)',
-    ...Platform.select({
-      web: {
-        cursor: 'not-allowed',
-      } as object,
-      default: {},
-    }),
   },
 });
