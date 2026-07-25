@@ -14,19 +14,20 @@ interface HarvestScreenHeaderProps {
   eyebrow?: string;
   statusLine: string;
   depthLabel: string;
-  cargoLabel: string;
+  cargoLabel?: string | null;
   fontScale: number;
 }
 
 /**
- * Compact page header for Resource Harvest — RESOURCE HARVEST is the only display title.
+ * Page header for Resource Harvest — RESOURCE HARVEST is the only display title.
+ * Height stays tall enough for full glyph boxes (no clipped title).
  */
 export default function HarvestScreenHeader({
   title = 'RESOURCE HARVEST',
   eyebrow = 'FIELD RECOVERY // RH-01',
   statusLine,
   depthLabel,
-  cargoLabel,
+  cargoLabel = null,
   fontScale,
 }: HarvestScreenHeaderProps): React.JSX.Element {
   return (
@@ -37,15 +38,13 @@ export default function HarvestScreenHeader({
             size={6.5 * fontScale}
             letterSpacing={1.05}
             style={styles.eyebrow}
-            numberOfLines={1}
           >
             {eyebrow}
           </TerminalText>
           <TerminalText
-            size={20 * fontScale}
+            size={18 * fontScale}
             letterSpacing={0.7}
             style={styles.title}
-            numberOfLines={1}
           >
             {title}
           </TerminalText>
@@ -55,7 +54,6 @@ export default function HarvestScreenHeader({
               size={6.5 * fontScale}
               letterSpacing={0.9}
               style={styles.liveLine}
-              numberOfLines={1}
             >
               {statusLine}
             </TerminalText>
@@ -66,18 +64,18 @@ export default function HarvestScreenHeader({
             size={6.5 * fontScale}
             letterSpacing={1}
             style={styles.metaLabel}
-            numberOfLines={1}
           >
             {depthLabel}
           </TerminalText>
-          <TerminalText
-            size={6.5 * fontScale}
-            letterSpacing={1}
-            style={styles.metaLabel}
-            numberOfLines={1}
-          >
-            {cargoLabel}
-          </TerminalText>
+          {cargoLabel ? (
+            <TerminalText
+              size={6.5 * fontScale}
+              letterSpacing={1}
+              style={styles.metaLabel}
+            >
+              {cargoLabel}
+            </TerminalText>
+          ) : null}
         </View>
       </View>
     </View>
@@ -87,16 +85,17 @@ export default function HarvestScreenHeader({
 const styles = StyleSheet.create({
   header: {
     width: '100%',
-    minHeight: 72,
-    maxHeight: 96,
-    paddingTop: 8,
-    paddingBottom: 10,
+    minHeight: 104,
+    maxHeight: 112,
+    paddingTop: 12,
+    paddingBottom: 12,
     marginBottom: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: SCANNER_BORDER_QUIET,
     backgroundColor: SCANNER_HEADER_BG,
     flexShrink: 0,
     justifyContent: 'center',
+    overflow: 'visible',
   },
   row: {
     flexDirection: 'row',
@@ -107,7 +106,8 @@ const styles = StyleSheet.create({
   copy: {
     flex: 1,
     minWidth: 0,
-    gap: 2,
+    gap: 4,
+    overflow: 'visible',
   },
   eyebrow: {
     color: SCANNER_TEXT_SECONDARY,
@@ -115,23 +115,26 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         fontSize: 'clamp(11px, 0.7vw, 12px)',
+        lineHeight: '1.25',
       } as object,
-      default: {},
+      default: {
+        lineHeight: 16,
+      },
     }),
   },
   title: {
     color: SCANNER_TEXT_PRIMARY,
     fontWeight: '800',
     textTransform: 'uppercase',
-    lineHeight: 36,
-    marginVertical: 0,
     ...Platform.select({
       web: {
-        fontSize: 'clamp(36px, 2.2vw, 42px)',
-        lineHeight: 0.98,
+        fontSize: 'clamp(34px, 2vw, 38px)',
+        lineHeight: '1.05',
         letterSpacing: '0.03em',
       } as object,
-      default: {},
+      default: {
+        lineHeight: 40,
+      },
     }),
   },
   liveRow: {
@@ -155,8 +158,11 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         fontSize: 'clamp(11px, 0.7vw, 12px)',
+        lineHeight: '1.25',
       } as object,
-      default: {},
+      default: {
+        lineHeight: 16,
+      },
     }),
   },
   meta: {
@@ -171,8 +177,11 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         fontSize: 'clamp(11px, 0.7vw, 12px)',
+        lineHeight: '1.25',
       } as object,
-      default: {},
+      default: {
+        lineHeight: 16,
+      },
     }),
   },
 });

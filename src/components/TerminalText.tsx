@@ -17,6 +17,11 @@ export interface TerminalTextProps extends TextProps {
   tier?: 'body' | 'caption';
 }
 
+/** Unitless CSS ratios (e.g. 0.98, 1.2) must not be scaled as pixel line-heights. */
+function isUnitlessLineHeight(value: unknown): boolean {
+  return typeof value === 'number' && value > 0 && value < 4;
+}
+
 /** Monospace terminal copy — scales typography on web desktop only. */
 export default function TerminalText({
   style,
@@ -40,24 +45,34 @@ export default function TerminalText({
     const baseSize = size
       ?? (token != null ? HUB_TYPE[token] : undefined)
       ?? (typeof flat.fontSize === 'number' ? flat.fontSize : undefined);
+
+    const styleHasCssFontSize = typeof flat.fontSize === 'string';
+    const styleHasCssLetterSpacing = typeof flat.letterSpacing === 'string';
+    const styleHasCssOrUnitlessLineHeight =
+      typeof flat.lineHeight === 'string'
+      || isUnitlessLineHeight(flat.lineHeight);
+
     const baseLineHeight = lineHeight
       ?? (token != null ? HUB_LINE_HEIGHT[token] : undefined)
-      ?? (typeof flat.lineHeight === 'number' ? flat.lineHeight : undefined);
+      ?? (
+        typeof flat.lineHeight === 'number' && !isUnitlessLineHeight(flat.lineHeight)
+          ? flat.lineHeight
+          : undefined
+      );
     const baseLetterSpacing = letterSpacing
       ?? (typeof flat.letterSpacing === 'number' ? flat.letterSpacing : undefined);
 
-    // Preserve CSS clamp()/string sizes from style (web harvest polish, etc.).
-    const styleHasCssFontSize = typeof flat.fontSize === 'string';
-    const styleHasCssLineHeight = typeof flat.lineHeight === 'string';
-    const styleHasCssLetterSpacing = typeof flat.letterSpacing === 'string';
-
     return {
       ...(baseSize != null && !styleHasCssFontSize ? { fontSize: scaleFont(baseSize) } : null),
-      ...(baseLineHeight != null && !styleHasCssLineHeight
+      ...(baseLineHeight != null && !styleHasCssOrUnitlessLineHeight
         ? { lineHeight: scaleFont(baseLineHeight) }
         : null),
       ...(baseLetterSpacing != null && !styleHasCssLetterSpacing
         ? { letterSpacing: scaleSpacing(baseLetterSpacing) }
+        : null),
+      // RN Web treats numeric 0.98 as 0.98px — emit a CSS unitless string instead.
+      ...(isUnitlessLineHeight(flat.lineHeight)
+        ? { lineHeight: String(flat.lineHeight) as unknown as number }
         : null),
     };
   }, [letterSpacing, lineHeight, scaleFont, scaleSpacing, size, style, tier, variant]);

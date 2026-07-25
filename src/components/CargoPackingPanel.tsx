@@ -49,6 +49,8 @@ interface CargoPackingPanelProps {
   onRelocateItem: (instanceId: string, row: number, col: number) => boolean;
   onReplaceItem?: (instanceId: string, row: number, col: number) => boolean;
   onDiscardItem?: (instanceId: string) => boolean;
+  /** Harvest — return grid cargo to the containment field. */
+  onReturnToContainment?: (instanceId: string) => boolean;
   runCredits?: number;
   showCreditsHud?: boolean;
   onContinue?: () => void;
@@ -103,6 +105,7 @@ export default function CargoPackingPanel({
   onRelocateItem,
   onReplaceItem,
   onDiscardItem,
+  onReturnToContainment,
   runCredits,
   showCreditsHud = false,
   onContinue,
@@ -380,42 +383,6 @@ export default function CargoPackingPanel({
 
   const cargoConsoleFooter = harvestTriPane && onContinue && !hideContinueButton ? (
     <View style={styles.continueBlock}>
-      {fieldCleared ? (
-        <TerminalText
-          size={7.5 * fontScale}
-          letterSpacing={0.95}
-          style={[styles.readiness, styles.readinessReady]}
-          numberOfLines={1}
-          ellipsizeMode="clip"
-        >
-          FIELD CLEAR // DESCENT READY
-        </TerminalText>
-      ) : (
-        <View style={styles.readinessStack}>
-          <TerminalText
-            size={7.5 * fontScale}
-            letterSpacing={0.95}
-            style={[styles.readiness, styles.readinessPending]}
-            numberOfLines={1}
-            ellipsizeMode="clip"
-          >
-            {unstowedCount === 1
-              ? '1 MATERIAL REMAINS'
-              : `${unstowedCount} MATERIALS REMAIN`}
-          </TerminalText>
-          <TerminalText
-            size={6.5 * fontScale}
-            letterSpacing={0.7}
-            style={styles.readinessSecondary}
-            numberOfLines={1}
-            ellipsizeMode="clip"
-          >
-            {unstowedCount === 1
-              ? 'STOW MATERIAL OR CONTINUE WITHOUT IT'
-              : 'STOW MATERIAL OR CONTINUE WITHOUT THEM'}
-          </TerminalText>
-        </View>
-      )}
       <View style={styles.continueBtnShell}>
         <HapticPressable
           onPress={() => {
@@ -426,7 +393,7 @@ export default function CargoPackingPanel({
           accessibilityLabel={continueLabel}
           style={(state) => [
             styles.continueBtn,
-            fieldCleared ? styles.continueBtnReady : null,
+            fieldCleared && residueLooseCount === 0 ? styles.continueBtnReady : null,
             terminalHoverStyle(readPressableHover(state), state.pressed),
             Platform.OS === 'web' ? ({ cursor: 'pointer' } as object) : null,
           ]}
@@ -462,6 +429,7 @@ export default function CargoPackingPanel({
       onRelocateItem={onRelocateItem}
       onReplaceItem={onReplaceItem}
       onDiscardItem={onDiscardItem}
+      onReturnToContainment={onReturnToContainment}
       runCredits={runCredits}
       showCreditsHud={showCreditsHud}
       onContinue={onContinue}
@@ -486,7 +454,8 @@ export default function CargoPackingPanel({
       leftPaneSlot={extractorPane}
       centerPaneFooter={cargoConsoleFooter}
       workspaceStatusStrip={workspaceStatusStrip}
-      cargoReadout={cargoReadout}
+      residueLooseCount={residueLooseCount}
+      cargoReadout={null}
       rightPaneWidth={rightPaneWidth}
       selectedHarvestInstanceId={harvestTriPane ? selectedCargoInstanceId : null}
       onHarvestCargoSelect={harvestTriPane ? setSelectedCargoInstanceId : undefined}
@@ -854,7 +823,7 @@ const styles = StyleSheet.create({
   },
   readoutBlock: {
     gap: 4,
-    paddingTop: 4,
+    paddingTop: 22,
     minHeight: 0,
     flexShrink: 1,
   },
@@ -873,9 +842,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     ...Platform.select({
       web: {
-        fontSize: 'clamp(17px, 1.05vw, 19px)',
+        fontSize: 'clamp(16px, 0.95vw, 18px)',
+        lineHeight: '1.25',
       } as object,
-      default: {},
+      default: {
+        lineHeight: 22,
+      },
     }),
   },
   readoutSelectedTitle: {
@@ -883,22 +855,26 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     ...Platform.select({
       web: {
-        fontSize: 'clamp(17px, 1.05vw, 19px)',
+        fontSize: 'clamp(16px, 0.95vw, 18px)',
+        lineHeight: '1.25',
       } as object,
-      default: {},
+      default: {
+        lineHeight: 22,
+      },
     }),
   },
   readoutBody: {
     color: HARVEST_MUTED_SLATE,
-    lineHeight: 18,
-    opacity: 0.88,
+    opacity: 0.82,
     fontWeight: '500',
     ...Platform.select({
       web: {
-        fontSize: 'clamp(14px, 0.9vw, 16px)',
-        lineHeight: 1.35,
+        fontSize: 'clamp(13px, 0.8vw, 14px)',
+        lineHeight: '1.35',
       } as object,
-      default: {},
+      default: {
+        lineHeight: 18,
+      },
     }),
   },
   readoutRows: {

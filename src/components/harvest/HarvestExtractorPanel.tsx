@@ -30,6 +30,7 @@ interface HarvestExtractorPanelProps {
 
 /**
  * Compact horizontal Veil Extractor — single operational state, full-width capacity bar.
+ * No ellipsis; layout sized so primary labels always fit.
  */
 export default function HarvestExtractorPanel({
   harvestPercentage,
@@ -49,7 +50,6 @@ export default function HarvestExtractorPanel({
     : Math.round((clampedPct / 100) * residueCapacity);
   const idle = !residueAvailable && !active;
   const fillColor = active ? HARVEST_PHOSPHOR : idle ? HARVEST_MUTED_SLATE : accentColor;
-  const stateLabel = active ? 'DRAWING' : residueAvailable ? 'READY' : 'IDLE';
 
   return (
     <View
@@ -57,13 +57,13 @@ export default function HarvestExtractorPanel({
         styles.module,
         {
           paddingHorizontal: padding,
-          paddingVertical: Math.max(10, padding - 2),
+          paddingVertical: Math.max(12, padding - 1),
           borderColor: active
             ? 'rgba(100, 201, 177, 0.36)'
             : residueAvailable
               ? 'rgba(91, 224, 195, 0.18)'
               : 'rgba(91, 224, 195, 0.14)',
-          opacity: idle ? 0.82 : 1,
+          opacity: idle ? 0.86 : 1,
         },
         style,
       ]}
@@ -74,42 +74,25 @@ export default function HarvestExtractorPanel({
 
       <View style={styles.readoutColumn}>
         <TerminalText
-          size={6.5 * fontScale}
-          letterSpacing={0.95}
+          size={6 * fontScale}
+          letterSpacing={0.9}
           style={styles.eyebrow}
-          numberOfLines={1}
         >
           ACTIVE TOOL // RESONANCE SINK
         </TerminalText>
 
-        <View style={styles.titleRow}>
-          <TerminalText
-            size={10 * fontScale}
-            letterSpacing={0.75}
-            style={styles.title}
-            numberOfLines={1}
-            ellipsizeMode="clip"
-          >
-            VEIL EXTRACTOR
-          </TerminalText>
-          <View style={styles.stateSlot}>
-            <TerminalText
-              size={6.5 * fontScale}
-              letterSpacing={0.9}
-              style={[styles.stateChip, { color: fillColor }]}
-              numberOfLines={1}
-              ellipsizeMode="clip"
-            >
-              {stateLabel}
-            </TerminalText>
-          </View>
-        </View>
+        <TerminalText
+          size={9.5 * fontScale}
+          letterSpacing={0.7}
+          style={styles.title}
+        >
+          VEIL EXTRACTOR
+        </TerminalText>
 
         <TerminalText
-          size={10 * fontScale}
-          letterSpacing={0.5}
+          size={9 * fontScale}
+          letterSpacing={0.45}
           style={[styles.capValue, { color: fillColor }]}
-          numberOfLines={1}
         >
           {`${String(currentUnits).padStart(2, '0')} / ${residueCapacity}`}
         </TerminalText>
@@ -137,19 +120,17 @@ export default function HarvestExtractorPanel({
 
         {idle ? (
           <TerminalText
-            size={6 * fontScale}
-            letterSpacing={0.75}
+            size={6.5 * fontScale}
+            letterSpacing={0.7}
             style={styles.supportLine}
-            numberOfLines={1}
           >
             NO RESIDUE DETECTED
           </TerminalText>
         ) : residueAvailable && !active ? (
           <TerminalText
-            size={6.5 * fontScale}
-            letterSpacing={0.8}
+            size={7 * fontScale}
+            letterSpacing={0.75}
             style={styles.supportLineHold}
-            numberOfLines={1}
           >
             [ HOLD ] VACUUM RESIDUE
           </TerminalText>
@@ -182,9 +163,9 @@ const styles = StyleSheet.create({
     minHeight: HARVEST_EXTRACTOR_MODULE_HEIGHT,
     backgroundColor: HARVEST_INSTRUMENT_BG,
     borderWidth: 1,
-    overflow: 'hidden',
+    overflow: 'visible',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
   },
   artColumn: {
     width: HARVEST_EXTRACTOR_ART_WIDTH,
@@ -202,66 +183,57 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     width: '100%',
-    gap: 4,
+    gap: 5,
     justifyContent: 'center',
-    overflow: 'hidden',
+    overflow: 'visible',
+    paddingRight: 2,
   },
   eyebrow: {
     color: HARVEST_MUTED_SLATE,
     fontWeight: '600',
     ...Platform.select({
       web: {
-        fontSize: 'clamp(11px, 0.7vw, 12px)',
+        fontSize: 'clamp(10px, 0.65vw, 11px)',
+        lineHeight: '1.3',
       } as object,
-      default: {},
+      default: {
+        lineHeight: 14,
+      },
     }),
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    minWidth: 0,
-    width: '100%',
   },
   title: {
     color: HARVEST_TEXT_PRIMARY,
     fontWeight: '700',
-    flexShrink: 1,
-    minWidth: 0,
     ...Platform.select({
       web: {
-        fontSize: 'clamp(18px, 1.05vw, 20px)',
+        fontSize: 'clamp(17px, 1vw, 19px)',
+        lineHeight: '1.2',
       } as object,
-      default: {},
+      default: {
+        lineHeight: 22,
+      },
     }),
-  },
-  stateSlot: {
-    width: 78,
-    flexShrink: 0,
-    alignItems: 'flex-end',
-  },
-  stateChip: {
-    fontWeight: '700',
-    textAlign: 'right',
   },
   capValue: {
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
-    marginTop: 2,
+    marginTop: 1,
     ...Platform.select({
       web: {
-        fontSize: 'clamp(18px, 1.05vw, 20px)',
+        fontSize: 'clamp(16px, 0.95vw, 18px)',
+        lineHeight: '1.2',
       } as object,
-      default: {},
+      default: {
+        lineHeight: 22,
+      },
     }),
   },
   meterTrack: {
     alignSelf: 'stretch',
     width: '100%',
     height: 3.5,
-    marginTop: 2,
-    backgroundColor: 'rgba(126, 139, 133, 0.28)',
+    marginTop: 1,
+    backgroundColor: 'rgba(126, 139, 133, 0.32)',
     overflow: 'hidden',
   },
   meterFill: {
@@ -271,16 +243,34 @@ const styles = StyleSheet.create({
   supportLine: {
     color: HARVEST_MUTED_SLATE,
     fontWeight: '600',
-    opacity: 0.78,
+    opacity: 0.82,
     marginTop: 4,
+    ...Platform.select({
+      web: {
+        fontSize: 'clamp(12px, 0.8vw, 14px)',
+        lineHeight: '1.3',
+      } as object,
+      default: {
+        lineHeight: 16,
+      },
+    }),
   },
   supportLineHold: {
     color: HARVEST_MUTED_SLATE,
     fontWeight: '700',
     marginTop: 4,
+    ...Platform.select({
+      web: {
+        fontSize: 'clamp(12px, 0.8vw, 14px)',
+        lineHeight: '1.3',
+      } as object,
+      default: {
+        lineHeight: 16,
+      },
+    }),
   },
   supportSpacer: {
-    height: 14,
+    height: 16,
     marginTop: 4,
   },
 });

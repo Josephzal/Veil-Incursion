@@ -694,6 +694,30 @@ export function removePlacedCargoItem(cargo: CargoRunState, instanceId: string):
   };
 }
 
+/** Move a placed grid item back into the containment / field floor. */
+export function returnCargoToContainment(
+  cargo: CargoRunState,
+  instanceId: string,
+): CargoRunState | null {
+  const placed = cargo.grid.placed.find((item) => item.instanceId === instanceId);
+  if (!placed) return null;
+
+  const containmentItem: ContainmentItem = {
+    instanceId: placed.instanceId,
+    itemId: placed.itemId,
+    currentValue: unitCargoValue(placed),
+    quantity: cargoItemQuantity(placed),
+  };
+
+  return {
+    ...cargo,
+    grid: {
+      placed: cargo.grid.placed.filter((item) => item.instanceId !== instanceId),
+    },
+    containment: [...cargo.containment, containmentItem],
+  };
+}
+
 export function buildHarvestLoot(
   _tier: HarvestYieldTier,
   _sectorTier: number,

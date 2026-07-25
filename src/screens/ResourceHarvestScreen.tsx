@@ -22,7 +22,7 @@ import { resolveVeilResidueCanisterFillPercent } from '../data/veilResidueRunEng
 import { useGameFlow } from '../context/GameFlowContext';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
-import { calculateGridOccupancy, isVeilResidueCargoItem } from '../data/cargoGridEngine';
+import { isVeilResidueCargoItem } from '../data/cargoGridEngine';
 import {
   cargoItemQuantity,
   isProgressionProtectedCargo,
@@ -56,6 +56,7 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
     relocateCargoItem,
     replaceCargoItem,
     discardCargoInstance,
+    returnCargoToContainment,
     recordEconomyLeaveBehind,
     appendRunLog,
     prepareHarvestAmbushEncounter,
@@ -113,9 +114,6 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
     ?? 'UNKNOWN SECTOR'
   ).toUpperCase();
   const depthLabel = `DEPTH ${String(activeIncursion.currentDepth ?? 1).padStart(2, '0')}`;
-  const cargoOccupancyPct = Math.round(calculateGridOccupancy(activeIncursion.cargo) * 100);
-  const cargoLabel = `CARGO ${String(cargoOccupancyPct).padStart(2, '0')}%`;
-
   const insets = useSafeAreaInsets();
   const masterPadding = Math.max(16 * fontScale, 18);
   const layoutGap = 10 * fontScale;
@@ -391,7 +389,7 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
       <IncursionRunLayout hideRunChrome style={{ backgroundColor: 'transparent' }}>
         <RunEventImmersiveBackdrop
           backgroundImage={ResourceHarvestBg}
-          scrimOpacity={0.15}
+          scrimOpacity={0.09}
           contentPadding={masterPadding}
           contentStyle={[styles.harvestBody, { paddingTop: verticalPadding, paddingBottom: verticalPadding }]}
           overlay={(
@@ -412,7 +410,6 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
             <HarvestScreenHeader
               statusLine={`CONTAINMENT STABLE // ${sectorLabel}`}
               depthLabel={depthLabel}
-              cargoLabel={cargoLabel}
               fontScale={fontScale}
             />
             {showSplitterPrompt ? (
@@ -443,6 +440,7 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
                 onRelocateItem={relocateCargoItem}
                 onReplaceItem={replaceCargoItem}
                 onDiscardItem={discardCargoInstance}
+                onReturnToContainment={returnCargoToContainment}
                 showCreditsHud={false}
                 onContinue={handlePackingContinue}
                 continueLabel={continueLabel}

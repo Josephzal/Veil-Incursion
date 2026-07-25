@@ -3,6 +3,8 @@ import { Modal, StyleSheet, Text, View } from 'react-native';
 import HapticPressable from './HapticPressable';
 import type { TerminalTheme } from '../types/theme';
 
+export type CargoDiscardConfirmMode = 'jettison' | 'field-drop';
+
 interface CargoDiscardConfirmOverlayProps {
   visible: boolean;
   itemName: string;
@@ -14,6 +16,8 @@ interface CargoDiscardConfirmOverlayProps {
   rareWarning?: boolean;
   /** Optional stack quantity label (e.g. "x3"). */
   quantityLabel?: string;
+  /** jettison = permanent remove; field-drop = return to containment floor. */
+  mode?: CargoDiscardConfirmMode;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -26,27 +30,43 @@ export default function CargoDiscardConfirmOverlay({
   routeIntelWarning = false,
   rareWarning = false,
   quantityLabel,
+  mode = 'jettison',
   onConfirm,
   onCancel,
 }: CargoDiscardConfirmOverlayProps): React.JSX.Element {
-  const danger = routeIntelWarning || rareWarning;
+  const fieldDrop = mode === 'field-drop';
+  const danger = !fieldDrop && (routeIntelWarning || rareWarning);
+  const headerColor = danger ? '#ef4444' : accentColor;
+
+  const header = fieldDrop
+    ? 'DROP INTO FIELD'
+    : routeIntelWarning
+      ? 'JETTISON ROUTE INTEL'
+      : rareWarning
+        ? 'JETTISON RARE CARGO'
+        : 'JETTISON CARGO';
+
+  const hint = fieldDrop
+    ? 'Return this stack to the containment field? You can pack it again before descent.'
+    : routeIntelWarning
+      ? 'WARNING — Sector access route intel. Cannot be fenced. Discarding delays the next sector unlock and counts toward pity recovery. Drop permanently?'
+      : rareWarning
+        ? 'WARNING — Rare or apex cargo. Cannot casually recover after jettison. Drop permanently?'
+        : 'Drop this stack permanently from your inventory?';
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <View style={styles.backdrop}>
-        <View style={[styles.panel, { borderColor: danger ? '#ef4444' : accentColor, backgroundColor: '#050608' }]}>
-          <Text style={[styles.header, { color: danger ? '#ef4444' : accentColor }]}>
-            {routeIntelWarning ? 'JETTISON ROUTE INTEL' : rareWarning ? 'JETTISON RARE CARGO' : 'JETTISON CARGO'}
+        <View style={[styles.panel, { borderColor: headerColor, backgroundColor: '#050608' }]}>
+          <Text style={[styles.header, { color: headerColor }]}>
+            {header}
           </Text>
           <Text style={[styles.body, { color: theme.primaryColor }]}>
             {itemName.toUpperCase()}
             {quantityLabel ? `  ${quantityLabel}` : ''}
           </Text>
           <Text style={[styles.hint, { color: theme.mutedColor }]}>
-            {routeIntelWarning
-              ? 'WARNING — Sector access route intel. Cannot be fenced. Discarding delays the next sector unlock and counts toward pity recovery. Drop permanently?'
-              : rareWarning
-                ? 'WARNING — Rare or apex cargo. Cannot casually recover after jettison. Drop permanently?'
-                : 'Drop this stack permanently from your inventory?'}
+            {hint}
           </Text>
 
           <View style={styles.actions}>
@@ -63,10 +83,12 @@ export default function CargoDiscardConfirmOverlay({
               onPress={onConfirm}
               style={({ pressed }) => [
                 styles.btn,
-                { borderColor: '#ef4444', opacity: pressed ? 0.75 : 1 },
+                { borderColor: fieldDrop ? accentColor : '#ef4444', opacity: pressed ? 0.75 : 1 },
               ]}
             >
-              <Text style={[styles.btnText, { color: '#ef4444' }]}>[ YES ]</Text>
+              <Text style={[styles.btnText, { color: fieldDrop ? accentColor : '#ef4444' }]}>
+                {fieldDrop ? '[ DROP ]' : '[ YES ]'}
+              </Text>
             </HapticPressable>
           </View>
         </View>

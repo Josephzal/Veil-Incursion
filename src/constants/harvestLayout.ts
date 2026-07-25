@@ -21,11 +21,40 @@ export const HARVEST_DESKTOP_LEFT_FLEX = 0;
 export const HARVEST_DESKTOP_CENTER_FLEX = 3;
 export const HARVEST_DESKTOP_RIGHT_FLEX = 1;
 /** Docked extractor module footprint inside the containment viewport. */
-export const HARVEST_EXTRACTOR_MODULE_WIDTH_CSS = 'clamp(400px, 23vw, 475px)';
-export const HARVEST_EXTRACTOR_MODULE_WIDTH = 420;
-export const HARVEST_EXTRACTOR_MODULE_HEIGHT = 165;
+export const HARVEST_EXTRACTOR_MODULE_WIDTH_CSS = 'clamp(460px, 26vw, 500px)';
+export const HARVEST_EXTRACTOR_MODULE_WIDTH = 480;
+export const HARVEST_EXTRACTOR_MODULE_HEIGHT = 178;
 /** Artwork column inside the horizontal extractor dock. */
-export const HARVEST_EXTRACTOR_ART_WIDTH = 120;
+export const HARVEST_EXTRACTOR_ART_WIDTH = 128;
+/** Matches `extractorDock` absolute insets in CargoGridBoard. */
+export const HARVEST_EXTRACTOR_DOCK_LEFT = 16;
+export const HARVEST_EXTRACTOR_DOCK_BOTTOM = 10;
+/** Extra keep-out padding so item hit-pads clear the dock. */
+export const HARVEST_EXTRACTOR_KEEP_OUT_PAD = 18;
+
+/** Local loot-area exclusion for the lower-left extractor instrument. */
+export function resolveHarvestExtractorExcludeZone(lootArea: {
+  width: number;
+  height: number;
+}): { left: number; top: number; width: number; height: number } | null {
+  if (lootArea.width <= 0 || lootArea.height <= 0) return null;
+  const pad = HARVEST_EXTRACTOR_KEEP_OUT_PAD;
+  const dockWidth = Math.min(
+    HARVEST_EXTRACTOR_MODULE_WIDTH,
+    Math.floor(lootArea.width * 0.72),
+  );
+  const width = Math.min(lootArea.width, dockWidth + pad * 2);
+  const height = Math.min(
+    lootArea.height,
+    HARVEST_EXTRACTOR_MODULE_HEIGHT + pad * 2,
+  );
+  const left = Math.max(0, HARVEST_EXTRACTOR_DOCK_LEFT - pad);
+  const top = Math.max(
+    0,
+    lootArea.height - HARVEST_EXTRACTOR_DOCK_BOTTOM - HARVEST_EXTRACTOR_MODULE_HEIGHT - pad,
+  );
+  return { left, top, width, height };
+}
 /** Bottom telemetry strip inside the containment workspace. */
 export const HARVEST_STATUS_STRIP_HEIGHT = 66;
 /** Harvest cargo console web width — wider than legacy 25vw clamp. */
@@ -34,8 +63,8 @@ export const HARVEST_CARGO_CONSOLE_WIDTH_NATIVE = 480;
 export const HARVEST_CARGO_CONSOLE_MAX_PCT = '40%';
 /** Viewport-aware cell target: clamp(78px, 8.5vh, 98px). */
 export const HARVEST_CELL_SIZE_MIN = 78;
-export const HARVEST_CELL_SIZE_MAX = 98;
-export const HARVEST_CELL_SIZE_VH = 0.085;
+export const HARVEST_CELL_SIZE_MAX = 118;
+export const HARVEST_CELL_SIZE_VH = 0.11;
 /** Quiet cargo matrix gap — slightly airier than the shared 2px cargo default. */
 export const HARVEST_CELL_GAP = 4;
 export const HARVEST_CONTINUE_BUTTON_MIN_HEIGHT = 56;

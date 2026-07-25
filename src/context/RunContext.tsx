@@ -238,6 +238,7 @@ import {
   finalizeHarvestCargoState,
   relocateCargoItem as relocateCargoItemState,
   replaceCargoAtCell as replaceCargoAtCellState,
+  returnCargoToContainment as returnCargoToContainmentState,
   resetCargoInstanceCounter,
   scaledLootCount,
   hasCargoItem,
@@ -725,6 +726,8 @@ interface RunContextType {
   relocateCargoItem: (instanceId: string, row: number, col: number) => boolean;
   replaceCargoItem: (instanceId: string, row: number, col: number) => boolean;
   discardCargoInstance: (instanceId: string) => boolean;
+  /** Harvest — return a grid item to the containment field floor. */
+  returnCargoToContainment: (instanceId: string) => boolean;
   /** Phase 2K — record leave-behind packing decision. */
   recordEconomyLeaveBehind: (count?: number) => void;
   applyHarvestChoice: (tier: HarvestYieldTier) => { logLines: string[]; ambushTriggered: boolean };
@@ -2825,6 +2828,28 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (!placed || !nextCargo) return false;
     const occupancy = Math.round(calculateGridOccupancy(nextCargo) * 100);
     appendRunLog(`>> CARGO REPLACE — occupant jettisoned // grid occupancy ${occupancy}%.`);
+    return true;
+  }, [appendRunLog]);
+
+  const returnCargoToContainment = useCallback((instanceId: string) => {
+    let returned = false;
+    let itemName = 'Unknown item';
+
+    setActiveIncursion((prev) => {
+      const nextCargo = returnCargoToContainmentState(prev.cargo, instanceId);
+      if (!nextCargo) return prev;
+      const placed = prev.cargo.grid.placed.find((item) => item.instanceId === instanceId);
+      if (placed) {
+        itemName = CARGO_ITEM_CATALOG[placed.itemId].name;
+      }
+      returned = true;
+      const next = { ...prev, cargo: nextCargo };
+      activeIncursionRef.current = next;
+      return next;
+    });
+
+    if (!returned) return false;
+    appendRunLog(`>> FIELD DROP — ${itemName} returned to containment.`);
     return true;
   }, [appendRunLog]);
 
@@ -7252,6 +7277,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       relocateCargoItem,
       replaceCargoItem,
       discardCargoInstance,
+      returnCargoToContainment,
       recordEconomyLeaveBehind,
       applyHarvestChoice,
       useFocusingAmpouleFromCargo,
@@ -7442,6 +7468,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       relocateCargoItem,
       replaceCargoItem,
       discardCargoInstance,
+      returnCargoToContainment,
       recordEconomyLeaveBehind,
       applyHarvestChoice,
       useFocusingAmpouleFromCargo,

@@ -13,10 +13,11 @@ export const HARVEST_VEIL_VIOLET = SCANNER_VEIL_VIOLET;
 export const HARVEST_DANGER = 'rgba(180, 86, 108, 0.92)';
 
 /** Near-transparent containment — environment stays visible beneath. */
-export const HARVEST_CONTAINMENT_BG = 'rgba(2, 8, 7, 0.08)';
+export const HARVEST_CONTAINMENT_BG = 'rgba(2, 8, 7, 0.04)';
 export const HARVEST_CONTAINMENT_BORDER = 'rgba(91, 224, 195, 0.10)';
-export const HARVEST_CONTAINMENT_SCRIM_TOP = 'rgba(2, 6, 6, 0.22)';
-export const HARVEST_CONTAINMENT_SCRIM_BOTTOM = 'rgba(2, 6, 6, 0.03)';
+/** Stronger gradient only behind upper HUD labels; floor stays readable. */
+export const HARVEST_CONTAINMENT_SCRIM_TOP = 'rgba(2, 6, 6, 0.18)';
+export const HARVEST_CONTAINMENT_SCRIM_BOTTOM = 'rgba(2, 6, 6, 0.01)';
 
 /** Extractor / status instruments — translucent HUD, not opaque panels. */
 export const HARVEST_INSTRUMENT_BG = 'rgba(4, 12, 11, 0.78)';

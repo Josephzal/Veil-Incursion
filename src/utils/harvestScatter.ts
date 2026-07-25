@@ -12,8 +12,39 @@ export interface ScatterPose {
   top: number;
 }
 
+/** Axis-aligned exclusion region in local scatter-floor coordinates. */
+export interface ScatterExcludeZone {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
 function randomInRange(min: number, max: number): number {
   return min + Math.random() * (max - min);
+}
+
+function rectsOverlap(
+  aLeft: number,
+  aTop: number,
+  aWidth: number,
+  aHeight: number,
+  zone: ScatterExcludeZone,
+): boolean {
+  return !(
+    aLeft + aWidth <= zone.left
+    || aLeft >= zone.left + zone.width
+    || aTop + aHeight <= zone.top
+    || aTop >= zone.top + zone.height
+  );
+}
+
+export function poseOverlapsExcludeZone(
+  pose: ScatterPose,
+  size: ScatterRect,
+  zone: ScatterExcludeZone,
+): boolean {
+  return rectsOverlap(pose.left, pose.top, size.width, size.height, zone);
 }
 
 /** Shrink floor so particles/sprites stay fully inside (accounts for half-size overhang). */
@@ -72,16 +103,27 @@ export function scatterRectsInBounds(
     padding?: number;
     maxAttempts?: number;
     existing?: ReadonlyMap<string, ScatterPose>;
+    /** Hard keep-out regions (e.g. extractor dock). */
+    excludeZones?: ReadonlyArray<ScatterExcludeZone>;
   },
 ): Map<string, ScatterPose> {
   const padding = Math.max(0, options?.padding ?? 8);
   const maxAttempts = options?.maxAttempts ?? 48;
+  const excludeZones = options?.excludeZones ?? [];
   const next = new Map<string, ScatterPose>(options?.existing ?? []);
+
+  const overlapsAnyExclude = (pose: ScatterPose, size: ScatterRect): boolean => (
+    excludeZones.some((zone) => poseOverlapsExcludeZone(pose, size, zone))
+  );
 
   const placed: Array<{ id: string; cx: number; cy: number; size: ScatterRect }> = [];
   for (const [id, pose] of next) {
     const match = items.find((item) => item.id === id);
     if (!match) continue;
+    if (overlapsAnyExclude(pose, match.size)) {
+      next.delete(id);
+      continue;
+    }
     placed.push({
       id,
       cx: pose.left + match.size.width / 2,
@@ -104,6 +146,11 @@ export function scatterRectsInBounds(
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       const left = randomInRange(minLeft, maxLeft);
       const top = randomInRange(minTop, maxTop);
+      const pose = { left, top };
+      if (overlapsAnyExclude(pose, item.size)) {
+        continue;
+      }
+
       const cx = left + item.size.width / 2;
       const cy = top + item.size.height / 2;
 
@@ -125,20 +172,50 @@ export function scatterRectsInBounds(
 
       if (penalty < bestPenalty) {
         bestPenalty = penalty;
-        best = { left, top };
+        best = pose;
         if (penalty === 0) break;
+      }
+    }
+
+    // Fallback: search a denser grid if random sampling missed a free pocket.
+    if (!best) {
+      const stepX = Math.max(12, item.size.width * 0.5);
+      const stepY = Math.max(12, item.size.height * 0.5);
+      for (let top = minTop; top <= maxTop && !best; top += stepY) {
+        for (let left = minLeft; left <= maxLeft; left += stepX) {
+          const pose = { left, top };
+          if (overlapsAnyExclude(pose, item.size)) continue;
+          best = pose;
+          break;
+        }
       }
     }
 
     const pose = best ?? {
       left: randomInRange(minLeft, maxLeft),
-      top: randomInRange(minTop, maxTop),
+      top: Math.min(minTop, Math.max(padding, maxTop - item.size.height)),
     };
-    next.set(item.id, pose);
+    // Last resort: clamp above exclude zones rather than land under the extractor.
+    let safePose = pose;
+    if (overlapsAnyExclude(safePose, item.size) && excludeZones.length > 0) {
+      const zone = excludeZones[0];
+      safePose = {
+        left: Math.min(maxLeft, Math.max(minLeft, padding)),
+        top: Math.min(maxTop, Math.max(minTop, zone.top - item.size.height - 8)),
+      };
+      if (overlapsAnyExclude(safePose, item.size)) {
+        safePose = {
+          left: Math.min(maxLeft, Math.max(minLeft, zone.left + zone.width + 8)),
+          top: Math.min(maxTop, Math.max(minTop, padding)),
+        };
+      }
+    }
+
+    next.set(item.id, safePose);
     placed.push({
       id: item.id,
-      cx: pose.left + item.size.width / 2,
-      cy: pose.top + item.size.height / 2,
+      cx: safePose.left + item.size.width / 2,
+      cy: safePose.top + item.size.height / 2,
       size: item.size,
     });
   }
