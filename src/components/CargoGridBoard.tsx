@@ -559,11 +559,6 @@ function ContainmentSlot({
   const slotRef = useRef<View>(null);
   const [hovered, setHovered] = useState(false);
   const rotation = useMemo(() => harvestPoseRotation(item.instanceId), [item.instanceId]);
-  const inspect = useMemo(
-    () => resolveCargoItemInspectInfo(item.itemId, cargoItemQuantity(item), unitCargoValue(item)),
-    [item.itemId, item],
-  );
-  const def = CARGO_ITEM_CATALOG[item.itemId];
   const hitPad = groundPresence ? 14 : 0;
 
   const reportCenter = useCallback(() => {
@@ -580,20 +575,7 @@ function ContainmentSlot({
     reportCenter();
   }, [reportCenter, scatterPose?.left, scatterPose?.top]);
 
-  const hoverHandlers = groundPresence
-    ? (Platform.OS === 'web'
-      ? {
-          onMouseEnter: () => setHovered(true),
-          onMouseLeave: () => setHovered(false),
-        }
-      : {
-          onHoverIn: () => setHovered(true),
-          onHoverOut: () => setHovered(false),
-        }) as Record<string, () => void>
-    : {};
-
   const showFocusChrome = groundPresence && (hovered || isDragging);
-  const classLabel = (inspect.categoryLabel ?? inspect.rarityLabel ?? 'SALVAGE').toUpperCase();
 
   return (
     <View
@@ -615,7 +597,6 @@ function ContainmentSlot({
             }
           : null,
       ]}
-      {...hoverHandlers}
     >
       {groundPresence ? (
         <View
@@ -653,17 +634,6 @@ function ContainmentSlot({
         </View>
       ) : null}
 
-      {showFocusChrome && !isDragging ? (
-        <View pointerEvents="none" style={[styles.groundLabel, { top: Math.max(0, hitPad - 28) }]}>
-          <TerminalText size={7} letterSpacing={0.85} style={styles.groundLabelTitle} numberOfLines={1}>
-            {inspect.shortName.toUpperCase()}
-          </TerminalText>
-          <TerminalText size={6} letterSpacing={0.7} style={styles.groundLabelMeta} numberOfLines={1}>
-            {`${classLabel} // ${def.width}×${def.height}`}
-          </TerminalText>
-        </View>
-      ) : null}
-
       <View
         style={groundPresence
           ? {
@@ -681,8 +651,14 @@ function ContainmentSlot({
           accentColor={accentColor}
           inspectQuantity={cargoItemQuantity(item)}
           inspectUnitValue={unitCargoValue(item)}
-          onInspectHover={groundPresence ? undefined : onInspectHover}
-          onInspectLeave={groundPresence ? undefined : onInspectLeave}
+          onInspectHover={(payload) => {
+            if (groundPresence) setHovered(true);
+            onInspectHover?.(payload);
+          }}
+          onInspectLeave={(instanceId) => {
+            if (groundPresence) setHovered(false);
+            onInspectLeave?.(instanceId);
+          }}
           onHoverCell={onHoverCell}
           onDragStart={onDragStart}
           onDragMove={onDragMove}
@@ -2524,29 +2500,6 @@ const styles = StyleSheet.create({
     right: 0,
     borderBottomWidth: 1,
     borderRightWidth: 1,
-  },
-  groundLabel: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    gap: 1,
-    zIndex: 5,
-    ...Platform.select({
-      web: {
-        transitionProperty: 'opacity',
-        transitionDuration: '120ms',
-      } as object,
-      default: {},
-    }),
-  },
-  groundLabelTitle: {
-    color: HARVEST_TEXT_PRIMARY,
-    fontWeight: '700',
-  },
-  groundLabelMeta: {
-    color: HARVEST_MUTED_SLATE,
-    fontWeight: '600',
   },
   spriteWrap: {
     alignItems: 'center',
