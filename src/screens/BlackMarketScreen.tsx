@@ -7,7 +7,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import TacticalButton from '../components/TacticalButton';
+import HubPrimaryCta from '../components/hub/HubPrimaryCta';
 import TerminalOverlay from '../components/TerminalOverlay';
 import BlackMarketBg from '../../assets/images/location images/black_market.png';
 import { listingsForStock, resolveBlackMarketListingPrice } from '../data/blackMarket';
@@ -21,18 +21,18 @@ import {
   getBlackMarketDiscountPct,
 } from '../data/boundRequisitionEngine';
 import { canPlaceCargoItem, listStagedBlackMarketPlacements } from '../data/cargoGridEngine';
+import { isRunItemCatalogId } from '../data/runItemInventoryEngine';
 import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useNodeProgression } from '../hooks/useNodeProgression';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
-import { DOSSIER_CTA_BG } from '../constants/dossierSurface';
+import { DOSSIER_CTA_BG, SELECT_ACCENT_GLOW } from '../constants/dossierSurface';
 import IncursionShell from '../components/IncursionShell';
 import IncursionRunLayout from '../components/IncursionRunLayout';
 import RunEventImmersiveBackdrop from '../components/layout/RunEventImmersiveBackdrop';
 import RunEventNodeHeader from '../components/layout/RunEventNodeHeader';
 import RunIncursionCargoPanel from '../components/run/RunIncursionCargoPanel';
 import DraggableMarketListing from '../components/run/DraggableMarketListing';
-import RunItemMarketListing from '../components/run/RunItemMarketListing';
 import BlackMarketFenceBay from '../components/run/BlackMarketFenceBay';
 import DossierCardShell from '../components/hub/DossierCardShell';
 import type { CargoDragSource } from '../components/CargoGridBoard';
@@ -47,10 +47,10 @@ import {
 import { resolveRunEventNodeHeaderFromNode } from '../utils/resolveRunEventNodeHeader';
 import { HIDDEN_SCROLLBAR_VIEW_STYLE, HIDDEN_SCROLLVIEW_PROPS } from '../utils/hiddenScrollbarStyle';
 import { VEIL } from '../theme/veilTerminalTokens';
+import { viewShadow } from '../utils/adaptiveStyles';
 
-const MUTED_SLATE = '#94A3B8';
+const MUTED_SLATE = VEIL.textMuted;
 const PHOSPHOR_GREEN = VEIL.mint;
-const LEAVE_ACCENT = VEIL.mint;
 const MANIFEST_ACTIVE_BG = DOSSIER_CTA_BG;
 
 const SPLIT_MAX_WIDTH = 1200;
@@ -79,8 +79,6 @@ export default function BlackMarketScreen(): React.JSX.Element {
     activeViewportWidth,
     fontScale,
     gap,
-    scaleSize,
-    scaleSpacing,
   } = useResponsiveLayout();
 
   const [buyingRunItemId, setBuyingRunItemId] = useState<CargoItemId | null>(null);
@@ -93,6 +91,7 @@ export default function BlackMarketScreen(): React.JSX.Element {
   const [hubCellSize, setHubCellSize] = useState(HUB_CARGO_INCURSION_CELL_TARGET);
 
   const gridMetricsRef = useRef<CargoGridWindowMetrics | null>(null);
+  const cargoPanelMetricsRef = useRef<WindowRect | null>(null);
   const manifestMetricsRef = useRef<WindowRect | null>(null);
   const fenceMetricsRef = useRef<WindowRect | null>(null);
   const rootRef = useRef<View>(null);
@@ -151,10 +150,10 @@ export default function BlackMarketScreen(): React.JSX.Element {
   const s = useMemo(() => ({
     panelPad: 14 * fontScale,
     section: 8 * fontScale,
-    creditValue: 13 * fontScale,
+    creditValue: 14 * fontScale,
     dossierMeta: 8 * fontScale,
     actionGap: 10 * fontScale,
-    listGap: 6 * fontScale,
+    listGap: 7 * fontScale,
   }), [fontScale]);
 
   const sectionLabelStyle = useMemo(
@@ -177,6 +176,13 @@ export default function BlackMarketScreen(): React.JSX.Element {
   const isOverFence = useCallback((x: number, y: number) => {
     const rect = fenceMetricsRef.current;
     return rect ? pointInWindowRect(x, y, rect, DROP_PADDING) : false;
+  }, []);
+
+  const isOverCargoDeck = useCallback((x: number, y: number) => {
+    const grid = gridMetricsRef.current;
+    if (grid && pointInWindowRect(x, y, grid, DROP_PADDING)) return true;
+    const panel = cargoPanelMetricsRef.current;
+    return panel ? pointInWindowRect(x, y, panel, DROP_PADDING) : false;
   }, []);
 
   const updateDropHighlights = useCallback((
@@ -214,6 +220,20 @@ export default function BlackMarketScreen(): React.JSX.Element {
     return result.success;
   }, [appendRunLog, purchaseBlackMarketCargoAtCell]);
 
+  const tryBuyRunItemAtPoint = useCallback((
+    itemId: CargoItemId,
+    absoluteX: number,
+    absoluteY: number,
+  ) => {
+    if (!isRunItemCatalogId(itemId) || buyingRunItemId) return false;
+    if (!isOverCargoDeck(absoluteX, absoluteY)) return false;
+    setBuyingRunItemId(itemId);
+    const result = purchaseBlackMarketCargo(itemId);
+    if (result) appendRunLog(result.logLine);
+    setBuyingRunItemId(null);
+    return Boolean(result?.success);
+  }, [appendRunLog, buyingRunItemId, isOverCargoDeck, purchaseBlackMarketCargo]);
+
   const handleMarketDragStart = useCallback((_itemId: CargoItemId) => {
     rootRef.current?.measureInWindow((x, y) => {
       rootOffsetRef.current = { x, y };
@@ -223,6 +243,10 @@ export default function BlackMarketScreen(): React.JSX.Element {
 
   const handleMarketDragMove = useCallback((itemId: CargoItemId, absoluteX: number, absoluteY: number) => {
     setDragGhost({ itemId, x: absoluteX, y: absoluteY });
+    if (isRunItemCatalogId(itemId)) {
+      setExternalHover(null);
+      return;
+    }
     const metrics = gridMetricsRef.current;
     if (!metrics) {
       setExternalHover(null);
@@ -239,8 +263,12 @@ export default function BlackMarketScreen(): React.JSX.Element {
   const handleMarketDragEnd = useCallback((itemId: CargoItemId, absoluteX: number, absoluteY: number) => {
     setDragGhost(null);
     setExternalHover(null);
+    if (isRunItemCatalogId(itemId)) {
+      tryBuyRunItemAtPoint(itemId, absoluteX, absoluteY);
+      return;
+    }
     tryStageAtPoint(itemId, absoluteX, absoluteY);
-  }, [tryStageAtPoint]);
+  }, [tryBuyRunItemAtPoint, tryStageAtPoint]);
 
   const handleCargoDragPosition = useCallback((payload: { source: CargoDragSource; x: number; y: number } | null) => {
     if (!payload) {
@@ -282,10 +310,17 @@ export default function BlackMarketScreen(): React.JSX.Element {
   ]);
 
   const manifestRef = useRef<View>(null);
+  const cargoPanelRef = useRef<View>(null);
 
   const handleManifestLayout = useCallback((_event: LayoutChangeEvent) => {
     manifestRef.current?.measureInWindow((pageX, pageY, width, height) => {
       manifestMetricsRef.current = { pageX, pageY, width, height };
+    });
+  }, []);
+
+  const handleCargoPanelLayout = useCallback((_event: LayoutChangeEvent) => {
+    cargoPanelRef.current?.measureInWindow((pageX, pageY, width, height) => {
+      cargoPanelMetricsRef.current = { pageX, pageY, width, height };
     });
   }, []);
 
@@ -309,16 +344,6 @@ export default function BlackMarketScreen(): React.JSX.Element {
     setBinding(false);
   };
 
-  const handleRunItemBuy = useCallback((itemId: CargoItemId) => {
-    if (buyingRunItemId) return;
-    setBuyingRunItemId(itemId);
-    const result = purchaseBlackMarketCargo(itemId);
-    if (result) {
-      appendRunLog(result.logLine);
-    }
-    setBuyingRunItemId(null);
-  }, [appendRunLog, buyingRunItemId, purchaseBlackMarketCargo]);
-
   const handleLeave = () => {
     if (leaving) return;
     setLeaving(true);
@@ -326,14 +351,29 @@ export default function BlackMarketScreen(): React.JSX.Element {
     completeCurrentNode('Contraband cache visit concluded.');
   };
 
-  const bindButtonStyle = useCallback(
-    () => [{ alignSelf: 'stretch' as const }],
+  const panelGlow = useMemo(
+    () => viewShadow({
+      color: PHOSPHOR_GREEN,
+      opacity: 0.28,
+      radius: 14,
+      offset: { width: 0, height: 0 },
+    }),
     [],
   );
 
-  const leaveButtonStyle = useCallback(
-    () => [{ alignSelf: 'stretch' as const }],
-    [],
+  const continueControl = (
+    <View style={[styles.continueColumn, !isDesktop ? styles.continueColumnMobile : null]}>
+      <HubPrimaryCta
+        label="[ CONTINUE INCURSION ]"
+        onPress={leaving ? undefined : handleLeave}
+        disabled={leaving}
+        variant="classic"
+        accessibilityLabel="Continue incursion"
+        minHeight={42}
+        size={7.5}
+        style={[styles.continueBtn, !isDesktop ? styles.continueBtnMobile : null]}
+      />
+    </View>
   );
 
   return (
@@ -364,78 +404,84 @@ export default function BlackMarketScreen(): React.JSX.Element {
                   },
                 ]}
               >
-              <DossierCardShell
-                fillHeight
-                padding={s.panelPad}
-                style={styles.marketPanel}
-                contentStyle={[styles.panelContent, { gap: s.actionGap }]}
-              >
-                <View style={styles.creditsReadout}>
-                  <Text style={sectionLabelStyle}>
-                    RUN CREDITS
-                  </Text>
-                  <Text
-                    style={[
-                      styles.creditValue,
-                      {
-                        color: PHOSPHOR_GREEN,
-                        fontSize: s.creditValue,
-                        lineHeight: s.creditValue * 1.15,
-                      },
-                    ]}
-                  >
-                    {activeIncursion.runCredits}
-                  </Text>
-                  {blackMarketDiscountPct > 0 ? (
+                {!isDesktop ? continueControl : null}
+                <DossierCardShell
+                  fillHeight
+                  padding={s.panelPad}
+                  accentColor={PHOSPHOR_GREEN}
+                  style={[styles.marketPanel, panelGlow]}
+                  contentStyle={[styles.panelContent, { gap: s.actionGap }]}
+                >
+                  <View style={styles.panelEyebrow}>
+                    <Text style={[styles.panelEyebrowText, { color: PHOSPHOR_GREEN, fontSize: s.dossierMeta }]}>
+                      CACHE SIGNAL // LIVE STOCK
+                    </Text>
+                  </View>
+
+                  <View style={[styles.creditsReadout, { backgroundColor: SELECT_ACCENT_GLOW }]}>
+                    <Text style={sectionLabelStyle}>
+                      RUN CREDITS
+                    </Text>
                     <Text
                       style={[
-                        styles.creditNote,
+                        styles.creditValue,
                         {
-                          color: MUTED_SLATE,
-                          fontSize: s.dossierMeta,
-                          lineHeight: s.dossierMeta * 1.35,
+                          color: PHOSPHOR_GREEN,
+                          fontSize: s.creditValue,
+                          lineHeight: s.creditValue * 1.15,
                         },
                       ]}
                     >
-                      {`−${blackMarketDiscountPct}% CACHE TARIFF`}
+                      {activeIncursion.runCredits}
                     </Text>
-                  ) : null}
-                </View>
+                    {blackMarketDiscountPct > 0 ? (
+                      <Text
+                        style={[
+                          styles.creditNote,
+                          {
+                            color: MUTED_SLATE,
+                            fontSize: s.dossierMeta,
+                            lineHeight: s.dossierMeta * 1.35,
+                          },
+                        ]}
+                      >
+                        {`−${blackMarketDiscountPct}% CACHE TARIFF`}
+                      </Text>
+                    ) : null}
+                  </View>
 
-                <View
-                  ref={manifestRef}
-                  onLayout={handleManifestLayout}
-                  style={[
-                    styles.manifestZone,
-                    manifestDropActive && styles.manifestZoneActive,
-                    { gap: s.listGap, padding: manifestDropActive ? 6 * fontScale : 0 },
-                  ]}
-                >
-                  <Text
+                  <View
+                    ref={manifestRef}
+                    onLayout={handleManifestLayout}
                     style={[
-                      styles.sectionLabel,
-                      {
-                        color: MUTED_SLATE,
-                        fontSize: s.section,
-                        lineHeight: s.section * 1.4,
-                      },
+                      styles.manifestZone,
+                      manifestDropActive && styles.manifestZoneActive,
+                      { gap: s.listGap, padding: manifestDropActive ? 6 * fontScale : 0 },
                     ]}
                   >
-                    MANIFEST // DRAG CARGO OR TAP RUN ITEMS
-                  </Text>
+                    <Text
+                      style={[
+                        styles.sectionLabel,
+                        {
+                          color: MUTED_SLATE,
+                          fontSize: s.section,
+                          lineHeight: s.section * 1.4,
+                        },
+                      ]}
+                    >
+                      MANIFEST // DRAG INTO CARGO TO STAGE
+                    </Text>
 
-                  <ScrollView
-                    {...HIDDEN_SCROLLVIEW_PROPS}
-                    style={[styles.listScroll, HIDDEN_SCROLLBAR_VIEW_STYLE]}
-                    contentContainerStyle={{ gap: s.listGap, paddingBottom: 4 }}
-                  >
-                    {marketListings.map((listing) => {
-                      const effectivePrice = priceForListing(listing.price, listing.id);
-                      const brokerMarked = brokerMarkedId === listing.id;
-                      if (listing.isRunItem) {
-                        const canBuy = activeIncursion.runCredits >= effectivePrice && buyingRunItemId == null;
+                    <ScrollView
+                      {...HIDDEN_SCROLLVIEW_PROPS}
+                      style={[styles.listScroll, HIDDEN_SCROLLBAR_VIEW_STYLE]}
+                      contentContainerStyle={{ gap: s.listGap, paddingBottom: 4 }}
+                    >
+                      {marketListings.map((listing) => {
+                        const effectivePrice = priceForListing(listing.price, listing.id);
+                        const brokerMarked = brokerMarkedId === listing.id;
                         return (
-                          <RunItemMarketListing
+                          <DraggableMarketListing
                             key={listing.id}
                             listing={listing}
                             price={effectivePrice}
@@ -444,116 +490,102 @@ export default function BlackMarketScreen(): React.JSX.Element {
                               || brokerMarked
                             }
                             fontScale={fontScale}
-                            borderColor={theme.borderColor}
-                            canBuy={canBuy}
-                            buying={buyingRunItemId === listing.id}
-                            onBuy={handleRunItemBuy}
+                            borderColor={VEIL.lineStrong}
+                            onDragStart={handleMarketDragStart}
+                            onDragMove={handleMarketDragMove}
+                            onDragEnd={handleMarketDragEnd}
                           />
                         );
-                      }
-                      return (
-                        <DraggableMarketListing
-                          key={listing.id}
-                          listing={listing}
-                          price={effectivePrice}
-                          markedShelf={
-                            isKeepsakeMarkedShelfItem(activeIncursion.keepsakeRuntime, listing.id)
-                            || brokerMarked
-                          }
-                          fontScale={fontScale}
-                          borderColor={theme.borderColor}
-                          onDragStart={handleMarketDragStart}
-                          onDragMove={handleMarketDragMove}
-                          onDragEnd={handleMarketDragEnd}
-                        />
-                      );
-                    })}
-                  </ScrollView>
+                      })}
+                    </ScrollView>
 
-                  {hasBrokerFlashcard ? (
-                    <TacticalButton
-                      label="[ BROKER FLASHCARD ] — REROLL STOCK"
-                      active
-                      onPress={() => {
-                        useBrokerFlashcard();
-                      }}
-                      accentColor="#FBBF24"
-                      mutedColor={theme.mutedColor}
-                      variant="cta"
-                      style={bindButtonStyle}
+                    {hasBrokerFlashcard ? (
+                      <HubPrimaryCta
+                        label="[ BROKER FLASHCARD — REROLL STOCK ]"
+                        onPress={() => {
+                          useBrokerFlashcard();
+                        }}
+                        variant="classic"
+                        accessibilityLabel="Broker flashcard reroll stock"
+                        minHeight={42}
+                        size={7.5}
+                        style={styles.panelCta}
+                      />
+                    ) : null}
+
+                    {manifestDropActive ? (
+                      <Text style={[styles.dropHint, { fontSize: s.dossierMeta, color: PHOSPHOR_GREEN }]}>
+                        RELEASE TO RETURN STAGED CARGO
+                      </Text>
+                    ) : null}
+                  </View>
+
+                  <HubPrimaryCta
+                    label={hasStagedPurchases ? `[ PURCHASE — ${bindTotalCost} CR ]` : '[ PURCHASE ]'}
+                    onPress={canBind ? handleBind : undefined}
+                    disabled={!canBind}
+                    variant="classic"
+                    accessibilityLabel="Purchase staged cargo"
+                    minHeight={46}
+                    size={8}
+                    style={styles.panelCta}
+                  />
+
+                  {canUseKeepsakeNullLedgerCredit(activeIncursion.keepsakeRuntime) ? (
+                    <HubPrimaryCta
+                      label="[ NULL LEDGER CREDIT ]"
+                      onPress={canCreditBind ? handleCreditBind : undefined}
+                      disabled={!canCreditBind}
+                      variant="classic"
+                      accessibilityLabel="Null ledger credit"
+                      minHeight={42}
+                      size={7.5}
+                      style={styles.panelCta}
                     />
                   ) : null}
+                </DossierCardShell>
 
-                  {manifestDropActive ? (
-                    <Text style={[styles.dropHint, { fontSize: s.dossierMeta, color: PHOSPHOR_GREEN }]}>
-                      RELEASE TO RETURN STAGED CARGO
+                <DossierCardShell
+                  fillHeight
+                  padding={s.panelPad}
+                  accentColor={PHOSPHOR_GREEN}
+                  style={[styles.cargoPanel, panelGlow]}
+                  contentStyle={[styles.panelContent, { gap: s.actionGap }]}
+                >
+                  <View
+                    ref={cargoPanelRef}
+                    onLayout={handleCargoPanelLayout}
+                    style={styles.cargoDeckBlock}
+                  >
+                    <View style={styles.panelEyebrow}>
+                      <Text style={[styles.panelEyebrowText, { color: PHOSPHOR_GREEN, fontSize: s.dossierMeta }]}>
+                        HOLD // STAGED THEN PURCHASE
+                      </Text>
+                    </View>
+                    <Text style={sectionLabelStyle}>
+                      CARGO DECK
                     </Text>
-                  ) : null}
-                </View>
-
-                <TacticalButton
-                  label={hasStagedPurchases ? `[ BIND TO CARGO ] — ${bindTotalCost} CR` : '[ BIND TO CARGO ]'}
-                  active={canBind}
-                  onPress={handleBind}
-                  accentColor={PHOSPHOR_GREEN}
-                  mutedColor={theme.mutedColor}
-                  variant="cta"
-                  disabled={!canBind}
-                  style={bindButtonStyle}
-                />
-
-                {canUseKeepsakeNullLedgerCredit(activeIncursion.keepsakeRuntime) ? (
-                  <TacticalButton
-                    label="[ NULL LEDGER CREDIT ]"
-                    active={canCreditBind}
-                    onPress={handleCreditBind}
-                    accentColor="#FBBF24"
-                    mutedColor={theme.mutedColor}
-                    variant="cta"
-                    disabled={!canCreditBind}
-                    style={bindButtonStyle}
+                    <RunIncursionCargoPanel
+                      accentColor={PHOSPHOR_GREEN}
+                      externalHover={externalHover}
+                      onCellSizeResolved={setHubCellSize}
+                      onGridMetricsMeasured={(metrics) => {
+                        gridMetricsRef.current = metrics;
+                      }}
+                      onHubExternalDrop={handleCargoExternalDrop}
+                      onDragPositionChange={handleCargoDragPosition}
+                    />
+                  </View>
+                  <BlackMarketFenceBay
+                    fontScale={fontScale}
+                    dropActive={fenceDropActive}
+                    onLayoutMeasured={(rect) => {
+                      fenceMetricsRef.current = rect;
+                    }}
                   />
-                ) : null}
+                </DossierCardShell>
 
-                <TacticalButton
-                  label="[ LEAVE CACHE ]"
-                  active={!leaving}
-                  onPress={handleLeave}
-                  accentColor={LEAVE_ACCENT}
-                  mutedColor={theme.mutedColor}
-                  variant="cta"
-                  disabled={leaving}
-                  style={leaveButtonStyle}
-                />
-              </DossierCardShell>
-
-              <DossierCardShell
-                fillHeight
-                padding={s.panelPad}
-                style={styles.cargoPanel}
-                contentStyle={[styles.panelContent, { gap: s.actionGap }]}
-              >
-                <Text style={sectionLabelStyle}>
-                  CARGO DECK
-                </Text>
-                <RunIncursionCargoPanel
-                  accentColor={PHOSPHOR_GREEN}
-                  externalHover={externalHover}
-                  onCellSizeResolved={setHubCellSize}
-                  onGridMetricsMeasured={(metrics) => {
-                    gridMetricsRef.current = metrics;
-                  }}
-                  onHubExternalDrop={handleCargoExternalDrop}
-                  onDragPositionChange={handleCargoDragPosition}
-                />
-                <BlackMarketFenceBay
-                  fontScale={fontScale}
-                  dropActive={fenceDropActive}
-                  onLayoutMeasured={(rect) => {
-                    fenceMetricsRef.current = rect;
-                  }}
-                />
-              </DossierCardShell>
+                {isDesktop ? continueControl : null}
               </View>
             </View>
 
@@ -616,6 +648,47 @@ const styles = StyleSheet.create({
     minWidth: 0,
     justifyContent: 'flex-start',
   },
+  continueColumn: {
+    justifyContent: 'flex-end',
+    alignItems: 'stretch',
+    flexShrink: 0,
+    alignSelf: 'stretch',
+    minWidth: 168,
+    maxWidth: 200,
+  },
+  continueColumnMobile: {
+    minWidth: 0,
+    maxWidth: '100%',
+    width: '100%',
+    alignItems: 'flex-end',
+  },
+  panelCta: {
+    alignSelf: 'stretch',
+    width: '100%',
+  },
+  continueBtn: {
+    alignSelf: 'stretch',
+    width: '100%',
+  },
+  continueBtnMobile: {
+    width: undefined,
+    alignSelf: 'flex-end',
+    minWidth: 168,
+    maxWidth: 220,
+  },
+  cargoDeckBlock: {
+    flex: 1,
+    minHeight: 0,
+    gap: 8,
+  },
+  panelEyebrow: {
+    flexShrink: 0,
+  },
+  panelEyebrowText: {
+    fontFamily: 'monospace',
+    fontWeight: '700',
+    letterSpacing: 1.1,
+  },
   sectionLabel: {
     fontFamily: 'monospace',
     letterSpacing: 0.8,
@@ -645,6 +718,10 @@ const styles = StyleSheet.create({
   creditsReadout: {
     flexShrink: 0,
     gap: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(98, 205, 181, 0.35)',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
   creditValue: {
     fontFamily: 'monospace',

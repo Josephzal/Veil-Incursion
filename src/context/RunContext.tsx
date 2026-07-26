@@ -6909,7 +6909,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     if (isRunItemCatalogId(itemId)) {
       return {
         success: false,
-        logLine: '[REJECTED] >> Run items route to dedicated slots — tap BUY on the listing.',
+        logLine: '[REJECTED] >> Run items route to dedicated slots — drag onto the cargo deck to purchase.',
       };
     }
     const placed = placeStagedBlackMarketCargoAtCell(inc.cargo, itemId, row, col);

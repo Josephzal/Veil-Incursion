@@ -1,11 +1,12 @@
 import React, { useRef } from 'react';
 import { LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
-import { DOSSIER_CTA_BG, DOSSIER_ROW_BG } from '../../constants/dossierSurface';
+import { DOSSIER_FOREGROUND } from '../../constants/dossierSurface';
+import { VEIL } from '../../theme/veilTerminalTokens';
 
-const FENCE_YELLOW = '#CA8A04';
-const FENCE_YELLOW_PALE = '#FEF9C3';
-const FENCE_YELLOW_BORDER = 'rgba(234, 179, 8, 0.55)';
-const FENCE_YELLOW_ACTIVE_BORDER = 'rgba(250, 204, 21, 0.95)';
+const FENCE_AMBER = '#E0B45A';
+const FENCE_BORDER = 'rgba(224, 180, 90, 0.55)';
+const FENCE_ACTIVE = 'rgba(224, 180, 90, 0.95)';
+const FENCE_PALE = '#FEF3C7';
 
 interface BlackMarketFenceBayProps {
   fontScale: number;
@@ -20,7 +21,6 @@ export default function BlackMarketFenceBay({
 }: BlackMarketFenceBayProps): React.JSX.Element {
   const labelSize = Math.max(9, 10 * fontScale);
   const subtextSize = Math.max(8, 9 * fontScale);
-  const hintSize = Math.max(16, 18 * fontScale);
   const rootRef = useRef<View>(null);
 
   const handleLayout = (_event: LayoutChangeEvent) => {
@@ -36,63 +36,39 @@ export default function BlackMarketFenceBay({
       style={[
         styles.bay,
         {
-          backgroundColor: dropActive ? DOSSIER_CTA_BG : DOSSIER_ROW_BG,
-          borderColor: dropActive ? FENCE_YELLOW_ACTIVE_BORDER : FENCE_YELLOW_BORDER,
-          minHeight: 72 * fontScale,
+          backgroundColor: dropActive ? 'rgba(224, 180, 90, 0.12)' : DOSSIER_FOREGROUND,
+          borderColor: dropActive ? FENCE_ACTIVE : FENCE_BORDER,
+          minHeight: 64 * fontScale,
           paddingVertical: 12 * fontScale,
-          paddingHorizontal: 14 * fontScale,
-          gap: 6 * fontScale,
+          paddingHorizontal: 12 * fontScale,
+          gap: 4 * fontScale,
         },
       ]}
     >
-      <View
+      <Text
         style={[
-          styles.dropFrame,
+          styles.label,
           {
-            borderColor: dropActive ? FENCE_YELLOW_ACTIVE_BORDER : FENCE_YELLOW_BORDER,
-            paddingVertical: 10 * fontScale,
-            paddingHorizontal: 12 * fontScale,
-            gap: 4 * fontScale,
+            color: dropActive ? FENCE_PALE : FENCE_AMBER,
+            fontSize: labelSize,
+            lineHeight: labelSize * 1.25,
           },
         ]}
       >
-        <Text
-          style={[
-            styles.dropGlyph,
-            {
-              color: dropActive ? FENCE_YELLOW_PALE : 'rgba(254, 249, 195, 0.75)',
-              fontSize: hintSize,
-              lineHeight: hintSize * 1.1,
-            },
-          ]}
-        >
-          ↓
-        </Text>
-        <Text
-          style={[
-            styles.label,
-            {
-              color: dropActive ? FENCE_YELLOW_PALE : FENCE_YELLOW,
-              fontSize: labelSize,
-              lineHeight: labelSize * 1.25,
-            },
-          ]}
-        >
-          FENCE
-        </Text>
-        <Text
-          style={[
-            styles.subtext,
-            {
-              color: dropActive ? 'rgba(254, 249, 195, 0.95)' : 'rgba(254, 249, 195, 0.72)',
-              fontSize: subtextSize,
-              lineHeight: subtextSize * 1.35,
-            },
-          ]}
-        >
-          {dropActive ? 'RELEASE TO SELL CARGO' : 'DRAG ITEM HERE TO SELL'}
-        </Text>
-      </View>
+        FENCE
+      </Text>
+      <Text
+        style={[
+          styles.subtext,
+          {
+            color: dropActive ? 'rgba(254, 243, 199, 0.95)' : VEIL.textMuted,
+            fontSize: subtextSize,
+            lineHeight: subtextSize * 1.35,
+          },
+        ]}
+      >
+        {dropActive ? 'RELEASE TO SELL CARGO' : 'DRAG OWNED CARGO HERE TO SELL'}
+      </Text>
     </View>
   );
 }
@@ -100,23 +76,11 @@ export default function BlackMarketFenceBay({
 const styles = StyleSheet.create({
   bay: {
     width: '100%',
-    borderWidth: 1,
+    borderWidth: 1.25,
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
-  },
-  dropFrame: {
-    width: '100%',
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: DOSSIER_ROW_BG,
-  },
-  dropGlyph: {
-    fontFamily: 'monospace',
-    fontWeight: '700',
   },
   label: {
     fontFamily: 'monospace',

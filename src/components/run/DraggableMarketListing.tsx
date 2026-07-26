@@ -3,20 +3,21 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 import type { BlackMarketCargoListing } from '../../data/blackMarket';
-import { DOSSIER_ROW_BG } from '../../constants/dossierSurface';
+import { DOSSIER_FOREGROUND, SELECT_ACCENT_GLOW } from '../../constants/dossierSurface';
 import HubCargoIconBox from '../safehouse/HubCargoIconBox';
 import { pulseCargoItemPickup } from '../../utils/hubButtonHaptics';
 import type { CargoItemId } from '../../types/cargoGrid';
+import { VEIL } from '../../theme/veilTerminalTokens';
+import { viewShadow } from '../../utils/adaptiveStyles';
 
-const STARK_WHITE = '#F8FAFC';
-const PHOSPHOR_GREEN = '#4ADE80';
-const MUTED_SLATE = '#94A3B8';
+const STARK_WHITE = VEIL.text;
+const MUTED_SLATE = VEIL.textMuted;
 
 interface DraggableMarketListingProps {
   listing: BlackMarketCargoListing;
   price: number;
   fontScale: number;
-  borderColor: string;
+  borderColor?: string;
   markedShelf?: boolean;
   onDragStart: (itemId: CargoItemId) => void;
   onDragMove: (itemId: CargoItemId, absoluteX: number, absoluteY: number) => void;
@@ -27,15 +28,16 @@ export default function DraggableMarketListing({
   listing,
   price,
   fontScale,
-  borderColor,
+  borderColor = VEIL.lineStrong,
   markedShelf = false,
   onDragStart,
   onDragMove,
   onDragEnd,
 }: DraggableMarketListingProps): React.JSX.Element {
-  const iconSize = Math.round(26 * fontScale);
-  const nameSize = Math.max(9, 10 * fontScale);
+  const iconSize = Math.round(28 * fontScale);
+  const nameSize = Math.max(10, 11 * fontScale);
   const metaSize = Math.max(8, 9 * fontScale);
+  const isRunItem = Boolean(listing.isRunItem);
 
   const dragGesture = Gesture.Pan()
     .minDistance(6)
@@ -58,11 +60,18 @@ export default function DraggableMarketListing({
           styles.row,
           {
             borderColor,
-            minHeight: Math.max(52, 56 * fontScale),
+            minHeight: Math.max(56, 60 * fontScale),
           },
+          viewShadow({
+            color: VEIL.mint,
+            opacity: 0.12,
+            radius: 8,
+            offset: { width: 0, height: 0 },
+          }),
         ]}
       >
-        <View style={[styles.copy, { gap: 3 * fontScale, paddingVertical: 8 * fontScale }]}>
+        <View style={[styles.mintTick, { backgroundColor: VEIL.mint }]} />
+        <View style={[styles.copy, { gap: 3 * fontScale, paddingVertical: 9 * fontScale }]}>
           <Text
             style={[
               styles.name,
@@ -75,6 +84,18 @@ export default function DraggableMarketListing({
             numberOfLines={1}
           >
             {listing.name.toUpperCase()}
+          </Text>
+          <Text
+            style={[
+              styles.effect,
+              {
+                color: VEIL.mint,
+                fontSize: metaSize,
+                lineHeight: metaSize * 1.2,
+              },
+            ]}
+          >
+            {isRunItem ? 'RUN ITEM // DRAG TO CARGO DECK' : 'CONTRABAND // DRAG TO CARGO GRID'}
           </Text>
           {markedShelf ? (
             <Text
@@ -107,7 +128,7 @@ export default function DraggableMarketListing({
             style={[
               styles.price,
               {
-                color: PHOSPHOR_GREEN,
+                color: VEIL.mintBright,
                 fontSize: metaSize,
                 lineHeight: metaSize * 1.2,
               },
@@ -116,11 +137,13 @@ export default function DraggableMarketListing({
             {`${price} CR`}
           </Text>
         </View>
-        <HubCargoIconBox
-          itemId={listing.id}
-          borderColor={MUTED_SLATE}
-          iconSize={iconSize}
-        />
+        <View style={styles.iconRail}>
+          <HubCargoIconBox
+            itemId={listing.id}
+            borderColor={VEIL.mint}
+            iconSize={iconSize}
+          />
+        </View>
       </View>
     </GestureDetector>
   );
@@ -132,14 +155,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'stretch',
     borderWidth: 1,
-    backgroundColor: DOSSIER_ROW_BG,
+    backgroundColor: DOSSIER_FOREGROUND,
     overflow: 'hidden',
+  },
+  mintTick: {
+    width: 2,
+    alignSelf: 'stretch',
+    opacity: 0.85,
   },
   copy: {
     flex: 1,
     minWidth: 0,
     justifyContent: 'center',
     paddingHorizontal: 10,
+    backgroundColor: SELECT_ACCENT_GLOW,
+  },
+  iconRail: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: VEIL.line,
   },
   name: {
     fontFamily: 'monospace',
