@@ -145,7 +145,7 @@ export default function CombatOperativeHud({
       ? 'FLUX'
       : operativeClass === 'HEX_SHOT'
         ? 'STM'
-        : 'GUARD';
+        : 'AR';
     const secondaryValue = operativeClass === 'ENVOY'
       ? `${Math.round(veilFlux)}/${fluxMaxCap}`
       : operativeClass === 'HEX_SHOT'
@@ -161,11 +161,6 @@ export default function CombatOperativeHud({
       : operativeClass === 'HEX_SHOT'
         ? OTT.terminalGreenMuted
         : '#9BB0B8';
-    const passiveLine = operativeClass === 'AEGIS'
-      ? 'Gain Guard after successful Guard.'
-      : operativeClass === 'HEX_SHOT'
-        ? 'Chamber bonus after tactical reload.'
-        : 'Veil Rot escalates occult pressure.';
     return (
       <View style={styles.rootConsole} pointerEvents="none">
         <Text style={styles.consoleClass}>{className}</Text>
@@ -202,10 +197,6 @@ export default function CombatOperativeHud({
         {operativeClass === 'ENVOY' ? (
           <CombatVeilRotGauge totalStacks={veilRotStacksTotal} variant="compact" />
         ) : null}
-        <View style={styles.passiveBlock}>
-          <Text style={styles.passiveHeader}>PASSIVE</Text>
-          <Text style={styles.passiveBody} numberOfLines={2}>{passiveLine}</Text>
-        </View>
       </View>
     );
   }
@@ -335,26 +326,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     color: OTT.textSecondary,
     marginBottom: 4,
-  },
-  passiveBlock: {
-    marginTop: 6,
-    paddingTop: 6,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: OTT.borderMuted,
-    gap: 3,
-  },
-  passiveHeader: {
-    fontFamily: OTT.mono,
-    fontSize: COMBAT_HUD_TYPE.body,
-    fontWeight: '800',
-    letterSpacing: 1.2,
-    color: OTT.terminalGreenMuted,
-  },
-  passiveBody: {
-    fontFamily: OTT.mono,
-    fontSize: COMBAT_HUD_TYPE.body,
-    lineHeight: COMBAT_HUD_TYPE.lineBody,
-    color: OTT.textSecondary,
   },
   root: {
     gap: 2,

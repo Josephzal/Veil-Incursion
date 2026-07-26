@@ -478,7 +478,8 @@ import CombatTelemetryGaugeRow from './combat/CombatHorizontalGauge';
 import type { ApparitionViewportRef } from './combat/ApparitionViewport';
 import type { CombatPlayerViewportRef } from './combat/CombatPlayerViewport';
 import type { CombatOperativeTelemetry } from './combat/CombatOperativeHud';
-import CombatCommandDeck, { COMMAND_DECK_MIN_HEIGHT_WITH_ULTIMATE } from './CombatCommandDeck';
+import CombatCommandDeck from './CombatCommandDeck';
+import CombatHostileTurnPanel from './combat/CombatHostileTurnPanel';
 import ParryMatrixOverlay from './combat/ParryMatrixOverlay';
 import ParrySuccessBurstOverlay from './combat/ParrySuccessBurstOverlay';
 import VectorSliceOverlay, { ORIGIN_JITTER } from './combat/VectorSliceOverlay';
@@ -8655,25 +8656,12 @@ export default function TacticalCombatHub({
 
   const renderEnemyTurnPanel = () => {
     const intentLabel = enemy ? formatIntentReadout(enemy.intent) : 'RESOLVING';
-    const isReading = enemyActionStage === 'reading';
-    const deckLabelFont = isCombatDesktop ? scaleCombatFont(9) : 9;
-    const deckLabelStyle = {
-      fontSize: deckLabelFont,
-      letterSpacing: isCombatDesktop ? 0.35 : 0.5,
-    };
+    const stage = enemyActionStage === 'executing' ? 'executing' : 'reading';
     return (
-      <View style={styles.enemyTurnPanel}>
-        <Text style={[styles.enemyTurnTitle, deckLabelStyle, { color: P.enemyHp }]}>
-          {isReading
-            ? `>> HOSTILE CHANNEL // ${intentLabel}`
-            : `>> HOSTILE ATTACK // ${intentLabel}`}
-        </Text>
-        <Text style={[styles.enemyTurnHint, deckLabelStyle, { color: theme.mutedColor }]}>
-          {isReading
-            ? 'Read incoming intent — command deck offline'
-            : 'Strike channel active — brace for impact'}
-        </Text>
-      </View>
+      <CombatHostileTurnPanel
+        intentLabel={intentLabel}
+        stage={stage}
+      />
     );
   };
 
@@ -8964,24 +8952,6 @@ const styles = StyleSheet.create({
     width: '100%',
     position: 'relative',
     overflow: 'hidden',
-  },
-  enemyTurnPanel: {
-    width: '100%',
-    minHeight: COMMAND_DECK_MIN_HEIGHT_WITH_ULTIMATE,
-    borderWidth: 0,
-    paddingHorizontal: 10,
-    paddingTop: 4,
-    paddingBottom: 12,
-    justifyContent: 'flex-start',
-    gap: 6,
-    backgroundColor: 'rgba(10, 11, 15, 0.96)',
-  },
-  enemyTurnTitle: {
-    fontFamily: MONO,
-    fontWeight: '700',
-  },
-  enemyTurnHint: {
-    fontFamily: MONO,
   },
   statusFeedCompact: {
     flexShrink: 0,

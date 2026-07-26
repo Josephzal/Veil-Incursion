@@ -2,8 +2,6 @@ import React from 'react';
 import { Image, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import CreditIcon from '../../assets/images/item images/credit_icon.png';
 
-const CREDITS_LABEL_FONT_SIZE = 8;
-
 interface CargoCreditsHudProps {
   credits: number;
   accentColor?: string;
@@ -12,7 +10,7 @@ interface CargoCreditsHudProps {
 
 export default function CargoCreditsHud({
   credits,
-  accentColor = '#00ff33',
+  accentColor = '#62CDB5',
   style,
 }: CargoCreditsHudProps): React.JSX.Element {
   return (
@@ -32,21 +30,21 @@ const styles = StyleSheet.create({
   root: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
   },
   icon: {
-    width: 12,
-    height: 12,
+    width: 14,
+    height: 14,
   },
   label: {
     fontFamily: 'monospace',
-    fontSize: CREDITS_LABEL_FONT_SIZE,
+    fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.8,
   },
   value: {
     fontFamily: 'monospace',
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.5,
   },

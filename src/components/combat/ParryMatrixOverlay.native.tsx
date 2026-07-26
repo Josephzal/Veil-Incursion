@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { type GestureResponderEvent, type LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { type GestureResponderEvent, type LayoutChangeEvent, Platform, StyleSheet, Text, View } from 'react-native';
 import HapticPressable from '../HapticPressable';
 import {
   Blur,
@@ -87,6 +87,20 @@ export default function ParryMatrixOverlay({
     onTap(locationX, locationY);
   };
 
+  useEffect(() => {
+    if (!visible || arenaSize.w <= 0 || Platform.OS !== 'web' || typeof window === 'undefined') return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.code !== 'Space' && event.key !== ' ') return;
+      if (event.repeat) return;
+      event.preventDefault();
+      onTap(arenaSize.w / 2, arenaSize.h / 2);
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [arenaSize.h, arenaSize.w, onTap, visible]);
+
   if (!visible) return null;
 
   return (
@@ -151,7 +165,9 @@ export default function ParryMatrixOverlay({
       ) : null}
 
       <Text style={styles.hint} pointerEvents="none">
-        TAP INSIDE RING WHEN RINGS COLLIDE
+        {Platform.OS === 'web'
+          ? 'PRESS SPACE OR TAP INSIDE RING WHEN RINGS COLLIDE'
+          : 'TAP INSIDE RING WHEN RINGS COLLIDE'}
       </Text>
     </View>
   );

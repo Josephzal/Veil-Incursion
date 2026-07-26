@@ -109,7 +109,7 @@ export default function CargoPackingPanel({
   runCredits,
   showCreditsHud = false,
   onContinue,
-  continueLabel = '[ CONTINUE ]',
+  continueLabel = 'CONTINUE',
   hideContinueButton = false,
   onContainmentItemCenterMeasured,
   harvestLayout = false,

@@ -11,6 +11,8 @@ import {
 } from '../utils/runStatusSnapshot';
 import type { RunStatusCategory } from '../utils/runStatusSnapshot';
 import { RESONANCE_SYSTEM_ACTIVE } from '../data/featureFlags';
+import { VEIL } from '../theme/veilTerminalTokens';
+import { viewShadow } from '../utils/adaptiveStyles';
 
 import {
   COMBAT_POPUP_BODY_FONT,
@@ -55,6 +57,7 @@ export default function RunStatusOverlay({
   const bodyLineHeight = bodyFont + 4;
   const panelMaxWidth = Math.round(420 * popupScale);
   const panelPadding = Math.round(14 * popupScale);
+  const panelAccent = combatMode ? VEIL.mint : accentColor;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -63,23 +66,32 @@ export default function RunStatusOverlay({
         <HapticPressable
           style={[
             styles.panel,
+            combatMode ? styles.panelCombat : null,
             {
-              borderColor: accentColor,
+              borderColor: panelAccent,
               maxWidth: panelMaxWidth,
               padding: panelPadding,
             },
+            combatMode
+              ? viewShadow({
+                color: panelAccent,
+                opacity: 0.42,
+                radius: 16,
+                offset: { width: 0, height: 0 },
+              })
+              : null,
           ]}
           onPress={(e) => e.stopPropagation()}
         >
-          <Text style={[styles.bodyText, { color: accentColor, fontSize: bodyFont, lineHeight: bodyLineHeight }]}>
+          <Text style={[styles.bodyText, { color: panelAccent, fontSize: bodyFont, lineHeight: bodyLineHeight }]}>
             OPERATIVE STATUS // RUN MANIFEST
           </Text>
 
-          <View style={[styles.vitalsBlock, { borderColor: accentColor }]}>
+          <View style={[styles.vitalsBlock, { borderColor: panelAccent }]}>
             <Text style={[styles.bodyText, { color: theme.mutedColor, fontSize: bodyFont, lineHeight: bodyLineHeight }]}>
               OPERATIVE VITALS
             </Text>
-            <Text style={[styles.bodyText, { color: accentColor, fontSize: bodyFont, lineHeight: bodyLineHeight }]}>
+            <Text style={[styles.bodyText, { color: panelAccent, fontSize: bodyFont, lineHeight: bodyLineHeight }]}>
               {vitalsLine}
             </Text>
           </View>
@@ -102,8 +114,8 @@ export default function RunStatusOverlay({
                       {RUN_STATUS_CATEGORY_LABELS[category].toUpperCase()}
                     </Text>
                     {items.map((entry) => (
-                      <View key={entry.id} style={styles.entry}>
-                        <Text style={[styles.bodyText, { color: accentColor, fontSize: bodyFont, lineHeight: bodyLineHeight }]}>
+                      <View key={entry.id} style={[styles.entry, combatMode ? { borderLeftColor: panelAccent } : null]}>
+                        <Text style={[styles.bodyText, { color: panelAccent, fontSize: bodyFont, lineHeight: bodyLineHeight }]}>
                           {entry.label}
                         </Text>
                         <Text style={[styles.bodyText, { color: theme.textColor, fontSize: bodyFont, lineHeight: bodyLineHeight }]}>
@@ -117,8 +129,8 @@ export default function RunStatusOverlay({
             )}
           </ScrollView>
 
-          <HapticPressable onPress={onClose} style={[styles.closeBtn, { borderColor: accentColor }]}>
-            <Text style={[styles.bodyText, { color: accentColor, fontSize: bodyFont, lineHeight: bodyLineHeight }]}>
+          <HapticPressable onPress={onClose} style={[styles.closeBtn, { borderColor: panelAccent }]}>
+            <Text style={[styles.bodyText, { color: panelAccent, fontSize: bodyFont, lineHeight: bodyLineHeight }]}>
               [ DISMISS ]
             </Text>
           </HapticPressable>
@@ -147,6 +159,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#0a0b0f',
     borderWidth: 1,
     zIndex: 2,
+  },
+  panelCombat: {
+    backgroundColor: 'rgba(5, 8, 8, 0.96)',
+    borderWidth: 1.5,
   },
   bodyText: {
     fontFamily: 'monospace',

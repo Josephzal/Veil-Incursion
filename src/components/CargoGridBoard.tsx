@@ -21,12 +21,13 @@ import CargoItemInspectPanel, {
   type CargoItemInspectAnchor,
 } from './cargo/CargoItemInspectPanel';
 import { resolveCargoItemInspectInfo } from '../utils/cargoItemInspect';
+import { COMBAT_HUD_TYPE } from '../constants/combatHudTypography';
 
 const REJECT_SNAP_MS = 140;
-const COMBAT_DETAIL_PANEL_HEIGHT = 160;
-const COMBAT_DETAIL_TITLE_HEIGHT = 18;
-const COMBAT_DETAIL_BODY_HEIGHT = 39;
-const COMBAT_DETAIL_META_HEIGHT = 14;
+const COMBAT_DETAIL_PANEL_HEIGHT = 200;
+const COMBAT_DETAIL_TITLE_HEIGHT = 24;
+const COMBAT_DETAIL_BODY_HEIGHT = 56;
+const COMBAT_DETAIL_META_HEIGHT = 18;
 import {
   canMergeCargoAtCell,
   canPlaceCargoItemExcluding,
@@ -302,7 +303,7 @@ function DraggableCargoSprite({
   cellSize = CARGO_CELL_SIZE,
   cellGap = CARGO_CELL_GAP,
   stackBadge = null,
-  accentColor = '#00ff33',
+  accentColor = '#62CDB5',
   inspectQuantity = 1,
   inspectUnitValue,
   onInspectHover,
@@ -410,7 +411,15 @@ function DraggableCargoSprite({
           spriteSize,
           styles.spriteWrap,
           styles.combatSelectPressable,
-          combatSelected ? styles.combatItemSelectedWrap : null,
+          combatSelected
+            ? [
+              styles.combatItemSelectedWrap,
+              {
+                borderColor: accentColor ?? '#62CDB5',
+                backgroundColor: 'rgba(98, 205, 181, 0.12)',
+              },
+            ]
+            : null,
           pressed ? styles.combatItemPressed : null,
         ]}
       >
@@ -475,9 +484,6 @@ function DraggableCargoSprite({
         ]}
         {...hoverHandlers}
       >
-        {harvestSelected ? (
-          <View pointerEvents="none" style={styles.harvestSelectCorner} />
-        ) : null}
         {isDragging ? (
           <View style={styles.dragPlaceholder} pointerEvents="none" />
         ) : (
@@ -557,11 +563,10 @@ function ContainmentSlot({
   accentColor?: string;
   onInspectHover?: (payload: CargoInspectHoverPayload) => void;
   onInspectLeave?: (instanceId: string) => void;
-  /** Harvest ground layer — artwork + contact shadow only until hover/drag. */
+  /** Harvest ground layer — artwork + contact shadow. */
   groundPresence?: boolean;
 }): React.JSX.Element {
   const slotRef = useRef<View>(null);
-  const [hovered, setHovered] = useState(false);
   const rotation = useMemo(() => harvestPoseRotation(item.instanceId), [item.instanceId]);
   const hitPad = groundPresence ? 14 : 0;
 
@@ -578,8 +583,6 @@ function ContainmentSlot({
   useEffect(() => {
     reportCenter();
   }, [reportCenter, scatterPose?.left, scatterPose?.top]);
-
-  const showFocusChrome = groundPresence && (hovered || isDragging);
 
   return (
     <View
@@ -618,26 +621,6 @@ function ContainmentSlot({
         />
       ) : null}
 
-      {showFocusChrome ? (
-        <View
-          pointerEvents="none"
-          style={[
-            styles.groundFocusChrome,
-            {
-              top: Math.max(0, hitPad - 2),
-              left: Math.max(0, hitPad - 2),
-              right: Math.max(0, hitPad - 2),
-              bottom: Math.max(0, hitPad - 2),
-            },
-          ]}
-        >
-          <View style={[styles.groundTick, styles.groundTickTL]} />
-          <View style={[styles.groundTick, styles.groundTickTR]} />
-          <View style={[styles.groundTick, styles.groundTickBL]} />
-          <View style={[styles.groundTick, styles.groundTickBR]} />
-        </View>
-      ) : null}
-
       <View
         style={groundPresence
           ? {
@@ -656,11 +639,9 @@ function ContainmentSlot({
           inspectQuantity={cargoItemQuantity(item)}
           inspectUnitValue={unitCargoValue(item)}
           onInspectHover={(payload) => {
-            if (groundPresence) setHovered(true);
             onInspectHover?.(payload);
           }}
           onInspectLeave={(instanceId) => {
-            if (groundPresence) setHovered(false);
             onInspectLeave?.(instanceId);
           }}
           onHoverCell={onHoverCell}
@@ -688,7 +669,7 @@ export default function CargoGridBoard({
   onRelocateItem,
   onReplaceItem,
   onContinue,
-  continueLabel = '[ CONTINUE ]',
+  continueLabel = 'CONTINUE',
   onUseAmpoule,
   onUseResonanceBribe,
   onUseDeadDrop,
@@ -1522,7 +1503,7 @@ export default function CargoGridBoard({
       style={[
         styles.combatDetailPanel,
         {
-          borderColor: theme.borderColor,
+          borderColor: accentColor,
           height: overlayCombatSplit ? frameHeight : combatDetailHeight,
           width: overlayCombatSplit
             ? combatSplitWidths?.detailWidth
@@ -2402,9 +2383,7 @@ const styles = StyleSheet.create({
     zIndex: 5,
   },
   combatItemSelectedWrap: {
-    borderWidth: 1,
-    borderColor: '#00ff33',
-    backgroundColor: 'rgba(0, 255, 51, 0.1)',
+    borderWidth: 1.25,
   },
   combatItemPressed: {
     opacity: 0.8,
@@ -2468,40 +2447,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.55)',
     zIndex: 0,
   },
-  groundFocusChrome: {
-    position: 'absolute',
-    zIndex: 2,
-  },
-  groundTick: {
-    position: 'absolute',
-    width: 7,
-    height: 7,
-    borderColor: 'rgba(196, 203, 198, 0.72)',
-  },
-  groundTickTL: {
-    top: 0,
-    left: 0,
-    borderTopWidth: 1,
-    borderLeftWidth: 1,
-  },
-  groundTickTR: {
-    top: 0,
-    right: 0,
-    borderTopWidth: 1,
-    borderRightWidth: 1,
-  },
-  groundTickBL: {
-    bottom: 0,
-    left: 0,
-    borderBottomWidth: 1,
-    borderLeftWidth: 1,
-  },
-  groundTickBR: {
-    bottom: 0,
-    right: 0,
-    borderBottomWidth: 1,
-    borderRightWidth: 1,
-  },
   spriteWrap: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -2547,17 +2492,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: HARVEST_VEIL_VIOLET,
   },
-  harvestSelectCorner: {
-    position: 'absolute',
-    top: 3,
-    left: 3,
-    width: 8,
-    height: 8,
-    borderTopWidth: 1.5,
-    borderLeftWidth: 1.5,
-    borderColor: HARVEST_VEIL_VIOLET,
-    zIndex: 3,
-  },
   lootSpriteSelected: {
     opacity: 1,
     ...Platform.select({
@@ -2572,12 +2506,12 @@ const styles = StyleSheet.create({
     maxHeight: '92%',
   },
   combatDetailPanel: {
-    borderWidth: 1,
-    backgroundColor: '#0a0b0f',
+    borderWidth: 1.25,
+    backgroundColor: 'rgba(8, 12, 12, 0.92)',
   },
   combatDetailInner: {
-    padding: 10,
-    gap: 6,
+    padding: 12,
+    gap: 8,
     justifyContent: 'flex-start',
   },
   combatDetailInnerSplit: {
@@ -2591,9 +2525,9 @@ const styles = StyleSheet.create({
   },
   combatDetailTitle: {
     fontFamily: 'monospace',
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.6,
+    fontSize: COMBAT_HUD_TYPE.title,
+    fontWeight: '800',
+    letterSpacing: 0.7,
     textAlign: 'center',
   },
   combatDetailBodySlot: {
@@ -2608,9 +2542,9 @@ const styles = StyleSheet.create({
   },
   combatDetailBody: {
     fontFamily: 'monospace',
-    fontSize: 8,
-    lineHeight: 13,
-    letterSpacing: 0.2,
+    fontSize: COMBAT_HUD_TYPE.body,
+    lineHeight: COMBAT_HUD_TYPE.lineBody,
+    letterSpacing: 0.25,
     textAlign: 'center',
   },
   combatDetailMetaSlot: {
@@ -2620,26 +2554,27 @@ const styles = StyleSheet.create({
   },
   combatDetailMeta: {
     fontFamily: 'monospace',
-    fontSize: 7,
-    letterSpacing: 0.5,
+    fontSize: COMBAT_HUD_TYPE.caption,
+    letterSpacing: 0.55,
     textAlign: 'center',
+    fontWeight: '600',
   },
   deployBtn: {
     marginTop: 0,
-    minHeight: 34,
+    minHeight: 40,
     justifyContent: 'center',
   },
   ampouleBtn: {
-    borderWidth: 1,
-    paddingVertical: 8,
+    borderWidth: 1.25,
+    paddingVertical: 10,
     alignItems: 'center',
     backgroundColor: '#050608',
   },
   ampouleBtnText: {
     fontFamily: 'monospace',
-    fontSize: 8,
+    fontSize: COMBAT_HUD_TYPE.body,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
   },
   continueBtn: {
     width: CARGO_GRID_FRAME_SIZE,

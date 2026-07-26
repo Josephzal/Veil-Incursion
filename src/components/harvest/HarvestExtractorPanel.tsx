@@ -132,7 +132,7 @@ export default function HarvestExtractorPanel({
             letterSpacing={0.75}
             style={styles.supportLineHold}
           >
-            [ HOLD ] VACUUM RESIDUE
+            HOLD VACUUM RESIDUE
           </TerminalText>
         ) : (
           <View style={styles.supportSpacer} />

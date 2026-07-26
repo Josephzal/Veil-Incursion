@@ -931,7 +931,9 @@ export default function CombatCommandDeck({
 
     if (combatReloadAvailable) {
       const ready = combatReloadEnabled;
-      const accent = ready ? OTT.warningAmber : OTT.borderSubtle;
+      const classAccent = OTT.warningAmber;
+      const accent = ready ? classAccent : OTT.borderSubtle;
+      const hovered = hoveredAbility === '__CLASS_RELOAD__';
       return (
         <HapticPressable
           key="class-action-reload"
@@ -942,10 +944,13 @@ export default function CombatCommandDeck({
           style={[
             styles.conceptCard,
             {
-              borderColor: hoveredAbility === '__CLASS_RELOAD__' || ready ? accent : OTT.borderSubtle,
-              backgroundColor: hoveredAbility === '__CLASS_RELOAD__'
+              borderColor: hovered ? classAccent : (ready ? accent : OTT.borderSubtle),
+              backgroundColor: hovered
                 ? 'rgba(224, 180, 90, 0.14)'
                 : 'rgba(8, 12, 14, 0.42)',
+              shadowColor: hovered ? classAccent : 'transparent',
+              shadowOpacity: hovered ? 0.5 : 0,
+              shadowRadius: hovered ? 10 : 0,
               opacity: ready ? 1 : 0.42,
             },
           ]}
@@ -977,8 +982,10 @@ export default function CombatCommandDeck({
 
     if (catalyticConsoleAvailable) {
       const ready = catalyticConsoleEnabled && catalyticConsoleRotStacks > 0;
-      const accent = ready ? OTT.terminalGreen : OTT.borderSubtle;
+      const classAccent = OTT.terminalGreen;
+      const accent = ready ? classAccent : OTT.borderSubtle;
       const statusLabel = ready ? 'READY' : catalyticConsoleRotStacks > 0 ? 'LOCKED' : 'CHARGING';
+      const hovered = hoveredAbility === '__CLASS_CATALYST__';
       return (
         <HapticPressable
           key="class-action-catalyst"
@@ -989,10 +996,13 @@ export default function CombatCommandDeck({
           style={[
             styles.conceptCard,
             {
-              borderColor: hoveredAbility === '__CLASS_CATALYST__' || ready ? accent : OTT.borderSubtle,
-              backgroundColor: hoveredAbility === '__CLASS_CATALYST__'
+              borderColor: hovered ? classAccent : (ready ? accent : OTT.borderSubtle),
+              backgroundColor: hovered
                 ? 'rgba(69, 247, 160, 0.14)'
                 : 'rgba(8, 12, 14, 0.42)',
+              shadowColor: hovered ? classAccent : 'transparent',
+              shadowOpacity: hovered ? 0.5 : 0,
+              shadowRadius: hovered ? 10 : 0,
               opacity: catalyticConsoleEnabled ? 1 : 0.42,
             },
           ]}
@@ -1025,13 +1035,13 @@ export default function CombatCommandDeck({
     if (voidWardAvailable) {
       const primed = voidWardPrimed;
       const enabled = voidWardEnabled && !primed;
-      const accent = riposteReady
-        ? OTT.warningAmber
-        : primed || enabled
-          ? OTT.cyanSelect
-          : OTT.borderSubtle;
+      const classAccent = riposteReady ? OTT.warningAmber : OTT.cyanSelect;
+      const accent = riposteReady || primed || enabled
+        ? classAccent
+        : OTT.borderSubtle;
       const title = riposteReady ? 'RIPOSTE' : 'PARRY';
       const statusLabel = riposteReady ? 'RIPOSTE' : primed ? 'PRIMED' : enabled ? 'READY' : 'LOCKED';
+      const hovered = hoveredAbility === '__CLASS_PARRY__';
       return (
         <HapticPressable
           key="class-action-parry"
@@ -1042,12 +1052,13 @@ export default function CombatCommandDeck({
           style={[
             styles.conceptCard,
             {
-              borderColor: hoveredAbility === '__CLASS_PARRY__' || accent !== OTT.borderSubtle
-                ? accent
-                : OTT.borderSubtle,
-              backgroundColor: hoveredAbility === '__CLASS_PARRY__'
-                ? 'rgba(98, 220, 229, 0.14)'
+              borderColor: hovered ? classAccent : accent,
+              backgroundColor: hovered
+                ? (riposteReady ? 'rgba(224, 180, 90, 0.14)' : 'rgba(98, 220, 229, 0.14)')
                 : 'rgba(8, 12, 14, 0.42)',
+              shadowColor: hovered ? classAccent : 'transparent',
+              shadowOpacity: hovered ? 0.5 : 0,
+              shadowRadius: hovered ? 10 : 0,
               opacity: primed || enabled || riposteReady ? 1 : 0.42,
             },
           ]}

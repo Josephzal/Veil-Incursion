@@ -23,8 +23,12 @@ import { countCargoItemInstances } from '../data/cargoGridEngine';
 import type { CargoRunState } from '../types/cargoGrid';
 import type { CargoItemId } from '../types/cargoGrid';
 import type { TerminalTheme } from '../types/theme';
+import { VEIL } from '../theme/veilTerminalTokens';
+import { viewShadow } from '../utils/adaptiveStyles';
 
 const TERMINAL_ACCENT = '#00ff33';
+/** Combat cargo modal — matches occult-terminal mint chrome. */
+const COMBAT_CARGO_ACCENT = VEIL.mint;
 
 interface CargoGridOverlayProps {
   visible: boolean;
@@ -120,6 +124,8 @@ export default function CargoGridOverlay({
     ? resolveCombatOverlayContentWidth(cellSize)
     : panelWidth - panelPadding * 2;
 
+  const panelAccent = combatMode ? COMBAT_CARGO_ACCENT : accentColor;
+
   return (
     <Modal
       visible={visible}
@@ -139,43 +145,52 @@ export default function CargoGridOverlay({
           <View
             style={[
               styles.panel,
+              combatMode ? styles.panelCombat : null,
               {
-                borderColor: accentColor,
+                borderColor: panelAccent,
                 width: panelWidth,
                 maxWidth: screenWidth - 12,
                 paddingHorizontal: panelPadding,
                 paddingBottom: panelPadding,
               },
+              combatMode
+                ? viewShadow({
+                  color: panelAccent,
+                  opacity: 0.42,
+                  radius: 16,
+                  offset: { width: 0, height: 0 },
+                })
+                : null,
             ]}
           >
             <View style={styles.panelHeader}>
               <CargoCreditsHud
                 credits={runCredits ?? 0}
-                accentColor={accentColor}
+                accentColor={panelAccent}
               />
               <HapticPressable
                 onPress={onClose}
                 style={({ pressed }) => [
                   styles.closeX,
-                  { borderColor: accentColor, opacity: pressed ? 0.7 : 1 },
+                  { borderColor: panelAccent, opacity: pressed ? 0.7 : 1 },
                 ]}
                 hitSlop={8}
               >
-                <Text style={[styles.closeXText, { color: accentColor }]}>✕</Text>
+                <Text style={[styles.closeXText, { color: panelAccent }]}>✕</Text>
               </HapticPressable>
             </View>
 
             <CargoPressurePanel
               cargo={cargo}
               specialCargoStacks={specialCargoStacks}
-              accentColor={accentColor}
+              accentColor={panelAccent}
               mutedColor={theme.mutedColor}
             />
 
             <CargoGridBoard
               cargo={cargo}
               theme={theme}
-              accentColor={accentColor}
+              accentColor={panelAccent}
               onRelocateItem={onRelocateItem}
               onReplaceItem={onReplaceItem}
               onDiscardItem={onDiscardItem}
@@ -248,6 +263,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#050608',
     paddingBottom: CARGO_OVERLAY_PANEL_PADDING,
     gap: 8,
+  },
+  panelCombat: {
+    borderWidth: 1.5,
+    backgroundColor: 'rgba(5, 8, 8, 0.96)',
   },
   panelHeader: {
     flexDirection: 'row',

@@ -104,8 +104,8 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
 
   const continueLabel = useMemo(
     () => (activeIncursion.pendingHarvestReturn === 'RESOURCE_CACHE'
-      ? '[ SEAL RIFT ]'
-      : '[ CONTINUE DESCENT ]'),
+      ? 'SEAL RIFT'
+      : 'CONTINUE DESCENT'),
     [activeIncursion.pendingHarvestReturn],
   );
 
@@ -428,7 +428,7 @@ export default function ResourceHarvestScreen(): React.JSX.Element {
                 ]}
               >
                 <TerminalText size={9} letterSpacing={0.8} style={{ color: activeCabal, fontWeight: '700' }}>
-                  [ LEY-SLAG SPLITTER ] — ARM +2 RESOURCE VEINS
+                  LEY-SLAG SPLITTER — ARM +2 RESOURCE VEINS
                 </TerminalText>
               </HapticPressable>
             ) : null}

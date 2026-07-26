@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import Svg, { Polygon } from 'react-native-svg';
 import { COMBAT_HUD_TYPE } from '../../constants/combatHudTypography';
 import {
   COMBAT_DECK_LABEL_WIDTH,
@@ -17,7 +18,7 @@ interface CombatRunicBrandGaugeProps {
   sigilScale?: number;
 }
 
-/** Runic Brand pips — occult sigil slots that light as brands are imprinted. */
+/** Runic Brand pips — triangular sigil slots that light as brands are imprinted. */
 export default function CombatRunicBrandGauge({
   currentBrands,
   maxBrands,
@@ -33,34 +34,33 @@ export default function CombatRunicBrandGauge({
   const isInline = variant === 'compact' || variant === 'inline';
   const labelText = `BRANDS // ${currentBrands}/${maxBrands}`;
   const sigilSize = SIGIL * sigilScale;
+  const points = trianglePoints(sigilSize);
 
   const sigilRow = (
-    <View style={styles.sigilRow}>
+    <View style={[styles.sigilRow, { minHeight: sigilSize }]}>
       {Array.from({ length: slots }).map((_, index) => {
         const live = index < currentBrands;
         return (
           <View
             key={index}
             style={[
-              styles.sigilOuter,
-              { width: sigilSize, height: sigilSize,
-                borderColor: live ? liveColor : 'rgba(88, 28, 135, 0.45)',
+              styles.sigilHost,
+              {
+                width: sigilSize,
+                height: sigilSize,
                 shadowColor: live ? liveColor : 'transparent',
-                opacity: live ? 1 : 0.4,
+                opacity: live ? 1 : 0.45,
               },
             ]}
           >
-            <View
-              style={[
-                styles.sigilInner,
-                {
-                  width: sigilSize - 4,
-                  height: sigilSize - 4,
-                  backgroundColor: live ? liveColor : spentColor,
-                  borderColor: live ? '#e9d5ff' : 'rgba(88, 28, 135, 0.35)',
-                },
-              ]}
-            />
+            <Svg width={sigilSize} height={sigilSize}>
+              <Polygon
+                points={points}
+                fill={live ? liveColor : spentColor}
+                stroke={live ? '#e9d5ff' : 'rgba(88, 28, 135, 0.55)'}
+                strokeWidth={1.25}
+              />
+            </Svg>
           </View>
         );
       })}
@@ -90,11 +90,21 @@ export default function CombatRunicBrandGauge({
   );
 }
 
-const SIGIL = 9;
+const SIGIL = 14;
+
+function trianglePoints(size: number): string {
+  const pad = 1;
+  const tipX = size / 2;
+  const tipY = pad;
+  const leftX = pad;
+  const rightX = size - pad;
+  const baseY = size - pad;
+  return `${tipX},${tipY} ${rightX},${baseY} ${leftX},${baseY}`;
+}
 
 const styles = StyleSheet.create({
   root: {
-    gap: 3,
+    gap: 4,
     width: '100%',
   },
   rootInline: {
@@ -106,7 +116,7 @@ const styles = StyleSheet.create({
   rootStacked: {
     flexDirection: 'column',
     alignItems: 'stretch',
-    gap: 3,
+    gap: 4,
   },
   label: {
     fontFamily: 'monospace',
@@ -130,29 +140,18 @@ const styles = StyleSheet.create({
   sigilRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 6,
     minHeight: SIGIL,
     flexShrink: 1,
     flex: 1,
     justifyContent: 'flex-start',
   },
-  sigilOuter: {
+  sigilHost: {
     width: SIGIL,
     height: SIGIL,
-    alignItems: 'center',
-    justifyContent: 'center',
-    transform: [{ rotate: '45deg' }],
-    borderWidth: 1,
-    borderRadius: 1,
-    shadowOpacity: 0.85,
-    shadowRadius: 5,
+    shadowOpacity: 0.9,
+    shadowRadius: 6,
     shadowOffset: { width: 0, height: 0 },
     elevation: 2,
-  },
-  sigilInner: {
-    width: SIGIL - 4,
-    height: SIGIL - 4,
-    borderWidth: 1,
-    borderRadius: 1,
   },
 });

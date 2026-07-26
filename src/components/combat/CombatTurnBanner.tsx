@@ -1,12 +1,13 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import type { CombatTurnPhase } from '../../context/CombatTurnContext';
+import { COMBAT_HUD_TYPE } from '../../constants/combatHudTypography';
+import { OTT } from '../../constants/occultTacticalTerminalTheme';
 import { formatIntentReadout } from '../../utils/combatTelemetryFormat';
 import type { EnemyIntent } from '../../types/run';
 
-const MONO = 'monospace';
-const HOSTILE_RED = '#ef4444';
-const PARRY_GREEN = '#00ff33';
+const HOSTILE_RED = OTT.soulRed;
+const PARRY_GREEN = OTT.terminalGreen;
 
 interface CombatTurnBannerProps {
   phase: CombatTurnPhase;
@@ -30,27 +31,31 @@ export default function CombatTurnBanner({
   let sublabel: string | null = null;
   let accent = primaryColor;
   let border = primaryColor;
+  let fill = 'rgba(8, 12, 14, 0.88)';
 
   switch (phase) {
     case 'ENEMY_WINDUP':
-      label = 'HOSTILE TURN';
+      label = 'HOSTILE CHANNEL';
       sublabel = enemyIntent
         ? `${formatIntentReadout(enemyIntent)} — READ INTENT`
         : 'ANALYZING HOSTILE CHANNEL';
       accent = HOSTILE_RED;
-      border = HOSTILE_RED;
+      border = 'rgba(255, 90, 98, 0.72)';
+      fill = 'rgba(255, 90, 98, 0.06)';
       break;
     case 'ENEMY_ACTION':
       label = 'HOSTILE ATTACK';
       sublabel = enemyIntent ? `${formatIntentReadout(enemyIntent)} — INCOMING` : 'STRIKE CHANNEL ACTIVE';
       accent = HOSTILE_RED;
-      border = HOSTILE_RED;
+      border = 'rgba(255, 90, 98, 0.72)';
+      fill = 'rgba(255, 90, 98, 0.06)';
       break;
     case 'PARRY_WINDOW':
       label = 'COUNTER WINDOW OPEN';
       sublabel = 'TAP INSIDE RING WHEN RINGS ALIGN';
       accent = PARRY_GREEN;
-      border = PARRY_GREEN;
+      border = 'rgba(69, 247, 160, 0.65)';
+      fill = 'rgba(69, 247, 160, 0.06)';
       break;
     case 'SLICE':
       label = 'EXECUTION PHASE';
@@ -65,8 +70,18 @@ export default function CombatTurnBanner({
   }
 
   return (
-    <View style={[styles.banner, compact && styles.bannerCompact, { borderColor: border }]}>
-      <Text style={[styles.label, compact && styles.labelCompact, { color: accent }]}>{`>> ${label}`}</Text>
+    <View style={[
+      styles.banner,
+      compact && styles.bannerCompact,
+      { borderColor: border, backgroundColor: fill },
+    ]}>
+      <Text style={[
+        styles.label,
+        compact && styles.labelCompact,
+        { color: accent },
+      ]}>
+        {`>> ${label}`}
+      </Text>
       {sublabel ? (
         <Text
           style={[styles.sublabel, compact && styles.sublabelCompact, { color: mutedColor }]}
@@ -82,36 +97,36 @@ export default function CombatTurnBanner({
 
 const styles = StyleSheet.create({
   banner: {
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    backgroundColor: 'rgba(10, 11, 15, 0.96)',
-    gap: 2,
+    borderWidth: 1.25,
+    borderRadius: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    gap: 3,
     width: '100%',
   },
   bannerCompact: {
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    gap: 1,
-    backgroundColor: 'rgba(10, 11, 15, 0.88)',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    gap: 2,
   },
   label: {
-    fontFamily: MONO,
-    fontSize: 8,
-    fontWeight: '700',
+    fontFamily: OTT.mono,
+    fontSize: COMBAT_HUD_TYPE.body,
+    fontWeight: '800',
     letterSpacing: 0.7,
   },
   labelCompact: {
-    fontSize: 7,
-    letterSpacing: 0.5,
+    fontSize: COMBAT_HUD_TYPE.caption,
+    letterSpacing: 0.55,
   },
   sublabel: {
-    fontFamily: MONO,
-    fontSize: 7,
-    letterSpacing: 0.5,
+    fontFamily: OTT.mono,
+    fontSize: COMBAT_HUD_TYPE.caption,
+    letterSpacing: 0.45,
+    color: OTT.textSecondary,
   },
   sublabelCompact: {
-    fontSize: 6,
+    fontSize: COMBAT_HUD_TYPE.micro,
     letterSpacing: 0.35,
   },
 });

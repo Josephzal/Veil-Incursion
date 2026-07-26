@@ -87,11 +87,11 @@ export default function CombatVeilRotGauge({
   );
 }
 
-const ORB = 9;
+const ORB = 14;
 
 const styles = StyleSheet.create({
   root: {
-    gap: 3,
+    gap: 4,
     width: '100%',
   },
   rootInline: {
@@ -103,11 +103,11 @@ const styles = StyleSheet.create({
   rootStacked: {
     flexDirection: 'column',
     alignItems: 'stretch',
-    gap: 3,
+    gap: 4,
   },
   label: {
     fontFamily: 'monospace',
-    fontSize: 7,
+    fontSize: 8,
     fontWeight: '700',
     letterSpacing: 0.4,
   },
@@ -115,19 +115,19 @@ const styles = StyleSheet.create({
     width: COMBAT_DECK_LABEL_WIDTH,
     flexShrink: 0,
     flex: 0,
-    fontSize: 7,
-    lineHeight: 9,
+    fontSize: 8,
+    lineHeight: 10,
     letterSpacing: 0.4,
   },
   labelStacked: {
-    fontSize: 8,
+    fontSize: 9,
     width: '100%',
     flex: 0,
   },
   orbRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
     minHeight: ORB,
     flexShrink: 1,
     flex: 1,
@@ -137,18 +137,18 @@ const styles = StyleSheet.create({
     width: ORB,
     height: ORB,
     borderRadius: ORB / 2,
-    borderWidth: 1,
+    borderWidth: 1.25,
     alignItems: 'center',
     justifyContent: 'center',
     shadowOpacity: 0.85,
-    shadowRadius: 5,
+    shadowRadius: 6,
     shadowOffset: { width: 0, height: 0 },
     elevation: 2,
   },
   orbInner: {
-    width: ORB - 3,
-    height: ORB - 3,
-    borderRadius: (ORB - 3) / 2,
+    width: ORB - 4,
+    height: ORB - 4,
+    borderRadius: (ORB - 4) / 2,
     borderWidth: 1,
   },
 });
