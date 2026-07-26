@@ -65,11 +65,11 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     width: '100%',
-    /** Align with ability row beneath the centered AP band. */
-    paddingTop: 28,
+    /** Match deck: paddingTop 4 + AP band 24 + gap 6 → ability of ability cards. */
+    paddingTop: 34,
     paddingBottom: 8,
     paddingHorizontal: 8,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
   },
   deckPanel: {
     flex: 1,

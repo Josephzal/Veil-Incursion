@@ -22,6 +22,7 @@ import CombatRunicBrandGauge from './CombatRunicBrandGauge';
 import { useCombatDesktopLayout } from '../../hooks/useCombatDesktopLayout';
 import ResourceRail from './ui/ResourceRail';
 import { OTT } from '../../constants/occultTacticalTerminalTheme';
+import { COMBAT_HUD_TYPE } from '../../constants/combatHudTypography';
 
 export interface CombatOperativeTelemetry {
   operativeClass: ClassType;
@@ -315,44 +316,44 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     width: '100%',
-    gap: 5,
+    gap: 6,
     paddingHorizontal: 2,
     paddingTop: 0,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
   },
   consoleClass: {
     fontFamily: OTT.mono,
-    fontSize: 14,
+    fontSize: COMBAT_HUD_TYPE.hero + 1,
     fontWeight: '800',
     letterSpacing: 1.4,
     color: OTT.textPrimary,
   },
   consoleSubtitle: {
     fontFamily: OTT.mono,
-    fontSize: 8,
+    fontSize: COMBAT_HUD_TYPE.label,
     fontWeight: '600',
     letterSpacing: 1,
     color: OTT.textSecondary,
-    marginBottom: 2,
+    marginBottom: 4,
   },
   passiveBlock: {
-    marginTop: 4,
-    paddingTop: 4,
+    marginTop: 6,
+    paddingTop: 6,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: OTT.borderMuted,
-    gap: 2,
+    gap: 3,
   },
   passiveHeader: {
     fontFamily: OTT.mono,
-    fontSize: 7,
+    fontSize: COMBAT_HUD_TYPE.body,
     fontWeight: '800',
     letterSpacing: 1.2,
     color: OTT.terminalGreenMuted,
   },
   passiveBody: {
     fontFamily: OTT.mono,
-    fontSize: 7,
-    lineHeight: 9,
+    fontSize: COMBAT_HUD_TYPE.body,
+    lineHeight: COMBAT_HUD_TYPE.lineBody,
     color: OTT.textSecondary,
   },
   root: {

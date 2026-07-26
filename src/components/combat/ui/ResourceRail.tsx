@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { OTT, OTT_LAYOUT } from '../../../constants/occultTacticalTerminalTheme';
+import { COMBAT_HUD_TYPE } from '../../../constants/combatHudTypography';
 
 interface ResourceRailProps {
   label: string;
@@ -45,14 +46,14 @@ const styles = StyleSheet.create({
   },
   label: {
     fontFamily: OTT.mono,
-    fontSize: 9,
+    fontSize: COMBAT_HUD_TYPE.body,
     fontWeight: '800',
     letterSpacing: 1,
     color: OTT.textSecondary,
   },
   value: {
     fontFamily: OTT.mono,
-    fontSize: 9,
+    fontSize: COMBAT_HUD_TYPE.body,
     fontWeight: '700',
     color: OTT.textPrimary,
   },

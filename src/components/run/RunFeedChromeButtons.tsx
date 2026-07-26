@@ -6,6 +6,7 @@ import { useCargoOverlay } from '../../context/CargoOverlayContext';
 import { useRunStatusOverlay } from '../../context/RunStatusOverlayContext';
 import { useRunItemOverlay } from '../../context/RunItemOverlayContext';
 import { OTT } from '../../constants/occultTacticalTerminalTheme';
+import { COMBAT_HUD_TYPE } from '../../constants/combatHudTypography';
 
 interface RunFeedChromeButtonsProps {
   accent: string;
@@ -155,7 +156,7 @@ const styles = StyleSheet.create({
   },
   terminalLabel: {
     fontFamily: OTT.mono,
-    fontSize: 7,
+    fontSize: COMBAT_HUD_TYPE.caption,
     fontWeight: '700',
     letterSpacing: 0.9,
     color: OTT.textSecondary,

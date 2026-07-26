@@ -9,7 +9,9 @@ import CombatApPipRow from './combat/CombatApPipRow';
 import RunFeedChromeButtons from './run/RunFeedChromeButtons';
 import { useCombatDesktopLayout } from '../hooks/useCombatDesktopLayout';
 import { DOSSIER_CTA_BG, DOSSIER_ROW_BG } from '../constants/dossierSurface';
+import { COMBAT_HUD_TYPE } from '../constants/combatHudTypography';
 import { OTT, OTT_LAYOUT } from '../constants/occultTacticalTerminalTheme';
+import type { AbilityTargetMode } from '../data/combatTargeting';
 
 const MONO = OTT.mono;
 const TILE_HEIGHT = 40;
@@ -49,6 +51,10 @@ interface CombatCommandDeckProps {
   getAbilityLabel: (ability: string) => string;
   /** Concept card category line (MELEE / DEFENSE / …). */
   getAbilityCategory?: (ability: string) => string;
+  /** Damage / buff / debuff chips — same idle and selected. */
+  getAbilityEffectTags?: (ability: string) => string;
+  /** Target mode drives confirm-on-card for NONE abilities. */
+  getAbilityTargetMode?: (ability: string) => AbilityTargetMode;
   initiativeQueued?: boolean;
   initiativeProcSeq?: number;
   onInitiativeProcComplete?: () => void;
@@ -94,6 +100,8 @@ export default function CombatCommandDeck({
   canEndTurn,
   getAbilityLabel,
   getAbilityCategory,
+  getAbilityEffectTags,
+  getAbilityTargetMode,
   initiativeQueued = false,
   initiativeProcSeq = 0,
   onInitiativeProcComplete,
@@ -344,22 +352,13 @@ export default function CombatCommandDeck({
 
     if (dashboardLayout) {
       const category = getAbilityCategory?.(ability) ?? 'ACTION';
-      const slotIndex = String(Math.max(1, loadout.indexOf(ability) + 1)).padStart(2, '0');
       const abilityName = labelFor(ability).toUpperCase().replace(/^\[\s*/, '').replace(/\s*\]$/, '');
-      const description = getStagedAbilityDescription(ability);
-      const parts = (description || '').split(' // ').map((part) => part.trim()).filter(Boolean);
-      /** Detail panel shows effect copy only — hide ammo/protocol/tag counter lines. */
-      const effectLines = parts
-        .filter((part) => {
-          const upper = part.toUpperCase();
-          return !upper.startsWith('TAGS:')
-            && !upper.startsWith('CATALYST:')
-            && !upper.startsWith('ROUND:')
-            && !upper.startsWith('PROTOCOL:')
-            && !upper.startsWith('AMMO:')
-            && !upper.startsWith('INTRINSIC:');
-        })
-        .slice(0, 3);
+      const effectTags = getAbilityEffectTags?.(ability) ?? '';
+      const targetMode = getAbilityTargetMode?.(ability) ?? 'SINGLE';
+      const needsConfirm = isSelected
+        && enabled
+        && (targetMode === 'NONE' || targetMode === 'ALL');
+      const confirmLabel = targetMode === 'ALL' ? 'CONFIRM AOE' : 'CONFIRM';
       const spectrallyLit = hoveredAbility === ability;
       const hoverAccent = isSelected
         ? OTT.cyanSelect
@@ -374,7 +373,16 @@ export default function CombatCommandDeck({
       return (
         <HapticPressable
           key={ability}
-          onPress={() => canSelectActions && onSelectAbility(ability)}
+          onPress={() => {
+            if (!canSelectActions) return;
+            if (isSelected) {
+              // AoE / self casts wait on CONFIRM — don't cancel via card body taps.
+              if (targetMode === 'NONE' || targetMode === 'ALL') return;
+              onAbort();
+              return;
+            }
+            onSelectAbility(ability);
+          }}
           disabled={!canSelectActions}
           onHoverIn={() => setHoveredAbility(ability)}
           onHoverOut={() => setHoveredAbility((current) => (current === ability ? null : current))}
@@ -392,12 +400,7 @@ export default function CombatCommandDeck({
         >
           <View style={styles.conceptCardPress}>
             <View style={styles.conceptCardTop}>
-              <Text style={[
-                styles.conceptSlot,
-                { color: isSelected ? OTT.cyanSelect : OTT.textMuted },
-              ]}>
-                {`${slotIndex} //`}
-              </Text>
+              <View style={styles.conceptCardTopSpacer} />
               <View style={styles.apDiamondHost}>
                 <View style={[
                   styles.apDiamond,
@@ -414,7 +417,7 @@ export default function CombatCommandDeck({
             </View>
             <Text
               style={[styles.conceptCardName, { color: enabled ? OTT.textPrimary : OTT.textMuted }]}
-              numberOfLines={1}
+              numberOfLines={2}
               adjustsFontSizeToFit
               minimumFontScale={0.55}
             >
@@ -423,16 +426,27 @@ export default function CombatCommandDeck({
             <Text style={styles.conceptCardCategory} numberOfLines={1}>
               {category}
             </Text>
-            {isSelected ? (
-              <>
-                <Text style={styles.conceptCardDesc} numberOfLines={3}>
-                  {effectLines.join('\n') || costImpact || '—'}
-                </Text>
-                <Text style={[styles.conceptArmed, { color: OTT.terminalGreen }]}>ARMED</Text>
-              </>
+            {effectTags ? (
+              <Text
+                style={[
+                  styles.conceptCardTags,
+                  { color: isSelected ? OTT.cyanSelect : OTT.textMuted },
+                ]}
+                numberOfLines={3}
+              >
+                {effectTags}
+              </Text>
             ) : (
               <View style={styles.conceptCardSpacer} />
             )}
+            {needsConfirm ? (
+              <HapticPressable
+                onPress={onConfirm}
+                style={styles.conceptConfirmBtn}
+              >
+                <Text style={styles.conceptConfirmLabel}>{confirmLabel}</Text>
+              </HapticPressable>
+            ) : null}
           </View>
         </HapticPressable>
       );
@@ -1100,50 +1114,6 @@ export default function CombatCommandDeck({
     );
   };
 
-  const renderCommitSideButtons = () => {
-    const hasArmedAbility = selectedAbility != null;
-    return (
-      <>
-        <View style={styles.conceptActionSlot}>
-          <HapticPressable
-            onPress={onConfirm}
-            disabled={!canExecute}
-            style={[
-              styles.sideCommitBtn,
-              styles.sideExecuteBtn,
-              { opacity: canExecute ? 1 : 0.38 },
-            ]}
-          >
-            <Text style={[
-              styles.sideExecuteLabel,
-              !canExecute && styles.sideCommitLabelMuted,
-            ]}>
-              EXECUTE
-            </Text>
-          </HapticPressable>
-        </View>
-        <View style={styles.conceptActionSlot}>
-          <HapticPressable
-            onPress={onAbort}
-            disabled={!hasArmedAbility}
-            style={[
-              styles.sideCommitBtn,
-              styles.sideAbortBtn,
-              { opacity: hasArmedAbility ? 1 : 0.38 },
-            ]}
-          >
-            <Text style={[
-              styles.sideAbortLabel,
-              !hasArmedAbility && styles.sideCommitLabelMuted,
-            ]}>
-              ABORT
-            </Text>
-          </HapticPressable>
-        </View>
-      </>
-    );
-  };
-
   const renderConceptDashboard = () => (
     <View style={styles.conceptDeck}>
       <View style={styles.conceptMain}>
@@ -1162,7 +1132,6 @@ export default function CombatCommandDeck({
       </View>
       <View style={styles.conceptTurnCol}>
         <View style={styles.conceptTurnActions}>
-          {renderCommitSideButtons()}
           <View style={styles.conceptActionSlot}>
             {renderEndTurnButton()}
           </View>
@@ -1513,7 +1482,7 @@ const styles = StyleSheet.create({
     flexBasis: 0,
     maxWidth: 168,
     minWidth: 110,
-    height: 178,
+    height: 198,
     borderWidth: 1.25,
     borderRadius: 2,
     overflow: 'hidden',
@@ -1521,33 +1490,37 @@ const styles = StyleSheet.create({
   },
   conceptCardPress: {
     flex: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    gap: 3,
+    paddingHorizontal: 9,
+    paddingVertical: 10,
+    gap: 7,
   },
   conceptCardTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     gap: 6,
+    minHeight: 18,
+  },
+  conceptCardTopSpacer: {
+    flex: 1,
   },
   conceptSlot: {
     fontFamily: MONO,
-    fontSize: 7,
+    fontSize: COMBAT_HUD_TYPE.caption,
     fontWeight: '700',
     letterSpacing: 0.6,
   },
   apDiamondHost: {
-    width: 18,
-    height: 18,
+    width: 20,
+    height: 20,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'transparent',
     overflow: 'visible',
   },
   apDiamond: {
-    width: 13,
-    height: 13,
+    width: 14,
+    height: 14,
     borderWidth: 1.25,
     backgroundColor: 'transparent',
     transform: [{ rotate: '45deg' }],
@@ -1556,56 +1529,77 @@ const styles = StyleSheet.create({
   },
   apDiamondText: {
     fontFamily: MONO,
-    fontSize: 8,
+    fontSize: COMBAT_HUD_TYPE.body,
     fontWeight: '800',
     transform: [{ rotate: '-45deg' }],
   },
   conceptCardName: {
     fontFamily: MONO,
-    fontSize: 11,
+    fontSize: COMBAT_HUD_TYPE.emphasis,
     fontWeight: '800',
-    letterSpacing: 0.2,
+    letterSpacing: 0.35,
     width: '100%',
+    marginTop: 2,
   },
   conceptCardCategory: {
     fontFamily: MONO,
-    fontSize: 7,
+    fontSize: COMBAT_HUD_TYPE.caption,
     fontWeight: '700',
-    letterSpacing: 0.7,
+    letterSpacing: 0.9,
     color: OTT.textSecondary,
+    marginTop: 2,
   },
   conceptCardDesc: {
     fontFamily: MONO,
-    fontSize: 8,
-    lineHeight: 11,
+    fontSize: COMBAT_HUD_TYPE.body,
+    lineHeight: COMBAT_HUD_TYPE.lineBody,
     color: OTT.textPrimary,
-    marginTop: 2,
+    marginTop: 4,
     flexGrow: 1,
     flexShrink: 1,
     minHeight: 0,
   },
   conceptCardSpacer: {
     flexGrow: 1,
-    minHeight: 8,
+    minHeight: 10,
   },
   conceptCardTags: {
     fontFamily: MONO,
-    fontSize: 6,
-    letterSpacing: 0.4,
+    fontSize: COMBAT_HUD_TYPE.caption,
+    letterSpacing: 0.45,
     color: OTT.textMuted,
-    marginTop: 2,
+    marginTop: 4,
+    lineHeight: COMBAT_HUD_TYPE.lineCaption,
+    flexGrow: 1,
   },
   conceptArmed: {
     fontFamily: MONO,
-    fontSize: 6,
+    fontSize: COMBAT_HUD_TYPE.micro,
     fontWeight: '800',
     letterSpacing: 1.2,
     color: OTT.terminalGreen,
     marginTop: 2,
   },
+  conceptConfirmBtn: {
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: OTT.terminalGreen,
+    backgroundColor: 'rgba(69, 247, 160, 0.12)',
+    borderRadius: 2,
+    paddingVertical: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  conceptConfirmLabel: {
+    fontFamily: MONO,
+    fontSize: COMBAT_HUD_TYPE.caption,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    color: OTT.terminalGreen,
+  },
   conceptClassBadge: {
     fontFamily: MONO,
-    fontSize: 8,
+    fontSize: COMBAT_HUD_TYPE.body,
     fontWeight: '800',
     letterSpacing: 0.8,
   },
@@ -1627,7 +1621,7 @@ const styles = StyleSheet.create({
   },
   sideExecuteLabel: {
     fontFamily: MONO,
-    fontSize: 10,
+    fontSize: COMBAT_HUD_TYPE.label,
     fontWeight: '800',
     letterSpacing: 1.2,
     color: OTT.terminalGreen,
@@ -1638,7 +1632,7 @@ const styles = StyleSheet.create({
   },
   sideAbortLabel: {
     fontFamily: MONO,
-    fontSize: 10,
+    fontSize: COMBAT_HUD_TYPE.label,
     fontWeight: '800',
     letterSpacing: 1.2,
     color: OTT.textSecondary,
@@ -1725,12 +1719,12 @@ const styles = StyleSheet.create({
   },
   endTurnLabel: {
     fontFamily: MONO,
-    fontSize: 7,
+    fontSize: COMBAT_HUD_TYPE.caption,
     fontWeight: 'bold',
     letterSpacing: 0.4,
   },
   endTurnLabelDashboard: {
-    fontSize: 10,
+    fontSize: COMBAT_HUD_TYPE.label,
     letterSpacing: 1.1,
     fontWeight: '800',
     textAlign: 'center',

@@ -2,6 +2,7 @@ import React from 'react';
 import { Image, ScrollView, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
 import type { CombatTurnOrderSnapshot, CombatTurnOrderEntry } from '../../utils/combatTurnOrder';
 import { OTT } from '../../constants/occultTacticalTerminalTheme';
+import { COMBAT_HUD_TYPE } from '../../constants/combatHudTypography';
 
 interface CombatTurnOrderTimelineProps {
   turnOrder: CombatTurnOrderSnapshot | null | undefined;
@@ -135,7 +136,7 @@ const styles = StyleSheet.create({
   },
   header: {
     fontFamily: OTT.mono,
-    fontSize: 7,
+    fontSize: COMBAT_HUD_TYPE.caption,
     fontWeight: '700',
     letterSpacing: 1.4,
     color: OTT.terminalGreenMuted,
@@ -143,7 +144,7 @@ const styles = StyleSheet.create({
   },
   empty: {
     fontFamily: OTT.mono,
-    fontSize: 6,
+    fontSize: COMBAT_HUD_TYPE.micro,
     textAlign: 'center',
   },
   scrollContent: {
@@ -197,12 +198,12 @@ const styles = StyleSheet.create({
   },
   initial: {
     fontFamily: OTT.mono,
-    fontSize: 7,
+    fontSize: COMBAT_HUD_TYPE.caption,
     fontWeight: '800',
   },
   chipLabel: {
     fontFamily: OTT.mono,
-    fontSize: 6,
+    fontSize: COMBAT_HUD_TYPE.micro,
     fontWeight: '800',
     letterSpacing: 0.4,
   },

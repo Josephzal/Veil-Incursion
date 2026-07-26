@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { clampRatio } from '../../utils/combatTelemetryFormat';
+import { COMBAT_HUD_TYPE } from '../../constants/combatHudTypography';
 
 import { COMBAT_GAUGE_TRACK_HEIGHT_COMPACT } from './combatGaugeMetrics';
 
@@ -117,8 +118,8 @@ export default function CombatTelemetryGaugeRow({
         isStacked ? styles.rowLabelStacked : null,
         isCompact ? styles.rowLabelCompact : null,
         labelFontScale !== 1 ? {
-          fontSize: (isCompact ? 7 : isStacked ? 8 : 8) * labelFontScale,
-          lineHeight: (isCompact ? 9 : 11) * labelFontScale,
+          fontSize: (isCompact ? COMBAT_HUD_TYPE.caption : COMBAT_HUD_TYPE.body) * labelFontScale,
+          lineHeight: (isCompact ? COMBAT_HUD_TYPE.lineCaption : COMBAT_HUD_TYPE.lineBody) * labelFontScale,
         } : null,
         { color: labelColor },
       ]} numberOfLines={1} ellipsizeMode="tail">
@@ -149,9 +150,9 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     fontFamily: MONO,
-    fontSize: 8,
+    fontSize: COMBAT_HUD_TYPE.body,
     letterSpacing: 0.5,
-    lineHeight: 11,
+    lineHeight: COMBAT_HUD_TYPE.lineBody,
   },
   gaugeColumn: {
     width: GAUGE_WIDTH,
@@ -186,15 +187,15 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   rowLabelCompact: {
-    width: 72,
+    width: 88,
     flexShrink: 0,
     flex: 0,
-    fontSize: 7,
-    lineHeight: 9,
+    fontSize: COMBAT_HUD_TYPE.caption,
+    lineHeight: COMBAT_HUD_TYPE.lineCaption,
   },
   valueCaption: {
     fontFamily: MONO,
-    fontSize: 9,
+    fontSize: COMBAT_HUD_TYPE.label,
     fontWeight: '700',
     letterSpacing: 0.5,
     lineHeight: 11,

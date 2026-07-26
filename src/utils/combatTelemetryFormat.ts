@@ -290,6 +290,8 @@ export interface CombatGridUnitSnapshot {
   isDead: boolean;
   isSelected: boolean;
   isTargetable: boolean;
+  /** AoE footprint highlight — ability hits the whole group, not a single pick. */
+  isAoeAffected?: boolean;
   isFocused: boolean;
   /** True while this unit is the active enemy-turn actor (wind-up or execute). */
   isActingEnemy?: boolean;
@@ -405,6 +407,8 @@ import type { CombatTurnOrderSnapshot } from './combatTurnOrder';
 export interface CombatSquadUiSnapshot {
   units: CombatGridUnitSnapshot[];
   targetingActive: boolean;
+  /** True while a staged ability needs hostile picks (SINGLE / ALL). */
+  abilityTargetingActive?: boolean;
   squadSize: number;
   stagedAbilityId?: string | null;
   turnOrder?: CombatTurnOrderSnapshot;
@@ -468,6 +472,7 @@ export function buildInitialSquadUiSnapshot(
   return {
     units,
     targetingActive: false,
+    abilityTargetingActive: false,
     squadSize: units.filter((u) => !u.isDead).length,
     stagedAbilityId: null,
   };

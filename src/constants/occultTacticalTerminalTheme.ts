@@ -28,7 +28,7 @@ export const OTT = {
   gridLine: 'rgba(120, 150, 150, 0.05)',
   mono: 'monospace',
   panelPad: 8,
-  headerSize: 8,
+  headerSize: 11,
   headerTracking: 1.4,
 } as const;
 

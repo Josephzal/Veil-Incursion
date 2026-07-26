@@ -90,6 +90,8 @@ const SLOT_ORDER: CombatGridSlotId[] = ['FL_0', 'FL_1', 'BL_0', 'BL_1'];
 interface CombatEnemyGridProps {
   units: CombatGridUnitView[];
   targetingActive: boolean;
+  /** Staged ability awaiting hostile selection — drives target reticles. */
+  abilityArmed?: boolean;
   onUnitPress: (unitId: string) => void;
   onUnitDissolveComplete?: (unitId: string) => void;
   borderColor?: string;
@@ -110,6 +112,7 @@ interface BattlefieldSlotProps {
   arenaHeight: number;
   wrapperWidth: `${number}%`;
   targetingActive: boolean;
+  abilityArmed?: boolean;
   accentColor: string;
   mutedColor: string;
   onUnitPress: (unitId: string) => void;
@@ -126,6 +129,7 @@ function BattlefieldSlot({
   arenaHeight,
   wrapperWidth,
   targetingActive,
+  abilityArmed = false,
   accentColor,
   mutedColor,
   onUnitPress,
@@ -165,6 +169,7 @@ function BattlefieldSlot({
           <CombatEnemyUnit
             unit={unit}
             targetingActive={targetingActive}
+            abilityArmed={abilityArmed}
             accentColor={accentColor}
             mutedColor={mutedColor}
             variant="arena"
@@ -182,6 +187,7 @@ function BattlefieldSlot({
 interface EnemyUnitStackProps {
   unit: CombatGridUnitView;
   targetingActive: boolean;
+  abilityArmed?: boolean;
   accentColor: string;
   mutedColor: string;
   onUnitPress?: (unitId: string) => void;
@@ -192,6 +198,7 @@ interface EnemyUnitStackProps {
 function EnemyUnitStack({
   unit,
   targetingActive,
+  abilityArmed = false,
   accentColor,
   mutedColor,
   onUnitPress,
@@ -206,6 +213,7 @@ function EnemyUnitStack({
       <CombatEnemyUnit
         unit={unit}
         targetingActive={targetingActive}
+        abilityArmed={abilityArmed}
         accentColor={accentColor}
         mutedColor={mutedColor}
         variant="compact"
@@ -219,6 +227,7 @@ function EnemyUnitStack({
 export default function CombatEnemyGrid({
   units,
   targetingActive,
+  abilityArmed = false,
   onUnitPress,
   onUnitDissolveComplete,
   accentColor,
@@ -256,6 +265,7 @@ export default function CombatEnemyGrid({
         <EnemyUnitStack
           unit={unit}
           targetingActive={targetingActive}
+          abilityArmed={abilityArmed}
           accentColor={accentColor}
           mutedColor={mutedColor}
           onUnitPress={onUnitPress}
@@ -276,6 +286,7 @@ export default function CombatEnemyGrid({
       arenaHeight: arenaSize.height,
       wrapperWidth,
       targetingActive,
+      abilityArmed,
       accentColor,
       mutedColor,
       onUnitPress,

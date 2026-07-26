@@ -5,6 +5,7 @@ import { TERMINAL_ACCENT } from '../../../components/MacroLogCargoButton';
 import { useCargoOverlay } from '../../../context/CargoOverlayContext';
 import { useRunStatusOverlay } from '../../../context/RunStatusOverlayContext';
 import { useCombatTurnOptional } from '../../../context/CombatTurnContext';
+import { COMBAT_HUD_TYPE } from '../../../constants/combatHudTypography';
 
 /** Semi-transparent lower-left run controls — cargo and status above the command deck. */
 export default function CombatGlobalChrome(): React.JSX.Element {
@@ -63,7 +64,7 @@ const styles = StyleSheet.create({
   },
   btnText: {
     fontFamily: 'monospace',
-    fontSize: 7,
+    fontSize: COMBAT_HUD_TYPE.caption,
     fontWeight: '700',
     letterSpacing: 0.5,
     color: TERMINAL_ACCENT,

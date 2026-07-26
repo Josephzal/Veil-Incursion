@@ -6,6 +6,7 @@ import type { ArenaIntentGlyph } from '../../data/combatArenaTelegraphEngine';
 import CombatArenaDefensePips from './CombatArenaDefensePips';
 import CombatArenaIntentGlyph from './CombatArenaIntentGlyph';
 import { OTT } from '../../constants/occultTacticalTerminalTheme';
+import { COMBAT_HUD_TYPE } from '../../constants/combatHudTypography';
 
 interface CombatEnemyOverheadBarsProps {
   unit: Pick<
@@ -115,13 +116,13 @@ const styles = StyleSheet.create({
   name: {
     flex: 1,
     fontFamily: OTT.mono,
-    fontSize: 8,
+    fontSize: COMBAT_HUD_TYPE.body,
     fontWeight: '800',
     letterSpacing: 0.55,
   },
   hpNum: {
     fontFamily: OTT.mono,
-    fontSize: 8,
+    fontSize: COMBAT_HUD_TYPE.body,
     fontWeight: '700',
     letterSpacing: 0.3,
     color: OTT.soulRed,
@@ -155,7 +156,7 @@ const styles = StyleSheet.create({
   },
   rotBadge: {
     fontFamily: OTT.mono,
-    fontSize: 6,
+    fontSize: COMBAT_HUD_TYPE.micro,
     fontWeight: '700',
     letterSpacing: 0.35,
     color: OTT.terminalGreenMuted,

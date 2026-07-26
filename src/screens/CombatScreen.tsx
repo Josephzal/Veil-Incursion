@@ -381,6 +381,7 @@ export default function CombatScreen(): React.JSX.Element {
       arenaGridVariant="staggered"
       units={gridUnits}
       targetingActive={effectiveSquadUi.targetingActive}
+      abilityArmed={Boolean(effectiveSquadUi.abilityTargetingActive)}
       onUnitPress={handleEnemyUnitPress}
       onUnitDissolveComplete={handleUnitDissolveComplete}
       accentColor={theme.primaryColor}

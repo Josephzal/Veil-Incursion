@@ -3,6 +3,7 @@ import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
 import HapticPressable from '../../../components/HapticPressable';
 import StatusEffectTray from '../../../components/combat/StatusEffectTray';
 import { OTT } from '../../../constants/occultTacticalTerminalTheme';
+import { COMBAT_HUD_TYPE } from '../../../constants/combatHudTypography';
 import type { CombatGridUnitSnapshot } from '../../../utils/combatTelemetryFormat';
 import { formatHostileId } from '../../../utils/combatTelemetryFormat';
 import { describeEnemyIntent } from '../../../utils/enemyIntentDescriptions';
@@ -216,15 +217,15 @@ const styles = StyleSheet.create({
   },
   standbyTitle: {
     fontFamily: OTT.mono,
-    fontSize: 10,
+    fontSize: 13,
     fontWeight: '800',
     letterSpacing: 1.2,
     color: OTT.cyanSelect,
   },
   standbyBody: {
     fontFamily: OTT.mono,
-    fontSize: 8,
-    lineHeight: 11,
+    fontSize: 11,
+    lineHeight: 13,
   },
   targetCard: {
     flexDirection: 'row',
@@ -254,20 +255,20 @@ const styles = StyleSheet.create({
   targetTitle: {
     flex: 1,
     fontFamily: OTT.mono,
-    fontSize: 10,
+    fontSize: 13,
     fontWeight: '800',
     letterSpacing: 0.5,
     color: OTT.cyanSelect,
   },
   targetHp: {
     fontFamily: OTT.mono,
-    fontSize: 11,
+    fontSize: 14,
     fontWeight: '800',
     color: OTT.soulRed,
   },
   tierLine: {
     fontFamily: OTT.mono,
-    fontSize: 7,
+    fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.6,
     color: OTT.textSecondary,
@@ -280,7 +281,7 @@ const styles = StyleSheet.create({
   },
   soulLabel: {
     fontFamily: OTT.mono,
-    fontSize: 7,
+    fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.8,
     color: OTT.textSecondary,
@@ -288,7 +289,7 @@ const styles = StyleSheet.create({
   },
   soulValue: {
     fontFamily: OTT.mono,
-    fontSize: 7,
+    fontSize: 10,
     fontWeight: '700',
     color: OTT.textPrimary,
   },
@@ -306,7 +307,7 @@ const styles = StyleSheet.create({
   },
   traitLink: {
     fontFamily: OTT.mono,
-    fontSize: 7,
+    fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.3,
     color: OTT.textSecondary,
@@ -318,14 +319,14 @@ const styles = StyleSheet.create({
   },
   statusHeader: {
     fontFamily: OTT.mono,
-    fontSize: 7,
+    fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.8,
     color: OTT.textMuted,
   },
   statusHint: {
     fontFamily: OTT.mono,
-    fontSize: 6,
+    fontSize: 9,
     color: OTT.textMuted,
   },
   separator: {
@@ -338,14 +339,14 @@ const styles = StyleSheet.create({
   },
   intent: {
     fontFamily: OTT.mono,
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.5,
     color: OTT.warningAmber,
   },
   intentHint: {
     fontFamily: OTT.mono,
-    fontSize: 6,
+    fontSize: 9,
     letterSpacing: 0.6,
     color: OTT.textMuted,
   },
@@ -366,20 +367,20 @@ const styles = StyleSheet.create({
   compactName: {
     flex: 1,
     fontFamily: OTT.mono,
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.5,
     color: OTT.textPrimary,
   },
   compactHp: {
     fontFamily: OTT.mono,
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: '700',
     color: OTT.soulRed,
   },
   compactIntent: {
     fontFamily: OTT.mono,
-    fontSize: 7,
+    fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.4,
     color: OTT.warningAmber,
@@ -407,21 +408,21 @@ const styles = StyleSheet.create({
   },
   detailTitle: {
     fontFamily: OTT.mono,
-    fontSize: 11,
+    fontSize: 14,
     fontWeight: '800',
     letterSpacing: 0.8,
     color: OTT.cyanSelect,
   },
   detailMeta: {
     fontFamily: OTT.mono,
-    fontSize: 8,
+    fontSize: 11,
     color: OTT.warningAmber,
     letterSpacing: 0.4,
   },
   detailBody: {
     fontFamily: OTT.mono,
-    fontSize: 9,
-    lineHeight: 13,
+    fontSize: 12,
+    lineHeight: 15,
     color: OTT.textPrimary,
   },
   detailClose: {
@@ -434,7 +435,7 @@ const styles = StyleSheet.create({
   },
   detailCloseLabel: {
     fontFamily: OTT.mono,
-    fontSize: 8,
+    fontSize: 11,
     fontWeight: '700',
     letterSpacing: 1,
     color: OTT.textSecondary,

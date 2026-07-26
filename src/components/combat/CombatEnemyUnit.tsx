@@ -17,6 +17,9 @@ import CombatSilhouetteShatterEffect from './CombatSilhouetteShatterEffect';
 import CombatEnemyOverheadBars from './CombatEnemyOverheadBars';
 import EnemyEntity from './EnemyEntity';
 import EliteSkullBadge from './EliteSkullBadge';
+import TargetingBrackets from './ui/TargetingBrackets';
+import { OTT } from '../../constants/occultTacticalTerminalTheme';
+import { COMBAT_HUD_TYPE } from '../../constants/combatHudTypography';
 import { resolveArenaIntentGlyph } from '../../data/combatArenaTelegraphEngine';
 
 const MONO = 'monospace';
@@ -32,6 +35,8 @@ export type CombatGridUnitView = CombatGridUnitSnapshot & {
 interface CombatEnemyUnitProps {
   unit: CombatGridUnitView;
   targetingActive: boolean;
+  /** True while an ability is staged and waiting on hostile picks. */
+  abilityArmed?: boolean;
   accentColor: string;
   mutedColor: string;
   variant?: 'arena' | 'compact';
@@ -48,6 +53,7 @@ interface CombatEnemyUnitProps {
 export default function CombatEnemyUnit({
   unit,
   targetingActive,
+  abilityArmed = false,
   variant = 'arena',
   layoutUnitScale = 1,
   skipDissolveEffect = false,
@@ -74,6 +80,10 @@ export default function CombatEnemyUnit({
   if (unit.dissolveHidden) return null;
 
   const breachTarget = unit.isFractureBreachTarget === true;
+  const showAbilityReticle = abilityArmed
+    && unit.isTargetable
+    && !unit.isBlocked
+    && !breachTarget;
   const arenaGlyph = isArena
     ? resolveArenaIntentGlyph({
         intent: unit.intent,
@@ -102,6 +112,24 @@ export default function CombatEnemyUnit({
         <Text style={styles.breachCallout} numberOfLines={1}>
           [ TAP TO BREACH ]
         </Text>
+      ) : null}
+      {showAbilityReticle ? (
+        <View
+          style={[
+            styles.targetCalloutPlate,
+            unit.isAoeAffected ? styles.targetCalloutPlateAoe : null,
+          ]}
+        >
+          <Text
+            style={[
+              styles.targetCallout,
+              unit.isAoeAffected ? styles.targetCalloutAoe : null,
+            ]}
+            numberOfLines={1}
+          >
+            {unit.isAoeAffected ? '[ AOE ]' : '[ TARGET ]'}
+          </Text>
+        </View>
       ) : null}
       {isAlpha ? <EliteSkullBadge style={styles.eliteBadge} /> : null}
 
@@ -148,6 +176,10 @@ export default function CombatEnemyUnit({
                           glow={portraitGlow}
                           intentShimmer={unit.intentShimmer ?? null}
                           isEnraged={unit.isEnraged === true}
+                        />
+                        <TargetingBrackets
+                          active={showAbilityReticle}
+                          color={unit.isAoeAffected ? OTT.warningAmber : OTT.cyanSelect}
                         />
                       </View>
                     </CombatSilhouetteShatterEffect>
@@ -239,10 +271,43 @@ const styles = StyleSheet.create({
     zIndex: 22,
     textAlign: 'center',
     fontFamily: MONO,
-    fontSize: 7,
+    fontSize: COMBAT_HUD_TYPE.caption,
     fontWeight: '700',
     letterSpacing: 0.6,
     color: '#67e8f9',
+  },
+  targetCalloutPlate: {
+    position: 'absolute',
+    top: -62,
+    left: '8%',
+    right: '8%',
+    zIndex: 22,
+    alignItems: 'center',
+    paddingVertical: 3,
+    paddingHorizontal: 6,
+    borderRadius: 2,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(98, 220, 229, 0.55)',
+    backgroundColor: 'rgba(5, 10, 12, 0.72)',
+    shadowColor: OTT.cyanSelect,
+    shadowOpacity: 0.55,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  targetCalloutPlateAoe: {
+    borderColor: 'rgba(224, 180, 90, 0.65)',
+    shadowColor: OTT.warningAmber,
+  },
+  targetCallout: {
+    textAlign: 'center',
+    fontFamily: MONO,
+    fontSize: COMBAT_HUD_TYPE.body,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    color: OTT.cyanSelect,
+  },
+  targetCalloutAoe: {
+    color: OTT.warningAmber,
   },
   eliteBadge: {
     position: 'absolute',

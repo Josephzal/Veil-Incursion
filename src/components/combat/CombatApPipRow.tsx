@@ -1,6 +1,7 @@
 import React from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { OTT } from '../../constants/occultTacticalTerminalTheme';
+import { COMBAT_HUD_TYPE } from '../../constants/combatHudTypography';
 
 interface CombatApPipRowProps {
   current: number;
@@ -33,8 +34,8 @@ export default function CombatApPipRow({
   conceptBand = false,
 }: CombatApPipRowProps): React.JSX.Element {
   const bandAccent = conceptBand ? OTT.cyanSelect : accent;
-  const resolvedLabelSize = labelFontSize ?? (conceptBand ? 11 : 7 * fontScale);
-  const resolvedHexSize = hexSize ?? (conceptBand ? 14 : HEX_SIZE * fontScale);
+  const resolvedLabelSize = labelFontSize ?? (conceptBand ? COMBAT_HUD_TYPE.emphasis : COMBAT_HUD_TYPE.caption * fontScale);
+  const resolvedHexSize = hexSize ?? (conceptBand ? 16 : HEX_SIZE * fontScale);
 
   return (
     <View style={[

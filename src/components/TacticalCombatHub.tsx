@@ -455,6 +455,7 @@ import {
   formatClassAbilityCostLine,
   resolveClassAbilityCost,
 } from '../data/classAbilityResolver';
+import { formatAbilityCardEffectLine } from '../data/combatAbilityPresentation';
 import { formatAbilityLabel } from '../data/classLoadoutEngine';
 import {
   detonateRiftSnareOnUnit,
@@ -888,6 +889,9 @@ export default function TacticalCombatHub({
   const [activeSliceIndex, setActiveSliceIndex] = useState(-1);
   const [sliceLines, setSliceLines] = useState<SliceLineConfig[]>([]);
   const [selectedAbility, setSelectedAbility] = useState<string | null>(null);
+  const selectedAbilityRef = useRef<string | null>(null);
+  selectedAbilityRef.current = selectedAbility;
+  const executeOperativeAbilityRef = useRef<(abilityId: string) => void>(() => {});
   const [playerActionPoints, setPlayerActionPoints] = useState(PLAYER_ACTION_POINTS_PER_TURN);
   const [initiativeQueued, setInitiativeQueued] = useState(false);
   const [initiativeProcSeq, setInitiativeProcSeq] = useState(0);
@@ -1485,6 +1489,14 @@ export default function TacticalCombatHub({
         if (isEnemyDamageIntent(intent)) return 'enemy-attacking';
       }
     }
+    const staged = selectedAbilityRef.current;
+    // AoE abilities affect the whole group — never glow a single pick as "the" target.
+    if (
+      staged
+      && classAbilityTargetMode(operativeClass, staged) === 'ALL'
+    ) {
+      return 'none';
+    }
     if (
       isPlayerTurnRef.current
       && cycleRef.current === 'TEXT_COMBAT'
@@ -1555,7 +1567,7 @@ export default function TacticalCombatHub({
     const targetMode = staged ? classAbilityTargetMode(operativeClass, staged) : 'NONE';
     const playerSelecting = canPlayerCommand();
     const fractureBreachActive = fractureBreakUnitIdRef.current != null;
-    const abilityTargeting = staged != null && targetMode === 'SINGLE';
+    const abilityTargeting = staged != null && (targetMode === 'SINGLE' || targetMode === 'ALL');
     const targetingActive = playerSelecting || abilityTargeting || fractureBreachActive;
     const validTargets = staged && abilityTargeting
       ? validTargetsForClassAbility(operativeClass, nextSquad, staged)
@@ -1564,6 +1576,7 @@ export default function TacticalCombatHub({
     onSquadUiChange({
       squadSize: aliveUnits(nextSquad).length,
       targetingActive,
+      abilityTargetingActive: abilityTargeting,
       stagedAbilityId: staged,
       turnOrder: buildCombatTurnOrder({
         squad: nextSquad,
@@ -1586,7 +1599,7 @@ export default function TacticalCombatHub({
           : targetingActive && alive && (
             !staged || !abilityTargeting || validIds.has(u.unitId!) || hookValid
           );
-        const blocked = staged != null && abilityTargeting
+        const blocked = staged != null && abilityTargeting && targetMode === 'SINGLE'
           && isUnitBlockedForClassAbility(operativeClass, nextSquad, staged, unitId)
           && !hookValid;
         const motionOptions = { arenaLayout: true, gridSlot: u.gridSlot ?? null };
@@ -1654,9 +1667,12 @@ export default function TacticalCombatHub({
           enemyClass: u.class,
           rosterId: u.rosterId,
           isDead: !isUnitAlive(u),
-          isSelected: selectedTargetIdRef.current === u.unitId
-            || focusedUnitIdRef.current === u.unitId,
+          isSelected: targetMode === 'ALL'
+            ? false
+            : (selectedTargetIdRef.current === u.unitId
+              || focusedUnitIdRef.current === u.unitId),
           isTargetable: targetable,
+          isAoeAffected: targetMode === 'ALL' && targetable,
           isFocused: focusedUnitIdRef.current === u.unitId,
           isActingEnemy: isActiveActor,
           isExecutingAttack: isActiveActor
@@ -1905,44 +1921,76 @@ export default function TacticalCombatHub({
     const unit = getUnitById(squadRef.current, unitId);
     if (!unit || !isUnitAlive(unit)) return;
 
-    const staged = selectedAbility;
-    if (staged && classAbilityRequiresTarget(operativeClass, staged)) {
+    const staged = selectedAbilityRef.current;
+    const targetMode = staged
+      ? classAbilityTargetMode(operativeClass, staged)
+      : 'NONE';
+
+    if (staged && targetMode === 'SINGLE') {
       if (!canTargetWithClassAbility(operativeClass, squadRef.current, staged, unitId)) {
         log('[TARGET] >> Line of sight blocked — clear the frontline column first.');
         publishSquadUi(squadRef.current);
         return;
       }
+      selectedTargetIdRef.current = unitId;
+      setSelectedTargetId(unitId);
+      focusedUnitIdRef.current = unitId;
+      enemyRef.current = unit;
+      setEnemy(unit);
+      executeOperativeAbilityRef.current(staged);
+      setSelectedAbility(null);
+      publishSquadUi(squadRef.current);
+      return;
     }
+
+    // AoE / self abilities: arena taps only refresh intel focus — cast via CONFIRM.
+    if (staged && (targetMode === 'ALL' || targetMode === 'NONE')) {
+      focusedUnitIdRef.current = unitId;
+      enemyRef.current = unit;
+      setEnemy(unit);
+      // Keep selection cleared so HUD does not imply a single cast target.
+      if (targetMode === 'ALL') {
+        selectedTargetIdRef.current = null;
+        setSelectedTargetId(null);
+      }
+      publishSquadUi(squadRef.current);
+      return;
+    }
+
     selectedTargetIdRef.current = unitId;
     setSelectedTargetId(unitId);
     focusedUnitIdRef.current = unitId;
     enemyRef.current = unit;
     setEnemy(unit);
     publishSquadUi(squadRef.current);
-  }, [selectedAbility, log]);
+  }, [log, operativeClass]);
   const focusIntelTarget = useCallback((unitId: string) => {
     const unit = getUnitById(squadRef.current, unitId);
     if (!unit || !isUnitAlive(unit)) return;
 
-    focusedUnitIdRef.current = unitId;
-    selectedTargetIdRef.current = unitId;
-    setSelectedTargetId(unitId);
-    enemyRef.current = unit;
-    setEnemy(unit);
+    const staged = selectedAbilityRef.current;
+    const targetMode = staged
+      ? classAbilityTargetMode(operativeClass, staged)
+      : 'NONE';
 
-    if (canPlayerCommand()) {
-      const staged = selectedAbility;
-      if (staged && classAbilityRequiresTarget(operativeClass, staged)) {
-        if (!canTargetWithClassAbility(operativeClass, squadRef.current, staged, unitId)) {
-          log('[TARGET] >> Line of sight blocked — clear the frontline column first.');
-          publishSquadUi(squadRef.current);
-          return;
-        }
-      }
+    // Single-target armed casts share the arena pipeline; AoE/self stay confirm-gated.
+    if (canPlayerCommand() && staged != null && targetMode === 'SINGLE') {
+      selectTarget(unitId);
+      return;
     }
 
+    focusedUnitIdRef.current = unitId;
+    if (targetMode === 'ALL') {
+      selectedTargetIdRef.current = null;
+      setSelectedTargetId(null);
+    } else {
+      selectedTargetIdRef.current = unitId;
+      setSelectedTargetId(unitId);
+    }
+    enemyRef.current = unit;
+    setEnemy(unit);
     publishSquadUi(squadRef.current);
-  }, [log, operativeClass, selectedAbility]);
+  }, [operativeClass, selectTarget]);
   const emitCombatFeedback = useCallback((event: CombatFeedbackEvent) => {
     feedbackNonceRef.current += 1;
     setCombatFeedback({ nonce: feedbackNonceRef.current, event });
@@ -6822,6 +6870,7 @@ export default function TacticalCombatHub({
     }
     executeAbility(abilityId as AegisAbilityId);
   };
+  executeOperativeAbilityRef.current = executeOperativeAbility;
 
   const executeAbility = (abilityId: AegisAbilityId) => {
     if (cycleState !== 'TEXT_COMBAT' || !canPlayerCommand() || !enemyRef.current) return;
@@ -8330,7 +8379,8 @@ export default function TacticalCombatHub({
 
   const confirmSelectedAbility = () => {
     if (!selectedAbility) return;
-    if (classAbilityRequiresTarget(operativeClass, selectedAbility)) {
+    const mode = classAbilityTargetMode(operativeClass, selectedAbility);
+    if (mode === 'SINGLE') {
       const targetId = selectedTargetIdRef.current;
       if (!targetId || !canTargetWithClassAbility(operativeClass, squadRef.current, selectedAbility, targetId)) {
         log('[TARGET] >> Select a valid hostile on the grid.');
@@ -8338,9 +8388,44 @@ export default function TacticalCombatHub({
         return;
       }
     }
+    // Executors still require a living enemyRef bootstrap even for group / self casts.
+    if (!enemyRef.current || !isUnitAlive(enemyRef.current)) {
+      const fallback = primaryAliveUnit(squadRef.current);
+      if (fallback) {
+        enemyRef.current = fallback;
+        setEnemy(fallback);
+        focusedUnitIdRef.current = fallback.unitId ?? null;
+      }
+    }
+    if (mode === 'ALL') {
+      selectedTargetIdRef.current = null;
+      setSelectedTargetId(null);
+    }
     executeOperativeAbility(selectedAbility);
     setSelectedAbility(null);
     publishSquadUi(squadRef.current);
+  };
+
+  const stageAbility = (abilityId: string) => {
+    const mode = classAbilityTargetMode(operativeClass, abilityId);
+    if (mode === 'ALL') {
+      selectedTargetIdRef.current = null;
+      setSelectedTargetId(null);
+      // Bootstrap executor context without marking a single cast target.
+      if (!enemyRef.current || !isUnitAlive(enemyRef.current)) {
+        const fallback = primaryAliveUnit(squadRef.current);
+        if (fallback) {
+          enemyRef.current = fallback;
+          setEnemy(fallback);
+          focusedUnitIdRef.current = fallback.unitId ?? null;
+        }
+      }
+    }
+    setSelectedAbility(abilityId);
+  };
+
+  const abortStagedAbility = () => {
+    setSelectedAbility(null);
   };
 
   useEffect(() => {
@@ -8442,9 +8527,9 @@ export default function TacticalCombatHub({
     <CombatCommandDeck
       loadout={activeLoadout}
       selectedAbility={selectedAbility}
-      onSelectAbility={setSelectedAbility}
+      onSelectAbility={stageAbility}
       onConfirm={confirmSelectedAbility}
-      onAbort={() => setSelectedAbility(null)}
+      onAbort={abortStagedAbility}
       onEndTurn={onEndTurn}
       actionPoints={playerActionPoints}
       displayActionPoints={apRollupDisplay}
@@ -8456,6 +8541,8 @@ export default function TacticalCombatHub({
       getActionDisableReason={getOperativeAbilityDisableReason}
       getAbilityLabel={(abilityId) => formatAbilityLabel(operativeClass, abilityId)}
       getAbilityCategory={(abilityId) => resolveAbilityUiCategory(operativeClass, abilityId)}
+      getAbilityEffectTags={(abilityId) => formatAbilityCardEffectLine(operativeClass, abilityId)}
+      getAbilityTargetMode={(abilityId) => classAbilityTargetMode(operativeClass, abilityId)}
       canEndTurn={isPlayerTurn && cycleState === 'TEXT_COMBAT' && !shadowstepProcActive}
       getStagedCostImpact={getStagedCostImpact}
       getStagedAbilityDescription={getStagedAbilityDescription}

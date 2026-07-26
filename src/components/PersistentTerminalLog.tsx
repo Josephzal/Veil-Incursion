@@ -7,6 +7,7 @@ import { useRun } from '../context/RunContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useCombatDesktopLayout } from '../hooks/useCombatDesktopLayout';
 import { combatPopupFont } from '../constants/combatOverlayTypography';
+import { COMBAT_HUD_TYPE } from '../constants/combatHudTypography';
 import {
   OTT,
   ottLogColor,
@@ -105,15 +106,15 @@ export default function PersistentTerminalLog({
   const dashboardMode = hideTopBorder && fillRemaining;
   const railMode = railModeEarly;
   const logFontSize = railMode
-    ? 8
+    ? COMBAT_HUD_TYPE.label
     : dashboardMode && isCombatDesktop
-      ? scaleCombatFont(10)
-      : 9;
+      ? scaleCombatFont(COMBAT_HUD_TYPE.title)
+      : COMBAT_HUD_TYPE.title;
   const logLineHeight = railMode
-    ? 12
+    ? COMBAT_HUD_TYPE.lineLabel
     : dashboardMode && isCombatDesktop
-      ? scaleCombatFont(15)
-      : 13;
+      ? scaleCombatFont(18)
+      : 17;
   const chromeButtonFontSize = dashboardMode && isCombatDesktop ? combatPopupFont(7) : undefined;
   const feedLines = railMode ? polishCombatFeedLines(runLog, 8) : runLog;
 
@@ -253,7 +254,7 @@ const styles = StyleSheet.create({
   },
   header: {
     fontFamily: 'monospace',
-    fontSize: 8,
+    fontSize: COMBAT_HUD_TYPE.label,
     letterSpacing: 1,
     flex: 1,
     minWidth: 0,

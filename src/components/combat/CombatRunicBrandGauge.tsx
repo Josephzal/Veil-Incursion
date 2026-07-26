@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { COMBAT_HUD_TYPE } from '../../constants/combatHudTypography';
 import {
   COMBAT_DECK_LABEL_WIDTH,
   COMBAT_DECK_ROW_GAP,
@@ -74,8 +75,8 @@ export default function CombatRunicBrandGauge({
           isStacked ? styles.labelStacked : null,
           isInline ? styles.labelInline : null,
           labelFontScale !== 1 ? {
-            fontSize: (isStacked ? 8 : 7) * labelFontScale,
-            lineHeight: (isStacked ? 10 : 9) * labelFontScale,
+            fontSize: (isStacked ? COMBAT_HUD_TYPE.body : COMBAT_HUD_TYPE.caption) * labelFontScale,
+            lineHeight: (isStacked ? COMBAT_HUD_TYPE.lineBody : COMBAT_HUD_TYPE.lineCaption) * labelFontScale,
           } : null,
           { color: labelColor },
         ]}
@@ -109,20 +110,20 @@ const styles = StyleSheet.create({
   },
   label: {
     fontFamily: 'monospace',
-    fontSize: 7,
+    fontSize: COMBAT_HUD_TYPE.body,
     fontWeight: '700',
     letterSpacing: 0.4,
   },
   labelInline: {
-    width: COMBAT_DECK_LABEL_WIDTH,
+    width: COMBAT_DECK_LABEL_WIDTH + 24,
     flexShrink: 0,
     flex: 0,
-    fontSize: 7,
-    lineHeight: 9,
+    fontSize: COMBAT_HUD_TYPE.body,
+    lineHeight: COMBAT_HUD_TYPE.lineBody,
     letterSpacing: 0.4,
   },
   labelStacked: {
-    fontSize: 8,
+    fontSize: COMBAT_HUD_TYPE.label,
     width: '100%',
     flex: 0,
   },
