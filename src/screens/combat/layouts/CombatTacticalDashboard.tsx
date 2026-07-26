@@ -6,6 +6,8 @@ import { OTT_LAYOUT } from '../../../constants/occultTacticalTerminalTheme';
 interface CombatTacticalDashboardProps {
   operativeStatus: React.ReactNode;
   commandDeck: React.ReactNode;
+  /** Soft-dim the console during end-of-encounter resolution (no solid black wash). */
+  resolutionDimmed?: boolean;
 }
 
 /**
@@ -15,11 +17,18 @@ interface CombatTacticalDashboardProps {
 export default function CombatTacticalDashboard({
   operativeStatus,
   commandDeck,
+  resolutionDimmed = false,
 }: CombatTacticalDashboardProps): React.JSX.Element {
   return (
-    <View style={styles.dashboard} pointerEvents="box-none">
-      <CombatConsoleDockFade />
-      <View style={styles.row} pointerEvents="box-none">
+    <View
+      style={styles.dashboard}
+      pointerEvents={resolutionDimmed ? 'none' : 'box-none'}
+    >
+      {resolutionDimmed ? null : <CombatConsoleDockFade />}
+      <View
+        style={styles.row}
+        pointerEvents={resolutionDimmed ? 'none' : 'box-none'}
+      >
         <View style={styles.sidePanel} pointerEvents="box-none">
           <View style={styles.sideContent} pointerEvents="box-none">
             {operativeStatus}

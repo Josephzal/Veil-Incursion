@@ -40,17 +40,12 @@ import { useNodeProgression } from '../hooks/useNodeProgression';
 import { useRunDeathFinalizer } from '../hooks/useRunDeathFinalizer';
 import { useDevSandboxExit } from '../hooks/useDevSandboxExit';
 import {
-  districtBossKillCredits,
-  eliteKillCredits,
-  primeBossKillCredits,
   standardKillCredits,
 } from '../data/combatCredits';
 import {
-  applyCompositionCreditScaling,
   formatCompositionRewardPayoutLog,
 } from '../data/encounterCompositionRewardEngine';
 import {
-  bossFlavorCreditBonus,
   bossFlavorRareLootBonusPct,
   buildBossFlavorContextFromRun,
   resolveBossFlavorRewardTier,
@@ -67,6 +62,13 @@ import {
   buildInitialSquadUiSnapshot,
   type CombatSquadUiSnapshot,
 } from '../utils/combatTelemetryFormat';
+import {
+  computeCombatVictoryCreditReward,
+  resolveCombatVictoryContinueDestination,
+  resolveCombatVictoryContinueLabel,
+  resolveCombatVictoryHeading,
+  resolveCombatVictoryKind,
+} from '../utils/combatVictoryResolution';
 import { buildCombatAugmentIcons } from '../utils/combatAugmentIcons';
 import { encounterBudgetForDepth } from '../data/combatEncounterBudget';
 import type { CargoItemId } from '../types/cargoGrid';
@@ -88,6 +90,13 @@ import { OTT } from '../constants/occultTacticalTerminalTheme';
 import { resolveWeaponState } from '../data/weaponProgressionEngine';
 import { resolveWeaponCombatStatsFromState } from '../data/weaponCombatEngine';
 import { shouldShowUnitInArenaGrid } from '../data/combatSquadEngine';
+
+type CombatResolutionPanelState = {
+  outcome: 'VICTORY' | 'DEFEAT';
+  playerTurns: number;
+  hostilesDefeated: number;
+  objectiveCallout: string | null;
+};
 
 export default function CombatScreen(): React.JSX.Element {
   const { theme } = useTerminal();
@@ -187,8 +196,9 @@ export default function CombatScreen(): React.JSX.Element {
   const [operativeTelemetry, setOperativeTelemetry] = useState<CombatOperativeTelemetry | null>(null);
   const [wardPrimed, setWardPrimed] = useState(false);
   const [abilityPrimed, setAbilityPrimed] = useState(false);
-  const [resolutionOutcome, setResolutionOutcome] = useState<'VICTORY' | 'DEFEAT' | null>(null);
+  const [resolutionPanel, setResolutionPanel] = useState<CombatResolutionPanelState | null>(null);
   const resolutionDismissRef = useRef<() => void>(() => {});
+  const victoryCreditRewardRef = useRef<number | null>(null);
   const apparitionRef = useRef<ApparitionViewportRef>(null);
   const playerViewportRef = useRef<CombatPlayerViewportRef>(null);
   const killResolverRef = useRef<() => void>(() => {});
@@ -372,7 +382,63 @@ export default function CombatScreen(): React.JSX.Element {
       });
   }, [effectiveSquadUi.units, nodeType]);
 
-  const showVictoryBanner = resolutionOutcome === 'VICTORY';
+  const showVictoryBanner = resolutionPanel?.outcome === 'VICTORY';
+
+  const victoryPresentation = useMemo(() => {
+    if (!showVictoryBanner || !resolutionPanel) return null;
+    const vectorNode = getSelectedVectorNode();
+    const isBossEncounter =
+      activeIncursion.bossProfile != null || runState.pendingEnemy?.isBoss === true;
+    const kind = resolveCombatVictoryKind({
+      isBossEncounter,
+      defendRiftActive: Boolean(activeIncursion.defendRiftActive),
+      vectorNodeType: vectorNode?.type ?? null,
+    });
+    const destination = resolveCombatVictoryContinueDestination({
+      isDevExit: Boolean(runState.devSandboxPreset || runState.combatTestPreset),
+      defendRiftActive: Boolean(activeIncursion.defendRiftActive),
+      isBossEncounter,
+      pendingAmbush: Boolean(runState.pendingAmbush),
+      ambushHarvestRoute: activeIncursion.pendingHarvestReturn ?? null,
+      boonBlocked: isPostCombatBoonBlocked(),
+    });
+    const showCredits = !activeIncursion.defendRiftActive
+      && !runState.devSandboxPreset
+      && !runState.combatTestPreset;
+    const credits = showCredits ? (victoryCreditRewardRef.current ?? 0) : 0;
+    const summary = [
+      {
+        value: String(resolutionPanel.hostilesDefeated),
+        label: resolutionPanel.hostilesDefeated === 1 ? 'HOSTILE' : 'HOSTILES',
+      },
+      {
+        value: String(resolutionPanel.playerTurns),
+        label: resolutionPanel.playerTurns === 1 ? 'TURN' : 'TURNS',
+      },
+      credits > 0
+        ? { value: `+${credits}`, label: 'CREDITS', accent: true as const }
+        : null,
+    ].filter(Boolean) as { value: string; label: string; accent?: boolean }[];
+
+    return {
+      heading: resolveCombatVictoryHeading(kind),
+      continueLabel: resolveCombatVictoryContinueLabel(destination),
+      summary,
+      objectiveLine: resolutionPanel.objectiveCallout,
+    };
+  }, [
+    activeIncursion.bossProfile,
+    activeIncursion.defendRiftActive,
+    activeIncursion.pendingHarvestReturn,
+    getSelectedVectorNode,
+    isPostCombatBoonBlocked,
+    resolutionPanel,
+    runState.combatTestPreset,
+    runState.devSandboxPreset,
+    runState.pendingAmbush,
+    runState.pendingEnemy?.isBoss,
+    showVictoryBanner,
+  ]);
 
   const enemySquadPanel = (
     <CombatEnemyGrid
@@ -417,11 +483,42 @@ export default function CombatScreen(): React.JSX.Element {
   );
 
   const handleResolutionPanelChange = useCallback(
-    (panel: { outcome: 'VICTORY' | 'DEFEAT'; onDismiss: () => void } | null) => {
-      setResolutionOutcome(panel?.outcome ?? null);
-      resolutionDismissRef.current = panel?.onDismiss ?? (() => {});
+    (panel: {
+      outcome: 'VICTORY' | 'DEFEAT';
+      onDismiss: () => void;
+      playerTurns: number;
+      hostilesDefeated: number;
+      objectiveCallout: string | null;
+    } | null) => {
+      if (!panel) {
+        setResolutionPanel(null);
+        victoryCreditRewardRef.current = null;
+        resolutionDismissRef.current = () => {};
+        return;
+      }
+      if (panel.outcome === 'VICTORY' && victoryCreditRewardRef.current == null) {
+        const vectorNode = getSelectedVectorNode();
+        const isBossEncounter =
+          activeIncursion.bossProfile != null || runState.pendingEnemy?.isBoss === true;
+        victoryCreditRewardRef.current = computeCombatVictoryCreditReward({
+          activeIncursion,
+          vectorNode,
+          isBossEncounter,
+        });
+      }
+      setResolutionPanel({
+        outcome: panel.outcome,
+        playerTurns: panel.playerTurns,
+        hostilesDefeated: panel.hostilesDefeated,
+        objectiveCallout: panel.objectiveCallout,
+      });
+      resolutionDismissRef.current = panel.onDismiss;
     },
-    [],
+    [
+      activeIncursion,
+      getSelectedVectorNode,
+      runState.pendingEnemy?.isBoss,
+    ],
   );
 
   const handleResolutionDismiss = useCallback(() => {
@@ -491,11 +588,13 @@ export default function CombatScreen(): React.JSX.Element {
     });
 
     if (runState.devSandboxPreset || runState.combatTestPreset) {
+      victoryCreditRewardRef.current = null;
       exitToDevTestHub();
       return;
     }
 
     if (!result.victory || result.remainingHp <= 0) {
+      victoryCreditRewardRef.current = null;
       clearNarrativeBoonStatusEffects();
       finalizeRunDeath(
         result.remainingHp <= 0 ? 'SOUL ANCHOR DESTROYED' : 'OPERATIVE DEFEATED IN COMBAT',
@@ -516,6 +615,7 @@ export default function CombatScreen(): React.JSX.Element {
     });
 
     if (activeIncursion.defendRiftActive) {
+      victoryCreditRewardRef.current = null;
       completeDefendRiftVictory();
       startExtractionReview();
       return;
@@ -550,15 +650,15 @@ export default function CombatScreen(): React.JSX.Element {
       highValue: Boolean(mods?.highValueResource),
       twistedTemplateId: victoryTwisted ?? null,
     });
-    let creditReward = isBossEncounter
-      ? (isPrimeBossDepth(depth) ? primeBossKillCredits(depth) : districtBossKillCredits(depth))
-      : nodeType === 'ELITE_COMBAT'
-        ? eliteKillCredits(depth)
-        : standardKillCredits(depth);
-    creditReward = applyCompositionCreditScaling(creditReward, rewardTier);
-    if (bossFlavorCtx) {
-      creditReward += bossFlavorCreditBonus(bossFlavorCtx);
+    let creditReward = victoryCreditRewardRef.current;
+    if (creditReward == null) {
+      creditReward = computeCombatVictoryCreditReward({
+        activeIncursion,
+        vectorNode,
+        isBossEncounter,
+      });
     }
+    victoryCreditRewardRef.current = null;
     const creditReason = isBossEncounter
       ? (isPrimeBossDepth(depth) ? 'prime anomaly eradicated' : 'district gate boss eradicated')
       : nodeType === 'ELITE_COMBAT'
@@ -769,19 +869,11 @@ export default function CombatScreen(): React.JSX.Element {
                       gridUnits={gridUnits}
                       onEradicationComplete={handleEradicationComplete}
                     />
-
-                    {showVictoryBanner ? (
-                      <CombatResolutionBanner
-                        outcome="VICTORY"
-                        primaryColor={OTT.terminalGreenMuted}
-                        defeatColor={OTT.soulRed}
-                        onDismiss={handleResolutionDismiss}
-                      />
-                    ) : null}
                   </View>
                 </View>
 
                 <CombatTacticalDashboard
+                  resolutionDimmed={showVictoryBanner}
                   operativeStatus={(
                     operativeTelemetry ? (
                       <CombatOperativeHud
@@ -867,6 +959,18 @@ export default function CombatScreen(): React.JSX.Element {
                     </CombatDashboardCommandColumn>
                   )}
                 />
+
+                {showVictoryBanner && victoryPresentation ? (
+                  <CombatResolutionBanner
+                    outcome="VICTORY"
+                    heading={victoryPresentation.heading}
+                    summary={victoryPresentation.summary}
+                    objectiveLine={victoryPresentation.objectiveLine}
+                    continueLabel={victoryPresentation.continueLabel}
+                    onDismiss={handleResolutionDismiss}
+                  />
+                ) : null}
+
                 <CombatMinigameOverlayHost />
               </CombatJuiceHost>
 

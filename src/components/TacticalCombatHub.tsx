@@ -600,7 +600,13 @@ interface TacticalCombatHubProps {
   registerIntelTargetHandler?: (handler: (unitId: string) => void) => void;
   /** Stacked layout: victory/defeat panel in the apparition viewport (hub keeps deck + gauges). */
   onResolutionPanelChange?: (
-    panel: { outcome: 'VICTORY' | 'DEFEAT'; onDismiss: () => void } | null,
+    panel: {
+      outcome: 'VICTORY' | 'DEFEAT';
+      onDismiss: () => void;
+      playerTurns: number;
+      hostilesDefeated: number;
+      objectiveCallout: string | null;
+    } | null,
   ) => void;
   onCombatComplete?: (r: {
     victory: boolean;
@@ -997,6 +1003,7 @@ export default function TacticalCombatHub({
   const dissolvedHiddenRef = useRef<Set<string>>(new Set());
   const adrenalinePrimerTurnsRef = useRef(0);
   const pendingVictoryRef = useRef(false);
+  const encounterHostileCountRef = useRef(0);
   const victoryFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wasEnemyTurnAtVictoryRef = useRef(false);
   const lastActiveTurnPhaseRef = useRef<CombatTurnPhase>('PLAYER_COMMAND');
@@ -5950,6 +5957,7 @@ export default function TacticalCombatHub({
     threatBudgetRef.current = threatBudget
       ?? (initialSquad.length >= 3 ? THREAT_BUDGET_ELITE : THREAT_BUDGET_STANDARD);
     arenaLayoutModeRef.current = resolveArenaLayoutMode(initialSquad.length);
+    encounterHostileCountRef.current = initialSquad.length;
     syncSquad(initialSquad);
     const defaultTarget = nextDefaultTarget(initialSquad);
     if (defaultTarget) selectTarget(defaultTarget);
@@ -8122,9 +8130,19 @@ export default function TacticalCombatHub({
       onResolutionPanelChange(null);
       return;
     }
+    const primary = objectiveSessionRef.current.primary;
+    let objectiveCallout: string | null = null;
+    if (primary?.status === 'COMPLETE') {
+      objectiveCallout = primary.replacesPressure
+        ? 'OBJECTIVE COMPLETE'
+        : 'CONTRACT PROGRESS UPDATED';
+    }
     onResolutionPanelChange({
       outcome: resolutionOutcome as 'VICTORY' | 'DEFEAT',
       onDismiss: () => dismissRef.current(),
+      playerTurns: Math.max(1, balanceEncounterRef.current.playerTurns),
+      hostilesDefeated: Math.max(1, encounterHostileCountRef.current),
+      objectiveCallout,
     });
   }, [cycleState, resolutionOutcome, onResolutionPanelChange]);
 
@@ -8601,19 +8619,11 @@ export default function TacticalCombatHub({
   const holdVictoryChrome =
     cycleState === 'RESOLUTION' && resolutionOutcome === 'VICTORY';
 
-  const resolutionActive =
-    cycleState === 'RESOLUTION' && resolutionOutcome != null;
-
   const classMinigameActive =
     activeReloadVisible
     || zeroProtocolVisible
     || cataclysmSigilVisible
     || catalyticConsoleVisible;
-
-  const renderCommandDeckDimOverlay = () =>
-    resolutionActive ? (
-      <View style={styles.commandDeckDimOverlay} pointerEvents="none" />
-    ) : null;
 
   const renderStatusFeed = () => (
     !classMinigameActive ? (
@@ -8668,12 +8678,13 @@ export default function TacticalCombatHub({
   const showCommandDeck =
     !classMinigameActive
     && ((cycleState === 'TEXT_COMBAT' && isPlayerTurn)
-    || (holdVictoryChrome && !wasEnemyTurnAtVictoryRef.current));
+    || holdVictoryChrome);
 
   const showEnemyTurnPanel =
     !classMinigameActive
-    && ((cycleState === 'TEXT_COMBAT' && !isPlayerTurn)
-    || (holdVictoryChrome && wasEnemyTurnAtVictoryRef.current));
+    && cycleState === 'TEXT_COMBAT'
+    && !isPlayerTurn
+    && !holdVictoryChrome;
 
   const renderCommandDeckSlot = () => (
     <View style={styles.commandDeckAnchor}>
@@ -8845,7 +8856,6 @@ export default function TacticalCombatHub({
       <View style={styles.commandDeckRow}>
         {renderStatusFeed()}
         {renderCommandDeckSlot()}
-        {renderCommandDeckDimOverlay()}
       </View>
       <CombatMinigameActiveBridge active={classMinigameActive} />
       <CombatMinigameOverlaySink>
@@ -8914,11 +8924,6 @@ const styles = StyleSheet.create({
     position: 'relative',
     gap: 3,
     backgroundColor: 'transparent',
-  },
-  commandDeckDimOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.68)',
-    zIndex: 8,
   },
   statusFeedSlot: {
     position: 'absolute',
